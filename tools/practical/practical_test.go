@@ -868,4 +868,3 @@ func TestWebScraperTool_Description(t *testing.T) {
 		t.Errorf("Expected description to mention scraping, got: %s", desc)
 	}
 }
-

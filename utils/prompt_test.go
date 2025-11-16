@@ -5,6 +5,7 @@ import (
 	"testing"
 )
 
+// TestPromptBuilder_WithSystemPrompt 测试设置系统提示词
 func TestPromptBuilder_WithSystemPrompt(t *testing.T) {
 	builder := NewPromptBuilder()
 	prompt := "You are a helpful assistant"
@@ -16,6 +17,7 @@ func TestPromptBuilder_WithSystemPrompt(t *testing.T) {
 	}
 }
 
+// TestPromptBuilder_WithContext 测试添加上下文信息
 func TestPromptBuilder_WithContext(t *testing.T) {
 	builder := NewPromptBuilder()
 	ctx := "User is working on a Go project"

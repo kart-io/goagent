@@ -368,8 +368,8 @@ func TestSoTAgent_TruncateText(t *testing.T) {
 	})
 
 	tests := []struct {
-		text   string
-		maxLen int
+		text     string
+		maxLen   int
 		expected string
 	}{
 		{"Short text", 20, "Short text"},

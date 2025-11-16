@@ -27,12 +27,13 @@ import (
 // WithChainOfThought creates a Chain-of-Thought agent
 //
 // Example:
-//   agent := NewAgentBuilder(llm).
-//     WithChainOfThought(cot.CoTConfig{
-//       ZeroShot: true,
-//       ShowStepNumbers: true,
-//     }).
-//     Build()
+//
+//	agent := NewAgentBuilder(llm).
+//	  WithChainOfThought(cot.CoTConfig{
+//	    ZeroShot: true,
+//	    ShowStepNumbers: true,
+//	  }).
+//	  Build()
 func (b *AgentBuilder[C, S]) WithChainOfThought(config ...cot.CoTConfig) *AgentBuilder[C, S] {
 	cfg := cot.CoTConfig{
 		Name:        "chain-of-thought",
@@ -83,13 +84,14 @@ func (b *AgentBuilder[C, S]) WithChainOfThought(config ...cot.CoTConfig) *AgentB
 // WithTreeOfThought creates a Tree-of-Thought agent
 //
 // Example:
-//   agent := NewAgentBuilder(llm).
-//     WithTreeOfThought(tot.ToTConfig{
-//       MaxDepth: 5,
-//       BranchingFactor: 3,
-//       SearchStrategy: interfaces.StrategyBeamSearch,
-//     }).
-//     Build()
+//
+//	agent := NewAgentBuilder(llm).
+//	  WithTreeOfThought(tot.ToTConfig{
+//	    MaxDepth: 5,
+//	    BranchingFactor: 3,
+//	    SearchStrategy: interfaces.StrategyBeamSearch,
+//	  }).
+//	  Build()
 func (b *AgentBuilder[C, S]) WithTreeOfThought(config ...tot.ToTConfig) *AgentBuilder[C, S] {
 	cfg := tot.ToTConfig{
 		Name:             "tree-of-thought",
@@ -143,12 +145,13 @@ func (b *AgentBuilder[C, S]) WithTreeOfThought(config ...tot.ToTConfig) *AgentBu
 // WithReAct creates a ReAct agent (existing pattern)
 //
 // Example:
-//   agent := NewAgentBuilder(llm).
-//     WithReAct(react.ReActConfig{
-//       MaxSteps: 10,
-//       StopPattern: []string{"Final Answer:"},
-//     }).
-//     Build()
+//
+//	agent := NewAgentBuilder(llm).
+//	  WithReAct(react.ReActConfig{
+//	    MaxSteps: 10,
+//	    StopPattern: []string{"Final Answer:"},
+//	  }).
+//	  Build()
 func (b *AgentBuilder[C, S]) WithReAct(config ...react.ReActConfig) *AgentBuilder[C, S] {
 	cfg := react.ReActConfig{
 		Name:        "react",
@@ -258,11 +261,12 @@ func (b *AgentBuilder[C, S]) BuildReasoningAgent() core.Agent {
 // WithZeroShotCoT creates a zero-shot Chain-of-Thought agent
 //
 // Example:
-//   agent := NewAgentBuilder(llm).WithZeroShotCoT().Build()
+//
+//	agent := NewAgentBuilder(llm).WithZeroShotCoT().Build()
 func (b *AgentBuilder[C, S]) WithZeroShotCoT() *AgentBuilder[C, S] {
 	return b.WithChainOfThought(cot.CoTConfig{
-		ZeroShot:        true,
-		ShowStepNumbers: true,
+		ZeroShot:             true,
+		ShowStepNumbers:      true,
 		RequireJustification: true,
 	})
 }
@@ -270,9 +274,10 @@ func (b *AgentBuilder[C, S]) WithZeroShotCoT() *AgentBuilder[C, S] {
 // WithFewShotCoT creates a few-shot Chain-of-Thought agent with examples
 //
 // Example:
-//   agent := NewAgentBuilder(llm).
-//     WithFewShotCoT(examples).
-//     Build()
+//
+//	agent := NewAgentBuilder(llm).
+//	  WithFewShotCoT(examples).
+//	  Build()
 func (b *AgentBuilder[C, S]) WithFewShotCoT(examples []cot.CoTExample) *AgentBuilder[C, S] {
 	return b.WithChainOfThought(cot.CoTConfig{
 		FewShot:         true,
@@ -284,9 +289,10 @@ func (b *AgentBuilder[C, S]) WithFewShotCoT(examples []cot.CoTExample) *AgentBui
 // WithBeamSearchToT creates a Tree-of-Thought agent with beam search
 //
 // Example:
-//   agent := NewAgentBuilder(llm).
-//     WithBeamSearchToT(beamWidth, maxDepth).
-//     Build()
+//
+//	agent := NewAgentBuilder(llm).
+//	  WithBeamSearchToT(beamWidth, maxDepth).
+//	  Build()
 func (b *AgentBuilder[C, S]) WithBeamSearchToT(beamWidth, maxDepth int) *AgentBuilder[C, S] {
 	return b.WithTreeOfThought(tot.ToTConfig{
 		MaxDepth:       maxDepth,
@@ -298,7 +304,8 @@ func (b *AgentBuilder[C, S]) WithBeamSearchToT(beamWidth, maxDepth int) *AgentBu
 // WithMonteCarloToT creates a Tree-of-Thought agent with Monte Carlo Tree Search
 //
 // Example:
-//   agent := NewAgentBuilder(llm).WithMonteCarloToT().Build()
+//
+//	agent := NewAgentBuilder(llm).WithMonteCarloToT().Build()
 func (b *AgentBuilder[C, S]) WithMonteCarloToT() *AgentBuilder[C, S] {
 	return b.WithTreeOfThought(tot.ToTConfig{
 		SearchStrategy:  interfaces.StrategyMonteCarlo,
@@ -310,12 +317,13 @@ func (b *AgentBuilder[C, S]) WithMonteCarloToT() *AgentBuilder[C, S] {
 // WithGraphOfThought creates a Graph-of-Thought agent
 //
 // Example:
-//   agent := NewAgentBuilder(llm).
-//     WithGraphOfThought(got.GoTConfig{
-//       MaxNodes: 50,
-//       ParallelExecution: true,
-//     }).
-//     Build()
+//
+//	agent := NewAgentBuilder(llm).
+//	  WithGraphOfThought(got.GoTConfig{
+//	    MaxNodes: 50,
+//	    ParallelExecution: true,
+//	  }).
+//	  Build()
 func (b *AgentBuilder[C, S]) WithGraphOfThought(config ...got.GoTConfig) *AgentBuilder[C, S] {
 	cfg := got.GoTConfig{
 		Name:              "graph-of-thought",
@@ -363,12 +371,13 @@ func (b *AgentBuilder[C, S]) WithGraphOfThought(config ...got.GoTConfig) *AgentB
 // WithProgramOfThought creates a Program-of-Thought agent
 //
 // Example:
-//   agent := NewAgentBuilder(llm).
-//     WithProgramOfThought(pot.PoTConfig{
-//       Language: "python",
-//       SafeMode: true,
-//     }).
-//     Build()
+//
+//	agent := NewAgentBuilder(llm).
+//	  WithProgramOfThought(pot.PoTConfig{
+//	    Language: "python",
+//	    SafeMode: true,
+//	  }).
+//	  Build()
 func (b *AgentBuilder[C, S]) WithProgramOfThought(config ...pot.PoTConfig) *AgentBuilder[C, S] {
 	cfg := pot.PoTConfig{
 		Name:             "program-of-thought",
@@ -418,12 +427,13 @@ func (b *AgentBuilder[C, S]) WithProgramOfThought(config ...pot.PoTConfig) *Agen
 // WithSkeletonOfThought creates a Skeleton-of-Thought agent
 //
 // Example:
-//   agent := NewAgentBuilder(llm).
-//     WithSkeletonOfThought(sot.SoTConfig{
-//       MaxConcurrency: 5,
-//       AggregationStrategy: "hierarchical",
-//     }).
-//     Build()
+//
+//	agent := NewAgentBuilder(llm).
+//	  WithSkeletonOfThought(sot.SoTConfig{
+//	    MaxConcurrency: 5,
+//	    AggregationStrategy: "hierarchical",
+//	  }).
+//	  Build()
 func (b *AgentBuilder[C, S]) WithSkeletonOfThought(config ...sot.SoTConfig) *AgentBuilder[C, S] {
 	cfg := sot.SoTConfig{
 		Name:                "skeleton-of-thought",
@@ -475,12 +485,13 @@ func (b *AgentBuilder[C, S]) WithSkeletonOfThought(config ...sot.SoTConfig) *Age
 // WithMetaCoT creates a Meta-CoT / Self-Ask agent
 //
 // Example:
-//   agent := NewAgentBuilder(llm).
-//     WithMetaCoT(metacot.MetaCoTConfig{
-//       MaxQuestions: 5,
-//       SelfCritique: true,
-//     }).
-//     Build()
+//
+//	agent := NewAgentBuilder(llm).
+//	  WithMetaCoT(metacot.MetaCoTConfig{
+//	    MaxQuestions: 5,
+//	    SelfCritique: true,
+//	  }).
+//	  Build()
 func (b *AgentBuilder[C, S]) WithMetaCoT(config ...metacot.MetaCoTConfig) *AgentBuilder[C, S] {
 	cfg := metacot.MetaCoTConfig{
 		Name:                "meta-cot",

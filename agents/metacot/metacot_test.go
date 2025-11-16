@@ -274,9 +274,9 @@ func TestMetaCoTAgent_EstimateConfidence(t *testing.T) {
 	})
 
 	tests := []struct {
-		answer   string
-		minConf  float64
-		maxConf  float64
+		answer  string
+		minConf float64
+		maxConf float64
 	}{
 		{
 			"This is a detailed answer with more than one hundred characters that provides comprehensive information about the topic at hand.",
@@ -501,7 +501,7 @@ func TestMetaCoTAgent_Invoke(t *testing.T) {
 	})
 
 	input := &core.AgentInput{
-		Task:      "Explain and analyze machine learning algorithms",
+		Task:    "Explain and analyze machine learning algorithms",
 		Context: make(map[string]interface{}),
 	}
 

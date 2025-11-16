@@ -40,18 +40,18 @@ type PoTConfig struct {
 	Tools       []interfaces.Tool // Available tools (optional)
 
 	// Code generation settings
-	Language         string   // Primary language ("python", "javascript", "go")
-	AllowedLanguages []string // Languages allowed for code generation
-	MaxCodeLength    int      // Maximum length of generated code
+	Language         string        // Primary language ("python", "javascript", "go")
+	AllowedLanguages []string      // Languages allowed for code generation
+	MaxCodeLength    int           // Maximum length of generated code
 	ExecutionTimeout time.Duration // Timeout for code execution
-	SafeMode         bool     // Enable safe execution mode
-	AllowImports     []string // Allowed imports/libraries
+	SafeMode         bool          // Enable safe execution mode
+	AllowImports     []string      // Allowed imports/libraries
 
 	// Execution settings
-	PythonPath      string // Path to Python interpreter
-	NodePath        string // Path to Node.js
-	DockerImage     string // Docker image for sandboxed execution
-	MaxIterations   int    // Max refinement iterations
+	PythonPath    string // Path to Python interpreter
+	NodePath      string // Path to Node.js
+	DockerImage   string // Docker image for sandboxed execution
+	MaxIterations int    // Max refinement iterations
 }
 
 // CodeResult represents the result of code execution

@@ -44,11 +44,11 @@ func TestCoTAgent_BasicFunctionality(t *testing.T) {
 
 	// Create CoT agent
 	config := CoTConfig{
-		Name:        "test-cot",
-		Description: "Test CoT Agent",
-		LLM:         mockLLM,
-		MaxSteps:    5,
-		ZeroShot:    true,
+		Name:            "test-cot",
+		Description:     "Test CoT Agent",
+		LLM:             mockLLM,
+		MaxSteps:        5,
+		ZeroShot:        true,
 		ShowStepNumbers: true,
 	}
 

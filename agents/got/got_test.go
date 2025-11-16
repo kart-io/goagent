@@ -438,8 +438,8 @@ func TestGoTAgent_EvaluateThought(t *testing.T) {
 
 	// Test various score responses
 	tests := []struct {
-		name         string
-		llmResponse  string
+		name          string
+		llmResponse   string
 		expectedScore float64
 	}{
 		{"valid score", "0.75", 0.75},
