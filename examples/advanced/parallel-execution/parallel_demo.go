@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"math/rand"
 	"time"
 
 	"github.com/kart-io/goagent/interfaces"
@@ -113,10 +112,10 @@ func demo2PerformanceComparison() {
 	tool4 := createSimulatedTool("tool4", "Processing 4...", 100*time.Millisecond)
 
 	calls := []*tools.ToolCall{
-		{ID: "call1", Tool: tool1, Input: &tools.ToolInput{Args: map[string]interface{}{}}},
-		{ID: "call2", Tool: tool2, Input: &tools.ToolInput{Args: map[string]interface{}{}}},
-		{ID: "call3", Tool: tool3, Input: &tools.ToolInput{Args: map[string]interface{}{}}},
-		{ID: "call4", Tool: tool4, Input: &tools.ToolInput{Args: map[string]interface{}{}}},
+		{ID: "call1", Tool: tool1, Input: &interfaces.ToolInput{Args: map[string]interface{}{}}},
+		{ID: "call2", Tool: tool2, Input: &interfaces.ToolInput{Args: map[string]interface{}{}}},
+		{ID: "call3", Tool: tool3, Input: &interfaces.ToolInput{Args: map[string]interface{}{}}},
+		{ID: "call4", Tool: tool4, Input: &interfaces.ToolInput{Args: map[string]interface{}{}}},
 	}
 
 	// Sequential execution
@@ -149,7 +148,7 @@ func demo3ConcurrencyLimit() {
 		calls[i] = &tools.ToolCall{
 			ID:    fmt.Sprintf("call%d", i),
 			Tool:  tool,
-			Input: &tools.ToolInput{Args: map[string]interface{}{"index": i}},
+			Input: &interfaces.ToolInput{Args: map[string]interface{}{"index": i}},
 		}
 	}
 
@@ -178,10 +177,10 @@ func demo4ErrorHandling() {
 	failTool := createFailingTool("fail_tool", "This tool will fail")
 
 	calls := []*tools.ToolCall{
-		{ID: "call1", Tool: successTool, Input: &tools.ToolInput{Args: map[string]interface{}{}}},
-		{ID: "call2", Tool: failTool, Input: &tools.ToolInput{Args: map[string]interface{}{}}},
-		{ID: "call3", Tool: successTool, Input: &tools.ToolInput{Args: map[string]interface{}{}}},
-		{ID: "call4", Tool: failTool, Input: &tools.ToolInput{Args: map[string]interface{}{}}},
+		{ID: "call1", Tool: successTool, Input: &interfaces.ToolInput{Args: map[string]interface{}{}}},
+		{ID: "call2", Tool: failTool, Input: &interfaces.ToolInput{Args: map[string]interface{}{}}},
+		{ID: "call3", Tool: successTool, Input: &interfaces.ToolInput{Args: map[string]interface{}{}}},
+		{ID: "call4", Tool: failTool, Input: &interfaces.ToolInput{Args: map[string]interface{}{}}},
 	}
 
 	results, _ := executor.ExecuteParallel(ctx, calls)
@@ -234,7 +233,7 @@ func demo5RetryPolicy() {
 	flakyTool := createFlakyTool("flaky_tool", 2) // Fails 2 times then succeeds
 
 	calls := []*tools.ToolCall{
-		{ID: "call1", Tool: flakyTool, Input: &tools.ToolInput{Args: map[string]interface{}{}}},
+		{ID: "call1", Tool: flakyTool, Input: &interfaces.ToolInput{Args: map[string]interface{}{}}},
 	}
 
 	start := time.Now()
@@ -268,8 +267,8 @@ func demo6TimeoutHandling() {
 	slowTool := createSimulatedTool("slow_tool", "Slow processing...", 200*time.Millisecond)
 
 	calls := []*tools.ToolCall{
-		{ID: "call1", Tool: fastTool, Input: &tools.ToolInput{Args: map[string]interface{}{}}},
-		{ID: "call2", Tool: slowTool, Input: &tools.ToolInput{Args: map[string]interface{}{}}},
+		{ID: "call1", Tool: fastTool, Input: &interfaces.ToolInput{Args: map[string]interface{}{}}},
+		{ID: "call2", Tool: slowTool, Input: &interfaces.ToolInput{Args: map[string]interface{}{}}},
 	}
 
 	results, _ := executor.ExecuteParallel(ctx, calls)
@@ -314,7 +313,7 @@ func createFailingTool(name, errorMsg string) interfaces.Tool {
 		name,
 		fmt.Sprintf("Failing %s tool", name),
 		"{}",
-		func(ctx context.Context, input *tools.ToolInput) (*interfaces.ToolOutput, error) {
+		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 			time.Sleep(10 * time.Millisecond)
 			return nil, fmt.Errorf("%s", errorMsg)
 		},
@@ -342,6 +341,8 @@ func createFlakyTool(name string, failCount int) interfaces.Tool {
 	)
 }
 
+// Unused example function - kept for reference
+/*
 func createRandomDelayTool(name string, minDelay, maxDelay time.Duration) interfaces.Tool {
 	return tools.NewBaseTool(
 		name,
@@ -358,3 +359,4 @@ func createRandomDelayTool(name string, minDelay, maxDelay time.Duration) interf
 		},
 	)
 }
+*/

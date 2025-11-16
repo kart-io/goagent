@@ -6,7 +6,7 @@ import (
 	"log"
 	"time"
 
-	agentcore "github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/toolkits"
 	"github.com/kart-io/goagent/tools"
 	"github.com/kart-io/goagent/tools/compute"
@@ -63,9 +63,9 @@ func example1BasicToolUsage() {
 		"hello",
 		"Says hello to a name",
 		`{"type": "object", "properties": {"name": {"type": "string"}}}`,
-		func(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
+		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 			name, _ := input.Args["name"].(string)
-			return &tools.ToolOutput{
+			return &interfaces.ToolOutput{
 				Result:  fmt.Sprintf("Hello, %s!", name),
 				Success: true,
 			}, nil
@@ -76,7 +76,7 @@ func example1BasicToolUsage() {
 	fmt.Printf("Tool Description: %s\n", tool.Description())
 
 	ctx := context.Background()
-	input := &tools.ToolInput{
+	input := &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"name": "World",
 		},
@@ -115,7 +115,7 @@ func example2FunctionTool() {
 		Build()
 
 	ctx := context.Background()
-	input := &tools.ToolInput{
+	input := &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"a": 6.0,
 			"b": 7.0,
@@ -150,7 +150,7 @@ func example3CalculatorTool() {
 	}
 
 	for _, expr := range expressions {
-		input := &tools.ToolInput{
+		input := &interfaces.ToolInput{
 			Args: map[string]interface{}{
 				"expression": expr,
 			},
@@ -181,7 +181,7 @@ func example4SearchTool() {
 	tool := search.NewSearchTool(engine)
 
 	ctx := context.Background()
-	input := &tools.ToolInput{
+	input := &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"query":       "Go programming language",
 			"max_results": 3.0,
@@ -220,7 +220,7 @@ func example5ShellTool() {
 	ctx := context.Background()
 
 	// 执行允许的命令
-	input := &tools.ToolInput{
+	input := &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"command": "echo",
 			"args":    []interface{}{"Hello from Shell!"},
@@ -237,7 +237,7 @@ func example5ShellTool() {
 	}
 
 	// 尝试执行不允许的命令
-	input2 := &tools.ToolInput{
+	input2 := &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"command": "rm",
 			"args":    []interface{}{"-rf", "/tmp/test"},
@@ -267,7 +267,7 @@ func example6APITool() {
 	ctx := context.Background()
 
 	// GET 请求
-	input := &tools.ToolInput{
+	input := &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"method": "GET",
 			"url":    "/posts/1",
@@ -305,7 +305,7 @@ func example7ToolkitUsage() {
 	// 使用工具集中的工具
 	calcTool, _ := toolkit.GetToolByName("calculator")
 	ctx := context.Background()
-	input := &tools.ToolInput{
+	input := &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"expression": "10 + 20",
 		},
@@ -352,10 +352,10 @@ func example9ToolsWithCallbacks() {
 
 	// 创建带回调的工具
 	tool := compute.NewCalculatorTool()
-	toolWithCallback := tool.WithCallbacks(callback).(tools.Tool)
+	toolWithCallback := tool.WithCallbacks(callback).(interfaces.Tool)
 
 	ctx := context.Background()
-	input := &tools.ToolInput{
+	input := &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"expression": "5 + 5",
 		},
@@ -372,13 +372,15 @@ func example9ToolsWithCallbacks() {
 }
 */
 
-// Placeholder for example 9
+// Placeholder for example 9 - disabled due to interface changes
+/*
 func example9ToolsWithCallbacks() {
 	fmt.Println("--- Example 9: Tools with Callbacks ---")
 	fmt.Println("This example has been disabled due to interface changes.")
 	fmt.Println("The simplified Tool interface no longer includes WithCallbacks method.")
 	fmt.Println()
 }
+*/
 
 // Example 10: 自定义工具
 func example10CustomTool() {
@@ -395,7 +397,7 @@ func example10CustomTool() {
 				"units": {"type": "string", "enum": ["celsius", "fahrenheit"]}
 			}
 		}`,
-		func(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
+		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 			city, _ := input.Args["city"].(string)
 			units, _ := input.Args["units"].(string)
 
@@ -408,7 +410,7 @@ func example10CustomTool() {
 				"humidity":    65,
 			}
 
-			return &tools.ToolOutput{
+			return &interfaces.ToolOutput{
 				Result:  weather,
 				Success: true,
 			}, nil
@@ -416,7 +418,7 @@ func example10CustomTool() {
 	)
 
 	ctx := context.Background()
-	input := &tools.ToolInput{
+	input := &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"city":  "Beijing",
 			"units": "celsius",
@@ -457,7 +459,7 @@ func example11ToolExecutor() {
 	ctx := context.Background()
 
 	// 执行单个工具
-	output, err := executor.Execute(ctx, "calculator", &tools.ToolInput{
+	output, err := executor.Execute(ctx, "calculator", &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"expression": "100 / 5",
 		},
@@ -473,7 +475,7 @@ func example11ToolExecutor() {
 	// 并行执行多个工具
 	executor.WithParallel(true)
 
-	requests := map[string]*tools.ToolInput{
+	requests := map[string]*interfaces.ToolInput{
 		"calculator": {
 			Args: map[string]interface{}{
 				"expression": "50 + 50",
@@ -501,6 +503,8 @@ func example11ToolExecutor() {
 	fmt.Println()
 }
 
+// Unused callback implementation - kept for reference
+/*
 // loggingCallback 日志回调
 type loggingCallback struct {
 	agentcore.BaseCallback
@@ -520,3 +524,4 @@ func (l *loggingCallback) OnToolError(ctx context.Context, toolName string, err 
 	fmt.Printf("[CALLBACK] Tool '%s' error: %v\n", toolName, err)
 	return nil
 }
+*/

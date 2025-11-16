@@ -497,7 +497,6 @@ type FailingAgentAfterN struct {
 	executeDelay time.Duration
 	executeCount int32
 	failureCount int32
-	mu           sync.Mutex
 }
 
 // NewFailingAgentAfterN creates a new failing agent
@@ -531,12 +530,9 @@ func (m *FailingAgentAfterN) Invoke(ctx context.Context, input *core.AgentInput)
 
 // trackingMockAgent wraps a mock agent to track concurrent executions
 type trackingMockAgent struct {
-	delegate          *MockAgent
-	onExecuteStart    func()
-	onExecuteEnd      func()
-	executeCount      int32
-	maxConcurrent     int32
-	currentConcurrent int32
+	delegate       *MockAgent
+	onExecuteStart func()
+	onExecuteEnd   func()
 }
 
 func (t *trackingMockAgent) Invoke(ctx context.Context, input *core.AgentInput) (*core.AgentOutput, error) {
