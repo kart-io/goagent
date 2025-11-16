@@ -7,14 +7,14 @@ version: "2"
 linters:
   # 默认 linter 集合设置
   # 可选值: none (禁用所有), standard (标准集合), all (所有), fast (快速检查)
-  # 这里使用 'none' 禁用所有，然后仅启用我们需要的 linter
-  # Use 'none' to disable all by default, then enable only what we need
-  default: none
-
-  # 启用的 linter 列表
-  # 当前仅启用 govet - Go 官方的静态分析工具
-  enable:
-    - govet
+  # 使用 'standard' 启用标准 linters 集合，包括:
+  #   - errcheck: 检查未处理的错误
+  #   - govet: Go 官方静态分析工具
+  #   - ineffassign: 检查无效赋值
+  #   - staticcheck: 静态代码分析（包含 gosimple、stylecheck）
+  #   - unused: 检查未使用的代码
+  # Use 'standard' to enable the standard set of linters
+  default: standard
 
   # Linter 特定设置
   # 为每个 linter 配置具体的检查项
@@ -37,35 +37,46 @@ linters:
   # Exclusion rules for test files and specific paths
   exclusions:
     rules:
-      # 对测试文件禁用 govet 检查
+      # 对测试文件禁用部分检查
       # 测试代码通常有不同的质量标准
       - path: _test\.go
         linters:
+          - errcheck
           - govet
+          - staticcheck
 
-      # 对 mock 代码禁用 govet 检查
+      # 对 mock 代码禁用检查
       # Mock 代码是自动生成或测试辅助代码
       - path: testing/mocks/
         linters:
+          - errcheck
           - govet
+          - staticcheck
+          - unused
 
-      # 对性能测试代码禁用 govet 检查
+      # 对性能测试代码禁用检查
       # 性能测试代码可能包含特殊的优化模式
       - path: performance/
         linters:
+          - errcheck
           - govet
+          - staticcheck
 
-      # 对可观测性相关代码禁用 govet 检查
+      # 对可观测性相关代码禁用检查
       # 监控和日志代码可能有特殊的模式
       - path: observability/
         linters:
+          - errcheck
           - govet
+          - staticcheck
 
-      # 对分布式系统相关代码禁用 govet 检查
+      # 对分布式系统相关代码禁用检查
       # 分布式代码可能包含复杂的并发模式
       - path: distributed/
         linters:
+          - errcheck
           - govet
+          - staticcheck
 
 # 运行配置
 # 控制 linter 的运行行为
