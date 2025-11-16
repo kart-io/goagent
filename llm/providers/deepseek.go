@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/tools"
 )
@@ -309,7 +310,7 @@ func (p *DeepSeekProvider) GenerateWithTools(ctx context.Context, prompt string,
 }
 
 // StreamWithTools implements streaming tool calls
-func (p *DeepSeekProvider) StreamWithTools(ctx context.Context, prompt string, tools []tools.Tool) (<-chan ToolChunk, error) {
+func (p *DeepSeekProvider) StreamWithTools(ctx context.Context, prompt string, tools []interfaces.Tool) (<-chan ToolChunk, error) {
 	chunks := make(chan ToolChunk, 100)
 
 	// Convert tools to DeepSeek format

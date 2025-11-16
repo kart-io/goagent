@@ -257,7 +257,7 @@ func TestStreamManager_Process_HandlerError(t *testing.T) {
 func TestStreamManager_Process_Timeout(t *testing.T) {
 	mgr := NewStreamManager(StreamManagerConfig{BufferSize: 10, Timeout: 100 * time.Millisecond})
 
-	streamCh := make(chan *StreamChunk, 0)
+	streamCh := make(chan *StreamChunk)
 
 	handler := NewFuncStreamHandler(
 		func(chunk *StreamChunk) error {
@@ -590,7 +590,7 @@ func TestStreamManager_Collect_WithError(t *testing.T) {
 func TestStreamManager_Collect_Timeout(t *testing.T) {
 	mgr := NewStreamManager(StreamManagerConfig{BufferSize: 10, Timeout: 100 * time.Millisecond})
 
-	input := make(chan *StreamChunk, 0)
+	input := make(chan *StreamChunk)
 
 	_, err := mgr.Collect(context.Background(), input)
 

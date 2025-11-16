@@ -352,11 +352,13 @@ func BenchmarkStore_Get(b *testing.B) {
 	store := New()
 	ctx := context.Background()
 	namespace := []string{"bench"}
-	store.Put(ctx, namespace, "key", "value")
+	err := store.Put(ctx, namespace, "key", "value")
+	require.NoError(b, err)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		store.Get(ctx, namespace, "key")
+		_, err := store.Get(ctx, namespace, "key")
+		require.NoError(b, err)
 	}
 }
 

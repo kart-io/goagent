@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/retrieval"
 	"github.com/kart-io/k8s-agent/common/errors"
 )
@@ -56,7 +57,7 @@ func NewJSONLoader(config JSONLoaderConfig) *JSONLoader {
 }
 
 // Load 加载 JSON 文件
-func (l *JSONLoader) Load(ctx context.Context) ([]*retrieval.Document, error) {
+func (l *JSONLoader) Load(ctx context.Context) ([]*interfaces.Document, error) {
 	// 触发回调
 	if l.callbackManager != nil {
 		if err := l.callbackManager.OnStart(ctx, map[string]interface{}{
@@ -77,7 +78,7 @@ func (l *JSONLoader) Load(ctx context.Context) ([]*retrieval.Document, error) {
 		return nil, errors.Wrap(errors.CodeInternalError, "failed to read json file", err)
 	}
 
-	var docs []*retrieval.Document
+	var docs []*interfaces.Document
 
 	if l.jsonLines {
 		docs = l.loadJSONLines(content)
@@ -105,18 +106,18 @@ func (l *JSONLoader) Load(ctx context.Context) ([]*retrieval.Document, error) {
 }
 
 // LoadAndSplit 加载并分割
-func (l *JSONLoader) LoadAndSplit(ctx context.Context, splitter TextSplitter) ([]*retrieval.Document, error) {
+func (l *JSONLoader) LoadAndSplit(ctx context.Context, splitter TextSplitter) ([]*interfaces.Document, error) {
 	return l.BaseDocumentLoader.LoadAndSplit(ctx, l, splitter)
 }
 
 // loadJSON 加载标准 JSON
-func (l *JSONLoader) loadJSON(content []byte) ([]*retrieval.Document, error) {
+func (l *JSONLoader) loadJSON(content []byte) ([]*interfaces.Document, error) {
 	var data interface{}
 	if err := json.Unmarshal(content, &data); err != nil {
 		return nil, errors.Wrap(errors.CodeInternalError, "failed to parse json", err)
 	}
 
-	docs := make([]*retrieval.Document, 0)
+	docs := make([]*interfaces.Document, 0)
 
 	switch v := data.(type) {
 	case map[string]interface{}:
@@ -145,9 +146,9 @@ func (l *JSONLoader) loadJSON(content []byte) ([]*retrieval.Document, error) {
 }
 
 // loadJSONLines 加载 JSON Lines
-func (l *JSONLoader) loadJSONLines(content []byte) []*retrieval.Document {
+func (l *JSONLoader) loadJSONLines(content []byte) []*interfaces.Document {
 	lines := strings.Split(string(content), "\n")
-	docs := make([]*retrieval.Document, 0)
+	docs := make([]*interfaces.Document, 0)
 
 	for i, line := range lines {
 		line = strings.TrimSpace(line)

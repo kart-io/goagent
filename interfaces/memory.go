@@ -17,7 +17,7 @@ import (
 // Previously defined in: memory/manager.go as Manager
 // This is now the single source of truth.
 //
-// See: pkg/agent/memory/manager.go for concrete implementations
+// See: memory/manager.go for concrete implementations
 type MemoryManager interface {
 	// AddConversation stores a conversation turn.
 	//

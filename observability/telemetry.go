@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/metric"
@@ -125,11 +126,11 @@ func (p *TelemetryProvider) createResource() (*resource.Resource, error) {
 
 	// 添加自定义属性
 	if len(p.config.ResourceAttributes) > 0 {
-		customAttrs := make([]interface{}, 0, len(p.config.ResourceAttributes)*2)
+		customAttrs := make([]attribute.KeyValue, 0, len(p.config.ResourceAttributes)*2)
 		for k, v := range p.config.ResourceAttributes {
-			customAttrs = append(customAttrs, k, v)
+			customAttrs = append(customAttrs, attribute.String(k, v))
 		}
-		attrs = append(attrs, resource.WithAttributes())
+		attrs = append(attrs, resource.WithAttributes(customAttrs...))
 	}
 
 	res, err := resource.New(

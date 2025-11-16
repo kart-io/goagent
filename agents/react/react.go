@@ -7,6 +7,7 @@ import (
 	"time"
 
 	agentcore "github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/parsers"
 	"github.com/kart-io/goagent/tools"
@@ -22,8 +23,8 @@ import (
 type ReActAgent struct {
 	*agentcore.BaseAgent
 	llm          llm.Client
-	tools        []tools.Tool
-	toolsByName  map[string]tools.Tool
+	tools        []interfaces.Tool
+	toolsByName  map[string]interfaces.Tool
 	parser       *parsers.ReActOutputParser
 	maxSteps     int
 	stopPattern  []string
@@ -37,7 +38,7 @@ type ReActConfig struct {
 	Name         string       // Agent 名称
 	Description  string       // Agent 描述
 	LLM          llm.Client   // LLM 客户端
-	Tools        []tools.Tool // 可用工具列表
+	Tools        []interfaces.Tool // 可用工具列表
 	MaxSteps     int          // 最大步数
 	StopPattern  []string     // 停止模式
 	PromptPrefix string       // Prompt 前缀

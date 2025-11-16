@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/tools"
 )
 
@@ -39,10 +40,10 @@ func NewCalculatorTool() *CalculatorTool {
 }
 
 // run 执行计算
-func (c *CalculatorTool) run(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
+func (c *CalculatorTool) run(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 	expression, ok := input.Args["expression"].(string)
 	if !ok {
-		return &tools.ToolOutput{
+		return &interfaces.ToolOutput{
 			Success: false,
 			Error:   "expression is required and must be a string",
 		}, tools.NewToolError(c.Name(), "invalid input", fmt.Errorf("expression is required"))
@@ -54,13 +55,13 @@ func (c *CalculatorTool) run(ctx context.Context, input *tools.ToolInput) (*tool
 	// 计算表达式
 	result, err := evaluateExpression(expression)
 	if err != nil {
-		return &tools.ToolOutput{
+		return &interfaces.ToolOutput{
 			Success: false,
 			Error:   err.Error(),
 		}, tools.NewToolError(c.Name(), "calculation failed", err)
 	}
 
-	return &tools.ToolOutput{
+	return &interfaces.ToolOutput{
 		Result:  result,
 		Success: true,
 		Metadata: map[string]interface{}{
@@ -212,10 +213,10 @@ func NewAdvancedCalculatorTool(operations CalculatorOperations) *AdvancedCalcula
 // run 执行高级计算
 //
 //nolint:gocyclo // High complexity is inherent due to multiple math operations
-func (a *AdvancedCalculatorTool) run(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
+func (a *AdvancedCalculatorTool) run(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 	operation, ok := input.Args["operation"].(string)
 	if !ok {
-		return &tools.ToolOutput{
+		return &interfaces.ToolOutput{
 			Success: false,
 			Error:   "operation is required",
 		}, tools.NewToolError(a.Name(), "invalid input", fmt.Errorf("operation is required"))
@@ -223,7 +224,7 @@ func (a *AdvancedCalculatorTool) run(ctx context.Context, input *tools.ToolInput
 
 	operands, ok := input.Args["operands"].([]interface{})
 	if !ok {
-		return &tools.ToolOutput{
+		return &interfaces.ToolOutput{
 			Success: false,
 			Error:   "operands must be an array",
 		}, tools.NewToolError(a.Name(), "invalid input", fmt.Errorf("operands must be an array"))
@@ -240,14 +241,14 @@ func (a *AdvancedCalculatorTool) run(ctx context.Context, input *tools.ToolInput
 		case string:
 			f, err := strconv.ParseFloat(v, 64)
 			if err != nil {
-				return &tools.ToolOutput{
+				return &interfaces.ToolOutput{
 					Success: false,
 					Error:   fmt.Sprintf("invalid operand: %v", v),
 				}, tools.NewToolError(a.Name(), "invalid operand", err)
 			}
 			nums[i] = f
 		default:
-			return &tools.ToolOutput{
+			return &interfaces.ToolOutput{
 				Success: false,
 				Error:   fmt.Sprintf("invalid operand type: %T", v),
 			}, tools.NewToolError(a.Name(), "invalid operand type", fmt.Errorf("invalid type: %T", v))
@@ -266,7 +267,7 @@ func (a *AdvancedCalculatorTool) run(ctx context.Context, input *tools.ToolInput
 		}
 	case "subtract":
 		if len(nums) < 2 {
-			return &tools.ToolOutput{Success: false, Error: "subtract requires at least 2 operands"}, nil
+			return &interfaces.ToolOutput{Success: false, Error: "subtract requires at least 2 operands"}, nil
 		}
 		result = nums[0]
 		for _, n := range nums[1:] {
@@ -279,63 +280,63 @@ func (a *AdvancedCalculatorTool) run(ctx context.Context, input *tools.ToolInput
 		}
 	case "divide":
 		if len(nums) < 2 {
-			return &tools.ToolOutput{Success: false, Error: "divide requires at least 2 operands"}, nil
+			return &interfaces.ToolOutput{Success: false, Error: "divide requires at least 2 operands"}, nil
 		}
 		result = nums[0]
 		for _, n := range nums[1:] {
 			if n == 0 {
-				return &tools.ToolOutput{Success: false, Error: "division by zero"}, nil
+				return &interfaces.ToolOutput{Success: false, Error: "division by zero"}, nil
 			}
 			result /= n
 		}
 	case "power":
 		if len(nums) != 2 {
-			return &tools.ToolOutput{Success: false, Error: "power requires exactly 2 operands"}, nil
+			return &interfaces.ToolOutput{Success: false, Error: "power requires exactly 2 operands"}, nil
 		}
 		result = math.Pow(nums[0], nums[1])
 	case "sqrt":
 		if len(nums) != 1 {
-			return &tools.ToolOutput{Success: false, Error: "sqrt requires exactly 1 operand"}, nil
+			return &interfaces.ToolOutput{Success: false, Error: "sqrt requires exactly 1 operand"}, nil
 		}
 		result = math.Sqrt(nums[0])
 	case "abs":
 		if len(nums) != 1 {
-			return &tools.ToolOutput{Success: false, Error: "abs requires exactly 1 operand"}, nil
+			return &interfaces.ToolOutput{Success: false, Error: "abs requires exactly 1 operand"}, nil
 		}
 		result = math.Abs(nums[0])
 	case "sin":
 		if len(nums) != 1 {
-			return &tools.ToolOutput{Success: false, Error: "sin requires exactly 1 operand"}, nil
+			return &interfaces.ToolOutput{Success: false, Error: "sin requires exactly 1 operand"}, nil
 		}
 		result = math.Sin(nums[0])
 	case "cos":
 		if len(nums) != 1 {
-			return &tools.ToolOutput{Success: false, Error: "cos requires exactly 1 operand"}, nil
+			return &interfaces.ToolOutput{Success: false, Error: "cos requires exactly 1 operand"}, nil
 		}
 		result = math.Cos(nums[0])
 	case "tan":
 		if len(nums) != 1 {
-			return &tools.ToolOutput{Success: false, Error: "tan requires exactly 1 operand"}, nil
+			return &interfaces.ToolOutput{Success: false, Error: "tan requires exactly 1 operand"}, nil
 		}
 		result = math.Tan(nums[0])
 	case "log":
 		if len(nums) != 1 {
-			return &tools.ToolOutput{Success: false, Error: "log requires exactly 1 operand"}, nil
+			return &interfaces.ToolOutput{Success: false, Error: "log requires exactly 1 operand"}, nil
 		}
 		result = math.Log10(nums[0])
 	case "ln":
 		if len(nums) != 1 {
-			return &tools.ToolOutput{Success: false, Error: "ln requires exactly 1 operand"}, nil
+			return &interfaces.ToolOutput{Success: false, Error: "ln requires exactly 1 operand"}, nil
 		}
 		result = math.Log(nums[0])
 	default:
-		return &tools.ToolOutput{
+		return &interfaces.ToolOutput{
 			Success: false,
 			Error:   fmt.Sprintf("unknown operation: %s", operation),
 		}, tools.NewToolError(a.Name(), "unknown operation", fmt.Errorf("unknown operation: %s", operation))
 	}
 
-	return &tools.ToolOutput{
+	return &interfaces.ToolOutput{
 		Result:  result,
 		Success: true,
 		Metadata: map[string]interface{}{

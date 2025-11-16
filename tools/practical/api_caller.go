@@ -12,6 +12,7 @@ import (
 	"time"
 
 	agentcore "github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/tools"
 )
 
@@ -136,7 +137,7 @@ func (t *APICallerTool) ArgsSchema() string {
 // OutputSchema returns the output schema
 
 // Execute makes the API call
-func (t *APICallerTool) Execute(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
+func (t *APICallerTool) Execute(ctx context.Context, input *tools.ToolInput) (*interfaces.ToolOutput, error) {
 	params, err := t.parseAPIInput(input.Args)
 	if err != nil {
 		return nil, fmt.Errorf("invalid input: %w", err)
@@ -153,7 +154,7 @@ func (t *APICallerTool) Execute(ctx context.Context, input *tools.ToolInput) (*t
 		if cached := t.responseCache.Get(cacheKey); cached != nil {
 			result := cached.(map[string]interface{})
 			result["cached"] = true
-			return &tools.ToolOutput{
+			return &interfaces.ToolOutput{
 				Result: result,
 			}, nil
 		}
@@ -187,7 +188,7 @@ func (t *APICallerTool) Execute(ctx context.Context, input *tools.ToolInput) (*t
 	}
 
 	if lastErr != nil {
-		return &tools.ToolOutput{
+		return &interfaces.ToolOutput{
 			Result: map[string]interface{}{
 				"error":    lastErr.Error(),
 				"attempts": attempts,
@@ -205,32 +206,32 @@ func (t *APICallerTool) Execute(ctx context.Context, input *tools.ToolInput) (*t
 		t.responseCache.Set(cacheKey, response)
 	}
 
-	return &tools.ToolOutput{
+	return &interfaces.ToolOutput{
 		Result: response,
 	}, nil
 }
 
 // Implement Runnable interface
-func (t *APICallerTool) Invoke(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
+func (t *APICallerTool) Invoke(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 	return t.Execute(ctx, input)
 }
 
-func (t *APICallerTool) Stream(ctx context.Context, input *tools.ToolInput) (<-chan agentcore.StreamChunk[*tools.ToolOutput], error) {
-	ch := make(chan agentcore.StreamChunk[*tools.ToolOutput])
+func (t *APICallerTool) Stream(ctx context.Context, input *interfaces.ToolInput) (<-chan agentcore.StreamChunk[*interfaces.ToolOutput], error) {
+	ch := make(chan agentcore.StreamChunk[*interfaces.ToolOutput])
 	go func() {
 		defer close(ch)
 		output, err := t.Execute(ctx, input)
 		if err != nil {
-			ch <- agentcore.StreamChunk[*tools.ToolOutput]{Error: err}
+			ch <- agentcore.StreamChunk[*interfaces.ToolOutput]{Error: err}
 		} else {
-			ch <- agentcore.StreamChunk[*tools.ToolOutput]{Data: output}
+			ch <- agentcore.StreamChunk[*interfaces.ToolOutput]{Data: output}
 		}
 	}()
 	return ch, nil
 }
 
-func (t *APICallerTool) Batch(ctx context.Context, inputs []*tools.ToolInput) ([]*tools.ToolOutput, error) {
-	outputs := make([]*tools.ToolOutput, len(inputs))
+func (t *APICallerTool) Batch(ctx context.Context, inputs []*tools.ToolInput) ([]*interfaces.ToolOutput, error) {
+	outputs := make([]*interfaces.ToolOutput, len(inputs))
 	for i, input := range inputs {
 		output, err := t.Execute(ctx, input)
 		if err != nil {
@@ -241,15 +242,15 @@ func (t *APICallerTool) Batch(ctx context.Context, inputs []*tools.ToolInput) ([
 	return outputs, nil
 }
 
-func (t *APICallerTool) Pipe(next agentcore.Runnable[*tools.ToolOutput, any]) agentcore.Runnable[*tools.ToolInput, any] {
+func (t *APICallerTool) Pipe(next agentcore.Runnable[*interfaces.ToolOutput, any]) agentcore.Runnable[*tools.ToolInput, any] {
 	return nil
 }
 
-func (t *APICallerTool) WithCallbacks(callbacks ...agentcore.Callback) agentcore.Runnable[*tools.ToolInput, *tools.ToolOutput] {
+func (t *APICallerTool) WithCallbacks(callbacks ...agentcore.Callback) agentcore.Runnable[*tools.ToolInput, *interfaces.ToolOutput] {
 	return t
 }
 
-func (t *APICallerTool) WithConfig(config agentcore.RunnableConfig) agentcore.Runnable[*tools.ToolInput, *tools.ToolOutput] {
+func (t *APICallerTool) WithConfig(config agentcore.RunnableConfig) agentcore.Runnable[*interfaces.ToolInput, *interfaces.ToolOutput] {
 	return t
 }
 
@@ -665,7 +666,7 @@ func NewAPICallerRuntimeTool() *APICallerRuntimeTool {
 }
 
 // ExecuteWithRuntime executes with runtime support
-func (t *APICallerRuntimeTool) ExecuteWithRuntime(ctx context.Context, input *tools.ToolInput, runtime *tools.ToolRuntime) (*tools.ToolOutput, error) {
+func (t *APICallerRuntimeTool) ExecuteWithRuntime(ctx context.Context, input *interfaces.ToolInput, runtime *tools.ToolRuntime) (*interfaces.ToolOutput, error) {
 	// Stream status
 	if runtime != nil && runtime.StreamWriter != nil {
 		runtime.StreamWriter(map[string]interface{}{

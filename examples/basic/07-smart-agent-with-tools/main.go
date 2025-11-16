@@ -6,6 +6,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/tools"
 	"github.com/kart-io/goagent/tools/http"
 )
@@ -32,7 +33,7 @@ func timeToolExample() {
 	timeTool := createTimeTool()
 
 	ctx := context.Background()
-	input := &tools.ToolInput{
+	input := &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"format":   "2006-01-02 15:04:05",
 			"timezone": "Asia/Shanghai",
@@ -203,7 +204,7 @@ func smartAgentExample() {
 }
 
 // 创建获取时间的工具
-func createTimeTool() tools.Tool {
+func createTimeTool() interfaces.Tool {
 	return tools.NewFunctionToolBuilder("get_current_time").
 		WithDescription("获取当前时间，支持不同的时区和格式").
 		WithArgsSchema(`{
@@ -262,7 +263,7 @@ func createTimeTool() tools.Tool {
 }
 
 // 创建通用 API 调用工具
-func createAPITool() tools.Tool {
+func createAPITool() interfaces.Tool {
 	return http.NewAPIToolBuilder().
 		WithBaseURL("").
 		WithTimeout(30 * time.Second).
@@ -270,7 +271,7 @@ func createAPITool() tools.Tool {
 }
 
 // 创建天气查询 API 工具（使用模拟数据）
-func createWeatherAPITool() tools.Tool {
+func createWeatherAPITool() interfaces.Tool {
 	return tools.NewFunctionToolBuilder("get_weather").
 		WithDescription("查询指定城市的天气信息").
 		WithArgsSchema(`{

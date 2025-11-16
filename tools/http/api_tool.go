@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/tools"
 )
 
@@ -81,7 +82,7 @@ func NewAPITool(baseURL string, timeout time.Duration, headers map[string]string
 }
 
 // run 执行 HTTP 请求
-func (a *APITool) run(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
+func (a *APITool) run(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 	// 解析参数
 	method, _ := input.Args["method"].(string)
 	if method == "" {
@@ -90,7 +91,7 @@ func (a *APITool) run(ctx context.Context, input *tools.ToolInput) (*tools.ToolO
 
 	urlStr, ok := input.Args["url"].(string)
 	if !ok || urlStr == "" {
-		return &tools.ToolOutput{
+		return &interfaces.ToolOutput{
 			Success: false,
 			Error:   "url is required and must be a non-empty string",
 		}, tools.NewToolError(a.Name(), "invalid input", fmt.Errorf("url is required"))
@@ -138,7 +139,7 @@ func (a *APITool) run(ctx context.Context, input *tools.ToolInput) (*tools.ToolO
 	if body != nil {
 		bodyBytes, err := json.Marshal(body)
 		if err != nil {
-			return &tools.ToolOutput{
+			return &interfaces.ToolOutput{
 				Success: false,
 				Error:   fmt.Sprintf("failed to marshal body: %v", err),
 			}, tools.NewToolError(a.Name(), "invalid body", err)
@@ -148,7 +149,7 @@ func (a *APITool) run(ctx context.Context, input *tools.ToolInput) (*tools.ToolO
 
 	req, err := http.NewRequestWithContext(ctx, method, urlStr, reqBody)
 	if err != nil {
-		return &tools.ToolOutput{
+		return &interfaces.ToolOutput{
 			Success: false,
 			Error:   fmt.Sprintf("failed to create request: %v", err),
 		}, tools.NewToolError(a.Name(), "request creation failed", err)
@@ -168,7 +169,7 @@ func (a *APITool) run(ctx context.Context, input *tools.ToolInput) (*tools.ToolO
 	duration := time.Since(startTime)
 
 	if err != nil {
-		return &tools.ToolOutput{
+		return &interfaces.ToolOutput{
 			Success: false,
 			Error:   fmt.Sprintf("http request failed: %v", err),
 			Metadata: map[string]interface{}{
@@ -185,7 +186,7 @@ func (a *APITool) run(ctx context.Context, input *tools.ToolInput) (*tools.ToolO
 	// 读取响应
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return &tools.ToolOutput{
+		return &interfaces.ToolOutput{
 			Success: false,
 			Error:   fmt.Sprintf("failed to read response: %v", err),
 		}, tools.NewToolError(a.Name(), "response read failed", err)
@@ -210,7 +211,7 @@ func (a *APITool) run(ctx context.Context, input *tools.ToolInput) (*tools.ToolO
 	success := resp.StatusCode >= 200 && resp.StatusCode < 300
 
 	if !success {
-		return &tools.ToolOutput{
+		return &interfaces.ToolOutput{
 			Result:  result,
 			Success: false,
 			Error:   fmt.Sprintf("HTTP request failed with status %d", resp.StatusCode),
@@ -221,7 +222,7 @@ func (a *APITool) run(ctx context.Context, input *tools.ToolInput) (*tools.ToolO
 		}, tools.NewToolError(a.Name(), "non-2xx status code", fmt.Errorf("status: %d", resp.StatusCode))
 	}
 
-	return &tools.ToolOutput{
+	return &interfaces.ToolOutput{
 		Result:  result,
 		Success: true,
 		Metadata: map[string]interface{}{
@@ -232,8 +233,8 @@ func (a *APITool) run(ctx context.Context, input *tools.ToolInput) (*tools.ToolO
 }
 
 // Get 执行 GET 请求的便捷方法
-func (a *APITool) Get(ctx context.Context, url string, headers map[string]string) (*tools.ToolOutput, error) {
-	return a.Invoke(ctx, &tools.ToolInput{
+func (a *APITool) Get(ctx context.Context, url string, headers map[string]string) (*interfaces.ToolOutput, error) {
+	return a.Invoke(ctx, &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"method":  "GET",
 			"url":     url,
@@ -244,8 +245,8 @@ func (a *APITool) Get(ctx context.Context, url string, headers map[string]string
 }
 
 // Post 执行 POST 请求的便捷方法
-func (a *APITool) Post(ctx context.Context, url string, body interface{}, headers map[string]string) (*tools.ToolOutput, error) {
-	return a.Invoke(ctx, &tools.ToolInput{
+func (a *APITool) Post(ctx context.Context, url string, body interface{}, headers map[string]string) (*interfaces.ToolOutput, error) {
+	return a.Invoke(ctx, &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"method":  "POST",
 			"url":     url,
@@ -257,8 +258,8 @@ func (a *APITool) Post(ctx context.Context, url string, body interface{}, header
 }
 
 // Put 执行 PUT 请求的便捷方法
-func (a *APITool) Put(ctx context.Context, url string, body interface{}, headers map[string]string) (*tools.ToolOutput, error) {
-	return a.Invoke(ctx, &tools.ToolInput{
+func (a *APITool) Put(ctx context.Context, url string, body interface{}, headers map[string]string) (*interfaces.ToolOutput, error) {
+	return a.Invoke(ctx, &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"method":  "PUT",
 			"url":     url,
@@ -270,8 +271,8 @@ func (a *APITool) Put(ctx context.Context, url string, body interface{}, headers
 }
 
 // Delete 执行 DELETE 请求的便捷方法
-func (a *APITool) Delete(ctx context.Context, url string, headers map[string]string) (*tools.ToolOutput, error) {
-	return a.Invoke(ctx, &tools.ToolInput{
+func (a *APITool) Delete(ctx context.Context, url string, headers map[string]string) (*interfaces.ToolOutput, error) {
+	return a.Invoke(ctx, &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"method":  "DELETE",
 			"url":     url,
@@ -282,8 +283,8 @@ func (a *APITool) Delete(ctx context.Context, url string, headers map[string]str
 }
 
 // Patch 执行 PATCH 请求的便捷方法
-func (a *APITool) Patch(ctx context.Context, url string, body interface{}, headers map[string]string) (*tools.ToolOutput, error) {
-	return a.Invoke(ctx, &tools.ToolInput{
+func (a *APITool) Patch(ctx context.Context, url string, body interface{}, headers map[string]string) (*interfaces.ToolOutput, error) {
+	return a.Invoke(ctx, &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"method":  "PATCH",
 			"url":     url,
