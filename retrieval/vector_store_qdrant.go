@@ -88,7 +88,7 @@ func NewQdrantVectorStore(config QdrantConfig) (*QdrantVectorStore, error) {
 // Add 添加文档和向量
 func (q *QdrantVectorStore) Add(ctx context.Context, docs []*Document, vectors [][]float32) error {
 	// TODO: 实现 Qdrant 添加逻辑
-	return fmt.Errorf("Qdrant integration not implemented yet - add github.com/qdrant/go-client dependency")
+	return fmt.Errorf("qdrant integration not implemented yet - add github.com/qdrant/go-client dependency")
 }
 
 // AddDocuments 添加文档（实现 VectorStore 接口）
@@ -125,7 +125,7 @@ func (q *QdrantVectorStore) Search(ctx context.Context, query string, topK int) 
 // SearchByVector 通过向量搜索
 func (q *QdrantVectorStore) SearchByVector(ctx context.Context, queryVector []float32, topK int) ([]*Document, error) {
 	// TODO: 实现 Qdrant 搜索逻辑
-	return nil, fmt.Errorf("Qdrant integration not implemented yet - add github.com/qdrant/go-client dependency")
+	return nil, fmt.Errorf("qdrant integration not implemented yet - add github.com/qdrant/go-client dependency")
 }
 
 // SimilaritySearch 相似度搜索（实现 VectorStore 接口）
@@ -141,13 +141,13 @@ func (q *QdrantVectorStore) SimilaritySearchWithScore(ctx context.Context, query
 // Delete 删除文档
 func (q *QdrantVectorStore) Delete(ctx context.Context, ids []string) error {
 	// TODO: 实现 Qdrant 删除逻辑
-	return fmt.Errorf("Qdrant integration not implemented yet - add github.com/qdrant/go-client dependency")
+	return fmt.Errorf("qdrant integration not implemented yet - add github.com/qdrant/go-client dependency")
 }
 
 // Update 更新文档
 func (q *QdrantVectorStore) Update(ctx context.Context, docs []*Document) error {
 	// TODO: 实现 Qdrant 更新逻辑
-	return fmt.Errorf("Qdrant integration not implemented yet - add github.com/qdrant/go-client dependency")
+	return fmt.Errorf("qdrant integration not implemented yet - add github.com/qdrant/go-client dependency")
 }
 
 // GetEmbedding 获取嵌入向量
