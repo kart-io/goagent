@@ -52,7 +52,7 @@ func NewKimiClient(config *KimiConfig) (*KimiClient, error) {
 	}
 
 	if config.APIKey == "" {
-		return nil, fmt.Errorf("Kimi API key is required")
+		return nil, fmt.Errorf("kimi API key is required")
 	}
 
 	if config.BaseURL == "" {
@@ -219,10 +219,10 @@ func (c *KimiClient) Complete(ctx context.Context, req *llm.CompletionRequest) (
 	if resp.StatusCode != http.StatusOK {
 		var errResp kimiError
 		if err := json.Unmarshal(body, &errResp); err == nil && errResp.Error.Message != "" {
-			return nil, fmt.Errorf("Kimi API error: %s (type: %s, code: %s)",
+			return nil, fmt.Errorf("kimi API error: %s (type: %s, code: %s)",
 				errResp.Error.Message, errResp.Error.Type, errResp.Error.Code)
 		}
-		return nil, fmt.Errorf("Kimi API error (status %d): %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("kimi API error (status %d): %s", resp.StatusCode, string(body))
 	}
 
 	// 解析响应
