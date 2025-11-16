@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 
 	"github.com/kart-io/goagent/llm"
@@ -154,6 +153,8 @@ func truncate(s string, maxLen int) string {
 	return s[:maxLen] + "..."
 }
 
+// Unused example functions - kept for reference
+/*
 // 使用示例：如何在代码中灵活切换 Provider
 func demonstrateProviderSwitching() {
 	// 根据环境或配置选择 provider
@@ -224,3 +225,4 @@ func createGeminiClient() llm.Client {
 func createOllamaClient() llm.Client {
 	return providers.NewOllamaClientSimple("llama2")
 }
+*/

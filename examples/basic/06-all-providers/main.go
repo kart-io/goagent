@@ -215,7 +215,8 @@ func testProvider(ctx context.Context, client llm.Client, name string) {
 	fmt.Printf("   Provider: %s, Model: %s\n", response.Provider, response.Model)
 }
 
-// Example of provider switching based on requirements
+// Example of provider switching based on requirements - kept for reference
+/*
 func selectProviderByRequirement(requirement string) llm.Client {
 	switch requirement {
 	case "long-context":
@@ -287,3 +288,4 @@ func selectProviderByRequirement(requirement string) llm.Client {
 		return client
 	}
 }
+*/

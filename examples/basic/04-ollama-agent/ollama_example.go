@@ -206,7 +206,8 @@ func listOllamaModels() {
 	}
 }
 
-// 额外的辅助函数：拉取模型（如果需要）
+// 额外的辅助函数：拉取模型（如果需要） - kept for reference
+/*
 func pullModelIfNeeded(modelName string) error {
 	client := providers.NewOllamaClientSimple(modelName)
 
@@ -226,6 +227,7 @@ func pullModelIfNeeded(modelName string) error {
 	fmt.Printf("Pulling model %s... (this may take a while)\n", modelName)
 	return client.PullModel(modelName)
 }
+*/
 
 // getCurrentTimeTool 获取当前时间的工具
 func getCurrentTimeTool() interfaces.Tool {
@@ -384,7 +386,10 @@ After receiving the tool result, provide a natural language response to the user
 			}
 		case "get_weather":
 			var args map[string]interface{}
-			json.Unmarshal([]byte(toolInput), &args)
+			if err := json.Unmarshal([]byte(toolInput), &args); err != nil {
+				log.Printf("Error unmarshalling tool input: %v\n", err)
+				return
+			}
 			output, toolErr := weatherTool.Invoke(ctx, &interfaces.ToolInput{
 				Args:    args,
 				Context: ctx,
@@ -445,7 +450,10 @@ Input: <tool_input_as_json>`, toolDescriptions)),
 
 		if toolName == "get_weather" {
 			var args map[string]interface{}
-			json.Unmarshal([]byte(toolInput), &args)
+			if err := json.Unmarshal([]byte(toolInput), &args); err != nil {
+				log.Printf("Error unmarshalling tool input: %v\n", err)
+				return
+			}
 			output, err := weatherTool.Invoke(ctx, &interfaces.ToolInput{
 				Args:    args,
 				Context: ctx,
