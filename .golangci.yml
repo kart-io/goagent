@@ -1,43 +1,47 @@
 version: "2"
 
 linters:
-  disable-all: true
+  # Use 'none' to disable all by default, then enable only what we need
+  default: none
+
   enable:
     - govet
 
-linters-settings:
-  govet:
-    enable-all: false
-    enable:
-      - atomic
-      - bools
-      - composites
-      - copylocks
-      - nilfunc
-      - printf
-      - stdmethods
-      - structtag
+  settings:
+    govet:
+      enable:
+        - atomic
+        - bools
+        - composites
+        - copylocks
+        - nilfunc
+        - printf
+        - stdmethods
+        - structtag
+
+  # Exclusion rules for test files and specific paths
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - govet
+      - path: testing/mocks/
+        linters:
+          - govet
+      - path: performance/
+        linters:
+          - govet
+      - path: observability/
+        linters:
+          - govet
+      - path: distributed/
+        linters:
+          - govet
 
 run:
   timeout: 5m
   tests: true
 
 issues:
-  exclude-rules:
-    - path: _test\.go
-      linters:
-        - govet
-    - path: testing/mocks/
-      linters:
-        - govet
-    - path: performance/
-      linters:
-        - govet
-    - path: observability/
-      linters:
-        - govet
-    - path: distributed/
-      linters:
-        - govet
   max-issues-per-linter: 0
   max-same-issues: 0
