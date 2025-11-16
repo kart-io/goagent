@@ -1,3 +1,5 @@
+// Package practical 提供实用工具的测试
+// 本文件测试 API Caller、File Operations、Database Query 和 Web Scraper 等实用工具的功能
 package practical
 
 import (
@@ -14,7 +16,9 @@ import (
 )
 
 // API Caller Tests
+// API 调用工具测试
 
+// TestNewAPICallerTool 测试创建 API 调用工具
 func TestNewAPICallerTool(t *testing.T) {
 	tool := NewAPICallerTool()
 
@@ -35,6 +39,7 @@ func TestNewAPICallerTool(t *testing.T) {
 	}
 }
 
+// TestAPICallerTool_Execute_SimpleGET 测试简单的 GET 请求
 func TestAPICallerTool_Execute_SimpleGET(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -66,6 +71,7 @@ func TestAPICallerTool_Execute_SimpleGET(t *testing.T) {
 	}
 }
 
+// TestAPICallerTool_Execute_POST 测试 POST 请求
 func TestAPICallerTool_Execute_POST(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
@@ -100,6 +106,7 @@ func TestAPICallerTool_Execute_POST(t *testing.T) {
 	}
 }
 
+// TestAPICallerTool_RateLimiter 测试速率限制器
 func TestAPICallerTool_RateLimiter(t *testing.T) {
 	limiter := NewRateLimiter(2, time.Minute)
 
@@ -117,6 +124,7 @@ func TestAPICallerTool_RateLimiter(t *testing.T) {
 	}
 }
 
+// TestResponseCache_GetSet 测试响应缓存的存取操作
 func TestResponseCache_GetSet(t *testing.T) {
 	cache := NewResponseCache(10, 5*time.Minute)
 
@@ -135,6 +143,7 @@ func TestResponseCache_GetSet(t *testing.T) {
 	}
 }
 
+// TestResponseCache_Expiration 测试缓存过期机制
 func TestResponseCache_Expiration(t *testing.T) {
 	cache := NewResponseCache(10, 10*time.Millisecond)
 
@@ -150,7 +159,9 @@ func TestResponseCache_Expiration(t *testing.T) {
 }
 
 // File Operations Tests
+// 文件操作工具测试
 
+// TestNewFileOperationsTool 测试创建文件操作工具
 func TestNewFileOperationsTool(t *testing.T) {
 	tool := NewFileOperationsTool("/tmp")
 
@@ -167,6 +178,7 @@ func TestNewFileOperationsTool(t *testing.T) {
 	}
 }
 
+// TestFileOperationsTool_WriteAndRead 测试文件写入和读取
 func TestFileOperationsTool_WriteAndRead(t *testing.T) {
 	tmpDir := t.TempDir()
 	tool := NewFileOperationsTool(tmpDir)
@@ -213,6 +225,7 @@ func TestFileOperationsTool_WriteAndRead(t *testing.T) {
 	}
 }
 
+// TestFileOperationsTool_Append 测试追加内容到文件
 func TestFileOperationsTool_Append(t *testing.T) {
 	tmpDir := t.TempDir()
 	tool := NewFileOperationsTool(tmpDir)
@@ -249,6 +262,7 @@ func TestFileOperationsTool_Append(t *testing.T) {
 	}
 }
 
+// TestFileOperationsTool_Delete 测试删除文件
 func TestFileOperationsTool_Delete(t *testing.T) {
 	tmpDir := t.TempDir()
 	tool := NewFileOperationsTool(tmpDir)
@@ -281,6 +295,7 @@ func TestFileOperationsTool_Delete(t *testing.T) {
 	}
 }
 
+// TestFileOperationsTool_Copy 测试复制文件
 func TestFileOperationsTool_Copy(t *testing.T) {
 	tmpDir := t.TempDir()
 	tool := NewFileOperationsTool(tmpDir)
@@ -318,6 +333,7 @@ func TestFileOperationsTool_Copy(t *testing.T) {
 	}
 }
 
+// TestFileOperationsTool_Move 测试移动文件
 func TestFileOperationsTool_Move(t *testing.T) {
 	tmpDir := t.TempDir()
 	tool := NewFileOperationsTool(tmpDir)
@@ -359,6 +375,7 @@ func TestFileOperationsTool_Move(t *testing.T) {
 	}
 }
 
+// TestFileOperationsTool_List 测试列出目录内容
 func TestFileOperationsTool_List(t *testing.T) {
 	tmpDir := t.TempDir()
 	tool := NewFileOperationsTool(tmpDir)
@@ -389,6 +406,7 @@ func TestFileOperationsTool_List(t *testing.T) {
 	}
 }
 
+// TestFileOperationsTool_Search 测试搜索文件
 func TestFileOperationsTool_Search(t *testing.T) {
 	tmpDir := t.TempDir()
 	tool := NewFileOperationsTool(tmpDir)
@@ -421,6 +439,7 @@ func TestFileOperationsTool_Search(t *testing.T) {
 	}
 }
 
+// TestFileOperationsTool_Info 测试获取文件信息
 func TestFileOperationsTool_Info(t *testing.T) {
 	tmpDir := t.TempDir()
 	tool := NewFileOperationsTool(tmpDir)
@@ -463,6 +482,7 @@ func TestFileOperationsTool_Info(t *testing.T) {
 	}
 }
 
+// TestFileOperationsTool_Analyze 测试分析文件
 func TestFileOperationsTool_Analyze(t *testing.T) {
 	tmpDir := t.TempDir()
 	tool := NewFileOperationsTool(tmpDir)
@@ -497,6 +517,7 @@ func TestFileOperationsTool_Analyze(t *testing.T) {
 	}
 }
 
+// TestFileOperationsTool_ValidatePath 测试路径验证
 func TestFileOperationsTool_ValidatePath(t *testing.T) {
 	tool := NewFileOperationsTool("/tmp")
 
@@ -513,6 +534,7 @@ func TestFileOperationsTool_ValidatePath(t *testing.T) {
 	}
 }
 
+// TestFileOperationsTool_Parse_JSON 测试解析 JSON 文件
 func TestFileOperationsTool_Parse_JSON(t *testing.T) {
 	tmpDir := t.TempDir()
 	tool := NewFileOperationsTool(tmpDir)
@@ -541,6 +563,7 @@ func TestFileOperationsTool_Parse_JSON(t *testing.T) {
 	}
 }
 
+// TestFileOperationsTool_UnsupportedOperation 测试不支持的操作
 func TestFileOperationsTool_UnsupportedOperation(t *testing.T) {
 	tmpDir := t.TempDir()
 	tool := NewFileOperationsTool(tmpDir)
@@ -565,6 +588,7 @@ func TestFileOperationsTool_UnsupportedOperation(t *testing.T) {
 	}
 }
 
+// TestAPICallerTool_Retry 测试重试机制
 func TestAPICallerTool_Retry(t *testing.T) {
 	attempts := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -602,6 +626,7 @@ func TestAPICallerTool_Retry(t *testing.T) {
 	}
 }
 
+// TestAPICallerTool_Authentication_Bearer 测试 Bearer 认证
 func TestAPICallerTool_Authentication_Bearer(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		auth := r.Header.Get("Authorization")
@@ -639,6 +664,7 @@ func TestAPICallerTool_Authentication_Bearer(t *testing.T) {
 	}
 }
 
+// TestNewAPICallerRuntimeTool 测试创建 API 调用运行时工具
 func TestNewAPICallerRuntimeTool(t *testing.T) {
 	tool := NewAPICallerRuntimeTool()
 
@@ -651,6 +677,7 @@ func TestNewAPICallerRuntimeTool(t *testing.T) {
 	}
 }
 
+// TestNewFileOperationsRuntimeTool 测试创建文件操作运行时工具
 func TestNewFileOperationsRuntimeTool(t *testing.T) {
 	tool := NewFileOperationsRuntimeTool("/tmp")
 
@@ -664,7 +691,9 @@ func TestNewFileOperationsRuntimeTool(t *testing.T) {
 }
 
 // Database Query Tool Tests
+// 数据库查询工具测试
 
+// TestNewDatabaseQueryTool 测试创建数据库查询工具
 func TestNewDatabaseQueryTool(t *testing.T) {
 	tool := NewDatabaseQueryTool()
 
@@ -689,6 +718,7 @@ func TestNewDatabaseQueryTool(t *testing.T) {
 	}
 }
 
+// TestDatabaseQueryTool_AddConnection 测试添加数据库连接
 func TestDatabaseQueryTool_AddConnection(t *testing.T) {
 	tool := NewDatabaseQueryTool()
 
@@ -704,6 +734,7 @@ func TestDatabaseQueryTool_AddConnection(t *testing.T) {
 	}
 }
 
+// TestDatabaseQueryTool_Name 测试获取工具名称
 func TestDatabaseQueryTool_Name(t *testing.T) {
 	tool := NewDatabaseQueryTool()
 	if tool.Name() != "database_query" {
@@ -711,6 +742,7 @@ func TestDatabaseQueryTool_Name(t *testing.T) {
 	}
 }
 
+// TestDatabaseQueryTool_Description 测试获取工具描述
 func TestDatabaseQueryTool_Description(t *testing.T) {
 	tool := NewDatabaseQueryTool()
 	desc := tool.Description()
@@ -720,7 +752,9 @@ func TestDatabaseQueryTool_Description(t *testing.T) {
 }
 
 // Web Scraper Tool Tests
+// 网页抓取工具测试
 
+// TestNewWebScraperTool 测试创建网页抓取工具
 func TestNewWebScraperTool(t *testing.T) {
 	tool := NewWebScraperTool()
 
@@ -749,6 +783,7 @@ func TestNewWebScraperTool(t *testing.T) {
 	}
 }
 
+// TestWebScraperTool_Execute 测试执行网页抓取
 func TestWebScraperTool_Execute(t *testing.T) {
 	// Create a test server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -800,6 +835,7 @@ func TestWebScraperTool_Execute(t *testing.T) {
 	}
 }
 
+// TestWebScraperTool_Execute_InvalidURL 测试无效 URL 的错误处理
 func TestWebScraperTool_Execute_InvalidURL(t *testing.T) {
 	tool := NewWebScraperTool()
 	ctx := context.Background()
@@ -816,6 +852,7 @@ func TestWebScraperTool_Execute_InvalidURL(t *testing.T) {
 	}
 }
 
+// TestWebScraperTool_Execute_WithSelectors 测试使用选择器抓取
 func TestWebScraperTool_Execute_WithSelectors(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		html := `<!DOCTYPE html>
@@ -854,6 +891,7 @@ func TestWebScraperTool_Execute_WithSelectors(t *testing.T) {
 	}
 }
 
+// TestWebScraperTool_Name 测试获取工具名称
 func TestWebScraperTool_Name(t *testing.T) {
 	tool := NewWebScraperTool()
 	if tool.Name() != "web_scraper" {
@@ -861,6 +899,7 @@ func TestWebScraperTool_Name(t *testing.T) {
 	}
 }
 
+// TestWebScraperTool_Description 测试获取工具描述
 func TestWebScraperTool_Description(t *testing.T) {
 	tool := NewWebScraperTool()
 	desc := tool.Description()

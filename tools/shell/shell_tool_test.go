@@ -1,3 +1,5 @@
+// Package shell 提供 Shell 命令工具的测试
+// 本文件测试 ShellTool 命令执行工具的功能
 package shell
 
 import (
@@ -10,6 +12,7 @@ import (
 	"github.com/kart-io/goagent/interfaces"
 )
 
+// TestNewShellTool 测试创建 Shell 工具
 func TestNewShellTool(t *testing.T) {
 	allowedCommands := []string{"echo", "ls", "pwd"}
 	timeout := 10 * time.Second
@@ -33,6 +36,7 @@ func TestNewShellTool(t *testing.T) {
 	}
 }
 
+// TestNewShellTool_DefaultTimeout 测试默认超时设置
 func TestNewShellTool_DefaultTimeout(t *testing.T) {
 	tool := NewShellTool([]string{"echo"}, 0)
 
@@ -41,6 +45,7 @@ func TestNewShellTool_DefaultTimeout(t *testing.T) {
 	}
 }
 
+// TestShellTool_Run_Success 测试成功执行命令
 func TestShellTool_Run_Success(t *testing.T) {
 	tool := NewShellTool([]string{"echo"}, 30*time.Second)
 	ctx := context.Background()
@@ -80,6 +85,7 @@ func TestShellTool_Run_Success(t *testing.T) {
 	}
 }
 
+// TestShellTool_Run_EmptyCommand 测试空命令的错误处理
 func TestShellTool_Run_EmptyCommand(t *testing.T) {
 	tool := NewShellTool([]string{"echo"}, 30*time.Second)
 	ctx := context.Background()
@@ -100,6 +106,7 @@ func TestShellTool_Run_EmptyCommand(t *testing.T) {
 	}
 }
 
+// TestShellTool_Run_NoCommand 测试缺少命令参数的错误处理
 func TestShellTool_Run_NoCommand(t *testing.T) {
 	tool := NewShellTool([]string{"echo"}, 30*time.Second)
 	ctx := context.Background()
@@ -118,6 +125,7 @@ func TestShellTool_Run_NoCommand(t *testing.T) {
 	}
 }
 
+// TestShellTool_Run_CommandNotAllowed 测试未授权命令的错误处理
 func TestShellTool_Run_CommandNotAllowed(t *testing.T) {
 	tool := NewShellTool([]string{"echo"}, 30*time.Second)
 	ctx := context.Background()
@@ -147,6 +155,7 @@ func TestShellTool_Run_CommandNotAllowed(t *testing.T) {
 	}
 }
 
+// TestShellTool_Run_DangerousCharacters 测试危险字符的安全性检查
 func TestShellTool_Run_DangerousCharacters(t *testing.T) {
 	// Add the dangerous commands to whitelist to test the dangerous character validation
 	tool := NewShellTool([]string{"echo;rm", "echo|grep", "echo&ls", "echo`pwd`", "echo$HOME", "echo>file", "echo<file"}, 30*time.Second)
@@ -191,6 +200,7 @@ func TestShellTool_Run_DangerousCharacters(t *testing.T) {
 	}
 }
 
+// TestShellTool_Run_WithWorkDir 测试指定工作目录执行命令
 func TestShellTool_Run_WithWorkDir(t *testing.T) {
 	// Skip on Windows due to path differences
 	if runtime.GOOS == "windows" {
@@ -231,6 +241,7 @@ func TestShellTool_Run_WithWorkDir(t *testing.T) {
 	}
 }
 
+// TestShellTool_Run_WithTimeout 测试超时控制
 func TestShellTool_Run_WithTimeout(t *testing.T) {
 	tool := NewShellTool([]string{"sleep"}, 30*time.Second)
 	ctx := context.Background()
@@ -256,6 +267,7 @@ func TestShellTool_Run_WithTimeout(t *testing.T) {
 	}
 }
 
+// TestShellTool_GetAllowedCommands 测试获取允许的命令列表
 func TestShellTool_GetAllowedCommands(t *testing.T) {
 	allowedCommands := []string{"echo", "ls", "pwd"}
 	tool := NewShellTool(allowedCommands, 30*time.Second)
@@ -279,6 +291,7 @@ func TestShellTool_GetAllowedCommands(t *testing.T) {
 	}
 }
 
+// TestShellTool_IsCommandAllowed 测试检查命令是否被允许
 func TestShellTool_IsCommandAllowed(t *testing.T) {
 	tool := NewShellTool([]string{"echo", "ls"}, 30*time.Second)
 
@@ -295,6 +308,7 @@ func TestShellTool_IsCommandAllowed(t *testing.T) {
 	}
 }
 
+// TestShellTool_ExecuteScript 测试执行脚本文件
 func TestShellTool_ExecuteScript(t *testing.T) {
 	// Skip on Windows
 	if runtime.GOOS == "windows" {
@@ -313,6 +327,7 @@ func TestShellTool_ExecuteScript(t *testing.T) {
 	_ = err // Either error or success is acceptable for this test
 }
 
+// TestShellTool_ExecutePipeline 测试执行命令管道
 func TestShellTool_ExecutePipeline(t *testing.T) {
 	// Skip on Windows
 	if runtime.GOOS == "windows" {
@@ -331,6 +346,7 @@ func TestShellTool_ExecutePipeline(t *testing.T) {
 	}
 }
 
+// TestShellToolBuilder_New 测试创建 ShellTool 构建器
 func TestShellToolBuilder_New(t *testing.T) {
 	builder := NewShellToolBuilder()
 
@@ -343,6 +359,7 @@ func TestShellToolBuilder_New(t *testing.T) {
 	}
 }
 
+// TestShellToolBuilder_WithAllowedCommands 测试设置允许的命令
 func TestShellToolBuilder_WithAllowedCommands(t *testing.T) {
 	builder := NewShellToolBuilder()
 	builder.WithAllowedCommands("echo", "ls").WithAllowedCommands("pwd")
@@ -352,6 +369,7 @@ func TestShellToolBuilder_WithAllowedCommands(t *testing.T) {
 	}
 }
 
+// TestShellToolBuilder_WithTimeout 测试设置超时时间
 func TestShellToolBuilder_WithTimeout(t *testing.T) {
 	builder := NewShellToolBuilder()
 	timeout := 60 * time.Second
@@ -363,6 +381,7 @@ func TestShellToolBuilder_WithTimeout(t *testing.T) {
 	}
 }
 
+// TestShellToolBuilder_Build 测试使用构建器构建工具
 func TestShellToolBuilder_Build(t *testing.T) {
 	builder := NewShellToolBuilder()
 	tool := builder.
@@ -383,6 +402,7 @@ func TestShellToolBuilder_Build(t *testing.T) {
 	}
 }
 
+// TestCommonShellTools 测试获取常用 Shell 工具列表
 func TestCommonShellTools(t *testing.T) {
 	tools := CommonShellTools()
 
@@ -401,6 +421,7 @@ func TestCommonShellTools(t *testing.T) {
 	}
 }
 
+// TestShellTool_Run_CommandSuccess 测试命令成功执行
 func TestShellTool_Run_CommandSuccess(t *testing.T) {
 	tool := NewShellTool([]string{"echo"}, 30*time.Second)
 	ctx := context.Background()
@@ -427,6 +448,7 @@ func TestShellTool_Run_CommandSuccess(t *testing.T) {
 	}
 }
 
+// TestShellTool_Run_InvalidCommand 测试无效命令的错误处理
 func TestShellTool_Run_InvalidCommand(t *testing.T) {
 	tool := NewShellTool([]string{"nonexistentcommand123"}, 30*time.Second)
 	ctx := context.Background()
@@ -455,6 +477,7 @@ func TestShellTool_Run_InvalidCommand(t *testing.T) {
 	}
 }
 
+// TestShellTool_Metadata 测试命令执行的元数据
 func TestShellTool_Metadata(t *testing.T) {
 	tool := NewShellTool([]string{"echo"}, 30*time.Second)
 	ctx := context.Background()

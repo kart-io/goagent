@@ -1,3 +1,5 @@
+// Package utils 提供工具函数的测试
+// 本文件测试 PromptBuilder 提示词构建器的功能
 package utils
 
 import (
@@ -32,6 +34,7 @@ func TestPromptBuilder_WithContext(t *testing.T) {
 	}
 }
 
+// TestPromptBuilder_WithContexts 测试批量添加多个上下文
 func TestPromptBuilder_WithContexts(t *testing.T) {
 	builder := NewPromptBuilder()
 	contexts := []string{"Context 1", "Context 2", "Context 3"}
@@ -45,6 +48,7 @@ func TestPromptBuilder_WithContexts(t *testing.T) {
 	}
 }
 
+// TestPromptBuilder_WithExample 测试添加示例
 func TestPromptBuilder_WithExample(t *testing.T) {
 	builder := NewPromptBuilder()
 	input := "What is 2+2?"
@@ -60,6 +64,7 @@ func TestPromptBuilder_WithExample(t *testing.T) {
 	}
 }
 
+// TestPromptBuilder_WithTask 测试设置任务描述
 func TestPromptBuilder_WithTask(t *testing.T) {
 	builder := NewPromptBuilder()
 	task := "Analyze the following code"
@@ -74,6 +79,7 @@ func TestPromptBuilder_WithTask(t *testing.T) {
 	}
 }
 
+// TestPromptBuilder_WithConstraint 测试添加约束条件
 func TestPromptBuilder_WithConstraint(t *testing.T) {
 	builder := NewPromptBuilder()
 	constraint := "Keep response under 100 words"
@@ -88,6 +94,7 @@ func TestPromptBuilder_WithConstraint(t *testing.T) {
 	}
 }
 
+// TestPromptBuilder_WithConstraints 测试批量添加约束条件
 func TestPromptBuilder_WithConstraints(t *testing.T) {
 	builder := NewPromptBuilder()
 	constraints := []string{"Constraint 1", "Constraint 2"}
@@ -101,6 +108,7 @@ func TestPromptBuilder_WithConstraints(t *testing.T) {
 	}
 }
 
+// TestPromptBuilder_WithOutputFormat 测试设置输出格式
 func TestPromptBuilder_WithOutputFormat(t *testing.T) {
 	builder := NewPromptBuilder()
 	format := "Respond in JSON format"
@@ -115,6 +123,7 @@ func TestPromptBuilder_WithOutputFormat(t *testing.T) {
 	}
 }
 
+// TestPromptBuilder_FullBuild 测试完整的提示词构建流程
 func TestPromptBuilder_FullBuild(t *testing.T) {
 	builder := NewPromptBuilder()
 
@@ -143,6 +152,7 @@ func TestPromptBuilder_FullBuild(t *testing.T) {
 	}
 }
 
+// TestPromptBuilder_BuildWithTemplate 测试使用模板构建提示词
 func TestPromptBuilder_BuildWithTemplate(t *testing.T) {
 	builder := NewPromptBuilder()
 	template := "Hello {{name}}, your role is {{role}}"
@@ -164,6 +174,7 @@ func TestPromptBuilder_BuildWithTemplate(t *testing.T) {
 	}
 }
 
+// TestPromptBuilder_Reset 测试重置构建器
 func TestPromptBuilder_Reset(t *testing.T) {
 	builder := NewPromptBuilder()
 
@@ -180,6 +191,7 @@ func TestPromptBuilder_Reset(t *testing.T) {
 	}
 }
 
+// TestPromptBuilder_EmptyContext 测试空上下文处理
 func TestPromptBuilder_EmptyContext(t *testing.T) {
 	builder := NewPromptBuilder()
 	result := builder.WithContext("").Build()
@@ -189,6 +201,7 @@ func TestPromptBuilder_EmptyContext(t *testing.T) {
 	}
 }
 
+// TestPromptBuilder_EmptyConstraint 测试空约束处理
 func TestPromptBuilder_EmptyConstraint(t *testing.T) {
 	builder := NewPromptBuilder()
 	result := builder.WithConstraint("").Build()
@@ -198,6 +211,7 @@ func TestPromptBuilder_EmptyConstraint(t *testing.T) {
 	}
 }
 
+// TestCommonPrompts_RootCauseAnalysis 测试根因分析模板
 func TestCommonPrompts_RootCauseAnalysis(t *testing.T) {
 	template := CommonPrompts.RootCauseAnalysis
 
@@ -209,6 +223,7 @@ func TestCommonPrompts_RootCauseAnalysis(t *testing.T) {
 	}
 }
 
+// TestCommonPrompts_ProblemSummary 测试问题摘要模板
 func TestCommonPrompts_ProblemSummary(t *testing.T) {
 	template := CommonPrompts.ProblemSummary
 
@@ -217,6 +232,7 @@ func TestCommonPrompts_ProblemSummary(t *testing.T) {
 	}
 }
 
+// TestCommonPrompts_RecommendationGeneration 测试建议生成模板
 func TestCommonPrompts_RecommendationGeneration(t *testing.T) {
 	template := CommonPrompts.RecommendationGeneration
 
