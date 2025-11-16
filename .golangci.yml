@@ -1,47 +1,90 @@
+# golangci-lint v2 配置文件
+# 配置文件版本，v2 使用新的配置格式
 version: "2"
 
+# Linter 配置
+# golangci-lint 是一个 Go 语言的代码质量检查工具集合
 linters:
+  # 默认 linter 集合设置
+  # 可选值: none (禁用所有), standard (标准集合), all (所有), fast (快速检查)
+  # 这里使用 'none' 禁用所有，然后仅启用我们需要的 linter
   # Use 'none' to disable all by default, then enable only what we need
   default: none
 
+  # 启用的 linter 列表
+  # 当前仅启用 govet - Go 官方的静态分析工具
   enable:
     - govet
 
+  # Linter 特定设置
+  # 为每个 linter 配置具体的检查项
   settings:
+    # govet 配置
+    # govet 是 Go 官方提供的静态分析工具，用于检测可疑的代码构造
     govet:
       enable:
-        - atomic
-        - bools
-        - composites
-        - copylocks
-        - nilfunc
-        - printf
-        - stdmethods
-        - structtag
+        - atomic      # 检查 atomic 包的常见错误使用
+        - bools       # 检查布尔表达式中的常见错误
+        - composites  # 检查复合字面量中未使用键的情况
+        - copylocks   # 检查值传递时的锁拷贝问题
+        - nilfunc     # 检查函数与 nil 的无用比较
+        - printf      # 检查 Printf 系列函数的格式字符串
+        - stdmethods  # 检查标准方法的签名（如 String、Error）
+        - structtag   # 检查结构体标签的正确性
 
+  # 排除规则
+  # 为特定路径或文件禁用某些 linter 检查
   # Exclusion rules for test files and specific paths
   exclusions:
     rules:
+      # 对测试文件禁用 govet 检查
+      # 测试代码通常有不同的质量标准
       - path: _test\.go
         linters:
           - govet
+
+      # 对 mock 代码禁用 govet 检查
+      # Mock 代码是自动生成或测试辅助代码
       - path: testing/mocks/
         linters:
           - govet
+
+      # 对性能测试代码禁用 govet 检查
+      # 性能测试代码可能包含特殊的优化模式
       - path: performance/
         linters:
           - govet
+
+      # 对可观测性相关代码禁用 govet 检查
+      # 监控和日志代码可能有特殊的模式
       - path: observability/
         linters:
           - govet
+
+      # 对分布式系统相关代码禁用 govet 检查
+      # 分布式代码可能包含复杂的并发模式
       - path: distributed/
         linters:
           - govet
 
+# 运行配置
+# 控制 linter 的运行行为
 run:
+  # 超时时间：5 分钟
+  # 如果 linter 运行超过此时间将被终止
   timeout: 5m
+
+  # 是否分析测试文件
+  # true 表示也检查 *_test.go 文件
   tests: true
 
+# 问题报告配置
+# 控制如何报告发现的问题
 issues:
+  # 每个 linter 报告的最大问题数
+  # 0 表示无限制，报告所有发现的问题
   max-issues-per-linter: 0
+
+  # 相同问题的最大报告次数
+  # 0 表示无限制，报告所有重复问题
   max-same-issues: 0
