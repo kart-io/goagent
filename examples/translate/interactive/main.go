@@ -50,7 +50,9 @@ func main() {
 		text = os.Args[1]
 	} else {
 		fmt.Print("请输入要翻译的文本: ")
-		fmt.Scanln(&text)
+		if _, err := fmt.Scanln(&text); err != nil {
+			log.Fatalf("无法读取输入: %v", err)
+		}
 	}
 
 	if text == "" {

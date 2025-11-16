@@ -9,6 +9,7 @@ import (
 	"github.com/kart-io/goagent/agents/executor"
 	"github.com/kart-io/goagent/agents/react"
 	agentcore "github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/tools"
 )
@@ -89,7 +90,7 @@ Final Answer: The current weather in Beijing is 25°C (77°F) with sunny skies.`
 		Name:        "WeatherAgent",
 		Description: "An agent that can provide weather information and perform calculations",
 		LLM:         llmClient,
-		Tools:       []tools.Tool{calculatorTool, weatherTool, searchTool},
+		Tools:       []interfaces.Tool{calculatorTool, weatherTool, searchTool},
 		MaxSteps:    10,
 	})
 
@@ -99,7 +100,7 @@ Final Answer: The current weather in Beijing is 25°C (77°F) with sunny skies.`
 	// 创建执行器
 	executor := executor.NewAgentExecutor(executor.ExecutorConfig{
 		Agent:             agent,
-		Tools:             []tools.Tool{calculatorTool, weatherTool, searchTool},
+		Tools:             []interfaces.Tool{calculatorTool, weatherTool, searchTool},
 		MaxIterations:     10,
 		MaxExecutionTime:  30 * time.Second,
 		ReturnIntermSteps: true,
@@ -168,7 +169,7 @@ Final Answer: The current weather in Beijing is 25°C (77°F) with sunny skies.`
 }
 
 // createCalculatorTool 创建计算器工具
-func createCalculatorTool() tools.Tool {
+func createCalculatorTool() interfaces.Tool {
 	return tools.NewBaseTool(
 		"calculator",
 		"Useful for mathematical calculations. Input should be a mathematical expression.",
@@ -182,10 +183,10 @@ func createCalculatorTool() tools.Tool {
 			},
 			"required": ["expression"]
 		}`,
-		func(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
+		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 			expr, ok := input.Args["expression"].(string)
 			if !ok {
-				return &tools.ToolOutput{
+				return &interfaces.ToolOutput{
 					Success: false,
 					Error:   "expression must be a string",
 				}, nil
@@ -203,7 +204,7 @@ func createCalculatorTool() tools.Tool {
 				result = 42.0
 			}
 
-			return &tools.ToolOutput{
+			return &interfaces.ToolOutput{
 				Result:  result,
 				Success: true,
 			}, nil
@@ -212,7 +213,7 @@ func createCalculatorTool() tools.Tool {
 }
 
 // createWeatherTool 创建天气查询工具
-func createWeatherTool() tools.Tool {
+func createWeatherTool() interfaces.Tool {
 	return tools.NewBaseTool(
 		"weather",
 		"Get current weather information for a city.",
@@ -226,10 +227,10 @@ func createWeatherTool() tools.Tool {
 			},
 			"required": ["city"]
 		}`,
-		func(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
+		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 			city, ok := input.Args["city"].(string)
 			if !ok {
-				return &tools.ToolOutput{
+				return &interfaces.ToolOutput{
 					Success: false,
 					Error:   "city must be a string",
 				}, nil
@@ -244,7 +245,7 @@ func createWeatherTool() tools.Tool {
 				"humidity":    60,
 			}
 
-			return &tools.ToolOutput{
+			return &interfaces.ToolOutput{
 				Result:  weather,
 				Success: true,
 				Metadata: map[string]interface{}{
@@ -256,7 +257,7 @@ func createWeatherTool() tools.Tool {
 }
 
 // createSearchTool 创建搜索工具
-func createSearchTool() tools.Tool {
+func createSearchTool() interfaces.Tool {
 	return tools.NewBaseTool(
 		"search",
 		"Search for information on the internet.",
@@ -270,10 +271,10 @@ func createSearchTool() tools.Tool {
 			},
 			"required": ["query"]
 		}`,
-		func(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
+		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 			query, ok := input.Args["query"].(string)
 			if !ok {
-				return &tools.ToolOutput{
+				return &interfaces.ToolOutput{
 					Success: false,
 					Error:   "query must be a string",
 				}, nil
@@ -286,7 +287,7 @@ func createSearchTool() tools.Tool {
 				fmt.Sprintf("Result 3 for '%s'", query),
 			}
 
-			return &tools.ToolOutput{
+			return &interfaces.ToolOutput{
 				Result:  results,
 				Success: true,
 			}, nil

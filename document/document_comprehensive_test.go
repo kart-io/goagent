@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/retrieval"
 )
 
@@ -1118,7 +1119,7 @@ func TestConcurrentDocumentLoading(t *testing.T) {
 
 	// Load documents concurrently
 	var wg sync.WaitGroup
-	results := make(chan []*retrieval.Document, 5)
+	results := make(chan []*interfaces.Document, 5)
 	errors := make(chan error, 5)
 
 	for i := 0; i < 5; i++ {
@@ -1149,7 +1150,7 @@ func TestConcurrentDocumentSplitting(t *testing.T) {
 		ChunkOverlap: 20,
 	})
 
-	docs := make([]*retrieval.Document, 10)
+	docs := make([]*interfaces.Document, 10)
 	for i := 0; i < 10; i++ {
 		content := strings.Repeat("word ", 100)
 		docs[i] = retrieval.NewDocument(content, map[string]interface{}{"index": i})
@@ -1157,12 +1158,12 @@ func TestConcurrentDocumentSplitting(t *testing.T) {
 
 	// Split documents concurrently
 	var wg sync.WaitGroup
-	results := make(chan []*retrieval.Document, 5)
+	results := make(chan []*interfaces.Document, 5)
 	errors := make(chan error, 5)
 
 	for i := 0; i < 5; i++ {
 		wg.Add(1)
-		go func(docSet []*retrieval.Document) {
+		go func(docSet []*interfaces.Document) {
 			defer wg.Done()
 			splitDocs, err := splitter.SplitDocuments(docSet)
 			if err != nil {

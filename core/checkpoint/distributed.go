@@ -163,6 +163,7 @@ func (dc *DistributedCheckpointer) Save(ctx context.Context, threadID string, st
 			if err := secondary.Save(ctx, threadID, state.Clone()); err != nil {
 				// Log error but don't fail the operation
 				// In production, you might want to use a logger here
+				fmt.Printf("failed to replicate to secondary: %v", err)
 			}
 		case "async":
 			// Asynchronous replication

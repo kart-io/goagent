@@ -6,7 +6,7 @@ import (
 	"time"
 
 	agentcore "github.com/kart-io/goagent/core"
-	"github.com/kart-io/goagent/tools"
+	"github.com/kart-io/goagent/interfaces"
 )
 
 // Memory 定义记忆系统接口（简化版，适配 memory.Manager）
@@ -31,7 +31,7 @@ type Memory interface {
 // - 早停机制
 type AgentExecutor struct {
 	agent               agentcore.Agent
-	tools               []tools.Tool
+	tools               []interfaces.Tool
 	memory              Memory
 	maxIterations       int
 	maxExecutionTime    time.Duration
@@ -43,15 +43,15 @@ type AgentExecutor struct {
 
 // ExecutorConfig 执行器配置
 type ExecutorConfig struct {
-	Agent               agentcore.Agent // Agent 实例
-	Tools               []tools.Tool    // 可用工具
-	Memory              Memory          // 记忆系统
-	MaxIterations       int             // 最大迭代次数
-	MaxExecutionTime    time.Duration   // 最大执行时间
-	EarlyStoppingMethod string          // 早停方法: "force", "generate"
-	HandleParsingErrors bool            // 是否处理解析错误
-	ReturnIntermSteps   bool            // 是否返回中间步骤
-	Verbose             bool            // 是否详细输出
+	Agent               agentcore.Agent   // Agent 实例
+	Tools               []interfaces.Tool // 可用工具
+	Memory              Memory            // 记忆系统
+	MaxIterations       int               // 最大迭代次数
+	MaxExecutionTime    time.Duration     // 最大执行时间
+	EarlyStoppingMethod string            // 早停方法: "force", "generate"
+	HandleParsingErrors bool              // 是否处理解析错误
+	ReturnIntermSteps   bool              // 是否返回中间步骤
+	Verbose             bool              // 是否详细输出
 }
 
 // NewAgentExecutor 创建 Agent 执行器
@@ -237,7 +237,7 @@ func (e *AgentExecutor) Batch(
 }
 
 // GetTools 获取可用工具
-func (e *AgentExecutor) GetTools() []tools.Tool {
+func (e *AgentExecutor) GetTools() []interfaces.Tool {
 	return e.tools
 }
 

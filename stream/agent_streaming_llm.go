@@ -79,7 +79,11 @@ func (a *StreamingLLMAgent) Execute(ctx context.Context, input *core.AgentInput)
 	if err != nil {
 		return nil, err
 	}
-	defer streamOutput.Close()
+	defer func() {
+		if err := streamOutput.Close(); err != nil {
+			fmt.Printf("failed to close stream output: %v", err)
+		}
+	}()
 
 	reader, ok := streamOutput.(*Reader)
 	if !ok {
@@ -120,7 +124,7 @@ func (a *StreamingLLMAgent) ExecuteStream(ctx context.Context, input *core.Agent
 
 // processStreamAsync 异步处理流式输出
 func (a *StreamingLLMAgent) processStreamAsync(ctx context.Context, input *core.AgentInput, writer *Writer) {
-	defer writer.Close()
+	defer func() { _ = writer.Close() }()
 
 	startTime := time.Now()
 
@@ -134,12 +138,14 @@ func (a *StreamingLLMAgent) processStreamAsync(ctx context.Context, input *core.
 	}
 
 	// 发送状态更新
-	writer.WriteStatus("Starting LLM generation...")
+	_ = writer.WriteStatus("Starting LLM generation...")
 
 	// 调用 LLM（这里模拟流式输出，实际需要 LLM 客户端支持）
 	response, err := a.llmClient.Chat(ctx, messages)
 	if err != nil {
-		writer.WriteError(fmt.Errorf("LLM call failed: %w", err))
+		if err := writer.WriteError(fmt.Errorf("LLM call failed: %w", err)); err != nil {
+			fmt.Printf("failed to write error: %v", err)
+		}
 		return
 	}
 
@@ -151,7 +157,7 @@ func (a *StreamingLLMAgent) processStreamAsync(ctx context.Context, input *core.
 		// 检查上下文取消
 		select {
 		case <-ctx.Done():
-			writer.WriteError(ctx.Err())
+			_ = writer.WriteError(ctx.Err())
 			return
 		default:
 		}
@@ -165,7 +171,9 @@ func (a *StreamingLLMAgent) processStreamAsync(ctx context.Context, input *core.
 
 		// 发送文本块
 		if err := writer.WriteText(chunk); err != nil {
-			writer.WriteError(err)
+			if err := writer.WriteError(err); err != nil {
+				fmt.Printf("failed to write error: %v", err)
+			}
 			return
 		}
 
@@ -176,7 +184,9 @@ func (a *StreamingLLMAgent) processStreamAsync(ctx context.Context, input *core.
 				progress = 100
 			}
 			chunkNum := i/a.config.ChunkSize + 1
-			writer.WriteProgress(progress, fmt.Sprintf("Chunk %d/%d", chunkNum, totalChunks))
+			if err := writer.WriteProgress(progress, fmt.Sprintf("Chunk %d/%d", chunkNum, totalChunks)); err != nil {
+				fmt.Printf("failed to write progress: %v", err)
+			}
 		}
 
 		// 添加延迟（模拟打字效果）
@@ -187,7 +197,7 @@ func (a *StreamingLLMAgent) processStreamAsync(ctx context.Context, input *core.
 
 	// 发送完成状态
 	elapsed := time.Since(startTime)
-	writer.WriteStatus(fmt.Sprintf("Completed in %v", elapsed))
+	_ = writer.WriteStatus(fmt.Sprintf("Completed in %v", elapsed))
 }
 
 // StreamingLLMAgentWithRealStreaming 支持真实 LLM 流式 API 的 Agent
@@ -210,7 +220,7 @@ func (a *StreamingLLMAgentWithRealStreaming) ExecuteStream(ctx context.Context, 
 	writer := NewWriter(ctx, opts)
 
 	go func() {
-		defer writer.Close()
+		defer func() { _ = writer.Close() }()
 
 		// TODO: 实现真实的 LLM 流式 API 调用
 		// 这需要 LLM 客户端支持类似以下的接口：
@@ -220,7 +230,9 @@ func (a *StreamingLLMAgentWithRealStreaming) ExecuteStream(ctx context.Context, 
 		//     writer.WriteText(chunk.Text)
 		// }
 
-		writer.WriteError(fmt.Errorf("real streaming API not implemented yet"))
+		if err := writer.WriteError(fmt.Errorf("real streaming API not implemented yet")); err != nil {
+			fmt.Printf("failed to write error: %v", err)
+		}
 	}()
 
 	reader := NewReader(ctx, writer.Channel(), opts)

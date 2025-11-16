@@ -57,10 +57,10 @@ func exampleCallbacks() {
 	processRunnable := core.NewRunnableFunc(
 		func(ctx context.Context, input string) (string, error) {
 			// 模拟 LLM 调用
-			stdoutCallback.OnLLMStart(ctx, []string{input}, "gpt-4")
+			_ = stdoutCallback.OnLLMStart(ctx, []string{input}, "gpt-4")
 			time.Sleep(100 * time.Millisecond) // 模拟延迟
 			result := fmt.Sprintf("Processed: %s", input)
-			stdoutCallback.OnLLMEnd(ctx, result, 50)
+			_ = stdoutCallback.OnLLMEnd(ctx, result, 50)
 			return result, nil
 		},
 	).WithCallbacks(stdoutCallback, metricsCallback)
@@ -207,14 +207,14 @@ func exampleRAGPipeline() {
 	// Step 1: 检索相关文档 (Retrieval)
 	retrievalStep := core.NewRunnableFunc(
 		func(ctx context.Context, query string) ([]string, error) {
-			stdoutCallback.OnToolStart(ctx, "VectorStoreRetriever", query)
+			_ = stdoutCallback.OnToolStart(ctx, "VectorStoreRetriever", query)
 			// 模拟从向量数据库检索
 			docs := []string{
 				"Kubernetes is a container orchestration platform",
 				"K8s provides automated deployment and scaling",
 				"Pods are the smallest deployable units in Kubernetes",
 			}
-			stdoutCallback.OnToolEnd(ctx, "VectorStoreRetriever", docs)
+			_ = stdoutCallback.OnToolEnd(ctx, "VectorStoreRetriever", fmt.Sprintf("%v", docs))
 			return docs, nil
 		},
 	)
@@ -237,14 +237,14 @@ func exampleRAGPipeline() {
 	// Step 3: 调用 LLM (Generate)
 	llmStep := core.NewRunnableFunc(
 		func(ctx context.Context, prompt string) (string, error) {
-			stdoutCallback.OnLLMStart(ctx, []string{prompt}, "gpt-4")
+			_ = stdoutCallback.OnLLMStart(ctx, []string{prompt}, "gpt-4")
 
 			// 检查缓存
 			keyGen := cache.NewCacheKeyGenerator("rag")
 			key := keyGen.GenerateKeySimple(prompt)
 
 			if cached, err := cacheInstance.Get(ctx, key); err == nil {
-				stdoutCallback.OnLLMEnd(ctx, cached.(string), 0)
+				_ = stdoutCallback.OnLLMEnd(ctx, cached.(string), 0)
 				return cached.(string), nil
 			}
 
@@ -259,8 +259,8 @@ func exampleRAGPipeline() {
 }
 ` + "```" + `
 `
-			cacheInstance.Set(ctx, key, response, 0)
-			stdoutCallback.OnLLMEnd(ctx, response, 150)
+			_ = cacheInstance.Set(ctx, key, response, 0)
+			_ = stdoutCallback.OnLLMEnd(ctx, response, 150)
 			return response, nil
 		},
 	)

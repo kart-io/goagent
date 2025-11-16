@@ -186,7 +186,7 @@ func (a *StrategyAgent) Execute(ctx context.Context, input *core.AgentInput) (*c
 		// Try to unmarshal if it's JSON data
 		if planBytes, err := json.Marshal(planData); err == nil {
 			plan = &Plan{}
-			if err := _ = json.Unmarshal(planBytes, plan); err != nil {
+			if err := json.Unmarshal(planBytes, plan); err != nil {
 				return nil, fmt.Errorf("invalid plan data")
 			}
 		} else {
@@ -259,7 +259,7 @@ func (a *OptimizationAgent) Execute(ctx context.Context, input *core.AgentInput)
 		// Try to unmarshal if it's JSON data
 		if planBytes, err := json.Marshal(planData); err == nil {
 			plan = &Plan{}
-			if err := _ = json.Unmarshal(planBytes, plan); err != nil {
+			if err := json.Unmarshal(planBytes, plan); err != nil {
 				return nil, fmt.Errorf("invalid plan data")
 			}
 		} else {
@@ -336,7 +336,7 @@ func (a *ValidationAgent) Execute(ctx context.Context, input *core.AgentInput) (
 		// Try to unmarshal if it's JSON data
 		if planBytes, err := json.Marshal(planData); err == nil {
 			plan = &Plan{}
-			if err := _ = json.Unmarshal(planBytes, plan); err != nil {
+			if err := json.Unmarshal(planBytes, plan); err != nil {
 				return nil, fmt.Errorf("invalid plan data")
 			}
 		} else {

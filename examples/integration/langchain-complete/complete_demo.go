@@ -10,6 +10,7 @@ import (
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/execution"
 	"github.com/kart-io/goagent/core/middleware"
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/store"
 	"github.com/kart-io/goagent/store/memory"
@@ -329,12 +330,12 @@ func main() {
 
 // Tool implementations
 
-func CreateSearchTool() tools.Tool {
+func CreateSearchTool() interfaces.Tool {
 	return tools.NewBaseTool(
 		"search",
 		"Search the web for information",
 		`{"type": "object", "properties": {"query": {"type": "string"}}}`,
-		func(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
+		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 			query := input.Args["query"]
 			// Simulate search
 			results := []string{
@@ -342,7 +343,7 @@ func CreateSearchTool() tools.Tool {
 				fmt.Sprintf("Result 2 for '%v': Advanced %v techniques", query, query),
 				fmt.Sprintf("Result 3 for '%v': %v best practices", query, query),
 			}
-			return &tools.ToolOutput{
+			return &interfaces.ToolOutput{
 				Result:  results,
 				Success: true,
 			}, nil
@@ -350,12 +351,12 @@ func CreateSearchTool() tools.Tool {
 	)
 }
 
-func CreateCalculatorTool() tools.Tool {
+func CreateCalculatorTool() interfaces.Tool {
 	return tools.NewBaseTool(
 		"calculator",
 		"Perform mathematical calculations",
 		`{"type": "object", "properties": {"expression": {"type": "string"}}}`,
-		func(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
+		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 			// Simplified calculator (in production, use proper expression parser)
 			expression := fmt.Sprintf("%v", input.Args["expression"])
 
@@ -366,7 +367,7 @@ func CreateCalculatorTool() tools.Tool {
 				time := 3.0
 				amount := principal * (1 + rate) * (1 + rate) * (1 + rate)
 				interest := amount - principal
-				return &tools.ToolOutput{
+				return &interfaces.ToolOutput{
 					Result: map[string]interface{}{
 						"principal": principal,
 						"rate":      rate * 100,
@@ -381,13 +382,13 @@ func CreateCalculatorTool() tools.Tool {
 			// Example: simple calculation
 			if expression == "10*45/60" {
 				result := 10.0 * 45.0 / 60.0
-				return &tools.ToolOutput{
+				return &interfaces.ToolOutput{
 					Result:  fmt.Sprintf("%.2f hours", result),
 					Success: true,
 				}, nil
 			}
 
-			return &tools.ToolOutput{
+			return &interfaces.ToolOutput{
 				Result:  "Calculation performed",
 				Success: true,
 			}, nil
@@ -395,15 +396,15 @@ func CreateCalculatorTool() tools.Tool {
 	)
 }
 
-func CreateWeatherTool() tools.Tool {
+func CreateWeatherTool() interfaces.Tool {
 	return tools.NewBaseTool(
 		"weather",
 		"Get weather information for a location",
 		`{"type": "object", "properties": {"location": {"type": "string"}}}`,
-		func(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
+		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 			location := input.Args["location"]
 			// Simulate weather data
-			return &tools.ToolOutput{
+			return &interfaces.ToolOutput{
 				Result: map[string]interface{}{
 					"location":    location,
 					"temperature": "22°C",
@@ -417,12 +418,12 @@ func CreateWeatherTool() tools.Tool {
 	)
 }
 
-func CreateDatabaseTool(st store.Store) tools.Tool {
+func CreateDatabaseTool(st store.Store) interfaces.Tool {
 	return tools.NewBaseTool(
 		"database",
 		"Query the database for user information",
 		`{"type": "object", "properties": {"query": {"type": "string"}}}`,
-		func(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
+		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 			// Access runtime context if available
 			if input.Context != nil {
 				// Get user profile from store
@@ -430,7 +431,7 @@ func CreateDatabaseTool(st store.Store) tools.Tool {
 					userID := runtime.Context.UserID
 					profile, err := st.Get(ctx, []string{"users", userID}, "profile")
 					if err == nil {
-						return &tools.ToolOutput{
+						return &interfaces.ToolOutput{
 							Result:  profile.Value,
 							Success: true,
 						}, nil
@@ -438,7 +439,7 @@ func CreateDatabaseTool(st store.Store) tools.Tool {
 				}
 			}
 
-			return &tools.ToolOutput{
+			return &interfaces.ToolOutput{
 				Result:  "Database query executed",
 				Success: true,
 			}, nil

@@ -300,10 +300,12 @@ func NewUserInfoTool() *UserInfoTool {
 // ExecuteWithRuntime retrieves user info using runtime
 func (t *UserInfoTool) ExecuteWithRuntime(ctx context.Context, input *ToolInput, runtime *ToolRuntime) (*ToolOutput, error) {
 	// Stream progress
-	runtime.Stream(map[string]interface{}{
+	if err := runtime.Stream(map[string]interface{}{
 		"status": "Looking up user information",
 		"tool":   t.Name(),
-	})
+	}); err != nil {
+		return nil, fmt.Errorf("failed to stream progress: %w", err)
+	}
 
 	// Get user ID from state
 	userID, err := runtime.GetState("user_id")
@@ -322,10 +324,12 @@ func (t *UserInfoTool) ExecuteWithRuntime(ctx context.Context, input *ToolInput,
 	}
 
 	// Stream completion
-	runtime.Stream(map[string]interface{}{
+	if err := runtime.Stream(map[string]interface{}{
 		"status":  "User information retrieved",
 		"user_id": userID,
-	})
+	}); err != nil {
+		return nil, fmt.Errorf("failed to stream completion: %w", err)
+	}
 
 	return &ToolOutput{
 		Result:  userInfo,
@@ -393,7 +397,9 @@ func (t *SavePreferenceTool) ExecuteWithRuntime(ctx context.Context, input *Tool
 	}
 
 	// Update state with the new preference
-	runtime.SetState(fmt.Sprintf("pref_%s", key), value)
+	if err := runtime.SetState(fmt.Sprintf("pref_%s", key), value); err != nil {
+		return nil, fmt.Errorf("failed to update state: %w", err)
+	}
 
 	return &ToolOutput{
 		Result: map[string]interface{}{
@@ -435,10 +441,12 @@ func (t *UpdateStateTool) ExecuteWithRuntime(ctx context.Context, input *ToolInp
 	}
 
 	// Stream the updates
-	runtime.Stream(map[string]interface{}{
+	if err := runtime.Stream(map[string]interface{}{
 		"status":  "State updated",
 		"updates": input.Args,
-	})
+	}); err != nil {
+		return nil, fmt.Errorf("failed to stream updates: %w", err)
+	}
 
 	return &ToolOutput{
 		Result: map[string]interface{}{

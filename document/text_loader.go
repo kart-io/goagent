@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/retrieval"
 	"github.com/kart-io/k8s-agent/common/errors"
 )
@@ -49,7 +50,7 @@ func NewTextLoader(config TextLoaderConfig) *TextLoader {
 }
 
 // Load 加载文本文件
-func (l *TextLoader) Load(ctx context.Context) ([]*retrieval.Document, error) {
+func (l *TextLoader) Load(ctx context.Context) ([]*interfaces.Document, error) {
 	// 触发回调
 	if l.callbackManager != nil {
 		if err := l.callbackManager.OnStart(ctx, map[string]interface{}{
@@ -85,11 +86,11 @@ func (l *TextLoader) Load(ctx context.Context) ([]*retrieval.Document, error) {
 		}
 	}
 
-	return []*retrieval.Document{doc}, nil
+	return []*interfaces.Document{doc}, nil
 }
 
 // LoadAndSplit 加载并分割
-func (l *TextLoader) LoadAndSplit(ctx context.Context, splitter TextSplitter) ([]*retrieval.Document, error) {
+func (l *TextLoader) LoadAndSplit(ctx context.Context, splitter TextSplitter) ([]*interfaces.Document, error) {
 	return l.BaseDocumentLoader.LoadAndSplit(ctx, l, splitter)
 }
 
@@ -146,7 +147,7 @@ func NewDirectoryLoader(config DirectoryLoaderConfig) *DirectoryLoader {
 }
 
 // Load 加载目录中的所有文件
-func (l *DirectoryLoader) Load(ctx context.Context) ([]*retrieval.Document, error) {
+func (l *DirectoryLoader) Load(ctx context.Context) ([]*interfaces.Document, error) {
 	// 触发回调
 	if l.callbackManager != nil {
 		if err := l.callbackManager.OnStart(ctx, map[string]interface{}{
@@ -191,7 +192,7 @@ func (l *DirectoryLoader) Load(ctx context.Context) ([]*retrieval.Document, erro
 	}
 
 	// 加载每个文件
-	var allDocs []*retrieval.Document
+	var allDocs []*interfaces.Document
 
 	for _, file := range files {
 		loader := l.loader(file)
@@ -218,6 +219,6 @@ func (l *DirectoryLoader) Load(ctx context.Context) ([]*retrieval.Document, erro
 }
 
 // LoadAndSplit 加载并分割
-func (l *DirectoryLoader) LoadAndSplit(ctx context.Context, splitter TextSplitter) ([]*retrieval.Document, error) {
+func (l *DirectoryLoader) LoadAndSplit(ctx context.Context, splitter TextSplitter) ([]*interfaces.Document, error) {
 	return l.BaseDocumentLoader.LoadAndSplit(ctx, l, splitter)
 }

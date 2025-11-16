@@ -94,7 +94,9 @@ func (s *SSEStreamer) Close() error {
 	s.closed = true
 
 	// 发送关闭事件
-	fmt.Fprintf(s.writer, "event: close\ndata: {\"message\": \"stream closed\"}\n\n")
+	if _, err := fmt.Fprintf(s.writer, "event: close\ndata: {\"message\": \"stream closed\"}\n\n"); err != nil {
+		return err
+	}
 	s.flusher.Flush()
 
 	return nil
@@ -106,10 +108,16 @@ func StreamToSSE(ctx context.Context, w http.ResponseWriter, source core.StreamO
 	if err != nil {
 		return err
 	}
-	defer streamer.Close()
+	defer func() {
+		if err := streamer.Close(); err != nil {
+			fmt.Printf("failed to close streamer: %v", err)
+		}
+	}()
 
 	// 发送开始事件
-	fmt.Fprintf(w, "event: start\ndata: {\"message\": \"stream started\"}\n\n")
+	if _, err := fmt.Fprintf(w, "event: start\ndata: {\"message\": \"stream started\"}\n\n"); err != nil {
+		return err
+	}
 	streamer.flusher.Flush()
 
 	for {
@@ -124,7 +132,9 @@ func StreamToSSE(ctx context.Context, w http.ResponseWriter, source core.StreamO
 				if err.Error() == "EOF" {
 					return nil
 				}
-				streamer.WriteError(err)
+				if err := streamer.WriteError(err); err != nil {
+					fmt.Printf("failed to write error: %v", err)
+				}
 				return err
 			}
 
@@ -153,7 +163,11 @@ func SSEHandler(handler func(ctx context.Context, input *core.AgentInput) (core.
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		defer source.Close()
+		defer func() {
+			if err := source.Close(); err != nil {
+				fmt.Printf("failed to close source: %v", err)
+			}
+		}()
 
 		// 转换为 SSE
 		if err := StreamToSSE(ctx, w, source); err != nil {
@@ -220,7 +234,7 @@ func StreamToChunkedTransfer(ctx context.Context, w http.ResponseWriter, source 
 	if err != nil {
 		return err
 	}
-	defer streamer.Close()
+	defer func() { _ = streamer.Close() }()
 
 	for {
 		select {

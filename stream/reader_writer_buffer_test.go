@@ -431,7 +431,7 @@ func TestWriter_Creation(t *testing.T) {
 // TestWriter_WriteChunk tests writing chunk
 func TestWriter_WriteChunk(t *testing.T) {
 	writer := NewWriter(context.Background(), core.DefaultStreamOptions())
-	defer writer.Close()
+	defer func() { _ = writer.Close() }()
 
 	chunk := core.NewTextChunk("test")
 	err := writer.WriteChunk(chunk)
@@ -443,7 +443,7 @@ func TestWriter_WriteChunk(t *testing.T) {
 // TestWriter_Write tests io.Writer interface
 func TestWriter_Write(t *testing.T) {
 	writer := NewWriter(context.Background(), core.DefaultStreamOptions())
-	defer writer.Close()
+	defer func() { _ = writer.Close() }()
 
 	data := []byte("test data")
 	n, err := writer.Write(data)
@@ -455,7 +455,7 @@ func TestWriter_Write(t *testing.T) {
 // TestWriter_WriteText tests writing text
 func TestWriter_WriteText(t *testing.T) {
 	writer := NewWriter(context.Background(), core.DefaultStreamOptions())
-	defer writer.Close()
+	defer func() { _ = writer.Close() }()
 
 	err := writer.WriteText("hello")
 
@@ -465,7 +465,7 @@ func TestWriter_WriteText(t *testing.T) {
 // TestWriter_WriteProgress tests writing progress
 func TestWriter_WriteProgress(t *testing.T) {
 	writer := NewWriter(context.Background(), core.DefaultStreamOptions())
-	defer writer.Close()
+	defer func() { _ = writer.Close() }()
 
 	err := writer.WriteProgress(50.0, "Half done")
 
@@ -475,7 +475,7 @@ func TestWriter_WriteProgress(t *testing.T) {
 // TestWriter_WriteStatus tests writing status
 func TestWriter_WriteStatus(t *testing.T) {
 	writer := NewWriter(context.Background(), core.DefaultStreamOptions())
-	defer writer.Close()
+	defer func() { _ = writer.Close() }()
 
 	err := writer.WriteStatus("processing")
 
@@ -485,7 +485,7 @@ func TestWriter_WriteStatus(t *testing.T) {
 // TestWriter_WriteError tests writing error
 func TestWriter_WriteError(t *testing.T) {
 	writer := NewWriter(context.Background(), core.DefaultStreamOptions())
-	defer writer.Close()
+	defer func() { _ = writer.Close() }()
 
 	err := writer.WriteError(errors.New("test error"))
 
@@ -495,7 +495,7 @@ func TestWriter_WriteError(t *testing.T) {
 // TestWriter_WriteBatch tests batch writing
 func TestWriter_WriteBatch(t *testing.T) {
 	writer := NewWriter(context.Background(), core.DefaultStreamOptions())
-	defer writer.Close()
+	defer func() { _ = writer.Close() }()
 
 	chunks := []*core.LegacyStreamChunk{
 		core.NewTextChunk("a"),
@@ -521,7 +521,7 @@ func TestWriter_Close(t *testing.T) {
 // TestWriter_WriteAfterClose tests error when writing after close
 func TestWriter_WriteAfterClose(t *testing.T) {
 	writer := NewWriter(context.Background(), core.DefaultStreamOptions())
-	writer.Close()
+	_ = writer.Close()
 
 	chunk := core.NewTextChunk("test")
 	err := writer.WriteChunk(chunk)
@@ -532,7 +532,7 @@ func TestWriter_WriteAfterClose(t *testing.T) {
 // TestWriter_Stats tests statistics
 func TestWriter_Stats(t *testing.T) {
 	writer := NewWriter(context.Background(), core.DefaultStreamOptions())
-	defer writer.Close()
+	defer func() { _ = writer.Close() }()
 
 	writer.WriteText("test1")
 	writer.WriteText("test2")
@@ -555,7 +555,7 @@ func TestReaderWriter_Integration(t *testing.T) {
 	go func() {
 		writer.WriteText("message1")
 		writer.WriteText("message2")
-		writer.Close()
+		_ = writer.Close()
 	}()
 
 	text, err := reader.CollectText()
@@ -611,7 +611,7 @@ func TestWriterTimeout(t *testing.T) {
 	opts.ChunkTimeout = 100 * time.Millisecond
 
 	writer := NewWriter(context.Background(), opts)
-	defer writer.Close()
+	defer func() { _ = writer.Close() }()
 
 	// Don't read from channel to cause blocking
 	chunk := core.NewTextChunk("test")
@@ -717,7 +717,7 @@ func BenchmarkReader_Next(b *testing.B) {
 // BenchmarkWriter_WriteChunk benchmarks writing
 func BenchmarkWriter_WriteChunk(b *testing.B) {
 	writer := NewWriter(context.Background(), core.DefaultStreamOptions())
-	defer writer.Close()
+	defer func() { _ = writer.Close() }()
 
 	chunk := core.NewTextChunk("test")
 

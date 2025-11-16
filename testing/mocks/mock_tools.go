@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	"github.com/kart-io/goagent/interfaces"
-	"github.com/kart-io/goagent/tools"
 )
 
 // MockTool provides a mock implementation of the Tool interface
@@ -15,9 +14,9 @@ type MockTool struct {
 	name         string
 	description  string
 	schema       string
-	invokeFunc   func(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error)
+	invokeFunc   func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error)
 	invokeCount  int
-	lastInput    *tools.ToolInput
+	lastInput    *interfaces.ToolInput
 	shouldError  bool
 	errorMessage string
 	delay        int // milliseconds to delay execution
@@ -54,7 +53,7 @@ func (m *MockTool) Schema() string {
 }
 
 // Invoke executes the tool
-func (m *MockTool) Invoke(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
+func (m *MockTool) Invoke(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -108,7 +107,7 @@ func (m *MockTool) GetInvokeCount() int {
 }
 
 // GetLastInput returns the last input passed to the tool
-func (m *MockTool) GetLastInput() *tools.ToolInput {
+func (m *MockTool) GetLastInput() *interfaces.ToolInput {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.lastInput
@@ -198,7 +197,7 @@ func NewMockToolExecutor() *MockToolExecutor {
 }
 
 // ExecuteParallel executes tools in parallel
-func (e *MockToolExecutor) ExecuteParallel(ctx context.Context, toolList []tools.Tool, inputs []map[string]interface{}) ([]interface{}, error) {
+func (e *MockToolExecutor) ExecuteParallel(ctx context.Context, toolList []interfaces.Tool, inputs []map[string]interface{}) ([]interface{}, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -228,7 +227,7 @@ func (e *MockToolExecutor) ExecuteParallel(ctx context.Context, toolList []tools
 }
 
 // SetExecuteFunc sets a custom execute function
-func (e *MockToolExecutor) SetExecuteFunc(fn func(ctx context.Context, tools []tools.Tool, inputs []map[string]interface{}) ([]interface{}, error)) {
+func (e *MockToolExecutor) SetExecuteFunc(fn func(ctx context.Context, tools []interfaces.Tool, inputs []map[string]interface{}) ([]interface{}, error)) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.executeFunc = fn

@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/mock"
 
 	agentcore "github.com/kart-io/goagent/core"
-	"github.com/kart-io/goagent/tools"
+	"github.com/kart-io/goagent/interfaces"
 )
 
 // MockAgent is a mock implementation of agentcore.Agent
@@ -666,7 +666,7 @@ func TestGettersAndSetters(t *testing.T) {
 	executor := NewAgentExecutor(ExecutorConfig{
 		Agent:  mockAgent,
 		Memory: mockMemory,
-		Tools:  []tools.Tool{},
+		Tools:  []interfaces.Tool{},
 	})
 
 	// Test GetTools

@@ -166,8 +166,8 @@ func testOllamaConnection(client llm.Client) bool {
 func createAnalysisAgent(llmClient llm.Client) (*builder.ConfigurableAgent[any, core.State], error) {
 	// Create analysis tools
 	registry := tools.NewRegistry()
-	registry.Register(createDataAnalysisTool())
-	registry.Register(createSummarizeTool())
+	_ = registry.Register(createDataAnalysisTool())
+	_ = registry.Register(createSummarizeTool())
 
 	systemPrompt := `You are an expert Analysis Agent. Your role is to:
 1. Analyze tasks and data thoroughly
@@ -200,8 +200,8 @@ Always call the appropriate tools and return their results.`
 func createStrategyAgent(llmClient llm.Client) (*builder.ConfigurableAgent[any, core.State], error) {
 	// Create strategy tools
 	registry := tools.NewRegistry()
-	registry.Register(createFormulateStrategyTool())
-	registry.Register(createPrioritizeTasksTool())
+	_ = registry.Register(createFormulateStrategyTool())
+	_ = registry.Register(createPrioritizeTasksTool())
 
 	systemPrompt := `You are an expert Strategy Agent. Your role is to:
 1. Review analysis results
@@ -233,9 +233,9 @@ Always call the appropriate tools and return their results.`
 func createExecutionAgent(llmClient llm.Client) (*builder.ConfigurableAgent[any, core.State], error) {
 	// Create execution tools
 	registry := tools.NewRegistry()
-	registry.Register(createHTTPRequestTool())
-	registry.Register(createExecuteCommandTool())
-	registry.Register(createFileOperationsTool())
+	_ = registry.Register(createHTTPRequestTool())
+	_ = registry.Register(createExecuteCommandTool())
+	_ = registry.Register(createFileOperationsTool())
 
 	systemPrompt := `You are an expert Execution Agent. Your role is to:
 1. Review strategic plans

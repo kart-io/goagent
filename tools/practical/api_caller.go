@@ -137,7 +137,7 @@ func (t *APICallerTool) ArgsSchema() string {
 // OutputSchema returns the output schema
 
 // Execute makes the API call
-func (t *APICallerTool) Execute(ctx context.Context, input *tools.ToolInput) (*interfaces.ToolOutput, error) {
+func (t *APICallerTool) Execute(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 	params, err := t.parseAPIInput(input.Args)
 	if err != nil {
 		return nil, fmt.Errorf("invalid input: %w", err)
@@ -230,7 +230,7 @@ func (t *APICallerTool) Stream(ctx context.Context, input *interfaces.ToolInput)
 	return ch, nil
 }
 
-func (t *APICallerTool) Batch(ctx context.Context, inputs []*tools.ToolInput) ([]*interfaces.ToolOutput, error) {
+func (t *APICallerTool) Batch(ctx context.Context, inputs []*interfaces.ToolInput) ([]*interfaces.ToolOutput, error) {
 	outputs := make([]*interfaces.ToolOutput, len(inputs))
 	for i, input := range inputs {
 		output, err := t.Execute(ctx, input)
@@ -242,11 +242,11 @@ func (t *APICallerTool) Batch(ctx context.Context, inputs []*tools.ToolInput) ([
 	return outputs, nil
 }
 
-func (t *APICallerTool) Pipe(next agentcore.Runnable[*interfaces.ToolOutput, any]) agentcore.Runnable[*tools.ToolInput, any] {
+func (t *APICallerTool) Pipe(next agentcore.Runnable[*interfaces.ToolOutput, any]) agentcore.Runnable[*interfaces.ToolInput, any] {
 	return nil
 }
 
-func (t *APICallerTool) WithCallbacks(callbacks ...agentcore.Callback) agentcore.Runnable[*tools.ToolInput, *interfaces.ToolOutput] {
+func (t *APICallerTool) WithCallbacks(callbacks ...agentcore.Callback) agentcore.Runnable[*interfaces.ToolInput, *interfaces.ToolOutput] {
 	return t
 }
 
@@ -324,7 +324,11 @@ func (t *APICallerTool) executeRequest(ctx context.Context, params *apiParams) (
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			fmt.Printf("failed to close response body: %v", err)
+		}
+	}()
 
 	// Read response body
 	bodyBytes, err := io.ReadAll(resp.Body)
@@ -669,10 +673,12 @@ func NewAPICallerRuntimeTool() *APICallerRuntimeTool {
 func (t *APICallerRuntimeTool) ExecuteWithRuntime(ctx context.Context, input *interfaces.ToolInput, runtime *tools.ToolRuntime) (*interfaces.ToolOutput, error) {
 	// Stream status
 	if runtime != nil && runtime.StreamWriter != nil {
-		runtime.StreamWriter(map[string]interface{}{
+		if err := runtime.StreamWriter(map[string]interface{}{
 			"status": "calling_api",
 			"tool":   t.Name(),
-		})
+		}); err != nil {
+			return nil, fmt.Errorf("failed to stream status: %w", err)
+		}
 	}
 
 	// Get stored API keys from runtime
@@ -694,17 +700,21 @@ func (t *APICallerRuntimeTool) ExecuteWithRuntime(ctx context.Context, input *in
 		params, _ := t.parseAPIInput(input.Args)
 		if params != nil {
 			// Store last successful response
-			runtime.PutToStore([]string{"api_responses"}, params.URL, result)
+			if err := runtime.PutToStore([]string{"api_responses"}, params.URL, result); err != nil {
+				return nil, fmt.Errorf("failed to put to store: %w", err)
+			}
 		}
 	}
 
 	// Stream completion
 	if runtime != nil && runtime.StreamWriter != nil {
-		runtime.StreamWriter(map[string]interface{}{
+		if err := runtime.StreamWriter(map[string]interface{}{
 			"status": "completed",
 			"tool":   t.Name(),
 			"error":  err,
-		})
+		}); err != nil {
+			return nil, fmt.Errorf("failed to stream completion: %w", err)
+		}
 	}
 
 	return result, err

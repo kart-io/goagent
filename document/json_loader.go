@@ -173,7 +173,7 @@ func (l *JSONLoader) loadJSONLines(content []byte) []*interfaces.Document {
 }
 
 // parseJSONObject 解析 JSON 对象为文档
-func (l *JSONLoader) parseJSONObject(obj map[string]interface{}) *retrieval.Document {
+func (l *JSONLoader) parseJSONObject(obj map[string]interface{}) *interfaces.Document {
 	// 提取内容
 	contentValue, ok := obj[l.contentKey]
 	if !ok {
