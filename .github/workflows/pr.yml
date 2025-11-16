@@ -69,7 +69,7 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
-          version: latest
+          version: v2.5.0
           install-mode: goinstall
           args: --timeout=5m --new-from-rev=origin/${{ github.base_ref }}
 
