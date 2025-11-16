@@ -123,7 +123,7 @@ func (c *NATSCommunicator) Unsubscribe(ctx context.Context, topic string) error 
 	defer c.mu.Unlock()
 
 	if sub, exists := c.subs[topic]; exists {
-		if err := sub.Unsubscribe(); err != nil {
+		if err := _ = sub.Unsubscribe(); err != nil {
 			return err
 		}
 		delete(c.subs, topic)
@@ -138,7 +138,7 @@ func (c *NATSCommunicator) Close() error {
 	defer c.mu.Unlock()
 
 	for topic, sub := range c.subs {
-		sub.Unsubscribe()
+		_ = sub.Unsubscribe()
 		delete(c.subs, topic)
 	}
 

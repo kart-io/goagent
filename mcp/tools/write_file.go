@@ -99,7 +99,7 @@ func (t *WriteFileTool) Execute(ctx context.Context, input map[string]interface{
 				Timestamp: time.Now(),
 			}, err
 		}
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 
 		_, err = f.WriteString(content)
 	} else {

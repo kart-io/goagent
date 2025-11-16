@@ -14,8 +14,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
-	"github.com/kart-io/goagent/tools"
 )
 
 // ==============================================================================
@@ -456,7 +456,7 @@ func TestDeepSeekProvider_GenerateWithTools(t *testing.T) {
 	require.NoError(t, err)
 
 	mockTool := &MockTool{}
-	toolsList := []tools.Tool{mockTool}
+	toolsList := []interfaces.Tool{mockTool}
 
 	resp, err := provider.GenerateWithTools(context.Background(), "What's the weather?", toolsList)
 	assert.NoError(t, err)
@@ -553,7 +553,7 @@ func TestDeepSeekProvider_StreamWithTools(t *testing.T) {
 	require.NoError(t, err)
 
 	mockTool := &MockTool{}
-	chunks, err := provider.StreamWithTools(context.Background(), "Test", []tools.Tool{mockTool})
+	chunks, err := provider.StreamWithTools(context.Background(), "Test", []interfaces.Tool{mockTool})
 	require.NoError(t, err)
 
 	var chunkCount int
@@ -663,7 +663,7 @@ func TestDeepSeekProvider_ConvertToolsToDeepSeek(t *testing.T) {
 	require.NoError(t, err)
 
 	mockTool := &MockTool{}
-	tools := []tools.Tool{mockTool}
+	tools := []interfaces.Tool{mockTool}
 
 	dsTools := provider.convertToolsToDeepSeek(tools)
 
@@ -883,7 +883,7 @@ func TestOpenAIProvider_ConvertToolsToFunctionsComprehensive(t *testing.T) {
 	require.NoError(t, err)
 
 	mockTool := &MockTool{}
-	tools := []tools.Tool{mockTool}
+	tools := []interfaces.Tool{mockTool}
 
 	functions := provider.convertToolsToFunctions(tools)
 
@@ -1230,7 +1230,7 @@ func TestDeepSeekProvider_ToolCallArgumentsParsing(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	resp, err := provider.GenerateWithTools(context.Background(), "Calculate", []tools.Tool{&MockTool{}})
+	resp, err := provider.GenerateWithTools(context.Background(), "Calculate", []interfaces.Tool{&MockTool{}})
 	assert.NoError(t, err)
 	assert.NotNil(t, resp)
 
@@ -1391,7 +1391,7 @@ func TestMultipleToolCalls(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	resp, err := provider.GenerateWithTools(context.Background(), "Call tools", []tools.Tool{&MockTool{}})
+	resp, err := provider.GenerateWithTools(context.Background(), "Call tools", []interfaces.Tool{&MockTool{}})
 	assert.NoError(t, err)
 	assert.NotNil(t, resp)
 	assert.Len(t, resp.ToolCalls, 3)

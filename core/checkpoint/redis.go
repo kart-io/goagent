@@ -160,7 +160,7 @@ func (c *RedisCheckpointer) Save(ctx context.Context, threadID string, state age
 		if err := c.acquireLock(ctx, threadID); err != nil {
 			return fmt.Errorf("failed to acquire lock: %w", err)
 		}
-		defer c.releaseLock(ctx, threadID)
+		defer func() { _ = c.releaseLock(ctx, threadID) }()
 	}
 
 	// Get existing checkpoint to preserve created timestamp
@@ -268,7 +268,7 @@ func (c *RedisCheckpointer) Delete(ctx context.Context, threadID string) error {
 		if err := c.acquireLock(ctx, threadID); err != nil {
 			return fmt.Errorf("failed to acquire lock: %w", err)
 		}
-		defer c.releaseLock(ctx, threadID)
+		defer func() { _ = c.releaseLock(ctx, threadID) }()
 	}
 
 	err := c.client.Del(ctx, key).Err()

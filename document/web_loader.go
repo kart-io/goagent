@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/retrieval"
 	"github.com/kart-io/k8s-agent/common/errors"
 )
@@ -62,7 +63,7 @@ func NewWebLoader(config WebLoaderConfig) *WebLoader {
 }
 
 // Load 加载 Web 页面
-func (l *WebLoader) Load(ctx context.Context) ([]*retrieval.Document, error) {
+func (l *WebLoader) Load(ctx context.Context) ([]*interfaces.Document, error) {
 	// 触发回调
 	if l.callbackManager != nil {
 		if err := l.callbackManager.OnStart(ctx, map[string]interface{}{
@@ -100,7 +101,7 @@ func (l *WebLoader) Load(ctx context.Context) ([]*retrieval.Document, error) {
 		}
 		return nil, errors.Wrap(errors.CodeInternalError, "failed to fetch url", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// 检查状态码
 	if resp.StatusCode != http.StatusOK {
@@ -145,11 +146,11 @@ func (l *WebLoader) Load(ctx context.Context) ([]*retrieval.Document, error) {
 		}
 	}
 
-	return []*retrieval.Document{doc}, nil
+	return []*interfaces.Document{doc}, nil
 }
 
 // LoadAndSplit 加载并分割
-func (l *WebLoader) LoadAndSplit(ctx context.Context, splitter TextSplitter) ([]*retrieval.Document, error) {
+func (l *WebLoader) LoadAndSplit(ctx context.Context, splitter TextSplitter) ([]*interfaces.Document, error) {
 	return l.BaseDocumentLoader.LoadAndSplit(ctx, l, splitter)
 }
 

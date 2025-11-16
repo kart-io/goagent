@@ -229,7 +229,7 @@ func (dc *DistributedCheckpointer) Delete(ctx context.Context, threadID string) 
 	if enableReplication && secondary != nil {
 		switch replicationMode {
 		case ReplicationModeSync:
-			secondary.Delete(ctx, threadID)
+			_ = secondary.Delete(ctx, threadID)
 		case ReplicationModeAsync:
 			select {
 			case dc.replicationQueue <- replicationTask{
@@ -348,9 +348,9 @@ func (dc *DistributedCheckpointer) replicationWorker() {
 
 		switch task.operation {
 		case "save":
-			secondary.Save(ctx, task.threadID, task.state)
+			_ = secondary.Save(ctx, task.threadID, task.state)
 		case "delete":
-			secondary.Delete(ctx, task.threadID)
+			_ = secondary.Delete(ctx, task.threadID)
 		}
 	}
 }
@@ -408,12 +408,12 @@ func (dc *DistributedCheckpointer) checkBackendHealth() {
 
 	// Try failover if primary is down and auto-failover is enabled
 	if !primaryHealthy && dc.config.EnableAutoFailover && !dc.failedOver {
-		dc.tryFailover(ctx)
+		_ = dc.tryFailover(ctx)
 	}
 
 	// Try failback if primary is back up
 	if primaryHealthy && dc.failedOver {
-		dc.tryFailback(ctx)
+		_ = dc.tryFailback(ctx)
 	}
 }
 

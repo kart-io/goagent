@@ -233,7 +233,7 @@ func (m *HierarchicalMemory) Get(ctx context.Context, key string) (interface{}, 
 
 		// Promote frequently accessed long-term memories to short-term
 		if entry.AccessCount > 10 {
-			m.shortTerm.Store(ctx, entry)
+			_ = m.shortTerm.Store(ctx, entry)
 		}
 
 		return entry.Content, nil
@@ -360,11 +360,11 @@ func (m *HierarchicalMemory) Consolidate(ctx context.Context) error {
 			for i, v := range entry.Embedding {
 				embedding64[i] = float64(v)
 			}
-			m.vectorStore.Add(ctx, entry.ID, embedding64, entry.Metadata)
+			_ = m.vectorStore.Add(ctx, entry.ID, embedding64, entry.Metadata)
 		}
 
 		// Remove from short-term
-		m.shortTerm.Remove(ctx, entry.ID)
+		_ = m.shortTerm.Remove(ctx, entry.ID)
 	}
 
 	return nil
@@ -387,7 +387,7 @@ func (m *HierarchicalMemory) Forget(ctx context.Context, threshold float64) erro
 	// Remove from vector store
 	if m.vectorStore != nil {
 		for _, id := range append(shortTermForgotten, longTermForgotten...) {
-			m.vectorStore.Delete(ctx, id)
+			_ = m.vectorStore.Delete(ctx, id)
 		}
 	}
 
@@ -526,7 +526,7 @@ func (m *HierarchicalMemory) Clear(ctx context.Context) error {
 
 	if m.vectorStore != nil {
 		// Clear vector store
-		m.vectorStore.Clear(ctx)
+		_ = m.vectorStore.Clear(ctx)
 	}
 
 	return nil
@@ -614,10 +614,10 @@ func (m *HierarchicalMemory) backgroundConsolidation() {
 			return // Clean shutdown
 		case <-ticker.C:
 			// Consolidate memories
-			m.Consolidate(m.ctx)
+			_ = m.Consolidate(m.ctx)
 
 			// Forget unimportant memories
-			m.Forget(m.ctx, m.importanceThreshold)
+			_ = m.Forget(m.ctx, m.importanceThreshold)
 		}
 	}
 }

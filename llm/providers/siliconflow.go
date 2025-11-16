@@ -196,7 +196,7 @@ func (c *SiliconFlowClient) Complete(ctx context.Context, req *llm.CompletionReq
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
