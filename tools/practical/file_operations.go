@@ -21,6 +21,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	agentcore "github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/tools"
 )
 
@@ -142,7 +143,7 @@ func (t *FileOperationsTool) ArgsSchema() string {
 // OutputSchema returns the output schema
 
 // Execute performs the file operation
-func (t *FileOperationsTool) Execute(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
+func (t *FileOperationsTool) Execute(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 	params, err := t.parseFileInput(input.Args)
 	if err != nil {
 		return nil, fmt.Errorf("invalid input: %w", err)
@@ -150,7 +151,7 @@ func (t *FileOperationsTool) Execute(ctx context.Context, input *tools.ToolInput
 
 	// Validate path security
 	if err := t.validatePath(params.Path); err != nil {
-		return &tools.ToolOutput{
+		return &interfaces.ToolOutput{
 			Result: map[string]interface{}{
 				"success": false,
 				"error":   err.Error(),
@@ -198,32 +199,32 @@ func (t *FileOperationsTool) Execute(ctx context.Context, input *tools.ToolInput
 		return nil, err
 	}
 
-	return &tools.ToolOutput{
+	return &interfaces.ToolOutput{
 		Result: result,
 	}, nil
 }
 
 // Implement Runnable interface
-func (t *FileOperationsTool) Invoke(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
+func (t *FileOperationsTool) Invoke(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 	return t.Execute(ctx, input)
 }
 
-func (t *FileOperationsTool) Stream(ctx context.Context, input *tools.ToolInput) (<-chan agentcore.StreamChunk[*tools.ToolOutput], error) {
-	ch := make(chan agentcore.StreamChunk[*tools.ToolOutput])
+func (t *FileOperationsTool) Stream(ctx context.Context, input *interfaces.ToolInput) (<-chan agentcore.StreamChunk[*interfaces.ToolOutput], error) {
+	ch := make(chan agentcore.StreamChunk[*interfaces.ToolOutput])
 	go func() {
 		defer close(ch)
 		output, err := t.Execute(ctx, input)
 		if err != nil {
-			ch <- agentcore.StreamChunk[*tools.ToolOutput]{Error: err}
+			ch <- agentcore.StreamChunk[*interfaces.ToolOutput]{Error: err}
 		} else {
-			ch <- agentcore.StreamChunk[*tools.ToolOutput]{Data: output}
+			ch <- agentcore.StreamChunk[*interfaces.ToolOutput]{Data: output}
 		}
 	}()
 	return ch, nil
 }
 
-func (t *FileOperationsTool) Batch(ctx context.Context, inputs []*tools.ToolInput) ([]*tools.ToolOutput, error) {
-	outputs := make([]*tools.ToolOutput, len(inputs))
+func (t *FileOperationsTool) Batch(ctx context.Context, inputs []*interfaces.ToolInput) ([]*interfaces.ToolOutput, error) {
+	outputs := make([]*interfaces.ToolOutput, len(inputs))
 	for i, input := range inputs {
 		output, err := t.Execute(ctx, input)
 		if err != nil {
@@ -234,15 +235,15 @@ func (t *FileOperationsTool) Batch(ctx context.Context, inputs []*tools.ToolInpu
 	return outputs, nil
 }
 
-func (t *FileOperationsTool) Pipe(next agentcore.Runnable[*tools.ToolOutput, any]) agentcore.Runnable[*tools.ToolInput, any] {
+func (t *FileOperationsTool) Pipe(next agentcore.Runnable[*interfaces.ToolOutput, any]) agentcore.Runnable[*interfaces.ToolInput, any] {
 	return nil
 }
 
-func (t *FileOperationsTool) WithCallbacks(callbacks ...agentcore.Callback) agentcore.Runnable[*tools.ToolInput, *tools.ToolOutput] {
+func (t *FileOperationsTool) WithCallbacks(callbacks ...agentcore.Callback) agentcore.Runnable[*interfaces.ToolInput, *interfaces.ToolOutput] {
 	return t
 }
 
-func (t *FileOperationsTool) WithConfig(config agentcore.RunnableConfig) agentcore.Runnable[*tools.ToolInput, *tools.ToolOutput] {
+func (t *FileOperationsTool) WithConfig(config agentcore.RunnableConfig) agentcore.Runnable[*interfaces.ToolInput, *interfaces.ToolOutput] {
 	return t
 }
 
@@ -263,7 +264,11 @@ func (t *FileOperationsTool) readFile(ctx context.Context, params *fileParams) (
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			fmt.Printf("failed to close file: %v", err)
+		}
+	}()
 
 	// Read with options
 	if params.Options.Lines > 0 {
@@ -320,7 +325,9 @@ func (t *FileOperationsTool) writeFile(ctx context.Context, params *fileParams) 
 	if params.Options.Permissions != "" {
 		// Parse permissions
 		var p uint64
-		fmt.Sscanf(params.Options.Permissions, "%o", &p)
+		if _, err := fmt.Sscanf(params.Options.Permissions, "%o", &p); err != nil {
+			return nil, err
+		}
 		// Validate permissions to prevent overflow
 		if p > 0xFFFFFFFF { // Max uint32 for FileMode
 			p = 0xFFFFFFFF
@@ -355,7 +362,11 @@ func (t *FileOperationsTool) appendFile(ctx context.Context, params *fileParams)
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			fmt.Printf("failed to close file: %v", err)
+		}
+	}()
 
 	_, err = file.WriteString(params.Content)
 	if err != nil {
@@ -433,14 +444,22 @@ func (t *FileOperationsTool) copyFile(ctx context.Context, params *fileParams) (
 	if err != nil {
 		return nil, err
 	}
-	defer src.Close()
+	defer func() {
+		if err := src.Close(); err != nil {
+			fmt.Printf("failed to close source file: %v", err)
+		}
+	}()
 
 	// Create destination
 	dst, err := os.Create(params.Destination)
 	if err != nil {
 		return nil, err
 	}
-	defer dst.Close()
+	defer func() {
+		if err := dst.Close(); err != nil {
+			fmt.Printf("failed to close destination file: %v", err)
+		}
+	}()
 
 	// Copy content
 	bytesCopied, err := io.Copy(dst, src)
@@ -449,7 +468,9 @@ func (t *FileOperationsTool) copyFile(ctx context.Context, params *fileParams) (
 	}
 
 	// Copy permissions
-	dst.Chmod(srcInfo.Mode())
+	if err := dst.Chmod(srcInfo.Mode()); err != nil {
+		return nil, err
+	}
 
 	return map[string]interface{}{
 		"success": true,
@@ -679,18 +700,30 @@ func (t *FileOperationsTool) compressGzip(src, dst string) (interface{}, error) 
 	if err != nil {
 		return nil, err
 	}
-	defer srcFile.Close()
+	defer func() {
+		if err := srcFile.Close(); err != nil {
+			fmt.Printf("failed to close source file: %v", err)
+		}
+	}()
 
 	// Create destination
 	dstFile, err := os.Create(dst)
 	if err != nil {
 		return nil, err
 	}
-	defer dstFile.Close()
+	defer func() {
+		if err := dstFile.Close(); err != nil {
+			fmt.Printf("failed to close destination file: %v", err)
+		}
+	}()
 
 	// Create gzip writer
 	gz := gzip.NewWriter(dstFile)
-	defer gz.Close()
+	defer func() {
+		if err := gz.Close(); err != nil {
+			fmt.Printf("failed to close gzip writer: %v", err)
+		}
+	}()
 
 	// Copy content
 	written, err := io.Copy(gz, srcFile)
@@ -722,11 +755,19 @@ func (t *FileOperationsTool) compressZip(src, dst string) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer dstFile.Close()
+	defer func() {
+		if err := dstFile.Close(); err != nil {
+			fmt.Printf("failed to close destination file: %v", err)
+		}
+	}()
 
 	// Create zip writer
 	zipWriter := zip.NewWriter(dstFile)
-	defer zipWriter.Close()
+	defer func() {
+		if err := zipWriter.Close(); err != nil {
+			fmt.Printf("failed to close zip writer: %v", err)
+		}
+	}()
 
 	// Add file to zip
 	info, err := os.Stat(src)
@@ -764,7 +805,11 @@ func (t *FileOperationsTool) compressZip(src, dst string) (interface{}, error) {
 				if err != nil {
 					return err
 				}
-				defer file.Close()
+				defer func() {
+					if err := file.Close(); err != nil {
+						fmt.Printf("failed to close file: %v", err)
+					}
+				}()
 				if _, err = io.Copy(writer, file); err != nil {
 					return err
 				}
@@ -785,7 +830,11 @@ func (t *FileOperationsTool) compressZip(src, dst string) (interface{}, error) {
 		if err != nil {
 			return nil, err
 		}
-		defer file.Close()
+		defer func() {
+			if err := file.Close(); err != nil {
+				fmt.Printf("failed to close file: %v", err)
+			}
+		}()
 
 		_, err = io.Copy(writer, file)
 		if err != nil {
@@ -842,21 +891,33 @@ func (t *FileOperationsTool) decompressGzip(src, dst string) (interface{}, error
 	if err != nil {
 		return nil, err
 	}
-	defer srcFile.Close()
+	defer func() {
+		if err := srcFile.Close(); err != nil {
+			fmt.Printf("failed to close source file: %v", err)
+		}
+	}()
 
 	// Create gzip reader
 	gz, err := gzip.NewReader(srcFile)
 	if err != nil {
 		return nil, err
 	}
-	defer gz.Close()
+	defer func() {
+		if err := gz.Close(); err != nil {
+			fmt.Printf("failed to close gzip reader: %v", err)
+		}
+	}()
 
 	// Create destination
 	dstFile, err := os.Create(dst)
 	if err != nil {
 		return nil, err
 	}
-	defer dstFile.Close()
+	defer func() {
+		if err := dstFile.Close(); err != nil {
+			fmt.Printf("failed to close destination file: %v", err)
+		}
+	}()
 
 	// Copy content
 	written, err := io.Copy(dstFile, gz)
@@ -881,7 +942,11 @@ func (t *FileOperationsTool) decompressZip(src, dst string) (interface{}, error)
 	if err != nil {
 		return nil, err
 	}
-	defer reader.Close()
+	defer func() {
+		if err := reader.Close(); err != nil {
+			fmt.Printf("failed to close zip reader: %v", err)
+		}
+	}()
 
 	// Create destination directory
 	if err := os.MkdirAll(dst, 0o755); err != nil {
@@ -893,7 +958,9 @@ func (t *FileOperationsTool) decompressZip(src, dst string) (interface{}, error)
 		path := filepath.Join(dst, file.Name)
 
 		if file.FileInfo().IsDir() {
-			os.MkdirAll(path, file.Mode())
+			if err := os.MkdirAll(path, file.Mode()); err != nil {
+				return nil, err
+			}
 			continue
 		}
 
@@ -902,14 +969,22 @@ func (t *FileOperationsTool) decompressZip(src, dst string) (interface{}, error)
 		if err != nil {
 			return nil, err
 		}
-		defer fileReader.Close()
+		defer func() {
+			if err := fileReader.Close(); err != nil {
+				fmt.Printf("failed to close file reader: %v", err)
+			}
+		}()
 
 		// Create destination file
 		targetFile, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, file.Mode())
 		if err != nil {
 			return nil, err
 		}
-		defer targetFile.Close()
+		defer func() {
+			if err := targetFile.Close(); err != nil {
+				fmt.Printf("failed to close target file: %v", err)
+			}
+		}()
 
 		// Copy content
 		_, err = io.Copy(targetFile, fileReader)
@@ -1235,13 +1310,15 @@ func NewFileOperationsRuntimeTool(basePath string) *FileOperationsRuntimeTool {
 }
 
 // ExecuteWithRuntime executes with runtime support
-func (t *FileOperationsRuntimeTool) ExecuteWithRuntime(ctx context.Context, input *tools.ToolInput, runtime *tools.ToolRuntime) (*tools.ToolOutput, error) {
+func (t *FileOperationsRuntimeTool) ExecuteWithRuntime(ctx context.Context, input *interfaces.ToolInput, runtime *tools.ToolRuntime) (*interfaces.ToolOutput, error) {
 	// Stream status
 	if runtime != nil && runtime.StreamWriter != nil {
-		runtime.StreamWriter(map[string]interface{}{
+		if err := runtime.StreamWriter(map[string]interface{}{
 			"status": "performing_file_operation",
 			"tool":   t.Name(),
-		})
+		}); err != nil {
+			return nil, fmt.Errorf("failed to stream status: %w", err)
+		}
 	}
 
 	// Execute the operation
@@ -1252,22 +1329,26 @@ func (t *FileOperationsRuntimeTool) ExecuteWithRuntime(ctx context.Context, inpu
 		params, _ := t.parseFileInput(input.Args)
 		if params != nil {
 			// Store operation log
-			runtime.PutToStore([]string{"file_operations"}, time.Now().Format(time.RFC3339), map[string]interface{}{
+			if err := runtime.PutToStore([]string{"file_operations"}, time.Now().Format(time.RFC3339), map[string]interface{}{
 				"operation": params.Operation,
 				"path":      params.Path,
 				"success":   err == nil,
 				"error":     err,
-			})
+			}); err != nil {
+				return nil, fmt.Errorf("failed to store operation log: %w", err)
+			}
 		}
 	}
 
 	// Stream completion
 	if runtime != nil && runtime.StreamWriter != nil {
-		runtime.StreamWriter(map[string]interface{}{
+		if err := runtime.StreamWriter(map[string]interface{}{
 			"status": "completed",
 			"tool":   t.Name(),
 			"error":  err,
-		})
+		}); err != nil {
+			return nil, fmt.Errorf("failed to stream completion: %w", err)
+		}
 	}
 
 	return result, err

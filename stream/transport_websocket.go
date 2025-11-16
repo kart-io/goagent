@@ -113,7 +113,9 @@ func (w *WebSocketStreamer) Close() error {
 
 	// 发送关闭消息
 	closeMsg := websocket.FormatCloseMessage(websocket.CloseNormalClosure, "stream closed")
-	w.conn.WriteMessage(websocket.CloseMessage, closeMsg)
+	if err := w.conn.WriteMessage(websocket.CloseMessage, closeMsg); err != nil {
+		fmt.Printf("failed to write close message: %v", err)
+	}
 
 	return w.conn.Close()
 }
@@ -128,7 +130,7 @@ func (w *WebSocketStreamer) IsClosed() bool {
 // StreamToWebSocket 将 StreamOutput 转换为 WebSocket 流
 func StreamToWebSocket(ctx context.Context, conn *websocket.Conn, source core.StreamOutput) error {
 	streamer := NewWebSocketStreamer(conn)
-	defer streamer.Close()
+	defer func() { _ = streamer.Close() }()
 
 	// 发送开始消息
 	startChunk := &core.LegacyStreamChunk{
@@ -138,7 +140,9 @@ func StreamToWebSocket(ctx context.Context, conn *websocket.Conn, source core.St
 			"message": "stream started",
 		},
 	}
-	streamer.WriteChunk(startChunk)
+	if err := streamer.WriteChunk(startChunk); err != nil {
+		fmt.Printf("failed to write start chunk: %v", err)
+	}
 
 	for {
 		select {
@@ -157,10 +161,14 @@ func StreamToWebSocket(ctx context.Context, conn *websocket.Conn, source core.St
 							"message": "stream ended",
 						},
 					}
-					streamer.WriteChunk(endChunk)
+					if err := streamer.WriteChunk(endChunk); err != nil {
+						fmt.Printf("failed to write end chunk: %v", err)
+					}
 					return nil
 				}
-				streamer.WriteError(err)
+				if err := streamer.WriteError(err); err != nil {
+					fmt.Printf("failed to write error: %v", err)
+				}
 				return err
 			}
 
@@ -280,7 +288,11 @@ func WebSocketStreamHandler(handler func(ctx context.Context, input *core.AgentI
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		defer conn.Close()
+		defer func() {
+			if err := conn.Close(); err != nil {
+				fmt.Printf("failed to close connection: %v", err)
+			}
+		}()
 
 		ctx := r.Context()
 		streamer := NewWebSocketStreamer(conn)
@@ -288,31 +300,43 @@ func WebSocketStreamHandler(handler func(ctx context.Context, input *core.AgentI
 		// 读取输入
 		chunk, err := streamer.ReadChunk()
 		if err != nil {
-			streamer.WriteError(err)
+			if err := streamer.WriteError(err); err != nil {
+				fmt.Printf("failed to write error: %v", err)
+			}
 			return
 		}
 
 		// 解析输入
 		inputData, ok := chunk.Data.(map[string]interface{})
 		if !ok {
-			streamer.WriteError(fmt.Errorf("invalid input format"))
+			if err := streamer.WriteError(fmt.Errorf("invalid input format")); err != nil {
+				fmt.Printf("failed to write error: %v", err)
+			}
 			return
 		}
 
 		inputJSON, _ := json.Marshal(inputData)
 		var input core.AgentInput
 		if err := json.Unmarshal(inputJSON, &input); err != nil {
-			streamer.WriteError(err)
+			if err := streamer.WriteError(err); err != nil {
+				fmt.Printf("failed to write error: %v", err)
+			}
 			return
 		}
 
 		// 执行流式任务
 		source, err := handler(ctx, &input)
 		if err != nil {
-			streamer.WriteError(err)
+			if err := streamer.WriteError(err); err != nil {
+				fmt.Printf("failed to write error: %v", err)
+			}
 			return
 		}
-		defer source.Close()
+		defer func() {
+			if err := source.Close(); err != nil {
+				fmt.Printf("failed to close source: %v", err)
+			}
+		}()
 
 		// 转换为 WebSocket 流
 		if err := StreamToWebSocket(ctx, conn, source); err != nil {

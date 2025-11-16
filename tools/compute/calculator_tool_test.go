@@ -9,7 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/kart-io/goagent/interfaces"
-	"github.com/kart-io/goagent/tools"
 )
 
 // TestNewCalculatorTool tests calculator tool creation
@@ -75,7 +74,7 @@ func TestCalculatorTool_Parentheses(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			output, err := calc.Invoke(ctx, &tools.ToolInput{
+			output, err := calc.Invoke(ctx, &interfaces.ToolInput{
 				Args: map[string]interface{}{
 					"expression": tt.expression,
 				},
@@ -107,7 +106,7 @@ func TestCalculatorTool_PowerOperations(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			output, err := calc.Invoke(ctx, &tools.ToolInput{
+			output, err := calc.Invoke(ctx, &interfaces.ToolInput{
 				Args: map[string]interface{}{
 					"expression": tt.expression,
 				},
@@ -168,7 +167,7 @@ func TestCalculatorTool_ErrorCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			output, err := calc.Invoke(ctx, &tools.ToolInput{
+			output, err := calc.Invoke(ctx, &interfaces.ToolInput{
 				Args:    tt.args,
 				Context: ctx,
 			})
@@ -196,7 +195,7 @@ func TestCalculatorTool_WhitespaceHandling(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.expression, func(t *testing.T) {
-			output, err := calc.Invoke(ctx, &tools.ToolInput{
+			output, err := calc.Invoke(ctx, &interfaces.ToolInput{
 				Args: map[string]interface{}{
 					"expression": tt.expression,
 				},
@@ -252,7 +251,7 @@ func TestAdvancedCalculatorTool_BasicOperations(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			output, err := calc.Invoke(ctx, &tools.ToolInput{
+			output, err := calc.Invoke(ctx, &interfaces.ToolInput{
 				Args: map[string]interface{}{
 					"operation": tt.operation,
 					"operands":  tt.operands,
@@ -290,7 +289,7 @@ func TestAdvancedCalculatorTool_MathFunctions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			output, err := calc.Invoke(ctx, &tools.ToolInput{
+			output, err := calc.Invoke(ctx, &interfaces.ToolInput{
 				Args: map[string]interface{}{
 					"operation": tt.operation,
 					"operands":  tt.operands,
@@ -324,7 +323,7 @@ func TestAdvancedCalculatorTool_OperandConversion(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			output, err := calc.Invoke(ctx, &tools.ToolInput{
+			output, err := calc.Invoke(ctx, &interfaces.ToolInput{
 				Args: map[string]interface{}{
 					"operation": "add",
 					"operands":  tt.operands,
@@ -412,7 +411,7 @@ func TestAdvancedCalculatorTool_ErrorCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			output, err := calc.Invoke(ctx, &tools.ToolInput{
+			output, err := calc.Invoke(ctx, &interfaces.ToolInput{
 				Args:    tt.args,
 				Context: ctx,
 			})
@@ -435,7 +434,7 @@ func TestAdvancedCalculatorTool_Metadata(t *testing.T) {
 	calc := NewAdvancedCalculatorTool(ops)
 	ctx := context.Background()
 
-	output, err := calc.Invoke(ctx, &tools.ToolInput{
+	output, err := calc.Invoke(ctx, &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"operation": "add",
 			"operands":  []interface{}{2.0, 3.0},
@@ -460,7 +459,7 @@ func BenchmarkCalculatorTool(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = calc.Invoke(ctx, &tools.ToolInput{
+		_, _ = calc.Invoke(ctx, &interfaces.ToolInput{
 			Args: map[string]interface{}{
 				"expression": "(2 + 3) * 4 - 5 / 2",
 			},
@@ -477,7 +476,7 @@ func BenchmarkAdvancedCalculatorTool(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = calc.Invoke(ctx, &tools.ToolInput{
+		_, _ = calc.Invoke(ctx, &interfaces.ToolInput{
 			Args: map[string]interface{}{
 				"operation": "add",
 				"operands":  []interface{}{1.0, 2.0, 3.0, 4.0, 5.0},

@@ -234,7 +234,9 @@ func (m *Multiplexer) broadcastError(err error) {
 			m.wg.Add(1)
 			go func(s *consumerState) {
 				defer m.wg.Done()
-				s.consumer.OnError(err)
+				if err := s.consumer.OnError(err); err != nil {
+					fmt.Printf("failed to broadcast error: %v", err)
+				}
 			}(state)
 		}
 	}
@@ -251,7 +253,9 @@ func (m *Multiplexer) broadcastComplete() {
 			m.wg.Add(1)
 			go func(s *consumerState) {
 				defer m.wg.Done()
-				s.consumer.OnComplete()
+				if err := s.consumer.OnComplete(); err != nil {
+					fmt.Printf("failed to broadcast complete: %v", err)
+				}
 			}(state)
 		}
 	}
@@ -270,7 +274,9 @@ func (m *Multiplexer) processConsumer(ctx context.Context, state *consumerState,
 
 			if err := state.consumer.OnChunk(chunk); err != nil {
 				state.errors++
-				state.consumer.OnError(err)
+				if err := state.consumer.OnError(err); err != nil {
+					fmt.Printf("failed to broadcast error: %v", err)
+				}
 			}
 
 		case <-ctx.Done():

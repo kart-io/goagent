@@ -156,7 +156,7 @@ func (t *DataProcessorTool) Name() string {
 
 func (t *DataProcessorTool) Execute(ctx context.Context, params map[string]interface{}) (interface{}, error) {
 	operation, _ := params["operation"].(string)
-	data, _ := params["data"].(interface{})
+	data, _ := params["data"].(string)
 
 	if operation == "" {
 		operation = "analyze"

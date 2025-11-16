@@ -39,11 +39,13 @@ func (m *BufferMiddleware) Apply(ctx context.Context, source execution.StreamOut
 	writer := NewWriter(ctx, opts)
 
 	go func() {
-		defer writer.Close()
+		defer func() { _ = writer.Close() }()
 
 		reader, ok := source.(*Reader)
 		if !ok {
-			writer.WriteError(fmt.Errorf("source is not a Reader"))
+			if err := writer.WriteError(fmt.Errorf("source is not a Reader")); err != nil {
+				fmt.Printf("failed to write error: %v", err)
+			}
 			return
 		}
 
@@ -67,7 +69,9 @@ func (m *BufferMiddleware) Apply(ctx context.Context, source execution.StreamOut
 				}
 
 				if err := writer.WriteChunk(chunk); err != nil {
-					writer.WriteError(err)
+					if err := writer.WriteError(err); err != nil {
+						fmt.Printf("failed to write error: %v", err)
+					}
 					return
 				}
 			}
@@ -107,7 +111,7 @@ func (m *ThrottleMiddleware) Apply(ctx context.Context, source execution.StreamO
 	writer := NewWriter(ctx, opts)
 
 	go func() {
-		defer writer.Close()
+		defer func() { _ = writer.Close() }()
 
 		lastChunkTime := time.Now()
 
@@ -124,7 +128,7 @@ func (m *ThrottleMiddleware) Apply(ctx context.Context, source execution.StreamO
 			}
 
 			if err := writer.WriteChunk(chunk); err != nil {
-				writer.WriteError(err)
+				_ = writer.WriteError(err)
 				return
 			}
 
@@ -161,7 +165,11 @@ func (m *TransformMiddleware) Apply(ctx context.Context, source execution.Stream
 	writer := NewWriter(ctx, opts)
 
 	go func() {
-		defer writer.Close()
+		defer func() {
+			if err := writer.Close(); err != nil {
+				fmt.Printf("failed to close writer: %v", err)
+			}
+		}()
 
 		for {
 			chunk, err := source.Next()
@@ -172,12 +180,14 @@ func (m *TransformMiddleware) Apply(ctx context.Context, source execution.Stream
 			// 应用转换
 			transformed, err := m.transformFunc(chunk)
 			if err != nil {
-				writer.WriteError(fmt.Errorf("transform error: %w", err))
+				_ = writer.WriteError(fmt.Errorf("transform error: %w", err))
 				return
 			}
 
 			if err := writer.WriteChunk(transformed); err != nil {
-				writer.WriteError(err)
+				if err := writer.WriteError(err); err != nil {
+					fmt.Printf("failed to write error: %v", err)
+				}
 				return
 			}
 		}
@@ -225,8 +235,12 @@ func (m *TeeMiddleware) Apply(ctx context.Context, source execution.StreamOutput
 	// 启动多路复用
 	go func() {
 		defer func() {
-			writer.Close()
-			multiplexer.Close()
+			if err := writer.Close(); err != nil {
+				fmt.Printf("failed to close writer: %v", err)
+			}
+			if err := multiplexer.Close(); err != nil {
+				fmt.Printf("failed to close multiplexer: %v", err)
+			}
 		}()
 
 		for {
@@ -237,13 +251,19 @@ func (m *TeeMiddleware) Apply(ctx context.Context, source execution.StreamOutput
 
 			// 写入主流
 			if err := writer.WriteChunk(chunk); err != nil {
-				writer.WriteError(err)
+				if err := writer.WriteError(err); err != nil {
+					fmt.Printf("failed to write error: %v", err)
+				}
 				return
 			}
 
 			// 广播到所有消费者
 			for _, consumer := range m.outputs {
-				go consumer.OnChunk(chunk)
+				go func(c execution.StreamConsumer) {
+					if err := c.OnChunk(chunk); err != nil {
+						fmt.Printf("failed to write error: %v", err)
+					}
+				}(consumer)
 			}
 		}
 	}()
@@ -273,7 +293,11 @@ func (m *FilterMiddleware) Apply(ctx context.Context, source execution.StreamOut
 	writer := NewWriter(ctx, opts)
 
 	go func() {
-		defer writer.Close()
+		defer func() {
+			if err := writer.Close(); err != nil {
+				fmt.Printf("failed to close writer: %v", err)
+			}
+		}()
 
 		for {
 			chunk, err := source.Next()
@@ -284,7 +308,9 @@ func (m *FilterMiddleware) Apply(ctx context.Context, source execution.StreamOut
 			// 应用过滤条件
 			if m.predicate(chunk) {
 				if err := writer.WriteChunk(chunk); err != nil {
-					writer.WriteError(err)
+					if err := writer.WriteError(err); err != nil {
+						fmt.Printf("failed to write error: %v", err)
+					}
 					return
 				}
 			}
@@ -318,7 +344,11 @@ func (m *BatchMiddleware) Apply(ctx context.Context, source execution.StreamOutp
 	writer := NewWriter(ctx, opts)
 
 	go func() {
-		defer writer.Close()
+		defer func() {
+			if err := writer.Close(); err != nil {
+				fmt.Printf("failed to close writer: %v", err)
+			}
+		}()
 
 		batch := make([]*execution.LegacyStreamChunk, 0, m.batchSize)
 		timer := time.NewTimer(m.timeout)
@@ -349,19 +379,26 @@ func (m *BatchMiddleware) Apply(ctx context.Context, source execution.StreamOutp
 		for {
 			select {
 			case <-ctx.Done():
-				flushBatch()
+				_ = flushBatch()
 				return
 
 			case <-timer.C:
 				if err := flushBatch(); err != nil {
-					writer.WriteError(err)
+					if err := writer.WriteError(err); err != nil {
+						fmt.Printf("failed to write error: %v", err)
+					}
 					return
 				}
 
 			default:
 				chunk, err := source.Next()
 				if err != nil {
-					flushBatch()
+					if err := flushBatch(); err != nil {
+						if err := writer.WriteError(err); err != nil {
+							fmt.Printf("failed to write error: %v", err)
+						}
+						return
+					}
 					return
 				}
 
@@ -369,7 +406,9 @@ func (m *BatchMiddleware) Apply(ctx context.Context, source execution.StreamOutp
 
 				if len(batch) >= m.batchSize {
 					if err := flushBatch(); err != nil {
-						writer.WriteError(err)
+						if err := writer.WriteError(err); err != nil {
+							fmt.Printf("failed to write error: %v", err)
+						}
 						return
 					}
 				}
@@ -408,7 +447,11 @@ func (m *RetryMiddleware) Apply(ctx context.Context, source execution.StreamOutp
 	writer := NewWriter(ctx, opts)
 
 	go func() {
-		defer writer.Close()
+		defer func() {
+			if err := writer.Close(); err != nil {
+				fmt.Printf("failed to close writer: %v", err)
+			}
+		}()
 
 		for {
 			chunk, err := source.Next()
@@ -423,13 +466,15 @@ func (m *RetryMiddleware) Apply(ctx context.Context, source execution.StreamOutp
 				}
 
 				if err != nil {
-					writer.WriteError(err)
+					_ = writer.WriteError(err)
 					return
 				}
 			}
 
 			if err := writer.WriteChunk(chunk); err != nil {
-				writer.WriteError(err)
+				if err := writer.WriteError(err); err != nil {
+					fmt.Printf("failed to write error: %v", err)
+				}
 				return
 			}
 		}

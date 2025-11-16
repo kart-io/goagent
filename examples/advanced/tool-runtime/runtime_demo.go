@@ -7,6 +7,7 @@ import (
 
 	"github.com/kart-io/goagent/builder"
 	"github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/store/memory"
 	"github.com/kart-io/goagent/tools"
@@ -53,7 +54,7 @@ func main() {
 
 	// 3. 预先存储用户数据
 	ctx := context.Background()
-	store.Put(ctx, []string{"users"}, "user_123", map[string]interface{}{
+	_ = store.Put(ctx, []string{"users"}, "user_123", map[string]interface{}{
 		"name":  "Alice",
 		"email": "alice@example.com",
 		"tier":  "premium",
@@ -72,7 +73,7 @@ func main() {
 
 	// 6. 演示 UserInfoTool
 	fmt.Println("--- Demo 1: Get User Info ---")
-	input1 := &tools.ToolInput{
+	input1 := &interfaces.ToolInput{
 		Args:    map[string]interface{}{},
 		Context: ctx,
 	}
@@ -85,7 +86,7 @@ func main() {
 
 	// 7. 演示 SavePreferenceTool
 	fmt.Println("--- Demo 2: Save Preference ---")
-	input2 := &tools.ToolInput{
+	input2 := &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"key":   "theme",
 			"value": "dark",

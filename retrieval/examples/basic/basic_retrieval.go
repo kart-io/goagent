@@ -113,7 +113,7 @@ func vectorExample(ctx context.Context, docs []*interfaces.Document) {
 }
 
 // keywordExample 关键词检索示例
-func keywordExample(ctx context.Context, docs []*retrieval.Document) {
+func keywordExample(ctx context.Context, docs []*interfaces.Document) {
 	// 创建 BM25 检索器
 	config := retrieval.DefaultRetrieverConfig()
 	config.TopK = 3
@@ -137,7 +137,7 @@ func keywordExample(ctx context.Context, docs []*retrieval.Document) {
 }
 
 // hybridExample 混合检索示例
-func hybridExample(ctx context.Context, docs []*retrieval.Document) {
+func hybridExample(ctx context.Context, docs []*interfaces.Document) {
 	// 创建向量检索器
 	vectorStore := retrieval.NewMockVectorStore()
 	_ = vectorStore.AddDocuments(ctx, docs)
@@ -188,7 +188,7 @@ func hybridExample(ctx context.Context, docs []*retrieval.Document) {
 }
 
 // ensembleExample 集成检索示例
-func ensembleExample(ctx context.Context, docs []*retrieval.Document) {
+func ensembleExample(ctx context.Context, docs []*interfaces.Document) {
 	// 创建多个检索器
 	vectorStore := retrieval.NewMockVectorStore()
 	_ = vectorStore.AddDocuments(ctx, docs)
@@ -226,7 +226,7 @@ func ensembleExample(ctx context.Context, docs []*retrieval.Document) {
 }
 
 // rerankingExample 重排序示例
-func rerankingExample(ctx context.Context, docs []*retrieval.Document) {
+func rerankingExample(ctx context.Context, docs []*interfaces.Document) {
 	// 创建基础检索器
 	baseRetriever := retrieval.NewKeywordRetriever(docs, retrieval.DefaultRetrieverConfig())
 
@@ -266,7 +266,7 @@ func rerankingExample(ctx context.Context, docs []*retrieval.Document) {
 }
 
 // printResults 打印检索结果
-func printResults(docs []*retrieval.Document) {
+func printResults(docs []*interfaces.Document) {
 	for i, doc := range docs {
 		fmt.Printf("%d. Score: %.4f\n", i+1, doc.Score)
 		fmt.Printf("   ID: %s\n", doc.ID)

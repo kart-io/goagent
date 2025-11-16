@@ -391,7 +391,7 @@ func (p *PoTAgent) validateGoCode(code string) error {
 	// For Go, we need a main function
 	if !strings.Contains(code, "func main()") && !strings.Contains(code, "package main") {
 		// Wrap in main function
-		return fmt.Errorf("Go code must have main function")
+		return fmt.Errorf("go code must have main function")
 	}
 
 	return nil

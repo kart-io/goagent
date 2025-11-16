@@ -352,14 +352,14 @@ func completeWorkflowDemo() {
 	// Turn 2: Continue conversation
 	state.Set("turn", 2)
 	state.Set("follow_up", "service mesh details")
-	runtime.SaveState(ctx)
+	_ = runtime.SaveState(ctx)
 	fmt.Println("\n  Turn 2: Follow-up question about service mesh")
 	fmt.Println("  ✓ Checkpoint saved")
 
 	// Turn 3: Request specific information
 	state.Set("turn", 3)
 	state.Set("request", "Istio configuration example")
-	runtime.SaveState(ctx)
+	_ = runtime.SaveState(ctx)
 	fmt.Println("\n  Turn 3: Requesting Istio examples")
 	fmt.Println("  ✓ Checkpoint saved")
 

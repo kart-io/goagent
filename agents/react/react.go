@@ -10,7 +10,6 @@ import (
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/parsers"
-	"github.com/kart-io/goagent/tools"
 )
 
 // ReActAgent ReAct (Reasoning + Acting) Agent
@@ -69,7 +68,7 @@ func NewReActAgent(config ReActConfig) *ReActAgent {
 	}
 
 	// 构建工具映射
-	toolsByName := make(map[string]tools.Tool)
+	toolsByName := make(map[string]interfaces.Tool)
 	for _, tool := range config.Tools {
 		toolsByName[tool.Name()] = tool
 	}
@@ -292,7 +291,7 @@ func (r *ReActAgent) executeTool(ctx context.Context, toolName string, input map
 	}
 
 	// 执行工具
-	toolInput := &tools.ToolInput{
+	toolInput := &interfaces.ToolInput{
 		Args:    input,
 		Context: ctx,
 	}

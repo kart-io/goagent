@@ -387,7 +387,7 @@ func createHTTPRequestTool() interfaces.Tool {
 				Error:   fmt.Sprintf("request failed: %v", err),
 			}, nil
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		// Read response body
 		bodyBytes, err := io.ReadAll(resp.Body)

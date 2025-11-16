@@ -60,7 +60,11 @@ func (a *ProgressAgent) Execute(ctx context.Context, input *core.AgentInput) (*c
 	if err != nil {
 		return nil, err
 	}
-	defer streamOutput.Close()
+	defer func() {
+		if err := streamOutput.Close(); err != nil {
+			fmt.Printf("failed to close stream output: %v", err)
+		}
+	}()
 
 	// 收集所有进度和结果
 	reader := streamOutput.(*Reader)
@@ -107,7 +111,7 @@ func (a *ProgressAgent) ExecuteStream(ctx context.Context, input *core.AgentInpu
 
 // processWithProgress 带进度的处理
 func (a *ProgressAgent) processWithProgress(ctx context.Context, input *core.AgentInput, writer *Writer) {
-	defer writer.Close()
+	defer func() { _ = writer.Close() }()
 
 	// 从输入获取任务配置
 	totalSteps := 100
@@ -124,13 +128,16 @@ func (a *ProgressAgent) processWithProgress(ctx context.Context, input *core.Age
 	phases := []string{"Initialization", "Processing", "Validation", "Finalization"}
 	currentPhase := 0
 
-	writer.WriteStatus(fmt.Sprintf("Starting task: %d steps", totalSteps))
+	if err := writer.WriteStatus(fmt.Sprintf("Starting task: %d steps", totalSteps)); err != nil {
+		_ = writer.WriteError(err)
+		return
+	}
 
 	// 执行任务
 	for step := 0; step < totalSteps; step++ {
 		select {
 		case <-ctx.Done():
-			writer.WriteError(ctx.Err())
+			_ = writer.WriteError(ctx.Err())
 			return
 		default:
 		}
@@ -140,7 +147,10 @@ func (a *ProgressAgent) processWithProgress(ctx context.Context, input *core.Age
 			newPhase := step * len(phases) / totalSteps
 			if newPhase != currentPhase && newPhase < len(phases) {
 				currentPhase = newPhase
-				writer.WriteStatus(fmt.Sprintf("Phase: %s", phases[currentPhase]))
+				if err := writer.WriteStatus(fmt.Sprintf("Phase: %s", phases[currentPhase])); err != nil {
+					_ = writer.WriteError(err)
+					return
+				}
 			}
 		}
 
@@ -178,7 +188,7 @@ func (a *ProgressAgent) processWithProgress(ctx context.Context, input *core.Age
 			}
 
 			if err := writer.WriteChunk(chunk); err != nil {
-				writer.WriteError(err)
+				_ = writer.WriteError(err)
 				return
 			}
 		}
@@ -205,8 +215,11 @@ func (a *ProgressAgent) processWithProgress(ctx context.Context, input *core.Age
 		},
 	}
 
-	writer.WriteChunk(resultChunk)
-	writer.WriteStatus("Task completed successfully")
+	if err := writer.WriteChunk(resultChunk); err != nil {
+		_ = writer.WriteError(err)
+		return
+	}
+	_ = writer.WriteStatus("Task completed successfully")
 }
 
 // ProgressTracker 进度跟踪器

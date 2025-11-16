@@ -13,6 +13,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 
 	agentcore "github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/tools"
 )
 
@@ -113,7 +114,7 @@ func (t *DatabaseQueryTool) ArgsSchema() string {
 // OutputSchema returns the output schema
 
 // Execute runs the database query
-func (t *DatabaseQueryTool) Execute(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
+func (t *DatabaseQueryTool) Execute(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 	params, err := t.parseDBInput(input.Args)
 	if err != nil {
 		return nil, fmt.Errorf("invalid input: %w", err)
@@ -147,7 +148,7 @@ func (t *DatabaseQueryTool) Execute(ctx context.Context, input *tools.ToolInput)
 	executionTime := time.Since(startTime).Milliseconds()
 
 	if err != nil {
-		return &tools.ToolOutput{
+		return &interfaces.ToolOutput{
 			Result: map[string]interface{}{
 				"error":             err.Error(),
 				"execution_time_ms": executionTime,
@@ -161,32 +162,32 @@ func (t *DatabaseQueryTool) Execute(ctx context.Context, input *tools.ToolInput)
 		resultMap["execution_time_ms"] = executionTime
 	}
 
-	return &tools.ToolOutput{
+	return &interfaces.ToolOutput{
 		Result: result,
 	}, nil
 }
 
 // Implement Runnable interface
-func (t *DatabaseQueryTool) Invoke(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
+func (t *DatabaseQueryTool) Invoke(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 	return t.Execute(ctx, input)
 }
 
-func (t *DatabaseQueryTool) Stream(ctx context.Context, input *tools.ToolInput) (<-chan agentcore.StreamChunk[*tools.ToolOutput], error) {
-	ch := make(chan agentcore.StreamChunk[*tools.ToolOutput])
+func (t *DatabaseQueryTool) Stream(ctx context.Context, input *interfaces.ToolInput) (<-chan agentcore.StreamChunk[*interfaces.ToolOutput], error) {
+	ch := make(chan agentcore.StreamChunk[*interfaces.ToolOutput])
 	go func() {
 		defer close(ch)
 		output, err := t.Execute(ctx, input)
 		if err != nil {
-			ch <- agentcore.StreamChunk[*tools.ToolOutput]{Error: err}
+			ch <- agentcore.StreamChunk[*interfaces.ToolOutput]{Error: err}
 		} else {
-			ch <- agentcore.StreamChunk[*tools.ToolOutput]{Data: output}
+			ch <- agentcore.StreamChunk[*interfaces.ToolOutput]{Data: output}
 		}
 	}()
 	return ch, nil
 }
 
-func (t *DatabaseQueryTool) Batch(ctx context.Context, inputs []*tools.ToolInput) ([]*tools.ToolOutput, error) {
-	outputs := make([]*tools.ToolOutput, len(inputs))
+func (t *DatabaseQueryTool) Batch(ctx context.Context, inputs []*interfaces.ToolInput) ([]*interfaces.ToolOutput, error) {
+	outputs := make([]*interfaces.ToolOutput, len(inputs))
 	for i, input := range inputs {
 		output, err := t.Execute(ctx, input)
 		if err != nil {
@@ -197,15 +198,15 @@ func (t *DatabaseQueryTool) Batch(ctx context.Context, inputs []*tools.ToolInput
 	return outputs, nil
 }
 
-func (t *DatabaseQueryTool) Pipe(next agentcore.Runnable[*tools.ToolOutput, any]) agentcore.Runnable[*tools.ToolInput, any] {
+func (t *DatabaseQueryTool) Pipe(next agentcore.Runnable[*interfaces.ToolOutput, any]) agentcore.Runnable[*interfaces.ToolInput, any] {
 	return nil
 }
 
-func (t *DatabaseQueryTool) WithCallbacks(callbacks ...agentcore.Callback) agentcore.Runnable[*tools.ToolInput, *tools.ToolOutput] {
+func (t *DatabaseQueryTool) WithCallbacks(callbacks ...agentcore.Callback) agentcore.Runnable[*interfaces.ToolInput, *interfaces.ToolOutput] {
 	return t
 }
 
-func (t *DatabaseQueryTool) WithConfig(config agentcore.RunnableConfig) agentcore.Runnable[*tools.ToolInput, *tools.ToolOutput] {
+func (t *DatabaseQueryTool) WithConfig(config agentcore.RunnableConfig) agentcore.Runnable[*interfaces.ToolInput, *interfaces.ToolOutput] {
 	return t
 }
 
@@ -240,7 +241,9 @@ func (t *DatabaseQueryTool) getConnection(config connectionConfig) (*sql.DB, err
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := db.PingContext(ctx); err != nil {
-		db.Close()
+		if err := db.Close(); err != nil {
+			fmt.Printf("failed to close database connection: %v", err)
+		}
 		return nil, err
 	}
 
@@ -267,7 +270,11 @@ func (t *DatabaseQueryTool) executeQuery(ctx context.Context, db *sql.DB, params
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			fmt.Printf("failed to close rows: %v", err)
+		}
+	}()
 
 	// Get column names
 	columns, err := rows.Columns()
@@ -358,7 +365,9 @@ func (t *DatabaseQueryTool) executeTransaction(ctx context.Context, db *sql.DB, 
 	for i, query := range params.Transaction {
 		result, err := tx.ExecContext(ctx, query.Query, query.Params...)
 		if err != nil {
-			tx.Rollback()
+			if err := tx.Rollback(); err != nil {
+				fmt.Printf("failed to rollback transaction: %v", err)
+			}
 			return map[string]interface{}{
 				"error":       err.Error(),
 				"failed_step": i,
@@ -500,13 +509,15 @@ func NewDatabaseQueryRuntimeTool() *DatabaseQueryRuntimeTool {
 }
 
 // ExecuteWithRuntime executes with runtime support
-func (t *DatabaseQueryRuntimeTool) ExecuteWithRuntime(ctx context.Context, input *tools.ToolInput, runtime *tools.ToolRuntime) (*tools.ToolOutput, error) {
+func (t *DatabaseQueryRuntimeTool) ExecuteWithRuntime(ctx context.Context, input *interfaces.ToolInput, runtime *tools.ToolRuntime) (*interfaces.ToolOutput, error) {
 	// Stream status
 	if runtime != nil && runtime.StreamWriter != nil {
-		runtime.StreamWriter(map[string]interface{}{
+		if err := runtime.StreamWriter(map[string]interface{}{
 			"status": "executing_query",
 			"tool":   t.Name(),
-		})
+		}); err != nil {
+			return nil, fmt.Errorf("failed to stream status: %w", err)
+		}
 	}
 
 	// Get connection details from runtime if needed
@@ -529,17 +540,21 @@ func (t *DatabaseQueryRuntimeTool) ExecuteWithRuntime(ctx context.Context, input
 		params, _ := t.parseDBInput(input.Args)
 		if params != nil && params.Operation == "query" {
 			// Store recent query results
-			runtime.PutToStore([]string{"query_results"}, time.Now().Format(time.RFC3339), result)
+			if err := runtime.PutToStore([]string{"query_results"}, time.Now().Format(time.RFC3339), result); err != nil {
+				return nil, fmt.Errorf("failed to put to store: %w", err)
+			}
 		}
 	}
 
 	// Stream completion
 	if runtime != nil && runtime.StreamWriter != nil {
-		runtime.StreamWriter(map[string]interface{}{
+		if err := runtime.StreamWriter(map[string]interface{}{
 			"status": "completed",
 			"tool":   t.Name(),
 			"error":  err,
-		})
+		}); err != nil {
+			return nil, fmt.Errorf("failed to stream completion: %w", err)
+		}
 	}
 
 	return result, err

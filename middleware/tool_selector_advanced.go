@@ -10,8 +10,8 @@ import (
 
 	"github.com/kart-io/goagent/core"
 	coremiddleware "github.com/kart-io/goagent/core/middleware"
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
-	"github.com/kart-io/goagent/tools"
 )
 
 // LLMToolSelectorMiddleware intelligently selects relevant tools using an LLM
@@ -50,7 +50,7 @@ func (m *LLMToolSelectorMiddleware) Process(ctx context.Context, state core.Stat
 	if !ok {
 		return state, nil // No tools found
 	}
-	allTools, ok := toolsVal.([]tools.Tool)
+	allTools, ok := toolsVal.([]interfaces.Tool)
 	if !ok || len(allTools) == 0 {
 		return state, nil // No tools to select from
 	}
@@ -96,7 +96,7 @@ func (m *LLMToolSelectorMiddleware) Process(ctx context.Context, state core.Stat
 }
 
 // selectTools uses the LLM to select relevant tools
-func (m *LLMToolSelectorMiddleware) selectTools(ctx context.Context, query string, allTools []tools.Tool) ([]string, error) {
+func (m *LLMToolSelectorMiddleware) selectTools(ctx context.Context, query string, allTools []interfaces.Tool) ([]string, error) {
 	// Build tool descriptions
 	toolDescriptions := m.buildToolDescriptions(allTools)
 
@@ -137,7 +137,7 @@ func (m *LLMToolSelectorMiddleware) selectTools(ctx context.Context, query strin
 }
 
 // buildToolDescriptions creates descriptions for all tools
-func (m *LLMToolSelectorMiddleware) buildToolDescriptions(allTools []tools.Tool) string {
+func (m *LLMToolSelectorMiddleware) buildToolDescriptions(allTools []interfaces.Tool) string {
 	descriptions := []string{}
 	for _, tool := range allTools {
 		desc := fmt.Sprintf("- %s: %s", tool.Name(), tool.Description())
@@ -192,7 +192,7 @@ func (m *LLMToolSelectorMiddleware) ensureAlwaysIncluded(selected []string) []st
 }
 
 // filterTools filters the tool list based on selected names
-func (m *LLMToolSelectorMiddleware) filterTools(allTools []tools.Tool, selectedNames []string) []tools.Tool {
+func (m *LLMToolSelectorMiddleware) filterTools(allTools []interfaces.Tool, selectedNames []string) []interfaces.Tool {
 	// Create set for fast lookup
 	selectedSet := make(map[string]bool)
 	for _, name := range selectedNames {
@@ -200,7 +200,7 @@ func (m *LLMToolSelectorMiddleware) filterTools(allTools []tools.Tool, selectedN
 	}
 
 	// Filter tools
-	filtered := []tools.Tool{}
+	filtered := []interfaces.Tool{}
 	for _, tool := range allTools {
 		if selectedSet[tool.Name()] {
 			filtered = append(filtered, tool)
@@ -211,7 +211,7 @@ func (m *LLMToolSelectorMiddleware) filterTools(allTools []tools.Tool, selectedN
 }
 
 // getCacheKey generates a cache key for tool selection
-func (m *LLMToolSelectorMiddleware) getCacheKey(query string, tools []tools.Tool) string {
+func (m *LLMToolSelectorMiddleware) getCacheKey(query string, tools []interfaces.Tool) string {
 	// Simple key based on query and tool count
 	// In production, could hash the tool names as well
 	return fmt.Sprintf("%s_%d", query, len(tools))

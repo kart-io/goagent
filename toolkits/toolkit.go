@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/kart-io/goagent/tools"
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/tools/compute"
 	"github.com/kart-io/goagent/tools/http"
 	"github.com/kart-io/goagent/tools/search"
@@ -17,10 +17,10 @@ import (
 // 管理一组相关的工具
 type Toolkit interface {
 	// GetTools 获取所有工具
-	GetTools() []tools.Tool
+	GetTools() []interfaces.Tool
 
 	// GetToolByName 根据名称获取工具
-	GetToolByName(name string) (tools.Tool, error)
+	GetToolByName(name string) (interfaces.Tool, error)
 
 	// GetToolNames 获取所有工具名称
 	GetToolNames() []string
@@ -28,16 +28,16 @@ type Toolkit interface {
 
 // BaseToolkit 基础工具集实现
 type BaseToolkit struct {
-	tools    []tools.Tool
-	toolsMap map[string]tools.Tool
+	tools    []interfaces.Tool
+	toolsMap map[string]interfaces.Tool
 	mu       sync.RWMutex
 }
 
 // NewBaseToolkit 创建基础工具集
-func NewBaseToolkit(toolList ...tools.Tool) *BaseToolkit {
+func NewBaseToolkit(toolList ...interfaces.Tool) *BaseToolkit {
 	toolkit := &BaseToolkit{
 		tools:    toolList,
-		toolsMap: make(map[string]tools.Tool),
+		toolsMap: make(map[string]interfaces.Tool),
 	}
 
 	for _, tool := range toolList {
@@ -48,14 +48,14 @@ func NewBaseToolkit(toolList ...tools.Tool) *BaseToolkit {
 }
 
 // GetTools 获取所有工具
-func (t *BaseToolkit) GetTools() []tools.Tool {
+func (t *BaseToolkit) GetTools() []interfaces.Tool {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	return t.tools
 }
 
 // GetToolByName 根据名称获取工具
-func (t *BaseToolkit) GetToolByName(name string) (tools.Tool, error) {
+func (t *BaseToolkit) GetToolByName(name string) (interfaces.Tool, error) {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
@@ -81,7 +81,7 @@ func (t *BaseToolkit) GetToolNames() []string {
 }
 
 // AddTool 添加工具
-func (t *BaseToolkit) AddTool(tool tools.Tool) {
+func (t *BaseToolkit) AddTool(tool interfaces.Tool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -127,7 +127,7 @@ type StandardToolkit struct {
 
 // NewStandardToolkit 创建标准工具集
 func NewStandardToolkit() *StandardToolkit {
-	toolList := []tools.Tool{
+	toolList := []interfaces.Tool{
 		compute.NewCalculatorTool(),
 		search.NewSearchTool(search.NewMockSearchEngine()),
 	}
@@ -153,7 +153,7 @@ func NewDevelopmentToolkit() *DevelopmentToolkit {
 		"uname", "hostname", "whoami", "date",
 	}
 
-	toolList := []tools.Tool{
+	toolList := []interfaces.Tool{
 		shell.NewShellTool(safeCommands, 0),
 		http.NewAPITool("", 0, nil),
 		compute.NewCalculatorTool(),
@@ -166,24 +166,24 @@ func NewDevelopmentToolkit() *DevelopmentToolkit {
 
 // ToolkitBuilder 工具集构建器
 type ToolkitBuilder struct {
-	tools []tools.Tool
+	tools []interfaces.Tool
 }
 
 // NewToolkitBuilder 创建工具集构建器
 func NewToolkitBuilder() *ToolkitBuilder {
 	return &ToolkitBuilder{
-		tools: []tools.Tool{},
+		tools: []interfaces.Tool{},
 	}
 }
 
 // AddTool 添加单个工具
-func (b *ToolkitBuilder) AddTool(tool tools.Tool) *ToolkitBuilder {
+func (b *ToolkitBuilder) AddTool(tool interfaces.Tool) *ToolkitBuilder {
 	b.tools = append(b.tools, tool)
 	return b
 }
 
 // AddTools 批量添加工具
-func (b *ToolkitBuilder) AddTools(tools ...tools.Tool) *ToolkitBuilder {
+func (b *ToolkitBuilder) AddTools(tools ...interfaces.Tool) *ToolkitBuilder {
 	b.tools = append(b.tools, tools...)
 	return b
 }
@@ -230,19 +230,19 @@ func (b *ToolkitBuilder) Build() Toolkit {
 //
 // 全局工具管理器，支持注册和发现工具
 type ToolRegistry struct {
-	tools map[string]tools.Tool
+	tools map[string]interfaces.Tool
 	mu    sync.RWMutex
 }
 
 // NewToolRegistry 创建工具注册表
 func NewToolRegistry() *ToolRegistry {
 	return &ToolRegistry{
-		tools: make(map[string]tools.Tool),
+		tools: make(map[string]interfaces.Tool),
 	}
 }
 
 // Register 注册工具
-func (r *ToolRegistry) Register(tool tools.Tool) error {
+func (r *ToolRegistry) Register(tool interfaces.Tool) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -268,7 +268,7 @@ func (r *ToolRegistry) Unregister(name string) error {
 }
 
 // Get 获取工具
-func (r *ToolRegistry) Get(name string) (tools.Tool, error) {
+func (r *ToolRegistry) Get(name string) (interfaces.Tool, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -281,11 +281,11 @@ func (r *ToolRegistry) Get(name string) (tools.Tool, error) {
 }
 
 // List 列出所有工具
-func (r *ToolRegistry) List() []tools.Tool {
+func (r *ToolRegistry) List() []interfaces.Tool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	toolList := make([]tools.Tool, 0, len(r.tools))
+	toolList := make([]interfaces.Tool, 0, len(r.tools))
 	for _, tool := range r.tools {
 		toolList = append(toolList, tool)
 	}
@@ -298,7 +298,7 @@ func (r *ToolRegistry) CreateToolkit(names ...string) (Toolkit, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	toolList := make([]tools.Tool, 0, len(names))
+	toolList := make([]interfaces.Tool, 0, len(names))
 	for _, name := range names {
 		tool, ok := r.tools[name]
 		if !ok {
@@ -314,17 +314,17 @@ func (r *ToolRegistry) CreateToolkit(names ...string) (Toolkit, error) {
 var defaultRegistry = NewToolRegistry()
 
 // RegisterTool 注册工具到全局注册表
-func RegisterTool(tool tools.Tool) error {
+func RegisterTool(tool interfaces.Tool) error {
 	return defaultRegistry.Register(tool)
 }
 
 // GetTool 从全局注册表获取工具
-func GetTool(name string) (tools.Tool, error) {
+func GetTool(name string) (interfaces.Tool, error) {
 	return defaultRegistry.Get(name)
 }
 
 // ListTools 列出全局注册表中的所有工具
-func ListTools() []tools.Tool {
+func ListTools() []interfaces.Tool {
 	return defaultRegistry.List()
 }
 
@@ -351,7 +351,7 @@ func (e *ToolkitExecutor) WithParallel(parallel bool) *ToolkitExecutor {
 }
 
 // Execute 执行单个工具
-func (e *ToolkitExecutor) Execute(ctx context.Context, toolName string, input *tools.ToolInput) (*tools.ToolOutput, error) {
+func (e *ToolkitExecutor) Execute(ctx context.Context, toolName string, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 	tool, err := e.toolkit.GetToolByName(toolName)
 	if err != nil {
 		return nil, err
@@ -361,7 +361,7 @@ func (e *ToolkitExecutor) Execute(ctx context.Context, toolName string, input *t
 }
 
 // ExecuteMultiple 执行多个工具
-func (e *ToolkitExecutor) ExecuteMultiple(ctx context.Context, requests map[string]*tools.ToolInput) (map[string]*tools.ToolOutput, error) {
+func (e *ToolkitExecutor) ExecuteMultiple(ctx context.Context, requests map[string]*interfaces.ToolInput) (map[string]*interfaces.ToolOutput, error) {
 	if e.parallel {
 		return e.executeParallel(ctx, requests)
 	}
@@ -369,8 +369,8 @@ func (e *ToolkitExecutor) ExecuteMultiple(ctx context.Context, requests map[stri
 }
 
 // executeSequential 顺序执行
-func (e *ToolkitExecutor) executeSequential(ctx context.Context, requests map[string]*tools.ToolInput) (map[string]*tools.ToolOutput, error) {
-	results := make(map[string]*tools.ToolOutput)
+func (e *ToolkitExecutor) executeSequential(ctx context.Context, requests map[string]*interfaces.ToolInput) (map[string]*interfaces.ToolOutput, error) {
+	results := make(map[string]*interfaces.ToolOutput)
 
 	for toolName, input := range requests {
 		output, err := e.Execute(ctx, toolName, input)
@@ -384,17 +384,17 @@ func (e *ToolkitExecutor) executeSequential(ctx context.Context, requests map[st
 }
 
 // executeParallel 并行执行
-func (e *ToolkitExecutor) executeParallel(ctx context.Context, requests map[string]*tools.ToolInput) (map[string]*tools.ToolOutput, error) {
+func (e *ToolkitExecutor) executeParallel(ctx context.Context, requests map[string]*interfaces.ToolInput) (map[string]*interfaces.ToolOutput, error) {
 	type result struct {
 		toolName string
-		output   *tools.ToolOutput
+		output   *interfaces.ToolOutput
 		err      error
 	}
 
 	resultsChan := make(chan result, len(requests))
 
 	for toolName, input := range requests {
-		go func(name string, inp *tools.ToolInput) {
+		go func(name string, inp *interfaces.ToolInput) {
 			output, err := e.Execute(ctx, name, inp)
 			resultsChan <- result{
 				toolName: name,
@@ -404,7 +404,7 @@ func (e *ToolkitExecutor) executeParallel(ctx context.Context, requests map[stri
 		}(toolName, input)
 	}
 
-	results := make(map[string]*tools.ToolOutput)
+	results := make(map[string]*interfaces.ToolOutput)
 	var firstError error
 
 	for i := 0; i < len(requests); i++ {

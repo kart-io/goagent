@@ -106,7 +106,7 @@ func (a *AnalysisAgent) Invoke(ctx context.Context, input *core.AgentInput) (*co
 			Content:   analysisResult,
 			Timestamp: time.Now(),
 		}
-		a.memory.AddConversation(ctx, conv)
+		_ = a.memory.AddConversation(ctx, conv)
 	}
 
 	output.Result = map[string]interface{}{
@@ -296,12 +296,14 @@ func main() {
 	memMgr := memory.NewInMemoryManager(memory.DefaultConfig())
 
 	// 添加一些历史对话
-	memMgr.AddConversation(context.Background(), &memory.Conversation{
+	if err := memMgr.AddConversation(context.Background(), &interfaces.Conversation{
 		SessionID: "session-1",
 		Role:      "user",
 		Content:   "What's the system status?",
 		Timestamp: time.Now().Add(-5 * time.Minute),
-	})
+	}); err != nil {
+		log.Fatalf("Failed to add conversation: %v", err)
+	}
 
 	// 2. 创建 Agent
 	fmt.Println("2. Creating Analysis Agent...")
@@ -314,8 +316,8 @@ func main() {
 	// 4. 创建 Orchestrator
 	fmt.Println("4. Creating Orchestrator...")
 	orchestrator := NewSimpleOrchestrator()
-	orchestrator.RegisterAgent("analysis", agent)
-	orchestrator.RegisterChain("data-processing", chain)
+	_ = orchestrator.RegisterAgent("analysis", agent)
+	_ = orchestrator.RegisterChain("data-processing", chain)
 
 	// 5. 执行编排任务
 	fmt.Println("\n5. Executing Orchestration Task...")

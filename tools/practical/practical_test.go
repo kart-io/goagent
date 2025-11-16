@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kart-io/goagent/tools"
+	"github.com/kart-io/goagent/interfaces"
 )
 
 // API Caller Tests
@@ -50,7 +50,7 @@ func TestAPICallerTool_Execute_SimpleGET(t *testing.T) {
 	tool := NewAPICallerTool()
 	ctx := context.Background()
 
-	input := &tools.ToolInput{
+	input := &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"url": server.URL,
 		},
@@ -85,7 +85,7 @@ func TestAPICallerTool_Execute_POST(t *testing.T) {
 	tool := NewAPICallerTool()
 	ctx := context.Background()
 
-	input := &tools.ToolInput{
+	input := &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"url":    server.URL,
 			"method": "POST",
@@ -188,7 +188,7 @@ func TestFileOperationsTool_WriteAndRead(t *testing.T) {
 	testContent := "Hello, World!"
 
 	// Write file
-	writeInput := &tools.ToolInput{
+	writeInput := &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"operation": "write",
 			"path":      testFile,
@@ -207,7 +207,7 @@ func TestFileOperationsTool_WriteAndRead(t *testing.T) {
 	}
 
 	// Read file
-	readInput := &tools.ToolInput{
+	readInput := &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"operation": "read",
 			"path":      testFile,
@@ -237,7 +237,7 @@ func TestFileOperationsTool_Append(t *testing.T) {
 	os.WriteFile(testFile, []byte("Line 1\n"), 0644)
 
 	// Append content
-	appendInput := &tools.ToolInput{
+	appendInput := &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"operation": "append",
 			"path":      testFile,
@@ -272,7 +272,7 @@ func TestFileOperationsTool_Delete(t *testing.T) {
 	os.WriteFile(testFile, []byte("test"), 0644)
 
 	// Delete file
-	deleteInput := &tools.ToolInput{
+	deleteInput := &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"operation": "delete",
 			"path":      testFile,
@@ -308,7 +308,7 @@ func TestFileOperationsTool_Copy(t *testing.T) {
 	os.WriteFile(srcFile, []byte(content), 0644)
 
 	// Copy file
-	copyInput := &tools.ToolInput{
+	copyInput := &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"operation":   "copy",
 			"path":        srcFile,
@@ -346,7 +346,7 @@ func TestFileOperationsTool_Move(t *testing.T) {
 	os.WriteFile(srcFile, []byte(content), 0644)
 
 	// Move file
-	moveInput := &tools.ToolInput{
+	moveInput := &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"operation":   "move",
 			"path":        srcFile,
@@ -386,7 +386,7 @@ func TestFileOperationsTool_List(t *testing.T) {
 	os.WriteFile(filepath.Join(tmpDir, "file2.txt"), []byte("test"), 0644)
 
 	// List directory
-	listInput := &tools.ToolInput{
+	listInput := &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"operation": "list",
 			"path":      tmpDir,
@@ -418,7 +418,7 @@ func TestFileOperationsTool_Search(t *testing.T) {
 	os.WriteFile(filepath.Join(tmpDir, "other.txt"), []byte("test"), 0644)
 
 	// Search for *.txt files
-	searchInput := &tools.ToolInput{
+	searchInput := &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"operation": "search",
 			"path":      tmpDir,
@@ -450,7 +450,7 @@ func TestFileOperationsTool_Info(t *testing.T) {
 	os.WriteFile(testFile, []byte(content), 0644)
 
 	// Get file info
-	infoInput := &tools.ToolInput{
+	infoInput := &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"operation": "info",
 			"path":      testFile,
@@ -493,7 +493,7 @@ func TestFileOperationsTool_Analyze(t *testing.T) {
 	os.WriteFile(testFile, []byte(content), 0644)
 
 	// Analyze file
-	analyzeInput := &tools.ToolInput{
+	analyzeInput := &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"operation": "analyze",
 			"path":      testFile,
@@ -545,7 +545,7 @@ func TestFileOperationsTool_Parse_JSON(t *testing.T) {
 	os.WriteFile(testFile, []byte(jsonContent), 0644)
 
 	// Parse JSON file
-	parseInput := &tools.ToolInput{
+	parseInput := &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"operation": "parse",
 			"path":      testFile,
@@ -571,7 +571,7 @@ func TestFileOperationsTool_UnsupportedOperation(t *testing.T) {
 
 	testFile := filepath.Join(tmpDir, "test.txt")
 
-	input := &tools.ToolInput{
+	input := &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"operation": "unsupported",
 			"path":      testFile,
@@ -605,7 +605,7 @@ func TestAPICallerTool_Retry(t *testing.T) {
 	tool := NewAPICallerTool()
 	ctx := context.Background()
 
-	input := &tools.ToolInput{
+	input := &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"url": server.URL,
 			"retry": map[string]interface{}{
@@ -641,7 +641,7 @@ func TestAPICallerTool_Authentication_Bearer(t *testing.T) {
 	tool := NewAPICallerTool()
 	ctx := context.Background()
 
-	input := &tools.ToolInput{
+	input := &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"url": server.URL,
 			"auth": map[string]interface{}{
@@ -809,7 +809,7 @@ func TestWebScraperTool_Execute(t *testing.T) {
 	tool := NewWebScraperTool()
 	ctx := context.Background()
 
-	input := &tools.ToolInput{
+	input := &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"url": server.URL,
 		},
@@ -840,7 +840,7 @@ func TestWebScraperTool_Execute_InvalidURL(t *testing.T) {
 	tool := NewWebScraperTool()
 	ctx := context.Background()
 
-	input := &tools.ToolInput{
+	input := &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"url": "://invalid-url",
 		},
@@ -870,7 +870,7 @@ func TestWebScraperTool_Execute_WithSelectors(t *testing.T) {
 	tool := NewWebScraperTool()
 	ctx := context.Background()
 
-	input := &tools.ToolInput{
+	input := &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"url": server.URL,
 			"selectors": map[string]interface{}{

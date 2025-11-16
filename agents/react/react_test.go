@@ -8,6 +8,7 @@ import (
 	"github.com/kart-io/goagent/agents/executor"
 	"github.com/kart-io/goagent/agents/react"
 	agentcore "github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/tools"
 )
@@ -61,10 +62,10 @@ func TestReActAgent(t *testing.T) {
 		"calculator",
 		"Useful for mathematical calculations",
 		`{"type": "object", "properties": {"expression": {"type": "string"}}}`,
-		func(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
+		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 			expr, ok := input.Args["expression"].(string)
 			if !ok {
-				return &tools.ToolOutput{
+				return &interfaces.ToolOutput{
 					Success: false,
 					Error:   "expression must be a string",
 				}, nil
@@ -73,7 +74,7 @@ func TestReActAgent(t *testing.T) {
 			// 简单计算 (实际应该使用表达式求值器)
 			result := fmt.Sprintf("Result of %s is 42", expr)
 
-			return &tools.ToolOutput{
+			return &interfaces.ToolOutput{
 				Result:  result,
 				Success: true,
 			}, nil
@@ -84,10 +85,10 @@ func TestReActAgent(t *testing.T) {
 		"search",
 		"Useful for searching information on the internet",
 		`{"type": "object", "properties": {"query": {"type": "string"}}}`,
-		func(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
+		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 			query, ok := input.Args["query"].(string)
 			if !ok {
-				return &tools.ToolOutput{
+				return &interfaces.ToolOutput{
 					Success: false,
 					Error:   "query must be a string",
 				}, nil
@@ -95,7 +96,7 @@ func TestReActAgent(t *testing.T) {
 
 			result := fmt.Sprintf("Search results for '%s': Found 10 results", query)
 
-			return &tools.ToolOutput{
+			return &interfaces.ToolOutput{
 				Result:  result,
 				Success: true,
 			}, nil
@@ -117,7 +118,7 @@ Final Answer: Go is a statically typed, compiled programming language designed a
 		Name:        "TestAgent",
 		Description: "A test ReAct agent",
 		LLM:         mockLLM,
-		Tools:       []tools.Tool{calculatorTool, searchTool},
+		Tools:       []interfaces.Tool{calculatorTool, searchTool},
 		MaxSteps:    5,
 	})
 
@@ -165,9 +166,9 @@ func TestAgentExecutor(t *testing.T) {
 		"echo",
 		"Echoes the input",
 		`{"type": "object", "properties": {"message": {"type": "string"}}}`,
-		func(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
+		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 			msg, _ := input.Args["message"].(string)
-			return &tools.ToolOutput{
+			return &interfaces.ToolOutput{
 				Result:  fmt.Sprintf("Echo: %s", msg),
 				Success: true,
 			}, nil
@@ -188,7 +189,7 @@ Action Input: {"message": "Hello World"}`,
 		Name:        "EchoAgent",
 		Description: "An agent that echoes messages",
 		LLM:         mockLLM,
-		Tools:       []tools.Tool{echoTool},
+		Tools:       []interfaces.Tool{echoTool},
 		MaxSteps:    3,
 	})
 
@@ -221,8 +222,8 @@ func BenchmarkReActAgent(b *testing.B) {
 		"simple",
 		"A simple test tool",
 		`{"type": "object"}`,
-		func(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
-			return &tools.ToolOutput{
+		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+			return &interfaces.ToolOutput{
 				Result:  "done",
 				Success: true,
 			}, nil
@@ -236,7 +237,7 @@ func BenchmarkReActAgent(b *testing.B) {
 	agent := react.NewReActAgent(react.ReActConfig{
 		Name:  "BenchAgent",
 		LLM:   mockLLM,
-		Tools: []tools.Tool{simpleTool},
+		Tools: []interfaces.Tool{simpleTool},
 	})
 
 	ctx := context.Background()

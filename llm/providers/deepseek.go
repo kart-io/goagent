@@ -510,7 +510,7 @@ func (p *DeepSeekProvider) callAPI(ctx context.Context, endpoint string, payload
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
 	}
 

@@ -19,29 +19,32 @@ func main() {
 	agent2Comm := multiagent.NewMemoryCommunicator("agent-2")
 	agent3Comm := multiagent.NewMemoryCommunicator("agent-3")
 
-	defer agent1Comm.Close()
-	defer agent2Comm.Close()
-	defer agent3Comm.Close()
-
-	fmt.Println("✓ Communicators created")
-
-	// 2. 演示点对点通信
-	fmt.Println("2. Demonstrating Point-to-Point Communication...")
+	defer func() {
+		if err := agent1Comm.Close(); err != nil {
+			log.Fatalf("Failed to close communicator: %v", err)
+		}
+	}()
+	defer func() {
+		if err := agent2Comm.Close(); err != nil {
+			log.Fatalf("Failed to close communicator: %v", err)
+		}
+	}()
+	defer func() {
+		if err := agent3Comm.Close(); err != nil {
+			log.Fatalf("Failed to close communicator: %v", err)
+		}
+	}()
 
 	ctx := context.Background()
 
-	// Agent 1 发送消息给 Agent 2
-	msg := multiagent.NewAgentMessage("agent-1", "agent-2", multiagent.MessageTypeRequest, map[string]string{
-		"task": "analyze data",
-	})
-	msg.Metadata["priority"] = "high"
-
-	if err := agent1Comm.Send(ctx, "agent-2", msg); err != nil {
-		log.Fatalf("Failed to send message: %v", err)
+	receivedMsg, err := agent2Comm.Receive(ctx)
+	if err != nil {
+		log.Printf("Failed to receive: %v", err)
+		return
 	}
-	fmt.Printf("Agent 1 → Agent 2: %s (Type: %s)\n", msg.Payload, msg.Type)
+	fmt.Printf("Agent 2 received: %v (From: %s)\n", receivedMsg.Payload, receivedMsg.From)
 
-	// Agent 2 接收消息
+	// Agent 2 回复
 	go func() {
 		receivedMsg, err := agent2Comm.Receive(ctx)
 		if err != nil {
@@ -54,7 +57,7 @@ func main() {
 		response := multiagent.NewAgentMessage("agent-2", "agent-1", multiagent.MessageTypeResponse, map[string]string{
 			"result": "analysis complete",
 		})
-		agent2Comm.Send(ctx, "agent-1", response)
+		_ = agent2Comm.Send(ctx, "agent-1", response)
 		fmt.Printf("Agent 2 → Agent 1: Response sent\n")
 	}()
 
@@ -111,19 +114,23 @@ func main() {
 	router := multiagent.NewMessageRouter()
 
 	// 注册路由处理器
-	router.RegisterRoute("task.analyze", func(ctx context.Context, msg *multiagent.AgentMessage) (*multiagent.AgentMessage, error) {
+	if err := router.RegisterRoute("task.analyze", func(ctx context.Context, msg *multiagent.AgentMessage) (*multiagent.AgentMessage, error) {
 		fmt.Printf("Router handling 'task.analyze': %v\n", msg.Payload)
 		return multiagent.NewAgentMessage("router", msg.From, multiagent.MessageTypeResponse, map[string]string{
 			"status": "processing",
 		}), nil
-	})
+	}); err != nil {
+		log.Fatalf("Failed to register route: %v", err)
+	}
 
-	router.RegisterRoute("task.report", func(ctx context.Context, msg *multiagent.AgentMessage) (*multiagent.AgentMessage, error) {
+	if err := router.RegisterRoute("task.report", func(ctx context.Context, msg *multiagent.AgentMessage) (*multiagent.AgentMessage, error) {
 		fmt.Printf("Router handling 'task.report': %v\n", msg.Payload)
 		return multiagent.NewAgentMessage("router", msg.From, multiagent.MessageTypeResponse, map[string]string{
 			"status": "reported",
 		}), nil
-	})
+	}); err != nil {
+		log.Fatalf("Failed to register route: %v", err)
+	}
 
 	// 路由消息
 	routeMsg1 := multiagent.NewAgentMessage("agent-1", "", multiagent.MessageTypeCommand, "do analysis")
@@ -153,10 +160,14 @@ func main() {
 
 	// 添加消息到会话
 	sessionMsg1 := multiagent.NewAgentMessage("agent-1", "agent-2", multiagent.MessageTypeRequest, "start collaboration")
-	sessionMgr.AddMessage(session.ID, sessionMsg1)
+	if err := sessionMgr.AddMessage(session.ID, sessionMsg1); err != nil {
+		log.Fatalf("Failed to add message to session: %v", err)
+	}
 
 	sessionMsg2 := multiagent.NewAgentMessage("agent-2", "agent-3", multiagent.MessageTypeRequest, "join collaboration")
-	sessionMgr.AddMessage(session.ID, sessionMsg2)
+	if err := sessionMgr.AddMessage(session.ID, sessionMsg2); err != nil {
+		log.Fatalf("Failed to add message to session: %v", err)
+	}
 
 	// 获取会话
 	retrievedSession, err := sessionMgr.GetSession(session.ID)
@@ -166,7 +177,9 @@ func main() {
 	fmt.Printf("Session has %d messages\n", len(retrievedSession.Messages))
 
 	// 关闭会话
-	sessionMgr.CloseSession(session.ID)
+	if err := sessionMgr.CloseSession(session.ID); err != nil {
+		log.Fatalf("Failed to close session: %v", err)
+	}
 	fmt.Println("Session closed")
 	fmt.Println("✓ Session management demonstrated")
 
