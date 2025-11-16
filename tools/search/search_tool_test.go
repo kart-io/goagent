@@ -1,3 +1,5 @@
+// Package search 提供搜索工具的测试
+// 本文件测试 SearchTool 搜索工具的功能
 package search
 
 import (
@@ -8,6 +10,7 @@ import (
 	"github.com/kart-io/goagent/interfaces"
 )
 
+// TestNewSearchTool 测试创建搜索工具
 func TestNewSearchTool(t *testing.T) {
 	engine := NewMockSearchEngine()
 	tool := NewSearchTool(engine)
@@ -25,6 +28,7 @@ func TestNewSearchTool(t *testing.T) {
 	}
 }
 
+// TestSearchTool_Run_Success 测试成功执行搜索
 func TestSearchTool_Run_Success(t *testing.T) {
 	engine := NewMockSearchEngine()
 	engine.AddResponse("golang", []SearchResult{
@@ -66,6 +70,7 @@ func TestSearchTool_Run_Success(t *testing.T) {
 	}
 }
 
+// TestSearchTool_Run_EmptyQuery 测试空查询字符串的错误处理
 func TestSearchTool_Run_EmptyQuery(t *testing.T) {
 	engine := NewMockSearchEngine()
 	tool := NewSearchTool(engine)
@@ -87,6 +92,7 @@ func TestSearchTool_Run_EmptyQuery(t *testing.T) {
 	}
 }
 
+// TestSearchTool_Run_NoQuery 测试缺少查询参数的错误处理
 func TestSearchTool_Run_NoQuery(t *testing.T) {
 	engine := NewMockSearchEngine()
 	tool := NewSearchTool(engine)
@@ -106,6 +112,7 @@ func TestSearchTool_Run_NoQuery(t *testing.T) {
 	}
 }
 
+// TestMockSearchEngine_Search 测试模拟搜索引擎的搜索功能
 func TestMockSearchEngine_Search(t *testing.T) {
 	engine := NewMockSearchEngine()
 
@@ -127,6 +134,7 @@ func TestMockSearchEngine_Search(t *testing.T) {
 	}
 }
 
+// TestMockSearchEngine_AddResponse 测试添加自定义搜索响应
 func TestMockSearchEngine_AddResponse(t *testing.T) {
 	engine := NewMockSearchEngine()
 	customResults := []SearchResult{
@@ -156,6 +164,7 @@ func TestMockSearchEngine_AddResponse(t *testing.T) {
 	}
 }
 
+// TestMockSearchEngine_MaxResults 测试最大结果数限制
 func TestMockSearchEngine_MaxResults(t *testing.T) {
 	engine := NewMockSearchEngine()
 	results := make([]SearchResult, 10)
@@ -179,6 +188,7 @@ func TestMockSearchEngine_MaxResults(t *testing.T) {
 	}
 }
 
+// TestMockSearchEngine_CaseInsensitive 测试大小写不敏感搜索
 func TestMockSearchEngine_CaseInsensitive(t *testing.T) {
 	engine := NewMockSearchEngine()
 	customResults := []SearchResult{
@@ -198,6 +208,7 @@ func TestMockSearchEngine_CaseInsensitive(t *testing.T) {
 	}
 }
 
+// TestGoogleSearchEngine_New 测试创建 Google 搜索引擎
 func TestGoogleSearchEngine_New(t *testing.T) {
 	engine := NewGoogleSearchEngine("api-key", "cx-id")
 
@@ -214,6 +225,7 @@ func TestGoogleSearchEngine_New(t *testing.T) {
 	}
 }
 
+// TestGoogleSearchEngine_Search 测试 Google 搜索引擎的搜索功能
 func TestGoogleSearchEngine_Search(t *testing.T) {
 	engine := NewGoogleSearchEngine("test-key", "test-cx")
 
@@ -231,6 +243,7 @@ func TestGoogleSearchEngine_Search(t *testing.T) {
 	}
 }
 
+// TestDuckDuckGoSearchEngine_New 测试创建 DuckDuckGo 搜索引擎
 func TestDuckDuckGoSearchEngine_New(t *testing.T) {
 	engine := NewDuckDuckGoSearchEngine()
 
@@ -239,6 +252,7 @@ func TestDuckDuckGoSearchEngine_New(t *testing.T) {
 	}
 }
 
+// TestDuckDuckGoSearchEngine_Search 测试 DuckDuckGo 搜索引擎的搜索功能
 func TestDuckDuckGoSearchEngine_Search(t *testing.T) {
 	engine := NewDuckDuckGoSearchEngine()
 
@@ -256,6 +270,7 @@ func TestDuckDuckGoSearchEngine_Search(t *testing.T) {
 	}
 }
 
+// TestAggregatedSearchEngine_New 测试创建聚合搜索引擎
 func TestAggregatedSearchEngine_New(t *testing.T) {
 	engine1 := NewMockSearchEngine()
 	engine2 := NewMockSearchEngine()
@@ -271,6 +286,7 @@ func TestAggregatedSearchEngine_New(t *testing.T) {
 	}
 }
 
+// TestAggregatedSearchEngine_Search 测试聚合搜索引擎的搜索功能
 func TestAggregatedSearchEngine_Search(t *testing.T) {
 	engine1 := NewMockSearchEngine()
 	engine1.AddResponse("test", []SearchResult{
@@ -294,6 +310,7 @@ func TestAggregatedSearchEngine_Search(t *testing.T) {
 	}
 }
 
+// TestAggregatedSearchEngine_NoEngines 测试没有配置搜索引擎时的错误处理
 func TestAggregatedSearchEngine_NoEngines(t *testing.T) {
 	aggregated := NewAggregatedSearchEngine()
 
@@ -303,6 +320,7 @@ func TestAggregatedSearchEngine_NoEngines(t *testing.T) {
 	}
 }
 
+// TestAggregatedSearchEngine_Deduplication 测试搜索结果去重功能
 func TestAggregatedSearchEngine_Deduplication(t *testing.T) {
 	engine1 := NewMockSearchEngine()
 	engine1.AddResponse("test", []SearchResult{
@@ -326,6 +344,7 @@ func TestAggregatedSearchEngine_Deduplication(t *testing.T) {
 	}
 }
 
+// TestAggregatedSearchEngine_MaxResults 测试聚合搜索引擎的最大结果数限制
 func TestAggregatedSearchEngine_MaxResults(t *testing.T) {
 	engine1 := NewMockSearchEngine()
 	engine1.AddResponse("test", []SearchResult{
@@ -346,6 +365,7 @@ func TestAggregatedSearchEngine_MaxResults(t *testing.T) {
 	}
 }
 
+// TestDeduplicateResults 测试搜索结果去重辅助函数
 func TestDeduplicateResults(t *testing.T) {
 	results := []SearchResult{
 		{URL: "https://example.com/1"},
@@ -361,6 +381,7 @@ func TestDeduplicateResults(t *testing.T) {
 	}
 }
 
+// TestSortResultsByScore 测试按分数排序搜索结果
 func TestSortResultsByScore(t *testing.T) {
 	results := []SearchResult{
 		{URL: "a", Score: 0.5},
@@ -379,6 +400,7 @@ func TestSortResultsByScore(t *testing.T) {
 	}
 }
 
+// TestAggregatedSearchEngine_ContextCancellation 测试上下文取消时的处理
 func TestAggregatedSearchEngine_ContextCancellation(t *testing.T) {
 	engine := NewMockSearchEngine()
 	aggregated := NewAggregatedSearchEngine(engine)
@@ -392,6 +414,7 @@ func TestAggregatedSearchEngine_ContextCancellation(t *testing.T) {
 	}
 }
 
+// TestSearchTool_Metadata 测试搜索工具的元数据
 func TestSearchTool_Metadata(t *testing.T) {
 	engine := NewMockSearchEngine()
 	tool := NewSearchTool(engine)

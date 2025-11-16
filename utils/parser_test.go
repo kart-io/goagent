@@ -1,3 +1,5 @@
+// Package utils 提供工具函数的测试
+// 本文件测试 ResponseParser 响应解析器的功能
 package utils
 
 import (
@@ -5,6 +7,7 @@ import (
 	"testing"
 )
 
+// TestResponseParser_ExtractJSON_Valid 测试从有效的 JSON 内容中提取 JSON
 func TestResponseParser_ExtractJSON_Valid(t *testing.T) {
 	content := `{"key": "value", "number": 42}`
 	parser := NewResponseParser(content)
@@ -18,6 +21,7 @@ func TestResponseParser_ExtractJSON_Valid(t *testing.T) {
 	}
 }
 
+// TestResponseParser_ExtractJSON_CodeBlock 测试从代码块中提取 JSON
 func TestResponseParser_ExtractJSON_CodeBlock(t *testing.T) {
 	content := "```json\n{\"key\": \"value\"}\n```"
 	parser := NewResponseParser(content)
@@ -31,6 +35,7 @@ func TestResponseParser_ExtractJSON_CodeBlock(t *testing.T) {
 	}
 }
 
+// TestResponseParser_ExtractJSON_Braces 测试从包含花括号的文本中提取 JSON
 func TestResponseParser_ExtractJSON_Braces(t *testing.T) {
 	content := `Some text before {"key": "value"} some text after`
 	parser := NewResponseParser(content)
@@ -44,6 +49,7 @@ func TestResponseParser_ExtractJSON_Braces(t *testing.T) {
 	}
 }
 
+// TestResponseParser_ExtractJSON_NoJSON 测试无 JSON 内容时的错误处理
 func TestResponseParser_ExtractJSON_NoJSON(t *testing.T) {
 	content := "This is just plain text with no JSON"
 	parser := NewResponseParser(content)
@@ -54,6 +60,7 @@ func TestResponseParser_ExtractJSON_NoJSON(t *testing.T) {
 	}
 }
 
+// TestResponseParser_ParseToMap 测试将 JSON 解析为 map
 func TestResponseParser_ParseToMap(t *testing.T) {
 	content := `{"name": "test", "value": 123}`
 	parser := NewResponseParser(content)
@@ -70,6 +77,7 @@ func TestResponseParser_ParseToMap(t *testing.T) {
 	}
 }
 
+// TestResponseParser_ParseToMap_Invalid 测试无效 JSON 解析为 map 时的错误处理
 func TestResponseParser_ParseToMap_Invalid(t *testing.T) {
 	content := "not json"
 	parser := NewResponseParser(content)
@@ -80,6 +88,7 @@ func TestResponseParser_ParseToMap_Invalid(t *testing.T) {
 	}
 }
 
+// TestResponseParser_ParseToStruct 测试将 JSON 解析为结构体
 func TestResponseParser_ParseToStruct(t *testing.T) {
 	type TestStruct struct {
 		Name  string `json:"name"`
@@ -102,6 +111,7 @@ func TestResponseParser_ParseToStruct(t *testing.T) {
 	}
 }
 
+// TestResponseParser_ExtractCodeBlock 测试提取指定语言的代码块
 func TestResponseParser_ExtractCodeBlock(t *testing.T) {
 	content := "```go\nfunc main() {}\n```"
 	parser := NewResponseParser(content)
@@ -115,6 +125,7 @@ func TestResponseParser_ExtractCodeBlock(t *testing.T) {
 	}
 }
 
+// TestResponseParser_ExtractCodeBlock_NotFound 测试找不到代码块时的错误处理
 func TestResponseParser_ExtractCodeBlock_NotFound(t *testing.T) {
 	content := "```go\nfunc main() {}\n```"
 	parser := NewResponseParser(content)
@@ -125,6 +136,7 @@ func TestResponseParser_ExtractCodeBlock_NotFound(t *testing.T) {
 	}
 }
 
+// TestResponseParser_ExtractAllCodeBlocks 测试提取所有代码块
 func TestResponseParser_ExtractAllCodeBlocks(t *testing.T) {
 	content := "```go\nfunc main() {}\n```\n\n```python\nprint('hello')\n```"
 	parser := NewResponseParser(content)
@@ -142,6 +154,7 @@ func TestResponseParser_ExtractAllCodeBlocks(t *testing.T) {
 	}
 }
 
+// TestResponseParser_ExtractList_Numbered 测试提取数字编号的列表
 func TestResponseParser_ExtractList_Numbered(t *testing.T) {
 	content := `1. First item
 2. Second item
@@ -158,6 +171,7 @@ func TestResponseParser_ExtractList_Numbered(t *testing.T) {
 	}
 }
 
+// TestResponseParser_ExtractList_Bullets 测试提取子弹符号的列表
 func TestResponseParser_ExtractList_Bullets(t *testing.T) {
 	content := `- First item
 - Second item
@@ -171,6 +185,7 @@ func TestResponseParser_ExtractList_Bullets(t *testing.T) {
 	}
 }
 
+// TestResponseParser_ExtractKeyValue_FromJSON 测试从 JSON 中提取键值对
 func TestResponseParser_ExtractKeyValue_FromJSON(t *testing.T) {
 	content := `{"name": "John", "age": "30"}`
 	parser := NewResponseParser(content)
@@ -184,6 +199,7 @@ func TestResponseParser_ExtractKeyValue_FromJSON(t *testing.T) {
 	}
 }
 
+// TestResponseParser_ExtractKeyValue_FromText 测试从文本中提取键值对
 func TestResponseParser_ExtractKeyValue_FromText(t *testing.T) {
 	content := `name: John Doe
 age: 30`
@@ -198,6 +214,7 @@ age: 30`
 	}
 }
 
+// TestResponseParser_ExtractKeyValue_NotFound 测试找不到键时的错误处理
 func TestResponseParser_ExtractKeyValue_NotFound(t *testing.T) {
 	content := "Some random text"
 	parser := NewResponseParser(content)
@@ -208,6 +225,7 @@ func TestResponseParser_ExtractKeyValue_NotFound(t *testing.T) {
 	}
 }
 
+// TestResponseParser_ExtractKeyValue_NonString 测试非字符串值的错误处理
 func TestResponseParser_ExtractKeyValue_NonString(t *testing.T) {
 	content := `{"name": 123}`
 	parser := NewResponseParser(content)
@@ -218,6 +236,7 @@ func TestResponseParser_ExtractKeyValue_NonString(t *testing.T) {
 	}
 }
 
+// TestResponseParser_ExtractSection 测试提取指定章节内容
 func TestResponseParser_ExtractSection(t *testing.T) {
 	content := `# Introduction
 This is intro
@@ -238,6 +257,7 @@ More info`
 	}
 }
 
+// TestResponseParser_ExtractSection_NotFound 测试找不到章节时的错误处理
 func TestResponseParser_ExtractSection_NotFound(t *testing.T) {
 	content := "# Introduction\nSome content"
 	parser := NewResponseParser(content)
@@ -248,6 +268,7 @@ func TestResponseParser_ExtractSection_NotFound(t *testing.T) {
 	}
 }
 
+// TestResponseParser_RemoveMarkdown 测试移除 Markdown 格式
 func TestResponseParser_RemoveMarkdown(t *testing.T) {
 	content := `# Heading
 **bold** and *italic*
@@ -272,6 +293,7 @@ inline ` + "`code`"
 	}
 }
 
+// TestResponseParser_GetPlainText 测试获取纯文本内容
 func TestResponseParser_GetPlainText(t *testing.T) {
 	content := "**Bold** text"
 	parser := NewResponseParser(content)
@@ -283,6 +305,7 @@ func TestResponseParser_GetPlainText(t *testing.T) {
 	}
 }
 
+// TestResponseParser_IsEmpty 测试检查内容是否为空
 func TestResponseParser_IsEmpty(t *testing.T) {
 	parser := NewResponseParser("")
 	if !parser.IsEmpty() {
@@ -300,6 +323,7 @@ func TestResponseParser_IsEmpty(t *testing.T) {
 	}
 }
 
+// TestResponseParser_Length 测试获取内容长度
 func TestResponseParser_Length(t *testing.T) {
 	content := "test content"
 	parser := NewResponseParser(content)
