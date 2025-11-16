@@ -35,7 +35,7 @@ type CoTConfig struct {
 	Description string            // Agent description
 	LLM         llm.Client        // LLM client
 	Tools       []interfaces.Tool // Available tools (optional)
-	MaxSteps    int          // Maximum reasoning steps
+	MaxSteps    int               // Maximum reasoning steps
 
 	// CoT-specific settings
 	ShowStepNumbers      bool   // Show step numbers in reasoning

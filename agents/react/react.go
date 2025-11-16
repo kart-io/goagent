@@ -35,15 +35,15 @@ type ReActAgent struct {
 
 // ReActConfig ReAct Agent 配置
 type ReActConfig struct {
-	Name         string       // Agent 名称
-	Description  string       // Agent 描述
-	LLM          llm.Client   // LLM 客户端
+	Name         string            // Agent 名称
+	Description  string            // Agent 描述
+	LLM          llm.Client        // LLM 客户端
 	Tools        []interfaces.Tool // 可用工具列表
-	MaxSteps     int          // 最大步数
-	StopPattern  []string     // 停止模式
-	PromptPrefix string       // Prompt 前缀
-	PromptSuffix string       // Prompt 后缀
-	FormatInstr  string       // 格式说明
+	MaxSteps     int               // 最大步数
+	StopPattern  []string          // 停止模式
+	PromptPrefix string            // Prompt 前缀
+	PromptSuffix string            // Prompt 后缀
+	FormatInstr  string            // 格式说明
 }
 
 // NewReActAgent 创建 ReAct Agent

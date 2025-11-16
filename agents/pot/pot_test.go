@@ -192,13 +192,13 @@ func TestPoTAgent_ExtractCode(t *testing.T) {
 		expected string
 	}{
 		{
-			name: "python code block",
+			name:     "python code block",
 			response: "Here's the solution:\n```python\ndef factorial(n):\n    return 1 if n <= 1 else n * factorial(n-1)\n```",
 			language: "python",
 			expected: "def factorial(n):\n    return 1 if n <= 1 else n * factorial(n-1)",
 		},
 		{
-			name: "generic code block",
+			name:     "generic code block",
 			response: "```\nconsole.log('Hello');\n```",
 			language: "javascript",
 			expected: "console.log('Hello');",
