@@ -9,7 +9,7 @@ import (
 
 // NewAgentExecutionError creates an error for agent execution failures
 func NewAgentExecutionError(agentName, operation string, cause error) *AgentError {
-	return Wrap(cause, CodeAgentExecution, fmt.Sprintf("agent execution failed")).
+	return Wrap(cause, CodeAgentExecution, "agent execution failed").
 		WithComponent("agent").
 		WithOperation(operation).
 		WithContext("agent_name", agentName)

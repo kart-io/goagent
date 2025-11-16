@@ -61,7 +61,7 @@ func (a *DataPipelineAgent) Execute(ctx context.Context, input *core.AgentInput)
 	if err != nil {
 		return nil, err
 	}
-	defer streamOutput.Close()
+	defer func() { _ = streamOutput.Close() }()
 
 	reader := streamOutput.(*Reader)
 	chunks, err := reader.Collect()
@@ -95,12 +95,16 @@ func (a *DataPipelineAgent) ExecuteStream(ctx context.Context, input *core.Agent
 
 // processDataPipeline 处理数据管道
 func (a *DataPipelineAgent) processDataPipeline(ctx context.Context, input *core.AgentInput, writer *Writer) {
-	defer writer.Close()
+	defer func() {
+		if err := writer.Close(); err != nil {
+			fmt.Printf("failed to close writer: %v", err)
+		}
+	}()
 
 	// 从输入获取数据源
 	dataSource, ok := input.Context["data_source"].([]interface{})
 	if !ok {
-		writer.WriteError(fmt.Errorf("invalid data source"))
+		_ = writer.WriteError(fmt.Errorf("invalid data source"))
 		return
 	}
 
@@ -108,13 +112,15 @@ func (a *DataPipelineAgent) processDataPipeline(ctx context.Context, input *core
 	var processedItems int
 	startTime := time.Now()
 
-	writer.WriteStatus(fmt.Sprintf("Starting pipeline: %d items", totalItems))
+	_ = writer.WriteStatus(fmt.Sprintf("Starting pipeline: %d items", totalItems))
 
 	// 分批处理
 	for i := 0; i < totalItems; i += a.config.BatchSize {
 		select {
 		case <-ctx.Done():
-			writer.WriteError(ctx.Err())
+			if err := writer.WriteError(ctx.Err()); err != nil {
+				fmt.Printf("failed to write error: %v", err)
+			}
 			return
 		default:
 		}
@@ -129,7 +135,7 @@ func (a *DataPipelineAgent) processDataPipeline(ctx context.Context, input *core
 		// 处理批次
 		result, err := a.processBatch(ctx, batch)
 		if err != nil {
-			writer.WriteError(fmt.Errorf("batch processing failed: %w", err))
+			_ = writer.WriteError(fmt.Errorf("batch processing failed: %w", err))
 			return
 		}
 
@@ -146,7 +152,9 @@ func (a *DataPipelineAgent) processDataPipeline(ctx context.Context, input *core
 		}
 
 		if err := writer.WriteChunk(chunk); err != nil {
-			writer.WriteError(err)
+			if err := writer.WriteError(err); err != nil {
+				fmt.Printf("failed to write error: %v", err)
+			}
 			return
 		}
 
@@ -155,7 +163,9 @@ func (a *DataPipelineAgent) processDataPipeline(ctx context.Context, input *core
 		// 发送进度更新
 		if a.config.EnableProgress {
 			progress := float64(processedItems) / float64(totalItems) * 100
-			writer.WriteProgress(progress, fmt.Sprintf("Processed %d/%d items", processedItems, totalItems))
+			if err := writer.WriteProgress(progress, fmt.Sprintf("Processed %d/%d items", processedItems, totalItems)); err != nil {
+				fmt.Printf("failed to write progress: %v", err)
+			}
 		}
 
 		// 处理延迟（避免过载）
@@ -167,7 +177,7 @@ func (a *DataPipelineAgent) processDataPipeline(ctx context.Context, input *core
 	elapsed := time.Since(startTime)
 	throughput := float64(totalItems) / elapsed.Seconds()
 
-	writer.WriteStatus(fmt.Sprintf("Pipeline complete: %d items in %v (%.2f items/sec)",
+	_ = writer.WriteStatus(fmt.Sprintf("Pipeline complete: %d items in %v (%.2f items/sec)",
 		totalItems, elapsed, throughput))
 }
 
@@ -194,13 +204,15 @@ func (a *DataPipelineAgent) ProcessWithTransform(
 	writer := NewWriter(ctx, opts)
 
 	go func() {
-		defer writer.Close()
+		defer func() { _ = writer.Close() }()
 
 		totalItems := len(dataSource)
 		for i, item := range dataSource {
 			select {
 			case <-ctx.Done():
-				writer.WriteError(ctx.Err())
+				if err := writer.WriteError(ctx.Err()); err != nil {
+					fmt.Printf("failed to write error: %v", err)
+				}
 				return
 			default:
 			}
@@ -208,7 +220,9 @@ func (a *DataPipelineAgent) ProcessWithTransform(
 			// 应用转换
 			transformed, err := transform(item)
 			if err != nil {
-				writer.WriteError(fmt.Errorf("transform failed at item %d: %w", i, err))
+				if err := writer.WriteError(fmt.Errorf("transform failed at item %d: %w", i, err)); err != nil {
+					fmt.Printf("failed to write error: %v", err)
+				}
 				return
 			}
 
@@ -225,7 +239,7 @@ func (a *DataPipelineAgent) ProcessWithTransform(
 			}
 
 			if err := writer.WriteChunk(chunk); err != nil {
-				writer.WriteError(err)
+				_ = writer.WriteError(err)
 				return
 			}
 		}
@@ -245,7 +259,11 @@ func (a *DataPipelineAgent) StreamFilter(
 	writer := NewWriter(ctx, opts)
 
 	go func() {
-		defer writer.Close()
+		defer func() {
+			if err := writer.Close(); err != nil {
+				fmt.Printf("failed to close writer: %v", err)
+			}
+		}()
 
 		for {
 			chunk, err := source.Next()
@@ -256,7 +274,7 @@ func (a *DataPipelineAgent) StreamFilter(
 			// 应用过滤器
 			if filter(chunk) {
 				if err := writer.WriteChunk(chunk); err != nil {
-					writer.WriteError(err)
+					_ = writer.WriteError(err)
 					return
 				}
 			}
@@ -277,7 +295,7 @@ func (a *DataPipelineAgent) StreamMap(
 	writer := NewWriter(ctx, opts)
 
 	go func() {
-		defer writer.Close()
+		defer func() { _ = writer.Close() }()
 
 		for {
 			chunk, err := source.Next()
@@ -288,12 +306,14 @@ func (a *DataPipelineAgent) StreamMap(
 			// 应用映射
 			mapped, err := mapper(chunk)
 			if err != nil {
-				writer.WriteError(err)
+				if err := writer.WriteError(err); err != nil {
+					fmt.Printf("failed to write error: %v", err)
+				}
 				return
 			}
 
 			if err := writer.WriteChunk(mapped); err != nil {
-				writer.WriteError(err)
+				_ = writer.WriteError(err)
 				return
 			}
 		}

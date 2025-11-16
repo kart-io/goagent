@@ -102,7 +102,7 @@ func TestLLMToolSelectorMiddleware_Process_NoQuery(t *testing.T) {
 	middleware := NewLLMToolSelectorMiddleware(mockLLM, 5)
 
 	state := core.NewAgentState()
-	allTools := []tools.Tool{
+	allTools := []interfaces.Tool{
 		NewMockTool("tool1", "Tool 1 description"),
 		NewMockTool("tool2", "Tool 2 description"),
 	}
@@ -120,7 +120,7 @@ func TestLLMToolSelectorMiddleware_Process_Success(t *testing.T) {
 	middleware := NewLLMToolSelectorMiddleware(mockLLM, 5)
 
 	state := core.NewAgentState()
-	allTools := []tools.Tool{
+	allTools := []interfaces.Tool{
 		NewMockTool("tool1", "Tool 1 description"),
 		NewMockTool("tool2", "Tool 2 description"),
 		NewMockTool("tool3", "Tool 3 description"),
@@ -136,7 +136,7 @@ func TestLLMToolSelectorMiddleware_Process_Success(t *testing.T) {
 	// Check selected tools
 	toolsVal, ok := resultState.Get("tools")
 	require.True(t, ok)
-	selectedTools, ok := toolsVal.([]tools.Tool)
+	selectedTools, ok := toolsVal.([]interfaces.Tool)
 	require.True(t, ok)
 	assert.Len(t, selectedTools, 2)
 
@@ -155,7 +155,7 @@ func TestLLMToolSelectorMiddleware_Process_WithAlwaysInclude(t *testing.T) {
 	middleware.WithAlwaysInclude("tool_critical")
 
 	state := core.NewAgentState()
-	allTools := []tools.Tool{
+	allTools := []interfaces.Tool{
 		NewMockTool("tool1", "Tool 1"),
 		NewMockTool("tool2", "Tool 2"),
 		NewMockTool("tool_critical", "Critical tool"),
@@ -169,7 +169,7 @@ func TestLLMToolSelectorMiddleware_Process_WithAlwaysInclude(t *testing.T) {
 
 	toolsVal, ok := resultState.Get("tools")
 	require.True(t, ok)
-	selectedTools, ok := toolsVal.([]tools.Tool)
+	selectedTools, ok := toolsVal.([]interfaces.Tool)
 	require.True(t, ok)
 
 	// Should have tool1 + tool_critical
@@ -188,7 +188,7 @@ func TestLLMToolSelectorMiddleware_Process_Caching(t *testing.T) {
 	middleware := NewLLMToolSelectorMiddleware(mockLLM, 5)
 
 	state := core.NewAgentState()
-	allTools := []tools.Tool{
+	allTools := []interfaces.Tool{
 		NewMockTool("tool1", "Tool 1"),
 		NewMockTool("tool2", "Tool 2"),
 		NewMockTool("tool3", "Tool 3"),
@@ -211,8 +211,8 @@ func TestLLMToolSelectorMiddleware_Process_Caching(t *testing.T) {
 	// Both should have the same result
 	tools1Val, _ := resultState1.Get("tools")
 	tools2Val, _ := resultState2.Get("tools")
-	tools1 := tools1Val.([]tools.Tool)
-	tools2 := tools2Val.([]tools.Tool)
+	tools1 := tools1Val.([]interfaces.Tool)
+	tools2 := tools2Val.([]interfaces.Tool)
 
 	assert.Equal(t, len(tools1), len(tools2))
 }
@@ -303,7 +303,7 @@ func TestLLMToolSelectorMiddleware_FilterTools(t *testing.T) {
 	mockLLM := &MockLLMClient{}
 	middleware := NewLLMToolSelectorMiddleware(mockLLM, 5)
 
-	allTools := []tools.Tool{
+	allTools := []interfaces.Tool{
 		NewMockTool("tool1", "Tool 1"),
 		NewMockTool("tool2", "Tool 2"),
 		NewMockTool("tool3", "Tool 3"),
@@ -328,7 +328,7 @@ func TestLLMToolSelectorMiddleware_BuildToolDescriptions(t *testing.T) {
 	mockLLM := &MockLLMClient{}
 	middleware := NewLLMToolSelectorMiddleware(mockLLM, 5)
 
-	allTools := []tools.Tool{
+	allTools := []interfaces.Tool{
 		NewMockTool("calculator", "Performs mathematical calculations"),
 		NewMockTool("web_search", "Searches the web"),
 	}
@@ -345,7 +345,7 @@ func TestLLMToolSelectorMiddleware_GetCacheKey(t *testing.T) {
 	mockLLM := &MockLLMClient{}
 	middleware := NewLLMToolSelectorMiddleware(mockLLM, 5)
 
-	allTools := []tools.Tool{
+	allTools := []interfaces.Tool{
 		NewMockTool("tool1", "Tool 1"),
 		NewMockTool("tool2", "Tool 2"),
 	}
@@ -390,7 +390,7 @@ func TestLLMToolSelectorMiddleware_Process_LLMError(t *testing.T) {
 	middleware := NewLLMToolSelectorMiddleware(mockLLM, 5)
 
 	state := core.NewAgentState()
-	allTools := []tools.Tool{
+	allTools := []interfaces.Tool{
 		NewMockTool("tool1", "Tool 1"),
 		NewMockTool("tool2", "Tool 2"),
 	}
@@ -405,7 +405,7 @@ func TestLLMToolSelectorMiddleware_Process_LLMError(t *testing.T) {
 	// Should still have all tools (fallback behavior)
 	toolsVal, ok := resultState.Get("tools")
 	require.True(t, ok)
-	tools := toolsVal.([]tools.Tool)
+	tools := toolsVal.([]interfaces.Tool)
 	assert.Len(t, tools, 2)
 }
 
@@ -415,7 +415,7 @@ func BenchmarkLLMToolSelectorMiddleware_Process(b *testing.B) {
 	middleware := NewLLMToolSelectorMiddleware(mockLLM, 5)
 
 	state := core.NewAgentState()
-	allTools := []tools.Tool{
+	allTools := []interfaces.Tool{
 		NewMockTool("tool1", "Tool 1"),
 		NewMockTool("tool2", "Tool 2"),
 		NewMockTool("tool3", "Tool 3"),

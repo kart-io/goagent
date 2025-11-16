@@ -53,7 +53,7 @@ func demo1BasicMultiMode() {
 	}
 
 	multiStream := stream.NewMultiModeStream(ctx, config)
-	defer multiStream.Close()
+	defer func() { _ = multiStream.Close() }()
 
 	// Subscribe to messages mode
 	msgCh, _ := multiStream.Subscribe(stream.StreamModeMessages)
@@ -62,14 +62,14 @@ func demo1BasicMultiMode() {
 	updatesCh, _ := multiStream.Subscribe(stream.StreamModeUpdates)
 
 	// Send events to different modes
-	multiStream.Stream(stream.StreamModeMessages, stream.StreamEvent{
+	_ = multiStream.Stream(stream.StreamModeMessages, stream.StreamEvent{
 		Mode:      stream.StreamModeMessages,
 		Type:      "token",
 		Data:      "Hello",
 		Timestamp: time.Now(),
 	})
 
-	multiStream.Stream(stream.StreamModeUpdates, stream.StreamEvent{
+	_ = multiStream.Stream(stream.StreamModeUpdates, stream.StreamEvent{
 		Mode:      stream.StreamModeUpdates,
 		Type:      "state_change",
 		Data:      map[string]interface{}{"user_id": "123", "status": "active"},
@@ -105,7 +105,7 @@ func demo2StreamWriter() {
 	}
 
 	multiStream := stream.NewMultiModeStream(ctx, config)
-	defer multiStream.Close()
+	defer func() { _ = multiStream.Close() }()
 
 	// Get writers for different modes
 	msgWriter, _ := multiStream.GetWriter(stream.StreamModeMessages)
@@ -116,11 +116,11 @@ func demo2StreamWriter() {
 	customCh, _ := multiStream.Subscribe(stream.StreamModeCustom)
 
 	// Write using writers
-	msgWriter.Write("token", "LLM")
-	msgWriter.Write("token", " generated")
-	msgWriter.Write("token", " text")
+	_ = msgWriter.Write("token", "LLM")
+	_ = msgWriter.Write("token", " generated")
+	_ = msgWriter.Write("token", " text")
 
-	customWriter.WriteWithMetadata("progress", map[string]interface{}{
+	_ = customWriter.WriteWithMetadata("progress", map[string]interface{}{
 		"step":     1,
 		"status":   "processing",
 		"progress": 50,
@@ -161,25 +161,25 @@ func demo3SubscribeAll() {
 	}
 
 	multiStream := stream.NewMultiModeStream(ctx, config)
-	defer multiStream.Close()
+	defer func() { _ = multiStream.Close() }()
 
 	// Subscribe to all modes at once
 	allCh := multiStream.SubscribeAll()
 
 	// Send events to different modes
-	multiStream.Stream(stream.StreamModeMessages, stream.StreamEvent{
+	_ = multiStream.Stream(stream.StreamModeMessages, stream.StreamEvent{
 		Mode: stream.StreamModeMessages,
 		Type: "token",
 		Data: "Message 1",
 	})
 
-	multiStream.Stream(stream.StreamModeUpdates, stream.StreamEvent{
+	_ = multiStream.Stream(stream.StreamModeUpdates, stream.StreamEvent{
 		Mode: stream.StreamModeUpdates,
 		Type: "state",
 		Data: "State update 1",
 	})
 
-	multiStream.Stream(stream.StreamModeCustom, stream.StreamEvent{
+	_ = multiStream.Stream(stream.StreamModeCustom, stream.StreamEvent{
 		Mode: stream.StreamModeCustom,
 		Type: "tool_output",
 		Data: "Tool result 1",
@@ -277,13 +277,13 @@ func demo6StreamAggregation() {
 		Modes:      []stream.StreamMode{stream.StreamModeMessages},
 		BufferSize: 10,
 	})
-	defer agent1Stream.Close()
+	defer func() { _ = agent1Stream.Close() }()
 
 	agent2Stream := stream.NewMultiModeStream(ctx, &stream.StreamConfig{
 		Modes:      []stream.StreamMode{stream.StreamModeMessages},
 		BufferSize: 10,
 	})
-	defer agent2Stream.Close()
+	defer func() { _ = agent2Stream.Close() }()
 
 	// Add streams to aggregator
 	aggregator.AddStream(agent1Stream)
@@ -293,7 +293,7 @@ func demo6StreamAggregation() {
 	aggregated := aggregator.AggregateMode(stream.StreamModeMessages)
 
 	// Send events from different agents
-	agent1Stream.Stream(stream.StreamModeMessages, stream.StreamEvent{
+	_ = agent1Stream.Stream(stream.StreamModeMessages, stream.StreamEvent{
 		Mode: stream.StreamModeMessages,
 		Type: "response",
 		Data: "Agent 1: Hello",
@@ -302,7 +302,7 @@ func demo6StreamAggregation() {
 		},
 	})
 
-	agent2Stream.Stream(stream.StreamModeMessages, stream.StreamEvent{
+	_ = agent2Stream.Stream(stream.StreamModeMessages, stream.StreamEvent{
 		Mode: stream.StreamModeMessages,
 		Type: "response",
 		Data: "Agent 2: Hi there",

@@ -5,7 +5,6 @@ import (
 
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/interfaces"
-	"github.com/kart-io/goagent/retrieval"
 )
 
 // DocumentLoader 文档加载器接口
@@ -51,7 +50,7 @@ func (l *BaseDocumentLoader) LoadAndSplit(
 	ctx context.Context,
 	loader DocumentLoader,
 	splitter TextSplitter,
-) ([]*retrieval.Document, error) {
+) ([]*interfaces.Document, error) {
 	// 触发回调
 	if l.callbackManager != nil {
 		if err := l.callbackManager.OnStart(ctx, map[string]interface{}{

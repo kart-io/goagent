@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/retrieval"
 )
 
@@ -16,7 +17,7 @@ type TextSplitter interface {
 	SplitText(text string) ([]string, error)
 
 	// SplitDocuments 分割文档
-	SplitDocuments(docs []*retrieval.Document) ([]*retrieval.Document, error)
+	SplitDocuments(docs []*interfaces.Document) ([]*interfaces.Document, error)
 
 	// GetChunkSize 获取块大小
 	GetChunkSize() int
@@ -79,8 +80,8 @@ func (s *BaseTextSplitter) GetChunkOverlap() int {
 }
 
 // SplitDocuments 分割文档
-func (s *BaseTextSplitter) SplitDocuments(docs []*retrieval.Document) ([]*retrieval.Document, error) {
-	result := make([]*retrieval.Document, 0)
+func (s *BaseTextSplitter) SplitDocuments(docs []*interfaces.Document) ([]*interfaces.Document, error) {
+	result := make([]*interfaces.Document, 0)
 
 	for _, doc := range docs {
 		// 分割文本

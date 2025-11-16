@@ -8,10 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/kart-io/goagent/tools"
 )
 
 // TestNewAPITool tests API tool creation
@@ -88,7 +87,7 @@ func TestAPITool_GET(t *testing.T) {
 	tool := NewAPITool(server.URL, 5*time.Second, nil)
 	ctx := context.Background()
 
-	output, err := tool.Invoke(ctx, &tools.ToolInput{
+	output, err := tool.Invoke(ctx, &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"method": "GET",
 			"url":    "/test",
@@ -131,7 +130,7 @@ func TestAPITool_POST(t *testing.T) {
 	tool := NewAPITool(server.URL, 5*time.Second, nil)
 	ctx := context.Background()
 
-	output, err := tool.Invoke(ctx, &tools.ToolInput{
+	output, err := tool.Invoke(ctx, &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"method": "POST",
 			"url":    "/create",
@@ -162,7 +161,7 @@ func TestAPITool_PUT(t *testing.T) {
 	tool := NewAPITool(server.URL, 5*time.Second, nil)
 	ctx := context.Background()
 
-	output, err := tool.Invoke(ctx, &tools.ToolInput{
+	output, err := tool.Invoke(ctx, &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"method": "PUT",
 			"url":    "/update",
@@ -186,7 +185,7 @@ func TestAPITool_DELETE(t *testing.T) {
 	tool := NewAPITool(server.URL, 5*time.Second, nil)
 	ctx := context.Background()
 
-	output, err := tool.Invoke(ctx, &tools.ToolInput{
+	output, err := tool.Invoke(ctx, &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"method": "DELETE",
 			"url":    "/delete/123",
@@ -210,7 +209,7 @@ func TestAPITool_PATCH(t *testing.T) {
 	tool := NewAPITool(server.URL, 5*time.Second, nil)
 	ctx := context.Background()
 
-	output, err := tool.Invoke(ctx, &tools.ToolInput{
+	output, err := tool.Invoke(ctx, &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"method": "PATCH",
 			"url":    "/patch",
@@ -240,7 +239,7 @@ func TestAPITool_CustomHeaders(t *testing.T) {
 	tool := NewAPITool(server.URL, 5*time.Second, defaultHeaders)
 	ctx := context.Background()
 
-	output, err := tool.Invoke(ctx, &tools.ToolInput{
+	output, err := tool.Invoke(ctx, &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"method": "GET",
 			"url":    "/test",
@@ -278,7 +277,7 @@ func TestAPITool_Non2xxStatus(t *testing.T) {
 			tool := NewAPITool(server.URL, 5*time.Second, nil)
 			ctx := context.Background()
 
-			output, err := tool.Invoke(ctx, &tools.ToolInput{
+			output, err := tool.Invoke(ctx, &interfaces.ToolInput{
 				Args: map[string]interface{}{
 					"url": "/test",
 				},
@@ -308,7 +307,7 @@ func TestAPITool_NonJSONResponse(t *testing.T) {
 	tool := NewAPITool(server.URL, 5*time.Second, nil)
 	ctx := context.Background()
 
-	output, err := tool.Invoke(ctx, &tools.ToolInput{
+	output, err := tool.Invoke(ctx, &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"url": "/text",
 		},
@@ -338,7 +337,7 @@ func TestAPITool_Timeout(t *testing.T) {
 	tool := NewAPITool(server.URL, 100*time.Millisecond, nil)
 	ctx := context.Background()
 
-	output, err := tool.Invoke(ctx, &tools.ToolInput{
+	output, err := tool.Invoke(ctx, &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"url": "/slow",
 		},
@@ -362,7 +361,7 @@ func TestAPITool_CustomTimeout(t *testing.T) {
 	tool := NewAPITool(server.URL, 10*time.Second, nil)
 	ctx := context.Background()
 
-	output, err := tool.Invoke(ctx, &tools.ToolInput{
+	output, err := tool.Invoke(ctx, &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"url":     "/test",
 			"timeout": 0.1, // 100ms
@@ -414,7 +413,7 @@ func TestAPITool_ErrorCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			output, err := tool.Invoke(ctx, &tools.ToolInput{
+			output, err := tool.Invoke(ctx, &interfaces.ToolInput{
 				Args:    tt.args,
 				Context: ctx,
 			})
@@ -480,7 +479,7 @@ func TestAPITool_AbsoluteURL(t *testing.T) {
 	ctx := context.Background()
 
 	// Absolute URL should override baseURL
-	output, err := tool.Invoke(ctx, &tools.ToolInput{
+	output, err := tool.Invoke(ctx, &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"url": server.URL + "/absolute",
 		},

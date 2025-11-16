@@ -72,11 +72,14 @@ func demo1BasicInterrupt() {
 		fmt.Println("\n[Human Reviewer] Reviewing interrupt...")
 		fmt.Println("[Human Reviewer] Decision: APPROVED (with caution)")
 
-		manager.RespondToInterrupt(interrupt.ID, &core.InterruptResponse{
+		if err := manager.RespondToInterrupt(interrupt.ID, &core.InterruptResponse{
 			Approved:    true,
 			Reason:      "Approved by senior engineer for maintenance",
 			RespondedBy: "admin@example.com",
-		})
+		}); err != nil {
+			fmt.Printf("Error: %v\n", err)
+			return
+		}
 	}()
 
 	// Wait for approval
@@ -121,7 +124,7 @@ func demo2PriorityLevels() {
 		// Respond immediately to avoid blocking
 		go func(idx int, intr *core.Interrupt) {
 			time.Sleep(100 * time.Millisecond)
-			manager.RespondToInterrupt(intr.ID, &core.InterruptResponse{
+			_ = manager.RespondToInterrupt(intr.ID, &core.InterruptResponse{
 				Approved:    true,
 				Reason:      fmt.Sprintf("Auto-approved for demo %d", idx),
 				RespondedBy: "system",
@@ -164,7 +167,7 @@ func demo3HumanInput() {
 		time.Sleep(500 * time.Millisecond)
 		fmt.Println("\n[Human Operator] Providing configuration...")
 
-		manager.RespondToInterrupt(interrupt.ID, &core.InterruptResponse{
+		_ = manager.RespondToInterrupt(interrupt.ID, &core.InterruptResponse{
 			Approved:    true,
 			RespondedBy: "operator@example.com",
 			Input: map[string]interface{}{
@@ -307,7 +310,7 @@ func demo5StatePersistence() {
 		fmt.Println("\n[Decision Maker] Reviewing workflow state...")
 		fmt.Println("[Decision Maker] Decision: CONTINUE processing")
 
-		manager.RespondToInterrupt(interrupt.ID, &core.InterruptResponse{
+		_ = manager.RespondToInterrupt(interrupt.ID, &core.InterruptResponse{
 			Approved:    true,
 			Reason:      "System stable, continue to completion",
 			RespondedBy: "ops_manager",
@@ -374,7 +377,7 @@ func demo6InterruptHooks() {
 		// Respond in background
 		go func(idx int, intr *core.Interrupt) {
 			time.Sleep(300 * time.Millisecond)
-			manager.RespondToInterrupt(intr.ID, &core.InterruptResponse{
+			_ = manager.RespondToInterrupt(intr.ID, &core.InterruptResponse{
 				Approved:    idx == 0, // Approve first, reject second
 				Reason:      fmt.Sprintf("Response for interrupt %d", idx),
 				RespondedBy: "reviewer",

@@ -119,9 +119,9 @@ func (s *Store) migrate() error {
 	// Set custom table name
 	if s.config.TableName != "" {
 		model := storeModel{}
-		s.db.Table(s.config.TableName).AutoMigrate(&model)
+		_ = s.db.Table(s.config.TableName).AutoMigrate(&model)
 	} else {
-		s.db.AutoMigrate(&storeModel{})
+		_ = s.db.AutoMigrate(&storeModel{})
 	}
 
 	// Create composite unique index
@@ -261,7 +261,9 @@ func (s *Store) Search(ctx context.Context, namespace []string, filter map[strin
 
 		var metadata map[string]interface{}
 		if len(model.Metadata) > 0 {
-			json.Unmarshal(model.Metadata, &metadata)
+			if err := json.Unmarshal(model.Metadata, &metadata); err != nil {
+				continue // Skip invalid metadata
+			}
 		} else {
 			metadata = make(map[string]interface{})
 		}

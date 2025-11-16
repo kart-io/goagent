@@ -195,7 +195,7 @@ func (c *Coordinator) ExecuteCustomWorkflow(ctx context.Context, task string, se
 		Status:      "in_progress",
 	}
 
-	var previousOutput string = task
+	previousOutput := task
 
 	for _, agentName := range sequence {
 		switch agentName {

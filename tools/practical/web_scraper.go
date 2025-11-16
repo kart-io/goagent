@@ -12,7 +12,7 @@ import (
 	"github.com/PuerkitoBio/goquery"
 
 	agentcore "github.com/kart-io/goagent/core"
-	"github.com/kart-io/goagent/tools"
+	"github.com/kart-io/goagent/interfaces"
 )
 
 // WebScraperTool scrapes web pages and extracts structured data
@@ -88,7 +88,7 @@ func (t *WebScraperTool) ArgsSchema() string {
 }
 
 // Execute runs the web scraper with ToolInput/ToolOutput
-func (t *WebScraperTool) Execute(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
+func (t *WebScraperTool) Execute(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 	params, err := t.parseInput(input.Args)
 	if err != nil {
 		return nil, fmt.Errorf("invalid input: %w", err)
@@ -106,7 +106,7 @@ func (t *WebScraperTool) Execute(ctx context.Context, input *tools.ToolInput) (*
 	// Fetch the page
 	doc, err := t.fetchPage(ctx, params.URL)
 	if err != nil {
-		return &tools.ToolOutput{
+		return &interfaces.ToolOutput{
 			Result: map[string]interface{}{
 				"url":   params.URL,
 				"error": err.Error(),
@@ -157,32 +157,32 @@ func (t *WebScraperTool) Execute(ctx context.Context, input *tools.ToolInput) (*
 		result["custom"] = custom
 	}
 
-	return &tools.ToolOutput{
+	return &interfaces.ToolOutput{
 		Result: result,
 	}, nil
 }
 
 // Implement Runnable interface
-func (t *WebScraperTool) Invoke(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
+func (t *WebScraperTool) Invoke(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 	return t.Execute(ctx, input)
 }
 
-func (t *WebScraperTool) Stream(ctx context.Context, input *tools.ToolInput) (<-chan agentcore.StreamChunk[*tools.ToolOutput], error) {
-	ch := make(chan agentcore.StreamChunk[*tools.ToolOutput])
+func (t *WebScraperTool) Stream(ctx context.Context, input *interfaces.ToolInput) (<-chan agentcore.StreamChunk[*interfaces.ToolOutput], error) {
+	ch := make(chan agentcore.StreamChunk[*interfaces.ToolOutput])
 	go func() {
 		defer close(ch)
 		output, err := t.Execute(ctx, input)
 		if err != nil {
-			ch <- agentcore.StreamChunk[*tools.ToolOutput]{Error: err}
+			ch <- agentcore.StreamChunk[*interfaces.ToolOutput]{Error: err}
 		} else {
-			ch <- agentcore.StreamChunk[*tools.ToolOutput]{Data: output}
+			ch <- agentcore.StreamChunk[*interfaces.ToolOutput]{Data: output}
 		}
 	}()
 	return ch, nil
 }
 
-func (t *WebScraperTool) Batch(ctx context.Context, inputs []*tools.ToolInput) ([]*tools.ToolOutput, error) {
-	outputs := make([]*tools.ToolOutput, len(inputs))
+func (t *WebScraperTool) Batch(ctx context.Context, inputs []*interfaces.ToolInput) ([]*interfaces.ToolOutput, error) {
+	outputs := make([]*interfaces.ToolOutput, len(inputs))
 	for i, input := range inputs {
 		output, err := t.Execute(ctx, input)
 		if err != nil {
@@ -193,15 +193,15 @@ func (t *WebScraperTool) Batch(ctx context.Context, inputs []*tools.ToolInput) (
 	return outputs, nil
 }
 
-func (t *WebScraperTool) Pipe(next agentcore.Runnable[*tools.ToolOutput, any]) agentcore.Runnable[*tools.ToolInput, any] {
+func (t *WebScraperTool) Pipe(next agentcore.Runnable[*interfaces.ToolOutput, any]) agentcore.Runnable[*interfaces.ToolInput, any] {
 	return nil
 }
 
-func (t *WebScraperTool) WithCallbacks(callbacks ...agentcore.Callback) agentcore.Runnable[*tools.ToolInput, *tools.ToolOutput] {
+func (t *WebScraperTool) WithCallbacks(callbacks ...agentcore.Callback) agentcore.Runnable[*interfaces.ToolInput, *interfaces.ToolOutput] {
 	return t
 }
 
-func (t *WebScraperTool) WithConfig(config agentcore.RunnableConfig) agentcore.Runnable[*tools.ToolInput, *tools.ToolOutput] {
+func (t *WebScraperTool) WithConfig(config agentcore.RunnableConfig) agentcore.Runnable[*interfaces.ToolInput, *interfaces.ToolOutput] {
 	return t
 }
 
@@ -295,7 +295,9 @@ func (t *WebScraperTool) fetchPage(ctx context.Context, urlStr string) (*goquery
 			break
 		}
 		if resp != nil {
-			resp.Body.Close()
+			if err := resp.Body.Close(); err != nil {
+				return nil, err
+			}
 		}
 		time.Sleep(time.Duration(i+1) * time.Second)
 	}
@@ -307,7 +309,9 @@ func (t *WebScraperTool) fetchPage(ctx context.Context, urlStr string) (*goquery
 		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, resp.Status)
 	}
 
-	defer resp.Body.Close()
+	if err := resp.Body.Close(); err != nil {
+		return nil, err
+	}
 	return goquery.NewDocumentFromReader(resp.Body)
 }
 

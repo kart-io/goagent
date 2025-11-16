@@ -126,12 +126,12 @@ func directoryLoaderExample() {
 
 func setupExampleFiles() {
 	// 创建示例文本文件
-	os.WriteFile("/tmp/example.txt", []byte(`This is a sample text file.
+	_ = os.WriteFile("/tmp/example.txt", []byte(`This is a sample text file.
 It contains multiple lines of text.
 This is useful for testing the text loader.`), 0o644)
 
 	// 创建示例 Markdown 文件
-	os.WriteFile("/tmp/example.md", []byte(`# Document Loaders
+	_ = os.WriteFile("/tmp/example.md", []byte(`# Document Loaders
 
 This is a markdown document with [links](https://example.com) and formatting.
 
@@ -142,7 +142,7 @@ This is a markdown document with [links](https://example.com) and formatting.
 - Extensible`), 0o644)
 
 	// 创建示例 JSON 文件
-	os.WriteFile("/tmp/example.json", []byte(`[
+	_ = os.WriteFile("/tmp/example.json", []byte(`[
   {
     "text": "First article about AI",
     "author": "John Doe",
@@ -156,17 +156,17 @@ This is a markdown document with [links](https://example.com) and formatting.
 ]`), 0o644)
 
 	// 创建示例目录
-	os.MkdirAll("/tmp/documents", 0o755)
-	os.WriteFile("/tmp/documents/doc1.txt", []byte("Document 1 content"), 0o644)
-	os.WriteFile("/tmp/documents/doc2.txt", []byte("Document 2 content"), 0o644)
-	os.WriteFile("/tmp/documents/doc3.txt", []byte("Document 3 content"), 0o644)
+	_ = os.MkdirAll("/tmp/documents", 0o755)
+	_ = os.WriteFile("/tmp/documents/doc1.txt", []byte("Document 1 content"), 0o644)
+	_ = os.WriteFile("/tmp/documents/doc2.txt", []byte("Document 2 content"), 0o644)
+	_ = os.WriteFile("/tmp/documents/doc3.txt", []byte("Document 3 content"), 0o644)
 }
 
 func cleanupExampleFiles() {
-	os.Remove("/tmp/example.txt")
-	os.Remove("/tmp/example.md")
-	os.Remove("/tmp/example.json")
-	os.RemoveAll("/tmp/documents")
+	_ = os.Remove("/tmp/example.txt")
+	_ = os.Remove("/tmp/example.md")
+	_ = os.Remove("/tmp/example.json")
+	_ = os.RemoveAll("/tmp/documents")
 }
 
 func truncate(s string, maxLen int) string {

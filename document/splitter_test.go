@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/retrieval"
 )
 
@@ -186,7 +187,7 @@ def standalone_function():
 }
 
 func TestSplitDocuments(t *testing.T) {
-	docs := []*retrieval.Document{
+	docs := []*interfaces.Document{
 		retrieval.NewDocument(
 			"First document with some content that needs to be split.",
 			map[string]interface{}{"source": "doc1"},
@@ -304,7 +305,7 @@ func main() {
 }
 
 func BenchmarkSplitDocuments(b *testing.B) {
-	docs := make([]*retrieval.Document, 100)
+	docs := make([]*interfaces.Document, 100)
 	for i := 0; i < 100; i++ {
 		docs[i] = retrieval.NewDocument(
 			"This is test content that will be split into chunks.",

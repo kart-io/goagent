@@ -11,6 +11,7 @@ import (
 
 	"github.com/kart-io/goagent/agents/react"
 	agentcore "github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/tools"
 )
@@ -187,8 +188,8 @@ func TestReActAgent_DefaultConfiguration(t *testing.T) {
 		"test",
 		"test tool",
 		`{}`,
-		func(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
-			return &tools.ToolOutput{Result: "ok", Success: true}, nil
+		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+			return &interfaces.ToolOutput{Result: "ok", Success: true}, nil
 		},
 	)
 
@@ -196,7 +197,7 @@ func TestReActAgent_DefaultConfiguration(t *testing.T) {
 	agent := react.NewReActAgent(react.ReActConfig{
 		Name:  "DefaultAgent",
 		LLM:   mockLLM,
-		Tools: []tools.Tool{tool},
+		Tools: []interfaces.Tool{tool},
 		// Not setting MaxSteps, StopPattern, PromptPrefix, etc.
 	})
 
@@ -227,15 +228,15 @@ func TestReActAgent_CustomPrompts(t *testing.T) {
 		"custom_tool",
 		"custom tool",
 		`{}`,
-		func(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
-			return &tools.ToolOutput{Result: "custom", Success: true}, nil
+		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+			return &interfaces.ToolOutput{Result: "custom", Success: true}, nil
 		},
 	)
 
 	agent := react.NewReActAgent(react.ReActConfig{
 		Name:         "CustomPromptAgent",
 		LLM:          mockLLM,
-		Tools:        []tools.Tool{tool},
+		Tools:        []interfaces.Tool{tool},
 		PromptPrefix: customPrefix,
 		PromptSuffix: customSuffix,
 		FormatInstr:  customFormat,
@@ -271,15 +272,15 @@ func TestReActAgent_Stream(t *testing.T) {
 		"stream_tool",
 		"stream tool",
 		`{}`,
-		func(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
-			return &tools.ToolOutput{Result: "stream_ok", Success: true}, nil
+		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+			return &interfaces.ToolOutput{Result: "stream_ok", Success: true}, nil
 		},
 	)
 
 	agent := react.NewReActAgent(react.ReActConfig{
 		Name:  "StreamAgent",
 		LLM:   mockLLM,
-		Tools: []tools.Tool{tool},
+		Tools: []interfaces.Tool{tool},
 	})
 
 	ctx := context.Background()
@@ -331,15 +332,15 @@ func TestReActAgent_LLMError(t *testing.T) {
 		"error_tool",
 		"error tool",
 		`{}`,
-		func(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
-			return &tools.ToolOutput{Result: "ok", Success: true}, nil
+		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+			return &interfaces.ToolOutput{Result: "ok", Success: true}, nil
 		},
 	)
 
 	agent := react.NewReActAgent(react.ReActConfig{
 		Name:  "ErrorAgent",
 		LLM:   mockLLM,
-		Tools: []tools.Tool{tool},
+		Tools: []interfaces.Tool{tool},
 	})
 
 	ctx := context.Background()
@@ -371,15 +372,15 @@ Action Input: {}`,
 		"existing_tool",
 		"existing tool",
 		`{}`,
-		func(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
-			return &tools.ToolOutput{Result: "ok", Success: true}, nil
+		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+			return &interfaces.ToolOutput{Result: "ok", Success: true}, nil
 		},
 	)
 
 	agent := react.NewReActAgent(react.ReActConfig{
 		Name:  "InvalidActionAgent",
 		LLM:   mockLLM,
-		Tools: []tools.Tool{tool},
+		Tools: []interfaces.Tool{tool},
 	})
 
 	ctx := context.Background()
@@ -410,15 +411,15 @@ Action Input: {}`,
 		"valid_tool",
 		"valid tool",
 		`{}`,
-		func(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
-			return &tools.ToolOutput{Result: "ok", Success: true}, nil
+		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+			return &interfaces.ToolOutput{Result: "ok", Success: true}, nil
 		},
 	)
 
 	agent := react.NewReActAgent(react.ReActConfig{
 		Name:  "EmptyActionAgent",
 		LLM:   mockLLM,
-		Tools: []tools.Tool{tool},
+		Tools: []interfaces.Tool{tool},
 	})
 
 	ctx := context.Background()
@@ -447,7 +448,7 @@ Final Answer: Unable to complete due to tool error`,
 		"failing_tool",
 		"tool that fails",
 		`{}`,
-		func(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
+		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 			return nil, errors.New("tool execution failed")
 		},
 	)
@@ -455,7 +456,7 @@ Final Answer: Unable to complete due to tool error`,
 	agent := react.NewReActAgent(react.ReActConfig{
 		Name:  "ToolErrorAgent",
 		LLM:   mockLLM,
-		Tools: []tools.Tool{failingTool},
+		Tools: []interfaces.Tool{failingTool},
 	})
 
 	ctx := context.Background()
@@ -494,15 +495,15 @@ Action Input: {}`, i)
 		"test_tool",
 		"test tool",
 		`{}`,
-		func(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
-			return &tools.ToolOutput{Result: "ok", Success: true}, nil
+		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+			return &interfaces.ToolOutput{Result: "ok", Success: true}, nil
 		},
 	)
 
 	agent := react.NewReActAgent(react.ReActConfig{
 		Name:     "MaxStepsAgent",
 		LLM:      mockLLM,
-		Tools:    []tools.Tool{tool},
+		Tools:    []interfaces.Tool{tool},
 		MaxSteps: 3,
 	})
 
@@ -541,15 +542,15 @@ Action Input: {}`,
 		"cb_tool",
 		"callback tool",
 		`{}`,
-		func(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
-			return &tools.ToolOutput{Result: "cb_ok", Success: true}, nil
+		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+			return &interfaces.ToolOutput{Result: "cb_ok", Success: true}, nil
 		},
 	)
 
 	baseAgent := react.NewReActAgent(react.ReActConfig{
 		Name:  "CallbackAgent",
 		LLM:   mockLLM,
-		Tools: []tools.Tool{tool},
+		Tools: []interfaces.Tool{tool},
 	})
 
 	// Add callbacks via WithCallbacks
@@ -599,15 +600,15 @@ func TestReActAgent_CallbackFailure(t *testing.T) {
 		"test",
 		"test",
 		`{}`,
-		func(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
-			return &tools.ToolOutput{Result: "ok", Success: true}, nil
+		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+			return &interfaces.ToolOutput{Result: "ok", Success: true}, nil
 		},
 	)
 
 	baseAgent := react.NewReActAgent(react.ReActConfig{
 		Name:  "FailingCallbackAgent",
 		LLM:   mockLLM,
-		Tools: []tools.Tool{tool},
+		Tools: []interfaces.Tool{tool},
 	})
 
 	// Create callback that fails on OnStart
@@ -639,15 +640,15 @@ Action Input: {}`,
 		"multi_tool",
 		"multi tool",
 		`{}`,
-		func(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
-			return &tools.ToolOutput{Result: "multi_ok", Success: true}, nil
+		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+			return &interfaces.ToolOutput{Result: "multi_ok", Success: true}, nil
 		},
 	)
 
 	baseAgent := react.NewReActAgent(react.ReActConfig{
 		Name:  "MultiCallbackAgent",
 		LLM:   mockLLM,
-		Tools: []tools.Tool{tool},
+		Tools: []interfaces.Tool{tool},
 	})
 
 	callback1 := NewTrackingCallback()
@@ -699,8 +700,8 @@ Final Answer: Complete analysis provided`,
 		"search",
 		"search tool",
 		`{}`,
-		func(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
-			return &tools.ToolOutput{Result: "search_result", Success: true}, nil
+		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+			return &interfaces.ToolOutput{Result: "search_result", Success: true}, nil
 		},
 	)
 
@@ -708,15 +709,15 @@ Final Answer: Complete analysis provided`,
 		"analyze",
 		"analyze tool",
 		`{}`,
-		func(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
-			return &tools.ToolOutput{Result: "analysis_result", Success: true}, nil
+		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+			return &interfaces.ToolOutput{Result: "analysis_result", Success: true}, nil
 		},
 	)
 
 	agent := react.NewReActAgent(react.ReActConfig{
 		Name:     "MultiStepAgent",
 		LLM:      mockLLM,
-		Tools:    []tools.Tool{searchTool, analyzeTool},
+		Tools:    []interfaces.Tool{searchTool, analyzeTool},
 		MaxSteps: 5,
 	})
 
@@ -762,15 +763,15 @@ Action Input: {}`,
 		"action_tool",
 		"action tool",
 		`{}`,
-		func(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
-			return &tools.ToolOutput{Result: "action_result", Success: true}, nil
+		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+			return &interfaces.ToolOutput{Result: "action_result", Success: true}, nil
 		},
 	)
 
 	agent := react.NewReActAgent(react.ReActConfig{
 		Name:  "ReasoningAgent",
 		LLM:   mockLLM,
-		Tools: []tools.Tool{tool},
+		Tools: []interfaces.Tool{tool},
 	})
 
 	ctx := context.Background()
@@ -828,11 +829,11 @@ Action Input: {}`,
 		"tool_a",
 		"tool a",
 		`{}`,
-		func(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
+		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 			mu.Lock()
 			selectedTools = append(selectedTools, "tool_a")
 			mu.Unlock()
-			return &tools.ToolOutput{Result: "a_result", Success: true}, nil
+			return &interfaces.ToolOutput{Result: "a_result", Success: true}, nil
 		},
 	)
 
@@ -840,18 +841,18 @@ Action Input: {}`,
 		"tool_b",
 		"tool b",
 		`{}`,
-		func(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
+		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 			mu.Lock()
 			selectedTools = append(selectedTools, "tool_b")
 			mu.Unlock()
-			return &tools.ToolOutput{Result: "b_result", Success: true}, nil
+			return &interfaces.ToolOutput{Result: "b_result", Success: true}, nil
 		},
 	)
 
 	agent := react.NewReActAgent(react.ReActConfig{
 		Name:     "ActionSelectionAgent",
 		LLM:      mockLLM,
-		Tools:    []tools.Tool{toolA, toolB},
+		Tools:    []interfaces.Tool{toolA, toolB},
 		MaxSteps: 5,
 	})
 
@@ -894,15 +895,15 @@ Final Answer: Processed: success`,
 		"data_tool",
 		"data tool",
 		`{}`,
-		func(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
-			return &tools.ToolOutput{Result: "data_result", Success: true}, nil
+		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+			return &interfaces.ToolOutput{Result: "data_result", Success: true}, nil
 		},
 	)
 
 	agent := react.NewReActAgent(react.ReActConfig{
 		Name:  "ObservationAgent",
 		LLM:   mockLLM,
-		Tools: []tools.Tool{tool},
+		Tools: []interfaces.Tool{tool},
 	})
 
 	ctx := context.Background()
@@ -941,15 +942,15 @@ func TestReActAgent_ConcurrentInvocations(t *testing.T) {
 		"concurrent_tool",
 		"concurrent tool",
 		`{}`,
-		func(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
-			return &tools.ToolOutput{Result: "ok", Success: true}, nil
+		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+			return &interfaces.ToolOutput{Result: "ok", Success: true}, nil
 		},
 	)
 
 	agent := react.NewReActAgent(react.ReActConfig{
 		Name:  "ConcurrentAgent",
 		LLM:   mockLLM,
-		Tools: []tools.Tool{tool},
+		Tools: []interfaces.Tool{tool},
 	})
 
 	var wg sync.WaitGroup
@@ -998,15 +999,15 @@ func TestReActAgent_WithConfig(t *testing.T) {
 		"config_tool",
 		"config tool",
 		`{}`,
-		func(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
-			return &tools.ToolOutput{Result: "ok", Success: true}, nil
+		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+			return &interfaces.ToolOutput{Result: "ok", Success: true}, nil
 		},
 	)
 
 	baseAgent := react.NewReActAgent(react.ReActConfig{
 		Name:  "ConfigAgent",
 		LLM:   mockLLM,
-		Tools: []tools.Tool{tool},
+		Tools: []interfaces.Tool{tool},
 	})
 
 	config := agentcore.RunnableConfig{
@@ -1042,15 +1043,15 @@ Action Input: {}`,
 		"metadata_tool",
 		"metadata tool",
 		`{}`,
-		func(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
-			return &tools.ToolOutput{Result: "meta_ok", Success: true}, nil
+		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+			return &interfaces.ToolOutput{Result: "meta_ok", Success: true}, nil
 		},
 	)
 
 	agent := react.NewReActAgent(react.ReActConfig{
 		Name:  "MetadataAgent",
 		LLM:   mockLLM,
-		Tools: []tools.Tool{tool},
+		Tools: []interfaces.Tool{tool},
 	})
 
 	ctx := context.Background()
@@ -1103,15 +1104,15 @@ STOP`,
 		"stop_tool",
 		"stop tool",
 		`{}`,
-		func(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
-			return &tools.ToolOutput{Result: "stopped", Success: true}, nil
+		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+			return &interfaces.ToolOutput{Result: "stopped", Success: true}, nil
 		},
 	)
 
 	agent := react.NewReActAgent(react.ReActConfig{
 		Name:        "StopPatternAgent",
 		LLM:         mockLLM,
-		Tools:       []tools.Tool{tool},
+		Tools:       []interfaces.Tool{tool},
 		StopPattern: customStopPattern,
 		MaxSteps:    10, // Large number to ensure we stop via pattern
 	})
@@ -1144,16 +1145,16 @@ Action Input: {}`,
 		"timing_tool",
 		"timing tool",
 		`{}`,
-		func(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
+		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 			time.Sleep(10 * time.Millisecond)
-			return &tools.ToolOutput{Result: "timed", Success: true}, nil
+			return &interfaces.ToolOutput{Result: "timed", Success: true}, nil
 		},
 	)
 
 	agent := react.NewReActAgent(react.ReActConfig{
 		Name:  "TimingAgent",
 		LLM:   mockLLM,
-		Tools: []tools.Tool{tool},
+		Tools: []interfaces.Tool{tool},
 	})
 
 	ctx := context.Background()
@@ -1193,15 +1194,15 @@ func TestReActAgent_LLMErrorCallback(t *testing.T) {
 		"test_tool",
 		"test tool",
 		`{}`,
-		func(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
-			return &tools.ToolOutput{Result: "ok", Success: true}, nil
+		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+			return &interfaces.ToolOutput{Result: "ok", Success: true}, nil
 		},
 	)
 
 	baseAgent := react.NewReActAgent(react.ReActConfig{
 		Name:  "LLMErrorCallbackAgent",
 		LLM:   mockLLM,
-		Tools: []tools.Tool{tool},
+		Tools: []interfaces.Tool{tool},
 	})
 
 	callback := NewTrackingCallback()
@@ -1235,7 +1236,7 @@ Action Input: {}`,
 		"failing_tool",
 		"failing tool",
 		`{}`,
-		func(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
+		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 			return nil, errors.New("tool failed")
 		},
 	)
@@ -1243,7 +1244,7 @@ Action Input: {}`,
 	baseAgent := react.NewReActAgent(react.ReActConfig{
 		Name:  "ToolErrorCallbackAgent",
 		LLM:   mockLLM,
-		Tools: []tools.Tool{failingTool},
+		Tools: []interfaces.Tool{failingTool},
 	})
 
 	callback := NewTrackingCallback()

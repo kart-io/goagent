@@ -125,7 +125,7 @@ func (c *CustomRetrievalCallback) OnStart(ctx context.Context, input interface{}
 }
 
 func (c *CustomRetrievalCallback) OnEnd(ctx context.Context, output interface{}) error {
-	docs, ok := output.([]*retrieval.Document)
+	docs, ok := output.([]*interfaces.Document)
 	if ok {
 		fmt.Printf("  [Callback] Retrieval completed, found %d documents\n", len(docs))
 		for i, doc := range docs {
@@ -182,7 +182,7 @@ func retrievalPipeline(ctx context.Context, docs []*interfaces.Document) {
 }
 
 // batchRetrieval 批量检索示例
-func batchRetrieval(ctx context.Context, docs []*retrieval.Document) {
+func batchRetrieval(ctx context.Context, docs []*interfaces.Document) {
 	// 创建检索器
 	config := retrieval.DefaultRetrieverConfig()
 	config.TopK = 2
@@ -244,12 +244,12 @@ func customRetriever(ctx context.Context, docs []*interfaces.Document) {
 // CategoryRetriever 基于类别的自定义检索器
 type CategoryRetriever struct {
 	*retrieval.BaseRetriever
-	docs     []*retrieval.Document
+	docs     []*interfaces.Document
 	category string
 }
 
 // NewCategoryRetriever 创建类别检索器
-func NewCategoryRetriever(docs []*retrieval.Document, category string) *CategoryRetriever {
+func NewCategoryRetriever(docs []*interfaces.Document, category string) *CategoryRetriever {
 	return &CategoryRetriever{
 		BaseRetriever: retrieval.NewBaseRetriever(),
 		docs:          docs,
@@ -258,9 +258,9 @@ func NewCategoryRetriever(docs []*retrieval.Document, category string) *Category
 }
 
 // GetRelevantDocuments 实现检索逻辑
-func (c *CategoryRetriever) GetRelevantDocuments(ctx context.Context, query string) ([]*retrieval.Document, error) {
+func (c *CategoryRetriever) GetRelevantDocuments(ctx context.Context, query string) ([]*interfaces.Document, error) {
 	// 1. 先按类别过滤
-	filtered := make([]*retrieval.Document, 0)
+	filtered := make([]*interfaces.Document, 0)
 	for _, doc := range c.docs {
 		if cat, ok := doc.Metadata["category"]; ok && cat == c.category {
 			filtered = append(filtered, doc)
@@ -268,7 +268,7 @@ func (c *CategoryRetriever) GetRelevantDocuments(ctx context.Context, query stri
 	}
 
 	if len(filtered) == 0 {
-		return []*retrieval.Document{}, nil
+		return []*interfaces.Document{}, nil
 	}
 
 	// 2. 使用关键词检索对过滤后的文档进行排序
@@ -296,13 +296,13 @@ type FilterRetriever struct {
 	minScore  float64
 }
 
-func (f *FilterRetriever) GetRelevantDocuments(ctx context.Context, query string) ([]*retrieval.Document, error) {
+func (f *FilterRetriever) GetRelevantDocuments(ctx context.Context, query string) ([]*interfaces.Document, error) {
 	docs, err := f.retriever.GetRelevantDocuments(ctx, query)
 	if err != nil {
 		return nil, err
 	}
 
-	filtered := make([]*retrieval.Document, 0)
+	filtered := make([]*interfaces.Document, 0)
 	for _, doc := range docs {
 		if doc.Score > f.minScore {
 			filtered = append(filtered, doc)
@@ -318,7 +318,7 @@ type EnrichRetriever struct {
 	retriever retrieval.Retriever
 }
 
-func (e *EnrichRetriever) GetRelevantDocuments(ctx context.Context, query string) ([]*retrieval.Document, error) {
+func (e *EnrichRetriever) GetRelevantDocuments(ctx context.Context, query string) ([]*interfaces.Document, error) {
 	docs, err := e.retriever.GetRelevantDocuments(ctx, query)
 	if err != nil {
 		return nil, err

@@ -188,7 +188,7 @@ func demo2AlwaysInclude(ctx context.Context, llmClient llm.Client) {
 	}
 
 	if toolsVal, ok := resultState.Get("tools"); ok {
-		selectedTools := toolsVal.([]tools.Tool)
+		selectedTools := toolsVal.([]interfaces.Tool)
 		fmt.Printf("\nSelected tools count: %d\n", len(selectedTools))
 		fmt.Println("Selected tools:")
 		for _, tool := range selectedTools {
@@ -261,7 +261,7 @@ func demo4Caching(ctx context.Context, llmClient llm.Client) {
 	fmt.Println("\nSecond call with same query (will use cache)...")
 	resultState2, _ := selector.Process(ctx, state2)
 	if toolsVal, ok := resultState2.Get("tools"); ok {
-		selectedTools := toolsVal.([]tools.Tool)
+		selectedTools := toolsVal.([]interfaces.Tool)
 		fmt.Printf("  Selected %d tools (from cache)\n", len(selectedTools))
 	}
 
@@ -273,7 +273,7 @@ func demo4Caching(ctx context.Context, llmClient llm.Client) {
 	fmt.Println("\nThird call with different query (will call LLM)...")
 	resultState3, _ := selector.Process(ctx, state3)
 	if toolsVal, ok := resultState3.Get("tools"); ok {
-		selectedTools := toolsVal.([]tools.Tool)
+		selectedTools := toolsVal.([]interfaces.Tool)
 		fmt.Printf("  Selected %d tools\n", len(selectedTools))
 	}
 }
@@ -304,7 +304,7 @@ func demo5TokenComparison(ctx context.Context, llmClient llm.Client) {
 
 	var selectedCount int
 	if toolsVal, ok := resultState.Get("tools"); ok {
-		selectedTools := toolsVal.([]tools.Tool)
+		selectedTools := toolsVal.([]interfaces.Tool)
 		selectedCount = len(selectedTools)
 		fmt.Printf("  Tools in prompt: %d\n", selectedCount)
 	}

@@ -67,7 +67,7 @@ func apiCallExample() {
 
 	// 示例 2.1: GET 请求 - 获取用户信息
 	fmt.Println("2.1: GET 请求获取用户信息")
-	getUserInput := &tools.ToolInput{
+	getUserInput := &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"method": "GET",
 			"url":    "https://jsonplaceholder.typicode.com/users/1",
@@ -89,7 +89,7 @@ func apiCallExample() {
 
 	// 示例 2.2: GET 请求 - 获取文章列表
 	fmt.Println("2.2: GET 请求获取文章列表")
-	getPostsInput := &tools.ToolInput{
+	getPostsInput := &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"method": "GET",
 			"url":    "https://jsonplaceholder.typicode.com/posts?_limit=3",
@@ -119,7 +119,7 @@ func apiCallExample() {
 		"userId": 1,
 	}
 
-	createPostInput := &tools.ToolInput{
+	createPostInput := &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"method": "POST",
 			"url":    "https://jsonplaceholder.typicode.com/posts",
@@ -167,7 +167,7 @@ func smartAgentExample() {
 
 	// 步骤 1: 获取当前时间
 	fmt.Println("步骤 1: 获取当前时间")
-	timeOutput, _ := timeTool.Invoke(ctx, &tools.ToolInput{
+	timeOutput, _ := timeTool.Invoke(ctx, &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"format":   "2006-01-02 15:04:05",
 			"timezone": "Asia/Shanghai",
@@ -182,7 +182,7 @@ func smartAgentExample() {
 
 	// 步骤 2: 查询天气
 	fmt.Println("步骤 2: 查询天气信息")
-	weatherOutput, _ := weatherTool.Invoke(ctx, &tools.ToolInput{
+	weatherOutput, _ := weatherTool.Invoke(ctx, &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"city": "Beijing",
 		},

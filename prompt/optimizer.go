@@ -678,7 +678,7 @@ func (o *PromptOptimizer) incrementVersion(version string) string {
 
 	// Increment patch version
 	patch := 0
-	_ = fmt.Sscanf(parts[2], "%d", &patch)
+	_, _ = fmt.Sscanf(parts[2], "%d", &patch)
 	parts[2] = fmt.Sprintf("%d", patch+1)
 
 	return strings.Join(parts, ".")
