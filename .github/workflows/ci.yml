@@ -74,7 +74,6 @@ jobs:
         uses: golangci/golangci-lint-action@v6
         with:
           version: v2.5.0
-          install-mode: goinstall
           args: --timeout=5m
 
   build:
