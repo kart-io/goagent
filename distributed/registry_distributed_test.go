@@ -390,6 +390,7 @@ func TestRegistry_MarkHealthy_Success(t *testing.T) {
 
 	registry.MarkUnhealthy("instance-1")
 	instance, err = registry.GetInstance("instance-1")
+	assert.NoError(t, err)
 	assert.False(t, instance.Healthy)
 
 	registry.MarkHealthy("instance-1")
