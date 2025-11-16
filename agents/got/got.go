@@ -38,12 +38,12 @@ type GoTConfig struct {
 	Tools       []interfaces.Tool // Available tools (optional)
 
 	// Graph parameters
-	MaxNodes         int     // Maximum number of nodes in the graph
-	MaxEdgesPerNode  int     // Maximum edges from a single node
-	ParallelExecution bool   // Enable parallel node processing
-	MergeStrategy    string  // How to merge multiple paths ("vote", "weighted", "llm")
-	CycleDetection   bool    // Enable cycle detection
-	PruneThreshold   float64 // Threshold for pruning low-score nodes
+	MaxNodes          int     // Maximum number of nodes in the graph
+	MaxEdgesPerNode   int     // Maximum edges from a single node
+	ParallelExecution bool    // Enable parallel node processing
+	MergeStrategy     string  // How to merge multiple paths ("vote", "weighted", "llm")
+	CycleDetection    bool    // Enable cycle detection
+	PruneThreshold    float64 // Threshold for pruning low-score nodes
 }
 
 // GraphNode represents a node in the thought graph

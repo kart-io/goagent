@@ -35,31 +35,31 @@ type MetaCoTConfig struct {
 	Tools       []interfaces.Tool // Available tools (optional)
 
 	// Self-questioning settings
-	MaxQuestions      int  // Maximum number of follow-up questions
-	MaxDepth          int  // Maximum recursion depth for sub-questions
-	AutoDecompose     bool // Automatically decompose complex questions
-	RequireEvidence   bool // Require evidence for answers
-	SelfCritique      bool // Enable self-critique of answers
+	MaxQuestions    int  // Maximum number of follow-up questions
+	MaxDepth        int  // Maximum recursion depth for sub-questions
+	AutoDecompose   bool // Automatically decompose complex questions
+	RequireEvidence bool // Require evidence for answers
+	SelfCritique    bool // Enable self-critique of answers
 
 	// Question generation strategy
 	QuestionStrategy string // "focused", "broad", "critical"
 
 	// Verification settings
-	VerifyAnswers    bool    // Verify answers through additional questioning
+	VerifyAnswers       bool    // Verify answers through additional questioning
 	ConfidenceThreshold float64 // Minimum confidence for accepting an answer
 }
 
 // Question represents a question in the self-ask process
 type Question struct {
-	ID             string
-	Text           string
-	Type           string // "main", "followup", "verification", "decomposed"
-	ParentID       string
-	Answer         string
-	Confidence     float64
-	Evidence       []string
-	SubQuestions   []*Question
-	Status         string // "pending", "answered", "verified"
+	ID           string
+	Text         string
+	Type         string // "main", "followup", "verification", "decomposed"
+	ParentID     string
+	Answer       string
+	Confidence   float64
+	Evidence     []string
+	SubQuestions []*Question
+	Status       string // "pending", "answered", "verified"
 }
 
 // NewMetaCoTAgent creates a new Meta-CoT / Self-Ask agent

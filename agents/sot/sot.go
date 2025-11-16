@@ -43,9 +43,9 @@ type SoTConfig struct {
 	AutoDecompose     bool // Automatically decompose complex points
 
 	// Parallel execution settings
-	MaxConcurrency    int           // Maximum concurrent elaborations
+	MaxConcurrency     int           // Maximum concurrent elaborations
 	ElaborationTimeout time.Duration // Timeout for each elaboration
-	BatchSize         int           // Batch size for parallel processing
+	BatchSize          int           // Batch size for parallel processing
 
 	// Aggregation settings
 	AggregationStrategy string // How to combine results ("sequential", "hierarchical", "weighted")
@@ -562,22 +562,22 @@ func (s *SoTAgent) createDefaultSkeleton(response string) []*SkeletonPoint {
 			Metadata:    make(map[string]interface{}),
 		},
 		{
-			ID:          "point_2",
-			Title:       "Solution",
-			Description: "Develop the solution",
-			Priority:    1,
-			Status:      "pending",
+			ID:           "point_2",
+			Title:        "Solution",
+			Description:  "Develop the solution",
+			Priority:     1,
+			Status:       "pending",
 			Dependencies: []string{"point_1"},
-			Metadata:    make(map[string]interface{}),
+			Metadata:     make(map[string]interface{}),
 		},
 		{
-			ID:          "point_3",
-			Title:       "Conclusion",
-			Description: "Summarize findings",
-			Priority:    2,
-			Status:      "pending",
+			ID:           "point_3",
+			Title:        "Conclusion",
+			Description:  "Summarize findings",
+			Priority:     2,
+			Status:       "pending",
 			Dependencies: []string{"point_2"},
-			Metadata:    make(map[string]interface{}),
+			Metadata:     make(map[string]interface{}),
 		},
 	}
 }
