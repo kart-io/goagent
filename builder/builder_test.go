@@ -14,7 +14,6 @@ import (
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/store/memory"
-	"github.com/kart-io/goagent/tools"
 )
 
 // MockLLMClient implements llm.Client for testing
@@ -84,7 +83,7 @@ func (t *MockTool) ArgsSchema() string {
 
 // Invoke implements the Runnable interface for Tool
 func (t *MockTool) Invoke(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
-	return &tools.ToolOutput{
+	return &interfaces.ToolOutput{
 		Result:  t.result,
 		Success: true,
 	}, nil
@@ -92,11 +91,11 @@ func (t *MockTool) Invoke(ctx context.Context, input *interfaces.ToolInput) (*in
 
 // Stream implements the Runnable interface for Tool
 func (t *MockTool) Stream(ctx context.Context, input *interfaces.ToolInput) (<-chan core.StreamChunk[*interfaces.ToolOutput], error) {
-	outChan := make(chan core.StreamChunk[*tools.ToolOutput], 1)
+	outChan := make(chan core.StreamChunk[*interfaces.ToolOutput], 1)
 	go func() {
 		defer close(outChan)
 		output, err := t.Invoke(ctx, input)
-		outChan <- core.StreamChunk[*tools.ToolOutput]{
+		outChan <- core.StreamChunk[*interfaces.ToolOutput]{
 			Data:  output,
 			Error: err,
 			Done:  true,
@@ -106,8 +105,8 @@ func (t *MockTool) Stream(ctx context.Context, input *interfaces.ToolInput) (<-c
 }
 
 // Batch implements the Runnable interface for Tool
-func (t *MockTool) Batch(ctx context.Context, inputs []*tools.ToolInput) ([]*tools.ToolOutput, error) {
-	outputs := make([]*tools.ToolOutput, len(inputs))
+func (t *MockTool) Batch(ctx context.Context, inputs []*interfaces.ToolInput) ([]*interfaces.ToolOutput, error) {
+	outputs := make([]*interfaces.ToolOutput, len(inputs))
 	for i, input := range inputs {
 		output, err := t.Invoke(ctx, input)
 		if err != nil {
@@ -124,14 +123,14 @@ func (t *MockTool) Pipe(next core.Runnable[*interfaces.ToolOutput, any]) core.Ru
 }
 
 // WithCallbacks adds callbacks to the tool
-func (t *MockTool) WithCallbacks(callbacks ...core.Callback) core.Runnable[*tools.ToolInput, *tools.ToolOutput] {
+func (t *MockTool) WithCallbacks(callbacks ...core.Callback) core.Runnable[*interfaces.ToolInput, *interfaces.ToolOutput] {
 	newTool := *t
 	newTool.BaseRunnable = t.BaseRunnable.WithCallbacks(callbacks...)
 	return &newTool
 }
 
 // WithConfig sets the config for the tool
-func (t *MockTool) WithConfig(config core.RunnableConfig) core.Runnable[*tools.ToolInput, *tools.ToolOutput] {
+func (t *MockTool) WithConfig(config core.RunnableConfig) core.Runnable[*interfaces.ToolInput, *interfaces.ToolOutput] {
 	newTool := *t
 	newTool.BaseRunnable = t.BaseRunnable.WithConfig(config)
 	return &newTool

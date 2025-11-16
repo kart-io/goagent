@@ -10,8 +10,8 @@ import (
 
 	"github.com/sashabaranov/go-openai"
 
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
-	"github.com/kart-io/goagent/tools"
 )
 
 // OpenAIProvider implements LLM interface for OpenAI
@@ -133,7 +133,7 @@ func (p *OpenAIProvider) Stream(ctx context.Context, prompt string) (<-chan stri
 
 	go func() {
 		defer close(tokens)
-		defer stream.Close()
+		defer func() { _ = stream.Close() }()
 
 		for {
 			response, err := stream.Recv()
@@ -156,7 +156,7 @@ func (p *OpenAIProvider) Stream(ctx context.Context, prompt string) (<-chan stri
 }
 
 // GenerateWithTools implements tool calling
-func (p *OpenAIProvider) GenerateWithTools(ctx context.Context, prompt string, tools []tools.Tool) (*ToolCallResponse, error) {
+func (p *OpenAIProvider) GenerateWithTools(ctx context.Context, prompt string, tools []interfaces.Tool) (*ToolCallResponse, error) {
 	// Convert tools to OpenAI function format
 	functions := p.convertToolsToFunctions(tools)
 
@@ -204,7 +204,7 @@ func (p *OpenAIProvider) GenerateWithTools(ctx context.Context, prompt string, t
 }
 
 // StreamWithTools implements streaming tool calls
-func (p *OpenAIProvider) StreamWithTools(ctx context.Context, prompt string, tools []tools.Tool) (<-chan ToolChunk, error) {
+func (p *OpenAIProvider) StreamWithTools(ctx context.Context, prompt string, tools []interfaces.Tool) (<-chan ToolChunk, error) {
 	chunks := make(chan ToolChunk, 100)
 	functions := p.convertToolsToFunctions(tools)
 
@@ -224,7 +224,7 @@ func (p *OpenAIProvider) StreamWithTools(ctx context.Context, prompt string, too
 
 	go func() {
 		defer close(chunks)
-		defer stream.Close()
+		defer func() { _ = stream.Close() }()
 
 		var currentCall *ToolCall
 		var argsBuffer string
@@ -346,7 +346,7 @@ func (p *OpenAIProvider) MaxTokens() int {
 }
 
 // convertToolsToFunctions converts our tools to OpenAI function format
-func (p *OpenAIProvider) convertToolsToFunctions(tools []tools.Tool) []openai.FunctionDefinition {
+func (p *OpenAIProvider) convertToolsToFunctions(tools []interfaces.Tool) []openai.FunctionDefinition {
 	functions := make([]openai.FunctionDefinition, len(tools))
 
 	for i, tool := range tools {
@@ -438,7 +438,7 @@ func (p *OpenAIStreamingProvider) StreamTokensWithMetadata(ctx context.Context, 
 
 	go func() {
 		defer close(tokens)
-		defer stream.Close()
+		defer func() { _ = stream.Close() }()
 
 		tokenCount := 0
 		for {

@@ -12,7 +12,6 @@ import (
 	agentcore "github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
-	"github.com/kart-io/goagent/tools"
 )
 
 // MockTool for testing
@@ -58,16 +57,16 @@ func (m *MockTool) Stream(ctx context.Context, input *interfaces.ToolInput) (<-c
 		defer close(ch)
 		output, err := m.Execute(ctx, input)
 		if err != nil {
-			ch <- agentcore.StreamChunk[*tools.ToolOutput]{Error: err}
+			ch <- agentcore.StreamChunk[*interfaces.ToolOutput]{Error: err}
 		} else {
-			ch <- agentcore.StreamChunk[*tools.ToolOutput]{Data: output}
+			ch <- agentcore.StreamChunk[*interfaces.ToolOutput]{Data: output}
 		}
 	}()
 	return ch, nil
 }
 
-func (m *MockTool) Batch(ctx context.Context, inputs []*tools.ToolInput) ([]*tools.ToolOutput, error) {
-	outputs := make([]*tools.ToolOutput, len(inputs))
+func (m *MockTool) Batch(ctx context.Context, inputs []*interfaces.ToolInput) ([]*interfaces.ToolOutput, error) {
+	outputs := make([]*interfaces.ToolOutput, len(inputs))
 	for i, input := range inputs {
 		output, err := m.Execute(ctx, input)
 		if err != nil {
@@ -78,15 +77,15 @@ func (m *MockTool) Batch(ctx context.Context, inputs []*tools.ToolInput) ([]*too
 	return outputs, nil
 }
 
-func (m *MockTool) Pipe(next agentcore.Runnable[*tools.ToolOutput, any]) agentcore.Runnable[*tools.ToolInput, any] {
+func (m *MockTool) Pipe(next agentcore.Runnable[*interfaces.ToolOutput, any]) agentcore.Runnable[*interfaces.ToolInput, any] {
 	return nil
 }
 
-func (m *MockTool) WithCallbacks(callbacks ...agentcore.Callback) agentcore.Runnable[*tools.ToolInput, *tools.ToolOutput] {
+func (m *MockTool) WithCallbacks(callbacks ...agentcore.Callback) agentcore.Runnable[*interfaces.ToolInput, *interfaces.ToolOutput] {
 	return m
 }
 
-func (m *MockTool) WithConfig(config agentcore.RunnableConfig) agentcore.Runnable[*tools.ToolInput, *tools.ToolOutput] {
+func (m *MockTool) WithConfig(config agentcore.RunnableConfig) agentcore.Runnable[*interfaces.ToolInput, *interfaces.ToolOutput] {
 	return m
 }
 
@@ -345,7 +344,7 @@ func BenchmarkOpenAIProvider_ConvertTools(b *testing.B) {
 		temperature: 0.7,
 	}
 
-	mockTools := make([]tools.Tool, 10)
+	mockTools := make([]interfaces.Tool, 10)
 	for i := 0; i < 10; i++ {
 		mockTools[i] = &MockTool{}
 	}

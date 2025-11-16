@@ -524,7 +524,7 @@ func (p *SmartPlanner) selectStrategy(goal string, constraints PlanConstraints) 
 func (p *SmartPlanner) storePlan(ctx context.Context, plan *Plan) {
 	// Store plan in memory for future reference
 	key := fmt.Sprintf("plan:%s", plan.ID)
-	p.memory.Store(ctx, key, plan)
+	_ = p.memory.Store(ctx, key, plan)
 }
 
 func (p *SmartPlanner) defaultOptimization(ctx context.Context, plan *Plan) (*Plan, error) {

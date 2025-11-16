@@ -271,7 +271,7 @@ func (a *SelfReflectiveAgent) Reflect(ctx context.Context, subject interface{}) 
 	a.reflectionHistory = append(a.reflectionHistory, result)
 
 	// Store in memory
-	a.memory.StoreTyped(ctx, result.ID, result, memory.MemoryTypeSemantic, memory.StoreOptions{
+	_ = a.memory.StoreTyped(ctx, result.ID, result, memory.MemoryTypeSemantic, memory.StoreOptions{
 		Tags: []string{"reflection", string(result.Type)},
 	})
 
@@ -346,7 +346,7 @@ func (a *SelfReflectiveAgent) ExtractLearnings(ctx context.Context, experiences 
 
 	// Store learnings in memory
 	for _, learning := range learnings {
-		a.memory.StoreTyped(ctx,
+		_ = a.memory.StoreTyped(ctx,
 			fmt.Sprintf("learning_%d", time.Now().UnixNano()),
 			learning,
 			memory.MemoryTypeSemantic,
@@ -415,7 +415,7 @@ func (a *SelfReflectiveAgent) ApplyLearnings(ctx context.Context, learnings []Le
 	// Store learnings in memory for future reference
 	for _, learning := range learnings {
 		key := fmt.Sprintf("applied_learning_%d", time.Now().UnixNano())
-		a.memory.StoreTyped(ctx, key, learning, memory.MemoryTypeProcedural, memory.StoreOptions{
+		_ = a.memory.StoreTyped(ctx, key, learning, memory.MemoryTypeProcedural, memory.StoreOptions{
 			Tags: []string{"applied_learning", learning.Category},
 		})
 	}
@@ -457,7 +457,7 @@ func (a *SelfReflectiveAgent) executeTask(ctx context.Context, input *core.Agent
 
 func (a *SelfReflectiveAgent) storeExperience(ctx context.Context, experience *Experience) {
 	// Store in memory
-	a.memory.StoreTyped(ctx, experience.ID, experience, memory.MemoryTypeEpisodic, memory.StoreOptions{
+	_ = a.memory.StoreTyped(ctx, experience.ID, experience, memory.MemoryTypeEpisodic, memory.StoreOptions{
 		Tags: []string{"experience"},
 	})
 }
@@ -487,7 +487,7 @@ func (a *SelfReflectiveAgent) performReflection(ctx context.Context) {
 	learnings, err := a.ExtractLearnings(ctx, exps)
 	if err == nil && len(learnings) > 0 {
 		// Apply learnings
-		a.ApplyLearnings(ctx, learnings)
+		_ = a.ApplyLearnings(ctx, learnings)
 	}
 
 	// Perform self-reflection

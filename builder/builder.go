@@ -15,7 +15,6 @@ import (
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/store"
 	"github.com/kart-io/goagent/store/memory"
-	"github.com/kart-io/goagent/tools"
 )
 
 // AgentBuilder provides a fluent API for building agents with all features
@@ -31,7 +30,7 @@ import (
 type AgentBuilder[C any, S core.State] struct {
 	// Core components
 	llmClient    llm.Client
-	tools        []tools.Tool
+	tools        []interfaces.Tool
 	systemPrompt string
 
 	// Phase 1 components
@@ -105,7 +104,7 @@ func DefaultAgentConfig() *AgentConfig {
 func NewAgentBuilder[C any, S core.State](llmClient llm.Client) *AgentBuilder[C, S] {
 	return &AgentBuilder[C, S]{
 		llmClient:   llmClient,
-		tools:       []tools.Tool{},
+		tools:       []interfaces.Tool{},
 		middlewares: []middleware.Middleware{},
 		callbacks:   []core.Callback{},
 		config:      DefaultAgentConfig(),
@@ -114,7 +113,7 @@ func NewAgentBuilder[C any, S core.State](llmClient llm.Client) *AgentBuilder[C,
 }
 
 // WithTools adds tools to the agent
-func (b *AgentBuilder[C, S]) WithTools(tools ...tools.Tool) *AgentBuilder[C, S] {
+func (b *AgentBuilder[C, S]) WithTools(tools ...interfaces.Tool) *AgentBuilder[C, S] {
 	b.tools = append(b.tools, tools...)
 	return b
 }
@@ -360,7 +359,7 @@ func (b *AgentBuilder[C, S]) createHandler(runtime *execution.Runtime[C, S]) mid
 
 		// Save checkpoint if auto-save is enabled
 		if b.config.EnableAutoSave && runtime.Checkpointer != nil {
-			runtime.SaveState(ctx)
+			_ = runtime.SaveState(ctx)
 		}
 
 		// Create response
@@ -375,7 +374,7 @@ func (b *AgentBuilder[C, S]) createHandler(runtime *execution.Runtime[C, S]) mid
 // ConfigurableAgent is the built agent with full configuration
 type ConfigurableAgent[C any, S core.State] struct {
 	llmClient    llm.Client
-	tools        []tools.Tool
+	tools        []interfaces.Tool
 	systemPrompt string
 	runtime      *execution.Runtime[C, S]
 	chain        *middleware.MiddlewareChain
@@ -443,7 +442,7 @@ func (a *ConfigurableAgent[C, S]) Execute(ctx context.Context, input interface{}
 
 		// Notify callbacks
 		for _, cb := range a.callbacks {
-			cb.OnError(ctx, err)
+			_ = cb.OnError(ctx, err)
 		}
 
 		return nil, err

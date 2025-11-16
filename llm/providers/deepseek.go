@@ -11,7 +11,6 @@ import (
 
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
-	"github.com/kart-io/goagent/tools"
 )
 
 // DeepSeekProvider implements LLM interface for DeepSeek
@@ -178,7 +177,7 @@ func (p *DeepSeekProvider) Complete(ctx context.Context, req *llm.CompletionRequ
 	if err := json.NewDecoder(resp.Body).Decode(&dsResp); err != nil {
 		return nil, fmt.Errorf("failed to parse DeepSeek response: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if len(dsResp.Choices) == 0 {
 		return nil, fmt.Errorf("no choices in DeepSeek response")
@@ -225,7 +224,7 @@ func (p *DeepSeekProvider) Stream(ctx context.Context, prompt string) (<-chan st
 
 	go func() {
 		defer close(tokens)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		decoder := json.NewDecoder(resp.Body)
 		for {
@@ -254,7 +253,7 @@ func (p *DeepSeekProvider) Stream(ctx context.Context, prompt string) (<-chan st
 }
 
 // GenerateWithTools implements tool calling
-func (p *DeepSeekProvider) GenerateWithTools(ctx context.Context, prompt string, tools []tools.Tool) (*ToolCallResponse, error) {
+func (p *DeepSeekProvider) GenerateWithTools(ctx context.Context, prompt string, tools []interfaces.Tool) (*ToolCallResponse, error) {
 	// Convert tools to DeepSeek format
 	dsTools := p.convertToolsToDeepSeek(tools)
 
@@ -281,7 +280,7 @@ func (p *DeepSeekProvider) GenerateWithTools(ctx context.Context, prompt string,
 	if err := json.NewDecoder(resp.Body).Decode(&dsResp); err != nil {
 		return nil, fmt.Errorf("failed to parse DeepSeek tool response: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if len(dsResp.Choices) == 0 {
 		return nil, fmt.Errorf("no choices in DeepSeek tool response")
@@ -339,7 +338,7 @@ func (p *DeepSeekProvider) StreamWithTools(ctx context.Context, prompt string, t
 
 	go func() {
 		defer close(chunks)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		decoder := json.NewDecoder(resp.Body)
 		var currentToolCall *ToolCall
@@ -444,7 +443,7 @@ func (p *DeepSeekProvider) Embed(ctx context.Context, text string) ([]float64, e
 	if err := json.NewDecoder(resp.Body).Decode(&embedResp); err != nil {
 		return nil, fmt.Errorf("failed to parse DeepSeek embeddings response: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if len(embedResp.Data) == 0 {
 		return nil, fmt.Errorf("no embeddings in response")
@@ -519,7 +518,7 @@ func (p *DeepSeekProvider) callAPI(ctx context.Context, endpoint string, payload
 }
 
 // convertToolsToDeepSeek converts our tools to DeepSeek format
-func (p *DeepSeekProvider) convertToolsToDeepSeek(tools []tools.Tool) []DeepSeekTool {
+func (p *DeepSeekProvider) convertToolsToDeepSeek(tools []interfaces.Tool) []DeepSeekTool {
 	dsTools := make([]DeepSeekTool, len(tools))
 
 	for i, tool := range tools {
@@ -618,7 +617,7 @@ func (p *DeepSeekStreamingProvider) StreamWithMetadata(ctx context.Context, prom
 
 	go func() {
 		defer close(tokens)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		decoder := json.NewDecoder(resp.Body)
 		tokenCount := 0
