@@ -196,7 +196,7 @@ func (c *OllamaClient) Complete(ctx context.Context, req *llm.CompletionRequest)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -257,7 +257,7 @@ func (c *OllamaClient) Chat(ctx context.Context, messages []llm.Message) (*llm.C
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -300,7 +300,7 @@ func (c *OllamaClient) IsAvailable() bool {
 	if err != nil {
 		return false
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	return resp.StatusCode == http.StatusOK
 }
@@ -316,7 +316,7 @@ func (c *OllamaClient) ListModels() ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -367,7 +367,7 @@ func (c *OllamaClient) PullModel(modelName string) error {
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)

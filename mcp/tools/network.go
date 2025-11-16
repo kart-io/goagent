@@ -118,7 +118,7 @@ func (t *HTTPRequestTool) Execute(ctx context.Context, input map[string]interfac
 			Timestamp: time.Now(),
 		}, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// 读取响应体
 	respBody, err := io.ReadAll(resp.Body)

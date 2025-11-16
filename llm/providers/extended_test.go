@@ -11,8 +11,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
-	"github.com/kart-io/goagent/tools"
 )
 
 // ==============================================================================
@@ -242,7 +242,7 @@ func TestDeepSeekProvider_StreamWithTools_InvalidJSON(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	chunks, err := provider.StreamWithTools(context.Background(), "test", []tools.Tool{&MockTool{}})
+	chunks, err := provider.StreamWithTools(context.Background(), "test", []interfaces.Tool{&MockTool{}})
 	require.NoError(t, err)
 
 	// Should still process the stream, skipping invalid JSON
@@ -438,7 +438,7 @@ func TestOpenAIProvider_ConvertToolsLarge(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create multiple tools
-	mockTools := make([]tools.Tool, 5)
+	mockTools := make([]interfaces.Tool, 5)
 	for i := 0; i < 5; i++ {
 		mockTools[i] = &MockTool{}
 	}
@@ -504,7 +504,7 @@ func TestGeminiProvider_ConvertToolsToFunctions(t *testing.T) {
 	require.NoError(t, err)
 
 	mockTool := &MockTool{}
-	functions := provider.convertToolsToFunctions([]tools.Tool{mockTool})
+	functions := provider.convertToolsToFunctions([]interfaces.Tool{mockTool})
 
 	assert.Len(t, functions, 1)
 	assert.Equal(t, "mock_tool", functions[0].Name)

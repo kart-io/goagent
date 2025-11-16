@@ -548,7 +548,7 @@ func (s *StoreWithCache) Get(ctx context.Context, namespace []string, key string
 	}
 
 	// Cache the value
-	s.cache.PutWithTTL(ctx, namespace, key, value.Value, s.ttl)
+	_ = s.cache.PutWithTTL(ctx, namespace, key, value.Value, s.ttl)
 
 	return value, nil
 }
@@ -561,7 +561,7 @@ func (s *StoreWithCache) Put(ctx context.Context, namespace []string, key string
 	}
 
 	// Update cache
-	return s.cache.PutWithTTL(ctx, namespace, key, value, s.ttl)
+	return _ = s.cache.PutWithTTL(ctx, namespace, key, value, s.ttl)
 }
 
 // PutWithTTL stores with TTL in both cache and backend
@@ -577,7 +577,7 @@ func (s *StoreWithCache) PutWithTTL(ctx context.Context, namespace []string, key
 		cacheTTL = s.ttl
 	}
 
-	return s.cache.PutWithTTL(ctx, namespace, key, value, cacheTTL)
+	return _ = s.cache.PutWithTTL(ctx, namespace, key, value, cacheTTL)
 }
 
 // Search performs search on backend
@@ -624,6 +624,6 @@ func (s *StoreWithCache) Watch(ctx context.Context, namespace []string) (<-chan 
 
 // Close closes both cache and backend
 func (s *StoreWithCache) Close() error {
-	s.cache.Close()
+	_ = s.cache.Close()
 	return s.backend.Close()
 }
