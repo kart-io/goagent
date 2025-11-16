@@ -9,7 +9,6 @@ import (
 	agentcore "github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
-	"github.com/kart-io/goagent/tools"
 )
 
 // CoTAgent implements Chain-of-Thought reasoning pattern.
@@ -24,29 +23,29 @@ import (
 type CoTAgent struct {
 	*agentcore.BaseAgent
 	llm         llm.Client
-	tools       []tools.Tool
-	toolsByName map[string]tools.Tool
+	tools       []interfaces.Tool
+	toolsByName map[string]interfaces.Tool
 	maxSteps    int
 	config      CoTConfig
 }
 
 // CoTConfig configuration for Chain-of-Thought agent
 type CoTConfig struct {
-	Name        string       // Agent name
-	Description string       // Agent description
-	LLM         llm.Client   // LLM client
-	Tools       []tools.Tool // Available tools (optional)
+	Name        string            // Agent name
+	Description string            // Agent description
+	LLM         llm.Client        // LLM client
+	Tools       []interfaces.Tool // Available tools (optional)
 	MaxSteps    int          // Maximum reasoning steps
 
 	// CoT-specific settings
-	ShowStepNumbers   bool   // Show step numbers in reasoning
-	RequireJustification bool // Require justification for each step
-	FinalAnswerFormat string // Format for final answer
-	ExampleFormat     string // Example CoT format to show model
+	ShowStepNumbers      bool   // Show step numbers in reasoning
+	RequireJustification bool   // Require justification for each step
+	FinalAnswerFormat    string // Format for final answer
+	ExampleFormat        string // Example CoT format to show model
 
 	// Prompting strategy
-	ZeroShot      bool   // Use zero-shot CoT ("Let's think step by step")
-	FewShot       bool   // Use few-shot CoT with examples
+	ZeroShot        bool         // Use zero-shot CoT ("Let's think step by step")
+	FewShot         bool         // Use few-shot CoT with examples
 	FewShotExamples []CoTExample // Examples for few-shot learning
 }
 
@@ -68,7 +67,7 @@ func NewCoTAgent(config CoTConfig) *CoTAgent {
 	}
 
 	// Build tools map
-	toolsByName := make(map[string]tools.Tool)
+	toolsByName := make(map[string]interfaces.Tool)
 	for _, tool := range config.Tools {
 		toolsByName[tool.Name()] = tool
 	}
@@ -109,7 +108,6 @@ func (c *CoTAgent) Invoke(ctx context.Context, input *agentcore.AgentInput) (*ag
 
 	// Execute Chain-of-Thought reasoning
 	reasoningSteps := make([]string, 0)
-	currentStep := 1
 
 	// Call LLM with CoT prompt
 	messages := []llm.Message{
@@ -298,8 +296,8 @@ func (c *CoTAgent) parseCoTResponse(response string) ([]string, string) {
 
 		// Detect start of reasoning
 		if strings.Contains(strings.ToLower(line), "step") ||
-		   strings.Contains(strings.ToLower(line), "think") ||
-		   collectingSteps {
+			strings.Contains(strings.ToLower(line), "think") ||
+			collectingSteps {
 			collectingSteps = true
 
 			// Extract step content
@@ -368,7 +366,7 @@ func (c *CoTAgent) executeToolsIfNeeded(ctx context.Context, steps []string, out
 
 				// Execute tool if available
 				if tool, exists := c.toolsByName[toolName]; exists {
-					toolIn := &tools.ToolInput{
+					toolIn := &interfaces.ToolInput{
 						Args:    toolInput,
 						Context: ctx,
 					}

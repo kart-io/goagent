@@ -60,7 +60,7 @@ type ReasoningOutput struct {
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
 
 	// ToolCalls made during reasoning
-	ToolCalls []ToolCall `json:"tool_calls,omitempty"`
+	ToolCalls []ReasoningToolCall `json:"tool_calls,omitempty"`
 }
 
 // ReasoningStep represents a single step in the reasoning process.
@@ -102,8 +102,9 @@ type ReasoningChunk struct {
 	Error error `json:"error,omitempty"`
 }
 
-// ToolCall represents a tool invocation during reasoning.
-type ToolCall struct {
+// ReasoningToolCall represents a tool invocation during reasoning.
+// This extends the basic ToolCall with reasoning-specific fields.
+type ReasoningToolCall struct {
 	// ToolName identifies the tool
 	ToolName string `json:"tool_name"`
 
@@ -115,6 +116,9 @@ type ToolCall struct {
 
 	// Error if tool execution failed
 	Error string `json:"error,omitempty"`
+
+	// ReasoningStepID links this call to a specific reasoning step
+	ReasoningStepID string `json:"reasoning_step_id,omitempty"`
 }
 
 // ThoughtNode represents a node in tree/graph-based reasoning patterns.

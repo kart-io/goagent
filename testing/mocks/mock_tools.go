@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/tools"
 )
 
@@ -28,8 +29,8 @@ func NewMockTool(name, description string) *MockTool {
 		name:        name,
 		description: description,
 		schema:      `{"type": "object"}`,
-		invokeFunc: func(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
-			return &tools.ToolOutput{
+		invokeFunc: func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+			return &interfaces.ToolOutput{
 				Result:  fmt.Sprintf("Mock result from %s", name),
 				Success: true,
 			}, nil
@@ -78,14 +79,14 @@ func (m *MockTool) Invoke(ctx context.Context, input *tools.ToolInput) (*tools.T
 		return m.invokeFunc(ctx, input)
 	}
 
-	return &tools.ToolOutput{
+	return &interfaces.ToolOutput{
 		Result:  fmt.Sprintf("Mock result from %s", m.name),
 		Success: true,
 	}, nil
 }
 
 // SetInvokeFunc sets a custom invoke function
-func (m *MockTool) SetInvokeFunc(fn func(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error)) {
+func (m *MockTool) SetInvokeFunc(fn func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error)) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.invokeFunc = fn
@@ -126,18 +127,18 @@ func (m *MockTool) Reset() {
 // MockToolRegistry provides a mock tool registry
 type MockToolRegistry struct {
 	mu    sync.Mutex
-	tools map[string]tools.Tool
+	tools map[string]interfaces.Tool
 }
 
 // NewMockToolRegistry creates a new mock tool registry
 func NewMockToolRegistry() *MockToolRegistry {
 	return &MockToolRegistry{
-		tools: make(map[string]tools.Tool),
+		tools: make(map[string]interfaces.Tool),
 	}
 }
 
 // Register registers a tool
-func (r *MockToolRegistry) Register(tool tools.Tool) error {
+func (r *MockToolRegistry) Register(tool interfaces.Tool) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -150,7 +151,7 @@ func (r *MockToolRegistry) Register(tool tools.Tool) error {
 }
 
 // Get retrieves a tool by name
-func (r *MockToolRegistry) Get(name string) (tools.Tool, bool) {
+func (r *MockToolRegistry) Get(name string) (interfaces.Tool, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -159,11 +160,11 @@ func (r *MockToolRegistry) Get(name string) (tools.Tool, bool) {
 }
 
 // List lists all registered tools
-func (r *MockToolRegistry) List() []tools.Tool {
+func (r *MockToolRegistry) List() []interfaces.Tool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	result := make([]tools.Tool, 0, len(r.tools))
+	result := make([]interfaces.Tool, 0, len(r.tools))
 	for _, tool := range r.tools {
 		result = append(result, tool)
 	}
@@ -174,15 +175,15 @@ func (r *MockToolRegistry) List() []tools.Tool {
 func (r *MockToolRegistry) Clear() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.tools = make(map[string]tools.Tool)
+	r.tools = make(map[string]interfaces.Tool)
 }
 
 // MockToolExecutor provides a mock tool executor
 type MockToolExecutor struct {
 	mu              sync.Mutex
-	executeFunc     func(ctx context.Context, tools []tools.Tool, inputs []map[string]interface{}) ([]interface{}, error)
+	executeFunc     func(ctx context.Context, tools []interfaces.Tool, inputs []map[string]interface{}) ([]interface{}, error)
 	executeCalls    int
-	lastTools       []tools.Tool
+	lastTools       []interfaces.Tool
 	lastInputs      []map[string]interface{}
 	shouldError     bool
 	errorMessage    string

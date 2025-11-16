@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/tools"
 )
@@ -48,8 +49,8 @@ type MockTool struct {
 }
 
 func NewMockTool(name, description string) *MockTool {
-	runFunc := func(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
-		return &tools.ToolOutput{
+	runFunc := func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+		return &interfaces.ToolOutput{
 			Result:  map[string]interface{}{"result": "ok"},
 			Success: true,
 		}, nil

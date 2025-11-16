@@ -169,7 +169,7 @@ func (s *ShellTool) run(ctx context.Context, input *interfaces.ToolInput) (*inte
 			errorMsg = err.Error()
 		}
 
-		return &tools.ToolOutput{
+		return &interfaces.ToolOutput{
 			Result:  result,
 			Success: false,
 			Error:   errorMsg,
@@ -180,7 +180,7 @@ func (s *ShellTool) run(ctx context.Context, input *interfaces.ToolInput) (*inte
 		}, tools.NewToolError(s.Name(), "command execution failed", err)
 	}
 
-	return &tools.ToolOutput{
+	return &interfaces.ToolOutput{
 		Result:  result,
 		Success: true,
 		Metadata: map[string]interface{}{

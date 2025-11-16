@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/store"
 )
 
@@ -255,8 +256,8 @@ func NewRuntimeToolAdapter(tool RuntimeTool, runtime *ToolRuntime) *RuntimeToolA
 }
 
 // Invoke implements the Tool interface through BaseTool
-func (a *RuntimeToolAdapter) Invoke(ctx context.Context, input *ToolInput) (*ToolOutput, error) {
-	return a.BaseTool.runFunc(ctx, input)
+func (a *RuntimeToolAdapter) Invoke(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+	return a.BaseTool.Invoke(ctx, input)
 }
 
 // BaseRuntimeTool provides a base implementation for runtime tools

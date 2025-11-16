@@ -231,7 +231,8 @@ func main() {
 	fmt.Println("Demonstrating three specialized agents working together:")
 	fmt.Println("1. Analysis Agent - Analyzes data and identifies patterns")
 	fmt.Println("2. Strategy Agent - Formulates optimal approaches")
-	fmt.Println("3. Execution Agent - Executes tasks with tools and HTTP\n")
+	fmt.Println("3. Execution Agent - Executes tasks with tools and HTTP")
+	fmt.Println()
 
 	// Initialize LLM client
 	var llmClient llm.Client

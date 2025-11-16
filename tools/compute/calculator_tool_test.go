@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/tools"
 )
 
@@ -42,7 +43,7 @@ func TestCalculatorTool_BasicArithmetic(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			output, err := calc.Invoke(ctx, &tools.ToolInput{
+			output, err := calc.Invoke(ctx, &interfaces.ToolInput{
 				Args: map[string]interface{}{
 					"expression": tt.expression,
 				},

@@ -62,8 +62,8 @@ func (s *SimpleLLMClient) IsAvailable() bool {
 }
 
 // createSampleTools 创建示例工具集
-func createSampleTools() []tools.Tool {
-	allTools := []tools.Tool{
+func createSampleTools() []interfaces.Tool {
+	allTools := []interfaces.Tool{
 		createTool("calculator", "Performs mathematical calculations"),
 		createTool("web_search", "Searches the web for information"),
 		createTool("code_analyzer", "Analyzes code for bugs and improvements"),
@@ -81,7 +81,7 @@ func createSampleTools() []tools.Tool {
 // createTool 创建一个工具
 func createTool(name, description string) interfaces.Tool {
 	runFunc := func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
-		return &tools.ToolOutput{
+		return &interfaces.ToolOutput{
 			Result:  fmt.Sprintf("Result from %s", name),
 			Success: true,
 		}, nil
@@ -146,7 +146,7 @@ func demo1BasicSelection(ctx context.Context, llmClient llm.Client) {
 
 	// Check selected tools
 	if toolsVal, ok := resultState.Get("tools"); ok {
-		selectedTools := toolsVal.([]tools.Tool)
+		selectedTools := toolsVal.([]interfaces.Tool)
 		fmt.Printf("Selected tools count: %d\n", len(selectedTools))
 		fmt.Println("Selected tools:")
 		for _, tool := range selectedTools {
@@ -226,7 +226,7 @@ func demo3MaxLimit(ctx context.Context, llmClient llm.Client) {
 		}
 
 		if toolsVal, ok := resultState.Get("tools"); ok {
-			selectedTools := toolsVal.([]tools.Tool)
+			selectedTools := toolsVal.([]interfaces.Tool)
 			fmt.Printf("Max limit: %d -> Selected: %d tools\n", maxTools, len(selectedTools))
 		}
 	}
@@ -249,7 +249,7 @@ func demo4Caching(ctx context.Context, llmClient llm.Client) {
 	fmt.Println("First call (will call LLM)...")
 	resultState1, _ := selector.Process(ctx, state1)
 	if toolsVal, ok := resultState1.Get("tools"); ok {
-		selectedTools := toolsVal.([]tools.Tool)
+		selectedTools := toolsVal.([]interfaces.Tool)
 		fmt.Printf("  Selected %d tools\n", len(selectedTools))
 	}
 

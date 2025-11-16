@@ -27,10 +27,10 @@ func (a *DemoAgent) Execute(ctx context.Context, input string) (string, error) {
 			input, len(input)), nil
 
 	case "StrategyAgent":
-		return fmt.Sprintf("[Strategy] Based on analysis, recommended approach: Progressive optimization with 3 phases | Priority: Performance > Security > UX"), nil
+		return "[Strategy] Based on analysis, recommended approach: Progressive optimization with 3 phases | Priority: Performance > Security > UX", nil
 
 	case "ExecutionAgent":
-		return fmt.Sprintf("[Execution] Successfully executed strategy | Actions taken: 1) API called 2) Cache updated 3) Metrics logged | Status: Complete"), nil
+		return "[Execution] Successfully executed strategy | Actions taken: 1) API called 2) Cache updated 3) Metrics logged | Status: Complete", nil
 
 	default:
 		return "", fmt.Errorf("unknown agent: %s", a.name)

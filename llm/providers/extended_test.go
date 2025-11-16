@@ -3,7 +3,6 @@ package providers
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -448,7 +447,7 @@ func TestOpenAIProvider_ConvertToolsLarge(t *testing.T) {
 	assert.Len(t, functions, 5)
 
 	for i, fn := range functions {
-		assert.Equal(t, fmt.Sprintf("mock_tool"), fn.Name)
+		assert.Equal(t, "mock_tool", fn.Name)
 		assert.NotNil(t, fn.Parameters)
 		_ = i
 	}

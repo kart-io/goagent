@@ -65,17 +65,17 @@ func demo1BasicParallel() {
 		{
 			ID:    "call1",
 			Tool:  searchTool,
-			Input: &tools.ToolInput{Args: map[string]interface{}{"query": "Go programming"}},
+			Input: &interfaces.ToolInput{Args: map[string]interface{}{"query": "Go programming"}},
 		},
 		{
 			ID:    "call2",
 			Tool:  calculateTool,
-			Input: &tools.ToolInput{Args: map[string]interface{}{"expression": "10 + 20"}},
+			Input: &interfaces.ToolInput{Args: map[string]interface{}{"expression": "10 + 20"}},
 		},
 		{
 			ID:    "call3",
 			Tool:  translateTool,
-			Input: &tools.ToolInput{Args: map[string]interface{}{"text": "Hello", "to": "Spanish"}},
+			Input: &interfaces.ToolInput{Args: map[string]interface{}{"text": "Hello", "to": "Spanish"}},
 		},
 	}
 
@@ -286,18 +286,18 @@ func demo6TimeoutHandling() {
 
 // Helper functions to create sample tools
 
-func createSimulatedTool(name, message string, delay time.Duration) tools.Tool {
+func createSimulatedTool(name, message string, delay time.Duration) interfaces.Tool {
 	return tools.NewBaseTool(
 		name,
 		fmt.Sprintf("Simulated %s tool", name),
 		"{}",
-		func(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
+		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 			// Simulate processing
 			select {
 			case <-time.After(delay):
 				// Normal completion
 				result := fmt.Sprintf("%s completed successfully", message)
-				return &tools.ToolOutput{
+				return &interfaces.ToolOutput{
 					Result:  result,
 					Success: true,
 				}, nil
@@ -309,32 +309,32 @@ func createSimulatedTool(name, message string, delay time.Duration) tools.Tool {
 	)
 }
 
-func createFailingTool(name, errorMsg string) tools.Tool {
+func createFailingTool(name, errorMsg string) interfaces.Tool {
 	return tools.NewBaseTool(
 		name,
 		fmt.Sprintf("Failing %s tool", name),
 		"{}",
-		func(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
+		func(ctx context.Context, input *tools.ToolInput) (*interfaces.ToolOutput, error) {
 			time.Sleep(10 * time.Millisecond)
 			return nil, fmt.Errorf("%s", errorMsg)
 		},
 	)
 }
 
-func createFlakyTool(name string, failCount int) tools.Tool {
+func createFlakyTool(name string, failCount int) interfaces.Tool {
 	attempts := 0
 	return tools.NewBaseTool(
 		name,
 		fmt.Sprintf("Flaky %s tool", name),
 		"{}",
-		func(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
+		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 			attempts++
 			if attempts <= failCount {
 				time.Sleep(20 * time.Millisecond)
 				return nil, fmt.Errorf("temporary_failure: attempt %d", attempts)
 			}
 			time.Sleep(20 * time.Millisecond)
-			return &tools.ToolOutput{
+			return &interfaces.ToolOutput{
 				Result:  fmt.Sprintf("Success after %d attempts", attempts),
 				Success: true,
 			}, nil

@@ -380,7 +380,7 @@ func TestCrossServiceTracer_TraceHTTPResponse(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
 			_, span := tracer.tracer.tracer.Start(ctx, "http.request")
-			ctx = context.WithValue(context.Background(), "span", span)
+			ctx = context.WithValue(ctx, "span", span)
 
 			resp := &http.Response{
 				StatusCode: tt.statusCode,
