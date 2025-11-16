@@ -1,0 +1,156 @@
+name: Pull Request
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  validate:
+    name: Validate PR
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Need full history for comparison
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-1.23-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-1.23-
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Check code formatting
+        run: |
+          if [ -n "$(gofmt -l .)" ]; then
+            echo "Code is not formatted. Please run 'make fmt'"
+            gofmt -l .
+            exit 1
+          fi
+
+      - name: Verify import layering
+        run: |
+          chmod +x ./verify_imports.sh
+          ./verify_imports.sh --strict
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Run tests with coverage
+        run: go test -v -race -timeout 5m -coverprofile=coverage.out ./...
+
+      - name: Check test coverage
+        run: |
+          # Calculate coverage
+          COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
+          echo "Test coverage: ${COVERAGE}%"
+
+          # Check if coverage meets minimum threshold (80%)
+          if (( $(echo "$COVERAGE < 80" | bc -l) )); then
+            echo "❌ Test coverage ${COVERAGE}% is below minimum threshold of 80%"
+            exit 1
+          else
+            echo "✅ Test coverage ${COVERAGE}% meets minimum threshold"
+          fi
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          args: --timeout=5m --new-from-rev=origin/${{ github.base_ref }}
+
+      - name: Comment PR with coverage
+        uses: actions/github-script@v7
+        if: always()
+        with:
+          script: |
+            const fs = require('fs');
+
+            // Read coverage file
+            let coverage = '0';
+            try {
+              const coverageOutput = require('child_process')
+                .execSync('go tool cover -func=coverage.out | grep total')
+                .toString();
+              coverage = coverageOutput.match(/(\d+\.\d+)%/)[1];
+            } catch (e) {
+              console.log('Could not read coverage');
+            }
+
+            // Create comment body
+            const body = `## 📊 Test Coverage Report
+
+            **Coverage**: ${coverage}%
+            ${parseFloat(coverage) >= 80 ? '✅ Meets minimum threshold (80%)' : '❌ Below minimum threshold (80%)'}
+
+            ---
+
+            ### Checklist
+
+            - [ ] All tests pass
+            - [ ] Code is properly formatted (\`make fmt\`)
+            - [ ] Import layering rules are satisfied
+            - [ ] Test coverage ≥ 80%
+            - [ ] All linter checks pass
+            `;
+
+            // Find existing comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const botComment = comments.find(comment =>
+              comment.user.type === 'Bot' &&
+              comment.body.includes('Test Coverage Report')
+            );
+
+            if (botComment) {
+              // Update existing comment
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: body
+              });
+            } else {
+              // Create new comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body
+              });
+            }
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Gosec Security Scanner
+        uses: securego/gosec@master
+        with:
+          args: '-no-fail -fmt sarif -out results.sarif ./...'
+
+      - name: Upload SARIF file
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif
