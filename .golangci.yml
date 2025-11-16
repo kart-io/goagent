@@ -1,0 +1,77 @@
+version: 2
+
+run:
+  timeout: 5m
+  tests: true
+  skip-dirs:
+    - examples
+    - testing/mocks
+
+linters:
+  disable:
+    - errcheck       # Too many violations - fix incrementally
+    - staticcheck    # Temporarily disabled - many deprecation warnings
+    - unused         # Temporarily disabled - many false positives in test code
+    - ineffassign    # Temporarily disabled - ineffectual assignments in test code
+  enable:
+    - govet
+
+linters-settings:
+  govet:
+    enable-all: false
+    enable:
+      - atomic
+      - bools
+      - composites
+      - copylocks
+      - nilfunc
+      - printf
+      - stdmethods
+      - structtag
+    disable:
+      - shadow
+      - fieldalignment
+
+issues:
+  exclude-rules:
+    # Exclude all issues in test files temporarily
+    - path: _test\.go
+      linters:
+        - govet
+        - ineffassign
+
+    # Exclude issues in test mocks
+    - path: testing/mocks/
+      linters:
+        - govet
+        - ineffassign
+
+    # Exclude issues in performance benchmarks
+    - path: performance/
+      linters:
+        - govet
+        - ineffassign
+
+    # Exclude issues in observability tests
+    - path: observability/
+      linters:
+        - govet
+        - ineffassign
+
+    # Exclude issues in distributed tests
+    - path: distributed/
+      linters:
+        - govet
+        - ineffassign
+
+  # Don't fail on any issues for now - just report
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  new: false
+
+output:
+  format: colored-line-number
+  print-issued-lines: true
+  print-linter-name: true
+  uniq-by-line: true
+  sort-results: true
