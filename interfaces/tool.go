@@ -14,7 +14,7 @@ import "context"
 //   - tools/shell/* - Shell execution tools
 //   - tools/practical/* - Practical utility tools
 //
-// See: pkg/agent/tools/tool.go for the base implementation
+// See: tools/tool.go for the base implementation
 type Tool interface {
 	// Name returns the tool identifier.
 	//

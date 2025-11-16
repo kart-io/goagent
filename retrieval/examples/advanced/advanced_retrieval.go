@@ -85,7 +85,7 @@ func createTechDocs() []*interfaces.Document {
 }
 
 // retrievalWithCallbacks 带回调的检索示例
-func retrievalWithCallbacks(ctx context.Context, docs []*retrieval.Document) {
+func retrievalWithCallbacks(ctx context.Context, docs []*interfaces.Document) {
 	// 创建自定义回调
 	callback := &CustomRetrievalCallback{}
 
@@ -141,7 +141,7 @@ func (c *CustomRetrievalCallback) OnError(ctx context.Context, err error) error 
 }
 
 // retrievalPipeline 管道式检索示例
-func retrievalPipeline(ctx context.Context, docs []*retrieval.Document) {
+func retrievalPipeline(ctx context.Context, docs []*interfaces.Document) {
 	// 创建检索器
 	config := retrieval.DefaultRetrieverConfig()
 	config.TopK = 5
@@ -219,7 +219,7 @@ func batchRetrieval(ctx context.Context, docs []*retrieval.Document) {
 }
 
 // customRetriever 自定义检索器示例
-func customRetriever(ctx context.Context, docs []*retrieval.Document) {
+func customRetriever(ctx context.Context, docs []*interfaces.Document) {
 	// 创建自定义检索器
 	retriever := NewCategoryRetriever(docs, "kubernetes")
 

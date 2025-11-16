@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/retrieval"
 )
 
@@ -12,7 +13,7 @@ func main() {
 	fmt.Println()
 
 	// 创建示例文档
-	docs := []*retrieval.Document{
+	docs := []*interfaces.Document{
 		retrieval.NewDocument(
 			"Kubernetes is an open-source container orchestration platform that automates deployment, scaling, and management of containerized applications.",
 			map[string]interface{}{
@@ -79,7 +80,7 @@ func main() {
 }
 
 // vectorExample 向量检索示例
-func vectorExample(ctx context.Context, docs []*retrieval.Document) {
+func vectorExample(ctx context.Context, docs []*interfaces.Document) {
 	// 创建模拟向量存储
 	vectorStore := retrieval.NewMockVectorStore()
 

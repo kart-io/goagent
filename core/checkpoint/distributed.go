@@ -160,7 +160,7 @@ func (dc *DistributedCheckpointer) Save(ctx context.Context, threadID string, st
 		switch replicationMode {
 		case "sync":
 			// Synchronous replication
-			if err := secondary.Save(ctx, threadID, state); err != nil {
+			if err := secondary.Save(ctx, threadID, state.Clone()); err != nil {
 				// Log error but don't fail the operation
 				// In production, you might want to use a logger here
 			}

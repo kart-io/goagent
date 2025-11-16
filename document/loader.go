@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/retrieval"
 )
 
@@ -12,10 +13,10 @@ import (
 // 负责从各种来源加载文档,支持单独加载或加载后分割
 type DocumentLoader interface {
 	// Load 加载文档
-	Load(ctx context.Context) ([]*retrieval.Document, error)
+	Load(ctx context.Context) ([]*interfaces.Document, error)
 
 	// LoadAndSplit 加载并分割文档
-	LoadAndSplit(ctx context.Context, splitter TextSplitter) ([]*retrieval.Document, error)
+	LoadAndSplit(ctx context.Context, splitter TextSplitter) ([]*interfaces.Document, error)
 
 	// GetMetadata 获取加载器元数据
 	GetMetadata() map[string]interface{}

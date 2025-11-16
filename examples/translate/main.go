@@ -16,12 +16,12 @@ import (
 
 // TranslationResult 翻译结果
 type TranslationResult struct {
-	OriginalText     string `json:"original_text"`
-	DetectedLanguage string `json:"detected_language"`
-	TranslatedText   string `json:"translated_text"`
-	TokensUsed       int    `json:"tokens_used"`        // 使用的 token 总数
-	DetectionTokens  int    `json:"detection_tokens"`   // 语言检测使用的 token
-	TranslationTokens int   `json:"translation_tokens"` // 翻译使用的 token
+	OriginalText      string `json:"original_text"`
+	DetectedLanguage  string `json:"detected_language"`
+	TranslatedText    string `json:"translated_text"`
+	TokensUsed        int    `json:"tokens_used"`        // 使用的 token 总数
+	DetectionTokens   int    `json:"detection_tokens"`   // 语言检测使用的 token
+	TranslationTokens int    `json:"translation_tokens"` // 翻译使用的 token
 }
 
 func main() {

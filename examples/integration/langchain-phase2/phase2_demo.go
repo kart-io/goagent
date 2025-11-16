@@ -271,14 +271,17 @@ func completeAgentDemo() {
 		output := fmt.Sprintf("Processing '%v' with tools: %s", req.Input, tools)
 
 		// Store in long-term memory
-		store.Put(ctx, []string{"conversations", "agent-session-001"},
+		err := store.Put(ctx, []string{"conversations", "agent-session-001"},
 			fmt.Sprintf("turn-%d", time.Now().Unix()),
 			map[string]interface{}{
 				"input":  req.Input,
 				"output": output,
 				"tools":  tools,
 			})
-
+		if err != nil {
+			fmt.Printf("    Error: %v\n", err)
+			return nil, err
+		}
 		return &middleware.MiddlewareResponse{
 			Output:   output,
 			State:    req.State,
@@ -406,7 +409,11 @@ func completeAgentDemo() {
 		fmt.Printf("    Duration: %v\n", resp.Duration)
 
 		// Save checkpoint after each turn
-		checkpointer.Save(ctx, "agent-session-001", state)
+		err = checkpointer.Save(ctx, "agent-session-001", state)
+		if err != nil {
+			fmt.Printf("    Error: %v\n", err)
+			continue
+		}
 
 		fmt.Println()
 		time.Sleep(100 * time.Millisecond) // Small delay between requests

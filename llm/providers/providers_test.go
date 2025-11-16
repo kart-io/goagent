@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/mock"
 
 	agentcore "github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/tools"
 )
@@ -38,21 +39,21 @@ func (m *MockTool) ArgsSchema() string {
 	}`
 }
 
-func (m *MockTool) Execute(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
+func (m *MockTool) Execute(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 	args := m.Called(ctx, input)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*tools.ToolOutput), args.Error(1)
+	return args.Get(0).(*interfaces.ToolOutput), args.Error(1)
 }
 
 // Implement Runnable interface
-func (m *MockTool) Invoke(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
+func (m *MockTool) Invoke(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 	return m.Execute(ctx, input)
 }
 
-func (m *MockTool) Stream(ctx context.Context, input *tools.ToolInput) (<-chan agentcore.StreamChunk[*tools.ToolOutput], error) {
-	ch := make(chan agentcore.StreamChunk[*tools.ToolOutput])
+func (m *MockTool) Stream(ctx context.Context, input *interfaces.ToolInput) (<-chan agentcore.StreamChunk[*interfaces.ToolOutput], error) {
+	ch := make(chan agentcore.StreamChunk[*interfaces.ToolOutput])
 	go func() {
 		defer close(ch)
 		output, err := m.Execute(ctx, input)
@@ -159,7 +160,7 @@ func TestOpenAIProvider_ConvertToolsToFunctions(t *testing.T) {
 	}
 
 	mockTool := &MockTool{}
-	tools := []tools.Tool{mockTool}
+	tools := []interfaces.Tool{mockTool}
 
 	functions := provider.convertToolsToFunctions(tools)
 

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/tools"
 )
 
@@ -63,10 +64,10 @@ func NewSearchTool(engine SearchEngine) *SearchTool {
 }
 
 // run 执行搜索
-func (s *SearchTool) run(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
+func (s *SearchTool) run(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 	query, ok := input.Args["query"].(string)
 	if !ok || query == "" {
-		return &tools.ToolOutput{
+		return &interfaces.ToolOutput{
 			Success: false,
 			Error:   "query is required and must be a non-empty string",
 		}, tools.NewToolError(s.Name(), "invalid input", fmt.Errorf("query is required"))
@@ -80,13 +81,13 @@ func (s *SearchTool) run(ctx context.Context, input *tools.ToolInput) (*tools.To
 	// 执行搜索
 	results, err := s.searchEngine.Search(ctx, query, maxResults)
 	if err != nil {
-		return &tools.ToolOutput{
+		return &interfaces.ToolOutput{
 			Success: false,
 			Error:   err.Error(),
 		}, tools.NewToolError(s.Name(), "search failed", err)
 	}
 
-	return &tools.ToolOutput{
+	return &interfaces.ToolOutput{
 		Result:  results,
 		Success: true,
 		Metadata: map[string]interface{}{
