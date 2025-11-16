@@ -189,6 +189,7 @@ func demo3SubscribeAll() {
 	received := 0
 	timeout := time.After(1 * time.Second)
 
+loop1:
 	for received < 3 {
 		select {
 		case event := <-allCh:
@@ -196,7 +197,7 @@ func demo3SubscribeAll() {
 			received++
 		case <-timeout:
 			fmt.Printf("Timeout, received %d/3 events\n", received)
-			break
+			break loop1
 		}
 	}
 }
@@ -315,6 +316,7 @@ func demo6StreamAggregation() {
 	received := 0
 	timeout := time.After(1 * time.Second)
 
+loop2:
 	for received < 2 {
 		select {
 		case event := <-aggregated:
@@ -328,7 +330,7 @@ func demo6StreamAggregation() {
 			received++
 		case <-timeout:
 			fmt.Printf("Timeout, received %d/2 events\n", received)
-			break
+			break loop2
 		}
 	}
 }

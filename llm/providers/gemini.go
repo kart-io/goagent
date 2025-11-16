@@ -11,8 +11,8 @@ import (
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
-	"github.com/kart-io/goagent/tools"
 )
 
 // GeminiProvider implements LLM interface for Google Gemini
@@ -28,7 +28,7 @@ type GeminiProvider struct {
 // NewGemini creates a new Gemini provider
 func NewGemini(config *llm.Config) (*GeminiProvider, error) {
 	if config.APIKey == "" {
-		return nil, fmt.Errorf("Gemini API key is required")
+		return nil, fmt.Errorf("gemini API key is required")
 	}
 
 	ctx := context.Background()
@@ -137,7 +137,7 @@ func (p *GeminiProvider) Complete(ctx context.Context, req *llm.CompletionReques
 	// Send the message
 	resp, err := cs.SendMessage(ctx, genai.Text(lastMessage.Content))
 	if err != nil {
-		return nil, fmt.Errorf("Gemini completion failed: %w", err)
+		return nil, fmt.Errorf("gemini completion failed: %w", err)
 	}
 
 	// Extract content from response
@@ -199,7 +199,7 @@ func (p *GeminiProvider) Stream(ctx context.Context, prompt string) (<-chan stri
 }
 
 // GenerateWithTools implements tool calling
-func (p *GeminiProvider) GenerateWithTools(ctx context.Context, prompt string, tools []tools.Tool) (*ToolCallResponse, error) {
+func (p *GeminiProvider) GenerateWithTools(ctx context.Context, prompt string, tools []interfaces.Tool) (*ToolCallResponse, error) {
 	// Convert tools to Gemini function declarations
 	functionDeclarations := p.convertToolsToFunctions(tools)
 
@@ -225,7 +225,7 @@ func (p *GeminiProvider) GenerateWithTools(ctx context.Context, prompt string, t
 	// Send message
 	resp, err := cs.SendMessage(ctx, genai.Text(prompt))
 	if err != nil {
-		return nil, fmt.Errorf("Gemini tool calling failed: %w", err)
+		return nil, fmt.Errorf("gemini tool calling failed: %w", err)
 	}
 
 	if len(resp.Candidates) == 0 {
@@ -258,7 +258,7 @@ func (p *GeminiProvider) GenerateWithTools(ctx context.Context, prompt string, t
 }
 
 // StreamWithTools implements streaming tool calls
-func (p *GeminiProvider) StreamWithTools(ctx context.Context, prompt string, tools []tools.Tool) (<-chan ToolChunk, error) {
+func (p *GeminiProvider) StreamWithTools(ctx context.Context, prompt string, tools []interfaces.Tool) (<-chan ToolChunk, error) {
 	chunks := make(chan ToolChunk, 100)
 
 	// Convert tools to Gemini function declarations
@@ -369,7 +369,7 @@ func (p *GeminiProvider) MaxTokens() int {
 }
 
 // convertToolsToFunctions converts our tools to Gemini function format
-func (p *GeminiProvider) convertToolsToFunctions(tools []tools.Tool) []*genai.FunctionDeclaration {
+func (p *GeminiProvider) convertToolsToFunctions(tools []interfaces.Tool) []*genai.FunctionDeclaration {
 	functions := make([]*genai.FunctionDeclaration, len(tools))
 
 	for i, tool := range tools {
