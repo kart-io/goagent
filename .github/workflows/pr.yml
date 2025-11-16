@@ -67,9 +67,9 @@ jobs:
           fi
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v7
         with:
-          version: v2.5.0
+          version: v2.6.2
           args: --timeout=5m --new-from-rev=origin/${{ github.base_ref }}
 
       - name: Comment PR with coverage
