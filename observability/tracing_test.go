@@ -249,7 +249,7 @@ func TestSpanLifecycle(t *testing.T) {
 		defer parentSpan.End()
 
 		// Create child span
-		ctx, childSpan := StartToolSpan(ctx, "child-tool")
+		_, childSpan := StartToolSpan(ctx, "child-tool")
 		defer childSpan.End()
 
 		// Add events to both spans
@@ -274,7 +274,7 @@ func TestTracingWithContextPropagation(t *testing.T) {
 	defer span2.End()
 
 	// Another nested span
-	ctx, span3 := StartRemoteAgentSpan(ctx, "service", "agent-2")
+	_, span3 := StartRemoteAgentSpan(ctx, "service", "agent-2")
 	defer span3.End()
 
 	// All should work without errors
