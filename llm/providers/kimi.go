@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
 )
 
@@ -52,7 +53,7 @@ func NewKimiClient(config *KimiConfig) (*KimiClient, error) {
 	}
 
 	if config.APIKey == "" {
-		return nil, fmt.Errorf("kimi API key is required")
+		return nil, agentErrors.NewInvalidConfigError("kimi", "api_key", "kimi API key is required")
 	}
 
 	if config.BaseURL == "" {
@@ -194,12 +195,12 @@ func (c *KimiClient) Complete(ctx context.Context, req *llm.CompletionRequest) (
 	// 发送请求
 	reqBody, err := json.Marshal(kimiReq)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
+		return nil, agentErrors.NewParserInvalidJSONError("request body", err)
 	}
 
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/chat/completions", bytes.NewBuffer(reqBody))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, agentErrors.NewLLMRequestError("kimi", c.getModel(req.Model), err)
 	}
 
 	httpReq.Header.Set("Content-Type", "application/json")
@@ -207,32 +208,36 @@ func (c *KimiClient) Complete(ctx context.Context, req *llm.CompletionRequest) (
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
+		return nil, agentErrors.NewLLMRequestError("kimi", c.getModel(req.Model), err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
+		return nil, agentErrors.NewLLMRequestError("kimi", c.getModel(req.Model), err).
+			WithContext("operation", "read_response")
 	}
 
 	if resp.StatusCode != http.StatusOK {
 		var errResp kimiError
 		if err := json.Unmarshal(body, &errResp); err == nil && errResp.Error.Message != "" {
-			return nil, fmt.Errorf("kimi API error: %s (type: %s, code: %s)",
-				errResp.Error.Message, errResp.Error.Type, errResp.Error.Code)
+			return nil, agentErrors.NewLLMResponseError("kimi", c.getModel(req.Model),
+				fmt.Sprintf("%s (type: %s, code: %s)",
+					errResp.Error.Message, errResp.Error.Type, errResp.Error.Code))
 		}
-		return nil, fmt.Errorf("kimi API error (status %d): %s", resp.StatusCode, string(body))
+		return nil, agentErrors.NewLLMResponseError("kimi", c.getModel(req.Model),
+			fmt.Sprintf("API error (status %d): %s", resp.StatusCode, string(body)))
 	}
 
 	// 解析响应
 	var kimiResp kimiResponse
 	if err := json.Unmarshal(body, &kimiResp); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+		return nil, agentErrors.NewParserInvalidJSONError(string(body), err).
+			WithContext("provider", "kimi")
 	}
 
 	if len(kimiResp.Choices) == 0 {
-		return nil, fmt.Errorf("no choices in response")
+		return nil, agentErrors.NewLLMResponseError("kimi", c.getModel(req.Model), "no choices in response")
 	}
 
 	// 构建响应
@@ -291,20 +296,23 @@ func (c *KimiClient) ListModels() ([]string, error) {
 
 	req, err := http.NewRequestWithContext(ctx, "GET", c.baseURL+"/models", nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, agentErrors.NewLLMRequestError("kimi", c.model, err).
+			WithContext("operation", "list_models")
 	}
 
 	req.Header.Set("Authorization", "Bearer "+c.apiKey)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
+		return nil, agentErrors.NewLLMRequestError("kimi", c.model, err).
+			WithContext("operation", "list_models")
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("failed to list models (status %d): %s", resp.StatusCode, string(body))
+		return nil, agentErrors.NewLLMResponseError("kimi", c.model,
+			fmt.Sprintf("failed to list models (status %d): %s", resp.StatusCode, string(body)))
 	}
 
 	var result struct {
@@ -317,7 +325,8 @@ func (c *KimiClient) ListModels() ([]string, error) {
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+		return nil, agentErrors.NewParserInvalidJSONError("models list response", err).
+			WithContext("provider", "kimi")
 	}
 
 	models := make([]string, len(result.Data))
@@ -414,7 +423,8 @@ func (c *KimiClient) ValidateContextSize(messages []llm.Message) error {
 
 	maxContext := c.GetModelContextSize(c.model)
 	if totalTokens > maxContext {
-		return fmt.Errorf("estimated tokens (%d) exceed model context size (%d)", totalTokens, maxContext)
+		return agentErrors.NewInvalidInputError("kimi", "messages",
+			fmt.Sprintf("estimated tokens (%d) exceed model context size (%d)", totalTokens, maxContext))
 	}
 
 	return nil

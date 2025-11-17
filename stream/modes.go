@@ -2,9 +2,10 @@ package stream
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // StreamMode defines different streaming modes
@@ -132,7 +133,10 @@ func (s *MultiModeStream) Stream(mode StreamMode, event StreamEvent) error {
 	s.mu.RUnlock()
 
 	if !exists {
-		return fmt.Errorf("stream mode %s not configured", mode)
+		return agentErrors.New(agentErrors.CodeInvalidConfig, "stream mode not configured").
+			WithComponent("stream_modes").
+			WithOperation("Stream").
+			WithContext("mode", string(mode))
 	}
 
 	// Add metadata if configured
@@ -151,7 +155,10 @@ func (s *MultiModeStream) Stream(mode StreamMode, event StreamEvent) error {
 		return nil
 	default:
 		// Non-blocking send - drop if buffer is full
-		return fmt.Errorf("stream buffer full for mode %s", mode)
+		return agentErrors.New(agentErrors.CodeStreamWrite, "stream buffer full").
+			WithComponent("stream_modes").
+			WithOperation("Stream").
+			WithContext("mode", string(mode))
 	}
 }
 
@@ -162,7 +169,10 @@ func (s *MultiModeStream) GetWriter(mode StreamMode) (*StreamWriter, error) {
 	s.mu.RUnlock()
 
 	if !exists {
-		return nil, fmt.Errorf("no writer for mode %s", mode)
+		return nil, agentErrors.New(agentErrors.CodeInvalidConfig, "no writer for mode").
+			WithComponent("stream_modes").
+			WithOperation("GetWriter").
+			WithContext("mode", string(mode))
 	}
 
 	return writer, nil
@@ -175,7 +185,10 @@ func (s *MultiModeStream) Subscribe(mode StreamMode) (<-chan StreamEvent, error)
 	s.mu.RUnlock()
 
 	if !exists {
-		return nil, fmt.Errorf("mode %s not configured", mode)
+		return nil, agentErrors.New(agentErrors.CodeInvalidConfig, "mode not configured").
+			WithComponent("stream_modes").
+			WithOperation("Subscribe").
+			WithContext("mode", string(mode))
 	}
 
 	return ch, nil

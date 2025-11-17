@@ -8,6 +8,8 @@ import (
 	"sync"
 	"text/template"
 	"time"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // PromptType defines the type of prompt
@@ -205,13 +207,19 @@ func (m *DefaultPromptManager) CreatePrompt(prompt *Prompt) error {
 	defer m.mu.Unlock()
 
 	if _, exists := m.prompts[prompt.ID]; exists {
-		return fmt.Errorf("prompt %s already exists", prompt.ID)
+		return agentErrors.New(agentErrors.CodeInvalidConfig, "prompt already exists").
+			WithComponent("prompt_manager").
+			WithOperation("CreatePrompt").
+			WithContext("prompt_id", prompt.ID)
 	}
 
 	// Parse and validate template
 	tmpl, err := template.New(prompt.ID).Parse(prompt.Template)
 	if err != nil {
-		return fmt.Errorf("invalid template: %w", err)
+		return agentErrors.Wrap(err, agentErrors.CodeInvalidInput, "invalid template").
+			WithComponent("prompt_manager").
+			WithOperation("CreatePrompt").
+			WithContext("prompt_id", prompt.ID)
 	}
 
 	prompt.CreatedAt = time.Now()
@@ -230,7 +238,10 @@ func (m *DefaultPromptManager) GetPrompt(id string) (*Prompt, error) {
 
 	prompt, exists := m.prompts[id]
 	if !exists {
-		return nil, fmt.Errorf("prompt %s not found", id)
+		return nil, agentErrors.New(agentErrors.CodeAgentNotFound, "prompt not found").
+			WithComponent("prompt_manager").
+			WithOperation("GetPrompt").
+			WithContext("prompt_id", id)
 	}
 
 	return prompt, nil
@@ -242,13 +253,19 @@ func (m *DefaultPromptManager) UpdatePrompt(prompt *Prompt) error {
 	defer m.mu.Unlock()
 
 	if _, exists := m.prompts[prompt.ID]; !exists {
-		return fmt.Errorf("prompt %s not found", prompt.ID)
+		return agentErrors.New(agentErrors.CodeAgentNotFound, "prompt not found").
+			WithComponent("prompt_manager").
+			WithOperation("UpdatePrompt").
+			WithContext("prompt_id", prompt.ID)
 	}
 
 	// Re-parse template
 	tmpl, err := template.New(prompt.ID).Parse(prompt.Template)
 	if err != nil {
-		return fmt.Errorf("invalid template: %w", err)
+		return agentErrors.Wrap(err, agentErrors.CodeInvalidInput, "invalid template").
+			WithComponent("prompt_manager").
+			WithOperation("UpdatePrompt").
+			WithContext("prompt_id", prompt.ID)
 	}
 
 	prompt.UpdatedAt = time.Now()
@@ -264,7 +281,10 @@ func (m *DefaultPromptManager) DeletePrompt(id string) error {
 	defer m.mu.Unlock()
 
 	if _, exists := m.prompts[id]; !exists {
-		return fmt.Errorf("prompt %s not found", id)
+		return agentErrors.New(agentErrors.CodeAgentNotFound, "prompt not found").
+			WithComponent("prompt_manager").
+			WithOperation("DeletePrompt").
+			WithContext("prompt_id", id)
 	}
 
 	delete(m.prompts, id)
@@ -312,11 +332,17 @@ func (m *DefaultPromptManager) ExecutePrompt(ctx context.Context, promptID strin
 	m.mu.RUnlock()
 
 	if !exists {
-		return "", fmt.Errorf("prompt %s not found", promptID)
+		return "", agentErrors.New(agentErrors.CodeAgentNotFound, "prompt not found").
+			WithComponent("prompt_manager").
+			WithOperation("ExecutePrompt").
+			WithContext("prompt_id", promptID)
 	}
 
 	if !hasTemplate {
-		return "", fmt.Errorf("template not found for prompt %s", promptID)
+		return "", agentErrors.New(agentErrors.CodeAgentNotFound, "template not found for prompt").
+			WithComponent("prompt_manager").
+			WithOperation("ExecutePrompt").
+			WithContext("prompt_id", promptID)
 	}
 
 	// Merge default variables with provided ones
@@ -367,7 +393,10 @@ func (m *DefaultPromptManager) ExecutePrompt(ctx context.Context, promptID strin
 	// Execute template with variables
 	var templateOutput strings.Builder
 	if err := tmpl.Execute(&templateOutput, finalVars); err != nil {
-		return "", fmt.Errorf("failed to execute template: %w", err)
+		return "", agentErrors.Wrap(err, agentErrors.CodeInvalidInput, "failed to execute template").
+			WithComponent("prompt_manager").
+			WithOperation("ExecutePrompt").
+			WithContext("prompt_id", promptID)
 	}
 
 	result.WriteString(templateOutput.String())
@@ -386,13 +415,21 @@ func (m *DefaultPromptManager) CreateChain(chain *PromptChain) error {
 	defer m.mu.Unlock()
 
 	if _, exists := m.chains[chain.ID]; exists {
-		return fmt.Errorf("chain %s already exists", chain.ID)
+		return agentErrors.New(agentErrors.CodeInvalidConfig, "chain already exists").
+			WithComponent("prompt_manager").
+			WithOperation("CreateChain").
+			WithContext("chain_id", chain.ID)
 	}
 
 	// Validate that all referenced prompts exist
 	for _, step := range chain.Steps {
 		if _, exists := m.prompts[step.PromptID]; !exists {
-			return fmt.Errorf("prompt %s not found in step %s", step.PromptID, step.ID)
+			return agentErrors.New(agentErrors.CodeAgentNotFound, "prompt not found in step").
+				WithComponent("prompt_manager").
+				WithOperation("CreateChain").
+				WithContext("chain_id", chain.ID).
+				WithContext("step_id", step.ID).
+				WithContext("prompt_id", step.PromptID)
 		}
 	}
 
@@ -409,7 +446,10 @@ func (m *DefaultPromptManager) ExecuteChain(ctx context.Context, chainID string,
 	m.mu.RUnlock()
 
 	if !exists {
-		return nil, fmt.Errorf("chain %s not found", chainID)
+		return nil, agentErrors.New(agentErrors.CodeAgentNotFound, "chain not found").
+			WithComponent("prompt_manager").
+			WithOperation("ExecuteChain").
+			WithContext("chain_id", chainID)
 	}
 
 	results := make(map[string]interface{})
@@ -433,7 +473,12 @@ func (m *DefaultPromptManager) ExecuteChain(ctx context.Context, chainID string,
 		// Execute prompt
 		output, err := m.ExecutePrompt(ctx, step.PromptID, stepInput)
 		if err != nil {
-			return nil, fmt.Errorf("failed to execute step %s: %w", step.ID, err)
+			return nil, agentErrors.Wrap(err, agentErrors.CodeInternal, "failed to execute step").
+				WithComponent("prompt_manager").
+				WithOperation("ExecuteChain").
+				WithContext("chain_id", chainID).
+				WithContext("step_id", step.ID).
+				WithContext("prompt_id", step.PromptID)
 		}
 
 		// Store result
@@ -453,7 +498,10 @@ func (m *DefaultPromptManager) OptimizePrompt(promptID string, feedback []Feedba
 	m.mu.RUnlock()
 
 	if !exists {
-		return nil, fmt.Errorf("prompt %s not found", promptID)
+		return nil, agentErrors.New(agentErrors.CodeAgentNotFound, "prompt not found").
+			WithComponent("prompt_manager").
+			WithOperation("OptimizePrompt").
+			WithContext("prompt_id", promptID)
 	}
 
 	// Use optimizer to improve prompt
@@ -474,7 +522,10 @@ func (m *DefaultPromptManager) TestPrompt(promptID string, testCases []TestCase)
 	m.mu.RUnlock()
 
 	if !exists {
-		return nil, fmt.Errorf("prompt %s not found", promptID)
+		return nil, agentErrors.New(agentErrors.CodeAgentNotFound, "prompt not found").
+			WithComponent("prompt_manager").
+			WithOperation("TestPrompt").
+			WithContext("prompt_id", promptID)
 	}
 
 	startTime := time.Now()

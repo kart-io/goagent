@@ -9,6 +9,7 @@ import (
 	"time"
 
 	agentcore "github.com/kart-io/goagent/core"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 )
@@ -244,7 +245,9 @@ func (t *ToTAgent) beamSearch(ctx context.Context, root *ThoughtNode, input *age
 		return beam[0], nil
 	}
 
-	return nil, fmt.Errorf("no valid paths found")
+	return nil, agentErrors.New(agentErrors.CodeAgentExecution, "no valid paths found").
+		WithComponent("tot_agent").
+		WithOperation("beamSearch")
 }
 
 // depthFirstSearch performs DFS on the thought tree
@@ -339,7 +342,9 @@ func (t *ToTAgent) breadthFirstSearch(ctx context.Context, root *ThoughtNode, in
 		}
 	}
 
-	return nil, fmt.Errorf("no solution found")
+	return nil, agentErrors.New(agentErrors.CodeAgentExecution, "no solution found").
+		WithComponent("tot_agent").
+		WithOperation("breadthFirstSearch")
 }
 
 // monteCarloSearch performs Monte Carlo Tree Search

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/core"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/tools"
 )
@@ -183,7 +184,9 @@ func (s *SupervisorAgent) Run(ctx context.Context, input interface{}) (*core.Age
 	tasks, err := s.parseTasks(ctx, input)
 	if err != nil {
 		s.metrics.IncrementFailedTasks()
-		return nil, fmt.Errorf("failed to parse tasks: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeAgentExecution, "failed to parse tasks").
+			WithComponent("supervisor_agent").
+			WithOperation("Run")
 	}
 
 	// Create execution plan
@@ -336,7 +339,10 @@ func (s *SupervisorAgent) executeTask(ctx context.Context, task Task) TaskResult
 	s.mu.RUnlock()
 
 	if !exists {
-		result.Error = fmt.Errorf("agent %s not found", agentName)
+		result.Error = agentErrors.New(agentErrors.CodeAgentNotFound, "agent not found").
+			WithComponent("supervisor_agent").
+			WithOperation("executeTask").
+			WithContext("agent_name", agentName)
 		result.ErrorString = result.Error.Error()
 		result.EndTime = time.Now()
 		result.Duration = result.EndTime.Sub(startTime)

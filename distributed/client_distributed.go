@@ -10,6 +10,7 @@ import (
 	"time"
 
 	agentcore "github.com/kart-io/goagent/core"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/logger/core"
 )
 
@@ -42,12 +43,19 @@ func (c *Client) ExecuteAgent(ctx context.Context, endpoint, agentName string, i
 
 	body, err := json.Marshal(input)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal input: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeDistributedSerialization, "failed to marshal input").
+			WithComponent("distributed_client").
+			WithOperation("execute_agent").
+			WithContext("agent_name", agentName)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(body))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeDistributedConnection, "failed to create request").
+			WithComponent("distributed_client").
+			WithOperation("execute_agent").
+			WithContext("url", url).
+			WithContext("agent_name", agentName)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -61,7 +69,11 @@ func (c *Client) ExecuteAgent(ctx context.Context, endpoint, agentName string, i
 	// 发送请求
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeDistributedConnection, "failed to send request").
+			WithComponent("distributed_client").
+			WithOperation("execute_agent").
+			WithContext("endpoint", endpoint).
+			WithContext("agent_name", agentName)
 	}
 	defer func() {
 		if closeErr := resp.Body.Close(); closeErr != nil {
@@ -72,18 +84,29 @@ func (c *Client) ExecuteAgent(ctx context.Context, endpoint, agentName string, i
 	// 读取响应
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeDistributedConnection, "failed to read response").
+			WithComponent("distributed_client").
+			WithOperation("execute_agent").
+			WithContext("agent_name", agentName)
 	}
 
 	// 检查状态码
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("agent execution failed with status %d: %s", resp.StatusCode, string(respBody))
+		return nil, agentErrors.New(agentErrors.CodeAgentExecution, "agent execution failed").
+			WithComponent("distributed_client").
+			WithOperation("execute_agent").
+			WithContext("status_code", resp.StatusCode).
+			WithContext("agent_name", agentName).
+			WithContext("response_body", string(respBody))
 	}
 
 	// 解析响应
 	var output agentcore.AgentOutput
 	if err := json.Unmarshal(respBody, &output); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeDistributedSerialization, "failed to unmarshal response").
+			WithComponent("distributed_client").
+			WithOperation("execute_agent").
+			WithContext("agent_name", agentName)
 	}
 
 	return &output, nil
@@ -96,12 +119,19 @@ func (c *Client) ExecuteAgentAsync(ctx context.Context, endpoint, agentName stri
 
 	body, err := json.Marshal(input)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal input: %w", err)
+		return "", agentErrors.Wrap(err, agentErrors.CodeDistributedSerialization, "failed to marshal input").
+			WithComponent("distributed_client").
+			WithOperation("execute_agent_async").
+			WithContext("agent_name", agentName)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(body))
 	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
+		return "", agentErrors.Wrap(err, agentErrors.CodeDistributedConnection, "failed to create request").
+			WithComponent("distributed_client").
+			WithOperation("execute_agent_async").
+			WithContext("url", url).
+			WithContext("agent_name", agentName)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -110,7 +140,11 @@ func (c *Client) ExecuteAgentAsync(ctx context.Context, endpoint, agentName stri
 	// 发送请求
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("failed to send request: %w", err)
+		return "", agentErrors.Wrap(err, agentErrors.CodeDistributedConnection, "failed to send request").
+			WithComponent("distributed_client").
+			WithOperation("execute_agent_async").
+			WithContext("endpoint", endpoint).
+			WithContext("agent_name", agentName)
 	}
 	defer func() {
 		if closeErr := resp.Body.Close(); closeErr != nil {
@@ -121,12 +155,20 @@ func (c *Client) ExecuteAgentAsync(ctx context.Context, endpoint, agentName stri
 	// 读取响应
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("failed to read response: %w", err)
+		return "", agentErrors.Wrap(err, agentErrors.CodeDistributedConnection, "failed to read response").
+			WithComponent("distributed_client").
+			WithOperation("execute_agent_async").
+			WithContext("agent_name", agentName)
 	}
 
 	// 检查状态码
 	if resp.StatusCode != http.StatusAccepted {
-		return "", fmt.Errorf("async execution failed with status %d: %s", resp.StatusCode, string(respBody))
+		return "", agentErrors.New(agentErrors.CodeAgentExecution, "async execution failed").
+			WithComponent("distributed_client").
+			WithOperation("execute_agent_async").
+			WithContext("status_code", resp.StatusCode).
+			WithContext("agent_name", agentName).
+			WithContext("response_body", string(respBody))
 	}
 
 	// 解析响应获取任务 ID
@@ -134,7 +176,10 @@ func (c *Client) ExecuteAgentAsync(ctx context.Context, endpoint, agentName stri
 		TaskID string `json:"task_id"`
 	}
 	if err := json.Unmarshal(respBody, &result); err != nil {
-		return "", fmt.Errorf("failed to unmarshal response: %w", err)
+		return "", agentErrors.Wrap(err, agentErrors.CodeDistributedSerialization, "failed to unmarshal response").
+			WithComponent("distributed_client").
+			WithOperation("execute_agent_async").
+			WithContext("agent_name", agentName)
 	}
 
 	return result.TaskID, nil
@@ -147,7 +192,11 @@ func (c *Client) GetAsyncResult(ctx context.Context, endpoint, taskID string) (*
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
-		return nil, false, fmt.Errorf("failed to create request: %w", err)
+		return nil, false, agentErrors.Wrap(err, agentErrors.CodeDistributedConnection, "failed to create request").
+			WithComponent("distributed_client").
+			WithOperation("get_async_result").
+			WithContext("url", url).
+			WithContext("task_id", taskID)
 	}
 
 	req.Header.Set("Accept", "application/json")
@@ -155,7 +204,11 @@ func (c *Client) GetAsyncResult(ctx context.Context, endpoint, taskID string) (*
 	// 发送请求
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, false, fmt.Errorf("failed to send request: %w", err)
+		return nil, false, agentErrors.Wrap(err, agentErrors.CodeDistributedConnection, "failed to send request").
+			WithComponent("distributed_client").
+			WithOperation("get_async_result").
+			WithContext("endpoint", endpoint).
+			WithContext("task_id", taskID)
 	}
 	defer func() {
 		if closeErr := resp.Body.Close(); closeErr != nil {
@@ -166,7 +219,10 @@ func (c *Client) GetAsyncResult(ctx context.Context, endpoint, taskID string) (*
 	// 读取响应
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, false, fmt.Errorf("failed to read response: %w", err)
+		return nil, false, agentErrors.Wrap(err, agentErrors.CodeDistributedConnection, "failed to read response").
+			WithComponent("distributed_client").
+			WithOperation("get_async_result").
+			WithContext("task_id", taskID)
 	}
 
 	// 检查状态码
@@ -176,13 +232,21 @@ func (c *Client) GetAsyncResult(ctx context.Context, endpoint, taskID string) (*
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, false, fmt.Errorf("failed to get result with status %d: %s", resp.StatusCode, string(respBody))
+		return nil, false, agentErrors.New(agentErrors.CodeAgentExecution, "failed to get result").
+			WithComponent("distributed_client").
+			WithOperation("get_async_result").
+			WithContext("status_code", resp.StatusCode).
+			WithContext("task_id", taskID).
+			WithContext("response_body", string(respBody))
 	}
 
 	// 解析响应
 	var output agentcore.AgentOutput
 	if err := json.Unmarshal(respBody, &output); err != nil {
-		return nil, false, fmt.Errorf("failed to unmarshal response: %w", err)
+		return nil, false, agentErrors.Wrap(err, agentErrors.CodeDistributedSerialization, "failed to unmarshal response").
+			WithComponent("distributed_client").
+			WithOperation("get_async_result").
+			WithContext("task_id", taskID)
 	}
 
 	return &output, true, nil
@@ -218,12 +282,18 @@ func (c *Client) Ping(ctx context.Context, endpoint string) error {
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
+		return agentErrors.Wrap(err, agentErrors.CodeDistributedConnection, "failed to create request").
+			WithComponent("distributed_client").
+			WithOperation("ping").
+			WithContext("url", url)
 	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to send request: %w", err)
+		return agentErrors.Wrap(err, agentErrors.CodeDistributedConnection, "failed to send request").
+			WithComponent("distributed_client").
+			WithOperation("ping").
+			WithContext("endpoint", endpoint)
 	}
 	defer func() {
 		if closeErr := resp.Body.Close(); closeErr != nil {
@@ -232,7 +302,11 @@ func (c *Client) Ping(ctx context.Context, endpoint string) error {
 	}()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("health check failed with status %d", resp.StatusCode)
+		return agentErrors.New(agentErrors.CodeDistributedHeartbeat, "health check failed").
+			WithComponent("distributed_client").
+			WithOperation("ping").
+			WithContext("status_code", resp.StatusCode).
+			WithContext("endpoint", endpoint)
 	}
 
 	return nil
@@ -244,14 +318,20 @@ func (c *Client) ListAgents(ctx context.Context, endpoint string) ([]string, err
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeDistributedConnection, "failed to create request").
+			WithComponent("distributed_client").
+			WithOperation("list_agents").
+			WithContext("url", url)
 	}
 
 	req.Header.Set("Accept", "application/json")
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeDistributedConnection, "failed to send request").
+			WithComponent("distributed_client").
+			WithOperation("list_agents").
+			WithContext("endpoint", endpoint)
 	}
 	defer func() {
 		if closeErr := resp.Body.Close(); closeErr != nil {
@@ -260,19 +340,27 @@ func (c *Client) ListAgents(ctx context.Context, endpoint string) ([]string, err
 	}()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to list agents with status %d", resp.StatusCode)
+		return nil, agentErrors.New(agentErrors.CodeAgentExecution, "failed to list agents").
+			WithComponent("distributed_client").
+			WithOperation("list_agents").
+			WithContext("status_code", resp.StatusCode).
+			WithContext("endpoint", endpoint)
 	}
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeDistributedConnection, "failed to read response").
+			WithComponent("distributed_client").
+			WithOperation("list_agents")
 	}
 
 	var result struct {
 		Agents []string `json:"agents"`
 	}
 	if err := json.Unmarshal(respBody, &result); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeDistributedSerialization, "failed to unmarshal response").
+			WithComponent("distributed_client").
+			WithOperation("list_agents")
 	}
 
 	return result.Agents, nil

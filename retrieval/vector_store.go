@@ -3,11 +3,11 @@ package retrieval
 import (
 	"context"
 	cryptorand "crypto/rand"
-	"fmt"
 	"math"
 	"math/big"
 	"sync"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 )
 
@@ -83,11 +83,18 @@ func (v *VectorStoreRetriever) GetRelevantDocuments(ctx context.Context, query s
 		// MMR 需要额外参数，这里简化为相似度搜索
 		docs, err = v.VectorStore.SimilaritySearch(ctx, query, v.TopK)
 	default:
-		return nil, fmt.Errorf("unknown search type: %s", v.SearchType)
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "unknown search type").
+			WithComponent("vector_store_retriever").
+			WithOperation("get_relevant_documents").
+			WithContext("search_type", string(v.SearchType))
 	}
 
 	if err != nil {
-		return nil, fmt.Errorf("vector store search failed: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeRetrievalSearch, "vector store search failed").
+			WithComponent("vector_store_retriever").
+			WithOperation("get_relevant_documents").
+			WithContext("query", query).
+			WithContext("topK", v.TopK)
 	}
 
 	return docs, nil

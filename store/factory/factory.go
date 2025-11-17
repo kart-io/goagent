@@ -1,8 +1,7 @@
 package factory
 
 import (
-	"fmt"
-
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/store"
 	"github.com/kart-io/goagent/store/memory"
 	"github.com/kart-io/goagent/store/postgres"
@@ -36,7 +35,7 @@ type Config struct {
 // NewStore creates a new store based on the configuration
 func NewStore(config *Config) (store.Store, error) {
 	if config == nil {
-		return nil, fmt.Errorf("config cannot be nil")
+		return nil, agentErrors.NewInvalidConfigError("store_factory", "config", "config cannot be nil")
 	}
 
 	switch config.Type {
@@ -56,7 +55,8 @@ func NewStore(config *Config) (store.Store, error) {
 		return redis.New(config.RedisConfig)
 
 	default:
-		return nil, fmt.Errorf("unknown store type: %s", config.Type)
+		return nil, agentErrors.NewInvalidConfigError("store_factory", "type", "unknown store type").
+			WithContext("store_type", string(config.Type))
 	}
 }
 

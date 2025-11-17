@@ -12,6 +12,7 @@ import (
 	"time"
 
 	agentcore "github.com/kart-io/goagent/core"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/tools"
 )
@@ -140,12 +141,17 @@ func (t *APICallerTool) ArgsSchema() string {
 func (t *APICallerTool) Execute(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 	params, err := t.parseAPIInput(input.Args)
 	if err != nil {
-		return nil, fmt.Errorf("invalid input: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeInvalidInput, "invalid input").
+			WithComponent("api_caller_tool").
+			WithOperation("execute")
 	}
 
 	// Check rate limit
 	if !t.rateLimiter.Allow() {
-		return nil, fmt.Errorf("rate limit exceeded")
+		return nil, agentErrors.New(agentErrors.CodeToolExecution, "rate limit exceeded").
+			WithComponent("api_caller_tool").
+			WithOperation("execute").
+			WithContext("url", params.URL)
 	}
 
 	// Check cache for GET requests
@@ -277,7 +283,10 @@ func (t *APICallerTool) executeRequest(ctx context.Context, params *apiParams) (
 		case map[string]interface{}:
 			data, err := json.Marshal(v)
 			if err != nil {
-				return nil, fmt.Errorf("failed to marshal body: %w", err)
+				return nil, agentErrors.Wrap(err, agentErrors.CodeToolExecution, "failed to marshal body").
+					WithComponent("api_caller_tool").
+					WithOperation("executeRequest").
+					WithContext("url", params.URL)
 			}
 			bodyReader = bytes.NewReader(data)
 		}
@@ -286,7 +295,11 @@ func (t *APICallerTool) executeRequest(ctx context.Context, params *apiParams) (
 	// Create request
 	req, err := http.NewRequestWithContext(ctx, params.Method, fullURL, bodyReader)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeToolExecution, "failed to create request").
+			WithComponent("api_caller_tool").
+			WithOperation("executeRequest").
+			WithContext("url", fullURL).
+			WithContext("method", params.Method)
 	}
 
 	// Set headers
@@ -299,7 +312,11 @@ func (t *APICallerTool) executeRequest(ctx context.Context, params *apiParams) (
 
 	// Set authentication
 	if err := t.setAuthentication(req, params.Auth); err != nil {
-		return nil, fmt.Errorf("authentication error: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeToolExecution, "authentication error").
+			WithComponent("api_caller_tool").
+			WithOperation("executeRequest").
+			WithContext("url", params.URL).
+			WithContext("auth_type", params.Auth.Type)
 	}
 
 	// Set content type for JSON body
@@ -333,7 +350,11 @@ func (t *APICallerTool) executeRequest(ctx context.Context, params *apiParams) (
 	// Read response body
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeToolExecution, "failed to read response").
+			WithComponent("api_caller_tool").
+			WithOperation("executeRequest").
+			WithContext("url", params.URL).
+			WithContext("status_code", resp.StatusCode)
 	}
 
 	// Parse response
@@ -354,7 +375,13 @@ func (t *APICallerTool) executeRequest(ctx context.Context, params *apiParams) (
 
 	// Check for HTTP errors
 	if resp.StatusCode >= 400 {
-		return result, fmt.Errorf("HTTP %d: %s", resp.StatusCode, resp.Status)
+		return result, agentErrors.New(agentErrors.CodeToolExecution, "HTTP request failed").
+			WithComponent("api_caller_tool").
+			WithOperation("executeRequest").
+			WithContext("url", params.URL).
+			WithContext("method", params.Method).
+			WithContext("status_code", resp.StatusCode).
+			WithContext("status", resp.Status)
 	}
 
 	return result, nil
@@ -370,7 +397,9 @@ func (t *APICallerTool) setAuthentication(req *http.Request, auth *authConfig) e
 	case "bearer":
 		token, ok := auth.Credentials["token"].(string)
 		if !ok {
-			return fmt.Errorf("bearer auth requires 'token' credential")
+			return agentErrors.New(agentErrors.CodeInvalidInput, "bearer auth requires 'token' credential").
+				WithComponent("api_caller_tool").
+				WithOperation("setAuthentication")
 		}
 		req.Header.Set("Authorization", "Bearer "+token)
 
@@ -382,7 +411,9 @@ func (t *APICallerTool) setAuthentication(req *http.Request, auth *authConfig) e
 	case "api_key":
 		key, ok := auth.Credentials["key"].(string)
 		if !ok {
-			return fmt.Errorf("api_key auth requires 'key' credential")
+			return agentErrors.New(agentErrors.CodeInvalidInput, "api_key auth requires 'key' credential").
+				WithComponent("api_caller_tool").
+				WithOperation("setAuthentication")
 		}
 		location, _ := auth.Credentials["location"].(string)
 		name, _ := auth.Credentials["name"].(string)
@@ -405,12 +436,17 @@ func (t *APICallerTool) setAuthentication(req *http.Request, auth *authConfig) e
 	case "oauth2":
 		token, ok := auth.Credentials["access_token"].(string)
 		if !ok {
-			return fmt.Errorf("oauth2 auth requires 'access_token' credential")
+			return agentErrors.New(agentErrors.CodeInvalidInput, "oauth2 auth requires 'access_token' credential").
+				WithComponent("api_caller_tool").
+				WithOperation("setAuthentication")
 		}
 		req.Header.Set("Authorization", "Bearer "+token)
 
 	default:
-		return fmt.Errorf("unsupported auth type: %s", auth.Type)
+		return agentErrors.New(agentErrors.CodeInvalidInput, "unsupported auth type").
+			WithComponent("api_caller_tool").
+			WithOperation("setAuthentication").
+			WithContext("auth_type", auth.Type)
 	}
 
 	return nil
@@ -501,7 +537,10 @@ func (t *APICallerTool) parseAPIInput(input interface{}) (*apiParams, error) {
 			return nil, err
 		}
 	default:
-		return nil, fmt.Errorf("unsupported input type: %T", input)
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "unsupported input type").
+			WithComponent("api_caller_tool").
+			WithOperation("parseAPIInput").
+			WithContext("input_type", v)
 	}
 
 	// Set defaults
@@ -677,7 +716,9 @@ func (t *APICallerRuntimeTool) ExecuteWithRuntime(ctx context.Context, input *in
 			"status": "calling_api",
 			"tool":   t.Name(),
 		}); err != nil {
-			return nil, fmt.Errorf("failed to stream status: %w", err)
+			return nil, agentErrors.Wrap(err, agentErrors.CodeToolExecution, "failed to stream status").
+				WithComponent("api_caller_tool").
+				WithOperation("executeWithRuntime")
 		}
 	}
 
@@ -701,7 +742,10 @@ func (t *APICallerRuntimeTool) ExecuteWithRuntime(ctx context.Context, input *in
 		if params != nil {
 			// Store last successful response
 			if err := runtime.PutToStore([]string{"api_responses"}, params.URL, result); err != nil {
-				return nil, fmt.Errorf("failed to put to store: %w", err)
+				return nil, agentErrors.Wrap(err, agentErrors.CodeToolExecution, "failed to put to store").
+					WithComponent("api_caller_tool").
+					WithOperation("executeWithRuntime").
+					WithContext("url", params.URL)
 			}
 		}
 	}
@@ -713,7 +757,9 @@ func (t *APICallerRuntimeTool) ExecuteWithRuntime(ctx context.Context, input *in
 			"tool":   t.Name(),
 			"error":  err,
 		}); err != nil {
-			return nil, fmt.Errorf("failed to stream completion: %w", err)
+			return nil, agentErrors.Wrap(err, agentErrors.CodeToolExecution, "failed to stream completion").
+				WithComponent("api_caller_tool").
+				WithOperation("executeWithRuntime")
 		}
 	}
 

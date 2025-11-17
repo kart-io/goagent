@@ -2,13 +2,13 @@ package toolbox
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/mcp/core"
 )
 
@@ -56,7 +56,10 @@ func NewStandardToolBox() *StandardToolBox {
 func (tb *StandardToolBox) Register(tool core.Tool) error {
 	// 验证工具 Schema
 	if err := tb.validator.ValidateSchema(tool.Schema()); err != nil {
-		return fmt.Errorf("invalid tool schema: %w", err)
+		return agentErrors.Wrap(err, agentErrors.CodeToolValidation, "invalid tool schema").
+			WithComponent("standard_toolbox").
+			WithOperation("register").
+			WithContext("tool_name", tool.Name())
 	}
 
 	// 注册到注册表
@@ -214,7 +217,10 @@ func (tb *StandardToolBox) ExecuteBatch(ctx context.Context, calls []*core.ToolC
 	// 检查错误
 	for _, err := range errors {
 		if err != nil {
-			return results, fmt.Errorf("batch execution had errors: %w", err)
+			return results, agentErrors.Wrap(err, agentErrors.CodeAgentExecution, "batch execution had errors").
+				WithComponent("standard_toolbox").
+				WithOperation("execute_batch").
+				WithContext("total_calls", len(calls))
 		}
 	}
 

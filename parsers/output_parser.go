@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 var (
@@ -67,7 +69,9 @@ func (p *BaseOutputParser[T]) ParseWithPrompt(ctx context.Context, text, prompt 
 // Parse 需要由子类实现
 func (p *BaseOutputParser[T]) Parse(ctx context.Context, text string) (T, error) {
 	var zero T
-	return zero, fmt.Errorf("Parse method must be implemented")
+	return zero, agentErrors.New(agentErrors.CodeNotImplemented, "Parse method must be implemented").
+		WithComponent("base_output_parser").
+		WithOperation("parse")
 }
 
 // GetFormatInstructions 需要由子类实现
@@ -98,12 +102,18 @@ func (p *JSONOutputParser[T]) Parse(ctx context.Context, text string) (T, error)
 	// 提取 JSON（支持 markdown 代码块）
 	jsonStr := p.extractJSON(text)
 	if jsonStr == "" {
-		return result, fmt.Errorf("%w: no JSON found in output", ErrParseFailed)
+		return result, agentErrors.Wrap(ErrParseFailed, agentErrors.CodeParserInvalidJSON, "no JSON found in output").
+			WithComponent("json_parser").
+			WithOperation("parse").
+			WithContext("text_length", len(text))
 	}
 
 	// 解析 JSON
 	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
-		return result, fmt.Errorf("%w: %w", ErrParseFailed, err)
+		return result, agentErrors.Wrap(err, agentErrors.CodeParserInvalidJSON, "failed to unmarshal JSON").
+			WithComponent("json_parser").
+			WithOperation("parse").
+			WithContext("json_snippet", jsonStr[:min(100, len(jsonStr))])
 	}
 
 	return result, nil
@@ -249,18 +259,28 @@ func (p *StructuredOutputParser[T]) Parse(ctx context.Context, text string) (T, 
 	// 检查必需字段
 	for fieldName, schema := range p.schema {
 		if schema.Required && fields[fieldName] == "" {
-			return result, fmt.Errorf("%w: %s", ErrMissingField, fieldName)
+			return result, agentErrors.Wrap(ErrMissingField, agentErrors.CodeParserMissingField, "required field not found").
+				WithComponent("structured_parser").
+				WithOperation("parse").
+				WithContext("field", fieldName).
+				WithContext("field_type", schema.Type)
 		}
 	}
 
 	// 构造 JSON 并解析
 	jsonData, err := json.Marshal(fields)
 	if err != nil {
-		return result, fmt.Errorf("%w: %w", ErrParseFailed, err)
+		return result, agentErrors.Wrap(err, agentErrors.CodeParserFailed, "failed to marshal fields to JSON").
+			WithComponent("structured_parser").
+			WithOperation("parse").
+			WithContext("fields_count", len(fields))
 	}
 
 	if err := json.Unmarshal(jsonData, &result); err != nil {
-		return result, fmt.Errorf("%w: %w", ErrParseFailed, err)
+		return result, agentErrors.Wrap(err, agentErrors.CodeParserFailed, "failed to unmarshal to result type").
+			WithComponent("structured_parser").
+			WithOperation("parse").
+			WithContext("fields_count", len(fields))
 	}
 
 	return result, nil
@@ -405,7 +425,11 @@ func (p *EnumOutputParser) Parse(ctx context.Context, text string) (string, erro
 		}
 	}
 
-	return "", fmt.Errorf("%w: '%s' is not one of %v", ErrInvalidFormat, text, p.allowedValues)
+	return "", agentErrors.Wrap(ErrInvalidFormat, agentErrors.CodeParserFailed, "value is not in allowed enum values").
+		WithComponent("enum_parser").
+		WithOperation("parse").
+		WithContext("value", text).
+		WithContext("allowed_values", p.allowedValues)
 }
 
 // GetFormatInstructions 获取格式化指令
@@ -448,7 +472,12 @@ func (p *BooleanOutputParser) Parse(ctx context.Context, text string) (bool, err
 		}
 	}
 
-	return false, fmt.Errorf("%w: cannot determine boolean value from '%s'", ErrParseFailed, text)
+	return false, agentErrors.Wrap(ErrParseFailed, agentErrors.CodeParserFailed, "cannot determine boolean value from text").
+		WithComponent("boolean_parser").
+		WithOperation("parse").
+		WithContext("text", text).
+		WithContext("true_values", p.trueValues).
+		WithContext("false_values", p.falseValues)
 }
 
 // GetFormatInstructions 获取格式化指令
@@ -514,7 +543,10 @@ func (p *ChainOutputParser[T]) Parse(ctx context.Context, text string) (T, error
 	}
 
 	var zero T
-	return zero, fmt.Errorf("%w: all parsers failed, last error: %w", ErrParseFailed, lastErr)
+	return zero, agentErrors.Wrap(lastErr, agentErrors.CodeParserFailed, "all parsers in chain failed").
+		WithComponent("chain_parser").
+		WithOperation("parse").
+		WithContext("parsers_count", len(p.parsers))
 }
 
 // ParseWithPrompt 带提示的解析
@@ -529,7 +561,11 @@ func (p *ChainOutputParser[T]) ParseWithPrompt(ctx context.Context, text, prompt
 	}
 
 	var zero T
-	return zero, fmt.Errorf("%w: all parsers failed, last error: %w", ErrParseFailed, lastErr)
+	return zero, agentErrors.Wrap(lastErr, agentErrors.CodeParserFailed, "all parsers in chain failed with prompt").
+		WithComponent("chain_parser").
+		WithOperation("parse_with_prompt").
+		WithContext("parsers_count", len(p.parsers)).
+		WithContext("prompt_length", len(prompt))
 }
 
 // GetFormatInstructions 获取格式化指令
@@ -546,4 +582,12 @@ func (p *ChainOutputParser[T]) GetType() string {
 		return p.parsers[0].GetType()
 	}
 	return "unknown"
+}
+
+// min returns the minimum of two integers
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

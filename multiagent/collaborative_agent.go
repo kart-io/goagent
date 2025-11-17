@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/core"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // BaseCollaborativeAgent provides a base implementation of CollaborativeAgent
@@ -58,7 +59,10 @@ func (a *BaseCollaborativeAgent) ReceiveMessage(ctx context.Context, message Mes
 	case <-ctx.Done():
 		return ctx.Err()
 	case <-time.After(5 * time.Second):
-		return fmt.Errorf("timeout receiving message")
+		return agentErrors.New(agentErrors.CodeMultiAgentMessage, "timeout receiving message").
+			WithComponent("collaborative_agent").
+			WithOperation("receive_message").
+			WithContext("agent_id", a.Name())
 	}
 }
 
@@ -67,7 +71,10 @@ func (a *BaseCollaborativeAgent) SendMessage(ctx context.Context, message Messag
 	if a.system != nil {
 		return a.system.SendMessage(message)
 	}
-	return fmt.Errorf("agent not connected to system")
+	return agentErrors.New(agentErrors.CodeInvalidConfig, "agent not connected to system").
+		WithComponent("collaborative_agent").
+		WithOperation("send_message").
+		WithContext("agent_id", a.Name())
 }
 
 // Collaborate participates in a collaborative task
@@ -100,7 +107,10 @@ func (a *BaseCollaborativeAgent) Vote(ctx context.Context, proposal interface{})
 	// Randomly vote yes or no for demonstration - using crypto/rand for security
 	n, err := cryptorand.Int(cryptorand.Reader, big.NewInt(1000))
 	if err != nil {
-		return false, fmt.Errorf("failed to generate random vote: %w", err)
+		return false, agentErrors.Wrap(err, agentErrors.CodeInternal, "failed to generate random vote").
+			WithComponent("collaborative_agent").
+			WithOperation("vote").
+			WithContext("agent_id", a.Name())
 	}
 	return float64(n.Int64())/1000.0 > 0.3, nil
 }
@@ -346,7 +356,12 @@ func (a *NegotiatingAgent) Negotiate(ctx context.Context, proposal interface{}, 
 			}
 
 			if err := a.SendMessage(ctx, message); err != nil {
-				return nil, fmt.Errorf("failed to send negotiation: %w", err)
+				return nil, agentErrors.Wrap(err, agentErrors.CodeMultiAgentMessage, "failed to send negotiation").
+					WithComponent("negotiating_agent").
+					WithOperation("negotiate").
+					WithContext("agent_id", a.Name()).
+					WithContext("round", round).
+					WithContext("partner", partner)
 			}
 		}
 
@@ -366,7 +381,11 @@ func (a *NegotiatingAgent) Negotiate(ctx context.Context, proposal interface{}, 
 		a.negotiationHistory = append(a.negotiationHistory, negotiationRound)
 	}
 
-	return nil, fmt.Errorf("negotiation failed after %d rounds", maxRounds)
+	return nil, agentErrors.Newf(agentErrors.CodeMultiAgentConsensus, "negotiation failed after %d rounds", maxRounds).
+		WithComponent("negotiating_agent").
+		WithOperation("negotiate").
+		WithContext("agent_id", a.Name()).
+		WithContext("max_rounds", maxRounds)
 }
 
 func (a *NegotiatingAgent) collectResponses(ctx context.Context, partners []string, timeout time.Duration) map[string]interface{} {

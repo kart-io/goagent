@@ -2,9 +2,10 @@ package retrieval
 
 import (
 	"context"
-	"fmt"
 	"math"
 	"sort"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // Reranker 重排序器接口
@@ -428,7 +429,10 @@ func (r *RerankingRetriever) GetRelevantDocuments(ctx context.Context, query str
 	// 1. 使用基础检索器获取候选文档
 	docs, err := r.Retriever.GetRelevantDocuments(ctx, query)
 	if err != nil {
-		return nil, fmt.Errorf("base retrieval failed: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeRetrievalSearch, "base retrieval failed").
+			WithComponent("reranking_retriever").
+			WithOperation("get_relevant_documents").
+			WithContext("query", query)
 	}
 
 	if len(docs) == 0 {
@@ -438,7 +442,11 @@ func (r *RerankingRetriever) GetRelevantDocuments(ctx context.Context, query str
 	// 2. 应用重排序
 	reranked, err := r.Reranker.Rerank(ctx, query, docs)
 	if err != nil {
-		return nil, fmt.Errorf("reranking failed: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeInternal, "reranking failed").
+			WithComponent("reranking_retriever").
+			WithOperation("get_relevant_documents").
+			WithContext("query", query).
+			WithContext("num_docs", len(docs))
 	}
 
 	// 3. 应用 top-k 限制

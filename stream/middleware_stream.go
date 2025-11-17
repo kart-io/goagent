@@ -7,6 +7,7 @@ import (
 
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/execution"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // BufferMiddleware 缓冲中间件
@@ -43,7 +44,9 @@ func (m *BufferMiddleware) Apply(ctx context.Context, source execution.StreamOut
 
 		reader, ok := source.(*Reader)
 		if !ok {
-			if err := writer.WriteError(fmt.Errorf("source is not a Reader")); err != nil {
+			if err := writer.WriteError(agentErrors.New(agentErrors.CodeInternal, "source is not a Reader").
+				WithComponent("stream_middleware").
+				WithOperation("BufferMiddleware")); err != nil {
 				fmt.Printf("failed to write error: %v", err)
 			}
 			return
@@ -180,7 +183,9 @@ func (m *TransformMiddleware) Apply(ctx context.Context, source execution.Stream
 			// 应用转换
 			transformed, err := m.transformFunc(chunk)
 			if err != nil {
-				_ = writer.WriteError(fmt.Errorf("transform error: %w", err))
+				_ = writer.WriteError(agentErrors.Wrap(err, agentErrors.CodeStreamWrite, "transform error").
+					WithComponent("stream_middleware").
+					WithOperation("TransformMiddleware"))
 				return
 			}
 
@@ -221,7 +226,9 @@ func (m *TeeMiddleware) Apply(ctx context.Context, source execution.StreamOutput
 	// 添加所有输出消费者
 	for _, output := range m.outputs {
 		if _, err := multiplexer.AddConsumer(output); err != nil {
-			return nil, fmt.Errorf("failed to add consumer: %w", err)
+			return nil, agentErrors.Wrap(err, agentErrors.CodeStreamWrite, "failed to add consumer").
+				WithComponent("stream_middleware").
+				WithOperation("TeeMiddleware")
 		}
 	}
 

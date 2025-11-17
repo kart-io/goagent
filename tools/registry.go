@@ -1,8 +1,9 @@
 package tools
 
 import (
-	"fmt"
 	"sync"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // Registry manages tool registration and lookup
@@ -25,7 +26,10 @@ func (r *Registry) Register(tool Tool) error {
 
 	name := tool.Name()
 	if _, exists := r.tools[name]; exists {
-		return fmt.Errorf("tool %s already registered", name)
+		return agentErrors.New(agentErrors.CodeToolValidation, "tool already registered").
+			WithComponent("registry").
+			WithOperation("register").
+			WithContext("tool_name", name)
 	}
 
 	r.tools[name] = tool

@@ -2,9 +2,10 @@ package retrieval
 
 import (
 	"context"
-	"fmt"
 	"sort"
 	"sync"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // MemoryVectorStore 内存向量存储实现
@@ -91,13 +92,20 @@ func (m *MemoryVectorStore) Add(ctx context.Context, docs []*Document, vectors [
 
 		generatedVectors, err := m.embedder.Embed(ctx, texts)
 		if err != nil {
-			return fmt.Errorf("failed to generate vectors: %w", err)
+			return agentErrors.Wrap(err, agentErrors.CodeRetrievalEmbedding, "failed to generate vectors").
+				WithComponent("memory_store").
+				WithOperation("add_documents").
+				WithContext("num_docs", len(docs))
 		}
 		vectors = generatedVectors
 	}
 
 	if len(docs) != len(vectors) {
-		return fmt.Errorf("documents and vectors count mismatch: %d != %d", len(docs), len(vectors))
+		return agentErrors.New(agentErrors.CodeVectorDimMismatch, "documents and vectors count mismatch").
+			WithComponent("memory_store").
+			WithOperation("add_documents").
+			WithContext("num_docs", len(docs)).
+			WithContext("num_vectors", len(vectors))
 	}
 
 	// 存储文档和向量
@@ -126,7 +134,10 @@ func (m *MemoryVectorStore) Search(ctx context.Context, query string, topK int) 
 	// 生成查询向量
 	queryVector, err := m.embedder.EmbedQuery(ctx, query)
 	if err != nil {
-		return nil, fmt.Errorf("failed to embed query: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeRetrievalEmbedding, "failed to embed query").
+			WithComponent("memory_store").
+			WithOperation("search").
+			WithContext("query", query)
 	}
 
 	return m.SearchByVector(ctx, queryVector, topK)
@@ -217,18 +228,26 @@ func (m *MemoryVectorStore) Update(ctx context.Context, docs []*Document) error 
 
 	for _, doc := range docs {
 		if doc.ID == "" {
-			return fmt.Errorf("document ID is required for update")
+			return agentErrors.New(agentErrors.CodeInvalidInput, "document ID is required for update").
+				WithComponent("memory_store").
+				WithOperation("update_documents")
 		}
 
 		// 检查文档是否存在
 		if _, exists := m.documents[doc.ID]; !exists {
-			return fmt.Errorf("document with ID %s not found", doc.ID)
+			return agentErrors.New(agentErrors.CodeDocumentNotFound, "document not found").
+				WithComponent("memory_store").
+				WithOperation("update_documents").
+				WithContext("document_id", doc.ID)
 		}
 
 		// 重新生成向量
 		vector, err := m.embedder.EmbedQuery(ctx, doc.PageContent)
 		if err != nil {
-			return fmt.Errorf("failed to generate vector for document %s: %w", doc.ID, err)
+			return agentErrors.Wrap(err, agentErrors.CodeRetrievalEmbedding, "failed to generate vector for document").
+				WithComponent("memory_store").
+				WithOperation("update_documents").
+				WithContext("document_id", doc.ID)
 		}
 
 		// 更新文档和向量
@@ -249,7 +268,10 @@ func (m *MemoryVectorStore) Get(ctx context.Context, id string) (*Document, erro
 
 	docWithVec, exists := m.documents[id]
 	if !exists {
-		return nil, fmt.Errorf("document with ID %s not found", id)
+		return nil, agentErrors.New(agentErrors.CodeDocumentNotFound, "document not found").
+			WithComponent("memory_store").
+			WithOperation("get_document").
+			WithContext("document_id", id)
 	}
 
 	return docWithVec.Document.Clone(), nil
@@ -262,7 +284,10 @@ func (m *MemoryVectorStore) GetVector(ctx context.Context, id string) ([]float32
 
 	vector, exists := m.vectors[id]
 	if !exists {
-		return nil, fmt.Errorf("vector for document ID %s not found", id)
+		return nil, agentErrors.New(agentErrors.CodeDocumentNotFound, "vector for document not found").
+			WithComponent("memory_store").
+			WithOperation("get_vector").
+			WithContext("document_id", id)
 	}
 
 	// 返回副本

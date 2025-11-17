@@ -11,6 +11,7 @@ import (
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 )
@@ -28,7 +29,7 @@ type GeminiProvider struct {
 // NewGemini creates a new Gemini provider
 func NewGemini(config *llm.Config) (*GeminiProvider, error) {
 	if config.APIKey == "" {
-		return nil, fmt.Errorf("gemini API key is required")
+		return nil, agentErrors.NewInvalidConfigError("llm", "api_key", "Gemini API key is required")
 	}
 
 	ctx := context.Background()
@@ -36,7 +37,8 @@ func NewGemini(config *llm.Config) (*GeminiProvider, error) {
 	// Create client with API key
 	client, err := genai.NewClient(ctx, config.APIKey, "", option.WithAPIKey(config.APIKey))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create Gemini client: %w", err)
+		return nil, agentErrors.NewAgentInitializationError("gemini_provider", err).
+			WithContext("provider", "gemini")
 	}
 
 	modelName := config.Model
@@ -111,12 +113,12 @@ func (p *GeminiProvider) Complete(ctx context.Context, req *llm.CompletionReques
 
 	// Get the last message as the prompt
 	if len(req.Messages) == 0 {
-		return nil, fmt.Errorf("no messages provided")
+		return nil, agentErrors.NewInvalidInputError("gemini_provider", "messages", "no messages provided")
 	}
 
 	lastMessage := req.Messages[len(req.Messages)-1]
 	if lastMessage.Role != "user" {
-		return nil, fmt.Errorf("last message must be from user")
+		return nil, agentErrors.NewInvalidInputError("gemini_provider", "last_message", "last message must be from user")
 	}
 
 	// Apply request-specific parameters
@@ -137,7 +139,7 @@ func (p *GeminiProvider) Complete(ctx context.Context, req *llm.CompletionReques
 	// Send the message
 	resp, err := cs.SendMessage(ctx, genai.Text(lastMessage.Content))
 	if err != nil {
-		return nil, fmt.Errorf("gemini completion failed: %w", err)
+		return nil, agentErrors.NewLLMRequestError("gemini", p.modelName, err)
 	}
 
 	// Extract content from response
@@ -225,11 +227,12 @@ func (p *GeminiProvider) GenerateWithTools(ctx context.Context, prompt string, t
 	// Send message
 	resp, err := cs.SendMessage(ctx, genai.Text(prompt))
 	if err != nil {
-		return nil, fmt.Errorf("gemini tool calling failed: %w", err)
+		return nil, agentErrors.NewLLMRequestError("gemini", p.modelName, err).
+			WithContext("tool_calling", true)
 	}
 
 	if len(resp.Candidates) == 0 {
-		return nil, fmt.Errorf("no candidates returned")
+		return nil, agentErrors.NewLLMResponseError("gemini", p.modelName, "no candidates returned")
 	}
 
 	result := &ToolCallResponse{}

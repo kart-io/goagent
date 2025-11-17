@@ -3,6 +3,7 @@ package cot
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -277,7 +278,9 @@ func (c *CoTAgent) parseCoTResponse(response string) ([]string, string) {
 	lines := strings.Split(response, "\n")
 	steps := make([]string, 0)
 	finalAnswer := ""
-	collectingSteps := false
+
+	currentStep := strings.Builder{}
+	inStep := false
 
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
@@ -287,6 +290,10 @@ func (c *CoTAgent) parseCoTResponse(response string) ([]string, string) {
 
 		// Check for final answer
 		if strings.Contains(line, c.config.FinalAnswerFormat) {
+			// Save current step if any
+			if currentStep.Len() > 0 {
+				steps = append(steps, strings.TrimSpace(currentStep.String()))
+			}
 			parts := strings.SplitN(line, c.config.FinalAnswerFormat, 2)
 			if len(parts) > 1 {
 				finalAnswer = strings.TrimSpace(parts[1])
@@ -294,49 +301,78 @@ func (c *CoTAgent) parseCoTResponse(response string) ([]string, string) {
 			break
 		}
 
-		// Detect start of reasoning
-		if strings.Contains(strings.ToLower(line), "step") ||
-			strings.Contains(strings.ToLower(line), "think") ||
-			collectingSteps {
-			collectingSteps = true
+		// Detect step header (e.g., "**Step 1:**", "Step 2:", "- Step 3")
+		// More flexible: just look for "step" with a number
+		lowerLine := strings.ToLower(line)
+		isStepHeader := strings.Contains(lowerLine, "step") &&
+			(strings.Contains(line, ":") || strings.HasPrefix(line, "**") || strings.HasPrefix(line, "-"))
 
-			// Extract step content
-			if strings.HasPrefix(line, "Step ") || strings.HasPrefix(line, "-") {
-				// Remove step prefix
-				step := line
-				if idx := strings.Index(line, ":"); idx > 0 {
-					step = strings.TrimSpace(line[idx+1:])
-				} else if strings.HasPrefix(line, "-") {
-					step = strings.TrimSpace(line[1:])
-				}
-				if step != "" {
-					steps = append(steps, step)
-				}
-			} else if collectingSteps && !strings.Contains(strings.ToLower(line), "question") {
-				// Collect as a step if we're in the reasoning section
-				steps = append(steps, line)
+		if isStepHeader {
+			// Save previous step if any
+			if currentStep.Len() > 0 {
+				steps = append(steps, strings.TrimSpace(currentStep.String()))
+				currentStep.Reset()
 			}
+			inStep = true
+
+			// Extract step title and content
+			// Remove markdown formatting and step number
+			cleanLine := strings.TrimPrefix(line, "**")
+			cleanLine = strings.TrimSuffix(cleanLine, "**")
+			cleanLine = strings.TrimPrefix(cleanLine, "- ")
+			currentStep.WriteString(cleanLine)
+			currentStep.WriteString(" ")
+		} else if inStep {
+			// Skip empty lines, LaTeX delimiters, and pure formula lines
+			if line == "\\[" || line == "\\]" {
+				continue
+			}
+			// Skip lines that are only numbers (likely part of LaTeX)
+			if matched, _ := regexp.MatchString(`^\d+$`, line); matched {
+				continue
+			}
+			// Skip lines that look like pure LaTeX formulas
+			if strings.HasPrefix(line, "\\frac") || strings.HasPrefix(line, "\\quad") ||
+				strings.HasPrefix(line, "\\text") {
+				continue
+			}
+			// Skip "Question:" line and "Let's" line
+			if strings.HasPrefix(lowerLine, "question:") ||
+				strings.HasPrefix(lowerLine, "let's") {
+				continue
+			}
+
+			// Collect content for current step
+			currentStep.WriteString(line)
+			currentStep.WriteString(" ")
 		}
 	}
 
-	// If no structured steps found, treat entire response as steps
+	// Save last step
+	if currentStep.Len() > 0 {
+		steps = append(steps, strings.TrimSpace(currentStep.String()))
+	}
+
+	// If no structured steps found, try alternative parsing
 	if len(steps) == 0 && finalAnswer == "" {
-		// Split by sentences or paragraphs
-		sentences := strings.Split(response, ". ")
-		for _, sentence := range sentences {
-			sentence = strings.TrimSpace(sentence)
-			if sentence != "" && !strings.HasSuffix(sentence, ".") {
-				sentence += "."
-			}
-			if sentence != "" {
-				steps = append(steps, sentence)
+		// Split by double newlines (paragraphs)
+		paragraphs := strings.Split(response, "\n\n")
+		for _, para := range paragraphs {
+			para = strings.TrimSpace(para)
+			if para != "" && !strings.HasPrefix(strings.ToLower(para), "question") &&
+				!strings.HasPrefix(strings.ToLower(para), "let's") {
+				steps = append(steps, para)
 			}
 		}
 
-		// Last sentence might be the answer
+		// Last paragraph might be the answer
 		if len(steps) > 0 {
-			finalAnswer = steps[len(steps)-1]
-			steps = steps[:len(steps)-1]
+			lastStep := steps[len(steps)-1]
+			if strings.Contains(strings.ToLower(lastStep), "answer") ||
+				strings.Contains(strings.ToLower(lastStep), "conclusion") {
+				finalAnswer = lastStep
+				steps = steps[:len(steps)-1]
+			}
 		}
 	}
 

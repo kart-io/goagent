@@ -2,7 +2,8 @@ package retrieval
 
 import (
 	"context"
-	"fmt"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // QdrantVectorStore Qdrant 向量数据库存储
@@ -47,7 +48,9 @@ func NewQdrantVectorStore(config QdrantConfig) (*QdrantVectorStore, error) {
 	}
 
 	if config.CollectionName == "" {
-		return nil, fmt.Errorf("collection name is required")
+		return nil, agentErrors.New(agentErrors.CodeInvalidConfig, "collection name is required").
+			WithComponent("qdrant_store").
+			WithOperation("create")
 	}
 
 	if config.VectorSize <= 0 {
@@ -88,7 +91,9 @@ func NewQdrantVectorStore(config QdrantConfig) (*QdrantVectorStore, error) {
 // Add 添加文档和向量
 func (q *QdrantVectorStore) Add(ctx context.Context, docs []*Document, vectors [][]float32) error {
 	// TODO: 实现 Qdrant 添加逻辑
-	return fmt.Errorf("qdrant integration not implemented yet - add github.com/qdrant/go-client dependency")
+	return agentErrors.New(agentErrors.CodeNotImplemented, "qdrant integration not implemented yet - add github.com/qdrant/go-client dependency").
+		WithComponent("qdrant_store").
+		WithOperation("add_documents")
 }
 
 // AddDocuments 添加文档（实现 VectorStore 接口）
@@ -105,7 +110,10 @@ func (q *QdrantVectorStore) AddDocuments(ctx context.Context, docs []*Document) 
 
 	vectors, err := q.config.Embedder.Embed(ctx, texts)
 	if err != nil {
-		return fmt.Errorf("failed to generate vectors: %w", err)
+		return agentErrors.Wrap(err, agentErrors.CodeRetrievalEmbedding, "failed to generate vectors").
+			WithComponent("qdrant_store").
+			WithOperation("add_documents").
+			WithContext("num_docs", len(docs))
 	}
 
 	return q.Add(ctx, docs, vectors)
@@ -116,7 +124,10 @@ func (q *QdrantVectorStore) Search(ctx context.Context, query string, topK int) 
 	// 生成查询向量
 	queryVector, err := q.config.Embedder.EmbedQuery(ctx, query)
 	if err != nil {
-		return nil, fmt.Errorf("failed to embed query: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeRetrievalEmbedding, "failed to embed query").
+			WithComponent("qdrant_store").
+			WithOperation("search").
+			WithContext("query", query)
 	}
 
 	return q.SearchByVector(ctx, queryVector, topK)
@@ -125,7 +136,10 @@ func (q *QdrantVectorStore) Search(ctx context.Context, query string, topK int) 
 // SearchByVector 通过向量搜索
 func (q *QdrantVectorStore) SearchByVector(ctx context.Context, queryVector []float32, topK int) ([]*Document, error) {
 	// TODO: 实现 Qdrant 搜索逻辑
-	return nil, fmt.Errorf("qdrant integration not implemented yet - add github.com/qdrant/go-client dependency")
+	return nil, agentErrors.New(agentErrors.CodeNotImplemented, "qdrant integration not implemented yet - add github.com/qdrant/go-client dependency").
+		WithComponent("qdrant_store").
+		WithOperation("search_by_vector").
+		WithContext("topK", topK)
 }
 
 // SimilaritySearch 相似度搜索（实现 VectorStore 接口）
@@ -141,13 +155,19 @@ func (q *QdrantVectorStore) SimilaritySearchWithScore(ctx context.Context, query
 // Delete 删除文档
 func (q *QdrantVectorStore) Delete(ctx context.Context, ids []string) error {
 	// TODO: 实现 Qdrant 删除逻辑
-	return fmt.Errorf("qdrant integration not implemented yet - add github.com/qdrant/go-client dependency")
+	return agentErrors.New(agentErrors.CodeNotImplemented, "qdrant integration not implemented yet - add github.com/qdrant/go-client dependency").
+		WithComponent("qdrant_store").
+		WithOperation("delete_documents").
+		WithContext("num_ids", len(ids))
 }
 
 // Update 更新文档
 func (q *QdrantVectorStore) Update(ctx context.Context, docs []*Document) error {
 	// TODO: 实现 Qdrant 更新逻辑
-	return fmt.Errorf("qdrant integration not implemented yet - add github.com/qdrant/go-client dependency")
+	return agentErrors.New(agentErrors.CodeNotImplemented, "qdrant integration not implemented yet - add github.com/qdrant/go-client dependency").
+		WithComponent("qdrant_store").
+		WithOperation("update_documents").
+		WithContext("num_docs", len(docs))
 }
 
 // GetEmbedding 获取嵌入向量

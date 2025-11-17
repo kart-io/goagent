@@ -8,6 +8,7 @@ import (
 	"time"
 
 	agentcore "github.com/kart-io/goagent/core"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 )
@@ -300,7 +301,10 @@ func (s *SoTAgent) elaborateSkeletonParallel(ctx context.Context, skeleton []*Sk
 				// Elaborate the point
 				err := s.elaboratePoint(elaborateCtx, p, skeleton, input)
 				if err != nil {
-					errors <- fmt.Errorf("failed to elaborate %s: %v", p.ID, err)
+					errors <- agentErrors.Wrap(err, agentErrors.CodeAgentExecution, "failed to elaborate point").
+						WithComponent("sot_agent").
+						WithOperation("elaborateSkeletonParallel").
+						WithContext("point_id", p.ID)
 				}
 
 				// Record elaboration step

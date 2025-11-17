@@ -56,6 +56,46 @@ const (
 	CodeInvalidConfig  ErrorCode = "INVALID_CONFIG"
 	CodeNotImplemented ErrorCode = "NOT_IMPLEMENTED"
 	CodeInternal       ErrorCode = "INTERNAL_ERROR"
+
+	// Distributed/Network errors
+	CodeDistributedConnection    ErrorCode = "DISTRIBUTED_CONNECTION"
+	CodeDistributedSerialization ErrorCode = "DISTRIBUTED_SERIALIZATION"
+	CodeDistributedCoordination  ErrorCode = "DISTRIBUTED_COORDINATION"
+	CodeDistributedScheduling    ErrorCode = "DISTRIBUTED_SCHEDULING"
+	CodeDistributedHeartbeat     ErrorCode = "DISTRIBUTED_HEARTBEAT"
+	CodeDistributedRegistry      ErrorCode = "DISTRIBUTED_REGISTRY"
+
+	// Retrieval/RAG errors
+	CodeRetrievalSearch    ErrorCode = "RETRIEVAL_SEARCH"
+	CodeRetrievalEmbedding ErrorCode = "RETRIEVAL_EMBEDDING"
+	CodeDocumentNotFound   ErrorCode = "DOCUMENT_NOT_FOUND"
+	CodeVectorDimMismatch  ErrorCode = "VECTOR_DIM_MISMATCH"
+
+	// Planning errors
+	CodePlanningFailed      ErrorCode = "PLANNING_FAILED"
+	CodePlanValidation      ErrorCode = "PLAN_VALIDATION"
+	CodePlanExecutionFailed ErrorCode = "PLAN_EXECUTION_FAILED"
+	CodePlanNotFound        ErrorCode = "PLAN_NOT_FOUND"
+
+	// Parser errors
+	CodeParserFailed       ErrorCode = "PARSER_FAILED"
+	CodeParserInvalidJSON  ErrorCode = "PARSER_INVALID_JSON"
+	CodeParserMissingField ErrorCode = "PARSER_MISSING_FIELD"
+
+	// MultiAgent errors
+	CodeMultiAgentRegistration ErrorCode = "MULTIAGENT_REGISTRATION"
+	CodeMultiAgentConsensus    ErrorCode = "MULTIAGENT_CONSENSUS"
+	CodeMultiAgentMessage      ErrorCode = "MULTIAGENT_MESSAGE"
+
+	// Store errors (supplemental)
+	CodeStoreConnection    ErrorCode = "STORE_CONNECTION"
+	CodeStoreSerialization ErrorCode = "STORE_SERIALIZATION"
+	CodeStoreNotFound      ErrorCode = "STORE_NOT_FOUND"
+
+	// Router errors
+	CodeRouterNoMatch  ErrorCode = "ROUTER_NO_MATCH"
+	CodeRouterFailed   ErrorCode = "ROUTER_FAILED"
+	CodeRouterOverload ErrorCode = "ROUTER_OVERLOAD"
 )
 
 // AgentError is the structured error type for all agent operations

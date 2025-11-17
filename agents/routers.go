@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 
 	"github.com/kart-io/goagent/core"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
 )
 
@@ -58,7 +59,9 @@ func (r *LLMRouter) Route(ctx context.Context, task Task, agents map[string]core
 		MaxTokens:   50,
 	})
 	if err != nil {
-		return "", fmt.Errorf("LLM routing failed: %w", err)
+		return "", agentErrors.Wrap(err, agentErrors.CodeLLMRequest, "LLM routing failed").
+			WithComponent("agent_router").
+			WithOperation("Route")
 	}
 
 	// Parse agent name from response
@@ -70,7 +73,9 @@ func (r *LLMRouter) Route(ctx context.Context, task Task, agents map[string]core
 		for name := range agents {
 			return name, nil
 		}
-		return "", fmt.Errorf("no suitable agent found")
+		return "", agentErrors.New(agentErrors.CodeRouterNoMatch, "no suitable agent found").
+			WithComponent("agent_router").
+			WithOperation("Route")
 	}
 
 	return agentName, nil
@@ -189,7 +194,9 @@ func (r *RuleBasedRouter) Route(ctx context.Context, task Task, agents map[strin
 		return name, nil
 	}
 
-	return "", fmt.Errorf("no agents available")
+	return "", agentErrors.New(agentErrors.CodeRouterNoMatch, "no agents available").
+		WithComponent("agent_router").
+		WithOperation("Route")
 }
 
 // GetCapabilities returns the capabilities of an agent
@@ -225,7 +232,9 @@ func NewRoundRobinRouter() *RoundRobinRouter {
 // Route selects the next agent in round-robin fashion
 func (r *RoundRobinRouter) Route(ctx context.Context, task Task, agents map[string]core.Agent) (string, error) {
 	if len(agents) == 0 {
-		return "", fmt.Errorf("no agents available")
+		return "", agentErrors.New(agentErrors.CodeRouterNoMatch, "no agents available").
+			WithComponent("agent_router").
+			WithOperation("Route")
 	}
 
 	// Get agent names
@@ -313,7 +322,9 @@ func (r *CapabilityRouter) Route(ctx context.Context, task Task, agents map[stri
 		return name, nil
 	}
 
-	return "", fmt.Errorf("no agents available")
+	return "", agentErrors.New(agentErrors.CodeRouterNoMatch, "no agents available").
+		WithComponent("agent_router").
+		WithOperation("Route")
 }
 
 // GetCapabilities returns the capabilities of an agent
@@ -372,7 +383,9 @@ func (r *LoadBalancingRouter) Route(ctx context.Context, task Task, agents map[s
 	}
 
 	// All agents at max capacity
-	return "", fmt.Errorf("all agents at maximum capacity")
+	return "", agentErrors.New(agentErrors.CodeRouterOverload, "all agents at maximum capacity").
+		WithComponent("agent_router").
+		WithOperation("Route")
 }
 
 // ReleaseTask decrements the task count for an agent
@@ -508,7 +521,9 @@ func NewRandomRouter() *RandomRouter {
 // Route randomly selects an agent
 func (r *RandomRouter) Route(ctx context.Context, task Task, agents map[string]core.Agent) (string, error) {
 	if len(agents) == 0 {
-		return "", fmt.Errorf("no agents available")
+		return "", agentErrors.New(agentErrors.CodeRouterNoMatch, "no agents available").
+			WithComponent("agent_router").
+			WithOperation("Route")
 	}
 
 	// Convert to slice for random selection
@@ -520,7 +535,9 @@ func (r *RandomRouter) Route(ctx context.Context, task Task, agents map[string]c
 	// Random selection using crypto/rand for security
 	n, err := cryptorand.Int(cryptorand.Reader, big.NewInt(int64(len(agentNames))))
 	if err != nil {
-		return "", fmt.Errorf("failed to generate random number: %w", err)
+		return "", agentErrors.Wrap(err, agentErrors.CodeInternal, "failed to generate random number").
+			WithComponent("agent_router").
+			WithOperation("Route")
 	}
 	return agentNames[n.Int64()], nil
 }

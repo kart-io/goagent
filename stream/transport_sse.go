@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/core"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // SSEStreamer Server-Sent Events 流支持
@@ -26,7 +27,9 @@ type SSEStreamer struct {
 func NewSSEStreamer(w http.ResponseWriter) (*SSEStreamer, error) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		return nil, fmt.Errorf("streaming not supported")
+		return nil, agentErrors.New(agentErrors.CodeInternal, "streaming not supported").
+			WithComponent("sse_transport").
+			WithOperation("NewSSEStreamer")
 	}
 
 	// 设置 SSE 头
@@ -44,7 +47,9 @@ func NewSSEStreamer(w http.ResponseWriter) (*SSEStreamer, error) {
 // WriteChunk 写入数据块
 func (s *SSEStreamer) WriteChunk(chunk *core.LegacyStreamChunk) error {
 	if s.closed {
-		return fmt.Errorf("streamer is closed")
+		return agentErrors.New(agentErrors.CodeStreamWrite, "streamer is closed").
+			WithComponent("sse_transport").
+			WithOperation("WriteChunk")
 	}
 
 	// 格式化为 SSE 格式
@@ -188,7 +193,9 @@ type ChunkedTransferStreamer struct {
 func NewChunkedTransferStreamer(w http.ResponseWriter) (*ChunkedTransferStreamer, error) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		return nil, fmt.Errorf("streaming not supported")
+		return nil, agentErrors.New(agentErrors.CodeInternal, "streaming not supported").
+			WithComponent("sse_transport").
+			WithOperation("NewChunkedTransferStreamer")
 	}
 
 	// 设置响应头
@@ -205,7 +212,9 @@ func NewChunkedTransferStreamer(w http.ResponseWriter) (*ChunkedTransferStreamer
 // WriteChunk 写入数据块
 func (c *ChunkedTransferStreamer) WriteChunk(chunk *core.LegacyStreamChunk) error {
 	if c.closed {
-		return fmt.Errorf("streamer is closed")
+		return agentErrors.New(agentErrors.CodeStreamWrite, "streamer is closed").
+			WithComponent("sse_transport").
+			WithOperation("WriteChunk")
 	}
 
 	data, err := json.Marshal(chunk)

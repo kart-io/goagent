@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/redis/go-redis/v9"
 
 	agentstate "github.com/kart-io/goagent/core/state"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // RedisCheckpointerConfig holds configuration for Redis checkpointer
@@ -130,7 +130,7 @@ func NewRedisCheckpointer(config *RedisCheckpointerConfig) (*RedisCheckpointer, 
 	defer cancel()
 
 	if err := client.Ping(ctx).Err(); err != nil {
-		return nil, fmt.Errorf("failed to connect to Redis: %w", err)
+		return nil, agentErrors.NewStoreConnectionError("redis", config.Addr, err)
 	}
 
 	return &RedisCheckpointer{
@@ -158,7 +158,10 @@ func (c *RedisCheckpointer) Save(ctx context.Context, threadID string, state age
 	// Acquire lock if enabled
 	if c.config.EnableLock {
 		if err := c.acquireLock(ctx, threadID); err != nil {
-			return fmt.Errorf("failed to acquire lock: %w", err)
+			return agentErrors.Wrap(err, agentErrors.CodeDistributedCoordination, "failed to acquire lock").
+				WithComponent("redis_checkpointer").
+				WithOperation("save").
+				WithContext("thread_id", threadID)
 		}
 		defer func() { _ = c.releaseLock(ctx, threadID) }()
 	}
@@ -192,7 +195,10 @@ func (c *RedisCheckpointer) Save(ctx context.Context, threadID string, state age
 	// Serialize to JSON
 	jsonData, err := json.Marshal(data)
 	if err != nil {
-		return fmt.Errorf("failed to serialize checkpoint: %w", err)
+		return agentErrors.Wrap(err, agentErrors.CodeDistributedSerialization, "failed to serialize checkpoint").
+			WithComponent("redis_checkpointer").
+			WithOperation("save").
+			WithContext("thread_id", threadID)
 	}
 
 	// Store in Redis
@@ -203,7 +209,10 @@ func (c *RedisCheckpointer) Save(ctx context.Context, threadID string, state age
 	}
 
 	if err != nil {
-		return fmt.Errorf("failed to save checkpoint to Redis: %w", err)
+		return agentErrors.Wrap(err, agentErrors.CodeStateCheckpoint, "failed to save checkpoint to Redis").
+			WithComponent("redis_checkpointer").
+			WithOperation("save").
+			WithContext("thread_id", threadID)
 	}
 
 	return nil
@@ -217,15 +226,24 @@ func (c *RedisCheckpointer) Load(ctx context.Context, threadID string) (agentsta
 	jsonData, err := c.client.Get(ctx, key).Bytes()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
-			return nil, fmt.Errorf("checkpoint not found for thread: %s", threadID)
+			return nil, agentErrors.New(agentErrors.CodeStateLoad, "checkpoint not found").
+				WithComponent("redis_checkpointer").
+				WithOperation("load").
+				WithContext("thread_id", threadID)
 		}
-		return nil, fmt.Errorf("failed to load checkpoint from Redis: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeStateLoad, "failed to load checkpoint from Redis").
+			WithComponent("redis_checkpointer").
+			WithOperation("load").
+			WithContext("thread_id", threadID)
 	}
 
 	// Deserialize
 	var data checkpointData
 	if err := json.Unmarshal(jsonData, &data); err != nil {
-		return nil, fmt.Errorf("failed to deserialize checkpoint: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeDistributedSerialization, "failed to deserialize checkpoint").
+			WithComponent("redis_checkpointer").
+			WithOperation("load").
+			WithContext("thread_id", threadID)
 	}
 
 	// Create state from snapshot
@@ -266,14 +284,20 @@ func (c *RedisCheckpointer) Delete(ctx context.Context, threadID string) error {
 	// Acquire lock if enabled
 	if c.config.EnableLock {
 		if err := c.acquireLock(ctx, threadID); err != nil {
-			return fmt.Errorf("failed to acquire lock: %w", err)
+			return agentErrors.Wrap(err, agentErrors.CodeDistributedCoordination, "failed to acquire lock").
+				WithComponent("redis_checkpointer").
+				WithOperation("delete").
+				WithContext("thread_id", threadID)
 		}
 		defer func() { _ = c.releaseLock(ctx, threadID) }()
 	}
 
 	err := c.client.Del(ctx, key).Err()
 	if err != nil {
-		return fmt.Errorf("failed to delete checkpoint from Redis: %w", err)
+		return agentErrors.Wrap(err, agentErrors.CodeStateCheckpoint, "failed to delete checkpoint from Redis").
+			WithComponent("redis_checkpointer").
+			WithOperation("delete").
+			WithContext("thread_id", threadID)
 	}
 
 	return nil
@@ -285,7 +309,10 @@ func (c *RedisCheckpointer) Exists(ctx context.Context, threadID string) (bool, 
 
 	count, err := c.client.Exists(ctx, key).Result()
 	if err != nil {
-		return false, fmt.Errorf("failed to check checkpoint existence: %w", err)
+		return false, agentErrors.Wrap(err, agentErrors.CodeStateLoad, "failed to check checkpoint existence").
+			WithComponent("redis_checkpointer").
+			WithOperation("exists").
+			WithContext("thread_id", threadID)
 	}
 
 	return count > 0, nil
@@ -343,7 +370,10 @@ func (c *RedisCheckpointer) scanKeys(ctx context.Context, pattern string) ([]str
 
 		scanKeys, cursor, err = c.client.Scan(ctx, cursor, pattern, 100).Result()
 		if err != nil {
-			return nil, fmt.Errorf("failed to scan keys: %w", err)
+			return nil, agentErrors.Wrap(err, agentErrors.CodeStateLoad, "failed to scan keys").
+				WithComponent("redis_checkpointer").
+				WithOperation("scan").
+				WithContext("pattern", pattern)
 		}
 
 		keys = append(keys, scanKeys...)
@@ -366,7 +396,10 @@ func (c *RedisCheckpointer) acquireLock(ctx context.Context, threadID string) er
 	for time.Now().Before(deadline) {
 		ok, err := c.client.SetNX(ctx, lockKey, "locked", c.config.LockExpiry).Result()
 		if err != nil {
-			return fmt.Errorf("failed to acquire lock: %w", err)
+			return agentErrors.Wrap(err, agentErrors.CodeDistributedCoordination, "failed to acquire lock").
+				WithComponent("redis_checkpointer").
+				WithOperation("acquire_lock").
+				WithContext("thread_id", threadID)
 		}
 
 		if ok {
@@ -377,7 +410,11 @@ func (c *RedisCheckpointer) acquireLock(ctx context.Context, threadID string) er
 		time.Sleep(100 * time.Millisecond)
 	}
 
-	return fmt.Errorf("lock timeout for thread: %s", threadID)
+	return agentErrors.New(agentErrors.CodeDistributedCoordination, "lock timeout").
+		WithComponent("redis_checkpointer").
+		WithOperation("acquire_lock").
+		WithContext("thread_id", threadID).
+		WithContext("lock_timeout", c.config.LockTimeout.String())
 }
 
 // releaseLock releases a distributed lock for a thread

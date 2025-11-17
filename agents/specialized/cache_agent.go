@@ -3,12 +3,12 @@ package specialized
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/redis/go-redis/v9"
 
 	agentcore "github.com/kart-io/goagent/core"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/logger/core"
 )
 
@@ -46,7 +46,9 @@ func (a *CacheAgent) Execute(ctx context.Context, input *agentcore.AgentInput) (
 	// 解析参数
 	operation, ok := input.Context["operation"].(string)
 	if !ok {
-		return nil, fmt.Errorf("operation is required")
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "operation is required").
+			WithComponent("cache_agent").
+			WithOperation("Execute")
 	}
 
 	a.logger.Info("Executing cache operation",
@@ -77,7 +79,10 @@ func (a *CacheAgent) Execute(ctx context.Context, input *agentcore.AgentInput) (
 	case "keys":
 		result, err = a.executeKeys(ctx, input)
 	default:
-		return nil, fmt.Errorf("unknown operation: %s", operation)
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "unknown operation").
+			WithComponent("cache_agent").
+			WithOperation("Execute").
+			WithContext("operation", operation)
 	}
 
 	// 构建输出
@@ -101,9 +106,12 @@ func (a *CacheAgent) Execute(ctx context.Context, input *agentcore.AgentInput) (
 
 	if err != nil {
 		output.Status = "failed"
-		output.Message = fmt.Sprintf("Cache operation failed: %v", err)
+		output.Message = "Cache operation failed"
 		output.ToolCalls[0].Error = err.Error()
-		return output, fmt.Errorf("cache operation failed: %w", err)
+		return output, agentErrors.Wrap(err, agentErrors.CodeAgentExecution, "cache operation failed").
+			WithComponent("cache_agent").
+			WithOperation("Execute").
+			WithContext("operation", operation)
 	}
 
 	output.Message = "Cache operation completed successfully"
@@ -115,7 +123,9 @@ func (a *CacheAgent) Execute(ctx context.Context, input *agentcore.AgentInput) (
 func (a *CacheAgent) executeGet(ctx context.Context, input *agentcore.AgentInput) (interface{}, error) {
 	key, ok := input.Context["key"].(string)
 	if !ok {
-		return nil, fmt.Errorf("key is required")
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "key is required").
+			WithComponent("cache_agent").
+			WithOperation("executeGet")
 	}
 
 	val, err := a.client.Get(ctx, key).Result()
@@ -139,12 +149,16 @@ func (a *CacheAgent) executeGet(ctx context.Context, input *agentcore.AgentInput
 func (a *CacheAgent) executeSet(ctx context.Context, input *agentcore.AgentInput) (interface{}, error) {
 	key, ok := input.Context["key"].(string)
 	if !ok {
-		return nil, fmt.Errorf("key is required")
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "key is required").
+			WithComponent("cache_agent").
+			WithOperation("executeSet")
 	}
 
 	value, ok := input.Context["value"]
 	if !ok {
-		return nil, fmt.Errorf("value is required")
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "value is required").
+			WithComponent("cache_agent").
+			WithOperation("executeSet")
 	}
 
 	var ttl time.Duration
@@ -167,7 +181,9 @@ func (a *CacheAgent) executeSet(ctx context.Context, input *agentcore.AgentInput
 func (a *CacheAgent) executeDelete(ctx context.Context, input *agentcore.AgentInput) (interface{}, error) {
 	key, ok := input.Context["key"].(string)
 	if !ok {
-		return nil, fmt.Errorf("key is required")
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "key is required").
+			WithComponent("cache_agent").
+			WithOperation("executeDelete")
 	}
 
 	deleted, err := a.client.Del(ctx, key).Result()
@@ -185,7 +201,9 @@ func (a *CacheAgent) executeDelete(ctx context.Context, input *agentcore.AgentIn
 func (a *CacheAgent) executeExists(ctx context.Context, input *agentcore.AgentInput) (interface{}, error) {
 	key, ok := input.Context["key"].(string)
 	if !ok {
-		return nil, fmt.Errorf("key is required")
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "key is required").
+			WithComponent("cache_agent").
+			WithOperation("executeExists")
 	}
 
 	exists, err := a.client.Exists(ctx, key).Result()
@@ -202,12 +220,16 @@ func (a *CacheAgent) executeExists(ctx context.Context, input *agentcore.AgentIn
 func (a *CacheAgent) executeExpire(ctx context.Context, input *agentcore.AgentInput) (interface{}, error) {
 	key, ok := input.Context["key"].(string)
 	if !ok {
-		return nil, fmt.Errorf("key is required")
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "key is required").
+			WithComponent("cache_agent").
+			WithOperation("executeExpire")
 	}
 
 	ttlSeconds, ok := input.Context["ttl"].(int)
 	if !ok {
-		return nil, fmt.Errorf("ttl is required")
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "ttl is required").
+			WithComponent("cache_agent").
+			WithOperation("executeExpire")
 	}
 
 	ttl := time.Duration(ttlSeconds) * time.Second
@@ -227,7 +249,9 @@ func (a *CacheAgent) executeExpire(ctx context.Context, input *agentcore.AgentIn
 func (a *CacheAgent) executeKeys(ctx context.Context, input *agentcore.AgentInput) (interface{}, error) {
 	pattern, ok := input.Context["pattern"].(string)
 	if !ok {
-		return nil, fmt.Errorf("pattern is required")
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "pattern is required").
+			WithComponent("cache_agent").
+			WithOperation("executeKeys")
 	}
 
 	keys, err := a.client.Keys(ctx, pattern).Result()

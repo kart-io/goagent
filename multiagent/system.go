@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/core"
+	agentErrors "github.com/kart-io/goagent/errors"
 	loggercore "github.com/kart-io/logger/core"
 )
 
@@ -194,11 +195,18 @@ func (s *MultiAgentSystem) RegisterAgent(id string, agent CollaborativeAgent) er
 	defer s.mu.Unlock()
 
 	if len(s.agents) >= s.maxAgents {
-		return fmt.Errorf("maximum number of agents (%d) reached", s.maxAgents)
+		return agentErrors.Newf(agentErrors.CodeMultiAgentRegistration, "maximum number of agents (%d) reached", s.maxAgents).
+			WithComponent("multiagent_system").
+			WithOperation("register_agent").
+			WithContext("max_agents", s.maxAgents).
+			WithContext("current_count", len(s.agents))
 	}
 
 	if _, exists := s.agents[id]; exists {
-		return fmt.Errorf("agent %s already registered", id)
+		return agentErrors.Newf(agentErrors.CodeMultiAgentRegistration, "agent %s already registered", id).
+			WithComponent("multiagent_system").
+			WithOperation("register_agent").
+			WithContext("agent_id", id)
 	}
 
 	s.agents[id] = agent
@@ -215,7 +223,10 @@ func (s *MultiAgentSystem) UnregisterAgent(id string) error {
 	defer s.mu.Unlock()
 
 	if _, exists := s.agents[id]; !exists {
-		return fmt.Errorf("agent %s not found", id)
+		return agentErrors.Newf(agentErrors.CodeAgentNotFound, "agent %s not found", id).
+			WithComponent("multiagent_system").
+			WithOperation("unregister_agent").
+			WithContext("agent_id", id)
 	}
 
 	delete(s.agents, id)
@@ -235,20 +246,31 @@ func (s *MultiAgentSystem) CreateTeam(team *Team) error {
 	defer s.mu.Unlock()
 
 	if _, exists := s.teams[team.ID]; exists {
-		return fmt.Errorf("team %s already exists", team.ID)
+		return agentErrors.Newf(agentErrors.CodeInvalidConfig, "team %s already exists", team.ID).
+			WithComponent("multiagent_system").
+			WithOperation("create_team").
+			WithContext("team_id", team.ID)
 	}
 
 	// Verify all members exist
 	for _, memberID := range team.Members {
 		if _, exists := s.agents[memberID]; !exists {
-			return fmt.Errorf("agent %s not found", memberID)
+			return agentErrors.Newf(agentErrors.CodeAgentNotFound, "agent %s not found", memberID).
+				WithComponent("multiagent_system").
+				WithOperation("create_team").
+				WithContext("team_id", team.ID).
+				WithContext("missing_agent_id", memberID)
 		}
 	}
 
 	// Verify leader exists and is a member
 	if team.Leader != "" {
 		if _, exists := s.agents[team.Leader]; !exists {
-			return fmt.Errorf("leader %s not found", team.Leader)
+			return agentErrors.Newf(agentErrors.CodeAgentNotFound, "leader %s not found", team.Leader).
+				WithComponent("multiagent_system").
+				WithOperation("create_team").
+				WithContext("team_id", team.ID).
+				WithContext("leader_id", team.Leader)
 		}
 		// Set leader role
 		s.agents[team.Leader].SetRole(RoleLeader)
@@ -291,7 +313,11 @@ func (s *MultiAgentSystem) ExecuteTask(ctx context.Context, task *CollaborativeT
 	case CollaborationTypePipeline:
 		err = s.executePipelineTask(ctx, task)
 	default:
-		err = fmt.Errorf("unknown collaboration type: %s", task.Type)
+		err = agentErrors.Newf(agentErrors.CodeInvalidInput, "unknown collaboration type: %s", task.Type).
+			WithComponent("multiagent_system").
+			WithOperation("execute_task").
+			WithContext("task_id", task.ID).
+			WithContext("collaboration_type", string(task.Type))
 	}
 
 	task.EndTime = time.Now()
@@ -318,7 +344,10 @@ func (s *MultiAgentSystem) executeParallelTask(ctx context.Context, task *Collab
 	s.mu.RUnlock()
 
 	if len(agents) == 0 {
-		return fmt.Errorf("no available agents")
+		return agentErrors.New(agentErrors.CodeAgentNotFound, "no available agents").
+			WithComponent("multiagent_system").
+			WithOperation("execute_parallel_task").
+			WithContext("task_id", task.ID)
 	}
 
 	// Distribute subtasks to agents
@@ -379,7 +408,10 @@ func (s *MultiAgentSystem) executeSequentialTask(ctx context.Context, task *Coll
 	s.mu.RUnlock()
 
 	if len(agents) == 0 {
-		return fmt.Errorf("no available agents")
+		return agentErrors.New(agentErrors.CodeAgentNotFound, "no available agents").
+			WithComponent("multiagent_system").
+			WithOperation("execute_sequential_task").
+			WithContext("task_id", task.ID)
 	}
 
 	// Execute in sequence
@@ -404,7 +436,11 @@ func (s *MultiAgentSystem) executeSequentialTask(ctx context.Context, task *Coll
 		if err != nil {
 			assignment.Status = TaskStatusFailed
 			task.Assignments[agentID] = assignment
-			return fmt.Errorf("agent %s failed: %w", agentID, err)
+			return agentErrors.Wrapf(err, agentErrors.CodeAgentExecution, "agent %s failed", agentID).
+				WithComponent("multiagent_system").
+				WithOperation("execute_sequential_task").
+				WithContext("task_id", task.ID).
+				WithContext("agent_id", agentID)
 		}
 
 		result.EndTime = time.Now()
@@ -430,20 +466,29 @@ func (s *MultiAgentSystem) executeHierarchicalTask(ctx context.Context, task *Co
 	s.mu.RUnlock()
 
 	if leader == nil {
-		return fmt.Errorf("no leader agent available")
+		return agentErrors.New(agentErrors.CodeAgentNotFound, "no leader agent available").
+			WithComponent("multiagent_system").
+			WithOperation("execute_hierarchical_task").
+			WithContext("task_id", task.ID)
 	}
 
 	// Leader creates plan
 	leaderTask := *task
 	leaderResult, err := leader.Collaborate(ctx, &leaderTask)
 	if err != nil {
-		return fmt.Errorf("leader failed to plan: %w", err)
+		return agentErrors.Wrap(err, agentErrors.CodeAgentExecution, "leader failed to plan").
+			WithComponent("multiagent_system").
+			WithOperation("execute_hierarchical_task").
+			WithContext("task_id", task.ID)
 	}
 
 	// Distribute work to workers based on leader's plan
 	plan, ok := leaderResult.Result.(map[string]interface{})
 	if !ok {
-		return fmt.Errorf("invalid plan from leader")
+		return agentErrors.New(agentErrors.CodeInvalidInput, "invalid plan from leader").
+			WithComponent("multiagent_system").
+			WithOperation("execute_hierarchical_task").
+			WithContext("task_id", task.ID)
 	}
 
 	// Execute worker tasks in parallel
@@ -482,7 +527,10 @@ func (s *MultiAgentSystem) executeHierarchicalTask(ctx context.Context, task *Co
 	validationTask.Input = workerResults
 	finalResult, err := leader.Collaborate(ctx, &validationTask)
 	if err != nil {
-		return fmt.Errorf("leader failed to validate results: %w", err)
+		return agentErrors.Wrap(err, agentErrors.CodeAgentExecution, "leader failed to validate results").
+			WithComponent("multiagent_system").
+			WithOperation("execute_hierarchical_task").
+			WithContext("task_id", task.ID)
 	}
 
 	task.Output = finalResult.Result
@@ -498,7 +546,11 @@ func (s *MultiAgentSystem) executeConsensusTask(ctx context.Context, task *Colla
 	s.mu.RUnlock()
 
 	if len(agents) < 3 {
-		return fmt.Errorf("consensus requires at least 3 agents")
+		return agentErrors.New(agentErrors.CodeInvalidConfig, "consensus requires at least 3 agents").
+			WithComponent("multiagent_system").
+			WithOperation("execute_consensus_task").
+			WithContext("task_id", task.ID).
+			WithContext("available_agents", len(agents))
 	}
 
 	// Each agent votes on the proposal
@@ -547,7 +599,12 @@ func (s *MultiAgentSystem) executeConsensusTask(ctx context.Context, task *Colla
 	}
 
 	if !consensusReached {
-		return fmt.Errorf("consensus not reached: %d/%d votes", yesVotes, len(votes))
+		return agentErrors.Newf(agentErrors.CodeMultiAgentConsensus, "consensus not reached: %d/%d votes", yesVotes, len(votes)).
+			WithComponent("multiagent_system").
+			WithOperation("execute_consensus_task").
+			WithContext("task_id", task.ID).
+			WithContext("yes_votes", yesVotes).
+			WithContext("total_votes", len(votes))
 	}
 
 	return nil
@@ -558,7 +615,10 @@ func (s *MultiAgentSystem) executePipelineTask(ctx context.Context, task *Collab
 	// Similar to sequential but with defined stages
 	pipeline, ok := task.Input.([]interface{})
 	if !ok {
-		return fmt.Errorf("pipeline task requires array of stages")
+		return agentErrors.New(agentErrors.CodeInvalidInput, "pipeline task requires array of stages").
+			WithComponent("multiagent_system").
+			WithOperation("execute_pipeline_task").
+			WithContext("task_id", task.ID)
 	}
 
 	s.mu.RLock()
@@ -566,7 +626,12 @@ func (s *MultiAgentSystem) executePipelineTask(ctx context.Context, task *Collab
 	s.mu.RUnlock()
 
 	if len(agents) < len(pipeline) {
-		return fmt.Errorf("not enough agents for pipeline stages")
+		return agentErrors.New(agentErrors.CodeInvalidConfig, "not enough agents for pipeline stages").
+			WithComponent("multiagent_system").
+			WithOperation("execute_pipeline_task").
+			WithContext("task_id", task.ID).
+			WithContext("available_agents", len(agents)).
+			WithContext("required_stages", len(pipeline))
 	}
 
 	// Execute each stage
@@ -587,7 +652,12 @@ func (s *MultiAgentSystem) executePipelineTask(ctx context.Context, task *Collab
 
 		result, err := agent.Collaborate(ctx, &stageTask)
 		if err != nil {
-			return fmt.Errorf("pipeline stage %d failed: %w", i, err)
+			return agentErrors.Wrapf(err, agentErrors.CodeAgentExecution, "pipeline stage %d failed", i).
+				WithComponent("multiagent_system").
+				WithOperation("execute_pipeline_task").
+				WithContext("task_id", task.ID).
+				WithContext("stage_index", i).
+				WithContext("agent_id", agentID)
 		}
 
 		previousOutput = result.Result
@@ -604,7 +674,12 @@ func (s *MultiAgentSystem) SendMessage(message Message) error {
 	case s.messageQueue <- message:
 		return nil
 	case <-time.After(s.timeout):
-		return fmt.Errorf("message queue full, timeout sending message")
+		return agentErrors.New(agentErrors.CodeMultiAgentMessage, "message queue full, timeout sending message").
+			WithComponent("multiagent_system").
+			WithOperation("send_message").
+			WithContext("from", message.From).
+			WithContext("to", message.To).
+			WithContext("timeout", s.timeout.String())
 	}
 }
 

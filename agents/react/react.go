@@ -7,6 +7,7 @@ import (
 	"time"
 
 	agentcore "github.com/kart-io/goagent/core"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/parsers"
@@ -169,7 +170,9 @@ func (r *ReActAgent) Invoke(ctx context.Context, input *agentcore.AgentInput) (*
 		actionInput := parsed.ActionInput
 
 		if action == "" {
-			return r.handleError(ctx, output, step, "No action specified", fmt.Errorf("empty action"), startTime)
+			return r.handleError(ctx, output, step, "No action specified", agentErrors.New(agentErrors.CodeParserFailed, "empty action").
+				WithComponent("react_agent").
+				WithOperation("Invoke"), startTime)
 		}
 
 		// 记录思考步骤
@@ -282,7 +285,10 @@ func (r *ReActAgent) WithConfig(config agentcore.RunnableConfig) agentcore.Runna
 func (r *ReActAgent) executeTool(ctx context.Context, toolName string, input map[string]interface{}) (interface{}, error) {
 	tool, ok := r.toolsByName[toolName]
 	if !ok {
-		return nil, fmt.Errorf("tool not found: %s", toolName)
+		return nil, agentErrors.New(agentErrors.CodeToolNotFound, "tool not found").
+			WithComponent("react_agent").
+			WithOperation("executeTool").
+			WithContext("tool_name", toolName)
 	}
 
 	// 触发工具回调

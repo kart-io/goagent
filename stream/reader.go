@@ -3,13 +3,13 @@ package stream
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/kart-io/goagent/core"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // Reader 流读取器实现
@@ -134,7 +134,10 @@ func (r *Reader) Next() (*core.LegacyStreamChunk, error) {
 
 	case <-timeout:
 		r.state.Store(core.StreamStateError)
-		return nil, fmt.Errorf("read timeout after %v", r.opts.ChunkTimeout)
+		return nil, agentErrors.New(agentErrors.CodeContextTimeout, "read timeout").
+			WithComponent("stream_reader").
+			WithOperation("Next").
+			WithContext("timeout", r.opts.ChunkTimeout.String())
 
 	case <-r.ctx.Done():
 		r.closed.Store(true)
@@ -146,7 +149,9 @@ func (r *Reader) Next() (*core.LegacyStreamChunk, error) {
 // Close 关闭读取器
 func (r *Reader) Close() error {
 	if !r.closed.CompareAndSwap(false, true) {
-		return fmt.Errorf("reader already closed")
+		return agentErrors.New(agentErrors.CodeStreamRead, "reader already closed").
+			WithComponent("stream_reader").
+			WithOperation("Close")
 	}
 
 	r.cancel()

@@ -2,11 +2,11 @@ package distributed
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
 	agentcore "github.com/kart-io/goagent/core"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/logger/core"
 )
 
@@ -37,7 +37,11 @@ func (c *Coordinator) ExecuteAgent(ctx context.Context, serviceName, agentName s
 	// 获取服务实例
 	instance, err := c.selectInstance(serviceName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to select instance: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeDistributedCoordination, "failed to select instance").
+			WithComponent("distributed_coordinator").
+			WithOperation("execute_agent").
+			WithContext("service_name", serviceName).
+			WithContext("agent_name", agentName)
 	}
 
 	c.logger.Info("Executing remote agent",
@@ -60,7 +64,12 @@ func (c *Coordinator) ExecuteAgent(ctx context.Context, serviceName, agentName s
 			return c.executeWithFailover(ctx, serviceName, agentName, input, instance.ID)
 		}
 
-		return nil, fmt.Errorf("agent execution failed: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeAgentExecution, "agent execution failed").
+			WithComponent("distributed_coordinator").
+			WithOperation("execute_agent").
+			WithContext("service_name", serviceName).
+			WithContext("agent_name", agentName).
+			WithContext("instance_id", instance.ID)
 	}
 
 	// 标记实例为健康
@@ -103,7 +112,12 @@ func (c *Coordinator) ExecuteAgentWithRetry(ctx context.Context, serviceName, ag
 		}
 	}
 
-	return nil, fmt.Errorf("agent execution failed after %d retries: %w", maxRetries, lastErr)
+	return nil, agentErrors.Wrap(lastErr, agentErrors.CodeAgentExecution, "agent execution failed after retries").
+		WithComponent("distributed_coordinator").
+		WithOperation("execute_agent_with_retry").
+		WithContext("service_name", serviceName).
+		WithContext("agent_name", agentName).
+		WithContext("max_retries", maxRetries)
 }
 
 // ExecuteParallel 并行执行多个 Agent
@@ -140,7 +154,11 @@ func (c *Coordinator) ExecuteParallel(ctx context.Context, tasks []AgentTask) ([
 	}
 
 	if len(errs) > 0 {
-		return results, fmt.Errorf("some tasks failed: %d errors", len(errs))
+		return results, agentErrors.New(agentErrors.CodeAgentExecution, "some tasks failed").
+			WithComponent("distributed_coordinator").
+			WithOperation("execute_parallel").
+			WithContext("failed_count", len(errs)).
+			WithContext("total_tasks", len(tasks))
 	}
 
 	return results, nil
@@ -159,7 +177,12 @@ func (c *Coordinator) ExecuteSequential(ctx context.Context, tasks []AgentTask) 
 		}
 
 		if err != nil {
-			return results, fmt.Errorf("task %d failed: %w", i, err)
+			return results, agentErrors.Wrap(err, agentErrors.CodeAgentExecution, "task failed").
+				WithComponent("distributed_coordinator").
+				WithOperation("execute_sequential").
+				WithContext("task_index", i).
+				WithContext("service_name", task.ServiceName).
+				WithContext("agent_name", task.AgentName)
 		}
 
 		// 将前一个任务的输出传递到下一个任务
@@ -182,7 +205,10 @@ func (c *Coordinator) selectInstance(serviceName string) (*ServiceInstance, erro
 	}
 
 	if len(instances) == 0 {
-		return nil, fmt.Errorf("no healthy instances for service: %s", serviceName)
+		return nil, agentErrors.New(agentErrors.CodeAgentNotFound, "no healthy instances for service").
+			WithComponent("distributed_coordinator").
+			WithOperation("select_instance").
+			WithContext("service_name", serviceName)
 	}
 
 	// Round-robin 负载均衡
@@ -212,7 +238,12 @@ func (c *Coordinator) executeWithFailover(ctx context.Context, serviceName, agen
 	}
 
 	if len(availableInstances) == 0 {
-		return nil, fmt.Errorf("no available instances for failover")
+		return nil, agentErrors.New(agentErrors.CodeDistributedCoordination, "no available instances for failover").
+			WithComponent("distributed_coordinator").
+			WithOperation("execute_with_failover").
+			WithContext("service_name", serviceName).
+			WithContext("agent_name", agentName).
+			WithContext("failed_instance_id", failedInstanceID)
 	}
 
 	// 尝试第一个可用实例

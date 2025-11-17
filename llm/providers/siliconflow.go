@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
 )
 
@@ -52,7 +53,7 @@ func NewSiliconFlowClient(config *SiliconFlowConfig) (*SiliconFlowClient, error)
 	}
 
 	if config.APIKey == "" {
-		return nil, fmt.Errorf("SiliconFlow API key is required")
+		return nil, agentErrors.NewInvalidConfigError("siliconflow", "api_key", "SiliconFlow API key is required")
 	}
 
 	if config.BaseURL == "" {
@@ -181,12 +182,12 @@ func (c *SiliconFlowClient) Complete(ctx context.Context, req *llm.CompletionReq
 	// 发送请求
 	reqBody, err := json.Marshal(sfReq)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
+		return nil, agentErrors.NewParserInvalidJSONError("request body", err)
 	}
 
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/chat/completions", bytes.NewBuffer(reqBody))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, agentErrors.NewLLMRequestError("siliconflow", c.getModel(req.Model), err)
 	}
 
 	httpReq.Header.Set("Content-Type", "application/json")
@@ -194,23 +195,25 @@ func (c *SiliconFlowClient) Complete(ctx context.Context, req *llm.CompletionReq
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
+		return nil, agentErrors.NewLLMRequestError("siliconflow", c.getModel(req.Model), err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("SiliconFlow API error (status %d): %s", resp.StatusCode, string(body))
+		return nil, agentErrors.NewLLMResponseError("siliconflow", c.getModel(req.Model),
+			fmt.Sprintf("API error (status %d): %s", resp.StatusCode, string(body)))
 	}
 
 	// 解析响应
 	var sfResp siliconFlowResponse
 	if err := json.NewDecoder(resp.Body).Decode(&sfResp); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+		return nil, agentErrors.NewParserInvalidJSONError("response body", err).
+			WithContext("provider", "siliconflow")
 	}
 
 	if len(sfResp.Choices) == 0 {
-		return nil, fmt.Errorf("no choices in response")
+		return nil, agentErrors.NewLLMResponseError("siliconflow", c.getModel(req.Model), "no choices in response")
 	}
 
 	// 构建响应
