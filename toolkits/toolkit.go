@@ -2,9 +2,9 @@ package toolkits
 
 import (
 	"context"
-	"fmt"
 	"sync"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/tools/compute"
 	"github.com/kart-io/goagent/tools/http"
@@ -61,7 +61,10 @@ func (t *BaseToolkit) GetToolByName(name string) (interfaces.Tool, error) {
 
 	tool, ok := t.toolsMap[name]
 	if !ok {
-		return nil, fmt.Errorf("tool not found: %s", name)
+		return nil, agentErrors.New(agentErrors.CodeToolNotFound, "tool not found").
+			WithComponent("base_toolkit").
+			WithOperation("get_tool_by_name").
+			WithContext("tool_name", name)
 	}
 
 	return tool, nil
@@ -95,7 +98,10 @@ func (t *BaseToolkit) RemoveTool(name string) error {
 	defer t.mu.Unlock()
 
 	if _, ok := t.toolsMap[name]; !ok {
-		return fmt.Errorf("tool not found: %s", name)
+		return agentErrors.New(agentErrors.CodeToolNotFound, "tool not found").
+			WithComponent("base_toolkit").
+			WithOperation("remove_tool").
+			WithContext("tool_name", name)
 	}
 
 	delete(t.toolsMap, name)
@@ -247,7 +253,10 @@ func (r *ToolRegistry) Register(tool interfaces.Tool) error {
 	defer r.mu.Unlock()
 
 	if _, exists := r.tools[tool.Name()]; exists {
-		return fmt.Errorf("tool already registered: %s", tool.Name())
+		return agentErrors.New(agentErrors.CodeToolValidation, "tool already registered").
+			WithComponent("tool_registry").
+			WithOperation("register").
+			WithContext("tool_name", tool.Name())
 	}
 
 	r.tools[tool.Name()] = tool
@@ -260,7 +269,10 @@ func (r *ToolRegistry) Unregister(name string) error {
 	defer r.mu.Unlock()
 
 	if _, exists := r.tools[name]; !exists {
-		return fmt.Errorf("tool not found: %s", name)
+		return agentErrors.New(agentErrors.CodeToolNotFound, "tool not found").
+			WithComponent("tool_registry").
+			WithOperation("unregister").
+			WithContext("tool_name", name)
 	}
 
 	delete(r.tools, name)
@@ -274,7 +286,10 @@ func (r *ToolRegistry) Get(name string) (interfaces.Tool, error) {
 
 	tool, ok := r.tools[name]
 	if !ok {
-		return nil, fmt.Errorf("tool not found: %s", name)
+		return nil, agentErrors.New(agentErrors.CodeToolNotFound, "tool not found").
+			WithComponent("tool_registry").
+			WithOperation("get").
+			WithContext("tool_name", name)
 	}
 
 	return tool, nil
@@ -302,7 +317,10 @@ func (r *ToolRegistry) CreateToolkit(names ...string) (Toolkit, error) {
 	for _, name := range names {
 		tool, ok := r.tools[name]
 		if !ok {
-			return nil, fmt.Errorf("tool not found: %s", name)
+			return nil, agentErrors.New(agentErrors.CodeToolNotFound, "tool not found").
+				WithComponent("tool_registry").
+				WithOperation("create_toolkit").
+				WithContext("tool_name", name)
 		}
 		toolList = append(toolList, tool)
 	}

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/providers"
 	"github.com/kart-io/goagent/memory"
@@ -102,7 +103,7 @@ func main() {
 }
 
 // createSmartPlanner 创建智能规划器
-func createSmartPlanner(llmClient llm.Client, memoryMgr memory.Manager) *planning.SmartPlanner {
+func createSmartPlanner(llmClient llm.Client, memoryMgr interfaces.MemoryManager) *planning.SmartPlanner {
 	planner := planning.NewSmartPlanner(
 		llmClient,
 		memoryMgr,                           // 使用内存管理器
@@ -298,12 +299,13 @@ func printExecutionSummary(plan *planning.Plan) {
 	totalDuration := time.Duration(0)
 
 	for _, step := range plan.Steps {
-		if step.Status == planning.StepStatusCompleted {
+		switch step.Status {
+		case planning.StepStatusCompleted:
 			completedSteps++
 			if step.Result != nil {
 				totalDuration += step.Result.Duration
 			}
-		} else if step.Status == planning.StepStatusFailed {
+		case planning.StepStatusFailed:
 			failedSteps++
 		}
 	}
