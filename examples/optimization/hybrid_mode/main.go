@@ -19,6 +19,8 @@ import (
 	"github.com/kart-io/goagent/llm/providers"
 	"github.com/kart-io/goagent/memory"
 	"github.com/kart-io/goagent/planning"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 // RealCodeExecutor 真实的代码执行工具
@@ -29,7 +31,10 @@ type RealCodeExecutor struct {
 func NewRealCodeExecutor() *RealCodeExecutor {
 	// 创建临时工作目录
 	workDir := filepath.Join(os.TempDir(), "goagent_code_executor", fmt.Sprintf("%d", time.Now().Unix()))
-	os.MkdirAll(workDir, 0755)
+	if err := os.MkdirAll(workDir, 0755); err != nil {
+		// 如果失败，使用默认临时目录
+		workDir = os.TempDir()
+	}
 	return &RealCodeExecutor{workDir: workDir}
 }
 
@@ -195,7 +200,10 @@ type RealDeploymentSimulator struct {
 
 func NewRealDeploymentSimulator() *RealDeploymentSimulator {
 	deployDir := filepath.Join(os.TempDir(), "goagent_deployments", fmt.Sprintf("%d", time.Now().Unix()))
-	os.MkdirAll(deployDir, 0755)
+	if err := os.MkdirAll(deployDir, 0755); err != nil {
+		// 如果失败，使用默认临时目录
+		deployDir = os.TempDir()
+	}
 	return &RealDeploymentSimulator{deployDir: deployDir}
 }
 
@@ -268,13 +276,19 @@ func (r *RealDeploymentSimulator) Invoke(ctx context.Context, input *interfaces.
 	if service != "database" {
 		dockerfile := r.generateDockerfile(service)
 		dockerFile := filepath.Join(deployPath, "Dockerfile")
-		os.WriteFile(dockerFile, []byte(dockerfile), 0644)
+		if err := os.WriteFile(dockerFile, []byte(dockerfile), 0644); err != nil {
+			// 记录错误但继续
+			fmt.Printf("Warning: failed to create Dockerfile: %v\n", err)
+		}
 	}
 
 	// 创建 docker-compose.yml
 	dockerCompose := r.generateDockerCompose(service, env)
 	composeFile := filepath.Join(deployPath, "docker-compose.yml")
-	os.WriteFile(composeFile, []byte(dockerCompose), 0644)
+	if err := os.WriteFile(composeFile, []byte(dockerCompose), 0644); err != nil {
+		// 记录错误但继续
+		fmt.Printf("Warning: failed to create docker-compose.yml: %v\n", err)
+	}
 
 	// 模拟部署过程
 	time.Sleep(300 * time.Millisecond)
@@ -410,7 +424,10 @@ type RealTestRunner struct {
 
 func NewRealTestRunner() *RealTestRunner {
 	testDir := filepath.Join(os.TempDir(), "goagent_tests", fmt.Sprintf("%d", time.Now().Unix()))
-	os.MkdirAll(testDir, 0755)
+	if err := os.MkdirAll(testDir, 0755); err != nil {
+		// 如果失败，使用默认临时目录
+		testDir = os.TempDir()
+	}
 	return &RealTestRunner{testDir: testDir}
 }
 
@@ -465,7 +482,10 @@ go 1.25
 
 require github.com/stretchr/testify v1.8.4`
 	goModPath := filepath.Join(r.testDir, "go.mod")
-	os.WriteFile(goModPath, []byte(goModContent), 0644)
+	if err := os.WriteFile(goModPath, []byte(goModContent), 0644); err != nil {
+		// 记录错误但继续
+		fmt.Printf("Warning: failed to create go.mod: %v\n", err)
+	}
 
 	// 执行测试
 	var output []byte
@@ -479,19 +499,19 @@ require github.com/stretchr/testify v1.8.4`
 		cmd.Dir = r.testDir
 		output, err = cmd.CombinedOutput()
 
-		if err != nil {
-			// 如果测试执行失败，使用模拟结果
-			passed, failed, coverage = r.getSimulatedResults(testType, target)
-		}
-
 		// 解析测试结果
-		outputStr := string(output)
-		if strings.Contains(outputStr, "PASS") {
-			passed = r.countTests(outputStr, "PASS")
-			coverage = r.extractCoverage(outputStr)
-		} else if strings.Contains(outputStr, "FAIL") {
-			failed = r.countTests(outputStr, "FAIL")
-			passed = r.countTests(outputStr, "PASS")
+		if err == nil {
+			outputStr := string(output)
+			if strings.Contains(outputStr, "PASS") {
+				passed = r.countTests(outputStr, "PASS")
+				coverage = r.extractCoverage(outputStr)
+			} else if strings.Contains(outputStr, "FAIL") {
+				failed = r.countTests(outputStr, "FAIL")
+				passed = r.countTests(outputStr, "PASS")
+			} else {
+				// 如果测试执行失败，使用模拟结果
+				passed, failed, coverage = r.getSimulatedResults(testType, target)
+			}
 		} else {
 			// 如果测试执行失败，使用模拟结果
 			passed, failed, coverage = r.getSimulatedResults(testType, target)
@@ -557,7 +577,7 @@ func Test%sUnit2(t *testing.T) {
 	// Test %s edge cases
 	t.Log("Testing edge cases...")
 	// Test passes
-}`, strings.Title(target), target, strings.Title(target), target)
+}`, cases.Title(language.English).String(target), target, cases.Title(language.English).String(target), target)
 	}
 
 	return fmt.Sprintf(`package test
@@ -576,7 +596,7 @@ func Test%sIntegration(t *testing.T) {
 	// Simulate integration test
 
 	t.Log("Cleanup...")
-}`, strings.Title(target), target, target)
+}`, cases.Title(language.English).String(target), target, target)
 }
 
 func (r *RealTestRunner) getSimulatedResults(testType, target string) (passed, failed int, coverage float64) {
@@ -1219,9 +1239,10 @@ func analyzePerformance(plan *planning.Plan, assignments []*AgentAssignment) {
 	completedSteps := 0
 	failedSteps := 0
 	for _, step := range plan.Steps {
-		if step.Status == planning.StepStatusCompleted {
+		switch step.Status {
+		case planning.StepStatusCompleted:
 			completedSteps++
-		} else if step.Status == planning.StepStatusFailed {
+		case planning.StepStatusFailed:
 			failedSteps++
 		}
 	}

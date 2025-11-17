@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/pflag"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/store"
 	"github.com/kart-io/k8s-agent/common/options"
 )
@@ -122,7 +123,9 @@ func ExampleEnvironmentBasedStore() (store.Store, error) {
 
 		// Validate configuration
 		if err := storeOpts.Redis.Validate(); err != nil {
-			return nil, fmt.Errorf("invalid redis configuration: %w", err)
+			return nil, agentErrors.Wrap(err, agentErrors.CodeInvalidConfig, "invalid redis configuration").
+				WithComponent("store_adapter_examples").
+				WithOperation("example_production_setup")
 		}
 
 	default:

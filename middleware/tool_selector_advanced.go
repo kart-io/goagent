@@ -3,6 +3,8 @@ package middleware
 import (
 	"context"
 	"fmt"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 	"sort"
 	"strings"
 	"sync"
@@ -413,7 +415,10 @@ func (m *LLMToolEmulatorMiddleware) emulateTool(ctx context.Context, toolName st
 		MaxTokens:   500,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to emulate tool %s: %w", toolName, err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeToolExecution, "failed to emulate tool").
+			WithComponent("tool_emulator").
+			WithOperation("emulate_tool").
+			WithContext("tool_name", toolName)
 	}
 
 	return response.Content, nil
@@ -615,7 +620,10 @@ func (m *ContextEnrichmentMiddleware) Process(ctx context.Context, state core.St
 				defer mu.Unlock()
 
 				if err != nil {
-					errors = append(errors, fmt.Errorf("%s: %w", e.Name, err))
+					errors = append(errors, agentErrors.Wrap(err, agentErrors.CodeMiddlewareExecution, "enricher failed").
+						WithComponent("context_enrichment").
+						WithOperation("enrich").
+						WithContext("enricher_name", e.Name))
 				} else {
 					for k, v := range data {
 						enrichedData[k] = v
@@ -626,7 +634,10 @@ func (m *ContextEnrichmentMiddleware) Process(ctx context.Context, state core.St
 			// Run synchronously
 			data, err := enricher.Enrich(ctx, state)
 			if err != nil {
-				errors = append(errors, fmt.Errorf("%s: %w", enricher.Name, err))
+				errors = append(errors, agentErrors.Wrap(err, agentErrors.CodeMiddlewareExecution, "enricher failed").
+					WithComponent("context_enrichment").
+					WithOperation("enrich").
+					WithContext("enricher_name", enricher.Name))
 			} else {
 				for k, v := range data {
 					enrichedData[k] = v

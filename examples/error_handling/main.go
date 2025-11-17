@@ -11,7 +11,7 @@ import (
 
 // 示例 1: 创建和使用不同类型的错误
 func example1CreateErrors() {
-	fmt.Println("=== Example 1: Creating Different Types of Errors ===\n")
+	fmt.Println("=== Example 1: Creating Different Types of Errors ===")
 
 	// LLM 请求错误
 	llmErr := errors.NewLLMRequestError("openai", "gpt-4", fmt.Errorf("API connection failed"))
@@ -37,7 +37,7 @@ func example1CreateErrors() {
 
 // 示例 2: 链式添加上下文
 func example2ChainedContext() {
-	fmt.Println("=== Example 2: Chained Context ===\n")
+	fmt.Println("=== Example 2: Chained Context ===")
 
 	err := errors.New(errors.CodeLLMRateLimit, "rate limit exceeded").
 		WithComponent("llm_client").
@@ -53,7 +53,7 @@ func example2ChainedContext() {
 
 // 示例 3: 错误包装
 func example3ErrorWrapping() {
-	fmt.Println("=== Example 3: Error Wrapping ===\n")
+	fmt.Println("=== Example 3: Error Wrapping ===")
 
 	// 模拟底层错误
 	originalErr := fmt.Errorf("network timeout")
@@ -80,7 +80,7 @@ func example3ErrorWrapping() {
 
 // 示例 4: 错误检查和分支处理
 func example4ErrorChecking() {
-	fmt.Println("=== Example 4: Error Checking ===\n")
+	fmt.Println("=== Example 4: Error Checking ===")
 
 	// 模拟不同类型的错误
 	testErrors := []error{
@@ -111,7 +111,7 @@ func example4ErrorChecking() {
 
 // 示例 5: 实际场景 - 重试逻辑
 func example5RetryLogic() {
-	fmt.Println("=== Example 5: Retry Logic ===\n")
+	fmt.Println("=== Example 5: Retry Logic ===")
 
 	// 模拟可能失败的操作
 	attemptCounter := 0
@@ -132,7 +132,7 @@ func example5RetryLogic() {
 
 		err := failingOperation()
 		if err == nil {
-			fmt.Println("✓ Operation succeeded!\n")
+			fmt.Println("✓ Operation succeeded!")
 			return
 		}
 
@@ -175,7 +175,7 @@ func (s *mockStore) Get(ctx context.Context, key string) (string, error) {
 }
 
 func example6Fallback() {
-	fmt.Println("=== Example 6: Fallback/Degradation ===\n")
+	fmt.Println("=== Example 6: Fallback/Degradation ===")
 
 	primaryStore := &mockStore{name: "primary", shouldFail: true}
 	backupStore := &mockStore{name: "backup", shouldFail: false}
@@ -202,7 +202,7 @@ func example6Fallback() {
 			return
 		}
 
-		fmt.Println("  ✗ Non-retriable error\n")
+		fmt.Println("  ✗ Non-retriable error")
 		return
 	}
 
@@ -211,7 +211,7 @@ func example6Fallback() {
 
 // 示例 7: 错误转换 (内部错误 → HTTP 状态码)
 func example7ErrorConversion() {
-	fmt.Println("=== Example 7: Error Conversion (to HTTP Status) ===\n")
+	fmt.Println("=== Example 7: Error Conversion (to HTTP Status) ===")
 
 	toHTTPStatus := func(err error) (int, string) {
 		code := errors.GetCode(err)
@@ -250,7 +250,7 @@ func example7ErrorConversion() {
 
 // 示例 8: 提取错误信息用于日志
 func example8Logging() {
-	fmt.Println("=== Example 8: Logging with Structured Errors ===\n")
+	fmt.Println("=== Example 8: Logging with Structured Errors ===")
 
 	err := errors.NewLLMRequestError("openai", "gpt-4", fmt.Errorf("connection refused")).
 		WithOperation("generate_response").
@@ -283,7 +283,7 @@ func example8Logging() {
 
 // 示例 9: 批处理错误聚合
 func example9BatchErrors() {
-	fmt.Println("=== Example 9: Batch Processing with Error Aggregation ===\n")
+	fmt.Println("=== Example 9: Batch Processing with Error Aggregation ===")
 
 	type Item struct {
 		ID   string
@@ -346,7 +346,7 @@ func example9BatchErrors() {
 
 // 示例 10: 错误链分析
 func example10ErrorChainAnalysis() {
-	fmt.Println("=== Example 10: Error Chain Analysis ===\n")
+	fmt.Println("=== Example 10: Error Chain Analysis ===")
 
 	// 构建多层错误链
 	err1 := fmt.Errorf("database connection timeout")
