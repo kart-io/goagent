@@ -3,9 +3,10 @@ package parsers
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"regexp"
 	"strings"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // ReActOutput ReAct 解析器的输出结构
@@ -66,7 +67,10 @@ func (p *ReActOutputParser) Parse(ctx context.Context, text string) (*ReActOutpu
 	if matches := p.actionPattern.FindStringSubmatch(text); len(matches) > 1 {
 		result.Action = strings.TrimSpace(matches[1])
 	} else {
-		return nil, fmt.Errorf("no action found in output")
+		return nil, agentErrors.New(agentErrors.CodeParserMissingField, "no action found in output").
+			WithComponent("react_parser").
+			WithOperation("parse").
+			WithContext("text_length", len(text))
 	}
 
 	// 解析行动输入
@@ -111,13 +115,18 @@ func (p *ReActOutputParser) ParseWithRetry(ctx context.Context, text string, max
 		}
 		lastErr = err
 	}
-	return nil, fmt.Errorf("failed to parse after %d retries: %w", maxRetries, lastErr)
+	return nil, agentErrors.Wrap(lastErr, agentErrors.CodeParserFailed, "failed to parse after retries").
+		WithComponent("react_parser").
+		WithOperation("parse_with_retry").
+		WithContext("max_retries", maxRetries)
 }
 
 // Validate 验证解析结果
 func (p *ReActOutputParser) Validate(parsed *ReActOutput) error {
 	if parsed == nil {
-		return fmt.Errorf("parsed output is nil")
+		return agentErrors.New(agentErrors.CodeParserFailed, "parsed output is nil").
+			WithComponent("react_parser").
+			WithOperation("validate")
 	}
 
 	// 检查是否有最终答案或行动
@@ -126,11 +135,17 @@ func (p *ReActOutputParser) Validate(parsed *ReActOutput) error {
 	}
 
 	if parsed.Action == "" {
-		return fmt.Errorf("missing action in parsed output")
+		return agentErrors.New(agentErrors.CodeParserMissingField, "missing action in parsed output").
+			WithComponent("react_parser").
+			WithOperation("validate").
+			WithContext("field", "action")
 	}
 
 	if parsed.ActionInput == nil {
-		return fmt.Errorf("missing action_input in parsed output")
+		return agentErrors.New(agentErrors.CodeParserMissingField, "missing action_input in parsed output").
+			WithComponent("react_parser").
+			WithOperation("validate").
+			WithContext("field", "action_input")
 	}
 
 	return nil

@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 )
@@ -207,7 +208,10 @@ func (p *SmartPlanner) CreatePlan(ctx context.Context, goal string, constraints 
 	// Retrieve relevant past plans from memory
 	similarPlans, err := p.retrieveSimilarPlans(ctx, goal)
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve similar plans: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeInternal, "failed to retrieve similar plans").
+			WithComponent("smart_planner").
+			WithOperation("create_plan").
+			WithContext("goal", goal)
 	}
 
 	// Generate plan using LLM with context from similar plans
@@ -219,7 +223,10 @@ func (p *SmartPlanner) CreatePlan(ctx context.Context, goal string, constraints 
 		},
 	})
 	if err != nil {
-		return nil, fmt.Errorf("LLM failed to generate plan: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeLLMRequest, "LLM failed to generate plan").
+			WithComponent("smart_planner").
+			WithOperation("llm_complete").
+			WithContext("goal", goal)
 	}
 
 	// Parse and structure the plan
@@ -229,13 +236,19 @@ func (p *SmartPlanner) CreatePlan(ctx context.Context, goal string, constraints 
 	strategy := p.selectStrategy(goal, constraints)
 	plan, err = strategy.Apply(ctx, plan, constraints)
 	if err != nil {
-		return nil, fmt.Errorf("strategy application failed: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeAgentExecution, "strategy application failed").
+			WithComponent("smart_planner").
+			WithOperation("apply_strategy").
+			WithContext("goal", goal)
 	}
 
 	// Validate the plan
 	valid, issues, err := p.ValidatePlan(ctx, plan)
 	if err != nil {
-		return nil, fmt.Errorf("plan validation failed: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodePlanValidation, "plan validation failed").
+			WithComponent("smart_planner").
+			WithOperation("validate_plan").
+			WithContext("plan_id", plan.ID)
 	}
 
 	if !valid && len(issues) > 0 {
@@ -280,7 +293,10 @@ Please provide an improved plan that addresses the feedback while maintaining th
 		},
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to refine plan: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeLLMRequest, "failed to refine plan").
+			WithComponent("smart_planner").
+			WithOperation("refine_plan").
+			WithContext("plan_id", plan.ID)
 	}
 
 	refinedPlan := p.parsePlan(response.Content, plan.Goal)
@@ -311,7 +327,10 @@ Provide 3-7 detailed sub-steps that fully accomplish the original step.`,
 		},
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to decompose step: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeLLMRequest, "failed to decompose step").
+			WithComponent("smart_planner").
+			WithOperation("decompose_plan").
+			WithContext("step_id", step.ID)
 	}
 
 	subSteps := p.parseSteps(response.Content)
@@ -343,7 +362,10 @@ func (p *SmartPlanner) ValidatePlan(ctx context.Context, plan *Plan) (bool, []st
 	for _, validator := range p.validators {
 		v, i, err := validator.Validate(ctx, plan)
 		if err != nil {
-			return false, nil, fmt.Errorf("validator %T failed: %w", validator, err)
+			return false, nil, agentErrors.Wrap(err, agentErrors.CodePlanValidation, "validator failed").
+				WithComponent("smart_planner").
+				WithOperation("validate_plan").
+				WithContext("validator_type", fmt.Sprintf("%T", validator))
 		}
 		if !v {
 			valid = false

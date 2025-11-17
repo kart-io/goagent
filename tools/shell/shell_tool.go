@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/tools"
 )
@@ -80,20 +81,26 @@ func (s *ShellTool) run(ctx context.Context, input *interfaces.ToolInput) (*inte
 	command, ok := input.Args["command"].(string)
 	if !ok || command == "" {
 		return &interfaces.ToolOutput{
-			Success: false,
-			Error:   "command is required and must be a non-empty string",
-		}, tools.NewToolError(s.Name(), "invalid input", fmt.Errorf("command is required"))
+				Success: false,
+				Error:   "command is required and must be a non-empty string",
+			}, tools.NewToolError(s.Name(), "invalid input", agentErrors.New(agentErrors.CodeInvalidInput, "command is required").
+				WithComponent("shell_tool").
+				WithOperation("run"))
 	}
 
 	// 安全检查：命令白名单
 	if !s.allowedCommands[command] {
 		return &interfaces.ToolOutput{
-			Success: false,
-			Error:   fmt.Sprintf("command not allowed: %s", command),
-			Metadata: map[string]interface{}{
-				"allowed_commands": s.GetAllowedCommands(),
-			},
-		}, tools.NewToolError(s.Name(), "command not allowed", fmt.Errorf("command not in whitelist: %s", command))
+				Success: false,
+				Error:   "command not allowed: " + command,
+				Metadata: map[string]interface{}{
+					"allowed_commands": s.GetAllowedCommands(),
+				},
+			}, tools.NewToolError(s.Name(), "command not allowed", agentErrors.New(agentErrors.CodeToolValidation, "command not in whitelist").
+				WithComponent("shell_tool").
+				WithOperation("run").
+				WithContext("command", command).
+				WithContext("allowed_commands", s.GetAllowedCommands()))
 	}
 
 	// 解析参数
@@ -123,14 +130,17 @@ func (s *ShellTool) run(ctx context.Context, input *interfaces.ToolInput) (*inte
 		strings.Contains(command, "$") || strings.Contains(command, ">") ||
 		strings.Contains(command, "<") {
 		return &interfaces.ToolOutput{
-			Result:  nil,
-			Success: false,
-			Error:   "command contains potentially dangerous characters",
-			Metadata: map[string]interface{}{
-				"tool_name": s.Name(),
-				"exit_code": -1,
-			},
-		}, tools.NewToolError(s.Name(), "invalid command", fmt.Errorf("command contains potentially dangerous characters"))
+				Result:  nil,
+				Success: false,
+				Error:   "command contains potentially dangerous characters",
+				Metadata: map[string]interface{}{
+					"tool_name": s.Name(),
+					"exit_code": -1,
+				},
+			}, tools.NewToolError(s.Name(), "invalid command", agentErrors.New(agentErrors.CodeToolValidation, "command contains dangerous characters").
+				WithComponent("shell_tool").
+				WithOperation("run").
+				WithContext("command", command))
 	}
 
 	// 构建命令

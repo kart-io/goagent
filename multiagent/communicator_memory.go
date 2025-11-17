@@ -2,8 +2,9 @@ package multiagent
 
 import (
 	"context"
-	"fmt"
 	"sync"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // MemoryCommunicator 内存通信器（单机多Agent）
@@ -29,7 +30,10 @@ func (c *MemoryCommunicator) Send(ctx context.Context, to string, message *Agent
 	c.mu.RLock()
 	if c.closed {
 		c.mu.RUnlock()
-		return fmt.Errorf("communicator is closed")
+		return agentErrors.New(agentErrors.CodeInvalidConfig, "communicator is closed").
+			WithComponent("memory_communicator").
+			WithOperation("send").
+			WithContext("to", to)
 	}
 
 	ch, exists := c.channels[to]
@@ -77,7 +81,9 @@ func (c *MemoryCommunicator) Broadcast(ctx context.Context, message *AgentMessag
 	defer c.mu.RUnlock()
 
 	if c.closed {
-		return fmt.Errorf("communicator is closed")
+		return agentErrors.New(agentErrors.CodeInvalidConfig, "communicator is closed").
+			WithComponent("memory_communicator").
+			WithOperation("broadcast")
 	}
 
 	message.From = c.agentID
@@ -101,7 +107,10 @@ func (c *MemoryCommunicator) Subscribe(ctx context.Context, topic string) (<-cha
 	defer c.mu.Unlock()
 
 	if c.closed {
-		return nil, fmt.Errorf("communicator is closed")
+		return nil, agentErrors.New(agentErrors.CodeInvalidConfig, "communicator is closed").
+			WithComponent("memory_communicator").
+			WithOperation("subscribe").
+			WithContext("topic", topic)
 	}
 
 	ch := make(chan *AgentMessage, 100)

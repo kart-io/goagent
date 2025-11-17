@@ -1,9 +1,9 @@
 package toolbox
 
 import (
-	"fmt"
 	"sync"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/mcp/core"
 )
 
@@ -163,7 +163,10 @@ func (r *MemoryRegistry) RegisterBatch(tools []core.Tool) error {
 	for _, tool := range tools {
 		name := tool.Name()
 		if _, exists := r.tools[name]; exists {
-			return fmt.Errorf("tool already exists: %s", name)
+			return agentErrors.New(agentErrors.CodeInvalidConfig, "tool already exists").
+				WithComponent("memory_registry").
+				WithOperation("register_batch").
+				WithContext("tool_name", name)
 		}
 	}
 

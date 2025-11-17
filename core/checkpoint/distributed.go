@@ -7,6 +7,7 @@ import (
 	"time"
 
 	agentstate "github.com/kart-io/goagent/core/state"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 const (
@@ -111,7 +112,7 @@ func NewDistributedCheckpointer(config *DistributedCheckpointerConfig) (*Distrib
 	}
 
 	if config.PrimaryBackend == nil {
-		return nil, fmt.Errorf("primary backend is required")
+		return nil, agentErrors.NewInvalidConfigError("distributed_checkpointer", "primary_backend", "primary backend is required")
 	}
 
 	dc := &DistributedCheckpointer{
@@ -152,7 +153,10 @@ func (dc *DistributedCheckpointer) Save(ctx context.Context, threadID string, st
 				return dc.activeBackend.Save(ctx, threadID, state)
 			}
 		}
-		return fmt.Errorf("failed to save to active backend: %w", err)
+		return agentErrors.Wrap(err, agentErrors.CodeStateCheckpoint, "failed to save to active backend").
+			WithComponent("distributed_checkpointer").
+			WithOperation("save").
+			WithContext("thread_id", threadID)
 	}
 
 	// Replicate to secondary if enabled
@@ -197,7 +201,10 @@ func (dc *DistributedCheckpointer) Load(ctx context.Context, threadID string) (a
 				return dc.activeBackend.Load(ctx, threadID)
 			}
 		}
-		return nil, fmt.Errorf("failed to load from active backend: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeStateLoad, "failed to load from active backend").
+			WithComponent("distributed_checkpointer").
+			WithOperation("load").
+			WithContext("thread_id", threadID)
 	}
 
 	return state, nil
@@ -223,7 +230,10 @@ func (dc *DistributedCheckpointer) Delete(ctx context.Context, threadID string) 
 
 	// Delete from active backend
 	if err := active.Delete(ctx, threadID); err != nil {
-		return fmt.Errorf("failed to delete from active backend: %w", err)
+		return agentErrors.Wrap(err, agentErrors.CodeStateCheckpoint, "failed to delete from active backend").
+			WithComponent("distributed_checkpointer").
+			WithOperation("delete").
+			WithContext("thread_id", threadID)
 	}
 
 	// Replicate deletion to secondary if enabled
@@ -275,15 +285,23 @@ func (dc *DistributedCheckpointer) tryFailover(ctx context.Context) error {
 	defer dc.mu.Unlock()
 
 	if dc.failedOver {
-		return fmt.Errorf("already failed over")
+		return agentErrors.New(agentErrors.CodeDistributedCoordination, "already failed over").
+			WithComponent("distributed_checkpointer").
+			WithOperation("failover")
 	}
 
 	if dc.config.SecondaryBackend == nil {
-		return fmt.Errorf("no secondary backend available")
+		return agentErrors.New(agentErrors.CodeDistributedCoordination, "no secondary backend available").
+			WithComponent("distributed_checkpointer").
+			WithOperation("failover")
 	}
 
 	if dc.failoverCount >= dc.config.MaxFailoverAttempts {
-		return fmt.Errorf("max failover attempts reached")
+		return agentErrors.New(agentErrors.CodeDistributedCoordination, "max failover attempts reached").
+			WithComponent("distributed_checkpointer").
+			WithOperation("failover").
+			WithContext("max_attempts", dc.config.MaxFailoverAttempts).
+			WithContext("current_count", dc.failoverCount)
 	}
 
 	// Switch to secondary
@@ -306,12 +324,18 @@ func (dc *DistributedCheckpointer) tryFailback(ctx context.Context) error {
 
 	// Check if enough time has passed since last failover
 	if time.Since(dc.lastFailoverAt) < dc.config.FailbackDelay {
-		return fmt.Errorf("failback delay not met")
+		return agentErrors.New(agentErrors.CodeDistributedCoordination, "failback delay not met").
+			WithComponent("distributed_checkpointer").
+			WithOperation("failback").
+			WithContext("failback_delay", dc.config.FailbackDelay.String()).
+			WithContext("time_since_failover", time.Since(dc.lastFailoverAt).String())
 	}
 
 	// Check primary health
 	if !dc.primaryHealthy {
-		return fmt.Errorf("primary backend not healthy")
+		return agentErrors.New(agentErrors.CodeDistributedCoordination, "primary backend not healthy").
+			WithComponent("distributed_checkpointer").
+			WithOperation("failback")
 	}
 
 	// Switch back to primary

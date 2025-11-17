@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/core"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // DataPipelineAgent 数据流处理 Agent
@@ -104,7 +105,9 @@ func (a *DataPipelineAgent) processDataPipeline(ctx context.Context, input *core
 	// 从输入获取数据源
 	dataSource, ok := input.Context["data_source"].([]interface{})
 	if !ok {
-		_ = writer.WriteError(fmt.Errorf("invalid data source"))
+		_ = writer.WriteError(agentErrors.New(agentErrors.CodeInvalidConfig, "invalid data source").
+			WithComponent("data_pipeline_agent").
+			WithOperation("processDataPipeline"))
 		return
 	}
 
@@ -135,7 +138,9 @@ func (a *DataPipelineAgent) processDataPipeline(ctx context.Context, input *core
 		// 处理批次
 		result, err := a.processBatch(ctx, batch)
 		if err != nil {
-			_ = writer.WriteError(fmt.Errorf("batch processing failed: %w", err))
+			_ = writer.WriteError(agentErrors.Wrap(err, agentErrors.CodeAgentExecution, "batch processing failed").
+				WithComponent("data_pipeline_agent").
+				WithOperation("processDataPipeline"))
 			return
 		}
 
@@ -220,7 +225,10 @@ func (a *DataPipelineAgent) ProcessWithTransform(
 			// 应用转换
 			transformed, err := transform(item)
 			if err != nil {
-				if err := writer.WriteError(fmt.Errorf("transform failed at item %d: %w", i, err)); err != nil {
+				if err := writer.WriteError(agentErrors.Wrap(err, agentErrors.CodeAgentExecution, "transform failed").
+					WithComponent("data_pipeline_agent").
+					WithOperation("ProcessWithTransform").
+					WithContext("item_index", i)); err != nil {
 					fmt.Printf("failed to write error: %v", err)
 				}
 				return

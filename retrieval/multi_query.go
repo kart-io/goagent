@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
 )
 
@@ -68,7 +69,10 @@ func (m *MultiQueryRetriever) GetRelevantDocuments(ctx context.Context, query st
 	// 1. 生成查询变体
 	queries, err := m.generateQueries(ctx, query)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate queries: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeLLMRequest, "failed to generate queries").
+			WithComponent("multi_query_retriever").
+			WithOperation("get_relevant_documents").
+			WithContext("query", query)
 	}
 
 	// 2. 对每个查询执行检索
@@ -126,7 +130,10 @@ func (m *MultiQueryRetriever) generateQueries(ctx context.Context, query string)
 		MaxTokens:   500,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("LLM generation failed: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeLLMRequest, "LLM generation failed").
+			WithComponent("multi_query_retriever").
+			WithOperation("generate_queries").
+			WithContext("query", query)
 	}
 
 	// 解析生成的查询

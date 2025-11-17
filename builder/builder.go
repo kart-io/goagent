@@ -11,6 +11,7 @@ import (
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/execution"
 	"github.com/kart-io/goagent/core/middleware"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/store"
@@ -205,7 +206,7 @@ func (b *AgentBuilder[C, S]) ConfigureForChatbot() *AgentBuilder[C, S] {
 			func(req *middleware.MiddlewareRequest) error {
 				// Validate input length
 				if len(fmt.Sprintf("%v", req.Input)) > 1000 {
-					return fmt.Errorf("message too long")
+					return agentErrors.NewInvalidInputError("chatbot", "message", "message too long")
 				}
 				return nil
 			},
@@ -247,7 +248,7 @@ func (b *AgentBuilder[C, S]) ConfigureForAnalysis() *AgentBuilder[C, S] {
 func (b *AgentBuilder[C, S]) Build() (*ConfigurableAgent[C, S], error) {
 	// Validate required components
 	if b.llmClient == nil {
-		return nil, fmt.Errorf("LLM client is required")
+		return nil, agentErrors.NewInvalidConfigError("builder", "llm_client", "LLM client is required")
 	}
 
 	// Set defaults if not provided
@@ -258,7 +259,7 @@ func (b *AgentBuilder[C, S]) Build() (*ConfigurableAgent[C, S], error) {
 		if _, ok := any(zero).(*core.AgentState); ok {
 			b.state = any(core.NewAgentState()).(S)
 		} else {
-			return nil, fmt.Errorf("state is required")
+			return nil, agentErrors.NewInvalidConfigError("builder", "state", "state is required")
 		}
 	}
 
@@ -307,7 +308,7 @@ func (b *AgentBuilder[C, S]) Build() (*ConfigurableAgent[C, S], error) {
 
 	// Initialize if needed
 	if err := agent.Initialize(context.Background()); err != nil {
-		return nil, fmt.Errorf("failed to initialize agent: %w", err)
+		return nil, agentErrors.NewAgentInitializationError("configurable_agent", err)
 	}
 
 	return agent, nil
@@ -338,7 +339,7 @@ func (b *AgentBuilder[C, S]) createHandler(runtime *execution.Runtime[C, S]) mid
 		// Call LLM
 		response, err := b.llmClient.Complete(ctx, llmReq)
 		if err != nil {
-			return nil, fmt.Errorf("LLM error: %w", err)
+			return nil, agentErrors.Wrap(err, agentErrors.CodeLLMRequest, "LLM completion error")
 		}
 
 		// Trigger OnLLMEnd callbacks
@@ -493,7 +494,7 @@ func (a *ConfigurableAgent[C, S]) ExecuteWithTools(ctx context.Context, input in
 		for _, call := range toolCalls {
 			result, err := a.executeToolCall(ctx, call)
 			if err != nil {
-				return nil, fmt.Errorf("tool execution failed: %w", err)
+				return nil, agentErrors.Wrap(err, agentErrors.CodeToolExecution, "tool execution failed")
 			}
 			toolResults = append(toolResults, result)
 		}
@@ -508,7 +509,8 @@ func (a *ConfigurableAgent[C, S]) ExecuteWithTools(ctx context.Context, input in
 	}
 
 	// Max iterations reached
-	return lastOutput, fmt.Errorf("max iterations (%d) reached", a.config.MaxIterations)
+	return lastOutput, agentErrors.New(agentErrors.CodeAgentExecution, "max iterations reached").
+		WithContext("max_iterations", a.config.MaxIterations)
 }
 
 // extractToolCalls extracts tool calls from LLM output
@@ -537,7 +539,7 @@ func (a *ConfigurableAgent[C, S]) executeToolCall(ctx context.Context, call Tool
 			return output.Result, nil
 		}
 	}
-	return nil, fmt.Errorf("tool not found: %s", call.Name)
+	return nil, agentErrors.NewToolNotFoundError(call.Name)
 }
 
 // GetState returns the current state
@@ -569,7 +571,7 @@ func (a *ConfigurableAgent[C, S]) Shutdown(ctx context.Context) error {
 	// Save final state
 	if a.runtime.Checkpointer != nil {
 		if err := a.runtime.SaveState(ctx); err != nil {
-			return fmt.Errorf("failed to save final state: %w", err)
+			return agentErrors.NewStateCheckpointError(a.config.SessionID, "save_final", err)
 		}
 	}
 
@@ -691,7 +693,7 @@ func WorkflowAgent(llmClient llm.Client, workflows map[string]interface{}) (*Con
 			middleware.NewValidationMiddleware(func(req *middleware.MiddlewareRequest) error {
 				// Basic validation
 				if req.Input == nil {
-					return fmt.Errorf("workflow input cannot be nil")
+					return agentErrors.NewInvalidInputError("workflow", "input", "workflow input cannot be nil")
 				}
 				return nil
 			}),

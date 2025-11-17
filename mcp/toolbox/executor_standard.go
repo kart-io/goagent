@@ -2,9 +2,9 @@ package toolbox
 
 import (
 	"context"
-	"fmt"
 	"time"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/mcp/core"
 )
 
@@ -81,7 +81,10 @@ func (e *StandardExecutor) ExecuteWithRetry(ctx context.Context, tool core.Tool,
 		}
 	}
 
-	return result, fmt.Errorf("execution failed after %d retries: %w", maxRetries, lastErr)
+	return result, agentErrors.Wrap(lastErr, agentErrors.CodeAgentExecution, "execution failed after retries").
+		WithComponent("standard_executor").
+		WithOperation("execute_with_retry").
+		WithContext("max_retries", maxRetries)
 }
 
 // ExecuteWithTimeout 执行工具（带超时）
@@ -111,11 +114,14 @@ func (e *StandardExecutor) ExecuteWithTimeout(ctx context.Context, tool core.Too
 	select {
 	case <-ctx.Done():
 		return &core.ToolResult{
-			Success:   false,
-			Error:     "execution timeout",
-			ErrorCode: "TIMEOUT_ERROR",
-			Timestamp: time.Now(),
-		}, fmt.Errorf("execution timeout after %v", timeout)
+				Success:   false,
+				Error:     "execution timeout",
+				ErrorCode: "TIMEOUT_ERROR",
+				Timestamp: time.Now(),
+			}, agentErrors.New(agentErrors.CodeContextTimeout, "execution timeout").
+				WithComponent("standard_executor").
+				WithOperation("execute_with_timeout").
+				WithContext("timeout", timeout.String())
 	case err := <-errChan:
 		result := <-resultChan
 		return result, err

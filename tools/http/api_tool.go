@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"time"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/tools"
 )
@@ -92,9 +93,11 @@ func (a *APITool) run(ctx context.Context, input *interfaces.ToolInput) (*interf
 	urlStr, ok := input.Args["url"].(string)
 	if !ok || urlStr == "" {
 		return &interfaces.ToolOutput{
-			Success: false,
-			Error:   "url is required and must be a non-empty string",
-		}, tools.NewToolError(a.Name(), "invalid input", fmt.Errorf("url is required"))
+				Success: false,
+				Error:   "url is required and must be a non-empty string",
+			}, tools.NewToolError(a.Name(), "invalid input", agentErrors.New(agentErrors.CodeInvalidInput, "url is required").
+				WithComponent("api_tool").
+				WithOperation("run"))
 	}
 
 	// 如果配置了基础 URL 且提供的是相对路径，则拼接
@@ -212,14 +215,18 @@ func (a *APITool) run(ctx context.Context, input *interfaces.ToolInput) (*interf
 
 	if !success {
 		return &interfaces.ToolOutput{
-			Result:  result,
-			Success: false,
-			Error:   fmt.Sprintf("HTTP request failed with status %d", resp.StatusCode),
-			Metadata: map[string]interface{}{
-				"method": method,
-				"url":    urlStr,
-			},
-		}, tools.NewToolError(a.Name(), "non-2xx status code", fmt.Errorf("status: %d", resp.StatusCode))
+				Result:  result,
+				Success: false,
+				Error:   fmt.Sprintf("HTTP request failed with status %d", resp.StatusCode),
+				Metadata: map[string]interface{}{
+					"method": method,
+					"url":    urlStr,
+				},
+			}, tools.NewToolError(a.Name(), "non-2xx status code", agentErrors.New(agentErrors.CodeToolExecution, "HTTP request failed with non-2xx status").
+				WithComponent("api_tool").
+				WithOperation("run").
+				WithContext("status_code", resp.StatusCode).
+				WithContext("url", urlStr))
 	}
 
 	return &interfaces.ToolOutput{

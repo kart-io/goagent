@@ -88,12 +88,12 @@ func TestInMemoryLangGraphStore_Get(t *testing.T) {
 	// Test non-existent namespace
 	_, err = store.Get(ctx, []string{"nonexistent"}, "key")
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "namespace not found")
+	assert.Contains(t, err.Error(), "STORE_NOT_FOUND")
 
 	// Test non-existent key
 	_, err = store.Get(ctx, []string{"users"}, "999")
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "key not found")
+	assert.Contains(t, err.Error(), "STORE_NOT_FOUND")
 }
 
 func TestInMemoryLangGraphStore_Search(t *testing.T) {
@@ -135,17 +135,17 @@ func TestInMemoryLangGraphStore_Delete(t *testing.T) {
 	// Verify deletion
 	_, err = store.Get(ctx, []string{"users"}, "123")
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "key not found")
+	assert.Contains(t, err.Error(), "STORE_NOT_FOUND")
 
 	// Delete non-existent key
 	err = store.Delete(ctx, []string{"users"}, "999")
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "key not found")
+	assert.Contains(t, err.Error(), "STORE_NOT_FOUND")
 
 	// Delete from non-existent namespace
 	err = store.Delete(ctx, []string{"nonexistent"}, "key")
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "namespace not found")
+	assert.Contains(t, err.Error(), "STORE_NOT_FOUND")
 }
 
 func TestInMemoryLangGraphStore_List(t *testing.T) {

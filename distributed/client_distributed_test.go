@@ -81,7 +81,7 @@ func TestClient_ExecuteAgent_BadStatusCode(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.Nil(t, output)
-	assert.Contains(t, err.Error(), "agent execution failed with status")
+	assert.Contains(t, err.Error(), "agent execution failed")
 }
 
 // TestClient_ExecuteAgent_InvalidJSON tests agent execution with invalid JSON response
@@ -167,7 +167,7 @@ func TestClient_ExecuteAgentAsync_BadStatusCode(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.Empty(t, taskID)
-	assert.Contains(t, err.Error(), "async execution failed with status")
+	assert.Contains(t, err.Error(), "async execution failed")
 }
 
 // TestClient_ExecuteAgentAsync_InvalidJSON tests async with invalid response

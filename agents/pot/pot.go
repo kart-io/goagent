@@ -11,6 +11,7 @@ import (
 	"time"
 
 	agentcore "github.com/kart-io/goagent/core"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 )
@@ -335,7 +336,9 @@ func (p *PoTAgent) extractCode(response string, language string) string {
 func (p *PoTAgent) validateCode(code string, language string) error {
 	// Check for empty code
 	if strings.TrimSpace(code) == "" {
-		return fmt.Errorf("generated code is empty")
+		return agentErrors.New(agentErrors.CodeParserFailed, "generated code is empty").
+			WithComponent("pot_agent").
+			WithOperation("validateCode")
 	}
 
 	// Language-specific validation
@@ -358,14 +361,19 @@ func (p *PoTAgent) validatePythonCode(code string) error {
 		dangerousImports := []string{"os", "subprocess", "eval", "exec", "__import__"}
 		for _, imp := range dangerousImports {
 			if strings.Contains(code, imp) && !p.isAllowedImport(imp) {
-				return fmt.Errorf("unsafe import detected: %s", imp)
+				return agentErrors.New(agentErrors.CodeInvalidInput, "unsafe import detected").
+					WithComponent("pot_agent").
+					WithOperation("validateCode").
+					WithContext("import", imp)
 			}
 		}
 	}
 
 	// Basic syntax check (simplified)
 	if strings.Count(code, "(") != strings.Count(code, ")") {
-		return fmt.Errorf("unbalanced parentheses")
+		return agentErrors.New(agentErrors.CodeInvalidInput, "unbalanced parentheses").
+			WithComponent("pot_agent").
+			WithOperation("validateCode")
 	}
 
 	return nil
@@ -378,7 +386,10 @@ func (p *PoTAgent) validateJavaScriptCode(code string) error {
 		dangerousFuncs := []string{"eval", "Function", "require('child_process')"}
 		for _, fn := range dangerousFuncs {
 			if strings.Contains(code, fn) {
-				return fmt.Errorf("unsafe function detected: %s", fn)
+				return agentErrors.New(agentErrors.CodeInvalidInput, "unsafe function detected").
+					WithComponent("pot_agent").
+					WithOperation("validateJavaScriptCode").
+					WithContext("function", fn)
 			}
 		}
 	}
@@ -391,7 +402,9 @@ func (p *PoTAgent) validateGoCode(code string) error {
 	// For Go, we need a main function
 	if !strings.Contains(code, "func main()") && !strings.Contains(code, "package main") {
 		// Wrap in main function
-		return fmt.Errorf("go code must have main function")
+		return agentErrors.New(agentErrors.CodeInvalidInput, "go code must have main function").
+			WithComponent("pot_agent").
+			WithOperation("validateGoCode")
 	}
 
 	return nil
@@ -411,7 +424,10 @@ func (p *PoTAgent) executeCode(ctx context.Context, code string, language string
 	case "go":
 		return p.executeGo(execCtx, code)
 	default:
-		return nil, fmt.Errorf("unsupported language: %s", language)
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "unsupported language").
+			WithComponent("pot_agent").
+			WithOperation("executeCode").
+			WithContext("language", language)
 	}
 }
 
@@ -437,7 +453,10 @@ func (p *PoTAgent) executePython(ctx context.Context, code string) (*CodeResult,
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			result.ExitCode = exitErr.ExitCode()
 		}
-		return result, fmt.Errorf("execution failed: %v", err)
+		return result, agentErrors.Wrap(err, agentErrors.CodeToolExecution, "python execution failed").
+			WithComponent("pot_agent").
+			WithOperation("executePython").
+			WithContext("stderr", stderr.String())
 	}
 
 	return result, nil
@@ -465,7 +484,10 @@ func (p *PoTAgent) executeJavaScript(ctx context.Context, code string) (*CodeRes
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			result.ExitCode = exitErr.ExitCode()
 		}
-		return result, fmt.Errorf("execution failed: %v", err)
+		return result, agentErrors.Wrap(err, agentErrors.CodeToolExecution, "javascript execution failed").
+			WithComponent("pot_agent").
+			WithOperation("executeJavaScript").
+			WithContext("stderr", stderr.String())
 	}
 
 	return result, nil
@@ -493,7 +515,10 @@ func (p *PoTAgent) executeGo(ctx context.Context, code string) (*CodeResult, err
 	}
 
 	if err != nil {
-		return result, fmt.Errorf("execution failed: %v", err)
+		return result, agentErrors.Wrap(err, agentErrors.CodeToolExecution, "go execution failed").
+			WithComponent("pot_agent").
+			WithOperation("executeGo").
+			WithContext("stderr", result.Error)
 	}
 
 	return result, nil

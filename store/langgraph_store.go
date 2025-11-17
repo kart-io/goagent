@@ -2,10 +2,11 @@ package store
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"sync"
 	"time"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // StoreValue represents a stored value with metadata
@@ -105,7 +106,9 @@ func (s *InMemoryLangGraphStore) PutWithTTL(ctx context.Context, namespace []str
 	defer s.mu.Unlock()
 
 	if s.closed {
-		return fmt.Errorf("store is closed")
+		return agentErrors.New(agentErrors.CodeInternal, "store is closed").
+			WithComponent("langgraph_store").
+			WithOperation("put_with_ttl")
 	}
 
 	ns := namespaceToString(namespace)
@@ -153,22 +156,31 @@ func (s *InMemoryLangGraphStore) Get(ctx context.Context, namespace []string, ke
 	defer s.mu.RUnlock()
 
 	if s.closed {
-		return nil, fmt.Errorf("store is closed")
+		return nil, agentErrors.New(agentErrors.CodeInternal, "store is closed").
+			WithComponent("langgraph_store").
+			WithOperation("get")
 	}
 
 	ns := namespaceToString(namespace)
 	if s.data[ns] == nil {
-		return nil, fmt.Errorf("namespace not found")
+		return nil, agentErrors.New(agentErrors.CodeStoreNotFound, "namespace not found").
+			WithComponent("langgraph_store").
+			WithOperation("get").
+			WithContext("namespace", namespace)
 	}
 
 	value, exists := s.data[ns][key]
 	if !exists {
-		return nil, fmt.Errorf("key not found")
+		return nil, agentErrors.NewStoreNotFoundError(namespace, key)
 	}
 
 	// Check expiration
 	if value.IsExpired() {
-		return nil, fmt.Errorf("value has expired")
+		return nil, agentErrors.New(agentErrors.CodeStoreNotFound, "value has expired").
+			WithComponent("langgraph_store").
+			WithOperation("get").
+			WithContext("namespace", namespace).
+			WithContext("key", key)
 	}
 
 	// Return a copy to prevent external modification
@@ -181,7 +193,9 @@ func (s *InMemoryLangGraphStore) Search(ctx context.Context, namespace []string,
 	defer s.mu.RUnlock()
 
 	if s.closed {
-		return nil, fmt.Errorf("store is closed")
+		return nil, agentErrors.New(agentErrors.CodeInternal, "store is closed").
+			WithComponent("langgraph_store").
+			WithOperation("search")
 	}
 
 	ns := namespaceToString(namespace)
@@ -231,16 +245,21 @@ func (s *InMemoryLangGraphStore) Delete(ctx context.Context, namespace []string,
 	defer s.mu.Unlock()
 
 	if s.closed {
-		return fmt.Errorf("store is closed")
+		return agentErrors.New(agentErrors.CodeInternal, "store is closed").
+			WithComponent("langgraph_store").
+			WithOperation("delete")
 	}
 
 	ns := namespaceToString(namespace)
 	if s.data[ns] == nil {
-		return fmt.Errorf("namespace not found")
+		return agentErrors.New(agentErrors.CodeStoreNotFound, "namespace not found").
+			WithComponent("langgraph_store").
+			WithOperation("delete").
+			WithContext("namespace", namespace)
 	}
 
 	if _, exists := s.data[ns][key]; !exists {
-		return fmt.Errorf("key not found")
+		return agentErrors.NewStoreNotFoundError(namespace, key)
 	}
 
 	delete(s.data[ns], key)
@@ -265,7 +284,9 @@ func (s *InMemoryLangGraphStore) List(ctx context.Context, namespace []string) (
 	defer s.mu.RUnlock()
 
 	if s.closed {
-		return nil, fmt.Errorf("store is closed")
+		return nil, agentErrors.New(agentErrors.CodeInternal, "store is closed").
+			WithComponent("langgraph_store").
+			WithOperation("list")
 	}
 
 	ns := namespaceToString(namespace)
@@ -290,7 +311,9 @@ func (s *InMemoryLangGraphStore) ListWithPrefix(ctx context.Context, namespace [
 	defer s.mu.RUnlock()
 
 	if s.closed {
-		return nil, fmt.Errorf("store is closed")
+		return nil, agentErrors.New(agentErrors.CodeInternal, "store is closed").
+			WithComponent("langgraph_store").
+			WithOperation("list_with_prefix")
 	}
 
 	ns := namespaceToString(namespace)
@@ -314,7 +337,9 @@ func (s *InMemoryLangGraphStore) Update(ctx context.Context, namespace []string,
 	defer s.mu.Unlock()
 
 	if s.closed {
-		return fmt.Errorf("store is closed")
+		return agentErrors.New(agentErrors.CodeInternal, "store is closed").
+			WithComponent("langgraph_store").
+			WithOperation("update")
 	}
 
 	ns := namespaceToString(namespace)
@@ -369,7 +394,9 @@ func (s *InMemoryLangGraphStore) Watch(ctx context.Context, namespace []string) 
 	defer s.mu.Unlock()
 
 	if s.closed {
-		return nil, fmt.Errorf("store is closed")
+		return nil, agentErrors.New(agentErrors.CodeInternal, "store is closed").
+			WithComponent("langgraph_store").
+			WithOperation("watch")
 	}
 
 	ns := namespaceToString(namespace)

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/core/state"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // State is an alias to state.State for convenience
@@ -400,7 +401,9 @@ func (m *RetryMiddleware) OnError(ctx context.Context, err error) error {
 
 	// Note: Actual retry logic would need to be implemented in the chain execution
 	// This is a simplified version showing the pattern
-	return fmt.Errorf("retry needed for error: %w", err)
+	return agentErrors.Wrap(err, agentErrors.CodeMiddlewareExecution, "retry needed for error").
+		WithComponent("retry_middleware").
+		WithOperation("on_error")
 }
 
 // CacheMiddleware provides response caching

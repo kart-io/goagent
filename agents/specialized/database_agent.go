@@ -2,12 +2,12 @@ package specialized
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"gorm.io/gorm"
 
 	agentcore "github.com/kart-io/goagent/core"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/logger/core"
 )
 
@@ -44,7 +44,9 @@ func (a *DatabaseAgent) Execute(ctx context.Context, input *agentcore.AgentInput
 	// 解析参数
 	operation, ok := input.Context["operation"].(string)
 	if !ok {
-		return nil, fmt.Errorf("operation is required")
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "operation is required").
+			WithComponent("database_agent").
+			WithOperation("Execute")
 	}
 
 	a.logger.Info("Executing database operation",
@@ -73,7 +75,10 @@ func (a *DatabaseAgent) Execute(ctx context.Context, input *agentcore.AgentInput
 	case "delete":
 		result, err = a.executeDelete(ctx, input)
 	default:
-		return nil, fmt.Errorf("unknown operation: %s", operation)
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "unknown operation").
+			WithComponent("database_agent").
+			WithOperation("Execute").
+			WithContext("operation", operation)
 	}
 
 	// 构建输出
@@ -97,9 +102,12 @@ func (a *DatabaseAgent) Execute(ctx context.Context, input *agentcore.AgentInput
 
 	if err != nil {
 		output.Status = "failed"
-		output.Message = fmt.Sprintf("Database operation failed: %v", err)
+		output.Message = "Database operation failed"
 		output.ToolCalls[0].Error = err.Error()
-		return output, fmt.Errorf("database operation failed: %w", err)
+		return output, agentErrors.Wrap(err, agentErrors.CodeAgentExecution, "database operation failed").
+			WithComponent("database_agent").
+			WithOperation("Execute").
+			WithContext("operation", operation)
 	}
 
 	output.Message = "Database operation completed successfully"
@@ -111,7 +119,9 @@ func (a *DatabaseAgent) Execute(ctx context.Context, input *agentcore.AgentInput
 func (a *DatabaseAgent) executeQuery(ctx context.Context, input *agentcore.AgentInput) (interface{}, error) {
 	sql, ok := input.Context["sql"].(string)
 	if !ok {
-		return nil, fmt.Errorf("sql is required")
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "sql is required").
+			WithComponent("database_agent").
+			WithOperation("executeQuery")
 	}
 
 	args, _ := input.Context["args"].([]interface{})
@@ -131,7 +141,9 @@ func (a *DatabaseAgent) executeQuery(ctx context.Context, input *agentcore.Agent
 func (a *DatabaseAgent) executeExec(ctx context.Context, input *agentcore.AgentInput) (interface{}, error) {
 	sql, ok := input.Context["sql"].(string)
 	if !ok {
-		return nil, fmt.Errorf("sql is required")
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "sql is required").
+			WithComponent("database_agent").
+			WithOperation("executeExec")
 	}
 
 	args, _ := input.Context["args"].([]interface{})
@@ -150,12 +162,16 @@ func (a *DatabaseAgent) executeExec(ctx context.Context, input *agentcore.AgentI
 func (a *DatabaseAgent) executeCreate(ctx context.Context, input *agentcore.AgentInput) (interface{}, error) {
 	tableName, ok := input.Context["table"].(string)
 	if !ok {
-		return nil, fmt.Errorf("table is required")
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "table is required").
+			WithComponent("database_agent").
+			WithOperation("executeCreate")
 	}
 
 	data, ok := input.Context["data"].(map[string]interface{})
 	if !ok {
-		return nil, fmt.Errorf("data is required")
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "data is required").
+			WithComponent("database_agent").
+			WithOperation("executeCreate")
 	}
 
 	if err := a.db.WithContext(ctx).Table(tableName).Create(data).Error; err != nil {
@@ -172,12 +188,16 @@ func (a *DatabaseAgent) executeCreate(ctx context.Context, input *agentcore.Agen
 func (a *DatabaseAgent) executeUpdate(ctx context.Context, input *agentcore.AgentInput) (interface{}, error) {
 	tableName, ok := input.Context["table"].(string)
 	if !ok {
-		return nil, fmt.Errorf("table is required")
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "table is required").
+			WithComponent("database_agent").
+			WithOperation("executeUpdate")
 	}
 
 	data, ok := input.Context["data"].(map[string]interface{})
 	if !ok {
-		return nil, fmt.Errorf("data is required")
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "data is required").
+			WithComponent("database_agent").
+			WithOperation("executeUpdate")
 	}
 
 	where, _ := input.Context["where"].(map[string]interface{})
@@ -202,12 +222,16 @@ func (a *DatabaseAgent) executeUpdate(ctx context.Context, input *agentcore.Agen
 func (a *DatabaseAgent) executeDelete(ctx context.Context, input *agentcore.AgentInput) (interface{}, error) {
 	tableName, ok := input.Context["table"].(string)
 	if !ok {
-		return nil, fmt.Errorf("table is required")
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "table is required").
+			WithComponent("database_agent").
+			WithOperation("executeDelete")
 	}
 
 	where, ok := input.Context["where"].(map[string]interface{})
 	if !ok {
-		return nil, fmt.Errorf("where is required")
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "where is required").
+			WithComponent("database_agent").
+			WithOperation("executeDelete")
 	}
 
 	query := a.db.WithContext(ctx).Table(tableName)

@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // MemoryType represents the type of memory
@@ -239,7 +241,10 @@ func (m *HierarchicalMemory) Get(ctx context.Context, key string) (interface{}, 
 		return entry.Content, nil
 	}
 
-	return nil, fmt.Errorf("memory not found: %s", key)
+	return nil, agentErrors.New(agentErrors.CodeStoreNotFound, "memory not found").
+		WithComponent("hierarchical_memory").
+		WithOperation("get").
+		WithContext("key", key)
 }
 
 // Search searches for memories matching a query
@@ -268,7 +273,9 @@ func (m *HierarchicalMemory) Search(ctx context.Context, query string, limit int
 // VectorSearch searches memories using vector similarity
 func (m *HierarchicalMemory) VectorSearch(ctx context.Context, embedding []float32, limit int, threshold float64) ([]*MemoryEntry, error) {
 	if m.vectorStore == nil {
-		return nil, fmt.Errorf("vector store not configured")
+		return nil, agentErrors.New(agentErrors.CodeInvalidConfig, "vector store not configured").
+			WithComponent("hierarchical_memory").
+			WithOperation("vector_search")
 	}
 
 	m.mu.RLock()
@@ -283,7 +290,9 @@ func (m *HierarchicalMemory) VectorSearch(ctx context.Context, embedding []float
 
 	results, err := m.vectorStore.Search(ctx, embedding64, limit*2)
 	if err != nil {
-		return nil, fmt.Errorf("vector search failed: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeRetrievalSearch, "vector search failed").
+			WithComponent("hierarchical_memory").
+			WithOperation("vector_search")
 	}
 
 	// Retrieve memory entries
@@ -350,7 +359,10 @@ func (m *HierarchicalMemory) Consolidate(ctx context.Context) error {
 
 		// Store in long-term
 		if err := m.longTerm.Store(ctx, entry); err != nil {
-			return fmt.Errorf("failed to consolidate memory %s: %w", entry.ID, err)
+			return agentErrors.Wrap(err, agentErrors.CodeStateSave, "failed to consolidate memory").
+				WithComponent("hierarchical_memory").
+				WithOperation("consolidate").
+				WithContext("entry_id", entry.ID)
 		}
 
 		// Store in vector database if available
@@ -416,7 +428,9 @@ func (m *HierarchicalMemory) Associate(ctx context.Context, id1, id2 string, str
 	}
 
 	if entry1 == nil || entry2 == nil {
-		return fmt.Errorf("one or both memories not found")
+		return agentErrors.New(agentErrors.CodeStoreNotFound, "one or both memories not found").
+			WithComponent("hierarchical_memory").
+			WithOperation("associate")
 	}
 
 	// Create bidirectional association
@@ -458,7 +472,10 @@ func (m *HierarchicalMemory) GetAssociated(ctx context.Context, id string, limit
 	}
 
 	if source == nil {
-		return nil, fmt.Errorf("memory not found: %s", id)
+		return nil, agentErrors.New(agentErrors.CodeStoreNotFound, "memory not found").
+			WithComponent("hierarchical_memory").
+			WithOperation("get_associated").
+			WithContext("id", id)
 	}
 
 	// Get associated memories

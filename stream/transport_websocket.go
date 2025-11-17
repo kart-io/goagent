@@ -10,6 +10,7 @@ import (
 	"github.com/gorilla/websocket"
 
 	"github.com/kart-io/goagent/core"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // WebSocketStreamer WebSocket 流支持
@@ -37,7 +38,9 @@ func (w *WebSocketStreamer) WriteChunk(chunk *core.LegacyStreamChunk) error {
 	defer w.mu.Unlock()
 
 	if w.closed {
-		return fmt.Errorf("streamer is closed")
+		return agentErrors.New(agentErrors.CodeStreamWrite, "streamer is closed").
+			WithComponent("websocket_transport").
+			WithOperation("WriteChunk")
 	}
 
 	data, err := json.Marshal(chunk)
@@ -72,7 +75,9 @@ func (w *WebSocketStreamer) WriteBinary(data []byte) error {
 	defer w.mu.Unlock()
 
 	if w.closed {
-		return fmt.Errorf("streamer is closed")
+		return agentErrors.New(agentErrors.CodeStreamWrite, "streamer is closed").
+			WithComponent("websocket_transport").
+			WithOperation("WriteBinary")
 	}
 
 	return w.conn.WriteMessage(websocket.BinaryMessage, data)
@@ -309,7 +314,9 @@ func WebSocketStreamHandler(handler func(ctx context.Context, input *core.AgentI
 		// 解析输入
 		inputData, ok := chunk.Data.(map[string]interface{})
 		if !ok {
-			if err := streamer.WriteError(fmt.Errorf("invalid input format")); err != nil {
+			if err := streamer.WriteError(agentErrors.New(agentErrors.CodeDistributedSerialization, "invalid input format").
+				WithComponent("websocket_transport").
+				WithOperation("WebSocketStreamHandler")); err != nil {
 				fmt.Printf("failed to write error: %v", err)
 			}
 			return

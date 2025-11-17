@@ -1,0 +1,210 @@
+================================================================================
+GoAgent Examples/Optimization 错误处理方式分析 - 快速参考表
+================================================================================
+
+【统计概览】
+
+┌─────────────────────────────────────────────────────────────────┐
+│                    总体错误处理情况统计                          │
+├──────────────────────────────┬──────────────────┬────────────────┤
+│ 指标                         │ 数量             │ 状态           │
+├──────────────────────────────┼──────────────────┼────────────────┤
+│ 需要改进的错误处理位置       │ 13处             │ 高             │
+│ 未使用 errors 包             │ 3 个文件         │ 高             │
+│ log.Fatal 调用               │ 3 处             │ 高             │
+│ log.Fatalf 调用              │ 7 处             │ 高             │
+│ log.Printf 调用              │ 3 处             │ 中             │
+│ fmt 输出函数                 │ 101 处           │ 信息           │
+└──────────────────────────────┴──────────────────┴────────────────┘
+
+
+【文件级错误处理详情】
+
+FILE 1: hybrid_mode/main.go
+═══════════════════════════════════════════════════════════════════
+
+错误处理位置汇总:
+
+  ┌─────────┬──────────┬────────────────────────┬──────────────────┐
+  │ 行号    │ 方式     │ 错误类型               │ 改进优先级       │
+  ├─────────┼──────────┼────────────────────────┼──────────────────┤
+  │ 31      │ Fatal    │ 环境变量缺失           │ ★★★ 高          │
+  │ 42      │ Fatalf   │ LLM 初始化失败         │ ★★★ 高          │
+  │ 110     │ Fatalf   │ 计划创建失败           │ ★★★ 高          │
+  │ 116     │ Printf   │ 计划优化失败(降级)     │ ★★ 中           │
+  └─────────┴──────────┴────────────────────────┴──────────────────┘
+
+详细位置:
+  [31]  if apiKey == "" { log.Fatal("请设置环境变量 OPENAI_API_KEY") }
+  [42]  if err != nil { log.Fatalf("Failed to create LLM client: %v", err) }
+  [110] if err != nil { log.Fatalf("Failed to create plan: %v", err) }
+  [116] if err != nil { log.Printf("Plan optimization failed, using original plan: %v", err) }
+
+
+FILE 2: planning_execution/main.go
+═══════════════════════════════════════════════════════════════════
+
+错误处理位置汇总:
+
+  ┌─────────┬──────────┬────────────────────────┬──────────────────┐
+  │ 行号    │ 方式     │ 错误类型               │ 改进优先级       │
+  ├─────────┼──────────┼────────────────────────┼──────────────────┤
+  │ 26      │ Fatal    │ 环境变量缺失           │ ★★★ 高          │
+  │ 37      │ Fatalf   │ LLM 初始化失败         │ ★★★ 高          │
+  │ 120     │ Fatalf   │ 计划创建失败           │ ★★★ 高          │
+  │ 135     │ Fatalf   │ 计划验证失败           │ ★★★ 高          │
+  │ 153     │ Fatalf   │ 计划优化失败           │ ★★★ 高          │
+  │ 166     │ Printf   │ 计划优化失败(降级)     │ ★★ 中           │
+  └─────────┴──────────┴────────────────────────┴──────────────────┘
+
+详细位置:
+  [26]  if apiKey == "" { log.Fatal("请设置环境变量 OPENAI_API_KEY") }
+  [37]  if err != nil { log.Fatalf("Failed to create LLM client: %v", err) }
+  [120] if err != nil { log.Fatalf("Failed to create plan: %v", err) }
+  [135] if err != nil { log.Fatalf("Plan validation failed: %v", err) }
+  [153] if err != nil { log.Fatalf("Plan refinement failed: %v", err) }
+  [166] if err != nil { log.Printf("Plan optimization failed: %v", err); return plan }
+
+
+FILE 3: cot_vs_react/main.go
+═══════════════════════════════════════════════════════════════════
+
+错误处理位置汇总:
+
+  ┌─────────┬──────────┬────────────────────────┬──────────────────┐
+  │ 行号    │ 方式     │ 错误类型               │ 改进优先级       │
+  ├─────────┼──────────┼────────────────────────┼──────────────────┤
+  │ 25      │ Fatal    │ 环境变量缺失           │ ★★★ 高          │
+  │ 36      │ Fatalf   │ LLM 初始化失败         │ ★★★ 高          │
+  │ 96      │ Printf   │ Agent 执行失败(降级)   │ ★★ 中           │
+  │ 125     │ Printf   │ Agent 执行失败(降级)   │ ★★ 中           │
+  └─────────┴──────────┴────────────────────────┴──────────────────┘
+
+详细位置:
+  [25]  if apiKey == "" { log.Fatal("请设置环境变量 OPENAI_API_KEY") }
+  [36]  if err != nil { log.Fatalf("Failed to create LLM client: %v", err) }
+  [96]  if err != nil { log.Printf("CoT execution failed: %v", err); return failed_output }
+  [125] if err != nil { log.Printf("ReAct execution failed: %v", err); return failed_output }
+
+
+【按错误类型分类】
+
+┌────────────────────────────┬─────────┬────────────────────────────────────┐
+│ 错误类型                   │ 数量    │ 涉及文件                           │
+├────────────────────────────┼─────────┼────────────────────────────────────┤
+│ 环境变量缺失               │ 3处     │ 所有文件 (25, 26, 31)              │
+│ LLM 初始化                 │ 3处     │ 所有文件 (36, 37, 42)              │
+│ 计划创建                   │ 2处     │ hybrid_mode(110), planning(120)    │
+│ 计划验证                   │ 1处     │ planning_execution(135)            │
+│ 计划优化                   │ 2处     │ hybrid_mode(116), planning(166)    │
+│ Agent 执行                 │ 2处     │ cot_vs_react(96, 125)              │
+└────────────────────────────┴─────────┴────────────────────────────────────┘
+
+
+【建议的错误代码映射】
+
+┌──────────────────────┬──────────────────────────────────────────┐
+│ 错误类型             │ 推荐使用的 errors 包函数                  │
+├──────────────────────┼──────────────────────────────────────────┤
+│ 环境变量缺失         │ errors.NewInvalidConfigError()           │
+│ LLM 初始化           │ errors.NewLLMRequestError()              │
+│ 计划创建             │ errors.New(CodeInternal, ...)            │
+│ 计划验证             │ errors.New(CodeInternal, ...)            │
+│ 计划优化             │ errors.Wrap(err, CodeInternal, ...)      │
+│ Agent 执行           │ errors.NewAgentExecutionError()          │
+└──────────────────────┴──────────────────────────────────────────┘
+
+
+【改进方案对照】
+
+BEFORE (当前):
+─────────────────────────────────────────────────────────────────
+if err != nil {
+    log.Fatalf("Failed to create LLM client: %v", err)
+}
+
+AFTER (改进后):
+─────────────────────────────────────────────────────────────────
+if err != nil {
+    agentErr := errors.NewLLMRequestError("openai", "gpt-4", err)
+    log.Fatalf("Failed to initialize LLM: %s", agentErr.Error())
+}
+
+改进点:
+  ✓ 使用项目标准错误包
+  ✓ 提供错误代码分类 (CodeLLMRequest)
+  ✓ 添加提供商和模型信息
+  ✓ 保持错误链
+  ✓ 增强可追踪性
+
+
+【实施计划】
+
+PHASE 1 - 紧急 (这个迭代完成)
+────────────────────────────────────────────────────────────
+  ☐ 替换 3 处 API Key 检查 (25, 26, 31)
+  ☐ 替换 3 处 LLM 初始化 (36, 37, 42)
+  ☐ 在所有文件添加 errors 包 import
+  预期时间: 1-2 小时
+  影响: 高 - 这些是会导致程序直接退出的关键路径
+
+PHASE 2 - 高优先级 (下个迭代)
+────────────────────────────────────────────────────────────
+  ☐ 替换 4 处计划操作错误 (110, 120, 135, 153)
+  ☐ 改进 3 处 log.Printf 使用 (96, 116, 125, 166)
+  预期时间: 2-3 小时
+  影响: 中 - 改进错误信息质量和可追踪性
+
+PHASE 3 - 可选改进
+────────────────────────────────────────────────────────────
+  ☐ 替换 fmt 输出为结构化日志 (101 处)
+  ☐ 创建错误处理工具函数消除重复
+  ☐ 文档化错误处理最佳实践
+  预期时间: 3-4 小时
+  影响: 低 - 代码质量提升
+
+
+【快速检查清单】
+
+hybrid_mode/main.go:
+  ☐ Line 31:  添加 import "github.com/kart-io/goagent/errors"
+  ☐ Line 31:  将 log.Fatal 改为 errors.NewInvalidConfigError
+  ☐ Line 42:  将 log.Fatalf 改为 errors.NewLLMRequestError
+  ☐ Line 110: 将 log.Fatalf 改为 errors 包调用
+  ☐ Line 116: 改进日志为结构化错误
+
+planning_execution/main.go:
+  ☐ Line 26:  添加 import "github.com/kart-io/goagent/errors"
+  ☐ Line 26:  将 log.Fatal 改为 errors.NewInvalidConfigError
+  ☐ Line 37:  将 log.Fatalf 改为 errors.NewLLMRequestError
+  ☐ Line 120: 将 log.Fatalf 改为 errors 包调用
+  ☐ Line 135: 将 log.Fatalf 改为 errors 包调用 (包含 issues)
+  ☐ Line 153: 将 log.Fatalf 改为 errors 包调用
+  ☐ Line 166: 改进日志为结构化错误
+
+cot_vs_react/main.go:
+  ☐ Line 25:  添加 import "github.com/kart-io/goagent/errors"
+  ☐ Line 25:  将 log.Fatal 改为 errors.NewInvalidConfigError
+  ☐ Line 36:  将 log.Fatalf 改为 errors.NewLLMRequestError
+  ☐ Line 96:  将 log.Printf 改为 errors.NewAgentExecutionError
+  ☐ Line 125: 将 log.Printf 改为 errors.NewAgentExecutionError
+
+
+【相关资源】
+
+项目错误包位置:
+  github.com/kart-io/goagent/errors/errors.go     (核心定义)
+  github.com/kart-io/goagent/errors/helpers.go    (便捷函数)
+
+可用的错误代码:
+  CodeInvalidConfig, CodeLLMRequest, CodeAgentExecution,
+  CodeInternal, CodeContextTimeout, ... (见 errors.go)
+
+便捷函数列表:
+  NewInvalidConfigError(component, key, reason)
+  NewLLMRequestError(provider, model, cause)
+  NewAgentExecutionError(agentName, operation, cause)
+  Wrap(err, code, message)
+  WithContext(key, value), WithComponent(name), WithOperation(op)
+
+═══════════════════════════════════════════════════════════════════════════════

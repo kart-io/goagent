@@ -2,12 +2,12 @@ package stream
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/kart-io/goagent/core"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // Writer 流写入器实现
@@ -55,7 +55,9 @@ func NewWriter(ctx context.Context, opts *core.StreamOptions) *Writer {
 // Write 实现 io.Writer 接口
 func (w *Writer) Write(p []byte) (n int, err error) {
 	if w.closed.Load() {
-		return 0, fmt.Errorf("writer is closed")
+		return 0, agentErrors.New(agentErrors.CodeStreamWrite, "writer is closed").
+			WithComponent("stream_writer").
+			WithOperation("Write")
 	}
 
 	chunk := core.NewTextChunk(string(p))
@@ -69,7 +71,9 @@ func (w *Writer) Write(p []byte) (n int, err error) {
 // Write 写入数据块
 func (w *Writer) WriteChunk(chunk *core.LegacyStreamChunk) error {
 	if w.closed.Load() {
-		return fmt.Errorf("writer is closed")
+		return agentErrors.New(agentErrors.CodeStreamWrite, "writer is closed").
+			WithComponent("stream_writer").
+			WithOperation("WriteChunk")
 	}
 
 	// 设置序列号
@@ -83,7 +87,10 @@ func (w *Writer) WriteChunk(chunk *core.LegacyStreamChunk) error {
 			w.mu.Lock()
 			w.stats.ErrorCount++
 			w.mu.Unlock()
-			return fmt.Errorf("transform error: %w", err)
+			return agentErrors.Wrap(err, agentErrors.CodeStreamWrite, "transform error").
+				WithComponent("stream_writer").
+				WithOperation("WriteChunk").
+				WithContext("chunk_type", chunk.Type)
 		}
 		chunk = transformed
 	}
@@ -96,7 +103,10 @@ func (w *Writer) WriteChunk(chunk *core.LegacyStreamChunk) error {
 	case <-w.ctx.Done():
 		return w.ctx.Err()
 	case <-time.After(w.opts.ChunkTimeout):
-		return fmt.Errorf("write timeout")
+		return agentErrors.New(agentErrors.CodeContextTimeout, "write timeout").
+			WithComponent("stream_writer").
+			WithOperation("WriteChunk").
+			WithContext("timeout", w.opts.ChunkTimeout.String())
 	}
 }
 
@@ -144,7 +154,9 @@ func (w *Writer) WriteError(err error) error {
 // Close 关闭写入器
 func (w *Writer) Close() error {
 	if !w.closed.CompareAndSwap(false, true) {
-		return fmt.Errorf("writer already closed")
+		return agentErrors.New(agentErrors.CodeStreamWrite, "writer already closed").
+			WithComponent("stream_writer").
+			WithOperation("Close")
 	}
 
 	// 发送最后一个块标记

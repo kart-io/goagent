@@ -2,8 +2,9 @@ package core
 
 import (
 	"context"
-	"fmt"
 	"time"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // Chain 定义链式处理接口
@@ -136,7 +137,10 @@ func (c *BaseChain) Invoke(ctx context.Context, input *ChainInput) (*ChainOutput
 	config := c.GetConfig()
 	for _, cb := range config.Callbacks {
 		if err := cb.OnChainStart(ctx, c.name, input); err != nil {
-			return nil, fmt.Errorf("callback OnChainStart failed: %w", err)
+			return nil, agentErrors.Wrap(err, agentErrors.CodeAgentExecution, "callback OnChainStart failed").
+				WithComponent("base_chain").
+				WithOperation("invoke").
+				WithContext("chain_name", c.name)
 		}
 	}
 
@@ -231,8 +235,11 @@ func (c *BaseChain) Stream(ctx context.Context, input *ChainInput) (<-chan Strea
 		for _, cb := range config.Callbacks {
 			if err := cb.OnChainStart(ctx, c.name, input); err != nil {
 				outChan <- StreamChunk[*ChainOutput]{
-					Error: fmt.Errorf("callback OnChainStart failed: %w", err),
-					Done:  true,
+					Error: agentErrors.Wrap(err, agentErrors.CodeAgentExecution, "callback OnChainStart failed").
+						WithComponent("base_chain").
+						WithOperation("stream").
+						WithContext("chain_name", c.name),
+					Done: true,
 				}
 				return
 			}

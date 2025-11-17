@@ -9,6 +9,7 @@ import (
 	"time"
 
 	agentcore "github.com/kart-io/goagent/core"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/logger/core"
 )
 
@@ -50,7 +51,9 @@ func (a *ShellAgent) Execute(ctx context.Context, input *agentcore.AgentInput) (
 	// 解析参数
 	command, ok := input.Context["command"].(string)
 	if !ok {
-		return nil, fmt.Errorf("command is required")
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "command is required").
+			WithComponent("shell_agent").
+			WithOperation("Execute")
 	}
 
 	args, _ := input.Context["args"].([]string)
@@ -59,11 +62,14 @@ func (a *ShellAgent) Execute(ctx context.Context, input *agentcore.AgentInput) (
 	// 安全检查：命令白名单
 	if !a.allowedCommands[command] {
 		return &agentcore.AgentOutput{
-			Status:    "failed",
-			Message:   fmt.Sprintf("Command not allowed: %s", command),
-			Latency:   time.Since(start),
-			Timestamp: start,
-		}, fmt.Errorf("command not allowed: %s", command)
+				Status:    "failed",
+				Message:   "Command not allowed",
+				Latency:   time.Since(start),
+				Timestamp: start,
+			}, agentErrors.New(agentErrors.CodeInvalidInput, "command not allowed").
+				WithComponent("shell_agent").
+				WithOperation("Execute").
+				WithContext("command", command)
 	}
 
 	// 应用超时

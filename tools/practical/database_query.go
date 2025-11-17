@@ -13,6 +13,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 
 	agentcore "github.com/kart-io/goagent/core"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/tools"
 )
@@ -117,13 +118,19 @@ func (t *DatabaseQueryTool) ArgsSchema() string {
 func (t *DatabaseQueryTool) Execute(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 	params, err := t.parseDBInput(input.Args)
 	if err != nil {
-		return nil, fmt.Errorf("invalid input: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeInvalidInput, "invalid input").
+			WithComponent("database_query_tool").
+			WithOperation("execute")
 	}
 
 	// Get or create connection
 	db, err := t.getConnection(params.Connection)
 	if err != nil {
-		return nil, fmt.Errorf("connection error: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeToolExecution, "connection error").
+			WithComponent("database_query_tool").
+			WithOperation("execute").
+			WithContext("driver", params.Connection.Driver).
+			WithContext("connection_id", params.Connection.ConnectionID)
 	}
 
 	// Create context with timeout
@@ -142,7 +149,10 @@ func (t *DatabaseQueryTool) Execute(ctx context.Context, input *interfaces.ToolI
 	case "transaction":
 		result, err = t.executeTransaction(queryCtx, db, params)
 	default:
-		return nil, fmt.Errorf("unsupported operation: %s", params.Operation)
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "unsupported operation").
+			WithComponent("database_query_tool").
+			WithOperation("execute").
+			WithContext("operation", params.Operation)
 	}
 
 	executionTime := time.Since(startTime).Milliseconds()
@@ -262,7 +272,10 @@ func (t *DatabaseQueryTool) executeQuery(ctx context.Context, db *sql.DB, params
 	if !strings.HasPrefix(strings.ToUpper(query), "SELECT") &&
 		!strings.HasPrefix(strings.ToUpper(query), "SHOW") &&
 		!strings.HasPrefix(strings.ToUpper(query), "DESCRIBE") {
-		return nil, fmt.Errorf("query operation only supports SELECT/SHOW/DESCRIBE statements")
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "query operation only supports SELECT/SHOW/DESCRIBE statements").
+			WithComponent("database_query_tool").
+			WithOperation("executeQuery").
+			WithContext("query", query)
 	}
 
 	// Execute query
@@ -326,7 +339,10 @@ func (t *DatabaseQueryTool) executeStatement(ctx context.Context, db *sql.DB, pa
 	// Validate query is not SELECT
 	query := strings.TrimSpace(params.Query)
 	if strings.HasPrefix(strings.ToUpper(query), "SELECT") {
-		return nil, fmt.Errorf("execute operation does not support SELECT statements")
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "execute operation does not support SELECT statements").
+			WithComponent("database_query_tool").
+			WithOperation("executeStatement").
+			WithContext("query", query)
 	}
 
 	// Execute statement
@@ -348,7 +364,9 @@ func (t *DatabaseQueryTool) executeStatement(ctx context.Context, db *sql.DB, pa
 // executeTransaction executes multiple queries in a transaction
 func (t *DatabaseQueryTool) executeTransaction(ctx context.Context, db *sql.DB, params *dbParams) (interface{}, error) {
 	if len(params.Transaction) == 0 {
-		return nil, fmt.Errorf("transaction requires at least one query")
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "transaction requires at least one query").
+			WithComponent("database_query_tool").
+			WithOperation("executeTransaction")
 	}
 
 	// Start transaction
@@ -443,21 +461,30 @@ func (t *DatabaseQueryTool) parseDBInput(input interface{}) (*dbParams, error) {
 
 	// Validate required fields
 	if params.Connection.Driver == "" {
-		return nil, fmt.Errorf("database driver is required")
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "database driver is required").
+			WithComponent("database_query_tool").
+			WithOperation("parseDBInput")
 	}
 	if params.Connection.DSN == "" && params.Connection.ConnectionID == "" {
-		return nil, fmt.Errorf("either DSN or connection_id is required")
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "either DSN or connection_id is required").
+			WithComponent("database_query_tool").
+			WithOperation("parseDBInput")
 	}
 
 	// Validate operation-specific requirements
 	switch params.Operation {
 	case "query", "execute":
 		if params.Query == "" {
-			return nil, fmt.Errorf("query is required for %s operation", params.Operation)
+			return nil, agentErrors.New(agentErrors.CodeInvalidInput, "query is required for operation").
+				WithComponent("database_query_tool").
+				WithOperation("parseDBInput").
+				WithContext("operation", params.Operation)
 		}
 	case "transaction":
 		if len(params.Transaction) == 0 {
-			return nil, fmt.Errorf("transaction queries are required")
+			return nil, agentErrors.New(agentErrors.CodeInvalidInput, "transaction queries are required").
+				WithComponent("database_query_tool").
+				WithOperation("parseDBInput")
 		}
 	}
 
@@ -468,7 +495,10 @@ func (t *DatabaseQueryTool) parseDBInput(input interface{}) (*dbParams, error) {
 func (t *DatabaseQueryTool) Close() error {
 	for id, db := range t.connections {
 		if err := db.Close(); err != nil {
-			return fmt.Errorf("failed to close connection %s: %w", id, err)
+			return agentErrors.Wrap(err, agentErrors.CodeToolExecution, "failed to close connection").
+				WithComponent("database_query_tool").
+				WithOperation("close").
+				WithContext("connection_id", id)
 		}
 	}
 	t.connections = make(map[string]*sql.DB)
@@ -516,7 +546,9 @@ func (t *DatabaseQueryRuntimeTool) ExecuteWithRuntime(ctx context.Context, input
 			"status": "executing_query",
 			"tool":   t.Name(),
 		}); err != nil {
-			return nil, fmt.Errorf("failed to stream status: %w", err)
+			return nil, agentErrors.Wrap(err, agentErrors.CodeToolExecution, "failed to stream status").
+				WithComponent("database_query_tool").
+				WithOperation("executeWithRuntime")
 		}
 	}
 
@@ -541,7 +573,9 @@ func (t *DatabaseQueryRuntimeTool) ExecuteWithRuntime(ctx context.Context, input
 		if params != nil && params.Operation == "query" {
 			// Store recent query results
 			if err := runtime.PutToStore([]string{"query_results"}, time.Now().Format(time.RFC3339), result); err != nil {
-				return nil, fmt.Errorf("failed to put to store: %w", err)
+				return nil, agentErrors.Wrap(err, agentErrors.CodeToolExecution, "failed to put to store").
+					WithComponent("database_query_tool").
+					WithOperation("executeWithRuntime")
 			}
 		}
 	}
@@ -553,7 +587,9 @@ func (t *DatabaseQueryRuntimeTool) ExecuteWithRuntime(ctx context.Context, input
 			"tool":   t.Name(),
 			"error":  err,
 		}); err != nil {
-			return nil, fmt.Errorf("failed to stream completion: %w", err)
+			return nil, agentErrors.Wrap(err, agentErrors.CodeToolExecution, "failed to stream completion").
+				WithComponent("database_query_tool").
+				WithOperation("executeWithRuntime")
 		}
 	}
 

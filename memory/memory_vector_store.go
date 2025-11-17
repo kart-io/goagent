@@ -7,6 +7,8 @@ import (
 	"math"
 	"sort"
 	"sync"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // SimpleVectorStore interface for vector-based memory storage
@@ -51,7 +53,11 @@ func (s *InMemoryVectorStore) Store(ctx context.Context, id string, vector []flo
 	defer s.mu.Unlock()
 
 	if len(vector) != s.dimension {
-		return fmt.Errorf("vector dimension mismatch: expected %d, got %d", s.dimension, len(vector))
+		return agentErrors.New(agentErrors.CodeVectorDimMismatch, "vector dimension mismatch").
+			WithComponent("in_memory_vector_store").
+			WithOperation("store").
+			WithContext("expected", s.dimension).
+			WithContext("got", len(vector))
 	}
 
 	// Normalize vector
@@ -67,7 +73,11 @@ func (s *InMemoryVectorStore) Search(ctx context.Context, query []float32, k int
 	defer s.mu.RUnlock()
 
 	if len(query) != s.dimension {
-		return nil, nil, fmt.Errorf("query dimension mismatch: expected %d, got %d", s.dimension, len(query))
+		return nil, nil, agentErrors.New(agentErrors.CodeVectorDimMismatch, "query dimension mismatch").
+			WithComponent("in_memory_vector_store").
+			WithOperation("search").
+			WithContext("expected", s.dimension).
+			WithContext("got", len(query))
 	}
 
 	// Normalize query
@@ -124,7 +134,9 @@ func (s *InMemoryVectorStore) GenerateEmbedding(ctx context.Context, content int
 
 	data, err := json.Marshal(content)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal content: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeDistributedSerialization, "failed to marshal content").
+			WithComponent("in_memory_vector_store").
+			WithOperation("generate_embedding")
 	}
 
 	// Generate pseudo-embedding based on content

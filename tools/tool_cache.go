@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // ToolCache 工具缓存接口
@@ -381,5 +383,7 @@ func (c *CachedTool) generateCacheKey(input *ToolInput) (string, error) {
 func (c *CachedTool) InvalidateCacheByPrefix(ctx context.Context, prefix string) error {
 	// 注意：这需要缓存实现支持前缀查询
 	// 当前简化实现不支持
-	return fmt.Errorf("not implemented")
+	return agentErrors.New(agentErrors.CodeNotImplemented, "prefix invalidation not implemented").
+		WithComponent("cached_tool").
+		WithOperation("invalidate_cache_by_prefix")
 }

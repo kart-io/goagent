@@ -6,6 +6,7 @@ import (
 	"time"
 
 	agentcore "github.com/kart-io/goagent/core"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 )
 
@@ -115,7 +116,10 @@ func (e *AgentExecutor) Execute(ctx context.Context, input *agentcore.AgentInput
 	if e.memory != nil {
 		history, err := e.memory.LoadHistory(ctx, input.SessionID)
 		if err != nil {
-			return nil, fmt.Errorf("failed to load memory: %w", err)
+			return nil, agentErrors.Wrap(err, agentErrors.CodeInternal, "failed to load memory").
+				WithComponent("executor_agent").
+				WithOperation("Execute").
+				WithContext("session_id", input.SessionID)
 		}
 
 		if input.Context == nil {
@@ -132,7 +136,10 @@ func (e *AgentExecutor) Execute(ctx context.Context, input *agentcore.AgentInput
 
 	// 检查是否超时
 	if ctx.Err() == context.DeadlineExceeded {
-		return nil, fmt.Errorf("execution timeout after %v", e.maxExecutionTime)
+		return nil, agentErrors.New(agentErrors.CodeContextTimeout, "execution timeout").
+			WithComponent("executor_agent").
+			WithOperation("Execute").
+			WithContext("timeout", e.maxExecutionTime)
 	}
 
 	// 检查是否超过最大迭代次数
@@ -201,8 +208,11 @@ func (e *AgentExecutor) Stream(
 		if err != nil {
 			outChan := make(chan agentcore.StreamChunk[*agentcore.AgentOutput], 1)
 			outChan <- agentcore.StreamChunk[*agentcore.AgentOutput]{
-				Error: fmt.Errorf("failed to load memory: %w", err),
-				Done:  true,
+				Error: agentErrors.Wrap(err, agentErrors.CodeInternal, "failed to load memory").
+					WithComponent("executor_agent").
+					WithOperation("Stream").
+					WithContext("session_id", input.SessionID),
+				Done: true,
 			}
 			close(outChan)
 			return outChan, nil
@@ -228,7 +238,10 @@ func (e *AgentExecutor) Batch(
 	for i, input := range inputs {
 		output, err := e.Execute(ctx, input)
 		if err != nil {
-			return nil, fmt.Errorf("failed to execute input %d: %w", i, err)
+			return nil, agentErrors.Wrap(err, agentErrors.CodeAgentExecution, "failed to execute input").
+				WithComponent("executor_agent").
+				WithOperation("Batch").
+				WithContext("input_index", i)
 		}
 		outputs[i] = output
 	}

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/tools"
 )
@@ -68,9 +69,11 @@ func (s *SearchTool) run(ctx context.Context, input *interfaces.ToolInput) (*int
 	query, ok := input.Args["query"].(string)
 	if !ok || query == "" {
 		return &interfaces.ToolOutput{
-			Success: false,
-			Error:   "query is required and must be a non-empty string",
-		}, tools.NewToolError(s.Name(), "invalid input", fmt.Errorf("query is required"))
+				Success: false,
+				Error:   "query is required and must be a non-empty string",
+			}, tools.NewToolError(s.Name(), "invalid input", agentErrors.New(agentErrors.CodeInvalidInput, "query is required").
+				WithComponent("search_tool").
+				WithOperation("run"))
 	}
 
 	maxResults := 5
@@ -220,7 +223,9 @@ func NewAggregatedSearchEngine(engines ...SearchEngine) *AggregatedSearchEngine 
 // Search 执行聚合搜索
 func (a *AggregatedSearchEngine) Search(ctx context.Context, query string, maxResults int) ([]SearchResult, error) {
 	if len(a.engines) == 0 {
-		return nil, fmt.Errorf("no search engines configured")
+		return nil, agentErrors.New(agentErrors.CodeToolValidation, "no search engines configured").
+			WithComponent("search_tool").
+			WithOperation("aggregated_search")
 	}
 
 	resultsChan := make(chan []SearchResult, len(a.engines))
@@ -255,7 +260,11 @@ func (a *AggregatedSearchEngine) Search(ctx context.Context, query string, maxRe
 
 	// 如果所有引擎都失败，返回错误
 	if len(allResults) == 0 && len(errors) > 0 {
-		return nil, fmt.Errorf("all search engines failed: %v", errors)
+		return nil, agentErrors.New(agentErrors.CodeToolExecution, "all search engines failed").
+			WithComponent("search_tool").
+			WithOperation("aggregated_search").
+			WithContext("error_count", len(errors)).
+			WithContext("errors", errors)
 	}
 
 	// 去重和排序

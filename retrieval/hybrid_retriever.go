@@ -2,7 +2,8 @@ package retrieval
 
 import (
 	"context"
-	"fmt"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // HybridRetriever 混合检索器
@@ -91,10 +92,16 @@ func (h *HybridRetriever) GetRelevantDocuments(ctx context.Context, query string
 	keywordResult := <-keywordChan
 
 	if vectorResult.err != nil {
-		return nil, fmt.Errorf("vector retrieval failed: %w", vectorResult.err)
+		return nil, agentErrors.Wrap(vectorResult.err, agentErrors.CodeRetrievalSearch, "vector retrieval failed").
+			WithComponent("hybrid_retriever").
+			WithOperation("get_relevant_documents").
+			WithContext("query", query)
 	}
 	if keywordResult.err != nil {
-		return nil, fmt.Errorf("keyword retrieval failed: %w", keywordResult.err)
+		return nil, agentErrors.Wrap(keywordResult.err, agentErrors.CodeRetrievalSearch, "keyword retrieval failed").
+			WithComponent("hybrid_retriever").
+			WithOperation("get_relevant_documents").
+			WithContext("query", query)
 	}
 
 	// 融合结果
@@ -107,7 +114,10 @@ func (h *HybridRetriever) GetRelevantDocuments(ctx context.Context, query string
 	case FusionStrategyCombSum:
 		fused = h.combSumFusion(vectorResult.docs, keywordResult.docs)
 	default:
-		return nil, fmt.Errorf("unknown fusion strategy: %s", h.FusionStrategy)
+		return nil, agentErrors.New(agentErrors.CodeInvalidConfig, "unknown fusion strategy").
+			WithComponent("hybrid_retriever").
+			WithOperation("get_relevant_documents").
+			WithContext("strategy", string(h.FusionStrategy))
 	}
 
 	// 排序

@@ -2,10 +2,9 @@
 package adapters
 
 import (
-	"fmt"
-
 	"gorm.io/gorm/logger"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/store"
 	"github.com/kart-io/goagent/store/factory"
 	"github.com/kart-io/goagent/store/memory"
@@ -46,17 +45,23 @@ func NewStore(opts *StoreOptions) (store.Store, error) {
 
 	case "redis":
 		if opts.Redis == nil {
-			return nil, fmt.Errorf("redis options are required for redis store")
+			return nil, agentErrors.NewInvalidConfigError("options_adapter", "redis", "redis options are required for redis store").
+				WithComponent("options_adapter").
+				WithOperation("new_store")
 		}
 
 		// Validate Redis options using common validation
 		if err := opts.Redis.Validate(); err != nil {
-			return nil, fmt.Errorf("invalid redis options: %w", err)
+			return nil, agentErrors.Wrap(err, agentErrors.CodeInvalidConfig, "invalid redis options").
+				WithComponent("options_adapter").
+				WithOperation("new_store")
 		}
 
 		// Complete Redis options (set defaults)
 		if err := opts.Redis.Complete(); err != nil {
-			return nil, fmt.Errorf("failed to complete redis options: %w", err)
+			return nil, agentErrors.Wrap(err, agentErrors.CodeInvalidConfig, "failed to complete redis options").
+				WithComponent("options_adapter").
+				WithOperation("new_store")
 		}
 
 		// Convert common RedisOptions to store redis.Config
@@ -78,32 +83,44 @@ func NewStore(opts *StoreOptions) (store.Store, error) {
 
 	case "mysql":
 		if opts.MySQL == nil {
-			return nil, fmt.Errorf("mysql options are required for mysql store")
+			return nil, agentErrors.NewInvalidConfigError("options_adapter", "mysql", "mysql options are required for mysql store").
+				WithComponent("options_adapter").
+				WithOperation("new_store")
 		}
 
 		// Validate MySQL options
 		if err := opts.MySQL.Validate(); err != nil {
-			return nil, fmt.Errorf("invalid mysql options: %w", err)
+			return nil, agentErrors.Wrap(err, agentErrors.CodeInvalidConfig, "invalid mysql options").
+				WithComponent("options_adapter").
+				WithOperation("new_store")
 		}
 
 		// MySQL store uses the same implementation as PostgreSQL with different driver
 		// Note: This requires updating postgres store to support MySQL driver
 		// For now, return error
-		return nil, fmt.Errorf("mysql store not yet implemented, use postgres instead")
+		return nil, agentErrors.New(agentErrors.CodeNotImplemented, "mysql store not yet implemented, use postgres instead").
+			WithComponent("options_adapter").
+			WithOperation("new_store")
 
 	case "postgres":
 		if opts.Postgres == nil {
-			return nil, fmt.Errorf("postgres options are required for postgres store")
+			return nil, agentErrors.NewInvalidConfigError("options_adapter", "postgres", "postgres options are required for postgres store").
+				WithComponent("options_adapter").
+				WithOperation("new_store")
 		}
 
 		// Validate Postgres options
 		if err := opts.Postgres.Validate(); err != nil {
-			return nil, fmt.Errorf("invalid postgres options: %w", err)
+			return nil, agentErrors.Wrap(err, agentErrors.CodeInvalidConfig, "invalid postgres options").
+				WithComponent("options_adapter").
+				WithOperation("new_store")
 		}
 
 		// Complete Postgres options (set defaults)
 		if err := opts.Postgres.Complete(); err != nil {
-			return nil, fmt.Errorf("failed to complete postgres options: %w", err)
+			return nil, agentErrors.Wrap(err, agentErrors.CodeInvalidConfig, "failed to complete postgres options").
+				WithComponent("options_adapter").
+				WithOperation("new_store")
 		}
 
 		// Use DSN from PostgresOptions
@@ -120,7 +137,10 @@ func NewStore(opts *StoreOptions) (store.Store, error) {
 		return postgres.New(config)
 
 	default:
-		return nil, fmt.Errorf("unsupported store type: %s", opts.Type)
+		return nil, agentErrors.NewInvalidConfigError("options_adapter", "type", "unsupported store type").
+			WithComponent("options_adapter").
+			WithOperation("new_store").
+			WithContext("store_type", opts.Type)
 	}
 }
 
@@ -137,7 +157,9 @@ func NewStoreFromFactory(opts *StoreOptions) (store.Store, error) {
 
 	case "redis":
 		if opts.Redis == nil {
-			return nil, fmt.Errorf("redis options are required")
+			return nil, agentErrors.NewInvalidConfigError("options_adapter", "redis", "redis options are required for redis store").
+				WithComponent("options_adapter").
+				WithOperation("new_store_from_factory")
 		}
 
 		// Validate and complete
@@ -162,7 +184,9 @@ func NewStoreFromFactory(opts *StoreOptions) (store.Store, error) {
 
 	case "postgres":
 		if opts.Postgres == nil {
-			return nil, fmt.Errorf("postgres options are required")
+			return nil, agentErrors.NewInvalidConfigError("options_adapter", "postgres", "postgres options are required for postgres store").
+				WithComponent("options_adapter").
+				WithOperation("new_store_from_factory")
 		}
 
 		// Validate and complete
@@ -184,7 +208,10 @@ func NewStoreFromFactory(opts *StoreOptions) (store.Store, error) {
 		}
 
 	default:
-		return nil, fmt.Errorf("unsupported store type: %s", opts.Type)
+		return nil, agentErrors.NewInvalidConfigError("options_adapter", "type", "unsupported store type").
+			WithComponent("options_adapter").
+			WithOperation("new_store_from_factory").
+			WithContext("store_type", opts.Type)
 	}
 
 	return factory.NewStore(factoryConfig)
@@ -227,12 +254,16 @@ func NewRedisStoreAdapter(opts *options.RedisOptions, prefix string) *RedisStore
 func (a *RedisStoreAdapter) CreateStore() (store.Store, error) {
 	// Validate options
 	if err := a.options.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid redis options: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeInvalidConfig, "invalid redis options").
+			WithComponent("options_adapter").
+			WithOperation("create_redis_store")
 	}
 
 	// Complete options
 	if err := a.options.Complete(); err != nil {
-		return nil, fmt.Errorf("failed to complete redis options: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeInvalidConfig, "failed to complete redis options").
+			WithComponent("options_adapter").
+			WithOperation("create_redis_store")
 	}
 
 	// Create config
@@ -275,7 +306,9 @@ func NewMySQLStoreAdapter(opts *options.MySQLOptions, tableName string) *MySQLSt
 func (a *MySQLStoreAdapter) CreateStore() (store.Store, error) {
 	// Validate options
 	if err := a.options.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid mysql options: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeInvalidConfig, "invalid mysql options").
+			WithComponent("options_adapter").
+			WithOperation("create_mysql_store")
 	}
 
 	// Create config using PostgreSQL store with MySQL DSN
@@ -291,5 +324,7 @@ func (a *MySQLStoreAdapter) CreateStore() (store.Store, error) {
 
 	// TODO: Implement MySQL-specific store or update postgres store to support MySQL
 	_ = config
-	return nil, fmt.Errorf("mysql store adapter not yet fully implemented")
+	return nil, agentErrors.New(agentErrors.CodeNotImplemented, "mysql store adapter not yet fully implemented").
+		WithComponent("options_adapter").
+		WithOperation("create_mysql_store")
 }

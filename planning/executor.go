@@ -2,11 +2,11 @@ package planning
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
 	"github.com/kart-io/goagent/core"
+	agentErrors "github.com/kart-io/goagent/errors"
 	loggercore "github.com/kart-io/logger/core"
 )
 
@@ -204,7 +204,10 @@ func (e *AgentExecutor) executePlan(ctx context.Context, state *ExecutionState) 
 		case <-state.PauseChan:
 			e.handlePause(ctx, state)
 		case <-state.CancelChan:
-			result.Error = fmt.Errorf("execution cancelled")
+			result.Error = agentErrors.New(agentErrors.CodeContextCanceled, "execution cancelled").
+				WithComponent("agent_executor").
+				WithOperation("execute_plan").
+				WithContext("plan_id", state.Plan.ID)
 			result.Success = false
 			return result
 		default:
@@ -317,7 +320,11 @@ func (e *AgentExecutor) executeParallelSteps(ctx context.Context, state *Executi
 			} else {
 				result.FailedSteps++
 				if firstError == nil {
-					firstError = fmt.Errorf("step %s failed: %s", s.ID, stepResult.Error)
+					firstError = agentErrors.New(agentErrors.CodeAgentExecution, "step execution failed").
+						WithComponent("agent_executor").
+						WithOperation("execute_step").
+						WithContext("step_id", s.ID).
+						WithContext("error", stepResult.Error)
 				}
 			}
 			mu.Unlock()
@@ -404,8 +411,11 @@ func (e *AgentExecutor) executeStep(ctx context.Context, step *Step) *StepResult
 	agent := e.selectAgent(step)
 	if agent == nil {
 		return &StepResult{
-			Success:   false,
-			Error:     fmt.Sprintf("no agent available for step type: %s", step.Type),
+			Success: false,
+			Error: agentErrors.New(agentErrors.CodeAgentNotFound, "no agent available for step type").
+				WithComponent("agent_executor").
+				WithOperation("select_agent").
+				WithContext("step_type", string(step.Type)).Error(),
 			Duration:  time.Since(startTime),
 			Timestamp: time.Now(),
 		}
@@ -464,7 +474,10 @@ func (e *AgentExecutor) executeStep(ctx context.Context, step *Step) *StepResult
 func (e *AgentExecutor) ExecuteStep(ctx context.Context, step *Step) (*StepResult, error) {
 	result := e.executeStep(ctx, step)
 	if !result.Success {
-		return result, fmt.Errorf("%s", result.Error)
+		return result, agentErrors.New(agentErrors.CodeAgentExecution, result.Error).
+			WithComponent("agent_executor").
+			WithOperation("execute_step").
+			WithContext("step_id", step.ID)
 	}
 	return result, nil
 }
@@ -563,14 +576,20 @@ func (e *AgentExecutor) Pause(planID string) error {
 	e.mu.RUnlock()
 
 	if !exists {
-		return fmt.Errorf("plan %s not found", planID)
+		return agentErrors.New(agentErrors.CodePlanNotFound, "plan not found").
+			WithComponent("agent_executor").
+			WithOperation("pause").
+			WithContext("plan_id", planID)
 	}
 
 	select {
 	case state.PauseChan <- struct{}{}:
 		return nil
 	default:
-		return fmt.Errorf("plan %s is not running", planID)
+		return agentErrors.New(agentErrors.CodeAgentExecution, "plan is not running").
+			WithComponent("agent_executor").
+			WithOperation("pause").
+			WithContext("plan_id", planID)
 	}
 }
 
@@ -581,14 +600,20 @@ func (e *AgentExecutor) Resume(planID string) error {
 	e.mu.RUnlock()
 
 	if !exists {
-		return fmt.Errorf("plan %s not found", planID)
+		return agentErrors.New(agentErrors.CodePlanNotFound, "plan not found").
+			WithComponent("agent_executor").
+			WithOperation("resume").
+			WithContext("plan_id", planID)
 	}
 
 	select {
 	case state.PauseChan <- struct{}{}:
 		return nil
 	default:
-		return fmt.Errorf("plan %s is not paused", planID)
+		return agentErrors.New(agentErrors.CodeAgentExecution, "plan is not paused").
+			WithComponent("agent_executor").
+			WithOperation("resume").
+			WithContext("plan_id", planID)
 	}
 }
 
@@ -599,14 +624,20 @@ func (e *AgentExecutor) Cancel(planID string) error {
 	e.mu.RUnlock()
 
 	if !exists {
-		return fmt.Errorf("plan %s not found", planID)
+		return agentErrors.New(agentErrors.CodePlanNotFound, "plan not found").
+			WithComponent("agent_executor").
+			WithOperation("cancel").
+			WithContext("plan_id", planID)
 	}
 
 	select {
 	case state.CancelChan <- struct{}{}:
 		return nil
 	default:
-		return fmt.Errorf("plan %s is not running", planID)
+		return agentErrors.New(agentErrors.CodeAgentExecution, "plan is not running").
+			WithComponent("agent_executor").
+			WithOperation("cancel").
+			WithContext("plan_id", planID)
 	}
 }
 
@@ -617,7 +648,10 @@ func (e *AgentExecutor) GetStatus(planID string) (*PlanStatus, error) {
 	e.mu.RUnlock()
 
 	if !exists {
-		return nil, fmt.Errorf("plan %s not found", planID)
+		return nil, agentErrors.New(agentErrors.CodePlanNotFound, "plan not found").
+			WithComponent("agent_executor").
+			WithOperation("get_status").
+			WithContext("plan_id", planID)
 	}
 
 	state.mu.RLock()

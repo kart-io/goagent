@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // RAGRetriever RAG (Retrieval-Augmented Generation) 检索器
@@ -42,7 +44,9 @@ type RAGRetrieverConfig struct {
 // NewRAGRetriever 创建 RAG 检索器
 func NewRAGRetriever(config RAGRetrieverConfig) (*RAGRetriever, error) {
 	if config.VectorStore == nil {
-		return nil, fmt.Errorf("vector store is required")
+		return nil, agentErrors.New(agentErrors.CodeInvalidConfig, "vector store is required").
+			WithComponent("rag_engine").
+			WithOperation("create")
 	}
 
 	if config.TopK <= 0 {
@@ -72,7 +76,11 @@ func (r *RAGRetriever) Retrieve(ctx context.Context, query string) ([]*Document,
 	// 从向量存储检索文档
 	docs, err := r.vectorStore.SimilaritySearch(ctx, query, r.topK)
 	if err != nil {
-		return nil, fmt.Errorf("failed to search documents: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeRetrievalSearch, "failed to search documents").
+			WithComponent("rag_engine").
+			WithOperation("retrieve").
+			WithContext("query", query).
+			WithContext("topK", r.topK)
 	}
 
 	// 过滤低分文档
@@ -159,7 +167,9 @@ func (r *RAGRetriever) Clear() error {
 		return nil
 	}
 
-	return fmt.Errorf("clear operation not supported for this vector store type")
+	return agentErrors.New(agentErrors.CodeNotImplemented, "clear operation not supported for this vector store type").
+		WithComponent("rag_engine").
+		WithOperation("clear")
 }
 
 // SetTopK 设置 TopK
@@ -223,7 +233,10 @@ func (c *RAGChain) Run(ctx context.Context, query string) (string, error) {
 	// 1. 检索相关文档
 	docs, err := c.retriever.Retrieve(ctx, query)
 	if err != nil {
-		return "", fmt.Errorf("retrieval failed: %w", err)
+		return "", agentErrors.Wrap(err, agentErrors.CodeRetrievalSearch, "retrieval failed").
+			WithComponent("rag_chain").
+			WithOperation("run").
+			WithContext("query", query)
 	}
 
 	if len(docs) == 0 {
@@ -233,7 +246,10 @@ func (c *RAGChain) Run(ctx context.Context, query string) (string, error) {
 	// 2. 格式化上下文
 	context, err := c.retriever.RetrieveWithContext(ctx, query)
 	if err != nil {
-		return "", fmt.Errorf("failed to format context: %w", err)
+		return "", agentErrors.Wrap(err, agentErrors.CodeInternal, "failed to format context").
+			WithComponent("rag_chain").
+			WithOperation("run").
+			WithContext("query", query)
 	}
 
 	// 3. TODO: 调用 LLM 生成回答

@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/store"
 )
 
@@ -70,12 +71,15 @@ func (s *Store) Get(ctx context.Context, namespace []string, key string) (*store
 
 	nsKey := namespaceToKey(namespace)
 	if s.data[nsKey] == nil {
-		return nil, fmt.Errorf("namespace not found: %v", namespace)
+		return nil, agentErrors.New(agentErrors.CodeStoreNotFound, "namespace not found").
+			WithComponent("store").
+			WithOperation("get").
+			WithContext("namespace", fmt.Sprintf("%v", namespace))
 	}
 
 	value, ok := s.data[nsKey][key]
 	if !ok {
-		return nil, fmt.Errorf("key not found: %s", key)
+		return nil, agentErrors.NewStoreNotFoundError(namespace, key)
 	}
 
 	return value, nil

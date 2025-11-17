@@ -1,10 +1,10 @@
 package distributed
 
 import (
-	"fmt"
 	"sync"
 	"time"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/logger/core"
 )
 
@@ -46,15 +46,21 @@ func NewRegistry(logger core.Logger) *Registry {
 // Register 注册服务实例
 func (r *Registry) Register(instance *ServiceInstance) error {
 	if instance.ID == "" {
-		return fmt.Errorf("instance ID is required")
+		return agentErrors.New(agentErrors.CodeInvalidInput, "instance ID is required").
+			WithComponent("distributed_registry").
+			WithOperation("register")
 	}
 
 	if instance.ServiceName == "" {
-		return fmt.Errorf("service name is required")
+		return agentErrors.New(agentErrors.CodeInvalidInput, "service name is required").
+			WithComponent("distributed_registry").
+			WithOperation("register")
 	}
 
 	if instance.Endpoint == "" {
-		return fmt.Errorf("endpoint is required")
+		return agentErrors.New(agentErrors.CodeInvalidInput, "endpoint is required").
+			WithComponent("distributed_registry").
+			WithOperation("register")
 	}
 
 	r.mu.Lock()
@@ -87,7 +93,10 @@ func (r *Registry) Deregister(instanceID string) error {
 
 	instance, ok := r.instances[instanceID]
 	if !ok {
-		return fmt.Errorf("instance not found: %s", instanceID)
+		return agentErrors.New(agentErrors.CodeAgentNotFound, "instance not found").
+			WithComponent("distributed_registry").
+			WithOperation("deregister").
+			WithContext("instance_id", instanceID)
 	}
 
 	// 从服务列表中移除
@@ -117,7 +126,10 @@ func (r *Registry) Heartbeat(instanceID string) error {
 
 	instance, ok := r.instances[instanceID]
 	if !ok {
-		return fmt.Errorf("instance not found: %s", instanceID)
+		return agentErrors.New(agentErrors.CodeAgentNotFound, "instance not found").
+			WithComponent("distributed_registry").
+			WithOperation("heartbeat").
+			WithContext("instance_id", instanceID)
 	}
 
 	instance.LastSeen = time.Now()
@@ -133,7 +145,10 @@ func (r *Registry) GetInstance(instanceID string) (*ServiceInstance, error) {
 
 	instance, ok := r.instances[instanceID]
 	if !ok {
-		return nil, fmt.Errorf("instance not found: %s", instanceID)
+		return nil, agentErrors.New(agentErrors.CodeAgentNotFound, "instance not found").
+			WithComponent("distributed_registry").
+			WithOperation("get_instance").
+			WithContext("instance_id", instanceID)
 	}
 
 	return instance, nil
@@ -146,7 +161,10 @@ func (r *Registry) GetHealthyInstances(serviceName string) ([]*ServiceInstance, 
 
 	instances, ok := r.services[serviceName]
 	if !ok {
-		return nil, fmt.Errorf("service not found: %s", serviceName)
+		return nil, agentErrors.New(agentErrors.CodeAgentNotFound, "service not found").
+			WithComponent("distributed_registry").
+			WithOperation("get_healthy_instances").
+			WithContext("service_name", serviceName)
 	}
 
 	healthy := make([]*ServiceInstance, 0, len(instances))
@@ -166,7 +184,10 @@ func (r *Registry) GetAllInstances(serviceName string) ([]*ServiceInstance, erro
 
 	instances, ok := r.services[serviceName]
 	if !ok {
-		return nil, fmt.Errorf("service not found: %s", serviceName)
+		return nil, agentErrors.New(agentErrors.CodeAgentNotFound, "service not found").
+			WithComponent("distributed_registry").
+			WithOperation("get_all_instances").
+			WithContext("service_name", serviceName)
 	}
 
 	return instances, nil

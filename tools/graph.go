@@ -1,8 +1,9 @@
 package tools
 
 import (
-	"fmt"
 	"sync"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // ToolGraph 工具依赖图
@@ -52,15 +53,22 @@ func NewToolGraph() *ToolGraph {
 // AddNode 添加节点
 func (g *ToolGraph) AddNode(node *ToolNode) error {
 	if node == nil {
-		return fmt.Errorf("node is nil")
+		return agentErrors.New(agentErrors.CodeToolValidation, "node is nil").
+			WithComponent("graph_tool").
+			WithOperation("add_node")
 	}
 
 	if node.ID == "" {
-		return fmt.Errorf("node ID is required")
+		return agentErrors.New(agentErrors.CodeToolValidation, "node ID is required").
+			WithComponent("graph_tool").
+			WithOperation("add_node")
 	}
 
 	if node.Tool == nil {
-		return fmt.Errorf("node tool is nil")
+		return agentErrors.New(agentErrors.CodeToolValidation, "node tool is nil").
+			WithComponent("graph_tool").
+			WithOperation("add_node").
+			WithContext("node_id", node.ID)
 	}
 
 	g.mu.Lock()
@@ -68,7 +76,10 @@ func (g *ToolGraph) AddNode(node *ToolNode) error {
 
 	// 检查节点是否已存在
 	if _, exists := g.nodes[node.ID]; exists {
-		return fmt.Errorf("node with ID %s already exists", node.ID)
+		return agentErrors.New(agentErrors.CodeToolValidation, "node already exists").
+			WithComponent("graph_tool").
+			WithOperation("add_node").
+			WithContext("node_id", node.ID)
 	}
 
 	g.nodes[node.ID] = node
@@ -86,15 +97,25 @@ func (g *ToolGraph) AddEdge(from, to string) error {
 
 	// 检查节点是否存在
 	if _, exists := g.nodes[from]; !exists {
-		return fmt.Errorf("node %s does not exist", from)
+		return agentErrors.New(agentErrors.CodeToolValidation, "source node does not exist").
+			WithComponent("graph_tool").
+			WithOperation("add_edge").
+			WithContext("from", from)
 	}
 	if _, exists := g.nodes[to]; !exists {
-		return fmt.Errorf("node %s does not exist", to)
+		return agentErrors.New(agentErrors.CodeToolValidation, "target node does not exist").
+			WithComponent("graph_tool").
+			WithOperation("add_edge").
+			WithContext("to", to)
 	}
 
 	// 检查是否会形成环
 	if g.wouldCreateCycle(from, to) {
-		return fmt.Errorf("adding edge %s -> %s would create a cycle", from, to)
+		return agentErrors.New(agentErrors.CodeToolValidation, "adding edge would create a cycle").
+			WithComponent("graph_tool").
+			WithOperation("add_edge").
+			WithContext("from", from).
+			WithContext("to", to)
 	}
 
 	// 添加边
@@ -115,7 +136,10 @@ func (g *ToolGraph) RemoveNode(id string) error {
 	defer g.mu.Unlock()
 
 	if _, exists := g.nodes[id]; !exists {
-		return fmt.Errorf("node %s does not exist", id)
+		return agentErrors.New(agentErrors.CodeToolValidation, "node does not exist").
+			WithComponent("graph_tool").
+			WithOperation("remove_node").
+			WithContext("node_id", id)
 	}
 
 	// 移除所有相关的边
@@ -199,7 +223,9 @@ func (g *ToolGraph) TopologicalSort() ([]string, error) {
 
 	// 检查是否所有节点都被访问
 	if len(result) != len(g.nodes) {
-		return nil, fmt.Errorf("graph contains cycle, cannot perform topological sort")
+		return nil, agentErrors.New(agentErrors.CodeToolExecution, "graph contains cycle, cannot perform topological sort").
+			WithComponent("graph_tool").
+			WithOperation("topological_sort")
 	}
 
 	return result, nil
@@ -242,14 +268,20 @@ func (g *ToolGraph) Validate() error {
 	// 检查是否有环
 	_, err := g.TopologicalSort()
 	if err != nil {
-		return fmt.Errorf("graph validation failed: %w", err)
+		return agentErrors.Wrap(err, agentErrors.CodeToolValidation, "graph validation failed").
+			WithComponent("graph_tool").
+			WithOperation("validate")
 	}
 
 	// 检查所有依赖是否存在
 	for nodeID, node := range g.nodes {
 		for _, depID := range node.Dependencies {
 			if _, exists := g.nodes[depID]; !exists {
-				return fmt.Errorf("node %s depends on non-existent node %s", nodeID, depID)
+				return agentErrors.New(agentErrors.CodeToolValidation, "node depends on non-existent node").
+					WithComponent("graph_tool").
+					WithOperation("validate").
+					WithContext("node_id", nodeID).
+					WithContext("missing_dependency", depID)
 			}
 		}
 	}
