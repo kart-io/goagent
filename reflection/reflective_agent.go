@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/core"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/memory"
 )
@@ -261,7 +262,9 @@ func (a *SelfReflectiveAgent) Reflect(ctx context.Context, subject interface{}) 
 	}
 	response, err := a.llmClient.Complete(ctx, req)
 	if err != nil {
-		return nil, fmt.Errorf("reflection failed: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeAgentExecution, "reflection failed").
+			WithComponent("reflective_agent").
+			WithOperation("reflect")
 	}
 
 	// Parse reflection result
@@ -307,7 +310,9 @@ Please provide:
 	}
 	response, err := a.llmClient.Complete(ctx, req)
 	if err != nil {
-		return nil, fmt.Errorf("evaluation failed: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeAgentExecution, "evaluation failed").
+			WithComponent("reflective_agent").
+			WithOperation("evaluate_performance")
 	}
 
 	// Parse evaluation
@@ -319,7 +324,11 @@ Please provide:
 // ExtractLearnings extracts learnings from experiences
 func (a *SelfReflectiveAgent) ExtractLearnings(ctx context.Context, experiences []Experience) ([]LearningPoint, error) {
 	if len(experiences) < a.minExperiences {
-		return nil, fmt.Errorf("insufficient experiences for learning extraction")
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "insufficient experiences for learning extraction").
+			WithComponent("reflective_agent").
+			WithOperation("extract_learnings").
+			WithContext("experiences_count", len(experiences)).
+			WithContext("min_required", a.minExperiences)
 	}
 
 	// Analyze patterns in experiences
@@ -335,7 +344,9 @@ func (a *SelfReflectiveAgent) ExtractLearnings(ctx context.Context, experiences 
 	}
 	response, err := a.llmClient.Complete(ctx, req)
 	if err != nil {
-		return nil, fmt.Errorf("learning extraction failed: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeAgentExecution, "learning extraction failed").
+			WithComponent("reflective_agent").
+			WithOperation("extract_learnings")
 	}
 
 	// Parse learnings
@@ -388,7 +399,9 @@ Generate specific, actionable improvements with:
 	}
 	response, err := a.llmClient.Complete(ctx, req)
 	if err != nil {
-		return nil, fmt.Errorf("improvement generation failed: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeAgentExecution, "improvement generation failed").
+			WithComponent("reflective_agent").
+			WithOperation("generate_improvements")
 	}
 
 	// Parse improvements

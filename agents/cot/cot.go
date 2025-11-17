@@ -275,6 +275,9 @@ Be systematic and thorough in your analysis.`
 
 // parseCoTResponse parses the Chain-of-Thought response
 func (c *CoTAgent) parseCoTResponse(response string) ([]string, string) {
+	// Pre-compile regex for better performance
+	digitOnlyRegex := regexp.MustCompile(`^\d+$`)
+
 	lines := strings.Split(response, "\n")
 	steps := make([]string, 0)
 	finalAnswer := ""
@@ -328,7 +331,7 @@ func (c *CoTAgent) parseCoTResponse(response string) ([]string, string) {
 				continue
 			}
 			// Skip lines that are only numbers (likely part of LaTeX)
-			if matched, _ := regexp.MatchString(`^\d+$`, line); matched {
+			if digitOnlyRegex.MatchString(line) {
 				continue
 			}
 			// Skip lines that look like pure LaTeX formulas

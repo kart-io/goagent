@@ -47,7 +47,7 @@ make coverage-view
 # Format code
 make fmt
 
-# Run linter
+# Run linter (CRITICAL: Must pass with 0 issues before committing)
 make lint
 
 # Run go vet
@@ -62,6 +62,14 @@ make check
 # Strict mode (treat warnings as errors)
 ./verify_imports.sh --strict
 ```
+
+**Important**: The linter catches common issues like:
+- `ineffassign`: Ineffectual assignments
+- `errcheck`: Unchecked error returns
+- `staticcheck`: Various static analysis issues (e.g., deprecated functions, performance issues)
+- `unused`: Unused variables, functions, or constants
+
+See the "Lint Best Practices" section for detailed guidance on avoiding common lint issues.
 
 ### Building
 
@@ -402,6 +410,172 @@ return errors.Wrap(err, errors.CodeInternal, "execution failed")
 - Interfaces: Name the capability (Agent, Runnable, Tool)
 - Implementations: Descriptive (ExecutorAgent, ReactAgent)
 
+### Lint Best Practices
+
+**CRITICAL**: Always write lint-compliant code from the start to avoid rework. The project uses `golangci-lint` with strict rules.
+
+#### Common Lint Issues and How to Avoid Them
+
+**1. Ineffectual Assignment (ineffassign)**
+```go
+// ❌ BAD: Variable assigned but immediately reassigned
+if err != nil {
+    result = getDefault()  // This assignment is wasted
+}
+result = parseOutput(output)  // Result always reassigned
+
+// ✅ GOOD: Only assign when needed
+if err == nil {
+    result = parseOutput(output)
+} else {
+    result = getDefault()
+}
+```
+
+**2. Regexp in Loop (staticcheck SA6000)**
+```go
+// ❌ BAD: Compiling regex in every iteration
+for _, line := range lines {
+    if matched, _ := regexp.MatchString(`^\d+$`, line); matched {
+        // Process line
+    }
+}
+
+// ✅ GOOD: Pre-compile regex outside loop
+digitPattern := regexp.MustCompile(`^\d+$`)
+for _, line := range lines {
+    if digitPattern.MatchString(line) {
+        // Process line
+    }
+}
+```
+
+**3. Deprecated Functions (staticcheck SA1019)**
+```go
+// ❌ BAD: Using deprecated strings.Title
+import "strings"
+title := strings.Title(name)
+
+// ✅ GOOD: Use golang.org/x/text/cases
+import (
+    "golang.org/x/text/cases"
+    "golang.org/x/text/language"
+)
+title := cases.Title(language.English).String(name)
+```
+
+**4. Unused Variables and Return Values**
+```go
+// ❌ BAD: Ignoring error return values
+data, _ := ioutil.ReadFile(path)
+
+// ✅ GOOD: Always handle errors
+data, err := ioutil.ReadFile(path)
+if err != nil {
+    return errors.Wrap(err, errors.CodeInternal, "failed to read file")
+}
+
+// ❌ BAD: Unused variable
+func process() {
+    result := calculate()  // Never used
+    return
+}
+
+// ✅ GOOD: Remove unused variables or use them
+func process() int {
+    result := calculate()
+    return result
+}
+```
+
+**5. Error Checking (errcheck)**
+```go
+// ❌ BAD: Not checking error from important operations
+file.Close()
+rows.Close()
+
+// ✅ GOOD: Defer with error check
+defer func() {
+    if err := file.Close(); err != nil {
+        log.Error("failed to close file", err)
+    }
+}()
+```
+
+**6. Context Usage**
+```go
+// ❌ BAD: Not passing context through call chain
+func fetchData() ([]byte, error) {
+    resp, err := http.Get(url)
+    // ...
+}
+
+// ✅ GOOD: Always accept and pass context
+func fetchData(ctx context.Context) ([]byte, error) {
+    req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+    // ...
+}
+```
+
+**7. String Formatting**
+```go
+// ❌ BAD: Using + for complex string building
+msg := "Error: " + err.Error() + " at " + time.Now().String()
+
+// ✅ GOOD: Use fmt.Sprintf or strings.Builder
+msg := fmt.Sprintf("Error: %v at %v", err, time.Now())
+
+// For multiple concatenations in a loop
+var builder strings.Builder
+for _, item := range items {
+    builder.WriteString(item)
+}
+result := builder.String()
+```
+
+#### Pre-Generation Checklist
+
+Before generating or modifying code, ensure:
+
+1. **Variables are used**: Every declared variable must be used
+2. **Errors are handled**: Never ignore error return values with `_`
+3. **Regex is pre-compiled**: If using regex in loops, compile once outside
+4. **No deprecated functions**: Check if stdlib functions are deprecated
+5. **Context is propagated**: All I/O operations should accept `context.Context`
+6. **Assignments are effective**: Variables shouldn't be assigned then immediately reassigned
+7. **Imports are organized**: Stdlib → External → Internal (respecting layer rules)
+8. **Comments for exports**: All exported items must have doc comments
+
+#### Running Lint
+
+```bash
+# Always run before committing
+make lint
+
+# Fix auto-fixable issues
+golangci-lint run --fix ./...
+
+# Run specific linters
+golangci-lint run --disable-all --enable=ineffassign,errcheck,staticcheck ./...
+```
+
+#### Integration with Development Workflow
+
+When writing code:
+1. Write lint-compliant code from the start
+2. Run `make lint` after completing each feature
+3. Fix issues immediately - don't accumulate lint debt
+4. If lint fails in CI, it blocks the PR
+
+Common workflow:
+```bash
+# After writing code
+make fmt              # Format code
+make lint             # Check for issues
+./verify_imports.sh   # Verify import layering
+make test             # Run tests
+```
+
 ## Common Development Patterns
 
 ### Adding a New Tool
@@ -444,6 +618,10 @@ If you need to move code between layers:
 4. **Low test coverage**: Ensure new code has 80%+ coverage
 5. **Missing documentation**: All exported APIs must have doc comments
 6. **Importing examples/ in production**: Examples are Layer 4 - never import in production code
+7. **Writing lint-violating code**: Always follow lint best practices from the start (see "Lint Best Practices" section)
+8. **Ignoring error returns**: Never use `_` to ignore errors from important operations
+9. **Using deprecated functions**: Check for deprecation warnings before using stdlib functions
+10. **Regex in loops**: Pre-compile regex patterns outside loops for performance
 
 ## Performance Considerations
 
@@ -481,17 +659,34 @@ Key external packages:
 
 ## CI/CD Considerations
 
+**CRITICAL**: All code must pass lint checks before being committed. Zero tolerance for lint errors.
+
 Before pushing:
-1. Run `make check` (fmt + vet + lint)
-2. Run `go test ./...`
-3. Run `./verify_imports.sh`
+1. Run `make check` (fmt + vet + lint) - **MUST pass with 0 issues**
+2. Run `go test ./...` - All tests must pass
+3. Run `./verify_imports.sh` - No import layer violations
 4. Ensure coverage meets minimum 80%
 
+Recommended pre-commit workflow:
+```bash
+make fmt && make lint && ./verify_imports.sh && make test
+```
+
 CI will fail on:
+- **Lint errors** (ineffassign, errcheck, staticcheck, etc.) - Zero tolerance
 - Import layering violations
 - Test failures
-- Lint errors
-- Insufficient coverage
+- Insufficient coverage (<80%)
+
+**Pro Tip**: Set up a git pre-commit hook to run `make lint` automatically:
+```bash
+# .git/hooks/pre-commit
+#!/bin/sh
+make lint || {
+    echo "❌ Lint failed. Fix issues before committing."
+    exit 1
+}
+```
 
 ## Getting Help
 
