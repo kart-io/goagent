@@ -2,7 +2,8 @@ package core
 
 import (
 	"context"
-	"fmt"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // Runnable 定义统一的可执行接口
@@ -197,14 +198,18 @@ func (p *RunnablePipe[I, M, O]) Invoke(ctx context.Context, input I) (O, error) 
 	middle, err := p.first.Invoke(ctx, input)
 	if err != nil {
 		var zero O
-		return zero, fmt.Errorf("first runnable failed: %w", err)
+		return zero, agentErrors.Wrap(err, agentErrors.CodeAgentExecution, "first runnable failed").
+			WithComponent("runnable_pipe").
+			WithOperation("invoke")
 	}
 
 	// 执行第二个 Runnable
 	output, err := p.second.Invoke(ctx, middle)
 	if err != nil {
 		var zero O
-		return zero, fmt.Errorf("second runnable failed: %w", err)
+		return zero, agentErrors.Wrap(err, agentErrors.CodeAgentExecution, "second runnable failed").
+			WithComponent("runnable_pipe").
+			WithOperation("invoke")
 	}
 
 	return output, nil
@@ -220,14 +225,18 @@ func (p *RunnablePipe[I, M, O]) Stream(ctx context.Context, input I) (<-chan Str
 		// 执行第一个 Runnable
 		middle, err := p.first.Invoke(ctx, input)
 		if err != nil {
-			outChan <- StreamChunk[O]{Error: fmt.Errorf("first runnable failed: %w", err)}
+			outChan <- StreamChunk[O]{Error: agentErrors.Wrap(err, agentErrors.CodeAgentExecution, "first runnable failed").
+				WithComponent("runnable_pipe").
+				WithOperation("stream")}
 			return
 		}
 
 		// 流式执行第二个 Runnable
 		stream, err := p.second.Stream(ctx, middle)
 		if err != nil {
-			outChan <- StreamChunk[O]{Error: fmt.Errorf("second runnable stream failed: %w", err)}
+			outChan <- StreamChunk[O]{Error: agentErrors.Wrap(err, agentErrors.CodeStreamRead, "second runnable stream failed").
+				WithComponent("runnable_pipe").
+				WithOperation("stream")}
 			return
 		}
 
@@ -249,13 +258,17 @@ func (p *RunnablePipe[I, M, O]) Batch(ctx context.Context, inputs []I) ([]O, err
 	// 执行第一个 Runnable 的批处理
 	middles, err := p.first.Batch(ctx, inputs)
 	if err != nil {
-		return nil, fmt.Errorf("first runnable batch failed: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeAgentExecution, "first runnable batch failed").
+			WithComponent("runnable_pipe").
+			WithOperation("batch")
 	}
 
 	// 执行第二个 Runnable 的批处理
 	outputs, err := p.second.Batch(ctx, middles)
 	if err != nil {
-		return nil, fmt.Errorf("second runnable batch failed: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeAgentExecution, "second runnable batch failed").
+			WithComponent("runnable_pipe").
+			WithOperation("batch")
 	}
 
 	return outputs, nil
@@ -389,7 +402,10 @@ func (s *RunnableSequence) Invoke(ctx context.Context, input any) (any, error) {
 	for i, runnable := range s.runnables {
 		output, err := runnable.Invoke(ctx, current)
 		if err != nil {
-			return nil, fmt.Errorf("runnable %d failed: %w", i, err)
+			return nil, agentErrors.Wrap(err, agentErrors.CodeAgentExecution, "runnable failed").
+				WithComponent("runnable_sequence").
+				WithOperation("invoke").
+				WithContext("index", i)
 		}
 		current = output
 	}
@@ -410,7 +426,10 @@ func (s *RunnableSequence) Stream(ctx context.Context, input any) (<-chan Stream
 			if i < len(s.runnables)-1 {
 				output, err := runnable.Invoke(ctx, current)
 				if err != nil {
-					outChan <- StreamChunk[any]{Error: fmt.Errorf("runnable %d failed: %w", i, err)}
+					outChan <- StreamChunk[any]{Error: agentErrors.Wrap(err, agentErrors.CodeAgentExecution, "runnable failed").
+						WithComponent("runnable_sequence").
+						WithOperation("stream").
+						WithContext("index", i)}
 					return
 				}
 				current = output
@@ -418,7 +437,10 @@ func (s *RunnableSequence) Stream(ctx context.Context, input any) (<-chan Stream
 				// 最后一个使用 Stream
 				stream, err := runnable.Stream(ctx, current)
 				if err != nil {
-					outChan <- StreamChunk[any]{Error: fmt.Errorf("runnable %d stream failed: %w", i, err)}
+					outChan <- StreamChunk[any]{Error: agentErrors.Wrap(err, agentErrors.CodeStreamRead, "runnable stream failed").
+						WithComponent("runnable_sequence").
+						WithOperation("stream").
+						WithContext("index", i)}
 					return
 				}
 
@@ -440,7 +462,10 @@ func (s *RunnableSequence) Batch(ctx context.Context, inputs []any) ([]any, erro
 	for i, runnable := range s.runnables {
 		outputs, err := runnable.Batch(ctx, current)
 		if err != nil {
-			return nil, fmt.Errorf("runnable %d batch failed: %w", i, err)
+			return nil, agentErrors.Wrap(err, agentErrors.CodeAgentExecution, "runnable batch failed").
+				WithComponent("runnable_sequence").
+				WithOperation("batch").
+				WithContext("index", i)
 		}
 		current = outputs
 	}

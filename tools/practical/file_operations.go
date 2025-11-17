@@ -21,6 +21,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	agentcore "github.com/kart-io/goagent/core"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/tools"
 )
@@ -146,7 +147,9 @@ func (t *FileOperationsTool) ArgsSchema() string {
 func (t *FileOperationsTool) Execute(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 	params, err := t.parseFileInput(input.Args)
 	if err != nil {
-		return nil, fmt.Errorf("invalid input: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeInvalidInput, "invalid input").
+			WithComponent("file_operations_tool").
+			WithOperation("execute")
 	}
 
 	// Validate path security
@@ -192,7 +195,10 @@ func (t *FileOperationsTool) Execute(ctx context.Context, input *interfaces.Tool
 	case "watch":
 		result, err = t.watchFile(ctx, params)
 	default:
-		return nil, fmt.Errorf("unsupported operation: %s", params.Operation)
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "unsupported operation").
+			WithComponent("file_operations_tool").
+			WithOperation("execute").
+			WithContext("operation", params.Operation)
 	}
 
 	if err != nil {
@@ -256,7 +262,12 @@ func (t *FileOperationsTool) readFile(ctx context.Context, params *fileParams) (
 	}
 
 	if info.Size() > t.maxFileSize {
-		return nil, fmt.Errorf("file too large: %d bytes (max: %d)", info.Size(), t.maxFileSize)
+		return nil, agentErrors.New(agentErrors.CodeToolExecution, "file too large").
+			WithComponent("file_operations_tool").
+			WithOperation("readFile").
+			WithContext("file_path", params.Path).
+			WithContext("size", info.Size()).
+			WithContext("max_size", t.maxFileSize)
 	}
 
 	// Open file
@@ -421,7 +432,10 @@ func (t *FileOperationsTool) deleteFile(ctx context.Context, params *fileParams)
 // copyFile copies a file
 func (t *FileOperationsTool) copyFile(ctx context.Context, params *fileParams) (interface{}, error) {
 	if params.Destination == "" {
-		return nil, fmt.Errorf("destination is required for copy operation")
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "destination is required for copy operation").
+			WithComponent("file_operations_tool").
+			WithOperation("copyFile").
+			WithContext("source", params.Path)
 	}
 
 	// Validate destination path
@@ -436,7 +450,10 @@ func (t *FileOperationsTool) copyFile(ctx context.Context, params *fileParams) (
 	}
 
 	if srcInfo.IsDir() {
-		return nil, fmt.Errorf("use recursive option to copy directories")
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "use recursive option to copy directories").
+			WithComponent("file_operations_tool").
+			WithOperation("copyFile").
+			WithContext("source", params.Path)
 	}
 
 	// Open source
@@ -486,7 +503,10 @@ func (t *FileOperationsTool) copyFile(ctx context.Context, params *fileParams) (
 // moveFile moves a file
 func (t *FileOperationsTool) moveFile(ctx context.Context, params *fileParams) (interface{}, error) {
 	if params.Destination == "" {
-		return nil, fmt.Errorf("destination is required for move operation")
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "destination is required for move operation").
+			WithComponent("file_operations_tool").
+			WithOperation("moveFile").
+			WithContext("source", params.Path)
 	}
 
 	// Validate destination path
@@ -572,7 +592,10 @@ func (t *FileOperationsTool) listDirectory(ctx context.Context, params *filePara
 // searchFiles searches for files matching pattern
 func (t *FileOperationsTool) searchFiles(ctx context.Context, params *fileParams) (interface{}, error) {
 	if params.Pattern == "" {
-		return nil, fmt.Errorf("pattern is required for search operation")
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "pattern is required for search operation").
+			WithComponent("file_operations_tool").
+			WithOperation("searchFiles").
+			WithContext("path", params.Path)
 	}
 
 	var matches []string
@@ -584,7 +607,10 @@ func (t *FileOperationsTool) searchFiles(ctx context.Context, params *fileParams
 		var err error
 		pattern, err = regexp.Compile(params.Pattern)
 		if err != nil {
-			return nil, fmt.Errorf("invalid regex pattern: %w", err)
+			return nil, agentErrors.Wrap(err, agentErrors.CodeInvalidInput, "invalid regex pattern").
+				WithComponent("file_operations_tool").
+				WithOperation("searchFiles").
+				WithContext("pattern", params.Pattern)
 		}
 	}
 
@@ -689,7 +715,10 @@ func (t *FileOperationsTool) compressFile(ctx context.Context, params *fileParam
 	case "zip":
 		return t.compressZip(params.Path, outputPath)
 	default:
-		return nil, fmt.Errorf("unsupported compression format: %s", compression)
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "unsupported compression format").
+			WithComponent("file_operations_tool").
+			WithOperation("compressFile").
+			WithContext("compression", compression)
 	}
 }
 
@@ -866,7 +895,10 @@ func (t *FileOperationsTool) decompressFile(ctx context.Context, params *filePar
 	} else if strings.HasSuffix(params.Path, ".zip") {
 		compression = "zip"
 	} else {
-		return nil, fmt.Errorf("cannot detect compression format")
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "cannot detect compression format").
+			WithComponent("file_operations_tool").
+			WithOperation("decompressFile").
+			WithContext("file_path", params.Path)
 	}
 
 	outputPath := params.Destination
@@ -880,7 +912,10 @@ func (t *FileOperationsTool) decompressFile(ctx context.Context, params *filePar
 	case "zip":
 		return t.decompressZip(params.Path, outputPath)
 	default:
-		return nil, fmt.Errorf("unsupported compression format: %s", compression)
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "unsupported compression format").
+			WithComponent("file_operations_tool").
+			WithOperation("decompressFile").
+			WithContext("compression", compression)
 	}
 }
 
@@ -1043,7 +1078,11 @@ func (t *FileOperationsTool) parseFile(ctx context.Context, params *fileParams) 
 	}
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse as %s: %w", format, err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeToolExecution, "failed to parse file").
+			WithComponent("file_operations_tool").
+			WithOperation("parseFile").
+			WithContext("file_path", params.Path).
+			WithContext("format", format)
 	}
 
 	return map[string]interface{}{
@@ -1188,14 +1227,22 @@ func (t *FileOperationsTool) validatePath(path string) error {
 	// Check forbidden paths
 	for _, forbidden := range t.forbiddenPaths {
 		if strings.HasPrefix(absPath, forbidden) {
-			return fmt.Errorf("access to path %s is forbidden", forbidden)
+			return agentErrors.New(agentErrors.CodeToolExecution, "access to path is forbidden").
+				WithComponent("file_operations_tool").
+				WithOperation("validatePath").
+				WithContext("path", path).
+				WithContext("forbidden_path", forbidden)
 		}
 	}
 
 	// If basePath is set, ensure path is within it
 	if t.basePath != "" {
 		if !strings.HasPrefix(absPath, t.basePath) {
-			return fmt.Errorf("path must be within %s", t.basePath)
+			return agentErrors.New(agentErrors.CodeToolExecution, "path must be within base path").
+				WithComponent("file_operations_tool").
+				WithOperation("validatePath").
+				WithContext("path", path).
+				WithContext("base_path", t.basePath)
 		}
 	}
 
@@ -1317,7 +1364,9 @@ func (t *FileOperationsRuntimeTool) ExecuteWithRuntime(ctx context.Context, inpu
 			"status": "performing_file_operation",
 			"tool":   t.Name(),
 		}); err != nil {
-			return nil, fmt.Errorf("failed to stream status: %w", err)
+			return nil, agentErrors.Wrap(err, agentErrors.CodeToolExecution, "failed to stream status").
+				WithComponent("file_operations_tool").
+				WithOperation("executeWithRuntime")
 		}
 	}
 
@@ -1335,7 +1384,9 @@ func (t *FileOperationsRuntimeTool) ExecuteWithRuntime(ctx context.Context, inpu
 				"success":   err == nil,
 				"error":     err,
 			}); err != nil {
-				return nil, fmt.Errorf("failed to store operation log: %w", err)
+				return nil, agentErrors.Wrap(err, agentErrors.CodeToolExecution, "failed to store operation log").
+					WithComponent("file_operations_tool").
+					WithOperation("executeWithRuntime")
 			}
 		}
 	}
@@ -1347,7 +1398,9 @@ func (t *FileOperationsRuntimeTool) ExecuteWithRuntime(ctx context.Context, inpu
 			"tool":   t.Name(),
 			"error":  err,
 		}); err != nil {
-			return nil, fmt.Errorf("failed to stream completion: %w", err)
+			return nil, agentErrors.Wrap(err, agentErrors.CodeToolExecution, "failed to stream completion").
+				WithComponent("file_operations_tool").
+				WithOperation("executeWithRuntime")
 		}
 	}
 

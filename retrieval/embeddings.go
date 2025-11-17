@@ -2,9 +2,10 @@ package retrieval
 
 import (
 	"context"
-	"fmt"
 	"math"
 	"strings"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // Embedder 嵌入模型接口
@@ -232,7 +233,11 @@ func normalizeVector(vec []float32) []float32 {
 // cosineSimilarity 计算余弦相似度
 func cosineSimilarity(vec1, vec2 []float32) (float32, error) {
 	if len(vec1) != len(vec2) {
-		return 0, fmt.Errorf("vectors must have same length: %d != %d", len(vec1), len(vec2))
+		return 0, agentErrors.New(agentErrors.CodeVectorDimMismatch, "vectors must have same length").
+			WithComponent("embeddings_client").
+			WithOperation("cosine_similarity").
+			WithContext("vec1_len", len(vec1)).
+			WithContext("vec2_len", len(vec2))
 	}
 
 	var dotProduct, norm1, norm2 float32
@@ -252,7 +257,11 @@ func cosineSimilarity(vec1, vec2 []float32) (float32, error) {
 // euclideanDistance 计算欧氏距离
 func euclideanDistance(vec1, vec2 []float32) (float32, error) {
 	if len(vec1) != len(vec2) {
-		return 0, fmt.Errorf("vectors must have same length: %d != %d", len(vec1), len(vec2))
+		return 0, agentErrors.New(agentErrors.CodeVectorDimMismatch, "vectors must have same length").
+			WithComponent("embeddings_client").
+			WithOperation("euclidean_distance").
+			WithContext("vec1_len", len(vec1)).
+			WithContext("vec2_len", len(vec2))
 	}
 
 	var sumSquares float32
@@ -267,7 +276,11 @@ func euclideanDistance(vec1, vec2 []float32) (float32, error) {
 // dotProduct 计算点积
 func dotProduct(vec1, vec2 []float32) (float32, error) {
 	if len(vec1) != len(vec2) {
-		return 0, fmt.Errorf("vectors must have same length: %d != %d", len(vec1), len(vec2))
+		return 0, agentErrors.New(agentErrors.CodeVectorDimMismatch, "vectors must have same length").
+			WithComponent("embeddings_client").
+			WithOperation("dot_product").
+			WithContext("vec1_len", len(vec1)).
+			WithContext("vec2_len", len(vec2))
 	}
 
 	var result float32

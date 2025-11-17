@@ -10,6 +10,7 @@ import (
 
 	"github.com/sashabaranov/go-openai"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 )
@@ -26,7 +27,7 @@ type OpenAIProvider struct {
 // NewOpenAI creates a new OpenAI provider
 func NewOpenAI(config *llm.Config) (*OpenAIProvider, error) {
 	if config.APIKey == "" {
-		return nil, fmt.Errorf("OpenAI API key is required")
+		return nil, agentErrors.NewInvalidConfigError("llm", "api_key", "OpenAI API key is required")
 	}
 
 	clientConfig := openai.DefaultConfig(config.APIKey)
@@ -91,11 +92,11 @@ func (p *OpenAIProvider) Complete(ctx context.Context, req *llm.CompletionReques
 		TopP:        float32(req.TopP),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("OpenAI completion failed: %w", err)
+		return nil, agentErrors.NewLLMRequestError("openai", model, err)
 	}
 
 	if len(resp.Choices) == 0 {
-		return nil, fmt.Errorf("no completion choices returned")
+		return nil, agentErrors.NewLLMResponseError("openai", model, "no completion choices returned")
 	}
 
 	return &llm.CompletionResponse{
@@ -128,7 +129,8 @@ func (p *OpenAIProvider) Stream(ctx context.Context, prompt string) (<-chan stri
 		Stream:      true,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create stream: %w", err)
+		return nil, agentErrors.NewLLMRequestError("openai", p.model, err).
+			WithContext("stream", true)
 	}
 
 	go func() {
@@ -172,11 +174,12 @@ func (p *OpenAIProvider) GenerateWithTools(ctx context.Context, prompt string, t
 		Functions:   functions,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("OpenAI tool calling failed: %w", err)
+		return nil, agentErrors.NewLLMRequestError("openai", p.model, err).
+			WithContext("tool_calling", true)
 	}
 
 	if len(resp.Choices) == 0 {
-		return nil, fmt.Errorf("no choices returned")
+		return nil, agentErrors.NewLLMResponseError("openai", p.model, "no choices returned")
 	}
 
 	choice := resp.Choices[0]
@@ -188,7 +191,8 @@ func (p *OpenAIProvider) GenerateWithTools(ctx context.Context, prompt string, t
 	if choice.Message.FunctionCall != nil {
 		var args map[string]interface{}
 		if err := json.Unmarshal([]byte(choice.Message.FunctionCall.Arguments), &args); err != nil {
-			return nil, fmt.Errorf("failed to parse function arguments: %w", err)
+			return nil, agentErrors.NewParserInvalidJSONError(choice.Message.FunctionCall.Arguments, err).
+				WithContext("function_name", choice.Message.FunctionCall.Name)
 		}
 
 		result.ToolCalls = []ToolCall{
@@ -219,7 +223,9 @@ func (p *OpenAIProvider) StreamWithTools(ctx context.Context, prompt string, too
 		Stream:      true,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create tool stream: %w", err)
+		return nil, agentErrors.NewLLMRequestError("openai", p.model, err).
+			WithContext("stream", true).
+			WithContext("tool_calling", true)
 	}
 
 	go func() {
@@ -291,16 +297,22 @@ func (p *OpenAIProvider) StreamWithTools(ctx context.Context, prompt string, too
 
 // Embed generates embeddings for text
 func (p *OpenAIProvider) Embed(ctx context.Context, text string) ([]float64, error) {
+	textPreview := text
+	if len(text) > 100 {
+		textPreview = text[:100] + "..."
+	}
+
 	resp, err := p.client.CreateEmbeddings(ctx, openai.EmbeddingRequest{
 		Input: []string{text},
 		Model: openai.AdaEmbeddingV2,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create embeddings: %w", err)
+		return nil, agentErrors.NewRetrievalEmbeddingError(textPreview, err).
+			WithContext("model", string(openai.AdaEmbeddingV2))
 	}
 
 	if len(resp.Data) == 0 {
-		return nil, fmt.Errorf("no embeddings returned")
+		return nil, agentErrors.NewLLMResponseError("openai", string(openai.AdaEmbeddingV2), "no embeddings returned")
 	}
 
 	// Convert float32 to float64

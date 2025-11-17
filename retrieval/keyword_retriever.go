@@ -2,10 +2,11 @@ package retrieval
 
 import (
 	"context"
-	"fmt"
 	"math"
 	"strings"
 	"unicode"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // KeywordRetriever 关键词检索器
@@ -68,7 +69,10 @@ func (k *KeywordRetriever) GetRelevantDocuments(ctx context.Context, query strin
 	case AlgorithmTFIDF:
 		scores = k.calculateTFIDFScores(query)
 	default:
-		return nil, fmt.Errorf("unknown algorithm: %s", k.Algorithm)
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "unknown algorithm").
+			WithComponent("keyword_retriever").
+			WithOperation("get_relevant_documents").
+			WithContext("algorithm", string(k.Algorithm))
 	}
 
 	// 创建结果文档

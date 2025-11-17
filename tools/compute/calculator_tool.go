@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/tools"
 )
@@ -44,9 +45,11 @@ func (c *CalculatorTool) run(ctx context.Context, input *interfaces.ToolInput) (
 	expression, ok := input.Args["expression"].(string)
 	if !ok {
 		return &interfaces.ToolOutput{
-			Success: false,
-			Error:   "expression is required and must be a string",
-		}, tools.NewToolError(c.Name(), "invalid input", fmt.Errorf("expression is required"))
+				Success: false,
+				Error:   "expression is required and must be a string",
+			}, tools.NewToolError(c.Name(), "invalid input", agentErrors.New(agentErrors.CodeInvalidInput, "expression is required").
+				WithComponent("calculator_tool").
+				WithOperation("run"))
 	}
 
 	// 清理表达式
@@ -83,7 +86,10 @@ func evaluateExpression(expr string) (float64, error) {
 		start := strings.LastIndex(expr, "(")
 		end := strings.Index(expr[start:], ")")
 		if end == -1 {
-			return 0, fmt.Errorf("mismatched parentheses")
+			return 0, agentErrors.New(agentErrors.CodeToolExecution, "mismatched parentheses").
+				WithComponent("calculator_tool").
+				WithOperation("evaluate_expression").
+				WithContext("expression", expr)
 		}
 		end += start
 
@@ -133,7 +139,9 @@ func evaluateExpression(expr string) (float64, error) {
 				return left * right, nil
 			}
 			if right == 0 {
-				return 0, fmt.Errorf("division by zero")
+				return 0, agentErrors.New(agentErrors.CodeToolExecution, "division by zero").
+					WithComponent("calculator_tool").
+					WithOperation("evaluate_expression")
 			}
 			return left / right, nil
 		}
@@ -155,7 +163,10 @@ func evaluateExpression(expr string) (float64, error) {
 	// 解析数字
 	num, err := strconv.ParseFloat(expr, 64)
 	if err != nil {
-		return 0, fmt.Errorf("invalid number: %s", expr)
+		return 0, agentErrors.Wrap(err, agentErrors.CodeToolExecution, "invalid number").
+			WithComponent("calculator_tool").
+			WithOperation("evaluate_expression").
+			WithContext("expression", expr)
 	}
 
 	return num, nil
@@ -217,17 +228,21 @@ func (a *AdvancedCalculatorTool) run(ctx context.Context, input *interfaces.Tool
 	operation, ok := input.Args["operation"].(string)
 	if !ok {
 		return &interfaces.ToolOutput{
-			Success: false,
-			Error:   "operation is required",
-		}, tools.NewToolError(a.Name(), "invalid input", fmt.Errorf("operation is required"))
+				Success: false,
+				Error:   "operation is required",
+			}, tools.NewToolError(a.Name(), "invalid input", agentErrors.New(agentErrors.CodeInvalidInput, "operation is required").
+				WithComponent("calculator_tool").
+				WithOperation("advanced_run"))
 	}
 
 	operands, ok := input.Args["operands"].([]interface{})
 	if !ok {
 		return &interfaces.ToolOutput{
-			Success: false,
-			Error:   "operands must be an array",
-		}, tools.NewToolError(a.Name(), "invalid input", fmt.Errorf("operands must be an array"))
+				Success: false,
+				Error:   "operands must be an array",
+			}, tools.NewToolError(a.Name(), "invalid input", agentErrors.New(agentErrors.CodeInvalidInput, "operands must be an array").
+				WithComponent("calculator_tool").
+				WithOperation("advanced_run"))
 	}
 
 	// 转换为 float64
@@ -242,16 +257,22 @@ func (a *AdvancedCalculatorTool) run(ctx context.Context, input *interfaces.Tool
 			f, err := strconv.ParseFloat(v, 64)
 			if err != nil {
 				return &interfaces.ToolOutput{
-					Success: false,
-					Error:   fmt.Sprintf("invalid operand: %v", v),
-				}, tools.NewToolError(a.Name(), "invalid operand", err)
+						Success: false,
+						Error:   fmt.Sprintf("invalid operand: %v", v),
+					}, tools.NewToolError(a.Name(), "invalid operand", agentErrors.Wrap(err, agentErrors.CodeInvalidInput, "invalid operand format").
+						WithComponent("calculator_tool").
+						WithOperation("advanced_run").
+						WithContext("operand", v))
 			}
 			nums[i] = f
 		default:
 			return &interfaces.ToolOutput{
-				Success: false,
-				Error:   fmt.Sprintf("invalid operand type: %T", v),
-			}, tools.NewToolError(a.Name(), "invalid operand type", fmt.Errorf("invalid type: %T", v))
+					Success: false,
+					Error:   fmt.Sprintf("invalid operand type: %T", v),
+				}, tools.NewToolError(a.Name(), "invalid operand type", agentErrors.New(agentErrors.CodeInvalidInput, "invalid operand type").
+					WithComponent("calculator_tool").
+					WithOperation("advanced_run").
+					WithContext("type", fmt.Sprintf("%T", v)))
 		}
 	}
 
@@ -331,9 +352,12 @@ func (a *AdvancedCalculatorTool) run(ctx context.Context, input *interfaces.Tool
 		result = math.Log(nums[0])
 	default:
 		return &interfaces.ToolOutput{
-			Success: false,
-			Error:   fmt.Sprintf("unknown operation: %s", operation),
-		}, tools.NewToolError(a.Name(), "unknown operation", fmt.Errorf("unknown operation: %s", operation))
+				Success: false,
+				Error:   fmt.Sprintf("unknown operation: %s", operation),
+			}, tools.NewToolError(a.Name(), "unknown operation", agentErrors.New(agentErrors.CodeInvalidInput, "unknown operation").
+				WithComponent("calculator_tool").
+				WithOperation("advanced_run").
+				WithContext("operation", operation))
 	}
 
 	return &interfaces.ToolOutput{

@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/mcp/core"
 )
 
@@ -20,17 +21,25 @@ func NewJSONSchemaValidator() *JSONSchemaValidator {
 // ValidateSchema 验证 Schema
 func (v *JSONSchemaValidator) ValidateSchema(schema *core.ToolSchema) error {
 	if schema == nil {
-		return fmt.Errorf("schema cannot be nil")
+		return agentErrors.New(agentErrors.CodeToolValidation, "schema cannot be nil").
+			WithComponent("json_schema_validator").
+			WithOperation("validate_schema")
 	}
 
 	if schema.Type != "object" {
-		return fmt.Errorf("schema type must be 'object', got '%s'", schema.Type)
+		return agentErrors.New(agentErrors.CodeToolValidation, "schema type must be 'object'").
+			WithComponent("json_schema_validator").
+			WithOperation("validate_schema").
+			WithContext("got_type", schema.Type)
 	}
 
 	// 验证所有 required 字段在 properties 中定义
 	for _, required := range schema.Required {
 		if _, exists := schema.Properties[required]; !exists {
-			return fmt.Errorf("required field '%s' not defined in properties", required)
+			return agentErrors.New(agentErrors.CodeToolValidation, "required field not defined in properties").
+				WithComponent("json_schema_validator").
+				WithOperation("validate_schema").
+				WithContext("field", required)
 		}
 	}
 
@@ -38,7 +47,10 @@ func (v *JSONSchemaValidator) ValidateSchema(schema *core.ToolSchema) error {
 	for name := range schema.Properties {
 		prop := schema.Properties[name] // Create copy to avoid implicit memory aliasing
 		if err := v.validatePropertySchema(&prop); err != nil {
-			return fmt.Errorf("invalid property '%s': %w", name, err)
+			return agentErrors.Wrap(err, agentErrors.CodeToolValidation, "invalid property").
+				WithComponent("json_schema_validator").
+				WithOperation("validate_schema").
+				WithContext("property", name)
 		}
 	}
 
@@ -53,25 +65,38 @@ func (v *JSONSchemaValidator) validatePropertySchema(prop *core.PropertySchema) 
 	}
 
 	if !validTypes[prop.Type] {
-		return fmt.Errorf("invalid type '%s'", prop.Type)
+		return agentErrors.New(agentErrors.CodeToolValidation, "invalid property type").
+			WithComponent("json_schema_validator").
+			WithOperation("validate_property_schema").
+			WithContext("type", prop.Type)
 	}
 
 	// 验证数组类型
 	if prop.Type == "array" && prop.Items == nil {
-		return fmt.Errorf("array type must define items")
+		return agentErrors.New(agentErrors.CodeToolValidation, "array type must define items").
+			WithComponent("json_schema_validator").
+			WithOperation("validate_property_schema")
 	}
 
 	// 验证数字范围
 	if prop.Minimum != nil && prop.Maximum != nil {
 		if *prop.Minimum > *prop.Maximum {
-			return fmt.Errorf("minimum cannot be greater than maximum")
+			return agentErrors.New(agentErrors.CodeToolValidation, "minimum cannot be greater than maximum").
+				WithComponent("json_schema_validator").
+				WithOperation("validate_property_schema").
+				WithContext("minimum", *prop.Minimum).
+				WithContext("maximum", *prop.Maximum)
 		}
 	}
 
 	// 验证字符串长度
 	if prop.MinLength != nil && prop.MaxLength != nil {
 		if *prop.MinLength > *prop.MaxLength {
-			return fmt.Errorf("minLength cannot be greater than maxLength")
+			return agentErrors.New(agentErrors.CodeToolValidation, "minLength cannot be greater than maxLength").
+				WithComponent("json_schema_validator").
+				WithOperation("validate_property_schema").
+				WithContext("min_length", *prop.MinLength).
+				WithContext("max_length", *prop.MaxLength)
 		}
 	}
 
@@ -305,16 +330,25 @@ func (v *JSONSchemaValidator) validateFormat(value, format string) error {
 	switch format {
 	case "email":
 		if !strings.Contains(value, "@") {
-			return fmt.Errorf("invalid email format")
+			return agentErrors.New(agentErrors.CodeToolValidation, "invalid email format").
+				WithComponent("json_schema_validator").
+				WithOperation("validate_format").
+				WithContext("value", value)
 		}
 	case "uri", "url":
 		if !strings.HasPrefix(value, "http://") && !strings.HasPrefix(value, "https://") {
-			return fmt.Errorf("invalid URL format")
+			return agentErrors.New(agentErrors.CodeToolValidation, "invalid URL format").
+				WithComponent("json_schema_validator").
+				WithOperation("validate_format").
+				WithContext("value", value)
 		}
 	case "uuid":
 		// 简单的 UUID 格式验证
 		if matched, _ := regexp.MatchString(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`, value); !matched {
-			return fmt.Errorf("invalid UUID format")
+			return agentErrors.New(agentErrors.CodeToolValidation, "invalid UUID format").
+				WithComponent("json_schema_validator").
+				WithOperation("validate_format").
+				WithContext("value", value)
 		}
 	}
 	return nil

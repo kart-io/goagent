@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/mcp/core"
 )
 
@@ -55,12 +56,15 @@ func (t *ReadFileTool) Execute(ctx context.Context, input map[string]interface{}
 	path, ok := input["path"].(string)
 	if !ok {
 		return &core.ToolResult{
-			Success:   false,
-			Error:     "path must be a string",
-			ErrorCode: "INVALID_INPUT",
-			Duration:  time.Since(startTime),
-			Timestamp: time.Now(),
-		}, fmt.Errorf("invalid path type")
+				Success:   false,
+				Error:     "path must be a string",
+				ErrorCode: "INVALID_INPUT",
+				Duration:  time.Since(startTime),
+				Timestamp: time.Now(),
+			}, agentErrors.New(agentErrors.CodeInvalidInput, "invalid path type").
+				WithComponent("read_file_tool").
+				WithOperation("execute").
+				WithContext("field", "path")
 	}
 
 	// 读取文件

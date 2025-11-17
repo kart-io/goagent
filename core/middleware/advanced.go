@@ -7,6 +7,8 @@ import (
 	"math/big"
 	"sync"
 	"time"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // DynamicPromptMiddleware modifies prompts based on context and state
@@ -204,7 +206,13 @@ func (m *RateLimiterMiddleware) OnBefore(ctx context.Context, request *Middlewar
 	} else {
 		// Check rate limit
 		if window.count >= m.maxRequests {
-			return nil, fmt.Errorf("rate limit exceeded: %d requests in %v", m.maxRequests, m.windowSize)
+			return nil, agentErrors.New(agentErrors.CodeMiddlewareExecution,
+				fmt.Sprintf("rate limit exceeded: %d requests in %v", m.maxRequests, m.windowSize)).
+				WithComponent("rate-limiter").
+				WithOperation("OnBefore").
+				WithContext("user_id", userID).
+				WithContext("max_requests", m.maxRequests).
+				WithContext("window_size", m.windowSize)
 		}
 		window.count++
 	}
@@ -265,10 +273,14 @@ func (m *AuthenticationMiddleware) OnBefore(ctx context.Context, request *Middle
 	if m.authFunc != nil {
 		authenticated, err := m.authFunc(ctx, request)
 		if err != nil {
-			return nil, fmt.Errorf("authentication error: %w", err)
+			return nil, agentErrors.Wrap(err, agentErrors.CodeMiddlewareExecution, "authentication error").
+				WithComponent("authentication").
+				WithOperation("OnBefore")
 		}
 		if !authenticated {
-			return nil, fmt.Errorf("authentication failed: unauthorized")
+			return nil, agentErrors.New(agentErrors.CodeMiddlewareExecution, "authentication failed: unauthorized").
+				WithComponent("authentication").
+				WithOperation("OnBefore")
 		}
 
 		// Mark as authenticated in metadata
@@ -296,9 +308,12 @@ func NewValidationMiddleware(validators ...func(*MiddlewareRequest) error) *Vali
 
 // OnBefore validates the request
 func (m *ValidationMiddleware) OnBefore(ctx context.Context, request *MiddlewareRequest) (*MiddlewareRequest, error) {
-	for _, validator := range m.validators {
+	for i, validator := range m.validators {
 		if err := validator(request); err != nil {
-			return nil, fmt.Errorf("validation failed: %w", err)
+			return nil, agentErrors.Wrap(err, agentErrors.CodeMiddlewareExecution, "validation failed").
+				WithComponent("validation").
+				WithOperation("OnBefore").
+				WithContext("validator_index", i)
 		}
 	}
 
@@ -335,7 +350,9 @@ func (m *TransformMiddleware) OnBefore(ctx context.Context, request *MiddlewareR
 	if m.inputTransform != nil {
 		transformed, err := m.inputTransform(request.Input)
 		if err != nil {
-			return nil, fmt.Errorf("input transform failed: %w", err)
+			return nil, agentErrors.Wrap(err, agentErrors.CodeMiddlewareExecution, "input transform failed").
+				WithComponent("transform").
+				WithOperation("OnBefore")
 		}
 		request.Input = transformed
 	}
@@ -347,7 +364,9 @@ func (m *TransformMiddleware) OnAfter(ctx context.Context, response *MiddlewareR
 	if m.outputTransform != nil && response.Error == nil {
 		transformed, err := m.outputTransform(response.Output)
 		if err != nil {
-			return nil, fmt.Errorf("output transform failed: %w", err)
+			return nil, agentErrors.Wrap(err, agentErrors.CodeMiddlewareExecution, "output transform failed").
+				WithComponent("transform").
+				WithOperation("OnAfter")
 		}
 		response.Output = transformed
 	}
@@ -391,7 +410,12 @@ func (m *CircuitBreakerMiddleware) OnBefore(ctx context.Context, request *Middle
 			m.state = "half-open"
 			m.mu.Unlock()
 		} else {
-			return nil, fmt.Errorf("circuit breaker is open")
+			return nil, agentErrors.New(agentErrors.CodeMiddlewareExecution, "circuit breaker is open").
+				WithComponent("circuit-breaker").
+				WithOperation("OnBefore").
+				WithContext("state", state).
+				WithContext("last_failure", lastFailure).
+				WithContext("reset_timeout", m.resetTimeout)
 		}
 	case "half-open":
 		// Allow request to proceed (testing)
@@ -462,7 +486,11 @@ func (m *RandomDelayMiddleware) OnBefore(ctx context.Context, request *Middlewar
 		// Use crypto/rand for secure random number generation
 		n, err := cryptorand.Int(cryptorand.Reader, big.NewInt(delayRange))
 		if err != nil {
-			return nil, fmt.Errorf("failed to generate random delay: %w", err)
+			return nil, agentErrors.Wrap(err, agentErrors.CodeMiddlewareExecution, "failed to generate random delay").
+				WithComponent("random-delay").
+				WithOperation("OnBefore").
+				WithContext("min_delay", m.minDelay).
+				WithContext("max_delay", m.maxDelay)
 		}
 		delay := m.minDelay + time.Duration(n.Int64())
 		select {

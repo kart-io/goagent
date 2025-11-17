@@ -2,7 +2,6 @@ package observability
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"time"
 
@@ -18,6 +17,8 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // TelemetryProvider OpenTelemetry 提供者
@@ -90,7 +91,9 @@ func NewTelemetryProvider(config *TelemetryConfig) (*TelemetryProvider, error) {
 	// 创建资源
 	res, err := provider.createResource()
 	if err != nil {
-		return nil, fmt.Errorf("failed to create resource: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeInternal, "failed to create resource").
+			WithComponent("telemetry").
+			WithOperation("NewTelemetryProvider")
 	}
 	provider.resource = res
 
@@ -98,7 +101,9 @@ func NewTelemetryProvider(config *TelemetryConfig) (*TelemetryProvider, error) {
 	if config.TraceEnabled {
 		tracerProvider, err := provider.initTracer(res)
 		if err != nil {
-			return nil, fmt.Errorf("failed to initialize tracer: %w", err)
+			return nil, agentErrors.Wrap(err, agentErrors.CodeInternal, "failed to initialize tracer").
+				WithComponent("telemetry").
+				WithOperation("NewTelemetryProvider")
 		}
 		provider.tracerProvider = tracerProvider
 		otel.SetTracerProvider(tracerProvider)
@@ -138,7 +143,9 @@ func (p *TelemetryProvider) createResource() (*resource.Resource, error) {
 		attrs...,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create resource: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeInternal, "failed to create resource").
+			WithComponent("telemetry").
+			WithOperation("createResource")
 	}
 
 	return res, nil
@@ -153,7 +160,10 @@ func (p *TelemetryProvider) initTracer(res *resource.Resource) (*sdktrace.Tracer
 	case "otlp":
 		exporter, err = p.createOTLPExporter()
 		if err != nil {
-			return nil, fmt.Errorf("failed to create OTLP exporter: %w", err)
+			return nil, agentErrors.Wrap(err, agentErrors.CodeInternal, "failed to create OTLP exporter").
+				WithComponent("telemetry").
+				WithOperation("initTracer").
+				WithContext("endpoint", p.config.TraceEndpoint)
 		}
 	case "stdout":
 		// stdout exporter is deprecated, using noop instead
@@ -161,7 +171,10 @@ func (p *TelemetryProvider) initTracer(res *resource.Resource) (*sdktrace.Tracer
 	case "noop":
 		exporter = &noopExporter{}
 	default:
-		return nil, fmt.Errorf("unsupported trace exporter: %s", p.config.TraceExporter)
+		return nil, agentErrors.New(agentErrors.CodeInvalidConfig, "unsupported trace exporter").
+			WithComponent("telemetry").
+			WithOperation("initTracer").
+			WithContext("exporter", p.config.TraceExporter)
 	}
 
 	// 创建采样器
@@ -189,7 +202,10 @@ func (p *TelemetryProvider) createOTLPExporter() (sdktrace.SpanExporter, error) 
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create gRPC connection: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeStoreConnection, "failed to create gRPC connection").
+			WithComponent("telemetry").
+			WithOperation("createOTLPExporter").
+			WithContext("endpoint", p.config.TraceEndpoint)
 	}
 
 	// 创建 OTLP trace 导出器
@@ -200,7 +216,10 @@ func (p *TelemetryProvider) createOTLPExporter() (sdktrace.SpanExporter, error) 
 		),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create OTLP trace exporter: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeInternal, "failed to create OTLP trace exporter").
+			WithComponent("telemetry").
+			WithOperation("createOTLPExporter").
+			WithContext("endpoint", p.config.TraceEndpoint)
 	}
 
 	return exporter, nil
@@ -243,16 +262,26 @@ func (p *TelemetryProvider) Shutdown(ctx context.Context) error {
 
 	if p.tracerProvider != nil {
 		if shutdownErr := p.tracerProvider.Shutdown(ctx); shutdownErr != nil {
-			err = fmt.Errorf("failed to shutdown tracer provider: %w", shutdownErr)
+			err = agentErrors.Wrap(shutdownErr, agentErrors.CodeInternal, "failed to shutdown tracer provider").
+				WithComponent("telemetry").
+				WithOperation("Shutdown")
 		}
 	}
 
 	if p.meterProvider != nil {
 		if shutdownErr := p.meterProvider.Shutdown(ctx); shutdownErr != nil {
 			if err != nil {
-				err = fmt.Errorf("%w; failed to shutdown meter provider: %w", err, shutdownErr)
+				// Combine errors - append the meter provider shutdown error
+				meterErr := agentErrors.Wrap(shutdownErr, agentErrors.CodeInternal, "failed to shutdown meter provider").
+					WithComponent("telemetry").
+					WithOperation("Shutdown")
+				err = agentErrors.Wrap(err, agentErrors.CodeInternal, meterErr.Error()).
+					WithComponent("telemetry").
+					WithOperation("Shutdown")
 			} else {
-				err = fmt.Errorf("failed to shutdown meter provider: %w", shutdownErr)
+				err = agentErrors.Wrap(shutdownErr, agentErrors.CodeInternal, "failed to shutdown meter provider").
+					WithComponent("telemetry").
+					WithOperation("Shutdown")
 			}
 		}
 	}
@@ -266,16 +295,26 @@ func (p *TelemetryProvider) ForceFlush(ctx context.Context) error {
 
 	if p.tracerProvider != nil {
 		if flushErr := p.tracerProvider.ForceFlush(ctx); flushErr != nil {
-			err = fmt.Errorf("failed to flush tracer provider: %w", flushErr)
+			err = agentErrors.Wrap(flushErr, agentErrors.CodeInternal, "failed to flush tracer provider").
+				WithComponent("telemetry").
+				WithOperation("ForceFlush")
 		}
 	}
 
 	if p.meterProvider != nil {
 		if flushErr := p.meterProvider.ForceFlush(ctx); flushErr != nil {
 			if err != nil {
-				err = fmt.Errorf("%w; failed to flush meter provider: %w", err, flushErr)
+				// Combine errors - append the meter provider flush error
+				meterErr := agentErrors.Wrap(flushErr, agentErrors.CodeInternal, "failed to flush meter provider").
+					WithComponent("telemetry").
+					WithOperation("ForceFlush")
+				err = agentErrors.Wrap(err, agentErrors.CodeInternal, meterErr.Error()).
+					WithComponent("telemetry").
+					WithOperation("ForceFlush")
 			} else {
-				err = fmt.Errorf("failed to flush meter provider: %w", flushErr)
+				err = agentErrors.Wrap(flushErr, agentErrors.CodeInternal, "failed to flush meter provider").
+					WithComponent("telemetry").
+					WithOperation("ForceFlush")
 			}
 		}
 	}

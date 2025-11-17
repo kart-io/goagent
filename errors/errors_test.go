@@ -412,3 +412,318 @@ func findSubstring(s, substr string) bool {
 	}
 	return false
 }
+
+func TestHelpers_DistributedErrors(t *testing.T) {
+	t.Run("NewDistributedConnectionError", func(t *testing.T) {
+		cause := fmt.Errorf("connection refused")
+		err := NewDistributedConnectionError("http://localhost:8080", cause)
+
+		if err.Code != CodeDistributedConnection {
+			t.Errorf("Code = %v, want %v", err.Code, CodeDistributedConnection)
+		}
+		if err.Component != "distributed" {
+			t.Errorf("Component = %v, want distributed", err.Component)
+		}
+		if err.Context["endpoint"] != "http://localhost:8080" {
+			t.Errorf("Context[endpoint] = %v, want http://localhost:8080", err.Context["endpoint"])
+		}
+	})
+
+	t.Run("NewDistributedSerializationError", func(t *testing.T) {
+		cause := fmt.Errorf("invalid json")
+		err := NewDistributedSerializationError("AgentInput", cause)
+
+		if err.Code != CodeDistributedSerialization {
+			t.Errorf("Code = %v, want %v", err.Code, CodeDistributedSerialization)
+		}
+		if err.Context["data_type"] != "AgentInput" {
+			t.Errorf("Context[data_type] = %v, want AgentInput", err.Context["data_type"])
+		}
+	})
+
+	t.Run("NewDistributedCoordinationError", func(t *testing.T) {
+		cause := fmt.Errorf("leader election failed")
+		err := NewDistributedCoordinationError("elect_leader", cause)
+
+		if err.Code != CodeDistributedCoordination {
+			t.Errorf("Code = %v, want %v", err.Code, CodeDistributedCoordination)
+		}
+		if err.Operation != "elect_leader" {
+			t.Errorf("Operation = %v, want elect_leader", err.Operation)
+		}
+	})
+}
+
+func TestHelpers_RetrievalErrors(t *testing.T) {
+	t.Run("NewRetrievalSearchError", func(t *testing.T) {
+		cause := fmt.Errorf("search failed")
+		err := NewRetrievalSearchError("test query", cause)
+
+		if err.Code != CodeRetrievalSearch {
+			t.Errorf("Code = %v, want %v", err.Code, CodeRetrievalSearch)
+		}
+		if err.Context["query"] != "test query" {
+			t.Errorf("Context[query] = %v, want test query", err.Context["query"])
+		}
+	})
+
+	t.Run("NewRetrievalEmbeddingError", func(t *testing.T) {
+		cause := fmt.Errorf("embedding failed")
+		longText := string(make([]byte, 200)) // text longer than 100 chars
+		err := NewRetrievalEmbeddingError(longText, cause)
+
+		if err.Code != CodeRetrievalEmbedding {
+			t.Errorf("Code = %v, want %v", err.Code, CodeRetrievalEmbedding)
+		}
+		preview := err.Context["text_preview"].(string)
+		if len(preview) > 103 { // 100 chars + "..."
+			t.Errorf("text_preview should be truncated, got length %d", len(preview))
+		}
+	})
+
+	t.Run("NewDocumentNotFoundError", func(t *testing.T) {
+		err := NewDocumentNotFoundError("doc-123")
+
+		if err.Code != CodeDocumentNotFound {
+			t.Errorf("Code = %v, want %v", err.Code, CodeDocumentNotFound)
+		}
+		if err.Context["document_id"] != "doc-123" {
+			t.Errorf("Context[document_id] = %v, want doc-123", err.Context["document_id"])
+		}
+	})
+
+	t.Run("NewVectorDimMismatchError", func(t *testing.T) {
+		err := NewVectorDimMismatchError(512, 768)
+
+		if err.Code != CodeVectorDimMismatch {
+			t.Errorf("Code = %v, want %v", err.Code, CodeVectorDimMismatch)
+		}
+		if err.Context["expected_dim"] != 512 {
+			t.Errorf("Context[expected_dim] = %v, want 512", err.Context["expected_dim"])
+		}
+		if err.Context["actual_dim"] != 768 {
+			t.Errorf("Context[actual_dim] = %v, want 768", err.Context["actual_dim"])
+		}
+	})
+}
+
+func TestHelpers_PlanningErrors(t *testing.T) {
+	t.Run("NewPlanningError", func(t *testing.T) {
+		cause := fmt.Errorf("planning failed")
+		err := NewPlanningError("solve complex problem", cause)
+
+		if err.Code != CodePlanningFailed {
+			t.Errorf("Code = %v, want %v", err.Code, CodePlanningFailed)
+		}
+		if err.Context["goal"] != "solve complex problem" {
+			t.Errorf("Context[goal] = %v, want solve complex problem", err.Context["goal"])
+		}
+	})
+
+	t.Run("NewPlanValidationError", func(t *testing.T) {
+		err := NewPlanValidationError("plan-123", "missing required step")
+
+		if err.Code != CodePlanValidation {
+			t.Errorf("Code = %v, want %v", err.Code, CodePlanValidation)
+		}
+		if err.Context["plan_id"] != "plan-123" {
+			t.Errorf("Context[plan_id] = %v, want plan-123", err.Context["plan_id"])
+		}
+	})
+
+	t.Run("NewPlanExecutionError", func(t *testing.T) {
+		cause := fmt.Errorf("step failed")
+		err := NewPlanExecutionError("plan-123", "step-5", cause)
+
+		if err.Code != CodePlanExecutionFailed {
+			t.Errorf("Code = %v, want %v", err.Code, CodePlanExecutionFailed)
+		}
+		if err.Context["plan_id"] != "plan-123" {
+			t.Errorf("Context[plan_id] = %v, want plan-123", err.Context["plan_id"])
+		}
+		if err.Context["step_id"] != "step-5" {
+			t.Errorf("Context[step_id] = %v, want step-5", err.Context["step_id"])
+		}
+	})
+
+	t.Run("NewPlanNotFoundError", func(t *testing.T) {
+		err := NewPlanNotFoundError("plan-123")
+
+		if err.Code != CodePlanNotFound {
+			t.Errorf("Code = %v, want %v", err.Code, CodePlanNotFound)
+		}
+		if err.Context["plan_id"] != "plan-123" {
+			t.Errorf("Context[plan_id] = %v, want plan-123", err.Context["plan_id"])
+		}
+	})
+}
+
+func TestHelpers_ParserErrors(t *testing.T) {
+	t.Run("NewParserError", func(t *testing.T) {
+		cause := fmt.Errorf("parse failed")
+		longContent := string(make([]byte, 300)) // content longer than 200 chars
+		err := NewParserError("json", longContent, cause)
+
+		if err.Code != CodeParserFailed {
+			t.Errorf("Code = %v, want %v", err.Code, CodeParserFailed)
+		}
+		if err.Context["parser_type"] != "json" {
+			t.Errorf("Context[parser_type] = %v, want json", err.Context["parser_type"])
+		}
+		preview := err.Context["content_preview"].(string)
+		if len(preview) > 203 { // 200 chars + "..."
+			t.Errorf("content_preview should be truncated, got length %d", len(preview))
+		}
+	})
+
+	t.Run("NewParserInvalidJSONError", func(t *testing.T) {
+		cause := fmt.Errorf("invalid json")
+		err := NewParserInvalidJSONError(`{"invalid": json}`, cause)
+
+		if err.Code != CodeParserInvalidJSON {
+			t.Errorf("Code = %v, want %v", err.Code, CodeParserInvalidJSON)
+		}
+	})
+
+	t.Run("NewParserMissingFieldError", func(t *testing.T) {
+		err := NewParserMissingFieldError("action")
+
+		if err.Code != CodeParserMissingField {
+			t.Errorf("Code = %v, want %v", err.Code, CodeParserMissingField)
+		}
+		if err.Context["missing_field"] != "action" {
+			t.Errorf("Context[missing_field] = %v, want action", err.Context["missing_field"])
+		}
+	})
+}
+
+func TestHelpers_MultiAgentErrors(t *testing.T) {
+	t.Run("NewMultiAgentRegistrationError", func(t *testing.T) {
+		cause := fmt.Errorf("registration failed")
+		err := NewMultiAgentRegistrationError("agent-123", cause)
+
+		if err.Code != CodeMultiAgentRegistration {
+			t.Errorf("Code = %v, want %v", err.Code, CodeMultiAgentRegistration)
+		}
+		if err.Context["agent_id"] != "agent-123" {
+			t.Errorf("Context[agent_id] = %v, want agent-123", err.Context["agent_id"])
+		}
+	})
+
+	t.Run("NewMultiAgentConsensusError", func(t *testing.T) {
+		votes := map[string]bool{
+			"agent-1": true,
+			"agent-2": false,
+			"agent-3": true,
+		}
+		err := NewMultiAgentConsensusError(votes)
+
+		if err.Code != CodeMultiAgentConsensus {
+			t.Errorf("Code = %v, want %v", err.Code, CodeMultiAgentConsensus)
+		}
+		if err.Context["yes_votes"] != 2 {
+			t.Errorf("Context[yes_votes] = %v, want 2", err.Context["yes_votes"])
+		}
+		if err.Context["no_votes"] != 1 {
+			t.Errorf("Context[no_votes] = %v, want 1", err.Context["no_votes"])
+		}
+		if err.Context["total_votes"] != 3 {
+			t.Errorf("Context[total_votes] = %v, want 3", err.Context["total_votes"])
+		}
+	})
+
+	t.Run("NewMultiAgentMessageError", func(t *testing.T) {
+		cause := fmt.Errorf("message send failed")
+		err := NewMultiAgentMessageError("agent.task", cause)
+
+		if err.Code != CodeMultiAgentMessage {
+			t.Errorf("Code = %v, want %v", err.Code, CodeMultiAgentMessage)
+		}
+		if err.Context["topic"] != "agent.task" {
+			t.Errorf("Context[topic] = %v, want agent.task", err.Context["topic"])
+		}
+	})
+}
+
+func TestHelpers_StoreErrors(t *testing.T) {
+	t.Run("NewStoreConnectionError", func(t *testing.T) {
+		cause := fmt.Errorf("connection failed")
+		err := NewStoreConnectionError("redis", "localhost:6379", cause)
+
+		if err.Code != CodeStoreConnection {
+			t.Errorf("Code = %v, want %v", err.Code, CodeStoreConnection)
+		}
+		if err.Context["store_type"] != "redis" {
+			t.Errorf("Context[store_type] = %v, want redis", err.Context["store_type"])
+		}
+		if err.Context["endpoint"] != "localhost:6379" {
+			t.Errorf("Context[endpoint] = %v, want localhost:6379", err.Context["endpoint"])
+		}
+	})
+
+	t.Run("NewStoreSerializationError", func(t *testing.T) {
+		cause := fmt.Errorf("serialization failed")
+		err := NewStoreSerializationError("session:123", cause)
+
+		if err.Code != CodeStoreSerialization {
+			t.Errorf("Code = %v, want %v", err.Code, CodeStoreSerialization)
+		}
+		if err.Context["key"] != "session:123" {
+			t.Errorf("Context[key] = %v, want session:123", err.Context["key"])
+		}
+	})
+
+	t.Run("NewStoreNotFoundError", func(t *testing.T) {
+		namespace := []string{"memory", "session"}
+		err := NewStoreNotFoundError(namespace, "key-123")
+
+		if err.Code != CodeStoreNotFound {
+			t.Errorf("Code = %v, want %v", err.Code, CodeStoreNotFound)
+		}
+		if err.Context["key"] != "key-123" {
+			t.Errorf("Context[key] = %v, want key-123", err.Context["key"])
+		}
+	})
+}
+
+func TestHelpers_RouterErrors(t *testing.T) {
+	t.Run("NewRouterNoMatchError", func(t *testing.T) {
+		err := NewRouterNoMatchError("user.login", "/api/*")
+
+		if err.Code != CodeRouterNoMatch {
+			t.Errorf("Code = %v, want %v", err.Code, CodeRouterNoMatch)
+		}
+		if err.Context["topic"] != "user.login" {
+			t.Errorf("Context[topic] = %v, want user.login", err.Context["topic"])
+		}
+		if err.Context["pattern"] != "/api/*" {
+			t.Errorf("Context[pattern] = %v, want /api/*", err.Context["pattern"])
+		}
+	})
+
+	t.Run("NewRouterFailedError", func(t *testing.T) {
+		cause := fmt.Errorf("routing failed")
+		err := NewRouterFailedError("semantic", cause)
+
+		if err.Code != CodeRouterFailed {
+			t.Errorf("Code = %v, want %v", err.Code, CodeRouterFailed)
+		}
+		if err.Context["router_type"] != "semantic" {
+			t.Errorf("Context[router_type] = %v, want semantic", err.Context["router_type"])
+		}
+	})
+
+	t.Run("NewRouterOverloadError", func(t *testing.T) {
+		err := NewRouterOverloadError(100, 150)
+
+		if err.Code != CodeRouterOverload {
+			t.Errorf("Code = %v, want %v", err.Code, CodeRouterOverload)
+		}
+		if err.Context["capacity"] != 100 {
+			t.Errorf("Context[capacity] = %v, want 100", err.Context["capacity"])
+		}
+		if err.Context["current"] != 150 {
+			t.Errorf("Context[current] = %v, want 150", err.Context["current"])
+		}
+	})
+}

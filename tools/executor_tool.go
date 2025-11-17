@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // ToolExecutor 工具执行器
@@ -212,7 +214,9 @@ func (e *ToolExecutor) ExecuteParallel(ctx context.Context, calls []*ToolCall) (
 
 	// 如果有工具执行失败，返回错误
 	if hasError {
-		return results, fmt.Errorf("one or more tools failed execution")
+		return results, agentErrors.New(agentErrors.CodeToolExecution, "one or more tools failed execution").
+			WithComponent("tool_executor").
+			WithOperation("execute_parallel")
 	}
 
 	return results, nil
@@ -238,13 +242,17 @@ func (e *ToolExecutor) ExecuteSequential(ctx context.Context, calls []*ToolCall)
 // ExecuteWithDependencies 根据依赖关系执行
 func (e *ToolExecutor) ExecuteWithDependencies(ctx context.Context, graph *ToolGraph) ([]*ToolResult, error) {
 	if graph == nil {
-		return nil, fmt.Errorf("tool graph is nil")
+		return nil, agentErrors.New(agentErrors.CodeToolValidation, "tool graph is nil").
+			WithComponent("tool_executor").
+			WithOperation("execute_with_dependencies")
 	}
 
 	// 拓扑排序
 	sorted, err := graph.TopologicalSort()
 	if err != nil {
-		return nil, fmt.Errorf("failed to sort dependencies: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeToolExecution, "failed to sort dependencies").
+			WithComponent("tool_executor").
+			WithOperation("execute_with_dependencies")
 	}
 
 	// 存储结果
@@ -272,8 +280,11 @@ func (e *ToolExecutor) ExecuteWithDependencies(ctx context.Context, graph *ToolG
 		if !allDepsSucceeded {
 			// 如果依赖失败，跳过此工具
 			result := &ToolResult{
-				CallID:   node.ID,
-				Error:    fmt.Errorf("skipped due to failed dependencies"),
+				CallID: node.ID,
+				Error: agentErrors.New(agentErrors.CodeToolExecution, "skipped due to failed dependencies").
+					WithComponent("tool_executor").
+					WithOperation("execute_with_dependencies").
+					WithContext("node_id", node.ID),
 				Duration: 0,
 			}
 			resultMap[node.ID] = result
@@ -351,7 +362,9 @@ func (e *ToolExecutor) executeWithRetry(ctx context.Context, call *ToolCall) *To
 // executeSingle 执行单个工具
 func (e *ToolExecutor) executeSingle(ctx context.Context, call *ToolCall) (*ToolOutput, error) {
 	if call.Tool == nil {
-		return nil, fmt.Errorf("tool is nil")
+		return nil, agentErrors.New(agentErrors.CodeToolValidation, "tool is nil").
+			WithComponent("tool_executor").
+			WithOperation("execute_single")
 	}
 
 	if call.Input == nil {
@@ -408,7 +421,11 @@ func defaultErrorHandler(call *ToolCall, err error) error {
 	if err == nil {
 		return nil
 	}
-	return fmt.Errorf("tool '%s' execution failed: %w", call.Tool.Name(), err)
+	return agentErrors.Wrap(err, agentErrors.CodeToolExecution, "tool execution failed").
+		WithComponent("tool_executor").
+		WithOperation("default_error_handler").
+		WithContext("tool_name", call.Tool.Name()).
+		WithContext("call_id", call.ID)
 }
 
 // ExecuteBatch 批量执行相同工具的不同输入

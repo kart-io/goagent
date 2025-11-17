@@ -10,6 +10,7 @@ import (
 	"time"
 
 	agentcore "github.com/kart-io/goagent/core"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/logger/core"
 )
 
@@ -57,7 +58,9 @@ func (a *HTTPAgent) Execute(ctx context.Context, input *agentcore.AgentInput) (*
 	}
 
 	if url == "" {
-		return nil, fmt.Errorf("url is required")
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "url is required").
+			WithComponent("http_agent").
+			WithOperation("Execute")
 	}
 
 	// 应用超时
@@ -76,14 +79,20 @@ func (a *HTTPAgent) Execute(ctx context.Context, input *agentcore.AgentInput) (*
 	if body != nil {
 		bodyBytes, err := json.Marshal(body)
 		if err != nil {
-			return nil, fmt.Errorf("failed to marshal body: %w", err)
+			return nil, agentErrors.Wrap(err, agentErrors.CodeInternal, "failed to marshal body").
+				WithComponent("http_agent").
+				WithOperation("Execute")
 		}
 		reqBody = bytes.NewBuffer(bodyBytes)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, method, url, reqBody)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeInternal, "failed to create request").
+			WithComponent("http_agent").
+			WithOperation("Execute").
+			WithContext("url", url).
+			WithContext("method", method)
 	}
 
 	// 设置请求头
@@ -98,11 +107,15 @@ func (a *HTTPAgent) Execute(ctx context.Context, input *agentcore.AgentInput) (*
 	resp, err := a.client.Do(req)
 	if err != nil {
 		return &agentcore.AgentOutput{
-			Status:    "failed",
-			Message:   fmt.Sprintf("HTTP request failed: %v", err),
-			Latency:   time.Since(start),
-			Timestamp: start,
-		}, fmt.Errorf("http request failed: %w", err)
+				Status:    "failed",
+				Message:   "HTTP request failed",
+				Latency:   time.Since(start),
+				Timestamp: start,
+			}, agentErrors.Wrap(err, agentErrors.CodeToolExecution, "http request failed").
+				WithComponent("http_agent").
+				WithOperation("Execute").
+				WithContext("url", url).
+				WithContext("method", method)
 	}
 	defer func() {
 		if closeErr := resp.Body.Close(); closeErr != nil {
@@ -113,7 +126,10 @@ func (a *HTTPAgent) Execute(ctx context.Context, input *agentcore.AgentInput) (*
 	// 读取响应
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeInternal, "failed to read response").
+			WithComponent("http_agent").
+			WithOperation("Execute").
+			WithContext("url", url)
 	}
 
 	// 尝试解析 JSON

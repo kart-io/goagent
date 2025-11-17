@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/core"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
 )
 
@@ -87,7 +88,9 @@ func (a *StreamingLLMAgent) Execute(ctx context.Context, input *core.AgentInput)
 
 	reader, ok := streamOutput.(*Reader)
 	if !ok {
-		return nil, fmt.Errorf("invalid stream output type")
+		return nil, agentErrors.New(agentErrors.CodeInternal, "invalid stream output type").
+			WithComponent("streaming_llm_agent").
+			WithOperation("Execute")
 	}
 
 	// 收集所有文本
@@ -143,7 +146,9 @@ func (a *StreamingLLMAgent) processStreamAsync(ctx context.Context, input *core.
 	// 调用 LLM（这里模拟流式输出，实际需要 LLM 客户端支持）
 	response, err := a.llmClient.Chat(ctx, messages)
 	if err != nil {
-		if err := writer.WriteError(fmt.Errorf("LLM call failed: %w", err)); err != nil {
+		if err := writer.WriteError(agentErrors.Wrap(err, agentErrors.CodeAgentExecution, "LLM call failed").
+			WithComponent("streaming_llm_agent").
+			WithOperation("processStreamAsync")); err != nil {
 			fmt.Printf("failed to write error: %v", err)
 		}
 		return
@@ -230,7 +235,9 @@ func (a *StreamingLLMAgentWithRealStreaming) ExecuteStream(ctx context.Context, 
 		//     writer.WriteText(chunk.Text)
 		// }
 
-		if err := writer.WriteError(fmt.Errorf("real streaming API not implemented yet")); err != nil {
+		if err := writer.WriteError(agentErrors.New(agentErrors.CodeInternal, "real streaming API not implemented yet").
+			WithComponent("streaming_llm_agent").
+			WithOperation("ExecuteStream")); err != nil {
 			fmt.Printf("failed to write error: %v", err)
 		}
 	}()

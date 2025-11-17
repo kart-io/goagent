@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/kart-io/goagent/core"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/store"
 )
@@ -116,7 +117,9 @@ func (r *ToolRuntime) GetState(key string) (interface{}, error) {
 // SetState updates a value in agent state
 func (r *ToolRuntime) SetState(key string, value interface{}) error {
 	if !r.Config.EnableStateAccess {
-		return fmt.Errorf("state access is disabled")
+		return agentErrors.New(agentErrors.CodeStateValidation, "state access is disabled").
+			WithComponent("tool_runtime").
+			WithOperation("set_state")
 	}
 
 	r.State.Set(key, value)
@@ -139,7 +142,10 @@ func (r *ToolRuntime) GetFromStore(namespace []string, key string) (interface{},
 			}
 		}
 		if !allowed {
-			return nil, fmt.Errorf("access to namespace %v is not allowed", namespace)
+			return nil, agentErrors.New(agentErrors.CodeInvalidInput, "access to namespace is not allowed").
+				WithComponent("tool_runtime").
+				WithOperation("get_from_store").
+				WithContext("namespace", namespace)
 		}
 	}
 
@@ -156,7 +162,9 @@ func (r *ToolRuntime) GetFromStore(namespace []string, key string) (interface{},
 // PutToStore saves data to long-term store
 func (r *ToolRuntime) PutToStore(namespace []string, key string, value interface{}) error {
 	if !r.Config.EnableStoreAccess {
-		return fmt.Errorf("store access is disabled")
+		return agentErrors.New(agentErrors.CodeStateValidation, "store access is disabled").
+			WithComponent("tool_runtime").
+			WithOperation("put_to_store")
 	}
 
 	// Check namespace restrictions
@@ -169,7 +177,10 @@ func (r *ToolRuntime) PutToStore(namespace []string, key string, value interface
 			}
 		}
 		if !allowed {
-			return fmt.Errorf("access to namespace %v is not allowed", namespace)
+			return agentErrors.New(agentErrors.CodeInvalidInput, "access to namespace is not allowed").
+				WithComponent("tool_runtime").
+				WithOperation("put_to_store").
+				WithContext("namespace", namespace)
 		}
 	}
 
@@ -179,11 +190,15 @@ func (r *ToolRuntime) PutToStore(namespace []string, key string, value interface
 // Stream sends data to the stream writer
 func (r *ToolRuntime) Stream(data interface{}) error {
 	if !r.Config.EnableStreaming {
-		return fmt.Errorf("streaming is disabled")
+		return agentErrors.New(agentErrors.CodeStreamWrite, "streaming is disabled").
+			WithComponent("tool_runtime").
+			WithOperation("stream")
 	}
 
 	if r.StreamWriter == nil {
-		return fmt.Errorf("no stream writer configured")
+		return agentErrors.New(agentErrors.CodeInvalidConfig, "no stream writer configured").
+			WithComponent("tool_runtime").
+			WithOperation("stream")
 	}
 
 	return r.StreamWriter(data)
@@ -304,23 +319,32 @@ func (t *UserInfoTool) ExecuteWithRuntime(ctx context.Context, input *ToolInput,
 		"status": "Looking up user information",
 		"tool":   t.Name(),
 	}); err != nil {
-		return nil, fmt.Errorf("failed to stream progress: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeStreamWrite, "failed to stream progress").
+			WithComponent("user_info_tool").
+			WithOperation("stream_progress")
 	}
 
 	// Get user ID from state
 	userID, err := runtime.GetState("user_id")
 	if err != nil {
-		return nil, fmt.Errorf("failed to get user ID: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeStateLoad, "failed to get user ID").
+			WithComponent("user_info_tool").
+			WithOperation("get_state")
 	}
 
 	if userID == nil {
-		return nil, fmt.Errorf("no user ID in state")
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "no user ID in state").
+			WithComponent("user_info_tool").
+			WithOperation("get_state")
 	}
 
 	// Retrieve from store
 	userInfo, err := runtime.GetFromStore([]string{"users"}, userID.(string))
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve user info: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeStoreNotFound, "failed to retrieve user info").
+			WithComponent("user_info_tool").
+			WithOperation("get_from_store").
+			WithContext("user_id", userID)
 	}
 
 	// Stream completion
@@ -328,7 +352,9 @@ func (t *UserInfoTool) ExecuteWithRuntime(ctx context.Context, input *ToolInput,
 		"status":  "User information retrieved",
 		"user_id": userID,
 	}); err != nil {
-		return nil, fmt.Errorf("failed to stream completion: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeStreamWrite, "failed to stream completion").
+			WithComponent("user_info_tool").
+			WithOperation("stream_completion")
 	}
 
 	return &ToolOutput{
@@ -361,22 +387,30 @@ func (t *SavePreferenceTool) ExecuteWithRuntime(ctx context.Context, input *Tool
 	// Parse input
 	key, ok := input.Args["key"].(string)
 	if !ok {
-		return nil, fmt.Errorf("missing preference key")
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "missing preference key").
+			WithComponent("save_preference_tool").
+			WithOperation("parse_input")
 	}
 
 	value, ok := input.Args["value"]
 	if !ok {
-		return nil, fmt.Errorf("missing preference value")
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "missing preference value").
+			WithComponent("save_preference_tool").
+			WithOperation("parse_input")
 	}
 
 	// Get user ID from state
 	userID, err := runtime.GetState("user_id")
 	if err != nil {
-		return nil, fmt.Errorf("failed to get user ID: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeStateLoad, "failed to get user ID").
+			WithComponent("save_preference_tool").
+			WithOperation("get_state")
 	}
 
 	if userID == nil {
-		return nil, fmt.Errorf("no user ID in state")
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "no user ID in state").
+			WithComponent("save_preference_tool").
+			WithOperation("get_state")
 	}
 
 	// Get existing preferences
@@ -393,12 +427,18 @@ func (t *SavePreferenceTool) ExecuteWithRuntime(ctx context.Context, input *Tool
 	// Save back to store
 	err = runtime.PutToStore([]string{"preferences"}, userID.(string), prefs)
 	if err != nil {
-		return nil, fmt.Errorf("failed to save preference: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeStoreSerialization, "failed to save preference").
+			WithComponent("save_preference_tool").
+			WithOperation("put_to_store").
+			WithContext("user_id", userID)
 	}
 
 	// Update state with the new preference
 	if err := runtime.SetState(fmt.Sprintf("pref_%s", key), value); err != nil {
-		return nil, fmt.Errorf("failed to update state: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeStateSave, "failed to update state").
+			WithComponent("save_preference_tool").
+			WithOperation("set_state").
+			WithContext("key", key)
 	}
 
 	return &ToolOutput{
@@ -436,7 +476,10 @@ func (t *UpdateStateTool) ExecuteWithRuntime(ctx context.Context, input *ToolInp
 	for key, value := range input.Args {
 		err := runtime.SetState(key, value)
 		if err != nil {
-			return nil, fmt.Errorf("failed to update state key %s: %w", key, err)
+			return nil, agentErrors.Wrap(err, agentErrors.CodeStateSave, "failed to update state key").
+				WithComponent("update_state_tool").
+				WithOperation("set_state").
+				WithContext("key", key)
 		}
 	}
 
@@ -445,7 +488,9 @@ func (t *UpdateStateTool) ExecuteWithRuntime(ctx context.Context, input *ToolInp
 		"status":  "State updated",
 		"updates": input.Args,
 	}); err != nil {
-		return nil, fmt.Errorf("failed to stream updates: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeStreamWrite, "failed to stream updates").
+			WithComponent("update_state_tool").
+			WithOperation("stream_updates")
 	}
 
 	return &ToolOutput{

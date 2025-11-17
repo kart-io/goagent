@@ -3,7 +3,6 @@ package practical
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -12,6 +11,7 @@ import (
 	"github.com/PuerkitoBio/goquery"
 
 	agentcore "github.com/kart-io/goagent/core"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 )
 
@@ -29,7 +29,10 @@ func NewWebScraperTool() *WebScraperTool {
 			Timeout: 30 * time.Second,
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
 				if len(via) >= 10 {
-					return fmt.Errorf("too many redirects")
+					return agentErrors.New(agentErrors.CodeToolExecution, "too many redirects").
+						WithComponent("web_scraper_tool").
+						WithOperation("check_redirect").
+						WithContext("redirect_count", len(via))
 				}
 				return nil
 			},
@@ -91,16 +94,25 @@ func (t *WebScraperTool) ArgsSchema() string {
 func (t *WebScraperTool) Execute(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 	params, err := t.parseInput(input.Args)
 	if err != nil {
-		return nil, fmt.Errorf("invalid input: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeInvalidInput, "invalid input").
+			WithComponent("web_scraper_tool").
+			WithOperation("execute")
 	}
 
 	// Validate URL
 	parsedURL, err := url.Parse(params.URL)
 	if err != nil {
-		return nil, fmt.Errorf("invalid URL: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeInvalidInput, "invalid URL").
+			WithComponent("web_scraper_tool").
+			WithOperation("execute").
+			WithContext("url", params.URL)
 	}
 	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
-		return nil, fmt.Errorf("only HTTP(S) URLs are supported")
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "only HTTP(S) URLs are supported").
+			WithComponent("web_scraper_tool").
+			WithOperation("execute").
+			WithContext("url", params.URL).
+			WithContext("scheme", parsedURL.Scheme)
 	}
 
 	// Fetch the page
@@ -234,7 +246,9 @@ func (t *WebScraperTool) parseInput(input interface{}) (*webScraperParams, error
 		if url, ok := v["url"].(string); ok {
 			params.URL = url
 		} else {
-			return nil, fmt.Errorf("url is required")
+			return nil, agentErrors.New(agentErrors.CodeInvalidInput, "url is required").
+				WithComponent("web_scraper_tool").
+				WithOperation("parseInput")
 		}
 
 		// Parse selectors
@@ -272,7 +286,10 @@ func (t *WebScraperTool) parseInput(input interface{}) (*webScraperParams, error
 		// Simple URL input
 		params.URL = v
 	default:
-		return nil, fmt.Errorf("unsupported input type: %T", input)
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "unsupported input type").
+			WithComponent("web_scraper_tool").
+			WithOperation("parseInput").
+			WithContext("input_type", v)
 	}
 
 	return params, nil
@@ -306,7 +323,12 @@ func (t *WebScraperTool) fetchPage(ctx context.Context, urlStr string) (*goquery
 		return nil, lastErr
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, resp.Status)
+		return nil, agentErrors.New(agentErrors.CodeToolExecution, "HTTP request failed").
+			WithComponent("web_scraper_tool").
+			WithOperation("fetchPage").
+			WithContext("url", urlStr).
+			WithContext("status_code", resp.StatusCode).
+			WithContext("status", resp.Status)
 	}
 
 	if err := resp.Body.Close(); err != nil {

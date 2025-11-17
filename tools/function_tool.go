@@ -3,7 +3,8 @@ package tools
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // FunctionTool 函数包装工具
@@ -167,10 +168,14 @@ func NewTypedFunctionTool[I, O any](
 			var input I
 			data, err := json.Marshal(args)
 			if err != nil {
-				return nil, fmt.Errorf("failed to marshal args: %w", err)
+				return nil, agentErrors.Wrap(err, agentErrors.CodeToolExecution, "failed to marshal args").
+					WithComponent("function_tool").
+					WithOperation("typed_function_run")
 			}
 			if err := json.Unmarshal(data, &input); err != nil {
-				return nil, fmt.Errorf("failed to unmarshal args: %w", err)
+				return nil, agentErrors.Wrap(err, agentErrors.CodeToolExecution, "failed to unmarshal args").
+					WithComponent("function_tool").
+					WithOperation("typed_function_run")
 			}
 
 			// 执行类型化函数

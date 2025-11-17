@@ -291,3 +291,230 @@ func ErrorWithDuration(err error, durationMs int64) *AgentError {
 	return Wrap(err, CodeInternal, "operation failed").
 		WithContext("duration_ms", durationMs)
 }
+
+// Distributed Errors
+
+// NewDistributedConnectionError creates an error for distributed connection failures
+func NewDistributedConnectionError(endpoint string, cause error) *AgentError {
+	return Wrap(cause, CodeDistributedConnection, "distributed connection failed").
+		WithComponent("distributed").
+		WithOperation("connect").
+		WithContext("endpoint", endpoint)
+}
+
+// NewDistributedSerializationError creates an error for serialization failures
+func NewDistributedSerializationError(dataType string, cause error) *AgentError {
+	return Wrap(cause, CodeDistributedSerialization, "distributed serialization failed").
+		WithComponent("distributed").
+		WithOperation("serialize").
+		WithContext("data_type", dataType)
+}
+
+// NewDistributedCoordinationError creates an error for coordination failures
+func NewDistributedCoordinationError(operation string, cause error) *AgentError {
+	return Wrap(cause, CodeDistributedCoordination, "distributed coordination failed").
+		WithComponent("distributed").
+		WithOperation(operation)
+}
+
+// Retrieval Errors
+
+// NewRetrievalSearchError creates an error for retrieval search failures
+func NewRetrievalSearchError(query string, cause error) *AgentError {
+	return Wrap(cause, CodeRetrievalSearch, "retrieval search failed").
+		WithComponent("retrieval").
+		WithOperation("search").
+		WithContext("query", query)
+}
+
+// NewRetrievalEmbeddingError creates an error for embedding generation failures
+func NewRetrievalEmbeddingError(text string, cause error) *AgentError {
+	textPreview := text
+	if len(text) > 100 {
+		textPreview = text[:100] + "..."
+	}
+	return Wrap(cause, CodeRetrievalEmbedding, "retrieval embedding failed").
+		WithComponent("retrieval").
+		WithOperation("generate_embedding").
+		WithContext("text_preview", textPreview)
+}
+
+// NewDocumentNotFoundError creates an error when a document is not found
+func NewDocumentNotFoundError(docID string) *AgentError {
+	return New(CodeDocumentNotFound, fmt.Sprintf("document not found: %s", docID)).
+		WithComponent("retrieval").
+		WithOperation("get_document").
+		WithContext("document_id", docID)
+}
+
+// NewVectorDimMismatchError creates an error for vector dimension mismatches
+func NewVectorDimMismatchError(expected, actual int) *AgentError {
+	return New(CodeVectorDimMismatch, fmt.Sprintf("vector dimension mismatch: expected %d, got %d", expected, actual)).
+		WithComponent("retrieval").
+		WithOperation("validate_vector").
+		WithContext("expected_dim", expected).
+		WithContext("actual_dim", actual)
+}
+
+// Planning Errors
+
+// NewPlanningError creates an error for planning failures
+func NewPlanningError(goal string, cause error) *AgentError {
+	return Wrap(cause, CodePlanningFailed, "planning failed").
+		WithComponent("planning").
+		WithOperation("create_plan").
+		WithContext("goal", goal)
+}
+
+// NewPlanValidationError creates an error for plan validation failures
+func NewPlanValidationError(planID, reason string) *AgentError {
+	return New(CodePlanValidation, fmt.Sprintf("plan validation failed: %s", reason)).
+		WithComponent("planning").
+		WithOperation("validate_plan").
+		WithContext("plan_id", planID)
+}
+
+// NewPlanExecutionError creates an error for plan execution failures
+func NewPlanExecutionError(planID, stepID string, cause error) *AgentError {
+	return Wrap(cause, CodePlanExecutionFailed, "plan execution failed").
+		WithComponent("planning").
+		WithOperation("execute_plan").
+		WithContext("plan_id", planID).
+		WithContext("step_id", stepID)
+}
+
+// NewPlanNotFoundError creates an error when a plan is not found
+func NewPlanNotFoundError(planID string) *AgentError {
+	return New(CodePlanNotFound, fmt.Sprintf("plan not found: %s", planID)).
+		WithComponent("planning").
+		WithOperation("get_plan").
+		WithContext("plan_id", planID)
+}
+
+// Parser Errors
+
+// NewParserError creates an error for parser failures
+func NewParserError(parserType, content string, cause error) *AgentError {
+	contentPreview := content
+	if len(content) > 200 {
+		contentPreview = content[:200] + "..."
+	}
+	return Wrap(cause, CodeParserFailed, "parser failed").
+		WithComponent("parser").
+		WithOperation("parse").
+		WithContext("parser_type", parserType).
+		WithContext("content_preview", contentPreview)
+}
+
+// NewParserInvalidJSONError creates an error for invalid JSON parsing
+func NewParserInvalidJSONError(content string, cause error) *AgentError {
+	contentPreview := content
+	if len(content) > 200 {
+		contentPreview = content[:200] + "..."
+	}
+	return Wrap(cause, CodeParserInvalidJSON, "invalid JSON").
+		WithComponent("parser").
+		WithOperation("parse_json").
+		WithContext("content_preview", contentPreview)
+}
+
+// NewParserMissingFieldError creates an error when a required field is missing
+func NewParserMissingFieldError(field string) *AgentError {
+	return New(CodeParserMissingField, fmt.Sprintf("missing required field: %s", field)).
+		WithComponent("parser").
+		WithOperation("validate_fields").
+		WithContext("missing_field", field)
+}
+
+// MultiAgent Errors
+
+// NewMultiAgentRegistrationError creates an error for agent registration failures
+func NewMultiAgentRegistrationError(agentID string, cause error) *AgentError {
+	return Wrap(cause, CodeMultiAgentRegistration, "agent registration failed").
+		WithComponent("multiagent").
+		WithOperation("register").
+		WithContext("agent_id", agentID)
+}
+
+// NewMultiAgentConsensusError creates an error for consensus failures
+func NewMultiAgentConsensusError(votes map[string]bool) *AgentError {
+	yesVotes := 0
+	noVotes := 0
+	for _, vote := range votes {
+		if vote {
+			yesVotes++
+		} else {
+			noVotes++
+		}
+	}
+	return New(CodeMultiAgentConsensus, fmt.Sprintf("consensus not reached: %d yes, %d no", yesVotes, noVotes)).
+		WithComponent("multiagent").
+		WithOperation("consensus").
+		WithContext("yes_votes", yesVotes).
+		WithContext("no_votes", noVotes).
+		WithContext("total_votes", len(votes))
+}
+
+// NewMultiAgentMessageError creates an error for message passing failures
+func NewMultiAgentMessageError(topic string, cause error) *AgentError {
+	return Wrap(cause, CodeMultiAgentMessage, "message passing failed").
+		WithComponent("multiagent").
+		WithOperation("send_message").
+		WithContext("topic", topic)
+}
+
+// Store Errors
+
+// NewStoreConnectionError creates an error for store connection failures
+func NewStoreConnectionError(storeType, endpoint string, cause error) *AgentError {
+	return Wrap(cause, CodeStoreConnection, "store connection failed").
+		WithComponent("store").
+		WithOperation("connect").
+		WithContext("store_type", storeType).
+		WithContext("endpoint", endpoint)
+}
+
+// NewStoreSerializationError creates an error for store serialization failures
+func NewStoreSerializationError(key string, cause error) *AgentError {
+	return Wrap(cause, CodeStoreSerialization, "store serialization failed").
+		WithComponent("store").
+		WithOperation("serialize").
+		WithContext("key", key)
+}
+
+// NewStoreNotFoundError creates an error when a store item is not found
+func NewStoreNotFoundError(namespace []string, key string) *AgentError {
+	return New(CodeStoreNotFound, fmt.Sprintf("store item not found: %s", key)).
+		WithComponent("store").
+		WithOperation("get").
+		WithContext("namespace", namespace).
+		WithContext("key", key)
+}
+
+// Router Errors
+
+// NewRouterNoMatchError creates an error when no route matches
+func NewRouterNoMatchError(topic, pattern string) *AgentError {
+	return New(CodeRouterNoMatch, fmt.Sprintf("no route matched for topic: %s (pattern: %s)", topic, pattern)).
+		WithComponent("router").
+		WithOperation("route").
+		WithContext("topic", topic).
+		WithContext("pattern", pattern)
+}
+
+// NewRouterFailedError creates an error for router failures
+func NewRouterFailedError(routerType string, cause error) *AgentError {
+	return Wrap(cause, CodeRouterFailed, "router failed").
+		WithComponent("router").
+		WithOperation("execute").
+		WithContext("router_type", routerType)
+}
+
+// NewRouterOverloadError creates an error when router is overloaded
+func NewRouterOverloadError(capacity, current int) *AgentError {
+	return New(CodeRouterOverload, fmt.Sprintf("router overloaded: %d/%d requests", current, capacity)).
+		WithComponent("router").
+		WithOperation("queue").
+		WithContext("capacity", capacity).
+		WithContext("current", current)
+}

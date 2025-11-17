@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
 	"github.com/redis/go-redis/v9"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/store"
 )
 
@@ -56,7 +56,7 @@ func New(config *Config) (*Store, error) {
 	defer cancel()
 
 	if err := client.Ping(ctx).Err(); err != nil {
-		return nil, fmt.Errorf("failed to connect to Redis: %w", err)
+		return nil, agentErrors.NewStoreConnectionError("redis", config.Addr, err)
 	}
 
 	return &Store{
@@ -109,7 +109,11 @@ func (s *Store) Put(ctx context.Context, namespace []string, key string, value i
 	// Serialize to JSON
 	data, err := json.Marshal(storeValue)
 	if err != nil {
-		return fmt.Errorf("failed to serialize value: %w", err)
+		return agentErrors.Wrap(err, agentErrors.CodeStoreSerialization, "failed to serialize value").
+			WithComponent("redis_store").
+			WithOperation("put").
+			WithContext("namespace", namespace).
+			WithContext("key", key)
 	}
 
 	// Store in Redis
@@ -120,7 +124,11 @@ func (s *Store) Put(ctx context.Context, namespace []string, key string, value i
 	}
 
 	if err != nil {
-		return fmt.Errorf("failed to store value in Redis: %w", err)
+		return agentErrors.Wrap(err, agentErrors.CodeStoreConnection, "failed to store value in Redis").
+			WithComponent("redis_store").
+			WithOperation("put").
+			WithContext("namespace", namespace).
+			WithContext("key", key)
 	}
 
 	return nil
@@ -134,15 +142,23 @@ func (s *Store) Get(ctx context.Context, namespace []string, key string) (*store
 	data, err := s.client.Get(ctx, redisKey).Bytes()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
-			return nil, fmt.Errorf("key not found: %s", key)
+			return nil, agentErrors.NewStoreNotFoundError(namespace, key)
 		}
-		return nil, fmt.Errorf("failed to get value from Redis: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeStoreConnection, "failed to get value from Redis").
+			WithComponent("redis_store").
+			WithOperation("get").
+			WithContext("namespace", namespace).
+			WithContext("key", key)
 	}
 
 	// Deserialize
 	var storeValue store.Value
 	if err := json.Unmarshal(data, &storeValue); err != nil {
-		return nil, fmt.Errorf("failed to deserialize value: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeStoreSerialization, "failed to deserialize value").
+			WithComponent("redis_store").
+			WithOperation("get").
+			WithContext("namespace", namespace).
+			WithContext("key", key)
 	}
 
 	return &storeValue, nil
@@ -154,7 +170,11 @@ func (s *Store) Delete(ctx context.Context, namespace []string, key string) erro
 
 	err := s.client.Del(ctx, redisKey).Err()
 	if err != nil {
-		return fmt.Errorf("failed to delete key from Redis: %w", err)
+		return agentErrors.Wrap(err, agentErrors.CodeStoreConnection, "failed to delete key from Redis").
+			WithComponent("redis_store").
+			WithOperation("delete").
+			WithContext("namespace", namespace).
+			WithContext("key", key)
 	}
 
 	return nil
@@ -228,7 +248,10 @@ func (s *Store) Clear(ctx context.Context, namespace []string) error {
 	// Delete all keys in batch
 	err = s.client.Del(ctx, keys...).Err()
 	if err != nil {
-		return fmt.Errorf("failed to clear namespace: %w", err)
+		return agentErrors.Wrap(err, agentErrors.CodeStoreConnection, "failed to clear namespace").
+			WithComponent("redis_store").
+			WithOperation("clear").
+			WithContext("namespace", namespace)
 	}
 
 	return nil
@@ -282,7 +305,10 @@ func (s *Store) scanKeys(ctx context.Context, pattern string) ([]string, error) 
 
 		scanKeys, cursor, err = s.client.Scan(ctx, cursor, pattern, 100).Result()
 		if err != nil {
-			return nil, fmt.Errorf("failed to scan keys: %w", err)
+			return nil, agentErrors.Wrap(err, agentErrors.CodeStoreConnection, "failed to scan keys").
+				WithComponent("redis_store").
+				WithOperation("scan").
+				WithContext("pattern", pattern)
 		}
 
 		keys = append(keys, scanKeys...)

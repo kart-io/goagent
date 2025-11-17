@@ -9,6 +9,7 @@ import (
 	"time"
 
 	agentcore "github.com/kart-io/goagent/core"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 )
@@ -115,7 +116,9 @@ func (g *GoTAgent) Invoke(ctx context.Context, input *agentcore.AgentInput) (*ag
 
 	// Check for cycles if enabled
 	if g.config.CycleDetection && g.hasCycles(graph) {
-		return g.handleError(ctx, output, "Cycle detected in thought graph", fmt.Errorf("cyclic dependencies found"), startTime)
+		return g.handleError(ctx, output, "Cycle detected in thought graph", agentErrors.New(agentErrors.CodeAgentExecution, "cyclic dependencies found").
+			WithComponent("got_agent").
+			WithOperation("Invoke"), startTime)
 	}
 
 	// Execute graph (parallel or sequential)
@@ -478,7 +481,10 @@ func (g *GoTAgent) topologicalSort(graph []*GraphNode) ([]*GraphNode, error) {
 	var visit func(*GraphNode) error
 	visit = func(node *GraphNode) error {
 		if tempMark[node.ID] {
-			return fmt.Errorf("cycle detected at node %s", node.ID)
+			return agentErrors.New(agentErrors.CodeAgentExecution, "cycle detected").
+				WithComponent("got_agent").
+				WithOperation("detectCycles").
+				WithContext("node_id", node.ID)
 		}
 		if visited[node.ID] {
 			return nil
@@ -549,7 +555,9 @@ func (g *GoTAgent) findTerminalNodes(graph []*GraphNode) []*GraphNode {
 
 func (g *GoTAgent) mergeResults(ctx context.Context, terminals []*GraphNode) (interface{}, error) {
 	if len(terminals) == 0 {
-		return nil, fmt.Errorf("no terminal nodes found")
+		return nil, agentErrors.New(agentErrors.CodeAgentExecution, "no terminal nodes found").
+			WithComponent("got_agent").
+			WithOperation("mergeResults")
 	}
 
 	if len(terminals) == 1 {

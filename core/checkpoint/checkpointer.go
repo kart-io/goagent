@@ -7,6 +7,7 @@ import (
 	"time"
 
 	agentstate "github.com/kart-io/goagent/core/state"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // Checkpointer defines the interface for session state persistence.
@@ -133,7 +134,10 @@ func (s *InMemorySaver) Load(ctx context.Context, threadID string) (agentstate.S
 
 	cp, ok := s.checkpoints[threadID]
 	if !ok {
-		return nil, fmt.Errorf("checkpoint not found for thread: %s", threadID)
+		return nil, agentErrors.New(agentErrors.CodeStateLoad, "checkpoint not found").
+			WithComponent("checkpointer").
+			WithOperation("load").
+			WithContext("thread_id", threadID)
 	}
 
 	// Return a clone to prevent external modifications
@@ -185,7 +189,10 @@ func (s *InMemorySaver) GetHistory(ctx context.Context, threadID string) ([]agen
 
 	cp, ok := s.checkpoints[threadID]
 	if !ok {
-		return nil, fmt.Errorf("checkpoint not found for thread: %s", threadID)
+		return nil, agentErrors.New(agentErrors.CodeStateLoad, "checkpoint not found").
+			WithComponent("checkpointer").
+			WithOperation("get_history").
+			WithContext("thread_id", threadID)
 	}
 
 	// Return clones to prevent external modifications
