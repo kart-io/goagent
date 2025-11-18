@@ -220,7 +220,7 @@ func TestSoTAgent_ElaboratePoint(t *testing.T) {
 	ctx := context.Background()
 	mockLLM := new(MockLLMClient)
 
-	mockLLM.On("Chat", ctx, mock.Anything).Return(
+	mockLLM.On("Chat", mock.Anything, mock.Anything).Return(
 		&llm.CompletionResponse{
 			Content: "This is the detailed elaboration of the point.",
 		}, nil,
@@ -388,7 +388,8 @@ func TestSoTAgent_ParallelElaboration(t *testing.T) {
 	mockLLM := new(MockLLMClient)
 
 	// Setup mock to return elaborations
-	mockLLM.On("Chat", ctx, mock.Anything).Return(
+	// Use mock.Anything for context since parallel elaboration creates timeout contexts
+	mockLLM.On("Chat", mock.Anything, mock.Anything).Return(
 		&llm.CompletionResponse{
 			Content: "Elaborated content",
 		}, nil,
@@ -427,13 +428,13 @@ func TestSoTAgent_Stream(t *testing.T) {
 	ctx := context.Background()
 	mockLLM := new(MockLLMClient)
 
-	mockLLM.On("Chat", ctx, mock.Anything).Return(
+	mockLLM.On("Chat", mock.Anything, mock.Anything).Return(
 		&llm.CompletionResponse{
 			Content: "1. Point: Description",
 		}, nil,
 	).Once()
 
-	mockLLM.On("Chat", ctx, mock.Anything).Return(
+	mockLLM.On("Chat", mock.Anything, mock.Anything).Return(
 		&llm.CompletionResponse{
 			Content: "Elaboration",
 		}, nil,
@@ -617,7 +618,8 @@ func TestSoTAgent_ConcurrentElaborationWithDependencies(t *testing.T) {
 	var mu sync.Mutex
 	elaborationOrder := []string{}
 
-	mockLLM.On("Chat", ctx, mock.Anything, mock.Anything).Return(
+	// Use mock.Anything for context since parallel elaboration creates timeout contexts
+	mockLLM.On("Chat", mock.Anything, mock.Anything).Return(
 		&llm.CompletionResponse{Content: "Elaborated"},
 		nil,
 	).Run(func(args mock.Arguments) {
