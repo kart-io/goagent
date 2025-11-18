@@ -175,7 +175,7 @@ func TestPoTAgent_SelectLanguage(t *testing.T) {
 
 	for _, tt := range tests {
 		language := agent.selectLanguage(tt.task)
-		assert.Equal(t, tt.expected, language)
+		assert.Equal(t, tt.expected, language, "Task: %s", tt.task)
 	}
 }
 

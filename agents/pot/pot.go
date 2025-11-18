@@ -8,12 +8,19 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	agentcore "github.com/kart-io/goagent/core"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
+)
+
+// Pre-compiled regular expressions for code extraction
+var (
+	// genericCodeBlockRegex matches code blocks without language specifier: ```\ncode```
+	genericCodeBlockRegex = regexp.MustCompile("```\\s*\\n([\\s\\S]*?)```")
 )
 
 // PoTAgent implements Program-of-Thought reasoning pattern.
@@ -31,6 +38,9 @@ type PoTAgent struct {
 	tools       []interfaces.Tool
 	toolsByName map[string]interfaces.Tool
 	config      PoTConfig
+
+	// codeExtractors caches compiled regexes per language for performance
+	codeExtractors sync.Map
 }
 
 // PoTConfig configuration for Program-of-Thought agent
@@ -294,7 +304,7 @@ func (p *PoTAgent) selectLanguage(task string) string {
 
 	// Simple heuristics for language selection
 	if strings.Contains(taskLower, "math") || strings.Contains(taskLower, "calculate") ||
-		strings.Contains(taskLower, "statistics") || strings.Contains(taskLower, "numpy") {
+		strings.Contains(taskLower, "statistic") || strings.Contains(taskLower, "numpy") {
 		return "python"
 	}
 
@@ -313,18 +323,27 @@ func (p *PoTAgent) selectLanguage(task string) string {
 }
 
 // extractCode extracts code from LLM response
+// Uses cached compiled regexes for performance
 func (p *PoTAgent) extractCode(response string, language string) string {
-	// Try to extract code between triple backticks
-	re := regexp.MustCompile("```(?:" + language + ")?\\s*\\n([\\s\\S]*?)```")
-	matches := re.FindStringSubmatch(response)
-	if len(matches) > 1 {
+	// Try to extract code with language-specific pattern (cached)
+	key := fmt.Sprintf("lang_%s", language)
+	var langPattern *regexp.Regexp
+
+	if cached, ok := p.codeExtractors.Load(key); ok {
+		langPattern = cached.(*regexp.Regexp)
+	} else {
+		// Compile and cache the language-specific pattern
+		pattern := fmt.Sprintf("```(?:%s)?\\s*\\n([\\s\\S]*?)```", regexp.QuoteMeta(language))
+		langPattern = regexp.MustCompile(pattern)
+		p.codeExtractors.Store(key, langPattern)
+	}
+
+	if matches := langPattern.FindStringSubmatch(response); len(matches) > 1 {
 		return strings.TrimSpace(matches[1])
 	}
 
-	// Fallback: try generic code blocks
-	re = regexp.MustCompile("```\\s*\\n([\\s\\S]*?)```")
-	matches = re.FindStringSubmatch(response)
-	if len(matches) > 1 {
+	// Fallback: try generic code blocks (pre-compiled at package level)
+	if matches := genericCodeBlockRegex.FindStringSubmatch(response); len(matches) > 1 {
 		return strings.TrimSpace(matches[1])
 	}
 
@@ -658,14 +677,26 @@ func (p *PoTAgent) triggerOnError(ctx context.Context, err error) error {
 
 // WithCallbacks adds callback handlers
 func (p *PoTAgent) WithCallbacks(callbacks ...agentcore.Callback) agentcore.Runnable[*agentcore.AgentInput, *agentcore.AgentOutput] {
-	newAgent := *p
-	newAgent.BaseAgent = p.BaseAgent.WithCallbacks(callbacks...).(*agentcore.BaseAgent)
-	return &newAgent
+	newAgent := &PoTAgent{
+		BaseAgent:      p.BaseAgent.WithCallbacks(callbacks...).(*agentcore.BaseAgent),
+		llm:            p.llm,
+		tools:          p.tools,
+		toolsByName:    p.toolsByName,
+		config:         p.config,
+		codeExtractors: sync.Map{}, // Explicit initialization - each instance gets fresh cache
+	}
+	return newAgent
 }
 
 // WithConfig configures the agent
 func (p *PoTAgent) WithConfig(config agentcore.RunnableConfig) agentcore.Runnable[*agentcore.AgentInput, *agentcore.AgentOutput] {
-	newAgent := *p
-	newAgent.BaseAgent = p.BaseAgent.WithConfig(config).(*agentcore.BaseAgent)
-	return &newAgent
+	newAgent := &PoTAgent{
+		BaseAgent:      p.BaseAgent.WithConfig(config).(*agentcore.BaseAgent),
+		llm:            p.llm,
+		tools:          p.tools,
+		toolsByName:    p.toolsByName,
+		config:         p.config,
+		codeExtractors: sync.Map{}, // Explicit initialization - each instance gets fresh cache
+	}
+	return newAgent
 }
