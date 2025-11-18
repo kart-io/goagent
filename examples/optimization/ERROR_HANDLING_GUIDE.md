@@ -93,7 +93,7 @@ err := errors.Wrapf(originalErr, errors.CodeAgentExecution, "agent %s failed", a
 err := errors.New(errors.CodeInvalidConfig, "API key missing").
     WithOperation("initialization").           // 设置操作名称
     WithComponent("cot_vs_react_example").    // 设置组件名称
-    WithContext("env_var", "OPENAI_API_KEY") // 添加上下文键值对
+    WithContext("env_var", "DEEPSEEK_API_KEY") // 添加上下文键值对
 ```
 
 ## 使用方法
@@ -111,14 +111,14 @@ import (
 用于环境变量缺失、配置文件错误等场景：
 
 ```go
-apiKey := os.Getenv("OPENAI_API_KEY")
+apiKey := os.Getenv("DEEPSEEK_API_KEY")
 if apiKey == "" {
-    err := errors.New(errors.CodeInvalidConfig, "OPENAI_API_KEY environment variable is not set").
+    err := errors.New(errors.CodeInvalidConfig, "DEEPSEEK_API_KEY environment variable is not set").
         WithOperation("initialization").
         WithComponent("cot_vs_react_example").
-        WithContext("env_var", "OPENAI_API_KEY")
+        WithContext("env_var", "DEEPSEEK_API_KEY")
     fmt.Printf("错误: %v\n", err)
-    fmt.Println("请设置环境变量 OPENAI_API_KEY")
+    fmt.Println("请设置环境变量 DEEPSEEK_API_KEY")
     os.Exit(1)
 }
 ```
@@ -126,8 +126,8 @@ if apiKey == "" {
 **错误输出示例：**
 
 ```text
-错误: [INVALID_CONFIG] [cot_vs_react_example] operation=initialization: OPENAI_API_KEY environment variable is not set (env_var=OPENAI_API_KEY)
-请设置环境变量 OPENAI_API_KEY
+错误: [INVALID_CONFIG] [cot_vs_react_example] operation=initialization: DEEPSEEK_API_KEY environment variable is not set (env_var=DEEPSEEK_API_KEY)
+请设置环境变量 DEEPSEEK_API_KEY
 ```
 
 ### 3. LLM 错误处理
@@ -135,9 +135,9 @@ if apiKey == "" {
 用于 LLM 客户端初始化、请求失败等场景：
 
 ```go
-llmClient, err := providers.NewOpenAI(&llm.Config{
+llmClient, err := providers.NewDeepSeek(&llm.Config{
     APIKey:      apiKey,
-    Model:       "gpt-4",
+    Model:       "deepseek-chat",
     MaxTokens:   2000,
     Temperature: 0.7,
 })
@@ -145,8 +145,8 @@ if err != nil {
     wrappedErr := errors.Wrap(err, errors.CodeLLMRequest, "failed to create LLM client").
         WithOperation("initialization").
         WithComponent("cot_vs_react_example").
-        WithContext("provider", "openai").
-        WithContext("model", "gpt-4")
+        WithContext("provider", "deepseek").
+        WithContext("model", "deepseek-chat")
     fmt.Printf("错误: %v\n", wrappedErr)
     os.Exit(1)
 }
@@ -155,7 +155,7 @@ if err != nil {
 **错误输出示例：**
 
 ```text
-错误: [LLM_REQUEST] [cot_vs_react_example] operation=initialization: failed to create LLM client (provider=openai, model=gpt-4): <原始错误信息>
+错误: [LLM_REQUEST] [cot_vs_react_example] operation=initialization: failed to create LLM client (provider=deepseek, model=deepseek-chat): <原始错误信息>
 ```
 
 ### 4. Agent 执行错误
@@ -210,9 +210,9 @@ if err != nil {
 #### 迁移前
 
 ```go
-apiKey := os.Getenv("OPENAI_API_KEY")
+apiKey := os.Getenv("DEEPSEEK_API_KEY")
 if apiKey == "" {
-    log.Fatal("请设置环境变量 OPENAI_API_KEY")
+    log.Fatal("请设置环境变量 DEEPSEEK_API_KEY")
 }
 ```
 
@@ -225,14 +225,14 @@ if apiKey == "" {
 #### 迁移后
 
 ```go
-apiKey := os.Getenv("OPENAI_API_KEY")
+apiKey := os.Getenv("DEEPSEEK_API_KEY")
 if apiKey == "" {
-    err := errors.New(errors.CodeInvalidConfig, "OPENAI_API_KEY environment variable is not set").
+    err := errors.New(errors.CodeInvalidConfig, "DEEPSEEK_API_KEY environment variable is not set").
         WithOperation("initialization").
         WithComponent("cot_vs_react_example").
-        WithContext("env_var", "OPENAI_API_KEY")
+        WithContext("env_var", "DEEPSEEK_API_KEY")
     fmt.Printf("错误: %v\n", err)
-    fmt.Println("请设置环境变量 OPENAI_API_KEY")
+    fmt.Println("请设置环境变量 DEEPSEEK_API_KEY")
     os.Exit(1)
 }
 ```
@@ -242,7 +242,7 @@ if apiKey == "" {
 - ✅ 错误代码：`INVALID_CONFIG`
 - ✅ 操作上下文：`initialization`
 - ✅ 组件信息：`cot_vs_react_example`
-- ✅ 附加上下文：`env_var=OPENAI_API_KEY`
+- ✅ 附加上下文：`env_var=DEEPSEEK_API_KEY`
 - ✅ 结构化输出，便于日志分析
 
 ### 示例 2: LLM 初始化
@@ -250,7 +250,7 @@ if apiKey == "" {
 #### 迁移前
 
 ```go
-llmClient, err := providers.NewOpenAI(&llm.Config{...})
+llmClient, err := providers.NewDeepSeek(&llm.Config{...})
 if err != nil {
     log.Fatalf("Failed to create LLM client: %v", err)
 }
@@ -265,13 +265,13 @@ if err != nil {
 #### 迁移后
 
 ```go
-llmClient, err := providers.NewOpenAI(&llm.Config{...})
+llmClient, err := providers.NewDeepSeek(&llm.Config{...})
 if err != nil {
     wrappedErr := errors.Wrap(err, errors.CodeLLMRequest, "failed to create LLM client").
         WithOperation("initialization").
         WithComponent("cot_vs_react_example").
-        WithContext("provider", "openai").
-        WithContext("model", "gpt-4")
+        WithContext("provider", "deepseek").
+        WithContext("model", "deepseek-chat")
     fmt.Printf("错误: %v\n", wrappedErr)
     os.Exit(1)
 }
@@ -401,11 +401,11 @@ if err != nil {
 
 ```go
 if apiKey == "" {
-    err := errors.New(errors.CodeInvalidConfig, "OPENAI_API_KEY environment variable is not set").
+    err := errors.New(errors.CodeInvalidConfig, "DEEPSEEK_API_KEY environment variable is not set").
         WithOperation("initialization").
         WithComponent("example")
     fmt.Printf("错误: %v\n", err)
-    fmt.Println("请设置环境变量 OPENAI_API_KEY")  // 用户友好提示
+    fmt.Println("请设置环境变量 DEEPSEEK_API_KEY")  // 用户友好提示
     os.Exit(1)
 }
 ```
@@ -433,24 +433,29 @@ if err != nil {
 }
 ```
 
-## 错误处理统计
+## 错误处理现状
 
-经过重构，所有优化示例的错误处理已完全统一：
+所有优化示例已采用统一的错误处理方式：
 
-| 文件 | 重构前 | 重构后 |
-|------|--------|--------|
-| `cot_vs_react/main.go` | 3 处混乱错误处理 | 5 处统一错误处理 |
-| `planning_execution/main.go` | 6 处混乱错误处理 | 6 处统一错误处理 |
-| `hybrid_mode/main.go` | 4 处混乱错误处理 | 4 处统一错误处理 |
-| **总计** | **13 处** | **15 处（新增 2 处降级错误）** |
+| 文件 | 错误处理位置 | 使用 errors 包 |
+|------|------------|---------------|
+| `cot_vs_react/main.go` | 5 处 | ✅ 已使用 |
+| `planning_execution/main.go` | 6 处 | ✅ 已使用 |
+| `hybrid_mode/main.go` | 4 处 | ✅ 已使用 |
+| **总计** | **15 处** | **100% 覆盖** |
 
-**改进覆盖率：100%**
+**特点：**
+
+- 所有示例都使用 `github.com/kart-io/goagent/errors` 包
+- 统一使用 DEEPSEEK_API_KEY 环境变量
+- 结构化错误信息，包含代码、操作、组件、上下文
+- 支持错误链和堆栈跟踪
 
 ## 参考资料
 
-- [GoAgent errors 包源码](/home/hellotalk/code/go/src/github.com/kart-io/goagent/errors/errors.go)
-- [错误处理分析报告](ERROR_HANDLING_ANALYSIS.md)
-- [错误处理改进示例](IMPROVEMENT_EXAMPLES.md)
+- [GoAgent errors 包源码](../../errors/errors.go)
+- [项目架构文档](../../docs/architecture/ARCHITECTURE.md)
+- [开发指南](../../CLAUDE.md)
 
 ## 总结
 

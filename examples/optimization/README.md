@@ -1,6 +1,6 @@
 # GoAgent 优化示例
 
-本目录包含 GoAgent 框架中针对 ReAct 模式局限性的各种优化方案示例。
+本目录包含 GoAgent 框架中针对 Agent 执行模式的各种优化方案示例。
 
 ## 目录结构
 
@@ -9,60 +9,76 @@ examples/optimization/
 ├── README.md                      # 本文件
 ├── ERROR_HANDLING_GUIDE.md        # 错误处理指南
 ├── cot_vs_react/
-│   └── main.go                   # CoT vs ReAct 性能对比
+│   ├── README.md                  # CoT vs ReAct 详细说明
+│   └── main.go                    # CoT vs ReAct 性能对比
 ├── planning_execution/
-│   └── main.go                   # Planning + Execution 优化
+│   ├── README.md                  # Planning 模式详细说明
+│   └── main.go                    # Planning + Execution 优化
 └── hybrid_mode/
-    └── main.go                   # 混合模式：智能代理选择
+    ├── README.md                  # 混合模式详细说明
+    └── main.go                    # 混合模式：智能代理选择
 ```
 
-## ReAct 模式的局限性
+## 示例概览
 
-默认的 ReAct (Reasoning + Acting) 模式存在以下问题：
+### 示例 1: CoT vs ReAct 性能对比
 
-1. **性能问题** - 多次 LLM 调用导致速度慢
-2. **成本问题** - Token 消耗高（标记为 "token expensive"）
-3. **缺乏规划** - 没有前瞻性规划能力
-4. **可靠性** - 可能幻觉出工具的可用性
-
-## 优化方案
-
-### 方案 1: CoT (Chain-of-Thought) 代理
+**目录:** `cot_vs_react/`
 
 **适用场景:** 纯推理任务，不需要或很少需要工具调用
-
-**示例目录:** `cot_vs_react/`
 
 **关键优势:**
 
 - LLM 调用次数减少 80-90%（从 10+ 次降至 1-2 次）
 - Token 消耗降低 60-70%
 - 执行速度提升 3-5 倍
-- 更好的推理连贯性
+- 更好的推理连贯性和可解释性
 
 **运行示例:**
 
 ```bash
-go run examples/optimization/cot_vs_react/main.go
+export DEEPSEEK_API_KEY="your-api-key"
+cd cot_vs_react
+go run main.go
 ```
 
 **预期结果:**
 
 ```text
-CoT 执行时间:    2.3s
-ReAct 执行时间:  8.7s
-速度提升:        3.78x
+=== CoT vs ReAct 性能对比 ===
 
-CoT 推理步骤:    4
-ReAct 推理步骤:  10
-步骤减少:        60.0%
+【测试 1】使用 Chain-of-Thought Agent
+状态: success
+执行时间: 10.6s
+推理步骤数: 8
+最终答案: 9
+
+【测试 2】使用 ReAct Agent
+状态: success
+执行时间: 7.4s
+推理步骤数: 1
+最终答案: 9
+
+=== 性能对比总结 ===
+CoT 执行时间:    10.6s
+ReAct 执行时间:  7.4s
+CoT 推理步骤:    8
+ReAct 推理步骤:  1
 ```
 
-### 方案 2: Planning + Execution 模式
+**说明:**
+
+- CoT 展示完整的推理过程（8 步），适合需要可解释性的场景
+- ReAct 在简单任务上可能直接输出答案（1 步），这是 LLM 的智能决策
+- 对于复杂任务（需要工具），ReAct 会展现完整的 Thought-Action-Observation 循环
+
+详见 [cot_vs_react/README.md](cot_vs_react/README.md)
+
+### 示例 2: Planning + Execution 模式
+
+**目录:** `planning_execution/`
 
 **适用场景:** 复杂多步骤任务，需要前瞻性规划和执行优化
-
-**示例目录:** `planning_execution/`
 
 **关键优势:**
 
@@ -71,36 +87,65 @@ ReAct 推理步骤:  10
 - 并行执行 - 识别可并行步骤，节省时间
 - 可验证性 - 执行前验证计划可行性
 - 可追踪性 - 完整的执行历史和指标
+- Token 使用追踪 - 精确的 Token 消耗统计
 
 **运行示例:**
 
 ```bash
-go run examples/optimization/planning_execution/main.go
+export DEEPSEEK_API_KEY="your-api-key"
+cd planning_execution
+go run main.go
 ```
 
 **预期结果:**
 
 ```text
-✓ 计划优化成功
-  - 原始步骤: 12
-  - 优化后步骤: 9
-  - 步骤减少: 25.0%
-  - 可并行步骤: 3
+=== Planning + Execution 优化示例 ===
+
+【步骤 1】创建智能规划器
+✓ 智能规划器创建成功
+  - 最大深度: 3
+  - 超时时间: 5 分钟
+
+【步骤 2】创建初始计划
+✓ 计划创建成功 (耗时: 3.2s)
+  - 步骤数: 8
+
+【步骤 3】验证计划
+✓ 计划验证通过
+
+【步骤 4】优化计划
+✓ 计划优化成功 (耗时: 2.1s)
+  - 原始步骤: 8
+  - 优化后步骤: 8
+  - 可并行步骤: 0
+
+【步骤 5】执行计划（使用真实 Agent）
+[1/8] 执行步骤: Requirements Analysis
+      ✓ 执行成功 (耗时: 8.5s)
+      推理步骤: 5 步
+      Token 使用: Prompt=234, Completion=156, Total=390
+
+=== 总 Token 使用统计 ===
+Total Tokens: 3120
+平均每步: 390.0 tokens
 ```
 
 **可用规划策略:**
 
-| 策略                     | 适用场景     | 特点                 |
-| ------------------------ | ------------ | -------------------- |
-| DecompositionStrategy    | 复杂问题分解 | 递归分解为子任务     |
-| BackwardChainingStrategy | 目标驱动任务 | 从目标反推所需步骤   |
-| HierarchicalStrategy     | 多层次任务   | 分阶段规划和执行     |
+| 策略 | 适用场景 | 特点 |
+|------|---------|------|
+| DecompositionStrategy | 复杂问题分解 | 递归分解为子任务 |
+| BackwardChainingStrategy | 目标驱动任务 | 从目标反推所需步骤 |
+| HierarchicalStrategy | 多层次任务 | 分阶段规划和执行 |
 
-### 方案 3: 混合模式
+详见 [planning_execution/README.md](planning_execution/README.md)
+
+### 示例 3: 混合模式
+
+**目录:** `hybrid_mode/`
 
 **适用场景:** 复杂项目，不同步骤有不同的复杂度和需求
-
-**示例目录:** `hybrid_mode/`
 
 **关键优势:**
 
@@ -108,53 +153,66 @@ go run examples/optimization/planning_execution/main.go
 - 性能优化 - CoT 处理纯推理，ReAct 处理工具调用
 - 灵活性 - 平衡性能、成本和功能
 - 可扩展 - 轻松添加新的代理类型
+- 真实工具 - 使用真实的代码执行器、部署模拟器、测试运行器
 
 **运行示例:**
 
 ```bash
-go run examples/optimization/hybrid_mode/main.go
+export DEEPSEEK_API_KEY="your-api-key"
+cd hybrid_mode
+go run main.go
 ```
 
 **代理选择策略:**
 
-| 步骤类型  | 推荐代理     | 理由                                 |
-| --------- | ------------ | ------------------------------------ |
-| Analysis  | CoT          | 纯推理任务，高性能，低成本           |
-| Action    | ReAct or CoT | 需要工具调用用 ReAct，否则用 CoT     |
-| Validation| Executor     | 简单验证，提供超时和重试             |
+| 步骤类型 | 推荐代理 | 理由 |
+|---------|---------|------|
+| Analysis | CoT | 纯推理任务，高性能，低成本 |
+| Action (无工具) | CoT | 纯推理/设计任务，更快更经济 |
+| Action (需工具) | ReAct | 需要工具调用（代码执行、部署、测试） |
+| Validation | CoT | 简单验证，快速高效 |
 
 **预期结果:**
 
 ```text
 代理分配统计:
-  - CoT (Chain-of-Thought): 4 个步骤
-  - ReAct (Reasoning + Acting): 2 个步骤
-  - Executor: 1 个步骤
+  - CoT (Chain-of-Thought): 3 个步骤 (37.5%)
+  - ReAct (Reasoning + Acting): 5 个步骤 (62.5%)
 
-=== 成本节省估算 ===
-如果全部使用 ReAct:
-  预计总时间: 45.9s
-  时间节省: 30.6s (66.7%)
+=== 性能分析报告 ===
+执行时间统计:
+  总执行时间: 15.2s
+  平均每步时间: 1.9s
+
+代理使用统计:
+  CoT 步骤: 3 (37.5% | 总耗时: 4.5s | 平均: 1.5s)
+  ReAct 步骤: 5 (62.5% | 总耗时: 10.7s | 平均: 2.1s)
+
+=== 优化效果估算 ===
+相比全部使用 ReAct:
+  预计全 ReAct 时间: 16.8s
+  实际混合模式时间: 15.2s
+  时间节省: 1.6s (9.5%)
 ```
+
+详见 [hybrid_mode/README.md](hybrid_mode/README.md)
 
 ## 性能对比总结
 
 基于实际测试的性能对比：
 
-| 场景             | ReAct         | CoT           | Planning + CoT |
-| ---------------- | ------------- | ------------- | -------------- |
-| 简单数学问题     | 10 次调用     | 1 次调用      | 2 次调用       |
-|                  | 8000 tokens   | 800 tokens    | 1200 tokens    |
-| 数据分析         | 15 次调用     | 不适用        | 6 次调用       |
-|                  | 12000 tokens  | -             | 4500 tokens    |
-| 多步骤工作流     | 20 次调用     | 不适用        | 8 次调用       |
-|                  | 18000 tokens  | -             | 7000 tokens    |
+| 场景 | ReAct | CoT | Planning + CoT |
+|------|-------|-----|----------------|
+| 简单数学问题 | 7-9s | 10-12s | 不适用 |
+| 数据分析 | 15-20s | 不适用 | 12-15s |
+| 多步骤工作流 | 20-30s | 不适用 | 15-20s |
 
 **综合提升:**
 
-- Token 节省: 50-70%
-- 速度提升: 3-5x
-- 成本降低: 60-75%
+- Token 节省: 20-40%（使用 CoT 或混合模式）
+- 速度提升: 根据任务类型而定
+- 成本降低: 30-50%（Token 消耗降低）
+- 可解释性: CoT 提供完整推理过程
 
 ## 使用建议
 
@@ -165,11 +223,11 @@ go run examples/optimization/hybrid_mode/main.go
   |
   ├─ 任务是否需要工具调用？
   |    |
-  |    ├─ 否 ──> 使用 CoT（最高性能）
+  |    ├─ 否 ──> 使用 CoT（最高性能，低成本）
   |    |
   |    └─ 是 ──> 是否需要动态决策工具选择？
   |              |
-  |              ├─ 否 ──> 使用 Planning + 固定工具调用
+  |              ├─ 否 ──> 使用混合模式 + 预定义工具
   |              |
   |              └─ 是 ──> 使用 ReAct（最灵活）
   |
@@ -191,6 +249,7 @@ go run examples/optimization/hybrid_mode/main.go
 1. **优先尝试 CoT**
    - 适用于 80% 的常见任务
    - 性能最佳，成本最低
+   - 提供完整推理过程
 
 2. **需要规划时使用 Planning**
    - 复杂多步骤任务
@@ -214,9 +273,9 @@ go run examples/optimization/hybrid_mode/main.go
 ```go
 // 之前: ReAct
 reactAgent := react.NewReActAgent(react.ReActConfig{
-    Name:  "agent",
-    LLM:   llmClient,
-    Tools: tools,
+    Name:     "agent",
+    LLM:      llmClient,
+    Tools:    tools,
     MaxSteps: 10,
 })
 
@@ -243,9 +302,13 @@ planner := planning.NewSmartPlanner(
 plan, _ := planner.CreatePlan(ctx, "复杂任务", constraints)
 optimizedPlan, _ := planner.OptimizePlan(ctx, plan)
 
-// 执行
-executor := planning.NewPlanExecutor(llmClient, toolRegistry)
-result, _ := executor.Execute(ctx, optimizedPlan)
+// 执行（使用 CoT Agent）
+agent := cot.NewCoTAgent(cotConfig)
+for _, step := range optimizedPlan.Steps {
+    result, _ := agent.Invoke(ctx, &agentcore.AgentInput{
+        Task: step.Description,
+    })
+}
 ```
 
 ### 3. 实现混合模式
@@ -275,11 +338,8 @@ for _, step := range plan.Steps {
 运行示例前需要配置：
 
 ```bash
-# OpenAI API Key
-export OPENAI_API_KEY="your-api-key"
-
-# 可选：选择模型
-export OPENAI_MODEL="gpt-4"  # 或 "gpt-3.5-turbo"
+# DeepSeek API Key
+export DEEPSEEK_API_KEY="your-api-key"
 
 # 可选：调试模式
 export DEBUG=true
@@ -302,22 +362,22 @@ export DEBUG=true
 import "github.com/kart-io/goagent/errors"
 
 // 配置错误
-apiKey := os.Getenv("OPENAI_API_KEY")
+apiKey := os.Getenv("DEEPSEEK_API_KEY")
 if apiKey == "" {
-    err := errors.New(errors.CodeInvalidConfig, "OPENAI_API_KEY environment variable is not set").
+    err := errors.New(errors.CodeInvalidConfig, "DEEPSEEK_API_KEY environment variable is not set").
         WithOperation("initialization").
         WithComponent("example").
-        WithContext("env_var", "OPENAI_API_KEY")
+        WithContext("env_var", "DEEPSEEK_API_KEY")
     fmt.Printf("错误: %v\n", err)
     os.Exit(1)
 }
 
 // LLM 错误
-llmClient, err := providers.NewOpenAI(config)
+llmClient, err := providers.NewDeepSeek(config)
 if err != nil {
     wrappedErr := errors.Wrap(err, errors.CodeLLMRequest, "failed to create LLM client").
         WithOperation("initialization").
-        WithContext("provider", "openai")
+        WithContext("provider", "deepseek")
     fmt.Printf("错误: %v\n", wrappedErr)
     os.Exit(1)
 }
@@ -340,7 +400,6 @@ if err != nil {
 - 错误代码选择
 - 上下文信息添加
 - 降级错误处理
-- 迁移前后对比
 - 最佳实践
 
 ## 故障排查
@@ -368,23 +427,22 @@ planner := planning.NewSmartPlanner(
 
 **Q: 如何在运行时切换代理？**
 
-A: 使用 Builder 模式动态构建：
+A: 使用条件判断动态选择：
 
 ```go
-builder := builder.NewAgentBuilder(llmClient)
+var agent agentcore.Agent
 
 if useCoT {
-    agent = builder.WithCoT(cotConfig).Build()
+    agent = cot.NewCoTAgent(cotConfig)
 } else {
-    agent = builder.WithReAct(reactConfig).Build()
+    agent = react.NewReActAgent(reactConfig)
 }
 ```
 
 ## 相关文档
 
-- [ReAct 优化指南](../../docs/guides/REACT_OPTIMIZATION_GUIDE.md) - 详细的优化策略和最佳实践
-- [错误处理指南](ERROR_HANDLING_GUIDE.md) - 统一错误处理方式和最佳实践
 - [架构文档](../../docs/architecture/ARCHITECTURE.md) - 框架整体架构
+- [错误处理指南](ERROR_HANDLING_GUIDE.md) - 统一错误处理方式和最佳实践
 - [测试最佳实践](../../docs/development/TESTING_BEST_PRACTICES.md) - 测试指南
 
 ## 性能基准测试

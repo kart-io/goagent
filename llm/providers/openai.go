@@ -105,6 +105,11 @@ func (p *OpenAIProvider) Complete(ctx context.Context, req *llm.CompletionReques
 		TokensUsed:   resp.Usage.TotalTokens,
 		FinishReason: string(resp.Choices[0].FinishReason),
 		Provider:     string(llm.ProviderOpenAI),
+		Usage: &interfaces.TokenUsage{
+			PromptTokens:     resp.Usage.PromptTokens,
+			CompletionTokens: resp.Usage.CompletionTokens,
+			TotalTokens:      resp.Usage.TotalTokens,
+		},
 	}, nil
 }
 

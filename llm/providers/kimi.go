@@ -11,6 +11,7 @@ import (
 	"time"
 
 	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 )
 
@@ -247,6 +248,11 @@ func (c *KimiClient) Complete(ctx context.Context, req *llm.CompletionRequest) (
 		TokensUsed:   kimiResp.Usage.TotalTokens,
 		FinishReason: kimiResp.Choices[0].FinishReason,
 		Provider:     string(llm.ProviderKimi),
+		Usage: &interfaces.TokenUsage{
+			PromptTokens:     kimiResp.Usage.PromptTokens,
+			CompletionTokens: kimiResp.Usage.CompletionTokens,
+			TotalTokens:      kimiResp.Usage.TotalTokens,
+		},
 	}, nil
 }
 
