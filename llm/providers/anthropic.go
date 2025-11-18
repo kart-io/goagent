@@ -15,12 +15,12 @@ import (
 
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
-	"github.com/kart-io/goagent/llm"
+	agentllm "github.com/kart-io/goagent/llm"
 )
 
 // AnthropicProvider implements LLM interface for Anthropic Claude
 type AnthropicProvider struct {
-	config      *llm.Config
+	config      *agentllm.Config
 	httpClient  *http.Client
 	apiKey      string
 	baseURL     string
@@ -31,33 +31,33 @@ type AnthropicProvider struct {
 
 // AnthropicRequest represents a request to Anthropic API
 type AnthropicRequest struct {
-	Model         string              `json:"model"`
-	Messages      []AnthropicMessage  `json:"messages"`
-	MaxTokens     int                 `json:"max_tokens"`
-	Temperature   float64             `json:"temperature,omitempty"`
-	TopP          float64             `json:"top_p,omitempty"`
-	TopK          int                 `json:"top_k,omitempty"`
-	Stream        bool                `json:"stream,omitempty"`
-	StopSequences []string            `json:"stop_sequences,omitempty"`
-	System        string              `json:"system,omitempty"`
+	Model         string             `json:"model"`
+	Messages      []AnthropicMessage `json:"messages"`
+	MaxTokens     int                `json:"max_tokens"`
+	Temperature   float64            `json:"temperature,omitempty"`
+	TopP          float64            `json:"top_p,omitempty"`
+	TopK          int                `json:"top_k,omitempty"`
+	Stream        bool               `json:"stream,omitempty"`
+	StopSequences []string           `json:"stop_sequences,omitempty"`
+	System        string             `json:"system,omitempty"`
 }
 
 // AnthropicMessage represents a message in Anthropic format
 type AnthropicMessage struct {
-	Role    string `json:"role"`    // "user" or "assistant"
+	Role    string `json:"role"` // "user" or "assistant"
 	Content string `json:"content"`
 }
 
 // AnthropicResponse represents a response from Anthropic API
 type AnthropicResponse struct {
-	ID           string              `json:"id"`
-	Type         string              `json:"type"`
-	Role         string              `json:"role"`
-	Content      []AnthropicContent  `json:"content"`
-	Model        string              `json:"model"`
-	StopReason   string              `json:"stop_reason"`
-	StopSequence string              `json:"stop_sequence,omitempty"`
-	Usage        AnthropicUsage      `json:"usage"`
+	ID           string             `json:"id"`
+	Type         string             `json:"type"`
+	Role         string             `json:"role"`
+	Content      []AnthropicContent `json:"content"`
+	Model        string             `json:"model"`
+	StopReason   string             `json:"stop_reason"`
+	StopSequence string             `json:"stop_sequence,omitempty"`
+	Usage        AnthropicUsage     `json:"usage"`
 }
 
 // AnthropicContent represents content in response
@@ -74,12 +74,12 @@ type AnthropicUsage struct {
 
 // AnthropicStreamEvent represents a streaming event
 type AnthropicStreamEvent struct {
-	Type         string              `json:"type"`
-	Message      *AnthropicResponse  `json:"message,omitempty"`
-	Index        int                 `json:"index,omitempty"`
-	Delta        *AnthropicDelta     `json:"delta,omitempty"`
-	ContentBlock *AnthropicContent   `json:"content_block,omitempty"`
-	Usage        *AnthropicUsage     `json:"usage,omitempty"`
+	Type         string             `json:"type"`
+	Message      *AnthropicResponse `json:"message,omitempty"`
+	Index        int                `json:"index,omitempty"`
+	Delta        *AnthropicDelta    `json:"delta,omitempty"`
+	ContentBlock *AnthropicContent  `json:"content_block,omitempty"`
+	Usage        *AnthropicUsage    `json:"usage,omitempty"`
 }
 
 // AnthropicDelta represents a streaming delta
@@ -90,7 +90,7 @@ type AnthropicDelta struct {
 
 // AnthropicErrorResponse represents an error response
 type AnthropicErrorResponse struct {
-	Type  string                `json:"type"`  // "error"
+	Type  string                `json:"type"` // "error"
 	Error AnthropicErrorDetails `json:"error"`
 }
 
@@ -101,58 +101,58 @@ type AnthropicErrorDetails struct {
 }
 
 // NewAnthropic creates a new Anthropic provider
-func NewAnthropic(config *llm.Config) (*AnthropicProvider, error) {
+func NewAnthropic(config *agentllm.Config) (*AnthropicProvider, error) {
 	// Get API key from config or env
 	apiKey := config.APIKey
 	if apiKey == "" {
-		apiKey = os.Getenv("ANTHROPIC_API_KEY")
+		apiKey = os.Getenv(agentllm.EnvAnthropicAPIKey)
 	}
 
 	if apiKey == "" {
-		return nil, agentErrors.NewInvalidConfigError("anthropic", "api_key", "API key must be provided via config or ANTHROPIC_API_KEY env var")
+		return nil, agentErrors.NewInvalidConfigError(ProviderAnthropic, agentllm.ErrorFieldAPIKey, fmt.Sprintf(ErrAPIKeyMissing, "ANTHROPIC"))
 	}
 
 	// Set base URL with fallback
 	baseURL := config.BaseURL
 	if baseURL == "" {
-		baseURL = os.Getenv("ANTHROPIC_BASE_URL")
+		baseURL = os.Getenv(agentllm.EnvAnthropicBaseURL)
 	}
 	if baseURL == "" {
-		baseURL = "https://api.anthropic.com/v1"
+		baseURL = AnthropicBaseURL
 	}
 
 	// Set model with fallback
 	model := config.Model
 	if model == "" {
-		model = os.Getenv("ANTHROPIC_MODEL")
+		model = os.Getenv(agentllm.EnvAnthropicModel)
 	}
 	if model == "" {
-		model = "claude-3-sonnet-20240229" // Default to balanced model
+		model = AnthropicDefaultModel
 	}
 
 	// Set other parameters with defaults
 	maxTokens := config.MaxTokens
 	if maxTokens == 0 {
-		maxTokens = 2000
+		maxTokens = DefaultMaxTokens
 	}
 
 	temperature := config.Temperature
 	if temperature == 0 {
-		temperature = 0.7
+		temperature = DefaultTemperature
 	}
 
 	timeout := time.Duration(config.Timeout) * time.Second
 	if timeout == 0 {
-		timeout = 60 * time.Second
+		timeout = DefaultTimeout
 	}
 
 	// Create HTTP client with connection pooling
 	httpClient := &http.Client{
 		Timeout: timeout,
 		Transport: &http.Transport{
-			MaxIdleConns:        100,
-			MaxIdleConnsPerHost: 10,
-			IdleConnTimeout:     90 * time.Second,
+			MaxIdleConns:        MaxIdleConns,
+			MaxIdleConnsPerHost: MaxIdleConnsPerHost,
+			IdleConnTimeout:     IdleConnTimeout,
 		},
 	}
 
@@ -170,7 +170,7 @@ func NewAnthropic(config *llm.Config) (*AnthropicProvider, error) {
 }
 
 // Complete implements basic text completion
-func (p *AnthropicProvider) Complete(ctx context.Context, req *llm.CompletionRequest) (*llm.CompletionResponse, error) {
+func (p *AnthropicProvider) Complete(ctx context.Context, req *agentllm.CompletionRequest) (*agentllm.CompletionResponse, error) {
 	// Build Anthropic request
 	anthropicReq := p.buildRequest(req)
 
@@ -184,14 +184,14 @@ func (p *AnthropicProvider) Complete(ctx context.Context, req *llm.CompletionReq
 	return p.convertResponse(resp), nil
 }
 
-// buildRequest converts llm.CompletionRequest to AnthropicRequest
-func (p *AnthropicProvider) buildRequest(req *llm.CompletionRequest) *AnthropicRequest {
+// buildRequest converts agentllm.CompletionRequest to AnthropicRequest
+func (p *AnthropicProvider) buildRequest(req *agentllm.CompletionRequest) *AnthropicRequest {
 	// Separate system message from other messages
 	var systemMsg string
 	var messages []AnthropicMessage
 
 	for _, msg := range req.Messages {
-		if msg.Role == "system" {
+		if msg.Role == RoleSystem {
 			systemMsg = msg.Content
 		} else {
 			messages = append(messages, AnthropicMessage{
@@ -233,24 +233,24 @@ func (p *AnthropicProvider) execute(ctx context.Context, req *AnthropicRequest) 
 	// Serialize request
 	body, err := json.Marshal(req)
 	if err != nil {
-		return nil, agentErrors.Wrap(err, agentErrors.CodeInternal, "failed to marshal request")
+		return nil, agentErrors.Wrap(err, agentErrors.CodeInternal, ErrFailedMarshalRequest)
 	}
 
 	// Create HTTP request
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", p.baseURL+"/messages", bytes.NewReader(body))
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", p.baseURL+AnthropicMessagesPath, bytes.NewReader(body))
 	if err != nil {
-		return nil, agentErrors.Wrap(err, agentErrors.CodeInternal, "failed to create request")
+		return nil, agentErrors.Wrap(err, agentErrors.CodeInternal, ErrFailedCreateRequest)
 	}
 
 	// Set headers
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("x-api-key", p.apiKey)
-	httpReq.Header.Set("anthropic-version", "2023-06-01")
+	httpReq.Header.Set(HeaderContentType, ContentTypeJSON)
+	httpReq.Header.Set(HeaderXAPIKey, p.apiKey)
+	httpReq.Header.Set(HeaderAnthropicVersion, AnthropicAPIVersion)
 
 	// Execute request
 	httpResp, err := p.httpClient.Do(httpReq)
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError("anthropic", p.model, err)
+		return nil, agentErrors.NewLLMRequestError(ProviderAnthropic, p.model, err)
 	}
 	defer func() {
 		_ = httpResp.Body.Close()
@@ -264,7 +264,7 @@ func (p *AnthropicProvider) execute(ctx context.Context, req *AnthropicRequest) 
 	// Deserialize response
 	var resp AnthropicResponse
 	if err := json.NewDecoder(httpResp.Body).Decode(&resp); err != nil {
-		return nil, agentErrors.NewLLMResponseError("anthropic", req.Model, "failed to decode response")
+		return nil, agentErrors.NewLLMResponseError(ProviderAnthropic, req.Model, ErrFailedDecodeResponse)
 	}
 
 	return &resp, nil
@@ -278,45 +278,45 @@ func (p *AnthropicProvider) handleHTTPError(resp *http.Response, model string) e
 		// Use error message from API
 		switch resp.StatusCode {
 		case 400:
-			return agentErrors.NewInvalidInputError("anthropic", "request", errResp.Error.Message)
+			return agentErrors.NewInvalidInputError(ProviderAnthropic, "request", errResp.Error.Message)
 		case 401:
-			return agentErrors.NewInvalidConfigError("anthropic", "api_key", errResp.Error.Message)
+			return agentErrors.NewInvalidConfigError(ProviderAnthropic, agentllm.ErrorFieldAPIKey, errResp.Error.Message)
 		case 403:
-			return agentErrors.NewInvalidConfigError("anthropic", "api_key", errResp.Error.Message)
+			return agentErrors.NewInvalidConfigError(ProviderAnthropic, agentllm.ErrorFieldAPIKey, errResp.Error.Message)
 		case 404:
-			return agentErrors.NewLLMResponseError("anthropic", model, errResp.Error.Message)
+			return agentErrors.NewLLMResponseError(ProviderAnthropic, model, errResp.Error.Message)
 		case 429:
 			retryAfter := parseRetryAfter(resp.Header.Get("Retry-After"))
-			return agentErrors.NewLLMRateLimitError("anthropic", model, retryAfter)
+			return agentErrors.NewLLMRateLimitError(ProviderAnthropic, model, retryAfter)
 		case 500, 502, 503, 504:
-			return agentErrors.NewLLMRequestError("anthropic", model, fmt.Errorf("server error: %s", errResp.Error.Message))
+			return agentErrors.NewLLMRequestError(ProviderAnthropic, model, fmt.Errorf("server error: %s", errResp.Error.Message))
 		}
 	}
 
 	// Fallback error handling
 	switch resp.StatusCode {
 	case 400:
-		return agentErrors.NewInvalidInputError("anthropic", "request", "bad request")
+		return agentErrors.NewInvalidInputError(ProviderAnthropic, "request", StatusBadRequest)
 	case 401:
-		return agentErrors.NewInvalidConfigError("anthropic", "api_key", "invalid API key")
+		return agentErrors.NewInvalidConfigError(ProviderAnthropic, agentllm.ErrorFieldAPIKey, StatusInvalidAPIKey)
 	case 403:
-		return agentErrors.NewInvalidConfigError("anthropic", "api_key", "API key lacks permissions")
+		return agentErrors.NewInvalidConfigError(ProviderAnthropic, agentllm.ErrorFieldAPIKey, StatusAPIKeyLacksPermissions)
 	case 404:
-		return agentErrors.NewLLMResponseError("anthropic", model, "model not found")
+		return agentErrors.NewLLMResponseError(ProviderAnthropic, model, StatusModelNotFound)
 	case 429:
 		retryAfter := parseRetryAfter(resp.Header.Get("Retry-After"))
-		return agentErrors.NewLLMRateLimitError("anthropic", model, retryAfter)
+		return agentErrors.NewLLMRateLimitError(ProviderAnthropic, model, retryAfter)
 	case 500, 502, 503, 504:
-		return agentErrors.NewLLMRequestError("anthropic", model, fmt.Errorf("server error: %d", resp.StatusCode))
+		return agentErrors.NewLLMRequestError(ProviderAnthropic, model, fmt.Errorf("server error: %d", resp.StatusCode))
 	default:
-		return agentErrors.NewLLMRequestError("anthropic", model, fmt.Errorf("unexpected status: %d", resp.StatusCode))
+		return agentErrors.NewLLMRequestError(ProviderAnthropic, model, fmt.Errorf("unexpected status: %d", resp.StatusCode))
 	}
 }
 
 // executeWithRetry executes request with exponential backoff
 func (p *AnthropicProvider) executeWithRetry(ctx context.Context, req *AnthropicRequest) (*AnthropicResponse, error) {
-	maxAttempts := 3
-	baseDelay := 1 * time.Second
+	maxAttempts := DefaultMaxAttempts
+	baseDelay := DefaultBaseDelay
 
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		resp, err := p.execute(ctx, req)
@@ -346,7 +346,7 @@ func (p *AnthropicProvider) executeWithRetry(ctx context.Context, req *Anthropic
 		}
 	}
 
-	return nil, agentErrors.NewInternalError("anthropic", "execute_with_retry", fmt.Errorf("max retries exceeded"))
+	return nil, agentErrors.NewInternalError(ProviderAnthropic, "execute_with_retry", fmt.Errorf("%s", ErrMaxRetriesExceeded))
 }
 
 // isRetryable checks if an error is retryable
@@ -361,20 +361,20 @@ func isRetryable(err error) bool {
 		code == agentErrors.CodeLLMRequest
 }
 
-// convertResponse converts AnthropicResponse to llm.CompletionResponse
-func (p *AnthropicProvider) convertResponse(resp *AnthropicResponse) *llm.CompletionResponse {
+// convertResponse converts AnthropicResponse to agentllm.CompletionResponse
+func (p *AnthropicProvider) convertResponse(resp *AnthropicResponse) *agentllm.CompletionResponse {
 	// Extract text content
 	var content string
 	if len(resp.Content) > 0 {
 		content = resp.Content[0].Text
 	}
 
-	return &llm.CompletionResponse{
+	return &agentllm.CompletionResponse{
 		Content:      content,
 		Model:        resp.Model,
 		TokensUsed:   resp.Usage.InputTokens + resp.Usage.OutputTokens,
 		FinishReason: resp.StopReason,
-		Provider:     string(llm.ProviderAnthropic),
+		Provider:     string(agentllm.ProviderAnthropic),
 		Usage: &interfaces.TokenUsage{
 			PromptTokens:     resp.Usage.InputTokens,
 			CompletionTokens: resp.Usage.OutputTokens,
@@ -384,15 +384,15 @@ func (p *AnthropicProvider) convertResponse(resp *AnthropicResponse) *llm.Comple
 }
 
 // Chat implements chat conversation
-func (p *AnthropicProvider) Chat(ctx context.Context, messages []llm.Message) (*llm.CompletionResponse, error) {
-	return p.Complete(ctx, &llm.CompletionRequest{
+func (p *AnthropicProvider) Chat(ctx context.Context, messages []agentllm.Message) (*agentllm.CompletionResponse, error) {
+	return p.Complete(ctx, &agentllm.CompletionRequest{
 		Messages: messages,
 	})
 }
 
 // Provider returns the provider type
-func (p *AnthropicProvider) Provider() llm.Provider {
-	return llm.ProviderAnthropic
+func (p *AnthropicProvider) Provider() agentllm.Provider {
+	return agentllm.ProviderAnthropic
 }
 
 // IsAvailable checks if the provider is available
@@ -401,8 +401,8 @@ func (p *AnthropicProvider) IsAvailable() bool {
 	defer cancel()
 
 	// Try a minimal completion
-	_, err := p.Complete(ctx, &llm.CompletionRequest{
-		Messages: []llm.Message{{Role: "user", Content: "test"}},
+	_, err := p.Complete(ctx, &agentllm.CompletionRequest{
+		Messages: []agentllm.Message{{Role: RoleUser, Content: "test"}},
 	})
 
 	return err == nil
@@ -414,33 +414,33 @@ func (p *AnthropicProvider) Stream(ctx context.Context, prompt string) (<-chan s
 
 	// Build streaming request
 	req := &AnthropicRequest{
-		Model:     p.model,
-		Messages:  []AnthropicMessage{{Role: "user", Content: prompt}},
-		MaxTokens: p.maxTokens,
+		Model:       p.model,
+		Messages:    []AnthropicMessage{{Role: RoleUser, Content: prompt}},
+		MaxTokens:   p.maxTokens,
 		Temperature: p.temperature,
-		Stream:    true,
+		Stream:      true,
 	}
 
 	// Create HTTP request
 	body, err := json.Marshal(req)
 	if err != nil {
-		return nil, agentErrors.Wrap(err, agentErrors.CodeInternal, "failed to marshal request")
+		return nil, agentErrors.Wrap(err, agentErrors.CodeInternal, ErrFailedMarshalRequest)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", p.baseURL+"/messages", bytes.NewReader(body))
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", p.baseURL+AnthropicMessagesPath, bytes.NewReader(body))
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError("anthropic", p.model, err)
+		return nil, agentErrors.NewLLMRequestError(ProviderAnthropic, p.model, err)
 	}
 
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("x-api-key", p.apiKey)
-	httpReq.Header.Set("anthropic-version", "2023-06-01")
-	httpReq.Header.Set("Accept", "text/event-stream")
+	httpReq.Header.Set(HeaderContentType, ContentTypeJSON)
+	httpReq.Header.Set(HeaderXAPIKey, p.apiKey)
+	httpReq.Header.Set(HeaderAnthropicVersion, AnthropicAPIVersion)
+	httpReq.Header.Set(HeaderAccept, AcceptEventStream)
 
 	// Execute request
 	httpResp, err := p.httpClient.Do(httpReq)
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError("anthropic", p.model, err)
+		return nil, agentErrors.NewLLMRequestError(ProviderAnthropic, p.model, err)
 	}
 
 	if httpResp.StatusCode != http.StatusOK {
@@ -460,12 +460,12 @@ func (p *AnthropicProvider) Stream(ctx context.Context, prompt string) (<-chan s
 			line := scanner.Text()
 
 			// Parse SSE format: "data: {...}"
-			if !strings.HasPrefix(line, "data: ") {
+			if !strings.HasPrefix(line, SSEDataPrefix) {
 				continue
 			}
 
-			data := strings.TrimPrefix(line, "data: ")
-			if data == "[DONE]" {
+			data := strings.TrimPrefix(line, SSEDataPrefix)
+			if data == SSEDoneMessage {
 				return
 			}
 
@@ -475,7 +475,7 @@ func (p *AnthropicProvider) Stream(ctx context.Context, prompt string) (<-chan s
 			}
 
 			// Extract text from content_block_delta events
-			if event.Type == "content_block_delta" && event.Delta != nil {
+			if event.Type == EventContentBlockDelta && event.Delta != nil {
 				tokens <- event.Delta.Text
 			}
 		}

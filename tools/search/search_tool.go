@@ -42,8 +42,8 @@ func NewSearchTool(engine SearchEngine) *SearchTool {
 	}
 
 	tool.BaseTool = tools.NewBaseTool(
-		"search",
-		"Search the web for information. Returns top search results with titles, URLs, and snippets.",
+		tools.ToolSearch,
+		tools.DescSearch,
 		`{
 			"type": "object",
 			"properties": {
