@@ -912,69 +912,106 @@ func selectBestAgent(
 		assignment.Reason = "分析任务适合使用 CoT，纯推理，高性能，低成本"
 
 	case planning.StepTypeAction:
-		// 行动步骤：检查是否需要工具
-		// 检查步骤名称和描述中的关键词（支持中英文）
-		toolKeywords := []string{
-			// 英文关键词
-			"execute", "run", "command", "deploy", "test", "implement",
-			"api", "server", "database", "build", "compile", "install",
-			"create", "write", "code", "develop", "setup", "configure",
-			// 中文关键词
-			"执行", "运行", "命令", "部署", "测试", "实现",
-			"API", "服务器", "数据库", "构建", "编译", "安装",
-			"创建", "编写", "代码", "开发", "设置", "配置",
+		// 行动步骤：区分"纯推理/设计任务"和"真实执行任务"
+
+		// 只有这些关键词才需要 ReAct + 工具调用
+		executionKeywords := []string{
+			// 真实执行动作（英文）
+			"execute", "run", "deploy", "test", "validate", "check",
+			// 真实执行动作（中文）
+			"执行", "运行", "部署", "测试", "验证", "检查",
 		}
 
-		needsToolsByDesc := containsKeywords(step.Description, toolKeywords)
-		needsToolsByName := containsKeywords(step.Name, toolKeywords)
-		needsTools := needsToolsByDesc || needsToolsByName
+		// 这些关键词表示设计/规划任务，应该使用 CoT
+		designKeywords := []string{
+			// 设计/实现关键词（英文）
+			"implement", "create", "write", "code", "develop", "build",
+			"design", "define", "setup", "configure",
+			// 设计/实现关键词（中文）
+			"实现", "创建", "编写", "代码", "开发", "构建",
+			"设计", "定义", "设置", "配置",
+		}
 
-		if needsTools {
-			// 根据步骤内容选择合适的工具
+		// 检查是否是真实执行任务
+		needsExecution := containsKeywords(step.Description, executionKeywords) ||
+			containsKeywords(step.Name, executionKeywords)
+
+		// 检查是否是设计任务
+		isDesignTask := containsKeywords(step.Description, designKeywords) ||
+			containsKeywords(step.Name, designKeywords)
+
+		// 决策逻辑：优先使用 CoT，除非明确需要执行操作
+		if needsExecution && !isDesignTask {
+			// 真实执行任务：使用 ReAct + 工具
 			tools := []interfaces.Tool{}
 
-			// 检查需要哪些工具
-			if strings.Contains(strings.ToLower(step.Description), "implement") ||
-				strings.Contains(strings.ToLower(step.Description), "code") ||
-				strings.Contains(strings.ToLower(step.Description), "api") {
-				tools = append(tools, codeExecutor)
-			}
-
-			if strings.Contains(strings.ToLower(step.Description), "deploy") ||
-				strings.Contains(strings.ToLower(step.Description), "server") {
+			// 根据步骤内容选择合适的工具
+			if strings.Contains(strings.ToLower(step.Description), "deploy") {
 				tools = append(tools, deploymentSimulator)
 			}
 
-			if strings.Contains(strings.ToLower(step.Description), "test") ||
-				strings.Contains(strings.ToLower(step.Description), "coverage") {
-				tools = append(tools, testRunner)
+			if strings.Contains(strings.ToLower(step.Description), "test") {
+				tools = append(tools, testRunner, codeExecutor)
 			}
 
-			// 如果没有特定工具，添加所有工具
+			if strings.Contains(strings.ToLower(step.Description), "execute") ||
+				strings.Contains(strings.ToLower(step.Description), "run") {
+				tools = append(tools, codeExecutor, testRunner)
+			}
+
+			// 如果没有匹配到特定工具，添加所有工具
 			if len(tools) == 0 {
 				tools = []interfaces.Tool{codeExecutor, deploymentSimulator, testRunner}
 			}
 
+			// 使用增强的提示词，强调格式要求
 			assignment.AgentType = "ReAct (Reasoning + Acting)"
 			assignment.Agent = react.NewReActAgent(react.ReActConfig{
 				Name:        fmt.Sprintf("react_%s", step.ID),
 				Description: step.Description,
 				LLM:         llmClient,
 				Tools:       tools,
-				MaxSteps:    8,
+				MaxSteps:    10,
+				// 使用自定义提示词，强调格式
+				PromptPrefix: `You are a precise execution agent. You have access to the following tools:
+
+{tools}
+
+CRITICAL: You MUST follow this exact format for every response:
+
+{format_instructions}
+
+IMPORTANT RULES:
+1. Always start with "Thought:" to explain your reasoning
+2. Then specify "Action:" with ONE tool name from [{tool_names}]
+3. Then provide "Action Input:" as a JSON object
+4. After receiving "Observation:", continue with next "Thought:"
+5. When done, output "Thought: I now know the final answer" followed by "Final Answer:"
+6. NEVER skip the Action/Action Input/Observation cycle
+7. NEVER provide lengthy explanations without actions
+
+Begin!`,
+				PromptSuffix: `Task: {input}
+Remember: Follow the Thought/Action/Action Input/Observation format strictly!
+Thought:`,
 			})
-			assignment.Reason = fmt.Sprintf("需要工具调用 (匹配: %s, 工具数: %d, 使用真实工具)",
-				getMatchedKeywords(step, toolKeywords), len(tools))
+			assignment.Reason = fmt.Sprintf("真实执行任务 (匹配: %s, 工具数: %d)",
+				getMatchedKeywords(step, executionKeywords), len(tools))
 		} else {
+			// 设计/规划任务：使用 CoT（更快、更适合纯推理）
 			assignment.AgentType = "CoT (Chain-of-Thought)"
 			assignment.Agent = cot.NewCoTAgent(cot.CoTConfig{
 				Name:        fmt.Sprintf("cot_%s", step.ID),
 				Description: step.Description,
 				LLM:         llmClient,
-				MaxSteps:    5,
+				MaxSteps:    7,
 				ZeroShot:    true,
 			})
-			assignment.Reason = "纯推理任务，使用 CoT 提高性能"
+			if isDesignTask {
+				assignment.Reason = "设计/实现任务，使用 CoT 进行推理和规划"
+			} else {
+				assignment.Reason = "纯推理任务，使用 CoT 提高性能"
+			}
 		}
 
 	case planning.StepTypeValidation:
@@ -1081,12 +1118,35 @@ func executeHybridWorkflow(
 		} else {
 			fmt.Printf("      ✓ 执行成功 (耗时: %v)\n", duration)
 			fmt.Printf("      推理步骤: %d 步\n", len(output.ReasoningSteps))
-			if output.Result != nil {
-				resultStr := fmt.Sprintf("%v", output.Result)
+
+			// 显示 Token 使用统计
+			if output.TokenUsage != nil && !output.TokenUsage.IsEmpty() {
+				fmt.Printf("      Token 使用: Prompt=%d, Completion=%d, Total=%d\n",
+					output.TokenUsage.PromptTokens,
+					output.TokenUsage.CompletionTokens,
+					output.TokenUsage.TotalTokens)
+			}
+
+			// 显示结果（优先显示 Result，如果为空则显示最后一个推理步骤）
+			resultStr := ""
+			if output.Result != nil && fmt.Sprintf("%v", output.Result) != "" {
+				resultStr = fmt.Sprintf("%v", output.Result)
+			} else if len(output.ReasoningSteps) > 0 {
+				// 如果 Result 为空，显示最后一个推理步骤
+				lastStep := output.ReasoningSteps[len(output.ReasoningSteps)-1]
+				resultStr = lastStep.Result
+			}
+
+			if resultStr != "" {
 				if len(resultStr) > 100 {
 					resultStr = resultStr[:100] + "..."
 				}
 				fmt.Printf("      结果: %s\n", resultStr)
+			}
+
+			// 显示工具调用统计
+			if len(output.ToolCalls) > 0 {
+				fmt.Printf("      工具调用: %d 次\n", len(output.ToolCalls))
 			}
 
 			step.Status = planning.StepStatusCompleted
@@ -1099,6 +1159,7 @@ func executeHybridWorkflow(
 					"agent_type":      assignment.AgentType,
 					"reasoning_steps": len(output.ReasoningSteps),
 					"tool_calls":      len(output.ToolCalls),
+					"token_usage":     output.TokenUsage,
 				},
 			}
 			successCount++
@@ -1172,6 +1233,9 @@ func analyzePerformance(plan *planning.Plan, assignments []*AgentAssignment) {
 	reactDuration := time.Duration(0)
 	totalReasoningSteps := 0
 	totalToolCalls := 0
+	totalPromptTokens := 0
+	totalCompletionTokens := 0
+	totalTokens := 0
 
 	for _, assignment := range assignments {
 		if assignment.Step.Result != nil {
@@ -1184,6 +1248,11 @@ func analyzePerformance(plan *planning.Plan, assignments []*AgentAssignment) {
 			}
 			if calls, ok := metadata["tool_calls"].(int); ok {
 				totalToolCalls += calls
+			}
+			if tokenUsage, ok := metadata["token_usage"].(*interfaces.TokenUsage); ok && tokenUsage != nil {
+				totalPromptTokens += tokenUsage.PromptTokens
+				totalCompletionTokens += tokenUsage.CompletionTokens
+				totalTokens += tokenUsage.TotalTokens
 			}
 
 			// 按代理类型统计
@@ -1261,6 +1330,28 @@ func analyzePerformance(plan *planning.Plan, assignments []*AgentAssignment) {
 	fmt.Println("3. ✓ 灵活性：ReAct 处理需要工具调用的复杂任务")
 	fmt.Println("4. ✓ 可扩展：轻松添加新的代理类型和选择策略")
 	fmt.Println("5. ✓ 可追踪：完整的执行历史和性能指标")
+
+	fmt.Println()
+	fmt.Println("=== Token 使用统计 ===")
+	if totalTokens > 0 {
+		fmt.Printf("Prompt Tokens: %d\n", totalPromptTokens)
+		fmt.Printf("Completion Tokens: %d\n", totalCompletionTokens)
+		fmt.Printf("Total Tokens: %d\n", totalTokens)
+		if len(assignments) > 0 {
+			fmt.Printf("平均每步 Token: %.1f\n", float64(totalTokens)/float64(len(assignments)))
+		}
+		if cotSteps > 0 {
+			avgCotTokens := float64(totalTokens) / float64(len(assignments))
+			fmt.Printf("  - CoT 平均: ~%.0f tokens/步\n", avgCotTokens)
+		}
+		if reactSteps > 0 {
+			avgReactTokens := float64(totalTokens) / float64(len(assignments)) * 1.5
+			fmt.Printf("  - ReAct 平均: ~%.0f tokens/步 (预估)\n", avgReactTokens)
+		}
+	} else {
+		fmt.Println("Token 使用统计: 未提供")
+		fmt.Println("说明：部分 LLM provider 可能未返回 Token 使用信息")
+	}
 
 	// 估算优化效果
 	if cotSteps > 0 && reactSteps > 0 {
