@@ -156,6 +156,11 @@ func (p *GeminiProvider) Complete(ctx context.Context, req *llm.CompletionReques
 		TokensUsed:   int(resp.UsageMetadata.TotalTokenCount),
 		FinishReason: string(resp.Candidates[0].FinishReason),
 		Provider:     string(llm.ProviderGemini),
+		Usage: &interfaces.TokenUsage{
+			PromptTokens:     int(resp.UsageMetadata.PromptTokenCount),
+			CompletionTokens: int(resp.UsageMetadata.CandidatesTokenCount),
+			TotalTokens:      int(resp.UsageMetadata.TotalTokenCount),
+		},
 	}, nil
 }
 

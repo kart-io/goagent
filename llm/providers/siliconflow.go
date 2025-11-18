@@ -11,6 +11,7 @@ import (
 	"time"
 
 	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 )
 
@@ -223,6 +224,11 @@ func (c *SiliconFlowClient) Complete(ctx context.Context, req *llm.CompletionReq
 		TokensUsed:   sfResp.Usage.TotalTokens,
 		FinishReason: sfResp.Choices[0].FinishReason,
 		Provider:     string(llm.ProviderSiliconFlow),
+		Usage: &interfaces.TokenUsage{
+			PromptTokens:     sfResp.Usage.PromptTokens,
+			CompletionTokens: sfResp.Usage.CompletionTokens,
+			TotalTokens:      sfResp.Usage.TotalTokens,
+		},
 	}, nil
 }
 

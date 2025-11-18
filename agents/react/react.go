@@ -111,6 +111,11 @@ func (r *ReActAgent) Invoke(ctx context.Context, input *agentcore.AgentInput) (*
 		ReasoningSteps: make([]agentcore.ReasoningStep, 0),
 		ToolCalls:      make([]agentcore.ToolCall, 0),
 		Metadata:       make(map[string]interface{}),
+		TokenUsage: &interfaces.TokenUsage{
+			PromptTokens:     0,
+			CompletionTokens: 0,
+			TotalTokens:      0,
+		},
 	}
 
 	// ReAct 循环
@@ -136,6 +141,11 @@ func (r *ReActAgent) Invoke(ctx context.Context, input *agentcore.AgentInput) (*
 		if err != nil {
 			_ = r.triggerOnLLMError(ctx, err)
 			return r.handleError(ctx, output, step, "LLM call failed", err, startTime)
+		}
+
+		// Collect token usage
+		if llmResp.Usage != nil {
+			output.TokenUsage.Add(llmResp.Usage)
 		}
 
 		llmOutput := llmResp.Content

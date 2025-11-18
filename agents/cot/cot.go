@@ -105,6 +105,11 @@ func (c *CoTAgent) Invoke(ctx context.Context, input *agentcore.AgentInput) (*ag
 		ReasoningSteps: make([]agentcore.ReasoningStep, 0),
 		ToolCalls:      make([]agentcore.ToolCall, 0),
 		Metadata:       make(map[string]interface{}),
+		TokenUsage: &interfaces.TokenUsage{
+			PromptTokens:     0,
+			CompletionTokens: 0,
+			TotalTokens:      0,
+		},
 	}
 
 	// Execute Chain-of-Thought reasoning
@@ -119,6 +124,11 @@ func (c *CoTAgent) Invoke(ctx context.Context, input *agentcore.AgentInput) (*ag
 	llmResp, err := c.llm.Chat(ctx, messages)
 	if err != nil {
 		return c.handleError(ctx, output, "LLM call failed", err, startTime)
+	}
+
+	// Collect token usage
+	if llmResp.Usage != nil {
+		output.TokenUsage.Add(llmResp.Usage)
 	}
 
 	// Parse CoT response
@@ -149,6 +159,11 @@ func (c *CoTAgent) Invoke(ctx context.Context, input *agentcore.AgentInput) (*ag
 
 			llmResp2, err := c.llm.Chat(ctx, messages)
 			if err == nil {
+				// Collect token usage from second LLM call
+				if llmResp2.Usage != nil {
+					output.TokenUsage.Add(llmResp2.Usage)
+				}
+
 				response = llmResp2.Content
 				additionalSteps, newAnswer := c.parseCoTResponse(response)
 				if newAnswer != "" {

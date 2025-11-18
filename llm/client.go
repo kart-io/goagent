@@ -2,6 +2,8 @@ package llm
 
 import (
 	"context"
+
+	"github.com/kart-io/goagent/interfaces"
 )
 
 // Provider 定义 LLM 提供商类型
@@ -51,11 +53,12 @@ type CompletionRequest struct {
 
 // CompletionResponse 定义补全响应
 type CompletionResponse struct {
-	Content      string `json:"content"`                 // 生成的内容
-	Model        string `json:"model"`                   // 使用的模型
-	TokensUsed   int    `json:"tokens_used,omitempty"`   // 使用的 token 数
-	FinishReason string `json:"finish_reason,omitempty"` // 结束原因
-	Provider     string `json:"provider,omitempty"`      // 提供商
+	Content      string                 `json:"content"`                 // 生成的内容
+	Model        string                 `json:"model"`                   // 使用的模型
+	TokensUsed   int                    `json:"tokens_used,omitempty"`   // 使用的 token 数 (deprecated: use Usage instead)
+	FinishReason string                 `json:"finish_reason,omitempty"` // 结束原因
+	Provider     string                 `json:"provider,omitempty"`      // 提供商
+	Usage        *interfaces.TokenUsage `json:"usage,omitempty"`         // 详细的 Token 使用统计
 }
 
 // Config 定义 LLM 配置

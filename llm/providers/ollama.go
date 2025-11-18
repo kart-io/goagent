@@ -11,6 +11,7 @@ import (
 	"time"
 
 	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 )
 
@@ -216,9 +217,14 @@ func (c *OllamaClient) Complete(ctx context.Context, req *llm.CompletionRequest)
 	return &llm.CompletionResponse{
 		Content:      strings.TrimSpace(ollamaResp.Response),
 		Model:        ollamaResp.Model,
-		TokensUsed:   ollamaResp.EvalCount,
+		TokensUsed:   ollamaResp.PromptEvalCount + ollamaResp.EvalCount,
 		FinishReason: c.getFinishReason(ollamaResp.Done),
 		Provider:     string(llm.ProviderOllama),
+		Usage: &interfaces.TokenUsage{
+			PromptTokens:     ollamaResp.PromptEvalCount,
+			CompletionTokens: ollamaResp.EvalCount,
+			TotalTokens:      ollamaResp.PromptEvalCount + ollamaResp.EvalCount,
+		},
 	}, nil
 }
 
@@ -281,9 +287,14 @@ func (c *OllamaClient) Chat(ctx context.Context, messages []llm.Message) (*llm.C
 	return &llm.CompletionResponse{
 		Content:      strings.TrimSpace(ollamaResp.Message.Content),
 		Model:        ollamaResp.Model,
-		TokensUsed:   ollamaResp.EvalCount,
+		TokensUsed:   ollamaResp.PromptEvalCount + ollamaResp.EvalCount,
 		FinishReason: c.getFinishReason(ollamaResp.Done),
 		Provider:     string(llm.ProviderOllama),
+		Usage: &interfaces.TokenUsage{
+			PromptTokens:     ollamaResp.PromptEvalCount,
+			CompletionTokens: ollamaResp.EvalCount,
+			TotalTokens:      ollamaResp.PromptEvalCount + ollamaResp.EvalCount,
+		},
 	}, nil
 }
 

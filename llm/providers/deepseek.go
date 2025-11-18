@@ -191,6 +191,11 @@ func (p *DeepSeekProvider) Complete(ctx context.Context, req *llm.CompletionRequ
 		TokensUsed:   dsResp.Usage.TotalTokens,
 		FinishReason: dsResp.Choices[0].FinishReason,
 		Provider:     string(llm.ProviderDeepSeek),
+		Usage: &interfaces.TokenUsage{
+			PromptTokens:     dsResp.Usage.PromptTokens,
+			CompletionTokens: dsResp.Usage.CompletionTokens,
+			TotalTokens:      dsResp.Usage.TotalTokens,
+		},
 	}, nil
 }
 
