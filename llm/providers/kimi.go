@@ -7,12 +7,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
-	"github.com/kart-io/goagent/llm"
+	agentllm "github.com/kart-io/goagent/llm"
 )
 
 // KimiClient Kimi (Moonshot AI) LLM 客户端
@@ -39,11 +40,11 @@ type KimiConfig struct {
 // DefaultKimiConfig 返回默认 Kimi 配置
 func DefaultKimiConfig() *KimiConfig {
 	return &KimiConfig{
-		BaseURL:     "https://api.moonshot.cn/v1",
+		BaseURL:     KimiBaseURL,
 		Model:       "moonshot-v1-8k", // 默认使用 8K 上下文模型
-		Temperature: 0.7,
-		MaxTokens:   2000,
-		Timeout:     60,
+		Temperature: DefaultTemperature,
+		MaxTokens:   DefaultMaxTokens,
+		Timeout:     int(DefaultTimeout / time.Second),
 	}
 }
 
@@ -54,11 +55,11 @@ func NewKimiClient(config *KimiConfig) (*KimiClient, error) {
 	}
 
 	if config.APIKey == "" {
-		return nil, agentErrors.NewInvalidConfigError("kimi", "api_key", "kimi API key is required")
+		return nil, agentErrors.NewInvalidConfigError(ProviderKimi, agentllm.ErrorFieldAPIKey, "kimi API key is required")
 	}
 
 	if config.BaseURL == "" {
-		config.BaseURL = "https://api.moonshot.cn/v1"
+		config.BaseURL = KimiBaseURL
 	}
 
 	if config.Model == "" {
@@ -66,15 +67,15 @@ func NewKimiClient(config *KimiConfig) (*KimiClient, error) {
 	}
 
 	if config.Temperature == 0 {
-		config.Temperature = 0.7
+		config.Temperature = DefaultTemperature
 	}
 
 	if config.MaxTokens == 0 {
-		config.MaxTokens = 2000
+		config.MaxTokens = DefaultMaxTokens
 	}
 
 	if config.Timeout == 0 {
-		config.Timeout = 60
+		config.Timeout = int(DefaultTimeout / time.Second)
 	}
 
 	return &KimiClient{
@@ -90,7 +91,7 @@ func NewKimiClient(config *KimiConfig) (*KimiClient, error) {
 }
 
 // NewKimi 创建 Kimi provider（兼容 llm.Config）
-func NewKimi(config *llm.Config) (*KimiClient, error) {
+func NewKimi(config *agentllm.Config) (*KimiClient, error) {
 	kimiConfig := &KimiConfig{
 		APIKey:      config.APIKey,
 		BaseURL:     config.BaseURL,
@@ -100,10 +101,20 @@ func NewKimi(config *llm.Config) (*KimiClient, error) {
 		Timeout:     config.Timeout,
 	}
 
-	if kimiConfig.BaseURL == "" {
-		kimiConfig.BaseURL = "https://api.moonshot.cn/v1"
+	if kimiConfig.APIKey == "" {
+		kimiConfig.APIKey = os.Getenv(agentllm.EnvKimiAPIKey)
 	}
 
+	if kimiConfig.BaseURL == "" {
+		kimiConfig.BaseURL = os.Getenv(agentllm.EnvKimiBaseURL)
+	}
+	if kimiConfig.BaseURL == "" {
+		kimiConfig.BaseURL = KimiBaseURL
+	}
+
+	if kimiConfig.Model == "" {
+		kimiConfig.Model = os.Getenv(agentllm.EnvKimiModel)
+	}
 	if kimiConfig.Model == "" {
 		kimiConfig.Model = "moonshot-v1-8k"
 	}
@@ -164,7 +175,7 @@ type kimiError struct {
 }
 
 // Complete 实现 llm.Client 接口的 Complete 方法
-func (c *KimiClient) Complete(ctx context.Context, req *llm.CompletionRequest) (*llm.CompletionResponse, error) {
+func (c *KimiClient) Complete(ctx context.Context, req *agentllm.CompletionRequest) (*agentllm.CompletionResponse, error) {
 	// 转换消息格式
 	messages := make([]kimiMessage, len(req.Messages))
 	for i, msg := range req.Messages {
@@ -204,8 +215,8 @@ func (c *KimiClient) Complete(ctx context.Context, req *llm.CompletionRequest) (
 		return nil, agentErrors.NewLLMRequestError("kimi", c.getModel(req.Model), err)
 	}
 
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
+	httpReq.Header.Set(HeaderContentType, ContentTypeJSON)
+	httpReq.Header.Set(HeaderAuthorization, AuthBearerPrefix+c.apiKey)
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
@@ -242,12 +253,12 @@ func (c *KimiClient) Complete(ctx context.Context, req *llm.CompletionRequest) (
 	}
 
 	// 构建响应
-	return &llm.CompletionResponse{
+	return &agentllm.CompletionResponse{
 		Content:      strings.TrimSpace(kimiResp.Choices[0].Message.Content),
 		Model:        kimiResp.Model,
 		TokensUsed:   kimiResp.Usage.TotalTokens,
 		FinishReason: kimiResp.Choices[0].FinishReason,
-		Provider:     string(llm.ProviderKimi),
+		Provider:     string(agentllm.ProviderKimi),
 		Usage: &interfaces.TokenUsage{
 			PromptTokens:     kimiResp.Usage.PromptTokens,
 			CompletionTokens: kimiResp.Usage.CompletionTokens,
@@ -257,15 +268,15 @@ func (c *KimiClient) Complete(ctx context.Context, req *llm.CompletionRequest) (
 }
 
 // Chat 实现 llm.Client 接口的 Chat 方法
-func (c *KimiClient) Chat(ctx context.Context, messages []llm.Message) (*llm.CompletionResponse, error) {
-	return c.Complete(ctx, &llm.CompletionRequest{
+func (c *KimiClient) Chat(ctx context.Context, messages []agentllm.Message) (*agentllm.CompletionResponse, error) {
+	return c.Complete(ctx, &agentllm.CompletionRequest{
 		Messages: messages,
 	})
 }
 
 // Provider 返回提供商类型
-func (c *KimiClient) Provider() llm.Provider {
-	return llm.ProviderKimi
+func (c *KimiClient) Provider() agentllm.Provider {
+	return agentllm.ProviderKimi
 }
 
 // IsAvailable 检查 Kimi 是否可用
@@ -284,7 +295,7 @@ func (c *KimiClient) IsAvailable() bool {
 		return false
 	}
 
-	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	req.Header.Set(HeaderAuthorization, AuthBearerPrefix+c.apiKey)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -306,7 +317,7 @@ func (c *KimiClient) ListModels() ([]string, error) {
 			WithContext("operation", "list_models")
 	}
 
-	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	req.Header.Set(HeaderAuthorization, AuthBearerPrefix+c.apiKey)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -421,7 +432,7 @@ func (c *KimiClient) CalculateFileUploadTokens(fileContent string) int {
 }
 
 // ValidateContextSize 验证消息是否超过模型的上下文限制
-func (c *KimiClient) ValidateContextSize(messages []llm.Message) error {
+func (c *KimiClient) ValidateContextSize(messages []agentllm.Message) error {
 	totalTokens := 0
 	for _, msg := range messages {
 		totalTokens += c.EstimateTokenCount(msg.Content)

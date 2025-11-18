@@ -46,9 +46,8 @@ func NewAPITool(baseURL string, timeout time.Duration, headers map[string]string
 	}
 
 	tool.BaseTool = tools.NewBaseTool(
-		"api",
-		"Makes HTTP API requests. Supports GET, POST, PUT, DELETE, and PATCH methods. "+
-			"Can send JSON payloads and custom headers.",
+		tools.ToolAPI,
+		tools.DescAPI,
 		`{
 			"type": "object",
 			"properties": {

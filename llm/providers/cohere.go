@@ -15,12 +15,12 @@ import (
 
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
-	"github.com/kart-io/goagent/llm"
+	agentllm "github.com/kart-io/goagent/llm"
 )
 
 // CohereProvider implements LLM interface for Cohere
 type CohereProvider struct {
-	config      *llm.Config
+	config      *agentllm.Config
 	httpClient  *http.Client
 	apiKey      string
 	baseURL     string
@@ -31,32 +31,32 @@ type CohereProvider struct {
 
 // CohereRequest represents a request to Cohere API
 type CohereRequest struct {
-	Model            string           `json:"model"`
-	Message          string           `json:"message"`
-	ChatHistory      []CohereMessage  `json:"chat_history,omitempty"`
-	Temperature      float64          `json:"temperature,omitempty"`
-	MaxTokens        int              `json:"max_tokens,omitempty"`
-	P                float64          `json:"p,omitempty"` // Top-p
-	K                int              `json:"k,omitempty"` // Top-k
-	Stream           bool             `json:"stream,omitempty"`
-	StopSequences    []string         `json:"stop_sequences,omitempty"`
-	PresencePenalty  float64          `json:"presence_penalty,omitempty"`
-	FrequencyPenalty float64          `json:"frequency_penalty,omitempty"`
+	Model            string          `json:"model"`
+	Message          string          `json:"message"`
+	ChatHistory      []CohereMessage `json:"chat_history,omitempty"`
+	Temperature      float64         `json:"temperature,omitempty"`
+	MaxTokens        int             `json:"max_tokens,omitempty"`
+	P                float64         `json:"p,omitempty"` // Top-p
+	K                int             `json:"k,omitempty"` // Top-k
+	Stream           bool            `json:"stream,omitempty"`
+	StopSequences    []string        `json:"stop_sequences,omitempty"`
+	PresencePenalty  float64         `json:"presence_penalty,omitempty"`
+	FrequencyPenalty float64         `json:"frequency_penalty,omitempty"`
 }
 
 // CohereMessage represents a message in Cohere format
 type CohereMessage struct {
-	Role    string `json:"role"`    // "USER", "CHATBOT", "SYSTEM"
+	Role    string `json:"role"` // "USER", "CHATBOT", "SYSTEM"
 	Message string `json:"message"`
 }
 
 // CohereResponse represents a response from Cohere API
 type CohereResponse struct {
-	ResponseID   string        `json:"response_id"`
-	Text         string        `json:"text"`
-	GenerationID string        `json:"generation_id"`
-	FinishReason string        `json:"finish_reason"`
-	TokenCount   CohereTokens  `json:"token_count"`
+	ResponseID   string          `json:"response_id"`
+	Text         string          `json:"text"`
+	GenerationID string          `json:"generation_id"`
+	FinishReason string          `json:"finish_reason"`
+	TokenCount   CohereTokens    `json:"token_count"`
 	ChatHistory  []CohereMessage `json:"chat_history,omitempty"`
 }
 
@@ -70,10 +70,10 @@ type CohereTokens struct {
 
 // CohereStreamEvent represents a streaming event
 type CohereStreamEvent struct {
-	EventType    string           `json:"event_type"` // "stream-start", "text-generation", "stream-end"
-	Text         string           `json:"text,omitempty"`
-	FinishReason string           `json:"finish_reason,omitempty"`
-	Response     *CohereResponse  `json:"response,omitempty"`
+	EventType    string          `json:"event_type"` // "stream-start", "text-generation", "stream-end"
+	Text         string          `json:"text,omitempty"`
+	FinishReason string          `json:"finish_reason,omitempty"`
+	Response     *CohereResponse `json:"response,omitempty"`
 }
 
 // CohereErrorResponse represents an error response
@@ -82,58 +82,58 @@ type CohereErrorResponse struct {
 }
 
 // NewCohere creates a new Cohere provider
-func NewCohere(config *llm.Config) (*CohereProvider, error) {
+func NewCohere(config *agentllm.Config) (*CohereProvider, error) {
 	// Get API key from config or env
 	apiKey := config.APIKey
 	if apiKey == "" {
-		apiKey = os.Getenv("COHERE_API_KEY")
+		apiKey = os.Getenv(agentllm.EnvCohereAPIKey)
 	}
 
 	if apiKey == "" {
-		return nil, agentErrors.NewInvalidConfigError("cohere", "api_key", "API key must be provided via config or COHERE_API_KEY env var")
+		return nil, agentErrors.NewInvalidConfigError(ProviderCohere, agentllm.ErrorFieldAPIKey, fmt.Sprintf(ErrAPIKeyMissing, "COHERE"))
 	}
 
 	// Set base URL with fallback
 	baseURL := config.BaseURL
 	if baseURL == "" {
-		baseURL = os.Getenv("COHERE_BASE_URL")
+		baseURL = os.Getenv(agentllm.EnvCohereBaseURL)
 	}
 	if baseURL == "" {
-		baseURL = "https://api.cohere.ai/v1"
+		baseURL = CohereBaseURL
 	}
 
 	// Set model with fallback
 	model := config.Model
 	if model == "" {
-		model = os.Getenv("COHERE_MODEL")
+		model = os.Getenv(agentllm.EnvCohereModel)
 	}
 	if model == "" {
-		model = "command" // Default to command model
+		model = CohereDefaultModel
 	}
 
 	// Set other parameters with defaults
 	maxTokens := config.MaxTokens
 	if maxTokens == 0 {
-		maxTokens = 2000
+		maxTokens = DefaultMaxTokens
 	}
 
 	temperature := config.Temperature
 	if temperature == 0 {
-		temperature = 0.7
+		temperature = DefaultTemperature
 	}
 
 	timeout := time.Duration(config.Timeout) * time.Second
 	if timeout == 0 {
-		timeout = 60 * time.Second
+		timeout = DefaultTimeout
 	}
 
 	// Create HTTP client with connection pooling
 	httpClient := &http.Client{
 		Timeout: timeout,
 		Transport: &http.Transport{
-			MaxIdleConns:        100,
-			MaxIdleConnsPerHost: 10,
-			IdleConnTimeout:     90 * time.Second,
+			MaxIdleConns:        MaxIdleConns,
+			MaxIdleConnsPerHost: MaxIdleConnsPerHost,
+			IdleConnTimeout:     IdleConnTimeout,
 		},
 	}
 
@@ -151,7 +151,7 @@ func NewCohere(config *llm.Config) (*CohereProvider, error) {
 }
 
 // Complete implements basic text completion
-func (p *CohereProvider) Complete(ctx context.Context, req *llm.CompletionRequest) (*llm.CompletionResponse, error) {
+func (p *CohereProvider) Complete(ctx context.Context, req *agentllm.CompletionRequest) (*agentllm.CompletionResponse, error) {
 	// Build Cohere request
 	cohereReq := p.buildRequest(req)
 
@@ -165,8 +165,8 @@ func (p *CohereProvider) Complete(ctx context.Context, req *llm.CompletionReques
 	return p.convertResponse(resp), nil
 }
 
-// buildRequest converts llm.CompletionRequest to CohereRequest
-func (p *CohereProvider) buildRequest(req *llm.CompletionRequest) *CohereRequest {
+// buildRequest converts agentllm.CompletionRequest to CohereRequest
+func (p *CohereProvider) buildRequest(req *agentllm.CompletionRequest) *CohereRequest {
 	// Convert messages to Cohere format
 	// Last user message becomes the message field
 	// Previous messages become chat history
@@ -228,14 +228,14 @@ func (p *CohereProvider) buildRequest(req *llm.CompletionRequest) *CohereRequest
 // convertRole converts standard role to Cohere role
 func (p *CohereProvider) convertRole(role string) string {
 	switch role {
-	case "user":
-		return "USER"
-	case "assistant":
-		return "CHATBOT"
-	case "system":
-		return "SYSTEM"
+	case RoleUser:
+		return CohereRoleUser
+	case RoleAssistant:
+		return CohereRoleChatbot
+	case RoleSystem:
+		return CohereRoleSystem
 	default:
-		return "USER"
+		return CohereRoleUser
 	}
 }
 
@@ -244,23 +244,23 @@ func (p *CohereProvider) execute(ctx context.Context, req *CohereRequest) (*Cohe
 	// Serialize request
 	body, err := json.Marshal(req)
 	if err != nil {
-		return nil, agentErrors.Wrap(err, agentErrors.CodeInternal, "failed to marshal request")
+		return nil, agentErrors.Wrap(err, agentErrors.CodeInternal, ErrFailedMarshalRequest)
 	}
 
 	// Create HTTP request
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", p.baseURL+"/chat", bytes.NewReader(body))
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", p.baseURL+CohereChatPath, bytes.NewReader(body))
 	if err != nil {
-		return nil, agentErrors.Wrap(err, agentErrors.CodeInternal, "failed to create request")
+		return nil, agentErrors.Wrap(err, agentErrors.CodeInternal, ErrFailedCreateRequest)
 	}
 
 	// Set headers (Bearer token, not x-api-key)
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set(HeaderContentType, ContentTypeJSON)
+	httpReq.Header.Set(HeaderAuthorization, AuthBearerPrefix+p.apiKey)
 
 	// Execute request
 	httpResp, err := p.httpClient.Do(httpReq)
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError("cohere", p.model, err)
+		return nil, agentErrors.NewLLMRequestError(ProviderCohere, p.model, err)
 	}
 	defer func() {
 		_ = httpResp.Body.Close()
@@ -274,7 +274,7 @@ func (p *CohereProvider) execute(ctx context.Context, req *CohereRequest) (*Cohe
 	// Deserialize response
 	var resp CohereResponse
 	if err := json.NewDecoder(httpResp.Body).Decode(&resp); err != nil {
-		return nil, agentErrors.NewLLMResponseError("cohere", req.Model, "failed to decode response")
+		return nil, agentErrors.NewLLMResponseError(ProviderCohere, req.Model, ErrFailedDecodeResponse)
 	}
 
 	return &resp, nil
@@ -288,45 +288,45 @@ func (p *CohereProvider) handleHTTPError(resp *http.Response, model string) erro
 		// Use error message from API
 		switch resp.StatusCode {
 		case 400:
-			return agentErrors.NewInvalidInputError("cohere", "request", errResp.Message)
+			return agentErrors.NewInvalidInputError(ProviderCohere, "request", errResp.Message)
 		case 401:
-			return agentErrors.NewInvalidConfigError("cohere", "api_key", errResp.Message)
+			return agentErrors.NewInvalidConfigError(ProviderCohere, agentllm.ErrorFieldAPIKey, errResp.Message)
 		case 403:
-			return agentErrors.NewInvalidConfigError("cohere", "api_key", errResp.Message)
+			return agentErrors.NewInvalidConfigError(ProviderCohere, agentllm.ErrorFieldAPIKey, errResp.Message)
 		case 404:
-			return agentErrors.NewLLMResponseError("cohere", model, errResp.Message)
+			return agentErrors.NewLLMResponseError(ProviderCohere, model, errResp.Message)
 		case 429:
 			retryAfter := parseRetryAfter(resp.Header.Get("Retry-After"))
-			return agentErrors.NewLLMRateLimitError("cohere", model, retryAfter)
+			return agentErrors.NewLLMRateLimitError(ProviderCohere, model, retryAfter)
 		case 500, 502, 503, 504:
-			return agentErrors.NewLLMRequestError("cohere", model, fmt.Errorf("server error: %s", errResp.Message))
+			return agentErrors.NewLLMRequestError(ProviderCohere, model, fmt.Errorf("server error: %s", errResp.Message))
 		}
 	}
 
 	// Fallback error handling
 	switch resp.StatusCode {
 	case 400:
-		return agentErrors.NewInvalidInputError("cohere", "request", "bad request")
+		return agentErrors.NewInvalidInputError(ProviderCohere, "request", StatusBadRequest)
 	case 401:
-		return agentErrors.NewInvalidConfigError("cohere", "api_key", "invalid API key")
+		return agentErrors.NewInvalidConfigError(ProviderCohere, agentllm.ErrorFieldAPIKey, StatusInvalidAPIKey)
 	case 403:
-		return agentErrors.NewInvalidConfigError("cohere", "api_key", "API key lacks permissions")
+		return agentErrors.NewInvalidConfigError(ProviderCohere, agentllm.ErrorFieldAPIKey, StatusAPIKeyLacksPermissions)
 	case 404:
-		return agentErrors.NewLLMResponseError("cohere", model, "endpoint not found")
+		return agentErrors.NewLLMResponseError(ProviderCohere, model, StatusEndpointNotFound)
 	case 429:
 		retryAfter := parseRetryAfter(resp.Header.Get("Retry-After"))
-		return agentErrors.NewLLMRateLimitError("cohere", model, retryAfter)
+		return agentErrors.NewLLMRateLimitError(ProviderCohere, model, retryAfter)
 	case 500, 502, 503, 504:
-		return agentErrors.NewLLMRequestError("cohere", model, fmt.Errorf("server error: %d", resp.StatusCode))
+		return agentErrors.NewLLMRequestError(ProviderCohere, model, fmt.Errorf("server error: %d", resp.StatusCode))
 	default:
-		return agentErrors.NewLLMRequestError("cohere", model, fmt.Errorf("unexpected status: %d", resp.StatusCode))
+		return agentErrors.NewLLMRequestError(ProviderCohere, model, fmt.Errorf("unexpected status: %d", resp.StatusCode))
 	}
 }
 
 // executeWithRetry executes request with exponential backoff
 func (p *CohereProvider) executeWithRetry(ctx context.Context, req *CohereRequest) (*CohereResponse, error) {
-	maxAttempts := 3
-	baseDelay := 1 * time.Second
+	maxAttempts := DefaultMaxAttempts
+	baseDelay := DefaultBaseDelay
 
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		resp, err := p.execute(ctx, req)
@@ -356,17 +356,17 @@ func (p *CohereProvider) executeWithRetry(ctx context.Context, req *CohereReques
 		}
 	}
 
-	return nil, agentErrors.NewInternalError("cohere", "execute_with_retry", fmt.Errorf("max retries exceeded"))
+	return nil, agentErrors.NewInternalError(ProviderCohere, "execute_with_retry", fmt.Errorf("%s", ErrMaxRetriesExceeded))
 }
 
-// convertResponse converts CohereResponse to llm.CompletionResponse
-func (p *CohereProvider) convertResponse(resp *CohereResponse) *llm.CompletionResponse {
-	return &llm.CompletionResponse{
+// convertResponse converts CohereResponse to agentllm.CompletionResponse
+func (p *CohereProvider) convertResponse(resp *CohereResponse) *agentllm.CompletionResponse {
+	return &agentllm.CompletionResponse{
 		Content:      resp.Text,
 		Model:        p.model, // Cohere doesn't return model in response
 		TokensUsed:   resp.TokenCount.TotalTokens,
 		FinishReason: resp.FinishReason,
-		Provider:     string(llm.ProviderCohere),
+		Provider:     string(agentllm.ProviderCohere),
 		Usage: &interfaces.TokenUsage{
 			PromptTokens:     resp.TokenCount.PromptTokens,
 			CompletionTokens: resp.TokenCount.ResponseTokens,
@@ -376,15 +376,15 @@ func (p *CohereProvider) convertResponse(resp *CohereResponse) *llm.CompletionRe
 }
 
 // Chat implements chat conversation
-func (p *CohereProvider) Chat(ctx context.Context, messages []llm.Message) (*llm.CompletionResponse, error) {
-	return p.Complete(ctx, &llm.CompletionRequest{
+func (p *CohereProvider) Chat(ctx context.Context, messages []agentllm.Message) (*agentllm.CompletionResponse, error) {
+	return p.Complete(ctx, &agentllm.CompletionRequest{
 		Messages: messages,
 	})
 }
 
 // Provider returns the provider type
-func (p *CohereProvider) Provider() llm.Provider {
-	return llm.ProviderCohere
+func (p *CohereProvider) Provider() agentllm.Provider {
+	return agentllm.ProviderCohere
 }
 
 // IsAvailable checks if the provider is available
@@ -393,8 +393,8 @@ func (p *CohereProvider) IsAvailable() bool {
 	defer cancel()
 
 	// Try a minimal completion
-	_, err := p.Complete(ctx, &llm.CompletionRequest{
-		Messages: []llm.Message{{Role: "user", Content: "test"}},
+	_, err := p.Complete(ctx, &agentllm.CompletionRequest{
+		Messages: []agentllm.Message{{Role: RoleUser, Content: "test"}},
 	})
 
 	return err == nil
@@ -416,22 +416,22 @@ func (p *CohereProvider) Stream(ctx context.Context, prompt string) (<-chan stri
 	// Create HTTP request
 	body, err := json.Marshal(req)
 	if err != nil {
-		return nil, agentErrors.Wrap(err, agentErrors.CodeInternal, "failed to marshal request")
+		return nil, agentErrors.Wrap(err, agentErrors.CodeInternal, ErrFailedMarshalRequest)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", p.baseURL+"/chat", bytes.NewReader(body))
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", p.baseURL+CohereChatPath, bytes.NewReader(body))
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError("cohere", p.model, err)
+		return nil, agentErrors.NewLLMRequestError(ProviderCohere, p.model, err)
 	}
 
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
-	httpReq.Header.Set("Accept", "text/event-stream")
+	httpReq.Header.Set(HeaderContentType, ContentTypeJSON)
+	httpReq.Header.Set(HeaderAuthorization, AuthBearerPrefix+p.apiKey)
+	httpReq.Header.Set(HeaderAccept, ContentTypeEventStream)
 
 	// Execute request
 	httpResp, err := p.httpClient.Do(httpReq)
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError("cohere", p.model, err)
+		return nil, agentErrors.NewLLMRequestError(ProviderCohere, p.model, err)
 	}
 
 	if httpResp.StatusCode != http.StatusOK {
@@ -462,12 +462,12 @@ func (p *CohereProvider) Stream(ctx context.Context, prompt string) (<-chan stri
 			}
 
 			// Extract text from text-generation events
-			if event.EventType == "text-generation" && event.Text != "" {
+			if event.EventType == EventTextGeneration && event.Text != "" {
 				tokens <- event.Text
 			}
 
 			// Stop on stream-end
-			if event.EventType == "stream-end" {
+			if event.EventType == EventStreamEnd {
 				return
 			}
 		}
