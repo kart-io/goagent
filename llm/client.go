@@ -17,6 +17,11 @@ const (
 	ProviderSiliconFlow Provider = "siliconflow"
 	ProviderKimi        Provider = "kimi"
 	ProviderCustom      Provider = "custom"
+
+	// New providers
+	ProviderAnthropic   Provider = "anthropic"
+	ProviderCohere      Provider = "cohere"
+	ProviderHuggingFace Provider = "huggingface"
 )
 
 // Client 定义 LLM 客户端接口
