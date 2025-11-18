@@ -65,6 +65,9 @@ type AgentOutput struct {
 	ReasoningSteps []ReasoningStep `json:"reasoning_steps"` // 推理步骤
 	ToolCalls      []ToolCall      `json:"tool_calls"`      // 工具调用记录
 
+	// Token 使用统计
+	TokenUsage *interfaces.TokenUsage `json:"token_usage,omitempty"` // LLM Token 使用统计
+
 	// 元数据
 	Latency   time.Duration          `json:"latency"`   // 执行延迟
 	Timestamp time.Time              `json:"timestamp"` // 时间戳

@@ -6,6 +6,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/kart-io/goagent/agents/cot"
+	agentcore "github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
@@ -22,30 +24,31 @@ func main() {
 	ctx := context.Background()
 
 	// 检查 API Key
-	apiKey := os.Getenv("OPENAI_API_KEY")
+	apiKey := os.Getenv("DEEPSEEK_API_KEY")
 	if apiKey == "" {
-		err := errors.New(errors.CodeInvalidConfig, "OPENAI_API_KEY environment variable is not set").
+		err := errors.New(errors.CodeInvalidConfig, "DEEPSEEK_API_KEY environment variable is not set").
 			WithOperation("initialization").
 			WithComponent("planning_execution_example").
-			WithContext("env_var", "OPENAI_API_KEY")
+			WithContext("env_var", "DEEPSEEK_API_KEY")
 		fmt.Printf("错误: %v\n", err)
-		fmt.Println("请设置环境变量 OPENAI_API_KEY")
+		fmt.Println("请设置环境变量 DEEPSEEK_API_KEY")
 		os.Exit(1)
 	}
 
 	// 初始化 LLM 客户端
-	llmClient, err := providers.NewOpenAI(&llm.Config{
+	llmClient, err := providers.NewDeepSeek(&llm.Config{
 		APIKey:      apiKey,
-		Model:       "gpt-4",
+		Model:       "deepseek-chat",
 		MaxTokens:   2000,
 		Temperature: 0.7,
+		Timeout:     60,
 	})
 	if err != nil {
 		wrappedErr := errors.Wrap(err, errors.CodeLLMRequest, "failed to create LLM client").
 			WithOperation("initialization").
 			WithComponent("planning_execution_example").
-			WithContext("provider", "openai").
-			WithContext("model", "gpt-4")
+			WithContext("provider", "deepseek").
+			WithContext("model", "deepseek-chat")
 		fmt.Printf("错误: %v\n", wrappedErr)
 		os.Exit(1)
 	}
@@ -91,10 +94,10 @@ func main() {
 	optimizedPlan := optimizePlan(ctx, planner, validatedPlan)
 	printPlan("优化后计划", optimizedPlan)
 
-	// 步骤 5: 执行计划（模拟）
+	// 步骤 5: 执行计划（使用真实 Agent）
 	fmt.Println()
-	fmt.Println("【步骤 5】执行计划（模拟）")
-	executePlan(ctx, optimizedPlan)
+	fmt.Println("【步骤 5】执行计划（使用真实 Agent）")
+	executePlan(ctx, llmClient, optimizedPlan)
 
 	// 总结
 	fmt.Println()
@@ -228,20 +231,90 @@ func optimizePlan(ctx context.Context, planner *planning.SmartPlanner, plan *pla
 	return optimizedPlan
 }
 
-// executePlan 执行计划（模拟）
-func executePlan(ctx context.Context, plan *planning.Plan) {
-	fmt.Printf("开始执行计划 %s（模拟模式）\n", plan.ID)
+// executePlan 执行计划（使用真实 Agent）
+func executePlan(ctx context.Context, llmClient llm.Client, plan *planning.Plan) {
+	fmt.Printf("开始执行计划 %s（真实 Agent 模式）\n", plan.ID)
+
+	// 创建 CoT Agent 用于执行步骤
+	agent := cot.NewCoTAgent(cot.CoTConfig{
+		Name:        "ExecutionAgent",
+		Description: "Execute planning steps with Chain-of-Thought reasoning",
+		LLM:         llmClient,
+		MaxSteps:    5,
+		ZeroShot:    true,
+	})
 
 	totalSteps := len(plan.Steps)
+	totalPromptTokens := 0
+	totalCompletionTokens := 0
+	totalTokens := 0
+
 	for i, step := range plan.Steps {
 		fmt.Println()
 		fmt.Printf("[%d/%d] 执行步骤: %s\n", i+1, totalSteps, step.Name)
 		fmt.Printf("      类型: %s\n", step.Type)
 		fmt.Printf("      描述: %s\n", step.Description)
 
-		// 模拟执行
-		duration := time.Duration(300+i*50) * time.Millisecond
-		time.Sleep(duration)
+		// 使用真实 Agent 执行步骤
+		startTime := time.Now()
+		output, err := agent.Invoke(ctx, &agentcore.AgentInput{
+			Task:        step.Description,
+			Instruction: fmt.Sprintf("步骤 %d/%d: %s", i+1, totalSteps, step.Name),
+			Context: map[string]interface{}{
+				"step_type": step.Type,
+				"priority":  step.Priority,
+			},
+			Timestamp: startTime,
+		})
+		duration := time.Since(startTime)
+
+		if err != nil {
+			fmt.Printf("      ❌ 执行失败: %v (耗时: %v)\n", err, duration)
+			step.Status = planning.StepStatusFailed
+			step.Result = &planning.StepResult{
+				Success:   false,
+				Output:    fmt.Sprintf("错误: %v", err),
+				Duration:  duration,
+				Timestamp: time.Now(),
+				Metadata: map[string]interface{}{
+					"error": err.Error(),
+				},
+			}
+			continue
+		}
+
+		// 显示执行结果
+		fmt.Printf("      ✓ 执行成功 (耗时: %v)\n", duration)
+		fmt.Printf("      推理步骤: %d 步\n", len(output.ReasoningSteps))
+
+		// 显示 Token 使用统计
+		if output.TokenUsage != nil && !output.TokenUsage.IsEmpty() {
+			fmt.Printf("      Token 使用: Prompt=%d, Completion=%d, Total=%d\n",
+				output.TokenUsage.PromptTokens,
+				output.TokenUsage.CompletionTokens,
+				output.TokenUsage.TotalTokens)
+
+			// 累加总 Token 使用
+			totalPromptTokens += output.TokenUsage.PromptTokens
+			totalCompletionTokens += output.TokenUsage.CompletionTokens
+			totalTokens += output.TokenUsage.TotalTokens
+		}
+
+		// 显示结果摘要
+		resultStr := ""
+		if output.Result != nil && fmt.Sprintf("%v", output.Result) != "" {
+			resultStr = fmt.Sprintf("%v", output.Result)
+		} else if len(output.ReasoningSteps) > 0 {
+			lastStep := output.ReasoningSteps[len(output.ReasoningSteps)-1]
+			resultStr = lastStep.Result
+		}
+
+		if resultStr != "" {
+			if len(resultStr) > 150 {
+				resultStr = resultStr[:150] + "..."
+			}
+			fmt.Printf("      结果: %s\n", resultStr)
+		}
 
 		// 检查是否可以并行执行
 		if parallel, ok := step.Parameters["parallel"].(bool); ok && parallel {
@@ -252,17 +325,32 @@ func executePlan(ctx context.Context, plan *planning.Plan) {
 		step.Status = planning.StepStatusCompleted
 		step.Result = &planning.StepResult{
 			Success:   true,
-			Output:    fmt.Sprintf("步骤 %s 执行成功", step.Name),
+			Output:    fmt.Sprintf("%v", output.Result),
 			Duration:  duration,
 			Timestamp: time.Now(),
+			Metadata: map[string]interface{}{
+				"reasoning_steps": len(output.ReasoningSteps),
+				"tool_calls":      len(output.ToolCalls),
+				"token_usage":     output.TokenUsage,
+			},
 		}
-
-		fmt.Printf("      ✓ 完成 (耗时: %v)\n", step.Result.Duration)
 	}
 
 	plan.Status = planning.PlanStatusCompleted
 	fmt.Println()
 	fmt.Println("✓ 计划执行完成")
+
+	// 显示总 Token 使用统计
+	if totalTokens > 0 {
+		fmt.Println()
+		fmt.Println("=== 总 Token 使用统计 ===")
+		fmt.Printf("Prompt Tokens: %d\n", totalPromptTokens)
+		fmt.Printf("Completion Tokens: %d\n", totalCompletionTokens)
+		fmt.Printf("Total Tokens: %d\n", totalTokens)
+		if totalSteps > 0 {
+			fmt.Printf("平均每步: %.1f tokens\n", float64(totalTokens)/float64(totalSteps))
+		}
+	}
 }
 
 // printPlan 打印计划详情
@@ -297,6 +385,9 @@ func printExecutionSummary(plan *planning.Plan) {
 	completedSteps := 0
 	failedSteps := 0
 	totalDuration := time.Duration(0)
+	totalPromptTokens := 0
+	totalCompletionTokens := 0
+	totalTokens := 0
 
 	for _, step := range plan.Steps {
 		switch step.Status {
@@ -304,6 +395,13 @@ func printExecutionSummary(plan *planning.Plan) {
 			completedSteps++
 			if step.Result != nil {
 				totalDuration += step.Result.Duration
+
+				// 收集 Token 使用统计
+				if tokenUsage, ok := step.Result.Metadata["token_usage"].(*interfaces.TokenUsage); ok && tokenUsage != nil {
+					totalPromptTokens += tokenUsage.PromptTokens
+					totalCompletionTokens += tokenUsage.CompletionTokens
+					totalTokens += tokenUsage.TotalTokens
+				}
 			}
 		case planning.StepStatusFailed:
 			failedSteps++
@@ -319,6 +417,18 @@ func printExecutionSummary(plan *planning.Plan) {
 	fmt.Printf("成功率: %.1f%%\n", successRate)
 	fmt.Printf("总耗时: %v\n", totalDuration)
 
+	// 显示 Token 使用统计
+	if totalTokens > 0 {
+		fmt.Println()
+		fmt.Println("=== Token 使用总结 ===")
+		fmt.Printf("Prompt Tokens: %d\n", totalPromptTokens)
+		fmt.Printf("Completion Tokens: %d\n", totalCompletionTokens)
+		fmt.Printf("Total Tokens: %d\n", totalTokens)
+		if completedSteps > 0 {
+			fmt.Printf("平均每步: %.1f tokens\n", float64(totalTokens)/float64(completedSteps))
+		}
+	}
+
 	fmt.Println()
 	fmt.Println("=== Planning 模式优势 ===")
 	fmt.Println("1. ✓ 前瞻性规划：提前识别所有必需步骤")
@@ -326,4 +436,5 @@ func printExecutionSummary(plan *planning.Plan) {
 	fmt.Println("3. ✓ 并行执行：识别可并行步骤，节省时间")
 	fmt.Println("4. ✓ 可验证性：执行前验证计划可行性")
 	fmt.Println("5. ✓ 可追踪性：完整的执行历史和指标")
+	fmt.Println("6. ✓ Token 追踪：精确的 Token 使用统计")
 }
