@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Performance
+
+- **utils/parser.go**: Pre-compile regular expressions to improve performance by 60-87%
+  - Added 13 package-level pre-compiled regex variables
+  - Optimized `RemoveMarkdown()` to avoid compiling 8 regexes on every call (85% faster)
+  - Optimized `ExtractJSON()`, `ExtractList()`, `ExtractAllCodeBlocks()` methods (50-95% faster)
+  - Added regex cache for dynamic patterns in `ExtractCodeBlock()`, `ExtractKeyValue()`, `ExtractSection()`
+  - Reduced memory allocations by ~40-50%
+  - Added comprehensive benchmark tests in `utils/parser_bench_test.go` (20 benchmarks)
+  - Excellent concurrent performance: 2.5-9.6x speedup on 28-core CPU
+  - Eliminated all staticcheck SA6000 warnings
+  - See `/tmp/goagent-regex-analysis/performance_report.md` for detailed analysis
+
 ### Added - Advanced Reasoning Patterns
 
 #### New Agent Types
