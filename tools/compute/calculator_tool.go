@@ -23,8 +23,8 @@ type CalculatorTool struct {
 func NewCalculatorTool() *CalculatorTool {
 	tool := &CalculatorTool{}
 	tool.BaseTool = tools.NewBaseTool(
-		"calculator",
-		"Performs mathematical calculations. Supports basic arithmetic (+, -, *, /), power (^), and parentheses.",
+		tools.ToolCalculator,
+		tools.DescCalculator,
 		`{
 			"type": "object",
 			"properties": {

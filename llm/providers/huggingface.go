@@ -15,12 +15,12 @@ import (
 
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
-	"github.com/kart-io/goagent/llm"
+	agentllm "github.com/kart-io/goagent/llm"
 )
 
 // HuggingFaceProvider implements LLM interface for Hugging Face
 type HuggingFaceProvider struct {
-	config      *llm.Config
+	config      *agentllm.Config
 	httpClient  *http.Client
 	apiKey      string
 	baseURL     string
@@ -31,9 +31,9 @@ type HuggingFaceProvider struct {
 
 // HuggingFaceRequest represents a request to Hugging Face API
 type HuggingFaceRequest struct {
-	Inputs     string                     `json:"inputs"`
-	Parameters HuggingFaceParameters      `json:"parameters,omitempty"`
-	Options    HuggingFaceOptions         `json:"options,omitempty"`
+	Inputs     string                `json:"inputs"`
+	Parameters HuggingFaceParameters `json:"parameters,omitempty"`
+	Options    HuggingFaceOptions    `json:"options,omitempty"`
 }
 
 // HuggingFaceParameters represents request parameters
@@ -55,8 +55,8 @@ type HuggingFaceOptions struct {
 
 // HuggingFaceResponse represents a response from Hugging Face API
 type HuggingFaceResponse struct {
-	GeneratedText string                  `json:"generated_text"`
-	Details       *HuggingFaceDetails     `json:"details,omitempty"`
+	GeneratedText string              `json:"generated_text"`
+	Details       *HuggingFaceDetails `json:"details,omitempty"`
 }
 
 // HuggingFaceDetails represents generation details
@@ -88,58 +88,58 @@ type HuggingFaceErrorResponse struct {
 }
 
 // NewHuggingFace creates a new Hugging Face provider
-func NewHuggingFace(config *llm.Config) (*HuggingFaceProvider, error) {
+func NewHuggingFace(config *agentllm.Config) (*HuggingFaceProvider, error) {
 	// Get API key from config or env
 	apiKey := config.APIKey
 	if apiKey == "" {
-		apiKey = os.Getenv("HUGGINGFACE_API_KEY")
+		apiKey = os.Getenv(agentllm.EnvHuggingFaceAPIKey)
 	}
 
 	if apiKey == "" {
-		return nil, agentErrors.NewInvalidConfigError("huggingface", "api_key", "API key must be provided via config or HUGGINGFACE_API_KEY env var")
+		return nil, agentErrors.NewInvalidConfigError(ProviderHuggingFace, agentllm.ErrorFieldAPIKey, fmt.Sprintf(ErrAPIKeyMissing, "HUGGINGFACE"))
 	}
 
 	// Set base URL with fallback
 	baseURL := config.BaseURL
 	if baseURL == "" {
-		baseURL = os.Getenv("HUGGINGFACE_BASE_URL")
+		baseURL = os.Getenv(agentllm.EnvHuggingFaceBaseURL)
 	}
 	if baseURL == "" {
-		baseURL = "https://api-inference.huggingface.co"
+		baseURL = HuggingFaceBaseURL
 	}
 
 	// Set model with fallback
 	model := config.Model
 	if model == "" {
-		model = os.Getenv("HUGGINGFACE_MODEL")
+		model = os.Getenv(agentllm.EnvHuggingFaceModel)
 	}
 	if model == "" {
-		model = "meta-llama/Meta-Llama-3-8B-Instruct" // Default model
+		model = HuggingFaceDefaultModel
 	}
 
 	// Set other parameters with defaults
 	maxTokens := config.MaxTokens
 	if maxTokens == 0 {
-		maxTokens = 2000
+		maxTokens = DefaultMaxTokens
 	}
 
 	temperature := config.Temperature
 	if temperature == 0 {
-		temperature = 0.7
+		temperature = DefaultTemperature
 	}
 
 	timeout := time.Duration(config.Timeout) * time.Second
 	if timeout == 0 {
-		timeout = 120 * time.Second // Longer timeout for model loading
+		timeout = HuggingFaceTimeout
 	}
 
 	// Create HTTP client with connection pooling
 	httpClient := &http.Client{
 		Timeout: timeout,
 		Transport: &http.Transport{
-			MaxIdleConns:        100,
-			MaxIdleConnsPerHost: 10,
-			IdleConnTimeout:     90 * time.Second,
+			MaxIdleConns:        MaxIdleConns,
+			MaxIdleConnsPerHost: MaxIdleConnsPerHost,
+			IdleConnTimeout:     IdleConnTimeout,
 		},
 	}
 
@@ -157,7 +157,7 @@ func NewHuggingFace(config *llm.Config) (*HuggingFaceProvider, error) {
 }
 
 // Complete implements basic text completion
-func (p *HuggingFaceProvider) Complete(ctx context.Context, req *llm.CompletionRequest) (*llm.CompletionResponse, error) {
+func (p *HuggingFaceProvider) Complete(ctx context.Context, req *agentllm.CompletionRequest) (*agentllm.CompletionResponse, error) {
 	// Build Hugging Face request
 	hfReq := p.buildRequest(req)
 
@@ -171,16 +171,17 @@ func (p *HuggingFaceProvider) Complete(ctx context.Context, req *llm.CompletionR
 	return p.convertResponse(resp), nil
 }
 
-// buildRequest converts llm.CompletionRequest to HuggingFaceRequest
-func (p *HuggingFaceProvider) buildRequest(req *llm.CompletionRequest) *HuggingFaceRequest {
+// buildRequest converts agentllm.CompletionRequest to HuggingFaceRequest
+func (p *HuggingFaceProvider) buildRequest(req *agentllm.CompletionRequest) *HuggingFaceRequest {
 	// Combine all messages into a single input string
 	var inputs strings.Builder
 	for _, msg := range req.Messages {
-		if msg.Role == "system" {
+		switch msg.Role {
+		case RoleSystem:
 			inputs.WriteString(fmt.Sprintf("System: %s\n", msg.Content))
-		} else if msg.Role == "user" {
+		case RoleUser:
 			inputs.WriteString(fmt.Sprintf("User: %s\n", msg.Content))
-		} else if msg.Role == "assistant" {
+		case RoleAssistant:
 			inputs.WriteString(fmt.Sprintf("Assistant: %s\n", msg.Content))
 		}
 	}
@@ -218,24 +219,24 @@ func (p *HuggingFaceProvider) execute(ctx context.Context, req *HuggingFaceReque
 	// Serialize request
 	body, err := json.Marshal(req)
 	if err != nil {
-		return nil, agentErrors.Wrap(err, agentErrors.CodeInternal, "failed to marshal request")
+		return nil, agentErrors.Wrap(err, agentErrors.CodeInternal, ErrFailedMarshalRequest)
 	}
 
 	// Create HTTP request with model ID in URL
 	endpoint := fmt.Sprintf("%s/models/%s", p.baseURL, p.model)
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(body))
 	if err != nil {
-		return nil, agentErrors.Wrap(err, agentErrors.CodeInternal, "failed to create request")
+		return nil, agentErrors.Wrap(err, agentErrors.CodeInternal, ErrFailedCreateRequest)
 	}
 
 	// Set headers (Bearer token)
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set(HeaderContentType, ContentTypeJSON)
+	httpReq.Header.Set(HeaderAuthorization, AuthBearerPrefix+p.apiKey)
 
 	// Execute request
 	httpResp, err := p.httpClient.Do(httpReq)
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError("huggingface", p.model, err)
+		return nil, agentErrors.NewLLMRequestError(ProviderHuggingFace, p.model, err)
 	}
 	defer func() {
 		_ = httpResp.Body.Close()
@@ -249,11 +250,11 @@ func (p *HuggingFaceProvider) execute(ctx context.Context, req *HuggingFaceReque
 	// Deserialize response (array format)
 	var respArray []HuggingFaceResponse
 	if err := json.NewDecoder(httpResp.Body).Decode(&respArray); err != nil {
-		return nil, agentErrors.NewLLMResponseError("huggingface", p.model, "failed to decode response")
+		return nil, agentErrors.NewLLMResponseError(ProviderHuggingFace, p.model, ErrFailedDecodeResponse)
 	}
 
 	if len(respArray) == 0 {
-		return nil, agentErrors.NewLLMResponseError("huggingface", p.model, "empty response array")
+		return nil, agentErrors.NewLLMResponseError(ProviderHuggingFace, p.model, ErrEmptyResponseArray)
 	}
 
 	return &respArray[0], nil
@@ -267,55 +268,55 @@ func (p *HuggingFaceProvider) handleHTTPError(resp *http.Response, model string)
 		// Use error message from API
 		switch resp.StatusCode {
 		case 400:
-			return agentErrors.NewInvalidInputError("huggingface", "request", errResp.Error)
+			return agentErrors.NewInvalidInputError(ProviderHuggingFace, "request", errResp.Error)
 		case 401:
-			return agentErrors.NewInvalidConfigError("huggingface", "api_key", errResp.Error)
+			return agentErrors.NewInvalidConfigError(ProviderHuggingFace, agentllm.ErrorFieldAPIKey, errResp.Error)
 		case 403:
-			return agentErrors.NewInvalidConfigError("huggingface", "api_key", errResp.Error)
+			return agentErrors.NewInvalidConfigError(ProviderHuggingFace, agentllm.ErrorFieldAPIKey, errResp.Error)
 		case 404:
-			return agentErrors.NewLLMResponseError("huggingface", model, errResp.Error)
+			return agentErrors.NewLLMResponseError(ProviderHuggingFace, model, errResp.Error)
 		case 429:
 			retryAfter := parseRetryAfter(resp.Header.Get("Retry-After"))
-			return agentErrors.NewLLMRateLimitError("huggingface", model, retryAfter)
+			return agentErrors.NewLLMRateLimitError(ProviderHuggingFace, model, retryAfter)
 		case 503:
 			// Model is loading - this is retryable
 			estimatedTime := int(errResp.EstimatedTime)
 			if estimatedTime == 0 {
-				estimatedTime = 20 // Default 20 seconds
+				estimatedTime = HuggingFaceDefaultEstimatedTime
 			}
-			return agentErrors.NewLLMRequestError("huggingface", model,
+			return agentErrors.NewLLMRequestError(ProviderHuggingFace, model,
 				fmt.Errorf("model loading (estimated time: %d seconds)", estimatedTime))
 		case 500, 502, 504:
-			return agentErrors.NewLLMRequestError("huggingface", model, fmt.Errorf("server error: %s", errResp.Error))
+			return agentErrors.NewLLMRequestError(ProviderHuggingFace, model, fmt.Errorf("server error: %s", errResp.Error))
 		}
 	}
 
 	// Fallback error handling
 	switch resp.StatusCode {
 	case 400:
-		return agentErrors.NewInvalidInputError("huggingface", "request", "bad request")
+		return agentErrors.NewInvalidInputError(ProviderHuggingFace, "request", StatusBadRequest)
 	case 401:
-		return agentErrors.NewInvalidConfigError("huggingface", "api_key", "invalid API key")
+		return agentErrors.NewInvalidConfigError(ProviderHuggingFace, agentllm.ErrorFieldAPIKey, StatusInvalidAPIKey)
 	case 403:
-		return agentErrors.NewInvalidConfigError("huggingface", "api_key", "API key lacks permissions")
+		return agentErrors.NewInvalidConfigError(ProviderHuggingFace, agentllm.ErrorFieldAPIKey, StatusAPIKeyLacksPermissions)
 	case 404:
-		return agentErrors.NewLLMResponseError("huggingface", model, "model not found")
+		return agentErrors.NewLLMResponseError(ProviderHuggingFace, model, StatusModelNotFound)
 	case 429:
 		retryAfter := parseRetryAfter(resp.Header.Get("Retry-After"))
-		return agentErrors.NewLLMRateLimitError("huggingface", model, retryAfter)
+		return agentErrors.NewLLMRateLimitError(ProviderHuggingFace, model, retryAfter)
 	case 503:
-		return agentErrors.NewLLMRequestError("huggingface", model, fmt.Errorf("model loading"))
+		return agentErrors.NewLLMRequestError(ProviderHuggingFace, model, fmt.Errorf("model loading"))
 	case 500, 502, 504:
-		return agentErrors.NewLLMRequestError("huggingface", model, fmt.Errorf("server error: %d", resp.StatusCode))
+		return agentErrors.NewLLMRequestError(ProviderHuggingFace, model, fmt.Errorf("server error: %d", resp.StatusCode))
 	default:
-		return agentErrors.NewLLMRequestError("huggingface", model, fmt.Errorf("unexpected status: %d", resp.StatusCode))
+		return agentErrors.NewLLMRequestError(ProviderHuggingFace, model, fmt.Errorf("unexpected status: %d", resp.StatusCode))
 	}
 }
 
 // executeWithRetry executes request with extended retry for model loading
 func (p *HuggingFaceProvider) executeWithRetry(ctx context.Context, req *HuggingFaceRequest) (*HuggingFaceResponse, error) {
-	maxAttempts := 5 // More attempts for model loading
-	baseDelay := 2 * time.Second // Longer base delay
+	maxAttempts := HuggingFaceMaxAttempts
+	baseDelay := HuggingFaceBaseDelay
 
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		resp, err := p.execute(ctx, req)
@@ -336,8 +337,8 @@ func (p *HuggingFaceProvider) executeWithRetry(ctx context.Context, req *Hugging
 		// Exponential backoff with jitter (longer delays for model loading)
 		delay := baseDelay * time.Duration(1<<uint(attempt-1))
 		// Cap at 60 seconds
-		if delay > 60*time.Second {
-			delay = 60 * time.Second
+		if delay > HuggingFaceMaxDelay {
+			delay = HuggingFaceMaxDelay
 		}
 		jitter := time.Duration(rand.Int63n(int64(delay) / 2))
 
@@ -349,11 +350,11 @@ func (p *HuggingFaceProvider) executeWithRetry(ctx context.Context, req *Hugging
 		}
 	}
 
-	return nil, agentErrors.NewInternalError("huggingface", "execute_with_retry", fmt.Errorf("max retries exceeded"))
+	return nil, agentErrors.NewInternalError(ProviderHuggingFace, "execute_with_retry", fmt.Errorf("%s", ErrMaxRetriesExceeded))
 }
 
-// convertResponse converts HuggingFaceResponse to llm.CompletionResponse
-func (p *HuggingFaceProvider) convertResponse(resp *HuggingFaceResponse) *llm.CompletionResponse {
+// convertResponse converts HuggingFaceResponse to agentllm.CompletionResponse
+func (p *HuggingFaceProvider) convertResponse(resp *HuggingFaceResponse) *agentllm.CompletionResponse {
 	// Estimate token usage (HF doesn't always provide it)
 	var promptTokens, completionTokens int
 	if resp.Details != nil {
@@ -362,17 +363,17 @@ func (p *HuggingFaceProvider) convertResponse(resp *HuggingFaceResponse) *llm.Co
 		promptTokens = len(resp.GeneratedText) / 4
 	}
 
-	finishReason := "complete"
+	finishReason := StatusComplete
 	if resp.Details != nil && resp.Details.FinishReason != "" {
 		finishReason = resp.Details.FinishReason
 	}
 
-	return &llm.CompletionResponse{
+	return &agentllm.CompletionResponse{
 		Content:      resp.GeneratedText,
 		Model:        p.model,
 		TokensUsed:   promptTokens + completionTokens,
 		FinishReason: finishReason,
-		Provider:     string(llm.ProviderHuggingFace),
+		Provider:     string(agentllm.ProviderHuggingFace),
 		Usage: &interfaces.TokenUsage{
 			PromptTokens:     promptTokens,
 			CompletionTokens: completionTokens,
@@ -382,15 +383,15 @@ func (p *HuggingFaceProvider) convertResponse(resp *HuggingFaceResponse) *llm.Co
 }
 
 // Chat implements chat conversation
-func (p *HuggingFaceProvider) Chat(ctx context.Context, messages []llm.Message) (*llm.CompletionResponse, error) {
-	return p.Complete(ctx, &llm.CompletionRequest{
+func (p *HuggingFaceProvider) Chat(ctx context.Context, messages []agentllm.Message) (*agentllm.CompletionResponse, error) {
+	return p.Complete(ctx, &agentllm.CompletionRequest{
 		Messages: messages,
 	})
 }
 
 // Provider returns the provider type
-func (p *HuggingFaceProvider) Provider() llm.Provider {
-	return llm.ProviderHuggingFace
+func (p *HuggingFaceProvider) Provider() agentllm.Provider {
+	return agentllm.ProviderHuggingFace
 }
 
 // IsAvailable checks if the provider is available
@@ -399,8 +400,8 @@ func (p *HuggingFaceProvider) IsAvailable() bool {
 	defer cancel()
 
 	// Try a minimal completion
-	_, err := p.Complete(ctx, &llm.CompletionRequest{
-		Messages: []llm.Message{{Role: "user", Content: "test"}},
+	_, err := p.Complete(ctx, &agentllm.CompletionRequest{
+		Messages: []agentllm.Message{{Role: RoleUser, Content: "test"}},
 	})
 
 	return err == nil
@@ -427,23 +428,23 @@ func (p *HuggingFaceProvider) Stream(ctx context.Context, prompt string) (<-chan
 	// Create HTTP request
 	body, err := json.Marshal(req)
 	if err != nil {
-		return nil, agentErrors.Wrap(err, agentErrors.CodeInternal, "failed to marshal request")
+		return nil, agentErrors.Wrap(err, agentErrors.CodeInternal, ErrFailedMarshalRequest)
 	}
 
 	endpoint := fmt.Sprintf("%s/models/%s", p.baseURL, p.model)
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(body))
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError("huggingface", p.model, err)
+		return nil, agentErrors.NewLLMRequestError(ProviderHuggingFace, p.model, err)
 	}
 
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
-	httpReq.Header.Set("Accept", "text/event-stream")
+	httpReq.Header.Set(HeaderContentType, ContentTypeJSON)
+	httpReq.Header.Set(HeaderAuthorization, AuthBearerPrefix+p.apiKey)
+	httpReq.Header.Set(HeaderAccept, ContentTypeEventStream)
 
 	// Execute request
 	httpResp, err := p.httpClient.Do(httpReq)
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError("huggingface", p.model, err)
+		return nil, agentErrors.NewLLMRequestError(ProviderHuggingFace, p.model, err)
 	}
 
 	if httpResp.StatusCode != http.StatusOK {

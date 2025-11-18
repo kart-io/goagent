@@ -327,9 +327,9 @@ func TestAnthropicChat(t *testing.T) {
 // TestAnthropicErrorHandling tests error scenarios
 func TestAnthropicErrorHandling(t *testing.T) {
 	tests := []struct {
-		name           string
-		statusCode     int
-		responseBody   interface{}
+		name            string
+		statusCode      int
+		responseBody    interface{}
 		expectedErrCode agentErrors.ErrorCode
 	}{
 		{
