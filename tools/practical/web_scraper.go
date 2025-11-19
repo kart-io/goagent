@@ -3,12 +3,12 @@ package practical
 import (
 	"context"
 	"encoding/json"
-	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
+	"github.com/go-resty/resty/v2"
 
 	agentcore "github.com/kart-io/goagent/core"
 	agentErrors "github.com/kart-io/goagent/errors"
@@ -17,26 +17,22 @@ import (
 
 // WebScraperTool scrapes web pages and extracts structured data
 type WebScraperTool struct {
-	httpClient *http.Client
+	client     *resty.Client
 	maxRetries int
 	userAgent  string
 }
 
 // NewWebScraperTool creates a new web scraper tool
 func NewWebScraperTool() *WebScraperTool {
+	client := resty.New().
+		SetTimeout(30 * time.Second).
+		SetRedirectPolicy(resty.FlexibleRedirectPolicy(10)).
+		SetRetryCount(3).
+		SetRetryWaitTime(1 * time.Second).
+		SetRetryMaxWaitTime(3 * time.Second)
+
 	return &WebScraperTool{
-		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
-			CheckRedirect: func(req *http.Request, via []*http.Request) error {
-				if len(via) >= 10 {
-					return agentErrors.New(agentErrors.CodeToolExecution, "too many redirects").
-						WithComponent("web_scraper_tool").
-						WithOperation("check_redirect").
-						WithContext("redirect_count", len(via))
-				}
-				return nil
-			},
-		},
+		client:     client,
 		maxRetries: 3,
 		userAgent:  "Mozilla/5.0 (compatible; AgentFramework/1.0)",
 	}
@@ -296,45 +292,26 @@ func (t *WebScraperTool) parseInput(input interface{}) (*webScraperParams, error
 }
 
 func (t *WebScraperTool) fetchPage(ctx context.Context, urlStr string) (*goquery.Document, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", urlStr, nil)
+	// Configure retry mechanism
+	resp, err := t.client.R().
+		SetContext(ctx).
+		SetHeader(interfaces.HeaderUserAgent, t.userAgent).
+		Get(urlStr)
+
 	if err != nil {
 		return nil, err
 	}
 
-	req.Header.Set("User-Agent", t.userAgent)
-
-	var resp *http.Response
-	var lastErr error
-
-	for i := 0; i < t.maxRetries; i++ {
-		resp, lastErr = t.httpClient.Do(req)
-		if lastErr == nil && resp.StatusCode == http.StatusOK {
-			break
-		}
-		if resp != nil {
-			if err := resp.Body.Close(); err != nil {
-				return nil, err
-			}
-		}
-		time.Sleep(time.Duration(i+1) * time.Second)
-	}
-
-	if lastErr != nil {
-		return nil, lastErr
-	}
-	if resp.StatusCode != http.StatusOK {
+	if !resp.IsSuccess() {
 		return nil, agentErrors.New(agentErrors.CodeToolExecution, "HTTP request failed").
 			WithComponent("web_scraper_tool").
 			WithOperation("fetchPage").
-			WithContext("url", urlStr).
-			WithContext("status_code", resp.StatusCode).
-			WithContext("status", resp.Status)
+			WithContext(interfaces.FieldURL, urlStr).
+			WithContext(interfaces.FieldStatusCode, resp.StatusCode()).
+			WithContext(interfaces.FieldStatus, resp.Status())
 	}
 
-	if err := resp.Body.Close(); err != nil {
-		return nil, err
-	}
-	return goquery.NewDocumentFromReader(resp.Body)
+	return goquery.NewDocumentFromReader(strings.NewReader(resp.String()))
 }
 
 func (t *WebScraperTool) extractText(doc *goquery.Document, selector string, maxLength int) string {

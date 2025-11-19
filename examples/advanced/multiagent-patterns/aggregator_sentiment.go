@@ -15,11 +15,11 @@ import (
 
 // SentimentAnalysisResult 情感分析结果
 type SentimentAnalysisResult struct {
-	Platform       string  `json:"platform"`
-	Polarity       float64 `json:"polarity"`       // 情感极性 (-1 到 1)
+	Platform          string  `json:"platform"`
+	Polarity          float64 `json:"polarity"`     // 情感极性 (-1 到 1)
 	SubjectivityScore float64 `json:"subjectivity"` // 主观性得分 (0 到 1)
-	PostCount      int     `json:"post_count"`
-	ProcessingTime float64 `json:"processing_time"` // 处理时间（秒）
+	PostCount         int     `json:"post_count"`
+	ProcessingTime    float64 `json:"processing_time"` // 处理时间（秒）
 }
 
 // AggregatedSentiment 聚合的情感分析报告

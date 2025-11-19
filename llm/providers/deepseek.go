@@ -1,13 +1,14 @@
 package providers
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
+	"strings"
 	"time"
+
+	"github.com/go-resty/resty/v2"
 
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
@@ -17,7 +18,7 @@ import (
 // DeepSeekProvider implements LLM interface for DeepSeek
 type DeepSeekProvider struct {
 	config      *llm.Config
-	httpClient  *http.Client
+	client      *resty.Client
 	apiKey      string
 	baseURL     string
 	model       string
@@ -123,9 +124,15 @@ func NewDeepSeek(config *llm.Config) (*DeepSeekProvider, error) {
 		model = "deepseek-chat"
 	}
 
+	client := resty.New().
+		SetTimeout(time.Duration(config.Timeout) * time.Second).
+		SetHeader("Content-Type", "application/json").
+		SetHeader("Accept", "application/json").
+		SetHeader("Authorization", "Bearer "+config.APIKey)
+
 	provider := &DeepSeekProvider{
 		config:      config,
-		httpClient:  &http.Client{Timeout: time.Duration(config.Timeout) * time.Second},
+		client:      client,
 		apiKey:      config.APIKey,
 		baseURL:     baseURL,
 		model:       model,
@@ -175,11 +182,10 @@ func (p *DeepSeekProvider) Complete(ctx context.Context, req *llm.CompletionRequ
 
 	// Parse response
 	var dsResp DeepSeekResponse
-	if err := json.NewDecoder(resp.Body).Decode(&dsResp); err != nil {
+	if err := json.NewDecoder(strings.NewReader(resp.String())).Decode(&dsResp); err != nil {
 		return nil, agentErrors.NewParserInvalidJSONError("response body", err).
 			WithContext("provider", "deepseek")
 	}
-	defer func() { _ = resp.Body.Close() }()
 
 	if len(dsResp.Choices) == 0 {
 		return nil, agentErrors.NewLLMResponseError("deepseek", p.getModel(req.Model), "no choices in response")
@@ -227,14 +233,11 @@ func (p *DeepSeekProvider) Stream(ctx context.Context, prompt string) (<-chan st
 		return nil, agentErrors.NewLLMRequestError("deepseek", p.model, err).
 			WithContext("operation", "stream")
 	}
-	// Body will be closed by goroutine below
-	// nolint:bodyclose
 
 	go func() {
 		defer close(tokens)
-		defer func() { _ = resp.Body.Close() }()
 
-		decoder := json.NewDecoder(resp.Body)
+		decoder := json.NewDecoder(strings.NewReader(resp.String()))
 		for {
 			var streamResp DeepSeekStreamResponse
 			if err := decoder.Decode(&streamResp); err != nil {
@@ -293,11 +296,10 @@ func (p *DeepSeekProvider) GenerateWithTools(ctx context.Context, prompt string,
 
 	// Parse response
 	var dsResp DeepSeekResponse
-	if err := json.NewDecoder(resp.Body).Decode(&dsResp); err != nil {
+	if err := json.NewDecoder(strings.NewReader(resp.String())).Decode(&dsResp); err != nil {
 		return nil, agentErrors.NewParserInvalidJSONError("tool response body", err).
 			WithContext("provider", "deepseek")
 	}
-	defer func() { _ = resp.Body.Close() }()
 
 	if len(dsResp.Choices) == 0 {
 		return nil, agentErrors.NewLLMResponseError("deepseek", p.model, "no choices in tool response")
@@ -351,14 +353,11 @@ func (p *DeepSeekProvider) StreamWithTools(ctx context.Context, prompt string, t
 		return nil, agentErrors.NewLLMRequestError("deepseek", p.model, err).
 			WithContext("operation", "stream_with_tools")
 	}
-	// Body will be closed by goroutine below
-	// nolint:bodyclose
 
 	go func() {
 		defer close(chunks)
-		defer func() { _ = resp.Body.Close() }()
 
-		decoder := json.NewDecoder(resp.Body)
+		decoder := json.NewDecoder(strings.NewReader(resp.String()))
 		var currentToolCall *ToolCall
 		var argsBuffer string
 
@@ -459,11 +458,10 @@ func (p *DeepSeekProvider) Embed(ctx context.Context, text string) ([]float64, e
 	}
 
 	var embedResp EmbedResponse
-	if err := json.NewDecoder(resp.Body).Decode(&embedResp); err != nil {
+	if err := json.NewDecoder(strings.NewReader(resp.String())).Decode(&embedResp); err != nil {
 		return nil, agentErrors.NewParserInvalidJSONError("embeddings response", err).
 			WithContext("provider", "deepseek")
 	}
-	defer func() { _ = resp.Body.Close() }()
 
 	if len(embedResp.Data) == 0 {
 		return nil, agentErrors.NewLLMResponseError("deepseek", "deepseek-embedding", "no embeddings in response")
@@ -506,35 +504,22 @@ func (p *DeepSeekProvider) MaxTokens() int {
 // Helper methods
 
 // callAPI makes an API call to DeepSeek
-func (p *DeepSeekProvider) callAPI(ctx context.Context, endpoint string, payload interface{}) (*http.Response, error) {
+func (p *DeepSeekProvider) callAPI(ctx context.Context, endpoint string, payload interface{}) (*resty.Response, error) {
 	url := p.baseURL + endpoint
 
-	jsonData, err := json.Marshal(payload)
-	if err != nil {
-		return nil, agentErrors.NewParserInvalidJSONError("API request payload", err)
-	}
+	resp, err := p.client.R().
+		SetContext(ctx).
+		SetBody(payload).
+		Post(url)
 
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonData))
-	if err != nil {
-		return nil, agentErrors.NewLLMRequestError("deepseek", p.model, err).
-			WithContext("endpoint", endpoint)
-	}
-
-	req.Header.Set("Authorization", "Bearer "+p.apiKey)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-
-	resp, err := p.httpClient.Do(req)
 	if err != nil {
 		return nil, agentErrors.NewLLMRequestError("deepseek", p.model, err).
 			WithContext("endpoint", endpoint)
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		_ = resp.Body.Close()
+	if !resp.IsSuccess() {
 		return nil, agentErrors.NewLLMResponseError("deepseek", p.model,
-			fmt.Sprintf("API returned status %d: %s", resp.StatusCode, string(body))).
+			fmt.Sprintf("API returned status %d: %s", resp.StatusCode(), resp.String())).
 			WithContext("endpoint", endpoint)
 	}
 
@@ -636,14 +621,11 @@ func (p *DeepSeekStreamingProvider) StreamWithMetadata(ctx context.Context, prom
 	if err != nil {
 		return nil, err
 	}
-	// Body will be closed by goroutine below
-	// nolint:bodyclose
 
 	go func() {
 		defer close(tokens)
-		defer func() { _ = resp.Body.Close() }()
 
-		decoder := json.NewDecoder(resp.Body)
+		decoder := json.NewDecoder(strings.NewReader(resp.String()))
 		tokenCount := 0
 
 		for {

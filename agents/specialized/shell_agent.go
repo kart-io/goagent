@@ -10,6 +10,7 @@ import (
 
 	agentcore "github.com/kart-io/goagent/core"
 	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/logger/core"
 )
 
@@ -62,7 +63,7 @@ func (a *ShellAgent) Execute(ctx context.Context, input *agentcore.AgentInput) (
 	// 安全检查：命令白名单
 	if !a.allowedCommands[command] {
 		return &agentcore.AgentOutput{
-				Status:    "failed",
+				Status:    interfaces.StatusFailed,
 				Message:   "Command not allowed",
 				Latency:   time.Since(start),
 				Timestamp: start,
@@ -93,7 +94,7 @@ func (a *ShellAgent) Execute(ctx context.Context, input *agentcore.AgentInput) (
 		strings.Contains(command, "$") || strings.Contains(command, ">") ||
 		strings.Contains(command, "<") {
 		return &agentcore.AgentOutput{
-			Status:  "failed",
+			Status:  interfaces.StatusFailed,
 			Message: "command contains potentially dangerous characters",
 			Result: map[string]interface{}{
 				"agent_name": a.Name(),
@@ -125,7 +126,7 @@ func (a *ShellAgent) Execute(ctx context.Context, input *agentcore.AgentInput) (
 
 	// 构建输出
 	result := &agentcore.AgentOutput{
-		Status: "success",
+		Status: interfaces.StatusSuccess,
 		Result: map[string]interface{}{
 			"command":   command,
 			"args":      args,
@@ -152,7 +153,7 @@ func (a *ShellAgent) Execute(ctx context.Context, input *agentcore.AgentInput) (
 	}
 
 	if !success {
-		result.Status = "failed"
+		result.Status = interfaces.StatusFailed
 		result.Message = fmt.Sprintf("Command failed with exit code %d", exitCode)
 		if err != nil {
 			result.ToolCalls[0].Error = err.Error()

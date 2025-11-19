@@ -13,12 +13,12 @@ import (
 
 // CodeIteration 代码迭代记录
 type CodeIteration struct {
-	Iteration   int       `json:"iteration"`
-	Code        string    `json:"code"`
+	Iteration   int        `json:"iteration"`
+	Code        string     `json:"code"`
 	TestResult  TestResult `json:"test_result"`
-	Passed      bool      `json:"passed"`
-	Feedback    string    `json:"feedback"`
-	ProcessedAt time.Time `json:"processed_at"`
+	Passed      bool       `json:"passed"`
+	Feedback    string     `json:"feedback"`
+	ProcessedAt time.Time  `json:"processed_at"`
 }
 
 // TestResult 测试结果
@@ -56,7 +56,7 @@ func RunLoopPattern(llmClient llm.Client, logger loggercore.Logger) error {
 	var iterations []CodeIteration
 	currentCode := ""
 
-	fmt.Println("开始迭代开发...\n")
+	fmt.Println("开始迭代开发...")
 
 	for i := 1; i <= maxIterations; i++ {
 		fmt.Printf("--- 第 %d 次迭代 ---\n", i)
@@ -177,8 +177,8 @@ type writerAgentImpl struct {
 	iterationCount int
 }
 
-func (w *writerAgentImpl) Name() string { return "code_writer" }
-func (w *writerAgentImpl) Description() string { return "代码编写Agent" }
+func (w *writerAgentImpl) Name() string           { return "code_writer" }
+func (w *writerAgentImpl) Description() string    { return "代码编写Agent" }
 func (w *writerAgentImpl) Capabilities() []string { return []string{"code_writing"} }
 
 func (w *writerAgentImpl) Invoke(ctx context.Context, input *core.AgentInput) (*core.AgentOutput, error) {
@@ -286,8 +286,8 @@ func createCodeTesterAgent(llmClient llm.Client) core.Agent {
 // testerAgentImpl 实现 Agent 接口
 type testerAgentImpl struct{}
 
-func (t *testerAgentImpl) Name() string { return "code_tester" }
-func (t *testerAgentImpl) Description() string { return "代码测试Agent" }
+func (t *testerAgentImpl) Name() string           { return "code_tester" }
+func (t *testerAgentImpl) Description() string    { return "代码测试Agent" }
 func (t *testerAgentImpl) Capabilities() []string { return []string{"code_testing"} }
 
 func (t *testerAgentImpl) Invoke(ctx context.Context, input *core.AgentInput) (*core.AgentOutput, error) {

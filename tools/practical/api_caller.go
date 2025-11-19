@@ -1,15 +1,12 @@
 package practical
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"net/url"
-	"strings"
 	"time"
+
+	"github.com/go-resty/resty/v2"
 
 	agentcore "github.com/kart-io/goagent/core"
 	agentErrors "github.com/kart-io/goagent/errors"
@@ -19,7 +16,7 @@ import (
 
 // APICallerTool makes HTTP API calls with authentication and retry logic
 type APICallerTool struct {
-	httpClient     *http.Client
+	client         *resty.Client
 	defaultHeaders map[string]string
 	maxRetries     int
 	rateLimiter    *RateLimiter
@@ -28,15 +25,22 @@ type APICallerTool struct {
 
 // NewAPICallerTool creates a new API caller tool
 func NewAPICallerTool() *APICallerTool {
+	client := resty.New().
+		SetTimeout(30 * time.Second).
+		SetHeader("User-Agent", "AgentFramework/1.0").
+		SetRetryCount(3).
+		SetRetryWaitTime(1 * time.Second).
+		SetRetryMaxWaitTime(3 * time.Second).
+		AddRetryCondition(func(r *resty.Response, err error) bool {
+			// Retry on network errors or 5xx status codes
+			if err != nil {
+				return true
+			}
+			return r.StatusCode() >= 500
+		})
+
 	return &APICallerTool{
-		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
-			Transport: &http.Transport{
-				MaxIdleConns:        100,
-				MaxIdleConnsPerHost: 10,
-				IdleConnTimeout:     90 * time.Second,
-			},
-		},
+		client: client,
 		defaultHeaders: map[string]string{
 			"User-Agent": "AgentFramework/1.0",
 		},
@@ -67,8 +71,8 @@ func (t *APICallerTool) ArgsSchema() string {
 			},
 			"method": map[string]interface{}{
 				"type":        "string",
-				"enum":        []string{"GET", "POST", "PUT", "DELETE", "PATCH"},
-				"default":     "GET",
+				"enum":        []string{interfaces.MethodGet, interfaces.MethodPost, interfaces.MethodPut, interfaces.MethodDelete, interfaces.MethodPatch},
+				"default":     interfaces.MethodGet,
 				"description": "HTTP method",
 			},
 			"headers": map[string]interface{}{
@@ -155,7 +159,7 @@ func (t *APICallerTool) Execute(ctx context.Context, input *interfaces.ToolInput
 	}
 
 	// Check cache for GET requests
-	if params.Method == "GET" && params.Cache {
+	if params.Method == interfaces.MethodGet && params.Cache {
 		cacheKey := t.getCacheKey(params)
 		if cached := t.responseCache.Get(cacheKey); cached != nil {
 			result := cached.(map[string]interface{})
@@ -166,48 +170,29 @@ func (t *APICallerTool) Execute(ctx context.Context, input *interfaces.ToolInput
 		}
 	}
 
-	// Execute with retry
-	var response map[string]interface{}
-	var lastErr error
-	attempts := 0
+	// Execute request (retries are handled by resty)
+	response, err := t.executeRequest(ctx, params)
 
-	for i := 0; i < params.Retry.MaxAttempts; i++ {
-		attempts++
-		response, lastErr = t.executeRequest(ctx, params)
-		if lastErr == nil {
-			break
+	if err != nil {
+		attempts := 1
+		if response != nil {
+			if a, ok := response["attempts"].(int); ok {
+				attempts = a
+			}
 		}
-
-		// Check if error is retryable
-		if !t.isRetryableError(lastErr) {
-			break
-		}
-
-		// Apply backoff
-		backoff := t.calculateBackoff(i, params.Retry.Backoff)
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case <-time.After(backoff):
-			// Continue to next attempt
-		}
-	}
-
-	if lastErr != nil {
 		return &interfaces.ToolOutput{
 			Result: map[string]interface{}{
-				"error":    lastErr.Error(),
+				"error":    err.Error(),
 				"attempts": attempts,
 			},
-			Error: lastErr.Error(),
-		}, lastErr
+			Error: err.Error(),
+		}, err
 	}
 
-	response["attempts"] = attempts
 	response["cached"] = false
 
 	// Cache successful GET responses
-	if params.Method == "GET" && params.Cache {
+	if params.Method == interfaces.MethodGet && params.Cache {
 		cacheKey := t.getCacheKey(params)
 		t.responseCache.Set(cacheKey, response)
 	}
@@ -266,52 +251,74 @@ func (t *APICallerTool) executeRequest(ctx context.Context, params *apiParams) (
 
 	// Build URL with query parameters
 	fullURL := params.URL
-	if len(params.Params) > 0 {
-		values := url.Values{}
-		for k, v := range params.Params {
-			values.Set(k, fmt.Sprint(v))
-		}
-		fullURL = fmt.Sprintf("%s?%s", params.URL, values.Encode())
+	queryParams := make(map[string]string)
+	for k, v := range params.Params {
+		queryParams[k] = fmt.Sprint(v)
 	}
 
-	// Prepare request body
-	var bodyReader io.Reader
-	if params.Body != nil {
-		switch v := params.Body.(type) {
-		case string:
-			bodyReader = strings.NewReader(v)
-		case map[string]interface{}:
-			data, err := json.Marshal(v)
-			if err != nil {
-				return nil, agentErrors.Wrap(err, agentErrors.CodeToolExecution, "failed to marshal body").
-					WithComponent("api_caller_tool").
-					WithOperation("executeRequest").
-					WithContext("url", params.URL)
-			}
-			bodyReader = bytes.NewReader(data)
+	// Track retry attempts using AfterResponse hook
+	attemptCount := 0
+
+	// Execute request
+	var resp *resty.Response
+	var err error
+
+	// Handle redirect policy and retry configuration
+	client := t.client
+	if !params.FollowRedirects || params.Retry.MaxAttempts != t.maxRetries {
+		// Create a new client with custom settings
+		client = resty.New().
+			SetTimeout(t.client.GetClient().Timeout)
+
+		if !params.FollowRedirects {
+			client.SetRedirectPolicy(resty.NoRedirectPolicy())
 		}
+
+		// Configure retries based on params
+		client.SetRetryCount(params.Retry.MaxAttempts - 1) // -1 because resty counts retries, not total attempts
+
+		// Set backoff strategy
+		switch params.Retry.Backoff {
+		case "constant":
+			client.SetRetryWaitTime(1 * time.Second).
+				SetRetryMaxWaitTime(1 * time.Second)
+		case "linear":
+			client.SetRetryWaitTime(1 * time.Second).
+				SetRetryMaxWaitTime(time.Duration(params.Retry.MaxAttempts) * time.Second)
+		case "exponential":
+			client.SetRetryWaitTime(1 * time.Second).
+				SetRetryMaxWaitTime(8 * time.Second)
+		}
+
+		client.AddRetryCondition(func(r *resty.Response, e error) bool {
+			if e != nil {
+				return true
+			}
+			return r.StatusCode() >= 500
+		})
 	}
+
+	// Add hook to track attempts
+	client.OnAfterResponse(func(c *resty.Client, r *resty.Response) error {
+		attemptCount++
+		return nil
+	})
 
 	// Create request
-	req, err := http.NewRequestWithContext(ctx, params.Method, fullURL, bodyReader)
-	if err != nil {
-		return nil, agentErrors.Wrap(err, agentErrors.CodeToolExecution, "failed to create request").
-			WithComponent("api_caller_tool").
-			WithOperation("executeRequest").
-			WithContext("url", fullURL).
-			WithContext("method", params.Method)
-	}
+	req := client.R().
+		SetContext(ctx).
+		SetQueryParams(queryParams).
+		SetHeaders(params.Headers)
 
-	// Set headers
+	// Set default headers
 	for k, v := range t.defaultHeaders {
-		req.Header.Set(k, v)
-	}
-	for k, v := range params.Headers {
-		req.Header.Set(k, v)
+		if _, exists := params.Headers[k]; !exists {
+			req.SetHeader(k, v)
+		}
 	}
 
 	// Set authentication
-	if err := t.setAuthentication(req, params.Auth); err != nil {
+	if err := t.setAuthenticationResty(req, params.Auth); err != nil {
 		return nil, agentErrors.Wrap(err, agentErrors.CodeToolExecution, "authentication error").
 			WithComponent("api_caller_tool").
 			WithOperation("executeRequest").
@@ -319,76 +326,77 @@ func (t *APICallerTool) executeRequest(ctx context.Context, params *apiParams) (
 			WithContext("auth_type", params.Auth.Type)
 	}
 
-	// Set content type for JSON body
-	if bodyReader != nil && req.Header.Get("Content-Type") == "" {
-		req.Header.Set("Content-Type", "application/json")
-	}
-
-	// Configure redirect policy
-	client := t.httpClient
-	if !params.FollowRedirects {
-		client = &http.Client{
-			Timeout:   t.httpClient.Timeout,
-			Transport: t.httpClient.Transport,
-			CheckRedirect: func(req *http.Request, via []*http.Request) error {
-				return http.ErrUseLastResponse
-			},
+	// Set body if provided
+	if params.Body != nil {
+		req.SetBody(params.Body)
+		if req.Header.Get(interfaces.HeaderContentType) == "" {
+			req.SetHeader(interfaces.HeaderContentType, interfaces.ContentTypeJSON)
 		}
 	}
 
-	// Execute request
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if err := resp.Body.Close(); err != nil {
-			fmt.Printf("failed to close response body: %v", err)
-		}
-	}()
-
-	// Read response body
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, agentErrors.Wrap(err, agentErrors.CodeToolExecution, "failed to read response").
+	switch params.Method {
+	case interfaces.MethodGet:
+		resp, err = req.Get(fullURL)
+	case interfaces.MethodPost:
+		resp, err = req.Post(fullURL)
+	case interfaces.MethodPut:
+		resp, err = req.Put(fullURL)
+	case interfaces.MethodDelete:
+		resp, err = req.Delete(fullURL)
+	case interfaces.MethodPatch:
+		resp, err = req.Patch(fullURL)
+	default:
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "unsupported HTTP method").
 			WithComponent("api_caller_tool").
 			WithOperation("executeRequest").
-			WithContext("url", params.URL).
-			WithContext("status_code", resp.StatusCode)
+			WithContext("method", params.Method)
+	}
+
+	// If attemptCount is still 0 (hook didn't fire), set it to 1
+	if attemptCount == 0 {
+		attemptCount = 1
+	}
+
+	if err != nil {
+		// Return result with attempt count even on error
+		return map[string]interface{}{
+			"attempts": attemptCount,
+		}, err
 	}
 
 	// Parse response
 	result := map[string]interface{}{
-		"status_code": resp.StatusCode,
-		"headers":     t.headersToMap(resp.Header),
+		"status_code": resp.StatusCode(),
+		"headers":     t.headersToMapResty(resp.Header()),
 		"latency_ms":  int(time.Since(startTime).Milliseconds()),
+		"attempts":    attemptCount,
 	}
 
 	// Try to parse as JSON
 	var jsonBody interface{}
-	if err := json.Unmarshal(bodyBytes, &jsonBody); err == nil {
+	if err := json.Unmarshal(resp.Body(), &jsonBody); err == nil {
 		result["body"] = jsonBody
 	} else {
 		// Return as string if not JSON
-		result["body"] = string(bodyBytes)
+		result["body"] = resp.String()
 	}
 
 	// Check for HTTP errors
-	if resp.StatusCode >= 400 {
+	if resp.StatusCode() >= 400 {
 		return result, agentErrors.New(agentErrors.CodeToolExecution, "HTTP request failed").
 			WithComponent("api_caller_tool").
 			WithOperation("executeRequest").
 			WithContext("url", params.URL).
 			WithContext("method", params.Method).
-			WithContext("status_code", resp.StatusCode).
-			WithContext("status", resp.Status)
+			WithContext("status_code", resp.StatusCode()).
+			WithContext("status", resp.Status())
 	}
 
 	return result, nil
 }
 
-// setAuthentication sets authentication headers
-func (t *APICallerTool) setAuthentication(req *http.Request, auth *authConfig) error {
+// setAuthenticationResty sets authentication for resty requests
+func (t *APICallerTool) setAuthenticationResty(req *resty.Request, auth *authConfig) error {
 	if auth == nil {
 		return nil
 	}
@@ -399,9 +407,9 @@ func (t *APICallerTool) setAuthentication(req *http.Request, auth *authConfig) e
 		if !ok {
 			return agentErrors.New(agentErrors.CodeInvalidInput, "bearer auth requires 'token' credential").
 				WithComponent("api_caller_tool").
-				WithOperation("setAuthentication")
+				WithOperation("setAuthenticationResty")
 		}
-		req.Header.Set("Authorization", "Bearer "+token)
+		req.SetAuthToken(token)
 
 	case "basic":
 		username, _ := auth.Credentials["username"].(string)
@@ -413,24 +421,23 @@ func (t *APICallerTool) setAuthentication(req *http.Request, auth *authConfig) e
 		if !ok {
 			return agentErrors.New(agentErrors.CodeInvalidInput, "api_key auth requires 'key' credential").
 				WithComponent("api_caller_tool").
-				WithOperation("setAuthentication")
+				WithOperation("setAuthenticationResty")
 		}
 		location, _ := auth.Credentials["location"].(string)
 		name, _ := auth.Credentials["name"].(string)
 
 		if location == "query" {
 			// Add to URL query parameters
-			u, _ := url.Parse(req.URL.String())
-			q := u.Query()
-			q.Set(name, key)
-			u.RawQuery = q.Encode()
-			req.URL = u
+			if name == "" {
+				name = "api_key"
+			}
+			req.SetQueryParam(name, key)
 		} else {
 			// Default to header
 			if name == "" {
 				name = "X-API-Key"
 			}
-			req.Header.Set(name, key)
+			req.SetHeader(name, key)
 		}
 
 	case "oauth2":
@@ -438,22 +445,22 @@ func (t *APICallerTool) setAuthentication(req *http.Request, auth *authConfig) e
 		if !ok {
 			return agentErrors.New(agentErrors.CodeInvalidInput, "oauth2 auth requires 'access_token' credential").
 				WithComponent("api_caller_tool").
-				WithOperation("setAuthentication")
+				WithOperation("setAuthenticationResty")
 		}
-		req.Header.Set("Authorization", "Bearer "+token)
+		req.SetAuthToken(token)
 
 	default:
 		return agentErrors.New(agentErrors.CodeInvalidInput, "unsupported auth type").
 			WithComponent("api_caller_tool").
-			WithOperation("setAuthentication").
+			WithOperation("setAuthenticationResty").
 			WithContext("auth_type", auth.Type)
 	}
 
 	return nil
 }
 
-// headersToMap converts http.Header to map
-func (t *APICallerTool) headersToMap(headers http.Header) map[string]string {
+// headersToMapResty converts http.Header to map for resty
+func (t *APICallerTool) headersToMapResty(headers map[string][]string) map[string]string {
 	result := make(map[string]string)
 	for k, v := range headers {
 		if len(v) > 0 {
@@ -473,52 +480,6 @@ func (t *APICallerTool) getCacheKey(params *apiParams) string {
 	return key
 }
 
-// isRetryableError checks if an error is retryable
-func (t *APICallerTool) isRetryableError(err error) bool {
-	// Check for specific HTTP status codes in error message
-	errStr := err.Error()
-	retryableCodes := []string{"429", "500", "502", "503", "504"}
-	for _, code := range retryableCodes {
-		if strings.Contains(errStr, "HTTP "+code) {
-			return true
-		}
-	}
-
-	// Check for network errors
-	networkErrors := []string{"timeout", "connection refused", "connection reset"}
-	for _, netErr := range networkErrors {
-		if strings.Contains(strings.ToLower(errStr), netErr) {
-			return true
-		}
-	}
-
-	return false
-}
-
-// calculateBackoff calculates retry backoff duration
-func (t *APICallerTool) calculateBackoff(attempt int, strategy string) time.Duration {
-	base := time.Second
-
-	switch strategy {
-	case "constant":
-		return base
-	case "linear":
-		return base * time.Duration(attempt+1)
-	case "exponential":
-		// Cap attempt to prevent overflow (2^31 is safe for uint)
-		safeAttempt := attempt
-		if safeAttempt > 31 {
-			safeAttempt = 31
-		}
-		if safeAttempt < 0 {
-			safeAttempt = 0
-		}
-		return base * (1 << uint(safeAttempt))
-	default:
-		return base
-	}
-}
-
 // parseAPIInput parses the tool input
 func (t *APICallerTool) parseAPIInput(input interface{}) (*apiParams, error) {
 	var params apiParams
@@ -527,7 +488,7 @@ func (t *APICallerTool) parseAPIInput(input interface{}) (*apiParams, error) {
 	case string:
 		// Simple GET request
 		params.URL = v
-		params.Method = "GET"
+		params.Method = interfaces.MethodGet
 	case map[string]interface{}:
 		data, err := json.Marshal(v)
 		if err != nil {
@@ -545,7 +506,7 @@ func (t *APICallerTool) parseAPIInput(input interface{}) (*apiParams, error) {
 
 	// Set defaults
 	if params.Method == "" {
-		params.Method = "GET"
+		params.Method = interfaces.MethodGet
 	}
 	if params.Timeout == 0 {
 		params.Timeout = 30
