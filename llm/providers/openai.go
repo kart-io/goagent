@@ -176,7 +176,13 @@ func (p *OpenAIProvider) Stream(ctx context.Context, prompt string) (<-chan stri
 			}
 
 			if len(response.Choices) > 0 && response.Choices[0].Delta.Content != "" {
-				tokens <- response.Choices[0].Delta.Content
+				select {
+				case tokens <- response.Choices[0].Delta.Content:
+					// Successfully sent
+				case <-ctx.Done():
+					// Context cancelled, exit immediately
+					return
+				}
 			}
 		}
 	}()
@@ -271,7 +277,13 @@ func (p *OpenAIProvider) StreamWithTools(ctx context.Context, prompt string, too
 						var args map[string]interface{}
 						if err := json.Unmarshal([]byte(argsBuffer), &args); err == nil {
 							currentCall.Arguments = args
-							chunks <- ToolChunk{Type: "tool_call", Value: currentCall}
+							select {
+							case chunks <- ToolChunk{Type: "tool_call", Value: currentCall}:
+								// Successfully sent
+							case <-ctx.Done():
+								// Context cancelled, exit immediately
+								return
+							}
 						}
 					}
 					return
@@ -287,7 +299,13 @@ func (p *OpenAIProvider) StreamWithTools(ctx context.Context, prompt string, too
 
 			// Handle content
 			if choice.Delta.Content != "" {
-				chunks <- ToolChunk{Type: "content", Value: choice.Delta.Content}
+				select {
+				case chunks <- ToolChunk{Type: "content", Value: choice.Delta.Content}:
+					// Successfully sent
+				case <-ctx.Done():
+					// Context cancelled, exit immediately
+					return
+				}
 			}
 
 			// Handle function calls
@@ -299,7 +317,13 @@ func (p *OpenAIProvider) StreamWithTools(ctx context.Context, prompt string, too
 						var args map[string]interface{}
 						if err := json.Unmarshal([]byte(argsBuffer), &args); err == nil {
 							currentCall.Arguments = args
-							chunks <- ToolChunk{Type: "tool_call", Value: currentCall}
+							select {
+							case chunks <- ToolChunk{Type: "tool_call", Value: currentCall}:
+								// Successfully sent
+							case <-ctx.Done():
+								// Context cancelled, exit immediately
+								return
+							}
 						}
 					}
 
@@ -308,12 +332,24 @@ func (p *OpenAIProvider) StreamWithTools(ctx context.Context, prompt string, too
 						Name: choice.Delta.FunctionCall.Name,
 					}
 					argsBuffer = ""
-					chunks <- ToolChunk{Type: "tool_name", Value: choice.Delta.FunctionCall.Name}
+					select {
+					case chunks <- ToolChunk{Type: "tool_name", Value: choice.Delta.FunctionCall.Name}:
+						// Successfully sent
+					case <-ctx.Done():
+						// Context cancelled, exit immediately
+						return
+					}
 				}
 
 				if choice.Delta.FunctionCall.Arguments != "" {
 					argsBuffer += choice.Delta.FunctionCall.Arguments
-					chunks <- ToolChunk{Type: "tool_args", Value: choice.Delta.FunctionCall.Arguments}
+					select {
+					case chunks <- ToolChunk{Type: "tool_args", Value: choice.Delta.FunctionCall.Arguments}:
+						// Successfully sent
+					case <-ctx.Done():
+						// Context cancelled, exit immediately
+						return
+					}
 				}
 			}
 		}
@@ -460,17 +496,27 @@ func (p *OpenAIStreamingProvider) StreamTokensWithMetadata(ctx context.Context, 
 			response, err := stream.Recv()
 			if err != nil {
 				if errors.Is(err, io.EOF) {
-					tokens <- TokenWithMetadata{
+					select {
+					case tokens <- TokenWithMetadata{
 						Type: "finish",
 						Metadata: map[string]interface{}{
 							"total_tokens": tokenCount,
 						},
+					}:
+						// Successfully sent
+					case <-ctx.Done():
+						// Context cancelled, exit immediately
 					}
 					return
 				}
-				tokens <- TokenWithMetadata{
+				select {
+				case tokens <- TokenWithMetadata{
 					Type:  "error",
 					Error: err,
+				}:
+					// Successfully sent
+				case <-ctx.Done():
+					// Context cancelled, exit immediately
 				}
 				return
 			}
@@ -479,13 +525,19 @@ func (p *OpenAIStreamingProvider) StreamTokensWithMetadata(ctx context.Context, 
 				choice := response.Choices[0]
 				if choice.Delta.Content != "" {
 					tokenCount++
-					tokens <- TokenWithMetadata{
+					select {
+					case tokens <- TokenWithMetadata{
 						Type:    "token",
 						Content: choice.Delta.Content,
 						Metadata: map[string]interface{}{
 							"index":         tokenCount,
 							"finish_reason": choice.FinishReason,
 						},
+					}:
+						// Successfully sent
+					case <-ctx.Done():
+						// Context cancelled, exit immediately
+						return
 					}
 				}
 			}

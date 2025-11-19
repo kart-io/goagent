@@ -247,7 +247,14 @@ func (p *DeepSeekProvider) Stream(ctx context.Context, prompt string) (<-chan st
 			}
 
 			if len(streamResp.Choices) > 0 && streamResp.Choices[0].Delta.Content != "" {
-				tokens <- streamResp.Choices[0].Delta.Content
+				// Use select to handle context cancellation
+				select {
+				case tokens <- streamResp.Choices[0].Delta.Content:
+					// Successfully sent
+				case <-ctx.Done():
+					// Context cancelled, exit immediately
+					return
+				}
 			}
 
 			// Check for completion
@@ -643,18 +650,24 @@ func (p *DeepSeekStreamingProvider) StreamWithMetadata(ctx context.Context, prom
 			var streamResp DeepSeekStreamResponse
 			if err := decoder.Decode(&streamResp); err != nil {
 				if err == io.EOF {
-					tokens <- TokenWithMetadata{
+					select {
+					case tokens <- TokenWithMetadata{
 						Type: "finish",
 						Metadata: map[string]interface{}{
 							"total_tokens": tokenCount,
 							"model":        p.model,
 						},
+					}:
+					case <-ctx.Done():
 					}
 					return
 				}
-				tokens <- TokenWithMetadata{
+				select {
+				case tokens <- TokenWithMetadata{
 					Type:  "error",
 					Error: err,
+				}:
+				case <-ctx.Done():
 				}
 				return
 			}
@@ -664,13 +677,19 @@ func (p *DeepSeekStreamingProvider) StreamWithMetadata(ctx context.Context, prom
 
 				if choice.Delta.Content != "" {
 					tokenCount++
-					tokens <- TokenWithMetadata{
+					select {
+					case tokens <- TokenWithMetadata{
 						Type:    "token",
 						Content: choice.Delta.Content,
 						Metadata: map[string]interface{}{
 							"index":         tokenCount,
 							"finish_reason": choice.FinishReason,
 						},
+					}:
+						// Successfully sent
+					case <-ctx.Done():
+						// Context cancelled, exit immediately
+						return
 					}
 				}
 

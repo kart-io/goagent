@@ -463,7 +463,14 @@ func (p *CohereProvider) Stream(ctx context.Context, prompt string) (<-chan stri
 
 			// Extract text from text-generation events
 			if event.EventType == EventTextGeneration && event.Text != "" {
-				tokens <- event.Text
+				// Use select to handle context cancellation
+				select {
+				case tokens <- event.Text:
+					// Successfully sent
+				case <-ctx.Done():
+					// Context cancelled, exit immediately
+					return
+				}
 			}
 
 			// Stop on stream-end
