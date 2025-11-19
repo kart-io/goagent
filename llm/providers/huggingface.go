@@ -2,16 +2,16 @@ package providers
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"math/rand"
-	"net/http"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/go-resty/resty/v2"
 
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
@@ -21,7 +21,7 @@ import (
 // HuggingFaceProvider implements LLM interface for Hugging Face
 type HuggingFaceProvider struct {
 	config      *agentllm.Config
-	httpClient  *http.Client
+	client      *resty.Client
 	apiKey      string
 	baseURL     string
 	model       string
@@ -120,7 +120,7 @@ func NewHuggingFace(config *agentllm.Config) (*HuggingFaceProvider, error) {
 	// Set other parameters with defaults
 	maxTokens := config.MaxTokens
 	if maxTokens == 0 {
-		maxTokens = DefaultMaxTokens
+		maxTokens = HuggingFaceDefaultMaxTokens
 	}
 
 	temperature := config.Temperature
@@ -133,19 +133,15 @@ func NewHuggingFace(config *agentllm.Config) (*HuggingFaceProvider, error) {
 		timeout = HuggingFaceTimeout
 	}
 
-	// Create HTTP client with connection pooling
-	httpClient := &http.Client{
-		Timeout: timeout,
-		Transport: &http.Transport{
-			MaxIdleConns:        MaxIdleConns,
-			MaxIdleConnsPerHost: MaxIdleConnsPerHost,
-			IdleConnTimeout:     IdleConnTimeout,
-		},
-	}
+	// Create resty client
+	client := resty.New().
+		SetTimeout(timeout).
+		SetHeader(HeaderContentType, ContentTypeJSON).
+		SetHeader(HeaderAuthorization, AuthBearerPrefix+apiKey)
 
 	provider := &HuggingFaceProvider{
 		config:      config,
-		httpClient:  httpClient,
+		client:      client,
 		apiKey:      apiKey,
 		baseURL:     baseURL,
 		model:       model,
@@ -216,40 +212,27 @@ func (p *HuggingFaceProvider) buildRequest(req *agentllm.CompletionRequest) *Hug
 
 // execute performs a single HTTP request to Hugging Face API
 func (p *HuggingFaceProvider) execute(ctx context.Context, req *HuggingFaceRequest) (*HuggingFaceResponse, error) {
-	// Serialize request
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, agentErrors.Wrap(err, agentErrors.CodeInternal, ErrFailedMarshalRequest)
-	}
-
 	// Create HTTP request with model ID in URL
 	endpoint := fmt.Sprintf("%s/models/%s", p.baseURL, p.model)
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(body))
-	if err != nil {
-		return nil, agentErrors.Wrap(err, agentErrors.CodeInternal, ErrFailedCreateRequest)
-	}
 
-	// Set headers (Bearer token)
-	httpReq.Header.Set(HeaderContentType, ContentTypeJSON)
-	httpReq.Header.Set(HeaderAuthorization, AuthBearerPrefix+p.apiKey)
+	// Execute request using resty
+	resp, err := p.client.R().
+		SetContext(ctx).
+		SetBody(req).
+		Post(endpoint)
 
-	// Execute request
-	httpResp, err := p.httpClient.Do(httpReq)
 	if err != nil {
 		return nil, agentErrors.NewLLMRequestError(ProviderHuggingFace, p.model, err)
 	}
-	defer func() {
-		_ = httpResp.Body.Close()
-	}()
 
 	// Check status code
-	if httpResp.StatusCode != http.StatusOK {
-		return nil, p.handleHTTPError(httpResp, p.model)
+	if !resp.IsSuccess() {
+		return nil, p.handleHTTPError(resp, p.model)
 	}
 
 	// Deserialize response (array format)
 	var respArray []HuggingFaceResponse
-	if err := json.NewDecoder(httpResp.Body).Decode(&respArray); err != nil {
+	if err := json.NewDecoder(strings.NewReader(resp.String())).Decode(&respArray); err != nil {
 		return nil, agentErrors.NewLLMResponseError(ProviderHuggingFace, p.model, ErrFailedDecodeResponse)
 	}
 
@@ -261,12 +244,12 @@ func (p *HuggingFaceProvider) execute(ctx context.Context, req *HuggingFaceReque
 }
 
 // handleHTTPError maps HTTP errors to AgentError
-func (p *HuggingFaceProvider) handleHTTPError(resp *http.Response, model string) error {
+func (p *HuggingFaceProvider) handleHTTPError(resp *resty.Response, model string) error {
 	// Try to parse error response
 	var errResp HuggingFaceErrorResponse
-	if err := json.NewDecoder(resp.Body).Decode(&errResp); err == nil && errResp.Error != "" {
+	if err := json.NewDecoder(strings.NewReader(resp.String())).Decode(&errResp); err == nil && errResp.Error != "" {
 		// Use error message from API
-		switch resp.StatusCode {
+		switch resp.StatusCode() {
 		case 400:
 			return agentErrors.NewInvalidInputError(ProviderHuggingFace, "request", errResp.Error)
 		case 401:
@@ -276,7 +259,7 @@ func (p *HuggingFaceProvider) handleHTTPError(resp *http.Response, model string)
 		case 404:
 			return agentErrors.NewLLMResponseError(ProviderHuggingFace, model, errResp.Error)
 		case 429:
-			retryAfter := parseRetryAfter(resp.Header.Get("Retry-After"))
+			retryAfter := parseRetryAfter(resp.Header().Get("Retry-After"))
 			return agentErrors.NewLLMRateLimitError(ProviderHuggingFace, model, retryAfter)
 		case 503:
 			// Model is loading - this is retryable
@@ -292,7 +275,7 @@ func (p *HuggingFaceProvider) handleHTTPError(resp *http.Response, model string)
 	}
 
 	// Fallback error handling
-	switch resp.StatusCode {
+	switch resp.StatusCode() {
 	case 400:
 		return agentErrors.NewInvalidInputError(ProviderHuggingFace, "request", StatusBadRequest)
 	case 401:
@@ -302,14 +285,14 @@ func (p *HuggingFaceProvider) handleHTTPError(resp *http.Response, model string)
 	case 404:
 		return agentErrors.NewLLMResponseError(ProviderHuggingFace, model, StatusModelNotFound)
 	case 429:
-		retryAfter := parseRetryAfter(resp.Header.Get("Retry-After"))
+		retryAfter := parseRetryAfter(resp.Header().Get("Retry-After"))
 		return agentErrors.NewLLMRateLimitError(ProviderHuggingFace, model, retryAfter)
 	case 503:
 		return agentErrors.NewLLMRequestError(ProviderHuggingFace, model, fmt.Errorf("model loading"))
 	case 500, 502, 504:
-		return agentErrors.NewLLMRequestError(ProviderHuggingFace, model, fmt.Errorf("server error: %d", resp.StatusCode))
+		return agentErrors.NewLLMRequestError(ProviderHuggingFace, model, fmt.Errorf("server error: %d", resp.StatusCode()))
 	default:
-		return agentErrors.NewLLMRequestError(ProviderHuggingFace, model, fmt.Errorf("unexpected status: %d", resp.StatusCode))
+		return agentErrors.NewLLMRequestError(ProviderHuggingFace, model, fmt.Errorf("unexpected status: %d", resp.StatusCode()))
 	}
 }
 
@@ -425,41 +408,29 @@ func (p *HuggingFaceProvider) Stream(ctx context.Context, prompt string) (<-chan
 		},
 	}
 
-	// Create HTTP request
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, agentErrors.Wrap(err, agentErrors.CodeInternal, ErrFailedMarshalRequest)
-	}
-
 	endpoint := fmt.Sprintf("%s/models/%s", p.baseURL, p.model)
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(body))
+
+	// Create streaming request with Accept header
+	streamClient := p.client.R().
+		SetContext(ctx).
+		SetHeader(HeaderAccept, ContentTypeEventStream).
+		SetBody(req)
+
+	// Execute streaming request
+	resp, err := streamClient.Post(endpoint)
 	if err != nil {
 		return nil, agentErrors.NewLLMRequestError(ProviderHuggingFace, p.model, err)
 	}
 
-	httpReq.Header.Set(HeaderContentType, ContentTypeJSON)
-	httpReq.Header.Set(HeaderAuthorization, AuthBearerPrefix+p.apiKey)
-	httpReq.Header.Set(HeaderAccept, ContentTypeEventStream)
-
-	// Execute request
-	httpResp, err := p.httpClient.Do(httpReq)
-	if err != nil {
-		return nil, agentErrors.NewLLMRequestError(ProviderHuggingFace, p.model, err)
-	}
-
-	if httpResp.StatusCode != http.StatusOK {
-		_ = httpResp.Body.Close()
-		return nil, p.handleHTTPError(httpResp, p.model)
+	if !resp.IsSuccess() {
+		return nil, p.handleHTTPError(resp, p.model)
 	}
 
 	// Start goroutine to read stream
 	go func() {
 		defer close(tokens)
-		defer func() {
-			_ = httpResp.Body.Close()
-		}()
 
-		scanner := bufio.NewScanner(httpResp.Body)
+		scanner := bufio.NewScanner(strings.NewReader(resp.String()))
 		for scanner.Scan() {
 			line := scanner.Text()
 

@@ -2,16 +2,16 @@ package providers
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"math/rand"
-	"net/http"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/go-resty/resty/v2"
 
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
@@ -21,7 +21,7 @@ import (
 // CohereProvider implements LLM interface for Cohere
 type CohereProvider struct {
 	config      *agentllm.Config
-	httpClient  *http.Client
+	client      *resty.Client
 	apiKey      string
 	baseURL     string
 	model       string
@@ -127,19 +127,15 @@ func NewCohere(config *agentllm.Config) (*CohereProvider, error) {
 		timeout = DefaultTimeout
 	}
 
-	// Create HTTP client with connection pooling
-	httpClient := &http.Client{
-		Timeout: timeout,
-		Transport: &http.Transport{
-			MaxIdleConns:        MaxIdleConns,
-			MaxIdleConnsPerHost: MaxIdleConnsPerHost,
-			IdleConnTimeout:     IdleConnTimeout,
-		},
-	}
+	// Create resty client
+	client := resty.New().
+		SetTimeout(timeout).
+		SetHeader(HeaderContentType, ContentTypeJSON).
+		SetHeader(HeaderAuthorization, AuthBearerPrefix+apiKey)
 
 	provider := &CohereProvider{
 		config:      config,
-		httpClient:  httpClient,
+		client:      client,
 		apiKey:      apiKey,
 		baseURL:     baseURL,
 		model:       model,
@@ -241,52 +237,37 @@ func (p *CohereProvider) convertRole(role string) string {
 
 // execute performs a single HTTP request to Cohere API
 func (p *CohereProvider) execute(ctx context.Context, req *CohereRequest) (*CohereResponse, error) {
-	// Serialize request
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, agentErrors.Wrap(err, agentErrors.CodeInternal, ErrFailedMarshalRequest)
-	}
+	// Execute request using resty
+	resp, err := p.client.R().
+		SetContext(ctx).
+		SetBody(req).
+		Post(p.baseURL + CohereChatPath)
 
-	// Create HTTP request
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", p.baseURL+CohereChatPath, bytes.NewReader(body))
-	if err != nil {
-		return nil, agentErrors.Wrap(err, agentErrors.CodeInternal, ErrFailedCreateRequest)
-	}
-
-	// Set headers (Bearer token, not x-api-key)
-	httpReq.Header.Set(HeaderContentType, ContentTypeJSON)
-	httpReq.Header.Set(HeaderAuthorization, AuthBearerPrefix+p.apiKey)
-
-	// Execute request
-	httpResp, err := p.httpClient.Do(httpReq)
 	if err != nil {
 		return nil, agentErrors.NewLLMRequestError(ProviderCohere, p.model, err)
 	}
-	defer func() {
-		_ = httpResp.Body.Close()
-	}()
 
 	// Check status code
-	if httpResp.StatusCode != http.StatusOK {
-		return nil, p.handleHTTPError(httpResp, req.Model)
+	if !resp.IsSuccess() {
+		return nil, p.handleHTTPError(resp, req.Model)
 	}
 
 	// Deserialize response
-	var resp CohereResponse
-	if err := json.NewDecoder(httpResp.Body).Decode(&resp); err != nil {
+	var cohereResp CohereResponse
+	if err := json.NewDecoder(strings.NewReader(resp.String())).Decode(&cohereResp); err != nil {
 		return nil, agentErrors.NewLLMResponseError(ProviderCohere, req.Model, ErrFailedDecodeResponse)
 	}
 
-	return &resp, nil
+	return &cohereResp, nil
 }
 
 // handleHTTPError maps HTTP errors to AgentError
-func (p *CohereProvider) handleHTTPError(resp *http.Response, model string) error {
+func (p *CohereProvider) handleHTTPError(resp *resty.Response, model string) error {
 	// Try to parse error response
 	var errResp CohereErrorResponse
-	if err := json.NewDecoder(resp.Body).Decode(&errResp); err == nil && errResp.Message != "" {
+	if err := json.NewDecoder(strings.NewReader(resp.String())).Decode(&errResp); err == nil && errResp.Message != "" {
 		// Use error message from API
-		switch resp.StatusCode {
+		switch resp.StatusCode() {
 		case 400:
 			return agentErrors.NewInvalidInputError(ProviderCohere, "request", errResp.Message)
 		case 401:
@@ -296,7 +277,7 @@ func (p *CohereProvider) handleHTTPError(resp *http.Response, model string) erro
 		case 404:
 			return agentErrors.NewLLMResponseError(ProviderCohere, model, errResp.Message)
 		case 429:
-			retryAfter := parseRetryAfter(resp.Header.Get("Retry-After"))
+			retryAfter := parseRetryAfter(resp.Header().Get("Retry-After"))
 			return agentErrors.NewLLMRateLimitError(ProviderCohere, model, retryAfter)
 		case 500, 502, 503, 504:
 			return agentErrors.NewLLMRequestError(ProviderCohere, model, fmt.Errorf("server error: %s", errResp.Message))
@@ -304,7 +285,7 @@ func (p *CohereProvider) handleHTTPError(resp *http.Response, model string) erro
 	}
 
 	// Fallback error handling
-	switch resp.StatusCode {
+	switch resp.StatusCode() {
 	case 400:
 		return agentErrors.NewInvalidInputError(ProviderCohere, "request", StatusBadRequest)
 	case 401:
@@ -314,12 +295,12 @@ func (p *CohereProvider) handleHTTPError(resp *http.Response, model string) erro
 	case 404:
 		return agentErrors.NewLLMResponseError(ProviderCohere, model, StatusEndpointNotFound)
 	case 429:
-		retryAfter := parseRetryAfter(resp.Header.Get("Retry-After"))
+		retryAfter := parseRetryAfter(resp.Header().Get("Retry-After"))
 		return agentErrors.NewLLMRateLimitError(ProviderCohere, model, retryAfter)
 	case 500, 502, 503, 504:
-		return agentErrors.NewLLMRequestError(ProviderCohere, model, fmt.Errorf("server error: %d", resp.StatusCode))
+		return agentErrors.NewLLMRequestError(ProviderCohere, model, fmt.Errorf("server error: %d", resp.StatusCode()))
 	default:
-		return agentErrors.NewLLMRequestError(ProviderCohere, model, fmt.Errorf("unexpected status: %d", resp.StatusCode))
+		return agentErrors.NewLLMRequestError(ProviderCohere, model, fmt.Errorf("unexpected status: %d", resp.StatusCode()))
 	}
 }
 
@@ -413,40 +394,27 @@ func (p *CohereProvider) Stream(ctx context.Context, prompt string) (<-chan stri
 		Stream:      true,
 	}
 
-	// Create HTTP request
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, agentErrors.Wrap(err, agentErrors.CodeInternal, ErrFailedMarshalRequest)
-	}
+	// Create streaming request with Accept header
+	streamClient := p.client.R().
+		SetContext(ctx).
+		SetHeader(HeaderAccept, ContentTypeEventStream).
+		SetBody(req)
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", p.baseURL+CohereChatPath, bytes.NewReader(body))
-	if err != nil {
-		return nil, agentErrors.NewLLMRequestError(ProviderCohere, p.model, err)
-	}
-
-	httpReq.Header.Set(HeaderContentType, ContentTypeJSON)
-	httpReq.Header.Set(HeaderAuthorization, AuthBearerPrefix+p.apiKey)
-	httpReq.Header.Set(HeaderAccept, ContentTypeEventStream)
-
-	// Execute request
-	httpResp, err := p.httpClient.Do(httpReq)
+	// Execute streaming request
+	resp, err := streamClient.Post(p.baseURL + CohereChatPath)
 	if err != nil {
 		return nil, agentErrors.NewLLMRequestError(ProviderCohere, p.model, err)
 	}
 
-	if httpResp.StatusCode != http.StatusOK {
-		_ = httpResp.Body.Close()
-		return nil, p.handleHTTPError(httpResp, p.model)
+	if !resp.IsSuccess() {
+		return nil, p.handleHTTPError(resp, p.model)
 	}
 
 	// Start goroutine to read stream
 	go func() {
 		defer close(tokens)
-		defer func() {
-			_ = httpResp.Body.Close()
-		}()
 
-		scanner := bufio.NewScanner(httpResp.Body)
+		scanner := bufio.NewScanner(strings.NewReader(resp.String()))
 		for scanner.Scan() {
 			line := scanner.Text()
 

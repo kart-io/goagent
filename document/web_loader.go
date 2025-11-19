@@ -2,10 +2,10 @@ package document
 
 import (
 	"context"
-	"io"
-	"net/http"
 	"strings"
 	"time"
+
+	"github.com/go-resty/resty/v2"
 
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/interfaces"
@@ -21,7 +21,7 @@ type WebLoader struct {
 	url       string
 	headers   map[string]string
 	timeout   time.Duration
-	client    *http.Client
+	client    *resty.Client
 	stripHTML bool
 }
 
@@ -48,9 +48,9 @@ func NewWebLoader(config WebLoaderConfig) *WebLoader {
 	config.Metadata["source"] = config.URL
 	config.Metadata["source_type"] = "web"
 
-	client := &http.Client{
-		Timeout: config.Timeout,
-	}
+	client := resty.New().
+		SetTimeout(config.Timeout).
+		SetHeader("User-Agent", "k8s-agent-document-loader/1.0")
 
 	return &WebLoader{
 		BaseDocumentLoader: NewBaseDocumentLoader(config.Metadata, config.CallbackManager),
@@ -74,53 +74,30 @@ func (l *WebLoader) Load(ctx context.Context) ([]*interfaces.Document, error) {
 		}
 	}
 
-	// 创建请求
-	req, err := http.NewRequestWithContext(ctx, "GET", l.url, nil)
-	if err != nil {
-		if l.callbackManager != nil {
-			_ = l.callbackManager.OnError(ctx, err)
-		}
-		return nil, errors.Wrap(errors.CodeInternalError, "failed to create request", err)
-	}
-
-	// 设置请求头
-	for key, value := range l.headers {
-		req.Header.Set(key, value)
-	}
-
-	// 设置默认 User-Agent
-	if req.Header.Get("User-Agent") == "" {
-		req.Header.Set("User-Agent", "k8s-agent-document-loader/1.0")
-	}
-
 	// 发送请求
-	resp, err := l.client.Do(req.WithContext(ctx))
+	resp, err := l.client.R().
+		SetContext(ctx).
+		SetHeaders(l.headers).
+		Get(l.url)
+
 	if err != nil {
 		if l.callbackManager != nil {
 			_ = l.callbackManager.OnError(ctx, err)
 		}
 		return nil, errors.Wrap(errors.CodeInternalError, "failed to fetch url", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
 
 	// 检查状态码
-	if resp.StatusCode != http.StatusOK {
-		err := errors.New(errors.CodeInternalError, "http status: "+resp.Status)
+	if resp.StatusCode() != 200 {
+		err := errors.New(errors.CodeInternalError, "http status: "+resp.Status())
 		if l.callbackManager != nil {
 			_ = l.callbackManager.OnError(ctx, err)
 		}
 		return nil, err
 	}
 
-	// 读取响应
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		if l.callbackManager != nil {
-			_ = l.callbackManager.OnError(ctx, err)
-		}
-		return nil, errors.Wrap(errors.CodeInternalError, "failed to read response", err)
-	}
-
+	// 获取响应内容
+	body := resp.Body()
 	content := string(body)
 
 	// 处理 HTML
@@ -130,9 +107,9 @@ func (l *WebLoader) Load(ctx context.Context) ([]*interfaces.Document, error) {
 
 	// 创建文档
 	metadata := l.GetMetadata()
-	metadata["content_type"] = resp.Header.Get("Content-Type")
+	metadata["content_type"] = resp.Header().Get("Content-Type")
 	metadata["content_length"] = len(body)
-	metadata["status_code"] = resp.StatusCode
+	metadata["status_code"] = resp.StatusCode()
 
 	doc := retrieval.NewDocument(content, metadata)
 

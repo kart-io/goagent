@@ -567,7 +567,7 @@ func TestClient_NewClient_Configuration(t *testing.T) {
 	log := createTestLogger()
 	client := NewClient(log)
 
-	assert.NotNil(t, client.httpClient)
+	assert.NotNil(t, client.client)
 	assert.NotNil(t, client.logger)
-	assert.Equal(t, 60*time.Second, client.httpClient.Timeout)
+	assert.Equal(t, 60*time.Second, client.client.GetClient().Timeout)
 }

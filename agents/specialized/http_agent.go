@@ -1,24 +1,24 @@
 package specialized
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"time"
+
+	"github.com/go-resty/resty/v2"
 
 	agentcore "github.com/kart-io/goagent/core"
 	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/logger/core"
 )
 
 // HTTPAgent HTTP 调用 Agent
-// 提供通用的 HTTP 请求能力
+// 提供通用的 HTTP 请求能力，使用 resty 客户端
 type HTTPAgent struct {
 	*agentcore.BaseAgent
-	client *http.Client
+	client *resty.Client
 	logger core.Logger
 }
 
@@ -36,9 +36,7 @@ func NewHTTPAgent(logger core.Logger) *HTTPAgent {
 				"http_patch",
 			},
 		),
-		client: &http.Client{
-			Timeout: 30 * time.Second,
-		},
+		client: resty.New().SetTimeout(30 * time.Second),
 		logger: logger.With("agent", "http"),
 	}
 }
@@ -54,7 +52,7 @@ func (a *HTTPAgent) Execute(ctx context.Context, input *agentcore.AgentInput) (*
 	body := input.Context["body"]
 
 	if method == "" {
-		method = "GET"
+		method = interfaces.MethodGet
 	}
 
 	if url == "" {
@@ -74,66 +72,55 @@ func (a *HTTPAgent) Execute(ctx context.Context, input *agentcore.AgentInput) (*
 		"method", method,
 		"url", url)
 
-	// 构建请求
-	var reqBody io.Reader
+	// 创建请求
+	req := a.client.R().
+		SetContext(ctx).
+		SetHeaders(headers)
+
+	// 如果有请求体，设置为 JSON
 	if body != nil {
-		bodyBytes, err := json.Marshal(body)
-		if err != nil {
-			return nil, agentErrors.Wrap(err, agentErrors.CodeInternal, "failed to marshal body").
-				WithComponent("http_agent").
-				WithOperation("Execute")
-		}
-		reqBody = bytes.NewBuffer(bodyBytes)
+		req.SetBody(body).
+			SetHeader(interfaces.HeaderContentType, interfaces.ContentTypeJSON)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, url, reqBody)
-	if err != nil {
-		return nil, agentErrors.Wrap(err, agentErrors.CodeInternal, "failed to create request").
+	// 执行请求
+	var resp *resty.Response
+	var err error
+
+	switch method {
+	case interfaces.MethodGet:
+		resp, err = req.Get(url)
+	case interfaces.MethodPost:
+		resp, err = req.Post(url)
+	case interfaces.MethodPut:
+		resp, err = req.Put(url)
+	case interfaces.MethodDelete:
+		resp, err = req.Delete(url)
+	case interfaces.MethodPatch:
+		resp, err = req.Patch(url)
+	default:
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "unsupported HTTP method").
 			WithComponent("http_agent").
 			WithOperation("Execute").
-			WithContext("url", url).
-			WithContext("method", method)
+			WithContext(interfaces.FieldMethod, method)
 	}
 
-	// 设置请求头
-	for k, v := range headers {
-		req.Header.Set(k, v)
-	}
-	if reqBody != nil && req.Header.Get("Content-Type") == "" {
-		req.Header.Set("Content-Type", "application/json")
-	}
-
-	// 发送请求
-	resp, err := a.client.Do(req)
 	if err != nil {
 		return &agentcore.AgentOutput{
-				Status:    "failed",
+				Status:    interfaces.StatusFailed,
 				Message:   "HTTP request failed",
 				Latency:   time.Since(start),
 				Timestamp: start,
 			}, agentErrors.Wrap(err, agentErrors.CodeToolExecution, "http request failed").
 				WithComponent("http_agent").
 				WithOperation("Execute").
-				WithContext("url", url).
-				WithContext("method", method)
-	}
-	defer func() {
-		if closeErr := resp.Body.Close(); closeErr != nil {
-			a.logger.Warnw("Failed to close response body", "error", closeErr)
-		}
-	}()
-
-	// 读取响应
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, agentErrors.Wrap(err, agentErrors.CodeInternal, "failed to read response").
-			WithComponent("http_agent").
-			WithOperation("Execute").
-			WithContext("url", url)
+				WithContext(interfaces.FieldURL, url).
+				WithContext(interfaces.FieldMethod, method)
 	}
 
 	// 尝试解析 JSON
 	var jsonBody interface{}
+	respBody := resp.Body()
 	if err := json.Unmarshal(respBody, &jsonBody); err != nil {
 		// 不是 JSON，返回原始文本
 		jsonBody = string(respBody)
@@ -141,36 +128,36 @@ func (a *HTTPAgent) Execute(ctx context.Context, input *agentcore.AgentInput) (*
 
 	// 构建输出
 	output := &agentcore.AgentOutput{
-		Status:  "success",
-		Message: fmt.Sprintf("HTTP %s request completed with status %d", method, resp.StatusCode),
+		Status:  interfaces.StatusSuccess,
+		Message: fmt.Sprintf("HTTP %s request completed with status %d", method, resp.StatusCode()),
 		Result: map[string]interface{}{
-			"status_code": resp.StatusCode,
-			"headers":     resp.Header,
-			"body":        jsonBody,
+			interfaces.FieldStatusCode: resp.StatusCode(),
+			interfaces.FieldHeaders:    resp.Header(),
+			interfaces.FieldBody:       jsonBody,
 		},
 		ToolCalls: []agentcore.ToolCall{
 			{
 				ToolName: "http",
 				Input: map[string]interface{}{
-					"method": method,
-					"url":    url,
-					"body":   body,
+					interfaces.FieldMethod: method,
+					interfaces.FieldURL:    url,
+					interfaces.FieldBody:   body,
 				},
 				Output: map[string]interface{}{
-					"status_code": resp.StatusCode,
-					"body":        jsonBody,
+					interfaces.FieldStatusCode: resp.StatusCode(),
+					interfaces.FieldBody:       jsonBody,
 				},
 				Duration: time.Since(start),
-				Success:  resp.StatusCode >= 200 && resp.StatusCode < 300,
+				Success:  resp.IsSuccess(),
 			},
 		},
 		Latency:   time.Since(start),
 		Timestamp: start,
 	}
 
-	if resp.StatusCode >= 400 {
-		output.Status = "failed"
-		output.Message = fmt.Sprintf("HTTP request failed with status %d", resp.StatusCode)
+	if resp.StatusCode() >= 400 {
+		output.Status = interfaces.StatusFailed
+		output.Message = fmt.Sprintf("HTTP request failed with status %d", resp.StatusCode())
 	}
 
 	return output, nil
@@ -180,9 +167,9 @@ func (a *HTTPAgent) Execute(ctx context.Context, input *agentcore.AgentInput) (*
 func (a *HTTPAgent) Get(ctx context.Context, url string, headers map[string]string) (*agentcore.AgentOutput, error) {
 	return a.Execute(ctx, &agentcore.AgentInput{
 		Context: map[string]interface{}{
-			"method":  "GET",
-			"url":     url,
-			"headers": headers,
+			interfaces.FieldMethod:  interfaces.MethodGet,
+			interfaces.FieldURL:     url,
+			interfaces.FieldHeaders: headers,
 		},
 	})
 }
@@ -191,10 +178,10 @@ func (a *HTTPAgent) Get(ctx context.Context, url string, headers map[string]stri
 func (a *HTTPAgent) Post(ctx context.Context, url string, body interface{}, headers map[string]string) (*agentcore.AgentOutput, error) {
 	return a.Execute(ctx, &agentcore.AgentInput{
 		Context: map[string]interface{}{
-			"method":  "POST",
-			"url":     url,
-			"body":    body,
-			"headers": headers,
+			interfaces.FieldMethod:  interfaces.MethodPost,
+			interfaces.FieldURL:     url,
+			interfaces.FieldBody:    body,
+			interfaces.FieldHeaders: headers,
 		},
 	})
 }
@@ -203,10 +190,10 @@ func (a *HTTPAgent) Post(ctx context.Context, url string, body interface{}, head
 func (a *HTTPAgent) Put(ctx context.Context, url string, body interface{}, headers map[string]string) (*agentcore.AgentOutput, error) {
 	return a.Execute(ctx, &agentcore.AgentInput{
 		Context: map[string]interface{}{
-			"method":  "PUT",
-			"url":     url,
-			"body":    body,
-			"headers": headers,
+			interfaces.FieldMethod:  interfaces.MethodPut,
+			interfaces.FieldURL:     url,
+			interfaces.FieldBody:    body,
+			interfaces.FieldHeaders: headers,
 		},
 	})
 }
@@ -215,9 +202,9 @@ func (a *HTTPAgent) Put(ctx context.Context, url string, body interface{}, heade
 func (a *HTTPAgent) Delete(ctx context.Context, url string, headers map[string]string) (*agentcore.AgentOutput, error) {
 	return a.Execute(ctx, &agentcore.AgentInput{
 		Context: map[string]interface{}{
-			"method":  "DELETE",
-			"url":     url,
-			"headers": headers,
+			interfaces.FieldMethod:  interfaces.MethodDelete,
+			interfaces.FieldURL:     url,
+			interfaces.FieldHeaders: headers,
 		},
 	})
 }

@@ -57,6 +57,110 @@ const (
 	ErrorFieldTimeout = "timeout"
 )
 
+// LLM Parameter Keys define common parameter names for LLM requests
+const (
+	// ParamTemperature controls randomness in generation (0.0-2.0)
+	ParamTemperature = "temperature"
+	// ParamMaxTokens limits the maximum number of tokens to generate
+	ParamMaxTokens = "max_tokens"
+	// ParamTopP controls nucleus sampling probability mass (0.0-1.0)
+	ParamTopP = "top_p"
+	// ParamTopK controls top-k sampling (number of top tokens to consider)
+	ParamTopK = "top_k"
+	// ParamFrequencyPenalty penalizes frequent tokens (-2.0 to 2.0)
+	ParamFrequencyPenalty = "frequency_penalty"
+	// ParamPresencePenalty penalizes tokens based on presence (-2.0 to 2.0)
+	ParamPresencePenalty = "presence_penalty"
+	// ParamStop defines stop sequences for generation
+	ParamStop = "stop"
+	// ParamStream enables streaming responses
+	ParamStream = "stream"
+	// ParamN specifies number of completions to generate
+	ParamN = "n"
+	// ParamLogprobs enables log probabilities in response
+	ParamLogprobs = "logprobs"
+	// ParamEcho echoes the prompt in the response
+	ParamEcho = "echo"
+	// ParamSeed sets random seed for reproducibility
+	ParamSeed = "seed"
+)
+
+// Message Field Names define fields in message structures
+const (
+	// MessageFieldRole represents the role field in a message
+	MessageFieldRole = "role"
+	// MessageFieldContent represents the content field in a message
+	MessageFieldContent = "content"
+	// MessageFieldName represents the name field in a message
+	MessageFieldName = "name"
+	// MessageFieldFunctionCall represents a function call in a message
+	MessageFieldFunctionCall = "function_call"
+	// MessageFieldToolCalls represents tool calls in a message
+	MessageFieldToolCalls = "tool_calls"
+)
+
+// Tool and Function Call Constants
+const (
+	// ToolTypeFunction represents a function tool type
+	ToolTypeFunction = "function"
+	// FunctionCallAuto enables automatic function calling
+	FunctionCallAuto = "auto"
+	// FunctionCallNone disables function calling
+	FunctionCallNone = "none"
+)
+
+// Response Field Names
+const (
+	// ResponseFieldID represents the response ID field
+	ResponseFieldID = "id"
+	// ResponseFieldObject represents the object type field
+	ResponseFieldObject = "object"
+	// ResponseFieldCreated represents the creation timestamp field
+	ResponseFieldCreated = "created"
+	// ResponseFieldModel represents the model field in response
+	ResponseFieldModel = "model"
+	// ResponseFieldChoices represents the choices array field
+	ResponseFieldChoices = "choices"
+	// ResponseFieldUsage represents the usage statistics field
+	ResponseFieldUsage = "usage"
+)
+
+// Token Usage Field Names
+const (
+	// UsageFieldPromptTokens represents prompt token count
+	UsageFieldPromptTokens = "prompt_tokens"
+	// UsageFieldCompletionTokens represents completion token count
+	UsageFieldCompletionTokens = "completion_tokens"
+	// UsageFieldTotalTokens represents total token count
+	UsageFieldTotalTokens = "total_tokens"
+)
+
+// Stream Event Types
+const (
+	// StreamEventChunk represents a content chunk event
+	StreamEventChunk = "chunk"
+	// StreamEventDone represents stream completion event
+	StreamEventDone = "done"
+	// StreamEventError represents an error event
+	StreamEventError = "error"
+	// StreamEventToolCall represents a tool call event
+	StreamEventToolCall = "tool_call"
+)
+
+// Default Values
+const (
+	// DefaultTemperature is the default temperature value
+	DefaultTemperature = 0.7
+	// DefaultMaxTokens is the default max tokens value
+	DefaultMaxTokens = 2048
+	// DefaultTopP is the default top_p value
+	DefaultTopP = 1.0
+	// DefaultFrequencyPenalty is the default frequency penalty
+	DefaultFrequencyPenalty = 0.0
+	// DefaultPresencePenalty is the default presence penalty
+	DefaultPresencePenalty = 0.0
+)
+
 // ToolCall represents a function/tool call by the LLM
 type ToolCall struct {
 	ID       string `json:"id"`

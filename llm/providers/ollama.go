@@ -1,14 +1,14 @@
 package providers
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
 	"strings"
 	"time"
+
+	"github.com/go-resty/resty/v2"
 
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
@@ -21,7 +21,7 @@ type OllamaClient struct {
 	model       string
 	temperature float64
 	maxTokens   int
-	httpClient  *http.Client
+	client      *resty.Client
 }
 
 // OllamaConfig Ollama 配置
@@ -75,9 +75,9 @@ func NewOllamaClient(config *OllamaConfig) *OllamaClient {
 		model:       config.Model,
 		temperature: config.Temperature,
 		maxTokens:   config.MaxTokens,
-		httpClient: &http.Client{
-			Timeout: time.Duration(config.Timeout) * time.Second,
-		},
+		client: resty.New().
+			SetTimeout(time.Duration(config.Timeout) * time.Second).
+			SetHeader("Content-Type", "application/json"),
 	}
 }
 
@@ -183,32 +183,23 @@ func (c *OllamaClient) Complete(ctx context.Context, req *llm.CompletionRequest)
 	}
 
 	// 发送请求
-	reqBody, err := json.Marshal(ollamaReq)
-	if err != nil {
-		return nil, agentErrors.NewParserInvalidJSONError("request body", err)
-	}
+	resp, err := c.client.R().
+		SetContext(ctx).
+		SetBody(ollamaReq).
+		Post(c.baseURL + "/api/generate")
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/api/generate", bytes.NewBuffer(reqBody))
-	if err != nil {
-		return nil, agentErrors.NewLLMRequestError("ollama", c.getModel(req.Model), err)
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
 		return nil, agentErrors.NewLLMRequestError("ollama", c.getModel(req.Model), err)
 	}
-	defer func() { _ = resp.Body.Close() }()
 
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+	if !resp.IsSuccess() {
 		return nil, agentErrors.NewLLMResponseError("ollama", c.getModel(req.Model),
-			fmt.Sprintf("API error (status %d): %s", resp.StatusCode, string(body)))
+			fmt.Sprintf("API error (status %d): %s", resp.StatusCode(), resp.String()))
 	}
 
 	// 解析响应
 	var ollamaResp ollamaGenerateResponse
-	if err := json.NewDecoder(resp.Body).Decode(&ollamaResp); err != nil {
+	if err := json.NewDecoder(strings.NewReader(resp.String())).Decode(&ollamaResp); err != nil {
 		return nil, agentErrors.NewParserInvalidJSONError("response body", err).
 			WithContext("provider", "ollama")
 	}
@@ -251,34 +242,24 @@ func (c *OllamaClient) Chat(ctx context.Context, messages []llm.Message) (*llm.C
 	}
 
 	// 发送请求
-	reqBody, err := json.Marshal(ollamaReq)
-	if err != nil {
-		return nil, agentErrors.NewParserInvalidJSONError("chat request body", err)
-	}
+	resp, err := c.client.R().
+		SetContext(ctx).
+		SetBody(ollamaReq).
+		Post(c.baseURL + "/api/chat")
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/api/chat", bytes.NewBuffer(reqBody))
-	if err != nil {
-		return nil, agentErrors.NewLLMRequestError("ollama", c.model, err).
-			WithContext("operation", "chat")
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
 		return nil, agentErrors.NewLLMRequestError("ollama", c.model, err).
 			WithContext("operation", "chat")
 	}
-	defer func() { _ = resp.Body.Close() }()
 
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+	if !resp.IsSuccess() {
 		return nil, agentErrors.NewLLMResponseError("ollama", c.model,
-			fmt.Sprintf("chat API error (status %d): %s", resp.StatusCode, string(body)))
+			fmt.Sprintf("chat API error (status %d): %s", resp.StatusCode(), resp.String()))
 	}
 
 	// 解析响应
 	var ollamaResp ollamaChatResponse
-	if err := json.NewDecoder(resp.Body).Decode(&ollamaResp); err != nil {
+	if err := json.NewDecoder(strings.NewReader(resp.String())).Decode(&ollamaResp); err != nil {
 		return nil, agentErrors.NewParserInvalidJSONError("chat response body", err).
 			WithContext("provider", "ollama")
 	}
@@ -309,39 +290,30 @@ func (c *OllamaClient) IsAvailable() bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, "GET", c.baseURL+"/api/tags", nil)
+	resp, err := c.client.R().
+		SetContext(ctx).
+		Get(c.baseURL + "/api/tags")
+
 	if err != nil {
 		return false
 	}
 
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return false
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	return resp.StatusCode == http.StatusOK
+	return resp.IsSuccess()
 }
 
 // ListModels 列出可用的模型
 func (c *OllamaClient) ListModels() ([]string, error) {
-	req, err := http.NewRequest("GET", c.baseURL+"/api/tags", nil)
+	resp, err := c.client.R().
+		Get(c.baseURL + "/api/tags")
+
 	if err != nil {
 		return nil, agentErrors.NewLLMRequestError("ollama", c.model, err).
 			WithContext("operation", "list_models")
 	}
 
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, agentErrors.NewLLMRequestError("ollama", c.model, err).
-			WithContext("operation", "list_models")
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+	if !resp.IsSuccess() {
 		return nil, agentErrors.NewLLMResponseError("ollama", c.model,
-			fmt.Sprintf("list models error (status %d): %s", resp.StatusCode, string(body)))
+			fmt.Sprintf("list models error (status %d): %s", resp.StatusCode(), resp.String()))
 	}
 
 	var result struct {
@@ -350,7 +322,7 @@ func (c *OllamaClient) ListModels() ([]string, error) {
 		} `json:"models"`
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.NewDecoder(strings.NewReader(resp.String())).Decode(&result); err != nil {
 		return nil, agentErrors.NewParserInvalidJSONError("models list response", err).
 			WithContext("provider", "ollama")
 	}
@@ -369,38 +341,27 @@ func (c *OllamaClient) PullModel(modelName string) error {
 		"name": modelName,
 	}
 
-	reqBody, err := json.Marshal(pullReq)
-	if err != nil {
-		return agentErrors.NewParserInvalidJSONError("pull model request", err)
-	}
-
-	req, err := http.NewRequest("POST", c.baseURL+"/api/pull", bytes.NewBuffer(reqBody))
-	if err != nil {
-		return agentErrors.NewLLMRequestError("ollama", modelName, err).
-			WithContext("operation", "pull_model")
-	}
-	req.Header.Set("Content-Type", "application/json")
-
 	// 使用更长的超时时间用于模型下载
-	client := &http.Client{
-		Timeout: 30 * time.Minute,
-	}
+	pullClient := resty.New().
+		SetTimeout(30 * time.Minute).
+		SetHeader("Content-Type", "application/json")
 
-	resp, err := client.Do(req)
+	resp, err := pullClient.R().
+		SetBody(pullReq).
+		Post(c.baseURL + "/api/pull")
+
 	if err != nil {
 		return agentErrors.NewLLMRequestError("ollama", modelName, err).
 			WithContext("operation", "pull_model")
 	}
-	defer func() { _ = resp.Body.Close() }()
 
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+	if !resp.IsSuccess() {
 		return agentErrors.NewLLMResponseError("ollama", modelName,
-			fmt.Sprintf("pull model error (status %d): %s", resp.StatusCode, string(body)))
+			fmt.Sprintf("pull model error (status %d): %s", resp.StatusCode(), resp.String()))
 	}
 
 	// 读取流式响应
-	decoder := json.NewDecoder(resp.Body)
+	decoder := json.NewDecoder(strings.NewReader(resp.String()))
 	for {
 		var status map[string]interface{}
 		if err := decoder.Decode(&status); err != nil {

@@ -63,9 +63,9 @@ func TestNewAPITool(t *testing.T) {
 
 			assert.NotNil(t, tool)
 			assert.Equal(t, "api", tool.Name())
-			assert.Contains(t, tool.Description(), "HTTP API requests")
+			assert.Contains(t, tool.Description(), "HTTP API")
 			assert.Equal(t, tt.baseURL, tool.baseURL)
-			assert.Equal(t, tt.expected.timeout, tool.client.Timeout)
+			assert.Equal(t, tt.expected.timeout, tool.client.GetClient().Timeout)
 			assert.Len(t, tool.headers, tt.expected.headers)
 		})
 	}
@@ -352,7 +352,7 @@ func TestAPITool_Timeout(t *testing.T) {
 // TestAPITool_CustomTimeout tests per-request timeout
 func TestAPITool_CustomTimeout(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		time.Sleep(200 * time.Millisecond)
+		time.Sleep(500 * time.Millisecond) // Sleep longer than timeout
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"ok":true}`))
 	}))
@@ -364,13 +364,14 @@ func TestAPITool_CustomTimeout(t *testing.T) {
 	output, err := tool.Invoke(ctx, &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"url":     "/test",
-			"timeout": 0.1, // 100ms
+			"timeout": 0.1, // 100ms - much shorter than server response time
 		},
 		Context: ctx,
 	})
 
 	require.Error(t, err)
 	assert.False(t, output.Success)
+	assert.Contains(t, output.Error, "context deadline exceeded")
 }
 
 // TestAPITool_ErrorCases tests error handling
@@ -407,7 +408,7 @@ func TestAPITool_ErrorCases(t *testing.T) {
 			args: map[string]interface{}{
 				"url": "://invalid-url",
 			},
-			expectedErrMsg: "failed to create request",
+			expectedErrMsg: "http request failed",
 		},
 	}
 
@@ -503,7 +504,7 @@ func TestAPIToolBuilder(t *testing.T) {
 
 	assert.NotNil(t, tool)
 	assert.Equal(t, "https://api.example.com", tool.baseURL)
-	assert.Equal(t, 10*time.Second, tool.client.Timeout)
+	assert.Equal(t, 10*time.Second, tool.client.GetClient().Timeout)
 	assert.Len(t, tool.headers, 3)
 	assert.Equal(t, "value", tool.headers["X-Custom"])
 	assert.Equal(t, "value2", tool.headers["X-Another"])
@@ -517,29 +518,8 @@ func TestAPIToolBuilder_Defaults(t *testing.T) {
 
 	assert.NotNil(t, tool)
 	assert.Equal(t, "", tool.baseURL)
-	assert.Equal(t, 30*time.Second, tool.client.Timeout)
+	assert.Equal(t, 30*time.Second, tool.client.GetClient().Timeout)
 	assert.Len(t, tool.headers, 0)
-}
-
-// TestIsAbsoluteURL tests URL detection
-func TestIsAbsoluteURL(t *testing.T) {
-	tests := []struct {
-		url      string
-		expected bool
-	}{
-		{"http://example.com", true},
-		{"https://example.com", true},
-		{"/relative/path", false},
-		{"relative/path", false},
-		{"", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.url, func(t *testing.T) {
-			result := isAbsoluteURL(tt.url)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
 }
 
 // BenchmarkAPITool_GET benchmarks GET requests

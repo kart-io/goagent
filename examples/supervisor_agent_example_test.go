@@ -87,139 +87,119 @@ func TestSupervisorAgent_DeepSeek_Example(t *testing.T) {
 	// 1. Define the overall task
 	complexTask := "Research the capital of France, find its current weather, and write a short summary."
 
-		// 2. Create mock sub-agents with specific capabilities
+	// 2. Create mock sub-agents with specific capabilities
 
-		searchAgent := new(MockAgent)
+	searchAgent := new(MockAgent)
 
-		weatherAgent := new(MockAgent)
+	weatherAgent := new(MockAgent)
 
-		summaryAgent := new(MockAgent)
+	summaryAgent := new(MockAgent)
 
-	
+	// 3. Create the DeepSeek LLM client
 
-		// 3. Create the DeepSeek LLM client
+	// IMPORTANT: Set the DEEPSEEK_API_KEY environment variable to run this test.
 
-		// IMPORTANT: Set the DEEPSEEK_API_KEY environment variable to run this test.
+	apiKey := os.Getenv("DEEPSEEK_API_KEY")
 
-		apiKey := os.Getenv("DEEPSEEK_API_KEY")
+	if apiKey == "" {
 
-		if apiKey == "" {
+		t.Skip("DEEPSEEK_API_KEY environment variable not set")
 
-			t.Skip("DEEPSEEK_API_KEY environment variable not set")
+	}
 
-		}
+	config := &llm.Config{
 
-		config := &llm.Config{
+		APIKey: apiKey,
 
-			APIKey: apiKey,
+		Model: "deepseek-chat",
+	}
 
-			Model:  "deepseek-chat",
+	llm, err := providers.NewDeepSeek(config)
 
-		}
+	if err != nil {
 
-		llm, err := providers.NewDeepSeek(config)
+		t.Fatalf("Failed to create DeepSeek client: %v", err)
 
-		if err != nil {
+	}
 
-			t.Fatalf("Failed to create DeepSeek client: %v", err)
+	// 4. Create the SupervisorAgent
 
-		}
+	agentConfig := agents.DefaultSupervisorConfig()
 
-	
+	agentConfig.AggregationStrategy = agents.StrategyHierarchy
 
-		// 4. Create the SupervisorAgent
+	supervisor := agents.NewSupervisorAgent(llm, agentConfig)
 
-		agentConfig := agents.DefaultSupervisorConfig()
+	supervisor.AddSubAgent("search", searchAgent)
 
-		agentConfig.AggregationStrategy = agents.StrategyHierarchy
+	supervisor.AddSubAgent("weather", weatherAgent)
 
-		supervisor := agents.NewSupervisorAgent(llm, agentConfig)
+	supervisor.AddSubAgent("summary", summaryAgent)
 
-		supervisor.AddSubAgent("search", searchAgent)
+	// 5. Mock the responses from the sub-agents
 
-		supervisor.AddSubAgent("weather", weatherAgent)
+	searchAgent.On("Invoke", mock.Anything, mock.Anything).Return(&core.AgentOutput{
 
-		supervisor.AddSubAgent("summary", summaryAgent)
+		Result: "The capital of France is Paris.",
+	}, nil).Once()
 
-	
+	weatherAgent.On("Invoke", mock.Anything, mock.Anything).Return(&core.AgentOutput{
 
-		// 5. Mock the responses from the sub-agents
+		Result: "The weather in Paris is sunny with a temperature of 25°C.",
+	}, nil).Once()
 
-		searchAgent.On("Invoke", mock.Anything, mock.Anything).Return(&core.AgentOutput{
+	summaryAgent.On("Invoke", mock.Anything, mock.Anything).Return(&core.AgentOutput{
 
-			Result: "The capital of France is Paris.",
+		Result: "The capital of France is Paris, where it is currently sunny and 25°C.",
+	}, nil).Once()
 
-		}, nil).Once()
+	// 8. Invoke the SupervisorAgent
 
-		weatherAgent.On("Invoke", mock.Anything, mock.Anything).Return(&core.AgentOutput{
+	finalResult, err := supervisor.Invoke(context.Background(), &core.AgentInput{Task: complexTask})
 
-			Result: "The weather in Paris is sunny with a temperature of 25°C.",
+	// 9. Print and verify the result
 
-		}, nil).Once()
+	if err != nil {
 
-		summaryAgent.On("Invoke", mock.Anything, mock.Anything).Return(&core.AgentOutput{
+		t.Fatalf("Supervisor agent returned an error: %v", err)
 
-			Result: "The capital of France is Paris, where it is currently sunny and 25°C.",
+	}
 
-		}, nil).Once()
+	fmt.Printf("Initial complex task: %s\n\n", complexTask)
 
-	
+	fmt.Println("Supervisor agent final aggregated result:")
 
-		// 8. Invoke the SupervisorAgent
+	fmt.Printf("%+v\n", finalResult.Result)
 
-		finalResult, err := supervisor.Invoke(context.Background(), &core.AgentInput{Task: complexTask})
+	// Example of how you might access the data
 
-	
+	if result, ok := finalResult.Result.(map[string]interface{}); ok {
 
-		// 9. Print and verify the result
+		if searchResult, ok := result["search"].(map[string]interface{}); ok {
 
-		if err != nil {
+			if results, ok := searchResult["results"].([]interface{}); ok {
 
-			t.Fatalf("Supervisor agent returned an error: %v", err)
+				fmt.Println("\nSearch results:")
 
-		}
+				for _, res := range results {
 
-	
-
-		fmt.Printf("Initial complex task: %s\n\n", complexTask)
-
-		fmt.Println("Supervisor agent final aggregated result:")
-
-		fmt.Printf("%+v\n", finalResult.Result)
-
-	
-
-		// Example of how you might access the data
-
-		if result, ok := finalResult.Result.(map[string]interface{}); ok {
-
-			if searchResult, ok := result["search"].(map[string]interface{}); ok {
-
-				if results, ok := searchResult["results"].([]interface{}); ok {
-
-					fmt.Println("\nSearch results:")
-
-					for _, res := range results {
-
-						fmt.Printf("- %s\n", res)
-
-					}
+					fmt.Printf("- %s\n", res)
 
 				}
 
 			}
 
-			if weatherResult, ok := result["weather"].(map[string]interface{}); ok {
+		}
 
-				if results, ok := weatherResult["results"].([]interface{}); ok {
+		if weatherResult, ok := result["weather"].(map[string]interface{}); ok {
 
-					fmt.Println("\nWeather results:")
+			if results, ok := weatherResult["results"].([]interface{}); ok {
 
-					for _, res := range results {
+				fmt.Println("\nWeather results:")
 
-						fmt.Printf("- %s\n", res)
+				for _, res := range results {
 
-					}
+					fmt.Printf("- %s\n", res)
 
 				}
 
@@ -229,4 +209,4 @@ func TestSupervisorAgent_DeepSeek_Example(t *testing.T) {
 
 	}
 
-	
+}

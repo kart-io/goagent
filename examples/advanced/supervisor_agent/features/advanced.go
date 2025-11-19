@@ -32,10 +32,10 @@ type AdvancedFeatures struct {
 	cache               *ResponseCache
 
 	// 批处理 API
-	EnableBatchAPI  bool
-	BatchSize       int
-	BatchTimeout    time.Duration
-	batchProcessor  *BatchProcessor
+	EnableBatchAPI bool
+	BatchSize      int
+	BatchTimeout   time.Duration
+	batchProcessor *BatchProcessor
 
 	// 多模态支持（文本）
 	EnableMultimodal bool
@@ -357,8 +357,8 @@ func (e *EnhancedLLMClient) enhanceMultimodal(req *llm.CompletionRequest) *llm.C
 func (e *EnhancedLLMClient) containsCode(content string) bool {
 	// 简单检测：包含特定关键字或代码块标记
 	return len(content) > 50 && (
-		// 包含代码块
-		len(content) > 100)
+	// 包含代码块
+	len(content) > 100)
 }
 
 // wrapCodeBlock 包装代码块
@@ -426,9 +426,9 @@ func DefaultAdvancedFeatures() *AdvancedFeatures {
 				},
 			},
 		},
-		EnableAutoFallback: true,
-		FallbackProviders:  []string{"openai", "deepseek"},
-		MaxRetries:         3,
+		EnableAutoFallback:  true,
+		FallbackProviders:   []string{"openai", "deepseek"},
+		MaxRetries:          3,
 		EnableResponseCache: true,
 		CacheTTL:            5 * time.Minute,
 		EnableBatchAPI:      false, // 默认关闭批处理

@@ -172,7 +172,6 @@ func runTravelPlannerExample(llmClient llm.Client) {
 	config := agents.DefaultSupervisorConfig()
 	config.AggregationStrategy = agents.StrategyHierarchy
 	config.SubAgentTimeout = ComplexTaskTimeout // 复杂任务需要更长的超时时间
-	config.GlobalTimeout = GlobalTimeout        // 设置全局超时
 
 	supervisor := agents.NewSupervisorAgent(llmClient, config)
 	supervisor.AddSubAgent("city_info", cityInfoAgent)
@@ -224,9 +223,8 @@ func runCodeReviewExample(llmClient llm.Client) {
 
 	// 创建 SupervisorAgent（使用合并聚合来测试）
 	config := agents.DefaultSupervisorConfig()
-	config.AggregationStrategy = agents.StrategyMerge   // 改为合并，可以看到每个 Agent 的独立结果
-	config.SubAgentTimeout = ComplexTaskTimeout         // 复杂的代码分析任务需要更长的超时时间
-	config.GlobalTimeout = GlobalTimeout                // 设置全局超时
+	config.AggregationStrategy = agents.StrategyMerge // 改为合并，可以看到每个 Agent 的独立结果
+	config.SubAgentTimeout = ComplexTaskTimeout       // 复杂的代码分析任务需要更长的超时时间
 
 	supervisor := agents.NewSupervisorAgent(llmClient, config)
 	supervisor.AddSubAgent("security", securityAgent)
