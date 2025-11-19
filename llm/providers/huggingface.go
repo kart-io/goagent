@@ -176,11 +176,12 @@ func (p *HuggingFaceProvider) buildRequest(req *llm.CompletionRequest) *HuggingF
 	// Combine all messages into a single input string
 	var inputs strings.Builder
 	for _, msg := range req.Messages {
-		if msg.Role == "system" {
+		switch msg.Role {
+		case "system":
 			inputs.WriteString(fmt.Sprintf("System: %s\n", msg.Content))
-		} else if msg.Role == "user" {
+		case "user":
 			inputs.WriteString(fmt.Sprintf("User: %s\n", msg.Content))
-		} else if msg.Role == "assistant" {
+		case "assistant":
 			inputs.WriteString(fmt.Sprintf("Assistant: %s\n", msg.Content))
 		}
 	}
