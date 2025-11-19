@@ -476,7 +476,14 @@ func (p *AnthropicProvider) Stream(ctx context.Context, prompt string) (<-chan s
 
 			// Extract text from content_block_delta events
 			if event.Type == EventContentBlockDelta && event.Delta != nil {
-				tokens <- event.Delta.Text
+				// Use select to handle context cancellation
+				select {
+				case tokens <- event.Delta.Text:
+					// Successfully sent
+				case <-ctx.Done():
+					// Context cancelled, exit immediately
+					return
+				}
 			}
 		}
 

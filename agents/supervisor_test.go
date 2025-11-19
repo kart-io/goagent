@@ -249,35 +249,89 @@ func TestSupervisorAgentAddRemoveSubAgent(t *testing.T) {
 	})
 }
 
-// Test Run method with successful execution
-func TestSupervisorAgentRun(t *testing.T) {
-	// Testing the parseTasks method instead of full Run
+// Test Invoke method with successful execution
+func TestSupervisorAgentInvoke(t *testing.T) {
 	mockLLM := &MockLLMClient{}
-	supervisor := NewSupervisorAgent(mockLLM, nil)
+	config := DefaultSupervisorConfig()
+	supervisor := NewSupervisorAgent(mockLLM, config)
 
+	// Mock sub-agents
+	agent1 := new(MockAgent)
+	agent2 := new(MockAgent)
+
+	supervisor.AddSubAgent("agent1", agent1)
+	supervisor.AddSubAgent("agent2", agent2)
+
+	// Mock LLM response for task decomposition
 	mockLLM.On("Complete", mock.Anything, mock.Anything).Return(
 		&llm.CompletionResponse{
-			Content: "task1\ntask2\ntask3",
+			Content: "Task 1 for agent1\nTask 2 for agent2",
 		}, nil,
-	)
+	).Once()
 
+	// Mock Router
+	mockRouter := new(MockRouter)
+	supervisor.Router = mockRouter
+	mockRouter.On("Route", mock.Anything, mock.MatchedBy(func(task Task) bool {
+		return task.Description == "Task 1 for agent1"
+	}), mock.Anything).Return("agent1", nil)
+	mockRouter.On("Route", mock.Anything, mock.MatchedBy(func(task Task) bool {
+		return task.Description == "Task 2 for agent2"
+	}), mock.Anything).Return("agent2", nil)
+	mockRouter.On("UpdateRouting", mock.Anything, mock.Anything).Return()
+
+	// Mock sub-agent responses
+	agent1.On("Invoke", mock.Anything, mock.Anything).Return(&core.AgentOutput{
+		Result: "Result from agent1",
+	}, nil)
+	agent2.On("Invoke", mock.Anything, mock.Anything).Return(&core.AgentOutput{
+		Result: "Result from agent2",
+	}, nil)
+
+	// Run the test
 	ctx := context.Background()
-	tasks, err := supervisor.parseTasks(ctx, "test input")
-	assert.NoError(t, err)
-	assert.NotEmpty(t, tasks)
-	assert.Equal(t, 3, len(tasks))
+	output, err := supervisor.Invoke(ctx, &core.AgentInput{Task: "complex task"})
 
-	// Verify task structure
-	for i, task := range tasks {
-		assert.NotEmpty(t, task.ID)
-		assert.Equal(t, "general", task.Type)
-		assert.NotEmpty(t, task.Description)
-		assert.True(t, task.Priority > 0, "task %d should have positive priority", i)
-	}
+	// Assertions
+	assert.NoError(t, err)
+	assert.NotNil(t, output)
+
+	result, ok := output.Result.(map[string]interface{})
+	assert.True(t, ok)
+
+	results, ok := result["results"].([]interface{})
+	assert.True(t, ok)
+	assert.Len(t, results, 2)
+	assert.Contains(t, results, "Result from agent1")
+	assert.Contains(t, results, "Result from agent2")
+
+	mockLLM.AssertExpectations(t)
+	mockRouter.AssertExpectations(t)
+	agent1.AssertExpectations(t)
+	agent2.AssertExpectations(t)
 }
 
-// Test Run with task parsing error
-func TestSupervisorAgentRunParseError(t *testing.T) {
+// MockRouter for testing
+type MockRouter struct {
+	mock.Mock
+}
+
+func (m *MockRouter) Route(ctx context.Context, task Task, agents map[string]core.Agent) (string, error) {
+	args := m.Called(ctx, task, agents)
+	return args.String(0), args.Error(1)
+}
+
+func (m *MockRouter) GetCapabilities(agentName string) []string {
+	args := m.Called(agentName)
+	return args.Get(0).([]string)
+}
+
+func (m *MockRouter) UpdateRouting(agentName string, performance float64) {
+	m.Called(agentName, performance)
+}
+
+// Test Invoke with task parsing error
+func TestSupervisorAgentInvokeParseError(t *testing.T) {
 	mockLLM := &MockLLMClient{}
 	supervisor := NewSupervisorAgent(mockLLM, nil)
 
@@ -288,7 +342,7 @@ func TestSupervisorAgentRunParseError(t *testing.T) {
 	)
 
 	ctx := context.Background()
-	output, err := supervisor.Run(ctx, "task")
+	output, err := supervisor.Invoke(ctx, &core.AgentInput{Task: "task"})
 
 	assert.Error(t, err)
 	assert.Nil(t, output)
@@ -554,7 +608,7 @@ func TestTaskExecutionErrorHandling(t *testing.T) {
 		MaxConcurrentAgents: 1,
 		SubAgentTimeout:     100 * time.Millisecond,
 		RetryPolicy: &tools.RetryPolicy{
-			MaxRetries:      2,
+			MaxRetries:      1,
 			InitialDelay:    10 * time.Millisecond,
 			MaxDelay:        50 * time.Millisecond,
 			Multiplier:      2.0,
@@ -563,42 +617,57 @@ func TestTaskExecutionErrorHandling(t *testing.T) {
 		RoutingStrategy: StrategyRoundRobin,
 	}
 
-	supervisor := NewSupervisorAgent(mockLLM, config)
-
-	agent := NewMockAgent("agent1", "test")
-	supervisor.AddSubAgent("agent1", agent)
-
 	// Task decomposition
 	mockLLM.On("Complete", mock.Anything, mock.Anything).Return(
-		&llm.CompletionResponse{Content: "task1\ntask2"},
+		&llm.CompletionResponse{Content: "task1"},
 		nil,
 	)
 
 	t.Run("agent not found error", func(t *testing.T) {
-		agent.On("Invoke", mock.Anything, mock.Anything).Return(
-			nil,
-			errors.New("agent execution failed"),
-		)
+		supervisor := NewSupervisorAgent(mockLLM, config)
+		agent := NewMockAgent("agent1", "test")
+		supervisor.AddSubAgent("agent1", agent)
+
+		mockRouter := new(MockRouter)
+		supervisor.Router = mockRouter
+		mockRouter.On("Route", mock.Anything, mock.Anything, mock.Anything).Return("", errors.New("agent not found"))
 
 		ctx := context.Background()
-		output, err := supervisor.Run(ctx, "test")
+		output, err := supervisor.Invoke(ctx, &core.AgentInput{Task: "test"})
 		assert.NoError(t, err)
 		assert.NotNil(t, output)
+
+		// Check that the result contains an error
+		result, ok := output.Result.(map[string]interface{})
+		assert.True(t, ok)
+		errors, ok := result["errors"].([]string)
+		assert.True(t, ok)
+		assert.Len(t, errors, 1)
+		assert.Contains(t, errors[0], "agent not found")
 	})
 
 	t.Run("retryable error", func(t *testing.T) {
-		callCount := 0
-		agent.On("Invoke", mock.Anything, mock.Anything).Run(func(args mock.Arguments) {
-			callCount++
-		}).Return(
-			&core.AgentOutput{Result: "success", Status: "success"},
-			nil,
-		)
+		supervisor := NewSupervisorAgent(mockLLM, config)
+		agent := NewMockAgent("agent1", "test")
+		supervisor.AddSubAgent("agent1", agent)
+		supervisor.Router = NewRoundRobinRouter()
+
+		// Mock the agent to fail once with a retryable error, then succeed.
+		agent.On("Invoke", mock.Anything, mock.Anything).Return(nil, errors.New("temporary failure")).Once()
+		agent.On("Invoke", mock.Anything, mock.Anything).Return(&core.AgentOutput{Result: "success"}, nil).Once()
 
 		ctx := context.Background()
-		output, err := supervisor.Run(ctx, "test")
+		output, err := supervisor.Invoke(ctx, &core.AgentInput{Task: "test"})
 		assert.NoError(t, err)
 		assert.NotNil(t, output)
+
+		// Check that the result is successful
+		result, ok := output.Result.(map[string]interface{})
+		assert.True(t, ok)
+		results, ok := result["results"].([]interface{})
+		assert.True(t, ok)
+		// Only one task will succeed, the other will fail after retry
+		assert.Contains(t, results, "success")
 	})
 }
 

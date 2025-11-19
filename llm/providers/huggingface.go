@@ -476,7 +476,14 @@ func (p *HuggingFaceProvider) Stream(ctx context.Context, prompt string) (<-chan
 
 			// Extract text from token
 			if streamResp.Token.Text != "" && !streamResp.Token.Special {
-				tokens <- streamResp.Token.Text
+				// Use select to handle context cancellation
+				select {
+				case tokens <- streamResp.Token.Text:
+					// Successfully sent
+				case <-ctx.Done():
+					// Context cancelled, exit immediately
+					return
+				}
 			}
 
 			// Stop if we have details (final event)

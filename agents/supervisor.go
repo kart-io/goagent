@@ -174,19 +174,19 @@ func (s *SupervisorAgent) RemoveSubAgent(name string) {
 	delete(s.SubAgents, name)
 }
 
-// Run executes a complex task by coordinating sub-agents
-func (s *SupervisorAgent) Run(ctx context.Context, input interface{}) (*core.AgentOutput, error) {
+// Invoke executes a complex task by coordinating sub-agents
+func (s *SupervisorAgent) Invoke(ctx context.Context, input *core.AgentInput) (*core.AgentOutput, error) {
 	// Start metrics collection
 	startTime := time.Now()
 	s.metrics.IncrementTotalTasks()
 
 	// Parse input into tasks
-	tasks, err := s.parseTasks(ctx, input)
+	tasks, err := s.parseTasks(ctx, input.Task)
 	if err != nil {
 		s.metrics.IncrementFailedTasks()
 		return nil, agentErrors.Wrap(err, agentErrors.CodeAgentExecution, "failed to parse tasks").
 			WithComponent("supervisor_agent").
-			WithOperation("Run")
+			WithOperation("Invoke")
 	}
 
 	// Create execution plan
@@ -350,7 +350,7 @@ func (s *SupervisorAgent) executeTask(ctx context.Context, task Task) TaskResult
 	}
 
 	// Execute task with retry
-	var output interface{}
+	var agentOutput *core.AgentOutput
 	var execErr error
 
 	for attempt := 0; attempt <= s.config.RetryPolicy.MaxRetries; attempt++ {
@@ -374,9 +374,10 @@ func (s *SupervisorAgent) executeTask(ctx context.Context, task Task) TaskResult
 			SessionID:   fmt.Sprintf("%s-%s", task.ID, agentName),
 			Timestamp:   time.Now(),
 		}
-		agentOutput, err := agent.Invoke(taskCtx, agentInput)
+		output, err := agent.Invoke(taskCtx, agentInput)
 		if err == nil {
-			output = agentOutput.Result
+			agentOutput = output
+			execErr = nil
 			break
 		}
 
@@ -388,7 +389,9 @@ func (s *SupervisorAgent) executeTask(ctx context.Context, task Task) TaskResult
 		}
 	}
 
-	result.Output = output
+	if agentOutput != nil {
+		result.Output = agentOutput.Result
+	}
 	result.Error = execErr
 	if execErr != nil {
 		result.ErrorString = execErr.Error()

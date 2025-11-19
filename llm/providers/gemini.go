@@ -196,7 +196,13 @@ func (p *GeminiProvider) Stream(ctx context.Context, prompt string) (<-chan stri
 			// Extract text from response
 			for _, part := range resp.Candidates[0].Content.Parts {
 				if text, ok := part.(genai.Text); ok {
-					tokens <- string(text)
+					select {
+					case tokens <- string(text):
+						// Successfully sent
+					case <-ctx.Done():
+						// Context cancelled, exit immediately
+						return
+					}
 				}
 			}
 		}
@@ -295,7 +301,12 @@ func (p *GeminiProvider) StreamWithTools(ctx context.Context, prompt string, too
 				break
 			}
 			if err != nil {
-				chunks <- ToolChunk{Type: "error", Value: err}
+				select {
+				case chunks <- ToolChunk{Type: "error", Value: err}:
+					// Successfully sent
+				case <-ctx.Done():
+					// Context cancelled, exit immediately
+				}
 				break
 			}
 
@@ -303,15 +314,33 @@ func (p *GeminiProvider) StreamWithTools(ctx context.Context, prompt string, too
 			for _, part := range resp.Candidates[0].Content.Parts {
 				switch v := part.(type) {
 				case genai.Text:
-					chunks <- ToolChunk{Type: "content", Value: string(v)}
+					select {
+					case chunks <- ToolChunk{Type: "content", Value: string(v)}:
+						// Successfully sent
+					case <-ctx.Done():
+						// Context cancelled, exit immediately
+						return
+					}
 				case *genai.FunctionCall:
-					chunks <- ToolChunk{Type: "tool_name", Value: v.Name}
+					select {
+					case chunks <- ToolChunk{Type: "tool_name", Value: v.Name}:
+						// Successfully sent
+					case <-ctx.Done():
+						// Context cancelled, exit immediately
+						return
+					}
 
 					// Send args as chunks
 					for k, val := range v.Args {
-						chunks <- ToolChunk{
+						select {
+						case chunks <- ToolChunk{
 							Type:  "tool_args",
 							Value: map[string]interface{}{k: val},
+						}:
+							// Successfully sent
+						case <-ctx.Done():
+							// Context cancelled, exit immediately
+							return
 						}
 					}
 
@@ -321,13 +350,19 @@ func (p *GeminiProvider) StreamWithTools(ctx context.Context, prompt string, too
 						args[k] = val
 					}
 
-					chunks <- ToolChunk{
+					select {
+					case chunks <- ToolChunk{
 						Type: "tool_call",
 						Value: ToolCall{
 							ID:        generateCallID(),
 							Name:      v.Name,
 							Arguments: args,
 						},
+					}:
+						// Successfully sent
+					case <-ctx.Done():
+						// Context cancelled, exit immediately
+						return
 					}
 				}
 			}
@@ -433,9 +468,15 @@ func (p *GeminiStreamingProvider) StreamWithContext(ctx context.Context, prompt 
 		defer close(events)
 
 		// Send start event
-		events <- StreamEvent{
+		select {
+		case events <- StreamEvent{
 			Type:      "start",
 			Timestamp: time.Now(),
+		}:
+			// Successfully sent
+		case <-ctx.Done():
+			// Context cancelled, exit immediately
+			return
 		}
 
 		iter := cs.SendMessageStream(ctx, genai.Text(prompt))
@@ -445,20 +486,30 @@ func (p *GeminiStreamingProvider) StreamWithContext(ctx context.Context, prompt 
 			resp, err := iter.Next()
 			if errors.Is(err, iterator.Done) {
 				// Send completion event
-				events <- StreamEvent{
+				select {
+				case events <- StreamEvent{
 					Type:      "complete",
 					Timestamp: time.Now(),
 					Metadata: map[string]interface{}{
 						"total_tokens": tokenCount,
 					},
+				}:
+					// Successfully sent
+				case <-ctx.Done():
+					// Context cancelled, exit immediately
 				}
 				break
 			}
 			if err != nil {
-				events <- StreamEvent{
+				select {
+				case events <- StreamEvent{
 					Type:      "error",
 					Error:     err,
 					Timestamp: time.Now(),
+				}:
+					// Successfully sent
+				case <-ctx.Done():
+					// Context cancelled, exit immediately
 				}
 				break
 			}
@@ -467,13 +518,19 @@ func (p *GeminiStreamingProvider) StreamWithContext(ctx context.Context, prompt 
 			for _, part := range resp.Candidates[0].Content.Parts {
 				if text, ok := part.(genai.Text); ok {
 					tokenCount++
-					events <- StreamEvent{
+					select {
+					case events <- StreamEvent{
 						Type:      "token",
 						Content:   string(text),
 						Timestamp: time.Now(),
 						Metadata: map[string]interface{}{
 							"index": tokenCount,
 						},
+					}:
+						// Successfully sent
+					case <-ctx.Done():
+						// Context cancelled, exit immediately
+						return
 					}
 				}
 			}
