@@ -10,20 +10,33 @@ import (
 
 	"github.com/kart-io/goagent/agents"
 	"github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/examples/advanced/supervisor_agent/features"
 	"github.com/kart-io/goagent/examples/testhelpers"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/providers"
 )
 
+// 超时配置常量
+const (
+	// SimpleTaskTimeout 简单任务超时时间
+	SimpleTaskTimeout = 30 * time.Second
+	// ComplexTaskTimeout 复杂任务超时时间（如旅行规划、代码审查）
+	ComplexTaskTimeout = 90 * time.Second
+	// VeryComplexTaskTimeout 非常复杂的任务超时时间
+	VeryComplexTaskTimeout = 120 * time.Second
+	// GlobalTimeout 全局超时时间
+	GlobalTimeout = 300 * time.Second // 5分钟
+)
+
 var (
-	scenario = flag.String("scenario", "basic", "Scenario to run: basic, travel, review, all")
+	scenario = flag.String("scenario", "basic", "Scenario to run: basic, travel, review, advanced, all")
 	provider = flag.String("provider", "deepseek", "LLM provider: deepseek, openai")
 )
 
 func main() {
 	flag.Parse()
 
-	fmt.Println("=== SupervisorAgent 功能示例 ===\n")
+	fmt.Println("=== SupervisorAgent 功能示例 ===")
 
 	// 创建 LLM 客户端
 	llmClient, err := createLLMClient(*provider)
@@ -44,15 +57,19 @@ func main() {
 		runTravelPlannerExample(llmClient)
 	case "review":
 		runCodeReviewExample(llmClient)
+	case "advanced":
+		features.DemoAdvancedFeatures(llmClient)
 	case "all":
 		runBasicExample(llmClient)
 		fmt.Println("\n" + strings.Repeat("=", 80) + "\n")
 		runTravelPlannerExample(llmClient)
 		fmt.Println("\n" + strings.Repeat("=", 80) + "\n")
 		runCodeReviewExample(llmClient)
+		fmt.Println("\n" + strings.Repeat("=", 80) + "\n")
+		features.DemoAdvancedFeatures(llmClient)
 	default:
 		fmt.Printf("❌ 未知场景: %s\n", *scenario)
-		fmt.Println("可用场景: basic, travel, review, all")
+		fmt.Println("可用场景: basic, travel, review, advanced, all")
 		os.Exit(1)
 	}
 }
@@ -122,7 +139,8 @@ func runBasicExample(llmClient llm.Client) {
 	}
 
 	// 输出结果
-	fmt.Println("✅ 执行成功！\n")
+	fmt.Println("✅ 执行成功！")
+	fmt.Println()
 	fmt.Println("📊 最终结果:")
 	fmt.Println(strings.Repeat("-", 80))
 	printResult(result.Result)
@@ -153,7 +171,8 @@ func runTravelPlannerExample(llmClient llm.Client) {
 	// 创建 SupervisorAgent（使用层次聚合）
 	config := agents.DefaultSupervisorConfig()
 	config.AggregationStrategy = agents.StrategyHierarchy
-	config.SubAgentTimeout = 60 * time.Second // 增加超时时间以处理复杂任务
+	config.SubAgentTimeout = ComplexTaskTimeout // 复杂任务需要更长的超时时间
+	config.GlobalTimeout = GlobalTimeout        // 设置全局超时
 
 	supervisor := agents.NewSupervisorAgent(llmClient, config)
 	supervisor.AddSubAgent("city_info", cityInfoAgent)
@@ -179,7 +198,8 @@ func runTravelPlannerExample(llmClient llm.Client) {
 	}
 
 	// 输出结果
-	fmt.Println("✅ 执行成功！\n")
+	fmt.Println("✅ 执行成功！")
+	fmt.Println()
 	fmt.Println("📊 旅行规划:")
 	fmt.Println(strings.Repeat("-", 80))
 	printResult(result.Result)
@@ -204,8 +224,9 @@ func runCodeReviewExample(llmClient llm.Client) {
 
 	// 创建 SupervisorAgent（使用合并聚合来测试）
 	config := agents.DefaultSupervisorConfig()
-	config.AggregationStrategy = agents.StrategyMerge // 改为合并，可以看到每个 Agent 的独立结果
-	config.SubAgentTimeout = 60 * time.Second         // 增加超时时间以处理复杂的代码分析任务
+	config.AggregationStrategy = agents.StrategyMerge   // 改为合并，可以看到每个 Agent 的独立结果
+	config.SubAgentTimeout = ComplexTaskTimeout         // 复杂的代码分析任务需要更长的超时时间
+	config.GlobalTimeout = GlobalTimeout                // 设置全局超时
 
 	supervisor := agents.NewSupervisorAgent(llmClient, config)
 	supervisor.AddSubAgent("security", securityAgent)
@@ -253,7 +274,8 @@ func ProcessUserData(data string) error {
 	}
 
 	// 输出结果
-	fmt.Println("✅ 审查完成！\n")
+	fmt.Println("✅ 审查完成！")
+	fmt.Println()
 	fmt.Println("📊 审查结果:")
 	fmt.Println(strings.Repeat("-", 80))
 	printResult(result.Result)

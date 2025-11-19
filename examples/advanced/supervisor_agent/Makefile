@@ -1,6 +1,6 @@
 # Makefile for SupervisorAgent Examples
 
-.PHONY: help run-basic run-travel run-review run-all build clean check-env
+.PHONY: help run-basic run-travel run-review run-advanced run-all build clean check-env
 
 # 默认目标
 .DEFAULT_GOAL := help
@@ -12,6 +12,7 @@ help:
 	@echo "  make run-basic       - 运行基础示例（多 Agent 协作）"
 	@echo "  make run-travel      - 运行旅行规划示例（层次聚合）"
 	@echo "  make run-review      - 运行代码审查示例（协商聚合）"
+	@echo "  make run-advanced    - 运行高级功能演示（缓存/Tool Calling/Fallback 等）"
 	@echo "  make run-all         - 运行所有示例"
 	@echo ""
 	@echo "  make build           - 编译示例程序"
@@ -54,6 +55,11 @@ run-review: check-env
 	@echo "🚀 运行代码审查示例..."
 	go run main.go -scenario=review
 
+# 运行高级功能演示
+run-advanced: check-env
+	@echo "🚀 运行高级功能演示..."
+	go run main.go -scenario=advanced
+
 # 运行所有示例
 run-all: check-env
 	@echo "🚀 运行所有示例..."
@@ -74,6 +80,7 @@ build:
 	@echo "  ./supervisor_example -scenario=basic"
 	@echo "  ./supervisor_example -scenario=travel"
 	@echo "  ./supervisor_example -scenario=review"
+	@echo "  ./supervisor_example -scenario=advanced"
 	@echo "  ./supervisor_example -scenario=all"
 
 # 清理
