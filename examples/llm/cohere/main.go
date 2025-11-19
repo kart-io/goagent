@@ -44,7 +44,7 @@ func basicExample() {
 	// Initialize provider with API key from environment
 	provider, err := providers.NewCohere(&llm.Config{
 		APIKey: os.Getenv("COHERE_API_KEY"), // or set directly: APIKey: "your-api-key"
-		Model:  "command",                    // Optional: defaults to "command"
+		Model:  "command",                   // Optional: defaults to "command"
 	})
 	if err != nil {
 		log.Fatalf("Failed to create Cohere provider: %v", err)
@@ -70,9 +70,9 @@ func basicExample() {
 // Example 2: Using Different Models
 func modelExample() {
 	models := []string{
-		"command",       // Standard model
-		"command-light", // Faster, lighter model
-		"command-r",     // RAG-optimized model
+		"command",        // Standard model
+		"command-light",  // Faster, lighter model
+		"command-r",      // RAG-optimized model
 		"command-r-plus", // Enhanced RAG model
 	}
 
@@ -164,7 +164,7 @@ func chatHistoryExample() {
 func customParametersExample() {
 	provider, err := providers.NewCohere(&llm.Config{
 		APIKey:      os.Getenv("COHERE_API_KEY"),
-		Temperature: 0.9,  // Higher creativity
+		Temperature: 0.9, // Higher creativity
 		MaxTokens:   200,
 	})
 	if err != nil {
@@ -176,8 +176,8 @@ func customParametersExample() {
 		Messages: []llm.Message{
 			{Role: "user", Content: "Invent a creative name for a coffee shop."},
 		},
-		Temperature: 0.9,    // Override provider default
-		TopP:        0.95,   // Nucleus sampling
+		Temperature: 0.9,              // Override provider default
+		TopP:        0.95,             // Nucleus sampling
 		Stop:        []string{"\n\n"}, // Stop sequences
 	})
 	if err != nil {
