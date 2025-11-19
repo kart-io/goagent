@@ -167,8 +167,8 @@ func NewSmartPlanner(llmClient llm.Client, mem interfaces.MemoryManager, opts ..
 	}
 
 	// Register default strategies
-	p.RegisterStrategy("decomposition", &DecompositionStrategy{})
-	p.RegisterStrategy("backward_chaining", &BackwardChainingStrategy{})
+	p.RegisterStrategy(StrategyDecomposition, &DecompositionStrategy{})
+	p.RegisterStrategy(StrategyBackwardChaining, &BackwardChainingStrategy{})
 	p.RegisterStrategy("hierarchical", &HierarchicalStrategy{})
 
 	// Add default validators
@@ -473,7 +473,7 @@ func (p *SmartPlanner) parsePlan(content string, goal string) *Plan {
 			Description: "Analyze the current situation and gather context",
 			Type:        StepTypeAnalysis,
 			Priority:    1,
-			Status:      StepStatusPending,
+			Status:      StatusPending,
 		},
 		{
 			ID:          "step_2",
@@ -481,7 +481,7 @@ func (p *SmartPlanner) parsePlan(content string, goal string) *Plan {
 			Description: "Execute the main action to achieve the goal",
 			Type:        StepTypeAction,
 			Priority:    2,
-			Status:      StepStatusPending,
+			Status:      StatusPending,
 		},
 		{
 			ID:          "step_3",
@@ -489,7 +489,7 @@ func (p *SmartPlanner) parsePlan(content string, goal string) *Plan {
 			Description: "Validate that the goal has been achieved",
 			Type:        StepTypeValidation,
 			Priority:    3,
-			Status:      StepStatusPending,
+			Status:      StatusPending,
 		},
 	}
 
@@ -509,7 +509,7 @@ func (p *SmartPlanner) parseSteps(content string) []*Step {
 				Name:        fmt.Sprintf("Sub-step %d", i+1),
 				Description: line,
 				Type:        StepTypeAction,
-				Status:      StepStatusPending,
+				Status:      StatusPending,
 			})
 		}
 	}
@@ -523,7 +523,7 @@ func (p *SmartPlanner) selectStrategy(goal string, constraints PlanConstraints) 
 
 	// Simple strategy selection - could be more sophisticated
 	if constraints.MaxSteps > 0 && constraints.MaxSteps < 5 {
-		if strategy, ok := p.strategies["backward_chaining"]; ok {
+		if strategy, ok := p.strategies[StrategyBackwardChaining]; ok {
 			return strategy
 		}
 	}
@@ -535,7 +535,7 @@ func (p *SmartPlanner) selectStrategy(goal string, constraints PlanConstraints) 
 	}
 
 	// Default to decomposition
-	if strategy, ok := p.strategies["decomposition"]; ok {
+	if strategy, ok := p.strategies[StrategyDecomposition]; ok {
 		return strategy
 	}
 

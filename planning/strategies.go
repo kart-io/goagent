@@ -32,7 +32,7 @@ type PlanOptimizer interface {
 type DecompositionStrategy struct{}
 
 func (s *DecompositionStrategy) Name() string {
-	return "decomposition"
+	return StrategyDecomposition
 }
 
 func (s *DecompositionStrategy) Apply(ctx context.Context, plan *Plan, constraints PlanConstraints) (*Plan, error) {
@@ -75,7 +75,7 @@ func (s *DecompositionStrategy) decomposeStep(step *Step) []*Step {
 			Description:       fmt.Sprintf("Prepare data and context for %s", step.Name),
 			Type:              StepTypeAction,
 			Priority:          step.Priority,
-			Status:            StepStatusPending,
+			Status:            StatusPending,
 			EstimatedDuration: 5 * time.Minute,
 		})
 
@@ -85,7 +85,7 @@ func (s *DecompositionStrategy) decomposeStep(step *Step) []*Step {
 			Description:       step.Description,
 			Type:              step.Type,
 			Priority:          step.Priority,
-			Status:            StepStatusPending,
+			Status:            StatusPending,
 			EstimatedDuration: step.EstimatedDuration,
 		})
 
@@ -95,7 +95,7 @@ func (s *DecompositionStrategy) decomposeStep(step *Step) []*Step {
 			Description:       fmt.Sprintf("Verify results of %s", step.Name),
 			Type:              StepTypeValidation,
 			Priority:          step.Priority,
-			Status:            StepStatusPending,
+			Status:            StatusPending,
 			EstimatedDuration: 2 * time.Minute,
 		})
 	} else {
@@ -124,7 +124,7 @@ func (s *DecompositionStrategy) updateDependencies(plan *Plan) {
 type BackwardChainingStrategy struct{}
 
 func (s *BackwardChainingStrategy) Name() string {
-	return "backward_chaining"
+	return StrategyBackwardChaining
 }
 
 func (s *BackwardChainingStrategy) Apply(ctx context.Context, plan *Plan, constraints PlanConstraints) (*Plan, error) {
@@ -137,7 +137,7 @@ func (s *BackwardChainingStrategy) Apply(ctx context.Context, plan *Plan, constr
 		Description: plan.Goal,
 		Type:        StepTypeValidation,
 		Priority:    100,
-		Status:      StepStatusPending,
+		Status:      StatusPending,
 	}
 
 	// Work backward to identify prerequisites
@@ -152,7 +152,7 @@ func (s *BackwardChainingStrategy) Apply(ctx context.Context, plan *Plan, constr
 			Description: prereq.Description,
 			Type:        prereq.Type,
 			Priority:    i + 1,
-			Status:      StepStatusPending,
+			Status:      StatusPending,
 		})
 	}
 
@@ -284,7 +284,7 @@ func (s *HierarchicalStrategy) createPhaseSteps(phase Phase, phaseNum int) []*St
 			Description: "Verify all prerequisites are met",
 			Type:        StepTypeValidation,
 			Priority:    1,
-			Status:      StepStatusPending,
+			Status:      StatusPending,
 		})
 		steps = append(steps, &Step{
 			ID:          fmt.Sprintf("step_%d_2", phaseNum),
@@ -292,7 +292,7 @@ func (s *HierarchicalStrategy) createPhaseSteps(phase Phase, phaseNum int) []*St
 			Description: "Load required configuration",
 			Type:        StepTypeAction,
 			Priority:    2,
-			Status:      StepStatusPending,
+			Status:      StatusPending,
 		})
 	case "Execution":
 		steps = append(steps, &Step{
@@ -301,7 +301,7 @@ func (s *HierarchicalStrategy) createPhaseSteps(phase Phase, phaseNum int) []*St
 			Description: "Process input data",
 			Type:        StepTypeAction,
 			Priority:    1,
-			Status:      StepStatusPending,
+			Status:      StatusPending,
 		})
 		steps = append(steps, &Step{
 			ID:          fmt.Sprintf("step_%d_2", phaseNum),
@@ -309,7 +309,7 @@ func (s *HierarchicalStrategy) createPhaseSteps(phase Phase, phaseNum int) []*St
 			Description: "Apply necessary transformations",
 			Type:        StepTypeAction,
 			Priority:    2,
-			Status:      StepStatusPending,
+			Status:      StatusPending,
 		})
 	case "Finalization":
 		steps = append(steps, &Step{
@@ -318,7 +318,7 @@ func (s *HierarchicalStrategy) createPhaseSteps(phase Phase, phaseNum int) []*St
 			Description: "Validate the output meets requirements",
 			Type:        StepTypeValidation,
 			Priority:    1,
-			Status:      StepStatusPending,
+			Status:      StatusPending,
 		})
 		steps = append(steps, &Step{
 			ID:          fmt.Sprintf("step_%d_2", phaseNum),
@@ -326,7 +326,7 @@ func (s *HierarchicalStrategy) createPhaseSteps(phase Phase, phaseNum int) []*St
 			Description: "Generate execution report",
 			Type:        StepTypeAction,
 			Priority:    2,
-			Status:      StepStatusPending,
+			Status:      StatusPending,
 		})
 	}
 

@@ -1,6 +1,8 @@
 package providers
 
 import (
+	"fmt"
+	"math/rand"
 	"strconv"
 	"time"
 )
@@ -22,4 +24,9 @@ func parseRetryAfter(header string) int {
 	}
 
 	return 60 // Fallback
+}
+
+// generateCallID generates a unique ID for tool calls
+func generateCallID() string {
+	return fmt.Sprintf("call_%d_%d", time.Now().UnixNano(), rand.Intn(100000))
 }

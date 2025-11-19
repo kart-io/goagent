@@ -7,12 +7,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
-	"github.com/kart-io/goagent/llm"
+	agentllm "github.com/kart-io/goagent/llm"
 )
 
 // SiliconFlowClient SiliconFlow LLM 客户端
@@ -39,11 +40,11 @@ type SiliconFlowConfig struct {
 // DefaultSiliconFlowConfig 返回默认 SiliconFlow 配置
 func DefaultSiliconFlowConfig() *SiliconFlowConfig {
 	return &SiliconFlowConfig{
-		BaseURL:     "https://api.siliconflow.cn/v1",
+		BaseURL:     SiliconFlowBaseURL,
 		Model:       "Qwen/Qwen2-7B-Instruct", // 默认使用 Qwen2
-		Temperature: 0.7,
-		MaxTokens:   2000,
-		Timeout:     60,
+		Temperature: DefaultTemperature,
+		MaxTokens:   DefaultMaxTokens,
+		Timeout:     int(DefaultTimeout / time.Second),
 	}
 }
 
@@ -54,11 +55,11 @@ func NewSiliconFlowClient(config *SiliconFlowConfig) (*SiliconFlowClient, error)
 	}
 
 	if config.APIKey == "" {
-		return nil, agentErrors.NewInvalidConfigError("siliconflow", "api_key", "SiliconFlow API key is required")
+		return nil, agentErrors.NewInvalidConfigError(ProviderSiliconFlow, agentllm.ErrorFieldAPIKey, "SiliconFlow API key is required")
 	}
 
 	if config.BaseURL == "" {
-		config.BaseURL = "https://api.siliconflow.cn/v1"
+		config.BaseURL = SiliconFlowBaseURL
 	}
 
 	if config.Model == "" {
@@ -66,15 +67,15 @@ func NewSiliconFlowClient(config *SiliconFlowConfig) (*SiliconFlowClient, error)
 	}
 
 	if config.Temperature == 0 {
-		config.Temperature = 0.7
+		config.Temperature = DefaultTemperature
 	}
 
 	if config.MaxTokens == 0 {
-		config.MaxTokens = 2000
+		config.MaxTokens = DefaultMaxTokens
 	}
 
 	if config.Timeout == 0 {
-		config.Timeout = 60
+		config.Timeout = int(DefaultTimeout / time.Second)
 	}
 
 	return &SiliconFlowClient{
@@ -90,7 +91,7 @@ func NewSiliconFlowClient(config *SiliconFlowConfig) (*SiliconFlowClient, error)
 }
 
 // NewSiliconFlow 创建 SiliconFlow provider（兼容 llm.Config）
-func NewSiliconFlow(config *llm.Config) (*SiliconFlowClient, error) {
+func NewSiliconFlow(config *agentllm.Config) (*SiliconFlowClient, error) {
 	sfConfig := &SiliconFlowConfig{
 		APIKey:      config.APIKey,
 		BaseURL:     config.BaseURL,
@@ -100,10 +101,20 @@ func NewSiliconFlow(config *llm.Config) (*SiliconFlowClient, error) {
 		Timeout:     config.Timeout,
 	}
 
-	if sfConfig.BaseURL == "" {
-		sfConfig.BaseURL = "https://api.siliconflow.cn/v1"
+	if sfConfig.APIKey == "" {
+		sfConfig.APIKey = os.Getenv(agentllm.EnvSiliconFlowAPIKey)
 	}
 
+	if sfConfig.BaseURL == "" {
+		sfConfig.BaseURL = os.Getenv(agentllm.EnvSiliconFlowBaseURL)
+	}
+	if sfConfig.BaseURL == "" {
+		sfConfig.BaseURL = SiliconFlowBaseURL
+	}
+
+	if sfConfig.Model == "" {
+		sfConfig.Model = os.Getenv(agentllm.EnvSiliconFlowModel)
+	}
 	if sfConfig.Model == "" {
 		sfConfig.Model = "Qwen/Qwen2-7B-Instruct"
 	}
@@ -153,7 +164,7 @@ type siliconFlowUsage struct {
 }
 
 // Complete 实现 llm.Client 接口的 Complete 方法
-func (c *SiliconFlowClient) Complete(ctx context.Context, req *llm.CompletionRequest) (*llm.CompletionResponse, error) {
+func (c *SiliconFlowClient) Complete(ctx context.Context, req *agentllm.CompletionRequest) (*agentllm.CompletionResponse, error) {
 	// 转换消息格式
 	messages := make([]siliconFlowMessage, len(req.Messages))
 	for i, msg := range req.Messages {
@@ -191,8 +202,8 @@ func (c *SiliconFlowClient) Complete(ctx context.Context, req *llm.CompletionReq
 		return nil, agentErrors.NewLLMRequestError("siliconflow", c.getModel(req.Model), err)
 	}
 
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
+	httpReq.Header.Set(HeaderContentType, ContentTypeJSON)
+	httpReq.Header.Set(HeaderAuthorization, AuthBearerPrefix+c.apiKey)
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
@@ -218,12 +229,12 @@ func (c *SiliconFlowClient) Complete(ctx context.Context, req *llm.CompletionReq
 	}
 
 	// 构建响应
-	return &llm.CompletionResponse{
+	return &agentllm.CompletionResponse{
 		Content:      strings.TrimSpace(sfResp.Choices[0].Message.Content),
 		Model:        sfResp.Model,
 		TokensUsed:   sfResp.Usage.TotalTokens,
 		FinishReason: sfResp.Choices[0].FinishReason,
-		Provider:     string(llm.ProviderSiliconFlow),
+		Provider:     string(agentllm.ProviderSiliconFlow),
 		Usage: &interfaces.TokenUsage{
 			PromptTokens:     sfResp.Usage.PromptTokens,
 			CompletionTokens: sfResp.Usage.CompletionTokens,
@@ -233,15 +244,15 @@ func (c *SiliconFlowClient) Complete(ctx context.Context, req *llm.CompletionReq
 }
 
 // Chat 实现 llm.Client 接口的 Chat 方法
-func (c *SiliconFlowClient) Chat(ctx context.Context, messages []llm.Message) (*llm.CompletionResponse, error) {
-	return c.Complete(ctx, &llm.CompletionRequest{
+func (c *SiliconFlowClient) Chat(ctx context.Context, messages []agentllm.Message) (*agentllm.CompletionResponse, error) {
+	return c.Complete(ctx, &agentllm.CompletionRequest{
 		Messages: messages,
 	})
 }
 
 // Provider 返回提供商类型
-func (c *SiliconFlowClient) Provider() llm.Provider {
-	return llm.ProviderSiliconFlow
+func (c *SiliconFlowClient) Provider() agentllm.Provider {
+	return agentllm.ProviderSiliconFlow
 }
 
 // IsAvailable 检查 SiliconFlow 是否可用
@@ -256,8 +267,8 @@ func (c *SiliconFlowClient) IsAvailable() bool {
 	defer cancel()
 
 	// 发送一个最小的测试请求
-	testReq := &llm.CompletionRequest{
-		Messages: []llm.Message{
+	testReq := &agentllm.CompletionRequest{
+		Messages: []agentllm.Message{
 			{Role: "user", Content: "Hi"},
 		},
 		MaxTokens: 1,
