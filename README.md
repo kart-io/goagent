@@ -10,7 +10,7 @@ GoAgent is a comprehensive, production-ready AI agent framework for Go, inspired
 
 - **Intelligent Agents** - Autonomous agents with reasoning capabilities and tool execution
 - **Flexible Architecture** - 4-layer modular design with clear separation of concerns
-- **LLM Abstraction** - Support for multiple LLM providers (OpenAI, Gemini, DeepSeek)
+- **LLM Abstraction** - Support for multiple LLM providers (OpenAI, Anthropic Claude, Cohere, HuggingFace, Gemini, DeepSeek)
 - **Memory Management** - Conversation history, case-based reasoning, and vector storage
 - **Tool System** - Extensible tool registry with parallel execution and dependency management
 - **State Management** - Thread-safe state with checkpointing and persistence
@@ -267,7 +267,7 @@ go run examples/basic/01-simple-agent/main.go
 
 ## Roadmap
 
-- [ ] Additional LLM providers (Anthropic Claude, Cohere, Hugging Face)
+- [x] Additional LLM providers (Anthropic Claude, Cohere, Hugging Face)
 - [ ] Production vector database integration (Qdrant, Milvus, Pinecone)
 - [ ] Graphical workflow designer
 - [ ] Enhanced monitoring dashboard
