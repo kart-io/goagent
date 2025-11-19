@@ -1279,20 +1279,20 @@ func (t *FileOperationsTool) calculateSHA256(data []byte) string {
 func (t *FileOperationsTool) detectMimeType(data []byte) string {
 	// Simple detection based on content
 	if len(data) == 0 {
-		return "application/octet-stream"
+		return interfaces.ContentTypeOctetStream
 	}
 
 	// Check for common text formats
 	if json.Valid(data) {
-		return "application/json"
+		return interfaces.ContentTypeJSON
 	}
 
 	// Check for binary
 	if t.isBinary(data) {
-		return "application/octet-stream"
+		return interfaces.ContentTypeOctetStream
 	}
 
-	return "text/plain"
+	return interfaces.ContentTypeText
 }
 
 func (t *FileOperationsTool) isBinary(data []byte) bool {

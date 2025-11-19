@@ -13,6 +13,7 @@ import (
 	agentcore "github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/parsers"
 	"github.com/kart-io/goagent/tools"
 )
 
@@ -793,10 +794,10 @@ Action Input: {}`,
 		stepTypes[step.Action]++
 	}
 
-	if stepTypes["Thought"] == 0 {
+	if stepTypes[parsers.FieldThought] == 0 {
 		t.Error("Missing Thought step")
 	}
-	if stepTypes["Action"] == 0 {
+	if stepTypes[parsers.FieldAction] == 0 {
 		t.Error("Missing Action step")
 	}
 	if stepTypes["Final Answer"] == 0 {

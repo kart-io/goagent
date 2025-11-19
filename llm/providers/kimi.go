@@ -1,15 +1,14 @@
 package providers
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/go-resty/resty/v2"
 
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
@@ -24,7 +23,7 @@ type KimiClient struct {
 	model       string
 	temperature float64
 	maxTokens   int
-	httpClient  *http.Client
+	client      *resty.Client
 }
 
 // KimiConfig Kimi 配置
@@ -84,9 +83,10 @@ func NewKimiClient(config *KimiConfig) (*KimiClient, error) {
 		model:       config.Model,
 		temperature: config.Temperature,
 		maxTokens:   config.MaxTokens,
-		httpClient: &http.Client{
-			Timeout: time.Duration(config.Timeout) * time.Second,
-		},
+		client: resty.New().
+			SetTimeout(time.Duration(config.Timeout) * time.Second).
+			SetHeader(HeaderContentType, ContentTypeJSON).
+			SetHeader(HeaderAuthorization, AuthBearerPrefix+config.APIKey),
 	}, nil
 }
 
@@ -205,32 +205,18 @@ func (c *KimiClient) Complete(ctx context.Context, req *agentllm.CompletionReque
 	}
 
 	// 发送请求
-	reqBody, err := json.Marshal(kimiReq)
-	if err != nil {
-		return nil, agentErrors.NewParserInvalidJSONError("request body", err)
-	}
+	resp, err := c.client.R().
+		SetContext(ctx).
+		SetBody(kimiReq).
+		Post(c.baseURL + "/chat/completions")
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/chat/completions", bytes.NewBuffer(reqBody))
-	if err != nil {
-		return nil, agentErrors.NewLLMRequestError("kimi", c.getModel(req.Model), err)
-	}
-
-	httpReq.Header.Set(HeaderContentType, ContentTypeJSON)
-	httpReq.Header.Set(HeaderAuthorization, AuthBearerPrefix+c.apiKey)
-
-	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
 		return nil, agentErrors.NewLLMRequestError("kimi", c.getModel(req.Model), err)
 	}
-	defer func() { _ = resp.Body.Close() }()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, agentErrors.NewLLMRequestError("kimi", c.getModel(req.Model), err).
-			WithContext("operation", "read_response")
-	}
+	body := resp.Body()
 
-	if resp.StatusCode != http.StatusOK {
+	if !resp.IsSuccess() {
 		var errResp kimiError
 		if err := json.Unmarshal(body, &errResp); err == nil && errResp.Error.Message != "" {
 			return nil, agentErrors.NewLLMResponseError("kimi", c.getModel(req.Model),
@@ -238,7 +224,7 @@ func (c *KimiClient) Complete(ctx context.Context, req *agentllm.CompletionReque
 					errResp.Error.Message, errResp.Error.Type, errResp.Error.Code))
 		}
 		return nil, agentErrors.NewLLMResponseError("kimi", c.getModel(req.Model),
-			fmt.Sprintf("API error (status %d): %s", resp.StatusCode, string(body)))
+			fmt.Sprintf("API error (status %d): %s", resp.StatusCode(), string(body)))
 	}
 
 	// 解析响应
@@ -290,20 +276,15 @@ func (c *KimiClient) IsAvailable() bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, "GET", c.baseURL+"/models", nil)
+	resp, err := c.client.R().
+		SetContext(ctx).
+		Get(c.baseURL + "/models")
+
 	if err != nil {
 		return false
 	}
 
-	req.Header.Set(HeaderAuthorization, AuthBearerPrefix+c.apiKey)
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return false
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	return resp.StatusCode == http.StatusOK
+	return resp.IsSuccess()
 }
 
 // ListModels 列出可用的模型
@@ -311,25 +292,18 @@ func (c *KimiClient) ListModels() ([]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, "GET", c.baseURL+"/models", nil)
+	resp, err := c.client.R().
+		SetContext(ctx).
+		Get(c.baseURL + "/models")
+
 	if err != nil {
 		return nil, agentErrors.NewLLMRequestError("kimi", c.model, err).
 			WithContext("operation", "list_models")
 	}
 
-	req.Header.Set(HeaderAuthorization, AuthBearerPrefix+c.apiKey)
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, agentErrors.NewLLMRequestError("kimi", c.model, err).
-			WithContext("operation", "list_models")
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+	if !resp.IsSuccess() {
 		return nil, agentErrors.NewLLMResponseError("kimi", c.model,
-			fmt.Sprintf("failed to list models (status %d): %s", resp.StatusCode, string(body)))
+			fmt.Sprintf("failed to list models (status %d): %s", resp.StatusCode(), resp.String()))
 	}
 
 	var result struct {
@@ -341,7 +315,7 @@ func (c *KimiClient) ListModels() ([]string, error) {
 		} `json:"data"`
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.NewDecoder(strings.NewReader(resp.String())).Decode(&result); err != nil {
 		return nil, agentErrors.NewParserInvalidJSONError("models list response", err).
 			WithContext("provider", "kimi")
 	}

@@ -2,16 +2,16 @@ package providers
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"math/rand"
-	"net/http"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/go-resty/resty/v2"
 
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
@@ -21,7 +21,7 @@ import (
 // AnthropicProvider implements LLM interface for Anthropic Claude
 type AnthropicProvider struct {
 	config      *agentllm.Config
-	httpClient  *http.Client
+	client      *resty.Client
 	apiKey      string
 	baseURL     string
 	model       string
@@ -146,19 +146,16 @@ func NewAnthropic(config *agentllm.Config) (*AnthropicProvider, error) {
 		timeout = DefaultTimeout
 	}
 
-	// Create HTTP client with connection pooling
-	httpClient := &http.Client{
-		Timeout: timeout,
-		Transport: &http.Transport{
-			MaxIdleConns:        MaxIdleConns,
-			MaxIdleConnsPerHost: MaxIdleConnsPerHost,
-			IdleConnTimeout:     IdleConnTimeout,
-		},
-	}
+	// Create resty client
+	client := resty.New().
+		SetTimeout(timeout).
+		SetHeader(HeaderContentType, ContentTypeJSON).
+		SetHeader(HeaderXAPIKey, apiKey).
+		SetHeader(HeaderAnthropicVersion, AnthropicAPIVersion)
 
 	provider := &AnthropicProvider{
 		config:      config,
-		httpClient:  httpClient,
+		client:      client,
 		apiKey:      apiKey,
 		baseURL:     baseURL,
 		model:       model,
@@ -230,53 +227,37 @@ func (p *AnthropicProvider) buildRequest(req *agentllm.CompletionRequest) *Anthr
 
 // execute performs a single HTTP request to Anthropic API
 func (p *AnthropicProvider) execute(ctx context.Context, req *AnthropicRequest) (*AnthropicResponse, error) {
-	// Serialize request
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, agentErrors.Wrap(err, agentErrors.CodeInternal, ErrFailedMarshalRequest)
-	}
+	// Execute request using resty
+	resp, err := p.client.R().
+		SetContext(ctx).
+		SetBody(req).
+		Post(p.baseURL + AnthropicMessagesPath)
 
-	// Create HTTP request
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", p.baseURL+AnthropicMessagesPath, bytes.NewReader(body))
-	if err != nil {
-		return nil, agentErrors.Wrap(err, agentErrors.CodeInternal, ErrFailedCreateRequest)
-	}
-
-	// Set headers
-	httpReq.Header.Set(HeaderContentType, ContentTypeJSON)
-	httpReq.Header.Set(HeaderXAPIKey, p.apiKey)
-	httpReq.Header.Set(HeaderAnthropicVersion, AnthropicAPIVersion)
-
-	// Execute request
-	httpResp, err := p.httpClient.Do(httpReq)
 	if err != nil {
 		return nil, agentErrors.NewLLMRequestError(ProviderAnthropic, p.model, err)
 	}
-	defer func() {
-		_ = httpResp.Body.Close()
-	}()
 
 	// Check status code
-	if httpResp.StatusCode != http.StatusOK {
-		return nil, p.handleHTTPError(httpResp, req.Model)
+	if !resp.IsSuccess() {
+		return nil, p.handleHTTPError(resp, req.Model)
 	}
 
 	// Deserialize response
-	var resp AnthropicResponse
-	if err := json.NewDecoder(httpResp.Body).Decode(&resp); err != nil {
+	var anthropicResp AnthropicResponse
+	if err := json.NewDecoder(strings.NewReader(resp.String())).Decode(&anthropicResp); err != nil {
 		return nil, agentErrors.NewLLMResponseError(ProviderAnthropic, req.Model, ErrFailedDecodeResponse)
 	}
 
-	return &resp, nil
+	return &anthropicResp, nil
 }
 
 // handleHTTPError maps HTTP errors to AgentError
-func (p *AnthropicProvider) handleHTTPError(resp *http.Response, model string) error {
+func (p *AnthropicProvider) handleHTTPError(resp *resty.Response, model string) error {
 	// Try to parse error response
 	var errResp AnthropicErrorResponse
-	if err := json.NewDecoder(resp.Body).Decode(&errResp); err == nil && errResp.Error.Message != "" {
+	if err := json.NewDecoder(strings.NewReader(resp.String())).Decode(&errResp); err == nil && errResp.Error.Message != "" {
 		// Use error message from API
-		switch resp.StatusCode {
+		switch resp.StatusCode() {
 		case 400:
 			return agentErrors.NewInvalidInputError(ProviderAnthropic, "request", errResp.Error.Message)
 		case 401:
@@ -286,7 +267,7 @@ func (p *AnthropicProvider) handleHTTPError(resp *http.Response, model string) e
 		case 404:
 			return agentErrors.NewLLMResponseError(ProviderAnthropic, model, errResp.Error.Message)
 		case 429:
-			retryAfter := parseRetryAfter(resp.Header.Get("Retry-After"))
+			retryAfter := parseRetryAfter(resp.Header().Get("Retry-After"))
 			return agentErrors.NewLLMRateLimitError(ProviderAnthropic, model, retryAfter)
 		case 500, 502, 503, 504:
 			return agentErrors.NewLLMRequestError(ProviderAnthropic, model, fmt.Errorf("server error: %s", errResp.Error.Message))
@@ -294,7 +275,7 @@ func (p *AnthropicProvider) handleHTTPError(resp *http.Response, model string) e
 	}
 
 	// Fallback error handling
-	switch resp.StatusCode {
+	switch resp.StatusCode() {
 	case 400:
 		return agentErrors.NewInvalidInputError(ProviderAnthropic, "request", StatusBadRequest)
 	case 401:
@@ -304,12 +285,12 @@ func (p *AnthropicProvider) handleHTTPError(resp *http.Response, model string) e
 	case 404:
 		return agentErrors.NewLLMResponseError(ProviderAnthropic, model, StatusModelNotFound)
 	case 429:
-		retryAfter := parseRetryAfter(resp.Header.Get("Retry-After"))
+		retryAfter := parseRetryAfter(resp.Header().Get("Retry-After"))
 		return agentErrors.NewLLMRateLimitError(ProviderAnthropic, model, retryAfter)
 	case 500, 502, 503, 504:
-		return agentErrors.NewLLMRequestError(ProviderAnthropic, model, fmt.Errorf("server error: %d", resp.StatusCode))
+		return agentErrors.NewLLMRequestError(ProviderAnthropic, model, fmt.Errorf("server error: %d", resp.StatusCode()))
 	default:
-		return agentErrors.NewLLMRequestError(ProviderAnthropic, model, fmt.Errorf("unexpected status: %d", resp.StatusCode))
+		return agentErrors.NewLLMRequestError(ProviderAnthropic, model, fmt.Errorf("unexpected status: %d", resp.StatusCode()))
 	}
 }
 
@@ -421,41 +402,28 @@ func (p *AnthropicProvider) Stream(ctx context.Context, prompt string) (<-chan s
 		Stream:      true,
 	}
 
-	// Create HTTP request
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, agentErrors.Wrap(err, agentErrors.CodeInternal, ErrFailedMarshalRequest)
-	}
+	// Create custom client for streaming with Accept header
+	streamClient := p.client.R().
+		SetContext(ctx).
+		SetHeader(HeaderAccept, AcceptEventStream).
+		SetBody(req)
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", p.baseURL+AnthropicMessagesPath, bytes.NewReader(body))
-	if err != nil {
-		return nil, agentErrors.NewLLMRequestError(ProviderAnthropic, p.model, err)
-	}
-
-	httpReq.Header.Set(HeaderContentType, ContentTypeJSON)
-	httpReq.Header.Set(HeaderXAPIKey, p.apiKey)
-	httpReq.Header.Set(HeaderAnthropicVersion, AnthropicAPIVersion)
-	httpReq.Header.Set(HeaderAccept, AcceptEventStream)
-
-	// Execute request
-	httpResp, err := p.httpClient.Do(httpReq)
+	// Execute streaming request
+	resp, err := streamClient.Post(p.baseURL + AnthropicMessagesPath)
 	if err != nil {
 		return nil, agentErrors.NewLLMRequestError(ProviderAnthropic, p.model, err)
 	}
 
-	if httpResp.StatusCode != http.StatusOK {
-		_ = httpResp.Body.Close()
-		return nil, p.handleHTTPError(httpResp, p.model)
+	if !resp.IsSuccess() {
+		return nil, p.handleHTTPError(resp, p.model)
 	}
 
 	// Start goroutine to read stream
 	go func() {
 		defer close(tokens)
-		defer func() {
-			_ = httpResp.Body.Close()
-		}()
 
-		scanner := bufio.NewScanner(httpResp.Body)
+		// Use scanner to read SSE stream
+		scanner := bufio.NewScanner(strings.NewReader(resp.String()))
 		for scanner.Scan() {
 			line := scanner.Text()
 

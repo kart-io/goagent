@@ -101,4 +101,3 @@ func (l *simpleLogger) Sync() error {
 func (l *simpleLogger) Flush() error {
 	return nil
 }
-

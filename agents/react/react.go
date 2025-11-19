@@ -53,7 +53,7 @@ func NewReActAgent(config ReActConfig) *ReActAgent {
 	}
 
 	if len(config.StopPattern) == 0 {
-		config.StopPattern = []string{"Final Answer:"}
+		config.StopPattern = []string{parsers.MarkerFinalAnswer}
 	}
 
 	if config.PromptPrefix == "" {
@@ -188,7 +188,7 @@ func (r *ReActAgent) Invoke(ctx context.Context, input *agentcore.AgentInput) (*
 		// 记录思考步骤
 		output.ReasoningSteps = append(output.ReasoningSteps, agentcore.ReasoningStep{
 			Step:        step + 1,
-			Action:      "Thought",
+			Action:      parsers.FieldThought,
 			Description: thought,
 			Result:      "",
 			Duration:    time.Since(llmStart),
@@ -216,7 +216,7 @@ func (r *ReActAgent) Invoke(ctx context.Context, input *agentcore.AgentInput) (*
 		// 记录行动步骤
 		output.ReasoningSteps = append(output.ReasoningSteps, agentcore.ReasoningStep{
 			Step:        step + 1,
-			Action:      "Action",
+			Action:      parsers.FieldAction,
 			Description: fmt.Sprintf("Tool: %s", action),
 			Result:      fmt.Sprintf("%v", observation),
 			Duration:    time.Since(toolStart),
@@ -225,8 +225,11 @@ func (r *ReActAgent) Invoke(ctx context.Context, input *agentcore.AgentInput) (*
 		})
 
 		// 更新 scratchpad
-		scratchpad += fmt.Sprintf("\nThought: %s\nAction: %s\nAction Input: %v\nObservation: %v\n",
-			thought, action, actionInput, observation)
+		scratchpad += fmt.Sprintf("\n%s %s\n%s %s\n%s %v\n%s %v\n",
+			parsers.MarkerThought, thought,
+			parsers.MarkerAction, action,
+			parsers.MarkerActionInput, actionInput,
+			parsers.MarkerObservation, observation)
 
 		// 检查是否达到停止条件
 		if r.shouldStop(llmOutput) {
@@ -236,11 +239,11 @@ func (r *ReActAgent) Invoke(ctx context.Context, input *agentcore.AgentInput) (*
 
 	// 构建最终输出
 	if finalAnswer != "" {
-		output.Status = "success"
+		output.Status = interfaces.StatusSuccess
 		output.Result = finalAnswer
 		output.Message = "Task completed successfully"
 	} else {
-		output.Status = "partial"
+		output.Status = interfaces.StatusPartial
 		output.Result = scratchpad
 		output.Message = fmt.Sprintf("Reached max steps (%d) without final answer", r.maxSteps)
 	}
@@ -488,12 +491,12 @@ Use the following format:
 Begin!`
 
 const defaultReActPromptSuffix = `Question: {input}
-Thought:`
+` + parsers.MarkerThought
 
-const defaultReActFormatInstructions = `Thought: you should always think about what to do
-Action: the action to take, should be one of [{tool_names}]
-Action Input: the input to the action
-Observation: the result of the action
+const defaultReActFormatInstructions = parsers.MarkerThought + ` you should always think about what to do
+` + parsers.MarkerAction + ` the action to take, should be one of [{tool_names}]
+` + parsers.MarkerActionInput + ` the input to the action
+` + parsers.MarkerObservation + ` the result of the action
 ... (this Thought/Action/Action Input/Observation can repeat N times)
-Thought: I now know the final answer
-Final Answer: the final answer to the original input question`
+` + parsers.MarkerThought + ` I now know the final answer
+` + parsers.MarkerFinalAnswer + ` the final answer to the original input question`

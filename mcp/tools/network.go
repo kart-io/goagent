@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"strings"
 	"time"
+
+	"github.com/go-resty/resty/v2"
 
 	"github.com/kart-io/goagent/mcp/core"
 )
@@ -15,7 +15,7 @@ import (
 // HTTPRequestTool HTTP 请求工具
 type HTTPRequestTool struct {
 	*core.BaseTool
-	client *http.Client
+	client *resty.Client
 }
 
 // NewHTTPRequestTool 创建 HTTP 请求工具
@@ -58,9 +58,8 @@ func NewHTTPRequestTool() *HTTPRequestTool {
 			"network",
 			schema,
 		),
-		client: &http.Client{
-			Timeout: 30 * time.Second,
-		},
+		client: resty.New().
+			SetTimeout(30 * time.Second),
 	}
 
 	return tool
@@ -77,38 +76,67 @@ func (t *HTTPRequestTool) Execute(ctx context.Context, input map[string]interfac
 	}
 
 	// 创建请求
-	var bodyReader io.Reader
-	if body, ok := input["body"].(string); ok && body != "" {
-		bodyReader = strings.NewReader(body)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, method, url, bodyReader)
-	if err != nil {
-		return &core.ToolResult{
-			Success:   false,
-			Error:     fmt.Sprintf("failed to create request: %v", err),
-			ErrorCode: "REQUEST_ERROR",
-			Duration:  time.Since(startTime),
-			Timestamp: time.Now(),
-		}, err
-	}
+	req := t.client.R().SetContext(ctx)
 
 	// 设置请求头
 	if headers, ok := input["headers"].(map[string]interface{}); ok {
 		for key, value := range headers {
 			if strValue, ok := value.(string); ok {
-				req.Header.Set(key, strValue)
+				req.SetHeader(key, strValue)
 			}
 		}
 	}
 
+	// 设置请求体
+	if body, ok := input["body"].(string); ok && body != "" {
+		req.SetBody(body)
+	}
+
 	// 设置超时
+	client := t.client
 	if timeout, ok := input["timeout"].(float64); ok {
-		t.client.Timeout = time.Duration(timeout) * time.Second
+		client = resty.New().
+			SetTimeout(time.Duration(timeout) * time.Second)
+		req = client.R().SetContext(ctx)
+
+		// 重新设置headers和body
+		if headers, ok := input["headers"].(map[string]interface{}); ok {
+			for key, value := range headers {
+				if strValue, ok := value.(string); ok {
+					req.SetHeader(key, strValue)
+				}
+			}
+		}
+		if body, ok := input["body"].(string); ok && body != "" {
+			req.SetBody(body)
+		}
 	}
 
 	// 发送请求
-	resp, err := t.client.Do(req)
+	var resp *resty.Response
+	var err error
+
+	switch strings.ToUpper(method) {
+	case "GET":
+		resp, err = req.Get(url)
+	case "POST":
+		resp, err = req.Post(url)
+	case "PUT":
+		resp, err = req.Put(url)
+	case "DELETE":
+		resp, err = req.Delete(url)
+	case "PATCH":
+		resp, err = req.Patch(url)
+	default:
+		return &core.ToolResult{
+			Success:   false,
+			Error:     fmt.Sprintf("unsupported HTTP method: %s", method),
+			ErrorCode: "METHOD_ERROR",
+			Duration:  time.Since(startTime),
+			Timestamp: time.Now(),
+		}, fmt.Errorf("unsupported method: %s", method)
+	}
+
 	if err != nil {
 		return &core.ToolResult{
 			Success:   false,
@@ -118,19 +146,9 @@ func (t *HTTPRequestTool) Execute(ctx context.Context, input map[string]interfac
 			Timestamp: time.Now(),
 		}, err
 	}
-	defer func() { _ = resp.Body.Close() }()
 
 	// 读取响应体
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return &core.ToolResult{
-			Success:   false,
-			Error:     fmt.Sprintf("failed to read response: %v", err),
-			ErrorCode: "READ_ERROR",
-			Duration:  time.Since(startTime),
-			Timestamp: time.Now(),
-		}, err
-	}
+	respBody := resp.Body()
 
 	// 尝试解析为 JSON
 	var jsonBody interface{}
@@ -139,9 +157,9 @@ func (t *HTTPRequestTool) Execute(ctx context.Context, input map[string]interfac
 	result := &core.ToolResult{
 		Success: true,
 		Data: map[string]interface{}{
-			"status_code": resp.StatusCode,
-			"status":      resp.Status,
-			"headers":     resp.Header,
+			"status_code": resp.StatusCode(),
+			"status":      resp.Status(),
+			"headers":     resp.Header(),
 			"body":        string(respBody),
 			"json":        jsonBody,
 			"size":        len(respBody),

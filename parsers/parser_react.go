@@ -38,10 +38,10 @@ type ReActOutputParser struct {
 func NewReActOutputParser() *ReActOutputParser {
 	return &ReActOutputParser{
 		BaseOutputParser:   NewBaseOutputParser[*ReActOutput](),
-		thoughtPattern:     regexp.MustCompile(`(?i)Thought:\s*(.+?)(?:\n|$)`),
-		actionPattern:      regexp.MustCompile(`(?i)Action:\s*(.+?)(?:\n|$)`),
-		actionInputPattern: regexp.MustCompile(`(?i)Action Input:\s*(.+?)(?:\n|$)`),
-		finalAnswerPattern: regexp.MustCompile(`(?i)Final Answer:\s*(.+?)(?:\n\n|$)`),
+		thoughtPattern:     regexp.MustCompile(`(?i)` + regexp.QuoteMeta(MarkerThought) + `\s*(.+?)(?:\n|$)`),
+		actionPattern:      regexp.MustCompile(`(?i)` + regexp.QuoteMeta(MarkerAction) + `\s*(.+?)(?:\n|$)`),
+		actionInputPattern: regexp.MustCompile(`(?i)` + regexp.QuoteMeta(MarkerActionInput) + `\s*(.+?)(?:\n|$)`),
+		finalAnswerPattern: regexp.MustCompile(`(?i)` + regexp.QuoteMeta(MarkerFinalAnswer) + `\s*(.+?)(?:\n\n|$)`),
 	}
 }
 
@@ -96,13 +96,13 @@ func (p *ReActOutputParser) Parse(ctx context.Context, text string) (*ReActOutpu
 func (p *ReActOutputParser) GetFormatInstructions() string {
 	return `Use the following format:
 
-Thought: you should always think about what to do
-Action: the action to take, should be one of the available tools
-Action Input: the input to the action (in JSON format if multiple parameters)
-Observation: the result of the action
+` + MarkerThought + ` you should always think about what to do
+` + MarkerAction + ` the action to take, should be one of the available tools
+` + MarkerActionInput + ` the input to the action (in JSON format if multiple parameters)
+` + MarkerObservation + ` the result of the action
 ... (this Thought/Action/Action Input/Observation can repeat N times)
-Thought: I now know the final answer
-Final Answer: the final answer to the original input question`
+` + MarkerThought + ` I now know the final answer
+` + MarkerFinalAnswer + ` the final answer to the original input question`
 }
 
 // ParseWithRetry 带重试的解析

@@ -8,6 +8,7 @@ import (
 
 	agentcore "github.com/kart-io/goagent/core"
 	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/logger/core"
 )
 
@@ -83,7 +84,7 @@ func (a *DatabaseAgent) Execute(ctx context.Context, input *agentcore.AgentInput
 
 	// 构建输出
 	output := &agentcore.AgentOutput{
-		Status: "success",
+		Status: interfaces.StatusSuccess,
 		Result: result,
 		ToolCalls: []agentcore.ToolCall{
 			{
@@ -101,7 +102,7 @@ func (a *DatabaseAgent) Execute(ctx context.Context, input *agentcore.AgentInput
 	}
 
 	if err != nil {
-		output.Status = "failed"
+		output.Status = interfaces.StatusFailed
 		output.Message = "Database operation failed"
 		output.ToolCalls[0].Error = err.Error()
 		return output, agentErrors.Wrap(err, agentErrors.CodeAgentExecution, "database operation failed").

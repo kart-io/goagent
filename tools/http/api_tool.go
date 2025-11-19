@@ -1,13 +1,12 @@
 package http
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"time"
+
+	"github.com/go-resty/resty/v2"
 
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
@@ -16,10 +15,10 @@ import (
 
 // APITool HTTP API 调用工具
 //
-// 提供通用的 HTTP 请求能力
+// 提供通用的 HTTP 请求能力，使用 resty 客户端
 type APITool struct {
 	*tools.BaseTool
-	client  *http.Client
+	client  *resty.Client
 	baseURL string            // 基础 URL（可选）
 	headers map[string]string // 默认请求头
 }
@@ -39,8 +38,17 @@ func NewAPITool(baseURL string, timeout time.Duration, headers map[string]string
 		headers = make(map[string]string)
 	}
 
+	// 创建 resty 客户端
+	client := resty.New().
+		SetTimeout(timeout).
+		SetHeaders(headers)
+
+	if baseURL != "" {
+		client.SetBaseURL(baseURL)
+	}
+
 	tool := &APITool{
-		client:  &http.Client{Timeout: timeout},
+		client:  client,
 		baseURL: baseURL,
 		headers: headers,
 	}
@@ -84,12 +92,12 @@ func NewAPITool(baseURL string, timeout time.Duration, headers map[string]string
 // run 执行 HTTP 请求
 func (a *APITool) run(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 	// 解析参数
-	method, _ := input.Args["method"].(string)
+	method, _ := input.Args[interfaces.FieldMethod].(string)
 	if method == "" {
-		method = "GET"
+		method = interfaces.MethodGet
 	}
 
-	urlStr, ok := input.Args["url"].(string)
+	urlStr, ok := input.Args[interfaces.FieldURL].(string)
 	if !ok || urlStr == "" {
 		return &interfaces.ToolOutput{
 				Success: false,
@@ -99,19 +107,9 @@ func (a *APITool) run(ctx context.Context, input *interfaces.ToolInput) (*interf
 				WithOperation("run"))
 	}
 
-	// 如果配置了基础 URL 且提供的是相对路径，则拼接
-	if a.baseURL != "" && !isAbsoluteURL(urlStr) {
-		urlStr = a.baseURL + urlStr
-	}
-
 	// 解析请求头
 	headers := make(map[string]string)
-	// 先复制默认请求头
-	for k, v := range a.headers {
-		headers[k] = v
-	}
-	// 再合并用户提供的请求头
-	if h, ok := input.Args["headers"].(map[string]interface{}); ok {
+	if h, ok := input.Args[interfaces.FieldHeaders].(map[string]interface{}); ok {
 		for k, v := range h {
 			headers[k] = fmt.Sprint(v)
 		}
@@ -119,55 +117,54 @@ func (a *APITool) run(ctx context.Context, input *interfaces.ToolInput) (*interf
 
 	// 解析请求体
 	var body interface{}
-	if b, ok := input.Args["body"]; ok {
+	if b, ok := input.Args[interfaces.FieldBody]; ok {
 		body = b
 	}
 
-	// 解析超时
-	if timeoutSec, ok := input.Args["timeout"].(float64); ok {
-		timeout := time.Duration(timeoutSec) * time.Second
+	// 解析超时并应用到 context
+	if timeoutSec, ok := input.Args[interfaces.FieldTimeout].(float64); ok && timeoutSec > 0 {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, timeout)
-		defer cancel()
-	} else if a.client.Timeout > 0 {
-		// 使用默认超时
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, a.client.Timeout)
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(timeoutSec)*time.Second)
 		defer cancel()
 	}
 
-	// 构建请求
-	var reqBody io.Reader
+	// 创建请求
+	req := a.client.R().
+		SetContext(ctx).
+		SetHeaders(headers)
+
+	// 如果有请求体，设置为 JSON
 	if body != nil {
-		bodyBytes, err := json.Marshal(body)
-		if err != nil {
-			return &interfaces.ToolOutput{
-				Success: false,
-				Error:   fmt.Sprintf("failed to marshal body: %v", err),
-			}, tools.NewToolError(a.Name(), "invalid body", err)
-		}
-		reqBody = bytes.NewBuffer(bodyBytes)
+		req.SetBody(body).
+			SetHeader(interfaces.HeaderContentType, interfaces.ContentTypeJSON)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, urlStr, reqBody)
-	if err != nil {
+	// 执行请求
+	startTime := time.Now()
+	var resp *resty.Response
+	var err error
+
+	switch method {
+	case interfaces.MethodGet:
+		resp, err = req.Get(urlStr)
+	case interfaces.MethodPost:
+		resp, err = req.Post(urlStr)
+	case interfaces.MethodPut:
+		resp, err = req.Put(urlStr)
+	case interfaces.MethodDelete:
+		resp, err = req.Delete(urlStr)
+	case interfaces.MethodPatch:
+		resp, err = req.Patch(urlStr)
+	default:
 		return &interfaces.ToolOutput{
 			Success: false,
-			Error:   fmt.Sprintf("failed to create request: %v", err),
-		}, tools.NewToolError(a.Name(), "request creation failed", err)
+			Error:   fmt.Sprintf("unsupported HTTP method: %s", method),
+		}, tools.NewToolError(a.Name(), "invalid method", agentErrors.New(agentErrors.CodeInvalidInput, "unsupported HTTP method").
+			WithComponent("api_tool").
+			WithOperation("run").
+			WithContext(interfaces.FieldMethod, method))
 	}
 
-	// 设置请求头
-	for k, v := range headers {
-		req.Header.Set(k, v)
-	}
-	if reqBody != nil && req.Header.Get("Content-Type") == "" {
-		req.Header.Set("Content-Type", "application/json")
-	}
-
-	// 发送请求
-	startTime := time.Now()
-	resp, err := a.client.Do(req)
 	duration := time.Since(startTime)
 
 	if err != nil {
@@ -175,27 +172,16 @@ func (a *APITool) run(ctx context.Context, input *interfaces.ToolInput) (*interf
 			Success: false,
 			Error:   fmt.Sprintf("http request failed: %v", err),
 			Metadata: map[string]interface{}{
-				"method":   method,
-				"url":      urlStr,
-				"duration": duration.String(),
+				interfaces.FieldMethod:   method,
+				interfaces.FieldURL:      urlStr,
+				interfaces.FieldDuration: duration.String(),
 			},
 		}, tools.NewToolError(a.Name(), "request failed", err)
-	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-
-	// 读取响应
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return &interfaces.ToolOutput{
-			Success: false,
-			Error:   fmt.Sprintf("failed to read response: %v", err),
-		}, tools.NewToolError(a.Name(), "response read failed", err)
 	}
 
 	// 尝试解析 JSON
 	var jsonBody interface{}
+	respBody := resp.Body()
 	if err := json.Unmarshal(respBody, &jsonBody); err != nil {
 		// 不是 JSON，返回原始文本
 		jsonBody = string(respBody)
@@ -203,37 +189,37 @@ func (a *APITool) run(ctx context.Context, input *interfaces.ToolInput) (*interf
 
 	// 构建结果
 	result := map[string]interface{}{
-		"status_code": resp.StatusCode,
-		"status":      resp.Status,
-		"headers":     resp.Header,
-		"body":        jsonBody,
-		"duration":    duration.String(),
+		interfaces.FieldStatusCode: resp.StatusCode(),
+		interfaces.FieldStatus:     resp.Status(),
+		interfaces.FieldHeaders:    resp.Header(),
+		interfaces.FieldBody:       jsonBody,
+		interfaces.FieldDuration:   duration.String(),
 	}
 
-	success := resp.StatusCode >= 200 && resp.StatusCode < 300
+	success := resp.IsSuccess()
 
 	if !success {
 		return &interfaces.ToolOutput{
 				Result:  result,
 				Success: false,
-				Error:   fmt.Sprintf("HTTP request failed with status %d", resp.StatusCode),
+				Error:   fmt.Sprintf("HTTP request failed with status %d", resp.StatusCode()),
 				Metadata: map[string]interface{}{
-					"method": method,
-					"url":    urlStr,
+					interfaces.FieldMethod: method,
+					interfaces.FieldURL:    urlStr,
 				},
 			}, tools.NewToolError(a.Name(), "non-2xx status code", agentErrors.New(agentErrors.CodeToolExecution, "HTTP request failed with non-2xx status").
 				WithComponent("api_tool").
 				WithOperation("run").
-				WithContext("status_code", resp.StatusCode).
-				WithContext("url", urlStr))
+				WithContext(interfaces.FieldStatusCode, resp.StatusCode()).
+				WithContext(interfaces.FieldURL, urlStr))
 	}
 
 	return &interfaces.ToolOutput{
 		Result:  result,
 		Success: true,
 		Metadata: map[string]interface{}{
-			"method": method,
-			"url":    urlStr,
+			interfaces.FieldMethod: method,
+			interfaces.FieldURL:    urlStr,
 		},
 	}, nil
 }
@@ -242,9 +228,9 @@ func (a *APITool) run(ctx context.Context, input *interfaces.ToolInput) (*interf
 func (a *APITool) Get(ctx context.Context, url string, headers map[string]string) (*interfaces.ToolOutput, error) {
 	return a.Invoke(ctx, &interfaces.ToolInput{
 		Args: map[string]interface{}{
-			"method":  "GET",
-			"url":     url,
-			"headers": headers,
+			interfaces.FieldMethod:  interfaces.MethodGet,
+			interfaces.FieldURL:     url,
+			interfaces.FieldHeaders: headers,
 		},
 		Context: ctx,
 	})
@@ -254,10 +240,10 @@ func (a *APITool) Get(ctx context.Context, url string, headers map[string]string
 func (a *APITool) Post(ctx context.Context, url string, body interface{}, headers map[string]string) (*interfaces.ToolOutput, error) {
 	return a.Invoke(ctx, &interfaces.ToolInput{
 		Args: map[string]interface{}{
-			"method":  "POST",
-			"url":     url,
-			"body":    body,
-			"headers": headers,
+			interfaces.FieldMethod:  interfaces.MethodPost,
+			interfaces.FieldURL:     url,
+			interfaces.FieldBody:    body,
+			interfaces.FieldHeaders: headers,
 		},
 		Context: ctx,
 	})
@@ -267,10 +253,10 @@ func (a *APITool) Post(ctx context.Context, url string, body interface{}, header
 func (a *APITool) Put(ctx context.Context, url string, body interface{}, headers map[string]string) (*interfaces.ToolOutput, error) {
 	return a.Invoke(ctx, &interfaces.ToolInput{
 		Args: map[string]interface{}{
-			"method":  "PUT",
-			"url":     url,
-			"body":    body,
-			"headers": headers,
+			interfaces.FieldMethod:  interfaces.MethodPut,
+			interfaces.FieldURL:     url,
+			interfaces.FieldBody:    body,
+			interfaces.FieldHeaders: headers,
 		},
 		Context: ctx,
 	})
@@ -280,9 +266,9 @@ func (a *APITool) Put(ctx context.Context, url string, body interface{}, headers
 func (a *APITool) Delete(ctx context.Context, url string, headers map[string]string) (*interfaces.ToolOutput, error) {
 	return a.Invoke(ctx, &interfaces.ToolInput{
 		Args: map[string]interface{}{
-			"method":  "DELETE",
-			"url":     url,
-			"headers": headers,
+			interfaces.FieldMethod:  interfaces.MethodDelete,
+			interfaces.FieldURL:     url,
+			interfaces.FieldHeaders: headers,
 		},
 		Context: ctx,
 	})
@@ -292,27 +278,13 @@ func (a *APITool) Delete(ctx context.Context, url string, headers map[string]str
 func (a *APITool) Patch(ctx context.Context, url string, body interface{}, headers map[string]string) (*interfaces.ToolOutput, error) {
 	return a.Invoke(ctx, &interfaces.ToolInput{
 		Args: map[string]interface{}{
-			"method":  "PATCH",
-			"url":     url,
-			"body":    body,
-			"headers": headers,
+			interfaces.FieldMethod:  interfaces.MethodPatch,
+			interfaces.FieldURL:     url,
+			interfaces.FieldBody:    body,
+			interfaces.FieldHeaders: headers,
 		},
 		Context: ctx,
 	})
-}
-
-// isAbsoluteURL 检查是否为绝对 URL
-func isAbsoluteURL(urlStr string) bool {
-	if len(urlStr) < 7 {
-		return false
-	}
-	if len(urlStr) >= 8 && urlStr[0:8] == "https://" {
-		return true
-	}
-	if len(urlStr) >= 7 && urlStr[0:7] == "http://" {
-		return true
-	}
-	return false
 }
 
 // APIToolBuilder API 工具构建器
@@ -358,7 +330,7 @@ func (b *APIToolBuilder) WithHeaders(headers map[string]string) *APIToolBuilder 
 
 // WithAuth 设置认证头
 func (b *APIToolBuilder) WithAuth(token string) *APIToolBuilder {
-	b.headers["Authorization"] = "Bearer " + token
+	b.headers[interfaces.HeaderAuthorization] = interfaces.Bearer + " " + token
 	return b
 }
 

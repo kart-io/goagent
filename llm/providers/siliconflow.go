@@ -1,15 +1,14 @@
 package providers
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/go-resty/resty/v2"
 
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
@@ -24,7 +23,7 @@ type SiliconFlowClient struct {
 	model       string
 	temperature float64
 	maxTokens   int
-	httpClient  *http.Client
+	client      *resty.Client
 }
 
 // SiliconFlowConfig SiliconFlow 配置
@@ -84,9 +83,10 @@ func NewSiliconFlowClient(config *SiliconFlowConfig) (*SiliconFlowClient, error)
 		model:       config.Model,
 		temperature: config.Temperature,
 		maxTokens:   config.MaxTokens,
-		httpClient: &http.Client{
-			Timeout: time.Duration(config.Timeout) * time.Second,
-		},
+		client: resty.New().
+			SetTimeout(time.Duration(config.Timeout) * time.Second).
+			SetHeader(HeaderContentType, ContentTypeJSON).
+			SetHeader(HeaderAuthorization, AuthBearerPrefix+config.APIKey),
 	}, nil
 }
 
@@ -192,34 +192,23 @@ func (c *SiliconFlowClient) Complete(ctx context.Context, req *agentllm.Completi
 	}
 
 	// 发送请求
-	reqBody, err := json.Marshal(sfReq)
-	if err != nil {
-		return nil, agentErrors.NewParserInvalidJSONError("request body", err)
-	}
+	resp, err := c.client.R().
+		SetContext(ctx).
+		SetBody(sfReq).
+		Post(c.baseURL + "/chat/completions")
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/chat/completions", bytes.NewBuffer(reqBody))
-	if err != nil {
-		return nil, agentErrors.NewLLMRequestError("siliconflow", c.getModel(req.Model), err)
-	}
-
-	httpReq.Header.Set(HeaderContentType, ContentTypeJSON)
-	httpReq.Header.Set(HeaderAuthorization, AuthBearerPrefix+c.apiKey)
-
-	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
 		return nil, agentErrors.NewLLMRequestError("siliconflow", c.getModel(req.Model), err)
 	}
-	defer func() { _ = resp.Body.Close() }()
 
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+	if !resp.IsSuccess() {
 		return nil, agentErrors.NewLLMResponseError("siliconflow", c.getModel(req.Model),
-			fmt.Sprintf("API error (status %d): %s", resp.StatusCode, string(body)))
+			fmt.Sprintf("API error (status %d): %s", resp.StatusCode(), resp.String()))
 	}
 
 	// 解析响应
 	var sfResp siliconFlowResponse
-	if err := json.NewDecoder(resp.Body).Decode(&sfResp); err != nil {
+	if err := json.NewDecoder(strings.NewReader(resp.String())).Decode(&sfResp); err != nil {
 		return nil, agentErrors.NewParserInvalidJSONError("response body", err).
 			WithContext("provider", "siliconflow")
 	}

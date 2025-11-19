@@ -16,10 +16,10 @@ import (
 type TicketCategory string
 
 const (
-	CategoryBilling   TicketCategory = "billing"      // 账单问题
-	CategoryTechnical TicketCategory = "technical"    // 技术支持
-	CategoryGeneral   TicketCategory = "general"      // 一般咨询
-	CategoryEscalate  TicketCategory = "escalate"     // 需要人工审查
+	CategoryBilling   TicketCategory = "billing"   // 账单问题
+	CategoryTechnical TicketCategory = "technical" // 技术支持
+	CategoryGeneral   TicketCategory = "general"   // 一般咨询
+	CategoryEscalate  TicketCategory = "escalate"  // 需要人工审查
 )
 
 // SupportTicket 客服工单
@@ -35,12 +35,12 @@ type SupportTicket struct {
 
 // TicketResponse 工单响应
 type TicketResponse struct {
-	TicketID      string         `json:"ticket_id"`
-	Category      TicketCategory `json:"category"`
-	Handler       string         `json:"handler"`
-	Response      string         `json:"response"`
-	ProcessedAt   time.Time      `json:"processed_at"`
-	ProcessingTime float64       `json:"processing_time"`
+	TicketID       string         `json:"ticket_id"`
+	Category       TicketCategory `json:"category"`
+	Handler        string         `json:"handler"`
+	Response       string         `json:"response"`
+	ProcessedAt    time.Time      `json:"processed_at"`
+	ProcessingTime float64        `json:"processing_time"`
 }
 
 // RunRouterPattern 运行路由模式示例
@@ -229,18 +229,18 @@ func createSupportAgent(llmClient llm.Client, agentID, expertise string) multiag
 
 		switch agentID {
 		case "billing":
-			response = fmt.Sprintf("【%s】您好！我已经检查了您的账单。" +
+			response = fmt.Sprintf("【%s】您好！我已经检查了您的账单。"+
 				"上月使用量增加是由于启用了新功能。我会为您提供详细的账单明细，并安排退款审核。", expertise)
 		case "technical":
-			response = fmt.Sprintf("【%s】您好！登录问题通常是浏览器缓存导致的。" +
-				"请尝试：1) 清除浏览器缓存 2) 使用无痕模式 3) 尝试其他浏览器。" +
+			response = fmt.Sprintf("【%s】您好！登录问题通常是浏览器缓存导致的。"+
+				"请尝试：1) 清除浏览器缓存 2) 使用无痕模式 3) 尝试其他浏览器。"+
 				"如问题仍存在，我会升级到技术团队深入调查。", expertise)
 		case "general":
-			response = fmt.Sprintf("【%s】您好！高级套餐包含：无限存储空间、优先技术支持、" +
+			response = fmt.Sprintf("【%s】您好！高级套餐包含：无限存储空间、优先技术支持、"+
 				"高级分析功能、团队协作工具等。我会发送详细的功能对比表到您的邮箱。", expertise)
 		case "escalation":
-			response = fmt.Sprintf("【%s】您好！我理解这个问题的严重性。" +
-				"我已经将您的情况标记为最高优先级，技术总监和数据恢复团队将在30分钟内联系您。" +
+			response = fmt.Sprintf("【%s】您好！我理解这个问题的严重性。"+
+				"我已经将您的情况标记为最高优先级，技术总监和数据恢复团队将在30分钟内联系您。"+
 				"同时我们会立即启动数据恢复流程。", expertise)
 		default:
 			response = fmt.Sprintf("【%s】感谢您的咨询，我们会尽快处理。", expertise)

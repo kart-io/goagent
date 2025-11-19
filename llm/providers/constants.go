@@ -51,6 +51,7 @@ const (
 	// Hugging Face
 	HuggingFaceBaseURL              = "https://api-inference.huggingface.co"
 	HuggingFaceDefaultModel         = "meta-llama/Meta-Llama-3-8B-Instruct"
+	HuggingFaceDefaultMaxTokens     = 2000
 	HuggingFaceTimeout              = 120 * time.Second
 	HuggingFaceMaxAttempts          = 5
 	HuggingFaceBaseDelay            = 3 * time.Second
