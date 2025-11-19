@@ -93,9 +93,8 @@ func (t *HTTPRequestTool) Execute(ctx context.Context, input map[string]interfac
 	}
 
 	// 设置超时
-	client := t.client
 	if timeout, ok := input["timeout"].(float64); ok {
-		client = resty.New().
+		client := resty.New().
 			SetTimeout(time.Duration(timeout) * time.Second)
 		req = client.R().SetContext(ctx)
 
