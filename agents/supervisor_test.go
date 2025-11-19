@@ -841,19 +841,22 @@ func TestSupervisorParseTasks(t *testing.T) {
 	supervisor := NewSupervisorAgent(mockLLM, nil)
 
 	t.Run("parse empty response", func(t *testing.T) {
-		tasks := supervisor.parseTaskResponse("")
+		tasks, err := supervisor.parseTaskResponse("")
+		assert.NoError(t, err)
 		assert.Equal(t, 0, len(tasks))
 	})
 
 	t.Run("parse single line", func(t *testing.T) {
-		tasks := supervisor.parseTaskResponse("single task")
+		tasks, err := supervisor.parseTaskResponse("single task")
+		assert.NoError(t, err)
 		assert.Equal(t, 1, len(tasks))
 		assert.Equal(t, "single task", tasks[0].Description)
 	})
 
 	t.Run("parse multiple lines with empty lines", func(t *testing.T) {
 		response := "task1\n\ntask2\n\n\ntask3"
-		tasks := supervisor.parseTaskResponse(response)
+		tasks, err := supervisor.parseTaskResponse(response)
+		assert.NoError(t, err)
 		// Empty lines should be skipped
 		assert.True(t, len(tasks) <= 3)
 	})
