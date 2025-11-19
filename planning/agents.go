@@ -116,7 +116,7 @@ type TaskDecompositionAgent struct {
 // NewTaskDecompositionAgent creates a new task decomposition agent
 func NewTaskDecompositionAgent(planner Planner) *TaskDecompositionAgent {
 	return &TaskDecompositionAgent{
-		BaseAgent: core.NewBaseAgent("task_decomposition", "Decomposes complex tasks into subtasks", []string{"decomposition"}),
+		BaseAgent: core.NewBaseAgent(AgentTaskDecomposition, DescTaskDecomposition, []string{StrategyDecomposition}),
 		planner:   planner,
 	}
 }
@@ -173,13 +173,13 @@ type StrategyAgent struct {
 // NewStrategyAgent creates a new strategy agent
 func NewStrategyAgent() *StrategyAgent {
 	agent := &StrategyAgent{
-		BaseAgent:  core.NewBaseAgent("strategy_agent", "Selects and applies planning strategies", []string{"strategy"}),
+		BaseAgent:  core.NewBaseAgent(AgentStrategy, DescStrategyAgent, []string{"strategy"}),
 		strategies: make(map[string]PlanStrategy),
 	}
 
 	// Register default strategies
-	agent.RegisterStrategy("decomposition", &DecompositionStrategy{})
-	agent.RegisterStrategy("backward_chaining", &BackwardChainingStrategy{})
+	agent.RegisterStrategy(StrategyDecomposition, &DecompositionStrategy{})
+	agent.RegisterStrategy(StrategyBackwardChaining, &BackwardChainingStrategy{})
 	agent.RegisterStrategy("hierarchical", &HierarchicalStrategy{})
 
 	return agent
@@ -218,7 +218,7 @@ func (a *StrategyAgent) Execute(ctx context.Context, input *core.AgentInput) (*c
 	}
 
 	// Extract strategy name
-	strategyName := "decomposition" // default
+	strategyName := StrategyDecomposition // default
 	if s, ok := input.Context["strategy"].(string); ok {
 		strategyName = s
 	}

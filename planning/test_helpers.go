@@ -12,10 +12,10 @@ import (
 
 // Compile-time interface verification
 var (
-	_ llm.Client                = (*MockLLMClient)(nil)
-	_ interfaces.MemoryManager  = (*MockMemoryManager)(nil)
-	_ loggercore.Logger         = (*MockLogger)(nil)
-	_ core.Agent                = (*MockAgent)(nil)
+	_ llm.Client               = (*MockLLMClient)(nil)
+	_ interfaces.MemoryManager = (*MockMemoryManager)(nil)
+	_ loggercore.Logger        = (*MockLogger)(nil)
+	_ core.Agent               = (*MockAgent)(nil)
 )
 
 // MockLLMClient is a complete mock LLM client for testing

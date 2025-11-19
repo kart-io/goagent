@@ -43,9 +43,8 @@ func NewShellTool(allowedCommands []string, timeout time.Duration) *ShellTool {
 	}
 
 	tool.BaseTool = tools.NewBaseTool(
-		"shell",
-		"Executes whitelisted shell commands with timeout and security controls. "+
-			"Only commands in the whitelist can be executed.",
+		tools.ToolShell,
+		tools.DescShell,
 		`{
 			"type": "object",
 			"properties": {

@@ -43,7 +43,7 @@ func main() {
 func basicExample() {
 	// Initialize provider with API key from environment
 	provider, err := providers.NewHuggingFace(&llm.Config{
-		APIKey: os.Getenv("HUGGINGFACE_API_KEY"), // or set directly: APIKey: "your-api-key"
+		APIKey: os.Getenv("HUGGINGFACE_API_KEY"),      // or set directly: APIKey: "your-api-key"
 		Model:  "meta-llama/Meta-Llama-3-8B-Instruct", // Optional: defaults to Meta-Llama-3-8B-Instruct
 	})
 	if err != nil {
@@ -236,8 +236,8 @@ func customParametersExample() {
 		Messages: []llm.Message{
 			{Role: "user", Content: "Generate a creative story opening."},
 		},
-		Temperature: 0.9,    // Higher creativity
-		TopP:        0.95,   // Nucleus sampling
+		Temperature: 0.9,  // Higher creativity
+		TopP:        0.95, // Nucleus sampling
 		MaxTokens:   150,
 		Stop:        []string{"\n\n", "The End"}, // Stop sequences
 	})
