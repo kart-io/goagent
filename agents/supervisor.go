@@ -2,7 +2,9 @@ package agents
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -192,8 +194,8 @@ func (s *SupervisorAgent) Invoke(ctx context.Context, input *core.AgentInput) (*
 	// Create execution plan
 	plan := s.Orchestrator.CreateExecutionPlan(tasks)
 
-	// Execute tasks
-	results := s.executePlan(ctx, plan)
+	// Execute tasks with original input preserved
+	results := s.executePlan(ctx, plan, input.Task)
 
 	// Aggregate results
 	finalResult := s.ResultAggregator.Aggregate(results)
@@ -217,16 +219,15 @@ func (s *SupervisorAgent) Invoke(ctx context.Context, input *core.AgentInput) (*
 func (s *SupervisorAgent) parseTasks(ctx context.Context, input interface{}) ([]Task, error) {
 	// Use LLM to decompose complex input into tasks
 	prompt := fmt.Sprintf(`
-		Decompose the following request into individual tasks:
-		%v
-
-		Return tasks as a structured list with type, description, and priority.
+		Decompose the following request into a concise, non-redundant list of individual tasks and return them as a valid JSON array of objects.
+		Each object in the array should have the following fields: "id" (string), "type" (string), "description" (string), and "priority" (int).
+		Request: %v
 		Available agent types: %s
 	`, input, s.getAgentTypes())
 
 	response, err := s.llm.Complete(ctx, &llm.CompletionRequest{
 		Messages: []llm.Message{
-			llm.SystemMessage("You are a task decomposition expert."),
+			llm.SystemMessage("You are a task decomposition expert. Respond with a valid, concise JSON array of tasks, and nothing else."),
 			llm.UserMessage(prompt),
 		},
 	})
@@ -234,32 +235,54 @@ func (s *SupervisorAgent) parseTasks(ctx context.Context, input interface{}) ([]
 		return nil, err
 	}
 
-	// Parse response into tasks (simplified for demo)
-	return s.parseTaskResponse(response.Content), nil
+	// Parse response into tasks
+	return s.parseTaskResponse(response.Content)
 }
 
 // parseTaskResponse parses LLM response into tasks
-func (s *SupervisorAgent) parseTaskResponse(response string) []Task {
-	tasks := []Task{}
+func (s *SupervisorAgent) parseTaskResponse(response string) ([]Task, error) {
+	// Use regex to find JSON array within the response
+	re := regexp.MustCompile(`(?s)\[\s*\{.*\}\s*\]`)
+	jsonStr := re.FindString(response)
 
-	// Simple parsing logic (in production, use structured output)
-	lines := strings.Split(response, "\n")
-	for i, line := range lines {
-		if strings.TrimSpace(line) != "" {
-			tasks = append(tasks, Task{
-				ID:          fmt.Sprintf("task_%d", i),
-				Type:        "general",
-				Description: line,
-				Priority:    len(lines) - i, // Higher priority for earlier tasks
-			})
+	if jsonStr == "" {
+		// Fallback to simple parsing if no JSON array is found
+		var tasks []Task
+		lines := strings.Split(response, "\n")
+		for i, line := range lines {
+			if strings.TrimSpace(line) != "" {
+				tasks = append(tasks, Task{
+					ID:          fmt.Sprintf("task_%d", i),
+					Type:        "general",
+					Description: line,
+					Priority:    len(lines) - i, // Higher priority for earlier tasks
+				})
+			}
+		}
+		return tasks, nil
+	}
+
+	var tasks []Task
+	err := json.Unmarshal([]byte(jsonStr), &tasks)
+	if err != nil {
+		return nil, err
+	}
+
+	// Deduplicate tasks
+	seen := make(map[string]bool)
+	result := []Task{}
+	for _, task := range tasks {
+		if _, ok := seen[task.Description]; !ok {
+			seen[task.Description] = true
+			result = append(result, task)
 		}
 	}
 
-	return tasks
+	return result, nil
 }
 
 // executePlan executes the task execution plan
-func (s *SupervisorAgent) executePlan(ctx context.Context, plan *ExecutionPlan) []TaskResult {
+func (s *SupervisorAgent) executePlan(ctx context.Context, plan *ExecutionPlan, originalInput interface{}) []TaskResult {
 	// Count total tasks
 	totalTasks := 0
 	for _, stage := range plan.Stages {
@@ -283,8 +306,8 @@ func (s *SupervisorAgent) executePlan(ctx context.Context, plan *ExecutionPlan) 
 				sem <- struct{}{}
 				defer func() { <-sem }()
 
-				// Execute task
-				result := s.executeTask(ctx, t)
+				// Execute task with original input
+				result := s.executeTask(ctx, t, originalInput)
 				resultsChan <- result
 			}(task)
 		}
@@ -310,7 +333,7 @@ func (s *SupervisorAgent) executePlan(ctx context.Context, plan *ExecutionPlan) 
 }
 
 // executeTask executes a single task
-func (s *SupervisorAgent) executeTask(ctx context.Context, task Task) TaskResult {
+func (s *SupervisorAgent) executeTask(ctx context.Context, task Task, originalInput interface{}) TaskResult {
 	startTime := time.Now()
 	result := TaskResult{
 		TaskID:    task.ID,
@@ -366,10 +389,20 @@ func (s *SupervisorAgent) executeTask(ctx context.Context, task Task) TaskResult
 			time.Sleep(delay)
 		}
 
-		// Create agent input
+		// Create agent input with original input preserved
+		// Combine task description with original input to provide full context
+		var taskContent string
+		if originalInput != nil {
+			// Convert original input to string
+			taskContent = fmt.Sprintf("%v", originalInput)
+		} else {
+			// Fallback to task description if no original input
+			taskContent = task.Description
+		}
+
 		agentInput := &core.AgentInput{
-			Task:        task.Description,
-			Instruction: fmt.Sprintf("Execute %s task", task.Type),
+			Task:        taskContent,
+			Instruction: fmt.Sprintf("Execute %s task: %s", task.Type, task.Description),
 			Context:     map[string]interface{}{"task": task},
 			SessionID:   fmt.Sprintf("%s-%s", task.ID, agentName),
 			Timestamp:   time.Now(),
