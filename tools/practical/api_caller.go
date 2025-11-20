@@ -12,11 +12,12 @@ import (
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/tools"
+	"github.com/kart-io/goagent/utils/httpclient"
 )
 
 // APICallerTool makes HTTP API calls with authentication and retry logic
 type APICallerTool struct {
-	client         *resty.Client
+	client         *httpclient.Client
 	defaultHeaders map[string]string
 	maxRetries     int
 	rateLimiter    *RateLimiter
@@ -25,19 +26,24 @@ type APICallerTool struct {
 
 // NewAPICallerTool creates a new API caller tool
 func NewAPICallerTool() *APICallerTool {
-	client := resty.New().
-		SetTimeout(30 * time.Second).
-		SetHeader("User-Agent", "AgentFramework/1.0").
-		SetRetryCount(3).
-		SetRetryWaitTime(1 * time.Second).
-		SetRetryMaxWaitTime(3 * time.Second).
-		AddRetryCondition(func(r *resty.Response, err error) bool {
-			// Retry on network errors or 5xx status codes
-			if err != nil {
-				return true
-			}
-			return r.StatusCode() >= 500
-		})
+	client := httpclient.NewClient(&httpclient.Config{
+		Timeout:          30 * time.Second,
+		RetryCount:       3,
+		RetryWaitTime:    1 * time.Second,
+		RetryMaxWaitTime: 3 * time.Second,
+		Headers: map[string]string{
+			"User-Agent": "AgentFramework/1.0",
+		},
+	})
+
+	// Add retry condition for 5xx errors
+	client.Resty().AddRetryCondition(func(r *resty.Response, err error) bool {
+		// Retry on network errors or 5xx status codes
+		if err != nil {
+			return true
+		}
+		return r.StatusCode() >= 500
+	})
 
 	return &APICallerTool{
 		client: client,
@@ -267,30 +273,28 @@ func (t *APICallerTool) executeRequest(ctx context.Context, params *apiParams) (
 	client := t.client
 	if !params.FollowRedirects || params.Retry.MaxAttempts != t.maxRetries {
 		// Create a new client with custom settings
-		client = resty.New().
-			SetTimeout(t.client.GetClient().Timeout)
-
-		if !params.FollowRedirects {
-			client.SetRedirectPolicy(resty.NoRedirectPolicy())
+		config := &httpclient.Config{
+			Timeout:          t.client.Resty().GetClient().Timeout,
+			RetryCount:       params.Retry.MaxAttempts - 1, // -1 because resty counts retries, not total attempts
+			RetryWaitTime:    1 * time.Second,
+			RetryMaxWaitTime: 1 * time.Second,
 		}
-
-		// Configure retries based on params
-		client.SetRetryCount(params.Retry.MaxAttempts - 1) // -1 because resty counts retries, not total attempts
 
 		// Set backoff strategy
 		switch params.Retry.Backoff {
-		case "constant":
-			client.SetRetryWaitTime(1 * time.Second).
-				SetRetryMaxWaitTime(1 * time.Second)
 		case "linear":
-			client.SetRetryWaitTime(1 * time.Second).
-				SetRetryMaxWaitTime(time.Duration(params.Retry.MaxAttempts) * time.Second)
+			config.RetryMaxWaitTime = time.Duration(params.Retry.MaxAttempts) * time.Second
 		case "exponential":
-			client.SetRetryWaitTime(1 * time.Second).
-				SetRetryMaxWaitTime(8 * time.Second)
+			config.RetryMaxWaitTime = 8 * time.Second
 		}
 
-		client.AddRetryCondition(func(r *resty.Response, e error) bool {
+		client = httpclient.NewClient(config)
+
+		if !params.FollowRedirects {
+			client.Resty().SetRedirectPolicy(resty.NoRedirectPolicy())
+		}
+
+		client.Resty().AddRetryCondition(func(r *resty.Response, e error) bool {
 			if e != nil {
 				return true
 			}
@@ -299,7 +303,7 @@ func (t *APICallerTool) executeRequest(ctx context.Context, params *apiParams) (
 	}
 
 	// Add hook to track attempts
-	client.OnAfterResponse(func(c *resty.Client, r *resty.Response) error {
+	client.Resty().OnAfterResponse(func(c *resty.Client, r *resty.Response) error {
 		attemptCount++
 		return nil
 	})

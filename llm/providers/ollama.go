@@ -8,11 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-resty/resty/v2"
-
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/utils/httpclient"
 )
 
 // OllamaClient Ollama LLM 客户端
@@ -21,7 +20,7 @@ type OllamaClient struct {
 	model       string
 	temperature float64
 	maxTokens   int
-	client      *resty.Client
+	client      *httpclient.Client
 }
 
 // OllamaConfig Ollama 配置
@@ -75,9 +74,12 @@ func NewOllamaClient(config *OllamaConfig) *OllamaClient {
 		model:       config.Model,
 		temperature: config.Temperature,
 		maxTokens:   config.MaxTokens,
-		client: resty.New().
-			SetTimeout(time.Duration(config.Timeout) * time.Second).
-			SetHeader("Content-Type", "application/json"),
+		client: httpclient.NewClient(&httpclient.Config{
+			Timeout: time.Duration(config.Timeout) * time.Second,
+			Headers: map[string]string{
+				"Content-Type": "application/json",
+			},
+		}),
 	}
 }
 
@@ -342,11 +344,14 @@ func (c *OllamaClient) PullModel(modelName string) error {
 	}
 
 	// 使用更长的超时时间用于模型下载
-	pullClient := resty.New().
-		SetTimeout(30 * time.Minute).
-		SetHeader("Content-Type", "application/json")
+	pullClient := httpclient.NewClient(&httpclient.Config{
+		Timeout: 30 * time.Minute,
+		Headers: map[string]string{
+			"Content-Type": "application/json",
+		},
+	})
 
-	resp, err := pullClient.R().
+	resp, err := pullClient.Resty().R().
 		SetBody(pullReq).
 		Post(c.baseURL + "/api/pull")
 

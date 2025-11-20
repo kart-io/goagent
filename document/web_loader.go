@@ -5,11 +5,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-resty/resty/v2"
-
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/retrieval"
+	"github.com/kart-io/goagent/utils/httpclient"
 	"github.com/kart-io/k8s-agent/common/errors"
 )
 
@@ -21,7 +20,7 @@ type WebLoader struct {
 	url       string
 	headers   map[string]string
 	timeout   time.Duration
-	client    *resty.Client
+	client    *httpclient.Client
 	stripHTML bool
 }
 
@@ -48,9 +47,12 @@ func NewWebLoader(config WebLoaderConfig) *WebLoader {
 	config.Metadata["source"] = config.URL
 	config.Metadata["source_type"] = "web"
 
-	client := resty.New().
-		SetTimeout(config.Timeout).
-		SetHeader("User-Agent", "k8s-agent-document-loader/1.0")
+	client := httpclient.NewClient(&httpclient.Config{
+		Timeout: config.Timeout,
+		Headers: map[string]string{
+			"User-Agent": "k8s-agent-document-loader/1.0",
+		},
+	})
 
 	return &WebLoader{
 		BaseDocumentLoader: NewBaseDocumentLoader(config.Metadata, config.CallbackManager),

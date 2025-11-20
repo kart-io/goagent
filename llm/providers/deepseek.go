@@ -13,12 +13,13 @@ import (
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/utils/httpclient"
 )
 
 // DeepSeekProvider implements LLM interface for DeepSeek
 type DeepSeekProvider struct {
 	config      *llm.Config
-	client      *resty.Client
+	client      *httpclient.Client
 	apiKey      string
 	baseURL     string
 	model       string
@@ -124,11 +125,14 @@ func NewDeepSeek(config *llm.Config) (*DeepSeekProvider, error) {
 		model = "deepseek-chat"
 	}
 
-	client := resty.New().
-		SetTimeout(time.Duration(config.Timeout) * time.Second).
-		SetHeader("Content-Type", "application/json").
-		SetHeader("Accept", "application/json").
-		SetHeader("Authorization", "Bearer "+config.APIKey)
+	client := httpclient.NewClient(&httpclient.Config{
+		Timeout: time.Duration(config.Timeout) * time.Second,
+		Headers: map[string]string{
+			"Content-Type":  "application/json",
+			"Accept":        "application/json",
+			"Authorization": "Bearer " + config.APIKey,
+		},
+	})
 
 	provider := &DeepSeekProvider{
 		config:      config,

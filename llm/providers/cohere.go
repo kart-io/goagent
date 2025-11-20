@@ -16,12 +16,13 @@ import (
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	agentllm "github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/utils/httpclient"
 )
 
 // CohereProvider implements LLM interface for Cohere
 type CohereProvider struct {
 	config      *agentllm.Config
-	client      *resty.Client
+	client      *httpclient.Client
 	apiKey      string
 	baseURL     string
 	model       string
@@ -127,11 +128,14 @@ func NewCohere(config *agentllm.Config) (*CohereProvider, error) {
 		timeout = DefaultTimeout
 	}
 
-	// Create resty client
-	client := resty.New().
-		SetTimeout(timeout).
-		SetHeader(HeaderContentType, ContentTypeJSON).
-		SetHeader(HeaderAuthorization, AuthBearerPrefix+apiKey)
+	// Create httpclient
+	client := httpclient.NewClient(&httpclient.Config{
+		Timeout: timeout,
+		Headers: map[string]string{
+			HeaderContentType:  ContentTypeJSON,
+			HeaderAuthorization: AuthBearerPrefix + apiKey,
+		},
+	})
 
 	provider := &CohereProvider{
 		config:      config,
