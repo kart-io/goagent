@@ -8,11 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-resty/resty/v2"
-
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	agentllm "github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/utils/httpclient"
 )
 
 // SiliconFlowClient SiliconFlow LLM 客户端
@@ -23,7 +22,7 @@ type SiliconFlowClient struct {
 	model       string
 	temperature float64
 	maxTokens   int
-	client      *resty.Client
+	client      *httpclient.Client
 }
 
 // SiliconFlowConfig SiliconFlow 配置
@@ -83,10 +82,13 @@ func NewSiliconFlowClient(config *SiliconFlowConfig) (*SiliconFlowClient, error)
 		model:       config.Model,
 		temperature: config.Temperature,
 		maxTokens:   config.MaxTokens,
-		client: resty.New().
-			SetTimeout(time.Duration(config.Timeout) * time.Second).
-			SetHeader(HeaderContentType, ContentTypeJSON).
-			SetHeader(HeaderAuthorization, AuthBearerPrefix+config.APIKey),
+		client: httpclient.NewClient(&httpclient.Config{
+			Timeout: time.Duration(config.Timeout) * time.Second,
+			Headers: map[string]string{
+				HeaderContentType:  ContentTypeJSON,
+				HeaderAuthorization: AuthBearerPrefix + config.APIKey,
+			},
+		}),
 	}, nil
 }
 

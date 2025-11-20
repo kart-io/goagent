@@ -4,13 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"strings"
 	"time"
 
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/tools"
+	"github.com/kart-io/goagent/utils/httpclient"
 )
 
 // ==================== Analysis Tools ====================
@@ -340,81 +339,59 @@ func createHTTPRequestTool() interfaces.Tool {
 		}
 
 		// Create HTTP client with timeout
-		client := &http.Client{
+		client := httpclient.NewClient(&httpclient.Config{
 			Timeout: 10 * time.Second,
-		}
+		})
 
 		// Prepare request
-		var req *http.Request
-		var err error
-
-		if method == "POST" || method == "PUT" || method == "PATCH" {
-			bodyData := input.Args["body"]
-			if bodyData != nil {
-				bodyJSON, _ := json.Marshal(bodyData)
-				req, err = http.NewRequestWithContext(ctx, method, url, strings.NewReader(string(bodyJSON)))
-				if err == nil {
-					req.Header.Set("Content-Type", "application/json")
-				}
-			} else {
-				req, err = http.NewRequestWithContext(ctx, method, url, nil)
-			}
-		} else {
-			req, err = http.NewRequestWithContext(ctx, method, url, nil)
-		}
-
-		if err != nil {
-			return &interfaces.ToolOutput{
-				Success: false,
-				Error:   fmt.Sprintf("failed to create request: %v", err),
-			}, nil
-		}
+		req := client.R().SetContext(ctx)
 
 		// Add custom headers
 		if headers, ok := input.Args["headers"].(map[string]interface{}); ok {
+			headerMap := make(map[string]string)
 			for key, value := range headers {
 				if strValue, ok := value.(string); ok {
-					req.Header.Set(key, strValue)
+					headerMap[key] = strValue
 				}
+			}
+			req.SetHeaders(headerMap)
+		}
+
+		// Set request body for POST/PUT/PATCH
+		if method == "POST" || method == "PUT" || method == "PATCH" {
+			bodyData := input.Args["body"]
+			if bodyData != nil {
+				req.SetBody(bodyData).
+					SetHeader("Content-Type", "application/json")
 			}
 		}
 
 		// Execute request
-		resp, err := client.Do(req)
+		resp, err := req.Execute(method, url)
 		if err != nil {
 			return &interfaces.ToolOutput{
 				Success: false,
 				Error:   fmt.Sprintf("request failed: %v", err),
 			}, nil
 		}
-		defer func() { _ = resp.Body.Close() }()
-
-		// Read response body
-		bodyBytes, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return &interfaces.ToolOutput{
-				Success: false,
-				Error:   fmt.Sprintf("failed to read response: %v", err),
-			}, nil
-		}
 
 		// Parse JSON response if possible
-		var bodyData interface{}
-		if err := json.Unmarshal(bodyBytes, &bodyData); err != nil {
-			bodyData = string(bodyBytes)
+		var respBody interface{}
+		if err := json.Unmarshal(resp.Body(), &respBody); err != nil {
+			respBody = string(resp.Body())
 		}
 
 		// Collect response headers
 		respHeaders := make(map[string]string)
-		for key, values := range resp.Header {
+		for key, values := range resp.Header() {
 			if len(values) > 0 {
 				respHeaders[key] = values[0]
 			}
 		}
 
 		result := map[string]interface{}{
-			"status_code": resp.StatusCode,
-			"body":        bodyData,
+			"status_code": resp.StatusCode(),
+			"body":        respBody,
 			"headers":     respHeaders,
 		}
 

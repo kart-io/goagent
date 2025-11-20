@@ -13,23 +13,27 @@ import (
 	agentcore "github.com/kart-io/goagent/core"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
+	"github.com/kart-io/goagent/utils/httpclient"
 )
 
 // WebScraperTool scrapes web pages and extracts structured data
 type WebScraperTool struct {
-	client     *resty.Client
+	client     *httpclient.Client
 	maxRetries int
 	userAgent  string
 }
 
 // NewWebScraperTool creates a new web scraper tool
 func NewWebScraperTool() *WebScraperTool {
-	client := resty.New().
-		SetTimeout(30 * time.Second).
-		SetRedirectPolicy(resty.FlexibleRedirectPolicy(10)).
-		SetRetryCount(3).
-		SetRetryWaitTime(1 * time.Second).
-		SetRetryMaxWaitTime(3 * time.Second)
+	client := httpclient.NewClient(&httpclient.Config{
+		Timeout:          30 * time.Second,
+		RetryCount:       3,
+		RetryWaitTime:    1 * time.Second,
+		RetryMaxWaitTime: 3 * time.Second,
+	})
+
+	// Set flexible redirect policy (max 10 redirects)
+	client.Resty().SetRedirectPolicy(resty.FlexibleRedirectPolicy(10))
 
 	return &WebScraperTool{
 		client:     client,

@@ -10,12 +10,13 @@ import (
 	"github.com/go-resty/resty/v2"
 
 	"github.com/kart-io/goagent/mcp/core"
+	"github.com/kart-io/goagent/utils/httpclient"
 )
 
 // HTTPRequestTool HTTP 请求工具
 type HTTPRequestTool struct {
 	*core.BaseTool
-	client *resty.Client
+	client *httpclient.Client
 }
 
 // NewHTTPRequestTool 创建 HTTP 请求工具
@@ -58,8 +59,9 @@ func NewHTTPRequestTool() *HTTPRequestTool {
 			"network",
 			schema,
 		),
-		client: resty.New().
-			SetTimeout(30 * time.Second),
+		client: httpclient.NewClient(&httpclient.Config{
+			Timeout: 30 * time.Second,
+		}),
 	}
 
 	return tool
@@ -94,8 +96,9 @@ func (t *HTTPRequestTool) Execute(ctx context.Context, input map[string]interfac
 
 	// 设置超时
 	if timeout, ok := input["timeout"].(float64); ok {
-		client := resty.New().
-			SetTimeout(time.Duration(timeout) * time.Second)
+		client := httpclient.NewClient(&httpclient.Config{
+			Timeout: time.Duration(timeout) * time.Second,
+		})
 		req = client.R().SetContext(ctx)
 
 		// 重新设置headers和body

@@ -65,7 +65,7 @@ func TestNewAPITool(t *testing.T) {
 			assert.Equal(t, "api", tool.Name())
 			assert.Contains(t, tool.Description(), "HTTP API")
 			assert.Equal(t, tt.baseURL, tool.baseURL)
-			assert.Equal(t, tt.expected.timeout, tool.client.GetClient().Timeout)
+			assert.Equal(t, tt.expected.timeout, tool.client.Config().Timeout)
 			assert.Len(t, tool.headers, tt.expected.headers)
 		})
 	}
@@ -504,7 +504,7 @@ func TestAPIToolBuilder(t *testing.T) {
 
 	assert.NotNil(t, tool)
 	assert.Equal(t, "https://api.example.com", tool.baseURL)
-	assert.Equal(t, 10*time.Second, tool.client.GetClient().Timeout)
+	assert.Equal(t, 10*time.Second, tool.client.Config().Timeout)
 	assert.Len(t, tool.headers, 3)
 	assert.Equal(t, "value", tool.headers["X-Custom"])
 	assert.Equal(t, "value2", tool.headers["X-Another"])
@@ -518,7 +518,7 @@ func TestAPIToolBuilder_Defaults(t *testing.T) {
 
 	assert.NotNil(t, tool)
 	assert.Equal(t, "", tool.baseURL)
-	assert.Equal(t, 30*time.Second, tool.client.GetClient().Timeout)
+	assert.Equal(t, 30*time.Second, tool.client.Config().Timeout)
 	assert.Len(t, tool.headers, 0)
 }
 

@@ -11,14 +11,15 @@ import (
 	agentcore "github.com/kart-io/goagent/core"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
+	"github.com/kart-io/goagent/utils/httpclient"
 	"github.com/kart-io/logger/core"
 )
 
 // HTTPAgent HTTP 调用 Agent
-// 提供通用的 HTTP 请求能力，使用 resty 客户端
+// 提供通用的 HTTP 请求能力，使用 httpclient
 type HTTPAgent struct {
 	*agentcore.BaseAgent
-	client *resty.Client
+	client *httpclient.Client
 	logger core.Logger
 }
 
@@ -36,7 +37,9 @@ func NewHTTPAgent(logger core.Logger) *HTTPAgent {
 				"http_patch",
 			},
 		),
-		client: resty.New().SetTimeout(30 * time.Second),
+		client: httpclient.NewClient(&httpclient.Config{
+			Timeout: 30 * time.Second,
+		}),
 		logger: logger.With("agent", "http"),
 	}
 }

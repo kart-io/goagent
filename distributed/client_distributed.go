@@ -6,27 +6,29 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/go-resty/resty/v2"
-
 	agentcore "github.com/kart-io/goagent/core"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
+	"github.com/kart-io/goagent/utils/httpclient"
 	"github.com/kart-io/logger/core"
 )
 
 // Client 远程 Agent 客户端
 // 负责调用远程服务的 Agent
 type Client struct {
-	client *resty.Client
+	client *httpclient.Client
 	logger core.Logger
 }
 
 // NewClient 创建客户端
 func NewClient(logger core.Logger) *Client {
-	client := resty.New().
-		SetTimeout(60 * time.Second).
-		SetHeader(interfaces.HeaderContentType, interfaces.ContentTypeJSON).
-		SetHeader(interfaces.HeaderAccept, interfaces.ContentTypeJSON)
+	client := httpclient.NewClient(&httpclient.Config{
+		Timeout: 60 * time.Second,
+		Headers: map[string]string{
+			interfaces.HeaderContentType: interfaces.ContentTypeJSON,
+			interfaces.HeaderAccept:      interfaces.ContentTypeJSON,
+		},
+	})
 
 	return &Client{
 		client: client,
