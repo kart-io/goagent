@@ -371,7 +371,7 @@ func TestRAGChainRun(t *testing.T) {
 		t.Fatalf("Failed to create retriever: %v", err)
 	}
 
-	chain := NewRAGChain(retriever)
+	chain := NewRAGChain(retriever, nil)
 
 	result, err := chain.Run(ctx, "What is Kubernetes?")
 	if err != nil {
@@ -402,7 +402,7 @@ func TestRAGChainRunEmptyResults(t *testing.T) {
 		t.Fatalf("Failed to create retriever: %v", err)
 	}
 
-	chain := NewRAGChain(retriever)
+	chain := NewRAGChain(retriever, nil)
 
 	result, err := chain.Run(ctx, "test query")
 	if err != nil {
@@ -428,14 +428,14 @@ func TestRAGMultiQueryRetrieverConfiguration(t *testing.T) {
 	retriever, _ := NewRAGRetriever(config)
 
 	t.Run("Default num queries", func(t *testing.T) {
-		mqr := NewRAGMultiQueryRetriever(retriever, 0)
+		mqr := NewRAGMultiQueryRetriever(retriever, 0, nil)
 		if mqr.NumQueries != 3 {
 			t.Errorf("Expected default NumQueries 3, got %d", mqr.NumQueries)
 		}
 	})
 
 	t.Run("Custom num queries", func(t *testing.T) {
-		mqr := NewRAGMultiQueryRetriever(retriever, 5)
+		mqr := NewRAGMultiQueryRetriever(retriever, 5, nil)
 		if mqr.NumQueries != 5 {
 			t.Errorf("Expected NumQueries 5, got %d", mqr.NumQueries)
 		}
@@ -463,7 +463,7 @@ func TestRAGMultiQueryRetrieverRetrieve(t *testing.T) {
 	}
 
 	retriever, _ := NewRAGRetriever(config)
-	mqr := NewRAGMultiQueryRetriever(retriever, 3)
+	mqr := NewRAGMultiQueryRetriever(retriever, 3, nil)
 
 	results, err := mqr.Retrieve(ctx, "machine learning")
 	if err != nil {
@@ -492,7 +492,7 @@ func TestRAGMultiQueryRetrieverDeduplication(t *testing.T) {
 	}
 
 	retriever, _ := NewRAGRetriever(config)
-	mqr := NewRAGMultiQueryRetriever(retriever, 5)
+	mqr := NewRAGMultiQueryRetriever(retriever, 5, nil)
 
 	results, err := mqr.Retrieve(ctx, "Kubernetes")
 	if err != nil {

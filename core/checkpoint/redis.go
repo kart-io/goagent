@@ -126,6 +126,8 @@ func NewRedisCheckpointer(config *RedisCheckpointerConfig) (*RedisCheckpointer, 
 	})
 
 	// Test connection
+	// NOTE: Using background context with timeout for initial connection test
+	// as this is a setup operation independent of request context
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 

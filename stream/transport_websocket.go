@@ -195,8 +195,14 @@ type WebSocketBidirectionalStream struct {
 }
 
 // NewWebSocketBidirectionalStream 创建双向流
+// Deprecated: Use NewWebSocketBidirectionalStreamWithContext instead
 func NewWebSocketBidirectionalStream(conn *websocket.Conn) *WebSocketBidirectionalStream {
-	ctx, cancel := context.WithCancel(context.Background())
+	return NewWebSocketBidirectionalStreamWithContext(context.Background(), conn)
+}
+
+// NewWebSocketBidirectionalStreamWithContext 创建双向流，使用父上下文
+func NewWebSocketBidirectionalStreamWithContext(parentCtx context.Context, conn *websocket.Conn) *WebSocketBidirectionalStream {
+	ctx, cancel := context.WithCancel(parentCtx)
 
 	stream := &WebSocketBidirectionalStream{
 		streamer: NewWebSocketStreamer(conn),

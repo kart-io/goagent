@@ -216,7 +216,10 @@ func TestCohereRerankerConfiguration(t *testing.T) {
 	model := "rerank-model"
 	topN := 3
 
-	reranker := NewCohereReranker(apiKey, model, topN)
+	reranker, err := NewCohereReranker(apiKey, model, topN)
+	if err != nil {
+		t.Fatalf("Failed to create Cohere reranker: %v", err)
+	}
 
 	if reranker.APIKey != apiKey {
 		t.Errorf("Expected APIKey %s, got %s", apiKey, reranker.APIKey)
@@ -234,7 +237,10 @@ func TestCohereRerankerConfiguration(t *testing.T) {
 // TestCohereRerankerEmptyDocs tests Cohere reranker with empty docs
 func TestCohereRerankerEmptyDocs(t *testing.T) {
 	ctx := context.Background()
-	reranker := NewCohereReranker("key", "model", 2)
+	reranker, err := NewCohereReranker("key", "model", 2)
+	if err != nil {
+		t.Fatalf("Failed to create Cohere reranker: %v", err)
+	}
 
 	results, err := reranker.Rerank(ctx, "test", []*Document{})
 	if err != nil {

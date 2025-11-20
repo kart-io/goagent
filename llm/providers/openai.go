@@ -395,6 +395,9 @@ func (p *OpenAIProvider) Provider() agentllm.Provider {
 
 // IsAvailable checks if the provider is available
 func (p *OpenAIProvider) IsAvailable() bool {
+	// NOTE: Using background context with timeout for availability check is acceptable
+	// as this is a non-critical health check operation that should be independent
+	// of any specific request context
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 

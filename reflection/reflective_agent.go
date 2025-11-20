@@ -146,8 +146,14 @@ type SelfReflectiveAgent struct {
 }
 
 // NewSelfReflectiveAgent creates a new self-reflective agent
+// Deprecated: Use NewSelfReflectiveAgentWithContext instead
 func NewSelfReflectiveAgent(llmClient llm.Client, mem memory.EnhancedMemory, opts ...ReflectionOption) *SelfReflectiveAgent {
-	ctx, cancel := context.WithCancel(context.Background())
+	return NewSelfReflectiveAgentWithContext(context.Background(), llmClient, mem, opts...)
+}
+
+// NewSelfReflectiveAgentWithContext creates a new self-reflective agent with a parent context
+func NewSelfReflectiveAgentWithContext(parentCtx context.Context, llmClient llm.Client, mem memory.EnhancedMemory, opts ...ReflectionOption) *SelfReflectiveAgent {
+	ctx, cancel := context.WithCancel(parentCtx)
 	agent := &SelfReflectiveAgent{
 		BaseAgent:          core.NewBaseAgent("self_reflective", "Agent with self-reflection capabilities", []string{"reflection", "learning", "self-improvement"}),
 		llmClient:          llmClient,
@@ -479,8 +485,8 @@ func (a *SelfReflectiveAgent) shouldReflect() bool {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 
-	// Check if we have enough experiences
-	experiences, _ := a.memory.GetByType(context.Background(), memory.MemoryTypeEpisodic, 100)
+	// Check if we have enough experiences using agent's context
+	experiences, _ := a.memory.GetByType(a.ctx, memory.MemoryTypeEpisodic, 100)
 	return len(experiences) >= a.minExperiences
 }
 
