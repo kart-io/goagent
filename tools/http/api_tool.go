@@ -11,14 +11,15 @@ import (
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/tools"
+	"github.com/kart-io/goagent/utils/httpclient"
 )
 
 // APITool HTTP API 调用工具
 //
-// 提供通用的 HTTP 请求能力，使用 resty 客户端
+// 提供通用的 HTTP 请求能力，使用统一的 HTTP 客户端管理器
 type APITool struct {
 	*tools.BaseTool
-	client  *resty.Client
+	client  *httpclient.Client
 	baseURL string            // 基础 URL（可选）
 	headers map[string]string // 默认请求头
 }
@@ -38,14 +39,15 @@ func NewAPITool(baseURL string, timeout time.Duration, headers map[string]string
 		headers = make(map[string]string)
 	}
 
-	// 创建 resty 客户端
-	client := resty.New().
-		SetTimeout(timeout).
-		SetHeaders(headers)
-
-	if baseURL != "" {
-		client.SetBaseURL(baseURL)
+	// 创建 HTTP 客户端配置
+	config := &httpclient.Config{
+		Timeout: timeout,
+		BaseURL: baseURL,
+		Headers: headers,
 	}
+
+	// 创建 HTTP 客户端
+	client := httpclient.NewClient(config)
 
 	tool := &APITool{
 		client:  client,
