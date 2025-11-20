@@ -79,12 +79,12 @@ run: build
 ## test: Run all tests
 test:
 	@echo "$(YELLOW)Running tests...$(NC)"
-	$(GOTEST) -v -race -timeout 30s ./...
+	GO_TEST_MODE=true $(GOTEST) -v -race -timeout 30s ./...
 
 ## test-short: Run short tests
 test-short:
 	@echo "$(YELLOW)Running short tests...$(NC)"
-	$(GOTEST) -v -short ./...
+	GO_TEST_MODE=true $(GOTEST) -v -short ./...
 
 ## test-integration: Run integration tests
 test-integration:
@@ -95,7 +95,7 @@ test-integration:
 coverage:
 	@echo "$(YELLOW)Generating coverage report...$(NC)"
 	@mkdir -p $(COVERAGE_DIR)
-	$(GOTEST) -v -race -coverprofile=$(COVERAGE_DIR)/coverage.out -covermode=atomic ./...
+	GO_TEST_MODE=true $(GOTEST) -v -race -coverprofile=$(COVERAGE_DIR)/coverage.out -covermode=atomic ./...
 	$(GOCMD) tool cover -html=$(COVERAGE_DIR)/coverage.out -o $(COVERAGE_DIR)/coverage.html
 	@echo "$(GREEN)Coverage report generated at $(COVERAGE_DIR)/coverage.html$(NC)"
 

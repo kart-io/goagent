@@ -6,9 +6,11 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/kart-io/goagent/utils/json"
+	"os"
 	"sync"
 	"time"
+
+	"github.com/kart-io/goagent/utils/json"
 )
 
 var (
@@ -369,7 +371,10 @@ func (c *MultiTierCache) Get(ctx context.Context, key string) (interface{}, erro
 		if err == nil {
 			// 回填到更高层级
 			for j := 0; j < i; j++ {
-				_ = c.tiers[j].Set(ctx, key, value, 0)
+				if err := c.tiers[j].Set(ctx, key, value, 0); err != nil {
+					// 缓存回填失败不影响业务，但记录日志便于调试
+					fmt.Fprintf(os.Stderr, "cache tier %d backfill failed (key=%s): %v\n", j, key, err)
+				}
 			}
 			return value, nil
 		}
@@ -391,16 +396,22 @@ func (c *MultiTierCache) Set(ctx context.Context, key string, value interface{},
 
 // Delete 从所有层级删除
 func (c *MultiTierCache) Delete(ctx context.Context, key string) error {
-	for _, tier := range c.tiers {
-		_ = tier.Delete(ctx, key)
+	for i, tier := range c.tiers {
+		if err := tier.Delete(ctx, key); err != nil {
+			// 缓存删除失败，记录但继续
+			fmt.Fprintf(os.Stderr, "cache tier %d delete failed (key=%s): %v\n", i, key, err)
+		}
 	}
 	return nil
 }
 
 // Clear 清空所有层级
 func (c *MultiTierCache) Clear(ctx context.Context) error {
-	for _, tier := range c.tiers {
-		_ = tier.Clear(ctx)
+	for i, tier := range c.tiers {
+		if err := tier.Clear(ctx); err != nil {
+			// 缓存清空失败，记录但继续
+			fmt.Fprintf(os.Stderr, "cache tier %d clear failed: %v\n", i, err)
+		}
 	}
 	return nil
 }

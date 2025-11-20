@@ -139,7 +139,7 @@ func demonstrateScenarioBasedStrategy() {
 	for i := 0; i < 100; i++ {
 		buf := poolManager.GetBuffer()
 		buf.WriteString(`{"id":`)
-		buf.WriteString(fmt.Sprintf("%d", i))
+		fmt.Fprintf(buf, "%d", i)
 		buf.WriteString(`}`)
 		_ = buf.String()
 		poolManager.PutBuffer(buf)
@@ -215,7 +215,7 @@ func demonstrateMetricsStrategy() {
 	for i := 0; i < 200; i++ {
 		// ByteBuffer 操作
 		buf := poolManager.GetBuffer()
-		buf.WriteString(fmt.Sprintf("Data %d", i))
+		fmt.Fprintf(buf, "Data %d", i)
 		poolManager.PutBuffer(buf)
 
 		// Message 操作

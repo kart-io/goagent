@@ -55,9 +55,9 @@ func TestNewAnthropic(t *testing.T) {
 			wantErr: false,
 			checkResult: func(t *testing.T, p *AnthropicProvider) {
 				assert.Equal(t, "test-key", p.apiKey)
-				assert.Equal(t, "https://api.anthropic.com/v1", p.baseURL)
-				assert.Equal(t, "claude-3-sonnet-20240229", p.model)
-				assert.Equal(t, 2000, p.maxTokens)
+				assert.Equal(t, "https://api.anthropic.com", p.baseURL)
+				assert.Equal(t, "claude-3-5-sonnet-20241022", p.model)
+				assert.Equal(t, 1000, p.maxTokens)
 				assert.Equal(t, 0.7, p.temperature)
 			},
 		},

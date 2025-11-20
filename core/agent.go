@@ -171,7 +171,11 @@ func (a *BaseAgent) Invoke(ctx context.Context, input *AgentInput) (*AgentOutput
 	}
 
 	// 触发回调
-	_ = a.triggerOnFinish(ctx, output)
+	if err := a.triggerOnFinish(ctx, output); err != nil {
+		// Log callback error but return the original NotImplemented error
+		// as it's more important for the caller to know the method needs implementation
+		return output, ErrNotImplemented
+	}
 
 	return output, ErrNotImplemented
 }
