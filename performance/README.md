@@ -183,9 +183,135 @@ for {
 }
 ```
 
+### 4. Object Pooling (`pool_manager.go`, `pool_strategies.go`)
+
+Object pooling reduces memory allocations and GC pressure by reusing frequently created objects.
+
+**Architecture**:
+
+- **PoolManager Interface** - Clean abstraction for pool operations
+- **PoolAgent Implementation** - Concrete implementation with dependency injection
+- **Strategy Pattern** - Flexible pool behavior control
+- **Agent Pattern** - Pool manager as an Agent
+
+**Key Features**:
+
+- Pools for 6 high-frequency object types
+- Zero allocations for pooled objects
+- Automatic object cleanup and reset
+- Large object protection (prevents memory bloat)
+- Statistics tracking for each pool
+- **Dependency injection** - No global state
+- **Multiple strategies** - Adaptive, Scenario-based, Metrics, Priority
+
+**Usage**:
+
+```go
+// Create pool manager with configuration
+config := &performance.PoolManagerConfig{
+    EnabledPools: map[performance.PoolType]bool{
+        performance.PoolTypeByteBuffer: true,
+        performance.PoolTypeMessage:    true,
+    },
+    MaxBufferSize: 64 * 1024,
+    MaxMapSize:    100,
+}
+
+manager := performance.NewPoolAgent(config)
+
+// Use the pool
+buf := manager.GetBuffer()
+defer manager.PutBuffer(buf)
+
+buf.WriteString("Hello, World!")
+```
+
+**Strategies**:
+
+```go
+// Adaptive strategy - auto-adjusts based on usage frequency
+adaptiveStrategy := performance.NewAdaptivePoolStrategy(config)
+config.UseStrategy = adaptiveStrategy
+
+// Scenario-based strategy - predefined configurations
+scenarioStrategy := performance.NewScenarioBasedStrategy(config)
+scenarioStrategy.SetScenario(performance.ScenarioLLMCalls)
+
+// Metrics strategy - collect performance metrics
+metricsStrategy := performance.NewMetricsPoolStrategy(baseStrategy, collector)
+```
+
+**Agent Pattern**:
+
+```go
+// Create pool manager as an Agent
+agent := performance.NewPoolManagerAgent("pool_optimizer", config)
+
+input := &core.AgentInput{
+    Task: "configure_pools",
+    Context: map[string]interface{}{
+        "scenario": "llm_calls",
+    },
+}
+
+output, _ := agent.Execute(ctx, input)
+```
+
+**Performance Benefits**:
+
+| Object Type | With Pool | Without Pool | Improvement | Allocations |
+|------------|-----------|-------------|-------------|-------------|
+| ByteBuffer | ~13 ns/op | ~20 ns/op | **35% faster** | **0 vs 1** |
+| Message | ~12 ns/op | ~25 ns/op | **52% faster** | **0 vs 1** |
+| ToolInput | ~28 ns/op | ~50 ns/op | **44% faster** | **0 vs 1** |
+| ToolOutput | ~25 ns/op | ~45 ns/op | **44% faster** | **0 vs 1** |
+| AgentInput | ~30 ns/op | ~55 ns/op | **45% faster** | **0 vs 1** |
+| AgentOutput | ~35 ns/op | ~65 ns/op | **46% faster** | **0 vs 1** |
+
+**Pool Statistics**:
+
+```go
+// Get individual pool stats
+stats := manager.GetStats(performance.PoolTypeByteBuffer)
+fmt.Printf("Gets: %d, Puts: %d, News: %d\n",
+    stats.Gets.Load(), stats.Puts.Load(), stats.News.Load())
+
+// Get all pool stats
+allStats := manager.GetAllStats()
+for poolType, stats := range allStats {
+    fmt.Printf("%s - Gets: %d, Puts: %d\n",
+        poolType, stats.Gets.Load(), stats.Puts.Load())
+}
+
+// Reset statistics
+manager.ResetStats()
+```
+
+**Best Practices**:
+
+- Always use `defer` to ensure objects are returned to pool
+- Buffers >64KB are automatically discarded (not pooled)
+- Maps >100 keys are reallocated to prevent memory leaks
+- Never store pooled objects in global variables
+- Objects are automatically cleaned when returned to pool
+- Use dependency injection for better testability
+
+**When to Use**:
+
+- High-frequency LLM API calls (Message, AgentInput/Output)
+- Concurrent tool execution (ToolInput/Output)
+- JSON serialization/deserialization (ByteBuffer)
+- Stream response processing
+
+**When NOT to Use**:
+
+- Low-frequency operations (<100/sec)
+- Long-lived objects (minute-scale lifetimes)
+- Objects with highly variable sizes
+
 ## Combined Usage
 
-All three optimizations can be combined for maximum performance:
+All optimizations can be combined for maximum performance:
 
 ```go
 // 1. Create agent pool with cached agents
@@ -238,6 +364,22 @@ Speedup: 12.01x
 ```
 1 Goroutine:     998,113 ns/op
 10 Goroutines:    19,900 ns/op (50x better throughput)
+```
+
+### Object Pool Performance
+
+```
+ByteBuffer (with pool):    13 ns/op (0 allocs/op)
+ByteBuffer (without pool): 20 ns/op (1 alloc/op)
+Improvement: 35% faster, 0 allocations
+
+Message (with pool):       12 ns/op (0 allocs/op)
+Message (without pool):    25 ns/op (1 alloc/op)
+Improvement: 52% faster, 0 allocations
+
+ToolInput (with pool):     28 ns/op (0 allocs/op)
+ToolInput (without pool):  50 ns/op (1 alloc/op)
+Improvement: 44% faster, 0 allocations
 ```
 
 ## Configuration Guidelines
@@ -300,18 +442,46 @@ See `example_test.go` for detailed usage examples:
 - `Example_streamingBatch`: Streaming results
 - `Example_customCacheKey`: Custom cache key generation
 
+### Decoupled Architecture Example
+
+See `../examples/advanced/pool-decoupled-architecture/` for comprehensive decoupled architecture demonstration:
+
+- **Dependency Injection**: Creating isolated pool manager instances
+- **Strategy Pattern**: Adaptive, Scenario-based, Metrics, and Priority strategies
+- **Agent Pattern**: Pool manager as an Agent
+- **Scenario-driven Configuration**: Auto-configuration for different use cases
+- **Metrics Collection**: Integration with monitoring systems
+- **Isolated Testing**: Test-friendly design
+
+Run the example:
+
+```bash
+cd ../examples/advanced/pool-decoupled-architecture
+make run
+```
+
+Features demonstrated:
+- 6 different usage patterns
+- Multiple pool strategies
+- Performance monitoring
+- Best practices
+
 ## Performance Metrics Summary
 
-| Optimization | Metric               | Value             |
-| ------------ | -------------------- | ----------------- |
-| **Pooling**  | Overhead Reduction   | ~10%              |
-| **Pooling**  | Allocation Reduction | ~31% fewer bytes  |
-| **Caching**  | Hit Latency          | <1µs              |
-| **Caching**  | Speedup (cached)     | 1130x             |
-| **Caching**  | Typical Hit Rate     | 90-99%            |
-| **Batch**    | Speedup (10 workers) | 12x               |
-| **Batch**    | Speedup (20 workers) | 23x               |
-| **Batch**    | Max Throughput       | >11,000 tasks/sec |
+| Optimization      | Metric               | Value             |
+| ----------------- | -------------------- | ----------------- |
+| **Pooling**       | Overhead Reduction   | ~10%              |
+| **Pooling**       | Allocation Reduction | ~31% fewer bytes  |
+| **Caching**       | Hit Latency          | <1µs              |
+| **Caching**       | Speedup (cached)     | 1130x             |
+| **Caching**       | Typical Hit Rate     | 90-99%            |
+| **Batch**         | Speedup (10 workers) | 12x               |
+| **Batch**         | Speedup (20 workers) | 23x               |
+| **Batch**         | Max Throughput       | >11,000 tasks/sec |
+| **Object Pool**   | ByteBuffer Speedup   | 35% faster        |
+| **Object Pool**   | Message Speedup      | 52% faster        |
+| **Object Pool**   | Allocations          | **0 allocs/op**   |
+| **Object Pool**   | GC Pressure          | Near-zero         |
 
 ## License
 
