@@ -2,17 +2,20 @@ package retrieval
 
 import (
 	"context"
+	"fmt"
+
+	"github.com/google/uuid"
+	"github.com/qdrant/go-client/qdrant"
 
 	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // QdrantVectorStore Qdrant 向量数据库存储
 //
-// 注意：这是可选功能，需要安装 github.com/qdrant/go-client
-// 当前为占位实现，实际使用时需要添加依赖并完善代码
+// 提供基于 Qdrant 的向量存储实现，支持高性能的语义搜索
 type QdrantVectorStore struct {
 	config QdrantConfig
-	// client *qdrant.Client // 需要导入 github.com/qdrant/go-client
+	client *qdrant.Client
 }
 
 // QdrantConfig Qdrant 配置
@@ -38,11 +41,13 @@ type QdrantConfig struct {
 
 // NewQdrantVectorStore 创建 Qdrant 向量存储
 //
-// 注意：当前为占位实现，实际使用需要：
-// 1. 在 go.mod 中添加：github.com/qdrant/go-client v1.7.0
-// 2. 运行：go get github.com/qdrant/go-client
-// 3. 完善下面的实现代码
-func NewQdrantVectorStore(config QdrantConfig) (*QdrantVectorStore, error) {
+// 参数:
+//   - config: Qdrant 配置
+//
+// 返回:
+//   - *QdrantVectorStore: Qdrant 向量存储实例
+//   - error: 错误信息
+func NewQdrantVectorStore(ctx context.Context, config QdrantConfig) (*QdrantVectorStore, error) {
 	if config.URL == "" {
 		config.URL = "localhost:6334"
 	}
@@ -65,35 +70,165 @@ func NewQdrantVectorStore(config QdrantConfig) (*QdrantVectorStore, error) {
 		config.Embedder = NewSimpleEmbedder(config.VectorSize)
 	}
 
-	store := &QdrantVectorStore{
-		config: config,
+	// 初始化 Qdrant 客户端
+	clientConfig := &qdrant.Config{
+		Host: config.URL,
+	}
+	if config.APIKey != "" {
+		clientConfig.APIKey = config.APIKey
 	}
 
-	// TODO: 初始化 Qdrant 客户端
-	// client, err := qdrant.NewClient(&qdrant.Config{
-	//     Host: config.URL,
-	//     APIKey: config.APIKey,
-	// })
-	// if err != nil {
-	//     return nil, fmt.Errorf("failed to create Qdrant client: %w", err)
-	// }
-	// store.client = client
+	client, err := qdrant.NewClient(clientConfig)
+	if err != nil {
+		return nil, agentErrors.Wrap(err, agentErrors.CodeInternal, "failed to create Qdrant client").
+			WithComponent("qdrant_store").
+			WithOperation("create").
+			WithContext("url", config.URL)
+	}
 
-	// TODO: 创建或验证集合
-	// err = store.ensureCollection()
-	// if err != nil {
-	//     return nil, err
-	// }
+	store := &QdrantVectorStore{
+		config: config,
+		client: client,
+	}
+
+	// 创建或验证集合
+	if err := store.ensureCollection(ctx); err != nil {
+		return nil, err
+	}
 
 	return store, nil
 }
 
+// ensureCollection 确保集合存在
+func (q *QdrantVectorStore) ensureCollection(ctx context.Context) error {
+	// 检查集合是否存在
+	exists, err := q.client.CollectionExists(ctx, q.config.CollectionName)
+	if err != nil {
+		return agentErrors.Wrap(err, agentErrors.CodeInternal, "failed to check collection existence").
+			WithComponent("qdrant_store").
+			WithOperation("ensure_collection").
+			WithContext("collection", q.config.CollectionName)
+	}
+
+	if exists {
+		return nil
+	}
+
+	// 创建集合
+	distance := qdrant.Distance_Cosine
+	switch q.config.Distance {
+	case "euclidean":
+		distance = qdrant.Distance_Euclid
+	case "dot":
+		distance = qdrant.Distance_Dot
+	case "cosine":
+		distance = qdrant.Distance_Cosine
+	}
+
+	err = q.client.CreateCollection(ctx, &qdrant.CreateCollection{
+		CollectionName: q.config.CollectionName,
+		VectorsConfig: qdrant.NewVectorsConfig(&qdrant.VectorParams{
+			Size:     uint64(q.config.VectorSize),
+			Distance: distance,
+		}),
+	})
+
+	if err != nil {
+		return agentErrors.Wrap(err, agentErrors.CodeInternal, "failed to create collection").
+			WithComponent("qdrant_store").
+			WithOperation("ensure_collection").
+			WithContext("collection", q.config.CollectionName)
+	}
+
+	return nil
+}
+
 // Add 添加文档和向量
 func (q *QdrantVectorStore) Add(ctx context.Context, docs []*Document, vectors [][]float32) error {
-	// TODO: 实现 Qdrant 添加逻辑
-	return agentErrors.New(agentErrors.CodeNotImplemented, "qdrant integration not implemented yet - add github.com/qdrant/go-client dependency").
-		WithComponent("qdrant_store").
-		WithOperation("add_documents")
+	if len(docs) == 0 {
+		return nil
+	}
+
+	if len(docs) != len(vectors) {
+		return agentErrors.New(agentErrors.CodeInvalidInput, "number of documents and vectors must match").
+			WithComponent("qdrant_store").
+			WithOperation("add_documents").
+			WithContext("num_docs", len(docs)).
+			WithContext("num_vectors", len(vectors))
+	}
+
+	// 转换为 Qdrant points
+	points := make([]*qdrant.PointStruct, len(docs))
+	for i, doc := range docs {
+		// 生成 ID 如果文档没有
+		id := doc.ID
+		if id == "" {
+			id = uuid.New().String()
+			doc.ID = id
+		}
+
+		// 转换 metadata 为 payload
+		payload := make(map[string]*qdrant.Value)
+		payload["page_content"] = qdrant.NewValueString(doc.PageContent)
+		payload["id"] = qdrant.NewValueString(id)
+
+		if doc.Metadata != nil {
+			for k, v := range doc.Metadata {
+				payload[k] = convertToQdrantValue(v)
+			}
+		}
+
+		points[i] = &qdrant.PointStruct{
+			Id:      qdrant.NewID(id),
+			Vectors: qdrant.NewVectors(vectors[i]...),
+			Payload: payload,
+		}
+	}
+
+	// 批量上传点
+	batchSize := 100
+	for i := 0; i < len(points); i += batchSize {
+		end := i + batchSize
+		if end > len(points) {
+			end = len(points)
+		}
+
+		batch := points[i:end]
+		_, err := q.client.Upsert(ctx, &qdrant.UpsertPoints{
+			CollectionName: q.config.CollectionName,
+			Points:         batch,
+		})
+
+		if err != nil {
+			return agentErrors.Wrap(err, agentErrors.CodeInternal, "failed to upsert points").
+				WithComponent("qdrant_store").
+				WithOperation("add_documents").
+				WithContext("batch_start", i).
+				WithContext("batch_end", end)
+		}
+	}
+
+	return nil
+}
+
+// convertToQdrantValue 转换 Go 值为 Qdrant Value
+func convertToQdrantValue(v interface{}) *qdrant.Value {
+	switch val := v.(type) {
+	case string:
+		return qdrant.NewValueString(val)
+	case int:
+		return qdrant.NewValueInt(int64(val))
+	case int64:
+		return qdrant.NewValueInt(val)
+	case float64:
+		return qdrant.NewValueDouble(val)
+	case float32:
+		return qdrant.NewValueDouble(float64(val))
+	case bool:
+		return qdrant.NewValueBool(val)
+	default:
+		return qdrant.NewValueString(fmt.Sprintf("%v", v))
+	}
 }
 
 // AddDocuments 添加文档（实现 VectorStore 接口）
@@ -135,11 +270,88 @@ func (q *QdrantVectorStore) Search(ctx context.Context, query string, topK int) 
 
 // SearchByVector 通过向量搜索
 func (q *QdrantVectorStore) SearchByVector(ctx context.Context, queryVector []float32, topK int) ([]*Document, error) {
-	// TODO: 实现 Qdrant 搜索逻辑
-	return nil, agentErrors.New(agentErrors.CodeNotImplemented, "qdrant integration not implemented yet - add github.com/qdrant/go-client dependency").
-		WithComponent("qdrant_store").
-		WithOperation("search_by_vector").
-		WithContext("topK", topK)
+	if topK <= 0 {
+		topK = 4
+	}
+
+	// 执行搜索
+	results, err := q.client.Query(ctx, &qdrant.QueryPoints{
+		CollectionName: q.config.CollectionName,
+		Query:          qdrant.NewQuery(queryVector...),
+		Limit:          uintPtr(uint64(topK)),
+		WithPayload:    qdrant.NewWithPayload(true),
+	})
+
+	if err != nil {
+		return nil, agentErrors.Wrap(err, agentErrors.CodeRetrievalSearch, "failed to search vectors").
+			WithComponent("qdrant_store").
+			WithOperation("search_by_vector").
+			WithContext("topK", topK)
+	}
+
+	// 转换结果为文档
+	docs := make([]*Document, 0, len(results))
+	for _, point := range results {
+		doc := &Document{
+			Metadata: make(map[string]interface{}),
+		}
+
+		// 提取 payload
+		if point.Payload != nil {
+			// 提取 page_content
+			if content, ok := point.Payload["page_content"]; ok && content.GetStringValue() != "" {
+				doc.PageContent = content.GetStringValue()
+			}
+
+			// 提取 ID
+			if id, ok := point.Payload["id"]; ok && id.GetStringValue() != "" {
+				doc.ID = id.GetStringValue()
+			} else if point.Id != nil {
+				doc.ID = point.Id.GetUuid()
+			}
+
+			// 提取其他 metadata
+			for k, v := range point.Payload {
+				if k != "page_content" && k != "id" {
+					doc.Metadata[k] = convertFromQdrantValue(v)
+				}
+			}
+		}
+
+		// 设置分数
+		doc.Score = float64(point.Score)
+
+		docs = append(docs, doc)
+	}
+
+	return docs, nil
+}
+
+// convertFromQdrantValue 转换 Qdrant Value 为 Go 值
+func convertFromQdrantValue(v *qdrant.Value) interface{} {
+	if v == nil {
+		return nil
+	}
+
+	if str := v.GetStringValue(); str != "" {
+		return str
+	}
+	if v.GetIntegerValue() != 0 {
+		return v.GetIntegerValue()
+	}
+	if v.GetDoubleValue() != 0 {
+		return v.GetDoubleValue()
+	}
+	if v.GetBoolValue() {
+		return true
+	}
+
+	return nil
+}
+
+// uintPtr 返回 uint64 指针
+func uintPtr(v uint64) *uint64 {
+	return &v
 }
 
 // SimilaritySearch 相似度搜索（实现 VectorStore 接口）
@@ -154,20 +366,60 @@ func (q *QdrantVectorStore) SimilaritySearchWithScore(ctx context.Context, query
 
 // Delete 删除文档
 func (q *QdrantVectorStore) Delete(ctx context.Context, ids []string) error {
-	// TODO: 实现 Qdrant 删除逻辑
-	return agentErrors.New(agentErrors.CodeNotImplemented, "qdrant integration not implemented yet - add github.com/qdrant/go-client dependency").
-		WithComponent("qdrant_store").
-		WithOperation("delete_documents").
-		WithContext("num_ids", len(ids))
+	if len(ids) == 0 {
+		return nil
+	}
+
+	// 转换 ID 为 Qdrant PointId
+	pointIDs := make([]*qdrant.PointId, len(ids))
+	for i, id := range ids {
+		pointIDs[i] = qdrant.NewID(id)
+	}
+
+	// 删除点
+	_, err := q.client.Delete(ctx, &qdrant.DeletePoints{
+		CollectionName: q.config.CollectionName,
+		Points: &qdrant.PointsSelector{
+			PointsSelectorOneOf: &qdrant.PointsSelector_Points{
+				Points: &qdrant.PointsIdsList{
+					Ids: pointIDs,
+				},
+			},
+		},
+	})
+
+	if err != nil {
+		return agentErrors.Wrap(err, agentErrors.CodeInternal, "failed to delete points").
+			WithComponent("qdrant_store").
+			WithOperation("delete_documents").
+			WithContext("num_ids", len(ids))
+	}
+
+	return nil
 }
 
 // Update 更新文档
 func (q *QdrantVectorStore) Update(ctx context.Context, docs []*Document) error {
-	// TODO: 实现 Qdrant 更新逻辑
-	return agentErrors.New(agentErrors.CodeNotImplemented, "qdrant integration not implemented yet - add github.com/qdrant/go-client dependency").
-		WithComponent("qdrant_store").
-		WithOperation("update_documents").
-		WithContext("num_docs", len(docs))
+	if len(docs) == 0 {
+		return nil
+	}
+
+	// 生成向量
+	texts := make([]string, len(docs))
+	for i, doc := range docs {
+		texts[i] = doc.PageContent
+	}
+
+	vectors, err := q.config.Embedder.Embed(ctx, texts)
+	if err != nil {
+		return agentErrors.Wrap(err, agentErrors.CodeRetrievalEmbedding, "failed to generate vectors for update").
+			WithComponent("qdrant_store").
+			WithOperation("update_documents").
+			WithContext("num_docs", len(docs))
+	}
+
+	// Qdrant 的 Upsert 操作会自动处理更新
+	return q.Add(ctx, docs, vectors)
 }
 
 // GetEmbedding 获取嵌入向量
@@ -177,10 +429,9 @@ func (q *QdrantVectorStore) GetEmbedding(ctx context.Context, text string) ([]fl
 
 // Close 关闭连接
 func (q *QdrantVectorStore) Close() error {
-	// TODO: 关闭 Qdrant 客户端连接
-	// if q.client != nil {
-	//     return q.client.Close()
-	// }
+	if q.client != nil {
+		return q.client.Close()
+	}
 	return nil
 }
 

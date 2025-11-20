@@ -5,6 +5,9 @@ import (
 	"math"
 	"sort"
 
+	coheregov2 "github.com/cohere-ai/cohere-go/v2"
+	cohereclient "github.com/cohere-ai/cohere-go/v2/client"
+
 	agentErrors "github.com/kart-io/goagent/errors"
 )
 
@@ -321,70 +324,102 @@ type CohereReranker struct {
 
 	// TopN 返回前 N 个文档
 	TopN int
+
+	// client Cohere 客户端
+	client *cohereclient.Client
 }
 
 // NewCohereReranker 创建 Cohere 重排序器
-func NewCohereReranker(apiKey, model string, topN int) *CohereReranker {
+//
+// 参数:
+//   - apiKey: Cohere API 密钥
+//   - model: 模型名称（可选，默认为 "rerank-english-v2.0"）
+//   - topN: 返回前 N 个文档
+//
+// 返回:
+//   - *CohereReranker: Cohere 重排序器实例
+//   - error: 错误信息
+func NewCohereReranker(apiKey, model string, topN int) (*CohereReranker, error) {
+	if apiKey == "" {
+		return nil, agentErrors.New(agentErrors.CodeInvalidConfig, "Cohere API key is required").
+			WithComponent("cohere_reranker").
+			WithOperation("create")
+	}
+
+	if model == "" {
+		model = "rerank-english-v2.0"
+	}
+
+	client := cohereclient.NewClient(cohereclient.WithToken(apiKey))
+
 	return &CohereReranker{
 		BaseReranker: NewBaseReranker("cohere"),
 		APIKey:       apiKey,
 		Model:        model,
 		TopN:         topN,
-	}
+		client:       client,
+	}, nil
 }
 
 // Rerank 使用 Cohere API 重新排序
+//
+// 参数:
+//   - ctx: 上下文
+//   - query: 查询字符串
+//   - docs: 待重排序的文档列表
+//
+// 返回:
+//   - []*Document: 重排序后的文档列表
+//   - error: 错误信息
 func (c *CohereReranker) Rerank(ctx context.Context, query string, docs []*Document) ([]*Document, error) {
 	if len(docs) == 0 {
 		return docs, nil
 	}
 
-	// TODO: 实际应该调用 Cohere Rerank API
-	// 这里提供模拟实现
-
-	// 模拟 API 调用延迟
-	// time.Sleep(100 * time.Millisecond)
-
-	// 使用简单的相似度评分
-	scored := make([]*Document, len(docs))
+	// 提取文档内容并转换为 RerankRequestDocumentsItem
+	documentItems := make([]*coheregov2.RerankRequestDocumentsItem, len(docs))
 	for i, doc := range docs {
-		docCopy := doc.Clone()
-		docCopy.Score = c.calculateScore(query, doc.PageContent)
-		scored[i] = docCopy
-	}
-
-	// 排序
-	collection := DocumentCollection(scored)
-	collection.SortByScore()
-
-	// 返回 top-N
-	if c.TopN > 0 && len(collection) > c.TopN {
-		collection = collection[:c.TopN]
-	}
-
-	return collection, nil
-}
-
-// calculateScore 计算分数（模拟）
-func (c *CohereReranker) calculateScore(query, content string) float64 {
-	queryWords := tokenize(query)
-	contentWords := tokenize(content)
-
-	if len(contentWords) == 0 {
-		return 0.0
-	}
-
-	matches := 0
-	for _, qw := range queryWords {
-		for _, cw := range contentWords {
-			if qw == cw {
-				matches++
-				break
-			}
+		documentItems[i] = &coheregov2.RerankRequestDocumentsItem{
+			String: doc.PageContent,
 		}
 	}
 
-	return float64(matches) / float64(len(queryWords))
+	// 调用 Cohere Rerank API
+	topN := c.TopN
+	if topN <= 0 {
+		topN = len(docs)
+	}
+
+	response, err := c.client.Rerank(ctx, &coheregov2.RerankRequest{
+		Query:     query,
+		Documents: documentItems,
+		Model:     &c.Model,
+		TopN:      &topN,
+	})
+
+	if err != nil {
+		return nil, agentErrors.Wrap(err, agentErrors.CodeInternal, "Cohere rerank API call failed").
+			WithComponent("cohere_reranker").
+			WithOperation("rerank").
+			WithContext("query", query).
+			WithContext("num_docs", len(docs))
+	}
+
+	// 转换结果
+	if response == nil || response.Results == nil {
+		return docs, nil
+	}
+
+	rerankedDocs := make([]*Document, 0, len(response.Results))
+	for _, result := range response.Results {
+		if result.Index < len(docs) {
+			doc := docs[result.Index].Clone()
+			doc.Score = result.RelevanceScore
+			rerankedDocs = append(rerankedDocs, doc)
+		}
+	}
+
+	return rerankedDocs, nil
 }
 
 // RerankingRetriever 带重排序的检索器

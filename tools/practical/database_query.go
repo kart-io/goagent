@@ -226,6 +226,8 @@ func (t *DatabaseQueryTool) getConnection(config connectionConfig) (*sql.DB, err
 	if config.ConnectionID != "" {
 		if db, exists := t.connections[config.ConnectionID]; exists {
 			// Verify connection is still alive
+			// NOTE: Using background context with timeout for connection health check
+			// as this is a maintenance operation independent of request context
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 			if err := db.PingContext(ctx); err == nil {
@@ -248,6 +250,8 @@ func (t *DatabaseQueryTool) getConnection(config connectionConfig) (*sql.DB, err
 	db.SetConnMaxLifetime(5 * time.Minute)
 
 	// Test connection
+	// NOTE: Using background context with timeout for initial connection test
+	// as this is a setup operation independent of request context
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := db.PingContext(ctx); err != nil {

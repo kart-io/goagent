@@ -697,6 +697,9 @@ func (s *MultiAgentSystem) routeMessages() {
 			continue
 		}
 
+		// NOTE: Using background context here is acceptable as this is a long-running
+		// background goroutine for message routing. Each message should have its own
+		// lifecycle independent of specific request contexts.
 		ctx := context.Background()
 		if err := recipient.ReceiveMessage(ctx, message); err != nil {
 			s.logger.Errorw("Failed to deliver message",
