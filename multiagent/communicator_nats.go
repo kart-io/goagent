@@ -3,8 +3,8 @@ package multiagent
 import (
 	"context"
 	"crypto/tls"
-	"encoding/json"
 	"fmt"
+	"github.com/kart-io/goagent/utils/json"
 	"sync"
 
 	agentErrors "github.com/kart-io/goagent/errors"

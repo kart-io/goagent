@@ -2,9 +2,9 @@ package postgres
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/kart-io/goagent/utils/json"
 	"time"
 
 	"gorm.io/datatypes"

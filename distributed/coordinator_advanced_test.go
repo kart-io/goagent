@@ -2,8 +2,8 @@ package distributed
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
+	"github.com/kart-io/goagent/utils/json"
 	"net/http"
 	"net/http/httptest"
 	"sync"

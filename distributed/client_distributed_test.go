@@ -2,11 +2,12 @@ package distributed
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/kart-io/goagent/utils/json"
 
 	agentcore "github.com/kart-io/goagent/core"
 	"github.com/stretchr/testify/assert"
@@ -569,5 +570,5 @@ func TestClient_NewClient_Configuration(t *testing.T) {
 
 	assert.NotNil(t, client.client)
 	assert.NotNil(t, client.logger)
-	assert.Equal(t, 60*time.Second, client.client.GetClient().Timeout)
+	assert.Equal(t, 60*time.Second, client.client.Config().Timeout)
 }

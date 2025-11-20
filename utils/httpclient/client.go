@@ -50,14 +50,14 @@ type Config struct {
 // DefaultConfig 返回默认配置
 func DefaultConfig() *Config {
 	return &Config{
-		Timeout:              30 * time.Second,
-		RetryCount:           3,
-		RetryWaitTime:        1 * time.Second,
-		RetryMaxWaitTime:     5 * time.Second,
-		Headers:              make(map[string]string),
-		Debug:                false,
-		DisableKeepAlive:     false,
-		MaxIdleConnsPerHost:  100,
+		Timeout:             30 * time.Second,
+		RetryCount:          3,
+		RetryWaitTime:       1 * time.Second,
+		RetryMaxWaitTime:    5 * time.Second,
+		Headers:             make(map[string]string),
+		Debug:               false,
+		DisableKeepAlive:    false,
+		MaxIdleConnsPerHost: 100,
 	}
 }
 

@@ -3,7 +3,7 @@ package providers
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"github.com/kart-io/goagent/utils/json"
 	"io"
 	"net/http"
 	"net/http/httptest"

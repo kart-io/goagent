@@ -2,9 +2,9 @@ package parsers
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/kart-io/goagent/utils/json"
 	"reflect"
 	"strings"
 

@@ -2,8 +2,8 @@ package providers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/kart-io/goagent/utils/json"
 	"io"
 	"strings"
 	"time"

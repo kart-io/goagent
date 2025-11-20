@@ -2,8 +2,8 @@ package memory
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/kart-io/goagent/utils/json"
 	"math"
 	"sort"
 	"sync"
