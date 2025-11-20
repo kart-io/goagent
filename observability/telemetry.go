@@ -138,6 +138,8 @@ func (p *TelemetryProvider) createResource() (*resource.Resource, error) {
 		attrs = append(attrs, resource.WithAttributes(customAttrs...))
 	}
 
+	// NOTE: Using background context here is acceptable for resource initialization
+	// as this is a one-time setup operation that doesn't depend on request context
 	res, err := resource.New(
 		context.Background(),
 		attrs...,
@@ -194,6 +196,8 @@ func (p *TelemetryProvider) initTracer(res *resource.Resource) (*sdktrace.Tracer
 
 // createOTLPExporter 创建 OTLP 导出器
 func (p *TelemetryProvider) createOTLPExporter() (sdktrace.SpanExporter, error) {
+	// NOTE: Using background context here is acceptable for creating the exporter connection
+	// as this is a setup operation that doesn't depend on specific request context
 	ctx := context.Background()
 
 	// 创建 gRPC 连接

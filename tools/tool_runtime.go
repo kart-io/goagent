@@ -516,11 +516,17 @@ func NewToolRuntimeManager() *ToolRuntimeManager {
 }
 
 // CreateRuntime creates a new runtime for a tool call
+// Deprecated: Use CreateRuntimeWithContext instead
 func (m *ToolRuntimeManager) CreateRuntime(callID string, state core.State, store store.Store) *ToolRuntime {
+	return m.CreateRuntimeWithContext(context.Background(), callID, state, store)
+}
+
+// CreateRuntimeWithContext creates a new runtime for a tool call with a parent context
+func (m *ToolRuntimeManager) CreateRuntimeWithContext(ctx context.Context, callID string, state core.State, store store.Store) *ToolRuntime {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	runtime := NewToolRuntime(context.Background(), state, store)
+	runtime := NewToolRuntime(ctx, state, store)
 	runtime.ToolCallID = callID
 	m.runtimes[callID] = runtime
 

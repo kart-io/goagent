@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/llm"
 )
 
 // RAGRetriever RAG (Retrieval-Augmented Generation) 检索器
@@ -218,17 +219,35 @@ func (r *RAGRetriever) formatDocument(doc *Document, index int) string {
 // RAGChain RAG 链，组合检索和生成
 type RAGChain struct {
 	retriever *RAGRetriever
-	// llmClient llm.Client // 可以添加 LLM 客户端进行生成
+	llmClient llm.Client
 }
 
 // NewRAGChain 创建 RAG 链
-func NewRAGChain(retriever *RAGRetriever) *RAGChain {
+//
+// 参数:
+//   - retriever: RAG 检索器
+//   - llmClient: LLM 客户端（可选，如果为 nil 则仅返回检索结果）
+//
+// 返回:
+//   - *RAGChain: RAG 链实例
+func NewRAGChain(retriever *RAGRetriever, llmClient llm.Client) *RAGChain {
 	return &RAGChain{
 		retriever: retriever,
+		llmClient: llmClient,
 	}
 }
 
 // Run 执行 RAG 链
+//
+// 执行完整的 RAG 流程：检索相关文档 -> 格式化上下文 -> 生成答案
+//
+// 参数:
+//   - ctx: 上下文
+//   - query: 用户查询
+//
+// 返回:
+//   - string: 生成的答案或格式化的上下文
+//   - error: 错误信息
 func (c *RAGChain) Run(ctx context.Context, query string) (string, error) {
 	// 1. 检索相关文档
 	docs, err := c.retriever.Retrieve(ctx, query)
@@ -244,7 +263,7 @@ func (c *RAGChain) Run(ctx context.Context, query string) (string, error) {
 	}
 
 	// 2. 格式化上下文
-	context, err := c.retriever.RetrieveWithContext(ctx, query)
+	contextPrompt, err := c.retriever.RetrieveWithContext(ctx, query)
 	if err != nil {
 		return "", agentErrors.Wrap(err, agentErrors.CodeInternal, "failed to format context").
 			WithComponent("rag_chain").
@@ -252,19 +271,26 @@ func (c *RAGChain) Run(ctx context.Context, query string) (string, error) {
 			WithContext("query", query)
 	}
 
-	// 3. TODO: 调用 LLM 生成回答
-	// response, err := c.llmClient.Complete(ctx, &llm.CompletionRequest{
-	//     Messages: []llm.Message{
-	//         llm.UserMessage(context),
-	//     },
-	// })
-	// if err != nil {
-	//     return "", fmt.Errorf("generation failed: %w", err)
-	// }
-	// return response.Content, nil
+	// 3. 如果没有 LLM 客户端，返回格式化的上下文
+	if c.llmClient == nil {
+		return contextPrompt, nil
+	}
 
-	// 临时返回格式化的上下文
-	return context, nil
+	// 4. 调用 LLM 生成回答
+	response, err := c.llmClient.Complete(ctx, &llm.CompletionRequest{
+		Messages: []llm.Message{
+			llm.UserMessage(contextPrompt),
+		},
+	})
+
+	if err != nil {
+		return "", agentErrors.Wrap(err, agentErrors.CodeLLMRequest, "LLM generation failed").
+			WithComponent("rag_chain").
+			WithOperation("run").
+			WithContext("query", query)
+	}
+
+	return response.Content, nil
 }
 
 // RAGMultiQueryRetriever RAG 多查询检索器
@@ -273,10 +299,19 @@ func (c *RAGChain) Run(ctx context.Context, query string) (string, error) {
 type RAGMultiQueryRetriever struct {
 	BaseRetriever *RAGRetriever
 	NumQueries    int
+	LLMClient     llm.Client // LLM 客户端用于生成查询变体
 }
 
 // NewRAGMultiQueryRetriever 创建 RAG 多查询检索器
-func NewRAGMultiQueryRetriever(baseRetriever *RAGRetriever, numQueries int) *RAGMultiQueryRetriever {
+//
+// 参数:
+//   - baseRetriever: 基础 RAG 检索器
+//   - numQueries: 生成的查询数量
+//   - llmClient: LLM 客户端（可选，如果为 nil 则只使用原始查询）
+//
+// 返回:
+//   - *RAGMultiQueryRetriever: 多查询检索器实例
+func NewRAGMultiQueryRetriever(baseRetriever *RAGRetriever, numQueries int, llmClient llm.Client) *RAGMultiQueryRetriever {
 	if numQueries <= 0 {
 		numQueries = 3
 	}
@@ -284,14 +319,28 @@ func NewRAGMultiQueryRetriever(baseRetriever *RAGRetriever, numQueries int) *RAG
 	return &RAGMultiQueryRetriever{
 		BaseRetriever: baseRetriever,
 		NumQueries:    numQueries,
+		LLMClient:     llmClient,
 	}
 }
 
 // Retrieve 检索相关文档
+//
+// 使用 LLM 生成查询变体，然后对每个查询进行检索并合并结果
+//
+// 参数:
+//   - ctx: 上下文
+//   - query: 原始查询
+//
+// 返回:
+//   - []*Document: 合并后的文档列表
+//   - error: 错误信息
 func (m *RAGMultiQueryRetriever) Retrieve(ctx context.Context, query string) ([]*Document, error) {
-	// TODO: 使用 LLM 生成相关查询
-	// 当前简化版本：直接使用原查询
-	queries := []string{query}
+	// 生成相关查询
+	queries, err := m.generateQueries(ctx, query)
+	if err != nil {
+		// 如果生成查询失败，回退到使用原始查询
+		queries = []string{query}
+	}
 
 	// 去重集合
 	docMap := make(map[string]*Document)
@@ -331,4 +380,53 @@ func (m *RAGMultiQueryRetriever) Retrieve(ctx context.Context, query string) ([]
 	}
 
 	return collection, nil
+}
+
+// generateQueries 使用 LLM 生成查询变体
+func (m *RAGMultiQueryRetriever) generateQueries(ctx context.Context, query string) ([]string, error) {
+	// 如果没有 LLM 客户端，返回原始查询
+	if m.LLMClient == nil {
+		return []string{query}, nil
+	}
+
+	// 构建提示词
+	prompt := fmt.Sprintf(`You are an AI assistant helping to generate alternative search queries.
+Given the original query, generate %d different variations that could help retrieve relevant information.
+The variations should rephrase the query in different ways while maintaining the same intent.
+
+Original query: %s
+
+Please provide only the alternative queries, one per line, without numbering or explanations.`, m.NumQueries, query)
+
+	// 调用 LLM 生成查询
+	response, err := m.LLMClient.Complete(ctx, &llm.CompletionRequest{
+		Messages: []llm.Message{
+			llm.UserMessage(prompt),
+		},
+		Temperature: 0.7, // 适度的创造性
+	})
+
+	if err != nil {
+		return nil, agentErrors.Wrap(err, agentErrors.CodeLLMRequest, "failed to generate query variations").
+			WithComponent("rag_multi_query_retriever").
+			WithOperation("generate_queries").
+			WithContext("query", query)
+	}
+
+	// 解析生成的查询
+	queries := []string{query} // 始终包含原始查询
+	lines := strings.Split(strings.TrimSpace(response.Content), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		// 移除数字前缀（如 "1. ", "- ", 等）
+		line = strings.TrimLeft(line, "0123456789.-) ")
+		if line != "" && line != query {
+			queries = append(queries, line)
+			if len(queries) >= m.NumQueries+1 { // +1 因为包含原始查询
+				break
+			}
+		}
+	}
+
+	return queries, nil
 }

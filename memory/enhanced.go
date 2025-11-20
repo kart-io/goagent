@@ -109,8 +109,14 @@ type HierarchicalMemory struct {
 }
 
 // NewHierarchicalMemory creates a new hierarchical memory system
+// Deprecated: Use NewHierarchicalMemoryWithContext instead
 func NewHierarchicalMemory(vectorStore VectorStore, opts ...MemoryOption) *HierarchicalMemory {
-	ctx, cancel := context.WithCancel(context.Background())
+	return NewHierarchicalMemoryWithContext(context.Background(), vectorStore, opts...)
+}
+
+// NewHierarchicalMemoryWithContext creates a new hierarchical memory system with a parent context
+func NewHierarchicalMemoryWithContext(parentCtx context.Context, vectorStore VectorStore, opts ...MemoryOption) *HierarchicalMemory {
+	ctx, cancel := context.WithCancel(parentCtx)
 	m := &HierarchicalMemory{
 		shortTerm:              NewShortTermMemory(100),
 		longTerm:               NewLongTermMemory(vectorStore),
