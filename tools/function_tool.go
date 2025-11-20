@@ -2,9 +2,9 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 
 	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/utils/json"
 )
 
 // FunctionTool 函数包装工具

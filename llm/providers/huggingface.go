@@ -3,8 +3,8 @@ package providers
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/kart-io/goagent/utils/json"
 	"io"
 	"math/rand"
 	"os"
@@ -138,7 +138,7 @@ func NewHuggingFace(config *agentllm.Config) (*HuggingFaceProvider, error) {
 	client := httpclient.NewClient(&httpclient.Config{
 		Timeout: timeout,
 		Headers: map[string]string{
-			HeaderContentType:  ContentTypeJSON,
+			HeaderContentType:   ContentTypeJSON,
 			HeaderAuthorization: AuthBearerPrefix + apiKey,
 		},
 	})

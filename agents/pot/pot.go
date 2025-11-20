@@ -3,8 +3,8 @@ package pot
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/kart-io/goagent/utils/json"
 	"os/exec"
 	"regexp"
 	"strings"

@@ -4,12 +4,12 @@ import (
 	"container/list"
 	"context"
 	"crypto/sha256"
-	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
 
 	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/utils/json"
 )
 
 // ToolCache 工具缓存接口

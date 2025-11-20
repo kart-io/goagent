@@ -3,8 +3,8 @@ package performance
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/json"
 	"fmt"
+	"github.com/kart-io/goagent/utils/json"
 	"sync"
 	"sync/atomic"
 	"time"

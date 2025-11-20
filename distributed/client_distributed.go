@@ -2,8 +2,8 @@ package distributed
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/kart-io/goagent/utils/json"
 	"time"
 
 	agentcore "github.com/kart-io/goagent/core"

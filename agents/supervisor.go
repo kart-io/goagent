@@ -2,8 +2,8 @@ package agents
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/kart-io/goagent/utils/json"
 	"regexp"
 	"strings"
 	"sync"

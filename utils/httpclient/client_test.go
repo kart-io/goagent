@@ -129,7 +129,7 @@ func TestClient_SetHeader(t *testing.T) {
 func TestClient_SetHeaders(t *testing.T) {
 	client := NewClient(nil)
 	headers := map[string]string{
-		"X-Custom-Header": "value1",
+		"X-Custom-Header":  "value1",
 		"X-Another-Header": "value2",
 	}
 
@@ -276,7 +276,7 @@ func TestClient_HTTPRequest(t *testing.T) {
 
 func TestClient_MethodChaining(t *testing.T) {
 	client := NewClient(nil).
-		SetTimeout(20 * time.Second).
+		SetTimeout(20*time.Second).
 		SetRetryCount(2).
 		SetHeader("User-Agent", "test").
 		SetBaseURL("https://example.com").

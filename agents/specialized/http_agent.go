@@ -2,8 +2,8 @@ package specialized
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/kart-io/goagent/utils/json"
 	"time"
 
 	"github.com/go-resty/resty/v2"

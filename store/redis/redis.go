@@ -2,8 +2,8 @@ package redis
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
+	"github.com/kart-io/goagent/utils/json"
 	"strings"
 	"time"
 

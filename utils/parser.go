@@ -1,8 +1,8 @@
 package utils
 
 import (
-	"encoding/json"
 	"errors"
+	"github.com/kart-io/goagent/utils/json"
 	"regexp"
 	"strings"
 	"sync"
