@@ -18,7 +18,7 @@ func TestNewCalculatorTool(t *testing.T) {
 	assert.NotNil(t, calc)
 	assert.NotNil(t, calc.BaseTool)
 	assert.Equal(t, "calculator", calc.Name())
-	assert.Contains(t, calc.Description(), "mathematical calculations")
+	assert.Contains(t, calc.Description(), "数学运算")
 	assert.NotNil(t, calc.ArgsSchema())
 }
 

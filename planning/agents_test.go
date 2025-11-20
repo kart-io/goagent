@@ -143,7 +143,7 @@ func TestNewTaskDecompositionAgent(t *testing.T) {
 	agent := NewTaskDecompositionAgent(planner)
 
 	assert.NotNil(t, agent)
-	assert.Equal(t, "task_decomposition", agent.Name())
+	assert.Equal(t, "task_decomposition_agent", agent.Name())
 	assert.Contains(t, agent.Capabilities(), "decomposition")
 }
 

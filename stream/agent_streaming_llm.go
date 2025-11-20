@@ -127,7 +127,11 @@ func (a *StreamingLLMAgent) ExecuteStream(ctx context.Context, input *core.Agent
 
 // processStreamAsync 异步处理流式输出
 func (a *StreamingLLMAgent) processStreamAsync(ctx context.Context, input *core.AgentInput, writer *Writer) {
-	defer func() { _ = writer.Close() }()
+	defer func() {
+		if err := writer.Close(); err != nil {
+			fmt.Printf("failed to close stream writer: %v\n", err)
+		}
+	}()
 
 	startTime := time.Now()
 
@@ -141,7 +145,12 @@ func (a *StreamingLLMAgent) processStreamAsync(ctx context.Context, input *core.
 	}
 
 	// 发送状态更新
-	_ = writer.WriteStatus("Starting LLM generation...")
+	if err := writer.WriteStatus("Starting LLM generation..."); err != nil {
+		if writeErr := writer.WriteError(agentErrors.Wrap(err, agentErrors.CodeStreamWrite, "failed to write starting status")); writeErr != nil {
+			fmt.Printf("failed to write error: %v\n", writeErr)
+		}
+		return
+	}
 
 	// 调用 LLM（这里模拟流式输出，实际需要 LLM 客户端支持）
 	response, err := a.llmClient.Chat(ctx, messages)
@@ -162,7 +171,9 @@ func (a *StreamingLLMAgent) processStreamAsync(ctx context.Context, input *core.
 		// 检查上下文取消
 		select {
 		case <-ctx.Done():
-			_ = writer.WriteError(ctx.Err())
+			if err := writer.WriteError(ctx.Err()); err != nil {
+				fmt.Printf("failed to write context error: %v\n", err)
+			}
 			return
 		default:
 		}
@@ -202,7 +213,10 @@ func (a *StreamingLLMAgent) processStreamAsync(ctx context.Context, input *core.
 
 	// 发送完成状态
 	elapsed := time.Since(startTime)
-	_ = writer.WriteStatus(fmt.Sprintf("Completed in %v", elapsed))
+	if err := writer.WriteStatus(fmt.Sprintf("Completed in %v", elapsed)); err != nil {
+		// Log error but don't fail the operation as the main work is already done
+		fmt.Printf("failed to write completion status: %v\n", err)
+	}
 }
 
 // StreamingLLMAgentWithRealStreaming 支持真实 LLM 流式 API 的 Agent
@@ -225,7 +239,11 @@ func (a *StreamingLLMAgentWithRealStreaming) ExecuteStream(ctx context.Context, 
 	writer := NewWriter(ctx, opts)
 
 	go func() {
-		defer func() { _ = writer.Close() }()
+		defer func() {
+			if err := writer.Close(); err != nil {
+				fmt.Printf("failed to close stream writer: %v\n", err)
+			}
+		}()
 
 		// TODO: 实现真实的 LLM 流式 API 调用
 		// 这需要 LLM 客户端支持类似以下的接口：

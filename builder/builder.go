@@ -360,7 +360,11 @@ func (b *AgentBuilder[C, S]) createHandler(runtime *execution.Runtime[C, S]) mid
 
 		// Save checkpoint if auto-save is enabled
 		if b.config.EnableAutoSave && runtime.Checkpointer != nil {
-			_ = runtime.SaveState(ctx)
+			if err := runtime.SaveState(ctx); err != nil {
+				// Log the error but don't fail the request
+				// State saving is important but not critical for the response
+				fmt.Fprintf(os.Stderr, "Failed to auto-save state: %v\n", err)
+			}
 		}
 
 		// Create response
@@ -443,7 +447,10 @@ func (a *ConfigurableAgent[C, S]) Execute(ctx context.Context, input interface{}
 
 		// Notify callbacks
 		for _, cb := range a.callbacks {
-			_ = cb.OnError(ctx, err)
+			if err := cb.OnError(ctx, err); err != nil {
+				// Log callback errors but don't override the original error
+				fmt.Fprintf(os.Stderr, "Callback OnError failed: %v\n", err)
+			}
 		}
 
 		return nil, err

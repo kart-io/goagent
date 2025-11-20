@@ -55,9 +55,9 @@ func TestNewCohere(t *testing.T) {
 			wantErr: false,
 			checkResult: func(t *testing.T, p *CohereProvider) {
 				assert.Equal(t, "test-key", p.apiKey)
-				assert.Equal(t, "https://api.cohere.ai/v1", p.baseURL)
-				assert.Equal(t, "command", p.model)
-				assert.Equal(t, 2000, p.maxTokens)
+				assert.Equal(t, "https://api.cohere.ai", p.baseURL)
+				assert.Equal(t, "command-r-plus", p.model)
+				assert.Equal(t, 1000, p.maxTokens)
 				assert.Equal(t, 0.7, p.temperature)
 			},
 		},

@@ -4,11 +4,12 @@ package memory
 import (
 	"context"
 	"fmt"
-	"github.com/kart-io/goagent/utils/json"
+	"os"
 	"sync"
 	"time"
 
 	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/utils/json"
 )
 
 // MemoryType represents the type of memory
@@ -235,7 +236,10 @@ func (m *HierarchicalMemory) Get(ctx context.Context, key string) (interface{}, 
 
 		// Promote frequently accessed long-term memories to short-term
 		if entry.AccessCount > 10 {
-			_ = m.shortTerm.Store(ctx, entry)
+			if err := m.shortTerm.Store(ctx, entry); err != nil {
+				// 缓存提升失败，记录但继续
+				fmt.Fprintf(os.Stderr, "memory promotion to short-term failed (key=%s): %v\n", key, err)
+			}
 		}
 
 		return entry.Content, nil
@@ -372,11 +376,17 @@ func (m *HierarchicalMemory) Consolidate(ctx context.Context) error {
 			for i, v := range entry.Embedding {
 				embedding64[i] = float64(v)
 			}
-			_ = m.vectorStore.Add(ctx, entry.ID, embedding64, entry.Metadata)
+			if err := m.vectorStore.Add(ctx, entry.ID, embedding64, entry.Metadata); err != nil {
+				// 向量数据库添加失败，记录但继续
+				fmt.Fprintf(os.Stderr, "vector store add failed during consolidation (entry_id=%s): %v\n", entry.ID, err)
+			}
 		}
 
 		// Remove from short-term
-		_ = m.shortTerm.Remove(ctx, entry.ID)
+		if err := m.shortTerm.Remove(ctx, entry.ID); err != nil {
+			// 短期记忆移除失败，记录但继续
+			fmt.Fprintf(os.Stderr, "short-term memory removal failed (entry_id=%s): %v\n", entry.ID, err)
+		}
 	}
 
 	return nil
@@ -399,7 +409,10 @@ func (m *HierarchicalMemory) Forget(ctx context.Context, threshold float64) erro
 	// Remove from vector store
 	if m.vectorStore != nil {
 		for _, id := range append(shortTermForgotten, longTermForgotten...) {
-			_ = m.vectorStore.Delete(ctx, id)
+			if err := m.vectorStore.Delete(ctx, id); err != nil {
+				// 向量数据库删除失败，记录但继续
+				fmt.Fprintf(os.Stderr, "vector store delete failed during forget (id=%s): %v\n", id, err)
+			}
 		}
 	}
 
@@ -543,7 +556,10 @@ func (m *HierarchicalMemory) Clear(ctx context.Context) error {
 
 	if m.vectorStore != nil {
 		// Clear vector store
-		_ = m.vectorStore.Clear(ctx)
+		if err := m.vectorStore.Clear(ctx); err != nil {
+			// 向量数据库清空失败，记录但继续
+			fmt.Fprintf(os.Stderr, "vector store clear failed: %v\n", err)
+		}
 	}
 
 	return nil
