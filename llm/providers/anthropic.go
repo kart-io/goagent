@@ -303,6 +303,14 @@ func (p *AnthropicProvider) executeWithRetry(ctx context.Context, req *Anthropic
 	maxAttempts := DefaultMaxAttempts
 	baseDelay := DefaultBaseDelay
 
+	// Use shorter delays in test environment  (detects testing.Testing() or test_retry_delay context key)
+	if testDelay, ok := ctx.Value("test_retry_delay").(time.Duration); ok && testDelay > 0 {
+		baseDelay = testDelay
+	} else if os.Getenv("GO_TEST_MODE") == "true" {
+		// Automatic fast retries in test mode
+		baseDelay = 10 * time.Millisecond
+	}
+
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		resp, err := p.execute(ctx, req)
 		if err == nil {

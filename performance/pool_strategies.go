@@ -12,12 +12,12 @@ import (
 // AdaptivePoolStrategy 自适应池策略
 // 根据使用频率和内存压力动态调整池行为
 type AdaptivePoolStrategy struct {
-	config           *PoolManagerConfig
-	usageCounter     map[PoolType]*atomic.Int64
-	lastUsage        map[PoolType]*atomic.Int64
-	memoryThreshold  float64 // 内存使用率阈值
-	inactiveTimeout  time.Duration
-	minUsageForPool  int64 // 最小使用次数才启用池
+	config          *PoolManagerConfig
+	usageCounter    map[PoolType]*atomic.Int64
+	lastUsage       map[PoolType]*atomic.Int64
+	memoryThreshold float64 // 内存使用率阈值
+	inactiveTimeout time.Duration
+	minUsageForPool int64 // 最小使用次数才启用池
 }
 
 // NewAdaptivePoolStrategy 创建自适应池策略
