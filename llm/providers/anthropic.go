@@ -3,8 +3,8 @@ package providers
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/kart-io/goagent/utils/json"
 	"io"
 	"math/rand"
 	"os"
@@ -151,8 +151,8 @@ func NewAnthropic(config *agentllm.Config) (*AnthropicProvider, error) {
 	client := httpclient.NewClient(&httpclient.Config{
 		Timeout: timeout,
 		Headers: map[string]string{
-			HeaderContentType:     ContentTypeJSON,
-			HeaderXAPIKey:         apiKey,
+			HeaderContentType:      ContentTypeJSON,
+			HeaderXAPIKey:          apiKey,
 			HeaderAnthropicVersion: AnthropicAPIVersion,
 		},
 	})

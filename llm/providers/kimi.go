@@ -2,8 +2,8 @@ package providers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/kart-io/goagent/utils/json"
 	"os"
 	"strings"
 	"time"
@@ -85,7 +85,7 @@ func NewKimiClient(config *KimiConfig) (*KimiClient, error) {
 		client: httpclient.NewClient(&httpclient.Config{
 			Timeout: time.Duration(config.Timeout) * time.Second,
 			Headers: map[string]string{
-				HeaderContentType:  ContentTypeJSON,
+				HeaderContentType:   ContentTypeJSON,
 				HeaderAuthorization: AuthBearerPrefix + config.APIKey,
 			},
 		}),

@@ -3,8 +3,8 @@ package reflection
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/kart-io/goagent/utils/json"
 	"sync"
 	"time"
 

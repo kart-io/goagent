@@ -2,7 +2,7 @@ package core
 
 import (
 	"context"
-	"encoding/json"
+	"github.com/kart-io/goagent/utils/json"
 	"time"
 )
 

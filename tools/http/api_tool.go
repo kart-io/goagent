@@ -2,7 +2,6 @@ package http
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -12,6 +11,7 @@ import (
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/tools"
 	"github.com/kart-io/goagent/utils/httpclient"
+	"github.com/kart-io/goagent/utils/json"
 )
 
 // APITool HTTP API 调用工具
@@ -159,12 +159,12 @@ func (a *APITool) run(ctx context.Context, input *interfaces.ToolInput) (*interf
 		resp, err = req.Patch(urlStr)
 	default:
 		return &interfaces.ToolOutput{
-			Success: false,
-			Error:   fmt.Sprintf("unsupported HTTP method: %s", method),
-		}, tools.NewToolError(a.Name(), "invalid method", agentErrors.New(agentErrors.CodeInvalidInput, "unsupported HTTP method").
-			WithComponent("api_tool").
-			WithOperation("run").
-			WithContext(interfaces.FieldMethod, method))
+				Success: false,
+				Error:   fmt.Sprintf("unsupported HTTP method: %s", method),
+			}, tools.NewToolError(a.Name(), "invalid method", agentErrors.New(agentErrors.CodeInvalidInput, "unsupported HTTP method").
+				WithComponent("api_tool").
+				WithOperation("run").
+				WithContext(interfaces.FieldMethod, method))
 	}
 
 	duration := time.Since(startTime)

@@ -2,8 +2,8 @@ package checkpoint
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
+	"github.com/kart-io/goagent/utils/json"
 	"time"
 
 	"github.com/redis/go-redis/v9"
