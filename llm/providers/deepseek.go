@@ -3,10 +3,11 @@ package providers
 import (
 	"context"
 	"fmt"
-	"github.com/kart-io/goagent/utils/json"
 	"io"
 	"strings"
 	"time"
+
+	"github.com/kart-io/goagent/utils/json"
 
 	"github.com/go-resty/resty/v2"
 
