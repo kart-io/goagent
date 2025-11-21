@@ -11,6 +11,110 @@ GoAgent 是一个全面的、生产就绪的 Go AI Agent 框架，灵感来自 L
 - **Redis、PostgreSQL、NATS** - 分布式系统支持
 - **多 LLM 提供商** - OpenAI、Gemini、DeepSeek、Anthropic、Cohere 等
 
+## 系统架构图
+
+### 整体架构
+
+```mermaid
+graph TB
+    subgraph "用户应用"
+        APP[应用程序]
+    end
+
+    subgraph "GoAgent 框架"
+        subgraph "第4层 - 示例/测试"
+            EXAMPLES[examples/]
+            TESTS[*_test.go]
+        end
+
+        subgraph "第3层 - 实现层"
+            AGENTS[agents/]
+            TOOLS[tools/]
+            MW[middleware/]
+            STREAM[stream/]
+            MULTI[multiagent/]
+            DIST[distributed/]
+        end
+
+        subgraph "第2层 - 业务逻辑层"
+            CORE[core/]
+            BUILDER[builder/]
+            LLM[llm/]
+            MEMORY[memory/]
+            STORE[store/]
+            OBS[observability/]
+        end
+
+        subgraph "第1层 - 基础层"
+            INTERFACES[interfaces/]
+            ERRORS[errors/]
+            CACHE[cache/]
+            UTILS[utils/]
+        end
+    end
+
+    subgraph "外部服务"
+        OPENAI[OpenAI]
+        GEMINI[Gemini]
+        REDIS[(Redis)]
+        PG[(PostgreSQL)]
+        NATS[NATS]
+    end
+
+    APP --> BUILDER
+    APP --> AGENTS
+    AGENTS --> CORE
+    AGENTS --> TOOLS
+    AGENTS --> LLM
+    CORE --> INTERFACES
+    LLM --> OPENAI
+    LLM --> GEMINI
+    STORE --> REDIS
+    STORE --> PG
+    MULTI --> NATS
+```
+
+### 核心组件交互
+
+```mermaid
+sequenceDiagram
+    participant User as 用户
+    participant Builder as AgentBuilder
+    participant Agent as Agent
+    participant LLM as LLM Client
+    participant Tool as Tool
+    participant Memory as Memory
+
+    User->>Builder: 配置 Agent
+    Builder->>Agent: 创建 Agent
+    User->>Agent: Invoke(input)
+    Agent->>Memory: 加载上下文
+    Agent->>LLM: 发送请求
+    LLM-->>Agent: 返回响应
+    Agent->>Tool: 执行工具
+    Tool-->>Agent: 返回结果
+    Agent->>Memory: 保存结果
+    Agent-->>User: 返回输出
+```
+
+### 4层导入规则
+
+```mermaid
+graph TD
+    L4[第4层: examples/, tests] --> L3
+    L4 --> L2
+    L4 --> L1
+    L3[第3层: agents/, tools/, middleware/] --> L2
+    L3 --> L1
+    L2[第2层: core/, builder/, llm/] --> L1
+    L1[第1层: interfaces/, errors/]
+
+    style L1 fill:#e1f5fe
+    style L2 fill:#fff3e0
+    style L3 fill:#f3e5f5
+    style L4 fill:#e8f5e9
+```
+
 ## 架构层次
 
 GoAgent 采用严格的 4 层架构，通过自动化验证确保导入规则的正确性。
