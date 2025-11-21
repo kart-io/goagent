@@ -128,8 +128,8 @@ func (e *AgentExecutor) Execute(ctx context.Context, input *agentcore.AgentInput
 		input.Context["history"] = history
 	}
 
-	// 执行 Agent
-	output, err := e.agent.Invoke(ctx, input)
+	// 执行 Agent（使用快速路径优化内部调用）
+	output, err := agentcore.TryInvokeFast(ctx, e.agent, input)
 	if err != nil {
 		return nil, err
 	}

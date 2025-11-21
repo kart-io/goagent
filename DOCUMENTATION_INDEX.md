@@ -44,6 +44,7 @@ docs/
 |------|------|-----------|
 | [快速入门](docs/guides/QUICKSTART.md) | 从零开始使用 GoAgent | 新用户 |
 | [LLM 提供商指南](docs/guides/LLM_PROVIDERS.md) | 配置不同的 LLM 提供商 | 所有用户 |
+| [InvokeFast 性能优化](docs/guides/INVOKE_FAST_OPTIMIZATION.md) | 热路径优化指南 | 高级用户 |
 
 ### 开发文档
 
@@ -211,6 +212,7 @@ make test             # 运行测试
 - [快速入门](docs/guides/QUICKSTART.md) - 立即开始
 - [架构概述](docs/architecture/ARCHITECTURE.md) - 了解设计
 - [LLM 提供商](docs/guides/LLM_PROVIDERS.md) - 配置 LLM
+- [性能优化](docs/guides/INVOKE_FAST_OPTIMIZATION.md) - InvokeFast 优化指南
 - [测试实践](docs/development/TESTING_BEST_PRACTICES.md) - 编写测试
 
 ## 贡献指南

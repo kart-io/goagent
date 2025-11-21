@@ -472,7 +472,8 @@ func (s *SupervisorAgent) executeTask(ctx context.Context, task Task, originalIn
 			SessionID:   fmt.Sprintf("%s-%s", task.ID, agentName),
 			Timestamp:   time.Now(),
 		}
-		output, err := agent.Invoke(taskCtx, agentInput)
+		// 使用快速路径优化子 Agent 调用
+		output, err := core.TryInvokeFast(taskCtx, agent, agentInput)
 		if err == nil {
 			agentOutput = output
 			execErr = nil

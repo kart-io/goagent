@@ -9,6 +9,7 @@ GoAgent is a comprehensive, production-ready AI agent framework for Go, inspired
 ## Features
 
 - **Intelligent Agents** - Autonomous agents with reasoning capabilities and tool execution
+- **High Performance** - Hot path optimization with InvokeFast reducing latency by 4-6%
 - **Flexible Architecture** - 4-layer modular design with clear separation of concerns
 - **LLM Abstraction** - Support for multiple LLM providers (OpenAI, Anthropic Claude, Cohere, HuggingFace, Gemini, DeepSeek)
 - **Memory Management** - Conversation history, case-based reasoning, and vector storage
@@ -225,12 +226,60 @@ go run examples/basic/01-simple-agent/main.go
 
 ## Performance
 
+### Core Performance Metrics
 - **Builder Construction**: ~100μs/op
 - **Agent Execution**: ~1ms/op (excluding LLM calls)
 - **Middleware Overhead**: <5%
 - **Parallel Tool Execution**: Linear scaling to 100+ concurrent calls
 - **Cache Hit Rate**: >90% with LRU caching
 - **OpenTelemetry Overhead**: <2% at 10% sampling
+
+### InvokeFast Optimization 🚀
+
+GoAgent provides **InvokeFast**, a hot path optimization that bypasses callbacks and middleware for internal calls:
+
+**Performance Gains** (ReActAgent benchmarks on Intel i7-14700KF):
+- **Latency**: 4-6% faster execution (1494ns → 1399ns per call)
+- **Memory**: 5-8% reduction in allocations
+- **Chain Calls (10x)**: 4.4% faster (15508ns → 14825ns)
+
+**Automatic Optimization**:
+- `ChainableAgent` automatically uses InvokeFast for internal calls
+- `SupervisorAgent` optimizes sub-agent coordination
+- `ExecutorAgent` optimizes wrapped agent execution
+- Zero code changes required for existing applications
+
+**Use Cases**:
+- Multi-agent systems with nested calls
+- High-frequency reasoning loops (ReAct)
+- Chain compositions with multiple agents
+- Performance-critical production workloads
+
+See [InvokeFast Optimization Guide](docs/guides/INVOKE_FAST_OPTIMIZATION.md) for implementation details and benchmarks.
+
+### Benchmarking Your Agents
+
+```go
+import "testing"
+
+func BenchmarkYourAgent(b *testing.B) {
+    agent := createYourAgent()
+    ctx := context.Background()
+    input := &core.AgentInput{Task: "test"}
+
+    b.Run("Standard", func(b *testing.B) {
+        for i := 0; i < b.N; i++ {
+            _, _ = agent.Invoke(ctx, input)
+        }
+    })
+
+    b.Run("Optimized", func(b *testing.B) {
+        for i := 0; i < b.N; i++ {
+            _, _ = agent.InvokeFast(ctx, input)
+        }
+    })
+}
+```
 
 See [Test Coverage Report](docs/development/TEST_COVERAGE_REPORT.md) for detailed benchmarks.
 
