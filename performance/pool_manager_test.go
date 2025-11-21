@@ -60,13 +60,13 @@ func TestByteBufferPoolManager(t *testing.T) {
 		buf.Write(largeData)
 
 		stats := manager.GetStats(PoolTypeByteBuffer)
-		initialPuts := stats.Puts.Load()
+		initialPuts := stats.Puts
 
 		manager.PutBuffer(buf)
 
 		// 大 buffer 不应该被池化
 		stats = manager.GetStats(PoolTypeByteBuffer)
-		assert.Equal(t, initialPuts, stats.Puts.Load())
+		assert.Equal(t, initialPuts, stats.Puts)
 	})
 
 	t.Run("Nil buffer", func(t *testing.T) {
@@ -202,8 +202,8 @@ func TestPoolManagerStats(t *testing.T) {
 		manager.PutBuffer(buf)
 
 		stats := manager.GetStats(PoolTypeByteBuffer)
-		assert.Equal(t, int64(1), stats.Gets.Load())
-		assert.Equal(t, int64(1), stats.Puts.Load())
+		assert.Equal(t, int64(1), stats.Gets)
+		assert.Equal(t, int64(1), stats.Puts)
 	})
 
 	t.Run("Get all stats", func(t *testing.T) {
@@ -219,9 +219,9 @@ func TestPoolManagerStats(t *testing.T) {
 		manager.PutAgentInput(input)
 
 		allStats := manager.GetAllStats()
-		assert.Equal(t, int64(1), allStats[PoolTypeByteBuffer].Gets.Load())
-		assert.Equal(t, int64(1), allStats[PoolTypeMessage].Gets.Load())
-		assert.Equal(t, int64(1), allStats[PoolTypeAgentInput].Gets.Load())
+		assert.Equal(t, int64(1), allStats[PoolTypeByteBuffer].Gets)
+		assert.Equal(t, int64(1), allStats[PoolTypeMessage].Gets)
+		assert.Equal(t, int64(1), allStats[PoolTypeAgentInput].Gets)
 	})
 
 	t.Run("Reset stats", func(t *testing.T) {
@@ -233,8 +233,8 @@ func TestPoolManagerStats(t *testing.T) {
 		manager.ResetStats()
 
 		stats := manager.GetStats(PoolTypeByteBuffer)
-		assert.Equal(t, int64(0), stats.Gets.Load())
-		assert.Equal(t, int64(0), stats.Puts.Load())
+		assert.Equal(t, int64(0), stats.Gets)
+		assert.Equal(t, int64(0), stats.Puts)
 	})
 }
 
