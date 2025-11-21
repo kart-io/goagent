@@ -147,6 +147,9 @@ type StreamOptions struct {
 	// 多路复用
 	EnableMultiplex bool `json:"enable_multiplex,omitempty"` // 是否支持多个消费者
 	MaxConsumers    int  `json:"max_consumers,omitempty"`    // 最大消费者数
+
+	// 内存保护
+	MaxCollectSize int64 `json:"max_collect_size,omitempty"` // Collect/CollectText 最大字节数限制（默认 100MB），防止 OOM
 }
 
 // ChunkTransformFunc 数据块转换函数
@@ -170,6 +173,7 @@ func DefaultStreamOptions() *StreamOptions {
 		ProgressInterval:   time.Second,
 		EnableMultiplex:    false,
 		MaxConsumers:       10,
+		MaxCollectSize:     100 * 1024 * 1024, // 100MB default limit
 	}
 }
 

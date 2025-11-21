@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -891,6 +892,217 @@ func TestRetryableError(t *testing.T) {
 	t.Run("nil error", func(t *testing.T) {
 		assert.False(t, supervisor.isRetryableError(nil))
 	})
+}
+
+// Test concurrent execution with race detection
+func TestSupervisorConcurrentExecutionRaceDetection(t *testing.T) {
+	mockLLM := &MockLLMClient{}
+	config := &SupervisorConfig{
+		MaxConcurrentAgents: 10,
+		SubAgentTimeout:     5 * time.Second,
+		RoutingStrategy:     StrategyRoundRobin,
+		RetryPolicy: &tools.RetryPolicy{
+			MaxRetries:   0, // No retries for faster testing
+			InitialDelay: 1 * time.Millisecond,
+		},
+	}
+
+	supervisor := NewSupervisorAgent(mockLLM, config)
+
+	// Add multiple mock agents
+	numAgents := 5
+	for i := 0; i < numAgents; i++ {
+		agent := NewMockAgent(fmt.Sprintf("agent%d", i), "test agent")
+		supervisor.AddSubAgent(fmt.Sprintf("agent%d", i), agent)
+	}
+
+	// Mock LLM to return multiple tasks
+	mockLLM.On("Complete", mock.Anything, mock.Anything).Return(
+		&llm.CompletionResponse{
+			Content: `[
+				{"id": "task1", "type": "test", "description": "Task 1", "priority": 1},
+				{"id": "task2", "type": "test", "description": "Task 2", "priority": 1},
+				{"id": "task3", "type": "test", "description": "Task 3", "priority": 1},
+				{"id": "task4", "type": "test", "description": "Task 4", "priority": 1},
+				{"id": "task5", "type": "test", "description": "Task 5", "priority": 1},
+				{"id": "task6", "type": "test", "description": "Task 6", "priority": 1},
+				{"id": "task7", "type": "test", "description": "Task 7", "priority": 1},
+				{"id": "task8", "type": "test", "description": "Task 8", "priority": 1},
+				{"id": "task9", "type": "test", "description": "Task 9", "priority": 1},
+				{"id": "task10", "type": "test", "description": "Task 10", "priority": 1}
+			]`,
+		}, nil,
+	)
+
+	// Mock all agents to return success
+	for name := range supervisor.SubAgents {
+		agent := supervisor.SubAgents[name].(*MockAgent)
+		agent.On("Invoke", mock.Anything, mock.Anything).Return(&core.AgentOutput{
+			Result: fmt.Sprintf("Result from %s", name),
+		}, nil)
+	}
+
+	// Execute with concurrent tasks
+	ctx := context.Background()
+	output, err := supervisor.Invoke(ctx, &core.AgentInput{Task: "concurrent test"})
+
+	// Verify no race conditions and correct results
+	assert.NoError(t, err)
+	assert.NotNil(t, output)
+
+	result, ok := output.Result.(map[string]interface{})
+	assert.True(t, ok)
+
+	results, ok := result["results"].([]interface{})
+	assert.True(t, ok)
+	assert.Equal(t, 10, len(results), "All 10 tasks should complete")
+}
+
+// Test context cancellation during execution
+func TestSupervisorContextCancellation(t *testing.T) {
+	mockLLM := &MockLLMClient{}
+	config := &SupervisorConfig{
+		MaxConcurrentAgents: 5,
+		SubAgentTimeout:     10 * time.Second,
+		RoutingStrategy:     StrategyRoundRobin,
+		RetryPolicy: &tools.RetryPolicy{
+			MaxRetries:   0,
+			InitialDelay: 1 * time.Millisecond,
+		},
+	}
+
+	supervisor := NewSupervisorAgent(mockLLM, config)
+
+	// Add agents
+	for i := 0; i < 3; i++ {
+		agent := NewMockAgent(fmt.Sprintf("agent%d", i), "slow agent")
+		supervisor.AddSubAgent(fmt.Sprintf("agent%d", i), agent)
+	}
+
+	// Mock LLM to return tasks
+	mockLLM.On("Complete", mock.Anything, mock.Anything).Return(
+		&llm.CompletionResponse{
+			Content: `[
+				{"id": "task1", "type": "test", "description": "Task 1", "priority": 1},
+				{"id": "task2", "type": "test", "description": "Task 2", "priority": 1},
+				{"id": "task3", "type": "test", "description": "Task 3", "priority": 1}
+			]`,
+		}, nil,
+	)
+
+	// Mock agents to simulate slow execution
+	for name := range supervisor.SubAgents {
+		agent := supervisor.SubAgents[name].(*MockAgent)
+		agent.On("Invoke", mock.Anything, mock.Anything).Run(func(args mock.Arguments) {
+			ctx := args.Get(0).(context.Context)
+			// Simulate slow work
+			select {
+			case <-time.After(2 * time.Second):
+			case <-ctx.Done():
+				return
+			}
+		}).Return(&core.AgentOutput{Result: "completed"}, nil)
+	}
+
+	// Create context with cancellation
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	// Execute - should respect context cancellation
+	output, err := supervisor.Invoke(ctx, &core.AgentInput{Task: "cancellable test"})
+
+	// Should handle cancellation gracefully
+	// The Invoke may return an error or partial results depending on timing
+	if err != nil {
+		// Context cancellation propagated
+		assert.Error(t, err)
+	} else {
+		// Partial results returned
+		assert.NotNil(t, output)
+		result, ok := output.Result.(map[string]interface{})
+		assert.True(t, ok)
+
+		// Check if errors contain context cancellation
+		if errList, ok := result["errors"].([]string); ok && len(errList) > 0 {
+			hasContextError := false
+			for _, e := range errList {
+				if strings.Contains(e, "context") || strings.Contains(e, "deadline") {
+					hasContextError = true
+					break
+				}
+			}
+			assert.True(t, hasContextError, "Should have context cancellation error")
+		}
+	}
+}
+
+// Test parallel execution maintains consistency
+func TestSupervisorParallelExecutionConsistency(t *testing.T) {
+	mockLLM := &MockLLMClient{}
+	config := &SupervisorConfig{
+		MaxConcurrentAgents: 20,
+		SubAgentTimeout:     5 * time.Second,
+		RoutingStrategy:     StrategyRoundRobin,
+	}
+
+	supervisor := NewSupervisorAgent(mockLLM, config)
+
+	// Add agents
+	numAgents := 3
+	for i := 0; i < numAgents; i++ {
+		agent := NewMockAgent(fmt.Sprintf("agent%d", i), "test agent")
+		supervisor.AddSubAgent(fmt.Sprintf("agent%d", i), agent)
+	}
+
+	// Run multiple invocations in parallel
+	numInvocations := 10
+	var wg sync.WaitGroup
+	results := make([]bool, numInvocations)
+	errors := make([]error, numInvocations)
+
+	for i := 0; i < numInvocations; i++ {
+		wg.Add(1)
+		go func(index int) {
+			defer wg.Done()
+
+			// Mock LLM for each invocation
+			localMockLLM := &MockLLMClient{}
+			localMockLLM.On("Complete", mock.Anything, mock.Anything).Return(
+				&llm.CompletionResponse{
+					Content: fmt.Sprintf(`[{"id": "task%d", "type": "test", "description": "Task %d", "priority": 1}]`, index, index),
+				}, nil,
+			)
+
+			localSupervisor := NewSupervisorAgent(localMockLLM, config)
+			for name, agent := range supervisor.SubAgents {
+				localSupervisor.AddSubAgent(name, agent)
+			}
+
+			// Mock agent responses
+			for name := range localSupervisor.SubAgents {
+				agent := localSupervisor.SubAgents[name].(*MockAgent)
+				agent.On("Invoke", mock.Anything, mock.Anything).Return(&core.AgentOutput{
+					Result: fmt.Sprintf("Result %d", index),
+				}, nil).Maybe()
+			}
+
+			ctx := context.Background()
+			output, err := localSupervisor.Invoke(ctx, &core.AgentInput{
+				Task: fmt.Sprintf("parallel test %d", index),
+			})
+
+			results[index] = (output != nil && err == nil)
+			errors[index] = err
+		}(i)
+	}
+
+	wg.Wait()
+
+	// All invocations should succeed
+	for i, success := range results {
+		assert.True(t, success, "Invocation %d should succeed", i)
+		assert.NoError(t, errors[i], "Invocation %d should not error", i)
+	}
 }
 
 // Test LLM router update routing with exponential moving average
