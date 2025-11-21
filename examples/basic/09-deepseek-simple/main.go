@@ -174,6 +174,7 @@ func runStructuredOutputExample(apiKey string) {
 - email: 邮箱地址（字符串）
 - age: 年龄（整数）
 - skills: 技能列表（字符串数组）
+- shool: 学校（字符串）
 
 请直接输出 JSON 数据，不要有任何其他说明文字。`
 

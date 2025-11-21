@@ -99,28 +99,94 @@ type UnmarshalOptions struct {
 	CopyString bool
 }
 
-// MarshalWithOptions 使用指定选项将 Go 值编码为 JSON
-func MarshalWithOptions(v interface{}, opts MarshalOptions) ([]byte, error) {
-	config := sonic.Config{
-		EscapeHTML:           opts.EscapeHTML,
-		SortMapKeys:          opts.SortMapKeys,
-		ValidateString:       opts.ValidateString,
-		NoNullSliceOrMap:     opts.NoNullSliceOrMap,
-		NoQuoteTextMarshaler: opts.NoQuoteTextMarshaler,
-	}.Froze()
+// Pre-frozen configurations for common marshal options.
+// These are computed once at package initialization to avoid repeated allocations.
+var (
+	// marshalConfigCache caches frozen sonic.API instances for marshal options.
+	// Key is computed from MarshalOptions boolean flags as a bitmask.
+	marshalConfigCache = func() map[uint8]sonic.API {
+		cache := make(map[uint8]sonic.API, 32) // 2^5 combinations for 5 boolean flags
+		for i := uint8(0); i < 32; i++ {
+			config := sonic.Config{
+				EscapeHTML:           i&1 != 0,
+				SortMapKeys:          i&2 != 0,
+				ValidateString:       i&4 != 0,
+				NoNullSliceOrMap:     i&8 != 0,
+				NoQuoteTextMarshaler: i&16 != 0,
+			}
+			cache[i] = config.Froze()
+		}
+		return cache
+	}()
 
-	return config.Marshal(v)
+	// unmarshalConfigCache caches frozen sonic.API instances for unmarshal options.
+	// Key is computed from UnmarshalOptions boolean flags as a bitmask.
+	unmarshalConfigCache = func() map[uint8]sonic.API {
+		cache := make(map[uint8]sonic.API, 8) // 2^3 combinations for 3 boolean flags
+		for i := uint8(0); i < 8; i++ {
+			config := sonic.Config{
+				UseNumber:             i&1 != 0,
+				DisallowUnknownFields: i&2 != 0,
+				CopyString:            i&4 != 0,
+			}
+			cache[i] = config.Froze()
+		}
+		return cache
+	}()
+)
+
+// marshalOptionsKey computes a cache key from MarshalOptions.
+func marshalOptionsKey(opts MarshalOptions) uint8 {
+	var key uint8
+	if opts.EscapeHTML {
+		key |= 1
+	}
+	if opts.SortMapKeys {
+		key |= 2
+	}
+	if opts.ValidateString {
+		key |= 4
+	}
+	if opts.NoNullSliceOrMap {
+		key |= 8
+	}
+	if opts.NoQuoteTextMarshaler {
+		key |= 16
+	}
+	return key
+}
+
+// unmarshalOptionsKey computes a cache key from UnmarshalOptions.
+func unmarshalOptionsKey(opts UnmarshalOptions) uint8 {
+	var key uint8
+	if opts.UseNumber {
+		key |= 1
+	}
+	if opts.DisallowUnknownFields {
+		key |= 2
+	}
+	if opts.CopyString {
+		key |= 4
+	}
+	return key
+}
+
+// MarshalWithOptions 使用指定选项将 Go 值编码为 JSON
+//
+// This function uses pre-frozen configurations for optimal performance.
+// All 32 possible combinations of options are cached at package initialization.
+func MarshalWithOptions(v interface{}, opts MarshalOptions) ([]byte, error) {
+	key := marshalOptionsKey(opts)
+	return marshalConfigCache[key].Marshal(v)
 }
 
 // UnmarshalWithOptions 使用指定选项将 JSON 解码为 Go 值
+//
+// This function uses pre-frozen configurations for optimal performance.
+// All 8 possible combinations of options are cached at package initialization.
 func UnmarshalWithOptions(data []byte, v interface{}, opts UnmarshalOptions) error {
-	config := sonic.Config{
-		UseNumber:             opts.UseNumber,
-		DisallowUnknownFields: opts.DisallowUnknownFields,
-		CopyString:            opts.CopyString,
-	}.Froze()
-
-	return config.Unmarshal(data, v)
+	key := unmarshalOptionsKey(opts)
+	return unmarshalConfigCache[key].Unmarshal(data, v)
 }
 
 // EncodeToWriter 将 Go 值编码为 JSON 并写入 writer

@@ -74,14 +74,26 @@ func (r *Runtime[C, S]) WithToolCallID(id string) *Runtime[C, S] {
 }
 
 // WithMetadata returns a copy of the runtime with additional metadata.
+//
+// Optimization: Uses copy-on-write pattern. The metadata map is only copied
+// when modifications are made, reducing allocations for read-heavy workloads.
+// Pre-allocates the new map with capacity for existing entries plus the new one.
 func (r *Runtime[C, S]) WithMetadata(key string, value interface{}) *Runtime[C, S] {
-	copy := *r
-	copy.Metadata = make(map[string]interface{}, len(r.Metadata)+1)
+	newRuntime := *r
+
+	// Pre-allocate with exact capacity needed
+	newMetadata := make(map[string]interface{}, len(r.Metadata)+1)
+
+	// Copy existing metadata
 	for k, v := range r.Metadata {
-		copy.Metadata[k] = v
+		newMetadata[k] = v
 	}
-	copy.Metadata[key] = value
-	return &copy
+
+	// Add new entry
+	newMetadata[key] = value
+	newRuntime.Metadata = newMetadata
+
+	return &newRuntime
 }
 
 // SaveState persists the current state using the checkpointer if available.

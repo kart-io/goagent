@@ -205,7 +205,7 @@ func smartAgentExample() {
 
 // 创建获取时间的工具
 func createTimeTool() interfaces.Tool {
-	return tools.NewFunctionToolBuilder("get_current_time").
+	tool, err := tools.NewFunctionToolBuilder("get_current_time").
 		WithDescription("获取当前时间，支持不同的时区和格式").
 		WithArgsSchema(`{
 			"type": "object",
@@ -260,6 +260,10 @@ func createTimeTool() interfaces.Tool {
 			}, nil
 		}).
 		Build()
+	if err != nil {
+		panic(fmt.Sprintf("failed to create time tool: %v", err))
+	}
+	return tool
 }
 
 // 创建通用 API 调用工具
@@ -272,7 +276,7 @@ func createAPITool() interfaces.Tool {
 
 // 创建天气查询 API 工具（使用模拟数据）
 func createWeatherAPITool() interfaces.Tool {
-	return tools.NewFunctionToolBuilder("get_weather").
+	tool, err := tools.NewFunctionToolBuilder("get_weather").
 		WithDescription("查询指定城市的天气信息").
 		WithArgsSchema(`{
 			"type": "object",
@@ -308,6 +312,10 @@ func createWeatherAPITool() interfaces.Tool {
 			}, nil
 		}).
 		Build()
+	if err != nil {
+		panic(fmt.Sprintf("failed to create weather tool: %v", err))
+	}
+	return tool
 }
 
 // 演示如何使用 LLM 创建完整的 Agent

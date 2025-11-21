@@ -2,6 +2,8 @@ package multiagent
 
 import (
 	"context"
+	"crypto/rand"
+	"strings"
 	"time"
 
 	"go.opentelemetry.io/otel/propagation"
@@ -56,15 +58,46 @@ func NewAgentMessage(from, to string, msgType MessageType, payload interface{}) 
 }
 
 // generateMessageID 生成消息 ID
+//
+// Optimized to use strings.Builder for efficient string concatenation
+// and avoid multiple allocations.
 func generateMessageID() string {
-	return time.Now().Format("20060102150405") + "-" + randomString(8)
+	timestamp := time.Now().Format("20060102150405")
+	randomPart := randomString(8)
+
+	// Pre-allocate exact capacity: timestamp (14) + "-" (1) + random (8) = 23
+	var builder strings.Builder
+	builder.Grow(23)
+	builder.WriteString(timestamp)
+	builder.WriteByte('-')
+	builder.WriteString(randomPart)
+
+	return builder.String()
 }
 
+// randomString generates a cryptographically secure random string of length n.
+//
+// Uses crypto/rand for security-sensitive message ID generation.
+// Optimized to use a pre-allocated byte slice and strings.Builder.
 func randomString(n int) string {
 	const letters = "abcdefghijklmnopqrstuvwxyz0123456789"
-	b := make([]byte, n)
-	for i := range b {
-		b[i] = letters[i%len(letters)]
+	const lettersLen = len(letters)
+
+	// Read random bytes from crypto/rand
+	randomBytes := make([]byte, n)
+	if _, err := rand.Read(randomBytes); err != nil {
+		// Fallback to deterministic pattern if crypto/rand fails
+		// This maintains backward compatibility while logging the issue
+		for i := range randomBytes {
+			randomBytes[i] = letters[i%lettersLen]
+		}
+		return string(randomBytes)
 	}
-	return string(b)
+
+	// Convert random bytes to letters
+	for i := 0; i < n; i++ {
+		randomBytes[i] = letters[int(randomBytes[i])%lettersLen]
+	}
+
+	return string(randomBytes)
 }

@@ -4,12 +4,18 @@ import (
 	"container/list"
 	"context"
 	"crypto/sha256"
+	"encoding/binary"
+	"encoding/hex"
 	"fmt"
+	"hash"
+	"os"
+	"sort"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	agentErrors "github.com/kart-io/goagent/errors"
-	"github.com/kart-io/goagent/utils/json"
 )
 
 // ToolCache 工具缓存接口
@@ -64,10 +70,9 @@ type cacheEntry struct {
 
 // CacheStats 缓存统计信息
 type CacheStats struct {
-	Hits   int64
-	Misses int64
-	Evicts int64
-	mu     sync.RWMutex
+	Hits   atomic.Int64
+	Misses atomic.Int64
+	Evicts atomic.Int64
 }
 
 // MemoryCacheConfig 内存缓存配置
@@ -201,14 +206,18 @@ func (c *MemoryToolCache) Size() int {
 
 // GetStats 获取统计信息
 func (c *MemoryToolCache) GetStats() CacheStats {
-	c.stats.mu.RLock()
-	defer c.stats.mu.RUnlock()
-
 	return CacheStats{
-		Hits:   c.stats.Hits,
-		Misses: c.stats.Misses,
-		Evicts: c.stats.Evicts,
+		Hits:   *copyAtomicInt64(&c.stats.Hits),
+		Misses: *copyAtomicInt64(&c.stats.Misses),
+		Evicts: *copyAtomicInt64(&c.stats.Evicts),
 	}
+}
+
+// copyAtomicInt64 creates a copy of an atomic.Int64 with the same value
+func copyAtomicInt64(src *atomic.Int64) *atomic.Int64 {
+	dst := &atomic.Int64{}
+	dst.Store(src.Load())
+	return dst
 }
 
 // Close 关闭缓存，清理资源
@@ -236,6 +245,9 @@ func (c *MemoryToolCache) evictOldest() {
 }
 
 // cleanupExpired 清理过期条目
+//
+// Optimized to delete expired entries in-place during iteration,
+// reducing intermediate slice allocation.
 func (c *MemoryToolCache) cleanupExpired(interval time.Duration) {
 	defer c.cleanupDone.Done()
 	ticker := time.NewTicker(interval)
@@ -249,18 +261,12 @@ func (c *MemoryToolCache) cleanupExpired(interval time.Duration) {
 			c.mu.Lock()
 			now := time.Now()
 
-			// 收集过期的 key
-			expiredKeys := make([]string, 0)
+			// Delete expired entries directly during iteration
+			// Note: Go allows deleting map entries while iterating
 			for key, entry := range c.cache {
 				if now.After(entry.expireTime) {
-					expiredKeys = append(expiredKeys, key)
-				}
-			}
-
-			// 删除过期条目
-			for _, key := range expiredKeys {
-				if entry, exists := c.cache[key]; exists {
-					c.removeEntry(entry)
+					c.lruList.Remove(entry.element)
+					delete(c.cache, key)
 				}
 			}
 
@@ -271,36 +277,29 @@ func (c *MemoryToolCache) cleanupExpired(interval time.Duration) {
 
 // recordHit 记录命中
 func (s *CacheStats) recordHit() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.Hits++
+	s.Hits.Add(1)
 }
 
 // recordMiss 记录未命中
 func (s *CacheStats) recordMiss() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.Misses++
+	s.Misses.Add(1)
 }
 
 // recordEvict 记录淘汰
 func (s *CacheStats) recordEvict() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.Evicts++
+	s.Evicts.Add(1)
 }
 
 // HitRate 计算命中率
 func (s *CacheStats) HitRate() float64 {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	total := s.Hits + s.Misses
+	hits := s.Hits.Load()
+	misses := s.Misses.Load()
+	total := hits + misses
 	if total == 0 {
 		return 0
 	}
 
-	return float64(s.Hits) / float64(total)
+	return float64(hits) / float64(total)
 }
 
 // CachedTool 带缓存的工具包装器
@@ -359,24 +358,138 @@ func (c *CachedTool) Invoke(ctx context.Context, input *ToolInput) (*ToolOutput,
 	}
 
 	// 存入缓存
-	_ = c.cache.Set(ctx, cacheKey, output, c.ttl)
+	// Log error at WARN level for debugging; cache failures should not affect tool execution
+	if setErr := c.cache.Set(ctx, cacheKey, output, c.ttl); setErr != nil {
+		fmt.Fprintf(os.Stderr, "[WARN] cache set failed (tool=%s, key=%s): %v\n", c.tool.Name(), cacheKey, setErr)
+	}
 
 	return output, nil
 }
 
 // generateCacheKey 生成缓存键
+//
+// This function uses direct hash computation instead of JSON marshaling
+// for better performance. It hashes the map keys and values directly
+// to avoid intermediate allocations.
+//
+// Optimization: Uses strings.Builder with hex.EncodeToString instead of
+// fmt.Sprintf to reduce allocations.
 func (c *CachedTool) generateCacheKey(input *ToolInput) (string, error) {
-	// 序列化输入参数
-	data, err := json.Marshal(input.Args)
-	if err != nil {
+	h := sha256.New()
+
+	// Hash the tool name first to namespace the cache key
+	h.Write([]byte(c.tool.Name()))
+	h.Write([]byte{0}) // separator
+
+	// Hash the args map deterministically (sorted keys)
+	if err := hashMap(h, input.Args); err != nil {
 		return "", err
 	}
 
-	// 使用 SHA256 生成哈希
-	hash := sha256.Sum256(data)
-	key := fmt.Sprintf("%s:%x", c.tool.Name(), hash)
+	// Build key using strings.Builder for efficiency
+	toolName := c.tool.Name()
+	hashHex := hex.EncodeToString(h.Sum(nil))
 
-	return key, nil
+	// Pre-allocate: toolName + ":" + hex hash (64 chars for SHA256)
+	var builder strings.Builder
+	builder.Grow(len(toolName) + 1 + 64)
+	builder.WriteString(toolName)
+	builder.WriteByte(':')
+	builder.WriteString(hashHex)
+
+	return builder.String(), nil
+}
+
+// hashMap writes a deterministic hash of a map to the hasher.
+// Keys are sorted to ensure consistent ordering.
+func hashMap(h hash.Hash, m map[string]interface{}) error {
+	if m == nil {
+		h.Write([]byte{0}) // nil marker
+		return nil
+	}
+
+	// Sort keys for deterministic ordering
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	// Write length prefix
+	var buf [8]byte
+	binary.LittleEndian.PutUint64(buf[:], uint64(len(m)))
+	h.Write(buf[:])
+
+	for _, k := range keys {
+		// Write key
+		h.Write([]byte(k))
+		h.Write([]byte{0}) // separator
+
+		// Write value
+		if err := hashValue(h, m[k]); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// hashValue writes a deterministic hash of a value to the hasher.
+func hashValue(h hash.Hash, v interface{}) error {
+	var buf [8]byte
+
+	switch val := v.(type) {
+	case nil:
+		h.Write([]byte{0}) // type marker for nil
+	case bool:
+		h.Write([]byte{1}) // type marker
+		if val {
+			h.Write([]byte{1})
+		} else {
+			h.Write([]byte{0})
+		}
+	case int:
+		h.Write([]byte{2}) // type marker
+		binary.LittleEndian.PutUint64(buf[:], uint64(val))
+		h.Write(buf[:])
+	case int64:
+		h.Write([]byte{3}) // type marker
+		binary.LittleEndian.PutUint64(buf[:], uint64(val))
+		h.Write(buf[:])
+	case float64:
+		h.Write([]byte{4}) // type marker
+		binary.LittleEndian.PutUint64(buf[:], uint64(val))
+		h.Write(buf[:])
+	case string:
+		h.Write([]byte{5}) // type marker
+		binary.LittleEndian.PutUint64(buf[:], uint64(len(val)))
+		h.Write(buf[:])
+		h.Write([]byte(val))
+	case []interface{}:
+		h.Write([]byte{6}) // type marker
+		binary.LittleEndian.PutUint64(buf[:], uint64(len(val)))
+		h.Write(buf[:])
+		for _, item := range val {
+			if err := hashValue(h, item); err != nil {
+				return err
+			}
+		}
+	case map[string]interface{}:
+		h.Write([]byte{7}) // type marker
+		if err := hashMap(h, val); err != nil {
+			return err
+		}
+	default:
+		// For unknown types, use fmt.Sprintf as fallback
+		// This is less efficient but ensures correctness
+		h.Write([]byte{8}) // type marker for unknown
+		str := fmt.Sprintf("%v", val)
+		binary.LittleEndian.PutUint64(buf[:], uint64(len(str)))
+		h.Write(buf[:])
+		h.Write([]byte(str))
+	}
+
+	return nil
 }
 
 // InvalidateCacheByPrefix 根据前缀失效缓存
