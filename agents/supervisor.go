@@ -13,6 +13,7 @@ import (
 	"github.com/kart-io/goagent/core"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/performance"
 	"github.com/kart-io/goagent/tools"
 	"github.com/kart-io/goagent/utils/json"
 )
@@ -41,11 +42,15 @@ type SupervisorConfig struct {
 	// RetryPolicy for failed sub-agent tasks
 	RetryPolicy *tools.RetryPolicy
 
-	// EnableCaching enables result caching
+	// EnableCaching enables result caching (deprecated: use CacheConfig instead)
 	EnableCaching bool
 
-	// CacheTTL for cached results
+	// CacheTTL for cached results (deprecated: use CacheConfig instead)
 	CacheTTL time.Duration
+
+	// CacheConfig configures the caching behavior
+	// If nil and EnableCaching is true, default cache config will be used
+	CacheConfig *CacheConfig
 
 	// EnableMetrics enables metrics collection
 	EnableMetrics bool
@@ -56,6 +61,9 @@ type SupervisorConfig struct {
 	// AggregationStrategy defines how to aggregate results
 	AggregationStrategy AggregationStrategy
 }
+
+// CacheConfig is imported from performance package
+type CacheConfig = performance.CacheConfig
 
 // DefaultSupervisorConfig returns default configuration
 func DefaultSupervisorConfig() *SupervisorConfig {
@@ -159,6 +167,35 @@ func NewSupervisorAgent(llm llm.Client, config *SupervisorConfig) *SupervisorAge
 	}
 
 	return supervisor
+}
+
+// NewCachedSupervisorAgent creates a supervisor agent with caching enabled
+// This wraps a SupervisorAgent with performance.CachedAgent for automatic result caching.
+// Cached supervisors are ideal for scenarios with repeated task patterns or queries.
+//
+// Example:
+//
+//	config := agents.DefaultSupervisorConfig()
+//	config.CacheConfig = &performance.CacheConfig{
+//	    TTL:     10 * time.Minute,
+//	    MaxSize: 1000,
+//	}
+//	cachedSupervisor := agents.NewCachedSupervisorAgent(llmClient, config)
+func NewCachedSupervisorAgent(llm llm.Client, config *SupervisorConfig) core.Agent {
+	supervisor := NewSupervisorAgent(llm, config)
+
+	// Determine cache config
+	cacheConfig := config.CacheConfig
+	if cacheConfig == nil {
+		// Use default config but adjust for supervisor workloads
+		defaultConfig := performance.DefaultCacheConfig()
+		cacheConfig = &defaultConfig
+		// Supervisor tasks often have longer validity periods
+		cacheConfig.TTL = 10 * time.Minute
+		cacheConfig.MaxSize = 1000
+	}
+
+	return performance.NewCachedAgent(supervisor, *cacheConfig)
 }
 
 // AddSubAgent adds a sub-agent to the supervisor

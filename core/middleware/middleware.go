@@ -10,6 +10,73 @@ import (
 	agentErrors "github.com/kart-io/goagent/errors"
 )
 
+// Object pools for MiddlewareRequest and MiddlewareResponse to reduce allocations
+var middlewareRequestPool = sync.Pool{
+	New: func() interface{} {
+		return &MiddlewareRequest{
+			Metadata: make(map[string]interface{}, 4),
+			Headers:  make(map[string]string, 4),
+		}
+	},
+}
+
+var middlewareResponsePool = sync.Pool{
+	New: func() interface{} {
+		return &MiddlewareResponse{
+			Metadata: make(map[string]interface{}, 4),
+			Headers:  make(map[string]string, 4),
+		}
+	},
+}
+
+// GetMiddlewareRequest retrieves a MiddlewareRequest from the object pool
+func GetMiddlewareRequest() *MiddlewareRequest {
+	req := middlewareRequestPool.Get().(*MiddlewareRequest)
+	// Reset to default state
+	req.Input = nil
+	req.State = nil
+	req.Runtime = nil
+	for k := range req.Metadata {
+		delete(req.Metadata, k)
+	}
+	for k := range req.Headers {
+		delete(req.Headers, k)
+	}
+	req.Timestamp = time.Time{}
+	return req
+}
+
+// PutMiddlewareRequest returns a MiddlewareRequest to the object pool
+func PutMiddlewareRequest(req *MiddlewareRequest) {
+	if req != nil {
+		middlewareRequestPool.Put(req)
+	}
+}
+
+// GetMiddlewareResponse retrieves a MiddlewareResponse from the object pool
+func GetMiddlewareResponse() *MiddlewareResponse {
+	resp := middlewareResponsePool.Get().(*MiddlewareResponse)
+	// Reset to default state
+	resp.Output = nil
+	resp.State = nil
+	for k := range resp.Metadata {
+		delete(resp.Metadata, k)
+	}
+	for k := range resp.Headers {
+		delete(resp.Headers, k)
+	}
+	resp.Duration = 0
+	resp.Error = nil
+	return resp
+}
+
+// PutMiddlewareResponse returns a MiddlewareResponse to the object pool
+func PutMiddlewareResponse(resp *MiddlewareResponse) {
+	if resp != nil {
+		middlewareResponsePool.Put(resp)
+	}
+}
+
 // State is an alias to state.State for convenience
 type State = state.State
 
