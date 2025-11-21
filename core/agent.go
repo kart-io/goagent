@@ -410,8 +410,26 @@ func NewChainableAgent(name, description string, agents ...Agent) *ChainableAgen
 	}
 }
 
-// Invoke 顺序调用所有 Agent
+// Invoke 顺序调用所有 Agent（使用快速路径优化）
 func (c *ChainableAgent) Invoke(ctx context.Context, input *AgentInput) (*AgentOutput, error) {
+	return c.executeChain(ctx, input, false)
+}
+
+// InvokeFast 快速调用链（绕过回调）
+//
+// 用于嵌套链场景的性能优化
+//
+//go:inline
+func (c *ChainableAgent) InvokeFast(ctx context.Context, input *AgentInput) (*AgentOutput, error) {
+	return c.executeChain(ctx, input, true)
+}
+
+// executeChain 执行 Agent 链
+//
+// useFastPath 参数控制是否使用快速调用：
+//   - true: 使用 InvokeFast（如果支持），绕过回调
+//   - false: 使用标准 Invoke，保留回调
+func (c *ChainableAgent) executeChain(ctx context.Context, input *AgentInput, useFastPath bool) (*AgentOutput, error) {
 	if len(c.agents) == 0 {
 		return &AgentOutput{
 			Status:    "success",
@@ -424,7 +442,22 @@ func (c *ChainableAgent) Invoke(ctx context.Context, input *AgentInput) (*AgentO
 	var finalOutput *AgentOutput
 
 	for i, agent := range c.agents {
-		output, err := agent.Invoke(ctx, currentInput)
+		var output *AgentOutput
+		var err error
+
+		// 使用快速路径优化内部调用
+		if useFastPath {
+			output, err = TryInvokeFast(ctx, agent, currentInput)
+		} else {
+			// 对于链内部的调用，仍然使用 InvokeFast 优化（如果支持）
+			// 但外层的 Invoke 会保留回调能力
+			if fastAgent, ok := agent.(FastInvoker); ok {
+				output, err = fastAgent.InvokeFast(ctx, currentInput)
+			} else {
+				output, err = agent.Invoke(ctx, currentInput)
+			}
+		}
+
 		if err != nil {
 			return nil, err
 		}

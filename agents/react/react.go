@@ -95,7 +95,7 @@ func NewReActAgent(config ReActConfig) *ReActAgent {
 	return agent
 }
 
-// Invoke 执行 ReAct Agent
+// Invoke 执行 ReAct Agent（含完整回调）
 func (r *ReActAgent) Invoke(ctx context.Context, input *agentcore.AgentInput) (*agentcore.AgentOutput, error) {
 	startTime := time.Now()
 
@@ -104,6 +104,43 @@ func (r *ReActAgent) Invoke(ctx context.Context, input *agentcore.AgentInput) (*
 		return nil, err
 	}
 
+	// 执行核心逻辑
+	output, err := r.executeCore(ctx, input, startTime, true)
+
+	// 触发完成回调
+	if err == nil {
+		if cbErr := r.triggerOnFinish(ctx, output); cbErr != nil {
+			return nil, cbErr
+		}
+	}
+
+	return output, err
+}
+
+// InvokeFast 快速执行（绕过回调）
+//
+// 用于热路径优化，直接执行核心逻辑，跳过所有回调
+// 性能提升：避免回调遍历和接口调用开销
+//
+// 使用场景：
+// - Chain 内部调用
+// - 嵌套 Agent 调用
+// - 高频循环场景
+// - 不需要监控和追踪的内部调用
+//
+// 注意：此方法不会触发任何回调（OnStart/OnFinish/OnLLMStart/OnToolStart 等）
+//
+//go:inline
+func (r *ReActAgent) InvokeFast(ctx context.Context, input *agentcore.AgentInput) (*agentcore.AgentOutput, error) {
+	return r.executeCore(ctx, input, time.Now(), false)
+}
+
+// executeCore 核心执行逻辑
+//
+// withCallbacks 参数控制是否触发回调：
+//   - true: 触发 LLM 和 Tool 回调（用于 Invoke）
+//   - false: 跳过所有回调（用于 InvokeFast）
+func (r *ReActAgent) executeCore(ctx context.Context, input *agentcore.AgentInput, startTime time.Time, withCallbacks bool) (*agentcore.AgentOutput, error) {
 	// 构建初始 prompt
 	prompt := r.buildPrompt(input)
 
@@ -129,8 +166,12 @@ func (r *ReActAgent) Invoke(ctx context.Context, input *agentcore.AgentInput) (*
 
 		// 调用 LLM
 		llmStart := time.Now()
-		if err := r.triggerOnLLMStart(ctx, []string{currentPrompt}); err != nil {
-			return nil, err
+
+		// 可选：触发 LLM 开始回调
+		if withCallbacks {
+			if err := r.triggerOnLLMStart(ctx, []string{currentPrompt}); err != nil {
+				return nil, err
+			}
 		}
 
 		// 使用 LLM Chat 接口
@@ -140,8 +181,10 @@ func (r *ReActAgent) Invoke(ctx context.Context, input *agentcore.AgentInput) (*
 
 		llmResp, err := r.llm.Chat(ctx, messages)
 		if err != nil {
-			_ = r.triggerOnLLMError(ctx, err)
-			return r.handleError(ctx, output, step, "LLM call failed", err, startTime)
+			if withCallbacks {
+				_ = r.triggerOnLLMError(ctx, err)
+			}
+			return r.handleErrorFast(output, step, "LLM call failed", err, startTime)
 		}
 
 		// Collect token usage
@@ -151,14 +194,17 @@ func (r *ReActAgent) Invoke(ctx context.Context, input *agentcore.AgentInput) (*
 
 		llmOutput := llmResp.Content
 
-		if err := r.triggerOnLLMEnd(ctx, llmOutput, llmResp.TokensUsed); err != nil {
-			return nil, err
+		// 可选：触发 LLM 结束回调
+		if withCallbacks {
+			if err := r.triggerOnLLMEnd(ctx, llmOutput, llmResp.TokensUsed); err != nil {
+				return nil, err
+			}
 		}
 
 		// 解析 LLM 输出
 		parsed, err := r.parser.Parse(ctx, llmOutput)
 		if err != nil {
-			return r.handleError(ctx, output, step, "Failed to parse LLM output", err, startTime)
+			return r.handleErrorFast(output, step, "Failed to parse LLM output", err, startTime)
 		}
 
 		// 检查是否得到最终答案
@@ -181,9 +227,9 @@ func (r *ReActAgent) Invoke(ctx context.Context, input *agentcore.AgentInput) (*
 		actionInput := parsed.ActionInput
 
 		if action == "" {
-			return r.handleError(ctx, output, step, "No action specified", agentErrors.New(agentErrors.CodeParserFailed, "empty action").
+			return r.handleErrorFast(output, step, "No action specified", agentErrors.New(agentErrors.CodeParserFailed, "empty action").
 				WithComponent("react_agent").
-				WithOperation("Invoke"), startTime)
+				WithOperation("executeCore"), startTime)
 		}
 
 		// 记录思考步骤
@@ -198,7 +244,14 @@ func (r *ReActAgent) Invoke(ctx context.Context, input *agentcore.AgentInput) (*
 
 		// 执行工具
 		toolStart := time.Now()
-		observation, toolErr := r.executeTool(ctx, action, actionInput)
+		var observation interface{}
+		var toolErr error
+
+		if withCallbacks {
+			observation, toolErr = r.executeTool(ctx, action, actionInput)
+		} else {
+			observation, toolErr = r.executeToolFast(ctx, action, actionInput)
+		}
 
 		// 记录工具调用
 		toolCall := agentcore.ToolCall{
@@ -254,11 +307,6 @@ func (r *ReActAgent) Invoke(ctx context.Context, input *agentcore.AgentInput) (*
 	output.Metadata["steps"] = len(output.ReasoningSteps)
 	output.Metadata["tool_calls"] = len(output.ToolCalls)
 
-	// 触发完成回调
-	if err := r.triggerOnFinish(ctx, output); err != nil {
-		return nil, err
-	}
-
 	return output, nil
 }
 
@@ -295,7 +343,7 @@ func (r *ReActAgent) WithConfig(config agentcore.RunnableConfig) agentcore.Runna
 	return &newAgent
 }
 
-// executeTool 执行工具
+// executeTool 执行工具（含回调）
 func (r *ReActAgent) executeTool(ctx context.Context, toolName string, input map[string]interface{}) (interface{}, error) {
 	tool, ok := r.toolsByName[toolName]
 	if !ok {
@@ -323,6 +371,34 @@ func (r *ReActAgent) executeTool(ctx context.Context, toolName string, input map
 	}
 
 	if err := r.triggerOnToolEnd(ctx, toolName, output.Result); err != nil {
+		return nil, err
+	}
+
+	return output.Result, nil
+}
+
+// executeToolFast 快速执行工具（无回调）
+//
+// 用于热路径优化，跳过工具回调
+//
+//go:inline
+func (r *ReActAgent) executeToolFast(ctx context.Context, toolName string, input map[string]interface{}) (interface{}, error) {
+	tool, ok := r.toolsByName[toolName]
+	if !ok {
+		return nil, agentErrors.New(agentErrors.CodeToolNotFound, "tool not found").
+			WithComponent("react_agent").
+			WithOperation("executeToolFast").
+			WithContext("tool_name", toolName)
+	}
+
+	// 直接执行工具，无回调
+	toolInput := &interfaces.ToolInput{
+		Args:    input,
+		Context: ctx,
+	}
+
+	output, err := tool.Invoke(ctx, toolInput)
+	if err != nil {
 		return nil, err
 	}
 
@@ -372,8 +448,12 @@ func (r *ReActAgent) shouldStop(output string) bool {
 	return false
 }
 
-// handleError 处理错误
-func (r *ReActAgent) handleError(ctx context.Context, output *agentcore.AgentOutput, step int, message string, err error, startTime time.Time) (*agentcore.AgentOutput, error) {
+// handleErrorFast 快速处理错误（无回调）
+//
+// 用于热路径优化，跳过错误回调
+//
+//go:inline
+func (r *ReActAgent) handleErrorFast(output *agentcore.AgentOutput, step int, message string, err error, startTime time.Time) (*agentcore.AgentOutput, error) {
 	output.Status = "failed"
 	output.Message = message
 	output.Timestamp = time.Now()
@@ -385,7 +465,6 @@ func (r *ReActAgent) handleError(ctx context.Context, output *agentcore.AgentOut
 		Error:   err.Error(),
 	})
 
-	_ = r.triggerOnError(ctx, err)
 	return output, err
 }
 
@@ -410,6 +489,9 @@ func (r *ReActAgent) triggerOnFinish(ctx context.Context, output *agentcore.Agen
 	return nil
 }
 
+// triggerOnError 触发错误回调
+//
+//nolint:unused // Reserved for potential future use in error handling paths
 func (r *ReActAgent) triggerOnError(ctx context.Context, err error) error {
 	config := r.GetConfig()
 	for _, cb := range config.Callbacks {
