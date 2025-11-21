@@ -2,10 +2,76 @@ package core
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	agentErrors "github.com/kart-io/goagent/errors"
 )
+
+// Object pools for ChainInput and ChainOutput to reduce allocations
+var chainInputPool = sync.Pool{
+	New: func() interface{} {
+		return &ChainInput{
+			Vars: make(map[string]interface{}, 8),
+			Options: ChainOptions{
+				StopOnError: true,
+				Extra:       make(map[string]interface{}, 4),
+			},
+		}
+	},
+}
+
+var chainOutputPool = sync.Pool{
+	New: func() interface{} {
+		return &ChainOutput{
+			StepsExecuted: make([]StepExecution, 0, 8),
+			Metadata:      make(map[string]interface{}, 4),
+		}
+	},
+}
+
+// GetChainInput retrieves a ChainInput from the object pool
+func GetChainInput() *ChainInput {
+	input := chainInputPool.Get().(*ChainInput)
+	// Reset to default state
+	input.Data = nil
+	for k := range input.Vars {
+		delete(input.Vars, k)
+	}
+	input.Options = ChainOptions{
+		StopOnError: true,
+		Extra:       make(map[string]interface{}, 4),
+	}
+	return input
+}
+
+// PutChainInput returns a ChainInput to the object pool
+func PutChainInput(input *ChainInput) {
+	if input != nil {
+		chainInputPool.Put(input)
+	}
+}
+
+// GetChainOutput retrieves a ChainOutput from the object pool
+func GetChainOutput() *ChainOutput {
+	output := chainOutputPool.Get().(*ChainOutput)
+	// Reset to default state
+	output.Data = nil
+	output.StepsExecuted = output.StepsExecuted[:0]
+	output.TotalLatency = 0
+	output.Status = ""
+	for k := range output.Metadata {
+		delete(output.Metadata, k)
+	}
+	return output
+}
+
+// PutChainOutput returns a ChainOutput to the object pool
+func PutChainOutput(output *ChainOutput) {
+	if output != nil {
+		chainOutputPool.Put(output)
+	}
+}
 
 // Chain 定义链式处理接口
 //
