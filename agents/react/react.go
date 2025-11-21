@@ -11,6 +11,7 @@ import (
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/parsers"
+	"github.com/kart-io/goagent/performance"
 )
 
 // ReActAgent ReAct (Reasoning + Acting) Agent
@@ -500,3 +501,41 @@ const defaultReActFormatInstructions = parsers.MarkerThought + ` you should alwa
 ... (this Thought/Action/Action Input/Observation can repeat N times)
 ` + parsers.MarkerThought + ` I now know the final answer
 ` + parsers.MarkerFinalAnswer + ` the final answer to the original input question`
+
+// NewCachedReActAgent creates a ReAct agent with caching enabled
+// This wraps a ReActAgent with performance.CachedAgent for automatic result caching.
+// Cached ReAct agents are ideal for scenarios with repeated reasoning patterns or queries.
+//
+// Example:
+//
+//	config := react.ReActConfig{
+//	    Name:        "cached-react",
+//	    Description: "ReAct agent with caching",
+//	    LLM:         llmClient,
+//	    Tools:       tools,
+//	    MaxSteps:    10,
+//	}
+//	cachedAgent := react.NewCachedReActAgent(config, nil)
+//
+// Or with custom cache config:
+//
+//	cacheConfig := &performance.CacheConfig{
+//	    TTL:     5 * time.Minute,
+//	    MaxSize: 500,
+//	}
+//	cachedAgent := react.NewCachedReActAgent(config, cacheConfig)
+func NewCachedReActAgent(config ReActConfig, cacheConfig *performance.CacheConfig) agentcore.Agent {
+	agent := NewReActAgent(config)
+
+	// Use provided cache config or create default
+	if cacheConfig == nil {
+		defaultConfig := performance.DefaultCacheConfig()
+		cacheConfig = &defaultConfig
+		// ReAct reasoning patterns can be cached for moderate durations
+		cacheConfig.TTL = 5 * time.Minute
+		cacheConfig.MaxSize = 500
+	}
+
+	return performance.NewCachedAgent(agent, *cacheConfig)
+}
+

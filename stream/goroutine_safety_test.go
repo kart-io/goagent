@@ -382,7 +382,7 @@ func TestStreamingLLMAgent_ChunkDelayRespectsCancellation(t *testing.T) {
 	// Use a longer response to ensure multiple chunks
 	mockClient := NewMockLLMClient(0, strings.Repeat("Hello World ", 20)) // 240 chars
 	config := DefaultStreamingLLMConfig()
-	config.ChunkSize = 10       // Small chunks
+	config.ChunkSize = 10                      // Small chunks
 	config.ChunkDelay = 500 * time.Millisecond // Long delay between chunks
 
 	agent := NewStreamingLLMAgent(mockClient, config)
