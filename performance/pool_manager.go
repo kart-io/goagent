@@ -55,8 +55,8 @@ type PoolManager interface {
 	IsPoolEnabled(poolType PoolType) bool
 
 	// Statistics 统计信息
-	GetStats(poolType PoolType) *ObjectPoolStats
-	GetAllStats() map[PoolType]*ObjectPoolStats
+	GetStats(poolType PoolType) *ObjectPoolStatsSnapshot
+	GetAllStats() map[PoolType]*ObjectPoolStatsSnapshot
 	ResetStats()
 
 	// Lifecycle
@@ -609,28 +609,28 @@ func (a *PoolAgent) IsPoolEnabled(poolType PoolType) bool {
 }
 
 // GetStats 获取指定池的统计信息
-func (a *PoolAgent) GetStats(poolType PoolType) *ObjectPoolStats {
+func (a *PoolAgent) GetStats(poolType PoolType) *ObjectPoolStatsSnapshot {
 	if stats, ok := a.stats[poolType]; ok {
-		// 返回拷贝
-		return &ObjectPoolStats{
-			Gets:    stats.Gets,
-			Puts:    stats.Puts,
-			News:    stats.News,
-			Current: stats.Current,
+		// 返回拷贝，使用 Load() 读取原子值
+		return &ObjectPoolStatsSnapshot{
+			Gets:    stats.Gets.Load(),
+			Puts:    stats.Puts.Load(),
+			News:    stats.News.Load(),
+			Current: stats.Current.Load(),
 		}
 	}
-	return &ObjectPoolStats{}
+	return &ObjectPoolStatsSnapshot{}
 }
 
 // GetAllStats 获取所有池的统计信息
-func (a *PoolAgent) GetAllStats() map[PoolType]*ObjectPoolStats {
-	result := make(map[PoolType]*ObjectPoolStats)
+func (a *PoolAgent) GetAllStats() map[PoolType]*ObjectPoolStatsSnapshot {
+	result := make(map[PoolType]*ObjectPoolStatsSnapshot)
 	for poolType, stats := range a.stats {
-		result[poolType] = &ObjectPoolStats{
-			Gets:    stats.Gets,
-			Puts:    stats.Puts,
-			News:    stats.News,
-			Current: stats.Current,
+		result[poolType] = &ObjectPoolStatsSnapshot{
+			Gets:    stats.Gets.Load(),
+			Puts:    stats.Puts.Load(),
+			News:    stats.News.Load(),
+			Current: stats.Current.Load(),
 		}
 	}
 	return result
