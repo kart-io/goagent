@@ -26,10 +26,10 @@ type MemorySemanticCache struct {
 	mu sync.RWMutex
 
 	// Statistics
-	hits       int64
-	misses     int64
-	tokensSaved int64
-	similaritySum float64
+	hits            int64
+	misses          int64
+	tokensSaved     int64
+	similaritySum   float64
 	similarityCount int64
 
 	// done channel for cleanup goroutine
@@ -198,7 +198,7 @@ func (c *MemorySemanticCache) Stats() *CacheStats {
 	for _, entry := range c.entries {
 		memoryUsed += int64(len(entry.Prompt) + len(entry.Response))
 		memoryUsed += int64(len(entry.Embedding) * 4) // float32 = 4 bytes
-		memoryUsed += 200 // overhead for other fields
+		memoryUsed += 200                             // overhead for other fields
 	}
 
 	return &CacheStats{
