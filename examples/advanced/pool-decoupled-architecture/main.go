@@ -92,9 +92,9 @@ func demonstrateDependencyInjection() {
 	stats := poolManager.GetAllStats()
 	fmt.Println("\n池统计信息:")
 	for poolType, stat := range stats {
-		if stat.Gets.Load() > 0 {
+		if stat.Gets > 0 {
 			fmt.Printf("  %s: Gets=%d, Puts=%d, News=%d\n",
-				poolType, stat.Gets.Load(), stat.Puts.Load(), stat.News.Load())
+				poolType, stat.Gets, stat.Puts, stat.News)
 		}
 	}
 }
@@ -177,7 +177,7 @@ func demonstrateAdaptiveStrategy() {
 
 	stats1 := poolManager.GetStats(performance.PoolTypeMessage)
 	fmt.Printf("低频使用统计 - Gets: %d, Puts: %d, News: %d\n",
-		stats1.Gets.Load(), stats1.Puts.Load(), stats1.News.Load())
+		stats1.Gets, stats1.Puts, stats1.News)
 
 	// 高频使用（会触发池化）
 	fmt.Println("\n阶段2: 高频使用")
@@ -189,9 +189,9 @@ func demonstrateAdaptiveStrategy() {
 
 	stats2 := poolManager.GetStats(performance.PoolTypeMessage)
 	fmt.Printf("高频使用统计 - Gets: %d, Puts: %d, News: %d\n",
-		stats2.Gets.Load(), stats2.Puts.Load(), stats2.News.Load())
+		stats2.Gets, stats2.Puts, stats2.News)
 	fmt.Printf("池命中率: %.2f%%\n",
-		float64(stats2.Gets.Load()-stats2.News.Load())/float64(stats2.Gets.Load())*100)
+		float64(stats2.Gets-stats2.News)/float64(stats2.Gets)*100)
 }
 
 // 演示4: 带指标收集的策略
@@ -231,10 +231,10 @@ func demonstrateMetricsStrategy() {
 	allStats := poolManager.GetAllStats()
 	fmt.Println("\n池统计信息:")
 	for poolType, stats := range allStats {
-		if stats.Gets.Load() > 0 {
+		if stats.Gets > 0 {
 			fmt.Printf("  %s: Gets=%d, Puts=%d, Hit Rate=%.2f%%\n",
-				poolType, stats.Gets.Load(), stats.Puts.Load(),
-				float64(stats.Gets.Load()-stats.News.Load())/float64(stats.Gets.Load())*100)
+				poolType, stats.Gets, stats.Puts,
+				float64(stats.Gets-stats.News)/float64(stats.Gets)*100)
 		}
 	}
 }
@@ -321,12 +321,12 @@ func demonstrateIsolatedPoolManager() {
 }
 
 // 辅助函数
-func printPoolUsage(stats map[performance.PoolType]*performance.ObjectPoolStats) {
+func printPoolUsage(stats map[performance.PoolType]*performance.ObjectPoolStatsSnapshot) {
 	for poolType, stat := range stats {
-		if stat.Gets.Load() > 0 {
+		if stat.Gets > 0 {
 			fmt.Printf("  %s: Gets=%d, Puts=%d, Pool Hit Rate=%.2f%%\n",
-				poolType, stat.Gets.Load(), stat.Puts.Load(),
-				float64(stat.Gets.Load()-stat.News.Load())/float64(stat.Gets.Load())*100)
+				poolType, stat.Gets, stat.Puts,
+				float64(stat.Gets-stat.News)/float64(stat.Gets)*100)
 		}
 	}
 }
@@ -345,10 +345,10 @@ func testManager(manager performance.PoolManager) {
 	// 打印统计
 	stats := manager.GetAllStats()
 	for poolType, stat := range stats {
-		if stat.Gets.Load() > 0 {
+		if stat.Gets > 0 {
 			fmt.Printf("  %s: Gets=%d, News=%d (池%s)\n",
-				poolType, stat.Gets.Load(), stat.News.Load(),
-				ternary(stat.News.Load() == 0, "已启用", "已禁用"))
+				poolType, stat.Gets, stat.News,
+				ternary(stat.News == 0, "已启用", "已禁用"))
 		}
 	}
 }

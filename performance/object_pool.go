@@ -9,12 +9,20 @@ import (
 	"github.com/kart-io/goagent/interfaces"
 )
 
-// ObjectPoolStats 对象池统计信息
+// ObjectPoolStats 对象池统计信息（内部使用，包含原子操作）
 type ObjectPoolStats struct {
 	Gets    atomic.Int64 // 获取次数
 	Puts    atomic.Int64 // 归还次数
 	News    atomic.Int64 // 新建次数
 	Current atomic.Int64 // 当前池中对象数（估算）
+}
+
+// ObjectPoolStatsSnapshot 对象池统计信息快照（用于返回和显示）
+type ObjectPoolStatsSnapshot struct {
+	Gets    int64 // 获取次数
+	Puts    int64 // 归还次数
+	News    int64 // 新建次数
+	Current int64 // 当前池中对象数（估算）
 }
 
 // AllPoolStats 所有对象池的统计信息

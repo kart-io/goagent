@@ -67,7 +67,8 @@ func (m *MockTool) ArgsSchema() string {
 
 func main() {
 	fmt.Println("GoAgent Performance Demonstration - InvokeFast Optimization")
-	fmt.Println("===========================================================\n")
+	fmt.Println("===========================================================")
+	fmt.Println()
 
 	// Create mock LLM client
 	llmClient := &MockLLMClient{}

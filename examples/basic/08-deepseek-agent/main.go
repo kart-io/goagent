@@ -109,14 +109,14 @@ func (w *WeatherTool) ArgsSchema() string {
 
 func main() {
 	fmt.Println("GoAgent DeepSeek 示例")
-	fmt.Println("=====================\n")
+	fmt.Println("=====================")
 
 	// 从环境变量获取 API Key
 	apiKey := os.Getenv("DEEPSEEK_API_KEY")
 	if apiKey == "" {
 		fmt.Println("⚠️  警告：未设置 DEEPSEEK_API_KEY 环境变量")
 		fmt.Println("提示：export DEEPSEEK_API_KEY=your-api-key")
-		fmt.Println("\n使用模拟模式运行示例...\n")
+		fmt.Println("\n使用模拟模式运行示例...")
 		runMockExample()
 		return
 	}
@@ -315,7 +315,7 @@ func runReActExample(apiKey string) {
 	// 执行任务
 	ctx := context.Background()
 	fmt.Printf("📋 任务: %s\n", input.Task)
-	fmt.Println("🔄 ReAct Agent 开始推理...\n")
+	fmt.Println("🔄 ReAct Agent 开始推理...")
 
 	output, err := reactAgent.Invoke(ctx, input)
 	if err != nil {
