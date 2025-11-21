@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"encoding/json"
+	"github.com/kart-io/goagent/utils/json"
 	"fmt"
 	"log"
 	"os"

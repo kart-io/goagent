@@ -3,6 +3,7 @@ package retrieval
 import (
 	"fmt"
 	"sort"
+	"sync/atomic"
 
 	"github.com/kart-io/goagent/interfaces"
 )
@@ -103,6 +104,6 @@ var idCounter int64
 
 // generateID 生成唯一 ID
 func generateID() string {
-	idCounter++
-	return fmt.Sprintf("doc_%d", idCounter)
+	id := atomic.AddInt64(&idCounter, 1)
+	return fmt.Sprintf("doc_%d", id)
 }

@@ -289,12 +289,15 @@ func (e *AgentExecutor) executeParallelSteps(ctx context.Context, state *Executi
 	// Use semaphore to limit concurrency
 	sem := make(chan struct{}, e.maxConcurrency)
 	var wg sync.WaitGroup
-	var mu sync.Mutex
+	var mu sync.RWMutex
 	var firstError error
 
 	for _, step := range steps {
-		// Check if step should be skipped
-		if e.shouldSkipStep(step, state) {
+		// Check if step should be skipped (need to read StepResults under lock)
+		mu.RLock()
+		skip := e.shouldSkipStep(step, state)
+		mu.RUnlock()
+		if skip {
 			result.SkippedSteps++
 			continue
 		}
