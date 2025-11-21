@@ -2,7 +2,7 @@ package agents
 
 import (
 	"context"
-	"encoding/json"
+	"github.com/kart-io/goagent/utils/json"
 	"fmt"
 	"time"
 )

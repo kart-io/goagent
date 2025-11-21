@@ -89,6 +89,8 @@ func (m *MockCheckpointer) List(ctx context.Context) ([]CheckpointInfo, error) {
 }
 
 func (m *MockCheckpointer) Ping(ctx context.Context) error {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	if m.pingError != nil {
 		return m.pingError
 	}
@@ -96,6 +98,18 @@ func (m *MockCheckpointer) Ping(ctx context.Context) error {
 		return fmt.Errorf("mock unhealthy")
 	}
 	return nil
+}
+
+func (m *MockCheckpointer) SetHealthy(healthy bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.healthy = healthy
+}
+
+func (m *MockCheckpointer) SetPingError(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.pingError = err
 }
 
 // TestDefaultDistributedCheckpointerConfig tests default config
@@ -460,11 +474,11 @@ func TestDistributedCheckpointer_ReplicationAsync(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Primary should have it immediately
-	assert.Equal(t, int32(1), primary.saveCount)
+	assert.Equal(t, int32(1), atomic.LoadInt32(&primary.saveCount))
 
 	// Secondary might have it after replication workers process
 	time.Sleep(100 * time.Millisecond)
-	assert.Greater(t, secondary.saveCount, int32(0))
+	assert.Greater(t, atomic.LoadInt32(&secondary.saveCount), int32(0))
 }
 
 // TestDistributedCheckpointer_ReplicationDelete tests delete replication
@@ -546,8 +560,8 @@ func TestDistributedCheckpointer_HealthCheck_FailoverTrigger(t *testing.T) {
 	require.NoError(t, err)
 
 	// Make primary unhealthy
-	primary.healthy = false
-	primary.pingError = fmt.Errorf("unhealthy")
+	primary.SetHealthy(false)
+	primary.SetPingError(fmt.Errorf("unhealthy"))
 
 	// Wait for health check to trigger failover
 	time.Sleep(150 * time.Millisecond)
@@ -581,8 +595,8 @@ func TestDistributedCheckpointer_HealthCheck_Failback(t *testing.T) {
 	require.NoError(t, err)
 
 	// Trigger failover
-	primary.healthy = false
-	primary.pingError = fmt.Errorf("unhealthy")
+	primary.SetHealthy(false)
+	primary.SetPingError(fmt.Errorf("unhealthy"))
 	time.Sleep(150 * time.Millisecond)
 
 	// Verify failed over
@@ -591,8 +605,8 @@ func TestDistributedCheckpointer_HealthCheck_Failback(t *testing.T) {
 	dc.mu.RUnlock()
 
 	// Restore primary
-	primary.healthy = true
-	primary.pingError = nil
+	primary.SetHealthy(true)
+	primary.SetPingError(nil)
 	time.Sleep(150 * time.Millisecond)
 
 	// Verify failed back

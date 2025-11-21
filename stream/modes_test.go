@@ -2,6 +2,7 @@ package stream
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -265,6 +266,7 @@ func TestMultiModeStream_SubscribeAll(t *testing.T) {
 func TestMultiModeStream_WithCallback(t *testing.T) {
 	ctx := context.Background()
 
+	var mu sync.Mutex
 	callbackCalled := 0
 	var receivedMode StreamMode
 	var receivedEvent StreamEvent
@@ -273,6 +275,8 @@ func TestMultiModeStream_WithCallback(t *testing.T) {
 		Modes:      []StreamMode{StreamModeMessages},
 		BufferSize: 10,
 		Callback: func(mode StreamMode, event StreamEvent) {
+			mu.Lock()
+			defer mu.Unlock()
 			callbackCalled++
 			receivedMode = mode
 			receivedEvent = event
@@ -294,6 +298,8 @@ func TestMultiModeStream_WithCallback(t *testing.T) {
 	// Wait for callback
 	time.Sleep(100 * time.Millisecond)
 
+	mu.Lock()
+	defer mu.Unlock()
 	assert.Equal(t, 1, callbackCalled)
 	assert.Equal(t, StreamModeMessages, receivedMode)
 	assert.Equal(t, "token", receivedEvent.Type)
