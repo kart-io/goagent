@@ -457,6 +457,8 @@ func (c *BaseChain) WithConfig(config RunnableConfig) Runnable[*ChainInput, *Cha
 }
 
 // shouldSkipStep 检查是否应该跳过步骤
+//
+//go:inline
 func shouldSkipStep(stepNum int, options ChainOptions) bool {
 	// 如果指定了 OnlySteps，只执行这些步骤
 	if len(options.OnlySteps) > 0 {

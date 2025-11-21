@@ -139,11 +139,15 @@ func NewBaseAgent(name, description string, capabilities []string) *BaseAgent {
 }
 
 // Name 返回 Agent 名称
+//
+//go:inline
 func (a *BaseAgent) Name() string {
 	return a.name
 }
 
 // Description 返回 Agent 描述
+//
+//go:inline
 func (a *BaseAgent) Description() string {
 	return a.description
 }
@@ -175,6 +179,30 @@ func (a *BaseAgent) Invoke(ctx context.Context, input *AgentInput) (*AgentOutput
 		// Log callback error but return the original NotImplemented error
 		// as it's more important for the caller to know the method needs implementation
 		return output, ErrNotImplemented
+	}
+
+	return output, ErrNotImplemented
+}
+
+// InvokeFast 快速调用（绕过中间件）
+//
+// 用于热路径优化，直接调用 Execute 方法
+// 性能提升：避免接口调用和中间件开销
+//
+// 注意：此方法不会触发 Runnable 的回调和中间件逻辑
+// 仅在性能关键路径且不需要额外处理时使用
+//
+//go:inline
+func (a *BaseAgent) InvokeFast(ctx context.Context, input *AgentInput) (*AgentOutput, error) {
+	// 直接执行，跳过回调
+	startTime := time.Now()
+
+	// 默认实现返回错误，提示需要重写
+	output := &AgentOutput{
+		Status:    "failed",
+		Message:   "Invoke method must be implemented by concrete agent",
+		Timestamp: time.Now(),
+		Latency:   time.Since(startTime),
 	}
 
 	return output, ErrNotImplemented
