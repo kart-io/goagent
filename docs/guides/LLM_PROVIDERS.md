@@ -1,434 +1,459 @@
-# GoAgent LLM Providers
+# LLM 提供商指南
 
-## 支持的 LLM 提供商
+## 概述
 
-GoAgent 支持多种大语言模型提供商，让你可以灵活选择最适合的 AI 模型。
+GoAgent 支持多种 LLM 提供商，提供统一的接口抽象。本指南详细说明各提供商的配置和使用方法。
 
-### 已支持的提供商
+## 支持的提供商
 
-| 提供商 | 模型示例 | 配置方式 | 特点 |
-|--------|---------|----------|------|
-| **OpenAI** | GPT-3.5, GPT-4, GPT-4-Turbo | API Key | 最成熟，功能最全面 |
-| **Anthropic Claude** ✨ | Claude 3 Opus, Sonnet, Haiku | API Key | 长上下文，安全性强 |
-| **Cohere** ✨ | Command, Command-R, Command-R-Plus | API Key | RAG 优化，企业级 |
-| **HuggingFace** ✨ | Llama 3, Mixtral, BLOOM, Flan-T5 | API Key | 开源模型，多样选择 |
-| **Google Gemini** | Gemini Pro, Gemini Ultra | API Key | Google 的多模态模型 |
-| **DeepSeek** | DeepSeek-Coder, DeepSeek-Chat | API Key | 中文优化，编程能力强 |
-| **Ollama** | Llama2, Mistral, Phi, CodeLlama | 本地运行 | 完全本地化，隐私安全 |
-| **SiliconFlow** | 各种开源模型 | API Key | 国内服务商 |
-| **Kimi** | Kimi Chat | API Key | 长上下文支持 |
+| 提供商 | 常量 | 特点 |
+|-------|------|------|
+| OpenAI | `ProviderOpenAI` | GPT 系列，广泛支持 |
+| Anthropic | `ProviderAnthropic` | Claude 系列，长上下文 |
+| Google Gemini | `ProviderGemini` | Gemini 系列 |
+| DeepSeek | `ProviderDeepSeek` | 高性价比 |
+| Cohere | `ProviderCohere` | 企业级 NLP |
+| HuggingFace | `ProviderHuggingFace` | 开源模型 |
+| Ollama | `ProviderOllama` | 本地部署 |
+| SiliconFlow | `ProviderSiliconFlow` | 国内服务 |
+| Kimi | `ProviderKimi` | 月之暗面 |
 
-### Ollama 支持 (新增)
+## 统一接口
 
-Ollama 允许你在本地运行大语言模型，无需 API Key，数据完全私有。
-
-#### 安装 Ollama
-
-```bash
-# macOS
-brew install ollama
-
-# Linux
-curl -fsSL https://ollama.ai/install.sh | sh
-
-# Windows
-# 下载安装包：https://ollama.ai/download/windows
-```
-
-#### 启动 Ollama 服务
-
-```bash
-# 启动 Ollama 服务
-ollama serve
-
-# 拉取模型（在另一个终端）
-ollama pull llama2
-ollama pull mistral
-ollama pull codellama
-ollama pull phi
-```
-
-#### 使用 Ollama Provider
+所有提供商都实现 `Client` 接口：
 
 ```go
-package main
+type Client interface {
+    // 文本补全
+    Complete(ctx context.Context, req *CompletionRequest) (*CompletionResponse, error)
 
-import (
-    "context"
-    "fmt"
-    "log"
+    // 对话
+    Chat(ctx context.Context, messages []Message) (*CompletionResponse, error)
 
-    "github.com/kart-io/goagent/llm"
-    "github.com/kart-io/goagent/llm/providers"
-    "github.com/kart-io/goagent/builder"
+    // 返回提供商类型
+    Provider() Provider
+
+    // 检查可用性
+    IsAvailable() bool
+}
+```
+
+流式客户端额外实现 `StreamClient` 接口：
+
+```go
+type StreamClient interface {
+    Client
+
+    // 流式补全
+    CompleteStream(ctx context.Context, req *CompletionRequest) (<-chan *StreamChunk, error)
+
+    // 流式对话
+    ChatStream(ctx context.Context, messages []Message) (<-chan *StreamChunk, error)
+}
+```
+
+## 提供商配置
+
+### OpenAI
+
+```go
+import "github.com/kart-io/goagent/llm/providers"
+
+// 基本配置
+client := providers.NewOpenAIClient(
+    os.Getenv("OPENAI_API_KEY"),
+    "gpt-4",
 )
 
-func main() {
-    // 创建 Ollama 客户端
-    ollamaClient := providers.NewOllamaClientSimple("llama2")
-
-    // 检查 Ollama 是否运行
-    if !ollamaClient.IsAvailable() {
-        log.Fatal("Ollama is not running. Please start it with: ollama serve")
-    }
-
-    // 方式 1: 直接使用客户端
-    ctx := context.Background()
-    response, err := ollamaClient.Chat(ctx, []llm.Message{
-        llm.SystemMessage("You are a helpful assistant."),
-        llm.UserMessage("What is Go?"),
-    })
-
-    if err != nil {
-        log.Fatal(err)
-    }
-
-    fmt.Println(response.Content)
-
-    // 方式 2: 创建 Agent
-    agent, err := builder.NewAgentBuilder(ollamaClient).
-        WithSystemPrompt("You are a helpful AI assistant.").
-        WithTools(/* your tools */).
-        Build()
-
-    if err != nil {
-        log.Fatal(err)
-    }
-
-    // 使用 agent...
-}
+// 高级配置
+client := providers.NewOpenAIClientWithConfig(providers.OpenAIConfig{
+    APIKey:      os.Getenv("OPENAI_API_KEY"),
+    Model:       "gpt-4-turbo",
+    BaseURL:     "https://api.openai.com/v1",  // 可自定义端点
+    MaxTokens:   4096,
+    Temperature: 0.7,
+    Timeout:     60,
+})
 ```
 
-#### Ollama 高级配置
+**支持的模型：**
+
+- `gpt-4`
+- `gpt-4-turbo`
+- `gpt-4o`
+- `gpt-3.5-turbo`
+
+### Anthropic
 
 ```go
-// 详细配置
-config := providers.DefaultOllamaConfig()
-config.BaseURL = "http://localhost:11434"  // 默认地址
-config.Model = "mistral"                   // 选择模型
-config.Temperature = 0.7                   // 温度参数
-config.MaxTokens = 2000                    // 最大 token 数
-config.Timeout = 120                       // 超时时间（秒）
+import "github.com/kart-io/goagent/llm/providers"
 
-client := providers.NewOllamaClient(config)
-
-// 列出可用模型
-models, err := client.ListModels()
-if err == nil {
-    for _, model := range models {
-        fmt.Printf("Available model: %s\n", model)
-    }
-}
-
-// 拉取新模型（如果需要）
-err = client.PullModel("codellama")
-```
-
-### 支持的 Ollama 模型
-
-| 模型 | 大小 | 用途 | 命令 |
-|------|------|------|------|
-| **llama2** | 3.8GB / 7B | 通用对话 | `ollama pull llama2` |
-| **mistral** | 4.1GB / 7B | 高质量推理 | `ollama pull mistral` |
-| **codellama** | 3.8GB / 7B | 代码生成 | `ollama pull codellama` |
-| **phi** | 1.6GB / 2.7B | 轻量级模型 | `ollama pull phi` |
-| **neural-chat** | 4.1GB / 7B | 对话优化 | `ollama pull neural-chat` |
-| **starling-lm** | 4.1GB / 7B | 强化学习优化 | `ollama pull starling-lm` |
-| **llama2:13b** | 7.4GB / 13B | 更强的推理能力 | `ollama pull llama2:13b` |
-| **llama2:70b** | 39GB / 70B | 最强推理能力 | `ollama pull llama2:70b` |
-
-### Anthropic Claude 支持 (新增)
-
-Anthropic Claude 提供高质量的长上下文对话能力，注重安全性和准确性。
-
-#### 支持的 Claude 模型
-
-| 模型 | 上下文 | 特点 | 最佳用途 |
-|------|--------|------|---------|
-| **claude-3-opus-20240229** | 200K tokens | 最强能力，最高质量 | 复杂任务，深度分析 |
-| **claude-3-sonnet-20240229** | 200K tokens | 性能与成本平衡 | 日常对话，代码生成 |
-| **claude-3-haiku-20240307** | 200K tokens | 最快响应速度 | 简单任务，实时交互 |
-
-#### 基本使用
-
-```go
-package main
-
-import (
-    "context"
-    "fmt"
-    "log"
-    "os"
-
-    "github.com/kart-io/goagent/llm"
-    "github.com/kart-io/goagent/llm/providers"
+// 基本配置
+client := providers.NewAnthropicClient(
+    os.Getenv("ANTHROPIC_API_KEY"),
+    "claude-3-sonnet-20240229",
 )
 
-func main() {
-    // 创建 Anthropic 客户端
-    client, err := providers.NewAnthropic(&llm.Config{
-        APIKey: os.Getenv("ANTHROPIC_API_KEY"),
-        Model:  "claude-3-sonnet-20240229", // 默认模型
-    })
-    if err != nil {
-        log.Fatal(err)
-    }
-
-    // 发送请求
-    ctx := context.Background()
-    resp, err := client.Complete(ctx, &llm.CompletionRequest{
-        Messages: []llm.Message{
-            {Role: "user", Content: "解释量子计算的基本原理"},
-        },
-        MaxTokens: 1000,
-    })
-    if err != nil {
-        log.Fatal(err)
-    }
-
-    fmt.Println(resp.Content)
-}
+// 高级配置
+client := providers.NewAnthropicClientWithConfig(providers.AnthropicConfig{
+    APIKey:      os.Getenv("ANTHROPIC_API_KEY"),
+    Model:       "claude-3-opus-20240229",
+    MaxTokens:   4096,
+    Temperature: 0.7,
+})
 ```
 
-#### 环境变量配置
+**支持的模型：**
 
-```bash
-export ANTHROPIC_API_KEY="your-api-key"
-export ANTHROPIC_BASE_URL="https://api.anthropic.com/v1"  # 可选
-export ANTHROPIC_MODEL="claude-3-sonnet-20240229"         # 可选
-```
+- `claude-3-opus-20240229`
+- `claude-3-sonnet-20240229`
+- `claude-3-haiku-20240307`
 
-#### 完整示例
-
-查看完整示例：[examples/llm/anthropic/main.go](../../examples/llm/anthropic/main.go)
-
----
-
-### Cohere 支持 (新增)
-
-Cohere 提供企业级 LLM 服务，特别优化了检索增强生成(RAG)能力。
-
-#### 支持的 Cohere 模型
-
-| 模型 | 特点 | 最佳用途 |
-|------|------|---------|
-| **command** | 标准对话模型 | 通用对话，文本生成 |
-| **command-light** | 轻量快速模型 | 实时响应，简单任务 |
-| **command-r** | RAG 优化 | 文档检索，知识问答 |
-| **command-r-plus** | 增强 RAG 能力 | 复杂检索，多文档分析 |
-
-#### 基本使用
+### Google Gemini
 
 ```go
-package main
+import "github.com/kart-io/goagent/llm/providers"
 
-import (
-    "context"
-    "fmt"
-    "log"
-    "os"
-
-    "github.com/kart-io/goagent/llm"
-    "github.com/kart-io/goagent/llm/providers"
+// 基本配置
+client := providers.NewGeminiClient(
+    os.Getenv("GOOGLE_API_KEY"),
+    "gemini-pro",
 )
 
-func main() {
-    // 创建 Cohere 客户端
-    client, err := providers.NewCohere(&llm.Config{
-        APIKey: os.Getenv("COHERE_API_KEY"),
-        Model:  "command",  // 默认模型
-    })
-    if err != nil {
-        log.Fatal(err)
-    }
-
-    // 支持对话历史
-    ctx := context.Background()
-    resp, err := client.Complete(ctx, &llm.CompletionRequest{
-        Messages: []llm.Message{
-            {Role: "user", Content: "什么是机器学习？"},
-            {Role: "assistant", Content: "机器学习是人工智能的一个分支..."},
-            {Role: "user", Content: "它有哪些应用？"},
-        },
-        MaxTokens: 500,
-    })
-    if err != nil {
-        log.Fatal(err)
-    }
-
-    fmt.Println(resp.Content)
-}
+// 高级配置
+client := providers.NewGeminiClientWithConfig(providers.GeminiConfig{
+    APIKey:      os.Getenv("GOOGLE_API_KEY"),
+    Model:       "gemini-1.5-pro",
+    MaxTokens:   4096,
+    Temperature: 0.7,
+})
 ```
 
-#### 环境变量配置
+**支持的模型：**
 
-```bash
-export COHERE_API_KEY="your-api-key"
-export COHERE_BASE_URL="https://api.cohere.ai/v1"  # 可选
-export COHERE_MODEL="command"                      # 可选
-```
+- `gemini-pro`
+- `gemini-1.5-pro`
+- `gemini-1.5-flash`
 
-#### 完整示例
-
-查看完整示例：[examples/llm/cohere/main.go](../../examples/llm/cohere/main.go)
-
----
-
-### HuggingFace 支持 (新增)
-
-HuggingFace Inference API 允许你访问数千个开源模型，无需自己部署。
-
-#### 热门模型推荐
-
-| 模型 | 参数量 | 特点 | 最佳用途 |
-|------|--------|------|---------|
-| **meta-llama/Meta-Llama-3-8B-Instruct** | 8B | 最新 Llama 3 | 通用对话 |
-| **mistralai/Mixtral-8x7B-Instruct-v0.1** | 47B (8x7B MoE) | 混合专家模型 | 复杂推理 |
-| **google/flan-t5-xxl** | 11B | Google 指令微调 | 任务执行 |
-| **bigscience/bloom** | 176B | 多语言支持 | 多语言生成 |
-
-#### 基本使用
+### DeepSeek
 
 ```go
-package main
+import "github.com/kart-io/goagent/llm/providers"
 
-import (
-    "context"
-    "fmt"
-    "log"
-    "os"
-    "time"
-
-    "github.com/kart-io/goagent/llm"
-    "github.com/kart-io/goagent/llm/providers"
+// 基本配置
+client := providers.NewDeepSeekClient(
+    os.Getenv("DEEPSEEK_API_KEY"),
+    "deepseek-chat",
 )
 
-func main() {
-    // 创建 HuggingFace 客户端
-    client, err := providers.NewHuggingFace(&llm.Config{
-        APIKey:  os.Getenv("HUGGINGFACE_API_KEY"),
-        Model:   "meta-llama/Meta-Llama-3-8B-Instruct",
-        Timeout: 120,  // 模型加载可能需要较长时间
-    })
-    if err != nil {
-        log.Fatal(err)
-    }
+// 高级配置
+client := providers.NewDeepSeekClientWithConfig(providers.DeepSeekConfig{
+    APIKey:      os.Getenv("DEEPSEEK_API_KEY"),
+    Model:       "deepseek-coder",
+    BaseURL:     "https://api.deepseek.com",
+    MaxTokens:   4096,
+    Temperature: 0.7,
+})
+```
 
-    // 首次请求可能需要等待模型加载
-    ctx := context.Background()
-    resp, err := client.Complete(ctx, &llm.CompletionRequest{
-        Messages: []llm.Message{
-            {Role: "user", Content: "什么是深度学习？"},
-        },
-        MaxTokens: 500,
-    })
-    if err != nil {
-        log.Fatal(err)
-    }
+**支持的模型：**
 
-    fmt.Println(resp.Content)
+- `deepseek-chat`
+- `deepseek-coder`
+
+### Cohere
+
+```go
+import "github.com/kart-io/goagent/llm/providers"
+
+// 基本配置
+client := providers.NewCohereClient(
+    os.Getenv("COHERE_API_KEY"),
+    "command",
+)
+
+// 高级配置
+client := providers.NewCohereClientWithConfig(providers.CohereConfig{
+    APIKey:      os.Getenv("COHERE_API_KEY"),
+    Model:       "command-r-plus",
+    MaxTokens:   4096,
+    Temperature: 0.7,
+})
+```
+
+**支持的模型：**
+
+- `command`
+- `command-r`
+- `command-r-plus`
+
+### HuggingFace
+
+```go
+import "github.com/kart-io/goagent/llm/providers"
+
+// 基本配置
+client := providers.NewHuggingFaceClient(
+    os.Getenv("HUGGINGFACE_API_KEY"),
+    "meta-llama/Llama-2-70b-chat-hf",
+)
+
+// 高级配置
+client := providers.NewHuggingFaceClientWithConfig(providers.HuggingFaceConfig{
+    APIKey:      os.Getenv("HUGGINGFACE_API_KEY"),
+    Model:       "mistralai/Mixtral-8x7B-Instruct-v0.1",
+    MaxTokens:   4096,
+    Temperature: 0.7,
+})
+```
+
+### Ollama（本地部署）
+
+```go
+import "github.com/kart-io/goagent/llm/providers"
+
+// 基本配置
+client := providers.NewOllamaClient(
+    "http://localhost:11434",
+    "llama2",
+)
+
+// 高级配置
+client := providers.NewOllamaClientWithConfig(providers.OllamaConfig{
+    BaseURL:     "http://localhost:11434",
+    Model:       "codellama",
+    MaxTokens:   4096,
+    Temperature: 0.7,
+})
+```
+
+**常用模型：**
+
+- `llama2`
+- `codellama`
+- `mistral`
+- `mixtral`
+
+### SiliconFlow
+
+```go
+import "github.com/kart-io/goagent/llm/providers"
+
+// 基本配置
+client := providers.NewSiliconFlowClient(
+    os.Getenv("SILICONFLOW_API_KEY"),
+    "Qwen/Qwen2-72B-Instruct",
+)
+```
+
+### Kimi
+
+```go
+import "github.com/kart-io/goagent/llm/providers"
+
+// 基本配置
+client := providers.NewKimiClient(
+    os.Getenv("KIMI_API_KEY"),
+    "moonshot-v1-8k",
+)
+```
+
+**支持的模型：**
+
+- `moonshot-v1-8k`
+- `moonshot-v1-32k`
+- `moonshot-v1-128k`
+
+## 使用示例
+
+### 基本对话
+
+```go
+client := providers.NewOpenAIClient(apiKey, "gpt-4")
+
+messages := []llm.Message{
+    llm.SystemMessage("你是一个有帮助的助手。"),
+    llm.UserMessage("你好！"),
+}
+
+resp, err := client.Chat(context.Background(), messages)
+if err != nil {
+    log.Fatal(err)
+}
+
+fmt.Println(resp.Content)
+```
+
+### 流式对话
+
+```go
+client := providers.NewOpenAIClient(apiKey, "gpt-4")
+
+messages := []llm.Message{
+    llm.UserMessage("请写一首诗。"),
+}
+
+stream, err := client.ChatStream(context.Background(), messages)
+if err != nil {
+    log.Fatal(err)
+}
+
+for chunk := range stream {
+    if chunk.Error != nil {
+        log.Printf("错误: %v\n", chunk.Error)
+        break
+    }
+    fmt.Print(chunk.Delta)
+    if chunk.Done {
+        break
+    }
 }
 ```
 
-#### 模型加载说明
-
-HuggingFace Inference API 采用按需加载模型：
-- **冷启动**：首次请求可能需要 20-60 秒加载模型
-- **自动重试**：Provider 会自动重试最多 5 次
-- **建议超时**：设置 120-180 秒的超时时间
-
-#### 环境变量配置
-
-```bash
-export HUGGINGFACE_API_KEY="your-api-key"
-export HUGGINGFACE_BASE_URL="https://api-inference.huggingface.co"  # 可选
-export HUGGINGFACE_MODEL="meta-llama/Meta-Llama-3-8B-Instruct"      # 可选
-```
-
-#### 完整示例
-
-查看完整示例：[examples/llm/huggingface/main.go](../../examples/llm/huggingface/main.go)
-
----
-
-### 选择合适的 LLM Provider
-
-| 场景 | 推荐 Provider | 原因 |
-|------|--------------|------|
-| **生产环境** | OpenAI GPT-4 / Claude 3 Opus | 最稳定，功能最全 |
-| **长上下文任务** | Anthropic Claude 3 | 200K token 上下文 |
-| **RAG/检索应用** | Cohere Command-R | RAG 专门优化 |
-| **开源模型** | HuggingFace | 数千个模型可选 |
-| **本地开发** | Ollama | 免费，数据私有 |
-| **中文场景** | DeepSeek / Kimi | 中文优化 |
-| **代码生成** | DeepSeek-Coder / CodeLlama | 专门优化 |
-| **成本敏感** | Ollama / HuggingFace | 本地或按需付费 |
-| **多模态** | Google Gemini | 支持图像输入 |
-
-### 示例：切换不同的 Provider
+### 自定义参数
 
 ```go
-// 根据环境选择 Provider
-func createLLMClient() llm.Client {
-    env := os.Getenv("LLM_PROVIDER")
+client := providers.NewOpenAIClient(apiKey, "gpt-4")
 
-    switch env {
-    case "anthropic":
-        // Anthropic Claude
-        client, _ := providers.NewAnthropic(&llm.Config{
-            APIKey: os.Getenv("ANTHROPIC_API_KEY"),
-        })
-        return client
+req := &llm.CompletionRequest{
+    Messages: []llm.Message{
+        llm.UserMessage("生成一个创意故事开头。"),
+    },
+    Temperature: 0.9,  // 更高的创造性
+    MaxTokens:   500,
+    TopP:        0.95,
+}
 
-    case "cohere":
-        // Cohere
-        client, _ := providers.NewCohere(&llm.Config{
-            APIKey: os.Getenv("COHERE_API_KEY"),
-        })
-        return client
+resp, err := client.Complete(context.Background(), req)
+if err != nil {
+    log.Fatal(err)
+}
 
-    case "huggingface":
-        // HuggingFace
-        client, _ := providers.NewHuggingFace(&llm.Config{
-            APIKey: os.Getenv("HUGGINGFACE_API_KEY"),
-        })
-        return client
+fmt.Println(resp.Content)
+```
 
-    case "ollama":
-        // 本地 Ollama
-        return providers.NewOllamaClientSimple("llama2")
+## 提供商切换
 
+GoAgent 的统一接口使得切换提供商非常简单：
+
+```go
+func createClient(provider string) llm.Client {
+    switch provider {
     case "openai":
-        // OpenAI
-        return providers.NewOpenAIClient(os.Getenv("OPENAI_API_KEY"))
-
-    case "gemini":
-        // Google Gemini
-        return providers.NewGeminiClient(os.Getenv("GEMINI_API_KEY"))
-
+        return providers.NewOpenAIClient(
+            os.Getenv("OPENAI_API_KEY"),
+            "gpt-4",
+        )
+    case "anthropic":
+        return providers.NewAnthropicClient(
+            os.Getenv("ANTHROPIC_API_KEY"),
+            "claude-3-sonnet-20240229",
+        )
     case "deepseek":
-        // DeepSeek
-        return providers.NewDeepSeekClient(os.Getenv("DEEPSEEK_API_KEY"))
-
+        return providers.NewDeepSeekClient(
+            os.Getenv("DEEPSEEK_API_KEY"),
+            "deepseek-chat",
+        )
     default:
-        // 默认使用 Ollama（本地）
-        client := providers.NewOllamaClientSimple("llama2")
-        if client.IsAvailable() {
-            return client
-        }
-        // 如果 Ollama 不可用，回退到 OpenAI
-        return providers.NewOpenAIClient(os.Getenv("OPENAI_API_KEY"))
+        return providers.NewOllamaClient(
+            "http://localhost:11434",
+            "llama2",
+        )
+    }
+}
+
+// 使用
+client := createClient(os.Getenv("LLM_PROVIDER"))
+agent := builder.NewAgentBuilder(client).Build()
+```
+
+## Token 使用统计
+
+所有提供商响应都包含 Token 使用信息：
+
+```go
+resp, err := client.Chat(ctx, messages)
+if err != nil {
+    log.Fatal(err)
+}
+
+if resp.Usage != nil {
+    fmt.Printf("输入 Token: %d\n", resp.Usage.PromptTokens)
+    fmt.Printf("输出 Token: %d\n", resp.Usage.CompletionTokens)
+    fmt.Printf("总 Token: %d\n", resp.Usage.TotalTokens)
+}
+```
+
+## 错误处理
+
+```go
+resp, err := client.Chat(ctx, messages)
+if err != nil {
+    // 检查错误类型
+    switch {
+    case strings.Contains(err.Error(), "rate limit"):
+        // 速率限制，等待重试
+        time.Sleep(time.Second * 5)
+    case strings.Contains(err.Error(), "invalid api key"):
+        // API 密钥错误
+        log.Fatal("请检查 API 密钥")
+    default:
+        log.Printf("LLM 调用失败: %v\n", err)
     }
 }
 ```
 
-### 完整示例
+## 最佳实践
 
-查看完整的 Ollama 示例：[examples/basic/04-ollama-agent/](examples/basic/04-ollama-agent/)
+### 1. 使用环境变量
 
-这个示例展示了：
-- 基本的 Ollama 客户端使用
-- 创建 Ollama Agent
-- 带工具的 Ollama Agent
-- 列出和切换模型
-- 错误处理和回退策略
+```bash
+export OPENAI_API_KEY="sk-..."
+export ANTHROPIC_API_KEY="sk-ant-..."
+```
+
+### 2. 设置超时
+
+```go
+ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+defer cancel()
+
+resp, err := client.Chat(ctx, messages)
+```
+
+### 3. 重试机制
+
+```go
+func chatWithRetry(client llm.Client, messages []llm.Message, maxRetries int) (*llm.CompletionResponse, error) {
+    var lastErr error
+    for i := 0; i < maxRetries; i++ {
+        resp, err := client.Chat(context.Background(), messages)
+        if err == nil {
+            return resp, nil
+        }
+        lastErr = err
+        time.Sleep(time.Second * time.Duration(i+1))
+    }
+    return nil, lastErr
+}
+```
+
+### 4. 选择合适的模型
+
+根据任务选择合适的模型：
+
+- **简单对话**：GPT-3.5-Turbo、DeepSeek Chat
+- **复杂推理**：GPT-4、Claude-3-Opus
+- **代码生成**：DeepSeek Coder、CodeLlama
+- **长文本**：Claude-3（200K）、Kimi（128K）
+
+### 5. 成本优化
+
+- 使用较小的模型处理简单任务
+- 限制 MaxTokens
+- 缓存常见请求的响应
+
+## 相关文档
+
+- [快速入门](QUICKSTART.md)
+- [架构概述](../architecture/ARCHITECTURE.md)
