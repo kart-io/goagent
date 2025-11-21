@@ -3,6 +3,7 @@ package react_test
 import (
 	"context"
 	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/kart-io/goagent/agents/executor"
@@ -17,6 +18,7 @@ import (
 type MockLLMClient struct {
 	responses []string
 	callCount int
+	mu        sync.Mutex // 保护并发访问
 }
 
 func NewMockLLMClient(responses []string) *MockLLMClient {
@@ -27,6 +29,9 @@ func NewMockLLMClient(responses []string) *MockLLMClient {
 }
 
 func (m *MockLLMClient) Chat(ctx context.Context, messages []llm.Message) (*llm.CompletionResponse, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	if m.callCount >= len(m.responses) {
 		return &llm.CompletionResponse{
 			Content:    "Final Answer: I don't have enough information to answer that.",

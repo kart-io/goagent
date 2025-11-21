@@ -316,3 +316,73 @@ func BenchmarkUnmarshalStruct(b *testing.B) {
 		}
 	}
 }
+
+// BenchmarkMarshalWithOptions tests the optimized MarshalWithOptions function
+// which uses pre-frozen sonic configurations.
+func BenchmarkMarshalWithOptions(b *testing.B) {
+	input := map[string]interface{}{
+		"name":   "test",
+		"age":    25,
+		"script": "<script>alert('xss')</script>",
+		"tags":   []string{"go", "json", "performance"},
+	}
+
+	opts := json.MarshalOptions{
+		EscapeHTML:  true,
+		SortMapKeys: true,
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := json.MarshalWithOptions(input, opts)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// BenchmarkUnmarshalWithOptions tests the optimized UnmarshalWithOptions function
+// which uses pre-frozen sonic configurations.
+func BenchmarkUnmarshalWithOptions(b *testing.B) {
+	data := []byte(`{"name":"test","age":25,"tags":["go","json","performance"]}`)
+
+	opts := json.UnmarshalOptions{
+		UseNumber:             true,
+		DisallowUnknownFields: false,
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		var result map[string]interface{}
+		err := json.UnmarshalWithOptions(data, &result, opts)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// BenchmarkMarshalWithOptionsAllCombinations tests various option combinations
+// to verify the pre-frozen configuration cache works efficiently.
+func BenchmarkMarshalWithOptionsAllCombinations(b *testing.B) {
+	input := map[string]interface{}{
+		"name": "test",
+		"age":  25,
+	}
+
+	optsList := []json.MarshalOptions{
+		{EscapeHTML: true},
+		{EscapeHTML: false},
+		{EscapeHTML: true, SortMapKeys: true},
+		{EscapeHTML: true, SortMapKeys: true, ValidateString: true},
+		{NoNullSliceOrMap: true},
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		opts := optsList[i%len(optsList)]
+		_, err := json.MarshalWithOptions(input, opts)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}

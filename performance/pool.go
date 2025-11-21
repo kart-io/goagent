@@ -147,65 +147,141 @@ func (p *AgentPool) Acquire(ctx context.Context) (core.Agent, error) {
 		p.stats.waitTimeNs.Add(int64(waitTime))
 	}()
 
-	// 创建带超时的上下文
+	// Fast path: Try to acquire an idle agent without waiting
+	if agent, ok := p.tryAcquireFast(); ok {
+		return agent, nil
+	}
+
+	// Slow path: Need to wait for an agent or create a new one
+	return p.acquireSlow(ctx)
+}
+
+// tryAcquireFast attempts to acquire an agent without blocking.
+// Returns (agent, true) if successful, (nil, false) otherwise.
+func (p *AgentPool) tryAcquireFast() (core.Agent, bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.closed {
+		return nil, false
+	}
+
+	// Look for an idle agent
+	for _, agent := range p.agents {
+		if !agent.inUse {
+			agent.inUse = true
+			agent.lastUsedAt = time.Now()
+			p.stats.acquired.Add(1)
+			return agent.agent, true
+		}
+	}
+
+	// Try to create a new agent if pool is not full
+	if len(p.agents) < p.config.MaxSize {
+		newAgent, err := p.createAgent()
+		if err != nil {
+			return nil, false
+		}
+		newAgent.inUse = true
+		newAgent.lastUsedAt = time.Now()
+		p.agents = append(p.agents, newAgent)
+		p.stats.acquired.Add(1)
+		return newAgent.agent, true
+	}
+
+	return nil, false
+}
+
+// acquireSlow handles the slow path when no agent is immediately available.
+// It waits for an agent to become available or times out.
+func (p *AgentPool) acquireSlow(ctx context.Context) (core.Agent, error) {
+	// Create timeout context
 	timeoutCtx, cancel := context.WithTimeout(ctx, p.config.AcquireTimeout)
 	defer cancel()
 
-	// 等待可用 Agent
-	doneCh := make(chan *pooledAgent, 1)
-	errCh := make(chan error, 1)
+	// Use channels to communicate between waiter goroutine and main goroutine
+	type acquireResult struct {
+		agent *pooledAgent
+		err   error
+	}
+	resultCh := make(chan acquireResult, 1)
+
+	// Track if we should stop waiting (for cleanup)
+	stopWaiting := make(chan struct{})
+	defer close(stopWaiting)
 
 	go func() {
 		p.mu.Lock()
 		defer p.mu.Unlock()
 
 		for {
-			// 检查是否已关闭
+			// Check if we should stop waiting
+			select {
+			case <-stopWaiting:
+				return
+			default:
+			}
+
+			// Check if pool is closed
 			if p.closed {
-				errCh <- ErrPoolClosed
+				select {
+				case resultCh <- acquireResult{err: ErrPoolClosed}:
+				default:
+				}
 				return
 			}
 
-			// 查找空闲 Agent
+			// Look for an idle agent
 			for _, agent := range p.agents {
 				if !agent.inUse {
 					agent.inUse = true
 					agent.lastUsedAt = time.Now()
 					p.stats.acquired.Add(1)
-					doneCh <- agent
+					select {
+					case resultCh <- acquireResult{agent: agent}:
+					default:
+					}
 					return
 				}
 			}
 
-			// 如果池未满，创建新 Agent
+			// Try to create a new agent if pool is not full
 			if len(p.agents) < p.config.MaxSize {
 				newAgent, err := p.createAgent()
 				if err != nil {
-					errCh <- err
+					select {
+					case resultCh <- acquireResult{err: err}:
+					default:
+					}
 					return
 				}
 				newAgent.inUse = true
 				newAgent.lastUsedAt = time.Now()
 				p.agents = append(p.agents, newAgent)
 				p.stats.acquired.Add(1)
-				doneCh <- newAgent
+				select {
+				case resultCh <- acquireResult{agent: newAgent}:
+				default:
+				}
 				return
 			}
 
-			// 等待有 Agent 被释放
+			// Wait for an agent to be released
 			p.stats.waitCount.Add(1)
 			p.cond.Wait()
 		}
 	}()
 
-	// 等待结果或超时
+	// Wait for result or timeout
 	select {
-	case agent := <-doneCh:
-		return agent.agent, nil
-	case err := <-errCh:
-		return nil, err
+	case result := <-resultCh:
+		if result.err != nil {
+			return nil, result.err
+		}
+		return result.agent.agent, nil
 	case <-timeoutCtx.Done():
-		p.cond.Broadcast() // 唤醒等待的协程
+		// Signal to stop waiting and wake up the waiter goroutine
+		p.cond.Broadcast()
 		return nil, ErrPoolTimeout
 	}
 }

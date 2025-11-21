@@ -2,7 +2,6 @@ package performance
 
 import (
 	"context"
-	stderrors "errors"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -109,111 +108,130 @@ func NewBatchExecutor(agent core.Agent, config BatchConfig) *BatchExecutor {
 	}
 }
 
+// batchTask represents a single task in the batch work queue.
+type batchTask struct {
+	index int
+	input *core.AgentInput
+}
+
 // Execute 执行批量任务
+// Uses a worker pool pattern: launches only MaxConcurrency workers that pull
+// work from a shared channel, instead of spawning len(inputs) goroutines.
 func (b *BatchExecutor) Execute(ctx context.Context, inputs []*core.AgentInput) *BatchResult {
 	startTime := time.Now()
 
-	// 创建带超时的上下文
+	// Handle empty input case
+	if len(inputs) == 0 {
+		return &BatchResult{
+			Results: make([]*core.AgentOutput, 0),
+			Errors:  make([]BatchError, 0),
+			Stats: BatchStats{
+				TotalCount:   0,
+				SuccessCount: 0,
+				FailureCount: 0,
+				Duration:     time.Since(startTime),
+			},
+		}
+	}
+
+	// Create timeout context
 	timeoutCtx, cancel := context.WithTimeout(ctx, b.config.Timeout)
 	defer cancel()
 
-	// 统计信息
+	// Update statistics
 	b.stats.totalExecutions.Add(1)
 	b.stats.totalTasks.Add(int64(len(inputs)))
 
-	// 结果收集
+	// Result collection
 	results := make([]*core.AgentOutput, len(inputs))
-	errors := make([]BatchError, 0)
 	durations := make([]time.Duration, len(inputs))
+	var resultsMu sync.Mutex
 
-	// 工作协程池
-	var wg sync.WaitGroup
-	semaphore := make(chan struct{}, b.config.MaxConcurrency)
+	// Error collection
+	errors := make([]BatchError, 0)
+	var errorsMu sync.Mutex
+
+	// Stop flag for fail-fast mode
+	var stopFlag atomic.Bool
+
+	// Work queue: buffer size equals number of inputs to avoid blocking sender
+	workQueue := make(chan batchTask, len(inputs))
+
+	// Result channels for collecting outcomes
+	// Buffer size is number of inputs to avoid blocking workers
 	resultChan := make(chan batchTaskResult, len(inputs))
 	errorChan := make(chan BatchError, len(inputs))
 
-	// 错误停止标志（用于 fail-fast）
-	var stopFlag atomic.Bool
-	stopFlag.Store(false)
-
-	// 启动任务
-	for i, input := range inputs {
-		// 检查是否需要停止
-		if b.config.ErrorPolicy == ErrorPolicyFailFast && stopFlag.Load() {
-			break
-		}
-
-		wg.Add(1)
-		go func(index int, inp *core.AgentInput) {
-			defer wg.Done()
-
-			// 获取信号量
-			select {
-			case semaphore <- struct{}{}:
-				defer func() { <-semaphore }()
-			case <-timeoutCtx.Done():
-				errorChan <- BatchError{
-					Index: index,
-					Input: inp,
-					Error: stderrors.New("timeout waiting for semaphore"),
-				}
-				return
-			}
-
-			// 检查停止标志
-			if stopFlag.Load() {
-				return
-			}
-
-			// 执行任务
-			taskStart := time.Now()
-			output, err := b.agent.Invoke(timeoutCtx, inp)
-			taskDuration := time.Since(taskStart)
-
-			if err != nil {
-				b.stats.failedTasks.Add(1)
-				batchErr := BatchError{
-					Index: index,
-					Input: inp,
-					Error: err,
-				}
-				errorChan <- batchErr
-
-				// 如果是 fail-fast 模式，设置停止标志
-				if b.config.ErrorPolicy == ErrorPolicyFailFast {
-					stopFlag.Store(true)
-				}
-				return
-			}
-
-			b.stats.successTasks.Add(1)
-			resultChan <- batchTaskResult{
-				Index:    index,
-				Output:   output,
-				Duration: taskDuration,
-			}
-		}(i, input)
+	// Determine actual worker count (min of MaxConcurrency and input count)
+	workerCount := b.config.MaxConcurrency
+	if len(inputs) < workerCount {
+		workerCount = len(inputs)
 	}
 
-	// 等待所有任务完成
+	// Start worker pool
+	var wg sync.WaitGroup
+	for i := 0; i < workerCount; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			b.worker(timeoutCtx, workQueue, resultChan, errorChan, &stopFlag)
+		}()
+	}
+
+	// Send tasks to work queue
+	go func() {
+		defer close(workQueue)
+		for i, input := range inputs {
+			// Check if we should stop sending (fail-fast mode)
+			if b.config.ErrorPolicy == ErrorPolicyFailFast && stopFlag.Load() {
+				break
+			}
+
+			// Check context cancellation
+			select {
+			case <-timeoutCtx.Done():
+				return
+			case workQueue <- batchTask{index: i, input: input}:
+			}
+		}
+	}()
+
+	// Close result channels after all workers complete
 	go func() {
 		wg.Wait()
 		close(resultChan)
 		close(errorChan)
 	}()
 
-	// 收集结果
-	for result := range resultChan {
-		results[result.Index] = result.Output
-		durations[result.Index] = result.Duration
-	}
+	// Collect results and errors concurrently
+	var collectWg sync.WaitGroup
+	collectWg.Add(2)
 
-	// 收集错误
-	for err := range errorChan {
-		errors = append(errors, err)
-	}
+	// Collect results
+	go func() {
+		defer collectWg.Done()
+		for result := range resultChan {
+			resultsMu.Lock()
+			results[result.Index] = result.Output
+			durations[result.Index] = result.Duration
+			resultsMu.Unlock()
+		}
+	}()
 
-	// 计算统计信息
+	// Collect errors
+	go func() {
+		defer collectWg.Done()
+		for err := range errorChan {
+			errorsMu.Lock()
+			errors = append(errors, err)
+			errorsMu.Unlock()
+		}
+	}()
+
+	// Wait for all collection to complete
+	collectWg.Wait()
+
+	// Calculate statistics
 	totalDuration := time.Since(startTime)
 	b.stats.totalDurationNs.Add(int64(totalDuration))
 
@@ -223,6 +241,61 @@ func (b *BatchExecutor) Execute(ctx context.Context, inputs []*core.AgentInput) 
 		Results: results,
 		Errors:  errors,
 		Stats:   stats,
+	}
+}
+
+// worker processes tasks from the work queue until it's closed or stopFlag is set.
+func (b *BatchExecutor) worker(
+	ctx context.Context,
+	workQueue <-chan batchTask,
+	resultChan chan<- batchTaskResult,
+	errorChan chan<- BatchError,
+	stopFlag *atomic.Bool,
+) {
+	for task := range workQueue {
+		// Check stop flag before processing
+		if stopFlag.Load() {
+			continue // Drain remaining tasks without processing
+		}
+
+		// Check context cancellation
+		select {
+		case <-ctx.Done():
+			errorChan <- BatchError{
+				Index: task.index,
+				Input: task.input,
+				Error: ctx.Err(),
+			}
+			continue
+		default:
+		}
+
+		// Execute task
+		taskStart := time.Now()
+		output, err := b.agent.Invoke(ctx, task.input)
+		taskDuration := time.Since(taskStart)
+
+		if err != nil {
+			b.stats.failedTasks.Add(1)
+			errorChan <- BatchError{
+				Index: task.index,
+				Input: task.input,
+				Error: err,
+			}
+
+			// Set stop flag for fail-fast mode
+			if b.config.ErrorPolicy == ErrorPolicyFailFast {
+				stopFlag.Store(true)
+			}
+			continue
+		}
+
+		b.stats.successTasks.Add(1)
+		resultChan <- batchTaskResult{
+			Index:    task.index,
+			Output:   output,
+			Duration: taskDuration,
+		}
 	}
 }
 

@@ -279,6 +279,9 @@ func (s *SoTAgent) elaborateSkeletonParallel(ctx context.Context, skeleton []*Sk
 	// Group points by dependency level
 	levels := s.groupByDependencyLevel(skeleton)
 
+	// Mutex to protect concurrent writes to output.ReasoningSteps
+	var stepsMu sync.Mutex
+
 	// Process each level
 	for levelIdx, level := range levels {
 		// Use semaphore for concurrency control
@@ -307,7 +310,8 @@ func (s *SoTAgent) elaborateSkeletonParallel(ctx context.Context, skeleton []*Sk
 						WithContext("point_id", p.ID)
 				}
 
-				// Record elaboration step
+				// Record elaboration step (protected by mutex)
+				stepsMu.Lock()
 				output.ReasoningSteps = append(output.ReasoningSteps, agentcore.ReasoningStep{
 					Step:        len(output.ReasoningSteps) + 1,
 					Action:      fmt.Sprintf("Elaborate (Level %d)", levelIdx+1),
@@ -316,6 +320,7 @@ func (s *SoTAgent) elaborateSkeletonParallel(ctx context.Context, skeleton []*Sk
 					Duration:    s.config.ElaborationTimeout,
 					Success:     err == nil,
 				})
+				stepsMu.Unlock()
 			}(point)
 		}
 

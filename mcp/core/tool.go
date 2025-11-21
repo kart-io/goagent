@@ -2,8 +2,14 @@ package core
 
 import (
 	"context"
+	"errors"
 	"github.com/kart-io/goagent/utils/json"
 	"time"
+)
+
+var (
+	// ErrNotImplemented is returned when an abstract method is called on a base type
+	ErrNotImplemented = errors.New("method must be implemented by concrete tool")
 )
 
 // Tool MCP 工具接口
@@ -278,12 +284,18 @@ func (b *BaseTool) SetIsDangerous(isDangerous bool) {
 	b.isDangerous = isDangerous
 }
 
-// Execute 需要由具体工具实现
+// Execute returns ErrNotImplemented.
+//
+// Concrete tool implementations must override this method.
+// Using composition: embed BaseTool and implement Execute.
 func (b *BaseTool) Execute(ctx context.Context, input map[string]interface{}) (*ToolResult, error) {
-	panic("Execute method must be implemented by concrete tool")
+	return nil, ErrNotImplemented
 }
 
-// Validate 需要由具体工具实现
+// Validate returns ErrNotImplemented.
+//
+// Concrete tool implementations must override this method.
+// Using composition: embed BaseTool and implement Validate.
 func (b *BaseTool) Validate(input map[string]interface{}) error {
-	panic("Validate method must be implemented by concrete tool")
+	return ErrNotImplemented
 }
