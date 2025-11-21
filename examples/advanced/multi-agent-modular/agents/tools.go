@@ -2,8 +2,8 @@ package agents
 
 import (
 	"context"
-	"github.com/kart-io/goagent/utils/json"
 	"fmt"
+	"github.com/kart-io/goagent/utils/json"
 	"time"
 )
 
