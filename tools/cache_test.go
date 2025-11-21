@@ -144,12 +144,12 @@ func TestMemoryToolCache(t *testing.T) {
 
 		stats := testCache.GetStats()
 
-		if stats.Hits != 1 {
-			t.Errorf("Expected 1 hit, got %d", stats.Hits)
+		if stats.Hits.Load() != 1 {
+			t.Errorf("Expected 1 hit, got %d", stats.Hits.Load())
 		}
 
-		if stats.Misses != 1 {
-			t.Errorf("Expected 1 miss, got %d", stats.Misses)
+		if stats.Misses.Load() != 1 {
+			t.Errorf("Expected 1 miss, got %d", stats.Misses.Load())
 		}
 
 		hitRate := stats.HitRate()
@@ -263,5 +263,74 @@ func BenchmarkMemoryToolCache_Get(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		key := string(rune('A' + (i % 26)))
 		cache.Get(ctx, key)
+	}
+}
+
+// BenchmarkCacheKeyGeneration tests the optimized cache key generation
+// which uses direct hashing instead of JSON marshaling.
+func BenchmarkCacheKeyGeneration(b *testing.B) {
+	baseTool := NewBaseTool(
+		"benchmark_tool",
+		"A tool for benchmarking",
+		`{"type": "object"}`,
+		func(ctx context.Context, input *ToolInput) (*ToolOutput, error) {
+			return &ToolOutput{Result: "result", Success: true}, nil
+		},
+	)
+
+	cache := NewMemoryToolCache(MemoryCacheConfig{
+		Capacity:        100,
+		DefaultTTL:      5 * time.Minute,
+		CleanupInterval: 10 * time.Minute,
+	})
+
+	cachedTool := NewCachedTool(baseTool, cache, 1*time.Minute)
+
+	// Test input with various types
+	input := &ToolInput{
+		Args: map[string]interface{}{
+			"string_param":  "test_value",
+			"int_param":     42,
+			"float_param":   3.14,
+			"bool_param":    true,
+			"array_param":   []interface{}{"a", "b", "c"},
+			"nested_param":  map[string]interface{}{"key": "value"},
+		},
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = cachedTool.generateCacheKey(input)
+	}
+}
+
+// BenchmarkCacheKeyGenerationSimple tests cache key generation with simple input.
+func BenchmarkCacheKeyGenerationSimple(b *testing.B) {
+	baseTool := NewBaseTool(
+		"simple_tool",
+		"A simple tool",
+		`{"type": "object"}`,
+		func(ctx context.Context, input *ToolInput) (*ToolOutput, error) {
+			return &ToolOutput{Result: "result", Success: true}, nil
+		},
+	)
+
+	cache := NewMemoryToolCache(MemoryCacheConfig{
+		Capacity:        100,
+		DefaultTTL:      5 * time.Minute,
+		CleanupInterval: 10 * time.Minute,
+	})
+
+	cachedTool := NewCachedTool(baseTool, cache, 1*time.Minute)
+
+	input := &ToolInput{
+		Args: map[string]interface{}{
+			"query": "test query",
+		},
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = cachedTool.generateCacheKey(input)
 	}
 }

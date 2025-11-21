@@ -100,14 +100,31 @@ func (b *FunctionToolBuilder) WithFunction(
 }
 
 // Build 构建工具
-func (b *FunctionToolBuilder) Build() *FunctionTool {
+//
+// Returns an error if the function is not set.
+// This replaces the previous panic behavior with proper error handling.
+func (b *FunctionToolBuilder) Build() (*FunctionTool, error) {
 	if b.fn == nil {
-		panic("function is required")
+		return nil, agentErrors.New(agentErrors.CodeInvalidConfig, "function is required").
+			WithComponent("function_tool_builder").
+			WithOperation("build")
 	}
 	if b.argsSchema == "" {
 		b.argsSchema = "{}"
 	}
-	return NewFunctionTool(b.name, b.description, b.argsSchema, b.fn)
+	return NewFunctionTool(b.name, b.description, b.argsSchema, b.fn), nil
+}
+
+// MustBuild 构建工具，如果失败则 panic
+//
+// 用于初始化时确定配置正确的场景。
+// 对于运行时构建，应使用 Build() 方法并处理错误。
+func (b *FunctionToolBuilder) MustBuild() *FunctionTool {
+	tool, err := b.Build()
+	if err != nil {
+		panic(err)
+	}
+	return tool
 }
 
 // generateJSONSchemaFromStruct 从结构体生成 JSON Schema
@@ -212,13 +229,25 @@ func NewTypedFunctionTool[I, O any](
 // )
 //
 // // 2. 使用构建器
-// tool := NewFunctionToolBuilder("calculator").
+// tool, err := NewFunctionToolBuilder("calculator").
 //     WithDescription("Performs basic arithmetic operations").
 //     WithArgsSchema(`{...}`).
 //     WithFunction(func(ctx context.Context, args map[string]interface{}) (interface{}, error) {
 //         // ...
 //     }).
 //     Build()
+// if err != nil {
+//     return err
+// }
+//
+// // 2b. 使用 MustBuild (用于初始化时确定配置正确的场景)
+// tool := NewFunctionToolBuilder("calculator").
+//     WithDescription("Performs basic arithmetic operations").
+//     WithArgsSchema(`{...}`).
+//     WithFunction(func(ctx context.Context, args map[string]interface{}) (interface{}, error) {
+//         // ...
+//     }).
+//     MustBuild()
 //
 // // 3. 简单函数工具
 // tool := NewSimpleFunctionTool(

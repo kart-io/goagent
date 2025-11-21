@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/kart-io/goagent/interfaces"
@@ -12,6 +13,16 @@ import (
 // For new code that doesn't need generic typing, use interfaces.Agent directly.
 // This alias provides a migration path for existing code.
 type SimpleAgent = interfaces.Agent
+
+// agentInputPool is a sync.Pool for reusing AgentInput objects
+// to reduce memory allocations in chain execution paths.
+var agentInputPool = sync.Pool{
+	New: func() interface{} {
+		return &AgentInput{
+			Context: make(map[string]interface{}),
+		}
+	},
+}
 
 // Agent 定义通用 AI Agent 接口
 //
@@ -429,6 +440,9 @@ func (c *ChainableAgent) InvokeFast(ctx context.Context, input *AgentInput) (*Ag
 // useFastPath 参数控制是否使用快速调用：
 //   - true: 使用 InvokeFast（如果支持），绕过回调
 //   - false: 使用标准 Invoke，保留回调
+//
+// Memory optimization: Uses sync.Pool to reuse AgentInput objects
+// for intermediate chain steps, reducing allocations.
 func (c *ChainableAgent) executeChain(ctx context.Context, input *AgentInput, useFastPath bool) (*AgentOutput, error) {
 	if len(c.agents) == 0 {
 		return &AgentOutput{
@@ -440,6 +454,7 @@ func (c *ChainableAgent) executeChain(ctx context.Context, input *AgentInput, us
 
 	currentInput := input
 	var finalOutput *AgentOutput
+	var pooledInput *AgentInput // Track pooled input for cleanup
 
 	for i, agent := range c.agents {
 		var output *AgentOutput
@@ -459,6 +474,11 @@ func (c *ChainableAgent) executeChain(ctx context.Context, input *AgentInput, us
 		}
 
 		if err != nil {
+			// Return pooled input before error return
+			if pooledInput != nil {
+				resetAgentInput(pooledInput)
+				agentInputPool.Put(pooledInput)
+			}
 			return nil, err
 		}
 
@@ -466,17 +486,63 @@ func (c *ChainableAgent) executeChain(ctx context.Context, input *AgentInput, us
 
 		// 如果不是最后一个 agent，准备下一个的输入
 		if i < len(c.agents)-1 {
-			// 将当前输出转换为下一个的输入
-			currentInput = &AgentInput{
-				Task:        currentInput.Task,
-				Instruction: currentInput.Instruction,
-				Context:     output.Metadata,
-				Options:     currentInput.Options,
-				SessionID:   currentInput.SessionID,
-				Timestamp:   time.Now(),
+			// Return previous pooled input to pool before getting a new one
+			if pooledInput != nil {
+				resetAgentInput(pooledInput)
+				agentInputPool.Put(pooledInput)
 			}
+
+			// Get a reusable AgentInput from the pool
+			pooledInput = agentInputPool.Get().(*AgentInput)
+
+			// Update fields in-place instead of creating new struct
+			pooledInput.Task = currentInput.Task
+			pooledInput.Instruction = currentInput.Instruction
+			pooledInput.Options = currentInput.Options
+			pooledInput.SessionID = currentInput.SessionID
+			pooledInput.Timestamp = time.Now()
+
+			// Copy metadata from output to context
+			if output.Metadata != nil {
+				// Reuse existing context map if possible, otherwise create new
+				if pooledInput.Context == nil {
+					pooledInput.Context = make(map[string]interface{}, len(output.Metadata))
+				} else {
+					// Clear existing context
+					for k := range pooledInput.Context {
+						delete(pooledInput.Context, k)
+					}
+				}
+				for k, v := range output.Metadata {
+					pooledInput.Context[k] = v
+				}
+			} else {
+				pooledInput.Context = nil
+			}
+
+			currentInput = pooledInput
 		}
 	}
 
+	// Return final pooled input to pool
+	if pooledInput != nil {
+		resetAgentInput(pooledInput)
+		agentInputPool.Put(pooledInput)
+	}
+
 	return finalOutput, nil
+}
+
+// resetAgentInput clears an AgentInput for reuse in the pool.
+func resetAgentInput(input *AgentInput) {
+	input.Task = ""
+	input.Instruction = ""
+	input.SessionID = ""
+	input.Timestamp = time.Time{}
+	input.Options = AgentOptions{}
+
+	// Clear context map instead of setting to nil to allow reuse
+	for k := range input.Context {
+		delete(input.Context, k)
+	}
 }

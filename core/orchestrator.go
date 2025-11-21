@@ -239,9 +239,12 @@ func (o *BaseOrchestrator) GetTool(name string) (Tool, bool) {
 	return tool, exists
 }
 
-// Execute 需要由具体编排器实现
+// Execute returns ErrNotImplemented.
+//
+// Concrete orchestrator implementations must override this method.
+// Using composition: embed BaseOrchestrator and implement Execute.
 func (o *BaseOrchestrator) Execute(ctx context.Context, request *OrchestratorRequest) (*OrchestratorResponse, error) {
-	panic("Execute method must be implemented by concrete orchestrator")
+	return nil, ErrNotImplemented
 }
 
 // DefaultOrchestratorStrategy 返回默认编排策略

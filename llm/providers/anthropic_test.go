@@ -416,7 +416,9 @@ func TestAnthropicErrorHandling(t *testing.T) {
 			})
 			require.NoError(t, err)
 
-			_, err = provider.Complete(context.Background(), &llm.CompletionRequest{
+			// Use context with shorter retry delays for tests
+			ctx := context.WithValue(context.Background(), "test_retry_delay", 10*time.Millisecond)
+			_, err = provider.Complete(ctx, &llm.CompletionRequest{
 				Messages: []llm.Message{{Role: "user", Content: "test"}},
 			})
 

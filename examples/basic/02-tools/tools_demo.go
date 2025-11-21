@@ -98,7 +98,7 @@ func example2FunctionTool() {
 	fmt.Println("--- Example 2: Function Tool ---")
 
 	// 使用 FunctionToolBuilder
-	tool := tools.NewFunctionToolBuilder("multiplier").
+	tool, err := tools.NewFunctionToolBuilder("multiplier").
 		WithDescription("Multiplies two numbers").
 		WithArgsSchema(`{
 			"type": "object",
@@ -113,6 +113,10 @@ func example2FunctionTool() {
 			return a * b, nil
 		}).
 		Build()
+	if err != nil {
+		log.Printf("Error building tool: %v\n", err)
+		return
+	}
 
 	ctx := context.Background()
 	input := &interfaces.ToolInput{
