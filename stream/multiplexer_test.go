@@ -59,6 +59,12 @@ func (m *mockConsumer) IsComplete() bool {
 	return m.complete
 }
 
+func (m *mockConsumer) GetErrors() []error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.errors
+}
+
 // Mock stream output for testing
 type mockStreamOutput struct {
 	chunks []*core.LegacyStreamChunk
@@ -357,7 +363,7 @@ func TestMultiplexer_ConsumerError(t *testing.T) {
 
 	time.Sleep(50 * time.Millisecond)
 
-	assert.Len(t, consumer.errors, 1)
+	assert.Len(t, consumer.GetErrors(), 1)
 }
 
 // TestMultiplexer_ConsumerComplete tests handling consumer completion

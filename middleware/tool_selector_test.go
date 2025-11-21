@@ -377,11 +377,12 @@ func TestLLMToolSelectorMiddleware_CacheOperations(t *testing.T) {
 	assert.NotNil(t, result)
 	assert.Equal(t, []string{"tool1", "tool2"}, result)
 
-	// Test cache expiration (after TTL)
-	middleware.CacheTTL = 100 * time.Millisecond
-	middleware.cacheSelection("expire_key", []string{"tool3"})
+	// Test cache expiration (after TTL) - use new middleware to avoid race
+	middleware2 := NewLLMToolSelectorMiddleware(mockLLM, 5)
+	middleware2.CacheTTL = 100 * time.Millisecond
+	middleware2.cacheSelection("expire_key", []string{"tool3"})
 	time.Sleep(200 * time.Millisecond)
-	result = middleware.getCachedSelection("expire_key")
+	result = middleware2.getCachedSelection("expire_key")
 	assert.Nil(t, result)
 }
 
