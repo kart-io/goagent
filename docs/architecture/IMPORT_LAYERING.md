@@ -1,538 +1,314 @@
-# Import Layering Architecture
+# GoAgent 导入层级说明
 
-## Overview
+## 概述
 
-This document defines the import layering architecture for GoAgent to ensure maintainability, prevent circular dependencies, and enforce clear architectural boundaries.
+GoAgent 强制执行严格的 4 层架构，通过自动化验证确保导入规则的正确性。违反导入规则将导致 CI 失败。
 
-## 4-Layer Architecture
+## 层级定义
 
-```
-LAYER 1: Foundational (No GoAgent imports)
-├─ interfaces/ ─────── All public interfaces
-├─ errors/ ─────────── Error types and helpers
-├─ cache/ ──────────── Basic caching
-└─ utils/ ──────────── Utility functions
+### 第 1 层：基础层
 
-LAYER 2: Business Logic (Import L1 only)
-├─ core/ ────────────── Base implementations
-├─ builder/ ─────────── Fluent API builders
-├─ llm/ ─────────────── LLM implementations
-├─ memory/ ──────────── Memory management
-├─ store/ ──────────── Storage layer
-└─ [retrieval, observability, performance, etc.]
+**包列表：**
 
-LAYER 3: Implementation (Import L1+L2 only)
-├─ agents/ ──────────── Agent implementations
-├─ tools/ ──────────── Tool implementations
-├─ middleware/ ──────── Middleware impls
-├─ parsers/ ─────────── Output parsers
-├─ stream/ ─────────── Stream processing
-└─ [multiagent, distributed, mcp, etc.]
-
-LAYER 4: Examples & Tests (Import everything)
-├─ examples/ ───────── Usage examples
-└─ *_test.go ───────── Test files
+```text
+interfaces/  - 所有公共接口定义
+errors/      - 错误类型和辅助函数
+cache/       - 基础缓存工具
+utils/       - 工具函数
 ```
 
-## Essential Rules
+**导入规则：**
 
-### Rule 1: Layer 1 Independence
-```
-interfaces/, errors/, cache/, utils/
-MUST NOT import from any other GoAgent packages
-```
+- 只能导入标准库和外部依赖
+- **禁止**导入任何 GoAgent 内部包
 
-### Rule 2: No Upward Imports
-```
-Layer 3 packages (agents, tools, middleware, parsers)
-MUST NOT import from examples/ or Layer 4
-```
+**示例：**
 
-### Rule 3: Core Protection
-```
-Layer 2 (core, builder)
-MUST NOT import from Layer 3
-```
-
-### Rule 4: Tool Isolation
-```
-tools/
-MUST NOT import from agents/, middleware/, or parsers/
-```
-
-### Rule 5: No Circular Dependencies
-```
-If A imports B, then B MUST NOT import A (transitively)
-```
-
-## Import Allowance Matrix
-
-```
-                      | Can Import From
-Package/Layer         | L1  | L2  | L3  | L4
-─────────────────────┼─────┼─────┼─────┼──────
-Layer 1 (interfaces)  | -   | ✗   | ✗   | ✗
-Layer 2 (core)        | ✓   | ✓*  | ✗   | ✗
-Layer 3 (agents)      | ✓   | ✓   | ✓*  | ✗
-Layer 4 (examples)    | ✓   | ✓   | ✓   | ✓
-─────────────────────┴─────┴─────┴─────┴──────
-
-Legend:
-✓   = Allowed (unrestricted)
-✓*  = Allowed (with restrictions/documentation)
-✗   = Not allowed
--   = Not applicable
-```
-
-## Layer Definitions
-
-### Layer 1: Foundation
-
-**Packages:** `interfaces/`, `errors/`, `cache/`, `utils/`
-
-**Purpose:** Provide foundational types and utilities with zero dependencies on other pkg/agent packages.
-
-**Rules:**
-- MUST NOT import from any other pkg/agent packages
-- Can import stdlib and external packages only
-- Provides interfaces, error types, and basic utilities
-
-**Examples:**
 ```go
-// Good: Layer 1 package (interfaces/agent.go)
+// 正确
 package interfaces
 
 import (
     "context"
+    "time"
 )
 
-type Agent interface {
-    Execute(ctx context.Context, input *AgentInput) (*AgentOutput, error)
-    Name() string
-}
-
-// Bad: Layer 1 importing from pkg/agent
+// 错误
 package interfaces
 
-import (
-    "github.com/kart-io/goagent/core"  // ✗ VIOLATION
-)
+import "github.com/kart-io/goagent/core"  // 禁止！
 ```
 
-### Layer 2: Business Logic
+### 第 2 层：业务逻辑层
 
-**Packages:** `core/`, `builder/`, `llm/`, `memory/`, `store/`, `retrieval/`, `observability/`, `performance/`, `planning/`, `prompt/`, `reflection/`
+**包列表：**
 
-**Purpose:** Implement core business logic and provide infrastructure for Layer 3.
+```text
+core/          - 基础实现 (BaseAgent, BaseChain)
+core/execution/ - 执行引擎
+core/state/    - 状态管理
+core/checkpoint/ - 检查点逻辑
+core/middleware/ - 中间件框架
+builder/       - 流式 API 构建器 (AgentBuilder)
+llm/           - LLM 客户端实现
+memory/        - 内存管理
+store/         - 存储实现
+retrieval/     - 文档检索
+observability/ - 遥测和监控
+performance/   - 性能工具
+planning/      - 规划工具
+prompt/        - 提示工程
+reflection/    - 反射工具
+```
 
-**Rules:**
-- Import ONLY from Layer 1
-- Cross-imports within Layer 2 are allowed (carefully managed)
-- MUST NOT import from Layer 3
-- Export interfaces and implementations to Layer 3
+**导入规则：**
 
-**Examples:**
+- 可以导入第 1 层
+- 第 2 层内部可以相互导入，但需注意避免循环依赖
+
+**示例：**
+
 ```go
-// Good: Layer 2 package (core/agent.go)
+// 正确
 package core
 
 import (
-    "github.com/kart-io/goagent/interfaces"  // ✓ Layer 1
-    "github.com/kart-io/goagent/errors"      // ✓ Layer 1
-    "github.com/kart-io/goagent/cache"       // ✓ Layer 1
+    "github.com/kart-io/goagent/interfaces"
+    "github.com/kart-io/goagent/errors"
 )
 
-type BaseAgent struct {
-    // ...
-}
-
-// Bad: Layer 2 importing from Layer 3
+// 错误
 package core
 
-import (
-    "github.com/kart-io/goagent/agents"  // ✗ VIOLATION
-)
+import "github.com/kart-io/goagent/agents"  // 禁止导入第 3 层！
 ```
 
-### Layer 3: Implementation
+### 第 3 层：实现层
 
-**Packages:** `agents/`, `tools/`, `middleware/`, `parsers/`, `stream/`, `multiagent/`, `distributed/`, `mcp/`, `document/`, `toolkits/`
+**包列表：**
 
-**Purpose:** Provide specific implementations of agents, tools, and middleware.
+```text
+agents/       - Agent 实现
+tools/        - 工具实现
+middleware/   - 中间件实现
+parsers/      - 输出解析器
+stream/       - 流处理
+multiagent/   - 多 Agent 编排
+distributed/  - 分布式执行
+mcp/          - 模型上下文协议
+document/     - 文档处理
+toolkits/     - 工具集合
+```
 
-**Rules:**
-- Import from Layer 1 and Layer 2
-- Limited cross-imports within Layer 3 (documented exceptions)
-- MUST NOT import from Layer 4 (examples)
-- MUST NOT create upward dependencies
+**导入规则：**
 
-**Examples:**
+- 可以导入第 1 层和第 2 层
+- 同层有限的交叉导入（如 agents 可以导入 tools）
+- **tools/ 禁止导入 agents/、middleware/ 或 parsers/**
+- **parsers/ 禁止导入 agents/、tools/ 或 middleware/**
+
+**示例：**
+
 ```go
-// Good: Layer 3 package (agents/executor/executor_agent.go)
-package executor
-
-import (
-    "github.com/kart-io/goagent/core"        // ✓ Layer 2
-    "github.com/kart-io/goagent/interfaces"  // ✓ Layer 1
-    "github.com/kart-io/goagent/tools"       // ✓ Same layer
-)
-
-// Bad: Layer 3 importing from Layer 4
+// 正确
 package agents
 
 import (
-    "github.com/kart-io/goagent/examples"  // ✗ VIOLATION
+    "github.com/kart-io/goagent/core"
+    "github.com/kart-io/goagent/interfaces"
+    "github.com/kart-io/goagent/tools"  // 同层允许
 )
 
-// Bad: tools importing agents
+// 错误
 package tools
 
-import (
-    "github.com/kart-io/goagent/agents"  // ✗ VIOLATION
-)
+import "github.com/kart-io/goagent/agents"  // 禁止！
 ```
 
-### Layer 4: Examples and Tests
+### 第 4 层：示例和测试
 
-**Packages:** `examples/`, `*_test.go` files
+**包列表：**
 
-**Purpose:** Demonstrate usage and test functionality.
+```text
+examples/     - 使用示例
+*_test.go     - 测试文件
+```
 
-**Rules:**
-- Can import from ALL layers
-- Nothing imports from examples (one-way dependency)
-- Test files can cross-import for testing purposes
+**导入规则：**
 
-**Examples:**
+- 可以导入所有层
+- 生产代码禁止导入第 4 层
+
+## 关键导入限制
+
+### 禁止的导入模式
+
 ```go
-// Good: Example file
-package main
+// 第 1 层导入 GoAgent 内部包
+package interfaces
+import "github.com/kart-io/goagent/core"  // 禁止
 
+// 第 2 层导入第 3 层
+package core
+import "github.com/kart-io/goagent/agents"  // 禁止
+
+// tools 导入 agents
+package tools
+import "github.com/kart-io/goagent/agents"  // 禁止
+
+// 循环依赖
+package core
+import "github.com/kart-io/goagent/builder"
+// 同时在 builder 中：
+import "github.com/kart-io/goagent/core"  // 可能造成循环
+
+// 生产代码导入 examples
+package agents
+import "github.com/kart-io/goagent/examples"  // 禁止
+```
+
+### 正确的导入模式
+
+```go
+// 第 2 层导入第 1 层
+package core
+import (
+    "github.com/kart-io/goagent/interfaces"
+    "github.com/kart-io/goagent/errors"
+)
+
+// 第 3 层导入第 1 和第 2 层
+package agents
 import (
     "github.com/kart-io/goagent/core"
-    "github.com/kart-io/goagent/builder"
+    "github.com/kart-io/goagent/interfaces"
+    "github.com/kart-io/goagent/tools"  // 同层允许
+)
+
+// 测试可以导入任何层
+package agents_test
+import (
     "github.com/kart-io/goagent/agents"
     "github.com/kart-io/goagent/tools"
 )
-
-func main() {
-    // Demonstrate usage
-}
 ```
 
-## Detailed Dependency Map
+## 验证流程
 
-### Layer 1: Foundation
+### 运行验证脚本
 
-```
-interfaces/
-├── imports: stdlib + external only
-├── exports: Agent, Tool, Memory, Store, LLM, Middleware interfaces
-└── no circular dependencies
+**提交前必须运行：**
 
-errors/
-├── imports: stdlib + external only
-├── exports: Error types, helpers
-└── independent
-
-cache/
-├── imports: stdlib + external only
-├── exports: Cache implementations
-└── independent
-
-utils/
-├── imports: stdlib + external only
-├── exports: Utility functions
-└── independent
+```bash
+./verify_imports.sh
 ```
 
-### Layer 2: Business Logic
+脚本检查内容：
 
-**core/**
-```
-core/
-├── agent.go
-│   └── imports: interfaces/, errors/, cache/
-├── execution/
-│   └── imports: interfaces/, errors/
-├── state/
-│   └── imports: interfaces/, errors/
-├── checkpoint/
-│   └── imports: interfaces/, errors/
-├── middleware/
-│   └── imports: interfaces/, errors/
-└── NO imports from: agents/, tools/, middleware/, parsers/, builder/
-```
+- 第 1 层没有 GoAgent 导入
+- 第 2 层不导入第 3 层
+- tools/ 不导入 agents/
+- parsers/ 不导入 agents/ 或 middleware/
+- 生产代码不导入 examples/
+- 无循环依赖
 
-**builder/**
-```
-builder/
-├── builder.go
-│   ├── imports: core/, llm/, store/, tools/, interfaces/, errors/
-│   ├── imports: core/execution, core/middleware
-│   └── cross-imports: memory/ (for type access)
-└── NO imports from: agents/, middleware/, examples/
+### 严格模式
+
+将警告视为错误：
+
+```bash
+./verify_imports.sh --strict
 ```
 
-**llm/**
-```
-llm/
-├── client.go
-│   └── imports: interfaces/, errors/
-├── providers/
-│   └── imports: llm/ (parent), interfaces/, errors/
-└── NO imports from: agents/, tools/, builder/
-```
+## 导入组织规范
 
-**memory/**
-```
-memory/
-├── manager.go
-│   └── imports: interfaces/, errors/
-└── NO imports from: agents/, tools/, builder/
-```
-
-**store/**
-```
-store/
-├── store.go
-│   └── imports: interfaces/, errors/
-├── memory/
-│   └── imports: store/ (parent), interfaces/
-├── redis/
-│   └── imports: store/ (parent), interfaces/
-├── postgres/
-│   └── imports: store/ (parent), interfaces/
-└── NO imports from: agents/, tools/, middleware/
-```
-
-### Layer 3: Implementation
-
-**agents/**
-```
-agents/
-├── executor/executor_agent.go
-│   ├── imports: core/, interfaces/, tools/
-│   └── imports: memory/, llm/ (Layer 2)
-├── react/react_agent.go
-│   ├── imports: core/, interfaces/
-│   └── imports: parsers/ (same layer)
-├── specialized/
-│   ├── imports: core/, interfaces/
-│   └── imports: tools/ (same layer)
-└── NO imports from: builder/, middleware/, examples/
-```
-
-**tools/**
-```
-tools/
-├── tool.go (interface only)
-│   └── imports: interfaces/, errors/
-├── registry.go
-│   └── imports: tools.Tool (local), sync
-├── shell/shell_tool.go
-│   ├── imports: interfaces/, errors/
-│   └── imports: core/ (for types)
-├── http/http_tool.go
-│   ├── imports: interfaces/, errors/
-│   └── imports: cache/ (Layer 1)
-└── NO imports from: agents/, middleware/, parsers/
-```
-
-**middleware/**
-```
-middleware/
-├── observability.go
-│   ├── imports: core/, core/middleware/
-│   └── imports: observability/ (Layer 2)
-├── tool_selector.go
-│   ├── imports: core/, core/middleware/
-│   └── imports: tools/ (same layer)
-└── NO imports from: agents/, builder/, examples/
-```
-
-**parsers/**
-```
-parsers/
-├── output_parser.go
-│   └── imports: interfaces/, errors/
-├── parser_react.go
-│   └── imports: interfaces/, errors/, core/
-└── NO imports from: agents/, tools/, middleware/
-```
-
-## Common Refactoring Scenarios
-
-### Scenario 1: Moving Code Between Layers
-
-**Problem:** You have code in Layer 3 that belongs in Layer 2.
-
-**Solution:**
-
-1. Create/update Layer 2 package (e.g., `planning/`)
-2. Move code to Layer 2
-3. Update Layer 3 imports to use Layer 2
-4. Keep type aliases in Layer 3 for backward compatibility if needed
+### 标准导入顺序
 
 ```go
-// Before: In agents/planning.go (Layer 3)
-package agents
-func PlanExecution() { /* ... */ }
-
-// After: In planning/executor.go (Layer 2)
-package planning
-func ExecutionPlan() { /* ... */ }
-
-// Backward compat: In agents/planning.go (Layer 3)
-package agents
-import "github.com/kart-io/goagent/planning"
-var PlanExecution = planning.ExecutionPlan
-```
-
-### Scenario 2: Circular Dependency
-
-**Problem:** Package A imports B, B imports A.
-
-**Solution:** Extract common interface to Layer 1.
-
-```go
-// Problem:
-// core/agent.go imports builder/
-// builder/builder.go imports core/
-
-// Solution: Define interface in Layer 1
-// interfaces/builder.go - New interface
-type Builder interface {
-    Build(ctx context.Context) (Agent, error)
-}
-
-// Now both can depend on interfaces without circular imports
-```
-
-### Scenario 3: Tool Needs Feature from Middleware
-
-**Problem:** `tools/my_tool.go` needs functionality from `middleware/`.
-
-**Solution:** Extract to Layer 2 if it's general purpose.
-
-```go
-// Problem:
-// tools/my_tool.go wants middleware functionality
-
-// Solution:
-// 1. If it's general: Create performance/ or observability/ in Layer 2
-// 2. Move code to Layer 2
-// 3. tools/ imports from Layer 2
-
-// Before:
-import "github.com/kart-io/goagent/middleware"
-
-// After:
-import "github.com/kart-io/goagent/observability"
-```
-
-### Scenario 4: Adding a New Tool
-
-1. Put in `tools/` (Layer 3)
-2. Import from: `core/`, `interfaces/`, `cache/`
-3. Can use: `tools/registry.go` for registration
-4. Run verification
-
-### Scenario 5: Adding LLM Provider
-
-1. Put in `llm/providers/` (Layer 2)
-2. Import from: `interfaces/`, `errors/`, parent `llm/`
-3. Exported through: `llm.Client` interface
-4. Used in: Layer 3 agents
-
-## Good vs Bad Import Patterns
-
-### Good Patterns
-
-```go
-// Layer 1 → No pkg/agent imports
-package interfaces
-import "context"
-
-// Layer 2 → Import Layer 1
-package core
-import "github.com/kart-io/goagent/interfaces"
-
-// Layer 3 → Import Layer 1 & 2
-package agents
 import (
+    // 标准库优先
+    "context"
+    "fmt"
+    "time"
+
+    // 外部依赖
+    "github.com/google/uuid"
+    "github.com/stretchr/testify/assert"
+
+    // 内部包（遵循层级规则）
     "github.com/kart-io/goagent/interfaces"
     "github.com/kart-io/goagent/core"
 )
-
-// Examples → Import everything
-package main
-import (
-    "github.com/kart-io/goagent/core"
-    "github.com/kart-io/goagent/agents"
-)
 ```
 
-### Bad Patterns
+## 常见问题解决
+
+### 循环依赖
+
+**问题**：两个包相互导入导致编译失败。
+
+**解决方案**：
+
+1. 将共享类型提取到第 1 层（interfaces/）
+2. 使用依赖注入
+3. 重新评估包的职责划分
+
+### 跨层重构
+
+如果需要在层之间移动代码：
+
+1. 根据功能确定正确的层
+2. 移动代码到新位置
+3. 更新依赖包的导入
+4. 如需向后兼容，在旧位置添加类型别名
+5. 运行 `./verify_imports.sh`
+6. 更新测试和文档
+
+### 打破依赖循环
 
 ```go
-// ✗ Layer 1 importing from pkg/agent
+// 不好的做法：直接依赖
+package a
+import "github.com/kart-io/goagent/b"
+
+package b
+import "github.com/kart-io/goagent/a"
+
+// 好的做法：通过接口解耦
 package interfaces
-import "github.com/kart-io/goagent/core"
+type ServiceA interface { ... }
+type ServiceB interface { ... }
 
-// ✗ Layer 2 importing from Layer 3
-package core
-import "github.com/kart-io/goagent/agents"
+package a
+import "github.com/kart-io/goagent/interfaces"
+func New(b interfaces.ServiceB) *A { ... }
 
-// ✗ Layer 3 importing from examples
-package agents
-import "github.com/kart-io/goagent/examples"
-
-// ✗ tools importing agents
-package tools
-import "github.com/kart-io/goagent/agents"
-
-// ✗ Circular dependency
-package core
-import "github.com/kart-io/goagent/builder"
-// AND
-package builder
-import "github.com/kart-io/goagent/core"
+package b
+import "github.com/kart-io/goagent/interfaces"
+func New(a interfaces.ServiceA) *B { ... }
 ```
 
-## How to Use
+## CI/CD 集成
 
-### For Architects/Tech Leads
+### 提交前检查清单
 
-1. Review the 4-layer architecture overview
-2. Review the layer definitions and rules
-3. Review the import dependency matrix
-4. Use verification procedures for audits
+```bash
+make fmt              # 格式化代码
+make lint             # 检查问题
+./verify_imports.sh   # 验证导入层级
+make test             # 运行测试
+```
 
-### For Developers Adding New Code
+### CI 失败原因
 
-1. Determine the package's layer based on its function
-2. Check the specific package import rules for that layer
-3. Review good vs bad import patterns
-4. Test with verification script
+CI 会在以下情况失败：
 
-### For Code Reviewers
+- Lint 错误（零容忍）
+- 导入层级违规
+- 测试失败
+- 覆盖率不足（低于 80%）
 
-1. Use the Import Audit Checklist
-2. Run verification script on PRs
-3. Reference layer rules when asking for changes
-4. Check specific package rules
+## 相关文档
 
-## See Also
-
-- [Import Verification Guide](./IMPORT_VERIFICATION.md) - Verification procedures and tools
-- [README.md](../../README.md) - Package usage guide
-- [MIGRATION_GUIDE.md](../guides/MIGRATION_GUIDE.md) - Migration procedures
-- [interfaces/](../../interfaces/) - All interface definitions
-- `examples/` - Usage examples
-
----
-
-**Version:** 1.0
-**Last Updated:** 2025-11-15
-**Status:** Production Ready
+- [架构概述](ARCHITECTURE.md)
+- [测试最佳实践](../development/TESTING_BEST_PRACTICES.md)

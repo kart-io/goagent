@@ -1,360 +1,279 @@
-# Testing Best Practices for GoAgent
+# GoAgent 测试最佳实践
 
-This document outlines testing best practices, patterns, and guidelines for the GoAgent project.
+## 概述
 
-## Table of Contents
+本文档提供 GoAgent 项目的测试指南和最佳实践，确保代码质量和可靠性。
 
-1. [Testing Philosophy](#testing-philosophy)
-2. [Test Organization](#test-organization)
-3. [Testing Patterns](#testing-patterns)
-4. [Mock Usage](#mock-usage)
-5. [Test Coverage Guidelines](#test-coverage-guidelines)
-6. [Performance Testing](#performance-testing)
-7. [Integration Testing](#integration-testing)
-8. [CI/CD Integration](#cicd-integration)
+## 测试覆盖率标准
 
-## Testing Philosophy
+- **最低要求**：所有包 80% 覆盖率
+- **新代码**：PR 合并前必须包含测试
+- **关键路径**：目标覆盖率超过 90%
 
-### Core Principles
+## 运行测试
 
-1. **Test Behavior, Not Implementation**: Focus on what the code does, not how it does it
-2. **Isolation**: Each test should be independent and not rely on other tests
-3. **Clarity**: Test names should clearly describe what is being tested
-4. **Fast Feedback**: Unit tests should run quickly (< 100ms per test)
-5. **Deterministic**: Tests should always produce the same result
+### 基本命令
 
-### Test Pyramid
+```bash
+# 运行所有测试
+make test
+# 或
+go test ./...
 
-```
-         /\
-        /  \    E2E Tests (5%)
-       /    \   - Full system tests
-      /------\
-     /        \ Integration Tests (20%)
-    /          \- Component interaction
-   /------------\
-  /              \ Unit Tests (75%)
- /________________\- Individual functions/methods
+# 带竞态检测
+go test -v -race -timeout 30s ./...
+
+# 仅运行短测试
+make test-short
+
+# 运行单个测试
+go test -v -run TestSpecificTest ./path/to/package
+
+# 运行集成测试
+make test-integration
 ```
 
-## Test Organization
+### 覆盖率报告
 
-### Directory Structure
+```bash
+# 生成覆盖率报告
+make coverage
 
-```
-GoAgent/
-├── module/
-│   ├── file.go              # Implementation
-│   ├── file_test.go         # Unit tests (same package)
-│   └── testdata/            # Test fixtures
-├── testing/
-│   ├── mocks/               # Shared mock implementations
-│   ├── testutil/            # Test helpers and utilities
-│   └── fixtures/            # Shared test data
-└── integration/
-    └── module_test.go       # Integration tests
+# 在浏览器中查看
+make coverage-view
+
+# 手动生成
+go test -coverprofile=coverage.out ./...
+go tool cover -html=coverage.out
 ```
 
-### Naming Conventions
+## 测试组织
 
-```go
-// Test function naming
-func TestComponentName_MethodName_Scenario(t *testing.T) {}
+### 表驱动测试
 
-// Examples:
-func TestAgentState_Set_ConcurrentWrites(t *testing.T) {}
-func TestToolExecutor_ExecuteParallel_WithTimeout(t *testing.T) {}
-func TestMiddleware_Chain_ErrorPropagation(t *testing.T) {}
-```
-
-### Test File Organization
-
-```go
-package mypackage_test
-
-import (
-    "testing"
-    // Standard library imports
-
-    // Third-party test libraries
-    "github.com/stretchr/testify/assert"
-    "github.com/stretchr/testify/require"
-
-    // Project imports
-    "github.com/kart-io/goagent/mypackage"
-    "github.com/kart-io/goagent/testing/mocks"
-    "github.com/kart-io/goagent/testing/testutil"
-)
-
-// Test helpers at the top
-func setupTest(t *testing.T) *TestContext {
-    // Setup code
-}
-
-// Grouped tests by component
-func TestComponent_Method(t *testing.T) {
-    // Table-driven tests for multiple scenarios
-    tests := []struct {
-        name     string
-        input    interface{}
-        expected interface{}
-        wantErr  bool
-    }{
-        // Test cases
-    }
-
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            // Test implementation
-        })
-    }
-}
-```
-
-## Testing Patterns
-
-### Table-Driven Tests
+对于多个测试用例，使用表驱动测试：
 
 ```go
 func TestCalculate(t *testing.T) {
     tests := []struct {
         name     string
-        a, b     int
+        input    int
         expected int
         wantErr  bool
     }{
-        {"positive numbers", 2, 3, 5, false},
-        {"negative numbers", -2, -3, -5, false},
-        {"zero", 0, 0, 0, false},
-        {"overflow", math.MaxInt, 1, 0, true},
+        {
+            name:     "positive number",
+            input:    5,
+            expected: 10,
+            wantErr:  false,
+        },
+        {
+            name:     "zero",
+            input:    0,
+            expected: 0,
+            wantErr:  false,
+        },
+        {
+            name:     "negative number",
+            input:    -1,
+            expected: 0,
+            wantErr:  true,
+        },
     }
 
     for _, tt := range tests {
         t.Run(tt.name, func(t *testing.T) {
-            result, err := Calculate(tt.a, tt.b)
+            result, err := Calculate(tt.input)
+
             if tt.wantErr {
-                require.Error(t, err)
+                assert.Error(t, err)
                 return
             }
-            require.NoError(t, err)
+
+            assert.NoError(t, err)
             assert.Equal(t, tt.expected, result)
         })
     }
 }
 ```
 
-### Test Fixtures
+### 子测试
 
-```go
-func TestWithFixture(t *testing.T) {
-    // Load test data
-    data, err := os.ReadFile("testdata/input.json")
-    require.NoError(t, err)
-
-    // Parse and use
-    var config Config
-    err = json.Unmarshal(data, &config)
-    require.NoError(t, err)
-
-    // Test with fixture data
-    result := ProcessConfig(config)
-    assert.NotNil(t, result)
-}
-```
-
-### Test Context Pattern
-
-```go
-func TestWithContext(t *testing.T) {
-    tc := testutil.NewTestContext(t)
-    defer tc.Cleanup()
-
-    // Use test context components
-    tc.State.Set("key", "value")
-    tc.MockLLM.SetResponse("test response")
-
-    // Run test
-    agent := NewAgent(tc.MockLLM, tc.State)
-    result, err := agent.Execute(tc.Ctx, "input")
-    require.NoError(t, err)
-    assert.Equal(t, "expected", result)
-}
-```
-
-### Subtests for Organization
+使用子测试组织相关测试：
 
 ```go
 func TestAgent(t *testing.T) {
-    t.Run("Initialization", func(t *testing.T) {
-        t.Run("WithDefaultConfig", func(t *testing.T) {
-            // Test default initialization
+    t.Run("Invoke", func(t *testing.T) {
+        t.Run("with valid input", func(t *testing.T) {
+            // 测试有效输入
         })
 
-        t.Run("WithCustomConfig", func(t *testing.T) {
-            // Test custom initialization
+        t.Run("with invalid input", func(t *testing.T) {
+            // 测试无效输入
         })
     })
 
-    t.Run("Execution", func(t *testing.T) {
-        t.Run("Success", func(t *testing.T) {
-            // Test successful execution
-        })
-
-        t.Run("Error", func(t *testing.T) {
-            // Test error handling
+    t.Run("Stream", func(t *testing.T) {
+        t.Run("with context cancellation", func(t *testing.T) {
+            // 测试上下文取消
         })
     })
 }
 ```
 
-## Mock Usage
+## Mock 和 Stub
 
-### Creating Mocks
+### LLM Mock
 
 ```go
-// Mock implementation
+// MockLLMClient 模拟 LLM 客户端
 type MockLLMClient struct {
-    mu        sync.Mutex
-    responses []string
-    calls     []string
+    responses []*llm.CompletionResponse
+    index     int
+    err       error
 }
 
-func (m *MockLLMClient) Complete(ctx context.Context, prompt string) (string, error) {
-    m.mu.Lock()
-    defer m.mu.Unlock()
-
-    m.calls = append(m.calls, prompt)
-    if len(m.responses) > 0 {
-        resp := m.responses[0]
-        m.responses = m.responses[1:]
-        return resp, nil
+func NewMockLLMClient(responses ...*llm.CompletionResponse) *MockLLMClient {
+    return &MockLLMClient{
+        responses: responses,
     }
-    return "", errors.New("no response configured")
 }
 
-// Usage in tests
-func TestWithMock(t *testing.T) {
-    mock := &MockLLMClient{
-        responses: []string{"response1", "response2"},
+func (m *MockLLMClient) Complete(ctx context.Context, req *llm.CompletionRequest) (*llm.CompletionResponse, error) {
+    if m.err != nil {
+        return nil, m.err
     }
+    if m.index >= len(m.responses) {
+        return &llm.CompletionResponse{Content: "default response"}, nil
+    }
+    resp := m.responses[m.index]
+    m.index++
+    return resp, nil
+}
 
-    agent := NewAgent(mock)
-    result, err := agent.Process(context.Background(), "input")
-    require.NoError(t, err)
-    assert.Equal(t, "response1", result)
+func (m *MockLLMClient) Chat(ctx context.Context, messages []llm.Message) (*llm.CompletionResponse, error) {
+    return m.Complete(ctx, &llm.CompletionRequest{Messages: messages})
+}
 
-    // Verify interactions
-    assert.Equal(t, 1, len(mock.calls))
-    assert.Contains(t, mock.calls[0], "input")
+func (m *MockLLMClient) Provider() llm.Provider {
+    return llm.ProviderCustom
+}
+
+func (m *MockLLMClient) IsAvailable() bool {
+    return true
 }
 ```
 
-### Mock Builders
+### 工具 Mock
 
 ```go
-func TestWithMockBuilder(t *testing.T) {
-    mock := mocks.NewMockTool("calculator").
-        WithSchema(`{"type": "object"}`).
-        WithResponse("42").
-        Build()
-
-    result, err := mock.Invoke(context.Background(), input)
-    require.NoError(t, err)
-    assert.Equal(t, "42", result.Result)
+// MockTool 模拟工具
+type MockTool struct {
+    name        string
+    description string
+    result      interface{}
+    err         error
 }
-```
 
-## Test Coverage Guidelines
-
-### Coverage Targets
-
-- **Overall Project**: ≥ 75%
-- **Core Packages**: ≥ 80%
-- **Critical Paths**: ≥ 90%
-- **Utilities**: ≥ 70%
-- **Examples**: ≥ 50%
-
-### Coverage Commands
-
-```bash
-# Run tests with coverage
-go test -v -cover ./...
-
-# Generate coverage report
-go test -coverprofile=coverage.out ./...
-go tool cover -html=coverage.out -o coverage.html
-
-# Check specific package coverage
-go test -cover ./core/...
-
-# Coverage with race detection
-go test -race -cover ./...
-```
-
-### What to Test
-
-**Must Test:**
-
-- Public APIs
-- Error conditions
-- Edge cases
-- Concurrent operations
-- State mutations
-- Resource cleanup
-
-**Consider Testing:**
-
-- Complex internal logic
-- Performance-critical paths
-- Configuration parsing
-- Retry/timeout logic
-
-**Skip Testing:**
-
-- Simple getters/setters
-- Obvious delegation
-- Generated code
-- Third-party library calls
-
-## Performance Testing
-
-### Benchmarks
-
-```go
-func BenchmarkToolExecution(b *testing.B) {
-    tool := NewCalculatorTool()
-    input := &ToolInput{
-        Args: map[string]interface{}{
-            "expression": "2 + 2",
-        },
-    }
-
-    b.ResetTimer()
-    for i := 0; i < b.N; i++ {
-        _, _ = tool.Invoke(context.Background(), input)
+func NewMockTool(name string, result interface{}) *MockTool {
+    return &MockTool{
+        name:        name,
+        description: "Mock tool for testing",
+        result:      result,
     }
 }
 
-// Run benchmarks
-// go test -bench=. -benchmem ./...
+func (m *MockTool) Name() string {
+    return m.name
+}
+
+func (m *MockTool) Description() string {
+    return m.description
+}
+
+func (m *MockTool) ArgsSchema() string {
+    return `{"type": "object", "properties": {}}`
+}
+
+func (m *MockTool) Invoke(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+    if m.err != nil {
+        return &interfaces.ToolOutput{
+            Success: false,
+            Error:   m.err.Error(),
+        }, nil
+    }
+    return &interfaces.ToolOutput{
+        Result:  m.result,
+        Success: true,
+    }, nil
+}
 ```
 
-### Load Testing
+## 测试模式
+
+### 上下文测试
 
 ```go
-func TestConcurrentLoad(t *testing.T) {
-    agent := NewAgent()
-    ctx := context.Background()
+func TestAgentWithContext(t *testing.T) {
+    t.Run("context cancellation", func(t *testing.T) {
+        agent := createTestAgent()
 
-    // Concurrent requests
+        ctx, cancel := context.WithCancel(context.Background())
+        cancel() // 立即取消
+
+        input := &interfaces.Input{
+            Messages: []interfaces.Message{
+                {Role: "user", Content: "test"},
+            },
+        }
+
+        _, err := agent.Invoke(ctx, input)
+        assert.Error(t, err)
+        assert.Contains(t, err.Error(), "context canceled")
+    })
+
+    t.Run("context timeout", func(t *testing.T) {
+        agent := createTestAgent()
+
+        ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+        defer cancel()
+
+        time.Sleep(10 * time.Millisecond) // 确保超时
+
+        input := &interfaces.Input{
+            Messages: []interfaces.Message{
+                {Role: "user", Content: "test"},
+            },
+        }
+
+        _, err := agent.Invoke(ctx, input)
+        assert.Error(t, err)
+    })
+}
+```
+
+### 并发测试
+
+```go
+func TestAgentConcurrency(t *testing.T) {
+    agent := createTestAgent()
+
+    const numGoroutines = 100
     var wg sync.WaitGroup
-    errors := make(chan error, 100)
+    errors := make(chan error, numGoroutines)
 
-    for i := 0; i < 100; i++ {
+    for i := 0; i < numGoroutines; i++ {
         wg.Add(1)
         go func(id int) {
             defer wg.Done()
-            _, err := agent.Execute(ctx, fmt.Sprintf("request-%d", id))
+
+            input := &interfaces.Input{
+                Messages: []interfaces.Message{
+                    {Role: "user", Content: fmt.Sprintf("test %d", id)},
+                },
+            }
+
+            _, err := agent.Invoke(context.Background(), input)
             if err != nil {
                 errors <- err
             }
@@ -364,77 +283,347 @@ func TestConcurrentLoad(t *testing.T) {
     wg.Wait()
     close(errors)
 
-    // Check for errors
-    var errorCount int
     for err := range errors {
-        t.Logf("Error: %v", err)
-        errorCount++
+        t.Errorf("并发调用失败: %v", err)
     }
-
-    assert.Less(t, errorCount, 5, "Too many errors under load")
 }
 ```
 
-## Integration Testing
+### 错误测试
 
-### Database Integration
+```go
+func TestAgentErrors(t *testing.T) {
+    tests := []struct {
+        name        string
+        setupMock   func() *MockLLMClient
+        input       *interfaces.Input
+        expectedErr string
+    }{
+        {
+            name: "LLM error",
+            setupMock: func() *MockLLMClient {
+                mock := NewMockLLMClient()
+                mock.err = fmt.Errorf("API error")
+                return mock
+            },
+            input: &interfaces.Input{
+                Messages: []interfaces.Message{
+                    {Role: "user", Content: "test"},
+                },
+            },
+            expectedErr: "API error",
+        },
+        {
+            name: "empty input",
+            setupMock: func() *MockLLMClient {
+                return NewMockLLMClient()
+            },
+            input:       &interfaces.Input{},
+            expectedErr: "empty input",
+        },
+    }
+
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            mock := tt.setupMock()
+            agent := builder.NewAgentBuilder(mock).Build()
+
+            _, err := agent.Invoke(context.Background(), tt.input)
+
+            assert.Error(t, err)
+            assert.Contains(t, err.Error(), tt.expectedErr)
+        })
+    }
+}
+```
+
+### 流式测试
+
+```go
+func TestAgentStream(t *testing.T) {
+    mockClient := NewMockStreamClient()
+    agent := builder.NewAgentBuilder(mockClient).Build()
+
+    input := &interfaces.Input{
+        Messages: []interfaces.Message{
+            {Role: "user", Content: "test"},
+        },
+    }
+
+    stream, err := agent.Stream(context.Background(), input)
+    require.NoError(t, err)
+
+    var chunks []*interfaces.StreamChunk
+    for chunk := range stream {
+        chunks = append(chunks, chunk)
+        if chunk.Done {
+            break
+        }
+    }
+
+    assert.NotEmpty(t, chunks)
+    assert.True(t, chunks[len(chunks)-1].Done)
+}
+```
+
+## 集成测试
+
+### 标记集成测试
 
 ```go
 //go:build integration
-// +build integration
 
-func TestDatabaseIntegration(t *testing.T) {
-    if testing.Short() {
-        t.Skip("Skipping integration test")
+package integration_test
+
+import (
+    "testing"
+    // ...
+)
+
+func TestRealLLMIntegration(t *testing.T) {
+    if os.Getenv("OPENAI_API_KEY") == "" {
+        t.Skip("需要 OPENAI_API_KEY")
     }
 
-    // Setup test database
-    db := setupTestDB(t)
-    defer cleanupTestDB(db)
-
-    store := NewSQLStore(db)
-
-    // Test operations
-    err := store.Put(ctx, []string{"test"}, "key", "value")
-    require.NoError(t, err)
-
-    item, err := store.Get(ctx, []string{"test"}, "key")
-    require.NoError(t, err)
-    assert.Equal(t, "value", item.Value)
+    // 集成测试代码
 }
 ```
 
-### External Service Integration
+运行集成测试：
+
+```bash
+go test -v -tags=integration ./...
+```
+
+### 数据库集成测试
 
 ```go
-func TestLLMIntegration(t *testing.T) {
-    if os.Getenv("OPENAI_API_KEY") == "" {
-        t.Skip("OpenAI API key not set")
+func TestRedisCheckpointer(t *testing.T) {
+    if testing.Short() {
+        t.Skip("跳过 Redis 集成测试")
     }
 
-    client := llm.NewOpenAIClient(os.Getenv("OPENAI_API_KEY"))
-
-    resp, err := client.Complete(context.Background(), &llm.Request{
-        Prompt: "Hello, world!",
+    // 确保 Redis 可用
+    client := redis.NewClient(&redis.Options{
+        Addr: "localhost:6379",
     })
+    defer client.Close()
 
-    require.NoError(t, err)
-    assert.NotEmpty(t, resp.Content)
+    if err := client.Ping(context.Background()).Err(); err != nil {
+        t.Skipf("Redis 不可用: %v", err)
+    }
+
+    // 测试代码
 }
 ```
 
-## CI/CD Integration
+## 断言和辅助函数
 
-### GitHub Actions Workflow
+### 使用 testify
+
+```go
+import (
+    "github.com/stretchr/testify/assert"
+    "github.com/stretchr/testify/require"
+)
+
+func TestExample(t *testing.T) {
+    // assert - 失败后继续执行
+    assert.Equal(t, expected, actual)
+    assert.NoError(t, err)
+    assert.True(t, condition)
+    assert.Contains(t, str, substr)
+
+    // require - 失败后立即停止
+    require.NoError(t, err)
+    require.NotNil(t, obj)
+}
+```
+
+### 自定义辅助函数
+
+```go
+// testutil/helpers.go
+package testutil
+
+import (
+    "testing"
+
+    "github.com/kart-io/goagent/builder"
+    "github.com/kart-io/goagent/interfaces"
+    "github.com/kart-io/goagent/llm"
+)
+
+// CreateTestAgent 创建测试用 Agent
+func CreateTestAgent(t *testing.T, responses ...*llm.CompletionResponse) interfaces.Agent {
+    t.Helper()
+    mock := NewMockLLMClient(responses...)
+    return builder.NewAgentBuilder(mock).Build()
+}
+
+// CreateTestInput 创建测试输入
+func CreateTestInput(content string) *interfaces.Input {
+    return &interfaces.Input{
+        Messages: []interfaces.Message{
+            {Role: "user", Content: content},
+        },
+    }
+}
+```
+
+## 基准测试
+
+```go
+func BenchmarkAgentInvoke(b *testing.B) {
+    mock := NewMockLLMClient(&llm.CompletionResponse{
+        Content: "response",
+    })
+    agent := builder.NewAgentBuilder(mock).Build()
+
+    input := &interfaces.Input{
+        Messages: []interfaces.Message{
+            {Role: "user", Content: "test"},
+        },
+    }
+
+    b.ResetTimer()
+    for i := 0; i < b.N; i++ {
+        _, err := agent.Invoke(context.Background(), input)
+        if err != nil {
+            b.Fatal(err)
+        }
+    }
+}
+
+func BenchmarkAgentInvokeParallel(b *testing.B) {
+    mock := NewMockLLMClient(&llm.CompletionResponse{
+        Content: "response",
+    })
+    agent := builder.NewAgentBuilder(mock).Build()
+
+    input := &interfaces.Input{
+        Messages: []interfaces.Message{
+            {Role: "user", Content: "test"},
+        },
+    }
+
+    b.RunParallel(func(pb *testing.PB) {
+        for pb.Next() {
+            _, err := agent.Invoke(context.Background(), input)
+            if err != nil {
+                b.Fatal(err)
+            }
+        }
+    })
+}
+```
+
+运行基准测试：
+
+```bash
+go test -bench=. -benchmem ./...
+```
+
+## 测试命名约定
+
+- 测试函数：`Test<FunctionName>`
+- 子测试：描述性名称，使用空格
+- 基准测试：`Benchmark<FunctionName>`
+- 示例：`Example<FunctionName>`
+
+```go
+func TestAgentInvoke(t *testing.T) {
+    t.Run("with valid input", func(t *testing.T) { ... })
+    t.Run("with empty messages", func(t *testing.T) { ... })
+    t.Run("with context cancellation", func(t *testing.T) { ... })
+}
+
+func BenchmarkAgentInvoke(b *testing.B) { ... }
+
+func ExampleAgent_Invoke() {
+    // 示例代码
+    // Output: expected output
+}
+```
+
+## 常见陷阱
+
+### 1. 不要使用固定的时间
+
+```go
+// 不好
+time.Sleep(100 * time.Millisecond)
+assert.True(t, isDone)
+
+// 好
+select {
+case <-done:
+    // 成功
+case <-time.After(time.Second):
+    t.Fatal("超时")
+}
+```
+
+### 2. 清理测试资源
+
+```go
+func TestWithTempFile(t *testing.T) {
+    f, err := os.CreateTemp("", "test")
+    require.NoError(t, err)
+    defer os.Remove(f.Name())
+    defer f.Close()
+
+    // 测试代码
+}
+```
+
+### 3. 避免测试间依赖
+
+```go
+// 不好 - 测试间共享状态
+var globalCounter int
+
+func TestA(t *testing.T) {
+    globalCounter++
+}
+
+func TestB(t *testing.T) {
+    assert.Equal(t, 1, globalCounter) // 依赖 TestA 先执行
+}
+
+// 好 - 独立测试
+func TestA(t *testing.T) {
+    counter := 0
+    counter++
+    assert.Equal(t, 1, counter)
+}
+
+func TestB(t *testing.T) {
+    counter := 0
+    counter++
+    assert.Equal(t, 1, counter)
+}
+```
+
+### 4. 使用 t.Helper()
+
+```go
+func assertAgentOutput(t *testing.T, output *interfaces.Output, expectedContent string) {
+    t.Helper() // 报告调用者的行号
+    require.NotNil(t, output)
+    require.NotEmpty(t, output.Messages)
+    assert.Equal(t, expectedContent, output.Messages[0].Content)
+}
+```
+
+## CI/CD 集成
+
+### GitHub Actions 配置
 
 ```yaml
-name: Tests
+name: Test
 
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+on: [push, pull_request]
 
 jobs:
   test:
@@ -445,118 +634,18 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
-          go-version: "1.21"
-
-      - name: Install dependencies
-        run: go mod download
+          go-version: '1.25'
 
       - name: Run tests
-        run: go test -v -race -coverprofile=coverage.out ./...
+        run: make test
 
-      - name: Upload coverage
-        uses: codecov/codecov-action@v3
-        with:
-          file: ./coverage.out
-
-      - name: Run integration tests
-        env:
-          INTEGRATION: true
-        run: go test -v -tags=integration ./...
+      - name: Check coverage
+        run: |
+          make coverage
+          go tool cover -func=coverage.out | grep total | awk '{print $3}'
 ```
 
-### Makefile Targets
+## 相关文档
 
-```makefile
-.PHONY: test test-unit test-integration test-coverage test-race
-
-test: test-unit
-
-test-unit:
-	go test -v ./...
-
-test-integration:
-	go test -v -tags=integration ./...
-
-test-coverage:
-	go test -v -coverprofile=coverage.out ./...
-	go tool cover -html=coverage.out -o coverage.html
-
-test-race:
-	go test -v -race ./...
-
-test-all: test-unit test-race test-integration
-```
-
-## Testing Checklist
-
-### Before Committing
-
-- [ ] All tests pass locally
-- [ ] Test coverage meets requirements
-- [ ] No race conditions detected
-- [ ] Tests are deterministic
-- [ ] Mock data is realistic
-- [ ] Error cases are covered
-- [ ] Documentation updated
-
-### Code Review Checklist
-
-- [ ] Tests follow naming conventions
-- [ ] Table-driven tests used where appropriate
-- [ ] Proper test isolation
-- [ ] Adequate assertions
-- [ ] Clear failure messages
-- [ ] No test interdependencies
-- [ ] Performance benchmarks for critical paths
-
-## Common Pitfalls to Avoid
-
-1. **Global State**: Avoid modifying global variables in tests
-2. **Time Dependencies**: Use time injection or mock clocks
-3. **File System**: Use temp directories or in-memory filesystems
-4. **Network Calls**: Mock external services
-5. **Random Data**: Use seeded random for reproducibility
-6. **Resource Leaks**: Always cleanup resources
-7. **Assertion Fatigue**: Too many assertions make tests brittle
-8. **Test Data Reuse**: Can create hidden dependencies
-
-## Testing Tools and Libraries
-
-### Essential Libraries
-
-- **testify**: Assertions and mocks
-- **gomock**: Code generation for mocks
-- **ginkgo/gomega**: BDD-style testing
-- **httptest**: HTTP server mocking
-- **sqlmock**: SQL database mocking
-
-### Useful Commands
-
-```bash
-# Run specific test
-go test -v -run TestAgentState_Set
-
-# Run tests matching pattern
-go test -v -run ".*Concurrent.*"
-
-# Test with timeout
-go test -timeout 30s ./...
-
-# Generate test coverage badge
-go test -coverprofile=coverage.out ./...
-go tool cover -func=coverage.out
-```
-
-## Summary
-
-Good testing is essential for maintaining code quality and preventing regressions. Follow these best practices:
-
-1. Write tests first (TDD) when possible
-2. Keep tests simple and focused
-3. Use mocks judiciously
-4. Maintain high coverage on critical paths
-5. Run tests frequently during development
-6. Automate testing in CI/CD pipelines
-7. Review and refactor tests regularly
-
-Remember: Tests are code too - they need to be maintained, documented, and refactored just like production code.
+- [架构概述](../architecture/ARCHITECTURE.md)
+- [导入层级说明](../architecture/IMPORT_LAYERING.md)
