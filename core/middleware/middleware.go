@@ -172,6 +172,8 @@ func NewMiddlewareChain(handler Handler) *MiddlewareChain {
 }
 
 // Use adds middleware to the chain
+//
+//go:inline
 func (c *MiddlewareChain) Use(middleware ...Middleware) *MiddlewareChain {
 	c.mu.Lock()
 	defer c.mu.Unlock()

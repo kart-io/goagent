@@ -538,4 +538,3 @@ func NewCachedReActAgent(config ReActConfig, cacheConfig *performance.CacheConfi
 
 	return performance.NewCachedAgent(agent, *cacheConfig)
 }
-
