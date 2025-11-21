@@ -212,14 +212,19 @@ func (m *InMemoryManager) Delete(ctx context.Context, key string) error {
 }
 
 // Clear 清空所有记忆
+// Lock acquisition order: convMu -> storeMu -> casesMu (always maintain this order to prevent deadlock)
 func (m *InMemoryManager) Clear(ctx context.Context) error {
+	// Acquire locks in consistent order to prevent deadlock
 	m.convMu.Lock()
-	m.storeMu.Lock()
-	m.casesMu.Lock()
 	defer m.convMu.Unlock()
+
+	m.storeMu.Lock()
 	defer m.storeMu.Unlock()
+
+	m.casesMu.Lock()
 	defer m.casesMu.Unlock()
 
+	// Clear all data
 	m.conversations = make(map[string][]*Conversation)
 	m.store = make(map[string]interface{})
 	m.cases = make(map[string]*Case)

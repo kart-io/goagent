@@ -3,16 +3,18 @@ package agents
 import (
 	"context"
 	"fmt"
-	"github.com/kart-io/goagent/utils/json"
 	"regexp"
 	"strings"
 	"sync"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/kart-io/goagent/core"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/tools"
+	"github.com/kart-io/goagent/utils/json"
 )
 
 // SupervisorAgent coordinates multiple sub-agents to handle complex tasks
@@ -282,6 +284,7 @@ func (s *SupervisorAgent) parseTaskResponse(response string) ([]Task, error) {
 }
 
 // executePlan executes the task execution plan
+// Uses errgroup for proper error propagation and context cancellation
 func (s *SupervisorAgent) executePlan(ctx context.Context, plan *ExecutionPlan, originalInput interface{}) []TaskResult {
 	// Count total tasks
 	totalTasks := 0
@@ -289,44 +292,63 @@ func (s *SupervisorAgent) executePlan(ctx context.Context, plan *ExecutionPlan, 
 		totalTasks += len(stage.Tasks)
 	}
 
-	results := make([]TaskResult, 0, totalTasks)
-	resultsChan := make(chan TaskResult, totalTasks)
+	// Use a mutex-protected slice for thread-safe result collection
+	var (
+		results   []TaskResult
+		resultsMu sync.Mutex
+	)
 
-	// Execute tasks according to plan
-	var wg sync.WaitGroup
+	// Semaphore to limit concurrent executions
 	sem := make(chan struct{}, s.config.MaxConcurrentAgents)
 
+	// Process each stage
 	for _, stage := range plan.Stages {
+		// Create errgroup for this stage with context
+		g, stageCtx := errgroup.WithContext(ctx)
+
+		// Execute tasks in the stage
 		for _, task := range stage.Tasks {
-			wg.Add(1)
-			go func(t Task) {
-				defer wg.Done()
+			task := task // capture loop variable
 
+			g.Go(func() error {
 				// Acquire semaphore
-				sem <- struct{}{}
-				defer func() { <-sem }()
+				select {
+				case sem <- struct{}{}:
+					defer func() { <-sem }()
+				case <-stageCtx.Done():
+					// Context cancelled, create error result
+					result := TaskResult{
+						TaskID:      task.ID,
+						StartTime:   time.Now(),
+						EndTime:     time.Now(),
+						Error:       stageCtx.Err(),
+						ErrorString: stageCtx.Err().Error(),
+					}
+					resultsMu.Lock()
+					results = append(results, result)
+					resultsMu.Unlock()
+					return nil // Don't propagate context cancellation as error
+				}
 
-				// Execute task with original input
-				result := s.executeTask(ctx, t, originalInput)
-				resultsChan <- result
-			}(task)
+				// Execute task with stage context
+				result := s.executeTask(stageCtx, task, originalInput)
+
+				// Store result safely
+				resultsMu.Lock()
+				results = append(results, result)
+				resultsMu.Unlock()
+
+				// Don't propagate task errors to errgroup - they're stored in results
+				return nil
+			})
 		}
 
-		// Wait for stage to complete if sequential
-		if stage.Sequential {
-			wg.Wait()
-		}
-	}
+		// Wait for stage to complete
+		// errgroup.Wait() will return first error or nil when all complete
+		_ = g.Wait() // Errors are captured in TaskResults, not propagated
 
-	// Wait for all tasks to complete
-	go func() {
-		wg.Wait()
-		close(resultsChan)
-	}()
-
-	// Collect results
-	for result := range resultsChan {
-		results = append(results, result)
+		// If stage is sequential, we've already waited via g.Wait()
+		// If stage is parallel, we also wait to maintain ordering guarantees
 	}
 
 	return results
@@ -376,8 +398,14 @@ func (s *SupervisorAgent) executeTask(ctx context.Context, task Task, originalIn
 	var agentOutput *core.AgentOutput
 	var execErr error
 
-	for attempt := 0; attempt <= s.config.RetryPolicy.MaxRetries; attempt++ {
-		if attempt > 0 {
+	// Determine max retries (handle nil RetryPolicy)
+	maxRetries := 0
+	if s.config.RetryPolicy != nil {
+		maxRetries = s.config.RetryPolicy.MaxRetries
+	}
+
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		if attempt > 0 && s.config.RetryPolicy != nil {
 			delay := s.config.RetryPolicy.InitialDelay
 			for i := 1; i < attempt; i++ {
 				delay = time.Duration(float64(delay) * s.config.RetryPolicy.Multiplier)
@@ -446,7 +474,7 @@ func (s *SupervisorAgent) executeTask(ctx context.Context, task Task, originalIn
 
 // isRetryableError checks if an error is retryable
 func (s *SupervisorAgent) isRetryableError(err error) bool {
-	if err == nil {
+	if err == nil || s.config.RetryPolicy == nil {
 		return false
 	}
 

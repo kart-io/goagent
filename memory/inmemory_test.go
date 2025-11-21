@@ -2,7 +2,10 @@ package memory
 
 import (
 	"context"
+	"fmt"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -490,6 +493,320 @@ func TestInMemoryManager_Concurrency(t *testing.T) {
 
 		for i := 0; i < 10; i++ {
 			<-done
+		}
+	})
+}
+
+// Test concurrent read/write operations with race detection
+func TestInMemoryManagerConcurrentReadWrite(t *testing.T) {
+	manager := NewInMemoryManager(nil)
+	ctx := context.Background()
+
+	// Pre-populate some data
+	for i := 0; i < 5; i++ {
+		conv := &Conversation{
+			SessionID: "session-rw",
+			Role:      "user",
+			Content:   fmt.Sprintf("Message %d", i),
+		}
+		err := manager.AddConversation(ctx, conv)
+		require.NoError(t, err)
+	}
+
+	// Concurrent reads and writes
+	t.Run("concurrent read and write conversations", func(t *testing.T) {
+		var wg sync.WaitGroup
+		numOperations := 50
+
+		// Readers
+		for i := 0; i < numOperations/2; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				_, _ = manager.GetConversationHistory(ctx, "session-rw", 0)
+			}()
+		}
+
+		// Writers
+		for i := 0; i < numOperations/2; i++ {
+			wg.Add(1)
+			go func(index int) {
+				defer wg.Done()
+				conv := &Conversation{
+					SessionID: "session-rw",
+					Role:      "assistant",
+					Content:   fmt.Sprintf("Concurrent message %d", index),
+				}
+				_ = manager.AddConversation(ctx, conv)
+			}(i)
+		}
+
+		wg.Wait()
+
+		// Verify data integrity
+		convs, err := manager.GetConversationHistory(ctx, "session-rw", 0)
+		require.NoError(t, err)
+		assert.GreaterOrEqual(t, len(convs), 5, "Should have at least initial conversations")
+	})
+
+	t.Run("concurrent read and write store", func(t *testing.T) {
+		var wg sync.WaitGroup
+		numOperations := 50
+
+		// Pre-populate
+		for i := 0; i < 5; i++ {
+			err := manager.Store(ctx, fmt.Sprintf("key_%d", i), i)
+			require.NoError(t, err)
+		}
+
+		// Readers
+		for i := 0; i < numOperations/2; i++ {
+			wg.Add(1)
+			go func(index int) {
+				defer wg.Done()
+				_, _ = manager.Retrieve(ctx, fmt.Sprintf("key_%d", index%5))
+			}(i)
+		}
+
+		// Writers
+		for i := 0; i < numOperations/2; i++ {
+			wg.Add(1)
+			go func(index int) {
+				defer wg.Done()
+				_ = manager.Store(ctx, fmt.Sprintf("key_new_%d", index), index)
+			}(i)
+		}
+
+		wg.Wait()
+	})
+
+	t.Run("concurrent read and write cases", func(t *testing.T) {
+		var wg sync.WaitGroup
+		numOperations := 50
+
+		// Pre-populate cases
+		for i := 0; i < 5; i++ {
+			caseItem := &Case{
+				Title:       fmt.Sprintf("Case %d", i),
+				Description: "Test case",
+				Problem:     "test problem",
+			}
+			err := manager.AddCase(ctx, caseItem)
+			require.NoError(t, err)
+		}
+
+		// Readers
+		for i := 0; i < numOperations/2; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				_, _ = manager.SearchSimilarCases(ctx, "test", 10)
+			}()
+		}
+
+		// Writers
+		for i := 0; i < numOperations/2; i++ {
+			wg.Add(1)
+			go func(index int) {
+				defer wg.Done()
+				caseItem := &Case{
+					Title:       fmt.Sprintf("Concurrent Case %d", index),
+					Description: "Concurrent test case",
+					Problem:     "concurrent problem",
+				}
+				_ = manager.AddCase(ctx, caseItem)
+			}(i)
+		}
+
+		wg.Wait()
+	})
+}
+
+// Test Clear() method with concurrent operations (deadlock test)
+func TestInMemoryManagerClearConcurrency(t *testing.T) {
+	manager := NewInMemoryManager(nil)
+	ctx := context.Background()
+
+	t.Run("clear with concurrent reads", func(t *testing.T) {
+		// Pre-populate data
+		for i := 0; i < 10; i++ {
+			conv := &Conversation{
+				SessionID: "clear-session",
+				Role:      "user",
+				Content:   fmt.Sprintf("Message %d", i),
+			}
+			err := manager.AddConversation(ctx, conv)
+			require.NoError(t, err)
+
+			err = manager.Store(ctx, fmt.Sprintf("key_%d", i), i)
+			require.NoError(t, err)
+
+			caseItem := &Case{
+				Title:       fmt.Sprintf("Case %d", i),
+				Description: "Test",
+			}
+			err = manager.AddCase(ctx, caseItem)
+			require.NoError(t, err)
+		}
+
+		var wg sync.WaitGroup
+
+		// Start concurrent readers
+		for i := 0; i < 10; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for j := 0; j < 5; j++ {
+					_, _ = manager.GetConversationHistory(ctx, "clear-session", 0)
+					_, _ = manager.SearchSimilarCases(ctx, "test", 10)
+					_, _ = manager.Retrieve(ctx, "key_0")
+					time.Sleep(1 * time.Millisecond)
+				}
+			}()
+		}
+
+		// Execute Clear in parallel
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			time.Sleep(10 * time.Millisecond) // Let readers start
+			err := manager.Clear(ctx)
+			assert.NoError(t, err)
+		}()
+
+		// Wait for all operations to complete (should not deadlock)
+		done := make(chan bool)
+		go func() {
+			wg.Wait()
+			close(done)
+		}()
+
+		select {
+		case <-done:
+			// Success - no deadlock
+		case <-time.After(5 * time.Second):
+			t.Fatal("Deadlock detected - Clear() took too long with concurrent operations")
+		}
+
+		// Verify data is cleared
+		convs, err := manager.GetConversationHistory(ctx, "clear-session", 0)
+		require.NoError(t, err)
+		assert.Empty(t, convs)
+	})
+
+	t.Run("multiple concurrent clears", func(t *testing.T) {
+		// Pre-populate
+		for i := 0; i < 5; i++ {
+			conv := &Conversation{
+				SessionID: "multi-clear",
+				Role:      "user",
+				Content:   "Message",
+			}
+			_ = manager.AddConversation(ctx, conv)
+		}
+
+		var wg sync.WaitGroup
+
+		// Multiple concurrent Clear() calls
+		for i := 0; i < 10; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				err := manager.Clear(ctx)
+				assert.NoError(t, err)
+			}()
+		}
+
+		// Wait with timeout
+		done := make(chan bool)
+		go func() {
+			wg.Wait()
+			close(done)
+		}()
+
+		select {
+		case <-done:
+			// Success
+		case <-time.After(5 * time.Second):
+			t.Fatal("Deadlock detected with multiple concurrent Clear() calls")
+		}
+	})
+}
+
+// Stress test for high concurrency
+func TestInMemoryManagerStressConcurrency(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping stress test in short mode")
+	}
+
+	manager := NewInMemoryManager(nil)
+	ctx := context.Background()
+
+	t.Run("stress test all operations", func(t *testing.T) {
+		var wg sync.WaitGroup
+		numGoroutines := 100
+		operationsPerGoroutine := 100
+
+		for i := 0; i < numGoroutines; i++ {
+			wg.Add(1)
+			go func(goroutineID int) {
+				defer wg.Done()
+
+				for j := 0; j < operationsPerGoroutine; j++ {
+					operation := j % 6
+
+					switch operation {
+					case 0:
+						// Add conversation
+						conv := &Conversation{
+							SessionID: fmt.Sprintf("session_%d", goroutineID%10),
+							Role:      "user",
+							Content:   fmt.Sprintf("Message from goroutine %d op %d", goroutineID, j),
+						}
+						_ = manager.AddConversation(ctx, conv)
+
+					case 1:
+						// Get conversation history
+						_, _ = manager.GetConversationHistory(ctx, fmt.Sprintf("session_%d", goroutineID%10), 5)
+
+					case 2:
+						// Store key-value
+						key := fmt.Sprintf("key_%d_%d", goroutineID, j)
+						_ = manager.Store(ctx, key, j)
+
+					case 3:
+						// Retrieve key-value
+						_, _ = manager.Retrieve(ctx, fmt.Sprintf("key_%d_%d", goroutineID, j-1))
+
+					case 4:
+						// Add case
+						caseItem := &Case{
+							Title:       fmt.Sprintf("Case %d %d", goroutineID, j),
+							Description: "Stress test case",
+						}
+						_ = manager.AddCase(ctx, caseItem)
+
+					case 5:
+						// Search cases
+						_, _ = manager.SearchSimilarCases(ctx, "test", 5)
+					}
+				}
+			}(i)
+		}
+
+		// Wait with timeout
+		done := make(chan bool)
+		go func() {
+			wg.Wait()
+			close(done)
+		}()
+
+		select {
+		case <-done:
+			// Success
+			t.Logf("Stress test completed: %d goroutines × %d operations", numGoroutines, operationsPerGoroutine)
+		case <-time.After(30 * time.Second):
+			t.Fatal("Stress test timeout - possible deadlock or performance issue")
 		}
 	})
 }

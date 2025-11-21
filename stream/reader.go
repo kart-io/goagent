@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -269,8 +270,15 @@ func (r *Reader) Drain() error {
 }
 
 // Collect 收集所有数据块
+// 注意：此方法会将所有数据加载到内存，受 MaxCollectSize 限制防止 OOM
 func (r *Reader) Collect() ([]*core.LegacyStreamChunk, error) {
 	var chunks []*core.LegacyStreamChunk
+	var totalBytes int64
+
+	maxSize := r.opts.MaxCollectSize
+	if maxSize <= 0 {
+		maxSize = 100 * 1024 * 1024 // 默认 100MB
+	}
 
 	for {
 		chunk, err := r.Next()
@@ -280,15 +288,51 @@ func (r *Reader) Collect() ([]*core.LegacyStreamChunk, error) {
 		if err != nil {
 			return chunks, err
 		}
+
+		// 估算并检查大小限制
+		chunkSize := estimateChunkSize(chunk)
+		if totalBytes+chunkSize > maxSize {
+			return chunks, agentErrors.New(agentErrors.CodeStreamRead, "collect size limit exceeded").
+				WithComponent("stream_reader").
+				WithOperation("Collect").
+				WithContext("max_size", maxSize).
+				WithContext("current_size", totalBytes).
+				WithContext("chunk_size", chunkSize)
+		}
+
 		chunks = append(chunks, chunk)
+		totalBytes += chunkSize
 	}
 
 	return chunks, nil
 }
 
+// estimateChunkSize 估算数据块的内存大小
+func estimateChunkSize(chunk *core.LegacyStreamChunk) int64 {
+	size := int64(len(chunk.Text))
+
+	if data, ok := chunk.Data.([]byte); ok {
+		size += int64(len(data))
+	} else if str, ok := chunk.Data.(string); ok {
+		size += int64(len(str))
+	}
+
+	// 为其他字段添加一些估算开销（元数据、指针等）
+	size += 256
+
+	return size
+}
+
 // CollectText 收集所有文本数据
+// 使用 strings.Builder 提高性能，并受 MaxCollectSize 限制防止 OOM
 func (r *Reader) CollectText() (string, error) {
-	var result string
+	var builder strings.Builder
+	var totalBytes int64
+
+	maxSize := r.opts.MaxCollectSize
+	if maxSize <= 0 {
+		maxSize = 100 * 1024 * 1024 // 默认 100MB
+	}
 
 	for {
 		chunk, err := r.Next()
@@ -296,13 +340,24 @@ func (r *Reader) CollectText() (string, error) {
 			break
 		}
 		if err != nil {
-			return result, err
+			return builder.String(), err
 		}
 
 		if chunk.Type == core.ChunkTypeText && chunk.Text != "" {
-			result += chunk.Text
+			textSize := int64(len(chunk.Text))
+			if totalBytes+textSize > maxSize {
+				return builder.String(), agentErrors.New(agentErrors.CodeStreamRead, "collect text size limit exceeded").
+					WithComponent("stream_reader").
+					WithOperation("CollectText").
+					WithContext("max_size", maxSize).
+					WithContext("current_size", totalBytes).
+					WithContext("text_size", textSize)
+			}
+
+			builder.WriteString(chunk.Text)
+			totalBytes += textSize
 		}
 	}
 
-	return result, nil
+	return builder.String(), nil
 }
