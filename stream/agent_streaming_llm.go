@@ -135,6 +135,16 @@ func (a *StreamingLLMAgent) processStreamAsync(ctx context.Context, input *core.
 
 	startTime := time.Now()
 
+	// 提前检查 context
+	select {
+	case <-ctx.Done():
+		if err := writer.WriteError(ctx.Err()); err != nil {
+			fmt.Printf("failed to write context error: %v\n", err)
+		}
+		return
+	default:
+	}
+
 	// 准备 LLM 请求
 	messages := []llm.Message{
 		llm.UserMessage(input.Task),
@@ -153,6 +163,16 @@ func (a *StreamingLLMAgent) processStreamAsync(ctx context.Context, input *core.
 	}
 
 	// 调用 LLM（这里模拟流式输出，实际需要 LLM 客户端支持）
+	// 在 LLM 调用前再次检查 context
+	select {
+	case <-ctx.Done():
+		if err := writer.WriteError(ctx.Err()); err != nil {
+			fmt.Printf("failed to write context error: %v\n", err)
+		}
+		return
+	default:
+	}
+
 	response, err := a.llmClient.Chat(ctx, messages)
 	if err != nil {
 		if err := writer.WriteError(agentErrors.Wrap(err, agentErrors.CodeAgentExecution, "LLM call failed").
@@ -168,7 +188,7 @@ func (a *StreamingLLMAgent) processStreamAsync(ctx context.Context, input *core.
 	totalChunks := (len(text) + a.config.ChunkSize - 1) / a.config.ChunkSize
 
 	for i := 0; i < len(text); i += a.config.ChunkSize {
-		// 检查上下文取消
+		// 检查上下文取消（在每次循环开始时）
 		select {
 		case <-ctx.Done():
 			if err := writer.WriteError(ctx.Err()); err != nil {
@@ -184,6 +204,16 @@ func (a *StreamingLLMAgent) processStreamAsync(ctx context.Context, input *core.
 		}
 
 		chunk := text[i:end]
+
+		// 在写入前再次检查 context（确保即使在写入阻塞时也能响应）
+		select {
+		case <-ctx.Done():
+			if err := writer.WriteError(ctx.Err()); err != nil {
+				fmt.Printf("failed to write context error: %v\n", err)
+			}
+			return
+		default:
+		}
 
 		// 发送文本块
 		if err := writer.WriteText(chunk); err != nil {
@@ -207,7 +237,15 @@ func (a *StreamingLLMAgent) processStreamAsync(ctx context.Context, input *core.
 
 		// 添加延迟（模拟打字效果）
 		if a.config.ChunkDelay > 0 {
-			time.Sleep(a.config.ChunkDelay)
+			// 使用 select 使延迟可被中断
+			select {
+			case <-ctx.Done():
+				if err := writer.WriteError(ctx.Err()); err != nil {
+					fmt.Printf("failed to write context error: %v\n", err)
+				}
+				return
+			case <-time.After(a.config.ChunkDelay):
+			}
 		}
 	}
 
@@ -304,25 +342,53 @@ func (c *SimpleStreamConsumer) OnError(err error) error {
 type TextAccumulatorConsumer struct {
 	builder strings.Builder
 	mu      chan struct{}
+	maxSize int64 // 最大累积大小（字节）
+	curSize int64 // 当前大小
 }
 
+// NewTextAccumulatorConsumer 创建文本累积器，默认限制 100MB
 func NewTextAccumulatorConsumer() *TextAccumulatorConsumer {
 	return &TextAccumulatorConsumer{
-		mu: make(chan struct{}, 1),
+		mu:      make(chan struct{}, 1),
+		maxSize: 100 * 1024 * 1024, // 默认 100MB
+	}
+}
+
+// NewTextAccumulatorConsumerWithLimit 创建带自定义大小限制的文本累积器
+func NewTextAccumulatorConsumerWithLimit(maxSize int64) *TextAccumulatorConsumer {
+	if maxSize <= 0 {
+		maxSize = 100 * 1024 * 1024 // 默认 100MB
+	}
+	return &TextAccumulatorConsumer{
+		mu:      make(chan struct{}, 1),
+		maxSize: maxSize,
 	}
 }
 
 func (c *TextAccumulatorConsumer) OnChunk(chunk *core.LegacyStreamChunk) error {
 	if chunk.Type == core.ChunkTypeText && chunk.Text != "" {
 		c.mu <- struct{}{}
+		defer func() { <-c.mu }()
+
+		textSize := int64(len(chunk.Text))
+		if c.curSize+textSize > c.maxSize {
+			return agentErrors.New(agentErrors.CodeStreamRead, "text accumulator size limit exceeded").
+				WithComponent("text_accumulator").
+				WithOperation("OnChunk").
+				WithContext("max_size", c.maxSize).
+				WithContext("current_size", c.curSize).
+				WithContext("text_size", textSize)
+		}
+
 		c.builder.WriteString(chunk.Text)
-		<-c.mu
+		c.curSize += textSize
 	}
 	return nil
 }
 
 func (c *TextAccumulatorConsumer) OnStart() error {
 	c.builder.Reset()
+	c.curSize = 0
 	return nil
 }
 
