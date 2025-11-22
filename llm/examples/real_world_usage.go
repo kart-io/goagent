@@ -115,19 +115,20 @@ func Example3_UseCaseOptimization() {
 	fmt.Println("Creative Story:", response.Content)
 }
 
-// Example4: 使用 Builder 模式
-func Example4_BuilderPattern() {
-	// 使用 Builder 模式构建 OpenAI 客户端
-	client, err := providers.NewOpenAIBuilder().
-		WithAPIKey("your-api-key").
-		WithModel("gpt-4-turbo-preview").
-		WithTemperature(0.7).
-		WithMaxTokens(4000).
-		WithPreset(llm.PresetHighQuality).
-		WithRetry(3, 2*time.Second).
-		WithCache(15 * time.Minute).
-		WithUseCase(llm.UseCaseAnalysis).
-		Build()
+// Example4: 使用 Option 模式
+func Example4_OptionPattern() {
+	// 使用 Option 模式构建 OpenAI 客户端（推荐方式）
+	client, err := providers.NewOpenAIWithOptions(
+		llm.WithAPIKey("your-api-key"),
+		llm.WithModel("gpt-4-turbo-preview"),
+		llm.WithTemperature(0.7),
+		llm.WithMaxTokens(4000),
+		llm.WithPreset(llm.PresetHighQuality),
+		llm.WithRetryCount(3),
+		llm.WithRetryDelay(2*time.Second),
+		llm.WithCache(true, 15*time.Minute),
+		llm.WithUseCase(llm.UseCaseAnalysis),
+	)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -334,12 +335,12 @@ func Example7_EnvironmentBased() {
 // Example8: 错误处理和重试
 func Example8_ErrorHandling() {
 	// 创建带有增强重试功能的 OpenAI 客户端
-	builder := providers.NewOpenAIBuilder().
-		WithAPIKey("your-api-key").
-		WithModel("gpt-4").
-		WithRetry(5, 3*time.Second) // 5次重试，间隔3秒
-
-	client, err := builder.Build()
+	client, err := providers.NewOpenAIWithOptions(
+		llm.WithAPIKey("your-api-key"),
+		llm.WithModel("gpt-4"),
+		llm.WithRetryCount(5),
+		llm.WithRetryDelay(3*time.Second), // 5次重试，间隔3秒
+	)
 	if err != nil {
 		log.Fatal("Failed to create client:", err)
 	}
@@ -354,8 +355,8 @@ func Example8_ErrorHandling() {
 		llm.UserMessage("Generate a complex analysis..."),
 	}
 
-	// 增强版客户端会自动重试
-	response, err := client.ChatWithSystemPrompt(ctxWithTimeout, messages)
+	// 标准客户端支持系统提示（通过 SystemMessage）
+	response, err := client.Chat(ctxWithTimeout, messages)
 	if err != nil {
 		// 处理错误
 		switch {

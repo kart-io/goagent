@@ -3,15 +3,16 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/kart-io/goagent/utils/json"
 	"log"
 	"strings"
 	"time"
 
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/constants"
 	"github.com/kart-io/goagent/llm/providers"
 	"github.com/kart-io/goagent/tools"
+	"github.com/kart-io/goagent/utils/json"
 )
 
 func main() {
@@ -40,7 +41,11 @@ func basicOllamaExample() {
 	fmt.Println("----------------------------")
 
 	// 创建 Ollama 客户端（使用默认配置）
-	client := providers.NewOllamaClientSimple("gemma3:12b")
+	client, err := providers.NewOllamaClientSimple("gemma3:12b")
+	if err != nil {
+		log.Printf("Error creating Ollama client: %v\n", err)
+		return
+	}
 
 	// 检查 Ollama 是否可用
 	if !client.IsAvailable() {
@@ -77,14 +82,17 @@ func ollamaAgentExample() {
 	fmt.Println("2. Ollama Chat Example")
 	fmt.Println("-----------------------")
 
-	// 配置 Ollama
-	config := providers.DefaultOllamaConfig()
-	config.Model = "gemma3:12b" // 或者使用其他模型如 "mistral", "codellama", "phi"
-	config.Temperature = 0.7
-	config.MaxTokens = 1000
-
-	// 创建 Ollama 客户端
-	ollamaClient := providers.NewOllamaClient(config)
+	// 创建 Ollama 客户端（使用标准配置）
+	ollamaClient, err := providers.NewOllama(&llm.LLMOptions{
+		Provider:    constants.ProviderOllama,
+		Model:       "gemma3:12b", // 或者使用其他模型如 "mistral", "codellama", "phi"
+		Temperature: 0.7,
+		MaxTokens:   1000,
+	})
+	if err != nil {
+		log.Printf("Error creating Ollama client: %v\n", err)
+		return
+	}
 
 	// 检查可用性
 	if !ollamaClient.IsAvailable() {
@@ -116,7 +124,11 @@ func ollamaWithCompletionExample() {
 	fmt.Println("-----------------------------")
 
 	// 创建 Ollama 客户端
-	ollamaClient := providers.NewOllamaClientSimple("gemma3:12b")
+	ollamaClient, err := providers.NewOllamaClientSimple("gemma3:12b")
+	if err != nil {
+		log.Printf("Failed to create Ollama client: %v\n", err)
+		return
+	}
 
 	if !ollamaClient.IsAvailable() {
 		fmt.Println("❌ Ollama not available. Skipping this example.")
@@ -149,7 +161,11 @@ func listOllamaModels() {
 	fmt.Println("4. Available Ollama Models")
 	fmt.Println("--------------------------")
 
-	client := providers.NewOllamaClientSimple("")
+	client, err := providers.NewOllamaClientSimple("")
+	if err != nil {
+		log.Printf("Failed to create Ollama client: %v\n", err)
+		return
+	}
 
 	if !client.IsAvailable() {
 		fmt.Println("❌ Ollama not available")
@@ -190,7 +206,11 @@ func listOllamaModels() {
 
 		if modelAvailable {
 			fmt.Printf("\n  Using %s model:\n", modelName)
-			client := providers.NewOllamaClientSimple(modelName)
+			client, err := providers.NewOllamaClientSimple(modelName)
+			if err != nil {
+				fmt.Printf("    Error creating client: %v\n", err)
+				continue
+			}
 			ctx := context.Background()
 
 			resp, err := client.Chat(ctx, []llm.Message{
@@ -255,7 +275,11 @@ func ollamaWithToolsExample() {
 	fmt.Println("--------------------------------------------------")
 
 	// 创建 Ollama 客户端
-	ollamaClient := providers.NewOllamaClientSimple("gemma3:12b")
+	ollamaClient, err := providers.NewOllamaClientSimple("gemma3:12b")
+	if err != nil {
+		log.Printf("Failed to create Ollama client: %v\n", err)
+		return
+	}
 
 	if !ollamaClient.IsAvailable() {
 		fmt.Println("❌ Ollama not available. Skipping this example.")

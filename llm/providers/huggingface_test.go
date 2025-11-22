@@ -45,9 +45,9 @@ func TestNewHuggingFace(t *testing.T) {
 			checkResult: func(t *testing.T, p *HuggingFaceProvider) {
 				assert.Equal(t, "test-key", p.apiKey)
 				assert.Equal(t, "https://custom.hf.co", p.baseURL)
-				assert.Equal(t, "mistralai/Mixtral-8x7B-Instruct-v0.1", p.model)
-				assert.Equal(t, 4000, p.maxTokens)
-				assert.Equal(t, 0.8, p.temperature)
+				assert.Equal(t, "mistralai/Mixtral-8x7B-Instruct-v0.1", p.GetModel(""))
+				assert.Equal(t, 4000, p.GetMaxTokens(0))
+				assert.Equal(t, 0.8, p.GetTemperature(0))
 			},
 		},
 		{
@@ -59,9 +59,9 @@ func TestNewHuggingFace(t *testing.T) {
 			checkResult: func(t *testing.T, p *HuggingFaceProvider) {
 				assert.Equal(t, "test-key", p.apiKey)
 				assert.Equal(t, "https://api-inference.huggingface.co", p.baseURL)
-				assert.Equal(t, "meta-llama/Meta-Llama-3-8B-Instruct", p.model)
-				assert.Equal(t, 2000, p.maxTokens)
-				assert.Equal(t, 0.7, p.temperature)
+				assert.Equal(t, "meta-llama/Meta-Llama-3-8B-Instruct", p.GetModel(""))
+				assert.Equal(t, 2000, p.GetMaxTokens(0))
+				assert.Equal(t, 0.7, p.GetTemperature(0))
 			},
 		},
 		{
@@ -73,7 +73,7 @@ func TestNewHuggingFace(t *testing.T) {
 			wantErr:   false,
 			checkResult: func(t *testing.T, p *HuggingFaceProvider) {
 				assert.Equal(t, "env-api-key", p.apiKey)
-				assert.Equal(t, "google/flan-t5-xxl", p.model)
+				assert.Equal(t, "google/flan-t5-xxl", p.GetModel(""))
 			},
 		},
 		{
@@ -95,7 +95,7 @@ func TestNewHuggingFace(t *testing.T) {
 			envModel: "bigscience/bloom",
 			wantErr:  false,
 			checkResult: func(t *testing.T, p *HuggingFaceProvider) {
-				assert.Equal(t, "bigscience/bloom", p.model)
+				assert.Equal(t, "bigscience/bloom", p.GetModel(""))
 			},
 		},
 		{

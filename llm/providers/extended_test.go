@@ -495,7 +495,7 @@ func TestGeminiProvider_DefaultModel(t *testing.T) {
 
 	provider, err := NewGemini(config)
 	require.NoError(t, err)
-	assert.Equal(t, "gemini-pro", provider.modelName)
+	assert.Equal(t, "gemini-pro", provider.GetModel(""))
 }
 
 // TestGeminiProvider_ConvertToolsToFunctions tests tool conversion

@@ -3,7 +3,6 @@ package providers
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -19,114 +18,58 @@ import (
 // KimiClient Kimi (Moonshot AI) LLM 客户端
 // Kimi 是月之暗面推出的智能助手，支持超长上下文（最高200K tokens）
 type KimiClient struct {
-	apiKey      string
-	baseURL     string
-	model       string
-	temperature float64
-	maxTokens   int
-	client      *httpclient.Client
+	*BaseProvider
+	apiKey  string
+	baseURL string
+	client  *httpclient.Client
 }
 
-// KimiConfig Kimi 配置
-type KimiConfig struct {
-	APIKey      string  // API 密钥
-	BaseURL     string  // API 地址，默认 https://api.moonshot.cn/v1
-	Model       string  // 模型名称，如 moonshot-v1-8k, moonshot-v1-32k, moonshot-v1-128k
-	Temperature float64 // 温度参数
-	MaxTokens   int     // 最大 token 数
-	Timeout     int     // 请求超时（秒）
-}
+// NewKimiWithOptions 使用选项模式创建 Kimi provider
+func NewKimiWithOptions(opts ...agentllm.ClientOption) (*KimiClient, error) {
+	// 创建 BaseProvider，统一处理 Options
+	base := NewBaseProvider(opts...)
 
-// DefaultKimiConfig 返回默认 Kimi 配置
-func DefaultKimiConfig() *KimiConfig {
-	return &KimiConfig{
-		BaseURL:     constants.KimiBaseURL,
-		Model:       "moonshot-v1-8k", // 默认使用 8K 上下文模型
-		Temperature: constants.DefaultTemperature,
-		MaxTokens:   constants.DefaultMaxTokens,
-		Timeout:     int(constants.DefaultTimeout / time.Second),
-	}
-}
+	// 应用 Provider 特定的默认值
+	base.ApplyProviderDefaults(
+		constants.ProviderKimi,
+		constants.KimiBaseURL,
+		"moonshot-v1-8k",
+		constants.EnvKimiBaseURL,
+		constants.EnvKimiModel,
+	)
 
-// NewKimiClient 创建新的 Kimi 客户端
-func NewKimiClient(config *KimiConfig) (*KimiClient, error) {
-	if config == nil {
-		config = DefaultKimiConfig()
+	// 统一处理 API Key
+	if err := base.EnsureAPIKey(constants.EnvKimiAPIKey, constants.ProviderKimi); err != nil {
+		return nil, err
 	}
 
-	if config.APIKey == "" {
-		return nil, agentErrors.NewInvalidConfigError(string(constants.ProviderKimi), constants.ErrorFieldAPIKey, "kimi API key is required")
-	}
+	// 获取超时时间
+	timeout := base.GetTimeout()
 
-	if config.BaseURL == "" {
-		config.BaseURL = constants.KimiBaseURL
-	}
-
-	if config.Model == "" {
-		config.Model = "moonshot-v1-8k"
-	}
-
-	if config.Temperature == 0 {
-		config.Temperature = constants.DefaultTemperature
-	}
-
-	if config.MaxTokens == 0 {
-		config.MaxTokens = constants.DefaultMaxTokens
-	}
-
-	if config.Timeout == 0 {
-		config.Timeout = int(constants.DefaultTimeout / time.Second)
-	}
+	// 创建 HTTP 客户端
+	client := httpclient.NewClient(&httpclient.Config{
+		Timeout: timeout,
+		Headers: map[string]string{
+			constants.HeaderContentType:   constants.ContentTypeJSON,
+			constants.HeaderAuthorization: constants.AuthBearerPrefix + base.Config.APIKey,
+		},
+	})
 
 	return &KimiClient{
-		apiKey:      config.APIKey,
-		baseURL:     strings.TrimRight(config.BaseURL, "/"),
-		model:       config.Model,
-		temperature: config.Temperature,
-		maxTokens:   config.MaxTokens,
-		client: httpclient.NewClient(&httpclient.Config{
-			Timeout: time.Duration(config.Timeout) * time.Second,
-			Headers: map[string]string{
-				constants.HeaderContentType:   constants.ContentTypeJSON,
-				constants.HeaderAuthorization: constants.AuthBearerPrefix + config.APIKey,
-			},
-		}),
+		BaseProvider: base,
+		apiKey:       base.Config.APIKey,
+		baseURL:      strings.TrimRight(base.Config.BaseURL, "/"),
+		client:       client,
 	}, nil
 }
 
-// NewKimi 创建 Kimi provider（兼容 llm.Config）
+// NewKimi 创建 Kimi provider (向后兼容)
 func NewKimi(config *agentllm.LLMOptions) (*KimiClient, error) {
-	kimiConfig := &KimiConfig{
-		APIKey:      config.APIKey,
-		BaseURL:     config.BaseURL,
-		Model:       config.Model,
-		Temperature: config.Temperature,
-		MaxTokens:   config.MaxTokens,
-		Timeout:     config.Timeout,
-	}
-
-	if kimiConfig.APIKey == "" {
-		kimiConfig.APIKey = os.Getenv(constants.EnvKimiAPIKey)
-	}
-
-	if kimiConfig.BaseURL == "" {
-		kimiConfig.BaseURL = os.Getenv(constants.EnvKimiBaseURL)
-	}
-	if kimiConfig.BaseURL == "" {
-		kimiConfig.BaseURL = constants.KimiBaseURL
-	}
-
-	if kimiConfig.Model == "" {
-		kimiConfig.Model = os.Getenv(constants.EnvKimiModel)
-	}
-	if kimiConfig.Model == "" {
-		kimiConfig.Model = "moonshot-v1-8k"
-	}
-
-	return NewKimiClient(kimiConfig)
+	// 将现有配置转换为 Options，使用 Options 模式创建 Provider
+	return NewKimiWithOptions(ConfigToOptions(config)...)
 }
 
-// kimiRequest Kimi 请求格式（兼容 OpenAI 格式）
+// kimiRequest Kimi 请求格式
 type kimiRequest struct {
 	Model       string        `json:"model"`
 	Messages    []kimiMessage `json:"messages"`
@@ -192,10 +135,10 @@ func (c *KimiClient) Complete(ctx context.Context, req *agentllm.CompletionReque
 
 	// 构建请求
 	kimiReq := kimiRequest{
-		Model:       c.getModel(req.Model),
+		Model:       c.GetModel(req.Model),
 		Messages:    messages,
-		Temperature: c.getTemperature(req.Temperature),
-		MaxTokens:   c.getMaxTokens(req.MaxTokens),
+		Temperature: c.GetTemperature(req.Temperature),
+		MaxTokens:   c.GetMaxTokens(req.MaxTokens),
 		Stream:      false,
 		N:           1,
 	}
@@ -214,8 +157,9 @@ func (c *KimiClient) Complete(ctx context.Context, req *agentllm.CompletionReque
 		SetBody(kimiReq).
 		Post(c.baseURL + "/chat/completions")
 
+	model := c.GetModel(req.Model)
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError("kimi", c.getModel(req.Model), err)
+		return nil, agentErrors.NewLLMRequestError("kimi", model, err)
 	}
 
 	body := resp.Body()
@@ -223,11 +167,11 @@ func (c *KimiClient) Complete(ctx context.Context, req *agentllm.CompletionReque
 	if !resp.IsSuccess() {
 		var errResp kimiError
 		if err := json.Unmarshal(body, &errResp); err == nil && errResp.Error.Message != "" {
-			return nil, agentErrors.NewLLMResponseError("kimi", c.getModel(req.Model),
+			return nil, agentErrors.NewLLMResponseError("kimi", model,
 				fmt.Sprintf("%s (type: %s, code: %s)",
 					errResp.Error.Message, errResp.Error.Type, errResp.Error.Code))
 		}
-		return nil, agentErrors.NewLLMResponseError("kimi", c.getModel(req.Model),
+		return nil, agentErrors.NewLLMResponseError("kimi", model,
 			fmt.Sprintf("API error (status %d): %s", resp.StatusCode(), string(body)))
 	}
 
@@ -239,7 +183,7 @@ func (c *KimiClient) Complete(ctx context.Context, req *agentllm.CompletionReque
 	}
 
 	if len(kimiResp.Choices) == 0 {
-		return nil, agentErrors.NewLLMResponseError("kimi", c.getModel(req.Model), "no choices in response")
+		return nil, agentErrors.NewLLMResponseError("kimi", model, "no choices in response")
 	}
 
 	// 构建响应
@@ -300,13 +244,14 @@ func (c *KimiClient) ListModels() ([]string, error) {
 		SetContext(ctx).
 		Get(c.baseURL + "/models")
 
+	model := c.GetModel("")
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError("kimi", c.model, err).
+		return nil, agentErrors.NewLLMRequestError("kimi", model, err).
 			WithContext("operation", "list_models")
 	}
 
 	if !resp.IsSuccess() {
-		return nil, agentErrors.NewLLMResponseError("kimi", c.model,
+		return nil, agentErrors.NewLLMResponseError("kimi", model,
 			fmt.Sprintf("failed to list models (status %d): %s", resp.StatusCode(), resp.String()))
 	}
 
@@ -364,42 +309,21 @@ func (c *KimiClient) EstimateTokenCount(text string) int {
 
 // 辅助方法
 
-func (c *KimiClient) getModel(model string) string {
-	if model != "" {
-		return model
-	}
-	return c.model
-}
-
-func (c *KimiClient) getTemperature(temp float64) float64 {
-	if temp > 0 {
-		return temp
-	}
-	return c.temperature
-}
-
-func (c *KimiClient) getMaxTokens(maxTokens int) int {
-	if maxTokens > 0 {
-		return maxTokens
-	}
-	return c.maxTokens
-}
-
 // WithModel 设置模型
 func (c *KimiClient) WithModel(model string) *KimiClient {
-	c.model = model
+	c.Config.Model = model
 	return c
 }
 
 // WithTemperature 设置温度
 func (c *KimiClient) WithTemperature(temperature float64) *KimiClient {
-	c.temperature = temperature
+	c.Config.Temperature = temperature
 	return c
 }
 
 // WithMaxTokens 设置最大 token 数
 func (c *KimiClient) WithMaxTokens(maxTokens int) *KimiClient {
-	c.maxTokens = maxTokens
+	c.Config.MaxTokens = maxTokens
 	return c
 }
 
@@ -416,7 +340,7 @@ func (c *KimiClient) ValidateContextSize(messages []agentllm.Message) error {
 		totalTokens += c.EstimateTokenCount(msg.Content)
 	}
 
-	maxContext := c.GetModelContextSize(c.model)
+	maxContext := c.GetModelContextSize(c.GetModel(""))
 	if totalTokens > maxContext {
 		return agentErrors.NewInvalidInputError("kimi", "messages",
 			fmt.Sprintf("estimated tokens (%d) exceed model context size (%d)", totalTokens, maxContext))

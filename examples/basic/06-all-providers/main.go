@@ -22,15 +22,16 @@ func main() {
 	fmt.Println("1. Testing OpenAI Provider")
 	fmt.Println("--------------------------")
 	if apiKey := os.Getenv("OPENAI_API_KEY"); apiKey != "" {
-		config := &llm.LLMOptions{
-			Provider:    constants.ProviderOpenAI,
-			APIKey:      apiKey,
-			Model:       "gpt-3.5-turbo",
-			MaxTokens:   100,
-			Temperature: 0.7,
+		// 使用 Options 模式创建客户端（推荐方式）
+		opts := []llm.ClientOption{
+			llm.WithProvider(constants.ProviderOpenAI),
+			llm.WithAPIKey(apiKey),
+			llm.WithModel("gpt-3.5-turbo"),
+			llm.WithMaxTokens(100),
+			llm.WithTemperature(0.7),
 		}
 
-		client, err := providers.NewOpenAI(config)
+		client, err := providers.NewOpenAIWithOptions(opts...)
 		if err != nil {
 			fmt.Printf("   ❌ Error creating OpenAI client: %v\n", err)
 		} else {
@@ -45,15 +46,16 @@ func main() {
 	fmt.Println("2. Testing Gemini Provider")
 	fmt.Println("--------------------------")
 	if apiKey := os.Getenv("GEMINI_API_KEY"); apiKey != "" {
-		config := &llm.LLMOptions{
-			Provider:    constants.ProviderGemini,
-			APIKey:      apiKey,
-			Model:       "gemini-pro",
-			MaxTokens:   100,
-			Temperature: 0.7,
+		// 使用 Options 模式创建客户端（推荐方式）
+		opts := []llm.ClientOption{
+			llm.WithProvider(constants.ProviderGemini),
+			llm.WithAPIKey(apiKey),
+			llm.WithModel("gemini-pro"),
+			llm.WithMaxTokens(100),
+			llm.WithTemperature(0.7),
 		}
 
-		client, err := providers.NewGemini(config)
+		client, err := providers.NewGeminiWithOptions(opts...)
 		if err != nil {
 			fmt.Printf("   ❌ Error creating Gemini client: %v\n", err)
 		} else {
@@ -68,16 +70,17 @@ func main() {
 	fmt.Println("3. Testing DeepSeek Provider")
 	fmt.Println("----------------------------")
 	if apiKey := os.Getenv("DEEPSEEK_API_KEY"); apiKey != "" {
-		config := &llm.LLMOptions{
-			Provider:    constants.ProviderDeepSeek,
-			APIKey:      apiKey,
-			BaseURL:     "https://api.deepseek.com/v1",
-			Model:       "deepseek-chat",
-			MaxTokens:   100,
-			Temperature: 0.7,
+		// 使用 Options 模式创建客户端（推荐方式）
+		opts := []llm.ClientOption{
+			llm.WithProvider(constants.ProviderDeepSeek),
+			llm.WithAPIKey(apiKey),
+			llm.WithBaseURL("https://api.deepseek.com/v1"),
+			llm.WithModel("deepseek-chat"),
+			llm.WithMaxTokens(100),
+			llm.WithTemperature(0.7),
 		}
 
-		client, err := providers.NewDeepSeek(config)
+		client, err := providers.NewDeepSeekWithOptions(opts...)
 		if err != nil {
 			fmt.Printf("   ❌ Error creating DeepSeek client: %v\n", err)
 		} else {
@@ -91,8 +94,10 @@ func main() {
 	// 4. Test Ollama Provider (Local)
 	fmt.Println("4. Testing Ollama Provider")
 	fmt.Println("--------------------------")
-	ollamaClient := providers.NewOllamaClientSimple("llama2")
-	if ollamaClient.IsAvailable() {
+	ollamaClient, err := providers.NewOllamaClientSimple("llama2")
+	if err != nil {
+		fmt.Printf("   ❌ Error creating Ollama client: %v\n", err)
+	} else if ollamaClient.IsAvailable() {
 		testProvider(ctx, ollamaClient, "Ollama")
 	} else {
 		fmt.Println("   ⚠️  Ollama not running locally, skipping")
@@ -105,15 +110,16 @@ func main() {
 	fmt.Println("5. Testing SiliconFlow Provider")
 	fmt.Println("-------------------------------")
 	if apiKey := os.Getenv("SILICONFLOW_API_KEY"); apiKey != "" {
-		config := &llm.LLMOptions{
-			Provider:    constants.ProviderSiliconFlow,
-			APIKey:      apiKey,
-			Model:       "Qwen/Qwen2-7B-Instruct",
-			MaxTokens:   100,
-			Temperature: 0.7,
+		// 使用 Options 模式创建客户端（推荐方式）
+		opts := []llm.ClientOption{
+			llm.WithProvider(constants.ProviderSiliconFlow),
+			llm.WithAPIKey(apiKey),
+			llm.WithModel("Qwen/Qwen2-7B-Instruct"),
+			llm.WithMaxTokens(100),
+			llm.WithTemperature(0.7),
 		}
 
-		client, err := providers.NewSiliconFlow(config)
+		client, err := providers.NewSiliconFlowWithOptions(opts...)
 		if err != nil {
 			fmt.Printf("   ❌ Error creating SiliconFlow client: %v\n", err)
 		} else {
@@ -139,15 +145,16 @@ func main() {
 	fmt.Println("6. Testing Kimi Provider")
 	fmt.Println("------------------------")
 	if apiKey := os.Getenv("KIMI_API_KEY"); apiKey != "" {
-		config := &llm.LLMOptions{
-			Provider:    constants.ProviderKimi,
-			APIKey:      apiKey,
-			Model:       "moonshot-v1-8k",
-			MaxTokens:   100,
-			Temperature: 0.7,
+		// 使用 Options 模式创建客户端（推荐方式）
+		opts := []llm.ClientOption{
+			llm.WithProvider(constants.ProviderKimi),
+			llm.WithAPIKey(apiKey),
+			llm.WithModel("moonshot-v1-8k"),
+			llm.WithMaxTokens(100),
+			llm.WithTemperature(0.7),
 		}
 
-		client, err := providers.NewKimi(config)
+		client, err := providers.NewKimiWithOptions(opts...)
 		if err != nil {
 			fmt.Printf("   ❌ Error creating Kimi client: %v\n", err)
 		} else {
@@ -232,7 +239,8 @@ func selectProviderByRequirement(requirement string) llm.Client {
 
 	case "local-privacy":
 		// Use Ollama for local execution
-		return providers.NewOllamaClientSimple("llama2")
+		client, _ := providers.NewOllamaClientSimple("llama2")
+		return client
 
 	case "chinese":
 		// Use DeepSeek or Kimi for Chinese
@@ -256,7 +264,8 @@ func selectProviderByRequirement(requirement string) llm.Client {
 			return client
 		}
 		// Fallback to Ollama Codellama
-		return providers.NewOllamaClientSimple("codellama")
+		client, _ := providers.NewOllamaClientSimple("codellama")
+		return client
 
 	case "multimodal":
 		// Use Gemini for multimodal

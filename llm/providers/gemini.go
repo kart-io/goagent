@@ -20,69 +20,71 @@ import (
 
 // GeminiProvider implements LLM interface for Google Gemini
 type GeminiProvider struct {
-	client      *genai.Client
-	config      *agentllm.LLMOptions
-	model       *genai.GenerativeModel
-	modelName   string
-	maxTokens   int
-	temperature float64
+	*BaseProvider
+	client    *genai.Client
+	model     *genai.GenerativeModel
+	modelName string
 }
 
-// NewGemini creates a new Gemini provider
-func NewGemini(config *agentllm.LLMOptions) (*GeminiProvider, error) {
-	if config.APIKey == "" {
-		return nil, agentErrors.NewInvalidConfigError(string(constants.ProviderGemini), constants.ErrorFieldAPIKey, "Gemini API key is required")
+// NewGeminiWithOptions creates a new Gemini provider using options pattern
+func NewGeminiWithOptions(opts ...agentllm.ClientOption) (*GeminiProvider, error) {
+	// 创建 BaseProvider，统一处理 Options
+	base := NewBaseProvider(opts...)
+
+	// 应用 Provider 特定的默认值
+	base.ApplyProviderDefaults(
+		constants.ProviderGemini,
+		"", // Gemini 不使用 BaseURL
+		"gemini-pro",
+		constants.EnvGeminiBaseURL,
+		constants.EnvGeminiModel,
+	)
+
+	// 统一处理 API Key
+	if err := base.EnsureAPIKey(constants.EnvGeminiAPIKey, constants.ProviderGemini); err != nil {
+		return nil, err
 	}
 
 	ctx := context.Background()
 
 	// Create client with API key
-	client, err := genai.NewClient(ctx, config.APIKey, "", option.WithAPIKey(config.APIKey))
+	client, err := genai.NewClient(ctx, base.Config.APIKey, "", option.WithAPIKey(base.Config.APIKey))
 	if err != nil {
 		return nil, agentErrors.NewAgentInitializationError("gemini_provider", err).
 			WithContext("provider", "gemini")
 	}
 
-	modelName := config.Model
-	if modelName == "" {
-		modelName = "gemini-pro"
-	}
+	modelName := base.Config.Model
 
 	// Initialize the model
 	model := client.GenerativeModel(modelName)
 
-	// Configure model parameters
-	if config.MaxTokens > 0 {
-		// Validate MaxTokens to prevent overflow
-		safeMaxTokens := config.MaxTokens
-		if safeMaxTokens > 0x7FFFFFFF { // Max int32
-			safeMaxTokens = 0x7FFFFFFF
-		}
-		maxTokens := int32(safeMaxTokens)
-		model.MaxOutputTokens = &maxTokens
-	} else {
-		defaultTokens := int32(2000)
-		model.MaxOutputTokens = &defaultTokens
+	// Configure model parameters using BaseProvider methods
+	maxTokens := base.GetMaxTokens(0)
+	if maxTokens > 0x7FFFFFFF { // Max int32
+		maxTokens = 0x7FFFFFFF
 	}
+	maxTokensInt32 := int32(maxTokens)
+	model.MaxOutputTokens = &maxTokensInt32
 
-	if config.Temperature > 0 {
-		temp := float32(config.Temperature)
-		model.Temperature = &temp
-	} else {
-		defaultTemp := float32(0.7)
-		model.Temperature = &defaultTemp
-	}
+	temperature := base.GetTemperature(0)
+	tempFloat32 := float32(temperature)
+	model.Temperature = &tempFloat32
 
 	provider := &GeminiProvider{
-		client:      client,
-		config:      config,
-		model:       model,
-		modelName:   modelName,
-		maxTokens:   int(*model.MaxOutputTokens),
-		temperature: float64(*model.Temperature),
+		BaseProvider: base,
+		client:       client,
+		model:        model,
+		modelName:    modelName,
 	}
 
 	return provider, nil
+}
+
+// NewGemini creates a new Gemini provider (backward compatible)
+func NewGemini(config *agentllm.LLMOptions) (*GeminiProvider, error) {
+	// 将现有配置转换为 Options，使用 Options 模式创建 Provider
+	return NewGeminiWithOptions(ConfigToOptions(config)...)
 }
 
 // Complete implements basic text completion
@@ -123,20 +125,17 @@ func (p *GeminiProvider) Complete(ctx context.Context, req *agentllm.CompletionR
 		return nil, agentErrors.NewInvalidInputError("gemini_provider", "last_message", "last message must be from user")
 	}
 
-	// Apply request-specific parameters
-	if req.MaxTokens > 0 {
-		// Validate MaxTokens to prevent overflow
-		safeMaxTokens := req.MaxTokens
-		if safeMaxTokens > 0x7FFFFFFF { // Max int32
-			safeMaxTokens = 0x7FFFFFFF
-		}
-		maxTokens := int32(safeMaxTokens)
-		p.model.MaxOutputTokens = &maxTokens
+	// Apply request-specific parameters using BaseProvider
+	maxTokens := p.GetMaxTokens(req.MaxTokens)
+	if maxTokens > 0x7FFFFFFF { // Max int32
+		maxTokens = 0x7FFFFFFF
 	}
-	if req.Temperature > 0 {
-		temp := float32(req.Temperature)
-		p.model.Temperature = &temp
-	}
+	maxTokensInt32 := int32(maxTokens)
+	p.model.MaxOutputTokens = &maxTokensInt32
+
+	temperature := p.GetTemperature(req.Temperature)
+	tempFloat32 := float32(temperature)
+	p.model.Temperature = &tempFloat32
 
 	// Send the message
 	resp, err := cs.SendMessage(ctx, genai.Text(lastMessage.Content))
@@ -218,18 +217,21 @@ func (p *GeminiProvider) GenerateWithTools(ctx context.Context, prompt string, t
 	// Convert tools to Gemini function declarations
 	functionDeclarations := p.convertToolsToFunctions(tools)
 
-	// Configure model with tools
-	model := p.client.GenerativeModel(p.modelName)
-	temp := float32(p.temperature)
-	model.Temperature = &temp
+	// Configure model with tools using BaseProvider
+	modelName := p.GetModel("")
+	maxTokens := p.GetMaxTokens(0)
+	temperature := p.GetTemperature(0)
+
+	model := p.client.GenerativeModel(modelName)
+	tempFloat32 := float32(temperature)
+	model.Temperature = &tempFloat32
 
 	// Validate maxTokens to prevent overflow
-	safeMaxTokens := p.maxTokens
-	if safeMaxTokens > 0x7FFFFFFF { // Max int32
-		safeMaxTokens = 0x7FFFFFFF
+	if maxTokens > 0x7FFFFFFF { // Max int32
+		maxTokens = 0x7FFFFFFF
 	}
-	maxTokens := int32(safeMaxTokens)
-	model.MaxOutputTokens = &maxTokens
+	maxTokensInt32 := int32(maxTokens)
+	model.MaxOutputTokens = &maxTokensInt32
 	model.Tools = []*genai.Tool{
 		{FunctionDeclarations: functionDeclarations},
 	}
@@ -240,12 +242,12 @@ func (p *GeminiProvider) GenerateWithTools(ctx context.Context, prompt string, t
 	// Send message
 	resp, err := cs.SendMessage(ctx, genai.Text(prompt))
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError("gemini", p.modelName, err).
+		return nil, agentErrors.NewLLMRequestError("gemini", modelName, err).
 			WithContext("tool_calling", true)
 	}
 
 	if len(resp.Candidates) == 0 {
-		return nil, agentErrors.NewLLMResponseError("gemini", p.modelName, "no candidates returned")
+		return nil, agentErrors.NewLLMResponseError("gemini", modelName, "no candidates returned")
 	}
 
 	result := &ToolCallResponse{}
@@ -280,12 +282,19 @@ func (p *GeminiProvider) StreamWithTools(ctx context.Context, prompt string, too
 	// Convert tools to Gemini function declarations
 	functionDeclarations := p.convertToolsToFunctions(tools)
 
-	// Configure model with tools
-	model := p.client.GenerativeModel(p.modelName)
-	temp := float32(p.temperature)
-	model.Temperature = &temp
-	maxTokens := int32(p.maxTokens)
-	model.MaxOutputTokens = &maxTokens
+	// Configure model with tools using BaseProvider
+	modelName := p.GetModel("")
+	maxTokens := p.GetMaxTokens(0)
+	temperature := p.GetTemperature(0)
+
+	model := p.client.GenerativeModel(modelName)
+	tempFloat32 := float32(temperature)
+	model.Temperature = &tempFloat32
+	if maxTokens > 0x7FFFFFFF { // Max int32
+		maxTokens = 0x7FFFFFFF
+	}
+	maxTokensInt32 := int32(maxTokens)
+	model.MaxOutputTokens = &maxTokensInt32
 	model.Tools = []*genai.Tool{
 		{FunctionDeclarations: functionDeclarations},
 	}
@@ -405,12 +414,12 @@ func (p *GeminiProvider) IsAvailable() bool {
 
 // ModelName returns the model name
 func (p *GeminiProvider) ModelName() string {
-	return p.modelName
+	return p.GetModel("")
 }
 
 // MaxTokens returns the max tokens setting
 func (p *GeminiProvider) MaxTokens() int {
-	return p.maxTokens
+	return p.GetMaxTokens(0)
 }
 
 // convertToolsToFunctions converts our tools to Gemini function format

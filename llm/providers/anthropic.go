@@ -23,13 +23,10 @@ import (
 
 // AnthropicProvider implements LLM interface for Anthropic Claude
 type AnthropicProvider struct {
-	config      *agentllm.LLMOptions
-	client      *httpclient.Client
-	apiKey      string
-	baseURL     string
-	model       string
-	maxTokens   int
-	temperature float64
+	*BaseProvider
+	client  *httpclient.Client
+	apiKey  string
+	baseURL string
 }
 
 // AnthropicRequest represents a request to Anthropic API
@@ -103,73 +100,52 @@ type AnthropicErrorDetails struct {
 	Message string `json:"message"`
 }
 
-// NewAnthropic creates a new Anthropic provider
-func NewAnthropic(config *agentllm.LLMOptions) (*AnthropicProvider, error) {
-	// Get API key from config or env
-	apiKey := config.APIKey
-	if apiKey == "" {
-		apiKey = os.Getenv(constants.EnvAnthropicAPIKey)
+// NewAnthropicWithOptions creates a new Anthropic provider using options pattern
+func NewAnthropicWithOptions(opts ...agentllm.ClientOption) (*AnthropicProvider, error) {
+	// 创建 BaseProvider，统一处理 Options
+	base := NewBaseProvider(opts...)
+
+	// 应用 Provider 特定的默认值
+	base.ApplyProviderDefaults(
+		constants.ProviderAnthropic,
+		constants.AnthropicBaseURL,
+		constants.AnthropicDefaultModel,
+		constants.EnvAnthropicBaseURL,
+		constants.EnvAnthropicModel,
+	)
+
+	// 统一处理 API Key
+	if err := base.EnsureAPIKey(constants.EnvAnthropicAPIKey, constants.ProviderAnthropic); err != nil {
+		return nil, err
 	}
 
-	if apiKey == "" {
-		return nil, agentErrors.NewInvalidConfigError(string(constants.ProviderAnthropic), constants.ErrorFieldAPIKey, fmt.Sprintf(constants.ErrAPIKeyMissing, "ANTHROPIC"))
-	}
-
-	// Set base URL with fallback
-	baseURL := config.BaseURL
-	if baseURL == "" {
-		baseURL = os.Getenv(constants.EnvAnthropicBaseURL)
-	}
-	if baseURL == "" {
-		baseURL = constants.AnthropicBaseURL
-	}
-
-	// Set model with fallback
-	model := config.Model
-	if model == "" {
-		model = os.Getenv(constants.EnvAnthropicModel)
-	}
-	if model == "" {
-		model = constants.AnthropicDefaultModel
-	}
-
-	// Set other parameters with defaults
-	maxTokens := config.MaxTokens
-	if maxTokens == 0 {
-		maxTokens = constants.DefaultMaxTokens
-	}
-
-	temperature := config.Temperature
-	if temperature == 0 {
-		temperature = constants.DefaultTemperature
-	}
-
-	timeout := time.Duration(config.Timeout) * time.Second
-	if timeout == 0 {
-		timeout = constants.DefaultTimeout
-	}
+	// 获取超时时间
+	timeout := base.GetTimeout()
 
 	// Create httpclient
 	client := httpclient.NewClient(&httpclient.Config{
 		Timeout: timeout,
 		Headers: map[string]string{
 			constants.HeaderContentType:      constants.ContentTypeJSON,
-			constants.HeaderXAPIKey:          apiKey,
+			constants.HeaderXAPIKey:          base.Config.APIKey,
 			constants.HeaderAnthropicVersion: constants.AnthropicAPIVersion,
 		},
 	})
 
 	provider := &AnthropicProvider{
-		config:      config,
-		client:      client,
-		apiKey:      apiKey,
-		baseURL:     baseURL,
-		model:       model,
-		maxTokens:   maxTokens,
-		temperature: temperature,
+		BaseProvider: base,
+		client:       client,
+		apiKey:       base.Config.APIKey,
+		baseURL:      base.Config.BaseURL,
 	}
 
 	return provider, nil
+}
+
+// NewAnthropic creates a new Anthropic provider (backward compatible)
+func NewAnthropic(config *agentllm.LLMOptions) (*AnthropicProvider, error) {
+	// 将现有配置转换为 Options，使用 Options 模式创建 Provider
+	return NewAnthropicWithOptions(ConfigToOptions(config)...)
 }
 
 // Complete implements basic text completion
@@ -204,21 +180,10 @@ func (p *AnthropicProvider) buildRequest(req *agentllm.CompletionRequest) *Anthr
 		}
 	}
 
-	// Use request parameters or provider defaults
-	model := p.model
-	if req.Model != "" {
-		model = req.Model
-	}
-
-	maxTokens := p.maxTokens
-	if req.MaxTokens > 0 {
-		maxTokens = req.MaxTokens
-	}
-
-	temperature := p.temperature
-	if req.Temperature > 0 {
-		temperature = req.Temperature
-	}
+	// 使用 BaseProvider 的统一参数处理方法
+	model := p.GetModel(req.Model)
+	maxTokens := p.GetMaxTokens(req.MaxTokens)
+	temperature := p.GetTemperature(req.Temperature)
 
 	return &AnthropicRequest{
 		Model:         model,
@@ -240,7 +205,7 @@ func (p *AnthropicProvider) execute(ctx context.Context, req *AnthropicRequest) 
 		Post(p.baseURL + constants.AnthropicMessagesPath)
 
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError(string(constants.ProviderAnthropic), p.model, err)
+		return nil, agentErrors.NewLLMRequestError(string(constants.ProviderAnthropic), req.Model, err)
 	}
 
 	// Check status code
@@ -407,12 +372,16 @@ func (p *AnthropicProvider) IsAvailable() bool {
 func (p *AnthropicProvider) Stream(ctx context.Context, prompt string) (<-chan string, error) {
 	tokens := make(chan string, 100)
 
+	model := p.GetModel("")
+	maxTokens := p.GetMaxTokens(0)
+	temperature := p.GetTemperature(0)
+
 	// Build streaming request
 	req := &AnthropicRequest{
-		Model:       p.model,
+		Model:       model,
 		Messages:    []AnthropicMessage{{Role: constants.RoleUser, Content: prompt}},
-		MaxTokens:   p.maxTokens,
-		Temperature: p.temperature,
+		MaxTokens:   maxTokens,
+		Temperature: temperature,
 		Stream:      true,
 	}
 
@@ -425,11 +394,11 @@ func (p *AnthropicProvider) Stream(ctx context.Context, prompt string) (<-chan s
 	// Execute streaming request
 	resp, err := streamClient.Post(p.baseURL + constants.AnthropicMessagesPath)
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError(string(constants.ProviderAnthropic), p.model, err)
+		return nil, agentErrors.NewLLMRequestError(string(constants.ProviderAnthropic), model, err)
 	}
 
 	if !resp.IsSuccess() {
-		return nil, p.handleHTTPError(resp, p.model)
+		return nil, p.handleHTTPError(resp, model)
 	}
 
 	// Start goroutine to read stream
@@ -480,10 +449,10 @@ func (p *AnthropicProvider) Stream(ctx context.Context, prompt string) (<-chan s
 
 // ModelName returns the model name
 func (p *AnthropicProvider) ModelName() string {
-	return p.model
+	return p.GetModel("")
 }
 
 // MaxTokens returns the max tokens setting
 func (p *AnthropicProvider) MaxTokens() int {
-	return p.maxTokens
+	return p.GetMaxTokens(0)
 }
