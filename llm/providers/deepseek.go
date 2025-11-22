@@ -112,38 +112,38 @@ type DeepSeekStreamResponse struct {
 }
 
 // NewDeepSeek creates a new DeepSeek provider
-func NewDeepSeek(config *agentllm.LLMOptions) (*DeepSeekProvider, error) {
-	if config.APIKey == "" {
+func NewDeepSeek(opts *agentllm.LLMOptions) (*DeepSeekProvider, error) {
+	if opts.APIKey == "" {
 		return nil, agentErrors.NewInvalidConfigError(string(constants.ProviderDeepSeek), constants.ErrorFieldAPIKey, "DeepSeek API key is required")
 	}
 
-	baseURL := config.BaseURL
+	baseURL := opts.BaseURL
 	if baseURL == "" {
 		baseURL = constants.DeepSeekBaseURL
 	}
 
-	model := config.Model
+	model := opts.Model
 	if model == "" {
 		model = "deepseek-chat"
 	}
 
 	client := httpclient.NewClient(&httpclient.Config{
-		Timeout: time.Duration(config.Timeout) * time.Second,
+		Timeout: time.Duration(opts.Timeout) * time.Second,
 		Headers: map[string]string{
 			"Content-Type":  "application/json",
 			"Accept":        "application/json",
-			"Authorization": "Bearer " + config.APIKey,
+			"Authorization": "Bearer " + opts.APIKey,
 		},
 	})
 
 	provider := &DeepSeekProvider{
-		config:      config,
+		config:      opts,
 		client:      client,
-		apiKey:      config.APIKey,
+		apiKey:      opts.APIKey,
 		baseURL:     baseURL,
 		model:       model,
-		maxTokens:   config.MaxTokens,
-		temperature: config.Temperature,
+		maxTokens:   opts.MaxTokens,
+		temperature: opts.Temperature,
 	}
 
 	// Set defaults
