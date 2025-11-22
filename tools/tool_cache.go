@@ -136,7 +136,7 @@ func NewMemoryToolCache(config MemoryCacheConfig) *MemoryToolCache {
 		cancel:       cancel,
 		dependencies: make(map[string][]string),
 	}
-	cache.closed.Store(0) // Explicitly initialize to not closed
+	cache.closed.Store(0)  // Explicitly initialize to not closed
 	cache.version.Store(0) // Initialize version
 
 	// 启动清理 goroutine with proper lifecycle management

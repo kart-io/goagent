@@ -51,7 +51,7 @@ func TestSearchTool_Run_Success(t *testing.T) {
 		},
 	}
 
-	output, err := tool.Execute(ctx, input)
+	output, err := tool.Invoke(ctx, input)
 	if err != nil {
 		t.Errorf("Expected no error, got: %v", err)
 	}
@@ -82,7 +82,7 @@ func TestSearchTool_Run_EmptyQuery(t *testing.T) {
 		},
 	}
 
-	output, err := tool.Execute(ctx, input)
+	output, err := tool.Invoke(ctx, input)
 	if err == nil {
 		t.Error("Expected error for empty query")
 	}
@@ -102,7 +102,7 @@ func TestSearchTool_Run_NoQuery(t *testing.T) {
 		Args: map[string]interface{}{},
 	}
 
-	output, err := tool.Execute(ctx, input)
+	output, err := tool.Invoke(ctx, input)
 	if err == nil {
 		t.Error("Expected error when query is missing")
 	}
@@ -427,7 +427,7 @@ func TestSearchTool_Metadata(t *testing.T) {
 		},
 	}
 
-	output, err := tool.Execute(ctx, input)
+	output, err := tool.Invoke(ctx, input)
 	if err != nil {
 		t.Errorf("Expected no error, got: %v", err)
 	}

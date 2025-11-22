@@ -25,6 +25,19 @@ type ShardedToolCache struct {
 	stats        *CacheStats
 	dependencies map[string][]string
 	depMu        sync.RWMutex
+	config       ShardedCacheConfig // 存储配置
+
+	// 自动调优相关
+	lastTuneTime time.Time
+	tuneMetrics  *tuneMetrics
+}
+
+// tuneMetrics 自动调优指标
+type tuneMetrics struct {
+	mu            sync.RWMutex
+	avgHitRate    float64
+	avgLoadFactor float64
+	qpsHistory    []float64
 }
 
 // cacheShard 单个缓存分片
@@ -48,27 +61,75 @@ type ShardedCacheConfig struct {
 
 	// CleanupInterval 清理间隔
 	CleanupInterval time.Duration
+
+	// EvictionPolicy 淘汰策略
+	EvictionPolicy EvictionPolicy
+
+	// CleanupStrategy 清理策略
+	CleanupStrategy CleanupStrategy
+
+	// LoadBalancing 负载均衡策略
+	LoadBalancing LoadBalancingStrategy
+
+	// AutoTuning 自动调优
+	AutoTuning bool
+
+	// MetricsEnabled 是否启用指标收集
+	MetricsEnabled bool
+
+	// MaxConcurrency 每个分片的最大并发数
+	MaxConcurrency int
+
+	// WarmupEntries 预热条目
+	WarmupEntries map[string]*ToolOutput
+
+	// CompressionThreshold 压缩阈值（字节）
+	CompressionThreshold int
+
+	// MaxEntrySize 单个条目最大大小（字节）
+	MaxEntrySize int
+
+	// MemoryLimit 内存限制（字节）
+	MemoryLimit int64
+
+	// WorkloadType 工作负载类型
+	WorkloadType WorkloadType
 }
 
-// NewShardedToolCache 创建分片工具缓存
+// NewShardedToolCache 创建分片工具缓存（使用配置结构体）
 func NewShardedToolCache(config ShardedCacheConfig) *ShardedToolCache {
+	// 应用默认值
 	if config.ShardCount <= 0 || (config.ShardCount&(config.ShardCount-1)) != 0 {
-		// 如果不是 2 的幂，使用默认值 32
 		config.ShardCount = 32
 	}
-
 	if config.Capacity <= 0 {
-		config.Capacity = 1000
+		config.Capacity = 10000
 	}
-
 	if config.DefaultTTL <= 0 {
 		config.DefaultTTL = 5 * time.Minute
 	}
-
 	if config.CleanupInterval <= 0 {
 		config.CleanupInterval = 1 * time.Minute
 	}
 
+	return newShardedToolCacheWithConfig(config)
+}
+
+// NewShardedToolCacheWithOptions 使用选项模式创建分片工具缓存
+func NewShardedToolCacheWithOptions(opts ...ShardedCacheOption) *ShardedToolCache {
+	// 使用默认配置
+	config := DefaultShardedCacheConfig()
+
+	// 应用所有选项
+	for _, opt := range opts {
+		opt(&config)
+	}
+
+	return newShardedToolCacheWithConfig(config)
+}
+
+// newShardedToolCacheWithConfig 内部创建函数
+func newShardedToolCacheWithConfig(config ShardedCacheConfig) *ShardedToolCache {
 	ctx, cancel := context.WithCancel(context.Background())
 	shardCapacity := config.Capacity / int(config.ShardCount)
 	if shardCapacity < 1 {
@@ -82,6 +143,7 @@ func NewShardedToolCache(config ShardedCacheConfig) *ShardedToolCache {
 		cancel:       cancel,
 		stats:        &CacheStats{},
 		dependencies: make(map[string][]string),
+		config:       config,
 	}
 
 	// 初始化分片
@@ -95,10 +157,29 @@ func NewShardedToolCache(config ShardedCacheConfig) *ShardedToolCache {
 
 	cache.closed.Store(0)
 
-	// 启动清理 goroutine
-	if config.CleanupInterval > 0 {
+	// 应用预热条目
+	if config.WarmupEntries != nil {
+		for key, output := range config.WarmupEntries {
+			_ = cache.Set(ctx, key, output, config.DefaultTTL)
+		}
+	}
+
+	// 根据清理策略启动清理
+	switch config.CleanupStrategy {
+	case PeriodicCleanup, HybridCleanup:
+		if config.CleanupInterval > 0 {
+			cache.cleanupDone.Add(1)
+			go cache.cleanupExpired(config.CleanupInterval, config.DefaultTTL)
+		}
+	case AdaptiveCleanup:
 		cache.cleanupDone.Add(1)
-		go cache.cleanupExpired(config.CleanupInterval, config.DefaultTTL)
+		go cache.adaptiveCleanup()
+	}
+
+	// 启动自动调优
+	if config.AutoTuning {
+		cache.cleanupDone.Add(1)
+		go cache.autoTune()
 	}
 
 	return cache
@@ -376,6 +457,12 @@ func (c *ShardedToolCache) GetStats() CacheStats {
 	}
 }
 
+// GetStatsValues 获取统计信息的数值
+func (c *ShardedToolCache) GetStatsValues() (hits, misses, evicts, invalidations int64) {
+	return c.stats.Hits.Load(), c.stats.Misses.Load(),
+		c.stats.Evicts.Load(), c.stats.Invalidations.Load()
+}
+
 // GetVersion 获取当前缓存版本号（分片缓存不使用版本号）
 func (c *ShardedToolCache) GetVersion() int64 {
 	return 0
@@ -460,13 +547,6 @@ func (c *ShardedToolCache) performCleanup() {
 	wg.Wait()
 }
 
-// hashKey 计算键的哈希值用于分片
-func hashKey(key string) uint32 {
-	h := fnv.New32a()
-	h.Write([]byte(key))
-	return h.Sum32()
-}
-
 // CreateShardedCache 创建分片缓存的辅助函数
 func CreateShardedCache() ToolCache {
 	return NewShardedToolCache(ShardedCacheConfig{
@@ -499,4 +579,189 @@ func BenchmarkCompareShardedVsNormal() {
 	// 在高并发场景下，分片缓存性能会显著优于普通缓存
 	// 特别是在多核 CPU 上，分片缓存可以实现近乎线性的扩展
 	log.Println("Sharded cache created for benchmarking")
+}
+
+// adaptiveCleanup 自适应清理策略
+func (c *ShardedToolCache) adaptiveCleanup() {
+	defer c.cleanupDone.Done()
+
+	baseInterval := c.config.CleanupInterval
+	if baseInterval <= 0 {
+		baseInterval = 1 * time.Minute
+	}
+
+	currentInterval := baseInterval
+	ticker := time.NewTicker(currentInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-c.ctx.Done():
+			return
+		case <-ticker.C:
+			// 执行清理
+			cleanedCount := c.performCleanupWithCount()
+
+			// 根据清理的条目数量调整间隔
+			loadFactor := float64(c.Size()) / float64(c.config.Capacity)
+
+			if loadFactor > 0.9 || cleanedCount > c.config.Capacity/10 {
+				// 负载高或清理了很多条目，减少间隔
+				currentInterval = baseInterval / 2
+			} else if loadFactor < 0.5 && cleanedCount < c.config.Capacity/100 {
+				// 负载低且清理很少，增加间隔
+				currentInterval = baseInterval * 2
+			} else {
+				currentInterval = baseInterval
+			}
+
+			// 限制间隔范围
+			if currentInterval < 10*time.Second {
+				currentInterval = 10 * time.Second
+			} else if currentInterval > 10*time.Minute {
+				currentInterval = 10 * time.Minute
+			}
+
+			// 重置ticker
+			ticker.Reset(currentInterval)
+		}
+	}
+}
+
+// performCleanupWithCount 执行清理并返回清理的条目数
+func (c *ShardedToolCache) performCleanupWithCount() int {
+	now := time.Now()
+	totalCleaned := 0
+
+	// 并发清理每个分片
+	var wg sync.WaitGroup
+	cleanedCounts := make([]int, len(c.shards))
+
+	for i, shard := range c.shards {
+		wg.Add(1)
+		go func(idx int, s *cacheShard) {
+			defer wg.Done()
+
+			// 收集过期键
+			s.mu.RLock()
+			expiredKeys := make([]string, 0)
+			for key, entry := range s.cache {
+				if now.After(entry.expireTime) {
+					expiredKeys = append(expiredKeys, key)
+				}
+			}
+			s.mu.RUnlock()
+
+			// 删除过期条目
+			if len(expiredKeys) > 0 {
+				s.mu.Lock()
+				for _, key := range expiredKeys {
+					if entry, exists := s.cache[key]; exists && now.After(entry.expireTime) {
+						s.lruList.Remove(entry.element)
+						delete(s.cache, key)
+						cleanedCounts[idx]++
+					}
+				}
+				s.mu.Unlock()
+			}
+		}(i, shard)
+	}
+	wg.Wait()
+
+	for _, count := range cleanedCounts {
+		totalCleaned += count
+	}
+
+	return totalCleaned
+}
+
+// autoTune 自动调优
+func (c *ShardedToolCache) autoTune() {
+	defer c.cleanupDone.Done()
+
+	// 初始化调优指标
+	c.tuneMetrics = &tuneMetrics{
+		qpsHistory: make([]float64, 0, 60), // 保留60个样本
+	}
+
+	ticker := time.NewTicker(10 * time.Second) // 每10秒检查一次
+	defer ticker.Stop()
+
+	var lastHits, lastMisses int64
+	lastCheck := time.Now()
+
+	for {
+		select {
+		case <-c.ctx.Done():
+			return
+		case <-ticker.C:
+			now := time.Now()
+			duration := now.Sub(lastCheck).Seconds()
+
+			// 计算QPS
+			currentHits := c.stats.Hits.Load()
+			currentMisses := c.stats.Misses.Load()
+			totalRequests := (currentHits - lastHits) + (currentMisses - lastMisses)
+			qps := float64(totalRequests) / duration
+
+			// 更新指标
+			c.tuneMetrics.mu.Lock()
+			c.tuneMetrics.qpsHistory = append(c.tuneMetrics.qpsHistory, qps)
+			if len(c.tuneMetrics.qpsHistory) > 60 {
+				c.tuneMetrics.qpsHistory = c.tuneMetrics.qpsHistory[1:]
+			}
+
+			// 计算命中率
+			if totalRequests > 0 {
+				c.tuneMetrics.avgHitRate = float64(currentHits-lastHits) / float64(totalRequests)
+			}
+
+			// 计算负载因子
+			c.tuneMetrics.avgLoadFactor = float64(c.Size()) / float64(c.config.Capacity)
+			c.tuneMetrics.mu.Unlock()
+
+			// 每分钟执行一次调优决策
+			if now.Sub(c.lastTuneTime) >= time.Minute {
+				c.performTuning()
+				c.lastTuneTime = now
+			}
+
+			lastHits = currentHits
+			lastMisses = currentMisses
+			lastCheck = now
+		}
+	}
+}
+
+// performTuning 执行调优决策
+func (c *ShardedToolCache) performTuning() {
+	c.tuneMetrics.mu.RLock()
+	defer c.tuneMetrics.mu.RUnlock()
+
+	if len(c.tuneMetrics.qpsHistory) < 6 {
+		return // 需要至少1分钟的数据
+	}
+
+	// 计算平均QPS
+	var avgQPS float64
+	for _, qps := range c.tuneMetrics.qpsHistory {
+		avgQPS += qps
+	}
+	avgQPS /= float64(len(c.tuneMetrics.qpsHistory))
+
+	// 根据指标调整配置
+	// 注意：分片数量在运行时不能更改，但可以记录建议供下次重启使用
+	if avgQPS > 1000 && c.tuneMetrics.avgHitRate < 0.7 {
+		log.Printf("Auto-tuning: High QPS (%.2f) with low hit rate (%.2f%%). Consider increasing cache capacity or TTL.",
+			avgQPS, c.tuneMetrics.avgHitRate*100)
+	}
+
+	if c.tuneMetrics.avgLoadFactor > 0.95 {
+		log.Printf("Auto-tuning: Cache nearly full (%.2f%%). Consider increasing capacity.",
+			c.tuneMetrics.avgLoadFactor*100)
+	}
+
+	// 可以动态调整的参数示例：
+	// - 调整清理间隔（已在adaptiveCleanup中实现）
+	// - 记录性能建议供监控系统使用
 }

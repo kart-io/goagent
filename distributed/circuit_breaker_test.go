@@ -14,8 +14,8 @@ import (
 // TestCircuitBreaker_NewCircuitBreaker tests circuit breaker creation
 func TestCircuitBreaker_NewCircuitBreaker(t *testing.T) {
 	tests := []struct {
-		name           string
-		config         *CircuitBreakerConfig
+		name            string
+		config          *CircuitBreakerConfig
 		expectedMaxFail uint32
 		expectedTimeout time.Duration
 	}{
