@@ -146,31 +146,38 @@ func demo4BuilderPattern() {
 	fmt.Println("\n📌 Demo 4: Builder 模式")
 	fmt.Println("-----------------------------------")
 
-	// 使用 Builder 创建配置
-	builder := providers.NewOpenAIBuilder().
-		WithAPIKey("demo-key").
-		WithModel("gpt-4-turbo-preview").
-		WithTemperature(0.7).
-		WithMaxTokens(4000).
-		WithPreset(llm.PresetHighQuality).
-		WithRetry(3, 2*time.Second).
-		WithCache(15 * time.Minute).
-		WithUseCase(llm.UseCaseAnalysis)
+	// 使用 Option 模式创建配置（Builder 模式已废弃，统一使用 Option 模式）
+	client, err := providers.NewOpenAIWithOptions(
+		llm.WithAPIKey("demo-key"),
+		llm.WithModel("gpt-4-turbo-preview"),
+		llm.WithTemperature(0.7),
+		llm.WithMaxTokens(4000),
+		llm.WithPreset(llm.PresetHighQuality),
+		llm.WithRetryCount(3),
+		llm.WithRetryDelay(2*time.Second),
+		llm.WithCache(true, 15*time.Minute),
+		llm.WithUseCase(llm.UseCaseAnalysis),
+	)
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		return
+	}
+	_ = client
 
-	fmt.Println("Builder 链式调用配置:")
-	fmt.Println("  builder := providers.NewOpenAIBuilder().")
-	fmt.Println("    WithAPIKey(\"your-key\").")
-	fmt.Println("    WithModel(\"gpt-4-turbo-preview\").")
-	fmt.Println("    WithTemperature(0.7).")
-	fmt.Println("    WithMaxTokens(4000).")
-	fmt.Println("    WithPreset(PresetHighQuality).")
-	fmt.Println("    WithRetry(3, 2*time.Second).")
-	fmt.Println("    WithCache(15*time.Minute).")
-	fmt.Println("    WithUseCase(UseCaseAnalysis).")
-	fmt.Println("    Build()")
+	fmt.Println("Option 模式配置（推荐方式）:")
+	fmt.Println("  client, err := providers.NewOpenAIWithOptions(")
+	fmt.Println("    llm.WithAPIKey(\"your-key\"),")
+	fmt.Println("    llm.WithModel(\"gpt-4-turbo-preview\"),")
+	fmt.Println("    llm.WithTemperature(0.7),")
+	fmt.Println("    llm.WithMaxTokens(4000),")
+	fmt.Println("    llm.WithPreset(PresetHighQuality),")
+	fmt.Println("    llm.WithRetryCount(3),")
+	fmt.Println("    llm.WithRetryDelay(2*time.Second),")
+	fmt.Println("    llm.WithCache(true, 15*time.Minute),")
+	fmt.Println("    llm.WithUseCase(UseCaseAnalysis),")
+	fmt.Println("  )")
 
-	fmt.Println("\n✅ Builder 配置完成（未实际创建客户端以避免 API 错误）")
-	_ = builder
+	fmt.Println("\n✅ Option 模式配置完成")
 }
 
 func demo5FactoryMethods() {

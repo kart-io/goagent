@@ -89,19 +89,15 @@ func initializeDeepSeekClient() (llm.Client, error) {
 	}
 
 	fmt.Println("使用 DeepSeek Chat 模型")
-
-	// 创建 DeepSeek 客户端
-	client, err := providers.NewDeepSeek(&llm.LLMOptions{
-		APIKey:      apiKey,
-		Model:       "deepseek-chat", // DeepSeek 的对话模型
-		Temperature: 0.3,             // 较低温度以获得更准确的翻译
-		MaxTokens:   2000,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("创建 DeepSeek 客户端失败: %w", err)
+	opts := []llm.ClientOption{
+		llm.WithAPIKey(apiKey),
+		llm.WithModel("deepseek-chat"),
+		llm.WithTemperature(0.3),
+		llm.WithMaxTokens(2000),
 	}
 
-	return client, nil
+	// 创建 DeepSeek 客户端
+	return providers.NewDeepSeekWithOptions(opts...)
 }
 
 // MultiAgentTranslator 多代理翻译器

@@ -70,9 +70,10 @@ func main() {
 	}
 
 	// 4. Ollama Provider (新增)
-	ollamaClient := providers.NewOllamaClientSimple("llama2")
-	clients = append(clients, ollamaClient)
-	fmt.Println("✅ Ollama Provider 创建成功")
+	if ollamaClient, err := providers.NewOllamaClientSimple("llama2"); err == nil {
+		clients = append(clients, ollamaClient)
+		fmt.Println("✅ Ollama Provider 创建成功")
+	}
 
 	fmt.Println()
 	fmt.Println("=== 测试所有 Provider 的统一接口 ===")

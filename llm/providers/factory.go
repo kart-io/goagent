@@ -16,54 +16,45 @@ func NewClientFactory() *ClientFactory {
 	return &ClientFactory{}
 }
 
-// needsEnhancedFeatures 检查是否需要增强功能
-func needsEnhancedFeatures(config *agentllm.LLMOptions) bool {
-	return config.RetryCount > 0 ||
-		config.CacheEnabled ||
-		config.SystemPrompt != "" ||
-		config.StreamingEnabled ||
-		len(config.CustomHeaders) > 0 ||
-		config.OrganizationID != ""
-}
-
 // CreateClient 根据配置创建相应的 LLM 客户端
+// 内部使用 Options 模式，确保统一的配置处理
 func (f *ClientFactory) CreateClient(config *agentllm.LLMOptions) (agentllm.Client, error) {
 	// 准备配置（验证、设置默认值、从环境变量读取）
 	if err := agentllm.PrepareConfig(config); err != nil {
 		return nil, err
 	}
 
-	// 根据提供商创建客户端
+	// 将配置转换为 Options，使用统一的 WithOptions 版本
+	opts := ConfigToOptions(config)
+
+	// 根据提供商创建客户端，优先使用 WithOptions 版本
 	switch config.Provider {
 	case constants.ProviderOpenAI:
-		if needsEnhancedFeatures(config) {
-			return NewEnhancedOpenAI(config)
-		}
-		return NewOpenAI(config)
+		return NewOpenAIWithOptions(opts...)
 
 	case constants.ProviderAnthropic:
-		return NewAnthropic(config)
+		return NewAnthropicWithOptions(opts...)
 
 	case constants.ProviderGemini:
-		return NewGemini(config)
+		return NewGeminiWithOptions(opts...)
 
 	case constants.ProviderDeepSeek:
-		return NewDeepSeek(config)
+		return NewDeepSeekWithOptions(opts...)
 
 	case constants.ProviderKimi:
-		return NewKimi(config)
+		return NewKimiWithOptions(opts...)
 
 	case constants.ProviderSiliconFlow:
-		return NewSiliconFlow(config)
+		return NewSiliconFlowWithOptions(opts...)
 
 	case constants.ProviderOllama:
-		return NewOllama(config)
+		return NewOllamaWithOptions(opts...)
 
 	case constants.ProviderCohere:
-		return NewCohere(config)
+		return NewCohereWithOptions(opts...)
 
 	case constants.ProviderHuggingFace:
-		return NewHuggingFace(config)
+		return NewHuggingFaceWithOptions(opts...)
 
 	default:
 		return nil, fmt.Errorf("unsupported provider: %s", config.Provider)
@@ -81,37 +72,30 @@ func (f *ClientFactory) CreateClientWithOptions(opts ...agentllm.ClientOption) (
 
 // 便捷方法
 
-// CreateOpenAIClient 创建 OpenAI 客户端
-func CreateOpenAIClient(apiKey string, opts ...agentllm.ClientOption) (agentllm.Client, error) {
+// createClientWithProvider 通用的客户端创建辅助函数
+func createClientWithProvider(provider constants.Provider, apiKey string, opts ...agentllm.ClientOption) (agentllm.Client, error) {
 	factory := NewClientFactory()
 	allOpts := append([]agentllm.ClientOption{
-		agentllm.WithProvider(constants.ProviderOpenAI),
+		agentllm.WithProvider(provider),
 		agentllm.WithAPIKey(apiKey),
 	}, opts...)
 
 	return factory.CreateClientWithOptions(allOpts...)
+}
+
+// CreateOpenAIClient 创建 OpenAI 客户端
+func CreateOpenAIClient(apiKey string, opts ...agentllm.ClientOption) (agentllm.Client, error) {
+	return createClientWithProvider(constants.ProviderOpenAI, apiKey, opts...)
 }
 
 // CreateAnthropicClient 创建 Anthropic 客户端
 func CreateAnthropicClient(apiKey string, opts ...agentllm.ClientOption) (agentllm.Client, error) {
-	factory := NewClientFactory()
-	allOpts := append([]agentllm.ClientOption{
-		agentllm.WithProvider(constants.ProviderAnthropic),
-		agentllm.WithAPIKey(apiKey),
-	}, opts...)
-
-	return factory.CreateClientWithOptions(allOpts...)
+	return createClientWithProvider(constants.ProviderAnthropic, apiKey, opts...)
 }
 
 // CreateGeminiClient 创建 Gemini 客户端
 func CreateGeminiClient(apiKey string, opts ...agentllm.ClientOption) (agentllm.Client, error) {
-	factory := NewClientFactory()
-	allOpts := append([]agentllm.ClientOption{
-		agentllm.WithProvider(constants.ProviderGemini),
-		agentllm.WithAPIKey(apiKey),
-	}, opts...)
-
-	return factory.CreateClientWithOptions(allOpts...)
+	return createClientWithProvider(constants.ProviderGemini, apiKey, opts...)
 }
 
 // CreateOllamaClient 创建 Ollama 客户端（本地运行，不需要 API key）

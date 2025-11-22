@@ -44,9 +44,9 @@ func TestNewCohere(t *testing.T) {
 			checkResult: func(t *testing.T, p *CohereProvider) {
 				assert.Equal(t, "test-key", p.apiKey)
 				assert.Equal(t, "https://custom.cohere.com", p.baseURL)
-				assert.Equal(t, "command-r", p.model)
-				assert.Equal(t, 4000, p.maxTokens)
-				assert.Equal(t, 0.8, p.temperature)
+				assert.Equal(t, "command-r", p.GetModel(""))
+				assert.Equal(t, 4000, p.GetMaxTokens(0))
+				assert.Equal(t, 0.8, p.GetTemperature(0))
 			},
 		},
 		{
@@ -58,9 +58,9 @@ func TestNewCohere(t *testing.T) {
 			checkResult: func(t *testing.T, p *CohereProvider) {
 				assert.Equal(t, "test-key", p.apiKey)
 				assert.Equal(t, "https://api.cohere.ai", p.baseURL)
-				assert.Equal(t, "command-r-plus", p.model)
-				assert.Equal(t, 1000, p.maxTokens)
-				assert.Equal(t, 0.7, p.temperature)
+				assert.Equal(t, "command-r-plus", p.GetModel(""))
+				assert.Equal(t, 1000, p.GetMaxTokens(0))
+				assert.Equal(t, 0.7, p.GetTemperature(0))
 			},
 		},
 		{
@@ -72,7 +72,7 @@ func TestNewCohere(t *testing.T) {
 			wantErr:   false,
 			checkResult: func(t *testing.T, p *CohereProvider) {
 				assert.Equal(t, "env-api-key", p.apiKey)
-				assert.Equal(t, "command-light", p.model)
+				assert.Equal(t, "command-light", p.GetModel(""))
 			},
 		},
 		{
@@ -94,7 +94,7 @@ func TestNewCohere(t *testing.T) {
 			envModel: "command-r-plus",
 			wantErr:  false,
 			checkResult: func(t *testing.T, p *CohereProvider) {
-				assert.Equal(t, "command-r-plus", p.model)
+				assert.Equal(t, "command-r-plus", p.GetModel(""))
 			},
 		},
 		{

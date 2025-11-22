@@ -105,13 +105,15 @@ func initializeLLMClient() (llm.Client, error) {
 	// Priority 1: Try Ollama (local, no API key needed)
 	if ollamaModel := os.Getenv("OLLAMA_MODEL"); ollamaModel != "" {
 		fmt.Printf("Using Ollama with model: %s\n", ollamaModel)
-		config := providers.DefaultOllamaConfig()
-		config.Model = ollamaModel
-		return providers.NewOllamaClient(config), nil
+		config := &llm.LLMOptions{
+			Provider: constants.ProviderOllama,
+			Model:    ollamaModel,
+		}
+		return providers.NewOllama(config)
 	}
 
 	// Check if Ollama is available (try default)
-	ollamaClient := providers.NewOllamaClientSimple("llama2")
+	ollamaClient, _ := providers.NewOllamaClientSimple("llama2")
 	// Test connection by checking if Ollama is running
 	if testOllamaConnection(ollamaClient) {
 		fmt.Println("Using Ollama with default model: llama2")

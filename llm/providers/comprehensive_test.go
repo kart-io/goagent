@@ -92,8 +92,8 @@ func TestDeepSeekProvider_Initialization(t *testing.T) {
 				assert.NoError(t, err)
 				assert.NotNil(t, provider)
 				assert.Equal(t, constants.ProviderDeepSeek, provider.Provider())
-				assert.NotZero(t, provider.maxTokens)
-				assert.NotZero(t, provider.temperature)
+				assert.NotZero(t, provider.GetMaxTokens(0))
+				assert.NotZero(t, provider.GetTemperature(0))
 			}
 		})
 	}
@@ -109,9 +109,9 @@ func TestDeepSeekProvider_DefaultValues(t *testing.T) {
 	provider, err := NewDeepSeek(config)
 	require.NoError(t, err)
 
-	assert.Equal(t, "deepseek-chat", provider.model)
-	assert.Equal(t, 2000, provider.maxTokens)
-	assert.Equal(t, 0.7, provider.temperature)
+	assert.Equal(t, "deepseek-chat", provider.GetModel(""))
+	assert.Equal(t, 2000, provider.GetMaxTokens(0))
+	assert.Equal(t, 0.7, provider.GetTemperature(0))
 	assert.Equal(t, "https://api.deepseek.com/v1", provider.baseURL)
 }
 
@@ -870,7 +870,7 @@ func TestOpenAIProvider_DefaultModelComprehensive(t *testing.T) {
 	require.NoError(t, err)
 
 	// Should have a non-empty default model
-	assert.NotEmpty(t, provider.model)
+	assert.NotEmpty(t, provider.GetModel(""))
 }
 
 // TestOpenAIProvider_ModelNameComprehensive tests model name retrieval
@@ -1309,17 +1309,17 @@ func TestDeepSeekProvider_GetterMethods(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Test getModel
-	assert.Equal(t, "custom-model", provider.getModel("custom-model"))
-	assert.Equal(t, "deepseek-chat", provider.getModel(""))
+	// Test GetModel
+	assert.Equal(t, "custom-model", provider.GetModel("custom-model"))
+	assert.Equal(t, "deepseek-chat", provider.GetModel(""))
 
-	// Test getTemperature
-	assert.Equal(t, 0.9, provider.getTemperature(0.9))
-	assert.Equal(t, 0.8, provider.getTemperature(0))
+	// Test GetTemperature
+	assert.Equal(t, 0.9, provider.GetTemperature(0.9))
+	assert.Equal(t, 0.8, provider.GetTemperature(0))
 
-	// Test getMaxTokens
-	assert.Equal(t, 5000, provider.getMaxTokens(5000))
-	assert.Equal(t, 3000, provider.getMaxTokens(0))
+	// Test GetMaxTokens
+	assert.Equal(t, 5000, provider.GetMaxTokens(5000))
+	assert.Equal(t, 3000, provider.GetMaxTokens(0))
 }
 
 // TestDeepSeekProvider_InvalidRequestPayload tests invalid request handling

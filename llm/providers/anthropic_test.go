@@ -44,9 +44,9 @@ func TestNewAnthropic(t *testing.T) {
 			checkResult: func(t *testing.T, p *AnthropicProvider) {
 				assert.Equal(t, "test-key", p.apiKey)
 				assert.Equal(t, "https://custom.api.com", p.baseURL)
-				assert.Equal(t, "claude-3-opus-20240229", p.model)
-				assert.Equal(t, 4000, p.maxTokens)
-				assert.Equal(t, 0.8, p.temperature)
+				assert.Equal(t, "claude-3-opus-20240229", p.GetModel(""))
+				assert.Equal(t, 4000, p.GetMaxTokens(0))
+				assert.Equal(t, 0.8, p.GetTemperature(0))
 			},
 		},
 		{
@@ -58,9 +58,9 @@ func TestNewAnthropic(t *testing.T) {
 			checkResult: func(t *testing.T, p *AnthropicProvider) {
 				assert.Equal(t, "test-key", p.apiKey)
 				assert.Equal(t, "https://api.anthropic.com", p.baseURL)
-				assert.Equal(t, "claude-3-5-sonnet-20241022", p.model)
-				assert.Equal(t, 1000, p.maxTokens)
-				assert.Equal(t, 0.7, p.temperature)
+				assert.Equal(t, "claude-3-5-sonnet-20241022", p.GetModel(""))
+				assert.Equal(t, 1000, p.GetMaxTokens(0))
+				assert.Equal(t, 0.7, p.GetTemperature(0))
 			},
 		},
 		{
@@ -72,7 +72,7 @@ func TestNewAnthropic(t *testing.T) {
 			wantErr:   false,
 			checkResult: func(t *testing.T, p *AnthropicProvider) {
 				assert.Equal(t, "env-api-key", p.apiKey)
-				assert.Equal(t, "claude-3-haiku-20240307", p.model)
+				assert.Equal(t, "claude-3-haiku-20240307", p.GetModel(""))
 			},
 		},
 		{
@@ -94,7 +94,7 @@ func TestNewAnthropic(t *testing.T) {
 			envModel: "claude-3-opus-20240229",
 			wantErr:  false,
 			checkResult: func(t *testing.T, p *AnthropicProvider) {
-				assert.Equal(t, "claude-3-opus-20240229", p.model)
+				assert.Equal(t, "claude-3-opus-20240229", p.GetModel(""))
 			},
 		},
 		{

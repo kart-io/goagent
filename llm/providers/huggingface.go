@@ -23,13 +23,10 @@ import (
 
 // HuggingFaceProvider implements LLM interface for Hugging Face
 type HuggingFaceProvider struct {
-	config      *agentllm.LLMOptions
-	client      *httpclient.Client
-	apiKey      string
-	baseURL     string
-	model       string
-	maxTokens   int
-	temperature float64
+	*BaseProvider
+	client  *httpclient.Client
+	apiKey  string
+	baseURL string
 }
 
 // HuggingFaceRequest represents a request to Hugging Face API
@@ -90,49 +87,28 @@ type HuggingFaceErrorResponse struct {
 	EstimatedTime float64 `json:"estimated_time,omitempty"` // For model loading
 }
 
-// NewHuggingFace creates a new Hugging Face provider
-func NewHuggingFace(config *agentllm.LLMOptions) (*HuggingFaceProvider, error) {
-	// Get API key from config or env
-	apiKey := config.APIKey
-	if apiKey == "" {
-		apiKey = os.Getenv(constants.EnvHuggingFaceAPIKey)
+// NewHuggingFaceWithOptions creates a new Hugging Face provider using options pattern
+func NewHuggingFaceWithOptions(opts ...agentllm.ClientOption) (*HuggingFaceProvider, error) {
+	// 创建 BaseProvider，统一处理 Options
+	base := NewBaseProvider(opts...)
+
+	// 应用 Provider 特定的默认值
+	base.ApplyProviderDefaults(
+		constants.ProviderHuggingFace,
+		constants.HuggingFaceBaseURL,
+		constants.HuggingFaceDefaultModel,
+		constants.EnvHuggingFaceBaseURL,
+		constants.EnvHuggingFaceModel,
+	)
+
+	// 统一处理 API Key
+	if err := base.EnsureAPIKey(constants.EnvHuggingFaceAPIKey, constants.ProviderHuggingFace); err != nil {
+		return nil, err
 	}
 
-	if apiKey == "" {
-		return nil, agentErrors.NewInvalidConfigError(string(constants.ProviderHuggingFace), constants.ErrorFieldAPIKey, fmt.Sprintf(constants.ErrAPIKeyMissing, "HUGGINGFACE"))
-	}
-
-	// Set base URL with fallback
-	baseURL := config.BaseURL
-	if baseURL == "" {
-		baseURL = os.Getenv(constants.EnvHuggingFaceBaseURL)
-	}
-	if baseURL == "" {
-		baseURL = constants.HuggingFaceBaseURL
-	}
-
-	// Set model with fallback
-	model := config.Model
-	if model == "" {
-		model = os.Getenv(constants.EnvHuggingFaceModel)
-	}
-	if model == "" {
-		model = constants.HuggingFaceDefaultModel
-	}
-
-	// Set other parameters with defaults
-	maxTokens := config.MaxTokens
-	if maxTokens == 0 {
-		maxTokens = constants.HuggingFaceDefaultMaxTokens
-	}
-
-	temperature := config.Temperature
-	if temperature == 0 {
-		temperature = constants.DefaultTemperature
-	}
-
-	timeout := time.Duration(config.Timeout) * time.Second
-	if timeout == 0 {
+	// 设置超时时间，HuggingFace 默认需要更长的超时
+	timeout := base.GetTimeout()
+	if timeout == constants.DefaultTimeout {
 		timeout = constants.HuggingFaceTimeout
 	}
 
@@ -141,21 +117,24 @@ func NewHuggingFace(config *agentllm.LLMOptions) (*HuggingFaceProvider, error) {
 		Timeout: timeout,
 		Headers: map[string]string{
 			constants.HeaderContentType:   constants.ContentTypeJSON,
-			constants.HeaderAuthorization: constants.AuthBearerPrefix + apiKey,
+			constants.HeaderAuthorization: constants.AuthBearerPrefix + base.Config.APIKey,
 		},
 	})
 
 	provider := &HuggingFaceProvider{
-		config:      config,
-		client:      client,
-		apiKey:      apiKey,
-		baseURL:     baseURL,
-		model:       model,
-		maxTokens:   maxTokens,
-		temperature: temperature,
+		BaseProvider: base,
+		client:       client,
+		apiKey:       base.Config.APIKey,
+		baseURL:      base.Config.BaseURL,
 	}
 
 	return provider, nil
+}
+
+// NewHuggingFace creates a new Hugging Face provider (backward compatible)
+func NewHuggingFace(config *agentllm.LLMOptions) (*HuggingFaceProvider, error) {
+	// 将现有配置转换为 Options，使用 Options 模式创建 Provider
+	return NewHuggingFaceWithOptions(ConfigToOptions(config)...)
 }
 
 // Complete implements basic text completion
@@ -189,16 +168,9 @@ func (p *HuggingFaceProvider) buildRequest(req *agentllm.CompletionRequest) *Hug
 	}
 	inputs.WriteString("Assistant: ") // Prompt for response
 
-	// Use request parameters or provider defaults
-	maxTokens := p.maxTokens
-	if req.MaxTokens > 0 {
-		maxTokens = req.MaxTokens
-	}
-
-	temperature := p.temperature
-	if req.Temperature > 0 {
-		temperature = req.Temperature
-	}
+	// 使用 BaseProvider 的统一参数处理方法
+	maxTokens := p.GetMaxTokens(req.MaxTokens)
+	temperature := p.GetTemperature(req.Temperature)
 
 	return &HuggingFaceRequest{
 		Inputs: inputs.String(),
@@ -218,8 +190,9 @@ func (p *HuggingFaceProvider) buildRequest(req *agentllm.CompletionRequest) *Hug
 
 // execute performs a single HTTP request to Hugging Face API
 func (p *HuggingFaceProvider) execute(ctx context.Context, req *HuggingFaceRequest) (*HuggingFaceResponse, error) {
+	model := p.GetModel("")
 	// Create HTTP request with model ID in URL
-	endpoint := fmt.Sprintf("%s/models/%s", p.baseURL, p.model)
+	endpoint := fmt.Sprintf("%s/models/%s", p.baseURL, model)
 
 	// Execute request using resty
 	resp, err := p.client.R().
@@ -228,22 +201,22 @@ func (p *HuggingFaceProvider) execute(ctx context.Context, req *HuggingFaceReque
 		Post(endpoint)
 
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError(string(constants.ProviderHuggingFace), p.model, err)
+		return nil, agentErrors.NewLLMRequestError(string(constants.ProviderHuggingFace), model, err)
 	}
 
 	// Check status code
 	if !resp.IsSuccess() {
-		return nil, p.handleHTTPError(resp, p.model)
+		return nil, p.handleHTTPError(resp, model)
 	}
 
 	// Deserialize response (array format)
 	var respArray []HuggingFaceResponse
 	if err := json.NewDecoder(strings.NewReader(resp.String())).Decode(&respArray); err != nil {
-		return nil, agentErrors.NewLLMResponseError(string(constants.ProviderHuggingFace), p.model, constants.ErrFailedDecodeResponse)
+		return nil, agentErrors.NewLLMResponseError(string(constants.ProviderHuggingFace), model, constants.ErrFailedDecodeResponse)
 	}
 
 	if len(respArray) == 0 {
-		return nil, agentErrors.NewLLMResponseError(string(constants.ProviderHuggingFace), p.model, constants.ErrEmptyResponseArray)
+		return nil, agentErrors.NewLLMResponseError(string(constants.ProviderHuggingFace), model, constants.ErrEmptyResponseArray)
 	}
 
 	return &respArray[0], nil
@@ -367,7 +340,7 @@ func (p *HuggingFaceProvider) convertResponse(resp *HuggingFaceResponse) *agentl
 
 	return &agentllm.CompletionResponse{
 		Content:      resp.GeneratedText,
-		Model:        p.model,
+		Model:        p.GetModel(""),
 		TokensUsed:   promptTokens + completionTokens,
 		FinishReason: finishReason,
 		Provider:     string(constants.ProviderHuggingFace),
@@ -408,12 +381,16 @@ func (p *HuggingFaceProvider) IsAvailable() bool {
 func (p *HuggingFaceProvider) Stream(ctx context.Context, prompt string) (<-chan string, error) {
 	tokens := make(chan string, 100)
 
+	model := p.GetModel("")
+	maxTokens := p.GetMaxTokens(0)
+	temperature := p.GetTemperature(0)
+
 	// Build streaming request
 	req := &HuggingFaceRequest{
 		Inputs: prompt,
 		Parameters: HuggingFaceParameters{
-			Temperature:    p.temperature,
-			MaxNewTokens:   p.maxTokens,
+			Temperature:    temperature,
+			MaxNewTokens:   maxTokens,
 			ReturnFullText: false,
 		},
 		Options: HuggingFaceOptions{
@@ -422,7 +399,7 @@ func (p *HuggingFaceProvider) Stream(ctx context.Context, prompt string) (<-chan
 		},
 	}
 
-	endpoint := fmt.Sprintf("%s/models/%s", p.baseURL, p.model)
+	endpoint := fmt.Sprintf("%s/models/%s", p.baseURL, model)
 
 	// Create streaming request with Accept header
 	streamClient := p.client.R().
@@ -433,11 +410,11 @@ func (p *HuggingFaceProvider) Stream(ctx context.Context, prompt string) (<-chan
 	// Execute streaming request
 	resp, err := streamClient.Post(endpoint)
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError(string(constants.ProviderHuggingFace), p.model, err)
+		return nil, agentErrors.NewLLMRequestError(string(constants.ProviderHuggingFace), model, err)
 	}
 
 	if !resp.IsSuccess() {
-		return nil, p.handleHTTPError(resp, p.model)
+		return nil, p.handleHTTPError(resp, model)
 	}
 
 	// Start goroutine to read stream
@@ -488,10 +465,10 @@ func (p *HuggingFaceProvider) Stream(ctx context.Context, prompt string) (<-chan
 
 // ModelName returns the model name
 func (p *HuggingFaceProvider) ModelName() string {
-	return p.model
+	return p.GetModel("")
 }
 
 // MaxTokens returns the max tokens setting
 func (p *HuggingFaceProvider) MaxTokens() int {
-	return p.maxTokens
+	return p.GetMaxTokens(0)
 }

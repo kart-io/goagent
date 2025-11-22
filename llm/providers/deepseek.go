@@ -20,13 +20,10 @@ import (
 
 // DeepSeekProvider implements LLM interface for DeepSeek
 type DeepSeekProvider struct {
-	config      *agentllm.LLMOptions
-	client      *httpclient.Client
-	apiKey      string
-	baseURL     string
-	model       string
-	maxTokens   int
-	temperature float64
+	*BaseProvider
+	client  *httpclient.Client
+	apiKey  string
+	baseURL string
 }
 
 // DeepSeekRequest represents a request to DeepSeek API
@@ -111,50 +108,51 @@ type DeepSeekStreamResponse struct {
 	Choices []DeepSeekChoice `json:"choices"`
 }
 
-// NewDeepSeek creates a new DeepSeek provider
-func NewDeepSeek(opts *agentllm.LLMOptions) (*DeepSeekProvider, error) {
-	if opts.APIKey == "" {
-		return nil, agentErrors.NewInvalidConfigError(string(constants.ProviderDeepSeek), constants.ErrorFieldAPIKey, "DeepSeek API key is required")
+// NewDeepSeekWithOptions creates a new DeepSeek provider using options pattern
+func NewDeepSeekWithOptions(opts ...agentllm.ClientOption) (*DeepSeekProvider, error) {
+	// 创建 BaseProvider，统一处理 Options
+	base := NewBaseProvider(opts...)
+
+	// 应用 Provider 特定的默认值
+	base.ApplyProviderDefaults(
+		constants.ProviderDeepSeek,
+		constants.DeepSeekBaseURL,
+		constants.DeepSeekDefaultModel,
+		constants.EnvDeepSeekBaseURL,
+		constants.EnvDeepSeekModel,
+	)
+
+	// 统一处理 API Key
+	if err := base.EnsureAPIKey(constants.EnvDeepSeekAPIKey, constants.ProviderDeepSeek); err != nil {
+		return nil, err
 	}
 
-	baseURL := opts.BaseURL
-	if baseURL == "" {
-		baseURL = constants.DeepSeekBaseURL
-	}
-
-	model := opts.Model
-	if model == "" {
-		model = "deepseek-chat"
-	}
+	// 获取超时时间
+	timeout := base.GetTimeout()
 
 	client := httpclient.NewClient(&httpclient.Config{
-		Timeout: time.Duration(opts.Timeout) * time.Second,
+		Timeout: timeout,
 		Headers: map[string]string{
 			"Content-Type":  "application/json",
 			"Accept":        "application/json",
-			"Authorization": "Bearer " + opts.APIKey,
+			"Authorization": "Bearer " + base.Config.APIKey,
 		},
 	})
 
 	provider := &DeepSeekProvider{
-		config:      opts,
-		client:      client,
-		apiKey:      opts.APIKey,
-		baseURL:     baseURL,
-		model:       model,
-		maxTokens:   opts.MaxTokens,
-		temperature: opts.Temperature,
-	}
-
-	// Set defaults
-	if provider.maxTokens == 0 {
-		provider.maxTokens = 2000
-	}
-	if provider.temperature == 0 {
-		provider.temperature = 0.7
+		BaseProvider: base,
+		client:       client,
+		apiKey:       base.Config.APIKey,
+		baseURL:      base.Config.BaseURL,
 	}
 
 	return provider, nil
+}
+
+// NewDeepSeek creates a new DeepSeek provider (backward compatible)
+func NewDeepSeek(config *agentllm.LLMOptions) (*DeepSeekProvider, error) {
+	// 将现有配置转换为 Options，使用 Options 模式创建 Provider
+	return NewDeepSeekWithOptions(ConfigToOptions(config)...)
 }
 
 // Complete implements basic text completion
@@ -170,11 +168,12 @@ func (p *DeepSeekProvider) Complete(ctx context.Context, req *agentllm.Completio
 	}
 
 	// Prepare request
+	model := p.GetModel(req.Model)
 	dsReq := DeepSeekRequest{
-		Model:       p.getModel(req.Model),
+		Model:       model,
 		Messages:    messages,
-		Temperature: p.getTemperature(req.Temperature),
-		MaxTokens:   p.getMaxTokens(req.MaxTokens),
+		Temperature: p.GetTemperature(req.Temperature),
+		MaxTokens:   p.GetMaxTokens(req.MaxTokens),
 		TopP:        req.TopP,
 		Stop:        req.Stop,
 		Stream:      false,
@@ -183,7 +182,7 @@ func (p *DeepSeekProvider) Complete(ctx context.Context, req *agentllm.Completio
 	// Make API call
 	resp, err := p.callAPI(ctx, "/chat/completions", dsReq)
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError(string(constants.ProviderDeepSeek), p.getModel(req.Model), err)
+		return nil, agentErrors.NewLLMRequestError(string(constants.ProviderDeepSeek), model, err)
 	}
 
 	// Parse response
@@ -194,7 +193,7 @@ func (p *DeepSeekProvider) Complete(ctx context.Context, req *agentllm.Completio
 	}
 
 	if len(dsResp.Choices) == 0 {
-		return nil, agentErrors.NewLLMResponseError("deepseek", p.getModel(req.Model), "no choices in response")
+		return nil, agentErrors.NewLLMResponseError("deepseek", model, "no choices in response")
 	}
 
 	return &agentllm.CompletionResponse{
@@ -222,21 +221,25 @@ func (p *DeepSeekProvider) Chat(ctx context.Context, messages []agentllm.Message
 func (p *DeepSeekProvider) Stream(ctx context.Context, prompt string) (<-chan string, error) {
 	tokens := make(chan string, 100)
 
+	model := p.GetModel("")
+	maxTokens := p.GetMaxTokens(0)
+	temperature := p.GetTemperature(0)
+
 	// Prepare request
 	dsReq := DeepSeekRequest{
-		Model: p.model,
+		Model: model,
 		Messages: []DeepSeekMessage{
 			{Role: "user", Content: prompt},
 		},
-		Temperature: p.temperature,
-		MaxTokens:   p.maxTokens,
+		Temperature: temperature,
+		MaxTokens:   maxTokens,
 		Stream:      true,
 	}
 
 	// Make streaming API call
 	resp, err := p.callAPI(ctx, "/chat/completions", dsReq)
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError("deepseek", p.model, err).
+		return nil, agentErrors.NewLLMRequestError("deepseek", model, err).
 			WithContext("operation", "stream")
 	}
 
@@ -281,14 +284,18 @@ func (p *DeepSeekProvider) GenerateWithTools(ctx context.Context, prompt string,
 	// Convert tools to DeepSeek format
 	dsTools := p.convertToolsToDeepSeek(tools)
 
+	model := p.GetModel("")
+	maxTokens := p.GetMaxTokens(0)
+	temperature := p.GetTemperature(0)
+
 	// Prepare request
 	dsReq := DeepSeekRequest{
-		Model: p.model,
+		Model: model,
 		Messages: []DeepSeekMessage{
 			{Role: "user", Content: prompt},
 		},
-		Temperature: p.temperature,
-		MaxTokens:   p.maxTokens,
+		Temperature: temperature,
+		MaxTokens:   maxTokens,
 		Tools:       dsTools,
 		ToolChoice:  "auto",
 	}
@@ -296,7 +303,7 @@ func (p *DeepSeekProvider) GenerateWithTools(ctx context.Context, prompt string,
 	// Make API call
 	resp, err := p.callAPI(ctx, "/chat/completions", dsReq)
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError("deepseek", p.model, err).
+		return nil, agentErrors.NewLLMRequestError("deepseek", model, err).
 			WithContext("operation", "tool_calling")
 	}
 
@@ -308,7 +315,7 @@ func (p *DeepSeekProvider) GenerateWithTools(ctx context.Context, prompt string,
 	}
 
 	if len(dsResp.Choices) == 0 {
-		return nil, agentErrors.NewLLMResponseError("deepseek", p.model, "no choices in tool response")
+		return nil, agentErrors.NewLLMResponseError("deepseek", model, "no choices in tool response")
 	}
 
 	// Convert to our format
@@ -340,14 +347,18 @@ func (p *DeepSeekProvider) StreamWithTools(ctx context.Context, prompt string, t
 	// Convert tools to DeepSeek format
 	dsTools := p.convertToolsToDeepSeek(tools)
 
+	model := p.GetModel("")
+	maxTokens := p.GetMaxTokens(0)
+	temperature := p.GetTemperature(0)
+
 	// Prepare request
 	dsReq := DeepSeekRequest{
-		Model: p.model,
+		Model: model,
 		Messages: []DeepSeekMessage{
 			{Role: "user", Content: prompt},
 		},
-		Temperature: p.temperature,
-		MaxTokens:   p.maxTokens,
+		Temperature: temperature,
+		MaxTokens:   maxTokens,
 		Tools:       dsTools,
 		ToolChoice:  "auto",
 		Stream:      true,
@@ -356,7 +367,7 @@ func (p *DeepSeekProvider) StreamWithTools(ctx context.Context, prompt string, t
 	// Make streaming API call
 	resp, err := p.callAPI(ctx, "/chat/completions", dsReq)
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError("deepseek", p.model, err).
+		return nil, agentErrors.NewLLMRequestError("deepseek", model, err).
 			WithContext("operation", "stream_with_tools")
 	}
 
@@ -374,7 +385,7 @@ func (p *DeepSeekProvider) StreamWithTools(ctx context.Context, prompt string, t
 					// Finalize last tool call
 					if currentToolCall != nil && argsBuffer != "" {
 						var args map[string]interface{}
-						if err := json.Unmarshal([]byte(argsBuffer), &args); err == nil {
+						if unmarshalErr := json.Unmarshal([]byte(argsBuffer), &args); unmarshalErr == nil {
 							currentToolCall.Arguments = args
 							chunks <- ToolChunk{Type: "tool_call", Value: currentToolCall}
 						}
@@ -499,12 +510,12 @@ func (p *DeepSeekProvider) IsAvailable() bool {
 
 // ModelName returns the model name
 func (p *DeepSeekProvider) ModelName() string {
-	return p.model
+	return p.GetModel("")
 }
 
 // MaxTokens returns the max tokens setting
 func (p *DeepSeekProvider) MaxTokens() int {
-	return p.maxTokens
+	return p.GetMaxTokens(0)
 }
 
 // Helper methods
@@ -518,13 +529,14 @@ func (p *DeepSeekProvider) callAPI(ctx context.Context, endpoint string, payload
 		SetBody(payload).
 		Post(url)
 
+	model := p.GetModel("")
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError("deepseek", p.model, err).
+		return nil, agentErrors.NewLLMRequestError("deepseek", model, err).
 			WithContext("endpoint", endpoint)
 	}
 
 	if !resp.IsSuccess() {
-		return nil, agentErrors.NewLLMResponseError("deepseek", p.model,
+		return nil, agentErrors.NewLLMResponseError("deepseek", model,
 			fmt.Sprintf("API returned status %d: %s", resp.StatusCode(), resp.String())).
 			WithContext("endpoint", endpoint)
 	}
@@ -566,30 +578,6 @@ func (p *DeepSeekProvider) toolSchemaToJSON(schema interface{}) map[string]inter
 	}
 }
 
-// getModel returns the model to use
-func (p *DeepSeekProvider) getModel(requestModel string) string {
-	if requestModel != "" {
-		return requestModel
-	}
-	return p.model
-}
-
-// getTemperature returns the temperature to use
-func (p *DeepSeekProvider) getTemperature(requestTemp float64) float64 {
-	if requestTemp > 0 {
-		return requestTemp
-	}
-	return p.temperature
-}
-
-// getMaxTokens returns the max tokens to use
-func (p *DeepSeekProvider) getMaxTokens(requestTokens int) int {
-	if requestTokens > 0 {
-		return requestTokens
-	}
-	return p.maxTokens
-}
-
 // DeepSeekStreamingProvider extends DeepSeekProvider with advanced streaming
 type DeepSeekStreamingProvider struct {
 	*DeepSeekProvider
@@ -611,14 +599,18 @@ func NewDeepSeekStreaming(config *agentllm.LLMOptions) (*DeepSeekStreamingProvid
 func (p *DeepSeekStreamingProvider) StreamWithMetadata(ctx context.Context, prompt string) (<-chan TokenWithMetadata, error) {
 	tokens := make(chan TokenWithMetadata, 100)
 
+	model := p.GetModel("")
+	maxTokens := p.GetMaxTokens(0)
+	temperature := p.GetTemperature(0)
+
 	// Prepare request
 	dsReq := DeepSeekRequest{
-		Model: p.model,
+		Model: model,
 		Messages: []DeepSeekMessage{
 			{Role: "user", Content: prompt},
 		},
-		Temperature: p.temperature,
-		MaxTokens:   p.maxTokens,
+		Temperature: temperature,
+		MaxTokens:   maxTokens,
 		Stream:      true,
 	}
 
@@ -643,7 +635,7 @@ func (p *DeepSeekStreamingProvider) StreamWithMetadata(ctx context.Context, prom
 						Type: "finish",
 						Metadata: map[string]interface{}{
 							"total_tokens": tokenCount,
-							"model":        p.model,
+							"model":        model,
 						},
 					}:
 					case <-ctx.Done():
