@@ -3,10 +3,12 @@ package providers
 import (
 	"context"
 	"fmt"
-	"github.com/kart-io/goagent/utils/json"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/kart-io/goagent/llm/constants"
+	"github.com/kart-io/goagent/utils/json"
 
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
@@ -38,11 +40,11 @@ type KimiConfig struct {
 // DefaultKimiConfig 返回默认 Kimi 配置
 func DefaultKimiConfig() *KimiConfig {
 	return &KimiConfig{
-		BaseURL:     KimiBaseURL,
+		BaseURL:     constants.KimiBaseURL,
 		Model:       "moonshot-v1-8k", // 默认使用 8K 上下文模型
-		Temperature: DefaultTemperature,
-		MaxTokens:   DefaultMaxTokens,
-		Timeout:     int(DefaultTimeout / time.Second),
+		Temperature: constants.DefaultTemperature,
+		MaxTokens:   constants.DefaultMaxTokens,
+		Timeout:     int(constants.DefaultTimeout / time.Second),
 	}
 }
 
@@ -53,11 +55,11 @@ func NewKimiClient(config *KimiConfig) (*KimiClient, error) {
 	}
 
 	if config.APIKey == "" {
-		return nil, agentErrors.NewInvalidConfigError(ProviderKimi, agentllm.ErrorFieldAPIKey, "kimi API key is required")
+		return nil, agentErrors.NewInvalidConfigError(string(constants.ProviderKimi), constants.ErrorFieldAPIKey, "kimi API key is required")
 	}
 
 	if config.BaseURL == "" {
-		config.BaseURL = KimiBaseURL
+		config.BaseURL = constants.KimiBaseURL
 	}
 
 	if config.Model == "" {
@@ -65,15 +67,15 @@ func NewKimiClient(config *KimiConfig) (*KimiClient, error) {
 	}
 
 	if config.Temperature == 0 {
-		config.Temperature = DefaultTemperature
+		config.Temperature = constants.DefaultTemperature
 	}
 
 	if config.MaxTokens == 0 {
-		config.MaxTokens = DefaultMaxTokens
+		config.MaxTokens = constants.DefaultMaxTokens
 	}
 
 	if config.Timeout == 0 {
-		config.Timeout = int(DefaultTimeout / time.Second)
+		config.Timeout = int(constants.DefaultTimeout / time.Second)
 	}
 
 	return &KimiClient{
@@ -85,15 +87,15 @@ func NewKimiClient(config *KimiConfig) (*KimiClient, error) {
 		client: httpclient.NewClient(&httpclient.Config{
 			Timeout: time.Duration(config.Timeout) * time.Second,
 			Headers: map[string]string{
-				HeaderContentType:   ContentTypeJSON,
-				HeaderAuthorization: AuthBearerPrefix + config.APIKey,
+				constants.HeaderContentType:   constants.ContentTypeJSON,
+				constants.HeaderAuthorization: constants.AuthBearerPrefix + config.APIKey,
 			},
 		}),
 	}, nil
 }
 
 // NewKimi 创建 Kimi provider（兼容 llm.Config）
-func NewKimi(config *agentllm.Config) (*KimiClient, error) {
+func NewKimi(config *agentllm.LLMOptions) (*KimiClient, error) {
 	kimiConfig := &KimiConfig{
 		APIKey:      config.APIKey,
 		BaseURL:     config.BaseURL,
@@ -104,18 +106,18 @@ func NewKimi(config *agentllm.Config) (*KimiClient, error) {
 	}
 
 	if kimiConfig.APIKey == "" {
-		kimiConfig.APIKey = os.Getenv(agentllm.EnvKimiAPIKey)
+		kimiConfig.APIKey = os.Getenv(constants.EnvKimiAPIKey)
 	}
 
 	if kimiConfig.BaseURL == "" {
-		kimiConfig.BaseURL = os.Getenv(agentllm.EnvKimiBaseURL)
+		kimiConfig.BaseURL = os.Getenv(constants.EnvKimiBaseURL)
 	}
 	if kimiConfig.BaseURL == "" {
-		kimiConfig.BaseURL = KimiBaseURL
+		kimiConfig.BaseURL = constants.KimiBaseURL
 	}
 
 	if kimiConfig.Model == "" {
-		kimiConfig.Model = os.Getenv(agentllm.EnvKimiModel)
+		kimiConfig.Model = os.Getenv(constants.EnvKimiModel)
 	}
 	if kimiConfig.Model == "" {
 		kimiConfig.Model = "moonshot-v1-8k"
@@ -246,7 +248,7 @@ func (c *KimiClient) Complete(ctx context.Context, req *agentllm.CompletionReque
 		Model:        kimiResp.Model,
 		TokensUsed:   kimiResp.Usage.TotalTokens,
 		FinishReason: kimiResp.Choices[0].FinishReason,
-		Provider:     string(agentllm.ProviderKimi),
+		Provider:     string(constants.ProviderKimi),
 		Usage: &interfaces.TokenUsage{
 			PromptTokens:     kimiResp.Usage.PromptTokens,
 			CompletionTokens: kimiResp.Usage.CompletionTokens,
@@ -263,8 +265,8 @@ func (c *KimiClient) Chat(ctx context.Context, messages []agentllm.Message) (*ag
 }
 
 // Provider 返回提供商类型
-func (c *KimiClient) Provider() agentllm.Provider {
-	return agentllm.ProviderKimi
+func (c *KimiClient) Provider() constants.Provider {
+	return constants.ProviderKimi
 }
 
 // IsAvailable 检查 Kimi 是否可用

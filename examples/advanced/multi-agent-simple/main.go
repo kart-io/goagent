@@ -3,12 +3,14 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/kart-io/goagent/utils/json"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/kart-io/goagent/utils/json"
+
 	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/constants"
 	"github.com/kart-io/goagent/llm/providers"
 )
 
@@ -255,8 +257,8 @@ func main() {
 
 		if apiKey := os.Getenv("OPENAI_API_KEY"); apiKey != "" {
 			fmt.Println("Trying OpenAI provider...")
-			config := &llm.Config{
-				Provider:    llm.ProviderOpenAI,
+			config := &llm.LLMOptions{
+				Provider:    constants.ProviderOpenAI,
 				APIKey:      apiKey,
 				Model:       "gpt-3.5-turbo",
 				MaxTokens:   500,
@@ -272,8 +274,8 @@ func main() {
 		if llmClient == nil {
 			if apiKey := os.Getenv("GEMINI_API_KEY"); apiKey != "" {
 				fmt.Println("Trying Gemini provider...")
-				config := &llm.Config{
-					Provider:    llm.ProviderGemini,
+				config := &llm.LLMOptions{
+					Provider:    constants.ProviderGemini,
 					APIKey:      apiKey,
 					Model:       "gemini-pro",
 					MaxTokens:   500,
@@ -418,8 +420,8 @@ func (m *MockLLMClient) Chat(ctx context.Context, messages []llm.Message) (*llm.
 	}, nil
 }
 
-func (m *MockLLMClient) Provider() llm.Provider {
-	return llm.ProviderCustom
+func (m *MockLLMClient) Provider() constants.Provider {
+	return constants.ProviderCustom
 }
 
 func (m *MockLLMClient) IsAvailable() bool {

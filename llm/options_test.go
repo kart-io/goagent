@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kart-io/goagent/llm/constants"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -12,7 +13,7 @@ import (
 func TestDefaultConfig(t *testing.T) {
 	config := DefaultClientConfig()
 
-	assert.Equal(t, ProviderOpenAI, config.Provider)
+	assert.Equal(t, constants.ProviderOpenAI, config.Provider)
 	assert.Equal(t, 2000, config.MaxTokens)
 	assert.Equal(t, 0.7, config.Temperature)
 	assert.Equal(t, 60, config.Timeout)
@@ -21,8 +22,8 @@ func TestDefaultConfig(t *testing.T) {
 
 // TestBasicOptions 测试基本选项
 func TestBasicOptions(t *testing.T) {
-	config := NewConfigWithOptions(
-		WithProvider(ProviderAnthropic),
+	config := NewLLMOptionsWithOptions(
+		WithProvider(constants.ProviderAnthropic),
 		WithAPIKey("test-key"),
 		WithModel("claude-3"),
 		WithMaxTokens(3000),
@@ -30,7 +31,7 @@ func TestBasicOptions(t *testing.T) {
 		WithTimeout(120*time.Second),
 	)
 
-	assert.Equal(t, ProviderAnthropic, config.Provider)
+	assert.Equal(t, constants.ProviderAnthropic, config.Provider)
 	assert.Equal(t, "test-key", config.APIKey)
 	assert.Equal(t, "claude-3", config.Model)
 	assert.Equal(t, 3000, config.MaxTokens)
@@ -80,7 +81,7 @@ func TestPresetOptions(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			config := NewConfigWithOptions(
+			config := NewLLMOptionsWithOptions(
 				WithPreset(tc.preset),
 			)
 
@@ -93,34 +94,34 @@ func TestPresetOptions(t *testing.T) {
 // TestProviderPresets 测试提供商预设
 func TestProviderPresets(t *testing.T) {
 	providers := []struct {
-		provider Provider
+		provider constants.Provider
 		model    string
 		baseURL  string
 	}{
 		{
-			provider: ProviderOpenAI,
+			provider: constants.ProviderOpenAI,
 			model:    "gpt-4-turbo-preview",
 		},
 		{
-			provider: ProviderAnthropic,
+			provider: constants.ProviderAnthropic,
 			model:    "claude-3-sonnet-20240229",
 		},
 		{
-			provider: ProviderGemini,
+			provider: constants.ProviderGemini,
 			model:    "gemini-pro",
 		},
 		{
-			provider: ProviderDeepSeek,
+			provider: constants.ProviderDeepSeek,
 			model:    "deepseek-chat",
 			baseURL:  "https://api.deepseek.com/v1",
 		},
 		{
-			provider: ProviderKimi,
+			provider: constants.ProviderKimi,
 			model:    "moonshot-v1-8k",
 			baseURL:  "https://api.moonshot.cn/v1",
 		},
 		{
-			provider: ProviderOllama,
+			provider: constants.ProviderOllama,
 			model:    "llama2",
 			baseURL:  "http://localhost:11434",
 		},
@@ -128,7 +129,7 @@ func TestProviderPresets(t *testing.T) {
 
 	for _, p := range providers {
 		t.Run(string(p.provider), func(t *testing.T) {
-			config := NewConfigWithOptions(
+			config := NewLLMOptionsWithOptions(
 				WithProviderPreset(p.provider),
 			)
 
@@ -189,7 +190,7 @@ func TestUseCaseOptions(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.useCase.String(), func(t *testing.T) {
-			config := NewConfigWithOptions(
+			config := NewLLMOptionsWithOptions(
 				WithUseCase(tc.useCase),
 			)
 
@@ -207,7 +208,7 @@ func TestAdvancedOptions(t *testing.T) {
 		"Authorization":   "Bearer token",
 	}
 
-	config := NewConfigWithOptions(
+	config := NewLLMOptionsWithOptions(
 		WithRetryCount(5),
 		WithRetryDelay(3*time.Second),
 		WithRateLimiting(100),
@@ -236,7 +237,7 @@ func TestAdvancedOptions(t *testing.T) {
 // TestOptionOverride 测试选项覆盖
 func TestOptionOverride(t *testing.T) {
 	// 后面的选项应该覆盖前面的选项
-	config := NewConfigWithOptions(
+	config := NewLLMOptionsWithOptions(
 		WithModel("gpt-3.5-turbo"),
 		WithMaxTokens(1000),
 		WithTemperature(0.5),
@@ -253,7 +254,7 @@ func TestOptionOverride(t *testing.T) {
 
 // TestPresetWithOverride 测试预设与覆盖
 func TestPresetWithOverride(t *testing.T) {
-	config := NewConfigWithOptions(
+	config := NewLLMOptionsWithOptions(
 		WithPreset(PresetDevelopment), // 设置 model="gpt-3.5-turbo", maxTokens=1000
 		WithModel("gpt-4"),            // 覆盖模型
 		WithMaxTokens(3000),           // 覆盖 token 限制
@@ -267,8 +268,8 @@ func TestPresetWithOverride(t *testing.T) {
 // TestApplyOptionsToExistingConfig 测试应用选项到现有配置
 func TestApplyOptionsToExistingConfig(t *testing.T) {
 	// 现有配置
-	config := &Config{
-		Provider:    ProviderOpenAI,
+	config := &LLMOptions{
+		Provider:    constants.ProviderOpenAI,
 		APIKey:      "original-key",
 		Model:       "gpt-3.5-turbo",
 		MaxTokens:   1000,
@@ -300,39 +301,39 @@ func TestApplyOptionsToExistingConfig(t *testing.T) {
 // TestValidation 测试参数验证
 func TestValidation(t *testing.T) {
 	// Temperature 应该在 0-2.0 范围内
-	config1 := NewConfigWithOptions(
+	config1 := NewLLMOptionsWithOptions(
 		WithTemperature(-0.5), // 无效，应该被忽略
 	)
 	assert.Equal(t, 0.7, config1.Temperature) // 使用默认值
 
-	config2 := NewConfigWithOptions(
+	config2 := NewLLMOptionsWithOptions(
 		WithTemperature(3.0), // 无效，应该被忽略
 	)
 	assert.Equal(t, 0.7, config2.Temperature) // 使用默认值
 
-	config3 := NewConfigWithOptions(
+	config3 := NewLLMOptionsWithOptions(
 		WithTemperature(1.5), // 有效
 	)
 	assert.Equal(t, 1.5, config3.Temperature)
 
 	// TopP 应该在 0-1.0 范围内
-	config4 := NewConfigWithOptions(
+	config4 := NewLLMOptionsWithOptions(
 		WithTopP(1.5), // 无效，应该被忽略
 	)
 	assert.Equal(t, 1.0, config4.TopP) // 使用默认值
 
-	config5 := NewConfigWithOptions(
+	config5 := NewLLMOptionsWithOptions(
 		WithTopP(0.8), // 有效
 	)
 	assert.Equal(t, 0.8, config5.TopP)
 
 	// MaxTokens 应该大于 0
-	config6 := NewConfigWithOptions(
+	config6 := NewLLMOptionsWithOptions(
 		WithMaxTokens(-100), // 无效，应该被忽略
 	)
 	assert.Equal(t, 2000, config6.MaxTokens) // 使用默认值
 
-	config7 := NewConfigWithOptions(
+	config7 := NewLLMOptionsWithOptions(
 		WithMaxTokens(5000), // 有效
 	)
 	assert.Equal(t, 5000, config7.MaxTokens)
@@ -347,15 +348,15 @@ func TestValidateConfig(t *testing.T) {
 	})
 
 	t.Run("MissingProvider", func(t *testing.T) {
-		config := &Config{}
+		config := &LLMOptions{}
 		err := validateConfig(config)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "provider is required")
 	})
 
 	t.Run("MissingAPIKey", func(t *testing.T) {
-		config := &Config{
-			Provider: ProviderOpenAI,
+		config := &LLMOptions{
+			Provider: constants.ProviderOpenAI,
 		}
 		err := validateConfig(config)
 		require.Error(t, err)
@@ -364,8 +365,8 @@ func TestValidateConfig(t *testing.T) {
 
 	t.Run("OllamaNoAPIKey", func(t *testing.T) {
 		// Ollama 不需要 API key
-		config := &Config{
-			Provider: ProviderOllama,
+		config := &LLMOptions{
+			Provider: constants.ProviderOllama,
 			BaseURL:  "http://localhost:11434",
 		}
 		err := validateConfig(config)
@@ -373,8 +374,8 @@ func TestValidateConfig(t *testing.T) {
 	})
 
 	t.Run("ValidConfig", func(t *testing.T) {
-		config := &Config{
-			Provider: ProviderOpenAI,
+		config := &LLMOptions{
+			Provider: constants.ProviderOpenAI,
 			APIKey:   "test-key",
 		}
 		err := validateConfig(config)

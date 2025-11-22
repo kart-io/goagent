@@ -12,15 +12,16 @@ import (
 
 	agentErrors "github.com/kart-io/goagent/errors"
 	agentllm "github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/constants"
 )
 
 // NewOpenAIWithOptions creates a new OpenAI provider using options pattern
 func NewOpenAIWithOptions(opts ...agentllm.ClientOption) (*OpenAIProvider, error) {
 	// Create config with options
-	config := agentllm.NewConfigWithOptions(opts...)
+	config := agentllm.NewLLMOptionsWithOptions(opts...)
 
 	// Ensure provider is set to OpenAI
-	config.Provider = agentllm.ProviderOpenAI
+	config.Provider = constants.ProviderOpenAI
 
 	// Use existing NewOpenAI function
 	return NewOpenAI(config)
@@ -38,7 +39,7 @@ type EnhancedOpenAIProvider struct {
 }
 
 // NewEnhancedOpenAI creates an enhanced OpenAI provider with full option support
-func NewEnhancedOpenAI(config *agentllm.Config) (*EnhancedOpenAIProvider, error) {
+func NewEnhancedOpenAI(config *agentllm.LLMOptions) (*EnhancedOpenAIProvider, error) {
 	// Create base provider
 	base, err := NewOpenAI(config)
 	if err != nil {
@@ -175,14 +176,14 @@ func isRetryableError(err error) bool {
 
 // Builder pattern for OpenAI provider
 type OpenAIProviderBuilder struct {
-	config *agentllm.Config
+	config *agentllm.LLMOptions
 	opts   []agentllm.ClientOption
 }
 
 // NewOpenAIBuilder creates a new builder
 func NewOpenAIBuilder() *OpenAIProviderBuilder {
 	return &OpenAIProviderBuilder{
-		config: agentllm.DefaultClientConfig(),
+		config: agentllm.DefaultLLMOptions(),
 		opts:   []agentllm.ClientOption{},
 	}
 }
@@ -240,7 +241,7 @@ func (b *OpenAIProviderBuilder) Build() (*EnhancedOpenAIProvider, error) {
 	config := agentllm.ApplyOptions(b.config, b.opts...)
 
 	// Ensure provider is set
-	config.Provider = agentllm.ProviderOpenAI
+	config.Provider = constants.ProviderOpenAI
 
 	// Get API key from environment if not set
 	if config.APIKey == "" {
@@ -250,7 +251,7 @@ func (b *OpenAIProviderBuilder) Build() (*EnhancedOpenAIProvider, error) {
 	// Validate config
 	if config.APIKey == "" {
 		return nil, agentErrors.NewInvalidConfigError(
-			string(agentllm.ProviderOpenAI),
+			string(constants.ProviderOpenAI),
 			"api_key",
 			"OpenAI API key is required",
 		)
@@ -265,7 +266,7 @@ func (b *OpenAIProviderBuilder) BuildBasic() (*OpenAIProvider, error) {
 	config := agentllm.ApplyOptions(b.config, b.opts...)
 
 	// Ensure provider is set
-	config.Provider = agentllm.ProviderOpenAI
+	config.Provider = constants.ProviderOpenAI
 
 	// Get API key from environment if not set
 	if config.APIKey == "" {

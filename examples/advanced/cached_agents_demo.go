@@ -11,6 +11,7 @@ import (
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/constants"
 	"github.com/kart-io/goagent/performance"
 )
 
@@ -345,8 +346,8 @@ func (m *mockLLMClient) Complete(ctx context.Context, req *llm.CompletionRequest
 	}, nil
 }
 
-func (m *mockLLMClient) Provider() llm.Provider {
-	return llm.ProviderCustom
+func (m *mockLLMClient) Provider() constants.Provider {
+	return constants.ProviderCustom
 }
 
 func (m *mockLLMClient) IsAvailable() bool {

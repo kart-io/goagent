@@ -86,14 +86,14 @@ import (
 func main() {
     // Test LLM Options
     config := llm.NewConfigWithOptions(
-        llm.WithProvider(llm.ProviderOpenAI),
+        llm.WithProvider(constants.ProviderCustom),
         llm.WithAPIKey("test"),
         llm.WithModel("gpt-4"),
         llm.WithMaxTokens(2000),
         llm.WithPreset(llm.PresetProduction),
     )
 
-    if config.Provider != llm.ProviderOpenAI {
+    if config.Provider != constants.ProviderCustom {
         panic("Provider not set correctly")
     }
     if config.Model != "gpt-4" {

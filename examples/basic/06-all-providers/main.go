@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/constants"
 	"github.com/kart-io/goagent/llm/providers"
 )
 
@@ -21,8 +22,8 @@ func main() {
 	fmt.Println("1. Testing OpenAI Provider")
 	fmt.Println("--------------------------")
 	if apiKey := os.Getenv("OPENAI_API_KEY"); apiKey != "" {
-		config := &llm.Config{
-			Provider:    llm.ProviderOpenAI,
+		config := &llm.LLMOptions{
+			Provider:    constants.ProviderOpenAI,
 			APIKey:      apiKey,
 			Model:       "gpt-3.5-turbo",
 			MaxTokens:   100,
@@ -44,8 +45,8 @@ func main() {
 	fmt.Println("2. Testing Gemini Provider")
 	fmt.Println("--------------------------")
 	if apiKey := os.Getenv("GEMINI_API_KEY"); apiKey != "" {
-		config := &llm.Config{
-			Provider:    llm.ProviderGemini,
+		config := &llm.LLMOptions{
+			Provider:    constants.ProviderGemini,
 			APIKey:      apiKey,
 			Model:       "gemini-pro",
 			MaxTokens:   100,
@@ -67,8 +68,8 @@ func main() {
 	fmt.Println("3. Testing DeepSeek Provider")
 	fmt.Println("----------------------------")
 	if apiKey := os.Getenv("DEEPSEEK_API_KEY"); apiKey != "" {
-		config := &llm.Config{
-			Provider:    llm.ProviderDeepSeek,
+		config := &llm.LLMOptions{
+			Provider:    constants.ProviderDeepSeek,
 			APIKey:      apiKey,
 			BaseURL:     "https://api.deepseek.com/v1",
 			Model:       "deepseek-chat",
@@ -104,8 +105,8 @@ func main() {
 	fmt.Println("5. Testing SiliconFlow Provider")
 	fmt.Println("-------------------------------")
 	if apiKey := os.Getenv("SILICONFLOW_API_KEY"); apiKey != "" {
-		config := &llm.Config{
-			Provider:    llm.ProviderSiliconFlow,
+		config := &llm.LLMOptions{
+			Provider:    constants.ProviderSiliconFlow,
 			APIKey:      apiKey,
 			Model:       "Qwen/Qwen2-7B-Instruct",
 			MaxTokens:   100,
@@ -138,8 +139,8 @@ func main() {
 	fmt.Println("6. Testing Kimi Provider")
 	fmt.Println("------------------------")
 	if apiKey := os.Getenv("KIMI_API_KEY"); apiKey != "" {
-		config := &llm.Config{
-			Provider:    llm.ProviderKimi,
+		config := &llm.LLMOptions{
+			Provider:    constants.ProviderKimi,
 			APIKey:      apiKey,
 			Model:       "moonshot-v1-8k",
 			MaxTokens:   100,
@@ -221,8 +222,8 @@ func selectProviderByRequirement(requirement string) llm.Client {
 	switch requirement {
 	case "long-context":
 		// Use Kimi for long context
-		config := &llm.Config{
-			Provider: llm.ProviderKimi,
+		config := &llm.LLMOptions{
+			Provider: constants.ProviderKimi,
 			APIKey:   os.Getenv("KIMI_API_KEY"),
 			Model:    "moonshot-v1-128k",
 		}
@@ -235,8 +236,8 @@ func selectProviderByRequirement(requirement string) llm.Client {
 
 	case "chinese":
 		// Use DeepSeek or Kimi for Chinese
-		config := &llm.Config{
-			Provider: llm.ProviderDeepSeek,
+		config := &llm.LLMOptions{
+			Provider: constants.ProviderDeepSeek,
 			APIKey:   os.Getenv("DEEPSEEK_API_KEY"),
 			Model:    "deepseek-chat",
 		}
@@ -246,8 +247,8 @@ func selectProviderByRequirement(requirement string) llm.Client {
 	case "coding":
 		// Use DeepSeek-Coder or Codellama
 		if os.Getenv("DEEPSEEK_API_KEY") != "" {
-			config := &llm.Config{
-				Provider: llm.ProviderDeepSeek,
+			config := &llm.LLMOptions{
+				Provider: constants.ProviderDeepSeek,
 				APIKey:   os.Getenv("DEEPSEEK_API_KEY"),
 				Model:    "deepseek-coder",
 			}
@@ -259,8 +260,8 @@ func selectProviderByRequirement(requirement string) llm.Client {
 
 	case "multimodal":
 		// Use Gemini for multimodal
-		config := &llm.Config{
-			Provider: llm.ProviderGemini,
+		config := &llm.LLMOptions{
+			Provider: constants.ProviderGemini,
 			APIKey:   os.Getenv("GEMINI_API_KEY"),
 			Model:    "gemini-pro-vision",
 		}
@@ -269,8 +270,8 @@ func selectProviderByRequirement(requirement string) llm.Client {
 
 	case "open-source":
 		// Use SiliconFlow for open-source models
-		config := &llm.Config{
-			Provider: llm.ProviderSiliconFlow,
+		config := &llm.LLMOptions{
+			Provider: constants.ProviderSiliconFlow,
 			APIKey:   os.Getenv("SILICONFLOW_API_KEY"),
 			Model:    "meta-llama/Meta-Llama-3.1-70B-Instruct",
 		}
@@ -279,8 +280,8 @@ func selectProviderByRequirement(requirement string) llm.Client {
 
 	default:
 		// Default to OpenAI
-		config := &llm.Config{
-			Provider: llm.ProviderOpenAI,
+		config := &llm.LLMOptions{
+			Provider: constants.ProviderOpenAI,
 			APIKey:   os.Getenv("OPENAI_API_KEY"),
 			Model:    "gpt-3.5-turbo",
 		}

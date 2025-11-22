@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/constants"
 	"github.com/kart-io/goagent/llm/providers"
 	"github.com/kart-io/goagent/tools"
 )
@@ -99,8 +100,8 @@ func demoLLMOptions() {
 
 	// 1. 基本配置
 	fmt.Println("\n基本配置:")
-	basicConfig := llm.NewConfigWithOptions(
-		llm.WithProvider(llm.ProviderOpenAI),
+	basicConfig := llm.NewLLMOptionsWithOptions(
+		llm.WithProvider(constants.ProviderOpenAI),
 		llm.WithAPIKey("demo-key"),
 		llm.WithModel("gpt-4"),
 		llm.WithMaxTokens(2000),
@@ -128,8 +129,8 @@ func demoLLMOptions() {
 	}
 
 	for _, p := range presets {
-		config := llm.NewConfigWithOptions(
-			llm.WithProvider(llm.ProviderOpenAI),
+		config := llm.NewLLMOptionsWithOptions(
+			llm.WithProvider(constants.ProviderOpenAI),
 			llm.WithAPIKey("demo"),
 			llm.WithPreset(p.preset),
 		)
@@ -160,8 +161,8 @@ func demoLLMOptions() {
 	}
 
 	for _, uc := range useCases {
-		config := llm.NewConfigWithOptions(
-			llm.WithProvider(llm.ProviderOpenAI),
+		config := llm.NewLLMOptionsWithOptions(
+			llm.WithProvider(constants.ProviderOpenAI),
 			llm.WithAPIKey("demo"),
 			llm.WithUseCase(uc.useCase),
 		)
@@ -190,8 +191,8 @@ func demoLLMOptions() {
 
 	// 5. 高级功能
 	fmt.Println("\n高级功能配置:")
-	advancedConfig := llm.NewConfigWithOptions(
-		llm.WithProvider(llm.ProviderOpenAI),
+	advancedConfig := llm.NewLLMOptionsWithOptions(
+		llm.WithProvider(constants.ProviderOpenAI),
 		llm.WithAPIKey("demo-key"),
 		llm.WithModel("gpt-4"),
 		llm.WithRetryCount(3),
@@ -217,8 +218,8 @@ func demoLLMOptions() {
 	fmt.Println("\n配置验证:")
 
 	// 有效配置
-	validConfig := &llm.Config{
-		Provider:  llm.ProviderOpenAI,
+	validConfig := &llm.LLMOptions{
+		Provider:  constants.ProviderOpenAI,
 		APIKey:    "test-key",
 		Model:     "gpt-4",
 		MaxTokens: 2000,
@@ -228,8 +229,8 @@ func demoLLMOptions() {
 	}
 
 	// Ollama 不需要 API Key
-	ollamaConfig := &llm.Config{
-		Provider: llm.ProviderOllama,
+	ollamaConfig := &llm.LLMOptions{
+		Provider: constants.ProviderOllama,
 		Model:    "llama2",
 		BaseURL:  "http://localhost:11434",
 	}
@@ -238,8 +239,8 @@ func demoLLMOptions() {
 	}
 
 	// 缺少 API Key
-	invalidConfig := &llm.Config{
-		Provider: llm.ProviderOpenAI,
+	invalidConfig := &llm.LLMOptions{
+		Provider: constants.ProviderOpenAI,
 		Model:    "gpt-4",
 	}
 	if err := llm.PrepareConfig(invalidConfig); err != nil {

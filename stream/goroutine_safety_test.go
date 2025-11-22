@@ -14,6 +14,7 @@ import (
 
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/constants"
 )
 
 // MockLLMClient for testing
@@ -59,8 +60,8 @@ func (m *MockLLMClient) Complete(ctx context.Context, req *llm.CompletionRequest
 	return nil, nil
 }
 
-func (m *MockLLMClient) Provider() llm.Provider {
-	return llm.ProviderOpenAI
+func (m *MockLLMClient) Provider() constants.Provider {
+	return constants.ProviderCustom
 }
 
 func (m *MockLLMClient) IsAvailable() bool {

@@ -8,6 +8,7 @@ import (
 	agentcore "github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/constants"
 )
 
 // MockLLMClient 用于基准测试的 Mock LLM 客户端
@@ -30,8 +31,8 @@ func (m *MockLLMClient) Complete(ctx context.Context, req *llm.CompletionRequest
 	return m.Chat(ctx, req.Messages)
 }
 
-func (m *MockLLMClient) Provider() llm.Provider {
-	return llm.ProviderOpenAI
+func (m *MockLLMClient) Provider() constants.Provider {
+	return constants.ProviderOpenAI
 }
 
 func (m *MockLLMClient) IsAvailable() bool {

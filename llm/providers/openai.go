@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/kart-io/goagent/utils/json"
 	"io"
 	"os"
 	"time"
+
+	"github.com/kart-io/goagent/llm/constants"
+	"github.com/kart-io/goagent/utils/json"
 
 	"github.com/sashabaranov/go-openai"
 
@@ -19,22 +21,22 @@ import (
 // OpenAIProvider implements LLM interface for OpenAI
 type OpenAIProvider struct {
 	client      *openai.Client
-	config      *agentllm.Config
+	config      *agentllm.LLMOptions
 	model       string
 	maxTokens   int
 	temperature float64
 }
 
 // NewOpenAI creates a new OpenAI provider
-func NewOpenAI(config *agentllm.Config) (*OpenAIProvider, error) {
+func NewOpenAI(config *agentllm.LLMOptions) (*OpenAIProvider, error) {
 	// Get API key from config or env
 	apiKey := config.APIKey
 	if apiKey == "" {
-		apiKey = os.Getenv(agentllm.EnvOpenAIAPIKey)
+		apiKey = os.Getenv(constants.EnvOpenAIAPIKey)
 	}
 
 	if apiKey == "" {
-		return nil, agentErrors.NewInvalidConfigError(ProviderOpenAI, agentllm.ErrorFieldAPIKey, "OpenAI API key is required")
+		return nil, agentErrors.NewInvalidConfigError(string(constants.ProviderOpenAI), constants.ErrorFieldAPIKey, "OpenAI API key is required")
 	}
 
 	clientConfig := openai.DefaultConfig(apiKey)
@@ -42,7 +44,7 @@ func NewOpenAI(config *agentllm.Config) (*OpenAIProvider, error) {
 	// Set base URL with fallback
 	baseURL := config.BaseURL
 	if baseURL == "" {
-		baseURL = os.Getenv(agentllm.EnvOpenAIBaseURL)
+		baseURL = os.Getenv(constants.EnvOpenAIBaseURL)
 	}
 	if baseURL != "" {
 		clientConfig.BaseURL = baseURL
@@ -51,7 +53,7 @@ func NewOpenAI(config *agentllm.Config) (*OpenAIProvider, error) {
 	// Set model with fallback
 	model := config.Model
 	if model == "" {
-		model = os.Getenv(agentllm.EnvOpenAIModel)
+		model = os.Getenv(constants.EnvOpenAIModel)
 	}
 	if model == "" {
 		model = openai.GPT4TurboPreview
@@ -114,11 +116,11 @@ func (p *OpenAIProvider) Complete(ctx context.Context, req *agentllm.CompletionR
 		TopP:        float32(req.TopP),
 	})
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError(ProviderOpenAI, model, err)
+		return nil, agentErrors.NewLLMRequestError(string(constants.ProviderOpenAI), model, err)
 	}
 
 	if len(resp.Choices) == 0 {
-		return nil, agentErrors.NewLLMResponseError(ProviderOpenAI, model, ErrNoCompletionChoices)
+		return nil, agentErrors.NewLLMResponseError(string(constants.ProviderOpenAI), model, "no choices in response")
 	}
 
 	return &agentllm.CompletionResponse{
@@ -126,7 +128,7 @@ func (p *OpenAIProvider) Complete(ctx context.Context, req *agentllm.CompletionR
 		Model:        resp.Model,
 		TokensUsed:   resp.Usage.TotalTokens,
 		FinishReason: string(resp.Choices[0].FinishReason),
-		Provider:     string(agentllm.ProviderOpenAI),
+		Provider:     string(constants.ProviderOpenAI),
 		Usage: &interfaces.TokenUsage{
 			PromptTokens:     resp.Usage.PromptTokens,
 			CompletionTokens: resp.Usage.CompletionTokens,
@@ -156,7 +158,7 @@ func (p *OpenAIProvider) Stream(ctx context.Context, prompt string) (<-chan stri
 		Stream:      true,
 	})
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError(ProviderOpenAI, p.model, err).
+		return nil, agentErrors.NewLLMRequestError(string(constants.ProviderOpenAI), p.model, err).
 			WithContext("stream", true)
 	}
 
@@ -207,12 +209,12 @@ func (p *OpenAIProvider) GenerateWithTools(ctx context.Context, prompt string, t
 		Functions:   functions,
 	})
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError(ProviderOpenAI, p.model, err).
+		return nil, agentErrors.NewLLMRequestError(string(constants.ProviderOpenAI), p.model, err).
 			WithContext("tool_calling", true)
 	}
 
 	if len(resp.Choices) == 0 {
-		return nil, agentErrors.NewLLMResponseError(ProviderOpenAI, p.model, ErrNoChoicesReturned)
+		return nil, agentErrors.NewLLMResponseError(string(constants.ProviderOpenAI), p.model, "no choices in response")
 	}
 
 	choice := resp.Choices[0]
@@ -256,7 +258,7 @@ func (p *OpenAIProvider) StreamWithTools(ctx context.Context, prompt string, too
 		Stream:      true,
 	})
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError(ProviderOpenAI, p.model, err).
+		return nil, agentErrors.NewLLMRequestError(string(constants.ProviderOpenAI), p.model, err).
 			WithContext("stream", true).
 			WithContext("tool_calling", true)
 	}
@@ -375,7 +377,7 @@ func (p *OpenAIProvider) Embed(ctx context.Context, text string) ([]float64, err
 	}
 
 	if len(resp.Data) == 0 {
-		return nil, agentErrors.NewLLMResponseError(ProviderOpenAI, string(openai.AdaEmbeddingV2), ErrNoEmbeddingsReturned)
+		return nil, agentErrors.NewLLMResponseError(string(constants.ProviderOpenAI), string(openai.AdaEmbeddingV2), "no embeddings in response")
 	}
 
 	// Convert float32 to float64
@@ -389,8 +391,8 @@ func (p *OpenAIProvider) Embed(ctx context.Context, text string) ([]float64, err
 }
 
 // Provider returns the provider type
-func (p *OpenAIProvider) Provider() agentllm.Provider {
-	return agentllm.ProviderOpenAI
+func (p *OpenAIProvider) Provider() constants.Provider {
+	return constants.ProviderOpenAI
 }
 
 // IsAvailable checks if the provider is available
@@ -462,7 +464,7 @@ type OpenAIStreamingProvider struct {
 }
 
 // NewOpenAIStreaming creates a streaming-optimized provider
-func NewOpenAIStreaming(config *agentllm.Config) (*OpenAIStreamingProvider, error) {
+func NewOpenAIStreaming(config *agentllm.LLMOptions) (*OpenAIStreamingProvider, error) {
 	base, err := NewOpenAI(config)
 	if err != nil {
 		return nil, err

@@ -36,7 +36,7 @@ func main() {
 	}
 
 	// 初始化 LLM 客户端
-	llmClient, err := providers.NewDeepSeek(&llm.Config{
+	llmClient, err := providers.NewDeepSeek(&llm.LLMOptions{
 		APIKey:      apiKey,
 		Model:       "deepseek-chat",
 		MaxTokens:   2000,

@@ -9,6 +9,7 @@ import (
 
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/constants"
 	"github.com/kart-io/goagent/llm/providers"
 	"github.com/kart-io/goagent/retrieval"
 )
@@ -109,8 +110,8 @@ func setupDeepSeekClient() (llm.Client, error) {
 		return nil, fmt.Errorf("DEEPSEEK_API_KEY environment variable not set")
 	}
 
-	config := &llm.Config{
-		Provider:    llm.ProviderDeepSeek,
+	config := &llm.LLMOptions{
+		Provider:    constants.ProviderDeepSeek,
 		APIKey:      apiKey,
 		Model:       "deepseek-chat",
 		Temperature: 0.7,

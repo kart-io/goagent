@@ -197,31 +197,31 @@ func main() {
 
 	// 4. 使用回调 (由于 Go 语言组合特性的限制，BaseAgent.WithCallbacks 返回 *BaseAgent，会导致丢失 SimpleTaskAgent 的 Invoke 实现，这里暂时注释掉)
 	/*
-	loggingCallback := agentcore.NewStdoutCallback(true)
-	agentWithCallbacks := simpleAgent.WithCallbacks(loggingCallback)
+		loggingCallback := agentcore.NewStdoutCallback(true)
+		agentWithCallbacks := simpleAgent.WithCallbacks(loggingCallback)
 
-	_, err = agentWithCallbacks.Invoke(ctx, input)
-	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		return
-	}
+		_, err = agentWithCallbacks.Invoke(ctx, input)
+		if err != nil {
+			fmt.Printf("Error: %v\n", err)
+			return
+		}
 	*/
 
 	// 5. 批量执行 (同样由于 BaseAgent.Batch 使用了 BaseAgent.Invoke，这里暂时注释掉)
 	/*
-	inputs := []*agentcore.AgentInput{
-		{Task: "Task 1", Options: agentcore.DefaultAgentOptions()},
-		{Task: "Task 2", Options: agentcore.DefaultAgentOptions()},
-		{Task: "Task 3", Options: agentcore.DefaultAgentOptions()},
-	}
+		inputs := []*agentcore.AgentInput{
+			{Task: "Task 1", Options: agentcore.DefaultAgentOptions()},
+			{Task: "Task 2", Options: agentcore.DefaultAgentOptions()},
+			{Task: "Task 3", Options: agentcore.DefaultAgentOptions()},
+		}
 
-	outputs, err := simpleAgent.Batch(ctx, inputs)
-	if err != nil {
-		fmt.Printf("Batch error: %v\n", err)
-		return
-	}
+		outputs, err := simpleAgent.Batch(ctx, inputs)
+		if err != nil {
+			fmt.Printf("Batch error: %v\n", err)
+			return
+		}
 
-	fmt.Printf("Processed %d tasks\n", len(outputs))
+		fmt.Printf("Processed %d tasks\n", len(outputs))
 	*/
 
 	// 6. 使用 ChainableAgent 串联多个 Agent
