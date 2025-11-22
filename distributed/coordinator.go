@@ -2,6 +2,7 @@ package distributed
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
@@ -20,16 +21,44 @@ type Coordinator struct {
 	// 负载均衡
 	mu              sync.RWMutex
 	roundRobinIndex map[string]int
+
+	// 并发控制
+	maxConcurrency int
+}
+
+const (
+	// DefaultMaxConcurrency 默认最大并发数
+	DefaultMaxConcurrency = 100
+)
+
+// CoordinatorOption Coordinator 配置选项
+type CoordinatorOption func(*Coordinator)
+
+// WithMaxConcurrency 设置最大并发数
+func WithMaxConcurrency(max int) CoordinatorOption {
+	return func(c *Coordinator) {
+		if max > 0 {
+			c.maxConcurrency = max
+		}
+	}
 }
 
 // NewCoordinator 创建协调器
-func NewCoordinator(registry *Registry, client *Client, logger core.Logger) *Coordinator {
-	return &Coordinator{
+func NewCoordinator(registry *Registry, client *Client, logger core.Logger, opts ...CoordinatorOption) *Coordinator {
+	c := &Coordinator{
 		registry:        registry,
 		client:          client,
 		logger:          logger.With("component", "agent-coordinator"),
 		roundRobinIndex: make(map[string]int),
+		maxConcurrency:  DefaultMaxConcurrency,
 	}
+
+	// 应用配置选项
+	for _, opt := range opts {
+		opt(c)
+	}
+
+	return c
 }
 
 // ExecuteAgent 执行远程 Agent
@@ -121,27 +150,46 @@ func (c *Coordinator) ExecuteAgentWithRetry(ctx context.Context, serviceName, ag
 }
 
 // ExecuteParallel 并行执行多个 Agent
+// 使用信号量模式限制并发 goroutine 数量，防止资源耗尽
 func (c *Coordinator) ExecuteParallel(ctx context.Context, tasks []AgentTask) ([]AgentTaskResult, error) {
 	results := make([]AgentTaskResult, len(tasks))
 	var wg sync.WaitGroup
 	errCh := make(chan error, len(tasks))
 
+	// 使用 buffered channel 作为信号量来限制并发数
+	semaphore := make(chan struct{}, c.maxConcurrency)
+
 	for i, task := range tasks {
 		wg.Add(1)
-		go func(index int, t AgentTask) {
-			defer wg.Done()
 
-			output, err := c.ExecuteAgent(ctx, t.ServiceName, t.AgentName, t.Input)
-			results[index] = AgentTaskResult{
-				Task:   t,
-				Output: output,
-				Error:  err,
-			}
+		// 获取信号量（阻塞直到有可用槽位）
+		select {
+		case <-ctx.Done():
+			// 上下文取消，停止启动新任务
+			wg.Done()
+			break
+		case semaphore <- struct{}{}:
+			// 成功获取信号量，启动 goroutine
+			go func(index int, t AgentTask) {
+				defer wg.Done()
+				defer func() { <-semaphore }() // 释放信号量
 
-			if err != nil {
-				errCh <- err
-			}
-		}(i, task)
+				output, err := c.ExecuteAgent(ctx, t.ServiceName, t.AgentName, t.Input)
+				results[index] = AgentTaskResult{
+					Task:   t,
+					Output: output,
+					Error:  err,
+				}
+
+				if err != nil {
+					select {
+					case errCh <- err:
+					default:
+						// errCh 已满，丢弃错误（已经记录在 results 中）
+					}
+				}
+			}(i, task)
+		}
 	}
 
 	wg.Wait()
@@ -265,28 +313,10 @@ func (c *Coordinator) shouldRetry(err error) bool {
 	}
 
 	errStr := err.Error()
-	// 网络错误
-	if contains(errStr, "connection refused") ||
-		contains(errStr, "timeout") ||
-		contains(errStr, "connection reset") {
-		return true
-	}
-
-	return false
-}
-
-// contains 检查字符串包含
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && (s[:len(substr)] == substr || s[len(s)-len(substr):] == substr || findInString(s, substr)))
-}
-
-func findInString(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
+	// 网络错误 - use standard library strings.Contains for O(n) performance
+	return strings.Contains(errStr, "connection refused") ||
+		strings.Contains(errStr, "timeout") ||
+		strings.Contains(errStr, "connection reset")
 }
 
 // AgentTask Agent 任务
