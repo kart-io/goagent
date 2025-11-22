@@ -8,7 +8,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"hash"
-	"os"
+	"log"
 	"regexp"
 	"sort"
 	"strings"
@@ -270,7 +270,7 @@ func copyAtomicInt64(src *atomic.Int64) *atomic.Int64 {
 // InvalidateByPattern 根据正则表达式模式失效缓存
 //
 // 支持正则表达式模式匹配缓存键。返回失效的条目数量。
-// 失效时会递增全局版本号，并且会级联失效依赖的工具。
+// 只删除匹配的条目，不影响其他缓存项。
 func (c *MemoryToolCache) InvalidateByPattern(ctx context.Context, pattern string) (int, error) {
 	// 编译正则表达式
 	re, err := regexp.Compile(pattern)
@@ -296,8 +296,7 @@ func (c *MemoryToolCache) InvalidateByPattern(ctx context.Context, pattern strin
 		}
 	}
 
-	// 递增版本号
-	c.version.Add(1)
+	// 不递增版本号，只删除匹配的条目
 
 	// 移除匹配的条目
 	for _, key := range keysToRemove {
@@ -324,6 +323,7 @@ func (c *MemoryToolCache) InvalidateByPattern(ctx context.Context, pattern strin
 // InvalidateByTool 根据工具名称失效缓存
 //
 // 失效指定工具的所有缓存条目，并级联失效依赖该工具的其他工具。
+// 只删除相关的条目，不影响其他缓存项。
 // 返回失效的条目数量。
 func (c *MemoryToolCache) InvalidateByTool(ctx context.Context, toolName string) (int, error) {
 	c.mu.Lock()
@@ -337,8 +337,7 @@ func (c *MemoryToolCache) InvalidateByTool(ctx context.Context, toolName string)
 		}
 	}
 
-	// 递增版本号
-	c.version.Add(1)
+	// 不递增版本号，只删除相关的条目
 
 	// 移除该工具的所有条目
 	for _, key := range keysToRemove {
@@ -637,7 +636,7 @@ func (c *CachedTool) Invoke(ctx context.Context, input *ToolInput) (*ToolOutput,
 	// 存入缓存
 	// Log error at WARN level for debugging; cache failures should not affect tool execution
 	if setErr := c.cache.Set(ctx, cacheKey, output, c.ttl); setErr != nil {
-		fmt.Fprintf(os.Stderr, "[WARN] cache set failed (tool=%s, key=%s): %v\n", c.tool.Name(), cacheKey, setErr)
+		log.Printf("[WARN] cache set failed (tool=%s, key=%s): %v\n", c.tool.Name(), cacheKey, setErr)
 	}
 
 	return output, nil
