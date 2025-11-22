@@ -10,19 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	agentcore "github.com/kart-io/goagent/core"
-	"github.com/kart-io/logger"
-	"github.com/kart-io/logger/core"
-	"github.com/kart-io/logger/option"
 )
-
-// createTestLogger creates a logger for testing
-func createTestLogger() core.Logger {
-	log, _ := logger.New(&option.LogOption{
-		Engine: "zap",
-		Level:  "ERROR",
-	})
-	return log
-}
 
 func TestNewCoordinator(t *testing.T) {
 	log := createTestLogger()

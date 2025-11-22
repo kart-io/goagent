@@ -11,21 +11,9 @@ import (
 	"github.com/kart-io/goagent/utils/json"
 
 	agentcore "github.com/kart-io/goagent/core"
-	"github.com/kart-io/logger"
-	"github.com/kart-io/logger/core"
-	"github.com/kart-io/logger/option"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-// createTestLogger creates a logger for testing
-func createTestLogger() core.Logger {
-	log, _ := logger.New(&option.LogOption{
-		Engine: "zap",
-		Level:  "ERROR",
-	})
-	return log
-}
 
 
 // TestClient_ExecuteAgent_Success tests successful agent execution
