@@ -2,15 +2,17 @@ package llm
 
 import (
 	"time"
+
+	"github.com/kart-io/goagent/llm/constants"
 )
 
 // ClientOption 定义 LLM 客户端配置选项
-type ClientOption func(*Config)
+type ClientOption func(*LLMOptions)
 
 // DefaultClientConfig 返回默认的客户端配置
-func DefaultClientConfig() *Config {
-	return &Config{
-		Provider:    ProviderOpenAI,
+func DefaultClientConfig() *LLMOptions {
+	return &LLMOptions{
+		Provider:    constants.ProviderCustom,
 		MaxTokens:   2000,
 		Temperature: 0.7,
 		Timeout:     60,
@@ -19,36 +21,36 @@ func DefaultClientConfig() *Config {
 }
 
 // WithProvider 设置 LLM 提供商
-func WithProvider(provider Provider) ClientOption {
-	return func(c *Config) {
+func WithProvider(provider constants.Provider) ClientOption {
+	return func(c *LLMOptions) {
 		c.Provider = provider
 	}
 }
 
 // WithAPIKey 设置 API 密钥
 func WithAPIKey(apiKey string) ClientOption {
-	return func(c *Config) {
+	return func(c *LLMOptions) {
 		c.APIKey = apiKey
 	}
 }
 
 // WithBaseURL 设置自定义 API 端点
 func WithBaseURL(baseURL string) ClientOption {
-	return func(c *Config) {
+	return func(c *LLMOptions) {
 		c.BaseURL = baseURL
 	}
 }
 
 // WithModel 设置默认模型
 func WithModel(model string) ClientOption {
-	return func(c *Config) {
+	return func(c *LLMOptions) {
 		c.Model = model
 	}
 }
 
 // WithMaxTokens 设置最大 token 数
 func WithMaxTokens(maxTokens int) ClientOption {
-	return func(c *Config) {
+	return func(c *LLMOptions) {
 		if maxTokens > 0 {
 			c.MaxTokens = maxTokens
 		}
@@ -57,7 +59,7 @@ func WithMaxTokens(maxTokens int) ClientOption {
 
 // WithTemperature 设置温度参数
 func WithTemperature(temperature float64) ClientOption {
-	return func(c *Config) {
+	return func(c *LLMOptions) {
 		if temperature >= 0 && temperature <= 2.0 {
 			c.Temperature = temperature
 		}
@@ -66,14 +68,14 @@ func WithTemperature(temperature float64) ClientOption {
 
 // WithTimeout 设置请求超时时间
 func WithTimeout(timeout time.Duration) ClientOption {
-	return func(c *Config) {
+	return func(c *LLMOptions) {
 		c.Timeout = int(timeout.Seconds())
 	}
 }
 
 // WithTopP 设置 Top-P 采样参数
 func WithTopP(topP float64) ClientOption {
-	return func(c *Config) {
+	return func(c *LLMOptions) {
 		if topP >= 0 && topP <= 1.0 {
 			c.TopP = topP
 		}
@@ -82,14 +84,14 @@ func WithTopP(topP float64) ClientOption {
 
 // WithOrganizationID 设置组织 ID（用于 OpenAI）
 func WithOrganizationID(orgID string) ClientOption {
-	return func(c *Config) {
+	return func(c *LLMOptions) {
 		c.OrganizationID = orgID
 	}
 }
 
 // WithRetryCount 设置重试次数
 func WithRetryCount(retryCount int) ClientOption {
-	return func(c *Config) {
+	return func(c *LLMOptions) {
 		if retryCount >= 0 {
 			c.RetryCount = retryCount
 		}
@@ -98,35 +100,35 @@ func WithRetryCount(retryCount int) ClientOption {
 
 // WithRetryDelay 设置重试延迟
 func WithRetryDelay(delay time.Duration) ClientOption {
-	return func(c *Config) {
+	return func(c *LLMOptions) {
 		c.RetryDelay = delay
 	}
 }
 
 // WithRateLimiting 配置速率限制
 func WithRateLimiting(requestsPerMinute int) ClientOption {
-	return func(c *Config) {
+	return func(c *LLMOptions) {
 		c.RateLimitRPM = requestsPerMinute
 	}
 }
 
 // WithProxy 设置代理 URL
 func WithProxy(proxyURL string) ClientOption {
-	return func(c *Config) {
+	return func(c *LLMOptions) {
 		c.ProxyURL = proxyURL
 	}
 }
 
 // WithSystemPrompt 设置默认系统提示
 func WithSystemPrompt(prompt string) ClientOption {
-	return func(c *Config) {
+	return func(c *LLMOptions) {
 		c.SystemPrompt = prompt
 	}
 }
 
 // WithCache 启用响应缓存
 func WithCache(enabled bool, ttl time.Duration) ClientOption {
-	return func(c *Config) {
+	return func(c *LLMOptions) {
 		c.CacheEnabled = enabled
 		c.CacheTTL = ttl
 	}
@@ -134,14 +136,14 @@ func WithCache(enabled bool, ttl time.Duration) ClientOption {
 
 // WithStreamingEnabled 启用流式响应
 func WithStreamingEnabled(enabled bool) ClientOption {
-	return func(c *Config) {
+	return func(c *LLMOptions) {
 		c.StreamingEnabled = enabled
 	}
 }
 
 // WithCustomHeaders 设置自定义 HTTP 头
 func WithCustomHeaders(headers map[string]string) ClientOption {
-	return func(c *Config) {
+	return func(c *LLMOptions) {
 		if c.CustomHeaders == nil {
 			c.CustomHeaders = make(map[string]string)
 		}
@@ -169,7 +171,7 @@ const (
 
 // WithPreset 应用预设配置
 func WithPreset(preset PresetOption) ClientOption {
-	return func(c *Config) {
+	return func(c *LLMOptions) {
 		switch preset {
 		case PresetDevelopment:
 			c.Model = "gpt-3.5-turbo"
@@ -212,48 +214,48 @@ func WithPreset(preset PresetOption) ClientOption {
 }
 
 // ProviderPreset 针对特定提供商的预设配置
-func WithProviderPreset(provider Provider) ClientOption {
-	return func(c *Config) {
+func WithProviderPreset(provider constants.Provider) ClientOption {
+	return func(c *LLMOptions) {
 		c.Provider = provider
 
 		switch provider {
-		case ProviderOpenAI:
+		case constants.ProviderOpenAI:
 			c.Model = "gpt-4-turbo-preview"
 			c.MaxTokens = 4096
 
-		case ProviderAnthropic:
+		case constants.ProviderAnthropic:
 			c.Model = "claude-3-sonnet-20240229"
 			c.MaxTokens = 4096
 
-		case ProviderGemini:
+		case constants.ProviderGemini:
 			c.Model = "gemini-pro"
 			c.MaxTokens = 8192
 
-		case ProviderDeepSeek:
+		case constants.ProviderDeepSeek:
 			c.Model = "deepseek-chat"
 			c.MaxTokens = 4096
 			c.BaseURL = "https://api.deepseek.com/v1"
 
-		case ProviderKimi:
+		case constants.ProviderKimi:
 			c.Model = "moonshot-v1-8k"
 			c.MaxTokens = 8192
 			c.BaseURL = "https://api.moonshot.cn/v1"
 
-		case ProviderSiliconFlow:
+		case constants.ProviderSiliconFlow:
 			c.Model = "Qwen/Qwen2-7B-Instruct"
 			c.MaxTokens = 4096
 			c.BaseURL = "https://api.siliconflow.cn/v1"
 
-		case ProviderOllama:
+		case constants.ProviderOllama:
 			c.Model = "llama2"
 			c.MaxTokens = 2048
 			c.BaseURL = "http://localhost:11434"
 
-		case ProviderCohere:
+		case constants.ProviderCohere:
 			c.Model = "command-r-plus"
 			c.MaxTokens = 4096
 
-		case ProviderHuggingFace:
+		case constants.ProviderHuggingFace:
 			c.Model = "meta-llama/Llama-2-7b-chat-hf"
 			c.MaxTokens = 2048
 		}
@@ -280,7 +282,7 @@ const (
 
 // WithUseCase 根据使用场景优化配置
 func WithUseCase(useCase UseCase) ClientOption {
-	return func(c *Config) {
+	return func(c *LLMOptions) {
 		switch useCase {
 		case UseCaseChat:
 			c.Temperature = 0.7
@@ -317,9 +319,9 @@ func WithUseCase(useCase UseCase) ClientOption {
 }
 
 // ApplyOptions 应用选项到配置
-func ApplyOptions(config *Config, opts ...ClientOption) *Config {
+func ApplyOptions(config *LLMOptions, opts ...ClientOption) *LLMOptions {
 	if config == nil {
-		config = DefaultClientConfig()
+		config = DefaultLLMOptions()
 	}
 
 	for _, opt := range opts {
@@ -330,7 +332,7 @@ func ApplyOptions(config *Config, opts ...ClientOption) *Config {
 }
 
 // NewConfigWithOptions 使用选项创建新配置
-func NewConfigWithOptions(opts ...ClientOption) *Config {
-	config := DefaultClientConfig()
+func NewLLMOptionsWithOptions(opts ...ClientOption) *LLMOptions {
+	config := DefaultLLMOptions()
 	return ApplyOptions(config, opts...)
 }

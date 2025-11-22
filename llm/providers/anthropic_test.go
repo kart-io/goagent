@@ -3,12 +3,14 @@ package providers
 import (
 	"context"
 	"fmt"
-	"github.com/kart-io/goagent/utils/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/kart-io/goagent/llm/constants"
+	"github.com/kart-io/goagent/utils/json"
 
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
@@ -20,7 +22,7 @@ import (
 func TestNewAnthropic(t *testing.T) {
 	tests := []struct {
 		name        string
-		config      *llm.Config
+		config      *llm.LLMOptions
 		envAPIKey   string
 		envBaseURL  string
 		envModel    string
@@ -30,7 +32,7 @@ func TestNewAnthropic(t *testing.T) {
 	}{
 		{
 			name: "valid config with all parameters",
-			config: &llm.Config{
+			config: &llm.LLMOptions{
 				APIKey:      "test-key",
 				BaseURL:     "https://custom.api.com",
 				Model:       "claude-3-opus-20240229",
@@ -49,7 +51,7 @@ func TestNewAnthropic(t *testing.T) {
 		},
 		{
 			name: "minimal config with defaults",
-			config: &llm.Config{
+			config: &llm.LLMOptions{
 				APIKey: "test-key",
 			},
 			wantErr: false,
@@ -63,7 +65,7 @@ func TestNewAnthropic(t *testing.T) {
 		},
 		{
 			name: "config with env var API key",
-			config: &llm.Config{
+			config: &llm.LLMOptions{
 				Model: "claude-3-haiku-20240307",
 			},
 			envAPIKey: "env-api-key",
@@ -75,7 +77,7 @@ func TestNewAnthropic(t *testing.T) {
 		},
 		{
 			name: "config with env var base URL",
-			config: &llm.Config{
+			config: &llm.LLMOptions{
 				APIKey: "test-key",
 			},
 			envBaseURL: "https://env.api.com",
@@ -86,7 +88,7 @@ func TestNewAnthropic(t *testing.T) {
 		},
 		{
 			name: "config with env var model",
-			config: &llm.Config{
+			config: &llm.LLMOptions{
 				APIKey: "test-key",
 			},
 			envModel: "claude-3-opus-20240229",
@@ -97,7 +99,7 @@ func TestNewAnthropic(t *testing.T) {
 		},
 		{
 			name:    "missing API key",
-			config:  &llm.Config{},
+			config:  &llm.LLMOptions{},
 			wantErr: true,
 			errCode: agentErrors.CodeInvalidConfig,
 		},
@@ -266,7 +268,7 @@ func TestAnthropicComplete(t *testing.T) {
 			defer server.Close()
 
 			// Create provider
-			provider, err := NewAnthropic(&llm.Config{
+			provider, err := NewAnthropic(&llm.LLMOptions{
 				APIKey:  "test-key",
 				BaseURL: server.URL,
 			})
@@ -310,7 +312,7 @@ func TestAnthropicChat(t *testing.T) {
 	}))
 	defer server.Close()
 
-	provider, err := NewAnthropic(&llm.Config{
+	provider, err := NewAnthropic(&llm.LLMOptions{
 		APIKey:  "test-key",
 		BaseURL: server.URL,
 	})
@@ -410,7 +412,7 @@ func TestAnthropicErrorHandling(t *testing.T) {
 			}))
 			defer server.Close()
 
-			provider, err := NewAnthropic(&llm.Config{
+			provider, err := NewAnthropic(&llm.LLMOptions{
 				APIKey:  "test-key",
 				BaseURL: server.URL,
 			})
@@ -458,7 +460,7 @@ func TestAnthropicRetry(t *testing.T) {
 	}))
 	defer server.Close()
 
-	provider, err := NewAnthropic(&llm.Config{
+	provider, err := NewAnthropic(&llm.LLMOptions{
 		APIKey:  "test-key",
 		BaseURL: server.URL,
 	})
@@ -482,7 +484,7 @@ func TestAnthropicRetryExhausted(t *testing.T) {
 	}))
 	defer server.Close()
 
-	provider, err := NewAnthropic(&llm.Config{
+	provider, err := NewAnthropic(&llm.LLMOptions{
 		APIKey:  "test-key",
 		BaseURL: server.URL,
 	})
@@ -505,7 +507,7 @@ func TestAnthropicContextCancellation(t *testing.T) {
 	}))
 	defer server.Close()
 
-	provider, err := NewAnthropic(&llm.Config{
+	provider, err := NewAnthropic(&llm.LLMOptions{
 		APIKey:  "test-key",
 		BaseURL: server.URL,
 	})
@@ -551,7 +553,7 @@ func TestAnthropicStream(t *testing.T) {
 	}))
 	defer server.Close()
 
-	provider, err := NewAnthropic(&llm.Config{
+	provider, err := NewAnthropic(&llm.LLMOptions{
 		APIKey:  "test-key",
 		BaseURL: server.URL,
 	})
@@ -575,7 +577,7 @@ func TestAnthropicStreamError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	provider, err := NewAnthropic(&llm.Config{
+	provider, err := NewAnthropic(&llm.LLMOptions{
 		APIKey:  "test-key",
 		BaseURL: server.URL,
 	})
@@ -588,17 +590,17 @@ func TestAnthropicStreamError(t *testing.T) {
 
 // TestAnthropicProvider tests Provider method
 func TestAnthropicProvider(t *testing.T) {
-	provider, err := NewAnthropic(&llm.Config{
+	provider, err := NewAnthropic(&llm.LLMOptions{
 		APIKey: "test-key",
 	})
 	require.NoError(t, err)
 
-	assert.Equal(t, llm.ProviderAnthropic, provider.Provider())
+	assert.Equal(t, constants.ProviderAnthropic, provider.Provider())
 }
 
 // TestAnthropicModelName tests ModelName method
 func TestAnthropicModelName(t *testing.T) {
-	provider, err := NewAnthropic(&llm.Config{
+	provider, err := NewAnthropic(&llm.LLMOptions{
 		APIKey: "test-key",
 		Model:  "claude-3-opus-20240229",
 	})
@@ -609,7 +611,7 @@ func TestAnthropicModelName(t *testing.T) {
 
 // TestAnthropicMaxTokens tests MaxTokens method
 func TestAnthropicMaxTokens(t *testing.T) {
-	provider, err := NewAnthropic(&llm.Config{
+	provider, err := NewAnthropic(&llm.LLMOptions{
 		APIKey:    "test-key",
 		MaxTokens: 4000,
 	})
@@ -640,7 +642,7 @@ func TestAnthropicIsAvailable(t *testing.T) {
 		}))
 		defer server.Close()
 
-		provider, err := NewAnthropic(&llm.Config{
+		provider, err := NewAnthropic(&llm.LLMOptions{
 			APIKey:  "test-key",
 			BaseURL: server.URL,
 		})
@@ -655,7 +657,7 @@ func TestAnthropicIsAvailable(t *testing.T) {
 		}))
 		defer server.Close()
 
-		provider, err := NewAnthropic(&llm.Config{
+		provider, err := NewAnthropic(&llm.LLMOptions{
 			APIKey:  "test-key",
 			BaseURL: server.URL,
 		})

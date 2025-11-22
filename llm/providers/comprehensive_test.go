@@ -3,13 +3,15 @@ package providers
 import (
 	"bytes"
 	"context"
-	"github.com/kart-io/goagent/utils/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/kart-io/goagent/llm/constants"
+	"github.com/kart-io/goagent/utils/json"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -26,14 +28,14 @@ import (
 func TestDeepSeekProvider_Initialization(t *testing.T) {
 	tests := []struct {
 		name    string
-		config  *llm.Config
+		config  *llm.LLMOptions
 		wantErr bool
 		errMsg  string
 	}{
 		{
 			name: "valid config with all parameters",
-			config: &llm.Config{
-				Provider:    llm.ProviderDeepSeek,
+			config: &llm.LLMOptions{
+				Provider:    constants.ProviderDeepSeek,
 				APIKey:      "test-key",
 				Model:       "deepseek-coder",
 				MaxTokens:   4000,
@@ -45,25 +47,30 @@ func TestDeepSeekProvider_Initialization(t *testing.T) {
 		},
 		{
 			name: "missing API key",
-			config: &llm.Config{
-				Provider: llm.ProviderDeepSeek,
-				Model:    "deepseek-chat",
+			config: &llm.LLMOptions{
+				Provider:    constants.ProviderDeepSeek,
+				APIKey:      "test-key",
+				Model:       "deepseek-chat",
+				MaxTokens:   4000,
+				Temperature: 0.5,
+				BaseURL:     "https://api.deepseek.com/v1",
+				Timeout:     30,
 			},
 			wantErr: true,
 			errMsg:  "API key is required",
 		},
 		{
 			name: "valid config with minimal parameters",
-			config: &llm.Config{
-				Provider: llm.ProviderDeepSeek,
+			config: &llm.LLMOptions{
+				Provider: constants.ProviderDeepSeek,
 				APIKey:   "test-key",
 			},
 			wantErr: false,
 		},
 		{
 			name: "config with custom base URL",
-			config: &llm.Config{
-				Provider: llm.ProviderDeepSeek,
+			config: &llm.LLMOptions{
+				Provider: constants.ProviderDeepSeek,
 				APIKey:   "test-key",
 				BaseURL:  "https://custom.deepseek.com",
 			},
@@ -84,7 +91,7 @@ func TestDeepSeekProvider_Initialization(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 				assert.NotNil(t, provider)
-				assert.Equal(t, llm.ProviderDeepSeek, provider.Provider())
+				assert.Equal(t, constants.ProviderDeepSeek, provider.Provider())
 				assert.NotZero(t, provider.maxTokens)
 				assert.NotZero(t, provider.temperature)
 			}
@@ -94,8 +101,8 @@ func TestDeepSeekProvider_Initialization(t *testing.T) {
 
 // TestDeepSeekProvider_DefaultValues tests default value assignments
 func TestDeepSeekProvider_DefaultValues(t *testing.T) {
-	config := &llm.Config{
-		Provider: llm.ProviderDeepSeek,
+	config := &llm.LLMOptions{
+		Provider: constants.ProviderDeepSeek,
 		APIKey:   "test-key",
 	}
 
@@ -110,8 +117,8 @@ func TestDeepSeekProvider_DefaultValues(t *testing.T) {
 
 // TestDeepSeekProvider_ModelName tests model name retrieval
 func TestDeepSeekProvider_ModelName(t *testing.T) {
-	config := &llm.Config{
-		Provider: llm.ProviderDeepSeek,
+	config := &llm.LLMOptions{
+		Provider: constants.ProviderDeepSeek,
 		APIKey:   "test-key",
 		Model:    "deepseek-coder",
 	}
@@ -124,8 +131,8 @@ func TestDeepSeekProvider_ModelName(t *testing.T) {
 
 // TestDeepSeekProvider_MaxTokens tests max tokens retrieval
 func TestDeepSeekProvider_MaxTokens(t *testing.T) {
-	config := &llm.Config{
-		Provider:  llm.ProviderDeepSeek,
+	config := &llm.LLMOptions{
+		Provider:  constants.ProviderDeepSeek,
 		APIKey:    "test-key",
 		MaxTokens: 3000,
 	}
@@ -181,8 +188,8 @@ func TestDeepSeekProvider_Complete(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	config := &llm.Config{
-		Provider: llm.ProviderDeepSeek,
+	config := &llm.LLMOptions{
+		Provider: constants.ProviderDeepSeek,
 		APIKey:   "test-key",
 		BaseURL:  mockServer.URL,
 		Model:    "deepseek-chat",
@@ -239,8 +246,8 @@ func TestDeepSeekProvider_Complete_OverrideRequestParams(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	provider, err := NewDeepSeek(&llm.Config{
-		Provider: llm.ProviderDeepSeek,
+	provider, err := NewDeepSeek(&llm.LLMOptions{
+		Provider: constants.ProviderDeepSeek,
 		APIKey:   "test-key",
 		BaseURL:  mockServer.URL,
 		Timeout:  5,
@@ -271,8 +278,8 @@ func TestDeepSeekProvider_Complete_EmptyResponse(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	provider, err := NewDeepSeek(&llm.Config{
-		Provider: llm.ProviderDeepSeek,
+	provider, err := NewDeepSeek(&llm.LLMOptions{
+		Provider: constants.ProviderDeepSeek,
 		APIKey:   "test-key",
 		BaseURL:  mockServer.URL,
 		Timeout:  5,
@@ -312,8 +319,8 @@ func TestDeepSeekProvider_Chat(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	provider, err := NewDeepSeek(&llm.Config{
-		Provider: llm.ProviderDeepSeek,
+	provider, err := NewDeepSeek(&llm.LLMOptions{
+		Provider: constants.ProviderDeepSeek,
 		APIKey:   "test-key",
 		BaseURL:  mockServer.URL,
 		Timeout:  5,
@@ -383,8 +390,8 @@ func TestDeepSeekProvider_Stream(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	provider, err := NewDeepSeek(&llm.Config{
-		Provider: llm.ProviderDeepSeek,
+	provider, err := NewDeepSeek(&llm.LLMOptions{
+		Provider: constants.ProviderDeepSeek,
 		APIKey:   "test-key",
 		BaseURL:  mockServer.URL,
 		Timeout:  5,
@@ -447,11 +454,14 @@ func TestDeepSeekProvider_GenerateWithTools(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	provider, err := NewDeepSeek(&llm.Config{
-		Provider: llm.ProviderDeepSeek,
-		APIKey:   "test-key",
-		BaseURL:  mockServer.URL,
-		Timeout:  5,
+	provider, err := NewDeepSeek(&llm.LLMOptions{
+		Provider:    constants.ProviderDeepSeek,
+		APIKey:      "test-key",
+		BaseURL:     mockServer.URL,
+		Timeout:     5,
+		Model:       "deepseek-chat",
+		Temperature: 0.7,
+		MaxTokens:   500,
 	})
 	require.NoError(t, err)
 
@@ -544,8 +554,8 @@ func TestDeepSeekProvider_StreamWithTools(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	provider, err := NewDeepSeek(&llm.Config{
-		Provider: llm.ProviderDeepSeek,
+	provider, err := NewDeepSeek(&llm.LLMOptions{
+		Provider: constants.ProviderDeepSeek,
 		APIKey:   "test-key",
 		BaseURL:  mockServer.URL,
 		Timeout:  5,
@@ -599,8 +609,8 @@ func TestDeepSeekProvider_Embed(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	provider, err := NewDeepSeek(&llm.Config{
-		Provider: llm.ProviderDeepSeek,
+	provider, err := NewDeepSeek(&llm.LLMOptions{
+		Provider: constants.ProviderDeepSeek,
 		APIKey:   "test-key",
 		BaseURL:  mockServer.URL,
 		Timeout:  5,
@@ -621,8 +631,8 @@ func TestDeepSeekProvider_CallAPI_HTTPError(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	provider, err := NewDeepSeek(&llm.Config{
-		Provider: llm.ProviderDeepSeek,
+	provider, err := NewDeepSeek(&llm.LLMOptions{
+		Provider: constants.ProviderDeepSeek,
 		APIKey:   "invalid-key",
 		BaseURL:  mockServer.URL,
 		Timeout:  5,
@@ -639,8 +649,8 @@ func TestDeepSeekProvider_CallAPI_HTTPError(t *testing.T) {
 
 // TestDeepSeekProvider_CallAPI_NetworkError tests network error handling
 func TestDeepSeekProvider_CallAPI_NetworkError(t *testing.T) {
-	provider, err := NewDeepSeek(&llm.Config{
-		Provider: llm.ProviderDeepSeek,
+	provider, err := NewDeepSeek(&llm.LLMOptions{
+		Provider: constants.ProviderDeepSeek,
 		APIKey:   "test-key",
 		BaseURL:  "http://invalid-hostname-that-does-not-exist.test",
 		Timeout:  1,
@@ -656,8 +666,8 @@ func TestDeepSeekProvider_CallAPI_NetworkError(t *testing.T) {
 
 // TestDeepSeekProvider_ConvertToolsToDeepSeek tests tool conversion
 func TestDeepSeekProvider_ConvertToolsToDeepSeek(t *testing.T) {
-	provider, err := NewDeepSeek(&llm.Config{
-		Provider: llm.ProviderDeepSeek,
+	provider, err := NewDeepSeek(&llm.LLMOptions{
+		Provider: constants.ProviderDeepSeek,
 		APIKey:   "test-key",
 	})
 	require.NoError(t, err)
@@ -676,8 +686,8 @@ func TestDeepSeekProvider_ConvertToolsToDeepSeek(t *testing.T) {
 
 // TestDeepSeekStreamingProvider_Creation tests streaming provider creation
 func TestDeepSeekStreamingProvider_Creation(t *testing.T) {
-	config := &llm.Config{
-		Provider: llm.ProviderDeepSeek,
+	config := &llm.LLMOptions{
+		Provider: constants.ProviderDeepSeek,
 		APIKey:   "test-key",
 	}
 
@@ -731,11 +741,13 @@ func TestDeepSeekStreamingProvider_StreamWithMetadata(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	provider, err := NewDeepSeekStreaming(&llm.Config{
-		Provider: llm.ProviderDeepSeek,
-		APIKey:   "test-key",
-		BaseURL:  mockServer.URL,
-		Timeout:  5,
+	provider, err := NewDeepSeekStreaming(&llm.LLMOptions{
+		Provider:    constants.ProviderDeepSeek,
+		APIKey:      "test-key",
+		BaseURL:     mockServer.URL,
+		Timeout:     5,
+		Model:       "deepseek-chat",
+		Temperature: 0.7,
 	})
 	require.NoError(t, err)
 
@@ -758,9 +770,13 @@ func TestDeepSeekStreamingProvider_StreamWithMetadata(t *testing.T) {
 
 // TestOpenAIStreamingProvider_CreationComprehensive tests OpenAI streaming provider creation
 func TestOpenAIStreamingProvider_CreationComprehensive(t *testing.T) {
-	config := &llm.Config{
-		Provider: llm.ProviderOpenAI,
-		APIKey:   "test-key",
+	config := &llm.LLMOptions{
+		Provider:    constants.ProviderOpenAI,
+		APIKey:      "test-key",
+		BaseURL:     "https://api.openai.com/v1",
+		Timeout:     5,
+		Model:       "gpt-4",
+		Temperature: 0.7,
 	}
 
 	provider, err := NewOpenAIStreaming(config)
@@ -771,8 +787,12 @@ func TestOpenAIStreamingProvider_CreationComprehensive(t *testing.T) {
 
 // TestOpenAIStreamingProvider_CreationErrorComprehensive tests error handling in creation
 func TestOpenAIStreamingProvider_CreationErrorComprehensive(t *testing.T) {
-	config := &llm.Config{
-		Provider: llm.ProviderOpenAI,
+	config := &llm.LLMOptions{
+		Provider:    constants.ProviderOpenAI,
+		BaseURL:     "https://api.openai.com/v1",
+		Timeout:     5,
+		Model:       "gpt-4",
+		Temperature: 0.7,
 		// Missing APIKey
 	}
 
@@ -785,31 +805,38 @@ func TestOpenAIStreamingProvider_CreationErrorComprehensive(t *testing.T) {
 func TestOpenAIProvider_InitializationComprehensive(t *testing.T) {
 	tests := []struct {
 		name    string
-		config  *llm.Config
+		config  *llm.LLMOptions
 		wantErr bool
 	}{
 		{
 			name: "valid config",
-			config: &llm.Config{
-				Provider:    llm.ProviderOpenAI,
+			config: &llm.LLMOptions{
+				Provider:    constants.ProviderOpenAI,
 				APIKey:      "test-key",
 				Model:       "gpt-4",
 				MaxTokens:   2000,
 				Temperature: 0.7,
+				BaseURL:     "https://api.openai.com/v1",
+				Timeout:     5,
 			},
 			wantErr: false,
 		},
 		{
 			name: "missing API key",
-			config: &llm.Config{
-				Provider: llm.ProviderOpenAI,
+			config: &llm.LLMOptions{
+				Provider:    constants.ProviderOpenAI,
+				BaseURL:     "https://api.openai.com/v1",
+				Timeout:     5,
+				Model:       "gpt-4",
+				MaxTokens:   2000,
+				Temperature: 0.7,
 			},
 			wantErr: true,
 		},
 		{
 			name: "with custom base URL",
-			config: &llm.Config{
-				Provider: llm.ProviderOpenAI,
+			config: &llm.LLMOptions{
+				Provider: constants.ProviderOpenAI,
 				APIKey:   "test-key",
 				BaseURL:  "https://custom.openai.com",
 			},
@@ -826,7 +853,7 @@ func TestOpenAIProvider_InitializationComprehensive(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 				assert.NotNil(t, provider)
-				assert.Equal(t, llm.ProviderOpenAI, provider.Provider())
+				assert.Equal(t, constants.ProviderOpenAI, provider.Provider())
 			}
 		})
 	}
@@ -834,8 +861,8 @@ func TestOpenAIProvider_InitializationComprehensive(t *testing.T) {
 
 // TestOpenAIProvider_DefaultModelComprehensive tests default model assignment
 func TestOpenAIProvider_DefaultModelComprehensive(t *testing.T) {
-	config := &llm.Config{
-		Provider: llm.ProviderOpenAI,
+	config := &llm.LLMOptions{
+		Provider: constants.ProviderOpenAI,
 		APIKey:   "test-key",
 	}
 
@@ -848,10 +875,14 @@ func TestOpenAIProvider_DefaultModelComprehensive(t *testing.T) {
 
 // TestOpenAIProvider_ModelNameComprehensive tests model name retrieval
 func TestOpenAIProvider_ModelNameComprehensive(t *testing.T) {
-	config := &llm.Config{
-		Provider: llm.ProviderOpenAI,
-		APIKey:   "test-key",
-		Model:    "gpt-4-turbo",
+	config := &llm.LLMOptions{
+		Provider:    constants.ProviderOpenAI,
+		APIKey:      "test-key",
+		BaseURL:     "https://api.openai.com/v1",
+		Timeout:     5,
+		Model:       "gpt-4",
+		Temperature: 0.7,
+		MaxTokens:   4000,
 	}
 
 	provider, err := NewOpenAI(config)
@@ -862,10 +893,14 @@ func TestOpenAIProvider_ModelNameComprehensive(t *testing.T) {
 
 // TestOpenAIProvider_MaxTokensComprehensive tests max tokens retrieval
 func TestOpenAIProvider_MaxTokensComprehensive(t *testing.T) {
-	config := &llm.Config{
-		Provider:  llm.ProviderOpenAI,
-		APIKey:    "test-key",
-		MaxTokens: 4000,
+	config := &llm.LLMOptions{
+		Provider:    constants.ProviderOpenAI,
+		APIKey:      "test-key",
+		BaseURL:     "https://api.openai.com/v1",
+		Timeout:     5,
+		Model:       "gpt-4",
+		Temperature: 0.7,
+		MaxTokens:   4000,
 	}
 
 	provider, err := NewOpenAI(config)
@@ -876,10 +911,16 @@ func TestOpenAIProvider_MaxTokensComprehensive(t *testing.T) {
 
 // TestOpenAIProvider_ConvertToolsToFunctionsComprehensive tests tool to function conversion
 func TestOpenAIProvider_ConvertToolsToFunctionsComprehensive(t *testing.T) {
-	provider, err := NewOpenAI(&llm.Config{
-		Provider: llm.ProviderOpenAI,
-		APIKey:   "test-key",
+	provider, err := NewOpenAI(&llm.LLMOptions{
+		Provider:    constants.ProviderOpenAI,
+		APIKey:      "test-key",
+		BaseURL:     "https://api.openai.com/v1",
+		Timeout:     5,
+		Model:       "gpt-4",
+		Temperature: 0.7,
+		MaxTokens:   4000,
 	})
+
 	require.NoError(t, err)
 
 	mockTool := &MockTool{}
@@ -895,9 +936,14 @@ func TestOpenAIProvider_ConvertToolsToFunctionsComprehensive(t *testing.T) {
 
 // TestOpenAIProvider_ToolSchemaToJSONComprehensive tests schema conversion
 func TestOpenAIProvider_ToolSchemaToJSONComprehensive(t *testing.T) {
-	provider, err := NewOpenAI(&llm.Config{
-		Provider: llm.ProviderOpenAI,
-		APIKey:   "test-key",
+	provider, err := NewOpenAI(&llm.LLMOptions{
+		Provider:    constants.ProviderOpenAI,
+		APIKey:      "test-key",
+		BaseURL:     "https://api.openai.com/v1",
+		Timeout:     5,
+		Model:       "gpt-4",
+		Temperature: 0.7,
+		MaxTokens:   4000,
 	})
 	require.NoError(t, err)
 
@@ -918,20 +964,26 @@ func TestOpenAIProvider_ToolSchemaToJSONComprehensive(t *testing.T) {
 func TestGeminiProvider_InitializationComprehensive(t *testing.T) {
 	tests := []struct {
 		name    string
-		config  *llm.Config
+		config  *llm.LLMOptions
 		wantErr bool
 	}{
 		{
 			name: "missing API key",
-			config: &llm.Config{
-				Provider: llm.ProviderGemini,
+			config: &llm.LLMOptions{
+				Provider:    constants.ProviderGemini,
+				APIKey:      "test-key",
+				BaseURL:     "https://api.openai.com/v1",
+				Timeout:     5,
+				Model:       "gpt-4",
+				Temperature: 0.7,
+				MaxTokens:   4000,
 			},
 			wantErr: true,
 		},
 		{
 			name: "valid config with API key",
-			config: &llm.Config{
-				Provider: llm.ProviderGemini,
+			config: &llm.LLMOptions{
+				Provider: constants.ProviderGemini,
 				APIKey:   "test-key",
 			},
 			wantErr: false,
@@ -947,7 +999,7 @@ func TestGeminiProvider_InitializationComprehensive(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 				assert.NotNil(t, provider)
-				assert.Equal(t, llm.ProviderGemini, provider.Provider())
+				assert.Equal(t, constants.ProviderGemini, provider.Provider())
 			}
 		})
 	}
@@ -1089,8 +1141,8 @@ func TestDeepSeekProvider_MalformedJSON(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	provider, err := NewDeepSeek(&llm.Config{
-		Provider: llm.ProviderDeepSeek,
+	provider, err := NewDeepSeek(&llm.LLMOptions{
+		Provider: constants.ProviderDeepSeek,
 		APIKey:   "test-key",
 		BaseURL:  mockServer.URL,
 		Timeout:  5,
@@ -1117,11 +1169,13 @@ func TestDeepSeekProvider_ContextCancellation(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	provider, err := NewDeepSeek(&llm.Config{
-		Provider: llm.ProviderDeepSeek,
-		APIKey:   "test-key",
-		BaseURL:  mockServer.URL,
-		Timeout:  5,
+	provider, err := NewDeepSeek(&llm.LLMOptions{
+		Provider:    constants.ProviderDeepSeek,
+		APIKey:      "test-key",
+		BaseURL:     mockServer.URL,
+		Timeout:     5,
+		Model:       "deepseek-chat",
+		Temperature: 0.7,
 	})
 	require.NoError(t, err)
 
@@ -1162,8 +1216,8 @@ func TestDeepSeekProvider_LargeResponse(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	provider, err := NewDeepSeek(&llm.Config{
-		Provider: llm.ProviderDeepSeek,
+	provider, err := NewDeepSeek(&llm.LLMOptions{
+		Provider: constants.ProviderDeepSeek,
 		APIKey:   "test-key",
 		BaseURL:  mockServer.URL,
 		Timeout:  5,
@@ -1222,11 +1276,13 @@ func TestDeepSeekProvider_ToolCallArgumentsParsing(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	provider, err := NewDeepSeek(&llm.Config{
-		Provider: llm.ProviderDeepSeek,
-		APIKey:   "test-key",
-		BaseURL:  mockServer.URL,
-		Timeout:  5,
+	provider, err := NewDeepSeek(&llm.LLMOptions{
+		Provider:    constants.ProviderDeepSeek,
+		APIKey:      "test-key",
+		BaseURL:     mockServer.URL,
+		Timeout:     5,
+		Model:       "deepseek-chat",
+		Temperature: 0.7,
 	})
 	require.NoError(t, err)
 
@@ -1243,12 +1299,13 @@ func TestDeepSeekProvider_ToolCallArgumentsParsing(t *testing.T) {
 
 // TestDeepSeekProvider_GetterMethods tests getter utility methods
 func TestDeepSeekProvider_GetterMethods(t *testing.T) {
-	provider, err := NewDeepSeek(&llm.Config{
-		Provider:    llm.ProviderDeepSeek,
+	provider, err := NewDeepSeek(&llm.LLMOptions{
+		Provider:    constants.ProviderDeepSeek,
 		APIKey:      "test-key",
+		Timeout:     5,
 		Model:       "deepseek-chat",
-		MaxTokens:   3000,
 		Temperature: 0.8,
+		MaxTokens:   3000,
 	})
 	require.NoError(t, err)
 
@@ -1287,11 +1344,13 @@ func TestDeepSeekProvider_InvalidRequestPayload(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	provider, err := NewDeepSeek(&llm.Config{
-		Provider: llm.ProviderDeepSeek,
-		APIKey:   "test-key",
-		BaseURL:  mockServer.URL,
-		Timeout:  5,
+	provider, err := NewDeepSeek(&llm.LLMOptions{
+		Provider:    constants.ProviderDeepSeek,
+		APIKey:      "test-key",
+		BaseURL:     mockServer.URL,
+		Timeout:     5,
+		Model:       "deepseek-chat",
+		Temperature: 0.7,
 	})
 	require.NoError(t, err)
 
@@ -1313,11 +1372,13 @@ func TestDeepSeekProvider_StreamReadError(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	provider, err := NewDeepSeek(&llm.Config{
-		Provider: llm.ProviderDeepSeek,
-		APIKey:   "test-key",
-		BaseURL:  mockServer.URL,
-		Timeout:  5,
+	provider, err := NewDeepSeek(&llm.LLMOptions{
+		Provider:    constants.ProviderDeepSeek,
+		APIKey:      "test-key",
+		BaseURL:     mockServer.URL,
+		Timeout:     5,
+		Model:       "deepseek-chat",
+		Temperature: 0.7,
 	})
 	require.NoError(t, err)
 
@@ -1383,11 +1444,13 @@ func TestMultipleToolCalls(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	provider, err := NewDeepSeek(&llm.Config{
-		Provider: llm.ProviderDeepSeek,
-		APIKey:   "test-key",
-		BaseURL:  mockServer.URL,
-		Timeout:  5,
+	provider, err := NewDeepSeek(&llm.LLMOptions{
+		Provider:    constants.ProviderDeepSeek,
+		APIKey:      "test-key",
+		BaseURL:     mockServer.URL,
+		Timeout:     5,
+		Model:       "deepseek-chat",
+		Temperature: 0.7,
 	})
 	require.NoError(t, err)
 
@@ -1429,11 +1492,13 @@ func TestStreamingProviderInheritance(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	provider, err := NewDeepSeekStreaming(&llm.Config{
-		Provider: llm.ProviderDeepSeek,
-		APIKey:   "test-key",
-		BaseURL:  mockServer.URL,
-		Timeout:  5,
+	provider, err := NewDeepSeekStreaming(&llm.LLMOptions{
+		Provider:    constants.ProviderDeepSeek,
+		APIKey:      "test-key",
+		BaseURL:     mockServer.URL,
+		Timeout:     5,
+		Model:       "deepseek-chat",
+		Temperature: 0.7,
 	})
 	require.NoError(t, err)
 
@@ -1444,7 +1509,7 @@ func TestStreamingProviderInheritance(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.NotNil(t, resp)
-	assert.Equal(t, llm.ProviderDeepSeek, provider.Provider())
+	assert.Equal(t, constants.ProviderDeepSeek, provider.Provider())
 }
 
 // TestEmbeddingEmptyResponse tests embedding with no embeddings in response
@@ -1469,11 +1534,13 @@ func TestEmbeddingEmptyResponse(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	provider, err := NewDeepSeek(&llm.Config{
-		Provider: llm.ProviderDeepSeek,
-		APIKey:   "test-key",
-		BaseURL:  mockServer.URL,
-		Timeout:  5,
+	provider, err := NewDeepSeek(&llm.LLMOptions{
+		Provider:    constants.ProviderDeepSeek,
+		APIKey:      "test-key",
+		BaseURL:     mockServer.URL,
+		Timeout:     5,
+		Model:       "deepseek-chat",
+		Temperature: 0.7,
 	})
 	require.NoError(t, err)
 
@@ -1503,11 +1570,13 @@ func TestRequestBodyClose(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	provider, err := NewDeepSeek(&llm.Config{
-		Provider: llm.ProviderDeepSeek,
-		APIKey:   "test-key",
-		BaseURL:  mockServer.URL,
-		Timeout:  5,
+	provider, err := NewDeepSeek(&llm.LLMOptions{
+		Provider:    constants.ProviderDeepSeek,
+		APIKey:      "test-key",
+		BaseURL:     mockServer.URL,
+		Timeout:     5,
+		Model:       "deepseek-chat",
+		Temperature: 0.7,
 	})
 	require.NoError(t, err)
 
@@ -1521,8 +1590,8 @@ func TestRequestBodyClose(t *testing.T) {
 
 // TestToolSchemaConversion tests tool schema conversion
 func TestToolSchemaConversion(t *testing.T) {
-	provider, err := NewDeepSeek(&llm.Config{
-		Provider: llm.ProviderDeepSeek,
+	provider, err := NewDeepSeek(&llm.LLMOptions{
+		Provider: constants.ProviderDeepSeek,
 		APIKey:   "test-key",
 	})
 	require.NoError(t, err)

@@ -42,7 +42,7 @@ func main() {
 // Example 1: Basic Configuration
 func basicExample() {
 	// Initialize provider with API key from environment
-	provider, err := providers.NewAnthropic(&llm.Config{
+	provider, err := providers.NewAnthropic(&llm.LLMOptions{
 		APIKey: os.Getenv("ANTHROPIC_API_KEY"), // or set directly: APIKey: "your-api-key"
 		Model:  "claude-3-sonnet-20240229",     // Optional: defaults to claude-3-sonnet-20240229
 	})
@@ -76,7 +76,7 @@ func modelExample() {
 	}
 
 	for _, model := range models {
-		provider, err := providers.NewAnthropic(&llm.Config{
+		provider, err := providers.NewAnthropic(&llm.LLMOptions{
 			APIKey: os.Getenv("ANTHROPIC_API_KEY"),
 			Model:  model,
 		})
@@ -107,7 +107,7 @@ func modelExample() {
 
 // Example 3: Streaming Responses
 func streamingExample() {
-	provider, err := providers.NewAnthropic(&llm.Config{
+	provider, err := providers.NewAnthropic(&llm.LLMOptions{
 		APIKey: os.Getenv("ANTHROPIC_API_KEY"),
 	})
 	if err != nil {
@@ -130,7 +130,7 @@ func streamingExample() {
 
 // Example 4: Multi-turn Conversation
 func conversationExample() {
-	provider, err := providers.NewAnthropic(&llm.Config{
+	provider, err := providers.NewAnthropic(&llm.LLMOptions{
 		APIKey:      os.Getenv("ANTHROPIC_API_KEY"),
 		Temperature: 0.7,
 		MaxTokens:   1000,
@@ -180,7 +180,7 @@ func conversationExample() {
 
 // Example 5: Token Usage Tracking
 func tokenUsageExample() {
-	provider, err := providers.NewAnthropic(&llm.Config{
+	provider, err := providers.NewAnthropic(&llm.LLMOptions{
 		APIKey: os.Getenv("ANTHROPIC_API_KEY"),
 	})
 	if err != nil {
@@ -212,7 +212,7 @@ func tokenUsageExample() {
 // Example 6: Error Handling
 func errorHandlingExample() {
 	// Example with invalid API key
-	provider, err := providers.NewAnthropic(&llm.Config{
+	provider, err := providers.NewAnthropic(&llm.LLMOptions{
 		APIKey: "invalid-key",
 	})
 	if err != nil {

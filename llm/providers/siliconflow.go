@@ -3,10 +3,12 @@ package providers
 import (
 	"context"
 	"fmt"
-	"github.com/kart-io/goagent/utils/json"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/kart-io/goagent/llm/constants"
+	"github.com/kart-io/goagent/utils/json"
 
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
@@ -38,11 +40,11 @@ type SiliconFlowConfig struct {
 // DefaultSiliconFlowConfig 返回默认 SiliconFlow 配置
 func DefaultSiliconFlowConfig() *SiliconFlowConfig {
 	return &SiliconFlowConfig{
-		BaseURL:     SiliconFlowBaseURL,
+		BaseURL:     constants.SiliconFlowBaseURL,
 		Model:       "Qwen/Qwen2-7B-Instruct", // 默认使用 Qwen2
-		Temperature: DefaultTemperature,
-		MaxTokens:   DefaultMaxTokens,
-		Timeout:     int(DefaultTimeout / time.Second),
+		Temperature: constants.DefaultTemperature,
+		MaxTokens:   constants.DefaultMaxTokens,
+		Timeout:     int(constants.DefaultTimeout / time.Second),
 	}
 }
 
@@ -53,11 +55,11 @@ func NewSiliconFlowClient(config *SiliconFlowConfig) (*SiliconFlowClient, error)
 	}
 
 	if config.APIKey == "" {
-		return nil, agentErrors.NewInvalidConfigError(ProviderSiliconFlow, agentllm.ErrorFieldAPIKey, "SiliconFlow API key is required")
+		return nil, agentErrors.NewInvalidConfigError(string(constants.ProviderSiliconFlow), constants.ErrorFieldAPIKey, "SiliconFlow API key is required")
 	}
 
 	if config.BaseURL == "" {
-		config.BaseURL = SiliconFlowBaseURL
+		config.BaseURL = constants.SiliconFlowBaseURL
 	}
 
 	if config.Model == "" {
@@ -73,7 +75,7 @@ func NewSiliconFlowClient(config *SiliconFlowConfig) (*SiliconFlowClient, error)
 	}
 
 	if config.Timeout == 0 {
-		config.Timeout = int(DefaultTimeout / time.Second)
+		config.Timeout = int(constants.DefaultTimeout / time.Second)
 	}
 
 	return &SiliconFlowClient{
@@ -85,15 +87,15 @@ func NewSiliconFlowClient(config *SiliconFlowConfig) (*SiliconFlowClient, error)
 		client: httpclient.NewClient(&httpclient.Config{
 			Timeout: time.Duration(config.Timeout) * time.Second,
 			Headers: map[string]string{
-				HeaderContentType:   ContentTypeJSON,
-				HeaderAuthorization: AuthBearerPrefix + config.APIKey,
+				constants.HeaderContentType:   constants.ContentTypeJSON,
+				constants.HeaderAuthorization: constants.AuthBearerPrefix + config.APIKey,
 			},
 		}),
 	}, nil
 }
 
 // NewSiliconFlow 创建 SiliconFlow provider（兼容 llm.Config）
-func NewSiliconFlow(config *agentllm.Config) (*SiliconFlowClient, error) {
+func NewSiliconFlow(config *agentllm.LLMOptions) (*SiliconFlowClient, error) {
 	sfConfig := &SiliconFlowConfig{
 		APIKey:      config.APIKey,
 		BaseURL:     config.BaseURL,
@@ -104,18 +106,18 @@ func NewSiliconFlow(config *agentllm.Config) (*SiliconFlowClient, error) {
 	}
 
 	if sfConfig.APIKey == "" {
-		sfConfig.APIKey = os.Getenv(agentllm.EnvSiliconFlowAPIKey)
+		sfConfig.APIKey = os.Getenv(constants.EnvSiliconFlowAPIKey)
 	}
 
 	if sfConfig.BaseURL == "" {
-		sfConfig.BaseURL = os.Getenv(agentllm.EnvSiliconFlowBaseURL)
+		sfConfig.BaseURL = os.Getenv(constants.EnvSiliconFlowBaseURL)
 	}
 	if sfConfig.BaseURL == "" {
-		sfConfig.BaseURL = SiliconFlowBaseURL
+		sfConfig.BaseURL = constants.SiliconFlowBaseURL
 	}
 
 	if sfConfig.Model == "" {
-		sfConfig.Model = os.Getenv(agentllm.EnvSiliconFlowModel)
+		sfConfig.Model = os.Getenv(constants.EnvSiliconFlowModel)
 	}
 	if sfConfig.Model == "" {
 		sfConfig.Model = "Qwen/Qwen2-7B-Instruct"
@@ -225,7 +227,7 @@ func (c *SiliconFlowClient) Complete(ctx context.Context, req *agentllm.Completi
 		Model:        sfResp.Model,
 		TokensUsed:   sfResp.Usage.TotalTokens,
 		FinishReason: sfResp.Choices[0].FinishReason,
-		Provider:     string(agentllm.ProviderSiliconFlow),
+		Provider:     string(constants.ProviderSiliconFlow),
 		Usage: &interfaces.TokenUsage{
 			PromptTokens:     sfResp.Usage.PromptTokens,
 			CompletionTokens: sfResp.Usage.CompletionTokens,
@@ -242,8 +244,8 @@ func (c *SiliconFlowClient) Chat(ctx context.Context, messages []agentllm.Messag
 }
 
 // Provider 返回提供商类型
-func (c *SiliconFlowClient) Provider() agentllm.Provider {
-	return agentllm.ProviderSiliconFlow
+func (c *SiliconFlowClient) Provider() constants.Provider {
+	return constants.ProviderSiliconFlow
 }
 
 // IsAvailable 检查 SiliconFlow 是否可用

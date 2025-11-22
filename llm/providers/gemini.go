@@ -13,13 +13,15 @@ import (
 
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
-	"github.com/kart-io/goagent/llm"
+
+	agentllm "github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/constants"
 )
 
 // GeminiProvider implements LLM interface for Google Gemini
 type GeminiProvider struct {
 	client      *genai.Client
-	config      *llm.Config
+	config      *agentllm.LLMOptions
 	model       *genai.GenerativeModel
 	modelName   string
 	maxTokens   int
@@ -27,9 +29,9 @@ type GeminiProvider struct {
 }
 
 // NewGemini creates a new Gemini provider
-func NewGemini(config *llm.Config) (*GeminiProvider, error) {
+func NewGemini(config *agentllm.LLMOptions) (*GeminiProvider, error) {
 	if config.APIKey == "" {
-		return nil, agentErrors.NewInvalidConfigError("llm", "api_key", "Gemini API key is required")
+		return nil, agentErrors.NewInvalidConfigError(string(constants.ProviderGemini), constants.ErrorFieldAPIKey, "Gemini API key is required")
 	}
 
 	ctx := context.Background()
@@ -84,7 +86,7 @@ func NewGemini(config *llm.Config) (*GeminiProvider, error) {
 }
 
 // Complete implements basic text completion
-func (p *GeminiProvider) Complete(ctx context.Context, req *llm.CompletionRequest) (*llm.CompletionResponse, error) {
+func (p *GeminiProvider) Complete(ctx context.Context, req *agentllm.CompletionRequest) (*agentllm.CompletionResponse, error) {
 	// Create a new chat session
 	cs := p.model.StartChat()
 
@@ -92,10 +94,10 @@ func (p *GeminiProvider) Complete(ctx context.Context, req *llm.CompletionReques
 	for _, msg := range req.Messages {
 		var role string
 		switch msg.Role {
-		case "system":
+		case constants.RoleSystem:
 			// Gemini doesn't have a system role, so we'll prepend it to the first user message
 			continue
-		case "user":
+		case constants.RoleUser:
 			role = "user"
 		case "assistant":
 			role = "model"
@@ -150,12 +152,12 @@ func (p *GeminiProvider) Complete(ctx context.Context, req *llm.CompletionReques
 		}
 	}
 
-	return &llm.CompletionResponse{
+	return &agentllm.CompletionResponse{
 		Content:      content.String(),
 		Model:        p.modelName,
 		TokensUsed:   int(resp.UsageMetadata.TotalTokenCount),
 		FinishReason: string(resp.Candidates[0].FinishReason),
-		Provider:     string(llm.ProviderGemini),
+		Provider:     string(constants.ProviderGemini),
 		Usage: &interfaces.TokenUsage{
 			PromptTokens:     int(resp.UsageMetadata.PromptTokenCount),
 			CompletionTokens: int(resp.UsageMetadata.CandidatesTokenCount),
@@ -165,8 +167,8 @@ func (p *GeminiProvider) Complete(ctx context.Context, req *llm.CompletionReques
 }
 
 // Chat implements chat conversation
-func (p *GeminiProvider) Chat(ctx context.Context, messages []llm.Message) (*llm.CompletionResponse, error) {
-	return p.Complete(ctx, &llm.CompletionRequest{
+func (p *GeminiProvider) Chat(ctx context.Context, messages []agentllm.Message) (*agentllm.CompletionResponse, error) {
+	return p.Complete(ctx, &agentllm.CompletionRequest{
 		Messages: messages,
 	})
 }
@@ -385,8 +387,8 @@ func (p *GeminiProvider) Embed(ctx context.Context, text string) ([]float64, err
 }
 
 // Provider returns the provider type
-func (p *GeminiProvider) Provider() llm.Provider {
-	return llm.ProviderGemini
+func (p *GeminiProvider) Provider() constants.Provider {
+	return constants.ProviderGemini
 }
 
 // IsAvailable checks if the provider is available
@@ -447,7 +449,7 @@ type GeminiStreamingProvider struct {
 }
 
 // NewGeminiStreaming creates a streaming-optimized provider
-func NewGeminiStreaming(config *llm.Config) (*GeminiStreamingProvider, error) {
+func NewGeminiStreaming(config *agentllm.LLMOptions) (*GeminiStreamingProvider, error) {
 	base, err := NewGemini(config)
 	if err != nil {
 		return nil, err

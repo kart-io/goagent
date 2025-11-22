@@ -8,6 +8,7 @@ import (
 
 	"github.com/kart-io/goagent/builder"
 	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/constants"
 )
 
 // MockLLMClient implements a simple mock LLM client for demonstration
@@ -43,8 +44,8 @@ func (m *MockLLMClient) Chat(ctx context.Context, messages []llm.Message) (*llm.
 	return m.Complete(ctx, &llm.CompletionRequest{Messages: messages})
 }
 
-func (m *MockLLMClient) Provider() llm.Provider {
-	return llm.ProviderCustom
+func (m *MockLLMClient) Provider() constants.Provider {
+	return constants.ProviderCustom
 }
 
 func (m *MockLLMClient) IsAvailable() bool {

@@ -7,6 +7,7 @@ import (
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/constants"
 	loggercore "github.com/kart-io/logger/core"
 )
 
@@ -22,7 +23,7 @@ var (
 type MockLLMClient struct {
 	CompleteFn    func(ctx context.Context, req *llm.CompletionRequest) (*llm.CompletionResponse, error)
 	ChatFn        func(ctx context.Context, messages []llm.Message) (*llm.CompletionResponse, error)
-	ProviderFn    func() llm.Provider
+	ProviderFn    func() constants.Provider
 	IsAvailableFn func() bool
 }
 
@@ -49,11 +50,11 @@ func (m *MockLLMClient) Chat(ctx context.Context, messages []llm.Message) (*llm.
 	}, nil
 }
 
-func (m *MockLLMClient) Provider() llm.Provider {
+func (m *MockLLMClient) Provider() constants.Provider {
 	if m.ProviderFn != nil {
 		return m.ProviderFn()
 	}
-	return llm.ProviderOpenAI
+	return constants.ProviderCustom
 }
 
 func (m *MockLLMClient) IsAvailable() bool {

@@ -4,13 +4,15 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	"github.com/kart-io/goagent/llm/constants"
 )
 
 // ExampleBasicUsage 展示基本用法
 func ExampleBasicUsage() {
 	// 方式1: 使用选项模式创建客户端
 	client, err := NewClientWithOptions(
-		WithProvider(ProviderOpenAI),
+		WithProvider(constants.ProviderOpenAI),
 		WithAPIKey("your-api-key"),
 		WithModel("gpt-4"),
 		WithMaxTokens(2000),
@@ -38,7 +40,7 @@ func ExampleBasicUsage() {
 func ExampleWithPresets() {
 	// 使用生产环境预设
 	productionClient, _ := NewClientWithOptions(
-		WithProvider(ProviderOpenAI),
+		WithProvider(constants.ProviderOpenAI),
 		WithAPIKey("your-api-key"),
 		WithPreset(PresetProduction),
 	)
@@ -46,7 +48,7 @@ func ExampleWithPresets() {
 
 	// 使用开发环境预设
 	devClient, _ := NewClientWithOptions(
-		WithProvider(ProviderOpenAI),
+		WithProvider(constants.ProviderOpenAI),
 		WithAPIKey("your-api-key"),
 		WithPreset(PresetDevelopment),
 	)
@@ -54,7 +56,7 @@ func ExampleWithPresets() {
 
 	// 使用低成本预设
 	lowCostClient, _ := NewClientWithOptions(
-		WithProvider(ProviderOpenAI),
+		WithProvider(constants.ProviderOpenAI),
 		WithAPIKey("your-api-key"),
 		WithPreset(PresetLowCost),
 	)
@@ -65,7 +67,7 @@ func ExampleWithPresets() {
 func ExampleProviderSpecific() {
 	// OpenAI 配置
 	openAIClient, _ := NewClientWithOptions(
-		WithProviderPreset(ProviderOpenAI),
+		WithProviderPreset(constants.ProviderOpenAI),
 		WithAPIKey("sk-..."),
 		WithOrganizationID("org-..."),
 		WithMaxTokens(4096),
@@ -74,7 +76,7 @@ func ExampleProviderSpecific() {
 
 	// Anthropic 配置
 	anthropicClient, _ := NewClientWithOptions(
-		WithProviderPreset(ProviderAnthropic),
+		WithProviderPreset(constants.ProviderAnthropic),
 		WithAPIKey("sk-ant-..."),
 		WithModel("claude-3-opus-20240229"),
 	)
@@ -82,7 +84,7 @@ func ExampleProviderSpecific() {
 
 	// Ollama 本地配置
 	ollamaClient, _ := NewClientWithOptions(
-		WithProviderPreset(ProviderOllama),
+		WithProviderPreset(constants.ProviderOllama),
 		WithBaseURL("http://localhost:11434"),
 		WithModel("llama2"),
 		WithTimeout(30*time.Second),
@@ -94,7 +96,7 @@ func ExampleProviderSpecific() {
 func ExampleUseCaseOptimized() {
 	// 代码生成场景
 	codeGenClient, _ := NewClientWithOptions(
-		WithProvider(ProviderOpenAI),
+		WithProvider(constants.ProviderOpenAI),
 		WithAPIKey("your-api-key"),
 		WithUseCase(UseCaseCodeGeneration),
 		WithModel("gpt-4"), // 覆盖使用场景的默认模型
@@ -103,7 +105,7 @@ func ExampleUseCaseOptimized() {
 
 	// 创意写作场景
 	creativeClient, _ := NewClientWithOptions(
-		WithProvider(ProviderOpenAI),
+		WithProvider(constants.ProviderOpenAI),
 		WithAPIKey("your-api-key"),
 		WithUseCase(UseCaseCreativeWriting),
 		WithMaxTokens(5000), // 覆盖默认值
@@ -112,7 +114,7 @@ func ExampleUseCaseOptimized() {
 
 	// 摘要生成场景
 	summaryClient, _ := NewClientWithOptions(
-		WithProvider(ProviderOpenAI),
+		WithProvider(constants.ProviderOpenAI),
 		WithAPIKey("your-api-key"),
 		WithUseCase(UseCaseSummarization),
 	)
@@ -123,7 +125,7 @@ func ExampleUseCaseOptimized() {
 func ExampleAdvancedConfiguration() {
 	// 配置重试、缓存和速率限制
 	advancedClient, _ := NewClientWithOptions(
-		WithProvider(ProviderOpenAI),
+		WithProvider(constants.ProviderOpenAI),
 		WithAPIKey("your-api-key"),
 
 		// 重试配置
@@ -159,7 +161,7 @@ func ExampleChainedConfiguration() {
 	// 可以组合多个选项
 	client, _ := NewClientWithOptions(
 		// 基础配置
-		WithProvider(ProviderOpenAI),
+		WithProvider(constants.ProviderOpenAI),
 		WithAPIKey("your-api-key"),
 
 		// 应用预设
@@ -182,8 +184,8 @@ func ExampleChainedConfiguration() {
 // ExampleConfigMigration 展示如何从旧的 Config 结构迁移到选项模式
 func ExampleConfigMigration() {
 	// 旧方式: 使用 Config 结构体
-	oldConfig := &Config{
-		Provider:    ProviderOpenAI,
+	oldConfig := &LLMOptions{
+		Provider:    constants.ProviderOpenAI,
 		APIKey:      "your-api-key",
 		Model:       "gpt-4",
 		MaxTokens:   2000,
@@ -219,7 +221,7 @@ func ExampleEnvironmentBased() {
 
 	// 开发环境
 	devClient, _ := NewClientWithOptions(
-		WithProvider(ProviderOpenAI),
+		WithProvider(constants.ProviderOpenAI),
 		// API key 从 OPENAI_API_KEY 环境变量读取
 		WithPreset(PresetDevelopment),
 		WithSystemPrompt("Development mode - verbose logging enabled"),
@@ -228,7 +230,7 @@ func ExampleEnvironmentBased() {
 
 	// 生产环境
 	prodClient, _ := NewClientWithOptions(
-		WithProvider(ProviderOpenAI),
+		WithProvider(constants.ProviderOpenAI),
 		// API key 从环境变量读取
 		WithPreset(PresetProduction),
 		WithCache(true, 30*time.Minute),

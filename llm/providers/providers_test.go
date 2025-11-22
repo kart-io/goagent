@@ -12,6 +12,7 @@ import (
 	agentcore "github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/constants"
 )
 
 // MockTool for testing
@@ -93,13 +94,13 @@ func (m *MockTool) WithConfig(config agentcore.RunnableConfig) agentcore.Runnabl
 func TestOpenAIProvider_Creation(t *testing.T) {
 	tests := []struct {
 		name    string
-		config  *llm.Config
+		config  *llm.LLMOptions
 		wantErr bool
 	}{
 		{
 			name: "valid config",
-			config: &llm.Config{
-				Provider:    llm.ProviderOpenAI,
+			config: &llm.LLMOptions{
+				Provider:    constants.ProviderOpenAI,
 				APIKey:      "test-key",
 				Model:       "gpt-4",
 				MaxTokens:   2000,
@@ -109,15 +110,15 @@ func TestOpenAIProvider_Creation(t *testing.T) {
 		},
 		{
 			name: "missing API key",
-			config: &llm.Config{
-				Provider: llm.ProviderOpenAI,
+			config: &llm.LLMOptions{
+				Provider: constants.ProviderOpenAI,
 			},
 			wantErr: true,
 		},
 		{
 			name: "with custom base URL",
-			config: &llm.Config{
-				Provider: llm.ProviderOpenAI,
+			config: &llm.LLMOptions{
+				Provider: constants.ProviderOpenAI,
 				APIKey:   "test-key",
 				BaseURL:  "https://custom.openai.com",
 			},
@@ -134,7 +135,7 @@ func TestOpenAIProvider_Creation(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 				assert.NotNil(t, provider)
-				assert.Equal(t, llm.ProviderOpenAI, provider.Provider())
+				assert.Equal(t, constants.ProviderOpenAI, provider.Provider())
 			}
 		})
 	}
@@ -173,13 +174,13 @@ func TestOpenAIProvider_ConvertToolsToFunctions(t *testing.T) {
 func TestGeminiProvider_Creation(t *testing.T) {
 	tests := []struct {
 		name    string
-		config  *llm.Config
+		config  *llm.LLMOptions
 		wantErr bool
 	}{
 		{
 			name: "valid config",
-			config: &llm.Config{
-				Provider:    llm.ProviderGemini,
+			config: &llm.LLMOptions{
+				Provider:    constants.ProviderGemini,
 				APIKey:      "test-key",
 				Model:       "gemini-pro",
 				MaxTokens:   2000,
@@ -189,15 +190,15 @@ func TestGeminiProvider_Creation(t *testing.T) {
 		},
 		{
 			name: "missing API key",
-			config: &llm.Config{
-				Provider: llm.ProviderGemini,
+			config: &llm.LLMOptions{
+				Provider: constants.ProviderGemini,
 			},
 			wantErr: true,
 		},
 		{
 			name: "default model",
-			config: &llm.Config{
-				Provider: llm.ProviderGemini,
+			config: &llm.LLMOptions{
+				Provider: constants.ProviderGemini,
 				APIKey:   "test-key",
 			},
 			wantErr: false,
@@ -217,7 +218,7 @@ func TestGeminiProvider_Creation(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 				assert.NotNil(t, provider)
-				assert.Equal(t, llm.ProviderGemini, provider.Provider())
+				assert.Equal(t, constants.ProviderGemini, provider.Provider())
 			}
 		})
 	}
@@ -290,8 +291,8 @@ func TestToolChunk(t *testing.T) {
 
 // TestStreamingProvider tests
 func TestOpenAIStreamingProvider_Creation(t *testing.T) {
-	config := &llm.Config{
-		Provider:    llm.ProviderOpenAI,
+	config := &llm.LLMOptions{
+		Provider:    constants.ProviderOpenAI,
 		APIKey:      "test-key",
 		Model:       "gpt-4",
 		MaxTokens:   2000,
@@ -366,8 +367,8 @@ func BenchmarkGenerateCallID(b *testing.B) {
 func TestGeminiStreamingProvider_Creation(t *testing.T) {
 	t.Skip("Skipping Gemini streaming test - requires valid API setup")
 
-	config := &llm.Config{
-		Provider:    llm.ProviderGemini,
+	config := &llm.LLMOptions{
+		Provider:    constants.ProviderGemini,
 		APIKey:      "test-key",
 		Model:       "gemini-pro",
 		MaxTokens:   2000,
@@ -409,8 +410,8 @@ func TestOpenAIProvider_Integration(t *testing.T) {
 		t.Skip("OPENAI_API_KEY not set")
 	}
 
-	config := &llm.Config{
-		Provider:    llm.ProviderOpenAI,
+	config := &llm.LLMOptions{
+		Provider:    constants.ProviderOpenAI,
 		APIKey:      apiKey,
 		Model:       "gpt-3.5-turbo",
 		MaxTokens:   100,

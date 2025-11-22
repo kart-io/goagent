@@ -12,6 +12,7 @@ import (
 	"github.com/kart-io/goagent/core/middleware"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/constants"
 	"github.com/kart-io/goagent/store"
 	"github.com/kart-io/goagent/store/memory"
 	"github.com/kart-io/goagent/tools"
@@ -535,8 +536,8 @@ func (c *DemoLLMClient) Chat(ctx context.Context, messages []llm.Message) (*llm.
 	return c.Complete(ctx, &llm.CompletionRequest{Messages: messages})
 }
 
-func (c *DemoLLMClient) Provider() llm.Provider {
-	return llm.ProviderCustom
+func (c *DemoLLMClient) Provider() constants.Provider {
+	return constants.ProviderCustom
 }
 
 func (c *DemoLLMClient) IsAvailable() bool {

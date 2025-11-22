@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/constants"
 	"github.com/kart-io/goagent/llm/providers"
 )
 
@@ -50,8 +51,8 @@ func demo1BasicOptions() {
 	fmt.Println("-----------------------------------")
 
 	// 使用 Option 创建配置
-	config := llm.NewConfigWithOptions(
-		llm.WithProvider(llm.ProviderOpenAI),
+	config := llm.NewLLMOptionsWithOptions(
+		llm.WithProvider(constants.ProviderOpenAI),
 		llm.WithAPIKey("demo-api-key"),
 		llm.WithModel("gpt-4"),
 		llm.WithMaxTokens(2000),
@@ -90,8 +91,8 @@ func demo2Presets() {
 	}
 
 	for _, p := range presets {
-		config := llm.NewConfigWithOptions(
-			llm.WithProvider(llm.ProviderOpenAI),
+		config := llm.NewLLMOptionsWithOptions(
+			llm.WithProvider(constants.ProviderOpenAI),
 			llm.WithAPIKey("demo-key"),
 			llm.WithPreset(p.preset),
 		)
@@ -130,8 +131,8 @@ func demo3UseCases() {
 	fmt.Println("-------------|-------|----------|------")
 
 	for _, uc := range useCases {
-		config := llm.NewConfigWithOptions(
-			llm.WithProvider(llm.ProviderOpenAI),
+		config := llm.NewLLMOptionsWithOptions(
+			llm.WithProvider(constants.ProviderOpenAI),
 			llm.WithAPIKey("demo"),
 			llm.WithUseCase(uc.useCase),
 		)
@@ -209,12 +210,12 @@ func demo6ConfigValidation() {
 
 	testCases := []struct {
 		name   string
-		config *llm.Config
+		config *llm.LLMOptions
 	}{
 		{
 			name: "✅ 有效的 OpenAI 配置",
-			config: &llm.Config{
-				Provider:  llm.ProviderOpenAI,
+			config: &llm.LLMOptions{
+				Provider:  constants.ProviderOpenAI,
 				APIKey:    "test-key",
 				Model:     "gpt-4",
 				MaxTokens: 2000,
@@ -222,23 +223,23 @@ func demo6ConfigValidation() {
 		},
 		{
 			name: "✅ 有效的 Ollama 配置（无需 API Key）",
-			config: &llm.Config{
-				Provider: llm.ProviderOllama,
+			config: &llm.LLMOptions{
+				Provider: constants.ProviderOllama,
 				Model:    "llama2",
 				BaseURL:  "http://localhost:11434",
 			},
 		},
 		{
 			name: "❌ 缺少 API Key（OpenAI）",
-			config: &llm.Config{
-				Provider: llm.ProviderOpenAI,
+			config: &llm.LLMOptions{
+				Provider: constants.ProviderOpenAI,
 				Model:    "gpt-4",
 			},
 		},
 		{
 			name: "⚠️ 温度超出范围（将使用默认值）",
-			config: &llm.Config{
-				Provider:    llm.ProviderOpenAI,
+			config: &llm.LLMOptions{
+				Provider:    constants.ProviderOpenAI,
 				APIKey:      "test-key",
 				Temperature: 3.0, // 超出 0-2.0 范围
 			},
@@ -290,8 +291,8 @@ func demo7Migration() {
 	// 转换为新的 Option 模式
 	fmt.Println("\n迁移到 Option 模式...")
 
-	newConfig := llm.NewConfigWithOptions(
-		llm.WithProvider(llm.Provider(oldConfig.Provider)),
+	newConfig := llm.NewLLMOptionsWithOptions(
+		llm.WithProvider(constants.Provider(oldConfig.Provider)),
 		llm.WithAPIKey(oldConfig.APIKey),
 		llm.WithModel(oldConfig.Model),
 		llm.WithMaxTokens(oldConfig.MaxTokens),

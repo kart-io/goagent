@@ -3,15 +3,17 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/kart-io/goagent/utils/json"
 	"log"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/kart-io/goagent/utils/json"
+
 	"github.com/kart-io/goagent/builder"
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/constants"
 	"github.com/kart-io/goagent/llm/providers"
 	"github.com/kart-io/goagent/tools"
 )
@@ -119,11 +121,12 @@ func initializeLLMClient() (llm.Client, error) {
 	// Priority 2: Try OpenAI
 	if apiKey := os.Getenv("OPENAI_API_KEY"); apiKey != "" {
 		fmt.Println("Using OpenAI GPT-3.5-turbo")
-		provider, err := providers.NewOpenAI(&llm.Config{
+		provider, err := providers.NewOpenAI(&llm.LLMOptions{
+			Provider:    constants.ProviderOpenAI,
 			APIKey:      apiKey,
 			Model:       "gpt-3.5-turbo",
-			Temperature: 0.7,
 			MaxTokens:   2000,
+			Temperature: 0.7,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create OpenAI client: %w", err)
@@ -134,7 +137,7 @@ func initializeLLMClient() (llm.Client, error) {
 	// Priority 3: Try Gemini
 	if apiKey := os.Getenv("GEMINI_API_KEY"); apiKey != "" {
 		fmt.Println("Using Google Gemini")
-		provider, err := providers.NewGemini(&llm.Config{
+		provider, err := providers.NewGemini(&llm.LLMOptions{
 			APIKey:      apiKey,
 			Model:       "gemini-pro",
 			Temperature: 0.7,

@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/constants"
 )
 
 // MockLLMClient provides a mock implementation of the LLM client for testing
@@ -117,8 +118,8 @@ func (m *MockLLMClient) Chat(ctx context.Context, messages []llm.Message) (*llm.
 }
 
 // Provider returns the provider type
-func (m *MockLLMClient) Provider() llm.Provider {
-	return llm.ProviderCustom
+func (m *MockLLMClient) Provider() constants.Provider {
+	return constants.ProviderCustom
 }
 
 // IsAvailable returns whether the client is available

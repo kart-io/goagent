@@ -50,6 +50,8 @@ github.com/cncf/xds/go v0.0.0-20250501225837-2ac532fd4443 h1:aQ3y1lwWyqYPiWZThqv
 github.com/cncf/xds/go v0.0.0-20250501225837-2ac532fd4443/go.mod h1:W+zGtBO5Y1IgJhy4+A9GOqVhqLpfZi+vwmdNXUehLA8=
 github.com/cohere-ai/cohere-go/v2 v2.16.0 h1:GRWIkpoUfCUzTNh/EKwXu0Ygy/a9pZHUcqIcCWZESfQ=
 github.com/cohere-ai/cohere-go/v2 v2.16.0/go.mod h1:MuiJkCxlR18BDV2qQPbz2Yb/OCVphT1y6nD2zYaKeR0=
+github.com/costa92/genericmap v0.0.1 h1:rKXd+GWDakggPo5yQk2KWS3wWdbN8l9MiGpXIup/7aY=
+github.com/costa92/genericmap v0.0.1/go.mod h1:HYQWcUH9UoyszLZ7j5HKQbEqNiC+xhwAULPExjcqwdc=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc h1:U9qPSI2PIWSS1VwoXQT9A3Wy9MM3WgvqSxFWenqJduM=

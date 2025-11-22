@@ -7,13 +7,14 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/constants"
 )
 
 // CachedLLMClient wraps an LLM client with semantic caching
 type CachedLLMClient struct {
 	client   llm.Client
 	cache    SemanticCache
-	provider llm.Provider
+	provider constants.Provider
 }
 
 // CachedLLMClientConfig configures the cached LLM client
@@ -105,7 +106,7 @@ func (c *CachedLLMClient) Chat(ctx context.Context, messages []llm.Message) (*ll
 }
 
 // Provider returns the underlying provider type
-func (c *CachedLLMClient) Provider() llm.Provider {
+func (c *CachedLLMClient) Provider() constants.Provider {
 	return c.provider
 }
 

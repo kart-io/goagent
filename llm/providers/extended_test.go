@@ -2,11 +2,14 @@ package providers
 
 import (
 	"context"
-	"github.com/kart-io/goagent/utils/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	agentllm "github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/constants"
+	"github.com/kart-io/goagent/utils/json"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -44,8 +47,8 @@ func TestDeepSeekProvider_IsAvailable(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	provider, err := NewDeepSeek(&llm.Config{
-		Provider: llm.ProviderDeepSeek,
+	provider, err := NewDeepSeek(&agentllm.LLMOptions{
+		Provider: constants.ProviderDeepSeek,
 		APIKey:   "test-key",
 		BaseURL:  mockServer.URL,
 		Timeout:  5,
@@ -58,8 +61,8 @@ func TestDeepSeekProvider_IsAvailable(t *testing.T) {
 
 // TestDeepSeekProvider_IsAvailable_Unavailable tests unavailable provider
 func TestDeepSeekProvider_IsAvailable_Unavailable(t *testing.T) {
-	provider, err := NewDeepSeek(&llm.Config{
-		Provider: llm.ProviderDeepSeek,
+	provider, err := NewDeepSeek(&agentllm.LLMOptions{
+		Provider: constants.ProviderDeepSeek,
 		APIKey:   "test-key",
 		BaseURL:  "http://invalid-host-that-does-not-exist.test",
 		Timeout:  1,
@@ -88,8 +91,8 @@ func TestDeepSeekProvider_Stream_WithContext(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	provider, err := NewDeepSeek(&llm.Config{
-		Provider: llm.ProviderDeepSeek,
+	provider, err := NewDeepSeek(&agentllm.LLMOptions{
+		Provider: constants.ProviderDeepSeek,
 		APIKey:   "test-key",
 		BaseURL:  mockServer.URL,
 		Timeout:  5,
@@ -147,8 +150,8 @@ func TestDeepSeekProvider_CompleteWithAllFields(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	provider, err := NewDeepSeek(&llm.Config{
-		Provider:    llm.ProviderDeepSeek,
+	provider, err := NewDeepSeek(&agentllm.LLMOptions{
+		Provider:    constants.ProviderDeepSeek,
 		APIKey:      "test-key",
 		BaseURL:     mockServer.URL,
 		Model:       "deepseek-chat",
@@ -234,8 +237,8 @@ func TestDeepSeekProvider_StreamWithTools_InvalidJSON(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	provider, err := NewDeepSeek(&llm.Config{
-		Provider: llm.ProviderDeepSeek,
+	provider, err := NewDeepSeek(&agentllm.LLMOptions{
+		Provider: constants.ProviderDeepSeek,
 		APIKey:   "test-key",
 		BaseURL:  mockServer.URL,
 		Timeout:  5,
@@ -284,8 +287,8 @@ func TestDeepSeekProvider_ChatWithMultipleMessages(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	provider, err := NewDeepSeek(&llm.Config{
-		Provider: llm.ProviderDeepSeek,
+	provider, err := NewDeepSeek(&agentllm.LLMOptions{
+		Provider: constants.ProviderDeepSeek,
 		APIKey:   "test-key",
 		BaseURL:  mockServer.URL,
 		Timeout:  5,
@@ -336,8 +339,8 @@ func TestDeepSeekProvider_EmbedMultipleChunks(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	provider, err := NewDeepSeek(&llm.Config{
-		Provider: llm.ProviderDeepSeek,
+	provider, err := NewDeepSeek(&agentllm.LLMOptions{
+		Provider: constants.ProviderDeepSeek,
 		APIKey:   "test-key",
 		BaseURL:  mockServer.URL,
 		Timeout:  5,
@@ -373,8 +376,8 @@ func TestDeepSeekStreamingProvider_StreamWithMetadata_ErrorHandling(t *testing.T
 	}))
 	defer mockServer.Close()
 
-	provider, err := NewDeepSeekStreaming(&llm.Config{
-		Provider: llm.ProviderDeepSeek,
+	provider, err := NewDeepSeekStreaming(&agentllm.LLMOptions{
+		Provider: constants.ProviderDeepSeek,
 		APIKey:   "test-key",
 		BaseURL:  mockServer.URL,
 		Timeout:  5,
@@ -405,8 +408,8 @@ func TestDeepSeekStreamingProvider_Inheritance(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	provider, err := NewDeepSeekStreaming(&llm.Config{
-		Provider: llm.ProviderDeepSeek,
+	provider, err := NewDeepSeekStreaming(&agentllm.LLMOptions{
+		Provider: constants.ProviderDeepSeek,
 		APIKey:   "test-key",
 		BaseURL:  mockServer.URL,
 		Timeout:  5,
@@ -419,7 +422,7 @@ func TestDeepSeekStreamingProvider_Inheritance(t *testing.T) {
 	assert.NotNil(t, resp)
 
 	// Test inherited Provider method
-	assert.Equal(t, llm.ProviderDeepSeek, provider.Provider())
+	assert.Equal(t, constants.ProviderDeepSeek, provider.Provider())
 
 	// Test inherited ModelName method
 	assert.NotEmpty(t, provider.ModelName())
@@ -431,8 +434,8 @@ func TestDeepSeekStreamingProvider_Inheritance(t *testing.T) {
 
 // TestOpenAIProvider_ConvertToolsLarge tests conversion of many tools
 func TestOpenAIProvider_ConvertToolsLarge(t *testing.T) {
-	provider, err := NewOpenAI(&llm.Config{
-		Provider: llm.ProviderOpenAI,
+	provider, err := NewOpenAI(&agentllm.LLMOptions{
+		Provider: constants.ProviderOpenAI,
 		APIKey:   "test-key",
 	})
 	require.NoError(t, err)
@@ -459,8 +462,8 @@ func TestOpenAIProvider_ConvertToolsLarge(t *testing.T) {
 
 // TestGeminiProvider_ModelName tests model name retrieval
 func TestGeminiProvider_ModelName(t *testing.T) {
-	config := &llm.Config{
-		Provider: llm.ProviderGemini,
+	config := &agentllm.LLMOptions{
+		Provider: constants.ProviderGemini,
 		APIKey:   "test-key",
 		Model:    "gemini-pro",
 	}
@@ -472,8 +475,8 @@ func TestGeminiProvider_ModelName(t *testing.T) {
 
 // TestGeminiProvider_MaxTokens tests max tokens retrieval
 func TestGeminiProvider_MaxTokens(t *testing.T) {
-	config := &llm.Config{
-		Provider:  llm.ProviderGemini,
+	config := &agentllm.LLMOptions{
+		Provider:  constants.ProviderGemini,
 		APIKey:    "test-key",
 		MaxTokens: 3000,
 	}
@@ -485,8 +488,8 @@ func TestGeminiProvider_MaxTokens(t *testing.T) {
 
 // TestGeminiProvider_DefaultModel tests default model assignment
 func TestGeminiProvider_DefaultModel(t *testing.T) {
-	config := &llm.Config{
-		Provider: llm.ProviderGemini,
+	config := &agentllm.LLMOptions{
+		Provider: constants.ProviderGemini,
 		APIKey:   "test-key",
 	}
 
@@ -497,8 +500,8 @@ func TestGeminiProvider_DefaultModel(t *testing.T) {
 
 // TestGeminiProvider_ConvertToolsToFunctions tests tool conversion
 func TestGeminiProvider_ConvertToolsToFunctions(t *testing.T) {
-	provider, err := NewGemini(&llm.Config{
-		Provider: llm.ProviderGemini,
+	provider, err := NewGemini(&agentllm.LLMOptions{
+		Provider: constants.ProviderGemini,
 		APIKey:   "test-key",
 	})
 	require.NoError(t, err)
@@ -514,8 +517,8 @@ func TestGeminiProvider_ConvertToolsToFunctions(t *testing.T) {
 
 // TestGeminiProvider_ToolSchemaToGeminiSchema tests schema conversion
 func TestGeminiProvider_ToolSchemaToGeminiSchema(t *testing.T) {
-	provider, err := NewGemini(&llm.Config{
-		Provider: llm.ProviderGemini,
+	provider, err := NewGemini(&agentllm.LLMOptions{
+		Provider: constants.ProviderGemini,
 		APIKey:   "test-key",
 	})
 	require.NoError(t, err)
@@ -528,8 +531,8 @@ func TestGeminiProvider_ToolSchemaToGeminiSchema(t *testing.T) {
 
 // TestGeminiStreamingProvider_Creation tests streaming provider creation
 func TestGeminiStreamingProvider_CreationComprehensive(t *testing.T) {
-	config := &llm.Config{
-		Provider: llm.ProviderGemini,
+	config := &agentllm.LLMOptions{
+		Provider: constants.ProviderGemini,
 		APIKey:   "test-key",
 		Model:    "gemini-pro",
 	}
@@ -542,8 +545,8 @@ func TestGeminiStreamingProvider_CreationComprehensive(t *testing.T) {
 
 // TestGeminiStreamingProvider_Inheritance tests inherited methods
 func TestGeminiStreamingProvider_Inheritance(t *testing.T) {
-	config := &llm.Config{
-		Provider: llm.ProviderGemini,
+	config := &agentllm.LLMOptions{
+		Provider: constants.ProviderGemini,
 		APIKey:   "test-key",
 		Model:    "gemini-pro",
 	}
@@ -552,7 +555,7 @@ func TestGeminiStreamingProvider_Inheritance(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test inherited methods
-	assert.Equal(t, llm.ProviderGemini, provider.Provider())
+	assert.Equal(t, constants.ProviderGemini, provider.Provider())
 	assert.Equal(t, "gemini-pro", provider.ModelName())
 	assert.Greater(t, provider.MaxTokens(), 0)
 }
@@ -580,8 +583,8 @@ func TestDeepSeekProvider_CompleteWithModelOverride(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	provider, err := NewDeepSeek(&llm.Config{
-		Provider: llm.ProviderDeepSeek,
+	provider, err := NewDeepSeek(&agentllm.LLMOptions{
+		Provider: constants.ProviderDeepSeek,
 		APIKey:   "test-key",
 		BaseURL:  mockServer.URL,
 		Model:    "deepseek-chat",
@@ -611,8 +614,8 @@ func TestDeepSeekProvider_Temperature_Boundary(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			provider, err := NewDeepSeek(&llm.Config{
-				Provider:    llm.ProviderDeepSeek,
+			provider, err := NewDeepSeek(&agentllm.LLMOptions{
+				Provider:    constants.ProviderDeepSeek,
 				APIKey:      "test-key",
 				Temperature: tt.temperature,
 			})
@@ -635,8 +638,8 @@ func TestDeepSeekProvider_MaxTokens_Boundary(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			provider, err := NewDeepSeek(&llm.Config{
-				Provider:  llm.ProviderDeepSeek,
+			provider, err := NewDeepSeek(&agentllm.LLMOptions{
+				Provider:  constants.ProviderDeepSeek,
 				APIKey:    "test-key",
 				MaxTokens: tt.maxTokens,
 			})
@@ -658,8 +661,8 @@ func TestDeepSeekProvider_EmptyMessages(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	provider, err := NewDeepSeek(&llm.Config{
-		Provider: llm.ProviderDeepSeek,
+	provider, err := NewDeepSeek(&agentllm.LLMOptions{
+		Provider: constants.ProviderDeepSeek,
 		APIKey:   "test-key",
 		BaseURL:  mockServer.URL,
 		Timeout:  5,

@@ -14,6 +14,7 @@ import (
 
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/constants"
 	"github.com/kart-io/goagent/tools"
 )
 
@@ -119,9 +120,9 @@ func (m *MockLLMClient) Chat(ctx context.Context, messages []llm.Message) (*llm.
 	return args.Get(0).(*llm.CompletionResponse), args.Error(1)
 }
 
-func (m *MockLLMClient) Provider() llm.Provider {
+func (m *MockLLMClient) Provider() constants.Provider {
 	args := m.Called()
-	return args.Get(0).(llm.Provider)
+	return args.Get(0).(constants.Provider)
 }
 
 func (m *MockLLMClient) IsAvailable() bool {

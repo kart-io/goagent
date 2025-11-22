@@ -91,7 +91,7 @@ func initializeDeepSeekClient() (llm.Client, error) {
 	fmt.Println("使用 DeepSeek Chat 模型")
 
 	// 创建 DeepSeek 客户端
-	client, err := providers.NewDeepSeek(&llm.Config{
+	client, err := providers.NewDeepSeek(&llm.LLMOptions{
 		APIKey:      apiKey,
 		Model:       "deepseek-chat", // DeepSeek 的对话模型
 		Temperature: 0.3,             // 较低温度以获得更准确的翻译

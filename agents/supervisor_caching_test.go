@@ -12,6 +12,7 @@ import (
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/constants"
 	"github.com/kart-io/goagent/performance"
 )
 
@@ -254,8 +255,8 @@ func (m *mockLLMForCaching) Complete(ctx context.Context, req *llm.CompletionReq
 	}, nil
 }
 
-func (m *mockLLMForCaching) Provider() llm.Provider {
-	return llm.ProviderCustom
+func (m *mockLLMForCaching) Provider() constants.Provider {
+	return constants.ProviderCustom
 }
 
 func (m *mockLLMForCaching) IsAvailable() bool {

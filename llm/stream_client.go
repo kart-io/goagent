@@ -3,6 +3,8 @@ package llm
 import (
 	"context"
 	"time"
+
+	"github.com/kart-io/goagent/llm/constants"
 )
 
 // StreamClient 流式 LLM 客户端接口
@@ -86,14 +88,14 @@ func DefaultStreamOptions() *StreamOptions {
 
 // MockStreamClient 模拟流式客户端（用于测试）
 type MockStreamClient struct {
-	provider    Provider
+	provider    constants.Provider
 	isAvailable bool
 }
 
 // NewMockStreamClient 创建模拟流式客户端
 func NewMockStreamClient() *MockStreamClient {
 	return &MockStreamClient{
-		provider:    ProviderCustom,
+		provider:    constants.ProviderCustom,
 		isAvailable: true,
 	}
 }
@@ -235,7 +237,7 @@ func (m *MockStreamClient) ChatStream(ctx context.Context, messages []Message) (
 }
 
 // Provider 返回提供商类型
-func (m *MockStreamClient) Provider() Provider {
+func (m *MockStreamClient) Provider() constants.Provider {
 	return m.provider
 }
 

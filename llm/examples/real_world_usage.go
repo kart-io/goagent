@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/constants"
 	"github.com/kart-io/goagent/llm/providers"
 )
 
@@ -17,7 +18,7 @@ func Example1_BasicUsage() {
 
 	// 方式1: 使用选项模式创建
 	client, err := factory.CreateClientWithOptions(
-		llm.WithProvider(llm.ProviderOpenAI),
+		llm.WithProvider(constants.ProviderOpenAI),
 		llm.WithAPIKey("your-api-key"),
 		llm.WithModel("gpt-3.5-turbo"),
 		llm.WithMaxTokens(1000),
@@ -44,7 +45,7 @@ func Example1_BasicUsage() {
 func Example2_ProductionSetup() {
 	// 创建生产环境优化的客户端
 	client, err := providers.CreateProductionClient(
-		llm.ProviderOpenAI,
+		constants.ProviderOpenAI,
 		"your-api-key",
 		llm.WithModel("gpt-4"),
 		llm.WithMaxTokens(2000),
@@ -74,7 +75,7 @@ func Example2_ProductionSetup() {
 func Example3_UseCaseOptimization() {
 	// 为代码生成优化的客户端
 	codeGenClient, err := providers.CreateClientForUseCase(
-		llm.ProviderOpenAI,
+		constants.ProviderOpenAI,
 		"your-api-key",
 		llm.UseCaseCodeGeneration,
 		llm.WithModel("gpt-4"), // 覆盖默认模型
@@ -95,7 +96,7 @@ func Example3_UseCaseOptimization() {
 
 	// 为创意写作优化的客户端
 	creativeClient, err := providers.CreateClientForUseCase(
-		llm.ProviderOpenAI,
+		constants.ProviderOpenAI,
 		"your-api-key",
 		llm.UseCaseCreativeWriting,
 		llm.WithMaxTokens(4000),
@@ -208,9 +209,9 @@ func Example6_AdvancedConfiguration() {
 	factory := providers.NewClientFactory()
 
 	// 创建具有完整高级配置的客户端
-	config := llm.NewConfigWithOptions(
+	config := llm.NewLLMOptionsWithOptions(
 		// 基础配置
-		llm.WithProvider(llm.ProviderOpenAI),
+		llm.WithProvider(constants.ProviderOpenAI),
 		llm.WithAPIKey("your-api-key"),
 		llm.WithModel("gpt-4"),
 
@@ -299,7 +300,7 @@ func Example7_EnvironmentBased() {
 	if isProduction {
 		// 生产环境配置
 		client, err = providers.CreateProductionClient(
-			llm.ProviderOpenAI,
+			constants.ProviderOpenAI,
 			"", // 从环境变量 OPENAI_API_KEY 读取
 			llm.WithModel("gpt-4"),
 			llm.WithCache(true, 1*time.Hour),
@@ -308,7 +309,7 @@ func Example7_EnvironmentBased() {
 	} else {
 		// 开发环境配置
 		client, err = providers.CreateDevelopmentClient(
-			llm.ProviderOpenAI,
+			constants.ProviderOpenAI,
 			"",                             // 从环境变量读取
 			llm.WithModel("gpt-3.5-turbo"), // 开发环境使用更便宜的模型
 		)

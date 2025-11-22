@@ -145,7 +145,7 @@ func main() {
 // runBasicChatExample 演示基础对话
 func runBasicChatExample(apiKey string) {
 	// 创建 DeepSeek 配置
-	config := &llm.Config{
+	config := &llm.LLMOptions{
 		APIKey:      apiKey,
 		Model:       "deepseek-chat", // 使用 deepseek-chat 模型
 		Temperature: 0.7,
@@ -192,7 +192,7 @@ func runBasicChatExample(apiKey string) {
 
 // runToolCallingExample 演示工具调用
 func runToolCallingExample(apiKey string) {
-	config := &llm.Config{
+	config := &llm.LLMOptions{
 		APIKey:      apiKey,
 		Model:       "deepseek-chat",
 		Temperature: 0.7,
@@ -241,7 +241,7 @@ func runToolCallingExample(apiKey string) {
 
 // runStreamingExample 演示流式输出
 func runStreamingExample(apiKey string) {
-	config := &llm.Config{
+	config := &llm.LLMOptions{
 		APIKey:      apiKey,
 		Model:       "deepseek-chat",
 		Temperature: 0.8,
@@ -277,7 +277,7 @@ func runStreamingExample(apiKey string) {
 
 // runReActExample 演示 ReAct Agent
 func runReActExample(apiKey string) {
-	config := &llm.Config{
+	config := &llm.LLMOptions{
 		APIKey:      apiKey,
 		Model:       "deepseek-chat",
 		Temperature: 0.7,
