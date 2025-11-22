@@ -23,13 +23,10 @@ import (
 
 // CohereProvider implements LLM interface for Cohere
 type CohereProvider struct {
-	config      *agentllm.LLMOptions
-	client      *httpclient.Client
-	apiKey      string
-	baseURL     string
-	model       string
-	maxTokens   int
-	temperature float64
+	*BaseProvider
+	client  *httpclient.Client
+	apiKey  string
+	baseURL string
 }
 
 // CohereRequest represents a request to Cohere API
@@ -84,72 +81,51 @@ type CohereErrorResponse struct {
 	Message string `json:"message"`
 }
 
-// NewCohere creates a new Cohere provider
-func NewCohere(config *agentllm.LLMOptions) (*CohereProvider, error) {
-	// Get API key from config or env
-	apiKey := config.APIKey
-	if apiKey == "" {
-		apiKey = os.Getenv(constants.EnvCohereAPIKey)
+// NewCohereWithOptions creates a new Cohere provider using options pattern
+func NewCohereWithOptions(opts ...agentllm.ClientOption) (*CohereProvider, error) {
+	// 创建 BaseProvider，统一处理 Options
+	base := NewBaseProvider(opts...)
+
+	// 应用 Provider 特定的默认值
+	base.ApplyProviderDefaults(
+		constants.ProviderCohere,
+		constants.CohereBaseURL,
+		constants.CohereDefaultModel,
+		constants.EnvCohereBaseURL,
+		constants.EnvCohereModel,
+	)
+
+	// 统一处理 API Key
+	if err := base.EnsureAPIKey(constants.EnvCohereAPIKey, constants.ProviderCohere); err != nil {
+		return nil, err
 	}
 
-	if apiKey == "" {
-		return nil, agentErrors.NewInvalidConfigError(string(constants.ProviderCohere), constants.ErrorFieldAPIKey, fmt.Sprintf(constants.ErrAPIKeyMissing, "COHERE"))
-	}
-
-	// Set base URL with fallback
-	baseURL := config.BaseURL
-	if baseURL == "" {
-		baseURL = os.Getenv(constants.EnvCohereBaseURL)
-	}
-	if baseURL == "" {
-		baseURL = constants.CohereBaseURL
-	}
-
-	// Set model with fallback
-	model := config.Model
-	if model == "" {
-		model = os.Getenv(constants.EnvCohereModel)
-	}
-	if model == "" {
-		model = constants.CohereDefaultModel
-	}
-
-	// Set other parameters with defaults
-	maxTokens := config.MaxTokens
-	if maxTokens == 0 {
-		maxTokens = constants.DefaultMaxTokens
-	}
-
-	temperature := config.Temperature
-	if temperature == 0 {
-		temperature = constants.DefaultTemperature
-	}
-
-	timeout := time.Duration(config.Timeout) * time.Second
-	if timeout == 0 {
-		timeout = constants.DefaultTimeout
-	}
+	// 获取超时时间
+	timeout := base.GetTimeout()
 
 	// Create httpclient
 	client := httpclient.NewClient(&httpclient.Config{
 		Timeout: timeout,
 		Headers: map[string]string{
 			constants.HeaderContentType:   constants.ContentTypeJSON,
-			constants.HeaderAuthorization: constants.AuthBearerPrefix + apiKey,
+			constants.HeaderAuthorization: constants.AuthBearerPrefix + base.Config.APIKey,
 		},
 	})
 
 	provider := &CohereProvider{
-		config:      config,
-		client:      client,
-		apiKey:      apiKey,
-		baseURL:     baseURL,
-		model:       model,
-		maxTokens:   maxTokens,
-		temperature: temperature,
+		BaseProvider: base,
+		client:       client,
+		apiKey:       base.Config.APIKey,
+		baseURL:      base.Config.BaseURL,
 	}
 
 	return provider, nil
+}
+
+// NewCohere creates a new Cohere provider (backward compatible)
+func NewCohere(config *agentllm.LLMOptions) (*CohereProvider, error) {
+	// 将现有配置转换为 Options，使用 Options 模式创建 Provider
+	return NewCohereWithOptions(ConfigToOptions(config)...)
 }
 
 // Complete implements basic text completion
@@ -200,21 +176,10 @@ func (p *CohereProvider) buildRequest(req *agentllm.CompletionRequest) *CohereRe
 		}
 	}
 
-	// Use request parameters or provider defaults
-	model := p.model
-	if req.Model != "" {
-		model = req.Model
-	}
-
-	maxTokens := p.maxTokens
-	if req.MaxTokens > 0 {
-		maxTokens = req.MaxTokens
-	}
-
-	temperature := p.temperature
-	if req.Temperature > 0 {
-		temperature = req.Temperature
-	}
+	// 使用 BaseProvider 的统一参数处理方法
+	model := p.GetModel(req.Model)
+	maxTokens := p.GetMaxTokens(req.MaxTokens)
+	temperature := p.GetTemperature(req.Temperature)
 
 	return &CohereRequest{
 		Model:         model,
@@ -249,8 +214,9 @@ func (p *CohereProvider) execute(ctx context.Context, req *CohereRequest) (*Cohe
 		SetBody(req).
 		Post(p.baseURL + constants.CohereChatPath)
 
+	model := p.GetModel("")
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError(string(constants.ProviderCohere), p.model, err)
+		return nil, agentErrors.NewLLMRequestError(string(constants.ProviderCohere), model, err)
 	}
 
 	// Check status code
@@ -358,7 +324,7 @@ func (p *CohereProvider) executeWithRetry(ctx context.Context, req *CohereReques
 func (p *CohereProvider) convertResponse(resp *CohereResponse) *agentllm.CompletionResponse {
 	return &agentllm.CompletionResponse{
 		Content:      resp.Text,
-		Model:        p.model, // Cohere doesn't return model in response
+		Model:        p.GetModel(""), // Cohere doesn't return model in response
 		TokensUsed:   resp.TokenCount.TotalTokens,
 		FinishReason: resp.FinishReason,
 		Provider:     string(constants.ProviderCohere),
@@ -399,12 +365,16 @@ func (p *CohereProvider) IsAvailable() bool {
 func (p *CohereProvider) Stream(ctx context.Context, prompt string) (<-chan string, error) {
 	tokens := make(chan string, 100)
 
+	model := p.GetModel("")
+	maxTokens := p.GetMaxTokens(0)
+	temperature := p.GetTemperature(0)
+
 	// Build streaming request
 	req := &CohereRequest{
-		Model:       p.model,
+		Model:       model,
 		Message:     prompt,
-		Temperature: p.temperature,
-		MaxTokens:   p.maxTokens,
+		Temperature: temperature,
+		MaxTokens:   maxTokens,
 		Stream:      true,
 	}
 
@@ -417,11 +387,11 @@ func (p *CohereProvider) Stream(ctx context.Context, prompt string) (<-chan stri
 	// Execute streaming request
 	resp, err := streamClient.Post(p.baseURL + constants.CohereChatPath)
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError(string(constants.ProviderCohere), p.model, err)
+		return nil, agentErrors.NewLLMRequestError(string(constants.ProviderCohere), model, err)
 	}
 
 	if !resp.IsSuccess() {
-		return nil, p.handleHTTPError(resp, p.model)
+		return nil, p.handleHTTPError(resp, model)
 	}
 
 	// Start goroutine to read stream
@@ -472,10 +442,10 @@ func (p *CohereProvider) Stream(ctx context.Context, prompt string) (<-chan stri
 
 // ModelName returns the model name
 func (p *CohereProvider) ModelName() string {
-	return p.model
+	return p.GetModel("")
 }
 
 // MaxTokens returns the max tokens setting
 func (p *CohereProvider) MaxTokens() int {
-	return p.maxTokens
+	return p.GetMaxTokens(0)
 }

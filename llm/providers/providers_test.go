@@ -153,10 +153,14 @@ func TestOpenAIProvider_Stream(t *testing.T) {
 }
 
 func TestOpenAIProvider_ConvertToolsToFunctions(t *testing.T) {
+	base := NewBaseProvider()
+	base.Config = &llm.LLMOptions{
+		Model:       "gpt-4",
+		MaxTokens:   2000,
+		Temperature: 0.7,
+	}
 	provider := &OpenAIProvider{
-		model:       "gpt-4",
-		maxTokens:   2000,
-		temperature: 0.7,
+		BaseProvider: base,
 	}
 
 	mockTool := &MockTool{}
@@ -340,9 +344,13 @@ func TestTokenWithMetadata(t *testing.T) {
 // Benchmark tests
 func BenchmarkOpenAIProvider_ConvertTools(b *testing.B) {
 	provider := &OpenAIProvider{
-		model:       "gpt-4",
-		maxTokens:   2000,
-		temperature: 0.7,
+		BaseProvider: &BaseProvider{
+			Config: &llm.LLMOptions{
+				Model:       "gpt-4",
+				MaxTokens:   2000,
+				Temperature: 0.7,
+			},
+		},
 	}
 
 	mockTools := make([]interfaces.Tool, 10)

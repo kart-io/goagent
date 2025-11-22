@@ -3,7 +3,6 @@ package providers
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -19,114 +18,58 @@ import (
 // SiliconFlowClient SiliconFlow LLM 客户端
 // SiliconFlow 是一个提供多种开源模型的服务平台
 type SiliconFlowClient struct {
-	apiKey      string
-	baseURL     string
-	model       string
-	temperature float64
-	maxTokens   int
-	client      *httpclient.Client
+	*BaseProvider
+	apiKey  string
+	baseURL string
+	client  *httpclient.Client
 }
 
-// SiliconFlowConfig SiliconFlow 配置
-type SiliconFlowConfig struct {
-	APIKey      string  // API 密钥
-	BaseURL     string  // API 地址，默认 https://api.siliconflow.cn/v1
-	Model       string  // 模型名称，如 Qwen/Qwen2-7B-Instruct, deepseek-ai/DeepSeek-V2-Chat
-	Temperature float64 // 温度参数
-	MaxTokens   int     // 最大 token 数
-	Timeout     int     // 请求超时（秒）
-}
+// NewSiliconFlowWithOptions 使用选项模式创建 SiliconFlow provider
+func NewSiliconFlowWithOptions(opts ...agentllm.ClientOption) (*SiliconFlowClient, error) {
+	// 创建 BaseProvider，统一处理 Options
+	base := NewBaseProvider(opts...)
 
-// DefaultSiliconFlowConfig 返回默认 SiliconFlow 配置
-func DefaultSiliconFlowConfig() *SiliconFlowConfig {
-	return &SiliconFlowConfig{
-		BaseURL:     constants.SiliconFlowBaseURL,
-		Model:       "Qwen/Qwen2-7B-Instruct", // 默认使用 Qwen2
-		Temperature: constants.DefaultTemperature,
-		MaxTokens:   constants.DefaultMaxTokens,
-		Timeout:     int(constants.DefaultTimeout / time.Second),
-	}
-}
+	// 应用 Provider 特定的默认值
+	base.ApplyProviderDefaults(
+		constants.ProviderSiliconFlow,
+		constants.SiliconFlowBaseURL,
+		"Qwen/Qwen2-7B-Instruct",
+		constants.EnvSiliconFlowBaseURL,
+		constants.EnvSiliconFlowModel,
+	)
 
-// NewSiliconFlowClient 创建新的 SiliconFlow 客户端
-func NewSiliconFlowClient(config *SiliconFlowConfig) (*SiliconFlowClient, error) {
-	if config == nil {
-		config = DefaultSiliconFlowConfig()
+	// 统一处理 API Key
+	if err := base.EnsureAPIKey(constants.EnvSiliconFlowAPIKey, constants.ProviderSiliconFlow); err != nil {
+		return nil, err
 	}
 
-	if config.APIKey == "" {
-		return nil, agentErrors.NewInvalidConfigError(string(constants.ProviderSiliconFlow), constants.ErrorFieldAPIKey, "SiliconFlow API key is required")
-	}
+	// 获取超时时间
+	timeout := base.GetTimeout()
 
-	if config.BaseURL == "" {
-		config.BaseURL = constants.SiliconFlowBaseURL
-	}
-
-	if config.Model == "" {
-		config.Model = "Qwen/Qwen2-7B-Instruct"
-	}
-
-	if config.Temperature == 0 {
-		config.Temperature = DefaultTemperature
-	}
-
-	if config.MaxTokens == 0 {
-		config.MaxTokens = DefaultMaxTokens
-	}
-
-	if config.Timeout == 0 {
-		config.Timeout = int(constants.DefaultTimeout / time.Second)
-	}
+	// 创建 HTTP 客户端
+	client := httpclient.NewClient(&httpclient.Config{
+		Timeout: timeout,
+		Headers: map[string]string{
+			constants.HeaderContentType:   constants.ContentTypeJSON,
+			constants.HeaderAuthorization: constants.AuthBearerPrefix + base.Config.APIKey,
+		},
+	})
 
 	return &SiliconFlowClient{
-		apiKey:      config.APIKey,
-		baseURL:     strings.TrimRight(config.BaseURL, "/"),
-		model:       config.Model,
-		temperature: config.Temperature,
-		maxTokens:   config.MaxTokens,
-		client: httpclient.NewClient(&httpclient.Config{
-			Timeout: time.Duration(config.Timeout) * time.Second,
-			Headers: map[string]string{
-				constants.HeaderContentType:   constants.ContentTypeJSON,
-				constants.HeaderAuthorization: constants.AuthBearerPrefix + config.APIKey,
-			},
-		}),
+		BaseProvider: base,
+		apiKey:       base.Config.APIKey,
+		baseURL:      strings.TrimRight(base.Config.BaseURL, "/"),
+		client:       client,
 	}, nil
 }
 
-// NewSiliconFlow 创建 SiliconFlow provider（兼容 llm.Config）
+// NewSiliconFlow 创建 SiliconFlow provider (向后兼容)
 func NewSiliconFlow(config *agentllm.LLMOptions) (*SiliconFlowClient, error) {
-	sfConfig := &SiliconFlowConfig{
-		APIKey:      config.APIKey,
-		BaseURL:     config.BaseURL,
-		Model:       config.Model,
-		Temperature: config.Temperature,
-		MaxTokens:   config.MaxTokens,
-		Timeout:     config.Timeout,
-	}
-
-	if sfConfig.APIKey == "" {
-		sfConfig.APIKey = os.Getenv(constants.EnvSiliconFlowAPIKey)
-	}
-
-	if sfConfig.BaseURL == "" {
-		sfConfig.BaseURL = os.Getenv(constants.EnvSiliconFlowBaseURL)
-	}
-	if sfConfig.BaseURL == "" {
-		sfConfig.BaseURL = constants.SiliconFlowBaseURL
-	}
-
-	if sfConfig.Model == "" {
-		sfConfig.Model = os.Getenv(constants.EnvSiliconFlowModel)
-	}
-	if sfConfig.Model == "" {
-		sfConfig.Model = "Qwen/Qwen2-7B-Instruct"
-	}
-
-	return NewSiliconFlowClient(sfConfig)
+	// 将现有配置转换为 Options，使用 Options 模式创建 Provider
+	return NewSiliconFlowWithOptions(ConfigToOptions(config)...)
 }
 
-// siliconFlowRequest SiliconFlow 请求格式（兼容 OpenAI 格式）
+// siliconFlowRequest SiliconFlow 请求格式
 type siliconFlowRequest struct {
 	Model       string               `json:"model"`
 	Messages    []siliconFlowMessage `json:"messages"`
@@ -180,10 +123,10 @@ func (c *SiliconFlowClient) Complete(ctx context.Context, req *agentllm.Completi
 
 	// 构建请求
 	sfReq := siliconFlowRequest{
-		Model:       c.getModel(req.Model),
+		Model:       c.GetModel(req.Model),
 		Messages:    messages,
-		Temperature: c.getTemperature(req.Temperature),
-		MaxTokens:   c.getMaxTokens(req.MaxTokens),
+		Temperature: c.GetTemperature(req.Temperature),
+		MaxTokens:   c.GetMaxTokens(req.MaxTokens),
 		Stream:      false,
 	}
 
@@ -196,17 +139,18 @@ func (c *SiliconFlowClient) Complete(ctx context.Context, req *agentllm.Completi
 	}
 
 	// 发送请求
+	model := c.GetModel(req.Model)
 	resp, err := c.client.R().
 		SetContext(ctx).
 		SetBody(sfReq).
 		Post(c.baseURL + "/chat/completions")
 
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError("siliconflow", c.getModel(req.Model), err)
+		return nil, agentErrors.NewLLMRequestError("siliconflow", model, err)
 	}
 
 	if !resp.IsSuccess() {
-		return nil, agentErrors.NewLLMResponseError("siliconflow", c.getModel(req.Model),
+		return nil, agentErrors.NewLLMResponseError("siliconflow", model,
 			fmt.Sprintf("API error (status %d): %s", resp.StatusCode(), resp.String()))
 	}
 
@@ -218,7 +162,7 @@ func (c *SiliconFlowClient) Complete(ctx context.Context, req *agentllm.Completi
 	}
 
 	if len(sfResp.Choices) == 0 {
-		return nil, agentErrors.NewLLMResponseError("siliconflow", c.getModel(req.Model), "no choices in response")
+		return nil, agentErrors.NewLLMResponseError("siliconflow", model, "no choices in response")
 	}
 
 	// 构建响应
@@ -316,41 +260,20 @@ func (c *SiliconFlowClient) ListModels() []string {
 
 // 辅助方法
 
-func (c *SiliconFlowClient) getModel(model string) string {
-	if model != "" {
-		return model
-	}
-	return c.model
-}
-
-func (c *SiliconFlowClient) getTemperature(temp float64) float64 {
-	if temp > 0 {
-		return temp
-	}
-	return c.temperature
-}
-
-func (c *SiliconFlowClient) getMaxTokens(maxTokens int) int {
-	if maxTokens > 0 {
-		return maxTokens
-	}
-	return c.maxTokens
-}
-
 // WithModel 设置模型
 func (c *SiliconFlowClient) WithModel(model string) *SiliconFlowClient {
-	c.model = model
+	c.Config.Model = model
 	return c
 }
 
 // WithTemperature 设置温度
 func (c *SiliconFlowClient) WithTemperature(temperature float64) *SiliconFlowClient {
-	c.temperature = temperature
+	c.Config.Temperature = temperature
 	return c
 }
 
 // WithMaxTokens 设置最大 token 数
 func (c *SiliconFlowClient) WithMaxTokens(maxTokens int) *SiliconFlowClient {
-	c.maxTokens = maxTokens
+	c.Config.MaxTokens = maxTokens
 	return c
 }

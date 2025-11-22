@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"time"
 
 	"github.com/kart-io/goagent/llm/constants"
@@ -20,65 +19,47 @@ import (
 
 // OpenAIProvider implements LLM interface for OpenAI
 type OpenAIProvider struct {
-	client      *openai.Client
-	config      *agentllm.LLMOptions
-	model       string
-	maxTokens   int
-	temperature float64
+	*BaseProvider
+	client *openai.Client
 }
 
-// NewOpenAI creates a new OpenAI provider
-func NewOpenAI(config *agentllm.LLMOptions) (*OpenAIProvider, error) {
-	// Get API key from config or env
-	apiKey := config.APIKey
-	if apiKey == "" {
-		apiKey = os.Getenv(constants.EnvOpenAIAPIKey)
+// NewOpenAIWithOptions creates a new OpenAI provider using options pattern
+func NewOpenAIWithOptions(opts ...agentllm.ClientOption) (*OpenAIProvider, error) {
+	// 创建 BaseProvider，统一处理 Options
+	base := NewBaseProvider(opts...)
+
+	// 应用 Provider 特定的默认值
+	base.ApplyProviderDefaults(
+		constants.ProviderOpenAI,
+		"https://api.openai.com/v1",
+		openai.GPT4TurboPreview,
+		constants.EnvOpenAIBaseURL,
+		constants.EnvOpenAIModel,
+	)
+
+	// 统一处理 API Key
+	if err := base.EnsureAPIKey(constants.EnvOpenAIAPIKey, constants.ProviderOpenAI); err != nil {
+		return nil, err
 	}
 
-	if apiKey == "" {
-		return nil, agentErrors.NewInvalidConfigError(string(constants.ProviderOpenAI), constants.ErrorFieldAPIKey, "OpenAI API key is required")
-	}
-
-	clientConfig := openai.DefaultConfig(apiKey)
-
-	// Set base URL with fallback
-	baseURL := config.BaseURL
-	if baseURL == "" {
-		baseURL = os.Getenv(constants.EnvOpenAIBaseURL)
-	}
-	if baseURL != "" {
-		clientConfig.BaseURL = baseURL
-	}
-
-	// Set model with fallback
-	model := config.Model
-	if model == "" {
-		model = os.Getenv(constants.EnvOpenAIModel)
-	}
-	if model == "" {
-		model = openai.GPT4TurboPreview
-	}
-
-	// Set other parameters with defaults
-	maxTokens := config.MaxTokens
-	if maxTokens == 0 {
-		maxTokens = DefaultMaxTokens
-	}
-
-	temperature := config.Temperature
-	if temperature == 0 {
-		temperature = DefaultTemperature
+	// 创建 OpenAI 客户端配置
+	clientConfig := openai.DefaultConfig(base.Config.APIKey)
+	if base.Config.BaseURL != "" {
+		clientConfig.BaseURL = base.Config.BaseURL
 	}
 
 	provider := &OpenAIProvider{
-		client:      openai.NewClientWithConfig(clientConfig),
-		config:      config,
-		model:       model,
-		maxTokens:   maxTokens,
-		temperature: temperature,
+		BaseProvider: base,
+		client:       openai.NewClientWithConfig(clientConfig),
 	}
 
 	return provider, nil
+}
+
+// NewOpenAI creates a new OpenAI provider (backward compatible)
+func NewOpenAI(config *agentllm.LLMOptions) (*OpenAIProvider, error) {
+	// 将现有配置转换为 Options，使用 Options 模式创建 Provider
+	return NewOpenAIWithOptions(ConfigToOptions(config)...)
 }
 
 // Complete implements basic text completion
@@ -92,20 +73,10 @@ func (p *OpenAIProvider) Complete(ctx context.Context, req *agentllm.CompletionR
 		}
 	}
 
-	model := p.model
-	if req.Model != "" {
-		model = req.Model
-	}
-
-	maxTokens := p.maxTokens
-	if req.MaxTokens > 0 {
-		maxTokens = req.MaxTokens
-	}
-
-	temperature := p.temperature
-	if req.Temperature > 0 {
-		temperature = req.Temperature
-	}
+	// 使用 BaseProvider 的统一参数处理方法
+	model := p.GetModel(req.Model)
+	maxTokens := p.GetMaxTokens(req.MaxTokens)
+	temperature := p.GetTemperature(req.Temperature)
 
 	resp, err := p.client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
 		Model:       model,
@@ -148,17 +119,21 @@ func (p *OpenAIProvider) Chat(ctx context.Context, messages []agentllm.Message) 
 func (p *OpenAIProvider) Stream(ctx context.Context, prompt string) (<-chan string, error) {
 	tokens := make(chan string, 100)
 
+	model := p.GetModel("")
+	maxTokens := p.GetMaxTokens(0)
+	temperature := p.GetTemperature(0)
+
 	stream, err := p.client.CreateChatCompletionStream(ctx, openai.ChatCompletionRequest{
-		Model: p.model,
+		Model: model,
 		Messages: []openai.ChatCompletionMessage{
 			{Role: openai.ChatMessageRoleUser, Content: prompt},
 		},
-		MaxTokens:   p.maxTokens,
-		Temperature: float32(p.temperature),
+		MaxTokens:   maxTokens,
+		Temperature: float32(temperature),
 		Stream:      true,
 	})
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError(string(constants.ProviderOpenAI), p.model, err).
+		return nil, agentErrors.NewLLMRequestError(string(constants.ProviderOpenAI), model, err).
 			WithContext("stream", true)
 	}
 
@@ -201,20 +176,24 @@ func (p *OpenAIProvider) GenerateWithTools(ctx context.Context, prompt string, t
 		{Role: openai.ChatMessageRoleUser, Content: prompt},
 	}
 
+	model := p.GetModel("")
+	maxTokens := p.GetMaxTokens(0)
+	temperature := p.GetTemperature(0)
+
 	resp, err := p.client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
-		Model:       p.model,
+		Model:       model,
 		Messages:    messages,
-		MaxTokens:   p.maxTokens,
-		Temperature: float32(p.temperature),
+		MaxTokens:   maxTokens,
+		Temperature: float32(temperature),
 		Functions:   functions,
 	})
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError(string(constants.ProviderOpenAI), p.model, err).
+		return nil, agentErrors.NewLLMRequestError(string(constants.ProviderOpenAI), model, err).
 			WithContext("tool_calling", true)
 	}
 
 	if len(resp.Choices) == 0 {
-		return nil, agentErrors.NewLLMResponseError(string(constants.ProviderOpenAI), p.model, "no choices in response")
+		return nil, agentErrors.NewLLMResponseError(string(constants.ProviderOpenAI), model, "no choices in response")
 	}
 
 	choice := resp.Choices[0]
@@ -247,18 +226,22 @@ func (p *OpenAIProvider) StreamWithTools(ctx context.Context, prompt string, too
 	chunks := make(chan ToolChunk, 100)
 	functions := p.convertToolsToFunctions(tools)
 
+	model := p.GetModel("")
+	maxTokens := p.GetMaxTokens(0)
+	temperature := p.GetTemperature(0)
+
 	stream, err := p.client.CreateChatCompletionStream(ctx, openai.ChatCompletionRequest{
-		Model: p.model,
+		Model: model,
 		Messages: []openai.ChatCompletionMessage{
 			{Role: openai.ChatMessageRoleUser, Content: prompt},
 		},
 		Functions:   functions,
-		MaxTokens:   p.maxTokens,
-		Temperature: float32(p.temperature),
+		MaxTokens:   maxTokens,
+		Temperature: float32(temperature),
 		Stream:      true,
 	})
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError(string(constants.ProviderOpenAI), p.model, err).
+		return nil, agentErrors.NewLLMRequestError(string(constants.ProviderOpenAI), model, err).
 			WithContext("stream", true).
 			WithContext("tool_calling", true)
 	}
@@ -417,12 +400,12 @@ func (p *OpenAIProvider) IsAvailable() bool {
 
 // ModelName returns the model name
 func (p *OpenAIProvider) ModelName() string {
-	return p.model
+	return p.GetModel("")
 }
 
 // MaxTokens returns the max tokens setting
 func (p *OpenAIProvider) MaxTokens() int {
-	return p.maxTokens
+	return p.GetMaxTokens(0)
 }
 
 // convertToolsToFunctions converts our tools to OpenAI function format
@@ -479,13 +462,17 @@ func NewOpenAIStreaming(config *agentllm.LLMOptions) (*OpenAIStreamingProvider, 
 func (p *OpenAIStreamingProvider) StreamTokensWithMetadata(ctx context.Context, prompt string) (<-chan TokenWithMetadata, error) {
 	tokens := make(chan TokenWithMetadata, 100)
 
+	model := p.GetModel("")
+	maxTokens := p.GetMaxTokens(0)
+	temperature := p.GetTemperature(0)
+
 	stream, err := p.client.CreateChatCompletionStream(ctx, openai.ChatCompletionRequest{
-		Model: p.model,
+		Model: model,
 		Messages: []openai.ChatCompletionMessage{
 			{Role: openai.ChatMessageRoleUser, Content: prompt},
 		},
-		MaxTokens:   p.maxTokens,
-		Temperature: float32(p.temperature),
+		MaxTokens:   maxTokens,
+		Temperature: float32(temperature),
 		Stream:      true,
 	})
 	if err != nil {

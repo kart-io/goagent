@@ -18,110 +18,62 @@ import (
 
 // OllamaClient Ollama LLM 客户端
 type OllamaClient struct {
-	baseURL     string
-	model       string
-	temperature float64
-	maxTokens   int
-	client      *httpclient.Client
+	*BaseProvider
+	baseURL string
+	client  *httpclient.Client
 }
 
-// OllamaConfig Ollama 配置
-type OllamaConfig struct {
-	BaseURL     string  // Ollama API 地址，默认 http://localhost:11434
-	Model       string  // 模型名称，如 llama2, codellama, mistral 等
-	Temperature float64 // 温度参数
-	MaxTokens   int     // 最大 token 数
-	Timeout     int     // 请求超时（秒）
-}
+// NewOllamaWithOptions 使用选项模式创建 Ollama 客户端
+func NewOllamaWithOptions(opts ...agentllm.ClientOption) (*OllamaClient, error) {
+	// 创建 BaseProvider，统一处理 Options
+	base := NewBaseProvider(opts...)
 
-// DefaultOllamaConfig 返回默认 Ollama 配置
-func DefaultOllamaConfig() *OllamaConfig {
-	return &OllamaConfig{
-		BaseURL:     "http://localhost:11434",
-		Model:       "llama2",
-		Temperature: 0.7,
-		MaxTokens:   2000,
-		Timeout:     120, // Ollama 可能需要更长的超时时间
-	}
-}
+	// 应用 Provider 特定的默认值（Ollama 不需要 API Key）
+	base.ApplyProviderDefaults(
+		constants.ProviderOllama,
+		"http://localhost:11434",
+		"llama2",
+		constants.EnvOllamaBaseURL,
+		constants.EnvOllamaModel,
+	)
 
-// NewOllama 使用标准配置创建 Ollama 客户端
-func NewOllama(config *agentllm.LLMOptions) (*OllamaClient, error) {
-	ollamaConfig := &OllamaConfig{
-		BaseURL:     config.BaseURL,
-		Model:       config.Model,
-		Temperature: config.Temperature,
-		MaxTokens:   config.MaxTokens,
-		Timeout:     config.Timeout,
+	// 设置超时时间，Ollama 默认需要更长的超时
+	timeout := base.GetTimeout()
+	if timeout == constants.DefaultTimeout {
+		timeout = 120 * time.Second
 	}
 
-	// 设置默认值
-	if ollamaConfig.BaseURL == "" {
-		ollamaConfig.BaseURL = "http://localhost:11434"
-	}
-	if ollamaConfig.Model == "" {
-		ollamaConfig.Model = "llama2"
-	}
-	if ollamaConfig.Temperature == 0 {
-		ollamaConfig.Temperature = 0.7
-	}
-	if ollamaConfig.MaxTokens == 0 {
-		ollamaConfig.MaxTokens = 2000
-	}
-	if ollamaConfig.Timeout == 0 {
-		ollamaConfig.Timeout = 120
-	}
-
-	return NewOllamaClient(ollamaConfig), nil
-}
-
-// NewOllamaClient 创建新的 Ollama 客户端
-func NewOllamaClient(config *OllamaConfig) *OllamaClient {
-	if config == nil {
-		config = DefaultOllamaConfig()
-	}
-
-	if config.BaseURL == "" {
-		config.BaseURL = "http://localhost:11434"
-	}
-
-	if config.Model == "" {
-		config.Model = "llama2"
-	}
-
-	if config.Temperature == 0 {
-		config.Temperature = 0.7
-	}
-
-	if config.MaxTokens == 0 {
-		config.MaxTokens = 2000
-	}
-
-	if config.Timeout == 0 {
-		config.Timeout = 120
-	}
+	// 创建 HTTP 客户端
+	client := httpclient.NewClient(&httpclient.Config{
+		Timeout: timeout,
+		Headers: map[string]string{
+			"Content-Type": "application/json",
+		},
+	})
 
 	return &OllamaClient{
-		baseURL:     strings.TrimRight(config.BaseURL, "/"),
-		model:       config.Model,
-		temperature: config.Temperature,
-		maxTokens:   config.MaxTokens,
-		client: httpclient.NewClient(&httpclient.Config{
-			Timeout: time.Duration(config.Timeout) * time.Second,
-			Headers: map[string]string{
-				"Content-Type": "application/json",
-			},
-		}),
-	}
+		BaseProvider: base,
+		baseURL:      strings.TrimRight(base.Config.BaseURL, "/"),
+		client:       client,
+	}, nil
 }
 
-// NewOllamaClientSimple 使用默认配置创建 Ollama 客户端
-func NewOllamaClientSimple(model string) *OllamaClient {
-	config := DefaultOllamaConfig()
-	if model != "" {
-		config.Model = model
+// NewOllama 使用标准配置创建 Ollama 客户端 (向后兼容)
+func NewOllama(config *agentllm.LLMOptions) (*OllamaClient, error) {
+	// 将现有配置转换为 Options，使用 Options 模式创建 Provider
+	return NewOllamaWithOptions(ConfigToOptions(config)...)
+}
+
+// NewOllamaClientSimple 使用默认配置创建 Ollama 客户端（便捷函数）
+func NewOllamaClientSimple(model string) (*OllamaClient, error) {
+	config := &agentllm.LLMOptions{
+		Provider: constants.ProviderOllama,
+		Model:    model,
 	}
-	return NewOllamaClient(config)
+	if model == "" {
+		config.Model = "llama2"
+	}
+	return NewOllama(config)
 }
 
 // ollamaChatRequest Ollama 聊天请求格式
@@ -199,12 +151,12 @@ func (c *OllamaClient) Complete(ctx context.Context, req *agentllm.CompletionReq
 
 	// 构建请求
 	ollamaReq := ollamaGenerateRequest{
-		Model:  c.getModel(req.Model),
+		Model:  c.GetModel(req.Model),
 		Prompt: prompt,
 		Stream: false,
 		Options: map[string]interface{}{
-			"temperature": c.getTemperature(req.Temperature),
-			"num_predict": c.getMaxTokens(req.MaxTokens),
+			"temperature": c.GetTemperature(req.Temperature),
+			"num_predict": c.GetMaxTokens(req.MaxTokens),
 		},
 	}
 
@@ -223,11 +175,11 @@ func (c *OllamaClient) Complete(ctx context.Context, req *agentllm.CompletionReq
 		Post(c.baseURL + "/api/generate")
 
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError("ollama", c.getModel(req.Model), err)
+		return nil, agentErrors.NewLLMRequestError("ollama", c.GetModel(req.Model), err)
 	}
 
 	if !resp.IsSuccess() {
-		return nil, agentErrors.NewLLMResponseError("ollama", c.getModel(req.Model),
+		return nil, agentErrors.NewLLMResponseError("ollama", c.GetModel(req.Model),
 			fmt.Sprintf("API error (status %d): %s", resp.StatusCode(), resp.String()))
 	}
 
@@ -264,14 +216,19 @@ func (c *OllamaClient) Chat(ctx context.Context, messages []agentllm.Message) (*
 		}
 	}
 
+	// 使用 BaseProvider 的统一参数处理方法
+	model := c.GetModel("")
+	maxTokens := c.GetMaxTokens(0)
+	temperature := c.GetTemperature(0)
+
 	// 构建请求
 	ollamaReq := ollamaChatRequest{
-		Model:    c.model,
+		Model:    model,
 		Messages: ollamaMessages,
 		Stream:   false,
 		Options: map[string]interface{}{
-			"temperature": c.temperature,
-			"num_predict": c.maxTokens,
+			"temperature": temperature,
+			"num_predict": maxTokens,
 		},
 	}
 
@@ -282,12 +239,12 @@ func (c *OllamaClient) Chat(ctx context.Context, messages []agentllm.Message) (*
 		Post(c.baseURL + "/api/chat")
 
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError("ollama", c.model, err).
+		return nil, agentErrors.NewLLMRequestError("ollama", model, err).
 			WithContext("operation", "chat")
 	}
 
 	if !resp.IsSuccess() {
-		return nil, agentErrors.NewLLMResponseError("ollama", c.model,
+		return nil, agentErrors.NewLLMResponseError("ollama", model,
 			fmt.Sprintf("chat API error (status %d): %s", resp.StatusCode(), resp.String()))
 	}
 
@@ -340,13 +297,14 @@ func (c *OllamaClient) ListModels() ([]string, error) {
 	resp, err := c.client.R().
 		Get(c.baseURL + "/api/tags")
 
+	model := c.GetModel("")
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError("ollama", c.model, err).
+		return nil, agentErrors.NewLLMRequestError("ollama", model, err).
 			WithContext("operation", "list_models")
 	}
 
 	if !resp.IsSuccess() {
-		return nil, agentErrors.NewLLMResponseError("ollama", c.model,
+		return nil, agentErrors.NewLLMResponseError("ollama", model,
 			fmt.Sprintf("list models error (status %d): %s", resp.StatusCode(), resp.String()))
 	}
 
@@ -416,27 +374,6 @@ func (c *OllamaClient) PullModel(modelName string) error {
 
 // 辅助方法
 
-func (c *OllamaClient) getModel(model string) string {
-	if model != "" {
-		return model
-	}
-	return c.model
-}
-
-func (c *OllamaClient) getTemperature(temp float64) float64 {
-	if temp > 0 {
-		return temp
-	}
-	return c.temperature
-}
-
-func (c *OllamaClient) getMaxTokens(maxTokens int) int {
-	if maxTokens > 0 {
-		return maxTokens
-	}
-	return c.maxTokens
-}
-
 func (c *OllamaClient) getFinishReason(done bool) string {
 	if done {
 		return "complete"
@@ -446,18 +383,18 @@ func (c *OllamaClient) getFinishReason(done bool) string {
 
 // WithModel 设置模型
 func (c *OllamaClient) WithModel(model string) *OllamaClient {
-	c.model = model
+	c.Config.Model = model
 	return c
 }
 
 // WithTemperature 设置温度
 func (c *OllamaClient) WithTemperature(temperature float64) *OllamaClient {
-	c.temperature = temperature
+	c.Config.Temperature = temperature
 	return c
 }
 
 // WithMaxTokens 设置最大 token 数
 func (c *OllamaClient) WithMaxTokens(maxTokens int) *OllamaClient {
-	c.maxTokens = maxTokens
+	c.Config.MaxTokens = maxTokens
 	return c
 }

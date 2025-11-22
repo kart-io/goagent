@@ -60,27 +60,26 @@ func TestOpenAIBuilder(t *testing.T) {
 		t.Skip("Skipping test that requires OPENAI_API_KEY")
 	}
 
-	t.Run("BuilderPattern", func(t *testing.T) {
-		builder := providers.NewOpenAIBuilder().
-			WithAPIKey(os.Getenv("OPENAI_API_KEY")).
-			WithModel("gpt-3.5-turbo").
-			WithTemperature(0.5).
-			WithMaxTokens(1000).
-			WithRetry(3, 2*time.Second).
-			WithCache(10 * time.Minute)
-
-		client, err := builder.Build()
+	t.Run("OptionPattern", func(t *testing.T) {
+		client, err := providers.NewOpenAIWithOptions(
+			llm.WithAPIKey(os.Getenv("OPENAI_API_KEY")),
+			llm.WithModel("gpt-3.5-turbo"),
+			llm.WithTemperature(0.5),
+			llm.WithMaxTokens(1000),
+			llm.WithRetryCount(3),
+			llm.WithRetryDelay(2*time.Second),
+			llm.WithCache(true, 10*time.Minute),
+		)
 		require.NoError(t, err)
 		assert.NotNil(t, client)
 	})
 
-	t.Run("BuilderWithPreset", func(t *testing.T) {
-		builder := providers.NewOpenAIBuilder().
-			WithAPIKey(os.Getenv("OPENAI_API_KEY")).
-			WithPreset(llm.PresetProduction).
-			WithUseCase(llm.UseCaseChat)
-
-		client, err := builder.Build()
+	t.Run("OptionWithPreset", func(t *testing.T) {
+		client, err := providers.NewOpenAIWithOptions(
+			llm.WithAPIKey(os.Getenv("OPENAI_API_KEY")),
+			llm.WithPreset(llm.PresetProduction),
+			llm.WithUseCase(llm.UseCaseChat),
+		)
 		require.NoError(t, err)
 		assert.NotNil(t, client)
 	})
@@ -221,19 +220,20 @@ func ExampleNewClientWithOptions_useCase() {
 	_ = response
 }
 
-// TestExampleOpenAIBuilder 展示使用 Builder 模式
-func TestExampleOpenAIBuilder(t *testing.T) {
+// TestExampleOpenAIOptions 展示使用 Option 模式
+func TestExampleOpenAIOptions(t *testing.T) {
 	// 仅演示用法，不实际运行
 	t.Skip("Example only")
-	client, err := providers.NewOpenAIBuilder().
-		WithAPIKey("your-api-key").
-		WithModel("gpt-4-turbo-preview").
-		WithTemperature(0.7).
-		WithMaxTokens(4000).
-		WithPreset(llm.PresetHighQuality).
-		WithRetry(3, 2*time.Second).
-		WithCache(15 * time.Minute).
-		Build()
+	client, err := providers.NewOpenAIWithOptions(
+		llm.WithAPIKey("your-api-key"),
+		llm.WithModel("gpt-4-turbo-preview"),
+		llm.WithTemperature(0.7),
+		llm.WithMaxTokens(4000),
+		llm.WithPreset(llm.PresetHighQuality),
+		llm.WithRetryCount(3),
+		llm.WithRetryDelay(2*time.Second),
+		llm.WithCache(true, 15*time.Minute),
+	)
 
 	if err != nil {
 		panic(err)

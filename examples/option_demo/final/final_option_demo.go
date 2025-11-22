@@ -170,24 +170,30 @@ func demoLLMOptions() {
 			uc.name, config.Temperature, config.MaxTokens, config.TopP, uc.desc)
 	}
 
-	// 4. Builder 模式
-	fmt.Println("\nBuilder 模式:")
-	builder := providers.NewOpenAIBuilder().
-		WithAPIKey("demo-key").
-		WithModel("gpt-4").
-		WithTemperature(0.7).
-		WithMaxTokens(2000).
-		WithRetry(3, 2*time.Second).
-		WithCache(10 * time.Minute)
+	// 4. Option 模式（推荐）
+	fmt.Println("\nOption 模式（推荐）:")
+	client, err := providers.NewOpenAIWithOptions(
+		llm.WithAPIKey("demo-key"),
+		llm.WithModel("gpt-4"),
+		llm.WithTemperature(0.7),
+		llm.WithMaxTokens(2000),
+		llm.WithRetryCount(3),
+		llm.WithRetryDelay(2*time.Second),
+		llm.WithCache(true, 10*time.Minute),
+	)
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		return
+	}
+	_ = client
 
-	fmt.Println("  OpenAI Builder 链式配置:")
+	fmt.Println("  OpenAI Option 模式配置:")
 	fmt.Println("  ✅ API Key 设置")
 	fmt.Println("  ✅ Model: gpt-4")
 	fmt.Println("  ✅ Temperature: 0.7")
 	fmt.Println("  ✅ MaxTokens: 2000")
 	fmt.Println("  ✅ Retry: 3次，2秒延迟")
 	fmt.Println("  ✅ Cache: 10分钟 TTL")
-	_ = builder
 
 	// 5. 高级功能
 	fmt.Println("\n高级功能配置:")

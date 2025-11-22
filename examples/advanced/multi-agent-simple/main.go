@@ -246,8 +246,10 @@ func main() {
 	}
 
 	fmt.Printf("Checking Ollama with model '%s'...\n", ollamaModel)
-	ollamaClient := providers.NewOllamaClientSimple(ollamaModel)
-	if ollamaClient.IsAvailable() {
+	ollamaClient, err := providers.NewOllamaClientSimple(ollamaModel)
+	if err != nil {
+		fmt.Printf("⚠️  Error creating Ollama client: %v\n", err)
+	} else if ollamaClient.IsAvailable() {
 		fmt.Printf("✓ Using Ollama provider with model: %s\n", ollamaModel)
 		fmt.Println("  Tip: You can change the model by setting OLLAMA_MODEL environment variable")
 		fmt.Println("  Example: export OLLAMA_MODEL=qwen2 or export OLLAMA_MODEL=deepseek-coder")

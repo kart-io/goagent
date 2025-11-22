@@ -106,7 +106,11 @@ func initializeLLM() llm.Client {
 	}
 
 	fmt.Printf("Checking Ollama with model '%s'...\n", ollamaModel)
-	ollamaClient := providers.NewOllamaClientSimple(ollamaModel)
+	ollamaClient, err := providers.NewOllamaClientSimple(ollamaModel)
+	if err != nil {
+		fmt.Printf("⚠️  Error creating Ollama client: %v\n", err)
+		return nil
+	}
 	if ollamaClient.IsAvailable() {
 		fmt.Printf("✓ Using Ollama provider with model: %s\n\n", ollamaModel)
 		return ollamaClient
