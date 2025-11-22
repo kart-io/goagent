@@ -1,4 +1,4 @@
-package basic
+package main
 
 import (
 	"context"
@@ -160,8 +160,13 @@ func (s *SimpleTaskAgent) Invoke(ctx context.Context, input *agentcore.AgentInpu
 	return output, nil
 }
 
-// ExampleUsage 展示 Agent 的使用方式
-func ExampleUsage() {
+// InvokeFast 快速执行
+func (s *SimpleTaskAgent) InvokeFast(ctx context.Context, input *agentcore.AgentInput) (*agentcore.AgentOutput, error) {
+	return s.Invoke(ctx, input)
+}
+
+// main 展示 Agent 的使用方式
+func main() {
 	// 1. 创建一个简单的 Agent
 	simpleAgent := NewSimpleTaskAgent()
 
@@ -190,7 +195,8 @@ func ExampleUsage() {
 	fmt.Printf("Result: %v\n", output.Result)
 	fmt.Printf("Latency: %v\n", output.Latency)
 
-	// 4. 使用回调
+	// 4. 使用回调 (由于 Go 语言组合特性的限制，BaseAgent.WithCallbacks 返回 *BaseAgent，会导致丢失 SimpleTaskAgent 的 Invoke 实现，这里暂时注释掉)
+	/*
 	loggingCallback := agentcore.NewStdoutCallback(true)
 	agentWithCallbacks := simpleAgent.WithCallbacks(loggingCallback)
 
@@ -199,8 +205,10 @@ func ExampleUsage() {
 		fmt.Printf("Error: %v\n", err)
 		return
 	}
+	*/
 
-	// 5. 批量执行
+	// 5. 批量执行 (同样由于 BaseAgent.Batch 使用了 BaseAgent.Invoke，这里暂时注释掉)
+	/*
 	inputs := []*agentcore.AgentInput{
 		{Task: "Task 1", Options: agentcore.DefaultAgentOptions()},
 		{Task: "Task 2", Options: agentcore.DefaultAgentOptions()},
@@ -214,6 +222,7 @@ func ExampleUsage() {
 	}
 
 	fmt.Printf("Processed %d tasks\n", len(outputs))
+	*/
 
 	// 6. 使用 ChainableAgent 串联多个 Agent
 	agent1 := NewSimpleTaskAgent()
