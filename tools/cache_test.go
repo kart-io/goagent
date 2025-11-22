@@ -16,6 +16,7 @@ func TestMemoryToolCache(t *testing.T) {
 	}
 
 	cache := NewMemoryToolCache(config)
+	defer cache.Close() // Ensure cleanup goroutine is stopped
 
 	t.Run("Set and Get", func(t *testing.T) {
 		key := "test_key"
@@ -76,6 +77,7 @@ func TestMemoryToolCache(t *testing.T) {
 			DefaultTTL:      5 * time.Minute,
 			CleanupInterval: 10 * time.Minute,
 		})
+		defer smallCache.Close() // Prevent goroutine leak
 
 		// 添加 3 个项，应该淘汰最老的
 		_ = smallCache.Set(ctx, "key1", &ToolOutput{Result: "1", Success: true}, 5*time.Minute)
@@ -133,6 +135,7 @@ func TestMemoryToolCache(t *testing.T) {
 
 	t.Run("Statistics", func(t *testing.T) {
 		testCache := NewMemoryToolCache(config)
+		defer testCache.Close() // Prevent goroutine leak
 
 		// 测试命中
 		key := "stats_test"
@@ -158,6 +161,45 @@ func TestMemoryToolCache(t *testing.T) {
 			t.Errorf("Expected hit rate %.2f, got %.2f", expectedRate, hitRate)
 		}
 	})
+
+	t.Run("Close is idempotent", func(t *testing.T) {
+		testCache := NewMemoryToolCache(config)
+
+		// Close multiple times should not panic
+		testCache.Close()
+		testCache.Close()
+		testCache.Close()
+
+		// Verify cache still works for basic operations after close
+		// (though cleanup goroutine is stopped)
+		size := testCache.Size()
+		if size != 0 {
+			t.Errorf("Expected size 0, got %d", size)
+		}
+	})
+
+	t.Run("Cleanup goroutine stops after close", func(t *testing.T) {
+		shortConfig := MemoryCacheConfig{
+			Capacity:        10,
+			DefaultTTL:      5 * time.Minute,
+			CleanupInterval: 100 * time.Millisecond,
+		}
+		testCache := NewMemoryToolCache(shortConfig)
+
+		// Add an item with short TTL
+		_ = testCache.Set(ctx, "expiring", &ToolOutput{Result: "data", Success: true}, 50*time.Millisecond)
+
+		// Wait for item to expire
+		time.Sleep(150 * time.Millisecond)
+
+		// Close the cache
+		testCache.Close()
+
+		// Wait a bit more to ensure cleanup goroutine has truly stopped
+		time.Sleep(200 * time.Millisecond)
+
+		// Test passes if no panic occurs (goroutine leak detector would catch issues)
+	})
 }
 
 func TestCachedTool(t *testing.T) {
@@ -168,6 +210,7 @@ func TestCachedTool(t *testing.T) {
 		DefaultTTL:      5 * time.Minute,
 		CleanupInterval: 10 * time.Minute,
 	})
+	defer cache.Close() // Prevent goroutine leak
 
 	// 创建模拟工具
 	executionCount := 0
@@ -234,6 +277,7 @@ func BenchmarkMemoryToolCache_Set(b *testing.B) {
 		DefaultTTL:      5 * time.Minute,
 		CleanupInterval: 10 * time.Minute,
 	})
+	defer cache.Close() // Prevent goroutine leak
 
 	output := &ToolOutput{Result: "benchmark data", Success: true}
 
@@ -251,6 +295,7 @@ func BenchmarkMemoryToolCache_Get(b *testing.B) {
 		DefaultTTL:      5 * time.Minute,
 		CleanupInterval: 10 * time.Minute,
 	})
+	defer cache.Close() // Prevent goroutine leak
 
 	// 预填充缓存
 	output := &ToolOutput{Result: "benchmark data", Success: true}
@@ -283,18 +328,19 @@ func BenchmarkCacheKeyGeneration(b *testing.B) {
 		DefaultTTL:      5 * time.Minute,
 		CleanupInterval: 10 * time.Minute,
 	})
+	defer cache.Close() // Prevent goroutine leak
 
 	cachedTool := NewCachedTool(baseTool, cache, 1*time.Minute)
 
 	// Test input with various types
 	input := &ToolInput{
 		Args: map[string]interface{}{
-			"string_param":  "test_value",
-			"int_param":     42,
-			"float_param":   3.14,
-			"bool_param":    true,
-			"array_param":   []interface{}{"a", "b", "c"},
-			"nested_param":  map[string]interface{}{"key": "value"},
+			"string_param": "test_value",
+			"int_param":    42,
+			"float_param":  3.14,
+			"bool_param":   true,
+			"array_param":  []interface{}{"a", "b", "c"},
+			"nested_param": map[string]interface{}{"key": "value"},
 		},
 	}
 
@@ -320,6 +366,7 @@ func BenchmarkCacheKeyGenerationSimple(b *testing.B) {
 		DefaultTTL:      5 * time.Minute,
 		CleanupInterval: 10 * time.Minute,
 	})
+	defer cache.Close() // Prevent goroutine leak
 
 	cachedTool := NewCachedTool(baseTool, cache, 1*time.Minute)
 

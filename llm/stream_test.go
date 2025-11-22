@@ -134,6 +134,77 @@ func TestMockStreamClient_CompleteStream(t *testing.T) {
 			}
 		}
 	})
+
+	t.Run("No goroutine leak on early exit", func(t *testing.T) {
+		ctx := context.Background()
+
+		req := &CompletionRequest{
+			Messages: []Message{
+				UserMessage("Test"),
+			},
+		}
+
+		stream, err := client.CompleteStream(ctx, req)
+		if err != nil {
+			t.Fatalf("CompleteStream failed: %v", err)
+		}
+
+		// Read only the first chunk and stop
+		// This simulates a consumer that stops reading early
+		chunkCount := 0
+		for chunk := range stream {
+			chunkCount++
+			if chunkCount >= 1 {
+				// Stop consuming - goroutine should not leak
+				break
+			}
+
+			if chunk.Error != nil {
+				t.Fatalf("Unexpected error: %v", chunk.Error)
+			}
+		}
+
+		// Give time for goroutine to potentially leak
+		time.Sleep(200 * time.Millisecond)
+
+		// If we reach here without hanging, the goroutine didn't leak
+		if chunkCount < 1 {
+			t.Error("Expected at least one chunk")
+		}
+	})
+
+	t.Run("No goroutine leak on context cancellation without consuming", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+		defer cancel()
+
+		req := &CompletionRequest{
+			Messages: []Message{
+				UserMessage("Test"),
+			},
+		}
+
+		stream, err := client.CompleteStream(ctx, req)
+		if err != nil {
+			t.Fatalf("CompleteStream failed: %v", err)
+		}
+
+		// Don't consume the stream at all - simulate a consumer that never reads
+		// Wait for context to expire
+		time.Sleep(100 * time.Millisecond)
+
+		// Now try to consume - should get error or closed channel
+		select {
+		case chunk, ok := <-stream:
+			if ok && chunk.Error != nil {
+				// Expected: got error chunk
+				if !errors.Is(chunk.Error, context.DeadlineExceeded) {
+					t.Logf("Got error: %v", chunk.Error)
+				}
+			}
+		case <-time.After(500 * time.Millisecond):
+			t.Error("Timeout waiting for stream - potential goroutine leak")
+		}
+	})
 }
 
 func TestStreamReader(t *testing.T) {

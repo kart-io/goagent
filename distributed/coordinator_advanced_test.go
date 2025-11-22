@@ -3,15 +3,16 @@ package distributed
 import (
 	"context"
 	"errors"
-	"github.com/kart-io/goagent/utils/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	agentcore "github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/utils/json"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -604,7 +605,7 @@ func TestCoordinator_SelectInstance_NoInstances(t *testing.T) {
 		"error should be returned for non-existent service")
 }
 
-// TestCoordinator_Contains tests the contains utility function
+// TestCoordinator_Contains tests the strings.Contains standard library function
 func TestCoordinator_Contains(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -623,7 +624,7 @@ func TestCoordinator_Contains(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := contains(tt.s, tt.substr)
+			result := strings.Contains(tt.s, tt.substr)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
