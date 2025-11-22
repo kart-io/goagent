@@ -127,16 +127,15 @@ func NewDeepSeekWithOptions(opts ...agentllm.ClientOption) (*DeepSeekProvider, e
 		return nil, err
 	}
 
-	// 获取超时时间
-	timeout := base.GetTimeout()
-
-	client := httpclient.NewClient(&httpclient.Config{
-		Timeout: timeout,
+	// Use the BaseProvider's NewHTTPClient method
+	client := base.NewHTTPClient(HTTPClientConfig{
+		Timeout: base.GetTimeout(),
 		Headers: map[string]string{
 			"Content-Type":  "application/json",
 			"Accept":        "application/json",
 			"Authorization": "Bearer " + base.Config.APIKey,
 		},
+		BaseURL: base.Config.BaseURL,
 	})
 
 	provider := &DeepSeekProvider{
@@ -182,18 +181,18 @@ func (p *DeepSeekProvider) Complete(ctx context.Context, req *agentllm.Completio
 	// Make API call
 	resp, err := p.callAPI(ctx, "/chat/completions", dsReq)
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError(string(constants.ProviderDeepSeek), model, err)
+		return nil, agentErrors.NewLLMRequestError(p.ProviderName(), model, err)
 	}
 
 	// Parse response
 	var dsResp DeepSeekResponse
 	if err := json.NewDecoder(strings.NewReader(resp.String())).Decode(&dsResp); err != nil {
 		return nil, agentErrors.NewParserInvalidJSONError("response body", err).
-			WithContext("provider", "deepseek")
+			WithContext("provider", p.ProviderName())
 	}
 
 	if len(dsResp.Choices) == 0 {
-		return nil, agentErrors.NewLLMResponseError("deepseek", model, "no choices in response")
+		return nil, agentErrors.NewLLMResponseError(p.ProviderName(), model, "no choices in response")
 	}
 
 	return &agentllm.CompletionResponse{
@@ -201,7 +200,7 @@ func (p *DeepSeekProvider) Complete(ctx context.Context, req *agentllm.Completio
 		Model:        dsResp.Model,
 		TokensUsed:   dsResp.Usage.TotalTokens,
 		FinishReason: dsResp.Choices[0].FinishReason,
-		Provider:     string(constants.ProviderDeepSeek),
+		Provider:     p.ProviderName(),
 		Usage: &interfaces.TokenUsage{
 			PromptTokens:     dsResp.Usage.PromptTokens,
 			CompletionTokens: dsResp.Usage.CompletionTokens,
@@ -239,7 +238,7 @@ func (p *DeepSeekProvider) Stream(ctx context.Context, prompt string) (<-chan st
 	// Make streaming API call
 	resp, err := p.callAPI(ctx, "/chat/completions", dsReq)
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError("deepseek", model, err).
+		return nil, agentErrors.NewLLMRequestError(p.ProviderName(), model, err).
 			WithContext("operation", "stream")
 	}
 
@@ -303,7 +302,7 @@ func (p *DeepSeekProvider) GenerateWithTools(ctx context.Context, prompt string,
 	// Make API call
 	resp, err := p.callAPI(ctx, "/chat/completions", dsReq)
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError("deepseek", model, err).
+		return nil, agentErrors.NewLLMRequestError(p.ProviderName(), model, err).
 			WithContext("operation", "tool_calling")
 	}
 
@@ -311,11 +310,11 @@ func (p *DeepSeekProvider) GenerateWithTools(ctx context.Context, prompt string,
 	var dsResp DeepSeekResponse
 	if err := json.NewDecoder(strings.NewReader(resp.String())).Decode(&dsResp); err != nil {
 		return nil, agentErrors.NewParserInvalidJSONError("tool response body", err).
-			WithContext("provider", "deepseek")
+			WithContext("provider", p.ProviderName())
 	}
 
 	if len(dsResp.Choices) == 0 {
-		return nil, agentErrors.NewLLMResponseError("deepseek", model, "no choices in tool response")
+		return nil, agentErrors.NewLLMResponseError(p.ProviderName(), model, "no choices in tool response")
 	}
 
 	// Convert to our format
@@ -367,7 +366,7 @@ func (p *DeepSeekProvider) StreamWithTools(ctx context.Context, prompt string, t
 	// Make streaming API call
 	resp, err := p.callAPI(ctx, "/chat/completions", dsReq)
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError("deepseek", model, err).
+		return nil, agentErrors.NewLLMRequestError(p.ProviderName(), model, err).
 			WithContext("operation", "stream_with_tools")
 	}
 
@@ -471,17 +470,17 @@ func (p *DeepSeekProvider) Embed(ctx context.Context, text string) ([]float64, e
 	resp, err := p.callAPI(ctx, "/embeddings", req)
 	if err != nil {
 		return nil, agentErrors.NewRetrievalEmbeddingError(text, err).
-			WithContext("provider", "deepseek")
+			WithContext("provider", p.ProviderName())
 	}
 
 	var embedResp EmbedResponse
 	if err := json.NewDecoder(strings.NewReader(resp.String())).Decode(&embedResp); err != nil {
 		return nil, agentErrors.NewParserInvalidJSONError("embeddings response", err).
-			WithContext("provider", "deepseek")
+			WithContext("provider", p.ProviderName())
 	}
 
 	if len(embedResp.Data) == 0 {
-		return nil, agentErrors.NewLLMResponseError("deepseek", "deepseek-embedding", "no embeddings in response")
+		return nil, agentErrors.NewLLMResponseError(p.ProviderName(), "deepseek-embedding", "no embeddings in response")
 	}
 
 	return embedResp.Data[0].Embedding, nil
@@ -508,40 +507,56 @@ func (p *DeepSeekProvider) IsAvailable() bool {
 	return err == nil
 }
 
-// ModelName returns the model name
-func (p *DeepSeekProvider) ModelName() string {
-	return p.GetModel("")
-}
-
 // MaxTokens returns the max tokens setting
 func (p *DeepSeekProvider) MaxTokens() int {
-	return p.GetMaxTokens(0)
+	return p.MaxTokensValue()
 }
 
 // Helper methods
 
-// callAPI makes an API call to DeepSeek
+// callAPI makes an API call to DeepSeek with retry logic
 func (p *DeepSeekProvider) callAPI(ctx context.Context, endpoint string, payload interface{}) (*resty.Response, error) {
 	url := p.baseURL + endpoint
-
-	resp, err := p.client.R().
-		SetContext(ctx).
-		SetBody(payload).
-		Post(url)
-
 	model := p.GetModel("")
-	if err != nil {
-		return nil, agentErrors.NewLLMRequestError("deepseek", model, err).
-			WithContext("endpoint", endpoint)
+
+	// Use the shared retry logic from BaseProvider
+	retryConfig := RetryConfig{
+		MaxAttempts: 3,
+		BaseDelay:   1 * time.Second,
+		MaxDelay:    10 * time.Second,
 	}
 
-	if !resp.IsSuccess() {
-		return nil, agentErrors.NewLLMResponseError("deepseek", model,
-			fmt.Sprintf("API returned status %d: %s", resp.StatusCode(), resp.String())).
-			WithContext("endpoint", endpoint)
-	}
+	return ExecuteWithRetry(ctx, retryConfig, p.ProviderName(), func(ctx context.Context) (*resty.Response, error) {
+		resp, err := p.client.R().
+			SetContext(ctx).
+			SetBody(payload).
+			Post(url)
 
-	return resp, nil
+		if err != nil {
+			return nil, agentErrors.NewLLMRequestError(p.ProviderName(), model, err).
+				WithContext("endpoint", endpoint)
+		}
+
+		if !resp.IsSuccess() {
+			// Use shared HTTP error mapping
+			httpErr := RestyResponseToHTTPError(resp)
+			return nil, MapHTTPError(httpErr, p.ProviderName(), model, func(body string) string {
+				// Extract error message from DeepSeek response if possible
+				var errorResp struct {
+					Error struct {
+						Message string `json:"message"`
+						Type    string `json:"type"`
+					} `json:"error"`
+				}
+				if err := json.Unmarshal([]byte(body), &errorResp); err == nil && errorResp.Error.Message != "" {
+					return errorResp.Error.Message
+				}
+				return body
+			})
+		}
+
+		return resp, nil
+	})
 }
 
 // convertToolsToDeepSeek converts our tools to DeepSeek format
