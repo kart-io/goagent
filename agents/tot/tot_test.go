@@ -10,6 +10,7 @@ import (
 	agentcore "github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/constants"
 )
 
 // MockLLMClient implements llm.Client for testing
@@ -49,8 +50,8 @@ func (m *MockLLMClient) Complete(ctx context.Context, req *llm.CompletionRequest
 	return m.Chat(ctx, req.Messages)
 }
 
-func (m *MockLLMClient) Provider() llm.Provider {
-	return llm.ProviderCustom
+func (m *MockLLMClient) Provider() constants.Provider {
+	return constants.ProviderCustom
 }
 
 func (m *MockLLMClient) IsAvailable() bool {

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/constants"
 	"github.com/kart-io/goagent/llm/providers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -21,7 +22,7 @@ func TestOptionPatternIntegration(t *testing.T) {
 
 	t.Run("CreateWithOptions", func(t *testing.T) {
 		client, err := llm.NewClientWithOptions(
-			llm.WithProvider(llm.ProviderOpenAI),
+			llm.WithProvider(constants.ProviderOpenAI),
 			llm.WithModel("gpt-3.5-turbo"),
 			llm.WithMaxTokens(1000),
 			llm.WithTemperature(0.7),
@@ -29,12 +30,12 @@ func TestOptionPatternIntegration(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.NotNil(t, client)
-		assert.Equal(t, llm.ProviderOpenAI, client.Provider())
+		assert.Equal(t, constants.ProviderOpenAI, client.Provider())
 	})
 
 	t.Run("CreateWithPreset", func(t *testing.T) {
 		client, err := llm.NewClientWithOptions(
-			llm.WithProvider(llm.ProviderOpenAI),
+			llm.WithProvider(constants.ProviderOpenAI),
 			llm.WithPreset(llm.PresetDevelopment),
 		)
 
@@ -44,7 +45,7 @@ func TestOptionPatternIntegration(t *testing.T) {
 
 	t.Run("CreateWithUseCase", func(t *testing.T) {
 		client, err := llm.NewClientWithOptions(
-			llm.WithProvider(llm.ProviderOpenAI),
+			llm.WithProvider(constants.ProviderOpenAI),
 			llm.WithUseCase(llm.UseCaseCodeGeneration),
 		)
 
@@ -92,21 +93,21 @@ func TestConvenienceMethods(t *testing.T) {
 	}
 
 	t.Run("CreateWithOptionsForOpenAI", func(t *testing.T) {
-		config := llm.NewConfigWithOptions(
-			llm.WithProvider(llm.ProviderOpenAI),
+		config := llm.NewLLMOptionsWithOptions(
+			llm.WithProvider(constants.ProviderOpenAI),
 			llm.WithAPIKey(os.Getenv("OPENAI_API_KEY")),
 			llm.WithModel("gpt-3.5-turbo"),
 			llm.WithMaxTokens(500),
 		)
 
 		require.NotNil(t, config)
-		assert.Equal(t, llm.ProviderOpenAI, config.Provider)
+		assert.Equal(t, constants.ProviderOpenAI, config.Provider)
 	})
 
 	t.Run("CreateWithOptionsForOllama", func(t *testing.T) {
 		// Ollama 不需要 API key
-		config := llm.NewConfigWithOptions(
-			llm.WithProvider(llm.ProviderOllama),
+		config := llm.NewLLMOptionsWithOptions(
+			llm.WithProvider(constants.ProviderOllama),
 			llm.WithBaseURL("http://localhost:11434"),
 			llm.WithModel("llama2"),
 			llm.WithMaxTokens(2048),
@@ -114,7 +115,7 @@ func TestConvenienceMethods(t *testing.T) {
 		)
 
 		require.NotNil(t, config)
-		assert.Equal(t, llm.ProviderOllama, config.Provider)
+		assert.Equal(t, constants.ProviderOllama, config.Provider)
 	})
 }
 
@@ -122,8 +123,8 @@ func TestConvenienceMethods(t *testing.T) {
 func TestConfigMigration(t *testing.T) {
 	t.Run("ApplyOptionsToExistingConfig", func(t *testing.T) {
 		// 现有配置
-		oldConfig := &llm.Config{
-			Provider:    llm.ProviderOpenAI,
+		oldConfig := &llm.LLMOptions{
+			Provider:    constants.ProviderOpenAI,
 			APIKey:      "test-key",
 			Model:       "gpt-3.5-turbo",
 			MaxTokens:   1000,
@@ -158,7 +159,7 @@ func TestConfigMigration(t *testing.T) {
 func ExampleNewClientWithOptions() {
 	// 基本使用
 	client, err := llm.NewClientWithOptions(
-		llm.WithProvider(llm.ProviderOpenAI),
+		llm.WithProvider(constants.ProviderOpenAI),
 		llm.WithAPIKey("your-api-key"),
 		llm.WithModel("gpt-4"),
 		llm.WithMaxTokens(2000),
@@ -184,7 +185,7 @@ func ExampleNewClientWithOptions() {
 func ExampleNewClientWithOptions_preset() {
 	// 使用生产预设
 	client, err := llm.NewClientWithOptions(
-		llm.WithProvider(llm.ProviderOpenAI),
+		llm.WithProvider(constants.ProviderOpenAI),
 		llm.WithAPIKey("your-api-key"),
 		llm.WithPreset(llm.PresetProduction),
 		llm.WithCache(true, 30*time.Minute),
@@ -200,7 +201,7 @@ func ExampleNewClientWithOptions_preset() {
 func ExampleNewClientWithOptions_useCase() {
 	// 为代码生成优化
 	client, err := llm.NewClientWithOptions(
-		llm.WithProvider(llm.ProviderOpenAI),
+		llm.WithProvider(constants.ProviderOpenAI),
 		llm.WithAPIKey("your-api-key"),
 		llm.WithUseCase(llm.UseCaseCodeGeneration),
 		llm.WithModel("gpt-4"), // 覆盖使用场景的默认模型
@@ -246,8 +247,8 @@ func TestExampleConfigWithOptions(t *testing.T) {
 	// 仅演示用法，不实际运行
 	t.Skip("Example only")
 	// 使用 option 模式创建配置
-	config := llm.NewConfigWithOptions(
-		llm.WithProvider(llm.ProviderOpenAI),
+	config := llm.NewLLMOptionsWithOptions(
+		llm.WithProvider(constants.ProviderOpenAI),
 		llm.WithAPIKey("your-api-key"),
 		llm.WithModel("gpt-4"),
 		llm.WithUseCase(llm.UseCaseAnalysis),

@@ -11,6 +11,7 @@ import (
 	agentcore "github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/constants"
 	"github.com/kart-io/goagent/tools"
 )
 
@@ -53,8 +54,8 @@ func (s *SimpleLLMClient) Complete(ctx context.Context, req *llm.CompletionReque
 	return s.Chat(ctx, req.Messages)
 }
 
-func (s *SimpleLLMClient) Provider() llm.Provider {
-	return llm.ProviderCustom
+func (s *SimpleLLMClient) Provider() constants.Provider {
+	return constants.ProviderCustom
 }
 
 func (s *SimpleLLMClient) IsAvailable() bool {

@@ -107,7 +107,7 @@ func TestSupervisorAgent_DeepSeek_Example(t *testing.T) {
 
 	}
 
-	config := &llm.Config{
+	config := &llm.LLMOptions{
 
 		APIKey: apiKey,
 

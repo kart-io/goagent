@@ -42,7 +42,7 @@ func main() {
 // Example 1: Basic Configuration
 func basicExample() {
 	// Initialize provider with API key from environment
-	provider, err := providers.NewHuggingFace(&llm.Config{
+	provider, err := providers.NewHuggingFace(&llm.LLMOptions{
 		APIKey: os.Getenv("HUGGINGFACE_API_KEY"),      // or set directly: APIKey: "your-api-key"
 		Model:  "meta-llama/Meta-Llama-3-8B-Instruct", // Optional: defaults to Meta-Llama-3-8B-Instruct
 	})
@@ -78,7 +78,7 @@ func modelExample() {
 	}
 
 	for _, model := range models {
-		provider, err := providers.NewHuggingFace(&llm.Config{
+		provider, err := providers.NewHuggingFace(&llm.LLMOptions{
 			APIKey: os.Getenv("HUGGINGFACE_API_KEY"),
 			Model:  model,
 		})
@@ -110,7 +110,7 @@ func modelExample() {
 
 // Example 3: Streaming Responses
 func streamingExample() {
-	provider, err := providers.NewHuggingFace(&llm.Config{
+	provider, err := providers.NewHuggingFace(&llm.LLMOptions{
 		APIKey: os.Getenv("HUGGINGFACE_API_KEY"),
 		Model:  "meta-llama/Meta-Llama-3-8B-Instruct",
 	})
@@ -134,7 +134,7 @@ func streamingExample() {
 
 // Example 4: Multi-turn Conversation
 func conversationExample() {
-	provider, err := providers.NewHuggingFace(&llm.Config{
+	provider, err := providers.NewHuggingFace(&llm.LLMOptions{
 		APIKey:      os.Getenv("HUGGINGFACE_API_KEY"),
 		Model:       "meta-llama/Meta-Llama-3-8B-Instruct",
 		Temperature: 0.7,
@@ -188,7 +188,7 @@ func conversationExample() {
 func modelLoadingExample() {
 	// HuggingFace Inference API may need to load models from cold start
 	// The provider automatically retries with exponential backoff (up to 5 attempts)
-	provider, err := providers.NewHuggingFace(&llm.Config{
+	provider, err := providers.NewHuggingFace(&llm.LLMOptions{
 		APIKey:  os.Getenv("HUGGINGFACE_API_KEY"),
 		Model:   "mistralai/Mixtral-8x7B-Instruct-v0.1",
 		Timeout: 180, // 3 minutes timeout for model loading
@@ -221,7 +221,7 @@ func modelLoadingExample() {
 
 // Example 6: Custom Inference API Parameters
 func customParametersExample() {
-	provider, err := providers.NewHuggingFace(&llm.Config{
+	provider, err := providers.NewHuggingFace(&llm.LLMOptions{
 		APIKey:      os.Getenv("HUGGINGFACE_API_KEY"),
 		Model:       "meta-llama/Meta-Llama-3-8B-Instruct",
 		Temperature: 0.8,

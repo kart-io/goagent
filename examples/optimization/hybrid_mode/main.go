@@ -3,12 +3,13 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/kart-io/goagent/utils/json"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/kart-io/goagent/utils/json"
 
 	"github.com/kart-io/goagent/agents/cot"
 	"github.com/kart-io/goagent/agents/react"
@@ -686,7 +687,7 @@ func main() {
 	}
 
 	// 初始化 LLM 客户端
-	llmClient, err := providers.NewDeepSeek(&llm.Config{
+	llmClient, err := providers.NewDeepSeek(&llm.LLMOptions{
 		APIKey:      apiKey,
 		Model:       "deepseek-chat",
 		MaxTokens:   2000,

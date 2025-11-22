@@ -9,6 +9,7 @@ import (
 	"github.com/kart-io/goagent/builder"
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/constants"
 	"github.com/kart-io/goagent/middleware"
 	"github.com/kart-io/goagent/observability"
 )
@@ -33,8 +34,8 @@ func (c *MockLLMClient) Stream(ctx context.Context, req *llm.CompletionRequest) 
 	return ch, nil
 }
 
-func (c *MockLLMClient) Provider() llm.Provider {
-	return llm.ProviderOpenAI
+func (c *MockLLMClient) Provider() constants.Provider {
+	return constants.ProviderOpenAI
 }
 
 func (c *MockLLMClient) IsAvailable() bool {

@@ -49,7 +49,7 @@ func runProviderExample(apiKey string) {
 	fmt.Println("-----------------------------------")
 
 	// 创建 DeepSeek 配置
-	config := &llm.Config{
+	config := &llm.LLMOptions{
 		APIKey:      apiKey,
 		Model:       "deepseek-chat",
 		Temperature: 0.7,
@@ -93,7 +93,7 @@ func runBuilderExample(apiKey string) {
 	fmt.Println("--------------------------------------")
 
 	// 创建 DeepSeek 配置
-	config := &llm.Config{
+	config := &llm.LLMOptions{
 		APIKey:      apiKey,
 		Model:       "deepseek-chat",
 		Temperature: 0.7,
@@ -142,7 +142,7 @@ func runStructuredOutputExample(apiKey string) {
 	fmt.Println("-------------------------------------")
 
 	// 创建 DeepSeek 配置
-	config := &llm.Config{
+	config := &llm.LLMOptions{
 		APIKey:      apiKey,
 		Model:       "deepseek-chat",
 		Temperature: 0.3, // 使用较低的 temperature 以获得更稳定的输出

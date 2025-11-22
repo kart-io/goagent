@@ -5,6 +5,7 @@ import (
 	"time"
 
 	agentllm "github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/constants"
 )
 
 // ClientFactory 统一的客户端工厂
@@ -16,7 +17,7 @@ func NewClientFactory() *ClientFactory {
 }
 
 // needsEnhancedFeatures 检查是否需要增强功能
-func needsEnhancedFeatures(config *agentllm.Config) bool {
+func needsEnhancedFeatures(config *agentllm.LLMOptions) bool {
 	return config.RetryCount > 0 ||
 		config.CacheEnabled ||
 		config.SystemPrompt != "" ||
@@ -26,7 +27,7 @@ func needsEnhancedFeatures(config *agentllm.Config) bool {
 }
 
 // CreateClient 根据配置创建相应的 LLM 客户端
-func (f *ClientFactory) CreateClient(config *agentllm.Config) (agentllm.Client, error) {
+func (f *ClientFactory) CreateClient(config *agentllm.LLMOptions) (agentllm.Client, error) {
 	// 准备配置（验证、设置默认值、从环境变量读取）
 	if err := agentllm.PrepareConfig(config); err != nil {
 		return nil, err
@@ -34,34 +35,34 @@ func (f *ClientFactory) CreateClient(config *agentllm.Config) (agentllm.Client, 
 
 	// 根据提供商创建客户端
 	switch config.Provider {
-	case agentllm.ProviderOpenAI:
+	case constants.ProviderOpenAI:
 		if needsEnhancedFeatures(config) {
 			return NewEnhancedOpenAI(config)
 		}
 		return NewOpenAI(config)
 
-	case agentllm.ProviderAnthropic:
+	case constants.ProviderAnthropic:
 		return NewAnthropic(config)
 
-	case agentllm.ProviderGemini:
+	case constants.ProviderGemini:
 		return NewGemini(config)
 
-	case agentllm.ProviderDeepSeek:
+	case constants.ProviderDeepSeek:
 		return NewDeepSeek(config)
 
-	case agentllm.ProviderKimi:
+	case constants.ProviderKimi:
 		return NewKimi(config)
 
-	case agentllm.ProviderSiliconFlow:
+	case constants.ProviderSiliconFlow:
 		return NewSiliconFlow(config)
 
-	case agentllm.ProviderOllama:
+	case constants.ProviderOllama:
 		return NewOllama(config)
 
-	case agentllm.ProviderCohere:
+	case constants.ProviderCohere:
 		return NewCohere(config)
 
-	case agentllm.ProviderHuggingFace:
+	case constants.ProviderHuggingFace:
 		return NewHuggingFace(config)
 
 	default:
@@ -72,7 +73,7 @@ func (f *ClientFactory) CreateClient(config *agentllm.Config) (agentllm.Client, 
 // CreateClientWithOptions 使用选项模式创建客户端
 func (f *ClientFactory) CreateClientWithOptions(opts ...agentllm.ClientOption) (agentllm.Client, error) {
 	// 创建配置
-	config := agentllm.NewConfigWithOptions(opts...)
+	config := agentllm.NewLLMOptionsWithOptions(opts...)
 
 	// 使用配置创建客户端
 	return f.CreateClient(config)
@@ -84,7 +85,7 @@ func (f *ClientFactory) CreateClientWithOptions(opts ...agentllm.ClientOption) (
 func CreateOpenAIClient(apiKey string, opts ...agentllm.ClientOption) (agentllm.Client, error) {
 	factory := NewClientFactory()
 	allOpts := append([]agentllm.ClientOption{
-		agentllm.WithProvider(agentllm.ProviderOpenAI),
+		agentllm.WithProvider(constants.ProviderOpenAI),
 		agentllm.WithAPIKey(apiKey),
 	}, opts...)
 
@@ -95,7 +96,7 @@ func CreateOpenAIClient(apiKey string, opts ...agentllm.ClientOption) (agentllm.
 func CreateAnthropicClient(apiKey string, opts ...agentllm.ClientOption) (agentllm.Client, error) {
 	factory := NewClientFactory()
 	allOpts := append([]agentllm.ClientOption{
-		agentllm.WithProvider(agentllm.ProviderAnthropic),
+		agentllm.WithProvider(constants.ProviderAnthropic),
 		agentllm.WithAPIKey(apiKey),
 	}, opts...)
 
@@ -106,7 +107,7 @@ func CreateAnthropicClient(apiKey string, opts ...agentllm.ClientOption) (agentl
 func CreateGeminiClient(apiKey string, opts ...agentllm.ClientOption) (agentllm.Client, error) {
 	factory := NewClientFactory()
 	allOpts := append([]agentllm.ClientOption{
-		agentllm.WithProvider(agentllm.ProviderGemini),
+		agentllm.WithProvider(constants.ProviderGemini),
 		agentllm.WithAPIKey(apiKey),
 	}, opts...)
 
@@ -119,7 +120,7 @@ func CreateOllamaClient(model string, opts ...agentllm.ClientOption) (agentllm.C
 
 	// Ollama 默认配置
 	allOpts := append([]agentllm.ClientOption{
-		agentllm.WithProvider(agentllm.ProviderOllama),
+		agentllm.WithProvider(constants.ProviderOllama),
 		agentllm.WithBaseURL("http://localhost:11434"),
 		agentllm.WithModel(model),
 	}, opts...)
@@ -128,7 +129,7 @@ func CreateOllamaClient(model string, opts ...agentllm.ClientOption) (agentllm.C
 }
 
 // CreateClientForUseCase 根据使用场景创建优化的客户端
-func CreateClientForUseCase(provider agentllm.Provider, apiKey string, useCase agentllm.UseCase, opts ...agentllm.ClientOption) (agentllm.Client, error) {
+func CreateClientForUseCase(provider constants.Provider, apiKey string, useCase agentllm.UseCase, opts ...agentllm.ClientOption) (agentllm.Client, error) {
 	factory := NewClientFactory()
 
 	// 组合选项：提供商 + API Key + 使用场景 + 自定义选项
@@ -142,7 +143,7 @@ func CreateClientForUseCase(provider agentllm.Provider, apiKey string, useCase a
 }
 
 // CreateProductionClient 创建生产环境客户端
-func CreateProductionClient(provider agentllm.Provider, apiKey string, opts ...agentllm.ClientOption) (agentllm.Client, error) {
+func CreateProductionClient(provider constants.Provider, apiKey string, opts ...agentllm.ClientOption) (agentllm.Client, error) {
 	factory := NewClientFactory()
 
 	// 生产环境默认配置
@@ -162,7 +163,7 @@ func CreateProductionClient(provider agentllm.Provider, apiKey string, opts ...a
 }
 
 // CreateDevelopmentClient 创建开发环境客户端
-func CreateDevelopmentClient(provider agentllm.Provider, apiKey string, opts ...agentllm.ClientOption) (agentllm.Client, error) {
+func CreateDevelopmentClient(provider constants.Provider, apiKey string, opts ...agentllm.ClientOption) (agentllm.Client, error) {
 	factory := NewClientFactory()
 
 	// 开发环境默认配置

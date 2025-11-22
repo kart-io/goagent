@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/constants"
 	"github.com/kart-io/goagent/llm/providers"
 )
 
@@ -21,8 +22,8 @@ func main() {
 
 	// 1. OpenAI Provider
 	if apiKey := os.Getenv("OPENAI_API_KEY"); apiKey != "" {
-		openaiConfig := &llm.Config{
-			Provider:    llm.ProviderOpenAI,
+		openaiConfig := &llm.LLMOptions{
+			Provider:    constants.ProviderOpenAI,
 			APIKey:      apiKey,
 			Model:       "gpt-3.5-turbo",
 			MaxTokens:   1000,
@@ -37,8 +38,8 @@ func main() {
 
 	// 2. DeepSeek Provider
 	if apiKey := os.Getenv("DEEPSEEK_API_KEY"); apiKey != "" {
-		deepseekConfig := &llm.Config{
-			Provider:    llm.ProviderDeepSeek,
+		deepseekConfig := &llm.LLMOptions{
+			Provider:    constants.ProviderDeepSeek,
 			APIKey:      apiKey,
 			BaseURL:     "https://api.deepseek.com",
 			Model:       "deepseek-chat",
@@ -54,8 +55,8 @@ func main() {
 
 	// 3. Gemini Provider
 	if apiKey := os.Getenv("GEMINI_API_KEY"); apiKey != "" {
-		geminiConfig := &llm.Config{
-			Provider:    llm.ProviderGemini,
+		geminiConfig := &llm.LLMOptions{
+			Provider:    constants.ProviderGemini,
 			APIKey:      apiKey,
 			Model:       "gemini-pro",
 			MaxTokens:   1000,
@@ -192,8 +193,8 @@ func demonstrateProviderSwitching() {
 }
 
 func createOpenAIClient() llm.Client {
-	config := &llm.Config{
-		Provider: llm.ProviderOpenAI,
+	config := &llm.LLMOptions{
+		Provider: constants.ProviderOpenAI,
 		APIKey:   os.Getenv("OPENAI_API_KEY"),
 		Model:    "gpt-3.5-turbo",
 	}
@@ -202,8 +203,8 @@ func createOpenAIClient() llm.Client {
 }
 
 func createDeepSeekClient() llm.Client {
-	config := &llm.Config{
-		Provider: llm.ProviderDeepSeek,
+	config := &llm.LLMOptions{
+		Provider: constants.ProviderDeepSeek,
 		APIKey:   os.Getenv("DEEPSEEK_API_KEY"),
 		BaseURL:  "https://api.deepseek.com",
 		Model:    "deepseek-chat",
@@ -213,8 +214,8 @@ func createDeepSeekClient() llm.Client {
 }
 
 func createGeminiClient() llm.Client {
-	config := &llm.Config{
-		Provider: llm.ProviderGemini,
+	config := &llm.LLMOptions{
+		Provider: constants.ProviderGemini,
 		APIKey:   os.Getenv("GEMINI_API_KEY"),
 		Model:    "gemini-pro",
 	}

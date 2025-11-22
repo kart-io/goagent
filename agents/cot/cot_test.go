@@ -6,6 +6,7 @@ import (
 
 	agentcore "github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/constants"
 )
 
 // MockLLM implements a simple mock LLM for testing
@@ -30,8 +31,8 @@ func (m *MockLLM) Complete(ctx context.Context, req *llm.CompletionRequest) (*ll
 	}, nil
 }
 
-func (m *MockLLM) Provider() llm.Provider {
-	return llm.ProviderCustom
+func (m *MockLLM) Provider() constants.Provider {
+	return constants.ProviderCustom
 }
 
 func (m *MockLLM) IsAvailable() bool {

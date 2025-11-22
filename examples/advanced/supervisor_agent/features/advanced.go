@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/constants"
 )
 
 // AdvancedFeatures 高级功能配置
@@ -293,7 +294,7 @@ func (e *EnhancedLLMClient) Chat(ctx context.Context, messages []llm.Message) (*
 }
 
 // Provider 返回提供商类型
-func (e *EnhancedLLMClient) Provider() llm.Provider {
+func (e *EnhancedLLMClient) Provider() constants.Provider {
 	return e.baseClient.Provider()
 }
 

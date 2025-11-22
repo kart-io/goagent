@@ -164,7 +164,7 @@ func createLLMClient(providerName string) (llm.Client, error) {
 		if apiKey == "" {
 			return nil, fmt.Errorf("DEEPSEEK_API_KEY environment variable not set")
 		}
-		return providers.NewDeepSeek(&llm.Config{
+		return providers.NewDeepSeek(&llm.LLMOptions{
 			APIKey: apiKey,
 			Model:  "deepseek-chat",
 		})
@@ -174,7 +174,7 @@ func createLLMClient(providerName string) (llm.Client, error) {
 		if apiKey == "" {
 			return nil, fmt.Errorf("OPENAI_API_KEY environment variable not set")
 		}
-		return providers.NewOpenAI(&llm.Config{
+		return providers.NewOpenAI(&llm.LLMOptions{
 			APIKey: apiKey,
 			Model:  "gpt-3.5-turbo",
 		})

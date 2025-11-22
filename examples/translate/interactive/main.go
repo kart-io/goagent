@@ -31,7 +31,7 @@ func main() {
 	fmt.Println("使用 DeepSeek Chat 模型")
 	fmt.Println()
 
-	llmClient, err := providers.NewDeepSeek(&llm.Config{
+	llmClient, err := providers.NewDeepSeek(&llm.LLMOptions{
 		APIKey:      apiKey,
 		Model:       "deepseek-chat",
 		Temperature: 0.3,

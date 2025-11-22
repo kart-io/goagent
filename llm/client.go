@@ -5,24 +5,7 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/interfaces"
-)
-
-// Provider 定义 LLM 提供商类型
-type Provider string
-
-const (
-	ProviderOpenAI      Provider = "openai"
-	ProviderGemini      Provider = "gemini"
-	ProviderDeepSeek    Provider = "deepseek"
-	ProviderOllama      Provider = "ollama"
-	ProviderSiliconFlow Provider = "siliconflow"
-	ProviderKimi        Provider = "kimi"
-	ProviderCustom      Provider = "custom"
-
-	// New providers
-	ProviderAnthropic   Provider = "anthropic"
-	ProviderCohere      Provider = "cohere"
-	ProviderHuggingFace Provider = "huggingface"
+	"github.com/kart-io/goagent/llm/constants"
 )
 
 // Client 定义 LLM 客户端接口
@@ -34,7 +17,7 @@ type Client interface {
 	Chat(ctx context.Context, messages []Message) (*CompletionResponse, error)
 
 	// Provider 返回提供商类型
-	Provider() Provider
+	Provider() constants.Provider
 
 	// IsAvailable 检查 LLM 是否可用
 	IsAvailable() bool
@@ -68,12 +51,12 @@ type CompletionResponse struct {
 }
 
 // Config 定义 LLM 配置
-type Config struct {
+type LLMOptions struct {
 	// 基础配置
-	Provider Provider `json:"provider"`           // 提供商
-	APIKey   string   `json:"api_key"`            // API 密钥
-	BaseURL  string   `json:"base_url,omitempty"` // 自定义 API 端点
-	Model    string   `json:"model"`              // 默认模型
+	Provider constants.Provider `json:"provider"`           // 提供商
+	APIKey   string             `json:"api_key"`            // API 密钥
+	BaseURL  string             `json:"base_url,omitempty"` // 自定义 API 端点
+	Model    string             `json:"model"`              // 默认模型
 
 	// 生成参数
 	MaxTokens   int     `json:"max_tokens"`      // 默认最大 token 数
@@ -105,9 +88,9 @@ type Config struct {
 }
 
 // DefaultConfig 返回默认配置
-func DefaultConfig() *Config {
-	return &Config{
-		Provider:    ProviderOpenAI,
+func DefaultLLMOptions() *LLMOptions {
+	return &LLMOptions{
+		Provider:    constants.ProviderOpenAI,
 		MaxTokens:   2000,
 		Temperature: 0.7,
 		Timeout:     60,

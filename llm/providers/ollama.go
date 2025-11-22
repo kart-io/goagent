@@ -3,14 +3,16 @@ package providers
 import (
 	"context"
 	"fmt"
-	"github.com/kart-io/goagent/utils/json"
 	"io"
 	"strings"
 	"time"
 
+	agentllm "github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/constants"
+	"github.com/kart-io/goagent/utils/json"
+
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
-	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/utils/httpclient"
 )
 
@@ -44,7 +46,7 @@ func DefaultOllamaConfig() *OllamaConfig {
 }
 
 // NewOllama 使用标准配置创建 Ollama 客户端
-func NewOllama(config *llm.Config) (*OllamaClient, error) {
+func NewOllama(config *agentllm.LLMOptions) (*OllamaClient, error) {
 	ollamaConfig := &OllamaConfig{
 		BaseURL:     config.BaseURL,
 		Model:       config.Model,
@@ -175,7 +177,7 @@ type ollamaGenerateResponse struct {
 }
 
 // Complete 实现 llm.Client 接口的 Complete 方法
-func (c *OllamaClient) Complete(ctx context.Context, req *llm.CompletionRequest) (*llm.CompletionResponse, error) {
+func (c *OllamaClient) Complete(ctx context.Context, req *agentllm.CompletionRequest) (*agentllm.CompletionResponse, error) {
 	// 构建 prompt
 	var prompt string
 	if len(req.Messages) > 0 {
@@ -237,12 +239,12 @@ func (c *OllamaClient) Complete(ctx context.Context, req *llm.CompletionRequest)
 	}
 
 	// 构建响应
-	return &llm.CompletionResponse{
+	return &agentllm.CompletionResponse{
 		Content:      strings.TrimSpace(ollamaResp.Response),
 		Model:        ollamaResp.Model,
 		TokensUsed:   ollamaResp.PromptEvalCount + ollamaResp.EvalCount,
 		FinishReason: c.getFinishReason(ollamaResp.Done),
-		Provider:     string(llm.ProviderOllama),
+		Provider:     string(constants.ProviderOllama),
 		Usage: &interfaces.TokenUsage{
 			PromptTokens:     ollamaResp.PromptEvalCount,
 			CompletionTokens: ollamaResp.EvalCount,
@@ -252,7 +254,7 @@ func (c *OllamaClient) Complete(ctx context.Context, req *llm.CompletionRequest)
 }
 
 // Chat 实现 llm.Client 接口的 Chat 方法
-func (c *OllamaClient) Chat(ctx context.Context, messages []llm.Message) (*llm.CompletionResponse, error) {
+func (c *OllamaClient) Chat(ctx context.Context, messages []agentllm.Message) (*agentllm.CompletionResponse, error) {
 	// 转换消息格式
 	ollamaMessages := make([]ollamaMessage, len(messages))
 	for i, msg := range messages {
@@ -297,12 +299,12 @@ func (c *OllamaClient) Chat(ctx context.Context, messages []llm.Message) (*llm.C
 	}
 
 	// 构建响应
-	return &llm.CompletionResponse{
+	return &agentllm.CompletionResponse{
 		Content:      strings.TrimSpace(ollamaResp.Message.Content),
 		Model:        ollamaResp.Model,
 		TokensUsed:   ollamaResp.PromptEvalCount + ollamaResp.EvalCount,
 		FinishReason: c.getFinishReason(ollamaResp.Done),
-		Provider:     string(llm.ProviderOllama),
+		Provider:     string(constants.ProviderOllama),
 		Usage: &interfaces.TokenUsage{
 			PromptTokens:     ollamaResp.PromptEvalCount,
 			CompletionTokens: ollamaResp.EvalCount,
@@ -312,8 +314,8 @@ func (c *OllamaClient) Chat(ctx context.Context, messages []llm.Message) (*llm.C
 }
 
 // Provider 返回提供商类型
-func (c *OllamaClient) Provider() llm.Provider {
-	return llm.ProviderOllama
+func (c *OllamaClient) Provider() constants.Provider {
+	return constants.ProviderOllama
 }
 
 // IsAvailable 检查 Ollama 是否可用

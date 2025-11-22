@@ -60,7 +60,7 @@ func TestSupervisorAgent_DeepSeek_Optimized(t *testing.T) {
 
 	// Create DeepSeek LLM client
 	apiKey := testhelpers.RequireEnv(t, "DEEPSEEK_API_KEY")
-	config := &llm.Config{
+	config := &llm.LLMOptions{
 		APIKey: apiKey,
 		Model:  "deepseek-chat",
 	}

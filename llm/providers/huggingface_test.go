@@ -3,12 +3,15 @@ package providers
 import (
 	"context"
 	"fmt"
-	"github.com/kart-io/goagent/utils/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"testing"
 	"time"
+
+	agentllm "github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/constants"
+	"github.com/kart-io/goagent/utils/json"
 
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
@@ -20,7 +23,7 @@ import (
 func TestNewHuggingFace(t *testing.T) {
 	tests := []struct {
 		name        string
-		config      *llm.Config
+		config      *agentllm.LLMOptions
 		envAPIKey   string
 		envBaseURL  string
 		envModel    string
@@ -30,7 +33,7 @@ func TestNewHuggingFace(t *testing.T) {
 	}{
 		{
 			name: "valid config with all parameters",
-			config: &llm.Config{
+			config: &agentllm.LLMOptions{
 				APIKey:      "test-key",
 				BaseURL:     "https://custom.hf.co",
 				Model:       "mistralai/Mixtral-8x7B-Instruct-v0.1",
@@ -49,7 +52,7 @@ func TestNewHuggingFace(t *testing.T) {
 		},
 		{
 			name: "minimal config with defaults",
-			config: &llm.Config{
+			config: &agentllm.LLMOptions{
 				APIKey: "test-key",
 			},
 			wantErr: false,
@@ -63,7 +66,7 @@ func TestNewHuggingFace(t *testing.T) {
 		},
 		{
 			name: "config with env var API key",
-			config: &llm.Config{
+			config: &agentllm.LLMOptions{
 				Model: "google/flan-t5-xxl",
 			},
 			envAPIKey: "env-api-key",
@@ -75,7 +78,7 @@ func TestNewHuggingFace(t *testing.T) {
 		},
 		{
 			name: "config with env var base URL",
-			config: &llm.Config{
+			config: &agentllm.LLMOptions{
 				APIKey: "test-key",
 			},
 			envBaseURL: "https://env.hf.co",
@@ -86,7 +89,7 @@ func TestNewHuggingFace(t *testing.T) {
 		},
 		{
 			name: "config with env var model",
-			config: &llm.Config{
+			config: &agentllm.LLMOptions{
 				APIKey: "test-key",
 			},
 			envModel: "bigscience/bloom",
@@ -97,7 +100,7 @@ func TestNewHuggingFace(t *testing.T) {
 		},
 		{
 			name:    "missing API key",
-			config:  &llm.Config{},
+			config:  &agentllm.LLMOptions{},
 			wantErr: true,
 			errCode: agentErrors.CodeInvalidConfig,
 		},
@@ -247,7 +250,7 @@ func TestHuggingFaceComplete(t *testing.T) {
 			defer server.Close()
 
 			// Create provider
-			provider, err := NewHuggingFace(&llm.Config{
+			provider, err := NewHuggingFace(&agentllm.LLMOptions{
 				APIKey:  "test-key",
 				BaseURL: server.URL,
 				Model:   "test-model",
@@ -287,7 +290,7 @@ func TestHuggingFaceChat(t *testing.T) {
 	}))
 	defer server.Close()
 
-	provider, err := NewHuggingFace(&llm.Config{
+	provider, err := NewHuggingFace(&agentllm.LLMOptions{
 		APIKey:  "test-key",
 		BaseURL: server.URL,
 		Model:   "test-model",
@@ -376,7 +379,7 @@ func TestHuggingFaceErrorHandling(t *testing.T) {
 			}))
 			defer server.Close()
 
-			provider, err := NewHuggingFace(&llm.Config{
+			provider, err := NewHuggingFace(&agentllm.LLMOptions{
 				APIKey:  "test-key",
 				BaseURL: server.URL,
 				Model:   "test-model",
@@ -424,7 +427,7 @@ func TestHuggingFaceModelLoading(t *testing.T) {
 	}))
 	defer server.Close()
 
-	provider, err := NewHuggingFace(&llm.Config{
+	provider, err := NewHuggingFace(&agentllm.LLMOptions{
 		APIKey:  "test-key",
 		BaseURL: server.URL,
 		Model:   "test-model",
@@ -452,7 +455,7 @@ func TestHuggingFaceRetryExhausted(t *testing.T) {
 	}))
 	defer server.Close()
 
-	provider, err := NewHuggingFace(&llm.Config{
+	provider, err := NewHuggingFace(&agentllm.LLMOptions{
 		APIKey:  "test-key",
 		BaseURL: server.URL,
 		Model:   "test-model",
@@ -476,7 +479,7 @@ func TestHuggingFaceContextCancellation(t *testing.T) {
 	}))
 	defer server.Close()
 
-	provider, err := NewHuggingFace(&llm.Config{
+	provider, err := NewHuggingFace(&agentllm.LLMOptions{
 		APIKey:  "test-key",
 		BaseURL: server.URL,
 		Model:   "test-model",
@@ -526,7 +529,7 @@ func TestHuggingFaceStream(t *testing.T) {
 	}))
 	defer server.Close()
 
-	provider, err := NewHuggingFace(&llm.Config{
+	provider, err := NewHuggingFace(&agentllm.LLMOptions{
 		APIKey:  "test-key",
 		BaseURL: server.URL,
 		Model:   "test-model",
@@ -551,7 +554,7 @@ func TestHuggingFaceStreamError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	provider, err := NewHuggingFace(&llm.Config{
+	provider, err := NewHuggingFace(&agentllm.LLMOptions{
 		APIKey:  "test-key",
 		BaseURL: server.URL,
 		Model:   "test-model",
@@ -565,17 +568,17 @@ func TestHuggingFaceStreamError(t *testing.T) {
 
 // TestHuggingFaceProvider tests Provider method
 func TestHuggingFaceProvider(t *testing.T) {
-	provider, err := NewHuggingFace(&llm.Config{
+	provider, err := NewHuggingFace(&agentllm.LLMOptions{
 		APIKey: "test-key",
 	})
 	require.NoError(t, err)
 
-	assert.Equal(t, llm.ProviderHuggingFace, provider.Provider())
+	assert.Equal(t, constants.ProviderHuggingFace, provider.Provider())
 }
 
 // TestHuggingFaceModelName tests ModelName method
 func TestHuggingFaceModelName(t *testing.T) {
-	provider, err := NewHuggingFace(&llm.Config{
+	provider, err := NewHuggingFace(&agentllm.LLMOptions{
 		APIKey: "test-key",
 		Model:  "bigscience/bloom",
 	})
@@ -586,7 +589,7 @@ func TestHuggingFaceModelName(t *testing.T) {
 
 // TestHuggingFaceMaxTokens tests MaxTokens method
 func TestHuggingFaceMaxTokens(t *testing.T) {
-	provider, err := NewHuggingFace(&llm.Config{
+	provider, err := NewHuggingFace(&agentllm.LLMOptions{
 		APIKey:    "test-key",
 		MaxTokens: 4000,
 	})
@@ -612,7 +615,7 @@ func TestHuggingFaceIsAvailable(t *testing.T) {
 		}))
 		defer server.Close()
 
-		provider, err := NewHuggingFace(&llm.Config{
+		provider, err := NewHuggingFace(&llm.LLMOptions{
 			APIKey:  "test-key",
 			BaseURL: server.URL,
 			Model:   "test-model",
@@ -628,7 +631,7 @@ func TestHuggingFaceIsAvailable(t *testing.T) {
 		}))
 		defer server.Close()
 
-		provider, err := NewHuggingFace(&llm.Config{
+		provider, err := NewHuggingFace(&llm.LLMOptions{
 			APIKey:  "test-key",
 			BaseURL: server.URL,
 			Model:   "test-model",

@@ -4,12 +4,14 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"github.com/kart-io/goagent/utils/json"
 	"io"
 	"math/rand"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/kart-io/goagent/llm/constants"
+	"github.com/kart-io/goagent/utils/json"
 
 	"github.com/go-resty/resty/v2"
 
@@ -21,7 +23,7 @@ import (
 
 // AnthropicProvider implements LLM interface for Anthropic Claude
 type AnthropicProvider struct {
-	config      *agentllm.Config
+	config      *agentllm.LLMOptions
 	client      *httpclient.Client
 	apiKey      string
 	baseURL     string
@@ -102,58 +104,58 @@ type AnthropicErrorDetails struct {
 }
 
 // NewAnthropic creates a new Anthropic provider
-func NewAnthropic(config *agentllm.Config) (*AnthropicProvider, error) {
+func NewAnthropic(config *agentllm.LLMOptions) (*AnthropicProvider, error) {
 	// Get API key from config or env
 	apiKey := config.APIKey
 	if apiKey == "" {
-		apiKey = os.Getenv(agentllm.EnvAnthropicAPIKey)
+		apiKey = os.Getenv(constants.EnvAnthropicAPIKey)
 	}
 
 	if apiKey == "" {
-		return nil, agentErrors.NewInvalidConfigError(ProviderAnthropic, agentllm.ErrorFieldAPIKey, fmt.Sprintf(ErrAPIKeyMissing, "ANTHROPIC"))
+		return nil, agentErrors.NewInvalidConfigError(string(constants.ProviderAnthropic), constants.ErrorFieldAPIKey, fmt.Sprintf(constants.ErrAPIKeyMissing, "ANTHROPIC"))
 	}
 
 	// Set base URL with fallback
 	baseURL := config.BaseURL
 	if baseURL == "" {
-		baseURL = os.Getenv(agentllm.EnvAnthropicBaseURL)
+		baseURL = os.Getenv(constants.EnvAnthropicBaseURL)
 	}
 	if baseURL == "" {
-		baseURL = AnthropicBaseURL
+		baseURL = constants.AnthropicBaseURL
 	}
 
 	// Set model with fallback
 	model := config.Model
 	if model == "" {
-		model = os.Getenv(agentllm.EnvAnthropicModel)
+		model = os.Getenv(constants.EnvAnthropicModel)
 	}
 	if model == "" {
-		model = AnthropicDefaultModel
+		model = constants.AnthropicDefaultModel
 	}
 
 	// Set other parameters with defaults
 	maxTokens := config.MaxTokens
 	if maxTokens == 0 {
-		maxTokens = DefaultMaxTokens
+		maxTokens = constants.DefaultMaxTokens
 	}
 
 	temperature := config.Temperature
 	if temperature == 0 {
-		temperature = DefaultTemperature
+		temperature = constants.DefaultTemperature
 	}
 
 	timeout := time.Duration(config.Timeout) * time.Second
 	if timeout == 0 {
-		timeout = DefaultTimeout
+		timeout = constants.DefaultTimeout
 	}
 
 	// Create httpclient
 	client := httpclient.NewClient(&httpclient.Config{
 		Timeout: timeout,
 		Headers: map[string]string{
-			HeaderContentType:      ContentTypeJSON,
-			HeaderXAPIKey:          apiKey,
-			HeaderAnthropicVersion: AnthropicAPIVersion,
+			constants.HeaderContentType:      constants.ContentTypeJSON,
+			constants.HeaderXAPIKey:          apiKey,
+			constants.HeaderAnthropicVersion: constants.AnthropicAPIVersion,
 		},
 	})
 
@@ -192,7 +194,7 @@ func (p *AnthropicProvider) buildRequest(req *agentllm.CompletionRequest) *Anthr
 	var messages []AnthropicMessage
 
 	for _, msg := range req.Messages {
-		if msg.Role == RoleSystem {
+		if msg.Role == constants.RoleSystem {
 			systemMsg = msg.Content
 		} else {
 			messages = append(messages, AnthropicMessage{
@@ -235,10 +237,10 @@ func (p *AnthropicProvider) execute(ctx context.Context, req *AnthropicRequest) 
 	resp, err := p.client.R().
 		SetContext(ctx).
 		SetBody(req).
-		Post(p.baseURL + AnthropicMessagesPath)
+		Post(p.baseURL + constants.AnthropicMessagesPath)
 
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError(ProviderAnthropic, p.model, err)
+		return nil, agentErrors.NewLLMRequestError(string(constants.ProviderAnthropic), p.model, err)
 	}
 
 	// Check status code
@@ -249,7 +251,7 @@ func (p *AnthropicProvider) execute(ctx context.Context, req *AnthropicRequest) 
 	// Deserialize response
 	var anthropicResp AnthropicResponse
 	if err := json.NewDecoder(strings.NewReader(resp.String())).Decode(&anthropicResp); err != nil {
-		return nil, agentErrors.NewLLMResponseError(ProviderAnthropic, req.Model, ErrFailedDecodeResponse)
+		return nil, agentErrors.NewLLMResponseError(string(constants.ProviderAnthropic), req.Model, constants.ErrFailedDecodeResponse)
 	}
 
 	return &anthropicResp, nil
@@ -263,45 +265,45 @@ func (p *AnthropicProvider) handleHTTPError(resp *resty.Response, model string) 
 		// Use error message from API
 		switch resp.StatusCode() {
 		case 400:
-			return agentErrors.NewInvalidInputError(ProviderAnthropic, "request", errResp.Error.Message)
+			return agentErrors.NewInvalidInputError(string(constants.ProviderAnthropic), "request", errResp.Error.Message)
 		case 401:
-			return agentErrors.NewInvalidConfigError(ProviderAnthropic, agentllm.ErrorFieldAPIKey, errResp.Error.Message)
+			return agentErrors.NewInvalidConfigError(string(constants.ProviderAnthropic), constants.ErrorFieldAPIKey, errResp.Error.Message)
 		case 403:
-			return agentErrors.NewInvalidConfigError(ProviderAnthropic, agentllm.ErrorFieldAPIKey, errResp.Error.Message)
+			return agentErrors.NewInvalidConfigError(string(constants.ProviderAnthropic), constants.ErrorFieldAPIKey, errResp.Error.Message)
 		case 404:
-			return agentErrors.NewLLMResponseError(ProviderAnthropic, model, errResp.Error.Message)
+			return agentErrors.NewLLMResponseError(string(constants.ProviderAnthropic), model, errResp.Error.Message)
 		case 429:
 			retryAfter := parseRetryAfter(resp.Header().Get("Retry-After"))
-			return agentErrors.NewLLMRateLimitError(ProviderAnthropic, model, retryAfter)
+			return agentErrors.NewLLMRateLimitError(string(constants.ProviderAnthropic), model, retryAfter)
 		case 500, 502, 503, 504:
-			return agentErrors.NewLLMRequestError(ProviderAnthropic, model, fmt.Errorf("server error: %s", errResp.Error.Message))
+			return agentErrors.NewLLMRequestError(string(constants.ProviderAnthropic), model, fmt.Errorf("server error: %s", errResp.Error.Message))
 		}
 	}
 
 	// Fallback error handling
 	switch resp.StatusCode() {
 	case 400:
-		return agentErrors.NewInvalidInputError(ProviderAnthropic, "request", StatusBadRequest)
+		return agentErrors.NewInvalidInputError(string(constants.ProviderAnthropic), "request", constants.StatusBadRequest)
 	case 401:
-		return agentErrors.NewInvalidConfigError(ProviderAnthropic, agentllm.ErrorFieldAPIKey, StatusInvalidAPIKey)
+		return agentErrors.NewInvalidConfigError(string(constants.ProviderAnthropic), constants.ErrorFieldAPIKey, constants.StatusInvalidAPIKey)
 	case 403:
-		return agentErrors.NewInvalidConfigError(ProviderAnthropic, agentllm.ErrorFieldAPIKey, StatusAPIKeyLacksPermissions)
+		return agentErrors.NewInvalidConfigError(string(constants.ProviderAnthropic), constants.ErrorFieldAPIKey, constants.StatusAPIKeyLacksPermissions)
 	case 404:
-		return agentErrors.NewLLMResponseError(ProviderAnthropic, model, StatusModelNotFound)
+		return agentErrors.NewLLMResponseError(string(constants.ProviderAnthropic), model, constants.StatusModelNotFound)
 	case 429:
 		retryAfter := parseRetryAfter(resp.Header().Get("Retry-After"))
-		return agentErrors.NewLLMRateLimitError(ProviderAnthropic, model, retryAfter)
+		return agentErrors.NewLLMRateLimitError(string(constants.ProviderAnthropic), model, retryAfter)
 	case 500, 502, 503, 504:
-		return agentErrors.NewLLMRequestError(ProviderAnthropic, model, fmt.Errorf("server error: %d", resp.StatusCode()))
+		return agentErrors.NewLLMRequestError(string(constants.ProviderAnthropic), model, fmt.Errorf("server error: %d", resp.StatusCode()))
 	default:
-		return agentErrors.NewLLMRequestError(ProviderAnthropic, model, fmt.Errorf("unexpected status: %d", resp.StatusCode()))
+		return agentErrors.NewLLMRequestError(string(constants.ProviderAnthropic), model, fmt.Errorf("unexpected status: %d", resp.StatusCode()))
 	}
 }
 
 // executeWithRetry executes request with exponential backoff
 func (p *AnthropicProvider) executeWithRetry(ctx context.Context, req *AnthropicRequest) (*AnthropicResponse, error) {
-	maxAttempts := DefaultMaxAttempts
-	baseDelay := DefaultBaseDelay
+	maxAttempts := constants.AnthropicMaxAttempts
+	baseDelay := constants.AnthropicBaseDelay
 
 	// Use shorter delays in test environment  (detects testing.Testing() or test_retry_delay context key)
 	if testDelay, ok := ctx.Value("test_retry_delay").(time.Duration); ok && testDelay > 0 {
@@ -339,7 +341,7 @@ func (p *AnthropicProvider) executeWithRetry(ctx context.Context, req *Anthropic
 		}
 	}
 
-	return nil, agentErrors.NewInternalError(ProviderAnthropic, "execute_with_retry", fmt.Errorf("%s", ErrMaxRetriesExceeded))
+	return nil, agentErrors.NewInternalError(string(constants.ProviderAnthropic), "execute_with_retry", fmt.Errorf("%s", constants.ErrMaxRetriesExceeded))
 }
 
 // isRetryable checks if an error is retryable
@@ -367,7 +369,7 @@ func (p *AnthropicProvider) convertResponse(resp *AnthropicResponse) *agentllm.C
 		Model:        resp.Model,
 		TokensUsed:   resp.Usage.InputTokens + resp.Usage.OutputTokens,
 		FinishReason: resp.StopReason,
-		Provider:     string(agentllm.ProviderAnthropic),
+		Provider:     string(constants.ProviderAnthropic),
 		Usage: &interfaces.TokenUsage{
 			PromptTokens:     resp.Usage.InputTokens,
 			CompletionTokens: resp.Usage.OutputTokens,
@@ -384,8 +386,8 @@ func (p *AnthropicProvider) Chat(ctx context.Context, messages []agentllm.Messag
 }
 
 // Provider returns the provider type
-func (p *AnthropicProvider) Provider() agentllm.Provider {
-	return agentllm.ProviderAnthropic
+func (p *AnthropicProvider) Provider() constants.Provider {
+	return constants.ProviderAnthropic
 }
 
 // IsAvailable checks if the provider is available
@@ -395,7 +397,7 @@ func (p *AnthropicProvider) IsAvailable() bool {
 
 	// Try a minimal completion
 	_, err := p.Complete(ctx, &agentllm.CompletionRequest{
-		Messages: []agentllm.Message{{Role: RoleUser, Content: "test"}},
+		Messages: []agentllm.Message{{Role: constants.RoleUser, Content: "test"}},
 	})
 
 	return err == nil
@@ -408,7 +410,7 @@ func (p *AnthropicProvider) Stream(ctx context.Context, prompt string) (<-chan s
 	// Build streaming request
 	req := &AnthropicRequest{
 		Model:       p.model,
-		Messages:    []AnthropicMessage{{Role: RoleUser, Content: prompt}},
+		Messages:    []AnthropicMessage{{Role: constants.RoleUser, Content: prompt}},
 		MaxTokens:   p.maxTokens,
 		Temperature: p.temperature,
 		Stream:      true,
@@ -417,13 +419,13 @@ func (p *AnthropicProvider) Stream(ctx context.Context, prompt string) (<-chan s
 	// Create custom client for streaming with Accept header
 	streamClient := p.client.R().
 		SetContext(ctx).
-		SetHeader(HeaderAccept, AcceptEventStream).
+		SetHeader(constants.HeaderAccept, constants.AcceptEventStream).
 		SetBody(req)
 
 	// Execute streaming request
-	resp, err := streamClient.Post(p.baseURL + AnthropicMessagesPath)
+	resp, err := streamClient.Post(p.baseURL + constants.AnthropicMessagesPath)
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError(ProviderAnthropic, p.model, err)
+		return nil, agentErrors.NewLLMRequestError(string(constants.ProviderAnthropic), p.model, err)
 	}
 
 	if !resp.IsSuccess() {
@@ -440,12 +442,12 @@ func (p *AnthropicProvider) Stream(ctx context.Context, prompt string) (<-chan s
 			line := scanner.Text()
 
 			// Parse SSE format: "data: {...}"
-			if !strings.HasPrefix(line, SSEDataPrefix) {
+			if !strings.HasPrefix(line, constants.SSEDataPrefix) {
 				continue
 			}
 
-			data := strings.TrimPrefix(line, SSEDataPrefix)
-			if data == SSEDoneMessage {
+			data := strings.TrimPrefix(line, constants.SSEDataPrefix)
+			if data == constants.SSEDoneMessage {
 				return
 			}
 
@@ -455,7 +457,7 @@ func (p *AnthropicProvider) Stream(ctx context.Context, prompt string) (<-chan s
 			}
 
 			// Extract text from content_block_delta events
-			if event.Type == EventContentBlockDelta && event.Delta != nil {
+			if event.Type == constants.EventContentBlockDelta && event.Delta != nil {
 				// Use select to handle context cancellation
 				select {
 				case tokens <- event.Delta.Text:

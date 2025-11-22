@@ -7,19 +7,20 @@ import (
 	"strings"
 	"time"
 
+	agentllm "github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/constants"
 	"github.com/kart-io/goagent/utils/json"
 
 	"github.com/go-resty/resty/v2"
 
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
-	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/utils/httpclient"
 )
 
 // DeepSeekProvider implements LLM interface for DeepSeek
 type DeepSeekProvider struct {
-	config      *llm.Config
+	config      *agentllm.LLMOptions
 	client      *httpclient.Client
 	apiKey      string
 	baseURL     string
@@ -111,14 +112,14 @@ type DeepSeekStreamResponse struct {
 }
 
 // NewDeepSeek creates a new DeepSeek provider
-func NewDeepSeek(config *llm.Config) (*DeepSeekProvider, error) {
+func NewDeepSeek(config *agentllm.LLMOptions) (*DeepSeekProvider, error) {
 	if config.APIKey == "" {
-		return nil, agentErrors.NewInvalidConfigError("deepseek", "api_key", "DeepSeek API key is required")
+		return nil, agentErrors.NewInvalidConfigError(string(constants.ProviderDeepSeek), constants.ErrorFieldAPIKey, "DeepSeek API key is required")
 	}
 
 	baseURL := config.BaseURL
 	if baseURL == "" {
-		baseURL = "https://api.deepseek.com/v1"
+		baseURL = constants.DeepSeekBaseURL
 	}
 
 	model := config.Model
@@ -157,7 +158,7 @@ func NewDeepSeek(config *llm.Config) (*DeepSeekProvider, error) {
 }
 
 // Complete implements basic text completion
-func (p *DeepSeekProvider) Complete(ctx context.Context, req *llm.CompletionRequest) (*llm.CompletionResponse, error) {
+func (p *DeepSeekProvider) Complete(ctx context.Context, req *agentllm.CompletionRequest) (*agentllm.CompletionResponse, error) {
 	// Convert messages to DeepSeek format
 	messages := make([]DeepSeekMessage, len(req.Messages))
 	for i, msg := range req.Messages {
@@ -182,7 +183,7 @@ func (p *DeepSeekProvider) Complete(ctx context.Context, req *llm.CompletionRequ
 	// Make API call
 	resp, err := p.callAPI(ctx, "/chat/completions", dsReq)
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError("deepseek", p.getModel(req.Model), err)
+		return nil, agentErrors.NewLLMRequestError(string(constants.ProviderDeepSeek), p.getModel(req.Model), err)
 	}
 
 	// Parse response
@@ -196,12 +197,12 @@ func (p *DeepSeekProvider) Complete(ctx context.Context, req *llm.CompletionRequ
 		return nil, agentErrors.NewLLMResponseError("deepseek", p.getModel(req.Model), "no choices in response")
 	}
 
-	return &llm.CompletionResponse{
+	return &agentllm.CompletionResponse{
 		Content:      dsResp.Choices[0].Message.Content,
 		Model:        dsResp.Model,
 		TokensUsed:   dsResp.Usage.TotalTokens,
 		FinishReason: dsResp.Choices[0].FinishReason,
-		Provider:     string(llm.ProviderDeepSeek),
+		Provider:     string(constants.ProviderDeepSeek),
 		Usage: &interfaces.TokenUsage{
 			PromptTokens:     dsResp.Usage.PromptTokens,
 			CompletionTokens: dsResp.Usage.CompletionTokens,
@@ -211,8 +212,8 @@ func (p *DeepSeekProvider) Complete(ctx context.Context, req *llm.CompletionRequ
 }
 
 // Chat implements chat conversation
-func (p *DeepSeekProvider) Chat(ctx context.Context, messages []llm.Message) (*llm.CompletionResponse, error) {
-	return p.Complete(ctx, &llm.CompletionRequest{
+func (p *DeepSeekProvider) Chat(ctx context.Context, messages []agentllm.Message) (*agentllm.CompletionResponse, error) {
+	return p.Complete(ctx, &agentllm.CompletionRequest{
 		Messages: messages,
 	})
 }
@@ -476,8 +477,8 @@ func (p *DeepSeekProvider) Embed(ctx context.Context, text string) ([]float64, e
 }
 
 // Provider returns the provider type
-func (p *DeepSeekProvider) Provider() llm.Provider {
-	return llm.ProviderDeepSeek
+func (p *DeepSeekProvider) Provider() constants.Provider {
+	return constants.ProviderDeepSeek
 }
 
 // IsAvailable checks if the provider is available
@@ -486,9 +487,9 @@ func (p *DeepSeekProvider) IsAvailable() bool {
 	defer cancel()
 
 	// Try a simple completion
-	_, err := p.Complete(ctx, &llm.CompletionRequest{
-		Messages: []llm.Message{
-			llm.UserMessage("test"),
+	_, err := p.Complete(ctx, &agentllm.CompletionRequest{
+		Messages: []agentllm.Message{
+			agentllm.UserMessage("test"),
 		},
 		MaxTokens: 1,
 	})
@@ -595,7 +596,7 @@ type DeepSeekStreamingProvider struct {
 }
 
 // NewDeepSeekStreaming creates a streaming-optimized provider
-func NewDeepSeekStreaming(config *llm.Config) (*DeepSeekStreamingProvider, error) {
+func NewDeepSeekStreaming(config *agentllm.LLMOptions) (*DeepSeekStreamingProvider, error) {
 	base, err := NewDeepSeek(config)
 	if err != nil {
 		return nil, err
