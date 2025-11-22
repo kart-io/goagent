@@ -119,7 +119,9 @@ func (m *MockStreamClient) Chat(ctx context.Context, messages []Message) (*Compl
 
 // CompleteStream 流式补全
 func (m *MockStreamClient) CompleteStream(ctx context.Context, req *CompletionRequest) (<-chan *StreamChunk, error) {
-	out := make(chan *StreamChunk, 10)
+	// Increased buffer size to reduce blocking probability
+	// Buffer should accommodate the full response to prevent goroutine leaks
+	out := make(chan *StreamChunk, 100)
 
 	go func() {
 		defer close(out)
@@ -129,38 +131,77 @@ func (m *MockStreamClient) CompleteStream(ctx context.Context, req *CompletionRe
 		accumulated := ""
 
 		for i, char := range response {
-			select {
-			case <-ctx.Done():
-				out <- &StreamChunk{
+			// Check context cancellation before processing
+			if ctx.Err() != nil {
+				// Non-blocking send of cancellation error
+				select {
+				case out <- &StreamChunk{
 					Content: accumulated,
 					Delta:   "",
 					Index:   i,
 					Done:    true,
 					Error:   ctx.Err(),
+				}:
+				case <-ctx.Done():
+					// Context already cancelled, exit immediately
 				}
 				return
-			default:
-				delta := string(char)
-				accumulated += delta
+			}
 
-				chunk := &StreamChunk{
-					Content:   accumulated,
-					Delta:     delta,
-					Role:      "assistant",
-					Index:     i,
-					Timestamp: time.Now(),
-					Done:      false,
+			delta := string(char)
+			accumulated += delta
+
+			chunk := &StreamChunk{
+				Content:   accumulated,
+				Delta:     delta,
+				Role:      "assistant",
+				Index:     i,
+				Timestamp: time.Now(),
+				Done:      false,
+			}
+
+			// Non-blocking send with context cancellation check
+			select {
+			case out <- chunk:
+				// Chunk sent successfully
+			case <-ctx.Done():
+				// Context cancelled while sending, send error chunk
+				select {
+				case out <- &StreamChunk{
+					Content: accumulated,
+					Delta:   "",
+					Index:   i,
+					Done:    true,
+					Error:   ctx.Err(),
+				}:
+				default:
+					// Channel full or consumer gone, exit gracefully
 				}
+				return
+			}
 
-				out <- chunk
-
-				// 模拟延迟
-				time.Sleep(50 * time.Millisecond)
+			// 模拟延迟 (check context during sleep)
+			select {
+			case <-time.After(50 * time.Millisecond):
+			case <-ctx.Done():
+				// Context cancelled during sleep
+				select {
+				case out <- &StreamChunk{
+					Content: accumulated,
+					Delta:   "",
+					Index:   i + 1,
+					Done:    true,
+					Error:   ctx.Err(),
+				}:
+				default:
+					// Channel full or consumer gone, exit gracefully
+				}
+				return
 			}
 		}
 
-		// 发送最后一个块
-		out <- &StreamChunk{
+		// 发送最后一个块 (non-blocking send)
+		finalChunk := &StreamChunk{
 			Content:      accumulated,
 			Delta:        "",
 			Role:         "assistant",
@@ -173,6 +214,13 @@ func (m *MockStreamClient) CompleteStream(ctx context.Context, req *CompletionRe
 			Index:     len(response),
 			Timestamp: time.Now(),
 			Done:      true,
+		}
+
+		select {
+		case out <- finalChunk:
+			// Final chunk sent successfully
+		case <-ctx.Done():
+			// Context cancelled, exit gracefully
 		}
 	}()
 

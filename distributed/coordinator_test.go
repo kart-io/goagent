@@ -308,3 +308,169 @@ func BenchmarkCoordinator_SelectInstance(b *testing.B) {
 		_, _ = coordinator.selectInstance("test-service")
 	}
 }
+
+// BenchmarkCoordinator_ExecuteParallel_Limited benchmarks parallel execution with concurrency limit
+func BenchmarkCoordinator_ExecuteParallel_Limited(b *testing.B) {
+	log := createTestLogger()
+	registry := NewRegistry(log)
+	client := NewClient(log)
+	coordinator := NewCoordinator(registry, client, log, WithMaxConcurrency(50))
+
+	// Register test instance
+	instance := &ServiceInstance{
+		ID:          "bench-instance",
+		ServiceName: "bench-service",
+		Endpoint:    "http://localhost:9999",
+		Agents:      []string{"BenchAgent"},
+	}
+	_ = registry.Register(instance)
+
+	// Create tasks
+	tasks := make([]AgentTask, 100)
+	for i := 0; i < 100; i++ {
+		tasks[i] = AgentTask{
+			ServiceName: "bench-service",
+			AgentName:   "BenchAgent",
+			Input:       &agentcore.AgentInput{Task: "bench"},
+		}
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = coordinator.ExecuteParallel(context.Background(), tasks)
+	}
+}
+
+// TestCoordinator_ConcurrencyLimitDefault tests default concurrency limit
+func TestCoordinator_ConcurrencyLimitDefault(t *testing.T) {
+	log := createTestLogger()
+	registry := NewRegistry(log)
+	client := NewClient(log)
+	coordinator := NewCoordinator(registry, client, log)
+
+	assert.Equal(t, DefaultMaxConcurrency, coordinator.maxConcurrency)
+}
+
+// TestCoordinator_WithMaxConcurrency tests custom concurrency limit
+func TestCoordinator_WithMaxConcurrency(t *testing.T) {
+	log := createTestLogger()
+	registry := NewRegistry(log)
+	client := NewClient(log)
+
+	tests := []struct {
+		name           string
+		maxConcurrency int
+		expected       int
+	}{
+		{
+			name:           "valid custom limit",
+			maxConcurrency: 50,
+			expected:       50,
+		},
+		{
+			name:           "very low limit",
+			maxConcurrency: 1,
+			expected:       1,
+		},
+		{
+			name:           "high limit",
+			maxConcurrency: 1000,
+			expected:       1000,
+		},
+		{
+			name:           "zero (invalid) uses default",
+			maxConcurrency: 0,
+			expected:       DefaultMaxConcurrency,
+		},
+		{
+			name:           "negative (invalid) uses default",
+			maxConcurrency: -10,
+			expected:       DefaultMaxConcurrency,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			coordinator := NewCoordinator(registry, client, log, WithMaxConcurrency(tt.maxConcurrency))
+			assert.Equal(t, tt.expected, coordinator.maxConcurrency)
+		})
+	}
+}
+
+// TestCoordinator_ExecuteParallel_ConcurrencyLimit tests that concurrency is properly limited
+func TestCoordinator_ExecuteParallel_ConcurrencyLimit(t *testing.T) {
+	log := createTestLogger()
+	registry := NewRegistry(log)
+	client := NewClient(log)
+
+	// Create coordinator with very small concurrency limit
+	const maxConcurrent = 5
+	coordinator := NewCoordinator(registry, client, log, WithMaxConcurrency(maxConcurrent))
+
+	// Register test instance
+	instance := &ServiceInstance{
+		ID:          "test-instance",
+		ServiceName: "test-service",
+		Endpoint:    "http://localhost:9999", // Non-existent to cause quick failures
+		Agents:      []string{"TestAgent"},
+	}
+	err := registry.Register(instance)
+	require.NoError(t, err)
+
+	// Create many tasks (more than maxConcurrent)
+	const totalTasks = 50
+	tasks := make([]AgentTask, totalTasks)
+	for i := 0; i < totalTasks; i++ {
+		tasks[i] = AgentTask{
+			ServiceName: "test-service",
+			AgentName:   "TestAgent",
+			Input:       &agentcore.AgentInput{Task: "test"},
+		}
+	}
+
+	// Execute in parallel
+	// This should not panic or exhaust resources
+	results, _ := coordinator.ExecuteParallel(context.Background(), tasks)
+
+	// Verify we got results for all tasks
+	assert.Len(t, results, totalTasks)
+}
+
+// TestCoordinator_ExecuteParallel_ContextCancellation tests context cancellation during parallel execution
+func TestCoordinator_ExecuteParallel_ContextCancellation(t *testing.T) {
+	log := createTestLogger()
+	registry := NewRegistry(log)
+	client := NewClient(log)
+	coordinator := NewCoordinator(registry, client, log, WithMaxConcurrency(10))
+
+	// Register test instance
+	instance := &ServiceInstance{
+		ID:          "test-instance",
+		ServiceName: "test-service",
+		Endpoint:    "http://localhost:9999",
+		Agents:      []string{"TestAgent"},
+	}
+	err := registry.Register(instance)
+	require.NoError(t, err)
+
+	// Create tasks
+	tasks := make([]AgentTask, 100)
+	for i := 0; i < 100; i++ {
+		tasks[i] = AgentTask{
+			ServiceName: "test-service",
+			AgentName:   "TestAgent",
+			Input:       &agentcore.AgentInput{Task: "test"},
+		}
+	}
+
+	// Create context with very short timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+
+	// Execute - should handle context cancellation gracefully
+	_, err = coordinator.ExecuteParallel(ctx, tasks)
+
+	// May or may not error depending on timing, but should not panic
+	// The important thing is we don't leak goroutines
+	_ = err
+}

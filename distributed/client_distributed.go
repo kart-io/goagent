@@ -16,12 +16,18 @@ import (
 // Client 远程 Agent 客户端
 // 负责调用远程服务的 Agent
 type Client struct {
-	client *httpclient.Client
-	logger core.Logger
+	client         *httpclient.Client
+	logger         core.Logger
+	circuitBreaker *CircuitBreaker
 }
 
 // NewClient 创建客户端
 func NewClient(logger core.Logger) *Client {
+	return NewClientWithCircuitBreaker(logger, DefaultCircuitBreakerConfig())
+}
+
+// NewClientWithCircuitBreaker 创建带自定义熔断器配置的客户端
+func NewClientWithCircuitBreaker(logger core.Logger, cbConfig *CircuitBreakerConfig) *Client {
 	client := httpclient.NewClient(&httpclient.Config{
 		Timeout: 60 * time.Second,
 		Headers: map[string]string{
@@ -30,14 +36,60 @@ func NewClient(logger core.Logger) *Client {
 		},
 	})
 
+	// Configure circuit breaker with state change logging
+	if cbConfig == nil {
+		cbConfig = DefaultCircuitBreakerConfig()
+	}
+
+	// Wrap the original OnStateChange callback to add logging
+	originalCallback := cbConfig.OnStateChange
+	cbConfig.OnStateChange = func(from, to CircuitState) {
+		logger.Info("Circuit breaker state changed",
+			"from", from.String(),
+			"to", to.String())
+
+		if originalCallback != nil {
+			originalCallback(from, to)
+		}
+	}
+
 	return &Client{
-		client: client,
-		logger: logger.With("component", "agent-client"),
+		client:         client,
+		logger:         logger.With("component", "agent-client"),
+		circuitBreaker: NewCircuitBreaker(cbConfig),
 	}
 }
 
 // ExecuteAgent 执行远程 Agent
 func (c *Client) ExecuteAgent(ctx context.Context, endpoint, agentName string, input *agentcore.AgentInput) (*agentcore.AgentOutput, error) {
+	var output *agentcore.AgentOutput
+
+	// Execute through circuit breaker
+	err := c.circuitBreaker.Execute(func() error {
+		var execErr error
+		output, execErr = c.executeAgentInternal(ctx, endpoint, agentName, input)
+		return execErr
+	})
+
+	if err != nil {
+		// If circuit is open, wrap the error with context
+		if err == ErrCircuitOpen {
+			return nil, agentErrors.Wrap(err, agentErrors.CodeDistributedConnection, "circuit breaker is open").
+				WithComponent("distributed_client").
+				WithOperation("execute_agent").
+				WithContext(interfaces.FieldEndpoint, endpoint).
+				WithContext(interfaces.FieldAgentName, agentName).
+				WithContext("circuit_state", c.circuitBreaker.State().String()).
+				WithContext("failures", c.circuitBreaker.Failures())
+		}
+		return nil, err
+	}
+
+	return output, nil
+}
+
+// executeAgentInternal is the internal implementation without circuit breaker
+func (c *Client) executeAgentInternal(ctx context.Context, endpoint, agentName string, input *agentcore.AgentInput) (*agentcore.AgentOutput, error) {
 	// 构建请求
 	url := fmt.Sprintf("%s/api/v1/agents/%s/execute", endpoint, agentName)
 
@@ -253,4 +305,9 @@ func (c *Client) ListAgents(ctx context.Context, endpoint string) ([]string, err
 	}
 
 	return result.Agents, nil
+}
+
+// CircuitBreaker returns the client's circuit breaker for monitoring
+func (c *Client) CircuitBreaker() *CircuitBreaker {
+	return c.circuitBreaker
 }

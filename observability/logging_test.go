@@ -502,6 +502,9 @@ func TestInstrumentedAgent_Delegation_Methods(t *testing.T) {
 
 	mockLogger := new(MockLogger)
 	mockLogger.On("With", mock.Anything).Return(mockLogger)
+	// Add expectations for Info and Error calls from instrumentation
+	mockLogger.On("Info", mock.Anything, mock.Anything).Return()
+	mockLogger.On("Error", mock.Anything, mock.Anything).Return()
 
 	instrumentedAgent := NewInstrumentedAgent(mockAgent, "test-service", mockLogger)
 
@@ -510,13 +513,15 @@ func TestInstrumentedAgent_Delegation_Methods(t *testing.T) {
 	assert.Equal(t, "test description", instrumentedAgent.Description())
 	assert.Equal(t, []string{"cap1", "cap2"}, instrumentedAgent.Capabilities())
 
-	// Stream should delegate
+	// Stream should delegate and properly handle errors
 	_, err := instrumentedAgent.Stream(context.Background(), &agentcore.AgentInput{})
 	assert.Error(t, err)
+	assert.Equal(t, "not implemented", err.Error())
 
-	// Batch should delegate
+	// Batch should delegate and properly handle errors
 	_, err = instrumentedAgent.Batch(context.Background(), []*agentcore.AgentInput{})
 	assert.Error(t, err)
+	assert.Equal(t, "not implemented", err.Error())
 
 	mockAgent.AssertExpectations(t)
 }
@@ -628,4 +633,373 @@ func BenchmarkInstrumentedAgent_Invoke(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		instrumentedAgent.Invoke(ctx, input)
 	}
+}
+
+func TestInstrumentedAgent_Stream_Success(t *testing.T) {
+	mockAgent := new(MockAgent)
+	mockAgent.On("Name").Return("stream-agent")
+
+	mockLogger := new(MockLogger)
+	mockLogger.On("With", mock.Anything).Return(mockLogger)
+	mockLogger.On("Info", mock.Anything, mock.Anything).Return()
+
+	// Create a channel with stream chunks
+	streamChan := make(chan agentcore.StreamChunk[*agentcore.AgentOutput], 3)
+	go func() {
+		defer close(streamChan)
+		streamChan <- agentcore.StreamChunk[*agentcore.AgentOutput]{
+			Data: &agentcore.AgentOutput{
+				Status:         "processing",
+				ToolCalls:      []agentcore.ToolCall{},
+				ReasoningSteps: []agentcore.ReasoningStep{},
+			},
+			Done: false,
+		}
+		streamChan <- agentcore.StreamChunk[*agentcore.AgentOutput]{
+			Data: &agentcore.AgentOutput{
+				Status:         "processing",
+				ToolCalls:      []agentcore.ToolCall{},
+				ReasoningSteps: []agentcore.ReasoningStep{},
+			},
+			Done: false,
+		}
+		streamChan <- agentcore.StreamChunk[*agentcore.AgentOutput]{
+			Data: &agentcore.AgentOutput{
+				Status:         "completed",
+				ToolCalls:      []agentcore.ToolCall{},
+				ReasoningSteps: []agentcore.ReasoningStep{},
+			},
+			Done: true,
+		}
+	}()
+
+	mockAgent.On("Stream", mock.Anything, mock.Anything).Return((<-chan agentcore.StreamChunk[*agentcore.AgentOutput])(streamChan), nil)
+
+	instrumentedAgent := NewInstrumentedAgent(mockAgent, "test-service", mockLogger)
+
+	ctx := context.Background()
+	input := &agentcore.AgentInput{
+		Task:      "stream task",
+		SessionID: "session-stream",
+	}
+
+	resultChan, err := instrumentedAgent.Stream(ctx, input)
+	assert.NoError(t, err)
+	assert.NotNil(t, resultChan)
+
+	// Consume all chunks
+	chunkCount := 0
+	for chunk := range resultChan {
+		chunkCount++
+		assert.NotNil(t, chunk.Data)
+		if chunk.Done {
+			assert.Equal(t, "completed", chunk.Data.Status)
+		}
+	}
+
+	assert.Equal(t, 3, chunkCount)
+	mockAgent.AssertExpectations(t)
+}
+
+func TestInstrumentedAgent_Stream_WithError(t *testing.T) {
+	mockAgent := new(MockAgent)
+	mockAgent.On("Name").Return("stream-error-agent")
+
+	mockLogger := new(MockLogger)
+	mockLogger.On("With", mock.Anything).Return(mockLogger)
+	mockLogger.On("Info", mock.Anything, mock.Anything).Return()
+	mockLogger.On("Error", mock.Anything, mock.Anything).Return()
+
+	testErr := errors.New("stream initialization failed")
+	mockAgent.On("Stream", mock.Anything, mock.Anything).Return(nil, testErr)
+
+	instrumentedAgent := NewInstrumentedAgent(mockAgent, "test-service", mockLogger)
+
+	ctx := context.Background()
+	input := &agentcore.AgentInput{
+		Task:      "failing stream",
+		SessionID: "session-fail",
+	}
+
+	resultChan, err := instrumentedAgent.Stream(ctx, input)
+	assert.Error(t, err)
+	assert.Nil(t, resultChan)
+	assert.Equal(t, testErr, err)
+	mockAgent.AssertExpectations(t)
+}
+
+func TestInstrumentedAgent_Stream_WithChunkError(t *testing.T) {
+	mockAgent := new(MockAgent)
+	mockAgent.On("Name").Return("stream-chunk-error-agent")
+
+	mockLogger := new(MockLogger)
+	mockLogger.On("With", mock.Anything).Return(mockLogger)
+	mockLogger.On("Info", mock.Anything, mock.Anything).Return()
+	mockLogger.On("Error", mock.Anything, mock.Anything).Return()
+
+	// Create a channel with an error chunk
+	streamChan := make(chan agentcore.StreamChunk[*agentcore.AgentOutput], 2)
+	go func() {
+		defer close(streamChan)
+		streamChan <- agentcore.StreamChunk[*agentcore.AgentOutput]{
+			Data: &agentcore.AgentOutput{
+				Status: "processing",
+			},
+			Done: false,
+		}
+		streamChan <- agentcore.StreamChunk[*agentcore.AgentOutput]{
+			Error: errors.New("processing error"),
+			Done:  true,
+		}
+	}()
+
+	mockAgent.On("Stream", mock.Anything, mock.Anything).Return((<-chan agentcore.StreamChunk[*agentcore.AgentOutput])(streamChan), nil)
+
+	instrumentedAgent := NewInstrumentedAgent(mockAgent, "test-service", mockLogger)
+
+	ctx := context.Background()
+	input := &agentcore.AgentInput{
+		Task:      "chunk error task",
+		SessionID: "session-chunk-error",
+	}
+
+	resultChan, err := instrumentedAgent.Stream(ctx, input)
+	assert.NoError(t, err)
+
+	// Consume chunks and find the error
+	var foundError error
+	for chunk := range resultChan {
+		if chunk.Error != nil {
+			foundError = chunk.Error
+		}
+	}
+
+	assert.Error(t, foundError)
+	assert.Equal(t, "processing error", foundError.Error())
+	mockAgent.AssertExpectations(t)
+}
+
+func TestInstrumentedAgent_Stream_WithToolCalls(t *testing.T) {
+	mockAgent := new(MockAgent)
+	mockAgent.On("Name").Return("stream-tools-agent")
+
+	mockLogger := new(MockLogger)
+	mockLogger.On("With", mock.Anything).Return(mockLogger)
+	mockLogger.On("Info", mock.Anything, mock.Anything).Return()
+
+	// Create a channel with tool calls in the final chunk
+	streamChan := make(chan agentcore.StreamChunk[*agentcore.AgentOutput], 1)
+	go func() {
+		defer close(streamChan)
+		streamChan <- agentcore.StreamChunk[*agentcore.AgentOutput]{
+			Data: &agentcore.AgentOutput{
+				Status: "completed",
+				ToolCalls: []agentcore.ToolCall{
+					{
+						ToolName: "calculator",
+						Success:  true,
+						Duration: 100 * time.Millisecond,
+					},
+					{
+						ToolName: "search",
+						Success:  false,
+						Duration: 50 * time.Millisecond,
+					},
+				},
+			},
+			Done: true,
+		}
+	}()
+
+	mockAgent.On("Stream", mock.Anything, mock.Anything).Return((<-chan agentcore.StreamChunk[*agentcore.AgentOutput])(streamChan), nil)
+
+	instrumentedAgent := NewInstrumentedAgent(mockAgent, "test-service", mockLogger)
+
+	ctx := context.Background()
+	input := &agentcore.AgentInput{
+		Task:      "stream with tools",
+		SessionID: "session-stream-tools",
+	}
+
+	resultChan, err := instrumentedAgent.Stream(ctx, input)
+	assert.NoError(t, err)
+
+	var lastOutput *agentcore.AgentOutput
+	for chunk := range resultChan {
+		if chunk.Data != nil {
+			lastOutput = chunk.Data
+		}
+	}
+
+	assert.NotNil(t, lastOutput)
+	assert.Len(t, lastOutput.ToolCalls, 2)
+	mockAgent.AssertExpectations(t)
+}
+
+func TestInstrumentedAgent_Batch_Success(t *testing.T) {
+	mockAgent := new(MockAgent)
+	mockAgent.On("Name").Return("batch-agent")
+
+	mockLogger := new(MockLogger)
+	mockLogger.On("With", mock.Anything).Return(mockLogger)
+	mockLogger.On("Info", mock.Anything, mock.Anything).Return()
+
+	inputs := []*agentcore.AgentInput{
+		{Task: "task 1", SessionID: "session-1"},
+		{Task: "task 2", SessionID: "session-2"},
+		{Task: "task 3", SessionID: "session-3"},
+	}
+
+	outputs := []*agentcore.AgentOutput{
+		{Status: "completed", ToolCalls: []agentcore.ToolCall{}, ReasoningSteps: []agentcore.ReasoningStep{}},
+		{Status: "completed", ToolCalls: []agentcore.ToolCall{}, ReasoningSteps: []agentcore.ReasoningStep{}},
+		{Status: "completed", ToolCalls: []agentcore.ToolCall{}, ReasoningSteps: []agentcore.ReasoningStep{}},
+	}
+
+	mockAgent.On("Batch", mock.Anything, inputs).Return(outputs, nil)
+
+	instrumentedAgent := NewInstrumentedAgent(mockAgent, "test-service", mockLogger)
+
+	ctx := context.Background()
+	results, err := instrumentedAgent.Batch(ctx, inputs)
+
+	assert.NoError(t, err)
+	assert.Len(t, results, 3)
+	for _, result := range results {
+		assert.Equal(t, "completed", result.Status)
+	}
+	mockAgent.AssertExpectations(t)
+}
+
+func TestInstrumentedAgent_Batch_WithError(t *testing.T) {
+	mockAgent := new(MockAgent)
+	mockAgent.On("Name").Return("batch-error-agent")
+
+	mockLogger := new(MockLogger)
+	mockLogger.On("With", mock.Anything).Return(mockLogger)
+	mockLogger.On("Info", mock.Anything, mock.Anything).Return()
+	mockLogger.On("Error", mock.Anything, mock.Anything).Return()
+
+	inputs := []*agentcore.AgentInput{
+		{Task: "task 1", SessionID: "session-1"},
+		{Task: "task 2", SessionID: "session-2"},
+	}
+
+	testErr := errors.New("batch execution failed")
+	mockAgent.On("Batch", mock.Anything, inputs).Return([]*agentcore.AgentOutput{}, testErr)
+
+	instrumentedAgent := NewInstrumentedAgent(mockAgent, "test-service", mockLogger)
+
+	ctx := context.Background()
+	results, err := instrumentedAgent.Batch(ctx, inputs)
+
+	assert.Error(t, err)
+	assert.Equal(t, testErr, err)
+	assert.Empty(t, results)
+	mockAgent.AssertExpectations(t)
+}
+
+func TestInstrumentedAgent_Batch_WithToolCalls(t *testing.T) {
+	mockAgent := new(MockAgent)
+	mockAgent.On("Name").Return("batch-tools-agent")
+
+	mockLogger := new(MockLogger)
+	mockLogger.On("With", mock.Anything).Return(mockLogger)
+	mockLogger.On("Info", mock.Anything, mock.Anything).Return()
+
+	inputs := []*agentcore.AgentInput{
+		{Task: "task 1", SessionID: "session-1"},
+		{Task: "task 2", SessionID: "session-2"},
+	}
+
+	outputs := []*agentcore.AgentOutput{
+		{
+			Status: "completed",
+			ToolCalls: []agentcore.ToolCall{
+				{ToolName: "calculator", Success: true, Duration: 100 * time.Millisecond},
+				{ToolName: "search", Success: true, Duration: 150 * time.Millisecond},
+			},
+			ReasoningSteps: []agentcore.ReasoningStep{},
+		},
+		{
+			Status: "completed",
+			ToolCalls: []agentcore.ToolCall{
+				{ToolName: "validator", Success: false, Duration: 50 * time.Millisecond},
+			},
+			ReasoningSteps: []agentcore.ReasoningStep{},
+		},
+	}
+
+	mockAgent.On("Batch", mock.Anything, inputs).Return(outputs, nil)
+
+	instrumentedAgent := NewInstrumentedAgent(mockAgent, "test-service", mockLogger)
+
+	ctx := context.Background()
+	results, err := instrumentedAgent.Batch(ctx, inputs)
+
+	assert.NoError(t, err)
+	assert.Len(t, results, 2)
+	assert.Len(t, results[0].ToolCalls, 2)
+	assert.Len(t, results[1].ToolCalls, 1)
+	mockAgent.AssertExpectations(t)
+}
+
+func TestInstrumentedAgent_Batch_EmptyInputs(t *testing.T) {
+	mockAgent := new(MockAgent)
+	mockAgent.On("Name").Return("batch-empty-agent")
+
+	mockLogger := new(MockLogger)
+	mockLogger.On("With", mock.Anything).Return(mockLogger)
+	mockLogger.On("Info", mock.Anything, mock.Anything).Return()
+
+	inputs := []*agentcore.AgentInput{}
+	outputs := []*agentcore.AgentOutput{}
+
+	mockAgent.On("Batch", mock.Anything, inputs).Return(outputs, nil)
+
+	instrumentedAgent := NewInstrumentedAgent(mockAgent, "test-service", mockLogger)
+
+	ctx := context.Background()
+	results, err := instrumentedAgent.Batch(ctx, inputs)
+
+	assert.NoError(t, err)
+	assert.Empty(t, results)
+	mockAgent.AssertExpectations(t)
+}
+
+func TestInstrumentedAgent_Batch_LargeBatch(t *testing.T) {
+	mockAgent := new(MockAgent)
+	mockAgent.On("Name").Return("batch-large-agent")
+
+	mockLogger := new(MockLogger)
+	mockLogger.On("With", mock.Anything).Return(mockLogger)
+	mockLogger.On("Info", mock.Anything, mock.Anything).Return()
+
+	// Create a large batch
+	batchSize := 100
+	inputs := make([]*agentcore.AgentInput, batchSize)
+	outputs := make([]*agentcore.AgentOutput, batchSize)
+
+	for i := 0; i < batchSize; i++ {
+		inputs[i] = &agentcore.AgentInput{
+			Task:      "task",
+			SessionID: "session",
+		}
+		outputs[i] = &agentcore.AgentOutput{
+			Status:         "completed",
+			ToolCalls:      []agentcore.ToolCall{},
+			ReasoningSteps: []agentcore.ReasoningStep{},
+		}
+	}
+
+	mockAgent.On("Batch", mock.Anything, inputs).Return(outputs, nil)
+
+	instrumentedAgent := NewInstrumentedAgent(mockAgent, "test-service", mockLogger)
+
+	ctx := context.Background()
+	results, err := instrumentedAgent.Batch(ctx, inputs)
+
+	assert.NoError(t, err)
+	assert.Len(t, results, batchSize)
+	mockAgent.AssertExpectations(t)
 }
