@@ -15,7 +15,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-
 // TestClient_ExecuteAgent_Success tests successful agent execution
 func TestClient_ExecuteAgent_Success(t *testing.T) {
 	log := createTestLogger()
