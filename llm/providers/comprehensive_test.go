@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -49,7 +50,6 @@ func TestDeepSeekProvider_Initialization(t *testing.T) {
 			name: "missing API key",
 			config: &llm.LLMOptions{
 				Provider:    constants.ProviderDeepSeek,
-				APIKey:      "test-key",
 				Model:       "deepseek-chat",
 				MaxTokens:   4000,
 				Temperature: 0.5,
@@ -80,6 +80,17 @@ func TestDeepSeekProvider_Initialization(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Clear environment variables for "missing API key" test
+			if tt.wantErr && tt.errMsg == "API key is required" {
+				originalAPIKey := os.Getenv("DEEPSEEK_API_KEY")
+				os.Unsetenv("DEEPSEEK_API_KEY")
+				defer func() {
+					if originalAPIKey != "" {
+						os.Setenv("DEEPSEEK_API_KEY", originalAPIKey)
+					}
+				}()
+			}
+
 			provider, err := NewDeepSeek(tt.config)
 
 			if tt.wantErr {
@@ -644,7 +655,9 @@ func TestDeepSeekProvider_CallAPI_HTTPError(t *testing.T) {
 	})
 
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "401")
+	// With the new error handling, 401 status is mapped to InvalidConfigError
+	// The error message will contain "Invalid API key" from the response body
+	assert.Contains(t, err.Error(), "Invalid API key")
 }
 
 // TestDeepSeekProvider_CallAPI_NetworkError tests network error handling

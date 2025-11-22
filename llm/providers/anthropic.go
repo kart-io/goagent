@@ -5,8 +5,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"math/rand"
-	"os"
 	"strings"
 	"time"
 
@@ -100,12 +98,12 @@ type AnthropicErrorDetails struct {
 	Message string `json:"message"`
 }
 
-// NewAnthropicWithOptions creates a new Anthropic provider using options pattern
+// NewAnthropicWithOptions creates a new Anthropic provider using options pattern.
 func NewAnthropicWithOptions(opts ...agentllm.ClientOption) (*AnthropicProvider, error) {
-	// 创建 BaseProvider，统一处理 Options
+	// Create BaseProvider with unified options handling
 	base := NewBaseProvider(opts...)
 
-	// 应用 Provider 特定的默认值
+	// Apply provider-specific default values
 	base.ApplyProviderDefaults(
 		constants.ProviderAnthropic,
 		constants.AnthropicBaseURL,
@@ -114,17 +112,13 @@ func NewAnthropicWithOptions(opts ...agentllm.ClientOption) (*AnthropicProvider,
 		constants.EnvAnthropicModel,
 	)
 
-	// 统一处理 API Key
+	// Validate API key
 	if err := base.EnsureAPIKey(constants.EnvAnthropicAPIKey, constants.ProviderAnthropic); err != nil {
 		return nil, err
 	}
 
-	// 获取超时时间
-	timeout := base.GetTimeout()
-
-	// Create httpclient
-	client := httpclient.NewClient(&httpclient.Config{
-		Timeout: timeout,
+	// Create HTTP client using BaseProvider helper
+	client := base.NewHTTPClient(HTTPClientConfig{
 		Headers: map[string]string{
 			constants.HeaderContentType:      constants.ContentTypeJSON,
 			constants.HeaderXAPIKey:          base.Config.APIKey,
@@ -142,19 +136,26 @@ func NewAnthropicWithOptions(opts ...agentllm.ClientOption) (*AnthropicProvider,
 	return provider, nil
 }
 
-// NewAnthropic creates a new Anthropic provider (backward compatible)
+// NewAnthropic creates a new Anthropic provider (backward compatible).
 func NewAnthropic(config *agentllm.LLMOptions) (*AnthropicProvider, error) {
-	// 将现有配置转换为 Options，使用 Options 模式创建 Provider
 	return NewAnthropicWithOptions(ConfigToOptions(config)...)
 }
 
-// Complete implements basic text completion
+// Complete implements basic text completion.
 func (p *AnthropicProvider) Complete(ctx context.Context, req *agentllm.CompletionRequest) (*agentllm.CompletionResponse, error) {
 	// Build Anthropic request
 	anthropicReq := p.buildRequest(req)
 
-	// Execute with retry
-	resp, err := p.executeWithRetry(ctx, anthropicReq)
+	// Execute with retry using shared retry logic
+	retryCfg := RetryConfig{
+		MaxAttempts: constants.AnthropicMaxAttempts,
+		BaseDelay:   constants.AnthropicBaseDelay,
+		MaxDelay:    constants.AnthropicMaxDelay,
+	}
+
+	resp, err := ExecuteWithRetry(ctx, retryCfg, p.ProviderName(), func(ctx context.Context) (*AnthropicResponse, error) {
+		return p.execute(ctx, anthropicReq)
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +164,7 @@ func (p *AnthropicProvider) Complete(ctx context.Context, req *agentllm.Completi
 	return p.convertResponse(resp), nil
 }
 
-// buildRequest converts agentllm.CompletionRequest to AnthropicRequest
+// buildRequest converts agentllm.CompletionRequest to AnthropicRequest.
 func (p *AnthropicProvider) buildRequest(req *agentllm.CompletionRequest) *AnthropicRequest {
 	// Separate system message from other messages
 	var systemMsg string
@@ -180,7 +181,7 @@ func (p *AnthropicProvider) buildRequest(req *agentllm.CompletionRequest) *Anthr
 		}
 	}
 
-	// 使用 BaseProvider 的统一参数处理方法
+	// Use BaseProvider's unified parameter handling
 	model := p.GetModel(req.Model)
 	maxTokens := p.GetMaxTokens(req.MaxTokens)
 	temperature := p.GetTemperature(req.Temperature)
@@ -196,19 +197,18 @@ func (p *AnthropicProvider) buildRequest(req *agentllm.CompletionRequest) *Anthr
 	}
 }
 
-// execute performs a single HTTP request to Anthropic API
+// execute performs a single HTTP request to Anthropic API.
 func (p *AnthropicProvider) execute(ctx context.Context, req *AnthropicRequest) (*AnthropicResponse, error) {
-	// Execute request using resty
 	resp, err := p.client.R().
 		SetContext(ctx).
 		SetBody(req).
 		Post(p.baseURL + constants.AnthropicMessagesPath)
 
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError(string(constants.ProviderAnthropic), req.Model, err)
+		return nil, agentErrors.NewLLMRequestError(p.ProviderName(), req.Model, err)
 	}
 
-	// Check status code
+	// Check status code using shared error handling
 	if !resp.IsSuccess() {
 		return nil, p.handleHTTPError(resp, req.Model)
 	}
@@ -216,112 +216,28 @@ func (p *AnthropicProvider) execute(ctx context.Context, req *AnthropicRequest) 
 	// Deserialize response
 	var anthropicResp AnthropicResponse
 	if err := json.NewDecoder(strings.NewReader(resp.String())).Decode(&anthropicResp); err != nil {
-		return nil, agentErrors.NewLLMResponseError(string(constants.ProviderAnthropic), req.Model, constants.ErrFailedDecodeResponse)
+		return nil, agentErrors.NewLLMResponseError(p.ProviderName(), req.Model, constants.ErrFailedDecodeResponse)
 	}
 
 	return &anthropicResp, nil
 }
 
-// handleHTTPError maps HTTP errors to AgentError
+// handleHTTPError maps HTTP errors to AgentError using the shared MapHTTPError function.
 func (p *AnthropicProvider) handleHTTPError(resp *resty.Response, model string) error {
-	// Try to parse error response
+	httpErr := RestyResponseToHTTPError(resp)
+	return MapHTTPError(httpErr, p.ProviderName(), model, p.parseErrorMessage)
+}
+
+// parseErrorMessage extracts error message from Anthropic error response body.
+func (p *AnthropicProvider) parseErrorMessage(body string) string {
 	var errResp AnthropicErrorResponse
-	if err := json.NewDecoder(strings.NewReader(resp.String())).Decode(&errResp); err == nil && errResp.Error.Message != "" {
-		// Use error message from API
-		switch resp.StatusCode() {
-		case 400:
-			return agentErrors.NewInvalidInputError(string(constants.ProviderAnthropic), "request", errResp.Error.Message)
-		case 401:
-			return agentErrors.NewInvalidConfigError(string(constants.ProviderAnthropic), constants.ErrorFieldAPIKey, errResp.Error.Message)
-		case 403:
-			return agentErrors.NewInvalidConfigError(string(constants.ProviderAnthropic), constants.ErrorFieldAPIKey, errResp.Error.Message)
-		case 404:
-			return agentErrors.NewLLMResponseError(string(constants.ProviderAnthropic), model, errResp.Error.Message)
-		case 429:
-			retryAfter := parseRetryAfter(resp.Header().Get("Retry-After"))
-			return agentErrors.NewLLMRateLimitError(string(constants.ProviderAnthropic), model, retryAfter)
-		case 500, 502, 503, 504:
-			return agentErrors.NewLLMRequestError(string(constants.ProviderAnthropic), model, fmt.Errorf("server error: %s", errResp.Error.Message))
-		}
+	if err := json.NewDecoder(strings.NewReader(body)).Decode(&errResp); err == nil {
+		return errResp.Error.Message
 	}
-
-	// Fallback error handling
-	switch resp.StatusCode() {
-	case 400:
-		return agentErrors.NewInvalidInputError(string(constants.ProviderAnthropic), "request", constants.StatusBadRequest)
-	case 401:
-		return agentErrors.NewInvalidConfigError(string(constants.ProviderAnthropic), constants.ErrorFieldAPIKey, constants.StatusInvalidAPIKey)
-	case 403:
-		return agentErrors.NewInvalidConfigError(string(constants.ProviderAnthropic), constants.ErrorFieldAPIKey, constants.StatusAPIKeyLacksPermissions)
-	case 404:
-		return agentErrors.NewLLMResponseError(string(constants.ProviderAnthropic), model, constants.StatusModelNotFound)
-	case 429:
-		retryAfter := parseRetryAfter(resp.Header().Get("Retry-After"))
-		return agentErrors.NewLLMRateLimitError(string(constants.ProviderAnthropic), model, retryAfter)
-	case 500, 502, 503, 504:
-		return agentErrors.NewLLMRequestError(string(constants.ProviderAnthropic), model, fmt.Errorf("server error: %d", resp.StatusCode()))
-	default:
-		return agentErrors.NewLLMRequestError(string(constants.ProviderAnthropic), model, fmt.Errorf("unexpected status: %d", resp.StatusCode()))
-	}
+	return ""
 }
 
-// executeWithRetry executes request with exponential backoff
-func (p *AnthropicProvider) executeWithRetry(ctx context.Context, req *AnthropicRequest) (*AnthropicResponse, error) {
-	maxAttempts := constants.AnthropicMaxAttempts
-	baseDelay := constants.AnthropicBaseDelay
-
-	// Use shorter delays in test environment  (detects testing.Testing() or test_retry_delay context key)
-	if testDelay, ok := ctx.Value("test_retry_delay").(time.Duration); ok && testDelay > 0 {
-		baseDelay = testDelay
-	} else if os.Getenv("GO_TEST_MODE") == "true" {
-		// Automatic fast retries in test mode
-		baseDelay = 10 * time.Millisecond
-	}
-
-	for attempt := 1; attempt <= maxAttempts; attempt++ {
-		resp, err := p.execute(ctx, req)
-		if err == nil {
-			return resp, nil
-		}
-
-		// Check if error is retryable
-		if !isRetryable(err) {
-			return nil, err
-		}
-
-		// Last attempt failed
-		if attempt == maxAttempts {
-			return nil, agentErrors.ErrorWithRetry(err, attempt, maxAttempts)
-		}
-
-		// Exponential backoff with jitter
-		delay := baseDelay * time.Duration(1<<uint(attempt-1))
-		jitter := time.Duration(rand.Int63n(int64(delay) / 2))
-
-		select {
-		case <-ctx.Done():
-			return nil, agentErrors.NewContextCanceledError("llm_request")
-		case <-time.After(delay + jitter):
-			// Continue to next attempt
-		}
-	}
-
-	return nil, agentErrors.NewInternalError(string(constants.ProviderAnthropic), "execute_with_retry", fmt.Errorf("%s", constants.ErrMaxRetriesExceeded))
-}
-
-// isRetryable checks if an error is retryable
-func isRetryable(err error) bool {
-	if err == nil {
-		return false
-	}
-
-	code := agentErrors.GetCode(err)
-	return code == agentErrors.CodeLLMRateLimit ||
-		code == agentErrors.CodeLLMTimeout ||
-		code == agentErrors.CodeLLMRequest
-}
-
-// convertResponse converts AnthropicResponse to agentllm.CompletionResponse
+// convertResponse converts AnthropicResponse to agentllm.CompletionResponse.
 func (p *AnthropicProvider) convertResponse(resp *AnthropicResponse) *agentllm.CompletionResponse {
 	// Extract text content
 	var content string
@@ -334,7 +250,7 @@ func (p *AnthropicProvider) convertResponse(resp *AnthropicResponse) *agentllm.C
 		Model:        resp.Model,
 		TokensUsed:   resp.Usage.InputTokens + resp.Usage.OutputTokens,
 		FinishReason: resp.StopReason,
-		Provider:     string(constants.ProviderAnthropic),
+		Provider:     p.ProviderName(),
 		Usage: &interfaces.TokenUsage{
 			PromptTokens:     resp.Usage.InputTokens,
 			CompletionTokens: resp.Usage.OutputTokens,
@@ -343,19 +259,19 @@ func (p *AnthropicProvider) convertResponse(resp *AnthropicResponse) *agentllm.C
 	}
 }
 
-// Chat implements chat conversation
+// Chat implements chat conversation.
 func (p *AnthropicProvider) Chat(ctx context.Context, messages []agentllm.Message) (*agentllm.CompletionResponse, error) {
 	return p.Complete(ctx, &agentllm.CompletionRequest{
 		Messages: messages,
 	})
 }
 
-// Provider returns the provider type
+// Provider returns the provider type.
 func (p *AnthropicProvider) Provider() constants.Provider {
 	return constants.ProviderAnthropic
 }
 
-// IsAvailable checks if the provider is available
+// IsAvailable checks if the provider is available.
 func (p *AnthropicProvider) IsAvailable() bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -368,7 +284,7 @@ func (p *AnthropicProvider) IsAvailable() bool {
 	return err == nil
 }
 
-// Stream implements streaming generation
+// Stream implements streaming generation.
 func (p *AnthropicProvider) Stream(ctx context.Context, prompt string) (<-chan string, error) {
 	tokens := make(chan string, 100)
 
@@ -394,7 +310,7 @@ func (p *AnthropicProvider) Stream(ctx context.Context, prompt string) (<-chan s
 	// Execute streaming request
 	resp, err := streamClient.Post(p.baseURL + constants.AnthropicMessagesPath)
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError(string(constants.ProviderAnthropic), model, err)
+		return nil, agentErrors.NewLLMRequestError(p.ProviderName(), model, err)
 	}
 
 	if !resp.IsSuccess() {
@@ -427,7 +343,6 @@ func (p *AnthropicProvider) Stream(ctx context.Context, prompt string) (<-chan s
 
 			// Extract text from content_block_delta events
 			if event.Type == constants.EventContentBlockDelta && event.Delta != nil {
-				// Use select to handle context cancellation
 				select {
 				case tokens <- event.Delta.Text:
 					// Successfully sent
@@ -447,12 +362,8 @@ func (p *AnthropicProvider) Stream(ctx context.Context, prompt string) (<-chan s
 	return tokens, nil
 }
 
-// ModelName returns the model name
-func (p *AnthropicProvider) ModelName() string {
-	return p.GetModel("")
-}
-
-// MaxTokens returns the max tokens setting
+// MaxTokens returns the max tokens setting.
+// Note: This method is provided for backward compatibility; prefer using MaxTokensValue() inherited from BaseProvider.
 func (p *AnthropicProvider) MaxTokens() int {
-	return p.GetMaxTokens(0)
+	return p.MaxTokensValue()
 }
