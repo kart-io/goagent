@@ -43,6 +43,36 @@ func DefaultOllamaConfig() *OllamaConfig {
 	}
 }
 
+// NewOllama 使用标准配置创建 Ollama 客户端
+func NewOllama(config *llm.Config) (*OllamaClient, error) {
+	ollamaConfig := &OllamaConfig{
+		BaseURL:     config.BaseURL,
+		Model:       config.Model,
+		Temperature: config.Temperature,
+		MaxTokens:   config.MaxTokens,
+		Timeout:     config.Timeout,
+	}
+
+	// 设置默认值
+	if ollamaConfig.BaseURL == "" {
+		ollamaConfig.BaseURL = "http://localhost:11434"
+	}
+	if ollamaConfig.Model == "" {
+		ollamaConfig.Model = "llama2"
+	}
+	if ollamaConfig.Temperature == 0 {
+		ollamaConfig.Temperature = 0.7
+	}
+	if ollamaConfig.MaxTokens == 0 {
+		ollamaConfig.MaxTokens = 2000
+	}
+	if ollamaConfig.Timeout == 0 {
+		ollamaConfig.Timeout = 120
+	}
+
+	return NewOllamaClient(ollamaConfig), nil
+}
+
 // NewOllamaClient 创建新的 Ollama 客户端
 func NewOllamaClient(config *OllamaConfig) *OllamaClient {
 	if config == nil {

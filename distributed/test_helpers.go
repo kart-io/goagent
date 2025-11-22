@@ -1,3 +1,4 @@
+//go:build test || !prod
 // +build test !prod
 
 package distributed

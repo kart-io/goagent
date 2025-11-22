@@ -19,12 +19,19 @@ GoAgent 是一个全面的、生产就绪的 Go AI Agent 框架，灵感来自 L
 
 ```text
 docs/
+├── api/                    # API 参考文档
+│   └── OPTIONS_API.md      # Option 模式 API 参考
 ├── architecture/           # 架构文档
 │   ├── ARCHITECTURE.md     # 架构概述
 │   └── IMPORT_LAYERING.md  # 导入层级说明
 ├── guides/                 # 用户指南
 │   ├── QUICKSTART.md       # 快速入门
-│   └── LLM_PROVIDERS.md    # LLM 提供商指南
+│   ├── LLM_PROVIDERS.md    # LLM 提供商指南
+│   ├── INVOKE_FAST_OPTIMIZATION.md  # InvokeFast 优化
+│   ├── OPTION_PATTERN_BEST_PRACTICES.md  # Option 模式最佳实践
+│   ├── OPTION_PATTERN_MIGRATION.md  # Option 模式迁移指南
+│   ├── PERFORMANCE_TUNING_OPTION_PATTERN.md  # 性能调优指南
+│   └── SHARDED_CACHE_CONFIG_GUIDE.md  # 分片缓存配置
 └── development/            # 开发文档
     └── TESTING_BEST_PRACTICES.md  # 测试最佳实践
 ```
@@ -45,6 +52,16 @@ docs/
 | [快速入门](docs/guides/QUICKSTART.md) | 从零开始使用 GoAgent | 新用户 |
 | [LLM 提供商指南](docs/guides/LLM_PROVIDERS.md) | 配置不同的 LLM 提供商 | 所有用户 |
 | [InvokeFast 性能优化](docs/guides/INVOKE_FAST_OPTIMIZATION.md) | 热路径优化指南 | 高级用户 |
+| [Option 模式最佳实践](docs/guides/OPTION_PATTERN_BEST_PRACTICES.md) | Option 设计模式使用指南 | 所有开发者 |
+| [Option 模式迁移指南](docs/guides/OPTION_PATTERN_MIGRATION.md) | 从旧配置迁移到 Option 模式 | 维护者 |
+| [性能调优指南](docs/guides/PERFORMANCE_TUNING_OPTION_PATTERN.md) | 基于 Option 模式的性能优化 | 高级用户 |
+| [分片缓存配置指南](docs/guides/SHARDED_CACHE_CONFIG_GUIDE.md) | 高性能缓存配置优化 | 高级用户 |
+
+### API 参考
+
+| 文档 | 说明 | 适合阅读者 |
+|------|------|-----------|
+| [Option 模式 API](docs/api/OPTIONS_API.md) | Option 模式完整 API 参考 | 所有开发者 |
 
 ### 开发文档
 
@@ -212,7 +229,12 @@ make test             # 运行测试
 - [快速入门](docs/guides/QUICKSTART.md) - 立即开始
 - [架构概述](docs/architecture/ARCHITECTURE.md) - 了解设计
 - [LLM 提供商](docs/guides/LLM_PROVIDERS.md) - 配置 LLM
-- [性能优化](docs/guides/INVOKE_FAST_OPTIMIZATION.md) - InvokeFast 优化指南
+- [Option 模式最佳实践](docs/guides/OPTION_PATTERN_BEST_PRACTICES.md) - Option 设计模式
+- [Option 模式迁移](docs/guides/OPTION_PATTERN_MIGRATION.md) - 配置迁移指南
+- [Option 模式 API](docs/api/OPTIONS_API.md) - API 参考文档
+- [性能调优](docs/guides/PERFORMANCE_TUNING_OPTION_PATTERN.md) - 性能优化指南
+- [InvokeFast 优化](docs/guides/INVOKE_FAST_OPTIMIZATION.md) - 热路径优化
+- [缓存优化](docs/guides/SHARDED_CACHE_CONFIG_GUIDE.md) - 分片缓存配置
 - [测试实践](docs/development/TESTING_BEST_PRACTICES.md) - 编写测试
 
 ## 贡献指南

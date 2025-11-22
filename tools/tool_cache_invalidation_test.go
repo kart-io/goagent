@@ -493,7 +493,6 @@ func TestExtractToolNameFromKey(t *testing.T) {
 	}
 }
 
-
 // BenchmarkInvalidateByPattern benchmarks pattern-based invalidation
 func BenchmarkInvalidateByPattern(b *testing.B) {
 	ctx := context.Background()

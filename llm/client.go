@@ -2,6 +2,7 @@ package llm
 
 import (
 	"context"
+	"time"
 
 	"github.com/kart-io/goagent/interfaces"
 )
@@ -68,13 +69,39 @@ type CompletionResponse struct {
 
 // Config 定义 LLM 配置
 type Config struct {
-	Provider    Provider `json:"provider"`           // 提供商
-	APIKey      string   `json:"api_key"`            // API 密钥
-	BaseURL     string   `json:"base_url,omitempty"` // 自定义 API 端点
-	Model       string   `json:"model"`              // 默认模型
-	MaxTokens   int      `json:"max_tokens"`         // 默认最大 token 数
-	Temperature float64  `json:"temperature"`        // 默认温度
-	Timeout     int      `json:"timeout"`            // 请求超时（秒）
+	// 基础配置
+	Provider Provider `json:"provider"`           // 提供商
+	APIKey   string   `json:"api_key"`            // API 密钥
+	BaseURL  string   `json:"base_url,omitempty"` // 自定义 API 端点
+	Model    string   `json:"model"`              // 默认模型
+
+	// 生成参数
+	MaxTokens   int     `json:"max_tokens"`      // 默认最大 token 数
+	Temperature float64 `json:"temperature"`     // 默认温度 (0.0-2.0)
+	TopP        float64 `json:"top_p,omitempty"` // Top-P 采样参数 (0.0-1.0)
+
+	// 网络配置
+	Timeout  int    `json:"timeout"`             // 请求超时（秒）
+	ProxyURL string `json:"proxy_url,omitempty"` // 代理 URL
+
+	// 重试配置
+	RetryCount int           `json:"retry_count,omitempty"` // 重试次数
+	RetryDelay time.Duration `json:"retry_delay,omitempty"` // 重试延迟
+
+	// 速率限制
+	RateLimitRPM int `json:"rate_limit_rpm,omitempty"` // 每分钟请求数限制
+
+	// 缓存配置
+	CacheEnabled bool          `json:"cache_enabled,omitempty"` // 是否启用缓存
+	CacheTTL     time.Duration `json:"cache_ttl,omitempty"`     // 缓存 TTL
+
+	// 流式响应
+	StreamingEnabled bool `json:"streaming_enabled,omitempty"` // 是否启用流式响应
+
+	// 其他配置
+	OrganizationID string            `json:"organization_id,omitempty"` // 组织 ID (用于 OpenAI)
+	SystemPrompt   string            `json:"system_prompt,omitempty"`   // 默认系统提示
+	CustomHeaders  map[string]string `json:"custom_headers,omitempty"`  // 自定义 HTTP 头
 }
 
 // DefaultConfig 返回默认配置
