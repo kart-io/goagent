@@ -5,8 +5,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"math/rand"
-	"os"
 	"strings"
 	"time"
 
@@ -132,12 +130,6 @@ func NewHuggingFaceWithOptions(opts ...agentllm.ClientOption) (*HuggingFaceProvi
 	return provider, nil
 }
 
-// NewHuggingFace creates a new Hugging Face provider (backward compatible)
-func NewHuggingFace(config *agentllm.LLMOptions) (*HuggingFaceProvider, error) {
-	// 将现有配置转换为 Options，使用 Options 模式创建 Provider
-	return NewHuggingFaceWithOptions(ConfigToOptions(config)...)
-}
-
 // Complete implements basic text completion
 func (p *HuggingFaceProvider) Complete(ctx context.Context, req *agentllm.CompletionRequest) (*agentllm.CompletionResponse, error) {
 	// Build Hugging Face request
@@ -155,26 +147,16 @@ func (p *HuggingFaceProvider) Complete(ctx context.Context, req *agentllm.Comple
 
 // buildRequest converts agentllm.CompletionRequest to HuggingFaceRequest
 func (p *HuggingFaceProvider) buildRequest(req *agentllm.CompletionRequest) *HuggingFaceRequest {
-	// Combine all messages into a single input string
-	var inputs strings.Builder
-	for _, msg := range req.Messages {
-		switch msg.Role {
-		case constants.RoleSystem:
-			inputs.WriteString(fmt.Sprintf("System: %s\n", msg.Content))
-		case constants.RoleUser:
-			inputs.WriteString(fmt.Sprintf("User: %s\n", msg.Content))
-		case constants.RoleAssistant:
-			inputs.WriteString(fmt.Sprintf("Assistant: %s\n", msg.Content))
-		}
-	}
-	inputs.WriteString("Assistant: ") // Prompt for response
+	// Combine all messages into a single input string using shared utility
+	inputs := MessagesToPrompt(req.Messages, DefaultPromptFormatter)
+	inputs += "Assistant: " // Prompt for response
 
 	// 使用 BaseProvider 的统一参数处理方法
 	maxTokens := p.GetMaxTokens(req.MaxTokens)
 	temperature := p.GetTemperature(req.Temperature)
 
 	return &HuggingFaceRequest{
-		Inputs: inputs.String(),
+		Inputs: inputs,
 		Parameters: HuggingFaceParameters{
 			Temperature:    temperature,
 			MaxNewTokens:   maxTokens,
@@ -276,52 +258,17 @@ func (p *HuggingFaceProvider) handleHTTPError(resp *resty.Response, model string
 	}
 }
 
-// executeWithRetry executes request with extended retry for model loading
+// executeWithRetry executes request with extended retry for model loading using shared retry logic
 func (p *HuggingFaceProvider) executeWithRetry(ctx context.Context, req *HuggingFaceRequest) (*HuggingFaceResponse, error) {
-	maxAttempts := constants.HuggingFaceMaxAttempts
-	baseDelay := constants.HuggingFaceBaseDelay
-
-	// Use shorter delays in test environment
-	if testDelay, ok := ctx.Value("test_retry_delay").(time.Duration); ok && testDelay > 0 {
-		baseDelay = testDelay
-	} else if os.Getenv("GO_TEST_MODE") == "true" {
-		// Automatic fast retries in test mode
-		baseDelay = 10 * time.Millisecond
+	// HuggingFace uses longer delays for model loading
+	cfg := RetryConfig{
+		MaxAttempts: constants.HuggingFaceMaxAttempts,
+		BaseDelay:   constants.HuggingFaceBaseDelay,
+		MaxDelay:    constants.HuggingFaceMaxDelay,
 	}
-
-	for attempt := 1; attempt <= maxAttempts; attempt++ {
-		resp, err := p.execute(ctx, req)
-		if err == nil {
-			return resp, nil
-		}
-
-		// Check if error is retryable
-		if !isRetryable(err) {
-			return nil, err
-		}
-
-		// Last attempt failed
-		if attempt == maxAttempts {
-			return nil, agentErrors.ErrorWithRetry(err, attempt, maxAttempts)
-		}
-
-		// Exponential backoff with jitter (longer delays for model loading)
-		delay := baseDelay * time.Duration(1<<uint(attempt-1))
-		// Cap at 60 seconds
-		if delay > constants.HuggingFaceMaxDelay {
-			delay = constants.HuggingFaceMaxDelay
-		}
-		jitter := time.Duration(rand.Int63n(int64(delay) / 2))
-
-		select {
-		case <-ctx.Done():
-			return nil, agentErrors.NewContextCanceledError("llm_request")
-		case <-time.After(delay + jitter):
-			// Continue to next attempt
-		}
-	}
-
-	return nil, agentErrors.NewInternalError(string(constants.ProviderHuggingFace), "execute_with_retry", fmt.Errorf("%s", constants.ErrMaxRetriesExceeded))
+	return ExecuteWithRetry(ctx, cfg, p.ProviderName(), func(ctx context.Context) (*HuggingFaceResponse, error) {
+		return p.execute(ctx, req)
+	})
 }
 
 // convertResponse converts HuggingFaceResponse to agentllm.CompletionResponse

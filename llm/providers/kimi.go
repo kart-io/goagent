@@ -61,12 +61,6 @@ func NewKimiWithOptions(opts ...agentllm.ClientOption) (*KimiClient, error) {
 	}, nil
 }
 
-// NewKimi 创建 Kimi provider (向后兼容)
-func NewKimi(config *agentllm.LLMOptions) (*KimiClient, error) {
-	// 将现有配置转换为 Options，使用 Options 模式创建 Provider
-	return NewKimiWithOptions(ConfigToOptions(config)...)
-}
-
 // kimiRequest Kimi 请求格式
 type kimiRequest struct {
 	Model       string        `json:"model"`

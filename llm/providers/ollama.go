@@ -59,22 +59,11 @@ func NewOllamaWithOptions(opts ...agentllm.ClientOption) (*OllamaClient, error) 
 	}, nil
 }
 
-// NewOllama 使用标准配置创建 Ollama 客户端 (向后兼容)
-func NewOllama(config *agentllm.LLMOptions) (*OllamaClient, error) {
-	// 将现有配置转换为 Options，使用 Options 模式创建 Provider
-	return NewOllamaWithOptions(ConfigToOptions(config)...)
-}
-
 // NewOllamaClientSimple 使用默认配置创建 Ollama 客户端（便捷函数）
 func NewOllamaClientSimple(model string) (*OllamaClient, error) {
-	config := &agentllm.LLMOptions{
-		Provider: constants.ProviderOllama,
-		Model:    model,
-	}
-	if model == "" {
-		config.Model = "llama2"
-	}
-	return NewOllama(config)
+	return NewOllamaWithOptions(
+		agentllm.WithModel(model),
+	)
 }
 
 // ollamaChatRequest Ollama 聊天请求格式

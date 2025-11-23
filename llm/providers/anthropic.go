@@ -136,11 +136,6 @@ func NewAnthropicWithOptions(opts ...agentllm.ClientOption) (*AnthropicProvider,
 	return provider, nil
 }
 
-// NewAnthropic creates a new Anthropic provider (backward compatible).
-func NewAnthropic(config *agentllm.LLMOptions) (*AnthropicProvider, error) {
-	return NewAnthropicWithOptions(ConfigToOptions(config)...)
-}
-
 // Complete implements basic text completion.
 func (p *AnthropicProvider) Complete(ctx context.Context, req *agentllm.CompletionRequest) (*agentllm.CompletionResponse, error) {
 	// Build Anthropic request
