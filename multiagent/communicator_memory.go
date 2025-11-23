@@ -7,24 +7,46 @@ import (
 	agentErrors "github.com/kart-io/goagent/errors"
 )
 
-// 全局共享的 channels map，让所有 MemoryCommunicator 实例可以互相通信
+// 全局默认的 ChannelStore 实例，用于向后兼容
 var (
-	globalChannels    = make(map[string]chan *AgentMessage)
-	globalSubscribers = make(map[string][]chan *AgentMessage)
-	globalMu          sync.RWMutex
+	defaultStore ChannelStore
+	defaultOnce  sync.Once
 )
+
+// getDefaultStore 获取全局默认的 ChannelStore
+func getDefaultStore() ChannelStore {
+	defaultOnce.Do(func() {
+		defaultStore = NewInMemoryChannelStore()
+	})
+	return defaultStore
+}
+
+// SetDefaultChannelStore 设置全局默认的 ChannelStore（用于第三方实现）
+func SetDefaultChannelStore(store ChannelStore) {
+	defaultStore = store
+}
 
 // MemoryCommunicator 内存通信器（单机多Agent）
 type MemoryCommunicator struct {
 	agentID string
+	store   ChannelStore
 	closed  bool
 	closeMu sync.RWMutex
 }
 
-// NewMemoryCommunicator 创建内存通信器
+// NewMemoryCommunicator 创建内存通信器，使用全局默认的 ChannelStore
 func NewMemoryCommunicator(agentID string) *MemoryCommunicator {
 	return &MemoryCommunicator{
 		agentID: agentID,
+		store:   getDefaultStore(),
+	}
+}
+
+// NewMemoryCommunicatorWithStore 创建内存通信器，使用指定的 ChannelStore
+func NewMemoryCommunicatorWithStore(agentID string, store ChannelStore) *MemoryCommunicator {
+	return &MemoryCommunicator{
+		agentID: agentID,
+		store:   store,
 	}
 }
 
@@ -40,19 +62,7 @@ func (c *MemoryCommunicator) Send(ctx context.Context, to string, message *Agent
 	}
 	c.closeMu.RUnlock()
 
-	globalMu.RLock()
-	ch, exists := globalChannels[to]
-	globalMu.RUnlock()
-
-	if !exists {
-		globalMu.Lock()
-		// Double-check after acquiring write lock
-		if ch, exists = globalChannels[to]; !exists {
-			ch = make(chan *AgentMessage, 100)
-			globalChannels[to] = ch
-		}
-		globalMu.Unlock()
-	}
+	ch := c.store.GetOrCreateChannel(to)
 
 	message.From = c.agentID
 	message.To = to
@@ -67,13 +77,7 @@ func (c *MemoryCommunicator) Send(ctx context.Context, to string, message *Agent
 
 // Receive 接收消息
 func (c *MemoryCommunicator) Receive(ctx context.Context) (*AgentMessage, error) {
-	globalMu.Lock()
-	ch, exists := globalChannels[c.agentID]
-	if !exists {
-		ch = make(chan *AgentMessage, 100)
-		globalChannels[c.agentID] = ch
-	}
-	globalMu.Unlock()
+	ch := c.store.GetOrCreateChannel(c.agentID)
 
 	select {
 	case msg := <-ch:
@@ -96,15 +100,18 @@ func (c *MemoryCommunicator) Broadcast(ctx context.Context, message *AgentMessag
 
 	message.From = c.agentID
 
-	globalMu.RLock()
-	defer globalMu.RUnlock()
+	// 获取所有 channel 的 ID
+	agentIDs := c.store.ListChannels()
 
-	for id, ch := range globalChannels {
+	for _, id := range agentIDs {
 		if id != c.agentID {
-			select {
-			case ch <- message:
-			default:
-				// Channel full, skip
+			ch := c.store.GetChannel(id)
+			if ch != nil {
+				select {
+				case ch <- message:
+				default:
+					// Channel full, skip
+				}
 			}
 		}
 	}
@@ -124,21 +131,12 @@ func (c *MemoryCommunicator) Subscribe(ctx context.Context, topic string) (<-cha
 	}
 	c.closeMu.RUnlock()
 
-	globalMu.Lock()
-	defer globalMu.Unlock()
-
-	ch := make(chan *AgentMessage, 100)
-	globalSubscribers[topic] = append(globalSubscribers[topic], ch)
-
-	return ch, nil
+	return c.store.Subscribe(topic), nil
 }
 
 // Unsubscribe 取消订阅
 func (c *MemoryCommunicator) Unsubscribe(ctx context.Context, topic string) error {
-	globalMu.Lock()
-	defer globalMu.Unlock()
-
-	delete(globalSubscribers, topic)
+	c.store.Unsubscribe(topic)
 	return nil
 }
 
@@ -153,8 +151,8 @@ func (c *MemoryCommunicator) Close() error {
 
 	c.closed = true
 
-	// Note: We don't close channels in the global map because
-	// other communicators might still be using them.
+	// Note: We don't close the store here because
+	// other communicators might still be using the shared store.
 	// In a real application, you'd want proper lifecycle management.
 
 	return nil
