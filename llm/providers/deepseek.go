@@ -21,6 +21,7 @@ import (
 // DeepSeekProvider implements LLM interface for DeepSeek
 type DeepSeekProvider struct {
 	*BaseProvider
+	*ProviderCapabilities
 	client  *httpclient.Client
 	apiKey  string
 	baseURL string
@@ -140,31 +141,31 @@ func NewDeepSeekWithOptions(opts ...agentllm.ClientOption) (*DeepSeekProvider, e
 
 	provider := &DeepSeekProvider{
 		BaseProvider: base,
-		client:       client,
-		apiKey:       base.Config.APIKey,
-		baseURL:      base.Config.BaseURL,
+		ProviderCapabilities: NewProviderCapabilities(
+			agentllm.CapabilityCompletion,
+			agentllm.CapabilityChat,
+			agentllm.CapabilityStreaming,
+			agentllm.CapabilityToolCalling,
+			agentllm.CapabilityEmbedding,
+		),
+		client:  client,
+		apiKey:  base.Config.APIKey,
+		baseURL: base.Config.BaseURL,
 	}
 
 	return provider, nil
 }
 
-// NewDeepSeek creates a new DeepSeek provider (backward compatible)
-func NewDeepSeek(config *agentllm.LLMOptions) (*DeepSeekProvider, error) {
-	// 将现有配置转换为 Options，使用 Options 模式创建 Provider
-	return NewDeepSeekWithOptions(ConfigToOptions(config)...)
-}
-
 // Complete implements basic text completion
 func (p *DeepSeekProvider) Complete(ctx context.Context, req *agentllm.CompletionRequest) (*agentllm.CompletionResponse, error) {
-	// Convert messages to DeepSeek format
-	messages := make([]DeepSeekMessage, len(req.Messages))
-	for i, msg := range req.Messages {
-		messages[i] = DeepSeekMessage{
+	// Convert messages to DeepSeek format using shared utility
+	messages := ConvertMessages(req.Messages, func(msg agentllm.Message) DeepSeekMessage {
+		return DeepSeekMessage{
 			Role:    msg.Role,
 			Content: msg.Content,
 			Name:    msg.Name,
 		}
-	}
+	})
 
 	// Prepare request
 	model := p.GetModel(req.Model)
@@ -600,7 +601,7 @@ type DeepSeekStreamingProvider struct {
 
 // NewDeepSeekStreaming creates a streaming-optimized provider
 func NewDeepSeekStreaming(config *agentllm.LLMOptions) (*DeepSeekStreamingProvider, error) {
-	base, err := NewDeepSeek(config)
+	base, err := NewDeepSeekWithOptions(ConfigToOptions(config)...)
 	if err != nil {
 		return nil, err
 	}

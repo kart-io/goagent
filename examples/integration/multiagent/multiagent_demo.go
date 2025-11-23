@@ -37,18 +37,18 @@ func main() {
 
 	ctx := context.Background()
 
-	receivedMsg, err := agent2Comm.Receive(ctx)
-	if err != nil {
-		log.Printf("Failed to receive: %v", err)
-		return
-	}
-	fmt.Printf("Agent 2 received: %v (From: %s)\n", receivedMsg.Payload, receivedMsg.From)
+	// 2. 演示点对点通信
+	fmt.Println("2. Demonstrating Point-to-Point Communication...")
 
-	// Agent 2 回复
+	// 创建一个等待组确保消息被处理
+	done := make(chan struct{})
+
+	// Agent 2 在 goroutine 中监听消息
 	go func() {
 		receivedMsg, err := agent2Comm.Receive(ctx)
 		if err != nil {
 			log.Printf("Failed to receive: %v", err)
+			close(done)
 			return
 		}
 		fmt.Printf("Agent 2 received: %v (From: %s)\n", receivedMsg.Payload, receivedMsg.From)
@@ -57,11 +57,26 @@ func main() {
 		response := multiagent.NewAgentMessage("agent-2", "agent-1", multiagent.MessageTypeResponse, map[string]string{
 			"result": "analysis complete",
 		})
-		_ = agent2Comm.Send(ctx, "agent-1", response)
+		if err := agent2Comm.Send(ctx, "agent-1", response); err != nil {
+			log.Printf("Failed to send response: %v", err)
+			close(done)
+			return
+		}
 		fmt.Printf("Agent 2 → Agent 1: Response sent\n")
+		close(done)
 	}()
 
-	time.Sleep(100 * time.Millisecond)
+	// Agent 1 发送请求给 Agent 2
+	request := multiagent.NewAgentMessage("agent-1", "agent-2", multiagent.MessageTypeRequest, map[string]string{
+		"task": "analyze data",
+	})
+	if err := agent1Comm.Send(ctx, "agent-2", request); err != nil {
+		log.Fatalf("Failed to send: %v", err)
+	}
+	fmt.Printf("Agent 1 → Agent 2: Request sent\n")
+
+	// 等待消息处理完成
+	<-done
 	fmt.Println("✓ Point-to-point communication demonstrated")
 
 	// 3. 演示广播通信

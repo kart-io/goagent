@@ -5,8 +5,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"math/rand"
-	"os"
 	"strings"
 	"time"
 
@@ -118,12 +116,6 @@ func NewCohereWithOptions(opts ...agentllm.ClientOption) (*CohereProvider, error
 	}
 
 	return provider, nil
-}
-
-// NewCohere creates a new Cohere provider (backward compatible)
-func NewCohere(config *agentllm.LLMOptions) (*CohereProvider, error) {
-	// 将现有配置转换为 Options，使用 Options 模式创建 Provider
-	return NewCohereWithOptions(ConfigToOptions(config)...)
 }
 
 // Complete implements basic text completion
@@ -274,48 +266,11 @@ func (p *CohereProvider) handleHTTPError(resp *resty.Response, model string) err
 	}
 }
 
-// executeWithRetry executes request with exponential backoff
+// executeWithRetry executes request with exponential backoff using the shared retry logic
 func (p *CohereProvider) executeWithRetry(ctx context.Context, req *CohereRequest) (*CohereResponse, error) {
-	maxAttempts := constants.DefaultMaxAttempts
-	baseDelay := constants.DefaultBaseDelay
-
-	// Use shorter delays in test environment
-	if testDelay, ok := ctx.Value("test_retry_delay").(time.Duration); ok && testDelay > 0 {
-		baseDelay = testDelay
-	} else if os.Getenv("GO_TEST_MODE") == "true" {
-		// Automatic fast retries in test mode
-		baseDelay = 10 * time.Millisecond
-	}
-
-	for attempt := 1; attempt <= maxAttempts; attempt++ {
-		resp, err := p.execute(ctx, req)
-		if err == nil {
-			return resp, nil
-		}
-
-		// Check if error is retryable
-		if !isRetryable(err) {
-			return nil, err
-		}
-
-		// Last attempt failed
-		if attempt == maxAttempts {
-			return nil, agentErrors.ErrorWithRetry(err, attempt, maxAttempts)
-		}
-
-		// Exponential backoff with jitter
-		delay := baseDelay * time.Duration(1<<uint(attempt-1))
-		jitter := time.Duration(rand.Int63n(int64(delay) / 2))
-
-		select {
-		case <-ctx.Done():
-			return nil, agentErrors.NewContextCanceledError("llm_request")
-		case <-time.After(delay + jitter):
-			// Continue to next attempt
-		}
-	}
-
-	return nil, agentErrors.NewInternalError(string(constants.ProviderCohere), "execute_with_retry", fmt.Errorf("%s", constants.ErrMaxRetriesExceeded))
+	return ExecuteWithRetry(ctx, DefaultRetryConfig(), p.ProviderName(), func(ctx context.Context) (*CohereResponse, error) {
+		return p.execute(ctx, req)
+	})
 }
 
 // convertResponse converts CohereResponse to agentllm.CompletionResponse

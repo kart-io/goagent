@@ -37,12 +37,15 @@ func TestNewMemoryCommunicator(t *testing.T) {
 
 	require.NotNil(t, comm)
 	assert.Equal(t, "agent1", comm.agentID)
-	assert.NotNil(t, comm.channels)
-	assert.NotNil(t, comm.subscribers)
 	assert.False(t, comm.closed)
 }
 
 func TestMemoryCommunicator_Send(t *testing.T) {
+	// Clean global state before test
+	globalMu.Lock()
+	globalChannels = make(map[string]chan *AgentMessage)
+	globalMu.Unlock()
+
 	comm := NewMemoryCommunicator("agent1")
 	ctx := context.Background()
 
@@ -55,26 +58,31 @@ func TestMemoryCommunicator_Send(t *testing.T) {
 	assert.Equal(t, "agent1", message.From)
 	assert.Equal(t, "agent2", message.To)
 
-	// Verify channel was created
-	comm.mu.RLock()
-	ch, exists := comm.channels["agent2"]
-	comm.mu.RUnlock()
+	// Verify channel was created in global map
+	globalMu.RLock()
+	ch, exists := globalChannels["agent2"]
+	globalMu.RUnlock()
 	assert.True(t, exists)
 	assert.NotNil(t, ch)
 }
 
 func TestMemoryCommunicator_Receive(t *testing.T) {
+	// Clean global state before test
+	globalMu.Lock()
+	globalChannels = make(map[string]chan *AgentMessage)
+	globalMu.Unlock()
+
 	comm := NewMemoryCommunicator("agent1")
 	ctx := context.Background()
 
 	// Send a message first
 	message := NewAgentMessage("agent2", "agent1", MessageTypeRequest, "test payload")
 
-	// Create channel for agent1
-	comm.mu.Lock()
+	// Create channel for agent1 in global map
+	globalMu.Lock()
 	ch := make(chan *AgentMessage, 100)
-	comm.channels["agent1"] = ch
-	comm.mu.Unlock()
+	globalChannels["agent1"] = ch
+	globalMu.Unlock()
 
 	// Send message directly to channel
 	ch <- message
@@ -89,15 +97,20 @@ func TestMemoryCommunicator_Receive(t *testing.T) {
 }
 
 func TestMemoryCommunicator_Broadcast(t *testing.T) {
+	// Clean global state before test
+	globalMu.Lock()
+	globalChannels = make(map[string]chan *AgentMessage)
+	globalMu.Unlock()
+
 	comm1 := NewMemoryCommunicator("agent1")
 	ctx := context.Background()
 
-	// Setup channels for all agents
-	comm1.mu.Lock()
-	comm1.channels["agent1"] = make(chan *AgentMessage, 100)
-	comm1.channels["agent2"] = make(chan *AgentMessage, 100)
-	comm1.channels["agent3"] = make(chan *AgentMessage, 100)
-	comm1.mu.Unlock()
+	// Setup channels for all agents in global map
+	globalMu.Lock()
+	globalChannels["agent1"] = make(chan *AgentMessage, 100)
+	globalChannels["agent2"] = make(chan *AgentMessage, 100)
+	globalChannels["agent3"] = make(chan *AgentMessage, 100)
+	globalMu.Unlock()
 
 	message := NewAgentMessage("agent1", "", MessageTypeBroadcast, "broadcast message")
 
@@ -105,23 +118,32 @@ func TestMemoryCommunicator_Broadcast(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify agent1 did not receive its own message
+	globalMu.RLock()
+	ch1 := globalChannels["agent1"]
+	globalMu.RUnlock()
+
 	select {
-	case <-comm1.channels["agent1"]:
+	case <-ch1:
 		t.Fatal("agent1 should not receive its own broadcast")
 	case <-time.After(50 * time.Millisecond):
 		// Good, no message
 	}
 
 	// Verify other agents received the message
+	globalMu.RLock()
+	ch2 := globalChannels["agent2"]
+	ch3 := globalChannels["agent3"]
+	globalMu.RUnlock()
+
 	select {
-	case msg := <-comm1.channels["agent2"]:
+	case msg := <-ch2:
 		assert.Equal(t, "broadcast message", msg.Payload)
 	case <-time.After(100 * time.Millisecond):
 		t.Fatal("agent2 should have received broadcast")
 	}
 
 	select {
-	case msg := <-comm1.channels["agent3"]:
+	case msg := <-ch3:
 		assert.Equal(t, "broadcast message", msg.Payload)
 	case <-time.After(100 * time.Millisecond):
 		t.Fatal("agent3 should have received broadcast")
@@ -129,6 +151,11 @@ func TestMemoryCommunicator_Broadcast(t *testing.T) {
 }
 
 func TestMemoryCommunicator_Subscribe(t *testing.T) {
+	// Clean global state before test
+	globalMu.Lock()
+	globalSubscribers = make(map[string][]chan *AgentMessage)
+	globalMu.Unlock()
+
 	comm := NewMemoryCommunicator("agent1")
 	ctx := context.Background()
 
@@ -137,16 +164,21 @@ func TestMemoryCommunicator_Subscribe(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, ch)
 
-	// Verify subscription was registered
-	comm.mu.RLock()
-	subs, exists := comm.subscribers["topic1"]
-	comm.mu.RUnlock()
+	// Verify subscription was registered in global map
+	globalMu.RLock()
+	subs, exists := globalSubscribers["topic1"]
+	globalMu.RUnlock()
 
 	assert.True(t, exists)
 	assert.Len(t, subs, 1)
 }
 
 func TestMemoryCommunicator_Unsubscribe(t *testing.T) {
+	// Clean global state before test
+	globalMu.Lock()
+	globalSubscribers = make(map[string][]chan *AgentMessage)
+	globalMu.Unlock()
+
 	comm := NewMemoryCommunicator("agent1")
 	ctx := context.Background()
 
@@ -154,20 +186,20 @@ func TestMemoryCommunicator_Unsubscribe(t *testing.T) {
 	_, err := comm.Subscribe(ctx, "topic1")
 	require.NoError(t, err)
 
-	// Verify subscription exists
-	comm.mu.RLock()
-	_, exists := comm.subscribers["topic1"]
-	comm.mu.RUnlock()
+	// Verify subscription exists in global map
+	globalMu.RLock()
+	_, exists := globalSubscribers["topic1"]
+	globalMu.RUnlock()
 	assert.True(t, exists)
 
 	// Unsubscribe
 	err = comm.Unsubscribe(ctx, "topic1")
 	require.NoError(t, err)
 
-	// Verify subscription removed
-	comm.mu.RLock()
-	_, exists = comm.subscribers["topic1"]
-	comm.mu.RUnlock()
+	// Verify subscription removed from global map
+	globalMu.RLock()
+	_, exists = globalSubscribers["topic1"]
+	globalMu.RUnlock()
 	assert.False(t, exists)
 }
 
@@ -231,9 +263,9 @@ func TestMemoryCommunicator_ConcurrentSend(t *testing.T) {
 	}
 
 	// Verify channel has all messages
-	comm.mu.RLock()
-	ch := comm.channels["receiver"]
-	comm.mu.RUnlock()
+	globalMu.RLock()
+	ch := globalChannels["receiver"]
+	globalMu.RUnlock()
 
 	assert.Len(t, ch, numMessages)
 }
@@ -256,11 +288,11 @@ func TestMemoryCommunicator_ContextCancellation(t *testing.T) {
 	msg := NewAgentMessage("agent1", "agent2", MessageTypeRequest, "test")
 
 	// Fill channel first to trigger context check
-	comm.mu.Lock()
+	globalMu.Lock()
 	ch := make(chan *AgentMessage, 1)
 	ch <- msg // Fill the buffer
-	comm.channels["agent2"] = ch
-	comm.mu.Unlock()
+	globalChannels["agent2"] = ch
+	globalMu.Unlock()
 
 	err = comm.Send(ctx2, "agent2", msg)
 	// Either succeeds immediately or fails with context error
@@ -308,10 +340,12 @@ func BenchmarkMemoryCommunicator_Broadcast(b *testing.B) {
 	comm := NewMemoryCommunicator("agent1")
 	ctx := context.Background()
 
-	// Setup channels for 10 agents
+	// Setup channels for 10 agents in global map
+	globalMu.Lock()
 	for i := 0; i < 10; i++ {
-		comm.channels[string(rune(i))] = make(chan *AgentMessage, 100)
+		globalChannels[string(rune(i))] = make(chan *AgentMessage, 100)
 	}
+	globalMu.Unlock()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
