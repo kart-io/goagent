@@ -53,6 +53,16 @@ func main() {
 	// 创建一个等待组确保消息被处理
 	done := make(chan struct{})
 
+	// Agent 1 在 goroutine 中监听回复
+	go func() {
+		responseMsg, err := agent1Comm.Receive(ctx)
+		if err != nil {
+			log.Printf("Agent 1 failed to receive response: %v", err)
+			return
+		}
+		fmt.Printf("Agent 1 received response: %v (From: %s)\n", responseMsg.Payload, responseMsg.From)
+	}()
+
 	// Agent 2 在 goroutine 中监听消息
 	go func() {
 		receivedMsg, err := agent2Comm.Receive(ctx)
@@ -76,6 +86,9 @@ func main() {
 		close(done)
 	}()
 
+	// 等待一小段时间确保接收者已启动
+	time.Sleep(100 * time.Millisecond)
+
 	// Agent 1 发送请求给 Agent 2
 	request := multiagent.NewAgentMessage("agent-1", "agent-2", multiagent.MessageTypeRequest, map[string]string{
 		"task": "analyze data",
@@ -87,6 +100,8 @@ func main() {
 
 	// 等待消息处理完成
 	<-done
+	// 等待 Agent 1 接收回复
+	time.Sleep(200 * time.Millisecond)
 	fmt.Println("✓ Point-to-point communication demonstrated")
 
 	// 3. 演示广播通信
