@@ -35,8 +35,9 @@ func GetChainInput() *ChainInput {
 	input := chainInputPool.Get().(*ChainInput)
 	// Reset to default state
 	input.Data = nil
-	for k := range input.Vars {
-		delete(input.Vars, k)
+	// 优化：使用 clear() (Go 1.21+) 代替 delete 循环
+	if len(input.Vars) > 0 {
+		clear(input.Vars)
 	}
 	input.Options = ChainOptions{
 		StopOnError: true,
@@ -60,8 +61,9 @@ func GetChainOutput() *ChainOutput {
 	output.StepsExecuted = output.StepsExecuted[:0]
 	output.TotalLatency = 0
 	output.Status = ""
-	for k := range output.Metadata {
-		delete(output.Metadata, k)
+	// 优化：使用 clear() (Go 1.21+) 代替 delete 循环
+	if len(output.Metadata) > 0 {
+		clear(output.Metadata)
 	}
 	return output
 }
