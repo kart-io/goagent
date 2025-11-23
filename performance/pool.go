@@ -425,6 +425,7 @@ func (p *AgentPool) cleanupLoop() {
 }
 
 // cleanup 清理过期的 Agent
+// 优化：使用原地过滤（in-place filtering）避免内存分配
 func (p *AgentPool) cleanup() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -434,32 +435,44 @@ func (p *AgentPool) cleanup() {
 	}
 
 	now := time.Now()
-	newAgents := make([]*pooledAgent, 0, len(p.agents))
 
-	for _, agent := range p.agents {
-		// 跳过正在使用的 Agent
+	// 使用双指针技术进行原地过滤，复用底层数组
+	keepIdx := 0
+	for i := 0; i < len(p.agents); i++ {
+		agent := p.agents[i]
+		shouldKeep := false
+
+		// 正在使用的 Agent 必须保留
 		if agent.inUse {
-			newAgents = append(newAgents, agent)
-			continue
-		}
-
-		// 检查是否超过最大生命周期
-		if now.Sub(agent.createdAt) > p.config.MaxLifetime {
-			p.stats.recycled.Add(1)
-			continue
-		}
-
-		// 检查是否超过空闲超时
-		if now.Sub(agent.lastUsedAt) > p.config.IdleTimeout {
-			// 如果池中 Agent 数量超过初始大小，回收空闲 Agent
-			if len(newAgents) >= p.config.InitialSize {
+			shouldKeep = true
+		} else if now.Sub(agent.createdAt) <= p.config.MaxLifetime {
+			// 未超过最大生命周期
+			if now.Sub(agent.lastUsedAt) <= p.config.IdleTimeout || keepIdx < p.config.InitialSize {
+				// 未超过空闲超时，或池大小未达到初始大小
+				shouldKeep = true
+			} else {
+				// 超过空闲超时且池大小已超过初始大小，回收
 				p.stats.recycled.Add(1)
-				continue
 			}
+		} else {
+			// 超过最大生命周期，回收
+			p.stats.recycled.Add(1)
 		}
 
-		newAgents = append(newAgents, agent)
+		if shouldKeep {
+			// 将保留的 agent 移到前面
+			if keepIdx != i {
+				p.agents[keepIdx] = agent
+			}
+			keepIdx++
+		}
 	}
 
-	p.agents = newAgents
+	// 清除剩余的元素以避免内存泄漏
+	for i := keepIdx; i < len(p.agents); i++ {
+		p.agents[i] = nil
+	}
+
+	// 重新切片，复用底层数组
+	p.agents = p.agents[:keepIdx]
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sync"
 	"time"
 
 	"github.com/kart-io/goagent/llm/constants"
@@ -16,6 +17,16 @@ import (
 	"github.com/kart-io/goagent/interfaces"
 	agentllm "github.com/kart-io/goagent/llm"
 )
+
+// messageSlicePool is a sync.Pool for reusing message slices
+// to reduce allocations in high-frequency LLM call paths
+var messageSlicePool = sync.Pool{
+	New: func() interface{} {
+		// Pre-allocate slice with capacity for typical conversation length
+		slice := make([]openai.ChatCompletionMessage, 0, 8)
+		return &slice
+	},
+}
 
 // OpenAIProvider implements LLM interface for OpenAI
 type OpenAIProvider struct {
@@ -67,8 +78,20 @@ func NewOpenAIWithOptions(opts ...agentllm.ClientOption) (*OpenAIProvider, error
 }
 
 // Complete implements basic text completion
+// 优化：使用 sync.Pool 复用消息切片以减少内存分配
 func (p *OpenAIProvider) Complete(ctx context.Context, req *agentllm.CompletionRequest) (*agentllm.CompletionResponse, error) {
-	messages := make([]openai.ChatCompletionMessage, len(req.Messages))
+	// Get message slice from pool
+	messagesPtr := messageSlicePool.Get().(*[]openai.ChatCompletionMessage)
+	messages := *messagesPtr
+
+	// Ensure capacity and reset length
+	if cap(messages) < len(req.Messages) {
+		messages = make([]openai.ChatCompletionMessage, len(req.Messages))
+	} else {
+		messages = messages[:len(req.Messages)]
+	}
+
+	// Convert messages
 	for i, msg := range req.Messages {
 		messages[i] = openai.ChatCompletionMessage{
 			Role:    msg.Role,
@@ -90,6 +113,16 @@ func (p *OpenAIProvider) Complete(ctx context.Context, req *agentllm.CompletionR
 		Stop:        req.Stop,
 		TopP:        float32(req.TopP),
 	})
+
+	// Return slice to pool after use
+	// Clear sensitive data before returning to pool
+	for i := range messages {
+		messages[i] = openai.ChatCompletionMessage{}
+	}
+	messages = messages[:0]
+	*messagesPtr = messages
+	messageSlicePool.Put(messagesPtr)
+
 	if err != nil {
 		return nil, agentErrors.NewLLMRequestError(p.ProviderName(), model, err)
 	}

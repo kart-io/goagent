@@ -15,9 +15,17 @@ func main() {
 	// 1. 创建内存通信器（单机多Agent）
 	fmt.Println("1. Creating Memory Communicators for 3 Agents...")
 
-	agent1Comm := multiagent.NewMemoryCommunicator("agent-1")
-	agent2Comm := multiagent.NewMemoryCommunicator("agent-2")
-	agent3Comm := multiagent.NewMemoryCommunicator("agent-3")
+	// 创建独立的 ChannelStore 以避免全局状态污染
+	store := multiagent.NewInMemoryChannelStore()
+	defer func() {
+		if err := store.Close(); err != nil {
+			log.Printf("Failed to close store: %v", err)
+		}
+	}()
+
+	agent1Comm := multiagent.NewMemoryCommunicatorWithStore("agent-1", store)
+	agent2Comm := multiagent.NewMemoryCommunicatorWithStore("agent-2", store)
+	agent3Comm := multiagent.NewMemoryCommunicatorWithStore("agent-3", store)
 
 	defer func() {
 		if err := agent1Comm.Close(); err != nil {
@@ -35,7 +43,9 @@ func main() {
 		}
 	}()
 
-	ctx := context.Background()
+	// 使用带超时的 context 防止死锁
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 
 	// 2. 演示点对点通信
 	fmt.Println("2. Demonstrating Point-to-Point Communication...")
