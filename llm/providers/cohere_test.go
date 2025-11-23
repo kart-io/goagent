@@ -59,7 +59,7 @@ func TestNewCohere(t *testing.T) {
 				assert.Equal(t, "test-key", p.apiKey)
 				assert.Equal(t, "https://api.cohere.ai", p.baseURL)
 				assert.Equal(t, "command-r-plus", p.GetModel(""))
-				assert.Equal(t, 1000, p.GetMaxTokens(0))
+				assert.Equal(t, 2000, p.GetMaxTokens(0)) // Default from DefaultLLMOptions()
 				assert.Equal(t, 0.7, p.GetTemperature(0))
 			},
 		},

@@ -43,16 +43,14 @@ func NewKimiWithOptions(opts ...agentllm.ClientOption) (*KimiClient, error) {
 		return nil, err
 	}
 
-	// 获取超时时间
-	timeout := base.GetTimeout()
-
-	// 创建 HTTP 客户端
-	client := httpclient.NewClient(&httpclient.Config{
-		Timeout: timeout,
+	// 使用 BaseProvider 的 NewHTTPClient 方法创建 HTTP 客户端
+	client := base.NewHTTPClient(HTTPClientConfig{
+		Timeout: base.GetTimeout(),
 		Headers: map[string]string{
 			constants.HeaderContentType:   constants.ContentTypeJSON,
 			constants.HeaderAuthorization: constants.AuthBearerPrefix + base.Config.APIKey,
 		},
+		BaseURL: base.Config.BaseURL,
 	})
 
 	return &KimiClient{
@@ -159,7 +157,7 @@ func (c *KimiClient) Complete(ctx context.Context, req *agentllm.CompletionReque
 
 	model := c.GetModel(req.Model)
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError("kimi", model, err)
+		return nil, agentErrors.NewLLMRequestError(c.ProviderName(), model, err)
 	}
 
 	body := resp.Body()
@@ -167,11 +165,11 @@ func (c *KimiClient) Complete(ctx context.Context, req *agentllm.CompletionReque
 	if !resp.IsSuccess() {
 		var errResp kimiError
 		if err := json.Unmarshal(body, &errResp); err == nil && errResp.Error.Message != "" {
-			return nil, agentErrors.NewLLMResponseError("kimi", model,
+			return nil, agentErrors.NewLLMResponseError(c.ProviderName(), model,
 				fmt.Sprintf("%s (type: %s, code: %s)",
 					errResp.Error.Message, errResp.Error.Type, errResp.Error.Code))
 		}
-		return nil, agentErrors.NewLLMResponseError("kimi", model,
+		return nil, agentErrors.NewLLMResponseError(c.ProviderName(), model,
 			fmt.Sprintf("API error (status %d): %s", resp.StatusCode(), string(body)))
 	}
 
@@ -179,11 +177,11 @@ func (c *KimiClient) Complete(ctx context.Context, req *agentllm.CompletionReque
 	var kimiResp kimiResponse
 	if err := json.Unmarshal(body, &kimiResp); err != nil {
 		return nil, agentErrors.NewParserInvalidJSONError(string(body), err).
-			WithContext("provider", "kimi")
+			WithContext("provider", c.ProviderName())
 	}
 
 	if len(kimiResp.Choices) == 0 {
-		return nil, agentErrors.NewLLMResponseError("kimi", model, "no choices in response")
+		return nil, agentErrors.NewLLMResponseError(c.ProviderName(), model, "no choices in response")
 	}
 
 	// 构建响应
@@ -246,12 +244,12 @@ func (c *KimiClient) ListModels() ([]string, error) {
 
 	model := c.GetModel("")
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError("kimi", model, err).
+		return nil, agentErrors.NewLLMRequestError(c.ProviderName(), model, err).
 			WithContext("operation", "list_models")
 	}
 
 	if !resp.IsSuccess() {
-		return nil, agentErrors.NewLLMResponseError("kimi", model,
+		return nil, agentErrors.NewLLMResponseError(c.ProviderName(), model,
 			fmt.Sprintf("failed to list models (status %d): %s", resp.StatusCode(), resp.String()))
 	}
 
@@ -266,7 +264,7 @@ func (c *KimiClient) ListModels() ([]string, error) {
 
 	if err := json.NewDecoder(strings.NewReader(resp.String())).Decode(&result); err != nil {
 		return nil, agentErrors.NewParserInvalidJSONError("models list response", err).
-			WithContext("provider", "kimi")
+			WithContext("provider", c.ProviderName())
 	}
 
 	models := make([]string, len(result.Data))
@@ -342,7 +340,7 @@ func (c *KimiClient) ValidateContextSize(messages []agentllm.Message) error {
 
 	maxContext := c.GetModelContextSize(c.GetModel(""))
 	if totalTokens > maxContext {
-		return agentErrors.NewInvalidInputError("kimi", "messages",
+		return agentErrors.NewInvalidInputError(c.ProviderName(), "messages",
 			fmt.Sprintf("estimated tokens (%d) exceed model context size (%d)", totalTokens, maxContext))
 	}
 
