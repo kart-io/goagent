@@ -1,0 +1,44 @@
+services:
+  # NATS 服务器
+  nats:
+    image: nats:latest
+    container_name: goagent-nats
+    ports:
+      - "4222:4222"    # Client connections
+      - "8222:8222"    # HTTP management port
+      - "6222:6222"    # Cluster port
+    command:
+      - "--http_port=8222"
+      - "--js"         # Enable JetStream for persistence
+      - "-DV"          # Enable debug and trace logging
+    networks:
+      - goagent-network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8222/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  # NATS 监控面板 (可选)
+  nats-exporter:
+    image: natsio/prometheus-nats-exporter:latest
+    container_name: goagent-nats-exporter
+    ports:
+      - "7777:7777"
+    command:
+      - "-varz"
+      - "-connz"
+      - "-routez"
+      - "-subz"
+      - "-serverz"
+      - "http://nats:8222"
+    networks:
+      - goagent-network
+    depends_on:
+      nats:
+        condition: service_healthy
+
+networks:
+  goagent-network:
+    driver: bridge
