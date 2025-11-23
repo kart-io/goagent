@@ -1,9 +1,7 @@
 package tools
 
 import (
-	"container/list"
 	"context"
-	"hash/fnv"
 	"log"
 	"regexp"
 	"sync"
@@ -44,7 +42,12 @@ type tuneMetrics struct {
 type cacheShard struct {
 	mu       sync.RWMutex
 	cache    map[string]*cacheEntry
-	lruList  *list.List
+
+	// 自定义 LRU 双向链表头尾指针（零分配优化）
+	head     *cacheEntry
+	tail     *cacheEntry
+	size     int // 当前链表长度
+
 	capacity int
 }
 
@@ -150,8 +153,10 @@ func newShardedToolCacheWithConfig(config ShardedCacheConfig) *ShardedToolCache 
 	for i := uint32(0); i < config.ShardCount; i++ {
 		cache.shards[i] = &cacheShard{
 			cache:    make(map[string]*cacheEntry),
-			lruList:  list.New(),
 			capacity: shardCapacity,
+			head:     nil,
+			tail:     nil,
+			size:     0,
 		}
 	}
 
@@ -185,11 +190,28 @@ func newShardedToolCacheWithConfig(config ShardedCacheConfig) *ShardedToolCache 
 	return cache
 }
 
-// getShard 根据键获取对应的分片
+// FNV-1a hash constants
+const (
+	offset32 = 2166136261
+	prime32  = 16777619
+)
+
+// hashString 计算字符串哈希值（零分配内联优化）
+// 替代 fnv.New32a().Write([]byte(s))，避免 slice 分配
+//
+//go:inline
+func hashString(s string) uint32 {
+	hash := uint32(offset32)
+	for i := 0; i < len(s); i++ {
+		hash ^= uint32(s[i])
+		hash *= prime32
+	}
+	return hash
+}
+
+// getShard 根据键获取对应的分片（零分配优化）
 func (c *ShardedToolCache) getShard(key string) *cacheShard {
-	h := fnv.New32a()
-	h.Write([]byte(key))
-	return c.shards[h.Sum32()&(c.shardCount-1)]
+	return c.shards[hashString(key)&(c.shardCount-1)]
 }
 
 // Get 获取缓存结果
@@ -212,8 +234,8 @@ func (c *ShardedToolCache) Get(ctx context.Context, key string) (*ToolOutput, bo
 		return nil, false
 	}
 
-	// 移到 LRU 链表前面
-	shard.lruList.MoveToFront(entry.element)
+	// 移到 LRU 链表头部（自定义链表操作）
+	c.moveToHead(shard, entry)
 	c.stats.recordHit()
 
 	return entry.output, true
@@ -232,12 +254,12 @@ func (c *ShardedToolCache) Set(ctx context.Context, key string, output *ToolOutp
 		entry.output = output
 		entry.expireTime = time.Now().Add(ttl)
 		entry.toolName = toolName
-		shard.lruList.MoveToFront(entry.element)
+		c.moveToHead(shard, entry)
 		return nil
 	}
 
-	// 检查容量，如果满了则淘汰最久未使用的
-	if shard.lruList.Len() >= shard.capacity {
+	// 检查容量，如果满了则淘汰最久未使用的（尾部）
+	if shard.size >= shard.capacity {
 		c.evictOldestFromShard(shard)
 	}
 
@@ -250,7 +272,7 @@ func (c *ShardedToolCache) Set(ctx context.Context, key string, output *ToolOutp
 		version:    0,
 	}
 
-	entry.element = shard.lruList.PushFront(entry)
+	c.addToHead(shard, entry)
 	shard.cache[key] = entry
 
 	return nil
@@ -275,7 +297,9 @@ func (c *ShardedToolCache) Clear() error {
 	for _, shard := range c.shards {
 		shard.mu.Lock()
 		shard.cache = make(map[string]*cacheEntry)
-		shard.lruList.Init()
+		shard.head = nil
+		shard.tail = nil
+		shard.size = 0
 		shard.mu.Unlock()
 	}
 	return nil
@@ -320,8 +344,7 @@ func (c *ShardedToolCache) InvalidateByPattern(ctx context.Context, pattern stri
 
 		for _, key := range keysToRemove {
 			if entry, exists := shard.cache[key]; exists {
-				shard.lruList.Remove(entry.element)
-				delete(shard.cache, key)
+				c.removeEntryFromShard(shard, entry)
 				totalCount++
 			}
 		}
@@ -355,8 +378,7 @@ func (c *ShardedToolCache) InvalidateByTool(ctx context.Context, toolName string
 
 		for _, key := range keysToRemove {
 			if entry, exists := shard.cache[key]; exists {
-				shard.lruList.Remove(entry.element)
-				delete(shard.cache, key)
+				c.removeEntryFromShard(shard, entry)
 				totalCount++
 			}
 		}
@@ -396,8 +418,7 @@ func (c *ShardedToolCache) invalidateDependents(toolName string) int {
 
 			for _, key := range keysToRemove {
 				if entry, exists := shard.cache[key]; exists {
-					shard.lruList.Remove(entry.element)
-					delete(shard.cache, key)
+					c.removeEntryFromShard(shard, entry)
 					totalCount++
 				}
 			}
@@ -478,18 +499,81 @@ func (c *ShardedToolCache) Close() {
 	c.cleanupDone.Wait()
 }
 
-// removeEntryFromShard 从分片中移除条目（内部方法，不加锁）
-func (c *ShardedToolCache) removeEntryFromShard(shard *cacheShard, entry *cacheEntry) {
-	shard.lruList.Remove(entry.element)
-	delete(shard.cache, entry.key)
+// --- 自定义 LRU 链表操作辅助函数（零分配优化）---
+
+// addToHead 将节点添加到头部
+func (c *ShardedToolCache) addToHead(shard *cacheShard, entry *cacheEntry) {
+	if shard.head == nil {
+		// 空链表
+		shard.head = entry
+		shard.tail = entry
+		entry.prev = nil
+		entry.next = nil
+	} else {
+		// 插入到头部
+		entry.next = shard.head
+		entry.prev = nil
+		shard.head.prev = entry
+		shard.head = entry
+	}
+	shard.size++
 }
 
-// evictOldestFromShard 从分片中淘汰最久未使用的条目
+// moveToHead 将现有节点移动到头部（LRU 访问更新）
+func (c *ShardedToolCache) moveToHead(shard *cacheShard, entry *cacheEntry) {
+	if shard.head == entry {
+		return // 已经在头部
+	}
+
+	// 从当前位置移除
+	if entry.prev != nil {
+		entry.prev.next = entry.next
+	}
+	if entry.next != nil {
+		entry.next.prev = entry.prev
+	}
+	if shard.tail == entry {
+		shard.tail = entry.prev
+	}
+
+	// 添加到头部
+	entry.next = shard.head
+	entry.prev = nil
+	if shard.head != nil {
+		shard.head.prev = entry
+	}
+	shard.head = entry
+	if shard.tail == nil {
+		shard.tail = entry
+	}
+}
+
+// removeEntryFromShard 从分片中移除条目（内部方法，不加锁）
+func (c *ShardedToolCache) removeEntryFromShard(shard *cacheShard, entry *cacheEntry) {
+	// 从双向链表移除
+	if entry.prev != nil {
+		entry.prev.next = entry.next
+	} else {
+		shard.head = entry.next
+	}
+
+	if entry.next != nil {
+		entry.next.prev = entry.prev
+	} else {
+		shard.tail = entry.prev
+	}
+
+	entry.prev = nil
+	entry.next = nil
+
+	delete(shard.cache, entry.key)
+	shard.size--
+}
+
+// evictOldestFromShard 从分片中淘汰最久未使用的条目（尾部）
 func (c *ShardedToolCache) evictOldestFromShard(shard *cacheShard) {
-	oldest := shard.lruList.Back()
-	if oldest != nil {
-		entry := oldest.Value.(*cacheEntry)
-		c.removeEntryFromShard(shard, entry)
+	if shard.tail != nil {
+		c.removeEntryFromShard(shard, shard.tail)
 		c.stats.recordEvict()
 	}
 }
@@ -536,8 +620,7 @@ func (c *ShardedToolCache) performCleanup() {
 				s.mu.Lock()
 				for _, key := range expiredKeys {
 					if entry, exists := s.cache[key]; exists && now.After(entry.expireTime) {
-						s.lruList.Remove(entry.element)
-						delete(s.cache, key)
+						c.removeEntryFromShard(s, entry)
 					}
 				}
 				s.mu.Unlock()
@@ -657,8 +740,7 @@ func (c *ShardedToolCache) performCleanupWithCount() int {
 				s.mu.Lock()
 				for _, key := range expiredKeys {
 					if entry, exists := s.cache[key]; exists && now.After(entry.expireTime) {
-						s.lruList.Remove(entry.element)
-						delete(s.cache, key)
+						c.removeEntryFromShard(s, entry)
 						cleanedCounts[idx]++
 					}
 				}

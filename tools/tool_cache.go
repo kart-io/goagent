@@ -84,8 +84,12 @@ type cacheEntry struct {
 	toolName   string // 工具名称，用于按工具失效
 	output     *ToolOutput
 	expireTime time.Time
-	element    *list.Element
-	version    int64 // 缓存版本，用于检测失效
+	element    *list.Element // 用于 MemoryToolCache 的 LRU 链表
+	version    int64         // 缓存版本，用于检测失效
+
+	// 自定义双向链表指针，用于 ShardedToolCache（零分配优化）
+	prev *cacheEntry
+	next *cacheEntry
 }
 
 // CacheStats 缓存统计信息

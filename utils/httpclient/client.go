@@ -88,10 +88,13 @@ func NewClient(config *Config) *Client {
 	}
 
 	// 连接池配置
-	transport := &http.Transport{
-		DisableKeepAlives:   config.DisableKeepAlive,
-		MaxIdleConnsPerHost: config.MaxIdleConnsPerHost,
-	}
+	// 优化：基于 DefaultTransport 进行修改，保留 Proxy、DialContext 等默认行为
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+
+	// 应用自定义配置
+	transport.DisableKeepAlives = config.DisableKeepAlive
+	transport.MaxIdleConnsPerHost = config.MaxIdleConnsPerHost
+
 	restyClient.SetTransport(transport)
 
 	return &Client{

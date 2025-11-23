@@ -293,10 +293,33 @@ func TestMemoryCommunicator_MessageTypes(t *testing.T) {
 		t.Run(string(msgType), func(t *testing.T) {
 			// 每个子测试使用不同的接收者,避免 channel 满
 			receiver := fmt.Sprintf("agent%d", i+2)
+
+			// 启动接收者 goroutine，避免 channel 阻塞
+			receiverComm := NewMemoryCommunicatorWithStore(receiver, store)
+			done := make(chan struct{})
+			var receivedMsg *AgentMessage
+			var receiveErr error
+
+			go func() {
+				receivedMsg, receiveErr = receiverComm.Receive(ctx)
+				close(done)
+			}()
+
+			// 发送消息
 			msg := NewAgentMessage("agent1", receiver, msgType, "test")
 			err := comm.Send(ctx, receiver, msg)
 			assert.NoError(t, err)
 			assert.Equal(t, msgType, msg.Type)
+
+			// 等待接收完成
+			<-done
+			assert.NoError(t, receiveErr)
+			assert.NotNil(t, receivedMsg)
+			if receivedMsg != nil {
+				assert.Equal(t, msgType, receivedMsg.Type)
+				assert.Equal(t, "agent1", receivedMsg.From)
+				assert.Equal(t, receiver, receivedMsg.To)
+			}
 		})
 	}
 }
