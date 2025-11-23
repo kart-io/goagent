@@ -20,6 +20,7 @@ import (
 // OpenAIProvider implements LLM interface for OpenAI
 type OpenAIProvider struct {
 	*BaseProvider
+	*ProviderCapabilities
 	client *openai.Client
 }
 
@@ -50,16 +51,19 @@ func NewOpenAIWithOptions(opts ...agentllm.ClientOption) (*OpenAIProvider, error
 
 	provider := &OpenAIProvider{
 		BaseProvider: base,
-		client:       openai.NewClientWithConfig(clientConfig),
+		ProviderCapabilities: NewProviderCapabilities(
+			agentllm.CapabilityCompletion,
+			agentllm.CapabilityChat,
+			agentllm.CapabilityStreaming,
+			agentllm.CapabilityToolCalling,
+			agentllm.CapabilityEmbedding,
+			agentllm.CapabilityVision,
+			agentllm.CapabilityJSON,
+		),
+		client: openai.NewClientWithConfig(clientConfig),
 	}
 
 	return provider, nil
-}
-
-// NewOpenAI creates a new OpenAI provider (backward compatible)
-func NewOpenAI(config *agentllm.LLMOptions) (*OpenAIProvider, error) {
-	// 将现有配置转换为 Options，使用 Options 模式创建 Provider
-	return NewOpenAIWithOptions(ConfigToOptions(config)...)
 }
 
 // Complete implements basic text completion
@@ -448,7 +452,7 @@ type OpenAIStreamingProvider struct {
 
 // NewOpenAIStreaming creates a streaming-optimized provider
 func NewOpenAIStreaming(config *agentllm.LLMOptions) (*OpenAIStreamingProvider, error) {
-	base, err := NewOpenAI(config)
+	base, err := NewOpenAIWithOptions(ConfigToOptions(config)...)
 	if err != nil {
 		return nil, err
 	}

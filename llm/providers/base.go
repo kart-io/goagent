@@ -47,7 +47,8 @@ func (b *BaseProvider) ApplyProviderDefaults(provider constants.Provider, defaul
 	b.EnsureModel(envModel, defaultModel)
 }
 
-// ConfigToOptions converts LLMOptions to a list of ClientOptions (for backward compatibility).
+// ConfigToOptions converts LLMOptions to a list of ClientOptions.
+// This is useful for factory methods that need to accept LLMOptions.
 func ConfigToOptions(config *agentllm.LLMOptions) []agentllm.ClientOption {
 	if config == nil {
 		return nil
@@ -321,6 +322,49 @@ type HTTPError struct {
 	Headers    map[string]string
 }
 
+// ProviderCapabilities holds the capabilities supported by a provider.
+// Embed this in providers to easily implement the CapabilityChecker interface.
+type ProviderCapabilities struct {
+	caps map[agentllm.Capability]bool
+}
+
+// NewProviderCapabilities creates a new ProviderCapabilities with the given capabilities.
+func NewProviderCapabilities(capabilities ...agentllm.Capability) *ProviderCapabilities {
+	caps := make(map[agentllm.Capability]bool)
+	for _, cap := range capabilities {
+		caps[cap] = true
+	}
+	return &ProviderCapabilities{caps: caps}
+}
+
+// HasCapability checks if the provider supports the given capability.
+func (p *ProviderCapabilities) HasCapability(cap agentllm.Capability) bool {
+	if p.caps == nil {
+		return false
+	}
+	return p.caps[cap]
+}
+
+// Capabilities returns all supported capabilities.
+func (p *ProviderCapabilities) Capabilities() []agentllm.Capability {
+	if p.caps == nil {
+		return nil
+	}
+	result := make([]agentllm.Capability, 0, len(p.caps))
+	for cap := range p.caps {
+		result = append(result, cap)
+	}
+	return result
+}
+
+// AddCapability adds a capability to the provider.
+func (p *ProviderCapabilities) AddCapability(cap agentllm.Capability) {
+	if p.caps == nil {
+		p.caps = make(map[agentllm.Capability]bool)
+	}
+	p.caps[cap] = true
+}
+
 // MapHTTPError maps an HTTP error to an appropriate AgentError based on status code.
 // This provides consistent error handling across all providers.
 func MapHTTPError(err HTTPError, providerName, model string, parseError func(body string) string) error {
@@ -377,4 +421,168 @@ func RestyResponseToHTTPError(resp *resty.Response) HTTPError {
 		Body:       resp.String(),
 		Headers:    headers,
 	}
+}
+
+// ============================================================================
+// Message Conversion Utilities
+// ============================================================================
+
+// MessageConverter is a function type that converts an agentllm.Message to a provider-specific message type.
+// This enables generic message conversion across different providers.
+type MessageConverter[T any] func(msg agentllm.Message) T
+
+// ConvertMessages converts a slice of agentllm.Message to a slice of provider-specific messages
+// using the provided converter function. This reduces boilerplate code across providers.
+//
+// Example usage:
+//
+//	messages := ConvertMessages(req.Messages, func(msg agentllm.Message) OpenAIMessage {
+//	    return OpenAIMessage{Role: msg.Role, Content: msg.Content, Name: msg.Name}
+//	})
+func ConvertMessages[T any](messages []agentllm.Message, converter MessageConverter[T]) []T {
+	result := make([]T, len(messages))
+	for i, msg := range messages {
+		result[i] = converter(msg)
+	}
+	return result
+}
+
+// StandardMessage represents a common message format used by OpenAI-compatible APIs.
+// This struct can be used directly by providers that follow the OpenAI message format.
+type StandardMessage struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+	Name    string `json:"name,omitempty"`
+}
+
+// ToStandardMessage converts an agentllm.Message to a StandardMessage.
+// Use this for providers that follow OpenAI-compatible message formats.
+func ToStandardMessage(msg agentllm.Message) StandardMessage {
+	return StandardMessage{
+		Role:    msg.Role,
+		Content: msg.Content,
+		Name:    msg.Name,
+	}
+}
+
+// ConvertToStandardMessages is a convenience function that converts agentllm.Message slice
+// to StandardMessage slice. Useful for OpenAI-compatible providers.
+func ConvertToStandardMessages(messages []agentllm.Message) []StandardMessage {
+	return ConvertMessages(messages, ToStandardMessage)
+}
+
+// RoleMapper is a function type for mapping standard roles to provider-specific roles.
+type RoleMapper func(role string) string
+
+// DefaultRoleMapper returns the role unchanged (for OpenAI-compatible providers).
+func DefaultRoleMapper(role string) string {
+	return role
+}
+
+// ConvertMessagesWithRoleMapping converts messages with custom role mapping.
+// This is useful for providers like Cohere that use different role names.
+//
+// Example usage:
+//
+//	messages := ConvertMessagesWithRoleMapping(req.Messages, func(role string) string {
+//	    switch role {
+//	    case "user": return "USER"
+//	    case "assistant": return "CHATBOT"
+//	    case "system": return "SYSTEM"
+//	    default: return "USER"
+//	    }
+//	}, func(msg agentllm.Message, mappedRole string) CohereMessage {
+//	    return CohereMessage{Role: mappedRole, Message: msg.Content}
+//	})
+func ConvertMessagesWithRoleMapping[T any](
+	messages []agentllm.Message,
+	roleMapper RoleMapper,
+	converter func(msg agentllm.Message, mappedRole string) T,
+) []T {
+	result := make([]T, len(messages))
+	for i, msg := range messages {
+		mappedRole := roleMapper(msg.Role)
+		result[i] = converter(msg, mappedRole)
+	}
+	return result
+}
+
+// MessagesToPrompt concatenates messages into a single prompt string.
+// This is useful for providers like HuggingFace that expect a single input string.
+// The format function determines how each message is formatted.
+//
+// Example usage:
+//
+//	prompt := MessagesToPrompt(messages, func(msg agentllm.Message) string {
+//	    return fmt.Sprintf("%s: %s\n", strings.Title(msg.Role), msg.Content)
+//	})
+func MessagesToPrompt(messages []agentllm.Message, format func(msg agentllm.Message) string) string {
+	var result string
+	for _, msg := range messages {
+		result += format(msg)
+	}
+	return result
+}
+
+// DefaultPromptFormatter formats a message in the standard "Role: Content" format.
+func DefaultPromptFormatter(msg agentllm.Message) string {
+	roleNames := map[string]string{
+		"system":    "System",
+		"user":      "User",
+		"assistant": "Assistant",
+	}
+	roleName := roleNames[msg.Role]
+	if roleName == "" {
+		roleName = msg.Role
+	}
+	return fmt.Sprintf("%s: %s\n", roleName, msg.Content)
+}
+
+// ============================================================================
+// Convenience Functions for LLMOptions-based creation
+// ============================================================================
+
+// NewOpenAI creates an OpenAI provider from LLMOptions.
+func NewOpenAI(config *agentllm.LLMOptions) (*OpenAIProvider, error) {
+	return NewOpenAIWithOptions(ConfigToOptions(config)...)
+}
+
+// NewDeepSeek creates a DeepSeek provider from LLMOptions.
+func NewDeepSeek(config *agentllm.LLMOptions) (*DeepSeekProvider, error) {
+	return NewDeepSeekWithOptions(ConfigToOptions(config)...)
+}
+
+// NewAnthropic creates an Anthropic provider from LLMOptions.
+func NewAnthropic(config *agentllm.LLMOptions) (*AnthropicProvider, error) {
+	return NewAnthropicWithOptions(ConfigToOptions(config)...)
+}
+
+// NewCohere creates a Cohere provider from LLMOptions.
+func NewCohere(config *agentllm.LLMOptions) (*CohereProvider, error) {
+	return NewCohereWithOptions(ConfigToOptions(config)...)
+}
+
+// NewHuggingFace creates a HuggingFace provider from LLMOptions.
+func NewHuggingFace(config *agentllm.LLMOptions) (*HuggingFaceProvider, error) {
+	return NewHuggingFaceWithOptions(ConfigToOptions(config)...)
+}
+
+// NewGemini creates a Gemini provider from LLMOptions.
+func NewGemini(config *agentllm.LLMOptions) (*GeminiProvider, error) {
+	return NewGeminiWithOptions(ConfigToOptions(config)...)
+}
+
+// NewOllama creates an Ollama provider from LLMOptions.
+func NewOllama(config *agentllm.LLMOptions) (*OllamaClient, error) {
+	return NewOllamaWithOptions(ConfigToOptions(config)...)
+}
+
+// NewKimi creates a Kimi provider from LLMOptions.
+func NewKimi(config *agentllm.LLMOptions) (*KimiClient, error) {
+	return NewKimiWithOptions(ConfigToOptions(config)...)
+}
+
+// NewSiliconFlow creates a SiliconFlow provider from LLMOptions.
+func NewSiliconFlow(config *agentllm.LLMOptions) (*SiliconFlowClient, error) {
+	return NewSiliconFlowWithOptions(ConfigToOptions(config)...)
 }

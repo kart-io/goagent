@@ -94,6 +94,7 @@ func DefaultLLMOptions() *LLMOptions {
 		MaxTokens:   2000,
 		Temperature: 0.7,
 		Timeout:     60,
+		TopP:        1.0,
 	}
 }
 

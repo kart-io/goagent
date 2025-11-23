@@ -81,12 +81,6 @@ func NewGeminiWithOptions(opts ...agentllm.ClientOption) (*GeminiProvider, error
 	return provider, nil
 }
 
-// NewGemini creates a new Gemini provider (backward compatible)
-func NewGemini(config *agentllm.LLMOptions) (*GeminiProvider, error) {
-	// 将现有配置转换为 Options，使用 Options 模式创建 Provider
-	return NewGeminiWithOptions(ConfigToOptions(config)...)
-}
-
 // Complete implements basic text completion
 func (p *GeminiProvider) Complete(ctx context.Context, req *agentllm.CompletionRequest) (*agentllm.CompletionResponse, error) {
 	// Create a new chat session
@@ -459,7 +453,7 @@ type GeminiStreamingProvider struct {
 
 // NewGeminiStreaming creates a streaming-optimized provider
 func NewGeminiStreaming(config *agentllm.LLMOptions) (*GeminiStreamingProvider, error) {
-	base, err := NewGemini(config)
+	base, err := NewGeminiWithOptions(ConfigToOptions(config)...)
 	if err != nil {
 		return nil, err
 	}

@@ -13,7 +13,7 @@ import (
 func TestDefaultConfig(t *testing.T) {
 	config := DefaultClientConfig()
 
-	assert.Equal(t, constants.ProviderOpenAI, config.Provider)
+	assert.Equal(t, constants.ProviderCustom, config.Provider)
 	assert.Equal(t, 2000, config.MaxTokens)
 	assert.Equal(t, 0.7, config.Temperature)
 	assert.Equal(t, 60, config.Timeout)

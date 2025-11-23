@@ -61,12 +61,6 @@ func NewSiliconFlowWithOptions(opts ...agentllm.ClientOption) (*SiliconFlowClien
 	}, nil
 }
 
-// NewSiliconFlow 创建 SiliconFlow provider (向后兼容)
-func NewSiliconFlow(config *agentllm.LLMOptions) (*SiliconFlowClient, error) {
-	// 将现有配置转换为 Options，使用 Options 模式创建 Provider
-	return NewSiliconFlowWithOptions(ConfigToOptions(config)...)
-}
-
 // siliconFlowRequest SiliconFlow 请求格式
 type siliconFlowRequest struct {
 	Model       string               `json:"model"`
