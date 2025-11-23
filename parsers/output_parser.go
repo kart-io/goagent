@@ -122,27 +122,31 @@ func (p *JSONOutputParser[T]) Parse(ctx context.Context, text string) (T, error)
 // extractJSON 从文本中提取 JSON
 func (p *JSONOutputParser[T]) extractJSON(text string) string {
 	// 尝试提取 markdown 代码块中的 JSON
-	if strings.Contains(text, "```json") {
-		start := strings.Index(text, "```json")
-		if start != -1 {
-			start += 7 // len("```json")
-			end := strings.Index(text[start:], "```")
-			if end != -1 {
-				return strings.TrimSpace(text[start : start+end])
+	// 优化：直接使用 Index，避免 Contains 的重复查找
+	if start := strings.Index(text, "```json"); start != -1 {
+		start += 7 // len("```json")
+		if end := strings.Index(text[start:], "```"); end != -1 {
+			// 优化：使用 strings.Clone 避免保留大字符串引用
+			extracted := text[start : start+end]
+			trimmed := strings.TrimSpace(extracted)
+			// 如果提取的 JSON 小于原文本的 10%，使用 Clone 释放原字符串
+			if len(text) > 1000 && len(trimmed) < len(text)/10 {
+				return strings.Clone(trimmed)
 			}
+			return trimmed
 		}
 	}
 
 	// 尝试提取纯 JSON（查找 { } 或 [ ]）
-	text = strings.TrimSpace(text)
-
+	// 优化：延迟 TrimSpace，只在需要时执行
 	// 找到第一个 { 或 [
 	startIdx := -1
-	startChar := ""
-	for i, ch := range text {
+	startChar := byte(0)
+	for i := 0; i < len(text); i++ {
+		ch := text[i]
 		if ch == '{' || ch == '[' {
 			startIdx = i
-			startChar = string(ch)
+			startChar = ch
 			break
 		}
 	}
@@ -152,31 +156,47 @@ func (p *JSONOutputParser[T]) extractJSON(text string) string {
 	}
 
 	// 找到对应的结束符
-	endChar := "}"
-	if startChar == "[" {
-		endChar = "]"
+	endChar := byte('}')
+	if startChar == '[' {
+		endChar = ']'
 	}
 
 	depth := 0
 	for i := startIdx; i < len(text); i++ {
-		ch := string(text[i])
+		ch := text[i]
 		switch ch {
 		case startChar:
 			depth++
 		case endChar:
 			depth--
 			if depth == 0 {
-				return text[startIdx : i+1]
+				extracted := text[startIdx : i+1]
+				// 优化：对于大文本中的小 JSON，使用 Clone 释放原字符串内存
+				if len(text) > 1000 && len(extracted) < len(text)/10 {
+					return strings.Clone(extracted)
+				}
+				return extracted
 			}
 		}
 	}
 
 	// 如果不是严格模式，返回从起始位置到末尾
 	if !p.strict {
-		return text[startIdx:]
+		extracted := text[startIdx:]
+		// 优化：对于大文本中的小片段，使用 Clone
+		if len(text) > 1000 && len(extracted) < len(text)/10 {
+			return strings.Clone(extracted)
+		}
+		return extracted
 	}
 
 	return ""
+}
+
+// extractJSONOptimized 是优化后的 extractJSON 实现（用于基准测试对比）
+// 这个方法仅用于性能测试，实际使用 extractJSON
+func (p *JSONOutputParser[T]) extractJSONOptimized(text string) string {
+	return p.extractJSON(text)
 }
 
 // GetFormatInstructions 获取格式化指令
@@ -184,11 +204,12 @@ func (p *JSONOutputParser[T]) GetFormatInstructions() string {
 	var zero T
 	t := reflect.TypeOf(zero)
 
-	instructions := "You must format your response as a JSON object"
+	var builder strings.Builder
+	builder.WriteString("You must format your response as a JSON object")
 
 	// 如果是结构体，生成字段说明
 	if t.Kind() == reflect.Struct {
-		instructions += " with the following fields:\n\n"
+		builder.WriteString(" with the following fields:\n\n")
 		for i := 0; i < t.NumField(); i++ {
 			field := t.Field(i)
 			jsonTag := field.Tag.Get("json")
@@ -199,17 +220,19 @@ func (p *JSONOutputParser[T]) GetFormatInstructions() string {
 				jsonTag = strings.Split(jsonTag, ",")[0]
 			}
 
-			instructions += fmt.Sprintf("- `%s`: (%s) %s\n",
+			builder.WriteString(fmt.Sprintf("- `%s`: (%s) %s\n",
 				jsonTag,
 				field.Type.String(),
 				field.Tag.Get("description"),
-			)
+			))
 		}
 	}
 
-	instructions += "\nExample format:\n```json\n" + p.generateExample() + "\n```"
+	builder.WriteString("\nExample format:\n```json\n")
+	builder.WriteString(p.generateExample())
+	builder.WriteString("\n```")
 
-	return instructions
+	return builder.String()
 }
 
 // generateExample 生成示例 JSON
@@ -313,22 +336,23 @@ func (p *StructuredOutputParser[T]) extractField(text, fieldName string) string 
 
 // GetFormatInstructions 获取格式化指令
 func (p *StructuredOutputParser[T]) GetFormatInstructions() string {
-	instructions := "You must format your response with the following fields:\n\n"
+	var builder strings.Builder
+	builder.WriteString("You must format your response with the following fields:\n\n")
 
 	for fieldName, schema := range p.schema {
 		required := ""
 		if schema.Required {
 			required = " (REQUIRED)"
 		}
-		instructions += fmt.Sprintf("**%s**%s: %s\n", fieldName, required, schema.Description)
+		builder.WriteString(fmt.Sprintf("**%s**%s: %s\n", fieldName, required, schema.Description))
 	}
 
-	instructions += "\nExample format:\n"
+	builder.WriteString("\nExample format:\n")
 	for fieldName := range p.schema {
-		instructions += fmt.Sprintf("%s: <value>\n", fieldName)
+		builder.WriteString(fmt.Sprintf("%s: <value>\n", fieldName))
 	}
 
-	return instructions
+	return builder.String()
 }
 
 // ListOutputParser 列表输出解析器

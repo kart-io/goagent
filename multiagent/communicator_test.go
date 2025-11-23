@@ -2,6 +2,7 @@ package multiagent
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -171,8 +172,13 @@ func TestMemoryCommunicator_Unsubscribe(t *testing.T) {
 }
 
 func TestMemoryCommunicator_Close(t *testing.T) {
-	comm := NewMemoryCommunicator("agent1")
-	ctx := context.Background()
+	// 创建独立的 store 避免测试污染
+	store := NewInMemoryChannelStore()
+	defer store.Close()
+
+	comm := NewMemoryCommunicatorWithStore("agent1", store)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
 	// Create some channels and subscriptions
 	comm.Send(ctx, "agent2", NewAgentMessage("agent1", "agent2", MessageTypeRequest, "test"))
@@ -265,8 +271,13 @@ func TestMemoryCommunicator_ContextCancellation(t *testing.T) {
 }
 
 func TestMemoryCommunicator_MessageTypes(t *testing.T) {
-	comm := NewMemoryCommunicator("agent1")
-	ctx := context.Background()
+	// 创建独立的 store 避免测试污染
+	store := NewInMemoryChannelStore()
+	defer store.Close()
+
+	comm := NewMemoryCommunicatorWithStore("agent1", store)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
 	messageTypes := []MessageType{
 		MessageTypeRequest,
@@ -278,10 +289,12 @@ func TestMemoryCommunicator_MessageTypes(t *testing.T) {
 		MessageTypeVote,
 	}
 
-	for _, msgType := range messageTypes {
+	for i, msgType := range messageTypes {
 		t.Run(string(msgType), func(t *testing.T) {
-			msg := NewAgentMessage("agent1", "agent2", msgType, "test")
-			err := comm.Send(ctx, "agent2", msg)
+			// 每个子测试使用不同的接收者,避免 channel 满
+			receiver := fmt.Sprintf("agent%d", i+2)
+			msg := NewAgentMessage("agent1", receiver, msgType, "test")
+			err := comm.Send(ctx, receiver, msg)
 			assert.NoError(t, err)
 			assert.Equal(t, msgType, msg.Type)
 		})
