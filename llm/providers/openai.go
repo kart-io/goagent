@@ -87,11 +87,11 @@ func (p *OpenAIProvider) Complete(ctx context.Context, req *agentllm.CompletionR
 		TopP:        float32(req.TopP),
 	})
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError(string(constants.ProviderOpenAI), model, err)
+		return nil, agentErrors.NewLLMRequestError(p.ProviderName(), model, err)
 	}
 
 	if len(resp.Choices) == 0 {
-		return nil, agentErrors.NewLLMResponseError(string(constants.ProviderOpenAI), model, "no choices in response")
+		return nil, agentErrors.NewLLMResponseError(p.ProviderName(), model, "no choices in response")
 	}
 
 	return &agentllm.CompletionResponse{
@@ -99,7 +99,7 @@ func (p *OpenAIProvider) Complete(ctx context.Context, req *agentllm.CompletionR
 		Model:        resp.Model,
 		TokensUsed:   resp.Usage.TotalTokens,
 		FinishReason: string(resp.Choices[0].FinishReason),
-		Provider:     string(constants.ProviderOpenAI),
+		Provider:     p.ProviderName(),
 		Usage: &interfaces.TokenUsage{
 			PromptTokens:     resp.Usage.PromptTokens,
 			CompletionTokens: resp.Usage.CompletionTokens,
@@ -133,7 +133,7 @@ func (p *OpenAIProvider) Stream(ctx context.Context, prompt string) (<-chan stri
 		Stream:      true,
 	})
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError(string(constants.ProviderOpenAI), model, err).
+		return nil, agentErrors.NewLLMRequestError(p.ProviderName(), model, err).
 			WithContext("stream", true)
 	}
 
@@ -188,12 +188,12 @@ func (p *OpenAIProvider) GenerateWithTools(ctx context.Context, prompt string, t
 		Functions:   functions,
 	})
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError(string(constants.ProviderOpenAI), model, err).
+		return nil, agentErrors.NewLLMRequestError(p.ProviderName(), model, err).
 			WithContext("tool_calling", true)
 	}
 
 	if len(resp.Choices) == 0 {
-		return nil, agentErrors.NewLLMResponseError(string(constants.ProviderOpenAI), model, "no choices in response")
+		return nil, agentErrors.NewLLMResponseError(p.ProviderName(), model, "no choices in response")
 	}
 
 	choice := resp.Choices[0]
@@ -241,7 +241,7 @@ func (p *OpenAIProvider) StreamWithTools(ctx context.Context, prompt string, too
 		Stream:      true,
 	})
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError(string(constants.ProviderOpenAI), model, err).
+		return nil, agentErrors.NewLLMRequestError(p.ProviderName(), model, err).
 			WithContext("stream", true).
 			WithContext("tool_calling", true)
 	}
@@ -360,7 +360,7 @@ func (p *OpenAIProvider) Embed(ctx context.Context, text string) ([]float64, err
 	}
 
 	if len(resp.Data) == 0 {
-		return nil, agentErrors.NewLLMResponseError(string(constants.ProviderOpenAI), string(openai.AdaEmbeddingV2), "no embeddings in response")
+		return nil, agentErrors.NewLLMResponseError(p.ProviderName(), string(openai.AdaEmbeddingV2), "no embeddings in response")
 	}
 
 	// Convert float32 to float64

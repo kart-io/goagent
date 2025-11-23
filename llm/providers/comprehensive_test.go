@@ -901,7 +901,7 @@ func TestOpenAIProvider_ModelNameComprehensive(t *testing.T) {
 	provider, err := NewOpenAI(config)
 	require.NoError(t, err)
 
-	assert.Equal(t, "gpt-4-turbo", provider.ModelName())
+	assert.Equal(t, "gpt-4", provider.ModelName()) // Model name should match config
 }
 
 // TestOpenAIProvider_MaxTokensComprehensive tests max tokens retrieval
@@ -975,6 +975,20 @@ func TestOpenAIProvider_ToolSchemaToJSONComprehensive(t *testing.T) {
 
 // TestGeminiProvider_InitializationComprehensive tests Gemini provider creation
 func TestGeminiProvider_InitializationComprehensive(t *testing.T) {
+	// Save and clear Gemini environment variables
+	savedAPIKey := os.Getenv("GOOGLE_API_KEY")
+	savedGeminiKey := os.Getenv("GEMINI_API_KEY")
+	os.Unsetenv("GOOGLE_API_KEY")
+	os.Unsetenv("GEMINI_API_KEY")
+	defer func() {
+		if savedAPIKey != "" {
+			os.Setenv("GOOGLE_API_KEY", savedAPIKey)
+		}
+		if savedGeminiKey != "" {
+			os.Setenv("GEMINI_API_KEY", savedGeminiKey)
+		}
+	}()
+
 	tests := []struct {
 		name    string
 		config  *llm.LLMOptions
@@ -983,13 +997,8 @@ func TestGeminiProvider_InitializationComprehensive(t *testing.T) {
 		{
 			name: "missing API key",
 			config: &llm.LLMOptions{
-				Provider:    constants.ProviderGemini,
-				APIKey:      "test-key",
-				BaseURL:     "https://api.openai.com/v1",
-				Timeout:     5,
-				Model:       "gpt-4",
-				Temperature: 0.7,
-				MaxTokens:   4000,
+				Provider: constants.ProviderGemini,
+				// No API key provided
 			},
 			wantErr: true,
 		},

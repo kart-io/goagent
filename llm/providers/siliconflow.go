@@ -43,16 +43,14 @@ func NewSiliconFlowWithOptions(opts ...agentllm.ClientOption) (*SiliconFlowClien
 		return nil, err
 	}
 
-	// 获取超时时间
-	timeout := base.GetTimeout()
-
-	// 创建 HTTP 客户端
-	client := httpclient.NewClient(&httpclient.Config{
-		Timeout: timeout,
+	// 使用 BaseProvider 的 NewHTTPClient 方法创建 HTTP 客户端
+	client := base.NewHTTPClient(HTTPClientConfig{
+		Timeout: base.GetTimeout(),
 		Headers: map[string]string{
 			constants.HeaderContentType:   constants.ContentTypeJSON,
 			constants.HeaderAuthorization: constants.AuthBearerPrefix + base.Config.APIKey,
 		},
+		BaseURL: base.Config.BaseURL,
 	})
 
 	return &SiliconFlowClient{
@@ -146,11 +144,11 @@ func (c *SiliconFlowClient) Complete(ctx context.Context, req *agentllm.Completi
 		Post(c.baseURL + "/chat/completions")
 
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError("siliconflow", model, err)
+		return nil, agentErrors.NewLLMRequestError(c.ProviderName(), model, err)
 	}
 
 	if !resp.IsSuccess() {
-		return nil, agentErrors.NewLLMResponseError("siliconflow", model,
+		return nil, agentErrors.NewLLMResponseError(c.ProviderName(), model,
 			fmt.Sprintf("API error (status %d): %s", resp.StatusCode(), resp.String()))
 	}
 
@@ -158,11 +156,11 @@ func (c *SiliconFlowClient) Complete(ctx context.Context, req *agentllm.Completi
 	var sfResp siliconFlowResponse
 	if err := json.NewDecoder(strings.NewReader(resp.String())).Decode(&sfResp); err != nil {
 		return nil, agentErrors.NewParserInvalidJSONError("response body", err).
-			WithContext("provider", "siliconflow")
+			WithContext("provider", c.ProviderName())
 	}
 
 	if len(sfResp.Choices) == 0 {
-		return nil, agentErrors.NewLLMResponseError("siliconflow", model, "no choices in response")
+		return nil, agentErrors.NewLLMResponseError(c.ProviderName(), model, "no choices in response")
 	}
 
 	// 构建响应

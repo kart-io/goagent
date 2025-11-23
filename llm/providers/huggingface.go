@@ -112,13 +112,14 @@ func NewHuggingFaceWithOptions(opts ...agentllm.ClientOption) (*HuggingFaceProvi
 		timeout = constants.HuggingFaceTimeout
 	}
 
-	// Create httpclient
-	client := httpclient.NewClient(&httpclient.Config{
+	// 使用 BaseProvider 的 NewHTTPClient 方法创建 HTTP 客户端
+	client := base.NewHTTPClient(HTTPClientConfig{
 		Timeout: timeout,
 		Headers: map[string]string{
 			constants.HeaderContentType:   constants.ContentTypeJSON,
 			constants.HeaderAuthorization: constants.AuthBearerPrefix + base.Config.APIKey,
 		},
+		BaseURL: base.Config.BaseURL,
 	})
 
 	provider := &HuggingFaceProvider{
