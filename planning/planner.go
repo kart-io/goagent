@@ -432,13 +432,16 @@ func (p *SmartPlanner) buildPlanPrompt(goal string, constraints PlanConstraints,
 		}
 	}
 
-	prompt += "\nProvide a structured plan with:\n"
-	prompt += "1. Overall strategy\n"
-	prompt += "2. Detailed steps with clear descriptions\n"
-	prompt += "3. Dependencies between steps\n"
-	prompt += "4. Expected outcomes for each step\n"
+	// Use strings.Builder for efficient string concatenation
+	var builder strings.Builder
+	builder.WriteString(prompt)
+	builder.WriteString("\nProvide a structured plan with:\n")
+	builder.WriteString("1. Overall strategy\n")
+	builder.WriteString("2. Detailed steps with clear descriptions\n")
+	builder.WriteString("3. Dependencies between steps\n")
+	builder.WriteString("4. Expected outcomes for each step\n")
 
-	return prompt
+	return builder.String()
 }
 
 func (p *SmartPlanner) parsePlan(content string, goal string) *Plan {

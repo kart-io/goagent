@@ -8,6 +8,12 @@ import (
 	"github.com/kart-io/goagent/interfaces"
 )
 
+const (
+	// maxContextMapSize 定义 Context map 的最大合理大小阈值
+	// 超过此值时，直接丢弃并重建 map，避免长期持有大内存
+	maxContextMapSize = 1000
+)
+
 // SimpleAgent is a type alias for the canonical Agent interface.
 //
 // For new code that doesn't need generic typing, use interfaces.Agent directly.
@@ -508,9 +514,13 @@ func (c *ChainableAgent) executeChain(ctx context.Context, input *AgentInput, us
 				if pooledInput.Context == nil {
 					pooledInput.Context = make(map[string]interface{}, len(output.Metadata))
 				} else {
-					// Clear existing context
-					for k := range pooledInput.Context {
-						delete(pooledInput.Context, k)
+					// 清理 Context map
+					// 策略：如果 map 过大，直接丢弃重建，避免长期持有大内存
+					if len(pooledInput.Context) > maxContextMapSize {
+						pooledInput.Context = make(map[string]interface{}, len(output.Metadata))
+					} else {
+						// Go 1.21+ 使用 clear() 内置函数
+						clear(pooledInput.Context)
 					}
 				}
 				for k, v := range output.Metadata {
@@ -534,6 +544,7 @@ func (c *ChainableAgent) executeChain(ctx context.Context, input *AgentInput, us
 }
 
 // resetAgentInput clears an AgentInput for reuse in the pool.
+// 优化：使用 clear() (Go 1.21+) 和大小阈值策略防止内存驻留
 func resetAgentInput(input *AgentInput) {
 	input.Task = ""
 	input.Instruction = ""
@@ -541,8 +552,12 @@ func resetAgentInput(input *AgentInput) {
 	input.Timestamp = time.Time{}
 	input.Options = AgentOptions{}
 
-	// Clear context map instead of setting to nil to allow reuse
-	for k := range input.Context {
-		delete(input.Context, k)
+	// 清理 Context map
+	// 策略：如果 map 过大，直接丢弃重建，避免长期持有大内存
+	if len(input.Context) > maxContextMapSize {
+		input.Context = make(map[string]interface{})
+	} else if input.Context != nil {
+		// Go 1.21+ 使用 clear() 内置函数，编译器高度优化
+		clear(input.Context)
 	}
 }
