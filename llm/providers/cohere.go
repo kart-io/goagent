@@ -100,16 +100,14 @@ func NewCohereWithOptions(opts ...agentllm.ClientOption) (*CohereProvider, error
 		return nil, err
 	}
 
-	// 获取超时时间
-	timeout := base.GetTimeout()
-
-	// Create httpclient
-	client := httpclient.NewClient(&httpclient.Config{
-		Timeout: timeout,
+	// 使用 BaseProvider 的 NewHTTPClient 方法创建 HTTP 客户端
+	client := base.NewHTTPClient(HTTPClientConfig{
+		Timeout: base.GetTimeout(),
 		Headers: map[string]string{
 			constants.HeaderContentType:   constants.ContentTypeJSON,
 			constants.HeaderAuthorization: constants.AuthBearerPrefix + base.Config.APIKey,
 		},
+		BaseURL: base.Config.BaseURL,
 	})
 
 	provider := &CohereProvider{

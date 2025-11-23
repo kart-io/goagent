@@ -43,12 +43,13 @@ func NewOllamaWithOptions(opts ...agentllm.ClientOption) (*OllamaClient, error) 
 		timeout = 120 * time.Second
 	}
 
-	// 创建 HTTP 客户端
-	client := httpclient.NewClient(&httpclient.Config{
+	// 使用 BaseProvider 的 NewHTTPClient 方法创建 HTTP 客户端
+	client := base.NewHTTPClient(HTTPClientConfig{
 		Timeout: timeout,
 		Headers: map[string]string{
 			"Content-Type": "application/json",
 		},
+		BaseURL: base.Config.BaseURL,
 	})
 
 	return &OllamaClient{
@@ -175,11 +176,11 @@ func (c *OllamaClient) Complete(ctx context.Context, req *agentllm.CompletionReq
 		Post(c.baseURL + "/api/generate")
 
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError("ollama", c.GetModel(req.Model), err)
+		return nil, agentErrors.NewLLMRequestError(c.ProviderName(), c.GetModel(req.Model), err)
 	}
 
 	if !resp.IsSuccess() {
-		return nil, agentErrors.NewLLMResponseError("ollama", c.GetModel(req.Model),
+		return nil, agentErrors.NewLLMResponseError(c.ProviderName(), c.GetModel(req.Model),
 			fmt.Sprintf("API error (status %d): %s", resp.StatusCode(), resp.String()))
 	}
 
@@ -187,7 +188,7 @@ func (c *OllamaClient) Complete(ctx context.Context, req *agentllm.CompletionReq
 	var ollamaResp ollamaGenerateResponse
 	if err := json.NewDecoder(strings.NewReader(resp.String())).Decode(&ollamaResp); err != nil {
 		return nil, agentErrors.NewParserInvalidJSONError("response body", err).
-			WithContext("provider", "ollama")
+			WithContext("provider", c.ProviderName())
 	}
 
 	// 构建响应
@@ -239,12 +240,12 @@ func (c *OllamaClient) Chat(ctx context.Context, messages []agentllm.Message) (*
 		Post(c.baseURL + "/api/chat")
 
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError("ollama", model, err).
+		return nil, agentErrors.NewLLMRequestError(c.ProviderName(), model, err).
 			WithContext("operation", "chat")
 	}
 
 	if !resp.IsSuccess() {
-		return nil, agentErrors.NewLLMResponseError("ollama", model,
+		return nil, agentErrors.NewLLMResponseError(c.ProviderName(), model,
 			fmt.Sprintf("chat API error (status %d): %s", resp.StatusCode(), resp.String()))
 	}
 
@@ -252,7 +253,7 @@ func (c *OllamaClient) Chat(ctx context.Context, messages []agentllm.Message) (*
 	var ollamaResp ollamaChatResponse
 	if err := json.NewDecoder(strings.NewReader(resp.String())).Decode(&ollamaResp); err != nil {
 		return nil, agentErrors.NewParserInvalidJSONError("chat response body", err).
-			WithContext("provider", "ollama")
+			WithContext("provider", c.ProviderName())
 	}
 
 	// 构建响应
@@ -299,12 +300,12 @@ func (c *OllamaClient) ListModels() ([]string, error) {
 
 	model := c.GetModel("")
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError("ollama", model, err).
+		return nil, agentErrors.NewLLMRequestError(c.ProviderName(), model, err).
 			WithContext("operation", "list_models")
 	}
 
 	if !resp.IsSuccess() {
-		return nil, agentErrors.NewLLMResponseError("ollama", model,
+		return nil, agentErrors.NewLLMResponseError(c.ProviderName(), model,
 			fmt.Sprintf("list models error (status %d): %s", resp.StatusCode(), resp.String()))
 	}
 
@@ -316,7 +317,7 @@ func (c *OllamaClient) ListModels() ([]string, error) {
 
 	if err := json.NewDecoder(strings.NewReader(resp.String())).Decode(&result); err != nil {
 		return nil, agentErrors.NewParserInvalidJSONError("models list response", err).
-			WithContext("provider", "ollama")
+			WithContext("provider", c.ProviderName())
 	}
 
 	models := make([]string, len(result.Models))
@@ -346,12 +347,12 @@ func (c *OllamaClient) PullModel(modelName string) error {
 		Post(c.baseURL + "/api/pull")
 
 	if err != nil {
-		return agentErrors.NewLLMRequestError("ollama", modelName, err).
+		return agentErrors.NewLLMRequestError(c.ProviderName(), modelName, err).
 			WithContext("operation", "pull_model")
 	}
 
 	if !resp.IsSuccess() {
-		return agentErrors.NewLLMResponseError("ollama", modelName,
+		return agentErrors.NewLLMResponseError(c.ProviderName(), modelName,
 			fmt.Sprintf("pull model error (status %d): %s", resp.StatusCode(), resp.String()))
 	}
 
@@ -364,7 +365,7 @@ func (c *OllamaClient) PullModel(modelName string) error {
 				break
 			}
 			return agentErrors.NewParserInvalidJSONError("pull model response stream", err).
-				WithContext("provider", "ollama")
+				WithContext("provider", c.ProviderName())
 		}
 		// 可以在这里添加进度显示逻辑
 	}
