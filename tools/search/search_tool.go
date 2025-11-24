@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
 
@@ -294,15 +295,10 @@ func deduplicateResults(results []SearchResult) []SearchResult {
 	return unique
 }
 
-// sortResultsByScore 按分数排序结果
+// sortResultsByScore sorts results by score in descending order using efficient sort.Slice
 func sortResultsByScore(results []SearchResult) []SearchResult {
-	// 简单的冒泡排序（实际项目中应使用 sort.Slice）
-	for i := 0; i < len(results); i++ {
-		for j := i + 1; j < len(results); j++ {
-			if results[j].Score > results[i].Score {
-				results[i], results[j] = results[j], results[i]
-			}
-		}
-	}
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].Score > results[j].Score
+	})
 	return results
 }

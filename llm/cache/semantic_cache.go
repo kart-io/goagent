@@ -12,6 +12,9 @@ import (
 	"time"
 )
 
+// 预编译正则表达式，避免每次调用都重新编译
+var spaceRegex = regexp.MustCompile(`\s+`)
+
 // MemorySemanticCache implements SemanticCache with in-memory storage
 type MemorySemanticCache struct {
 	config   *SemanticCacheConfig
@@ -352,8 +355,7 @@ func normalizePrompt(prompt string) string {
 	// Convert to lowercase
 	normalized := strings.ToLower(prompt)
 
-	// Remove extra whitespace
-	spaceRegex := regexp.MustCompile(`\s+`)
+	// Remove extra whitespace (使用预编译的正则表达式)
 	normalized = spaceRegex.ReplaceAllString(normalized, " ")
 
 	// Trim

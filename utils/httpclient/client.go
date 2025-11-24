@@ -89,7 +89,21 @@ func NewClient(config *Config) *Client {
 
 	// 连接池配置
 	// 优化：基于 DefaultTransport 进行修改，保留 Proxy、DialContext 等默认行为
-	transport := http.DefaultTransport.(*http.Transport).Clone()
+	// 安全：进行类型断言检查，防止 DefaultTransport 被替换时 panic
+	var transport *http.Transport
+	if t, ok := http.DefaultTransport.(*http.Transport); ok {
+		transport = t.Clone()
+	} else {
+		// 回退机制：如果 DefaultTransport 被替换为非 *http.Transport 类型，创建新的标准 Transport
+		transport = &http.Transport{
+			Proxy:                 http.ProxyFromEnvironment,
+			ForceAttemptHTTP2:     true,
+			MaxIdleConns:          100,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+		}
+	}
 
 	// 应用自定义配置
 	transport.DisableKeepAlives = config.DisableKeepAlive

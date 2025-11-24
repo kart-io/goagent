@@ -187,6 +187,20 @@ func (a *StreamingLLMAgent) processStreamAsync(ctx context.Context, input *core.
 	text := response.Content
 	totalChunks := (len(text) + a.config.ChunkSize - 1) / a.config.ChunkSize
 
+	// 预创建定时器以避免热循环中的定时器泄漏
+	var delayTimer *time.Timer
+	if a.config.ChunkDelay > 0 {
+		delayTimer = time.NewTimer(a.config.ChunkDelay)
+		defer delayTimer.Stop()
+		// 排空初始定时器，因为我们还没准备好等待
+		if !delayTimer.Stop() {
+			select {
+			case <-delayTimer.C:
+			default:
+			}
+		}
+	}
+
 	for i := 0; i < len(text); i += a.config.ChunkSize {
 		// 检查上下文取消（在每次循环开始时）
 		select {
@@ -236,7 +250,9 @@ func (a *StreamingLLMAgent) processStreamAsync(ctx context.Context, input *core.
 		}
 
 		// 添加延迟（模拟打字效果）
-		if a.config.ChunkDelay > 0 {
+		if a.config.ChunkDelay > 0 && delayTimer != nil {
+			// 重置定时器用于下一次延迟
+			delayTimer.Reset(a.config.ChunkDelay)
 			// 使用 select 使延迟可被中断
 			select {
 			case <-ctx.Done():
@@ -244,7 +260,7 @@ func (a *StreamingLLMAgent) processStreamAsync(ctx context.Context, input *core.
 					fmt.Printf("failed to write context error: %v\n", err)
 				}
 				return
-			case <-time.After(a.config.ChunkDelay):
+			case <-delayTimer.C:
 			}
 		}
 	}

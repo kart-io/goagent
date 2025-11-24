@@ -33,7 +33,8 @@ docs/
 │   ├── PERFORMANCE_TUNING_OPTION_PATTERN.md  # 性能调优指南
 │   └── SHARDED_CACHE_CONFIG_GUIDE.md  # 分片缓存配置
 └── development/            # 开发文档
-    └── TESTING_BEST_PRACTICES.md  # 测试最佳实践
+    ├── TESTING_BEST_PRACTICES.md  # 测试最佳实践
+    └── PANIC_HANDLING.md          # Panic 处理开发指南
 ```
 
 ## 核心文档
@@ -68,6 +69,7 @@ docs/
 | 文档 | 说明 | 适合阅读者 |
 |------|------|-----------|
 | [测试最佳实践](docs/development/TESTING_BEST_PRACTICES.md) | 测试指南和模式 | 贡献者 |
+| [Panic 处理开发指南](docs/development/PANIC_HANDLING.md) | 接口化 panic 处理系统 | 所有开发者 |
 
 ## 核心概念
 
@@ -235,6 +237,7 @@ make test             # 运行测试
 - [性能调优](docs/guides/PERFORMANCE_TUNING_OPTION_PATTERN.md) - 性能优化指南
 - [InvokeFast 优化](docs/guides/INVOKE_FAST_OPTIMIZATION.md) - 热路径优化
 - [缓存优化](docs/guides/SHARDED_CACHE_CONFIG_GUIDE.md) - 分片缓存配置
+- [Panic 处理](docs/development/PANIC_HANDLING.md) - 接口化 panic 处理系统
 - [测试实践](docs/development/TESTING_BEST_PRACTICES.md) - 编写测试
 
 ## 贡献指南
