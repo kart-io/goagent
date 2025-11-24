@@ -18,6 +18,9 @@ import (
 	"github.com/kart-io/goagent/utils/json"
 )
 
+// 预编译正则表达式，避免每次调用都重新编译
+var jsonArrayPattern = regexp.MustCompile(`(?s)\[\s*\{.*\}\s*\]`)
+
 // SupervisorAgent coordinates multiple sub-agents to handle complex tasks
 type SupervisorAgent struct {
 	*core.BaseAgent
@@ -280,9 +283,8 @@ func (s *SupervisorAgent) parseTasks(ctx context.Context, input interface{}) ([]
 
 // parseTaskResponse parses LLM response into tasks
 func (s *SupervisorAgent) parseTaskResponse(response string) ([]Task, error) {
-	// Use regex to find JSON array within the response
-	re := regexp.MustCompile(`(?s)\[\s*\{.*\}\s*\]`)
-	jsonStr := re.FindString(response)
+	// Use pre-compiled regex to find JSON array within the response
+	jsonStr := jsonArrayPattern.FindString(response)
 
 	if jsonStr == "" {
 		// Fallback to simple parsing if no JSON array is found

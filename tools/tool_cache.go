@@ -310,10 +310,15 @@ func (c *MemoryToolCache) InvalidateByPattern(ctx context.Context, pattern strin
 		}
 	}
 
-	// 级联失效依赖的工具
+	// 级联失效依赖的工具，使用 visited 集合防止循环依赖
+	visited := make(map[string]struct{})
+	for toolName := range affectedTools {
+		visited[toolName] = struct{}{}
+	}
+
 	dependentCount := 0
 	for toolName := range affectedTools {
-		count := c.invalidateDependents(toolName)
+		count := c.invalidateDependentsRecursive(toolName, visited)
 		dependentCount += count
 	}
 
@@ -351,8 +356,10 @@ func (c *MemoryToolCache) InvalidateByTool(ctx context.Context, toolName string)
 		}
 	}
 
-	// 级联失效依赖的工具
-	dependentCount := c.invalidateDependents(toolName)
+	// 级联失效依赖的工具，使用 visited 集合防止循环依赖
+	visited := make(map[string]struct{})
+	visited[toolName] = struct{}{}
+	dependentCount := c.invalidateDependentsRecursive(toolName, visited)
 
 	// 记录失效统计
 	totalInvalidated := len(keysToRemove) + dependentCount
@@ -361,11 +368,11 @@ func (c *MemoryToolCache) InvalidateByTool(ctx context.Context, toolName string)
 	return totalInvalidated, nil
 }
 
-// invalidateDependents 失效依赖指定工具的所有工具（内部方法，不加锁）
+// invalidateDependentsRecursive 失效依赖指定工具的所有工具（带循环检测）
 //
 // 递归失效所有直接和间接依赖的工具。
 // 注意：调用者必须持有 mu 锁。
-func (c *MemoryToolCache) invalidateDependents(toolName string) int {
+func (c *MemoryToolCache) invalidateDependentsRecursive(toolName string, visited map[string]struct{}) int {
 	c.depMu.RLock()
 	dependents, exists := c.dependencies[toolName]
 	c.depMu.RUnlock()
@@ -378,6 +385,12 @@ func (c *MemoryToolCache) invalidateDependents(toolName string) int {
 
 	// 失效每个依赖工具
 	for _, dependent := range dependents {
+		// 检测循环依赖：如果该工具已经被访问过，跳过以避免无限递归
+		if _, seen := visited[dependent]; seen {
+			continue
+		}
+		visited[dependent] = struct{}{}
+
 		keysToRemove := make([]string, 0)
 		for key, entry := range c.cache {
 			if entry.toolName == dependent {
@@ -394,8 +407,8 @@ func (c *MemoryToolCache) invalidateDependents(toolName string) int {
 			}
 		}
 
-		// 递归失效依赖的依赖
-		totalCount += c.invalidateDependents(dependent)
+		// 递归失效依赖的依赖，传递 visited 集合
+		totalCount += c.invalidateDependentsRecursive(dependent, visited)
 	}
 
 	return totalCount
