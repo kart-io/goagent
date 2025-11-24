@@ -1,0 +1,171 @@
+# Complex Search Plugin Schema
+# Demonstrates nested types, slices, maps, and pointers
+
+package: search
+name: SearchPlugin
+version: v2.0.0
+description: Advanced search plugin with complex data structures
+
+imports:
+  - time
+
+input:
+  name: SearchRequest
+  kind: struct
+  fields:
+    - name: Query
+      json: query
+      required: true
+      description: The search query string
+      type:
+        name: string
+        kind: primitive
+        type: string
+
+    - name: Filters
+      json: filters
+      required: false
+      description: Search filters as key-value pairs
+      type:
+        name: Filters
+        kind: map
+        key:
+          name: string
+          kind: primitive
+          type: string
+        element:
+          name: string
+          kind: primitive
+          type: string
+
+    - name: Tags
+      json: tags
+      required: false
+      description: List of tags to filter by
+      type:
+        name: Tags
+        kind: slice
+        element:
+          name: string
+          kind: primitive
+          type: string
+
+    - name: Pagination
+      json: pagination
+      required: false
+      description: Pagination parameters
+      type:
+        name: Pagination
+        kind: struct
+        fields:
+          - name: Page
+            json: page
+            required: true
+            type:
+              name: int
+              kind: primitive
+              type: int
+
+          - name: PageSize
+            json: page_size
+            required: true
+            type:
+              name: int
+              kind: primitive
+              type: int
+
+    - name: Timeout
+      json: timeout
+      required: false
+      description: Optional timeout for the search
+      type:
+        name: Duration
+        kind: pointer
+        element:
+          name: Duration
+          kind: primitive
+          type: time.Duration
+
+output:
+  name: SearchResponse
+  kind: struct
+  fields:
+    - name: Results
+      json: results
+      required: true
+      description: List of search results
+      type:
+        name: Results
+        kind: slice
+        element:
+          name: SearchResult
+          kind: struct
+          fields:
+            - name: ID
+              json: id
+              required: true
+              type:
+                name: string
+                kind: primitive
+                type: string
+
+            - name: Title
+              json: title
+              required: true
+              type:
+                name: string
+                kind: primitive
+                type: string
+
+            - name: Score
+              json: score
+              required: true
+              type:
+                name: float64
+                kind: primitive
+                type: float64
+
+            - name: Metadata
+              json: metadata
+              required: false
+              type:
+                name: Metadata
+                kind: map
+                key:
+                  name: string
+                  kind: primitive
+                  type: string
+                element:
+                  name: interface
+                  kind: primitive
+                  type: interface{}
+
+    - name: Total
+      json: total
+      required: true
+      description: Total number of results found
+      type:
+        name: int
+        kind: primitive
+        type: int
+
+    - name: ExecutionTime
+      json: execution_time
+      required: false
+      description: Time taken to execute the search
+      type:
+        name: Duration
+        kind: primitive
+        type: time.Duration
+
+    - name: Error
+      json: error
+      required: false
+      description: Error message if search failed
+      type:
+        name: string
+        kind: pointer
+        element:
+          name: string
+          kind: primitive
+          type: string

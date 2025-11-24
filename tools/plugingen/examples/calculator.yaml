@@ -1,0 +1,96 @@
+# Simple Calculator Plugin Schema
+# This demonstrates basic type-safe plugin code generation
+
+package: calculator
+name: Calculator
+version: v1.0.0
+description: A simple calculator plugin with type-safe boundaries
+
+imports:
+  - time
+
+input:
+  name: CalculatorInput
+  kind: struct
+  fields:
+    - name: Operation
+      json: operation
+      required: true
+      description: The operation to perform (add, subtract, multiply, divide)
+      type:
+        name: string
+        kind: primitive
+        type: string
+
+    - name: A
+      json: a
+      required: true
+      description: First operand
+      type:
+        name: float64
+        kind: primitive
+        type: float64
+
+    - name: B
+      json: b
+      required: true
+      description: Second operand
+      type:
+        name: float64
+        kind: primitive
+        type: float64
+
+    - name: Precision
+      json: precision
+      required: false
+      description: Number of decimal places for result
+      type:
+        name: int
+        kind: pointer
+        element:
+          name: int
+          kind: primitive
+          type: int
+
+    - name: Timestamp
+      json: timestamp
+      required: false
+      description: When the calculation was requested
+      type:
+        name: Time
+        kind: primitive
+        type: time.Time
+
+output:
+  name: CalculatorOutput
+  kind: struct
+  fields:
+    - name: Result
+      json: result
+      required: true
+      description: The calculation result
+      type:
+        name: float64
+        kind: primitive
+        type: float64
+
+    - name: Error
+      json: error
+      required: false
+      description: Error message if calculation failed
+      type:
+        name: string
+        kind: pointer
+        element:
+          name: string
+          kind: primitive
+          type: string
+
+    - name: Duration
+      json: duration
+      required: false
+      description: Time taken to perform the calculation
+      type:
+        name: Duration
+        kind: primitive
+        type: time.Duration

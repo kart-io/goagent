@@ -98,10 +98,10 @@ const (
 	CodeRouterOverload ErrorCode = "ROUTER_OVERLOAD"
 
 	// Plugin/Type system errors
-	CodeTypeMismatch   ErrorCode = "TYPE_MISMATCH"
-	CodeAlreadyExists  ErrorCode = "ALREADY_EXISTS"
-	CodeNotFound       ErrorCode = "NOT_FOUND"
-	CodeInvalidOutput  ErrorCode = "INVALID_OUTPUT"
+	CodeTypeMismatch  ErrorCode = "TYPE_MISMATCH"
+	CodeAlreadyExists ErrorCode = "ALREADY_EXISTS"
+	CodeNotFound      ErrorCode = "NOT_FOUND"
+	CodeInvalidOutput ErrorCode = "INVALID_OUTPUT"
 )
 
 // AgentError is the structured error type for all agent operations
