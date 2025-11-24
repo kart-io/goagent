@@ -84,9 +84,9 @@ func (s *Store) Put(ctx context.Context, namespace []string, key string, value i
 		}
 	} else {
 		storeValue.Created = now
-		// Clear metadata from pool if it has any
-		for k := range storeValue.Metadata {
-			delete(storeValue.Metadata, k)
+		// Clear metadata from pool if it has any (使用 Go 1.21+ clear() 提高性能)
+		if len(storeValue.Metadata) > 0 {
+			clear(storeValue.Metadata)
 		}
 	}
 
@@ -288,9 +288,9 @@ func returnValueToPool(v *store.Value) {
 	v.Namespace = nil
 	v.Key = ""
 
-	// Clear metadata map but keep it for reuse
-	for k := range v.Metadata {
-		delete(v.Metadata, k)
+	// Clear metadata map but keep it for reuse (使用 Go 1.21+ clear() 提高性能)
+	if len(v.Metadata) > 0 {
+		clear(v.Metadata)
 	}
 
 	// Return to pool

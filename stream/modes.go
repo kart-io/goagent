@@ -211,6 +211,10 @@ func (s *MultiModeStream) SubscribeAll() <-chan StreamEvent {
 		}
 		s.mu.RUnlock()
 
+		// 使用 Ticker 替代 time.After 防止热循环中的定时器泄漏
+		ticker := time.NewTicker(10 * time.Millisecond)
+		defer ticker.Stop()
+
 		// Read from all channels
 		for {
 			for _, ch := range cases {
@@ -234,7 +238,7 @@ func (s *MultiModeStream) SubscribeAll() <-chan StreamEvent {
 			select {
 			case <-s.ctx.Done():
 				return
-			case <-time.After(10 * time.Millisecond):
+			case <-ticker.C:
 			}
 		}
 	}()

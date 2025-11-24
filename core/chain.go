@@ -35,14 +35,26 @@ func GetChainInput() *ChainInput {
 	input := chainInputPool.Get().(*ChainInput)
 	// Reset to default state
 	input.Data = nil
-	// 优化：使用 clear() (Go 1.21+) 代替 delete 循环
+
+	// 优化：使用 clear() (Go 1.21+) 代替 delete 循环，复用 map 减少 GC
 	if len(input.Vars) > 0 {
 		clear(input.Vars)
 	}
-	input.Options = ChainOptions{
-		StopOnError: true,
-		Extra:       make(map[string]interface{}, 4),
+
+	// 复用 Options.Extra map，避免每次都分配新的 map
+	if input.Options.Extra == nil {
+		input.Options.Extra = make(map[string]interface{}, 4)
+	} else if len(input.Options.Extra) > 0 {
+		clear(input.Options.Extra)
 	}
+
+	// 重置其他 Option 字段，保留 Extra map
+	input.Options.StopOnError = true
+	input.Options.Timeout = 0
+	input.Options.Parallel = false
+	input.Options.SkipSteps = nil
+	input.Options.OnlySteps = nil
+
 	return input
 }
 

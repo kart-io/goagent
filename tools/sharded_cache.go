@@ -351,9 +351,14 @@ func (c *ShardedToolCache) InvalidateByPattern(ctx context.Context, pattern stri
 		shard.mu.Unlock()
 	}
 
-	// 级联失效依赖的工具
+	// 级联失效依赖的工具，使用 visited 集合防止循环依赖
+	visited := make(map[string]struct{})
 	for toolName := range affectedTools {
-		count := c.invalidateDependents(toolName)
+		visited[toolName] = struct{}{}
+	}
+
+	for toolName := range affectedTools {
+		count := c.invalidateDependentsRecursive(toolName, visited)
 		totalCount += count
 	}
 
@@ -385,16 +390,18 @@ func (c *ShardedToolCache) InvalidateByTool(ctx context.Context, toolName string
 		shard.mu.Unlock()
 	}
 
-	// 级联失效依赖的工具
-	dependentCount := c.invalidateDependents(toolName)
+	// 级联失效依赖的工具，使用 visited 集合防止循环依赖
+	visited := make(map[string]struct{})
+	visited[toolName] = struct{}{}
+	dependentCount := c.invalidateDependentsRecursive(toolName, visited)
 	totalCount += dependentCount
 
 	c.stats.recordInvalidation(int64(totalCount))
 	return totalCount, nil
 }
 
-// invalidateDependents 失效依赖指定工具的所有工具
-func (c *ShardedToolCache) invalidateDependents(toolName string) int {
+// invalidateDependentsRecursive 失效依赖指定工具的所有工具（带循环检测）
+func (c *ShardedToolCache) invalidateDependentsRecursive(toolName string, visited map[string]struct{}) int {
 	c.depMu.RLock()
 	dependents, exists := c.dependencies[toolName]
 	c.depMu.RUnlock()
@@ -405,6 +412,12 @@ func (c *ShardedToolCache) invalidateDependents(toolName string) int {
 
 	totalCount := 0
 	for _, dependent := range dependents {
+		// 检测循环依赖：如果该工具已经被访问过，跳过以避免无限递归
+		if _, seen := visited[dependent]; seen {
+			continue
+		}
+		visited[dependent] = struct{}{}
+
 		// 遍历所有分片删除依赖工具
 		for _, shard := range c.shards {
 			shard.mu.Lock()
@@ -425,8 +438,8 @@ func (c *ShardedToolCache) invalidateDependents(toolName string) int {
 			shard.mu.Unlock()
 		}
 
-		// 递归失效
-		totalCount += c.invalidateDependents(dependent)
+		// 递归失效，传递 visited 集合
+		totalCount += c.invalidateDependentsRecursive(dependent, visited)
 	}
 
 	return totalCount

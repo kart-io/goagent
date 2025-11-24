@@ -342,9 +342,9 @@ func (a *PoolAgent) GetToolInput() *interfaces.ToolInput {
 	}
 
 	input := a.toolInputPool.Get().(*interfaces.ToolInput)
-	// 清理 map
-	for k := range input.Args {
-		delete(input.Args, k)
+	// 清理 map (使用 Go 1.21+ clear() 提高性能)
+	if len(input.Args) > 0 {
+		clear(input.Args)
 	}
 	input.Context = nil
 	return input
@@ -365,10 +365,8 @@ func (a *PoolAgent) PutToolInput(input *interfaces.ToolInput) {
 	// 清理 map
 	if len(input.Args) > a.config.MaxMapSize {
 		input.Args = make(map[string]interface{})
-	} else {
-		for k := range input.Args {
-			delete(input.Args, k)
-		}
+	} else if len(input.Args) > 0 {
+		clear(input.Args)
 	}
 	input.Context = nil
 
@@ -393,8 +391,8 @@ func (a *PoolAgent) GetToolOutput() *interfaces.ToolOutput {
 	output.Result = nil
 	output.Success = false
 	output.Error = ""
-	for k := range output.Metadata {
-		delete(output.Metadata, k)
+	if len(output.Metadata) > 0 {
+		clear(output.Metadata)
 	}
 	return output
 }
@@ -419,10 +417,8 @@ func (a *PoolAgent) PutToolOutput(output *interfaces.ToolOutput) {
 	// 清理 metadata map
 	if len(output.Metadata) > a.config.MaxMapSize {
 		output.Metadata = make(map[string]interface{})
-	} else {
-		for k := range output.Metadata {
-			delete(output.Metadata, k)
-		}
+	} else if len(output.Metadata) > 0 {
+		clear(output.Metadata)
 	}
 
 	a.recordPut(PoolTypeToolOutput)
@@ -446,9 +442,9 @@ func (a *PoolAgent) GetAgentInput() *core.AgentInput {
 	input.Task = ""
 	input.Instruction = ""
 	input.SessionID = ""
-	// 清理 map
-	for k := range input.Context {
-		delete(input.Context, k)
+	// 清理 map (使用 Go 1.21+ clear() 提高性能)
+	if len(input.Context) > 0 {
+		clear(input.Context)
 	}
 	return input
 }
@@ -473,10 +469,8 @@ func (a *PoolAgent) PutAgentInput(input *core.AgentInput) {
 	// 清理 map
 	if len(input.Context) > a.config.MaxMapSize {
 		input.Context = make(map[string]interface{})
-	} else {
-		for k := range input.Context {
-			delete(input.Context, k)
-		}
+	} else if len(input.Context) > 0 {
+		clear(input.Context)
 	}
 
 	a.recordPut(PoolTypeAgentInput)
@@ -505,9 +499,9 @@ func (a *PoolAgent) GetAgentOutput() *core.AgentOutput {
 	// 重置 slices
 	output.ReasoningSteps = output.ReasoningSteps[:0]
 	output.ToolCalls = output.ToolCalls[:0]
-	// 清理 map
-	for k := range output.Metadata {
-		delete(output.Metadata, k)
+	// 清理 map (使用 Go 1.21+ clear() 提高性能)
+	if len(output.Metadata) > 0 {
+		clear(output.Metadata)
 	}
 	output.TokenUsage = nil
 	return output
@@ -549,10 +543,8 @@ func (a *PoolAgent) PutAgentOutput(output *core.AgentOutput) {
 	// 清理 map
 	if len(output.Metadata) > a.config.MaxMapSize {
 		output.Metadata = make(map[string]interface{})
-	} else {
-		for k := range output.Metadata {
-			delete(output.Metadata, k)
-		}
+	} else if len(output.Metadata) > 0 {
+		clear(output.Metadata)
 	}
 
 	a.recordPut(PoolTypeAgentOutput)

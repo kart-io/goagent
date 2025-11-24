@@ -32,15 +32,15 @@ var middlewareResponsePool = sync.Pool{
 // GetMiddlewareRequest retrieves a MiddlewareRequest from the object pool
 func GetMiddlewareRequest() *MiddlewareRequest {
 	req := middlewareRequestPool.Get().(*MiddlewareRequest)
-	// Reset to default state
+	// Reset to default state (使用 Go 1.21+ clear() 提高性能)
 	req.Input = nil
 	req.State = nil
 	req.Runtime = nil
-	for k := range req.Metadata {
-		delete(req.Metadata, k)
+	if len(req.Metadata) > 0 {
+		clear(req.Metadata)
 	}
-	for k := range req.Headers {
-		delete(req.Headers, k)
+	if len(req.Headers) > 0 {
+		clear(req.Headers)
 	}
 	req.Timestamp = time.Time{}
 	return req
@@ -56,14 +56,14 @@ func PutMiddlewareRequest(req *MiddlewareRequest) {
 // GetMiddlewareResponse retrieves a MiddlewareResponse from the object pool
 func GetMiddlewareResponse() *MiddlewareResponse {
 	resp := middlewareResponsePool.Get().(*MiddlewareResponse)
-	// Reset to default state
+	// Reset to default state (使用 Go 1.21+ clear() 提高性能)
 	resp.Output = nil
 	resp.State = nil
-	for k := range resp.Metadata {
-		delete(resp.Metadata, k)
+	if len(resp.Metadata) > 0 {
+		clear(resp.Metadata)
 	}
-	for k := range resp.Headers {
-		delete(resp.Headers, k)
+	if len(resp.Headers) > 0 {
+		clear(resp.Headers)
 	}
 	resp.Duration = 0
 	resp.Error = nil

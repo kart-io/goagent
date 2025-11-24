@@ -12,6 +12,9 @@ import (
 	"github.com/kart-io/goagent/llm"
 )
 
+// 预编译正则表达式，避免每次调用都重新编译
+var digitOnlyRegex = regexp.MustCompile(`^\d+$`)
+
 // CoTAgent implements Chain-of-Thought reasoning pattern.
 //
 // Chain-of-Thought (CoT) prompts the model to break down complex problems
@@ -290,8 +293,7 @@ Be systematic and thorough in your analysis.`
 
 // parseCoTResponse parses the Chain-of-Thought response
 func (c *CoTAgent) parseCoTResponse(response string) ([]string, string) {
-	// Pre-compile regex for better performance
-	digitOnlyRegex := regexp.MustCompile(`^\d+$`)
+	// 使用预编译的正则表达式 digitOnlyRegex
 
 	lines := strings.Split(response, "\n")
 	steps := make([]string, 0)
