@@ -25,8 +25,8 @@ func BenchmarkExtractJSON_Original(b *testing.B) {
 		{
 			name: "LargeTextWithSmallJSON",
 			text: strings.Repeat("Lorem ipsum dolor sit amet, consectetur adipiscing elit. ", 100) +
-				 `{"result": "success"}` +
-				 strings.Repeat(" More text after JSON. ", 100),
+				`{"result": "success"}` +
+				strings.Repeat(" More text after JSON. ", 100),
 		},
 		{
 			name: "NestedJSON",
@@ -70,8 +70,8 @@ func BenchmarkExtractJSON_Optimized(b *testing.B) {
 		{
 			name: "LargeTextWithSmallJSON",
 			text: strings.Repeat("Lorem ipsum dolor sit amet, consectetur adipiscing elit. ", 100) +
-				 `{"result": "success"}` +
-				 strings.Repeat(" More text after JSON. ", 100),
+				`{"result": "success"}` +
+				strings.Repeat(" More text after JSON. ", 100),
 		},
 		{
 			name: "NestedJSON",
@@ -122,8 +122,8 @@ func BenchmarkJSONParser_Parse(b *testing.B) {
 		{
 			name: "LargeOutputWithJSON",
 			text: strings.Repeat("Thinking... ", 200) + "\n\n" +
-				 `{"name": "result", "value": 999, "active": false}` + "\n\n" +
-				 strings.Repeat("Done. ", 200),
+				`{"name": "result", "value": 999, "active": false}` + "\n\n" +
+				strings.Repeat("Done. ", 200),
 		},
 	}
 

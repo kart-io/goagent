@@ -8,7 +8,7 @@ import (
 func BenchmarkGetChainInput_Clear(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
-	
+
 	for i := 0; i < b.N; i++ {
 		input := GetChainInput()
 		// 模拟使用
@@ -23,7 +23,7 @@ func BenchmarkGetChainInput_Clear(b *testing.B) {
 func BenchmarkGetChainOutput_Clear(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
-	
+
 	for i := 0; i < b.N; i++ {
 		output := GetChainOutput()
 		// 模拟使用

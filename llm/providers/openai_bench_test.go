@@ -3,8 +3,8 @@ package providers
 import (
 	"testing"
 
-	"github.com/sashabaranov/go-openai"
 	agentllm "github.com/kart-io/goagent/llm"
+	"github.com/sashabaranov/go-openai"
 )
 
 // BenchmarkMessageConversion benchmarks the message conversion process

@@ -596,11 +596,11 @@ func (b *BaseLifecycle) HealthCheck(ctx context.Context) interfaces.HealthStatus
 
 // FunctionalLifecycle allows creating Lifecycle implementations using functions.
 type FunctionalLifecycle struct {
-	name        string
-	initFn      func(context.Context, interface{}) error
-	startFn     func(context.Context) error
-	stopFn      func(context.Context) error
-	healthFn    func(context.Context) interfaces.HealthStatus
+	name     string
+	initFn   func(context.Context, interface{}) error
+	startFn  func(context.Context) error
+	stopFn   func(context.Context) error
+	healthFn func(context.Context) interfaces.HealthStatus
 }
 
 // FunctionalLifecycleOption configures a FunctionalLifecycle.

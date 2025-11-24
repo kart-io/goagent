@@ -23,15 +23,15 @@ import (
 type FieldType string
 
 const (
-	FieldTypeString  FieldType = "string"
-	FieldTypeInt     FieldType = "int"
-	FieldTypeFloat   FieldType = "float"
-	FieldTypeBool    FieldType = "bool"
-	FieldTypeObject  FieldType = "object"
-	FieldTypeArray   FieldType = "array"
-	FieldTypeAny     FieldType = "any" // 向后兼容
-	FieldTypeBytes   FieldType = "bytes"
-	FieldTypeTime    FieldType = "time"
+	FieldTypeString FieldType = "string"
+	FieldTypeInt    FieldType = "int"
+	FieldTypeFloat  FieldType = "float"
+	FieldTypeBool   FieldType = "bool"
+	FieldTypeObject FieldType = "object"
+	FieldTypeArray  FieldType = "array"
+	FieldTypeAny    FieldType = "any" // 向后兼容
+	FieldTypeBytes  FieldType = "bytes"
+	FieldTypeTime   FieldType = "time"
 )
 
 // FieldSchema 定义单个字段的 Schema

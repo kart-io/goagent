@@ -5,9 +5,9 @@
 //   - Runtime flexibility (plugin systems, dynamic registration)
 //
 // The solution introduces a layered architecture:
-//   1. DynamicRunnable - Runtime-safe interface using any types
-//   2. TypedAdapter - Converts between generic and dynamic versions
-//   3. PluginRegistry - Manages dynamically loaded components
+//  1. DynamicRunnable - Runtime-safe interface using any types
+//  2. TypedAdapter - Converts between generic and dynamic versions
+//  3. PluginRegistry - Manages dynamically loaded components
 package core
 
 import (
@@ -520,9 +520,9 @@ func (r *PluginRegistry) GetMetadata(name string) (*PluginMetadata, error) {
 // convertToType 智能类型转换
 //
 // 支持以下转换策略:
-//   1. 直接类型断言
-//   2. JSON 序列化/反序列化
-//   3. reflect 基础类型转换
+//  1. 直接类型断言
+//  2. JSON 序列化/反序列化
+//  3. reflect 基础类型转换
 func convertToType[T any](value any) (T, error) {
 	var zero T
 

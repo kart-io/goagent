@@ -19,8 +19,8 @@ import (
 
 // MockPanicHandler is a mock implementation for testing
 type MockPanicHandler struct {
-	calls      []PanicCall
-	mu         sync.Mutex
+	calls         []PanicCall
+	mu            sync.Mutex
 	errorToReturn error
 }
 

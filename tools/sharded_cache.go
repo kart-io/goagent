@@ -40,13 +40,13 @@ type tuneMetrics struct {
 
 // cacheShard 单个缓存分片
 type cacheShard struct {
-	mu       sync.RWMutex
-	cache    map[string]*cacheEntry
+	mu    sync.RWMutex
+	cache map[string]*cacheEntry
 
 	// 自定义 LRU 双向链表头尾指针（零分配优化）
-	head     *cacheEntry
-	tail     *cacheEntry
-	size     int // 当前链表长度
+	head *cacheEntry
+	tail *cacheEntry
+	size int // 当前链表长度
 
 	capacity int
 }
