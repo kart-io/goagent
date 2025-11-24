@@ -140,9 +140,9 @@ func (l *NoOpPanicLogger) LogPanic(ctx context.Context, component, operation str
 //   - Global singleton with sensible defaults
 type PanicHandlerRegistry struct {
 	// Atomic pointers for lock-free reads
-	handler   atomic.Pointer[PanicHandler]
-	metrics   atomic.Pointer[PanicMetricsCollector]
-	logger    atomic.Pointer[PanicLogger]
+	handler atomic.Pointer[PanicHandler]
+	metrics atomic.Pointer[PanicMetricsCollector]
+	logger  atomic.Pointer[PanicLogger]
 
 	// Mutex only for writes (hot-swapping)
 	mu sync.Mutex

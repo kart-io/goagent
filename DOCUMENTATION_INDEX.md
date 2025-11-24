@@ -212,6 +212,7 @@ make test             # 运行测试
 
 - `agents/` - Agent 实现
 - `tools/` - 工具实现
+- `tools/plugingen/` - 类型安全代码生成器
 - `middleware/` - 中间件
 - `parsers/` - 解析器
 - `stream/` - 流处理
@@ -219,6 +220,26 @@ make test             # 运行测试
 - `distributed/` - 分布式
 - `document/` - 文档处理
 - `mcp/` - MCP 协议
+
+## 开发工具
+
+| 工具 | 位置 | 说明 |
+|------|------|------|
+| PluginGen | `tools/plugingen/` | 类型安全插件代码生成器 |
+
+### PluginGen - 类型安全代码生成
+
+PluginGen 解决了插件边界的类型擦除问题，生成强类型转换代码：
+
+```bash
+# 验证 schema
+plugingen validate -i plugin.yaml
+
+# 生成代码
+plugingen generate -i plugin.yaml -o generated.go
+```
+
+详细信息请参考 [PluginGen 文档](tools/plugingen/README.md)。
 
 ## 外部资源
 
@@ -238,6 +259,7 @@ make test             # 运行测试
 - [InvokeFast 优化](docs/guides/INVOKE_FAST_OPTIMIZATION.md) - 热路径优化
 - [缓存优化](docs/guides/SHARDED_CACHE_CONFIG_GUIDE.md) - 分片缓存配置
 - [Panic 处理](docs/development/PANIC_HANDLING.md) - 接口化 panic 处理系统
+- [PluginGen](tools/plugingen/README.md) - 类型安全插件代码生成器
 - [测试实践](docs/development/TESTING_BEST_PRACTICES.md) - 编写测试
 
 ## 贡献指南

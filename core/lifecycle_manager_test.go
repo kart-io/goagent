@@ -19,19 +19,19 @@ import (
 
 // mockLifecycleComponent is a test implementation of Lifecycle.
 type mockLifecycleComponent struct {
-	name          string
-	initCalled    atomic.Bool
-	startCalled   atomic.Bool
-	stopCalled    atomic.Bool
-	healthCalled  atomic.Bool
-	initErr       error
-	startErr      error
-	stopErr       error
-	healthStatus  interfaces.HealthStatus
-	dependencies  []string
-	initDelay     time.Duration
-	startDelay    time.Duration
-	stopDelay     time.Duration
+	name         string
+	initCalled   atomic.Bool
+	startCalled  atomic.Bool
+	stopCalled   atomic.Bool
+	healthCalled atomic.Bool
+	initErr      error
+	startErr     error
+	stopErr      error
+	healthStatus interfaces.HealthStatus
+	dependencies []string
+	initDelay    time.Duration
+	startDelay   time.Duration
+	stopDelay    time.Duration
 }
 
 func newMockComponent(name string) *mockLifecycleComponent {
