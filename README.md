@@ -1,6 +1,7 @@
 # GoAgent - AI Agent Framework for Go
 
 [![Go Version](https://img.shields.io/badge/go-1.25.0-blue.svg)](https://go.dev/)
+[![Build](https://github.com/kart-io/goagent/actions/workflows/ci.yml/badge.svg?branch=msater)](https://github.com/kart-io/goagent/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg)](docs/)
 [![Go Report Card](https://goreportcard.com/badge/github.com/kart-io/goagent)](https://goreportcard.com/report/github.com/kart-io/goagent)
