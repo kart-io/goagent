@@ -2,8 +2,9 @@ package providers
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/binary"
 	"fmt"
-	"math/rand"
 	"os"
 	"time"
 
@@ -259,6 +260,24 @@ func DefaultRetryConfig() RetryConfig {
 	}
 }
 
+// secureRandomInt63n generates a cryptographically secure random int64 in [0, n)
+// If n <= 0, it returns 0. If crypto/rand fails, it falls back to 0 (no jitter).
+func secureRandomInt63n(n int64) int64 {
+	if n <= 0 {
+		return 0
+	}
+
+	var b [8]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		// Fallback: no jitter on crypto/rand failure
+		return 0
+	}
+
+	// Convert bytes to uint64, then to int64 in range [0, n)
+	randomUint64 := binary.BigEndian.Uint64(b[:])
+	return int64(randomUint64 % uint64(n))
+}
+
 // ExecuteFunc is a function type for executing a single request.
 // It should return the response and any error encountered.
 type ExecuteFunc[T any] func(ctx context.Context) (T, error)
@@ -297,12 +316,12 @@ func ExecuteWithRetry[T any](ctx context.Context, cfg RetryConfig, providerName 
 			return zero, agentErrors.ErrorWithRetry(err, attempt, maxAttempts)
 		}
 
-		// Exponential backoff with jitter
+		// Exponential backoff with cryptographically secure jitter
 		delay := baseDelay * time.Duration(1<<uint(attempt-1))
 		if cfg.MaxDelay > 0 && delay > cfg.MaxDelay {
 			delay = cfg.MaxDelay
 		}
-		jitter := time.Duration(rand.Int63n(int64(delay) / 2))
+		jitter := time.Duration(secureRandomInt63n(int64(delay) / 2))
 
 		select {
 		case <-ctx.Done():
