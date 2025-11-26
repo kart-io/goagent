@@ -194,7 +194,7 @@ store, err := redis.New(config)
 
 ```go
 import (
-    "github.com/kart-io/k8s-agent/common/options"
+    "github.com/kart-io/goagent/options"
     "github.com/kart-io/goagent/store/adapters"
 )
 
@@ -208,7 +208,7 @@ store, err := adapter.CreateStore()
 ## Benefits
 
 1. **Consistency**: Use the same configuration pattern across all services
-2. **Validation**: Built-in validation rules from `common/options`
+2. **Validation**: Built-in validation rules from `goagent/options`
 3. **Observability**: Health checks and metrics integration
 4. **Flexibility**: Easy switching between store backends
 5. **Maintainability**: Centralized configuration management

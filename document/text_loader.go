@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 
 	"github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/retrieval"
-	"github.com/kart-io/k8s-agent/common/errors"
 )
 
 // TextLoader 文本文件加载器
@@ -67,7 +67,7 @@ func (l *TextLoader) Load(ctx context.Context) ([]*interfaces.Document, error) {
 		if l.callbackManager != nil {
 			_ = l.callbackManager.OnError(ctx, err)
 		}
-		return nil, errors.Wrap(errors.CodeInternalError, "failed to read file", err)
+		return nil, errors.Wrap(err, errors.CodeInternal, "failed to read file")
 	}
 
 	// 创建文档
@@ -188,7 +188,7 @@ func (l *DirectoryLoader) Load(ctx context.Context) ([]*interfaces.Document, err
 		if l.callbackManager != nil {
 			_ = l.callbackManager.OnError(ctx, err)
 		}
-		return nil, errors.Wrap(errors.CodeInternalError, "failed to list files", err)
+		return nil, errors.Wrap(err, errors.CodeInternal, "failed to list files")
 	}
 
 	// 加载每个文件

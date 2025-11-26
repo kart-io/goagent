@@ -1,11 +1,13 @@
 # GoAgent - AI Agent Framework for Go
 
-[![Go Version](https://img.shields.io/badge/go-1.25.0-blue.svg)](https://go.dev/)
-[![Build](https://github.com/kart-io/goagent/actions/workflows/ci.yml/badge.svg?branch=msater)](https://github.com/kart-io/goagent/actions/workflows/ci.yml)
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg)](docs/)
-[![Go Report Card](https://goreportcard.com/badge/github.com/kart-io/goagent)](https://goreportcard.com/report/github.com/kart-io/goagent)
-[![Go Reference](https://pkg.go.dev/badge/github.com/kart-io/goagent.svg)](https://pkg.go.dev/github.com/kart-io/goagent)
+[![Go Version](https://img.shields.io/badge/go-1.25.0-blue?style=flat-square&logo=go)](https://go.dev/)
+[![Build](https://img.shields.io/github/actions/workflow/status/kart-io/goagent/ci.yml?branch=master&style=flat-square&logo=github)](https://github.com/kart-io/goagent/actions/workflows/ci.yml)
+[![License](https://img.shields.io/github/license/kart-io/goagent?style=flat-square)](LICENSE)
+[![Documentation](https://img.shields.io/badge/docs-latest-brightgreen?style=flat-square&logo=readthedocs)](docs/)
+[![Downloads](https://img.shields.io/endpoint?url=https://api.pinstudios.net/api/badges/downloads/kart-io/goagent/total)](https://github.com/kart-io/goagent/releases/latest)
+[![Go Report Card](https://img.shields.io/goreportcard/grade/github.com/kart-io/goagent?style=flat-square)](https://goreportcard.com/report/github.com/kart-io/goagent)
+[![Go Reference](https://img.shields.io/badge/go-reference-blue?style=flat-square&logo=go)](https://pkg.go.dev/github.com/kart-io/goagent)
+[![Deepwiki](https://img.shields.io/badge/deepwiki-view-blueviolet?style=flat-square)](https://deepwiki.com/kart-io/goagent)
 
 GoAgent is a comprehensive, production-ready AI agent framework for Go, inspired by LangChain. It provides agents, tools, memory, LLM abstraction, and orchestration capabilities with enterprise-grade features like distributed tracing, persistent storage, and multi-agent coordination.
 
