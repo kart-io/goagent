@@ -145,11 +145,11 @@ func TestShardCountRecommendation(t *testing.T) {
 		minCount uint32
 		maxCount uint32
 	}{
-		{50, 1, nextPowerOfTwo(uint32(cpuCores * 2))},       // Light load: 2x CPU cores
-		{300, 16, nextPowerOfTwo(uint32(cpuCores * 4))},     // Moderate load: 4x CPU cores
-		{800, 32, nextPowerOfTwo(uint32(cpuCores * 8))},     // Medium load: 8x CPU cores
-		{3000, 64, 128},                                      // High load: Fixed range
-		{10000, 256, 256},                                    // Very high load: Fixed 256
+		{50, 1, nextPowerOfTwo(uint32(cpuCores * 2))},   // Light load: 2x CPU cores
+		{300, 16, nextPowerOfTwo(uint32(cpuCores * 4))}, // Moderate load: 4x CPU cores
+		{800, 32, nextPowerOfTwo(uint32(cpuCores * 8))}, // Medium load: 8x CPU cores
+		{3000, 64, 128},   // High load: Fixed range
+		{10000, 256, 256}, // Very high load: Fixed 256
 	}
 
 	for _, tc := range testCases {
