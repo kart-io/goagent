@@ -10,8 +10,7 @@ import (
 	"github.com/kart-io/goagent/llm/providers"
 )
 
-
-func main(){
+func main() {
 	provider, err := providers.NewKimiWithOptions(llm.WithAPIKey(os.Getenv("KIMI_API_KEY")), llm.WithModel("moonshot-v1-8k"))
 	if err != nil {
 		log.Fatalf("Failed to create Kimi provider: %v", err)

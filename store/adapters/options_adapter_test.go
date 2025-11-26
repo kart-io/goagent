@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/kart-io/k8s-agent/common/options"
+	"github.com/kart-io/goagent/options"
 )
 
 func TestRedisStoreAdapter(t *testing.T) {
