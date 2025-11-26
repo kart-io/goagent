@@ -12,7 +12,7 @@ type MySQLOptions struct {
 	Host            string        `mapstructure:"host" yaml:"host" json:"host"`
 	Port            int           `mapstructure:"port" yaml:"port" json:"port"`
 	User            string        `mapstructure:"user" yaml:"user" json:"user"`
-	Password        string        `mapstructure:"password" yaml:"password" json:"password"`
+	Password        string        `mapstructure:"password" yaml:"password" json:"-"` // json:"-" 防止序列化泄露
 	Database        string        `mapstructure:"database" yaml:"database" json:"database"`
 	Charset         string        `mapstructure:"charset" yaml:"charset" json:"charset"`
 	ParseTime       bool          `mapstructure:"parse_time" yaml:"parse_time" json:"parse_time"`
@@ -41,6 +41,16 @@ func NewMySQLOptions() *MySQLOptions {
 		LogLevel:        "silent",
 		AutoMigrate:     false,
 	}
+}
+
+// String 返回安全的字符串表示（隐藏密码）
+func (o *MySQLOptions) String() string {
+	password := "***"
+	if o.Password == "" {
+		password = "(empty)"
+	}
+	return fmt.Sprintf("MySQLOptions{Host:%s, Port:%d, User:%s, Password:%s, Database:%s}",
+		o.Host, o.Port, o.User, password, o.Database)
 }
 
 // Validate 验证 MySQL 配置

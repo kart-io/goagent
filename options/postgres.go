@@ -12,7 +12,7 @@ type PostgresOptions struct {
 	Host            string        `mapstructure:"host" yaml:"host" json:"host"`
 	Port            int           `mapstructure:"port" yaml:"port" json:"port"`
 	User            string        `mapstructure:"user" yaml:"user" json:"user"`
-	Password        string        `mapstructure:"password" yaml:"password" json:"password"`
+	Password        string        `mapstructure:"password" yaml:"password" json:"-"` // json:"-" 防止序列化泄露
 	Database        string        `mapstructure:"database" yaml:"database" json:"database"`
 	SSLMode         string        `mapstructure:"ssl_mode" yaml:"ssl_mode" json:"ssl_mode"`
 	TimeZone        string        `mapstructure:"time_zone" yaml:"time_zone" json:"time_zone"`
@@ -39,6 +39,16 @@ func NewPostgresOptions() *PostgresOptions {
 		LogLevel:        "silent",
 		AutoMigrate:     false,
 	}
+}
+
+// String 返回安全的字符串表示（隐藏密码）
+func (o *PostgresOptions) String() string {
+	password := "***"
+	if o.Password == "" {
+		password = "(empty)"
+	}
+	return fmt.Sprintf("PostgresOptions{Host:%s, Port:%d, User:%s, Password:%s, Database:%s, SSLMode:%s}",
+		o.Host, o.Port, o.User, password, o.Database, o.SSLMode)
 }
 
 // Validate 验证 PostgreSQL 配置
