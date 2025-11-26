@@ -5,12 +5,12 @@ import (
 	"gorm.io/gorm/logger"
 
 	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/options"
 	"github.com/kart-io/goagent/store"
 	"github.com/kart-io/goagent/store/factory"
 	"github.com/kart-io/goagent/store/memory"
 	"github.com/kart-io/goagent/store/postgres"
 	"github.com/kart-io/goagent/store/redis"
-	"github.com/kart-io/k8s-agent/common/options"
 )
 
 // StoreOptions extends common options with store-specific settings
