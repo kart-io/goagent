@@ -18,7 +18,35 @@ import (
 	"github.com/kart-io/goagent/utils/json"
 )
 
+// sanitizeQuery performs basic SQL query sanitization checks
+// WARNING: This is not a complete SQL injection prevention solution.
+// Always use parameterized queries for user inputs.
+func sanitizeQuery(query string) error {
+	query = strings.TrimSpace(query)
+
+	// Check for multiple statements (basic check)
+	if strings.Contains(query, ";") && !strings.HasSuffix(query, ";") {
+		return agentErrors.New(agentErrors.CodeInvalidInput, "multiple SQL statements not allowed").
+			WithComponent("database_query_tool").
+			WithOperation("sanitizeQuery")
+	}
+
+	// Check for comment injection attempts
+	if strings.Contains(query, "--") || strings.Contains(query, "/*") {
+		return agentErrors.New(agentErrors.CodeInvalidInput, "SQL comments not allowed for security").
+			WithComponent("database_query_tool").
+			WithOperation("sanitizeQuery")
+	}
+
+	return nil
+}
+
 // DatabaseQueryTool executes SQL queries against various databases
+// SECURITY NOTES:
+// - Always use parameterized queries with the 'params' field
+// - Table and column names cannot be parameterized - validate them separately
+// - Consider implementing query templates or whitelists for production use
+// - Enable query logging and monitoring for suspicious patterns
 type DatabaseQueryTool struct {
 	connections map[string]*sql.DB
 	maxRows     int
@@ -282,6 +310,11 @@ func (t *DatabaseQueryTool) executeQuery(ctx context.Context, db *sql.DB, params
 			WithContext("query", query)
 	}
 
+	// Perform security sanitization
+	if err := sanitizeQuery(query); err != nil {
+		return nil, err
+	}
+
 	// Execute query
 	rows, err := db.QueryContext(ctx, query, params.Params...)
 	if err != nil {
@@ -349,6 +382,11 @@ func (t *DatabaseQueryTool) executeStatement(ctx context.Context, db *sql.DB, pa
 			WithContext("query", query)
 	}
 
+	// Perform security sanitization
+	if err := sanitizeQuery(query); err != nil {
+		return nil, err
+	}
+
 	// Execute statement
 	result, err := db.ExecContext(ctx, query, params.Params...)
 	if err != nil {
@@ -371,6 +409,16 @@ func (t *DatabaseQueryTool) executeTransaction(ctx context.Context, db *sql.DB, 
 		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "transaction requires at least one query").
 			WithComponent("database_query_tool").
 			WithOperation("executeTransaction")
+	}
+
+	// Validate all queries before starting transaction
+	for i, query := range params.Transaction {
+		if err := sanitizeQuery(query.Query); err != nil {
+			return nil, agentErrors.Wrap(err, agentErrors.CodeInvalidInput, "invalid query in transaction").
+				WithComponent("database_query_tool").
+				WithOperation("executeTransaction").
+				WithContext("step", i)
+		}
 	}
 
 	// Start transaction
