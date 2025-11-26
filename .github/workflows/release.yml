@@ -59,32 +59,36 @@ jobs:
           echo "✅ Library verification complete"
 
       - name: Build example binaries (optional)
+        env:
+          VERSION: ${{ github.ref_name }}
+          COMMIT: ${{ github.sha }}
         run: |
           mkdir -p dist
 
           # Build plugingen CLI tool
-          LDFLAGS="-s -w -X main.Version=${{ github.ref_name }} -X main.GitCommit=${{ github.sha }} -X main.BuildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          LDFLAGS="-s -w -X main.Version=${VERSION} -X main.GitCommit=${COMMIT} -X main.BuildDate=${BUILD_DATE}"
           PKG_PATH="./tools/plugingen/cmd/plugingen"
 
           # Linux AMD64
-          GOOS=linux GOARCH=amd64 go build -ldflags="$LDFLAGS" -o dist/plugingen-linux-amd64 $PKG_PATH
-          tar -czf dist/plugingen-${{ github.ref_name }}-linux-amd64.tar.gz -C dist plugingen-linux-amd64
+          GOOS=linux GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o dist/plugingen-linux-amd64 ${PKG_PATH}
+          tar -czf dist/plugingen-${VERSION}-linux-amd64.tar.gz -C dist plugingen-linux-amd64
 
           # Linux ARM64
-          GOOS=linux GOARCH=arm64 go build -ldflags="$LDFLAGS" -o dist/plugingen-linux-arm64 $PKG_PATH
-          tar -czf dist/plugingen-${{ github.ref_name }}-linux-arm64.tar.gz -C dist plugingen-linux-arm64
+          GOOS=linux GOARCH=arm64 go build -ldflags="${LDFLAGS}" -o dist/plugingen-linux-arm64 ${PKG_PATH}
+          tar -czf dist/plugingen-${VERSION}-linux-arm64.tar.gz -C dist plugingen-linux-arm64
 
           # macOS AMD64
-          GOOS=darwin GOARCH=amd64 go build -ldflags="$LDFLAGS" -o dist/plugingen-darwin-amd64 $PKG_PATH
-          tar -czf dist/plugingen-${{ github.ref_name }}-darwin-amd64.tar.gz -C dist plugingen-darwin-amd64
+          GOOS=darwin GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o dist/plugingen-darwin-amd64 ${PKG_PATH}
+          tar -czf dist/plugingen-${VERSION}-darwin-amd64.tar.gz -C dist plugingen-darwin-amd64
 
           # macOS ARM64 (Apple Silicon)
-          GOOS=darwin GOARCH=arm64 go build -ldflags="$LDFLAGS" -o dist/plugingen-darwin-arm64 $PKG_PATH
-          tar -czf dist/plugingen-${{ github.ref_name }}-darwin-arm64.tar.gz -C dist plugingen-darwin-arm64
+          GOOS=darwin GOARCH=arm64 go build -ldflags="${LDFLAGS}" -o dist/plugingen-darwin-arm64 ${PKG_PATH}
+          tar -czf dist/plugingen-${VERSION}-darwin-arm64.tar.gz -C dist plugingen-darwin-arm64
 
           # Windows AMD64
-          GOOS=windows GOARCH=amd64 go build -ldflags="$LDFLAGS" -o dist/plugingen-windows-amd64.exe $PKG_PATH
-          zip -j dist/plugingen-${{ github.ref_name }}-windows-amd64.zip dist/plugingen-windows-amd64.exe
+          GOOS=windows GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o dist/plugingen-windows-amd64.exe ${PKG_PATH}
+          zip -j dist/plugingen-${VERSION}-windows-amd64.zip dist/plugingen-windows-amd64.exe
 
       - name: Generate checksums
         run: |
