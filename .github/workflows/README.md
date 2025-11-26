@@ -21,11 +21,50 @@ This directory contains GitHub Actions workflows for CI/CD automation.
 
 ---
 
+### 🏷️ Auto Tag (`auto-tag.yml`)
+
+**Trigger**:
+- Push to `master` branch (automatic)
+- Manual dispatch via GitHub Actions UI
+
+**Purpose**: Automatic version tagging based on conventional commits
+
+**Actions**:
+- Analyze commits since last tag
+- Determine version bump type (major, minor, patch) based on commit messages
+- Calculate new version number
+- Generate comprehensive changelog
+- Create and push new tag
+- Trigger release workflow
+
+**Supported Commit Types**:
+- `feat:` → MINOR version bump (v1.0.0 → v1.1.0)
+- `fix:`, `docs:`, `test:`, etc. → PATCH version bump (v1.0.0 → v1.0.1)
+- `feat!:` or `BREAKING CHANGE:` → MAJOR version bump (v1.0.0 → v2.0.0)
+
+**Usage (Automatic)**:
+```bash
+# Commits following conventional commit format automatically trigger releases
+git commit -m "feat(llm): add Claude 3.5 Sonnet support"
+git push origin master
+# → Auto creates tag v1.1.0 (if current version is v1.0.0)
+```
+
+**Usage (Manual)**:
+```bash
+# Navigate to Actions → Auto Tag and Release → Run workflow
+# Select version bump type: auto, major, minor, or patch
+```
+
+**See Also**: [VERSION_MANAGEMENT.md](../../VERSION_MANAGEMENT.md) for detailed documentation
+
+---
+
 ### 🚀 Release (`release.yml`)
 
-**Trigger**: Push tags matching `v*.*.*`
+**Trigger**: Push tags matching `v*.*.*` (usually triggered by auto-tag workflow)
 
-**Purpose**: Automated release creation
+**Purpose**: Automated release creation and distribution
 
 **Actions**:
 - Run full test suite
@@ -35,29 +74,32 @@ This directory contains GitHub Actions workflows for CI/CD automation.
   - macOS (AMD64, ARM64/Apple Silicon)
   - Windows (AMD64)
 - Generate SHA256 checksums
-- Create GitHub Release with binaries
+- Create GitHub Release with binaries and release notes
 - Publish to pkg.go.dev
 
-**Usage**:
+**Usage (Automatic)**:
+The auto-tag workflow automatically triggers this when it creates a new tag.
+
+**Usage (Manual - Advanced)**:
 ```bash
-# Create and push a tag
+# Create and push a tag manually
 git tag -a v1.2.3 -m "Release v1.2.3"
 git push origin v1.2.3
-
-# Or use the helper script
-./create_release.sh 1.2.3
 ```
 
 **Pre-releases**:
 ```bash
-# Alpha release
-./create_release.sh 1.3.0 alpha
+# Alpha release (manual only)
+git tag -a v1.3.0-alpha.1 -m "Alpha release v1.3.0-alpha.1"
+git push origin v1.3.0-alpha.1
 
-# Beta release
-./create_release.sh 1.3.0 beta
+# Beta release (manual only)
+git tag -a v1.3.0-beta.1 -m "Beta release v1.3.0-beta.1"
+git push origin v1.3.0-beta.1
 
-# Release candidate
-./create_release.sh 1.3.0 rc
+# Release candidate (manual only)
+git tag -a v1.3.0-rc.1 -m "Release candidate v1.3.0-rc.1"
+git push origin v1.3.0-rc.1
 ```
 
 ---
@@ -116,11 +158,44 @@ Go to Actions → Nightly Build → Run workflow
 
 ## Quick Reference
 
-### Creating a Release
+### Recommended Release Workflow (Automatic)
 
-1. **Update CHANGELOG.md**:
+**For most releases, use the automatic workflow:**
+
+1. **Follow Conventional Commit format**:
    ```bash
-   # Add entry for new version
+   # New feature
+   git commit -m "feat(llm): add Claude 3.5 Sonnet support"
+
+   # Bug fix
+   git commit -m "fix(retry): handle crypto/rand failure"
+
+   # Breaking change
+   git commit -m "feat(core)!: redesign middleware system
+
+   BREAKING CHANGE: Middleware signature changed"
+   ```
+
+2. **Push to master**:
+   ```bash
+   git push origin master
+   ```
+
+3. **Automatic release**:
+   - Auto-tag workflow analyzes commits
+   - Creates appropriate version tag (v1.x.x)
+   - Release workflow builds and publishes
+
+4. **Monitor**:
+   - Check [Actions](https://github.com/kart-io/goagent/actions)
+   - Verify [Release](https://github.com/kart-io/goagent/releases)
+
+### Manual Release (Advanced)
+
+**Only use this for special cases (hotfixes, pre-releases, etc.)**:
+
+1. **Update CHANGELOG.md** (optional):
+   ```bash
    vim CHANGELOG.md
    ```
 
@@ -131,25 +206,15 @@ Go to Actions → Nightly Build → Run workflow
    make lint
    ```
 
-3. **Create release**:
+3. **Create and push tag manually**:
    ```bash
-   # Interactive script (recommended)
-   ./create_release.sh 1.2.3
-
-   # Manual
-   git tag -a v1.2.3 -m "Release v1.2.3
-
-   - Feature: New reasoning patterns
-   - Fix: Import layering issues
-   - Docs: Comprehensive documentation"
-
+   git tag -a v1.2.3 -m "Release v1.2.3"
    git push origin v1.2.3
    ```
 
-4. **Monitor**:
-   - Check [Actions](https://github.com/kart-io/goagent/actions)
-   - Verify [Release](https://github.com/kart-io/goagent/releases)
-   - Confirm [pkg.go.dev](https://pkg.go.dev/github.com/kart-io/goagent)
+4. **Or manually trigger auto-tag workflow**:
+   - Go to Actions → Auto Tag and Release → Run workflow
+   - Select version bump type (major, minor, patch)
 
 ### Checking Workflow Status
 
@@ -178,6 +243,7 @@ The following secrets should be configured in repository settings:
 | File | Description | Triggers |
 |------|-------------|----------|
 | `ci.yml` | Main CI pipeline | Push, PR |
+| `auto-tag.yml` | Automatic version tagging | Push to master, manual |
 | `release.yml` | Automated releases | Tag push (v*.*.*) |
 | `pr.yml` | PR validation | PR events |
 | `nightly.yml` | Nightly builds | Schedule, manual |
@@ -261,9 +327,11 @@ Fix the import structure:
 
 ## Additional Resources
 
-- [Release Management Guide](.github/RELEASE.md)
+- **[Version Management Guide](../../VERSION_MANAGEMENT.md)** - Comprehensive guide on automatic versioning and releases
 - [Architecture Documentation](../docs/architecture/ARCHITECTURE.md)
 - [Import Layering Rules](../docs/architecture/IMPORT_LAYERING.md)
+- [Conventional Commits Specification](https://www.conventionalcommits.org/)
+- [Semantic Versioning](https://semver.org/)
 - [GitHub Actions Documentation](https://docs.github.com/en/actions)
 
 ---
