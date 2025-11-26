@@ -10,9 +10,8 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
+	"github.com/kart-io/goagent/options"
 	"github.com/kart-io/goagent/store/adapters"
-	"github.com/kart-io/k8s-agent/common/options"
-	"github.com/kart-io/logger"
 )
 
 // AppConfig represents the application configuration
@@ -94,16 +93,8 @@ func main() {
 			log.Fatal("Failed to complete Redis config:", err)
 		}
 
-		// Health check
-		ctx := context.Background()
-		logger, err := logger.NewWithDefaults()
-		if err != nil {
-			log.Printf("WARNING: Failed to create logger: %v", err)
-		} else {
-			if err := config.Redis.Health(ctx, logger); err != nil {
-				log.Printf("WARNING: Redis health check failed: %v", err)
-			}
-		}
+		// Note: Health check removed as it's not part of options.RedisOptions
+		// If needed, implement health check after creating the store
 
 	case "postgres":
 		// Use shared PostgreSQL configuration

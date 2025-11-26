@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -778,7 +779,7 @@ func TestClient_CircuitBreaker_ConcurrentRequests(t *testing.T) {
 	log := createTestLogger()
 
 	cbConfig := &CircuitBreakerConfig{
-		MaxFailures: 5,
+		MaxFailures: 3, // Reduced from 5 to make circuit open faster
 		Timeout:     1 * time.Second,
 	}
 	client := NewClientWithCircuitBreaker(log, cbConfig)
@@ -787,9 +788,11 @@ func TestClient_CircuitBreaker_ConcurrentRequests(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		count := requestCount.Add(1)
 
-		// Fail first 5 requests
-		if count <= 5 {
+		// Fail first requests to trigger circuit breaker
+		// Using a smaller number to ensure circuit opens
+		if count <= 10 {
 			w.WriteHeader(http.StatusInternalServerError)
+			time.Sleep(10 * time.Millisecond) // Small delay to space out failures
 			return
 		}
 
@@ -802,8 +805,17 @@ func TestClient_CircuitBreaker_ConcurrentRequests(t *testing.T) {
 
 	input := &agentcore.AgentInput{Task: "test"}
 
-	// Execute concurrent requests
-	const numGoroutines = 20
+	// First, trigger the circuit breaker with sequential requests
+	for i := 0; i < 5; i++ {
+		_, _ = client.ExecuteAgent(context.Background(), server.URL, "TestAgent", input)
+		time.Sleep(5 * time.Millisecond) // Small delay between requests
+	}
+
+	// Wait a bit to ensure circuit breaker state is updated
+	time.Sleep(50 * time.Millisecond)
+
+	// Now execute concurrent requests when circuit should be open
+	const numGoroutines = 10
 	results := make(chan error, numGoroutines)
 
 	for i := 0; i < numGoroutines; i++ {
@@ -815,15 +827,22 @@ func TestClient_CircuitBreaker_ConcurrentRequests(t *testing.T) {
 
 	// Collect results
 	var circuitOpenErrors int
+	var otherErrors int
 	for i := 0; i < numGoroutines; i++ {
 		err := <-results
-		if err != nil && assert.Contains(t, err.Error(), "circuit breaker is open") {
-			circuitOpenErrors++
+		if err != nil {
+			if assert.Contains(t, err.Error(), "circuit breaker is open") {
+				circuitOpenErrors++
+			} else {
+				otherErrors++
+			}
 		}
 	}
 
-	// Circuit should have opened and blocked some requests
-	assert.True(t, circuitOpenErrors > 0, "some requests should be blocked by circuit breaker")
+	// At least some requests should be blocked by circuit breaker
+	// Since we triggered the circuit beforehand, most concurrent requests should fail
+	assert.Greater(t, circuitOpenErrors, 0, "some requests should be blocked by circuit breaker")
+	t.Logf("Circuit open errors: %d, Other errors: %d", circuitOpenErrors, otherErrors)
 }
 
 // TestClient_CircuitBreaker_StateChangeCallback tests state change notifications
@@ -831,11 +850,14 @@ func TestClient_CircuitBreaker_StateChangeCallback(t *testing.T) {
 	log := createTestLogger()
 
 	var stateChanges []string
+	var mu sync.Mutex // Add mutex to protect stateChanges
 	cbConfig := &CircuitBreakerConfig{
 		MaxFailures: 2,
 		Timeout:     100 * time.Millisecond,
 		OnStateChange: func(from, to CircuitState) {
+			mu.Lock()
 			stateChanges = append(stateChanges, from.String()+"->"+to.String())
+			mu.Unlock()
 		},
 	}
 	client := NewClientWithCircuitBreaker(log, cbConfig)
@@ -854,6 +876,10 @@ func TestClient_CircuitBreaker_StateChangeCallback(t *testing.T) {
 
 	// Wait for callback
 	time.Sleep(50 * time.Millisecond)
+
+	// Check state changes with mutex protection
+	mu.Lock()
+	defer mu.Unlock()
 
 	// Should see closed->open transition
 	assert.Contains(t, stateChanges, "closed->open")

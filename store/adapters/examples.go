@@ -8,8 +8,8 @@ import (
 	"github.com/spf13/pflag"
 
 	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/options"
 	"github.com/kart-io/goagent/store"
-	"github.com/kart-io/k8s-agent/common/options"
 )
 
 // Example 1: Using RedisStoreAdapter with common RedisOptions
