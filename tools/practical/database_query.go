@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -18,11 +19,31 @@ import (
 	"github.com/kart-io/goagent/utils/json"
 )
 
-// sanitizeQuery performs basic SQL query sanitization checks
-// WARNING: This is not a complete SQL injection prevention solution.
-// Always use parameterized queries for user inputs.
+// sanitizeQuery performs SQL query sanitization checks.
+//
+// WARNING: This is NOT a complete SQL injection prevention solution.
+// ALWAYS use parameterized queries for user inputs.
+//
+// This function provides defense-in-depth by catching obvious injection attempts,
+// but it should never be the only defense mechanism. It performs the following checks:
+// - Multiple statements (prevents statement chaining)
+// - Comment injection (prevents comment-based bypasses)
+// - UNION-based injection (prevents data exfiltration)
+// - Boolean expression injection (prevents authentication bypasses)
+//
+// IMPORTANT: This sanitization cannot protect against:
+// - Injection in table/column names (these cannot be parameterized)
+// - Complex injection patterns specific to certain SQL dialects
+// - Second-order injection attacks
+//
+// ALWAYS implement proper application-level validation for:
+// - Table and column name whitelisting
+// - Input validation and type checking
+// - Least-privilege database access controls
+// - Query logging and monitoring
 func sanitizeQuery(query string) error {
 	query = strings.TrimSpace(query)
+	upperQuery := strings.ToUpper(query)
 
 	// Check for multiple statements (basic check)
 	if strings.Contains(query, ";") && !strings.HasSuffix(query, ";") {
@@ -36,6 +57,34 @@ func sanitizeQuery(query string) error {
 		return agentErrors.New(agentErrors.CodeInvalidInput, "SQL comments not allowed for security").
 			WithComponent("database_query_tool").
 			WithOperation("sanitizeQuery")
+	}
+
+	// Check for UNION-based injection
+	if strings.Contains(upperQuery, " UNION ") || strings.Contains(upperQuery, " UNION ALL ") {
+		return agentErrors.New(agentErrors.CodeInvalidInput, "UNION statements not allowed for security").
+			WithComponent("database_query_tool").
+			WithOperation("sanitizeQuery")
+	}
+
+	// Check for obvious boolean-based injection patterns
+	dangerousPatterns := []string{
+		" OR 1=1",
+		" OR '1'='1'",
+		` OR "1"="1"`,
+		" OR `1`=`1`",
+		" AND 1=1",
+		" AND '1'='1'",
+		` AND "1"="1"`,
+		" AND `1`=`1`",
+		" OR TRUE",
+		" AND TRUE",
+	}
+	for _, pattern := range dangerousPatterns {
+		if strings.Contains(upperQuery, pattern) {
+			return agentErrors.New(agentErrors.CodeInvalidInput, "suspicious boolean expression detected").
+				WithComponent("database_query_tool").
+				WithOperation("sanitizeQuery")
+		}
 	}
 
 	return nil
@@ -283,8 +332,13 @@ func (t *DatabaseQueryTool) getConnection(config connectionConfig) (*sql.DB, err
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := db.PingContext(ctx); err != nil {
-		if err := db.Close(); err != nil {
-			fmt.Printf("failed to close database connection: %v", err)
+		if closeErr := db.Close(); closeErr != nil {
+			slog.Error("failed to close database connection",
+				"error", closeErr,
+				"connection_id", config.ConnectionID,
+				"driver", config.Driver,
+				"component", "database_query_tool",
+				"operation", "getConnection")
 		}
 		return nil, err
 	}
@@ -321,8 +375,12 @@ func (t *DatabaseQueryTool) executeQuery(ctx context.Context, db *sql.DB, params
 		return nil, err
 	}
 	defer func() {
-		if err := rows.Close(); err != nil {
-			fmt.Printf("failed to close rows: %v", err)
+		if closeErr := rows.Close(); closeErr != nil {
+			slog.Error("failed to close rows",
+				"error", closeErr,
+				"component", "database_query_tool",
+				"operation", "executeQuery",
+				"query", query)
 		}
 	}()
 
@@ -435,8 +493,13 @@ func (t *DatabaseQueryTool) executeTransaction(ctx context.Context, db *sql.DB, 
 	for i, query := range params.Transaction {
 		result, err := tx.ExecContext(ctx, query.Query, query.Params...)
 		if err != nil {
-			if err := tx.Rollback(); err != nil {
-				fmt.Printf("failed to rollback transaction: %v", err)
+			if rollbackErr := tx.Rollback(); rollbackErr != nil {
+				slog.Error("failed to rollback transaction",
+					"error", rollbackErr,
+					"component", "database_query_tool",
+					"operation", "executeTransaction",
+					"failed_step", i,
+					"original_error", err.Error())
 			}
 			return map[string]interface{}{
 				"error":       err.Error(),
