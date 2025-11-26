@@ -1,8 +1,11 @@
 # GoAgent - AI Agent Framework for Go
 
 [![Go Version](https://img.shields.io/badge/go-1.25.0-blue.svg)](https://go.dev/)
+[![Build](https://github.com/kart-io/goagent/actions/workflows/ci.yml/badge.svg?branch=msater)](https://github.com/kart-io/goagent/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg)](docs/)
+[![Go Report Card](https://goreportcard.com/badge/github.com/kart-io/goagent)](https://goreportcard.com/report/github.com/kart-io/goagent)
+[![Go Reference](https://pkg.go.dev/badge/github.com/kart-io/goagent.svg)](https://pkg.go.dev/github.com/kart-io/goagent)
 
 GoAgent is a comprehensive, production-ready AI agent framework for Go, inspired by LangChain. It provides agents, tools, memory, LLM abstraction, and orchestration capabilities with enterprise-grade features like distributed tracing, persistent storage, and multi-agent coordination.
 
