@@ -6,10 +6,10 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/retrieval"
 	"github.com/kart-io/goagent/utils/httpclient"
-	"github.com/kart-io/k8s-agent/common/errors"
 )
 
 // WebLoader Web 页面加载器
@@ -86,12 +86,12 @@ func (l *WebLoader) Load(ctx context.Context) ([]*interfaces.Document, error) {
 		if l.callbackManager != nil {
 			_ = l.callbackManager.OnError(ctx, err)
 		}
-		return nil, errors.Wrap(errors.CodeInternalError, "failed to fetch url", err)
+		return nil, errors.Wrap(err, errors.CodeInternal, "failed to fetch url")
 	}
 
 	// 检查状态码
 	if resp.StatusCode() != 200 {
-		err := errors.New(errors.CodeInternalError, "http status: "+resp.Status())
+		err := errors.New(errors.CodeInternal, "http status: "+resp.Status())
 		if l.callbackManager != nil {
 			_ = l.callbackManager.OnError(ctx, err)
 		}

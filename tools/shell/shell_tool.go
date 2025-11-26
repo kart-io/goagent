@@ -214,7 +214,22 @@ func (s *ShellTool) IsCommandAllowed(command string) bool {
 }
 
 // ExecuteScript 执行脚本的便捷方法
+// 注意：此方法要求 "bash" 命令必须在白名单中
 func (s *ShellTool) ExecuteScript(ctx context.Context, scriptPath string, args []string) (*interfaces.ToolOutput, error) {
+	// 安全检查：验证 bash 命令是否在白名单中
+	if !s.allowedCommands["bash"] && !s.allowedCommands["sh"] {
+		return &interfaces.ToolOutput{
+				Success: false,
+				Error:   "bash or sh command must be in whitelist to execute scripts",
+				Metadata: map[string]interface{}{
+					"allowed_commands": s.GetAllowedCommands(),
+				},
+			}, tools.NewToolError(s.Name(), "command not allowed", agentErrors.New(agentErrors.CodeToolValidation, "bash/sh not in whitelist").
+				WithComponent("shell_tool").
+				WithOperation("ExecuteScript").
+				WithContext("allowed_commands", s.GetAllowedCommands()))
+	}
+
 	return s.Invoke(ctx, &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"command": "bash",
@@ -225,7 +240,39 @@ func (s *ShellTool) ExecuteScript(ctx context.Context, scriptPath string, args [
 }
 
 // ExecutePipeline 执行管道命令的便捷方法
+// 注意：此方法会验证管道中的每个命令是否在白名单中
 func (s *ShellTool) ExecutePipeline(ctx context.Context, commands []string) (*interfaces.ToolOutput, error) {
+	// 安全检查：验证每个命令都在白名单中
+	for _, cmd := range commands {
+		// 提取命令的第一个单词（实际的命令名）
+		fields := strings.Fields(strings.TrimSpace(cmd))
+		if len(fields) == 0 {
+			return &interfaces.ToolOutput{
+					Success: false,
+					Error:   "empty command in pipeline",
+				}, tools.NewToolError(s.Name(), "empty command in pipeline", agentErrors.New(agentErrors.CodeToolValidation, "empty command in pipeline").
+					WithComponent("shell_tool").
+					WithOperation("ExecutePipeline"))
+		}
+
+		cmdName := fields[0]
+		if !s.allowedCommands[cmdName] {
+			return &interfaces.ToolOutput{
+					Success: false,
+					Error:   "command not allowed in pipeline: " + cmdName,
+					Metadata: map[string]interface{}{
+						"disallowed_command": cmdName,
+						"allowed_commands":   s.GetAllowedCommands(),
+					},
+				}, tools.NewToolError(s.Name(), "command not allowed", agentErrors.New(agentErrors.CodeToolValidation, "pipeline contains non-whitelisted command").
+					WithComponent("shell_tool").
+					WithOperation("ExecutePipeline").
+					WithContext("disallowed_command", cmdName).
+					WithContext("allowed_commands", s.GetAllowedCommands()))
+		}
+	}
+
+	// 所有命令都通过验证，构建管道
 	pipeline := strings.Join(commands, " | ")
 	return s.Invoke(ctx, &interfaces.ToolInput{
 		Args: map[string]interface{}{

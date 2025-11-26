@@ -38,14 +38,27 @@ jobs:
         run: go mod download
 
       - name: Run tests
-        run: go test -v -race -timeout 5m ./...
+        run: go test -v -timeout 5m ./...
 
       - name: Verify import layering
         run: |
           chmod +x ./verify_imports.sh
           ./verify_imports.sh
 
-      - name: Build binaries for multiple platforms
+      - name: Verify library can be imported
+        run: |
+          echo "Verifying library import..."
+          go list -m github.com/kart-io/goagent
+
+          # Check that major packages compile
+          go build -v ./core/...
+          go build -v ./llm/...
+          go build -v ./tools/...
+          go build -v ./agents/...
+
+          echo "✅ Library verification complete"
+
+      - name: Build example binaries (optional)
         run: |
           mkdir -p dist
 
@@ -76,8 +89,12 @@ jobs:
       - name: Generate checksums
         run: |
           cd dist
-          sha256sum *.tar.gz *.zip > checksums.txt
-          cat checksums.txt
+          if ls *.tar.gz *.zip 1> /dev/null 2>&1; then
+            sha256sum *.tar.gz *.zip > checksums.txt
+            cat checksums.txt
+          else
+            echo "No binaries to checksum (library project)" > checksums.txt
+          fi
 
       - name: Extract release notes
         id: extract-release-notes

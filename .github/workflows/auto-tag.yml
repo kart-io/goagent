@@ -1,0 +1,240 @@
+name: Auto Tag and Release
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+    inputs:
+      version_bump:
+        description: 'Version bump type (major, minor, patch, or specific version like v1.2.3)'
+        required: true
+        default: 'auto'
+        type: choice
+        options:
+          - auto
+          - major
+          - minor
+          - patch
+
+permissions:
+  contents: write
+
+jobs:
+  auto-tag:
+    name: Auto Tag and Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Get latest tag
+        id: get-latest-tag
+        run: |
+          # Get the latest tag, or use v0.0.0 if no tags exist
+          latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "latest_tag=$latest_tag" >> $GITHUB_OUTPUT
+          echo "Latest tag: $latest_tag"
+
+      - name: Analyze commits since last tag
+        id: analyze-commits
+        run: |
+          latest_tag="${{ steps.get-latest-tag.outputs.latest_tag }}"
+
+          # Get commits since last tag
+          if [ "$latest_tag" = "v0.0.0" ]; then
+            commits=$(git log --pretty=format:"%s" HEAD)
+          else
+            commits=$(git log --pretty=format:"%s" ${latest_tag}..HEAD)
+          fi
+
+          echo "Commits since $latest_tag:"
+          echo "$commits"
+          echo ""
+
+          # Determine version bump type based on conventional commits
+          bump_type="none"
+
+          # Check for breaking changes (BREAKING CHANGE or ! after type)
+          if echo "$commits" | grep -qE "^[a-z]+(\([a-z]+\))?!:|BREAKING CHANGE:"; then
+            bump_type="major"
+            echo "Found breaking changes - will bump MAJOR version"
+          # Check for new features
+          elif echo "$commits" | grep -qE "^feat(\([a-z]+\))?:"; then
+            bump_type="minor"
+            echo "Found new features - will bump MINOR version"
+          # Check for fixes, docs, refactor, perf, test, etc.
+          elif echo "$commits" | grep -qE "^(fix|docs|refactor|perf|test|chore)(\([a-z]+\))?:"; then
+            bump_type="patch"
+            echo "Found fixes/improvements - will bump PATCH version"
+          else
+            echo "No conventional commits found - no version bump needed"
+          fi
+
+          echo "bump_type=$bump_type" >> $GITHUB_OUTPUT
+
+      - name: Calculate new version
+        id: calc-version
+        run: |
+          latest_tag="${{ steps.get-latest-tag.outputs.latest_tag }}"
+          bump_type="${{ steps.analyze-commits.outputs.bump_type }}"
+          manual_bump="${{ github.event.inputs.version_bump }}"
+
+          # Use manual bump type if workflow_dispatch was used
+          if [ "$manual_bump" != "" ] && [ "$manual_bump" != "auto" ]; then
+            bump_type="$manual_bump"
+            echo "Using manual bump type: $bump_type"
+          fi
+
+          # If no bump needed and not manual trigger, skip
+          if [ "$bump_type" = "none" ] && [ "$manual_bump" = "" ]; then
+            echo "No version bump needed"
+            echo "new_tag=" >> $GITHUB_OUTPUT
+            echo "should_release=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Parse current version (remove 'v' prefix)
+          current_version="${latest_tag#v}"
+
+          # Split version into components
+          IFS='.' read -r major minor patch <<< "$current_version"
+
+          # Remove any pre-release suffix from patch
+          patch="${patch%%-*}"
+
+          # Bump version based on type
+          case "$bump_type" in
+            major)
+              major=$((major + 1))
+              minor=0
+              patch=0
+              ;;
+            minor)
+              minor=$((minor + 1))
+              patch=0
+              ;;
+            patch)
+              patch=$((patch + 1))
+              ;;
+            *)
+              echo "Invalid bump type: $bump_type"
+              exit 1
+              ;;
+          esac
+
+          new_tag="v${major}.${minor}.${patch}"
+          echo "New version: $new_tag"
+          echo "new_tag=$new_tag" >> $GITHUB_OUTPUT
+          echo "should_release=true" >> $GITHUB_OUTPUT
+
+      - name: Generate changelog
+        id: changelog
+        if: steps.calc-version.outputs.should_release == 'true'
+        run: |
+          latest_tag="${{ steps.get-latest-tag.outputs.latest_tag }}"
+          new_tag="${{ steps.calc-version.outputs.new_tag }}"
+
+          echo "# Release Notes for $new_tag" > changelog.md
+          echo "" >> changelog.md
+          echo "**Release Date:** $(date -u '+%Y-%m-%d')" >> changelog.md
+          echo "" >> changelog.md
+
+          # Get commits since last tag
+          if [ "$latest_tag" = "v0.0.0" ]; then
+            commits=$(git log --pretty=format:"- %s (%h)" HEAD)
+          else
+            commits=$(git log --pretty=format:"- %s (%h)" ${latest_tag}..HEAD)
+          fi
+
+          # Categorize commits
+          echo "## 🚀 Features" >> changelog.md
+          echo "$commits" | grep "^- feat" || echo "_No new features_" >> changelog.md
+          echo "" >> changelog.md
+
+          echo "## 🐛 Bug Fixes" >> changelog.md
+          echo "$commits" | grep "^- fix" || echo "_No bug fixes_" >> changelog.md
+          echo "" >> changelog.md
+
+          echo "## 📚 Documentation" >> changelog.md
+          echo "$commits" | grep "^- docs" || echo "_No documentation changes_" >> changelog.md
+          echo "" >> changelog.md
+
+          echo "## 🧪 Tests" >> changelog.md
+          echo "$commits" | grep "^- test" || echo "_No test changes_" >> changelog.md
+          echo "" >> changelog.md
+
+          echo "## 🔧 Maintenance" >> changelog.md
+          echo "$commits" | grep -E "^- (chore|refactor|perf|style|ci|build)" || echo "_No maintenance changes_" >> changelog.md
+          echo "" >> changelog.md
+
+          echo "## 📊 Statistics" >> changelog.md
+          commit_count=$(echo "$commits" | wc -l)
+          echo "- **Total commits:** $commit_count" >> changelog.md
+          echo "- **Previous version:** $latest_tag" >> changelog.md
+          echo "- **New version:** $new_tag" >> changelog.md
+          echo "" >> changelog.md
+
+          echo "---" >> changelog.md
+          echo "" >> changelog.md
+          echo "🤖 Generated with [Claude Code](https://claude.com/claude-code)" >> changelog.md
+          echo "" >> changelog.md
+          echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${latest_tag}...${new_tag}" >> changelog.md
+
+          # Show the changelog
+          cat changelog.md
+
+      - name: Create and push tag
+        if: steps.calc-version.outputs.should_release == 'true'
+        run: |
+          new_tag="${{ steps.calc-version.outputs.new_tag }}"
+
+          # Check if tag already exists
+          if git rev-parse "$new_tag" >/dev/null 2>&1; then
+            echo "Tag $new_tag already exists, skipping..."
+            exit 0
+          fi
+
+          # Create annotated tag with changelog
+          git tag -a "$new_tag" -F changelog.md
+
+          # Push tag to trigger release workflow
+          git push origin "$new_tag"
+
+          echo "✅ Created and pushed tag: $new_tag"
+
+      - name: Summary
+        if: steps.calc-version.outputs.should_release == 'true'
+        run: |
+          new_tag="${{ steps.calc-version.outputs.new_tag }}"
+          echo "## 🎉 Auto Tag Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **New Tag:** $new_tag" >> $GITHUB_STEP_SUMMARY
+          echo "- **Previous Tag:** ${{ steps.get-latest-tag.outputs.latest_tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Bump Type:** ${{ steps.analyze-commits.outputs.bump_type }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The release workflow will be triggered automatically." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📦 **Release will be available at:**" >> $GITHUB_STEP_SUMMARY
+          echo "https://github.com/${{ github.repository }}/releases/tag/$new_tag" >> $GITHUB_STEP_SUMMARY
+
+      - name: No release needed
+        if: steps.calc-version.outputs.should_release == 'false'
+        run: |
+          echo "## ℹ️ No Release Needed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "No conventional commits found since last release." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Commits must follow the conventional commit format:" >> $GITHUB_STEP_SUMMARY
+          echo "- \`feat:\` for new features (minor version bump)" >> $GITHUB_STEP_SUMMARY
+          echo "- \`fix:\` for bug fixes (patch version bump)" >> $GITHUB_STEP_SUMMARY
+          echo "- \`BREAKING CHANGE:\` for breaking changes (major version bump)" >> $GITHUB_STEP_SUMMARY

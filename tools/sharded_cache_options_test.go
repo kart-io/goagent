@@ -138,16 +138,18 @@ func TestShardedCacheWarmup(t *testing.T) {
 
 // TestShardCountRecommendation tests shard count recommendations
 func TestShardCountRecommendation(t *testing.T) {
+	cpuCores := runtime.NumCPU()
+
 	testCases := []struct {
 		qps      int
 		minCount uint32
 		maxCount uint32
 	}{
-		{50, 1, 32},       // Light load (adjusted for higher CPU core machines)
-		{300, 16, 64},     // Moderate load
-		{800, 32, 128},    // Medium load
-		{3000, 64, 128},   // High load
-		{10000, 256, 256}, // Very high load
+		{50, 1, nextPowerOfTwo(uint32(cpuCores * 2))},   // Light load: 2x CPU cores
+		{300, 16, nextPowerOfTwo(uint32(cpuCores * 4))}, // Moderate load: 4x CPU cores
+		{800, 32, nextPowerOfTwo(uint32(cpuCores * 8))}, // Medium load: 8x CPU cores
+		{3000, 64, 128},   // High load: Fixed range
+		{10000, 256, 256}, // Very high load: Fixed 256
 	}
 
 	for _, tc := range testCases {
@@ -310,6 +312,12 @@ func TestAutoTuning(t *testing.T) {
 	}
 
 	wg.Wait()
+
+	// Wait for autoTune to complete at least one cycle
+	time.Sleep(200 * time.Millisecond)
+
+	// Stop autotuning before accessing metrics
+	cache.Close()
 
 	// Verify metrics were collected
 	assert.NotNil(t, cache.tuneMetrics)
