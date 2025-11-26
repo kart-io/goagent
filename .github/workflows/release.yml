@@ -45,35 +45,42 @@ jobs:
           chmod +x ./verify_imports.sh
           ./verify_imports.sh
 
-      - name: Build binaries for multiple platforms
+      - name: Verify library can be imported
+        run: |
+          echo "Verifying library import..."
+          go list -m github.com/kart-io/goagent
+
+          # Check that major packages compile
+          go build -v ./core/...
+          go build -v ./llm/...
+          go build -v ./tools/...
+          go build -v ./agents/...
+
+          echo "✅ Library verification complete"
+
+      - name: Build example binaries (optional)
         run: |
           mkdir -p dist
 
-          # Linux AMD64
-          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X main.Version=${{ github.ref_name }}" -o dist/goagent-linux-amd64
-          tar -czf dist/goagent-${{ github.ref_name }}-linux-amd64.tar.gz -C dist goagent-linux-amd64
+          # Build plugingen tool as example
+          echo "Building plugingen tool..."
+          cd tools/plugingen
+          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o ../../dist/plugingen-linux-amd64 ./cmd/plugingen
+          cd ../..
 
-          # Linux ARM64
-          GOOS=linux GOARCH=arm64 go build -ldflags="-s -w -X main.Version=${{ github.ref_name }}" -o dist/goagent-linux-arm64
-          tar -czf dist/goagent-${{ github.ref_name }}-linux-arm64.tar.gz -C dist goagent-linux-arm64
+          tar -czf dist/plugingen-${{ github.ref_name }}-linux-amd64.tar.gz -C dist plugingen-linux-amd64
 
-          # macOS AMD64
-          GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w -X main.Version=${{ github.ref_name }}" -o dist/goagent-darwin-amd64
-          tar -czf dist/goagent-${{ github.ref_name }}-darwin-amd64.tar.gz -C dist goagent-darwin-amd64
-
-          # macOS ARM64 (Apple Silicon)
-          GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w -X main.Version=${{ github.ref_name }}" -o dist/goagent-darwin-arm64
-          tar -czf dist/goagent-${{ github.ref_name }}-darwin-arm64.tar.gz -C dist goagent-darwin-arm64
-
-          # Windows AMD64
-          GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -X main.Version=${{ github.ref_name }}" -o dist/goagent-windows-amd64.exe
-          zip -j dist/goagent-${{ github.ref_name }}-windows-amd64.zip dist/goagent-windows-amd64.exe
+          echo "✅ Example tool built successfully"
 
       - name: Generate checksums
         run: |
           cd dist
-          sha256sum *.tar.gz *.zip > checksums.txt
-          cat checksums.txt
+          if ls *.tar.gz 1> /dev/null 2>&1; then
+            sha256sum *.tar.gz > checksums.txt
+            cat checksums.txt
+          else
+            echo "No binaries to checksum (library project)" > checksums.txt
+          fi
 
       - name: Extract release notes
         id: extract-release-notes
@@ -113,7 +120,6 @@ jobs:
           prerelease: ${{ contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') }}
           files: |
             dist/*.tar.gz
-            dist/*.zip
             dist/checksums.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
