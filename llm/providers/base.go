@@ -5,7 +5,9 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"fmt"
+	mathrand "math/rand"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/go-resty/resty/v2"
@@ -14,6 +16,14 @@ import (
 	agentllm "github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/constants"
 	"github.com/kart-io/goagent/utils/httpclient"
+)
+
+// insecureRand is a fallback random number generator used when crypto/rand fails.
+// This maintains jitter effect even in degraded scenarios, preventing thundering herd.
+var (
+	insecureRand     *mathrand.Rand
+	insecureRandOnce sync.Once
+	insecureRandMu   sync.Mutex
 )
 
 // BaseProvider encapsulates common configuration and logic for all LLM providers.
@@ -260,8 +270,16 @@ func DefaultRetryConfig() RetryConfig {
 	}
 }
 
-// secureRandomInt63n generates a cryptographically secure random int64 in [0, n)
-// If n <= 0, it returns 0. If crypto/rand fails, it falls back to 0 (no jitter).
+// secureRandomInt63n generates a cryptographically secure random int64 in [0, n).
+// If n <= 0, it returns 0.
+//
+// Fallback Strategy:
+// When crypto/rand fails (e.g., due to entropy exhaustion or system issues), this function
+// falls back to math/rand to maintain jitter effect. This prevents thundering herd where
+// all retry attempts happen simultaneously, which could overwhelm the backend service.
+//
+// While the fallback is not cryptographically secure, it's sufficient for retry jitter
+// since the goal is randomness distribution, not cryptographic security.
 func secureRandomInt63n(n int64) int64 {
 	if n <= 0 {
 		return 0
@@ -269,8 +287,17 @@ func secureRandomInt63n(n int64) int64 {
 
 	var b [8]byte
 	if _, err := rand.Read(b[:]); err != nil {
-		// Fallback: no jitter on crypto/rand failure
-		return 0
+		// Fallback to insecure random to maintain jitter effect
+		// This prevents thundering herd when crypto/rand fails
+		insecureRandOnce.Do(func() {
+			insecureRand = mathrand.New(mathrand.NewSource(time.Now().UnixNano()))
+		})
+
+		insecureRandMu.Lock()
+		result := insecureRand.Int63n(n)
+		insecureRandMu.Unlock()
+
+		return result
 	}
 
 	// Convert bytes to uint64, then to int64 in range [0, n)
