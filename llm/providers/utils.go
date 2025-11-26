@@ -1,8 +1,9 @@
 package providers
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
-	"math/rand"
 	"strconv"
 	"time"
 
@@ -28,9 +29,15 @@ func parseRetryAfter(header string) int {
 	return 60 // Fallback
 }
 
-// generateCallID generates a unique ID for tool calls
+// generateCallID generates a cryptographically secure unique ID for tool calls
 func generateCallID() string {
-	return fmt.Sprintf("call_%d_%d", time.Now().UnixNano(), rand.Intn(100000))
+	// Use crypto/rand for secure random number generation
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
+		// Fallback to timestamp-based ID if crypto/rand fails
+		return fmt.Sprintf("call_%d", time.Now().UnixNano())
+	}
+	return fmt.Sprintf("call_%d_%s", time.Now().UnixNano(), hex.EncodeToString(b))
 }
 
 // isRetryable checks if an error is retryable based on its error code.
