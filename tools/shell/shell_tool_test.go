@@ -334,15 +334,25 @@ func TestShellTool_ExecutePipeline(t *testing.T) {
 		t.Skip("Skipping on Windows")
 	}
 
-	tool := NewShellTool([]string{"bash"}, 30*time.Second)
+	// Test with proper whitelisted commands
+	tool := NewShellTool([]string{"bash", "echo", "grep"}, 30*time.Second)
 	ctx := context.Background()
 
-	// This tests the pipeline method signature
+	// This tests the pipeline method signature with allowed commands
 	_, err := tool.ExecutePipeline(ctx, []string{"echo hello", "grep hello"})
 
-	// This should work if bash is allowed
-	if err != nil && tool.IsCommandAllowed("bash") {
-		t.Errorf("Expected no error for pipeline, got: %v", err)
+	// This should work since bash, echo, and grep are all allowed
+	if err != nil {
+		t.Errorf("Expected no error for pipeline with whitelisted commands, got: %v", err)
+	}
+
+	// Test with disallowed command in pipeline
+	tool2 := NewShellTool([]string{"bash"}, 30*time.Second)
+	_, err2 := tool2.ExecutePipeline(ctx, []string{"echo hello", "grep hello"})
+
+	// This should fail because echo and grep are not in whitelist
+	if err2 == nil {
+		t.Error("Expected error for pipeline with non-whitelisted commands, got nil")
 	}
 }
 

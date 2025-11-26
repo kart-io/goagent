@@ -8,9 +8,9 @@ import (
 	"strings"
 
 	"github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/retrieval"
-	"github.com/kart-io/k8s-agent/common/errors"
 )
 
 // JSONLoader JSON 文件加载器
@@ -75,7 +75,7 @@ func (l *JSONLoader) Load(ctx context.Context) ([]*interfaces.Document, error) {
 		if l.callbackManager != nil {
 			_ = l.callbackManager.OnError(ctx, err)
 		}
-		return nil, errors.Wrap(errors.CodeInternalError, "failed to read json file", err)
+		return nil, errors.Wrap(err, errors.CodeInternal, "failed to read json file")
 	}
 
 	var docs []*interfaces.Document
@@ -114,7 +114,7 @@ func (l *JSONLoader) LoadAndSplit(ctx context.Context, splitter TextSplitter) ([
 func (l *JSONLoader) loadJSON(content []byte) ([]*interfaces.Document, error) {
 	var data interface{}
 	if err := json.Unmarshal(content, &data); err != nil {
-		return nil, errors.Wrap(errors.CodeInternalError, "failed to parse json", err)
+		return nil, errors.Wrap(err, errors.CodeInternal, "failed to parse json")
 	}
 
 	docs := make([]*interfaces.Document, 0)
@@ -139,7 +139,7 @@ func (l *JSONLoader) loadJSON(content []byte) ([]*interfaces.Document, error) {
 		}
 
 	default:
-		return nil, errors.New(errors.CodeInternalError, "unsupported json structure")
+		return nil, errors.New(errors.CodeInternal, "unsupported json structure")
 	}
 
 	return docs, nil

@@ -6,9 +6,9 @@ import (
 	"strings"
 
 	"github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/retrieval"
-	"github.com/kart-io/k8s-agent/common/errors"
 )
 
 // MarkdownLoader Markdown 文件加载器
@@ -68,7 +68,7 @@ func (l *MarkdownLoader) Load(ctx context.Context) ([]*interfaces.Document, erro
 		if l.callbackManager != nil {
 			_ = l.callbackManager.OnError(ctx, err)
 		}
-		return nil, errors.Wrap(errors.CodeInternalError, "failed to read markdown file", err)
+		return nil, errors.Wrap(err, errors.CodeInternal, "failed to read markdown file")
 	}
 
 	text := string(content)

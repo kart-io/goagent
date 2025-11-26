@@ -5,12 +5,12 @@ import (
 	"gorm.io/gorm/logger"
 
 	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/options"
 	"github.com/kart-io/goagent/store"
 	"github.com/kart-io/goagent/store/factory"
 	"github.com/kart-io/goagent/store/memory"
 	"github.com/kart-io/goagent/store/postgres"
 	"github.com/kart-io/goagent/store/redis"
-	"github.com/kart-io/k8s-agent/common/options"
 )
 
 // StoreOptions extends common options with store-specific settings
@@ -70,10 +70,10 @@ func NewStore(opts *StoreOptions) (store.Store, error) {
 			Password:     opts.Redis.Password,
 			DB:           opts.Redis.DB,
 			Prefix:       opts.Prefix,
-			TTL:          0, // Store-specific, not in common options
+			TTL:          opts.Redis.TTL,
 			PoolSize:     opts.Redis.PoolSize,
 			MinIdleConns: opts.Redis.MinIdleConns,
-			MaxRetries:   3, // Default, not in common options
+			MaxRetries:   opts.Redis.MaxRetries,
 			DialTimeout:  opts.Redis.DialTimeout,
 			ReadTimeout:  opts.Redis.ReadTimeout,
 			WriteTimeout: opts.Redis.WriteTimeout,
@@ -175,8 +175,10 @@ func NewStoreFromFactory(opts *StoreOptions) (store.Store, error) {
 			Password:     opts.Redis.Password,
 			DB:           opts.Redis.DB,
 			Prefix:       opts.Prefix,
+			TTL:          opts.Redis.TTL,
 			PoolSize:     opts.Redis.PoolSize,
 			MinIdleConns: opts.Redis.MinIdleConns,
+			MaxRetries:   opts.Redis.MaxRetries,
 			DialTimeout:  opts.Redis.DialTimeout,
 			ReadTimeout:  opts.Redis.ReadTimeout,
 			WriteTimeout: opts.Redis.WriteTimeout,
@@ -272,10 +274,10 @@ func (a *RedisStoreAdapter) CreateStore() (store.Store, error) {
 		Password:     a.options.Password,
 		DB:           a.options.DB,
 		Prefix:       a.prefix,
-		TTL:          0,
+		TTL:          a.options.TTL,
 		PoolSize:     a.options.PoolSize,
 		MinIdleConns: a.options.MinIdleConns,
-		MaxRetries:   3,
+		MaxRetries:   a.options.MaxRetries,
 		DialTimeout:  a.options.DialTimeout,
 		ReadTimeout:  a.options.ReadTimeout,
 		WriteTimeout: a.options.WriteTimeout,
