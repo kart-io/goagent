@@ -108,3 +108,9 @@ var MessagesToPrompt = common.MessagesToPrompt
 // DefaultPromptFormatter is now an alias to common.DefaultPromptFormatter for backward compatibility.
 // Deprecated: Use common.DefaultPromptFormatter directly.
 var DefaultPromptFormatter = common.DefaultPromptFormatter
+
+// secureRandomInt63n is now an alias to common.SecureRandomInt63n for backward compatibility.
+// Deprecated: Use common.SecureRandomInt63n directly.
+func secureRandomInt63n(n int64) int64 {
+	return common.SecureRandomInt63n(n)
+}

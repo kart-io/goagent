@@ -35,6 +35,13 @@ type OpenAIProvider struct {
 	client *openai.Client
 }
 
+// NewOpenAI creates a new OpenAI provider using LLMOptions (deprecated).
+// Deprecated: Use NewOpenAIWithOptions instead.
+func NewOpenAI(config *agentllm.LLMOptions) (*OpenAIProvider, error) {
+	opts := common.ConfigToOptions(config)
+	return NewOpenAIWithOptions(opts...)
+}
+
 // NewOpenAIWithOptions creates a new OpenAI provider using options pattern
 func NewOpenAIWithOptions(opts ...agentllm.ClientOption) (*OpenAIProvider, error) {
 	// 创建 BaseProvider，统一处理 Options

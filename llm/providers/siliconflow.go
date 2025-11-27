@@ -25,6 +25,13 @@ type SiliconFlowClient struct {
 	client  *httpclient.Client
 }
 
+// NewSiliconFlow 使用 LLMOptions 创建 SiliconFlow provider（废弃）。
+// Deprecated: 使用 NewSiliconFlowWithOptions 代替。
+func NewSiliconFlow(config *agentllm.LLMOptions) (*SiliconFlowClient, error) {
+	opts := common.ConfigToOptions(config)
+	return NewSiliconFlowWithOptions(opts...)
+}
+
 // NewSiliconFlowWithOptions 使用选项模式创建 SiliconFlow provider
 func NewSiliconFlowWithOptions(opts ...agentllm.ClientOption) (*SiliconFlowClient, error) {
 	// 创建 BaseProvider，统一处理 Options

@@ -87,6 +87,13 @@ type HuggingFaceErrorResponse struct {
 	EstimatedTime float64 `json:"estimated_time,omitempty"` // For model loading
 }
 
+// NewHuggingFace creates a new Hugging Face provider using LLMOptions (deprecated).
+// Deprecated: Use NewHuggingFaceWithOptions instead.
+func NewHuggingFace(config *agentllm.LLMOptions) (*HuggingFaceProvider, error) {
+	opts := common.ConfigToOptions(config)
+	return NewHuggingFaceWithOptions(opts...)
+}
+
 // NewHuggingFaceWithOptions creates a new Hugging Face provider using options pattern
 func NewHuggingFaceWithOptions(opts ...agentllm.ClientOption) (*HuggingFaceProvider, error) {
 	// 创建 BaseProvider，统一处理 Options
