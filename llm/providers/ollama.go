@@ -3,7 +3,6 @@ package providers
 import (
 	"context"
 	"fmt"
-	"io"
 	"strings"
 	"time"
 
@@ -325,74 +324,10 @@ func (c *OllamaClient) ListModels() ([]string, error) {
 	return models, nil
 }
 
-// PullModel 拉取模型
-func (c *OllamaClient) PullModel(modelName string) error {
-	pullReq := map[string]interface{}{
-		"name": modelName,
-	}
-
-	// 使用更长的超时时间用于模型下载
-	pullClient := httpclient.NewClient(&httpclient.Config{
-		Timeout: 30 * time.Minute,
-		Headers: map[string]string{
-			"Content-Type": "application/json",
-		},
-	})
-
-	resp, err := pullClient.Resty().R().
-		SetBody(pullReq).
-		Post(c.baseURL + "/api/pull")
-
-	if err != nil {
-		return agentErrors.NewLLMRequestError(c.ProviderName(), modelName, err).
-			WithContext("operation", "pull_model")
-	}
-
-	if !resp.IsSuccess() {
-		return agentErrors.NewLLMResponseError(c.ProviderName(), modelName,
-			fmt.Sprintf("pull model error (status %d): %s", resp.StatusCode(), resp.String()))
-	}
-
-	// 读取流式响应
-	decoder := json.NewDecoder(strings.NewReader(resp.String()))
-	for {
-		var status map[string]interface{}
-		if err := decoder.Decode(&status); err != nil {
-			if err == io.EOF {
-				break
-			}
-			return agentErrors.NewParserInvalidJSONError("pull model response stream", err).
-				WithContext("provider", c.ProviderName())
-		}
-		// 可以在这里添加进度显示逻辑
-	}
-
-	return nil
-}
-
-// 辅助方法
-
+// getFinishReason converts Ollama's done flag to finish reason
 func (c *OllamaClient) getFinishReason(done bool) string {
 	if done {
-		return "complete"
+		return "stop"
 	}
-	return "length"
-}
-
-// WithModel 设置模型
-func (c *OllamaClient) WithModel(model string) *OllamaClient {
-	c.Config.Model = model
-	return c
-}
-
-// WithTemperature 设置温度
-func (c *OllamaClient) WithTemperature(temperature float64) *OllamaClient {
-	c.Config.Temperature = temperature
-	return c
-}
-
-// WithMaxTokens 设置最大 token 数
-func (c *OllamaClient) WithMaxTokens(maxTokens int) *OllamaClient {
-	c.Config.MaxTokens = maxTokens
-	return c
+	return ""
 }
