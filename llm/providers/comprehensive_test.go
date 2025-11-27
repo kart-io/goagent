@@ -792,10 +792,9 @@ func TestOpenAIStreamingProvider_CreationComprehensive(t *testing.T) {
 		Temperature: 0.7,
 	}
 
-	provider, err := NewOpenAIStreaming(config)
+	provider, err := NewOpenAI(config)
 	assert.NoError(t, err)
 	assert.NotNil(t, provider)
-	assert.NotNil(t, provider.OpenAIProvider)
 }
 
 // TestOpenAIStreamingProvider_CreationErrorComprehensive tests error handling in creation
@@ -809,7 +808,7 @@ func TestOpenAIStreamingProvider_CreationErrorComprehensive(t *testing.T) {
 		// Missing APIKey
 	}
 
-	provider, err := NewOpenAIStreaming(config)
+	provider, err := NewOpenAI(config)
 	assert.Error(t, err)
 	assert.Nil(t, provider)
 }

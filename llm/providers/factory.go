@@ -9,15 +9,21 @@ import (
 )
 
 // ClientFactory 统一的客户端工厂
+// Deprecated: 使用 llm/registry.New() 代替。
+// 迁移示例:
+//   import _ "github.com/kart-io/goagent/contrib/llm-providers/openai"
+//   client, err := registry.New(constants.ProviderOpenAI, opts...)
 type ClientFactory struct{}
 
 // NewClientFactory 创建新的客户端工厂
+// Deprecated: 使用 llm/registry.New() 代替。
 func NewClientFactory() *ClientFactory {
 	return &ClientFactory{}
 }
 
 // CreateClient 根据配置创建相应的 LLM 客户端
 // 内部使用 Options 模式，确保统一的配置处理
+// Deprecated: 使用 registry.New() 代替。
 func (f *ClientFactory) CreateClient(config *agentllm.LLMOptions) (agentllm.Client, error) {
 	// 准备配置（验证、设置默认值、从环境变量读取）
 	if err := agentllm.PrepareConfig(config); err != nil {
@@ -62,6 +68,7 @@ func (f *ClientFactory) CreateClient(config *agentllm.LLMOptions) (agentllm.Clie
 }
 
 // CreateClientWithOptions 使用选项模式创建客户端
+// Deprecated: 使用 registry.New() 代替。
 func (f *ClientFactory) CreateClientWithOptions(opts ...agentllm.ClientOption) (agentllm.Client, error) {
 	// 创建配置
 	config := agentllm.NewLLMOptionsWithOptions(opts...)
