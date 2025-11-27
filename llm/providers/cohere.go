@@ -81,6 +81,13 @@ type CohereErrorResponse struct {
 	Message string `json:"message"`
 }
 
+// NewCohere creates a new Cohere provider using LLMOptions (deprecated).
+// Deprecated: Use NewCohereWithOptions instead.
+func NewCohere(config *agentllm.LLMOptions) (*CohereProvider, error) {
+	opts := ConfigToOptions(config)
+	return NewCohereWithOptions(opts...)
+}
+
 // NewCohereWithOptions creates a new Cohere provider using options pattern
 func NewCohereWithOptions(opts ...agentllm.ClientOption) (*CohereProvider, error) {
 	// 创建 BaseProvider，统一处理 Options

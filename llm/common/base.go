@@ -270,7 +270,7 @@ func DefaultRetryConfig() RetryConfig {
 //
 // While the fallback is not cryptographically secure, it's sufficient for retry jitter
 // since the goal is randomness distribution, not cryptographic security.
-func secureRandomInt63n(n int64) int64 {
+func SecureRandomInt63n(n int64) int64 {
 	if n <= 0 {
 		return 0
 	}
@@ -338,7 +338,7 @@ func ExecuteWithRetry[T any](ctx context.Context, cfg RetryConfig, providerName 
 		if cfg.MaxDelay > 0 && delay > cfg.MaxDelay {
 			delay = cfg.MaxDelay
 		}
-		jitter := time.Duration(secureRandomInt63n(int64(delay) / 2))
+		jitter := time.Duration(SecureRandomInt63n(int64(delay) / 2))
 
 		select {
 		case <-ctx.Done():

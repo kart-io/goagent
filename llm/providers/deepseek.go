@@ -109,6 +109,13 @@ type DeepSeekStreamResponse struct {
 	Choices []DeepSeekChoice `json:"choices"`
 }
 
+// NewDeepSeek creates a new DeepSeek provider using LLMOptions (deprecated).
+// Deprecated: Use NewDeepSeekWithOptions instead.
+func NewDeepSeek(config *agentllm.LLMOptions) (*DeepSeekProvider, error) {
+	opts := ConfigToOptions(config)
+	return NewDeepSeekWithOptions(opts...)
+}
+
 // NewDeepSeekWithOptions creates a new DeepSeek provider using options pattern
 func NewDeepSeekWithOptions(opts ...agentllm.ClientOption) (*DeepSeekProvider, error) {
 	// 创建 BaseProvider，统一处理 Options

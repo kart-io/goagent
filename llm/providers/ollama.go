@@ -24,6 +24,13 @@ type OllamaClient struct {
 	client  *httpclient.Client
 }
 
+// NewOllama 使用 LLMOptions 创建 Ollama 客户端（废弃）。
+// Deprecated: 使用 NewOllamaWithOptions 代替。
+func NewOllama(config *agentllm.LLMOptions) (*OllamaClient, error) {
+	opts := common.ConfigToOptions(config)
+	return NewOllamaWithOptions(opts...)
+}
+
 // NewOllamaWithOptions 使用选项模式创建 Ollama 客户端
 func NewOllamaWithOptions(opts ...agentllm.ClientOption) (*OllamaClient, error) {
 	// 创建 BaseProvider，统一处理 Options
