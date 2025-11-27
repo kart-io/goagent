@@ -6,6 +6,7 @@ import (
 
 	agentllm "github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/constants"
+	"github.com/kart-io/goagent/llm/registry"
 )
 
 // ClientFactory 统一的客户端工厂
@@ -33,7 +34,13 @@ func (f *ClientFactory) CreateClient(config *agentllm.LLMOptions) (agentllm.Clie
 	// 将配置转换为 Options，使用统一的 WithOptions 版本
 	opts := ConfigToOptions(config)
 
-	// 根据提供商创建客户端，优先使用 WithOptions 版本
+	// 优先尝试从 registry 创建（支持 contrib providers）
+	client, err := registry.New(config.Provider, opts...)
+	if err == nil {
+		return client, nil
+	}
+
+	// 回退到本地实现（向后兼容）
 	switch config.Provider {
 	case constants.ProviderOpenAI:
 		return NewOpenAIWithOptions(opts...)

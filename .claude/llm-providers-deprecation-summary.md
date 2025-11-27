@@ -12,6 +12,8 @@
 | 识别废弃代码 | ✅ 完成 | `llm-providers-cleanup-analysis.md` (第5节) |
 | 识别共享代码 | ✅ 完成 | `llm-providers-cleanup-analysis.md` (第6节) |
 | 创建清理计划 | ✅ 完成 | `llm-providers-cleanup-plan.md` |
+| Phase 1 执行 | ✅ 完成 | Git commit de966ab |
+| Phase 2 执行 | ✅ 完成 | Git commit (待创建) |
 | 生成总结报告 | ✅ 完成 | 本文档 |
 
 ## 🎯 核心发现
@@ -233,20 +235,22 @@ llm/providers/anthropic.go: NewAnthropicWithOptions()
 
 ## ✅ 下一步行动
 
-### 立即执行 (今天)
+### ✅ 已完成 (Phase 1 & 2)
 - [x] 完成深度分析
 - [x] 创建清理计划
 - [x] 生成总结报告
-- [ ] 执行计划 A (保守清理)
-- [ ] 运行测试验证
-- [ ] 创建 git commit
+- [x] 执行计划 A (保守清理)
+- [x] 运行测试验证
+- [x] 创建 git commit (de966ab)
+- [x] 迁移 factory 到 registry (Phase 2)
+- [x] 实现回退机制保持兼容性
+- [x] 验证所有测试通过
 
-### 本周完成
-- [ ] 迁移 factory 到 registry (阶段 2)
+### 本周待完成
 - [ ] 更新核心文档
 - [ ] 更新关键示例
 
-### 本月完成
+### 本月待完成
 - [ ] 迁移所有测试到新 API
 - [ ] 更新所有文档
 - [ ] 发布迁移指南
@@ -255,6 +259,51 @@ llm/providers/anthropic.go: NewAnthropicWithOptions()
 - [ ] 完全删除 provider 实现 (阶段 3)
 - [ ] 架构完全迁移到插件化
 - [ ] 维护成本降低 80%+
+
+## 🎉 Phase 2 完成总结
+
+**执行时间**: 2025-11-27
+**Git Commit**: (待创建)
+
+### 实现内容
+
+1. **Registry 集成**
+   - factory.go 现在优先使用 registry.New()
+   - 实现智能回退机制：registry 失败时使用本地实现
+   - 保持完全向后兼容性
+
+2. **架构优势**
+   - 支持 contrib providers 的动态加载
+   - 不破坏现有代码的正常运行
+   - 为 Phase 3 完全清理铺平道路
+
+3. **测试验证**
+   - ✅ 所有 Factory 测试通过
+   - ✅ 所有 Provider 测试通过
+   - ✅ 向后兼容性验证通过
+
+### 技术细节
+
+**回退机制实现**:
+```go
+// 优先尝试从 registry 创建（支持 contrib providers）
+client, err := registry.New(config.Provider, opts...)
+if err == nil {
+    return client, nil
+}
+
+// 回退到本地实现（向后兼容）
+switch config.Provider {
+    case constants.ProviderOpenAI:
+        return NewOpenAIWithOptions(opts...)
+    // ... 其他 providers
+}
+```
+
+**优势**:
+- contrib providers 导入时自动使用新实现
+- 未导入时回退到本地实现
+- 零破坏性变更
 
 ## 🎬 总结
 
