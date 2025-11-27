@@ -3,6 +3,8 @@ package retrieval
 import (
 	"context"
 	"testing"
+
+	"github.com/kart-io/goagent/interfaces"
 )
 
 func TestSimpleEmbedder(t *testing.T) {
@@ -133,7 +135,7 @@ func TestMemoryVectorStore(t *testing.T) {
 	store := NewMemoryVectorStore(config)
 
 	t.Run("Add and retrieve documents", func(t *testing.T) {
-		docs := []*Document{
+		docs := []*interfaces.Document{
 			NewDocument("Machine learning is a subset of AI", map[string]interface{}{"source": "wiki"}),
 			NewDocument("Deep learning uses neural networks", map[string]interface{}{"source": "book"}),
 			NewDocument("Natural language processing is important", map[string]interface{}{"source": "paper"}),
@@ -194,11 +196,11 @@ func TestMemoryVectorStore(t *testing.T) {
 }
 
 // GetNodes 辅助方法，用于测试
-func (m *MemoryVectorStore) GetNodes() []*Document {
+func (m *MemoryVectorStore) GetNodes() []*interfaces.Document {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	docs := make([]*Document, 0, len(m.documents))
+	docs := make([]*interfaces.Document, 0, len(m.documents))
 	for _, docWithVec := range m.documents {
 		docs = append(docs, docWithVec.Document)
 	}
@@ -216,7 +218,7 @@ func TestRAGRetriever(t *testing.T) {
 	})
 
 	// 添加测试文档
-	docs := []*Document{
+	docs := []*interfaces.Document{
 		NewDocument("Python is a programming language", map[string]interface{}{"type": "programming"}),
 		NewDocument("Machine learning models need data", map[string]interface{}{"type": "ml"}),
 		NewDocument("Neural networks have layers", map[string]interface{}{"type": "dl"}),
@@ -304,7 +306,7 @@ func BenchmarkMemoryVectorStoreSearch(b *testing.B) {
 	})
 
 	// 添加测试文档
-	docs := make([]*Document, 100)
+	docs := make([]*interfaces.Document, 100)
 	for i := 0; i < 100; i++ {
 		docs[i] = NewDocument("This is document content", nil)
 	}

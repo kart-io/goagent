@@ -3,6 +3,8 @@ package tools
 import (
 	"runtime"
 	"time"
+
+	"github.com/kart-io/goagent/interfaces"
 )
 
 // ShardedCacheOption is a functional option for configuring ShardedToolCache
@@ -159,7 +161,7 @@ func WithMaxShardConcurrency(max int) ShardedCacheOption {
 }
 
 // WithWarmup enables cache warmup with specified entries
-func WithWarmup(entries map[string]*ToolOutput) ShardedCacheOption {
+func WithWarmup(entries map[string]*interfaces.ToolOutput) ShardedCacheOption {
 	return func(c *ShardedCacheConfig) {
 		c.WarmupEntries = entries
 	}

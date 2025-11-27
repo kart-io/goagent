@@ -8,6 +8,7 @@ import (
 
 	"github.com/kart-io/goagent/builder"
 	"github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/core/checkpoint"
 	"github.com/kart-io/goagent/core/execution"
 	"github.com/kart-io/goagent/core/middleware"
 	"github.com/kart-io/goagent/interfaces"
@@ -78,7 +79,7 @@ func main() {
 
 	// 4. Create Store and Checkpointer
 	store := memory.New()
-	checkpointer := core.NewInMemorySaver()
+	checkpointer := checkpoint.NewInMemorySaver()
 
 	// Pre-populate store with some data
 	_ = store.Put(ctx, []string{"users", appContext.UserID}, "profile", map[string]interface{}{
@@ -157,6 +158,7 @@ func main() {
 	fmt.Println("Building AI Agent with Complete Feature Set...")
 	fmt.Println()
 
+	//nolint:staticcheck // Example demonstrates old API for backward compatibility
 	agent, err := builder.NewAgentBuilder[ApplicationContext, *CustomState](llmClient).
 		WithSystemPrompt("You are an advanced AI assistant with access to multiple tools. "+
 			"You help users with various tasks including search, calculations, weather, and database queries. "+
@@ -188,17 +190,15 @@ func main() {
 			responseFormatter,
 			core.NewCircuitBreakerMiddleware(3, 30*time.Second),
 		).
-		WithConfig(&builder.AgentConfig{
-			MaxIterations:   10,
-			Timeout:         30 * time.Second,
-			EnableStreaming: false,
-			EnableAutoSave:  true,
-			SaveInterval:    10 * time.Second,
-			MaxTokens:       2000,
-			Temperature:     0.7,
-			SessionID:       fmt.Sprintf("session-%s-%d", appContext.UserID, time.Now().Unix()),
-			Verbose:         true,
-		}).
+		WithMaxIterations(10).
+		WithTimeout(30*time.Second).
+		WithStreamingEnabled(false).
+		WithAutoSaveEnabled(true).
+		WithSaveInterval(10*time.Second).
+		WithMaxTokens(2000).
+		WithTemperature(0.7).
+		WithSessionID(fmt.Sprintf("session-%s-%d", appContext.UserID, time.Now().Unix())).
+		WithVerbose(true).
 		WithErrorHandler(func(err error) error {
 			// Custom error handling
 			log.Printf("Agent error: %v", err)

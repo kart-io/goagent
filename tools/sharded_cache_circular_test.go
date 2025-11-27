@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kart-io/goagent/interfaces"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -27,13 +29,13 @@ func TestShardedCache_CircularDependency(t *testing.T) {
 	cache.AddDependency("toolA", "toolC")
 
 	// 为每个工具添加缓存条目（使用 extractToolNameFromKey 识别的格式）
-	err := cache.Set(ctx, "toolA:key1", &ToolOutput{Result: "a1"}, 5*time.Minute)
+	err := cache.Set(ctx, "toolA:key1", &interfaces.ToolOutput{Result: "a1"}, 5*time.Minute)
 	require.NoError(t, err)
 
-	err = cache.Set(ctx, "toolB:key1", &ToolOutput{Result: "b1"}, 5*time.Minute)
+	err = cache.Set(ctx, "toolB:key1", &interfaces.ToolOutput{Result: "b1"}, 5*time.Minute)
 	require.NoError(t, err)
 
-	err = cache.Set(ctx, "toolC:key1", &ToolOutput{Result: "c1"}, 5*time.Minute)
+	err = cache.Set(ctx, "toolC:key1", &interfaces.ToolOutput{Result: "c1"}, 5*time.Minute)
 	require.NoError(t, err)
 
 	// 验证初始状态
@@ -75,7 +77,7 @@ func TestShardedCache_ComplexCircularDependency(t *testing.T) {
 	for _, tool := range tools {
 		for i := 0; i < 3; i++ {
 			key := tool + ":key" + string(rune('0'+i))
-			err := cache.Set(ctx, key, &ToolOutput{Result: key}, 5*time.Minute)
+			err := cache.Set(ctx, key, &interfaces.ToolOutput{Result: key}, 5*time.Minute)
 			require.NoError(t, err)
 		}
 	}
@@ -109,7 +111,7 @@ func TestShardedCache_SelfDependency(t *testing.T) {
 	cache.AddDependency("toolA", "toolA")
 
 	// 添加缓存条目
-	err := cache.Set(ctx, "toolA:key1", &ToolOutput{Result: "a1"}, 5*time.Minute)
+	err := cache.Set(ctx, "toolA:key1", &interfaces.ToolOutput{Result: "a1"}, 5*time.Minute)
 	require.NoError(t, err)
 
 	// 触发失效，不应该导致无限递归
@@ -138,10 +140,10 @@ func TestShardedCache_InvalidateByPatternWithCircularDeps(t *testing.T) {
 	cache.AddDependency("toolA", "toolB")
 
 	// 添加缓存条目
-	err := cache.Set(ctx, "toolA:user123", &ToolOutput{Result: "a1"}, 5*time.Minute)
+	err := cache.Set(ctx, "toolA:user123", &interfaces.ToolOutput{Result: "a1"}, 5*time.Minute)
 	require.NoError(t, err)
 
-	err = cache.Set(ctx, "toolB:user456", &ToolOutput{Result: "b1"}, 5*time.Minute)
+	err = cache.Set(ctx, "toolB:user456", &interfaces.ToolOutput{Result: "b1"}, 5*time.Minute)
 	require.NoError(t, err)
 
 	// 使用正则表达式失效，应该触发级联失效但不会栈溢出
@@ -166,10 +168,10 @@ func TestShardedCache_NoDependency(t *testing.T) {
 	ctx := context.Background()
 
 	// 添加缓存条目，不设置依赖
-	err := cache.Set(ctx, "toolA:key1", &ToolOutput{Result: "a"}, 5*time.Minute)
+	err := cache.Set(ctx, "toolA:key1", &interfaces.ToolOutput{Result: "a"}, 5*time.Minute)
 	require.NoError(t, err)
 
-	err = cache.Set(ctx, "toolB:key1", &ToolOutput{Result: "b"}, 5*time.Minute)
+	err = cache.Set(ctx, "toolB:key1", &interfaces.ToolOutput{Result: "b"}, 5*time.Minute)
 	require.NoError(t, err)
 
 	// 失效 toolA 不应该影响 toolB
@@ -209,7 +211,7 @@ func BenchmarkCircularDependencyInvalidation(b *testing.B) {
 			tool := "tool" + string(rune('A'+i))
 			for j := 0; j < 10; j++ {
 				key := tool + ":key" + string(rune('0'+j))
-				_ = cache.Set(ctx, key, &ToolOutput{Result: key}, 5*time.Minute)
+				_ = cache.Set(ctx, key, &interfaces.ToolOutput{Result: key}, 5*time.Minute)
 			}
 		}
 	}

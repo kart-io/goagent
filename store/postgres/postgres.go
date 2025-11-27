@@ -55,12 +55,28 @@ func (storeModel) TableName() string {
 	return "agent_stores"
 }
 
-// New creates a new PostgreSQL-backed store
-func New(config *Config) (*Store, error) {
-	if config == nil {
-		config = DefaultConfig()
+// New creates a new PostgreSQL-backed store with options
+//
+// Example:
+//
+//	store, err := postgres.New("host=localhost user=postgres dbname=mydb",
+//	    postgres.WithMaxOpenConns(50),
+//	    postgres.WithAutoMigrate(true),
+//	)
+func New(dsn string, opts ...PostgresOption) (*Store, error) {
+	config := DefaultConfig()
+	config.DSN = dsn
+
+	// Apply options
+	for _, opt := range opts {
+		opt(config)
 	}
 
+	return newFromConfig(config)
+}
+
+// newFromConfig is the internal constructor that creates a store from config
+func newFromConfig(config *Config) (*Store, error) {
 	// Open database connection
 	db, err := gorm.Open(postgres.Open(config.DSN), &gorm.Config{
 		Logger: logger.Default.LogMode(config.LogLevel),

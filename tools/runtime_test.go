@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/kart-io/goagent/interfaces"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
@@ -404,7 +406,7 @@ func TestSavePreferenceTool(t *testing.T) {
 	runtime := NewToolRuntime(ctx, state, mockStore)
 
 	tool := NewSavePreferenceTool()
-	input := &ToolInput{
+	input := &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"key":   "language",
 			"value": "en",
@@ -434,7 +436,7 @@ func TestUpdateStateTool(t *testing.T) {
 	runtime := NewToolRuntime(ctx, state, nil)
 
 	tool := NewUpdateStateTool()
-	input := &ToolInput{
+	input := &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"key1": "value1",
 			"key2": 123,
@@ -494,7 +496,7 @@ func TestToolRuntimeManager(t *testing.T) {
 	mockStore := &MockStore{}
 
 	// Create runtime
-	runtime1 := manager.CreateRuntime("call_1", state, mockStore)
+	runtime1 := manager.CreateRuntimeWithContext(context.Background(), "call_1", state, mockStore)
 	assert.NotNil(t, runtime1)
 	assert.Equal(t, "call_1", runtime1.ToolCallID)
 
@@ -508,7 +510,7 @@ func TestToolRuntimeManager(t *testing.T) {
 	assert.False(t, exists)
 
 	// Create another runtime
-	runtime2 := manager.CreateRuntime("call_2", state, mockStore)
+	runtime2 := manager.CreateRuntimeWithContext(context.Background(), "call_2", state, mockStore)
 	assert.NotNil(t, runtime2)
 	assert.Equal(t, "call_2", runtime2.ToolCallID)
 
@@ -564,7 +566,7 @@ func BenchmarkToolRuntimeManager_Operations(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		callID := fmt.Sprintf("call_%d", i)
-		manager.CreateRuntime(callID, state, mockStore)
+		manager.CreateRuntimeWithContext(context.Background(), callID, state, mockStore)
 		retrieved, _ := manager.GetRuntime(callID)
 		_ = retrieved
 		manager.RemoveRuntime(callID)

@@ -274,7 +274,7 @@ func (t *APICallerTool) executeRequest(ctx context.Context, params *apiParams) (
 	if !params.FollowRedirects || params.Retry.MaxAttempts != t.maxRetries {
 		// Create a new client with custom settings
 		config := &httpclient.Config{
-			Timeout:          t.client.Resty().GetClient().Timeout,
+			Timeout:          t.client.Config().Timeout,
 			RetryCount:       params.Retry.MaxAttempts - 1, // -1 because resty counts retries, not total attempts
 			RetryWaitTime:    1 * time.Second,
 			RetryMaxWaitTime: 1 * time.Second,

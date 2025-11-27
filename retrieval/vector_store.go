@@ -11,15 +11,6 @@ import (
 	"github.com/kart-io/goagent/interfaces"
 )
 
-// VectorStore 向量存储接口
-//
-// Deprecated: Use interfaces.VectorStore instead.
-// This type alias provides backward compatibility. It will be removed in v1.0.0.
-//
-// Migration: import "github.com/kart-io/goagent/interfaces"
-// See: pkg/agent/docs/refactoring/migration-guide.md
-type VectorStore = interfaces.VectorStore
-
 // VectorStoreRetriever 向量存储检索器
 //
 // 使用向量相似度进行文档检索
@@ -27,7 +18,7 @@ type VectorStoreRetriever struct {
 	*BaseRetriever
 
 	// VectorStore 向量存储实例
-	VectorStore VectorStore
+	VectorStore interfaces.VectorStore
 
 	// SearchType 搜索类型
 	SearchType SearchType
@@ -51,7 +42,7 @@ const (
 )
 
 // NewVectorStoreRetriever 创建向量存储检索器
-func NewVectorStoreRetriever(vectorStore VectorStore, config RetrieverConfig) *VectorStoreRetriever {
+func NewVectorStoreRetriever(vectorStore interfaces.VectorStore, config RetrieverConfig) *VectorStoreRetriever {
 	retriever := &VectorStoreRetriever{
 		BaseRetriever: NewBaseRetriever(),
 		VectorStore:   vectorStore,
@@ -67,8 +58,8 @@ func NewVectorStoreRetriever(vectorStore VectorStore, config RetrieverConfig) *V
 }
 
 // GetRelevantDocuments 检索相关文档
-func (v *VectorStoreRetriever) GetRelevantDocuments(ctx context.Context, query string) ([]*Document, error) {
-	var docs []*Document
+func (v *VectorStoreRetriever) GetRelevantDocuments(ctx context.Context, query string) ([]*interfaces.Document, error) {
+	var docs []*interfaces.Document
 	var err error
 
 	switch v.SearchType {
@@ -114,24 +105,24 @@ func (v *VectorStoreRetriever) WithSearchKwargs(kwargs map[string]interface{}) *
 
 // MockVectorStore 模拟向量存储（用于测试和示例）
 type MockVectorStore struct {
-	documents []*Document
+	documents []*interfaces.Document
 	mu        sync.RWMutex
 }
 
 // NewMockVectorStore 创建模拟向量存储
 func NewMockVectorStore() *MockVectorStore {
 	return &MockVectorStore{
-		documents: make([]*Document, 0),
+		documents: make([]*interfaces.Document, 0),
 	}
 }
 
 // SimilaritySearch 相似度搜索（模拟实现）
-func (m *MockVectorStore) SimilaritySearch(ctx context.Context, query string, topK int) ([]*Document, error) {
+func (m *MockVectorStore) SimilaritySearch(ctx context.Context, query string, topK int) ([]*interfaces.Document, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
 	// 简单的模拟：基于文本包含关系
-	results := make([]*Document, 0)
+	results := make([]*interfaces.Document, 0)
 	for _, doc := range m.documents {
 		// 模拟相似度计算
 		score := m.calculateSimilarity(query, doc.PageContent)
@@ -154,12 +145,12 @@ func (m *MockVectorStore) SimilaritySearch(ctx context.Context, query string, to
 }
 
 // SimilaritySearchWithScore 带分数的相似度搜索
-func (m *MockVectorStore) SimilaritySearchWithScore(ctx context.Context, query string, topK int) ([]*Document, error) {
+func (m *MockVectorStore) SimilaritySearchWithScore(ctx context.Context, query string, topK int) ([]*interfaces.Document, error) {
 	return m.SimilaritySearch(ctx, query, topK)
 }
 
 // AddDocuments 添加文档
-func (m *MockVectorStore) AddDocuments(ctx context.Context, docs []*Document) error {
+func (m *MockVectorStore) AddDocuments(ctx context.Context, docs []*interfaces.Document) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -177,7 +168,7 @@ func (m *MockVectorStore) Delete(ctx context.Context, ids []string) error {
 		idSet[id] = true
 	}
 
-	filtered := make([]*Document, 0)
+	filtered := make([]*interfaces.Document, 0)
 	for _, doc := range m.documents {
 		if !idSet[doc.ID] {
 			filtered = append(filtered, doc)
@@ -219,18 +210,18 @@ func (m *MockVectorStore) calculateSimilarity(query, content string) float64 {
 }
 
 // LoadDocuments 加载文档到向量存储
-func (m *MockVectorStore) LoadDocuments(docs []*Document) {
+func (m *MockVectorStore) LoadDocuments(docs []*interfaces.Document) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.documents = append(m.documents, docs...)
 }
 
 // GetAllDocuments 获取所有文档
-func (m *MockVectorStore) GetAllDocuments() []*Document {
+func (m *MockVectorStore) GetAllDocuments() []*interfaces.Document {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	result := make([]*Document, len(m.documents))
+	result := make([]*interfaces.Document, len(m.documents))
 	copy(result, m.documents)
 	return result
 }
@@ -239,5 +230,5 @@ func (m *MockVectorStore) GetAllDocuments() []*Document {
 func (m *MockVectorStore) Clear() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.documents = make([]*Document, 0)
+	m.documents = make([]*interfaces.Document, 0)
 }

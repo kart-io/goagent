@@ -4,6 +4,8 @@ import (
 	"context"
 	"sync"
 	"testing"
+
+	"github.com/kart-io/goagent/interfaces"
 )
 
 // TestKeywordRetrieverEmptyDocs tests with empty document list
@@ -11,7 +13,7 @@ func TestKeywordRetrieverEmptyDocs(t *testing.T) {
 	ctx := context.Background()
 
 	config := RetrieverConfig{TopK: 5, MinScore: 0.0}
-	retriever := NewKeywordRetriever([]*Document{}, config)
+	retriever := NewKeywordRetriever([]*interfaces.Document{}, config)
 
 	results, err := retriever.GetRelevantDocuments(ctx, "test query")
 	if err != nil {
@@ -25,7 +27,7 @@ func TestKeywordRetrieverEmptyDocs(t *testing.T) {
 
 // TestKeywordRetrieverBM25Algorithm tests BM25 algorithm
 func TestKeywordRetrieverBM25Algorithm(t *testing.T) {
-	docs := []*Document{
+	docs := []*interfaces.Document{
 		NewDocument("Kubernetes is a container orchestration platform", nil),
 		NewDocument("Docker containers are lightweight and portable", nil),
 		NewDocument("Python is a popular programming language", nil),
@@ -52,7 +54,7 @@ func TestKeywordRetrieverBM25Algorithm(t *testing.T) {
 
 // TestKeywordRetrieverTFIDFAlgorithm tests TF-IDF algorithm
 func TestKeywordRetrieverTFIDFAlgorithm(t *testing.T) {
-	docs := []*Document{
+	docs := []*interfaces.Document{
 		NewDocument("machine learning deep neural networks", nil),
 		NewDocument("natural language processing NLP", nil),
 		NewDocument("computer vision image recognition", nil),
@@ -76,7 +78,7 @@ func TestKeywordRetrieverTFIDFAlgorithm(t *testing.T) {
 
 // TestKeywordRetrieverUnknownAlgorithm tests unknown algorithm
 func TestKeywordRetrieverUnknownAlgorithm(t *testing.T) {
-	docs := []*Document{
+	docs := []*interfaces.Document{
 		NewDocument("Test content", nil),
 	}
 
@@ -94,7 +96,7 @@ func TestKeywordRetrieverUnknownAlgorithm(t *testing.T) {
 
 // TestKeywordRetrieverMinScoreFiltering tests minimum score filtering
 func TestKeywordRetrieverMinScoreFiltering(t *testing.T) {
-	docs := []*Document{
+	docs := []*interfaces.Document{
 		NewDocument("High relevance machine learning deep learning", nil),
 		NewDocument("Low relevance content", nil),
 	}
@@ -199,7 +201,7 @@ func TestInvertedIndexDuplicateTerms(t *testing.T) {
 func TestHybridRetrieverCombSumFusion(t *testing.T) {
 	ctx := context.Background()
 
-	docs := []*Document{
+	docs := []*interfaces.Document{
 		NewDocument("Kubernetes container orchestration", nil),
 		NewDocument("Docker containerization technology", nil),
 		NewDocument("Python programming language", nil),
@@ -228,7 +230,7 @@ func TestHybridRetrieverCombSumFusion(t *testing.T) {
 // TestHybridRetrieverWeightConfiguration tests weight configuration
 func TestHybridRetrieverWeightConfiguration(t *testing.T) {
 	vectorStore := NewMockVectorStore()
-	keywordDocs := []*Document{NewDocument("test", nil)}
+	keywordDocs := []*interfaces.Document{NewDocument("test", nil)}
 
 	vectorRetriever := NewVectorStoreRetriever(vectorStore, DefaultRetrieverConfig())
 	keywordRetriever := NewKeywordRetriever(keywordDocs, DefaultRetrieverConfig())
@@ -253,7 +255,7 @@ func TestHybridRetrieverWeightConfiguration(t *testing.T) {
 
 // TestNormalizeScoresAllSame tests normalizing identical scores
 func TestNormalizeScoresAllSame(t *testing.T) {
-	docs := []*Document{
+	docs := []*interfaces.Document{
 		{ID: "1", Score: 0.5},
 		{ID: "2", Score: 0.5},
 		{ID: "3", Score: 0.5},
@@ -275,7 +277,7 @@ func TestNormalizeScoresAllSame(t *testing.T) {
 
 // TestNormalizeScoresRange tests normalizing different scores
 func TestNormalizeScoresRange(t *testing.T) {
-	docs := []*Document{
+	docs := []*interfaces.Document{
 		{ID: "1", Score: 0.1},
 		{ID: "2", Score: 0.5},
 		{ID: "3", Score: 0.9},
@@ -320,7 +322,7 @@ func TestEnsembleRetrieverNoRetrievers(t *testing.T) {
 func TestEnsembleRetrieverSingleRetriever(t *testing.T) {
 	ctx := context.Background()
 
-	docs := []*Document{
+	docs := []*interfaces.Document{
 		NewDocument("Test document", nil),
 	}
 
@@ -351,7 +353,7 @@ func TestEnsembleRetrieverWeightMismatch(t *testing.T) {
 		}
 	}()
 
-	docs := []*Document{NewDocument("test", nil)}
+	docs := []*interfaces.Document{NewDocument("test", nil)}
 	retriever := NewKeywordRetriever(docs, DefaultRetrieverConfig())
 
 	config := DefaultRetrieverConfig()
@@ -368,7 +370,7 @@ func TestBaseRetrieverFilterByScore(t *testing.T) {
 	baseRetriever := NewBaseRetriever()
 	baseRetriever.MinScore = 0.5
 
-	docs := []*Document{
+	docs := []*interfaces.Document{
 		{ID: "1", Score: 0.8},
 		{ID: "2", Score: 0.3},
 		{ID: "3", Score: 0.6},
@@ -414,7 +416,7 @@ func TestBaseRetrieverInvoke(t *testing.T) {
 
 	// Create a simple mock to test invoke
 	mockStore := NewMockVectorStore()
-	docs := []*Document{NewDocument("Test", nil)}
+	docs := []*interfaces.Document{NewDocument("Test", nil)}
 	_ = mockStore.AddDocuments(ctx, docs)
 
 	vectorRetriever := NewVectorStoreRetriever(mockStore, DefaultRetrieverConfig())
@@ -433,7 +435,7 @@ func TestBaseRetrieverInvoke(t *testing.T) {
 
 // TestConcurrentHybridRetrieval tests concurrent operations in hybrid retriever
 func TestConcurrentHybridRetrieval(t *testing.T) {
-	docs := []*Document{
+	docs := []*interfaces.Document{
 		NewDocument("Kubernetes orchestration", nil),
 		NewDocument("Docker containers", nil),
 	}

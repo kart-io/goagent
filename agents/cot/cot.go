@@ -222,6 +222,209 @@ func (c *CoTAgent) Stream(ctx context.Context, input *agentcore.AgentInput) (<-c
 	return outChan, nil
 }
 
+// RunGenerator 使用 Generator 模式执行 Chain-of-Thought（实验性功能）
+//
+// 相比 Stream，RunGenerator 提供零分配的流式执行，在每个主要步骤后 yield 中间结果：
+//   - LLM 生成初始推理步骤后 yield
+//   - 执行工具后 yield（如果使用工具）
+//   - LLM 基于工具结果生成最终答案后 yield
+//
+// 性能优势：
+//   - 零内存分配（无 channel、goroutine 开销）
+//   - 支持早期终止（用户可以在任意步骤 break）
+//   - 更低延迟（无 channel 发送/接收开销）
+//
+// 使用示例：
+//
+//	for output, err := range agent.RunGenerator(ctx, input) {
+//	    if err != nil {
+//	        log.Error("step failed", err)
+//	        continue
+//	    }
+//	    fmt.Printf("Step type: %s\n", output.Metadata["step_type"])
+//	    if output.Status == interfaces.StatusSuccess {
+//	        break  // 找到最终答案
+//	    }
+//	}
+//
+// 注意：此方法会触发 LLM 回调，但不触发 Agent 级别的回调（OnStart/OnFinish）
+func (c *CoTAgent) RunGenerator(ctx context.Context, input *agentcore.AgentInput) agentcore.Generator[*agentcore.AgentOutput] {
+	return func(yield func(*agentcore.AgentOutput, error) bool) {
+		startTime := time.Now()
+
+		// Build CoT prompt
+		prompt := c.buildCoTPrompt(input)
+
+		// Initialize accumulated output
+		accumulated := &agentcore.AgentOutput{
+			ReasoningSteps: make([]agentcore.ReasoningStep, 0),
+			ToolCalls:      make([]agentcore.ToolCall, 0),
+			Metadata:       make(map[string]interface{}),
+			TokenUsage: &interfaces.TokenUsage{
+				PromptTokens:     0,
+				CompletionTokens: 0,
+				TotalTokens:      0,
+			},
+		}
+
+		// Call LLM with CoT prompt
+		messages := []llm.Message{
+			llm.SystemMessage(c.getSystemPrompt()),
+			llm.UserMessage(prompt),
+		}
+
+		llmResp, err := c.llm.Chat(ctx, messages)
+		if err != nil {
+			errorOutput := c.createStepOutput(accumulated, "LLM call failed", startTime)
+			errorOutput.Status = interfaces.StatusFailed
+			if !yield(errorOutput, err) {
+				return
+			}
+			return
+		}
+
+		// Collect token usage
+		if llmResp.Usage != nil {
+			accumulated.TokenUsage.Add(llmResp.Usage)
+		}
+
+		// Parse CoT response
+		response := llmResp.Content
+		steps, finalAnswer := c.parseCoTResponse(response)
+
+		// Record reasoning steps
+		for i, step := range steps {
+			accumulated.ReasoningSteps = append(accumulated.ReasoningSteps, agentcore.ReasoningStep{
+				Step:        i + 1,
+				Action:      "Reasoning",
+				Description: fmt.Sprintf("Step %d", i+1),
+				Result:      step,
+				Duration:    time.Since(startTime) / time.Duration(len(steps)),
+				Success:     true,
+			})
+		}
+
+		// Yield after initial reasoning
+		stepOutput := c.createStepOutput(accumulated, "Initial reasoning completed", startTime)
+		stepOutput.Status = interfaces.StatusInProgress
+		stepOutput.Metadata["step_type"] = "initial_reasoning"
+		stepOutput.Metadata["total_reasoning_steps"] = len(steps)
+		if finalAnswer != "" {
+			stepOutput.Metadata["has_final_answer"] = true
+		}
+		if !yield(stepOutput, nil) {
+			return // Early termination
+		}
+
+		// If tools are available and needed, execute them
+		if len(c.tools) > 0 {
+			toolResults := c.executeToolsIfNeeded(ctx, steps, accumulated)
+			if len(toolResults) > 0 {
+				// Yield after tool execution
+				toolOutput := c.createStepOutput(accumulated, "Tools executed", startTime)
+				toolOutput.Status = interfaces.StatusInProgress
+				toolOutput.Metadata["step_type"] = "tool_execution"
+				toolOutput.Metadata["tools_used"] = len(accumulated.ToolCalls)
+				if !yield(toolOutput, nil) {
+					return // Early termination
+				}
+
+				// Re-run reasoning with tool results
+				toolContext := c.formatToolResults(toolResults)
+				messages = append(messages, llm.AssistantMessage(response))
+				messages = append(messages, llm.UserMessage(toolContext))
+
+				llmResp2, err := c.llm.Chat(ctx, messages)
+				if err == nil {
+					// Collect token usage from second LLM call
+					if llmResp2.Usage != nil {
+						accumulated.TokenUsage.Add(llmResp2.Usage)
+					}
+
+					response = llmResp2.Content
+					additionalSteps, newAnswer := c.parseCoTResponse(response)
+					if newAnswer != "" {
+						finalAnswer = newAnswer
+					}
+
+					// Record additional reasoning steps
+					for i, step := range additionalSteps {
+						accumulated.ReasoningSteps = append(accumulated.ReasoningSteps, agentcore.ReasoningStep{
+							Step:        len(steps) + i + 1,
+							Action:      "Reasoning with Tools",
+							Description: fmt.Sprintf("Step %d (with tools)", len(steps)+i+1),
+							Result:      step,
+							Duration:    time.Since(startTime) / time.Duration(len(steps)+len(additionalSteps)),
+							Success:     true,
+						})
+					}
+
+					// Yield after reasoning with tools
+					finalReasoningOutput := c.createStepOutput(accumulated, "Reasoning with tools completed", startTime)
+					finalReasoningOutput.Status = interfaces.StatusInProgress
+					finalReasoningOutput.Metadata["step_type"] = "reasoning_with_tools"
+					finalReasoningOutput.Metadata["additional_steps"] = len(additionalSteps)
+					if !yield(finalReasoningOutput, nil) {
+						return // Early termination
+					}
+				} else {
+					// Tool-based reasoning failed, but we can still return initial answer
+					errorOutput := c.createStepOutput(accumulated, "Tool-based reasoning failed", startTime)
+					errorOutput.Status = interfaces.StatusPartial
+					errorOutput.Metadata["step_type"] = "tool_reasoning_error"
+					errorOutput.Metadata["error"] = err.Error()
+					if !yield(errorOutput, err) {
+						return
+					}
+				}
+			}
+		}
+
+		// Yield final output
+		finalOutput := c.createStepOutput(accumulated, "Chain-of-Thought reasoning completed", startTime)
+		if finalAnswer != "" {
+			finalOutput.Status = interfaces.StatusSuccess
+			finalOutput.Result = finalAnswer
+		} else {
+			finalOutput.Status = interfaces.StatusPartial
+			finalOutput.Result = "No final answer found"
+			finalOutput.Message = "CoT completed but no definitive answer"
+		}
+		finalOutput.Metadata["step_type"] = "final"
+		finalOutput.Metadata["total_steps"] = len(accumulated.ReasoningSteps)
+		yield(finalOutput, nil)
+	}
+}
+
+// createStepOutput creates a snapshot of current execution state
+func (c *CoTAgent) createStepOutput(accumulated *agentcore.AgentOutput, message string, startTime time.Time) *agentcore.AgentOutput {
+	stepOutput := &agentcore.AgentOutput{
+		ReasoningSteps: make([]agentcore.ReasoningStep, len(accumulated.ReasoningSteps)),
+		ToolCalls:      make([]agentcore.ToolCall, len(accumulated.ToolCalls)),
+		Metadata:       make(map[string]interface{}),
+		TokenUsage: &interfaces.TokenUsage{
+			PromptTokens:     accumulated.TokenUsage.PromptTokens,
+			CompletionTokens: accumulated.TokenUsage.CompletionTokens,
+			TotalTokens:      accumulated.TokenUsage.TotalTokens,
+			CachedTokens:     accumulated.TokenUsage.CachedTokens,
+		},
+		Timestamp: time.Now(),
+		Latency:   time.Since(startTime),
+		Message:   message,
+	}
+
+	// Copy slices
+	copy(stepOutput.ReasoningSteps, accumulated.ReasoningSteps)
+	copy(stepOutput.ToolCalls, accumulated.ToolCalls)
+
+	// Copy metadata from accumulated
+	for k, v := range accumulated.Metadata {
+		stepOutput.Metadata[k] = v
+	}
+
+	return stepOutput
+}
+
 // buildCoTPrompt builds the Chain-of-Thought prompt
 func (c *CoTAgent) buildCoTPrompt(input *agentcore.AgentInput) string {
 	var prompt strings.Builder

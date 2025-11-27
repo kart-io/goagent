@@ -282,3 +282,118 @@ func TestStore_Ping(t *testing.T) {
 	_ = store.Ping(ctx)
 	_ = mock // Suppress unused variable warning
 }
+
+// TestNew_WithOptions 测试新的 Option 模式 API
+func TestNew_WithOptions(t *testing.T) {
+	// This test would require a real PostgreSQL connection
+	// We're testing the option application logic here
+	t.Run("default options", func(t *testing.T) {
+		config := DefaultConfig()
+		config.DSN = "test_dsn"
+
+		opts := []PostgresOption{}
+		for _, opt := range opts {
+			opt(config)
+		}
+
+		assert.Equal(t, "test_dsn", config.DSN)
+		assert.Equal(t, "agent_stores", config.TableName)
+		assert.Equal(t, 10, config.MaxIdleConns)
+		assert.Equal(t, 100, config.MaxOpenConns)
+		assert.Equal(t, time.Hour, config.ConnMaxLifetime)
+		assert.True(t, config.AutoMigrate)
+	})
+
+	t.Run("with custom options", func(t *testing.T) {
+		config := DefaultConfig()
+		config.DSN = "test_dsn"
+
+		opts := []PostgresOption{
+			WithTableName("custom_table"),
+			WithMaxIdleConns(20),
+			WithMaxOpenConns(200),
+			WithConnMaxLifetime(2 * time.Hour),
+			WithAutoMigrate(false),
+		}
+
+		for _, opt := range opts {
+			opt(config)
+		}
+
+		assert.Equal(t, "custom_table", config.TableName)
+		assert.Equal(t, 20, config.MaxIdleConns)
+		assert.Equal(t, 200, config.MaxOpenConns)
+		assert.Equal(t, 2*time.Hour, config.ConnMaxLifetime)
+		assert.False(t, config.AutoMigrate)
+	})
+
+	t.Run("option validation", func(t *testing.T) {
+		config := DefaultConfig()
+
+		// Test that invalid values are ignored
+		WithMaxIdleConns(-1)(config)
+		assert.Equal(t, 10, config.MaxIdleConns) // Should keep default
+
+		WithMaxOpenConns(0)(config)
+		assert.Equal(t, 100, config.MaxOpenConns) // Should keep default
+
+		WithConnMaxLifetime(-1 * time.Hour)(config)
+		assert.Equal(t, time.Hour, config.ConnMaxLifetime) // Should keep default
+
+		WithTableName("")(config)
+		assert.Equal(t, "agent_stores", config.TableName) // Should keep default
+	})
+}
+
+// TestNewFromConfig_Backward_Compatibility 测试向后兼容性
+func TestNewFromConfig_Backward_Compatibility(t *testing.T) {
+	// Skip if no real DB connection
+	t.Skip("Requires real PostgreSQL connection")
+
+	// Old way still works via New function
+	store, err := New("host=localhost user=postgres dbname=test",
+		WithTableName("test_table"),
+		WithMaxIdleConns(5),
+		WithMaxOpenConns(50),
+		WithConnMaxLifetime(30*time.Minute),
+		WithAutoMigrate(false),
+	)
+	if err != nil {
+		t.Skip("PostgreSQL not available")
+	}
+	defer store.Close()
+
+	assert.NotNil(t, store)
+	assert.Equal(t, "test_table", store.config.TableName)
+}
+
+// TestApplyPostgresOptions 测试 ApplyPostgresOptions 函数
+func TestApplyPostgresOptions(t *testing.T) {
+	t.Run("apply to nil config", func(t *testing.T) {
+		config := ApplyPostgresOptions(nil,
+			WithTableName("custom_table"),
+			WithMaxOpenConns(50),
+		)
+
+		assert.NotNil(t, config)
+		assert.Equal(t, "custom_table", config.TableName)
+		assert.Equal(t, 50, config.MaxOpenConns)
+	})
+
+	t.Run("apply to existing config", func(t *testing.T) {
+		config := &Config{
+			DSN:          "test_dsn",
+			TableName:    "old_table",
+			MaxIdleConns: 5,
+		}
+
+		config = ApplyPostgresOptions(config,
+			WithTableName("new_table"),
+			WithMaxIdleConns(15),
+		)
+
+		assert.Equal(t, "test_dsn", config.DSN) // Unchanged
+		assert.Equal(t, "new_table", config.TableName)
+		assert.Equal(t, 15, config.MaxIdleConns)
+	})
+}

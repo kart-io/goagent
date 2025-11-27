@@ -7,6 +7,7 @@ import (
 	"time"
 
 	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/interfaces"
 )
 
 // ToolExecutor 工具执行器
@@ -29,10 +30,10 @@ type ToolExecutor struct {
 // ToolCall 工具调用
 type ToolCall struct {
 	// Tool 要调用的工具
-	Tool Tool
+	Tool interfaces.Tool
 
 	// Input 输入参数
-	Input *ToolInput
+	Input *interfaces.ToolInput
 
 	// ID 调用标识符（用于追踪）
 	ID string
@@ -47,7 +48,7 @@ type ToolResult struct {
 	CallID string
 
 	// Output 输出结果
-	Output *ToolOutput
+	Output *interfaces.ToolOutput
 
 	// Duration 执行耗时
 	Duration time.Duration
@@ -360,7 +361,7 @@ func (e *ToolExecutor) executeWithRetry(ctx context.Context, call *ToolCall) *To
 }
 
 // executeSingle 执行单个工具
-func (e *ToolExecutor) executeSingle(ctx context.Context, call *ToolCall) (*ToolOutput, error) {
+func (e *ToolExecutor) executeSingle(ctx context.Context, call *ToolCall) (*interfaces.ToolOutput, error) {
 	if call.Tool == nil {
 		return nil, agentErrors.New(agentErrors.CodeToolValidation, "tool is nil").
 			WithComponent("tool_executor").
@@ -368,7 +369,7 @@ func (e *ToolExecutor) executeSingle(ctx context.Context, call *ToolCall) (*Tool
 	}
 
 	if call.Input == nil {
-		call.Input = &ToolInput{
+		call.Input = &interfaces.ToolInput{
 			Args:    make(map[string]interface{}),
 			Context: ctx,
 		}
@@ -429,7 +430,7 @@ func defaultErrorHandler(call *ToolCall, err error) error {
 }
 
 // ExecuteBatch 批量执行相同工具的不同输入
-func (e *ToolExecutor) ExecuteBatch(ctx context.Context, tool Tool, inputs []*ToolInput) ([]*ToolResult, error) {
+func (e *ToolExecutor) ExecuteBatch(ctx context.Context, tool interfaces.Tool, inputs []*interfaces.ToolInput) ([]*ToolResult, error) {
 	calls := make([]*ToolCall, len(inputs))
 	for i, input := range inputs {
 		calls[i] = &ToolCall{

@@ -25,11 +25,11 @@ type Config struct {
 	// Type specifies which store implementation to use
 	Type StoreType
 
-	// PostgresConfig is used when Type is Postgres
-	PostgresConfig *postgres.Config
+	// Postgres is used when Type is Postgres
+	Postgres *postgres.Config
 
-	// RedisConfig is used when Type is Redis
-	RedisConfig *redis.Config
+	// Redis is used when Type is Redis
+	Redis *redis.Config
 }
 
 // NewStore creates a new store based on the configuration
@@ -43,16 +43,70 @@ func NewStore(config *Config) (store.Store, error) {
 		return memory.New(), nil
 
 	case Postgres:
-		if config.PostgresConfig == nil {
-			config.PostgresConfig = postgres.DefaultConfig()
+		if config.Postgres == nil {
+			config.Postgres = postgres.DefaultConfig()
 		}
-		return postgres.New(config.PostgresConfig)
+
+		opts := []postgres.PostgresOption{}
+		cfg := config.Postgres
+
+		if cfg.TableName != "" {
+			opts = append(opts, postgres.WithTableName(cfg.TableName))
+		}
+		if cfg.MaxOpenConns > 0 {
+			opts = append(opts, postgres.WithMaxOpenConns(cfg.MaxOpenConns))
+		}
+		if cfg.MaxIdleConns > 0 {
+			opts = append(opts, postgres.WithMaxIdleConns(cfg.MaxIdleConns))
+		}
+		if cfg.ConnMaxLifetime > 0 {
+			opts = append(opts, postgres.WithConnMaxLifetime(cfg.ConnMaxLifetime))
+		}
+		opts = append(opts, postgres.WithLogLevel(cfg.LogLevel))
+		opts = append(opts, postgres.WithAutoMigrate(cfg.AutoMigrate))
+
+		return postgres.New(cfg.DSN, opts...)
 
 	case Redis:
-		if config.RedisConfig == nil {
-			config.RedisConfig = redis.DefaultConfig()
+		if config.Redis == nil {
+			config.Redis = redis.DefaultConfig()
 		}
-		return redis.New(config.RedisConfig)
+
+		opts := []redis.RedisOption{}
+		cfg := config.Redis
+
+		if cfg.Password != "" {
+			opts = append(opts, redis.WithPassword(cfg.Password))
+		}
+		if cfg.DB != 0 {
+			opts = append(opts, redis.WithDB(cfg.DB))
+		}
+		if cfg.Prefix != "" {
+			opts = append(opts, redis.WithPrefix(cfg.Prefix))
+		}
+		if cfg.TTL > 0 {
+			opts = append(opts, redis.WithTTL(cfg.TTL))
+		}
+		if cfg.PoolSize > 0 {
+			opts = append(opts, redis.WithPoolSize(cfg.PoolSize))
+		}
+		if cfg.MinIdleConns > 0 {
+			opts = append(opts, redis.WithMinIdleConns(cfg.MinIdleConns))
+		}
+		if cfg.MaxRetries > 0 {
+			opts = append(opts, redis.WithMaxRetries(cfg.MaxRetries))
+		}
+		if cfg.DialTimeout > 0 {
+			opts = append(opts, redis.WithDialTimeout(cfg.DialTimeout))
+		}
+		if cfg.ReadTimeout > 0 {
+			opts = append(opts, redis.WithReadTimeout(cfg.ReadTimeout))
+		}
+		if cfg.WriteTimeout > 0 {
+			opts = append(opts, redis.WithWriteTimeout(cfg.WriteTimeout))
+		}
+
+		return redis.New(cfg.Addr, opts...)
 
 	default:
 		return nil, agentErrors.NewInvalidConfigError("store_factory", "type", "unknown store type").
@@ -67,10 +121,68 @@ func NewMemoryStore() store.Store {
 
 // NewPostgresStore creates a new PostgreSQL store with the given config
 func NewPostgresStore(config *postgres.Config) (store.Store, error) {
-	return postgres.New(config)
+	if config == nil {
+		config = postgres.DefaultConfig()
+	}
+
+	opts := []postgres.PostgresOption{}
+
+	if config.TableName != "" {
+		opts = append(opts, postgres.WithTableName(config.TableName))
+	}
+	if config.MaxOpenConns > 0 {
+		opts = append(opts, postgres.WithMaxOpenConns(config.MaxOpenConns))
+	}
+	if config.MaxIdleConns > 0 {
+		opts = append(opts, postgres.WithMaxIdleConns(config.MaxIdleConns))
+	}
+	if config.ConnMaxLifetime > 0 {
+		opts = append(opts, postgres.WithConnMaxLifetime(config.ConnMaxLifetime))
+	}
+	opts = append(opts, postgres.WithLogLevel(config.LogLevel))
+	opts = append(opts, postgres.WithAutoMigrate(config.AutoMigrate))
+
+	return postgres.New(config.DSN, opts...)
 }
 
 // NewRedisStore creates a new Redis store with the given config
 func NewRedisStore(config *redis.Config) (store.Store, error) {
-	return redis.New(config)
+	if config == nil {
+		config = redis.DefaultConfig()
+	}
+
+	opts := []redis.RedisOption{}
+
+	if config.Password != "" {
+		opts = append(opts, redis.WithPassword(config.Password))
+	}
+	if config.DB != 0 {
+		opts = append(opts, redis.WithDB(config.DB))
+	}
+	if config.Prefix != "" {
+		opts = append(opts, redis.WithPrefix(config.Prefix))
+	}
+	if config.TTL > 0 {
+		opts = append(opts, redis.WithTTL(config.TTL))
+	}
+	if config.PoolSize > 0 {
+		opts = append(opts, redis.WithPoolSize(config.PoolSize))
+	}
+	if config.MinIdleConns > 0 {
+		opts = append(opts, redis.WithMinIdleConns(config.MinIdleConns))
+	}
+	if config.MaxRetries > 0 {
+		opts = append(opts, redis.WithMaxRetries(config.MaxRetries))
+	}
+	if config.DialTimeout > 0 {
+		opts = append(opts, redis.WithDialTimeout(config.DialTimeout))
+	}
+	if config.ReadTimeout > 0 {
+		opts = append(opts, redis.WithReadTimeout(config.ReadTimeout))
+	}
+	if config.WriteTimeout > 0 {
+		opts = append(opts, redis.WithWriteTimeout(config.WriteTimeout))
+	}
+
+	return redis.New(config.Addr, opts...)
 }

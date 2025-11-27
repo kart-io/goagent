@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/kart-io/goagent/interfaces"
 )
 
 // MockTool 模拟工具
@@ -24,7 +26,7 @@ func NewMockTool(name string, executionTime time.Duration, shouldFail bool) *Moc
 		name,
 		"Mock tool for testing",
 		`{"type": "object"}`,
-		func(ctx context.Context, input *ToolInput) (*ToolOutput, error) {
+		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 			// 模拟执行时间
 			time.Sleep(mockTool.executionTime)
 
@@ -32,7 +34,7 @@ func NewMockTool(name string, executionTime time.Duration, shouldFail bool) *Moc
 				return nil, errors.New("mock tool execution failed")
 			}
 
-			return &ToolOutput{
+			return &interfaces.ToolOutput{
 				Result:  "mock result",
 				Success: true,
 			}, nil
@@ -53,17 +55,17 @@ func TestToolExecutor_ExecuteParallel(t *testing.T) {
 		calls := []*ToolCall{
 			{
 				Tool:  NewMockTool("tool1", 100*time.Millisecond, false),
-				Input: &ToolInput{Args: map[string]interface{}{"arg": "value1"}},
+				Input: &interfaces.ToolInput{Args: map[string]interface{}{"arg": "value1"}},
 				ID:    "call1",
 			},
 			{
 				Tool:  NewMockTool("tool2", 100*time.Millisecond, false),
-				Input: &ToolInput{Args: map[string]interface{}{"arg": "value2"}},
+				Input: &interfaces.ToolInput{Args: map[string]interface{}{"arg": "value2"}},
 				ID:    "call2",
 			},
 			{
 				Tool:  NewMockTool("tool3", 100*time.Millisecond, false),
-				Input: &ToolInput{Args: map[string]interface{}{"arg": "value3"}},
+				Input: &interfaces.ToolInput{Args: map[string]interface{}{"arg": "value3"}},
 				ID:    "call3",
 			},
 		}
@@ -93,12 +95,12 @@ func TestToolExecutor_ExecuteParallel(t *testing.T) {
 		calls := []*ToolCall{
 			{
 				Tool:  NewMockTool("tool1", 50*time.Millisecond, false),
-				Input: &ToolInput{Args: map[string]interface{}{}},
+				Input: &interfaces.ToolInput{Args: map[string]interface{}{}},
 				ID:    "call1",
 			},
 			{
 				Tool:  NewMockTool("tool2", 50*time.Millisecond, true),
-				Input: &ToolInput{Args: map[string]interface{}{}},
+				Input: &interfaces.ToolInput{Args: map[string]interface{}{}},
 				ID:    "call2",
 			},
 		}
@@ -137,12 +139,12 @@ func TestToolExecutor_ExecuteSequential(t *testing.T) {
 		calls := []*ToolCall{
 			{
 				Tool:  NewMockTool("tool1", 100*time.Millisecond, false),
-				Input: &ToolInput{Args: map[string]interface{}{}},
+				Input: &interfaces.ToolInput{Args: map[string]interface{}{}},
 				ID:    "call1",
 			},
 			{
 				Tool:  NewMockTool("tool2", 100*time.Millisecond, false),
-				Input: &ToolInput{Args: map[string]interface{}{}},
+				Input: &interfaces.ToolInput{Args: map[string]interface{}{}},
 				ID:    "call2",
 			},
 		}
@@ -170,12 +172,12 @@ func TestToolExecutor_ExecuteSequential(t *testing.T) {
 		calls := []*ToolCall{
 			{
 				Tool:  NewMockTool("tool1", 50*time.Millisecond, true),
-				Input: &ToolInput{Args: map[string]interface{}{}},
+				Input: &interfaces.ToolInput{Args: map[string]interface{}{}},
 				ID:    "call1",
 			},
 			{
 				Tool:  NewMockTool("tool2", 50*time.Millisecond, false),
-				Input: &ToolInput{Args: map[string]interface{}{}},
+				Input: &interfaces.ToolInput{Args: map[string]interface{}{}},
 				ID:    "call2",
 			},
 		}
@@ -201,7 +203,7 @@ func TestToolGraph(t *testing.T) {
 		node1 := &ToolNode{
 			ID:           "node1",
 			Tool:         NewMockTool("tool1", 0, false),
-			Input:        &ToolInput{Args: map[string]interface{}{}},
+			Input:        &interfaces.ToolInput{Args: map[string]interface{}{}},
 			Dependencies: []string{},
 		}
 
@@ -318,17 +320,17 @@ func TestToolExecutor_ExecuteWithDependencies(t *testing.T) {
 		nodeA := &ToolNode{
 			ID:    "A",
 			Tool:  NewMockTool("A", 50*time.Millisecond, false),
-			Input: &ToolInput{Args: map[string]interface{}{}},
+			Input: &interfaces.ToolInput{Args: map[string]interface{}{}},
 		}
 		nodeB := &ToolNode{
 			ID:    "B",
 			Tool:  NewMockTool("B", 50*time.Millisecond, false),
-			Input: &ToolInput{Args: map[string]interface{}{}},
+			Input: &interfaces.ToolInput{Args: map[string]interface{}{}},
 		}
 		nodeC := &ToolNode{
 			ID:    "C",
 			Tool:  NewMockTool("C", 50*time.Millisecond, false),
-			Input: &ToolInput{Args: map[string]interface{}{}},
+			Input: &interfaces.ToolInput{Args: map[string]interface{}{}},
 		}
 
 		_ = graph.AddNode(nodeA)
@@ -364,7 +366,7 @@ func BenchmarkToolExecutor_Parallel(b *testing.B) {
 	for i := 0; i < 10; i++ {
 		calls[i] = &ToolCall{
 			Tool:  NewMockTool("tool", 10*time.Millisecond, false),
-			Input: &ToolInput{Args: map[string]interface{}{}},
+			Input: &interfaces.ToolInput{Args: map[string]interface{}{}},
 			ID:    string(rune('A' + i)),
 		}
 	}

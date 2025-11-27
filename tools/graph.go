@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/interfaces"
 )
 
 // ToolGraph 工具依赖图
@@ -29,10 +30,10 @@ type ToolNode struct {
 	ID string
 
 	// Tool 工具实例
-	Tool Tool
+	Tool interfaces.Tool
 
 	// Input 输入参数
-	Input *ToolInput
+	Input *interfaces.ToolInput
 
 	// Dependencies 依赖的节点 ID 列表
 	Dependencies []string
@@ -397,7 +398,7 @@ func NewToolGraphBuilder() *ToolGraphBuilder {
 }
 
 // AddTool 添加工具
-func (b *ToolGraphBuilder) AddTool(id string, tool Tool, input *ToolInput) *ToolGraphBuilder {
+func (b *ToolGraphBuilder) AddTool(id string, tool interfaces.Tool, input *interfaces.ToolInput) *ToolGraphBuilder {
 	node := &ToolNode{
 		ID:           id,
 		Tool:         tool,

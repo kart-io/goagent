@@ -633,6 +633,210 @@ func (p *PoTAgent) Stream(ctx context.Context, input *agentcore.AgentInput) (<-c
 	return outChan, nil
 }
 
+// RunGenerator 使用 Generator 模式执行 Program-of-Thought（实验性功能）
+//
+// 相比 Stream，RunGenerator 提供零分配的流式执行，在每个迭代步骤后 yield 中间结果：
+//   - 每次代码生成后 yield
+//   - 每次代码执行后 yield
+//   - 最终答案生成后 yield
+//
+// 性能优势：
+//   - 零内存分配（无 channel、goroutine 开销）
+//   - 支持早期终止（用户可以在任意步骤 break）
+//   - 更低延迟（无 channel 发送/接收开销）
+//
+// 使用示例：
+//
+//	for output, err := range agent.RunGenerator(ctx, input) {
+//	    if err != nil {
+//	        log.Error("step failed", err)
+//	        continue
+//	    }
+//	    stepType := output.Metadata["step_type"].(string)
+//	    if stepType == "code_generated" {
+//	        fmt.Printf("生成了 %s 代码\n", output.Metadata["language"])
+//	    }
+//	    if output.Status == interfaces.StatusSuccess {
+//	        break  // 完成
+//	    }
+//	}
+//
+// 注意：此方法不触发 Agent 级别的回调（OnStart/OnFinish）
+func (p *PoTAgent) RunGenerator(ctx context.Context, input *agentcore.AgentInput) agentcore.Generator[*agentcore.AgentOutput] {
+	return func(yield func(*agentcore.AgentOutput, error) bool) {
+		startTime := time.Now()
+
+		// Initialize accumulated output
+		accumulated := &agentcore.AgentOutput{
+			ReasoningSteps: make([]agentcore.ReasoningStep, 0),
+			ToolCalls:      make([]agentcore.ToolCall, 0),
+			Metadata:       make(map[string]interface{}),
+		}
+
+		// Generate and execute code iteratively
+		var finalResult interface{}
+		var finalCode string
+		success := false
+
+		for iteration := 0; iteration < p.config.MaxIterations && !success; iteration++ {
+			// Phase 1: Generate code
+			codeGenStart := time.Now()
+			code, language, err := p.generateCode(ctx, input, finalResult)
+			if err != nil {
+				errorOutput := p.createStepOutput(accumulated, "Code generation failed", startTime)
+				errorOutput.Status = interfaces.StatusFailed
+				if !yield(errorOutput, err) {
+					return
+				}
+				return
+			}
+
+			// Record code generation step
+			accumulated.ReasoningSteps = append(accumulated.ReasoningSteps, agentcore.ReasoningStep{
+				Step:        iteration*2 + 1,
+				Action:      fmt.Sprintf("Generate %s Code", language),
+				Description: fmt.Sprintf("Iteration %d", iteration+1),
+				Result:      p.formatCodeForDisplay(code, language),
+				Duration:    time.Since(codeGenStart),
+				Success:     true,
+			})
+
+			// Yield after code generation
+			codeGenOutput := p.createStepOutput(accumulated, fmt.Sprintf("Code generated (iteration %d)", iteration+1), startTime)
+			codeGenOutput.Status = interfaces.StatusInProgress
+			codeGenOutput.Metadata["step_type"] = "code_generated"
+			codeGenOutput.Metadata["iteration"] = iteration + 1
+			codeGenOutput.Metadata["language"] = language
+			codeGenOutput.Metadata["code"] = code
+			if !yield(codeGenOutput, nil) {
+				return // Early termination
+			}
+
+			// Validate code
+			if err := p.validateCode(code, language); err != nil {
+				finalResult = fmt.Sprintf("Code validation failed: %v", err)
+
+				// Yield validation error
+				validationOutput := p.createStepOutput(accumulated, "Code validation failed", startTime)
+				validationOutput.Status = interfaces.StatusInProgress
+				validationOutput.Metadata["step_type"] = "validation_failed"
+				validationOutput.Metadata["iteration"] = iteration + 1
+				validationOutput.Metadata["error"] = err.Error()
+				if !yield(validationOutput, nil) {
+					return
+				}
+				continue
+			}
+
+			// Phase 2: Execute code
+			execStart := time.Now()
+			result, err := p.executeCode(ctx, code, language)
+
+			// Record execution step
+			accumulated.ReasoningSteps = append(accumulated.ReasoningSteps, agentcore.ReasoningStep{
+				Step:        iteration*2 + 2,
+				Action:      "Execute Code",
+				Description: fmt.Sprintf("%s execution", language),
+				Result:      p.formatExecutionResult(result),
+				Duration:    time.Since(execStart),
+				Success:     err == nil,
+				Error:       p.errorString(err),
+			})
+
+			// Yield after code execution
+			execOutput := p.createStepOutput(accumulated, fmt.Sprintf("Code executed (iteration %d)", iteration+1), startTime)
+			if err != nil {
+				execOutput.Status = interfaces.StatusInProgress
+				execOutput.Metadata["step_type"] = "execution_failed"
+				execOutput.Metadata["iteration"] = iteration + 1
+				execOutput.Metadata["error"] = err.Error()
+				if result != nil {
+					execOutput.Metadata["output"] = result.Output
+					execOutput.Metadata["error_output"] = result.Error
+				}
+
+				if !yield(execOutput, nil) {
+					return
+				}
+
+				// Try to debug and fix
+				if iteration < p.config.MaxIterations-1 {
+					finalResult = p.debugError(ctx, code, err, result)
+					continue
+				}
+
+				// Final iteration failed
+				finalErrorOutput := p.createStepOutput(accumulated, "Code execution failed", startTime)
+				finalErrorOutput.Status = interfaces.StatusFailed
+				if !yield(finalErrorOutput, err) {
+					return
+				}
+				return
+			}
+
+			execOutput.Status = interfaces.StatusInProgress
+			execOutput.Metadata["step_type"] = "execution_success"
+			execOutput.Metadata["iteration"] = iteration + 1
+			execOutput.Metadata["output"] = result.Output
+			execOutput.Metadata["exit_code"] = result.ExitCode
+			execOutput.Metadata["duration_ms"] = result.Duration.Milliseconds()
+			if !yield(execOutput, nil) {
+				return
+			}
+
+			// Parse and validate result
+			parsedResult, err := p.parseResult(result)
+			if err == nil {
+				finalResult = parsedResult
+				finalCode = code
+				success = true
+			} else {
+				finalResult = result.Output
+				if iteration == p.config.MaxIterations-1 {
+					success = true // Accept raw output on last iteration
+				}
+			}
+		}
+
+		// Build final answer
+		finalAnswer := p.buildFinalAnswer(finalResult, finalCode)
+
+		// Yield final output
+		finalOutput := p.createStepOutput(accumulated, "Program-of-Thought reasoning completed", startTime)
+		finalOutput.Status = interfaces.StatusSuccess
+		finalOutput.Result = finalAnswer
+		finalOutput.Metadata["step_type"] = "final"
+		finalOutput.Metadata["language"] = p.config.Language
+		finalOutput.Metadata["iterations"] = p.config.MaxIterations
+		finalOutput.Metadata["final_code"] = finalCode
+		finalOutput.Metadata["total_duration_ms"] = time.Since(startTime).Milliseconds()
+		yield(finalOutput, nil)
+	}
+}
+
+// createStepOutput creates a snapshot of current execution state
+func (p *PoTAgent) createStepOutput(accumulated *agentcore.AgentOutput, message string, startTime time.Time) *agentcore.AgentOutput {
+	stepOutput := &agentcore.AgentOutput{
+		ReasoningSteps: make([]agentcore.ReasoningStep, len(accumulated.ReasoningSteps)),
+		ToolCalls:      make([]agentcore.ToolCall, len(accumulated.ToolCalls)),
+		Metadata:       make(map[string]interface{}),
+		Timestamp:      time.Now(),
+		Latency:        time.Since(startTime),
+		Message:        message,
+	}
+
+	// Copy slices
+	copy(stepOutput.ReasoningSteps, accumulated.ReasoningSteps)
+	copy(stepOutput.ToolCalls, accumulated.ToolCalls)
+
+	// Copy existing metadata
+	for k, v := range accumulated.Metadata {
+		stepOutput.Metadata[k] = v
+	}
+
+	return stepOutput
+}
+
 // Error handling
 func (p *PoTAgent) handleError(ctx context.Context, output *agentcore.AgentOutput, message string, err error, startTime time.Time) (*agentcore.AgentOutput, error) {
 	output.Status = "failed"

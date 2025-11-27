@@ -329,6 +329,282 @@ func (r *ReActAgent) Stream(ctx context.Context, input *agentcore.AgentInput) (<
 	return outChan, nil
 }
 
+// RunGenerator 使用 Generator 模式执行 ReAct Agent（实验性功能）
+//
+// 相比 Stream，RunGenerator 提供零分配的流式执行，在每个推理步骤后 yield 中间结果：
+//   - 每次 LLM 调用后 yield（Thought 步骤）
+//   - 每次工具执行后 yield（Action 步骤）
+//   - 最终答案后 yield（Final Answer）
+//
+// 性能优势：
+//   - 零内存分配（无 channel、goroutine 开销）
+//   - 支持早期终止（用户可以在任意步骤 break）
+//   - 更低延迟（无 channel 发送/接收开销）
+//
+// 使用示例：
+//
+//	for output, err := range agent.RunGenerator(ctx, input) {
+//	    if err != nil {
+//	        log.Error("step failed", err)
+//	        continue  // 可以选择继续或 break
+//	    }
+//	    fmt.Printf("Step %d: %s\n", output.Metadata["current_step"], output.Message)
+//	    if output.Status == interfaces.StatusSuccess {
+//	        break  // 找到最终答案，提前终止
+//	    }
+//	}
+//
+// 注意：此方法不会触发 Agent 级别的回调（OnStart/OnFinish），但会触发 LLM 和 Tool 回调
+func (r *ReActAgent) RunGenerator(ctx context.Context, input *agentcore.AgentInput) agentcore.Generator[*agentcore.AgentOutput] {
+	return func(yield func(*agentcore.AgentOutput, error) bool) {
+		startTime := time.Now()
+
+		// 构建初始 prompt
+		prompt := r.buildPrompt(input)
+
+		// 初始化累积输出（用于记录完整执行历史）
+		accumulatedOutput := &agentcore.AgentOutput{
+			ReasoningSteps: make([]agentcore.ReasoningStep, 0),
+			ToolCalls:      make([]agentcore.ToolCall, 0),
+			Metadata:       make(map[string]interface{}),
+			TokenUsage: &interfaces.TokenUsage{
+				PromptTokens:     0,
+				CompletionTokens: 0,
+				TotalTokens:      0,
+			},
+		}
+
+		// ReAct 循环
+		scratchpad := ""
+		var finalAnswer string
+
+		for step := 0; step < r.maxSteps; step++ {
+			// 构建当前输入
+			currentPrompt := prompt + scratchpad
+
+			// 调用 LLM
+			llmStart := time.Now()
+
+			// 触发 LLM 开始回调
+			if err := r.triggerOnLLMStart(ctx, []string{currentPrompt}); err != nil {
+				// Yield 错误并终止
+				stepOutput := r.createStepOutput(accumulatedOutput, step, "LLM callback failed", startTime)
+				stepOutput.Status = interfaces.StatusFailed
+				if !yield(stepOutput, err) {
+					return
+				}
+				return
+			}
+
+			// 使用 LLM Chat 接口
+			messages := []llm.Message{
+				llm.UserMessage(currentPrompt),
+			}
+
+			llmResp, err := r.llm.Chat(ctx, messages)
+			if err != nil {
+				_ = r.triggerOnLLMError(ctx, err)
+				// Yield LLM 错误
+				stepOutput := r.createStepOutput(accumulatedOutput, step, "LLM call failed", startTime)
+				stepOutput.Status = interfaces.StatusFailed
+				if !yield(stepOutput, err) {
+					return
+				}
+				return
+			}
+
+			// 收集 token 使用量
+			if llmResp.Usage != nil {
+				accumulatedOutput.TokenUsage.Add(llmResp.Usage)
+			}
+
+			llmOutput := llmResp.Content
+
+			// 触发 LLM 结束回调
+			if err := r.triggerOnLLMEnd(ctx, llmOutput, llmResp.TokensUsed); err != nil {
+				stepOutput := r.createStepOutput(accumulatedOutput, step, "LLM callback failed", startTime)
+				stepOutput.Status = interfaces.StatusFailed
+				if !yield(stepOutput, err) {
+					return
+				}
+				return
+			}
+
+			// 解析 LLM 输出
+			parsed, err := r.parser.Parse(ctx, llmOutput)
+			if err != nil {
+				stepOutput := r.createStepOutput(accumulatedOutput, step, "Failed to parse LLM output", startTime)
+				stepOutput.Status = interfaces.StatusFailed
+				accumulatedOutput.ReasoningSteps = append(accumulatedOutput.ReasoningSteps, agentcore.ReasoningStep{
+					Step:    step + 1,
+					Action:  "Parse Error",
+					Success: false,
+					Error:   err.Error(),
+				})
+				if !yield(stepOutput, err) {
+					return
+				}
+				return
+			}
+
+			// 检查是否得到最终答案
+			if parsed.FinalAnswer != "" {
+				finalAnswer = parsed.FinalAnswer
+				accumulatedOutput.ReasoningSteps = append(accumulatedOutput.ReasoningSteps, agentcore.ReasoningStep{
+					Step:        step + 1,
+					Action:      "Final Answer",
+					Description: "Reached final conclusion",
+					Result:      parsed.FinalAnswer,
+					Duration:    time.Since(llmStart),
+					Success:     true,
+				})
+
+				// Yield 最终答案
+				finalOutput := r.createStepOutput(accumulatedOutput, step, "Task completed successfully", startTime)
+				finalOutput.Status = interfaces.StatusSuccess
+				finalOutput.Result = finalAnswer
+				if !yield(finalOutput, nil) {
+					return
+				}
+				return
+			}
+
+			// 提取思考和行动
+			thought := parsed.Thought
+			action := parsed.Action
+			actionInput := parsed.ActionInput
+
+			if action == "" {
+				stepOutput := r.createStepOutput(accumulatedOutput, step, "No action specified", startTime)
+				stepOutput.Status = interfaces.StatusFailed
+				err := agentErrors.New(agentErrors.CodeParserFailed, "empty action").
+					WithComponent("react_agent").
+					WithOperation("RunGenerator")
+				if !yield(stepOutput, err) {
+					return
+				}
+				return
+			}
+
+			// 记录思考步骤
+			thoughtStep := agentcore.ReasoningStep{
+				Step:        step + 1,
+				Action:      parsers.FieldThought,
+				Description: thought,
+				Result:      "",
+				Duration:    time.Since(llmStart),
+				Success:     true,
+			}
+			accumulatedOutput.ReasoningSteps = append(accumulatedOutput.ReasoningSteps, thoughtStep)
+
+			// Yield 思考步骤
+			thoughtOutput := r.createStepOutput(accumulatedOutput, step, fmt.Sprintf("Thought: %s", thought), startTime)
+			thoughtOutput.Status = interfaces.StatusInProgress
+			thoughtOutput.Metadata["step_type"] = "thought"
+			if !yield(thoughtOutput, nil) {
+				return // 用户提前终止
+			}
+
+			// 执行工具
+			toolStart := time.Now()
+			observation, toolErr := r.executeTool(ctx, action, actionInput)
+
+			// 记录工具调用
+			toolCall := agentcore.ToolCall{
+				ToolName: action,
+				Input:    actionInput,
+				Output:   observation,
+				Duration: time.Since(toolStart),
+				Success:  toolErr == nil,
+			}
+			if toolErr != nil {
+				toolCall.Error = toolErr.Error()
+				observation = fmt.Sprintf("Error: %v", toolErr)
+			}
+			accumulatedOutput.ToolCalls = append(accumulatedOutput.ToolCalls, toolCall)
+
+			// 记录行动步骤
+			actionStep := agentcore.ReasoningStep{
+				Step:        step + 1,
+				Action:      parsers.FieldAction,
+				Description: fmt.Sprintf("Tool: %s", action),
+				Result:      fmt.Sprintf("%v", observation),
+				Duration:    time.Since(toolStart),
+				Success:     toolErr == nil,
+				Error:       toolCall.Error,
+			}
+			accumulatedOutput.ReasoningSteps = append(accumulatedOutput.ReasoningSteps, actionStep)
+
+			// Yield 工具执行结果
+			actionOutput := r.createStepOutput(accumulatedOutput, step, fmt.Sprintf("Action: %s", action), startTime)
+			actionOutput.Status = interfaces.StatusInProgress
+			actionOutput.Metadata["step_type"] = "action"
+			actionOutput.Metadata["tool_name"] = action
+			actionOutput.Metadata["observation"] = observation
+			if !yield(actionOutput, nil) {
+				return // 用户提前终止
+			}
+
+			// 更新 scratchpad
+			scratchpad += fmt.Sprintf("\n%s %s\n%s %s\n%s %v\n%s %v\n",
+				parsers.MarkerThought, thought,
+				parsers.MarkerAction, action,
+				parsers.MarkerActionInput, actionInput,
+				parsers.MarkerObservation, observation)
+
+			// 检查是否达到停止条件
+			if r.shouldStop(llmOutput) {
+				break
+			}
+		}
+
+		// 如果循环结束仍未找到最终答案
+		if finalAnswer == "" {
+			partialOutput := r.createStepOutput(accumulatedOutput, r.maxSteps,
+				fmt.Sprintf("Reached max steps (%d) without final answer", r.maxSteps), startTime)
+			partialOutput.Status = interfaces.StatusPartial
+			partialOutput.Result = scratchpad
+			yield(partialOutput, nil)
+		}
+	}
+}
+
+// createStepOutput 创建步骤输出（辅助函数）
+func (r *ReActAgent) createStepOutput(accumulated *agentcore.AgentOutput, currentStep int, message string, startTime time.Time) *agentcore.AgentOutput {
+	// 创建当前步骤的输出快照
+	stepOutput := &agentcore.AgentOutput{
+		ReasoningSteps: make([]agentcore.ReasoningStep, len(accumulated.ReasoningSteps)),
+		ToolCalls:      make([]agentcore.ToolCall, len(accumulated.ToolCalls)),
+		Metadata:       make(map[string]interface{}),
+		TokenUsage: &interfaces.TokenUsage{
+			PromptTokens:     accumulated.TokenUsage.PromptTokens,
+			CompletionTokens: accumulated.TokenUsage.CompletionTokens,
+			TotalTokens:      accumulated.TokenUsage.TotalTokens,
+			CachedTokens:     accumulated.TokenUsage.CachedTokens,
+		},
+		Timestamp: time.Now(),
+		Latency:   time.Since(startTime),
+		Message:   message,
+	}
+
+	// 复制推理步骤和工具调用
+	copy(stepOutput.ReasoningSteps, accumulated.ReasoningSteps)
+	copy(stepOutput.ToolCalls, accumulated.ToolCalls)
+
+	// 复制元数据
+	for k, v := range accumulated.Metadata {
+		stepOutput.Metadata[k] = v
+	}
+
+	// 添加当前步骤信息
+	stepOutput.Metadata["current_step"] = currentStep + 1
+	stepOutput.Metadata["max_steps"] = r.maxSteps
+	stepOutput.Metadata["total_reasoning_steps"] = len(stepOutput.ReasoningSteps)
+	stepOutput.Metadata["total_tool_calls"] = len(stepOutput.ToolCalls)
+
+	return stepOutput
+}
+
 // WithCallbacks 添加回调处理器
 func (r *ReActAgent) WithCallbacks(callbacks ...agentcore.Callback) agentcore.Runnable[*agentcore.AgentInput, *agentcore.AgentOutput] {
 	newAgent := *r

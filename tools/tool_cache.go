@@ -17,15 +17,16 @@ import (
 	"time"
 
 	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/interfaces"
 )
 
 // ToolCache 工具缓存接口
 type ToolCache interface {
 	// Get 获取缓存结果
-	Get(ctx context.Context, key string) (*ToolOutput, bool)
+	Get(ctx context.Context, key string) (*interfaces.ToolOutput, bool)
 
 	// Set 设置缓存结果
-	Set(ctx context.Context, key string, output *ToolOutput, ttl time.Duration) error
+	Set(ctx context.Context, key string, output *interfaces.ToolOutput, ttl time.Duration) error
 
 	// Delete 删除缓存
 	Delete(ctx context.Context, key string) error
@@ -82,7 +83,7 @@ type MemoryToolCache struct {
 type cacheEntry struct {
 	key        string
 	toolName   string // 工具名称，用于按工具失效
-	output     *ToolOutput
+	output     *interfaces.ToolOutput
 	expireTime time.Time
 	element    *list.Element // 用于 MemoryToolCache 的 LRU 链表
 	version    int64         // 缓存版本，用于检测失效
@@ -153,7 +154,7 @@ func NewMemoryToolCache(config MemoryCacheConfig) *MemoryToolCache {
 }
 
 // Get 获取缓存结果
-func (c *MemoryToolCache) Get(ctx context.Context, key string) (*ToolOutput, bool) {
+func (c *MemoryToolCache) Get(ctx context.Context, key string) (*interfaces.ToolOutput, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -186,7 +187,7 @@ func (c *MemoryToolCache) Get(ctx context.Context, key string) (*ToolOutput, boo
 }
 
 // Set 设置缓存结果
-func (c *MemoryToolCache) Set(ctx context.Context, key string, output *ToolOutput, ttl time.Duration) error {
+func (c *MemoryToolCache) Set(ctx context.Context, key string, output *interfaces.ToolOutput, ttl time.Duration) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -597,13 +598,13 @@ func (s *CacheStats) HitRate() float64 {
 
 // CachedTool 带缓存的工具包装器
 type CachedTool struct {
-	tool  Tool
+	tool  interfaces.Tool
 	cache ToolCache
 	ttl   time.Duration
 }
 
 // NewCachedTool 创建带缓存的工具
-func NewCachedTool(tool Tool, cache ToolCache, ttl time.Duration) *CachedTool {
+func NewCachedTool(tool interfaces.Tool, cache ToolCache, ttl time.Duration) *CachedTool {
 	if ttl <= 0 {
 		ttl = 5 * time.Minute
 	}
@@ -631,7 +632,7 @@ func (c *CachedTool) ArgsSchema() string {
 }
 
 // Invoke 执行工具（带缓存）
-func (c *CachedTool) Invoke(ctx context.Context, input *ToolInput) (*ToolOutput, error) {
+func (c *CachedTool) Invoke(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 	// 生成缓存键
 	cacheKey, err := c.generateCacheKey(input)
 	if err != nil {
@@ -667,7 +668,7 @@ func (c *CachedTool) Invoke(ctx context.Context, input *ToolInput) (*ToolOutput,
 //
 // Optimization: Uses strings.Builder with hex.EncodeToString instead of
 // fmt.Sprintf to reduce allocations.
-func (c *CachedTool) generateCacheKey(input *ToolInput) (string, error) {
+func (c *CachedTool) generateCacheKey(input *interfaces.ToolInput) (string, error) {
 	h := sha256.New()
 
 	// Hash the tool name first to namespace the cache key

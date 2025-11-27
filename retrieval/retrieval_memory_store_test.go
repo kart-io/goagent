@@ -4,6 +4,8 @@ import (
 	"context"
 	"sync"
 	"testing"
+
+	"github.com/kart-io/goagent/interfaces"
 )
 
 // TestMemoryVectorStoreDistanceMetrics tests different distance metrics
@@ -25,7 +27,7 @@ func TestMemoryVectorStoreDistanceMetrics(t *testing.T) {
 
 			store := NewMemoryVectorStore(config)
 
-			docs := []*Document{
+			docs := []*interfaces.Document{
 				NewDocument("Machine learning algorithms", nil),
 				NewDocument("Deep learning networks", nil),
 				NewDocument("Natural language processing", nil),
@@ -59,7 +61,7 @@ func TestMemoryVectorStoreExplicitVectors(t *testing.T) {
 
 	store := NewMemoryVectorStore(config)
 
-	docs := []*Document{
+	docs := []*interfaces.Document{
 		NewDocument("Document 1", nil),
 		NewDocument("Document 2", nil),
 	}
@@ -90,7 +92,7 @@ func TestMemoryVectorStoreVectorMismatch(t *testing.T) {
 
 	store := NewMemoryVectorStore(config)
 
-	docs := []*Document{
+	docs := []*interfaces.Document{
 		NewDocument("Document 1", nil),
 		NewDocument("Document 2", nil),
 	}
@@ -116,7 +118,7 @@ func TestMemoryVectorStoreSearchByVector(t *testing.T) {
 
 	store := NewMemoryVectorStore(config)
 
-	docs := []*Document{
+	docs := []*interfaces.Document{
 		NewDocument("Test content", nil),
 	}
 
@@ -150,11 +152,11 @@ func TestMemoryVectorStoreUpdateDocument(t *testing.T) {
 	store := NewMemoryVectorStore(config)
 
 	doc := NewDocumentWithID("doc1", "Original content", nil)
-	_ = store.AddDocuments(ctx, []*Document{doc})
+	_ = store.AddDocuments(ctx, []*interfaces.Document{doc})
 
 	// Update document
 	updatedDoc := NewDocumentWithID("doc1", "Updated content", nil)
-	err := store.Update(ctx, []*Document{updatedDoc})
+	err := store.Update(ctx, []*interfaces.Document{updatedDoc})
 
 	if err != nil {
 		t.Fatalf("Update failed: %v", err)
@@ -183,7 +185,7 @@ func TestMemoryVectorStoreUpdateNonexistent(t *testing.T) {
 	store := NewMemoryVectorStore(config)
 
 	doc := NewDocumentWithID("nonexistent", "Content", nil)
-	err := store.Update(ctx, []*Document{doc})
+	err := store.Update(ctx, []*interfaces.Document{doc})
 
 	if err == nil {
 		t.Error("Expected error for nonexistent document")
@@ -201,8 +203,8 @@ func TestMemoryVectorStoreUpdateNoID(t *testing.T) {
 
 	store := NewMemoryVectorStore(config)
 
-	doc := &Document{PageContent: "Content", ID: ""}
-	err := store.Update(ctx, []*Document{doc})
+	doc := &interfaces.Document{PageContent: "Content", ID: ""}
+	err := store.Update(ctx, []*interfaces.Document{doc})
 
 	if err == nil {
 		t.Error("Expected error for document without ID")
@@ -221,7 +223,7 @@ func TestMemoryVectorStoreGetVector(t *testing.T) {
 	store := NewMemoryVectorStore(config)
 
 	doc := NewDocumentWithID("doc1", "Test content", nil)
-	_ = store.AddDocuments(ctx, []*Document{doc})
+	_ = store.AddDocuments(ctx, []*interfaces.Document{doc})
 
 	vector, err := store.GetVector(ctx, "doc1")
 	if err != nil {
@@ -277,7 +279,7 @@ func TestMemoryVectorStoreConcurrentOperations(t *testing.T) {
 			defer wg.Done()
 
 			doc := NewDocument("Concurrent document", nil)
-			_ = store.AddDocuments(ctx, []*Document{doc})
+			_ = store.AddDocuments(ctx, []*interfaces.Document{doc})
 		}(i)
 	}
 
@@ -312,7 +314,7 @@ func TestMemoryVectorStoreConcurrentAddDelete(t *testing.T) {
 	store := NewMemoryVectorStore(config)
 
 	// Add initial documents
-	docs := make([]*Document, 20)
+	docs := make([]*interfaces.Document, 20)
 	for i := 0; i < 20; i++ {
 		docs[i] = NewDocumentWithID(string(rune('0'+i)), "Content", nil)
 	}
@@ -338,7 +340,7 @@ func TestMemoryVectorStoreConcurrentAddDelete(t *testing.T) {
 			defer wg.Done()
 
 			doc := NewDocument("New concurrent content", nil)
-			_ = store.AddDocuments(ctx, []*Document{doc})
+			_ = store.AddDocuments(ctx, []*interfaces.Document{doc})
 		}(i)
 	}
 
@@ -361,7 +363,7 @@ func TestMemoryVectorStoreDeleteMultiple(t *testing.T) {
 
 	store := NewMemoryVectorStore(config)
 
-	docs := []*Document{
+	docs := []*interfaces.Document{
 		NewDocumentWithID("doc1", "Content 1", nil),
 		NewDocumentWithID("doc2", "Content 2", nil),
 		NewDocumentWithID("doc3", "Content 3", nil),
@@ -427,7 +429,7 @@ func TestMemoryVectorStoreAddWithoutVectors(t *testing.T) {
 
 	store := NewMemoryVectorStore(config)
 
-	docs := []*Document{
+	docs := []*interfaces.Document{
 		NewDocument("Test document 1", nil),
 		NewDocument("Test document 2", nil),
 	}
@@ -454,9 +456,9 @@ func TestMemoryVectorStoreAutoIDGeneration(t *testing.T) {
 
 	store := NewMemoryVectorStore(config)
 
-	doc := &Document{PageContent: "Test", ID: ""}
+	doc := &interfaces.Document{PageContent: "Test", ID: ""}
 
-	_ = store.AddDocuments(ctx, []*Document{doc})
+	_ = store.AddDocuments(ctx, []*interfaces.Document{doc})
 
 	if doc.ID == "" {
 		t.Error("Expected automatic ID generation")
@@ -474,7 +476,7 @@ func TestMemoryVectorStoreSimilaritySearchEdgeCases(t *testing.T) {
 
 	store := NewMemoryVectorStore(config)
 
-	docs := []*Document{
+	docs := []*interfaces.Document{
 		NewDocument("Test document", nil),
 	}
 
@@ -532,7 +534,7 @@ func TestMemoryVectorStoreEuclideanSorting(t *testing.T) {
 
 	store := NewMemoryVectorStore(config)
 
-	docs := []*Document{
+	docs := []*interfaces.Document{
 		NewDocument("Document 1", nil),
 		NewDocument("Document 2", nil),
 	}

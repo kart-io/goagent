@@ -679,6 +679,199 @@ func (tc *testCallback) OnToolError(ctx context.Context, toolName string, err er
 	return nil
 }
 
+// TestToTAgent_RunGenerator tests the RunGenerator method
+func TestToTAgent_RunGenerator(t *testing.T) {
+	// Simplified test: find solution at depth 1
+	mockLLM := NewMockLLMClient(
+		// Depth 0: Check if root is solution
+		"no",
+		// Depth 0: Generate thoughts from root
+		"Step 1: First thought\nStep 2: Second thought",
+		// Depth 0: Evaluate each thought
+		"0.8", "0.7",
+		// Depth 1: Check if first thought is solution
+		"yes", // First thought IS the solution!
+	)
+
+	agent := NewToTAgent(ToTConfig{
+		Name:            "test-tot-gen",
+		Description:     "Test ToT Agent with Generator",
+		LLM:             mockLLM,
+		MaxDepth:        2,
+		BranchingFactor: 2,
+		BeamWidth:       2,
+		SearchStrategy:  interfaces.StrategyBeamSearch,
+		PruneThreshold:  0.3,
+	})
+
+	input := &agentcore.AgentInput{
+		Task: "Test task for generator",
+	}
+
+	ctx := context.Background()
+
+	// Collect all outputs from generator
+	var outputs []*agentcore.AgentOutput
+	var finalOutput *agentcore.AgentOutput
+	var foundSolution bool
+
+	for output, err := range agent.RunGenerator(ctx, input) {
+		if err != nil {
+			t.Logf("Error at step %d: %v", len(outputs)+1, err)
+		}
+
+		if output == nil {
+			t.Error("Output is nil")
+			break
+		}
+
+		outputs = append(outputs, output)
+		finalOutput = output
+
+		// Check metadata
+		if _, ok := output.Metadata["step_type"]; !ok {
+			t.Error("Missing step_type in metadata")
+		}
+
+		// Check if solution was found
+		if stepType, ok := output.Metadata["step_type"].(string); ok {
+			if stepType == "solution_found" {
+				foundSolution = true
+				t.Log("Solution found!")
+			}
+		}
+
+		// Log step type
+		t.Logf("Step %d: %s - %s", len(outputs), output.Metadata["step_type"], output.Message)
+
+		// Break on final output
+		if output.Metadata["step_type"] == "final" {
+			break
+		}
+	}
+
+	// Verify we got multiple outputs
+	require.NotEmpty(t, outputs, "RunGenerator should produce outputs")
+
+	t.Logf("Total outputs: %d", len(outputs))
+	t.Logf("Found solution: %v", foundSolution)
+
+	// Verify final output exists
+	require.NotNil(t, finalOutput, "Final output should not be nil")
+
+	// Verify we found a solution
+	assert.True(t, foundSolution, "Should have found a solution")
+
+	// Log final result
+	t.Logf("Final result: %v", finalOutput.Result)
+	t.Logf("Final status: %s", finalOutput.Status)
+}
+
+// TestToTAgent_RunGenerator_EarlyTermination tests early termination
+func TestToTAgent_RunGenerator_EarlyTermination(t *testing.T) {
+	mockLLM := NewMockLLMClient(
+		// Generate thoughts (will be called multiple times)
+		"Step 1: Thought A\nStep 2: Thought B",
+		// Evaluate thoughts
+		"0.8", "0.6",
+		// More thoughts
+		"Step 1: Thought C\nStep 2: Thought D",
+		"0.7", "0.5",
+	)
+
+	agent := NewToTAgent(ToTConfig{
+		Name:            "test-tot-early",
+		Description:     "Test early termination",
+		LLM:             mockLLM,
+		MaxDepth:        3,
+		BranchingFactor: 2,
+		SearchStrategy:  interfaces.StrategyBeamSearch,
+	})
+
+	input := &agentcore.AgentInput{
+		Task: "Test early termination",
+	}
+
+	ctx := context.Background()
+
+	// Terminate after first 2 outputs
+	maxOutputs := 2
+	outputCount := 0
+
+	for _, err := range agent.RunGenerator(ctx, input) {
+		if err != nil {
+			t.Errorf("Unexpected error: %v", err)
+			break
+		}
+
+		outputCount++
+
+		if outputCount >= maxOutputs {
+			t.Logf("Terminating early after %d outputs", outputCount)
+			break
+		}
+	}
+
+	// Verify we only got the expected number of outputs
+	assert.Equal(t, maxOutputs, outputCount, "Should terminate after exactly %d outputs", maxOutputs)
+
+	t.Logf("Successfully terminated early after %d outputs", outputCount)
+}
+
+// TestToTAgent_RunGenerator_DFS tests DFS strategy with generator
+func TestToTAgent_RunGenerator_DFS(t *testing.T) {
+	mockLLM := NewMockLLMClient(
+		// Generate thoughts
+		"Step 1: DFS thought 1\nStep 2: DFS thought 2",
+		// Evaluate
+		"0.7", "0.6",
+		// Check solution
+		"no",
+		// More thoughts at depth 2
+		"Step 1: DFS thought 3",
+		"0.5",
+		"yes", // This one is the solution
+	)
+
+	agent := NewToTAgent(ToTConfig{
+		Name:            "test-tot-dfs",
+		Description:     "Test DFS with Generator",
+		LLM:             mockLLM,
+		MaxDepth:        3,
+		BranchingFactor: 2,
+		SearchStrategy:  interfaces.StrategyDepthFirst,
+		PruneThreshold:  0.3,
+	})
+
+	input := &agentcore.AgentInput{
+		Task: "Test DFS strategy",
+	}
+
+	ctx := context.Background()
+
+	var foundSolution bool
+	for output, err := range agent.RunGenerator(ctx, input) {
+		if err != nil {
+			t.Errorf("Unexpected error: %v", err)
+			break
+		}
+
+		// Check if solution was found
+		if stepType, ok := output.Metadata["step_type"].(string); ok {
+			if stepType == "solution_found" {
+				foundSolution = true
+				t.Log("Solution found with DFS strategy")
+			}
+		}
+
+		if output.Metadata["step_type"] == "final" {
+			break
+		}
+	}
+
+	t.Logf("DFS search completed, solution found: %v", foundSolution)
+}
+
 func BenchmarkToTAgent_Invoke(b *testing.B) {
 	mockLLM := NewMockLLMClient(
 		"Step 1: Benchmark thought",

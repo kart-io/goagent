@@ -145,12 +145,6 @@ type SelfReflectiveAgent struct {
 	learningThreshold  float64
 }
 
-// NewSelfReflectiveAgent creates a new self-reflective agent
-// Deprecated: Use NewSelfReflectiveAgentWithContext instead
-func NewSelfReflectiveAgent(llmClient llm.Client, mem memory.EnhancedMemory, opts ...ReflectionOption) *SelfReflectiveAgent {
-	return NewSelfReflectiveAgentWithContext(context.Background(), llmClient, mem, opts...)
-}
-
 // NewSelfReflectiveAgentWithContext creates a new self-reflective agent with a parent context
 func NewSelfReflectiveAgentWithContext(parentCtx context.Context, llmClient llm.Client, mem memory.EnhancedMemory, opts ...ReflectionOption) *SelfReflectiveAgent {
 	ctx, cancel := context.WithCancel(parentCtx)
