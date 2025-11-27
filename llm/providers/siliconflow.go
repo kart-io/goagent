@@ -12,13 +12,14 @@ import (
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	agentllm "github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/common"
 	"github.com/kart-io/goagent/utils/httpclient"
 )
 
 // SiliconFlowClient SiliconFlow LLM 客户端
 // SiliconFlow 是一个提供多种开源模型的服务平台
 type SiliconFlowClient struct {
-	*BaseProvider
+	*common.BaseProvider
 	apiKey  string
 	baseURL string
 	client  *httpclient.Client
@@ -27,7 +28,7 @@ type SiliconFlowClient struct {
 // NewSiliconFlowWithOptions 使用选项模式创建 SiliconFlow provider
 func NewSiliconFlowWithOptions(opts ...agentllm.ClientOption) (*SiliconFlowClient, error) {
 	// 创建 BaseProvider，统一处理 Options
-	base := NewBaseProvider(opts...)
+	base := common.NewBaseProvider(opts...)
 
 	// 应用 Provider 特定的默认值
 	base.ApplyProviderDefaults(
@@ -44,7 +45,7 @@ func NewSiliconFlowWithOptions(opts ...agentllm.ClientOption) (*SiliconFlowClien
 	}
 
 	// 使用 BaseProvider 的 NewHTTPClient 方法创建 HTTP 客户端
-	client := base.NewHTTPClient(HTTPClientConfig{
+	client := base.NewHTTPClient(common.HTTPClientConfig{
 		Timeout: base.GetTimeout(),
 		Headers: map[string]string{
 			constants.HeaderContentType:   constants.ContentTypeJSON,

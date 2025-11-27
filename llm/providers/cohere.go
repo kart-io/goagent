@@ -16,12 +16,14 @@ import (
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	agentllm "github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/common"
 	"github.com/kart-io/goagent/utils/httpclient"
 )
 
 // CohereProvider implements LLM interface for Cohere
 type CohereProvider struct {
-	*BaseProvider
+	*common.BaseProvider
+	*common.ProviderCapabilities
 	client  *httpclient.Client
 	apiKey  string
 	baseURL string
@@ -82,7 +84,7 @@ type CohereErrorResponse struct {
 // NewCohereWithOptions creates a new Cohere provider using options pattern
 func NewCohereWithOptions(opts ...agentllm.ClientOption) (*CohereProvider, error) {
 	// 创建 BaseProvider，统一处理 Options
-	base := NewBaseProvider(opts...)
+	base := common.NewBaseProvider(opts...)
 
 	// 应用 Provider 特定的默认值
 	base.ApplyProviderDefaults(
@@ -99,7 +101,7 @@ func NewCohereWithOptions(opts ...agentllm.ClientOption) (*CohereProvider, error
 	}
 
 	// 使用 BaseProvider 的 NewHTTPClient 方法创建 HTTP 客户端
-	client := base.NewHTTPClient(HTTPClientConfig{
+	client := base.NewHTTPClient(common.HTTPClientConfig{
 		Timeout: base.GetTimeout(),
 		Headers: map[string]string{
 			constants.HeaderContentType:   constants.ContentTypeJSON,
@@ -110,9 +112,14 @@ func NewCohereWithOptions(opts ...agentllm.ClientOption) (*CohereProvider, error
 
 	provider := &CohereProvider{
 		BaseProvider: base,
-		client:       client,
-		apiKey:       base.Config.APIKey,
-		baseURL:      base.Config.BaseURL,
+		ProviderCapabilities: common.NewProviderCapabilities(
+			agentllm.CapabilityCompletion,
+			agentllm.CapabilityChat,
+			agentllm.CapabilityStreaming,
+		),
+		client:  client,
+		apiKey:  base.Config.APIKey,
+		baseURL: base.Config.BaseURL,
 	}
 
 	return provider, nil
@@ -239,7 +246,7 @@ func (p *CohereProvider) handleHTTPError(resp *resty.Response, model string) err
 		case 404:
 			return agentErrors.NewLLMResponseError(string(constants.ProviderCohere), model, errResp.Message)
 		case 429:
-			retryAfter := parseRetryAfter(resp.Header().Get("Retry-After"))
+			retryAfter := common.ParseRetryAfter(resp.Header().Get("Retry-After"))
 			return agentErrors.NewLLMRateLimitError(string(constants.ProviderCohere), model, retryAfter)
 		case 500, 502, 503, 504:
 			return agentErrors.NewLLMRequestError(string(constants.ProviderCohere), model, fmt.Errorf("server error: %s", errResp.Message))
@@ -257,7 +264,7 @@ func (p *CohereProvider) handleHTTPError(resp *resty.Response, model string) err
 	case 404:
 		return agentErrors.NewLLMResponseError(string(constants.ProviderCohere), model, constants.StatusEndpointNotFound)
 	case 429:
-		retryAfter := parseRetryAfter(resp.Header().Get("Retry-After"))
+		retryAfter := common.ParseRetryAfter(resp.Header().Get("Retry-After"))
 		return agentErrors.NewLLMRateLimitError(string(constants.ProviderCohere), model, retryAfter)
 	case 500, 502, 503, 504:
 		return agentErrors.NewLLMRequestError(string(constants.ProviderCohere), model, fmt.Errorf("server error: %d", resp.StatusCode()))
@@ -268,7 +275,7 @@ func (p *CohereProvider) handleHTTPError(resp *resty.Response, model string) err
 
 // executeWithRetry executes request with exponential backoff using the shared retry logic
 func (p *CohereProvider) executeWithRetry(ctx context.Context, req *CohereRequest) (*CohereResponse, error) {
-	return ExecuteWithRetry(ctx, DefaultRetryConfig(), p.ProviderName(), func(ctx context.Context) (*CohereResponse, error) {
+	return common.ExecuteWithRetry(ctx, common.DefaultRetryConfig(), p.ProviderName(), func(ctx context.Context) (*CohereResponse, error) {
 		return p.execute(ctx, req)
 	})
 }
@@ -299,6 +306,11 @@ func (p *CohereProvider) Chat(ctx context.Context, messages []agentllm.Message) 
 // Provider returns the provider type
 func (p *CohereProvider) Provider() constants.Provider {
 	return constants.ProviderCohere
+}
+
+// ProviderName returns the provider name as a string
+func (p *CohereProvider) ProviderName() string {
+	return string(constants.ProviderCohere)
 }
 
 // IsAvailable checks if the provider is available

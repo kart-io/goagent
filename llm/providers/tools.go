@@ -1,42 +1,34 @@
 package providers
 
-import "github.com/kart-io/goagent/interfaces"
+import "github.com/kart-io/goagent/llm/common"
 
-// Default Values
+// Default Values - aliased for backward compatibility
 const (
 	// DefaultTemperature is the default temperature value
-	DefaultTemperature = 0.7
+	// Deprecated: Use common.DefaultTemperature directly.
+	DefaultTemperature = common.DefaultTemperature
 	// DefaultMaxTokens is the default max tokens value
-	DefaultMaxTokens = 2048
+	// Deprecated: Use common.DefaultMaxTokens directly.
+	DefaultMaxTokens = common.DefaultMaxTokens
 	// DefaultTopP is the default top_p value
-	DefaultTopP = 1.0
+	// Deprecated: Use common.DefaultTopP directly.
+	DefaultTopP = common.DefaultTopP
 	// DefaultFrequencyPenalty is the default frequency penalty
-	DefaultFrequencyPenalty = 0.0
+	// Deprecated: Use common.DefaultFrequencyPenalty directly.
+	DefaultFrequencyPenalty = common.DefaultFrequencyPenalty
 	// DefaultPresencePenalty is the default presence penalty
-	DefaultPresencePenalty = 0.0
+	// Deprecated: Use common.DefaultPresencePenalty directly.
+	DefaultPresencePenalty = common.DefaultPresencePenalty
 )
 
-// ToolCall represents a function/tool call by the LLM
-type ToolCall struct {
-	ID        string                 `json:"id"`
-	Type      string                 `json:"type,omitempty"` // "function"
-	Name      string                 `json:"name,omitempty"`
-	Arguments map[string]interface{} `json:"arguments,omitempty"`
-	Function  *struct {
-		Name      string `json:"name"`
-		Arguments string `json:"arguments"` // JSON string
-	} `json:"function,omitempty"`
-}
+// ToolCall is now an alias to common.ToolCall for backward compatibility.
+// Deprecated: Use common.ToolCall directly.
+type ToolCall = common.ToolCall
 
-// ToolCallResponse represents the response from tool-enabled completion
-type ToolCallResponse struct {
-	Content   string                 `json:"content"`
-	ToolCalls []ToolCall             `json:"tool_calls,omitempty"`
-	Usage     *interfaces.TokenUsage `json:"usage,omitempty"`
-}
+// ToolCallResponse is now an alias to common.ToolCallResponse for backward compatibility.
+// Deprecated: Use common.ToolCallResponse directly.
+type ToolCallResponse = common.ToolCallResponse
 
-// ToolChunk represents a streaming chunk from tool-enabled completion
-type ToolChunk struct {
-	Type  string      `json:"type"`  // "content", "tool_call", "tool_name", "tool_args", "error"
-	Value interface{} `json:"value"` // Content string, ToolCall, or error
-}
+// ToolChunk is now an alias to common.ToolChunk for backward compatibility.
+// Deprecated: Use common.ToolChunk directly.
+type ToolChunk = common.ToolChunk

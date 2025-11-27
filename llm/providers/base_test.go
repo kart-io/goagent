@@ -27,21 +27,23 @@ func TestNewBaseProvider(t *testing.T) {
 	assert.Equal(t, 100, bp.Config.MaxTokens)
 }
 
-func TestNewBaseProviderWithConfig(t *testing.T) {
+func TestNewBaseProviderWithOptions(t *testing.T) {
 	config := &agentllm.LLMOptions{
 		APIKey:    "test-key",
 		Model:     "test-model",
 		MaxTokens: 200,
 	}
 
-	bp := NewBaseProviderWithConfig(config)
+	bp := NewBaseProvider(ConfigToOptions(config)...)
 
 	require.NotNil(t, bp)
-	assert.Equal(t, config, bp.Config)
+	assert.Equal(t, "test-key", bp.Config.APIKey)
+	assert.Equal(t, "test-model", bp.Config.Model)
+	assert.Equal(t, 200, bp.Config.MaxTokens)
 }
 
-func TestNewBaseProviderWithConfig_NilConfig(t *testing.T) {
-	bp := NewBaseProviderWithConfig(nil)
+func TestNewBaseProviderWithNilOptions(t *testing.T) {
+	bp := NewBaseProvider()
 
 	require.NotNil(t, bp)
 	require.NotNil(t, bp.Config)
@@ -217,7 +219,7 @@ func TestGetMaxTokens(t *testing.T) {
 	assert.Equal(t, 2000, bp2.GetMaxTokens(0))
 
 	// Test with zero config (should use constants.DefaultMaxTokens)
-	bp3 := NewBaseProviderWithConfig(&agentllm.LLMOptions{MaxTokens: 0})
+	bp3 := NewBaseProvider(ConfigToOptions(&agentllm.LLMOptions{MaxTokens: 0})...)
 	assert.Equal(t, constants.DefaultMaxTokens, bp3.GetMaxTokens(0))
 }
 
@@ -234,7 +236,7 @@ func TestGetTemperature(t *testing.T) {
 	assert.Equal(t, 0.7, bp2.GetTemperature(0)) // DefaultLLMOptions sets it to 0.7
 
 	// Test with zero config (should use constants.DefaultTemperature)
-	bp3 := NewBaseProviderWithConfig(&agentllm.LLMOptions{Temperature: 0})
+	bp3 := NewBaseProvider(ConfigToOptions(&agentllm.LLMOptions{Temperature: 0})...)
 	assert.Equal(t, constants.DefaultTemperature, bp3.GetTemperature(0))
 }
 
@@ -249,7 +251,7 @@ func TestGetTimeout(t *testing.T) {
 	assert.Equal(t, 60*time.Second, bp2.GetTimeout())
 
 	// Test with config that has zero timeout (should use default)
-	bp3 := NewBaseProviderWithConfig(&agentllm.LLMOptions{Timeout: 0})
+	bp3 := NewBaseProvider(ConfigToOptions(&agentllm.LLMOptions{Timeout: 0})...)
 	assert.Equal(t, constants.DefaultTimeout, bp3.GetTimeout())
 }
 
@@ -266,7 +268,7 @@ func TestGetTopP(t *testing.T) {
 	assert.Equal(t, 1.0, bp2.GetTopP(0)) // DefaultLLMOptions sets it to 1.0
 
 	// Test with zero config (should use constants.DefaultTopP)
-	bp3 := NewBaseProviderWithConfig(&agentllm.LLMOptions{TopP: 0})
+	bp3 := NewBaseProvider(ConfigToOptions(&agentllm.LLMOptions{TopP: 0})...)
 	assert.Equal(t, constants.DefaultTopP, bp3.GetTopP(0))
 }
 
