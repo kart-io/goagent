@@ -616,3 +616,154 @@ func (tc *testCallback) OnToolEnd(ctx context.Context, toolName string, output i
 func (tc *testCallback) OnToolError(ctx context.Context, toolName string, err error) error {
 	return nil
 }
+
+// TestPoTAgent_RunGenerator tests the RunGenerator method
+func TestPoTAgent_RunGenerator(t *testing.T) {
+	ctx := context.Background()
+	mockLLM := new(MockLLMClient)
+
+	// Mock code generation - return valid Python code
+	codeResponse := "```python\nresult = 5 * 4 * 3 * 2 * 1\nprint(result)\n```"
+	mockLLM.On("Chat", mock.Anything, mock.Anything).Return(&llm.CompletionResponse{
+		Content:    codeResponse,
+		TokensUsed: 50,
+	}, nil).Once()
+
+	agent := NewPoTAgent(PoTConfig{
+		Name:          "test-pot-gen",
+		Description:   "Test PoT Agent with Generator",
+		LLM:           mockLLM,
+		Language:      "python",
+		MaxIterations: 3,
+		MaxCodeLength: 1000,
+	})
+
+	input := &core.AgentInput{
+		Task: "Calculate factorial of 5",
+	}
+
+	// Collect all outputs from generator
+	var outputs []*core.AgentOutput
+	var finalOutput *core.AgentOutput
+	var foundCodeGenerated bool
+	var foundExecutionSuccess bool
+
+	for output, err := range agent.RunGenerator(ctx, input) {
+		if err != nil {
+			t.Logf("Error at step %d: %v", len(outputs)+1, err)
+		}
+
+		if output == nil {
+			t.Error("Output is nil")
+			break
+		}
+
+		outputs = append(outputs, output)
+		finalOutput = output
+
+		// Check metadata
+		if _, ok := output.Metadata["step_type"]; !ok {
+			t.Error("Missing step_type in metadata")
+		}
+
+		// Check if code was generated
+		if stepType, ok := output.Metadata["step_type"].(string); ok {
+			if stepType == "code_generated" {
+				foundCodeGenerated = true
+				t.Log("Code generated!")
+				// Verify code is in metadata
+				if code, ok := output.Metadata["code"].(string); ok {
+					assert.Contains(t, code, "result", "Generated code should contain result variable")
+				}
+			}
+			if stepType == "execution_success" {
+				foundExecutionSuccess = true
+				t.Log("Code execution succeeded!")
+			}
+		}
+
+		// Log step type
+		t.Logf("Step %d: %s - %s", len(outputs), output.Metadata["step_type"], output.Message)
+
+		// Break on final output
+		if output.Metadata["step_type"] == "final" {
+			break
+		}
+	}
+
+	// Verify we got multiple outputs
+	assert.NotEmpty(t, outputs, "RunGenerator should produce outputs")
+	assert.GreaterOrEqual(t, len(outputs), 2, "Should have at least 2 outputs (code_generated, final)")
+
+	t.Logf("Total outputs: %d", len(outputs))
+	t.Logf("Found code generated: %v", foundCodeGenerated)
+	t.Logf("Found execution success: %v", foundExecutionSuccess)
+
+	// Verify final output exists
+	assert.NotNil(t, finalOutput, "Final output should not be nil")
+
+	// Verify we found code generation stage
+	assert.True(t, foundCodeGenerated, "Should have generated code")
+
+	// Verify final output status and metadata
+	if finalOutput != nil {
+		assert.Equal(t, interfaces.StatusSuccess, finalOutput.Status, "Final status should be success")
+		assert.Equal(t, "final", finalOutput.Metadata["step_type"], "Last output should be final")
+		assert.NotEmpty(t, finalOutput.Result, "Final result should not be empty")
+	}
+
+	// Log final result
+	t.Logf("Final result: %v", finalOutput.Result)
+	t.Logf("Total reasoning steps: %d", len(finalOutput.ReasoningSteps))
+
+	mockLLM.AssertExpectations(t)
+}
+
+// TestPoTAgent_RunGenerator_EarlyTermination tests early termination
+func TestPoTAgent_RunGenerator_EarlyTermination(t *testing.T) {
+	ctx := context.Background()
+	mockLLM := new(MockLLMClient)
+
+	// Mock code generation
+	codeResponse := "```python\nprint('Hello, World!')\n```"
+	mockLLM.On("Chat", mock.Anything, mock.Anything).Return(&llm.CompletionResponse{
+		Content:    codeResponse,
+		TokensUsed: 30,
+	}, nil).Once()
+
+	agent := NewPoTAgent(PoTConfig{
+		Name:          "test-pot-early",
+		LLM:           mockLLM,
+		Language:      "python",
+		MaxIterations: 3,
+	})
+
+	input := &core.AgentInput{
+		Task: "Print hello world",
+	}
+
+	// Terminate after first output
+	maxOutputs := 1
+	outputCount := 0
+
+	for _, err := range agent.RunGenerator(ctx, input) {
+		if err != nil {
+			t.Errorf("Unexpected error: %v", err)
+			break
+		}
+
+		outputCount++
+
+		if outputCount >= maxOutputs {
+			t.Logf("Terminating early after %d outputs", outputCount)
+			break
+		}
+	}
+
+	// Verify we only got the expected number of outputs
+	assert.Equal(t, maxOutputs, outputCount, "Should terminate after exactly %d outputs", maxOutputs)
+
+	t.Logf("Successfully terminated early after %d outputs", outputCount)
+
+	mockLLM.AssertExpectations(t)
+}

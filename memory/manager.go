@@ -6,40 +6,13 @@ import (
 	"github.com/kart-io/goagent/interfaces"
 )
 
-// Manager 定义记忆管理器接口
-//
-// Deprecated: Use interfaces.MemoryManager instead.
-// This type alias provides backward compatibility. It will be removed in v1.0.0.
-//
-// Migration: import "github.com/kart-io/goagent/interfaces"
-// See: pkg/agent/docs/refactoring/migration-guide.md
-type Manager = interfaces.MemoryManager
-
-// Conversation 对话记录
-//
-// Deprecated: Use interfaces.Conversation instead.
-// This type alias provides backward compatibility. It will be removed in v1.0.0.
-//
-// Migration: import "github.com/kart-io/goagent/interfaces"
-// See: pkg/agent/docs/refactoring/migration-guide.md
-type Conversation = interfaces.Conversation
-
-// Case 案例记忆
-//
-// Deprecated: Use interfaces.Case instead.
-// This type alias provides backward compatibility. It will be removed in v1.0.0.
-//
-// Migration: import "github.com/kart-io/goagent/interfaces"
-// See: pkg/agent/docs/refactoring/migration-guide.md
-type Case = interfaces.Case
-
 // ConversationStore 对话存储接口
 type ConversationStore interface {
 	// Add 添加对话
-	Add(ctx context.Context, conv *Conversation) error
+	Add(ctx context.Context, conv *interfaces.Conversation) error
 
 	// Get 获取对话历史
-	Get(ctx context.Context, sessionID string, limit int) ([]*Conversation, error)
+	Get(ctx context.Context, sessionID string, limit int) ([]*interfaces.Conversation, error)
 
 	// Clear 清空会话
 	Clear(ctx context.Context, sessionID string) error

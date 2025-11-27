@@ -238,9 +238,9 @@ func (r *ToolRuntime) Clone() *ToolRuntime {
 
 // RuntimeTool interface for tools that use runtime
 type RuntimeTool interface {
-	Tool
+	interfaces.Tool
 	// ExecuteWithRuntime executes the tool with runtime context
-	ExecuteWithRuntime(ctx context.Context, input *ToolInput, runtime *ToolRuntime) (*ToolOutput, error)
+	ExecuteWithRuntime(ctx context.Context, input *interfaces.ToolInput, runtime *ToolRuntime) (*interfaces.ToolOutput, error)
 }
 
 // RuntimeToolAdapter adapts a RuntimeTool to the standard Tool interface
@@ -262,7 +262,7 @@ func NewRuntimeToolAdapter(tool RuntimeTool, runtime *ToolRuntime) *RuntimeToolA
 		tool.Name(),
 		tool.Description(),
 		tool.ArgsSchema(),
-		func(ctx context.Context, input *ToolInput) (*ToolOutput, error) {
+		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 			return adapter.tool.ExecuteWithRuntime(ctx, input, adapter.runtime)
 		},
 	)
@@ -313,7 +313,7 @@ func NewUserInfoTool() *UserInfoTool {
 }
 
 // ExecuteWithRuntime retrieves user info using runtime
-func (t *UserInfoTool) ExecuteWithRuntime(ctx context.Context, input *ToolInput, runtime *ToolRuntime) (*ToolOutput, error) {
+func (t *UserInfoTool) ExecuteWithRuntime(ctx context.Context, input *interfaces.ToolInput, runtime *ToolRuntime) (*interfaces.ToolOutput, error) {
 	// Stream progress
 	if err := runtime.Stream(map[string]interface{}{
 		"status": "Looking up user information",
@@ -357,7 +357,7 @@ func (t *UserInfoTool) ExecuteWithRuntime(ctx context.Context, input *ToolInput,
 			WithOperation("stream_completion")
 	}
 
-	return &ToolOutput{
+	return &interfaces.ToolOutput{
 		Result:  userInfo,
 		Success: true,
 	}, nil
@@ -383,7 +383,7 @@ func NewSavePreferenceTool() *SavePreferenceTool {
 }
 
 // ExecuteWithRuntime saves a preference using runtime
-func (t *SavePreferenceTool) ExecuteWithRuntime(ctx context.Context, input *ToolInput, runtime *ToolRuntime) (*ToolOutput, error) {
+func (t *SavePreferenceTool) ExecuteWithRuntime(ctx context.Context, input *interfaces.ToolInput, runtime *ToolRuntime) (*interfaces.ToolOutput, error) {
 	// Parse input
 	key, ok := input.Args["key"].(string)
 	if !ok {
@@ -441,7 +441,7 @@ func (t *SavePreferenceTool) ExecuteWithRuntime(ctx context.Context, input *Tool
 			WithContext("key", key)
 	}
 
-	return &ToolOutput{
+	return &interfaces.ToolOutput{
 		Result: map[string]interface{}{
 			"status": "saved",
 			"key":    key,
@@ -471,7 +471,7 @@ func NewUpdateStateTool() *UpdateStateTool {
 }
 
 // ExecuteWithRuntime updates state using runtime
-func (t *UpdateStateTool) ExecuteWithRuntime(ctx context.Context, input *ToolInput, runtime *ToolRuntime) (*ToolOutput, error) {
+func (t *UpdateStateTool) ExecuteWithRuntime(ctx context.Context, input *interfaces.ToolInput, runtime *ToolRuntime) (*interfaces.ToolOutput, error) {
 	// Apply updates
 	for key, value := range input.Args {
 		err := runtime.SetState(key, value)
@@ -493,7 +493,7 @@ func (t *UpdateStateTool) ExecuteWithRuntime(ctx context.Context, input *ToolInp
 			WithOperation("stream_updates")
 	}
 
-	return &ToolOutput{
+	return &interfaces.ToolOutput{
 		Result: map[string]interface{}{
 			"status":  "success",
 			"updated": len(input.Args),
@@ -513,12 +513,6 @@ func NewToolRuntimeManager() *ToolRuntimeManager {
 	return &ToolRuntimeManager{
 		runtimes: make(map[string]*ToolRuntime),
 	}
-}
-
-// CreateRuntime creates a new runtime for a tool call
-// Deprecated: Use CreateRuntimeWithContext instead
-func (m *ToolRuntimeManager) CreateRuntime(callID string, state core.State, store store.Store) *ToolRuntime {
-	return m.CreateRuntimeWithContext(context.Background(), callID, state, store)
 }
 
 // CreateRuntimeWithContext creates a new runtime for a tool call with a parent context

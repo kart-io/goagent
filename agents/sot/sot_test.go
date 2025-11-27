@@ -672,3 +672,159 @@ func TestSoTAgent_ConcurrentElaborationWithDependencies(t *testing.T) {
 		assert.Equal(t, "completed", point.Status)
 	}
 }
+
+// TestSoTAgent_RunGenerator tests the RunGenerator method
+func TestSoTAgent_RunGenerator(t *testing.T) {
+	ctx := context.Background()
+	mockLLM := new(MockLLMClient)
+
+	// Mock skeleton generation
+	skeletonResponse := `Point 1: Understand the problem
+Point 2: Break down into steps
+Point 3: Implement solution`
+	mockLLM.On("Chat", mock.Anything, mock.Anything).Return(&llm.CompletionResponse{
+		Content:    skeletonResponse,
+		TokensUsed: 50,
+	}, nil).Once()
+
+	// Mock elaborations for each skeleton point
+	mockLLM.On("Chat", mock.Anything, mock.Anything).Return(&llm.CompletionResponse{
+		Content:    "Detailed elaboration for this point",
+		TokensUsed: 30,
+	}, nil).Times(3)
+
+	agent := NewSoTAgent(SoTConfig{
+		Name:                "test-sot-gen",
+		Description:         "Test SoT Agent with Generator",
+		LLM:                 mockLLM,
+		MaxConcurrency:      2,
+		MaxSkeletonPoints:   5,
+		MinSkeletonPoints:   2,
+		AggregationStrategy: "sequential",
+	})
+
+	input := &core.AgentInput{
+		Task: "Test task for generator",
+	}
+
+	// Collect all outputs from generator
+	var outputs []*core.AgentOutput
+	var finalOutput *core.AgentOutput
+	var foundSkeleton bool
+	var foundElaboration bool
+
+	for output, err := range agent.RunGenerator(ctx, input) {
+		if err != nil {
+			t.Logf("Error at step %d: %v", len(outputs)+1, err)
+		}
+
+		if output == nil {
+			t.Error("Output is nil")
+			break
+		}
+
+		outputs = append(outputs, output)
+		finalOutput = output
+
+		// Check metadata
+		if _, ok := output.Metadata["step_type"]; !ok {
+			t.Error("Missing step_type in metadata")
+		}
+
+		// Check if skeleton was generated
+		if stepType, ok := output.Metadata["step_type"].(string); ok {
+			if stepType == "skeleton_generated" {
+				foundSkeleton = true
+				t.Log("Skeleton generated!")
+			}
+			if stepType == "elaboration_completed" {
+				foundElaboration = true
+				t.Log("Elaboration completed!")
+			}
+		}
+
+		// Log step type
+		t.Logf("Step %d: %s - %s", len(outputs), output.Metadata["step_type"], output.Message)
+
+		// Break on final output
+		if output.Metadata["step_type"] == "final" {
+			break
+		}
+	}
+
+	// Verify we got multiple outputs
+	assert.NotEmpty(t, outputs, "RunGenerator should produce outputs")
+	assert.GreaterOrEqual(t, len(outputs), 3, "Should have at least 3 outputs (skeleton, elaboration, final)")
+
+	t.Logf("Total outputs: %d", len(outputs))
+	t.Logf("Found skeleton: %v", foundSkeleton)
+	t.Logf("Found elaboration: %v", foundElaboration)
+
+	// Verify final output exists
+	assert.NotNil(t, finalOutput, "Final output should not be nil")
+
+	// Verify we found skeleton and elaboration stages
+	assert.True(t, foundSkeleton, "Should have generated skeleton")
+	assert.True(t, foundElaboration, "Should have completed elaboration")
+
+	// Verify final output status
+	if finalOutput != nil {
+		assert.Equal(t, interfaces.StatusSuccess, finalOutput.Status, "Final status should be success")
+		assert.Equal(t, "final", finalOutput.Metadata["step_type"], "Last output should be final")
+	}
+
+	// Log final result
+	t.Logf("Final result: %v", finalOutput.Result)
+	t.Logf("Total reasoning steps: %d", len(finalOutput.ReasoningSteps))
+
+	mockLLM.AssertExpectations(t)
+}
+
+// TestSoTAgent_RunGenerator_EarlyTermination tests early termination
+func TestSoTAgent_RunGenerator_EarlyTermination(t *testing.T) {
+	ctx := context.Background()
+	mockLLM := new(MockLLMClient)
+
+	// Mock skeleton generation
+	skeletonResponse := `Point 1: First point
+Point 2: Second point`
+	mockLLM.On("Chat", mock.Anything, mock.Anything).Return(&llm.CompletionResponse{
+		Content:    skeletonResponse,
+		TokensUsed: 50,
+	}, nil).Once()
+
+	agent := NewSoTAgent(SoTConfig{
+		Name:           "test-sot-early",
+		LLM:            mockLLM,
+		MaxConcurrency: 2,
+	})
+
+	input := &core.AgentInput{
+		Task: "Test early termination",
+	}
+
+	// Terminate after first output
+	maxOutputs := 1
+	outputCount := 0
+
+	for _, err := range agent.RunGenerator(ctx, input) {
+		if err != nil {
+			t.Errorf("Unexpected error: %v", err)
+			break
+		}
+
+		outputCount++
+
+		if outputCount >= maxOutputs {
+			t.Logf("Terminating early after %d outputs", outputCount)
+			break
+		}
+	}
+
+	// Verify we only got the expected number of outputs
+	assert.Equal(t, maxOutputs, outputCount, "Should terminate after exactly %d outputs", maxOutputs)
+
+	t.Logf("Successfully terminated early after %d outputs", outputCount)
+
+	mockLLM.AssertExpectations(t)
+}

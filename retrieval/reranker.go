@@ -5,6 +5,8 @@ import (
 	"math"
 	"sort"
 
+	"github.com/kart-io/goagent/interfaces"
+
 	coheregov2 "github.com/cohere-ai/cohere-go/v2"
 	cohereclient "github.com/cohere-ai/cohere-go/v2/client"
 
@@ -16,7 +18,7 @@ import (
 // 对检索到的文档进行重新排序，提高结果质量
 type Reranker interface {
 	// Rerank 重新排序文档
-	Rerank(ctx context.Context, query string, docs []*Document) ([]*Document, error)
+	Rerank(ctx context.Context, query string, docs []*interfaces.Document) ([]*interfaces.Document, error)
 }
 
 // BaseReranker 基础重排序器
@@ -32,7 +34,7 @@ func NewBaseReranker(name string) *BaseReranker {
 }
 
 // Rerank 默认实现（不改变顺序）
-func (b *BaseReranker) Rerank(ctx context.Context, query string, docs []*Document) ([]*Document, error) {
+func (b *BaseReranker) Rerank(ctx context.Context, query string, docs []*interfaces.Document) ([]*interfaces.Document, error) {
 	return docs, nil
 }
 
@@ -59,14 +61,14 @@ func NewCrossEncoderReranker(model string, topN int) *CrossEncoderReranker {
 }
 
 // Rerank 重新排序文档
-func (c *CrossEncoderReranker) Rerank(ctx context.Context, query string, docs []*Document) ([]*Document, error) {
+func (c *CrossEncoderReranker) Rerank(ctx context.Context, query string, docs []*interfaces.Document) ([]*interfaces.Document, error) {
 	if len(docs) == 0 {
 		return docs, nil
 	}
 
 	// 模拟交叉编码器评分
 	// 实际应该调用真实的模型 API
-	scored := make([]*Document, len(docs))
+	scored := make([]*interfaces.Document, len(docs))
 	for i, doc := range docs {
 		docCopy := doc.Clone()
 		// 模拟评分：基于内容相似度
@@ -146,13 +148,13 @@ Document: {{.Document}}
 Relevance score (0-10):`
 
 // Rerank 重新排序文档
-func (l *LLMReranker) Rerank(ctx context.Context, query string, docs []*Document) ([]*Document, error) {
+func (l *LLMReranker) Rerank(ctx context.Context, query string, docs []*interfaces.Document) ([]*interfaces.Document, error) {
 	if len(docs) == 0 {
 		return docs, nil
 	}
 
 	// 模拟 LLM 评分
-	scored := make([]*Document, len(docs))
+	scored := make([]*interfaces.Document, len(docs))
 	for i, doc := range docs {
 		docCopy := doc.Clone()
 		// 模拟评分（实际应该调用 LLM）
@@ -223,7 +225,7 @@ func NewMMRReranker(lambda float64, topN int) *MMRReranker {
 //
 // MMR = λ * Sim(D, Q) - (1-λ) * max(Sim(D, Di))
 // 其中 Di 是已选择的文档
-func (m *MMRReranker) Rerank(ctx context.Context, query string, docs []*Document) ([]*Document, error) {
+func (m *MMRReranker) Rerank(ctx context.Context, query string, docs []*interfaces.Document) ([]*interfaces.Document, error) {
 	if len(docs) == 0 {
 		return docs, nil
 	}
@@ -234,8 +236,8 @@ func (m *MMRReranker) Rerank(ctx context.Context, query string, docs []*Document
 	}
 
 	// 初始化
-	selected := make([]*Document, 0, topN)
-	remaining := make([]*Document, len(docs))
+	selected := make([]*interfaces.Document, 0, topN)
+	remaining := make([]*interfaces.Document, len(docs))
 	copy(remaining, docs)
 
 	// 迭代选择
@@ -281,7 +283,7 @@ func (m *MMRReranker) Rerank(ctx context.Context, query string, docs []*Document
 }
 
 // documentSimilarity 计算文档相似度（简化版本）
-func (m *MMRReranker) documentSimilarity(doc1, doc2 *Document) float64 {
+func (m *MMRReranker) documentSimilarity(doc1, doc2 *interfaces.Document) float64 {
 	// 简单的基于词汇重叠的相似度
 	words1 := tokenize(doc1.PageContent)
 	words2 := tokenize(doc2.PageContent)
@@ -369,9 +371,9 @@ func NewCohereReranker(apiKey, model string, topN int) (*CohereReranker, error) 
 //   - docs: 待重排序的文档列表
 //
 // 返回:
-//   - []*Document: 重排序后的文档列表
+//   - []*interfaces.Document: 重排序后的文档列表
 //   - error: 错误信息
-func (c *CohereReranker) Rerank(ctx context.Context, query string, docs []*Document) ([]*Document, error) {
+func (c *CohereReranker) Rerank(ctx context.Context, query string, docs []*interfaces.Document) ([]*interfaces.Document, error) {
 	if len(docs) == 0 {
 		return docs, nil
 	}
@@ -410,7 +412,7 @@ func (c *CohereReranker) Rerank(ctx context.Context, query string, docs []*Docum
 		return docs, nil
 	}
 
-	rerankedDocs := make([]*Document, 0, len(response.Results))
+	rerankedDocs := make([]*interfaces.Document, 0, len(response.Results))
 	for _, result := range response.Results {
 		if result.Index < len(docs) {
 			doc := docs[result.Index].Clone()
@@ -460,7 +462,7 @@ func NewRerankingRetriever(
 }
 
 // GetRelevantDocuments 检索并重排序文档
-func (r *RerankingRetriever) GetRelevantDocuments(ctx context.Context, query string) ([]*Document, error) {
+func (r *RerankingRetriever) GetRelevantDocuments(ctx context.Context, query string) ([]*interfaces.Document, error) {
 	// 1. 使用基础检索器获取候选文档
 	docs, err := r.Retriever.GetRelevantDocuments(ctx, query)
 	if err != nil {
@@ -496,8 +498,8 @@ type CompareRankers struct {
 }
 
 // Compare 对比重排序结果
-func (c *CompareRankers) Compare(ctx context.Context, query string, docs []*Document) (map[string][]*Document, error) {
-	results := make(map[string][]*Document)
+func (c *CompareRankers) Compare(ctx context.Context, query string, docs []*interfaces.Document) (map[string][]*interfaces.Document, error) {
+	results := make(map[string][]*interfaces.Document)
 
 	for _, reranker := range c.Rerankers {
 		if br, ok := reranker.(*BaseReranker); ok {
@@ -530,7 +532,7 @@ func NewRankFusion(method string) *RankFusion {
 }
 
 // Fuse 融合多个排名结果
-func (rf *RankFusion) Fuse(rankings [][]*Document) []*Document {
+func (rf *RankFusion) Fuse(rankings [][]*interfaces.Document) []*interfaces.Document {
 	switch rf.Method {
 	case "rrf":
 		return rf.reciprocalRankFusion(rankings)
@@ -544,9 +546,9 @@ func (rf *RankFusion) Fuse(rankings [][]*Document) []*Document {
 }
 
 // reciprocalRankFusion RRF 融合
-func (rf *RankFusion) reciprocalRankFusion(rankings [][]*Document) []*Document {
+func (rf *RankFusion) reciprocalRankFusion(rankings [][]*interfaces.Document) []*interfaces.Document {
 	scores := make(map[string]float64)
-	docMap := make(map[string]*Document)
+	docMap := make(map[string]*interfaces.Document)
 
 	for _, ranking := range rankings {
 		for rank, doc := range ranking {
@@ -559,7 +561,7 @@ func (rf *RankFusion) reciprocalRankFusion(rankings [][]*Document) []*Document {
 	}
 
 	// 创建结果列表
-	result := make([]*Document, 0, len(docMap))
+	result := make([]*interfaces.Document, 0, len(docMap))
 	for id, doc := range docMap {
 		doc.Score = scores[id]
 		result = append(result, doc)
@@ -574,9 +576,9 @@ func (rf *RankFusion) reciprocalRankFusion(rankings [][]*Document) []*Document {
 }
 
 // bordaCount Borda 计数融合
-func (rf *RankFusion) bordaCount(rankings [][]*Document) []*Document {
+func (rf *RankFusion) bordaCount(rankings [][]*interfaces.Document) []*interfaces.Document {
 	scores := make(map[string]int)
-	docMap := make(map[string]*Document)
+	docMap := make(map[string]*interfaces.Document)
 
 	for _, ranking := range rankings {
 		n := len(ranking)
@@ -590,7 +592,7 @@ func (rf *RankFusion) bordaCount(rankings [][]*Document) []*Document {
 	}
 
 	// 创建结果列表
-	result := make([]*Document, 0, len(docMap))
+	result := make([]*interfaces.Document, 0, len(docMap))
 	for id, doc := range docMap {
 		doc.Score = float64(scores[id])
 		result = append(result, doc)
@@ -605,9 +607,9 @@ func (rf *RankFusion) bordaCount(rankings [][]*Document) []*Document {
 }
 
 // combSum 分数求和融合
-func (rf *RankFusion) combSum(rankings [][]*Document) []*Document {
+func (rf *RankFusion) combSum(rankings [][]*interfaces.Document) []*interfaces.Document {
 	scores := make(map[string]float64)
-	docMap := make(map[string]*Document)
+	docMap := make(map[string]*interfaces.Document)
 
 	for _, ranking := range rankings {
 		for _, doc := range ranking {
@@ -619,7 +621,7 @@ func (rf *RankFusion) combSum(rankings [][]*Document) []*Document {
 	}
 
 	// 创建结果列表
-	result := make([]*Document, 0, len(docMap))
+	result := make([]*interfaces.Document, 0, len(docMap))
 	for id, doc := range docMap {
 		doc.Score = scores[id]
 		result = append(result, doc)

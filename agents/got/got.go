@@ -722,6 +722,169 @@ func (g *GoTAgent) Stream(ctx context.Context, input *agentcore.AgentInput) (<-c
 	return outChan, nil
 }
 
+// RunGenerator 使用 Generator 模式执行 Graph-of-Thought（实验性功能）
+//
+// 相比 Stream，RunGenerator 提供零分配的流式执行，在每个主要阶段后 yield 中间结果：
+//   - 构建思维图后 yield
+//   - 图执行完成后 yield
+//   - 合成最终答案后 yield
+//
+// 性能优势：
+//   - 零内存分配（无 channel、goroutine 开销）
+//   - 支持早期终止（用户可以在任意步骤 break）
+//   - 更低延迟（无 channel 发送/接收开销）
+//
+// 使用示例：
+//
+//	for output, err := range agent.RunGenerator(ctx, input) {
+//	    if err != nil {
+//	        log.Error("step failed", err)
+//	        continue
+//	    }
+//	    stepType := output.Metadata["step_type"].(string)
+//	    if stepType == "graph_built" {
+//	        fmt.Printf("构建了 %d 个节点的图\n", output.Metadata["total_nodes"])
+//	    }
+//	    if output.Status == interfaces.StatusSuccess {
+//	        break  // 完成
+//	    }
+//	}
+//
+// 注意：此方法不触发 Agent 级别的回调（OnStart/OnFinish）
+func (g *GoTAgent) RunGenerator(ctx context.Context, input *agentcore.AgentInput) agentcore.Generator[*agentcore.AgentOutput] {
+	return func(yield func(*agentcore.AgentOutput, error) bool) {
+		startTime := time.Now()
+
+		// Initialize accumulated output
+		accumulated := &agentcore.AgentOutput{
+			ReasoningSteps: make([]agentcore.ReasoningStep, 0),
+			ToolCalls:      make([]agentcore.ToolCall, 0),
+			Metadata:       make(map[string]interface{}),
+		}
+
+		// Phase 1: Build thought graph
+		graphStart := time.Now()
+		graph := g.buildThoughtGraph(ctx, input, accumulated)
+
+		// Check for cycles if enabled
+		if g.config.CycleDetection && g.hasCycles(graph) {
+			errorOutput := g.createStepOutput(accumulated, "Cycle detected in thought graph", startTime)
+			errorOutput.Status = interfaces.StatusFailed
+			err := agentErrors.New(agentErrors.CodeAgentExecution, "cyclic dependencies found").
+				WithComponent("got_agent").
+				WithOperation("RunGenerator")
+			if !yield(errorOutput, err) {
+				return
+			}
+			return
+		}
+
+		// Record graph building
+		accumulated.ReasoningSteps = append(accumulated.ReasoningSteps, agentcore.ReasoningStep{
+			Step:        1,
+			Action:      "Build Graph",
+			Description: fmt.Sprintf("Built thought graph with %d nodes", len(graph)),
+			Result:      "Graph construction complete",
+			Duration:    time.Since(graphStart),
+			Success:     true,
+		})
+
+		// Yield after graph building
+		graphOutput := g.createStepOutput(accumulated, "Thought graph built", startTime)
+		graphOutput.Status = interfaces.StatusInProgress
+		graphOutput.Metadata["step_type"] = "graph_built"
+		graphOutput.Metadata["total_nodes"] = len(graph)
+		graphOutput.Metadata["parallel_execution"] = g.config.ParallelExecution
+		if !yield(graphOutput, nil) {
+			return // Early termination
+		}
+
+		// Phase 2: Execute graph
+		executionStart := time.Now()
+		var finalResult interface{}
+		var err error
+
+		if g.config.ParallelExecution {
+			finalResult, err = g.executeGraphParallel(ctx, graph, input, accumulated)
+		} else {
+			finalResult, err = g.executeGraphSequential(ctx, graph, input, accumulated)
+		}
+
+		if err != nil {
+			errorOutput := g.createStepOutput(accumulated, "Graph execution failed", startTime)
+			errorOutput.Status = interfaces.StatusPartial
+			if !yield(errorOutput, err) {
+				return
+			}
+			return
+		}
+
+		// Record graph execution
+		accumulated.ReasoningSteps = append(accumulated.ReasoningSteps, agentcore.ReasoningStep{
+			Step:        2,
+			Action:      "Execute Graph",
+			Description: "Executed all graph nodes",
+			Result:      "Graph execution complete",
+			Duration:    time.Since(executionStart),
+			Success:     true,
+		})
+
+		// Yield after graph execution
+		executionOutput := g.createStepOutput(accumulated, "Graph execution completed", startTime)
+		executionOutput.Status = interfaces.StatusInProgress
+		executionOutput.Metadata["step_type"] = "execution_completed"
+		executionOutput.Metadata["merge_strategy"] = g.config.MergeStrategy
+		if !yield(executionOutput, nil) {
+			return // Early termination
+		}
+
+		// Phase 3: Synthesize answer
+		synthesisStart := time.Now()
+		finalAnswer := g.synthesizeAnswer(ctx, graph, finalResult)
+
+		// Record synthesis
+		accumulated.ReasoningSteps = append(accumulated.ReasoningSteps, agentcore.ReasoningStep{
+			Step:        3,
+			Action:      "Synthesize Answer",
+			Description: "Combined graph results into final answer",
+			Result:      "Answer synthesis complete",
+			Duration:    time.Since(synthesisStart),
+			Success:     true,
+		})
+
+		// Yield final output
+		finalOutput := g.createStepOutput(accumulated, "Graph-of-Thought reasoning completed successfully", startTime)
+		finalOutput.Status = interfaces.StatusSuccess
+		finalOutput.Result = finalAnswer
+		finalOutput.Metadata["step_type"] = "final"
+		finalOutput.Metadata["total_duration_ms"] = time.Since(startTime).Milliseconds()
+		yield(finalOutput, nil)
+	}
+}
+
+// createStepOutput creates a snapshot of current execution state
+func (g *GoTAgent) createStepOutput(accumulated *agentcore.AgentOutput, message string, startTime time.Time) *agentcore.AgentOutput {
+	stepOutput := &agentcore.AgentOutput{
+		ReasoningSteps: make([]agentcore.ReasoningStep, len(accumulated.ReasoningSteps)),
+		ToolCalls:      make([]agentcore.ToolCall, len(accumulated.ToolCalls)),
+		Metadata:       make(map[string]interface{}),
+		Timestamp:      time.Now(),
+		Latency:        time.Since(startTime),
+		Message:        message,
+	}
+
+	// Copy slices
+	copy(stepOutput.ReasoningSteps, accumulated.ReasoningSteps)
+	copy(stepOutput.ToolCalls, accumulated.ToolCalls)
+
+	// Copy existing metadata
+	for k, v := range accumulated.Metadata {
+		stepOutput.Metadata[k] = v
+	}
+
+	return stepOutput
+}
+
 // Error handling
 func (g *GoTAgent) handleError(ctx context.Context, output *agentcore.AgentOutput, message string, err error, startTime time.Time) (*agentcore.AgentOutput, error) {
 	output.Status = "failed"

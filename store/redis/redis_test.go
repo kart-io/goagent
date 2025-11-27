@@ -17,23 +17,16 @@ func setupTestStore(t *testing.T) (*Store, *miniredis.Miniredis) {
 	// Create a miniredis server
 	mr := miniredis.RunT(t)
 
-	// Create config
-	config := &Config{
-		Addr:         mr.Addr(),
-		Password:     "",
-		DB:           0,
-		Prefix:       "test:store:",
-		TTL:          0,
-		PoolSize:     10,
-		MinIdleConns: 2,
-		MaxRetries:   3,
-		DialTimeout:  5 * time.Second,
-		ReadTimeout:  3 * time.Second,
-		WriteTimeout: 3 * time.Second,
-	}
-
-	// Create store
-	s, err := New(config)
+	// Create store using new Option API
+	s, err := New(mr.Addr(),
+		WithPrefix("test:store:"),
+		WithPoolSize(10),
+		WithMinIdleConns(2),
+		WithMaxRetries(3),
+		WithDialTimeout(5*time.Second),
+		WithReadTimeout(3*time.Second),
+		WithWriteTimeout(3*time.Second),
+	)
 	require.NoError(t, err)
 	require.NotNil(t, s)
 
@@ -51,12 +44,9 @@ func TestNew(t *testing.T) {
 }
 
 func TestNew_ConnectionFailure(t *testing.T) {
-	config := &Config{
-		Addr:        "localhost:9999", // Non-existent server
-		DialTimeout: 1 * time.Second,
-	}
-
-	s, err := New(config)
+	s, err := New("localhost:9999", // Non-existent server
+		WithDialTimeout(1*time.Second),
+	)
 	assert.Error(t, err)
 	assert.Nil(t, s)
 }
@@ -306,13 +296,10 @@ func TestStore_WithTTL(t *testing.T) {
 	mr := miniredis.RunT(t)
 	defer mr.Close()
 
-	config := &Config{
-		Addr:   mr.Addr(),
-		Prefix: "test:ttl:",
-		TTL:    100 * time.Millisecond,
-	}
-
-	s, err := New(config)
+	s, err := New(mr.Addr(),
+		WithPrefix("test:ttl:"),
+		WithTTL(100*time.Millisecond),
+	)
 	require.NoError(t, err)
 	defer s.Close()
 
@@ -414,4 +401,132 @@ func TestStore_NamespaceIsolation(t *testing.T) {
 	stored2, err := s.Get(ctx, []string{"ns2"}, key)
 	require.NoError(t, err)
 	assert.Equal(t, value2, stored2.Value)
+}
+
+// TestNew_WithOptions 测试新的 Option 模式 API
+func TestNew_WithOptions(t *testing.T) {
+	mr := miniredis.RunT(t)
+	defer mr.Close()
+
+	t.Run("default options", func(t *testing.T) {
+		s, err := New(mr.Addr())
+		require.NoError(t, err)
+		defer s.Close()
+
+		assert.NotNil(t, s)
+		assert.Equal(t, mr.Addr(), s.config.Addr)
+		assert.Equal(t, "agent:store:", s.config.Prefix) // Default prefix
+		assert.Equal(t, 10, s.config.PoolSize)           // Default pool size
+	})
+
+	t.Run("with custom options", func(t *testing.T) {
+		s, err := New(mr.Addr(),
+			WithPassword("secret"),
+			WithDB(1),
+			WithPrefix("custom:"),
+			WithPoolSize(20),
+			WithMinIdleConns(5),
+			WithTTL(10*time.Minute),
+		)
+		require.NoError(t, err)
+		defer s.Close()
+
+		assert.Equal(t, "secret", s.config.Password)
+		assert.Equal(t, 1, s.config.DB)
+		assert.Equal(t, "custom:", s.config.Prefix)
+		assert.Equal(t, 20, s.config.PoolSize)
+		assert.Equal(t, 5, s.config.MinIdleConns)
+		assert.Equal(t, 10*time.Minute, s.config.TTL)
+	})
+
+	t.Run("option validation", func(t *testing.T) {
+		config := DefaultConfig()
+
+		// Test that invalid values are ignored
+		WithDB(-1)(config)
+		assert.Equal(t, 0, config.DB) // Should keep default
+
+		WithPoolSize(0)(config)
+		assert.Equal(t, 10, config.PoolSize) // Should keep default
+
+		WithMinIdleConns(-1)(config)
+		assert.Equal(t, 2, config.MinIdleConns) // Should keep default
+
+		WithPrefix("")(config)
+		assert.Equal(t, "agent:store:", config.Prefix) // Should keep default
+
+		WithDialTimeout(-1 * time.Second)(config)
+		assert.Equal(t, 5*time.Second, config.DialTimeout) // Should keep default
+	})
+
+	t.Run("functional test with options", func(t *testing.T) {
+		s, err := New(mr.Addr(),
+			WithPrefix("test:opt:"),
+			WithPoolSize(5),
+		)
+		require.NoError(t, err)
+		defer s.Close()
+
+		ctx := context.Background()
+		err = s.Put(ctx, []string{"test"}, "key1", "value1")
+		assert.NoError(t, err)
+
+		val, err := s.Get(ctx, []string{"test"}, "key1")
+		require.NoError(t, err)
+		assert.Equal(t, "value1", val.Value)
+	})
+}
+
+// TestNewFromConfig_Backward_Compatibility 测试向后兼容性
+func TestNewFromConfig_Backward_Compatibility(t *testing.T) {
+	mr := miniredis.RunT(t)
+	defer mr.Close()
+
+	// Old way still works
+	s, err := New(mr.Addr(),
+		WithPassword("test_pass"),
+		WithDB(2),
+		WithPrefix("legacy:"),
+		WithPoolSize(15),
+		WithMinIdleConns(3),
+		WithTTL(5*time.Minute),
+	)
+	require.NoError(t, err)
+	defer s.Close()
+
+	assert.NotNil(t, s)
+	assert.Equal(t, "legacy:", s.config.Prefix)
+	assert.Equal(t, 15, s.config.PoolSize)
+	assert.Equal(t, 2, s.config.DB)
+}
+
+// TestApplyRedisOptions 测试 ApplyRedisOptions 函数
+func TestApplyRedisOptions(t *testing.T) {
+	t.Run("apply to nil config", func(t *testing.T) {
+		config := ApplyRedisOptions(nil,
+			WithPrefix("new:"),
+			WithPoolSize(25),
+		)
+
+		assert.NotNil(t, config)
+		assert.Equal(t, "new:", config.Prefix)
+		assert.Equal(t, 25, config.PoolSize)
+	})
+
+	t.Run("apply to existing config", func(t *testing.T) {
+		config := &Config{
+			Addr:     "localhost:6379",
+			Prefix:   "old:",
+			PoolSize: 10,
+		}
+
+		config = ApplyRedisOptions(config,
+			WithPrefix("updated:"),
+			WithPoolSize(30),
+		)
+
+		assert.Equal(t, "localhost:6379", config.Addr) // Unchanged
+		assert.Equal(t, "updated:", config.Prefix)
+		assert.Equal(t, 30, config.PoolSize)
+	})
 }

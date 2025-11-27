@@ -6,13 +6,15 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kart-io/goagent/interfaces"
+
 	"github.com/google/uuid"
 )
 
 // InMemoryManager 内存记忆管理器实现
 type InMemoryManager struct {
 	// 对话存储
-	conversations map[string][]*Conversation // sessionID -> conversations
+	conversations map[string][]*interfaces.Conversation // sessionID -> conversations
 	convMu        sync.RWMutex
 
 	// 通用键值存储
@@ -20,7 +22,7 @@ type InMemoryManager struct {
 	storeMu sync.RWMutex
 
 	// 案例存储
-	cases   map[string]*Case
+	cases   map[string]*interfaces.Case
 	casesMu sync.RWMutex
 
 	// 配置
@@ -34,15 +36,15 @@ func NewInMemoryManager(config *Config) *InMemoryManager {
 	}
 
 	return &InMemoryManager{
-		conversations: make(map[string][]*Conversation),
+		conversations: make(map[string][]*interfaces.Conversation),
 		store:         make(map[string]interface{}),
-		cases:         make(map[string]*Case),
+		cases:         make(map[string]*interfaces.Case),
 		config:        config,
 	}
 }
 
 // AddConversation 添加对话
-func (m *InMemoryManager) AddConversation(ctx context.Context, conv *Conversation) error {
+func (m *InMemoryManager) AddConversation(ctx context.Context, conv *interfaces.Conversation) error {
 	if conv == nil {
 		return errors.New("conversation is nil")
 	}
@@ -79,7 +81,7 @@ func (m *InMemoryManager) AddConversation(ctx context.Context, conv *Conversatio
 }
 
 // GetConversationHistory 获取对话历史
-func (m *InMemoryManager) GetConversationHistory(ctx context.Context, sessionID string, limit int) ([]*Conversation, error) {
+func (m *InMemoryManager) GetConversationHistory(ctx context.Context, sessionID string, limit int) ([]*interfaces.Conversation, error) {
 	if sessionID == "" {
 		return nil, errors.New("session_id is required")
 	}
@@ -89,7 +91,7 @@ func (m *InMemoryManager) GetConversationHistory(ctx context.Context, sessionID 
 
 	convs, exists := m.conversations[sessionID]
 	if !exists {
-		return []*Conversation{}, nil
+		return []*interfaces.Conversation{}, nil
 	}
 
 	// 应用 limit
@@ -114,7 +116,7 @@ func (m *InMemoryManager) ClearConversation(ctx context.Context, sessionID strin
 }
 
 // AddCase 添加案例
-func (m *InMemoryManager) AddCase(ctx context.Context, caseMemory *Case) error {
+func (m *InMemoryManager) AddCase(ctx context.Context, caseMemory *interfaces.Case) error {
 	if caseMemory == nil {
 		return errors.New("case is nil")
 	}
@@ -141,16 +143,16 @@ func (m *InMemoryManager) AddCase(ctx context.Context, caseMemory *Case) error {
 // SearchSimilarCases 搜索相似案例
 //
 // 注意：这是一个简单的文本匹配实现，实际应用中应使用向量相似度搜索
-func (m *InMemoryManager) SearchSimilarCases(ctx context.Context, query string, limit int) ([]*Case, error) {
+func (m *InMemoryManager) SearchSimilarCases(ctx context.Context, query string, limit int) ([]*interfaces.Case, error) {
 	if query == "" {
-		return []*Case{}, nil
+		return []*interfaces.Case{}, nil
 	}
 
 	m.casesMu.RLock()
 	defer m.casesMu.RUnlock()
 
 	// 简单的文本匹配（实际应使用向量搜索）
-	results := make([]*Case, 0)
+	results := make([]*interfaces.Case, 0)
 	for _, c := range m.cases {
 		// 简单检查：如果查询字符串出现在案例的描述或问题中
 		if contains(c.Description, query) || contains(c.Problem, query) || contains(c.Title, query) {
@@ -225,9 +227,9 @@ func (m *InMemoryManager) Clear(ctx context.Context) error {
 	defer m.casesMu.Unlock()
 
 	// Clear all data
-	m.conversations = make(map[string][]*Conversation)
+	m.conversations = make(map[string][]*interfaces.Conversation)
 	m.store = make(map[string]interface{})
-	m.cases = make(map[string]*Case)
+	m.cases = make(map[string]*interfaces.Case)
 
 	return nil
 }

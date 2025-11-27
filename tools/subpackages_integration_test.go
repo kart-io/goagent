@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kart-io/goagent/tools"
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/tools/compute"
 	"github.com/kart-io/goagent/tools/http"
 	"github.com/kart-io/goagent/tools/search"
@@ -32,7 +32,7 @@ func TestCalculatorTool(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.expression, func(t *testing.T) {
-			input := &tools.ToolInput{
+			input := &interfaces.ToolInput{
 				Args: map[string]interface{}{
 					"expression": tt.expression,
 				},
@@ -61,7 +61,7 @@ func TestSearchTool(t *testing.T) {
 	tool := search.NewSearchTool(engine)
 
 	ctx := context.Background()
-	input := &tools.ToolInput{
+	input := &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"query":       "golang",
 			"max_results": 2.0,
@@ -95,7 +95,7 @@ func TestShellTool(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("AllowedCommand", func(t *testing.T) {
-		input := &tools.ToolInput{
+		input := &interfaces.ToolInput{
 			Args: map[string]interface{}{
 				"command": "echo",
 				"args":    []interface{}{"hello", "world"},
@@ -123,7 +123,7 @@ func TestShellTool(t *testing.T) {
 	})
 
 	t.Run("DisallowedCommand", func(t *testing.T) {
-		input := &tools.ToolInput{
+		input := &interfaces.ToolInput{
 			Args: map[string]interface{}{
 				"command": "rm",
 				"args":    []interface{}{"-rf", "/"},
@@ -149,7 +149,7 @@ func TestAPITool(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("GET Request", func(t *testing.T) {
-		input := &tools.ToolInput{
+		input := &interfaces.ToolInput{
 			Args: map[string]interface{}{
 				"method": "GET",
 				"url":    "/posts/1",
@@ -181,7 +181,7 @@ func TestAPITool(t *testing.T) {
 func BenchmarkCalculatorTool(b *testing.B) {
 	tool := compute.NewCalculatorTool()
 	ctx := context.Background()
-	input := &tools.ToolInput{
+	input := &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"expression": "2 + 3 * 4",
 		},

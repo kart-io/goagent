@@ -3,15 +3,7 @@ package store
 import (
 	"context"
 	"time"
-
-	"github.com/kart-io/goagent/interfaces"
 )
-
-// SimpleStore is a type alias for the canonical Store interface.
-//
-// For new code, use interfaces.Store directly.
-// This alias provides a migration path for existing code.
-type SimpleStore = interfaces.Store
 
 // Store defines the interface for namespace-based persistent storage.
 //

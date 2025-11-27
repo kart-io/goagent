@@ -679,6 +679,158 @@ func (s *SoTAgent) Stream(ctx context.Context, input *agentcore.AgentInput) (<-c
 	return outChan, nil
 }
 
+// RunGenerator 使用 Generator 模式执行 Skeleton-of-Thought（实验性功能）
+//
+// 相比 Stream，RunGenerator 提供零分配的流式执行，在每个主要阶段后 yield 中间结果：
+//   - 生成骨架后 yield
+//   - 并行 elaboration 完成后 yield
+//   - 聚合结果后 yield（最终输出）
+//
+// 性能优势：
+//   - 零内存分配（无 channel、goroutine 开销）
+//   - 支持早期终止（用户可以在任意步骤 break）
+//   - 更低延迟（无 channel 发送/接收开销）
+//
+// 使用示例：
+//
+//	for output, err := range agent.RunGenerator(ctx, input) {
+//	    if err != nil {
+//	        log.Error("step failed", err)
+//	        continue
+//	    }
+//	    stepType := output.Metadata["step_type"].(string)
+//	    if stepType == "skeleton_generated" {
+//	        fmt.Printf("生成了 %d 个骨架点\n", output.Metadata["skeleton_points"])
+//	    }
+//	    if output.Status == interfaces.StatusSuccess {
+//	        break  // 完成
+//	    }
+//	}
+//
+// 注意：此方法不触发 Agent 级别的回调（OnStart/OnFinish）
+func (s *SoTAgent) RunGenerator(ctx context.Context, input *agentcore.AgentInput) agentcore.Generator[*agentcore.AgentOutput] {
+	return func(yield func(*agentcore.AgentOutput, error) bool) {
+		startTime := time.Now()
+
+		// Initialize accumulated output
+		accumulated := &agentcore.AgentOutput{
+			ReasoningSteps: make([]agentcore.ReasoningStep, 0),
+			ToolCalls:      make([]agentcore.ToolCall, 0),
+			Metadata:       make(map[string]interface{}),
+		}
+
+		// Phase 1: Generate skeleton
+		skeletonStart := time.Now()
+		skeleton, err := s.generateSkeleton(ctx, input)
+		if err != nil {
+			errorOutput := s.createStepOutput(accumulated, "Skeleton generation failed", startTime)
+			errorOutput.Status = interfaces.StatusFailed
+			if !yield(errorOutput, err) {
+				return
+			}
+			return
+		}
+
+		// Record skeleton generation
+		accumulated.ReasoningSteps = append(accumulated.ReasoningSteps, agentcore.ReasoningStep{
+			Step:        1,
+			Action:      "Generate Skeleton",
+			Description: fmt.Sprintf("Created %d skeleton points", len(skeleton)),
+			Result:      s.formatSkeleton(skeleton),
+			Duration:    time.Since(skeletonStart),
+			Success:     true,
+		})
+
+		// Yield after skeleton generation
+		skeletonOutput := s.createStepOutput(accumulated, "Skeleton generated", startTime)
+		skeletonOutput.Status = interfaces.StatusInProgress
+		skeletonOutput.Metadata["step_type"] = "skeleton_generated"
+		skeletonOutput.Metadata["skeleton_points"] = len(skeleton)
+		skeletonOutput.Metadata["skeleton_structure"] = s.formatSkeleton(skeleton)
+		if !yield(skeletonOutput, nil) {
+			return // Early termination
+		}
+
+		// Phase 2: Elaborate skeleton points in parallel
+		elaborationStart := time.Now()
+		err = s.elaborateSkeletonParallel(ctx, skeleton, input, accumulated)
+		if err != nil {
+			errorOutput := s.createStepOutput(accumulated, "Skeleton elaboration failed", startTime)
+			errorOutput.Status = interfaces.StatusPartial
+			if !yield(errorOutput, err) {
+				return
+			}
+			return
+		}
+
+		// Record elaboration phase
+		accumulated.ReasoningSteps = append(accumulated.ReasoningSteps, agentcore.ReasoningStep{
+			Step:        2,
+			Action:      "Parallel Elaboration",
+			Description: fmt.Sprintf("Elaborated %d points in parallel", len(skeleton)),
+			Result:      "All points successfully elaborated",
+			Duration:    time.Since(elaborationStart),
+			Success:     true,
+		})
+
+		// Yield after elaboration
+		elaborationOutput := s.createStepOutput(accumulated, "Elaboration completed", startTime)
+		elaborationOutput.Status = interfaces.StatusInProgress
+		elaborationOutput.Metadata["step_type"] = "elaboration_completed"
+		elaborationOutput.Metadata["points_elaborated"] = len(skeleton)
+		elaborationOutput.Metadata["parallel_concurrency"] = s.config.MaxConcurrency
+		if !yield(elaborationOutput, nil) {
+			return // Early termination
+		}
+
+		// Phase 3: Aggregate results
+		aggregationStart := time.Now()
+		finalAnswer := s.aggregateResults(ctx, skeleton, input)
+
+		// Record aggregation
+		accumulated.ReasoningSteps = append(accumulated.ReasoningSteps, agentcore.ReasoningStep{
+			Step:        3,
+			Action:      "Aggregate Results",
+			Description: "Combined elaborated points into final answer",
+			Result:      "Aggregation complete",
+			Duration:    time.Since(aggregationStart),
+			Success:     true,
+		})
+
+		// Yield final output
+		finalOutput := s.createStepOutput(accumulated, "Skeleton-of-Thought reasoning completed", startTime)
+		finalOutput.Status = interfaces.StatusSuccess
+		finalOutput.Result = finalAnswer
+		finalOutput.Metadata["step_type"] = "final"
+		finalOutput.Metadata["aggregation_strategy"] = s.config.AggregationStrategy
+		finalOutput.Metadata["total_duration_ms"] = time.Since(startTime).Milliseconds()
+		yield(finalOutput, nil)
+	}
+}
+
+// createStepOutput creates a snapshot of current execution state
+func (s *SoTAgent) createStepOutput(accumulated *agentcore.AgentOutput, message string, startTime time.Time) *agentcore.AgentOutput {
+	stepOutput := &agentcore.AgentOutput{
+		ReasoningSteps: make([]agentcore.ReasoningStep, len(accumulated.ReasoningSteps)),
+		ToolCalls:      make([]agentcore.ToolCall, len(accumulated.ToolCalls)),
+		Metadata:       make(map[string]interface{}),
+		Timestamp:      time.Now(),
+		Latency:        time.Since(startTime),
+		Message:        message,
+	}
+
+	// Copy slices
+	copy(stepOutput.ReasoningSteps, accumulated.ReasoningSteps)
+	copy(stepOutput.ToolCalls, accumulated.ToolCalls)
+
+	// Copy existing metadata
+	for k, v := range accumulated.Metadata {
+		stepOutput.Metadata[k] = v
+	}
+
+	return stepOutput
+}
+
 // Error handling
 func (s *SoTAgent) handleError(ctx context.Context, output *agentcore.AgentOutput, message string, err error, startTime time.Time) (*agentcore.AgentOutput, error) {
 	output.Status = "failed"

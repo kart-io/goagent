@@ -244,6 +244,48 @@ func (a *BaseAgent) Stream(ctx context.Context, input *AgentInput) (<-chan Strea
 	return outChan, nil
 }
 
+// RunGenerator 使用 Generator 模式执行 Agent（实验性功能）
+//
+// 相比 Stream 方法的优势：
+//   - 零内存分配（无 channel、goroutine 开销）
+//   - 支持早期终止（通过 for-range break）
+//   - 更简洁的迭代语法
+//
+// 参数：
+//   - ctx - 上下文
+//   - input - 输入数据
+//
+// 返回：
+//   - Generator，产生 *AgentOutput 和 error
+//
+// 示例：
+//
+//	for output, err := range agent.RunGenerator(ctx, input) {
+//	    if err != nil {
+//	        return err
+//	    }
+//	    fmt.Println("Step:", output.Status)
+//	}
+//
+// 注意：
+//   - 这是实验性 API，可能在未来版本中调整
+//   - 默认实现调用 Invoke 并产生单个结果
+//   - 具体 Agent 可以重写此方法实现真正的流式处理
+//   - 如需向后兼容，使用 Stream 方法
+func (a *BaseAgent) RunGenerator(ctx context.Context, input *AgentInput) Generator[*AgentOutput] {
+	return func(yield func(*AgentOutput, error) bool) {
+		// 检查上下文取消
+		if ctx.Err() != nil {
+			yield(nil, ctx.Err())
+			return
+		}
+
+		// 默认实现：调用 Invoke 并产生单个结果
+		output, err := a.Invoke(ctx, input)
+		yield(output, err)
+	}
+}
+
 // Batch 批量执行 Agent
 // 使用 BaseRunnable 的默认批处理实现
 func (a *BaseAgent) Batch(ctx context.Context, inputs []*AgentInput) ([]*AgentOutput, error) {

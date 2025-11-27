@@ -3,6 +3,8 @@ package retrieval
 import (
 	"context"
 	"testing"
+
+	"github.com/kart-io/goagent/interfaces"
 )
 
 // TestRAGRetrieverConfiguration tests RAG retriever configuration
@@ -102,7 +104,7 @@ func TestRAGRetrieverScoreThreshold(t *testing.T) {
 	ctx := context.Background()
 
 	store := NewMockVectorStore()
-	docs := []*Document{
+	docs := []*interfaces.Document{
 		NewDocument("High relevance machine learning", nil),
 		NewDocument("Medium relevance data science", nil),
 		NewDocument("Low relevance random text", nil),
@@ -140,7 +142,7 @@ func TestRAGRetrieverMaxContentLength(t *testing.T) {
 	ctx := context.Background()
 
 	store := NewMockVectorStore()
-	docs := []*Document{
+	docs := []*interfaces.Document{
 		NewDocument("This is a very long document content that should be truncated because it exceeds the maximum length", nil),
 	}
 	_ = store.AddDocuments(ctx, docs)
@@ -189,7 +191,7 @@ func TestRAGRetrieverAddDocuments(t *testing.T) {
 		t.Fatalf("Failed to create retriever: %v", err)
 	}
 
-	docs := []*Document{
+	docs := []*interfaces.Document{
 		NewDocument("Document 1", nil),
 		NewDocument("Document 2", nil),
 	}
@@ -208,7 +210,7 @@ func TestRAGRetrieverClear(t *testing.T) {
 		Embedder: NewSimpleEmbedder(50),
 	})
 
-	docs := []*Document{
+	docs := []*interfaces.Document{
 		NewDocument("Test document", nil),
 	}
 	_ = store.AddDocuments(ctx, docs)
@@ -279,7 +281,7 @@ func TestRAGRetrieverRetrieveAndFormat(t *testing.T) {
 	ctx := context.Background()
 
 	store := NewMockVectorStore()
-	docs := []*Document{
+	docs := []*interfaces.Document{
 		NewDocument("Python is a programming language", map[string]interface{}{"type": "language"}),
 		NewDocument("Machine learning uses algorithms", nil),
 	}
@@ -319,7 +321,7 @@ func TestRAGRetrieverWithEmptyTemplate(t *testing.T) {
 	ctx := context.Background()
 
 	store := NewMockVectorStore()
-	docs := []*Document{
+	docs := []*interfaces.Document{
 		NewDocument("Test content", nil),
 	}
 	_ = store.AddDocuments(ctx, docs)
@@ -352,7 +354,7 @@ func TestRAGChainRun(t *testing.T) {
 	ctx := context.Background()
 
 	store := NewMockVectorStore()
-	docs := []*Document{
+	docs := []*interfaces.Document{
 		NewDocument("Kubernetes is a container orchestration system", nil),
 		NewDocument("Docker provides containerization", nil),
 	}
@@ -447,7 +449,7 @@ func TestRAGMultiQueryRetrieverRetrieve(t *testing.T) {
 	ctx := context.Background()
 
 	store := NewMockVectorStore()
-	docs := []*Document{
+	docs := []*interfaces.Document{
 		NewDocument("Machine learning algorithms", nil),
 		NewDocument("Deep learning networks", nil),
 		NewDocument("Natural language processing", nil),
@@ -481,7 +483,7 @@ func TestRAGMultiQueryRetrieverDeduplication(t *testing.T) {
 
 	store := NewMockVectorStore()
 	doc := NewDocument("Kubernetes container orchestration platform", nil)
-	_ = store.AddDocuments(ctx, []*Document{doc})
+	_ = store.AddDocuments(ctx, []*interfaces.Document{doc})
 
 	config := RAGRetrieverConfig{
 		VectorStore:      store,

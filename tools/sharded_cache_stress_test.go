@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -36,7 +37,7 @@ func TestShardedCache_DeepCircularChain(t *testing.T) {
 		tool := fmt.Sprintf("tool%d", i)
 		for j := 0; j < 5; j++ {
 			key := fmt.Sprintf("%s:key%d", tool, j)
-			err := cache.Set(ctx, key, &ToolOutput{Result: key}, 5*time.Minute)
+			err := cache.Set(ctx, key, &interfaces.ToolOutput{Result: key}, 5*time.Minute)
 			require.NoError(t, err)
 		}
 	}
@@ -100,7 +101,7 @@ func TestShardedCache_MultipleCircularGroups(t *testing.T) {
 		for _, tool := range group {
 			for i := 0; i < 3; i++ {
 				key := fmt.Sprintf("%s:key%d", tool, i)
-				err := cache.Set(ctx, key, &ToolOutput{Result: key}, 5*time.Minute)
+				err := cache.Set(ctx, key, &interfaces.ToolOutput{Result: key}, 5*time.Minute)
 				require.NoError(t, err)
 			}
 		}
@@ -162,7 +163,7 @@ func TestShardedCache_ComplexDependencyGraph(t *testing.T) {
 	for _, tool := range tools {
 		for i := 0; i < 4; i++ {
 			key := fmt.Sprintf("%s:key%d", tool, i)
-			err := cache.Set(ctx, key, &ToolOutput{Result: key}, 5*time.Minute)
+			err := cache.Set(ctx, key, &interfaces.ToolOutput{Result: key}, 5*time.Minute)
 			require.NoError(t, err)
 		}
 	}
@@ -221,7 +222,7 @@ func TestShardedCache_NoStackOverflow(t *testing.T) {
 	for i := 0; i < numTools; i++ {
 		tool := fmt.Sprintf("tool%d", i)
 		key := fmt.Sprintf("%s:key", tool)
-		err := cache.Set(ctx, key, &ToolOutput{Result: key}, 5*time.Minute)
+		err := cache.Set(ctx, key, &interfaces.ToolOutput{Result: key}, 5*time.Minute)
 		require.NoError(t, err)
 	}
 

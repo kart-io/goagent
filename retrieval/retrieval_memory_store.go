@@ -5,6 +5,8 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/kart-io/goagent/interfaces"
+
 	agentErrors "github.com/kart-io/goagent/errors"
 )
 
@@ -31,7 +33,7 @@ type MemoryVectorStore struct {
 
 // DocumentWithVector 包含向量的文档
 type DocumentWithVector struct {
-	Document *Document
+	Document *interfaces.Document
 	Vector   []float32
 }
 
@@ -75,7 +77,7 @@ func NewMemoryVectorStore(config MemoryVectorStoreConfig) *MemoryVectorStore {
 }
 
 // Add 添加文档和向量
-func (m *MemoryVectorStore) Add(ctx context.Context, docs []*Document, vectors [][]float32) error {
+func (m *MemoryVectorStore) Add(ctx context.Context, docs []*interfaces.Document, vectors [][]float32) error {
 	if len(docs) == 0 {
 		return nil
 	}
@@ -125,12 +127,12 @@ func (m *MemoryVectorStore) Add(ctx context.Context, docs []*Document, vectors [
 }
 
 // AddDocuments 添加文档（实现 VectorStore 接口）
-func (m *MemoryVectorStore) AddDocuments(ctx context.Context, docs []*Document) error {
+func (m *MemoryVectorStore) AddDocuments(ctx context.Context, docs []*interfaces.Document) error {
 	return m.Add(ctx, docs, nil)
 }
 
 // Search 相似度搜索
-func (m *MemoryVectorStore) Search(ctx context.Context, query string, topK int) ([]*Document, error) {
+func (m *MemoryVectorStore) Search(ctx context.Context, query string, topK int) ([]*interfaces.Document, error) {
 	// 生成查询向量
 	queryVector, err := m.embedder.EmbedQuery(ctx, query)
 	if err != nil {
@@ -144,17 +146,17 @@ func (m *MemoryVectorStore) Search(ctx context.Context, query string, topK int) 
 }
 
 // SearchByVector 通过向量搜索
-func (m *MemoryVectorStore) SearchByVector(ctx context.Context, queryVector []float32, topK int) ([]*Document, error) {
+func (m *MemoryVectorStore) SearchByVector(ctx context.Context, queryVector []float32, topK int) ([]*interfaces.Document, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
 	if len(m.documents) == 0 {
-		return []*Document{}, nil
+		return []*interfaces.Document{}, nil
 	}
 
 	// 计算所有文档的相似度
 	type docScore struct {
-		doc   *Document
+		doc   *interfaces.Document
 		score float32
 	}
 
@@ -190,7 +192,7 @@ func (m *MemoryVectorStore) SearchByVector(ctx context.Context, queryVector []fl
 		scores = scores[:topK]
 	}
 
-	results := make([]*Document, len(scores))
+	results := make([]*interfaces.Document, len(scores))
 	for i, ds := range scores {
 		results[i] = ds.doc
 	}
@@ -199,12 +201,12 @@ func (m *MemoryVectorStore) SearchByVector(ctx context.Context, queryVector []fl
 }
 
 // SimilaritySearch 相似度搜索（实现 VectorStore 接口）
-func (m *MemoryVectorStore) SimilaritySearch(ctx context.Context, query string, topK int) ([]*Document, error) {
+func (m *MemoryVectorStore) SimilaritySearch(ctx context.Context, query string, topK int) ([]*interfaces.Document, error) {
 	return m.Search(ctx, query, topK)
 }
 
 // SimilaritySearchWithScore 带分数的相似度搜索（实现 VectorStore 接口）
-func (m *MemoryVectorStore) SimilaritySearchWithScore(ctx context.Context, query string, topK int) ([]*Document, error) {
+func (m *MemoryVectorStore) SimilaritySearchWithScore(ctx context.Context, query string, topK int) ([]*interfaces.Document, error) {
 	return m.Search(ctx, query, topK)
 }
 
@@ -222,7 +224,7 @@ func (m *MemoryVectorStore) Delete(ctx context.Context, ids []string) error {
 }
 
 // Update 更新文档
-func (m *MemoryVectorStore) Update(ctx context.Context, docs []*Document) error {
+func (m *MemoryVectorStore) Update(ctx context.Context, docs []*interfaces.Document) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -262,7 +264,7 @@ func (m *MemoryVectorStore) Update(ctx context.Context, docs []*Document) error 
 }
 
 // Get 获取文档
-func (m *MemoryVectorStore) Get(ctx context.Context, id string) (*Document, error) {
+func (m *MemoryVectorStore) Get(ctx context.Context, id string) (*interfaces.Document, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 

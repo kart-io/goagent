@@ -761,3 +761,227 @@ func TestMetaCoTAgent_SearchForAnswer(t *testing.T) {
 		assert.Equal(t, "Direct answer without tool", question.Answer)
 	})
 }
+
+// TestMetaCoTAgent_RunGenerator tests the RunGenerator method
+func TestMetaCoTAgent_RunGenerator(t *testing.T) {
+	ctx := context.Background()
+	mockLLM := new(MockLLMClient)
+
+	// Mock follow-up questions generation - signal DIRECT_ANSWER
+	mockLLM.On("Chat", mock.Anything, mock.Anything).Return(&llm.CompletionResponse{
+		Content:    "DIRECT_ANSWER",
+		TokensUsed: 20,
+	}, nil).Once()
+
+	// Mock direct answer
+	mockLLM.On("Chat", mock.Anything, mock.Anything).Return(&llm.CompletionResponse{
+		Content:    "The answer to your question is 42.",
+		TokensUsed: 30,
+	}, nil).Once()
+
+	agent := NewMetaCoTAgent(MetaCoTConfig{
+		Name:             "test-metacot-gen",
+		Description:      "Test MetaCoT Agent with Generator",
+		LLM:              mockLLM,
+		MaxQuestions:     3,
+		MaxDepth:         3,
+		QuestionStrategy: "focused",
+	})
+
+	input := &core.AgentInput{
+		Task: "What is the answer to life, universe and everything?",
+	}
+
+	// Collect all outputs from generator
+	var outputs []*core.AgentOutput
+	var finalOutput *core.AgentOutput
+
+	for output, err := range agent.RunGenerator(ctx, input) {
+		if err != nil {
+			t.Logf("Error at step %d: %v", len(outputs)+1, err)
+		}
+
+		if output == nil {
+			t.Error("Output is nil")
+			break
+		}
+
+		outputs = append(outputs, output)
+		finalOutput = output
+
+		// Check metadata
+		if _, ok := output.Metadata["step_type"]; !ok {
+			t.Error("Missing step_type in metadata")
+		}
+
+		// Log step type
+		t.Logf("Step %d: %s - %s", len(outputs), output.Metadata["step_type"], output.Message)
+
+		// Break on final output
+		if output.Metadata["step_type"] == "final" {
+			break
+		}
+	}
+
+	// Verify we got at least one output
+	assert.NotEmpty(t, outputs, "RunGenerator should produce outputs")
+
+	t.Logf("Total outputs: %d", len(outputs))
+
+	// Verify final output exists
+	assert.NotNil(t, finalOutput, "Final output should not be nil")
+
+	// Verify final output status and metadata
+	if finalOutput != nil {
+		assert.Equal(t, interfaces.StatusSuccess, finalOutput.Status, "Final status should be success")
+		assert.Equal(t, "final", finalOutput.Metadata["step_type"], "Last output should be final")
+		assert.NotEmpty(t, finalOutput.Result, "Final result should not be empty")
+	}
+
+	// Log final result
+	t.Logf("Final result: %v", finalOutput.Result)
+	t.Logf("Total reasoning steps: %d", len(finalOutput.ReasoningSteps))
+
+	mockLLM.AssertExpectations(t)
+}
+
+// TestMetaCoTAgent_RunGenerator_WithFollowup tests with follow-up questions
+func TestMetaCoTAgent_RunGenerator_WithFollowup(t *testing.T) {
+	ctx := context.Background()
+	mockLLM := new(MockLLMClient)
+
+	// Mock follow-up questions generation for main question
+	mockLLM.On("Chat", mock.Anything, mock.Anything).Return(&llm.CompletionResponse{
+		Content:    "Q: What are the components?\nQ: How do they work together?",
+		TokensUsed: 40,
+	}, nil).Once()
+
+	// Mock DIRECT_ANSWER for first follow-up (no further questions)
+	mockLLM.On("Chat", mock.Anything, mock.Anything).Return(&llm.CompletionResponse{
+		Content:    "DIRECT_ANSWER",
+		TokensUsed: 15,
+	}, nil).Once()
+
+	// Mock direct answer for first follow-up
+	mockLLM.On("Chat", mock.Anything, mock.Anything).Return(&llm.CompletionResponse{
+		Content:    "The components are A, B, and C.",
+		TokensUsed: 25,
+	}, nil).Once()
+
+	// Mock DIRECT_ANSWER for second follow-up (no further questions)
+	mockLLM.On("Chat", mock.Anything, mock.Anything).Return(&llm.CompletionResponse{
+		Content:    "DIRECT_ANSWER",
+		TokensUsed: 15,
+	}, nil).Once()
+
+	// Mock direct answer for second follow-up
+	mockLLM.On("Chat", mock.Anything, mock.Anything).Return(&llm.CompletionResponse{
+		Content:    "They work together through coordination.",
+		TokensUsed: 25,
+	}, nil).Once()
+
+	// Mock final answer with context (for main question)
+	mockLLM.On("Chat", mock.Anything, mock.Anything).Return(&llm.CompletionResponse{
+		Content:    "Based on the components and their coordination, the system functions effectively.",
+		TokensUsed: 35,
+	}, nil).Once()
+
+	// Mock synthesis
+	mockLLM.On("Chat", mock.Anything, mock.Anything).Return(&llm.CompletionResponse{
+		Content:    "The final synthesized answer.",
+		TokensUsed: 20,
+	}, nil).Maybe()
+
+	agent := NewMetaCoTAgent(MetaCoTConfig{
+		Name:         "test-followup-gen",
+		LLM:          mockLLM,
+		MaxQuestions: 2,
+		MaxDepth:     2,
+	})
+
+	input := &core.AgentInput{
+		Task: "How does the system work?",
+	}
+
+	// Collect all outputs
+	var outputs []*core.AgentOutput
+	var foundFollowup bool
+
+	for output, err := range agent.RunGenerator(ctx, input) {
+		if err != nil {
+			t.Logf("Error: %v", err)
+		}
+
+		if output == nil {
+			break
+		}
+
+		outputs = append(outputs, output)
+
+		// Check if we got follow-up question answers
+		if stepType, ok := output.Metadata["step_type"].(string); ok {
+			if stepType == "followup_answered" {
+				foundFollowup = true
+				t.Logf("Follow-up answered: %v", output.Metadata["question"])
+			}
+		}
+
+		t.Logf("Step %d: %s - %s", len(outputs), output.Metadata["step_type"], output.Message)
+
+		if output.Metadata["step_type"] == "final" {
+			break
+		}
+	}
+
+	assert.True(t, foundFollowup, "Should have processed follow-up questions")
+	assert.NotEmpty(t, outputs, "Should have multiple outputs")
+
+	t.Logf("Total outputs: %d", len(outputs))
+
+	mockLLM.AssertExpectations(t)
+}
+
+// TestMetaCoTAgent_RunGenerator_EarlyTermination tests early termination
+func TestMetaCoTAgent_RunGenerator_EarlyTermination(t *testing.T) {
+	ctx := context.Background()
+	mockLLM := new(MockLLMClient)
+
+	// Mock minimal response
+	mockLLM.On("Chat", mock.Anything, mock.Anything).Return(&llm.CompletionResponse{
+		Content:    "DIRECT_ANSWER",
+		TokensUsed: 10,
+	}, nil).Maybe()
+
+	agent := NewMetaCoTAgent(MetaCoTConfig{
+		Name:     "test-early-term",
+		LLM:      mockLLM,
+		MaxDepth: 2,
+	})
+
+	input := &core.AgentInput{
+		Task: "Simple question",
+	}
+
+	// Terminate after first output
+	maxOutputs := 1
+	outputCount := 0
+
+	for _, err := range agent.RunGenerator(ctx, input) {
+		if err != nil {
+			t.Errorf("Unexpected error: %v", err)
+			break
+		}
+
+		outputCount++
+
+		if outputCount >= maxOutputs {
+			t.Logf("Terminating early after %d outputs", outputCount)
+			break
+		}
+	}
+
+	// Verify we only got the expected number of outputs
+	assert.Equal(t, maxOutputs, outputCount, "Should terminate after exactly %d outputs", maxOutputs)
+
+	t.Logf("Successfully terminated early after %d outputs", outputCount)
+}

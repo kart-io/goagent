@@ -108,12 +108,6 @@ type HierarchicalMemory struct {
 	importanceThreshold    float64
 }
 
-// NewHierarchicalMemory creates a new hierarchical memory system
-// Deprecated: Use NewHierarchicalMemoryWithContext instead
-func NewHierarchicalMemory(vectorStore VectorStore, opts ...MemoryOption) *HierarchicalMemory {
-	return NewHierarchicalMemoryWithContext(context.Background(), vectorStore, opts...)
-}
-
 // NewHierarchicalMemoryWithContext creates a new hierarchical memory system with a parent context
 func NewHierarchicalMemoryWithContext(parentCtx context.Context, vectorStore VectorStore, opts ...MemoryOption) *HierarchicalMemory {
 	ctx, cancel := context.WithCancel(parentCtx)

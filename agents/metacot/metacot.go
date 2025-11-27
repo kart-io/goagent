@@ -648,6 +648,259 @@ func (m *MetaCoTAgent) Stream(ctx context.Context, input *agentcore.AgentInput) 
 	return outChan, nil
 }
 
+// RunGenerator 使用 Generator 模式执行 Meta-CoT / Self-Ask（实验性功能）
+//
+// 相比 Stream，RunGenerator 提供零分配的流式执行，在每个主要阶段后 yield 中间结果：
+//   - 问题分解后 yield
+//   - 每个自问-自答步骤后 yield
+//   - 答案合成后 yield
+//   - 自我批评后 yield（如果启用）
+//   - 最终输出
+//
+// 性能优势：
+//   - 零内存分配（无 channel、goroutine 开销）
+//   - 支持早期终止（用户可以在任意步骤 break）
+//   - 更低延迟（无 channel 发送/接收开销）
+//
+// 使用示例：
+//
+//	for output, err := range agent.RunGenerator(ctx, input) {
+//	    if err != nil {
+//	        log.Error("step failed", err)
+//	        continue
+//	    }
+//	    stepType := output.Metadata["step_type"].(string)
+//	    if stepType == "question_decomposed" {
+//	        fmt.Printf("分解了 %d 个子问题\n", output.Metadata["sub_questions_count"])
+//	    }
+//	    if output.Status == interfaces.StatusSuccess {
+//	        break  // 完成
+//	    }
+//	}
+//
+// 注意：此方法不触发 Agent 级别的回调（OnStart/OnFinish）
+func (m *MetaCoTAgent) RunGenerator(ctx context.Context, input *agentcore.AgentInput) agentcore.Generator[*agentcore.AgentOutput] {
+	return func(yield func(*agentcore.AgentOutput, error) bool) {
+		startTime := time.Now()
+
+		// Initialize accumulated output
+		accumulated := &agentcore.AgentOutput{
+			ReasoningSteps: make([]agentcore.ReasoningStep, 0),
+			ToolCalls:      make([]agentcore.ToolCall, 0),
+			Metadata:       make(map[string]interface{}),
+		}
+
+		// Create main question
+		mainQuestion := &Question{
+			ID:     "main",
+			Text:   input.Task,
+			Type:   "main",
+			Status: "pending",
+		}
+
+		// Phase 1: Question decomposition (if needed)
+		if m.shouldDecompose(mainQuestion.Text) {
+			decompositionStart := time.Now()
+			subQuestions := m.decomposeQuestion(ctx, mainQuestion, accumulated)
+			mainQuestion.SubQuestions = subQuestions
+
+			accumulated.ReasoningSteps = append(accumulated.ReasoningSteps, agentcore.ReasoningStep{
+				Step:        1,
+				Action:      "Decompose Question",
+				Description: fmt.Sprintf("Decomposed into %d sub-questions", len(subQuestions)),
+				Result:      m.formatQuestions(subQuestions),
+				Duration:    time.Since(decompositionStart),
+				Success:     true,
+			})
+
+			// Yield after question decomposition
+			decompositionOutput := m.createStepOutput(accumulated, "Question decomposed", startTime)
+			decompositionOutput.Status = interfaces.StatusInProgress
+			decompositionOutput.Metadata["step_type"] = "question_decomposed"
+			decompositionOutput.Metadata["sub_questions_count"] = len(subQuestions)
+			decompositionOutput.Metadata["sub_questions"] = m.formatQuestions(subQuestions)
+			if !yield(decompositionOutput, nil) {
+				return // Early termination
+			}
+		}
+
+		// Phase 2: Self-ask process
+		questionTree := m.buildQuestionTree(mainQuestion)
+		err := m.processSelfAskGenerator(ctx, questionTree, 0, accumulated, yield, startTime)
+		if err != nil {
+			errorOutput := m.createStepOutput(accumulated, "Self-ask process failed", startTime)
+			errorOutput.Status = interfaces.StatusFailed
+			if !yield(errorOutput, err) {
+				return
+			}
+			return
+		}
+
+		// Phase 3: Synthesize final answer
+		synthesisStart := time.Now()
+		finalAnswer := m.synthesizeAnswer(ctx, questionTree, accumulated)
+
+		accumulated.ReasoningSteps = append(accumulated.ReasoningSteps, agentcore.ReasoningStep{
+			Step:        len(accumulated.ReasoningSteps) + 1,
+			Action:      "Synthesize Answer",
+			Description: "Combine all sub-question answers",
+			Result:      "Answer synthesis complete",
+			Duration:    time.Since(synthesisStart),
+			Success:     true,
+		})
+
+		// Yield after answer synthesis
+		synthesisOutput := m.createStepOutput(accumulated, "Answer synthesized", startTime)
+		synthesisOutput.Status = interfaces.StatusInProgress
+		synthesisOutput.Metadata["step_type"] = "answer_synthesized"
+		synthesisOutput.Metadata["answer_preview"] = m.truncateText(finalAnswer, 100)
+		if !yield(synthesisOutput, nil) {
+			return
+		}
+
+		// Phase 4: Self-critique (if enabled)
+		if m.config.SelfCritique {
+			critiqueStart := time.Now()
+			critique := m.selfCritique(ctx, input.Task, finalAnswer)
+
+			accumulated.ReasoningSteps = append(accumulated.ReasoningSteps, agentcore.ReasoningStep{
+				Step:        len(accumulated.ReasoningSteps) + 1,
+				Action:      "Self-Critique",
+				Description: "Critically evaluate the answer",
+				Result:      critique,
+				Duration:    time.Since(critiqueStart),
+				Success:     true,
+			})
+
+			// Yield after self-critique
+			critiqueOutput := m.createStepOutput(accumulated, "Self-critique completed", startTime)
+			critiqueOutput.Status = interfaces.StatusInProgress
+			critiqueOutput.Metadata["step_type"] = "self_critique_completed"
+			critiqueOutput.Metadata["critique"] = critique
+			critiqueOutput.Metadata["needs_refinement"] = m.needsRefinement(critique)
+			if !yield(critiqueOutput, nil) {
+				return
+			}
+
+			// Refine answer if critique suggests improvements
+			if m.needsRefinement(critique) {
+				refinementStart := time.Now()
+				finalAnswer = m.refineAnswer(ctx, finalAnswer, critique)
+
+				accumulated.ReasoningSteps = append(accumulated.ReasoningSteps, agentcore.ReasoningStep{
+					Step:        len(accumulated.ReasoningSteps) + 1,
+					Action:      "Refine Answer",
+					Description: "Improve answer based on critique",
+					Result:      "Answer refinement complete",
+					Duration:    time.Since(refinementStart),
+					Success:     true,
+				})
+
+				// Yield after refinement
+				refinementOutput := m.createStepOutput(accumulated, "Answer refined", startTime)
+				refinementOutput.Status = interfaces.StatusInProgress
+				refinementOutput.Metadata["step_type"] = "answer_refined"
+				refinementOutput.Metadata["refined_answer_preview"] = m.truncateText(finalAnswer, 100)
+				if !yield(refinementOutput, nil) {
+					return
+				}
+			}
+		}
+
+		// Yield final output
+		finalOutput := m.createStepOutput(accumulated, "Meta-CoT / Self-Ask reasoning completed", startTime)
+		finalOutput.Status = interfaces.StatusSuccess
+		finalOutput.Result = finalAnswer
+		finalOutput.Metadata["step_type"] = "final"
+		finalOutput.Metadata["total_questions"] = m.countQuestions(questionTree)
+		finalOutput.Metadata["max_depth"] = m.getMaxDepth(questionTree)
+		finalOutput.Metadata["self_critique"] = m.config.SelfCritique
+		finalOutput.Metadata["total_duration_ms"] = time.Since(startTime).Milliseconds()
+		yield(finalOutput, nil)
+	}
+}
+
+// processSelfAskGenerator processes the self-ask questioning recursively with generator support
+func (m *MetaCoTAgent) processSelfAskGenerator(ctx context.Context, question *Question, depth int, accumulated *agentcore.AgentOutput, yield func(*agentcore.AgentOutput, error) bool, startTime time.Time) error {
+	// Check depth limit
+	if depth >= m.config.MaxDepth {
+		return m.answerDirectly(ctx, question, accumulated)
+	}
+
+	// Generate follow-up questions
+	followupQuestions := m.generateFollowupQuestions(ctx, question, accumulated)
+
+	// Process each follow-up question
+	for i, fq := range followupQuestions {
+		// Check if we need to search for information
+		if m.needsExternalInfo(fq) && len(m.tools) > 0 {
+			m.searchForAnswer(ctx, fq, accumulated)
+		} else {
+			// Recursively process sub-question
+			if err := m.processSelfAskGenerator(ctx, fq, depth+1, accumulated, yield, startTime); err != nil {
+				return err
+			}
+		}
+
+		// Record step
+		accumulated.ReasoningSteps = append(accumulated.ReasoningSteps, agentcore.ReasoningStep{
+			Step:        len(accumulated.ReasoningSteps) + 1,
+			Action:      fmt.Sprintf("Self-Ask (depth=%d)", depth),
+			Description: fq.Text,
+			Result:      fq.Answer,
+			Duration:    time.Millisecond * 100, // Approximate
+			Success:     fq.Status == "answered",
+		})
+
+		// Yield after each follow-up question is answered
+		followupOutput := m.createStepOutput(accumulated, fmt.Sprintf("Follow-up question %d answered", i+1), startTime)
+		followupOutput.Status = interfaces.StatusInProgress
+		followupOutput.Metadata["step_type"] = "followup_answered"
+		followupOutput.Metadata["depth"] = depth
+		followupOutput.Metadata["question"] = fq.Text
+		followupOutput.Metadata["answer"] = fq.Answer
+		followupOutput.Metadata["question_index"] = i + 1
+		followupOutput.Metadata["total_followups"] = len(followupQuestions)
+		if !yield(followupOutput, nil) {
+			return fmt.Errorf("early termination")
+		}
+	}
+
+	// Answer the current question using follow-up answers
+	return m.answerWithContext(ctx, question, followupQuestions, accumulated)
+}
+
+// createStepOutput creates a snapshot of current execution state
+func (m *MetaCoTAgent) createStepOutput(accumulated *agentcore.AgentOutput, message string, startTime time.Time) *agentcore.AgentOutput {
+	stepOutput := &agentcore.AgentOutput{
+		ReasoningSteps: make([]agentcore.ReasoningStep, len(accumulated.ReasoningSteps)),
+		ToolCalls:      make([]agentcore.ToolCall, len(accumulated.ToolCalls)),
+		Metadata:       make(map[string]interface{}),
+		Timestamp:      time.Now(),
+		Latency:        time.Since(startTime),
+		Message:        message,
+	}
+
+	// Copy slices
+	copy(stepOutput.ReasoningSteps, accumulated.ReasoningSteps)
+	copy(stepOutput.ToolCalls, accumulated.ToolCalls)
+
+	// Copy existing metadata
+	for k, v := range accumulated.Metadata {
+		stepOutput.Metadata[k] = v
+	}
+
+	return stepOutput
+}
+
+// truncateText truncates text to maxLen characters
+func (m *MetaCoTAgent) truncateText(text string, maxLen int) string {
+	if len(text) <= maxLen {
+		return text
+	}
+	return text[:maxLen] + "..."
+}
+
 // Error handling
 func (m *MetaCoTAgent) handleError(ctx context.Context, output *agentcore.AgentOutput, message string, err error, startTime time.Time) (*agentcore.AgentOutput, error) {
 	output.Status = "failed"

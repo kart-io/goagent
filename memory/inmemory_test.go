@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kart-io/goagent/interfaces"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -37,7 +39,7 @@ func TestInMemoryManager_AddConversation(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("add valid conversation", func(t *testing.T) {
-		conv := &Conversation{
+		conv := &interfaces.Conversation{
 			SessionID: "session-1",
 			Role:      "user",
 			Content:   "Hello, agent!",
@@ -56,7 +58,7 @@ func TestInMemoryManager_AddConversation(t *testing.T) {
 	})
 
 	t.Run("missing session_id", func(t *testing.T) {
-		conv := &Conversation{
+		conv := &interfaces.Conversation{
 			Role:    "user",
 			Content: "Hello",
 		}
@@ -67,7 +69,7 @@ func TestInMemoryManager_AddConversation(t *testing.T) {
 	})
 
 	t.Run("auto-generate ID", func(t *testing.T) {
-		conv := &Conversation{
+		conv := &interfaces.Conversation{
 			SessionID: "session-2",
 			Role:      "assistant",
 			Content:   "Response",
@@ -79,7 +81,7 @@ func TestInMemoryManager_AddConversation(t *testing.T) {
 	})
 
 	t.Run("preserve existing ID", func(t *testing.T) {
-		conv := &Conversation{
+		conv := &interfaces.Conversation{
 			ID:        "custom-id",
 			SessionID: "session-3",
 			Role:      "user",
@@ -104,7 +106,7 @@ func TestInMemoryManager_AddConversation_MaxLength(t *testing.T) {
 
 	// Add 5 conversations
 	for i := 1; i <= 5; i++ {
-		conv := &Conversation{
+		conv := &interfaces.Conversation{
 			SessionID: sessionID,
 			Role:      "user",
 			Content:   "Message " + string(rune(i)),
@@ -126,7 +128,7 @@ func TestInMemoryManager_GetConversationHistory(t *testing.T) {
 
 	// Add multiple conversations
 	for i := 1; i <= 5; i++ {
-		conv := &Conversation{
+		conv := &interfaces.Conversation{
 			SessionID: sessionID,
 			Role:      "user",
 			Content:   "Message " + string(rune(i)),
@@ -167,7 +169,7 @@ func TestInMemoryManager_ClearConversation(t *testing.T) {
 	sessionID := "session-clear"
 
 	// Add conversations
-	conv := &Conversation{
+	conv := &interfaces.Conversation{
 		SessionID: sessionID,
 		Role:      "user",
 		Content:   "Test message",
@@ -206,7 +208,7 @@ func TestInMemoryManager_AddCase(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("add valid case", func(t *testing.T) {
-		caseMemory := &Case{
+		caseMemory := &interfaces.Case{
 			Title:       "OOMKilled Pod",
 			Description: "Pod was killed due to OOM",
 			Problem:     "High memory usage",
@@ -228,7 +230,7 @@ func TestInMemoryManager_AddCase(t *testing.T) {
 	})
 
 	t.Run("auto-generate ID", func(t *testing.T) {
-		caseMemory := &Case{
+		caseMemory := &interfaces.Case{
 			Title:       "Test Case",
 			Description: "Description",
 		}
@@ -239,7 +241,7 @@ func TestInMemoryManager_AddCase(t *testing.T) {
 	})
 
 	t.Run("preserve existing ID", func(t *testing.T) {
-		caseMemory := &Case{
+		caseMemory := &interfaces.Case{
 			ID:          "custom-case-id",
 			Title:       "Test Case",
 			Description: "Description",
@@ -256,7 +258,7 @@ func TestInMemoryManager_SearchSimilarCases(t *testing.T) {
 	ctx := context.Background()
 
 	// Add test cases
-	cases := []*Case{
+	cases := []*interfaces.Case{
 		{
 			Title:       "OOMKilled Pod",
 			Description: "Pod was killed due to out of memory",
@@ -413,7 +415,7 @@ func TestInMemoryManager_Clear(t *testing.T) {
 	ctx := context.Background()
 
 	// Add conversations
-	conv := &Conversation{
+	conv := &interfaces.Conversation{
 		SessionID: "session-1",
 		Role:      "user",
 		Content:   "Message",
@@ -422,7 +424,7 @@ func TestInMemoryManager_Clear(t *testing.T) {
 	require.NoError(t, err)
 
 	// Add cases
-	caseMemory := &Case{
+	caseMemory := &interfaces.Case{
 		Title:       "Test Case",
 		Description: "Description",
 	}
@@ -461,7 +463,7 @@ func TestInMemoryManager_Concurrency(t *testing.T) {
 
 		for i := 0; i < 10; i++ {
 			go func(index int) {
-				conv := &Conversation{
+				conv := &interfaces.Conversation{
 					SessionID: "concurrent-session",
 					Role:      "user",
 					Content:   "Message from goroutine",
@@ -504,7 +506,7 @@ func TestInMemoryManagerConcurrentReadWrite(t *testing.T) {
 
 	// Pre-populate some data
 	for i := 0; i < 5; i++ {
-		conv := &Conversation{
+		conv := &interfaces.Conversation{
 			SessionID: "session-rw",
 			Role:      "user",
 			Content:   fmt.Sprintf("Message %d", i),
@@ -532,7 +534,7 @@ func TestInMemoryManagerConcurrentReadWrite(t *testing.T) {
 			wg.Add(1)
 			go func(index int) {
 				defer wg.Done()
-				conv := &Conversation{
+				conv := &interfaces.Conversation{
 					SessionID: "session-rw",
 					Role:      "assistant",
 					Content:   fmt.Sprintf("Concurrent message %d", index),
@@ -586,7 +588,7 @@ func TestInMemoryManagerConcurrentReadWrite(t *testing.T) {
 
 		// Pre-populate cases
 		for i := 0; i < 5; i++ {
-			caseItem := &Case{
+			caseItem := &interfaces.Case{
 				Title:       fmt.Sprintf("Case %d", i),
 				Description: "Test case",
 				Problem:     "test problem",
@@ -609,7 +611,7 @@ func TestInMemoryManagerConcurrentReadWrite(t *testing.T) {
 			wg.Add(1)
 			go func(index int) {
 				defer wg.Done()
-				caseItem := &Case{
+				caseItem := &interfaces.Case{
 					Title:       fmt.Sprintf("Concurrent Case %d", index),
 					Description: "Concurrent test case",
 					Problem:     "concurrent problem",
@@ -630,7 +632,7 @@ func TestInMemoryManagerClearConcurrency(t *testing.T) {
 	t.Run("clear with concurrent reads", func(t *testing.T) {
 		// Pre-populate data
 		for i := 0; i < 10; i++ {
-			conv := &Conversation{
+			conv := &interfaces.Conversation{
 				SessionID: "clear-session",
 				Role:      "user",
 				Content:   fmt.Sprintf("Message %d", i),
@@ -641,7 +643,7 @@ func TestInMemoryManagerClearConcurrency(t *testing.T) {
 			err = manager.Store(ctx, fmt.Sprintf("key_%d", i), i)
 			require.NoError(t, err)
 
-			caseItem := &Case{
+			caseItem := &interfaces.Case{
 				Title:       fmt.Sprintf("Case %d", i),
 				Description: "Test",
 			}
@@ -697,7 +699,7 @@ func TestInMemoryManagerClearConcurrency(t *testing.T) {
 	t.Run("multiple concurrent clears", func(t *testing.T) {
 		// Pre-populate
 		for i := 0; i < 5; i++ {
-			conv := &Conversation{
+			conv := &interfaces.Conversation{
 				SessionID: "multi-clear",
 				Role:      "user",
 				Content:   "Message",
@@ -758,7 +760,7 @@ func TestInMemoryManagerStressConcurrency(t *testing.T) {
 					switch operation {
 					case 0:
 						// Add conversation
-						conv := &Conversation{
+						conv := &interfaces.Conversation{
 							SessionID: fmt.Sprintf("session_%d", goroutineID%10),
 							Role:      "user",
 							Content:   fmt.Sprintf("Message from goroutine %d op %d", goroutineID, j),
@@ -780,7 +782,7 @@ func TestInMemoryManagerStressConcurrency(t *testing.T) {
 
 					case 4:
 						// Add case
-						caseItem := &Case{
+						caseItem := &interfaces.Case{
 							Title:       fmt.Sprintf("Case %d %d", goroutineID, j),
 							Description: "Stress test case",
 						}
@@ -818,7 +820,7 @@ func BenchmarkInMemoryManager_AddConversation(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		conv := &Conversation{
+		conv := &interfaces.Conversation{
 			SessionID: "bench-session",
 			Role:      "user",
 			Content:   "Benchmark message",
@@ -834,7 +836,7 @@ func BenchmarkInMemoryManager_GetConversationHistory(b *testing.B) {
 
 	// Prepare data
 	for i := 0; i < 100; i++ {
-		conv := &Conversation{
+		conv := &interfaces.Conversation{
 			SessionID: sessionID,
 			Role:      "user",
 			Content:   "Message",

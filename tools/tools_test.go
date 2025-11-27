@@ -3,6 +3,8 @@ package tools
 import (
 	"context"
 	"testing"
+
+	"github.com/kart-io/goagent/interfaces"
 )
 
 // TestBaseTool 测试基础工具
@@ -11,8 +13,8 @@ func TestBaseTool(t *testing.T) {
 		"test_tool",
 		"A test tool",
 		`{"type": "object"}`,
-		func(ctx context.Context, input *ToolInput) (*ToolOutput, error) {
-			return &ToolOutput{
+		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+			return &interfaces.ToolOutput{
 				Result:  "test result",
 				Success: true,
 			}, nil
@@ -28,7 +30,7 @@ func TestBaseTool(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	input := &ToolInput{
+	input := &interfaces.ToolInput{
 		Args:    map[string]interface{}{},
 		Context: ctx,
 	}
@@ -61,7 +63,7 @@ func TestFunctionTool(t *testing.T) {
 	)
 
 	ctx := context.Background()
-	input := &ToolInput{
+	input := &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"a": 5.0,
 			"b": 3.0,
@@ -84,7 +86,7 @@ func TestFunctionTool(t *testing.T) {
 }
 
 // TestToolWithCallbacks 测试工具回调
-// NOTE: This test is disabled because WithCallbacks is no longer part of the simplified Tool interface
+// NOTE: This test is disabled because WithCallbacks is no longer part of the simplified interfaces.Tool interface
 /*
 func TestToolWithCallbacks(t *testing.T) {
 	var callbackExecuted bool
@@ -103,15 +105,15 @@ func TestToolWithCallbacks(t *testing.T) {
 		"test_tool",
 		"A test tool",
 		`{}`,
-		func(ctx context.Context, input *ToolInput) (*ToolOutput, error) {
-			return &ToolOutput{Success: true}, nil
+		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+			return &interfaces.ToolOutput{Success: true}, nil
 		},
 	)
 
-	toolWithCallback := tool.WithCallbacks(callback).(Tool)
+	toolWithCallback := tool.WithCallbacks(callback).(interfaces.Tool)
 
 	ctx := context.Background()
-	input := &ToolInput{
+	input := &interfaces.ToolInput{
 		Args:    map[string]interface{}{},
 		Context: ctx,
 	}
@@ -133,8 +135,8 @@ func TestBasicToolInvocation(t *testing.T) {
 		"test_tool",
 		"A test tool",
 		`{}`,
-		func(ctx context.Context, input *ToolInput) (*ToolOutput, error) {
-			return &ToolOutput{
+		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+			return &interfaces.ToolOutput{
 				Success: true,
 				Result:  "tool executed",
 			}, nil
@@ -142,7 +144,7 @@ func TestBasicToolInvocation(t *testing.T) {
 	)
 
 	ctx := context.Background()
-	input := &ToolInput{
+	input := &interfaces.ToolInput{
 		Args:    map[string]interface{}{},
 		Context: ctx,
 	}
@@ -207,7 +209,7 @@ func BenchmarkFunctionTool(b *testing.B) {
 	)
 
 	ctx := context.Background()
-	input := &ToolInput{
+	input := &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"a": 5.0,
 			"b": 3.0,

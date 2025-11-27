@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"runtime"
 	"time"
+
+	"github.com/kart-io/goagent/interfaces"
 )
 
 // ExampleShardedCacheUsage 展示如何使用分片缓存的选项模式
@@ -88,7 +90,7 @@ func ExampleShardedCacheUsage() {
 	defer burstyCache.Close()
 
 	// 示例9: 预热缓存
-	warmupData := map[string]*ToolOutput{
+	warmupData := map[string]*interfaces.ToolOutput{
 		"tool:search:query1": {Result: "cached result 1"},
 		"tool:search:query2": {Result: "cached result 2"},
 	}
@@ -123,7 +125,7 @@ func ExampleCacheOperations() {
 	ctx := context.Background()
 
 	// 存储数据
-	output := &ToolOutput{
+	output := &interfaces.ToolOutput{
 		Result: "search results",
 	}
 	err := cache.Set(ctx, "search:golang", output, 10*time.Minute)
@@ -226,7 +228,7 @@ func ExampleMonitoringAndTuning() {
 	go func() {
 		for i := 0; i < 1000; i++ {
 			key := fmt.Sprintf("key:%d", i%100)
-			output := &ToolOutput{Result: fmt.Sprintf("result %d", i)}
+			output := &interfaces.ToolOutput{Result: fmt.Sprintf("result %d", i)}
 			_ = cache.Set(ctx, key, output, 5*time.Minute)
 			time.Sleep(10 * time.Millisecond)
 		}

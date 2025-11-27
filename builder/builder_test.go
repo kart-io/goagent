@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/core/checkpoint"
 	"github.com/kart-io/goagent/core/middleware"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
@@ -233,7 +234,7 @@ func TestAgentBuilder_WithCheckpointer(t *testing.T) {
 	llmClient := NewMockLLMClient()
 	builder := NewAgentBuilder[TestContext, *core.AgentState](llmClient)
 
-	checkpointer := core.NewInMemorySaver()
+	checkpointer := checkpoint.NewInMemorySaver()
 	builder.WithCheckpointer(checkpointer)
 
 	assert.NotNil(t, builder.checkpointer)
@@ -260,7 +261,9 @@ func TestAgentBuilder_WithConfig(t *testing.T) {
 		Timeout:       10 * time.Minute,
 		Temperature:   0.5,
 	}
-	builder.WithConfig(config)
+	builder.WithMaxIterations(config.MaxIterations).
+		WithTimeout(config.Timeout).
+		WithTemperature(config.Temperature)
 
 	assert.Equal(t, 20, builder.config.MaxIterations)
 	assert.Equal(t, 10*time.Minute, builder.config.Timeout)
@@ -316,7 +319,7 @@ func TestAgentBuilder_Build(t *testing.T) {
 		WithState(state).
 		WithContext(ctx).
 		WithStore(memory.New()).
-		WithCheckpointer(core.NewInMemorySaver()).
+		WithCheckpointer(checkpoint.NewInMemorySaver()).
 		Build()
 
 	require.NoError(t, err)
@@ -411,7 +414,7 @@ func TestConfigurableAgent_GetMetrics(t *testing.T) {
 
 func TestConfigurableAgent_Shutdown(t *testing.T) {
 	llmClient := NewMockLLMClient()
-	checkpointer := core.NewInMemorySaver()
+	checkpointer := checkpoint.NewInMemorySaver()
 	state := core.NewAgentState()
 	state.Set("key", "value")
 
@@ -644,7 +647,7 @@ func TestAgentBuilder_CompleteFlow(t *testing.T) {
 	}
 
 	store := memory.New()
-	checkpointer := core.NewInMemorySaver()
+	checkpointer := checkpoint.NewInMemorySaver()
 
 	// Create tools
 	calcTool := NewMockTool("calculator", "42")
@@ -666,14 +669,12 @@ func TestAgentBuilder_CompleteFlow(t *testing.T) {
 		WithTools(calcTool, searchTool).
 		WithMiddleware(loggingMW, cacheMW).
 		WithMetadata("test", "complete").
-		WithConfig(&AgentConfig{
-			MaxIterations:   5,
-			Timeout:         1 * time.Minute,
-			EnableStreaming: false,
-			EnableAutoSave:  true,
-			Temperature:     0.5,
-			Verbose:         true,
-		}).
+		WithMaxIterations(5).
+		WithTimeout(1 * time.Minute).
+		WithStreamingEnabled(false).
+		WithAutoSaveEnabled(true).
+		WithTemperature(0.5).
+		WithVerbose(true).
 		Build()
 
 	require.NoError(t, err)
@@ -843,7 +844,9 @@ func TestConfigurableAgent_Execute_WithTimeout(t *testing.T) {
 	agent, err := NewAgentBuilder[any, *core.AgentState](llmClient).
 		WithSystemPrompt("Test").
 		WithState(state).
-		WithConfig(config).
+		WithTimeout(config.Timeout).
+		WithMaxTokens(config.MaxTokens).
+		WithTemperature(config.Temperature).
 		Build()
 
 	require.NoError(t, err)
@@ -857,7 +860,7 @@ func TestConfigurableAgent_Execute_WithTimeout(t *testing.T) {
 // TestConfigurableAgent_Initialize_WithCheckpoint tests state loading from checkpoint
 func TestConfigurableAgent_Initialize_WithCheckpoint(t *testing.T) {
 	llmClient := NewMockLLMClient("response")
-	checkpointer := core.NewInMemorySaver()
+	checkpointer := checkpoint.NewInMemorySaver()
 	state := core.NewAgentState()
 	state.Set("saved_key", "saved_value")
 
@@ -882,7 +885,7 @@ func TestConfigurableAgent_Initialize_WithCheckpoint(t *testing.T) {
 		WithSystemPrompt("Test").
 		WithState(state2).
 		WithCheckpointer(checkpointer).
-		WithConfig(config2).
+		WithSessionID(config2.SessionID).
 		Build()
 
 	require.NoError(t, err)
@@ -1022,7 +1025,10 @@ func TestConfigurableAgent_ExecuteWithTools_MaxIterations(t *testing.T) {
 	agent, err := NewAgentBuilder[any, *core.AgentState](llmClient).
 		WithSystemPrompt("Test").
 		WithState(state).
-		WithConfig(config).
+		WithMaxIterations(config.MaxIterations).
+		WithTimeout(config.Timeout).
+		WithTemperature(config.Temperature).
+		WithMaxTokens(config.MaxTokens).
 		Build()
 
 	require.NoError(t, err)
@@ -1261,7 +1267,11 @@ func TestAgentBuilder_Build_WithVerboseConfig(t *testing.T) {
 	agent, err := NewAgentBuilder[any, *core.AgentState](llmClient).
 		WithSystemPrompt("Test").
 		WithState(state).
-		WithConfig(config).
+		WithMaxIterations(config.MaxIterations).
+		WithTimeout(config.Timeout).
+		WithTemperature(config.Temperature).
+		WithMaxTokens(config.MaxTokens).
+		WithVerbose(config.Verbose).
 		Build()
 
 	require.NoError(t, err)
@@ -1305,4 +1315,224 @@ func TestConfigurableAgent_Execute_WithMetadata(t *testing.T) {
 	assert.NotNil(t, output)
 	// Metadata should be available in output
 	assert.NotNil(t, output.Metadata)
+}
+
+// TestAgentBuilder_FineGrainedOptions 测试新的细粒度 Option 方法
+func TestAgentBuilder_FineGrainedOptions(t *testing.T) {
+	mockClient := NewMockLLMClient()
+
+	t.Run("WithMaxIterations", func(t *testing.T) {
+		builder := NewAgentBuilder[any, *core.AgentState](mockClient).
+			WithMaxIterations(25)
+
+		assert.Equal(t, 25, builder.config.MaxIterations)
+
+		// Invalid value should be ignored
+		builder.WithMaxIterations(-1)
+		assert.Equal(t, 25, builder.config.MaxIterations) // Should remain unchanged
+	})
+
+	t.Run("WithTimeout", func(t *testing.T) {
+		builder := NewAgentBuilder[any, *core.AgentState](mockClient).
+			WithTimeout(2 * time.Minute)
+
+		assert.Equal(t, 2*time.Minute, builder.config.Timeout)
+
+		// Invalid value should be ignored
+		builder.WithTimeout(-1 * time.Second)
+		assert.Equal(t, 2*time.Minute, builder.config.Timeout) // Should remain unchanged
+	})
+
+	t.Run("WithTemperature", func(t *testing.T) {
+		builder := NewAgentBuilder[any, *core.AgentState](mockClient).
+			WithTemperature(0.5)
+
+		assert.Equal(t, 0.5, builder.config.Temperature)
+
+		// Out of range value should be ignored
+		builder.WithTemperature(3.0)                     // > 2.0
+		assert.Equal(t, 0.5, builder.config.Temperature) // Should remain unchanged
+
+		builder.WithTemperature(-0.1)                    // < 0
+		assert.Equal(t, 0.5, builder.config.Temperature) // Should remain unchanged
+	})
+
+	t.Run("WithMaxTokens", func(t *testing.T) {
+		builder := NewAgentBuilder[any, *core.AgentState](mockClient).
+			WithMaxTokens(5000)
+
+		assert.Equal(t, 5000, builder.config.MaxTokens)
+
+		// Invalid value should be ignored
+		builder.WithMaxTokens(0)
+		assert.Equal(t, 5000, builder.config.MaxTokens) // Should remain unchanged
+	})
+
+	t.Run("WithStreamingEnabled", func(t *testing.T) {
+		builder := NewAgentBuilder[any, *core.AgentState](mockClient).
+			WithStreamingEnabled(true)
+
+		assert.True(t, builder.config.EnableStreaming)
+
+		builder.WithStreamingEnabled(false)
+		assert.False(t, builder.config.EnableStreaming)
+	})
+
+	t.Run("WithAutoSaveEnabled", func(t *testing.T) {
+		builder := NewAgentBuilder[any, *core.AgentState](mockClient).
+			WithAutoSaveEnabled(false)
+
+		assert.False(t, builder.config.EnableAutoSave)
+
+		builder.WithAutoSaveEnabled(true)
+		assert.True(t, builder.config.EnableAutoSave)
+	})
+
+	t.Run("WithSaveInterval", func(t *testing.T) {
+		builder := NewAgentBuilder[any, *core.AgentState](mockClient).
+			WithSaveInterval(1 * time.Minute)
+
+		assert.Equal(t, 1*time.Minute, builder.config.SaveInterval)
+
+		// Invalid value should be ignored
+		builder.WithSaveInterval(-1 * time.Second)
+		assert.Equal(t, 1*time.Minute, builder.config.SaveInterval) // Should remain unchanged
+	})
+
+	t.Run("WithSessionID", func(t *testing.T) {
+		builder := NewAgentBuilder[any, *core.AgentState](mockClient).
+			WithSessionID("custom-session-123")
+
+		assert.Equal(t, "custom-session-123", builder.config.SessionID)
+
+		// Empty string should be ignored
+		builder.WithSessionID("")
+		assert.Equal(t, "custom-session-123", builder.config.SessionID) // Should remain unchanged
+	})
+
+	t.Run("WithVerbose", func(t *testing.T) {
+		builder := NewAgentBuilder[any, *core.AgentState](mockClient).
+			WithVerbose(true)
+
+		assert.True(t, builder.config.Verbose)
+
+		builder.WithVerbose(false)
+		assert.False(t, builder.config.Verbose)
+	})
+
+	t.Run("chaining multiple options", func(t *testing.T) {
+		builder := NewAgentBuilder[any, *core.AgentState](mockClient).
+			WithMaxIterations(15).
+			WithTimeout(45 * time.Second).
+			WithTemperature(0.8).
+			WithMaxTokens(3000).
+			WithStreamingEnabled(true).
+			WithVerbose(true)
+
+		assert.Equal(t, 15, builder.config.MaxIterations)
+		assert.Equal(t, 45*time.Second, builder.config.Timeout)
+		assert.Equal(t, 0.8, builder.config.Temperature)
+		assert.Equal(t, 3000, builder.config.MaxTokens)
+		assert.True(t, builder.config.EnableStreaming)
+		assert.True(t, builder.config.Verbose)
+	})
+}
+
+// TestAgentBuilder_WithConfig_Deprecated tests that fine-grained methods replace WithConfig
+func TestAgentBuilder_WithConfig_Deprecated(t *testing.T) {
+	mockClient := NewMockLLMClient()
+
+	t.Run("fine-grained methods apply all fields", func(t *testing.T) {
+		customConfig := &AgentConfig{
+			MaxIterations:   25,
+			Timeout:         2 * time.Minute,
+			EnableStreaming: true,
+			EnableAutoSave:  false,
+			SaveInterval:    45 * time.Second,
+			MaxTokens:       4000,
+			Temperature:     0.6,
+			SessionID:       "test-session",
+			Verbose:         true,
+		}
+
+		builder := NewAgentBuilder[any, *core.AgentState](mockClient).
+			WithMaxIterations(customConfig.MaxIterations).
+			WithTimeout(customConfig.Timeout).
+			WithStreamingEnabled(customConfig.EnableStreaming).
+			WithAutoSaveEnabled(customConfig.EnableAutoSave).
+			WithSaveInterval(customConfig.SaveInterval).
+			WithMaxTokens(customConfig.MaxTokens).
+			WithTemperature(customConfig.Temperature).
+			WithSessionID(customConfig.SessionID).
+			WithVerbose(customConfig.Verbose)
+
+		assert.Equal(t, 25, builder.config.MaxIterations)
+		assert.Equal(t, 2*time.Minute, builder.config.Timeout)
+		assert.True(t, builder.config.EnableStreaming)
+		assert.False(t, builder.config.EnableAutoSave)
+		assert.Equal(t, 45*time.Second, builder.config.SaveInterval)
+		assert.Equal(t, 4000, builder.config.MaxTokens)
+		assert.Equal(t, 0.6, builder.config.Temperature)
+		assert.Equal(t, "test-session", builder.config.SessionID)
+		assert.True(t, builder.config.Verbose)
+	})
+
+	t.Run("using fine-grained methods", func(t *testing.T) {
+		builder := NewAgentBuilder[any, *core.AgentState](mockClient)
+		originalConfig := builder.config
+
+		// No changes should occur
+		builder.WithMaxIterations(0) // 0 is ignored
+
+		// Config should remain unchanged
+		assert.Equal(t, originalConfig, builder.config)
+	})
+
+	t.Run("mixing fine-grained options", func(t *testing.T) {
+		builder := NewAgentBuilder[any, *core.AgentState](mockClient).
+			WithMaxIterations(20).
+			WithTemperature(0.5).
+			WithMaxTokens(3500).
+			WithVerbose(true)
+
+		assert.Equal(t, 20, builder.config.MaxIterations)
+		assert.Equal(t, 0.5, builder.config.Temperature)
+		assert.Equal(t, 3500, builder.config.MaxTokens)
+		assert.True(t, builder.config.Verbose)
+	})
+}
+
+// TestAgentBuilder_FineGrainedOptions_Integration 测试细粒度选项的集成功能
+func TestAgentBuilder_FineGrainedOptions_Integration(t *testing.T) {
+	mockClient := NewMockLLMClient("Test response")
+	state := core.NewAgentState()
+	store := memory.New()
+
+	agent, err := NewAgentBuilder[any, *core.AgentState](mockClient).
+		WithSystemPrompt("You are a test assistant").
+		WithState(state).
+		WithStore(store).
+		WithMaxIterations(5).
+		WithTimeout(30 * time.Second).
+		WithTemperature(0.7).
+		WithMaxTokens(2500).
+		WithVerbose(false).
+		Build()
+
+	require.NoError(t, err)
+	require.NotNil(t, agent)
+
+	// Verify configuration was applied
+	assert.Equal(t, 5, agent.config.MaxIterations)
+	assert.Equal(t, 30*time.Second, agent.config.Timeout)
+	assert.Equal(t, 0.7, agent.config.Temperature)
+	assert.Equal(t, 2500, agent.config.MaxTokens)
+	assert.False(t, agent.config.Verbose)
+
+	// Test execution
+	ctx := context.Background()
+	output, err := agent.Execute(ctx, "test input")
+	require.NoError(t, err)
+	assert.NotNil(t, output)
+	assert.Equal(t, "Test response", output.Result)
 }

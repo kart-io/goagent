@@ -6,32 +6,6 @@ import (
 	"github.com/kart-io/goagent/interfaces"
 )
 
-// Tool is a type alias for interfaces.Tool
-//
-// Deprecated: Use interfaces.Tool directly for new code.
-// This alias provides backward compatibility and will be removed in v1.0.0.
-//
-// Migration: import "github.com/kart-io/goagent/interfaces"
-type Tool = interfaces.Tool
-
-// ToolInput 工具输入
-//
-// Deprecated: Use interfaces.ToolInput instead for new code.
-// This type alias provides backward compatibility. It will be removed in v1.0.0.
-//
-// Note: This struct is retained for compatibility with existing tool implementations
-// that reference tools.ToolInput. The canonical definition is now in interfaces.ToolInput.
-type ToolInput = interfaces.ToolInput
-
-// ToolOutput 工具输出
-//
-// Deprecated: Use interfaces.ToolOutput instead for new code.
-// This type alias provides backward compatibility. It will be removed in v1.0.0.
-//
-// Note: This struct is retained for compatibility with existing tool implementations
-// that reference tools.ToolOutput. The canonical definition is now in interfaces.ToolOutput.
-type ToolOutput = interfaces.ToolOutput
-
 // BaseTool 提供 Tool 的基础实现
 //
 // 实现了 interfaces.Tool 接口的通用功能
@@ -40,7 +14,7 @@ type BaseTool struct {
 	name        string
 	description string
 	argsSchema  string
-	runFunc     func(context.Context, *ToolInput) (*ToolOutput, error)
+	runFunc     func(context.Context, *interfaces.ToolInput) (*interfaces.ToolOutput, error)
 }
 
 // NewBaseTool 创建基础工具
@@ -48,7 +22,7 @@ func NewBaseTool(
 	name string,
 	description string,
 	argsSchema string,
-	runFunc func(context.Context, *ToolInput) (*ToolOutput, error),
+	runFunc func(context.Context, *interfaces.ToolInput) (*interfaces.ToolOutput, error),
 ) *BaseTool {
 	return &BaseTool{
 		name:        name,
@@ -74,7 +48,7 @@ func (t *BaseTool) ArgsSchema() string {
 }
 
 // Invoke 执行工具
-func (t *BaseTool) Invoke(ctx context.Context, input *ToolInput) (*ToolOutput, error) {
+func (t *BaseTool) Invoke(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 	// 执行工具函数
 	return t.runFunc(ctx, input)
 }

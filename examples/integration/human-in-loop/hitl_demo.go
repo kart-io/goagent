@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/core/checkpoint"
 )
 
 func main() {
@@ -280,7 +281,7 @@ func demo4ConditionalInterrupts() {
 func demo5StatePersistence() {
 	fmt.Println("--- Demo 5: Interrupt with State Persistence ---")
 
-	checkpointer := core.NewInMemorySaver()
+	checkpointer := checkpoint.NewInMemorySaver()
 	manager := core.NewInterruptManager(checkpointer)
 	ctx := context.Background()
 

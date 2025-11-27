@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/core/checkpoint"
 	"github.com/kart-io/goagent/core/execution"
 	"github.com/kart-io/goagent/core/middleware"
 	agentErrors "github.com/kart-io/goagent/errors"
@@ -37,7 +38,7 @@ type AgentBuilder[C any, S core.State] struct {
 	// Phase 1 components
 	state        S
 	store        store.Store
-	checkpointer core.Checkpointer
+	checkpointer checkpoint.Checkpointer
 	context      C
 
 	// Phase 2 components
@@ -144,7 +145,7 @@ func (b *AgentBuilder[C, S]) WithStore(st store.Store) *AgentBuilder[C, S] {
 }
 
 // WithCheckpointer sets the session checkpointer
-func (b *AgentBuilder[C, S]) WithCheckpointer(checkpointer core.Checkpointer) *AgentBuilder[C, S] {
+func (b *AgentBuilder[C, S]) WithCheckpointer(checkpointer checkpoint.Checkpointer) *AgentBuilder[C, S] {
 	b.checkpointer = checkpointer
 	return b
 }
@@ -161,9 +162,69 @@ func (b *AgentBuilder[C, S]) WithCallbacks(callbacks ...core.Callback) *AgentBui
 	return b
 }
 
-// WithConfig sets custom configuration
-func (b *AgentBuilder[C, S]) WithConfig(config *AgentConfig) *AgentBuilder[C, S] {
-	b.config = config
+// WithMaxIterations 设置最大迭代次数
+func (b *AgentBuilder[C, S]) WithMaxIterations(max int) *AgentBuilder[C, S] {
+	if max > 0 {
+		b.config.MaxIterations = max
+	}
+	return b
+}
+
+// WithTimeout 设置超时时间
+func (b *AgentBuilder[C, S]) WithTimeout(timeout time.Duration) *AgentBuilder[C, S] {
+	if timeout > 0 {
+		b.config.Timeout = timeout
+	}
+	return b
+}
+
+// WithStreamingEnabled 设置是否启用流式响应
+func (b *AgentBuilder[C, S]) WithStreamingEnabled(enabled bool) *AgentBuilder[C, S] {
+	b.config.EnableStreaming = enabled
+	return b
+}
+
+// WithAutoSaveEnabled 设置是否启用自动保存
+func (b *AgentBuilder[C, S]) WithAutoSaveEnabled(enabled bool) *AgentBuilder[C, S] {
+	b.config.EnableAutoSave = enabled
+	return b
+}
+
+// WithSaveInterval 设置自动保存间隔
+func (b *AgentBuilder[C, S]) WithSaveInterval(interval time.Duration) *AgentBuilder[C, S] {
+	if interval > 0 {
+		b.config.SaveInterval = interval
+	}
+	return b
+}
+
+// WithMaxTokens 设置最大 token 数
+func (b *AgentBuilder[C, S]) WithMaxTokens(max int) *AgentBuilder[C, S] {
+	if max > 0 {
+		b.config.MaxTokens = max
+	}
+	return b
+}
+
+// WithTemperature 设置温度参数（控制随机性）
+func (b *AgentBuilder[C, S]) WithTemperature(temp float64) *AgentBuilder[C, S] {
+	if temp >= 0 && temp <= 2.0 {
+		b.config.Temperature = temp
+	}
+	return b
+}
+
+// WithSessionID 设置会话 ID
+func (b *AgentBuilder[C, S]) WithSessionID(sessionID string) *AgentBuilder[C, S] {
+	if sessionID != "" {
+		b.config.SessionID = sessionID
+	}
+	return b
+}
+
+// WithVerbose 设置是否启用详细日志
+func (b *AgentBuilder[C, S]) WithVerbose(verbose bool) *AgentBuilder[C, S] {
+	b.config.Verbose = verbose
 	return b
 }
 
@@ -190,9 +251,9 @@ func (b *AgentBuilder[C, S]) ConfigureForRAG() *AgentBuilder[C, S] {
 		}),
 	)
 
-	// Set appropriate config
-	b.config.MaxTokens = 3000
-	b.config.Temperature = 0.3 // Lower temperature for factual responses
+	// Set appropriate config using fine-grained methods
+	b.WithMaxTokens(3000)
+	b.WithTemperature(0.3) // Lower temperature for factual responses
 
 	return b
 }
@@ -213,9 +274,9 @@ func (b *AgentBuilder[C, S]) ConfigureForChatbot() *AgentBuilder[C, S] {
 		),
 	)
 
-	// Enable streaming for better UX
-	b.config.EnableStreaming = true
-	b.config.Temperature = 0.8 // Higher temperature for creativity
+	// Enable streaming for better UX using fine-grained methods
+	b.WithStreamingEnabled(true)
+	b.WithTemperature(0.8) // Higher temperature for creativity
 
 	return b
 }
@@ -237,9 +298,9 @@ func (b *AgentBuilder[C, S]) ConfigureForAnalysis() *AgentBuilder[C, S] {
 		),
 	)
 
-	// Configure for accuracy
-	b.config.Temperature = 0.1  // Very low temperature for consistency
-	b.config.MaxIterations = 20 // More iterations for complex analysis
+	// Configure for accuracy using fine-grained methods
+	b.WithTemperature(0.1)  // Very low temperature for consistency
+	b.WithMaxIterations(20) // More iterations for complex analysis
 
 	return b
 }
@@ -268,7 +329,7 @@ func (b *AgentBuilder[C, S]) Build() (*ConfigurableAgent[C, S], error) {
 	}
 
 	if b.checkpointer == nil {
-		b.checkpointer = core.NewInMemorySaver()
+		b.checkpointer = checkpoint.NewInMemorySaver()
 	}
 
 	// Create runtime
@@ -686,14 +747,11 @@ func WorkflowAgent(llmClient llm.Client, workflows map[string]interface{}) (*Con
 		state.Set("workflow_status", "initialized")
 	}
 
-	config := DefaultAgentConfig()
-	config.MaxIterations = 15
-	config.EnableAutoSave = true
-
 	return NewAgentBuilder[any, *core.AgentState](llmClient).
 		WithSystemPrompt("You are a workflow orchestrator. Execute tasks systematically, validate results, and handle errors gracefully.").
 		WithState(state).
-		WithConfig(config).
+		WithMaxIterations(15).
+		WithAutoSaveEnabled(true).
 		WithMiddleware(
 			middleware.NewLoggingMiddleware(nil),
 			middleware.NewCircuitBreakerMiddleware(5, 30*time.Second),
@@ -728,14 +786,11 @@ func MonitoringAgent(llmClient llm.Client, checkInterval time.Duration) (*Config
 	state.Set("last_check", time.Now())
 	state.Set("monitoring_status", "active")
 
-	config := DefaultAgentConfig()
-	config.MaxIterations = 100 // Long-running monitoring
-	config.Temperature = 0.3   // Balanced for pattern recognition
-
 	return NewAgentBuilder[any, *core.AgentState](llmClient).
 		WithSystemPrompt("You are a system monitoring expert. Observe metrics, detect anomalies, and alert on issues promptly.").
 		WithState(state).
-		WithConfig(config).
+		WithMaxIterations(100). // Long-running monitoring
+		WithTemperature(0.3).   // Balanced for pattern recognition
 		WithMiddleware(
 			middleware.NewRateLimiterMiddleware(60, time.Minute), // Limit to 60 checks per minute
 			middleware.NewCacheMiddleware(5*time.Minute),         // Cache recent checks
@@ -766,15 +821,12 @@ func ResearchAgent(llmClient llm.Client, sources []string) (*ConfigurableAgent[a
 	}
 	state.Set("research_status", "initialized")
 
-	config := DefaultAgentConfig()
-	config.MaxTokens = 4000
-	config.Temperature = 0.5
-	config.MaxIterations = 15
-
 	return NewAgentBuilder[any, *core.AgentState](llmClient).
 		WithSystemPrompt("You are a research expert. Gather information from multiple sources, synthesize findings, and provide comprehensive, well-cited reports.").
 		WithState(state).
-		WithConfig(config).
+		WithMaxTokens(4000).
+		WithTemperature(0.5).
+		WithMaxIterations(15).
 		WithMiddleware(
 			middleware.NewCacheMiddleware(10*time.Minute), // Cache research results
 			middleware.NewTimingMiddleware(),

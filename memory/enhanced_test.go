@@ -55,7 +55,7 @@ func (m *mockVectorStore) Clear(ctx context.Context) error {
 
 func TestNewHierarchicalMemory(t *testing.T) {
 	vectorStore := newMockVectorStore()
-	hm := NewHierarchicalMemory(vectorStore)
+	hm := NewHierarchicalMemoryWithContext(context.Background(), vectorStore)
 
 	assert.NotNil(t, hm)
 	assert.NotNil(t, hm.shortTerm)
@@ -68,17 +68,17 @@ func TestHierarchicalMemory_WithOptions(t *testing.T) {
 	vectorStore := newMockVectorStore()
 
 	t.Run("with short-term capacity", func(t *testing.T) {
-		hm := NewHierarchicalMemory(vectorStore, WithShortTermCapacity(50))
+		hm := NewHierarchicalMemoryWithContext(context.Background(), vectorStore, WithShortTermCapacity(50))
 		assert.Equal(t, 50, hm.shortTermCapacity)
 	})
 
 	t.Run("with decay rate", func(t *testing.T) {
-		hm := NewHierarchicalMemory(vectorStore, WithDecayRate(0.05))
+		hm := NewHierarchicalMemoryWithContext(context.Background(), vectorStore, WithDecayRate(0.05))
 		assert.Equal(t, 0.05, hm.decayRate)
 	})
 
 	t.Run("with multiple options", func(t *testing.T) {
-		hm := NewHierarchicalMemory(
+		hm := NewHierarchicalMemoryWithContext(context.Background(),
 			vectorStore,
 			WithShortTermCapacity(75),
 			WithDecayRate(0.02),
@@ -90,7 +90,7 @@ func TestHierarchicalMemory_WithOptions(t *testing.T) {
 
 func TestHierarchicalMemory_Store(t *testing.T) {
 	vectorStore := newMockVectorStore()
-	hm := NewHierarchicalMemory(vectorStore)
+	hm := NewHierarchicalMemoryWithContext(context.Background(), vectorStore)
 	ctx := context.Background()
 
 	t.Run("store in short-term memory", func(t *testing.T) {
@@ -114,7 +114,7 @@ func TestHierarchicalMemory_Store(t *testing.T) {
 
 func TestHierarchicalMemory_StoreTyped(t *testing.T) {
 	vectorStore := newMockVectorStore()
-	hm := NewHierarchicalMemory(vectorStore)
+	hm := NewHierarchicalMemoryWithContext(context.Background(), vectorStore)
 	ctx := context.Background()
 
 	t.Run("store short-term memory", func(t *testing.T) {
@@ -153,7 +153,7 @@ func TestHierarchicalMemory_StoreTyped(t *testing.T) {
 
 func TestHierarchicalMemory_Get(t *testing.T) {
 	vectorStore := newMockVectorStore()
-	hm := NewHierarchicalMemory(vectorStore)
+	hm := NewHierarchicalMemoryWithContext(context.Background(), vectorStore)
 	ctx := context.Background()
 
 	// Store in short-term
@@ -185,7 +185,7 @@ func TestHierarchicalMemory_Get(t *testing.T) {
 
 func TestHierarchicalMemory_Search(t *testing.T) {
 	vectorStore := newMockVectorStore()
-	hm := NewHierarchicalMemory(vectorStore)
+	hm := NewHierarchicalMemoryWithContext(context.Background(), vectorStore)
 	ctx := context.Background()
 
 	// Store test data
@@ -211,11 +211,11 @@ func TestHierarchicalMemory_Search(t *testing.T) {
 
 func TestHierarchicalMemory_VectorSearch(t *testing.T) {
 	vectorStore := newMockVectorStore()
-	hm := NewHierarchicalMemory(vectorStore)
+	hm := NewHierarchicalMemoryWithContext(context.Background(), vectorStore)
 	ctx := context.Background()
 
 	t.Run("vector search without store", func(t *testing.T) {
-		hmNoStore := NewHierarchicalMemory(nil)
+		hmNoStore := NewHierarchicalMemoryWithContext(context.Background(), nil)
 		embedding := make([]float32, 128)
 		results, err := hmNoStore.VectorSearch(ctx, embedding, 5, 0.5)
 		assert.Error(t, err)
@@ -237,7 +237,7 @@ func TestHierarchicalMemory_VectorSearch(t *testing.T) {
 
 func TestHierarchicalMemory_GetByType(t *testing.T) {
 	vectorStore := newMockVectorStore()
-	hm := NewHierarchicalMemory(vectorStore)
+	hm := NewHierarchicalMemoryWithContext(context.Background(), vectorStore)
 	ctx := context.Background()
 
 	// Store different types
@@ -267,7 +267,7 @@ func TestHierarchicalMemory_GetByType(t *testing.T) {
 
 func TestHierarchicalMemory_Consolidate(t *testing.T) {
 	vectorStore := newMockVectorStore()
-	hm := NewHierarchicalMemory(vectorStore)
+	hm := NewHierarchicalMemoryWithContext(context.Background(), vectorStore)
 	ctx := context.Background()
 
 	// Store high-importance short-term memories
@@ -293,7 +293,7 @@ func TestHierarchicalMemory_Consolidate(t *testing.T) {
 
 func TestHierarchicalMemory_Forget(t *testing.T) {
 	vectorStore := newMockVectorStore()
-	hm := NewHierarchicalMemory(vectorStore)
+	hm := NewHierarchicalMemoryWithContext(context.Background(), vectorStore)
 	ctx := context.Background()
 
 	// Store memories with different importance
@@ -327,7 +327,7 @@ func TestHierarchicalMemory_Forget(t *testing.T) {
 
 func TestHierarchicalMemory_Associate(t *testing.T) {
 	vectorStore := newMockVectorStore()
-	hm := NewHierarchicalMemory(vectorStore)
+	hm := NewHierarchicalMemoryWithContext(context.Background(), vectorStore)
 	ctx := context.Background()
 
 	// Store two memories
@@ -352,7 +352,7 @@ func TestHierarchicalMemory_Associate(t *testing.T) {
 
 func TestHierarchicalMemory_GetAssociated(t *testing.T) {
 	vectorStore := newMockVectorStore()
-	hm := NewHierarchicalMemory(vectorStore)
+	hm := NewHierarchicalMemoryWithContext(context.Background(), vectorStore)
 	ctx := context.Background()
 
 	// Store and associate memories
@@ -384,7 +384,7 @@ func TestHierarchicalMemory_GetAssociated(t *testing.T) {
 
 func TestHierarchicalMemory_GetStats(t *testing.T) {
 	vectorStore := newMockVectorStore()
-	hm := NewHierarchicalMemory(vectorStore)
+	hm := NewHierarchicalMemoryWithContext(context.Background(), vectorStore)
 	ctx := context.Background()
 
 	// Store different types of memories
@@ -408,7 +408,7 @@ func TestHierarchicalMemory_GetStats(t *testing.T) {
 
 func TestHierarchicalMemory_Clear(t *testing.T) {
 	vectorStore := newMockVectorStore()
-	hm := NewHierarchicalMemory(vectorStore)
+	hm := NewHierarchicalMemoryWithContext(context.Background(), vectorStore)
 	ctx := context.Background()
 
 	// Store some memories
@@ -429,7 +429,7 @@ func TestHierarchicalMemory_Clear(t *testing.T) {
 
 func TestHierarchicalMemory_CalculateImportance(t *testing.T) {
 	vectorStore := newMockVectorStore()
-	hm := NewHierarchicalMemory(vectorStore)
+	hm := NewHierarchicalMemoryWithContext(context.Background(), vectorStore)
 
 	t.Run("small string", func(t *testing.T) {
 		importance := hm.calculateImportance("small")
@@ -464,7 +464,7 @@ func TestHierarchicalMemory_CalculateImportance(t *testing.T) {
 
 func TestHierarchicalMemory_UpdateAccess(t *testing.T) {
 	vectorStore := newMockVectorStore()
-	hm := NewHierarchicalMemory(vectorStore)
+	hm := NewHierarchicalMemoryWithContext(context.Background(), vectorStore)
 
 	entry := &MemoryEntry{
 		ID:          "test",
@@ -486,7 +486,7 @@ func TestHierarchicalMemory_UpdateAccess(t *testing.T) {
 
 func TestHierarchicalMemory_ApplyDecay(t *testing.T) {
 	vectorStore := newMockVectorStore()
-	hm := NewHierarchicalMemory(vectorStore, WithDecayRate(0.01))
+	hm := NewHierarchicalMemoryWithContext(context.Background(), vectorStore, WithDecayRate(0.01))
 	ctx := context.Background()
 
 	// Store memory with old access time
@@ -523,7 +523,7 @@ func TestHierarchicalMemory_ApplyDecay(t *testing.T) {
 
 func TestHierarchicalMemory_FrequentAccess(t *testing.T) {
 	vectorStore := newMockVectorStore()
-	hm := NewHierarchicalMemory(vectorStore)
+	hm := NewHierarchicalMemoryWithContext(context.Background(), vectorStore)
 	ctx := context.Background()
 
 	// Store in long-term with high access count
@@ -548,7 +548,7 @@ func TestHierarchicalMemory_FrequentAccess(t *testing.T) {
 // Benchmark tests
 func BenchmarkHierarchicalMemory_Store(b *testing.B) {
 	vectorStore := newMockVectorStore()
-	hm := NewHierarchicalMemory(vectorStore)
+	hm := NewHierarchicalMemoryWithContext(context.Background(), vectorStore)
 	ctx := context.Background()
 
 	b.ResetTimer()
@@ -560,7 +560,7 @@ func BenchmarkHierarchicalMemory_Store(b *testing.B) {
 
 func BenchmarkHierarchicalMemory_Get(b *testing.B) {
 	vectorStore := newMockVectorStore()
-	hm := NewHierarchicalMemory(vectorStore)
+	hm := NewHierarchicalMemoryWithContext(context.Background(), vectorStore)
 	ctx := context.Background()
 
 	// Prepare data
@@ -578,7 +578,7 @@ func BenchmarkHierarchicalMemory_Get(b *testing.B) {
 
 func BenchmarkHierarchicalMemory_Search(b *testing.B) {
 	vectorStore := newMockVectorStore()
-	hm := NewHierarchicalMemory(vectorStore)
+	hm := NewHierarchicalMemoryWithContext(context.Background(), vectorStore)
 	ctx := context.Background()
 
 	// Prepare data

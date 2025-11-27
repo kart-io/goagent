@@ -54,7 +54,7 @@ import (
 // MyCustomPlugin 自定义插件实现
 type MyCustomPlugin struct {
     *core.BasePlugin
-    config map[string]interface{}
+    config map[string]interface{”}
 }
 
 // NewMyCustomPlugin 创建插件实例
@@ -133,7 +133,7 @@ func main() {
     config := &core.PluginConfig{
         Name:    "my-custom-plugin",
         Version: "1.0.0",
-        Config:  map[string]interface{}{
+        Config:  map[string]interface{”}{
             "api_key": "secret",
         },
         Enabled: true,
@@ -367,7 +367,7 @@ type PluginDependency struct {
 config := &core.PluginConfig{
     Name:    "my-plugin",
     Version: "1.0.0",
-    Config: map[string]interface{}{
+    Config: map[string]interface{”}{
         "api_key":   "secret",
         "timeout":   30,
         "debug":     true,

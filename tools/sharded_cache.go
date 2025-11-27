@@ -9,6 +9,7 @@ import (
 	"time"
 
 	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/interfaces"
 )
 
 // ShardedToolCache 分片工具缓存
@@ -84,7 +85,7 @@ type ShardedCacheConfig struct {
 	MaxConcurrency int
 
 	// WarmupEntries 预热条目
-	WarmupEntries map[string]*ToolOutput
+	WarmupEntries map[string]*interfaces.ToolOutput
 
 	// CompressionThreshold 压缩阈值（字节）
 	CompressionThreshold int
@@ -215,7 +216,7 @@ func (c *ShardedToolCache) getShard(key string) *cacheShard {
 }
 
 // Get 获取缓存结果
-func (c *ShardedToolCache) Get(ctx context.Context, key string) (*ToolOutput, bool) {
+func (c *ShardedToolCache) Get(ctx context.Context, key string) (*interfaces.ToolOutput, bool) {
 	shard := c.getShard(key)
 
 	shard.mu.Lock()
@@ -242,7 +243,7 @@ func (c *ShardedToolCache) Get(ctx context.Context, key string) (*ToolOutput, bo
 }
 
 // Set 设置缓存结果
-func (c *ShardedToolCache) Set(ctx context.Context, key string, output *ToolOutput, ttl time.Duration) error {
+func (c *ShardedToolCache) Set(ctx context.Context, key string, output *interfaces.ToolOutput, ttl time.Duration) error {
 	shard := c.getShard(key)
 	toolName := extractToolNameFromKey(key)
 

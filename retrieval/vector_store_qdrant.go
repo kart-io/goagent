@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/kart-io/goagent/interfaces"
+
 	"github.com/google/uuid"
 	"github.com/qdrant/go-client/qdrant"
 
@@ -144,7 +146,7 @@ func (q *QdrantVectorStore) ensureCollection(ctx context.Context) error {
 }
 
 // Add 添加文档和向量
-func (q *QdrantVectorStore) Add(ctx context.Context, docs []*Document, vectors [][]float32) error {
+func (q *QdrantVectorStore) Add(ctx context.Context, docs []*interfaces.Document, vectors [][]float32) error {
 	if len(docs) == 0 {
 		return nil
 	}
@@ -232,7 +234,7 @@ func convertToQdrantValue(v interface{}) *qdrant.Value {
 }
 
 // AddDocuments 添加文档（实现 VectorStore 接口）
-func (q *QdrantVectorStore) AddDocuments(ctx context.Context, docs []*Document) error {
+func (q *QdrantVectorStore) AddDocuments(ctx context.Context, docs []*interfaces.Document) error {
 	// 自动生成向量
 	if len(docs) == 0 {
 		return nil
@@ -255,7 +257,7 @@ func (q *QdrantVectorStore) AddDocuments(ctx context.Context, docs []*Document) 
 }
 
 // Search 相似度搜索
-func (q *QdrantVectorStore) Search(ctx context.Context, query string, topK int) ([]*Document, error) {
+func (q *QdrantVectorStore) Search(ctx context.Context, query string, topK int) ([]*interfaces.Document, error) {
 	// 生成查询向量
 	queryVector, err := q.config.Embedder.EmbedQuery(ctx, query)
 	if err != nil {
@@ -269,7 +271,7 @@ func (q *QdrantVectorStore) Search(ctx context.Context, query string, topK int) 
 }
 
 // SearchByVector 通过向量搜索
-func (q *QdrantVectorStore) SearchByVector(ctx context.Context, queryVector []float32, topK int) ([]*Document, error) {
+func (q *QdrantVectorStore) SearchByVector(ctx context.Context, queryVector []float32, topK int) ([]*interfaces.Document, error) {
 	if topK <= 0 {
 		topK = 4
 	}
@@ -290,9 +292,9 @@ func (q *QdrantVectorStore) SearchByVector(ctx context.Context, queryVector []fl
 	}
 
 	// 转换结果为文档
-	docs := make([]*Document, 0, len(results))
+	docs := make([]*interfaces.Document, 0, len(results))
 	for _, point := range results {
-		doc := &Document{
+		doc := &interfaces.Document{
 			Metadata: make(map[string]interface{}),
 		}
 
@@ -355,12 +357,12 @@ func uintPtr(v uint64) *uint64 {
 }
 
 // SimilaritySearch 相似度搜索（实现 VectorStore 接口）
-func (q *QdrantVectorStore) SimilaritySearch(ctx context.Context, query string, topK int) ([]*Document, error) {
+func (q *QdrantVectorStore) SimilaritySearch(ctx context.Context, query string, topK int) ([]*interfaces.Document, error) {
 	return q.Search(ctx, query, topK)
 }
 
 // SimilaritySearchWithScore 带分数的相似度搜索（实现 VectorStore 接口）
-func (q *QdrantVectorStore) SimilaritySearchWithScore(ctx context.Context, query string, topK int) ([]*Document, error) {
+func (q *QdrantVectorStore) SimilaritySearchWithScore(ctx context.Context, query string, topK int) ([]*interfaces.Document, error) {
 	return q.Search(ctx, query, topK)
 }
 
@@ -399,7 +401,7 @@ func (q *QdrantVectorStore) Delete(ctx context.Context, ids []string) error {
 }
 
 // Update 更新文档
-func (q *QdrantVectorStore) Update(ctx context.Context, docs []*Document) error {
+func (q *QdrantVectorStore) Update(ctx context.Context, docs []*interfaces.Document) error {
 	if len(docs) == 0 {
 		return nil
 	}
