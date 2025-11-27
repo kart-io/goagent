@@ -3,15 +3,17 @@ package retrieval
 import (
 	"context"
 
+	"github.com/kart-io/goagent/interfaces"
+
 	"github.com/kart-io/goagent/core"
 )
 
 // Retriever 定义检索器接口
 //
 // 借鉴 LangChain 的 Retriever 设计，提供统一的文档检索接口
-// 继承自 Runnable[string, []*Document]，支持管道操作和回调
+// 继承自 Runnable[string, []*interfaces.Document]，支持管道操作和回调
 type Retriever interface {
-	core.Runnable[string, []*Document]
+	core.Runnable[string, []*interfaces.Document]
 
 	// GetRelevantDocuments 检索相关文档
 	//
@@ -20,9 +22,9 @@ type Retriever interface {
 	//   - query: 查询字符串
 	//
 	// 返回:
-	//   - []*Document: 相关文档列表
+	//   - []*interfaces.Document: 相关文档列表
 	//   - error: 错误信息
-	GetRelevantDocuments(ctx context.Context, query string) ([]*Document, error)
+	GetRelevantDocuments(ctx context.Context, query string) ([]*interfaces.Document, error)
 }
 
 // BaseRetriever 提供 Retriever 的基础实现
@@ -30,7 +32,7 @@ type Retriever interface {
 // 实现了 Runnable 接口的通用功能
 // 子类只需实现 GetRelevantDocuments 方法
 type BaseRetriever struct {
-	*core.BaseRunnable[string, []*Document]
+	*core.BaseRunnable[string, []*interfaces.Document]
 
 	// TopK 返回的最大文档数
 	TopK int
@@ -45,7 +47,7 @@ type BaseRetriever struct {
 // NewBaseRetriever 创建基础检索器
 func NewBaseRetriever() *BaseRetriever {
 	return &BaseRetriever{
-		BaseRunnable: core.NewBaseRunnable[string, []*Document](),
+		BaseRunnable: core.NewBaseRunnable[string, []*interfaces.Document](),
 		TopK:         4,
 		MinScore:     0.0,
 		Name:         "base_retriever",
@@ -53,7 +55,7 @@ func NewBaseRetriever() *BaseRetriever {
 }
 
 // Invoke 执行检索（实现 Runnable 接口）
-func (r *BaseRetriever) Invoke(ctx context.Context, query string) ([]*Document, error) {
+func (r *BaseRetriever) Invoke(ctx context.Context, query string) ([]*interfaces.Document, error) {
 	// 触发回调
 	config := r.GetConfig()
 	for _, cb := range config.Callbacks {
@@ -78,14 +80,14 @@ func (r *BaseRetriever) Invoke(ctx context.Context, query string) ([]*Document, 
 }
 
 // Stream 流式执行（默认实现）
-func (r *BaseRetriever) Stream(ctx context.Context, query string) (<-chan core.StreamChunk[[]*Document], error) {
-	outChan := make(chan core.StreamChunk[[]*Document], 1)
+func (r *BaseRetriever) Stream(ctx context.Context, query string) (<-chan core.StreamChunk[[]*interfaces.Document], error) {
+	outChan := make(chan core.StreamChunk[[]*interfaces.Document], 1)
 
 	go func() {
 		defer close(outChan)
 
 		docs, err := r.Invoke(ctx, query)
-		outChan <- core.StreamChunk[[]*Document]{
+		outChan <- core.StreamChunk[[]*interfaces.Document]{
 			Data:  docs,
 			Error: err,
 			Done:  true,
@@ -96,24 +98,24 @@ func (r *BaseRetriever) Stream(ctx context.Context, query string) (<-chan core.S
 }
 
 // Batch 批量执行
-func (r *BaseRetriever) Batch(ctx context.Context, queries []string) ([][]*Document, error) {
+func (r *BaseRetriever) Batch(ctx context.Context, queries []string) ([][]*interfaces.Document, error) {
 	return r.BaseRunnable.Batch(ctx, queries, r.Invoke)
 }
 
 // Pipe 连接到另一个 Runnable
-func (r *BaseRetriever) Pipe(next core.Runnable[[]*Document, any]) core.Runnable[string, any] {
-	return core.NewRunnablePipe[string, []*Document, any](r, next)
+func (r *BaseRetriever) Pipe(next core.Runnable[[]*interfaces.Document, any]) core.Runnable[string, any] {
+	return core.NewRunnablePipe[string, []*interfaces.Document, any](r, next)
 }
 
 // WithCallbacks 添加回调
-func (r *BaseRetriever) WithCallbacks(callbacks ...core.Callback) core.Runnable[string, []*Document] {
+func (r *BaseRetriever) WithCallbacks(callbacks ...core.Callback) core.Runnable[string, []*interfaces.Document] {
 	newRetriever := *r
 	newRetriever.BaseRunnable = r.BaseRunnable.WithCallbacks(callbacks...)
 	return &newRetriever
 }
 
 // WithConfig 配置 Retriever
-func (r *BaseRetriever) WithConfig(config core.RunnableConfig) core.Runnable[string, []*Document] {
+func (r *BaseRetriever) WithConfig(config core.RunnableConfig) core.Runnable[string, []*interfaces.Document] {
 	newRetriever := *r
 	newRetriever.BaseRunnable = r.BaseRunnable.WithConfig(config)
 	return &newRetriever
@@ -122,17 +124,17 @@ func (r *BaseRetriever) WithConfig(config core.RunnableConfig) core.Runnable[str
 // GetRelevantDocuments 基础实现（返回空列表）
 //
 // 子类应该重写此方法
-func (r *BaseRetriever) GetRelevantDocuments(ctx context.Context, query string) ([]*Document, error) {
-	return []*Document{}, nil
+func (r *BaseRetriever) GetRelevantDocuments(ctx context.Context, query string) ([]*interfaces.Document, error) {
+	return []*interfaces.Document{}, nil
 }
 
 // FilterByScore 按分数过滤文档
-func (r *BaseRetriever) FilterByScore(docs []*Document) []*Document {
+func (r *BaseRetriever) FilterByScore(docs []*interfaces.Document) []*interfaces.Document {
 	if r.MinScore <= 0.0 {
 		return docs
 	}
 
-	filtered := make([]*Document, 0)
+	filtered := make([]*interfaces.Document, 0)
 	for _, doc := range docs {
 		if doc.Score >= r.MinScore {
 			filtered = append(filtered, doc)
@@ -143,7 +145,7 @@ func (r *BaseRetriever) FilterByScore(docs []*Document) []*Document {
 }
 
 // LimitTopK 限制返回的文档数量
-func (r *BaseRetriever) LimitTopK(docs []*Document) []*Document {
+func (r *BaseRetriever) LimitTopK(docs []*interfaces.Document) []*interfaces.Document {
 	if r.TopK <= 0 || len(docs) <= r.TopK {
 		return docs
 	}

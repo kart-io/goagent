@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 )
 
@@ -13,10 +14,10 @@ import (
 //
 // 结合向量检索和生成模型，提供增强的文档检索能力
 type RAGRetriever struct {
-	// VectorStore 向量存储
-	vectorStore VectorStore
+	// interfaces.VectorStore 向量存储
+	vectorStore interfaces.VectorStore
 
-	// Embedder 嵌入器（可选，如果 VectorStore 不支持）
+	// Embedder 嵌入器（可选，如果 interfaces.VectorStore 不支持）
 	embedder Embedder
 
 	// TopK 返回的最大文档数
@@ -34,7 +35,7 @@ type RAGRetriever struct {
 
 // RAGRetrieverConfig RAG 检索器配置
 type RAGRetrieverConfig struct {
-	VectorStore      VectorStore
+	VectorStore      interfaces.VectorStore
 	Embedder         Embedder
 	TopK             int
 	ScoreThreshold   float32
@@ -73,7 +74,7 @@ func NewRAGRetriever(config RAGRetrieverConfig) (*RAGRetriever, error) {
 }
 
 // Retrieve 检索相关文档
-func (r *RAGRetriever) Retrieve(ctx context.Context, query string) ([]*Document, error) {
+func (r *RAGRetriever) Retrieve(ctx context.Context, query string) ([]*interfaces.Document, error) {
 	// 从向量存储检索文档
 	docs, err := r.vectorStore.SimilaritySearch(ctx, query, r.topK)
 	if err != nil {
@@ -86,7 +87,7 @@ func (r *RAGRetriever) Retrieve(ctx context.Context, query string) ([]*Document,
 
 	// 过滤低分文档
 	if r.scoreThreshold > 0 {
-		filtered := make([]*Document, 0)
+		filtered := make([]*interfaces.Document, 0)
 		for _, doc := range docs {
 			if float32(doc.Score) >= r.scoreThreshold {
 				filtered = append(filtered, doc)
@@ -156,7 +157,7 @@ Answer:`
 }
 
 // AddDocuments 添加文档到向量存储
-func (r *RAGRetriever) AddDocuments(ctx context.Context, docs []*Document) error {
+func (r *RAGRetriever) AddDocuments(ctx context.Context, docs []*interfaces.Document) error {
 	return r.vectorStore.AddDocuments(ctx, docs)
 }
 
@@ -196,7 +197,7 @@ Retrieved Documents ({num_docs}):
 }
 
 // formatDocument 格式化单个文档
-func (r *RAGRetriever) formatDocument(doc *Document, index int) string {
+func (r *RAGRetriever) formatDocument(doc *interfaces.Document, index int) string {
 	var sb strings.Builder
 
 	sb.WriteString(fmt.Sprintf("Document %d:\n", index))
@@ -332,9 +333,9 @@ func NewRAGMultiQueryRetriever(baseRetriever *RAGRetriever, numQueries int, llmC
 //   - query: 原始查询
 //
 // 返回:
-//   - []*Document: 合并后的文档列表
+//   - []*interfaces.Document: 合并后的文档列表
 //   - error: 错误信息
-func (m *RAGMultiQueryRetriever) Retrieve(ctx context.Context, query string) ([]*Document, error) {
+func (m *RAGMultiQueryRetriever) Retrieve(ctx context.Context, query string) ([]*interfaces.Document, error) {
 	// 生成相关查询
 	queries, err := m.generateQueries(ctx, query)
 	if err != nil {
@@ -343,7 +344,7 @@ func (m *RAGMultiQueryRetriever) Retrieve(ctx context.Context, query string) ([]
 	}
 
 	// 去重集合
-	docMap := make(map[string]*Document)
+	docMap := make(map[string]*interfaces.Document)
 
 	// 对每个查询进行检索
 	for _, q := range queries {
@@ -365,7 +366,7 @@ func (m *RAGMultiQueryRetriever) Retrieve(ctx context.Context, query string) ([]
 	}
 
 	// 转换为切片并排序
-	results := make([]*Document, 0, len(docMap))
+	results := make([]*interfaces.Document, 0, len(docMap))
 	for _, doc := range docMap {
 		results = append(results, doc)
 	}

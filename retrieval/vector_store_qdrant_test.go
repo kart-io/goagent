@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/kart-io/goagent/interfaces"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -166,7 +168,7 @@ func TestQdrantVectorStore_DocumentOperations(t *testing.T) {
 	defer store.Close()
 
 	// Test documents
-	docs := []*Document{
+	docs := []*interfaces.Document{
 		{
 			ID:          "doc1",
 			PageContent: "This is a test document about machine learning",
@@ -205,7 +207,7 @@ func TestQdrantVectorStore_DocumentOperations(t *testing.T) {
 
 	// Test Update
 	docs[0].PageContent = "Updated content about machine learning"
-	err = store.Update(ctx, []*Document{docs[0]})
+	err = store.Update(ctx, []*interfaces.Document{docs[0]})
 	require.NoError(t, err)
 
 	// Test Delete
@@ -232,7 +234,7 @@ func TestQdrantVectorStore_AddDocuments(t *testing.T) {
 	}
 	defer store.Close()
 
-	docs := []*Document{
+	docs := []*interfaces.Document{
 		NewDocument("Test document one", map[string]interface{}{"id": "1"}),
 		NewDocument("Test document two", map[string]interface{}{"id": "2"}),
 	}
@@ -296,13 +298,13 @@ func TestQdrantVectorStore_EmptyOperations(t *testing.T) {
 	defer store.Close()
 
 	// Test operations with empty inputs
-	err = store.Add(ctx, []*Document{}, [][]float32{})
+	err = store.Add(ctx, []*interfaces.Document{}, [][]float32{})
 	assert.NoError(t, err)
 
 	err = store.Delete(ctx, []string{})
 	assert.NoError(t, err)
 
-	err = store.Update(ctx, []*Document{})
+	err = store.Update(ctx, []*interfaces.Document{})
 	assert.NoError(t, err)
 }
 
@@ -327,11 +329,11 @@ func TestQdrantVectorStore_BatchOperations(t *testing.T) {
 
 	// Create large batch (more than batch size of 100)
 	numDocs := 250
-	docs := make([]*Document, numDocs)
+	docs := make([]*interfaces.Document, numDocs)
 	vectors := make([][]float32, numDocs)
 
 	for i := 0; i < numDocs; i++ {
-		docs[i] = &Document{
+		docs[i] = &interfaces.Document{
 			PageContent: "Batch test document",
 			Metadata:    map[string]interface{}{"index": i},
 		}
@@ -368,7 +370,7 @@ func TestQdrantVectorStore_ErrorCases(t *testing.T) {
 	defer store.Close()
 
 	// Test mismatched docs and vectors
-	docs := []*Document{
+	docs := []*interfaces.Document{
 		NewDocument("Test", nil),
 		NewDocument("Test 2", nil),
 	}

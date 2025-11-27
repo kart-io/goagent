@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/kart-io/goagent/interfaces"
+
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
 )
@@ -65,7 +67,7 @@ Original question: {{.Question}}
 Generate {{.NumQueries}} alternative questions (one per line):`
 
 // GetRelevantDocuments 检索相关文档
-func (m *MultiQueryRetriever) GetRelevantDocuments(ctx context.Context, query string) ([]*Document, error) {
+func (m *MultiQueryRetriever) GetRelevantDocuments(ctx context.Context, query string) ([]*interfaces.Document, error) {
 	// 1. 生成查询变体
 	queries, err := m.generateQueries(ctx, query)
 	if err != nil {
@@ -76,8 +78,8 @@ func (m *MultiQueryRetriever) GetRelevantDocuments(ctx context.Context, query st
 	}
 
 	// 2. 对每个查询执行检索
-	allDocs := make(map[string]*Document) // 使用 map 去重
-	docCounts := make(map[string]int)     // 记录每个文档出现的次数
+	allDocs := make(map[string]*interfaces.Document) // 使用 map 去重
+	docCounts := make(map[string]int)                // 记录每个文档出现的次数
 
 	for _, q := range queries {
 		docs, err := m.Retriever.GetRelevantDocuments(ctx, q)
@@ -100,7 +102,7 @@ func (m *MultiQueryRetriever) GetRelevantDocuments(ctx context.Context, query st
 	}
 
 	// 3. 计算平均分数
-	results := make([]*Document, 0, len(allDocs))
+	results := make([]*interfaces.Document, 0, len(allDocs))
 	for id, doc := range allDocs {
 		doc.Score = doc.Score / float64(docCounts[id])
 		results = append(results, doc)
@@ -226,15 +228,15 @@ func NewEnsembleRetriever(
 }
 
 // GetRelevantDocuments 检索相关文档
-func (e *EnsembleRetriever) GetRelevantDocuments(ctx context.Context, query string) ([]*Document, error) {
+func (e *EnsembleRetriever) GetRelevantDocuments(ctx context.Context, query string) ([]*interfaces.Document, error) {
 	if len(e.Retrievers) == 0 {
-		return []*Document{}, nil
+		return []*interfaces.Document{}, nil
 	}
 
 	// 并发执行所有检索器
 	type result struct {
 		index int
-		docs  []*Document
+		docs  []*interfaces.Document
 		err   error
 	}
 
@@ -263,7 +265,7 @@ func (e *EnsembleRetriever) GetRelevantDocuments(ctx context.Context, query stri
 	}
 
 	// 融合所有检索器的结果
-	docMap := make(map[string]*Document)
+	docMap := make(map[string]*interfaces.Document)
 
 	for i, res := range results {
 		if res.docs == nil {
@@ -285,7 +287,7 @@ func (e *EnsembleRetriever) GetRelevantDocuments(ctx context.Context, query stri
 	}
 
 	// 转换为列表
-	merged := make([]*Document, 0, len(docMap))
+	merged := make([]*interfaces.Document, 0, len(docMap))
 	for _, doc := range docMap {
 		merged = append(merged, doc)
 	}

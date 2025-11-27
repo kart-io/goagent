@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"testing"
 	"time"
+
+	"github.com/kart-io/goagent/interfaces"
 )
 
 // TestInvalidateByPattern tests pattern-based cache invalidation
@@ -18,14 +20,14 @@ func TestInvalidateByPattern(t *testing.T) {
 	defer cache.Close()
 
 	// Create test tools
-	tool1 := NewBaseTool("search_tool", "Search tool", `{}`, func(ctx context.Context, input *ToolInput) (*ToolOutput, error) {
-		return &ToolOutput{Result: "search result", Success: true}, nil
+	tool1 := NewBaseTool("search_tool", "Search tool", `{}`, func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+		return &interfaces.ToolOutput{Result: "search result", Success: true}, nil
 	})
-	tool2 := NewBaseTool("calc_tool", "Calculator tool", `{}`, func(ctx context.Context, input *ToolInput) (*ToolOutput, error) {
-		return &ToolOutput{Result: "42", Success: true}, nil
+	tool2 := NewBaseTool("calc_tool", "Calculator tool", `{}`, func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+		return &interfaces.ToolOutput{Result: "42", Success: true}, nil
 	})
-	tool3 := NewBaseTool("search_advanced", "Advanced search", `{}`, func(ctx context.Context, input *ToolInput) (*ToolOutput, error) {
-		return &ToolOutput{Result: "advanced result", Success: true}, nil
+	tool3 := NewBaseTool("search_advanced", "Advanced search", `{}`, func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+		return &interfaces.ToolOutput{Result: "advanced result", Success: true}, nil
 	})
 
 	cachedTool1 := NewCachedTool(tool1, cache, 5*time.Minute)
@@ -34,9 +36,9 @@ func TestInvalidateByPattern(t *testing.T) {
 
 	t.Run("Invalidate by exact pattern", func(t *testing.T) {
 		// Populate cache
-		input1 := &ToolInput{Args: map[string]interface{}{"query": "test1"}}
-		input2 := &ToolInput{Args: map[string]interface{}{"num": 10}}
-		input3 := &ToolInput{Args: map[string]interface{}{"query": "test2"}}
+		input1 := &interfaces.ToolInput{Args: map[string]interface{}{"query": "test1"}}
+		input2 := &interfaces.ToolInput{Args: map[string]interface{}{"num": 10}}
+		input3 := &interfaces.ToolInput{Args: map[string]interface{}{"query": "test2"}}
 
 		_, _ = cachedTool1.Invoke(ctx, input1)
 		_, _ = cachedTool2.Invoke(ctx, input2)
@@ -81,8 +83,8 @@ func TestInvalidateByPattern(t *testing.T) {
 		_ = cache.Clear()
 
 		// Populate cache
-		input1 := &ToolInput{Args: map[string]interface{}{"query": "alpha"}}
-		input2 := &ToolInput{Args: map[string]interface{}{"query": "beta"}}
+		input1 := &interfaces.ToolInput{Args: map[string]interface{}{"query": "alpha"}}
+		input2 := &interfaces.ToolInput{Args: map[string]interface{}{"query": "beta"}}
 
 		_, _ = cachedTool1.Invoke(ctx, input1)
 		_, _ = cachedTool1.Invoke(ctx, input2)
@@ -112,7 +114,7 @@ func TestInvalidateByPattern(t *testing.T) {
 	t.Run("Pattern matches nothing", func(t *testing.T) {
 		_ = cache.Clear()
 
-		input := &ToolInput{Args: map[string]interface{}{"query": "test"}}
+		input := &interfaces.ToolInput{Args: map[string]interface{}{"query": "test"}}
 		_, _ = cachedTool1.Invoke(ctx, input)
 
 		count, err := cache.InvalidateByPattern(ctx, "nonexistent_.*")
@@ -141,11 +143,11 @@ func TestInvalidateByTool(t *testing.T) {
 	defer cache.Close()
 
 	// Create test tools
-	tool1 := NewBaseTool("search_tool", "Search tool", `{}`, func(ctx context.Context, input *ToolInput) (*ToolOutput, error) {
-		return &ToolOutput{Result: "search result", Success: true}, nil
+	tool1 := NewBaseTool("search_tool", "Search tool", `{}`, func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+		return &interfaces.ToolOutput{Result: "search result", Success: true}, nil
 	})
-	tool2 := NewBaseTool("calc_tool", "Calculator tool", `{}`, func(ctx context.Context, input *ToolInput) (*ToolOutput, error) {
-		return &ToolOutput{Result: "42", Success: true}, nil
+	tool2 := NewBaseTool("calc_tool", "Calculator tool", `{}`, func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+		return &interfaces.ToolOutput{Result: "42", Success: true}, nil
 	})
 
 	cachedTool1 := NewCachedTool(tool1, cache, 5*time.Minute)
@@ -154,12 +156,12 @@ func TestInvalidateByTool(t *testing.T) {
 	t.Run("Invalidate specific tool", func(t *testing.T) {
 		// Populate cache with multiple entries per tool
 		for i := 0; i < 3; i++ {
-			input := &ToolInput{Args: map[string]interface{}{"query": fmt.Sprintf("test%d", i)}}
+			input := &interfaces.ToolInput{Args: map[string]interface{}{"query": fmt.Sprintf("test%d", i)}}
 			_, _ = cachedTool1.Invoke(ctx, input)
 		}
 
 		for i := 0; i < 2; i++ {
-			input := &ToolInput{Args: map[string]interface{}{"num": i}}
+			input := &interfaces.ToolInput{Args: map[string]interface{}{"num": i}}
 			_, _ = cachedTool2.Invoke(ctx, input)
 		}
 
@@ -183,7 +185,7 @@ func TestInvalidateByTool(t *testing.T) {
 
 		// Verify calc_tool entries are still present
 		for i := 0; i < 2; i++ {
-			input := &ToolInput{Args: map[string]interface{}{"num": i}}
+			input := &interfaces.ToolInput{Args: map[string]interface{}{"num": i}}
 			key, _ := cachedTool2.generateCacheKey(input)
 			_, found := cache.Get(ctx, key)
 			if !found {
@@ -195,7 +197,7 @@ func TestInvalidateByTool(t *testing.T) {
 	t.Run("Invalidate non-existent tool", func(t *testing.T) {
 		_ = cache.Clear()
 
-		input := &ToolInput{Args: map[string]interface{}{"query": "test"}}
+		input := &interfaces.ToolInput{Args: map[string]interface{}{"query": "test"}}
 		_, _ = cachedTool1.Invoke(ctx, input)
 
 		count, err := cache.InvalidateByTool(ctx, "nonexistent_tool")
@@ -224,14 +226,14 @@ func TestDependencyTracking(t *testing.T) {
 	defer cache.Close()
 
 	// Create test tools
-	dataTool := NewBaseTool("data_fetch", "Fetch data", `{}`, func(ctx context.Context, input *ToolInput) (*ToolOutput, error) {
-		return &ToolOutput{Result: "data", Success: true}, nil
+	dataTool := NewBaseTool("data_fetch", "Fetch data", `{}`, func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+		return &interfaces.ToolOutput{Result: "data", Success: true}, nil
 	})
-	processTool := NewBaseTool("data_process", "Process data", `{}`, func(ctx context.Context, input *ToolInput) (*ToolOutput, error) {
-		return &ToolOutput{Result: "processed", Success: true}, nil
+	processTool := NewBaseTool("data_process", "Process data", `{}`, func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+		return &interfaces.ToolOutput{Result: "processed", Success: true}, nil
 	})
-	reportTool := NewBaseTool("report_generate", "Generate report", `{}`, func(ctx context.Context, input *ToolInput) (*ToolOutput, error) {
-		return &ToolOutput{Result: "report", Success: true}, nil
+	reportTool := NewBaseTool("report_generate", "Generate report", `{}`, func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+		return &interfaces.ToolOutput{Result: "report", Success: true}, nil
 	})
 
 	cachedData := NewCachedTool(dataTool, cache, 5*time.Minute)
@@ -244,9 +246,9 @@ func TestDependencyTracking(t *testing.T) {
 		cache.AddDependency("data_process", "data_fetch")
 
 		// Populate cache
-		dataInput := &ToolInput{Args: map[string]interface{}{"id": 1}}
-		processInput := &ToolInput{Args: map[string]interface{}{"id": 1}}
-		reportInput := &ToolInput{Args: map[string]interface{}{"id": 1}}
+		dataInput := &interfaces.ToolInput{Args: map[string]interface{}{"id": 1}}
+		processInput := &interfaces.ToolInput{Args: map[string]interface{}{"id": 1}}
+		reportInput := &interfaces.ToolInput{Args: map[string]interface{}{"id": 1}}
 
 		_, _ = cachedData.Invoke(ctx, dataInput)
 		_, _ = cachedProcess.Invoke(ctx, processInput)
@@ -276,14 +278,14 @@ func TestDependencyTracking(t *testing.T) {
 		_ = cache.Clear()
 
 		// Create tools where multiple tools depend on one base tool
-		baseTool := NewBaseTool("base_tool", "Base tool", `{}`, func(ctx context.Context, input *ToolInput) (*ToolOutput, error) {
-			return &ToolOutput{Result: "base", Success: true}, nil
+		baseTool := NewBaseTool("base_tool", "Base tool", `{}`, func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+			return &interfaces.ToolOutput{Result: "base", Success: true}, nil
 		})
-		dependent1 := NewBaseTool("dependent1", "Dependent 1", `{}`, func(ctx context.Context, input *ToolInput) (*ToolOutput, error) {
-			return &ToolOutput{Result: "dep1", Success: true}, nil
+		dependent1 := NewBaseTool("dependent1", "Dependent 1", `{}`, func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+			return &interfaces.ToolOutput{Result: "dep1", Success: true}, nil
 		})
-		dependent2 := NewBaseTool("dependent2", "Dependent 2", `{}`, func(ctx context.Context, input *ToolInput) (*ToolOutput, error) {
-			return &ToolOutput{Result: "dep2", Success: true}, nil
+		dependent2 := NewBaseTool("dependent2", "Dependent 2", `{}`, func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+			return &interfaces.ToolOutput{Result: "dep2", Success: true}, nil
 		})
 
 		cachedBase := NewCachedTool(baseTool, cache, 5*time.Minute)
@@ -295,7 +297,7 @@ func TestDependencyTracking(t *testing.T) {
 		cache.AddDependency("dependent2", "base_tool")
 
 		// Populate cache
-		input := &ToolInput{Args: map[string]interface{}{"id": 1}}
+		input := &interfaces.ToolInput{Args: map[string]interface{}{"id": 1}}
 		_, _ = cachedBase.Invoke(ctx, input)
 		_, _ = cachedDep1.Invoke(ctx, input)
 		_, _ = cachedDep2.Invoke(ctx, input)
@@ -357,17 +359,17 @@ func TestVersioning(t *testing.T) {
 	})
 	defer cache.Close()
 
-	tool := NewBaseTool("test_tool", "Test tool", `{}`, func(ctx context.Context, input *ToolInput) (*ToolOutput, error) {
-		return &ToolOutput{Result: "result", Success: true}, nil
+	tool := NewBaseTool("test_tool", "Test tool", `{}`, func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+		return &interfaces.ToolOutput{Result: "result", Success: true}, nil
 	})
 	cachedTool := NewCachedTool(tool, cache, 5*time.Minute)
 
 	t.Run("Cache invalidation removes entries", func(t *testing.T) {
-		input := &ToolInput{Args: map[string]interface{}{"query": "test"}}
+		input := &interfaces.ToolInput{Args: map[string]interface{}{"query": "test"}}
 		key, _ := cachedTool.generateCacheKey(input)
 
 		// Set a value
-		output := &ToolOutput{Result: "cached", Success: true}
+		output := &interfaces.ToolOutput{Result: "cached", Success: true}
 		_ = cache.Set(ctx, key, output, 5*time.Minute)
 
 		// Verify it's accessible
@@ -392,11 +394,11 @@ func TestVersioning(t *testing.T) {
 	t.Run("Pattern invalidation removes matching entries", func(t *testing.T) {
 		_ = cache.Clear()
 
-		input := &ToolInput{Args: map[string]interface{}{"query": "test"}}
+		input := &interfaces.ToolInput{Args: map[string]interface{}{"query": "test"}}
 		key, _ := cachedTool.generateCacheKey(input)
 
 		// Set a value
-		output := &ToolOutput{Result: "cached", Success: true}
+		output := &interfaces.ToolOutput{Result: "cached", Success: true}
 		_ = cache.Set(ctx, key, output, 5*time.Minute)
 
 		// Verify it's accessible
@@ -429,14 +431,14 @@ func TestInvalidationStatistics(t *testing.T) {
 	})
 	defer cache.Close()
 
-	tool := NewBaseTool("test_tool", "Test tool", `{}`, func(ctx context.Context, input *ToolInput) (*ToolOutput, error) {
-		return &ToolOutput{Result: "result", Success: true}, nil
+	tool := NewBaseTool("test_tool", "Test tool", `{}`, func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+		return &interfaces.ToolOutput{Result: "result", Success: true}, nil
 	})
 	cachedTool := NewCachedTool(tool, cache, 5*time.Minute)
 
 	// Populate cache
 	for i := 0; i < 5; i++ {
-		input := &ToolInput{Args: map[string]interface{}{"id": i}}
+		input := &interfaces.ToolInput{Args: map[string]interface{}{"id": i}}
 		_, _ = cachedTool.Invoke(ctx, input)
 	}
 
@@ -504,13 +506,13 @@ func BenchmarkInvalidateByPattern(b *testing.B) {
 	defer cache.Close()
 
 	// Populate cache with many entries
-	tool := NewBaseTool("test_tool", "Test", `{}`, func(ctx context.Context, input *ToolInput) (*ToolOutput, error) {
-		return &ToolOutput{Result: "result", Success: true}, nil
+	tool := NewBaseTool("test_tool", "Test", `{}`, func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+		return &interfaces.ToolOutput{Result: "result", Success: true}, nil
 	})
 	cachedTool := NewCachedTool(tool, cache, 5*time.Minute)
 
 	for i := 0; i < 1000; i++ {
-		input := &ToolInput{Args: map[string]interface{}{"id": i}}
+		input := &interfaces.ToolInput{Args: map[string]interface{}{"id": i}}
 		_, _ = cachedTool.Invoke(ctx, input)
 	}
 
@@ -520,7 +522,7 @@ func BenchmarkInvalidateByPattern(b *testing.B) {
 		// Repopulate for next iteration
 		if i < b.N-1 {
 			for j := 0; j < 1000; j++ {
-				input := &ToolInput{Args: map[string]interface{}{"id": j}}
+				input := &interfaces.ToolInput{Args: map[string]interface{}{"id": j}}
 				_, _ = cachedTool.Invoke(ctx, input)
 			}
 		}
@@ -538,13 +540,13 @@ func BenchmarkInvalidateByTool(b *testing.B) {
 	defer cache.Close()
 
 	// Populate cache
-	tool := NewBaseTool("test_tool", "Test", `{}`, func(ctx context.Context, input *ToolInput) (*ToolOutput, error) {
-		return &ToolOutput{Result: "result", Success: true}, nil
+	tool := NewBaseTool("test_tool", "Test", `{}`, func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+		return &interfaces.ToolOutput{Result: "result", Success: true}, nil
 	})
 	cachedTool := NewCachedTool(tool, cache, 5*time.Minute)
 
 	for i := 0; i < 1000; i++ {
-		input := &ToolInput{Args: map[string]interface{}{"id": i}}
+		input := &interfaces.ToolInput{Args: map[string]interface{}{"id": i}}
 		_, _ = cachedTool.Invoke(ctx, input)
 	}
 
@@ -554,7 +556,7 @@ func BenchmarkInvalidateByTool(b *testing.B) {
 		// Repopulate for next iteration
 		if i < b.N-1 {
 			for j := 0; j < 1000; j++ {
-				input := &ToolInput{Args: map[string]interface{}{"id": j}}
+				input := &interfaces.ToolInput{Args: map[string]interface{}{"id": j}}
 				_, _ = cachedTool.Invoke(ctx, input)
 			}
 		}

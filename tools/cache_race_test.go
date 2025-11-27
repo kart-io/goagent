@@ -5,6 +5,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/kart-io/goagent/interfaces"
 )
 
 // TestCacheRaceCondition performs a stress test to verify there are no race conditions
@@ -36,7 +38,7 @@ func TestCacheRaceCondition(t *testing.T) {
 				switch j % 5 {
 				case 0: // Set
 					key := "key_" + string(rune('A'+(id%26)))
-					_ = cache.Set(ctx, key, &ToolOutput{Result: "data", Success: true}, 50*time.Millisecond)
+					_ = cache.Set(ctx, key, &interfaces.ToolOutput{Result: "data", Success: true}, 50*time.Millisecond)
 				case 1: // Get
 					key := "key_" + string(rune('A'+(id%26)))
 					cache.Get(ctx, key)
@@ -59,7 +61,7 @@ func TestCacheRaceCondition(t *testing.T) {
 
 	// Verify cache is still functional after stress test
 	testKey := "final_test"
-	_ = cache.Set(ctx, testKey, &ToolOutput{Result: "final", Success: true}, 1*time.Minute)
+	_ = cache.Set(ctx, testKey, &interfaces.ToolOutput{Result: "final", Success: true}, 1*time.Minute)
 	if output, found := cache.Get(ctx, testKey); !found || output.Result != "final" {
 		t.Error("Cache should still be functional after stress test")
 	}
@@ -83,7 +85,7 @@ func TestCleanupDoesNotBlockOperations(t *testing.T) {
 	for i := 0; i < 500; i++ {
 		key := "key_" + string(rune('A'+(i%26))) + string(rune('0'+(i%10)))
 		ttl := time.Duration(i%100) * time.Millisecond
-		_ = cache.Set(ctx, key, &ToolOutput{Result: "data", Success: true}, ttl)
+		_ = cache.Set(ctx, key, &interfaces.ToolOutput{Result: "data", Success: true}, ttl)
 	}
 
 	// Monitor operation latency during cleanup

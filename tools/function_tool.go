@@ -4,6 +4,7 @@ import (
 	"context"
 
 	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/utils/json"
 )
 
@@ -38,16 +39,16 @@ func NewFunctionTool(
 }
 
 // run 执行函数
-func (f *FunctionTool) run(ctx context.Context, input *ToolInput) (*ToolOutput, error) {
+func (f *FunctionTool) run(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 	result, err := f.fn(ctx, input.Args)
 	if err != nil {
-		return &ToolOutput{
+		return &interfaces.ToolOutput{
 			Success: false,
 			Error:   err.Error(),
 		}, NewToolError(f.Name(), "function execution failed", err)
 	}
 
-	return &ToolOutput{
+	return &interfaces.ToolOutput{
 		Result:  result,
 		Success: true,
 	}, nil

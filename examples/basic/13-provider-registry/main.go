@@ -117,21 +117,21 @@ func main() {
 	// 取消注释以下代码来测试实际请求
 
 	/*
-	ctx := context.Background()
-	req := &agentllm.CompletionRequest{
-		Messages: []agentllm.Message{
-			{Role: "user", Content: "Hello, how are you?"},
-		},
-	}
-
-	if openaiClient != nil {
-		resp, err := openaiClient.Complete(ctx, req)
-		if err != nil {
-			log.Printf("请求失败: %v\n", err)
-		} else {
-			fmt.Printf("响应: %s\n", resp.Content)
+		ctx := context.Background()
+		req := &agentllm.CompletionRequest{
+			Messages: []agentllm.Message{
+				{Role: "user", Content: "Hello, how are you?"},
+			},
 		}
-	}
+
+		if openaiClient != nil {
+			resp, err := openaiClient.Complete(ctx, req)
+			if err != nil {
+				log.Printf("请求失败: %v\n", err)
+			} else {
+				fmt.Printf("响应: %s\n", resp.Content)
+			}
+		}
 	*/
 
 	fmt.Println("  （需要有效的 API key 才能测试实际请求）")

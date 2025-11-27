@@ -6,6 +6,8 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/kart-io/goagent/interfaces"
+
 	agentErrors "github.com/kart-io/goagent/errors"
 )
 
@@ -16,7 +18,7 @@ type KeywordRetriever struct {
 	*BaseRetriever
 
 	// Documents 文档集合
-	Documents []*Document
+	Documents []*interfaces.Document
 
 	// Algorithm 检索算法
 	Algorithm KeywordAlgorithm
@@ -37,7 +39,7 @@ const (
 )
 
 // NewKeywordRetriever 创建关键词检索器
-func NewKeywordRetriever(docs []*Document, config RetrieverConfig) *KeywordRetriever {
+func NewKeywordRetriever(docs []*interfaces.Document, config RetrieverConfig) *KeywordRetriever {
 	retriever := &KeywordRetriever{
 		BaseRetriever: NewBaseRetriever(),
 		Documents:     docs,
@@ -56,9 +58,9 @@ func NewKeywordRetriever(docs []*Document, config RetrieverConfig) *KeywordRetri
 }
 
 // GetRelevantDocuments 检索相关文档
-func (k *KeywordRetriever) GetRelevantDocuments(ctx context.Context, query string) ([]*Document, error) {
+func (k *KeywordRetriever) GetRelevantDocuments(ctx context.Context, query string) ([]*interfaces.Document, error) {
 	if len(k.Documents) == 0 {
-		return []*Document{}, nil
+		return []*interfaces.Document{}, nil
 	}
 
 	// 根据算法计算得分
@@ -76,7 +78,7 @@ func (k *KeywordRetriever) GetRelevantDocuments(ctx context.Context, query strin
 	}
 
 	// 创建结果文档
-	results := make([]*Document, 0)
+	results := make([]*interfaces.Document, 0)
 	for i, doc := range k.Documents {
 		if scores[i] > 0 {
 			docCopy := doc.Clone()

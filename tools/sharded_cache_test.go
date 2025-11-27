@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kart-io/goagent/interfaces"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -23,7 +25,7 @@ func TestShardedToolCache_BasicOperations(t *testing.T) {
 	defer cache.Close()
 
 	t.Run("Set and Get", func(t *testing.T) {
-		output := &ToolOutput{Result: "test result", Success: true}
+		output := &interfaces.ToolOutput{Result: "test result", Success: true}
 		err := cache.Set(ctx, "key1", output, 5*time.Minute)
 		require.NoError(t, err)
 
@@ -39,7 +41,7 @@ func TestShardedToolCache_BasicOperations(t *testing.T) {
 	})
 
 	t.Run("Delete", func(t *testing.T) {
-		output := &ToolOutput{Result: "to delete", Success: true}
+		output := &interfaces.ToolOutput{Result: "to delete", Success: true}
 		_ = cache.Set(ctx, "key2", output, 5*time.Minute)
 
 		err := cache.Delete(ctx, "key2")
@@ -53,7 +55,7 @@ func TestShardedToolCache_BasicOperations(t *testing.T) {
 		// Add multiple entries
 		for i := 0; i < 10; i++ {
 			key := fmt.Sprintf("clear_key_%d", i)
-			output := &ToolOutput{Result: fmt.Sprintf("result_%d", i), Success: true}
+			output := &interfaces.ToolOutput{Result: fmt.Sprintf("result_%d", i), Success: true}
 			_ = cache.Set(ctx, key, output, 5*time.Minute)
 		}
 
@@ -77,9 +79,9 @@ func TestShardedToolCache_Invalidation(t *testing.T) {
 
 	t.Run("InvalidateByPattern", func(t *testing.T) {
 		// Populate cache
-		_ = cache.Set(ctx, "search_tool:hash1", &ToolOutput{Result: "1", Success: true}, 5*time.Minute)
-		_ = cache.Set(ctx, "search_tool:hash2", &ToolOutput{Result: "2", Success: true}, 5*time.Minute)
-		_ = cache.Set(ctx, "calc_tool:hash3", &ToolOutput{Result: "3", Success: true}, 5*time.Minute)
+		_ = cache.Set(ctx, "search_tool:hash1", &interfaces.ToolOutput{Result: "1", Success: true}, 5*time.Minute)
+		_ = cache.Set(ctx, "search_tool:hash2", &interfaces.ToolOutput{Result: "2", Success: true}, 5*time.Minute)
+		_ = cache.Set(ctx, "calc_tool:hash3", &interfaces.ToolOutput{Result: "3", Success: true}, 5*time.Minute)
 
 		assert.Equal(t, 3, cache.Size())
 
@@ -97,9 +99,9 @@ func TestShardedToolCache_Invalidation(t *testing.T) {
 		_ = cache.Clear()
 
 		// Populate cache
-		_ = cache.Set(ctx, "tool1:hash1", &ToolOutput{Result: "1", Success: true}, 5*time.Minute)
-		_ = cache.Set(ctx, "tool1:hash2", &ToolOutput{Result: "2", Success: true}, 5*time.Minute)
-		_ = cache.Set(ctx, "tool2:hash3", &ToolOutput{Result: "3", Success: true}, 5*time.Minute)
+		_ = cache.Set(ctx, "tool1:hash1", &interfaces.ToolOutput{Result: "1", Success: true}, 5*time.Minute)
+		_ = cache.Set(ctx, "tool1:hash2", &interfaces.ToolOutput{Result: "2", Success: true}, 5*time.Minute)
+		_ = cache.Set(ctx, "tool2:hash3", &interfaces.ToolOutput{Result: "3", Success: true}, 5*time.Minute)
 
 		count, err := cache.InvalidateByTool(ctx, "tool1")
 		require.NoError(t, err)
@@ -133,7 +135,7 @@ func TestShardedToolCache_Concurrency(t *testing.T) {
 
 			for j := 0; j < opsPerGoroutine; j++ {
 				key := fmt.Sprintf("key_%d_%d", id, j)
-				output := &ToolOutput{Result: fmt.Sprintf("result_%d_%d", id, j), Success: true}
+				output := &interfaces.ToolOutput{Result: fmt.Sprintf("result_%d_%d", id, j), Success: true}
 
 				// Set operation
 				if err := cache.Set(ctx, key, output, 5*time.Minute); err == nil {
@@ -176,7 +178,7 @@ func TestShardedToolCache_LRUEviction(t *testing.T) {
 	// Fill cache beyond capacity
 	for i := 0; i < 30; i++ {
 		key := fmt.Sprintf("key_%d", i)
-		output := &ToolOutput{Result: fmt.Sprintf("result_%d", i), Success: true}
+		output := &interfaces.ToolOutput{Result: fmt.Sprintf("result_%d", i), Success: true}
 		_ = cache.Set(ctx, key, output, 5*time.Minute)
 	}
 
@@ -204,7 +206,7 @@ func TestShardedToolCache_TTLExpiration(t *testing.T) {
 	defer cache.Close()
 
 	// Add item with short TTL
-	output := &ToolOutput{Result: "expiring", Success: true}
+	output := &interfaces.ToolOutput{Result: "expiring", Success: true}
 	_ = cache.Set(ctx, "expiring_key", output, 100*time.Millisecond)
 
 	// Should exist initially
@@ -233,8 +235,8 @@ func TestShardedToolCache_Dependencies(t *testing.T) {
 	cache.AddDependency("tool2", "tool1")
 
 	// Populate cache
-	_ = cache.Set(ctx, "tool1:hash1", &ToolOutput{Result: "1", Success: true}, 5*time.Minute)
-	_ = cache.Set(ctx, "tool2:hash2", &ToolOutput{Result: "2", Success: true}, 5*time.Minute)
+	_ = cache.Set(ctx, "tool1:hash1", &interfaces.ToolOutput{Result: "1", Success: true}, 5*time.Minute)
+	_ = cache.Set(ctx, "tool2:hash2", &interfaces.ToolOutput{Result: "2", Success: true}, 5*time.Minute)
 
 	assert.Equal(t, 2, cache.Size())
 
@@ -259,7 +261,7 @@ func BenchmarkShardedCache_ConcurrentAccess(b *testing.B) {
 	// Pre-populate cache
 	for i := 0; i < 1000; i++ {
 		key := fmt.Sprintf("key_%d", i)
-		output := &ToolOutput{Result: fmt.Sprintf("result_%d", i), Success: true}
+		output := &interfaces.ToolOutput{Result: fmt.Sprintf("result_%d", i), Success: true}
 		_ = cache.Set(ctx, key, output, 5*time.Minute)
 	}
 
@@ -271,7 +273,7 @@ func BenchmarkShardedCache_ConcurrentAccess(b *testing.B) {
 			if i%2 == 0 {
 				cache.Get(ctx, key)
 			} else {
-				output := &ToolOutput{Result: fmt.Sprintf("new_%d", i), Success: true}
+				output := &interfaces.ToolOutput{Result: fmt.Sprintf("new_%d", i), Success: true}
 				cache.Set(ctx, key, output, 5*time.Minute)
 			}
 			i++
@@ -295,7 +297,7 @@ func BenchmarkComparison(b *testing.B) {
 			i := 0
 			for pb.Next() {
 				key := fmt.Sprintf("key_%d", i%1000)
-				output := &ToolOutput{Result: fmt.Sprintf("result_%d", i), Success: true}
+				output := &interfaces.ToolOutput{Result: fmt.Sprintf("result_%d", i), Success: true}
 				cache.Set(ctx, key, output, 5*time.Minute)
 				cache.Get(ctx, key)
 				i++
@@ -316,7 +318,7 @@ func BenchmarkComparison(b *testing.B) {
 			i := 0
 			for pb.Next() {
 				key := fmt.Sprintf("key_%d", i%1000)
-				output := &ToolOutput{Result: fmt.Sprintf("result_%d", i), Success: true}
+				output := &interfaces.ToolOutput{Result: fmt.Sprintf("result_%d", i), Success: true}
 				cache.Set(ctx, key, output, 5*time.Minute)
 				cache.Get(ctx, key)
 				i++

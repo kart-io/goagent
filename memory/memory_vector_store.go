@@ -3,10 +3,11 @@ package memory
 import (
 	"context"
 	"fmt"
-	"github.com/kart-io/goagent/utils/json"
 	"math"
 	"sort"
 	"sync"
+
+	"github.com/kart-io/goagent/utils/json"
 
 	agentErrors "github.com/kart-io/goagent/errors"
 )

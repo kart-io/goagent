@@ -64,22 +64,40 @@ func NewStore(opts *StoreOptions) (store.Store, error) {
 				WithOperation("new_store")
 		}
 
-		// Convert common RedisOptions to store redis.Config
-		config := &redis.Config{
-			Addr:         opts.Redis.Addr,
-			Password:     opts.Redis.Password,
-			DB:           opts.Redis.DB,
-			Prefix:       opts.Prefix,
-			TTL:          opts.Redis.TTL,
-			PoolSize:     opts.Redis.PoolSize,
-			MinIdleConns: opts.Redis.MinIdleConns,
-			MaxRetries:   opts.Redis.MaxRetries,
-			DialTimeout:  opts.Redis.DialTimeout,
-			ReadTimeout:  opts.Redis.ReadTimeout,
-			WriteTimeout: opts.Redis.WriteTimeout,
+		// Convert common RedisOptions to store redis options
+		redisOpts := []redis.RedisOption{}
+		if opts.Redis.Password != "" {
+			redisOpts = append(redisOpts, redis.WithPassword(opts.Redis.Password))
+		}
+		if opts.Redis.DB != 0 {
+			redisOpts = append(redisOpts, redis.WithDB(opts.Redis.DB))
+		}
+		if opts.Prefix != "" {
+			redisOpts = append(redisOpts, redis.WithPrefix(opts.Prefix))
+		}
+		if opts.Redis.TTL > 0 {
+			redisOpts = append(redisOpts, redis.WithTTL(opts.Redis.TTL))
+		}
+		if opts.Redis.PoolSize > 0 {
+			redisOpts = append(redisOpts, redis.WithPoolSize(opts.Redis.PoolSize))
+		}
+		if opts.Redis.MinIdleConns > 0 {
+			redisOpts = append(redisOpts, redis.WithMinIdleConns(opts.Redis.MinIdleConns))
+		}
+		if opts.Redis.MaxRetries > 0 {
+			redisOpts = append(redisOpts, redis.WithMaxRetries(opts.Redis.MaxRetries))
+		}
+		if opts.Redis.DialTimeout > 0 {
+			redisOpts = append(redisOpts, redis.WithDialTimeout(opts.Redis.DialTimeout))
+		}
+		if opts.Redis.ReadTimeout > 0 {
+			redisOpts = append(redisOpts, redis.WithReadTimeout(opts.Redis.ReadTimeout))
+		}
+		if opts.Redis.WriteTimeout > 0 {
+			redisOpts = append(redisOpts, redis.WithWriteTimeout(opts.Redis.WriteTimeout))
 		}
 
-		return redis.New(config)
+		return redis.New(opts.Redis.Addr, redisOpts...)
 
 	case "mysql":
 		if opts.MySQL == nil {
@@ -124,17 +142,23 @@ func NewStore(opts *StoreOptions) (store.Store, error) {
 		}
 
 		// Use DSN from PostgresOptions
-		config := &postgres.Config{
-			DSN:             opts.Postgres.DSN(),
-			TableName:       opts.TableName,
-			MaxIdleConns:    opts.Postgres.MaxIdleConns,
-			MaxOpenConns:    opts.Postgres.MaxOpenConns,
-			ConnMaxLifetime: opts.Postgres.ConnMaxLifetime,
-			LogLevel:        convertLogLevel(opts.Postgres.LogLevel),
-			AutoMigrate:     opts.Postgres.AutoMigrate,
+		postgresOpts := []postgres.PostgresOption{}
+		if opts.TableName != "" {
+			postgresOpts = append(postgresOpts, postgres.WithTableName(opts.TableName))
 		}
+		if opts.Postgres.MaxOpenConns > 0 {
+			postgresOpts = append(postgresOpts, postgres.WithMaxOpenConns(opts.Postgres.MaxOpenConns))
+		}
+		if opts.Postgres.MaxIdleConns > 0 {
+			postgresOpts = append(postgresOpts, postgres.WithMaxIdleConns(opts.Postgres.MaxIdleConns))
+		}
+		if opts.Postgres.ConnMaxLifetime > 0 {
+			postgresOpts = append(postgresOpts, postgres.WithConnMaxLifetime(opts.Postgres.ConnMaxLifetime))
+		}
+		postgresOpts = append(postgresOpts, postgres.WithLogLevel(convertLogLevel(opts.Postgres.LogLevel)))
+		postgresOpts = append(postgresOpts, postgres.WithAutoMigrate(opts.Postgres.AutoMigrate))
 
-		return postgres.New(config)
+		return postgres.New(opts.Postgres.DSN(), postgresOpts...)
 
 	default:
 		return nil, agentErrors.NewInvalidConfigError("options_adapter", "type", "unsupported store type").
@@ -170,7 +194,7 @@ func NewStoreFromFactory(opts *StoreOptions) (store.Store, error) {
 			return nil, err
 		}
 
-		factoryConfig.RedisConfig = &redis.Config{
+		factoryConfig.Redis = &redis.Config{
 			Addr:         opts.Redis.Addr,
 			Password:     opts.Redis.Password,
 			DB:           opts.Redis.DB,
@@ -199,7 +223,7 @@ func NewStoreFromFactory(opts *StoreOptions) (store.Store, error) {
 			return nil, err
 		}
 
-		factoryConfig.PostgresConfig = &postgres.Config{
+		factoryConfig.Postgres = &postgres.Config{
 			DSN:             opts.Postgres.DSN(),
 			TableName:       opts.TableName,
 			MaxIdleConns:    opts.Postgres.MaxIdleConns,
@@ -268,22 +292,40 @@ func (a *RedisStoreAdapter) CreateStore() (store.Store, error) {
 			WithOperation("create_redis_store")
 	}
 
-	// Create config
-	config := &redis.Config{
-		Addr:         a.options.Addr,
-		Password:     a.options.Password,
-		DB:           a.options.DB,
-		Prefix:       a.prefix,
-		TTL:          a.options.TTL,
-		PoolSize:     a.options.PoolSize,
-		MinIdleConns: a.options.MinIdleConns,
-		MaxRetries:   a.options.MaxRetries,
-		DialTimeout:  a.options.DialTimeout,
-		ReadTimeout:  a.options.ReadTimeout,
-		WriteTimeout: a.options.WriteTimeout,
+	// Create options
+	redisOpts := []redis.RedisOption{}
+	if a.options.Password != "" {
+		redisOpts = append(redisOpts, redis.WithPassword(a.options.Password))
+	}
+	if a.options.DB != 0 {
+		redisOpts = append(redisOpts, redis.WithDB(a.options.DB))
+	}
+	if a.prefix != "" {
+		redisOpts = append(redisOpts, redis.WithPrefix(a.prefix))
+	}
+	if a.options.TTL > 0 {
+		redisOpts = append(redisOpts, redis.WithTTL(a.options.TTL))
+	}
+	if a.options.PoolSize > 0 {
+		redisOpts = append(redisOpts, redis.WithPoolSize(a.options.PoolSize))
+	}
+	if a.options.MinIdleConns > 0 {
+		redisOpts = append(redisOpts, redis.WithMinIdleConns(a.options.MinIdleConns))
+	}
+	if a.options.MaxRetries > 0 {
+		redisOpts = append(redisOpts, redis.WithMaxRetries(a.options.MaxRetries))
+	}
+	if a.options.DialTimeout > 0 {
+		redisOpts = append(redisOpts, redis.WithDialTimeout(a.options.DialTimeout))
+	}
+	if a.options.ReadTimeout > 0 {
+		redisOpts = append(redisOpts, redis.WithReadTimeout(a.options.ReadTimeout))
+	}
+	if a.options.WriteTimeout > 0 {
+		redisOpts = append(redisOpts, redis.WithWriteTimeout(a.options.WriteTimeout))
 	}
 
-	return redis.New(config)
+	return redis.New(a.options.Addr, redisOpts...)
 }
 
 // MySQLStoreAdapter adapts MySQLOptions to create a MySQL-backed store

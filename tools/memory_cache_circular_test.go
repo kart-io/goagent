@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kart-io/goagent/interfaces"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -27,13 +29,13 @@ func TestMemoryCache_CircularDependency(t *testing.T) {
 	cache.AddDependency("toolA", "toolC")
 
 	// 为每个工具添加缓存条目
-	err := cache.Set(ctx, "toolA:key1", &ToolOutput{Result: "a1"}, 5*time.Minute)
+	err := cache.Set(ctx, "toolA:key1", &interfaces.ToolOutput{Result: "a1"}, 5*time.Minute)
 	require.NoError(t, err)
 
-	err = cache.Set(ctx, "toolB:key1", &ToolOutput{Result: "b1"}, 5*time.Minute)
+	err = cache.Set(ctx, "toolB:key1", &interfaces.ToolOutput{Result: "b1"}, 5*time.Minute)
 	require.NoError(t, err)
 
-	err = cache.Set(ctx, "toolC:key1", &ToolOutput{Result: "c1"}, 5*time.Minute)
+	err = cache.Set(ctx, "toolC:key1", &interfaces.ToolOutput{Result: "c1"}, 5*time.Minute)
 	require.NoError(t, err)
 
 	// 验证初始状态
@@ -71,7 +73,7 @@ func TestMemoryCache_ComplexCircularDependency(t *testing.T) {
 	for _, tool := range tools {
 		for i := 0; i < 3; i++ {
 			key := fmt.Sprintf("%s:key%d", tool, i)
-			err := cache.Set(ctx, key, &ToolOutput{Result: key}, 5*time.Minute)
+			err := cache.Set(ctx, key, &interfaces.ToolOutput{Result: key}, 5*time.Minute)
 			require.NoError(t, err)
 		}
 	}
@@ -104,7 +106,7 @@ func TestMemoryCache_SelfDependency(t *testing.T) {
 	cache.AddDependency("toolA", "toolA")
 
 	// 添加缓存条目
-	err := cache.Set(ctx, "toolA:key1", &ToolOutput{Result: "a1"}, 5*time.Minute)
+	err := cache.Set(ctx, "toolA:key1", &interfaces.ToolOutput{Result: "a1"}, 5*time.Minute)
 	require.NoError(t, err)
 
 	// 触发失效，不应该导致无限递归
@@ -132,10 +134,10 @@ func TestMemoryCache_InvalidateByPatternWithCircularDeps(t *testing.T) {
 	cache.AddDependency("toolA", "toolB")
 
 	// 添加缓存条目
-	err := cache.Set(ctx, "toolA:user123", &ToolOutput{Result: "a1"}, 5*time.Minute)
+	err := cache.Set(ctx, "toolA:user123", &interfaces.ToolOutput{Result: "a1"}, 5*time.Minute)
 	require.NoError(t, err)
 
-	err = cache.Set(ctx, "toolB:user456", &ToolOutput{Result: "b1"}, 5*time.Minute)
+	err = cache.Set(ctx, "toolB:user456", &interfaces.ToolOutput{Result: "b1"}, 5*time.Minute)
 	require.NoError(t, err)
 
 	// 使用正则表达式失效，应该触发级联失效但不会栈溢出
@@ -171,7 +173,7 @@ func TestMemoryCache_DeepCircularChain(t *testing.T) {
 		tool := fmt.Sprintf("tool%d", i)
 		for j := 0; j < 3; j++ {
 			key := fmt.Sprintf("%s:key%d", tool, j)
-			err := cache.Set(ctx, key, &ToolOutput{Result: key}, 5*time.Minute)
+			err := cache.Set(ctx, key, &interfaces.ToolOutput{Result: key}, 5*time.Minute)
 			require.NoError(t, err)
 		}
 	}
@@ -231,7 +233,7 @@ func TestMemoryCache_MultipleCircularGroups(t *testing.T) {
 		for _, tool := range group {
 			for i := 0; i < 3; i++ {
 				key := fmt.Sprintf("%s:key%d", tool, i)
-				err := cache.Set(ctx, key, &ToolOutput{Result: key}, 5*time.Minute)
+				err := cache.Set(ctx, key, &interfaces.ToolOutput{Result: key}, 5*time.Minute)
 				require.NoError(t, err)
 			}
 		}

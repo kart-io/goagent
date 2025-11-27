@@ -4,23 +4,24 @@ import (
 	"sync"
 
 	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/interfaces"
 )
 
 // Registry manages tool registration and lookup
 type Registry struct {
-	tools map[string]Tool
+	tools map[string]interfaces.Tool
 	mu    sync.RWMutex
 }
 
 // NewRegistry creates a new tool registry
 func NewRegistry() *Registry {
 	return &Registry{
-		tools: make(map[string]Tool),
+		tools: make(map[string]interfaces.Tool),
 	}
 }
 
 // Register adds a tool to the registry
-func (r *Registry) Register(tool Tool) error {
+func (r *Registry) Register(tool interfaces.Tool) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -37,7 +38,7 @@ func (r *Registry) Register(tool Tool) error {
 }
 
 // Get retrieves a tool by name
-func (r *Registry) Get(name string) Tool {
+func (r *Registry) Get(name string) interfaces.Tool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -45,11 +46,11 @@ func (r *Registry) Get(name string) Tool {
 }
 
 // List returns all registered tools
-func (r *Registry) List() []Tool {
+func (r *Registry) List() []interfaces.Tool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	tools := make([]Tool, 0, len(r.tools))
+	tools := make([]interfaces.Tool, 0, len(r.tools))
 	for _, tool := range r.tools {
 		tools = append(tools, tool)
 	}
@@ -75,7 +76,7 @@ func (r *Registry) Clear() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	r.tools = make(map[string]Tool)
+	r.tools = make(map[string]interfaces.Tool)
 }
 
 // Size returns the number of registered tools

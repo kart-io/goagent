@@ -84,7 +84,7 @@ func() {
 
 ### 新增测试
 
-**文件**: `core/plugin_bridge_test.go` (+182 lines)
+**文件**: `core/plugin_bridge.go` (+182 lines)
 
 **测试用例**:
 1. `TestTypedToDynamicAdapter_InvokeDynamic_PanicRecovery` (2 sub-tests)

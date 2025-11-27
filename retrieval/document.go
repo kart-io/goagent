@@ -8,15 +8,9 @@ import (
 	"github.com/kart-io/goagent/interfaces"
 )
 
-// Document type alias for backward compatibility
-//
-// Deprecated: Use interfaces.Document directly.
-// This alias will be removed in v1.0.0.
-type Document = interfaces.Document
-
 // NewDocument 创建新文档
-func NewDocument(content string, metadata map[string]interface{}) *Document {
-	return &Document{
+func NewDocument(content string, metadata map[string]interface{}) *interfaces.Document {
+	return &interfaces.Document{
 		PageContent: content,
 		Metadata:    metadata,
 		ID:          generateID(),
@@ -24,8 +18,8 @@ func NewDocument(content string, metadata map[string]interface{}) *Document {
 }
 
 // NewDocumentWithID 创建带 ID 的文档
-func NewDocumentWithID(id, content string, metadata map[string]interface{}) *Document {
-	return &Document{
+func NewDocumentWithID(id, content string, metadata map[string]interface{}) *interfaces.Document {
+	return &interfaces.Document{
 		ID:          id,
 		PageContent: content,
 		Metadata:    metadata,
@@ -33,7 +27,7 @@ func NewDocumentWithID(id, content string, metadata map[string]interface{}) *Doc
 }
 
 // DocumentCollection 文档集合
-type DocumentCollection []*Document
+type DocumentCollection []*interfaces.Document
 
 // Len 实现 sort.Interface
 func (dc DocumentCollection) Len() int {
@@ -64,7 +58,7 @@ func (dc DocumentCollection) Top(n int) DocumentCollection {
 }
 
 // Filter 过滤文档
-func (dc DocumentCollection) Filter(predicate func(*Document) bool) DocumentCollection {
+func (dc DocumentCollection) Filter(predicate func(*interfaces.Document) bool) DocumentCollection {
 	result := make(DocumentCollection, 0)
 	for _, doc := range dc {
 		if predicate(doc) {
@@ -75,7 +69,7 @@ func (dc DocumentCollection) Filter(predicate func(*Document) bool) DocumentColl
 }
 
 // Map 映射文档
-func (dc DocumentCollection) Map(mapper func(*Document) *Document) DocumentCollection {
+func (dc DocumentCollection) Map(mapper func(*interfaces.Document) *interfaces.Document) DocumentCollection {
 	result := make(DocumentCollection, len(dc))
 	for i, doc := range dc {
 		result[i] = mapper(doc)

@@ -6,6 +6,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/kart-io/goagent/interfaces"
 )
 
 // BenchmarkHashStringVsFNV 对比内联哈希和 FNV 哈希的性能
@@ -61,7 +63,7 @@ func BenchmarkLRUCustomVsContainerList(b *testing.B) {
 
 		for i := 0; i < b.N; i++ {
 			key := fmt.Sprintf("key_%d", i%1000)
-			output := &ToolOutput{Result: "value"}
+			output := &interfaces.ToolOutput{Result: "value"}
 
 			_ = cache.Set(ctx, key, output, 5*time.Minute)
 			_, _ = cache.Get(ctx, key)
@@ -80,7 +82,7 @@ func BenchmarkLRUCustomVsContainerList(b *testing.B) {
 
 		for i := 0; i < b.N; i++ {
 			key := fmt.Sprintf("key_%d", i%1000)
-			output := &ToolOutput{Result: "value"}
+			output := &interfaces.ToolOutput{Result: "value"}
 
 			_ = cache.Set(ctx, key, output, 5*time.Minute)
 			_, _ = cache.Get(ctx, key)
@@ -109,7 +111,7 @@ func BenchmarkShardedCacheConcurrency(b *testing.B) {
 				i := 0
 				for pb.Next() {
 					key := fmt.Sprintf("key_%d", i%10000)
-					output := &ToolOutput{Result: fmt.Sprintf("value_%d", i)}
+					output := &interfaces.ToolOutput{Result: fmt.Sprintf("value_%d", i)}
 
 					if i%2 == 0 {
 						_ = cache.Set(ctx, key, output, 5*time.Minute)
@@ -148,7 +150,7 @@ func BenchmarkShardedVsNonSharded(b *testing.B) {
 				defer wg.Done()
 				for i := 0; i < opsPerGoroutine; i++ {
 					key := fmt.Sprintf("key_%d_%d", gid, i%1000)
-					output := &ToolOutput{Result: "value"}
+					output := &interfaces.ToolOutput{Result: "value"}
 
 					if i%3 == 0 {
 						_ = cache.Set(ctx, key, output, 5*time.Minute)
@@ -180,7 +182,7 @@ func BenchmarkShardedVsNonSharded(b *testing.B) {
 				defer wg.Done()
 				for i := 0; i < opsPerGoroutine; i++ {
 					key := fmt.Sprintf("key_%d_%d", gid, i%1000)
-					output := &ToolOutput{Result: "value"}
+					output := &interfaces.ToolOutput{Result: "value"}
 
 					if i%3 == 0 {
 						_ = cache.Set(ctx, key, output, 5*time.Minute)
@@ -209,7 +211,7 @@ func BenchmarkMemoryAllocation(b *testing.B) {
 		// Pre-populate
 		for i := 0; i < 1000; i++ {
 			key := fmt.Sprintf("key_%d", i)
-			_ = cache.Set(ctx, key, &ToolOutput{Result: "value"}, 5*time.Minute)
+			_ = cache.Set(ctx, key, &interfaces.ToolOutput{Result: "value"}, 5*time.Minute)
 		}
 
 		b.ReportAllocs()
@@ -231,7 +233,7 @@ func BenchmarkMemoryAllocation(b *testing.B) {
 		// Pre-populate
 		for i := 0; i < 1000; i++ {
 			key := fmt.Sprintf("key_%d", i)
-			_ = cache.Set(ctx, key, &ToolOutput{Result: "value"}, 5*time.Minute)
+			_ = cache.Set(ctx, key, &interfaces.ToolOutput{Result: "value"}, 5*time.Minute)
 		}
 
 		b.ReportAllocs()

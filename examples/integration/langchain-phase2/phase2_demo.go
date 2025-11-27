@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/core/checkpoint"
 	"github.com/kart-io/goagent/core/middleware"
 	"github.com/kart-io/goagent/store/memory"
 )
@@ -240,7 +241,7 @@ func completeAgentDemo() {
 
 	// Initialize Phase 1 components
 	store := memory.New()
-	checkpointer := core.NewInMemorySaver()
+	checkpointer := checkpoint.NewInMemorySaver()
 	ctx := context.Background()
 
 	// Create agent state

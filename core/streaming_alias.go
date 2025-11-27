@@ -4,9 +4,7 @@ import (
 	"github.com/kart-io/goagent/core/execution"
 )
 
-// Type aliases for backward compatibility
-// These types have been moved to the execution package
-
+// Type aliases for internal use within core package
 type (
 	LegacyStreamChunk  = execution.LegacyStreamChunk
 	StreamOptions      = execution.StreamOptions
@@ -19,7 +17,7 @@ type (
 	StreamState        = execution.StreamState
 )
 
-// Constants
+// Constants for internal use
 const (
 	ChunkTypeText     = execution.ChunkTypeText
 	ChunkTypeError    = execution.ChunkTypeError
@@ -36,7 +34,7 @@ const (
 	StreamStateClosed   = execution.StreamStateClosed
 )
 
-// Functions
+// Functions for internal use
 var (
 	DefaultStreamOptions = execution.DefaultStreamOptions
 	NewTextChunk         = execution.NewTextChunk

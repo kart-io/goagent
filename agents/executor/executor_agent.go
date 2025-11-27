@@ -10,6 +10,15 @@ import (
 	"github.com/kart-io/goagent/interfaces"
 )
 
+// GeneratorAgent 定义支持 RunGenerator 的 Agent 接口（可选）
+//
+// 如果底层 Agent 实现了此接口，ExecutorAgent.RunGenerator 将使用它进行流式执行。
+// 否则，将回退到调用 Invoke 并产生单个结果。
+type GeneratorAgent interface {
+	agentcore.Agent
+	RunGenerator(ctx context.Context, input *agentcore.AgentInput) agentcore.Generator[*agentcore.AgentOutput]
+}
+
 // Memory 定义记忆系统接口（简化版，适配 memory.Manager）
 type Memory interface {
 	// SaveContext 保存上下文
@@ -226,6 +235,147 @@ func (e *AgentExecutor) Stream(
 
 	// 流式执行
 	return e.agent.Stream(ctx, input)
+}
+
+// RunGenerator 使用 Generator 模式执行（实验性功能）
+//
+// RunGenerator 提供零分配的流式执行，相比 Stream 具有以下优势：
+//   - 零内存分配（无 channel、goroutine 开销）
+//   - 支持早期终止（用户可以在任意步骤 break）
+//   - 更低延迟（无 channel 发送/接收开销）
+//
+// AgentExecutor 的 RunGenerator 会：
+//  1. 应用执行超时
+//  2. 加载记忆历史到 input.Context
+//  3. 调用底层 agent 的 RunGenerator（如果支持）
+//  4. 在每个步骤后保存记忆（如果配置了 memory）
+//
+// 使用示例：
+//
+//	executor := executor.NewAgentExecutor(config)
+//	for output, err := range executor.RunGenerator(ctx, input) {
+//	    if err != nil {
+//	        log.Error("step failed", err)
+//	        continue
+//	    }
+//	    fmt.Printf("Step: %s\n", output.Message)
+//	    if output.Status == interfaces.StatusSuccess {
+//	        break  // 任务完成
+//	    }
+//	}
+//
+// 注意：如果底层 agent 不支持 RunGenerator（即不实现 GeneratorAgent 接口），
+// 将回退到调用 Invoke 并产生单个结果
+func (e *AgentExecutor) RunGenerator(ctx context.Context, input *agentcore.AgentInput) agentcore.Generator[*agentcore.AgentOutput] {
+	return func(yield func(*agentcore.AgentOutput, error) bool) {
+		startTime := time.Now()
+
+		// 应用执行超时
+		if e.maxExecutionTime > 0 {
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(ctx, e.maxExecutionTime)
+			defer cancel()
+		}
+
+		// 加载记忆
+		if e.memory != nil {
+			history, err := e.memory.LoadHistory(ctx, input.SessionID)
+			if err != nil {
+				// Yield 记忆加载错误
+				errorOutput := &agentcore.AgentOutput{
+					Status:    "failed",
+					Message:   "Failed to load memory",
+					Timestamp: time.Now(),
+					Latency:   time.Since(startTime),
+					Metadata:  make(map[string]interface{}),
+				}
+				yield(errorOutput, agentErrors.Wrap(err, agentErrors.CodeInternal, "failed to load memory").
+					WithComponent("executor_agent").
+					WithOperation("RunGenerator").
+					WithContext("session_id", input.SessionID))
+				return
+			}
+
+			if input.Context == nil {
+				input.Context = make(map[string]interface{})
+			}
+			input.Context["history"] = history
+		}
+
+		// 尝试使用底层 agent 的 RunGenerator（如果支持）
+		var gen agentcore.Generator[*agentcore.AgentOutput]
+		if genAgent, ok := e.agent.(GeneratorAgent); ok {
+			// 底层 agent 支持 RunGenerator
+			gen = genAgent.RunGenerator(ctx, input)
+		} else {
+			// 底层 agent 不支持 RunGenerator，回退到 Invoke
+			gen = func(yield func(*agentcore.AgentOutput, error) bool) {
+				output, err := e.agent.Invoke(ctx, input)
+				yield(output, err)
+			}
+		}
+
+		var lastOutput *agentcore.AgentOutput
+
+		// 遍历底层 agent 产生的每个输出
+		for output, err := range gen {
+			lastOutput = output
+
+			// 检查是否超时
+			if ctx.Err() == context.DeadlineExceeded {
+				timeoutOutput := output
+				if timeoutOutput == nil {
+					timeoutOutput = &agentcore.AgentOutput{
+						Status:    "failed",
+						Timestamp: time.Now(),
+						Latency:   time.Since(startTime),
+						Metadata:  make(map[string]interface{}),
+					}
+				}
+				timeoutOutput.Message = "Execution timeout"
+				yield(timeoutOutput, agentErrors.New(agentErrors.CodeContextTimeout, "execution timeout").
+					WithComponent("executor_agent").
+					WithOperation("RunGenerator").
+					WithContext("timeout", e.maxExecutionTime))
+				return
+			}
+
+			// 检查是否超过最大迭代次数
+			if output != nil && len(output.ReasoningSteps) > e.maxIterations {
+				if e.earlyStoppingMethod == "force" {
+					output.Status = "partial"
+					output.Message = fmt.Sprintf("Reached max iterations (%d)", e.maxIterations)
+				} else {
+					// "generate" - 让 Agent 生成最终答案
+					output.Message = "Generating final answer after max iterations"
+				}
+			}
+
+			// Yield 当前输出
+			if !yield(output, err) {
+				return // 用户提前终止
+			}
+
+			// 如果出错，终止
+			if err != nil {
+				return
+			}
+		}
+
+		// 保存到记忆（仅在成功完成时）
+		if e.memory != nil && lastOutput != nil && lastOutput.Status == "success" {
+			memoryInput := map[string]interface{}{
+				"input":  input.Task,
+				"output": lastOutput.Result,
+			}
+			if err := e.memory.SaveContext(ctx, input.SessionID, memoryInput, lastOutput.Metadata); err != nil {
+				// 记录错误但不中断（记忆保存失败不应该影响执行结果）
+				if e.verbose {
+					fmt.Printf("Warning: failed to save to memory: %v\n", err)
+				}
+			}
+		}
+	}
 }
 
 // Batch 批量执行

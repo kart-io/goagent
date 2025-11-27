@@ -32,12 +32,29 @@ type Store struct {
 	config *Config
 }
 
-// New creates a new Redis-backed store
-func New(config *Config) (*Store, error) {
-	if config == nil {
-		config = DefaultConfig()
+// New creates a new Redis-backed store with options
+//
+// Example:
+//
+//	store, err := redis.New("localhost:6379",
+//	    redis.WithPassword("secret"),
+//	    redis.WithDB(1),
+//	    redis.WithPoolSize(20),
+//	)
+func New(addr string, opts ...RedisOption) (*Store, error) {
+	config := DefaultConfig()
+	config.Addr = addr
+
+	// Apply options
+	for _, opt := range opts {
+		opt(config)
 	}
 
+	return newFromConfig(config)
+}
+
+// newFromConfig is the internal constructor that creates a store from config
+func newFromConfig(config *Config) (*Store, error) {
 	// Create Redis client
 	client := redis.NewClient(&redis.Options{
 		Addr:         config.Addr,

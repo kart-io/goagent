@@ -257,3 +257,178 @@ func BenchmarkReActAgent(b *testing.B) {
 		mockLLM.callCount = 0 // 重置计数器
 	}
 }
+
+// TestReActAgent_RunGenerator 测试 RunGenerator 方法
+func TestReActAgent_RunGenerator(t *testing.T) {
+	// 创建模拟 LLM，提供包含 Final Answer 的响应
+	mockLLM := NewMockLLMClient([]string{
+		`Thought: Let me calculate this
+Action: calculator
+Action Input: {"expression": "2 + 2"}
+Observation:`,
+		`Thought: I now know the final answer
+Final Answer: The result is 4`,
+	})
+
+	// 创建简单工具
+	calcTool := tools.NewBaseTool(
+		"calculator",
+		"Calculate expressions",
+		`{"type": "object"}`,
+		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+			return &interfaces.ToolOutput{
+				Success: true,
+				Result:  4,
+			}, nil
+		},
+	)
+
+	// 创建 ReAct Agent
+	agent := react.NewReActAgent(react.ReActConfig{
+		Name:  "TestAgent",
+		LLM:   mockLLM,
+		Tools: []interfaces.Tool{calcTool},
+	})
+
+	ctx := context.Background()
+	input := &agentcore.AgentInput{
+		Task: "What is 2 + 2?",
+	}
+
+	// 测试 RunGenerator
+	var stepCount int
+	var finalOutput *agentcore.AgentOutput
+	var lastError error
+
+	for output, err := range agent.RunGenerator(ctx, input) {
+		stepCount++
+		finalOutput = output
+		lastError = err
+
+		if err != nil {
+			t.Errorf("Unexpected error at step %d: %v", stepCount, err)
+			break
+		}
+
+		// 验证输出不为 nil
+		if output == nil {
+			t.Errorf("Output is nil at step %d", stepCount)
+			break
+		}
+
+		// 验证元数据包含必要信息
+		if _, ok := output.Metadata["current_step"]; !ok {
+			t.Errorf("Missing current_step in metadata at step %d", stepCount)
+		}
+
+		// 如果找到最终答案，验证并退出
+		if output.Status == interfaces.StatusSuccess {
+			if output.Result == nil {
+				t.Error("Final answer result is nil")
+			}
+			break
+		}
+	}
+
+	// 验证执行了多个步骤
+	if stepCount == 0 {
+		t.Fatal("RunGenerator did not produce any outputs")
+	}
+
+	t.Logf("Total steps: %d", stepCount)
+
+	// 验证没有错误
+	if lastError != nil {
+		t.Errorf("Final error: %v", lastError)
+	}
+
+	// 验证最终输出
+	if finalOutput == nil {
+		t.Fatal("Final output is nil")
+	}
+
+	if finalOutput.Status != interfaces.StatusSuccess {
+		t.Errorf("Expected success status, got: %s", finalOutput.Status)
+	}
+
+	// 验证有推理步骤
+	if len(finalOutput.ReasoningSteps) == 0 {
+		t.Error("No reasoning steps in final output")
+	}
+
+	// 验证有工具调用
+	if len(finalOutput.ToolCalls) == 0 {
+		t.Error("No tool calls in final output")
+	}
+
+	t.Logf("Reasoning steps: %d", len(finalOutput.ReasoningSteps))
+	t.Logf("Tool calls: %d", len(finalOutput.ToolCalls))
+}
+
+// TestReActAgent_RunGenerator_EarlyTermination 测试早期终止
+func TestReActAgent_RunGenerator_EarlyTermination(t *testing.T) {
+	mockLLM := NewMockLLMClient([]string{
+		`Thought: Step 1
+Action: calculator
+Action Input: {}`,
+		`Thought: Step 2
+Action: calculator
+Action Input: {}`,
+		`Thought: Step 3
+Final Answer: Done`,
+	})
+
+	calcTool := tools.NewBaseTool(
+		"calculator",
+		"Calculate",
+		`{"type": "object"}`,
+		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+			return &interfaces.ToolOutput{
+				Success: true,
+				Result:  "result",
+			}, nil
+		},
+	)
+
+	agent := react.NewReActAgent(react.ReActConfig{
+		Name:  "TestAgent",
+		LLM:   mockLLM,
+		Tools: []interfaces.Tool{calcTool},
+	})
+
+	ctx := context.Background()
+	input := &agentcore.AgentInput{Task: "Test"}
+
+	// 在第 3 步后主动终止
+	stepCount := 0
+	maxSteps := 3
+
+	for _, err := range agent.RunGenerator(ctx, input) {
+		if err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+
+		stepCount++
+
+		if stepCount >= maxSteps {
+			t.Logf("Terminating early at step %d", stepCount)
+			break
+		}
+	}
+
+	// 验证只执行了 maxSteps 步
+	if stepCount != maxSteps {
+		t.Errorf("Expected %d steps, got %d", maxSteps, stepCount)
+	}
+
+	// 验证 LLM 只被调用了 2 次（因为每个 LLM 调用会产生 thought + action 两个步骤）
+	mockLLM.mu.Lock()
+	callCount := mockLLM.callCount
+	mockLLM.mu.Unlock()
+
+	if callCount > maxSteps {
+		t.Errorf("LLM was called %d times, expected <= %d", callCount, maxSteps)
+	}
+
+	t.Logf("LLM calls: %d, Steps: %d", callCount, stepCount)
+}

@@ -3,6 +3,8 @@ package retrieval
 import (
 	"context"
 	"testing"
+
+	"github.com/kart-io/goagent/interfaces"
 )
 
 // TestBaseRerankerNoop tests base reranker (no-op)
@@ -10,7 +12,7 @@ func TestBaseRerankerNoop(t *testing.T) {
 	ctx := context.Background()
 	reranker := NewBaseReranker("test_reranker")
 
-	docs := []*Document{
+	docs := []*interfaces.Document{
 		{ID: "1", PageContent: "Test document 1", Score: 0.8},
 		{ID: "2", PageContent: "Test document 2", Score: 0.6},
 	}
@@ -35,7 +37,7 @@ func TestCrossEncoderRerankerEmptyDocs(t *testing.T) {
 	ctx := context.Background()
 	reranker := NewCrossEncoderReranker("model", 2)
 
-	results, err := reranker.Rerank(ctx, "test", []*Document{})
+	results, err := reranker.Rerank(ctx, "test", []*interfaces.Document{})
 	if err != nil {
 		t.Fatalf("Reranking empty docs failed: %v", err)
 	}
@@ -77,9 +79,9 @@ func TestCrossEncoderRerankerTopN(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			docs := make([]*Document, tt.numDocs)
+			docs := make([]*interfaces.Document, tt.numDocs)
 			for i := 0; i < tt.numDocs; i++ {
-				docs[i] = &Document{ID: string(rune('0' + i)), PageContent: "content"}
+				docs[i] = &interfaces.Document{ID: string(rune('0' + i)), PageContent: "content"}
 			}
 
 			reranker := NewCrossEncoderReranker("model", tt.topN)
@@ -101,7 +103,7 @@ func TestLLMRerankerEmptyDocs(t *testing.T) {
 	ctx := context.Background()
 	reranker := NewLLMReranker(2)
 
-	results, err := reranker.Rerank(ctx, "test", []*Document{})
+	results, err := reranker.Rerank(ctx, "test", []*interfaces.Document{})
 	if err != nil {
 		t.Fatalf("Reranking empty docs failed: %v", err)
 	}
@@ -136,7 +138,7 @@ func TestMMRRerankerEmptyDocs(t *testing.T) {
 	ctx := context.Background()
 	reranker := NewMMRReranker(0.7, 2)
 
-	results, err := reranker.Rerank(ctx, "test", []*Document{})
+	results, err := reranker.Rerank(ctx, "test", []*interfaces.Document{})
 	if err != nil {
 		t.Fatalf("Reranking empty docs failed: %v", err)
 	}
@@ -150,7 +152,7 @@ func TestMMRRerankerEmptyDocs(t *testing.T) {
 func TestMMRRerankerLambdaEffect(t *testing.T) {
 	ctx := context.Background()
 
-	docs := []*Document{
+	docs := []*interfaces.Document{
 		{ID: "1", PageContent: "Machine learning and AI", Score: 0.9},
 		{ID: "2", PageContent: "Deep learning networks", Score: 0.85},
 		{ID: "3", PageContent: "Natural language processing", Score: 0.8},
@@ -196,7 +198,7 @@ func TestMMRRerankerSingleDoc(t *testing.T) {
 	ctx := context.Background()
 	reranker := NewMMRReranker(0.5, 2)
 
-	docs := []*Document{
+	docs := []*interfaces.Document{
 		{ID: "1", PageContent: "Test document", Score: 0.8},
 	}
 
@@ -242,7 +244,7 @@ func TestCohereRerankerEmptyDocs(t *testing.T) {
 		t.Fatalf("Failed to create Cohere reranker: %v", err)
 	}
 
-	results, err := reranker.Rerank(ctx, "test", []*Document{})
+	results, err := reranker.Rerank(ctx, "test", []*interfaces.Document{})
 	if err != nil {
 		t.Fatalf("Reranking empty docs failed: %v", err)
 	}
@@ -257,7 +259,7 @@ func TestRerankingRetrieverEmptyBaseResults(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a retriever that returns no results
-	baseRetriever := NewKeywordRetriever([]*Document{}, DefaultRetrieverConfig())
+	baseRetriever := NewKeywordRetriever([]*interfaces.Document{}, DefaultRetrieverConfig())
 	reranker := NewCrossEncoderReranker("model", 2)
 
 	config := DefaultRetrieverConfig()
@@ -284,7 +286,7 @@ func TestRerankingRetrieverEmptyBaseResults(t *testing.T) {
 func TestRerankingRetrieverWithResults(t *testing.T) {
 	ctx := context.Background()
 
-	docs := []*Document{
+	docs := []*interfaces.Document{
 		NewDocument("Kubernetes cluster management", nil),
 		NewDocument("Docker container runtime", nil),
 		NewDocument("Python programming", nil),
@@ -317,7 +319,7 @@ func TestRerankingRetrieverWithResults(t *testing.T) {
 func TestCompareRankers(t *testing.T) {
 	ctx := context.Background()
 
-	docs := []*Document{
+	docs := []*interfaces.Document{
 		{ID: "1", PageContent: "Kubernetes orchestration", Score: 0.8},
 		{ID: "2", PageContent: "Docker containers", Score: 0.7},
 		{ID: "3", PageContent: "Python code", Score: 0.6},
@@ -374,7 +376,7 @@ func TestRankFusionMethods(t *testing.T) {
 func TestReciprocalRankFusion(t *testing.T) {
 	fusion := NewRankFusion("rrf")
 
-	rankings := [][]*Document{
+	rankings := [][]*interfaces.Document{
 		{
 			{ID: "1", Score: 0.9},
 			{ID: "2", Score: 0.8},
@@ -401,7 +403,7 @@ func TestReciprocalRankFusion(t *testing.T) {
 func TestBordaCountFusion(t *testing.T) {
 	fusion := NewRankFusion("borda")
 
-	rankings := [][]*Document{
+	rankings := [][]*interfaces.Document{
 		{
 			{ID: "1", Score: 0},
 			{ID: "2", Score: 0},
@@ -432,7 +434,7 @@ func TestBordaCountFusion(t *testing.T) {
 func TestCombSumFusion(t *testing.T) {
 	fusion := NewRankFusion("comb_sum")
 
-	rankings := [][]*Document{
+	rankings := [][]*interfaces.Document{
 		{
 			{ID: "1", Score: 0.8},
 			{ID: "2", Score: 0.7},
@@ -459,7 +461,7 @@ func TestCombSumFusion(t *testing.T) {
 func TestRankFusionUnknownMethod(t *testing.T) {
 	fusion := NewRankFusion("unknown")
 
-	rankings := [][]*Document{
+	rankings := [][]*interfaces.Document{
 		{
 			{ID: "1", Score: 0.8},
 			{ID: "2", Score: 0.7},
@@ -478,7 +480,7 @@ func TestRankFusionUnknownMethod(t *testing.T) {
 func TestRankFusionEmptyRankings(t *testing.T) {
 	fusion := NewRankFusion("rrf")
 
-	rankings := [][]*Document{}
+	rankings := [][]*interfaces.Document{}
 
 	// Should handle gracefully
 	defer func() {

@@ -3,6 +3,8 @@ package retrieval
 import (
 	"context"
 	"testing"
+
+	"github.com/kart-io/goagent/interfaces"
 )
 
 // TestVectorStoreRetrieverSearchTypes tests different search type configurations
@@ -10,7 +12,7 @@ func TestVectorStoreRetrieverSearchTypes(t *testing.T) {
 	ctx := context.Background()
 	vectorStore := NewMockVectorStore()
 
-	docs := []*Document{
+	docs := []*interfaces.Document{
 		NewDocument("Machine learning algorithms", nil),
 		NewDocument("Deep learning neural networks", nil),
 		NewDocument("Natural language processing", nil),
@@ -98,7 +100,7 @@ func TestMockVectorStoreAddDocuments(t *testing.T) {
 	ctx := context.Background()
 	store := NewMockVectorStore()
 
-	docs := []*Document{
+	docs := []*interfaces.Document{
 		NewDocument("Document 1 content", map[string]interface{}{"id": 1}),
 		NewDocument("Document 2 content", map[string]interface{}{"id": 2}),
 		NewDocument("Document 3 content", map[string]interface{}{"id": 3}),
@@ -120,7 +122,7 @@ func TestMockVectorStoreDelete(t *testing.T) {
 	ctx := context.Background()
 	store := NewMockVectorStore()
 
-	docs := []*Document{
+	docs := []*interfaces.Document{
 		NewDocumentWithID("doc1", "Content 1", nil),
 		NewDocumentWithID("doc2", "Content 2", nil),
 		NewDocumentWithID("doc3", "Content 3", nil),
@@ -148,7 +150,7 @@ func TestMockVectorStoreClear(t *testing.T) {
 	ctx := context.Background()
 	store := NewMockVectorStore()
 
-	docs := []*Document{
+	docs := []*interfaces.Document{
 		NewDocument("Content 1", nil),
 		NewDocument("Content 2", nil),
 	}
@@ -188,7 +190,7 @@ func TestMockVectorStoreSimilaritySearchTopK(t *testing.T) {
 	store := NewMockVectorStore()
 
 	// Add multiple documents
-	docs := make([]*Document, 10)
+	docs := make([]*interfaces.Document, 10)
 	for i := 0; i < 10; i++ {
 		docs[i] = NewDocument("Machine learning content", nil)
 	}
@@ -241,7 +243,7 @@ func TestMockVectorStoreSimilaritySearchWithScore(t *testing.T) {
 	ctx := context.Background()
 	store := NewMockVectorStore()
 
-	docs := []*Document{
+	docs := []*interfaces.Document{
 		NewDocument("Kubernetes orchestration platform", nil),
 		NewDocument("Docker containerization technology", nil),
 		NewDocument("Python programming language", nil),
@@ -271,7 +273,7 @@ func TestVectorStoreRetrieverWithMinScore(t *testing.T) {
 	ctx := context.Background()
 	vectorStore := NewMockVectorStore()
 
-	docs := []*Document{
+	docs := []*interfaces.Document{
 		NewDocument("High relevance machine learning", nil),
 		NewDocument("Medium relevance data science", nil),
 		NewDocument("Low relevance cooking recipe", nil),

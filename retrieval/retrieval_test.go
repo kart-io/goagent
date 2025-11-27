@@ -3,6 +3,8 @@ package retrieval
 import (
 	"context"
 	"testing"
+
+	"github.com/kart-io/goagent/interfaces"
 )
 
 func TestDocument(t *testing.T) {
@@ -76,9 +78,9 @@ func TestDocument(t *testing.T) {
 func TestDocumentCollection(t *testing.T) {
 	t.Run("SortByScore", func(t *testing.T) {
 		docs := DocumentCollection{
-			&Document{ID: "1", Score: 0.5},
-			&Document{ID: "2", Score: 0.9},
-			&Document{ID: "3", Score: 0.3},
+			&interfaces.Document{ID: "1", Score: 0.5},
+			&interfaces.Document{ID: "2", Score: 0.9},
+			&interfaces.Document{ID: "3", Score: 0.3},
 		}
 
 		docs.SortByScore()
@@ -93,9 +95,9 @@ func TestDocumentCollection(t *testing.T) {
 
 	t.Run("Top", func(t *testing.T) {
 		docs := DocumentCollection{
-			&Document{ID: "1", Score: 0.5},
-			&Document{ID: "2", Score: 0.9},
-			&Document{ID: "3", Score: 0.3},
+			&interfaces.Document{ID: "1", Score: 0.5},
+			&interfaces.Document{ID: "2", Score: 0.9},
+			&interfaces.Document{ID: "3", Score: 0.3},
 		}
 
 		top2 := docs.Top(2)
@@ -111,12 +113,12 @@ func TestDocumentCollection(t *testing.T) {
 
 	t.Run("Filter", func(t *testing.T) {
 		docs := DocumentCollection{
-			&Document{ID: "1", Score: 0.5},
-			&Document{ID: "2", Score: 0.9},
-			&Document{ID: "3", Score: 0.3},
+			&interfaces.Document{ID: "1", Score: 0.5},
+			&interfaces.Document{ID: "2", Score: 0.9},
+			&interfaces.Document{ID: "3", Score: 0.3},
 		}
 
-		filtered := docs.Filter(func(d *Document) bool {
+		filtered := docs.Filter(func(d *interfaces.Document) bool {
 			return d.Score > 0.4
 		})
 
@@ -127,9 +129,9 @@ func TestDocumentCollection(t *testing.T) {
 
 	t.Run("Deduplicate", func(t *testing.T) {
 		docs := DocumentCollection{
-			&Document{ID: "1", PageContent: "doc1"},
-			&Document{ID: "2", PageContent: "doc2"},
-			&Document{ID: "1", PageContent: "doc1 duplicate"},
+			&interfaces.Document{ID: "1", PageContent: "doc1"},
+			&interfaces.Document{ID: "2", PageContent: "doc2"},
+			&interfaces.Document{ID: "1", PageContent: "doc1 duplicate"},
 		}
 
 		unique := docs.Deduplicate()
@@ -146,7 +148,7 @@ func TestVectorStoreRetriever(t *testing.T) {
 		vectorStore := NewMockVectorStore()
 
 		// 添加文档
-		docs := []*Document{
+		docs := []*interfaces.Document{
 			NewDocument("Kubernetes is a container orchestration platform", map[string]interface{}{
 				"source": "k8s_intro.txt",
 			}),
@@ -194,7 +196,7 @@ func TestVectorStoreRetriever(t *testing.T) {
 
 	t.Run("Invoke interface", func(t *testing.T) {
 		vectorStore := NewMockVectorStore()
-		docs := []*Document{
+		docs := []*interfaces.Document{
 			NewDocument("Test document", nil),
 		}
 
@@ -217,7 +219,7 @@ func TestVectorStoreRetriever(t *testing.T) {
 }
 
 func TestKeywordRetriever(t *testing.T) {
-	docs := []*Document{
+	docs := []*interfaces.Document{
 		NewDocument("Kubernetes cluster management and container orchestration", map[string]interface{}{
 			"id": "doc1",
 		}),
@@ -294,7 +296,7 @@ func TestKeywordRetriever(t *testing.T) {
 }
 
 func TestHybridRetriever(t *testing.T) {
-	docs := []*Document{
+	docs := []*interfaces.Document{
 		NewDocument("Kubernetes is a container orchestration platform", nil),
 		NewDocument("Docker containers are lightweight and portable", nil),
 		NewDocument("Python is great for machine learning", nil),
@@ -368,7 +370,7 @@ func TestHybridRetriever(t *testing.T) {
 }
 
 func TestEnsembleRetriever(t *testing.T) {
-	docs := []*Document{
+	docs := []*interfaces.Document{
 		NewDocument("Kubernetes cluster management", nil),
 		NewDocument("Docker container technology", nil),
 		NewDocument("Python programming language", nil),
@@ -412,7 +414,7 @@ func TestEnsembleRetriever(t *testing.T) {
 			config,
 		)
 
-		docs := []*Document{NewDocument("test", nil)}
+		docs := []*interfaces.Document{NewDocument("test", nil)}
 		retriever := NewKeywordRetriever(docs, config)
 
 		ensemble.AddRetriever(retriever, 1.0)
@@ -424,7 +426,7 @@ func TestEnsembleRetriever(t *testing.T) {
 }
 
 func TestReranker(t *testing.T) {
-	docs := []*Document{
+	docs := []*interfaces.Document{
 		{ID: "1", PageContent: "Kubernetes container orchestration platform", Score: 0.6},
 		{ID: "2", PageContent: "Docker container runtime technology", Score: 0.7},
 		{ID: "3", PageContent: "Python programming language", Score: 0.5},
@@ -465,7 +467,7 @@ func TestReranker(t *testing.T) {
 
 	t.Run("RerankingRetriever", func(t *testing.T) {
 		// 创建基础检索器
-		keywordDocs := []*Document{
+		keywordDocs := []*interfaces.Document{
 			NewDocument("Kubernetes container orchestration", nil),
 			NewDocument("Docker container runtime", nil),
 			NewDocument("Python programming", nil),

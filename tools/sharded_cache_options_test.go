@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -111,7 +112,7 @@ func TestShardedCacheWithOptions(t *testing.T) {
 
 // TestShardedCacheWarmup tests cache warmup functionality
 func TestShardedCacheWarmup(t *testing.T) {
-	warmupData := map[string]*ToolOutput{
+	warmupData := map[string]*interfaces.ToolOutput{
 		"key1": {Result: "value1"},
 		"key2": {Result: "value2"},
 		"key3": {Result: "value3"},
@@ -266,7 +267,7 @@ func TestAdaptiveCleanup(t *testing.T) {
 	// Fill cache with short-lived entries
 	for i := 0; i < 50; i++ {
 		key := fmt.Sprintf("key%d", i)
-		output := &ToolOutput{Result: fmt.Sprintf("value%d", i)}
+		output := &interfaces.ToolOutput{Result: fmt.Sprintf("value%d", i)}
 		err := cache.Set(ctx, key, output, 100*time.Millisecond)
 		require.NoError(t, err)
 	}
@@ -303,7 +304,7 @@ func TestAutoTuning(t *testing.T) {
 			defer wg.Done()
 			for j := 0; j < 100; j++ {
 				key := fmt.Sprintf("worker%d:key%d", worker, j)
-				output := &ToolOutput{Result: fmt.Sprintf("value%d", j)}
+				output := &interfaces.ToolOutput{Result: fmt.Sprintf("value%d", j)}
 				_ = cache.Set(ctx, key, output, 5*time.Minute)
 				_, _ = cache.Get(ctx, key)
 				time.Sleep(time.Millisecond)
@@ -374,7 +375,7 @@ func TestConcurrentOperationsWithOptions(t *testing.T) {
 					defer wg.Done()
 					for j := 0; j < numOperations; j++ {
 						key := fmt.Sprintf("w%d:k%d", worker, j)
-						output := &ToolOutput{Result: fmt.Sprintf("v%d", j)}
+						output := &interfaces.ToolOutput{Result: fmt.Sprintf("v%d", j)}
 
 						// Set
 						if err := cache.Set(ctx, key, output, time.Minute); err != nil {
@@ -457,7 +458,7 @@ func BenchmarkShardedCacheWithOptions(b *testing.B) {
 			defer cache.Close()
 
 			ctx := context.Background()
-			output := &ToolOutput{Result: "benchmark value"}
+			output := &interfaces.ToolOutput{Result: "benchmark value"}
 
 			b.ResetTimer()
 			b.RunParallel(func(pb *testing.PB) {

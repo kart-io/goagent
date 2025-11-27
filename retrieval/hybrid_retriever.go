@@ -3,6 +3,8 @@ package retrieval
 import (
 	"context"
 
+	"github.com/kart-io/goagent/interfaces"
+
 	agentErrors "github.com/kart-io/goagent/errors"
 )
 
@@ -65,10 +67,10 @@ func NewHybridRetriever(
 }
 
 // GetRelevantDocuments 检索相关文档
-func (h *HybridRetriever) GetRelevantDocuments(ctx context.Context, query string) ([]*Document, error) {
+func (h *HybridRetriever) GetRelevantDocuments(ctx context.Context, query string) ([]*interfaces.Document, error) {
 	// 并发执行两种检索
 	type result struct {
-		docs []*Document
+		docs []*interfaces.Document
 		err  error
 	}
 
@@ -105,7 +107,7 @@ func (h *HybridRetriever) GetRelevantDocuments(ctx context.Context, query string
 	}
 
 	// 融合结果
-	var fused []*Document
+	var fused []*interfaces.Document
 	switch h.FusionStrategy {
 	case FusionStrategyWeightedSum:
 		fused = h.weightedSumFusion(vectorResult.docs, keywordResult.docs)
@@ -132,13 +134,13 @@ func (h *HybridRetriever) GetRelevantDocuments(ctx context.Context, query string
 }
 
 // weightedSumFusion 加权求和融合
-func (h *HybridRetriever) weightedSumFusion(vectorDocs, keywordDocs []*Document) []*Document {
+func (h *HybridRetriever) weightedSumFusion(vectorDocs, keywordDocs []*interfaces.Document) []*interfaces.Document {
 	// 归一化分数
 	vectorNormalized := normalizeScores(vectorDocs)
 	keywordNormalized := normalizeScores(keywordDocs)
 
 	// 创建文档映射
-	docMap := make(map[string]*Document)
+	docMap := make(map[string]*interfaces.Document)
 
 	// 添加向量检索结果
 	for i, doc := range vectorNormalized {
@@ -161,7 +163,7 @@ func (h *HybridRetriever) weightedSumFusion(vectorDocs, keywordDocs []*Document)
 	}
 
 	// 转换为列表
-	results := make([]*Document, 0, len(docMap))
+	results := make([]*interfaces.Document, 0, len(docMap))
 	for _, doc := range docMap {
 		results = append(results, doc)
 	}
@@ -173,11 +175,11 @@ func (h *HybridRetriever) weightedSumFusion(vectorDocs, keywordDocs []*Document)
 //
 // RRF = sum(1/(k + rank))
 // k 通常设为 60
-func (h *HybridRetriever) rrfFusion(vectorDocs, keywordDocs []*Document) []*Document {
+func (h *HybridRetriever) rrfFusion(vectorDocs, keywordDocs []*interfaces.Document) []*interfaces.Document {
 	const k = 60.0
 
 	// 创建文档映射
-	docMap := make(map[string]*Document)
+	docMap := make(map[string]*interfaces.Document)
 	docScores := make(map[string]float64)
 
 	// 处理向量检索结果
@@ -199,7 +201,7 @@ func (h *HybridRetriever) rrfFusion(vectorDocs, keywordDocs []*Document) []*Docu
 	}
 
 	// 设置最终分数
-	results := make([]*Document, 0, len(docMap))
+	results := make([]*interfaces.Document, 0, len(docMap))
 	for id, doc := range docMap {
 		doc.Score = docScores[id]
 		results = append(results, doc)
@@ -211,9 +213,9 @@ func (h *HybridRetriever) rrfFusion(vectorDocs, keywordDocs []*Document) []*Docu
 // combSumFusion 组合求和融合
 //
 // 直接累加所有检索器的原始分数
-func (h *HybridRetriever) combSumFusion(vectorDocs, keywordDocs []*Document) []*Document {
+func (h *HybridRetriever) combSumFusion(vectorDocs, keywordDocs []*interfaces.Document) []*interfaces.Document {
 	// 创建文档映射
-	docMap := make(map[string]*Document)
+	docMap := make(map[string]*interfaces.Document)
 
 	// 添加向量检索结果
 	for _, doc := range vectorDocs {
@@ -233,7 +235,7 @@ func (h *HybridRetriever) combSumFusion(vectorDocs, keywordDocs []*Document) []*
 	}
 
 	// 转换为列表
-	results := make([]*Document, 0, len(docMap))
+	results := make([]*interfaces.Document, 0, len(docMap))
 	for _, doc := range docMap {
 		results = append(results, doc)
 	}
@@ -255,7 +257,7 @@ func (h *HybridRetriever) WithWeights(vectorWeight, keywordWeight float64) *Hybr
 }
 
 // normalizeScores 归一化分数到 0-1 范围
-func normalizeScores(docs []*Document) []*Document {
+func normalizeScores(docs []*interfaces.Document) []*interfaces.Document {
 	if len(docs) == 0 {
 		return docs
 	}
@@ -280,7 +282,7 @@ func normalizeScores(docs []*Document) []*Document {
 		return docs
 	}
 
-	normalized := make([]*Document, len(docs))
+	normalized := make([]*interfaces.Document, len(docs))
 	for i, doc := range docs {
 		docCopy := doc.Clone()
 		docCopy.Score = (doc.Score - minScore) / scoreRange

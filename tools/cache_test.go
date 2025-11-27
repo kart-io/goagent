@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/kart-io/goagent/interfaces"
 )
 
 func TestMemoryToolCache(t *testing.T) {
@@ -20,7 +22,7 @@ func TestMemoryToolCache(t *testing.T) {
 
 	t.Run("Set and Get", func(t *testing.T) {
 		key := "test_key"
-		output := &ToolOutput{
+		output := &interfaces.ToolOutput{
 			Result:  "test result",
 			Success: true,
 		}
@@ -49,7 +51,7 @@ func TestMemoryToolCache(t *testing.T) {
 
 	t.Run("TTL expiration", func(t *testing.T) {
 		key := "expiring_key"
-		output := &ToolOutput{Result: "data", Success: true}
+		output := &interfaces.ToolOutput{Result: "data", Success: true}
 
 		err := cache.Set(ctx, key, output, 100*time.Millisecond)
 		if err != nil {
@@ -80,9 +82,9 @@ func TestMemoryToolCache(t *testing.T) {
 		defer smallCache.Close() // Prevent goroutine leak
 
 		// 添加 3 个项，应该淘汰最老的
-		_ = smallCache.Set(ctx, "key1", &ToolOutput{Result: "1", Success: true}, 5*time.Minute)
-		_ = smallCache.Set(ctx, "key2", &ToolOutput{Result: "2", Success: true}, 5*time.Minute)
-		_ = smallCache.Set(ctx, "key3", &ToolOutput{Result: "3", Success: true}, 5*time.Minute)
+		_ = smallCache.Set(ctx, "key1", &interfaces.ToolOutput{Result: "1", Success: true}, 5*time.Minute)
+		_ = smallCache.Set(ctx, "key2", &interfaces.ToolOutput{Result: "2", Success: true}, 5*time.Minute)
+		_ = smallCache.Set(ctx, "key3", &interfaces.ToolOutput{Result: "3", Success: true}, 5*time.Minute)
 
 		// key1 应该被淘汰
 		_, found := smallCache.Get(ctx, "key1")
@@ -104,7 +106,7 @@ func TestMemoryToolCache(t *testing.T) {
 
 	t.Run("Delete", func(t *testing.T) {
 		key := "delete_test"
-		output := &ToolOutput{Result: "data", Success: true}
+		output := &interfaces.ToolOutput{Result: "data", Success: true}
 
 		_ = cache.Set(ctx, key, output, 1*time.Minute)
 
@@ -120,8 +122,8 @@ func TestMemoryToolCache(t *testing.T) {
 	})
 
 	t.Run("Clear", func(t *testing.T) {
-		_ = cache.Set(ctx, "key1", &ToolOutput{Result: "1", Success: true}, 1*time.Minute)
-		_ = cache.Set(ctx, "key2", &ToolOutput{Result: "2", Success: true}, 1*time.Minute)
+		_ = cache.Set(ctx, "key1", &interfaces.ToolOutput{Result: "1", Success: true}, 1*time.Minute)
+		_ = cache.Set(ctx, "key2", &interfaces.ToolOutput{Result: "2", Success: true}, 1*time.Minute)
 
 		err := cache.Clear()
 		if err != nil {
@@ -139,7 +141,7 @@ func TestMemoryToolCache(t *testing.T) {
 
 		// 测试命中
 		key := "stats_test"
-		_ = testCache.Set(ctx, key, &ToolOutput{Result: "data", Success: true}, 1*time.Minute)
+		_ = testCache.Set(ctx, key, &interfaces.ToolOutput{Result: "data", Success: true}, 1*time.Minute)
 		testCache.Get(ctx, key)
 
 		// 测试未命中
@@ -187,7 +189,7 @@ func TestMemoryToolCache(t *testing.T) {
 		testCache := NewMemoryToolCache(shortConfig)
 
 		// Add an item with short TTL
-		_ = testCache.Set(ctx, "expiring", &ToolOutput{Result: "data", Success: true}, 50*time.Millisecond)
+		_ = testCache.Set(ctx, "expiring", &interfaces.ToolOutput{Result: "data", Success: true}, 50*time.Millisecond)
 
 		// Wait for item to expire
 		time.Sleep(150 * time.Millisecond)
@@ -218,9 +220,9 @@ func TestCachedTool(t *testing.T) {
 		"test_tool",
 		"A test tool",
 		`{"type": "object"}`,
-		func(ctx context.Context, input *ToolInput) (*ToolOutput, error) {
+		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 			executionCount++
-			return &ToolOutput{
+			return &interfaces.ToolOutput{
 				Result:  "result",
 				Success: true,
 			}, nil
@@ -230,7 +232,7 @@ func TestCachedTool(t *testing.T) {
 	cachedTool := NewCachedTool(baseTool, cache, 1*time.Minute)
 
 	t.Run("Cache hit on second call", func(t *testing.T) {
-		input := &ToolInput{
+		input := &interfaces.ToolInput{
 			Args: map[string]interface{}{"param": "value"},
 		}
 
@@ -258,8 +260,8 @@ func TestCachedTool(t *testing.T) {
 	t.Run("Different inputs result in cache miss", func(t *testing.T) {
 		executionCount = 0
 
-		input1 := &ToolInput{Args: map[string]interface{}{"param": "value1"}}
-		input2 := &ToolInput{Args: map[string]interface{}{"param": "value2"}}
+		input1 := &interfaces.ToolInput{Args: map[string]interface{}{"param": "value1"}}
+		input2 := &interfaces.ToolInput{Args: map[string]interface{}{"param": "value2"}}
 
 		_, _ = cachedTool.Invoke(ctx, input1)
 		_, _ = cachedTool.Invoke(ctx, input2)
@@ -279,7 +281,7 @@ func BenchmarkMemoryToolCache_Set(b *testing.B) {
 	})
 	defer cache.Close() // Prevent goroutine leak
 
-	output := &ToolOutput{Result: "benchmark data", Success: true}
+	output := &interfaces.ToolOutput{Result: "benchmark data", Success: true}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -298,7 +300,7 @@ func BenchmarkMemoryToolCache_Get(b *testing.B) {
 	defer cache.Close() // Prevent goroutine leak
 
 	// 预填充缓存
-	output := &ToolOutput{Result: "benchmark data", Success: true}
+	output := &interfaces.ToolOutput{Result: "benchmark data", Success: true}
 	for i := 0; i < 100; i++ {
 		key := string(rune('A' + (i % 26)))
 		_ = cache.Set(ctx, key, output, 1*time.Minute)
@@ -318,8 +320,8 @@ func BenchmarkCacheKeyGeneration(b *testing.B) {
 		"benchmark_tool",
 		"A tool for benchmarking",
 		`{"type": "object"}`,
-		func(ctx context.Context, input *ToolInput) (*ToolOutput, error) {
-			return &ToolOutput{Result: "result", Success: true}, nil
+		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+			return &interfaces.ToolOutput{Result: "result", Success: true}, nil
 		},
 	)
 
@@ -333,7 +335,7 @@ func BenchmarkCacheKeyGeneration(b *testing.B) {
 	cachedTool := NewCachedTool(baseTool, cache, 1*time.Minute)
 
 	// Test input with various types
-	input := &ToolInput{
+	input := &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"string_param": "test_value",
 			"int_param":    42,
@@ -356,8 +358,8 @@ func BenchmarkCacheKeyGenerationSimple(b *testing.B) {
 		"simple_tool",
 		"A simple tool",
 		`{"type": "object"}`,
-		func(ctx context.Context, input *ToolInput) (*ToolOutput, error) {
-			return &ToolOutput{Result: "result", Success: true}, nil
+		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+			return &interfaces.ToolOutput{Result: "result", Success: true}, nil
 		},
 	)
 
@@ -370,7 +372,7 @@ func BenchmarkCacheKeyGenerationSimple(b *testing.B) {
 
 	cachedTool := NewCachedTool(baseTool, cache, 1*time.Minute)
 
-	input := &ToolInput{
+	input := &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"query": "test query",
 		},
