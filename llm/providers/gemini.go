@@ -15,12 +15,14 @@ import (
 	"github.com/kart-io/goagent/interfaces"
 
 	agentllm "github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/common"
 	"github.com/kart-io/goagent/llm/constants"
 )
 
 // GeminiProvider implements LLM interface for Google Gemini
 type GeminiProvider struct {
-	*BaseProvider
+	*common.BaseProvider
+	*common.ProviderCapabilities
 	client    *genai.Client
 	model     *genai.GenerativeModel
 	modelName string
@@ -29,7 +31,7 @@ type GeminiProvider struct {
 // NewGeminiWithOptions creates a new Gemini provider using options pattern
 func NewGeminiWithOptions(opts ...agentllm.ClientOption) (*GeminiProvider, error) {
 	// 创建 BaseProvider，统一处理 Options
-	base := NewBaseProvider(opts...)
+	base := common.NewBaseProvider(opts...)
 
 	// 应用 Provider 特定的默认值
 	base.ApplyProviderDefaults(
@@ -73,9 +75,16 @@ func NewGeminiWithOptions(opts ...agentllm.ClientOption) (*GeminiProvider, error
 
 	provider := &GeminiProvider{
 		BaseProvider: base,
-		client:       client,
-		model:        model,
-		modelName:    modelName,
+		ProviderCapabilities: common.NewProviderCapabilities(
+			agentllm.CapabilityCompletion,
+			agentllm.CapabilityChat,
+			agentllm.CapabilityStreaming,
+			agentllm.CapabilityToolCalling,
+			agentllm.CapabilityEmbedding,
+		),
+		client:    client,
+		model:     model,
+		modelName: modelName,
 	}
 
 	return provider, nil
@@ -207,7 +216,7 @@ func (p *GeminiProvider) Stream(ctx context.Context, prompt string) (<-chan stri
 }
 
 // GenerateWithTools implements tool calling
-func (p *GeminiProvider) GenerateWithTools(ctx context.Context, prompt string, tools []interfaces.Tool) (*ToolCallResponse, error) {
+func (p *GeminiProvider) GenerateWithTools(ctx context.Context, prompt string, tools []interfaces.Tool) (*common.ToolCallResponse, error) {
 	// Convert tools to Gemini function declarations
 	functionDeclarations := p.convertToolsToFunctions(tools)
 
@@ -244,7 +253,7 @@ func (p *GeminiProvider) GenerateWithTools(ctx context.Context, prompt string, t
 		return nil, agentErrors.NewLLMResponseError("gemini", modelName, "no candidates returned")
 	}
 
-	result := &ToolCallResponse{}
+	result := &common.ToolCallResponse{}
 
 	// Process response parts
 	for _, part := range resp.Candidates[0].Content.Parts {
@@ -258,8 +267,8 @@ func (p *GeminiProvider) GenerateWithTools(ctx context.Context, prompt string, t
 				args[k] = val
 			}
 
-			result.ToolCalls = append(result.ToolCalls, ToolCall{
-				ID:        generateCallID(),
+			result.ToolCalls = append(result.ToolCalls, common.ToolCall{
+				ID:        common.GenerateCallID(),
 				Name:      v.Name,
 				Arguments: args,
 			})
@@ -270,8 +279,8 @@ func (p *GeminiProvider) GenerateWithTools(ctx context.Context, prompt string, t
 }
 
 // StreamWithTools implements streaming tool calls
-func (p *GeminiProvider) StreamWithTools(ctx context.Context, prompt string, tools []interfaces.Tool) (<-chan ToolChunk, error) {
-	chunks := make(chan ToolChunk, 100)
+func (p *GeminiProvider) StreamWithTools(ctx context.Context, prompt string, tools []interfaces.Tool) (<-chan common.ToolChunk, error) {
+	chunks := make(chan common.ToolChunk, 100)
 
 	// Convert tools to Gemini function declarations
 	functionDeclarations := p.convertToolsToFunctions(tools)
@@ -307,7 +316,7 @@ func (p *GeminiProvider) StreamWithTools(ctx context.Context, prompt string, too
 			}
 			if err != nil {
 				select {
-				case chunks <- ToolChunk{Type: "error", Value: err}:
+				case chunks <- common.ToolChunk{Type: "error", Value: err}:
 					// Successfully sent
 				case <-ctx.Done():
 					// Context cancelled, exit immediately
@@ -320,7 +329,7 @@ func (p *GeminiProvider) StreamWithTools(ctx context.Context, prompt string, too
 				switch v := part.(type) {
 				case genai.Text:
 					select {
-					case chunks <- ToolChunk{Type: "content", Value: string(v)}:
+					case chunks <- common.ToolChunk{Type: "content", Value: string(v)}:
 						// Successfully sent
 					case <-ctx.Done():
 						// Context cancelled, exit immediately
@@ -328,7 +337,7 @@ func (p *GeminiProvider) StreamWithTools(ctx context.Context, prompt string, too
 					}
 				case *genai.FunctionCall:
 					select {
-					case chunks <- ToolChunk{Type: "tool_name", Value: v.Name}:
+					case chunks <- common.ToolChunk{Type: "tool_name", Value: v.Name}:
 						// Successfully sent
 					case <-ctx.Done():
 						// Context cancelled, exit immediately
@@ -338,7 +347,7 @@ func (p *GeminiProvider) StreamWithTools(ctx context.Context, prompt string, too
 					// Send args as chunks
 					for k, val := range v.Args {
 						select {
-						case chunks <- ToolChunk{
+						case chunks <- common.ToolChunk{
 							Type:  "tool_args",
 							Value: map[string]interface{}{k: val},
 						}:
@@ -356,10 +365,10 @@ func (p *GeminiProvider) StreamWithTools(ctx context.Context, prompt string, too
 					}
 
 					select {
-					case chunks <- ToolChunk{
+					case chunks <- common.ToolChunk{
 						Type: "tool_call",
-						Value: ToolCall{
-							ID:        generateCallID(),
+						Value: common.ToolCall{
+							ID:        common.GenerateCallID(),
 							Name:      v.Name,
 							Arguments: args,
 						},
@@ -392,6 +401,11 @@ func (p *GeminiProvider) Embed(ctx context.Context, text string) ([]float64, err
 // Provider returns the provider type
 func (p *GeminiProvider) Provider() constants.Provider {
 	return constants.ProviderGemini
+}
+
+// ProviderName returns the provider name as a string
+func (p *GeminiProvider) ProviderName() string {
+	return string(constants.ProviderGemini)
 }
 
 // IsAvailable checks if the provider is available
@@ -453,7 +467,7 @@ type GeminiStreamingProvider struct {
 
 // NewGeminiStreaming creates a streaming-optimized provider
 func NewGeminiStreaming(config *agentllm.LLMOptions) (*GeminiStreamingProvider, error) {
-	base, err := NewGeminiWithOptions(ConfigToOptions(config)...)
+	base, err := NewGeminiWithOptions(common.ConfigToOptions(config)...)
 	if err != nil {
 		return nil, err
 	}

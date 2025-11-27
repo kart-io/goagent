@@ -8,14 +8,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kart-io/goagent/llm/constants"
-	"github.com/kart-io/goagent/utils/json"
-
 	"github.com/sashabaranov/go-openai"
 
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	agentllm "github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/common"
+	"github.com/kart-io/goagent/llm/constants"
+	"github.com/kart-io/goagent/utils/json"
 )
 
 // messageSlicePool is a sync.Pool for reusing message slices
@@ -30,15 +30,15 @@ var messageSlicePool = sync.Pool{
 
 // OpenAIProvider implements LLM interface for OpenAI
 type OpenAIProvider struct {
-	*BaseProvider
-	*ProviderCapabilities
+	*common.BaseProvider
+	*common.ProviderCapabilities
 	client *openai.Client
 }
 
 // NewOpenAIWithOptions creates a new OpenAI provider using options pattern
 func NewOpenAIWithOptions(opts ...agentllm.ClientOption) (*OpenAIProvider, error) {
 	// 创建 BaseProvider，统一处理 Options
-	base := NewBaseProvider(opts...)
+	base := common.NewBaseProvider(opts...)
 
 	// 应用 Provider 特定的默认值
 	base.ApplyProviderDefaults(
@@ -62,7 +62,7 @@ func NewOpenAIWithOptions(opts ...agentllm.ClientOption) (*OpenAIProvider, error
 
 	provider := &OpenAIProvider{
 		BaseProvider: base,
-		ProviderCapabilities: NewProviderCapabilities(
+		ProviderCapabilities: common.NewProviderCapabilities(
 			agentllm.CapabilityCompletion,
 			agentllm.CapabilityChat,
 			agentllm.CapabilityStreaming,
@@ -205,7 +205,7 @@ func (p *OpenAIProvider) Stream(ctx context.Context, prompt string) (<-chan stri
 }
 
 // GenerateWithTools implements tool calling
-func (p *OpenAIProvider) GenerateWithTools(ctx context.Context, prompt string, tools []interfaces.Tool) (*ToolCallResponse, error) {
+func (p *OpenAIProvider) GenerateWithTools(ctx context.Context, prompt string, tools []interfaces.Tool) (*common.ToolCallResponse, error) {
 	// Convert tools to OpenAI function format
 	functions := p.convertToolsToFunctions(tools)
 
@@ -234,7 +234,7 @@ func (p *OpenAIProvider) GenerateWithTools(ctx context.Context, prompt string, t
 	}
 
 	choice := resp.Choices[0]
-	result := &ToolCallResponse{
+	result := &common.ToolCallResponse{
 		Content: choice.Message.Content,
 	}
 
@@ -246,9 +246,9 @@ func (p *OpenAIProvider) GenerateWithTools(ctx context.Context, prompt string, t
 				WithContext("function_name", choice.Message.FunctionCall.Name)
 		}
 
-		result.ToolCalls = []ToolCall{
+		result.ToolCalls = []common.ToolCall{
 			{
-				ID:        generateCallID(),
+				ID:        common.GenerateCallID(),
 				Name:      choice.Message.FunctionCall.Name,
 				Arguments: args,
 			},
@@ -259,8 +259,8 @@ func (p *OpenAIProvider) GenerateWithTools(ctx context.Context, prompt string, t
 }
 
 // StreamWithTools implements streaming tool calls
-func (p *OpenAIProvider) StreamWithTools(ctx context.Context, prompt string, tools []interfaces.Tool) (<-chan ToolChunk, error) {
-	chunks := make(chan ToolChunk, 100)
+func (p *OpenAIProvider) StreamWithTools(ctx context.Context, prompt string, tools []interfaces.Tool) (<-chan common.ToolChunk, error) {
+	chunks := make(chan common.ToolChunk, 100)
 	functions := p.convertToolsToFunctions(tools)
 
 	model := p.GetModel("")
@@ -287,7 +287,7 @@ func (p *OpenAIProvider) StreamWithTools(ctx context.Context, prompt string, too
 		defer close(chunks)
 		defer func() { _ = stream.Close() }()
 
-		var currentCall *ToolCall
+		var currentCall *common.ToolCall
 		var argsBuffer string
 
 		for {
@@ -300,7 +300,7 @@ func (p *OpenAIProvider) StreamWithTools(ctx context.Context, prompt string, too
 						if err := json.Unmarshal([]byte(argsBuffer), &args); err == nil {
 							currentCall.Arguments = args
 							select {
-							case chunks <- ToolChunk{Type: "tool_call", Value: currentCall}:
+							case chunks <- common.ToolChunk{Type: "tool_call", Value: currentCall}:
 								// Successfully sent
 							case <-ctx.Done():
 								// Context cancelled, exit immediately
@@ -322,7 +322,7 @@ func (p *OpenAIProvider) StreamWithTools(ctx context.Context, prompt string, too
 			// Handle content
 			if choice.Delta.Content != "" {
 				select {
-				case chunks <- ToolChunk{Type: "content", Value: choice.Delta.Content}:
+				case chunks <- common.ToolChunk{Type: "content", Value: choice.Delta.Content}:
 					// Successfully sent
 				case <-ctx.Done():
 					// Context cancelled, exit immediately
@@ -340,7 +340,7 @@ func (p *OpenAIProvider) StreamWithTools(ctx context.Context, prompt string, too
 						if err := json.Unmarshal([]byte(argsBuffer), &args); err == nil {
 							currentCall.Arguments = args
 							select {
-							case chunks <- ToolChunk{Type: "tool_call", Value: currentCall}:
+							case chunks <- common.ToolChunk{Type: "tool_call", Value: currentCall}:
 								// Successfully sent
 							case <-ctx.Done():
 								// Context cancelled, exit immediately
@@ -349,13 +349,13 @@ func (p *OpenAIProvider) StreamWithTools(ctx context.Context, prompt string, too
 						}
 					}
 
-					currentCall = &ToolCall{
-						ID:   generateCallID(),
+					currentCall = &common.ToolCall{
+						ID:   common.GenerateCallID(),
 						Name: choice.Delta.FunctionCall.Name,
 					}
 					argsBuffer = ""
 					select {
-					case chunks <- ToolChunk{Type: "tool_name", Value: choice.Delta.FunctionCall.Name}:
+					case chunks <- common.ToolChunk{Type: "tool_name", Value: choice.Delta.FunctionCall.Name}:
 						// Successfully sent
 					case <-ctx.Done():
 						// Context cancelled, exit immediately
@@ -366,7 +366,7 @@ func (p *OpenAIProvider) StreamWithTools(ctx context.Context, prompt string, too
 				if choice.Delta.FunctionCall.Arguments != "" {
 					argsBuffer += choice.Delta.FunctionCall.Arguments
 					select {
-					case chunks <- ToolChunk{Type: "tool_args", Value: choice.Delta.FunctionCall.Arguments}:
+					case chunks <- common.ToolChunk{Type: "tool_args", Value: choice.Delta.FunctionCall.Arguments}:
 						// Successfully sent
 					case <-ctx.Done():
 						// Context cancelled, exit immediately
@@ -485,7 +485,7 @@ type OpenAIStreamingProvider struct {
 
 // NewOpenAIStreaming creates a streaming-optimized provider
 func NewOpenAIStreaming(config *agentllm.LLMOptions) (*OpenAIStreamingProvider, error) {
-	base, err := NewOpenAIWithOptions(ConfigToOptions(config)...)
+	base, err := NewOpenAIWithOptions(common.ConfigToOptions(config)...)
 	if err != nil {
 		return nil, err
 	}

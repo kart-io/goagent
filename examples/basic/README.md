@@ -22,7 +22,7 @@
 展示不同 LLM 提供商的一致性使用
 
 ### 06-all-providers
-展示如何使用所有支持的 LLM 提供商
+展示如何使用所有支持的 LLM 提供商（传统方式）
 
 ### 07-smart-agent-with-tools ✨ 新增
 **智能 Agent 示例 - 时间获取与 API 调用**
@@ -44,5 +44,37 @@
 cd 07-smart-agent-with-tools
 go run main.go
 ```
+
+### 13-provider-registry ✨ 推荐
+**Provider Registry - 动态 LLM Provider 管理**
+
+展示如何使用 Provider Registry 系统动态管理和创建 LLM Providers。
+
+**核心功能：**
+- 🔄 运行时动态选择 provider
+- 📋 列出所有可用 providers
+- 🔌 插件式架构，按需导入
+- 🎯 Provider fallback 链
+- 🧪 易于测试和 mock
+- ⚙️ 配置驱动的应用
+
+**示例场景：**
+- 基本用法：使用 `registry.New()` 创建 provider
+- 动态选择：根据配置选择 provider
+- 批量创建：同时管理多个 providers
+- Fallback 链：自动切换到可用 provider
+- A/B 测试：随机选择 provider
+
+**运行方式：**
+```bash
+cd 13-provider-registry
+go run main.go
+```
+
+**相关文档：**
+- [Registry 完整指南](../../llm/registry/README.md)
+- [Provider 使用对比](../../docs/guides/PROVIDER_USAGE_GUIDE.md)
+
+---
 
 查看各子目录以获取具体示例文档。

@@ -1,54 +1,15 @@
 package providers
 
-import (
-	"crypto/rand"
-	"encoding/hex"
-	"fmt"
-	"strconv"
-	"time"
+import "github.com/kart-io/goagent/llm/common"
 
-	agentErrors "github.com/kart-io/goagent/errors"
-)
+// ParseRetryAfter is now an alias to common.ParseRetryAfter for backward compatibility.
+// Deprecated: Use common.ParseRetryAfter directly.
+var parseRetryAfter = common.ParseRetryAfter
 
-// parseRetryAfter parses Retry-After header (seconds or HTTP-date)
-func parseRetryAfter(header string) int {
-	if header == "" {
-		return 60 // Default 60 seconds
-	}
+// GenerateCallID is now an alias to common.GenerateCallID for backward compatibility.
+// Deprecated: Use common.GenerateCallID directly.
+var generateCallID = common.GenerateCallID
 
-	// Try parsing as integer (seconds)
-	if seconds, err := strconv.Atoi(header); err == nil {
-		return seconds
-	}
-
-	// Try parsing as HTTP-date (RFC1123)
-	if t, err := time.Parse(time.RFC1123, header); err == nil {
-		return int(time.Until(t).Seconds())
-	}
-
-	return 60 // Fallback
-}
-
-// generateCallID generates a cryptographically secure unique ID for tool calls
-func generateCallID() string {
-	// Use crypto/rand for secure random number generation
-	b := make([]byte, 8)
-	if _, err := rand.Read(b); err != nil {
-		// Fallback to timestamp-based ID if crypto/rand fails
-		return fmt.Sprintf("call_%d", time.Now().UnixNano())
-	}
-	return fmt.Sprintf("call_%d_%s", time.Now().UnixNano(), hex.EncodeToString(b))
-}
-
-// isRetryable checks if an error is retryable based on its error code.
-// Retryable errors include rate limit errors, timeout errors, and general request errors.
-func isRetryable(err error) bool {
-	if err == nil {
-		return false
-	}
-
-	code := agentErrors.GetCode(err)
-	return code == agentErrors.CodeLLMRateLimit ||
-		code == agentErrors.CodeLLMTimeout ||
-		code == agentErrors.CodeLLMRequest
-}
+// IsRetryable is now an alias to common.IsRetryable for backward compatibility.
+// Deprecated: Use common.IsRetryable directly.
+var isRetryable = common.IsRetryable

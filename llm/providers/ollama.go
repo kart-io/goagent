@@ -8,6 +8,7 @@ import (
 	"time"
 
 	agentllm "github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/common"
 	"github.com/kart-io/goagent/llm/constants"
 	"github.com/kart-io/goagent/utils/json"
 
@@ -18,7 +19,7 @@ import (
 
 // OllamaClient Ollama LLM 客户端
 type OllamaClient struct {
-	*BaseProvider
+	*common.BaseProvider
 	baseURL string
 	client  *httpclient.Client
 }
@@ -26,7 +27,7 @@ type OllamaClient struct {
 // NewOllamaWithOptions 使用选项模式创建 Ollama 客户端
 func NewOllamaWithOptions(opts ...agentllm.ClientOption) (*OllamaClient, error) {
 	// 创建 BaseProvider，统一处理 Options
-	base := NewBaseProvider(opts...)
+	base := common.NewBaseProvider(opts...)
 
 	// 应用 Provider 特定的默认值（Ollama 不需要 API Key）
 	base.ApplyProviderDefaults(
@@ -44,7 +45,7 @@ func NewOllamaWithOptions(opts ...agentllm.ClientOption) (*OllamaClient, error) 
 	}
 
 	// 使用 BaseProvider 的 NewHTTPClient 方法创建 HTTP 客户端
-	client := base.NewHTTPClient(HTTPClientConfig{
+	client := base.NewHTTPClient(common.HTTPClientConfig{
 		Timeout: timeout,
 		Headers: map[string]string{
 			"Content-Type": "application/json",
