@@ -25,6 +25,13 @@ type KimiClient struct {
 	client  *httpclient.Client
 }
 
+// NewKimi 使用 LLMOptions 创建 Kimi provider（废弃）。
+// Deprecated: 使用 NewKimiWithOptions 代替。
+func NewKimi(config *agentllm.LLMOptions) (*KimiClient, error) {
+	opts := common.ConfigToOptions(config)
+	return NewKimiWithOptions(opts...)
+}
+
 // NewKimiWithOptions 使用选项模式创建 Kimi provider
 func NewKimiWithOptions(opts ...agentllm.ClientOption) (*KimiClient, error) {
 	// 创建 BaseProvider，统一处理 Options
