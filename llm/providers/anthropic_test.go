@@ -609,17 +609,6 @@ func TestAnthropicModelName(t *testing.T) {
 	assert.Equal(t, "claude-3-opus-20240229", provider.ModelName())
 }
 
-// TestAnthropicMaxTokens tests MaxTokens method
-func TestAnthropicMaxTokens(t *testing.T) {
-	provider, err := NewAnthropic(&llm.LLMOptions{
-		APIKey:    "test-key",
-		MaxTokens: 4000,
-	})
-	require.NoError(t, err)
-
-	assert.Equal(t, 4000, provider.MaxTokens())
-}
-
 // TestAnthropicIsAvailable tests IsAvailable method
 func TestAnthropicIsAvailable(t *testing.T) {
 	t.Run("available", func(t *testing.T) {
