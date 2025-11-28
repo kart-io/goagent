@@ -103,13 +103,13 @@ type AnthropicErrorDetails struct {
 // NewAnthropic creates a new Anthropic provider using LLMOptions (deprecated).
 // Deprecated: Use NewAnthropicWithOptions instead.
 func NewAnthropic(config *agentllm.LLMOptions) (*AnthropicProvider, error) {
-	opts := ConfigToOptions(config)
+	opts := common.ConfigToOptions(config)
 	return NewAnthropicWithOptions(opts...)
 }
 
 // NewAnthropicWithOptions creates a new Anthropic provider using options pattern.
 func NewAnthropicWithOptions(opts ...agentllm.ClientOption) (*AnthropicProvider, error) {
-	// Create BaseProvider with unified options handling
+	// Create common.BaseProvider with unified options handling
 	base := common.NewBaseProvider(opts...)
 
 	// Apply provider-specific default values
@@ -126,7 +126,7 @@ func NewAnthropicWithOptions(opts ...agentllm.ClientOption) (*AnthropicProvider,
 		return nil, err
 	}
 
-	// Create HTTP client using BaseProvider helper
+	// Create HTTP client using common.BaseProvider helper
 	client := base.NewHTTPClient(common.HTTPClientConfig{
 		Headers: map[string]string{
 			constants.HeaderContentType:      constants.ContentTypeJSON,
@@ -190,7 +190,7 @@ func (p *AnthropicProvider) buildRequest(req *agentllm.CompletionRequest) *Anthr
 		}
 	}
 
-	// Use BaseProvider's unified parameter handling
+	// Use common.BaseProvider's unified parameter handling
 	model := p.GetModel(req.Model)
 	maxTokens := p.GetMaxTokens(req.MaxTokens)
 	temperature := p.GetTemperature(req.Temperature)
@@ -231,7 +231,7 @@ func (p *AnthropicProvider) execute(ctx context.Context, req *AnthropicRequest) 
 	return &anthropicResp, nil
 }
 
-// handleHTTPError maps HTTP errors to AgentError using the shared MapHTTPError function.
+// handleHTTPError maps HTTP errors to AgentError using the shared common.MapHTTPError function.
 func (p *AnthropicProvider) handleHTTPError(resp *resty.Response, model string) error {
 	httpErr := common.RestyResponseToHTTPError(resp)
 	return common.MapHTTPError(httpErr, p.ProviderName(), model, p.parseErrorMessage)

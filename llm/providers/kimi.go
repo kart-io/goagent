@@ -34,7 +34,7 @@ func NewKimi(config *agentllm.LLMOptions) (*KimiClient, error) {
 
 // NewKimiWithOptions 使用选项模式创建 Kimi provider
 func NewKimiWithOptions(opts ...agentllm.ClientOption) (*KimiClient, error) {
-	// 创建 BaseProvider，统一处理 Options
+	// 创建 common.BaseProvider，统一处理 Options
 	base := common.NewBaseProvider(opts...)
 
 	// 应用 Provider 特定的默认值
@@ -51,7 +51,7 @@ func NewKimiWithOptions(opts ...agentllm.ClientOption) (*KimiClient, error) {
 		return nil, err
 	}
 
-	// 使用 BaseProvider 的 NewHTTPClient 方法创建 HTTP 客户端
+	// 使用 common.BaseProvider 的 NewHTTPClient 方法创建 HTTP 客户端
 	client := base.NewHTTPClient(common.HTTPClientConfig{
 		Timeout: base.GetTimeout(),
 		Headers: map[string]string{
@@ -63,9 +63,9 @@ func NewKimiWithOptions(opts ...agentllm.ClientOption) (*KimiClient, error) {
 
 	return &KimiClient{
 		BaseProvider: base,
-		apiKey:       base.Config.APIKey,
-		baseURL:      strings.TrimRight(base.Config.BaseURL, "/"),
-		client:       client,
+		apiKey:              base.Config.APIKey,
+		baseURL:             strings.TrimRight(base.Config.BaseURL, "/"),
+		client:              client,
 	}, nil
 }
 

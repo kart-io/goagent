@@ -2,6 +2,7 @@ package providers
 
 import (
 	"fmt"
+	"github.com/kart-io/goagent/llm/common"
 	"time"
 
 	agentllm "github.com/kart-io/goagent/llm"
@@ -12,8 +13,9 @@ import (
 // ClientFactory 统一的客户端工厂
 // Deprecated: 使用 llm/registry.New() 代替。
 // 迁移示例:
-//   import _ "github.com/kart-io/goagent/contrib/llm-providers/openai"
-//   client, err := registry.New(constants.ProviderOpenAI, opts...)
+//
+//	import _ "github.com/kart-io/goagent/contrib/llm-providers/openai"
+//	client, err := registry.New(constants.ProviderOpenAI, opts...)
 type ClientFactory struct{}
 
 // NewClientFactory 创建新的客户端工厂
@@ -32,7 +34,7 @@ func (f *ClientFactory) CreateClient(config *agentllm.LLMOptions) (agentllm.Clie
 	}
 
 	// 将配置转换为 Options，使用统一的 WithOptions 版本
-	opts := ConfigToOptions(config)
+	opts := common.ConfigToOptions(config)
 
 	// 优先尝试从 registry 创建（支持 contrib providers）
 	client, err := registry.New(config.Provider, opts...)

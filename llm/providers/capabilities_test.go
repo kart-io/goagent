@@ -1,6 +1,7 @@
 package providers
 
 import (
+	"github.com/kart-io/goagent/llm/common"
 	"testing"
 
 	agentllm "github.com/kart-io/goagent/llm"
@@ -8,7 +9,7 @@ import (
 )
 
 func TestNewProviderCapabilities(t *testing.T) {
-	caps := NewProviderCapabilities(
+	caps := common.NewProviderCapabilities(
 		agentllm.CapabilityChat,
 		agentllm.CapabilityStreaming,
 		agentllm.CapabilityToolCalling,
@@ -21,27 +22,27 @@ func TestNewProviderCapabilities(t *testing.T) {
 }
 
 func TestNewProviderCapabilities_Empty(t *testing.T) {
-	caps := NewProviderCapabilities()
+	caps := common.NewProviderCapabilities()
 
 	assert.NotNil(t, caps)
 	assert.False(t, caps.HasCapability(agentllm.CapabilityChat))
 }
 
 func TestProviderCapabilities_HasCapability(t *testing.T) {
-	caps := NewProviderCapabilities(agentllm.CapabilityChat)
+	caps := common.NewProviderCapabilities(agentllm.CapabilityChat)
 
 	assert.True(t, caps.HasCapability(agentllm.CapabilityChat))
 	assert.False(t, caps.HasCapability(agentllm.CapabilityEmbedding))
 }
 
 func TestProviderCapabilities_HasCapability_NilCaps(t *testing.T) {
-	caps := &ProviderCapabilities{}
+	caps := &common.ProviderCapabilities{}
 
 	assert.False(t, caps.HasCapability(agentllm.CapabilityChat))
 }
 
 func TestProviderCapabilities_Capabilities(t *testing.T) {
-	caps := NewProviderCapabilities(
+	caps := common.NewProviderCapabilities(
 		agentllm.CapabilityChat,
 		agentllm.CapabilityStreaming,
 	)
@@ -54,7 +55,7 @@ func TestProviderCapabilities_Capabilities(t *testing.T) {
 }
 
 func TestProviderCapabilities_Capabilities_Empty(t *testing.T) {
-	caps := &ProviderCapabilities{}
+	caps := &common.ProviderCapabilities{}
 
 	result := caps.Capabilities()
 
@@ -62,7 +63,7 @@ func TestProviderCapabilities_Capabilities_Empty(t *testing.T) {
 }
 
 func TestProviderCapabilities_AddCapability(t *testing.T) {
-	caps := NewProviderCapabilities()
+	caps := common.NewProviderCapabilities()
 
 	assert.False(t, caps.HasCapability(agentllm.CapabilityChat))
 
@@ -72,7 +73,7 @@ func TestProviderCapabilities_AddCapability(t *testing.T) {
 }
 
 func TestProviderCapabilities_AddCapability_NilCaps(t *testing.T) {
-	caps := &ProviderCapabilities{}
+	caps := &common.ProviderCapabilities{}
 
 	caps.AddCapability(agentllm.CapabilityChat)
 
@@ -80,7 +81,7 @@ func TestProviderCapabilities_AddCapability_NilCaps(t *testing.T) {
 }
 
 func TestProviderCapabilities_AddCapability_Duplicate(t *testing.T) {
-	caps := NewProviderCapabilities(agentllm.CapabilityChat)
+	caps := common.NewProviderCapabilities(agentllm.CapabilityChat)
 
 	// Adding same capability should be idempotent
 	caps.AddCapability(agentllm.CapabilityChat)

@@ -1,6 +1,7 @@
 package providers
 
 import (
+	"github.com/kart-io/goagent/llm/common"
 	"testing"
 
 	agentllm "github.com/kart-io/goagent/llm"
@@ -28,7 +29,7 @@ func TestConvertMessages(t *testing.T) {
 		}
 	}
 
-	result := ConvertMessages(messages, converter)
+	result := common.ConvertMessages(messages, converter)
 
 	assert.Len(t, result, 3)
 	assert.Equal(t, "user", result[0].Role)
@@ -41,11 +42,11 @@ func TestConvertMessages(t *testing.T) {
 func TestConvertMessages_Empty(t *testing.T) {
 	messages := []agentllm.Message{}
 
-	converter := func(msg agentllm.Message) StandardMessage {
-		return ToStandardMessage(msg)
+	converter := func(msg agentllm.Message) common.StandardMessage {
+		return common.ToStandardMessage(msg)
 	}
 
-	result := ConvertMessages(messages, converter)
+	result := common.ConvertMessages(messages, converter)
 
 	assert.Empty(t, result)
 }
@@ -57,7 +58,7 @@ func TestToStandardMessage(t *testing.T) {
 		Name:    "TestUser",
 	}
 
-	result := ToStandardMessage(msg)
+	result := common.ToStandardMessage(msg)
 
 	assert.Equal(t, "user", result.Role)
 	assert.Equal(t, "Hello", result.Content)
@@ -70,7 +71,7 @@ func TestConvertToStandardMessages(t *testing.T) {
 		{Role: "assistant", Content: "Hi"},
 	}
 
-	result := ConvertToStandardMessages(messages)
+	result := common.ConvertToStandardMessages(messages)
 
 	assert.Len(t, result, 2)
 	assert.Equal(t, "user", result[0].Role)
@@ -83,8 +84,8 @@ func TestDefaultRoleMapper(t *testing.T) {
 	testCases := []string{"user", "assistant", "system", "function"}
 
 	for _, role := range testCases {
-		result := DefaultRoleMapper(role)
-		assert.Equal(t, role, result, "DefaultRoleMapper should return role unchanged")
+		result := common.DefaultRoleMapper(role)
+		assert.Equal(t, role, result, "common.DefaultRoleMapper should return role unchanged")
 	}
 }
 
@@ -121,7 +122,7 @@ func TestConvertMessagesWithRoleMapping(t *testing.T) {
 		}
 	}
 
-	result := ConvertMessagesWithRoleMapping(messages, roleMapper, converter)
+	result := common.ConvertMessagesWithRoleMapping(messages, roleMapper, converter)
 
 	assert.Len(t, result, 3)
 	assert.Equal(t, "USER", result[0].Role)
@@ -142,7 +143,7 @@ func TestMessagesToPrompt(t *testing.T) {
 		return msg.Role + ": " + msg.Content + "\n"
 	}
 
-	result := MessagesToPrompt(messages, formatter)
+	result := common.MessagesToPrompt(messages, formatter)
 
 	expected := "user: What is AI?\nassistant: AI is artificial intelligence.\n"
 	assert.Equal(t, expected, result)
@@ -155,7 +156,7 @@ func TestMessagesToPrompt_Empty(t *testing.T) {
 		return msg.Role + ": " + msg.Content + "\n"
 	}
 
-	result := MessagesToPrompt(messages, formatter)
+	result := common.MessagesToPrompt(messages, formatter)
 
 	assert.Equal(t, "", result)
 }
@@ -190,7 +191,7 @@ func TestDefaultPromptFormatter(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := DefaultPromptFormatter(tc.message)
+			result := common.DefaultPromptFormatter(tc.message)
 			assert.Equal(t, tc.expected, result)
 		})
 	}
@@ -203,7 +204,7 @@ func TestMessagesToPrompt_WithDefaultFormatter(t *testing.T) {
 		{Role: "assistant", Content: "Hello"},
 	}
 
-	result := MessagesToPrompt(messages, DefaultPromptFormatter)
+	result := common.MessagesToPrompt(messages, common.DefaultPromptFormatter)
 
 	expected := "System: You are helpful\nUser: Hi\nAssistant: Hello\n"
 	assert.Equal(t, expected, result)

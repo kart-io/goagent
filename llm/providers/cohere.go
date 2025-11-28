@@ -84,13 +84,13 @@ type CohereErrorResponse struct {
 // NewCohere creates a new Cohere provider using LLMOptions (deprecated).
 // Deprecated: Use NewCohereWithOptions instead.
 func NewCohere(config *agentllm.LLMOptions) (*CohereProvider, error) {
-	opts := ConfigToOptions(config)
+	opts := common.ConfigToOptions(config)
 	return NewCohereWithOptions(opts...)
 }
 
 // NewCohereWithOptions creates a new Cohere provider using options pattern
 func NewCohereWithOptions(opts ...agentllm.ClientOption) (*CohereProvider, error) {
-	// 创建 BaseProvider，统一处理 Options
+	// 创建 common.BaseProvider，统一处理 Options
 	base := common.NewBaseProvider(opts...)
 
 	// 应用 Provider 特定的默认值
@@ -107,7 +107,7 @@ func NewCohereWithOptions(opts ...agentllm.ClientOption) (*CohereProvider, error
 		return nil, err
 	}
 
-	// 使用 BaseProvider 的 NewHTTPClient 方法创建 HTTP 客户端
+	// 使用 common.BaseProvider 的 NewHTTPClient 方法创建 HTTP 客户端
 	client := base.NewHTTPClient(common.HTTPClientConfig{
 		Timeout: base.GetTimeout(),
 		Headers: map[string]string{
@@ -180,7 +180,7 @@ func (p *CohereProvider) buildRequest(req *agentllm.CompletionRequest) *CohereRe
 		}
 	}
 
-	// 使用 BaseProvider 的统一参数处理方法
+	// 使用 common.BaseProvider 的统一参数处理方法
 	model := p.GetModel(req.Model)
 	maxTokens := p.GetMaxTokens(req.MaxTokens)
 	temperature := p.GetTemperature(req.Temperature)

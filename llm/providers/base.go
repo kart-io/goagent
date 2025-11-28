@@ -1,116 +1,46 @@
 package providers
 
-import (
-	"context"
-
-	agentllm "github.com/kart-io/goagent/llm"
-	"github.com/kart-io/goagent/llm/common"
-)
-
-// BaseProvider is now an alias to common.BaseProvider for backward compatibility.
-// Deprecated: Use common.BaseProvider directly.
-type BaseProvider = common.BaseProvider
-
-// NewBaseProvider is now an alias to common.NewBaseProvider for backward compatibility.
-// Deprecated: Use common.NewBaseProvider directly.
-var NewBaseProvider = common.NewBaseProvider
-
-// ConfigToOptions is now an alias to common.ConfigToOptions for backward compatibility.
-// Deprecated: Use common.ConfigToOptions directly.
-var ConfigToOptions = common.ConfigToOptions
-
-// HTTPClientConfig is now an alias to common.HTTPClientConfig for backward compatibility.
-// Deprecated: Use common.HTTPClientConfig directly.
-type HTTPClientConfig = common.HTTPClientConfig
-
-// RetryConfig is now an alias to common.RetryConfig for backward compatibility.
-// Deprecated: Use common.RetryConfig directly.
-type RetryConfig = common.RetryConfig
-
-// DefaultRetryConfig is now an alias to common.DefaultRetryConfig for backward compatibility.
-// Deprecated: Use common.DefaultRetryConfig directly.
-var DefaultRetryConfig = common.DefaultRetryConfig
-
-// ExecuteFunc is now an alias to common.ExecuteFunc for backward compatibility.
-// Deprecated: Use common.ExecuteFunc directly.
-type ExecuteFunc[T any] = common.ExecuteFunc[T]
-
-// ExecuteWithRetry wraps common.ExecuteWithRetry for backward compatibility.
-// Deprecated: Use common.ExecuteWithRetry directly.
-func ExecuteWithRetry[T any](ctx context.Context, cfg RetryConfig, providerName string, execute ExecuteFunc[T]) (T, error) {
-	return common.ExecuteWithRetry(ctx, cfg, providerName, execute)
-}
-
-// HTTPError is now an alias to common.HTTPError for backward compatibility.
-// Deprecated: Use common.HTTPError directly.
-type HTTPError = common.HTTPError
-
-// ProviderCapabilities is now an alias to common.ProviderCapabilities for backward compatibility.
-// Deprecated: Use common.ProviderCapabilities directly.
-type ProviderCapabilities = common.ProviderCapabilities
-
-// NewProviderCapabilities is now an alias to common.NewProviderCapabilities for backward compatibility.
-// Deprecated: Use common.NewProviderCapabilities directly.
-var NewProviderCapabilities = common.NewProviderCapabilities
-
-// MapHTTPError is now an alias to common.MapHTTPError for backward compatibility.
-// Deprecated: Use common.MapHTTPError directly.
-var MapHTTPError = common.MapHTTPError
-
-// RestyResponseToHTTPError is now an alias to common.RestyResponseToHTTPError for backward compatibility.
-// Deprecated: Use common.RestyResponseToHTTPError directly.
-var RestyResponseToHTTPError = common.RestyResponseToHTTPError
-
-// MessageConverter is now an alias to common.MessageConverter for backward compatibility.
-// Deprecated: Use common.MessageConverter directly.
-type MessageConverter[T any] = common.MessageConverter[T]
-
-// ConvertMessages wraps common.ConvertMessages for backward compatibility.
-// Deprecated: Use common.ConvertMessages directly.
-func ConvertMessages[T any](messages []agentllm.Message, converter MessageConverter[T]) []T {
-	return common.ConvertMessages(messages, converter)
-}
-
-// StandardMessage is now an alias to common.StandardMessage for backward compatibility.
-// Deprecated: Use common.StandardMessage directly.
-type StandardMessage = common.StandardMessage
-
-// ToStandardMessage is now an alias to common.ToStandardMessage for backward compatibility.
-// Deprecated: Use common.ToStandardMessage directly.
-var ToStandardMessage = common.ToStandardMessage
-
-// ConvertToStandardMessages is now an alias to common.ConvertToStandardMessages for backward compatibility.
-// Deprecated: Use common.ConvertToStandardMessages directly.
-var ConvertToStandardMessages = common.ConvertToStandardMessages
-
-// RoleMapper is now an alias to common.RoleMapper for backward compatibility.
-// Deprecated: Use common.RoleMapper directly.
-type RoleMapper = common.RoleMapper
-
-// DefaultRoleMapper is now an alias to common.DefaultRoleMapper for backward compatibility.
-// Deprecated: Use common.DefaultRoleMapper directly.
-var DefaultRoleMapper = common.DefaultRoleMapper
-
-// ConvertMessagesWithRoleMapping wraps common.ConvertMessagesWithRoleMapping for backward compatibility.
-// Deprecated: Use common.ConvertMessagesWithRoleMapping directly.
-func ConvertMessagesWithRoleMapping[T any](
-	messages []agentllm.Message,
-	roleMapper RoleMapper,
-	converter func(msg agentllm.Message, mappedRole string) T,
-) []T {
-	return common.ConvertMessagesWithRoleMapping(messages, roleMapper, converter)
-}
-
-// MessagesToPrompt is now an alias to common.MessagesToPrompt for backward compatibility.
-// Deprecated: Use common.MessagesToPrompt directly.
-var MessagesToPrompt = common.MessagesToPrompt
-
-// DefaultPromptFormatter is now an alias to common.DefaultPromptFormatter for backward compatibility.
-// Deprecated: Use common.DefaultPromptFormatter directly.
-var DefaultPromptFormatter = common.DefaultPromptFormatter
-
-// secureRandomInt63n is now an alias to common.SecureRandomInt63n for backward compatibility.
-// Deprecated: Use common.SecureRandomInt63n directly.
-func secureRandomInt63n(n int64) int64 {
-	return common.SecureRandomInt63n(n)
-}
+// 本文件中的所有类型和函数别名已被删除（Phase 3 清理）。
+// 所有功能已迁移到 llm/common 包，请直接使用：
+//
+// 类型:
+//   - common.BaseProvider (原 providers.BaseProvider)
+//   - common.HTTPClientConfig (原 providers.HTTPClientConfig)
+//   - common.RetryConfig (原 providers.RetryConfig)
+//   - common.ExecuteFunc[T] (原 providers.ExecuteFunc[T])
+//   - common.HTTPError (原 providers.HTTPError)
+//   - common.ProviderCapabilities (原 providers.ProviderCapabilities)
+//   - common.MessageConverter[T] (原 providers.MessageConverter[T])
+//   - common.StandardMessage (原 providers.StandardMessage)
+//   - common.RoleMapper (原 providers.RoleMapper)
+//
+// 函数:
+//   - common.NewBaseProvider (原 providers.NewBaseProvider)
+//   - common.ConfigToOptions (原 providers.ConfigToOptions)
+//   - common.DefaultRetryConfig (原 providers.DefaultRetryConfig)
+//   - common.ExecuteWithRetry (原 providers.ExecuteWithRetry)
+//   - common.NewProviderCapabilities (原 providers.NewProviderCapabilities)
+//   - common.MapHTTPError (原 providers.MapHTTPError)
+//   - common.RestyResponseToHTTPError (原 providers.RestyResponseToHTTPError)
+//   - common.ConvertMessages (原 providers.ConvertMessages)
+//   - common.ToStandardMessage (原 providers.ToStandardMessage)
+//   - common.ConvertToStandardMessages (原 providers.ConvertToStandardMessages)
+//   - common.DefaultRoleMapper (原 providers.DefaultRoleMapper)
+//   - common.ConvertMessagesWithRoleMapping (原 providers.ConvertMessagesWithRoleMapping)
+//   - common.MessagesToPrompt (原 providers.MessagesToPrompt)
+//   - common.DefaultPromptFormatter (原 providers.DefaultPromptFormatter)
+//   - common.SecureRandomInt63n (原 providers.secureRandomInt63n)
+//
+// 迁移示例:
+//
+//   // 旧代码
+//   import "github.com/kart-io/goagent/llm/providers"
+//   bp := providers.NewBaseProvider(opts...)
+//
+//   // 新代码
+//   import "github.com/kart-io/goagent/llm/common"
+//   bp := common.NewBaseProvider(opts...)
+//
+// 参考文档:
+//   - docs/guides/PROVIDER_BEST_PRACTICES.md
+//   - .claude/phase3-deprecation-analysis.md
