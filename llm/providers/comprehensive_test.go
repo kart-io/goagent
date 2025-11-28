@@ -93,7 +93,7 @@ func TestDeepSeekProvider_Initialization(t *testing.T) {
 				}()
 			}
 
-			provider, err := NewDeepSeek(tt.config)
+			provider, err := NewDeepSeekWithOptions(common.ConfigToOptions(tt.config)...)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -119,7 +119,7 @@ func TestDeepSeekProvider_DefaultValues(t *testing.T) {
 		APIKey:   "test-key",
 	}
 
-	provider, err := NewDeepSeek(config)
+	provider, err := NewDeepSeekWithOptions(common.ConfigToOptions(config)...)
 	require.NoError(t, err)
 
 	assert.Equal(t, "deepseek-chat", provider.GetModel(""))
@@ -136,7 +136,7 @@ func TestDeepSeekProvider_ModelName(t *testing.T) {
 		Model:    "deepseek-coder",
 	}
 
-	provider, err := NewDeepSeek(config)
+	provider, err := NewDeepSeekWithOptions(common.ConfigToOptions(config)...)
 	require.NoError(t, err)
 
 	assert.Equal(t, "deepseek-coder", provider.ModelName())
@@ -150,7 +150,7 @@ func TestDeepSeekProvider_MaxTokens(t *testing.T) {
 		MaxTokens: 3000,
 	}
 
-	provider, err := NewDeepSeek(config)
+	provider, err := NewDeepSeekWithOptions(common.ConfigToOptions(config)...)
 	require.NoError(t, err)
 
 	assert.Equal(t, 3000, provider.MaxTokens())
@@ -209,7 +209,7 @@ func TestDeepSeekProvider_Complete(t *testing.T) {
 		Timeout:  5,
 	}
 
-	provider, err := NewDeepSeek(config)
+	provider, err := NewDeepSeekWithOptions(common.ConfigToOptions(config)...)
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -655,7 +655,7 @@ func TestDeepSeekStreamingProvider_Creation(t *testing.T) {
 		APIKey:   "test-key",
 	}
 
-	provider, err := NewDeepSeekStreaming(config)
+	provider, err := NewDeepSeekStreamingWithOptions(common.ConfigToOptions(config)...)
 	assert.NoError(t, err)
 	assert.NotNil(t, provider)
 	assert.NotNil(t, provider.DeepSeekProvider)
@@ -736,7 +736,7 @@ func TestOpenAIStreamingProvider_CreationComprehensive(t *testing.T) {
 		Temperature: 0.7,
 	}
 
-	provider, err := NewOpenAI(config)
+	provider, err := NewOpenAIWithOptions(common.ConfigToOptions(config)...)
 	assert.NoError(t, err)
 	assert.NotNil(t, provider)
 }
@@ -752,7 +752,7 @@ func TestOpenAIStreamingProvider_CreationErrorComprehensive(t *testing.T) {
 		// Missing APIKey
 	}
 
-	provider, err := NewOpenAI(config)
+	provider, err := NewOpenAIWithOptions(common.ConfigToOptions(config)...)
 	assert.Error(t, err)
 	assert.Nil(t, provider)
 }
@@ -802,7 +802,7 @@ func TestOpenAIProvider_InitializationComprehensive(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			provider, err := NewOpenAI(tt.config)
+			provider, err := NewOpenAIWithOptions(common.ConfigToOptions(tt.config)...)
 			if tt.wantErr {
 				assert.Error(t, err)
 				assert.Nil(t, provider)
@@ -822,7 +822,7 @@ func TestOpenAIProvider_DefaultModelComprehensive(t *testing.T) {
 		APIKey:   "test-key",
 	}
 
-	provider, err := NewOpenAI(config)
+	provider, err := NewOpenAIWithOptions(common.ConfigToOptions(config)...)
 	require.NoError(t, err)
 
 	// Should have a non-empty default model
@@ -841,7 +841,7 @@ func TestOpenAIProvider_ModelNameComprehensive(t *testing.T) {
 		MaxTokens:   4000,
 	}
 
-	provider, err := NewOpenAI(config)
+	provider, err := NewOpenAIWithOptions(common.ConfigToOptions(config)...)
 	require.NoError(t, err)
 
 	assert.Equal(t, "gpt-4", provider.ModelName()) // Model name should match config
@@ -859,7 +859,7 @@ func TestOpenAIProvider_MaxTokensComprehensive(t *testing.T) {
 		MaxTokens:   4000,
 	}
 
-	provider, err := NewOpenAI(config)
+	provider, err := NewOpenAIWithOptions(common.ConfigToOptions(config)...)
 	require.NoError(t, err)
 
 	assert.Equal(t, 4000, provider.MaxTokens())
@@ -941,7 +941,7 @@ func TestGeminiProvider_InitializationComprehensive(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			provider, err := NewGemini(tt.config)
+			provider, err := NewGeminiWithOptions(common.ConfigToOptions(tt.config)...)
 			if tt.wantErr {
 				assert.Error(t, err)
 				assert.Nil(t, provider)

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	agentllm "github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/common"
 	"github.com/kart-io/goagent/llm/constants"
 	"github.com/kart-io/goagent/utils/json"
 
@@ -127,7 +128,7 @@ func TestNewHuggingFace(t *testing.T) {
 				defer os.Unsetenv("HUGGINGFACE_MODEL")
 			}
 
-			provider, err := NewHuggingFace(tt.config)
+			provider, err := NewHuggingFaceWithOptions(common.ConfigToOptions(tt.config)...)
 
 			if tt.wantErr {
 				require.Error(t, err)

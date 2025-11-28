@@ -8,6 +8,7 @@ import (
 	"time"
 
 	agentllm "github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/common"
 	"github.com/kart-io/goagent/llm/constants"
 	"github.com/kart-io/goagent/utils/json"
 
@@ -417,7 +418,7 @@ func TestGeminiProvider_ModelName(t *testing.T) {
 		Model:    "gemini-pro",
 	}
 
-	provider, err := NewGemini(config)
+	provider, err := NewGeminiWithOptions(common.ConfigToOptions(config)...)
 	require.NoError(t, err)
 	assert.Equal(t, "gemini-pro", provider.ModelName())
 }
@@ -430,7 +431,7 @@ func TestGeminiProvider_MaxTokens(t *testing.T) {
 		MaxTokens: 3000,
 	}
 
-	provider, err := NewGemini(config)
+	provider, err := NewGeminiWithOptions(common.ConfigToOptions(config)...)
 	require.NoError(t, err)
 	assert.Equal(t, 3000, provider.MaxTokens())
 }
@@ -442,7 +443,7 @@ func TestGeminiProvider_DefaultModel(t *testing.T) {
 		APIKey:   "test-key",
 	}
 
-	provider, err := NewGemini(config)
+	provider, err := NewGeminiWithOptions(common.ConfigToOptions(config)...)
 	require.NoError(t, err)
 	assert.Equal(t, "gemini-pro", provider.GetModel(""))
 }
@@ -480,7 +481,7 @@ func TestGeminiStreamingProvider_CreationComprehensive(t *testing.T) {
 		Model:    "gemini-pro",
 	}
 
-	provider, err := NewGeminiStreaming(config)
+	provider, err := NewGeminiStreamingWithOptions(common.ConfigToOptions(config)...)
 	assert.NoError(t, err)
 	assert.NotNil(t, provider)
 	assert.NotNil(t, provider.GeminiProvider)
@@ -494,7 +495,7 @@ func TestGeminiStreamingProvider_Inheritance(t *testing.T) {
 		Model:    "gemini-pro",
 	}
 
-	provider, err := NewGeminiStreaming(config)
+	provider, err := NewGeminiStreamingWithOptions(common.ConfigToOptions(config)...)
 	require.NoError(t, err)
 
 	// Test inherited methods
