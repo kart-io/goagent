@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	agentllm "github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/constants"
 	"github.com/kart-io/goagent/utils/json"
 
@@ -256,10 +257,7 @@ func TestCohereComplete(t *testing.T) {
 			defer server.Close()
 
 			// Create provider
-			provider, err := NewCohere(&llm.LLMOptions{
-				APIKey:  "test-key",
-				BaseURL: server.URL,
-			})
+			provider, err := NewCohereWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(server.URL))
 			require.NoError(t, err)
 
 			// Test Complete
@@ -297,10 +295,7 @@ func TestCohereChat(t *testing.T) {
 	}))
 	defer server.Close()
 
-	provider, err := NewCohere(&llm.LLMOptions{
-		APIKey:  "test-key",
-		BaseURL: server.URL,
-	})
+	provider, err := NewCohereWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(server.URL))
 	require.NoError(t, err)
 
 	resp, err := provider.Chat(context.Background(), []llm.Message{
@@ -381,10 +376,7 @@ func TestCohereErrorHandling(t *testing.T) {
 			}))
 			defer server.Close()
 
-			provider, err := NewCohere(&llm.LLMOptions{
-				APIKey:  "test-key",
-				BaseURL: server.URL,
-			})
+			provider, err := NewCohereWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(server.URL))
 			require.NoError(t, err)
 
 			// Use context with shorter retry delays for tests
@@ -426,10 +418,7 @@ func TestCohereRetry(t *testing.T) {
 	}))
 	defer server.Close()
 
-	provider, err := NewCohere(&llm.LLMOptions{
-		APIKey:  "test-key",
-		BaseURL: server.URL,
-	})
+	provider, err := NewCohereWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(server.URL))
 	require.NoError(t, err)
 
 	resp, err := provider.Complete(context.Background(), &llm.CompletionRequest{
@@ -450,10 +439,7 @@ func TestCohereRetryExhausted(t *testing.T) {
 	}))
 	defer server.Close()
 
-	provider, err := NewCohere(&llm.LLMOptions{
-		APIKey:  "test-key",
-		BaseURL: server.URL,
-	})
+	provider, err := NewCohereWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(server.URL))
 	require.NoError(t, err)
 
 	_, err = provider.Complete(context.Background(), &llm.CompletionRequest{
@@ -473,10 +459,7 @@ func TestCohereContextCancellation(t *testing.T) {
 	}))
 	defer server.Close()
 
-	provider, err := NewCohere(&llm.LLMOptions{
-		APIKey:  "test-key",
-		BaseURL: server.URL,
-	})
+	provider, err := NewCohereWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(server.URL))
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -517,10 +500,7 @@ func TestCohereStream(t *testing.T) {
 	}))
 	defer server.Close()
 
-	provider, err := NewCohere(&llm.LLMOptions{
-		APIKey:  "test-key",
-		BaseURL: server.URL,
-	})
+	provider, err := NewCohereWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(server.URL))
 	require.NoError(t, err)
 
 	tokens, err := provider.Stream(context.Background(), "test")
@@ -541,10 +521,7 @@ func TestCohereStreamError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	provider, err := NewCohere(&llm.LLMOptions{
-		APIKey:  "test-key",
-		BaseURL: server.URL,
-	})
+	provider, err := NewCohereWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(server.URL))
 	require.NoError(t, err)
 
 	_, err = provider.Stream(context.Background(), "test")
@@ -554,9 +531,7 @@ func TestCohereStreamError(t *testing.T) {
 
 // TestCohereProvider tests Provider method
 func TestCohereProvider(t *testing.T) {
-	provider, err := NewCohere(&llm.LLMOptions{
-		APIKey: "test-key",
-	})
+	provider, err := NewCohereWithOptions(agentllm.WithAPIKey("test-key"))
 	require.NoError(t, err)
 
 	assert.Equal(t, constants.ProviderCohere, provider.Provider())
@@ -564,10 +539,7 @@ func TestCohereProvider(t *testing.T) {
 
 // TestCohereModelName tests ModelName method
 func TestCohereModelName(t *testing.T) {
-	provider, err := NewCohere(&llm.LLMOptions{
-		APIKey: "test-key",
-		Model:  "command-r-plus",
-	})
+	provider, err := NewCohereWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithModel("command-r-plus"))
 	require.NoError(t, err)
 
 	assert.Equal(t, "command-r-plus", provider.ModelName())
@@ -575,10 +547,7 @@ func TestCohereModelName(t *testing.T) {
 
 // TestCohereMaxTokens tests MaxTokens method
 func TestCohereMaxTokens(t *testing.T) {
-	provider, err := NewCohere(&llm.LLMOptions{
-		APIKey:    "test-key",
-		MaxTokens: 4000,
-	})
+	provider, err := NewCohereWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithMaxTokens(4000))
 	require.NoError(t, err)
 
 	assert.Equal(t, 4000, provider.MaxTokens())
@@ -603,10 +572,7 @@ func TestCohereIsAvailable(t *testing.T) {
 		}))
 		defer server.Close()
 
-		provider, err := NewCohere(&llm.LLMOptions{
-			APIKey:  "test-key",
-			BaseURL: server.URL,
-		})
+		provider, err := NewCohereWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(server.URL))
 		require.NoError(t, err)
 
 		assert.True(t, provider.IsAvailable())
@@ -618,10 +584,7 @@ func TestCohereIsAvailable(t *testing.T) {
 		}))
 		defer server.Close()
 
-		provider, err := NewCohere(&llm.LLMOptions{
-			APIKey:  "test-key",
-			BaseURL: server.URL,
-		})
+		provider, err := NewCohereWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(server.URL))
 		require.NoError(t, err)
 
 		assert.False(t, provider.IsAvailable())

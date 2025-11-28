@@ -607,6 +607,18 @@ type DeepSeekStreamingProvider struct {
 	*DeepSeekProvider
 }
 
+// NewDeepSeekStreamingWithOptions creates a streaming-optimized provider using options pattern
+func NewDeepSeekStreamingWithOptions(opts ...agentllm.ClientOption) (*DeepSeekStreamingProvider, error) {
+	base, err := NewDeepSeekWithOptions(opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	return &DeepSeekStreamingProvider{
+		DeepSeekProvider: base,
+	}, nil
+}
+
 // NewDeepSeekStreaming creates a streaming-optimized provider
 func NewDeepSeekStreaming(config *agentllm.LLMOptions) (*DeepSeekStreamingProvider, error) {
 	base, err := NewDeepSeekWithOptions(common.ConfigToOptions(config)...)

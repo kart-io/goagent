@@ -61,8 +61,8 @@ func NewOllamaWithOptions(opts ...agentllm.ClientOption) (*OllamaClient, error) 
 
 	return &OllamaClient{
 		BaseProvider: base,
-		baseURL:             strings.TrimRight(base.Config.BaseURL, "/"),
-		client:              client,
+		baseURL:      strings.TrimRight(base.Config.BaseURL, "/"),
+		client:       client,
 	}, nil
 }
 
