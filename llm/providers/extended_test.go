@@ -47,12 +47,7 @@ func TestDeepSeekProvider_IsAvailable(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	provider, err := NewDeepSeek(&agentllm.LLMOptions{
-		Provider: constants.ProviderDeepSeek,
-		APIKey:   "test-key",
-		BaseURL:  mockServer.URL,
-		Timeout:  5,
-	})
+	provider, err := NewDeepSeekWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(mockServer.URL), agentllm.WithTimeout(5))
 	require.NoError(t, err)
 
 	isAvailable := provider.IsAvailable()
@@ -61,12 +56,7 @@ func TestDeepSeekProvider_IsAvailable(t *testing.T) {
 
 // TestDeepSeekProvider_IsAvailable_Unavailable tests unavailable provider
 func TestDeepSeekProvider_IsAvailable_Unavailable(t *testing.T) {
-	provider, err := NewDeepSeek(&agentllm.LLMOptions{
-		Provider: constants.ProviderDeepSeek,
-		APIKey:   "test-key",
-		BaseURL:  "http://invalid-host-that-does-not-exist.test",
-		Timeout:  1,
-	})
+	provider, err := NewDeepSeekWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL("http://invalid-host-that-does-not-exist.test"), agentllm.WithTimeout(1))
 	require.NoError(t, err)
 
 	isAvailable := provider.IsAvailable()
@@ -91,12 +81,7 @@ func TestDeepSeekProvider_Stream_WithContext(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	provider, err := NewDeepSeek(&agentllm.LLMOptions{
-		Provider: constants.ProviderDeepSeek,
-		APIKey:   "test-key",
-		BaseURL:  mockServer.URL,
-		Timeout:  5,
-	})
+	provider, err := NewDeepSeekWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(mockServer.URL), agentllm.WithTimeout(5))
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -150,15 +135,7 @@ func TestDeepSeekProvider_CompleteWithAllFields(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	provider, err := NewDeepSeek(&agentllm.LLMOptions{
-		Provider:    constants.ProviderDeepSeek,
-		APIKey:      "test-key",
-		BaseURL:     mockServer.URL,
-		Model:       "deepseek-chat",
-		MaxTokens:   1000,
-		Temperature: 0.8,
-		Timeout:     5,
-	})
+	provider, err := NewDeepSeekWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(mockServer.URL), agentllm.WithModel("deepseek-chat"), agentllm.WithMaxTokens(1000), agentllm.WithTemperature(0.8), agentllm.WithTimeout(5))
 	require.NoError(t, err)
 
 	resp, err := provider.Complete(context.Background(), &llm.CompletionRequest{
@@ -237,12 +214,7 @@ func TestDeepSeekProvider_StreamWithTools_InvalidJSON(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	provider, err := NewDeepSeek(&agentllm.LLMOptions{
-		Provider: constants.ProviderDeepSeek,
-		APIKey:   "test-key",
-		BaseURL:  mockServer.URL,
-		Timeout:  5,
-	})
+	provider, err := NewDeepSeekWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(mockServer.URL), agentllm.WithTimeout(5))
 	require.NoError(t, err)
 
 	chunks, err := provider.StreamWithTools(context.Background(), "test", []interfaces.Tool{&MockTool{}})
@@ -287,12 +259,7 @@ func TestDeepSeekProvider_ChatWithMultipleMessages(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	provider, err := NewDeepSeek(&agentllm.LLMOptions{
-		Provider: constants.ProviderDeepSeek,
-		APIKey:   "test-key",
-		BaseURL:  mockServer.URL,
-		Timeout:  5,
-	})
+	provider, err := NewDeepSeekWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(mockServer.URL), agentllm.WithTimeout(5))
 	require.NoError(t, err)
 
 	messages := []llm.Message{
@@ -339,12 +306,7 @@ func TestDeepSeekProvider_EmbedMultipleChunks(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	provider, err := NewDeepSeek(&agentllm.LLMOptions{
-		Provider: constants.ProviderDeepSeek,
-		APIKey:   "test-key",
-		BaseURL:  mockServer.URL,
-		Timeout:  5,
-	})
+	provider, err := NewDeepSeekWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(mockServer.URL), agentllm.WithTimeout(5))
 	require.NoError(t, err)
 
 	embedding, err := provider.Embed(context.Background(), "test text")
@@ -376,12 +338,7 @@ func TestDeepSeekStreamingProvider_StreamWithMetadata_ErrorHandling(t *testing.T
 	}))
 	defer mockServer.Close()
 
-	provider, err := NewDeepSeekStreaming(&agentllm.LLMOptions{
-		Provider: constants.ProviderDeepSeek,
-		APIKey:   "test-key",
-		BaseURL:  mockServer.URL,
-		Timeout:  5,
-	})
+	provider, err := NewDeepSeekStreamingWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(mockServer.URL), agentllm.WithTimeout(5))
 	require.NoError(t, err)
 
 	tokens, err := provider.StreamWithMetadata(context.Background(), "test")
@@ -408,12 +365,7 @@ func TestDeepSeekStreamingProvider_Inheritance(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	provider, err := NewDeepSeekStreaming(&agentllm.LLMOptions{
-		Provider: constants.ProviderDeepSeek,
-		APIKey:   "test-key",
-		BaseURL:  mockServer.URL,
-		Timeout:  5,
-	})
+	provider, err := NewDeepSeekStreamingWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(mockServer.URL), agentllm.WithTimeout(5))
 	require.NoError(t, err)
 
 	// Test inherited Chat method
@@ -434,10 +386,7 @@ func TestDeepSeekStreamingProvider_Inheritance(t *testing.T) {
 
 // TestOpenAIProvider_ConvertToolsLarge tests conversion of many tools
 func TestOpenAIProvider_ConvertToolsLarge(t *testing.T) {
-	provider, err := NewOpenAI(&agentllm.LLMOptions{
-		Provider: constants.ProviderOpenAI,
-		APIKey:   "test-key",
-	})
+	provider, err := NewOpenAIWithOptions(agentllm.WithAPIKey("test-key"))
 	require.NoError(t, err)
 
 	// Create multiple tools
@@ -500,10 +449,7 @@ func TestGeminiProvider_DefaultModel(t *testing.T) {
 
 // TestGeminiProvider_ConvertToolsToFunctions tests tool conversion
 func TestGeminiProvider_ConvertToolsToFunctions(t *testing.T) {
-	provider, err := NewGemini(&agentllm.LLMOptions{
-		Provider: constants.ProviderGemini,
-		APIKey:   "test-key",
-	})
+	provider, err := NewGeminiWithOptions(agentllm.WithAPIKey("test-key"))
 	require.NoError(t, err)
 
 	mockTool := &MockTool{}
@@ -517,10 +463,7 @@ func TestGeminiProvider_ConvertToolsToFunctions(t *testing.T) {
 
 // TestGeminiProvider_ToolSchemaToGeminiSchema tests schema conversion
 func TestGeminiProvider_ToolSchemaToGeminiSchema(t *testing.T) {
-	provider, err := NewGemini(&agentllm.LLMOptions{
-		Provider: constants.ProviderGemini,
-		APIKey:   "test-key",
-	})
+	provider, err := NewGeminiWithOptions(agentllm.WithAPIKey("test-key"))
 	require.NoError(t, err)
 
 	schema := provider.toolSchemaToGeminiSchema(nil)
@@ -583,13 +526,7 @@ func TestDeepSeekProvider_CompleteWithModelOverride(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	provider, err := NewDeepSeek(&agentllm.LLMOptions{
-		Provider: constants.ProviderDeepSeek,
-		APIKey:   "test-key",
-		BaseURL:  mockServer.URL,
-		Model:    "deepseek-chat",
-		Timeout:  5,
-	})
+	provider, err := NewDeepSeekWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(mockServer.URL), agentllm.WithModel("deepseek-chat"), agentllm.WithTimeout(5))
 	require.NoError(t, err)
 
 	_, err = provider.Complete(context.Background(), &llm.CompletionRequest{
@@ -614,11 +551,7 @@ func TestDeepSeekProvider_Temperature_Boundary(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			provider, err := NewDeepSeek(&agentllm.LLMOptions{
-				Provider:    constants.ProviderDeepSeek,
-				APIKey:      "test-key",
-				Temperature: tt.temperature,
-			})
+			provider, err := NewDeepSeekWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithTemperature(tt.temperature))
 			require.NoError(t, err)
 			assert.NotNil(t, provider)
 		})
@@ -638,11 +571,7 @@ func TestDeepSeekProvider_MaxTokens_Boundary(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			provider, err := NewDeepSeek(&agentllm.LLMOptions{
-				Provider:  constants.ProviderDeepSeek,
-				APIKey:    "test-key",
-				MaxTokens: tt.maxTokens,
-			})
+			provider, err := NewDeepSeekWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithMaxTokens(tt.maxTokens))
 			require.NoError(t, err)
 			assert.NotNil(t, provider)
 		})
@@ -661,12 +590,7 @@ func TestDeepSeekProvider_EmptyMessages(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	provider, err := NewDeepSeek(&agentllm.LLMOptions{
-		Provider: constants.ProviderDeepSeek,
-		APIKey:   "test-key",
-		BaseURL:  mockServer.URL,
-		Timeout:  5,
-	})
+	provider, err := NewDeepSeekWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(mockServer.URL), agentllm.WithTimeout(5))
 	require.NoError(t, err)
 
 	resp, err := provider.Complete(context.Background(), &llm.CompletionRequest{

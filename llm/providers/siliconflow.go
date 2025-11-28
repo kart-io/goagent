@@ -63,9 +63,9 @@ func NewSiliconFlowWithOptions(opts ...agentllm.ClientOption) (*SiliconFlowClien
 
 	return &SiliconFlowClient{
 		BaseProvider: base,
-		apiKey:              base.Config.APIKey,
-		baseURL:             strings.TrimRight(base.Config.BaseURL, "/"),
-		client:              client,
+		apiKey:       base.Config.APIKey,
+		baseURL:      strings.TrimRight(base.Config.BaseURL, "/"),
+		client:       client,
 	}, nil
 }
 

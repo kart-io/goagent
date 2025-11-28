@@ -472,6 +472,18 @@ type GeminiStreamingProvider struct {
 	*GeminiProvider
 }
 
+// NewGeminiStreamingWithOptions creates a streaming-optimized provider using options pattern
+func NewGeminiStreamingWithOptions(opts ...agentllm.ClientOption) (*GeminiStreamingProvider, error) {
+	base, err := NewGeminiWithOptions(opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	return &GeminiStreamingProvider{
+		GeminiProvider: base,
+	}, nil
+}
+
 // NewGeminiStreaming creates a streaming-optimized provider
 func NewGeminiStreaming(config *agentllm.LLMOptions) (*GeminiStreamingProvider, error) {
 	base, err := NewGeminiWithOptions(common.ConfigToOptions(config)...)
