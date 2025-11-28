@@ -2,6 +2,7 @@ package providers
 
 import (
 	"context"
+	"github.com/kart-io/goagent/llm/common"
 	"os"
 	"testing"
 	"time"
@@ -19,7 +20,7 @@ func TestExecuteWithRetry_Success(t *testing.T) {
 		return "success", nil
 	}
 
-	cfg := RetryConfig{
+	cfg := common.RetryConfig{
 		MaxAttempts: 3,
 		BaseDelay:   10 * time.Millisecond,
 		MaxDelay:    100 * time.Millisecond,
@@ -27,7 +28,7 @@ func TestExecuteWithRetry_Success(t *testing.T) {
 
 	ctx := context.WithValue(context.Background(), "test_retry_delay", 1*time.Millisecond)
 
-	result, err := ExecuteWithRetry(ctx, cfg, "test-provider", execute)
+	result, err := common.ExecuteWithRetry(ctx, cfg, "test-provider", execute)
 
 	require.NoError(t, err)
 	assert.Equal(t, "success", result)
@@ -45,7 +46,7 @@ func TestExecuteWithRetry_SuccessAfterRetries(t *testing.T) {
 		return "success", nil
 	}
 
-	cfg := RetryConfig{
+	cfg := common.RetryConfig{
 		MaxAttempts: 3,
 		BaseDelay:   10 * time.Millisecond,
 		MaxDelay:    100 * time.Millisecond,
@@ -53,7 +54,7 @@ func TestExecuteWithRetry_SuccessAfterRetries(t *testing.T) {
 
 	ctx := context.WithValue(context.Background(), "test_retry_delay", 1*time.Millisecond)
 
-	result, err := ExecuteWithRetry(ctx, cfg, "test-provider", execute)
+	result, err := common.ExecuteWithRetry(ctx, cfg, "test-provider", execute)
 
 	require.NoError(t, err)
 	assert.Equal(t, "success", result)
@@ -68,7 +69,7 @@ func TestExecuteWithRetry_MaxRetriesExceeded(t *testing.T) {
 		return "", agentErrors.NewLLMRateLimitError("test", "test-model", 60)
 	}
 
-	cfg := RetryConfig{
+	cfg := common.RetryConfig{
 		MaxAttempts: 3,
 		BaseDelay:   10 * time.Millisecond,
 		MaxDelay:    100 * time.Millisecond,
@@ -76,7 +77,7 @@ func TestExecuteWithRetry_MaxRetriesExceeded(t *testing.T) {
 
 	ctx := context.WithValue(context.Background(), "test_retry_delay", 1*time.Millisecond)
 
-	_, err := ExecuteWithRetry(ctx, cfg, "test-provider", execute)
+	_, err := common.ExecuteWithRetry(ctx, cfg, "test-provider", execute)
 
 	require.Error(t, err)
 	assert.Equal(t, 3, callCount, "Should try all attempts")
@@ -96,7 +97,7 @@ func TestExecuteWithRetry_ContextCanceled(t *testing.T) {
 		return "", agentErrors.NewLLMRateLimitError("test", "test-model", 60)
 	}
 
-	cfg := RetryConfig{
+	cfg := common.RetryConfig{
 		MaxAttempts: 3,
 		BaseDelay:   10 * time.Millisecond,
 		MaxDelay:    100 * time.Millisecond,
@@ -104,7 +105,7 @@ func TestExecuteWithRetry_ContextCanceled(t *testing.T) {
 
 	ctx = context.WithValue(ctx, "test_retry_delay", 1*time.Millisecond)
 
-	_, err := ExecuteWithRetry(ctx, cfg, "test-provider", execute)
+	_, err := common.ExecuteWithRetry(ctx, cfg, "test-provider", execute)
 
 	require.Error(t, err)
 	assert.Equal(t, agentErrors.CodeContextCanceled, agentErrors.GetCode(err))
@@ -118,10 +119,10 @@ func TestExecuteWithRetry_NonRetryableError(t *testing.T) {
 		return "", agentErrors.NewInvalidInputError("test", "input", "invalid")
 	}
 
-	cfg := DefaultRetryConfig()
+	cfg := common.DefaultRetryConfig()
 	ctx := context.WithValue(context.Background(), "test_retry_delay", 1*time.Millisecond)
 
-	_, err := ExecuteWithRetry(ctx, cfg, "test-provider", execute)
+	_, err := common.ExecuteWithRetry(ctx, cfg, "test-provider", execute)
 
 	require.Error(t, err)
 	assert.Equal(t, 1, callCount, "Should not retry non-retryable errors")
@@ -139,7 +140,7 @@ func TestExecuteWithRetry_DefaultMaxAttempts(t *testing.T) {
 		return "success", nil
 	}
 
-	cfg := RetryConfig{
+	cfg := common.RetryConfig{
 		MaxAttempts: 0, // Should use default
 		BaseDelay:   10 * time.Millisecond,
 		MaxDelay:    100 * time.Millisecond,
@@ -147,7 +148,7 @@ func TestExecuteWithRetry_DefaultMaxAttempts(t *testing.T) {
 
 	ctx := context.WithValue(context.Background(), "test_retry_delay", 1*time.Millisecond)
 
-	result, err := ExecuteWithRetry(ctx, cfg, "test-provider", execute)
+	result, err := common.ExecuteWithRetry(ctx, cfg, "test-provider", execute)
 
 	require.NoError(t, err)
 	assert.Equal(t, "success", result)
@@ -168,7 +169,7 @@ func TestExecuteWithRetry_ExponentialBackoff(t *testing.T) {
 		return "success", nil
 	}
 
-	cfg := RetryConfig{
+	cfg := common.RetryConfig{
 		MaxAttempts: 3,
 		BaseDelay:   10 * time.Millisecond, // Shorter for test stability
 		MaxDelay:    100 * time.Millisecond,
@@ -177,7 +178,7 @@ func TestExecuteWithRetry_ExponentialBackoff(t *testing.T) {
 	// Use test mode for faster retries
 	ctx := context.WithValue(context.Background(), "test_retry_delay", 5*time.Millisecond)
 
-	result, err := ExecuteWithRetry(ctx, cfg, "test-provider", execute)
+	result, err := common.ExecuteWithRetry(ctx, cfg, "test-provider", execute)
 
 	require.NoError(t, err)
 	assert.Equal(t, "success", result)
@@ -204,7 +205,7 @@ func TestExecuteWithRetry_MaxDelayLimit(t *testing.T) {
 		return "", agentErrors.NewLLMRateLimitError("test", "test-model", 60)
 	}
 
-	cfg := RetryConfig{
+	cfg := common.RetryConfig{
 		MaxAttempts: 5,
 		BaseDelay:   100 * time.Millisecond,
 		MaxDelay:    150 * time.Millisecond, // Cap at 150ms
@@ -212,7 +213,7 @@ func TestExecuteWithRetry_MaxDelayLimit(t *testing.T) {
 
 	ctx := context.WithValue(context.Background(), "test_retry_delay", 10*time.Millisecond)
 
-	_, err := ExecuteWithRetry(ctx, cfg, "test-provider", execute)
+	_, err := common.ExecuteWithRetry(ctx, cfg, "test-provider", execute)
 
 	require.Error(t, err)
 	assert.Equal(t, 5, callCount)
@@ -222,7 +223,7 @@ func TestSecureRandomInt63n_Range(t *testing.T) {
 	// Test random number range
 	n := int64(100)
 	for i := 0; i < 1000; i++ {
-		val := secureRandomInt63n(n)
+		val := common.SecureRandomInt63n(n)
 		assert.GreaterOrEqual(t, val, int64(0), "Value should be >= 0")
 		assert.Less(t, val, n, "Value should be < n")
 	}
@@ -230,8 +231,8 @@ func TestSecureRandomInt63n_Range(t *testing.T) {
 
 func TestSecureRandomInt63n_ZeroAndNegative(t *testing.T) {
 	// Test edge cases
-	assert.Equal(t, int64(0), secureRandomInt63n(0), "Should return 0 for n=0")
-	assert.Equal(t, int64(0), secureRandomInt63n(-1), "Should return 0 for negative n")
+	assert.Equal(t, int64(0), common.SecureRandomInt63n(0), "Should return 0 for n=0")
+	assert.Equal(t, int64(0), common.SecureRandomInt63n(-1), "Should return 0 for negative n")
 }
 
 func TestSecureRandomInt63n_Randomness(t *testing.T) {
@@ -240,7 +241,7 @@ func TestSecureRandomInt63n_Randomness(t *testing.T) {
 	n := int64(100)
 
 	for i := 0; i < 1000; i++ {
-		val := secureRandomInt63n(n)
+		val := common.SecureRandomInt63n(n)
 		results[val]++
 	}
 
@@ -264,7 +265,7 @@ func TestSecureRandomInt63n_SmallRange(t *testing.T) {
 	results := make(map[int64]int)
 
 	for i := 0; i < 500; i++ {
-		val := secureRandomInt63n(n)
+		val := common.SecureRandomInt63n(n)
 		results[val]++
 		assert.GreaterOrEqual(t, val, int64(0))
 		assert.Less(t, val, n)
@@ -276,7 +277,7 @@ func TestSecureRandomInt63n_SmallRange(t *testing.T) {
 
 func TestDefaultRetryConfig(t *testing.T) {
 	// Test default retry config values
-	cfg := DefaultRetryConfig()
+	cfg := common.DefaultRetryConfig()
 
 	assert.Greater(t, cfg.MaxAttempts, 0, "MaxAttempts should be positive")
 	assert.Greater(t, cfg.BaseDelay, time.Duration(0), "BaseDelay should be positive")
@@ -301,7 +302,7 @@ func TestExecuteWithRetry_TestModeEnvVar(t *testing.T) {
 		return "success", nil
 	}
 
-	cfg := RetryConfig{
+	cfg := common.RetryConfig{
 		MaxAttempts: 3,
 		BaseDelay:   100 * time.Millisecond, // Will be reduced to 10ms by test mode
 		MaxDelay:    500 * time.Millisecond,
@@ -309,7 +310,7 @@ func TestExecuteWithRetry_TestModeEnvVar(t *testing.T) {
 
 	ctx := context.Background()
 
-	result, err := ExecuteWithRetry(ctx, cfg, "test-provider", execute)
+	result, err := common.ExecuteWithRetry(ctx, cfg, "test-provider", execute)
 
 	require.NoError(t, err)
 	assert.Equal(t, "success", result)

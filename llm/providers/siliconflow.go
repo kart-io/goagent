@@ -34,7 +34,7 @@ func NewSiliconFlow(config *agentllm.LLMOptions) (*SiliconFlowClient, error) {
 
 // NewSiliconFlowWithOptions 使用选项模式创建 SiliconFlow provider
 func NewSiliconFlowWithOptions(opts ...agentllm.ClientOption) (*SiliconFlowClient, error) {
-	// 创建 BaseProvider，统一处理 Options
+	// 创建 common.BaseProvider，统一处理 Options
 	base := common.NewBaseProvider(opts...)
 
 	// 应用 Provider 特定的默认值
@@ -51,7 +51,7 @@ func NewSiliconFlowWithOptions(opts ...agentllm.ClientOption) (*SiliconFlowClien
 		return nil, err
 	}
 
-	// 使用 BaseProvider 的 NewHTTPClient 方法创建 HTTP 客户端
+	// 使用 common.BaseProvider 的 NewHTTPClient 方法创建 HTTP 客户端
 	client := base.NewHTTPClient(common.HTTPClientConfig{
 		Timeout: base.GetTimeout(),
 		Headers: map[string]string{
@@ -63,9 +63,9 @@ func NewSiliconFlowWithOptions(opts ...agentllm.ClientOption) (*SiliconFlowClien
 
 	return &SiliconFlowClient{
 		BaseProvider: base,
-		apiKey:       base.Config.APIKey,
-		baseURL:      strings.TrimRight(base.Config.BaseURL, "/"),
-		client:       client,
+		apiKey:              base.Config.APIKey,
+		baseURL:             strings.TrimRight(base.Config.BaseURL, "/"),
+		client:              client,
 	}, nil
 }
 

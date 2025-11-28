@@ -44,7 +44,7 @@ func NewOpenAI(config *agentllm.LLMOptions) (*OpenAIProvider, error) {
 
 // NewOpenAIWithOptions creates a new OpenAI provider using options pattern
 func NewOpenAIWithOptions(opts ...agentllm.ClientOption) (*OpenAIProvider, error) {
-	// 创建 BaseProvider，统一处理 Options
+	// 创建 common.BaseProvider，统一处理 Options
 	base := common.NewBaseProvider(opts...)
 
 	// 应用 Provider 特定的默认值
@@ -107,7 +107,7 @@ func (p *OpenAIProvider) Complete(ctx context.Context, req *agentllm.CompletionR
 		}
 	}
 
-	// 使用 BaseProvider 的统一参数处理方法
+	// 使用 common.BaseProvider 的统一参数处理方法
 	model := p.GetModel(req.Model)
 	maxTokens := p.GetMaxTokens(req.MaxTokens)
 	temperature := p.GetTemperature(req.Temperature)

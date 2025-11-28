@@ -1,6 +1,7 @@
 package providers
 
 import (
+	"github.com/kart-io/goagent/llm/common"
 	"testing"
 
 	agentErrors "github.com/kart-io/goagent/errors"
@@ -9,19 +10,19 @@ import (
 )
 
 func TestMapHTTPError_BadRequest(t *testing.T) {
-	httpErr := HTTPError{
+	httpErr := common.HTTPError{
 		StatusCode: 400,
 		Body:       `{"error": "invalid parameter"}`,
 	}
 
-	err := MapHTTPError(httpErr, "test-provider", "test-model", nil)
+	err := common.MapHTTPError(httpErr, "test-provider", "test-model", nil)
 
 	require.Error(t, err)
 	assert.Equal(t, agentErrors.CodeInvalidInput, agentErrors.GetCode(err))
 }
 
 func TestMapHTTPError_BadRequestWithParser(t *testing.T) {
-	httpErr := HTTPError{
+	httpErr := common.HTTPError{
 		StatusCode: 400,
 		Body:       `{"error": {"message": "custom error"}}`,
 	}
@@ -30,7 +31,7 @@ func TestMapHTTPError_BadRequestWithParser(t *testing.T) {
 		return "custom error"
 	}
 
-	err := MapHTTPError(httpErr, "test-provider", "test-model", parseError)
+	err := common.MapHTTPError(httpErr, "test-provider", "test-model", parseError)
 
 	require.Error(t, err)
 	assert.Equal(t, agentErrors.CodeInvalidInput, agentErrors.GetCode(err))
@@ -38,19 +39,19 @@ func TestMapHTTPError_BadRequestWithParser(t *testing.T) {
 }
 
 func TestMapHTTPError_Unauthorized(t *testing.T) {
-	httpErr := HTTPError{
+	httpErr := common.HTTPError{
 		StatusCode: 401,
 		Body:       "",
 	}
 
-	err := MapHTTPError(httpErr, "test-provider", "test-model", nil)
+	err := common.MapHTTPError(httpErr, "test-provider", "test-model", nil)
 
 	require.Error(t, err)
 	assert.Equal(t, agentErrors.CodeInvalidConfig, agentErrors.GetCode(err))
 }
 
 func TestMapHTTPError_UnauthorizedWithMessage(t *testing.T) {
-	httpErr := HTTPError{
+	httpErr := common.HTTPError{
 		StatusCode: 401,
 		Body:       `{"error": "invalid API key"}`,
 	}
@@ -59,7 +60,7 @@ func TestMapHTTPError_UnauthorizedWithMessage(t *testing.T) {
 		return "invalid API key"
 	}
 
-	err := MapHTTPError(httpErr, "test-provider", "test-model", parseError)
+	err := common.MapHTTPError(httpErr, "test-provider", "test-model", parseError)
 
 	require.Error(t, err)
 	assert.Equal(t, agentErrors.CodeInvalidConfig, agentErrors.GetCode(err))
@@ -67,19 +68,19 @@ func TestMapHTTPError_UnauthorizedWithMessage(t *testing.T) {
 }
 
 func TestMapHTTPError_Forbidden(t *testing.T) {
-	httpErr := HTTPError{
+	httpErr := common.HTTPError{
 		StatusCode: 403,
 		Body:       "",
 	}
 
-	err := MapHTTPError(httpErr, "test-provider", "test-model", nil)
+	err := common.MapHTTPError(httpErr, "test-provider", "test-model", nil)
 
 	require.Error(t, err)
 	assert.Equal(t, agentErrors.CodeInvalidConfig, agentErrors.GetCode(err))
 }
 
 func TestMapHTTPError_ForbiddenWithMessage(t *testing.T) {
-	httpErr := HTTPError{
+	httpErr := common.HTTPError{
 		StatusCode: 403,
 		Body:       `{"error": "insufficient permissions"}`,
 	}
@@ -88,7 +89,7 @@ func TestMapHTTPError_ForbiddenWithMessage(t *testing.T) {
 		return "insufficient permissions"
 	}
 
-	err := MapHTTPError(httpErr, "test-provider", "test-model", parseError)
+	err := common.MapHTTPError(httpErr, "test-provider", "test-model", parseError)
 
 	require.Error(t, err)
 	assert.Equal(t, agentErrors.CodeInvalidConfig, agentErrors.GetCode(err))
@@ -96,19 +97,19 @@ func TestMapHTTPError_ForbiddenWithMessage(t *testing.T) {
 }
 
 func TestMapHTTPError_NotFound(t *testing.T) {
-	httpErr := HTTPError{
+	httpErr := common.HTTPError{
 		StatusCode: 404,
 		Body:       "",
 	}
 
-	err := MapHTTPError(httpErr, "test-provider", "test-model", nil)
+	err := common.MapHTTPError(httpErr, "test-provider", "test-model", nil)
 
 	require.Error(t, err)
 	assert.Equal(t, agentErrors.CodeLLMResponse, agentErrors.GetCode(err))
 }
 
 func TestMapHTTPError_NotFoundWithMessage(t *testing.T) {
-	httpErr := HTTPError{
+	httpErr := common.HTTPError{
 		StatusCode: 404,
 		Body:       `{"error": "model not found"}`,
 	}
@@ -117,7 +118,7 @@ func TestMapHTTPError_NotFoundWithMessage(t *testing.T) {
 		return "model not found"
 	}
 
-	err := MapHTTPError(httpErr, "test-provider", "test-model", parseError)
+	err := common.MapHTTPError(httpErr, "test-provider", "test-model", parseError)
 
 	require.Error(t, err)
 	assert.Equal(t, agentErrors.CodeLLMResponse, agentErrors.GetCode(err))
@@ -125,26 +126,26 @@ func TestMapHTTPError_NotFoundWithMessage(t *testing.T) {
 }
 
 func TestMapHTTPError_RateLimitWithRetryAfter(t *testing.T) {
-	httpErr := HTTPError{
+	httpErr := common.HTTPError{
 		StatusCode: 429,
 		Headers: map[string]string{
 			"Retry-After": "120",
 		},
 	}
 
-	err := MapHTTPError(httpErr, "test-provider", "test-model", nil)
+	err := common.MapHTTPError(httpErr, "test-provider", "test-model", nil)
 
 	require.Error(t, err)
 	assert.Equal(t, agentErrors.CodeLLMRateLimit, agentErrors.GetCode(err))
 }
 
 func TestMapHTTPError_RateLimitNoRetryAfter(t *testing.T) {
-	httpErr := HTTPError{
+	httpErr := common.HTTPError{
 		StatusCode: 429,
 		Headers:    map[string]string{},
 	}
 
-	err := MapHTTPError(httpErr, "test-provider", "test-model", nil)
+	err := common.MapHTTPError(httpErr, "test-provider", "test-model", nil)
 
 	require.Error(t, err)
 	assert.Equal(t, agentErrors.CodeLLMRateLimit, agentErrors.GetCode(err))
@@ -191,12 +192,12 @@ func TestMapHTTPError_InternalServerError(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			httpErr := HTTPError{
+			httpErr := common.HTTPError{
 				StatusCode: tc.statusCode,
 				Body:       tc.body,
 			}
 
-			err := MapHTTPError(httpErr, "test-provider", "test-model", tc.parseError)
+			err := common.MapHTTPError(httpErr, "test-provider", "test-model", tc.parseError)
 
 			require.Error(t, err)
 			assert.Equal(t, agentErrors.CodeLLMRequest, agentErrors.GetCode(err))
@@ -205,12 +206,12 @@ func TestMapHTTPError_InternalServerError(t *testing.T) {
 }
 
 func TestMapHTTPError_UnexpectedStatus(t *testing.T) {
-	httpErr := HTTPError{
+	httpErr := common.HTTPError{
 		StatusCode: 418, // I'm a teapot
 		Body:       "",
 	}
 
-	err := MapHTTPError(httpErr, "test-provider", "test-model", nil)
+	err := common.MapHTTPError(httpErr, "test-provider", "test-model", nil)
 
 	require.Error(t, err)
 	assert.Equal(t, agentErrors.CodeLLMRequest, agentErrors.GetCode(err))
@@ -220,5 +221,5 @@ func TestMapHTTPError_UnexpectedStatus(t *testing.T) {
 func TestRestyResponseToHTTPError(t *testing.T) {
 	// This is tested indirectly through other provider tests
 	// We just verify the function signature here
-	assert.NotNil(t, RestyResponseToHTTPError)
+	assert.NotNil(t, common.RestyResponseToHTTPError)
 }

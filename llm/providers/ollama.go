@@ -32,7 +32,7 @@ func NewOllama(config *agentllm.LLMOptions) (*OllamaClient, error) {
 
 // NewOllamaWithOptions 使用选项模式创建 Ollama 客户端
 func NewOllamaWithOptions(opts ...agentllm.ClientOption) (*OllamaClient, error) {
-	// 创建 BaseProvider，统一处理 Options
+	// 创建 common.BaseProvider，统一处理 Options
 	base := common.NewBaseProvider(opts...)
 
 	// 应用 Provider 特定的默认值（Ollama 不需要 API Key）
@@ -50,7 +50,7 @@ func NewOllamaWithOptions(opts ...agentllm.ClientOption) (*OllamaClient, error) 
 		timeout = 120 * time.Second
 	}
 
-	// 使用 BaseProvider 的 NewHTTPClient 方法创建 HTTP 客户端
+	// 使用 common.BaseProvider 的 NewHTTPClient 方法创建 HTTP 客户端
 	client := base.NewHTTPClient(common.HTTPClientConfig{
 		Timeout: timeout,
 		Headers: map[string]string{
@@ -61,8 +61,8 @@ func NewOllamaWithOptions(opts ...agentllm.ClientOption) (*OllamaClient, error) 
 
 	return &OllamaClient{
 		BaseProvider: base,
-		baseURL:      strings.TrimRight(base.Config.BaseURL, "/"),
-		client:       client,
+		baseURL:             strings.TrimRight(base.Config.BaseURL, "/"),
+		client:              client,
 	}, nil
 }
 
@@ -213,7 +213,7 @@ func (c *OllamaClient) Chat(ctx context.Context, messages []agentllm.Message) (*
 		}
 	}
 
-	// 使用 BaseProvider 的统一参数处理方法
+	// 使用 common.BaseProvider 的统一参数处理方法
 	model := c.GetModel("")
 	maxTokens := c.GetMaxTokens(0)
 	temperature := c.GetTemperature(0)
