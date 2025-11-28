@@ -117,12 +117,7 @@ func main() {
 	}
 
 	// 初始化 LLM 客户端
-	llmClient, err := providers.NewDeepSeek(&llm.LLMOptions{
-		APIKey:      apiKey,
-		Model:       "deepseek-chat",
-		MaxTokens:   2000,
-		Temperature: 0.7,
-	})
+	llmClient, err := providers.NewDeepSeekWithOptions(agentllm.WithAPIKey(apiKey), agentllm.WithModel("deepseek-chat"), agentllm.WithMaxTokens(2000), agentllm.WithTemperature(0.7))
 	if err != nil {
 		wrappedErr := errors.Wrap(err, errors.CodeLLMRequest, "failed to create LLM client").
 			WithOperation("initialization").
