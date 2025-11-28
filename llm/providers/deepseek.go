@@ -3,6 +3,7 @@ package providers
 import (
 	"context"
 	"fmt"
+	"github.com/kart-io/goagent/llm/common"
 	"io"
 	"strings"
 	"time"
@@ -20,8 +21,8 @@ import (
 
 // DeepSeekProvider implements LLM interface for DeepSeek
 type DeepSeekProvider struct {
-	*BaseProvider
-	*ProviderCapabilities
+	*common.BaseProvider
+	*common.ProviderCapabilities
 	client  *httpclient.Client
 	apiKey  string
 	baseURL string
@@ -112,14 +113,14 @@ type DeepSeekStreamResponse struct {
 // NewDeepSeek creates a new DeepSeek provider using LLMOptions (deprecated).
 // Deprecated: Use NewDeepSeekWithOptions instead.
 func NewDeepSeek(config *agentllm.LLMOptions) (*DeepSeekProvider, error) {
-	opts := ConfigToOptions(config)
+	opts := common.ConfigToOptions(config)
 	return NewDeepSeekWithOptions(opts...)
 }
 
 // NewDeepSeekWithOptions creates a new DeepSeek provider using options pattern
 func NewDeepSeekWithOptions(opts ...agentllm.ClientOption) (*DeepSeekProvider, error) {
-	// 创建 BaseProvider，统一处理 Options
-	base := NewBaseProvider(opts...)
+	// 创建 common.BaseProvider，统一处理 Options
+	base := common.NewBaseProvider(opts...)
 
 	// 应用 Provider 特定的默认值
 	base.ApplyProviderDefaults(
@@ -135,8 +136,8 @@ func NewDeepSeekWithOptions(opts ...agentllm.ClientOption) (*DeepSeekProvider, e
 		return nil, err
 	}
 
-	// Use the BaseProvider's NewHTTPClient method
-	client := base.NewHTTPClient(HTTPClientConfig{
+	// Use the common.BaseProvider's NewHTTPClient method
+	client := base.NewHTTPClient(common.HTTPClientConfig{
 		Timeout: base.GetTimeout(),
 		Headers: map[string]string{
 			"Content-Type":  "application/json",
@@ -148,7 +149,7 @@ func NewDeepSeekWithOptions(opts ...agentllm.ClientOption) (*DeepSeekProvider, e
 
 	provider := &DeepSeekProvider{
 		BaseProvider: base,
-		ProviderCapabilities: NewProviderCapabilities(
+		ProviderCapabilities: common.NewProviderCapabilities(
 			agentllm.CapabilityCompletion,
 			agentllm.CapabilityChat,
 			agentllm.CapabilityStreaming,
@@ -166,7 +167,7 @@ func NewDeepSeekWithOptions(opts ...agentllm.ClientOption) (*DeepSeekProvider, e
 // Complete implements basic text completion
 func (p *DeepSeekProvider) Complete(ctx context.Context, req *agentllm.CompletionRequest) (*agentllm.CompletionResponse, error) {
 	// Convert messages to DeepSeek format using shared utility
-	messages := ConvertMessages(req.Messages, func(msg agentllm.Message) DeepSeekMessage {
+	messages := common.ConvertMessages(req.Messages, func(msg agentllm.Message) DeepSeekMessage {
 		return DeepSeekMessage{
 			Role:    msg.Role,
 			Content: msg.Content,
@@ -287,7 +288,7 @@ func (p *DeepSeekProvider) Stream(ctx context.Context, prompt string) (<-chan st
 }
 
 // GenerateWithTools implements tool calling
-func (p *DeepSeekProvider) GenerateWithTools(ctx context.Context, prompt string, tools []interfaces.Tool) (*ToolCallResponse, error) {
+func (p *DeepSeekProvider) GenerateWithTools(ctx context.Context, prompt string, tools []interfaces.Tool) (*common.ToolCallResponse, error) {
 	// Convert tools to DeepSeek format
 	dsTools := p.convertToolsToDeepSeek(tools)
 
@@ -326,7 +327,7 @@ func (p *DeepSeekProvider) GenerateWithTools(ctx context.Context, prompt string,
 	}
 
 	// Convert to our format
-	result := &ToolCallResponse{
+	result := &common.ToolCallResponse{
 		Content: dsResp.Choices[0].Message.Content,
 	}
 
@@ -337,7 +338,7 @@ func (p *DeepSeekProvider) GenerateWithTools(ctx context.Context, prompt string,
 			continue // Skip invalid arguments
 		}
 
-		result.ToolCalls = append(result.ToolCalls, ToolCall{
+		result.ToolCalls = append(result.ToolCalls, common.ToolCall{
 			ID:        tc.ID,
 			Name:      tc.Function.Name,
 			Arguments: args,
@@ -348,8 +349,8 @@ func (p *DeepSeekProvider) GenerateWithTools(ctx context.Context, prompt string,
 }
 
 // StreamWithTools implements streaming tool calls
-func (p *DeepSeekProvider) StreamWithTools(ctx context.Context, prompt string, tools []interfaces.Tool) (<-chan ToolChunk, error) {
-	chunks := make(chan ToolChunk, 100)
+func (p *DeepSeekProvider) StreamWithTools(ctx context.Context, prompt string, tools []interfaces.Tool) (<-chan common.ToolChunk, error) {
+	chunks := make(chan common.ToolChunk, 100)
 
 	// Convert tools to DeepSeek format
 	dsTools := p.convertToolsToDeepSeek(tools)
@@ -382,7 +383,7 @@ func (p *DeepSeekProvider) StreamWithTools(ctx context.Context, prompt string, t
 		defer close(chunks)
 
 		decoder := json.NewDecoder(strings.NewReader(resp.String()))
-		var currentToolCall *ToolCall
+		var currentToolCall *common.ToolCall
 		var argsBuffer string
 
 		for {
@@ -394,12 +395,12 @@ func (p *DeepSeekProvider) StreamWithTools(ctx context.Context, prompt string, t
 						var args map[string]interface{}
 						if unmarshalErr := json.Unmarshal([]byte(argsBuffer), &args); unmarshalErr == nil {
 							currentToolCall.Arguments = args
-							chunks <- ToolChunk{Type: "tool_call", Value: currentToolCall}
+							chunks <- common.ToolChunk{Type: "tool_call", Value: currentToolCall}
 						}
 					}
 					return
 				}
-				chunks <- ToolChunk{Type: "error", Value: err}
+				chunks <- common.ToolChunk{Type: "error", Value: err}
 				return
 			}
 
@@ -408,7 +409,7 @@ func (p *DeepSeekProvider) StreamWithTools(ctx context.Context, prompt string, t
 
 				// Handle content
 				if choice.Delta.Content != "" {
-					chunks <- ToolChunk{Type: "content", Value: choice.Delta.Content}
+					chunks <- common.ToolChunk{Type: "content", Value: choice.Delta.Content}
 				}
 
 				// Handle tool calls
@@ -420,20 +421,20 @@ func (p *DeepSeekProvider) StreamWithTools(ctx context.Context, prompt string, t
 							var args map[string]interface{}
 							if err := json.Unmarshal([]byte(argsBuffer), &args); err == nil {
 								currentToolCall.Arguments = args
-								chunks <- ToolChunk{Type: "tool_call", Value: currentToolCall}
+								chunks <- common.ToolChunk{Type: "tool_call", Value: currentToolCall}
 							}
 						}
 
-						currentToolCall = &ToolCall{
+						currentToolCall = &common.ToolCall{
 							ID:   tc.ID,
 							Name: tc.Function.Name,
 						}
 						argsBuffer = tc.Function.Arguments
-						chunks <- ToolChunk{Type: "tool_name", Value: tc.Function.Name}
+						chunks <- common.ToolChunk{Type: "tool_name", Value: tc.Function.Name}
 					} else if tc.Function.Arguments != "" {
 						// Continue arguments
 						argsBuffer += tc.Function.Arguments
-						chunks <- ToolChunk{Type: "tool_args", Value: tc.Function.Arguments}
+						chunks <- common.ToolChunk{Type: "tool_args", Value: tc.Function.Arguments}
 					}
 				}
 
@@ -527,14 +528,14 @@ func (p *DeepSeekProvider) callAPI(ctx context.Context, endpoint string, payload
 	url := p.baseURL + endpoint
 	model := p.GetModel("")
 
-	// Use the shared retry logic from BaseProvider
-	retryConfig := RetryConfig{
+	// Use the shared retry logic from common.BaseProvider
+	retryConfig := common.RetryConfig{
 		MaxAttempts: 3,
 		BaseDelay:   1 * time.Second,
 		MaxDelay:    10 * time.Second,
 	}
 
-	return ExecuteWithRetry(ctx, retryConfig, p.ProviderName(), func(ctx context.Context) (*resty.Response, error) {
+	return common.ExecuteWithRetry(ctx, retryConfig, p.ProviderName(), func(ctx context.Context) (*resty.Response, error) {
 		resp, err := p.client.R().
 			SetContext(ctx).
 			SetBody(payload).
@@ -547,8 +548,8 @@ func (p *DeepSeekProvider) callAPI(ctx context.Context, endpoint string, payload
 
 		if !resp.IsSuccess() {
 			// Use shared HTTP error mapping
-			httpErr := RestyResponseToHTTPError(resp)
-			return nil, MapHTTPError(httpErr, p.ProviderName(), model, func(body string) string {
+			httpErr := common.RestyResponseToHTTPError(resp)
+			return nil, common.MapHTTPError(httpErr, p.ProviderName(), model, func(body string) string {
 				// Extract error message from DeepSeek response if possible
 				var errorResp struct {
 					Error struct {
@@ -608,7 +609,7 @@ type DeepSeekStreamingProvider struct {
 
 // NewDeepSeekStreaming creates a streaming-optimized provider
 func NewDeepSeekStreaming(config *agentllm.LLMOptions) (*DeepSeekStreamingProvider, error) {
-	base, err := NewDeepSeekWithOptions(ConfigToOptions(config)...)
+	base, err := NewDeepSeekWithOptions(common.ConfigToOptions(config)...)
 	if err != nil {
 		return nil, err
 	}

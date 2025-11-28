@@ -37,7 +37,7 @@ func NewGemini(config *agentllm.LLMOptions) (*GeminiProvider, error) {
 
 // NewGeminiWithOptions creates a new Gemini provider using options pattern
 func NewGeminiWithOptions(opts ...agentllm.ClientOption) (*GeminiProvider, error) {
-	// 创建 BaseProvider，统一处理 Options
+	// 创建 common.BaseProvider，统一处理 Options
 	base := common.NewBaseProvider(opts...)
 
 	// 应用 Provider 特定的默认值
@@ -68,7 +68,7 @@ func NewGeminiWithOptions(opts ...agentllm.ClientOption) (*GeminiProvider, error
 	// Initialize the model
 	model := client.GenerativeModel(modelName)
 
-	// Configure model parameters using BaseProvider methods
+	// Configure model parameters using common.BaseProvider methods
 	maxTokens := base.GetMaxTokens(0)
 	if maxTokens > 0x7FFFFFFF { // Max int32
 		maxTokens = 0x7FFFFFFF
@@ -135,7 +135,7 @@ func (p *GeminiProvider) Complete(ctx context.Context, req *agentllm.CompletionR
 		return nil, agentErrors.NewInvalidInputError("gemini_provider", "last_message", "last message must be from user")
 	}
 
-	// Apply request-specific parameters using BaseProvider
+	// Apply request-specific parameters using common.BaseProvider
 	maxTokens := p.GetMaxTokens(req.MaxTokens)
 	if maxTokens > 0x7FFFFFFF { // Max int32
 		maxTokens = 0x7FFFFFFF
@@ -227,7 +227,7 @@ func (p *GeminiProvider) GenerateWithTools(ctx context.Context, prompt string, t
 	// Convert tools to Gemini function declarations
 	functionDeclarations := p.convertToolsToFunctions(tools)
 
-	// Configure model with tools using BaseProvider
+	// Configure model with tools using common.BaseProvider
 	modelName := p.GetModel("")
 	maxTokens := p.GetMaxTokens(0)
 	temperature := p.GetTemperature(0)
@@ -292,7 +292,7 @@ func (p *GeminiProvider) StreamWithTools(ctx context.Context, prompt string, too
 	// Convert tools to Gemini function declarations
 	functionDeclarations := p.convertToolsToFunctions(tools)
 
-	// Configure model with tools using BaseProvider
+	// Configure model with tools using common.BaseProvider
 	modelName := p.GetModel("")
 	maxTokens := p.GetMaxTokens(0)
 	temperature := p.GetTemperature(0)

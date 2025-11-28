@@ -3,6 +3,7 @@ package providers
 import (
 	"bytes"
 	"context"
+	"github.com/kart-io/goagent/llm/common"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -1043,11 +1044,11 @@ func TestGenerateCallID(t *testing.T) {
 	assert.True(t, strings.HasPrefix(id2, "call_"))
 }
 
-// TestToolCallResponse_Structure tests ToolCallResponse structure
+// TestToolCallResponse_Structure tests common.ToolCallResponse structure
 func TestToolCallResponse_Structure(t *testing.T) {
-	response := &ToolCallResponse{
+	response := &common.ToolCallResponse{
 		Content: "Response content",
-		ToolCalls: []ToolCall{
+		ToolCalls: []common.ToolCall{
 			{
 				ID:   "call_123",
 				Name: "test_tool",
@@ -1066,38 +1067,38 @@ func TestToolCallResponse_Structure(t *testing.T) {
 	assert.Equal(t, 42, response.ToolCalls[0].Arguments["param2"])
 }
 
-// TestToolChunk_Types tests different ToolChunk types
+// TestToolChunk_Types tests different common.ToolChunk types
 func TestToolChunk_Types(t *testing.T) {
 	tests := []struct {
 		name  string
-		chunk ToolChunk
+		chunk common.ToolChunk
 	}{
 		{
 			name: "content chunk",
-			chunk: ToolChunk{
+			chunk: common.ToolChunk{
 				Type:  "content",
 				Value: "Some content",
 			},
 		},
 		{
 			name: "tool_name chunk",
-			chunk: ToolChunk{
+			chunk: common.ToolChunk{
 				Type:  "tool_name",
 				Value: "get_weather",
 			},
 		},
 		{
 			name: "tool_args chunk",
-			chunk: ToolChunk{
+			chunk: common.ToolChunk{
 				Type:  "tool_args",
 				Value: `{"location":"NYC"}`,
 			},
 		},
 		{
 			name: "tool_call chunk",
-			chunk: ToolChunk{
+			chunk: common.ToolChunk{
 				Type: "tool_call",
-				Value: ToolCall{
+				Value: common.ToolCall{
 					ID:   "call_456",
 					Name: "calculator",
 				},
