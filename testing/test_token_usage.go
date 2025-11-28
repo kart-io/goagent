@@ -26,14 +26,13 @@ func main() {
 	}
 
 	// 初始化 LLM 客户端
-	llmClient, err := providers.NewDeepSeek(&llm.LLMOptions{
-		Provider:    constants.ProviderDeepSeek,
-		APIKey:      apiKey,
-		Model:       "deepseek-chat",
-		Temperature: 0.7,
-		MaxTokens:   500,
-		Timeout:     30,
-	})
+	llmClient, err := providers.NewDeepSeekWithOptions(
+		llm.WithAPIKey(apiKey),
+		llm.WithModel("deepseek-chat"),
+		llm.WithTemperature(0.7),
+		llm.WithMaxTokens(500),
+		llm.WithTimeout(30),
+	)
 	if err != nil {
 		fmt.Printf("创建 LLM 客户端失败: %v\n", err)
 		os.Exit(1)

@@ -60,12 +60,10 @@ func TestSupervisorAgent_DeepSeek_Optimized(t *testing.T) {
 
 	// Create DeepSeek LLM client
 	apiKey := testhelpers.RequireEnv(t, "DEEPSEEK_API_KEY")
-	config := &llm.LLMOptions{
-		APIKey: apiKey,
-		Model:  "deepseek-chat",
-	}
-
-	llmClient, err := providers.NewDeepSeek(config)
+	llmClient, err := providers.NewDeepSeekWithOptions(
+		llm.WithAPIKey(apiKey),
+		llm.WithModel("deepseek-chat"),
+	)
 	require.NoError(t, err, "Failed to create DeepSeek client")
 
 	// Create the SupervisorAgent with hierarchical strategy
