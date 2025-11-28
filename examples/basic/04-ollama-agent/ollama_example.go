@@ -83,12 +83,11 @@ func ollamaAgentExample() {
 	fmt.Println("-----------------------")
 
 	// 创建 Ollama 客户端（使用标准配置）
-	ollamaClient, err := providers.NewOllama(&llm.LLMOptions{
-		Provider:    constants.ProviderOllama,
-		Model:       "gemma3:12b", // 或者使用其他模型如 "mistral", "codellama", "phi"
-		Temperature: 0.7,
-		MaxTokens:   1000,
-	})
+	ollamaClient, err := providers.NewOllamaWithOptions(
+		llm.WithModel("gemma3:12b"), // 或者使用其他模型如 "mistral", "codellama", "phi"
+		llm.WithTemperature(0.7),
+		llm.WithMaxTokens(1000),
+	)
 	if err != nil {
 		log.Printf("Error creating Ollama client: %v\n", err)
 		return

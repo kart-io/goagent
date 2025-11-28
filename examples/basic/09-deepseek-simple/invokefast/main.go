@@ -100,17 +100,14 @@ func runMultiStepExample(apiKey string) {
 	fmt.Println("（InvokeFast 优化在内部自动生效）")
 	fmt.Println()
 
-	// 创建 DeepSeek 配置
-	config := &llm.LLMOptions{
-		APIKey:      apiKey,
-		Model:       "deepseek-chat",
-		Temperature: 0.7,
-		MaxTokens:   400,
-		Timeout:     30,
-	}
-
 	// 创建 DeepSeek provider
-	client, err := providers.NewDeepSeek(config)
+	client, err := providers.NewDeepSeekWithOptions(
+		llm.WithAPIKey(apiKey),
+		llm.WithModel("deepseek-chat"),
+		llm.WithTemperature(0.7),
+		llm.WithMaxTokens(400),
+		llm.WithTimeout(30),
+	)
 	if err != nil {
 		log.Fatalf("创建 DeepSeek provider 失败: %v", err)
 	}
@@ -184,17 +181,14 @@ func runStructuredDataExample(apiKey string) {
 	fmt.Println("（使用多个专业 Agent 协同生成结构化数据）")
 	fmt.Println()
 
-	// 创建 DeepSeek 配置
-	config := &llm.LLMOptions{
-		APIKey:      apiKey,
-		Model:       "deepseek-chat",
-		Temperature: 0.3, // 使用较低的 temperature 获得稳定输出
-		MaxTokens:   500,
-		Timeout:     30,
-	}
-
-	// 创建 DeepSeek provider
-	client, err := providers.NewDeepSeek(config)
+	// 创建 DeepSeek provider（使用较低的 temperature 获得稳定输出）
+	client, err := providers.NewDeepSeekWithOptions(
+		llm.WithAPIKey(apiKey),
+		llm.WithModel("deepseek-chat"),
+		llm.WithTemperature(0.3),
+		llm.WithMaxTokens(500),
+		llm.WithTimeout(30),
+	)
 	if err != nil {
 		log.Fatalf("创建 DeepSeek provider 失败: %v", err)
 	}
