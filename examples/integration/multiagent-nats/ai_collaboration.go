@@ -204,15 +204,13 @@ func RunAICollaboration() {
 	fmt.Println()
 
 	// 创建 DeepSeek LLM 客户端
-	llmConfig := &llm.LLMOptions{
-		APIKey:      apiKey,
-		Model:       "deepseek-chat",
-		Temperature: 0.7,
-		MaxTokens:   2000,
-		Timeout:     30,
-	}
-
-	llmClient, err := providers.NewDeepSeek(llmConfig)
+	llmClient, err := providers.NewDeepSeekWithOptions(
+		llm.WithAPIKey(apiKey),
+		llm.WithModel("deepseek-chat"),
+		llm.WithTemperature(0.7),
+		llm.WithMaxTokens(2000),
+		llm.WithTimeout(30),
+	)
 	if err != nil {
 		log.Fatalf("❌ Failed to create DeepSeek client: %v", err)
 	}

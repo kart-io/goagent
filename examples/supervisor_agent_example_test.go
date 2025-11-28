@@ -107,14 +107,10 @@ func TestSupervisorAgent_DeepSeek_Example(t *testing.T) {
 
 	}
 
-	config := &llm.LLMOptions{
-
-		APIKey: apiKey,
-
-		Model: "deepseek-chat",
-	}
-
-	llm, err := providers.NewDeepSeek(config)
+	llm, err := providers.NewDeepSeekWithOptions(
+		llm.WithAPIKey(apiKey),
+		llm.WithModel("deepseek-chat"),
+	)
 
 	if err != nil {
 
