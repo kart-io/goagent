@@ -255,7 +255,7 @@ wg.Wait()
 
 ## Files Modified/Created
 
-1. **Created**: `/Users/costalong/code/go/src/github.com/kart/k8s-agent/agents/supervisor_test.go`
+1. **Created**: `/Users/costalong/code/go/src/github.com/kart/goagent/agents/supervisor_test.go`
    - 800+ lines of test code
    - 25+ test functions
    - Comprehensive coverage of supervisor and router implementations

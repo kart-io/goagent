@@ -8,10 +8,12 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/core/checkpoint"
 )
 
 func TestNewInterruptManager(t *testing.T) {
-	checkpointer := NewInMemorySaver()
+	checkpointer := checkpoint.NewInMemorySaver()
 	manager := NewInterruptManager(checkpointer)
 
 	assert.NotNil(t, manager)
@@ -210,7 +212,7 @@ func TestInterruptManager_CancelInterrupt(t *testing.T) {
 }
 
 func TestInterruptManager_WithCheckpointer(t *testing.T) {
-	checkpointer := NewInMemorySaver()
+	checkpointer := checkpoint.NewInMemorySaver()
 	manager := NewInterruptManager(checkpointer)
 	ctx := context.Background()
 

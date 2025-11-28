@@ -251,7 +251,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Refactored from k8s-agent monolithic architecture
+- Refactored from goagent monolithic architecture
 - Extracted pkg/agent as standalone framework
 - Reorganized documentation structure
 - Consolidated import layering rules
@@ -310,7 +310,7 @@ For breaking changes, see:
 
 ---
 
-**Note**: This is the initial release (1.0.0) extracted from the k8s-agent project.
+**Note**: This is the initial release (1.0.0) extracted from the goagent project.
 Historical development is documented in the [archive](docs/archive/) directory.
 
 [1.0.0]: https://github.com/kart-io/goagent/releases/tag/v1.0.0

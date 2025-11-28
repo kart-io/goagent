@@ -365,7 +365,7 @@ The test suite follows industry best practices, is CI/CD ready, and provides con
 ---
 
 **Test Suite Details**
-- Location: `/Users/costalong/code/go/src/github.com/kart/k8s-agent/distributed/`
+- Location: `/Users/costalong/code/go/src/github.com/kart/goagent/distributed/`
 - Coverage: 92.4% (all tests passing)
 - Test Files: 4 files with 97 test cases
 - Execution Time: ~5.5 seconds

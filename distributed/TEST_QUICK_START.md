@@ -19,7 +19,7 @@ The test suite consists of 4 test files with 97 test cases:
 
 ### Run All Tests
 ```bash
-cd /Users/costalong/code/go/src/github.com/kart/k8s-agent
+cd /Users/costalong/code/go/src/github.com/kart/goagent
 go test ./distributed -v
 ```
 
