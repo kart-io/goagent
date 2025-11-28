@@ -63,9 +63,9 @@ func NewKimiWithOptions(opts ...agentllm.ClientOption) (*KimiClient, error) {
 
 	return &KimiClient{
 		BaseProvider: base,
-		apiKey:              base.Config.APIKey,
-		baseURL:             strings.TrimRight(base.Config.BaseURL, "/"),
-		client:              client,
+		apiKey:       base.Config.APIKey,
+		baseURL:      strings.TrimRight(base.Config.BaseURL, "/"),
+		client:       client,
 	}, nil
 }
 

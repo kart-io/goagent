@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	agentllm "github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/constants"
 	"github.com/kart-io/goagent/utils/json"
 
@@ -268,10 +269,7 @@ func TestAnthropicComplete(t *testing.T) {
 			defer server.Close()
 
 			// Create provider
-			provider, err := NewAnthropic(&llm.LLMOptions{
-				APIKey:  "test-key",
-				BaseURL: server.URL,
-			})
+			provider, err := NewAnthropicWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(server.URL))
 			require.NoError(t, err)
 
 			// Test Complete
@@ -312,10 +310,7 @@ func TestAnthropicChat(t *testing.T) {
 	}))
 	defer server.Close()
 
-	provider, err := NewAnthropic(&llm.LLMOptions{
-		APIKey:  "test-key",
-		BaseURL: server.URL,
-	})
+	provider, err := NewAnthropicWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(server.URL))
 	require.NoError(t, err)
 
 	resp, err := provider.Chat(context.Background(), []llm.Message{
@@ -412,10 +407,7 @@ func TestAnthropicErrorHandling(t *testing.T) {
 			}))
 			defer server.Close()
 
-			provider, err := NewAnthropic(&llm.LLMOptions{
-				APIKey:  "test-key",
-				BaseURL: server.URL,
-			})
+			provider, err := NewAnthropicWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(server.URL))
 			require.NoError(t, err)
 
 			// Use context with shorter retry delays for tests
@@ -460,10 +452,7 @@ func TestAnthropicRetry(t *testing.T) {
 	}))
 	defer server.Close()
 
-	provider, err := NewAnthropic(&llm.LLMOptions{
-		APIKey:  "test-key",
-		BaseURL: server.URL,
-	})
+	provider, err := NewAnthropicWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(server.URL))
 	require.NoError(t, err)
 
 	resp, err := provider.Complete(context.Background(), &llm.CompletionRequest{
@@ -484,10 +473,7 @@ func TestAnthropicRetryExhausted(t *testing.T) {
 	}))
 	defer server.Close()
 
-	provider, err := NewAnthropic(&llm.LLMOptions{
-		APIKey:  "test-key",
-		BaseURL: server.URL,
-	})
+	provider, err := NewAnthropicWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(server.URL))
 	require.NoError(t, err)
 
 	_, err = provider.Complete(context.Background(), &llm.CompletionRequest{
@@ -507,10 +493,7 @@ func TestAnthropicContextCancellation(t *testing.T) {
 	}))
 	defer server.Close()
 
-	provider, err := NewAnthropic(&llm.LLMOptions{
-		APIKey:  "test-key",
-		BaseURL: server.URL,
-	})
+	provider, err := NewAnthropicWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(server.URL))
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -553,10 +536,7 @@ func TestAnthropicStream(t *testing.T) {
 	}))
 	defer server.Close()
 
-	provider, err := NewAnthropic(&llm.LLMOptions{
-		APIKey:  "test-key",
-		BaseURL: server.URL,
-	})
+	provider, err := NewAnthropicWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(server.URL))
 	require.NoError(t, err)
 
 	tokens, err := provider.Stream(context.Background(), "test")
@@ -577,10 +557,7 @@ func TestAnthropicStreamError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	provider, err := NewAnthropic(&llm.LLMOptions{
-		APIKey:  "test-key",
-		BaseURL: server.URL,
-	})
+	provider, err := NewAnthropicWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(server.URL))
 	require.NoError(t, err)
 
 	_, err = provider.Stream(context.Background(), "test")
@@ -590,9 +567,7 @@ func TestAnthropicStreamError(t *testing.T) {
 
 // TestAnthropicProvider tests Provider method
 func TestAnthropicProvider(t *testing.T) {
-	provider, err := NewAnthropic(&llm.LLMOptions{
-		APIKey: "test-key",
-	})
+	provider, err := NewAnthropicWithOptions(agentllm.WithAPIKey("test-key"))
 	require.NoError(t, err)
 
 	assert.Equal(t, constants.ProviderAnthropic, provider.Provider())
@@ -600,10 +575,7 @@ func TestAnthropicProvider(t *testing.T) {
 
 // TestAnthropicModelName tests ModelName method
 func TestAnthropicModelName(t *testing.T) {
-	provider, err := NewAnthropic(&llm.LLMOptions{
-		APIKey: "test-key",
-		Model:  "claude-3-opus-20240229",
-	})
+	provider, err := NewAnthropicWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithModel("claude-3-opus-20240229"))
 	require.NoError(t, err)
 
 	assert.Equal(t, "claude-3-opus-20240229", provider.ModelName())
@@ -631,10 +603,7 @@ func TestAnthropicIsAvailable(t *testing.T) {
 		}))
 		defer server.Close()
 
-		provider, err := NewAnthropic(&llm.LLMOptions{
-			APIKey:  "test-key",
-			BaseURL: server.URL,
-		})
+		provider, err := NewAnthropicWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(server.URL))
 		require.NoError(t, err)
 
 		assert.True(t, provider.IsAvailable())
@@ -646,10 +615,7 @@ func TestAnthropicIsAvailable(t *testing.T) {
 		}))
 		defer server.Close()
 
-		provider, err := NewAnthropic(&llm.LLMOptions{
-			APIKey:  "test-key",
-			BaseURL: server.URL,
-		})
+		provider, err := NewAnthropicWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(server.URL))
 		require.NoError(t, err)
 
 		assert.False(t, provider.IsAvailable())

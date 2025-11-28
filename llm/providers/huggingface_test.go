@@ -250,11 +250,7 @@ func TestHuggingFaceComplete(t *testing.T) {
 			defer server.Close()
 
 			// Create provider
-			provider, err := NewHuggingFace(&agentllm.LLMOptions{
-				APIKey:  "test-key",
-				BaseURL: server.URL,
-				Model:   "test-model",
-			})
+			provider, err := NewHuggingFaceWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(server.URL), agentllm.WithModel("test-model"))
 			require.NoError(t, err)
 
 			// Test Complete
@@ -290,11 +286,7 @@ func TestHuggingFaceChat(t *testing.T) {
 	}))
 	defer server.Close()
 
-	provider, err := NewHuggingFace(&agentllm.LLMOptions{
-		APIKey:  "test-key",
-		BaseURL: server.URL,
-		Model:   "test-model",
-	})
+	provider, err := NewHuggingFaceWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(server.URL), agentllm.WithModel("test-model"))
 	require.NoError(t, err)
 
 	resp, err := provider.Chat(context.Background(), []llm.Message{
@@ -379,11 +371,7 @@ func TestHuggingFaceErrorHandling(t *testing.T) {
 			}))
 			defer server.Close()
 
-			provider, err := NewHuggingFace(&agentllm.LLMOptions{
-				APIKey:  "test-key",
-				BaseURL: server.URL,
-				Model:   "test-model",
-			})
+			provider, err := NewHuggingFaceWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(server.URL), agentllm.WithModel("test-model"))
 			require.NoError(t, err)
 
 			// Use context with shorter retry delays for tests
@@ -427,11 +415,7 @@ func TestHuggingFaceModelLoading(t *testing.T) {
 	}))
 	defer server.Close()
 
-	provider, err := NewHuggingFace(&agentllm.LLMOptions{
-		APIKey:  "test-key",
-		BaseURL: server.URL,
-		Model:   "test-model",
-	})
+	provider, err := NewHuggingFaceWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(server.URL), agentllm.WithModel("test-model"))
 	require.NoError(t, err)
 
 	resp, err := provider.Complete(context.Background(), &llm.CompletionRequest{
@@ -455,11 +439,7 @@ func TestHuggingFaceRetryExhausted(t *testing.T) {
 	}))
 	defer server.Close()
 
-	provider, err := NewHuggingFace(&agentllm.LLMOptions{
-		APIKey:  "test-key",
-		BaseURL: server.URL,
-		Model:   "test-model",
-	})
+	provider, err := NewHuggingFaceWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(server.URL), agentllm.WithModel("test-model"))
 	require.NoError(t, err)
 
 	_, err = provider.Complete(context.Background(), &llm.CompletionRequest{
@@ -479,11 +459,7 @@ func TestHuggingFaceContextCancellation(t *testing.T) {
 	}))
 	defer server.Close()
 
-	provider, err := NewHuggingFace(&agentllm.LLMOptions{
-		APIKey:  "test-key",
-		BaseURL: server.URL,
-		Model:   "test-model",
-	})
+	provider, err := NewHuggingFaceWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(server.URL), agentllm.WithModel("test-model"))
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -529,11 +505,7 @@ func TestHuggingFaceStream(t *testing.T) {
 	}))
 	defer server.Close()
 
-	provider, err := NewHuggingFace(&agentllm.LLMOptions{
-		APIKey:  "test-key",
-		BaseURL: server.URL,
-		Model:   "test-model",
-	})
+	provider, err := NewHuggingFaceWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(server.URL), agentllm.WithModel("test-model"))
 	require.NoError(t, err)
 
 	tokens, err := provider.Stream(context.Background(), "test")
@@ -554,11 +526,7 @@ func TestHuggingFaceStreamError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	provider, err := NewHuggingFace(&agentllm.LLMOptions{
-		APIKey:  "test-key",
-		BaseURL: server.URL,
-		Model:   "test-model",
-	})
+	provider, err := NewHuggingFaceWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(server.URL), agentllm.WithModel("test-model"))
 	require.NoError(t, err)
 
 	_, err = provider.Stream(context.Background(), "test")
@@ -568,9 +536,7 @@ func TestHuggingFaceStreamError(t *testing.T) {
 
 // TestHuggingFaceProvider tests Provider method
 func TestHuggingFaceProvider(t *testing.T) {
-	provider, err := NewHuggingFace(&agentllm.LLMOptions{
-		APIKey: "test-key",
-	})
+	provider, err := NewHuggingFaceWithOptions(agentllm.WithAPIKey("test-key"))
 	require.NoError(t, err)
 
 	assert.Equal(t, constants.ProviderHuggingFace, provider.Provider())
@@ -578,10 +544,7 @@ func TestHuggingFaceProvider(t *testing.T) {
 
 // TestHuggingFaceModelName tests ModelName method
 func TestHuggingFaceModelName(t *testing.T) {
-	provider, err := NewHuggingFace(&agentllm.LLMOptions{
-		APIKey: "test-key",
-		Model:  "bigscience/bloom",
-	})
+	provider, err := NewHuggingFaceWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithModel("bigscience/bloom"))
 	require.NoError(t, err)
 
 	assert.Equal(t, "bigscience/bloom", provider.ModelName())
@@ -589,10 +552,7 @@ func TestHuggingFaceModelName(t *testing.T) {
 
 // TestHuggingFaceMaxTokens tests MaxTokens method
 func TestHuggingFaceMaxTokens(t *testing.T) {
-	provider, err := NewHuggingFace(&agentllm.LLMOptions{
-		APIKey:    "test-key",
-		MaxTokens: 4000,
-	})
+	provider, err := NewHuggingFaceWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithMaxTokens(4000))
 	require.NoError(t, err)
 
 	assert.Equal(t, 4000, provider.MaxTokens())
@@ -615,11 +575,7 @@ func TestHuggingFaceIsAvailable(t *testing.T) {
 		}))
 		defer server.Close()
 
-		provider, err := NewHuggingFace(&llm.LLMOptions{
-			APIKey:  "test-key",
-			BaseURL: server.URL,
-			Model:   "test-model",
-		})
+		provider, err := NewHuggingFaceWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(server.URL), agentllm.WithModel("test-model"))
 		require.NoError(t, err)
 
 		assert.True(t, provider.IsAvailable())
@@ -631,11 +587,7 @@ func TestHuggingFaceIsAvailable(t *testing.T) {
 		}))
 		defer server.Close()
 
-		provider, err := NewHuggingFace(&llm.LLMOptions{
-			APIKey:  "test-key",
-			BaseURL: server.URL,
-			Model:   "test-model",
-		})
+		provider, err := NewHuggingFaceWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(server.URL), agentllm.WithModel("test-model"))
 		require.NoError(t, err)
 
 		assert.False(t, provider.IsAvailable())
