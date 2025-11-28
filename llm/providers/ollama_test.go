@@ -79,10 +79,10 @@ func TestOllama_Complete_Success(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		response := map[string]interface{}{
-			"model":     "llama2",
-			"response":  "Ollama test response",
-			"done":      true,
-			"context":   []int{1, 2, 3},
+			"model":          "llama2",
+			"response":       "Ollama test response",
+			"done":           true,
+			"context":        []int{1, 2, 3},
 			"total_duration": 1000000,
 		}
 		json.NewEncoder(w).Encode(response)
