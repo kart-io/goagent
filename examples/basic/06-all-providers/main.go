@@ -222,12 +222,10 @@ func selectProviderByRequirement(requirement string) llm.Client {
 	switch requirement {
 	case "long-context":
 		// Use Kimi for long context
-		config := &llm.LLMOptions{
-			Provider: constants.ProviderKimi,
-			APIKey:   os.Getenv("KIMI_API_KEY"),
-			Model:    "moonshot-v1-128k",
-		}
-		client, _ := providers.NewKimi(config)
+		client, _ := providers.NewKimiWithOptions(
+			llm.WithAPIKey(os.Getenv("KIMI_API_KEY")),
+			llm.WithModel("moonshot-v1-128k"),
+		)
 		return client
 
 	case "local-privacy":
@@ -237,23 +235,19 @@ func selectProviderByRequirement(requirement string) llm.Client {
 
 	case "chinese":
 		// Use DeepSeek or Kimi for Chinese
-		config := &llm.LLMOptions{
-			Provider: constants.ProviderDeepSeek,
-			APIKey:   os.Getenv("DEEPSEEK_API_KEY"),
-			Model:    "deepseek-chat",
-		}
-		client, _ := providers.NewDeepSeek(config)
+		client, _ := providers.NewDeepSeekWithOptions(
+			llm.WithAPIKey(os.Getenv("DEEPSEEK_API_KEY")),
+			llm.WithModel("deepseek-chat"),
+		)
 		return client
 
 	case "coding":
 		// Use DeepSeek-Coder or Codellama
 		if os.Getenv("DEEPSEEK_API_KEY") != "" {
-			config := &llm.LLMOptions{
-				Provider: constants.ProviderDeepSeek,
-				APIKey:   os.Getenv("DEEPSEEK_API_KEY"),
-				Model:    "deepseek-coder",
-			}
-			client, _ := providers.NewDeepSeek(config)
+			client, _ := providers.NewDeepSeekWithOptions(
+				llm.WithAPIKey(os.Getenv("DEEPSEEK_API_KEY")),
+				llm.WithModel("deepseek-coder"),
+			)
 			return client
 		}
 		// Fallback to Ollama Codellama
@@ -262,32 +256,26 @@ func selectProviderByRequirement(requirement string) llm.Client {
 
 	case "multimodal":
 		// Use Gemini for multimodal
-		config := &llm.LLMOptions{
-			Provider: constants.ProviderGemini,
-			APIKey:   os.Getenv("GEMINI_API_KEY"),
-			Model:    "gemini-pro-vision",
-		}
-		client, _ := providers.NewGemini(config)
+		client, _ := providers.NewGeminiWithOptions(
+			llm.WithAPIKey(os.Getenv("GEMINI_API_KEY")),
+			llm.WithModel("gemini-pro-vision"),
+		)
 		return client
 
 	case "open-source":
 		// Use SiliconFlow for open-source models
-		config := &llm.LLMOptions{
-			Provider: constants.ProviderSiliconFlow,
-			APIKey:   os.Getenv("SILICONFLOW_API_KEY"),
-			Model:    "meta-llama/Meta-Llama-3.1-70B-Instruct",
-		}
-		client, _ := providers.NewSiliconFlow(config)
+		client, _ := providers.NewSiliconFlowWithOptions(
+			llm.WithAPIKey(os.Getenv("SILICONFLOW_API_KEY")),
+			llm.WithModel("meta-llama/Meta-Llama-3.1-70B-Instruct"),
+		)
 		return client
 
 	default:
 		// Default to OpenAI
-		config := &llm.LLMOptions{
-			Provider: constants.ProviderOpenAI,
-			APIKey:   os.Getenv("OPENAI_API_KEY"),
-			Model:    "gpt-3.5-turbo",
-		}
-		client, _ := providers.NewOpenAI(config)
+		client, _ := providers.NewOpenAIWithOptions(
+			llm.WithAPIKey(os.Getenv("OPENAI_API_KEY")),
+			llm.WithModel("gpt-3.5-turbo"),
+		)
 		return client
 	}
 }
