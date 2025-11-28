@@ -125,7 +125,6 @@ func main() {
 		} else {
 			testProvider(ctx, client, "SiliconFlow")
 
-			// Note: ListModels() 方法已移除，请参考 contrib/llm-providers/siliconflow
 			fmt.Println("   📝 SiliconFlow supports models: Qwen, DeepSeek, GLM, Yi, Mistral, Llama, etc.")
 		}
 	} else {
@@ -160,7 +159,6 @@ func main() {
 			fmt.Println("      - File upload and processing capabilities")
 
 			// Show supported models
-			// Note: GetSupportedModels() 和 GetModelContextSize() 方法已移除，请参考 contrib/llm-providers/kimi
 			fmt.Println("   📝 Supported models:")
 			fmt.Println("      - moonshot-v1-8k (context: 8K tokens)")
 			fmt.Println("      - moonshot-v1-32k (context: 32K tokens)")
