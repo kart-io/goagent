@@ -366,9 +366,9 @@ go test -bench=. ./pkg/agent/performance/... -benchmem
 
 Created:
 
-- `/Users/costalong/code/go/src/github.com/kart/k8s-agent/pkg/agent/performance/batch_test.go` (714 lines)
-- `/Users/costalong/code/go/src/github.com/kart/k8s-agent/pkg/agent/performance/pool_test.go` (734 lines)
-- `/Users/costalong/code/go/src/github.com/kart/k8s-agent/pkg/agent/performance/cache_test.go` (1,408 lines)
+- `/Users/costalong/code/go/src/github.com/kart/goagent/pkg/agent/performance/batch_test.go` (714 lines)
+- `/Users/costalong/code/go/src/github.com/kart/goagent/pkg/agent/performance/pool_test.go` (734 lines)
+- `/Users/costalong/code/go/src/github.com/kart/goagent/pkg/agent/performance/cache_test.go` (1,408 lines)
 
 **Total: 2,856 lines of comprehensive test code**
 

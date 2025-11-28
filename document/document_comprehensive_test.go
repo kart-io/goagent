@@ -107,7 +107,7 @@ func TestWebLoader_Load_CustomHeaders(t *testing.T) {
 
 func TestWebLoader_Load_DefaultUserAgent(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "k8s-agent-document-loader/1.0", r.Header.Get("User-Agent"))
+		assert.Equal(t, "goagent-document-loader/1.0", r.Header.Get("User-Agent"))
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("Content"))
 	}))

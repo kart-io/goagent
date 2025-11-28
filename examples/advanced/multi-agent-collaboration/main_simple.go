@@ -13,7 +13,6 @@ import (
 	"github.com/kart-io/goagent/builder"
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/llm"
-	"github.com/kart-io/goagent/llm/constants"
 	"github.com/kart-io/goagent/llm/providers"
 	"github.com/kart-io/goagent/tools"
 )
@@ -121,7 +120,7 @@ func initializeLLMClient() (llm.Client, error) {
 	// Priority 2: Try OpenAI
 	if apiKey := os.Getenv("OPENAI_API_KEY"); apiKey != "" {
 		fmt.Println("Using OpenAI GPT-3.5-turbo")
-		provider, err := providers.NewOpenAIWithOptions(agentllm.WithAPIKey(apiKey), agentllm.WithModel("gpt-3.5-turbo"), agentllm.WithMaxTokens(2000), agentllm.WithTemperature(0.7))
+		provider, err := providers.NewOpenAIWithOptions(llm.WithAPIKey(apiKey), llm.WithModel("gpt-3.5-turbo"), llm.WithMaxTokens(2000), llm.WithTemperature(0.7))
 		if err != nil {
 			return nil, fmt.Errorf("failed to create OpenAI client: %w", err)
 		}
@@ -131,7 +130,7 @@ func initializeLLMClient() (llm.Client, error) {
 	// Priority 3: Try Gemini
 	if apiKey := os.Getenv("GEMINI_API_KEY"); apiKey != "" {
 		fmt.Println("Using Google Gemini")
-		provider, err := providers.NewGeminiWithOptions(agentllm.WithAPIKey(apiKey), agentllm.WithModel("gemini-pro"), agentllm.WithTemperature(0.7), agentllm.WithMaxTokens(2000))
+		provider, err := providers.NewGeminiWithOptions(llm.WithAPIKey(apiKey), llm.WithModel("gemini-pro"), llm.WithTemperature(0.7), llm.WithMaxTokens(2000))
 		if err != nil {
 			return nil, fmt.Errorf("failed to create Gemini client: %w", err)
 		}
@@ -179,6 +178,7 @@ Always call the appropriate tools and return their results.`
 	agent, err := builder.NewAgentBuilder[any, core.State](llmClient).
 		WithSystemPrompt(systemPrompt).
 		WithTools(registry.List()...).
+		WithState(core.NewAgentState()).
 		Build()
 
 	if err != nil {
@@ -212,6 +212,7 @@ Always call the appropriate tools and return their results.`
 	agent, err := builder.NewAgentBuilder[any, core.State](llmClient).
 		WithSystemPrompt(systemPrompt).
 		WithTools(registry.List()...).
+		WithState(core.NewAgentState()).
 		Build()
 
 	if err != nil {
@@ -247,6 +248,7 @@ Always call the appropriate tools and return their results.`
 	agent, err := builder.NewAgentBuilder[any, core.State](llmClient).
 		WithSystemPrompt(systemPrompt).
 		WithTools(registry.List()...).
+		WithState(core.NewAgentState()).
 		Build()
 
 	if err != nil {

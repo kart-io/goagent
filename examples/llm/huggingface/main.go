@@ -42,7 +42,10 @@ func main() {
 // Example 1: Basic Configuration
 func basicExample() {
 	// Initialize provider with API key from environment
-	provider, err := providers.NewHuggingFaceWithOptions(agentllm.WithAPIKey(os.Getenv("HUGGINGFACE_API_KEY"),      // or set directly: APIKey: "your-api-key"), agentllm.WithModel("meta-llama/Meta-Llama-3-8B-Instruct", // Optional: defaults to Meta-Llama-3-8B-Instruct))
+	provider, err := providers.NewHuggingFaceWithOptions(
+		llm.WithAPIKey(os.Getenv("HUGGINGFACE_API_KEY")),
+		llm.WithModel("meta-llama/Meta-Llama-3-8B-Instruct"),
+	)
 	if err != nil {
 		log.Fatalf("Failed to create HuggingFace provider: %v", err)
 	}
@@ -75,7 +78,7 @@ func modelExample() {
 	}
 
 	for _, model := range models {
-		provider, err := providers.NewHuggingFaceWithOptions(agentllm.WithAPIKey(os.Getenv("HUGGINGFACE_API_KEY")), agentllm.WithModel(model))
+		provider, err := providers.NewHuggingFaceWithOptions(llm.WithAPIKey(os.Getenv("HUGGINGFACE_API_KEY")), llm.WithModel(model))
 		if err != nil {
 			log.Printf("Failed to create provider for %s: %v\n", model, err)
 			continue
@@ -104,7 +107,7 @@ func modelExample() {
 
 // Example 3: Streaming Responses
 func streamingExample() {
-	provider, err := providers.NewHuggingFaceWithOptions(agentllm.WithAPIKey(os.Getenv("HUGGINGFACE_API_KEY")), agentllm.WithModel("meta-llama/Meta-Llama-3-8B-Instruct"))
+	provider, err := providers.NewHuggingFaceWithOptions(llm.WithAPIKey(os.Getenv("HUGGINGFACE_API_KEY")), llm.WithModel("meta-llama/Meta-Llama-3-8B-Instruct"))
 	if err != nil {
 		log.Fatalf("Failed to create provider: %v", err)
 	}
@@ -125,7 +128,7 @@ func streamingExample() {
 
 // Example 4: Multi-turn Conversation
 func conversationExample() {
-	provider, err := providers.NewHuggingFaceWithOptions(agentllm.WithAPIKey(os.Getenv("HUGGINGFACE_API_KEY")), agentllm.WithModel("meta-llama/Meta-Llama-3-8B-Instruct"), agentllm.WithTemperature(0.7), agentllm.WithMaxTokens(500))
+	provider, err := providers.NewHuggingFaceWithOptions(llm.WithAPIKey(os.Getenv("HUGGINGFACE_API_KEY")), llm.WithModel("meta-llama/Meta-Llama-3-8B-Instruct"), llm.WithTemperature(0.7), llm.WithMaxTokens(500))
 	if err != nil {
 		log.Fatalf("Failed to create provider: %v", err)
 	}
@@ -174,7 +177,11 @@ func conversationExample() {
 func modelLoadingExample() {
 	// HuggingFace Inference API may need to load models from cold start
 	// The provider automatically retries with exponential backoff (up to 5 attempts)
-	provider, err := providers.NewHuggingFaceWithOptions(agentllm.WithAPIKey(os.Getenv("HUGGINGFACE_API_KEY")), agentllm.WithModel("mistralai/Mixtral-8x7B-Instruct-v0.1"), agentllm.WithTimeout(180, // 3 minutes timeout for model loading))
+	provider, err := providers.NewHuggingFaceWithOptions(
+		llm.WithAPIKey(os.Getenv("HUGGINGFACE_API_KEY")),
+		llm.WithModel("mistralai/Mixtral-8x7B-Instruct-v0.1"),
+		llm.WithTimeout(180), // 3 minutes timeout for model loading)
+	)
 	if err != nil {
 		log.Fatalf("Failed to create provider: %v", err)
 	}
@@ -203,7 +210,7 @@ func modelLoadingExample() {
 
 // Example 6: Custom Inference API Parameters
 func customParametersExample() {
-	provider, err := providers.NewHuggingFaceWithOptions(agentllm.WithAPIKey(os.Getenv("HUGGINGFACE_API_KEY")), agentllm.WithModel("meta-llama/Meta-Llama-3-8B-Instruct"), agentllm.WithTemperature(0.8), agentllm.WithMaxTokens(200))
+	provider, err := providers.NewHuggingFaceWithOptions(llm.WithAPIKey(os.Getenv("HUGGINGFACE_API_KEY")), llm.WithModel("meta-llama/Meta-Llama-3-8B-Instruct"), llm.WithTemperature(0.8), llm.WithMaxTokens(200))
 	if err != nil {
 		log.Fatalf("Failed to create provider: %v", err)
 	}
