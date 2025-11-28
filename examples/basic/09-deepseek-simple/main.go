@@ -49,16 +49,14 @@ func runProviderExample(apiKey string) {
 	fmt.Println("-----------------------------------")
 
 	// 创建 DeepSeek 配置
-	config := &llm.LLMOptions{
-		APIKey:      apiKey,
-		Model:       "deepseek-chat",
-		Temperature: 0.7,
-		MaxTokens:   1000,
-		Timeout:     30,
-	}
-
 	// 创建 DeepSeek provider
-	client, err := providers.NewDeepSeek(config)
+	client, err := providers.NewDeepSeekWithOptions(
+		llm.WithAPIKey(apiKey),
+		llm.WithModel("deepseek-chat"),
+		llm.WithTemperature(0.7),
+		llm.WithMaxTokens(1000),
+		llm.WithTimeout(30),
+	)
 	if err != nil {
 		log.Fatalf("创建 DeepSeek provider 失败: %v", err)
 	}
@@ -93,16 +91,14 @@ func runBuilderExample(apiKey string) {
 	fmt.Println("--------------------------------------")
 
 	// 创建 DeepSeek 配置
-	config := &llm.LLMOptions{
-		APIKey:      apiKey,
-		Model:       "deepseek-chat",
-		Temperature: 0.7,
-		MaxTokens:   1000,
-		Timeout:     30,
-	}
-
 	// 创建 DeepSeek provider
-	client, err := providers.NewDeepSeek(config)
+	client, err := providers.NewDeepSeekWithOptions(
+		llm.WithAPIKey(apiKey),
+		llm.WithModel("deepseek-chat"),
+		llm.WithTemperature(0.7),
+		llm.WithMaxTokens(1000),
+		llm.WithTimeout(30),
+	)
 	if err != nil {
 		log.Fatalf("创建 DeepSeek provider 失败: %v", err)
 	}
@@ -141,17 +137,14 @@ func runStructuredOutputExample(apiKey string) {
 	fmt.Println("示例 3: 输出结构化数据（JSON 格式）")
 	fmt.Println("-------------------------------------")
 
-	// 创建 DeepSeek 配置
-	config := &llm.LLMOptions{
-		APIKey:      apiKey,
-		Model:       "deepseek-chat",
-		Temperature: 0.3, // 使用较低的 temperature 以获得更稳定的输出
-		MaxTokens:   1000,
-		Timeout:     30,
-	}
-
 	// 创建 DeepSeek provider
-	client, err := providers.NewDeepSeek(config)
+	client, err := providers.NewDeepSeekWithOptions(
+		llm.WithAPIKey(apiKey),
+		llm.WithModel("deepseek-chat"),
+		llm.WithTemperature(0.3), // 使用较低的 temperature 以获得更稳定的输出
+		llm.WithMaxTokens(1000),
+		llm.WithTimeout(30),
+	)
 	if err != nil {
 		log.Fatalf("创建 DeepSeek provider 失败: %v", err)
 	}
