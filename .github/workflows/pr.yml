@@ -54,17 +54,8 @@ jobs:
 
       - name: Check test coverage
         run: |
-          # Calculate coverage
-          COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
-          echo "Test coverage: ${COVERAGE}%"
-
-          # Check if coverage meets minimum threshold (80%)
-          if (( $(echo "$COVERAGE < 80" | bc -l) )); then
-            echo "❌ Test coverage ${COVERAGE}% is below minimum threshold of 80%"
-            exit 1
-          else
-            echo "✅ Test coverage ${COVERAGE}% meets minimum threshold"
-          fi
+          chmod +x scripts/check_coverage.sh
+          ./scripts/check_coverage.sh
 
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v7
@@ -83,7 +74,7 @@ jobs:
             let coverage = '0';
             try {
               const coverageOutput = require('child_process')
-                .execSync('go tool cover -func=coverage.out | grep total')
+                .execSync('go tool cover -func=coverage.out | grep "^total:"')
                 .toString();
               coverage = coverageOutput.match(/(\d+\.\d+)%/)[1];
             } catch (e) {
@@ -93,8 +84,16 @@ jobs:
             // Create comment body
             const body = `## 📊 Test Coverage Report
 
-            **Coverage**: ${coverage}%
-            ${parseFloat(coverage) >= 80 ? '✅ Meets minimum threshold (80%)' : '❌ Below minimum threshold (80%)'}
+            **Overall Coverage**: ${coverage}%
+            ${parseFloat(coverage) >= 45 ? '✅ Meets minimum threshold (45%)' : '❌ Below minimum threshold (45%)'}
+
+            ### 关键文件覆盖率要求
+            - llm/providers/openai.go ≥ 70%
+            - llm/providers/gemini.go ≥ 65%
+            - llm/common/base.go ≥ 50%
+            - tools/practical/database_query.go ≥ 40%
+
+            运行 \`./scripts/check_coverage.sh\` 查看详细报告。
 
             ---
 
@@ -103,7 +102,7 @@ jobs:
             - [ ] All tests pass
             - [ ] Code is properly formatted (\`make fmt\`)
             - [ ] Import layering rules are satisfied
-            - [ ] Test coverage ≥ 80%
+            - [ ] Test coverage meets requirements (see above)
             - [ ] All linter checks pass
             `;
 

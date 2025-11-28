@@ -9,7 +9,6 @@ import (
 
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
-	"github.com/kart-io/goagent/llm/constants"
 	"github.com/kart-io/goagent/llm/providers"
 	"github.com/kart-io/goagent/retrieval"
 )
