@@ -110,16 +110,13 @@ func setupDeepSeekClient() (llm.Client, error) {
 		return nil, fmt.Errorf("DEEPSEEK_API_KEY environment variable not set")
 	}
 
-	config := &llm.LLMOptions{
-		Provider:    constants.ProviderDeepSeek,
-		APIKey:      apiKey,
-		Model:       "deepseek-chat",
-		Temperature: 0.7,
-		MaxTokens:   2000,
-		Timeout:     60,
-	}
-
-	return providers.NewDeepSeek(config)
+	return providers.NewDeepSeekWithOptions(
+		llm.WithAPIKey(apiKey),
+		llm.WithModel("deepseek-chat"),
+		llm.WithTemperature(0.7),
+		llm.WithMaxTokens(2000),
+		llm.WithTimeout(60),
+	)
 }
 
 // setupQdrantStore initializes the Qdrant vector store
