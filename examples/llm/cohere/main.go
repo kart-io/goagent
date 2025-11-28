@@ -42,7 +42,10 @@ func main() {
 // Example 1: Basic Configuration
 func basicExample() {
 	// Initialize provider with API key from environment
-	provider, err := providers.NewCohereWithOptions(agentllm.WithAPIKey(os.Getenv("COHERE_API_KEY"), // or set directly: APIKey: "your-api-key"), agentllm.WithModel("command",                   // Optional: defaults to "command"))
+	provider, err := providers.NewCohereWithOptions(
+		llm.WithAPIKey(os.Getenv("COHERE_API_KEY")), // or set directly: APIKey: "your-api-key"
+		llm.WithModel("command"),                    // Optional: defaults to "command"
+	)
 	if err != nil {
 		log.Fatalf("Failed to create Cohere provider: %v", err)
 	}
@@ -74,7 +77,10 @@ func modelExample() {
 	}
 
 	for _, model := range models {
-		provider, err := providers.NewCohereWithOptions(agentllm.WithAPIKey(os.Getenv("COHERE_API_KEY")), agentllm.WithModel(model))
+		provider, err := providers.NewCohereWithOptions(
+			llm.WithAPIKey(os.Getenv("COHERE_API_KEY")),
+			llm.WithModel(model),
+		)
 		if err != nil {
 			log.Printf("Failed to create provider for %s: %v\n", model, err)
 			continue
@@ -102,7 +108,9 @@ func modelExample() {
 
 // Example 3: Streaming Responses
 func streamingExample() {
-	provider, err := providers.NewCohereWithOptions(agentllm.WithAPIKey(os.Getenv("COHERE_API_KEY")))
+	provider, err := providers.NewCohereWithOptions(
+		llm.WithAPIKey(os.Getenv("COHERE_API_KEY")),
+	)
 	if err != nil {
 		log.Fatalf("Failed to create provider: %v", err)
 	}
@@ -123,7 +131,11 @@ func streamingExample() {
 
 // Example 4: Chat with History
 func chatHistoryExample() {
-	provider, err := providers.NewCohereWithOptions(agentllm.WithAPIKey(os.Getenv("COHERE_API_KEY")), agentllm.WithTemperature(0.7), agentllm.WithMaxTokens(1000))
+	provider, err := providers.NewCohereWithOptions(
+		llm.WithAPIKey(os.Getenv("COHERE_API_KEY")),
+		llm.WithTemperature(0.7),
+		llm.WithMaxTokens(1000),
+	)
 	if err != nil {
 		log.Fatalf("Failed to create provider: %v", err)
 	}
@@ -150,7 +162,11 @@ func chatHistoryExample() {
 
 // Example 5: Custom Parameters
 func customParametersExample() {
-	provider, err := providers.NewCohereWithOptions(agentllm.WithAPIKey(os.Getenv("COHERE_API_KEY")), agentllm.WithTemperature(0.9, // Higher creativity), agentllm.WithMaxTokens(200))
+	provider, err := providers.NewCohereWithOptions(
+		llm.WithAPIKey(os.Getenv("COHERE_API_KEY")),
+		llm.WithTemperature(0.9), // Higher creativity
+		llm.WithMaxTokens(200),
+	)
 	if err != nil {
 		log.Fatalf("Failed to create provider: %v", err)
 	}
@@ -175,7 +191,9 @@ func customParametersExample() {
 
 // Example 6: Token Usage and Billing
 func tokenUsageExample() {
-	provider, err := providers.NewCohereWithOptions(agentllm.WithAPIKey(os.Getenv("COHERE_API_KEY")))
+	provider, err := providers.NewCohereWithOptions(
+		llm.WithAPIKey(os.Getenv("COHERE_API_KEY")),
+	)
 	if err != nil {
 		log.Fatalf("Failed to create provider: %v", err)
 	}

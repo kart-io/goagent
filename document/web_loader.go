@@ -50,7 +50,7 @@ func NewWebLoader(config WebLoaderConfig) *WebLoader {
 	client := httpclient.NewClient(&httpclient.Config{
 		Timeout: config.Timeout,
 		Headers: map[string]string{
-			"User-Agent": "k8s-agent-document-loader/1.0",
+			"User-Agent": "goagent-document-loader/1.0",
 		},
 	})
 

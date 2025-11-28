@@ -164,14 +164,14 @@ func createLLMClient(providerName string) (llm.Client, error) {
 		if apiKey == "" {
 			return nil, fmt.Errorf("DEEPSEEK_API_KEY environment variable not set")
 		}
-		return providers.NewDeepSeekWithOptions(agentllm.WithAPIKey(apiKey), agentllm.WithModel("deepseek-chat"))
+		return providers.NewDeepSeekWithOptions(llm.WithAPIKey(apiKey), llm.WithModel("deepseek-chat"))
 
 	case "openai":
 		apiKey := os.Getenv("OPENAI_API_KEY")
 		if apiKey == "" {
 			return nil, fmt.Errorf("OPENAI_API_KEY environment variable not set")
 		}
-		return providers.NewOpenAIWithOptions(agentllm.WithAPIKey(apiKey), agentllm.WithModel("gpt-3.5-turbo"))
+		return providers.NewOpenAIWithOptions(llm.WithAPIKey(apiKey), llm.WithModel("gpt-3.5-turbo"))
 
 	default:
 		return nil, fmt.Errorf("unknown provider: %s (supported: deepseek, openai)", providerName)
