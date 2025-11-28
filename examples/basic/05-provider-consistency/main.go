@@ -6,7 +6,6 @@ import (
 	"os"
 
 	"github.com/kart-io/goagent/llm"
-	"github.com/kart-io/goagent/llm/constants"
 	"github.com/kart-io/goagent/llm/providers"
 )
 
@@ -22,15 +21,13 @@ func main() {
 
 	// 1. OpenAI Provider
 	if apiKey := os.Getenv("OPENAI_API_KEY"); apiKey != "" {
-		openaiConfig := &llm.LLMOptions{
-			Provider:    constants.ProviderOpenAI,
-			APIKey:      apiKey,
-			Model:       "gpt-3.5-turbo",
-			MaxTokens:   1000,
-			Temperature: 0.7,
-			Timeout:     30,
-		}
-		if client, err := providers.NewOpenAI(openaiConfig); err == nil {
+		if client, err := providers.NewOpenAIWithOptions(
+			llm.WithAPIKey(apiKey),
+			llm.WithModel("gpt-3.5-turbo"),
+			llm.WithMaxTokens(1000),
+			llm.WithTemperature(0.7),
+			llm.WithTimeout(30),
+		); err == nil {
 			clients = append(clients, client)
 			fmt.Println("✅ OpenAI Provider 创建成功")
 		}
@@ -38,16 +35,14 @@ func main() {
 
 	// 2. DeepSeek Provider
 	if apiKey := os.Getenv("DEEPSEEK_API_KEY"); apiKey != "" {
-		deepseekConfig := &llm.LLMOptions{
-			Provider:    constants.ProviderDeepSeek,
-			APIKey:      apiKey,
-			BaseURL:     "https://api.deepseek.com",
-			Model:       "deepseek-chat",
-			MaxTokens:   1000,
-			Temperature: 0.7,
-			Timeout:     30,
-		}
-		if client, err := providers.NewDeepSeek(deepseekConfig); err == nil {
+		if client, err := providers.NewDeepSeekWithOptions(
+			llm.WithAPIKey(apiKey),
+			llm.WithBaseURL("https://api.deepseek.com"),
+			llm.WithModel("deepseek-chat"),
+			llm.WithMaxTokens(1000),
+			llm.WithTemperature(0.7),
+			llm.WithTimeout(30),
+		); err == nil {
 			clients = append(clients, client)
 			fmt.Println("✅ DeepSeek Provider 创建成功")
 		}
@@ -55,15 +50,13 @@ func main() {
 
 	// 3. Gemini Provider
 	if apiKey := os.Getenv("GEMINI_API_KEY"); apiKey != "" {
-		geminiConfig := &llm.LLMOptions{
-			Provider:    constants.ProviderGemini,
-			APIKey:      apiKey,
-			Model:       "gemini-pro",
-			MaxTokens:   1000,
-			Temperature: 0.7,
-			Timeout:     30,
-		}
-		if client, err := providers.NewGemini(geminiConfig); err == nil {
+		if client, err := providers.NewGeminiWithOptions(
+			llm.WithAPIKey(apiKey),
+			llm.WithModel("gemini-pro"),
+			llm.WithMaxTokens(1000),
+			llm.WithTemperature(0.7),
+			llm.WithTimeout(30),
+		); err == nil {
 			clients = append(clients, client)
 			fmt.Println("✅ Gemini Provider 创建成功")
 		}
@@ -194,33 +187,27 @@ func demonstrateProviderSwitching() {
 }
 
 func createOpenAIClient() llm.Client {
-	config := &llm.LLMOptions{
-		Provider: constants.ProviderOpenAI,
-		APIKey:   os.Getenv("OPENAI_API_KEY"),
-		Model:    "gpt-3.5-turbo",
-	}
-	client, _ := providers.NewOpenAI(config)
+	client, _ := providers.NewOpenAIWithOptions(
+		llm.WithAPIKey(os.Getenv("OPENAI_API_KEY")),
+		llm.WithModel("gpt-3.5-turbo"),
+	)
 	return client
 }
 
 func createDeepSeekClient() llm.Client {
-	config := &llm.LLMOptions{
-		Provider: constants.ProviderDeepSeek,
-		APIKey:   os.Getenv("DEEPSEEK_API_KEY"),
-		BaseURL:  "https://api.deepseek.com",
-		Model:    "deepseek-chat",
-	}
-	client, _ := providers.NewDeepSeek(config)
+	client, _ := providers.NewDeepSeekWithOptions(
+		llm.WithAPIKey(os.Getenv("DEEPSEEK_API_KEY")),
+		llm.WithBaseURL("https://api.deepseek.com"),
+		llm.WithModel("deepseek-chat"),
+	)
 	return client
 }
 
 func createGeminiClient() llm.Client {
-	config := &llm.LLMOptions{
-		Provider: constants.ProviderGemini,
-		APIKey:   os.Getenv("GEMINI_API_KEY"),
-		Model:    "gemini-pro",
-	}
-	client, _ := providers.NewGemini(config)
+	client, _ := providers.NewGeminiWithOptions(
+		llm.WithAPIKey(os.Getenv("GEMINI_API_KEY")),
+		llm.WithModel("gemini-pro"),
+	)
 	return client
 }
 
