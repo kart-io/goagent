@@ -28,13 +28,6 @@ type GeminiProvider struct {
 	modelName string
 }
 
-// NewGemini creates a new Gemini provider using LLMOptions (deprecated).
-// Deprecated: Use NewGeminiWithOptions instead.
-func NewGemini(config *agentllm.LLMOptions) (*GeminiProvider, error) {
-	opts := common.ConfigToOptions(config)
-	return NewGeminiWithOptions(opts...)
-}
-
 // NewGeminiWithOptions creates a new Gemini provider using options pattern
 func NewGeminiWithOptions(opts ...agentllm.ClientOption) (*GeminiProvider, error) {
 	// 创建 common.BaseProvider，统一处理 Options
