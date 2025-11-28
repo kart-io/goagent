@@ -144,17 +144,14 @@ func main() {
 
 // runBasicChatExample 演示基础对话
 func runBasicChatExample(apiKey string) {
-	// 创建 DeepSeek 配置
-	config := &llm.LLMOptions{
-		APIKey:      apiKey,
-		Model:       "deepseek-chat", // 使用 deepseek-chat 模型
-		Temperature: 0.7,
-		MaxTokens:   2000,
-		Timeout:     30,
-	}
-
 	// 创建 DeepSeek provider
-	deepseek, err := providers.NewDeepSeek(config)
+	deepseek, err := providers.NewDeepSeekWithOptions(
+		llm.WithAPIKey(apiKey),
+		llm.WithModel("deepseek-chat"), // 使用 deepseek-chat 模型
+		llm.WithTemperature(0.7),
+		llm.WithMaxTokens(2000),
+		llm.WithTimeout(30),
+	)
 	if err != nil {
 		fmt.Printf("❌ 创建 DeepSeek provider 失败: %v\n", err)
 		return
