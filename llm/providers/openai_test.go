@@ -496,9 +496,9 @@ func TestOpenAI_Complete_WithParameters(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 		response := map[string]interface{}{
-			"id":      "chatcmpl-123",
-			"object":  "chat.completion",
-			"model":   "gpt-4",
+			"id":     "chatcmpl-123",
+			"object": "chat.completion",
+			"model":  "gpt-4",
 			"choices": []map[string]interface{}{
 				{
 					"message": map[string]interface{}{
