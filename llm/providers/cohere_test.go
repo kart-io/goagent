@@ -10,6 +10,7 @@ import (
 	"time"
 
 	agentllm "github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/common"
 	"github.com/kart-io/goagent/llm/constants"
 	"github.com/kart-io/goagent/utils/json"
 
@@ -127,7 +128,7 @@ func TestNewCohere(t *testing.T) {
 				defer os.Unsetenv("COHERE_MODEL")
 			}
 
-			provider, err := NewCohere(tt.config)
+			provider, err := NewCohereWithOptions(common.ConfigToOptions(tt.config)...)
 
 			if tt.wantErr {
 				require.Error(t, err)
