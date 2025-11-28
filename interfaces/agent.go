@@ -8,7 +8,7 @@ import "context"
 // This is the canonical definition; all other references should use type aliases.
 //
 // The Agent interface extends Runnable and adds agent-specific methods for:
-//   - Identifying the agent (Name, Description)
+//   - Identifying the agent (Name, Description, Capabilities)
 //   - Generating execution plans
 //
 // Implementations:
@@ -24,6 +24,11 @@ type Agent interface {
 
 	// Description returns what the agent does.
 	Description() string
+
+	// Capabilities returns the agent's capability list.
+	// This describes what tasks or operations the agent can perform.
+	// Examples: ["search", "analyze", "summarize"]
+	Capabilities() []string
 
 	// Plan generates an execution plan for the given input.
 	// This is optional and may return nil if the agent doesn't support planning.
