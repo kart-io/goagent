@@ -100,13 +100,6 @@ type AnthropicErrorDetails struct {
 	Message string `json:"message"`
 }
 
-// NewAnthropic creates a new Anthropic provider using LLMOptions (deprecated).
-// Deprecated: Use NewAnthropicWithOptions instead.
-func NewAnthropic(config *agentllm.LLMOptions) (*AnthropicProvider, error) {
-	opts := common.ConfigToOptions(config)
-	return NewAnthropicWithOptions(opts...)
-}
-
 // NewAnthropicWithOptions creates a new Anthropic provider using options pattern.
 func NewAnthropicWithOptions(opts ...agentllm.ClientOption) (*AnthropicProvider, error) {
 	// Create common.BaseProvider with unified options handling
