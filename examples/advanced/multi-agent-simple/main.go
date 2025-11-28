@@ -259,14 +259,12 @@ func main() {
 
 		if apiKey := os.Getenv("OPENAI_API_KEY"); apiKey != "" {
 			fmt.Println("Trying OpenAI provider...")
-			config := &llm.LLMOptions{
-				Provider:    constants.ProviderOpenAI,
-				APIKey:      apiKey,
-				Model:       "gpt-3.5-turbo",
-				MaxTokens:   500,
-				Temperature: 0.7,
-			}
-			client, err := providers.NewOpenAI(config)
+			client, err := providers.NewOpenAIWithOptions(
+				llm.WithAPIKey(apiKey),
+				llm.WithModel("gpt-3.5-turbo"),
+				llm.WithMaxTokens(500),
+				llm.WithTemperature(0.7),
+			)
 			if err == nil && client.IsAvailable() {
 				fmt.Println("✓ Using OpenAI provider")
 				llmClient = client
@@ -276,14 +274,12 @@ func main() {
 		if llmClient == nil {
 			if apiKey := os.Getenv("GEMINI_API_KEY"); apiKey != "" {
 				fmt.Println("Trying Gemini provider...")
-				config := &llm.LLMOptions{
-					Provider:    constants.ProviderGemini,
-					APIKey:      apiKey,
-					Model:       "gemini-pro",
-					MaxTokens:   500,
-					Temperature: 0.7,
-				}
-				client, err := providers.NewGemini(config)
+				client, err := providers.NewGeminiWithOptions(
+					llm.WithAPIKey(apiKey),
+					llm.WithModel("gemini-pro"),
+					llm.WithMaxTokens(500),
+					llm.WithTemperature(0.7),
+				)
 				if err == nil && client.IsAvailable() {
 					fmt.Println("✓ Using Gemini provider")
 					llmClient = client
