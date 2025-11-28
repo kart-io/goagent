@@ -123,13 +123,7 @@ func initializeLLMClient() (llm.Client, error) {
 	// Priority 2: Try OpenAI
 	if apiKey := os.Getenv("OPENAI_API_KEY"); apiKey != "" {
 		fmt.Println("Using OpenAI GPT-3.5-turbo")
-		provider, err := providers.NewOpenAI(&llm.LLMOptions{
-			Provider:    constants.ProviderOpenAI,
-			APIKey:      apiKey,
-			Model:       "gpt-3.5-turbo",
-			MaxTokens:   2000,
-			Temperature: 0.7,
-		})
+		provider, err := providers.NewOpenAIWithOptions(agentllm.WithAPIKey(apiKey), agentllm.WithModel("gpt-3.5-turbo"), agentllm.WithMaxTokens(2000), agentllm.WithTemperature(0.7))
 		if err != nil {
 			return nil, fmt.Errorf("failed to create OpenAI client: %w", err)
 		}
@@ -139,12 +133,7 @@ func initializeLLMClient() (llm.Client, error) {
 	// Priority 3: Try Gemini
 	if apiKey := os.Getenv("GEMINI_API_KEY"); apiKey != "" {
 		fmt.Println("Using Google Gemini")
-		provider, err := providers.NewGemini(&llm.LLMOptions{
-			APIKey:      apiKey,
-			Model:       "gemini-pro",
-			Temperature: 0.7,
-			MaxTokens:   2000,
-		})
+		provider, err := providers.NewGeminiWithOptions(agentllm.WithAPIKey(apiKey), agentllm.WithModel("gemini-pro"), agentllm.WithTemperature(0.7), agentllm.WithMaxTokens(2000))
 		if err != nil {
 			return nil, fmt.Errorf("failed to create Gemini client: %w", err)
 		}
