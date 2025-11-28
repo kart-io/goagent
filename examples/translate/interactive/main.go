@@ -31,7 +31,12 @@ func main() {
 	fmt.Println("使用 DeepSeek Chat 模型")
 	fmt.Println()
 
-	llmClient, err := providers.NewDeepSeekWithOptions(agentllm.WithAPIKey(apiKey), agentllm.WithModel("deepseek-chat"), agentllm.WithTemperature(0.3), agentllm.WithMaxTokens(2000))
+	llmClient, err := providers.NewDeepSeekWithOptions(
+		llm.WithAPIKey(apiKey),
+		llm.WithModel("deepseek-chat"),
+		llm.WithTemperature(0.3),
+		llm.WithMaxTokens(2000),
+	)
 	if err != nil {
 		log.Fatalf("初始化 DeepSeek 客户端失败: %v", err)
 	}

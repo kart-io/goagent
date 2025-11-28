@@ -102,9 +102,9 @@ func TestGemini_ProviderName(t *testing.T) {
 // TestGemini_ModelName 测试 ModelName 方法
 func TestGemini_ModelName(t *testing.T) {
 	tests := []struct {
-		name      string
-		model     string
-		expected  string
+		name     string
+		model    string
+		expected string
 	}{
 		{
 			name:     "gemini-pro",
