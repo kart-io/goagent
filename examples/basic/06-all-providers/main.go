@@ -125,15 +125,8 @@ func main() {
 		} else {
 			testProvider(ctx, client, "SiliconFlow")
 
-			// Show available models
-			fmt.Println("   📝 Available SiliconFlow models:")
-			models := client.ListModels()
-			for i, model := range models[:5] { // Show first 5 models
-				fmt.Printf("      - %s\n", model)
-				if i == 4 {
-					fmt.Printf("      ... and %d more models\n", len(models)-5)
-				}
-			}
+			// Note: ListModels() 方法已移除，请参考 contrib/llm-providers/siliconflow
+			fmt.Println("   📝 SiliconFlow supports models: Qwen, DeepSeek, GLM, Yi, Mistral, Llama, etc.")
 		}
 	} else {
 		fmt.Println("   ⚠️  SILICONFLOW_API_KEY not set, skipping")
@@ -167,11 +160,11 @@ func main() {
 			fmt.Println("      - File upload and processing capabilities")
 
 			// Show supported models
+			// Note: GetSupportedModels() 和 GetModelContextSize() 方法已移除，请参考 contrib/llm-providers/kimi
 			fmt.Println("   📝 Supported models:")
-			for _, model := range client.GetSupportedModels() {
-				contextSize := client.GetModelContextSize(model)
-				fmt.Printf("      - %s (context: %dK tokens)\n", model, contextSize/1000)
-			}
+			fmt.Println("      - moonshot-v1-8k (context: 8K tokens)")
+			fmt.Println("      - moonshot-v1-32k (context: 32K tokens)")
+			fmt.Println("      - moonshot-v1-128k (context: 128K tokens)")
 		}
 	} else {
 		fmt.Println("   ⚠️  KIMI_API_KEY not set, skipping")
