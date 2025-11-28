@@ -50,6 +50,32 @@ type Tool interface {
 	ArgsSchema() string
 }
 
+// ValidatableTool is an optional interface that tools can implement
+// to provide custom input validation logic.
+//
+// If a tool implements this interface, the validator will call Validate
+// before executing the tool, allowing for more sophisticated validation
+// than JSON schema alone can provide.
+//
+// Example implementation:
+//
+//	func (t *MyTool) Validate(ctx context.Context, input *ToolInput) error {
+//	    // Custom validation logic
+//	    if val, ok := input.Args["amount"].(float64); ok && val < 0 {
+//	        return fmt.Errorf("amount must be non-negative")
+//	    }
+//	    return nil
+//	}
+type ValidatableTool interface {
+	Tool
+
+	// Validate validates the tool input before execution.
+	//
+	// Returns an error if the input is invalid. The error message
+	// should clearly describe what is wrong with the input.
+	Validate(ctx context.Context, input *ToolInput) error
+}
+
 // ToolExecutor represents a component that can execute tools.
 //
 // This interface is implemented by components that need to run tools,

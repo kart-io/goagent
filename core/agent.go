@@ -32,15 +32,23 @@ var agentInputPool = sync.Pool{
 
 // Agent 定义通用 AI Agent 接口
 //
+// 已废弃：此接口已被废弃，请使用 interfaces.Agent 替代。
+//
+// Deprecated: Use interfaces.Agent instead. This generic version will be removed in v2.0.
+// The canonical Agent interface is now in the interfaces package for better cross-package
+// compatibility and to avoid circular dependencies.
+//
+// 迁移指南：
+//   - 将 core.Agent 替换为 interfaces.Agent
+//   - 使用 interfaces.Input 和 interfaces.Output 替代 AgentInput 和 AgentOutput
+//   - 实现 interfaces.Agent 接口的所有方法（包括新增的 Capabilities 和 Plan）
+//
 // Agent 是一个 Runnable[*AgentInput, *AgentOutput]，具有推理能力的智能体，能够：
 // - 接收输入并进行处理（通过 Runnable.Invoke）
 // - 调用工具获取额外信息
 // - 使用 LLM 进行推理
 // - 返回结构化输出
 // - 支持流式处理、批量执行、管道连接等 Runnable 特性
-//
-// Note: This is a generic version of the Agent interface.
-// For cross-package compatibility, consider using interfaces.Agent.
 type Agent interface {
 	// 继承 Runnable 接口，Agent 是一个可执行的组件
 	Runnable[*AgentInput, *AgentOutput]
@@ -69,6 +77,9 @@ type AgentInput struct {
 	// 元数据
 	SessionID string    `json:"session_id"` // 会话 ID
 	Timestamp time.Time `json:"timestamp"`  // 时间戳
+
+	// 并发安全保护
+	contextMu sync.RWMutex `json:"-"` // Context map 的读写锁
 }
 
 // AgentOutput Agent 输出
@@ -173,6 +184,83 @@ func (a *BaseAgent) Description() string {
 func (a *BaseAgent) Capabilities() []string {
 	return a.capabilities
 }
+
+// =============================================================================
+// AgentInput 并发安全方法
+// =============================================================================
+
+// GetContext 线程安全地获取 Context 中的值
+func (input *AgentInput) GetContext(key string) (interface{}, bool) {
+	input.contextMu.RLock()
+	defer input.contextMu.RUnlock()
+	val, ok := input.Context[key]
+	return val, ok
+}
+
+// SetContext 线程安全地设置 Context 中的值
+func (input *AgentInput) SetContext(key string, value interface{}) {
+	input.contextMu.Lock()
+	defer input.contextMu.Unlock()
+	if input.Context == nil {
+		input.Context = make(map[string]interface{})
+	}
+	input.Context[key] = value
+}
+
+// DeleteContext 线程安全地删除 Context 中的值
+func (input *AgentInput) DeleteContext(key string) {
+	input.contextMu.Lock()
+	defer input.contextMu.Unlock()
+	delete(input.Context, key)
+}
+
+// RangeContext 线程安全地遍历 Context
+// 回调函数返回 false 时停止遍历
+func (input *AgentInput) RangeContext(fn func(key string, value interface{}) bool) {
+	input.contextMu.RLock()
+	defer input.contextMu.RUnlock()
+	for k, v := range input.Context {
+		if !fn(k, v) {
+			break
+		}
+	}
+}
+
+// CopyContext 线程安全地复制 Context 到目标 map
+func (input *AgentInput) CopyContext(dst map[string]interface{}) {
+	input.contextMu.RLock()
+	defer input.contextMu.RUnlock()
+	for k, v := range input.Context {
+		dst[k] = v
+	}
+}
+
+// LockContext 获取 Context 的写锁（高级用法，需要手动解锁）
+// 使用场景：需要进行批量操作时
+// 注意：必须调用 UnlockContext 释放锁
+func (input *AgentInput) LockContext() {
+	input.contextMu.Lock()
+}
+
+// UnlockContext 释放 Context 的写锁
+func (input *AgentInput) UnlockContext() {
+	input.contextMu.Unlock()
+}
+
+// RLockContext 获取 Context 的读锁（高级用法，需要手动解锁）
+// 注意：必须调用 RUnlockContext 释放锁
+func (input *AgentInput) RLockContext() {
+	input.contextMu.RLock()
+}
+
+// RUnlockContext 释放 Context 的读锁
+func (input *AgentInput) RUnlockContext() {
+	input.contextMu.RUnlock()
+}
+
+// =============================================================================
+// BaseAgent 方法
+// =============================================================================
 
 // Invoke 执行 Agent
 // 这是 Runnable 接口的核心方法，需要由具体 Agent 实现
