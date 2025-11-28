@@ -326,6 +326,10 @@ func (m *mockAgent) Description() string {
 	return m.agentDescription
 }
 
+func (m *mockAgent) Capabilities() []string {
+	return []string{"process", "plan", "test"}
+}
+
 func (m *mockAgent) Plan(ctx context.Context, input *Input) (*Plan, error) {
 	return &Plan{
 		Steps: []Step{
