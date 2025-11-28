@@ -143,9 +143,7 @@ func quickAgentWithTools(apiKey, prompt string, tools ...interfaces.Tool) *build
 		WithSystemPrompt(prompt).
 		WithTools(tools...).
 		WithState(agentstate.NewAgentState()).
-		WithConfig(&builder.AgentConfig{
-			Verbose: true,
-		}).
+		WithVerbose(true).
 		Build()
 	if err != nil {
 		panic(fmt.Sprintf("创建 Agent 失败: %v", err))
