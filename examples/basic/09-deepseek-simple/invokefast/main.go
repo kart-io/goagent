@@ -54,17 +54,14 @@ func runBasicExample(apiKey string) {
 	fmt.Println("示例 1: 基础 DeepSeek Agent")
 	fmt.Println("---------------------------")
 
-	// 创建 DeepSeek 配置
-	config := &llm.LLMOptions{
-		APIKey:      apiKey,
-		Model:       "deepseek-chat",
-		Temperature: 0.7,
-		MaxTokens:   500,
-		Timeout:     30,
-	}
-
 	// 创建 DeepSeek provider
-	client, err := providers.NewDeepSeek(config)
+	client, err := providers.NewDeepSeekWithOptions(
+		llm.WithAPIKey(apiKey),
+		llm.WithModel("deepseek-chat"),
+		llm.WithTemperature(0.7),
+		llm.WithMaxTokens(500),
+		llm.WithTimeout(30),
+	)
 	if err != nil {
 		log.Fatalf("创建 DeepSeek provider 失败: %v", err)
 	}

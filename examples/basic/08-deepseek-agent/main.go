@@ -189,15 +189,13 @@ func runBasicChatExample(apiKey string) {
 
 // runToolCallingExample 演示工具调用
 func runToolCallingExample(apiKey string) {
-	config := &llm.LLMOptions{
-		APIKey:      apiKey,
-		Model:       "deepseek-chat",
-		Temperature: 0.7,
-		MaxTokens:   2000,
-		Timeout:     30,
-	}
-
-	deepseek, err := providers.NewDeepSeek(config)
+	deepseek, err := providers.NewDeepSeekWithOptions(
+		llm.WithAPIKey(apiKey),
+		llm.WithModel("deepseek-chat"),
+		llm.WithTemperature(0.7),
+		llm.WithMaxTokens(2000),
+		llm.WithTimeout(30),
+	)
 	if err != nil {
 		fmt.Printf("❌ 创建 DeepSeek provider 失败: %v\n", err)
 		return
@@ -238,15 +236,13 @@ func runToolCallingExample(apiKey string) {
 
 // runStreamingExample 演示流式输出
 func runStreamingExample(apiKey string) {
-	config := &llm.LLMOptions{
-		APIKey:      apiKey,
-		Model:       "deepseek-chat",
-		Temperature: 0.8,
-		MaxTokens:   500,
-		Timeout:     30,
-	}
-
-	deepseek, err := providers.NewDeepSeek(config)
+	deepseek, err := providers.NewDeepSeekWithOptions(
+		llm.WithAPIKey(apiKey),
+		llm.WithModel("deepseek-chat"),
+		llm.WithTemperature(0.8),
+		llm.WithMaxTokens(500),
+		llm.WithTimeout(30),
+	)
 	if err != nil {
 		fmt.Printf("❌ 创建 DeepSeek provider 失败: %v\n", err)
 		return
@@ -274,15 +270,13 @@ func runStreamingExample(apiKey string) {
 
 // runReActExample 演示 ReAct Agent
 func runReActExample(apiKey string) {
-	config := &llm.LLMOptions{
-		APIKey:      apiKey,
-		Model:       "deepseek-chat",
-		Temperature: 0.7,
-		MaxTokens:   2000,
-		Timeout:     60,
-	}
-
-	deepseek, err := providers.NewDeepSeek(config)
+	deepseek, err := providers.NewDeepSeekWithOptions(
+		llm.WithAPIKey(apiKey),
+		llm.WithModel("deepseek-chat"),
+		llm.WithTemperature(0.7),
+		llm.WithMaxTokens(2000),
+		llm.WithTimeout(60),
+	)
 	if err != nil {
 		fmt.Printf("❌ 创建 DeepSeek provider 失败: %v\n", err)
 		return
