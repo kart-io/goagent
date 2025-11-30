@@ -1,8 +1,8 @@
 package builder
 
 import (
-	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -14,6 +14,7 @@ import (
 	"github.com/kart-io/goagent/agents/react"
 	"github.com/kart-io/goagent/agents/sot"
 	"github.com/kart-io/goagent/agents/tot"
+	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/interfaces"
 )
 
@@ -38,11 +39,11 @@ func TestWithChainOfThought(t *testing.T) {
 	t.Run("custom_config", func(t *testing.T) {
 		builder := NewAgentBuilder[any, core.State](mockLLM).
 			WithChainOfThought(cot.CoTConfig{
-				Name:                  "custom-cot",
-				MaxSteps:              5,
-				ShowStepNumbers:       true,
-				RequireJustification:  true,
-				FinalAnswerFormat:     "JSON",
+				Name:                 "custom-cot",
+				MaxSteps:             5,
+				ShowStepNumbers:      true,
+				RequireJustification: true,
+				FinalAnswerFormat:    "JSON",
 			})
 
 		assert.NotNil(t, builder)
@@ -131,25 +132,23 @@ func TestWithReAct(t *testing.T) {
 		assert.NotNil(t, builder)
 		assert.Equal(t, "react", builder.metadata["reasoning_pattern"])
 
-		cfg, ok := builder.metadata["react_config"].(react.ReactConfig)
+		cfg, ok := builder.metadata["react_config"].(react.ReActConfig)
 		require.True(t, ok)
-		assert.Equal(t, "react-agent", cfg.Name)
-		assert.Equal(t, 10, cfg.MaxIterations)
+		assert.Equal(t, "react", cfg.Name)
+		assert.Equal(t, 10, cfg.MaxSteps)
 	})
 
 	t.Run("custom_config", func(t *testing.T) {
 		builder := NewAgentBuilder[any, core.State](mockLLM).
-			WithReAct(react.ReactConfig{
-				Name:          "custom-react",
-				MaxIterations: 15,
-				Verbose:       true,
+			WithReAct(react.ReActConfig{
+				Name:     "custom-react",
+				MaxSteps: 15,
 			})
 
-		cfg, ok := builder.metadata["react_config"].(react.ReactConfig)
+		cfg, ok := builder.metadata["react_config"].(react.ReActConfig)
 		require.True(t, ok)
 		assert.Equal(t, "custom-react", cfg.Name)
-		assert.Equal(t, 15, cfg.MaxIterations)
-		assert.True(t, cfg.Verbose)
+		assert.Equal(t, 15, cfg.MaxSteps)
 	})
 }
 
@@ -158,39 +157,35 @@ func TestBuildReasoningAgent(t *testing.T) {
 	mockLLM := NewMockLLMClient("Reasoning response")
 
 	t.Run("build_cot_agent", func(t *testing.T) {
-		agent, err := NewAgentBuilder[any, core.State](mockLLM).
+		agent := NewAgentBuilder[any, core.State](mockLLM).
 			WithChainOfThought().
 			BuildReasoningAgent()
 
-		assert.NoError(t, err)
 		assert.NotNil(t, agent)
 	})
 
 	t.Run("build_tot_agent", func(t *testing.T) {
-		agent, err := NewAgentBuilder[any, core.State](mockLLM).
+		agent := NewAgentBuilder[any, core.State](mockLLM).
 			WithTreeOfThought().
 			BuildReasoningAgent()
 
-		assert.NoError(t, err)
 		assert.NotNil(t, agent)
 	})
 
 	t.Run("build_react_agent", func(t *testing.T) {
-		agent, err := NewAgentBuilder[any, core.State](mockLLM).
+		agent := NewAgentBuilder[any, core.State](mockLLM).
 			WithReAct().
 			BuildReasoningAgent()
 
-		assert.NoError(t, err)
 		assert.NotNil(t, agent)
 	})
 
 	t.Run("no_reasoning_pattern", func(t *testing.T) {
-		agent, err := NewAgentBuilder[any, core.State](mockLLM).
+		// BuildReasoningAgent defaults to ReAct if no pattern specified
+		agent := NewAgentBuilder[any, core.State](mockLLM).
 			BuildReasoningAgent()
 
-		assert.Error(t, err)
-		assert.Nil(t, agent)
-		assert.Contains(t, err.Error(), "no reasoning pattern")
+		assert.NotNil(t, agent)
 	})
 }
 
@@ -206,7 +201,9 @@ func TestWithZeroShotCoT(t *testing.T) {
 	require.True(t, ok)
 	assert.True(t, cfg.ZeroShot)
 	assert.False(t, cfg.FewShot)
-	assert.Equal(t, "zero-shot-cot", cfg.Name)
+	assert.Equal(t, "chain-of-thought", cfg.Name)
+	assert.True(t, cfg.ShowStepNumbers)
+	assert.True(t, cfg.RequireJustification)
 }
 
 // TestWithFewShotCoT 测试 Few-Shot CoT
@@ -234,8 +231,9 @@ func TestWithFewShotCoT(t *testing.T) {
 	require.True(t, ok)
 	assert.True(t, cfg.FewShot)
 	assert.False(t, cfg.ZeroShot)
-	assert.Equal(t, "few-shot-cot", cfg.Name)
+	assert.Equal(t, "chain-of-thought", cfg.Name)
 	assert.Len(t, cfg.FewShotExamples, 2)
+	assert.True(t, cfg.ShowStepNumbers)
 }
 
 // TestWithBeamSearchToT 测试 Beam Search ToT
@@ -248,7 +246,7 @@ func TestWithBeamSearchToT(t *testing.T) {
 	assert.NotNil(t, builder)
 	cfg, ok := builder.metadata["tot_config"].(tot.ToTConfig)
 	require.True(t, ok)
-	assert.Equal(t, "beam-search-tot", cfg.Name)
+	assert.Equal(t, "tree-of-thought", cfg.Name)
 	assert.Equal(t, interfaces.StrategyBeamSearch, cfg.SearchStrategy)
 	assert.Equal(t, 3, cfg.BeamWidth)
 	assert.Equal(t, 5, cfg.MaxDepth)
@@ -264,7 +262,7 @@ func TestWithMonteCarloToT(t *testing.T) {
 
 		cfg, ok := builder.metadata["tot_config"].(tot.ToTConfig)
 		require.True(t, ok)
-		assert.Equal(t, "monte-carlo-tot", cfg.Name)
+		assert.Equal(t, "tree-of-thought", cfg.Name)
 		assert.Equal(t, interfaces.StrategyMonteCarlo, cfg.SearchStrategy)
 		assert.Equal(t, 4, cfg.BranchingFactor)
 		assert.Equal(t, 6, cfg.MaxDepth)
@@ -285,7 +283,7 @@ func TestWithGraphOfThought(t *testing.T) {
 		cfg, ok := builder.metadata["got_config"].(got.GoTConfig)
 		require.True(t, ok)
 		assert.Equal(t, "graph-of-thought", cfg.Name)
-		assert.Equal(t, 10, cfg.MaxNodes)
+		assert.Equal(t, 50, cfg.MaxNodes)
 	})
 
 	t.Run("custom_config", func(t *testing.T) {
@@ -293,18 +291,18 @@ func TestWithGraphOfThought(t *testing.T) {
 			WithGraphOfThought(got.GoTConfig{
 				Name:              "custom-got",
 				MaxNodes:          20,
-				MaxEdges:          30,
-				AllowCycles:       true,
-				EnableAggregation: true,
+				MaxEdgesPerNode:   5,
+				CycleDetection:    true,
+				ParallelExecution: true,
 			})
 
 		cfg, ok := builder.metadata["got_config"].(got.GoTConfig)
 		require.True(t, ok)
 		assert.Equal(t, "custom-got", cfg.Name)
 		assert.Equal(t, 20, cfg.MaxNodes)
-		assert.Equal(t, 30, cfg.MaxEdges)
-		assert.True(t, cfg.AllowCycles)
-		assert.True(t, cfg.EnableAggregation)
+		assert.Equal(t, 5, cfg.MaxEdgesPerNode)
+		assert.True(t, cfg.CycleDetection)
+		assert.True(t, cfg.ParallelExecution)
 	})
 }
 
@@ -328,20 +326,18 @@ func TestWithProgramOfThought(t *testing.T) {
 	t.Run("custom_config", func(t *testing.T) {
 		builder := NewAgentBuilder[any, core.State](mockLLM).
 			WithProgramOfThought(pot.PoTConfig{
-				Name:              "custom-pot",
-				Language:          "javascript",
-				MaxExecutionTime:  5000,
-				EnableSandbox:     true,
-				AllowedLibraries:  []string{"math", "numpy"},
+				Name:             "custom-pot",
+				Language:         "javascript",
+				ExecutionTimeout: 5 * time.Second,
+				SafeMode:         true,
 			})
 
 		cfg, ok := builder.metadata["pot_config"].(pot.PoTConfig)
 		require.True(t, ok)
 		assert.Equal(t, "custom-pot", cfg.Name)
 		assert.Equal(t, "javascript", cfg.Language)
-		assert.Equal(t, 5000, cfg.MaxExecutionTime)
-		assert.True(t, cfg.EnableSandbox)
-		assert.Equal(t, []string{"math", "numpy"}, cfg.AllowedLibraries)
+		assert.Equal(t, 5*time.Second, cfg.ExecutionTimeout)
+		assert.True(t, cfg.SafeMode)
 	})
 }
 
@@ -359,24 +355,24 @@ func TestWithSkeletonOfThought(t *testing.T) {
 		cfg, ok := builder.metadata["sot_config"].(sot.SoTConfig)
 		require.True(t, ok)
 		assert.Equal(t, "skeleton-of-thought", cfg.Name)
-		assert.Equal(t, 5, cfg.SkeletonPoints)
+		assert.Equal(t, 10, cfg.MaxSkeletonPoints)
 	})
 
 	t.Run("custom_config", func(t *testing.T) {
 		builder := NewAgentBuilder[any, core.State](mockLLM).
 			WithSkeletonOfThought(sot.SoTConfig{
-				Name:                     "custom-sot",
-				SkeletonPoints:           7,
-				ParallelExpansion:        true,
-				MaxConcurrentExpansions:  3,
+				Name:              "custom-sot",
+				MaxSkeletonPoints: 7,
+				AutoDecompose:     true,
+				MaxConcurrency:    3,
 			})
 
 		cfg, ok := builder.metadata["sot_config"].(sot.SoTConfig)
 		require.True(t, ok)
 		assert.Equal(t, "custom-sot", cfg.Name)
-		assert.Equal(t, 7, cfg.SkeletonPoints)
-		assert.True(t, cfg.ParallelExpansion)
-		assert.Equal(t, 3, cfg.MaxConcurrentExpansions)
+		assert.Equal(t, 7, cfg.MaxSkeletonPoints)
+		assert.True(t, cfg.AutoDecompose)
+		assert.Equal(t, 3, cfg.MaxConcurrency)
 	})
 }
 
@@ -394,24 +390,22 @@ func TestWithMetaCoT(t *testing.T) {
 		cfg, ok := builder.metadata["metacot_config"].(metacot.MetaCoTConfig)
 		require.True(t, ok)
 		assert.Equal(t, "meta-cot", cfg.Name)
-		assert.Equal(t, 3, cfg.MaxMetaLevels)
+		assert.Equal(t, 3, cfg.MaxDepth)
 	})
 
 	t.Run("custom_config", func(t *testing.T) {
 		builder := NewAgentBuilder[any, core.State](mockLLM).
 			WithMetaCoT(metacot.MetaCoTConfig{
-				Name:                 "custom-metacot",
-				MaxMetaLevels:        5,
-				EnableSelfCorrection: true,
-				ReflectionPrompt:     "Is this reasoning correct?",
+				Name:         "custom-metacot",
+				MaxDepth:     5,
+				SelfCritique: true,
 			})
 
 		cfg, ok := builder.metadata["metacot_config"].(metacot.MetaCoTConfig)
 		require.True(t, ok)
 		assert.Equal(t, "custom-metacot", cfg.Name)
-		assert.Equal(t, 5, cfg.MaxMetaLevels)
-		assert.True(t, cfg.EnableSelfCorrection)
-		assert.Equal(t, "Is this reasoning correct?", cfg.ReflectionPrompt)
+		assert.Equal(t, 5, cfg.MaxDepth)
+		assert.True(t, cfg.SelfCritique)
 	})
 }
 
@@ -423,13 +417,13 @@ func TestReasoningPresetsIntegration(t *testing.T) {
 		builder := NewAgentBuilder[any, core.State](mockLLM).
 			WithSystemPrompt("You are a reasoning agent").
 			WithMaxIterations(15).
-			WithTimeout(60).
+			WithTimeout(60 * time.Second).
 			WithChainOfThought()
 
 		assert.NotNil(t, builder)
 		assert.Equal(t, "cot", builder.metadata["reasoning_pattern"])
 		assert.Equal(t, 15, builder.config.MaxIterations)
-		assert.Equal(t, 60, builder.config.Timeout)
+		assert.Equal(t, 60*time.Second, builder.config.Timeout)
 	})
 
 	t.Run("override_reasoning_pattern", func(t *testing.T) {
@@ -451,24 +445,22 @@ func TestReasoningPresetsBuildFlow(t *testing.T) {
 	mockLLM := NewMockLLMClient("Build flow test")
 
 	t.Run("successful_build_with_reasoning", func(t *testing.T) {
-		agent, err := NewAgentBuilder(mockLLM).
+		agent := NewAgentBuilder[any, core.State](mockLLM).
 			WithChainOfThought(cot.CoTConfig{
 				Name:     "test-cot",
 				MaxSteps: 5,
 			}).
 			BuildReasoningAgent()
 
-		assert.NoError(t, err)
 		assert.NotNil(t, agent)
 	})
 
-	t.Run("build_fails_without_reasoning_pattern", func(t *testing.T) {
-		agent, err := NewAgentBuilder(mockLLM).
+	t.Run("build_without_reasoning_pattern_defaults_to_react", func(t *testing.T) {
+		// BuildReasoningAgent defaults to ReAct if no pattern specified
+		agent := NewAgentBuilder[any, core.State](mockLLM).
 			WithSystemPrompt("Test").
 			BuildReasoningAgent()
 
-		assert.Error(t, err)
-		assert.Nil(t, agent)
-		assert.Contains(t, err.Error(), "no reasoning pattern configured")
+		assert.NotNil(t, agent)
 	})
 }

@@ -10,22 +10,22 @@ import (
 // ToolBox 管理所有可用的工具，提供工具的注册、发现、执行等功能。
 type ToolBox interface {
 	// Register 注册工具
-	Register(tool Tool) error
+	Register(tool MCPTool) error
 
 	// Unregister 注销工具
 	Unregister(name string) error
 
 	// Get 获取工具
-	Get(name string) (Tool, error)
+	Get(name string) (MCPTool, error)
 
 	// List 列出所有工具
-	List() []Tool
+	List() []MCPTool
 
 	// ListByCategory 按分类列出工具
-	ListByCategory(category string) []Tool
+	ListByCategory(category string) []MCPTool
 
 	// Search 搜索工具（按名称或描述）
-	Search(query string) []Tool
+	Search(query string) []MCPTool
 
 	// Execute 执行工具
 	Execute(ctx context.Context, call *ToolCall) (*ToolCallResult, error)
@@ -97,13 +97,13 @@ type ToolPermission struct {
 // ToolExecutor 工具执行器接口
 type ToolExecutor interface {
 	// Execute 执行工具
-	Execute(ctx context.Context, tool Tool, call *ToolCall) (*ToolResult, error)
+	Execute(ctx context.Context, tool MCPTool, call *ToolCall) (*ToolResult, error)
 
 	// ExecuteWithRetry 执行工具（带重试）
-	ExecuteWithRetry(ctx context.Context, tool Tool, call *ToolCall, maxRetries int) (*ToolResult, error)
+	ExecuteWithRetry(ctx context.Context, tool MCPTool, call *ToolCall, maxRetries int) (*ToolResult, error)
 
 	// ExecuteWithTimeout 执行工具（带超时）
-	ExecuteWithTimeout(ctx context.Context, tool Tool, call *ToolCall) (*ToolResult, error)
+	ExecuteWithTimeout(ctx context.Context, tool MCPTool, call *ToolCall) (*ToolResult, error)
 }
 
 // ToolValidator 工具验证器接口
@@ -121,16 +121,16 @@ type ToolValidator interface {
 // ToolRegistry 工具注册表接口
 type ToolRegistry interface {
 	// Register 注册工具
-	Register(tool Tool) error
+	Register(tool MCPTool) error
 
 	// Unregister 注销工具
 	Unregister(name string) error
 
 	// Get 获取工具
-	Get(name string) (Tool, bool)
+	Get(name string) (MCPTool, bool)
 
 	// List 列出所有工具
-	List() []Tool
+	List() []MCPTool
 
 	// Exists 检查工具是否存在
 	Exists(name string) bool
@@ -142,13 +142,13 @@ type ToolRegistry interface {
 // ToolDiscovery 工具发现接口
 type ToolDiscovery interface {
 	// DiscoverLocal 发现本地工具
-	DiscoverLocal() ([]Tool, error)
+	DiscoverLocal() ([]MCPTool, error)
 
 	// DiscoverRemote 发现远程工具
-	DiscoverRemote(endpoint string) ([]Tool, error)
+	DiscoverRemote(endpoint string) ([]MCPTool, error)
 
 	// DiscoverByPattern 按模式发现工具
-	DiscoverByPattern(pattern string) ([]Tool, error)
+	DiscoverByPattern(pattern string) ([]MCPTool, error)
 
 	// AutoRegister 自动注册发现的工具
 	AutoRegister(toolbox ToolBox) error

@@ -75,7 +75,6 @@ func (e *CacheEntry) IsExpired() bool {
 // InMemoryCache 内存缓存实现
 //
 // 使用 sync.RWMutex + map 提供线程安全的内存缓存
-// 相比 sync.Map，在读多写少且需要遍历的场景下性能更好
 type InMemoryCache struct {
 	entries         map[string]*CacheEntry // 缓存条目
 	entriesMu       sync.RWMutex           // 条目读写锁
@@ -558,17 +557,13 @@ func DefaultCacheConfig() CacheConfig {
 }
 
 // NewCacheFromConfig 根据配置创建缓存
+//
+// 已简化为使用 SimpleCache,删除过度设计的 LRU/MultiTier 等实现
 func NewCacheFromConfig(config CacheConfig) Cache {
 	if !config.Enabled {
 		return NewNoOpCache()
 	}
 
-	switch config.Type {
-	case "lru":
-		return NewLRUCache(config.MaxSize, config.DefaultTTL, config.CleanupInterval)
-	case "memory":
-		return NewInMemoryCache(config.MaxSize, config.DefaultTTL, config.CleanupInterval)
-	default:
-		return NewInMemoryCache(config.MaxSize, config.DefaultTTL, config.CleanupInterval)
-	}
+	// 统一使用 SimpleCache (基于 sync.Map + TTL)
+	return NewSimpleCache(config.DefaultTTL)
 }

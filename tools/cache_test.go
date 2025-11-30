@@ -229,7 +229,7 @@ func TestCachedTool(t *testing.T) {
 		},
 	)
 
-	cachedTool := NewCachedTool(baseTool, cache, 1*time.Minute)
+	cachedTool := NewCachedTool(baseTool, 1*time.Minute)
 
 	t.Run("Cache hit on second call", func(t *testing.T) {
 		input := &interfaces.ToolInput{
@@ -332,7 +332,7 @@ func BenchmarkCacheKeyGeneration(b *testing.B) {
 	})
 	defer cache.Close() // Prevent goroutine leak
 
-	cachedTool := NewCachedTool(baseTool, cache, 1*time.Minute)
+	cachedTool := NewCachedTool(baseTool, 1*time.Minute)
 
 	// Test input with various types
 	input := &interfaces.ToolInput{
@@ -348,7 +348,7 @@ func BenchmarkCacheKeyGeneration(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = cachedTool.generateCacheKey(input)
+		_ = cachedTool.generateCacheKey(input)
 	}
 }
 
@@ -370,7 +370,7 @@ func BenchmarkCacheKeyGenerationSimple(b *testing.B) {
 	})
 	defer cache.Close() // Prevent goroutine leak
 
-	cachedTool := NewCachedTool(baseTool, cache, 1*time.Minute)
+	cachedTool := NewCachedTool(baseTool, 1*time.Minute)
 
 	input := &interfaces.ToolInput{
 		Args: map[string]interface{}{
@@ -380,6 +380,6 @@ func BenchmarkCacheKeyGenerationSimple(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = cachedTool.generateCacheKey(input)
+		_ = cachedTool.generateCacheKey(input)
 	}
 }

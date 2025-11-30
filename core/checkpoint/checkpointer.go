@@ -21,10 +21,6 @@ import (
 //   - Multi-turn conversations
 //   - Resuming interrupted workflows
 //   - A/B testing different conversation paths
-//
-// Note: The canonical Checkpointer interface is defined in interfaces.Checkpointer
-// with a slightly different method signature. This interface is maintained for
-// backward compatibility with existing code.
 type Checkpointer interface {
 	// Save persists the current state for a thread/session.
 	Save(ctx context.Context, threadID string, state agentstate.State) error

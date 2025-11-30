@@ -3,6 +3,8 @@ package core
 import (
 	"context"
 	"time"
+
+	"github.com/kart-io/goagent/interfaces"
 )
 
 // Orchestrator 定义编排器接口
@@ -22,7 +24,7 @@ type Orchestrator interface {
 	RegisterChain(name string, chain Chain) error
 
 	// RegisterTool 注册 Tool
-	RegisterTool(name string, tool Tool) error
+	RegisterTool(name string, tool interfaces.Tool) error
 
 	// Name 返回编排器名称
 	Name() string
@@ -132,51 +134,12 @@ type ExecutionStep struct {
 	Metadata map[string]interface{} `json:"metadata,omitempty"` // 额外元数据
 }
 
-// Tool 定义工具接口
-type Tool interface {
-	// Execute 执行工具
-	Execute(ctx context.Context, input *ToolInput) (*ToolOutput, error)
-
-	// Name 返回工具名称
-	Name() string
-
-	// Description 返回工具描述
-	Description() string
-
-	// Parameters 返回工具参数定义
-	Parameters() []ToolParameter
-}
-
-// ToolInput 工具输入
-type ToolInput struct {
-	Action     string                 `json:"action"`     // 操作类型
-	Parameters map[string]interface{} `json:"parameters"` // 参数
-	Context    map[string]interface{} `json:"context"`    // 上下文
-}
-
-// ToolOutput 工具输出
-type ToolOutput struct {
-	Success bool        `json:"success"` // 是否成功
-	Data    interface{} `json:"data"`    // 输出数据
-	Message string      `json:"message"` // 消息
-	Error   string      `json:"error"`   // 错误信息
-}
-
-// ToolParameter 工具参数定义
-type ToolParameter struct {
-	Name        string      `json:"name"`        // 参数名称
-	Type        string      `json:"type"`        // 参数类型
-	Description string      `json:"description"` // 参数描述
-	Required    bool        `json:"required"`    // 是否必需
-	Default     interface{} `json:"default"`     // 默认值
-}
-
 // BaseOrchestrator 提供编排器的基础实现
 type BaseOrchestrator struct {
 	name   string
 	agents map[string]Agent
 	chains map[string]Chain
-	tools  map[string]Tool
+	tools  map[string]interfaces.Tool
 }
 
 // NewBaseOrchestrator 创建基础编排器
@@ -185,7 +148,7 @@ func NewBaseOrchestrator(name string) *BaseOrchestrator {
 		name:   name,
 		agents: make(map[string]Agent),
 		chains: make(map[string]Chain),
-		tools:  make(map[string]Tool),
+		tools:  make(map[string]interfaces.Tool),
 	}
 }
 
@@ -213,7 +176,7 @@ func (o *BaseOrchestrator) RegisterChain(name string, chain Chain) error {
 }
 
 // RegisterTool 注册 Tool
-func (o *BaseOrchestrator) RegisterTool(name string, tool Tool) error {
+func (o *BaseOrchestrator) RegisterTool(name string, tool interfaces.Tool) error {
 	if _, exists := o.tools[name]; exists {
 		return ErrToolAlreadyExists
 	}
@@ -234,7 +197,7 @@ func (o *BaseOrchestrator) GetChain(name string) (Chain, bool) {
 }
 
 // GetTool 获取 Tool
-func (o *BaseOrchestrator) GetTool(name string) (Tool, bool) {
+func (o *BaseOrchestrator) GetTool(name string) (interfaces.Tool, bool) {
 	tool, exists := o.tools[name]
 	return tool, exists
 }

@@ -31,7 +31,7 @@ func (d *DemoAgent) Invoke(ctx context.Context, input *core.AgentInput) (*core.A
 	}, nil
 }
 
-// Stream 实现流式执行（向后兼容）
+// Stream 实现流式执行
 func (d *DemoAgent) Stream(ctx context.Context, input *core.AgentInput) (<-chan core.StreamChunk[*core.AgentOutput], error) {
 	ch := make(chan core.StreamChunk[*core.AgentOutput], d.maxSteps)
 
@@ -112,9 +112,9 @@ func main() {
 	fmt.Println()
 
 	// ========================================
-	// 方式 2：使用 Channel（向后兼容）
+	// 方式 2：使用 Channel
 	// ========================================
-	fmt.Println("=== 方式 2：Channel 模式（向后兼容）===")
+	fmt.Println("=== 方式 2：Channel 模式 ===")
 	ch, err := agent.Stream(ctx, input)
 	if err != nil {
 		log.Fatal(err)

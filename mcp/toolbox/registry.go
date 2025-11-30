@@ -9,19 +9,19 @@ import (
 
 // MemoryRegistry 内存工具注册表
 type MemoryRegistry struct {
-	tools map[string]core.Tool
+	tools map[string]core.MCPTool
 	mutex sync.RWMutex
 }
 
 // NewMemoryRegistry 创建内存注册表
 func NewMemoryRegistry() *MemoryRegistry {
 	return &MemoryRegistry{
-		tools: make(map[string]core.Tool),
+		tools: make(map[string]core.MCPTool),
 	}
 }
 
 // Register 注册工具
-func (r *MemoryRegistry) Register(tool core.Tool) error {
+func (r *MemoryRegistry) Register(tool core.MCPTool) error {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
@@ -48,7 +48,7 @@ func (r *MemoryRegistry) Unregister(name string) error {
 }
 
 // Get 获取工具
-func (r *MemoryRegistry) Get(name string) (core.Tool, bool) {
+func (r *MemoryRegistry) Get(name string) (core.MCPTool, bool) {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
 
@@ -57,11 +57,11 @@ func (r *MemoryRegistry) Get(name string) (core.Tool, bool) {
 }
 
 // List 列出所有工具
-func (r *MemoryRegistry) List() []core.Tool {
+func (r *MemoryRegistry) List() []core.MCPTool {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
 
-	tools := make([]core.Tool, 0, len(r.tools))
+	tools := make([]core.MCPTool, 0, len(r.tools))
 	for _, tool := range r.tools {
 		tools = append(tools, tool)
 	}
@@ -91,15 +91,15 @@ func (r *MemoryRegistry) Clear() {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
-	r.tools = make(map[string]core.Tool)
+	r.tools = make(map[string]core.MCPTool)
 }
 
 // GetByCategory 按分类获取工具
-func (r *MemoryRegistry) GetByCategory(category string) []core.Tool {
+func (r *MemoryRegistry) GetByCategory(category string) []core.MCPTool {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
 
-	tools := make([]core.Tool, 0)
+	tools := make([]core.MCPTool, 0)
 	for _, tool := range r.tools {
 		if tool.Category() == category {
 			tools = append(tools, tool)
@@ -141,7 +141,7 @@ func (r *MemoryRegistry) ListCategories() []string {
 }
 
 // Update 更新工具
-func (r *MemoryRegistry) Update(tool core.Tool) error {
+func (r *MemoryRegistry) Update(tool core.MCPTool) error {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
@@ -155,7 +155,7 @@ func (r *MemoryRegistry) Update(tool core.Tool) error {
 }
 
 // RegisterBatch 批量注册工具
-func (r *MemoryRegistry) RegisterBatch(tools []core.Tool) error {
+func (r *MemoryRegistry) RegisterBatch(tools []core.MCPTool) error {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 

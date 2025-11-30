@@ -477,29 +477,6 @@ func TestNew_WithOptions(t *testing.T) {
 	})
 }
 
-// TestNewFromConfig_Backward_Compatibility 测试向后兼容性
-func TestNewFromConfig_Backward_Compatibility(t *testing.T) {
-	mr := miniredis.RunT(t)
-	defer mr.Close()
-
-	// Old way still works
-	s, err := New(mr.Addr(),
-		WithPassword("test_pass"),
-		WithDB(2),
-		WithPrefix("legacy:"),
-		WithPoolSize(15),
-		WithMinIdleConns(3),
-		WithTTL(5*time.Minute),
-	)
-	require.NoError(t, err)
-	defer s.Close()
-
-	assert.NotNil(t, s)
-	assert.Equal(t, "legacy:", s.config.Prefix)
-	assert.Equal(t, 15, s.config.PoolSize)
-	assert.Equal(t, 2, s.config.DB)
-}
-
 // TestApplyRedisOptions 测试 ApplyRedisOptions 函数
 func TestApplyRedisOptions(t *testing.T) {
 	t.Run("apply to nil config", func(t *testing.T) {

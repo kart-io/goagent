@@ -960,9 +960,9 @@ func TestGeminiProvider_InitializationComprehensive(t *testing.T) {
 
 // TestGenerateCallID tests unique ID generation
 func TestGenerateCallID(t *testing.T) {
-	id1 := generateCallID()
+	id1 := common.GenerateCallID()
 	time.Sleep(1 * time.Millisecond) // Ensure different timestamp
-	id2 := generateCallID()
+	id2 := common.GenerateCallID()
 
 	assert.NotEmpty(t, id1)
 	assert.NotEmpty(t, id2)
