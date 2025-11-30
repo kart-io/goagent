@@ -345,28 +345,6 @@ func TestNew_WithOptions(t *testing.T) {
 	})
 }
 
-// TestNewFromConfig_Backward_Compatibility 测试向后兼容性
-func TestNewFromConfig_Backward_Compatibility(t *testing.T) {
-	// Skip if no real DB connection
-	t.Skip("Requires real PostgreSQL connection")
-
-	// Old way still works via New function
-	store, err := New("host=localhost user=postgres dbname=test",
-		WithTableName("test_table"),
-		WithMaxIdleConns(5),
-		WithMaxOpenConns(50),
-		WithConnMaxLifetime(30*time.Minute),
-		WithAutoMigrate(false),
-	)
-	if err != nil {
-		t.Skip("PostgreSQL not available")
-	}
-	defer store.Close()
-
-	assert.NotNil(t, store)
-	assert.Equal(t, "test_table", store.config.TableName)
-}
-
 // TestApplyPostgresOptions 测试 ApplyPostgresOptions 函数
 func TestApplyPostgresOptions(t *testing.T) {
 	t.Run("apply to nil config", func(t *testing.T) {

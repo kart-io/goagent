@@ -235,6 +235,16 @@ func (b *AgentBuilder[C, S]) BuildReasoningAgent() core.Agent {
 				reactAgent = reactAgent.WithCallbacks(b.callbacks...).(*react.ReActAgent)
 			}
 			agent = reactAgent
+		} else {
+			// Fallback to basic ReAct if no config
+			reactAgent := react.NewReActAgent(react.ReActConfig{
+				Name:        "default-react",
+				Description: "Default ReAct agent",
+				LLM:         b.llmClient,
+				Tools:       b.tools,
+				MaxSteps:    10,
+			})
+			agent = reactAgent
 		}
 
 	default:

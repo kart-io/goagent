@@ -1438,8 +1438,8 @@ func TestAgentBuilder_FineGrainedOptions(t *testing.T) {
 	})
 }
 
-// TestAgentBuilder_WithConfig_Deprecated tests that fine-grained methods replace WithConfig
-func TestAgentBuilder_WithConfig_Deprecated(t *testing.T) {
+// TestAgentBuilder_FineGrainedMethods tests fine-grained configuration methods
+func TestAgentBuilder_FineGrainedMethods(t *testing.T) {
 	mockClient := NewMockLLMClient()
 
 	t.Run("fine-grained methods apply all fields", func(t *testing.T) {

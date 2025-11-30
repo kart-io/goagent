@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
+	"github.com/kart-io/goagent/mcp/core"
 )
 
 // InputValidator 提供工具输入验证功能
@@ -76,9 +78,11 @@ func (v *InputValidator) Validate(ctx context.Context, tool interfaces.Tool, inp
 	// 2. 解析 JSON Schema
 	schema, err := v.parseSchema(tool.ArgsSchema())
 	if err != nil {
-		// 如果 schema 解析失败，只记录警告，不阻止执行
-		// 这样可以保持向后兼容性
-		return nil
+		return agentErrors.New(agentErrors.CodeInvalidInput, "schema parsing failed").
+			WithComponent("input_validator").
+			WithOperation("parse_schema").
+			WithContext("tool_name", tool.Name()).
+			WithContext("error", err.Error())
 	}
 
 	// 3. 验证必需参数
@@ -127,13 +131,13 @@ type schema struct {
 
 // property 表示属性定义
 type property struct {
-	Type        string      `json:"type"`
-	Description string      `json:"description"`
+	Type        string        `json:"type"`
+	Description string        `json:"description"`
 	Enum        []interface{} `json:"enum"`
-	Minimum     *float64    `json:"minimum"`
-	Maximum     *float64    `json:"maximum"`
-	MinLength   *int        `json:"minLength"`
-	MaxLength   *int        `json:"maxLength"`
+	Minimum     *float64      `json:"minimum"`
+	Maximum     *float64      `json:"maximum"`
+	MinLength   *int          `json:"minLength"`
+	MaxLength   *int          `json:"maxLength"`
 }
 
 // parseSchema 解析 JSON Schema
@@ -296,4 +300,385 @@ func ValidateAndInvoke(ctx context.Context, tool interfaces.Tool, input *interfa
 		}, err
 	}
 	return tool.Invoke(ctx, input)
+}
+
+// ============================================================================
+// MCP ToolSchema 验证支持
+// ============================================================================
+
+// ValidateToolSchema 验证 MCP ToolSchema 定义本身
+//
+// 验证内容：
+// 1. Type 必须是 "object"
+// 2. Required 字段必须在 Properties 中定义
+// 3. 每个属性的类型必须有效
+// 4. 数组类型必须定义 Items
+// 5. 数值/字符串约束必须合理（最小值 <= 最大值）
+func ValidateToolSchema(schema *core.ToolSchema) error {
+	if schema == nil {
+		return agentErrors.New(agentErrors.CodeInvalidInput, "schema cannot be nil").
+			WithComponent("validator").
+			WithOperation("validate_tool_schema")
+	}
+
+	if schema.Type != "object" {
+		return agentErrors.New(agentErrors.CodeToolValidation, "schema type must be 'object'").
+			WithComponent("validator").
+			WithOperation("validate_tool_schema").
+			WithContext("got_type", schema.Type)
+	}
+
+	// 验证所有 required 字段在 properties 中定义
+	for _, required := range schema.Required {
+		if _, exists := schema.Properties[required]; !exists {
+			return agentErrors.New(agentErrors.CodeToolValidation, "required field not defined in properties").
+				WithComponent("validator").
+				WithOperation("validate_tool_schema").
+				WithContext("field", required)
+		}
+	}
+
+	// 验证每个属性定义
+	for name := range schema.Properties {
+		prop := schema.Properties[name]
+		if err := validatePropertySchema(&prop); err != nil {
+			return agentErrors.Wrap(err, agentErrors.CodeToolValidation, "invalid property").
+				WithComponent("validator").
+				WithOperation("validate_tool_schema").
+				WithContext("property", name)
+		}
+	}
+
+	return nil
+}
+
+// validatePropertySchema 验证属性 Schema
+func validatePropertySchema(prop *core.PropertySchema) error {
+	validTypes := map[string]bool{
+		"string": true, "number": true, "integer": true,
+		"boolean": true, "object": true, "array": true,
+	}
+
+	if !validTypes[prop.Type] {
+		return agentErrors.New(agentErrors.CodeToolValidation, "invalid property type").
+			WithComponent("validator").
+			WithOperation("validate_property_schema").
+			WithContext("type", prop.Type)
+	}
+
+	// 验证数组类型
+	if prop.Type == "array" && prop.Items == nil {
+		return agentErrors.New(agentErrors.CodeToolValidation, "array type must define items").
+			WithComponent("validator").
+			WithOperation("validate_property_schema")
+	}
+
+	// 验证数字范围
+	if prop.Minimum != nil && prop.Maximum != nil {
+		if *prop.Minimum > *prop.Maximum {
+			return agentErrors.New(agentErrors.CodeToolValidation, "minimum cannot be greater than maximum").
+				WithComponent("validator").
+				WithOperation("validate_property_schema").
+				WithContext("minimum", *prop.Minimum).
+				WithContext("maximum", *prop.Maximum)
+		}
+	}
+
+	// 验证字符串长度
+	if prop.MinLength != nil && prop.MaxLength != nil {
+		if *prop.MinLength > *prop.MaxLength {
+			return agentErrors.New(agentErrors.CodeToolValidation, "minLength cannot be greater than maxLength").
+				WithComponent("validator").
+				WithOperation("validate_property_schema").
+				WithContext("min_length", *prop.MinLength).
+				WithContext("max_length", *prop.MaxLength)
+		}
+	}
+
+	return nil
+}
+
+// ValidateInputWithSchema 使用 MCP ToolSchema 验证输入参数
+//
+// 验证步骤：
+// 1. 检查必需字段
+// 2. 验证每个输入字段的类型和约束
+// 3. 在非 AdditionalProperties 模式下验证未定义字段
+func ValidateInputWithSchema(schema *core.ToolSchema, input map[string]interface{}, strict bool) error {
+	if schema == nil {
+		return agentErrors.New(agentErrors.CodeInvalidInput, "schema cannot be nil").
+			WithComponent("validator").
+			WithOperation("validate_input_with_schema")
+	}
+
+	// 检查必需字段
+	for _, required := range schema.Required {
+		if _, exists := input[required]; !exists {
+			return agentErrors.New(agentErrors.CodeToolValidation, "required field is missing").
+				WithComponent("validator").
+				WithOperation("validate_input_with_schema").
+				WithContext("field", required)
+		}
+	}
+
+	// 验证每个输入字段
+	for key, value := range input {
+		propSchema, exists := schema.Properties[key]
+		if !exists {
+			if !schema.AdditionalProperties && strict {
+				return agentErrors.New(agentErrors.CodeToolValidation, "field not defined in schema").
+					WithComponent("validator").
+					WithOperation("validate_input_with_schema").
+					WithContext("field", key)
+			}
+			continue
+		}
+
+		if err := validateValueWithPropertySchema(key, value, &propSchema); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// validateValueWithPropertySchema 验证值符合属性 Schema
+func validateValueWithPropertySchema(fieldName string, value interface{}, schema *core.PropertySchema) error {
+	if value == nil {
+		return nil // nil 值总是有效的
+	}
+
+	switch schema.Type {
+	case "string":
+		return validateStringWithSchema(fieldName, value, schema)
+	case "number", "integer":
+		return validateNumberWithSchema(fieldName, value, schema)
+	case "boolean":
+		return validateBooleanWithSchema(fieldName, value)
+	case "array":
+		return validateArrayWithSchema(fieldName, value, schema)
+	case "object":
+		return validateObjectWithSchema(fieldName, value)
+	default:
+		return agentErrors.New(agentErrors.CodeToolValidation, "unsupported type").
+			WithComponent("validator").
+			WithOperation("validate_value").
+			WithContext("field", fieldName).
+			WithContext("type", schema.Type)
+	}
+}
+
+// validateStringWithSchema 验证字符串值
+func validateStringWithSchema(fieldName string, value interface{}, schema *core.PropertySchema) error {
+	str, ok := value.(string)
+	if !ok {
+		return agentErrors.New(agentErrors.CodeToolValidation, "expected string").
+			WithComponent("validator").
+			WithOperation("validate_string").
+			WithContext("field", fieldName).
+			WithContext("got_type", fmt.Sprintf("%T", value))
+	}
+
+	// 检查枚举值
+	if len(schema.Enum) > 0 {
+		found := false
+		for _, enum := range schema.Enum {
+			if str == enum {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return agentErrors.New(agentErrors.CodeToolValidation, "value must be one of enum").
+				WithComponent("validator").
+				WithOperation("validate_string").
+				WithContext("field", fieldName).
+				WithContext("enum_values", fmt.Sprintf("%v", schema.Enum)).
+				WithContext("got_value", str)
+		}
+	}
+
+	// 检查长度
+	if schema.MinLength != nil && len(str) < *schema.MinLength {
+		return agentErrors.New(agentErrors.CodeToolValidation, "length must be at least minimum").
+			WithComponent("validator").
+			WithOperation("validate_string").
+			WithContext("field", fieldName).
+			WithContext("min_length", *schema.MinLength).
+			WithContext("got_length", len(str))
+	}
+	if schema.MaxLength != nil && len(str) > *schema.MaxLength {
+		return agentErrors.New(agentErrors.CodeToolValidation, "length must not exceed maximum").
+			WithComponent("validator").
+			WithOperation("validate_string").
+			WithContext("field", fieldName).
+			WithContext("max_length", *schema.MaxLength).
+			WithContext("got_length", len(str))
+	}
+
+	// 检查正则表达式
+	if schema.Pattern != "" {
+		matched, err := regexp.MatchString(schema.Pattern, str)
+		if err != nil {
+			return agentErrors.New(agentErrors.CodeToolValidation, "invalid pattern").
+				WithComponent("validator").
+				WithOperation("validate_string").
+				WithContext("field", fieldName).
+				WithContext("pattern", schema.Pattern).
+				WithContext("error", err.Error())
+		}
+		if !matched {
+			return agentErrors.New(agentErrors.CodeToolValidation, "does not match pattern").
+				WithComponent("validator").
+				WithOperation("validate_string").
+				WithContext("field", fieldName).
+				WithContext("pattern", schema.Pattern).
+				WithContext("value", str)
+		}
+	}
+
+	// 检查格式
+	if schema.Format != "" {
+		if err := validateFormat(str, schema.Format); err != nil {
+			return agentErrors.Wrap(err, agentErrors.CodeToolValidation, "format validation failed").
+				WithComponent("validator").
+				WithOperation("validate_string").
+				WithContext("field", fieldName).
+				WithContext("format", schema.Format)
+		}
+	}
+
+	return nil
+}
+
+// validateNumberWithSchema 验证数字值
+func validateNumberWithSchema(fieldName string, value interface{}, schema *core.PropertySchema) error {
+	var num float64
+
+	switch val := value.(type) {
+	case float64:
+		num = val
+	case float32:
+		num = float64(val)
+	case int:
+		num = float64(val)
+	case int64:
+		num = float64(val)
+	case int32:
+		num = float64(val)
+	default:
+		return agentErrors.New(agentErrors.CodeToolValidation, "expected number").
+			WithComponent("validator").
+			WithOperation("validate_number").
+			WithContext("field", fieldName).
+			WithContext("got_type", fmt.Sprintf("%T", value))
+	}
+
+	// 检查整数类型
+	if schema.Type == "integer" && num != float64(int64(num)) {
+		return agentErrors.New(agentErrors.CodeToolValidation, "expected integer value").
+			WithComponent("validator").
+			WithOperation("validate_number").
+			WithContext("field", fieldName).
+			WithContext("got_value", num)
+	}
+
+	// 检查范围
+	if schema.Minimum != nil && num < *schema.Minimum {
+		return agentErrors.New(agentErrors.CodeToolValidation, "must be at least minimum").
+			WithComponent("validator").
+			WithOperation("validate_number").
+			WithContext("field", fieldName).
+			WithContext("minimum", *schema.Minimum).
+			WithContext("got_value", num)
+	}
+	if schema.Maximum != nil && num > *schema.Maximum {
+		return agentErrors.New(agentErrors.CodeToolValidation, "must not exceed maximum").
+			WithComponent("validator").
+			WithOperation("validate_number").
+			WithContext("field", fieldName).
+			WithContext("maximum", *schema.Maximum).
+			WithContext("got_value", num)
+	}
+
+	return nil
+}
+
+// validateBooleanWithSchema 验证布尔值
+func validateBooleanWithSchema(fieldName string, value interface{}) error {
+	if _, ok := value.(bool); !ok {
+		return agentErrors.New(agentErrors.CodeToolValidation, "expected boolean").
+			WithComponent("validator").
+			WithOperation("validate_boolean").
+			WithContext("field", fieldName).
+			WithContext("got_type", fmt.Sprintf("%T", value))
+	}
+	return nil
+}
+
+// validateArrayWithSchema 验证数组值
+func validateArrayWithSchema(fieldName string, value interface{}, schema *core.PropertySchema) error {
+	// 使用类型断言检查常见的数组类型
+	switch arr := value.(type) {
+	case []interface{}:
+		if schema.Items != nil {
+			for i, elem := range arr {
+				elemName := fmt.Sprintf("%s[%d]", fieldName, i)
+				if err := validateValueWithPropertySchema(elemName, elem, schema.Items); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	case []string, []int, []float64, []bool:
+		// 这些类型的数组也是有效的，但不递归验证元素
+		return nil
+	default:
+		return agentErrors.New(agentErrors.CodeToolValidation, "expected array").
+			WithComponent("validator").
+			WithOperation("validate_array").
+			WithContext("field", fieldName).
+			WithContext("got_type", fmt.Sprintf("%T", value))
+	}
+}
+
+// validateObjectWithSchema 验证对象值
+func validateObjectWithSchema(fieldName string, value interface{}) error {
+	if _, ok := value.(map[string]interface{}); !ok {
+		return agentErrors.New(agentErrors.CodeToolValidation, "expected object").
+			WithComponent("validator").
+			WithOperation("validate_object").
+			WithContext("field", fieldName).
+			WithContext("got_type", fmt.Sprintf("%T", value))
+	}
+	return nil
+}
+
+// validateFormat 验证格式
+func validateFormat(value, format string) error {
+	switch format {
+	case "email":
+		if !strings.Contains(value, "@") {
+			return agentErrors.New(agentErrors.CodeToolValidation, "invalid email format").
+				WithComponent("validator").
+				WithOperation("validate_format").
+				WithContext("value", value)
+		}
+	case "uri", "url":
+		if !strings.HasPrefix(value, "http://") && !strings.HasPrefix(value, "https://") {
+			return agentErrors.New(agentErrors.CodeToolValidation, "invalid URL format").
+				WithComponent("validator").
+				WithOperation("validate_format").
+				WithContext("value", value)
+		}
+	case "uuid":
+		// 简单的 UUID 格式验证
+		if matched, _ := regexp.MatchString(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`, value); !matched {
+			return agentErrors.New(agentErrors.CodeToolValidation, "invalid UUID format").
+				WithComponent("validator").
+				WithOperation("validate_format").
+				WithContext("value", value)
+		}
+	}
+	return nil
 }

@@ -87,7 +87,6 @@ func randomString(n int) string {
 	randomBytes := make([]byte, n)
 	if _, err := rand.Read(randomBytes); err != nil {
 		// Fallback to deterministic pattern if crypto/rand fails
-		// This maintains backward compatibility while logging the issue
 		for i := range randomBytes {
 			randomBytes[i] = letters[i%lettersLen]
 		}

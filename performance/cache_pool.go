@@ -4,12 +4,13 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
-	"github.com/kart-io/goagent/utils/json"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/kart-io/goagent/cache"
 	"github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/utils/json"
 )
 
 // CacheEntry 缓存条目
@@ -45,22 +46,19 @@ func DefaultCacheConfig() CacheConfig {
 	}
 }
 
-// CachedAgent 缓存包装器
+// CachedAgent 缓存包装器 (简化版本)
+//
+// 使用 cache.SimpleCache 替代自定义map实现
 type CachedAgent struct {
 	agent  core.Agent
 	config CacheConfig
 
-	cache    map[string]*CacheEntry
-	mu       sync.RWMutex
+	cache    *cache.SimpleCache
 	closed   bool
 	closeOne sync.Once
 
 	// 统计信息
 	stats cacheStats
-
-	// 清理协程控制
-	stopCleanup chan struct{}
-	wg          sync.WaitGroup
 }
 
 // cacheStats 缓存统计信息
@@ -81,23 +79,15 @@ func NewCachedAgent(agent core.Agent, config CacheConfig) *CachedAgent {
 	if config.TTL <= 0 {
 		config.TTL = 10 * time.Minute
 	}
-	if config.CleanupInterval <= 0 {
-		config.CleanupInterval = 1 * time.Minute
-	}
 	if config.KeyGenerator == nil {
 		config.KeyGenerator = defaultKeyGenerator
 	}
 
 	ca := &CachedAgent{
-		agent:       agent,
-		config:      config,
-		cache:       make(map[string]*CacheEntry),
-		stopCleanup: make(chan struct{}),
+		agent:  agent,
+		config: config,
+		cache:  cache.NewSimpleCache(config.TTL),
 	}
-
-	// 启动清理协程
-	ca.wg.Add(1)
-	go ca.cleanupLoop()
 
 	return ca
 }
@@ -152,22 +142,14 @@ func (c *CachedAgent) Capabilities() []string {
 
 // getFromCache 从缓存获取
 func (c *CachedAgent) getFromCache(key string) (*core.AgentOutput, bool) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	entry, exists := c.cache[key]
-	if !exists {
+	val, err := c.cache.Get(context.Background(), key)
+	if err != nil {
 		c.stats.misses.Add(1)
 		return nil, false
 	}
 
-	// 检查是否过期
-	if time.Now().After(entry.ExpiresAt) {
-		c.stats.misses.Add(1)
-		return nil, false
-	}
-
-	// 缓存命中
+	entry := val.(*CacheEntry)
+	// 检查是否过期 (SimpleCache已处理)
 	c.stats.hits.Add(1)
 	entry.HitCount.Add(1)
 
@@ -177,64 +159,32 @@ func (c *CachedAgent) getFromCache(key string) (*core.AgentOutput, bool) {
 
 // putToCache 保存到缓存
 func (c *CachedAgent) putToCache(key string, output *core.AgentOutput) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	if c.closed {
 		return
 	}
 
-	// 如果缓存已满，驱逐最旧的条目
-	if len(c.cache) >= c.config.MaxSize {
-		c.evictOldest()
-	}
-
-	// 添加新条目
-	c.cache[key] = &CacheEntry{
+	// SimpleCache会自动处理容量和TTL
+	entry := &CacheEntry{
 		Output:    copyOutput(output),
 		CreatedAt: time.Now(),
 		ExpiresAt: time.Now().Add(c.config.TTL),
 	}
-}
-
-// evictOldest 驱逐最旧的缓存条目
-func (c *CachedAgent) evictOldest() {
-	var oldestKey string
-	var oldestTime time.Time
-
-	for key, entry := range c.cache {
-		if oldestKey == "" || entry.CreatedAt.Before(oldestTime) {
-			oldestKey = key
-			oldestTime = entry.CreatedAt
-		}
-	}
-
-	if oldestKey != "" {
-		delete(c.cache, oldestKey)
-		c.stats.evictions.Add(1)
-	}
+	c.cache.Set(context.Background(), key, entry, c.config.TTL)
 }
 
 // Invalidate 失效指定缓存键
 func (c *CachedAgent) Invalidate(input *core.AgentInput) {
 	key := c.config.KeyGenerator(input)
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	delete(c.cache, key)
+	c.cache.Delete(context.Background(), key)
 }
 
 // InvalidateAll 清空所有缓存
 func (c *CachedAgent) InvalidateAll() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.cache = make(map[string]*CacheEntry)
+	c.cache.Clear(context.Background())
 }
 
 // Stats 返回缓存统计信息
 func (c *CachedAgent) Stats() CacheStats {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
 	hits := c.stats.hits.Load()
 	misses := c.stats.misses.Load()
 	total := hits + misses
@@ -252,8 +202,10 @@ func (c *CachedAgent) Stats() CacheStats {
 		avgMissTime = time.Duration(c.stats.totalMissTimeNs.Load() / misses)
 	}
 
+	cacheStats := c.cache.GetStats()
+
 	return CacheStats{
-		Size:        len(c.cache),
+		Size:        int(cacheStats.Size),
 		MaxSize:     c.config.MaxSize,
 		Hits:        hits,
 		Misses:      misses,
@@ -281,50 +233,10 @@ type CacheStats struct {
 // Close 关闭缓存
 func (c *CachedAgent) Close() error {
 	c.closeOne.Do(func() {
-		c.mu.Lock()
 		c.closed = true
-		c.mu.Unlock()
-
-		// 停止清理协程
-		close(c.stopCleanup)
-		c.wg.Wait()
+		c.cache.Close()
 	})
 	return nil
-}
-
-// cleanupLoop 清理循环
-func (c *CachedAgent) cleanupLoop() {
-	defer c.wg.Done()
-
-	ticker := time.NewTicker(c.config.CleanupInterval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			c.cleanup()
-		case <-c.stopCleanup:
-			return
-		}
-	}
-}
-
-// cleanup 清理过期的缓存条目
-func (c *CachedAgent) cleanup() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if c.closed {
-		return
-	}
-
-	now := time.Now()
-	for key, entry := range c.cache {
-		if now.After(entry.ExpiresAt) {
-			delete(c.cache, key)
-			c.stats.expirations.Add(1)
-		}
-	}
 }
 
 // defaultKeyGenerator 默认缓存键生成器

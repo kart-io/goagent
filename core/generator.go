@@ -44,7 +44,7 @@ func GeneratorFunc[T any](fn func(yield func(T, error) bool)) Generator[T] {
 	return Generator[T](fn)
 }
 
-// ToChannel 将 Generator 转换为 Channel（向后兼容）
+// ToChannel 将 Generator 转换为 Channel
 //
 // 参数：
 //   - ctx - 上下文（用于取消）

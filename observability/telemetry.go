@@ -168,7 +168,7 @@ func (p *TelemetryProvider) initTracer(res *resource.Resource) (*sdktrace.Tracer
 				WithContext("endpoint", p.config.TraceEndpoint)
 		}
 	case "stdout":
-		// stdout exporter is deprecated, using noop instead
+		// stdout exporter 不再支持，使用 noop 替代
 		exporter = &noopExporter{}
 	case "noop":
 		exporter = &noopExporter{}

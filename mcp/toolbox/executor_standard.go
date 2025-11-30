@@ -21,7 +21,7 @@ func NewStandardExecutor() *StandardExecutor {
 }
 
 // Execute 执行工具
-func (e *StandardExecutor) Execute(ctx context.Context, tool core.Tool, call *core.ToolCall) (*core.ToolResult, error) {
+func (e *StandardExecutor) Execute(ctx context.Context, tool core.MCPTool, call *core.ToolCall) (*core.ToolResult, error) {
 	startTime := time.Now()
 
 	// 验证输入
@@ -58,7 +58,7 @@ func (e *StandardExecutor) Execute(ctx context.Context, tool core.Tool, call *co
 }
 
 // ExecuteWithRetry 执行工具（带重试）
-func (e *StandardExecutor) ExecuteWithRetry(ctx context.Context, tool core.Tool, call *core.ToolCall, maxRetries int) (*core.ToolResult, error) {
+func (e *StandardExecutor) ExecuteWithRetry(ctx context.Context, tool core.MCPTool, call *core.ToolCall, maxRetries int) (*core.ToolResult, error) {
 	var lastErr error
 	var result *core.ToolResult
 
@@ -88,7 +88,7 @@ func (e *StandardExecutor) ExecuteWithRetry(ctx context.Context, tool core.Tool,
 }
 
 // ExecuteWithTimeout 执行工具（带超时）
-func (e *StandardExecutor) ExecuteWithTimeout(ctx context.Context, tool core.Tool, call *core.ToolCall) (*core.ToolResult, error) {
+func (e *StandardExecutor) ExecuteWithTimeout(ctx context.Context, tool core.MCPTool, call *core.ToolCall) (*core.ToolResult, error) {
 	// 创建带超时的上下文
 	timeout := e.defaultTimeout
 	if call.Context != nil {

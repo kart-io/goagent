@@ -30,7 +30,7 @@ func (a *AdvancedAgent) Invoke(ctx context.Context, input *core.AgentInput) (*co
 	}, nil
 }
 
-// Stream 实现流式执行（向后兼容）
+// Stream 实现流式执行
 func (a *AdvancedAgent) Stream(ctx context.Context, input *core.AgentInput) (<-chan core.StreamChunk[*core.AgentOutput], error) {
 	ch := make(chan core.StreamChunk[*core.AgentOutput], a.steps)
 

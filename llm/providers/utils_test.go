@@ -6,18 +6,19 @@ import (
 	"time"
 
 	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/llm/common"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestParseRetryAfter_Integer(t *testing.T) {
 	// Test integer seconds
-	seconds := parseRetryAfter("120")
+	seconds := common.ParseRetryAfter("120")
 	assert.Equal(t, 120, seconds)
 }
 
 func TestParseRetryAfter_Empty(t *testing.T) {
 	// Test empty header returns default
-	seconds := parseRetryAfter("")
+	seconds := common.ParseRetryAfter("")
 	assert.Equal(t, 60, seconds)
 }
 
@@ -26,7 +27,7 @@ func TestParseRetryAfter_RFC1123(t *testing.T) {
 	future := time.Now().Add(90 * time.Second)
 	httpDate := future.Format(time.RFC1123)
 
-	seconds := parseRetryAfter(httpDate)
+	seconds := common.ParseRetryAfter(httpDate)
 	// Should be approximately 90 seconds (allow some tolerance)
 	assert.Greater(t, seconds, 85)
 	assert.Less(t, seconds, 95)
@@ -34,7 +35,7 @@ func TestParseRetryAfter_RFC1123(t *testing.T) {
 
 func TestParseRetryAfter_InvalidFormat(t *testing.T) {
 	// Test invalid format returns default
-	seconds := parseRetryAfter("invalid")
+	seconds := common.ParseRetryAfter("invalid")
 	assert.Equal(t, 60, seconds)
 }
 
@@ -43,7 +44,7 @@ func TestParseRetryAfter_PastDate(t *testing.T) {
 	past := time.Now().Add(-30 * time.Second)
 	httpDate := past.Format(time.RFC1123)
 
-	seconds := parseRetryAfter(httpDate)
+	seconds := common.ParseRetryAfter(httpDate)
 	// Should return negative or small value
 	assert.LessOrEqual(t, seconds, 0)
 }
@@ -52,7 +53,7 @@ func TestGenerateCallID_Uniqueness(t *testing.T) {
 	// Test that generated IDs are unique
 	ids := make(map[string]bool)
 	for i := 0; i < 1000; i++ {
-		id := generateCallID()
+		id := common.GenerateCallID()
 		assert.NotEmpty(t, id)
 		assert.False(t, ids[id], "Generated duplicate ID: %s", id)
 		ids[id] = true
@@ -61,7 +62,7 @@ func TestGenerateCallID_Uniqueness(t *testing.T) {
 
 func TestGenerateCallID_Format(t *testing.T) {
 	// Test ID format
-	id := generateCallID()
+	id := common.GenerateCallID()
 	assert.True(t, strings.HasPrefix(id, "call_"), "ID should start with 'call_'")
 	parts := strings.Split(id, "_")
 	assert.GreaterOrEqual(t, len(parts), 2, "ID should have at least 2 parts")
@@ -69,17 +70,17 @@ func TestGenerateCallID_Format(t *testing.T) {
 
 func TestIsRetryable_RateLimitError(t *testing.T) {
 	err := agentErrors.NewLLMRateLimitError("test", "model", 60)
-	assert.True(t, isRetryable(err))
+	assert.True(t, common.IsRetryable(err))
 }
 
 func TestIsRetryable_TimeoutError(t *testing.T) {
 	err := agentErrors.NewLLMTimeoutError("test", "model", 30)
-	assert.True(t, isRetryable(err))
+	assert.True(t, common.IsRetryable(err))
 }
 
 func TestIsRetryable_RequestError(t *testing.T) {
 	err := agentErrors.NewLLMRequestError("test", "model", assert.AnError)
-	assert.True(t, isRetryable(err))
+	assert.True(t, common.IsRetryable(err))
 }
 
 func TestIsRetryable_NonRetryableError(t *testing.T) {
@@ -103,11 +104,11 @@ func TestIsRetryable_NonRetryableError(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.False(t, isRetryable(tc.err))
+			assert.False(t, common.IsRetryable(tc.err))
 		})
 	}
 }
 
 func TestIsRetryable_NilError(t *testing.T) {
-	assert.False(t, isRetryable(nil))
+	assert.False(t, common.IsRetryable(nil))
 }

@@ -12,11 +12,13 @@ var (
 	ErrNotImplemented = errors.New("method must be implemented by concrete tool")
 )
 
-// Tool MCP 工具接口
+// MCPTool MCP 工具接口
 //
-// Tool 代表一个可以被 AI Agent 调用的工具，符合 MCP (Model Context Protocol) 规范。
+// MCPTool 代表一个可以被 AI Agent 调用的工具，符合 MCP (Model Context Protocol) 规范。
 // 每个工具都有明确的输入输出定义，支持 JSON Schema 验证。
-type Tool interface {
+//
+// 注意：这个接口与 interfaces.Tool 不同，MCP工具有额外的元数据和安全检查方法。
+type MCPTool interface {
 	// Name 返回工具名称（唯一标识符）
 	Name() string
 
@@ -222,7 +224,7 @@ func (t *ToolMetadata) ToJSON() (string, error) {
 	return string(data), nil
 }
 
-// BaseTool 提供 Tool 的基础实现
+// BaseTool 提供 MCPTool 的基础实现
 type BaseTool struct {
 	name         string
 	description  string

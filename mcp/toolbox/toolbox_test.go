@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/kart-io/goagent/mcp/core"
+	"github.com/kart-io/goagent/tools"
 )
 
 // MockTool 模拟工具
@@ -299,8 +300,6 @@ func TestPermissionManager_RateLimit(t *testing.T) {
 
 // TestJSONSchemaValidator 测试 JSON Schema 验证
 func TestJSONSchemaValidator(t *testing.T) {
-	validator := NewJSONSchemaValidator()
-
 	schema := &core.ToolSchema{
 		Type: "object",
 		Properties: map[string]core.PropertySchema{
@@ -316,19 +315,23 @@ func TestJSONSchemaValidator(t *testing.T) {
 		Required: []string{"name"},
 	}
 
+	// 验证 Schema 定义本身
+	err := tools.ValidateToolSchema(schema)
+	assert.NoError(t, err)
+
 	// 有效输入
 	validInput := map[string]interface{}{
 		"name": "Alice",
 		"age":  30,
 	}
-	err := validator.ValidateInput(schema, validInput)
+	err = tools.ValidateInputWithSchema(schema, validInput, false)
 	assert.NoError(t, err)
 
 	// 缺少必需字段
 	invalidInput := map[string]interface{}{
 		"age": 30,
 	}
-	err = validator.ValidateInput(schema, invalidInput)
+	err = tools.ValidateInputWithSchema(schema, invalidInput, false)
 	assert.Error(t, err)
 
 	// 类型错误
@@ -336,7 +339,7 @@ func TestJSONSchemaValidator(t *testing.T) {
 		"name": "Alice",
 		"age":  "thirty", // 应该是数字
 	}
-	err = validator.ValidateInput(schema, wrongTypeInput)
+	err = tools.ValidateInputWithSchema(schema, wrongTypeInput, false)
 	assert.Error(t, err)
 }
 

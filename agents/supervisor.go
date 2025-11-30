@@ -45,15 +45,15 @@ type SupervisorConfig struct {
 	// RetryPolicy for failed sub-agent tasks
 	RetryPolicy *tools.RetryPolicy
 
-	// EnableCaching enables result caching (deprecated: use CacheConfig instead)
+	// EnableCaching enables result caching
 	EnableCaching bool
 
-	// CacheTTL for cached results (deprecated: use CacheConfig instead)
+	// CacheTTL for cached results
 	CacheTTL time.Duration
 
 	// CacheConfig configures the caching behavior
 	// If nil and EnableCaching is true, default cache config will be used
-	CacheConfig *CacheConfig
+	CacheConfig *performance.CacheConfig
 
 	// EnableMetrics enables metrics collection
 	EnableMetrics bool
@@ -64,9 +64,6 @@ type SupervisorConfig struct {
 	// AggregationStrategy defines how to aggregate results
 	AggregationStrategy AggregationStrategy
 }
-
-// CacheConfig is imported from performance package
-type CacheConfig = performance.CacheConfig
 
 // DefaultSupervisorConfig returns default configuration
 func DefaultSupervisorConfig() *SupervisorConfig {
