@@ -215,12 +215,13 @@ func TestGetMaxTokens(t *testing.T) {
 	// Falls back to config
 	assert.Equal(t, 100, bp.GetMaxTokens(0))
 
-	// Test default fallback - common.NewBaseProvider() uses DefaultLLMOptions() which sets MaxTokens to 2000
+	// 测试默认值回退 - common.NewBaseProvider() 使用 DefaultLLMOptions()，该函数设置 MaxTokens 为 2000
 	bp2 := common.NewBaseProvider()
 	assert.Equal(t, 2000, bp2.GetMaxTokens(0))
 
-	// Test with zero config (should use constants.DefaultMaxTokens)
-	bp3 := common.NewBaseProvider(common.ConfigToOptions(&agentllm.LLMOptions{MaxTokens: 0})...)
+	// 测试零配置时的兜底默认值（应使用 constants.DefaultMaxTokens）
+	// 需要创建一个空配置（不使用 DefaultLLMOptions）
+	bp3 := &common.BaseProvider{Config: &agentllm.LLMOptions{}}
 	assert.Equal(t, constants.DefaultMaxTokens, bp3.GetMaxTokens(0))
 }
 
@@ -247,12 +248,13 @@ func TestGetTimeout(t *testing.T) {
 	timeout := bp.GetTimeout()
 	assert.Equal(t, 30*time.Second, timeout)
 
-	// Test default fallback - common.NewBaseProvider() uses DefaultLLMOptions() which sets Timeout to 60
+	// 测试默认值回退 - common.NewBaseProvider() 使用 DefaultLLMOptions()，该函数设置 Timeout 为 60
 	bp2 := common.NewBaseProvider()
 	assert.Equal(t, 60*time.Second, bp2.GetTimeout())
 
-	// Test with config that has zero timeout (should use default)
-	bp3 := common.NewBaseProvider(common.ConfigToOptions(&agentllm.LLMOptions{Timeout: 0})...)
+	// 测试零配置时的兜底默认值（应使用 constants.DefaultTimeout）
+	// 需要创建一个空配置（不使用 DefaultLLMOptions）
+	bp3 := &common.BaseProvider{Config: &agentllm.LLMOptions{}}
 	assert.Equal(t, constants.DefaultTimeout, bp3.GetTimeout())
 }
 

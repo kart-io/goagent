@@ -10,6 +10,7 @@ import (
 
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/mcp/core"
+	"github.com/kart-io/goagent/tools"
 )
 
 // StandardToolBox 标准工具箱实现
@@ -19,9 +20,6 @@ type StandardToolBox struct {
 
 	// 工具执行器
 	executor core.ToolExecutor
-
-	// 工具验证器
-	validator core.ToolValidator
 
 	// 权限管理器
 	permissionManager *PermissionManager
@@ -41,7 +39,6 @@ func NewStandardToolBox() *StandardToolBox {
 	return &StandardToolBox{
 		registry:          NewMemoryRegistry(),
 		executor:          NewStandardExecutor(),
-		validator:         NewJSONSchemaValidator(),
 		permissionManager: NewPermissionManager(),
 		stats: &core.ToolBoxStatistics{
 			ToolUsage:     make(map[string]int64),
@@ -53,9 +50,9 @@ func NewStandardToolBox() *StandardToolBox {
 }
 
 // Register 注册工具
-func (tb *StandardToolBox) Register(tool core.Tool) error {
+func (tb *StandardToolBox) Register(tool core.MCPTool) error {
 	// 验证工具 Schema
-	if err := tb.validator.ValidateSchema(tool.Schema()); err != nil {
+	if err := tools.ValidateToolSchema(tool.Schema()); err != nil {
 		return agentErrors.Wrap(err, agentErrors.CodeToolValidation, "invalid tool schema").
 			WithComponent("standard_toolbox").
 			WithOperation("register").
@@ -91,7 +88,7 @@ func (tb *StandardToolBox) Unregister(name string) error {
 }
 
 // Get 获取工具
-func (tb *StandardToolBox) Get(name string) (core.Tool, error) {
+func (tb *StandardToolBox) Get(name string) (core.MCPTool, error) {
 	tool, exists := tb.registry.Get(name)
 	if !exists {
 		return nil, &core.ErrToolNotFound{ToolName: name}
@@ -100,14 +97,14 @@ func (tb *StandardToolBox) Get(name string) (core.Tool, error) {
 }
 
 // List 列出所有工具
-func (tb *StandardToolBox) List() []core.Tool {
+func (tb *StandardToolBox) List() []core.MCPTool {
 	return tb.registry.List()
 }
 
 // ListByCategory 按分类列出工具
-func (tb *StandardToolBox) ListByCategory(category string) []core.Tool {
+func (tb *StandardToolBox) ListByCategory(category string) []core.MCPTool {
 	tools := tb.registry.List()
-	result := make([]core.Tool, 0)
+	result := make([]core.MCPTool, 0)
 
 	for _, tool := range tools {
 		if tool.Category() == category {
@@ -119,9 +116,9 @@ func (tb *StandardToolBox) ListByCategory(category string) []core.Tool {
 }
 
 // Search 搜索工具
-func (tb *StandardToolBox) Search(query string) []core.Tool {
+func (tb *StandardToolBox) Search(query string) []core.MCPTool {
 	tools := tb.registry.List()
-	result := make([]core.Tool, 0)
+	result := make([]core.MCPTool, 0)
 	query = strings.ToLower(query)
 
 	for _, tool := range tools {
@@ -272,7 +269,7 @@ func (tb *StandardToolBox) Validate(call *core.ToolCall) error {
 	}
 
 	// 验证输入参数
-	if err := tb.validator.ValidateInput(tool.Schema(), call.Input); err != nil {
+	if err := tools.ValidateInputWithSchema(tool.Schema(), call.Input, false); err != nil {
 		return err
 	}
 

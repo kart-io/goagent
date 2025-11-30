@@ -464,7 +464,7 @@ func TestNewCacheFromConfig(t *testing.T) {
 		check  func(*testing.T, Cache)
 	}{
 		{
-			name: "memory cache",
+			name: "enabled cache returns SimpleCache",
 			config: CacheConfig{
 				Enabled:         true,
 				Type:            "memory",
@@ -473,15 +473,15 @@ func TestNewCacheFromConfig(t *testing.T) {
 				CleanupInterval: 1 * time.Minute,
 			},
 			check: func(t *testing.T, cache Cache) {
-				_, ok := cache.(*InMemoryCache)
-				assert.True(t, ok)
-				if c, ok := cache.(*InMemoryCache); ok {
+				_, ok := cache.(*SimpleCache)
+				assert.True(t, ok, "expected SimpleCache")
+				if c, ok := cache.(*SimpleCache); ok {
 					c.Close()
 				}
 			},
 		},
 		{
-			name: "LRU cache",
+			name: "any enabled type returns SimpleCache",
 			config: CacheConfig{
 				Enabled:         true,
 				Type:            "lru",
@@ -490,9 +490,9 @@ func TestNewCacheFromConfig(t *testing.T) {
 				CleanupInterval: 1 * time.Minute,
 			},
 			check: func(t *testing.T, cache Cache) {
-				_, ok := cache.(*LRUCache)
-				assert.True(t, ok)
-				if c, ok := cache.(*LRUCache); ok {
+				_, ok := cache.(*SimpleCache)
+				assert.True(t, ok, "expected SimpleCache for any enabled type")
+				if c, ok := cache.(*SimpleCache); ok {
 					c.Close()
 				}
 			},
@@ -508,7 +508,7 @@ func TestNewCacheFromConfig(t *testing.T) {
 			},
 		},
 		{
-			name: "unknown type defaults to memory",
+			name: "unknown type also returns SimpleCache",
 			config: CacheConfig{
 				Enabled:         true,
 				Type:            "unknown",
@@ -517,9 +517,9 @@ func TestNewCacheFromConfig(t *testing.T) {
 				CleanupInterval: 1 * time.Minute,
 			},
 			check: func(t *testing.T, cache Cache) {
-				_, ok := cache.(*InMemoryCache)
-				assert.True(t, ok)
-				if c, ok := cache.(*InMemoryCache); ok {
+				_, ok := cache.(*SimpleCache)
+				assert.True(t, ok, "expected SimpleCache for unknown type")
+				if c, ok := cache.(*SimpleCache); ok {
 					c.Close()
 				}
 			},

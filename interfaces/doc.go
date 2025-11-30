@@ -12,10 +12,4 @@
 //   - MemoryManager: Memory management
 //   - Checkpointer: State checkpointing
 //   - Store: Key-value storage
-//
-// Backward Compatibility:
-//
-// Type aliases exist in original locations (retrieval/, memory/, core/)
-// for backward compatibility. These will be removed in v1.0.0.
-// See docs/refactoring/migration-guide.md for migration instructions.
 package interfaces

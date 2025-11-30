@@ -19,90 +19,45 @@ import (
 	"github.com/kart-io/goagent/store/memory"
 )
 
-// AgentBuilder provides a fluent API for building agents with all features
+// AgentBuilder 提供用于构建 Agent 的 fluent API
 //
-// Inspired by LangChain's create_agent function, it integrates:
-//   - LLM client configuration
-//   - Tools registration
-//   - State management
-//   - Runtime context
-//   - Store and Checkpointer
-//   - Middleware stack
-//   - System prompts
+// 受 LangChain 的 create_agent 函数启发,它集成了:
+//   - LLM 客户端配置
+//   - 工具注册
+//   - 状态管理
+//   - 运行时上下文
+//   - Store 和 Checkpointer
+//   - 中间件栈
+//   - 系统提示词
 type AgentBuilder[C any, S core.State] struct {
-	// Core components
+	// 核心组件
 	llmClient    llm.Client
 	tools        []interfaces.Tool
 	systemPrompt string
 
-	// Phase 1 components
+	// Phase 1 组件
 	state        S
 	store        store.Store
 	checkpointer checkpoint.Checkpointer
 	context      C
 
-	// Phase 2 components
+	// Phase 2 组件
 	middlewares []middleware.Middleware
 
-	// Configuration
+	// 配置
 	config *AgentConfig
 
-	// Callbacks
+	// 回调
 	callbacks []core.Callback
 
-	// Error handling
+	// 错误处理
 	errorHandler func(error) error
 
-	// Metadata
+	// 元数据
 	metadata map[string]interface{}
 }
 
-// AgentConfig holds agent configuration options
-type AgentConfig struct {
-	// MaxIterations limits the number of reasoning steps
-	MaxIterations int
-
-	// Timeout for agent execution
-	Timeout time.Duration
-
-	// EnableStreaming enables streaming responses
-	EnableStreaming bool
-
-	// EnableAutoSave automatically saves state after each step
-	EnableAutoSave bool
-
-	// SaveInterval for auto-save
-	SaveInterval time.Duration
-
-	// MaxTokens limits LLM response tokens
-	MaxTokens int
-
-	// Temperature for LLM sampling
-	Temperature float64
-
-	// SessionID for checkpointing
-	SessionID string
-
-	// Verbose enables detailed logging
-	Verbose bool
-}
-
-// DefaultAgentConfig returns default configuration
-func DefaultAgentConfig() *AgentConfig {
-	return &AgentConfig{
-		MaxIterations:   10,
-		Timeout:         5 * time.Minute,
-		EnableStreaming: false,
-		EnableAutoSave:  true,
-		SaveInterval:    30 * time.Second,
-		MaxTokens:       2000,
-		Temperature:     0.7,
-		SessionID:       fmt.Sprintf("session-%d", time.Now().Unix()),
-		Verbose:         false,
-	}
-}
-
-// NewAgentBuilder creates a new agent builder
+// NewAgentBuilder 创建一个新的 Agent 构建器
 func NewAgentBuilder[C any, S core.State](llmClient llm.Client) *AgentBuilder[C, S] {
 	return &AgentBuilder[C, S]{
 		llmClient:   llmClient,
@@ -114,209 +69,17 @@ func NewAgentBuilder[C any, S core.State](llmClient llm.Client) *AgentBuilder[C,
 	}
 }
 
-// WithTools adds tools to the agent
-func (b *AgentBuilder[C, S]) WithTools(tools ...interfaces.Tool) *AgentBuilder[C, S] {
-	b.tools = append(b.tools, tools...)
-	return b
-}
-
-// WithSystemPrompt sets the system prompt
-func (b *AgentBuilder[C, S]) WithSystemPrompt(prompt string) *AgentBuilder[C, S] {
-	b.systemPrompt = prompt
-	return b
-}
-
-// WithState sets the agent state
-func (b *AgentBuilder[C, S]) WithState(state S) *AgentBuilder[C, S] {
-	b.state = state
-	return b
-}
-
-// WithContext sets the application context
-func (b *AgentBuilder[C, S]) WithContext(context C) *AgentBuilder[C, S] {
-	b.context = context
-	return b
-}
-
-// WithStore sets the long-term storage
-func (b *AgentBuilder[C, S]) WithStore(st store.Store) *AgentBuilder[C, S] {
-	b.store = st
-	return b
-}
-
-// WithCheckpointer sets the session checkpointer
-func (b *AgentBuilder[C, S]) WithCheckpointer(checkpointer checkpoint.Checkpointer) *AgentBuilder[C, S] {
-	b.checkpointer = checkpointer
-	return b
-}
-
-// WithMiddleware adds middleware to the chain
-func (b *AgentBuilder[C, S]) WithMiddleware(mw ...middleware.Middleware) *AgentBuilder[C, S] {
-	b.middlewares = append(b.middlewares, mw...)
-	return b
-}
-
-// WithCallbacks adds callbacks for monitoring
-func (b *AgentBuilder[C, S]) WithCallbacks(callbacks ...core.Callback) *AgentBuilder[C, S] {
-	b.callbacks = append(b.callbacks, callbacks...)
-	return b
-}
-
-// WithMaxIterations 设置最大迭代次数
-func (b *AgentBuilder[C, S]) WithMaxIterations(max int) *AgentBuilder[C, S] {
-	if max > 0 {
-		b.config.MaxIterations = max
-	}
-	return b
-}
-
-// WithTimeout 设置超时时间
-func (b *AgentBuilder[C, S]) WithTimeout(timeout time.Duration) *AgentBuilder[C, S] {
-	if timeout > 0 {
-		b.config.Timeout = timeout
-	}
-	return b
-}
-
-// WithStreamingEnabled 设置是否启用流式响应
-func (b *AgentBuilder[C, S]) WithStreamingEnabled(enabled bool) *AgentBuilder[C, S] {
-	b.config.EnableStreaming = enabled
-	return b
-}
-
-// WithAutoSaveEnabled 设置是否启用自动保存
-func (b *AgentBuilder[C, S]) WithAutoSaveEnabled(enabled bool) *AgentBuilder[C, S] {
-	b.config.EnableAutoSave = enabled
-	return b
-}
-
-// WithSaveInterval 设置自动保存间隔
-func (b *AgentBuilder[C, S]) WithSaveInterval(interval time.Duration) *AgentBuilder[C, S] {
-	if interval > 0 {
-		b.config.SaveInterval = interval
-	}
-	return b
-}
-
-// WithMaxTokens 设置最大 token 数
-func (b *AgentBuilder[C, S]) WithMaxTokens(max int) *AgentBuilder[C, S] {
-	if max > 0 {
-		b.config.MaxTokens = max
-	}
-	return b
-}
-
-// WithTemperature 设置温度参数（控制随机性）
-func (b *AgentBuilder[C, S]) WithTemperature(temp float64) *AgentBuilder[C, S] {
-	if temp >= 0 && temp <= 2.0 {
-		b.config.Temperature = temp
-	}
-	return b
-}
-
-// WithSessionID 设置会话 ID
-func (b *AgentBuilder[C, S]) WithSessionID(sessionID string) *AgentBuilder[C, S] {
-	if sessionID != "" {
-		b.config.SessionID = sessionID
-	}
-	return b
-}
-
-// WithVerbose 设置是否启用详细日志
-func (b *AgentBuilder[C, S]) WithVerbose(verbose bool) *AgentBuilder[C, S] {
-	b.config.Verbose = verbose
-	return b
-}
-
-// WithErrorHandler sets custom error handling
-func (b *AgentBuilder[C, S]) WithErrorHandler(handler func(error) error) *AgentBuilder[C, S] {
-	b.errorHandler = handler
-	return b
-}
-
-// WithMetadata adds metadata to the agent
-func (b *AgentBuilder[C, S]) WithMetadata(key string, value interface{}) *AgentBuilder[C, S] {
-	b.metadata[key] = value
-	return b
-}
-
-// ConfigureForRAG adds common RAG (Retrieval-Augmented Generation) components
-func (b *AgentBuilder[C, S]) ConfigureForRAG() *AgentBuilder[C, S] {
-	// Add common RAG middleware
-	b.WithMiddleware(
-		middleware.NewCacheMiddleware(5*time.Minute),
-		middleware.NewDynamicPromptMiddleware(func(req *middleware.MiddlewareRequest) string {
-			// Add context from retrieval
-			return fmt.Sprintf("Use the following context to answer: %v", req.Input)
-		}),
-	)
-
-	// Set appropriate config using fine-grained methods
-	b.WithMaxTokens(3000)
-	b.WithTemperature(0.3) // Lower temperature for factual responses
-
-	return b
-}
-
-// ConfigureForChatbot adds common chatbot components
-func (b *AgentBuilder[C, S]) ConfigureForChatbot() *AgentBuilder[C, S] {
-	// Add chatbot middleware
-	b.WithMiddleware(
-		middleware.NewRateLimiterMiddleware(20, time.Minute),
-		middleware.NewValidationMiddleware(
-			func(req *middleware.MiddlewareRequest) error {
-				// Validate input length
-				if len(fmt.Sprintf("%v", req.Input)) > 1000 {
-					return agentErrors.NewInvalidInputError("chatbot", "message", "message too long")
-				}
-				return nil
-			},
-		),
-	)
-
-	// Enable streaming for better UX using fine-grained methods
-	b.WithStreamingEnabled(true)
-	b.WithTemperature(0.8) // Higher temperature for creativity
-
-	return b
-}
-
-// ConfigureForAnalysis adds components for data analysis tasks
-func (b *AgentBuilder[C, S]) ConfigureForAnalysis() *AgentBuilder[C, S] {
-	// Add analysis middleware
-	b.WithMiddleware(
-		middleware.NewTimingMiddleware(),
-		middleware.NewTransformMiddleware(
-			nil, // No input transform
-			func(output interface{}) (interface{}, error) {
-				// Format output as structured data
-				return map[string]interface{}{
-					"analysis":  output,
-					"timestamp": time.Now(),
-				}, nil
-			},
-		),
-	)
-
-	// Configure for accuracy using fine-grained methods
-	b.WithTemperature(0.1)  // Very low temperature for consistency
-	b.WithMaxIterations(20) // More iterations for complex analysis
-
-	return b
-}
-
-// Build constructs the final agent
+// Build 构建最终的 Agent
 func (b *AgentBuilder[C, S]) Build() (*ConfigurableAgent[C, S], error) {
-	// Validate required components
+	// 验证必需组件
 	if b.llmClient == nil {
 		return nil, agentErrors.NewInvalidConfigError("builder", "llm_client", "LLM client is required")
 	}
 
-	// Set defaults if not provided
-	// Check if state is zero value
+	// 如果未提供则设置默认值
 	var zero S
 	if reflect.DeepEqual(b.state, zero) {
-		// Try to create a default state if S is *core.AgentState
+		// 尝试创建默认状态,如果 S 是 *core.AgentState
 		if _, ok := any(zero).(*core.AgentState); ok {
 			b.state = any(core.NewAgentState()).(S)
 		} else {
@@ -332,7 +95,7 @@ func (b *AgentBuilder[C, S]) Build() (*ConfigurableAgent[C, S], error) {
 		b.checkpointer = checkpoint.NewInMemorySaver()
 	}
 
-	// Create runtime
+	// 创建运行时
 	runtime := execution.NewRuntime(
 		b.context,
 		b.state,
@@ -341,20 +104,20 @@ func (b *AgentBuilder[C, S]) Build() (*ConfigurableAgent[C, S], error) {
 		b.config.SessionID,
 	)
 
-	// Build middleware chain
+	// 构建中间件链
 	handler := b.createHandler(runtime)
 	chain := middleware.NewMiddlewareChain(handler)
 
-	// Add default middleware if verbose
+	// 如果 verbose,添加默认中间件
 	if b.config.Verbose {
 		chain.Use(middleware.NewLoggingMiddleware(nil))
 		chain.Use(middleware.NewTimingMiddleware())
 	}
 
-	// Add user-specified middleware
+	// 添加用户指定的中间件
 	chain.Use(b.middlewares...)
 
-	// Create the agent
+	// 创建 Agent
 	agent := &ConfigurableAgent[C, S]{
 		llmClient:    b.llmClient,
 		tools:        b.tools,
@@ -367,7 +130,7 @@ func (b *AgentBuilder[C, S]) Build() (*ConfigurableAgent[C, S], error) {
 		metadata:     b.metadata,
 	}
 
-	// Initialize if needed
+	// 如果需要则初始化
 	if err := agent.Initialize(context.Background()); err != nil {
 		return nil, agentErrors.NewAgentInitializationError("configurable_agent", err)
 	}
@@ -375,13 +138,13 @@ func (b *AgentBuilder[C, S]) Build() (*ConfigurableAgent[C, S], error) {
 	return agent, nil
 }
 
-// createHandler creates the main execution handler
+// createHandler 创建主执行处理器
 func (b *AgentBuilder[C, S]) createHandler(runtime *execution.Runtime[C, S]) middleware.Handler {
 	return func(ctx context.Context, request *middleware.MiddlewareRequest) (*middleware.MiddlewareResponse, error) {
-		// Extract input
+		// 提取输入
 		inputStr := fmt.Sprintf("%v", request.Input)
 
-		// Create LLM request
+		// 创建 LLM 请求
 		llmReq := &llm.CompletionRequest{
 			Messages: []llm.Message{
 				{
@@ -397,38 +160,38 @@ func (b *AgentBuilder[C, S]) createHandler(runtime *execution.Runtime[C, S]) mid
 			Temperature: b.config.Temperature,
 		}
 
-		// Call LLM
+		// 调用 LLM
 		response, err := b.llmClient.Complete(ctx, llmReq)
 		if err != nil {
 			return nil, agentErrors.Wrap(err, agentErrors.CodeLLMRequest, "LLM completion error")
 		}
 
-		// Trigger OnLLMEnd callbacks
+		// 触发 OnLLMEnd 回调
 		if len(b.callbacks) > 0 {
 			for _, cb := range b.callbacks {
 				if err := cb.OnLLMEnd(ctx, response.Content, response.TokensUsed); err != nil {
-					// Log error but don't fail the request
+					// 记录错误但不失败请求
 					fmt.Fprintf(os.Stderr, "Callback OnLLMEnd error: %v\n", err)
 				}
 			}
 		}
 
-		// Update state if needed
+		// 如果需要则更新状态
 		if request.State != nil {
 			request.State.Set("last_response", response.Content)
 			request.State.Set("last_timestamp", time.Now())
 		}
 
-		// Save checkpoint if auto-save is enabled
+		// 如果启用自动保存则保存检查点
 		if b.config.EnableAutoSave && runtime.Checkpointer != nil {
 			if err := runtime.SaveState(ctx); err != nil {
-				// Log the error but don't fail the request
-				// State saving is important but not critical for the response
+				// 记录错误但不失败请求
+				// 状态保存很重要但对响应不是关键的
 				fmt.Fprintf(os.Stderr, "Failed to auto-save state: %v\n", err)
 			}
 		}
 
-		// Create response
+		// 创建响应
 		return &middleware.MiddlewareResponse{
 			Output:   response.Content,
 			State:    request.State,
@@ -437,7 +200,7 @@ func (b *AgentBuilder[C, S]) createHandler(runtime *execution.Runtime[C, S]) mid
 	}
 }
 
-// ConfigurableAgent is the built agent with full configuration
+// ConfigurableAgent 是具有完整配置的已构建 Agent
 type ConfigurableAgent[C any, S core.State] struct {
 	llmClient    llm.Client
 	tools        []interfaces.Tool
@@ -451,20 +214,20 @@ type ConfigurableAgent[C any, S core.State] struct {
 	mu           sync.RWMutex
 }
 
-// Initialize prepares the agent for execution
+// Initialize 准备 Agent 执行
 func (a *ConfigurableAgent[C, S]) Initialize(ctx context.Context) error {
-	// Load previous state if exists
+	// 如果存在则加载先前状态
 	if a.runtime.Checkpointer != nil {
 		if exists, _ := a.runtime.Checkpointer.Exists(ctx, a.config.SessionID); exists {
 			state, err := a.runtime.Checkpointer.Load(ctx, a.config.SessionID)
 			if err == nil {
-				// Update runtime state
+				// 更新运行时状态
 				a.runtime.State = state.(S)
 			}
 		}
 	}
 
-	// Notify callbacks
+	// 通知回调
 	for _, cb := range a.callbacks {
 		if err := cb.OnStart(ctx, a.metadata); err != nil {
 			return err
@@ -474,16 +237,16 @@ func (a *ConfigurableAgent[C, S]) Initialize(ctx context.Context) error {
 	return nil
 }
 
-// Execute runs the agent with the given input
+// Execute 使用给定输入运行 Agent
 func (a *ConfigurableAgent[C, S]) Execute(ctx context.Context, input interface{}) (*AgentOutput, error) {
-	// Apply timeout if configured
+	// 如果配置了超时则应用
 	if a.config.Timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, a.config.Timeout)
 		defer cancel()
 	}
 
-	// Create request
+	// 创建请求
 	request := &middleware.MiddlewareRequest{
 		Input:     input,
 		State:     a.runtime.State,
@@ -493,23 +256,23 @@ func (a *ConfigurableAgent[C, S]) Execute(ctx context.Context, input interface{}
 		Timestamp: time.Now(),
 	}
 
-	// Add metadata
+	// 添加元数据
 	for k, v := range a.metadata {
 		request.Metadata[k] = v
 	}
 
-	// Execute through middleware chain
+	// 通过中间件链执行
 	response, err := a.chain.Execute(ctx, request)
 	if err != nil {
-		// Handle error
+		// 处理错误
 		if a.errorHandler != nil {
 			err = a.errorHandler(err)
 		}
 
-		// Notify callbacks
+		// 通知回调
 		for _, cb := range a.callbacks {
 			if err := cb.OnError(ctx, err); err != nil {
-				// Log callback errors but don't override the original error
+				// 记录回调错误但不覆盖原始错误
 				fmt.Fprintf(os.Stderr, "Callback OnError failed: %v\n", err)
 			}
 		}
@@ -517,7 +280,7 @@ func (a *ConfigurableAgent[C, S]) Execute(ctx context.Context, input interface{}
 		return nil, err
 	}
 
-	// Create output
+	// 创建输出
 	output := &AgentOutput{
 		Result:    response.Output,
 		State:     response.State,
@@ -526,7 +289,7 @@ func (a *ConfigurableAgent[C, S]) Execute(ctx context.Context, input interface{}
 		Timestamp: time.Now(),
 	}
 
-	// Notify callbacks
+	// 通知回调
 	for _, cb := range a.callbacks {
 		if err := cb.OnEnd(ctx, output); err != nil {
 			return output, err
@@ -536,13 +299,13 @@ func (a *ConfigurableAgent[C, S]) Execute(ctx context.Context, input interface{}
 	return output, nil
 }
 
-// ExecuteWithTools runs the agent with tool execution capability
+// ExecuteWithTools 使用工具执行能力运行 Agent
 func (a *ConfigurableAgent[C, S]) ExecuteWithTools(ctx context.Context, input interface{}) (*AgentOutput, error) {
 	iterations := 0
 	var lastOutput *AgentOutput
 
 	for iterations < a.config.MaxIterations {
-		// Execute one step
+		// 执行一步
 		output, err := a.Execute(ctx, input)
 		if err != nil {
 			return nil, err
@@ -550,14 +313,14 @@ func (a *ConfigurableAgent[C, S]) ExecuteWithTools(ctx context.Context, input in
 
 		lastOutput = output
 
-		// Check if we need to use tools
+		// 检查是否需要使用工具
 		toolCalls := a.extractToolCalls(output.Result)
 		if len(toolCalls) == 0 {
-			// No tools needed, return result
+			// 不需要工具,返回结果
 			return output, nil
 		}
 
-		// Execute tools
+		// 执行工具
 		toolResults := make([]interface{}, 0, len(toolCalls))
 		for _, call := range toolCalls {
 			result, err := a.executeToolCall(ctx, call)
@@ -567,7 +330,7 @@ func (a *ConfigurableAgent[C, S]) ExecuteWithTools(ctx context.Context, input in
 			toolResults = append(toolResults, result)
 		}
 
-		// Update input with tool results for next iteration
+		// 使用工具结果更新输入用于下一次迭代
 		input = map[string]interface{}{
 			"previous_output": output.Result,
 			"tool_results":    toolResults,
@@ -576,30 +339,30 @@ func (a *ConfigurableAgent[C, S]) ExecuteWithTools(ctx context.Context, input in
 		iterations++
 	}
 
-	// Max iterations reached
+	// 达到最大迭代次数
 	return lastOutput, agentErrors.New(agentErrors.CodeAgentExecution, "max iterations reached").
 		WithContext("max_iterations", a.config.MaxIterations)
 }
 
-// extractToolCalls extracts tool calls from LLM output
+// extractToolCalls 从 LLM 输出中提取工具调用
 func (a *ConfigurableAgent[C, S]) extractToolCalls(output interface{}) []ToolCall {
-	// Simplified tool call extraction
-	// In production, use proper parsing
+	// 简化的工具调用提取
+	// 在生产中,使用适当的解析
 	return []ToolCall{}
 }
 
-// executeToolCall executes a single tool call
+// executeToolCall 执行单个工具调用
 func (a *ConfigurableAgent[C, S]) executeToolCall(ctx context.Context, call ToolCall) (interface{}, error) {
-	// Find tool
+	// 查找工具
 	for _, tool := range a.tools {
 		if tool.Name() == call.Name {
-			// Create tool input
+			// 创建工具输入
 			toolInput := &interfaces.ToolInput{
 				Args:    call.Input,
 				Context: ctx,
 			}
 
-			// Execute tool
+			// 执行工具
 			output, err := tool.Invoke(ctx, toolInput)
 			if err != nil {
 				return nil, err
@@ -610,23 +373,22 @@ func (a *ConfigurableAgent[C, S]) executeToolCall(ctx context.Context, call Tool
 	return nil, agentErrors.NewToolNotFoundError(call.Name)
 }
 
-// GetState returns the current state
+// GetState 返回当前状态
 func (a *ConfigurableAgent[C, S]) GetState() S {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	return a.runtime.State
 }
 
-// GetMetrics returns agent metrics
+// GetMetrics 返回 Agent 指标
 func (a *ConfigurableAgent[C, S]) GetMetrics() map[string]interface{} {
 	metrics := make(map[string]interface{})
 
-	// Add basic metrics
+	// 添加基本指标
 	metrics["session_id"] = a.config.SessionID
 	metrics["tools_count"] = len(a.tools)
-	// Note: middleware count not exposed by MiddlewareChain
 
-	// Add state size if available
+	// 如果可用则添加状态大小
 	if state, ok := any(a.runtime.State).(*core.AgentState); ok {
 		metrics["state_size"] = state.Size()
 	}
@@ -634,16 +396,16 @@ func (a *ConfigurableAgent[C, S]) GetMetrics() map[string]interface{} {
 	return metrics
 }
 
-// Shutdown gracefully shuts down the agent
+// Shutdown 优雅地关闭 Agent
 func (a *ConfigurableAgent[C, S]) Shutdown(ctx context.Context) error {
-	// Save final state
+	// 保存最终状态
 	if a.runtime.Checkpointer != nil {
 		if err := a.runtime.SaveState(ctx); err != nil {
 			return agentErrors.NewStateCheckpointError(a.config.SessionID, "save_final", err)
 		}
 	}
 
-	// Notify callbacks
+	// 通知回调
 	for _, cb := range a.callbacks {
 		if shutdown, ok := cb.(interface{ OnShutdown(context.Context) error }); ok {
 			if err := shutdown.OnShutdown(ctx); err != nil {
@@ -655,197 +417,17 @@ func (a *ConfigurableAgent[C, S]) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-// ToolCall represents a tool invocation request
+// ToolCall 表示工具调用请求
 type ToolCall struct {
 	Name  string
 	Input map[string]interface{}
 }
 
-// AgentOutput represents the agent execution result
+// AgentOutput 表示 Agent 执行结果
 type AgentOutput struct {
 	Result    interface{}
 	State     core.State
 	Metadata  map[string]interface{}
 	Duration  time.Duration
 	Timestamp time.Time
-}
-
-// QuickAgent creates a simple agent with minimal configuration
-func QuickAgent(llmClient llm.Client, systemPrompt string) (*ConfigurableAgent[any, *core.AgentState], error) {
-	return NewAgentBuilder[any, *core.AgentState](llmClient).
-		WithSystemPrompt(systemPrompt).
-		WithState(core.NewAgentState()).
-		Build()
-}
-
-// RAGAgent creates a pre-configured RAG agent
-func RAGAgent(llmClient llm.Client, retriever interface{}) (*ConfigurableAgent[any, *core.AgentState], error) {
-	return NewAgentBuilder[any, *core.AgentState](llmClient).
-		WithSystemPrompt("You are a helpful assistant. Answer questions based on the provided context.").
-		ConfigureForRAG().
-		WithState(core.NewAgentState()).
-		WithMetadata("type", "rag").
-		Build()
-}
-
-// ChatAgent creates a pre-configured chatbot agent
-func ChatAgent(llmClient llm.Client, userName string) (*ConfigurableAgent[any, *core.AgentState], error) {
-	state := core.NewAgentState()
-	state.Set("user_name", userName)
-
-	return NewAgentBuilder[any, *core.AgentState](llmClient).
-		WithSystemPrompt(fmt.Sprintf("You are a helpful assistant chatting with %s.", userName)).
-		WithState(state).
-		ConfigureForChatbot().
-		WithMetadata("type", "chatbot").
-		Build()
-}
-
-// AnalysisAgent creates a pre-configured data analysis agent
-//
-// This agent is optimized for:
-//   - Data analysis and report generation
-//   - Consistent, factual outputs
-//   - Structured data transformations
-//   - Extended reasoning iterations
-//
-// Configuration:
-//   - Temperature: 0.1 (very low for consistency)
-//   - MaxIterations: 20 (more iterations for complex analysis)
-//   - Middleware: Timing, Transform (for structured output)
-func AnalysisAgent(llmClient llm.Client, dataSource interface{}) (*ConfigurableAgent[any, *core.AgentState], error) {
-	state := core.NewAgentState()
-	if dataSource != nil {
-		state.Set("data_source", dataSource)
-	}
-
-	return NewAgentBuilder[any, *core.AgentState](llmClient).
-		WithSystemPrompt("You are a data analysis expert. Analyze data thoroughly and provide structured, accurate insights.").
-		WithState(state).
-		ConfigureForAnalysis().
-		WithMetadata("type", "analysis").
-		WithMetadata("data_source_type", fmt.Sprintf("%T", dataSource)).
-		Build()
-}
-
-// WorkflowAgent creates a pre-configured workflow orchestration agent
-//
-// This agent is optimized for:
-//   - Multi-step workflow execution
-//   - Task orchestration and coordination
-//   - Error handling and validation
-//   - State persistence across steps
-//
-// Configuration:
-//   - MaxIterations: 15 (balanced for workflow steps)
-//   - EnableAutoSave: true (persist state across steps)
-//   - Middleware: Logging, CircuitBreaker, Validation
-func WorkflowAgent(llmClient llm.Client, workflows map[string]interface{}) (*ConfigurableAgent[any, *core.AgentState], error) {
-	state := core.NewAgentState()
-	if workflows != nil {
-		state.Set("workflows", workflows)
-		state.Set("workflow_status", "initialized")
-	}
-
-	return NewAgentBuilder[any, *core.AgentState](llmClient).
-		WithSystemPrompt("You are a workflow orchestrator. Execute tasks systematically, validate results, and handle errors gracefully.").
-		WithState(state).
-		WithMaxIterations(15).
-		WithAutoSaveEnabled(true).
-		WithMiddleware(
-			middleware.NewLoggingMiddleware(nil),
-			middleware.NewCircuitBreakerMiddleware(5, 30*time.Second),
-			middleware.NewValidationMiddleware(func(req *middleware.MiddlewareRequest) error {
-				// Basic validation
-				if req.Input == nil {
-					return agentErrors.NewInvalidInputError("workflow", "input", "workflow input cannot be nil")
-				}
-				return nil
-			}),
-		).
-		WithMetadata("type", "workflow").
-		Build()
-}
-
-// MonitoringAgent creates a pre-configured monitoring agent
-//
-// This agent is optimized for:
-//   - Continuous system monitoring
-//   - Anomaly detection
-//   - Alert generation
-//   - Periodic health checks
-//
-// Configuration:
-//   - Continuous operation mode
-//   - Rate limiting to prevent overwhelming
-//   - Caching for efficient monitoring
-//   - Alert middleware for notifications
-func MonitoringAgent(llmClient llm.Client, checkInterval time.Duration) (*ConfigurableAgent[any, *core.AgentState], error) {
-	state := core.NewAgentState()
-	state.Set("check_interval", checkInterval)
-	state.Set("last_check", time.Now())
-	state.Set("monitoring_status", "active")
-
-	return NewAgentBuilder[any, *core.AgentState](llmClient).
-		WithSystemPrompt("You are a system monitoring expert. Observe metrics, detect anomalies, and alert on issues promptly.").
-		WithState(state).
-		WithMaxIterations(100). // Long-running monitoring
-		WithTemperature(0.3).   // Balanced for pattern recognition
-		WithMiddleware(
-			middleware.NewRateLimiterMiddleware(60, time.Minute), // Limit to 60 checks per minute
-			middleware.NewCacheMiddleware(5*time.Minute),         // Cache recent checks
-			middleware.NewTimingMiddleware(),
-		).
-		WithMetadata("type", "monitoring").
-		WithMetadata("check_interval", checkInterval.String()).
-		Build()
-}
-
-// ResearchAgent creates a pre-configured research and information gathering agent
-//
-// This agent is optimized for:
-//   - Information collection from multiple sources
-//   - Research report generation
-//   - Source synthesis and citation
-//   - Fact-checking and verification
-//
-// Configuration:
-//   - MaxTokens: 4000 (larger context for comprehensive reports)
-//   - Temperature: 0.5 (balanced for creativity and accuracy)
-//   - Middleware: ToolSelector (for search/scrape), Cache
-func ResearchAgent(llmClient llm.Client, sources []string) (*ConfigurableAgent[any, *core.AgentState], error) {
-	state := core.NewAgentState()
-	if len(sources) > 0 {
-		state.Set("sources", sources)
-		state.Set("sources_count", len(sources))
-	}
-	state.Set("research_status", "initialized")
-
-	return NewAgentBuilder[any, *core.AgentState](llmClient).
-		WithSystemPrompt("You are a research expert. Gather information from multiple sources, synthesize findings, and provide comprehensive, well-cited reports.").
-		WithState(state).
-		WithMaxTokens(4000).
-		WithTemperature(0.5).
-		WithMaxIterations(15).
-		WithMiddleware(
-			middleware.NewCacheMiddleware(10*time.Minute), // Cache research results
-			middleware.NewTimingMiddleware(),
-		).
-		WithMetadata("type", "research").
-		WithMetadata("sources_count", len(sources)).
-		Build()
-}
-
-// WithTelemetry 添加 OpenTelemetry 支持
-func (b *AgentBuilder[C, S]) WithTelemetry(provider interface{}) *AgentBuilder[C, S] {
-	// Store telemetry provider in metadata
-	b.metadata["telemetry_provider"] = provider
-	return b
-}
-
-// WithCommunicator 添加通信器
-func (b *AgentBuilder[C, S]) WithCommunicator(communicator interface{}) *AgentBuilder[C, S] {
-	// Store communicator in metadata
-	b.metadata["communicator"] = communicator
-	return b
 }

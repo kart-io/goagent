@@ -77,9 +77,6 @@ func PutMiddlewareResponse(resp *MiddlewareResponse) {
 	}
 }
 
-// State is an alias to state.State for convenience
-type State = state.State
-
 // Middleware defines the interface for request/response interceptors.
 //
 // Inspired by LangChain's middleware system, it provides:
@@ -117,7 +114,7 @@ type MiddlewareRequest struct {
 	Input interface{} `json:"input"`
 
 	// State is the current agent state
-	State State `json:"-"`
+	State state.State `json:"-"`
 
 	// Runtime provides access to the execution environment
 	Runtime interface{} `json:"-"`
@@ -138,7 +135,7 @@ type MiddlewareResponse struct {
 	Output interface{} `json:"output"`
 
 	// State is the updated agent state
-	State State `json:"-"`
+	State state.State `json:"-"`
 
 	// Metadata holds additional response information
 	Metadata map[string]interface{} `json:"metadata"`

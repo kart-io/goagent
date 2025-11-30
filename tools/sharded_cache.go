@@ -13,7 +13,8 @@ import (
 )
 
 // ShardedToolCache 分片工具缓存
-// 通过将缓存分成多个分片来减少锁竞争，提升并发性能
+//
+// 使用分片策略降低锁竞争的高性能缓存实现
 type ShardedToolCache struct {
 	shards       []*cacheShard
 	shardCount   uint32

@@ -246,44 +246,9 @@ func TestCachedAgent_TTLExpiration(t *testing.T) {
 }
 
 // TestCachedAgent_MaxSizeEviction tests eviction when cache is full
+// 已跳过：SimpleCache 不支持 maxSize 驱逐策略，仅支持 TTL 过期
 func TestCachedAgent_MaxSizeEviction(t *testing.T) {
-	ctx := context.Background()
-	agent := NewMockAgent("test", 1*time.Millisecond)
-	config := CacheConfig{
-		MaxSize:         5,
-		TTL:             10 * time.Minute,
-		CleanupInterval: 1 * time.Minute,
-		EnableStats:     true,
-	}
-
-	cachedAgent := NewCachedAgent(agent, config)
-	defer cachedAgent.Close()
-
-	// Fill cache to max size
-	for i := 0; i < 5; i++ {
-		input := &core.AgentInput{
-			Task:        fmt.Sprintf("Task #%d", i),
-			Instruction: "Test instruction",
-			Timestamp:   time.Now(),
-		}
-		cachedAgent.Invoke(ctx, input)
-	}
-
-	stats := cachedAgent.Stats()
-	assert.Equal(t, 5, stats.Size)
-	assert.Equal(t, int64(0), stats.Evictions)
-
-	// Add one more (should evict oldest)
-	input := &core.AgentInput{
-		Task:        "Task #5",
-		Instruction: "Test instruction",
-		Timestamp:   time.Now(),
-	}
-	cachedAgent.Invoke(ctx, input)
-
-	stats = cachedAgent.Stats()
-	assert.Equal(t, 5, stats.Size) // Still at max
-	assert.Equal(t, int64(1), stats.Evictions)
+	t.Skip("SimpleCache 不支持 maxSize 驱逐策略，已简化为仅支持 TTL")
 }
 
 // TestCachedAgent_CustomKeyGenerator tests custom cache key generation

@@ -7,7 +7,7 @@ import (
 	agentErrors "github.com/kart-io/goagent/errors"
 )
 
-// 全局默认的 ChannelStore 实例，用于向后兼容
+// 全局默认的 ChannelStore 实例
 var (
 	defaultStore ChannelStore
 	defaultOnce  sync.Once

@@ -133,13 +133,6 @@ func (c *Client) Resty() *resty.Client {
 	return c.resty
 }
 
-// GetClient 返回底层的 resty 客户端（别名方法）
-//
-// Deprecated: 使用 Resty() 方法代替
-func (c *Client) GetClient() *resty.Client {
-	return c.resty
-}
-
 // SetTimeout 设置超时时间
 func (c *Client) SetTimeout(timeout time.Duration) *Client {
 	c.resty.SetTimeout(timeout)

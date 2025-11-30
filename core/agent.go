@@ -14,12 +14,6 @@ const (
 	maxContextMapSize = 1000
 )
 
-// SimpleAgent is a type alias for the canonical Agent interface.
-//
-// For new code that doesn't need generic typing, use interfaces.Agent directly.
-// This alias provides a migration path for existing code.
-type SimpleAgent = interfaces.Agent
-
 // agentInputPool is a sync.Pool for reusing AgentInput objects
 // to reduce memory allocations in chain execution paths.
 var agentInputPool = sync.Pool{
@@ -31,17 +25,6 @@ var agentInputPool = sync.Pool{
 }
 
 // Agent 定义通用 AI Agent 接口
-//
-// 已废弃：此接口已被废弃，请使用 interfaces.Agent 替代。
-//
-// Deprecated: Use interfaces.Agent instead. This generic version will be removed in v2.0.
-// The canonical Agent interface is now in the interfaces package for better cross-package
-// compatibility and to avoid circular dependencies.
-//
-// 迁移指南：
-//   - 将 core.Agent 替换为 interfaces.Agent
-//   - 使用 interfaces.Input 和 interfaces.Output 替代 AgentInput 和 AgentOutput
-//   - 实现 interfaces.Agent 接口的所有方法（包括新增的 Capabilities 和 Plan）
 //
 // Agent 是一个 Runnable[*AgentInput, *AgentOutput]，具有推理能力的智能体，能够：
 // - 接收输入并进行处理（通过 Runnable.Invoke）
