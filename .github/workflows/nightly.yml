@@ -35,7 +35,7 @@ jobs:
 
       - name: Run all tests
         run: |
-          go test -v -race -timeout 10m -coverprofile=coverage.out ./...
+          GO_TEST_MODE=true go test -v -race -timeout 10m -coverprofile=coverage.out ./...
 
       - name: Run benchmarks
         run: |
