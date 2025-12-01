@@ -119,9 +119,9 @@ func (s *SoTAgent) Invoke(ctx context.Context, input *agentcore.AgentInput) (*ag
 
 	// Initialize output
 	output := &agentcore.AgentOutput{
-		Steps: make([]agentcore.AgentStep, 0),
-		ToolCalls:      make([]agentcore.AgentToolCall, 0),
-		Metadata:       make(map[string]interface{}),
+		Steps:     make([]agentcore.AgentStep, 0),
+		ToolCalls: make([]agentcore.AgentToolCall, 0),
+		Metadata:  make(map[string]interface{}),
 	}
 
 	// Phase 1: Generate skeleton
@@ -714,9 +714,9 @@ func (s *SoTAgent) RunGenerator(ctx context.Context, input *agentcore.AgentInput
 
 		// Initialize accumulated output
 		accumulated := &agentcore.AgentOutput{
-			Steps: make([]agentcore.AgentStep, 0),
-			ToolCalls:      make([]agentcore.AgentToolCall, 0),
-			Metadata:       make(map[string]interface{}),
+			Steps:     make([]agentcore.AgentStep, 0),
+			ToolCalls: make([]agentcore.AgentToolCall, 0),
+			Metadata:  make(map[string]interface{}),
 		}
 
 		// Phase 1: Generate skeleton
@@ -811,12 +811,12 @@ func (s *SoTAgent) RunGenerator(ctx context.Context, input *agentcore.AgentInput
 // createStepOutput creates a snapshot of current execution state
 func (s *SoTAgent) createStepOutput(accumulated *agentcore.AgentOutput, message string, startTime time.Time) *agentcore.AgentOutput {
 	stepOutput := &agentcore.AgentOutput{
-		Steps: make([]agentcore.AgentStep, len(accumulated.Steps)),
-		ToolCalls:      make([]agentcore.AgentToolCall, len(accumulated.ToolCalls)),
-		Metadata:       make(map[string]interface{}),
-		Timestamp:      time.Now(),
-		Latency:        time.Since(startTime),
-		Message:        message,
+		Steps:     make([]agentcore.AgentStep, len(accumulated.Steps)),
+		ToolCalls: make([]agentcore.AgentToolCall, len(accumulated.ToolCalls)),
+		Metadata:  make(map[string]interface{}),
+		Timestamp: time.Now(),
+		Latency:   time.Since(startTime),
+		Message:   message,
 	}
 
 	// Copy slices

@@ -151,11 +151,11 @@ func performanceComparison() {
 		input.Context["key"] = "value"
 
 		output := &core.AgentOutput{
-			Result:         "result",
-			Status:         "success",
-			Steps: make([]core.AgentStep, 0, 10),
-			ToolCalls:      make([]core.AgentToolCall, 0, 5),
-			Metadata:       make(map[string]interface{}, 8),
+			Result:    "result",
+			Status:    "success",
+			Steps:     make([]core.AgentStep, 0, 10),
+			ToolCalls: make([]core.AgentToolCall, 0, 5),
+			Metadata:  make(map[string]interface{}, 8),
 		}
 		output.Steps = append(output.Steps,
 			core.AgentStep{Step: 1, Action: "test"},

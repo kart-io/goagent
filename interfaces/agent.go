@@ -42,7 +42,7 @@ type Agent interface {
 //   - 同步执行（Invoke）
 //   - 流式执行（Stream）
 //
-// Runnable 接口通过标准执行模式启用组件的组合和链接
+// # Runnable 接口通过标准执行模式启用组件的组合和链接
 //
 // 实现：
 //   - core.BaseRunnable - 基础实现，支持回调

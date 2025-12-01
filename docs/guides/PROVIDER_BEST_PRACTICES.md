@@ -71,7 +71,7 @@ client, err := factory.CreateClient(config)
 - ❌ 无法利用插件化架构
 - ❌ 已被 registry 完全替代
 
-**迁移方式**: 参考 [Registry 迁移指南](REGISTRY_MIGRATION_GUIDE.md)
+**迁移方式**: 参考下方的迁移路径章节
 
 ## 架构演进
 
@@ -271,8 +271,7 @@ A: 使用空白导入 `import _ "package"`，init() 会自动注册。可以用 
 
 ## 相关文档
 
-- [Registry 迁移指南](REGISTRY_MIGRATION_GUIDE.md) - 详细迁移步骤
-- [Provider 使用指南](PROVIDER_USAGE_GUIDE.md) - 基础使用方法
+- [LLM 提供商指南](LLM_PROVIDERS.md) - 基础使用方法
 - [插件系统指南](PLUGIN_SYSTEM_GUIDE.md) - 插件化架构说明
 
 ## 更新日志

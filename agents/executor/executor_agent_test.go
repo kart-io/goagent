@@ -372,9 +372,9 @@ func TestExecute(t *testing.T) {
 					steps[i] = agentcore.AgentStep{Step: i, Action: "think"}
 				}
 				ma.On("Invoke", mock.Anything, mock.Anything).Return(&agentcore.AgentOutput{
-					Result:         "partial result",
-					Status:         "running",
-					Steps: steps,
+					Result: "partial result",
+					Status: "running",
+					Steps:  steps,
 				}, nil)
 			},
 			wantError:  false,
@@ -869,9 +869,9 @@ func TestEarlyStoppingMethods(t *testing.T) {
 			}
 
 			mockAgent.On("Invoke", mock.Anything, mock.Anything).Return(&agentcore.AgentOutput{
-				Result:         "result",
-				Status:         "running",
-				Steps: steps,
+				Result: "result",
+				Status: "running",
+				Steps:  steps,
 			}, nil)
 
 			executor := NewAgentExecutor(ExecutorConfig{

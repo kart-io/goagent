@@ -549,9 +549,9 @@ func (s *CoTStrategy) formatToolResults(results map[string]interface{}) string {
 // createStepOutput 创建步骤输出快照
 func createStepOutput(accumulated *agentcore.AgentOutput, message string, startTime time.Time) *agentcore.AgentOutput {
 	stepOutput := &agentcore.AgentOutput{
-		Steps: make([]agentcore.AgentStep, len(accumulated.Steps)),
-		ToolCalls:      make([]agentcore.AgentToolCall, len(accumulated.ToolCalls)),
-		Metadata:       make(map[string]interface{}),
+		Steps:     make([]agentcore.AgentStep, len(accumulated.Steps)),
+		ToolCalls: make([]agentcore.AgentToolCall, len(accumulated.ToolCalls)),
+		Metadata:  make(map[string]interface{}),
 		TokenUsage: &interfaces.TokenUsage{
 			PromptTokens:     accumulated.TokenUsage.PromptTokens,
 			CompletionTokens: accumulated.TokenUsage.CompletionTokens,

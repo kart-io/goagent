@@ -704,8 +704,6 @@ func (l *Logger) LogPanic(ctx context.Context, ...) {
 - **接口定义**: `core/panic_handler.go`
 - **默认实现**: `core/panic_handler.go:DefaultPanicHandler`
 - **测试示例**: `core/panic_handler_test.go`
-- **实现报告**: `docs/fixes/INTERFACE_BASED_PANIC_HANDLING.md`
-- **原始设计**: `docs/fixes/PANIC_RECOVERY.md`
 
 ## 总结
 

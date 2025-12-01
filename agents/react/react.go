@@ -146,9 +146,9 @@ func (r *ReActAgent) executeCore(ctx context.Context, input *agentcore.AgentInpu
 
 	// 初始化输出
 	output := &agentcore.AgentOutput{
-		Steps: make([]agentcore.AgentStep, 0),
-		ToolCalls:      make([]agentcore.AgentToolCall, 0),
-		Metadata:       make(map[string]interface{}),
+		Steps:     make([]agentcore.AgentStep, 0),
+		ToolCalls: make([]agentcore.AgentToolCall, 0),
+		Metadata:  make(map[string]interface{}),
 		TokenUsage: &interfaces.TokenUsage{
 			PromptTokens:     0,
 			CompletionTokens: 0,
@@ -364,9 +364,9 @@ func (r *ReActAgent) RunGenerator(ctx context.Context, input *agentcore.AgentInp
 
 		// 初始化累积输出（用于记录完整执行历史）
 		accumulatedOutput := &agentcore.AgentOutput{
-			Steps: make([]agentcore.AgentStep, 0),
-			ToolCalls:      make([]agentcore.AgentToolCall, 0),
-			Metadata:       make(map[string]interface{}),
+			Steps:     make([]agentcore.AgentStep, 0),
+			ToolCalls: make([]agentcore.AgentToolCall, 0),
+			Metadata:  make(map[string]interface{}),
 			TokenUsage: &interfaces.TokenUsage{
 				PromptTokens:     0,
 				CompletionTokens: 0,
@@ -573,9 +573,9 @@ func (r *ReActAgent) RunGenerator(ctx context.Context, input *agentcore.AgentInp
 func (r *ReActAgent) createStepOutput(accumulated *agentcore.AgentOutput, currentStep int, message string, startTime time.Time) *agentcore.AgentOutput {
 	// 创建当前步骤的输出快照
 	stepOutput := &agentcore.AgentOutput{
-		Steps: make([]agentcore.AgentStep, len(accumulated.Steps)),
-		ToolCalls:      make([]agentcore.AgentToolCall, len(accumulated.ToolCalls)),
-		Metadata:       make(map[string]interface{}),
+		Steps:     make([]agentcore.AgentStep, len(accumulated.Steps)),
+		ToolCalls: make([]agentcore.AgentToolCall, len(accumulated.ToolCalls)),
+		Metadata:  make(map[string]interface{}),
 		TokenUsage: &interfaces.TokenUsage{
 			PromptTokens:     accumulated.TokenUsage.PromptTokens,
 			CompletionTokens: accumulated.TokenUsage.CompletionTokens,
