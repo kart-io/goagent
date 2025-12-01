@@ -78,12 +78,12 @@ func TestCoTAgent_BasicFunctionality(t *testing.T) {
 	}
 
 	// Check that we have reasoning steps
-	if len(output.ReasoningSteps) == 0 {
+	if len(output.Steps) == 0 {
 		t.Error("Expected reasoning steps, got none")
 	}
 
 	t.Logf("Agent completed successfully with result: %v", output.Result)
-	t.Logf("Reasoning steps: %d", len(output.ReasoningSteps))
+	t.Logf("Reasoning steps: %d", len(output.Steps))
 }
 
 func TestCoTAgent_WithConfiguration(t *testing.T) {
@@ -196,12 +196,12 @@ func TestCoTAgent_RunGenerator(t *testing.T) {
 	}
 
 	// Verify we have reasoning steps
-	if len(finalOutput.ReasoningSteps) == 0 {
+	if len(finalOutput.Steps) == 0 {
 		t.Error("No reasoning steps in final output")
 	}
 
 	t.Logf("Final result: %v", finalOutput.Result)
-	t.Logf("Reasoning steps: %d", len(finalOutput.ReasoningSteps))
+	t.Logf("Reasoning steps: %d", len(finalOutput.Steps))
 }
 
 // TestCoTAgent_RunGenerator_EarlyTermination tests early termination

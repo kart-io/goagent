@@ -299,13 +299,13 @@ func (a *StreamingLLMAgentWithRealStreaming) ExecuteStream(ctx context.Context, 
 			}
 		}()
 
-		// TODO: 实现真实的 LLM 流式 API 调用
-		// 这需要 LLM 客户端支持类似以下的接口：
-		//
+		// 注意：真实的 LLM 流式 API 调用需要 LLM 客户端支持 ChatStream 接口
+		// 示例用法：
 		// streamChan, err := a.llmClient.ChatStream(ctx, messages)
 		// for chunk := range streamChan {
 		//     writer.WriteText(chunk.Text)
 		// }
+		// 当前返回错误提示，需要集成具体 LLM 提供商的流式 API
 
 		if err := writer.WriteError(agentErrors.New(agentErrors.CodeInternal, "real streaming API not implemented yet").
 			WithComponent("streaming_llm_agent").

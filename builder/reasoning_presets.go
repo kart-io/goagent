@@ -259,9 +259,8 @@ func (b *AgentBuilder[C, S]) BuildReasoningAgent() core.Agent {
 		agent = reactAgent
 	}
 
-	// TODO: Apply middlewares if configured
-	// Middleware integration needs to be implemented based on
-	// the actual middleware application pattern in GoAgent
+	// 注意: 推理 agent (CoT/ToT/ReAct) 暂不支持 middleware
+	// middleware 应用于标准 agent 构建流程
 
 	return agent
 }

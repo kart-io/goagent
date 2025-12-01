@@ -138,11 +138,11 @@ Final Answer: The current weather in Beijing is 25°C (77°F) with sunny skies.`
 	fmt.Printf("Result: %v\n", output.Result)
 	fmt.Printf("Message: %s\n", output.Message)
 	fmt.Printf("Latency: %v\n", output.Latency)
-	fmt.Printf("Steps: %d\n", len(output.ReasoningSteps))
+	fmt.Printf("Steps: %d\n", len(output.Steps))
 	fmt.Printf("Tool Calls: %d\n", len(output.ToolCalls))
 
 	fmt.Println("\n=== Reasoning Steps ===")
-	for i, step := range output.ReasoningSteps {
+	for i, step := range output.Steps {
 		fmt.Printf("%d. [%s] %s -> %s (%.2fms)\n",
 			i+1,
 			step.Action,

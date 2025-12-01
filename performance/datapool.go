@@ -80,8 +80,8 @@ func NewDataPools() *DataPools {
 		outputPool: &sync.Pool{
 			New: func() interface{} {
 				return &core.AgentOutput{
-					ReasoningSteps: make([]core.ReasoningStep, 0, 10), // 预分配容量
-					ToolCalls:      make([]core.ToolCall, 0, 5),       // 预分配容量
+					Steps: make([]core.AgentStep, 0, 10), // 预分配容量
+					ToolCalls:      make([]core.AgentToolCall, 0, 5),       // 预分配容量
 					Metadata:       make(map[string]interface{}, 8),   // 预分配容量
 				}
 			},
@@ -90,14 +90,14 @@ func NewDataPools() *DataPools {
 		// ReasoningStep 池
 		reasoningStepPool: &sync.Pool{
 			New: func() interface{} {
-				return &core.ReasoningStep{}
+				return &core.AgentStep{}
 			},
 		},
 
 		// ToolCall 池
 		toolCallPool: &sync.Pool{
 			New: func() interface{} {
-				return &core.ToolCall{
+				return &core.AgentToolCall{
 					Input: make(map[string]interface{}, 4), // 预分配容量
 				}
 			},
@@ -127,14 +127,14 @@ func NewDataPools() *DataPools {
 		// ReasoningStep Slice 池
 		reasoningSlicePool: &sync.Pool{
 			New: func() interface{} {
-				return make([]core.ReasoningStep, 0, 10)
+				return make([]core.AgentStep, 0, 10)
 			},
 		},
 
 		// ToolCall Slice 池
 		toolCallSlicePool: &sync.Pool{
 			New: func() interface{} {
-				return make([]core.ToolCall, 0, 5)
+				return make([]core.AgentToolCall, 0, 5)
 			},
 		},
 	}
@@ -199,7 +199,7 @@ func (p *DataPools) PutAgentOutput(output *core.AgentOutput) {
 
 	// 如果切片容量过大，不放回池中，让 GC 回收
 	// 这防止了内存膨胀问题
-	if cap(output.ReasoningSteps) > maxReasoningStepsCapacity ||
+	if cap(output.Steps) > maxReasoningStepsCapacity ||
 		cap(output.ToolCalls) > maxToolCallsCapacity {
 		return
 	}
@@ -214,7 +214,7 @@ func (p *DataPools) PutAgentOutput(output *core.AgentOutput) {
 
 	// 切片零分配：重置长度但保留容量
 	// 这是关键优化点，避免了切片的重新分配
-	output.ReasoningSteps = output.ReasoningSteps[:0]
+	output.Steps = output.Steps[:0]
 	output.ToolCalls = output.ToolCalls[:0]
 
 	// 清空 Metadata map
@@ -229,34 +229,34 @@ func (p *DataPools) PutAgentOutput(output *core.AgentOutput) {
 }
 
 // GetReasoningStep 从池中获取 ReasoningStep
-func (p *DataPools) GetReasoningStep() *core.ReasoningStep {
-	step := p.reasoningStepPool.Get().(*core.ReasoningStep)
+func (p *DataPools) GetReasoningStep() *core.AgentStep {
+	step := p.reasoningStepPool.Get().(*core.AgentStep)
 	p.stats.reasoningGetCount.Add(1)
 	return step
 }
 
 // PutReasoningStep 将 ReasoningStep 归还到池中
-func (p *DataPools) PutReasoningStep(step *core.ReasoningStep) {
+func (p *DataPools) PutReasoningStep(step *core.AgentStep) {
 	if step == nil {
 		return
 	}
 
 	// 重置所有字段
-	*step = core.ReasoningStep{}
+	*step = core.AgentStep{}
 
 	p.stats.reasoningPutCount.Add(1)
 	p.reasoningStepPool.Put(step)
 }
 
 // GetToolCall 从池中获取 ToolCall
-func (p *DataPools) GetToolCall() *core.ToolCall {
-	tc := p.toolCallPool.Get().(*core.ToolCall)
+func (p *DataPools) GetToolCall() *core.AgentToolCall {
+	tc := p.toolCallPool.Get().(*core.AgentToolCall)
 	p.stats.toolCallGetCount.Add(1)
 	return tc
 }
 
 // PutToolCall 将 ToolCall 归还到池中
-func (p *DataPools) PutToolCall(tc *core.ToolCall) {
+func (p *DataPools) PutToolCall(tc *core.AgentToolCall) {
 	if tc == nil {
 		return
 	}
@@ -346,14 +346,14 @@ func (p *DataPools) PutStringSlice(s []string) {
 }
 
 // GetReasoningSlice 从池中获取 ReasoningStep slice
-func (p *DataPools) GetReasoningSlice() []core.ReasoningStep {
-	s := p.reasoningSlicePool.Get().([]core.ReasoningStep)
+func (p *DataPools) GetReasoningSlice() []core.AgentStep {
+	s := p.reasoningSlicePool.Get().([]core.AgentStep)
 	p.stats.sliceGetCount.Add(1)
 	return s[:0] // 重置长度
 }
 
 // PutReasoningSlice 将 ReasoningStep slice 归还到池中
-func (p *DataPools) PutReasoningSlice(s []core.ReasoningStep) {
+func (p *DataPools) PutReasoningSlice(s []core.AgentStep) {
 	if s == nil {
 		return
 	}
@@ -371,14 +371,14 @@ func (p *DataPools) PutReasoningSlice(s []core.ReasoningStep) {
 }
 
 // GetToolCallSlice 从池中获取 ToolCall slice
-func (p *DataPools) GetToolCallSlice() []core.ToolCall {
-	s := p.toolCallSlicePool.Get().([]core.ToolCall)
+func (p *DataPools) GetToolCallSlice() []core.AgentToolCall {
+	s := p.toolCallSlicePool.Get().([]core.AgentToolCall)
 	p.stats.sliceGetCount.Add(1)
 	return s[:0] // 重置长度
 }
 
 // PutToolCallSlice 将 ToolCall slice 归还到池中
-func (p *DataPools) PutToolCallSlice(s []core.ToolCall) {
+func (p *DataPools) PutToolCallSlice(s []core.AgentToolCall) {
 	if s == nil {
 		return
 	}
@@ -592,13 +592,13 @@ func CloneAgentOutput(src *core.AgentOutput, pool *DataPools) *core.AgentOutput 
 	}
 
 	// 深拷贝 ReasoningSteps
-	for _, step := range src.ReasoningSteps {
-		dst.ReasoningSteps = append(dst.ReasoningSteps, step)
+	for _, step := range src.Steps {
+		dst.Steps = append(dst.Steps, step)
 	}
 
 	// 深拷贝 ToolCalls
 	for _, tc := range src.ToolCalls {
-		newTC := core.ToolCall{
+		newTC := core.AgentToolCall{
 			ToolName: tc.ToolName,
 			Input:    make(map[string]interface{}, len(tc.Input)),
 			Output:   tc.Output,

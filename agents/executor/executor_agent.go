@@ -152,7 +152,7 @@ func (e *AgentExecutor) Execute(ctx context.Context, input *agentcore.AgentInput
 	}
 
 	// 检查是否超过最大迭代次数
-	if len(output.ReasoningSteps) > e.maxIterations {
+	if len(output.Steps) > e.maxIterations {
 		if e.earlyStoppingMethod == "force" {
 			output.Status = "partial"
 			output.Message = fmt.Sprintf("Reached max iterations (%d)", e.maxIterations)
@@ -341,7 +341,7 @@ func (e *AgentExecutor) RunGenerator(ctx context.Context, input *agentcore.Agent
 			}
 
 			// 检查是否超过最大迭代次数
-			if output != nil && len(output.ReasoningSteps) > e.maxIterations {
+			if output != nil && len(output.Steps) > e.maxIterations {
 				if e.earlyStoppingMethod == "force" {
 					output.Status = "partial"
 					output.Message = fmt.Sprintf("Reached max iterations (%d)", e.maxIterations)

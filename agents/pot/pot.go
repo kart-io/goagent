@@ -129,8 +129,8 @@ func (p *PoTAgent) Invoke(ctx context.Context, input *agentcore.AgentInput) (*ag
 
 	// Initialize output
 	output := &agentcore.AgentOutput{
-		ReasoningSteps: make([]agentcore.ReasoningStep, 0),
-		ToolCalls:      make([]agentcore.ToolCall, 0),
+		Steps: make([]agentcore.AgentStep, 0),
+		ToolCalls:      make([]agentcore.AgentToolCall, 0),
 		Metadata:       make(map[string]interface{}),
 	}
 
@@ -147,7 +147,7 @@ func (p *PoTAgent) Invoke(ctx context.Context, input *agentcore.AgentInput) (*ag
 		}
 
 		// Record code generation step
-		output.ReasoningSteps = append(output.ReasoningSteps, agentcore.ReasoningStep{
+		output.Steps = append(output.Steps, agentcore.AgentStep{
 			Step:        iteration*2 + 1,
 			Action:      fmt.Sprintf("Generate %s Code", language),
 			Description: fmt.Sprintf("Iteration %d", iteration+1),
@@ -167,7 +167,7 @@ func (p *PoTAgent) Invoke(ctx context.Context, input *agentcore.AgentInput) (*ag
 		result, err := p.executeCode(ctx, code, language)
 
 		// Record execution step
-		output.ReasoningSteps = append(output.ReasoningSteps, agentcore.ReasoningStep{
+		output.Steps = append(output.Steps, agentcore.AgentStep{
 			Step:        iteration*2 + 2,
 			Action:      "Execute Code",
 			Description: fmt.Sprintf("%s execution", language),
@@ -668,8 +668,8 @@ func (p *PoTAgent) RunGenerator(ctx context.Context, input *agentcore.AgentInput
 
 		// Initialize accumulated output
 		accumulated := &agentcore.AgentOutput{
-			ReasoningSteps: make([]agentcore.ReasoningStep, 0),
-			ToolCalls:      make([]agentcore.ToolCall, 0),
+			Steps: make([]agentcore.AgentStep, 0),
+			ToolCalls:      make([]agentcore.AgentToolCall, 0),
 			Metadata:       make(map[string]interface{}),
 		}
 
@@ -692,7 +692,7 @@ func (p *PoTAgent) RunGenerator(ctx context.Context, input *agentcore.AgentInput
 			}
 
 			// Record code generation step
-			accumulated.ReasoningSteps = append(accumulated.ReasoningSteps, agentcore.ReasoningStep{
+			accumulated.Steps = append(accumulated.Steps, agentcore.AgentStep{
 				Step:        iteration*2 + 1,
 				Action:      fmt.Sprintf("Generate %s Code", language),
 				Description: fmt.Sprintf("Iteration %d", iteration+1),
@@ -733,7 +733,7 @@ func (p *PoTAgent) RunGenerator(ctx context.Context, input *agentcore.AgentInput
 			result, err := p.executeCode(ctx, code, language)
 
 			// Record execution step
-			accumulated.ReasoningSteps = append(accumulated.ReasoningSteps, agentcore.ReasoningStep{
+			accumulated.Steps = append(accumulated.Steps, agentcore.AgentStep{
 				Step:        iteration*2 + 2,
 				Action:      "Execute Code",
 				Description: fmt.Sprintf("%s execution", language),
@@ -817,8 +817,8 @@ func (p *PoTAgent) RunGenerator(ctx context.Context, input *agentcore.AgentInput
 // createStepOutput creates a snapshot of current execution state
 func (p *PoTAgent) createStepOutput(accumulated *agentcore.AgentOutput, message string, startTime time.Time) *agentcore.AgentOutput {
 	stepOutput := &agentcore.AgentOutput{
-		ReasoningSteps: make([]agentcore.ReasoningStep, len(accumulated.ReasoningSteps)),
-		ToolCalls:      make([]agentcore.ToolCall, len(accumulated.ToolCalls)),
+		Steps: make([]agentcore.AgentStep, len(accumulated.Steps)),
+		ToolCalls:      make([]agentcore.AgentToolCall, len(accumulated.ToolCalls)),
 		Metadata:       make(map[string]interface{}),
 		Timestamp:      time.Now(),
 		Latency:        time.Since(startTime),
@@ -826,7 +826,7 @@ func (p *PoTAgent) createStepOutput(accumulated *agentcore.AgentOutput, message 
 	}
 
 	// Copy slices
-	copy(stepOutput.ReasoningSteps, accumulated.ReasoningSteps)
+	copy(stepOutput.Steps, accumulated.Steps)
 	copy(stepOutput.ToolCalls, accumulated.ToolCalls)
 
 	// Copy existing metadata

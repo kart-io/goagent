@@ -138,7 +138,7 @@ func (a *HTTPAgent) Execute(ctx context.Context, input *agentcore.AgentInput) (*
 			interfaces.FieldHeaders:    resp.Header(),
 			interfaces.FieldBody:       jsonBody,
 		},
-		ToolCalls: []agentcore.ToolCall{
+		ToolCalls: []agentcore.AgentToolCall{
 			{
 				ToolName: "http",
 				Input: map[string]interface{}{

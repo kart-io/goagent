@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -280,8 +281,8 @@ func (s *SupervisorAgent) parseTasks(ctx context.Context, input interface{}) ([]
 
 // parseTaskResponse parses LLM response into tasks
 func (s *SupervisorAgent) parseTaskResponse(response string) ([]Task, error) {
-	// Use pre-compiled regex to find JSON array within the response
-	jsonStr := jsonArrayPattern.FindString(response)
+	// 首先尝试使用更健壮的 JSON 提取方法
+	jsonStr := extractJSONArray(response)
 
 	if jsonStr == "" {
 		// Fallback to simple parsing if no JSON array is found
@@ -317,6 +318,80 @@ func (s *SupervisorAgent) parseTaskResponse(response string) ([]Task, error) {
 	}
 
 	return result, nil
+}
+
+// extractJSONArray 从混合内容中提取有效的 JSON 数组
+// 比简单的正则匹配更健壮，能处理 LLM 输出中的对话文本
+func extractJSONArray(content string) string {
+	content = strings.TrimSpace(content)
+
+	// 策略1：尝试直接解析整个内容
+	if strings.HasPrefix(content, "[") {
+		var test []interface{}
+		if err := json.Unmarshal([]byte(content), &test); err == nil {
+			return content
+		}
+	}
+
+	// 策略2：查找第一个 '[' 并尝试找到匹配的 ']'
+	startIdx := strings.Index(content, "[")
+	if startIdx == -1 {
+		return ""
+	}
+
+	// 从 '[' 开始，使用括号计数找到匹配的 ']'
+	bracketCount := 0
+	inString := false
+	escaped := false
+
+	for i := startIdx; i < len(content); i++ {
+		char := content[i]
+
+		if escaped {
+			escaped = false
+			continue
+		}
+
+		if char == '\\' && inString {
+			escaped = true
+			continue
+		}
+
+		if char == '"' && !escaped {
+			inString = !inString
+			continue
+		}
+
+		if inString {
+			continue
+		}
+
+		if char == '[' {
+			bracketCount++
+		} else if char == ']' {
+			bracketCount--
+			if bracketCount == 0 {
+				// 找到匹配的 ']'
+				candidate := content[startIdx : i+1]
+				// 验证是否为有效 JSON
+				var test []interface{}
+				if err := json.Unmarshal([]byte(candidate), &test); err == nil {
+					return candidate
+				}
+				// 无效，继续查找下一个 '['
+				nextStart := strings.Index(content[i+1:], "[")
+				if nextStart == -1 {
+					return ""
+				}
+				startIdx = i + 1 + nextStart
+				i = startIdx - 1
+				bracketCount = 0
+			}
+		}
+	}
+
+	// 策略3：使用原有的正则作为最后回退
+	return jsonArrayPattern.FindString(content)
 }
 
 // executePlan executes the task execution plan
@@ -586,9 +661,12 @@ type ExecutionStage struct {
 
 // CreateExecutionPlan creates an execution plan for tasks
 func (o *TaskOrchestrator) CreateExecutionPlan(tasks []Task) *ExecutionPlan {
-	// Sort tasks by priority
+	// Sort tasks by priority (higher priority first)
 	sortedTasks := make([]Task, len(tasks))
 	copy(sortedTasks, tasks)
+	sort.Slice(sortedTasks, func(i, j int) bool {
+		return sortedTasks[i].Priority > sortedTasks[j].Priority
+	})
 
 	// Group tasks into stages based on dependencies and priority
 	stages := []ExecutionStage{}

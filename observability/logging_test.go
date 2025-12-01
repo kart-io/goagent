@@ -234,8 +234,8 @@ func TestInstrumentedAgent_Invoke_Success(t *testing.T) {
 
 	output := &agentcore.AgentOutput{
 		Status:         "completed",
-		ToolCalls:      []agentcore.ToolCall{},
-		ReasoningSteps: []agentcore.ReasoningStep{},
+		ToolCalls:      []agentcore.AgentToolCall{},
+		Steps: []agentcore.AgentStep{},
 	}
 	mockAgent.On("Invoke", mock.Anything, mock.Anything).Return(output, nil)
 
@@ -267,8 +267,8 @@ func TestInstrumentedAgent_Invoke_WithError(t *testing.T) {
 	testErr := errors.New("agent execution failed")
 	output := &agentcore.AgentOutput{
 		Status:         "failed",
-		ToolCalls:      []agentcore.ToolCall{},
-		ReasoningSteps: []agentcore.ReasoningStep{},
+		ToolCalls:      []agentcore.AgentToolCall{},
+		Steps: []agentcore.AgentStep{},
 	}
 	mockAgent.On("Invoke", mock.Anything, mock.Anything).Return(output, testErr)
 
@@ -298,7 +298,7 @@ func TestInstrumentedAgent_Invoke_WithToolCalls(t *testing.T) {
 
 	output := &agentcore.AgentOutput{
 		Status: "completed",
-		ToolCalls: []agentcore.ToolCall{
+		ToolCalls: []agentcore.AgentToolCall{
 			{
 				ToolName: "calculator",
 				Success:  true,
@@ -310,7 +310,7 @@ func TestInstrumentedAgent_Invoke_WithToolCalls(t *testing.T) {
 				Duration: 500 * time.Millisecond,
 			},
 		},
-		ReasoningSteps: []agentcore.ReasoningStep{},
+		Steps: []agentcore.AgentStep{},
 	}
 	mockAgent.On("Invoke", mock.Anything, mock.Anything).Return(output, nil)
 
@@ -340,7 +340,7 @@ func TestInstrumentedAgent_Invoke_WithFailedToolCalls(t *testing.T) {
 
 	output := &agentcore.AgentOutput{
 		Status: "completed",
-		ToolCalls: []agentcore.ToolCall{
+		ToolCalls: []agentcore.AgentToolCall{
 			{
 				ToolName: "calculator",
 				Success:  true,
@@ -352,7 +352,7 @@ func TestInstrumentedAgent_Invoke_WithFailedToolCalls(t *testing.T) {
 				Duration: 50 * time.Millisecond,
 			},
 		},
-		ReasoningSteps: []agentcore.ReasoningStep{},
+		Steps: []agentcore.AgentStep{},
 	}
 	mockAgent.On("Invoke", mock.Anything, mock.Anything).Return(output, nil)
 
@@ -384,8 +384,8 @@ func TestInstrumentedAgent_Invoke_ConcurrentExecutions(t *testing.T) {
 
 	output := &agentcore.AgentOutput{
 		Status:         "completed",
-		ToolCalls:      []agentcore.ToolCall{},
-		ReasoningSteps: []agentcore.ReasoningStep{},
+		ToolCalls:      []agentcore.AgentToolCall{},
+		Steps: []agentcore.AgentStep{},
 	}
 	mockAgent.On("Invoke", mock.Anything, mock.Anything).Return(output, nil)
 
@@ -423,8 +423,8 @@ func TestInstrumentedAgent_Invoke_WithDifferentDurations(t *testing.T) {
 
 			output := &agentcore.AgentOutput{
 				Status:         "completed",
-				ToolCalls:      []agentcore.ToolCall{},
-				ReasoningSteps: []agentcore.ReasoningStep{},
+				ToolCalls:      []agentcore.AgentToolCall{},
+				Steps: []agentcore.AgentStep{},
 			}
 
 			// Simulate execution time
@@ -461,9 +461,9 @@ func TestInstrumentedAgent_Invoke_WithManyToolCalls(t *testing.T) {
 	mockLogger.On("Info", mock.Anything, mock.Anything).Return()
 
 	// Create many tool calls
-	toolCalls := make([]agentcore.ToolCall, 100)
+	toolCalls := make([]agentcore.AgentToolCall, 100)
 	for i := 0; i < 100; i++ {
-		toolCalls[i] = agentcore.ToolCall{
+		toolCalls[i] = agentcore.AgentToolCall{
 			ToolName: "tool-" + string(rune(i)),
 			Success:  i%2 == 0,
 			Duration: time.Duration(i*10) * time.Millisecond,
@@ -473,7 +473,7 @@ func TestInstrumentedAgent_Invoke_WithManyToolCalls(t *testing.T) {
 	output := &agentcore.AgentOutput{
 		Status:         "completed",
 		ToolCalls:      toolCalls,
-		ReasoningSteps: []agentcore.ReasoningStep{},
+		Steps: []agentcore.AgentStep{},
 	}
 	mockAgent.On("Invoke", mock.Anything, mock.Anything).Return(output, nil)
 
@@ -554,8 +554,8 @@ func TestInstrumentedAgent_WithOpenTelemetry(t *testing.T) {
 
 	output := &agentcore.AgentOutput{
 		Status:         "completed",
-		ToolCalls:      []agentcore.ToolCall{},
-		ReasoningSteps: []agentcore.ReasoningStep{},
+		ToolCalls:      []agentcore.AgentToolCall{},
+		Steps: []agentcore.AgentStep{},
 	}
 	mockAgent.On("Invoke", mock.Anything, mock.Anything).Return(output, nil)
 
@@ -584,8 +584,8 @@ func TestInstrumentedAgent_ContextPropagation(t *testing.T) {
 
 	output := &agentcore.AgentOutput{
 		Status:         "completed",
-		ToolCalls:      []agentcore.ToolCall{},
-		ReasoningSteps: []agentcore.ReasoningStep{},
+		ToolCalls:      []agentcore.AgentToolCall{},
+		Steps: []agentcore.AgentStep{},
 	}
 
 	capturedCtx := context.Background()
@@ -617,8 +617,8 @@ func BenchmarkInstrumentedAgent_Invoke(b *testing.B) {
 
 	output := &agentcore.AgentOutput{
 		Status:         "completed",
-		ToolCalls:      []agentcore.ToolCall{},
-		ReasoningSteps: []agentcore.ReasoningStep{},
+		ToolCalls:      []agentcore.AgentToolCall{},
+		Steps: []agentcore.AgentStep{},
 	}
 	mockAgent.On("Invoke", mock.Anything, mock.Anything).Return(output, nil)
 
@@ -650,24 +650,24 @@ func TestInstrumentedAgent_Stream_Success(t *testing.T) {
 		streamChan <- agentcore.StreamChunk[*agentcore.AgentOutput]{
 			Data: &agentcore.AgentOutput{
 				Status:         "processing",
-				ToolCalls:      []agentcore.ToolCall{},
-				ReasoningSteps: []agentcore.ReasoningStep{},
+				ToolCalls:      []agentcore.AgentToolCall{},
+				Steps: []agentcore.AgentStep{},
 			},
 			Done: false,
 		}
 		streamChan <- agentcore.StreamChunk[*agentcore.AgentOutput]{
 			Data: &agentcore.AgentOutput{
 				Status:         "processing",
-				ToolCalls:      []agentcore.ToolCall{},
-				ReasoningSteps: []agentcore.ReasoningStep{},
+				ToolCalls:      []agentcore.AgentToolCall{},
+				Steps: []agentcore.AgentStep{},
 			},
 			Done: false,
 		}
 		streamChan <- agentcore.StreamChunk[*agentcore.AgentOutput]{
 			Data: &agentcore.AgentOutput{
 				Status:         "completed",
-				ToolCalls:      []agentcore.ToolCall{},
-				ReasoningSteps: []agentcore.ReasoningStep{},
+				ToolCalls:      []agentcore.AgentToolCall{},
+				Steps: []agentcore.AgentStep{},
 			},
 			Done: true,
 		}
@@ -794,7 +794,7 @@ func TestInstrumentedAgent_Stream_WithToolCalls(t *testing.T) {
 		streamChan <- agentcore.StreamChunk[*agentcore.AgentOutput]{
 			Data: &agentcore.AgentOutput{
 				Status: "completed",
-				ToolCalls: []agentcore.ToolCall{
+				ToolCalls: []agentcore.AgentToolCall{
 					{
 						ToolName: "calculator",
 						Success:  true,
@@ -851,9 +851,9 @@ func TestInstrumentedAgent_Batch_Success(t *testing.T) {
 	}
 
 	outputs := []*agentcore.AgentOutput{
-		{Status: "completed", ToolCalls: []agentcore.ToolCall{}, ReasoningSteps: []agentcore.ReasoningStep{}},
-		{Status: "completed", ToolCalls: []agentcore.ToolCall{}, ReasoningSteps: []agentcore.ReasoningStep{}},
-		{Status: "completed", ToolCalls: []agentcore.ToolCall{}, ReasoningSteps: []agentcore.ReasoningStep{}},
+		{Status: "completed", ToolCalls: []agentcore.AgentToolCall{}, Steps: []agentcore.AgentStep{}},
+		{Status: "completed", ToolCalls: []agentcore.AgentToolCall{}, Steps: []agentcore.AgentStep{}},
+		{Status: "completed", ToolCalls: []agentcore.AgentToolCall{}, Steps: []agentcore.AgentStep{}},
 	}
 
 	mockAgent.On("Batch", mock.Anything, inputs).Return(outputs, nil)
@@ -915,18 +915,18 @@ func TestInstrumentedAgent_Batch_WithToolCalls(t *testing.T) {
 	outputs := []*agentcore.AgentOutput{
 		{
 			Status: "completed",
-			ToolCalls: []agentcore.ToolCall{
+			ToolCalls: []agentcore.AgentToolCall{
 				{ToolName: "calculator", Success: true, Duration: 100 * time.Millisecond},
 				{ToolName: "search", Success: true, Duration: 150 * time.Millisecond},
 			},
-			ReasoningSteps: []agentcore.ReasoningStep{},
+			Steps: []agentcore.AgentStep{},
 		},
 		{
 			Status: "completed",
-			ToolCalls: []agentcore.ToolCall{
+			ToolCalls: []agentcore.AgentToolCall{
 				{ToolName: "validator", Success: false, Duration: 50 * time.Millisecond},
 			},
-			ReasoningSteps: []agentcore.ReasoningStep{},
+			Steps: []agentcore.AgentStep{},
 		},
 	}
 
@@ -987,8 +987,8 @@ func TestInstrumentedAgent_Batch_LargeBatch(t *testing.T) {
 		}
 		outputs[i] = &agentcore.AgentOutput{
 			Status:         "completed",
-			ToolCalls:      []agentcore.ToolCall{},
-			ReasoningSteps: []agentcore.ReasoningStep{},
+			ToolCalls:      []agentcore.AgentToolCall{},
+			Steps: []agentcore.AgentStep{},
 		}
 	}
 

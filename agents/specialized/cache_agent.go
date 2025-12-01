@@ -90,7 +90,7 @@ func (a *CacheAgent) Execute(ctx context.Context, input *agentcore.AgentInput) (
 	output := &agentcore.AgentOutput{
 		Status: interfaces.StatusSuccess,
 		Result: result,
-		ToolCalls: []agentcore.ToolCall{
+		ToolCalls: []agentcore.AgentToolCall{
 			{
 				ToolName: "cache",
 				Input: map[string]interface{}{

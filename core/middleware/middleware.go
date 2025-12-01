@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/kart-io/goagent/core/state"
@@ -153,37 +154,51 @@ type MiddlewareResponse struct {
 // Handler is a function that processes a request and returns a response
 type Handler func(ctx context.Context, request *MiddlewareRequest) (*MiddlewareResponse, error)
 
+// middlewareSlice 不可变的 middleware 切片包装，用于原子操作
+type middlewareSlice struct {
+	items []Middleware
+}
+
 // MiddlewareChain manages a sequence of middleware
+// 使用 atomic.Pointer 实现零拷贝读取，避免热路径上的 slice 复制
 type MiddlewareChain struct {
-	middlewares []Middleware
+	middlewares atomic.Pointer[middlewareSlice]
 	handler     Handler
-	mu          sync.RWMutex
+	mu          sync.Mutex // 仅用于写操作的互斥
 }
 
 // NewMiddlewareChain creates a new middleware chain
 func NewMiddlewareChain(handler Handler) *MiddlewareChain {
-	return &MiddlewareChain{
-		middlewares: []Middleware{},
-		handler:     handler,
+	c := &MiddlewareChain{
+		handler: handler,
 	}
+	// 初始化空 slice
+	c.middlewares.Store(&middlewareSlice{items: []Middleware{}})
+	return c
 }
 
 // Use adds middleware to the chain
-//
-//go:inline
+// 写操作使用 copy-on-write 模式，确保读取端无锁
 func (c *MiddlewareChain) Use(middleware ...Middleware) *MiddlewareChain {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.middlewares = append(c.middlewares, middleware...)
+
+	// 获取当前 slice 并创建新副本
+	current := c.middlewares.Load()
+	newItems := make([]Middleware, len(current.items), len(current.items)+len(middleware))
+	copy(newItems, current.items)
+	newItems = append(newItems, middleware...)
+
+	// 原子替换为新 slice
+	c.middlewares.Store(&middlewareSlice{items: newItems})
 	return c
 }
 
 // Execute runs the request through the middleware chain
+// 热路径零拷贝：直接读取不可变 slice，无需加锁或复制
 func (c *MiddlewareChain) Execute(ctx context.Context, request *MiddlewareRequest) (*MiddlewareResponse, error) {
-	c.mu.RLock()
-	middlewares := make([]Middleware, len(c.middlewares))
-	copy(middlewares, c.middlewares)
-	c.mu.RUnlock()
+	// 原子加载不可变 slice，无需复制
+	middlewares := c.middlewares.Load().items
 
 	// Run OnBefore hooks in order
 	for _, mw := range middlewares {
@@ -198,18 +213,32 @@ func (c *MiddlewareChain) Execute(ctx context.Context, request *MiddlewareReques
 		}
 	}
 
-	// Execute the main handler
+	// 检查缓存命中（短路执行）
+	var response *MiddlewareResponse
+	var err error
 	start := time.Now()
-	response, err := c.handler(ctx, request)
-	if err != nil {
-		// Let middleware handle the error
-		for _, mw := range middlewares {
-			if handledErr := mw.OnError(ctx, err); handledErr != nil {
-				err = handledErr
-			}
+
+	if request != nil && request.Metadata != nil {
+		if cached, ok := request.Metadata["cached_response"].(*MiddlewareResponse); ok && cached != nil {
+			// 缓存命中，跳过 handler 执行
+			response = cached
+			response.Duration = 0 // 缓存响应无执行时间
 		}
+	}
+
+	// 如果没有缓存命中，执行主处理器
+	if response == nil {
+		response, err = c.handler(ctx, request)
 		if err != nil {
-			return nil, err
+			// Let middleware handle the error
+			for _, mw := range middlewares {
+				if handledErr := mw.OnError(ctx, err); handledErr != nil {
+					err = handledErr
+				}
+			}
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -223,7 +252,8 @@ func (c *MiddlewareChain) Execute(ctx context.Context, request *MiddlewareReques
 			Duration: time.Since(start),
 			Error:    err,
 		}
-	} else {
+	} else if response.Duration == 0 {
+		// 仅当未设置时才计算 Duration（缓存命中时已设为 0）
 		response.Duration = time.Since(start)
 	}
 
@@ -240,6 +270,11 @@ func (c *MiddlewareChain) Execute(ctx context.Context, request *MiddlewareReques
 	}
 
 	return response, nil
+}
+
+// Size 返回当前 middleware 数量
+func (c *MiddlewareChain) Size() int {
+	return len(c.middlewares.Load().items)
 }
 
 // BaseMiddleware provides a default implementation of Middleware
@@ -364,6 +399,9 @@ type TimingMiddleware struct {
 	counter int64
 }
 
+// timingContextKey 用于在 context 中存储计时开始时间
+type timingContextKey struct{}
+
 // NewTimingMiddleware creates a timing middleware
 func NewTimingMiddleware() *TimingMiddleware {
 	return &TimingMiddleware{
@@ -377,7 +415,9 @@ func (m *TimingMiddleware) OnBefore(ctx context.Context, request *MiddlewareRequ
 	if request.Metadata == nil {
 		request.Metadata = make(map[string]interface{})
 	}
-	request.Metadata["timing_start"] = time.Now()
+	// 同时存储在 metadata 和 request 中，以便 OnAfter 可以访问
+	startTime := time.Now()
+	request.Metadata["timing_start"] = startTime
 	return request, nil
 }
 
@@ -387,9 +427,17 @@ func (m *TimingMiddleware) OnAfter(ctx context.Context, response *MiddlewareResp
 		response.Metadata = make(map[string]interface{})
 	}
 
-	// Get start time from request metadata (if available through response)
-	if startTime, ok := response.Metadata["timing_start"].(time.Time); ok {
-		duration := time.Since(startTime)
+	var duration time.Duration
+
+	// 优先使用 response.Duration（由 MiddlewareChain.Execute 设置）
+	if response.Duration > 0 {
+		duration = response.Duration
+	} else if startTime, ok := response.Metadata["timing_start"].(time.Time); ok {
+		// 回退：从元数据中获取开始时间（直接调用 OnAfter 的场景）
+		duration = time.Since(startTime)
+	}
+
+	if duration > 0 {
 		response.Metadata["timing_duration"] = duration
 
 		// Store timing with unique key
@@ -472,11 +520,17 @@ func (m *RetryMiddleware) OnError(ctx context.Context, err error) error {
 		WithOperation("on_error")
 }
 
-// CacheMiddleware provides response caching
+// CacheMiddleware provides response caching with sharded locks for better concurrency
 type CacheMiddleware struct {
 	*BaseMiddleware
+	shards    []*cacheShard
+	numShards uint32
+	ttl       time.Duration
+}
+
+// cacheShard 单个缓存分片，减少锁竞争
+type cacheShard struct {
 	cache map[string]*CacheEntry
-	ttl   time.Duration
 	mu    sync.RWMutex
 }
 
@@ -486,22 +540,75 @@ type CacheEntry struct {
 	ExpiresAt time.Time
 }
 
-// NewCacheMiddleware creates a cache middleware
+// defaultNumShards 默认分片数量（应为 2 的幂）
+const defaultNumShards = 32
+
+// NewCacheMiddleware creates a cache middleware with sharded locks
 func NewCacheMiddleware(ttl time.Duration) *CacheMiddleware {
+	return NewCacheMiddlewareWithShards(ttl, defaultNumShards)
+}
+
+// NewCacheMiddlewareWithShards creates a cache middleware with specified number of shards
+func NewCacheMiddlewareWithShards(ttl time.Duration, numShards uint32) *CacheMiddleware {
+	if numShards == 0 {
+		numShards = defaultNumShards
+	}
+	// 确保是 2 的幂，方便取模
+	numShards = nextPowerOfTwo(numShards)
+
+	shards := make([]*cacheShard, numShards)
+	for i := range shards {
+		shards[i] = &cacheShard{
+			cache: make(map[string]*CacheEntry),
+		}
+	}
+
 	return &CacheMiddleware{
 		BaseMiddleware: NewBaseMiddleware("cache"),
-		cache:          make(map[string]*CacheEntry),
+		shards:         shards,
+		numShards:      numShards,
 		ttl:            ttl,
 	}
+}
+
+// nextPowerOfTwo 返回大于等于 n 的最小 2 的幂
+func nextPowerOfTwo(n uint32) uint32 {
+	if n == 0 {
+		return 1
+	}
+	n--
+	n |= n >> 1
+	n |= n >> 2
+	n |= n >> 4
+	n |= n >> 8
+	n |= n >> 16
+	return n + 1
+}
+
+// getShard 根据 key 获取对应的分片
+func (m *CacheMiddleware) getShard(key string) *cacheShard {
+	hash := fnv32(key)
+	return m.shards[hash&(m.numShards-1)]
+}
+
+// fnv32 简单的 FNV-1a 哈希函数
+func fnv32(key string) uint32 {
+	hash := uint32(2166136261)
+	for i := 0; i < len(key); i++ {
+		hash ^= uint32(key[i])
+		hash *= 16777619
+	}
+	return hash
 }
 
 // OnBefore checks cache before execution
 func (m *CacheMiddleware) OnBefore(ctx context.Context, request *MiddlewareRequest) (*MiddlewareRequest, error) {
 	key := m.getCacheKey(request)
+	shard := m.getShard(key)
 
-	m.mu.RLock()
-	entry, ok := m.cache[key]
-	m.mu.RUnlock()
+	shard.mu.RLock()
+	entry, ok := shard.cache[key]
+	shard.mu.RUnlock()
 
 	if ok && time.Now().Before(entry.ExpiresAt) {
 		// Cache hit - add flag to metadata
@@ -527,14 +634,17 @@ func (m *CacheMiddleware) OnAfter(ctx context.Context, response *MiddlewareRespo
 	// Cache the response
 	if response.Error == nil {
 		key := m.getCacheKeyFromResponse(response)
-		entry := &CacheEntry{
-			Response:  response,
-			ExpiresAt: time.Now().Add(m.ttl),
-		}
+		if key != "" {
+			entry := &CacheEntry{
+				Response:  response,
+				ExpiresAt: time.Now().Add(m.ttl),
+			}
 
-		m.mu.Lock()
-		m.cache[key] = entry
-		m.mu.Unlock()
+			shard := m.getShard(key)
+			shard.mu.Lock()
+			shard.cache[key] = entry
+			shard.mu.Unlock()
+		}
 	}
 
 	return response, nil
@@ -557,14 +667,20 @@ func (m *CacheMiddleware) getCacheKeyFromResponse(response *MiddlewareResponse) 
 
 // Clear removes all cached entries
 func (m *CacheMiddleware) Clear() {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.cache = make(map[string]*CacheEntry)
+	for _, shard := range m.shards {
+		shard.mu.Lock()
+		shard.cache = make(map[string]*CacheEntry)
+		shard.mu.Unlock()
+	}
 }
 
 // Size returns the number of cached entries
 func (m *CacheMiddleware) Size() int {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	return len(m.cache)
+	total := 0
+	for _, shard := range m.shards {
+		shard.mu.RLock()
+		total += len(shard.cache)
+		shard.mu.RUnlock()
+	}
+	return total
 }

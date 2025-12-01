@@ -521,8 +521,8 @@ Action Input: {}`, i)
 		t.Errorf("Expected partial status for max steps, got %s", output.Status)
 	}
 
-	if len(output.ReasoningSteps) > 3*3 { // Each step creates 3 reasoning steps (Thought, Action, Observation)
-		t.Errorf("Exceeded max steps: %d reasoning steps", len(output.ReasoningSteps))
+	if len(output.Steps) > 3*3 { // Each step creates 3 reasoning steps (Thought, Action, Observation)
+		t.Errorf("Exceeded max steps: %d reasoning steps", len(output.Steps))
 	}
 }
 
@@ -785,13 +785,13 @@ Action Input: {}`,
 	}
 
 	// Should have reasoning steps: Thought, Action, Final Answer
-	if len(output.ReasoningSteps) < 3 {
-		t.Errorf("Expected at least 3 reasoning steps, got %d", len(output.ReasoningSteps))
+	if len(output.Steps) < 3 {
+		t.Errorf("Expected at least 3 reasoning steps, got %d", len(output.Steps))
 	}
 
 	// Verify step sequence
 	stepTypes := make(map[string]int)
-	for _, step := range output.ReasoningSteps {
+	for _, step := range output.Steps {
 		stepTypes[step.Action]++
 	}
 
@@ -1128,7 +1128,7 @@ STOP`,
 	}
 
 	// Should have stopped due to pattern, not max steps
-	if len(output.ReasoningSteps) > 10 {
+	if len(output.Steps) > 10 {
 		t.Error("Should have stopped due to pattern")
 	}
 }
@@ -1173,7 +1173,7 @@ Action Input: {}`,
 	}
 
 	// Verify reasoning steps have timing
-	for _, step := range output.ReasoningSteps {
+	for _, step := range output.Steps {
 		if step.Duration < 0 {
 			t.Error("Expected non-negative duration")
 		}

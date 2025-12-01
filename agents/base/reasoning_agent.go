@@ -235,8 +235,8 @@ func (b *BaseReasoningAgent) GetToolByName(name string) (interfaces.Tool, bool) 
 // initOutput 初始化输出对象
 func (b *BaseReasoningAgent) initOutput() *agentcore.AgentOutput {
 	return &agentcore.AgentOutput{
-		ReasoningSteps: make([]agentcore.ReasoningStep, 0),
-		ToolCalls:      make([]agentcore.ToolCall, 0),
+		Steps: make([]agentcore.AgentStep, 0),
+		ToolCalls:      make([]agentcore.AgentToolCall, 0),
 		Metadata:       make(map[string]interface{}),
 		TokenUsage: &interfaces.TokenUsage{
 			PromptTokens:     0,
@@ -249,8 +249,8 @@ func (b *BaseReasoningAgent) initOutput() *agentcore.AgentOutput {
 // createStepOutput 创建步骤输出（用于Generator）
 func (b *BaseReasoningAgent) createStepOutput(accumulated *agentcore.AgentOutput, message string, startTime time.Time) *agentcore.AgentOutput {
 	stepOutput := &agentcore.AgentOutput{
-		ReasoningSteps: make([]agentcore.ReasoningStep, len(accumulated.ReasoningSteps)),
-		ToolCalls:      make([]agentcore.ToolCall, len(accumulated.ToolCalls)),
+		Steps: make([]agentcore.AgentStep, len(accumulated.Steps)),
+		ToolCalls:      make([]agentcore.AgentToolCall, len(accumulated.ToolCalls)),
 		Metadata:       make(map[string]interface{}),
 		TokenUsage: &interfaces.TokenUsage{
 			PromptTokens:     accumulated.TokenUsage.PromptTokens,
@@ -264,7 +264,7 @@ func (b *BaseReasoningAgent) createStepOutput(accumulated *agentcore.AgentOutput
 	}
 
 	// 复制slice
-	copy(stepOutput.ReasoningSteps, accumulated.ReasoningSteps)
+	copy(stepOutput.Steps, accumulated.Steps)
 	copy(stepOutput.ToolCalls, accumulated.ToolCalls)
 
 	// 复制metadata
