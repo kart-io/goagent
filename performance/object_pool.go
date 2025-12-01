@@ -93,8 +93,8 @@ var AgentInputPool = &sync.Pool{
 var AgentOutputPool = &sync.Pool{
 	New: func() interface{} {
 		return &core.AgentOutput{
-			ReasoningSteps: make([]core.ReasoningStep, 0, 4),
-			ToolCalls:      make([]core.ToolCall, 0, 4),
+			Steps: make([]core.AgentStep, 0, 4),
+			ToolCalls:      make([]core.AgentToolCall, 0, 4),
 			Metadata:       make(map[string]interface{}),
 		}
 	},

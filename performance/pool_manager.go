@@ -229,8 +229,8 @@ func (a *PoolAgent) initPools() {
 		New: func() interface{} {
 			a.recordNew(PoolTypeAgentOutput)
 			return &core.AgentOutput{
-				ReasoningSteps: make([]core.ReasoningStep, 0, 4),
-				ToolCalls:      make([]core.ToolCall, 0, 4),
+				Steps: make([]core.AgentStep, 0, 4),
+				ToolCalls:      make([]core.AgentToolCall, 0, 4),
 				Metadata:       make(map[string]interface{}),
 			}
 		},
@@ -485,8 +485,8 @@ func (a *PoolAgent) GetAgentOutput() *core.AgentOutput {
 	if !a.IsPoolEnabled(PoolTypeAgentOutput) {
 		a.recordNew(PoolTypeAgentOutput)
 		return &core.AgentOutput{
-			ReasoningSteps: make([]core.ReasoningStep, 0, 4),
-			ToolCalls:      make([]core.ToolCall, 0, 4),
+			Steps: make([]core.AgentStep, 0, 4),
+			ToolCalls:      make([]core.AgentToolCall, 0, 4),
 			Metadata:       make(map[string]interface{}),
 		}
 	}
@@ -497,7 +497,7 @@ func (a *PoolAgent) GetAgentOutput() *core.AgentOutput {
 	output.Status = ""
 	output.Message = ""
 	// 重置 slices
-	output.ReasoningSteps = output.ReasoningSteps[:0]
+	output.Steps = output.Steps[:0]
 	output.ToolCalls = output.ToolCalls[:0]
 	// 清理 map (使用 Go 1.21+ clear() 提高性能)
 	if len(output.Metadata) > 0 {
@@ -515,7 +515,7 @@ func (a *PoolAgent) PutAgentOutput(output *core.AgentOutput) {
 
 	defer a.strategy.PostPut(PoolTypeAgentOutput)
 
-	maxSize := cap(output.ReasoningSteps)
+	maxSize := cap(output.Steps)
 	if cap(output.ToolCalls) > maxSize {
 		maxSize = cap(output.ToolCalls)
 	}
@@ -531,12 +531,12 @@ func (a *PoolAgent) PutAgentOutput(output *core.AgentOutput) {
 	output.TokenUsage = nil
 
 	// 只池化小 slice
-	if cap(output.ReasoningSteps) > a.config.MaxSliceSize ||
+	if cap(output.Steps) > a.config.MaxSliceSize ||
 		cap(output.ToolCalls) > a.config.MaxSliceSize {
-		output.ReasoningSteps = make([]core.ReasoningStep, 0, 4)
-		output.ToolCalls = make([]core.ToolCall, 0, 4)
+		output.Steps = make([]core.AgentStep, 0, 4)
+		output.ToolCalls = make([]core.AgentToolCall, 0, 4)
 	} else {
-		output.ReasoningSteps = output.ReasoningSteps[:0]
+		output.Steps = output.Steps[:0]
 		output.ToolCalls = output.ToolCalls[:0]
 	}
 

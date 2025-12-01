@@ -321,9 +321,9 @@ func runReActExample(apiKey string) {
 	fmt.Printf("⏱️  执行时间: %v\n", output.Latency)
 
 	// 显示推理步骤
-	if len(output.ReasoningSteps) > 0 {
-		fmt.Printf("\n🧠 推理步骤 (%d 步):\n", len(output.ReasoningSteps))
-		for _, step := range output.ReasoningSteps {
+	if len(output.Steps) > 0 {
+		fmt.Printf("\n🧠 推理步骤 (%d 步):\n", len(output.Steps))
+		for _, step := range output.Steps {
 			status := "✅"
 			if !step.Success {
 				status = "❌"

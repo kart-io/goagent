@@ -74,10 +74,8 @@ func (s *AdaptivePoolStrategy) ShouldPool(poolType PoolType, size int) bool {
 		}
 	}
 
-	// TODO: 检查内存压力
-	// if s.getMemoryUsage() > s.memoryThreshold {
-	//     return false
-	// }
+	// 内存压力检查：可通过 runtime.MemStats 实现
+	// 当前简化实现，仅检查大小限制
 
 	return true
 }

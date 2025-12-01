@@ -131,7 +131,7 @@ func (s *CoTStrategy) Execute(
 
 	// 记录推理步骤
 	for i, step := range steps {
-		output.ReasoningSteps = append(output.ReasoningSteps, agentcore.ReasoningStep{
+		output.Steps = append(output.Steps, agentcore.AgentStep{
 			Step:        i + 1,
 			Action:      "Reasoning",
 			Description: fmt.Sprintf("Step %d", i+1),
@@ -164,7 +164,7 @@ func (s *CoTStrategy) Execute(
 					finalAnswer = newAnswer
 				}
 				for i, step := range additionalSteps {
-					output.ReasoningSteps = append(output.ReasoningSteps, agentcore.ReasoningStep{
+					output.Steps = append(output.Steps, agentcore.AgentStep{
 						Step:        len(steps) + i + 1,
 						Action:      "Reasoning with Tools",
 						Description: fmt.Sprintf("Step %d (with tools)", len(steps)+i+1),
@@ -178,7 +178,7 @@ func (s *CoTStrategy) Execute(
 	}
 
 	// 设置元数据
-	output.Metadata["total_steps"] = len(output.ReasoningSteps)
+	output.Metadata["total_steps"] = len(output.Steps)
 	output.Metadata["reasoning_trace"] = reasoningSteps
 
 	return finalAnswer, nil
@@ -220,7 +220,7 @@ func (s *CoTStrategy) ExecuteWithGenerator(
 
 	// 记录推理步骤
 	for i, step := range steps {
-		output.ReasoningSteps = append(output.ReasoningSteps, agentcore.ReasoningStep{
+		output.Steps = append(output.Steps, agentcore.AgentStep{
 			Step:        i + 1,
 			Action:      "Reasoning",
 			Description: fmt.Sprintf("Step %d", i+1),
@@ -274,7 +274,7 @@ func (s *CoTStrategy) ExecuteWithGenerator(
 
 				// 记录额外推理步骤
 				for i, step := range additionalSteps {
-					output.ReasoningSteps = append(output.ReasoningSteps, agentcore.ReasoningStep{
+					output.Steps = append(output.Steps, agentcore.AgentStep{
 						Step:        len(steps) + i + 1,
 						Action:      "Reasoning with Tools",
 						Description: fmt.Sprintf("Step %d (with tools)", len(steps)+i+1),
@@ -303,7 +303,7 @@ func (s *CoTStrategy) ExecuteWithGenerator(
 	finalOutput.Timestamp = time.Now()
 	finalOutput.Latency = time.Since(startTime)
 	finalOutput.Metadata["step_type"] = "final"
-	finalOutput.Metadata["total_steps"] = len(output.ReasoningSteps)
+	finalOutput.Metadata["total_steps"] = len(output.Steps)
 	finalOutput.Metadata["reasoning_trace"] = steps
 	if !yield(finalOutput, nil) {
 		return finalAnswer, nil
@@ -508,7 +508,7 @@ func (s *CoTStrategy) executeToolsIfNeeded(ctx context.Context, steps []string, 
 					startTime := time.Now()
 					result, err := tool.Invoke(ctx, toolIn)
 
-					toolCall := agentcore.ToolCall{
+					toolCall := agentcore.AgentToolCall{
 						ToolName: toolName,
 						Input:    toolInput,
 						Duration: time.Since(startTime),
@@ -549,8 +549,8 @@ func (s *CoTStrategy) formatToolResults(results map[string]interface{}) string {
 // createStepOutput 创建步骤输出快照
 func createStepOutput(accumulated *agentcore.AgentOutput, message string, startTime time.Time) *agentcore.AgentOutput {
 	stepOutput := &agentcore.AgentOutput{
-		ReasoningSteps: make([]agentcore.ReasoningStep, len(accumulated.ReasoningSteps)),
-		ToolCalls:      make([]agentcore.ToolCall, len(accumulated.ToolCalls)),
+		Steps: make([]agentcore.AgentStep, len(accumulated.Steps)),
+		ToolCalls:      make([]agentcore.AgentToolCall, len(accumulated.ToolCalls)),
 		Metadata:       make(map[string]interface{}),
 		TokenUsage: &interfaces.TokenUsage{
 			PromptTokens:     accumulated.TokenUsage.PromptTokens,
@@ -564,7 +564,7 @@ func createStepOutput(accumulated *agentcore.AgentOutput, message string, startT
 	}
 
 	// 复制slices
-	copy(stepOutput.ReasoningSteps, accumulated.ReasoningSteps)
+	copy(stepOutput.Steps, accumulated.Steps)
 	copy(stepOutput.ToolCalls, accumulated.ToolCalls)
 
 	// 复制metadata

@@ -131,7 +131,7 @@ func (s *SimpleTaskAgent) Invoke(ctx context.Context, input *agentcore.AgentInpu
 		Result:  result,
 		Status:  "success",
 		Message: "Task completed successfully",
-		ReasoningSteps: []agentcore.ReasoningStep{
+		Steps: []agentcore.AgentStep{
 			{
 				Step:        1,
 				Action:      "parse_input",

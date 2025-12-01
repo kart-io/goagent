@@ -367,14 +367,14 @@ func TestExecute(t *testing.T) {
 			withMemory: false,
 			mockSetup: func(ma *MockAgent, mm *MockMemory) {
 				// Simulate output with many reasoning steps (more than max iterations)
-				steps := make([]agentcore.ReasoningStep, 20)
+				steps := make([]agentcore.AgentStep, 20)
 				for i := 0; i < 20; i++ {
-					steps[i] = agentcore.ReasoningStep{Step: i, Action: "think"}
+					steps[i] = agentcore.AgentStep{Step: i, Action: "think"}
 				}
 				ma.On("Invoke", mock.Anything, mock.Anything).Return(&agentcore.AgentOutput{
 					Result:         "partial result",
 					Status:         "running",
-					ReasoningSteps: steps,
+					Steps: steps,
 				}, nil)
 			},
 			wantError:  false,
@@ -863,15 +863,15 @@ func TestEarlyStoppingMethods(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockAgent := new(MockAgent)
 
-			steps := make([]agentcore.ReasoningStep, tt.steps)
+			steps := make([]agentcore.AgentStep, tt.steps)
 			for i := 0; i < tt.steps; i++ {
-				steps[i] = agentcore.ReasoningStep{Step: i, Action: "think"}
+				steps[i] = agentcore.AgentStep{Step: i, Action: "think"}
 			}
 
 			mockAgent.On("Invoke", mock.Anything, mock.Anything).Return(&agentcore.AgentOutput{
 				Result:         "result",
 				Status:         "running",
-				ReasoningSteps: steps,
+				Steps: steps,
 			}, nil)
 
 			executor := NewAgentExecutor(ExecutorConfig{

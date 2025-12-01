@@ -86,7 +86,7 @@ func (a *DatabaseAgent) Execute(ctx context.Context, input *agentcore.AgentInput
 	output := &agentcore.AgentOutput{
 		Status: interfaces.StatusSuccess,
 		Result: result,
-		ToolCalls: []agentcore.ToolCall{
+		ToolCalls: []agentcore.AgentToolCall{
 			{
 				ToolName: "database",
 				Input: map[string]interface{}{

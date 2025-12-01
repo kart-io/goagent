@@ -457,7 +457,7 @@ func createTierRateLimiter() core.Middleware {
 		"enterprise": 1000,
 	}
 
-	// TODO: Could enhance to use tier-specific limits
+	// 演示用途：实际应用可根据用户层级动态选择限流值
 	_ = limits
 	return core.NewRateLimiterMiddleware(100, 1*time.Minute)
 }

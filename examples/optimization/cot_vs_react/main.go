@@ -169,16 +169,16 @@ func main() {
 		}
 	}
 
-	fmt.Printf("\nCoT 推理步骤:    %d\n", len(cotResult.ReasoningSteps))
-	fmt.Printf("ReAct 推理步骤:  %d\n", len(reactResult.ReasoningSteps))
+	fmt.Printf("\nCoT 推理步骤:    %d\n", len(cotResult.Steps))
+	fmt.Printf("ReAct 推理步骤:  %d\n", len(reactResult.Steps))
 
 	// 计算步骤差异
-	if len(reactResult.ReasoningSteps) > 0 && len(cotResult.ReasoningSteps) > 0 {
-		if len(cotResult.ReasoningSteps) < len(reactResult.ReasoningSteps) {
-			reduction := (1 - float64(len(cotResult.ReasoningSteps))/float64(len(reactResult.ReasoningSteps))) * 100
+	if len(reactResult.Steps) > 0 && len(cotResult.Steps) > 0 {
+		if len(cotResult.Steps) < len(reactResult.Steps) {
+			reduction := (1 - float64(len(cotResult.Steps))/float64(len(reactResult.Steps))) * 100
 			fmt.Printf("CoT 步骤减少:    %.1f%%\n", reduction)
-		} else if len(cotResult.ReasoningSteps) > len(reactResult.ReasoningSteps) {
-			increase := (float64(len(cotResult.ReasoningSteps))/float64(len(reactResult.ReasoningSteps)) - 1) * 100
+		} else if len(cotResult.Steps) > len(reactResult.Steps) {
+			increase := (float64(len(cotResult.Steps))/float64(len(reactResult.Steps)) - 1) * 100
 			fmt.Printf("CoT 步骤增加:    %.1f%%\n", increase)
 		} else {
 			fmt.Printf("步骤数量相同\n")
@@ -279,13 +279,13 @@ Thought:`,
 func printResult(agentType string, output *agentcore.AgentOutput) {
 	fmt.Printf("状态: %s\n", output.Status)
 	fmt.Printf("执行时间: %v\n", output.Latency)
-	fmt.Printf("推理步骤数: %d\n", len(output.ReasoningSteps))
+	fmt.Printf("推理步骤数: %d\n", len(output.Steps))
 	fmt.Printf("最终答案: %v\n", output.Result)
 
 	// 打印推理步骤
 	fmt.Println()
 	fmt.Println("推理过程:")
-	for i, step := range output.ReasoningSteps {
+	for i, step := range output.Steps {
 		result := fmt.Sprintf("%v", step.Result)
 		if len(result) > 80 {
 			result = result[:80] + "..."

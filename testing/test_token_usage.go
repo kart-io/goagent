@@ -63,7 +63,7 @@ func main() {
 	fmt.Printf("状态: %s\n", output.Status)
 	fmt.Printf("消息: %s\n", output.Message)
 	fmt.Printf("结果: %v\n", output.Result)
-	fmt.Printf("推理步骤: %d 步\n", len(output.ReasoningSteps))
+	fmt.Printf("推理步骤: %d 步\n", len(output.Steps))
 	fmt.Printf("执行延迟: %v\n", output.Latency)
 
 	// 输出 Token 使用统计

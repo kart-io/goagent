@@ -68,12 +68,12 @@ func BenchmarkAgentOutputWithoutPool(b *testing.B) {
 			Result:  "test result",
 			Status:  "success",
 			Message: "test message",
-			ReasoningSteps: []core.ReasoningStep{
+			Steps: []core.AgentStep{
 				{Step: 1, Action: "action1", Description: "desc1", Result: "result1", Success: true},
 				{Step: 2, Action: "action2", Description: "desc2", Result: "result2", Success: true},
 				{Step: 3, Action: "action3", Description: "desc3", Result: "result3", Success: true},
 			},
-			ToolCalls: []core.ToolCall{
+			ToolCalls: []core.AgentToolCall{
 				{ToolName: "tool1", Success: true},
 				{ToolName: "tool2", Success: true},
 			},
@@ -86,7 +86,7 @@ func BenchmarkAgentOutputWithoutPool(b *testing.B) {
 
 		// 模拟使用
 		_ = output.Result
-		_ = output.ReasoningSteps
+		_ = output.Steps
 		_ = output.ToolCalls
 
 		// 不归还，等待 GC
@@ -106,15 +106,15 @@ func BenchmarkAgentOutputWithPool(b *testing.B) {
 		output.Message = "test message"
 
 		// 使用底层数组复用（零分配）
-		output.ReasoningSteps = append(output.ReasoningSteps,
-			core.ReasoningStep{Step: 1, Action: "action1", Description: "desc1", Result: "result1", Success: true},
-			core.ReasoningStep{Step: 2, Action: "action2", Description: "desc2", Result: "result2", Success: true},
-			core.ReasoningStep{Step: 3, Action: "action3", Description: "desc3", Result: "result3", Success: true},
+		output.Steps = append(output.Steps,
+			core.AgentStep{Step: 1, Action: "action1", Description: "desc1", Result: "result1", Success: true},
+			core.AgentStep{Step: 2, Action: "action2", Description: "desc2", Result: "result2", Success: true},
+			core.AgentStep{Step: 3, Action: "action3", Description: "desc3", Result: "result3", Success: true},
 		)
 
 		output.ToolCalls = append(output.ToolCalls,
-			core.ToolCall{ToolName: "tool1", Success: true},
-			core.ToolCall{ToolName: "tool2", Success: true},
+			core.AgentToolCall{ToolName: "tool1", Success: true},
+			core.AgentToolCall{ToolName: "tool2", Success: true},
 		)
 
 		output.Metadata["key1"] = "value1"
@@ -124,7 +124,7 @@ func BenchmarkAgentOutputWithPool(b *testing.B) {
 
 		// 模拟使用
 		_ = output.Result
-		_ = output.ReasoningSteps
+		_ = output.Steps
 		_ = output.ToolCalls
 
 		// 归还到池中（重置切片长度）
@@ -148,8 +148,8 @@ func BenchmarkConcurrentPoolUsage(b *testing.B) {
 			// 获取输出
 			output := pool.GetAgentOutput()
 			output.Result = "concurrent result"
-			output.ReasoningSteps = append(output.ReasoningSteps,
-				core.ReasoningStep{Step: 1, Action: "test", Success: true},
+			output.Steps = append(output.Steps,
+				core.AgentStep{Step: 1, Action: "test", Success: true},
 			)
 
 			// 模拟处理
@@ -170,9 +170,9 @@ func BenchmarkSliceReuseWithoutPool(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		// 每次都创建新切片
-		steps := make([]core.ReasoningStep, 0, 10)
+		steps := make([]core.AgentStep, 0, 10)
 		for j := 0; j < 5; j++ {
-			steps = append(steps, core.ReasoningStep{
+			steps = append(steps, core.AgentStep{
 				Step:   j,
 				Action: "action",
 			})
@@ -191,7 +191,7 @@ func BenchmarkSliceReuseWithPool(b *testing.B) {
 		// 从池中获取，复用底层数组
 		steps := pool.GetReasoningSlice()
 		for j := 0; j < 5; j++ {
-			steps = append(steps, core.ReasoningStep{
+			steps = append(steps, core.AgentStep{
 				Step:   j,
 				Action: "action",
 			})
@@ -261,12 +261,12 @@ func BenchmarkComplexWorkflowWithoutPool(b *testing.B) {
 			Result:  "complex result",
 			Status:  "success",
 			Message: "completed successfully",
-			ReasoningSteps: []core.ReasoningStep{
+			Steps: []core.AgentStep{
 				{Step: 1, Action: "analyze", Result: "analyzed", Success: true},
 				{Step: 2, Action: "process", Result: "processed", Success: true},
 				{Step: 3, Action: "verify", Result: "verified", Success: true},
 			},
-			ToolCalls: []core.ToolCall{
+			ToolCalls: []core.AgentToolCall{
 				{ToolName: "analyzer", Success: true},
 				{ToolName: "processor", Success: true},
 			},
@@ -307,15 +307,15 @@ func BenchmarkComplexWorkflowWithPool(b *testing.B) {
 		output.Message = "completed successfully"
 
 		// 复用切片底层数组
-		output.ReasoningSteps = append(output.ReasoningSteps,
-			core.ReasoningStep{Step: 1, Action: "analyze", Result: "analyzed", Success: true},
-			core.ReasoningStep{Step: 2, Action: "process", Result: "processed", Success: true},
-			core.ReasoningStep{Step: 3, Action: "verify", Result: "verified", Success: true},
+		output.Steps = append(output.Steps,
+			core.AgentStep{Step: 1, Action: "analyze", Result: "analyzed", Success: true},
+			core.AgentStep{Step: 2, Action: "process", Result: "processed", Success: true},
+			core.AgentStep{Step: 3, Action: "verify", Result: "verified", Success: true},
 		)
 
 		output.ToolCalls = append(output.ToolCalls,
-			core.ToolCall{ToolName: "analyzer", Success: true},
-			core.ToolCall{ToolName: "processor", Success: true},
+			core.AgentToolCall{ToolName: "analyzer", Success: true},
+			core.AgentToolCall{ToolName: "processor", Success: true},
 		)
 
 		output.Metadata["result_type"] = "complex"
@@ -361,15 +361,15 @@ func TestDataPoolsGetPut(t *testing.T) {
 		t.Fatal("GetAgentOutput returned nil")
 	}
 	output.Result = "result"
-	output.ReasoningSteps = append(output.ReasoningSteps, core.ReasoningStep{Step: 1})
+	output.Steps = append(output.Steps, core.AgentStep{Step: 1})
 	pool.PutAgentOutput(output)
 
 	// 验证切片零分配
 	output2 := pool.GetAgentOutput()
-	if len(output2.ReasoningSteps) != 0 {
+	if len(output2.Steps) != 0 {
 		t.Error("ReasoningSteps not properly reset to zero length")
 	}
-	if cap(output2.ReasoningSteps) == 0 {
+	if cap(output2.Steps) == 0 {
 		t.Error("ReasoningSteps capacity should be preserved")
 	}
 }
@@ -437,14 +437,14 @@ func TestCloneAgentOutput(t *testing.T) {
 
 	src := pool.GetAgentOutput()
 	src.Result = "original result"
-	src.ReasoningSteps = append(src.ReasoningSteps, core.ReasoningStep{Step: 1})
+	src.Steps = append(src.Steps, core.AgentStep{Step: 1})
 
 	dst := CloneAgentOutput(src, pool)
 
 	if dst.Result != src.Result {
 		t.Error("CloneAgentOutput failed to copy Result")
 	}
-	if len(dst.ReasoningSteps) != len(src.ReasoningSteps) {
+	if len(dst.Steps) != len(src.Steps) {
 		t.Error("CloneAgentOutput failed to copy ReasoningSteps")
 	}
 
@@ -494,7 +494,7 @@ func TestDataPool_OversizedSliceCapacity(t *testing.T) {
 
 	// 添加超过限制的元素
 	for i := 0; i < 150; i++ { // 超过 maxReasoningStepsCapacity (100)
-		output.ReasoningSteps = append(output.ReasoningSteps, core.ReasoningStep{Step: i})
+		output.Steps = append(output.Steps, core.AgentStep{Step: i})
 	}
 
 	// 归还（应该被拒绝，不放回池中）
@@ -502,7 +502,7 @@ func TestDataPool_OversizedSliceCapacity(t *testing.T) {
 
 	// 再次获取，应该是新对象
 	output2 := pool.GetAgentOutput()
-	if cap(output2.ReasoningSteps) > 20 {
+	if cap(output2.Steps) > 20 {
 		t.Error("Expected new output with normal capacity, got oversized capacity")
 	}
 }
@@ -534,7 +534,7 @@ func TestDataPool_ToolCallSliceCapacity(t *testing.T) {
 
 	// 添加超过限制的元素
 	for i := 0; i < 60; i++ { // 超过 maxToolCallsCapacity (50)
-		s = append(s, core.ToolCall{ToolName: fmt.Sprintf("tool%d", i)})
+		s = append(s, core.AgentToolCall{ToolName: fmt.Sprintf("tool%d", i)})
 	}
 
 	// 归还（应该被拒绝）
@@ -594,10 +594,10 @@ func TestDataPool_SliceZeroAllocation(t *testing.T) {
 
 	// 添加一些元素
 	for i := 0; i < 5; i++ {
-		output.ReasoningSteps = append(output.ReasoningSteps, core.ReasoningStep{Step: i})
+		output.Steps = append(output.Steps, core.AgentStep{Step: i})
 	}
 
-	originalCap := cap(output.ReasoningSteps)
+	originalCap := cap(output.Steps)
 
 	// 归还
 	pool.PutAgentOutput(output)
@@ -606,12 +606,12 @@ func TestDataPool_SliceZeroAllocation(t *testing.T) {
 	output2 := pool.GetAgentOutput()
 
 	// 长度应该是 0
-	if len(output2.ReasoningSteps) != 0 {
-		t.Errorf("Expected length 0, got %d", len(output2.ReasoningSteps))
+	if len(output2.Steps) != 0 {
+		t.Errorf("Expected length 0, got %d", len(output2.Steps))
 	}
 
 	// 容量应该保留
-	if cap(output2.ReasoningSteps) < originalCap {
+	if cap(output2.Steps) < originalCap {
 		t.Error("Capacity not preserved (zero allocation failed)")
 	}
 }
@@ -637,8 +637,8 @@ func TestDataPool_ConcurrentStress(t *testing.T) {
 				} else {
 					output := pool.GetAgentOutput()
 					output.Result = "result"
-					output.ReasoningSteps = append(output.ReasoningSteps,
-						core.ReasoningStep{Step: 1})
+					output.Steps = append(output.Steps,
+						core.AgentStep{Step: 1})
 					pool.PutAgentOutput(output)
 				}
 			}

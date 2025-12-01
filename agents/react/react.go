@@ -146,8 +146,8 @@ func (r *ReActAgent) executeCore(ctx context.Context, input *agentcore.AgentInpu
 
 	// 初始化输出
 	output := &agentcore.AgentOutput{
-		ReasoningSteps: make([]agentcore.ReasoningStep, 0),
-		ToolCalls:      make([]agentcore.ToolCall, 0),
+		Steps: make([]agentcore.AgentStep, 0),
+		ToolCalls:      make([]agentcore.AgentToolCall, 0),
 		Metadata:       make(map[string]interface{}),
 		TokenUsage: &interfaces.TokenUsage{
 			PromptTokens:     0,
@@ -210,7 +210,7 @@ func (r *ReActAgent) executeCore(ctx context.Context, input *agentcore.AgentInpu
 		// 检查是否得到最终答案
 		if parsed.FinalAnswer != "" {
 			finalAnswer = parsed.FinalAnswer
-			output.ReasoningSteps = append(output.ReasoningSteps, agentcore.ReasoningStep{
+			output.Steps = append(output.Steps, agentcore.AgentStep{
 				Step:        step + 1,
 				Action:      "Final Answer",
 				Description: "Reached final conclusion",
@@ -233,7 +233,7 @@ func (r *ReActAgent) executeCore(ctx context.Context, input *agentcore.AgentInpu
 		}
 
 		// 记录思考步骤
-		output.ReasoningSteps = append(output.ReasoningSteps, agentcore.ReasoningStep{
+		output.Steps = append(output.Steps, agentcore.AgentStep{
 			Step:        step + 1,
 			Action:      parsers.FieldThought,
 			Description: thought,
@@ -254,7 +254,7 @@ func (r *ReActAgent) executeCore(ctx context.Context, input *agentcore.AgentInpu
 		}
 
 		// 记录工具调用
-		toolCall := agentcore.ToolCall{
+		toolCall := agentcore.AgentToolCall{
 			ToolName: action,
 			Input:    actionInput,
 			Output:   observation,
@@ -268,7 +268,7 @@ func (r *ReActAgent) executeCore(ctx context.Context, input *agentcore.AgentInpu
 		output.ToolCalls = append(output.ToolCalls, toolCall)
 
 		// 记录行动步骤
-		output.ReasoningSteps = append(output.ReasoningSteps, agentcore.ReasoningStep{
+		output.Steps = append(output.Steps, agentcore.AgentStep{
 			Step:        step + 1,
 			Action:      parsers.FieldAction,
 			Description: fmt.Sprintf("Tool: %s", action),
@@ -304,7 +304,7 @@ func (r *ReActAgent) executeCore(ctx context.Context, input *agentcore.AgentInpu
 
 	output.Timestamp = time.Now()
 	output.Latency = time.Since(startTime)
-	output.Metadata["steps"] = len(output.ReasoningSteps)
+	output.Metadata["steps"] = len(output.Steps)
 	output.Metadata["tool_calls"] = len(output.ToolCalls)
 
 	return output, nil
@@ -364,8 +364,8 @@ func (r *ReActAgent) RunGenerator(ctx context.Context, input *agentcore.AgentInp
 
 		// 初始化累积输出（用于记录完整执行历史）
 		accumulatedOutput := &agentcore.AgentOutput{
-			ReasoningSteps: make([]agentcore.ReasoningStep, 0),
-			ToolCalls:      make([]agentcore.ToolCall, 0),
+			Steps: make([]agentcore.AgentStep, 0),
+			ToolCalls:      make([]agentcore.AgentToolCall, 0),
 			Metadata:       make(map[string]interface{}),
 			TokenUsage: &interfaces.TokenUsage{
 				PromptTokens:     0,
@@ -435,7 +435,7 @@ func (r *ReActAgent) RunGenerator(ctx context.Context, input *agentcore.AgentInp
 			if err != nil {
 				stepOutput := r.createStepOutput(accumulatedOutput, step, "Failed to parse LLM output", startTime)
 				stepOutput.Status = interfaces.StatusFailed
-				accumulatedOutput.ReasoningSteps = append(accumulatedOutput.ReasoningSteps, agentcore.ReasoningStep{
+				accumulatedOutput.Steps = append(accumulatedOutput.Steps, agentcore.AgentStep{
 					Step:    step + 1,
 					Action:  "Parse Error",
 					Success: false,
@@ -450,7 +450,7 @@ func (r *ReActAgent) RunGenerator(ctx context.Context, input *agentcore.AgentInp
 			// 检查是否得到最终答案
 			if parsed.FinalAnswer != "" {
 				finalAnswer = parsed.FinalAnswer
-				accumulatedOutput.ReasoningSteps = append(accumulatedOutput.ReasoningSteps, agentcore.ReasoningStep{
+				accumulatedOutput.Steps = append(accumulatedOutput.Steps, agentcore.AgentStep{
 					Step:        step + 1,
 					Action:      "Final Answer",
 					Description: "Reached final conclusion",
@@ -487,7 +487,7 @@ func (r *ReActAgent) RunGenerator(ctx context.Context, input *agentcore.AgentInp
 			}
 
 			// 记录思考步骤
-			thoughtStep := agentcore.ReasoningStep{
+			thoughtStep := agentcore.AgentStep{
 				Step:        step + 1,
 				Action:      parsers.FieldThought,
 				Description: thought,
@@ -495,7 +495,7 @@ func (r *ReActAgent) RunGenerator(ctx context.Context, input *agentcore.AgentInp
 				Duration:    time.Since(llmStart),
 				Success:     true,
 			}
-			accumulatedOutput.ReasoningSteps = append(accumulatedOutput.ReasoningSteps, thoughtStep)
+			accumulatedOutput.Steps = append(accumulatedOutput.Steps, thoughtStep)
 
 			// Yield 思考步骤
 			thoughtOutput := r.createStepOutput(accumulatedOutput, step, fmt.Sprintf("Thought: %s", thought), startTime)
@@ -510,7 +510,7 @@ func (r *ReActAgent) RunGenerator(ctx context.Context, input *agentcore.AgentInp
 			observation, toolErr := r.executeTool(ctx, action, actionInput)
 
 			// 记录工具调用
-			toolCall := agentcore.ToolCall{
+			toolCall := agentcore.AgentToolCall{
 				ToolName: action,
 				Input:    actionInput,
 				Output:   observation,
@@ -524,7 +524,7 @@ func (r *ReActAgent) RunGenerator(ctx context.Context, input *agentcore.AgentInp
 			accumulatedOutput.ToolCalls = append(accumulatedOutput.ToolCalls, toolCall)
 
 			// 记录行动步骤
-			actionStep := agentcore.ReasoningStep{
+			actionStep := agentcore.AgentStep{
 				Step:        step + 1,
 				Action:      parsers.FieldAction,
 				Description: fmt.Sprintf("Tool: %s", action),
@@ -533,7 +533,7 @@ func (r *ReActAgent) RunGenerator(ctx context.Context, input *agentcore.AgentInp
 				Success:     toolErr == nil,
 				Error:       toolCall.Error,
 			}
-			accumulatedOutput.ReasoningSteps = append(accumulatedOutput.ReasoningSteps, actionStep)
+			accumulatedOutput.Steps = append(accumulatedOutput.Steps, actionStep)
 
 			// Yield 工具执行结果
 			actionOutput := r.createStepOutput(accumulatedOutput, step, fmt.Sprintf("Action: %s", action), startTime)
@@ -573,8 +573,8 @@ func (r *ReActAgent) RunGenerator(ctx context.Context, input *agentcore.AgentInp
 func (r *ReActAgent) createStepOutput(accumulated *agentcore.AgentOutput, currentStep int, message string, startTime time.Time) *agentcore.AgentOutput {
 	// 创建当前步骤的输出快照
 	stepOutput := &agentcore.AgentOutput{
-		ReasoningSteps: make([]agentcore.ReasoningStep, len(accumulated.ReasoningSteps)),
-		ToolCalls:      make([]agentcore.ToolCall, len(accumulated.ToolCalls)),
+		Steps: make([]agentcore.AgentStep, len(accumulated.Steps)),
+		ToolCalls:      make([]agentcore.AgentToolCall, len(accumulated.ToolCalls)),
 		Metadata:       make(map[string]interface{}),
 		TokenUsage: &interfaces.TokenUsage{
 			PromptTokens:     accumulated.TokenUsage.PromptTokens,
@@ -588,7 +588,7 @@ func (r *ReActAgent) createStepOutput(accumulated *agentcore.AgentOutput, curren
 	}
 
 	// 复制推理步骤和工具调用
-	copy(stepOutput.ReasoningSteps, accumulated.ReasoningSteps)
+	copy(stepOutput.Steps, accumulated.Steps)
 	copy(stepOutput.ToolCalls, accumulated.ToolCalls)
 
 	// 复制元数据
@@ -599,7 +599,7 @@ func (r *ReActAgent) createStepOutput(accumulated *agentcore.AgentOutput, curren
 	// 添加当前步骤信息
 	stepOutput.Metadata["current_step"] = currentStep + 1
 	stepOutput.Metadata["max_steps"] = r.maxSteps
-	stepOutput.Metadata["total_reasoning_steps"] = len(stepOutput.ReasoningSteps)
+	stepOutput.Metadata["total_reasoning_steps"] = len(stepOutput.Steps)
 	stepOutput.Metadata["total_tool_calls"] = len(stepOutput.ToolCalls)
 
 	return stepOutput
@@ -734,7 +734,7 @@ func (r *ReActAgent) handleErrorFast(output *agentcore.AgentOutput, step int, me
 	output.Message = message
 	output.Timestamp = time.Now()
 	output.Latency = time.Since(startTime)
-	output.ReasoningSteps = append(output.ReasoningSteps, agentcore.ReasoningStep{
+	output.Steps = append(output.Steps, agentcore.AgentStep{
 		Step:    step + 1,
 		Action:  "Error",
 		Success: false,

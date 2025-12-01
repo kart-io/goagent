@@ -181,7 +181,7 @@ func TestMiddlewareChain_Use_FluentInterface(t *testing.T) {
 		Use(NewBaseMiddleware("mw2")).
 		Use(NewBaseMiddleware("mw3"))
 
-	assert.Equal(t, 3, len(chain.middlewares))
+	assert.Equal(t, 3, chain.Size())
 }
 
 func TestMiddlewareChain_ConcurrentUse(t *testing.T) {
@@ -203,7 +203,7 @@ func TestMiddlewareChain_ConcurrentUse(t *testing.T) {
 
 	wg.Wait()
 
-	assert.Equal(t, 10, len(chain.middlewares))
+	assert.Equal(t, 10, chain.Size())
 }
 
 // ===== Logging Middleware Edge Cases =====
@@ -350,8 +350,9 @@ func TestCacheMiddleware_GetCacheKeyFromResponse_NoOriginalInput(t *testing.T) {
 
 	mw.OnAfter(context.Background(), resp)
 
-	// Cache key will be empty, but response is still cached with empty key
-	assert.Equal(t, 1, mw.Size())
+	// 当 metadata 中没有 original_input 时，getCacheKeyFromResponse 返回空字符串
+	// 空键不会被缓存（这是正确的行为，避免缓存无法检索的条目）
+	assert.Equal(t, 0, mw.Size())
 }
 
 func TestCacheMiddleware_OnBefore_NilMetadata(t *testing.T) {

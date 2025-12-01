@@ -72,9 +72,9 @@ type AgentOutput struct {
 	Status  string      `json:"status"`  // 状态: "success", "failed", "partial"
 	Message string      `json:"message"` // 结果消息
 
-	// 推理过程
-	ReasoningSteps []ReasoningStep `json:"reasoning_steps"` // 推理步骤
-	ToolCalls      []ToolCall      `json:"tool_calls"`      // 工具调用记录
+	// 执行过程
+	Steps     []AgentStep     `json:"steps"`      // 执行步骤
+	ToolCalls []AgentToolCall `json:"tool_calls"` // 工具调用记录
 
 	// Token 使用统计
 	TokenUsage *interfaces.TokenUsage `json:"token_usage,omitempty"` // LLM Token 使用统计
@@ -107,8 +107,8 @@ type AgentOptions struct {
 	Timeout time.Duration `json:"timeout,omitempty"` // 超时时间
 }
 
-// ReasoningStep 推理步骤
-type ReasoningStep struct {
+// AgentStep Agent执行步骤（简化版本）
+type AgentStep struct {
 	Step        int           `json:"step"`        // 步骤编号
 	Action      string        `json:"action"`      // 执行的操作
 	Description string        `json:"description"` // 操作描述
@@ -118,8 +118,8 @@ type ReasoningStep struct {
 	Error       string        `json:"error"`       // 错误信息
 }
 
-// ToolCall 工具调用记录
-type ToolCall struct {
+// AgentToolCall Agent工具调用记录（简化版本）
+type AgentToolCall struct {
 	ToolName string                 `json:"tool_name"` // 工具名称
 	Input    map[string]interface{} `json:"input"`     // 输入参数
 	Output   interface{}            `json:"output"`    // 输出结果

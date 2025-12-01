@@ -1,6 +1,7 @@
 package state
 
 import (
+	"encoding/json"
 	"fmt"
 	"sync"
 )
@@ -108,6 +109,7 @@ func (s *AgentState) Snapshot() map[string]interface{} {
 }
 
 // Clone creates a deep copy of the state.
+// 使用 JSON 序列化实现真正的深拷贝，确保嵌套的 map 和 slice 也被复制。
 func (s *AgentState) Clone() State {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -115,10 +117,65 @@ func (s *AgentState) Clone() State {
 	cloned := &AgentState{
 		state: make(map[string]interface{}, len(s.state)),
 	}
+
+	// 使用 JSON 序列化实现深拷贝
 	for k, v := range s.state {
-		cloned.state[k] = v
+		cloned.state[k] = deepCopyValue(v)
 	}
 	return cloned
+}
+
+// deepCopyValue 对单个值进行深拷贝
+func deepCopyValue(v interface{}) interface{} {
+	if v == nil {
+		return nil
+	}
+
+	// 对于复杂类型，使用 JSON 序列化/反序列化实现深拷贝
+	switch val := v.(type) {
+	case map[string]interface{}:
+		// 深拷贝 map
+		copied := make(map[string]interface{}, len(val))
+		for k, v := range val {
+			copied[k] = deepCopyValue(v)
+		}
+		return copied
+	case []interface{}:
+		// 深拷贝 slice
+		copied := make([]interface{}, len(val))
+		for i, v := range val {
+			copied[i] = deepCopyValue(v)
+		}
+		return copied
+	case []string:
+		copied := make([]string, len(val))
+		copy(copied, val)
+		return copied
+	case []int:
+		copied := make([]int, len(val))
+		copy(copied, val)
+		return copied
+	case []float64:
+		copied := make([]float64, len(val))
+		copy(copied, val)
+		return copied
+	case string, int, int32, int64, float32, float64, bool:
+		// 基本类型直接返回（值类型，自动复制）
+		return v
+	default:
+		// 对于其他复杂类型，尝试使用 JSON 深拷贝
+		data, err := json.Marshal(v)
+		if err != nil {
+			// JSON 序列化失败，返回原值（浅拷贝）
+			return v
+		}
+		var copied interface{}
+		if err := json.Unmarshal(data, &copied); err != nil {
+			// JSON 反序列化失败，返回原值
+			return v
+		}
+		return copied
+	}
 }
 
 // Delete removes a value from state by key.
