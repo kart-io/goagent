@@ -233,9 +233,9 @@ func TestInstrumentedAgent_Invoke_Success(t *testing.T) {
 	mockLogger.On("Info", mock.Anything, mock.Anything).Return()
 
 	output := &agentcore.AgentOutput{
-		Status:         "completed",
-		ToolCalls:      []agentcore.AgentToolCall{},
-		Steps: []agentcore.AgentStep{},
+		Status:    "completed",
+		ToolCalls: []agentcore.AgentToolCall{},
+		Steps:     []agentcore.AgentStep{},
 	}
 	mockAgent.On("Invoke", mock.Anything, mock.Anything).Return(output, nil)
 
@@ -266,9 +266,9 @@ func TestInstrumentedAgent_Invoke_WithError(t *testing.T) {
 
 	testErr := errors.New("agent execution failed")
 	output := &agentcore.AgentOutput{
-		Status:         "failed",
-		ToolCalls:      []agentcore.AgentToolCall{},
-		Steps: []agentcore.AgentStep{},
+		Status:    "failed",
+		ToolCalls: []agentcore.AgentToolCall{},
+		Steps:     []agentcore.AgentStep{},
 	}
 	mockAgent.On("Invoke", mock.Anything, mock.Anything).Return(output, testErr)
 
@@ -383,9 +383,9 @@ func TestInstrumentedAgent_Invoke_ConcurrentExecutions(t *testing.T) {
 	mockLogger.On("Info", mock.Anything, mock.Anything).Return()
 
 	output := &agentcore.AgentOutput{
-		Status:         "completed",
-		ToolCalls:      []agentcore.AgentToolCall{},
-		Steps: []agentcore.AgentStep{},
+		Status:    "completed",
+		ToolCalls: []agentcore.AgentToolCall{},
+		Steps:     []agentcore.AgentStep{},
 	}
 	mockAgent.On("Invoke", mock.Anything, mock.Anything).Return(output, nil)
 
@@ -422,9 +422,9 @@ func TestInstrumentedAgent_Invoke_WithDifferentDurations(t *testing.T) {
 			mockLogger.On("Info", mock.Anything, mock.Anything).Return()
 
 			output := &agentcore.AgentOutput{
-				Status:         "completed",
-				ToolCalls:      []agentcore.AgentToolCall{},
-				Steps: []agentcore.AgentStep{},
+				Status:    "completed",
+				ToolCalls: []agentcore.AgentToolCall{},
+				Steps:     []agentcore.AgentStep{},
 			}
 
 			// Simulate execution time
@@ -471,9 +471,9 @@ func TestInstrumentedAgent_Invoke_WithManyToolCalls(t *testing.T) {
 	}
 
 	output := &agentcore.AgentOutput{
-		Status:         "completed",
-		ToolCalls:      toolCalls,
-		Steps: []agentcore.AgentStep{},
+		Status:    "completed",
+		ToolCalls: toolCalls,
+		Steps:     []agentcore.AgentStep{},
 	}
 	mockAgent.On("Invoke", mock.Anything, mock.Anything).Return(output, nil)
 
@@ -553,9 +553,9 @@ func TestInstrumentedAgent_WithOpenTelemetry(t *testing.T) {
 	mockLogger.On("Info", mock.Anything, mock.Anything).Return()
 
 	output := &agentcore.AgentOutput{
-		Status:         "completed",
-		ToolCalls:      []agentcore.AgentToolCall{},
-		Steps: []agentcore.AgentStep{},
+		Status:    "completed",
+		ToolCalls: []agentcore.AgentToolCall{},
+		Steps:     []agentcore.AgentStep{},
 	}
 	mockAgent.On("Invoke", mock.Anything, mock.Anything).Return(output, nil)
 
@@ -583,9 +583,9 @@ func TestInstrumentedAgent_ContextPropagation(t *testing.T) {
 	mockLogger.On("Info", mock.Anything, mock.Anything).Return()
 
 	output := &agentcore.AgentOutput{
-		Status:         "completed",
-		ToolCalls:      []agentcore.AgentToolCall{},
-		Steps: []agentcore.AgentStep{},
+		Status:    "completed",
+		ToolCalls: []agentcore.AgentToolCall{},
+		Steps:     []agentcore.AgentStep{},
 	}
 
 	capturedCtx := context.Background()
@@ -616,9 +616,9 @@ func BenchmarkInstrumentedAgent_Invoke(b *testing.B) {
 	mockLogger.On("Info", mock.Anything, mock.Anything).Return()
 
 	output := &agentcore.AgentOutput{
-		Status:         "completed",
-		ToolCalls:      []agentcore.AgentToolCall{},
-		Steps: []agentcore.AgentStep{},
+		Status:    "completed",
+		ToolCalls: []agentcore.AgentToolCall{},
+		Steps:     []agentcore.AgentStep{},
 	}
 	mockAgent.On("Invoke", mock.Anything, mock.Anything).Return(output, nil)
 
@@ -649,25 +649,25 @@ func TestInstrumentedAgent_Stream_Success(t *testing.T) {
 		defer close(streamChan)
 		streamChan <- agentcore.StreamChunk[*agentcore.AgentOutput]{
 			Data: &agentcore.AgentOutput{
-				Status:         "processing",
-				ToolCalls:      []agentcore.AgentToolCall{},
-				Steps: []agentcore.AgentStep{},
+				Status:    "processing",
+				ToolCalls: []agentcore.AgentToolCall{},
+				Steps:     []agentcore.AgentStep{},
 			},
 			Done: false,
 		}
 		streamChan <- agentcore.StreamChunk[*agentcore.AgentOutput]{
 			Data: &agentcore.AgentOutput{
-				Status:         "processing",
-				ToolCalls:      []agentcore.AgentToolCall{},
-				Steps: []agentcore.AgentStep{},
+				Status:    "processing",
+				ToolCalls: []agentcore.AgentToolCall{},
+				Steps:     []agentcore.AgentStep{},
 			},
 			Done: false,
 		}
 		streamChan <- agentcore.StreamChunk[*agentcore.AgentOutput]{
 			Data: &agentcore.AgentOutput{
-				Status:         "completed",
-				ToolCalls:      []agentcore.AgentToolCall{},
-				Steps: []agentcore.AgentStep{},
+				Status:    "completed",
+				ToolCalls: []agentcore.AgentToolCall{},
+				Steps:     []agentcore.AgentStep{},
 			},
 			Done: true,
 		}
@@ -986,9 +986,9 @@ func TestInstrumentedAgent_Batch_LargeBatch(t *testing.T) {
 			SessionID: "session",
 		}
 		outputs[i] = &agentcore.AgentOutput{
-			Status:         "completed",
-			ToolCalls:      []agentcore.AgentToolCall{},
-			Steps: []agentcore.AgentStep{},
+			Status:    "completed",
+			ToolCalls: []agentcore.AgentToolCall{},
+			Steps:     []agentcore.AgentStep{},
 		}
 	}
 

@@ -235,9 +235,9 @@ func (b *BaseReasoningAgent) GetToolByName(name string) (interfaces.Tool, bool) 
 // initOutput 初始化输出对象
 func (b *BaseReasoningAgent) initOutput() *agentcore.AgentOutput {
 	return &agentcore.AgentOutput{
-		Steps: make([]agentcore.AgentStep, 0),
-		ToolCalls:      make([]agentcore.AgentToolCall, 0),
-		Metadata:       make(map[string]interface{}),
+		Steps:     make([]agentcore.AgentStep, 0),
+		ToolCalls: make([]agentcore.AgentToolCall, 0),
+		Metadata:  make(map[string]interface{}),
 		TokenUsage: &interfaces.TokenUsage{
 			PromptTokens:     0,
 			CompletionTokens: 0,
@@ -249,9 +249,9 @@ func (b *BaseReasoningAgent) initOutput() *agentcore.AgentOutput {
 // createStepOutput 创建步骤输出（用于Generator）
 func (b *BaseReasoningAgent) createStepOutput(accumulated *agentcore.AgentOutput, message string, startTime time.Time) *agentcore.AgentOutput {
 	stepOutput := &agentcore.AgentOutput{
-		Steps: make([]agentcore.AgentStep, len(accumulated.Steps)),
-		ToolCalls:      make([]agentcore.AgentToolCall, len(accumulated.ToolCalls)),
-		Metadata:       make(map[string]interface{}),
+		Steps:     make([]agentcore.AgentStep, len(accumulated.Steps)),
+		ToolCalls: make([]agentcore.AgentToolCall, len(accumulated.ToolCalls)),
+		Metadata:  make(map[string]interface{}),
 		TokenUsage: &interfaces.TokenUsage{
 			PromptTokens:     accumulated.TokenUsage.PromptTokens,
 			CompletionTokens: accumulated.TokenUsage.CompletionTokens,

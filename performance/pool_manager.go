@@ -229,9 +229,9 @@ func (a *PoolAgent) initPools() {
 		New: func() interface{} {
 			a.recordNew(PoolTypeAgentOutput)
 			return &core.AgentOutput{
-				Steps: make([]core.AgentStep, 0, 4),
-				ToolCalls:      make([]core.AgentToolCall, 0, 4),
-				Metadata:       make(map[string]interface{}),
+				Steps:     make([]core.AgentStep, 0, 4),
+				ToolCalls: make([]core.AgentToolCall, 0, 4),
+				Metadata:  make(map[string]interface{}),
 			}
 		},
 	}
@@ -485,9 +485,9 @@ func (a *PoolAgent) GetAgentOutput() *core.AgentOutput {
 	if !a.IsPoolEnabled(PoolTypeAgentOutput) {
 		a.recordNew(PoolTypeAgentOutput)
 		return &core.AgentOutput{
-			Steps: make([]core.AgentStep, 0, 4),
-			ToolCalls:      make([]core.AgentToolCall, 0, 4),
-			Metadata:       make(map[string]interface{}),
+			Steps:     make([]core.AgentStep, 0, 4),
+			ToolCalls: make([]core.AgentToolCall, 0, 4),
+			Metadata:  make(map[string]interface{}),
 		}
 	}
 

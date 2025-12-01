@@ -266,14 +266,14 @@ func defaultKeyGenerator(input *core.AgentInput) string {
 func copyOutput(output *core.AgentOutput) *core.AgentOutput {
 	// 创建浅拷贝
 	copied := &core.AgentOutput{
-		Result:         output.Result,
-		Status:         output.Status,
-		Message:        output.Message,
-		Steps: make([]core.AgentStep, len(output.Steps)),
-		ToolCalls:      make([]core.AgentToolCall, len(output.ToolCalls)),
-		Latency:        output.Latency,
-		Timestamp:      output.Timestamp,
-		Metadata:       make(map[string]interface{}),
+		Result:    output.Result,
+		Status:    output.Status,
+		Message:   output.Message,
+		Steps:     make([]core.AgentStep, len(output.Steps)),
+		ToolCalls: make([]core.AgentToolCall, len(output.ToolCalls)),
+		Latency:   output.Latency,
+		Timestamp: output.Timestamp,
+		Metadata:  make(map[string]interface{}),
 	}
 
 	// 拷贝 Steps
