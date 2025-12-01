@@ -252,7 +252,7 @@ func (c *MiddlewareChain) Execute(ctx context.Context, request *MiddlewareReques
 |------|--------|------|------|
 | P0-1 TODO 注释处理 | P0 | ✅ | 已无 TODO 注释 |
 | P1-1 验证器测试补充 | P1 | ✅ | 新增 4 个测试场景 |
-| P1-2 错误处理统一 | P1 | ⏭️ 跳过 | 当前功能正常，属于可选优化 |
+| P1-2 错误处理统一 | P1 | ✅ | 已完成 validator.go 内部方法错误处理统一 |
 
 #### P1-1 新增测试用例
 
@@ -262,6 +262,38 @@ func (c *MiddlewareChain) Execute(ctx context.Context, request *MiddlewareReques
 | `TestInputValidator_LargeArrayPerformance` | `tools/validator_test.go` | 10,000 元素数组性能测试（<100ms） |
 | `TestInputValidator_Concurrent` | `tools/validator_test.go` | 100 goroutine 并发验证 |
 | `TestInputValidator_ErrorRecovery` | `tools/validator_test.go` | 错误恢复能力测试 |
+
+#### P1-2 错误处理统一 - 已完成
+
+统一 `tools/validator.go` 中所有内部方法的错误处理，使用项目标准的 `agentErrors` 包：
+
+| 方法 | 原实现 | 新实现 |
+|------|--------|--------|
+| `parseSchema` | `fmt.Errorf` | `agentErrors.Wrap().WithComponent().WithOperation()` |
+| `validateRequired` | `fmt.Errorf` | `agentErrors.New().WithComponent().WithOperation().WithContext()` |
+| `validateType` | `fmt.Errorf` | `agentErrors.New().WithComponent().WithOperation().WithContext()` |
+| `validateNoExtraArgs` | `fmt.Errorf` | `agentErrors.New().WithComponent().WithOperation().WithContext()` |
+
+**改进点**：
+- 统一使用结构化错误类型 `AgentError`
+- 错误信息包含组件名 (`input_validator`)、操作名、上下文信息
+- 错误可追溯性提升，便于调试和日志分析
+- 与项目其他模块错误处理模式保持一致
+
+---
+
+### P2 可选优化任务评估
+
+| 任务 | 优先级 | 状态 | 评估结论 |
+|------|--------|------|----------|
+| P2-1 提取配置合并逻辑 | P2 | ⏭️ 跳过 | 配置类型各异，反射方案收益低于代价，当前实现类型安全且清晰 |
+| P2-2 验证器粒度控制 | P2 | ⏭️ 跳过 | 功能扩展非必要，当前 3 个开关已满足需求，避免过度设计 |
+| P2-3 性能监测 | P2 | ⏭️ 跳过 | 已有性能测试覆盖，额外监测 API 属于早期优化 |
+
+**评估依据**：
+- CLAUDE.md "避免过度架构或早期优化" 原则
+- CLAUDE.md "选择表达清晰的实现，拒绝炫技式写法" 原则
+- 当前功能完整，测试全部通过
 
 ---
 

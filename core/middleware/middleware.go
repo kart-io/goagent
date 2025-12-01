@@ -399,9 +399,6 @@ type TimingMiddleware struct {
 	counter int64
 }
 
-// timingContextKey 用于在 context 中存储计时开始时间
-type timingContextKey struct{}
-
 // NewTimingMiddleware creates a timing middleware
 func NewTimingMiddleware() *TimingMiddleware {
 	return &TimingMiddleware{

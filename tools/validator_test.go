@@ -62,13 +62,13 @@ func TestInputValidator_ValidateRequired(t *testing.T) {
 			name:    "required missing",
 			args:    map[string]interface{}{"age": 30},
 			wantErr: true,
-			errMsg:  "required parameter 'name' is missing",
+			errMsg:  "required parameter is missing",
 		},
 		{
 			name:    "empty args",
 			args:    map[string]interface{}{},
 			wantErr: true,
-			errMsg:  "required parameter 'name' is missing",
+			errMsg:  "required parameter is missing",
 		},
 	}
 
@@ -215,7 +215,7 @@ func TestInputValidator_StrictMode(t *testing.T) {
 			strictMode: true,
 			args:       map[string]interface{}{"name": "John", "extra": "data"},
 			wantErr:    true,
-			errMsg:     "unexpected parameter 'extra'",
+			errMsg:     "unexpected parameter not defined in schema",
 		},
 		{
 			name:       "strict allows defined args",
@@ -353,25 +353,25 @@ func TestInputValidator_NumericConstraints(t *testing.T) {
 			name:    "age below minimum",
 			args:    map[string]interface{}{"age": -1},
 			wantErr: true,
-			errMsg:  "must be >= 0",
+			errMsg:  "must be >= minimum",
 		},
 		{
 			name:    "age above maximum",
 			args:    map[string]interface{}{"age": 200},
 			wantErr: true,
-			errMsg:  "must be <= 150",
+			errMsg:  "must be <= maximum",
 		},
 		{
 			name:    "score below minimum",
 			args:    map[string]interface{}{"score": -0.1},
 			wantErr: true,
-			errMsg:  "must be >= 0",
+			errMsg:  "must be >= minimum",
 		},
 		{
 			name:    "score above maximum",
 			args:    map[string]interface{}{"score": 100.1},
 			wantErr: true,
-			errMsg:  "must be <= 100",
+			errMsg:  "must be <= maximum",
 		},
 	}
 
@@ -427,13 +427,13 @@ func TestInputValidator_StringConstraints(t *testing.T) {
 			name:    "too short",
 			args:    map[string]interface{}{"username": "jo"},
 			wantErr: true,
-			errMsg:  "length must be at least 3",
+			errMsg:  "length must be at least minimum",
 		},
 		{
 			name:    "too long",
 			args:    map[string]interface{}{"username": "this_username_is_way_too_long"},
 			wantErr: true,
-			errMsg:  "length must be at most 20",
+			errMsg:  "length must be at most maximum",
 		},
 	}
 
