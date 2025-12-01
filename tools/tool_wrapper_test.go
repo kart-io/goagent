@@ -16,7 +16,7 @@ import (
 // mockToolForWrapper 是用于测试包装器的模拟工具
 type mockToolForWrapper struct {
 	name        string
-	callCount   int
+	callCount   atomic.Int32 // 使用原子操作保证线程安全
 	shouldError bool
 }
 
@@ -33,7 +33,7 @@ func (m *mockToolForWrapper) ArgsSchema() string {
 }
 
 func (m *mockToolForWrapper) Invoke(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
-	m.callCount++
+	m.callCount.Add(1)
 
 	if m.shouldError {
 		return &interfaces.ToolOutput{
@@ -69,7 +69,7 @@ func TestWithMiddleware_NoMiddleware(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "processed: test", output.Result)
-	assert.Equal(t, 1, tool.callCount)
+	assert.Equal(t, int32(1), tool.callCount.Load())
 }
 
 // TestWithMiddleware_SingleFunctionalMiddleware 测试单个函数式中间件
@@ -89,14 +89,14 @@ func TestWithMiddleware_SingleFunctionalMiddleware(t *testing.T) {
 	output1, err := wrapped.Invoke(ctx, input)
 	require.NoError(t, err)
 	assert.Equal(t, "processed: test", output1.Result)
-	assert.Equal(t, 1, tool.callCount)
+	assert.Equal(t, int32(1), tool.callCount.Load())
 	assert.False(t, output1.Metadata["cache_hit"].(bool))
 
 	// 第二次调用（缓存命中）
 	output2, err := wrapped.Invoke(ctx, input)
 	require.NoError(t, err)
 	assert.Equal(t, "processed: test", output2.Result)
-	assert.Equal(t, 1, tool.callCount, "Cache hit should not call tool again")
+	assert.Equal(t, int32(1), tool.callCount.Load(), "Cache hit should not call tool again")
 	assert.True(t, output2.Metadata["cache_hit"].(bool))
 }
 
@@ -125,7 +125,7 @@ func TestWithMiddleware_MultipleFunctionalMiddleware(t *testing.T) {
 	output1, err := wrapped.Invoke(ctx, input)
 	require.NoError(t, err)
 	assert.Equal(t, "processed: test", output1.Result)
-	assert.Equal(t, 1, tool.callCount)
+	assert.Equal(t, int32(1), tool.callCount.Load())
 
 	// 验证中间件元数据
 	assert.Contains(t, output1.Metadata, "cache_stored") // 来自 caching
@@ -135,7 +135,7 @@ func TestWithMiddleware_MultipleFunctionalMiddleware(t *testing.T) {
 	output2, err := wrapped.Invoke(ctx, input)
 	require.NoError(t, err)
 	assert.Equal(t, "processed: test", output2.Result)
-	assert.Equal(t, 1, tool.callCount, "Cache hit should skip tool and rate limit")
+	assert.Equal(t, int32(1), tool.callCount.Load(), "Cache hit should skip tool and rate limit")
 	assert.True(t, output2.Metadata["cache_hit"].(bool))
 }
 
@@ -157,12 +157,12 @@ func TestWithMiddleware_InterfaceMiddleware(t *testing.T) {
 	// 第一次调用
 	_, err := wrapped.Invoke(ctx, input)
 	require.NoError(t, err)
-	assert.Equal(t, 1, tool.callCount)
+	assert.Equal(t, int32(1), tool.callCount.Load())
 
 	// 第二次调用（缓存命中）
 	output2, err := wrapped.Invoke(ctx, input)
 	require.NoError(t, err)
-	assert.Equal(t, 1, tool.callCount)
+	assert.Equal(t, int32(1), tool.callCount.Load())
 	assert.True(t, output2.Metadata["cache_hit"].(bool))
 }
 
@@ -214,7 +214,7 @@ func TestWithMiddleware_CachingEffectiveness(t *testing.T) {
 	}
 
 	// 工具应该只被调用一次（其余9次命中缓存）
-	assert.Equal(t, 1, tool.callCount, "interfaces.Tool should only be called once with caching")
+	assert.Equal(t, int32(1), tool.callCount.Load(), "interfaces.Tool should only be called once with caching")
 }
 
 // TestWithMiddleware_RateLimitEffectiveness 测试限流中间件的有效性
@@ -291,8 +291,8 @@ func TestWithMiddleware_Concurrent(t *testing.T) {
 	}
 
 	// 由于缓存，工具调用次数应该远小于并发数
-	t.Logf("interfaces.Tool call count: %d, Success count: %d", tool.callCount, successCount.Load())
-	assert.LessOrEqual(t, tool.callCount, 10, "Caching should reduce tool calls")
+	t.Logf("interfaces.Tool call count: %d, Success count: %d", tool.callCount.Load(), successCount.Load())
+	assert.LessOrEqual(t, tool.callCount.Load(), int32(10), "Caching should reduce tool calls")
 	assert.Greater(t, int(successCount.Load()), 0, "Some requests should succeed")
 }
 
@@ -317,11 +317,11 @@ func TestWithMiddleware_MixedTypes(t *testing.T) {
 	// 第一次调用
 	_, err := wrapped.Invoke(ctx, input)
 	require.NoError(t, err)
-	assert.Equal(t, 1, tool.callCount)
+	assert.Equal(t, int32(1), tool.callCount.Load())
 
 	// 第二次调用（缓存命中，不触发限流）
 	output2, err := wrapped.Invoke(ctx, input)
 	require.NoError(t, err)
-	assert.Equal(t, 1, tool.callCount)
+	assert.Equal(t, int32(1), tool.callCount.Load())
 	assert.True(t, output2.Metadata["cache_hit"].(bool))
 }
