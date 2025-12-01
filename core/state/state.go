@@ -1,9 +1,10 @@
 package state
 
 import (
-	"encoding/json"
 	"fmt"
 	"sync"
+
+	"github.com/kart-io/goagent/utils/json"
 )
 
 // State defines the interface for Agent state management.

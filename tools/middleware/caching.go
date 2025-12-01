@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"sync/atomic"
 	"time"
@@ -13,6 +12,7 @@ import (
 
 	"github.com/kart-io/goagent/cache"
 	"github.com/kart-io/goagent/interfaces"
+	"github.com/kart-io/goagent/utils/json"
 )
 
 // CachingConfig 缓存中间件配置

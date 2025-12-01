@@ -2,7 +2,6 @@ package providers
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -12,6 +11,7 @@ import (
 
 	agentllm "github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/constants"
+	"github.com/kart-io/goagent/utils/json"
 )
 
 // TestOllama_NewOllamaWithOptions_Success 测试成功创建 Ollama client

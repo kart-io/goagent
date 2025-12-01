@@ -1,11 +1,11 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"sync"
 
 	"github.com/kart-io/goagent/multiagent"
+	"github.com/kart-io/goagent/utils/json"
 	"github.com/nats-io/nats.go"
 )
 
