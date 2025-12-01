@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
@@ -10,6 +9,7 @@ import (
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/mcp/core"
+	"github.com/kart-io/goagent/utils/json"
 )
 
 // InputValidator 提供工具输入验证功能
@@ -153,7 +153,9 @@ func (v *InputValidator) parseSchema(schemaStr string) (*schema, error) {
 
 	var s schema
 	if err := json.Unmarshal([]byte(schemaStr), &s); err != nil {
-		return nil, fmt.Errorf("failed to parse schema: %w", err)
+		return nil, agentErrors.Wrap(err, agentErrors.CodeInvalidInput, "failed to parse schema").
+			WithComponent("input_validator").
+			WithOperation("parse_schema")
 	}
 
 	if s.Properties == nil {
@@ -171,7 +173,10 @@ func (v *InputValidator) parseSchema(schemaStr string) (*schema, error) {
 func (v *InputValidator) validateRequired(s *schema, args map[string]interface{}) error {
 	for _, required := range s.Required {
 		if _, exists := args[required]; !exists {
-			return fmt.Errorf("required parameter '%s' is missing", required)
+			return agentErrors.New(agentErrors.CodeToolValidation, "required parameter is missing").
+				WithComponent("input_validator").
+				WithOperation("validate_required").
+				WithContext("parameter", required)
 		}
 	}
 	return nil
@@ -202,51 +207,87 @@ func (v *InputValidator) validateType(key string, value interface{}, prop proper
 	switch prop.Type {
 	case "string":
 		if _, ok := value.(string); !ok {
-			return fmt.Errorf("parameter '%s' must be string, got %T", key, value)
+			return agentErrors.New(agentErrors.CodeToolValidation, "parameter must be string").
+				WithComponent("input_validator").
+				WithOperation("validate_type").
+				WithContext("parameter", key).
+				WithContext("got_type", fmt.Sprintf("%T", value))
 		}
 		// 验证字符串长度
 		if s, ok := value.(string); ok {
 			if prop.MinLength != nil && len(s) < *prop.MinLength {
-				return fmt.Errorf("parameter '%s' length must be at least %d", key, *prop.MinLength)
+				return agentErrors.New(agentErrors.CodeToolValidation, "parameter length must be at least minimum").
+					WithComponent("input_validator").
+					WithOperation("validate_type").
+					WithContext("parameter", key).
+					WithContext("min_length", *prop.MinLength).
+					WithContext("got_length", len(s))
 			}
 			if prop.MaxLength != nil && len(s) > *prop.MaxLength {
-				return fmt.Errorf("parameter '%s' length must be at most %d", key, *prop.MaxLength)
+				return agentErrors.New(agentErrors.CodeToolValidation, "parameter length must be at most maximum").
+					WithComponent("input_validator").
+					WithOperation("validate_type").
+					WithContext("parameter", key).
+					WithContext("max_length", *prop.MaxLength).
+					WithContext("got_length", len(s))
 			}
 		}
 
 	case "number", "integer":
 		var num float64
-		switch v := value.(type) {
+		switch val := value.(type) {
 		case float64:
-			num = v
+			num = val
 		case float32:
-			num = float64(v)
+			num = float64(val)
 		case int:
-			num = float64(v)
+			num = float64(val)
 		case int64:
-			num = float64(v)
+			num = float64(val)
 		case int32:
-			num = float64(v)
+			num = float64(val)
 		default:
-			return fmt.Errorf("parameter '%s' must be number, got %T", key, value)
+			return agentErrors.New(agentErrors.CodeToolValidation, "parameter must be number").
+				WithComponent("input_validator").
+				WithOperation("validate_type").
+				WithContext("parameter", key).
+				WithContext("got_type", fmt.Sprintf("%T", value))
 		}
 
 		// 验证数值范围
 		if prop.Minimum != nil && num < *prop.Minimum {
-			return fmt.Errorf("parameter '%s' must be >= %v", key, *prop.Minimum)
+			return agentErrors.New(agentErrors.CodeToolValidation, "parameter must be >= minimum").
+				WithComponent("input_validator").
+				WithOperation("validate_type").
+				WithContext("parameter", key).
+				WithContext("minimum", *prop.Minimum).
+				WithContext("got_value", num)
 		}
 		if prop.Maximum != nil && num > *prop.Maximum {
-			return fmt.Errorf("parameter '%s' must be <= %v", key, *prop.Maximum)
+			return agentErrors.New(agentErrors.CodeToolValidation, "parameter must be <= maximum").
+				WithComponent("input_validator").
+				WithOperation("validate_type").
+				WithContext("parameter", key).
+				WithContext("maximum", *prop.Maximum).
+				WithContext("got_value", num)
 		}
 
 		// 对于 integer 类型，验证是否为整数
 		if prop.Type == "integer" && num != float64(int(num)) {
-			return fmt.Errorf("parameter '%s' must be integer, got float", key)
+			return agentErrors.New(agentErrors.CodeToolValidation, "parameter must be integer").
+				WithComponent("input_validator").
+				WithOperation("validate_type").
+				WithContext("parameter", key).
+				WithContext("got_value", num)
 		}
 
 	case "boolean":
 		if _, ok := value.(bool); !ok {
-			return fmt.Errorf("parameter '%s' must be boolean, got %T", key, value)
+			return agentErrors.New(agentErrors.CodeToolValidation, "parameter must be boolean").
+				WithComponent("input_validator").
+				WithOperation("validate_type").
+				WithContext("parameter", key).
+				WithContext("got_type", fmt.Sprintf("%T", value))
 		}
 
 	case "array":
@@ -254,12 +295,20 @@ func (v *InputValidator) validateType(key string, value interface{}, prop proper
 		case []interface{}, []string, []int, []float64, []bool:
 			// 有效的数组类型
 		default:
-			return fmt.Errorf("parameter '%s' must be array, got %T", key, value)
+			return agentErrors.New(agentErrors.CodeToolValidation, "parameter must be array").
+				WithComponent("input_validator").
+				WithOperation("validate_type").
+				WithContext("parameter", key).
+				WithContext("got_type", fmt.Sprintf("%T", value))
 		}
 
 	case "object":
 		if _, ok := value.(map[string]interface{}); !ok {
-			return fmt.Errorf("parameter '%s' must be object, got %T", key, value)
+			return agentErrors.New(agentErrors.CodeToolValidation, "parameter must be object").
+				WithComponent("input_validator").
+				WithOperation("validate_type").
+				WithContext("parameter", key).
+				WithContext("got_type", fmt.Sprintf("%T", value))
 		}
 	}
 
@@ -273,7 +322,12 @@ func (v *InputValidator) validateType(key string, value interface{}, prop proper
 			}
 		}
 		if !found {
-			return fmt.Errorf("parameter '%s' must be one of %v, got %v", key, prop.Enum, value)
+			return agentErrors.New(agentErrors.CodeToolValidation, "parameter must be one of enum values").
+				WithComponent("input_validator").
+				WithOperation("validate_type").
+				WithContext("parameter", key).
+				WithContext("enum_values", fmt.Sprintf("%v", prop.Enum)).
+				WithContext("got_value", value)
 		}
 	}
 
@@ -284,7 +338,10 @@ func (v *InputValidator) validateType(key string, value interface{}, prop proper
 func (v *InputValidator) validateNoExtraArgs(s *schema, args map[string]interface{}) error {
 	for key := range args {
 		if _, exists := s.Properties[key]; !exists {
-			return fmt.Errorf("unexpected parameter '%s' (not defined in schema)", key)
+			return agentErrors.New(agentErrors.CodeToolValidation, "unexpected parameter not defined in schema").
+				WithComponent("input_validator").
+				WithOperation("validate_no_extra_args").
+				WithContext("parameter", key)
 		}
 	}
 	return nil

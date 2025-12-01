@@ -2,12 +2,12 @@
 package plugingen
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/kart-io/goagent/utils/json"
 	"gopkg.in/yaml.v3"
 )
 

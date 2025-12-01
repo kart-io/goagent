@@ -2,7 +2,6 @@ package builder
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"reflect"
@@ -18,6 +17,7 @@ import (
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/store"
 	"github.com/kart-io/goagent/store/memory"
+	"github.com/kart-io/goagent/utils/json"
 )
 
 // AgentBuilder 提供用于构建 Agent 的 fluent API

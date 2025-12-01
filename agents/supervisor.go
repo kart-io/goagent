@@ -366,9 +366,10 @@ func extractJSONArray(content string) string {
 			continue
 		}
 
-		if char == '[' {
+		switch char {
+		case '[':
 			bracketCount++
-		} else if char == ']' {
+		case ']':
 			bracketCount--
 			if bracketCount == 0 {
 				// 找到匹配的 ']'

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -13,6 +12,7 @@ import (
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/providers"
 	"github.com/kart-io/goagent/multiagent"
+	"github.com/kart-io/goagent/utils/json"
 	"github.com/nats-io/nats.go"
 )
 
