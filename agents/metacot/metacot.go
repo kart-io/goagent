@@ -108,8 +108,8 @@ func (m *MetaCoTAgent) Invoke(ctx context.Context, input *agentcore.AgentInput) 
 
 	// Initialize output
 	output := &agentcore.AgentOutput{
-		ReasoningSteps: make([]agentcore.ReasoningStep, 0),
-		ToolCalls:      make([]agentcore.ToolCall, 0),
+		Steps: make([]agentcore.AgentStep, 0),
+		ToolCalls:      make([]agentcore.AgentToolCall, 0),
 		Metadata:       make(map[string]interface{}),
 	}
 
@@ -126,7 +126,7 @@ func (m *MetaCoTAgent) Invoke(ctx context.Context, input *agentcore.AgentInput) 
 		subQuestions := m.decomposeQuestion(ctx, mainQuestion, output)
 		mainQuestion.SubQuestions = subQuestions
 
-		output.ReasoningSteps = append(output.ReasoningSteps, agentcore.ReasoningStep{
+		output.Steps = append(output.Steps, agentcore.AgentStep{
 			Step:        1,
 			Action:      "Decompose Question",
 			Description: fmt.Sprintf("Decomposed into %d sub-questions", len(subQuestions)),
@@ -151,8 +151,8 @@ func (m *MetaCoTAgent) Invoke(ctx context.Context, input *agentcore.AgentInput) 
 		critiqueStart := time.Now()
 		critique := m.selfCritique(ctx, input.Task, finalAnswer)
 
-		output.ReasoningSteps = append(output.ReasoningSteps, agentcore.ReasoningStep{
-			Step:        len(output.ReasoningSteps) + 1,
+		output.Steps = append(output.Steps, agentcore.AgentStep{
+			Step:        len(output.Steps) + 1,
 			Action:      "Self-Critique",
 			Description: "Critically evaluate the answer",
 			Result:      critique,
@@ -209,8 +209,8 @@ func (m *MetaCoTAgent) processSelfAsk(ctx context.Context, question *Question, d
 		}
 
 		// Record step
-		output.ReasoningSteps = append(output.ReasoningSteps, agentcore.ReasoningStep{
-			Step:        len(output.ReasoningSteps) + 1,
+		output.Steps = append(output.Steps, agentcore.AgentStep{
+			Step:        len(output.Steps) + 1,
 			Action:      fmt.Sprintf("Self-Ask (depth=%d)", depth),
 			Description: fq.Text,
 			Result:      fq.Answer,
@@ -522,7 +522,7 @@ func (m *MetaCoTAgent) searchForAnswer(ctx context.Context, question *Question, 
 			question.Evidence = append(question.Evidence, "Search result")
 
 			// Record tool call
-			output.ToolCalls = append(output.ToolCalls, agentcore.ToolCall{
+			output.ToolCalls = append(output.ToolCalls, agentcore.AgentToolCall{
 				ToolName: "search",
 				Input:    toolInput.Args,
 				Output:   result.Result,
@@ -685,8 +685,8 @@ func (m *MetaCoTAgent) RunGenerator(ctx context.Context, input *agentcore.AgentI
 
 		// Initialize accumulated output
 		accumulated := &agentcore.AgentOutput{
-			ReasoningSteps: make([]agentcore.ReasoningStep, 0),
-			ToolCalls:      make([]agentcore.ToolCall, 0),
+			Steps: make([]agentcore.AgentStep, 0),
+			ToolCalls:      make([]agentcore.AgentToolCall, 0),
 			Metadata:       make(map[string]interface{}),
 		}
 
@@ -704,7 +704,7 @@ func (m *MetaCoTAgent) RunGenerator(ctx context.Context, input *agentcore.AgentI
 			subQuestions := m.decomposeQuestion(ctx, mainQuestion, accumulated)
 			mainQuestion.SubQuestions = subQuestions
 
-			accumulated.ReasoningSteps = append(accumulated.ReasoningSteps, agentcore.ReasoningStep{
+			accumulated.Steps = append(accumulated.Steps, agentcore.AgentStep{
 				Step:        1,
 				Action:      "Decompose Question",
 				Description: fmt.Sprintf("Decomposed into %d sub-questions", len(subQuestions)),
@@ -740,8 +740,8 @@ func (m *MetaCoTAgent) RunGenerator(ctx context.Context, input *agentcore.AgentI
 		synthesisStart := time.Now()
 		finalAnswer := m.synthesizeAnswer(ctx, questionTree, accumulated)
 
-		accumulated.ReasoningSteps = append(accumulated.ReasoningSteps, agentcore.ReasoningStep{
-			Step:        len(accumulated.ReasoningSteps) + 1,
+		accumulated.Steps = append(accumulated.Steps, agentcore.AgentStep{
+			Step:        len(accumulated.Steps) + 1,
 			Action:      "Synthesize Answer",
 			Description: "Combine all sub-question answers",
 			Result:      "Answer synthesis complete",
@@ -763,8 +763,8 @@ func (m *MetaCoTAgent) RunGenerator(ctx context.Context, input *agentcore.AgentI
 			critiqueStart := time.Now()
 			critique := m.selfCritique(ctx, input.Task, finalAnswer)
 
-			accumulated.ReasoningSteps = append(accumulated.ReasoningSteps, agentcore.ReasoningStep{
-				Step:        len(accumulated.ReasoningSteps) + 1,
+			accumulated.Steps = append(accumulated.Steps, agentcore.AgentStep{
+				Step:        len(accumulated.Steps) + 1,
 				Action:      "Self-Critique",
 				Description: "Critically evaluate the answer",
 				Result:      critique,
@@ -787,8 +787,8 @@ func (m *MetaCoTAgent) RunGenerator(ctx context.Context, input *agentcore.AgentI
 				refinementStart := time.Now()
 				finalAnswer = m.refineAnswer(ctx, finalAnswer, critique)
 
-				accumulated.ReasoningSteps = append(accumulated.ReasoningSteps, agentcore.ReasoningStep{
-					Step:        len(accumulated.ReasoningSteps) + 1,
+				accumulated.Steps = append(accumulated.Steps, agentcore.AgentStep{
+					Step:        len(accumulated.Steps) + 1,
 					Action:      "Refine Answer",
 					Description: "Improve answer based on critique",
 					Result:      "Answer refinement complete",
@@ -843,8 +843,8 @@ func (m *MetaCoTAgent) processSelfAskGenerator(ctx context.Context, question *Qu
 		}
 
 		// Record step
-		accumulated.ReasoningSteps = append(accumulated.ReasoningSteps, agentcore.ReasoningStep{
-			Step:        len(accumulated.ReasoningSteps) + 1,
+		accumulated.Steps = append(accumulated.Steps, agentcore.AgentStep{
+			Step:        len(accumulated.Steps) + 1,
 			Action:      fmt.Sprintf("Self-Ask (depth=%d)", depth),
 			Description: fq.Text,
 			Result:      fq.Answer,
@@ -873,8 +873,8 @@ func (m *MetaCoTAgent) processSelfAskGenerator(ctx context.Context, question *Qu
 // createStepOutput creates a snapshot of current execution state
 func (m *MetaCoTAgent) createStepOutput(accumulated *agentcore.AgentOutput, message string, startTime time.Time) *agentcore.AgentOutput {
 	stepOutput := &agentcore.AgentOutput{
-		ReasoningSteps: make([]agentcore.ReasoningStep, len(accumulated.ReasoningSteps)),
-		ToolCalls:      make([]agentcore.ToolCall, len(accumulated.ToolCalls)),
+		Steps: make([]agentcore.AgentStep, len(accumulated.Steps)),
+		ToolCalls:      make([]agentcore.AgentToolCall, len(accumulated.ToolCalls)),
 		Metadata:       make(map[string]interface{}),
 		Timestamp:      time.Now(),
 		Latency:        time.Since(startTime),
@@ -882,7 +882,7 @@ func (m *MetaCoTAgent) createStepOutput(accumulated *agentcore.AgentOutput, mess
 	}
 
 	// Copy slices
-	copy(stepOutput.ReasoningSteps, accumulated.ReasoningSteps)
+	copy(stepOutput.Steps, accumulated.Steps)
 	copy(stepOutput.ToolCalls, accumulated.ToolCalls)
 
 	// Copy existing metadata

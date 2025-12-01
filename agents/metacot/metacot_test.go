@@ -513,7 +513,7 @@ func TestMetaCoTAgent_Invoke(t *testing.T) {
 	assert.NotNil(t, output)
 	assert.Equal(t, "success", output.Status)
 	assert.NotEmpty(t, output.Result)
-	assert.NotEmpty(t, output.ReasoningSteps)
+	assert.NotEmpty(t, output.Steps)
 }
 
 func TestMetaCoTAgent_SelfCritique(t *testing.T) {
@@ -724,7 +724,7 @@ func TestMetaCoTAgent_SearchForAnswer(t *testing.T) {
 			Status: "pending",
 		}
 		output := &core.AgentOutput{
-			ToolCalls: make([]core.ToolCall, 0),
+			ToolCalls: make([]core.AgentToolCall, 0),
 		}
 
 		agent.searchForAnswer(ctx, question, output)
@@ -840,7 +840,7 @@ func TestMetaCoTAgent_RunGenerator(t *testing.T) {
 
 	// Log final result
 	t.Logf("Final result: %v", finalOutput.Result)
-	t.Logf("Total reasoning steps: %d", len(finalOutput.ReasoningSteps))
+	t.Logf("Total reasoning steps: %d", len(finalOutput.Steps))
 
 	mockLLM.AssertExpectations(t)
 }

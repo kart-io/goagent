@@ -714,7 +714,7 @@ func TestPoTAgent_RunGenerator(t *testing.T) {
 
 	// Log final result
 	t.Logf("Final result: %v", finalOutput.Result)
-	t.Logf("Total reasoning steps: %d", len(finalOutput.ReasoningSteps))
+	t.Logf("Total reasoning steps: %d", len(finalOutput.Steps))
 
 	mockLLM.AssertExpectations(t)
 }

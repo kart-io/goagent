@@ -319,22 +319,9 @@ func (m *LongTermMemory) Search(ctx context.Context, query string, limit int) ([
 
 	var results []interface{}
 
-	// Search using vector store if available
-	// TODO: GenerateEmbedding method is not available in current VectorStore interface
-	// if m.vectorStore != nil {
-	// 	embedding, err := m.vectorStore.GenerateEmbedding(ctx, query)
-	// 	if err == nil {
-	// 		ids, _, err := m.vectorStore.Search(ctx, embedding, limit, 0.5)
-	// 		if err == nil {
-	// 			for _, id := range ids {
-	// 				if entry, exists := m.entries[id]; exists {
-	// 					results = append(results, entry.Content)
-	// 				}
-	// 			}
-	// 			return results, nil
-	// 		}
-	// 	}
-	// }
+	// 向量搜索：当前 VectorStore 接口不包含 GenerateEmbedding 方法
+	// 如需支持向量搜索，需扩展 VectorStore 接口或使用独立的嵌入服务
+	// 当前使用简单字符串匹配作为后备方案
 
 	// Fallback to simple string matching
 	for _, entry := range m.entries {

@@ -355,20 +355,8 @@ func (a *MySQLStoreAdapter) CreateStore() (store.Store, error) {
 			WithOperation("create_mysql_store")
 	}
 
-	// Create config using PostgreSQL store with MySQL DSN
-	config := &postgres.Config{
-		DSN:             a.options.DSN(),
-		TableName:       a.tableName,
-		MaxIdleConns:    a.options.MaxIdleConns,
-		MaxOpenConns:    a.options.MaxOpenConns,
-		ConnMaxLifetime: a.options.ConnMaxLifetime,
-		LogLevel:        convertLogLevel(a.options.LogLevel),
-		AutoMigrate:     a.options.AutoMigrate,
-	}
-
-	// TODO: Implement MySQL-specific store or update postgres store to support MySQL
-	_ = config
-	return nil, agentErrors.New(agentErrors.CodeNotImplemented, "mysql store adapter not yet fully implemented").
+	// MySQL store 暂不支持，项目无实现计划
+	return nil, agentErrors.New(agentErrors.CodeNotImplemented, "mysql store not supported").
 		WithComponent("options_adapter").
 		WithOperation("create_mysql_store")
 }

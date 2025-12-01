@@ -411,8 +411,8 @@ func TestSoTAgent_ParallelElaboration(t *testing.T) {
 
 	input := &core.AgentInput{Task: "Test parallel"}
 	output := &core.AgentOutput{
-		ReasoningSteps: make([]core.ReasoningStep, 0),
-		ToolCalls:      make([]core.ToolCall, 0),
+		Steps: make([]core.AgentStep, 0),
+		ToolCalls:      make([]core.AgentToolCall, 0),
 		Metadata:       make(map[string]interface{}),
 	}
 
@@ -659,8 +659,8 @@ func TestSoTAgent_ConcurrentElaborationWithDependencies(t *testing.T) {
 
 	input := &core.AgentInput{Task: "Test dependencies"}
 	output := &core.AgentOutput{
-		ReasoningSteps: make([]core.ReasoningStep, 0),
-		ToolCalls:      make([]core.ToolCall, 0),
+		Steps: make([]core.AgentStep, 0),
+		ToolCalls:      make([]core.AgentToolCall, 0),
 		Metadata:       make(map[string]interface{}),
 	}
 
@@ -775,7 +775,7 @@ Point 3: Implement solution`
 
 	// Log final result
 	t.Logf("Final result: %v", finalOutput.Result)
-	t.Logf("Total reasoning steps: %d", len(finalOutput.ReasoningSteps))
+	t.Logf("Total reasoning steps: %d", len(finalOutput.Steps))
 
 	mockLLM.AssertExpectations(t)
 }

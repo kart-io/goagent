@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -393,8 +394,49 @@ func (e *ToolExecutor) shouldRetry(err error) bool {
 		return false
 	}
 
-	// TODO: 检查错误类型是否在可重试列表中
-	// 当前简化版本：所有错误都可重试
+	// 检查错误类型是否为可重试的错误
+	// 可重试错误类型：超时、网络、限流等临时性错误
+	var agentErr *agentErrors.AgentError
+	if errors.As(err, &agentErr) {
+		switch agentErr.Code {
+		case agentErrors.CodeToolTimeout,
+			agentErrors.CodeLLMTimeout,
+			agentErrors.CodeContextTimeout,
+			agentErrors.CodeLLMRateLimit,
+			agentErrors.CodeStreamTimeout,
+			agentErrors.CodeStoreConnection,
+			agentErrors.CodeDistributedConnection,
+			agentErrors.CodeDistributedHeartbeat,
+			agentErrors.CodeRouterOverload:
+			// 这些是临时性错误，可以重试
+			return true
+		case agentErrors.CodeToolValidation,
+			agentErrors.CodeInvalidInput,
+			agentErrors.CodeInvalidConfig,
+			agentErrors.CodeToolNotFound,
+			agentErrors.CodeNotImplemented,
+			agentErrors.CodeAgentValidation,
+			agentErrors.CodeParserFailed,
+			agentErrors.CodeVectorDimMismatch:
+			// 这些是永久性错误，重试无意义
+			return false
+		default:
+			// 其他错误，默认可重试（保守策略）
+			return true
+		}
+	}
+
+	// 非 AgentError，检查是否为 context 错误
+	if errors.Is(err, context.Canceled) {
+		// 上下文取消，不重试
+		return false
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		// 上下文超时，可以重试
+		return true
+	}
+
+	// 其他未知错误，默认可重试
 	return true
 }
 

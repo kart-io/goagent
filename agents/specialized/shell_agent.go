@@ -133,7 +133,7 @@ func (a *ShellAgent) Execute(ctx context.Context, input *agentcore.AgentInput) (
 			"output":    outputStr,
 			"exit_code": exitCode,
 		},
-		ToolCalls: []agentcore.ToolCall{
+		ToolCalls: []agentcore.AgentToolCall{
 			{
 				ToolName: "shell",
 				Input: map[string]interface{}{

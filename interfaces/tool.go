@@ -2,65 +2,64 @@ package interfaces
 
 import "context"
 
-// Tool represents an executable tool that agents can invoke.
+// Tool 表示智能体可以调用的可执行工具
 //
-// All tool implementations should implement this interface.
+// 所有工具实现都应实现此接口
 //
-// Implementation locations:
-//   - tools.BaseTool - Base implementation with common functionality
-//   - tools/compute/* - Computation tools
-//   - tools/http/* - HTTP request tools
-//   - tools/search/* - Search tools
-//   - tools/shell/* - Shell execution tools
-//   - tools/practical/* - Practical utility tools
+// 实现位置：
+//   - tools.BaseTool - 基础实现，包含通用功能
+//   - tools/compute/* - 计算工具
+//   - tools/http/* - HTTP 请求工具
+//   - tools/search/* - 搜索工具
+//   - tools/shell/* - Shell 执行工具
+//   - tools/practical/* - 实用工具
 //
-// See: tools/tool.go for the base implementation
+// 参见：tools/tool.go 的基础实现
 type Tool interface {
-	// Name returns the tool identifier.
+	// Name 返回工具标识符
 	//
-	// The name should be unique within a tool registry and follow
-	// naming conventions (lowercase, underscores for separators).
+	// 名称应在工具注册表中唯一，并遵循命名约定
+	// （小写字母，下划线分隔）
 	Name() string
 
-	// Description returns what the tool does.
+	// Description 返回工具的功能描述
 	//
-	// This description is used by LLMs to understand when and how
-	// to use the tool. It should be clear and concise.
+	// 此描述供 LLM 理解何时以及如何使用工具
+	// 应当清晰简洁
 	Description() string
 
-	// Invoke executes the tool with given input.
+	// Invoke 使用给定输入执行工具
 	//
-	// The tool should process the input arguments and return results
-	// or an error if execution fails.
+	// 工具应处理输入参数并返回结果
+	// 如果执行失败则返回错误
 	Invoke(ctx context.Context, input *ToolInput) (*ToolOutput, error)
 
-	// ArgsSchema returns the tool's input schema (JSON Schema format).
+	// ArgsSchema 返回工具的输入模式（JSON Schema 格式）
 	//
-	// This schema defines the structure of arguments the tool accepts.
-	// It's used by LLMs to generate valid tool calls.
+	// 此模式定义工具接受的参数结构
+	// LLM 使用它生成有效的工具调用
 	//
-	// Example schema:
+	// 示例模式：
 	//   {
 	//     "type": "object",
 	//     "properties": {
-	//       "query": {"type": "string", "description": "Search query"}
+	//       "query": {"type": "string", "description": "搜索查询"}
 	//     },
 	//     "required": ["query"]
 	//   }
 	ArgsSchema() string
 }
 
-// ValidatableTool is an optional interface that tools can implement
-// to provide custom input validation logic.
+// ValidatableTool 是工具可以实现的可选接口
+// 用于提供自定义输入验证逻辑
 //
-// If a tool implements this interface, the validator will call Validate
-// before executing the tool, allowing for more sophisticated validation
-// than JSON schema alone can provide.
+// 如果工具实现了此接口，验证器将在执行工具之前调用 Validate
+// 允许进行比单独使用 JSON schema 更复杂的验证
 //
-// Example implementation:
+// 示例实现：
 //
 //	func (t *MyTool) Validate(ctx context.Context, input *ToolInput) error {
-//	    // Custom validation logic
+//	    // 自定义验证逻辑
 //	    if val, ok := input.Args["amount"].(float64); ok && val < 0 {
 //	        return fmt.Errorf("amount must be non-negative")
 //	    }
@@ -69,150 +68,147 @@ type Tool interface {
 type ValidatableTool interface {
 	Tool
 
-	// Validate validates the tool input before execution.
+	// Validate 在执行前验证工具输入
 	//
-	// Returns an error if the input is invalid. The error message
-	// should clearly describe what is wrong with the input.
+	// 如果输入无效则返回错误，错误消息应清楚描述输入的问题
 	Validate(ctx context.Context, input *ToolInput) error
 }
 
-// ToolExecutor represents a component that can execute tools.
+// ToolExecutor 表示可以执行工具的组件
 //
-// This interface is implemented by components that need to run tools,
-// such as agents and workflow engines.
+// 此接口由需要运行工具的组件实现
+// 例如智能体和工作流引擎
 //
-// Implementation locations:
-//   - agents/executor/executor_agent.go - Executor agent implementation
-//   - tools/registry.go - Tool registry with execution capabilities
+// 实现位置：
+//   - agents/executor/executor_agent.go - 执行器智能体实现
+//   - tools/registry.go - 具有执行能力的工具注册表
 type ToolExecutor interface {
-	// ExecuteTool executes a tool by name with the given arguments.
+	// ExecuteTool 按名称使用给定参数执行工具
 	//
-	// The executor is responsible for:
-	//   - Looking up the tool by name
-	//   - Validating arguments against the tool's schema
-	//   - Executing the tool
-	//   - Handling errors and timeouts
+	// 执行器负责：
+	//   - 按名称查找工具
+	//   - 验证参数是否符合工具模式
+	//   - 执行工具
+	//   - 处理错误和超时
 	ExecuteTool(ctx context.Context, toolName string, args map[string]interface{}) (*ToolResult, error)
 
-	// ListTools returns all available tools.
+	// ListTools 返回所有可用工具
 	//
-	// This is useful for agents that need to discover what tools
-	// they can use.
+	// 这对于需要发现可用工具的智能体很有用
 	ListTools() []Tool
 }
 
-// ToolInput represents tool execution input.
+// ToolInput 表示工具执行输入
 //
-// This structure contains all necessary information to execute a tool,
-// including arguments and metadata for tracing and debugging.
+// 此结构包含执行工具所需的所有信息
+// 包括参数和用于追踪和调试的元数据
 type ToolInput struct {
-	// Args contains the tool's input parameters.
+	// Args 包含工具的输入参数
 	//
-	// The structure of Args should match the tool's ArgsSchema.
+	// Args 的结构应与工具的 ArgsSchema 匹配
 	Args map[string]interface{} `json:"args"`
 
-	// Context is the execution context (not serialized).
+	// Context 是执行上下文（不序列化）
 	//
-	// This is used for cancellation, timeouts, and passing
-	// request-scoped values.
+	// 用于取消、超时和传递请求范围的值
 	Context context.Context `json:"-"`
 
-	// CallerID identifies who is invoking the tool.
+	// CallerID 标识调用工具的身份
 	//
-	// Optional. Used for authorization and auditing.
+	// 可选，用于授权和审计
 	CallerID string `json:"caller_id,omitempty"`
 
-	// TraceID is used for distributed tracing.
+	// TraceID 用于分布式追踪
 	//
-	// Optional. Helps track tool execution across systems.
+	// 可选，帮助跨系统跟踪工具执行
 	TraceID string `json:"trace_id,omitempty"`
 }
 
-// ToolOutput represents tool execution output.
+// ToolOutput 表示工具执行输出
 //
-// This structure contains the result of tool execution along with
-// status information and metadata.
+// 此结构包含工具执行的结果
+// 以及状态信息和元数据
 type ToolOutput struct {
-	// Result contains the tool's output data.
+	// Result 包含工具的输出数据
 	//
-	// The type depends on the specific tool. Common types:
-	//   - string: Text output
-	//   - map[string]interface{}: Structured data
-	//   - []byte: Binary data
+	// 类型取决于具体工具，常见类型：
+	//   - string: 文本输出
+	//   - map[string]interface{}: 结构化数据
+	//   - []byte: 二进制数据
 	Result interface{} `json:"result"`
 
-	// Success indicates whether the tool executed successfully.
+	// Success 指示工具是否成功执行
 	//
-	// True if the tool completed without errors, false otherwise.
+	// 如果工具无错误完成则为 true，否则为 false
 	Success bool `json:"success"`
 
-	// Error contains the error message if Success is false.
+	// Error 包含错误消息（当 Success 为 false 时）
 	//
-	// Empty string if Success is true.
+	// 当 Success 为 true 时为空字符串
 	Error string `json:"error,omitempty"`
 
-	// Metadata contains additional information about execution.
+	// Metadata 包含关于执行的额外信息
 	//
-	// Optional. May include:
-	//   - execution_time: How long the tool took to run
-	//   - retries: Number of retry attempts
-	//   - cost: API call cost (for external services)
+	// 可选，可能包括：
+	//   - execution_time: 工具运行时长
+	//   - retries: 重试次数
+	//   - cost: API 调用成本（对于外部服务）
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
 }
 
-// ToolResult represents the result of a tool execution by a ToolExecutor.
+// ToolResult 表示 ToolExecutor 执行工具的结果
 //
-// This is different from ToolOutput in that it includes additional
-// information that executors track, such as the tool that was run.
+// 与 ToolOutput 不同，它包含执行器跟踪的额外信息
+// 例如执行的工具名称
 type ToolResult struct {
-	// ToolName is the name of the tool that was executed.
+	// ToolName 是被执行工具的名称
 	ToolName string `json:"tool_name"`
 
-	// Output contains the tool's execution output.
+	// Output 包含工具的执行输出
 	Output *ToolOutput `json:"output"`
 
-	// ExecutionTime is how long the tool took to execute (in milliseconds).
+	// ExecutionTime 是工具执行时长（毫秒）
 	//
-	// Optional. Useful for performance monitoring.
+	// 可选，用于性能监控
 	ExecutionTime int64 `json:"execution_time,omitempty"`
 }
 
-// ToolCall represents a record of a tool invocation.
+// ToolCall 表示工具调用的记录
 //
-// This is used for logging, auditing, and debugging purposes.
-// It captures the complete context of a tool call.
+// 用于日志记录、审计和调试
+// 它捕获工具调用的完整上下文
 type ToolCall struct {
-	// ID is a unique identifier for this tool call.
+	// ID 是此工具调用的唯一标识符
 	//
-	// Useful for correlating calls across logs and traces.
+	// 用于在日志和追踪中关联调用
 	ID string `json:"id"`
 
-	// ToolName is the name of the tool that was called.
+	// ToolName 是被调用工具的名称
 	ToolName string `json:"tool_name"`
 
-	// Args are the arguments passed to the tool.
+	// Args 是传递给工具的参数
 	Args map[string]interface{} `json:"args"`
 
-	// Result is the output from the tool.
+	// Result 是工具的输出
 	//
-	// May be nil if the call is still in progress.
+	// 如果调用仍在进行中可能为 nil
 	Result *ToolOutput `json:"result,omitempty"`
 
-	// Error contains error information if the call failed.
+	// Error 包含调用失败时的错误信息
 	//
-	// Empty string if the call succeeded.
+	// 调用成功时为空字符串
 	Error string `json:"error,omitempty"`
 
-	// StartTime is when the tool call started (Unix timestamp).
+	// StartTime 是工具调用开始的时间（Unix 时间戳）
 	StartTime int64 `json:"start_time"`
 
-	// EndTime is when the tool call completed (Unix timestamp).
+	// EndTime 是工具调用完成的时间（Unix 时间戳）
 	//
-	// Zero if the call is still in progress.
+	// 如果调用仍在进行中则为零
 	EndTime int64 `json:"end_time,omitempty"`
 
-	// Metadata contains additional context about the call.
+	// Metadata 包含关于调用的额外上下文
 	//
-	// May include caller information, trace IDs, etc.
+	// 可能包括调用者信息、追踪 ID 等
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
 }

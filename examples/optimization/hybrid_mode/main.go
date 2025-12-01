@@ -1113,7 +1113,7 @@ func executeHybridWorkflow(
 			}
 		} else {
 			fmt.Printf("      ✓ 执行成功 (耗时: %v)\n", duration)
-			fmt.Printf("      推理步骤: %d 步\n", len(output.ReasoningSteps))
+			fmt.Printf("      推理步骤: %d 步\n", len(output.Steps))
 
 			// 显示 Token 使用统计
 			if output.TokenUsage != nil && !output.TokenUsage.IsEmpty() {
@@ -1127,9 +1127,9 @@ func executeHybridWorkflow(
 			resultStr := ""
 			if output.Result != nil && fmt.Sprintf("%v", output.Result) != "" {
 				resultStr = fmt.Sprintf("%v", output.Result)
-			} else if len(output.ReasoningSteps) > 0 {
+			} else if len(output.Steps) > 0 {
 				// 如果 Result 为空，显示最后一个推理步骤
-				lastStep := output.ReasoningSteps[len(output.ReasoningSteps)-1]
+				lastStep := output.Steps[len(output.Steps)-1]
 				resultStr = lastStep.Result
 			}
 
@@ -1153,7 +1153,7 @@ func executeHybridWorkflow(
 				Timestamp: time.Now(),
 				Metadata: map[string]interface{}{
 					"agent_type":      assignment.AgentType,
-					"reasoning_steps": len(output.ReasoningSteps),
+					"reasoning_steps": len(output.Steps),
 					"tool_calls":      len(output.ToolCalls),
 					"token_usage":     output.TokenUsage,
 				},

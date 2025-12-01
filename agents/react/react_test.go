@@ -149,7 +149,7 @@ Final Answer: Go is a statically typed, compiled programming language designed a
 	}
 
 	t.Logf("Agent result: %v", output.Result)
-	t.Logf("Reasoning steps: %d", len(output.ReasoningSteps))
+	t.Logf("Reasoning steps: %d", len(output.Steps))
 	t.Logf("Tool calls: %d", len(output.ToolCalls))
 
 	// 验证至少有一次工具调用
@@ -352,7 +352,7 @@ Final Answer: The result is 4`,
 	}
 
 	// 验证有推理步骤
-	if len(finalOutput.ReasoningSteps) == 0 {
+	if len(finalOutput.Steps) == 0 {
 		t.Error("No reasoning steps in final output")
 	}
 
@@ -361,7 +361,7 @@ Final Answer: The result is 4`,
 		t.Error("No tool calls in final output")
 	}
 
-	t.Logf("Reasoning steps: %d", len(finalOutput.ReasoningSteps))
+	t.Logf("Reasoning steps: %d", len(finalOutput.Steps))
 	t.Logf("Tool calls: %d", len(finalOutput.ToolCalls))
 }
 

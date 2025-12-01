@@ -2,6 +2,7 @@ package builder
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"reflect"
@@ -346,9 +347,78 @@ func (a *ConfigurableAgent[C, S]) ExecuteWithTools(ctx context.Context, input in
 
 // extractToolCalls 从 LLM 输出中提取工具调用
 func (a *ConfigurableAgent[C, S]) extractToolCalls(output interface{}) []ToolCall {
-	// 简化的工具调用提取
-	// 在生产中,使用适当的解析
-	return []ToolCall{}
+	// 尝试从输出中提取工具调用
+	switch v := output.(type) {
+	case string:
+		// 尝试从 JSON 字符串中解析工具调用
+		return a.parseToolCallsFromJSON(v)
+	case map[string]interface{}:
+		// 尝试从 map 中提取工具调用
+		if toolCalls, ok := v["tool_calls"].([]interface{}); ok {
+			return a.convertToolCalls(toolCalls)
+		}
+	case *llm.ToolCallResponse:
+		// 直接从 LLM 工具调用响应中提取
+		return a.convertLLMToolCalls(v.ToolCalls)
+	}
+	return nil
+}
+
+// parseToolCallsFromJSON 从 JSON 字符串中解析工具调用
+func (a *ConfigurableAgent[C, S]) parseToolCallsFromJSON(content string) []ToolCall {
+	// 尝试解析整个内容为 JSON
+	var data map[string]interface{}
+	if err := json.Unmarshal([]byte(content), &data); err != nil {
+		return nil
+	}
+
+	if toolCalls, ok := data["tool_calls"].([]interface{}); ok {
+		return a.convertToolCalls(toolCalls)
+	}
+	return nil
+}
+
+// convertToolCalls 将通用工具调用数据转换为 ToolCall 切片
+func (a *ConfigurableAgent[C, S]) convertToolCalls(toolCalls []interface{}) []ToolCall {
+	var result []ToolCall
+	for _, tc := range toolCalls {
+		if tcMap, ok := tc.(map[string]interface{}); ok {
+			call := ToolCall{}
+			if name, ok := tcMap["name"].(string); ok {
+				call.Name = name
+			}
+			if input, ok := tcMap["input"].(map[string]interface{}); ok {
+				call.Input = input
+			} else if args, ok := tcMap["arguments"].(map[string]interface{}); ok {
+				call.Input = args
+			}
+			if call.Name != "" {
+				result = append(result, call)
+			}
+		}
+	}
+	return result
+}
+
+// convertLLMToolCalls 将 LLM ToolCall 转换为 builder ToolCall
+func (a *ConfigurableAgent[C, S]) convertLLMToolCalls(llmCalls []llm.ToolCall) []ToolCall {
+	var result []ToolCall
+	for _, tc := range llmCalls {
+		call := ToolCall{
+			Name: tc.Function.Name,
+		}
+		// 解析 JSON 参数
+		if tc.Function.Arguments != "" {
+			var args map[string]interface{}
+			if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err == nil {
+				call.Input = args
+			}
+		}
+		if call.Name != "" {
+			result = append(result, call)
+		}
+	}
+	return result
 }
 
 // executeToolCall 执行单个工具调用

@@ -257,7 +257,7 @@ func TestAgentInput_Structure(t *testing.T) {
 }
 
 func TestAgentOutput_Structure(t *testing.T) {
-	reasoningSteps := []ReasoningStep{
+	executionSteps := []AgentStep{
 		{
 			Step:        1,
 			Action:      "analyze logs",
@@ -276,7 +276,7 @@ func TestAgentOutput_Structure(t *testing.T) {
 		},
 	}
 
-	toolCalls := []ToolCall{
+	toolCalls := []AgentToolCall{
 		{
 			ToolName: "kubectl",
 			Input: map[string]interface{}{
@@ -293,7 +293,7 @@ func TestAgentOutput_Structure(t *testing.T) {
 		Result:         map[string]interface{}{"root_cause": "OOMKilled"},
 		Status:         "success",
 		Message:        "diagnosis completed",
-		ReasoningSteps: reasoningSteps,
+		Steps:     executionSteps,
 		ToolCalls:      toolCalls,
 		Latency:        200 * time.Millisecond,
 		Timestamp:      time.Now(),
@@ -304,7 +304,7 @@ func TestAgentOutput_Structure(t *testing.T) {
 
 	assert.Equal(t, "success", output.Status)
 	assert.Equal(t, "diagnosis completed", output.Message)
-	assert.Len(t, output.ReasoningSteps, 2)
+	assert.Len(t, output.Steps, 2)
 	assert.Len(t, output.ToolCalls, 1)
 	assert.Equal(t, 200*time.Millisecond, output.Latency)
 	assert.Equal(t, 0.95, output.Metadata["confidence"])
@@ -352,8 +352,8 @@ func TestAgentOptions_CustomValues(t *testing.T) {
 	assert.Equal(t, 120*time.Second, opts.Timeout)
 }
 
-func TestReasoningStep_Structure(t *testing.T) {
-	step := ReasoningStep{
+func TestAgentStep_Structure(t *testing.T) {
+	step := AgentStep{
 		Step:        1,
 		Action:      "analyze",
 		Description: "analyzing data",
@@ -371,8 +371,8 @@ func TestReasoningStep_Structure(t *testing.T) {
 	assert.Empty(t, step.Error)
 }
 
-func TestReasoningStep_WithError(t *testing.T) {
-	step := ReasoningStep{
+func TestAgentStep_WithError(t *testing.T) {
+	step := AgentStep{
 		Step:        1,
 		Action:      "analyze",
 		Description: "analyzing data",
@@ -386,8 +386,8 @@ func TestReasoningStep_WithError(t *testing.T) {
 	assert.Equal(t, "analysis failed: invalid data", step.Error)
 }
 
-func TestToolCall_Structure(t *testing.T) {
-	toolCall := ToolCall{
+func TestAgentToolCall_Structure(t *testing.T) {
+	toolCall := AgentToolCall{
 		ToolName: "kubectl",
 		Input: map[string]interface{}{
 			"command":   "get",
@@ -409,8 +409,8 @@ func TestToolCall_Structure(t *testing.T) {
 	assert.Empty(t, toolCall.Error)
 }
 
-func TestToolCall_WithError(t *testing.T) {
-	toolCall := ToolCall{
+func TestAgentToolCall_WithError(t *testing.T) {
+	toolCall := AgentToolCall{
 		ToolName: "kubectl",
 		Input: map[string]interface{}{
 			"command": "get",

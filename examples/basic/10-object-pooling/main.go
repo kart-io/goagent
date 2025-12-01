@@ -80,8 +80,8 @@ func basicPoolUsage() {
 	output.Message = "分析完成"
 
 	// 使用切片零分配技巧
-	output.ReasoningSteps = append(output.ReasoningSteps,
-		core.ReasoningStep{
+	output.Steps = append(output.Steps,
+		core.AgentStep{
 			Step:        1,
 			Action:      "数据采集",
 			Description: "收集用户行为数据",
@@ -89,7 +89,7 @@ func basicPoolUsage() {
 			Duration:    100 * time.Millisecond,
 			Success:     true,
 		},
-		core.ReasoningStep{
+		core.AgentStep{
 			Step:        2,
 			Action:      "数据分析",
 			Description: "计算活跃度指标",
@@ -100,7 +100,7 @@ func basicPoolUsage() {
 	)
 
 	fmt.Printf("结果: %v\n", output.Result)
-	fmt.Printf("推理步骤数: %d\n", len(output.ReasoningSteps))
+	fmt.Printf("推理步骤数: %d\n", len(output.Steps))
 
 	// 归还到池中
 	performance.PutAgentOutput(output)
@@ -153,12 +153,12 @@ func performanceComparison() {
 		output := &core.AgentOutput{
 			Result:         "result",
 			Status:         "success",
-			ReasoningSteps: make([]core.ReasoningStep, 0, 10),
-			ToolCalls:      make([]core.ToolCall, 0, 5),
+			Steps: make([]core.AgentStep, 0, 10),
+			ToolCalls:      make([]core.AgentToolCall, 0, 5),
 			Metadata:       make(map[string]interface{}, 8),
 		}
-		output.ReasoningSteps = append(output.ReasoningSteps,
-			core.ReasoningStep{Step: 1, Action: "test"},
+		output.Steps = append(output.Steps,
+			core.AgentStep{Step: 1, Action: "test"},
 		)
 
 		// 模拟使用
@@ -189,8 +189,8 @@ func performanceComparison() {
 		output := pool.GetAgentOutput()
 		output.Result = "result"
 		output.Status = "success"
-		output.ReasoningSteps = append(output.ReasoningSteps,
-			core.ReasoningStep{Step: 1, Action: "test"},
+		output.Steps = append(output.Steps,
+			core.AgentStep{Step: 1, Action: "test"},
 		)
 
 		// 模拟使用

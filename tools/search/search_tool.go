@@ -171,9 +171,9 @@ func NewGoogleSearchEngine(apiKey, cx string) *GoogleSearchEngine {
 }
 
 // Search 执行 Google 搜索
+// 注意：当前返回模拟结果，生产环境需集成 Google Custom Search API
 func (g *GoogleSearchEngine) Search(ctx context.Context, query string, maxResults int) ([]SearchResult, error) {
-	// TODO: 实现真实的 Google Custom Search API 调用
-	// 这里返回模拟结果
+	// 模拟实现：生产环境请使用 Google Custom Search JSON API
 	return []SearchResult{
 		{
 			Title:   "Google Search Result",
@@ -194,8 +194,9 @@ func NewDuckDuckGoSearchEngine() *DuckDuckGoSearchEngine {
 }
 
 // Search 执行 DuckDuckGo 搜索
+// 注意：当前返回模拟结果，生产环境需集成 DuckDuckGo Instant Answer API
 func (d *DuckDuckGoSearchEngine) Search(ctx context.Context, query string, maxResults int) ([]SearchResult, error) {
-	// TODO: 实现真实的 DuckDuckGo API 调用
+	// 模拟实现：生产环境请使用 DuckDuckGo API
 	return []SearchResult{
 		{
 			Title:   "DuckDuckGo Search Result",

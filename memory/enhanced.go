@@ -198,14 +198,8 @@ func (m *HierarchicalMemory) StoreTyped(ctx context.Context, key string, value i
 		Metadata:    make(map[string]interface{}),
 	}
 
-	// Generate embedding if vector store is available
-	// TODO: GenerateEmbedding method is not available in current VectorStore interface
-	// if m.vectorStore != nil {
-	// 	embedding, err := m.vectorStore.GenerateEmbedding(ctx, value)
-	// 	if err == nil {
-	// 		entry.Embedding = embedding
-	// 	}
-	// }
+	// 向量嵌入生成：当前 VectorStore 接口不包含 GenerateEmbedding 方法
+	// 如需支持向量搜索，需扩展 VectorStore 接口或使用独立的嵌入服务
 
 	// Store based on type
 	switch memType {

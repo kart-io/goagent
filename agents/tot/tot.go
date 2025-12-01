@@ -67,7 +67,7 @@ type ThoughtNode struct {
 	Children   []*ThoughtNode
 	State      map[string]interface{} // Problem state at this node
 	IsSolution bool
-	ToolCalls  []agentcore.ToolCall
+	ToolCalls  []agentcore.AgentToolCall
 }
 
 // NewToTAgent creates a new Tree-of-Thought agent
@@ -119,8 +119,8 @@ func (t *ToTAgent) Invoke(ctx context.Context, input *agentcore.AgentInput) (*ag
 
 	// Initialize output
 	output := &agentcore.AgentOutput{
-		ReasoningSteps: make([]agentcore.ReasoningStep, 0),
-		ToolCalls:      make([]agentcore.ToolCall, 0),
+		Steps: make([]agentcore.AgentStep, 0),
+		ToolCalls:      make([]agentcore.AgentToolCall, 0),
 		Metadata:       make(map[string]interface{}),
 	}
 
@@ -217,8 +217,8 @@ func (t *ToTAgent) beamSearch(ctx context.Context, root *ThoughtNode, input *age
 					nextBeam = append(nextBeam, child)
 
 					// Record reasoning step
-					output.ReasoningSteps = append(output.ReasoningSteps, agentcore.ReasoningStep{
-						Step:        len(output.ReasoningSteps) + 1,
+					output.Steps = append(output.Steps, agentcore.AgentStep{
+						Step:        len(output.Steps) + 1,
 						Action:      fmt.Sprintf("Thought (depth=%d)", depth+1),
 						Description: child.Thought,
 						Result:      fmt.Sprintf("Score: %.2f", child.Score),
@@ -274,8 +274,8 @@ func (t *ToTAgent) depthFirstSearch(ctx context.Context, node *ThoughtNode, inpu
 		}
 
 		// Record step
-		output.ReasoningSteps = append(output.ReasoningSteps, agentcore.ReasoningStep{
-			Step:        len(output.ReasoningSteps) + 1,
+		output.Steps = append(output.Steps, agentcore.AgentStep{
+			Step:        len(output.Steps) + 1,
 			Action:      fmt.Sprintf("Explore (DFS, depth=%d)", child.Depth),
 			Description: child.Thought,
 			Result:      fmt.Sprintf("Score: %.2f", child.Score),
@@ -330,8 +330,8 @@ func (t *ToTAgent) breadthFirstSearch(ctx context.Context, root *ThoughtNode, in
 				queue = append(queue, child)
 
 				// Record step
-				output.ReasoningSteps = append(output.ReasoningSteps, agentcore.ReasoningStep{
-					Step:        len(output.ReasoningSteps) + 1,
+				output.Steps = append(output.Steps, agentcore.AgentStep{
+					Step:        len(output.Steps) + 1,
 					Action:      fmt.Sprintf("Explore (BFS, depth=%d)", child.Depth),
 					Description: child.Thought,
 					Result:      fmt.Sprintf("Score: %.2f", child.Score),
@@ -693,9 +693,9 @@ func (t *ToTAgent) needsTools(thought string) bool {
 	return false
 }
 
-func (t *ToTAgent) executeToolsForThought(ctx context.Context, thought string, output *agentcore.AgentOutput) []agentcore.ToolCall {
+func (t *ToTAgent) executeToolsForThought(ctx context.Context, thought string, output *agentcore.AgentOutput) []agentcore.AgentToolCall {
 	// This is simplified - in practice, you'd parse the thought to determine which tools to use
-	toolCalls := make([]agentcore.ToolCall, 0)
+	toolCalls := make([]agentcore.AgentToolCall, 0)
 
 	// Example: if thought mentions calculation, use calculator tool
 	if strings.Contains(strings.ToLower(thought), "calculate") {
@@ -708,7 +708,7 @@ func (t *ToTAgent) executeToolsForThought(ctx context.Context, thought string, o
 			}
 
 			result, err := calc.Invoke(ctx, input)
-			toolCall := agentcore.ToolCall{
+			toolCall := agentcore.AgentToolCall{
 				ToolName: "calculator",
 				Input:    input.Args,
 				Success:  err == nil,
@@ -843,8 +843,8 @@ func (t *ToTAgent) RunGenerator(ctx context.Context, input *agentcore.AgentInput
 
 		// Initialize output
 		output := &agentcore.AgentOutput{
-			ReasoningSteps: make([]agentcore.ReasoningStep, 0),
-			ToolCalls:      make([]agentcore.ToolCall, 0),
+			Steps: make([]agentcore.AgentStep, 0),
+			ToolCalls:      make([]agentcore.AgentToolCall, 0),
 			Metadata:       make(map[string]interface{}),
 		}
 
@@ -984,8 +984,8 @@ func (t *ToTAgent) beamSearchGenerator(
 				child.Score = t.evaluateThought(ctx, child, input)
 
 				// Record reasoning step
-				output.ReasoningSteps = append(output.ReasoningSteps, agentcore.ReasoningStep{
-					Step:        len(output.ReasoningSteps) + 1,
+				output.Steps = append(output.Steps, agentcore.AgentStep{
+					Step:        len(output.Steps) + 1,
 					Action:      fmt.Sprintf("Thought (depth=%d)", depth+1),
 					Description: child.Thought,
 					Result:      fmt.Sprintf("Score: %.2f", child.Score),
@@ -1026,7 +1026,7 @@ func (t *ToTAgent) beamSearchGenerator(
 		depthCompleteOutput.Status = interfaces.StatusInProgress
 		depthCompleteOutput.Metadata["step_type"] = "depth_complete"
 		depthCompleteOutput.Metadata["next_beam_size"] = len(nextBeam)
-		depthCompleteOutput.Metadata["total_reasoning_steps"] = len(output.ReasoningSteps)
+		depthCompleteOutput.Metadata["total_reasoning_steps"] = len(output.Steps)
 		if !yield(depthCompleteOutput, nil) {
 			return nil, nil // Early termination
 		}
@@ -1100,8 +1100,8 @@ func (t *ToTAgent) depthFirstSearchGenerator(
 		}
 
 		// Record step
-		output.ReasoningSteps = append(output.ReasoningSteps, agentcore.ReasoningStep{
-			Step:        len(output.ReasoningSteps) + 1,
+		output.Steps = append(output.Steps, agentcore.AgentStep{
+			Step:        len(output.Steps) + 1,
 			Action:      fmt.Sprintf("Explore (DFS, depth=%d)", child.Depth),
 			Description: child.Thought,
 			Result:      fmt.Sprintf("Score: %.2f", child.Score),
@@ -1186,8 +1186,8 @@ func (t *ToTAgent) breadthFirstSearchGenerator(
 				queue = append(queue, child)
 
 				// Record step
-				output.ReasoningSteps = append(output.ReasoningSteps, agentcore.ReasoningStep{
-					Step:        len(output.ReasoningSteps) + 1,
+				output.Steps = append(output.Steps, agentcore.AgentStep{
+					Step:        len(output.Steps) + 1,
 					Action:      fmt.Sprintf("Explore (BFS, depth=%d)", child.Depth),
 					Description: child.Thought,
 					Result:      fmt.Sprintf("Score: %.2f", child.Score),
@@ -1206,8 +1206,8 @@ func (t *ToTAgent) breadthFirstSearchGenerator(
 // createSearchStepOutput creates a snapshot of current search state
 func (t *ToTAgent) createSearchStepOutput(output *agentcore.AgentOutput, message string, depth int, startTime time.Time) *agentcore.AgentOutput {
 	stepOutput := &agentcore.AgentOutput{
-		ReasoningSteps: make([]agentcore.ReasoningStep, len(output.ReasoningSteps)),
-		ToolCalls:      make([]agentcore.ToolCall, len(output.ToolCalls)),
+		Steps: make([]agentcore.AgentStep, len(output.Steps)),
+		ToolCalls:      make([]agentcore.AgentToolCall, len(output.ToolCalls)),
 		Metadata:       make(map[string]interface{}),
 		Timestamp:      time.Now(),
 		Latency:        time.Since(startTime),
@@ -1215,7 +1215,7 @@ func (t *ToTAgent) createSearchStepOutput(output *agentcore.AgentOutput, message
 	}
 
 	// Copy slices
-	copy(stepOutput.ReasoningSteps, output.ReasoningSteps)
+	copy(stepOutput.Steps, output.Steps)
 	copy(stepOutput.ToolCalls, output.ToolCalls)
 
 	// Copy existing metadata
@@ -1225,7 +1225,7 @@ func (t *ToTAgent) createSearchStepOutput(output *agentcore.AgentOutput, message
 
 	// Add step-specific metadata
 	stepOutput.Metadata["current_depth"] = depth
-	stepOutput.Metadata["total_reasoning_steps"] = len(output.ReasoningSteps)
+	stepOutput.Metadata["total_reasoning_steps"] = len(output.Steps)
 	stepOutput.Metadata["total_tool_calls"] = len(output.ToolCalls)
 
 	return stepOutput

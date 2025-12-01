@@ -100,7 +100,7 @@ func (i *InstrumentedAgent) Invoke(ctx context.Context, input *agentcore.AgentIn
 		attribute.String("status", status),
 		attribute.Float64("duration_ms", float64(duration.Milliseconds())),
 		attribute.Int("tool_calls", len(output.ToolCalls)),
-		attribute.Int("reasoning_steps", len(output.ReasoningSteps)),
+		attribute.Int("reasoning_steps", len(output.Steps)),
 	)
 
 	return output, err
@@ -258,7 +258,7 @@ func (i *InstrumentedAgent) Stream(ctx context.Context, input *agentcore.AgentIn
 		if lastOutput != nil {
 			AddAttributes(span,
 				attribute.Int("tool_calls", len(lastOutput.ToolCalls)),
-				attribute.Int("reasoning_steps", len(lastOutput.ReasoningSteps)),
+				attribute.Int("reasoning_steps", len(lastOutput.Steps)),
 			)
 		}
 	}()
@@ -363,7 +363,7 @@ func (i *InstrumentedAgent) Batch(ctx context.Context, inputs []*agentcore.Agent
 	totalToolCalls := 0
 	for _, output := range outputs {
 		if output != nil {
-			totalReasoningSteps += len(output.ReasoningSteps)
+			totalReasoningSteps += len(output.Steps)
 			totalToolCalls += len(output.ToolCalls)
 		}
 	}

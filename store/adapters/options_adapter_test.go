@@ -148,7 +148,7 @@ func TestMySQLStoreAdapter(t *testing.T) {
 	// CreateStore should return not implemented error for now
 	_, err := adapter.CreateStore()
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "not yet fully implemented")
+	assert.Contains(t, err.Error(), "mysql store not supported")
 }
 
 func TestStoreOptions_DefaultValues(t *testing.T) {

@@ -34,7 +34,7 @@ func NewAnalysisAgent(memMgr interfaces.MemoryManager) *AnalysisAgent {
 func (a *AnalysisAgent) Invoke(ctx context.Context, input *core.AgentInput) (*core.AgentOutput, error) {
 	start := time.Now()
 	output := &core.AgentOutput{
-		ReasoningSteps: make([]core.ReasoningStep, 0),
+		Steps: make([]core.AgentStep, 0),
 		Timestamp:      start,
 	}
 
@@ -46,7 +46,7 @@ func (a *AnalysisAgent) Invoke(ctx context.Context, input *core.AgentInput) (*co
 		stepStart := time.Now()
 		history, err := a.memory.GetConversationHistory(ctx, input.SessionID, 5)
 
-		step := core.ReasoningStep{
+		step := core.AgentStep{
 			Step:        1,
 			Action:      "load_history",
 			Description: "Load conversation history",
@@ -61,14 +61,14 @@ func (a *AnalysisAgent) Invoke(ctx context.Context, input *core.AgentInput) (*co
 			step.Error = err.Error()
 		}
 
-		output.ReasoningSteps = append(output.ReasoningSteps, step)
+		output.Steps = append(output.Steps, step)
 	}
 
 	// 步骤 2: 执行分析
 	stepStart := time.Now()
 	analysisResult := fmt.Sprintf("Analysis completed for: %s", input.Task)
 
-	step := core.ReasoningStep{
+	step := core.AgentStep{
 		Step:        2,
 		Action:      "analyze",
 		Description: "Perform data analysis",
@@ -76,7 +76,7 @@ func (a *AnalysisAgent) Invoke(ctx context.Context, input *core.AgentInput) (*co
 		Duration:    time.Since(stepStart),
 		Success:     true,
 	}
-	output.ReasoningSteps = append(output.ReasoningSteps, step)
+	output.Steps = append(output.Steps, step)
 	fmt.Printf("  [Step 2] %s: %s\n", step.Description, step.Result)
 
 	// 步骤 3: 生成建议
@@ -87,7 +87,7 @@ func (a *AnalysisAgent) Invoke(ctx context.Context, input *core.AgentInput) (*co
 		"Recommendation 3: Review system logs daily",
 	}
 
-	step = core.ReasoningStep{
+	step = core.AgentStep{
 		Step:        3,
 		Action:      "generate_recommendations",
 		Description: "Generate actionable recommendations",
@@ -95,7 +95,7 @@ func (a *AnalysisAgent) Invoke(ctx context.Context, input *core.AgentInput) (*co
 		Duration:    time.Since(stepStart),
 		Success:     true,
 	}
-	output.ReasoningSteps = append(output.ReasoningSteps, step)
+	output.Steps = append(output.Steps, step)
 	fmt.Printf("  [Step 3] %s: %s\n", step.Description, step.Result)
 
 	// 保存到记忆

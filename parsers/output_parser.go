@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
+	"strings"
+
 	"github.com/kart-io/goagent/utils/json"
 	"reflect"
-	"strings"
 
 	agentErrors "github.com/kart-io/goagent/errors"
 )
@@ -527,11 +529,27 @@ func NewRegexOutputParser(patterns map[string]string) *RegexOutputParser {
 
 // Parse 解析输出
 func (p *RegexOutputParser) Parse(ctx context.Context, text string) (map[string]string, error) {
-	// 这里简化实现，实际应该使用 regexp 包
 	result := make(map[string]string)
 
-	// TODO: 实现正则匹配
-	// 这是一个简化版本，实际需要使用 regexp.MustCompile 等
+	// 遍历每个模式进行正则匹配
+	for fieldName, pattern := range p.patterns {
+		re, err := regexp.Compile(pattern)
+		if err != nil {
+			return nil, agentErrors.Wrap(err, agentErrors.CodeInvalidInput, "invalid regex pattern").
+				WithContext("field", fieldName).
+				WithContext("pattern", pattern)
+		}
+
+		matches := re.FindStringSubmatch(text)
+		if len(matches) > 1 {
+			// 使用第一个捕获组
+			result[fieldName] = matches[1]
+		} else if len(matches) == 1 {
+			// 没有捕获组，使用完整匹配
+			result[fieldName] = matches[0]
+		}
+		// 没有匹配则该字段为空字符串
+	}
 
 	return result, nil
 }

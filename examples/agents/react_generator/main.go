@@ -119,7 +119,7 @@ func main() {
 
 		if output.Status == interfaces.StatusSuccess {
 			fmt.Printf("\n✅ 最终答案: %v\n", output.Result)
-			fmt.Printf("总推理步骤: %d\n", len(output.ReasoningSteps))
+			fmt.Printf("总推理步骤: %d\n", len(output.Steps))
 			fmt.Printf("总工具调用: %d\n", len(output.ToolCalls))
 			fmt.Printf("Token 使用: 提示=%d, 完成=%d, 总计=%d\n",
 				output.TokenUsage.PromptTokens,

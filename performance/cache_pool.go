@@ -269,15 +269,15 @@ func copyOutput(output *core.AgentOutput) *core.AgentOutput {
 		Result:         output.Result,
 		Status:         output.Status,
 		Message:        output.Message,
-		ReasoningSteps: make([]core.ReasoningStep, len(output.ReasoningSteps)),
-		ToolCalls:      make([]core.ToolCall, len(output.ToolCalls)),
+		Steps: make([]core.AgentStep, len(output.Steps)),
+		ToolCalls:      make([]core.AgentToolCall, len(output.ToolCalls)),
 		Latency:        output.Latency,
 		Timestamp:      output.Timestamp,
 		Metadata:       make(map[string]interface{}),
 	}
 
-	// 拷贝 ReasoningSteps
-	copy(copied.ReasoningSteps, output.ReasoningSteps)
+	// 拷贝 Steps
+	copy(copied.Steps, output.Steps)
 
 	// 拷贝 ToolCalls
 	copy(copied.ToolCalls, output.ToolCalls)

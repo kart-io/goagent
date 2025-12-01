@@ -106,8 +106,8 @@ func (g *GoTAgent) Invoke(ctx context.Context, input *agentcore.AgentInput) (*ag
 
 	// Initialize output
 	output := &agentcore.AgentOutput{
-		ReasoningSteps: make([]agentcore.ReasoningStep, 0),
-		ToolCalls:      make([]agentcore.ToolCall, 0),
+		Steps: make([]agentcore.AgentStep, 0),
+		ToolCalls:      make([]agentcore.AgentToolCall, 0),
 		Metadata:       make(map[string]interface{}),
 	}
 
@@ -215,8 +215,8 @@ func (g *GoTAgent) buildThoughtGraph(ctx context.Context, input *agentcore.Agent
 					}
 
 					// Record step
-					output.ReasoningSteps = append(output.ReasoningSteps, agentcore.ReasoningStep{
-						Step:        len(output.ReasoningSteps) + 1,
+					output.Steps = append(output.Steps, agentcore.AgentStep{
+						Step:        len(output.Steps) + 1,
 						Action:      fmt.Sprintf("Graph Node (%s)", newNode.ID),
 						Description: newNode.Thought,
 						Result:      fmt.Sprintf("Score: %.2f, Dependencies: %d", newNode.Score, len(newNode.Dependencies)),
@@ -757,8 +757,8 @@ func (g *GoTAgent) RunGenerator(ctx context.Context, input *agentcore.AgentInput
 
 		// Initialize accumulated output
 		accumulated := &agentcore.AgentOutput{
-			ReasoningSteps: make([]agentcore.ReasoningStep, 0),
-			ToolCalls:      make([]agentcore.ToolCall, 0),
+			Steps: make([]agentcore.AgentStep, 0),
+			ToolCalls:      make([]agentcore.AgentToolCall, 0),
 			Metadata:       make(map[string]interface{}),
 		}
 
@@ -780,7 +780,7 @@ func (g *GoTAgent) RunGenerator(ctx context.Context, input *agentcore.AgentInput
 		}
 
 		// Record graph building
-		accumulated.ReasoningSteps = append(accumulated.ReasoningSteps, agentcore.ReasoningStep{
+		accumulated.Steps = append(accumulated.Steps, agentcore.AgentStep{
 			Step:        1,
 			Action:      "Build Graph",
 			Description: fmt.Sprintf("Built thought graph with %d nodes", len(graph)),
@@ -820,7 +820,7 @@ func (g *GoTAgent) RunGenerator(ctx context.Context, input *agentcore.AgentInput
 		}
 
 		// Record graph execution
-		accumulated.ReasoningSteps = append(accumulated.ReasoningSteps, agentcore.ReasoningStep{
+		accumulated.Steps = append(accumulated.Steps, agentcore.AgentStep{
 			Step:        2,
 			Action:      "Execute Graph",
 			Description: "Executed all graph nodes",
@@ -843,7 +843,7 @@ func (g *GoTAgent) RunGenerator(ctx context.Context, input *agentcore.AgentInput
 		finalAnswer := g.synthesizeAnswer(ctx, graph, finalResult)
 
 		// Record synthesis
-		accumulated.ReasoningSteps = append(accumulated.ReasoningSteps, agentcore.ReasoningStep{
+		accumulated.Steps = append(accumulated.Steps, agentcore.AgentStep{
 			Step:        3,
 			Action:      "Synthesize Answer",
 			Description: "Combined graph results into final answer",
@@ -865,8 +865,8 @@ func (g *GoTAgent) RunGenerator(ctx context.Context, input *agentcore.AgentInput
 // createStepOutput creates a snapshot of current execution state
 func (g *GoTAgent) createStepOutput(accumulated *agentcore.AgentOutput, message string, startTime time.Time) *agentcore.AgentOutput {
 	stepOutput := &agentcore.AgentOutput{
-		ReasoningSteps: make([]agentcore.ReasoningStep, len(accumulated.ReasoningSteps)),
-		ToolCalls:      make([]agentcore.ToolCall, len(accumulated.ToolCalls)),
+		Steps: make([]agentcore.AgentStep, len(accumulated.Steps)),
+		ToolCalls:      make([]agentcore.AgentToolCall, len(accumulated.ToolCalls)),
 		Metadata:       make(map[string]interface{}),
 		Timestamp:      time.Now(),
 		Latency:        time.Since(startTime),
@@ -874,7 +874,7 @@ func (g *GoTAgent) createStepOutput(accumulated *agentcore.AgentOutput, message 
 	}
 
 	// Copy slices
-	copy(stepOutput.ReasoningSteps, accumulated.ReasoningSteps)
+	copy(stepOutput.Steps, accumulated.Steps)
 	copy(stepOutput.ToolCalls, accumulated.ToolCalls)
 
 	// Copy existing metadata

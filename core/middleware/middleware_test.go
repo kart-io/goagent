@@ -26,7 +26,7 @@ func TestNewMiddlewareChain(t *testing.T) {
 	chain := NewMiddlewareChain(handler)
 	require.NotNil(t, chain)
 	assert.NotNil(t, chain.handler)
-	assert.Empty(t, chain.middlewares)
+	assert.Equal(t, 0, chain.Size())
 }
 
 func TestMiddlewareChain_Use(t *testing.T) {
@@ -40,7 +40,7 @@ func TestMiddlewareChain_Use(t *testing.T) {
 	mw2 := NewBaseMiddleware("mw2")
 
 	chain.Use(mw1, mw2)
-	assert.Equal(t, 2, len(chain.middlewares))
+	assert.Equal(t, 2, chain.Size())
 }
 
 func TestMiddlewareChain_Execute(t *testing.T) {

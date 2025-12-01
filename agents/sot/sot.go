@@ -119,8 +119,8 @@ func (s *SoTAgent) Invoke(ctx context.Context, input *agentcore.AgentInput) (*ag
 
 	// Initialize output
 	output := &agentcore.AgentOutput{
-		ReasoningSteps: make([]agentcore.ReasoningStep, 0),
-		ToolCalls:      make([]agentcore.ToolCall, 0),
+		Steps: make([]agentcore.AgentStep, 0),
+		ToolCalls:      make([]agentcore.AgentToolCall, 0),
 		Metadata:       make(map[string]interface{}),
 	}
 
@@ -132,7 +132,7 @@ func (s *SoTAgent) Invoke(ctx context.Context, input *agentcore.AgentInput) (*ag
 	}
 
 	// Record skeleton generation
-	output.ReasoningSteps = append(output.ReasoningSteps, agentcore.ReasoningStep{
+	output.Steps = append(output.Steps, agentcore.AgentStep{
 		Step:        1,
 		Action:      "Generate Skeleton",
 		Description: fmt.Sprintf("Created %d skeleton points", len(skeleton)),
@@ -149,7 +149,7 @@ func (s *SoTAgent) Invoke(ctx context.Context, input *agentcore.AgentInput) (*ag
 	}
 
 	// Record elaboration phase
-	output.ReasoningSteps = append(output.ReasoningSteps, agentcore.ReasoningStep{
+	output.Steps = append(output.Steps, agentcore.AgentStep{
 		Step:        2,
 		Action:      "Parallel Elaboration",
 		Description: fmt.Sprintf("Elaborated %d points in parallel", len(skeleton)),
@@ -163,7 +163,7 @@ func (s *SoTAgent) Invoke(ctx context.Context, input *agentcore.AgentInput) (*ag
 	finalAnswer := s.aggregateResults(ctx, skeleton, input)
 
 	// Record aggregation
-	output.ReasoningSteps = append(output.ReasoningSteps, agentcore.ReasoningStep{
+	output.Steps = append(output.Steps, agentcore.AgentStep{
 		Step:        3,
 		Action:      "Aggregate Results",
 		Description: "Combined elaborated points into final answer",
@@ -279,7 +279,7 @@ func (s *SoTAgent) elaborateSkeletonParallel(ctx context.Context, skeleton []*Sk
 	// Group points by dependency level
 	levels := s.groupByDependencyLevel(skeleton)
 
-	// Mutex to protect concurrent writes to output.ReasoningSteps
+	// Mutex to protect concurrent writes to output.Steps
 	var stepsMu sync.Mutex
 
 	// Process each level
@@ -312,8 +312,8 @@ func (s *SoTAgent) elaborateSkeletonParallel(ctx context.Context, skeleton []*Sk
 
 				// Record elaboration step (protected by mutex)
 				stepsMu.Lock()
-				output.ReasoningSteps = append(output.ReasoningSteps, agentcore.ReasoningStep{
-					Step:        len(output.ReasoningSteps) + 1,
+				output.Steps = append(output.Steps, agentcore.AgentStep{
+					Step:        len(output.Steps) + 1,
 					Action:      fmt.Sprintf("Elaborate (Level %d)", levelIdx+1),
 					Description: p.Title,
 					Result:      s.truncateText(p.Elaboration, 100),
@@ -714,8 +714,8 @@ func (s *SoTAgent) RunGenerator(ctx context.Context, input *agentcore.AgentInput
 
 		// Initialize accumulated output
 		accumulated := &agentcore.AgentOutput{
-			ReasoningSteps: make([]agentcore.ReasoningStep, 0),
-			ToolCalls:      make([]agentcore.ToolCall, 0),
+			Steps: make([]agentcore.AgentStep, 0),
+			ToolCalls:      make([]agentcore.AgentToolCall, 0),
 			Metadata:       make(map[string]interface{}),
 		}
 
@@ -732,7 +732,7 @@ func (s *SoTAgent) RunGenerator(ctx context.Context, input *agentcore.AgentInput
 		}
 
 		// Record skeleton generation
-		accumulated.ReasoningSteps = append(accumulated.ReasoningSteps, agentcore.ReasoningStep{
+		accumulated.Steps = append(accumulated.Steps, agentcore.AgentStep{
 			Step:        1,
 			Action:      "Generate Skeleton",
 			Description: fmt.Sprintf("Created %d skeleton points", len(skeleton)),
@@ -764,7 +764,7 @@ func (s *SoTAgent) RunGenerator(ctx context.Context, input *agentcore.AgentInput
 		}
 
 		// Record elaboration phase
-		accumulated.ReasoningSteps = append(accumulated.ReasoningSteps, agentcore.ReasoningStep{
+		accumulated.Steps = append(accumulated.Steps, agentcore.AgentStep{
 			Step:        2,
 			Action:      "Parallel Elaboration",
 			Description: fmt.Sprintf("Elaborated %d points in parallel", len(skeleton)),
@@ -788,7 +788,7 @@ func (s *SoTAgent) RunGenerator(ctx context.Context, input *agentcore.AgentInput
 		finalAnswer := s.aggregateResults(ctx, skeleton, input)
 
 		// Record aggregation
-		accumulated.ReasoningSteps = append(accumulated.ReasoningSteps, agentcore.ReasoningStep{
+		accumulated.Steps = append(accumulated.Steps, agentcore.AgentStep{
 			Step:        3,
 			Action:      "Aggregate Results",
 			Description: "Combined elaborated points into final answer",
@@ -811,8 +811,8 @@ func (s *SoTAgent) RunGenerator(ctx context.Context, input *agentcore.AgentInput
 // createStepOutput creates a snapshot of current execution state
 func (s *SoTAgent) createStepOutput(accumulated *agentcore.AgentOutput, message string, startTime time.Time) *agentcore.AgentOutput {
 	stepOutput := &agentcore.AgentOutput{
-		ReasoningSteps: make([]agentcore.ReasoningStep, len(accumulated.ReasoningSteps)),
-		ToolCalls:      make([]agentcore.ToolCall, len(accumulated.ToolCalls)),
+		Steps: make([]agentcore.AgentStep, len(accumulated.Steps)),
+		ToolCalls:      make([]agentcore.AgentToolCall, len(accumulated.ToolCalls)),
 		Metadata:       make(map[string]interface{}),
 		Timestamp:      time.Now(),
 		Latency:        time.Since(startTime),
@@ -820,7 +820,7 @@ func (s *SoTAgent) createStepOutput(accumulated *agentcore.AgentOutput, message 
 	}
 
 	// Copy slices
-	copy(stepOutput.ReasoningSteps, accumulated.ReasoningSteps)
+	copy(stepOutput.Steps, accumulated.Steps)
 	copy(stepOutput.ToolCalls, accumulated.ToolCalls)
 
 	// Copy existing metadata
