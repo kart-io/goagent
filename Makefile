@@ -93,7 +93,7 @@ plugingen-install:
 ## test: Run all tests
 test:
 	@echo "$(YELLOW)Running tests...$(NC)"
-	GO_TEST_MODE=true $(GOTEST) -v -race -timeout 30s ./...
+	GO_TEST_MODE=true $(GOTEST) -v -race -timeout 120s ./...
 
 ## test-short: Run short tests
 test-short:

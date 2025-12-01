@@ -12,6 +12,11 @@ import (
 
 // TestQdrantVectorStore_Configuration tests Qdrant configuration validation
 func TestQdrantVectorStore_Configuration(t *testing.T) {
+	// 跳过需要真实 Qdrant 连接的测试
+	if testing.Short() {
+		t.Skip("Skipping integration test")
+	}
+
 	ctx := context.Background()
 
 	tests := []struct {

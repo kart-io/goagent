@@ -395,6 +395,10 @@ func TestCohereErrorHandling(t *testing.T) {
 
 // TestCohereRetry tests retry logic
 func TestCohereRetry(t *testing.T) {
+	// 设置测试模式以使用更短的重试延迟
+	os.Setenv("GO_TEST_MODE", "true")
+	defer os.Unsetenv("GO_TEST_MODE")
+
 	attempts := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts++
@@ -433,6 +437,10 @@ func TestCohereRetry(t *testing.T) {
 
 // TestCohereRetryExhausted tests when retries are exhausted
 func TestCohereRetryExhausted(t *testing.T) {
+	// 设置测试模式以使用更短的重试延迟
+	os.Setenv("GO_TEST_MODE", "true")
+	defer os.Unsetenv("GO_TEST_MODE")
+
 	attempts := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts++
