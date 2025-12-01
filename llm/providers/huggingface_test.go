@@ -430,6 +430,10 @@ func TestHuggingFaceModelLoading(t *testing.T) {
 
 // TestHuggingFaceRetryExhausted tests when retries are exhausted
 func TestHuggingFaceRetryExhausted(t *testing.T) {
+	// 设置测试模式以使用更短的重试延迟
+	os.Setenv("GO_TEST_MODE", "true")
+	defer os.Unsetenv("GO_TEST_MODE")
+
 	attempts := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts++

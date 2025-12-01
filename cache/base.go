@@ -111,18 +111,16 @@ func NewInMemoryCache(maxSize int, defaultTTL, cleanupInterval time.Duration) *I
 
 // Get 获取缓存值
 func (c *InMemoryCache) Get(ctx context.Context, key string) (interface{}, error) {
-	c.entriesMu.RLock()
+	c.entriesMu.Lock()
 	entry, ok := c.entries[key]
-	c.entriesMu.RUnlock()
-
 	if !ok {
+		c.entriesMu.Unlock()
 		c.misses.Add(1)
 		return nil, ErrCacheMiss
 	}
 
 	// 检查是否过期
 	if entry.IsExpired() {
-		c.entriesMu.Lock()
 		delete(c.entries, key)
 		c.entriesMu.Unlock()
 		c.misses.Add(1)
@@ -130,12 +128,14 @@ func (c *InMemoryCache) Get(ctx context.Context, key string) (interface{}, error
 		return nil, ErrCacheMiss
 	}
 
-	// 更新访问信息 (Note: this is a race, but acceptable for cache stats)
+	// 更新访问信息（在持有锁的情况下更新，保证线程安全）
 	entry.AccessTime = time.Now()
 	entry.AccessCount++
+	value := entry.Value
+	c.entriesMu.Unlock()
 
 	c.hits.Add(1)
-	return entry.Value, nil
+	return value, nil
 }
 
 // Set 设置缓存值
