@@ -290,13 +290,13 @@ func TestAgentOutput_Structure(t *testing.T) {
 	}
 
 	output := &AgentOutput{
-		Result:         map[string]interface{}{"root_cause": "OOMKilled"},
-		Status:         "success",
-		Message:        "diagnosis completed",
+		Result:    map[string]interface{}{"root_cause": "OOMKilled"},
+		Status:    "success",
+		Message:   "diagnosis completed",
 		Steps:     executionSteps,
-		ToolCalls:      toolCalls,
-		Latency:        200 * time.Millisecond,
-		Timestamp:      time.Now(),
+		ToolCalls: toolCalls,
+		Latency:   200 * time.Millisecond,
+		Timestamp: time.Now(),
 		Metadata: map[string]interface{}{
 			"confidence": 0.95,
 		},

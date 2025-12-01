@@ -108,9 +108,9 @@ func (m *MetaCoTAgent) Invoke(ctx context.Context, input *agentcore.AgentInput) 
 
 	// Initialize output
 	output := &agentcore.AgentOutput{
-		Steps: make([]agentcore.AgentStep, 0),
-		ToolCalls:      make([]agentcore.AgentToolCall, 0),
-		Metadata:       make(map[string]interface{}),
+		Steps:     make([]agentcore.AgentStep, 0),
+		ToolCalls: make([]agentcore.AgentToolCall, 0),
+		Metadata:  make(map[string]interface{}),
 	}
 
 	// Create main question
@@ -685,9 +685,9 @@ func (m *MetaCoTAgent) RunGenerator(ctx context.Context, input *agentcore.AgentI
 
 		// Initialize accumulated output
 		accumulated := &agentcore.AgentOutput{
-			Steps: make([]agentcore.AgentStep, 0),
-			ToolCalls:      make([]agentcore.AgentToolCall, 0),
-			Metadata:       make(map[string]interface{}),
+			Steps:     make([]agentcore.AgentStep, 0),
+			ToolCalls: make([]agentcore.AgentToolCall, 0),
+			Metadata:  make(map[string]interface{}),
 		}
 
 		// Create main question
@@ -873,12 +873,12 @@ func (m *MetaCoTAgent) processSelfAskGenerator(ctx context.Context, question *Qu
 // createStepOutput creates a snapshot of current execution state
 func (m *MetaCoTAgent) createStepOutput(accumulated *agentcore.AgentOutput, message string, startTime time.Time) *agentcore.AgentOutput {
 	stepOutput := &agentcore.AgentOutput{
-		Steps: make([]agentcore.AgentStep, len(accumulated.Steps)),
-		ToolCalls:      make([]agentcore.AgentToolCall, len(accumulated.ToolCalls)),
-		Metadata:       make(map[string]interface{}),
-		Timestamp:      time.Now(),
-		Latency:        time.Since(startTime),
-		Message:        message,
+		Steps:     make([]agentcore.AgentStep, len(accumulated.Steps)),
+		ToolCalls: make([]agentcore.AgentToolCall, len(accumulated.ToolCalls)),
+		Metadata:  make(map[string]interface{}),
+		Timestamp: time.Now(),
+		Latency:   time.Since(startTime),
+		Message:   message,
 	}
 
 	// Copy slices

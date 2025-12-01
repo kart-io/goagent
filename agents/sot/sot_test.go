@@ -411,9 +411,9 @@ func TestSoTAgent_ParallelElaboration(t *testing.T) {
 
 	input := &core.AgentInput{Task: "Test parallel"}
 	output := &core.AgentOutput{
-		Steps: make([]core.AgentStep, 0),
-		ToolCalls:      make([]core.AgentToolCall, 0),
-		Metadata:       make(map[string]interface{}),
+		Steps:     make([]core.AgentStep, 0),
+		ToolCalls: make([]core.AgentToolCall, 0),
+		Metadata:  make(map[string]interface{}),
 	}
 
 	err := agent.elaborateSkeletonParallel(ctx, skeleton, input, output)
@@ -659,9 +659,9 @@ func TestSoTAgent_ConcurrentElaborationWithDependencies(t *testing.T) {
 
 	input := &core.AgentInput{Task: "Test dependencies"}
 	output := &core.AgentOutput{
-		Steps: make([]core.AgentStep, 0),
-		ToolCalls:      make([]core.AgentToolCall, 0),
-		Metadata:       make(map[string]interface{}),
+		Steps:     make([]core.AgentStep, 0),
+		ToolCalls: make([]core.AgentToolCall, 0),
+		Metadata:  make(map[string]interface{}),
 	}
 
 	err := agent.elaborateSkeletonParallel(ctx, skeleton, input, output)

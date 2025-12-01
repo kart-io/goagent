@@ -80,9 +80,9 @@ func NewDataPools() *DataPools {
 		outputPool: &sync.Pool{
 			New: func() interface{} {
 				return &core.AgentOutput{
-					Steps: make([]core.AgentStep, 0, 10), // 预分配容量
-					ToolCalls:      make([]core.AgentToolCall, 0, 5),       // 预分配容量
-					Metadata:       make(map[string]interface{}, 8),   // 预分配容量
+					Steps:     make([]core.AgentStep, 0, 10),    // 预分配容量
+					ToolCalls: make([]core.AgentToolCall, 0, 5), // 预分配容量
+					Metadata:  make(map[string]interface{}, 8),  // 预分配容量
 				}
 			},
 		},

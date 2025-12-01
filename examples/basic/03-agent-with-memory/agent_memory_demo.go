@@ -34,8 +34,8 @@ func NewAnalysisAgent(memMgr interfaces.MemoryManager) *AnalysisAgent {
 func (a *AnalysisAgent) Invoke(ctx context.Context, input *core.AgentInput) (*core.AgentOutput, error) {
 	start := time.Now()
 	output := &core.AgentOutput{
-		Steps: make([]core.AgentStep, 0),
-		Timestamp:      start,
+		Steps:     make([]core.AgentStep, 0),
+		Timestamp: start,
 	}
 
 	fmt.Printf("\n=== %s Executing ===\n", a.Name())

@@ -119,9 +119,9 @@ func (t *ToTAgent) Invoke(ctx context.Context, input *agentcore.AgentInput) (*ag
 
 	// Initialize output
 	output := &agentcore.AgentOutput{
-		Steps: make([]agentcore.AgentStep, 0),
-		ToolCalls:      make([]agentcore.AgentToolCall, 0),
-		Metadata:       make(map[string]interface{}),
+		Steps:     make([]agentcore.AgentStep, 0),
+		ToolCalls: make([]agentcore.AgentToolCall, 0),
+		Metadata:  make(map[string]interface{}),
 	}
 
 	// Create root node
@@ -843,9 +843,9 @@ func (t *ToTAgent) RunGenerator(ctx context.Context, input *agentcore.AgentInput
 
 		// Initialize output
 		output := &agentcore.AgentOutput{
-			Steps: make([]agentcore.AgentStep, 0),
-			ToolCalls:      make([]agentcore.AgentToolCall, 0),
-			Metadata:       make(map[string]interface{}),
+			Steps:     make([]agentcore.AgentStep, 0),
+			ToolCalls: make([]agentcore.AgentToolCall, 0),
+			Metadata:  make(map[string]interface{}),
 		}
 
 		// Create root node
@@ -1206,12 +1206,12 @@ func (t *ToTAgent) breadthFirstSearchGenerator(
 // createSearchStepOutput creates a snapshot of current search state
 func (t *ToTAgent) createSearchStepOutput(output *agentcore.AgentOutput, message string, depth int, startTime time.Time) *agentcore.AgentOutput {
 	stepOutput := &agentcore.AgentOutput{
-		Steps: make([]agentcore.AgentStep, len(output.Steps)),
-		ToolCalls:      make([]agentcore.AgentToolCall, len(output.ToolCalls)),
-		Metadata:       make(map[string]interface{}),
-		Timestamp:      time.Now(),
-		Latency:        time.Since(startTime),
-		Message:        message,
+		Steps:     make([]agentcore.AgentStep, len(output.Steps)),
+		ToolCalls: make([]agentcore.AgentToolCall, len(output.ToolCalls)),
+		Metadata:  make(map[string]interface{}),
+		Timestamp: time.Now(),
+		Latency:   time.Since(startTime),
+		Message:   message,
 	}
 
 	// Copy slices
