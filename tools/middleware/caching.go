@@ -86,7 +86,7 @@ type CachingMiddleware struct {
 //   - *CachingMiddleware: 缓存中间件实例
 func NewCachingMiddleware(opts ...CachingOption) *CachingMiddleware {
 	cfg := &CachingConfig{
-		Cache:   cache.NewLRUCache(1000, 5*time.Minute, 1*time.Minute), // 默认 LRU 缓存
+		Cache:   cache.NewSimpleCache(5 * time.Minute), // 使用简化的 SimpleCache
 		TTL:     5 * time.Minute,
 		KeyFunc: defaultCacheKeyFunc,
 		Logger:  nil, // 默认不使用日志（避免依赖）

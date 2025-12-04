@@ -91,6 +91,9 @@ type InMemoryCache struct {
 }
 
 // NewInMemoryCache 创建内存缓存
+//
+// Deprecated: 使用 NewSimpleCache 代替。此函数将在未来版本中移除。
+// InMemoryCache 实现过于复杂，包含不必要的特性。建议使用更简化的 SimpleCache。
 func NewInMemoryCache(maxSize int, defaultTTL, cleanupInterval time.Duration) *InMemoryCache {
 	cache := &InMemoryCache{
 		entries:         make(map[string]*CacheEntry),
@@ -316,6 +319,9 @@ type LRUCache struct {
 }
 
 // NewLRUCache 创建 LRU 缓存
+//
+// Deprecated: 使用 NewSimpleCache 代替。此函数将在未来版本中移除。
+// LRU驱逐逻辑在实际场景中很少使用，SimpleCache 基于 TTL 的方式更简单有效。
 func NewLRUCache(maxSize int, defaultTTL, cleanupInterval time.Duration) *LRUCache {
 	return &LRUCache{
 		InMemoryCache: NewInMemoryCache(maxSize, defaultTTL, cleanupInterval),
@@ -353,6 +359,9 @@ type MultiTierCache struct {
 }
 
 // NewMultiTierCache 创建多级缓存
+//
+// Deprecated: 使用 NewSimpleCache 代替。此函数将在未来版本中移除。
+// 多级缓存在单进程应用中过于复杂，实际使用场景有限。
 func NewMultiTierCache(tiers ...Cache) *MultiTierCache {
 	return &MultiTierCache{
 		tiers: tiers,
