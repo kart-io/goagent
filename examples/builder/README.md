@@ -122,6 +122,22 @@ go run main.go
 
 ## 💡 快速开始
 
+### 配置 API Key
+
+运行示例前需要配置 API Key（选择其一即可）：
+
+```bash
+# 方式 1: 使用 DeepSeek
+export DEEPSEEK_API_KEY=your-deepseek-key
+
+# 方式 2: 使用 Kimi (月之暗面)
+export KIMI_API_KEY=your-kimi-key
+```
+
+**获取 API Key**：
+- **DeepSeek**: <https://platform.deepseek.com/>
+- **Kimi**: <https://platform.moonshot.cn/>
+
 ### 如果你是新手...
 
 **从 `simple/` 开始！**

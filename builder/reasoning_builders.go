@@ -425,8 +425,8 @@ func GoTAgent(llmClient llm.Client, config *GoTAgentConfig) *got.GoTAgent {
 		ParallelExecution: true,
 		MergeStrategy:     "weighted",
 		CycleDetection:    true,
-		PruneThreshold:    0.5,          // 优化：从 0.3 提高到 0.5
-		FastEvaluation:    true,         // 优化：默认启用快速评估
+		PruneThreshold:    0.5,  // 优化：从 0.3 提高到 0.5
+		FastEvaluation:    true, // 优化：默认启用快速评估
 		NodeTimeout:       30 * time.Second,
 	}
 
@@ -483,11 +483,11 @@ func GoTAgent(llmClient llm.Client, config *GoTAgentConfig) *got.GoTAgent {
 //	agent := builder.GoTAgentForSlowAPI(llmClient)
 func GoTAgentForSlowAPI(llmClient llm.Client) *got.GoTAgent {
 	return GoTAgent(llmClient, &GoTAgentConfig{
-		Name:            "got-agent-minimal",
-		Description:     "Graph-of-Thought agent optimized for slow APIs",
-		MinimalMode:     true,
-		FastEvaluation:  true,
-		NodeTimeout:     120 * time.Second, // 慢速 API 需要更长超时
+		Name:           "got-agent-minimal",
+		Description:    "Graph-of-Thought agent optimized for slow APIs",
+		MinimalMode:    true,
+		FastEvaluation: true,
+		NodeTimeout:    120 * time.Second, // 慢速 API 需要更长超时
 	})
 }
 
