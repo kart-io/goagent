@@ -920,22 +920,27 @@ func TestStreamMultiplexer_SlowConsumer(t *testing.T) {
 func BenchmarkStreamManager_Transform(b *testing.B) {
 	mgr := NewStreamManager(StreamManagerConfig{BufferSize: 1000, Timeout: 30 * time.Second})
 
-	input := make(chan *StreamChunk, 1000)
-
 	transformer := func(chunk *StreamChunk) (*StreamChunk, error) {
 		return chunk, nil
 	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		input <- NewStreamChunk(i)
-	}
-	close(input) // Close immediately after sending data to avoid deadlock
+		input := make(chan *StreamChunk, 10)
 
-	output := mgr.Transform(context.Background(), input, transformer)
+		// 在后台发送数据并关闭channel
+		go func() {
+			for j := 0; j < 10; j++ {
+				input <- NewStreamChunk(j)
+			}
+			close(input)
+		}()
 
-	for range output {
-		// Drain the output
+		output := mgr.Transform(context.Background(), input, transformer)
+
+		// 消费所有输出
+		for range output {
+		}
 	}
 }
 
@@ -943,22 +948,27 @@ func BenchmarkStreamManager_Transform(b *testing.B) {
 func BenchmarkStreamManager_Filter(b *testing.B) {
 	mgr := NewStreamManager(StreamManagerConfig{BufferSize: 1000, Timeout: 30 * time.Second})
 
-	input := make(chan *StreamChunk, 1000)
-
 	predicate := func(chunk *StreamChunk) bool {
 		return true
 	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		input <- NewStreamChunk(i)
-	}
-	close(input) // Close immediately after sending data to avoid deadlock
+		input := make(chan *StreamChunk, 10)
 
-	output := mgr.Filter(context.Background(), input, predicate)
+		// 在后台发送数据并关闭channel
+		go func() {
+			for j := 0; j < 10; j++ {
+				input <- NewStreamChunk(j)
+			}
+			close(input)
+		}()
 
-	for range output {
-		// Drain the output
+		output := mgr.Filter(context.Background(), input, predicate)
+
+		// 消费所有输出
+		for range output {
+		}
 	}
 }
 

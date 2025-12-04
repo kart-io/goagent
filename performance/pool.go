@@ -43,7 +43,7 @@ func DefaultPoolConfig() PoolConfig {
 		MaxSize:         50,
 		IdleTimeout:     5 * time.Minute,
 		MaxLifetime:     30 * time.Minute,
-		AcquireTimeout:  10 * time.Second,
+		AcquireTimeout:  core.DefaultPoolAcquireTimeout,
 		CleanupInterval: 1 * time.Minute,
 	}
 }

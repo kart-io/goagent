@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	coreTimeout "github.com/kart-io/goagent/core"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/mcp/core"
 )
@@ -16,7 +17,7 @@ type StandardExecutor struct {
 // NewStandardExecutor 创建标准执行器
 func NewStandardExecutor() *StandardExecutor {
 	return &StandardExecutor{
-		defaultTimeout: 30 * time.Second,
+		defaultTimeout: coreTimeout.DefaultToolTimeout,
 	}
 }
 

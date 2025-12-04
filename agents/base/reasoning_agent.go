@@ -142,6 +142,40 @@ func (b *BaseReasoningAgent) Invoke(ctx context.Context, input *agentcore.AgentI
 	return output, nil
 }
 
+// InvokeFast 快速执行推理Agent（绕过回调）
+//
+// 用于热路径优化，直接执行策略逻辑，跳过回调
+// 性能提升：避免回调遍历开销
+//
+// 注意：此方法不会触发任何回调（OnStart/OnFinish等）
+// 仅在性能关键路径且不需要额外处理时使用
+//
+//go:inline
+func (b *BaseReasoningAgent) InvokeFast(ctx context.Context, input *agentcore.AgentInput) (*agentcore.AgentOutput, error) {
+	startTime := time.Now()
+
+	// 初始化输出
+	output := b.initOutput()
+
+	// 直接执行策略（跳过回调）
+	result, err := b.strategy.Execute(ctx, input, b.llm, b.tools, b.toolsByName, output)
+	if err != nil {
+		output.Status = interfaces.StatusFailed
+		output.Message = "Strategy execution failed: " + err.Error()
+		output.Timestamp = time.Now()
+		output.Latency = time.Since(startTime)
+		return output, err
+	}
+
+	// 设置结果
+	output.Result = result
+	output.Status = interfaces.StatusSuccess
+	output.Timestamp = time.Now()
+	output.Latency = time.Since(startTime)
+
+	return output, nil
+}
+
 // Stream 流式执行推理Agent
 func (b *BaseReasoningAgent) Stream(ctx context.Context, input *agentcore.AgentInput) (<-chan agentcore.StreamChunk[*agentcore.AgentOutput], error) {
 	outChan := make(chan agentcore.StreamChunk[*agentcore.AgentOutput])

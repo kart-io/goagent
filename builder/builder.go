@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"strings"
 	"sync"
 	"time"
 
@@ -15,10 +16,18 @@ import (
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/common"
 	"github.com/kart-io/goagent/store"
 	"github.com/kart-io/goagent/store/memory"
 	"github.com/kart-io/goagent/utils/json"
 )
+
+// commonToolCallingClient 定义内部接口，兼容 common.ToolCallResponse 返回类型
+// 这是因为 llm.ToolCallingClient 要求返回 *llm.ToolCallResponse
+// 但 DeepSeek/OpenAI 等实际返回的是 *common.ToolCallResponse
+type commonToolCallingClient interface {
+	GenerateWithTools(ctx context.Context, prompt string, tools []interfaces.Tool) (*common.ToolCallResponse, error)
+}
 
 // AgentBuilder 提供用于构建 Agent 的 fluent API
 //
@@ -194,9 +203,10 @@ func (b *AgentBuilder[C, S]) createHandler(runtime *execution.Runtime[C, S]) mid
 
 		// 创建响应
 		return &middleware.MiddlewareResponse{
-			Output:   response.Content,
-			State:    request.State,
-			Metadata: request.Metadata,
+			Output:     response.Content,
+			State:      request.State,
+			Metadata:   request.Metadata,
+			TokenUsage: response.Usage,
 		}, nil
 	}
 }
@@ -283,11 +293,12 @@ func (a *ConfigurableAgent[C, S]) Execute(ctx context.Context, input interface{}
 
 	// 创建输出
 	output := &AgentOutput{
-		Result:    response.Output,
-		State:     response.State,
-		Metadata:  response.Metadata,
-		Duration:  response.Duration,
-		Timestamp: time.Now(),
+		Result:     response.Output,
+		State:      response.State,
+		Metadata:   response.Metadata,
+		Duration:   response.Duration,
+		Timestamp:  time.Now(),
+		TokenUsage: response.TokenUsage,
 	}
 
 	// 通知回调
@@ -302,47 +313,128 @@ func (a *ConfigurableAgent[C, S]) Execute(ctx context.Context, input interface{}
 
 // ExecuteWithTools 使用工具执行能力运行 Agent
 func (a *ConfigurableAgent[C, S]) ExecuteWithTools(ctx context.Context, input interface{}) (*AgentOutput, error) {
+	// 检查 LLM 客户端是否支持工具调用
+	// 优先检查 commonToolCallingClient（实际实现使用的接口）
+	toolCaller, ok := a.llmClient.(commonToolCallingClient)
+	if !ok {
+		// 也尝试检查标准的 llm.ToolCallingClient
+		if stdToolCaller, stdOk := a.llmClient.(llm.ToolCallingClient); stdOk {
+			// 如果实现了标准接口，包装成 commonToolCallingClient
+			toolCaller = &stdToolCallerWrapper{client: stdToolCaller}
+		} else {
+			// 不支持工具调用，回退到普通执行
+			return a.Execute(ctx, input)
+		}
+	}
+
+	// 如果没有工具配置，直接执行
+	if len(a.tools) == 0 {
+		return a.Execute(ctx, input)
+	}
+
+	// 如果配置了超时则应用
+	if a.config.Timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, a.config.Timeout)
+		defer cancel()
+	}
+
+	startTime := time.Now()
 	iterations := 0
-	var lastOutput *AgentOutput
+	var totalTokenUsage *interfaces.TokenUsage
+
+	// 构建初始提示
+	prompt := a.buildPromptWithSystemMessage(input)
 
 	for iterations < a.config.MaxIterations {
-		// 执行一步
-		output, err := a.Execute(ctx, input)
+		// 使用工具调用接口
+		response, err := toolCaller.GenerateWithTools(ctx, prompt, a.tools)
 		if err != nil {
-			return nil, err
+			return nil, agentErrors.Wrap(err, agentErrors.CodeLLMRequest, "tool-enabled LLM request failed")
 		}
 
-		lastOutput = output
-
-		// 检查是否需要使用工具
-		toolCalls := a.extractToolCalls(output.Result)
-		if len(toolCalls) == 0 {
-			// 不需要工具,返回结果
-			return output, nil
+		// 累计 token 使用
+		if response.Usage != nil {
+			if totalTokenUsage == nil {
+				totalTokenUsage = &interfaces.TokenUsage{}
+			}
+			totalTokenUsage.Add(response.Usage)
 		}
 
-		// 执行工具
-		toolResults := make([]interface{}, 0, len(toolCalls))
-		for _, call := range toolCalls {
+		// 如果没有工具调用，返回结果
+		if len(response.ToolCalls) == 0 {
+			return &AgentOutput{
+				Result:     response.Content,
+				State:      a.runtime.State,
+				Metadata:   make(map[string]interface{}),
+				Duration:   time.Since(startTime),
+				Timestamp:  time.Now(),
+				TokenUsage: totalTokenUsage,
+			}, nil
+		}
+
+		// 执行工具调用
+		toolResults := make([]string, 0, len(response.ToolCalls))
+		for _, tc := range response.ToolCalls {
+			call := ToolCall{}
+
+			// common.ToolCall 可能有两种格式：
+			// 1. 直接的 Name 和 Arguments 字段
+			// 2. Function 嵌套结构
+			if tc.Name != "" {
+				call.Name = tc.Name
+				call.Input = tc.Arguments
+			} else if tc.Function != nil {
+				call.Name = tc.Function.Name
+				// 解析 JSON 参数
+				if tc.Function.Arguments != "" {
+					var args map[string]interface{}
+					if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err == nil {
+						call.Input = args
+					}
+				}
+			}
+
+			if call.Name == "" {
+				continue // 跳过无效的工具调用
+			}
+
 			result, err := a.executeToolCall(ctx, call)
 			if err != nil {
 				return nil, agentErrors.Wrap(err, agentErrors.CodeToolExecution, "tool execution failed")
 			}
-			toolResults = append(toolResults, result)
+
+			// 格式化工具结果
+			resultStr, _ := json.Marshal(result)
+			toolResults = append(toolResults, fmt.Sprintf("工具 %s 执行结果: %s", call.Name, string(resultStr)))
 		}
 
-		// 使用工具结果更新输入用于下一次迭代
-		input = map[string]interface{}{
-			"previous_output": output.Result,
-			"tool_results":    toolResults,
-		}
+		// 构建下一轮的提示，包含工具结果
+		prompt = fmt.Sprintf("%s\n\n工具调用结果:\n%s\n\n请根据以上工具执行结果，给出最终回答。",
+			prompt, strings.Join(toolResults, "\n"))
 
 		iterations++
 	}
 
 	// 达到最大迭代次数
-	return lastOutput, agentErrors.New(agentErrors.CodeAgentExecution, "max iterations reached").
-		WithContext("max_iterations", a.config.MaxIterations)
+	return &AgentOutput{
+			Result:     "达到最大迭代次数，无法完成任务",
+			State:      a.runtime.State,
+			Metadata:   make(map[string]interface{}),
+			Duration:   time.Since(startTime),
+			Timestamp:  time.Now(),
+			TokenUsage: totalTokenUsage,
+		}, agentErrors.New(agentErrors.CodeAgentExecution, "max iterations reached").
+			WithContext("max_iterations", a.config.MaxIterations)
+}
+
+// buildPromptWithSystemMessage 构建包含系统消息的提示
+func (a *ConfigurableAgent[C, S]) buildPromptWithSystemMessage(input interface{}) string {
+	inputStr := fmt.Sprintf("%v", input)
+	if a.systemPrompt != "" {
+		return fmt.Sprintf("系统指令: %s\n\n用户请求: %s", a.systemPrompt, inputStr)
+	}
+	return inputStr
 }
 
 // extractToolCalls 从 LLM 输出中提取工具调用
@@ -495,9 +587,94 @@ type ToolCall struct {
 
 // AgentOutput 表示 Agent 执行结果
 type AgentOutput struct {
-	Result    interface{}
-	State     core.State
-	Metadata  map[string]interface{}
-	Duration  time.Duration
-	Timestamp time.Time
+	Result     interface{}
+	State      core.State
+	Metadata   map[string]interface{}
+	Duration   time.Duration
+	Timestamp  time.Time
+	TokenUsage *interfaces.TokenUsage
+}
+
+// ==============================
+// 简化 API（推荐使用）
+// ==============================
+
+// SimpleAgentBuilder 是 AgentBuilder 的简化版本类型别名
+//
+// 使用最常见的类型参数组合：
+//   - Context: any (通用上下文)
+//   - State: *core.AgentState (标准状态实现)
+//
+// 这个类型别名消除了 95% 以上使用场景中的泛型复杂度。
+// 如果需要自定义 Context 或 State，请使用原始的 NewAgentBuilder[C, S] 函数。
+//
+// 使用示例：
+//
+//	builder := builder.NewSimpleBuilder(llmClient)
+//	agent, err := builder.
+//	    WithSystemPrompt("你是一个助手").
+//	    Build()
+type SimpleAgentBuilder = AgentBuilder[any, *core.AgentState]
+
+// SimpleAgent 是 ConfigurableAgent 的简化版本类型别名
+//
+// 使用最常见的类型参数组合，与 SimpleAgentBuilder 匹配。
+type SimpleAgent = ConfigurableAgent[any, *core.AgentState]
+
+// NewSimpleBuilder 创建一个简化的 Agent 构建器
+//
+// 这是推荐的构建器创建方式，适用于大多数使用场景。
+// 相比 NewAgentBuilder[any, *core.AgentState](client)，
+// 此函数无需显式指定泛型参数，使用更简洁。
+//
+// 参数：
+//   - llmClient: LLM 客户端实例
+//
+// 返回：
+//   - *SimpleAgentBuilder: 简化的构建器实例
+//
+// 使用示例：
+//
+//	client := providers.NewOpenAIClient(apiKey)
+//	builder := builder.NewSimpleBuilder(client)
+//	agent, err := builder.
+//	    WithSystemPrompt("你是一个助手").
+//	    WithTools(calculatorTool, searchTool).
+//	    Build()
+func NewSimpleBuilder(llmClient llm.Client) *SimpleAgentBuilder {
+	return NewAgentBuilder[any, *core.AgentState](llmClient)
+}
+
+// stdToolCallerWrapper 将 llm.ToolCallingClient 包装成 commonToolCallingClient
+type stdToolCallerWrapper struct {
+	client llm.ToolCallingClient
+}
+
+// GenerateWithTools 实现 commonToolCallingClient 接口
+func (w *stdToolCallerWrapper) GenerateWithTools(ctx context.Context, prompt string, tools []interfaces.Tool) (*common.ToolCallResponse, error) {
+	resp, err := w.client.GenerateWithTools(ctx, prompt, tools)
+	if err != nil {
+		return nil, err
+	}
+
+	// 转换 llm.ToolCallResponse 到 common.ToolCallResponse
+	result := &common.ToolCallResponse{
+		Content: resp.Content,
+		Usage:   resp.Usage,
+	}
+
+	for _, tc := range resp.ToolCalls {
+		result.ToolCalls = append(result.ToolCalls, common.ToolCall{
+			ID: tc.ID,
+			Function: &struct {
+				Name      string `json:"name"`
+				Arguments string `json:"arguments"`
+			}{
+				Name:      tc.Function.Name,
+				Arguments: tc.Function.Arguments,
+			},
+		})
+	}
+
+	return result, nil
 }

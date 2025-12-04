@@ -416,7 +416,8 @@ func TestNew_WithOptions(t *testing.T) {
 		assert.NotNil(t, s)
 		assert.Equal(t, mr.Addr(), s.config.Addr)
 		assert.Equal(t, "agent:store:", s.config.Prefix) // Default prefix
-		assert.Equal(t, 10, s.config.PoolSize)           // Default pool size
+		assert.Equal(t, 100, s.config.PoolSize)          // Updated default pool size
+		assert.Equal(t, 10, s.config.MinIdleConns)       // Updated default min idle conns
 	})
 
 	t.Run("with custom options", func(t *testing.T) {
@@ -447,10 +448,10 @@ func TestNew_WithOptions(t *testing.T) {
 		assert.Equal(t, 0, config.DB) // Should keep default
 
 		WithPoolSize(0)(config)
-		assert.Equal(t, 10, config.PoolSize) // Should keep default
+		assert.Equal(t, 100, config.PoolSize) // Should keep updated default
 
 		WithMinIdleConns(-1)(config)
-		assert.Equal(t, 2, config.MinIdleConns) // Should keep default
+		assert.Equal(t, 10, config.MinIdleConns) // Should keep updated default
 
 		WithPrefix("")(config)
 		assert.Equal(t, "agent:store:", config.Prefix) // Should keep default

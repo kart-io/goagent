@@ -141,6 +141,34 @@ func WithStreamingEnabled(enabled bool) ClientOption {
 	}
 }
 
+// WithResponseFormat 设置响应格式
+//
+// 支持的格式类型：
+//   - "text": 普通文本格式（默认）
+//   - "json_object": JSON 对象格式（确保 LLM 返回有效的 JSON）
+//
+// 使用示例：
+//
+//	// 使用预定义常量
+//	llm.WithResponseFormat(llm.ResponseFormatJSON)
+//
+//	// 自定义格式
+//	llm.WithResponseFormat(&llm.ResponseFormat{Type: "json_object"})
+func WithResponseFormat(format *ResponseFormat) ClientOption {
+	return func(c *LLMOptions) {
+		c.ResponseFormat = format
+	}
+}
+
+// WithJSONResponse 便捷方法：设置响应格式为 JSON
+//
+// 等同于 WithResponseFormat(ResponseFormatJSON)
+func WithJSONResponse() ClientOption {
+	return func(c *LLMOptions) {
+		c.ResponseFormat = ResponseFormatJSON
+	}
+}
+
 // WithCustomHeaders 设置自定义 HTTP 头
 func WithCustomHeaders(headers map[string]string) ClientOption {
 	return func(c *LLMOptions) {

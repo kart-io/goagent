@@ -45,6 +45,15 @@ func WithConnMaxLifetime(d time.Duration) PostgresOption {
 	}
 }
 
+// WithConnMaxIdleTime 设置空闲连接超时时间
+func WithConnMaxIdleTime(d time.Duration) PostgresOption {
+	return func(cfg *Config) {
+		if d > 0 {
+			cfg.ConnMaxIdleTime = d
+		}
+	}
+}
+
 // WithLogLevel 设置 GORM 日志级别
 func WithLogLevel(level logger.LogLevel) PostgresOption {
 	return func(cfg *Config) {
