@@ -106,12 +106,24 @@ loggingMW := middleware.NewLoggingMiddleware(
 
 **使用示例**：
 ```go
+import (
+    "github.com/kart-io/goagent/cache"
+    "github.com/kart-io/goagent/tools/middleware"
+)
+
+// 创建缓存实例（推荐使用 SimpleCache）
+cacheInstance := cache.NewSimpleCache(10 * time.Minute)
+
+// 配置缓存中间件
 cachingMW := middleware.Caching(
-    middleware.WithCache(myCache),
+    middleware.WithCache(cacheInstance),
     middleware.WithTTL(10 * time.Minute),
-    middleware.WithCacheKeyFunc(customKeyFunc),
+    middleware.WithCacheKeyFunc(customKeyFunc),  // 可选：自定义键函数
 )
 ```
+
+> **💡 提示**：推荐使用 `cache.NewSimpleCache()` 作为默认缓存实现。
+> 详细的缓存使用指南请参考 [CACHING_GUIDE.md](./CACHING_GUIDE.md)。
 
 **元数据**：
 ```go
@@ -122,7 +134,8 @@ output.Metadata["cache_stored"] // true (仅首次调用)
 **注意事项**：
 - 缓存键默认为 `tool:<name>:<sha256(args)[:8]>`
 - 内部元数据（`__` 前缀）不影响缓存键
-- 并发安全（使用 LRU 缓存时）
+- 完全并发安全（基于 sync.Map 或 sync.RWMutex）
+- 仅缓存成功结果（错误不会被缓存）
 
 ### 3. RateLimit（限流）
 
