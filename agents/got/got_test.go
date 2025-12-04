@@ -87,8 +87,8 @@ func TestNewGoTAgent(t *testing.T) {
 			check: func(t *testing.T, agent *GoTAgent) {
 				assert.Equal(t, "test-got", agent.Name())
 				assert.Equal(t, "Test GoT Agent", agent.Description())
-				assert.Equal(t, 10, agent.config.MaxNodes)        // 优化后的默认值
-				assert.Equal(t, 3, agent.config.MaxEdgesPerNode)  // 优化后的默认值
+				assert.Equal(t, 10, agent.config.MaxNodes)       // 优化后的默认值
+				assert.Equal(t, 3, agent.config.MaxEdgesPerNode) // 优化后的默认值
 				assert.Equal(t, "weighted", agent.config.MergeStrategy)
 				assert.Equal(t, 0.5, agent.config.PruneThreshold) // 优化后的默认值
 			},
@@ -658,11 +658,11 @@ func TestGoTAgent_FastEvaluation(t *testing.T) {
 	})
 
 	tests := []struct {
-		name          string
-		thought       string
-		task          string
-		expectHigher  float64 // 期望分数高于此值
-		expectLower   float64 // 期望分数低于此值
+		name         string
+		thought      string
+		task         string
+		expectHigher float64 // 期望分数高于此值
+		expectLower  float64 // 期望分数低于此值
 	}{
 		{
 			name:         "relevant long thought",
@@ -787,8 +787,8 @@ func TestGoTAgent_ParseThoughts(t *testing.T) {
 			expected: 3,
 		},
 		{
-			name: "无分隔符",
-			content: "这是一个完整的思考，没有分隔符。",
+			name:     "无分隔符",
+			content:  "这是一个完整的思考，没有分隔符。",
 			expected: 1,
 		},
 		{

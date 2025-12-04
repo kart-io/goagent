@@ -30,16 +30,16 @@ type DeepSeekProvider struct {
 
 // DeepSeekRequest represents a request to DeepSeek API
 type DeepSeekRequest struct {
-	Model          string                   `json:"model"`
-	Messages       []DeepSeekMessage        `json:"messages"`
-	Temperature    float64                  `json:"temperature,omitempty"`
-	MaxTokens      int                      `json:"max_tokens,omitempty"`
-	TopP           float64                  `json:"top_p,omitempty"`
-	Stream         bool                     `json:"stream,omitempty"`
-	Tools          []DeepSeekTool           `json:"tools,omitempty"`
-	ToolChoice     interface{}              `json:"tool_choice,omitempty"`
-	Stop           []string                 `json:"stop,omitempty"`
-	ResponseFormat *DeepSeekResponseFormat  `json:"response_format,omitempty"`
+	Model          string                  `json:"model"`
+	Messages       []DeepSeekMessage       `json:"messages"`
+	Temperature    float64                 `json:"temperature,omitempty"`
+	MaxTokens      int                     `json:"max_tokens,omitempty"`
+	TopP           float64                 `json:"top_p,omitempty"`
+	Stream         bool                    `json:"stream,omitempty"`
+	Tools          []DeepSeekTool          `json:"tools,omitempty"`
+	ToolChoice     interface{}             `json:"tool_choice,omitempty"`
+	Stop           []string                `json:"stop,omitempty"`
+	ResponseFormat *DeepSeekResponseFormat `json:"response_format,omitempty"`
 }
 
 // DeepSeekResponseFormat 定义响应格式

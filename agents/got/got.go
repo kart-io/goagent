@@ -53,9 +53,9 @@ type GoTConfig struct {
 	NodeTimeout    time.Duration // 单个节点的处理超时时间
 
 	// DeepSeek/慢速 API 优化参数
-	MinimalMode      bool // 极简模式：仅使用2次LLM调用（生成+合成），适用于慢速API如DeepSeek
-	BatchGeneration  bool // 批量生成：一次调用生成所有思考，减少API调用次数
-	DirectSynthesis  bool // 直接合成：跳过图执行，直接从生成的思考合成答案
+	MinimalMode     bool // 极简模式：仅使用2次LLM调用（生成+合成），适用于慢速API如DeepSeek
+	BatchGeneration bool // 批量生成：一次调用生成所有思考，减少API调用次数
+	DirectSynthesis bool // 直接合成：跳过图执行，直接从生成的思考合成答案
 }
 
 // GraphNode represents a node in the thought graph
