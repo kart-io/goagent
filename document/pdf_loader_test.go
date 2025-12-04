@@ -14,10 +14,10 @@ import (
 // TestNewPDFLoader 测试 PDF 加载器创建
 func TestNewPDFLoader(t *testing.T) {
 	tests := []struct {
-		name     string
-		config   PDFLoaderConfig
-		wantURL  bool
-		wantSrc  string
+		name    string
+		config  PDFLoaderConfig
+		wantURL bool
+		wantSrc string
 	}{
 		{
 			name: "本地文件路径",

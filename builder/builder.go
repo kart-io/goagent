@@ -39,6 +39,7 @@ type commonToolCallingClient interface {
 //   - Store 和 Checkpointer
 //   - 中间件栈
 //   - 系统提示词
+//   - 对话记忆管理
 type AgentBuilder[C any, S core.State] struct {
 	// 核心组件
 	llmClient    llm.Client
@@ -53,6 +54,9 @@ type AgentBuilder[C any, S core.State] struct {
 
 	// Phase 2 组件
 	middlewares []middleware.Middleware
+
+	// 对话记忆管理（支持多轮对话）
+	memoryManager interfaces.MemoryManager
 
 	// 配置
 	config *AgentConfig
@@ -129,15 +133,16 @@ func (b *AgentBuilder[C, S]) Build() (*ConfigurableAgent[C, S], error) {
 
 	// 创建 Agent
 	agent := &ConfigurableAgent[C, S]{
-		llmClient:    b.llmClient,
-		tools:        b.tools,
-		systemPrompt: b.systemPrompt,
-		runtime:      runtime,
-		chain:        chain,
-		config:       b.config,
-		callbacks:    b.callbacks,
-		errorHandler: b.errorHandler,
-		metadata:     b.metadata,
+		llmClient:     b.llmClient,
+		tools:         b.tools,
+		systemPrompt:  b.systemPrompt,
+		runtime:       runtime,
+		chain:         chain,
+		config:        b.config,
+		callbacks:     b.callbacks,
+		errorHandler:  b.errorHandler,
+		metadata:      b.metadata,
+		memoryManager: b.memoryManager,
 	}
 
 	// 如果需要则初始化
@@ -148,24 +153,75 @@ func (b *AgentBuilder[C, S]) Build() (*ConfigurableAgent[C, S], error) {
 	return agent, nil
 }
 
+// buildSystemPrompt 构建完整的系统提示内容（包含输出格式指示）
+func (b *AgentBuilder[C, S]) buildSystemPrompt() string {
+	if b.systemPrompt == "" && b.config.OutputFormat == OutputFormatDefault {
+		return ""
+	}
+
+	var sb strings.Builder
+	if b.systemPrompt != "" {
+		sb.WriteString(b.systemPrompt)
+	}
+
+	// 追加输出格式指示
+	var formatPrompt string
+	if b.config.OutputFormat == OutputFormatCustom {
+		formatPrompt = b.config.CustomOutputPrompt
+	} else {
+		formatPrompt = GetOutputFormatPrompt(b.config.OutputFormat)
+	}
+
+	if formatPrompt != "" {
+		if sb.Len() > 0 {
+			sb.WriteString(" ")
+		}
+		sb.WriteString(formatPrompt)
+	}
+
+	return sb.String()
+}
+
 // createHandler 创建主执行处理器
 func (b *AgentBuilder[C, S]) createHandler(runtime *execution.Runtime[C, S]) middleware.Handler {
 	return func(ctx context.Context, request *middleware.MiddlewareRequest) (*middleware.MiddlewareResponse, error) {
 		// 提取输入
 		inputStr := fmt.Sprintf("%v", request.Input)
 
+		// 构建消息列表
+		messages := make([]llm.Message, 0)
+
+		// 构建系统提示（包含输出格式指示）
+		systemContent := b.buildSystemPrompt()
+		if systemContent != "" {
+			messages = append(messages, llm.Message{
+				Role:    "system",
+				Content: systemContent,
+			})
+		}
+
+		// 如果配置了 MemoryManager，加载历史对话
+		if b.memoryManager != nil && b.config.SessionID != "" {
+			history, err := b.memoryManager.GetConversationHistory(ctx, b.config.SessionID, b.config.MaxConversationHistory)
+			if err == nil && len(history) > 0 {
+				for _, conv := range history {
+					messages = append(messages, llm.Message{
+						Role:    conv.Role,
+						Content: conv.Content,
+					})
+				}
+			}
+		}
+
+		// 添加当前用户输入
+		messages = append(messages, llm.Message{
+			Role:    "user",
+			Content: inputStr,
+		})
+
 		// 创建 LLM 请求
 		llmReq := &llm.CompletionRequest{
-			Messages: []llm.Message{
-				{
-					Role:    "system",
-					Content: b.systemPrompt,
-				},
-				{
-					Role:    "user",
-					Content: inputStr,
-				},
-			},
+			Messages:    messages,
 			MaxTokens:   b.config.MaxTokens,
 			Temperature: b.config.Temperature,
 		}
@@ -174,6 +230,22 @@ func (b *AgentBuilder[C, S]) createHandler(runtime *execution.Runtime[C, S]) mid
 		response, err := b.llmClient.Complete(ctx, llmReq)
 		if err != nil {
 			return nil, agentErrors.Wrap(err, agentErrors.CodeLLMRequest, "LLM completion error")
+		}
+
+		// 如果配置了 MemoryManager，保存对话到记忆
+		if b.memoryManager != nil && b.config.SessionID != "" {
+			// 保存用户输入
+			_ = b.memoryManager.AddConversation(ctx, &interfaces.Conversation{
+				SessionID: b.config.SessionID,
+				Role:      "user",
+				Content:   inputStr,
+			})
+			// 保存 AI 响应
+			_ = b.memoryManager.AddConversation(ctx, &interfaces.Conversation{
+				SessionID: b.config.SessionID,
+				Role:      "assistant",
+				Content:   response.Content,
+			})
 		}
 
 		// 触发 OnLLMEnd 回调
@@ -213,16 +285,17 @@ func (b *AgentBuilder[C, S]) createHandler(runtime *execution.Runtime[C, S]) mid
 
 // ConfigurableAgent 是具有完整配置的已构建 Agent
 type ConfigurableAgent[C any, S core.State] struct {
-	llmClient    llm.Client
-	tools        []interfaces.Tool
-	systemPrompt string
-	runtime      *execution.Runtime[C, S]
-	chain        *middleware.MiddlewareChain
-	config       *AgentConfig
-	callbacks    []core.Callback
-	errorHandler func(error) error
-	metadata     map[string]interface{}
-	mu           sync.RWMutex
+	llmClient     llm.Client
+	tools         []interfaces.Tool
+	systemPrompt  string
+	runtime       *execution.Runtime[C, S]
+	chain         *middleware.MiddlewareChain
+	config        *AgentConfig
+	callbacks     []core.Callback
+	errorHandler  func(error) error
+	metadata      map[string]interface{}
+	memoryManager interfaces.MemoryManager // 对话记忆管理
+	mu            sync.RWMutex
 }
 
 // Initialize 准备 Agent 执行
@@ -342,9 +415,10 @@ func (a *ConfigurableAgent[C, S]) ExecuteWithTools(ctx context.Context, input in
 	startTime := time.Now()
 	iterations := 0
 	var totalTokenUsage *interfaces.TokenUsage
+	inputStr := fmt.Sprintf("%v", input)
 
-	// 构建初始提示
-	prompt := a.buildPromptWithSystemMessage(input)
+	// 构建初始提示（包含历史对话）
+	prompt := a.buildPromptWithHistory(ctx, input)
 
 	for iterations < a.config.MaxIterations {
 		// 使用工具调用接口
@@ -361,8 +435,11 @@ func (a *ConfigurableAgent[C, S]) ExecuteWithTools(ctx context.Context, input in
 			totalTokenUsage.Add(response.Usage)
 		}
 
-		// 如果没有工具调用，返回结果
+		// 如果没有工具调用，返回结果并保存对话
 		if len(response.ToolCalls) == 0 {
+			// 保存对话到记忆
+			a.saveConversation(ctx, inputStr, response.Content)
+
 			return &AgentOutput{
 				Result:     response.Content,
 				State:      a.runtime.State,
@@ -431,10 +508,99 @@ func (a *ConfigurableAgent[C, S]) ExecuteWithTools(ctx context.Context, input in
 // buildPromptWithSystemMessage 构建包含系统消息的提示
 func (a *ConfigurableAgent[C, S]) buildPromptWithSystemMessage(input interface{}) string {
 	inputStr := fmt.Sprintf("%v", input)
-	if a.systemPrompt != "" {
-		return fmt.Sprintf("系统指令: %s\n\n用户请求: %s", a.systemPrompt, inputStr)
+	systemContent := a.buildSystemPromptContent()
+	if systemContent != "" {
+		return fmt.Sprintf("系统指令: %s\n\n用户请求: %s", systemContent, inputStr)
 	}
 	return inputStr
+}
+
+// buildPromptWithHistory 构建包含历史对话的提示
+func (a *ConfigurableAgent[C, S]) buildPromptWithHistory(ctx context.Context, input interface{}) string {
+	inputStr := fmt.Sprintf("%v", input)
+	var sb strings.Builder
+
+	// 添加系统提示（包含输出格式指示）
+	systemContent := a.buildSystemPromptContent()
+	if systemContent != "" {
+		sb.WriteString("系统指令: ")
+		sb.WriteString(systemContent)
+		sb.WriteString("\n\n")
+	}
+
+	// 如果配置了 MemoryManager，加载历史对话
+	if a.memoryManager != nil && a.config.SessionID != "" {
+		history, err := a.memoryManager.GetConversationHistory(ctx, a.config.SessionID, a.config.MaxConversationHistory)
+		if err == nil && len(history) > 0 {
+			sb.WriteString("历史对话:\n")
+			for _, conv := range history {
+				if conv.Role == "user" {
+					sb.WriteString("用户: ")
+				} else if conv.Role == "assistant" {
+					sb.WriteString("助手: ")
+				} else {
+					sb.WriteString(conv.Role)
+					sb.WriteString(": ")
+				}
+				sb.WriteString(conv.Content)
+				sb.WriteString("\n")
+			}
+			sb.WriteString("\n")
+		}
+	}
+
+	// 添加当前用户输入
+	sb.WriteString("用户请求: ")
+	sb.WriteString(inputStr)
+
+	return sb.String()
+}
+
+// buildSystemPromptContent 构建完整的系统提示内容（包含输出格式指示）
+func (a *ConfigurableAgent[C, S]) buildSystemPromptContent() string {
+	if a.systemPrompt == "" && a.config.OutputFormat == OutputFormatDefault {
+		return ""
+	}
+
+	var sb strings.Builder
+	if a.systemPrompt != "" {
+		sb.WriteString(a.systemPrompt)
+	}
+
+	// 追加输出格式指示
+	var formatPrompt string
+	if a.config.OutputFormat == OutputFormatCustom {
+		formatPrompt = a.config.CustomOutputPrompt
+	} else {
+		formatPrompt = GetOutputFormatPrompt(a.config.OutputFormat)
+	}
+
+	if formatPrompt != "" {
+		if sb.Len() > 0 {
+			sb.WriteString(" ")
+		}
+		sb.WriteString(formatPrompt)
+	}
+
+	return sb.String()
+}
+
+// saveConversation 保存对话到记忆
+func (a *ConfigurableAgent[C, S]) saveConversation(ctx context.Context, userInput, assistantResponse string) {
+	if a.memoryManager != nil && a.config.SessionID != "" {
+		// 保存用户输入
+		_ = a.memoryManager.AddConversation(ctx, &interfaces.Conversation{
+			SessionID: a.config.SessionID,
+			Role:      "user",
+			Content:   userInput,
+		})
+		// 保存 AI 响应
+		_ = a.memoryManager.AddConversation(ctx, &interfaces.Conversation{
+			SessionID: a.config.SessionID,
+			Role:      "assistant",
+			Content:   assistantResponse,
+		})
+	}
 }
 
 // extractToolCalls 从 LLM 输出中提取工具调用

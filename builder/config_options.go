@@ -15,6 +15,33 @@ import (
 // - [Core]: 标准 API，覆盖 95% 使用场景（性能调优）
 // - [Advanced]: 完整 API，覆盖所有场景（细粒度控制）
 
+// OutputFormat 定义 LLM 输出格式类型
+type OutputFormat string
+
+const (
+	// OutputFormatDefault 不指定格式，由 LLM 自行决定
+	OutputFormatDefault OutputFormat = ""
+
+	// OutputFormatPlainText 纯文本格式，不使用 Markdown 语法
+	OutputFormatPlainText OutputFormat = "plain_text"
+
+	// OutputFormatMarkdown Markdown 格式
+	OutputFormatMarkdown OutputFormat = "markdown"
+
+	// OutputFormatJSON JSON 格式
+	OutputFormatJSON OutputFormat = "json"
+
+	// OutputFormatCustom 自定义格式（需配合 CustomOutputPrompt 使用）
+	OutputFormatCustom OutputFormat = "custom"
+)
+
+// outputFormatPrompts 存储各格式对应的提示词
+var outputFormatPrompts = map[OutputFormat]string{
+	OutputFormatPlainText: "请使用纯文本格式回复，不要使用 Markdown 语法。",
+	OutputFormatMarkdown:  "请使用 Markdown 格式回复。",
+	OutputFormatJSON:      "请使用 JSON 格式回复。",
+}
+
 // AgentConfig 保存 Agent 配置选项
 type AgentConfig struct {
 	// MaxIterations 限制推理步骤的最大次数
@@ -38,25 +65,39 @@ type AgentConfig struct {
 	// Temperature 控制 LLM 采样的随机性
 	Temperature float64
 
-	// SessionID 用于检查点保存
+	// SessionID 用于检查点保存和对话记忆
 	SessionID string
 
 	// Verbose 启用详细日志
 	Verbose bool
+
+	// MaxConversationHistory 限制加载的历史对话轮数
+	// 用于控制上下文窗口大小，避免超出 LLM 的 token 限制
+	// 0 或负数表示不限制
+	MaxConversationHistory int
+
+	// OutputFormat 指定 LLM 输出格式
+	// 支持：OutputFormatDefault（默认）、OutputFormatPlainText、OutputFormatMarkdown、OutputFormatJSON、OutputFormatCustom
+	OutputFormat OutputFormat
+
+	// CustomOutputPrompt 自定义输出格式提示词
+	// 仅当 OutputFormat 为 OutputFormatCustom 时生效
+	CustomOutputPrompt string
 }
 
 // DefaultAgentConfig 返回默认配置
 func DefaultAgentConfig() *AgentConfig {
 	return &AgentConfig{
-		MaxIterations:   10,
-		Timeout:         core.DefaultAgentExecutionTimeout,
-		EnableStreaming: false,
-		EnableAutoSave:  true,
-		SaveInterval:    30 * time.Second,
-		MaxTokens:       2000,
-		Temperature:     0.7,
-		SessionID:       fmt.Sprintf("session-%d", time.Now().Unix()),
-		Verbose:         false,
+		MaxIterations:          10,
+		Timeout:                core.DefaultAgentExecutionTimeout,
+		EnableStreaming:        false,
+		EnableAutoSave:         true,
+		SaveInterval:           30 * time.Second,
+		MaxTokens:              2000,
+		Temperature:            0.7,
+		SessionID:              fmt.Sprintf("session-%d", time.Now().Unix()),
+		Verbose:                false,
+		MaxConversationHistory: 20, // 默认保留最近 20 轮对话
 	}
 }
 
@@ -147,4 +188,64 @@ func (b *AgentBuilder[C, S]) WithSessionID(sessionID string) *AgentBuilder[C, S]
 func (b *AgentBuilder[C, S]) WithVerbose(verbose bool) *AgentBuilder[C, S] {
 	b.config.Verbose = verbose
 	return b
+}
+
+// WithMaxConversationHistory 设置加载的最大历史对话轮数
+//
+// [Core] 标准配置，控制对话记忆的上下文窗口大小（默认 20）。
+// 用于限制发送给 LLM 的历史对话数量，避免超出 token 限制。
+// 设置为 0 或负数表示不限制（加载全部历史）。
+//
+// 注意：此设置仅在使用 WithMemory 配置了 MemoryManager 时生效。
+func (b *AgentBuilder[C, S]) WithMaxConversationHistory(max int) *AgentBuilder[C, S] {
+	b.config.MaxConversationHistory = max
+	return b
+}
+
+// WithOutputFormat 设置 LLM 输出格式
+//
+// [Simple] 常用配置，控制 LLM 响应的输出格式。
+// 支持以下格式：
+//   - OutputFormatDefault: 不指定格式，由 LLM 自行决定
+//   - OutputFormatPlainText: 纯文本格式，不使用 Markdown 语法（适合终端显示）
+//   - OutputFormatMarkdown: Markdown 格式（适合富文本显示）
+//   - OutputFormatJSON: JSON 格式（适合程序解析）
+//
+// 使用示例：
+//
+//	agent, err := builder.NewSimpleBuilder(llmClient).
+//	    WithSystemPrompt("你是一个助手").
+//	    WithOutputFormat(builder.OutputFormatPlainText).
+//	    Build()
+func (b *AgentBuilder[C, S]) WithOutputFormat(format OutputFormat) *AgentBuilder[C, S] {
+	b.config.OutputFormat = format
+	return b
+}
+
+// WithCustomOutputFormat 设置自定义输出格式提示词
+//
+// [Simple] 常用配置，允许用户指定任意格式提示词。
+// 此方法会自动将 OutputFormat 设置为 OutputFormatCustom。
+//
+// 使用示例：
+//
+//	agent, err := builder.NewSimpleBuilder(llmClient).
+//	    WithSystemPrompt("你是一个助手").
+//	    WithCustomOutputFormat("请用表格格式回复，每行一个条目").
+//	    Build()
+func (b *AgentBuilder[C, S]) WithCustomOutputFormat(prompt string) *AgentBuilder[C, S] {
+	if prompt != "" {
+		b.config.OutputFormat = OutputFormatCustom
+		b.config.CustomOutputPrompt = prompt
+	}
+	return b
+}
+
+// GetOutputFormatPrompt 获取输出格式对应的提示词
+// 如果格式为 Default 或未定义，返回空字符串
+func GetOutputFormatPrompt(format OutputFormat) string {
+	if prompt, ok := outputFormatPrompts[format]; ok {
+		return prompt
+	}
+	return ""
 }
