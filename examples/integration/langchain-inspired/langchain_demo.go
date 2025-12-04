@@ -133,12 +133,8 @@ func exampleCaching() {
 	fmt.Println("=== Example 4: Caching for Performance ===")
 	fmt.Println()
 
-	// 创建内存缓存
-	cacheInstance := cache.NewInMemoryCache(
-		100,           // maxSize
-		5*time.Minute, // defaultTTL
-		1*time.Minute, // cleanupInterval
-	)
+	// 创建内存缓存（使用 SimpleCache）
+	cacheInstance := cache.NewSimpleCache(5 * time.Minute)
 
 	// 创建缓存键生成器
 	keyGen := cache.NewCacheKeyGenerator("llm")
@@ -199,8 +195,8 @@ func exampleRAGPipeline() {
 		Confidence float64  `json:"confidence"`
 	}
 
-	// 创建组件
-	cacheInstance := cache.NewInMemoryCache(100, 5*time.Minute, 1*time.Minute)
+	// 创建组件（使用 SimpleCache）
+	cacheInstance := cache.NewSimpleCache(5 * time.Minute)
 	parser := parsers.NewJSONOutputParser[RAGResponse](false)
 	stdoutCallback := core.NewStdoutCallback(true)
 
