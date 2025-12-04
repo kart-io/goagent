@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Deprecated
+
+⚠️ **Cache API Deprecation** - 简化缓存实现，减少过度设计
+
+以下缓存函数已标记为 **Deprecated**，将在 v2.0.0 中移除：
+
+- `cache.NewInMemoryCache()` - 请改用 `cache.NewSimpleCache()`
+  - 理由：实现过于复杂，包含不必要的特性（maxSize、cleanupInterval 参数）
+  - 迁移：将 `NewInMemoryCache(100, 5*time.Minute, 1*time.Minute)` 改为 `NewSimpleCache(5*time.Minute)`
+
+- `cache.NewLRUCache()` - 请改用 `cache.NewSimpleCache()`
+  - 理由：LRU 驱逐逻辑在实际场景中很少使用，SimpleCache 基于 TTL 的方式更简单有效
+  - 迁移：将 `NewLRUCache(100, 5*time.Minute, 1*time.Minute)` 改为 `NewSimpleCache(5*time.Minute)`
+
+- `cache.NewMultiTierCache()` - 请改用 `cache.NewSimpleCache()`
+  - 理由：多级缓存在单进程应用中过于复杂，实际使用场景有限
+  - 迁移：单进程应用使用 `NewSimpleCache()` 即可，分布式场景建议使用 Redis + 本地缓存方案
+
+**向后兼容性**：所有 deprecated 函数在 v1.x 版本中仍然可用，不会影响现有代码。
+
+**迁移指南**：
+- 完整的迁移指南请参考 [`docs/guides/CACHING_GUIDE.md`](docs/guides/CACHING_GUIDE.md)
+- 扫描工具：`go run tools/migrate-cache.go scan ./...`
+- 自动迁移：`go run tools/migrate-cache.go replace ./...`
+
+**相关变更**：
+- 已将 `tools/middleware/caching.go` 从 `NewLRUCache` 迁移到 `NewSimpleCache` [commit: d7bd117]
+- 已更新示例代码 `examples/integration/langchain-inspired/langchain_demo.go` 使用 `SimpleCache`
+- 新增文档 `docs/guides/CACHING_GUIDE.md` - 详细的缓存使用指南
+- 更新文档 `docs/guides/TOOL_MIDDLEWARE.md` - 推荐使用 `SimpleCache`
+
 ### Performance
 
 - **utils/parser.go**: Pre-compile regular expressions to improve performance by 60-87%
