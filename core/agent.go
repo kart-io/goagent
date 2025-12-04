@@ -524,7 +524,8 @@ func (e *AgentExecutor) Execute(ctx context.Context, input *AgentInput) (*AgentO
 // 允许将多个 Agent 串联起来，前一个的输出作为后一个的输入
 type ChainableAgent struct {
 	*BaseAgent
-	agents []Agent
+	agents   []Agent
+	agentsMu sync.RWMutex // 保护 agents slice 的并发访问
 }
 
 // NewChainableAgent 创建可链式调用的 Agent
@@ -562,8 +563,17 @@ func (c *ChainableAgent) InvokeFast(ctx context.Context, input *AgentInput) (*Ag
 //
 // Memory optimization: Uses sync.Pool to reuse AgentInput objects
 // for intermediate chain steps, reducing allocations.
+//
+// 并发安全：使用读锁保护 agents slice 的访问
 func (c *ChainableAgent) executeChain(ctx context.Context, input *AgentInput, useFastPath bool) (*AgentOutput, error) {
-	if len(c.agents) == 0 {
+	// 获取读锁，保护 agents slice 的并发访问
+	c.agentsMu.RLock()
+	agentCount := len(c.agents)
+	// 复制 agents 引用，以便在释放锁后安全迭代
+	agents := c.agents
+	c.agentsMu.RUnlock()
+
+	if agentCount == 0 {
 		return &AgentOutput{
 			Status:    "success",
 			Message:   "No agents in chain",
@@ -575,7 +585,7 @@ func (c *ChainableAgent) executeChain(ctx context.Context, input *AgentInput, us
 	var finalOutput *AgentOutput
 	var pooledInput *AgentInput // Track pooled input for cleanup
 
-	for i, agent := range c.agents {
+	for i, agent := range agents {
 		var output *AgentOutput
 		var err error
 
@@ -604,7 +614,7 @@ func (c *ChainableAgent) executeChain(ctx context.Context, input *AgentInput, us
 		finalOutput = output
 
 		// 如果不是最后一个 agent，准备下一个的输入
-		if i < len(c.agents)-1 {
+		if i < len(agents)-1 {
 			// Return previous pooled input to pool before getting a new one
 			if pooledInput != nil {
 				resetAgentInput(pooledInput)

@@ -141,7 +141,7 @@ func main() {
 	toolTracker := createToolTrackerMiddleware()
 
 	// Response formatter middleware
-	responseFormatter := core.NewTransformMiddleware(
+	responseFormatter := middleware.NewTransformMiddleware(
 		nil, // No input transform
 		func(output interface{}) (interface{}, error) {
 			// Format output with metadata
@@ -186,9 +186,9 @@ func main() {
 					return nil
 				},
 			),
-			core.NewCacheMiddleware(30*time.Second),
+			middleware.NewCacheMiddleware(30*time.Second),
 			responseFormatter,
-			core.NewCircuitBreakerMiddleware(3, 30*time.Second),
+			middleware.NewCircuitBreakerMiddleware(3, 30*time.Second),
 		).
 		WithMaxIterations(10).
 		WithTimeout(30*time.Second).
@@ -450,7 +450,7 @@ func CreateDatabaseTool(st store.Store) interfaces.Tool {
 
 // Custom middleware implementations
 
-func createTierRateLimiter() core.Middleware {
+func createTierRateLimiter() middleware.Middleware {
 	limits := map[string]int{
 		"free":       10,
 		"premium":    100,
@@ -459,17 +459,17 @@ func createTierRateLimiter() core.Middleware {
 
 	// 演示用途：实际应用可根据用户层级动态选择限流值
 	_ = limits
-	return core.NewRateLimiterMiddleware(100, 1*time.Minute)
+	return middleware.NewRateLimiterMiddleware(100, 1*time.Minute)
 }
 
-func createToolTrackerMiddleware() core.Middleware {
+func createToolTrackerMiddleware() middleware.Middleware {
 	return &toolTrackerMiddleware{
-		BaseMiddleware: core.NewBaseMiddleware("tool-tracker"),
+		BaseMiddleware: middleware.NewBaseMiddleware("tool-tracker"),
 	}
 }
 
 type toolTrackerMiddleware struct {
-	*core.BaseMiddleware
+	*middleware.BaseMiddleware
 }
 
 func (m *toolTrackerMiddleware) OnBefore(ctx context.Context, request *middleware.MiddlewareRequest) (*middleware.MiddlewareRequest, error) {

@@ -119,7 +119,7 @@ func runWithoutRAG(ctx context.Context, client llm.Client, query string) error {
 		},
 	})
 	if err != nil {
-		return fmt.Errorf("Gemini 调用失败: %w", err)
+		return fmt.Errorf("gemini 调用失败: %w", err)
 	}
 
 	elapsed := time.Since(startTime)
@@ -156,7 +156,9 @@ func runWithRAG(ctx context.Context, client llm.Client, pdfPath, query string) e
 		return fmt.Errorf("创建嵌入器失败: %w", err)
 	}
 	if closer, ok := embedder.(interface{ Close() error }); ok {
-		defer closer.Close()
+		defer func() {
+			_ = closer.Close()
+		}()
 	}
 	if *useSimple {
 		fmt.Println("  使用简单嵌入器（演示模式）")
@@ -216,7 +218,7 @@ func runWithRAG(ctx context.Context, client llm.Client, pdfPath, query string) e
 		},
 	})
 	if err != nil {
-		return fmt.Errorf("Gemini 调用失败: %w", err)
+		return fmt.Errorf("gemini 调用失败: %w", err)
 	}
 
 	elapsed := time.Since(startTime)
@@ -262,19 +264,25 @@ func loadPDF(ctx context.Context, pdfPath string) ([]*interfaces.Document, error
 }
 
 // setupEmbedder 创建嵌入器
+//
+// 使用统一的 NewEmbedder 工厂函数，支持多种服务商
 func setupEmbedder(ctx context.Context) (retrieval.Embedder, error) {
 	if *useSimple {
 		// 使用简单嵌入器（演示用）
-		return retrieval.NewSimpleEmbedder(768), nil
+		return retrieval.NewEmbedder(ctx,
+			retrieval.WithProvider(retrieval.EmbedderProviderSimple),
+			retrieval.WithDimensions(768),
+		)
 	}
 
 	// 使用 Vertex AI 嵌入器
-	return retrieval.NewVertexAIEmbedder(ctx, retrieval.VertexAIEmbedderConfig{
-		ProjectID:  *projectID,
-		Location:   *location,
-		ModelID:    "text-embedding-005",
-		Dimensions: 768,
-	})
+	return retrieval.NewEmbedder(ctx,
+		retrieval.WithProvider(retrieval.EmbedderProviderVertexAI),
+		retrieval.WithProjectID(*projectID),
+		retrieval.WithLocation(*location),
+		retrieval.WithModel("text-embedding-005"),
+		retrieval.WithDimensions(768),
+	)
 }
 
 // indexDocuments 索引文档到向量存储
