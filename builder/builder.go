@@ -235,17 +235,23 @@ func (b *AgentBuilder[C, S]) createHandler(runtime *execution.Runtime[C, S]) mid
 		// 如果配置了 MemoryManager，保存对话到记忆
 		if b.memoryManager != nil && b.config.SessionID != "" {
 			// 保存用户输入
-			_ = b.memoryManager.AddConversation(ctx, &interfaces.Conversation{
+			if err := b.memoryManager.AddConversation(ctx, &interfaces.Conversation{
 				SessionID: b.config.SessionID,
 				Role:      "user",
 				Content:   inputStr,
-			})
+			}); err != nil {
+				// 记录错误但不中断请求，对话记忆不是关键路径
+				fmt.Fprintf(os.Stderr, "Failed to save user conversation: %v\n", err)
+			}
 			// 保存 AI 响应
-			_ = b.memoryManager.AddConversation(ctx, &interfaces.Conversation{
+			if err := b.memoryManager.AddConversation(ctx, &interfaces.Conversation{
 				SessionID: b.config.SessionID,
 				Role:      "assistant",
 				Content:   response.Content,
-			})
+			}); err != nil {
+				// 记录错误但不中断请求
+				fmt.Fprintf(os.Stderr, "Failed to save assistant conversation: %v\n", err)
+			}
 		}
 
 		// 触发 OnLLMEnd 回调
@@ -534,11 +540,12 @@ func (a *ConfigurableAgent[C, S]) buildPromptWithHistory(ctx context.Context, in
 		if err == nil && len(history) > 0 {
 			sb.WriteString("历史对话:\n")
 			for _, conv := range history {
-				if conv.Role == "user" {
+				switch conv.Role {
+				case "user":
 					sb.WriteString("用户: ")
-				} else if conv.Role == "assistant" {
+				case "assistant":
 					sb.WriteString("助手: ")
-				} else {
+				default:
 					sb.WriteString(conv.Role)
 					sb.WriteString(": ")
 				}
@@ -589,17 +596,23 @@ func (a *ConfigurableAgent[C, S]) buildSystemPromptContent() string {
 func (a *ConfigurableAgent[C, S]) saveConversation(ctx context.Context, userInput, assistantResponse string) {
 	if a.memoryManager != nil && a.config.SessionID != "" {
 		// 保存用户输入
-		_ = a.memoryManager.AddConversation(ctx, &interfaces.Conversation{
+		if err := a.memoryManager.AddConversation(ctx, &interfaces.Conversation{
 			SessionID: a.config.SessionID,
 			Role:      "user",
 			Content:   userInput,
-		})
+		}); err != nil {
+			// 记录错误但不中断流程，对话记忆不是关键路径
+			fmt.Fprintf(os.Stderr, "Failed to save user conversation: %v\n", err)
+		}
 		// 保存 AI 响应
-		_ = a.memoryManager.AddConversation(ctx, &interfaces.Conversation{
+		if err := a.memoryManager.AddConversation(ctx, &interfaces.Conversation{
 			SessionID: a.config.SessionID,
 			Role:      "assistant",
 			Content:   assistantResponse,
-		})
+		}); err != nil {
+			// 记录错误但不中断流程
+			fmt.Fprintf(os.Stderr, "Failed to save assistant conversation: %v\n", err)
+		}
 	}
 }
 

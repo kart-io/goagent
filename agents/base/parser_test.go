@@ -214,3 +214,118 @@ func TestDefaultParser_AreThoughtsRelated(t *testing.T) {
 		})
 	}
 }
+
+// TestIntToString 测试 intToString 辅助函数
+func TestIntToString(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    int
+		expected string
+	}{
+		{
+			name:     "正数",
+			input:    42,
+			expected: "42",
+		},
+		{
+			name:     "零",
+			input:    0,
+			expected: "0",
+		},
+		{
+			name:     "负数",
+			input:    -123,
+			expected: "-123",
+		},
+		{
+			name:     "大数",
+			input:    999999,
+			expected: "999999",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := intToString(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+// TestStoi 测试 Stoi 字符串转整数函数
+func TestStoi(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected int
+	}{
+		{
+			name:     "正数",
+			input:    "42",
+			expected: 42,
+		},
+		{
+			name:     "零",
+			input:    "0",
+			expected: 0,
+		},
+		{
+			name:     "大数",
+			input:    "999999",
+			expected: 999999,
+		},
+		{
+			name:     "带前缀文本",
+			input:    "abc123",
+			expected: 123,
+		},
+		{
+			name:     "空字符串",
+			input:    "",
+			expected: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := Stoi(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+// TestGenerateQuestionID 测试问题 ID 生成
+func TestGenerateQuestionID(t *testing.T) {
+	tests := []struct {
+		name     string
+		parentID string
+		index    int
+		expected string
+	}{
+		{
+			name:     "基本生成",
+			parentID: "q1",
+			index:    0,
+			expected: "q1_fq_0",
+		},
+		{
+			name:     "非零索引",
+			parentID: "parent",
+			index:    5,
+			expected: "parent_fq_5",
+		},
+		{
+			name:     "空父 ID",
+			parentID: "",
+			index:    1,
+			expected: "_fq_1",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := generateQuestionID(tt.parentID, tt.index)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}

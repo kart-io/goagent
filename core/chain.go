@@ -302,11 +302,29 @@ func (c *BaseChain) Invoke(ctx context.Context, input *ChainInput) (*ChainOutput
 // Stream 流式执行（实现 Runnable 接口）
 //
 // 每个步骤执行完成后，立即发送一个流块
+// 使用带缓冲的 channel 和 context 检查避免 goroutine 泄漏
 func (c *BaseChain) Stream(ctx context.Context, input *ChainInput) (<-chan StreamChunk[*ChainOutput], error) {
-	outChan := make(chan StreamChunk[*ChainOutput])
+	// 使用带缓冲的 channel，避免发送阻塞导致 goroutine 泄漏
+	outChan := make(chan StreamChunk[*ChainOutput], len(c.steps)+2)
 
 	go func() {
 		defer close(outChan)
+
+		// 辅助函数：安全发送，检查 context 是否取消
+		send := func(chunk StreamChunk[*ChainOutput]) bool {
+			select {
+			case <-ctx.Done():
+				// context 已取消，发送取消错误后退出
+				select {
+				case outChan <- StreamChunk[*ChainOutput]{Error: ctx.Err(), Done: true}:
+				default:
+					// channel 满了也不阻塞
+				}
+				return false
+			case outChan <- chunk:
+				return true
+			}
+		}
 
 		start := time.Now()
 		config := c.GetConfig()
@@ -314,13 +332,13 @@ func (c *BaseChain) Stream(ctx context.Context, input *ChainInput) (<-chan Strea
 		// 触发 Chain 开始回调
 		for _, cb := range config.Callbacks {
 			if err := cb.OnChainStart(ctx, c.name, input); err != nil {
-				outChan <- StreamChunk[*ChainOutput]{
+				send(StreamChunk[*ChainOutput]{
 					Error: agentErrors.Wrap(err, agentErrors.CodeAgentExecution, "callback OnChainStart failed").
 						WithComponent("base_chain").
 						WithOperation("stream").
 						WithContext("chain_name", c.name),
 					Done: true,
-				}
+				})
 				return
 			}
 		}
@@ -332,15 +350,31 @@ func (c *BaseChain) Stream(ctx context.Context, input *ChainInput) (<-chan Strea
 		}
 
 		// 应用超时
+		execCtx := ctx
 		if input.Options.Timeout > 0 {
 			var cancel context.CancelFunc
-			ctx, cancel = context.WithTimeout(ctx, input.Options.Timeout)
+			execCtx, cancel = context.WithTimeout(ctx, input.Options.Timeout)
 			defer cancel()
 		}
 
 		// 执行步骤，每个步骤完成后发送中间结果
 		currentData := input.Data
 		for i, step := range c.steps {
+			// 检查 context 是否取消
+			select {
+			case <-execCtx.Done():
+				output.Status = "cancelled"
+				output.TotalLatency = time.Since(start)
+				output.Data = currentData
+				send(StreamChunk[*ChainOutput]{
+					Data:  output,
+					Error: execCtx.Err(),
+					Done:  true,
+				})
+				return
+			default:
+			}
+
 			// 检查是否跳过
 			if shouldSkipStep(i+1, input.Options) {
 				execution := StepExecution{
@@ -351,7 +385,7 @@ func (c *BaseChain) Stream(ctx context.Context, input *ChainInput) (<-chan Strea
 				output.StepsExecuted = append(output.StepsExecuted, execution)
 
 				// 发送中间状态
-				outChan <- StreamChunk[*ChainOutput]{
+				if !send(StreamChunk[*ChainOutput]{
 					Data: &ChainOutput{
 						Data:          currentData,
 						StepsExecuted: append([]StepExecution{}, output.StepsExecuted...),
@@ -360,13 +394,15 @@ func (c *BaseChain) Stream(ctx context.Context, input *ChainInput) (<-chan Strea
 						Metadata:      output.Metadata,
 					},
 					Done: false,
+				}) {
+					return
 				}
 				continue
 			}
 
 			// 执行步骤
 			stepStart := time.Now()
-			result, err := step.Execute(ctx, currentData)
+			result, err := step.Execute(execCtx, currentData)
 			duration := time.Since(stepStart)
 
 			execution := StepExecution{
@@ -394,11 +430,11 @@ func (c *BaseChain) Stream(ctx context.Context, input *ChainInput) (<-chan Strea
 					}
 
 					// 发送错误结果
-					outChan <- StreamChunk[*ChainOutput]{
+					send(StreamChunk[*ChainOutput]{
 						Data:  output,
 						Error: err,
 						Done:  true,
-					}
+					})
 					return
 				}
 
@@ -409,7 +445,7 @@ func (c *BaseChain) Stream(ctx context.Context, input *ChainInput) (<-chan Strea
 			}
 
 			// 发送中间状态
-			outChan <- StreamChunk[*ChainOutput]{
+			if !send(StreamChunk[*ChainOutput]{
 				Data: &ChainOutput{
 					Data:          currentData,
 					StepsExecuted: append([]StepExecution{}, output.StepsExecuted...),
@@ -418,6 +454,8 @@ func (c *BaseChain) Stream(ctx context.Context, input *ChainInput) (<-chan Strea
 					Metadata:      output.Metadata,
 				},
 				Done: false,
+			}) {
+				return
 			}
 		}
 
@@ -431,10 +469,10 @@ func (c *BaseChain) Stream(ctx context.Context, input *ChainInput) (<-chan Strea
 		}
 
 		// 发送最终结果
-		outChan <- StreamChunk[*ChainOutput]{
+		send(StreamChunk[*ChainOutput]{
 			Data: output,
 			Done: true,
-		}
+		})
 	}()
 
 	return outChan, nil

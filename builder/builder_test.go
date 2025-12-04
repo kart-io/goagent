@@ -1536,3 +1536,49 @@ func TestAgentBuilder_FineGrainedOptions_Integration(t *testing.T) {
 	assert.NotNil(t, output)
 	assert.Equal(t, "Test response", output.Result)
 }
+
+// TestConfigurableAgent_BuildPromptWithSystemMessage 测试 buildPromptWithSystemMessage 方法
+func TestConfigurableAgent_BuildPromptWithSystemMessage(t *testing.T) {
+	mockClient := NewMockLLMClient("response")
+
+	tests := []struct {
+		name         string
+		systemPrompt string
+		input        interface{}
+		wantContains []string
+	}{
+		{
+			name:         "带系统提示",
+			systemPrompt: "你是一个助手",
+			input:        "测试输入",
+			wantContains: []string{"系统指令:", "你是一个助手", "用户请求:", "测试输入"},
+		},
+		{
+			name:         "无系统提示",
+			systemPrompt: "",
+			input:        "测试输入",
+			wantContains: []string{"测试输入"},
+		},
+		{
+			name:         "复杂输入",
+			systemPrompt: "助手提示",
+			input:        map[string]string{"key": "value"},
+			wantContains: []string{"系统指令:", "助手提示", "用户请求:"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			agent, err := NewAgentBuilder[any, *core.AgentState](mockClient).
+				WithSystemPrompt(tt.systemPrompt).
+				Build()
+			require.NoError(t, err)
+
+			result := agent.buildPromptWithSystemMessage(tt.input)
+
+			for _, want := range tt.wantContains {
+				assert.Contains(t, result, want)
+			}
+		})
+	}
+}

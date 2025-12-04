@@ -189,7 +189,9 @@ func (l *PDFLoader) downloadPDF(ctx context.Context) (io.ReaderAt, int64, error)
 	if err != nil {
 		return nil, 0, errors.Wrap(err, errors.CodeInternal, "failed to download PDF")
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, 0, errors.New(errors.CodeInternal, fmt.Sprintf("failed to download PDF: HTTP %d", resp.StatusCode))
@@ -210,17 +212,22 @@ func (l *PDFLoader) readLocalPDF() (io.ReaderAt, int64, error) {
 	if err != nil {
 		return nil, 0, errors.Wrap(err, errors.CodeInternal, "failed to open PDF file")
 	}
+	// 确保文件在函数返回时关闭
+	defer func() {
+		if cerr := file.Close(); cerr != nil {
+			// 记录关闭错误（在读取成功后发生的关闭错误通常不是致命的）
+			fmt.Fprintf(os.Stderr, "warning: failed to close PDF file: %v\n", cerr)
+		}
+	}()
 
 	// 获取文件大小
 	stat, err := file.Stat()
 	if err != nil {
-		file.Close()
 		return nil, 0, errors.Wrap(err, errors.CodeInternal, "failed to get file info")
 	}
 
 	// 读取全部内容到内存（避免文件句柄问题）
 	data, err := io.ReadAll(file)
-	file.Close()
 	if err != nil {
 		return nil, 0, errors.Wrap(err, errors.CodeInternal, "failed to read PDF file")
 	}
