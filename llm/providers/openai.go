@@ -462,17 +462,25 @@ func (p *OpenAIProvider) convertToolsToFunctions(tools []interfaces.Tool) []open
 
 // toolSchemaToJSON converts tool schema to JSON schema
 func (p *OpenAIProvider) toolSchemaToJSON(schema interface{}) interface{} {
-	// This is a simplified version - in production you'd want
-	// to properly convert the schema to OpenAI's expected format
+	// 处理不同类型的 schema 输入
+	switch s := schema.(type) {
+	case string:
+		// JSON 字符串格式的 schema
+		if s != "" {
+			var result map[string]interface{}
+			if err := json.Unmarshal([]byte(s), &result); err == nil {
+				return result
+			}
+		}
+	case map[string]interface{}:
+		// 已经是 map 格式
+		return s
+	}
+
+	// 默认返回空 schema
 	return map[string]interface{}{
-		"type": "object",
-		"properties": map[string]interface{}{
-			"input": map[string]interface{}{
-				"type":        "string",
-				"description": "The input for the tool",
-			},
-		},
-		"required": []string{"input"},
+		"type":       "object",
+		"properties": map[string]interface{}{},
 	}
 }
 

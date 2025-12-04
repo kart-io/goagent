@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kart-io/goagent/agents/base"
 	agentcore "github.com/kart-io/goagent/core"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
@@ -30,6 +31,7 @@ type ToTAgent struct {
 	tools       []interfaces.Tool
 	toolsByName map[string]interfaces.Tool
 	config      ToTConfig
+	parser      *base.DefaultParser
 }
 
 // ToTConfig configuration for Tree-of-Thought agent
@@ -105,6 +107,7 @@ func NewToTAgent(config ToTConfig) *ToTAgent {
 		tools:       config.Tools,
 		toolsByName: toolsByName,
 		config:      config,
+		parser:      base.GetDefaultParser(),
 	}
 }
 
@@ -180,6 +183,80 @@ func (t *ToTAgent) Invoke(ctx context.Context, input *agentcore.AgentInput) (*ag
 	if err := t.triggerOnFinish(ctx, output); err != nil {
 		return nil, err
 	}
+
+	return output, nil
+}
+
+// InvokeFast 快速执行 Tree-of-Thought 推理（绕过回调）
+//
+// 用于热路径优化，跳过回调直接执行
+// 性能提升：避免回调遍历开销
+//
+// 注意：此方法不会触发任何回调（OnStart/OnFinish等）
+//
+//go:inline
+func (t *ToTAgent) InvokeFast(ctx context.Context, input *agentcore.AgentInput) (*agentcore.AgentOutput, error) {
+	startTime := time.Now()
+
+	// Initialize output
+	output := &agentcore.AgentOutput{
+		Steps:     make([]agentcore.AgentStep, 0),
+		ToolCalls: make([]agentcore.AgentToolCall, 0),
+		Metadata:  make(map[string]interface{}),
+	}
+
+	// Create root node
+	root := &ThoughtNode{
+		ID:      "root",
+		Thought: input.Task,
+		Score:   1.0,
+		Depth:   0,
+		State:   make(map[string]interface{}),
+	}
+
+	// Execute tree search based on strategy
+	var solution *ThoughtNode
+	var err error
+
+	switch t.config.SearchStrategy {
+	case interfaces.StrategyDepthFirst:
+		solution, err = t.depthFirstSearch(ctx, root, input, output)
+	case interfaces.StrategyBreadthFirst:
+		solution, err = t.breadthFirstSearch(ctx, root, input, output)
+	case interfaces.StrategyBeamSearch:
+		solution, err = t.beamSearch(ctx, root, input, output)
+	case interfaces.StrategyMonteCarlo:
+		solution, err = t.monteCarloSearch(ctx, root, input, output)
+	default:
+		solution, err = t.beamSearch(ctx, root, input, output)
+	}
+
+	if err != nil {
+		output.Status = interfaces.StatusFailed
+		output.Message = err.Error()
+		output.Timestamp = time.Now()
+		output.Latency = time.Since(startTime)
+		return output, err
+	}
+
+	// Build final answer from solution path
+	if solution != nil {
+		path := t.getPathToRoot(solution)
+		answer := t.buildAnswerFromPath(path)
+		output.Status = interfaces.StatusSuccess
+		output.Result = answer
+		output.Message = "Tree-of-Thought reasoning completed successfully"
+		output.Metadata["path_length"] = len(path)
+		output.Metadata["total_nodes"] = t.countNodes(root)
+		output.Metadata["search_strategy"] = string(t.config.SearchStrategy)
+	} else {
+		output.Status = interfaces.StatusFailed
+		output.Message = "No solution found within depth limit"
+		output.Result = "Unable to find a solution through tree search"
+	}
+
+	output.Timestamp = time.Now()
+	output.Latency = time.Since(startTime)
 
 	return output, nil
 }
@@ -587,21 +664,39 @@ func (t *ToTAgent) parseGeneratedThoughts(response string) []string {
 
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "Step ") {
-			parts := strings.SplitN(line, ":", 2)
-			if len(parts) > 1 {
-				thought := strings.TrimSpace(parts[1])
-				if thought != "" {
-					thoughts = append(thoughts, thought)
-				}
+		if line == "" {
+			continue
+		}
+
+		// 使用解析器检测是否是步骤行
+		isStepLine, content := t.parser.IsStepLine(line)
+		if isStepLine && content != "" {
+			thoughts = append(thoughts, content)
+			continue
+		}
+
+		// 如果解析器返回了 true 但没有 content，尝试提取内容
+		if isStepLine {
+			content = t.parser.ExtractStepContent(line)
+			if content != "" {
+				thoughts = append(thoughts, content)
+				continue
 			}
 		}
 	}
 
-	// If no structured format, split by numbered list
+	// 如果没有找到结构化格式，尝试按段落分割
 	if len(thoughts) == 0 {
 		for _, line := range lines {
 			if matched := strings.TrimSpace(line); matched != "" && len(matched) > 10 {
+				// 跳过提示性文本
+				lowerLine := strings.ToLower(matched)
+				if strings.HasPrefix(lowerLine, "here are") ||
+					strings.HasPrefix(lowerLine, "i will") ||
+					strings.HasPrefix(matched, "以下是") ||
+					strings.HasPrefix(matched, "我将") {
+					continue
+				}
 				thoughts = append(thoughts, matched)
 				if len(thoughts) >= t.config.BranchingFactor {
 					break

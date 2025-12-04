@@ -51,6 +51,19 @@ type CompletionResponse struct {
 	Usage        *interfaces.TokenUsage `json:"usage,omitempty"`         // 详细的 Token 使用统计
 }
 
+// ResponseFormat 定义响应格式类型
+type ResponseFormat struct {
+	Type string `json:"type"` // "text" 或 "json_object"
+}
+
+// 预定义的响应格式常量
+var (
+	// ResponseFormatText 普通文本格式
+	ResponseFormatText = &ResponseFormat{Type: "text"}
+	// ResponseFormatJSON JSON 对象格式
+	ResponseFormatJSON = &ResponseFormat{Type: "json_object"}
+)
+
 // Config 定义 LLM 配置
 type LLMOptions struct {
 	// 基础配置
@@ -60,9 +73,10 @@ type LLMOptions struct {
 	Model    string             `json:"model"`              // 默认模型
 
 	// 生成参数
-	MaxTokens   int     `json:"max_tokens"`      // 默认最大 token 数
-	Temperature float64 `json:"temperature"`     // 默认温度 (0.0-2.0)
-	TopP        float64 `json:"top_p,omitempty"` // Top-P 采样参数 (0.0-1.0)
+	MaxTokens      int             `json:"max_tokens"`                // 默认最大 token 数
+	Temperature    float64         `json:"temperature"`               // 默认温度 (0.0-2.0)
+	TopP           float64         `json:"top_p,omitempty"`           // Top-P 采样参数 (0.0-1.0)
+	ResponseFormat *ResponseFormat `json:"response_format,omitempty"` // 响应格式 (json_object 或 text)
 
 	// 网络配置
 	Timeout  int    `json:"timeout"`             // 请求超时（秒）

@@ -1,6 +1,10 @@
 package redis
 
-import "time"
+import (
+	"time"
+
+	"github.com/kart-io/goagent/core"
+)
 
 // Config holds configuration for Redis store
 type Config struct {
@@ -45,12 +49,12 @@ func DefaultConfig() *Config {
 		Password:     "",
 		DB:           0,
 		Prefix:       "agent:store:",
-		TTL:          0, // No expiration
-		PoolSize:     10,
-		MinIdleConns: 2,
+		TTL:          0,   // 无过期时间
+		PoolSize:     100, // 连接池大小，适合高并发场景
+		MinIdleConns: 10,  // 最小空闲连接，保持足够的预热连接
 		MaxRetries:   3,
-		DialTimeout:  5 * time.Second,
-		ReadTimeout:  3 * time.Second,
-		WriteTimeout: 3 * time.Second,
+		DialTimeout:  core.DefaultDBConnectionTimeout,
+		ReadTimeout:  core.DefaultDBOperationTimeout,
+		WriteTimeout: core.DefaultDBOperationTimeout,
 	}
 }

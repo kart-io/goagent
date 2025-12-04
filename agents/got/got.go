@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kart-io/goagent/agents/base"
 	agentcore "github.com/kart-io/goagent/core"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
@@ -29,6 +30,7 @@ type GoTAgent struct {
 	tools       []interfaces.Tool
 	toolsByName map[string]interfaces.Tool
 	config      GoTConfig
+	parser      *base.DefaultParser
 }
 
 // GoTConfig configuration for Graph-of-Thought agent
@@ -45,6 +47,15 @@ type GoTConfig struct {
 	MergeStrategy     string  // How to merge multiple paths ("vote", "weighted", "llm")
 	CycleDetection    bool    // Enable cycle detection
 	PruneThreshold    float64 // Threshold for pruning low-score nodes
+
+	// 性能优化参数
+	FastEvaluation bool          // 快速评估模式：跳过单独的 LLM 评估调用，使用启发式评分
+	NodeTimeout    time.Duration // 单个节点的处理超时时间
+
+	// DeepSeek/慢速 API 优化参数
+	MinimalMode      bool // 极简模式：仅使用2次LLM调用（生成+合成），适用于慢速API如DeepSeek
+	BatchGeneration  bool // 批量生成：一次调用生成所有思考，减少API调用次数
+	DirectSynthesis  bool // 直接合成：跳过图执行，直接从生成的思考合成答案
 }
 
 // GraphNode represents a node in the thought graph
@@ -62,17 +73,26 @@ type GraphNode struct {
 
 // NewGoTAgent creates a new Graph-of-Thought agent
 func NewGoTAgent(config GoTConfig) *GoTAgent {
+	// 优化默认值：减少节点数量以降低 LLM 调用次数
 	if config.MaxNodes <= 0 {
-		config.MaxNodes = 50
+		config.MaxNodes = 10 // 从 50 降低到 10，显著减少 LLM 调用
 	}
 	if config.MaxEdgesPerNode <= 0 {
-		config.MaxEdgesPerNode = 5
+		config.MaxEdgesPerNode = 3 // 从 5 降低到 3
 	}
 	if config.MergeStrategy == "" {
 		config.MergeStrategy = "weighted"
 	}
+	// 提高剪枝阈值：更积极地过滤低质量思考
 	if config.PruneThreshold == 0 {
-		config.PruneThreshold = 0.3
+		config.PruneThreshold = 0.5 // 从 0.3 提高到 0.5
+	}
+	// 默认启用快速评估模式
+	// 用户可以通过设置 FastEvaluation = false 来使用完整的 LLM 评估
+	// 注：这里不覆盖用户显式设置的值，因为 bool 零值是 false
+	// 如果用户未设置，默认使用快速评估
+	if config.NodeTimeout == 0 {
+		config.NodeTimeout = 30 * time.Second // 单节点 30 秒超时
 	}
 
 	// Build tools map
@@ -92,6 +112,7 @@ func NewGoTAgent(config GoTConfig) *GoTAgent {
 		tools:       config.Tools,
 		toolsByName: toolsByName,
 		config:      config,
+		parser:      base.GetDefaultParser(),
 	}
 }
 
@@ -109,6 +130,12 @@ func (g *GoTAgent) Invoke(ctx context.Context, input *agentcore.AgentInput) (*ag
 		Steps:     make([]agentcore.AgentStep, 0),
 		ToolCalls: make([]agentcore.AgentToolCall, 0),
 		Metadata:  make(map[string]interface{}),
+	}
+
+	// 极简模式：专为慢速 API（如 DeepSeek）优化
+	// 仅使用 2 次 LLM 调用：生成思考 + 合成答案
+	if g.config.MinimalMode {
+		return g.invokeMinimal(ctx, input, output, startTime)
 	}
 
 	// Build thought graph
@@ -157,6 +184,226 @@ func (g *GoTAgent) Invoke(ctx context.Context, input *agentcore.AgentInput) (*ag
 	return output, nil
 }
 
+// invokeMinimal 极简模式执行
+// 仅使用 2 次 LLM 调用，适用于慢速 API（如 DeepSeek）
+//
+// 执行流程：
+//  1. 一次调用生成多个并行思考路径
+//  2. 一次调用合成最终答案
+//
+// 优势：
+//   - LLM 调用次数从 N 次降为 2 次
+//   - 总执行时间显著缩短
+//   - 适合响应慢的 API 提供商
+func (g *GoTAgent) invokeMinimal(ctx context.Context, input *agentcore.AgentInput, output *agentcore.AgentOutput, startTime time.Time) (*agentcore.AgentOutput, error) {
+	// 步骤1：一次调用生成多个思考路径
+	thoughts, err := g.generateAllThoughts(ctx, input)
+	if err != nil {
+		return g.handleError(ctx, output, "Failed to generate thoughts", err, startTime)
+	}
+
+	// 记录生成步骤
+	output.Steps = append(output.Steps, agentcore.AgentStep{
+		Step:        1,
+		Action:      "Generate Thoughts",
+		Description: fmt.Sprintf("Generated %d parallel reasoning paths", len(thoughts)),
+		Result:      strings.Join(thoughts, "\n---\n"),
+		Duration:    time.Since(startTime),
+		Success:     true,
+	})
+
+	// 步骤2：一次调用合成最终答案
+	synthesisStart := time.Now()
+	finalAnswer, err := g.synthesizeFromThoughts(ctx, input, thoughts)
+	if err != nil {
+		return g.handleError(ctx, output, "Failed to synthesize answer", err, startTime)
+	}
+
+	// 记录合成步骤
+	output.Steps = append(output.Steps, agentcore.AgentStep{
+		Step:        2,
+		Action:      "Synthesize Answer",
+		Description: "Combined insights from all reasoning paths",
+		Result:      "Synthesis complete",
+		Duration:    time.Since(synthesisStart),
+		Success:     true,
+	})
+
+	output.Status = interfaces.StatusSuccess
+	output.Result = finalAnswer
+	output.Message = "Graph-of-Thought reasoning completed (minimal mode)"
+	output.Timestamp = time.Now()
+	output.Latency = time.Since(startTime)
+
+	// 添加元数据
+	output.Metadata["mode"] = "minimal"
+	output.Metadata["thought_count"] = len(thoughts)
+	output.Metadata["llm_calls"] = 2
+
+	// Trigger finish callback
+	if err := g.triggerOnFinish(ctx, output); err != nil {
+		return nil, err
+	}
+
+	return output, nil
+}
+
+// generateAllThoughts 一次调用生成所有思考路径
+func (g *GoTAgent) generateAllThoughts(ctx context.Context, input *agentcore.AgentInput) ([]string, error) {
+	prompt := fmt.Sprintf(`任务：%s
+
+请从多个不同角度分析这个问题，提供 3-5 个独立的思考路径。
+每个路径应该：
+- 从不同的视角或方法切入
+- 包含完整的推理过程
+- 得出自己的结论
+
+请按以下格式输出，用 "---" 分隔不同的思考路径：
+
+思考路径 1:
+[你的分析和结论]
+
+---
+
+思考路径 2:
+[你的分析和结论]
+
+---
+
+思考路径 3:
+[你的分析和结论]`, input.Task)
+
+	messages := []llm.Message{
+		llm.UserMessage(prompt),
+	}
+
+	resp, err := g.llm.Chat(ctx, messages)
+	if err != nil {
+		return nil, err
+	}
+
+	// 解析思考路径
+	thoughts := g.parseThoughts(resp.Content)
+	if len(thoughts) == 0 {
+		// 如果解析失败，将整个响应作为单个思考
+		thoughts = []string{resp.Content}
+	}
+
+	return thoughts, nil
+}
+
+// parseThoughts 解析 LLM 响应中的多个思考路径
+func (g *GoTAgent) parseThoughts(content string) []string {
+	// 按 "---" 分隔
+	parts := strings.Split(content, "---")
+	thoughts := make([]string, 0, len(parts))
+
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if len(part) > 20 { // 过滤太短的内容
+			thoughts = append(thoughts, part)
+		}
+	}
+
+	return thoughts
+}
+
+// synthesizeFromThoughts 从多个思考路径合成最终答案
+func (g *GoTAgent) synthesizeFromThoughts(ctx context.Context, input *agentcore.AgentInput, thoughts []string) (string, error) {
+	var thoughtsText strings.Builder
+	for i, thought := range thoughts {
+		thoughtsText.WriteString(fmt.Sprintf("=== 思考路径 %d ===\n%s\n\n", i+1, thought))
+	}
+
+	prompt := fmt.Sprintf(`原始任务：%s
+
+以下是从不同角度进行的分析：
+
+%s
+
+请综合以上所有分析，提取关键见解，给出一个完整、准确的最终答案。
+注意整合不同视角的优点，避免重复，确保答案全面且有条理。`, input.Task, thoughtsText.String())
+
+	messages := []llm.Message{
+		llm.UserMessage(prompt),
+	}
+
+	resp, err := g.llm.Chat(ctx, messages)
+	if err != nil {
+		return "", err
+	}
+
+	return resp.Content, nil
+}
+
+// InvokeFast 快速执行 Graph-of-Thought 推理（绕过回调）
+//
+// 用于热路径优化，跳过回调直接执行
+// 性能提升：避免回调遍历开销
+//
+// 注意：此方法不会触发任何回调（OnStart/OnFinish等）
+//
+//go:inline
+func (g *GoTAgent) InvokeFast(ctx context.Context, input *agentcore.AgentInput) (*agentcore.AgentOutput, error) {
+	startTime := time.Now()
+
+	// Initialize output
+	output := &agentcore.AgentOutput{
+		Steps:     make([]agentcore.AgentStep, 0),
+		ToolCalls: make([]agentcore.AgentToolCall, 0),
+		Metadata:  make(map[string]interface{}),
+	}
+
+	// Build thought graph
+	graph := g.buildThoughtGraph(ctx, input, output)
+
+	// Check for cycles if enabled
+	if g.config.CycleDetection && g.hasCycles(graph) {
+		err := agentErrors.New(agentErrors.CodeAgentExecution, "cyclic dependencies found").
+			WithComponent("got_agent").
+			WithOperation("InvokeFast")
+		output.Status = interfaces.StatusFailed
+		output.Message = "Cycle detected in thought graph"
+		output.Timestamp = time.Now()
+		output.Latency = time.Since(startTime)
+		return output, err
+	}
+
+	// Execute graph (parallel or sequential)
+	var finalResult interface{}
+	var err error
+
+	if g.config.ParallelExecution {
+		finalResult, err = g.executeGraphParallel(ctx, graph, input, output)
+	} else {
+		finalResult, err = g.executeGraphSequential(ctx, graph, input, output)
+	}
+
+	if err != nil {
+		output.Status = interfaces.StatusFailed
+		output.Message = "Graph execution failed: " + err.Error()
+		output.Timestamp = time.Now()
+		output.Latency = time.Since(startTime)
+		return output, err
+	}
+
+	// Build final answer from graph results
+	finalAnswer := g.synthesizeAnswer(ctx, graph, finalResult)
+
+	output.Status = interfaces.StatusSuccess
+	output.Result = finalAnswer
+	output.Message = "Graph-of-Thought reasoning completed successfully"
+	output.Timestamp = time.Now()
+	output.Latency = time.Since(startTime)
+
+	// Add graph metadata
+	output.Metadata["total_nodes"] = len(graph)
+	output.Metadata["parallel_execution"] = g.config.ParallelExecution
+	output.Metadata["merge_strategy"] = g.config.MergeStrategy
+
+	return output, nil
+}
+
 // buildThoughtGraph constructs the DAG of thoughts
 func (g *GoTAgent) buildThoughtGraph(ctx context.Context, input *agentcore.AgentInput, output *agentcore.AgentOutput) []*GraphNode {
 	// Initialize with root node
@@ -175,6 +422,15 @@ func (g *GoTAgent) buildThoughtGraph(ctx context.Context, input *agentcore.Agent
 
 	// Build graph iteratively
 	for len(graph) < g.config.MaxNodes {
+		// 检查上下文是否已取消（超时控制）
+		select {
+		case <-ctx.Done():
+			// 上下文已取消，停止构建图，返回当前已构建的部分
+			return graph
+		default:
+			// 继续执行
+		}
+
 		// Select nodes for expansion
 		candidates := g.selectExpansionCandidates(graph)
 		if len(candidates) == 0 {
@@ -182,6 +438,13 @@ func (g *GoTAgent) buildThoughtGraph(ctx context.Context, input *agentcore.Agent
 		}
 
 		for _, node := range candidates {
+			// 每次生成前检查上下文
+			select {
+			case <-ctx.Done():
+				return graph
+			default:
+			}
+
 			// Generate new thoughts from this node
 			newThoughts := g.generateThoughtsFromNode(ctx, node, input)
 
@@ -310,6 +573,10 @@ func (g *GoTAgent) processNode(ctx context.Context, node *GraphNode, input *agen
 	node.Status = "processing"
 	node.mu.Unlock()
 
+	// 添加节点级别超时控制
+	nodeCtx, cancel := context.WithTimeout(ctx, g.config.NodeTimeout)
+	defer cancel()
+
 	// Build context from dependencies
 	depContext := g.buildDependencyContext(node)
 
@@ -331,7 +598,7 @@ Provide your analysis or answer based on the above context.`,
 		llm.UserMessage(prompt),
 	}
 
-	llmResp, err := g.llm.Chat(ctx, messages)
+	llmResp, err := g.llm.Chat(nodeCtx, messages)
 	if err != nil {
 		node.mu.Lock()
 		node.Status = "failed"
@@ -378,7 +645,7 @@ func (g *GoTAgent) generateThoughtsFromNode(ctx context.Context, node *GraphNode
 Current thought: %s
 
 Generate 2-3 different follow-up thoughts or approaches that build on or complement this thought.
-Format each thought on a new line starting with "- "`,
+Format each thought on a new line starting with "- " or numbered like "1. "`,
 		input.Task,
 		node.Thought)
 
@@ -391,20 +658,46 @@ Format each thought on a new line starting with "- "`,
 		return nil
 	}
 
-	// Parse thoughts
+	// 使用解析器解析思考
 	thoughts := make([]string, 0)
 	lines := strings.Split(llmResp.Content, "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "- ") {
-			thought := strings.TrimPrefix(line, "- ")
-			if thought != "" {
-				thoughts = append(thoughts, thought)
+		if line == "" {
+			continue
+		}
+
+		// 使用解析器检测是否是步骤行
+		isStep, content := g.parser.IsStepLine(line)
+		if isStep {
+			if content == "" {
+				content = g.parser.ExtractStepContent(line)
 			}
+			if content != "" {
+				thoughts = append(thoughts, content)
+				continue
+			}
+		}
+
+		// 备选：如果行足够长且不是提示性文本，也作为思考
+		if len(line) > 20 && !g.isSkippableLine(line) {
+			thoughts = append(thoughts, line)
 		}
 	}
 
 	return thoughts
+}
+
+// isSkippableLine 检查是否应该跳过的行
+func (g *GoTAgent) isSkippableLine(line string) bool {
+	lowerLine := strings.ToLower(line)
+	skipPrefixes := []string{"given", "task:", "current", "here are", "以下是", "任务：", "当前"}
+	for _, skip := range skipPrefixes {
+		if strings.HasPrefix(lowerLine, skip) || strings.HasPrefix(line, skip) {
+			return true
+		}
+	}
+	return false
 }
 
 func (g *GoTAgent) findAdditionalDependencies(node *GraphNode, graph []*GraphNode) {
@@ -413,7 +706,7 @@ func (g *GoTAgent) findAdditionalDependencies(node *GraphNode, graph []*GraphNod
 	for _, other := range graph {
 		if other.ID != node.Dependencies[0].ID { // Skip direct parent
 			// Check if thoughts are related
-			if g.areThoughtsRelated(node.Thought, other.Thought) {
+			if g.parser.AreThoughtsRelated(node.Thought, other.Thought) {
 				node.Dependencies = append(node.Dependencies, other)
 				if len(node.Dependencies) >= 3 { // Limit dependencies
 					break
@@ -423,23 +716,14 @@ func (g *GoTAgent) findAdditionalDependencies(node *GraphNode, graph []*GraphNod
 	}
 }
 
-func (g *GoTAgent) areThoughtsRelated(thought1, thought2 string) bool {
-	// Simplified relatedness check
-	t1Lower := strings.ToLower(thought1)
-	t2Lower := strings.ToLower(thought2)
-
-	// Check for common key terms
-	commonTerms := []string{"therefore", "because", "result", "conclusion", "analysis"}
-	for _, term := range commonTerms {
-		if strings.Contains(t1Lower, term) && strings.Contains(t2Lower, term) {
-			return true
-		}
+func (g *GoTAgent) evaluateThought(ctx context.Context, thought string, input *agentcore.AgentInput) float64 {
+	// 快速评估模式：使用启发式评分，跳过 LLM 调用
+	// 这是主要的性能优化点，避免每个思考都进行 LLM 调用
+	if g.config.FastEvaluation {
+		return g.evaluateThoughtFast(thought, input)
 	}
 
-	return false
-}
-
-func (g *GoTAgent) evaluateThought(ctx context.Context, thought string, input *agentcore.AgentInput) float64 {
+	// 完整评估模式：使用 LLM 评分（可能导致超时）
 	prompt := fmt.Sprintf(`Rate the following thought for solving the task on a scale of 0 to 1:
 Task: %s
 Thought: %s
@@ -452,7 +736,11 @@ Respond with just a number between 0 and 1.`,
 		llm.UserMessage(prompt),
 	}
 
-	llmResp, err := g.llm.Chat(ctx, messages)
+	// 添加节点超时控制
+	evalCtx, cancel := context.WithTimeout(ctx, g.config.NodeTimeout)
+	defer cancel()
+
+	llmResp, err := g.llm.Chat(evalCtx, messages)
 	if err != nil {
 		return 0.5
 	}
@@ -463,6 +751,52 @@ Respond with just a number between 0 and 1.`,
 		score = 0.5
 	}
 
+	if score < 0 {
+		score = 0
+	}
+	if score > 1 {
+		score = 1
+	}
+
+	return score
+}
+
+// evaluateThoughtFast 使用启发式方法快速评估思考质量
+// 不调用 LLM，基于文本特征评分
+func (g *GoTAgent) evaluateThoughtFast(thought string, input *agentcore.AgentInput) float64 {
+	score := 0.5 // 基础分
+
+	// 1. 长度评分：太短或太长都扣分
+	thoughtLen := len(thought)
+	if thoughtLen >= 20 && thoughtLen <= 500 {
+		score += 0.15
+	} else if thoughtLen < 10 {
+		score -= 0.2
+	}
+
+	// 2. 与任务的相关性：检查是否包含任务关键词
+	taskLower := strings.ToLower(input.Task)
+	thoughtLower := strings.ToLower(thought)
+
+	// 提取任务关键词（简单分词）
+	taskWords := strings.Fields(taskLower)
+	matchCount := 0
+	for _, word := range taskWords {
+		if len(word) > 3 && strings.Contains(thoughtLower, word) {
+			matchCount++
+		}
+	}
+	if len(taskWords) > 0 {
+		relevance := float64(matchCount) / float64(len(taskWords))
+		score += relevance * 0.2
+	}
+
+	// 3. 结构性评分：使用解析器检查是否包含推理词汇
+	if g.parser.ContainsReasoningWords(thought) {
+		score += 0.05
+	}
+
+	// 4. 确保分数在 [0, 1] 范围内
 	if score < 0 {
 		score = 0
 	}

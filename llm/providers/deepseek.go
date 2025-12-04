@@ -30,15 +30,21 @@ type DeepSeekProvider struct {
 
 // DeepSeekRequest represents a request to DeepSeek API
 type DeepSeekRequest struct {
-	Model       string            `json:"model"`
-	Messages    []DeepSeekMessage `json:"messages"`
-	Temperature float64           `json:"temperature,omitempty"`
-	MaxTokens   int               `json:"max_tokens,omitempty"`
-	TopP        float64           `json:"top_p,omitempty"`
-	Stream      bool              `json:"stream,omitempty"`
-	Tools       []DeepSeekTool    `json:"tools,omitempty"`
-	ToolChoice  interface{}       `json:"tool_choice,omitempty"`
-	Stop        []string          `json:"stop,omitempty"`
+	Model          string                   `json:"model"`
+	Messages       []DeepSeekMessage        `json:"messages"`
+	Temperature    float64                  `json:"temperature,omitempty"`
+	MaxTokens      int                      `json:"max_tokens,omitempty"`
+	TopP           float64                  `json:"top_p,omitempty"`
+	Stream         bool                     `json:"stream,omitempty"`
+	Tools          []DeepSeekTool           `json:"tools,omitempty"`
+	ToolChoice     interface{}              `json:"tool_choice,omitempty"`
+	Stop           []string                 `json:"stop,omitempty"`
+	ResponseFormat *DeepSeekResponseFormat  `json:"response_format,omitempty"`
+}
+
+// DeepSeekResponseFormat 定义响应格式
+type DeepSeekResponseFormat struct {
+	Type string `json:"type"` // "text" 或 "json_object"
 }
 
 // DeepSeekMessage represents a message in DeepSeek format
@@ -178,6 +184,13 @@ func (p *DeepSeekProvider) Complete(ctx context.Context, req *agentllm.Completio
 		TopP:        req.TopP,
 		Stop:        req.Stop,
 		Stream:      false,
+	}
+
+	// 添加 ResponseFormat 支持（从配置中获取）
+	if p.Config.ResponseFormat != nil {
+		dsReq.ResponseFormat = &DeepSeekResponseFormat{
+			Type: p.Config.ResponseFormat.Type,
+		}
 	}
 
 	// Make API call
@@ -581,17 +594,25 @@ func (p *DeepSeekProvider) convertToolsToDeepSeek(tools []interfaces.Tool) []Dee
 
 // toolSchemaToJSON converts tool schema to JSON schema
 func (p *DeepSeekProvider) toolSchemaToJSON(schema interface{}) map[string]interface{} {
-	// This is a simplified version
-	// In production, you'd properly convert the schema
+	// 处理不同类型的 schema 输入
+	switch s := schema.(type) {
+	case string:
+		// JSON 字符串格式的 schema
+		if s != "" {
+			var result map[string]interface{}
+			if err := json.Unmarshal([]byte(s), &result); err == nil {
+				return result
+			}
+		}
+	case map[string]interface{}:
+		// 已经是 map 格式
+		return s
+	}
+
+	// 默认返回空 schema
 	return map[string]interface{}{
-		"type": "object",
-		"properties": map[string]interface{}{
-			"input": map[string]interface{}{
-				"type":        "string",
-				"description": "The input for the tool",
-			},
-		},
-		"required": []string{"input"},
+		"type":       "object",
+		"properties": map[string]interface{}{},
 	}
 }
 

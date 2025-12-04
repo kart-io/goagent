@@ -3,7 +3,6 @@ package cot
 import (
 	"context"
 	"fmt"
-	"regexp"
 	"strings"
 	"time"
 
@@ -12,9 +11,6 @@ import (
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 )
-
-// 预编译正则表达式，避免每次调用都重新编译
-var digitOnlyRegex = regexp.MustCompile(`^\d+$`)
 
 // CoTAgent implements Chain-of-Thought reasoning pattern.
 //
@@ -60,6 +56,7 @@ type CoTExample struct {
 // CoTStrategy CoT推理策略实现
 type CoTStrategy struct {
 	config CoTConfig
+	parser *base.DefaultParser
 }
 
 // NewCoTAgent creates a new Chain-of-Thought agent
@@ -77,7 +74,10 @@ func NewCoTAgent(config CoTConfig) *CoTAgent {
 		capabilities = append(capabilities, "tool_calling")
 	}
 
-	strategy := &CoTStrategy{config: config}
+	strategy := &CoTStrategy{
+		config: config,
+		parser: base.GetDefaultParser(),
+	}
 
 	baseAgent := base.NewBaseReasoningAgent(
 		config.Name,
@@ -377,80 +377,25 @@ Be systematic and thorough in your analysis.`
 }
 
 func (s *CoTStrategy) parseCoTResponse(response string) ([]string, string) {
-	lines := strings.Split(response, "\n")
-	steps := make([]string, 0)
-	finalAnswer := ""
+	// 使用解析器解析步骤
+	steps := s.parser.ParseSteps(response)
 
-	currentStep := strings.Builder{}
-	inStep := false
+	// 使用解析器解析答案
+	finalAnswer := s.parser.ParseAnswer(response)
 
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
+	// 如果配置了自定义最终答案格式，也检查它
+	if finalAnswer == "" && s.config.FinalAnswerFormat != "" {
+		lines := strings.Split(response, "\n")
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if strings.Contains(line, s.config.FinalAnswerFormat) {
+				parts := strings.SplitN(line, s.config.FinalAnswerFormat, 2)
+				if len(parts) > 1 {
+					finalAnswer = strings.TrimSpace(parts[1])
+					break
+				}
+			}
 		}
-
-		// 检查最终答案
-		if strings.Contains(line, s.config.FinalAnswerFormat) {
-			// 保存当前步骤
-			if currentStep.Len() > 0 {
-				steps = append(steps, strings.TrimSpace(currentStep.String()))
-			}
-			parts := strings.SplitN(line, s.config.FinalAnswerFormat, 2)
-			if len(parts) > 1 {
-				finalAnswer = strings.TrimSpace(parts[1])
-			}
-			break
-		}
-
-		// 检测步骤头部
-		lowerLine := strings.ToLower(line)
-		isStepHeader := strings.Contains(lowerLine, "step") &&
-			(strings.Contains(line, ":") || strings.HasPrefix(line, "**") || strings.HasPrefix(line, "-"))
-
-		if isStepHeader {
-			// 保存前一步骤
-			if currentStep.Len() > 0 {
-				steps = append(steps, strings.TrimSpace(currentStep.String()))
-				currentStep.Reset()
-			}
-			inStep = true
-
-			// 提取步骤标题和内容
-			cleanLine := strings.TrimPrefix(line, "**")
-			cleanLine = strings.TrimSuffix(cleanLine, "**")
-			cleanLine = strings.TrimPrefix(cleanLine, "- ")
-			currentStep.WriteString(cleanLine)
-			currentStep.WriteString(" ")
-		} else if inStep {
-			// 跳过空行和LaTeX分隔符
-			if line == "\\[" || line == "\\]" {
-				continue
-			}
-			// 跳过纯数字行
-			if digitOnlyRegex.MatchString(line) {
-				continue
-			}
-			// 跳过纯LaTeX公式
-			if strings.HasPrefix(line, "\\frac") || strings.HasPrefix(line, "\\quad") ||
-				strings.HasPrefix(line, "\\text") {
-				continue
-			}
-			// 跳过"Question:"和"Let's"行
-			if strings.HasPrefix(lowerLine, "question:") ||
-				strings.HasPrefix(lowerLine, "let's") {
-				continue
-			}
-
-			// 收集当前步骤内容
-			currentStep.WriteString(line)
-			currentStep.WriteString(" ")
-		}
-	}
-
-	// 保存最后一步
-	if currentStep.Len() > 0 {
-		steps = append(steps, strings.TrimSpace(currentStep.String()))
 	}
 
 	// 如果没有找到结构化步骤，尝试备用解析
@@ -458,8 +403,7 @@ func (s *CoTStrategy) parseCoTResponse(response string) ([]string, string) {
 		paragraphs := strings.Split(response, "\n\n")
 		for _, para := range paragraphs {
 			para = strings.TrimSpace(para)
-			if para != "" && !strings.HasPrefix(strings.ToLower(para), "question") &&
-				!strings.HasPrefix(strings.ToLower(para), "let's") {
+			if para != "" && !s.isSkippableParagraph(para) {
 				steps = append(steps, para)
 			}
 		}
@@ -467,15 +411,88 @@ func (s *CoTStrategy) parseCoTResponse(response string) ([]string, string) {
 		// 最后一段可能是答案
 		if len(steps) > 0 {
 			lastStep := steps[len(steps)-1]
-			if strings.Contains(strings.ToLower(lastStep), "answer") ||
-				strings.Contains(strings.ToLower(lastStep), "conclusion") {
+			if s.isAnswerParagraph(lastStep) {
 				finalAnswer = lastStep
 				steps = steps[:len(steps)-1]
 			}
 		}
 	}
 
+	// 如果仍然没有找到最终答案，但有步骤，使用最后一步作为答案
+	if finalAnswer == "" && len(steps) > 0 {
+		finalAnswer = steps[len(steps)-1]
+	}
+
+	// 如果完全没有解析出结果，返回原始响应作为答案
+	if finalAnswer == "" && len(steps) == 0 {
+		finalAnswer = response
+	}
+
 	return steps, finalAnswer
+}
+
+// isStepHeader 检测是否是步骤头部（委托给解析器）
+func (s *CoTStrategy) isStepHeader(line string) bool {
+	isStep, _ := s.parser.IsStepLine(line)
+	return isStep
+}
+
+// isAnswerLine 检测是否是答案行（委托给解析器）
+func (s *CoTStrategy) isAnswerLine(line string) bool {
+	// 首先检查配置的自定义格式
+	if s.config.FinalAnswerFormat != "" && strings.Contains(line, s.config.FinalAnswerFormat) {
+		return true
+	}
+	return s.parser.IsAnswerLine(line)
+}
+
+// extractAnswer 从答案行中提取答案内容（委托给解析器）
+func (s *CoTStrategy) extractAnswer(line string) string {
+	// 首先尝试从配置的格式中提取
+	if s.config.FinalAnswerFormat != "" && strings.Contains(line, s.config.FinalAnswerFormat) {
+		parts := strings.SplitN(line, s.config.FinalAnswerFormat, 2)
+		if len(parts) > 1 {
+			return strings.TrimSpace(parts[1])
+		}
+	}
+	return s.parser.ExtractAnswerContent(line)
+}
+
+// isSkippableParagraph 检测是否应该跳过的段落
+func (s *CoTStrategy) isSkippableParagraph(para string) bool {
+	lowerPara := strings.ToLower(para)
+
+	// 英文
+	if strings.HasPrefix(lowerPara, "question") || strings.HasPrefix(lowerPara, "let's") {
+		return true
+	}
+
+	// 中文
+	if strings.HasPrefix(para, "问题") || strings.HasPrefix(para, "让我们") {
+		return true
+	}
+
+	return false
+}
+
+// isAnswerParagraph 检测段落是否包含答案
+func (s *CoTStrategy) isAnswerParagraph(para string) bool {
+	lowerPara := strings.ToLower(para)
+
+	// 英文
+	if strings.Contains(lowerPara, "answer") || strings.Contains(lowerPara, "conclusion") ||
+		strings.Contains(lowerPara, "therefore") || strings.Contains(lowerPara, "thus") {
+		return true
+	}
+
+	// 中文
+	if strings.Contains(para, "答案") || strings.Contains(para, "结论") ||
+		strings.Contains(para, "因此") || strings.Contains(para, "所以") ||
+		strings.Contains(para, "综上") || strings.Contains(para, "总结") {
+		return true
+	}
+
+	return false
 }
 
 func (s *CoTStrategy) executeToolsIfNeeded(ctx context.Context, steps []string, toolsByName map[string]interfaces.Tool, output *agentcore.AgentOutput) map[string]interface{} {

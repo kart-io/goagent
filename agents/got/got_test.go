@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kart-io/goagent/agents/base"
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
@@ -86,10 +87,10 @@ func TestNewGoTAgent(t *testing.T) {
 			check: func(t *testing.T, agent *GoTAgent) {
 				assert.Equal(t, "test-got", agent.Name())
 				assert.Equal(t, "Test GoT Agent", agent.Description())
-				assert.Equal(t, 50, agent.config.MaxNodes)
-				assert.Equal(t, 5, agent.config.MaxEdgesPerNode)
+				assert.Equal(t, 10, agent.config.MaxNodes)        // 优化后的默认值
+				assert.Equal(t, 3, agent.config.MaxEdgesPerNode)  // 优化后的默认值
 				assert.Equal(t, "weighted", agent.config.MergeStrategy)
-				assert.Equal(t, 0.3, agent.config.PruneThreshold)
+				assert.Equal(t, 0.5, agent.config.PruneThreshold) // 优化后的默认值
 			},
 		},
 		{
@@ -151,7 +152,8 @@ func TestGoTAgent_Invoke(t *testing.T) {
 	mockLLM := new(MockLLMClient)
 
 	// Setup mock for processNode calls (node analysis/answer)
-	mockLLM.On("Chat", ctx, mock.MatchedBy(func(messages []llm.Message) bool {
+	// 使用 mock.Anything 匹配带 timeout 的 context
+	mockLLM.On("Chat", mock.Anything, mock.MatchedBy(func(messages []llm.Message) bool {
 		if len(messages) > 0 {
 			return strings.Contains(messages[0].Content, "Provide your analysis or answer")
 		}
@@ -163,7 +165,7 @@ func TestGoTAgent_Invoke(t *testing.T) {
 	).Maybe()
 
 	// Setup mock for thought generation requests
-	mockLLM.On("Chat", ctx, mock.MatchedBy(func(messages []llm.Message) bool {
+	mockLLM.On("Chat", mock.Anything, mock.MatchedBy(func(messages []llm.Message) bool {
 		if len(messages) > 0 {
 			return strings.Contains(messages[0].Content, "Generate") &&
 				strings.Contains(messages[0].Content, "follow-up thoughts")
@@ -175,8 +177,8 @@ func TestGoTAgent_Invoke(t *testing.T) {
 		}, nil,
 	).Maybe()
 
-	// Setup mock for evaluation requests
-	mockLLM.On("Chat", ctx, mock.MatchedBy(func(messages []llm.Message) bool {
+	// Setup mock for evaluation requests (only used when FastEvaluation=false)
+	mockLLM.On("Chat", mock.Anything, mock.MatchedBy(func(messages []llm.Message) bool {
 		if len(messages) > 0 {
 			return strings.Contains(messages[0].Content, "Rate the following thought")
 		}
@@ -194,6 +196,7 @@ func TestGoTAgent_Invoke(t *testing.T) {
 		MaxNodes:          5, // Reduced from 10 to minimize calls
 		ParallelExecution: false,
 		MergeStrategy:     "weighted",
+		FastEvaluation:    true, // 启用快速评估，减少 LLM 调用
 	})
 
 	input := &core.AgentInput{
@@ -215,7 +218,8 @@ func TestGoTAgent_ParallelExecution(t *testing.T) {
 	mockLLM := new(MockLLMClient)
 
 	// Setup mock for processNode calls
-	mockLLM.On("Chat", ctx, mock.MatchedBy(func(messages []llm.Message) bool {
+	// 使用 mock.Anything 匹配带 timeout 的 context
+	mockLLM.On("Chat", mock.Anything, mock.MatchedBy(func(messages []llm.Message) bool {
 		if len(messages) > 0 {
 			return strings.Contains(messages[0].Content, "Provide your analysis or answer")
 		}
@@ -227,7 +231,7 @@ func TestGoTAgent_ParallelExecution(t *testing.T) {
 	).Maybe()
 
 	// Setup mock for thought generation
-	mockLLM.On("Chat", ctx, mock.MatchedBy(func(messages []llm.Message) bool {
+	mockLLM.On("Chat", mock.Anything, mock.MatchedBy(func(messages []llm.Message) bool {
 		if len(messages) > 0 {
 			return strings.Contains(messages[0].Content, "Generate") &&
 				strings.Contains(messages[0].Content, "follow-up thoughts")
@@ -239,8 +243,8 @@ func TestGoTAgent_ParallelExecution(t *testing.T) {
 		}, nil,
 	).Maybe()
 
-	// Setup mock for evaluation
-	mockLLM.On("Chat", ctx, mock.MatchedBy(func(messages []llm.Message) bool {
+	// Setup mock for evaluation (only used when FastEvaluation=false)
+	mockLLM.On("Chat", mock.Anything, mock.MatchedBy(func(messages []llm.Message) bool {
 		if len(messages) > 0 {
 			return strings.Contains(messages[0].Content, "Rate the following thought")
 		}
@@ -258,6 +262,7 @@ func TestGoTAgent_ParallelExecution(t *testing.T) {
 		MaxNodes:          5,
 		ParallelExecution: true,
 		MergeStrategy:     "vote",
+		FastEvaluation:    true, // 启用快速评估
 	})
 
 	input := &core.AgentInput{
@@ -379,7 +384,8 @@ func TestGoTAgent_Stream(t *testing.T) {
 	mockLLM := new(MockLLMClient)
 
 	// Setup mock for processNode calls
-	mockLLM.On("Chat", ctx, mock.MatchedBy(func(messages []llm.Message) bool {
+	// 使用 mock.Anything 匹配带 timeout 的 context
+	mockLLM.On("Chat", mock.Anything, mock.MatchedBy(func(messages []llm.Message) bool {
 		if len(messages) > 0 {
 			return strings.Contains(messages[0].Content, "Provide your analysis or answer")
 		}
@@ -391,7 +397,7 @@ func TestGoTAgent_Stream(t *testing.T) {
 	).Maybe()
 
 	// Setup mock for thought generation
-	mockLLM.On("Chat", ctx, mock.MatchedBy(func(messages []llm.Message) bool {
+	mockLLM.On("Chat", mock.Anything, mock.MatchedBy(func(messages []llm.Message) bool {
 		if len(messages) > 0 {
 			return strings.Contains(messages[0].Content, "Generate") &&
 				strings.Contains(messages[0].Content, "follow-up thoughts")
@@ -403,8 +409,8 @@ func TestGoTAgent_Stream(t *testing.T) {
 		}, nil,
 	).Maybe()
 
-	// Setup mock for evaluation
-	mockLLM.On("Chat", ctx, mock.MatchedBy(func(messages []llm.Message) bool {
+	// Setup mock for evaluation (only used when FastEvaluation=false)
+	mockLLM.On("Chat", mock.Anything, mock.MatchedBy(func(messages []llm.Message) bool {
 		if len(messages) > 0 {
 			return strings.Contains(messages[0].Content, "Rate the following thought")
 		}
@@ -416,10 +422,11 @@ func TestGoTAgent_Stream(t *testing.T) {
 	).Maybe()
 
 	agent := NewGoTAgent(GoTConfig{
-		Name:        "test-stream",
-		Description: "Test Stream",
-		LLM:         mockLLM,
-		MaxNodes:    3, // Limit to speed up test
+		Name:           "test-stream",
+		Description:    "Test Stream",
+		LLM:            mockLLM,
+		MaxNodes:       3, // Limit to speed up test
+		FastEvaluation: true,
 	})
 
 	input := &core.AgentInput{
@@ -543,13 +550,15 @@ func TestGoTAgent_EvaluateThought(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockLLM := new(MockLLMClient)
-			mockLLM.On("Chat", ctx, mock.Anything).Return(
+			// 使用 mock.Anything 匹配带 timeout 的 context
+			mockLLM.On("Chat", mock.Anything, mock.Anything).Return(
 				&llm.CompletionResponse{Content: tt.llmResponse}, nil,
 			).Once()
 
 			agent := NewGoTAgent(GoTConfig{
-				Name: "test-evaluate",
-				LLM:  mockLLM,
+				Name:           "test-evaluate",
+				LLM:            mockLLM,
+				FastEvaluation: false, // 禁用快速评估以测试 LLM 评估
 			})
 
 			score := agent.evaluateThought(ctx, "test thought", &core.AgentInput{Task: "test"})
@@ -609,10 +618,8 @@ func TestGoTAgent_GroupByDepth(t *testing.T) {
 }
 
 func TestGoTAgent_AreThoughtsRelated(t *testing.T) {
-	agent := NewGoTAgent(GoTConfig{
-		Name: "test-related",
-		LLM:  &MockLLMClient{},
-	})
+	// 使用全局解析器测试，因为 agent.parser 是私有字段
+	parser := base.GetDefaultParser()
 
 	tests := []struct {
 		thought1 string
@@ -637,7 +644,204 @@ func TestGoTAgent_AreThoughtsRelated(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		related := agent.areThoughtsRelated(tt.thought1, tt.thought2)
+		related := parser.AreThoughtsRelated(tt.thought1, tt.thought2)
 		assert.Equal(t, tt.expected, related)
 	}
+}
+
+// TestGoTAgent_FastEvaluation 测试快速评估模式
+func TestGoTAgent_FastEvaluation(t *testing.T) {
+	agent := NewGoTAgent(GoTConfig{
+		Name:           "test-fast-eval",
+		LLM:            &MockLLMClient{},
+		FastEvaluation: true,
+	})
+
+	tests := []struct {
+		name          string
+		thought       string
+		task          string
+		expectHigher  float64 // 期望分数高于此值
+		expectLower   float64 // 期望分数低于此值
+	}{
+		{
+			name:         "relevant long thought",
+			thought:      "分析 Go 语言的并发特性，因为它是解决这个问题的关键",
+			task:         "分析 Go 语言的优势",
+			expectHigher: 0.5,
+			expectLower:  1.0,
+		},
+		{
+			name:         "short thought",
+			thought:      "ok",
+			task:         "test task",
+			expectHigher: 0.0,
+			expectLower:  0.5,
+		},
+		{
+			name:         "medium thought with reasoning",
+			thought:      "Therefore, we should consider the performance implications of this approach",
+			task:         "optimize performance",
+			expectHigher: 0.5,
+			expectLower:  1.0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			score := agent.evaluateThoughtFast(tt.thought, &core.AgentInput{Task: tt.task})
+			assert.GreaterOrEqual(t, score, tt.expectHigher, "score should be >= %f", tt.expectHigher)
+			assert.LessOrEqual(t, score, tt.expectLower, "score should be <= %f", tt.expectLower)
+		})
+	}
+}
+
+// TestGoTAgent_MinimalMode 测试极简模式
+func TestGoTAgent_MinimalMode(t *testing.T) {
+	ctx := context.Background()
+	mockLLM := new(MockLLMClient)
+
+	// 第一次调用：生成多个思考路径
+	mockLLM.On("Chat", mock.Anything, mock.MatchedBy(func(msgs []llm.Message) bool {
+		return strings.Contains(msgs[0].Content, "多个不同角度")
+	})).Return(
+		&llm.CompletionResponse{
+			Content: `思考路径 1:
+从用户体验角度分析，API 应该简洁易用。
+
+---
+
+思考路径 2:
+从性能角度分析，API 应该高效响应。
+
+---
+
+思考路径 3:
+从安全角度分析，API 应该防止攻击。`,
+		}, nil,
+	).Once()
+
+	// 第二次调用：合成最终答案
+	mockLLM.On("Chat", mock.Anything, mock.MatchedBy(func(msgs []llm.Message) bool {
+		return strings.Contains(msgs[0].Content, "综合以上所有分析")
+	})).Return(
+		&llm.CompletionResponse{
+			Content: "API 设计需要兼顾易用性、性能和安全性三个方面。",
+		}, nil,
+	).Once()
+
+	agent := NewGoTAgent(GoTConfig{
+		Name:        "test-minimal",
+		Description: "Test Minimal Mode",
+		LLM:         mockLLM,
+		MinimalMode: true, // 启用极简模式
+	})
+
+	input := &core.AgentInput{
+		Task: "简述 API 设计的要点",
+	}
+
+	output, err := agent.Invoke(ctx, input)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, output)
+	assert.Equal(t, interfaces.StatusSuccess, output.Status)
+	assert.Contains(t, output.Message, "minimal mode")
+
+	// 验证元数据
+	assert.Equal(t, "minimal", output.Metadata["mode"])
+	assert.Equal(t, 2, output.Metadata["llm_calls"])
+	assert.GreaterOrEqual(t, output.Metadata["thought_count"], 1)
+
+	// 验证只有 2 个步骤
+	assert.Equal(t, 2, len(output.Steps))
+	assert.Equal(t, "Generate Thoughts", output.Steps[0].Action)
+	assert.Equal(t, "Synthesize Answer", output.Steps[1].Action)
+
+	mockLLM.AssertExpectations(t)
+}
+
+// TestGoTAgent_ParseThoughts 测试思考解析
+func TestGoTAgent_ParseThoughts(t *testing.T) {
+	agent := NewGoTAgent(GoTConfig{
+		Name: "test-parse",
+		LLM:  &MockLLMClient{},
+	})
+
+	tests := []struct {
+		name     string
+		content  string
+		expected int // 期望解析出的思考数量
+	}{
+		{
+			name: "正常分隔",
+			content: `思考1：这是第一个思考。
+
+---
+
+思考2：这是第二个思考。
+
+---
+
+思考3：这是第三个思考。`,
+			expected: 3,
+		},
+		{
+			name: "无分隔符",
+			content: "这是一个完整的思考，没有分隔符。",
+			expected: 1,
+		},
+		{
+			name:     "空内容",
+			content:  "",
+			expected: 0,
+		},
+		{
+			name: "混合短内容",
+			content: `长思考1：这是一个足够长的思考内容，超过20字符。
+
+---
+
+短
+
+---
+
+长思考2：这也是一个足够长的思考内容，超过20字符。`,
+			expected: 2, // 短内容被过滤
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			thoughts := agent.parseThoughts(tt.content)
+			assert.Equal(t, tt.expected, len(thoughts))
+		})
+	}
+}
+
+// TestGoTAgent_MinimalModeWithError 测试极简模式错误处理
+func TestGoTAgent_MinimalModeWithError(t *testing.T) {
+	ctx := context.Background()
+	mockLLM := new(MockLLMClient)
+
+	// 模拟 LLM 调用失败
+	mockLLM.On("Chat", mock.Anything, mock.Anything).Return(
+		nil, assert.AnError,
+	).Once()
+
+	agent := NewGoTAgent(GoTConfig{
+		Name:        "test-minimal-error",
+		LLM:         mockLLM,
+		MinimalMode: true,
+	})
+
+	input := &core.AgentInput{
+		Task: "测试任务",
+	}
+
+	output, err := agent.Invoke(ctx, input)
+
+	assert.Error(t, err)
+	assert.NotNil(t, output)
+	assert.Equal(t, interfaces.StatusFailed, output.Status)
 }

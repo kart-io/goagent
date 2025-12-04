@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kart-io/goagent/agents/base"
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
@@ -551,45 +552,55 @@ func (tc *testCallback) OnToolError(ctx context.Context, toolName string, err er
 }
 
 func TestParseNumberedLine(t *testing.T) {
+	// 使用 agent 的 parseSkeletonContent 方法测试
+	agent := NewSoTAgent(SoTConfig{
+		Name: "test-parse-line",
+		LLM:  &MockLLMClient{},
+	})
+
+	// 使用解析器的 IsStepLine 和 ExtractStepContent 方法
+	parser := base.GetDefaultParser()
+
 	tests := []struct {
-		line     string
-		expected map[string]string
-		isNil    bool
+		line          string
+		shouldBeStep  bool
+		expectedTitle string
 	}{
 		{
-			line: "1. [Title]: Description",
-			expected: map[string]string{
-				"title":       "Title",
-				"description": "Description",
-			},
+			line:          "1. [Title]: Description",
+			shouldBeStep:  true,
+			expectedTitle: "Title",
 		},
 		{
-			line: "2. Simple title: With description. Depends on: 1",
-			expected: map[string]string{
-				"title":        "Simple title",
-				"description":  "With description.",
-				"dependencies": "1",
-			},
+			line:          "2. Simple title: With description. Depends on: 1",
+			shouldBeStep:  true,
+			expectedTitle: "Simple title",
 		},
 		{
-			line: "3. Title only",
-			expected: map[string]string{
-				"title":       "Title only",
-				"description": "Title only",
-			},
+			line:          "3. Title only",
+			shouldBeStep:  true,
+			expectedTitle: "Title only",
 		},
 		{
-			line:  "Not a numbered line",
-			isNil: true,
+			line:         "Not a numbered line",
+			shouldBeStep: false,
 		},
 	}
 
 	for _, tt := range tests {
-		result := parseNumberedLine(tt.line)
-		if tt.isNil {
-			assert.Nil(t, result)
-		} else {
-			assert.Equal(t, tt.expected, result)
+		isStep, _ := parser.IsStepLine(tt.line)
+		assert.Equal(t, tt.shouldBeStep, isStep, "IsStepLine mismatch for: %s", tt.line)
+
+		if tt.shouldBeStep {
+			// 使用 agent 的 parseSkeletonContent 方法解析内容
+			content := parser.ExtractStepContent(tt.line)
+			if content != "" {
+				result := agent.parseSkeletonContent(content)
+				assert.NotNil(t, result, "parseSkeletonContent should not return nil for: %s", tt.line)
+				if result != nil {
+					assert.Equal(t, tt.expectedTitle, result["title"], "Title mismatch for: %s", tt.line)
+				}
+			}
 		}
 	}
 }

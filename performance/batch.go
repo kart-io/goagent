@@ -35,7 +35,7 @@ const (
 func DefaultBatchConfig() BatchConfig {
 	return BatchConfig{
 		MaxConcurrency: 10,
-		Timeout:        5 * time.Minute,
+		Timeout:        core.DefaultBatchTimeout,
 		ErrorPolicy:    ErrorPolicyContinue,
 		EnableStats:    true,
 	}
