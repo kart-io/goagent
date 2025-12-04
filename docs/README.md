@@ -16,6 +16,7 @@ GoAgent 是一个全面的 Go AI Agent 框架，提供 Agent、工具、内存�
 ### 使用指南
 
 - [LLM_PROVIDERS.md](guides/LLM_PROVIDERS.md) - LLM 提供商配置指南
+- [EMBEDDER_PROVIDERS.md](guides/EMBEDDER_PROVIDERS.md) - Embedder 提供商配置指南
 - [PROVIDER_BEST_PRACTICES.md](guides/PROVIDER_BEST_PRACTICES.md) - Provider 最佳实践
 - [PLUGIN_SYSTEM_GUIDE.md](guides/PLUGIN_SYSTEM_GUIDE.md) - 插件系统完整指南
 - [TOOL_MIDDLEWARE.md](guides/TOOL_MIDDLEWARE.md) - 工具中间件使用指南

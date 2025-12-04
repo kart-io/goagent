@@ -25,7 +25,7 @@ import (
 )
 
 func main() {
-	fmt.Println("=== Builder API - Simple 层级示例 ===\n")
+	fmt.Println("=== Builder API - Simple 层级示例 ===")
 
 	// 检查 API Key
 	deepseekKey := os.Getenv("DEEPSEEK_API_KEY")

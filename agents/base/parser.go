@@ -966,7 +966,7 @@ func generateQuestionID(parentID string, index int) string {
 	return parentID + "_fq_" + strconv.Itoa(index)
 }
 
-// 辅助函数：整数转字符串
+// intToString 辅助函数：整数转字符串
 func intToString(n int) string {
 	return strconv.Itoa(n)
 }

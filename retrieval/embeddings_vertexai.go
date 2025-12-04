@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"cloud.google.com/go/aiplatform/apiv1/aiplatformpb"
+	"github.com/sashabaranov/go-openai"
 	"google.golang.org/api/option"
 	"google.golang.org/protobuf/types/known/structpb"
 
@@ -279,8 +280,8 @@ func truncateString(s string, maxLen int) string {
 // 支持 text-embedding-3-small, text-embedding-3-large 等模型
 type OpenAIEmbedder struct {
 	*BaseEmbedder
-	apiKey  string
-	model   string
+	client  *openai.Client
+	model   openai.EmbeddingModel
 	baseURL string
 }
 
@@ -329,21 +330,64 @@ func NewOpenAIEmbedder(config OpenAIEmbedderConfig) (*OpenAIEmbedder, error) {
 		}
 	}
 
+	// 创建 OpenAI 客户端
+	clientConfig := openai.DefaultConfig(config.APIKey)
+	clientConfig.BaseURL = strings.TrimSuffix(config.BaseURL, "/")
+
+	// 将字符串模型转换为 openai.EmbeddingModel
+	var model openai.EmbeddingModel
+	switch config.Model {
+	case "text-embedding-3-small":
+		model = openai.SmallEmbedding3
+	case "text-embedding-3-large":
+		model = openai.LargeEmbedding3
+	case "text-embedding-ada-002":
+		model = openai.AdaEmbeddingV2
+	default:
+		model = openai.EmbeddingModel(config.Model)
+	}
+
 	return &OpenAIEmbedder{
 		BaseEmbedder: NewBaseEmbedder(config.Dimensions),
-		apiKey:       config.APIKey,
-		model:        config.Model,
+		client:       openai.NewClientWithConfig(clientConfig),
+		model:        model,
 		baseURL:      strings.TrimSuffix(config.BaseURL, "/"),
 	}, nil
 }
 
 // Embed 批量嵌入文本
 func (e *OpenAIEmbedder) Embed(ctx context.Context, texts []string) ([][]float32, error) {
-	// TODO: 实现 OpenAI 嵌入 API 调用
-	// 当前返回空实现，实际应调用 OpenAI API
-	return nil, agentErrors.New(agentErrors.CodeNotImplemented, "OpenAI embedder not fully implemented").
-		WithComponent("openai_embedder").
-		WithOperation("embed")
+	if len(texts) == 0 {
+		return [][]float32{}, nil
+	}
+
+	// 调用 OpenAI 嵌入 API
+	resp, err := e.client.CreateEmbeddings(ctx, openai.EmbeddingRequest{
+		Input: texts,
+		Model: e.model,
+	})
+	if err != nil {
+		return nil, agentErrors.Wrap(err, agentErrors.CodeRetrievalEmbedding, "failed to create embeddings").
+			WithComponent("openai_embedder").
+			WithOperation("embed").
+			WithContext("num_texts", len(texts))
+	}
+
+	if len(resp.Data) == 0 {
+		return nil, agentErrors.New(agentErrors.CodeInternal, "no embeddings returned").
+			WithComponent("openai_embedder").
+			WithOperation("embed")
+	}
+
+	// 按索引排序结果（OpenAI API 可能返回乱序）
+	results := make([][]float32, len(texts))
+	for _, data := range resp.Data {
+		if data.Index < len(results) {
+			results[data.Index] = data.Embedding
+		}
+	}
+
+	return results, nil
 }
 
 // EmbedQuery 嵌入单个查询文本

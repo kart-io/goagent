@@ -299,7 +299,7 @@ func runSupervisorExample(llmClient llm.Client) error {
 
 	output, err := supervisor.Invoke(ctx, input)
 	if err != nil {
-		return fmt.Errorf("Supervisor Agent 执行失败: %w", err)
+		return fmt.Errorf("supervisor agent 执行失败: %w", err)
 	}
 
 	fmt.Printf("任务: %s\n", input.Task)
