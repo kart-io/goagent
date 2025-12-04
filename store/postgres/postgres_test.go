@@ -298,9 +298,10 @@ func TestNew_WithOptions(t *testing.T) {
 
 		assert.Equal(t, "test_dsn", config.DSN)
 		assert.Equal(t, "agent_stores", config.TableName)
-		assert.Equal(t, 10, config.MaxIdleConns)
-		assert.Equal(t, 100, config.MaxOpenConns)
-		assert.Equal(t, time.Hour, config.ConnMaxLifetime)
+		assert.Equal(t, 25, config.MaxIdleConns)               // Updated default
+		assert.Equal(t, 100, config.MaxOpenConns)              // Unchanged
+		assert.Equal(t, 5*time.Minute, config.ConnMaxLifetime) // Updated default
+		assert.Equal(t, 5*time.Minute, config.ConnMaxIdleTime) // New field
 		assert.True(t, config.AutoMigrate)
 	})
 
@@ -313,6 +314,7 @@ func TestNew_WithOptions(t *testing.T) {
 			WithMaxIdleConns(20),
 			WithMaxOpenConns(200),
 			WithConnMaxLifetime(2 * time.Hour),
+			WithConnMaxIdleTime(10 * time.Minute),
 			WithAutoMigrate(false),
 		}
 
@@ -324,6 +326,7 @@ func TestNew_WithOptions(t *testing.T) {
 		assert.Equal(t, 20, config.MaxIdleConns)
 		assert.Equal(t, 200, config.MaxOpenConns)
 		assert.Equal(t, 2*time.Hour, config.ConnMaxLifetime)
+		assert.Equal(t, 10*time.Minute, config.ConnMaxIdleTime)
 		assert.False(t, config.AutoMigrate)
 	})
 
@@ -332,13 +335,16 @@ func TestNew_WithOptions(t *testing.T) {
 
 		// Test that invalid values are ignored
 		WithMaxIdleConns(-1)(config)
-		assert.Equal(t, 10, config.MaxIdleConns) // Should keep default
+		assert.Equal(t, 25, config.MaxIdleConns) // Should keep updated default
 
 		WithMaxOpenConns(0)(config)
 		assert.Equal(t, 100, config.MaxOpenConns) // Should keep default
 
 		WithConnMaxLifetime(-1 * time.Hour)(config)
-		assert.Equal(t, time.Hour, config.ConnMaxLifetime) // Should keep default
+		assert.Equal(t, 5*time.Minute, config.ConnMaxLifetime) // Should keep updated default
+
+		WithConnMaxIdleTime(-1 * time.Minute)(config)
+		assert.Equal(t, 5*time.Minute, config.ConnMaxIdleTime) // Should keep updated default
 
 		WithTableName("")(config)
 		assert.Equal(t, "agent_stores", config.TableName) // Should keep default

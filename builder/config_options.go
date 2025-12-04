@@ -3,6 +3,8 @@ package builder
 import (
 	"fmt"
 	"time"
+
+	"github.com/kart-io/goagent/core"
 )
 
 // Runtime 配置方法
@@ -42,7 +44,7 @@ type AgentConfig struct {
 func DefaultAgentConfig() *AgentConfig {
 	return &AgentConfig{
 		MaxIterations:   10,
-		Timeout:         5 * time.Minute,
+		Timeout:         core.DefaultAgentExecutionTimeout,
 		EnableStreaming: false,
 		EnableAutoSave:  true,
 		SaveInterval:    30 * time.Second,

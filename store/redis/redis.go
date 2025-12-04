@@ -9,6 +9,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
+	"github.com/kart-io/goagent/core"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/store"
 )
@@ -69,7 +70,7 @@ func newFromConfig(config *Config) (*Store, error) {
 	})
 
 	// Test connection
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), core.DefaultDBConnectionTimeout)
 	defer cancel()
 
 	if err := client.Ping(ctx).Err(); err != nil {

@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kart-io/goagent/agents/base"
 	agentcore "github.com/kart-io/goagent/core"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
@@ -29,6 +30,7 @@ type SoTAgent struct {
 	tools       []interfaces.Tool
 	toolsByName map[string]interfaces.Tool
 	config      SoTConfig
+	parser      *base.DefaultParser
 }
 
 // SoTConfig configuration for Skeleton-of-Thought agent
@@ -105,6 +107,7 @@ func NewSoTAgent(config SoTConfig) *SoTAgent {
 		tools:       config.Tools,
 		toolsByName: toolsByName,
 		config:      config,
+		parser:      base.GetDefaultParser(),
 	}
 }
 
@@ -193,6 +196,63 @@ func (s *SoTAgent) Invoke(ctx context.Context, input *agentcore.AgentInput) (*ag
 	return output, nil
 }
 
+// InvokeFast 快速执行 Skeleton-of-Thought 推理（绕过回调）
+//
+// 用于热路径优化，跳过回调直接执行
+// 性能提升：避免回调遍历开销
+//
+// 注意：此方法不会触发任何回调（OnStart/OnFinish等）
+//
+//go:inline
+func (s *SoTAgent) InvokeFast(ctx context.Context, input *agentcore.AgentInput) (*agentcore.AgentOutput, error) {
+	startTime := time.Now()
+
+	// Initialize output
+	output := &agentcore.AgentOutput{
+		Steps:     make([]agentcore.AgentStep, 0),
+		ToolCalls: make([]agentcore.AgentToolCall, 0),
+		Metadata:  make(map[string]interface{}),
+	}
+
+	// Phase 1: Generate skeleton
+	skeleton, err := s.generateSkeleton(ctx, input)
+	if err != nil {
+		output.Status = interfaces.StatusFailed
+		output.Message = "Skeleton generation failed: " + err.Error()
+		output.Timestamp = time.Now()
+		output.Latency = time.Since(startTime)
+		return output, err
+	}
+
+	// Phase 2: Elaborate skeleton points in parallel
+	err = s.elaborateSkeletonParallel(ctx, skeleton, input, output)
+	if err != nil {
+		output.Status = interfaces.StatusFailed
+		output.Message = "Skeleton elaboration failed: " + err.Error()
+		output.Timestamp = time.Now()
+		output.Latency = time.Since(startTime)
+		return output, err
+	}
+
+	// Phase 3: Aggregate results
+	finalAnswer := s.aggregateResults(ctx, skeleton, input)
+
+	// Set final output
+	output.Status = interfaces.StatusSuccess
+	output.Result = finalAnswer
+	output.Message = "Skeleton-of-Thought reasoning completed"
+	output.Timestamp = time.Now()
+	output.Latency = time.Since(startTime)
+
+	// Add metadata
+	output.Metadata["skeleton_points"] = len(skeleton)
+	output.Metadata["parallel_concurrency"] = s.config.MaxConcurrency
+	output.Metadata["aggregation_strategy"] = s.config.AggregationStrategy
+	output.Metadata["total_duration_ms"] = output.Latency.Milliseconds()
+
+	return output, nil
+}
+
 // generateSkeleton creates the initial skeleton structure
 func (s *SoTAgent) generateSkeleton(ctx context.Context, input *agentcore.AgentInput) ([]*SkeletonPoint, error) {
 	prompt := fmt.Sprintf(`Break down the following task into a skeleton outline with %d-%d key points:
@@ -246,24 +306,41 @@ func (s *SoTAgent) parseSkeleton(response string) []*SkeletonPoint {
 			continue
 		}
 
-		// Parse numbered points (1. [Title]: Description)
-		if matched := parseNumberedLine(line); matched != nil {
-			point := &SkeletonPoint{
-				ID:          fmt.Sprintf("point_%d", len(skeleton)+1),
-				Title:       matched["title"],
-				Description: matched["description"],
-				Priority:    i,
-				Status:      "pending",
-				Metadata:    make(map[string]interface{}),
-			}
-
-			// Check for dependencies
-			if deps := matched["dependencies"]; deps != "" {
-				point.Dependencies = parseDependencies(deps)
-			}
-
-			skeleton = append(skeleton, point)
+		// 使用解析器检测是否是步骤行
+		isStep, content := s.parser.IsStepLine(line)
+		if !isStep {
+			continue
 		}
+
+		// 如果解析器返回了内容，使用它；否则尝试提取
+		if content == "" {
+			content = s.parser.ExtractStepContent(line)
+		}
+		if content == "" {
+			continue
+		}
+
+		// 解析标题和描述
+		matched := s.parseSkeletonContent(content)
+		if matched == nil {
+			continue
+		}
+
+		point := &SkeletonPoint{
+			ID:          fmt.Sprintf("point_%d", len(skeleton)+1),
+			Title:       matched["title"],
+			Description: matched["description"],
+			Priority:    i,
+			Status:      "pending",
+			Metadata:    make(map[string]interface{}),
+		}
+
+		// Check for dependencies
+		if deps := matched["dependencies"]; deps != "" {
+			point.Dependencies = parseDependencies(deps)
+		}
+
+		skeleton = append(skeleton, point)
 	}
 
 	// If parsing failed, create a simple skeleton
@@ -598,40 +675,38 @@ func (s *SoTAgent) truncateText(text string, maxLen int) string {
 	return text[:maxLen] + "..."
 }
 
-// Utility functions
-
-func parseNumberedLine(line string) map[string]string {
-	// Parse lines like "1. [Title]: Description"
-	// This is simplified - use proper regex in production
+// parseSkeletonContent 从内容中提取标题和描述（支持中英文）
+func (s *SoTAgent) parseSkeletonContent(content string) map[string]string {
 	result := make(map[string]string)
 
-	// Remove numbering
-	parts := strings.SplitN(line, ".", 2)
-	if len(parts) < 2 {
-		return nil
-	}
-
-	content := strings.TrimSpace(parts[1])
-
-	// Extract title and description
-	if strings.Contains(content, ":") {
-		titleDesc := strings.SplitN(content, ":", 2)
-		title := strings.TrimSpace(titleDesc[0])
-		title = strings.Trim(title, "[]")
+	// 提取标题和描述
+	// 支持多种冒号格式: ":", "：", "：："
+	colonIdx := strings.IndexAny(content, ":：")
+	if colonIdx != -1 {
+		title := strings.TrimSpace(content[:colonIdx])
+		title = strings.Trim(title, "[]【】")
 
 		desc := ""
-		if len(titleDesc) > 1 {
-			desc = strings.TrimSpace(titleDesc[1])
+		if colonIdx < len(content)-1 {
+			desc = strings.TrimSpace(content[colonIdx+1:])
+			// 如果是中文冒号，可能占多个字节
+			if strings.HasPrefix(content[colonIdx:], "：") {
+				desc = strings.TrimSpace(content[colonIdx+len("："):])
+			}
 		}
 
 		result["title"] = title
 		result["description"] = desc
 
-		// Check for dependencies
-		if strings.Contains(desc, "Depends on:") {
-			depParts := strings.SplitN(desc, "Depends on:", 2)
-			result["description"] = strings.TrimSpace(depParts[0])
-			result["dependencies"] = strings.TrimSpace(depParts[1])
+		// 检查依赖（支持中英文）
+		depMarkers := []string{"Depends on:", "depends on:", "依赖:", "依赖：", "前置:", "前置："}
+		for _, marker := range depMarkers {
+			if strings.Contains(desc, marker) {
+				depParts := strings.SplitN(desc, marker, 2)
+				result["description"] = strings.TrimSpace(depParts[0])
+				result["dependencies"] = strings.TrimSpace(depParts[1])
+				break
+			}
 		}
 	} else {
 		result["title"] = content
@@ -640,6 +715,8 @@ func parseNumberedLine(line string) map[string]string {
 
 	return result
 }
+
+// Utility functions
 
 func parseDependencies(deps string) []string {
 	// Parse dependency string like "1, 2" or "point_1, point_2"

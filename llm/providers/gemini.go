@@ -17,6 +17,7 @@ import (
 	agentllm "github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/common"
 	"github.com/kart-io/goagent/llm/constants"
+	"github.com/kart-io/goagent/utils/json"
 )
 
 // GeminiProvider implements LLM interface for Google Gemini
@@ -447,17 +448,90 @@ func (p *GeminiProvider) convertToolsToFunctions(tools []interfaces.Tool) []*gen
 
 // toolSchemaToGeminiSchema converts tool schema to Gemini schema format
 func (p *GeminiProvider) toolSchemaToGeminiSchema(schema interface{}) *genai.Schema {
-	// Simplified version - you'd want to properly convert based on the actual schema
-	return &genai.Schema{
-		Type: genai.TypeObject,
-		Properties: map[string]*genai.Schema{
-			"input": {
-				Type:        genai.TypeString,
-				Description: "The input for the tool",
-			},
-		},
-		Required: []string{"input"},
+	// 处理不同类型的 schema 输入
+	var schemaMap map[string]interface{}
+
+	switch s := schema.(type) {
+	case string:
+		// JSON 字符串格式的 schema
+		if s != "" {
+			if err := json.Unmarshal([]byte(s), &schemaMap); err != nil {
+				// 解析失败，返回空 schema
+				return &genai.Schema{
+					Type:       genai.TypeObject,
+					Properties: map[string]*genai.Schema{},
+				}
+			}
+		}
+	case map[string]interface{}:
+		schemaMap = s
 	}
+
+	if schemaMap == nil {
+		return &genai.Schema{
+			Type:       genai.TypeObject,
+			Properties: map[string]*genai.Schema{},
+		}
+	}
+
+	// 转换为 Gemini Schema 格式
+	return p.convertToGeminiSchema(schemaMap)
+}
+
+// convertToGeminiSchema 递归转换 JSON Schema 到 Gemini Schema
+func (p *GeminiProvider) convertToGeminiSchema(schemaMap map[string]interface{}) *genai.Schema {
+	result := &genai.Schema{}
+
+	// 处理类型
+	if typeStr, ok := schemaMap["type"].(string); ok {
+		switch typeStr {
+		case "object":
+			result.Type = genai.TypeObject
+		case "string":
+			result.Type = genai.TypeString
+		case "number":
+			result.Type = genai.TypeNumber
+		case "integer":
+			result.Type = genai.TypeInteger
+		case "boolean":
+			result.Type = genai.TypeBoolean
+		case "array":
+			result.Type = genai.TypeArray
+		default:
+			result.Type = genai.TypeString
+		}
+	}
+
+	// 处理描述
+	if desc, ok := schemaMap["description"].(string); ok {
+		result.Description = desc
+	}
+
+	// 处理 properties
+	if props, ok := schemaMap["properties"].(map[string]interface{}); ok {
+		result.Properties = make(map[string]*genai.Schema)
+		for key, val := range props {
+			if propMap, ok := val.(map[string]interface{}); ok {
+				result.Properties[key] = p.convertToGeminiSchema(propMap)
+			}
+		}
+	}
+
+	// 处理 required
+	if required, ok := schemaMap["required"].([]interface{}); ok {
+		for _, r := range required {
+			if rStr, ok := r.(string); ok {
+				result.Required = append(result.Required, rStr)
+			}
+		}
+	}
+
+	// 处理 items（数组类型）
+	if items, ok := schemaMap["items"].(map[string]interface{}); ok {
+		result.Items = p.convertToGeminiSchema(items)
+	}
+
+	return result
 }
 
 // GeminiStreamingProvider extends GeminiProvider with advanced streaming

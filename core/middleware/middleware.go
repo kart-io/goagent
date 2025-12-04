@@ -9,6 +9,7 @@ import (
 
 	"github.com/kart-io/goagent/core/state"
 	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/interfaces"
 )
 
 // Object pools for MiddlewareRequest and MiddlewareResponse to reduce allocations
@@ -146,6 +147,9 @@ type MiddlewareResponse struct {
 
 	// Duration is the execution time
 	Duration time.Duration `json:"duration"`
+
+	// TokenUsage holds LLM token usage statistics
+	TokenUsage *interfaces.TokenUsage `json:"token_usage,omitempty"`
 
 	// Error holds any error that occurred
 	Error error `json:"-"`

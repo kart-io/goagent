@@ -271,8 +271,16 @@ func (r *Reader) Drain() error {
 
 // Collect 收集所有数据块
 // 注意：此方法会将所有数据加载到内存，受 MaxCollectSize 限制防止 OOM
+// 性能优化：根据 BufferSize 预分配切片容量，减少扩容和内存复制
 func (r *Reader) Collect() ([]*core.LegacyStreamChunk, error) {
-	var chunks []*core.LegacyStreamChunk
+	// 智能预分配：使用 BufferSize 作为初始容量估计
+	// 大多数流的数据块数量接近或小于 BufferSize
+	initialCap := r.opts.BufferSize
+	if initialCap <= 0 {
+		initialCap = 100 // 默认容量
+	}
+
+	chunks := make([]*core.LegacyStreamChunk, 0, initialCap)
 	var totalBytes int64
 
 	maxSize := r.opts.MaxCollectSize

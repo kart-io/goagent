@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kart-io/goagent/agents/base"
 	agentcore "github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
@@ -25,6 +26,7 @@ type MetaCoTAgent struct {
 	tools       []interfaces.Tool
 	toolsByName map[string]interfaces.Tool
 	config      MetaCoTConfig
+	parser      *base.DefaultParser
 }
 
 // MetaCoTConfig configuration for Meta-CoT / Self-Ask agent
@@ -94,7 +96,98 @@ func NewMetaCoTAgent(config MetaCoTConfig) *MetaCoTAgent {
 		tools:       config.Tools,
 		toolsByName: toolsByName,
 		config:      config,
+		parser:      base.GetDefaultParser(),
 	}
+}
+
+// InvokeFast 快速执行 Meta-CoT / Self-Ask 推理（绕过回调）
+//
+// 用于热路径优化，跳过回调直接执行
+// 性能提升：避免回调遍历开销
+//
+// 注意：此方法不会触发任何回调（OnStart/OnFinish等）
+//
+//go:inline
+func (m *MetaCoTAgent) InvokeFast(ctx context.Context, input *agentcore.AgentInput) (*agentcore.AgentOutput, error) {
+	startTime := time.Now()
+
+	// Initialize output
+	output := &agentcore.AgentOutput{
+		Steps:     make([]agentcore.AgentStep, 0),
+		ToolCalls: make([]agentcore.AgentToolCall, 0),
+		Metadata:  make(map[string]interface{}),
+	}
+
+	// Create main question
+	mainQuestion := &Question{
+		ID:     "main",
+		Text:   input.Task,
+		Type:   "main",
+		Status: "pending",
+	}
+
+	// Phase 1: Question decomposition (if needed)
+	if m.shouldDecompose(mainQuestion.Text) {
+		subQuestions := m.decomposeQuestion(ctx, mainQuestion, output)
+		mainQuestion.SubQuestions = subQuestions
+
+		output.Steps = append(output.Steps, agentcore.AgentStep{
+			Step:        1,
+			Action:      "Decompose Question",
+			Description: fmt.Sprintf("Decomposed into %d sub-questions", len(subQuestions)),
+			Result:      m.formatQuestions(subQuestions),
+			Duration:    time.Since(startTime),
+			Success:     true,
+		})
+	}
+
+	// Phase 2: Self-ask process
+	questionTree := m.buildQuestionTree(mainQuestion)
+	err := m.processSelfAsk(ctx, questionTree, 0, output)
+	if err != nil {
+		output.Status = interfaces.StatusFailed
+		output.Message = "Self-ask process failed: " + err.Error()
+		output.Timestamp = time.Now()
+		output.Latency = time.Since(startTime)
+		return output, err
+	}
+
+	// Phase 3: Synthesize final answer
+	finalAnswer := m.synthesizeAnswer(ctx, questionTree, output)
+
+	// Phase 4: Self-critique (if enabled)
+	if m.config.SelfCritique {
+		critiqueStart := time.Now()
+		critique := m.selfCritique(ctx, input.Task, finalAnswer)
+
+		output.Steps = append(output.Steps, agentcore.AgentStep{
+			Step:        len(output.Steps) + 1,
+			Action:      "Self-Critique",
+			Description: "Critically evaluate the answer",
+			Result:      critique,
+			Duration:    time.Since(critiqueStart),
+			Success:     true,
+		})
+
+		// Refine answer if critique suggests improvements
+		if m.needsRefinement(critique) {
+			finalAnswer = m.refineAnswer(ctx, finalAnswer, critique)
+		}
+	}
+
+	// Set final output
+	output.Status = interfaces.StatusSuccess
+	output.Result = finalAnswer
+	output.Message = "Meta-CoT / Self-Ask reasoning completed"
+	output.Timestamp = time.Now()
+	output.Latency = time.Since(startTime)
+
+	// Add metadata
+	output.Metadata["total_questions"] = m.countQuestions(questionTree)
+	output.Metadata["max_depth"] = m.getMaxDepth(questionTree)
+	output.Metadata["self_critique"] = m.config.SelfCritique
+
+	return output, nil
 }
 
 // Invoke executes the Meta-CoT / Self-Ask reasoning
@@ -274,28 +367,27 @@ Format each question on a new line starting with "Q: "`, question.Text, strategy
 
 // parseFollowupQuestions parses follow-up questions from response
 func (m *MetaCoTAgent) parseFollowupQuestions(response string, parentID string) []*Question {
-	// Check for direct answer signal
-	if strings.Contains(response, "DIRECT_ANSWER") {
+	// 使用解析器解析问题
+	parsedQuestions := m.parser.ParseQuestions(response, parentID)
+	if parsedQuestions == nil {
 		return nil
 	}
 
-	questions := make([]*Question, 0)
-	lines := strings.Split(response, "\n")
+	// 转换为 Question 结构
+	questions := make([]*Question, 0, len(parsedQuestions))
+	for _, pq := range parsedQuestions {
+		questions = append(questions, &Question{
+			ID:       pq.ID,
+			Text:     pq.Text,
+			Type:     pq.Type,
+			ParentID: pq.ParentID,
+			Status:   "pending",
+		})
+	}
 
-	for i, line := range lines {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "Q:") || strings.HasPrefix(line, "Question:") {
-			text := strings.TrimSpace(strings.TrimPrefix(strings.TrimPrefix(line, "Q:"), "Question:"))
-			if text != "" {
-				questions = append(questions, &Question{
-					ID:       fmt.Sprintf("%s_fq_%d", parentID, i),
-					Text:     text,
-					Type:     "followup",
-					ParentID: parentID,
-					Status:   "pending",
-				})
-			}
-		}
+	// 限制问题数量
+	if len(questions) > m.config.MaxQuestions {
+		questions = questions[:m.config.MaxQuestions]
 	}
 
 	return questions
@@ -470,39 +562,13 @@ func (m *MetaCoTAgent) shouldDecompose(question string) bool {
 	if !m.config.AutoDecompose {
 		return false
 	}
-
-	// Simple heuristics for complexity
-	questionLower := strings.ToLower(question)
-	complexIndicators := []string{
-		"and", "or", "multiple", "several", "various",
-		"compare", "contrast", "analyze", "evaluate",
-	}
-
-	complexityScore := 0
-	for _, indicator := range complexIndicators {
-		if strings.Contains(questionLower, indicator) {
-			complexityScore++
-		}
-	}
-
-	return complexityScore >= 2 || len(strings.Fields(question)) > 20
+	// 使用解析器判断是否应该分解
+	return m.parser.ShouldDecompose(question)
 }
 
 func (m *MetaCoTAgent) needsExternalInfo(question *Question) bool {
-	// Check if question requires external information
-	questionLower := strings.ToLower(question.Text)
-	infoIndicators := []string{
-		"what is", "who is", "when did", "where is",
-		"how many", "which", "define", "explain",
-	}
-
-	for _, indicator := range infoIndicators {
-		if strings.Contains(questionLower, indicator) {
-			return true
-		}
-	}
-
-	return false
+	// 使用解析器判断是否需要外部信息
+	return m.parser.NeedsExternalInfo(question.Text)
 }
 
 func (m *MetaCoTAgent) searchForAnswer(ctx context.Context, question *Question, output *agentcore.AgentOutput) {
@@ -544,56 +610,13 @@ func (m *MetaCoTAgent) buildQuestionTree(mainQuestion *Question) *Question {
 }
 
 func (m *MetaCoTAgent) estimateConfidence(answer string) float64 {
-	// Simple confidence estimation based on answer characteristics
-	confidence := 0.5
-
-	// Increase confidence for detailed answers
-	if len(answer) > 100 {
-		confidence += 0.2
-	}
-
-	// Check for uncertainty markers
-	uncertaintyMarkers := []string{"maybe", "possibly", "might", "could be", "not sure"}
-	for _, marker := range uncertaintyMarkers {
-		if strings.Contains(strings.ToLower(answer), marker) {
-			confidence -= 0.1
-		}
-	}
-
-	// Check for confidence markers
-	confidenceMarkers := []string{"definitely", "certainly", "clearly", "obviously"}
-	for _, marker := range confidenceMarkers {
-		if strings.Contains(strings.ToLower(answer), marker) {
-			confidence += 0.1
-		}
-	}
-
-	// Clamp to valid range
-	if confidence < 0 {
-		confidence = 0
-	}
-	if confidence > 1 {
-		confidence = 1
-	}
-
-	return confidence
+	// 使用解析器估算置信度
+	return m.parser.EstimateConfidence(answer)
 }
 
 func (m *MetaCoTAgent) needsRefinement(critique string) bool {
-	// Check if critique suggests significant improvements needed
-	critiqueLower := strings.ToLower(critique)
-	refinementIndicators := []string{
-		"incorrect", "wrong", "missing", "incomplete",
-		"should", "needs", "must", "improve",
-	}
-
-	for _, indicator := range refinementIndicators {
-		if strings.Contains(critiqueLower, indicator) {
-			return true
-		}
-	}
-
-	return false
+	// 使用解析器判断是否需要改进
+	return m.parser.NeedsRefinement(critique)
 }
 
 func (m *MetaCoTAgent) formatQuestions(questions []*Question) string {

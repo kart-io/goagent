@@ -5,6 +5,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/interfaces"
+	"github.com/kart-io/goagent/retrieval"
 )
 
 // CharacterTextSplitter 字符分割器
@@ -58,6 +60,38 @@ func (s *CharacterTextSplitter) SplitText(text string) ([]string, error) {
 
 	// 合并分割后的文本块
 	return s.MergeSplits(splits, s.separator), nil
+}
+
+// SplitDocuments 分割文档
+func (s *CharacterTextSplitter) SplitDocuments(docs []*interfaces.Document) ([]*interfaces.Document, error) {
+	result := make([]*interfaces.Document, 0)
+
+	for _, doc := range docs {
+		// 使用 CharacterTextSplitter 的 SplitText 方法
+		chunks, err := s.SplitText(doc.PageContent)
+		if err != nil {
+			return nil, err
+		}
+
+		// 创建新文档
+		for i, chunk := range chunks {
+			// 复制元数据
+			metadata := make(map[string]interface{})
+			for k, v := range doc.Metadata {
+				metadata[k] = v
+			}
+
+			// 添加分割信息
+			metadata["chunk_index"] = i
+			metadata["chunk_total"] = len(chunks)
+			metadata["source_id"] = doc.ID
+
+			newDoc := retrieval.NewDocument(chunk, metadata)
+			result = append(result, newDoc)
+		}
+	}
+
+	return result, nil
 }
 
 // RecursiveCharacterTextSplitter 递归字符分割器
@@ -172,4 +206,36 @@ func (s *RecursiveCharacterTextSplitter) splitTextRecursive(text string, separat
 	}
 
 	return finalChunks
+}
+
+// SplitDocuments 分割文档
+func (s *RecursiveCharacterTextSplitter) SplitDocuments(docs []*interfaces.Document) ([]*interfaces.Document, error) {
+	result := make([]*interfaces.Document, 0)
+
+	for _, doc := range docs {
+		// 使用 RecursiveCharacterTextSplitter 的 SplitText 方法
+		chunks, err := s.SplitText(doc.PageContent)
+		if err != nil {
+			return nil, err
+		}
+
+		// 创建新文档
+		for i, chunk := range chunks {
+			// 复制元数据
+			metadata := make(map[string]interface{})
+			for k, v := range doc.Metadata {
+				metadata[k] = v
+			}
+
+			// 添加分割信息
+			metadata["chunk_index"] = i
+			metadata["chunk_total"] = len(chunks)
+			metadata["source_id"] = doc.ID
+
+			newDoc := retrieval.NewDocument(chunk, metadata)
+			result = append(result, newDoc)
+		}
+	}
+
+	return result, nil
 }
