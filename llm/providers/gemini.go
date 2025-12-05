@@ -217,7 +217,8 @@ func (p *GeminiProvider) Stream(ctx context.Context, prompt string) (<-chan stri
 }
 
 // GenerateWithTools implements tool calling
-func (p *GeminiProvider) GenerateWithTools(ctx context.Context, prompt string, tools []interfaces.Tool) (*common.ToolCallResponse, error) {
+// 返回 *agentllm.ToolCallResponse 以符合 llm.ToolCallingClient 接口
+func (p *GeminiProvider) GenerateWithTools(ctx context.Context, prompt string, tools []interfaces.Tool) (*agentllm.ToolCallResponse, error) {
 	// Convert tools to Gemini function declarations
 	functionDeclarations := p.convertToolsToFunctions(tools)
 
@@ -254,7 +255,8 @@ func (p *GeminiProvider) GenerateWithTools(ctx context.Context, prompt string, t
 		return nil, agentErrors.NewLLMResponseError("gemini", modelName, "no candidates returned")
 	}
 
-	result := &common.ToolCallResponse{}
+	// Convert to llm.ToolCallResponse format (符合接口定义)
+	result := &agentllm.ToolCallResponse{}
 
 	// Process response parts
 	for _, part := range resp.Candidates[0].Content.Parts {
@@ -262,16 +264,20 @@ func (p *GeminiProvider) GenerateWithTools(ctx context.Context, prompt string, t
 		case genai.Text:
 			result.Content += string(v)
 		case *genai.FunctionCall:
-			// Convert function call to our format
-			args := make(map[string]interface{})
-			for k, val := range v.Args {
-				args[k] = val
-			}
+			// Convert function call to our format - 转换为 agentllm.ToolCall 格式
+			// 将参数序列化为 JSON 字符串
+			argsJSON, _ := json.Marshal(v.Args)
 
-			result.ToolCalls = append(result.ToolCalls, common.ToolCall{
-				ID:        common.GenerateCallID(),
-				Name:      v.Name,
-				Arguments: args,
+			result.ToolCalls = append(result.ToolCalls, agentllm.ToolCall{
+				ID:   common.GenerateCallID(),
+				Type: "function",
+				Function: struct {
+					Name      string `json:"name"`
+					Arguments string `json:"arguments"`
+				}{
+					Name:      v.Name,
+					Arguments: string(argsJSON), // 保持 JSON 字符串格式
+				},
 			})
 		}
 	}
@@ -280,8 +286,9 @@ func (p *GeminiProvider) GenerateWithTools(ctx context.Context, prompt string, t
 }
 
 // StreamWithTools implements streaming tool calls
-func (p *GeminiProvider) StreamWithTools(ctx context.Context, prompt string, tools []interfaces.Tool) (<-chan common.ToolChunk, error) {
-	chunks := make(chan common.ToolChunk, 100)
+// 返回 <-chan agentllm.ToolChunk 以符合 llm.ToolCallingClient 接口
+func (p *GeminiProvider) StreamWithTools(ctx context.Context, prompt string, tools []interfaces.Tool) (<-chan agentllm.ToolChunk, error) {
+	chunks := make(chan agentllm.ToolChunk, 100)
 
 	// Convert tools to Gemini function declarations
 	functionDeclarations := p.convertToolsToFunctions(tools)
@@ -317,7 +324,7 @@ func (p *GeminiProvider) StreamWithTools(ctx context.Context, prompt string, too
 			}
 			if err != nil {
 				select {
-				case chunks <- common.ToolChunk{Type: "error", Value: err}:
+				case chunks <- agentllm.ToolChunk{Type: "error", Value: err}:
 					// Successfully sent
 				case <-ctx.Done():
 					// Context cancelled, exit immediately
@@ -330,7 +337,7 @@ func (p *GeminiProvider) StreamWithTools(ctx context.Context, prompt string, too
 				switch v := part.(type) {
 				case genai.Text:
 					select {
-					case chunks <- common.ToolChunk{Type: "content", Value: string(v)}:
+					case chunks <- agentllm.ToolChunk{Type: "content", Value: string(v)}:
 						// Successfully sent
 					case <-ctx.Done():
 						// Context cancelled, exit immediately
@@ -338,40 +345,40 @@ func (p *GeminiProvider) StreamWithTools(ctx context.Context, prompt string, too
 					}
 				case *genai.FunctionCall:
 					select {
-					case chunks <- common.ToolChunk{Type: "tool_name", Value: v.Name}:
+					case chunks <- agentllm.ToolChunk{Type: "tool_name", Value: v.Name}:
 						// Successfully sent
 					case <-ctx.Done():
 						// Context cancelled, exit immediately
 						return
 					}
 
-					// Send args as chunks
-					for k, val := range v.Args {
-						select {
-						case chunks <- common.ToolChunk{
-							Type:  "tool_args",
-							Value: map[string]interface{}{k: val},
-						}:
-							// Successfully sent
-						case <-ctx.Done():
-							// Context cancelled, exit immediately
-							return
-						}
-					}
-
-					// Send complete tool call
-					args := make(map[string]interface{})
-					for k, val := range v.Args {
-						args[k] = val
-					}
-
+					// 将参数序列化为 JSON 字符串��送
+					argsJSON, _ := json.Marshal(v.Args)
 					select {
-					case chunks <- common.ToolChunk{
+					case chunks <- agentllm.ToolChunk{
+						Type:  "tool_args",
+						Value: string(argsJSON),
+					}:
+						// Successfully sent
+					case <-ctx.Done():
+						// Context cancelled, exit immediately
+						return
+					}
+
+					// Send complete tool call - 使用 agentllm.ToolCall 格式
+					select {
+					case chunks <- agentllm.ToolChunk{
 						Type: "tool_call",
-						Value: common.ToolCall{
-							ID:        common.GenerateCallID(),
-							Name:      v.Name,
-							Arguments: args,
+						Value: &agentllm.ToolCall{
+							ID:   common.GenerateCallID(),
+							Type: "function",
+							Function: struct {
+								Name      string `json:"name"`
+								Arguments string `json:"arguments"`
+							}{
+								Name:      v.Name,
+								Arguments: string(argsJSON), // 保持 JSON 字符串格式
+							},
 						},
 					}:
 						// Successfully sent

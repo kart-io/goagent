@@ -15,26 +15,54 @@ import (
 // simpleLogger 简单的日志实现，满足 loggercore.Logger 接口
 type simpleLogger struct{}
 
-func (l *simpleLogger) Debug(args ...interface{})                          { fmt.Print("[DEBUG] "); fmt.Println(args...) }
-func (l *simpleLogger) Info(args ...interface{})                           { fmt.Print("[INFO] "); fmt.Println(args...) }
-func (l *simpleLogger) Warn(args ...interface{})                           { fmt.Print("[WARN] "); fmt.Println(args...) }
-func (l *simpleLogger) Error(args ...interface{})                          { fmt.Print("[ERROR] "); fmt.Println(args...) }
-func (l *simpleLogger) Fatal(args ...interface{})                          { fmt.Print("[FATAL] "); fmt.Println(args...); os.Exit(1) }
-func (l *simpleLogger) Debugf(template string, args ...interface{})        { fmt.Printf("[DEBUG] "+template+"\n", args...) }
-func (l *simpleLogger) Infof(template string, args ...interface{})         { fmt.Printf("[INFO] "+template+"\n", args...) }
-func (l *simpleLogger) Warnf(template string, args ...interface{})         { fmt.Printf("[WARN] "+template+"\n", args...) }
-func (l *simpleLogger) Errorf(template string, args ...interface{})        { fmt.Printf("[ERROR] "+template+"\n", args...) }
-func (l *simpleLogger) Fatalf(template string, args ...interface{})        { fmt.Printf("[FATAL] "+template+"\n", args...); os.Exit(1) }
-func (l *simpleLogger) Debugw(msg string, keysAndValues ...interface{})    { fmt.Printf("[DEBUG] %s %v\n", msg, keysAndValues) }
-func (l *simpleLogger) Infow(msg string, keysAndValues ...interface{})     { fmt.Printf("[INFO] %s %v\n", msg, keysAndValues) }
-func (l *simpleLogger) Warnw(msg string, keysAndValues ...interface{})     { fmt.Printf("[WARN] %s %v\n", msg, keysAndValues) }
-func (l *simpleLogger) Errorw(msg string, keysAndValues ...interface{})    { fmt.Printf("[ERROR] %s %v\n", msg, keysAndValues) }
-func (l *simpleLogger) Fatalw(msg string, keysAndValues ...interface{})    { fmt.Printf("[FATAL] %s %v\n", msg, keysAndValues); os.Exit(1) }
-func (l *simpleLogger) With(keyValues ...interface{}) loggercore.Logger    { return l }
-func (l *simpleLogger) WithCtx(ctx context.Context, keyValues ...interface{}) loggercore.Logger { return l }
-func (l *simpleLogger) WithCallerSkip(skip int) loggercore.Logger          { return l }
-func (l *simpleLogger) SetLevel(level loggercore.Level)                    {}
-func (l *simpleLogger) Flush() error                                       { return nil }
+func (l *simpleLogger) Debug(args ...interface{}) { fmt.Print("[DEBUG] "); fmt.Println(args...) }
+func (l *simpleLogger) Info(args ...interface{})  { fmt.Print("[INFO] "); fmt.Println(args...) }
+func (l *simpleLogger) Warn(args ...interface{})  { fmt.Print("[WARN] "); fmt.Println(args...) }
+func (l *simpleLogger) Error(args ...interface{}) { fmt.Print("[ERROR] "); fmt.Println(args...) }
+func (l *simpleLogger) Fatal(args ...interface{}) {
+	fmt.Print("[FATAL] ")
+	fmt.Println(args...)
+	os.Exit(1)
+}
+func (l *simpleLogger) Debugf(template string, args ...interface{}) {
+	fmt.Printf("[DEBUG] "+template+"\n", args...)
+}
+func (l *simpleLogger) Infof(template string, args ...interface{}) {
+	fmt.Printf("[INFO] "+template+"\n", args...)
+}
+func (l *simpleLogger) Warnf(template string, args ...interface{}) {
+	fmt.Printf("[WARN] "+template+"\n", args...)
+}
+func (l *simpleLogger) Errorf(template string, args ...interface{}) {
+	fmt.Printf("[ERROR] "+template+"\n", args...)
+}
+func (l *simpleLogger) Fatalf(template string, args ...interface{}) {
+	fmt.Printf("[FATAL] "+template+"\n", args...)
+	os.Exit(1)
+}
+func (l *simpleLogger) Debugw(msg string, keysAndValues ...interface{}) {
+	fmt.Printf("[DEBUG] %s %v\n", msg, keysAndValues)
+}
+func (l *simpleLogger) Infow(msg string, keysAndValues ...interface{}) {
+	fmt.Printf("[INFO] %s %v\n", msg, keysAndValues)
+}
+func (l *simpleLogger) Warnw(msg string, keysAndValues ...interface{}) {
+	fmt.Printf("[WARN] %s %v\n", msg, keysAndValues)
+}
+func (l *simpleLogger) Errorw(msg string, keysAndValues ...interface{}) {
+	fmt.Printf("[ERROR] %s %v\n", msg, keysAndValues)
+}
+func (l *simpleLogger) Fatalw(msg string, keysAndValues ...interface{}) {
+	fmt.Printf("[FATAL] %s %v\n", msg, keysAndValues)
+	os.Exit(1)
+}
+func (l *simpleLogger) With(keyValues ...interface{}) loggercore.Logger { return l }
+func (l *simpleLogger) WithCtx(ctx context.Context, keyValues ...interface{}) loggercore.Logger {
+	return l
+}
+func (l *simpleLogger) WithCallerSkip(skip int) loggercore.Logger { return l }
+func (l *simpleLogger) SetLevel(level loggercore.Level)           {}
+func (l *simpleLogger) Flush() error                              { return nil }
 
 func main() {
 	fmt.Println("╔════════════════════════════════════════════════════════════════╗")

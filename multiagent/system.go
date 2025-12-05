@@ -100,14 +100,28 @@ const (
 	TaskStatusCancelled TaskStatus = "cancelled"
 )
 
+// PipelineStage 定义 Pipeline 任务的阶段结构
+// 支持更直观的阶段配置，包含名称、描述和配置参数
+type PipelineStage struct {
+	Name        string                 `json:"name"`                  // 阶段名称
+	Description string                 `json:"description,omitempty"` // 阶段描述
+	Config      map[string]interface{} `json:"config,omitempty"`      // 阶段配置参数
+}
+
 // MultiAgentSystem manages multiple agents working together
 type MultiAgentSystem struct {
 	agents       map[string]CollaborativeAgent
+	agentOrder   []string // 记录 Agent 注册顺序，保证顺序任务执行顺序确定
 	teams        map[string]*Team
 	messageQueue chan Message
 	tasks        map[string]*CollaborativeTask
 	logger       loggercore.Logger
 	mu           sync.RWMutex
+
+	// Lifecycle management
+	done   chan struct{}  // 关闭信号通道
+	wg     sync.WaitGroup // 等待后台 goroutine 完成
+	closed bool           // 标记系统是否已关闭
 
 	// Configuration
 	maxAgents         int
@@ -153,10 +167,13 @@ type Team struct {
 func NewMultiAgentSystem(log loggercore.Logger, opts ...SystemOption) *MultiAgentSystem {
 	system := &MultiAgentSystem{
 		agents:            make(map[string]CollaborativeAgent),
+		agentOrder:        make([]string, 0),
 		teams:             make(map[string]*Team),
 		messageQueue:      make(chan Message, 1000),
 		tasks:             make(map[string]*CollaborativeTask),
 		logger:            log,
+		done:              make(chan struct{}),
+		closed:            false,
 		maxAgents:         100,
 		messageBufferSize: 1000,
 		timeout:           30 * time.Second,
@@ -167,6 +184,7 @@ func NewMultiAgentSystem(log loggercore.Logger, opts ...SystemOption) *MultiAgen
 	}
 
 	// Start message router
+	system.wg.Add(1)
 	go system.routeMessages()
 
 	return system
@@ -194,6 +212,12 @@ func (s *MultiAgentSystem) RegisterAgent(id string, agent CollaborativeAgent) er
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	if s.closed {
+		return agentErrors.New(agentErrors.CodeInvalidConfig, "system is closed").
+			WithComponent("multiagent_system").
+			WithOperation("register_agent")
+	}
+
 	if len(s.agents) >= s.maxAgents {
 		return agentErrors.Newf(agentErrors.CodeMultiAgentRegistration, "maximum number of agents (%d) reached", s.maxAgents).
 			WithComponent("multiagent_system").
@@ -210,6 +234,7 @@ func (s *MultiAgentSystem) RegisterAgent(id string, agent CollaborativeAgent) er
 	}
 
 	s.agents[id] = agent
+	s.agentOrder = append(s.agentOrder, id) // 记录注册顺序
 	s.logger.Infow("Agent registered",
 		"agent_id", id,
 		"role", string(agent.GetRole()))
@@ -230,6 +255,15 @@ func (s *MultiAgentSystem) UnregisterAgent(id string) error {
 	}
 
 	delete(s.agents, id)
+
+	// 从 agentOrder 中移除
+	newOrder := make([]string, 0, len(s.agentOrder)-1)
+	for _, aid := range s.agentOrder {
+		if aid != id {
+			newOrder = append(newOrder, aid)
+		}
+	}
+	s.agentOrder = newOrder
 
 	// Remove from teams
 	for _, team := range s.teams {
@@ -459,10 +493,15 @@ func (s *MultiAgentSystem) executeSequentialTask(ctx context.Context, task *Coll
 }
 
 // executeHierarchicalTask executes tasks in a hierarchical manner
+// 支持多种 Leader plan 格式：
+// - map[string]interface{} 带 "subtasks" 字段: 自动分配任务给 workers
+// - map[string]interface{} 带实际 worker ID: 按 ID 分配任务
+// - []interface{}: 直接作为任务列表自动分配
 func (s *MultiAgentSystem) executeHierarchicalTask(ctx context.Context, task *CollaborativeTask) error {
 	s.mu.RLock()
 	leader := s.findLeader()
 	workers := s.findWorkers()
+	workerIDs := s.getWorkerIDsOrdered()
 	s.mu.RUnlock()
 
 	if leader == nil {
@@ -482,10 +521,10 @@ func (s *MultiAgentSystem) executeHierarchicalTask(ctx context.Context, task *Co
 			WithContext("task_id", task.ID)
 	}
 
-	// Distribute work to workers based on leader's plan
-	plan, ok := leaderResult.Result.(map[string]interface{})
-	if !ok {
-		return agentErrors.New(agentErrors.CodeInvalidInput, "invalid plan from leader").
+	// 解析 Leader 返回的 plan，支持多种格式
+	workerTasks, err := s.parseLeaderPlan(leaderResult.Result, workerIDs, workers)
+	if err != nil {
+		return agentErrors.Wrap(err, agentErrors.CodeInvalidInput, "failed to parse leader plan").
 			WithComponent("multiagent_system").
 			WithOperation("execute_hierarchical_task").
 			WithContext("task_id", task.ID)
@@ -496,28 +535,33 @@ func (s *MultiAgentSystem) executeHierarchicalTask(ctx context.Context, task *Co
 	workerResults := make(map[string]interface{})
 	var mu sync.Mutex
 
-	for workerID, worker := range workers {
-		if subtask, exists := plan[workerID]; exists {
-			wg.Add(1)
-			go func(id string, agent CollaborativeAgent, work interface{}) {
-				defer wg.Done()
-
-				workerTask := *task
-				workerTask.Input = work
-
-				result, err := agent.Collaborate(ctx, &workerTask)
-				if err != nil {
-					s.logger.Errorw("Worker failed",
-						"worker_id", id,
-						"error", err)
-					return
-				}
-
-				mu.Lock()
-				workerResults[id] = result.Result
-				mu.Unlock()
-			}(workerID, worker, subtask)
+	for workerID, subtask := range workerTasks {
+		worker, exists := workers[workerID]
+		if !exists {
+			s.logger.Warnw("Worker not found for assigned task",
+				"worker_id", workerID)
+			continue
 		}
+
+		wg.Add(1)
+		go func(id string, agent CollaborativeAgent, work interface{}) {
+			defer wg.Done()
+
+			workerTask := *task
+			workerTask.Input = work
+
+			result, err := agent.Collaborate(ctx, &workerTask)
+			if err != nil {
+				s.logger.Errorw("Worker failed",
+					"worker_id", id,
+					"error", err)
+				return
+			}
+
+			mu.Lock()
+			workerResults[id] = result.Result
+			mu.Unlock()
+		}(workerID, worker, subtask)
 	}
 
 	wg.Wait()
@@ -539,6 +583,120 @@ func (s *MultiAgentSystem) executeHierarchicalTask(ctx context.Context, task *Co
 	return nil
 }
 
+// parseLeaderPlan 解析 Leader 返回的 plan，支持多种格式
+func (s *MultiAgentSystem) parseLeaderPlan(planResult interface{}, workerIDs []string, workers map[string]CollaborativeAgent) (map[string]interface{}, error) {
+	if planResult == nil {
+		return nil, fmt.Errorf("plan result is nil")
+	}
+
+	switch plan := planResult.(type) {
+	case map[string]interface{}:
+		// 检查是否包含 subtasks 字段（任务列表格式）
+		if subtasks, exists := plan["subtasks"]; exists {
+			return s.distributeSubtasksToWorkers(subtasks, workerIDs)
+		}
+
+		// 检查是否包含 tasks 字段（另一种任务列表格式）
+		if tasks, exists := plan["tasks"]; exists {
+			return s.distributeSubtasksToWorkers(tasks, workerIDs)
+		}
+
+		// 尝试作为 worker ID 映射处理
+		result := make(map[string]interface{})
+		assignedCount := 0
+
+		// 首先尝试使用实际 worker ID
+		for workerID := range workers {
+			if subtask, exists := plan[workerID]; exists {
+				result[workerID] = subtask
+				assignedCount++
+			}
+		}
+
+		// 如果没有匹配到任何 worker，尝试按顺序分配
+		if assignedCount == 0 {
+			// 可能是占位符格式（worker_1, worker_2 等）
+			placeholderTasks := make([]interface{}, 0)
+			for key, value := range plan {
+				// 跳过元数据字段
+				if key == "strategy" || key == "description" || key == "metadata" {
+					continue
+				}
+				placeholderTasks = append(placeholderTasks, value)
+			}
+			if len(placeholderTasks) > 0 {
+				return s.distributeSubtasksToWorkers(placeholderTasks, workerIDs)
+			}
+		}
+
+		if assignedCount == 0 {
+			return nil, fmt.Errorf("no tasks could be assigned to workers from plan")
+		}
+
+		return result, nil
+
+	case []interface{}:
+		// 直接作为任务列表处理
+		return s.distributeSubtasksToWorkers(plan, workerIDs)
+
+	default:
+		return nil, fmt.Errorf("unsupported plan type: %T", planResult)
+	}
+}
+
+// distributeSubtasksToWorkers 将任务列表自动分配给 workers
+func (s *MultiAgentSystem) distributeSubtasksToWorkers(subtasks interface{}, workerIDs []string) (map[string]interface{}, error) {
+	var taskList []interface{}
+
+	switch v := subtasks.(type) {
+	case []interface{}:
+		taskList = v
+	case []map[string]interface{}:
+		taskList = make([]interface{}, len(v))
+		for i, item := range v {
+			taskList[i] = item
+		}
+	default:
+		return nil, fmt.Errorf("subtasks must be an array, got %T", subtasks)
+	}
+
+	if len(taskList) == 0 {
+		return nil, fmt.Errorf("subtasks list is empty")
+	}
+
+	if len(workerIDs) == 0 {
+		return nil, fmt.Errorf("no workers available for task distribution")
+	}
+
+	result := make(map[string]interface{})
+
+	// 按顺序分配任务给 workers（如果任务多于 workers，后续任务会被忽略）
+	for i, task := range taskList {
+		if i >= len(workerIDs) {
+			s.logger.Warnw("More subtasks than workers, some tasks will be skipped",
+				"total_subtasks", len(taskList),
+				"available_workers", len(workerIDs))
+			break
+		}
+		result[workerIDs[i]] = task
+	}
+
+	return result, nil
+}
+
+// getWorkerIDsOrdered 返回有序的 worker ID 列表
+func (s *MultiAgentSystem) getWorkerIDsOrdered() []string {
+	workerIDs := make([]string, 0)
+	for _, id := range s.agentOrder {
+		if agent, exists := s.agents[id]; exists {
+			if agent.GetRole() == RoleWorker {
+				workerIDs = append(workerIDs, id)
+			}
+		}
+	}
+	return workerIDs
+}
+
 // executeConsensusTask executes tasks requiring consensus
 func (s *MultiAgentSystem) executeConsensusTask(ctx context.Context, task *CollaborativeTask) error {
 	s.mu.RLock()
@@ -551,6 +709,19 @@ func (s *MultiAgentSystem) executeConsensusTask(ctx context.Context, task *Colla
 			WithOperation("execute_consensus_task").
 			WithContext("task_id", task.ID).
 			WithContext("available_agents", len(agents))
+	}
+
+	// 解析 quorum 参数，默认为简单多数 (0.5)
+	quorum := 0.5
+	if inputMap, ok := task.Input.(map[string]interface{}); ok {
+		if q, exists := inputMap["quorum"]; exists {
+			switch v := q.(type) {
+			case float64:
+				quorum = v
+			case int:
+				quorum = float64(v)
+			}
+		}
 	}
 
 	// Each agent votes on the proposal
@@ -587,35 +758,45 @@ func (s *MultiAgentSystem) executeConsensusTask(ctx context.Context, task *Colla
 		}
 	}
 
-	// Check if consensus reached (simple majority)
-	consensusThreshold := len(votes)/2 + 1
+	// 使用用户定义的 quorum 阈值计算是否达成共识
+	consensusThreshold := int(float64(len(votes)) * quorum)
+	if consensusThreshold < 1 {
+		consensusThreshold = 1
+	}
 	consensusReached := yesVotes >= consensusThreshold
 
 	task.Output = map[string]interface{}{
 		"consensus_reached": consensusReached,
 		"yes_votes":         yesVotes,
 		"total_votes":       len(votes),
+		"quorum":            quorum,
+		"threshold":         consensusThreshold,
 		"votes":             votes,
 	}
 
 	if !consensusReached {
-		return agentErrors.Newf(agentErrors.CodeMultiAgentConsensus, "consensus not reached: %d/%d votes", yesVotes, len(votes)).
+		return agentErrors.Newf(agentErrors.CodeMultiAgentConsensus, "consensus not reached: %d/%d votes (need %.0f%%)", yesVotes, len(votes), quorum*100).
 			WithComponent("multiagent_system").
 			WithOperation("execute_consensus_task").
 			WithContext("task_id", task.ID).
 			WithContext("yes_votes", yesVotes).
-			WithContext("total_votes", len(votes))
+			WithContext("total_votes", len(votes)).
+			WithContext("quorum", quorum)
 	}
 
 	return nil
 }
 
 // executePipelineTask executes tasks in a pipeline
+// 支持多种输入格式：
+// - []PipelineStage: 推荐的结构化格式
+// - []interface{}: 兼容现有格式
+// - []map[string]interface{}: 便捷 map 格式
 func (s *MultiAgentSystem) executePipelineTask(ctx context.Context, task *CollaborativeTask) error {
-	// Similar to sequential but with defined stages
-	pipeline, ok := task.Input.([]interface{})
-	if !ok {
-		return agentErrors.New(agentErrors.CodeInvalidInput, "pipeline task requires array of stages").
+	// 解析 Pipeline 阶段，支持多种输入格式
+	stages, err := s.parsePipelineStages(task.Input)
+	if err != nil {
+		return agentErrors.Wrap(err, agentErrors.CodeInvalidInput, "failed to parse pipeline stages").
 			WithComponent("multiagent_system").
 			WithOperation("execute_pipeline_task").
 			WithContext("task_id", task.ID)
@@ -625,18 +806,18 @@ func (s *MultiAgentSystem) executePipelineTask(ctx context.Context, task *Collab
 	agents := s.getAvailableAgentsOrdered()
 	s.mu.RUnlock()
 
-	if len(agents) < len(pipeline) {
+	if len(agents) < len(stages) {
 		return agentErrors.New(agentErrors.CodeInvalidConfig, "not enough agents for pipeline stages").
 			WithComponent("multiagent_system").
 			WithOperation("execute_pipeline_task").
 			WithContext("task_id", task.ID).
 			WithContext("available_agents", len(agents)).
-			WithContext("required_stages", len(pipeline))
+			WithContext("required_stages", len(stages))
 	}
 
 	// Execute each stage
 	var previousOutput interface{}
-	for i, stage := range pipeline {
+	for i, stage := range stages {
 		if i >= len(agents) {
 			break
 		}
@@ -646,26 +827,114 @@ func (s *MultiAgentSystem) executePipelineTask(ctx context.Context, task *Collab
 
 		stageTask := *task
 		stageTask.Input = map[string]interface{}{
-			"stage":    stage,
-			"previous": previousOutput,
+			"stage":      stage,
+			"stage_name": stage.Name,
+			"config":     stage.Config,
+			"previous":   previousOutput,
 		}
 
 		result, err := agent.Collaborate(ctx, &stageTask)
 		if err != nil {
-			return agentErrors.Wrapf(err, agentErrors.CodeAgentExecution, "pipeline stage %d failed", i).
+			return agentErrors.Wrapf(err, agentErrors.CodeAgentExecution, "pipeline stage %d (%s) failed", i, stage.Name).
 				WithComponent("multiagent_system").
 				WithOperation("execute_pipeline_task").
 				WithContext("task_id", task.ID).
 				WithContext("stage_index", i).
+				WithContext("stage_name", stage.Name).
 				WithContext("agent_id", agentID)
 		}
 
 		previousOutput = result.Result
-		task.Results[fmt.Sprintf("stage_%d", i)] = result.Result
+		// 使用阶段名称作为结果 key（如果有），否则使用索引
+		resultKey := stage.Name
+		if resultKey == "" {
+			resultKey = fmt.Sprintf("stage_%d", i)
+		}
+		task.Results[resultKey] = result.Result
 	}
 
 	task.Output = previousOutput
 	return nil
+}
+
+// parsePipelineStages 解析 Pipeline 输入为统一的 PipelineStage 切片
+// 支持多种输入格式以提升开发体验
+func (s *MultiAgentSystem) parsePipelineStages(input interface{}) ([]PipelineStage, error) {
+	if input == nil {
+		return nil, fmt.Errorf("pipeline input is nil")
+	}
+
+	switch v := input.(type) {
+	case []PipelineStage:
+		// 推荐格式：直接使用 PipelineStage 切片
+		return v, nil
+
+	case []interface{}:
+		// 兼容格式：[]interface{} 切片
+		stages := make([]PipelineStage, 0, len(v))
+		for i, item := range v {
+			stage, err := s.convertToPipelineStage(item, i)
+			if err != nil {
+				return nil, fmt.Errorf("failed to convert stage %d: %w", i, err)
+			}
+			stages = append(stages, stage)
+		}
+		return stages, nil
+
+	case []map[string]interface{}:
+		// 便捷格式：map 切片
+		stages := make([]PipelineStage, 0, len(v))
+		for i, item := range v {
+			stage, err := s.convertToPipelineStage(item, i)
+			if err != nil {
+				return nil, fmt.Errorf("failed to convert stage %d: %w", i, err)
+			}
+			stages = append(stages, stage)
+		}
+		return stages, nil
+
+	default:
+		return nil, fmt.Errorf("unsupported pipeline input type: %T, expected []PipelineStage, []interface{}, or []map[string]interface{}", input)
+	}
+}
+
+// convertToPipelineStage 将单个阶段项转换为 PipelineStage
+func (s *MultiAgentSystem) convertToPipelineStage(item interface{}, index int) (PipelineStage, error) {
+	switch v := item.(type) {
+	case PipelineStage:
+		return v, nil
+
+	case map[string]interface{}:
+		stage := PipelineStage{
+			Config: v,
+		}
+		// 提取 name 字段
+		if name, ok := v["name"].(string); ok {
+			stage.Name = name
+		} else {
+			stage.Name = fmt.Sprintf("stage_%d", index)
+		}
+		// 提取 description 字段
+		if desc, ok := v["description"].(string); ok {
+			stage.Description = desc
+		}
+		return stage, nil
+
+	case string:
+		// 简单字符串作为阶段名称
+		return PipelineStage{
+			Name: v,
+		}, nil
+
+	default:
+		// 其他类型：使用默认名称，将整个项作为配置
+		return PipelineStage{
+			Name: fmt.Sprintf("stage_%d", index),
+			Config: map[string]interface{}{
+				"data": item,
+			},
+		}, nil
+	}
 }
 
 // SendMessage sends a message between agents
@@ -685,29 +954,75 @@ func (s *MultiAgentSystem) SendMessage(message Message) error {
 
 // routeMessages routes messages between agents
 func (s *MultiAgentSystem) routeMessages() {
-	for message := range s.messageQueue {
-		s.mu.RLock()
-		recipient, exists := s.agents[message.To]
-		s.mu.RUnlock()
+	defer s.wg.Done()
 
-		if !exists {
-			s.logger.Errorw("Recipient not found",
-				"to", message.To,
-				"from", message.From)
-			continue
-		}
-
-		// NOTE: Using background context here is acceptable as this is a long-running
-		// background goroutine for message routing. Each message should have its own
-		// lifecycle independent of specific request contexts.
-		ctx := context.Background()
-		if err := recipient.ReceiveMessage(ctx, message); err != nil {
-			s.logger.Errorw("Failed to deliver message",
-				"to", message.To,
-				"from", message.From,
-				"error", err)
+	for {
+		select {
+		case <-s.done:
+			// 优雅关闭：处理剩余消息
+			for {
+				select {
+				case message := <-s.messageQueue:
+					s.deliverMessage(message)
+				default:
+					return
+				}
+			}
+		case message, ok := <-s.messageQueue:
+			if !ok {
+				return
+			}
+			s.deliverMessage(message)
 		}
 	}
+}
+
+// deliverMessage 投递消息到目标 Agent
+func (s *MultiAgentSystem) deliverMessage(message Message) {
+	s.mu.RLock()
+	recipient, exists := s.agents[message.To]
+	s.mu.RUnlock()
+
+	if !exists {
+		s.logger.Errorw("Recipient not found",
+			"to", message.To,
+			"from", message.From)
+		return
+	}
+
+	// NOTE: Using background context here is acceptable as this is a long-running
+	// background goroutine for message routing. Each message should have its own
+	// lifecycle independent of specific request contexts.
+	ctx := context.Background()
+	if err := recipient.ReceiveMessage(ctx, message); err != nil {
+		s.logger.Errorw("Failed to deliver message",
+			"to", message.To,
+			"from", message.From,
+			"error", err)
+	}
+}
+
+// Close 优雅关闭多智能体系统
+func (s *MultiAgentSystem) Close() error {
+	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		return nil
+	}
+	s.closed = true
+	s.mu.Unlock()
+
+	// 发送关闭信号
+	close(s.done)
+
+	// 等待消息路由 goroutine 完成
+	s.wg.Wait()
+
+	// 关闭消息队列
+	close(s.messageQueue)
+
+	s.logger.Info("MultiAgentSystem closed")
+	return nil
 }
 
 // Helper methods
@@ -722,11 +1037,14 @@ func (s *MultiAgentSystem) getAvailableAgents() map[string]CollaborativeAgent {
 }
 
 func (s *MultiAgentSystem) getAvailableAgentsOrdered() []string {
-	ordered := make([]string, 0, len(s.agents))
-	for id := range s.agents {
-		ordered = append(ordered, id)
+	// 返回注册顺序，保证顺序任务执行顺序确定
+	result := make([]string, 0, len(s.agentOrder))
+	for _, id := range s.agentOrder {
+		if _, exists := s.agents[id]; exists {
+			result = append(result, id)
+		}
 	}
-	return ordered
+	return result
 }
 
 func (s *MultiAgentSystem) findLeader() CollaborativeAgent {
