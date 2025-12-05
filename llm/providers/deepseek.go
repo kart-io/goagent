@@ -294,7 +294,8 @@ func (p *DeepSeekProvider) Stream(ctx context.Context, prompt string) (<-chan st
 }
 
 // GenerateWithTools implements tool calling
-func (p *DeepSeekProvider) GenerateWithTools(ctx context.Context, prompt string, tools []interfaces.Tool) (*common.ToolCallResponse, error) {
+// 返回 *agentllm.ToolCallResponse 以符合 llm.ToolCallingClient 接口
+func (p *DeepSeekProvider) GenerateWithTools(ctx context.Context, prompt string, tools []interfaces.Tool) (*agentllm.ToolCallResponse, error) {
 	// Convert tools to DeepSeek format
 	dsTools := p.convertToolsToDeepSeek(tools)
 
@@ -332,22 +333,23 @@ func (p *DeepSeekProvider) GenerateWithTools(ctx context.Context, prompt string,
 		return nil, agentErrors.NewLLMResponseError(p.ProviderName(), model, "no choices in tool response")
 	}
 
-	// Convert to our format
-	result := &common.ToolCallResponse{
+	// Convert to llm.ToolCallResponse format (符合接口定义)
+	result := &agentllm.ToolCallResponse{
 		Content: dsResp.Choices[0].Message.Content,
 	}
 
-	// Parse tool calls
+	// Parse tool calls - 转换为 llm.ToolCall 格式
 	for _, tc := range dsResp.Choices[0].Message.ToolCalls {
-		var args map[string]interface{}
-		if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err != nil {
-			continue // Skip invalid arguments
-		}
-
-		result.ToolCalls = append(result.ToolCalls, common.ToolCall{
-			ID:        tc.ID,
-			Name:      tc.Function.Name,
-			Arguments: args,
+		result.ToolCalls = append(result.ToolCalls, agentllm.ToolCall{
+			ID:   tc.ID,
+			Type: tc.Type,
+			Function: struct {
+				Name      string `json:"name"`
+				Arguments string `json:"arguments"`
+			}{
+				Name:      tc.Function.Name,
+				Arguments: tc.Function.Arguments, // 保持原始 JSON 字符串
+			},
 		})
 	}
 
@@ -355,8 +357,9 @@ func (p *DeepSeekProvider) GenerateWithTools(ctx context.Context, prompt string,
 }
 
 // StreamWithTools implements streaming tool calls
-func (p *DeepSeekProvider) StreamWithTools(ctx context.Context, prompt string, tools []interfaces.Tool) (<-chan common.ToolChunk, error) {
-	chunks := make(chan common.ToolChunk, 100)
+// 返回 <-chan agentllm.ToolChunk 以符合 llm.ToolCallingClient 接口
+func (p *DeepSeekProvider) StreamWithTools(ctx context.Context, prompt string, tools []interfaces.Tool) (<-chan agentllm.ToolChunk, error) {
+	chunks := make(chan agentllm.ToolChunk, 100)
 
 	// Convert tools to DeepSeek format
 	dsTools := p.convertToolsToDeepSeek(tools)
@@ -389,7 +392,7 @@ func (p *DeepSeekProvider) StreamWithTools(ctx context.Context, prompt string, t
 		defer close(chunks)
 
 		decoder := json.NewDecoder(strings.NewReader(resp.String()))
-		var currentToolCall *common.ToolCall
+		var currentToolCall *agentllm.ToolCall
 		var argsBuffer string
 
 		for {
@@ -398,15 +401,12 @@ func (p *DeepSeekProvider) StreamWithTools(ctx context.Context, prompt string, t
 				if err == io.EOF {
 					// Finalize last tool call
 					if currentToolCall != nil && argsBuffer != "" {
-						var args map[string]interface{}
-						if unmarshalErr := json.Unmarshal([]byte(argsBuffer), &args); unmarshalErr == nil {
-							currentToolCall.Arguments = args
-							chunks <- common.ToolChunk{Type: "tool_call", Value: currentToolCall}
-						}
+						currentToolCall.Function.Arguments = argsBuffer
+						chunks <- agentllm.ToolChunk{Type: "tool_call", Value: currentToolCall}
 					}
 					return
 				}
-				chunks <- common.ToolChunk{Type: "error", Value: err}
+				chunks <- agentllm.ToolChunk{Type: "error", Value: err}
 				return
 			}
 
@@ -415,32 +415,35 @@ func (p *DeepSeekProvider) StreamWithTools(ctx context.Context, prompt string, t
 
 				// Handle content
 				if choice.Delta.Content != "" {
-					chunks <- common.ToolChunk{Type: "content", Value: choice.Delta.Content}
+					chunks <- agentllm.ToolChunk{Type: "content", Value: choice.Delta.Content}
 				}
 
 				// Handle tool calls
 				for _, tc := range choice.Delta.ToolCalls {
 					if tc.Function.Name != "" {
-						// New tool call
+						// New tool call - finalize previous call first
 						if currentToolCall != nil && argsBuffer != "" {
-							// Finalize previous call
-							var args map[string]interface{}
-							if err := json.Unmarshal([]byte(argsBuffer), &args); err == nil {
-								currentToolCall.Arguments = args
-								chunks <- common.ToolChunk{Type: "tool_call", Value: currentToolCall}
-							}
+							currentToolCall.Function.Arguments = argsBuffer
+							chunks <- agentllm.ToolChunk{Type: "tool_call", Value: currentToolCall}
 						}
 
-						currentToolCall = &common.ToolCall{
+						// Create new tool call with llm.ToolCall format
+						currentToolCall = &agentllm.ToolCall{
 							ID:   tc.ID,
-							Name: tc.Function.Name,
+							Type: tc.Type,
+							Function: struct {
+								Name      string `json:"name"`
+								Arguments string `json:"arguments"`
+							}{
+								Name: tc.Function.Name,
+							},
 						}
 						argsBuffer = tc.Function.Arguments
-						chunks <- common.ToolChunk{Type: "tool_name", Value: tc.Function.Name}
+						chunks <- agentllm.ToolChunk{Type: "tool_name", Value: tc.Function.Name}
 					} else if tc.Function.Arguments != "" {
 						// Continue arguments
 						argsBuffer += tc.Function.Arguments
-						chunks <- common.ToolChunk{Type: "tool_args", Value: tc.Function.Arguments}
+						chunks <- agentllm.ToolChunk{Type: "tool_args", Value: tc.Function.Arguments}
 					}
 				}
 

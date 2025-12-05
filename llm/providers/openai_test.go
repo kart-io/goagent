@@ -397,11 +397,13 @@ func TestOpenAI_GenerateWithTools(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, result)
 	assert.NotEmpty(t, result.ToolCalls)
-	assert.Equal(t, "get_weather", result.ToolCalls[0].Name)
-	// 检查 Arguments map 中的值
-	assert.Contains(t, result.ToolCalls[0].Arguments, "location")
-	assert.Equal(t, "San Francisco", result.ToolCalls[0].Arguments["location"])
-	assert.Equal(t, "celsius", result.ToolCalls[0].Arguments["unit"])
+	assert.Equal(t, "get_weather", result.ToolCalls[0].Function.Name)
+	// 解析 Arguments JSON 字符串
+	var args map[string]interface{}
+	json.Unmarshal([]byte(result.ToolCalls[0].Function.Arguments), &args)
+	assert.Contains(t, args, "location")
+	assert.Equal(t, "San Francisco", args["location"])
+	assert.Equal(t, "celsius", args["unit"])
 }
 
 // TestOpenAI_ProviderInfo 测试 Provider 信息方法

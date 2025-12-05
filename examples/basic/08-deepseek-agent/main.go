@@ -227,7 +227,7 @@ func runToolCallingExample(apiKey string) {
 	if len(result.ToolCalls) > 0 {
 		fmt.Printf("🔨 计划调用 %d 个工具:\n", len(result.ToolCalls))
 		for i, tc := range result.ToolCalls {
-			fmt.Printf("  %d. %s (参数: %v)\n", i+1, tc.Name, tc.Arguments)
+			fmt.Printf("  %d. %s (参数: %v)\n", i+1, tc.Function.Name, tc.Function.Arguments)
 		}
 	} else {
 		fmt.Println("ℹ️  DeepSeek 没有调用任何工具")

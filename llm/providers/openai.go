@@ -205,7 +205,8 @@ func (p *OpenAIProvider) Stream(ctx context.Context, prompt string) (<-chan stri
 }
 
 // GenerateWithTools implements tool calling
-func (p *OpenAIProvider) GenerateWithTools(ctx context.Context, prompt string, tools []interfaces.Tool) (*common.ToolCallResponse, error) {
+// 返回 *agentllm.ToolCallResponse 以符合 llm.ToolCallingClient 接口
+func (p *OpenAIProvider) GenerateWithTools(ctx context.Context, prompt string, tools []interfaces.Tool) (*agentllm.ToolCallResponse, error) {
 	// Convert tools to OpenAI function format
 	functions := p.convertToolsToFunctions(tools)
 
@@ -234,23 +235,23 @@ func (p *OpenAIProvider) GenerateWithTools(ctx context.Context, prompt string, t
 	}
 
 	choice := resp.Choices[0]
-	result := &common.ToolCallResponse{
+	result := &agentllm.ToolCallResponse{
 		Content: choice.Message.Content,
 	}
 
-	// Parse function calls
+	// Parse function calls - 转换为 agentllm.ToolCall 格式
 	if choice.Message.FunctionCall != nil {
-		var args map[string]interface{}
-		if err := json.Unmarshal([]byte(choice.Message.FunctionCall.Arguments), &args); err != nil {
-			return nil, agentErrors.NewParserInvalidJSONError(choice.Message.FunctionCall.Arguments, err).
-				WithContext("function_name", choice.Message.FunctionCall.Name)
-		}
-
-		result.ToolCalls = []common.ToolCall{
+		result.ToolCalls = []agentllm.ToolCall{
 			{
-				ID:        common.GenerateCallID(),
-				Name:      choice.Message.FunctionCall.Name,
-				Arguments: args,
+				ID:   common.GenerateCallID(),
+				Type: "function",
+				Function: struct {
+					Name      string `json:"name"`
+					Arguments string `json:"arguments"`
+				}{
+					Name:      choice.Message.FunctionCall.Name,
+					Arguments: choice.Message.FunctionCall.Arguments, // 保持原始 JSON 字符串
+				},
 			},
 		}
 	}
@@ -259,8 +260,9 @@ func (p *OpenAIProvider) GenerateWithTools(ctx context.Context, prompt string, t
 }
 
 // StreamWithTools implements streaming tool calls
-func (p *OpenAIProvider) StreamWithTools(ctx context.Context, prompt string, tools []interfaces.Tool) (<-chan common.ToolChunk, error) {
-	chunks := make(chan common.ToolChunk, 100)
+// 返回 <-chan agentllm.ToolChunk 以符合 llm.ToolCallingClient 接口
+func (p *OpenAIProvider) StreamWithTools(ctx context.Context, prompt string, tools []interfaces.Tool) (<-chan agentllm.ToolChunk, error) {
+	chunks := make(chan agentllm.ToolChunk, 100)
 	functions := p.convertToolsToFunctions(tools)
 
 	model := p.GetModel("")
@@ -287,7 +289,7 @@ func (p *OpenAIProvider) StreamWithTools(ctx context.Context, prompt string, too
 		defer close(chunks)
 		defer func() { _ = stream.Close() }()
 
-		var currentCall *common.ToolCall
+		var currentCall *agentllm.ToolCall
 		var argsBuffer string
 
 		for {
@@ -296,16 +298,13 @@ func (p *OpenAIProvider) StreamWithTools(ctx context.Context, prompt string, too
 				if errors.Is(err, io.EOF) {
 					// Finalize last tool call if exists
 					if currentCall != nil && argsBuffer != "" {
-						var args map[string]interface{}
-						if err := json.Unmarshal([]byte(argsBuffer), &args); err == nil {
-							currentCall.Arguments = args
-							select {
-							case chunks <- common.ToolChunk{Type: "tool_call", Value: currentCall}:
-								// Successfully sent
-							case <-ctx.Done():
-								// Context cancelled, exit immediately
-								return
-							}
+						currentCall.Function.Arguments = argsBuffer
+						select {
+						case chunks <- agentllm.ToolChunk{Type: "tool_call", Value: currentCall}:
+							// Successfully sent
+						case <-ctx.Done():
+							// Context cancelled, exit immediately
+							return
 						}
 					}
 					return
@@ -322,7 +321,7 @@ func (p *OpenAIProvider) StreamWithTools(ctx context.Context, prompt string, too
 			// Handle content
 			if choice.Delta.Content != "" {
 				select {
-				case chunks <- common.ToolChunk{Type: "content", Value: choice.Delta.Content}:
+				case chunks <- agentllm.ToolChunk{Type: "content", Value: choice.Delta.Content}:
 					// Successfully sent
 				case <-ctx.Done():
 					// Context cancelled, exit immediately
@@ -333,29 +332,32 @@ func (p *OpenAIProvider) StreamWithTools(ctx context.Context, prompt string, too
 			// Handle function calls
 			if choice.Delta.FunctionCall != nil {
 				if choice.Delta.FunctionCall.Name != "" {
-					// New function call
+					// New function call - finalize previous call first
 					if currentCall != nil && argsBuffer != "" {
-						// Finalize previous call
-						var args map[string]interface{}
-						if err := json.Unmarshal([]byte(argsBuffer), &args); err == nil {
-							currentCall.Arguments = args
-							select {
-							case chunks <- common.ToolChunk{Type: "tool_call", Value: currentCall}:
-								// Successfully sent
-							case <-ctx.Done():
-								// Context cancelled, exit immediately
-								return
-							}
+						currentCall.Function.Arguments = argsBuffer
+						select {
+						case chunks <- agentllm.ToolChunk{Type: "tool_call", Value: currentCall}:
+							// Successfully sent
+						case <-ctx.Done():
+							// Context cancelled, exit immediately
+							return
 						}
 					}
 
-					currentCall = &common.ToolCall{
+					// Create new tool call with agentllm.ToolCall format
+					currentCall = &agentllm.ToolCall{
 						ID:   common.GenerateCallID(),
-						Name: choice.Delta.FunctionCall.Name,
+						Type: "function",
+						Function: struct {
+							Name      string `json:"name"`
+							Arguments string `json:"arguments"`
+						}{
+							Name: choice.Delta.FunctionCall.Name,
+						},
 					}
 					argsBuffer = ""
 					select {
-					case chunks <- common.ToolChunk{Type: "tool_name", Value: choice.Delta.FunctionCall.Name}:
+					case chunks <- agentllm.ToolChunk{Type: "tool_name", Value: choice.Delta.FunctionCall.Name}:
 						// Successfully sent
 					case <-ctx.Done():
 						// Context cancelled, exit immediately
@@ -366,7 +368,7 @@ func (p *OpenAIProvider) StreamWithTools(ctx context.Context, prompt string, too
 				if choice.Delta.FunctionCall.Arguments != "" {
 					argsBuffer += choice.Delta.FunctionCall.Arguments
 					select {
-					case chunks <- common.ToolChunk{Type: "tool_args", Value: choice.Delta.FunctionCall.Arguments}:
+					case chunks <- agentllm.ToolChunk{Type: "tool_args", Value: choice.Delta.FunctionCall.Arguments}:
 						// Successfully sent
 					case <-ctx.Done():
 						// Context cancelled, exit immediately
