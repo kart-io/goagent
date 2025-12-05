@@ -43,8 +43,9 @@ func main() {
 func basicExample() {
 	// Initialize provider with API key from environment
 	provider, err := providers.NewAnthropicWithOptions(
-		llm.WithAPIKey(os.Getenv("ANTHROPIC_API_KEY")), // or set directly: APIKey: "your-api-key"
-		llm.WithModel("claude-3-sonnet-20240229"),      // Optional: defaults to claude-3-sonnet-20240229
+		llm.WithBaseURL(os.Getenv("ANTHROPIC_API_BASE_URL")), // Optional: for custom endpoints
+		llm.WithAPIKey(os.Getenv("ANTHROPIC_API_KEY")),       // or set directly: APIKey: "your-api-key"
+		llm.WithModel("claude-3-sonnet-20240229"),            // Optional: defaults to claude-3-sonnet-20240229
 	)
 	if err != nil {
 		log.Fatalf("Failed to create Anthropic provider: %v", err)
@@ -77,6 +78,7 @@ func modelExample() {
 
 	for _, model := range models {
 		provider, err := providers.NewAnthropicWithOptions(
+			llm.WithBaseURL(os.Getenv("ANTHROPIC_API_BASE_URL")), // Optional: for custom endpoints
 			llm.WithAPIKey(os.Getenv("ANTHROPIC_API_KEY")),
 			llm.WithModel(model))
 		if err != nil {

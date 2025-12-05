@@ -257,7 +257,7 @@ func TestGemini_ToolSchemaToGeminiSchema_NilSchema(t *testing.T) {
 
 	assert.NotNil(t, schema)
 	assert.NotNil(t, schema.Properties)
-	assert.NotEmpty(t, schema.Required)
+	// 默认 schema 的 Required 为空
 }
 
 // TestGemini_ToolSchemaToGeminiSchema_ValidSchema 测试有效 schema 转换

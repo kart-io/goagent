@@ -458,8 +458,11 @@ func TestDeepSeekProvider_GenerateWithTools(t *testing.T) {
 	assert.NotNil(t, resp)
 	assert.Equal(t, "Getting weather...", resp.Content)
 	assert.Len(t, resp.ToolCalls, 1)
-	assert.Equal(t, "mock_tool", resp.ToolCalls[0].Name)
-	assert.Equal(t, "New York", resp.ToolCalls[0].Arguments["location"])
+	assert.Equal(t, "mock_tool", resp.ToolCalls[0].Function.Name)
+	// 解析 Arguments JSON 字符串
+	var args map[string]interface{}
+	json.Unmarshal([]byte(resp.ToolCalls[0].Function.Arguments), &args)
+	assert.Equal(t, "New York", args["location"])
 }
 
 // TestDeepSeekProvider_StreamWithTools tests streaming tool calls
@@ -1215,11 +1218,20 @@ func TestDeepSeekProvider_ToolCallArgumentsParsing(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, resp)
 
-	// Only valid tool call should be included
-	assert.Len(t, resp.ToolCalls, 1)
-	assert.Equal(t, "calculator", resp.ToolCalls[0].Name)
-	assert.Equal(t, "add", resp.ToolCalls[0].Arguments["operation"])
-	assert.Equal(t, float64(5), resp.ToolCalls[0].Arguments["a"])
+	// 新设计：保留所有 tool calls，Arguments 作为原始 JSON 字符串传递
+	// 调用方负责解析和验证 JSON
+	assert.Len(t, resp.ToolCalls, 2)
+	assert.Equal(t, "calculator", resp.ToolCalls[0].Function.Name)
+	// 解析第一个有效的 Arguments JSON 字符串
+	var args map[string]interface{}
+	err = json.Unmarshal([]byte(resp.ToolCalls[0].Function.Arguments), &args)
+	assert.NoError(t, err)
+	assert.Equal(t, "add", args["operation"])
+	assert.Equal(t, float64(5), args["a"])
+
+	// 第二个 tool call 有无效 JSON，但仍然保留原始字符串
+	assert.Equal(t, "invalid_json", resp.ToolCalls[1].Function.Name)
+	assert.Equal(t, "{invalid json}", resp.ToolCalls[1].Function.Arguments)
 }
 
 // TestDeepSeekProvider_GetterMethods tests getter utility methods
@@ -1358,9 +1370,12 @@ func TestMultipleToolCalls(t *testing.T) {
 
 	for i, tc := range resp.ToolCalls {
 		assert.NotEmpty(t, tc.ID)
-		assert.NotEmpty(t, tc.Name)
-		assert.NotNil(t, tc.Arguments)
-		assert.Equal(t, "value"+string(rune(49+i)), tc.Arguments["param"])
+		assert.NotEmpty(t, tc.Function.Name)
+		assert.NotEmpty(t, tc.Function.Arguments)
+		// 解析 Arguments JSON 字符串
+		var args map[string]interface{}
+		json.Unmarshal([]byte(tc.Function.Arguments), &args)
+		assert.Equal(t, "value"+string(rune(49+i)), args["param"])
 	}
 }
 
@@ -1472,8 +1487,7 @@ func TestToolSchemaConversion(t *testing.T) {
 	schema := provider.toolSchemaToJSON(nil)
 	assert.NotNil(t, schema)
 
-	// Verify structure
+	// Verify structure - 默认 schema 只包含 type 和 properties
 	assert.Equal(t, "object", schema["type"])
 	assert.NotNil(t, schema["properties"])
-	assert.NotNil(t, schema["required"])
 }
