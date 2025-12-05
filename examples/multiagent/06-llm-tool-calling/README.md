@@ -104,6 +104,7 @@ classDiagram
         -systemPrompt string
         +Collaborate(ctx, task) Assignment
         +buildPrompt(userPrompt) string
+        +buildPipelinePrompt(input) string
         +executeToolCalls(ctx, toolCalls, prompt) (string, []string)
     }
 
