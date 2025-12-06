@@ -55,6 +55,7 @@ func TestToChannel_WithContext(t *testing.T) {
 	})
 
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	ch := ToChannel(ctx, gen, 0)
 
 	// 读取前 2 个值后取消
