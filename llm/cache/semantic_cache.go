@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"container/list"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -15,16 +16,23 @@ import (
 // 预编译正则表达式，避免每次调用都重新编译
 var spaceRegex = regexp.MustCompile(`\s+`)
 
+// lruEntry 内部 LRU 条目，包含 CacheEntry 和链表元素指针
+type lruEntry struct {
+	key     string        // 缓存键
+	entry   *CacheEntry   // 实际缓存数据
+	element *list.Element // 链表元素指针
+}
+
 // MemorySemanticCache implements SemanticCache with in-memory storage
 type MemorySemanticCache struct {
 	config   *SemanticCacheConfig
 	provider EmbeddingProvider
 
-	// entries stores cache entries by key
-	entries map[string]*CacheEntry
+	// entries stores cache entries by key (map 用于 O(1) 查找)
+	entries map[string]*lruEntry
 
-	// accessOrder tracks LRU order
-	accessOrder []string
+	// lruList tracks LRU order (list 用于 O(1) LRU 操作)
+	lruList *list.List
 
 	mu sync.RWMutex
 
@@ -37,6 +45,9 @@ type MemorySemanticCache struct {
 
 	// done channel for cleanup goroutine
 	done chan struct{}
+
+	// closeOnce ensures Close is called only once
+	closeOnce sync.Once
 }
 
 // NewMemorySemanticCache creates a new in-memory semantic cache
@@ -46,11 +57,11 @@ func NewMemorySemanticCache(provider EmbeddingProvider, config *SemanticCacheCon
 	}
 
 	cache := &MemorySemanticCache{
-		config:      config,
-		provider:    provider,
-		entries:     make(map[string]*CacheEntry),
-		accessOrder: make([]string, 0),
-		done:        make(chan struct{}),
+		config:   config,
+		provider: provider,
+		entries:  make(map[string]*lruEntry),
+		lruList:  list.New(),
+		done:     make(chan struct{}),
 	}
 
 	// Start cleanup goroutine
@@ -73,42 +84,72 @@ func (c *MemorySemanticCache) Get(ctx context.Context, prompt string, model stri
 		return nil, 0, fmt.Errorf("failed to generate embedding: %w", err)
 	}
 
+	// 在读锁内完成查找和数据拷贝，避免 TOCTOU 竞态条件
 	c.mu.RLock()
 	entries := c.getEntriesForModel(model)
-	c.mu.RUnlock()
 
 	if len(entries) == 0 {
+		c.mu.RUnlock()
 		atomic.AddInt64(&c.misses, 1)
 		return nil, 0, nil
 	}
 
-	// Find most similar entry
+	// Find most similar entry (在读锁内执行，确保数据一致性)
 	bestEntry, similarity, _ := FindMostSimilar(embedding, entries)
 
 	if bestEntry == nil || similarity < c.config.SimilarityThreshold {
+		c.mu.RUnlock()
 		atomic.AddInt64(&c.misses, 1)
 		return nil, similarity, nil
 	}
 
-	// Update access time and hit count
+	// 在读锁内拷贝数据，避免返回悬空指针
+	// 二次验证条目仍然存在（防止在 FindMostSimilar 期间被删除）
+	lruEnt, ok := c.entries[bestEntry.Key]
+	if !ok {
+		// 条目已被删除，视为缓存未命中
+		c.mu.RUnlock()
+		atomic.AddInt64(&c.misses, 1)
+		return nil, 0, nil
+	}
+
+	entry := lruEnt.entry
+
+	// 深拷贝缓存条目数据，避免返回可能被修改的指针
+	entryCopy := &CacheEntry{
+		Key:        entry.Key,
+		Prompt:     entry.Prompt,
+		Embedding:  entry.Embedding, // 切片共享底层数组，但 embedding 是只读的
+		Response:   entry.Response,
+		Model:      entry.Model,
+		TokensUsed: entry.TokensUsed,
+		CreatedAt:  entry.CreatedAt,
+		AccessedAt: entry.AccessedAt,
+		HitCount:   entry.HitCount,
+	}
+	c.mu.RUnlock()
+
+	// 使用独立的写锁更新访问统计，不阻塞其他读操作
 	c.mu.Lock()
-	if entry, ok := c.entries[bestEntry.Key]; ok {
-		entry.AccessedAt = time.Now()
-		entry.HitCount++
-		c.updateAccessOrder(bestEntry.Key)
+	// 再次检查条目是否存在（在释放读锁到获取写锁之间可能被删除）
+	if lruEnt, ok := c.entries[bestEntry.Key]; ok {
+		lruEnt.entry.AccessedAt = time.Now()
+		lruEnt.entry.HitCount++
+		// 使用 O(1) 的 MoveToFront 更新 LRU 顺序
+		c.lruList.MoveToFront(lruEnt.element)
 	}
 	c.mu.Unlock()
 
 	// Update statistics
 	atomic.AddInt64(&c.hits, 1)
-	atomic.AddInt64(&c.tokensSaved, int64(bestEntry.TokensUsed))
+	atomic.AddInt64(&c.tokensSaved, int64(entryCopy.TokensUsed))
 
 	c.mu.Lock()
 	c.similaritySum += similarity
 	c.similarityCount++
 	c.mu.Unlock()
 
-	return bestEntry, similarity, nil
+	return entryCopy, similarity, nil
 }
 
 // Set stores a response in the cache
@@ -148,9 +189,14 @@ func (c *MemorySemanticCache) Set(ctx context.Context, prompt string, response s
 		c.evict()
 	}
 
-	// Store entry
-	c.entries[key] = entry
-	c.accessOrder = append(c.accessOrder, key)
+	// Store entry with LRU tracking
+	lruEnt := &lruEntry{
+		key:   key,
+		entry: entry,
+	}
+	// 将新条目添加到链表前端（最近使用）
+	lruEnt.element = c.lruList.PushFront(lruEnt)
+	c.entries[key] = lruEnt
 
 	return nil
 }
@@ -160,8 +206,12 @@ func (c *MemorySemanticCache) Delete(ctx context.Context, key string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	delete(c.entries, key)
-	c.removeFromAccessOrder(key)
+	if lruEnt, ok := c.entries[key]; ok {
+		// 从链表中移除
+		c.lruList.Remove(lruEnt.element)
+		// 从 map 中删除
+		delete(c.entries, key)
+	}
 
 	return nil
 }
@@ -171,8 +221,8 @@ func (c *MemorySemanticCache) Clear(ctx context.Context) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.entries = make(map[string]*CacheEntry)
-	c.accessOrder = make([]string, 0)
+	c.entries = make(map[string]*lruEntry)
+	c.lruList.Init() // 重新初始化链表
 
 	return nil
 }
@@ -198,7 +248,8 @@ func (c *MemorySemanticCache) Stats() *CacheStats {
 
 	// Estimate memory usage (rough approximation)
 	var memoryUsed int64
-	for _, entry := range c.entries {
+	for _, lruEnt := range c.entries {
+		entry := lruEnt.entry
 		memoryUsed += int64(len(entry.Prompt) + len(entry.Response))
 		memoryUsed += int64(len(entry.Embedding) * 4) // float32 = 4 bytes
 		memoryUsed += 200                             // overhead for other fields
@@ -218,7 +269,9 @@ func (c *MemorySemanticCache) Stats() *CacheStats {
 
 // Close closes the cache and releases resources
 func (c *MemorySemanticCache) Close() error {
-	close(c.done)
+	c.closeOnce.Do(func() {
+		close(c.done)
+	})
 	return nil
 }
 
@@ -226,7 +279,8 @@ func (c *MemorySemanticCache) Close() error {
 func (c *MemorySemanticCache) getEntriesForModel(model string) []*CacheEntry {
 	var entries []*CacheEntry
 
-	for _, entry := range c.entries {
+	for _, lruEnt := range c.entries {
+		entry := lruEnt.entry
 		// Filter by model if model-specific caching is enabled
 		if c.config.ModelSpecific && entry.Model != model {
 			continue
@@ -243,73 +297,65 @@ func (c *MemorySemanticCache) getEntriesForModel(model string) []*CacheEntry {
 
 // evict removes entries based on eviction policy
 func (c *MemorySemanticCache) evict() {
-	if len(c.accessOrder) == 0 {
+	if c.lruList.Len() == 0 {
 		return
 	}
 
 	switch c.config.EvictionPolicy {
 	case "lru":
-		// Remove least recently used
-		key := c.accessOrder[0]
-		delete(c.entries, key)
-		c.accessOrder = c.accessOrder[1:]
+		// Remove least recently used (链表尾部)
+		oldest := c.lruList.Back()
+		if oldest != nil {
+			lruEnt := oldest.Value.(*lruEntry)
+			c.lruList.Remove(oldest)
+			delete(c.entries, lruEnt.key)
+		}
 
 	case "lfu":
 		// Remove least frequently used
 		var minKey string
 		var minHits int64 = -1
 
-		for key, entry := range c.entries {
-			if minHits == -1 || entry.HitCount < minHits {
-				minHits = entry.HitCount
+		for key, lruEnt := range c.entries {
+			if minHits == -1 || lruEnt.entry.HitCount < minHits {
+				minHits = lruEnt.entry.HitCount
 				minKey = key
 			}
 		}
 
 		if minKey != "" {
-			delete(c.entries, minKey)
-			c.removeFromAccessOrder(minKey)
+			if lruEnt, ok := c.entries[minKey]; ok {
+				c.lruList.Remove(lruEnt.element)
+				delete(c.entries, minKey)
+			}
 		}
 
 	case "fifo":
-		// Remove oldest
+		// Remove oldest (按创建时间)
 		var oldestKey string
 		var oldestTime time.Time
 
-		for key, entry := range c.entries {
-			if oldestKey == "" || entry.CreatedAt.Before(oldestTime) {
-				oldestTime = entry.CreatedAt
+		for key, lruEnt := range c.entries {
+			if oldestKey == "" || lruEnt.entry.CreatedAt.Before(oldestTime) {
+				oldestTime = lruEnt.entry.CreatedAt
 				oldestKey = key
 			}
 		}
 
 		if oldestKey != "" {
-			delete(c.entries, oldestKey)
-			c.removeFromAccessOrder(oldestKey)
+			if lruEnt, ok := c.entries[oldestKey]; ok {
+				c.lruList.Remove(lruEnt.element)
+				delete(c.entries, oldestKey)
+			}
 		}
 
 	default:
 		// Default to LRU
-		if len(c.accessOrder) > 0 {
-			key := c.accessOrder[0]
-			delete(c.entries, key)
-			c.accessOrder = c.accessOrder[1:]
-		}
-	}
-}
-
-// updateAccessOrder moves a key to the end (most recently used)
-func (c *MemorySemanticCache) updateAccessOrder(key string) {
-	c.removeFromAccessOrder(key)
-	c.accessOrder = append(c.accessOrder, key)
-}
-
-// removeFromAccessOrder removes a key from the access order list
-func (c *MemorySemanticCache) removeFromAccessOrder(key string) {
-	for i, k := range c.accessOrder {
-		if k == key {
-			c.accessOrder = append(c.accessOrder[:i], c.accessOrder[i+1:]...)
-			return
+		oldest := c.lruList.Back()
+		if oldest != nil {
+			lruEnt := oldest.Value.(*lruEntry)
+			c.lruList.Remove(oldest)
+			delete(c.entries, lruEnt.key)
 		}
 	}
 }
@@ -335,10 +381,10 @@ func (c *MemorySemanticCache) cleanup() {
 	defer c.mu.Unlock()
 
 	now := time.Now()
-	for key, entry := range c.entries {
-		if now.Sub(entry.CreatedAt) > c.config.TTL {
+	for key, lruEnt := range c.entries {
+		if now.Sub(lruEnt.entry.CreatedAt) > c.config.TTL {
+			c.lruList.Remove(lruEnt.element)
 			delete(c.entries, key)
-			c.removeFromAccessOrder(key)
 		}
 	}
 }
