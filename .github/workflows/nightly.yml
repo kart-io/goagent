@@ -2,9 +2,8 @@ name: Nightly Build
 
 on:
   schedule:
-    # Run every day at 2 AM UTC
     - cron: '0 2 * * *'
-  workflow_dispatch:  # Allow manual trigger
+  workflow_dispatch:
 
 jobs:
   nightly:
@@ -33,9 +32,20 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
+      # --- 新增步骤：安装 gotestsum ---
+      - name: Install gotestsum
+        run: go install gotest.tools/gotestsum@latest
+
+      # --- 修改步骤：使用 gotestsum 运行测试 ---
       - name: Run all tests
         run: |
-          GO_TEST_MODE=true go test -v -race -timeout 10m -coverprofile=coverage.out ./...
+          # --format testname: 简洁输出，只显示测试名字，出错时才显示详情
+          # --junitfile: 生成 XML 报告
+          # -- : 后的参数传给 go test (增加了 timeout 到 20m)
+          gotestsum --format testname --junitfile unit-tests.xml -- \
+            -race -timeout 20m -coverprofile=coverage.out ./...
+        env:
+          GO_TEST_MODE: true
 
       - name: Run benchmarks
         run: |
@@ -62,47 +72,54 @@ jobs:
           name: coverage-report-${{ github.sha }}
           path: coverage.out
 
+      # --- 新增步骤：上传测试结果 XML (即使失败也上传) ---
+      - name: Upload test results
+        if: always() # 确保即使测试失败也能拿到报告
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ github.sha }}
+          path: unit-tests.xml
+
       - name: Notify on failure
         if: failure()
         uses: actions/github-script@v7
         with:
           script: |
-            // 检查是否已存在打开的 nightly-failure issue
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
             const existingIssues = await github.rest.issues.listForRepo({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
+              owner,
+              repo,
               labels: 'nightly-failure',
               state: 'open'
             });
 
+            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+
             if (existingIssues.data.length > 0) {
-              // 已存在打开的 issue，添加评论而不是创建新 issue
               const issueNumber = existingIssues.data[0].number;
               await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
+                owner,
+                repo,
                 issue_number: issueNumber,
-                body: `🔄 **又一次构建失败**
-
-**提交**: ${context.sha}
-**工作流运行**: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}
-**时间**: ${new Date().toISOString()}`
+                body:
+                  '🔄 又一次构建失败\n\n' +
+                  `提交: ${context.sha}\n` +
+                  `工作流运行: ${runUrl}\n` +
+                  `时间: ${new Date().toISOString()}`
               });
-              console.log(`Added comment to existing issue #${issueNumber}`);
             } else {
-              // 没有打开的 issue，创建新的
               await github.rest.issues.create({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
+                owner,
+                repo,
                 title: '❌ Nightly Build Failed',
-                body: `Nightly build failed for commit ${context.sha}
-
-**工作流运行**: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}
-
-请调查并修复问题。`,
+                body:
+                  `Nightly build failed for commit ${context.sha}\n\n` +
+                  `工作流运行: ${runUrl}\n\n` +
+                  '请调查并修复问题。',
                 labels: ['ci', 'nightly-failure']
               });
-              console.log('Created new nightly-failure issue');
             }
 
       - name: Close issue on success
@@ -110,29 +127,33 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            // 构建成功时，关闭所有打开的 nightly-failure issues
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
             const openIssues = await github.rest.issues.listForRepo({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
+              owner,
+              repo,
               labels: 'nightly-failure',
               state: 'open'
             });
 
+            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+
             for (const issue of openIssues.data) {
               await github.rest.issues.update({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
+                owner,
+                repo,
                 issue_number: issue.number,
                 state: 'closed'
               });
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: issue.number,
-                body: `✅ **问题已修复**
 
-Nightly Build 在提交 ${context.sha} 上成功通过。
-**工作流运行**: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: issue.number,
+                body:
+                  '✅ 问题已修复\n\n' +
+                  `Nightly Build 在提交 ${context.sha} 上成功通过。\n` +
+                  `工作流运行: ${runUrl}`
               });
-              console.log(`Closed issue #${issue.number}`);
             }
