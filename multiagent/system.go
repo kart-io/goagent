@@ -389,6 +389,9 @@ func (s *MultiAgentSystem) executeParallelTask(ctx context.Context, task *Collab
 	results := make(chan Assignment, len(agents))
 	errors := make(chan error, len(agents))
 
+	// 使用互斥锁保护 task.Assignments 的并发写
+	var taskMu sync.Mutex
+
 	for agentID, agent := range agents {
 		assignment := Assignment{
 			AgentID:   agentID,
@@ -397,7 +400,10 @@ func (s *MultiAgentSystem) executeParallelTask(ctx context.Context, task *Collab
 			Status:    TaskStatusExecuting,
 			StartTime: time.Now(),
 		}
+		// 在主 goroutine 中安全写入初始 assignment
+		taskMu.Lock()
 		task.Assignments[agentID] = assignment
+		taskMu.Unlock()
 
 		wg.Add(1)
 		go func(id string, a CollaborativeAgent) {
@@ -419,7 +425,7 @@ func (s *MultiAgentSystem) executeParallelTask(ctx context.Context, task *Collab
 	close(results)
 	close(errors)
 
-	// Collect results
+	// Collect results - 所有 goroutine 已结束，无需加锁
 	for result := range results {
 		task.Results[result.AgentID] = result.Result
 		task.Assignments[result.AgentID] = result

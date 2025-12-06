@@ -50,7 +50,7 @@ graph TB
 ```mermaid
 classDiagram
     class MultiAgentSystem {
-        -agents map[string]Agent
+        -agents map~string~Agent
         -logger Logger
         -maxAgents int
         +RegisterAgent(id, agent)
@@ -73,7 +73,7 @@ classDiagram
         -id string
         -description string
         -role Role
-        -system *MultiAgentSystem
+        -system MultiAgentSystem
         +Name() string
         +GetRole() Role
         +Collaborate(ctx, task) Assignment
@@ -83,8 +83,8 @@ classDiagram
         +ID string
         +Name string
         +Type CollaborationType
-        +Input interface{}
-        +Assignments map[string]Assignment
+        +Input interface
+        +Assignments map~string~Assignment
     }
 
     MultiAgentSystem "1" --> "*" CollaborativeAgent : 管理

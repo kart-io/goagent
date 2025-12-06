@@ -44,16 +44,16 @@ classDiagram
     }
 
     class NegotiatingAgent {
-        -negotiationHistory []Proposal
+        -negotiationHistory list~Proposal~
         +Propose(ctx, proposal) Response
         +CounterPropose(ctx, counter) Response
         +Accept(ctx) bool
         +Reject(ctx, reason) bool
     }
 
-    CollaborativeAgent <|.. BaseCollaborativeAgent
-    BaseCollaborativeAgent <|-- SpecializedAgent
-    BaseCollaborativeAgent <|-- NegotiatingAgent
+    CollaborativeAgent <|.. BaseCollaborativeAgent : 实现
+    BaseCollaborativeAgent <|-- SpecializedAgent : 继承
+    BaseCollaborativeAgent <|-- NegotiatingAgent : 继承
 ```
 
 ### 专业化 Agent 架构

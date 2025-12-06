@@ -97,15 +97,15 @@ graph TB
 ```mermaid
 classDiagram
     class ToolAgent {
-        -BaseCollaborativeAgent *base
-        -llmClient llm.Client
-        -tools []interfaces.Tool
-        -toolMap map[string]interfaces.Tool
+        -base *BaseCollaborativeAgent
+        -llmClient Client
+        -tools list~Tool~
+        -toolMap map~string~Tool
         -systemPrompt string
         +Collaborate(ctx, task) Assignment
         +buildPrompt(userPrompt) string
         +buildPipelinePrompt(input) string
-        +executeToolCalls(ctx, toolCalls, prompt) (string, []string)
+        +executeToolCalls(ctx, toolCalls, prompt) tuple~string, list~string~~
     }
 
     class BaseCollaborativeAgent {
@@ -120,31 +120,12 @@ classDiagram
     class ToolCallingClient {
         <<interface>>
         +GenerateWithTools(ctx, prompt, tools) ToolCallResponse
-        +StreamWithTools(ctx, prompt, tools) chan ToolChunk
-    }
-
-    class Tool {
-        <<interface>>
-        +Name() string
-        +Description() string
-        +ArgsSchema() string
-        +Invoke(ctx, input) ToolOutput
-    }
-
-    class FunctionTool {
-        -name string
-        -description string
-        -argsSchema string
-        -fn func(ctx, args) (interface{}, error)
-        +Name() string
-        +Description() string
-        +ArgsSchema() string
-        +Invoke(ctx, input) ToolOutput
+        +StreamWithTools(ctx, prompt, tools) chan~ToolChunk~
     }
 
     class ToolCallResponse {
         +Content string
-        +ToolCalls []ToolCall
+        +ToolCalls list~ToolCall~
         +Model string
         +TokensUsed int
     }
@@ -153,16 +134,31 @@ classDiagram
         +ID string
         +Type string
         +Name string
-        +Arguments map[string]interface{}
+        +Arguments map~string~any
         +Function struct
     }
 
-    ToolAgent --> BaseCollaborativeAgent : 嵌入
+    class Tool {
+        <<interface>>
+        +Name() string
+        +Description() string
+        +ArgsSchema() string
+        +Invoke(ctx, input) tuple~any, error~
+    }
+
+    class FunctionTool {
+        -name string
+        -description string
+        -argsSchema string
+        -fn func
+    }
+
+    ToolAgent *-- BaseCollaborativeAgent : 嵌入
     ToolAgent --> ToolCallingClient : 使用
-    ToolAgent --> Tool : 管理多个
+    ToolAgent --> Tool : 管理
     FunctionTool ..|> Tool : 实现
-    ToolCallingClient --> ToolCallResponse : 返回
-    ToolCallResponse --> ToolCall : 包含
+    ToolCallingClient ..> ToolCallResponse : 返回
+    ToolCallResponse *-- ToolCall : 包含
 ```
 
 ### 工具调用决策流程

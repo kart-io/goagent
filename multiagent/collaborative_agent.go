@@ -17,11 +17,12 @@ type BaseCollaborativeAgent struct {
 	*core.BaseAgent
 	role         Role
 	messageBox   chan Message
-	outbox       chan Message
 	system       *MultiAgentSystem
 	capabilities []string
 	state        map[string]interface{}
-	mu           sync.RWMutex
+	mu           sync.RWMutex // 保护 role
+	stateMu      sync.RWMutex // 保护 state
+	msgTimeout   time.Duration
 }
 
 // NewBaseCollaborativeAgent creates a new base collaborative agent
@@ -30,10 +31,10 @@ func NewBaseCollaborativeAgent(id, description string, role Role, system *MultiA
 		BaseAgent:    core.NewBaseAgent(id, description, []string{}),
 		role:         role,
 		messageBox:   make(chan Message, 100),
-		outbox:       make(chan Message, 100),
 		system:       system,
 		capabilities: []string{},
 		state:        make(map[string]interface{}),
+		msgTimeout:   5 * time.Second, // 默认超时，可通过 SetMessageTimeout 配置
 	}
 }
 
@@ -51,18 +52,63 @@ func (a *BaseCollaborativeAgent) SetRole(role Role) {
 	a.role = role
 }
 
+// SetMessageTimeout sets the message timeout duration
+func (a *BaseCollaborativeAgent) SetMessageTimeout(timeout time.Duration) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.msgTimeout = timeout
+}
+
+// GetMessageTimeout returns the message timeout duration
+func (a *BaseCollaborativeAgent) GetMessageTimeout() time.Duration {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.msgTimeout
+}
+
+// GetState returns a value from the agent's state (thread-safe)
+func (a *BaseCollaborativeAgent) GetState(key string) (interface{}, bool) {
+	a.stateMu.RLock()
+	defer a.stateMu.RUnlock()
+	val, ok := a.state[key]
+	return val, ok
+}
+
+// SetState sets a value in the agent's state (thread-safe)
+func (a *BaseCollaborativeAgent) SetState(key string, value interface{}) {
+	a.stateMu.Lock()
+	defer a.stateMu.Unlock()
+	a.state[key] = value
+}
+
+// DeleteState removes a value from the agent's state (thread-safe)
+func (a *BaseCollaborativeAgent) DeleteState(key string) {
+	a.stateMu.Lock()
+	defer a.stateMu.Unlock()
+	delete(a.state, key)
+}
+
+// ClearState clears all state (thread-safe)
+func (a *BaseCollaborativeAgent) ClearState() {
+	a.stateMu.Lock()
+	defer a.stateMu.Unlock()
+	a.state = make(map[string]interface{})
+}
+
 // ReceiveMessage handles incoming messages
 func (a *BaseCollaborativeAgent) ReceiveMessage(ctx context.Context, message Message) error {
+	timeout := a.GetMessageTimeout()
 	select {
 	case a.messageBox <- message:
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
-	case <-time.After(5 * time.Second):
+	case <-time.After(timeout):
 		return agentErrors.New(agentErrors.CodeMultiAgentMessage, "timeout receiving message").
 			WithComponent("collaborative_agent").
 			WithOperation("receive_message").
-			WithContext("agent_id", a.Name())
+			WithContext("agent_id", a.Name()).
+			WithContext("timeout", timeout.String())
 	}
 }
 

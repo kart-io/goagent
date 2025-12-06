@@ -145,9 +145,10 @@ func TestDatabaseQueryTool_Execute_QueryOperation(t *testing.T) {
 				if !ok {
 					t.Fatal("结果应该是 map")
 				}
-				columns, ok := resultMap["columns"].([]interface{})
+				// 实现返回 []string 类型的 columns
+				columns, ok := resultMap["columns"].([]string)
 				if !ok {
-					t.Fatal("columns 应该存在")
+					t.Fatal("columns 应该存在并且是 []string 类型")
 				}
 				if len(columns) != 3 {
 					t.Errorf("期望 3 列，得到 %d", len(columns))
@@ -187,7 +188,9 @@ func TestDatabaseQueryTool_Execute_QueryOperation(t *testing.T) {
 					"driver":        "sqlite3",
 					"connection_id": "test_db",
 				},
-				"query":     "PRAGMA table_info(users)",
+				// SQLite 不支持 DESCRIBE，但支持 SHOW 和 SELECT
+				// 实现只支持 SELECT/SHOW/DESCRIBE，使用 SELECT 语法代替
+				"query":     "SELECT name, type FROM sqlite_master WHERE type='table' AND name='users'",
 				"operation": "query",
 			},
 			shouldError: false,
