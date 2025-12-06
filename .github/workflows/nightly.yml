@@ -32,9 +32,20 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
+      # --- 新增步骤：安装 gotestsum ---
+      - name: Install gotestsum
+        run: go install gotest.tools/gotestsum@latest
+
+      # --- 修改步骤：使用 gotestsum 运行测试 ---
       - name: Run all tests
         run: |
-          GO_TEST_MODE=true go test -v -race -timeout 10m -coverprofile=coverage.out ./...
+          # --format testname: 简洁输出，只显示测试名字，出错时才显示详情
+          # --junitfile: 生成 XML 报告
+          # -- : 后的参数传给 go test (增加了 timeout 到 20m)
+          gotestsum --format testname --junitfile unit-tests.xml -- \
+            -race -timeout 20m -coverprofile=coverage.out ./...
+        env:
+          GO_TEST_MODE: true
 
       - name: Run benchmarks
         run: |
@@ -60,6 +71,14 @@ jobs:
         with:
           name: coverage-report-${{ github.sha }}
           path: coverage.out
+
+      # --- 新增步骤：上传测试结果 XML (即使失败也上传) ---
+      - name: Upload test results
+        if: always() # 确保即使测试失败也能拿到报告
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ github.sha }}
+          path: unit-tests.xml
 
       - name: Notify on failure
         if: failure()
