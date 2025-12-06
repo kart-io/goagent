@@ -53,10 +53,10 @@ classDiagram
         +ID string
         +Name string
         +Leader string
-        +Members []string
+        +Members list~string~
         +Purpose string
-        +Capabilities []string
-        +Metadata map[string]interface{}
+        +Capabilities list~string~
+        +Metadata map~string~interface~
     }
 
     class CollaborativeAgent {

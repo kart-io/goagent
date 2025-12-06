@@ -122,6 +122,18 @@ func WithRetryPolicy(policy RetryPolicy) ExecutorOption {
 	}
 }
 
+// RegisterAgent 注册 Agent 到执行器
+// 这允许外部代码向执行器注册自定义 Agent
+func (e *AgentExecutor) RegisterAgent(name string, agent core.Agent) {
+	e.registry.RegisterAgent(name, agent)
+}
+
+// GetRegistry 返回 Agent 注册表
+// 用于高级场景，如批量注册或查询已注册的 Agent
+func (e *AgentExecutor) GetRegistry() *AgentRegistry {
+	return e.registry
+}
+
 // Execute executes a plan
 func (e *AgentExecutor) Execute(ctx context.Context, plan *Plan) (*PlanResult, error) {
 	e.logger.Info("Starting plan execution",
