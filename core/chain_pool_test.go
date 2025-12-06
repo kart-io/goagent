@@ -14,25 +14,16 @@ func TestChainInputPoolReuse(t *testing.T) {
 	input1.Vars["key1"] = "value1"
 	input1.Options.Extra["extra1"] = "data1"
 
-	// 记录 Vars 和 Extra map 的地址
-	varsAddr1 := &input1.Vars
-	extraAddr1 := &input1.Options.Extra
+	// 记录对象地址
+	objAddr1 := input1
 
 	// 放回池中
 	PutChainInput(input1)
 
-	// 再次获取对象（应该是同一个对象）
+	// 再次获取对象 - sync.Pool 可能会复用,也可能会创建新对象
 	input2 := GetChainInput()
 
-	// 记录新的 map 地址
-	varsAddr2 := &input2.Vars
-	extraAddr2 := &input2.Options.Extra
-
-	// 验证对象被复用（map 指针地址应该相同）
-	assert.Equal(t, varsAddr1, varsAddr2, "Vars map should be reused")
-	assert.Equal(t, extraAddr1, extraAddr2, "Options.Extra map should be reused")
-
-	// 验证 map 内容被清空
+	// 验证 map 内容被清空(这是对象池的核心功能)
 	assert.Empty(t, input2.Vars, "Vars should be empty after reset")
 	assert.Empty(t, input2.Options.Extra, "Options.Extra should be empty after reset")
 
@@ -43,6 +34,16 @@ func TestChainInputPoolReuse(t *testing.T) {
 	assert.False(t, input2.Options.Parallel, "Parallel should be reset to false")
 	assert.Nil(t, input2.Options.SkipSteps, "SkipSteps should be nil")
 	assert.Nil(t, input2.Options.OnlySteps, "OnlySteps should be nil")
+
+	// 如果对象确实被复用了,验证 map 也被复用(优化目标)
+	if objAddr1 == input2 {
+		t.Log("Object was reused from pool (performance optimization working)")
+		// map 应该被复用且已清空
+		assert.NotNil(t, input2.Vars, "Vars map should exist when object is reused")
+		assert.NotNil(t, input2.Options.Extra, "Extra map should exist when object is reused")
+	} else {
+		t.Log("New object was created by pool (normal sync.Pool behavior)")
+	}
 
 	PutChainInput(input2)
 }
@@ -55,27 +56,32 @@ func TestChainOutputPoolReuse(t *testing.T) {
 	output1.Status = "success"
 	output1.Metadata["key1"] = "value1"
 
-	// 记录 Metadata map 的地址
-	metadataAddr1 := &output1.Metadata
+	// 记录对象地址
+	objAddr1 := output1
 
 	// 放回池中
 	PutChainOutput(output1)
 
-	// 再次获取对象
+	// 再次获取对象 - sync.Pool 可能会复用,也可能会创建新对象
+	// 这取决于 GC 和运行时状态,因此我们应该测试"可能复用"而非"必定复用"
 	output2 := GetChainOutput()
 
-	// 记录新的 map 地址
-	metadataAddr2 := &output2.Metadata
-
-	// 验证对象被复用
-	assert.Equal(t, metadataAddr1, metadataAddr2, "Metadata map should be reused")
-
-	// 验证内容被清空
+	// 验证对象被正确重置(这是对象池的核心功能)
 	assert.Empty(t, output2.Metadata, "Metadata should be empty after reset")
 	assert.Nil(t, output2.Data, "Data should be nil after reset")
 	assert.Zero(t, output2.TotalLatency, "TotalLatency should be reset to 0")
 	assert.Empty(t, output2.Status, "Status should be empty after reset")
 	assert.Empty(t, output2.StepsExecuted, "StepsExecuted should be empty after reset")
+
+	// 如果对象确实被复用了,验证 map 也被复用(优化目标)
+	// 注意:这是一个性能优化验证,不是必须的功能要求
+	if objAddr1 == output2 {
+		t.Log("Object was reused from pool (performance optimization working)")
+		// 如果对象被复用,那么 Metadata map 应该也被复用
+		assert.NotNil(t, output2.Metadata, "Metadata map should exist when object is reused")
+	} else {
+		t.Log("New object was created by pool (normal sync.Pool behavior)")
+	}
 
 	PutChainOutput(output2)
 }
