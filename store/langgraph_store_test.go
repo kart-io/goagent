@@ -252,6 +252,7 @@ func TestInMemoryLangGraphStore_Watch(t *testing.T) {
 
 	// Start watching
 	watchCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	events, err := store.Watch(watchCtx, []string{"watched"})
 	assert.NoError(t, err)
 	assert.NotNil(t, events)

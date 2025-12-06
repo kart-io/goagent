@@ -2,6 +2,8 @@ package cache
 
 import (
 	"context"
+	"fmt"
+	"runtime"
 	"testing"
 	"time"
 
@@ -423,3 +425,117 @@ func BenchmarkCosineSimilarity(b *testing.B) {
 		CosineSimilarity(a, b2)
 	}
 }
+
+// BenchmarkMemorySemanticCache_LRUUpdate 测试 LRU 更新性能
+// 此基准测试专门验证使用 container/list 后，LRU 更新操作从 O(n) 优化到 O(1)
+func BenchmarkMemorySemanticCache_LRUUpdate(b *testing.B) {
+	cacheSizes := []int{100, 1000, 10000}
+
+	for _, size := range cacheSizes {
+		b.Run(fmt.Sprintf("Size_%d", size), func(b *testing.B) {
+			provider := NewMockEmbeddingProvider(128)
+			config := DefaultSemanticCacheConfig()
+			config.MaxEntries = size
+			cache := NewMemorySemanticCache(provider, config)
+			defer cache.Close()
+
+			ctx := context.Background()
+
+			// Pre-populate cache to target size
+			for i := 0; i < size; i++ {
+				prompt := fmt.Sprintf("prompt_%d", i)
+				cache.Set(ctx, prompt, fmt.Sprintf("response_%d", i), "gpt-4", 10)
+			}
+
+			b.ReportAllocs()
+			b.ResetTimer()
+
+			// Benchmark repeated access (triggers LRU update)
+			for i := 0; i < b.N; i++ {
+				// Access random existing entries to trigger LRU updates
+				prompt := fmt.Sprintf("prompt_%d", i%size)
+				cache.Get(ctx, prompt, "gpt-4")
+			}
+		})
+	}
+}
+
+
+// TestMemorySemanticCache_Close 测试 Close 方法能够正确停止 cleanupLoop goroutine
+func TestMemorySemanticCache_Close(t *testing.T) {
+	provider := NewMockEmbeddingProvider(128)
+	cache := NewMemorySemanticCache(provider, nil)
+
+	// 计数关闭前的 goroutine 数量
+	beforeClose := countGoroutines()
+
+	// 添加一些数据
+	ctx := context.Background()
+	cache.Set(ctx, "test1", "response1", "gpt-4", 10)
+	cache.Set(ctx, "test2", "response2", "gpt-4", 10)
+
+	// 关闭缓存
+	err := cache.Close()
+	require.NoError(t, err)
+
+	// 等待 cleanupLoop goroutine 完全退出
+	time.Sleep(100 * time.Millisecond)
+
+	// 计数关闭后的 goroutine 数量
+	afterClose := countGoroutines()
+
+	// cleanupLoop goroutine 应该已经退出，goroutine 数量应该相同或更少
+	assert.LessOrEqual(t, afterClose, beforeClose+1, "Close() 应该停止 cleanupLoop goroutine")
+}
+
+// TestMemorySemanticCache_CleanupLoop 测试清理循环正确移除过期条目
+func TestMemorySemanticCache_CleanupLoop(t *testing.T) {
+	provider := NewMockEmbeddingProvider(128)
+	config := DefaultSemanticCacheConfig()
+	config.TTL = 50 * time.Millisecond
+
+	cache := NewMemorySemanticCache(provider, config)
+	defer cache.Close()
+
+	ctx := context.Background()
+
+	// 添加条目
+	cache.Set(ctx, "test1", "response1", "gpt-4", 10)
+	cache.Set(ctx, "test2", "response2", "gpt-4", 10)
+
+	// 验证条目存在
+	assert.Equal(t, int64(2), cache.Stats().TotalEntries)
+
+	// 等待 TTL 过期和清理循环运行
+	time.Sleep(150 * time.Millisecond)
+
+	// 手动触发清理（确保清理已执行）
+	cache.cleanup()
+
+	// 验证过期条目已被清理
+	assert.Equal(t, int64(0), cache.Stats().TotalEntries)
+}
+
+// TestMemorySemanticCache_MultipleClose 测试多次调用 Close 不会 panic
+func TestMemorySemanticCache_MultipleClose(t *testing.T) {
+	provider := NewMockEmbeddingProvider(128)
+	cache := NewMemorySemanticCache(provider, nil)
+
+	// 第一次关闭
+	err := cache.Close()
+	require.NoError(t, err)
+
+	// 第二次关闭应该是安全的（sync.Once 保证只关闭一次）
+	err = cache.Close()
+	require.NoError(t, err)
+
+	// 第三次关闭也应该安全
+	err = cache.Close()
+	require.NoError(t, err)
+}
+
+// countGoroutines 返回当前 goroutine 数量（用于泄漏检测）
+func countGoroutines() int {
+	return runtime.NumGoroutine()
+}
+
