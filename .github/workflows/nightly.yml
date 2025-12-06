@@ -67,14 +67,72 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            github.rest.issues.create({
+            // 检查是否已存在打开的 nightly-failure issue
+            const existingIssues = await github.rest.issues.listForRepo({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: '❌ Nightly Build Failed',
-              body: `Nightly build failed for commit ${context.sha}
+              labels: 'nightly-failure',
+              state: 'open'
+            });
 
-              **Workflow Run**: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}
+            if (existingIssues.data.length > 0) {
+              // 已存在打开的 issue，添加评论而不是创建新 issue
+              const issueNumber = existingIssues.data[0].number;
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                body: `🔄 **又一次构建失败**
 
-              Please investigate and fix the issues.`,
-              labels: ['ci', 'nightly-failure']
-            })
+**提交**: ${context.sha}
+**工作流运行**: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}
+**时间**: ${new Date().toISOString()}`
+              });
+              console.log(`Added comment to existing issue #${issueNumber}`);
+            } else {
+              // 没有打开的 issue，创建新的
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: '❌ Nightly Build Failed',
+                body: `Nightly build failed for commit ${context.sha}
+
+**工作流运行**: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}
+
+请调查并修复问题。`,
+                labels: ['ci', 'nightly-failure']
+              });
+              console.log('Created new nightly-failure issue');
+            }
+
+      - name: Close issue on success
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // 构建成功时，关闭所有打开的 nightly-failure issues
+            const openIssues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: 'nightly-failure',
+              state: 'open'
+            });
+
+            for (const issue of openIssues.data) {
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                state: 'closed'
+              });
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: `✅ **问题已修复**
+
+Nightly Build 在提交 ${context.sha} 上成功通过。
+**工作流运行**: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
+              });
+              console.log(`Closed issue #${issue.number}`);
+            }
