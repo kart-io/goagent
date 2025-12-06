@@ -58,8 +58,8 @@ graph TB
 ```mermaid
 classDiagram
     class LLMCollaborativeAgent {
-        -BaseCollaborativeAgent *base
-        -llmClient llm.Client
+        -base *BaseCollaborativeAgent
+        -llmClient Client
         -systemPrompt string
         -expertise string
         +Collaborate(ctx, task) Assignment
@@ -82,7 +82,7 @@ classDiagram
     }
 
     class CompletionRequest {
-        +Messages []Message
+        +Messages list~Message~
         +MaxTokens int
         +Temperature float64
     }
@@ -94,10 +94,10 @@ classDiagram
         +Provider string
     }
 
-    LLMCollaborativeAgent --> BaseCollaborativeAgent : 嵌入
+    LLMCollaborativeAgent *-- BaseCollaborativeAgent : 嵌入
     LLMCollaborativeAgent --> LLMClient : 使用
-    LLMClient --> CompletionRequest : 输入
-    LLMClient --> CompletionResponse : 输出
+    LLMClient ..> CompletionRequest : 输入
+    LLMClient ..> CompletionResponse : 输出
 ```
 
 ### LLM 提供商选择流程

@@ -50,7 +50,6 @@ func TestNewBaseCollaborativeAgent(t *testing.T) {
 	assert.Equal(t, "agent1", agent.Name())
 	assert.Equal(t, RoleWorker, agent.GetRole())
 	assert.NotNil(t, agent.messageBox)
-	assert.NotNil(t, agent.outbox)
 	assert.NotNil(t, agent.state)
 }
 

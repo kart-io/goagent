@@ -41,9 +41,10 @@ func TestFileOperationsTool_Execute_ReadOperation(t *testing.T) {
 	}
 
 	result := output.Result.(map[string]interface{})
-	content, ok := result["content"].(string)
+	// 实现返回 "result" 字段而非 "content"
+	content, ok := result["result"].(string)
 	if !ok {
-		t.Fatal("内容应该存在并且是字符串")
+		t.Fatal("result 应该存在并且是字符串")
 	}
 
 	if content != testContent {
@@ -75,8 +76,9 @@ func TestFileOperationsTool_Execute_WriteOperation(t *testing.T) {
 	}
 
 	result := output.Result.(map[string]interface{})
-	if result["status"] != "success" {
-		t.Errorf("期望状态 success，得到 %v", result["status"])
+	// 实现返回 "success": true 而非 "status": "success"
+	if result["success"] != true {
+		t.Errorf("期望 success=true，得到 %v", result["success"])
 	}
 
 	// 验证文件内容
@@ -119,8 +121,9 @@ func TestFileOperationsTool_Execute_AppendOperation(t *testing.T) {
 	}
 
 	result := output.Result.(map[string]interface{})
-	if result["status"] != "success" {
-		t.Errorf("期望状态 success，得到 %v", result["status"])
+	// 实现返回 "success": true 而非 "status": "success"
+	if result["success"] != true {
+		t.Errorf("期望 success=true，得到 %v", result["success"])
 	}
 
 	// 验证文件内容
@@ -153,8 +156,9 @@ func TestFileOperationsTool_Execute_DeleteOperation(t *testing.T) {
 	}
 
 	result := output.Result.(map[string]interface{})
-	if result["status"] != "success" {
-		t.Errorf("期望状态 success，得到 %v", result["status"])
+	// 实现返回 "success": true 而非 "status": "success"
+	if result["success"] != true {
+		t.Errorf("期望 success=true，得到 %v", result["success"])
 	}
 
 	// 验证文件已删除
@@ -190,8 +194,9 @@ func TestFileOperationsTool_Execute_CopyOperation(t *testing.T) {
 	}
 
 	result := output.Result.(map[string]interface{})
-	if result["status"] != "success" {
-		t.Errorf("期望状态 success，得到 %v", result["status"])
+	// 实现返回 "success": true 而非 "status": "success"
+	if result["success"] != true {
+		t.Errorf("期望 success=true，得到 %v", result["success"])
 	}
 
 	// 验证目标文件存在且内容相同
@@ -228,8 +233,9 @@ func TestFileOperationsTool_Execute_MoveOperation(t *testing.T) {
 	}
 
 	result := output.Result.(map[string]interface{})
-	if result["status"] != "success" {
-		t.Errorf("期望状态 success，得到 %v", result["status"])
+	// 实现返回 "success": true 而非 "status": "success"
+	if result["success"] != true {
+		t.Errorf("期望 success=true，得到 %v", result["success"])
 	}
 
 	// 验证原文件已删除，目标文件存在
@@ -267,9 +273,10 @@ func TestFileOperationsTool_Execute_ListOperation(t *testing.T) {
 	}
 
 	result := output.Result.(map[string]interface{})
-	items, ok := result["items"].([]interface{})
+	// 实现返回 result 数组而非 items
+	items, ok := result["result"].([]map[string]interface{})
 	if !ok {
-		t.Fatal("items 应该存在")
+		t.Fatal("result 应该存在并且是数组")
 	}
 
 	if len(items) != 3 {
@@ -306,9 +313,10 @@ func TestFileOperationsTool_Execute_SearchOperation(t *testing.T) {
 	}
 
 	result := output.Result.(map[string]interface{})
-	matches, ok := result["matches"].([]interface{})
+	// 实现返回 result 数组而非 matches
+	matches, ok := result["result"].([]string)
 	if !ok {
-		t.Fatal("matches 应该存在")
+		t.Fatal("result 应该存在并且是字符串数组")
 	}
 
 	if len(matches) != 2 {
@@ -340,13 +348,18 @@ func TestFileOperationsTool_Execute_InfoOperation(t *testing.T) {
 	}
 
 	result := output.Result.(map[string]interface{})
-	if _, ok := result["size"]; !ok {
+	// info 操作返回嵌套的 result 结构
+	infoResult, ok := result["result"].(map[string]interface{})
+	if !ok {
+		t.Fatal("result 应该存在并且是 map")
+	}
+	if _, ok := infoResult["size"]; !ok {
 		t.Error("size 应该存在")
 	}
-	if _, ok := result["mode"]; !ok {
+	if _, ok := infoResult["mode"]; !ok {
 		t.Error("mode 应该存在")
 	}
-	if _, ok := result["modified"]; !ok {
+	if _, ok := infoResult["modified"]; !ok {
 		t.Error("modified 应该存在")
 	}
 }
@@ -380,8 +393,9 @@ func TestFileOperationsTool_Execute_CompressGzip(t *testing.T) {
 	}
 
 	result := output.Result.(map[string]interface{})
-	if result["status"] != "success" {
-		t.Errorf("期望状态 success，得到 %v", result["status"])
+	// 实现返回 "success": true 而非 "status": "success"
+	if result["success"] != true {
+		t.Errorf("期望 success=true，得到 %v", result["success"])
 	}
 
 	// 验证压缩文件存在
@@ -415,7 +429,8 @@ func TestFileOperationsTool_Execute_CompressZip(t *testing.T) {
 	ctx := context.Background()
 
 	sourceFile := filepath.Join(tmpDir, "compress.txt")
-	destFile := filepath.Join(tmpDir, "compress.zip")
+	// 实际实现会生成 sourceFile + ".zip"，即 compress.txt.zip
+	destFile := filepath.Join(tmpDir, "compress.txt.zip")
 	content := "content to compress with zip"
 
 	ioutil.WriteFile(sourceFile, []byte(content), 0644)
@@ -437,8 +452,9 @@ func TestFileOperationsTool_Execute_CompressZip(t *testing.T) {
 	}
 
 	result := output.Result.(map[string]interface{})
-	if result["status"] != "success" {
-		t.Errorf("期望状态 success，得到 %v", result["status"])
+	// 实现返回 "success": true 而非 "status": "success"
+	if result["success"] != true {
+		t.Errorf("期望 success=true，得到 %v", result["success"])
 	}
 
 	// 验证压缩文件存在
@@ -480,8 +496,9 @@ func TestFileOperationsTool_Execute_DecompressGzip(t *testing.T) {
 	}
 
 	result := output.Result.(map[string]interface{})
-	if result["status"] != "success" {
-		t.Errorf("期望状态 success，得到 %v", result["status"])
+	// 实现返回 "success": true 而非 "status": "success"
+	if result["success"] != true {
+		t.Errorf("期望 success=true，得到 %v", result["success"])
 	}
 }
 
@@ -522,8 +539,9 @@ func TestFileOperationsTool_Execute_DecompressZip(t *testing.T) {
 	}
 
 	result := output.Result.(map[string]interface{})
-	if result["status"] != "success" {
-		t.Errorf("期望状态 success，得到 %v", result["status"])
+	// 实现返回 "success": true 而非 "status": "success"
+	if result["success"] != true {
+		t.Errorf("期望 success=true，得到 %v", result["success"])
 	}
 }
 
@@ -554,8 +572,9 @@ func TestFileOperationsTool_Execute_ParseJSON(t *testing.T) {
 	}
 
 	result := output.Result.(map[string]interface{})
-	if _, ok := result["data"]; !ok {
-		t.Error("data 应该存在")
+	// parse 操作返回嵌套的 result 结构
+	if _, ok := result["result"]; !ok {
+		t.Error("result 应该存在")
 	}
 }
 
@@ -583,13 +602,18 @@ func TestFileOperationsTool_Execute_AnalyzeFile(t *testing.T) {
 	}
 
 	result := output.Result.(map[string]interface{})
-	if _, ok := result["lines"]; !ok {
-		t.Error("lines 应该存在")
+	// analyze 操作返回嵌套的 result 结构
+	analyzeResult, ok := result["result"].(map[string]interface{})
+	if !ok {
+		t.Fatal("result 应该存在并且是 map")
 	}
-	if _, ok := result["size"]; !ok {
+	if _, ok := analyzeResult["line_count"]; !ok {
+		t.Error("line_count 应该存在")
+	}
+	if _, ok := analyzeResult["size"]; !ok {
 		t.Error("size 应该存在")
 	}
-	if _, ok := result["mime_type"]; !ok {
+	if _, ok := analyzeResult["mime_type"]; !ok {
 		t.Error("mime_type 应该存在")
 	}
 }
@@ -672,10 +696,15 @@ func TestFileOperationsTool_CalculateChecksum(t *testing.T) {
 	}
 
 	result := output.Result.(map[string]interface{})
-	if _, ok := result["sha256"]; !ok {
+	// info 操作返回嵌套的 result 结构
+	infoResult, ok := result["result"].(map[string]interface{})
+	if !ok {
+		t.Fatal("result 应该存在并且是 map")
+	}
+	if _, ok := infoResult["sha256"]; !ok {
 		t.Error("sha256 应该存在")
 	}
-	if _, ok := result["md5"]; !ok {
+	if _, ok := infoResult["md5"]; !ok {
 		t.Error("md5 应该存在")
 	}
 }

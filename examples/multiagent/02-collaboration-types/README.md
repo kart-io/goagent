@@ -49,8 +49,8 @@ classDiagram
         +Name string
         +Description string
         +Type CollaborationType
-        +Input interface{}
-        +Assignments map[string]Assignment
+        +Input interface
+        +Assignments map~string~Assignment
     }
 
     class CollaborationType {
@@ -65,11 +65,11 @@ classDiagram
     class Assignment {
         +AgentID string
         +Role Role
-        +Subtask interface{}
-        +Result interface{}
+        +Subtask interface
+        +Result interface
         +Status TaskStatus
-        +StartTime time.Time
-        +EndTime time.Time
+        +StartTime Time
+        +EndTime Time
     }
 
     CollaborativeTask --> CollaborationType

@@ -190,6 +190,16 @@ func createLLMClient() (llm.Client, error) {
 		)
 	}
 
+	// 尝试使用 Kimi (Moonshot)
+	if apiKey := os.Getenv("KIMI_API_KEY"); apiKey != "" {
+		return providers.NewKimiWithOptions(
+			llm.WithAPIKey(apiKey),
+			llm.WithModel("moonshot-v1-8k"),
+			llm.WithMaxTokens(1000),
+			llm.WithTemperature(0.7),
+		)
+	}
+
 	// 尝试使用 OpenAI
 	if apiKey := os.Getenv("OPENAI_API_KEY"); apiKey != "" {
 		return providers.NewOpenAIWithOptions(
@@ -206,7 +216,7 @@ func createLLMClient() (llm.Client, error) {
 		return ollamaClient, nil
 	}
 
-	return nil, fmt.Errorf("未找到可用的 LLM 提供商，请设置 DEEPSEEK_API_KEY 或 OPENAI_API_KEY")
+	return nil, fmt.Errorf("未找到可用的 LLM 提供商，请设置 DEEPSEEK_API_KEY、KIMI_API_KEY 或 OPENAI_API_KEY")
 }
 
 // runCodeReviewScenario 代码审查场景
@@ -724,7 +734,9 @@ func printSummary() {
 	fmt.Println("└────────────────────┴──────────────────────────────────────────┘")
 	fmt.Println()
 	fmt.Println("使用真实 LLM:")
-	fmt.Println("  export DEEPSEEK_API_KEY=\"your-api-key\"")
+	fmt.Println("  export DEEPSEEK_API_KEY=\"your-api-key\"  # DeepSeek")
+	fmt.Println("  export KIMI_API_KEY=\"your-api-key\"      # Kimi (Moonshot)")
+	fmt.Println("  export OPENAI_API_KEY=\"your-api-key\"    # OpenAI")
 	fmt.Println("  go run main.go")
 	fmt.Println()
 	fmt.Println("或使用本地 Ollama:")
