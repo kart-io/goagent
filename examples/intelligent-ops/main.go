@@ -43,13 +43,13 @@ const (
 type AlertType string
 
 const (
-	AlertTypeDiskFull      AlertType = "disk_full"
-	AlertTypeCPUHigh       AlertType = "cpu_high"
-	AlertTypeMemoryHigh    AlertType = "memory_high"
-	AlertTypePodCrash      AlertType = "pod_crash"
-	AlertTypeServiceError  AlertType = "service_error"
-	AlertTypeNetworkIssue  AlertType = "network_issue"
-	AlertTypeUnknown       AlertType = "unknown"
+	AlertTypeDiskFull     AlertType = "disk_full"
+	AlertTypeCPUHigh      AlertType = "cpu_high"
+	AlertTypeMemoryHigh   AlertType = "memory_high"
+	AlertTypePodCrash     AlertType = "pod_crash"
+	AlertTypeServiceError AlertType = "service_error"
+	AlertTypeNetworkIssue AlertType = "network_issue"
+	AlertTypeUnknown      AlertType = "unknown"
 )
 
 // Alert 运维告警
@@ -81,25 +81,25 @@ type SOP struct {
 
 // SOPStep SOP 执行步骤
 type SOPStep struct {
-	Order       int                    `json:"order"`
-	Name        string                 `json:"name"`
-	Action      string                 `json:"action"`
-	Command     string                 `json:"command,omitempty"`
-	Script      string                 `json:"script,omitempty"`
-	Timeout     time.Duration          `json:"timeout"`
-	RetryCount  int                    `json:"retry_count"`
-	Params      map[string]interface{} `json:"params,omitempty"`
-	OnFailure   string                 `json:"on_failure,omitempty"`
+	Order      int                    `json:"order"`
+	Name       string                 `json:"name"`
+	Action     string                 `json:"action"`
+	Command    string                 `json:"command,omitempty"`
+	Script     string                 `json:"script,omitempty"`
+	Timeout    time.Duration          `json:"timeout"`
+	RetryCount int                    `json:"retry_count"`
+	Params     map[string]interface{} `json:"params,omitempty"`
+	OnFailure  string                 `json:"on_failure,omitempty"`
 }
 
 // InspectionResult 巡检结果
 type InspectionResult struct {
-	Source      string                 `json:"source"`
-	Timestamp   time.Time              `json:"timestamp"`
-	Type        string                 `json:"type"`
-	Status      string                 `json:"status"`
-	Data        map[string]interface{} `json:"data"`
-	Anomalies   []Anomaly              `json:"anomalies,omitempty"`
+	Source    string                 `json:"source"`
+	Timestamp time.Time              `json:"timestamp"`
+	Type      string                 `json:"type"`
+	Status    string                 `json:"status"`
+	Data      map[string]interface{} `json:"data"`
+	Anomalies []Anomaly              `json:"anomalies,omitempty"`
 }
 
 // Anomaly 异常点
@@ -125,24 +125,24 @@ type RootCauseResult struct {
 
 // OpsResult 运维处理结果
 type OpsResult struct {
-	AlertID       string                 `json:"alert_id"`
-	Status        string                 `json:"status"`
-	Layer         string                 `json:"layer"`
-	Handler       string                 `json:"handler"`
-	Actions       []ActionRecord         `json:"actions"`
-	Duration      time.Duration          `json:"duration"`
-	RootCause     *RootCauseResult       `json:"root_cause,omitempty"`
-	Message       string                 `json:"message"`
-	Metadata      map[string]interface{} `json:"metadata,omitempty"`
+	AlertID   string                 `json:"alert_id"`
+	Status    string                 `json:"status"`
+	Layer     string                 `json:"layer"`
+	Handler   string                 `json:"handler"`
+	Actions   []ActionRecord         `json:"actions"`
+	Duration  time.Duration          `json:"duration"`
+	RootCause *RootCauseResult       `json:"root_cause,omitempty"`
+	Message   string                 `json:"message"`
+	Metadata  map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // ActionRecord 操作记录
 type ActionRecord struct {
-	Timestamp   time.Time `json:"timestamp"`
-	Action      string    `json:"action"`
-	Result      string    `json:"result"`
-	Success     bool      `json:"success"`
-	Duration    time.Duration `json:"duration"`
+	Timestamp time.Time     `json:"timestamp"`
+	Action    string        `json:"action"`
+	Result    string        `json:"result"`
+	Success   bool          `json:"success"`
+	Duration  time.Duration `json:"duration"`
 }
 
 // =============================================================================
@@ -795,11 +795,11 @@ func (ds *KubernetesDataSource) Collect(ctx context.Context) (*InspectionResult,
 		Type:      "events",
 		Status:    "ok",
 		Data: map[string]interface{}{
-			"total_pods":    podCount,
-			"ready_pods":    readyPods,
-			"pending_pods":  podCount - readyPods,
-			"node_count":    3,
-			"namespace":     "production",
+			"total_pods":   podCount,
+			"ready_pods":   readyPods,
+			"pending_pods": podCount - readyPods,
+			"node_count":   3,
+			"namespace":    "production",
 			"recent_events": []string{
 				"Pod scheduled successfully",
 				"Container started",
@@ -875,9 +875,9 @@ func (ds *LogDataSource) Collect(ctx context.Context) (*InspectionResult, error)
 // 处理复杂故障的 LLM 推理分析
 type RootCauseAnalysisAgent struct {
 	*multiagent.BaseCollaborativeAgent
-	llmClient        llm.Client
-	inspectionAgent  *InspectionAgent
-	logger           *simpleLogger
+	llmClient       llm.Client
+	inspectionAgent *InspectionAgent
+	logger          *simpleLogger
 }
 
 // NewRootCauseAnalysisAgent 创建 AI 根因分析 Agent
@@ -1067,9 +1067,9 @@ func (a *RootCauseAnalysisAgent) analyzeRootCause(ctx context.Context, analysisC
 	if err := json.Unmarshal([]byte(resp.Content), &result); err != nil {
 		// 如果解析失败，尝试提取关键信息
 		result = RootCauseResult{
-			RootCause:  "需要进一步分析",
-			Confidence: 0.5,
-			Analysis:   resp.Content,
+			RootCause:   "需要进一步分析",
+			Confidence:  0.5,
+			Analysis:    resp.Content,
 			Suggestions: []string{"建议收集更多日志信息", "建议检查相关服务状态"},
 		}
 	}
@@ -1080,32 +1080,32 @@ func (a *RootCauseAnalysisAgent) analyzeRootCause(ctx context.Context, analysisC
 // simulateRootCauseAnalysis 模拟根因分析
 func (a *RootCauseAnalysisAgent) simulateRootCauseAnalysis() *RootCauseResult {
 	causes := []struct {
-		cause      string
-		confidence float64
-		evidence   []string
+		cause       string
+		confidence  float64
+		evidence    []string
 		suggestions []string
-		analysis   string
+		analysis    string
 	}{
 		{
-			cause:      "数据库连接池耗尽",
-			confidence: 0.85,
-			evidence:   []string{"数据库连接数达到上限", "请求队列积压", "响应延迟显著增加"},
+			cause:       "数据库连接池耗尽",
+			confidence:  0.85,
+			evidence:    []string{"数据库连接数达到上限", "请求队列积压", "响应延迟显著增加"},
 			suggestions: []string{"增加连接池大小", "优化慢查询", "检查是否存在连接泄漏"},
-			analysis:   "根据巡检数据，数据库连接数已达到配置上限，同时观察到请求延迟明显增加，日志中出现大量 connection timeout 错误。这表明数据库连接池已耗尽，导致新请求无法获取连接。",
+			analysis:    "根据巡检数据，数据库连接数已达到配置上限，同时观察到请求延迟明显增加，日志中出现大量 connection timeout 错误。这表明数据库连接池已耗尽，导致新请求无法获取连接。",
 		},
 		{
-			cause:      "上游服务 A 未透传用户上下文",
-			confidence: 0.78,
-			evidence:   []string{"服务 B 参数校验失败", "user_id 字段为空", "调用链路显示 A->B"},
+			cause:       "上游服务 A 未透传用户上下文",
+			confidence:  0.78,
+			evidence:    []string{"服务 B 参数校验失败", "user_id 字段为空", "调用链路显示 A->B"},
 			suggestions: []string{"检查服务 A 的请求透传逻辑", "添加参数校验日志", "配置链路追踪"},
-			analysis:   "分析调用链路发现，服务 B 收到的请求中 user_id 字段为空，而该字段应由上游服务 A 透传。检查服务 A 的代码发现，在某些异常分支中未正确传递上下文。",
+			analysis:    "分析调用链路发现，服务 B 收到的请求中 user_id 字段为空，而该字段应由上游服务 A 透传。检查服务 A 的代码发现，在某些异常分支中未正确传递上下文。",
 		},
 		{
-			cause:      "内存泄漏导致 OOM",
-			confidence: 0.92,
-			evidence:   []string{"内存使用持续增长", "GC 频率异常升高", "最终触发 OOM Killer"},
+			cause:       "内存泄漏导致 OOM",
+			confidence:  0.92,
+			evidence:    []string{"内存使用持续增长", "GC 频率异常升高", "最终触发 OOM Killer"},
 			suggestions: []string{"分析内存 dump", "检查对象引用", "添加内存监控告警"},
-			analysis:   "监控数据显示内存使用率在过去 24 小时内持续上升，GC 频率从每分钟 2 次增加到 15 次。结合日志中的 OutOfMemoryError，确认存在内存泄漏问题。",
+			analysis:    "监控数据显示内存使用率在过去 24 小时内持续上升，GC 频率从每分钟 2 次增加到 15 次。结合日志中的 OutOfMemoryError，确认存在内存泄漏问题。",
 		},
 	}
 
@@ -1426,7 +1426,7 @@ func main() {
 	fmt.Println()
 
 	// 初始化随机数种子
-	rand.Seed(time.Now().UnixNano())
+	// rand.Seed(time.Now().UnixNano()) // Go 1.20+ automatically seeds global random source
 
 	// 创建 LLM 客户端
 	llmClient, err := createLLMClient()
@@ -1447,7 +1447,11 @@ func main() {
 	// 创建多智能体系统
 	logger := newLogger("System")
 	system := multiagent.NewMultiAgentSystem(logger, multiagent.WithMaxAgents(10))
-	defer system.Close()
+	defer func() {
+		if err := system.Close(); err != nil {
+			fmt.Printf("Error closing system: %v\n", err)
+		}
+	}()
 
 	// 创建运维协调器
 	coordinator := NewOpsCoordinator(system, llmClient)
