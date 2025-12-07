@@ -17,7 +17,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: '1.25'
 
       - name: Cache Go modules
         uses: actions/cache@v4
@@ -25,9 +25,9 @@ jobs:
           path: |
             ~/go/pkg/mod
             ~/.cache/go-build
-          key: ${{ runner.os }}-go-1.24-${{ hashFiles('**/go.sum') }}
+          key: ${{ runner.os }}-go-1.25-${{ hashFiles('**/go.sum') }}
           restore-keys: |
-            ${{ runner.os }}-go-1.24-
+            ${{ runner.os }}-go-1.25-
 
       - name: Download dependencies
         run: go mod download
@@ -68,8 +68,8 @@ jobs:
           GO_TEST_MODE: "true"
           # 增加 Go 运行时配置，提高并发稳定性
           GOMAXPROCS: "4"
-          # 禁用 CGO 避免 SQLite 等依赖问题
-          CGO_ENABLED: "0"
+          # 启用 CGO 以支持 SQLite 测试和 Race 检测
+          CGO_ENABLED: "1"
 
       - name: Run benchmarks
         run: |
