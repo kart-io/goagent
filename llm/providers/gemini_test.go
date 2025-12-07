@@ -33,6 +33,9 @@ func TestGemini_NewGeminiWithOptions_Success(t *testing.T) {
 
 // TestGemini_NewGeminiWithOptions_MissingAPIKey 测试缺少 API key 的错误
 func TestGemini_NewGeminiWithOptions_MissingAPIKey(t *testing.T) {
+	// Ensure environment variable doesn't interfere with test
+	t.Setenv(constants.EnvGeminiAPIKey, "")
+
 	provider, err := NewGeminiWithOptions(
 		agentllm.WithModel("gemini-pro"),
 	)
@@ -340,6 +343,9 @@ func TestGeminiStreaming_NewGeminiStreamingWithOptions(t *testing.T) {
 
 // TestGeminiStreaming_MissingAPIKey 测试流式 provider 缺少 API key
 func TestGeminiStreaming_MissingAPIKey(t *testing.T) {
+	// Ensure environment variable doesn't interfere with test
+	t.Setenv(constants.EnvGeminiAPIKey, "")
+
 	provider, err := NewGeminiStreamingWithOptions(
 		agentllm.WithModel("gemini-pro"),
 	)
@@ -407,6 +413,9 @@ func TestGeminiStreaming_NewGeminiStreaming_Deprecated(t *testing.T) {
 
 // TestGeminiStreaming_NewGeminiStreaming_MissingAPIKey 测试已弃用构造函数缺少 API key
 func TestGeminiStreaming_NewGeminiStreaming_MissingAPIKey(t *testing.T) {
+	// Ensure environment variable doesn't interfere with test
+	t.Setenv(constants.EnvGeminiAPIKey, "")
+
 	config := &agentllm.LLMOptions{
 		Provider: constants.ProviderGemini,
 		Model:    "gemini-pro",
