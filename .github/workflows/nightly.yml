@@ -62,7 +62,7 @@ jobs:
             -timeout 30m \
             -parallel 4 \
             -count 1 \
-            -coverprofile=coverage.out
+            ./...
         env:
           GO_TEST_MODE: "true"
           # 增加 Go 运行时配置，提高并发稳定性
@@ -90,6 +90,7 @@ jobs:
           fi
 
       - name: Upload coverage report
+        if: hashFiles('coverage.out') != ''
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report-${{ github.sha }}
