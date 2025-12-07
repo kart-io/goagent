@@ -17,7 +17,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version: '1.24'
 
       - name: Cache Go modules
         uses: actions/cache@v4
@@ -25,9 +25,9 @@ jobs:
           path: |
             ~/go/pkg/mod
             ~/.cache/go-build
-          key: ${{ runner.os }}-go-1.25-${{ hashFiles('**/go.sum') }}
+          key: ${{ runner.os }}-go-1.24-${{ hashFiles('**/go.sum') }}
           restore-keys: |
-            ${{ runner.os }}-go-1.25-
+            ${{ runner.os }}-go-1.24-
 
       - name: Download dependencies
         run: go mod download
@@ -44,26 +44,25 @@ jobs:
           # --junitfile: 生成 XML 报告
           # --rerun-fails: 失败测试自动重试（最多2次）
           # --rerun-fails-max-failures: 最多重试10个失败测试
-          # --packages: 显式指定包列表避免通配符问题
+          # --packages: 显式指定包列表（--rerun-fails 必需）
           #
           # go test 参数说明：
           # -race: 竞态检测
           # -timeout 30m: 总超时时间延长到30分钟
           # -parallel 4: 限制并行测试数量，避免资源竞争
           # -count 1: 禁用测试缓存，确保每次都执行
-          # -short: 跳过长时间运行的测试（可选，当前未启用）
           gotestsum \
             --format testname \
             --junitfile unit-tests.xml \
             --rerun-fails \
             --rerun-fails-max-failures 10 \
+            --packages="./..." \
             -- \
             -race \
             -timeout 30m \
             -parallel 4 \
             -count 1 \
-            -coverprofile=coverage.out \
-            ./...
+            -coverprofile=coverage.out
         env:
           GO_TEST_MODE: "true"
           # 增加 Go 运行时配置，提高并发稳定性
