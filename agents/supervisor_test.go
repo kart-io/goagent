@@ -1039,24 +1039,15 @@ func TestSupervisorContextCancellation(t *testing.T) {
 
 // Test parallel execution maintains consistency
 func TestSupervisorParallelExecutionConsistency(t *testing.T) {
-	mockLLM := &MockLLMClient{}
 	config := &SupervisorConfig{
 		MaxConcurrentAgents: 20,
 		SubAgentTimeout:     5 * time.Second,
 		RoutingStrategy:     StrategyRoundRobin,
 	}
 
-	supervisor := NewSupervisorAgent(mockLLM, config)
-
-	// Add agents
-	numAgents := 3
-	for i := 0; i < numAgents; i++ {
-		agent := NewMockAgent(fmt.Sprintf("agent%d", i), "test agent")
-		supervisor.AddSubAgent(fmt.Sprintf("agent%d", i), agent)
-	}
-
 	// Run multiple invocations in parallel
 	numInvocations := 10
+	numAgents := 3
 	var wg sync.WaitGroup
 	results := make([]bool, numInvocations)
 	errors := make([]error, numInvocations)
@@ -1066,7 +1057,7 @@ func TestSupervisorParallelExecutionConsistency(t *testing.T) {
 		go func(index int) {
 			defer wg.Done()
 
-			// Mock LLM for each invocation
+			// 每个 goroutine 创建独立的 MockLLMClient
 			localMockLLM := &MockLLMClient{}
 			localMockLLM.On("Complete", mock.Anything, mock.Anything).Return(
 				&llm.CompletionResponse{
@@ -1074,17 +1065,15 @@ func TestSupervisorParallelExecutionConsistency(t *testing.T) {
 				}, nil,
 			)
 
+			// 每个 goroutine 创建独立的 supervisor 和独立的 MockAgent
 			localSupervisor := NewSupervisorAgent(localMockLLM, config)
-			for name, agent := range supervisor.SubAgents {
-				localSupervisor.AddSubAgent(name, agent)
-			}
-
-			// Mock agent responses
-			for name := range localSupervisor.SubAgents {
-				agent := localSupervisor.SubAgents[name].(*MockAgent)
+			for j := 0; j < numAgents; j++ {
+				// 为每个 goroutine 创建独立的 MockAgent 实例
+				agent := NewMockAgent(fmt.Sprintf("agent%d", j), "test agent")
 				agent.On("Invoke", mock.Anything, mock.Anything).Return(&core.AgentOutput{
-					Result: fmt.Sprintf("Result %d", index),
+					Result: fmt.Sprintf("Result %d from agent%d", index, j),
 				}, nil).Maybe()
+				localSupervisor.AddSubAgent(fmt.Sprintf("agent%d", j), agent)
 			}
 
 			ctx := context.Background()
