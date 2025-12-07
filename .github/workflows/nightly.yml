@@ -39,16 +39,13 @@ jobs:
       # --- 修改步骤：使用 gotestsum 运行测试 ---
       - name: Run all tests
         run: |
-          # 创建覆盖率数据目录，避免 "go: no such tool covdata" 错误
-          mkdir -p /tmp/go-cover
           # --format testname: 简洁输出，只显示测试名字，出错时才显示详情
           # --junitfile: 生成 XML 报告
           # -- : 后的参数传给 go test (增加了 timeout 到 20m)
           gotestsum --format testname --junitfile unit-tests.xml -- \
             -race -timeout 20m -coverprofile=coverage.out ./...
         env:
-          GO_TEST_MODE: true
-          GOCOVERDIR: /tmp/go-cover
+          GO_TEST_MODE: "true"
 
       - name: Run benchmarks
         run: |
