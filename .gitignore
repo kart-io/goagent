@@ -33,3 +33,6 @@ go.work.sum
 
 # Claude Code 工作文件
 .claude/
+
+# Coverage
+*.out
