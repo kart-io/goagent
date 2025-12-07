@@ -330,6 +330,14 @@ func BenchmarkMemoryCommunicator_Send(b *testing.B) {
 	comm := NewMemoryCommunicatorWithStore("sender", store)
 	ctx := context.Background()
 
+	// Start a consumer to drain the channel and prevent deadlock
+	ch := store.GetOrCreateChannel("receiver")
+	go func() {
+		for range ch {
+			// Drain channel
+		}
+	}()
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		msg := NewAgentMessage("sender", "receiver", MessageTypeRequest, "data")
