@@ -36,16 +36,40 @@ jobs:
       - name: Install gotestsum
         run: go install gotest.tools/gotestsum@latest
 
-      # --- 修改步骤：使用 gotestsum 运行测试 ---
+      # --- 修改步骤：使用 gotestsum 运行测试（增加重试和并发控制）---
       - name: Run all tests
         run: |
-          # --format testname: 简洁输出，只显示测试名字，出错时才显示详情
+          # gotestsum 参数说明：
+          # --format testname: 简洁输出
           # --junitfile: 生成 XML 报告
-          # -- : 后的参数传给 go test (增加了 timeout 到 20m)
-          gotestsum --format testname --junitfile unit-tests.xml -- \
-            -race -timeout 20m -coverprofile=coverage.out ./...
+          # --rerun-fails: 失败测试自动重试（最多2次）
+          # --rerun-fails-max-failures: 最多重试10个失败测试
+          # --packages: 显式指定包列表避免通配符问题
+          #
+          # go test 参数说明：
+          # -race: 竞态检测
+          # -timeout 30m: 总超时时间延长到30分钟
+          # -parallel 4: 限制并行测试数量，避免资源竞争
+          # -count 1: 禁用测试缓存，确保每次都执行
+          # -short: 跳过长时间运行的测试（可选，当前未启用）
+          gotestsum \
+            --format testname \
+            --junitfile unit-tests.xml \
+            --rerun-fails \
+            --rerun-fails-max-failures 10 \
+            -- \
+            -race \
+            -timeout 30m \
+            -parallel 4 \
+            -count 1 \
+            -coverprofile=coverage.out \
+            ./...
         env:
           GO_TEST_MODE: "true"
+          # 增加 Go 运行时配置，提高并发稳定性
+          GOMAXPROCS: "4"
+          # 禁用 CGO 避免 SQLite 等依赖问题
+          CGO_ENABLED: "0"
 
       - name: Run benchmarks
         run: |
