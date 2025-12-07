@@ -3,6 +3,8 @@ package retrieval
 import (
 	"context"
 	"fmt"
+	"net"
+	"strconv"
 
 	"github.com/kart-io/goagent/interfaces"
 
@@ -72,9 +74,24 @@ func NewQdrantVectorStore(ctx context.Context, config QdrantConfig) (*QdrantVect
 		config.Embedder = NewSimpleEmbedder(config.VectorSize)
 	}
 
+	// 解析 URL，分离主机和端口
+	// Qdrant 客户端的 Host 字段只接受主机名，端口需要单独设置
+	host, portStr, err := net.SplitHostPort(config.URL)
+	if err != nil {
+		// 如果解析失败，假设没有端口，整个字符串是主机名
+		host = config.URL
+		portStr = "6334" // 默认 gRPC 端口
+	}
+
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		port = 6334
+	}
+
 	// 初始化 Qdrant 客户端
 	clientConfig := &qdrant.Config{
-		Host: config.URL,
+		Host: host,
+		Port: port,
 	}
 	if config.APIKey != "" {
 		clientConfig.APIKey = config.APIKey
