@@ -237,7 +237,7 @@ func (a *ConfigurableAgent[C, S]) ExecuteWithTools(ctx context.Context, input in
 			Timestamp:  time.Now(),
 			TokenUsage: totalTokenUsage,
 		}, agentErrors.New(agentErrors.CodeAgentExecution, "max iterations reached").
-		WithContext("max_iterations", a.config.MaxIterations)
+			WithContext("max_iterations", a.config.MaxIterations)
 }
 
 // buildPromptWithSystemMessage 构建包含系统消息的提示

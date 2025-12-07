@@ -460,7 +460,6 @@ func BenchmarkMemorySemanticCache_LRUUpdate(b *testing.B) {
 	}
 }
 
-
 // TestMemorySemanticCache_Close 测试 Close 方法能够正确停止 cleanupLoop goroutine
 func TestMemorySemanticCache_Close(t *testing.T) {
 	provider := NewMockEmbeddingProvider(128)
@@ -538,4 +537,3 @@ func TestMemorySemanticCache_MultipleClose(t *testing.T) {
 func countGoroutines() int {
 	return runtime.NumGoroutine()
 }
-
