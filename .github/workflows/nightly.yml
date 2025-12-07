@@ -25,9 +25,9 @@ jobs:
           path: |
             ~/go/pkg/mod
             ~/.cache/go-build
-          key: ${{ runner.os }}-go-1.24-${{ hashFiles('**/go.sum') }}
+          key: ${{ runner.os }}-go-1.25-v1-${{ hashFiles('**/go.sum') }}
           restore-keys: |
-            ${{ runner.os }}-go-1.24-
+            ${{ runner.os }}-go-1.25-v1-
 
       - name: Download dependencies
         run: go mod download
