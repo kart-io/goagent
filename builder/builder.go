@@ -296,8 +296,8 @@ func (b *AgentBuilder[C, S]) createHandler(runtime *execution.Runtime[C, S]) mid
 //
 //	builder := builder.NewSimpleBuilder(llmClient)
 //	agent, err := builder.
-	//	WithSystemPrompt("你是一个助手").
-	//	Build()
+//	WithSystemPrompt("你是一个助手").
+//	Build()
 type SimpleAgentBuilder = AgentBuilder[any, *core.AgentState]
 
 // SimpleAgent 是 ConfigurableAgent 的简化版本类型别名
@@ -322,9 +322,9 @@ type SimpleAgent = ConfigurableAgent[any, *core.AgentState]
 //	client := providers.NewOpenAIClient(apiKey)
 //	builder := builder.NewSimpleBuilder(client)
 //	agent, err := builder.
-	//	WithSystemPrompt("你是一个助手").
-	//	WithTools(calculatorTool, searchTool).
-	//	Build()
+//	WithSystemPrompt("你是一个助手").
+//	WithTools(calculatorTool, searchTool).
+//	Build()
 func NewSimpleBuilder(llmClient llm.Client) *SimpleAgentBuilder {
 	return NewAgentBuilder[any, *core.AgentState](llmClient)
 }
