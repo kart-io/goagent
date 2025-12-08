@@ -42,8 +42,8 @@ jobs:
 
       - name: Verify import layering
         run: |
-          chmod +x ./verify_imports.sh
-          ./verify_imports.sh
+          chmod +x ./scripts/verify_imports.sh
+          ./scripts/verify_imports.sh
 
       - name: Run tests with race detection
         run: go test -v -race -timeout 10m -coverprofile=coverage.out ./...

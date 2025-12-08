@@ -1,4 +1,7 @@
 #!/bin/bash
+
+# Ensure we are running from the project root
+cd "$(dirname "$0")/.." || exit 1
 #
 # create_release.sh - Helper script to create and push a release tag
 #

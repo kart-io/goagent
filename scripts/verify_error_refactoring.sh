@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# Ensure we are running from the project root
+cd "$(dirname "$0")/.." || exit 1
 # verify_error_refactoring.sh - Verify error handling refactoring completeness
 
 set -e
