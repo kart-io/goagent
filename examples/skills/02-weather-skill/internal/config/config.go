@@ -5,11 +5,11 @@ package config
 
 // Config 应用配置
 type Config struct {
-	Name     string     `yaml:"Name"`
-	Log      LogConfig  `yaml:"Log"`
-	Skill    SkillConf  `yaml:"Skill"`
-	Keywords []string   `yaml:"Keywords"`
-	LLM      LLMConfig  `yaml:"LLM"`
+	Name     string    `yaml:"Name"`
+	Log      LogConfig `yaml:"Log"`
+	Skill    SkillConf `yaml:"Skill"`
+	Keywords []string  `yaml:"Keywords"`
+	LLM      LLMConfig `yaml:"LLM"`
 }
 
 // LLMConfig LLM 配置
