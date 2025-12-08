@@ -12,6 +12,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/kart-io/goagent/document"
@@ -209,6 +210,7 @@ func runWithRAG(ctx context.Context, client llm.Client, pdfPath, query string) e
 	if err != nil {
 		return fmt.Errorf("构建上下文失败: %w", err)
 	}
+	contextPrompt = strings.ToValidUTF8(contextPrompt, "")
 
 	// 调用 Gemini 生成回答
 	response, err := client.Complete(ctx, &llm.CompletionRequest{
@@ -249,6 +251,11 @@ func loadPDF(ctx context.Context, pdfPath string) ([]*interfaces.Document, error
 	docs, err := loader.Load(ctx)
 	if err != nil {
 		return nil, err
+	}
+
+	// 清理无效的 UTF-8 字符，防止 gRPC 调用失败
+	for _, doc := range docs {
+		doc.PageContent = strings.ToValidUTF8(doc.PageContent, "")
 	}
 
 	// 创建分割器（LlamaIndex 风格：1024 字符块，20 字符重叠）

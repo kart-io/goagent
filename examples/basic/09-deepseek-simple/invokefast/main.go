@@ -60,7 +60,7 @@ func runBasicExample(apiKey string) {
 		llm.WithModel("deepseek-chat"),
 		llm.WithTemperature(0.7),
 		llm.WithMaxTokens(500),
-		llm.WithTimeout(30),
+		llm.WithTimeout(120),
 	)
 	if err != nil {
 		log.Fatalf("创建 DeepSeek provider 失败: %v", err)
@@ -106,7 +106,7 @@ func runMultiStepExample(apiKey string) {
 		llm.WithModel("deepseek-chat"),
 		llm.WithTemperature(0.7),
 		llm.WithMaxTokens(400),
-		llm.WithTimeout(30),
+		llm.WithTimeout(120),
 	)
 	if err != nil {
 		log.Fatalf("创建 DeepSeek provider 失败: %v", err)
@@ -114,7 +114,7 @@ func runMultiStepExample(apiKey string) {
 
 	// 创建分析 Agent
 	analyzeAgent, err := builder.NewAgentBuilder[any, *agentcore.AgentState](client).
-		WithSystemPrompt("你是代码分析专家，分析代码特点。").
+		WithSystemPrompt("你是代码分析员。简短回答，不超过20字。").
 		WithMetadata("name", "AnalyzeAgent").
 		Build()
 	if err != nil {
@@ -123,7 +123,7 @@ func runMultiStepExample(apiKey string) {
 
 	// 创建优化建议 Agent
 	optimizeAgent, err := builder.NewAgentBuilder[any, *agentcore.AgentState](client).
-		WithSystemPrompt("你是代码优化专家，提供优化建议。").
+		WithSystemPrompt("你是代码优化员。仅提供一条最简优化的建议，不超过20字。").
 		WithMetadata("name", "OptimizeAgent").
 		Build()
 	if err != nil {
@@ -187,7 +187,7 @@ func runStructuredDataExample(apiKey string) {
 		llm.WithModel("deepseek-chat"),
 		llm.WithTemperature(0.3),
 		llm.WithMaxTokens(500),
-		llm.WithTimeout(30),
+		llm.WithTimeout(120),
 	)
 	if err != nil {
 		log.Fatalf("创建 DeepSeek provider 失败: %v", err)

@@ -241,6 +241,63 @@ func (input *AgentInput) RUnlockContext() {
 	input.contextMu.RUnlock()
 }
 
+// GetString 从 Context 中安全获取 string 类型值
+func (input *AgentInput) GetString(key string) (string, bool) {
+	val, ok := input.GetContext(key)
+	if !ok {
+		return "", false
+	}
+	str, ok := val.(string)
+	return str, ok
+}
+
+// GetInt 从 Context 中安全获取 int 类型值
+func (input *AgentInput) GetInt(key string) (int, bool) {
+	val, ok := input.GetContext(key)
+	if !ok {
+		return 0, false
+	}
+	// 处理可能的数字类型转换
+	switch v := val.(type) {
+	case int:
+		return v, true
+	case float64:
+		return int(v), true
+	case int64:
+		return int(v), true
+	default:
+		return 0, false
+	}
+}
+
+// GetBool 从 Context 中安全获取 bool 类型值
+func (input *AgentInput) GetBool(key string) (bool, bool) {
+	val, ok := input.GetContext(key)
+	if !ok {
+		return false, false
+	}
+	b, ok := val.(bool)
+	return b, ok
+}
+
+// GetFloat64 从 Context 中安全获取 float64 类型值
+func (input *AgentInput) GetFloat64(key string) (float64, bool) {
+	val, ok := input.GetContext(key)
+	if !ok {
+		return 0.0, false
+	}
+	switch v := val.(type) {
+	case float64:
+		return v, true
+	case int:
+		return float64(v), true
+	case int64:
+		return float64(v), true
+	default:
+		return 0.0, false
+	}
+}
+
 // =============================================================================
 // BaseAgent 方法
 // =============================================================================

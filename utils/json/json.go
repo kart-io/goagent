@@ -6,6 +6,7 @@ import (
 	"io"
 
 	"github.com/bytedance/sonic"
+	"github.com/go-viper/mapstructure/v2"
 )
 
 // JSON 抽象层，使用 sonic 作为底层实现，提供兼容标准库的 API
@@ -269,8 +270,34 @@ func Indent(dst *[]byte, src []byte, prefix, indent string) error {
 }
 
 // HTMLEscape 将 JSON 数据中的 HTML 特殊字符转义
+// HTMLEscape 将 JSON 数据中的 HTML 特殊字符转义
 func HTMLEscape(dst *[]byte, src []byte) {
 	var buf bytes.Buffer
 	stdjson.HTMLEscape(&buf, src)
 	*dst = buf.Bytes()
+}
+
+// Decode 使用 mapstructure 将输入值解码到输出结构
+//
+// 默认配置：
+// - 使用 "json" 标签
+// - 允许弱类型转换 (WeaklyTypedInput: true)
+// - 允许元数据 (Metadata: nil)
+//
+// 这是一个便捷函数，用于替代 json.Unmarshal(json.Marshal(input), output) 的常见模式
+// 性能更高，因为它避免了 JSON 序列化/反序列化的开销
+func Decode(input interface{}, output interface{}) error {
+	config := &mapstructure.DecoderConfig{
+		Metadata:         nil,
+		Result:           output,
+		TagName:          "json", // 使用 json tag，保持兼容性
+		WeaklyTypedInput: true,   // 允许弱类型转换
+	}
+
+	decoder, err := mapstructure.NewDecoder(config)
+	if err != nil {
+		return err
+	}
+
+	return decoder.Decode(input)
 }
