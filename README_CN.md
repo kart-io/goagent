@@ -305,7 +305,7 @@ executor := tools.NewToolExecutor(tools.ToolExecutorConfig{
     Timeout: 30 * time.Second,
 })
 
-results, err := executor.ExecuteParallel(ctx, []tools.ToolCall{
+results, err := executor.ExecuteParallel(ctx, []tools.ToolCallRequest{
     {Tool: searchTool, Input: map[string]interface{}{"query": "Go"}},
     {Tool: calcTool, Input: map[string]interface{}{"expr": "2+2"}},
 })

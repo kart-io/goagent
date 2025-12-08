@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/tools"
 )
@@ -76,30 +75,24 @@ func NewShellTool(allowedCommands []string, timeout time.Duration) *ShellTool {
 
 // run 执行 shell 命令
 func (s *ShellTool) run(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+	resp := tools.NewToolErrorResponse(s.Name()).WithOperation("run")
+
 	// 解析参数
 	command, ok := input.Args["command"].(string)
 	if !ok || command == "" {
-		return &interfaces.ToolOutput{
-				Success: false,
-				Error:   "command is required and must be a non-empty string",
-			}, tools.NewToolError(s.Name(), "invalid input", agentErrors.New(agentErrors.CodeInvalidInput, "command is required").
-				WithComponent("shell_tool").
-				WithOperation("run"))
+		return resp.ValidationError("command is required and must be a non-empty string", "field", "command")
 	}
 
 	// 安全检查：命令白名单
 	if !s.allowedCommands[command] {
-		return &interfaces.ToolOutput{
-				Success: false,
-				Error:   "command not allowed: " + command,
-				Metadata: map[string]interface{}{
-					"allowed_commands": s.GetAllowedCommands(),
-				},
-			}, tools.NewToolError(s.Name(), "command not allowed", agentErrors.New(agentErrors.CodeToolValidation, "command not in whitelist").
-				WithComponent("shell_tool").
-				WithOperation("run").
-				WithContext("command", command).
-				WithContext("allowed_commands", s.GetAllowedCommands()))
+		output, err := resp.ValidationError("command not allowed: "+command,
+			"command", command,
+			"allowed_commands", s.GetAllowedCommands())
+		// 添加 Metadata 以保持向后兼容性
+		output.Metadata = map[string]interface{}{
+			"allowed_commands": s.GetAllowedCommands(),
+		}
+		return output, err
 	}
 
 	// 解析参数
@@ -128,18 +121,9 @@ func (s *ShellTool) run(ctx context.Context, input *interfaces.ToolInput) (*inte
 		strings.Contains(command, "&") || strings.Contains(command, "`") ||
 		strings.Contains(command, "$") || strings.Contains(command, ">") ||
 		strings.Contains(command, "<") {
-		return &interfaces.ToolOutput{
-				Result:  nil,
-				Success: false,
-				Error:   "command contains potentially dangerous characters",
-				Metadata: map[string]interface{}{
-					"tool_name": s.Name(),
-					"exit_code": -1,
-				},
-			}, tools.NewToolError(s.Name(), "invalid command", agentErrors.New(agentErrors.CodeToolValidation, "command contains dangerous characters").
-				WithComponent("shell_tool").
-				WithOperation("run").
-				WithContext("command", command))
+		return resp.ValidationError("command contains potentially dangerous characters",
+			"command", command,
+			"dangerous_chars", []string{";", "|", "&", "`", "$", ">", "<"})
 	}
 
 	// 构建命令
@@ -173,30 +157,18 @@ func (s *ShellTool) run(ctx context.Context, input *interfaces.ToolInput) (*inte
 	}
 
 	if !success {
+		// 命令执行失败但有输出，返回部分结果
 		errorMsg := fmt.Sprintf("command failed with exit code %d", exitCode)
 		if err != nil && exitCode == 0 {
 			errorMsg = err.Error()
 		}
-
-		return &interfaces.ToolOutput{
-			Result:  result,
-			Success: false,
-			Error:   errorMsg,
-			Metadata: map[string]interface{}{
-				"work_dir": workDir,
-				"timeout":  timeout.String(),
-			},
-		}, tools.NewToolError(s.Name(), "command execution failed", err)
+		return resp.ExecutionError(errorMsg, result, err)
 	}
 
-	return &interfaces.ToolOutput{
-		Result:  result,
-		Success: true,
-		Metadata: map[string]interface{}{
-			"work_dir": workDir,
-			"timeout":  timeout.String(),
-		},
-	}, nil
+	return resp.Success(result, map[string]interface{}{
+		"work_dir": workDir,
+		"timeout":  timeout.String(),
+	})
 }
 
 // GetAllowedCommands 获取允许的命令列表
@@ -216,18 +188,17 @@ func (s *ShellTool) IsCommandAllowed(command string) bool {
 // ExecuteScript 执行脚本的便捷方法
 // 注意：此方法要求 "bash" 命令必须在白名单中
 func (s *ShellTool) ExecuteScript(ctx context.Context, scriptPath string, args []string) (*interfaces.ToolOutput, error) {
+	resp := tools.NewToolErrorResponse(s.Name()).WithOperation("ExecuteScript")
+
 	// 安全检查：验证 bash 命令是否在白名单中
 	if !s.allowedCommands["bash"] && !s.allowedCommands["sh"] {
-		return &interfaces.ToolOutput{
-				Success: false,
-				Error:   "bash or sh command must be in whitelist to execute scripts",
-				Metadata: map[string]interface{}{
-					"allowed_commands": s.GetAllowedCommands(),
-				},
-			}, tools.NewToolError(s.Name(), "command not allowed", agentErrors.New(agentErrors.CodeToolValidation, "bash/sh not in whitelist").
-				WithComponent("shell_tool").
-				WithOperation("ExecuteScript").
-				WithContext("allowed_commands", s.GetAllowedCommands()))
+		output, err := resp.ValidationError("bash or sh command must be in whitelist to execute scripts",
+			"allowed_commands", s.GetAllowedCommands())
+		// 添加 Metadata 以保持向后兼容性
+		output.Metadata = map[string]interface{}{
+			"allowed_commands": s.GetAllowedCommands(),
+		}
+		return output, err
 	}
 
 	return s.Invoke(ctx, &interfaces.ToolInput{
@@ -242,33 +213,27 @@ func (s *ShellTool) ExecuteScript(ctx context.Context, scriptPath string, args [
 // ExecutePipeline 执行管道命令的便捷方法
 // 注意：此方法会验证管道中的每个命令是否在白名单中
 func (s *ShellTool) ExecutePipeline(ctx context.Context, commands []string) (*interfaces.ToolOutput, error) {
+	resp := tools.NewToolErrorResponse(s.Name()).WithOperation("ExecutePipeline")
+
 	// 安全检查：验证每个命令都在白名单中
 	for _, cmd := range commands {
 		// 提取命令的第一个单词（实际的命令名）
 		fields := strings.Fields(strings.TrimSpace(cmd))
 		if len(fields) == 0 {
-			return &interfaces.ToolOutput{
-					Success: false,
-					Error:   "empty command in pipeline",
-				}, tools.NewToolError(s.Name(), "empty command in pipeline", agentErrors.New(agentErrors.CodeToolValidation, "empty command in pipeline").
-					WithComponent("shell_tool").
-					WithOperation("ExecutePipeline"))
+			return resp.ValidationError("empty command in pipeline")
 		}
 
 		cmdName := fields[0]
 		if !s.allowedCommands[cmdName] {
-			return &interfaces.ToolOutput{
-					Success: false,
-					Error:   "command not allowed in pipeline: " + cmdName,
-					Metadata: map[string]interface{}{
-						"disallowed_command": cmdName,
-						"allowed_commands":   s.GetAllowedCommands(),
-					},
-				}, tools.NewToolError(s.Name(), "command not allowed", agentErrors.New(agentErrors.CodeToolValidation, "pipeline contains non-whitelisted command").
-					WithComponent("shell_tool").
-					WithOperation("ExecutePipeline").
-					WithContext("disallowed_command", cmdName).
-					WithContext("allowed_commands", s.GetAllowedCommands()))
+			output, err := resp.ValidationError("command not allowed in pipeline: "+cmdName,
+				"disallowed_command", cmdName,
+				"allowed_commands", s.GetAllowedCommands())
+			// 添加 Metadata 以保持向后兼容性
+			output.Metadata = map[string]interface{}{
+				"disallowed_command": cmdName,
+				"allowed_commands":   s.GetAllowedCommands(),
+			}
+			return output, err
 		}
 	}
 

@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/kart-io/goagent/mcp/core"
@@ -309,7 +310,7 @@ func (t *SearchFilesTool) Validate(input map[string]interface{}) error {
 }
 
 // contains 检查字符串是否包含子串
+// 使用标准库实现，性能 O(n+m)
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||
-		(len(s) > 0 && (s[0:1] == substr[0:1] && contains(s[1:], substr[1:])) || contains(s[1:], substr)))
+	return strings.Contains(s, substr)
 }
