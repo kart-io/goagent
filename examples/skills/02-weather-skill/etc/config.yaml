@@ -1,0 +1,55 @@
+# 天气技能配置文件
+# Weather Skill Configuration
+
+# 服务名称
+Name: weather-skill
+
+# 日志配置
+Log:
+  Level: info
+  Mode: console
+
+# 技能配置
+Skill:
+  # 技能名称
+  Name: weather
+  # 技能描述
+  Description: 天气查询与预报技能
+  # 技能版本
+  Version: v1.0.0
+  # 默认城市
+  DefaultCity: 北京
+  # 支持的城市列表
+  SupportedCities:
+    - 北京
+    - 上海
+    - 广州
+    - 深圳
+    - 杭州
+    - 成都
+    - 武汉
+    - 西安
+  # 缓存配置
+  Cache:
+    Enabled: true
+    TTL: 300  # 秒
+
+# 路由关键词
+Keywords:
+  - 天气
+  - 气温
+  - 预报
+  - weather
+  - forecast
+  - temperature
+
+# LLM 配置
+LLM:
+  # 提供商：deepseek, openai（从环境变量读取 API Key）
+  Provider: deepseek
+  # 模型名称
+  Model: deepseek-chat
+  # 最大 Token 数
+  MaxTokens: 1000
+  # 温度参数
+  Temperature: 0.7
