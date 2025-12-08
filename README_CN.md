@@ -429,7 +429,7 @@ go run examples/basic/01-simple-agent/main.go
 - 最低测试覆盖率: 80%
 - 所有公共 API 必须有文档
 - 遵循 [导入分层规则](docs/architecture/IMPORT_LAYERING.md)
-- 运行验证: `./verify_imports.sh`
+- 运行验证: `./scripts/verify_imports.sh`
 
 ## 路线图
 

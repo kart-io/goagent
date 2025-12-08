@@ -1,4 +1,7 @@
 #!/bin/bash
+
+# Ensure we are running from the project root
+cd "$(dirname "$0")/.." || exit 1
 # Release 监控脚本
 # 用于检查 GitHub Release 状态
 

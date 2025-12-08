@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# Ensure we are running from the project root
+cd "$(dirname "$0")/.." || exit 1
 # GoAgent Option Pattern Verification Script
 # This script verifies that all Option pattern implementations are working correctly
 
