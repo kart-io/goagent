@@ -158,14 +158,6 @@ func (t *FileOperationsTool) Execute(ctx context.Context, input *interfaces.Tool
 			WithOperation("execute")
 	}
 
-	// 打印废弃警告
-	fmt.Printf("WARNING: FileOperationsTool is deprecated. Please use specific tools instead:\n")
-	fmt.Printf("  - FileReadTool for: read, parse, info, analyze\n")
-	fmt.Printf("  - FileWriteTool for: write, append\n")
-	fmt.Printf("  - FileManagementTool for: delete, copy, move, list, search\n")
-	fmt.Printf("  - FileCompressionTool for: compress, decompress\n")
-	fmt.Printf("  - FileWatchTool for: watch\n")
-
 	// 根据操作委托给相应的专门工具
 	switch params.Operation {
 	case "read", "parse", "info", "analyze":

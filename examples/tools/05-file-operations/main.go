@@ -1,5 +1,5 @@
 // Package main 演示文件操作工具的使用方法
-// 本示例展示 FileOperationsTool 的基本用法
+// 本示例展示专门化文件工具的基本用法
 package main
 
 import (
@@ -15,8 +15,8 @@ import (
 
 func main() {
 	fmt.Println("╔════════════════════════════════════════════════════════════════╗")
-	fmt.Println("║          文件操作工具 (FileOperationsTool) 示例                ║")
-	fmt.Println("║   展示文件读写、搜索、压缩等操作                               ║")
+	fmt.Println("║              专门化文件工具 (File Tools) 示例                  ║")
+	fmt.Println("║   展示 FileReadTool, FileWriteTool 等专门工具的使用            ║")
 	fmt.Println("╚════════════════════════════════════════════════════════════════╝")
 	fmt.Println()
 
@@ -34,17 +34,38 @@ func main() {
 
 	fmt.Printf("测试目录: %s\n\n", tmpDir)
 
-	// 1. 创建文件操作工具
-	fmt.Println("【步骤 1】创建文件操作工具")
+	// 创建工具配置
+	config := &practical.FileToolConfig{
+		BasePath:    tmpDir,
+		MaxFileSize: 100 * 1024 * 1024, // 100MB
+		AllowedPaths: []string{
+			"/tmp",
+			"/var/tmp",
+		},
+		ForbiddenPaths: []string{
+			"/etc",
+			"/sys",
+			"/proc",
+		},
+	}
+
+	// 1. 创建专门化文件工具
+	fmt.Println("【步骤 1】创建专门化文件工具")
 	fmt.Println("────────────────────────────────────────")
 
-	fileTool := practical.NewFileOperationsTool(tmpDir)
-	fmt.Printf("工具名称: %s\n", fileTool.Name())
-	fmt.Printf("工具描述: %s\n", fileTool.Description())
+	readTool := practical.NewFileReadTool(config)
+	writeTool := practical.NewFileWriteTool(config)
+	managementTool := practical.NewFileManagementTool(config)
+	compressionTool := practical.NewFileCompressionTool(config)
+
+	fmt.Printf("✓ FileReadTool: %s\n", readTool.Name())
+	fmt.Printf("✓ FileWriteTool: %s\n", writeTool.Name())
+	fmt.Printf("✓ FileManagementTool: %s\n", managementTool.Name())
+	fmt.Printf("✓ FileCompressionTool: %s\n", compressionTool.Name())
 	fmt.Println()
 
-	// 2. 写入文件
-	fmt.Println("【步骤 2】写入文件")
+	// 2. 写入文件 (使用 FileWriteTool)
+	fmt.Println("【步骤 2】写入文件 (FileWriteTool)")
 	fmt.Println("────────────────────────────────────────")
 
 	testFile := filepath.Join(tmpDir, "test.txt")
@@ -59,7 +80,7 @@ GoAgent 是一个强大的 AI Agent 框架。
 - 压缩文件
 - 解析 JSON/YAML`
 
-	_, err = fileTool.Execute(ctx, &interfaces.ToolInput{
+	_, err = writeTool.Execute(ctx, &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"operation": "write",
 			"path":      testFile,
@@ -76,11 +97,11 @@ GoAgent 是一个强大的 AI Agent 框架。
 	}
 	fmt.Println()
 
-	// 3. 读取文件
-	fmt.Println("【步骤 3】读取文件")
+	// 3. 读取文件 (使用 FileReadTool)
+	fmt.Println("【步骤 3】读取文件 (FileReadTool)")
 	fmt.Println("────────────────────────────────────────")
 
-	readOutput, err := fileTool.Execute(ctx, &interfaces.ToolInput{
+	readOutput, err := readTool.Execute(ctx, &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"operation": "read",
 			"path":      testFile,
@@ -104,12 +125,12 @@ GoAgent 是一个强大的 AI Agent 框架。
 	}
 	fmt.Println()
 
-	// 4. 追加内容
-	fmt.Println("【步骤 4】追加内容")
+	// 4. 追加内容 (使用 FileWriteTool)
+	fmt.Println("【步骤 4】追加内容 (FileWriteTool)")
 	fmt.Println("────────────────────────────────────────")
 
 	appendContent := "\n\n--- 追加的内容 ---\n这是追加的新内容。"
-	appendOutput, err := fileTool.Execute(ctx, &interfaces.ToolInput{
+	_, err = writeTool.Execute(ctx, &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"operation": "append",
 			"path":      testFile,
@@ -122,15 +143,14 @@ GoAgent 是一个强大的 AI Agent 框架。
 		fmt.Printf("✗ 追加内容失败: %v\n", err)
 	} else {
 		fmt.Println("✓ 追加内容成功")
-		_ = appendOutput
 	}
 	fmt.Println()
 
-	// 5. 获取文件信息
-	fmt.Println("【步骤 5】获取文件信息")
+	// 5. 获取文件信息 (使用 FileReadTool)
+	fmt.Println("【步骤 5】获取文件信息 (FileReadTool)")
 	fmt.Println("────────────────────────────────────────")
 
-	infoOutput, err := fileTool.Execute(ctx, &interfaces.ToolInput{
+	infoOutput, err := readTool.Execute(ctx, &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"operation": "info",
 			"path":      testFile,
@@ -143,7 +163,6 @@ GoAgent 是一个强大的 AI Agent 框架。
 	} else {
 		fmt.Println("✓ 获取文件信息成功")
 		if result, ok := infoOutput.Result.(map[string]interface{}); ok {
-			// 文件信息直接在 result 中
 			if name, ok := result["name"]; ok {
 				fmt.Printf("  文件名: %v\n", name)
 			}
@@ -156,13 +175,11 @@ GoAgent 是一个强大的 AI Agent 框架。
 			if isDir, ok := result["is_dir"]; ok {
 				fmt.Printf("  是否为目录: %v\n", isDir)
 			}
-		} else {
-			fmt.Printf("  结果: %v\n", infoOutput.Result)
 		}
 	}
 	fmt.Println()
 
-	// 6. 创建 JSON 文件并解析
+	// 6. 创建 JSON 文件并解析 (使用 FileWriteTool 和 FileReadTool)
 	fmt.Println("【步骤 6】JSON 文件操作")
 	fmt.Println("────────────────────────────────────────")
 
@@ -178,7 +195,7 @@ GoAgent 是一个强大的 AI Agent 框架。
 }`
 
 	// 写入 JSON
-	_, err = fileTool.Execute(ctx, &interfaces.ToolInput{
+	_, err = writeTool.Execute(ctx, &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"operation": "write",
 			"path":      jsonFile,
@@ -192,8 +209,8 @@ GoAgent 是一个强大的 AI Agent 框架。
 		fmt.Printf("✓ 写入 JSON 成功: %s\n", jsonFile)
 	}
 
-	// 解析 JSON
-	parseOutput, err := fileTool.Execute(ctx, &interfaces.ToolInput{
+	// 解析 JSON (使用 FileReadTool)
+	parseOutput, err := readTool.Execute(ctx, &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"operation": "parse",
 			"path":      jsonFile,
@@ -218,8 +235,8 @@ GoAgent 是一个强大的 AI Agent 框架。
 	}
 	fmt.Println()
 
-	// 7. 列出目录
-	fmt.Println("【步骤 7】列出目录内容")
+	// 7. 列出目录 (使用 FileManagementTool)
+	fmt.Println("【步骤 7】列出目录内容 (FileManagementTool)")
 	fmt.Println("────────────────────────────────────────")
 
 	// 创建一些额外的测试文件
@@ -228,7 +245,7 @@ GoAgent 是一个强大的 AI Agent 框架。
 	_ = os.MkdirAll(filepath.Join(tmpDir, "subdir"), 0755)
 	_ = os.WriteFile(filepath.Join(tmpDir, "subdir", "nested.txt"), []byte("nested file"), 0644)
 
-	listOutput, err := fileTool.Execute(ctx, &interfaces.ToolInput{
+	listOutput, err := managementTool.Execute(ctx, &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"operation": "list",
 			"path":      tmpDir,
@@ -262,11 +279,11 @@ GoAgent 是一个强大的 AI Agent 框架。
 	}
 	fmt.Println()
 
-	// 8. 搜索文件
-	fmt.Println("【步骤 8】搜索文件")
+	// 8. 搜索文件 (使用 FileManagementTool)
+	fmt.Println("【步骤 8】搜索文件 (FileManagementTool)")
 	fmt.Println("────────────────────────────────────────")
 
-	searchOutput, err := fileTool.Execute(ctx, &interfaces.ToolInput{
+	searchOutput, err := managementTool.Execute(ctx, &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"operation": "search",
 			"path":      tmpDir,
@@ -293,12 +310,12 @@ GoAgent 是一个强大的 AI Agent 框架。
 	}
 	fmt.Println()
 
-	// 9. 复制文件
-	fmt.Println("【步骤 9】复制文件")
+	// 9. 复制文件 (使用 FileManagementTool)
+	fmt.Println("【步骤 9】复制文件 (FileManagementTool)")
 	fmt.Println("────────────────────────────────────────")
 
 	copyDest := filepath.Join(tmpDir, "test_copy.txt")
-	copyOutput, err := fileTool.Execute(ctx, &interfaces.ToolInput{
+	_, err = managementTool.Execute(ctx, &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"operation":   "copy",
 			"path":        testFile,
@@ -311,15 +328,14 @@ GoAgent 是一个强大的 AI Agent 框架。
 		fmt.Printf("✗ 复制文件失败: %v\n", err)
 	} else {
 		fmt.Printf("✓ 复制文件成功: %s -> %s\n", testFile, copyDest)
-		_ = copyOutput
 	}
 	fmt.Println()
 
-	// 10. 压缩文件
-	fmt.Println("【步骤 10】压缩文件")
+	// 10. 压缩文件 (使用 FileCompressionTool)
+	fmt.Println("【步骤 10】压缩文件 (FileCompressionTool)")
 	fmt.Println("────────────────────────────────────────")
 
-	compressOutput, err := fileTool.Execute(ctx, &interfaces.ToolInput{
+	compressOutput, err := compressionTool.Execute(ctx, &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"operation": "compress",
 			"path":      testFile,
@@ -335,7 +351,6 @@ GoAgent 是一个强大的 AI Agent 框架。
 	} else {
 		fmt.Println("✓ 压缩文件成功 (gzip)")
 		if result, ok := compressOutput.Result.(map[string]interface{}); ok {
-			// 压缩信息在 info 字段中
 			if info, ok := result["info"].(map[string]interface{}); ok {
 				fmt.Printf("  压缩文件: %v\n", info["destination"])
 				fmt.Printf("  原始大小: %v\n", info["original_size"])
@@ -347,11 +362,11 @@ GoAgent 是一个强大的 AI Agent 框架。
 	}
 	fmt.Println()
 
-	// 11. 删除文件
-	fmt.Println("【步骤 11】删除文件")
+	// 11. 删除文件 (使用 FileManagementTool)
+	fmt.Println("【步骤 11】删除文件 (FileManagementTool)")
 	fmt.Println("────────────────────────────────────────")
 
-	deleteOutput, err := fileTool.Execute(ctx, &interfaces.ToolInput{
+	_, err = managementTool.Execute(ctx, &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"operation": "delete",
 			"path":      copyDest,
@@ -363,7 +378,6 @@ GoAgent 是一个强大的 AI Agent 框架。
 		fmt.Printf("✗ 删除文件失败: %v\n", err)
 	} else {
 		fmt.Printf("✓ 删除文件成功: %s\n", copyDest)
-		_ = deleteOutput
 	}
 	fmt.Println()
 
@@ -372,17 +386,33 @@ GoAgent 是一个强大的 AI Agent 框架。
 	fmt.Println("║                        示例完成                                ║")
 	fmt.Println("╚════════════════════════════════════════════════════════════════╝")
 	fmt.Println()
-	fmt.Println("本示例演示了文件操作工具的核心功能:")
-	fmt.Println("  ✓ 读取文件 (read)")
-	fmt.Println("  ✓ 写入文件 (write)")
-	fmt.Println("  ✓ 追加内容 (append)")
-	fmt.Println("  ✓ 获取文件信息 (info)")
-	fmt.Println("  ✓ 列出目录 (list)")
-	fmt.Println("  ✓ 搜索文件 (search)")
-	fmt.Println("  ✓ 复制文件 (copy)")
-	fmt.Println("  ✓ 压缩文件 (compress)")
-	fmt.Println("  ✓ 解析 JSON/YAML (parse)")
-	fmt.Println("  ✓ 删除文件 (delete)")
+	fmt.Println("本示例演示了专门化文件工具的核心功能:")
+	fmt.Println()
+	fmt.Println("  FileReadTool (读取相关):")
+	fmt.Println("    ✓ 读取文件 (read)")
+	fmt.Println("    ✓ 获取文件信息 (info)")
+	fmt.Println("    ✓ 解析 JSON/YAML (parse)")
+	fmt.Println("    ✓ 分析文件 (analyze)")
+	fmt.Println()
+	fmt.Println("  FileWriteTool (写入相关):")
+	fmt.Println("    ✓ 写入文件 (write)")
+	fmt.Println("    ✓ 追加内容 (append)")
+	fmt.Println()
+	fmt.Println("  FileManagementTool (管理相关):")
+	fmt.Println("    ✓ 列出目录 (list)")
+	fmt.Println("    ✓ 搜索文件 (search)")
+	fmt.Println("    ✓ 复制文件 (copy)")
+	fmt.Println("    ✓ 移动文件 (move)")
+	fmt.Println("    ✓ 删除文件 (delete)")
+	fmt.Println()
+	fmt.Println("  FileCompressionTool (压缩相关):")
+	fmt.Println("    ✓ 压缩文件 (compress)")
+	fmt.Println("    ✓ 解压文件 (decompress)")
+	fmt.Println()
+	fmt.Println("💡 最佳实践:")
+	fmt.Println("  - 使用专门化工具替代旧的 FileOperationsTool")
+	fmt.Println("  - 每个工具职责单一，更易于维护和测试")
+	fmt.Println("  - 共享 FileToolConfig 配置")
 	fmt.Println()
 	fmt.Println("⚠️  安全提示:")
 	fmt.Println("  - 文件操作工具默认限制在指定的 basePath 内")
