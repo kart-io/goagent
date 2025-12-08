@@ -36,7 +36,7 @@ func main() {
 
 	// 方式 2：使用 Builder 模式
 	builderApiTool := http.NewAPIToolBuilder().
-		WithTimeout(30 * time.Second).
+		WithTimeout(30*time.Second).
 		WithHeader("Accept", "application/json").
 		WithHeader("User-Agent", "GoAgent-Example/1.0").
 		Build()
@@ -167,7 +167,7 @@ func main() {
 
 	authApiTool := http.NewAPIToolBuilder().
 		WithBaseURL("https://api.example.com").
-		WithTimeout(30 * time.Second).
+		WithTimeout(30*time.Second).
 		WithAuth("your-api-token-here").
 		WithHeader("X-API-Version", "v1").
 		Build()

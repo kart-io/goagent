@@ -8,6 +8,7 @@ import (
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/execution"
 	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/utils"
 )
 
 // BufferMiddleware 缓冲中间件
@@ -40,7 +41,7 @@ func (m *BufferMiddleware) Apply(ctx context.Context, source execution.StreamOut
 	writer := NewWriter(ctx, opts)
 
 	go func() {
-		defer func() { _ = writer.Close() }()
+		defer utils.CloseQuietly(writer)
 
 		reader, ok := source.(*Reader)
 		if !ok {
@@ -114,7 +115,7 @@ func (m *ThrottleMiddleware) Apply(ctx context.Context, source execution.StreamO
 	writer := NewWriter(ctx, opts)
 
 	go func() {
-		defer func() { _ = writer.Close() }()
+		defer utils.CloseQuietly(writer)
 
 		lastChunkTime := time.Now()
 

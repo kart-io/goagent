@@ -60,7 +60,7 @@ func demo1BasicParallel() {
 	translateTool := createSimulatedTool("translator", "Translating...", 120*time.Millisecond)
 
 	// Prepare tool calls
-	calls := []*tools.ToolCall{
+	calls := []*tools.ToolCallRequest{
 		{
 			ID:    "call1",
 			Tool:  searchTool,
@@ -111,7 +111,7 @@ func demo2PerformanceComparison() {
 	tool3 := createSimulatedTool("tool3", "Processing 3...", 100*time.Millisecond)
 	tool4 := createSimulatedTool("tool4", "Processing 4...", 100*time.Millisecond)
 
-	calls := []*tools.ToolCall{
+	calls := []*tools.ToolCallRequest{
 		{ID: "call1", Tool: tool1, Input: &interfaces.ToolInput{Args: map[string]interface{}{}}},
 		{ID: "call2", Tool: tool2, Input: &interfaces.ToolInput{Args: map[string]interface{}{}}},
 		{ID: "call3", Tool: tool3, Input: &interfaces.ToolInput{Args: map[string]interface{}{}}},
@@ -142,10 +142,10 @@ func demo3ConcurrencyLimit() {
 	ctx := context.Background()
 
 	// Create 10 tools
-	calls := make([]*tools.ToolCall, 10)
+	calls := make([]*tools.ToolCallRequest, 10)
 	for i := 0; i < 10; i++ {
 		tool := createSimulatedTool(fmt.Sprintf("tool%d", i), fmt.Sprintf("Processing %d...", i), 100*time.Millisecond)
-		calls[i] = &tools.ToolCall{
+		calls[i] = &tools.ToolCallRequest{
 			ID:    fmt.Sprintf("call%d", i),
 			Tool:  tool,
 			Input: &interfaces.ToolInput{Args: map[string]interface{}{"index": i}},
@@ -176,7 +176,7 @@ func demo4ErrorHandling() {
 	successTool := createSimulatedTool("success_tool", "Processing...", 50*time.Millisecond)
 	failTool := createFailingTool("fail_tool", "This tool will fail")
 
-	calls := []*tools.ToolCall{
+	calls := []*tools.ToolCallRequest{
 		{ID: "call1", Tool: successTool, Input: &interfaces.ToolInput{Args: map[string]interface{}{}}},
 		{ID: "call2", Tool: failTool, Input: &interfaces.ToolInput{Args: map[string]interface{}{}}},
 		{ID: "call3", Tool: successTool, Input: &interfaces.ToolInput{Args: map[string]interface{}{}}},
@@ -232,7 +232,7 @@ func demo5RetryPolicy() {
 	// Tool that fails on first attempt but succeeds on retry
 	flakyTool := createFlakyTool("flaky_tool", 2) // Fails 2 times then succeeds
 
-	calls := []*tools.ToolCall{
+	calls := []*tools.ToolCallRequest{
 		{ID: "call1", Tool: flakyTool, Input: &interfaces.ToolInput{Args: map[string]interface{}{}}},
 	}
 
@@ -266,7 +266,7 @@ func demo6TimeoutHandling() {
 	fastTool := createSimulatedTool("fast_tool", "Fast processing...", 50*time.Millisecond)
 	slowTool := createSimulatedTool("slow_tool", "Slow processing...", 200*time.Millisecond)
 
-	calls := []*tools.ToolCall{
+	calls := []*tools.ToolCallRequest{
 		{ID: "call1", Tool: fastTool, Input: &interfaces.ToolInput{Args: map[string]interface{}{}}},
 		{ID: "call2", Tool: slowTool, Input: &interfaces.ToolInput{Args: map[string]interface{}{}}},
 	}
