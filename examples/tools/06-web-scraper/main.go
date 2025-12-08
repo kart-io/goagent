@@ -40,8 +40,8 @@ func main() {
 
 	output, err := scraper.Execute(ctx, &interfaces.ToolInput{
 		Args: map[string]interface{}{
-			"url":              testURL,
-			"extract_metadata": true,
+			"url":                testURL,
+			"extract_metadata":   true,
 			"max_content_length": 5000,
 		},
 		Context: ctx,
@@ -116,8 +116,8 @@ func main() {
 
 	metaOutput, err := scraper.Execute(ctx, &interfaces.ToolInput{
 		Args: map[string]interface{}{
-			"url":              "https://www.wikipedia.org",
-			"extract_metadata": true,
+			"url":                "https://www.wikipedia.org",
+			"extract_metadata":   true,
 			"max_content_length": 1000,
 		},
 		Context: ctx,
@@ -215,7 +215,7 @@ func main() {
 			"url": "https://httpbin.org/html",
 			"selectors": map[string]interface{}{
 				"custom": map[string]interface{}{
-					"heading": "h1",
+					"heading":    "h1",
 					"paragraphs": "p",
 				},
 			},

@@ -30,7 +30,7 @@ func main() {
 		fmt.Printf("✗ 创建临时目录失败: %v\n", err)
 		return
 	}
-	defer os.RemoveAll(tmpDir) // 清理临时目录
+	defer func() { _ = os.RemoveAll(tmpDir) }() // 清理临时目录
 
 	fmt.Printf("测试目录: %s\n\n", tmpDir)
 
@@ -223,10 +223,10 @@ GoAgent 是一个强大的 AI Agent 框架。
 	fmt.Println("────────────────────────────────────────")
 
 	// 创建一些额外的测试文件
-	os.WriteFile(filepath.Join(tmpDir, "readme.md"), []byte("# README"), 0644)
-	os.WriteFile(filepath.Join(tmpDir, "data.csv"), []byte("name,value\ntest,123"), 0644)
-	os.MkdirAll(filepath.Join(tmpDir, "subdir"), 0755)
-	os.WriteFile(filepath.Join(tmpDir, "subdir", "nested.txt"), []byte("nested file"), 0644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "readme.md"), []byte("# README"), 0644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "data.csv"), []byte("name,value\ntest,123"), 0644)
+	_ = os.MkdirAll(filepath.Join(tmpDir, "subdir"), 0755)
+	_ = os.WriteFile(filepath.Join(tmpDir, "subdir", "nested.txt"), []byte("nested file"), 0644)
 
 	listOutput, err := fileTool.Execute(ctx, &interfaces.ToolInput{
 		Args: map[string]interface{}{
