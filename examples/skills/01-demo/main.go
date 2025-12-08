@@ -114,16 +114,16 @@ type SkillInput struct {
 
 // SkillOutput 技能输出
 type SkillOutput struct {
-	SkillName   string                 `json:"skill_name"`   // 技能名称
-	Action      string                 `json:"action"`       // 执行动作
-	Result      interface{}            `json:"result"`       // 执行结果
-	Success     bool                   `json:"success"`      // 是否成功
-	Error       string                 `json:"error"`        // 错误信息
-	Duration    time.Duration          `json:"duration"`     // 执行时长
-	Metadata    map[string]interface{} `json:"metadata"`     // 元数据
-	ToolsUsed   []string               `json:"tools_used"`   // 使用的工具
-	Confidence  float64                `json:"confidence"`   // ���果置信度
-	Suggestions []string               `json:"suggestions"`  // 后续建议
+	SkillName   string                 `json:"skill_name"`  // 技能名称
+	Action      string                 `json:"action"`      // 执行动作
+	Result      interface{}            `json:"result"`      // 执行结果
+	Success     bool                   `json:"success"`     // 是否成功
+	Error       string                 `json:"error"`       // 错误信息
+	Duration    time.Duration          `json:"duration"`    // 执行时长
+	Metadata    map[string]interface{} `json:"metadata"`    // 元数据
+	ToolsUsed   []string               `json:"tools_used"`  // 使用的工具
+	Confidence  float64                `json:"confidence"`  // ���果置信度
+	Suggestions []string               `json:"suggestions"` // 后续建议
 }
 
 // RoutingContext 路由上下文
