@@ -31,7 +31,7 @@ Before creating a release, ensure:
 
 2. Import layering is valid:
    ```bash
-   ./verify_imports.sh
+   ./scripts/verify_imports.sh
    ```
 
 3. Code is properly formatted:

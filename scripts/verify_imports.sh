@@ -1,4 +1,7 @@
 #!/bin/bash
+
+# Ensure we are running from the project root
+cd "$(dirname "$0")/.." || exit 1
 #
 # verify_imports.sh - Verify import layering compliance for pkg/agent
 #

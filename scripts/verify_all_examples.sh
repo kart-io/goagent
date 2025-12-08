@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# Ensure we are running from the project root
+cd "$(dirname "$0")/.." || exit 1
 # Configuration
 TIMEOUT_DURATION="5s"
 LOG_FILE="example_verification_results.log"

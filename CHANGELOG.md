@@ -124,7 +124,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Automatic GitHub Release creation
   - pkg.go.dev publication
 - **Release Management**:
-  - `create_release.sh` - Interactive release helper script
+  - `scripts/create_release.sh` - Interactive release helper script
   - `.github/RELEASE.md` - Comprehensive release documentation
   - Pre-release support (alpha, beta, rc)
 

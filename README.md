@@ -423,7 +423,7 @@ go run examples/basic/01-simple-agent/main.go
 - Minimum test coverage: 80%
 - All public APIs must have documentation
 - Follow [import layering rules](docs/architecture/IMPORT_LAYERING.md)
-- Run verification: `./verify_imports.sh`
+- Run verification: `./scripts/verify_imports.sh`
 
 ## Roadmap
 

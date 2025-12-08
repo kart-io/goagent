@@ -176,7 +176,7 @@ go mod download
 **检查导入**：
 ```bash
 cd /path/to/goagent
-./verify_imports.sh  # 验证导入层级
+./scripts/verify_imports.sh  # 验证导入层级
 ```
 
 **运行测试**：
