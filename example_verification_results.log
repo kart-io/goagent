@@ -1,0 +1,374 @@
+Verification Run - Mon Dec  8 22:18:01 CST 2025
+---------------------------------------------------
+Running: examples/advanced/cached_agents_demo.go
+⏳ TIMEOUT (Expected for services)
+⚠️ Skipping demo_standalone.go (No 'func main', likely a helper file)
+---------------------------------------------------
+Running: examples/advanced/multi-agent-collaboration/main_simple.go
+   -> Retrying with directory context...
+⚠️ CONFIG ERROR (Acceptable)
+========================================
+=== Multi-Agent Collaboration Example ===
+========================================
+
+Using Google Gemini
+2025/12/08 22:18:07 WARNING:  Starting on June 24, 2025, the cloud.google.com/go/vertexai/genai package is deprecated and will be removed on June 24, 2026, except cloud.google.com/go/vertexai/genai/tokenizer.
+New users are encouraged to use the Google GenAI Go SDK available at [google.golang.org/genai](http://pkg.go.dev/google.golang.org/genai).
+For information about migrating to the Google Gen AI SDK, see [Vertex AI SDK migration guide](https://cloud.google.com/vertex-ai/generative-ai/docs/deprecations/genai-vertexai-sdk)
+Task: Analyze website performance data and optimize loading times for an e-commerce platform
+========================================
+
+🔍 Analysis Agent: Analyzing the task...
+2025/12/08 22:18:09 Analysis agent failed: [LLM_REQUEST]: LLM completion error: [LLM_REQUEST] [llm] operation=request: LLM request failed (provider=gemini, model=gemini-pro): rpc error: code = Unauthenticated desc = API keys are not supported by this API. Expected OAuth2 access token or other authentication credentials that assert a principal. See https://cloud.google.com/docs/authentication
+error details: name = ErrorInfo reason = CREDENTIALS_MISSING domain = googleapis.com metadata = map[method:google.cloud.aiplatform.v1beta1.PredictionService.GenerateContent service:aiplatform.googleapis.com]
+exit status 1
+⚠️ Skipping tools.go (No 'func main', likely a helper file)
+---------------------------------------------------
+Running: examples/advanced/multi-agent-demo/main.go
+✅ PASS
+---------------------------------------------------
+Running: examples/advanced/multi-agent-modular/main.go
+✅ PASS
+---------------------------------------------------
+Running: examples/advanced/multi-agent-simple/main.go
+⏳ TIMEOUT (Expected for services)
+---------------------------------------------------
+Running: examples/advanced/multi-mode-streaming/multi_mode_demo.go
+✅ PASS
+⚠️ Skipping aggregator_sentiment.go (No 'func main', likely a helper file)
+⚠️ Skipping collaborative_mock.go (No 'func main', likely a helper file)
+⚠️ Skipping loop_code_iteration.go (No 'func main', likely a helper file)
+---------------------------------------------------
+Running: examples/advanced/multiagent-patterns/main.go
+   -> Retrying with directory context...
+✅ PASS
+⚠️ Skipping router_support.go (No 'func main', likely a helper file)
+⚠️ Skipping simple_logger.go (No 'func main', likely a helper file)
+---------------------------------------------------
+Running: examples/advanced/observability/observability_demo.go
+✅ PASS
+---------------------------------------------------
+Running: examples/advanced/parallel-execution/parallel_demo.go
+⏳ TIMEOUT (Expected for services)
+---------------------------------------------------
+Running: examples/advanced/pool-decoupled-architecture/main.go
+✅ PASS
+---------------------------------------------------
+Running: examples/advanced/react/react_demo.go
+✅ PASS
+---------------------------------------------------
+Running: examples/advanced/streaming/streaming_demo.go
+⏳ TIMEOUT (Expected for services)
+---------------------------------------------------
+Running: examples/advanced/supervisor_agent/main.go
+⏳ TIMEOUT (Expected for services)
+---------------------------------------------------
+Running: examples/advanced/tool-runtime/runtime_demo.go
+✅ PASS
+---------------------------------------------------
+Running: examples/advanced/tool-selector/selector_demo.go
+✅ PASS
+---------------------------------------------------
+Running: examples/agents/react_generator/main.go
+✅ PASS
+---------------------------------------------------
+Running: examples/basic/01-simple-agent/simple_agent.go
+✅ PASS
+---------------------------------------------------
+Running: examples/basic/02-tools/tools_demo.go
+✅ PASS
+---------------------------------------------------
+Running: examples/basic/03-agent-with-memory/agent_memory_demo.go
+✅ PASS
+---------------------------------------------------
+Running: examples/basic/04-ollama-agent/ollama_example.go
+⏳ TIMEOUT (Expected for services)
+---------------------------------------------------
+Running: examples/basic/05-provider-consistency/main.go
+✅ PASS
+---------------------------------------------------
+Running: examples/basic/06-all-providers/main.go
+⏳ TIMEOUT (Expected for services)
+---------------------------------------------------
+Running: examples/basic/07-smart-agent-with-tools/main.go
+✅ PASS
+---------------------------------------------------
+Running: examples/basic/08-deepseek-agent/main.go
+⏳ TIMEOUT (Expected for services)
+---------------------------------------------------
+Running: examples/basic/09-deepseek-simple/invokefast/main.go
+⏳ TIMEOUT (Expected for services)
+---------------------------------------------------
+Running: examples/basic/09-deepseek-simple/main.go
+⏳ TIMEOUT (Expected for services)
+---------------------------------------------------
+Running: examples/basic/10-object-pooling/main.go
+✅ PASS
+---------------------------------------------------
+Running: examples/basic/11-deepseek-with-builder/main.go
+⏳ TIMEOUT (Expected for services)
+---------------------------------------------------
+Running: examples/basic/12-deepseek-simple/main.go
+⏳ TIMEOUT (Expected for services)
+---------------------------------------------------
+Running: examples/basic/13-simple-builder-deepseek/main.go
+⏳ TIMEOUT (Expected for services)
+---------------------------------------------------
+Running: examples/basic/14-reasoning-agents/main.go
+⏳ TIMEOUT (Expected for services)
+---------------------------------------------------
+Running: examples/basic/15-simple-builder-kimi/main.go
+⏳ TIMEOUT (Expected for services)
+---------------------------------------------------
+Running: examples/basic/16-pdf-rag/main.go
+⏳ TIMEOUT (Expected for services)
+---------------------------------------------------
+Running: examples/basic/17-vertexai-rag/main.go
+❌ FAIL
+========================================
+Vertex AI RAG 演示
+========================================
+
+初始化 Gemini 模型...
+2025/12/08 22:19:41 WARNING:  Starting on June 24, 2025, the cloud.google.com/go/vertexai/genai package is deprecated and will be removed on June 24, 2026, except cloud.google.com/go/vertexai/genai/tokenizer.
+New users are encouraged to use the Google GenAI Go SDK available at [google.golang.org/genai](http://pkg.go.dev/google.golang.org/genai).
+For information about migrating to the Google Gen AI SDK, see [Vertex AI SDK migration guide](https://cloud.google.com/vertex-ai/generative-ai/docs/deprecations/genai-vertexai-sdk)
+  模型: gemini-2.0-flash
+
+[RAG 模式] 使用 PDF 文档增强回答
+
+步骤 1: 读取 PDF 文档...
+  已加载 PDF，共 60 个文档片段
+
+步骤 2: 初始化嵌入模型...
+  使用简单嵌入器（演示模式）
+
+步骤 3: 索引文档...
+  已索引 60 个文档片段
+
+步骤 4: 创建检索器...
+
+步骤 5: 查询...
+问题: 'summary'
+
+检索到的相关文档:
+----------------------------------------
+[1] (相似度: 0.0000)
+    2¾Møoä$ÈÓ¥o¥MoM$o¥¥]ä$È²Ó¥¥1Ó¥1]]¥X1oää1$¦¾1M$¥$o]¥ÓM¾1M]¥1Å1]M¥
+M$ä$1$]1²Óä¥]ä¬ä$È...
+
+[2] (相似度: 0.0000)
+    o¥¾1]]$oäÈ$Mo²Ó¥$¥¬¥]¾1M]¥]$ä$È1]ÓM$Èä$ÈM$¥o§
+o¥¾1]ÓMËM]äÈÓo²Ó¥$¥¬¥]¾1M]¥XM]ý¥ä$MÓMËM]1o1Mä1$1]ä�...
+
+[3] (相似度: 0.0000)
+    manual.md
+2024-03-23
+22
+ / 
+22
+1
+§
+71$$¥1$¥¥$1ÅÓ¥]¥Mä$ä$ÈøX¥]M¥1Ó¥$¥ÈMä¬¥¥]ä$M1$Ó¥1Ó¥]¬¥Óä¥ o
+M¥]¾§
+3
+§
+71...
+
+[4] (相似度: 0.0000)
+    Ó¥Å11²ä$ÈÅ¥M]¥oM]¥ä$¥ä$Ó¥M1MäoXX1]o¾o¥©
+«M$¥¥XM]]¥²M]$ä$È©
+ÓäoÅ¥M]¥²M]$o¾1äÅ¾1M]¥]äÅä$�...
+
+RAG 执行失败: gemini 调用失败: [LLM_REQUEST] [llm] operation=request: LLM request failed (provider=gemini, model=gemini-2.0-flash): rpc error: code = Internal desc = grpc: error while marshaling: string field contains invalid UTF-8
+exit status 1
+---------------------------------------------------
+Running: examples/builder/advanced/main.go
+⏳ TIMEOUT (Expected for services)
+---------------------------------------------------
+Running: examples/builder/core/main.go
+⏳ TIMEOUT (Expected for services)
+---------------------------------------------------
+Running: examples/builder/simple/main.go
+⏳ TIMEOUT (Expected for services)
+---------------------------------------------------
+Running: examples/comprehensive/main.go
+⏳ TIMEOUT (Expected for services)
+---------------------------------------------------
+Running: examples/error_handling/main.go
+✅ PASS
+---------------------------------------------------
+Running: examples/generator/advanced/main.go
+✅ PASS
+---------------------------------------------------
+Running: examples/generator/basic/main.go
+✅ PASS
+---------------------------------------------------
+Running: examples/integration/human-in-loop/hitl_demo.go
+⏳ TIMEOUT (Expected for services)
+---------------------------------------------------
+Running: examples/integration/langchain-complete/complete_demo.go
+✅ PASS
+---------------------------------------------------
+Running: examples/integration/langchain-inspired/langchain_demo.go
+✅ PASS
+---------------------------------------------------
+Running: examples/integration/langchain-phase1/phase1_demo.go
+✅ PASS
+---------------------------------------------------
+Running: examples/integration/langchain-phase2/phase2_demo.go
+✅ PASS
+⚠️ Skipping ai_collaboration.go (No 'func main', likely a helper file)
+---------------------------------------------------
+Running: examples/integration/multiagent-nats/main.go
+⚠️ Skipping examples/integration/multiagent-nats/main.go (NATS dependency)
+⚠️ Skipping nats_channel_store.go (No 'func main', likely a helper file)
+---------------------------------------------------
+Running: examples/integration/multiagent/multiagent_demo.go
+✅ PASS
+---------------------------------------------------
+Running: examples/integration/preconfig-agents/preconfig_demo.go
+✅ PASS
+---------------------------------------------------
+Running: examples/intelligent-ops/main.go
+⏳ TIMEOUT (Expected for services)
+---------------------------------------------------
+Running: examples/llm/advanced/main.go
+⏳ TIMEOUT (Expected for services)
+---------------------------------------------------
+Running: examples/llm/anthropic/main.go
+⚠️ CONFIG ERROR (Acceptable)
+=== Anthropic Claude Provider Examples ===
+Example 1: Basic Configuration
+2025/12/08 22:20:24 Failed to create Anthropic provider: [INVALID_CONFIG] [anthropic] operation=validate_config: invalid configuration: anthropic API key is required (set via config or environment variable) (config_key=api_key)
+exit status 1
+---------------------------------------------------
+Running: examples/llm/cohere/main.go
+⚠️ CONFIG ERROR (Acceptable)
+=== Cohere Provider Examples ===
+Example 1: Basic Configuration
+2025/12/08 22:20:24 Failed to create Cohere provider: [INVALID_CONFIG] [cohere] operation=validate_config: invalid configuration: cohere API key is required (set via config or environment variable) (config_key=api_key)
+exit status 1
+---------------------------------------------------
+Running: examples/llm/huggingface/main.go
+⚠️ CONFIG ERROR (Acceptable)
+=== Hugging Face Provider Examples ===
+Example 1: Basic Configuration
+2025/12/08 22:20:24 Failed to create HuggingFace provider: [INVALID_CONFIG] [huggingface] operation=validate_config: invalid configuration: huggingface API key is required (set via config or environment variable) (config_key=api_key)
+exit status 1
+---------------------------------------------------
+Running: examples/llm/kimi/main.go
+⏳ TIMEOUT (Expected for services)
+---------------------------------------------------
+Running: examples/mcp/basic_tools/main.go
+✅ PASS
+---------------------------------------------------
+Running: examples/mcp/custom_tool/main.go
+✅ PASS
+---------------------------------------------------
+Running: examples/mcp/tool_chain/main.go
+⏳ TIMEOUT (Expected for services)
+---------------------------------------------------
+Running: examples/multiagent/01-basic-system/main.go
+✅ PASS
+---------------------------------------------------
+Running: examples/multiagent/02-collaboration-types/main.go
+✅ PASS
+---------------------------------------------------
+Running: examples/multiagent/03-team-management/main.go
+✅ PASS
+---------------------------------------------------
+Running: examples/multiagent/04-specialized-agents/main.go
+✅ PASS
+---------------------------------------------------
+Running: examples/multiagent/05-llm-collaborative-agents/main.go
+⏳ TIMEOUT (Expected for services)
+---------------------------------------------------
+Running: examples/multiagent/06-llm-tool-calling/main.go
+⏳ TIMEOUT (Expected for services)
+---------------------------------------------------
+Running: examples/multiagent/07-multiagent-llm-stream/main.go
+✅ PASS
+---------------------------------------------------
+Running: examples/multiagent/08-multiagent-tool-registry/main.go
+✅ PASS
+---------------------------------------------------
+Running: examples/multiagent/09-multiagent-with-middleware/main.go
+✅ PASS
+---------------------------------------------------
+Running: examples/multiagent/10-multiagent-integrated/main.go
+⏳ TIMEOUT (Expected for services)
+---------------------------------------------------
+Running: examples/multiagent/11-planning-multiagent/main.go
+⏳ TIMEOUT (Expected for services)
+---------------------------------------------------
+Running: examples/optimization/cot_vs_react/main.go
+⏳ TIMEOUT (Expected for services)
+---------------------------------------------------
+Running: examples/optimization/hybrid_mode/main.go
+⏳ TIMEOUT (Expected for services)
+---------------------------------------------------
+Running: examples/optimization/planning_execution/main.go
+⏳ TIMEOUT (Expected for services)
+---------------------------------------------------
+Running: examples/performance/main.go
+✅ PASS
+---------------------------------------------------
+Running: examples/planning/main.go
+⏳ TIMEOUT (Expected for services)
+---------------------------------------------------
+Running: examples/rag/deepseek_rag_example.go
+⚠️ CONFIG ERROR (Acceptable)
+=== Step 1: Setting up DeepSeek LLM Client ===
+✓ DeepSeek client initialized successfully
+
+=== Step 2: Setting up Qdrant Vector Store ===
+2025/12/08 22:21:31 WARN Unable to get server version, use default err="rpc error: code = Unavailable desc = connection error: desc = \"transport: Error while dialing: dial tcp 127.0.0.1:6334: connect: connection refused\"" default=Unknown
+2025/12/08 22:21:31 WARN Failed to obtain server version. Unable to check client-server compatibility. Set SkipCompatibilityCheck=true to skip version check.
+2025/12/08 22:21:31 Failed to setup Qdrant store: [INTERNAL_ERROR] [qdrant_store] operation=ensure_collection: failed to check collection existence (collection=goagent_rag_demo): CollectionExists() failed: goagent_rag_demo: rpc error: code = Unavailable desc = connection error: desc = "transport: Error while dialing: dial tcp 127.0.0.1:6334: connect: connection refused"
+exit status 1
+---------------------------------------------------
+Running: examples/retry-jitter/main.go
+⏳ TIMEOUT (Expected for services)
+---------------------------------------------------
+Running: examples/skills/01-demo/main.go
+✅ PASS
+---------------------------------------------------
+Running: examples/skills/02-weather-skill/main.go
+⏳ TIMEOUT (Expected for services)
+---------------------------------------------------
+Running: examples/tools/01-calculator/main.go
+✅ PASS
+---------------------------------------------------
+Running: examples/tools/02-http-api/main.go
+⏳ TIMEOUT (Expected for services)
+---------------------------------------------------
+Running: examples/tools/03-shell/main.go
+✅ PASS
+---------------------------------------------------
+Running: examples/tools/04-search/main.go
+✅ PASS
+---------------------------------------------------
+Running: examples/tools/05-file-operations/main.go
+✅ PASS
+---------------------------------------------------
+Running: examples/tools/06-web-scraper/main.go
+⏳ TIMEOUT (Expected for services)
+---------------------------------------------------
+Running: examples/tools/07-function-tool/main.go
+✅ PASS
+---------------------------------------------------
+Running: examples/tools/08-tool-with-agent/main.go
+✅ PASS
+---------------------------------------------------
+Running: examples/tools/middleware/main.go
+✅ PASS
+---------------------------------------------------
+Running: examples/tools/registry/main.go
+✅ PASS
+---------------------------------------------------
+Running: examples/translate/interactive/main.go
+⏳ TIMEOUT (Expected for services)
+---------------------------------------------------
+Running: examples/translate/main.go
+⏳ TIMEOUT (Expected for services)

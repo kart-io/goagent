@@ -125,7 +125,11 @@ func (s *SimpleTaskAgent) Invoke(ctx context.Context, input *agentcore.AgentInpu
 	startTime := time.Now()
 
 	// 简单的任务处理逻辑
-	result := fmt.Sprintf("Processed task: %s with instruction: %s", input.Task, input.Instruction)
+	// 简单的任务处理逻辑
+	logLevel, _ := input.GetString("log_level")
+	timeframe, _ := input.GetString("timeframe")
+	result := fmt.Sprintf("Processed task: %s with instruction: %s (Log Level: %s, Timeframe: %s)",
+		input.Task, input.Instruction, logLevel, timeframe)
 
 	output := &agentcore.AgentOutput{
 		Result:  result,
