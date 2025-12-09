@@ -14,6 +14,9 @@ const (
 	maxContextMapSize = 1000
 )
 
+// DebugMode controls whether to enable expensive safety checks
+var DebugMode = false
+
 // agentInputPool is a sync.Pool for reusing AgentInput objects
 // to reduce memory allocations in chain execution paths.
 var agentInputPool = sync.Pool{
@@ -63,6 +66,9 @@ type AgentInput struct {
 
 	// 并发安全保护
 	contextMu sync.RWMutex `json:"-"` // Context map 的读写锁
+
+	// Debugging
+	inUse bool `json:"-"` // Only used when DebugMode is true
 }
 
 // AgentOutput Agent 输出
@@ -681,6 +687,13 @@ func (c *ChainableAgent) executeChain(ctx context.Context, input *AgentInput, us
 			// Get a reusable AgentInput from the pool
 			pooledInput = agentInputPool.Get().(*AgentInput)
 
+			if DebugMode {
+				if pooledInput.inUse {
+					panic("AgentInput pulled from pool is already in use! Double-free detected.")
+				}
+				pooledInput.inUse = true
+			}
+
 			// Update fields in-place instead of creating new struct
 			pooledInput.Task = currentInput.Task
 			pooledInput.Instruction = currentInput.Instruction
@@ -726,6 +739,9 @@ func (c *ChainableAgent) executeChain(ctx context.Context, input *AgentInput, us
 // resetAgentInput clears an AgentInput for reuse in the pool.
 // 优化：使用 clear() (Go 1.21+) 和大小阈值策略防止内存驻留
 func resetAgentInput(input *AgentInput) {
+	if DebugMode {
+		input.inUse = false
+	}
 	input.Task = ""
 	input.Instruction = ""
 	input.SessionID = ""

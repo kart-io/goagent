@@ -97,6 +97,26 @@ func (p *GeminiProvider) Complete(ctx context.Context, req *agentllm.CompletionR
 	cs := p.model.StartChat()
 
 	// Convert messages to Gemini format
+	// Handle SystemPrompt from config
+	if p.Config.SystemPrompt != "" {
+		// Gemini doesn't have a dedicated system role in ChatSession history in the same way,
+		// but we can prepend it to the first message or rely on model-level instructions if available.
+		// For simplicity and compatibility, we'll prepend it to the first user message or history.
+		// However, since we are building history from scratch here:
+		cs.History = append(cs.History, &genai.Content{
+			Parts: []genai.Part{
+				genai.Text(p.Config.SystemPrompt),
+			},
+			Role: constants.RoleUser, // Use user role for system prompt as fallback/standard practice in some Gemini contexts
+		})
+		cs.History = append(cs.History, &genai.Content{
+			Parts: []genai.Part{
+				genai.Text("Understood."),
+			},
+			Role: "model",
+		})
+	}
+
 	for _, msg := range req.Messages {
 		var role string
 		switch msg.Role {
@@ -104,11 +124,11 @@ func (p *GeminiProvider) Complete(ctx context.Context, req *agentllm.CompletionR
 			// Gemini doesn't have a system role, so we'll prepend it to the first user message
 			continue
 		case constants.RoleUser:
-			role = "user"
-		case "assistant":
+			role = constants.RoleUser
+		case constants.RoleAssistant:
 			role = "model"
 		default:
-			role = "user"
+			role = constants.RoleUser
 		}
 
 		cs.History = append(cs.History, &genai.Content{
@@ -186,6 +206,15 @@ func (p *GeminiProvider) Stream(ctx context.Context, prompt string) (<-chan stri
 	go func() {
 		defer close(tokens)
 
+		// Send system prompt if configured
+		if p.Config.SystemPrompt != "" {
+			// We can't easily inject history into a new chat session started from model.StartChat()
+			// without manually setting History.
+			// But here we are just sending a message.
+			// Strategy: Prepend system prompt to the prompt.
+			prompt = fmt.Sprintf("System: %s\n\nUser: %s", p.Config.SystemPrompt, prompt)
+		}
+
 		iter := cs.SendMessageStream(ctx, genai.Text(prompt))
 		for {
 			resp, err := iter.Next()
@@ -245,7 +274,11 @@ func (p *GeminiProvider) GenerateWithTools(ctx context.Context, prompt string, t
 	cs := model.StartChat()
 
 	// Send message
-	resp, err := cs.SendMessage(ctx, genai.Text(prompt))
+	finalPrompt := prompt
+	if p.Config.SystemPrompt != "" {
+		finalPrompt = fmt.Sprintf("System: %s\n\nUser: %s", p.Config.SystemPrompt, prompt)
+	}
+	resp, err := cs.SendMessage(ctx, genai.Text(finalPrompt))
 	if err != nil {
 		return nil, agentErrors.NewLLMRequestError("gemini", modelName, err).
 			WithContext("tool_calling", true)
@@ -316,7 +349,13 @@ func (p *GeminiProvider) StreamWithTools(ctx context.Context, prompt string, too
 	go func() {
 		defer close(chunks)
 
-		iter := cs.SendMessageStream(ctx, genai.Text(prompt))
+		var iter *genai.GenerateContentResponseIterator
+		if p.Config.SystemPrompt != "" {
+			// Prepend system prompt to the prompt for streaming with tools
+			iter = cs.SendMessageStream(ctx, genai.Text(fmt.Sprintf("System: %s\n\nUser: %s", p.Config.SystemPrompt, prompt)))
+		} else {
+			iter = cs.SendMessageStream(ctx, genai.Text(prompt))
+		}
 		for {
 			resp, err := iter.Next()
 			if errors.Is(err, iterator.Done) {

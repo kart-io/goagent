@@ -338,9 +338,13 @@ client, _ := providers.NewDeepSeekWithOptions(
     llm.WithAPIKey(os.Getenv("DEEPSEEK_API_KEY")),
 )
 
-// 使用用例
+// 使用用例 (替换为显式配置)
 client, _ := providers.NewOpenAIWithOptions(
-    llm.WithUseCase(llm.UseCaseCodeGeneration),
+    llm.WithModel("gpt-4"),
+    llm.WithMaxTokens(2000),
+    llm.WithTemperature(0.7),
+    llm.WithCache(true, 5*time.Minute),
+    llm.WithRetryCount(3),
     llm.WithAPIKey(os.Getenv("OPENAI_API_KEY")),
 )
 
