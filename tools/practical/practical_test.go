@@ -234,7 +234,7 @@ func TestFileOperationsTool_Append(t *testing.T) {
 	testFile := filepath.Join(tmpDir, "test.txt")
 
 	// Write initial content
-	os.WriteFile(testFile, []byte("Line 1\n"), 0644)
+	os.WriteFile(testFile, []byte("Line 1\n"), 0o644)
 
 	// Append content
 	appendInput := &interfaces.ToolInput{
@@ -269,7 +269,7 @@ func TestFileOperationsTool_Delete(t *testing.T) {
 	ctx := context.Background()
 
 	testFile := filepath.Join(tmpDir, "test.txt")
-	os.WriteFile(testFile, []byte("test"), 0644)
+	os.WriteFile(testFile, []byte("test"), 0o644)
 
 	// Delete file
 	deleteInput := &interfaces.ToolInput{
@@ -305,7 +305,7 @@ func TestFileOperationsTool_Copy(t *testing.T) {
 	dstFile := filepath.Join(tmpDir, "dest.txt")
 	content := "test content"
 
-	os.WriteFile(srcFile, []byte(content), 0644)
+	os.WriteFile(srcFile, []byte(content), 0o644)
 
 	// Copy file
 	copyInput := &interfaces.ToolInput{
@@ -343,7 +343,7 @@ func TestFileOperationsTool_Move(t *testing.T) {
 	dstFile := filepath.Join(tmpDir, "dest.txt")
 	content := "test content"
 
-	os.WriteFile(srcFile, []byte(content), 0644)
+	os.WriteFile(srcFile, []byte(content), 0o644)
 
 	// Move file
 	moveInput := &interfaces.ToolInput{
@@ -382,8 +382,8 @@ func TestFileOperationsTool_List(t *testing.T) {
 	ctx := context.Background()
 
 	// Create test files
-	os.WriteFile(filepath.Join(tmpDir, "file1.txt"), []byte("test"), 0644)
-	os.WriteFile(filepath.Join(tmpDir, "file2.txt"), []byte("test"), 0644)
+	os.WriteFile(filepath.Join(tmpDir, "file1.txt"), []byte("test"), 0o644)
+	os.WriteFile(filepath.Join(tmpDir, "file2.txt"), []byte("test"), 0o644)
 
 	// List directory
 	listInput := &interfaces.ToolInput{
@@ -413,9 +413,9 @@ func TestFileOperationsTool_Search(t *testing.T) {
 	ctx := context.Background()
 
 	// Create test files
-	os.WriteFile(filepath.Join(tmpDir, "test1.txt"), []byte("test"), 0644)
-	os.WriteFile(filepath.Join(tmpDir, "test2.log"), []byte("test"), 0644)
-	os.WriteFile(filepath.Join(tmpDir, "other.txt"), []byte("test"), 0644)
+	os.WriteFile(filepath.Join(tmpDir, "test1.txt"), []byte("test"), 0o644)
+	os.WriteFile(filepath.Join(tmpDir, "test2.log"), []byte("test"), 0o644)
+	os.WriteFile(filepath.Join(tmpDir, "other.txt"), []byte("test"), 0o644)
 
 	// Search for *.txt files
 	searchInput := &interfaces.ToolInput{
@@ -447,7 +447,7 @@ func TestFileOperationsTool_Info(t *testing.T) {
 
 	testFile := filepath.Join(tmpDir, "test.txt")
 	content := "test content"
-	os.WriteFile(testFile, []byte(content), 0644)
+	os.WriteFile(testFile, []byte(content), 0o644)
 
 	// Get file info
 	infoInput := &interfaces.ToolInput{
@@ -490,7 +490,7 @@ func TestFileOperationsTool_Analyze(t *testing.T) {
 
 	testFile := filepath.Join(tmpDir, "test.txt")
 	content := "Line 1\nLine 2\nLine 3\n"
-	os.WriteFile(testFile, []byte(content), 0644)
+	os.WriteFile(testFile, []byte(content), 0o644)
 
 	// Analyze file
 	analyzeInput := &interfaces.ToolInput{
@@ -542,7 +542,7 @@ func TestFileOperationsTool_Parse_JSON(t *testing.T) {
 
 	testFile := filepath.Join(tmpDir, "test.json")
 	jsonContent := `{"key": "value", "number": 42}`
-	os.WriteFile(testFile, []byte(jsonContent), 0644)
+	os.WriteFile(testFile, []byte(jsonContent), 0o644)
 
 	// Parse JSON file
 	parseInput := &interfaces.ToolInput{

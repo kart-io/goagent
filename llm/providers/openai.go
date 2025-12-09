@@ -7,14 +7,13 @@ import (
 	"io"
 	"time"
 
-	"github.com/sashabaranov/go-openai"
-
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	agentllm "github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/common"
 	"github.com/kart-io/goagent/llm/constants"
 	"github.com/kart-io/goagent/utils/json"
+	"github.com/sashabaranov/go-openai"
 )
 
 // OpenAIProvider implements LLM interface for OpenAI
@@ -99,7 +98,6 @@ func (p *OpenAIProvider) Complete(ctx context.Context, req *agentllm.CompletionR
 		Stop:        req.Stop,
 		TopP:        float32(req.TopP),
 	})
-
 	if err != nil {
 		return nil, agentErrors.NewLLMRequestError(p.ProviderName(), model, err)
 	}

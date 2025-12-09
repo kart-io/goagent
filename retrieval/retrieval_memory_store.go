@@ -5,9 +5,8 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/kart-io/goagent/interfaces"
-
 	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/interfaces"
 )
 
 // MemoryVectorStore 内存向量存储实现

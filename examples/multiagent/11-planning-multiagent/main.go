@@ -26,7 +26,6 @@ import (
 	"github.com/kart-io/goagent/planning"
 	"github.com/kart-io/goagent/tools"
 	"github.com/kart-io/goagent/tools/middleware"
-
 	loggercore "github.com/kart-io/logger/core"
 )
 
@@ -222,7 +221,6 @@ func demonstratePlanningMultiAgent(ctx context.Context, system *multiagent.Multi
 		MaxSteps:    8,
 		MaxDuration: 30 * time.Minute,
 	})
-
 	if err != nil {
 		fmt.Printf("  ✗ 创建计划失败: %v\n", err)
 		return

@@ -22,7 +22,7 @@ func TestFileOperationsTool_Execute_ReadOperation(t *testing.T) {
 	// 创建测试文件
 	testFile := filepath.Join(tmpDir, "test.txt")
 	testContent := "Hello, World!"
-	err := ioutil.WriteFile(testFile, []byte(testContent), 0644)
+	err := ioutil.WriteFile(testFile, []byte(testContent), 0o644)
 	if err != nil {
 		t.Fatalf("创建测试文件失败：%v", err)
 	}
@@ -104,7 +104,7 @@ func TestFileOperationsTool_Execute_AppendOperation(t *testing.T) {
 	appendContent := "\nAppended content"
 
 	// 创建初始文件
-	ioutil.WriteFile(testFile, []byte(initialContent), 0644)
+	ioutil.WriteFile(testFile, []byte(initialContent), 0o644)
 
 	input := &interfaces.ToolInput{
 		Args: map[string]interface{}{
@@ -140,7 +140,7 @@ func TestFileOperationsTool_Execute_DeleteOperation(t *testing.T) {
 	ctx := context.Background()
 
 	testFile := filepath.Join(tmpDir, "delete_test.txt")
-	ioutil.WriteFile(testFile, []byte("content to delete"), 0644)
+	ioutil.WriteFile(testFile, []byte("content to delete"), 0o644)
 
 	input := &interfaces.ToolInput{
 		Args: map[string]interface{}{
@@ -177,7 +177,7 @@ func TestFileOperationsTool_Execute_CopyOperation(t *testing.T) {
 	destFile := filepath.Join(tmpDir, "dest.txt")
 	content := "content to copy"
 
-	ioutil.WriteFile(sourceFile, []byte(content), 0644)
+	ioutil.WriteFile(sourceFile, []byte(content), 0o644)
 
 	input := &interfaces.ToolInput{
 		Args: map[string]interface{}{
@@ -216,7 +216,7 @@ func TestFileOperationsTool_Execute_MoveOperation(t *testing.T) {
 	destFile := filepath.Join(tmpDir, "move_dest.txt")
 	content := "content to move"
 
-	ioutil.WriteFile(sourceFile, []byte(content), 0644)
+	ioutil.WriteFile(sourceFile, []byte(content), 0o644)
 
 	input := &interfaces.ToolInput{
 		Args: map[string]interface{}{
@@ -255,9 +255,9 @@ func TestFileOperationsTool_Execute_ListOperation(t *testing.T) {
 	ctx := context.Background()
 
 	// 创建测试文件
-	ioutil.WriteFile(filepath.Join(tmpDir, "file1.txt"), []byte("content"), 0644)
-	ioutil.WriteFile(filepath.Join(tmpDir, "file2.txt"), []byte("content"), 0644)
-	os.Mkdir(filepath.Join(tmpDir, "subdir"), 0755)
+	ioutil.WriteFile(filepath.Join(tmpDir, "file1.txt"), []byte("content"), 0o644)
+	ioutil.WriteFile(filepath.Join(tmpDir, "file2.txt"), []byte("content"), 0o644)
+	os.Mkdir(filepath.Join(tmpDir, "subdir"), 0o755)
 
 	input := &interfaces.ToolInput{
 		Args: map[string]interface{}{
@@ -291,9 +291,9 @@ func TestFileOperationsTool_Execute_SearchOperation(t *testing.T) {
 	ctx := context.Background()
 
 	// 创建测试文件
-	ioutil.WriteFile(filepath.Join(tmpDir, "test_file.txt"), []byte("content"), 0644)
-	ioutil.WriteFile(filepath.Join(tmpDir, "test_data.json"), []byte("{}"), 0644)
-	ioutil.WriteFile(filepath.Join(tmpDir, "other.log"), []byte("log"), 0644)
+	ioutil.WriteFile(filepath.Join(tmpDir, "test_file.txt"), []byte("content"), 0o644)
+	ioutil.WriteFile(filepath.Join(tmpDir, "test_data.json"), []byte("{}"), 0o644)
+	ioutil.WriteFile(filepath.Join(tmpDir, "other.log"), []byte("log"), 0o644)
 
 	input := &interfaces.ToolInput{
 		Args: map[string]interface{}{
@@ -332,7 +332,7 @@ func TestFileOperationsTool_Execute_InfoOperation(t *testing.T) {
 
 	testFile := filepath.Join(tmpDir, "info_test.txt")
 	content := "some content for info"
-	ioutil.WriteFile(testFile, []byte(content), 0644)
+	ioutil.WriteFile(testFile, []byte(content), 0o644)
 
 	input := &interfaces.ToolInput{
 		Args: map[string]interface{}{
@@ -374,7 +374,7 @@ func TestFileOperationsTool_Execute_CompressGzip(t *testing.T) {
 	destFile := filepath.Join(tmpDir, "compress.txt.gz")
 	content := "content to compress with gzip"
 
-	ioutil.WriteFile(sourceFile, []byte(content), 0644)
+	ioutil.WriteFile(sourceFile, []byte(content), 0o644)
 
 	input := &interfaces.ToolInput{
 		Args: map[string]interface{}{
@@ -433,7 +433,7 @@ func TestFileOperationsTool_Execute_CompressZip(t *testing.T) {
 	destFile := filepath.Join(tmpDir, "compress.txt.zip")
 	content := "content to compress with zip"
 
-	ioutil.WriteFile(sourceFile, []byte(content), 0644)
+	ioutil.WriteFile(sourceFile, []byte(content), 0o644)
 
 	input := &interfaces.ToolInput{
 		Args: map[string]interface{}{
@@ -553,7 +553,7 @@ func TestFileOperationsTool_Execute_ParseJSON(t *testing.T) {
 
 	jsonFile := filepath.Join(tmpDir, "test.json")
 	jsonContent := `{"name": "John", "age": 30}`
-	ioutil.WriteFile(jsonFile, []byte(jsonContent), 0644)
+	ioutil.WriteFile(jsonFile, []byte(jsonContent), 0o644)
 
 	input := &interfaces.ToolInput{
 		Args: map[string]interface{}{
@@ -586,7 +586,7 @@ func TestFileOperationsTool_Execute_AnalyzeFile(t *testing.T) {
 
 	testFile := filepath.Join(tmpDir, "analyze.txt")
 	content := "line1\nline2\nline3\n"
-	ioutil.WriteFile(testFile, []byte(content), 0644)
+	ioutil.WriteFile(testFile, []byte(content), 0o644)
 
 	input := &interfaces.ToolInput{
 		Args: map[string]interface{}{
@@ -680,7 +680,7 @@ func TestFileOperationsTool_CalculateChecksum(t *testing.T) {
 
 	testFile := filepath.Join(tmpDir, "checksum.txt")
 	content := "content for checksum"
-	ioutil.WriteFile(testFile, []byte(content), 0644)
+	ioutil.WriteFile(testFile, []byte(content), 0o644)
 
 	input := &interfaces.ToolInput{
 		Args: map[string]interface{}{

@@ -166,7 +166,6 @@ func (t *MultiAgentTranslator) createLanguageDetectionAgent() *builder.Configura
 		WithState(state.NewAgentState()).
 		WithCallbacks(t.tokenTracker). // 添加 token 追踪回调
 		Build()
-
 	if err != nil {
 		log.Fatalf("创建语言检测代理失败: %v", err)
 	}
@@ -206,7 +205,6 @@ func (t *MultiAgentTranslator) createTranslationAgent() *builder.ConfigurableAge
 		WithState(state.NewAgentState()).
 		WithCallbacks(t.tokenTracker). // 添加 token 追踪回调
 		Build()
-
 	if err != nil {
 		log.Fatalf("创建翻译代理失败: %v", err)
 	}

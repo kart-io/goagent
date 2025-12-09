@@ -16,10 +16,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kart-io/goagent/interfaces"
-	"github.com/kart-io/goagent/tools"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
+
+	"github.com/kart-io/goagent/interfaces"
+	"github.com/kart-io/goagent/tools"
 )
 
 func main() {

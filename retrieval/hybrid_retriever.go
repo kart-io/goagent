@@ -3,9 +3,8 @@ package retrieval
 import (
 	"context"
 
-	"github.com/kart-io/goagent/interfaces"
-
 	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/interfaces"
 )
 
 // HybridRetriever 混合检索器

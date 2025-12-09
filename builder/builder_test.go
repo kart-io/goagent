@@ -6,9 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/checkpoint"
 	"github.com/kart-io/goagent/core/middleware"
@@ -16,6 +13,8 @@ import (
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/constants"
 	"github.com/kart-io/goagent/store/memory"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // MockLLMClient implements llm.Client for testing

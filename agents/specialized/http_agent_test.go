@@ -2,17 +2,16 @@ package specialized
 
 import (
 	"context"
-	"github.com/kart-io/goagent/utils/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
+	agentcore "github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/utils/json"
+	"github.com/kart-io/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	agentcore "github.com/kart-io/goagent/core"
-	"github.com/kart-io/logger"
 )
 
 func TestNewHTTPAgent(t *testing.T) {

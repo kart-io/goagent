@@ -8,11 +8,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	loggercore "github.com/kart-io/logger/core"
-
 	"github.com/kart-io/goagent/cache"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/utils/json"
+	loggercore "github.com/kart-io/logger/core"
 )
 
 // CachingConfig 缓存中间件配置

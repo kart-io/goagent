@@ -7,11 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kart-io/goagent/utils/json"
-
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/constants"
 	"github.com/kart-io/goagent/llm/providers"
+	"github.com/kart-io/goagent/utils/json"
 )
 
 // MultiAgentSystem coordinates multiple specialized agents working together

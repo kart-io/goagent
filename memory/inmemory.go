@@ -6,9 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kart-io/goagent/interfaces"
-
 	"github.com/google/uuid"
+	"github.com/kart-io/goagent/interfaces"
 )
 
 // InMemoryManager 内存记忆管理器实现

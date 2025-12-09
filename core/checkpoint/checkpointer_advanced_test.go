@@ -8,10 +8,9 @@ import (
 	"testing"
 	"time"
 
+	agentstate "github.com/kart-io/goagent/core/state"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	agentstate "github.com/kart-io/goagent/core/state"
 )
 
 // TestInMemorySaver_ConcurrentSaveAndLoad tests concurrent save/load operations

@@ -18,7 +18,6 @@ import (
 	"github.com/kart-io/goagent/multiagent"
 	"github.com/kart-io/goagent/tools"
 	"github.com/kart-io/goagent/tools/middleware"
-
 	loggercore "github.com/kart-io/logger/core"
 )
 
@@ -170,7 +169,8 @@ func demonstrateMetricsMiddleware(ctx context.Context, system *multiagent.MultiA
 		go func(idx int, task struct {
 			id   string
 			args map[string]interface{}
-		}) {
+		},
+		) {
 			defer wg.Done()
 			result, err := workers[idx].ExecuteTool(ctx, task.args)
 			mu.Lock()

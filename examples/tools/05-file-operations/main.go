@@ -240,10 +240,10 @@ GoAgent 是一个强大的 AI Agent 框架。
 	fmt.Println("────────────────────────────────────────")
 
 	// 创建一些额外的测试文件
-	_ = os.WriteFile(filepath.Join(tmpDir, "readme.md"), []byte("# README"), 0644)
-	_ = os.WriteFile(filepath.Join(tmpDir, "data.csv"), []byte("name,value\ntest,123"), 0644)
-	_ = os.MkdirAll(filepath.Join(tmpDir, "subdir"), 0755)
-	_ = os.WriteFile(filepath.Join(tmpDir, "subdir", "nested.txt"), []byte("nested file"), 0644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "readme.md"), []byte("# README"), 0o644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "data.csv"), []byte("name,value\ntest,123"), 0o644)
+	_ = os.MkdirAll(filepath.Join(tmpDir, "subdir"), 0o755)
+	_ = os.WriteFile(filepath.Join(tmpDir, "subdir", "nested.txt"), []byte("nested file"), 0o644)
 
 	listOutput, err := managementTool.Execute(ctx, &interfaces.ToolInput{
 		Args: map[string]interface{}{

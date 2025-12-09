@@ -5,12 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/kart-io/goagent/core/checkpoint"
 	"github.com/kart-io/goagent/core/state"
 	"github.com/kart-io/goagent/store/memory"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // MockContext for testing

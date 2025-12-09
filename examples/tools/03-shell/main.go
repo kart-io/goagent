@@ -77,7 +77,6 @@ func main() {
 			Args:    args,
 			Context: ctx,
 		})
-
 		if err != nil {
 			fmt.Printf("✗ 执行失败: %v\n", err)
 			continue

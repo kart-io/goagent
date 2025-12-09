@@ -3,9 +3,8 @@ package retrieval
 import (
 	"context"
 
-	"github.com/kart-io/goagent/interfaces"
-
 	"github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/interfaces"
 )
 
 // Retriever 定义检索器接口

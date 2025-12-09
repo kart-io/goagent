@@ -113,7 +113,6 @@ func example1SimpleAgent(apiKey, providerName string) {
 		WithSystemPrompt("你是一个翻译助手，专门将中文翻译成英文。").
 		WithOutputFormat(builder.OutputFormatPlainText). // 使用纯文本格式
 		Build()
-
 	if err != nil {
 		log.Fatalf("创建 Agent 失败: %v", err)
 	}
@@ -154,7 +153,6 @@ func example2AgentWithTools(apiKey, providerName string) {
 		WithTools(calculator).
 		WithOutputFormat(builder.OutputFormatPlainText). // 使用纯文本格式
 		Build()
-
 	if err != nil {
 		log.Fatalf("创建 Agent 失败: %v", err)
 	}
@@ -200,7 +198,6 @@ func example3ConfiguredAgent(apiKey, providerName string) {
 		WithTemperature(0.3).                            // 降低创造性，提高精确性（默认 0.7）
 		WithOutputFormat(builder.OutputFormatPlainText). // 使用纯文本格式
 		Build()
-
 	if err != nil {
 		log.Fatalf("创建 Agent 失败: %v", err)
 	}
@@ -309,7 +306,6 @@ func createCalculatorTool() interfaces.Tool {
 			return nil, fmt.Errorf("无效的表达式格式")
 		}).
 		Build()
-
 	if err != nil {
 		panic(fmt.Sprintf("创建计算器工具失败: %v", err))
 	}
@@ -352,7 +348,6 @@ func createTimeTool() interfaces.Tool {
 			}, nil
 		}).
 		Build()
-
 	if err != nil {
 		panic(fmt.Sprintf("创建时间工具失败: %v", err))
 	}

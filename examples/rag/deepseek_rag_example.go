@@ -430,7 +430,6 @@ Your Response:`
 		Temperature: 0.7,
 		MaxTokens:   1000,
 	})
-
 	if err != nil {
 		log.Printf("LLM generation failed: %v", err)
 		return

@@ -260,7 +260,6 @@ func TestClient_HTTPRequest(t *testing.T) {
 
 	client := NewClient(nil)
 	resp, err := client.R().Get(server.URL)
-
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}

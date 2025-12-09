@@ -5,12 +5,10 @@ import (
 	"math"
 	"sort"
 
-	"github.com/kart-io/goagent/interfaces"
-
 	coheregov2 "github.com/cohere-ai/cohere-go/v2"
 	cohereclient "github.com/cohere-ai/cohere-go/v2/client"
-
 	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/interfaces"
 )
 
 // Reranker 重排序器接口
@@ -398,7 +396,6 @@ func (c *CohereReranker) Rerank(ctx context.Context, query string, docs []*inter
 		Model:     &c.Model,
 		TopN:      &topN,
 	})
-
 	if err != nil {
 		return nil, agentErrors.Wrap(err, agentErrors.CodeInternal, "Cohere rerank API call failed").
 			WithComponent("cohere_reranker").

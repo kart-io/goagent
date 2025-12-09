@@ -34,9 +34,11 @@ func (a *SimpleWorkerAgent) SetRole(role multiagent.Role) { a.role = role }
 func (a *SimpleWorkerAgent) ReceiveMessage(ctx context.Context, msg multiagent.Message) error {
 	return nil
 }
+
 func (a *SimpleWorkerAgent) SendMessage(ctx context.Context, msg multiagent.Message) error {
 	return nil
 }
+
 func (a *SimpleWorkerAgent) Vote(ctx context.Context, proposal interface{}) (bool, error) {
 	return true, nil
 }

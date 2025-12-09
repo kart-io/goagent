@@ -3,13 +3,12 @@ package checkpoint
 import (
 	"context"
 	"errors"
-	"github.com/kart-io/goagent/utils/json"
 	"time"
-
-	"github.com/redis/go-redis/v9"
 
 	agentstate "github.com/kart-io/goagent/core/state"
 	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/utils/json"
+	"github.com/redis/go-redis/v9"
 )
 
 // RedisCheckpointerConfig holds configuration for Redis checkpointer

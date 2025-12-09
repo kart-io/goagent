@@ -5,11 +5,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kart-io/goagent/interfaces"
 	_ "github.com/mattn/go-sqlite3" // Import SQLite driver for tests
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/kart-io/goagent/interfaces"
 )
 
 // TestDatabaseQuery_SQLInjectionPrevention tests SQL injection protection

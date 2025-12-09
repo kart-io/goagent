@@ -340,7 +340,6 @@ func TestShellTool_ExecutePipeline(t *testing.T) {
 
 	// This tests the pipeline method signature with allowed commands
 	_, err := tool.ExecutePipeline(ctx, []string{"echo hello", "grep hello"})
-
 	// This should work since bash, echo, and grep are all allowed
 	if err != nil {
 		t.Errorf("Expected no error for pipeline with whitelisted commands, got: %v", err)

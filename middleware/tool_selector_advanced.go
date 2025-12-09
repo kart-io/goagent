@@ -3,8 +3,6 @@ package middleware
 import (
 	"context"
 	"fmt"
-
-	agentErrors "github.com/kart-io/goagent/errors"
 	"sort"
 	"strings"
 	"sync"
@@ -12,6 +10,7 @@ import (
 
 	"github.com/kart-io/goagent/core"
 	coremiddleware "github.com/kart-io/goagent/core/middleware"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 )

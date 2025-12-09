@@ -6,14 +6,13 @@ import (
 	"strings"
 	"time"
 
+	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/interfaces"
 	agentllm "github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/common"
 	"github.com/kart-io/goagent/llm/constants"
-	"github.com/kart-io/goagent/utils/json"
-
-	agentErrors "github.com/kart-io/goagent/errors"
-	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/utils/httpclient"
+	"github.com/kart-io/goagent/utils/json"
 )
 
 // OllamaClient Ollama LLM 客户端
@@ -166,7 +165,6 @@ func (c *OllamaClient) Complete(ctx context.Context, req *agentllm.CompletionReq
 		SetContext(ctx).
 		SetBody(ollamaReq).
 		Post(c.baseURL + "/api/generate")
-
 	if err != nil {
 		return nil, agentErrors.NewLLMRequestError(c.ProviderName(), c.GetModel(req.Model), err)
 	}
@@ -236,7 +234,6 @@ func (c *OllamaClient) Chat(ctx context.Context, messages []agentllm.Message) (*
 		SetContext(ctx).
 		SetBody(ollamaReq).
 		Post(c.baseURL + "/api/chat")
-
 	if err != nil {
 		return nil, agentErrors.NewLLMRequestError(c.ProviderName(), model, err).
 			WithContext("operation", "chat")
@@ -283,7 +280,6 @@ func (c *OllamaClient) IsAvailable() bool {
 	resp, err := c.client.R().
 		SetContext(ctx).
 		Get(c.baseURL + "/api/tags")
-
 	if err != nil {
 		return false
 	}

@@ -7,8 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/kart-io/goagent/utils/json"
 	"gopkg.in/yaml.v3"
+
+	"github.com/kart-io/goagent/utils/json"
 )
 
 // LoadSchema loads a PluginSchema from a file (YAML or JSON).
@@ -107,7 +108,7 @@ func SaveSchema(schema *PluginSchema, path string) error {
 		return fmt.Errorf("unsupported file format: %s (expected .yaml, .yml, or .json)", ext)
 	}
 
-	if err := os.WriteFile(path, data, 0644); err != nil {
+	if err := os.WriteFile(path, data, 0o644); err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
 

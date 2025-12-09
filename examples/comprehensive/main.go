@@ -29,7 +29,6 @@ import (
 	"github.com/kart-io/goagent/stream"
 	"github.com/kart-io/goagent/tools"
 	"github.com/kart-io/goagent/tools/middleware"
-
 	loggercore "github.com/kart-io/logger/core"
 )
 

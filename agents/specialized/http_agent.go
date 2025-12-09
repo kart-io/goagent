@@ -3,15 +3,14 @@ package specialized
 import (
 	"context"
 	"fmt"
-	"github.com/kart-io/goagent/utils/json"
 	"time"
 
 	"github.com/go-resty/resty/v2"
-
 	agentcore "github.com/kart-io/goagent/core"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/utils/httpclient"
+	"github.com/kart-io/goagent/utils/json"
 	"github.com/kart-io/logger/core"
 )
 

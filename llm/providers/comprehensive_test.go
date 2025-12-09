@@ -11,16 +11,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kart-io/goagent/interfaces"
+	"github.com/kart-io/goagent/llm"
 	agentllm "github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/common"
 	"github.com/kart-io/goagent/llm/constants"
 	"github.com/kart-io/goagent/utils/json"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/kart-io/goagent/interfaces"
-	"github.com/kart-io/goagent/llm"
 )
 
 // ==============================================================================
@@ -1258,7 +1256,6 @@ func TestDeepSeekProvider_InvalidRequestPayload(t *testing.T) {
 		// Verify proper request format
 		var req DeepSeekRequest
 		err := json.NewDecoder(r.Body).Decode(&req)
-
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Invalid request"))

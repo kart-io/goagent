@@ -39,7 +39,6 @@ func chatExample() {
 
 	ctx := context.Background()
 	resp, err := provider.Chat(ctx, []llm.Message{
-
 		{Role: "system", Content: "You are a helpful assistant. please answer the question in the chinese as the question"},
 		{Role: "user", Content: "What is the capital of France?"},
 	})

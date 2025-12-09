@@ -81,7 +81,6 @@ func (l *WebLoader) Load(ctx context.Context) ([]*interfaces.Document, error) {
 		SetContext(ctx).
 		SetHeaders(l.headers).
 		Get(l.url)
-
 	if err != nil {
 		if l.callbackManager != nil {
 			_ = l.callbackManager.OnError(ctx, err)

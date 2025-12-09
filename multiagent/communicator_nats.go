@@ -4,10 +4,10 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"github.com/kart-io/goagent/utils/json"
 	"sync"
 
 	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/utils/json"
 	"github.com/nats-io/nats.go"
 )
 

@@ -3,7 +3,6 @@ package document
 import (
 	"context"
 	"fmt"
-	"github.com/kart-io/goagent/utils/json"
 	"os"
 	"strings"
 
@@ -11,6 +10,7 @@ import (
 	"github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/retrieval"
+	"github.com/kart-io/goagent/utils/json"
 )
 
 // JSONLoader JSON 文件加载器
