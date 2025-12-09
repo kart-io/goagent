@@ -99,7 +99,7 @@ func main() {
 			"timeout": 30
 		}
 	}`
-	if err := os.WriteFile(configFile, []byte(configContent), 0644); err != nil {
+	if err := os.WriteFile(configFile, []byte(configContent), 0o644); err != nil {
 		fmt.Printf("创建配置文件失败: %v\n", err)
 		return
 	}

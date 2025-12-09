@@ -3,10 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/kart-io/goagent/utils/json"
 	"time"
 
 	"github.com/kart-io/goagent/interfaces"
+	"github.com/kart-io/goagent/utils/json"
 )
 
 // RunDemo demonstrates the multi-agent workflow without requiring an LLM

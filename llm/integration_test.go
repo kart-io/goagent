@@ -258,7 +258,6 @@ func TestExampleOpenAIOptions(t *testing.T) {
 		llm.WithRetryDelay(2*time.Second),
 		llm.WithCache(true, 15*time.Minute),
 	)
-
 	if err != nil {
 		panic(err)
 	}

@@ -6,12 +6,10 @@ import (
 	"net"
 	"strconv"
 
-	"github.com/kart-io/goagent/interfaces"
-
 	"github.com/google/uuid"
-	"github.com/qdrant/go-client/qdrant"
-
 	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/interfaces"
+	"github.com/qdrant/go-client/qdrant"
 )
 
 // QdrantVectorStore Qdrant 向量数据库存储
@@ -151,7 +149,6 @@ func (q *QdrantVectorStore) ensureCollection(ctx context.Context) error {
 			Distance: distance,
 		}),
 	})
-
 	if err != nil {
 		return agentErrors.Wrap(err, agentErrors.CodeInternal, "failed to create collection").
 			WithComponent("qdrant_store").
@@ -217,7 +214,6 @@ func (q *QdrantVectorStore) Add(ctx context.Context, docs []*interfaces.Document
 			CollectionName: q.config.CollectionName,
 			Points:         batch,
 		})
-
 		if err != nil {
 			return agentErrors.Wrap(err, agentErrors.CodeInternal, "failed to upsert points").
 				WithComponent("qdrant_store").
@@ -300,7 +296,6 @@ func (q *QdrantVectorStore) SearchByVector(ctx context.Context, queryVector []fl
 		Limit:          uintPtr(uint64(topK)),
 		WithPayload:    qdrant.NewWithPayload(true),
 	})
-
 	if err != nil {
 		return nil, agentErrors.Wrap(err, agentErrors.CodeRetrievalSearch, "failed to search vectors").
 			WithComponent("qdrant_store").
@@ -406,7 +401,6 @@ func (q *QdrantVectorStore) Delete(ctx context.Context, ids []string) error {
 			},
 		},
 	})
-
 	if err != nil {
 		return agentErrors.Wrap(err, agentErrors.CodeInternal, "failed to delete points").
 			WithComponent("qdrant_store").

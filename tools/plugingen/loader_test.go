@@ -45,7 +45,7 @@ output:
 	// Create temporary file
 	tmpDir := t.TempDir()
 	tmpFile := filepath.Join(tmpDir, "test.yaml")
-	err := os.WriteFile(tmpFile, []byte(yamlContent), 0644)
+	err := os.WriteFile(tmpFile, []byte(yamlContent), 0o644)
 	require.NoError(t, err)
 
 	// Load schema
@@ -105,7 +105,7 @@ func TestLoadSchema_JSON(t *testing.T) {
 	// Create temporary file
 	tmpDir := t.TempDir()
 	tmpFile := filepath.Join(tmpDir, "test.json")
-	err := os.WriteFile(tmpFile, []byte(jsonContent), 0644)
+	err := os.WriteFile(tmpFile, []byte(jsonContent), 0o644)
 	require.NoError(t, err)
 
 	// Load schema
@@ -123,7 +123,7 @@ func TestLoadSchema_JSON(t *testing.T) {
 func TestLoadSchema_InvalidFormat(t *testing.T) {
 	tmpDir := t.TempDir()
 	tmpFile := filepath.Join(tmpDir, "test.txt")
-	err := os.WriteFile(tmpFile, []byte("test"), 0644)
+	err := os.WriteFile(tmpFile, []byte("test"), 0o644)
 	require.NoError(t, err)
 
 	_, err = LoadSchema(tmpFile)
@@ -147,7 +147,7 @@ name: [invalid yaml structure
 
 	tmpDir := t.TempDir()
 	tmpFile := filepath.Join(tmpDir, "invalid.yaml")
-	err := os.WriteFile(tmpFile, []byte(invalidYAML), 0644)
+	err := os.WriteFile(tmpFile, []byte(invalidYAML), 0o644)
 	require.NoError(t, err)
 
 	_, err = LoadSchema(tmpFile)
@@ -165,7 +165,7 @@ version: v1.0.0
 
 	tmpDir := t.TempDir()
 	tmpFile := filepath.Join(tmpDir, "invalid.yaml")
-	err := os.WriteFile(tmpFile, []byte(invalidSchema), 0644)
+	err := os.WriteFile(tmpFile, []byte(invalidSchema), 0o644)
 	require.NoError(t, err)
 
 	_, err = LoadSchema(tmpFile)

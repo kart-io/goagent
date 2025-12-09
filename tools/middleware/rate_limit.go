@@ -9,10 +9,9 @@ import (
 
 	"golang.org/x/time/rate"
 
-	loggercore "github.com/kart-io/logger/core"
-
 	"github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
+	loggercore "github.com/kart-io/logger/core"
 )
 
 // RateLimitConfig 限流中间件配置

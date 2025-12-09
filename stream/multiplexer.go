@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	"github.com/google/uuid"
-
 	"github.com/kart-io/goagent/core"
 	agentErrors "github.com/kart-io/goagent/errors"
 )

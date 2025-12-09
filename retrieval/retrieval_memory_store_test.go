@@ -130,7 +130,6 @@ func TestMemoryVectorStoreSearchByVector(t *testing.T) {
 
 	queryVector := []float32{1.0, 0, 0}
 	results, err := store.SearchByVector(ctx, queryVector, 1)
-
 	if err != nil {
 		t.Fatalf("SearchByVector failed: %v", err)
 	}
@@ -157,7 +156,6 @@ func TestMemoryVectorStoreUpdateDocument(t *testing.T) {
 	// Update document
 	updatedDoc := NewDocumentWithID("doc1", "Updated content", nil)
 	err := store.Update(ctx, []*interfaces.Document{updatedDoc})
-
 	if err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
@@ -548,7 +546,6 @@ func TestMemoryVectorStoreEuclideanSorting(t *testing.T) {
 
 	queryVector := []float32{2.0, 0, 0}
 	results, err := store.SearchByVector(ctx, queryVector, 2)
-
 	if err != nil {
 		t.Fatalf("Search failed: %v", err)
 	}

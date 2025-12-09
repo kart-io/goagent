@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/kart-io/goagent/interfaces"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -165,7 +164,6 @@ func TestQdrantVectorStore_DocumentOperations(t *testing.T) {
 		VectorSize:     100,
 		Distance:       "cosine",
 	})
-
 	// If Qdrant is not running, skip the test
 	if err != nil {
 		t.Skipf("Qdrant not available: %v", err)
@@ -233,7 +231,6 @@ func TestQdrantVectorStore_AddDocuments(t *testing.T) {
 		CollectionName: "test_add_docs",
 		VectorSize:     100,
 	})
-
 	if err != nil {
 		t.Skipf("Qdrant not available: %v", err)
 	}
@@ -264,7 +261,6 @@ func TestQdrantVectorStore_Search(t *testing.T) {
 		CollectionName: "test_search",
 		VectorSize:     100,
 	})
-
 	if err != nil {
 		t.Skipf("Qdrant not available: %v", err)
 	}
@@ -296,7 +292,6 @@ func TestQdrantVectorStore_EmptyOperations(t *testing.T) {
 		CollectionName: "test_empty_ops",
 		VectorSize:     100,
 	})
-
 	if err != nil {
 		t.Skipf("Qdrant not available: %v", err)
 	}
@@ -326,7 +321,6 @@ func TestQdrantVectorStore_BatchOperations(t *testing.T) {
 		CollectionName: "test_batch",
 		VectorSize:     100,
 	})
-
 	if err != nil {
 		t.Skipf("Qdrant not available: %v", err)
 	}
@@ -368,7 +362,6 @@ func TestQdrantVectorStore_ErrorCases(t *testing.T) {
 		CollectionName: "test_errors",
 		VectorSize:     100,
 	})
-
 	if err != nil {
 		t.Skipf("Qdrant not available: %v", err)
 	}
@@ -401,7 +394,6 @@ func TestQdrantVectorStore_Close(t *testing.T) {
 		CollectionName: "test_close",
 		VectorSize:     100,
 	})
-
 	if err != nil {
 		t.Skipf("Qdrant not available: %v", err)
 	}

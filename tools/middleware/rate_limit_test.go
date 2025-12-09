@@ -7,10 +7,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/kart-io/goagent/interfaces"
 )
 
 // TestRateLimitMiddleware_Basic 测试基本限流功能

@@ -283,7 +283,6 @@ func (c *RAGChain) Run(ctx context.Context, query string) (string, error) {
 			llm.UserMessage(contextPrompt),
 		},
 	})
-
 	if err != nil {
 		return "", agentErrors.Wrap(err, agentErrors.CodeLLMRequest, "LLM generation failed").
 			WithComponent("rag_chain").
@@ -406,7 +405,6 @@ Please provide only the alternative queries, one per line, without numbering or 
 		},
 		Temperature: 0.7, // 适度的创造性
 	})
-
 	if err != nil {
 		return nil, agentErrors.Wrap(err, agentErrors.CodeLLMRequest, "failed to generate query variations").
 			WithComponent("rag_multi_query_retriever").

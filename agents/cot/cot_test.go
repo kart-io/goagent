@@ -66,7 +66,6 @@ func TestCoTAgent_BasicFunctionality(t *testing.T) {
 	// Execute agent
 	ctx := context.Background()
 	output, err := agent.Invoke(ctx, input)
-
 	// Verify results
 	if err != nil {
 		t.Fatalf("Agent execution failed: %v", err)

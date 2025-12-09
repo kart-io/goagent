@@ -3,16 +3,15 @@ package checkpoint
 import (
 	"context"
 	"fmt"
-	"github.com/kart-io/goagent/utils/json"
 	"testing"
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
+	agentstate "github.com/kart-io/goagent/core/state"
+	"github.com/kart-io/goagent/utils/json"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	agentstate "github.com/kart-io/goagent/core/state"
 )
 
 func setupTestRedisCheckpointer(t *testing.T) (*RedisCheckpointer, *miniredis.Miniredis) {

@@ -4,13 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"regexp"
 	"strings"
 
-	"github.com/kart-io/goagent/utils/json"
-	"reflect"
-
 	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/utils/json"
 )
 
 var (

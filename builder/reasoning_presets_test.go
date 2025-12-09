@@ -4,9 +4,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/kart-io/goagent/agents/cot"
 	"github.com/kart-io/goagent/agents/got"
 	"github.com/kart-io/goagent/agents/metacot"
@@ -16,6 +13,8 @@ import (
 	"github.com/kart-io/goagent/agents/tot"
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/interfaces"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestWithChainOfThought 测试 Chain-of-Thought 推理预设

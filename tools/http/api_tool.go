@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/go-resty/resty/v2"
-
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/tools"

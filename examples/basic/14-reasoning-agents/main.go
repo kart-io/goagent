@@ -358,7 +358,6 @@ func createCalculatorTool() interfaces.Tool {
 			}, nil
 		}).
 		Build()
-
 	if err != nil {
 		panic(fmt.Sprintf("创建计算器工具失败: %v", err))
 	}

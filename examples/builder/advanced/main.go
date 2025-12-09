@@ -147,7 +147,6 @@ func example1AgentWithCustomState(apiKey, providerName string) {
 		// Advanced API - 自定义状态
 		WithState(customState).
 		Build()
-
 	if err != nil {
 		log.Fatalf("创建 Agent 失败: %v", err)
 	}
@@ -193,7 +192,6 @@ func example2AgentWithMiddleware(apiKey, providerName string) {
 		WithSystemPrompt("你是一个高性能助手").
 		WithTools(calculator).
 		Build()
-
 	if err != nil {
 		log.Fatalf("创建 Agent 失败: %v", err)
 	}
@@ -253,7 +251,6 @@ func example3AgentWithSessionManagement(apiKey, providerName string) {
 		WithSaveInterval(30 * time.Second). // 每 30 秒保存一次状态
 
 		Build()
-
 	if err != nil {
 		log.Fatalf("创建 Agent 失败: %v", err)
 	}
@@ -359,7 +356,6 @@ func example4EnterpriseAgent(apiKey, providerName string) {
 		WithMetadata("environment", "production"). // 环境标识
 
 		Build()
-
 	if err != nil {
 		log.Fatalf("创建企业级 Agent 失败: %v", err)
 	}
@@ -444,7 +440,6 @@ func createCalculatorTool() interfaces.Tool {
 			return nil, fmt.Errorf("无效的表达式格式")
 		}).
 		Build()
-
 	if err != nil {
 		panic(fmt.Sprintf("创建计算器工具失败: %v", err))
 	}

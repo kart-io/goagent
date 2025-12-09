@@ -8,16 +8,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kart-io/goagent/llm/constants"
-	"github.com/kart-io/goagent/utils/json"
-
 	"github.com/go-resty/resty/v2"
-
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	agentllm "github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/common"
+	"github.com/kart-io/goagent/llm/constants"
 	"github.com/kart-io/goagent/utils/httpclient"
+	"github.com/kart-io/goagent/utils/json"
 )
 
 // HuggingFaceProvider implements LLM interface for Hugging Face
@@ -189,7 +187,6 @@ func (p *HuggingFaceProvider) execute(ctx context.Context, req *HuggingFaceReque
 		SetContext(ctx).
 		SetBody(req).
 		Post(endpoint)
-
 	if err != nil {
 		return nil, agentErrors.NewLLMRequestError(string(constants.ProviderHuggingFace), model, err)
 	}

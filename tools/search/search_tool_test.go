@@ -150,7 +150,6 @@ func TestMockSearchEngine_AddResponse(t *testing.T) {
 
 	engine.AddResponse("custom query", customResults)
 	results, err := engine.Search(context.Background(), "custom query", 10)
-
 	if err != nil {
 		t.Errorf("Expected no error, got: %v", err)
 	}

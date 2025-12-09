@@ -6,12 +6,13 @@ import (
 	"testing"
 	"time"
 
+	"go.opentelemetry.io/otel"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+
 	agentcore "github.com/kart-io/goagent/core"
 	"github.com/kart-io/logger/core"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"go.opentelemetry.io/otel"
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
 // MockAgent implements the Agent interface for testing
