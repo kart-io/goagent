@@ -92,7 +92,6 @@ func main() {
         llm.WithAPIKey("test"),
         llm.WithModel("gpt-4"),
         llm.WithMaxTokens(2000),
-        llm.WithPreset(llm.PresetProduction),
     )
 
     if config.Provider != constants.ProviderCustom {

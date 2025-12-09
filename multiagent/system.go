@@ -589,12 +589,54 @@ func (s *MultiAgentSystem) executeHierarchicalTask(ctx context.Context, task *Co
 	return nil
 }
 
+// Plan represents a structured plan from a leader agent
+type Plan struct {
+	Tasks       []TaskAssignment `json:"tasks"`
+	Strategy    string           `json:"strategy,omitempty"`
+	Description string           `json:"description,omitempty"`
+}
+
+// TaskAssignment represents a task assigned to a worker
+type TaskAssignment struct {
+	WorkerID string      `json:"worker_id"`
+	Task     interface{} `json:"task"`
+}
+
 // parseLeaderPlan 解析 Leader 返回的 plan，支持多种格式
 func (s *MultiAgentSystem) parseLeaderPlan(planResult interface{}, workerIDs []string, workers map[string]CollaborativeAgent) (map[string]interface{}, error) {
 	if planResult == nil {
 		return nil, fmt.Errorf("plan result is nil")
 	}
 
+	// 优先尝试解析为结构化的 Plan 对象
+	if planMap, ok := planResult.(map[string]interface{}); ok {
+		// 检查是否符合 Plan 结构特征 (必须包含 tasks 数组)
+		if tasks, ok := planMap["tasks"].([]interface{}); ok {
+			// 尝试解析为 []TaskAssignment
+			result := make(map[string]interface{})
+			validPlan := true
+
+			for _, t := range tasks {
+				if taskMap, ok := t.(map[string]interface{}); ok {
+					if workerID, ok := taskMap["worker_id"].(string); ok {
+						if taskContent, ok := taskMap["task"]; ok {
+							result[workerID] = taskContent
+							continue
+						}
+					}
+				}
+				// 如果无法解析为标准 TaskAssignment，则标记为非标准 Plan，回退到旧逻辑
+				validPlan = false
+				break
+			}
+
+			if validPlan && len(result) > 0 {
+				return result, nil
+			}
+		}
+	}
+
+	// 回退到旧的解析逻辑
 	switch plan := planResult.(type) {
 	case map[string]interface{}:
 		// 检查是否包含 subtasks 字段（任务列表格式）
@@ -602,7 +644,7 @@ func (s *MultiAgentSystem) parseLeaderPlan(planResult interface{}, workerIDs []s
 			return s.distributeSubtasksToWorkers(subtasks, workerIDs)
 		}
 
-		// 检查是否包含 tasks 字段（另一种任务列表格式）
+		// 检查是否包含 tasks 字段（另一种任务列表格式 - 非结构化）
 		if tasks, exists := plan["tasks"]; exists {
 			return s.distributeSubtasksToWorkers(tasks, workerIDs)
 		}
