@@ -65,7 +65,6 @@ func (s *NATSChannelStore) GetOrCreateChannel(agentID string) chan *multiagent.A
 			fmt.Printf("Warning: channel full for agent %s, dropping message\n", agentID)
 		}
 	})
-
 	if err != nil {
 		fmt.Printf("Failed to subscribe to %s: %v\n", subject, err)
 		return ch

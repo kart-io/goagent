@@ -97,7 +97,6 @@ func createMiddlewareInvoker(
 
 		// 调用下一层（可能是另一个中间件或实际工具）
 		output, err := nextInvoker(ctx, modifiedInput)
-
 		// 如果执行出错，调用错误处理
 		if err != nil {
 			return nil, middleware.OnError(ctx, tool, err)

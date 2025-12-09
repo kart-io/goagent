@@ -7,12 +7,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	agentllm "github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/constants"
 	"github.com/kart-io/goagent/utils/json"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestKimi_NewKimiWithOptions_Success 测试成功创建 Kimi client

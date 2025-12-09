@@ -6,9 +6,10 @@ import (
 	"testing"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/otel/attribute"
 )
 
 func TestAgentMetrics_ConcurrentRecordRequest(t *testing.T) {

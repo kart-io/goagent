@@ -5,12 +5,11 @@ import (
 	"errors"
 	"time"
 
-	"github.com/redis/go-redis/v9"
-
 	agentcore "github.com/kart-io/goagent/core"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/logger/core"
+	"github.com/redis/go-redis/v9"
 )
 
 // CacheAgent 缓存操作 Agent

@@ -313,7 +313,7 @@ func TestPDFLoader_EmptyContent(t *testing.T) {
 	tmpDir := t.TempDir()
 	emptyFile := filepath.Join(tmpDir, "empty.pdf")
 
-	err := os.WriteFile(emptyFile, []byte("not a valid pdf"), 0644)
+	err := os.WriteFile(emptyFile, []byte("not a valid pdf"), 0o644)
 	require.NoError(t, err)
 
 	loader := NewPDFLoader(PDFLoaderConfig{

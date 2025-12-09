@@ -359,7 +359,6 @@ func createCalculatorTool() interfaces.Tool {
 			return nil, fmt.Errorf("无效的表达式格式")
 		}).
 		Build()
-
 	if err != nil {
 		panic(fmt.Sprintf("创建计算器工具失败: %v", err))
 	}
@@ -402,7 +401,6 @@ func createTimeTool() interfaces.Tool {
 			}, nil
 		}).
 		Build()
-
 	if err != nil {
 		panic(fmt.Sprintf("创建时间工具失败: %v", err))
 	}

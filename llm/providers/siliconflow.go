@@ -6,14 +6,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kart-io/goagent/llm/constants"
-	"github.com/kart-io/goagent/utils/json"
-
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	agentllm "github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/common"
+	"github.com/kart-io/goagent/llm/constants"
 	"github.com/kart-io/goagent/utils/httpclient"
+	"github.com/kart-io/goagent/utils/json"
 )
 
 // SiliconFlowClient SiliconFlow LLM 客户端
@@ -137,7 +136,6 @@ func (c *SiliconFlowClient) Complete(ctx context.Context, req *agentllm.Completi
 		SetContext(ctx).
 		SetBody(sfReq).
 		Post(c.baseURL + "/chat/completions")
-
 	if err != nil {
 		return nil, agentErrors.NewLLMRequestError(c.ProviderName(), model, err)
 	}

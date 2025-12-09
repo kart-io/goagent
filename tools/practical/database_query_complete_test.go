@@ -6,9 +6,8 @@ import (
 	"testing"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
-
 	"github.com/kart-io/goagent/interfaces"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 // TestDatabaseQueryTool_SanitizeQuery_BooleanInjection 测试布尔注入检测

@@ -102,20 +102,15 @@ func TestSupervisorAgent_DeepSeek_Example(t *testing.T) {
 	apiKey := os.Getenv("DEEPSEEK_API_KEY")
 
 	if apiKey == "" {
-
 		t.Skip("DEEPSEEK_API_KEY environment variable not set")
-
 	}
 
 	llm, err := providers.NewDeepSeekWithOptions(
 		llm.WithAPIKey(apiKey),
 		llm.WithModel("deepseek-chat"),
 	)
-
 	if err != nil {
-
 		t.Fatalf("Failed to create DeepSeek client: %v", err)
-
 	}
 
 	// 4. Create the SupervisorAgent
@@ -135,30 +130,23 @@ func TestSupervisorAgent_DeepSeek_Example(t *testing.T) {
 	// 5. Mock the responses from the sub-agents
 
 	searchAgent.On("Invoke", mock.Anything, mock.Anything).Return(&core.AgentOutput{
-
 		Result: "The capital of France is Paris.",
 	}, nil).Once()
 
 	weatherAgent.On("Invoke", mock.Anything, mock.Anything).Return(&core.AgentOutput{
-
 		Result: "The weather in Paris is sunny with a temperature of 25°C.",
 	}, nil).Once()
 
 	summaryAgent.On("Invoke", mock.Anything, mock.Anything).Return(&core.AgentOutput{
-
 		Result: "The capital of France is Paris, where it is currently sunny and 25°C.",
 	}, nil).Once()
 
 	// 8. Invoke the SupervisorAgent
 
 	finalResult, err := supervisor.Invoke(context.Background(), &core.AgentInput{Task: complexTask})
-
 	// 9. Print and verify the result
-
 	if err != nil {
-
 		t.Fatalf("Supervisor agent returned an error: %v", err)
-
 	}
 
 	fmt.Printf("Initial complex task: %s\n\n", complexTask)
@@ -172,37 +160,28 @@ func TestSupervisorAgent_DeepSeek_Example(t *testing.T) {
 	if result, ok := finalResult.Result.(map[string]interface{}); ok {
 
 		if searchResult, ok := result["search"].(map[string]interface{}); ok {
-
 			if results, ok := searchResult["results"].([]interface{}); ok {
 
 				fmt.Println("\nSearch results:")
 
 				for _, res := range results {
-
 					fmt.Printf("- %s\n", res)
-
 				}
 
 			}
-
 		}
 
 		if weatherResult, ok := result["weather"].(map[string]interface{}); ok {
-
 			if results, ok := weatherResult["results"].([]interface{}); ok {
 
 				fmt.Println("\nWeather results:")
 
 				for _, res := range results {
-
 					fmt.Printf("- %s\n", res)
-
 				}
 
 			}
-
 		}
 
 	}
-
 }

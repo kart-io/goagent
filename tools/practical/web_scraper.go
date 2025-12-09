@@ -8,7 +8,6 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/go-resty/resty/v2"
-
 	agentcore "github.com/kart-io/goagent/core"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
@@ -301,7 +300,6 @@ func (t *WebScraperTool) fetchPage(ctx context.Context, urlStr string) (*goquery
 		SetContext(ctx).
 		SetHeader(interfaces.HeaderUserAgent, t.userAgent).
 		Get(urlStr)
-
 	if err != nil {
 		return nil, err
 	}

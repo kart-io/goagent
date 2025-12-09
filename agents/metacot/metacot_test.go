@@ -610,7 +610,6 @@ func TestMetaCoTAgent_Stream(t *testing.T) {
 }
 
 func TestMetaCoTAgent_WithCallbacks(t *testing.T) {
-
 	callback := &testCallback{
 		onStart: func(ctx context.Context, input interface{}) error {
 			return nil

@@ -5,8 +5,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/otel/attribute"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestStartAgentSpan(t *testing.T) {

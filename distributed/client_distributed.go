@@ -3,13 +3,13 @@ package distributed
 import (
 	"context"
 	"fmt"
-	"github.com/kart-io/goagent/utils/json"
 	"time"
 
 	agentcore "github.com/kart-io/goagent/core"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/utils/httpclient"
+	"github.com/kart-io/goagent/utils/json"
 	"github.com/kart-io/logger/core"
 )
 
@@ -70,7 +70,6 @@ func (c *Client) ExecuteAgent(ctx context.Context, endpoint, agentName string, i
 		output, execErr = c.executeAgentInternal(ctx, endpoint, agentName, input)
 		return execErr
 	})
-
 	if err != nil {
 		// If circuit is open, wrap the error with context
 		if err == ErrCircuitOpen {
@@ -103,7 +102,6 @@ func (c *Client) executeAgentInternal(ctx context.Context, endpoint, agentName s
 		SetContext(ctx).
 		SetBody(input).
 		Post(url)
-
 	if err != nil {
 		return nil, agentErrors.Wrap(err, agentErrors.CodeDistributedConnection, "failed to send request").
 			WithComponent("distributed_client").
@@ -144,7 +142,6 @@ func (c *Client) ExecuteAgentAsync(ctx context.Context, endpoint, agentName stri
 		SetContext(ctx).
 		SetBody(input).
 		Post(url)
-
 	if err != nil {
 		return "", agentErrors.Wrap(err, agentErrors.CodeDistributedConnection, "failed to send request").
 			WithComponent("distributed_client").
@@ -186,7 +183,6 @@ func (c *Client) GetAsyncResult(ctx context.Context, endpoint, taskID string) (*
 	resp, err := c.client.R().
 		SetContext(ctx).
 		Get(url)
-
 	if err != nil {
 		return nil, false, agentErrors.Wrap(err, agentErrors.CodeDistributedConnection, "failed to send request").
 			WithComponent("distributed_client").
@@ -253,7 +249,6 @@ func (c *Client) Ping(ctx context.Context, endpoint string) error {
 	resp, err := c.client.R().
 		SetContext(ctx).
 		Get(url)
-
 	if err != nil {
 		return agentErrors.Wrap(err, agentErrors.CodeDistributedConnection, "failed to send request").
 			WithComponent("distributed_client").
@@ -279,7 +274,6 @@ func (c *Client) ListAgents(ctx context.Context, endpoint string) ([]string, err
 	resp, err := c.client.R().
 		SetContext(ctx).
 		Get(url)
-
 	if err != nil {
 		return nil, agentErrors.Wrap(err, agentErrors.CodeDistributedConnection, "failed to send request").
 			WithComponent("distributed_client").

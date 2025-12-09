@@ -7,9 +7,8 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/kart-io/goagent/utils/json"
-
 	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/utils/json"
 )
 
 // SimpleVectorStore interface for vector-based memory storage

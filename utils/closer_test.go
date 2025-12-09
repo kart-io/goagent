@@ -182,7 +182,6 @@ func TestMultiCloser(t *testing.T) {
 
 		multi := NewMultiCloser(mc1, mc2, mc3)
 		err := multi.Close()
-
 		if err != nil {
 			t.Errorf("期望 nil 错误，得到 %v", err)
 		}
@@ -227,7 +226,6 @@ func TestMultiCloser(t *testing.T) {
 		mc := &mockCloser{}
 		multi := NewMultiCloser(nil, mc, nil)
 		err := multi.Close()
-
 		if err != nil {
 			t.Errorf("期望 nil 错误，得到 %v", err)
 		}

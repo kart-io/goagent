@@ -17,7 +17,6 @@ import (
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/multiagent"
 	"github.com/kart-io/goagent/tools"
-
 	loggercore "github.com/kart-io/logger/core"
 )
 
@@ -184,7 +183,8 @@ func demonstrateDistributedExecution(ctx context.Context, system *multiagent.Mul
 			id       string
 			toolName string
 			args     map[string]interface{}
-		}) {
+		},
+		) {
 			defer wg.Done()
 			result, err := workers[idx].ExecuteTool(ctx, task.toolName, task.args)
 			mu.Lock()

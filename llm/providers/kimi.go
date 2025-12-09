@@ -6,14 +6,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kart-io/goagent/llm/constants"
-	"github.com/kart-io/goagent/utils/json"
-
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	agentllm "github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/common"
+	"github.com/kart-io/goagent/llm/constants"
 	"github.com/kart-io/goagent/utils/httpclient"
+	"github.com/kart-io/goagent/utils/json"
 )
 
 // KimiClient Kimi (Moonshot AI) LLM 客户端
@@ -220,7 +219,6 @@ func (c *KimiClient) IsAvailable() bool {
 	resp, err := c.client.R().
 		SetContext(ctx).
 		Get(c.baseURL + "/models")
-
 	if err != nil {
 		return false
 	}

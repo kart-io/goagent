@@ -174,31 +174,40 @@ func (l *simpleLogger) Fatal(args ...interface{}) { l.log("FATAL", fmt.Sprint(ar
 func (l *simpleLogger) Debugf(template string, args ...interface{}) {
 	l.log("DEBUG", fmt.Sprintf(template, args...))
 }
+
 func (l *simpleLogger) Infof(template string, args ...interface{}) {
 	l.log("INFO ", fmt.Sprintf(template, args...))
 }
+
 func (l *simpleLogger) Warnf(template string, args ...interface{}) {
 	l.log("WARN ", fmt.Sprintf(template, args...))
 }
+
 func (l *simpleLogger) Errorf(template string, args ...interface{}) {
 	l.log("ERROR", fmt.Sprintf(template, args...))
 }
+
 func (l *simpleLogger) Fatalf(template string, args ...interface{}) {
 	l.log("FATAL", fmt.Sprintf(template, args...))
 	os.Exit(1)
 }
+
 func (l *simpleLogger) Debugw(msg string, keysAndValues ...interface{}) {
 	l.log("DEBUG", msg, keysAndValues...)
 }
+
 func (l *simpleLogger) Infow(msg string, keysAndValues ...interface{}) {
 	l.log("INFO ", msg, keysAndValues...)
 }
+
 func (l *simpleLogger) Warnw(msg string, keysAndValues ...interface{}) {
 	l.log("WARN ", msg, keysAndValues...)
 }
+
 func (l *simpleLogger) Errorw(msg string, keysAndValues ...interface{}) {
 	l.log("ERROR", msg, keysAndValues...)
 }
+
 func (l *simpleLogger) Fatalw(msg string, keysAndValues ...interface{}) {
 	l.log("FATAL", msg, keysAndValues...)
 	os.Exit(1)

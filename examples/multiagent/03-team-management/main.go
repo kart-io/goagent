@@ -24,34 +24,44 @@ func (l *simpleLogger) Fatal(args ...interface{}) {
 	fmt.Println(args...)
 	os.Exit(1)
 }
+
 func (l *simpleLogger) Debugf(template string, args ...interface{}) {
 	fmt.Printf("[DEBUG] "+template+"\n", args...)
 }
+
 func (l *simpleLogger) Infof(template string, args ...interface{}) {
 	fmt.Printf("[INFO] "+template+"\n", args...)
 }
+
 func (l *simpleLogger) Warnf(template string, args ...interface{}) {
 	fmt.Printf("[WARN] "+template+"\n", args...)
 }
+
 func (l *simpleLogger) Errorf(template string, args ...interface{}) {
 	fmt.Printf("[ERROR] "+template+"\n", args...)
 }
+
 func (l *simpleLogger) Fatalf(template string, args ...interface{}) {
 	fmt.Printf("[FATAL] "+template+"\n", args...)
 	os.Exit(1)
 }
+
 func (l *simpleLogger) Debugw(msg string, keysAndValues ...interface{}) {
 	fmt.Printf("[DEBUG] %s %v\n", msg, keysAndValues)
 }
+
 func (l *simpleLogger) Infow(msg string, keysAndValues ...interface{}) {
 	fmt.Printf("[INFO] %s %v\n", msg, keysAndValues)
 }
+
 func (l *simpleLogger) Warnw(msg string, keysAndValues ...interface{}) {
 	fmt.Printf("[WARN] %s %v\n", msg, keysAndValues)
 }
+
 func (l *simpleLogger) Errorw(msg string, keysAndValues ...interface{}) {
 	fmt.Printf("[ERROR] %s %v\n", msg, keysAndValues)
 }
+
 func (l *simpleLogger) Fatalw(msg string, keysAndValues ...interface{}) {
 	fmt.Printf("[FATAL] %s %v\n", msg, keysAndValues)
 	os.Exit(1)
@@ -284,8 +294,8 @@ func printTeamInfo(team *multiagent.Team) {
 
 // executeProjectWithTeams 执行跨团队项目
 func executeProjectWithTeams(ctx context.Context, system *multiagent.MultiAgentSystem,
-	devTeam, dataTeam, opsTeam *multiagent.Team) {
-
+	devTeam, dataTeam, opsTeam *multiagent.Team,
+) {
 	fmt.Println("项目名称: 智能推荐系统 v2.0")
 	fmt.Println("项目目标: 基于用户行为数据，构建个性化推荐引擎")
 	fmt.Println()

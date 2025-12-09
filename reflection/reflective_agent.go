@@ -4,7 +4,6 @@ package reflection
 import (
 	"context"
 	"fmt"
-	"github.com/kart-io/goagent/utils/json"
 	"sync"
 	"time"
 
@@ -12,6 +11,7 @@ import (
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/memory"
+	"github.com/kart-io/goagent/utils/json"
 )
 
 // ReflectionType represents the type of reflection

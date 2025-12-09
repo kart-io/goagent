@@ -22,7 +22,6 @@ import (
 	"github.com/kart-io/goagent/llm/providers"
 	"github.com/kart-io/goagent/multiagent"
 	"github.com/kart-io/goagent/tools"
-
 	loggercore "github.com/kart-io/logger/core"
 )
 
@@ -1072,34 +1071,44 @@ func (l *simpleLogger) Fatal(args ...interface{}) {
 	fmt.Println(args...)
 	os.Exit(1)
 }
+
 func (l *simpleLogger) Debugf(template string, args ...interface{}) {
 	fmt.Printf("[DEBUG] "+template+"\n", args...)
 }
+
 func (l *simpleLogger) Infof(template string, args ...interface{}) {
 	fmt.Printf("[INFO] "+template+"\n", args...)
 }
+
 func (l *simpleLogger) Warnf(template string, args ...interface{}) {
 	fmt.Printf("[WARN] "+template+"\n", args...)
 }
+
 func (l *simpleLogger) Errorf(template string, args ...interface{}) {
 	fmt.Printf("[ERROR] "+template+"\n", args...)
 }
+
 func (l *simpleLogger) Fatalf(template string, args ...interface{}) {
 	fmt.Printf("[FATAL] "+template+"\n", args...)
 	os.Exit(1)
 }
+
 func (l *simpleLogger) Debugw(msg string, keysAndValues ...interface{}) {
 	fmt.Print("[DEBUG] ", msg, " ", formatKV(keysAndValues), "\n")
 }
+
 func (l *simpleLogger) Infow(msg string, keysAndValues ...interface{}) {
 	fmt.Print("[INFO] ", msg, " ", formatKV(keysAndValues), "\n")
 }
+
 func (l *simpleLogger) Warnw(msg string, keysAndValues ...interface{}) {
 	fmt.Print("[WARN] ", msg, " ", formatKV(keysAndValues), "\n")
 }
+
 func (l *simpleLogger) Errorw(msg string, keysAndValues ...interface{}) {
 	fmt.Print("[ERROR] ", msg, " ", formatKV(keysAndValues), "\n")
 }
+
 func (l *simpleLogger) Fatalw(msg string, keysAndValues ...interface{}) {
 	fmt.Print("[FATAL] ", msg, " ", formatKV(keysAndValues), "\n")
 	os.Exit(1)

@@ -8,8 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kart-io/goagent/utils/json"
-
 	"github.com/kart-io/goagent/builder"
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/interfaces"
@@ -17,6 +15,7 @@ import (
 	"github.com/kart-io/goagent/llm/providers"
 	"github.com/kart-io/goagent/tools"
 	"github.com/kart-io/goagent/utils/httpclient"
+	"github.com/kart-io/goagent/utils/json"
 )
 
 func main() {
@@ -182,7 +181,6 @@ Always call the appropriate tools and return their results.`
 		WithTools(registry.List()...).
 		WithState(core.NewAgentState()).
 		Build()
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to build analysis agent: %w", err)
 	}
@@ -216,7 +214,6 @@ Always call the appropriate tools and return their results.`
 		WithTools(registry.List()...).
 		WithState(core.NewAgentState()).
 		Build()
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to build strategy agent: %w", err)
 	}
@@ -252,7 +249,6 @@ Always call the appropriate tools and return their results.`
 		WithTools(registry.List()...).
 		WithState(core.NewAgentState()).
 		Build()
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to build execution agent: %w", err)
 	}

@@ -9,10 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kart-io/goagent/core/state"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/kart-io/goagent/core/state"
 )
 
 // Alias for convenience in tests

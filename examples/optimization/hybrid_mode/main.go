@@ -9,7 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kart-io/goagent/utils/json"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 
 	"github.com/kart-io/goagent/agents/cot"
 	"github.com/kart-io/goagent/agents/react"
@@ -20,8 +21,7 @@ import (
 	"github.com/kart-io/goagent/llm/providers"
 	"github.com/kart-io/goagent/memory"
 	"github.com/kart-io/goagent/planning"
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
+	"github.com/kart-io/goagent/utils/json"
 )
 
 // RealCodeExecutor 真实的代码执行工具
@@ -32,7 +32,7 @@ type RealCodeExecutor struct {
 func NewRealCodeExecutor() *RealCodeExecutor {
 	// 创建临时工作目录
 	workDir := filepath.Join(os.TempDir(), "goagent_code_executor", fmt.Sprintf("%d", time.Now().Unix()))
-	if err := os.MkdirAll(workDir, 0755); err != nil {
+	if err := os.MkdirAll(workDir, 0o755); err != nil {
 		// 如果失败，使用默认临时目录
 		workDir = os.TempDir()
 	}
@@ -148,7 +148,7 @@ echo "Deployment preparation complete"`
 func (r *RealCodeExecutor) executeGoCode(ctx context.Context, code string) (string, error) {
 	// 创建临时 Go 文件
 	fileName := filepath.Join(r.workDir, "main.go")
-	if err := os.WriteFile(fileName, []byte(code), 0644); err != nil {
+	if err := os.WriteFile(fileName, []byte(code), 0o644); err != nil {
 		return "", err
 	}
 
@@ -168,7 +168,7 @@ func (r *RealCodeExecutor) executeJavaScriptCode(ctx context.Context, code strin
 
 	// 创建临时 JS 文件
 	fileName := filepath.Join(r.workDir, "script.js")
-	if err := os.WriteFile(fileName, []byte(code), 0644); err != nil {
+	if err := os.WriteFile(fileName, []byte(code), 0o644); err != nil {
 		return "", err
 	}
 
@@ -201,7 +201,7 @@ type RealDeploymentSimulator struct {
 
 func NewRealDeploymentSimulator() *RealDeploymentSimulator {
 	deployDir := filepath.Join(os.TempDir(), "goagent_deployments", fmt.Sprintf("%d", time.Now().Unix()))
-	if err := os.MkdirAll(deployDir, 0755); err != nil {
+	if err := os.MkdirAll(deployDir, 0o755); err != nil {
 		// 如果失败，使用默认临时目录
 		deployDir = os.TempDir()
 	}
@@ -249,7 +249,7 @@ func (r *RealDeploymentSimulator) Invoke(ctx context.Context, input *interfaces.
 
 	// 创建部署目录结构
 	deployPath := filepath.Join(r.deployDir, env, service)
-	if err := os.MkdirAll(deployPath, 0755); err != nil {
+	if err := os.MkdirAll(deployPath, 0o755); err != nil {
 		return nil, err
 	}
 
@@ -269,7 +269,7 @@ func (r *RealDeploymentSimulator) Invoke(ctx context.Context, input *interfaces.
 
 	configBytes, _ := json.MarshalIndent(config, "", "  ")
 	configFile := filepath.Join(deployPath, "deployment.json")
-	if err := os.WriteFile(configFile, configBytes, 0644); err != nil {
+	if err := os.WriteFile(configFile, configBytes, 0o644); err != nil {
 		return nil, err
 	}
 
@@ -277,7 +277,7 @@ func (r *RealDeploymentSimulator) Invoke(ctx context.Context, input *interfaces.
 	if service != "database" {
 		dockerfile := r.generateDockerfile(service)
 		dockerFile := filepath.Join(deployPath, "Dockerfile")
-		if err := os.WriteFile(dockerFile, []byte(dockerfile), 0644); err != nil {
+		if err := os.WriteFile(dockerFile, []byte(dockerfile), 0o644); err != nil {
 			// 记录错误但继续
 			fmt.Printf("Warning: failed to create Dockerfile: %v\n", err)
 		}
@@ -286,7 +286,7 @@ func (r *RealDeploymentSimulator) Invoke(ctx context.Context, input *interfaces.
 	// 创建 docker-compose.yml
 	dockerCompose := r.generateDockerCompose(service, env)
 	composeFile := filepath.Join(deployPath, "docker-compose.yml")
-	if err := os.WriteFile(composeFile, []byte(dockerCompose), 0644); err != nil {
+	if err := os.WriteFile(composeFile, []byte(dockerCompose), 0o644); err != nil {
 		// 记录错误但继续
 		fmt.Printf("Warning: failed to create docker-compose.yml: %v\n", err)
 	}
@@ -425,7 +425,7 @@ type RealTestRunner struct {
 
 func NewRealTestRunner() *RealTestRunner {
 	testDir := filepath.Join(os.TempDir(), "goagent_tests", fmt.Sprintf("%d", time.Now().Unix()))
-	if err := os.MkdirAll(testDir, 0755); err != nil {
+	if err := os.MkdirAll(testDir, 0o755); err != nil {
 		// 如果失败，使用默认临时目录
 		testDir = os.TempDir()
 	}
@@ -473,7 +473,7 @@ func (r *RealTestRunner) Invoke(ctx context.Context, input *interfaces.ToolInput
 	// 创建测试文件
 	testFile := r.createTestFile(testType, target)
 	testPath := filepath.Join(r.testDir, fmt.Sprintf("%s_%s_test.go", target, testType))
-	if err := os.WriteFile(testPath, []byte(testFile), 0644); err != nil {
+	if err := os.WriteFile(testPath, []byte(testFile), 0o644); err != nil {
 		return nil, err
 	}
 
@@ -483,7 +483,7 @@ go 1.25
 
 require github.com/stretchr/testify v1.8.4`
 	goModPath := filepath.Join(r.testDir, "go.mod")
-	if err := os.WriteFile(goModPath, []byte(goModContent), 0644); err != nil {
+	if err := os.WriteFile(goModPath, []byte(goModContent), 0o644); err != nil {
 		// 记录错误但继续
 		fmt.Printf("Warning: failed to create go.mod: %v\n", err)
 	}

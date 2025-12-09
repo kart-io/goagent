@@ -7,9 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-
 	"github.com/kart-io/goagent/core"
+	"github.com/stretchr/testify/assert"
 )
 
 // TestRingBuffer_Creation tests buffer creation

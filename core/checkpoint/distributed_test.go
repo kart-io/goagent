@@ -8,10 +8,9 @@ import (
 	"testing"
 	"time"
 
+	agentstate "github.com/kart-io/goagent/core/state"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	agentstate "github.com/kart-io/goagent/core/state"
 )
 
 // MockCheckpointer is a mock implementation for testing
