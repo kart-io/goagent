@@ -75,42 +75,54 @@ func demonstrateLLMConfiguration() {
 	fmt.Println("\n场景描述: 展示多种 LLM 客户端的配置方式")
 	fmt.Println()
 
-	// 1. 使用预设配置
-	fmt.Println("1. 使用预设配置 (Presets)")
+	// 1. 显式配置
+	fmt.Println("1. 显式配置 (Explicit Configuration)")
 	fmt.Println("────────────────────────────────────────")
 
-	presets := []struct {
-		name   string
-		preset llm.ClientOption
+	configs := []struct {
+		name string
+		opts []llm.ClientOption
 	}{
-		{"Development", llm.WithPreset(llm.PresetDevelopment)},
-		{"Production", llm.WithPreset(llm.PresetProduction)},
-		{"LowCost", llm.WithPreset(llm.PresetLowCost)},
-		{"HighQuality", llm.WithPreset(llm.PresetHighQuality)},
-		{"Fast", llm.WithPreset(llm.PresetFast)},
+		{"Development", []llm.ClientOption{
+			llm.WithModel("gpt-3.5-turbo"),
+			llm.WithMaxTokens(1000),
+			llm.WithTemperature(0.5),
+		}},
+		{"Production", []llm.ClientOption{
+			llm.WithModel("gpt-4"),
+			llm.WithMaxTokens(2000),
+			llm.WithTemperature(0.7),
+			llm.WithCache(true, 5*time.Minute),
+		}},
 	}
 
-	for _, p := range presets {
-		fmt.Printf("  - %s: 适用于%s场景\n", p.name, getPresetDescription(p.name))
+	for _, c := range configs {
+		fmt.Printf("  - %s: 显式设置模型和参数\n", c.name)
 	}
 
-	// 2. 使用用例预设
-	fmt.Println("\n2. 使用用例预设 (Use Cases)")
+	// 2. 针对场景优化
+	fmt.Println("\n2. 针对场景优化 (Scenario Optimization)")
 	fmt.Println("────────────────────────────────────────")
 
-	useCases := []struct {
-		name    string
-		useCase llm.UseCase
+	scenarios := []struct {
+		name string
+		opts []llm.ClientOption
 	}{
-		{"Chat", llm.UseCaseChat},
-		{"CodeGeneration", llm.UseCaseCodeGeneration},
-		{"Translation", llm.UseCaseTranslation},
-		{"Summarization", llm.UseCaseSummarization},
-		{"Analysis", llm.UseCaseAnalysis},
+		{"Chat", []llm.ClientOption{
+			llm.WithTemperature(0.7),
+			llm.WithMaxTokens(1500),
+			llm.WithTopP(0.9),
+		}},
+		{"CodeGeneration", []llm.ClientOption{
+			llm.WithTemperature(0.2),
+			llm.WithMaxTokens(2500),
+			llm.WithTopP(0.95),
+			llm.WithModel("gpt-4"),
+		}},
 	}
 
-	for _, uc := range useCases {
-		fmt.Printf("  - %s: %s\n", uc.name, getUseCaseDescription(uc.name))
+	for _, s := range scenarios {
+		fmt.Printf("  - %s: 针对特定任务调整参数\n", s.name)
 	}
 
 	// 3. 使用 Provider 预设
@@ -441,7 +453,7 @@ func estimateCost(model string, tokens int) {
 	fmt.Println("成本控制建议:")
 	fmt.Println("  - 使用 WithMaxTokens() 限制输出长度")
 	fmt.Println("  - 使用 WithCache() 缓存重复请求")
-	fmt.Println("  - 使用 LowCost 预设选择经济型模型")
+	fmt.Println("  - 显式配置经济型模型参数 (如 gpt-3.5-turbo)")
 	fmt.Println("  - 批量处理请求以提高效率")
 }
 
@@ -477,28 +489,6 @@ func createLLMClient() llm.Client {
 	}
 
 	return nil
-}
-
-func getPresetDescription(name string) string {
-	descriptions := map[string]string{
-		"Development": "开发调试，详细日志",
-		"Production":  "生产环境，稳定可靠",
-		"LowCost":     "成本优先，经济实惠",
-		"HighQuality": "质量优先，最佳效果",
-		"Fast":        "速度优先，快速响应",
-	}
-	return descriptions[name]
-}
-
-func getUseCaseDescription(name string) string {
-	descriptions := map[string]string{
-		"Chat":           "对话聊天，自然交互",
-		"CodeGeneration": "代码生成，编程辅助",
-		"Translation":    "翻译转换，多语言支持",
-		"Summarization":  "文本摘要，信息提炼",
-		"Analysis":       "数据分析，洞察发现",
-	}
-	return descriptions[name]
 }
 
 // ============================================================================

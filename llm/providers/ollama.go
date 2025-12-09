@@ -122,15 +122,18 @@ type ollamaGenerateResponse struct {
 func (c *OllamaClient) Complete(ctx context.Context, req *agentllm.CompletionRequest) (*agentllm.CompletionResponse, error) {
 	// 构建 prompt
 	var prompt string
+	if c.Config.SystemPrompt != "" {
+		prompt += fmt.Sprintf("System: %s\n", c.Config.SystemPrompt)
+	}
 	if len(req.Messages) > 0 {
 		// 将消息转换为 prompt
 		for _, msg := range req.Messages {
 			switch msg.Role {
-			case "system":
+			case constants.RoleSystem:
 				prompt += fmt.Sprintf("System: %s\n", msg.Content)
-			case "user":
+			case constants.RoleUser:
 				prompt += fmt.Sprintf("User: %s\n", msg.Content)
-			case "assistant":
+			case constants.RoleAssistant:
 				prompt += fmt.Sprintf("Assistant: %s\n", msg.Content)
 			}
 		}
@@ -198,12 +201,18 @@ func (c *OllamaClient) Complete(ctx context.Context, req *agentllm.CompletionReq
 // Chat 实现 llm.Client 接口的 Chat 方法
 func (c *OllamaClient) Chat(ctx context.Context, messages []agentllm.Message) (*agentllm.CompletionResponse, error) {
 	// 转换消息格式
-	ollamaMessages := make([]ollamaMessage, len(messages))
-	for i, msg := range messages {
-		ollamaMessages[i] = ollamaMessage{
+	ollamaMessages := make([]ollamaMessage, 0, len(messages)+1)
+	if c.Config.SystemPrompt != "" {
+		ollamaMessages = append(ollamaMessages, ollamaMessage{
+			Role:    constants.RoleSystem,
+			Content: c.Config.SystemPrompt,
+		})
+	}
+	for _, msg := range messages {
+		ollamaMessages = append(ollamaMessages, ollamaMessage{
 			Role:    msg.Role,
 			Content: msg.Content,
-		}
+		})
 	}
 
 	// 使用 common.BaseProvider 的统一参数处理方法
