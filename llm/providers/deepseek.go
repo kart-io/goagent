@@ -3,10 +3,11 @@ package providers
 import (
 	"context"
 	"fmt"
-	"github.com/kart-io/goagent/llm/common"
 	"io"
 	"strings"
 	"time"
+
+	"github.com/kart-io/goagent/llm/common"
 
 	agentllm "github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/constants"
@@ -165,8 +166,17 @@ func NewDeepSeekWithOptions(opts ...agentllm.ClientOption) (*DeepSeekProvider, e
 
 // Complete implements basic text completion
 func (p *DeepSeekProvider) Complete(ctx context.Context, req *agentllm.CompletionRequest) (*agentllm.CompletionResponse, error) {
+	// Prepare messages
+	inputMessages := req.Messages
+	if p.Config.SystemPrompt != "" {
+		newMessages := make([]agentllm.Message, 0, len(inputMessages)+1)
+		newMessages = append(newMessages, agentllm.SystemMessage(p.Config.SystemPrompt))
+		newMessages = append(newMessages, inputMessages...)
+		inputMessages = newMessages
+	}
+
 	// Convert messages to DeepSeek format using shared utility
-	messages := common.ConvertMessages(req.Messages, func(msg agentllm.Message) DeepSeekMessage {
+	messages := common.ConvertMessages(inputMessages, func(msg agentllm.Message) DeepSeekMessage {
 		return DeepSeekMessage{
 			Role:    msg.Role,
 			Content: msg.Content,
@@ -239,12 +249,17 @@ func (p *DeepSeekProvider) Stream(ctx context.Context, prompt string) (<-chan st
 	maxTokens := p.GetMaxTokens(0)
 	temperature := p.GetTemperature(0)
 
+	// Prepare messages
+	messages := make([]DeepSeekMessage, 0, 2)
+	if p.Config.SystemPrompt != "" {
+		messages = append(messages, DeepSeekMessage{Role: "system", Content: p.Config.SystemPrompt})
+	}
+	messages = append(messages, DeepSeekMessage{Role: "user", Content: prompt})
+
 	// Prepare request
 	dsReq := DeepSeekRequest{
-		Model: model,
-		Messages: []DeepSeekMessage{
-			{Role: "user", Content: prompt},
-		},
+		Model:       model,
+		Messages:    messages,
 		Temperature: temperature,
 		MaxTokens:   maxTokens,
 		Stream:      true,
@@ -303,12 +318,17 @@ func (p *DeepSeekProvider) GenerateWithTools(ctx context.Context, prompt string,
 	maxTokens := p.GetMaxTokens(0)
 	temperature := p.GetTemperature(0)
 
+	// Prepare messages
+	messages := make([]DeepSeekMessage, 0, 2)
+	if p.Config.SystemPrompt != "" {
+		messages = append(messages, DeepSeekMessage{Role: "system", Content: p.Config.SystemPrompt})
+	}
+	messages = append(messages, DeepSeekMessage{Role: "user", Content: prompt})
+
 	// Prepare request
 	dsReq := DeepSeekRequest{
-		Model: model,
-		Messages: []DeepSeekMessage{
-			{Role: "user", Content: prompt},
-		},
+		Model:       model,
+		Messages:    messages,
 		Temperature: temperature,
 		MaxTokens:   maxTokens,
 		Tools:       dsTools,
@@ -368,12 +388,17 @@ func (p *DeepSeekProvider) StreamWithTools(ctx context.Context, prompt string, t
 	maxTokens := p.GetMaxTokens(0)
 	temperature := p.GetTemperature(0)
 
+	// Prepare messages
+	messages := make([]DeepSeekMessage, 0, 2)
+	if p.Config.SystemPrompt != "" {
+		messages = append(messages, DeepSeekMessage{Role: "system", Content: p.Config.SystemPrompt})
+	}
+	messages = append(messages, DeepSeekMessage{Role: "user", Content: prompt})
+
 	// Prepare request
 	dsReq := DeepSeekRequest{
-		Model: model,
-		Messages: []DeepSeekMessage{
-			{Role: "user", Content: prompt},
-		},
+		Model:       model,
+		Messages:    messages,
 		Temperature: temperature,
 		MaxTokens:   maxTokens,
 		Tools:       dsTools,

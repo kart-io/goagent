@@ -202,7 +202,7 @@ Go to Actions → Nightly Build → Run workflow
 2. **Run pre-flight checks**:
    ```bash
    make test
-   ./verify_imports.sh
+   ./scripts/verify_imports.sh
    make lint
    ```
 
@@ -280,7 +280,7 @@ vim CHANGELOG.md
 # (if applicable)
 
 # Use the release script
-./create_release.sh <version>
+./scripts/create_release.sh <version>
 ```
 
 ---

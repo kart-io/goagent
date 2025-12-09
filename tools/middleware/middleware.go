@@ -70,6 +70,66 @@ type ToolInvoker func(context.Context, *interfaces.ToolInput) (*interfaces.ToolO
 //	}
 type ToolMiddlewareFunc func(interfaces.Tool, ToolInvoker) ToolInvoker
 
+// createMiddlewareInvoker 创建单个中间件的 invoker 包装器。
+//
+// 该函数提取了中间件包装逻辑，避免闭包变量捕获问题。
+// 显式传递中间件、下一层 invoker 和工具，确保每个包装层的变量独立。
+//
+// 参数:
+//   - middleware: 当前中间件实例
+//   - nextInvoker: 下一层调用函数（可能是另一个中间件或实际工具）
+//   - tool: 被包装的工具实例
+//
+// 返回:
+//   - 包装后的 ToolInvoker，包含该中间件的前置、后置和错误处理逻辑
+func createMiddlewareInvoker(
+	middleware ToolMiddleware,
+	nextInvoker ToolInvoker,
+	tool interfaces.Tool,
+) ToolInvoker {
+	return func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+		// OnBeforeInvoke: 前置处理
+		modifiedInput, err := middleware.OnBeforeInvoke(ctx, tool, input)
+		if err != nil {
+			// 前置错误处理
+			return nil, middleware.OnError(ctx, tool, err)
+		}
+
+		// 调用下一层（可能是另一个中间件或实际工具）
+		output, err := nextInvoker(ctx, modifiedInput)
+
+		// 如果执行出错，调用错误处理
+		if err != nil {
+			return nil, middleware.OnError(ctx, tool, err)
+		}
+
+		// 将 input 信息传递给 output（通过 Metadata）
+		// 这样 OnAfterInvoke 可以访问原始输入
+		if output != nil {
+			if output.Metadata == nil {
+				output.Metadata = make(map[string]interface{})
+			}
+			// 传递关键的 input 信息
+			if modifiedInput != nil && modifiedInput.Args != nil {
+				// 复制特殊的元数据键（如__logging_start_time）
+				for k, v := range modifiedInput.Args {
+					if len(k) > 2 && k[:2] == "__" {
+						output.Metadata[k] = v
+					}
+				}
+			}
+		}
+
+		// OnAfterInvoke: 后置处理
+		modifiedOutput, err := middleware.OnAfterInvoke(ctx, tool, output)
+		if err != nil {
+			return nil, middleware.OnError(ctx, tool, err)
+		}
+
+		return modifiedOutput, nil
+	}
+}
+
 // Chain 将多个中间件链式组合成单个 ToolInvoker。
 //
 // 中间件按照传入顺序执行 OnBeforeInvoke，按逆序执行 OnAfterInvoke，
@@ -105,51 +165,13 @@ func Chain(tool interfaces.Tool, invoker ToolInvoker, middlewares ...ToolMiddlew
 	// 从最后一个中间件开始，逆序包装（洋葱模型）
 	wrapped := invoker
 	for i := len(middlewares) - 1; i >= 0; i-- {
-		middleware := middlewares[i]
-		nextInvoker := wrapped
+		// 显式创建局部变量副本，避免闭包变量捕获问题
+		// 虽然 Go 1.22+ 已修复循环变量问题，但为了兼容性和清晰度，仍显式赋值
+		mw := middlewares[i]
+		next := wrapped
 
-		// 为每个中间件创建包装层
-		wrapped = func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
-			// OnBeforeInvoke: 前置处理
-			modifiedInput, err := middleware.OnBeforeInvoke(ctx, tool, input)
-			if err != nil {
-				// 前置错误处理
-				return nil, middleware.OnError(ctx, tool, err)
-			}
-
-			// 调用下一层（可能是另一个中间件或实际工具）
-			output, err := nextInvoker(ctx, modifiedInput)
-
-			// 如果执行出错，调用错误处理
-			if err != nil {
-				return nil, middleware.OnError(ctx, tool, err)
-			}
-
-			// 将 input 信息传递给 output（通过 Metadata）
-			// 这样 OnAfterInvoke 可以访问原始输入
-			if output != nil {
-				if output.Metadata == nil {
-					output.Metadata = make(map[string]interface{})
-				}
-				// 传递关键的 input 信息
-				if modifiedInput != nil && modifiedInput.Args != nil {
-					// 复制特殊的元数据键（如__logging_start_time）
-					for k, v := range modifiedInput.Args {
-						if len(k) > 2 && k[:2] == "__" {
-							output.Metadata[k] = v
-						}
-					}
-				}
-			}
-
-			// OnAfterInvoke: 后置处理
-			modifiedOutput, err := middleware.OnAfterInvoke(ctx, tool, output)
-			if err != nil {
-				return nil, middleware.OnError(ctx, tool, err)
-			}
-
-			return modifiedOutput, nil
-		}
+		// 使用辅助函数创建中间件包装器
+		wrapped = createMiddlewareInvoker(mw, next, tool)
 	}
 
 	return wrapped

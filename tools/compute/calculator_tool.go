@@ -42,14 +42,11 @@ func NewCalculatorTool() *CalculatorTool {
 
 // run 执行计算
 func (c *CalculatorTool) run(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+	resp := tools.NewToolErrorResponse(c.Name()).WithOperation("run")
+
 	expression, ok := input.Args["expression"].(string)
 	if !ok {
-		return &interfaces.ToolOutput{
-				Success: false,
-				Error:   "expression is required and must be a string",
-			}, tools.NewToolError(c.Name(), "invalid input", agentErrors.New(agentErrors.CodeInvalidInput, "expression is required").
-				WithComponent("calculator_tool").
-				WithOperation("run"))
+		return resp.ValidationError("expression is required and must be a string", "field", "expression")
 	}
 
 	// 清理表达式
@@ -58,20 +55,13 @@ func (c *CalculatorTool) run(ctx context.Context, input *interfaces.ToolInput) (
 	// 计算表达式
 	result, err := evaluateExpression(expression)
 	if err != nil {
-		return &interfaces.ToolOutput{
-			Success: false,
-			Error:   err.Error(),
-		}, tools.NewToolError(c.Name(), "calculation failed", err)
+		return resp.ExecutionError("calculation failed", nil, err)
 	}
 
-	return &interfaces.ToolOutput{
-		Result:  result,
-		Success: true,
-		Metadata: map[string]interface{}{
-			"expression": expression,
-			"result":     result,
-		},
-	}, nil
+	return resp.Success(result, map[string]interface{}{
+		"expression": expression,
+		"result":     result,
+	})
 }
 
 // evaluateExpression 计算数学表达式
@@ -225,24 +215,16 @@ func NewAdvancedCalculatorTool(operations CalculatorOperations) *AdvancedCalcula
 //
 //nolint:gocyclo // High complexity is inherent due to multiple math operations
 func (a *AdvancedCalculatorTool) run(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+	resp := tools.NewToolErrorResponse(a.Name()).WithOperation("advanced_run")
+
 	operation, ok := input.Args["operation"].(string)
 	if !ok {
-		return &interfaces.ToolOutput{
-				Success: false,
-				Error:   "operation is required",
-			}, tools.NewToolError(a.Name(), "invalid input", agentErrors.New(agentErrors.CodeInvalidInput, "operation is required").
-				WithComponent("calculator_tool").
-				WithOperation("advanced_run"))
+		return resp.ValidationError("operation is required", "field", "operation")
 	}
 
 	operands, ok := input.Args["operands"].([]interface{})
 	if !ok {
-		return &interfaces.ToolOutput{
-				Success: false,
-				Error:   "operands must be an array",
-			}, tools.NewToolError(a.Name(), "invalid input", agentErrors.New(agentErrors.CodeInvalidInput, "operands must be an array").
-				WithComponent("calculator_tool").
-				WithOperation("advanced_run"))
+		return resp.ValidationError("operands must be an array", "field", "operands")
 	}
 
 	// 转换为 float64
@@ -256,29 +238,16 @@ func (a *AdvancedCalculatorTool) run(ctx context.Context, input *interfaces.Tool
 		case string:
 			f, err := strconv.ParseFloat(v, 64)
 			if err != nil {
-				return &interfaces.ToolOutput{
-						Success: false,
-						Error:   fmt.Sprintf("invalid operand: %v", v),
-					}, tools.NewToolError(a.Name(), "invalid operand", agentErrors.Wrap(err, agentErrors.CodeInvalidInput, "invalid operand format").
-						WithComponent("calculator_tool").
-						WithOperation("advanced_run").
-						WithContext("operand", v))
+				return resp.ValidationError(fmt.Sprintf("invalid operand: %v", v), "operand", v, "index", i)
 			}
 			nums[i] = f
 		default:
-			return &interfaces.ToolOutput{
-					Success: false,
-					Error:   fmt.Sprintf("invalid operand type: %T", v),
-				}, tools.NewToolError(a.Name(), "invalid operand type", agentErrors.New(agentErrors.CodeInvalidInput, "invalid operand type").
-					WithComponent("calculator_tool").
-					WithOperation("advanced_run").
-					WithContext("type", fmt.Sprintf("%T", v)))
+			return resp.ValidationError(fmt.Sprintf("invalid operand type: %T", v), "type", fmt.Sprintf("%T", v), "index", i)
 		}
 	}
 
 	// 执行操作
 	var result float64
-	var err error
 
 	switch operation {
 	case "add":
@@ -288,7 +257,7 @@ func (a *AdvancedCalculatorTool) run(ctx context.Context, input *interfaces.Tool
 		}
 	case "subtract":
 		if len(nums) < 2 {
-			return &interfaces.ToolOutput{Success: false, Error: "subtract requires at least 2 operands"}, nil
+			return resp.ValidationError("subtract requires at least 2 operands", "operation", operation, "operand_count", len(nums))
 		}
 		result = nums[0]
 		for _, n := range nums[1:] {
@@ -301,72 +270,62 @@ func (a *AdvancedCalculatorTool) run(ctx context.Context, input *interfaces.Tool
 		}
 	case "divide":
 		if len(nums) < 2 {
-			return &interfaces.ToolOutput{Success: false, Error: "divide requires at least 2 operands"}, nil
+			return resp.ValidationError("divide requires at least 2 operands", "operation", operation, "operand_count", len(nums))
 		}
 		result = nums[0]
 		for _, n := range nums[1:] {
 			if n == 0 {
-				return &interfaces.ToolOutput{Success: false, Error: "division by zero"}, nil
+				return resp.ExecutionError("division by zero", nil, nil)
 			}
 			result /= n
 		}
 	case "power":
 		if len(nums) != 2 {
-			return &interfaces.ToolOutput{Success: false, Error: "power requires exactly 2 operands"}, nil
+			return resp.ValidationError("power requires exactly 2 operands", "operation", operation, "operand_count", len(nums))
 		}
 		result = math.Pow(nums[0], nums[1])
 	case "sqrt":
 		if len(nums) != 1 {
-			return &interfaces.ToolOutput{Success: false, Error: "sqrt requires exactly 1 operand"}, nil
+			return resp.ValidationError("sqrt requires exactly 1 operand", "operation", operation, "operand_count", len(nums))
 		}
 		result = math.Sqrt(nums[0])
 	case "abs":
 		if len(nums) != 1 {
-			return &interfaces.ToolOutput{Success: false, Error: "abs requires exactly 1 operand"}, nil
+			return resp.ValidationError("abs requires exactly 1 operand", "operation", operation, "operand_count", len(nums))
 		}
 		result = math.Abs(nums[0])
 	case "sin":
 		if len(nums) != 1 {
-			return &interfaces.ToolOutput{Success: false, Error: "sin requires exactly 1 operand"}, nil
+			return resp.ValidationError("sin requires exactly 1 operand", "operation", operation, "operand_count", len(nums))
 		}
 		result = math.Sin(nums[0])
 	case "cos":
 		if len(nums) != 1 {
-			return &interfaces.ToolOutput{Success: false, Error: "cos requires exactly 1 operand"}, nil
+			return resp.ValidationError("cos requires exactly 1 operand", "operation", operation, "operand_count", len(nums))
 		}
 		result = math.Cos(nums[0])
 	case "tan":
 		if len(nums) != 1 {
-			return &interfaces.ToolOutput{Success: false, Error: "tan requires exactly 1 operand"}, nil
+			return resp.ValidationError("tan requires exactly 1 operand", "operation", operation, "operand_count", len(nums))
 		}
 		result = math.Tan(nums[0])
 	case "log":
 		if len(nums) != 1 {
-			return &interfaces.ToolOutput{Success: false, Error: "log requires exactly 1 operand"}, nil
+			return resp.ValidationError("log requires exactly 1 operand", "operation", operation, "operand_count", len(nums))
 		}
 		result = math.Log10(nums[0])
 	case "ln":
 		if len(nums) != 1 {
-			return &interfaces.ToolOutput{Success: false, Error: "ln requires exactly 1 operand"}, nil
+			return resp.ValidationError("ln requires exactly 1 operand", "operation", operation, "operand_count", len(nums))
 		}
 		result = math.Log(nums[0])
 	default:
-		return &interfaces.ToolOutput{
-				Success: false,
-				Error:   fmt.Sprintf("unknown operation: %s", operation),
-			}, tools.NewToolError(a.Name(), "unknown operation", agentErrors.New(agentErrors.CodeInvalidInput, "unknown operation").
-				WithComponent("calculator_tool").
-				WithOperation("advanced_run").
-				WithContext("operation", operation))
+		return resp.ValidationError(fmt.Sprintf("unknown operation: %s", operation), "operation", operation)
 	}
 
-	return &interfaces.ToolOutput{
-		Result:  result,
-		Success: true,
-		Metadata: map[string]interface{}{
-			"operation": operation,
-			"operands":  nums,
-			"result":    result,
-		},
-	}, err
+	return resp.Success(result, map[string]interface{}{
+		"operation": operation,
+		"operands":  nums,
+		"result":    result,
+	})
 }

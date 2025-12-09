@@ -543,18 +543,13 @@ func convertToType[T any](value any) (T, error) {
 		}
 	}
 
-	// 策略 3: JSON 序列化/反序列化（最通用但最慢）
-	jsonBytes, err := json.Marshal(value)
-	if err != nil {
-		return zero, fmt.Errorf("failed to marshal value: %w", err)
+	// 策略 3: 使用 mapstructure 进行转换 (比 JSON 快)
+	// 使用 utils/json 提供的统一 Decode 方法
+	if err := json.Decode(value, &zero); err != nil {
+		return zero, fmt.Errorf("failed to decode to target type: %w", err)
 	}
 
-	var result T
-	if err := json.Unmarshal(jsonBytes, &result); err != nil {
-		return zero, fmt.Errorf("failed to unmarshal to target type: %w", err)
-	}
-
-	return result, nil
+	return zero, nil
 }
 
 // =============================================================================

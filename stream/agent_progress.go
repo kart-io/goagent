@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/utils"
 )
 
 // ProgressAgent 带进度反馈的 Agent
@@ -111,7 +112,7 @@ func (a *ProgressAgent) ExecuteStream(ctx context.Context, input *core.AgentInpu
 
 // processWithProgress 带进度的处理
 func (a *ProgressAgent) processWithProgress(ctx context.Context, input *core.AgentInput, writer *Writer) {
-	defer func() { _ = writer.Close() }()
+	defer utils.CloseQuietly(writer)
 
 	// 从输入获取任务配置
 	totalSteps := 100

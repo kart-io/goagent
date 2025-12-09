@@ -67,14 +67,11 @@ func NewSearchTool(engine SearchEngine) *SearchTool {
 
 // run 执行搜索
 func (s *SearchTool) run(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+	resp := tools.NewToolErrorResponse(s.Name()).WithOperation("run")
+
 	query, ok := input.Args["query"].(string)
 	if !ok || query == "" {
-		return &interfaces.ToolOutput{
-				Success: false,
-				Error:   "query is required and must be a non-empty string",
-			}, tools.NewToolError(s.Name(), "invalid input", agentErrors.New(agentErrors.CodeInvalidInput, "query is required").
-				WithComponent("search_tool").
-				WithOperation("run"))
+		return resp.ValidationError("query is required and must be a non-empty string", "field", "query")
 	}
 
 	maxResults := 5
@@ -85,21 +82,14 @@ func (s *SearchTool) run(ctx context.Context, input *interfaces.ToolInput) (*int
 	// 执行搜索
 	results, err := s.searchEngine.Search(ctx, query, maxResults)
 	if err != nil {
-		return &interfaces.ToolOutput{
-			Success: false,
-			Error:   err.Error(),
-		}, tools.NewToolError(s.Name(), "search failed", err)
+		return resp.ExecutionError("search failed", nil, err)
 	}
 
-	return &interfaces.ToolOutput{
-		Result:  results,
-		Success: true,
-		Metadata: map[string]interface{}{
-			"query":        query,
-			"result_count": len(results),
-			"max_results":  maxResults,
-		},
-	}, nil
+	return resp.Success(results, map[string]interface{}{
+		"query":        query,
+		"result_count": len(results),
+		"max_results":  maxResults,
+	})
 }
 
 // MockSearchEngine 模拟搜索引擎
@@ -212,13 +202,25 @@ func (d *DuckDuckGoSearchEngine) Search(ctx context.Context, query string, maxRe
 //
 // 从多个搜索引擎聚合结果
 type AggregatedSearchEngine struct {
-	engines []SearchEngine
+	engines       []SearchEngine
+	engineTimeout time.Duration // 单个引擎超时时间
 }
 
 // NewAggregatedSearchEngine 创建聚合搜索引擎
+//
+// 使用默认超时时间（5秒）
 func NewAggregatedSearchEngine(engines ...SearchEngine) *AggregatedSearchEngine {
 	return &AggregatedSearchEngine{
-		engines: engines,
+		engines:       engines,
+		engineTimeout: 5 * time.Second,
+	}
+}
+
+// NewAggregatedSearchEngineWithTimeout 创建带自定义超时的聚合搜索引擎
+func NewAggregatedSearchEngineWithTimeout(timeout time.Duration, engines ...SearchEngine) *AggregatedSearchEngine {
+	return &AggregatedSearchEngine{
+		engines:       engines,
+		engineTimeout: timeout,
 	}
 }
 
@@ -236,7 +238,11 @@ func (a *AggregatedSearchEngine) Search(ctx context.Context, query string, maxRe
 	// 并发查询所有搜索引擎
 	for _, engine := range a.engines {
 		go func(e SearchEngine) {
-			results, err := e.Search(ctx, query, maxResults)
+			// 为每个引擎创建独立超时
+			engineCtx, cancel := context.WithTimeout(ctx, a.engineTimeout)
+			defer cancel()
+
+			results, err := e.Search(engineCtx, query, maxResults)
 			if err != nil {
 				errorsChan <- err
 				return

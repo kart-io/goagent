@@ -773,3 +773,348 @@ func TestInputValidator_ErrorRecovery(t *testing.T) {
 		})
 	}
 }
+
+// ===== Schema 结构验证测试 =====
+
+// TestInputValidator_ParseSchemaValidation 测试 parseSchema 中的 schema 结构验证
+func TestInputValidator_ParseSchemaValidation(t *testing.T) {
+	validator := NewInputValidator()
+
+	tests := []struct {
+		name    string
+		schema  string
+		args    map[string]interface{} // 提供足够的参数避免 required 验证失败
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "valid schema with object type",
+			schema: `{
+				"type": "object",
+				"properties": {
+					"name": {"type": "string"},
+					"age": {"type": "integer"}
+				},
+				"required": ["name"]
+			}`,
+			args:    map[string]interface{}{"name": "test"},
+			wantErr: false,
+		},
+		{
+			name: "valid schema with empty type",
+			schema: `{
+				"properties": {
+					"name": {"type": "string"}
+				}
+			}`,
+			args:    map[string]interface{}{},
+			wantErr: false,
+		},
+		{
+			name: "valid schema with all supported types",
+			schema: `{
+				"type": "object",
+				"properties": {
+					"str": {"type": "string"},
+					"num": {"type": "number"},
+					"int": {"type": "integer"},
+					"bool": {"type": "boolean"},
+					"obj": {"type": "object"},
+					"arr": {"type": "array"},
+					"optional": {"type": ""}
+				}
+			}`,
+			args:    map[string]interface{}{},
+			wantErr: false,
+		},
+		{
+			name: "invalid schema type",
+			schema: `{
+				"type": "string",
+				"properties": {}
+			}`,
+			args:    map[string]interface{}{},
+			wantErr: true,
+			errMsg:  "tool schema type must be 'object'",
+		},
+		{
+			name: "invalid property type",
+			schema: `{
+				"type": "object",
+				"properties": {
+					"field": {"type": "invalid_type"}
+				}
+			}`,
+			args:    map[string]interface{}{},
+			wantErr: true,
+			errMsg:  "invalid property type",
+		},
+		{
+			name: "required field not in properties",
+			schema: `{
+				"type": "object",
+				"properties": {
+					"name": {"type": "string"}
+				},
+				"required": ["name", "age"]
+			}`,
+			args:    map[string]interface{}{},
+			wantErr: true,
+			errMsg:  "required field not found in properties",
+		},
+		{
+			name: "multiple invalid property types",
+			schema: `{
+				"properties": {
+					"field1": {"type": "invalid1"},
+					"field2": {"type": "string"}
+				}
+			}`,
+			args:    map[string]interface{}{},
+			wantErr: true,
+			errMsg:  "invalid property type",
+		},
+		{
+			name: "empty properties with non-empty required",
+			schema: `{
+				"type": "object",
+				"properties": {},
+				"required": ["missing_field"]
+			}`,
+			args:    map[string]interface{}{},
+			wantErr: true,
+			errMsg:  "required field not found in properties",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tool := NewBaseTool("test_tool", "Test schema validation", tt.schema, nil)
+			input := &interfaces.ToolInput{Args: tt.args}
+
+			err := validator.Validate(context.Background(), tool, input)
+
+			if tt.wantErr {
+				assert.Error(t, err)
+				if tt.errMsg != "" {
+					assert.Contains(t, err.Error(), tt.errMsg)
+				}
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+// TestInputValidator_SchemaValidationEdgeCases 测试 schema 验证的边界情况
+func TestInputValidator_SchemaValidationEdgeCases(t *testing.T) {
+	validator := NewInputValidator()
+
+	tests := []struct {
+		name    string
+		schema  string
+		args    map[string]interface{}
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name:    "empty schema",
+			schema:  "",
+			args:    map[string]interface{}{},
+			wantErr: false,
+		},
+		{
+			name:    "schema with only type",
+			schema:  `{"type": "object"}`,
+			args:    map[string]interface{}{},
+			wantErr: false,
+		},
+		{
+			name: "schema with empty required array",
+			schema: `{
+				"type": "object",
+				"properties": {"name": {"type": "string"}},
+				"required": []
+			}`,
+			args:    map[string]interface{}{},
+			wantErr: false,
+		},
+		{
+			name: "schema with duplicate required fields",
+			schema: `{
+				"properties": {"name": {"type": "string"}},
+				"required": ["name", "name"]
+			}`,
+			args:    map[string]interface{}{"name": "test"},
+			wantErr: false, // 重复的 required 字段不是错误，只是冗余
+		},
+		{
+			name: "schema with numeric type name (edge case)",
+			schema: `{
+				"properties": {
+					"field": {"type": "int"}
+				}
+			}`,
+			args:    map[string]interface{}{},
+			wantErr: true,
+			errMsg:  "invalid property type",
+		},
+		{
+			name: "schema with case-sensitive type mismatch",
+			schema: `{
+				"properties": {
+					"field": {"type": "String"}
+				}
+			}`,
+			args:    map[string]interface{}{},
+			wantErr: true,
+			errMsg:  "invalid property type",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tool := NewBaseTool("test_tool", "Test edge cases", tt.schema, nil)
+			input := &interfaces.ToolInput{Args: tt.args}
+
+			err := validator.Validate(context.Background(), tool, input)
+
+			if tt.wantErr {
+				assert.Error(t, err)
+				if tt.errMsg != "" {
+					assert.Contains(t, err.Error(), tt.errMsg)
+				}
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+// TestValidateFormat_Email 测试 email 格式验证
+func TestValidateFormat_Email(t *testing.T) {
+	validator := NewInputValidator()
+
+	// 构造 schema 使用 format: "email"
+	schema := `{
+		"type": "object",
+		"properties": {
+			"email": {
+				"type": "string",
+				"format": "email"
+			}
+		},
+		"required": ["email"]
+	}`
+
+	tool := NewBaseTool("test_email", "Test email validation", schema, nil)
+
+	tests := []struct {
+		name    string
+		email   string
+		wantErr bool
+		errMsg  string
+	}{
+		// 有效 email 格式
+		{
+			name:    "standard email",
+			email:   "user@example.com",
+			wantErr: false,
+		},
+		{
+			name:    "email with subdomain",
+			email:   "user@mail.example.com",
+			wantErr: false,
+		},
+		{
+			name:    "email with display name",
+			email:   "John Doe <john@example.com>",
+			wantErr: false,
+		},
+		{
+			name:    "email with plus sign",
+			email:   "user+tag@example.com",
+			wantErr: false,
+		},
+		{
+			name:    "email with dots",
+			email:   "first.last@example.org",
+			wantErr: false,
+		},
+		{
+			name:    "email with hyphen",
+			email:   "user-name@example-domain.com",
+			wantErr: false,
+		},
+
+		// 无效 email 格式
+		{
+			name:    "missing @",
+			email:   "invalid",
+			wantErr: true,
+			errMsg:  "invalid email format",
+		},
+		{
+			name:    "missing local part",
+			email:   "@example.com",
+			wantErr: true,
+			errMsg:  "invalid email format",
+		},
+		{
+			name:    "missing domain",
+			email:   "user@",
+			wantErr: true,
+			errMsg:  "invalid email format",
+		},
+		{
+			name:    "empty string",
+			email:   "",
+			wantErr: true,
+			errMsg:  "invalid email format",
+		},
+		{
+			name:    "only @",
+			email:   "@",
+			wantErr: true,
+			errMsg:  "invalid email format",
+		},
+		{
+			name:    "multiple @ symbols",
+			email:   "user@@example.com",
+			wantErr: true,
+			errMsg:  "invalid email format",
+		},
+		{
+			name:    "spaces in email",
+			email:   "user @example.com",
+			wantErr: true,
+			errMsg:  "invalid email format",
+		},
+		{
+			name:    "incomplete domain",
+			email:   "user@domain",
+			wantErr: false, // net/mail 允许这种格式（本地邮箱）
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			input := &interfaces.ToolInput{
+				Args: map[string]interface{}{
+					"email": tt.email,
+				},
+			}
+
+			err := validator.Validate(context.Background(), tool, input)
+
+			if tt.wantErr {
+				assert.Error(t, err)
+				if tt.errMsg != "" {
+					assert.Contains(t, err.Error(), tt.errMsg)
+				}
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}

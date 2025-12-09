@@ -9,6 +9,8 @@
 [![Go Reference](https://img.shields.io/badge/go-reference-blue?style=flat-square&logo=go)](https://pkg.go.dev/github.com/kart-io/goagent)
 [![Deepwiki](https://img.shields.io/badge/deepwiki-view-blueviolet?style=flat-square)](https://deepwiki.com/kart-io/goagent)
 
+[English](README.md) | [中文](README_CN.md)
+
 GoAgent is a comprehensive, production-ready AI agent framework for Go, inspired by LangChain. It provides agents, tools, memory, LLM abstraction, and orchestration capabilities with enterprise-grade features like distributed tracing, persistent storage, and multi-agent coordination.
 
 ## Features
@@ -86,14 +88,118 @@ monitoringAgent, err := builder.MonitoringAgent(llmClient, 30*time.Second)
 
 GoAgent follows a 4-layer architecture for maintainability and scalability:
 
+```mermaid
+graph TB
+    subgraph "Layer 4: Application"
+        Examples["Examples"]
+        UserApps["User Applications"]
+    end
+
+    subgraph "Layer 3: Implementation"
+        Agents["agents<br/>Reasoning Strategies"]
+        Tools["tools<br/>Tool System"]
+        Middleware["middleware<br/>Request Pipeline"]
+        Parsers["parsers<br/>Output Parsing"]
+        Planning["planning<br/>Task Planning"]
+        Reflection["reflection<br/>Self-Reflection"]
+    end
+
+    subgraph "Layer 2: Business Logic"
+        Core["core<br/>Execution Engine"]
+        LLM["llm<br/>LLM Integration"]
+        Memory["memory<br/>Memory Management"]
+        Stream["stream<br/>Streaming"]
+        MultiAgent["multiagent<br/>Multi-Agent"]
+        Observability["observability<br/>Tracing & Metrics"]
+    end
+
+    subgraph "Layer 1: Foundation"
+        Interfaces["interfaces<br/>Core Interfaces"]
+        Errors["errors<br/>Error Types"]
+        Cache["cache<br/>Caching"]
+        Options["options<br/>Configuration"]
+    end
+
+    Examples --> Agents
+    Examples --> Builder
+    UserApps --> Builder
+
+    Agents --> Core
+    Tools --> Core
+    Middleware --> Core
+    Planning --> Core
+
+    Core --> LLM
+    Core --> Memory
+    Core --> Interfaces
+
+    LLM --> Interfaces
+    Memory --> Cache
+
+    style Core fill:#e8f5e9
+    style LLM fill:#e1f5ff
+    style Interfaces fill:#fff3e0
+
+    Builder["builder<br/>Fluent API"]
+    Builder --> Core
+    Builder --> LLM
 ```
-Layer 1: Foundation     - Interfaces, errors, cache, utilities
-Layer 2: Business Logic - Core, LLM, memory, storage, observability
-Layer 3: Implementation - Agents, tools, middleware, parsers
-Layer 4: Examples       - Usage examples and tests
+
+### Request Flow
+
+```mermaid
+sequenceDiagram
+    participant App as Application
+    participant Builder as AgentBuilder
+    participant Agent as Agent
+    participant LLM as LLM Client
+    participant Tools as Tool System
+
+    App->>Builder: NewAgentBuilder(llm)
+    Builder->>Builder: Configure options
+    Builder->>Agent: Build()
+
+    App->>Agent: Execute(ctx, input)
+    Agent->>LLM: Generate(prompt)
+    LLM-->>Agent: Response
+
+    alt Tool Call Required
+        Agent->>Tools: Execute(toolCall)
+        Tools-->>Agent: Result
+        Agent->>LLM: Generate(with result)
+        LLM-->>Agent: Final Response
+    end
+
+    Agent-->>App: AgentOutput
 ```
 
 See [Architecture Documentation](docs/architecture/) for details.
+
+## Module Reference
+
+| Module | Description | Documentation |
+|--------|-------------|---------------|
+| **[core](core/)** | Execution engine, state management, runtime | [README](core/README.md) |
+| **[llm](llm/)** | LLM provider integration (OpenAI, Anthropic, etc.) | [README](llm/README.md) |
+| **[builder](builder/)** | Fluent API for agent construction | [README](builder/README.md) |
+| **[agents](agents/)** | Reasoning strategies (ReAct, CoT, ToT) | [README](agents/README.md) |
+| **[tools](tools/)** | Tool system and registry | [README](tools/README.md) |
+| **[memory](memory/)** | Memory management and vector storage | [README](memory/README.md) |
+| **[multiagent](multiagent/)** | Multi-agent coordination | [README](multiagent/README.md) |
+| **[stream](stream/)** | Streaming data processing | [README](stream/README.md) |
+| **[middleware](middleware/)** | Request/response middleware | [README](middleware/README.md) |
+| **[observability](observability/)** | Tracing and metrics | [README](observability/README.md) |
+| **[cache](cache/)** | Caching system | [README](cache/README.md) |
+| **[interfaces](interfaces/)** | Core interface definitions | [README](interfaces/README.md) |
+| **[errors](errors/)** | Error types and handling | [README](errors/README.md) |
+| **[planning](planning/)** | Task planning system | [README](planning/README.md) |
+| **[reflection](reflection/)** | Self-reflective agents | [README](reflection/README.md) |
+| **[prompt](prompt/)** | Prompt templates | [README](prompt/README.md) |
+| **[parsers](parsers/)** | Output parsing | [README](parsers/README.md) |
+| **[options](options/)** | Configuration options | [README](options/README.md) |
+| **[toolkits](toolkits/)** | Toolkit management | [README](toolkits/README.md) |
+| **[testing](testing/)** | Testing utilities and mocks | [README](testing/README.md) |
+| **[distributed](distributed/)** | Distributed computing | [README](distributed/README.md) |
 
 ## Core Components
 
@@ -194,7 +300,7 @@ executor := tools.NewToolExecutor(tools.ToolExecutorConfig{
     Timeout: 30 * time.Second,
 })
 
-results, err := executor.ExecuteParallel(ctx, []tools.ToolCall{
+results, err := executor.ExecuteParallel(ctx, []tools.ToolCallRequest{
     {Tool: searchTool, Input: map[string]interface{}{"query": "Go"}},
     {Tool: calcTool, Input: map[string]interface{}{"expr": "2+2"}},
 })
@@ -317,7 +423,7 @@ go run examples/basic/01-simple-agent/main.go
 - Minimum test coverage: 80%
 - All public APIs must have documentation
 - Follow [import layering rules](docs/architecture/IMPORT_LAYERING.md)
-- Run verification: `./verify_imports.sh`
+- Run verification: `./scripts/verify_imports.sh`
 
 ## Roadmap
 
