@@ -33,20 +33,27 @@ func TestOptionPatternIntegration(t *testing.T) {
 		assert.Equal(t, constants.ProviderOpenAI, client.Provider())
 	})
 
-	t.Run("CreateWithPreset", func(t *testing.T) {
+	t.Run("CreateWithExplicitOptions", func(t *testing.T) {
 		client, err := llm.NewClientWithOptions(
 			llm.WithProvider(constants.ProviderOpenAI),
-			llm.WithPreset(llm.PresetDevelopment),
+			llm.WithModel("gpt-3.5-turbo"),
+			llm.WithMaxTokens(1000),
+			llm.WithTemperature(0.5),
+			llm.WithTimeout(30*time.Second),
+			llm.WithRetryCount(1),
 		)
 
 		require.NoError(t, err)
 		assert.NotNil(t, client)
 	})
 
-	t.Run("CreateWithUseCase", func(t *testing.T) {
+	t.Run("CreateWithScenarioOptions", func(t *testing.T) {
 		client, err := llm.NewClientWithOptions(
 			llm.WithProvider(constants.ProviderOpenAI),
-			llm.WithUseCase(llm.UseCaseCodeGeneration),
+			llm.WithTemperature(0.2),
+			llm.WithMaxTokens(2500),
+			llm.WithTopP(0.95),
+			llm.WithModel("gpt-4"),
 		)
 
 		require.NoError(t, err)
@@ -74,11 +81,18 @@ func TestOpenAIBuilder(t *testing.T) {
 		assert.NotNil(t, client)
 	})
 
-	t.Run("OptionWithPreset", func(t *testing.T) {
+	t.Run("OptionWithExplicitConfig", func(t *testing.T) {
 		client, err := providers.NewOpenAIWithOptions(
 			llm.WithAPIKey(os.Getenv("OPENAI_API_KEY")),
-			llm.WithPreset(llm.PresetProduction),
-			llm.WithUseCase(llm.UseCaseChat),
+			llm.WithModel("gpt-4"),
+			llm.WithMaxTokens(2000),
+			llm.WithTemperature(0.7),
+			llm.WithTimeout(60*time.Second),
+			llm.WithRetryCount(3),
+			llm.WithCache(true, 5*time.Minute),
+			llm.WithTemperature(0.7),
+			llm.WithMaxTokens(1500),
+			llm.WithTopP(0.9),
 		)
 		require.NoError(t, err)
 		assert.NotNil(t, client)
@@ -180,13 +194,17 @@ func ExampleNewClientWithOptions() {
 	_ = response
 }
 
-// ExampleNewClientWithOptions_preset 展示使用预设配置
-func ExampleNewClientWithOptions_preset() {
-	// 使用生产预设
+// ExampleNewClientWithOptions_explicit 展示使用显式配置
+func ExampleNewClientWithOptions_explicit() {
+	// 使用生产环境配置
 	client, err := llm.NewClientWithOptions(
 		llm.WithProvider(constants.ProviderOpenAI),
 		llm.WithAPIKey("your-api-key"),
-		llm.WithPreset(llm.PresetProduction),
+		llm.WithModel("gpt-4"),
+		llm.WithMaxTokens(2000),
+		llm.WithTemperature(0.7),
+		llm.WithTimeout(60*time.Second),
+		llm.WithRetryCount(3),
 		llm.WithCache(true, 30*time.Minute),
 	)
 	if err != nil {
@@ -202,7 +220,9 @@ func ExampleNewClientWithOptions_useCase() {
 	client, err := llm.NewClientWithOptions(
 		llm.WithProvider(constants.ProviderOpenAI),
 		llm.WithAPIKey("your-api-key"),
-		llm.WithUseCase(llm.UseCaseCodeGeneration),
+		llm.WithTemperature(0.2),
+		llm.WithMaxTokens(2500),
+		llm.WithTopP(0.95),
 		llm.WithModel("gpt-4"), // 覆盖使用场景的默认模型
 	)
 	if err != nil {
@@ -229,7 +249,11 @@ func TestExampleOpenAIOptions(t *testing.T) {
 		llm.WithModel("gpt-4-turbo-preview"),
 		llm.WithTemperature(0.7),
 		llm.WithMaxTokens(4000),
-		llm.WithPreset(llm.PresetHighQuality),
+		llm.WithModel("gpt-4-turbo-preview"),
+		llm.WithMaxTokens(4000),
+		llm.WithTemperature(0.8),
+		llm.WithTopP(0.95),
+		llm.WithTimeout(120*time.Second),
 		llm.WithRetryCount(3),
 		llm.WithRetryDelay(2*time.Second),
 		llm.WithCache(true, 15*time.Minute),
@@ -251,8 +275,9 @@ func TestExampleConfigWithOptions(t *testing.T) {
 		llm.WithProvider(constants.ProviderOpenAI),
 		llm.WithAPIKey("your-api-key"),
 		llm.WithModel("gpt-4"),
-		llm.WithUseCase(llm.UseCaseAnalysis),
+		llm.WithTemperature(0.5),
 		llm.WithMaxTokens(3000),
+		llm.WithTopP(0.95),
 		llm.WithSystemPrompt("You are a data analyst"),
 	)
 

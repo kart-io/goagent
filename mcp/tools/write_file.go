@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/mcp/core"
+	"github.com/kart-io/goagent/utils"
 )
 
 // WriteFileTool 写入文件工具
@@ -99,7 +100,7 @@ func (t *WriteFileTool) Execute(ctx context.Context, input map[string]interface{
 				Timestamp: time.Now(),
 			}, err
 		}
-		defer func() { _ = f.Close() }()
+		defer utils.CloseQuietly(f)
 
 		_, err = f.WriteString(content)
 	} else {
@@ -140,14 +141,28 @@ func (t *WriteFileTool) Execute(ctx context.Context, input map[string]interface{
 
 // Validate 验证输入
 func (t *WriteFileTool) Validate(input map[string]interface{}) error {
-	path, ok := input["path"].(string)
-	if !ok || path == "" {
-		return &core.ErrInvalidInput{Field: "path", Message: "must be a non-empty string"}
+	// 验证 path 参数
+	pathVal, exists := input["path"]
+	if !exists {
+		return &core.ErrInvalidInput{Field: "path", Message: "is required"}
+	}
+	path, ok := pathVal.(string)
+	if !ok {
+		return &core.ErrInvalidInput{Field: "path", Message: "must be a string"}
+	}
+	if path == "" {
+		return &core.ErrInvalidInput{Field: "path", Message: "cannot be empty"}
 	}
 
-	_, ok = input["content"].(string)
-	if !ok {
-		return &core.ErrInvalidInput{Field: "content", Message: "must be a string"}
+	// 验证 content 参数（允许空字符串，但必须是字符串类型）
+	contentVal, exists := input["content"]
+	if !exists {
+		return &core.ErrInvalidInput{Field: "content", Message: "is required"}
+	}
+	if contentVal != nil {
+		if _, ok := contentVal.(string); !ok {
+			return &core.ErrInvalidInput{Field: "content", Message: "must be a string"}
+		}
 	}
 
 	return nil

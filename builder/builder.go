@@ -19,6 +19,18 @@ import (
 	"github.com/kart-io/goagent/store/memory"
 )
 
+// InputSerializer 定义输入序列化接口
+type InputSerializer interface {
+	Serialize(input interface{}) (string, error)
+}
+
+// DefaultInputSerializer 默认输入序列化器（使用 fmt.Sprintf）
+type DefaultInputSerializer struct{}
+
+func (s *DefaultInputSerializer) Serialize(input interface{}) (string, error) {
+	return fmt.Sprintf("%v", input), nil
+}
+
 // AgentBuilder 提供用于构建 Agent 的 fluent API
 //
 // 受 LangChain 的 create_agent 函数启发,它集成了:
@@ -30,6 +42,7 @@ import (
 //   - 中间件栈
 //   - 系统提示词
 //   - 对话记忆管理
+//   - 输入序列化
 type AgentBuilder[C any, S core.State] struct {
 	// 核心组件
 	llmClient    llm.Client
@@ -57,6 +70,9 @@ type AgentBuilder[C any, S core.State] struct {
 	// 错误处理
 	errorHandler func(error) error
 
+	// 输入序列化
+	inputSerializer InputSerializer
+
 	// 元数据
 	metadata map[string]interface{}
 }
@@ -64,12 +80,13 @@ type AgentBuilder[C any, S core.State] struct {
 // NewAgentBuilder 创建一个新的 Agent 构建器
 func NewAgentBuilder[C any, S core.State](llmClient llm.Client) *AgentBuilder[C, S] {
 	return &AgentBuilder[C, S]{
-		llmClient:   llmClient,
-		tools:       []interfaces.Tool{},
-		middlewares: []middleware.Middleware{},
-		callbacks:   []core.Callback{},
-		config:      DefaultAgentConfig(),
-		metadata:    make(map[string]interface{}),
+		llmClient:       llmClient,
+		tools:           []interfaces.Tool{},
+		middlewares:     []middleware.Middleware{},
+		callbacks:       []core.Callback{},
+		config:          DefaultAgentConfig(),
+		inputSerializer: &DefaultInputSerializer{},
+		metadata:        make(map[string]interface{}),
 	}
 }
 
@@ -172,11 +189,20 @@ func (b *AgentBuilder[C, S]) buildSystemPrompt() string {
 	return sb.String()
 }
 
+// WithInputSerializer 设置输入序列化器
+func (b *AgentBuilder[C, S]) WithInputSerializer(serializer InputSerializer) *AgentBuilder[C, S] {
+	b.inputSerializer = serializer
+	return b
+}
+
 // createHandler 创建主执行处理器
 func (b *AgentBuilder[C, S]) createHandler(runtime *execution.Runtime[C, S]) middleware.Handler {
 	return func(ctx context.Context, request *middleware.MiddlewareRequest) (*middleware.MiddlewareResponse, error) {
 		// 提取输入
-		inputStr := fmt.Sprintf("%v", request.Input)
+		inputStr, err := b.inputSerializer.Serialize(request.Input)
+		if err != nil {
+			return nil, agentErrors.Wrap(err, agentErrors.CodeInvalidInput, "failed to serialize input")
+		}
 
 		// 构建消息列表
 		messages := make([]llm.Message, 0)

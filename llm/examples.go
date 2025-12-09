@@ -36,29 +36,41 @@ func ExampleBasicUsage() {
 	fmt.Printf("Response: %s\n", response.Content)
 }
 
-// ExampleWithPresets 展示使用预设配置
-func ExampleWithPresets() {
-	// 使用生产环境预设
+// ExampleExplicitConfiguration 展示使用显式配置
+func ExampleExplicitConfiguration() {
+	// 使用生产环境配置
 	productionClient, _ := NewClientWithOptions(
 		WithProvider(constants.ProviderOpenAI),
 		WithAPIKey("your-api-key"),
-		WithPreset(PresetProduction),
+		WithModel("gpt-4"),
+		WithMaxTokens(2000),
+		WithTemperature(0.7),
+		WithTimeout(60*time.Second),
+		WithRetryCount(3),
+		WithCache(true, 5*time.Minute),
 	)
 	_ = productionClient
 
-	// 使用开发环境预设
+	// 使用开发环境配置
 	devClient, _ := NewClientWithOptions(
 		WithProvider(constants.ProviderOpenAI),
 		WithAPIKey("your-api-key"),
-		WithPreset(PresetDevelopment),
+		WithModel("gpt-3.5-turbo"),
+		WithMaxTokens(1000),
+		WithTemperature(0.5),
+		WithTimeout(30*time.Second),
+		WithRetryCount(1),
 	)
 	_ = devClient
 
-	// 使用低成本预设
+	// 使用低成本配置
 	lowCostClient, _ := NewClientWithOptions(
 		WithProvider(constants.ProviderOpenAI),
 		WithAPIKey("your-api-key"),
-		WithPreset(PresetLowCost),
+		WithModel("gpt-3.5-turbo"),
+		WithMaxTokens(500),
+		WithTemperature(0.3),
+		WithCache(true, 10*time.Minute),
 	)
 	_ = lowCostClient
 }
@@ -67,39 +79,44 @@ func ExampleWithPresets() {
 func ExampleProviderSpecific() {
 	// OpenAI 配置
 	openAIClient, _ := NewClientWithOptions(
-		WithProviderPreset(constants.ProviderOpenAI),
+		WithProvider(constants.ProviderOpenAI),
 		WithAPIKey("sk-..."),
 		WithOrganizationID("org-..."),
+		WithModel("gpt-4-turbo-preview"),
 		WithMaxTokens(4096),
 	)
 	_ = openAIClient
 
 	// Anthropic 配置
 	anthropicClient, _ := NewClientWithOptions(
-		WithProviderPreset(constants.ProviderAnthropic),
+		WithProvider(constants.ProviderAnthropic),
 		WithAPIKey("sk-ant-..."),
 		WithModel("claude-3-opus-20240229"),
+		WithMaxTokens(4096),
 	)
 	_ = anthropicClient
 
 	// Ollama 本地配置
 	ollamaClient, _ := NewClientWithOptions(
-		WithProviderPreset(constants.ProviderOllama),
+		WithProvider(constants.ProviderOllama),
 		WithBaseURL("http://localhost:11434"),
 		WithModel("llama2"),
+		WithMaxTokens(2048),
 		WithTimeout(30*time.Second),
 	)
 	_ = ollamaClient
 }
 
-// ExampleUseCaseOptimized 展示针对不同使用场景的优化
-func ExampleUseCaseOptimized() {
+// ExampleScenarioOptimization 展示针对不同使用场景的优化
+func ExampleScenarioOptimization() {
 	// 代码生成场景
 	codeGenClient, _ := NewClientWithOptions(
 		WithProvider(constants.ProviderOpenAI),
 		WithAPIKey("your-api-key"),
-		WithUseCase(UseCaseCodeGeneration),
-		WithModel("gpt-4"), // 覆盖使用场景的默认模型
+		WithTemperature(0.2),
+		WithMaxTokens(2500),
+		WithTopP(0.95),
+		WithModel("gpt-4"), // 代码生成推荐使用更强的模型
 	)
 	_ = codeGenClient
 
@@ -107,8 +124,9 @@ func ExampleUseCaseOptimized() {
 	creativeClient, _ := NewClientWithOptions(
 		WithProvider(constants.ProviderOpenAI),
 		WithAPIKey("your-api-key"),
-		WithUseCase(UseCaseCreativeWriting),
+		WithTemperature(0.9),
 		WithMaxTokens(5000), // 覆盖默认值
+		WithTopP(0.95),
 	)
 	_ = creativeClient
 
@@ -116,7 +134,9 @@ func ExampleUseCaseOptimized() {
 	summaryClient, _ := NewClientWithOptions(
 		WithProvider(constants.ProviderOpenAI),
 		WithAPIKey("your-api-key"),
-		WithUseCase(UseCaseSummarization),
+		WithTemperature(0.3),
+		WithMaxTokens(500),
+		WithTopP(0.9),
 	)
 	_ = summaryClient
 }
@@ -164,11 +184,18 @@ func ExampleChainedConfiguration() {
 		WithProvider(constants.ProviderOpenAI),
 		WithAPIKey("your-api-key"),
 
-		// 应用预设
-		WithPreset(PresetProduction),
+		// 生产环境配置
+		WithModel("gpt-4"),
+		WithMaxTokens(2000),
+		WithTemperature(0.7),
+		WithTimeout(60*time.Second),
+		WithRetryCount(3),
+		WithCache(true, 5*time.Minute),
 
-		// 应用使用场景优化
-		WithUseCase(UseCaseCodeGeneration),
+		// 代码生成优化
+		WithTemperature(0.2),
+		WithMaxTokens(2500),
+		WithTopP(0.95),
 
 		// 覆盖特定参数
 		WithModel("gpt-4-turbo-preview"),
@@ -223,7 +250,11 @@ func ExampleEnvironmentBased() {
 	devClient, _ := NewClientWithOptions(
 		WithProvider(constants.ProviderOpenAI),
 		// API key 从 OPENAI_API_KEY 环境变量读取
-		WithPreset(PresetDevelopment),
+		WithModel("gpt-3.5-turbo"),
+		WithMaxTokens(1000),
+		WithTemperature(0.5),
+		WithTimeout(30*time.Second),
+		WithRetryCount(1),
 		WithSystemPrompt("Development mode - verbose logging enabled"),
 	)
 	_ = devClient
@@ -232,10 +263,13 @@ func ExampleEnvironmentBased() {
 	prodClient, _ := NewClientWithOptions(
 		WithProvider(constants.ProviderOpenAI),
 		// API key 从环境变量读取
-		WithPreset(PresetProduction),
-		WithCache(true, 30*time.Minute),
-		WithRetryCount(5),
-		WithRateLimiting(1000), // 生产环境更高的速率限制
+		WithModel("gpt-4"),
+		WithMaxTokens(2000),
+		WithTemperature(0.7),
+		WithTimeout(60*time.Second),
+		WithRetryCount(5),               // 覆盖默认重试次数
+		WithCache(true, 30*time.Minute), // 覆盖默认缓存
+		WithRateLimiting(1000),          // 生产环境更高的速率限制
 	)
 	_ = prodClient
 }

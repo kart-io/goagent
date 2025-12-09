@@ -14,6 +14,9 @@ const (
 	maxContextMapSize = 1000
 )
 
+// DebugMode controls whether to enable expensive safety checks
+var DebugMode = false
+
 // agentInputPool is a sync.Pool for reusing AgentInput objects
 // to reduce memory allocations in chain execution paths.
 var agentInputPool = sync.Pool{
@@ -63,6 +66,9 @@ type AgentInput struct {
 
 	// 并发安全保护
 	contextMu sync.RWMutex `json:"-"` // Context map 的读写锁
+
+	// Debugging
+	inUse bool `json:"-"` // Only used when DebugMode is true
 }
 
 // AgentOutput Agent 输出
@@ -239,6 +245,63 @@ func (input *AgentInput) RLockContext() {
 // RUnlockContext 释放 Context 的读锁
 func (input *AgentInput) RUnlockContext() {
 	input.contextMu.RUnlock()
+}
+
+// GetString 从 Context 中安全获取 string 类型值
+func (input *AgentInput) GetString(key string) (string, bool) {
+	val, ok := input.GetContext(key)
+	if !ok {
+		return "", false
+	}
+	str, ok := val.(string)
+	return str, ok
+}
+
+// GetInt 从 Context 中安全获取 int 类型值
+func (input *AgentInput) GetInt(key string) (int, bool) {
+	val, ok := input.GetContext(key)
+	if !ok {
+		return 0, false
+	}
+	// 处理可能的数字类型转换
+	switch v := val.(type) {
+	case int:
+		return v, true
+	case float64:
+		return int(v), true
+	case int64:
+		return int(v), true
+	default:
+		return 0, false
+	}
+}
+
+// GetBool 从 Context 中安全获取 bool 类型值
+func (input *AgentInput) GetBool(key string) (bool, bool) {
+	val, ok := input.GetContext(key)
+	if !ok {
+		return false, false
+	}
+	b, ok := val.(bool)
+	return b, ok
+}
+
+// GetFloat64 从 Context 中安全获取 float64 类型值
+func (input *AgentInput) GetFloat64(key string) (float64, bool) {
+	val, ok := input.GetContext(key)
+	if !ok {
+		return 0.0, false
+	}
+	switch v := val.(type) {
+	case float64:
+		return v, true
+	case int:
+		return float64(v), true
+	case int64:
+		return float64(v), true
+	default:
+		return 0.0, false
+	}
 }
 
 // =============================================================================
@@ -624,6 +687,13 @@ func (c *ChainableAgent) executeChain(ctx context.Context, input *AgentInput, us
 			// Get a reusable AgentInput from the pool
 			pooledInput = agentInputPool.Get().(*AgentInput)
 
+			if DebugMode {
+				if pooledInput.inUse {
+					panic("AgentInput pulled from pool is already in use! Double-free detected.")
+				}
+				pooledInput.inUse = true
+			}
+
 			// Update fields in-place instead of creating new struct
 			pooledInput.Task = currentInput.Task
 			pooledInput.Instruction = currentInput.Instruction
@@ -669,6 +739,9 @@ func (c *ChainableAgent) executeChain(ctx context.Context, input *AgentInput, us
 // resetAgentInput clears an AgentInput for reuse in the pool.
 // 优化：使用 clear() (Go 1.21+) 和大小阈值策略防止内存驻留
 func resetAgentInput(input *AgentInput) {
+	if DebugMode {
+		input.inUse = false
+	}
 	input.Task = ""
 	input.Instruction = ""
 	input.SessionID = ""

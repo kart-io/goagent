@@ -378,3 +378,187 @@ func BenchmarkToolExecutor_Parallel(b *testing.B) {
 		_, _ = executor.ExecuteParallel(ctx, calls)
 	}
 }
+
+func TestToolExecutor_RetryWithJitter(t *testing.T) {
+	t.Run("Default jitter is 25%", func(t *testing.T) {
+		policy := &RetryPolicy{
+			MaxRetries:   3,
+			InitialDelay: time.Second,
+			MaxDelay:     10 * time.Second,
+			Multiplier:   2.0,
+			// Jitter 未设置，应使用默认值 0.25
+		}
+		executor := NewToolExecutor(WithRetryPolicy(policy))
+
+		// 多次计算延迟，验证存在随机性
+		delays := make([]time.Duration, 10)
+		for i := 0; i < 10; i++ {
+			delays[i] = executor.calculateRetryDelay(0)
+		}
+
+		// 验证至少有一些延迟值不同（说明有随机抖动）
+		hasVariation := false
+		for i := 1; i < len(delays); i++ {
+			if delays[i] != delays[0] {
+				hasVariation = true
+				break
+			}
+		}
+
+		if !hasVariation {
+			t.Error("Expected variation in retry delays due to jitter")
+		}
+
+		// 验证所有延迟都在合理范围内（基础延迟 ± 25%）
+		baseDelay := policy.InitialDelay
+		minDelay := time.Duration(float64(baseDelay) * 0.75)
+		maxDelay := time.Duration(float64(baseDelay) * 1.25)
+
+		for i, delay := range delays {
+			if delay < minDelay || delay > maxDelay {
+				t.Errorf("Delay %d out of expected range: %v (expected between %v and %v)",
+					i, delay, minDelay, maxDelay)
+			}
+		}
+	})
+
+	t.Run("Custom jitter value", func(t *testing.T) {
+		policy := &RetryPolicy{
+			MaxRetries:   3,
+			InitialDelay: time.Second,
+			MaxDelay:     10 * time.Second,
+			Multiplier:   2.0,
+			Jitter:       0.5, // 50% 抖动
+		}
+		executor := NewToolExecutor(WithRetryPolicy(policy))
+
+		// 多次计算延迟
+		delays := make([]time.Duration, 20)
+		for i := 0; i < 20; i++ {
+			delays[i] = executor.calculateRetryDelay(0)
+		}
+
+		// 验证所有延迟都在合理范围内（基础延迟 ± 50%）
+		baseDelay := policy.InitialDelay
+		minDelay := time.Duration(float64(baseDelay) * 0.5)
+		maxDelay := time.Duration(float64(baseDelay) * 1.5)
+
+		for i, delay := range delays {
+			if delay < minDelay || delay > maxDelay {
+				t.Errorf("Delay %d out of expected range: %v (expected between %v and %v)",
+					i, delay, minDelay, maxDelay)
+			}
+		}
+	})
+
+	t.Run("Zero jitter uses default", func(t *testing.T) {
+		policy := &RetryPolicy{
+			MaxRetries:   3,
+			InitialDelay: time.Second,
+			MaxDelay:     10 * time.Second,
+			Multiplier:   2.0,
+			Jitter:       0, // 零值应使用默认 0.25
+		}
+		executor := NewToolExecutor(WithRetryPolicy(policy))
+
+		delays := make([]time.Duration, 10)
+		for i := 0; i < 10; i++ {
+			delays[i] = executor.calculateRetryDelay(0)
+		}
+
+		// 验证存在随机性
+		hasVariation := false
+		for i := 1; i < len(delays); i++ {
+			if delays[i] != delays[0] {
+				hasVariation = true
+				break
+			}
+		}
+
+		if !hasVariation {
+			t.Error("Expected variation even with zero jitter (should use default)")
+		}
+	})
+
+	t.Run("Jitter respects max delay", func(t *testing.T) {
+		policy := &RetryPolicy{
+			MaxRetries:   5,
+			InitialDelay: time.Second,
+			MaxDelay:     2 * time.Second, // 最大延迟限制
+			Multiplier:   2.0,
+			Jitter:       0.5,
+		}
+		executor := NewToolExecutor(WithRetryPolicy(policy))
+
+		// 在高重试次数下，抖动后的延迟不应超过 MaxDelay
+		for attempt := 0; attempt < 10; attempt++ {
+			for i := 0; i < 10; i++ {
+				delay := executor.calculateRetryDelay(attempt)
+				if delay > policy.MaxDelay {
+					t.Errorf("Delay %v exceeds MaxDelay %v for attempt %d",
+						delay, policy.MaxDelay, attempt)
+				}
+			}
+		}
+	})
+
+	t.Run("Negative delay protection", func(t *testing.T) {
+		policy := &RetryPolicy{
+			MaxRetries:   3,
+			InitialDelay: 10 * time.Millisecond, // 非常小的初始延迟
+			MaxDelay:     time.Second,
+			Multiplier:   2.0,
+			Jitter:       1.0, // 100% 抖动，可能产生负值
+		}
+		executor := NewToolExecutor(WithRetryPolicy(policy))
+
+		// 即使有 100% 抖动，也不应返回负延迟
+		for i := 0; i < 100; i++ {
+			delay := executor.calculateRetryDelay(0)
+			if delay < 0 {
+				t.Errorf("Negative delay detected: %v", delay)
+			}
+			// 应该至少是 InitialDelay
+			if delay < policy.InitialDelay {
+				t.Errorf("Delay %v is less than InitialDelay %v", delay, policy.InitialDelay)
+			}
+		}
+	})
+
+	t.Run("Exponential backoff with jitter", func(t *testing.T) {
+		policy := &RetryPolicy{
+			MaxRetries:   4,
+			InitialDelay: 100 * time.Millisecond,
+			MaxDelay:     10 * time.Second,
+			Multiplier:   2.0,
+			Jitter:       0.25,
+		}
+		executor := NewToolExecutor(WithRetryPolicy(policy))
+
+		// 验证指数退避仍然生效（平均延迟应该随尝试次数增长）
+		for attempt := 0; attempt < 4; attempt++ {
+			delays := make([]time.Duration, 20)
+			var sum time.Duration
+			for i := 0; i < 20; i++ {
+				delays[i] = executor.calculateRetryDelay(attempt)
+				sum += delays[i]
+			}
+			avgDelay := sum / 20
+
+			// 理论平均延迟（无抖动）
+			expectedDelay := policy.InitialDelay
+			for i := 0; i < attempt; i++ {
+				expectedDelay = time.Duration(float64(expectedDelay) * policy.Multiplier)
+			}
+
+			// 平均延迟应该接近理论值（允许 ±30% 误差，考虑随机性）
+			lowerBound := time.Duration(float64(expectedDelay) * 0.7)
+			upperBound := time.Duration(float64(expectedDelay) * 1.3)
+
+			if avgDelay < lowerBound || avgDelay > upperBound {
+				t.Logf("Attempt %d: avg delay %v, expected ~%v (range: %v - %v)",
+					attempt, avgDelay, expectedDelay, lowerBound, upperBound)
+			}
+		}
+	})
+}

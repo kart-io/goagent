@@ -93,6 +93,8 @@ func NewAPITool(baseURL string, timeout time.Duration, headers map[string]string
 
 // run 执行 HTTP 请求
 func (a *APITool) run(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+	resp := tools.NewToolErrorResponse(a.Name()).WithOperation("run")
+
 	// 解析参数
 	method, _ := input.Args[interfaces.FieldMethod].(string)
 	if method == "" {
@@ -101,12 +103,7 @@ func (a *APITool) run(ctx context.Context, input *interfaces.ToolInput) (*interf
 
 	urlStr, ok := input.Args[interfaces.FieldURL].(string)
 	if !ok || urlStr == "" {
-		return &interfaces.ToolOutput{
-				Success: false,
-				Error:   "url is required and must be a non-empty string",
-			}, tools.NewToolError(a.Name(), "invalid input", agentErrors.New(agentErrors.CodeInvalidInput, "url is required").
-				WithComponent("api_tool").
-				WithOperation("run"))
+		return resp.ValidationError("url is required and must be a non-empty string", "field", "url")
 	}
 
 	// 解析请求头
@@ -143,47 +140,34 @@ func (a *APITool) run(ctx context.Context, input *interfaces.ToolInput) (*interf
 
 	// 执行请求
 	startTime := time.Now()
-	var resp *resty.Response
+	var httpResp *resty.Response
 	var err error
 
 	switch method {
 	case interfaces.MethodGet:
-		resp, err = req.Get(urlStr)
+		httpResp, err = req.Get(urlStr)
 	case interfaces.MethodPost:
-		resp, err = req.Post(urlStr)
+		httpResp, err = req.Post(urlStr)
 	case interfaces.MethodPut:
-		resp, err = req.Put(urlStr)
+		httpResp, err = req.Put(urlStr)
 	case interfaces.MethodDelete:
-		resp, err = req.Delete(urlStr)
+		httpResp, err = req.Delete(urlStr)
 	case interfaces.MethodPatch:
-		resp, err = req.Patch(urlStr)
+		httpResp, err = req.Patch(urlStr)
 	default:
-		return &interfaces.ToolOutput{
-				Success: false,
-				Error:   fmt.Sprintf("unsupported HTTP method: %s", method),
-			}, tools.NewToolError(a.Name(), "invalid method", agentErrors.New(agentErrors.CodeInvalidInput, "unsupported HTTP method").
-				WithComponent("api_tool").
-				WithOperation("run").
-				WithContext(interfaces.FieldMethod, method))
+		return resp.ValidationError(fmt.Sprintf("unsupported HTTP method: %s", method), interfaces.FieldMethod, method)
 	}
 
 	duration := time.Since(startTime)
 
 	if err != nil {
-		return &interfaces.ToolOutput{
-			Success: false,
-			Error:   fmt.Sprintf("http request failed: %v", err),
-			Metadata: map[string]interface{}{
-				interfaces.FieldMethod:   method,
-				interfaces.FieldURL:      urlStr,
-				interfaces.FieldDuration: duration.String(),
-			},
-		}, tools.NewToolError(a.Name(), "request failed", err)
+		// 网络错误，完全失败
+		return resp.ExecutionError(fmt.Sprintf("http request failed: %v", err), nil, err)
 	}
 
 	// 尝试解析 JSON
 	var jsonBody interface{}
-	respBody := resp.Body()
+	respBody := httpResp.Body()
 	if err := json.Unmarshal(respBody, &jsonBody); err != nil {
 		// 不是 JSON，返回原始文本
 		jsonBody = string(respBody)
@@ -191,39 +175,27 @@ func (a *APITool) run(ctx context.Context, input *interfaces.ToolInput) (*interf
 
 	// 构建结果
 	result := map[string]interface{}{
-		interfaces.FieldStatusCode: resp.StatusCode(),
-		interfaces.FieldStatus:     resp.Status(),
-		interfaces.FieldHeaders:    resp.Header(),
+		interfaces.FieldStatusCode: httpResp.StatusCode(),
+		interfaces.FieldStatus:     httpResp.Status(),
+		interfaces.FieldHeaders:    httpResp.Header(),
 		interfaces.FieldBody:       jsonBody,
 		interfaces.FieldDuration:   duration.String(),
 	}
 
-	success := resp.IsSuccess()
+	success := httpResp.IsSuccess()
 
 	if !success {
-		return &interfaces.ToolOutput{
-				Result:  result,
-				Success: false,
-				Error:   fmt.Sprintf("HTTP request failed with status %d", resp.StatusCode()),
-				Metadata: map[string]interface{}{
-					interfaces.FieldMethod: method,
-					interfaces.FieldURL:    urlStr,
-				},
-			}, tools.NewToolError(a.Name(), "non-2xx status code", agentErrors.New(agentErrors.CodeToolExecution, "HTTP request failed with non-2xx status").
-				WithComponent("api_tool").
-				WithOperation("run").
-				WithContext(interfaces.FieldStatusCode, resp.StatusCode()).
+		// HTTP 请求失败但有响应，返回部分结果
+		return resp.ExecutionError(fmt.Sprintf("HTTP request failed with status %d", httpResp.StatusCode()), result,
+			agentErrors.New(agentErrors.CodeToolExecution, "HTTP request failed with non-2xx status").
+				WithContext(interfaces.FieldStatusCode, httpResp.StatusCode()).
 				WithContext(interfaces.FieldURL, urlStr))
 	}
 
-	return &interfaces.ToolOutput{
-		Result:  result,
-		Success: true,
-		Metadata: map[string]interface{}{
-			interfaces.FieldMethod: method,
-			interfaces.FieldURL:    urlStr,
-		},
-	}, nil
+	return resp.Success(result, map[string]interface{}{
+		interfaces.FieldMethod: method,
+		interfaces.FieldURL:    urlStr,
+	})
 }
 
 // Get 执行 GET 请求的便捷方法

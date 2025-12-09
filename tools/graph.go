@@ -183,13 +183,10 @@ func (g *ToolGraph) GetNodes() []*ToolNode {
 	return nodes
 }
 
-// TopologicalSort 拓扑排序
+// topologicalSortLocked 拓扑排序（内部实现，调用者需持有锁）
 //
 // 返回执行顺序（节点 ID 列表）
-func (g *ToolGraph) TopologicalSort() ([]string, error) {
-	g.mu.RLock()
-	defer g.mu.RUnlock()
-
+func (g *ToolGraph) topologicalSortLocked() ([]string, error) {
 	// 复制入度图（避免修改原图）
 	inDegree := make(map[string]int)
 	for k, v := range g.inDegree {
@@ -232,6 +229,15 @@ func (g *ToolGraph) TopologicalSort() ([]string, error) {
 	return result, nil
 }
 
+// TopologicalSort 拓扑排序
+//
+// 返回执行顺序（节点 ID 列表）
+func (g *ToolGraph) TopologicalSort() ([]string, error) {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	return g.topologicalSortLocked()
+}
+
 // wouldCreateCycle 检查添加边是否会形成环
 func (g *ToolGraph) wouldCreateCycle(from, to string) bool {
 	// 使用 DFS 检查从 from 是否能到达 to
@@ -266,8 +272,8 @@ func (g *ToolGraph) Validate() error {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 
-	// 检查是否有环
-	_, err := g.TopologicalSort()
+	// 检查是否有环（使用内部方法，避免重复加锁）
+	_, err := g.topologicalSortLocked()
 	if err != nil {
 		return agentErrors.Wrap(err, agentErrors.CodeToolValidation, "graph validation failed").
 			WithComponent("graph_tool").

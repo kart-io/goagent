@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -28,8 +29,8 @@ type ToolExecutor struct {
 	errorHandler ErrorHandler
 }
 
-// ToolCall 工具调用
-type ToolCall struct {
+// ToolCallRequest 工具调用请求
+type ToolCallRequest struct {
 	// Tool 要调用的工具
 	Tool interfaces.Tool
 
@@ -42,6 +43,9 @@ type ToolCall struct {
 	// Dependencies 依赖的其他工具调用 ID
 	Dependencies []string
 }
+
+// ToolCall 是 ToolCallRequest 的别名，用于向后兼容
+type ToolCall = ToolCallRequest
 
 // ToolResult 工具执行结果
 type ToolResult struct {
@@ -72,12 +76,16 @@ type RetryPolicy struct {
 	// Multiplier 延迟倍数
 	Multiplier float64
 
+	// Jitter 随机抖动比例 (0.0 - 1.0)，默认 0.25
+	// 用于避免高并发场景下的雷群效应
+	Jitter float64
+
 	// RetryableErrors 可重试的错误类型
 	RetryableErrors []string
 }
 
 // ErrorHandler 错误处理器
-type ErrorHandler func(call *ToolCall, err error) error
+type ErrorHandler func(call *ToolCallRequest, err error) error
 
 // ExecutorOption 执行器选项
 type ExecutorOption func(*ToolExecutor)
@@ -140,7 +148,7 @@ func WithErrorHandler(handler ErrorHandler) ExecutorOption {
 }
 
 // ExecuteParallel 并行执行多个工具
-func (e *ToolExecutor) ExecuteParallel(ctx context.Context, calls []*ToolCall) ([]*ToolResult, error) {
+func (e *ToolExecutor) ExecuteParallel(ctx context.Context, calls []*ToolCallRequest) ([]*ToolResult, error) {
 	if len(calls) == 0 {
 		return []*ToolResult{}, nil
 	}
@@ -157,7 +165,7 @@ func (e *ToolExecutor) ExecuteParallel(ctx context.Context, calls []*ToolCall) (
 	// 并发执行工具
 	for i, call := range calls {
 		wg.Add(1)
-		go func(index int, c *ToolCall) {
+		go func(index int, c *ToolCallRequest) {
 			defer wg.Done()
 
 			// Check if context is already cancelled
@@ -225,7 +233,7 @@ func (e *ToolExecutor) ExecuteParallel(ctx context.Context, calls []*ToolCall) (
 }
 
 // ExecuteSequential 顺序执行工具
-func (e *ToolExecutor) ExecuteSequential(ctx context.Context, calls []*ToolCall) ([]*ToolResult, error) {
+func (e *ToolExecutor) ExecuteSequential(ctx context.Context, calls []*ToolCallRequest) ([]*ToolResult, error) {
 	results := make([]*ToolResult, 0, len(calls))
 
 	for _, call := range calls {
@@ -295,7 +303,7 @@ func (e *ToolExecutor) ExecuteWithDependencies(ctx context.Context, graph *ToolG
 		}
 
 		// 执行工具
-		call := &ToolCall{
+		call := &ToolCallRequest{
 			Tool:         node.Tool,
 			Input:        node.Input,
 			ID:           node.ID,
@@ -311,7 +319,7 @@ func (e *ToolExecutor) ExecuteWithDependencies(ctx context.Context, graph *ToolG
 }
 
 // executeWithRetry 执行工具并支持重试
-func (e *ToolExecutor) executeWithRetry(ctx context.Context, call *ToolCall) *ToolResult {
+func (e *ToolExecutor) executeWithRetry(ctx context.Context, call *ToolCallRequest) *ToolResult {
 	var lastError error
 	startTime := time.Now()
 
@@ -362,7 +370,7 @@ func (e *ToolExecutor) executeWithRetry(ctx context.Context, call *ToolCall) *To
 }
 
 // executeSingle 执行单个工具
-func (e *ToolExecutor) executeSingle(ctx context.Context, call *ToolCall) (*interfaces.ToolOutput, error) {
+func (e *ToolExecutor) executeSingle(ctx context.Context, call *ToolCallRequest) (*interfaces.ToolOutput, error) {
 	if call.Tool == nil {
 		return nil, agentErrors.New(agentErrors.CodeToolValidation, "tool is nil").
 			WithComponent("tool_executor").
@@ -451,7 +459,26 @@ func (e *ToolExecutor) calculateRetryDelay(attempt int) time.Duration {
 		delay *= e.retryPolicy.Multiplier
 	}
 
+	// 添加随机抖动以避免雷群效应
+	jitter := e.retryPolicy.Jitter
+	if jitter <= 0 {
+		jitter = 0.25 // 默认 25%
+	}
+	if jitter > 1.0 {
+		jitter = 1.0 // 限制最大为 100%
+	}
+
+	// 计算抖动量：±jitter%
+	// rand.Float64() 返回 [0.0, 1.0)，乘以 2 减 1 得到 [-1.0, 1.0)
+	jitterAmount := delay * jitter * (rand.Float64()*2 - 1)
+	delay += jitterAmount
+
 	finalDelay := time.Duration(delay)
+
+	// 确保延迟在合理范围内
+	if finalDelay < e.retryPolicy.InitialDelay {
+		finalDelay = e.retryPolicy.InitialDelay
+	}
 	if finalDelay > e.retryPolicy.MaxDelay {
 		finalDelay = e.retryPolicy.MaxDelay
 	}
@@ -460,7 +487,7 @@ func (e *ToolExecutor) calculateRetryDelay(attempt int) time.Duration {
 }
 
 // defaultErrorHandler 默认错误处理器
-func defaultErrorHandler(call *ToolCall, err error) error {
+func defaultErrorHandler(call *ToolCallRequest, err error) error {
 	if err == nil {
 		return nil
 	}
@@ -473,9 +500,9 @@ func defaultErrorHandler(call *ToolCall, err error) error {
 
 // ExecuteBatch 批量执行相同工具的不同输入
 func (e *ToolExecutor) ExecuteBatch(ctx context.Context, tool interfaces.Tool, inputs []*interfaces.ToolInput) ([]*ToolResult, error) {
-	calls := make([]*ToolCall, len(inputs))
+	calls := make([]*ToolCallRequest, len(inputs))
 	for i, input := range inputs {
-		calls[i] = &ToolCall{
+		calls[i] = &ToolCallRequest{
 			Tool:  tool,
 			Input: input,
 			ID:    fmt.Sprintf("%s_%d", tool.Name(), i),

@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# Ensure we are running from the project root
+cd "$(dirname "$0")/.." || exit 1
 # GoAgent Option Pattern Verification Script
 # This script verifies that all Option pattern implementations are working correctly
 
@@ -90,7 +92,6 @@ func main() {
         llm.WithAPIKey("test"),
         llm.WithModel("gpt-4"),
         llm.WithMaxTokens(2000),
-        llm.WithPreset(llm.PresetProduction),
     )
 
     if config.Provider != constants.ProviderCustom {

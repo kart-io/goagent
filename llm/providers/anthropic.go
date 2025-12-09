@@ -170,11 +170,18 @@ func (p *AnthropicProvider) Complete(ctx context.Context, req *agentllm.Completi
 func (p *AnthropicProvider) buildRequest(req *agentllm.CompletionRequest) *AnthropicRequest {
 	// Separate system message from other messages
 	var systemMsg string
+	if p.Config.SystemPrompt != "" {
+		systemMsg = p.Config.SystemPrompt
+	}
 	var messages []AnthropicMessage
 
 	for _, msg := range req.Messages {
 		if msg.Role == constants.RoleSystem {
-			systemMsg = msg.Content
+			if systemMsg != "" {
+				systemMsg += "\n" + msg.Content
+			} else {
+				systemMsg = msg.Content
+			}
 		} else {
 			messages = append(messages, AnthropicMessage{
 				Role:    msg.Role,

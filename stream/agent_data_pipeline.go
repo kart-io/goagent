@@ -7,6 +7,7 @@ import (
 
 	"github.com/kart-io/goagent/core"
 	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/utils"
 )
 
 // DataPipelineAgent 数据流处理 Agent
@@ -62,7 +63,7 @@ func (a *DataPipelineAgent) Execute(ctx context.Context, input *core.AgentInput)
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = streamOutput.Close() }()
+	defer utils.CloseQuietly(streamOutput)
 
 	reader := streamOutput.(*Reader)
 	chunks, err := reader.Collect()
@@ -209,7 +210,7 @@ func (a *DataPipelineAgent) ProcessWithTransform(
 	writer := NewWriter(ctx, opts)
 
 	go func() {
-		defer func() { _ = writer.Close() }()
+		defer utils.CloseQuietly(writer)
 
 		totalItems := len(dataSource)
 		for i, item := range dataSource {
@@ -303,7 +304,7 @@ func (a *DataPipelineAgent) StreamMap(
 	writer := NewWriter(ctx, opts)
 
 	go func() {
-		defer func() { _ = writer.Close() }()
+		defer utils.CloseQuietly(writer)
 
 		for {
 			chunk, err := source.Next()

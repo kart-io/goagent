@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"net/mail"
 	"regexp"
 	"strings"
 
@@ -133,6 +134,7 @@ type schema struct {
 type property struct {
 	Type        string        `json:"type"`
 	Description string        `json:"description"`
+	Format      string        `json:"format"`
 	Enum        []interface{} `json:"enum"`
 	Minimum     *float64      `json:"minimum"`
 	Maximum     *float64      `json:"maximum"`
@@ -164,6 +166,40 @@ func (v *InputValidator) parseSchema(schemaStr string) (*schema, error) {
 
 	if s.Required == nil {
 		s.Required = []string{}
+	}
+
+	// 验证 schema 结构
+	// 1. 验证 Type 字段（应为空或 "object"）
+	if s.Type != "" && s.Type != "object" {
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "tool schema type must be 'object'").
+			WithComponent("input_validator").
+			WithOperation("parse_schema").
+			WithContext("got_type", s.Type)
+	}
+
+	// 2. 验证属性类型
+	validTypes := map[string]bool{
+		"string": true, "number": true, "integer": true,
+		"boolean": true, "object": true, "array": true, "": true,
+	}
+	for propName, prop := range s.Properties {
+		if !validTypes[prop.Type] {
+			return nil, agentErrors.New(agentErrors.CodeInvalidInput, "invalid property type").
+				WithComponent("input_validator").
+				WithOperation("parse_schema").
+				WithContext("property", propName).
+				WithContext("type", prop.Type)
+		}
+	}
+
+	// 3. 验证 required 字段存在于 properties 中
+	for _, required := range s.Required {
+		if _, exists := s.Properties[required]; !exists {
+			return nil, agentErrors.New(agentErrors.CodeInvalidInput, "required field not found in properties").
+				WithComponent("input_validator").
+				WithOperation("parse_schema").
+				WithContext("field", required)
+		}
 	}
 
 	return &s, nil
@@ -230,6 +266,12 @@ func (v *InputValidator) validateType(key string, value interface{}, prop proper
 					WithContext("parameter", key).
 					WithContext("max_length", *prop.MaxLength).
 					WithContext("got_length", len(s))
+			}
+			// 验证格式
+			if prop.Format != "" {
+				if err := validateFormat(s, prop.Format); err != nil {
+					return err
+				}
 			}
 		}
 
@@ -715,11 +757,14 @@ func validateObjectWithSchema(fieldName string, value interface{}) error {
 func validateFormat(value, format string) error {
 	switch format {
 	case "email":
-		if !strings.Contains(value, "@") {
+		// 使用标准库进行 email 验证
+		_, err := mail.ParseAddress(value)
+		if err != nil {
 			return agentErrors.New(agentErrors.CodeToolValidation, "invalid email format").
 				WithComponent("validator").
 				WithOperation("validate_format").
-				WithContext("value", value)
+				WithContext("value", value).
+				WithContext("error", err.Error())
 		}
 	case "uri", "url":
 		if !strings.HasPrefix(value, "http://") && !strings.HasPrefix(value, "https://") {
