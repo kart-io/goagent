@@ -133,6 +133,43 @@ func NewShardedToolCacheWithOptions(opts ...ShardedCacheOption) *ShardedToolCach
 	return newShardedToolCacheWithConfig(config)
 }
 
+// NewHighPerformanceCache 创建高性能缓存配置
+//
+// 适用于内存充足、追求极致性能的场景
+// 特点：
+// - 更多分片 (64)
+// - 更大容量 (100,000)
+// - 激进的预取和保留策略
+func NewHighPerformanceCache() *ShardedToolCache {
+	return NewShardedToolCache(ShardedCacheConfig{
+		ShardCount:      64,
+		Capacity:        100000,
+		DefaultTTL:      10 * time.Minute,
+		CleanupInterval: 30 * time.Second,
+		AutoTuning:      true,
+		MetricsEnabled:  true,
+	})
+}
+
+// NewLowMemoryCache 创建低内存缓存配置
+//
+// 适用于资源受限环境
+// 特点：
+// - 较少分片 (8)
+// - 较小容量 (1,000)
+// - 激进的清理策略
+func NewLowMemoryCache() *ShardedToolCache {
+	return NewShardedToolCache(ShardedCacheConfig{
+		ShardCount:           8,
+		Capacity:             1000,
+		DefaultTTL:           2 * time.Minute,
+		CleanupInterval:      1 * time.Minute,
+		AutoTuning:           false,
+		MetricsEnabled:       false,
+		CompressionThreshold: 1024, // 启用压缩
+	})
+}
+
 // newShardedToolCacheWithConfig 内部创建函数
 func newShardedToolCacheWithConfig(config ShardedCacheConfig) *ShardedToolCache {
 	ctx, cancel := context.WithCancel(context.Background())

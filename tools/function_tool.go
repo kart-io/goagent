@@ -2,6 +2,8 @@ package tools
 
 import (
 	"context"
+	"reflect"
+	"strings"
 
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
@@ -40,18 +42,14 @@ func NewFunctionTool(
 
 // run 执行函数
 func (f *FunctionTool) run(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+	resp := NewToolErrorResponse(f.Name()).WithOperation("run")
+
 	result, err := f.fn(ctx, input.Args)
 	if err != nil {
-		return &interfaces.ToolOutput{
-			Success: false,
-			Error:   err.Error(),
-		}, NewToolError(f.Name(), "function execution failed", err)
+		return resp.ExecutionError("function execution failed", nil, err)
 	}
 
-	return &interfaces.ToolOutput{
-		Result:  result,
-		Success: true,
-	}, nil
+	return resp.Success(result, nil)
 }
 
 // FunctionToolBuilder 函数工具构建器
@@ -129,17 +127,130 @@ func (b *FunctionToolBuilder) MustBuild() *FunctionTool {
 }
 
 // generateJSONSchemaFromStruct 从结构体生成 JSON Schema
-// 简化实现，实际项目中应使用专业库
+//
+// 使用反射解析结构体字段，生成符合 JSON Schema 规范的字符串。
+// 支持以下功能：
+//   - 解析 json tag 确定字段名
+//   - 自动推断字段类型
+//   - 解析 description tag 添加字段描述
+//   - 非指针字段自动标记为 required
 func generateJSONSchemaFromStruct(v interface{}) string {
-	schema := map[string]interface{}{
-		"type":       "object",
-		"properties": map[string]interface{}{},
+	// 处理 nil 值
+	if v == nil {
+		return `{"type":"object","properties":{}}`
 	}
 
-	// 简化：直接返回基础 schema
-	// 在实际项目中，应该使用反射解析结构体字段
+	t := reflect.TypeOf(v)
+
+	// 处理指针类型
+	if t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+
+	// 如果不是结构体，返回基础 schema
+	if t.Kind() != reflect.Struct {
+		return `{"type":"object","properties":{}}`
+	}
+
+	// 构建 schema
+	properties := make(map[string]interface{})
+	var required []string
+
+	// 遍历结构体字段
+	for i := 0; i < t.NumField(); i++ {
+		field := t.Field(i)
+
+		// 跳过未导出的字段
+		if !field.IsExported() {
+			continue
+		}
+
+		// 获取 JSON 字段名
+		jsonName := getJSONFieldName(field)
+		if jsonName == "-" {
+			// json:"-" 表示忽略该字段
+			continue
+		}
+
+		// 构建字段属性
+		prop := make(map[string]interface{})
+		prop["type"] = getTypeString(field.Type)
+
+		// 添加描述（如果有）
+		if desc := field.Tag.Get("description"); desc != "" {
+			prop["description"] = desc
+		}
+
+		properties[jsonName] = prop
+
+		// 判断是否为必需字段
+		// 1. 显式标记 required:"true"
+		// 2. 非指针类型且没有 omitempty 标记
+		if isRequired := field.Tag.Get("required"); isRequired == "true" {
+			required = append(required, jsonName)
+		} else if field.Type.Kind() != reflect.Ptr && !hasOmitEmpty(field) {
+			required = append(required, jsonName)
+		}
+	}
+
+	// 构建完整 schema
+	schema := map[string]interface{}{
+		"type":       "object",
+		"properties": properties,
+	}
+
+	if len(required) > 0 {
+		schema["required"] = required
+	}
+
+	// 序列化为 JSON
 	data, _ := json.Marshal(schema)
 	return string(data)
+}
+
+// getJSONFieldName 从字段中提取 JSON 字段名
+func getJSONFieldName(field reflect.StructField) string {
+	jsonTag := field.Tag.Get("json")
+	if jsonTag == "" {
+		// 没有 json tag，使用字段名的小写形式
+		return strings.ToLower(field.Name[:1]) + field.Name[1:]
+	}
+
+	// 解析 json tag，格式可能是 "name" 或 "name,omitempty"
+	parts := strings.Split(jsonTag, ",")
+	return parts[0]
+}
+
+// hasOmitEmpty 检查字段是否有 omitempty 标记
+func hasOmitEmpty(field reflect.StructField) bool {
+	jsonTag := field.Tag.Get("json")
+	return strings.Contains(jsonTag, "omitempty")
+}
+
+// getTypeString 将 Go 类型映射为 JSON Schema 类型
+func getTypeString(t reflect.Type) string {
+	// 处理指针类型
+	if t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+
+	switch t.Kind() {
+	case reflect.String:
+		return "string"
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return "integer"
+	case reflect.Float32, reflect.Float64:
+		return "number"
+	case reflect.Bool:
+		return "boolean"
+	case reflect.Slice, reflect.Array:
+		return "array"
+	case reflect.Struct, reflect.Map:
+		return "object"
+	default:
+		return "string" // 默认类型
+	}
 }
 
 // SimpleFunction 简单函数类型

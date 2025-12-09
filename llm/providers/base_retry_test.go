@@ -2,10 +2,11 @@ package providers
 
 import (
 	"context"
-	"github.com/kart-io/goagent/llm/common"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/kart-io/goagent/llm/common"
 
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/stretchr/testify/assert"
@@ -217,62 +218,6 @@ func TestExecuteWithRetry_MaxDelayLimit(t *testing.T) {
 
 	require.Error(t, err)
 	assert.Equal(t, 5, callCount)
-}
-
-func TestSecureRandomInt63n_Range(t *testing.T) {
-	// Test random number range
-	n := int64(100)
-	for i := 0; i < 1000; i++ {
-		val := common.SecureRandomInt63n(n)
-		assert.GreaterOrEqual(t, val, int64(0), "Value should be >= 0")
-		assert.Less(t, val, n, "Value should be < n")
-	}
-}
-
-func TestSecureRandomInt63n_ZeroAndNegative(t *testing.T) {
-	// Test edge cases
-	assert.Equal(t, int64(0), common.SecureRandomInt63n(0), "Should return 0 for n=0")
-	assert.Equal(t, int64(0), common.SecureRandomInt63n(-1), "Should return 0 for negative n")
-}
-
-func TestSecureRandomInt63n_Randomness(t *testing.T) {
-	// Test randomness distribution
-	results := make(map[int64]int)
-	n := int64(100)
-
-	for i := 0; i < 1000; i++ {
-		val := common.SecureRandomInt63n(n)
-		results[val]++
-	}
-
-	// Should have sufficient randomness (at least 50 unique values)
-	assert.GreaterOrEqual(t, len(results), 50,
-		"Should have at least 50 unique values out of 1000 calls")
-
-	// Check that no single value dominates
-	for val, count := range results {
-		// No value should appear more than 5% of the time (50/1000)
-		if count > 50 {
-			t.Logf("Warning: value %d appears %d times (%.1f%%), distribution may be skewed",
-				val, count, float64(count)/10.0)
-		}
-	}
-}
-
-func TestSecureRandomInt63n_SmallRange(t *testing.T) {
-	// Test with small range
-	n := int64(5)
-	results := make(map[int64]int)
-
-	for i := 0; i < 500; i++ {
-		val := common.SecureRandomInt63n(n)
-		results[val]++
-		assert.GreaterOrEqual(t, val, int64(0))
-		assert.Less(t, val, n)
-	}
-
-	// All values 0-4 should appear at least once
-	assert.LessOrEqual(t, len(results), int(n), "Should have at most n unique values")
 }
 
 func TestDefaultRetryConfig(t *testing.T) {

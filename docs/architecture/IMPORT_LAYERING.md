@@ -200,7 +200,7 @@ import (
 **提交前必须运行：**
 
 ```bash
-./verify_imports.sh
+./scripts/verify_imports.sh
 ```
 
 脚本检查内容：
@@ -217,7 +217,7 @@ import (
 将警告视为错误：
 
 ```bash
-./verify_imports.sh --strict
+./scripts/verify_imports.sh --strict
 ```
 
 ## 导入组织规范
@@ -261,7 +261,7 @@ import (
 2. 移动代码到新位置
 3. 更新依赖包的导入
 4. 如需向后兼容，在旧位置添加类型别名
-5. 运行 `./verify_imports.sh`
+5. 运行 `./scripts/verify_imports.sh`
 6. 更新测试和文档
 
 ### 打破依赖循环
@@ -295,7 +295,7 @@ func New(a interfaces.ServiceA) *B { ... }
 ```bash
 make fmt              # 格式化代码
 make lint             # 检查问题
-./verify_imports.sh   # 验证导入层级
+./scripts/verify_imports.sh   # 验证导入层级
 make test             # 运行测试
 ```
 
