@@ -1,4 +1,4 @@
-package providers
+package common_test
 
 import (
 	"strings"
