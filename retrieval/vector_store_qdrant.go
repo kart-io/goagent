@@ -7,9 +7,10 @@ import (
 	"strconv"
 
 	"github.com/google/uuid"
+	"github.com/qdrant/go-client/qdrant"
+
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
-	"github.com/qdrant/go-client/qdrant"
 )
 
 // QdrantVectorStore Qdrant 向量数据库存储

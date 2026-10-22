@@ -9,11 +9,12 @@ import (
 	"testing"
 	"time"
 
-	agentcore "github.com/kart-io/goagent/core"
-	"github.com/kart-io/goagent/interfaces"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+
+	agentcore "github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/interfaces"
 )
 
 // MockToolForParallel for testing parallel execution

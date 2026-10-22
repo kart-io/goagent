@@ -3,9 +3,10 @@ package providers
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	agentllm "github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/common"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestConvertMessages(t *testing.T) {

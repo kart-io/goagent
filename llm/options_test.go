@@ -4,9 +4,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kart-io/goagent/llm/constants"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/llm/constants"
 )
 
 // TestDefaultConfig 测试默认配置

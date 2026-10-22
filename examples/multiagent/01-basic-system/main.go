@@ -8,8 +8,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/kart-io/goagent/multiagent"
 	loggercore "github.com/kart-io/logger/core"
+
+	"github.com/kart-io/goagent/multiagent"
 )
 
 // simpleLogger 简单的日志实现，满足 loggercore.Logger 接口

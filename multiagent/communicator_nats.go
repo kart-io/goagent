@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/nats-io/nats.go"
+
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/utils/json"
-	"github.com/nats-io/nats.go"
 )
 
 // NATSCommunicator NATS 通信器（分布式）

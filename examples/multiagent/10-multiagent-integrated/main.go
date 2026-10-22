@@ -17,6 +17,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	loggercore "github.com/kart-io/logger/core"
+
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/providers"
@@ -24,7 +26,6 @@ import (
 	"github.com/kart-io/goagent/multiagent"
 	"github.com/kart-io/goagent/tools"
 	"github.com/kart-io/goagent/tools/middleware"
-	loggercore "github.com/kart-io/logger/core"
 )
 
 func main() {

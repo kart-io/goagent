@@ -5,10 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kart-io/goagent/mcp/core"
-	"github.com/kart-io/goagent/tools"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/mcp/core"
+	"github.com/kart-io/goagent/tools"
 )
 
 // MockTool 模拟工具

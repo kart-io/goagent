@@ -18,11 +18,12 @@ import (
 	"sync"
 	"time"
 
+	loggercore "github.com/kart-io/logger/core"
+
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/constants"
 	"github.com/kart-io/goagent/llm/providers"
 	"github.com/kart-io/goagent/multiagent"
-	loggercore "github.com/kart-io/logger/core"
 )
 
 // =============================================================================

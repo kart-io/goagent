@@ -5,10 +5,11 @@ import (
 	"testing"
 	"time"
 
-	agentErrors "github.com/kart-io/goagent/errors"
-	"github.com/kart-io/goagent/llm"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/llm"
 )
 
 // TestNewSmartPlanner tests the creation of a SmartPlanner

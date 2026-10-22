@@ -5,13 +5,14 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/agents"
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/examples/testhelpers"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/providers"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestSupervisorAgent_DeepSeek_Optimized(t *testing.T) {

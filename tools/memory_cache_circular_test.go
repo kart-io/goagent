@@ -6,9 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kart-io/goagent/interfaces"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/interfaces"
 )
 
 // TestMemoryCache_CircularDependency 测试 MemoryToolCache 的循环依赖保护

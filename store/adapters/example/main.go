@@ -7,10 +7,11 @@ import (
 	"log"
 	"os"
 
-	"github.com/kart-io/goagent/options"
-	"github.com/kart-io/goagent/store/adapters"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
+
+	"github.com/kart-io/goagent/options"
+	"github.com/kart-io/goagent/store/adapters"
 )
 
 // AppConfig represents the application configuration

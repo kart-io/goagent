@@ -9,8 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kart-io/goagent/core"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/kart-io/goagent/core"
 )
 
 // Mock consumer for testing

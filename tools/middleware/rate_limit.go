@@ -7,11 +7,11 @@ import (
 	"sync/atomic"
 	"time"
 
+	loggercore "github.com/kart-io/logger/core"
 	"golang.org/x/time/rate"
 
 	"github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
-	loggercore "github.com/kart-io/logger/core"
 )
 
 // RateLimitConfig 限流中间件配置

@@ -4,9 +4,10 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/kart-io/goagent/utils/json"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/utils/json"
 )
 
 func TestMarshal(t *testing.T) {

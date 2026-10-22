@@ -7,10 +7,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kart-io/goagent/core"
-	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/core"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // TestReader_Collect_SizeLimitExceeded tests that Collect respects MaxCollectSize

@@ -9,11 +9,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/nats-io/nats.go"
+
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/providers"
 	"github.com/kart-io/goagent/multiagent"
 	"github.com/kart-io/goagent/utils/json"
-	"github.com/nats-io/nats.go"
 )
 
 // AIAgent 集成 LLM 的智能代理
