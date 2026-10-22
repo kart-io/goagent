@@ -8,6 +8,9 @@ jobs:
   validate:
     name: Validate PR
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
 
     steps:
       - name: Checkout code
@@ -107,6 +110,15 @@ jobs:
             - [ ] Test coverage meets requirements (see above)
             - [ ] All linter checks pass
             `;
+
+            await core.summary.addRaw(body).write();
+
+            // fork 发起的 PR 中 GITHUB_TOKEN 被强制只读，无法评论，报告仅输出到 job summary
+            const headRepo = context.payload.pull_request.head.repo?.full_name;
+            if (headRepo !== `${context.repo.owner}/${context.repo.repo}`) {
+              core.info(`来自 fork 的 PR (${headRepo})，跳过评论`);
+              return;
+            }
 
             // Find existing comment
             const { data: comments } = await github.rest.issues.listComments({
