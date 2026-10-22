@@ -5,9 +5,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm/common"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestParseRetryAfter_Integer(t *testing.T) {

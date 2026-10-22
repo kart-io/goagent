@@ -4,8 +4,9 @@ import (
 	"sync"
 	"time"
 
-	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/logger/core"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // Registry Agent 注册中心

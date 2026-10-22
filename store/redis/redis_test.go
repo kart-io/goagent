@@ -6,10 +6,11 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
-	"github.com/kart-io/goagent/utils/json"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/utils/json"
 )
 
 func setupTestStore(t *testing.T) (*Store, *miniredis.Miniredis) {

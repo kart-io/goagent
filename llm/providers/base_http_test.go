@@ -3,10 +3,11 @@ package providers
 import (
 	"testing"
 
-	agentErrors "github.com/kart-io/goagent/errors"
-	"github.com/kart-io/goagent/llm/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/llm/common"
 )
 
 func TestMapHTTPError_BadRequest(t *testing.T) {

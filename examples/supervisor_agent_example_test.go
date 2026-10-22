@@ -6,11 +6,12 @@ import (
 	"os"
 	"testing"
 
+	"github.com/stretchr/testify/mock"
+
 	"github.com/kart-io/goagent/agents"
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/providers"
-	"github.com/stretchr/testify/mock"
 )
 
 // MockAgent is a mock implementation of the core.Agent interface for testing purposes.

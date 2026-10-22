@@ -6,11 +6,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/redis/go-redis/v9"
+
 	"github.com/kart-io/goagent/core"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/store"
 	"github.com/kart-io/goagent/utils/json"
-	"github.com/redis/go-redis/v9"
 )
 
 // Store is a Redis-backed implementation of the store.Store interface.

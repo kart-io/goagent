@@ -7,9 +7,10 @@ import (
 	"sync"
 	"time"
 
+	loggercore "github.com/kart-io/logger/core"
+
 	"github.com/kart-io/goagent/core"
 	agentErrors "github.com/kart-io/goagent/errors"
-	loggercore "github.com/kart-io/logger/core"
 )
 
 // Role defines the role of an agent in collaboration

@@ -5,10 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kart-io/goagent/core"
 	loggercore "github.com/kart-io/logger/core"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/core"
 )
 
 // MockLogger implements a basic logger for testing

@@ -9,11 +9,12 @@ import (
 	"os"
 	"strings"
 
+	"github.com/ledongthuc/pdf"
+
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/retrieval"
-	"github.com/ledongthuc/pdf"
 )
 
 // PDFLoader PDF 文档加载器
