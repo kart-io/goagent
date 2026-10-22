@@ -6,10 +6,11 @@ import (
 	"strings"
 	"time"
 
+	loggercore "github.com/kart-io/logger/core"
+
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/multiagent"
-	loggercore "github.com/kart-io/logger/core"
 )
 
 // TicketCategory 工单类别
@@ -141,7 +142,6 @@ func RunRouterPattern(llmClient llm.Client, logger loggercore.Logger) error {
 			Task: fmt.Sprintf("工单ID: %s\n客户: %s\n问题: %s\n描述: %s",
 				ticket.ID, ticket.Customer, ticket.Subject, ticket.Description),
 		})
-
 		if err != nil {
 			fmt.Printf("  └─ ❌ 处理失败: %v\n\n", err)
 			continue

@@ -7,8 +7,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/kart-io/goagent/multiagent"
 	"github.com/nats-io/nats.go"
+
+	"github.com/kart-io/goagent/multiagent"
 )
 
 func main() {

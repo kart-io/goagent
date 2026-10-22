@@ -126,7 +126,6 @@ func createDetectionAgent(llmClient llm.Client, tokenTracker *core.CostTrackingC
 		WithState(state.NewAgentState()).
 		WithCallbacks(tokenTracker). // 添加 token 追踪
 		Build()
-
 	if err != nil {
 		log.Fatalf("创建语言检测代理失败: %v", err)
 	}
@@ -142,7 +141,6 @@ func createTranslationAgent(llmClient llm.Client, tokenTracker *core.CostTrackin
 		WithState(state.NewAgentState()).
 		WithCallbacks(tokenTracker). // 添加 token 追踪
 		Build()
-
 	if err != nil {
 		log.Fatalf("创建翻译代理失败: %v", err)
 	}

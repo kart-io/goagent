@@ -9,11 +9,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kart-io/goagent/utils/json"
-
-	agentcore "github.com/kart-io/goagent/core"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	agentcore "github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/utils/json"
 )
 
 // TestClient_ExecuteAgent_Success tests successful agent execution

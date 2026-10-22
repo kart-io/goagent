@@ -15,11 +15,11 @@ import (
 	"sync"
 	"time"
 
+	loggercore "github.com/kart-io/logger/core"
+
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/providers"
 	"github.com/kart-io/goagent/multiagent"
-
-	loggercore "github.com/kart-io/logger/core"
 )
 
 func main() {
@@ -333,7 +333,6 @@ func demonstrateMultiTurnStream(ctx context.Context, system *multiagent.MultiAge
 		err := agent.Chat(ctx, msg, func(chunk string) {
 			fmt.Print(chunk)
 		})
-
 		if err != nil {
 			fmt.Printf("\n对话失败: %v\n", err)
 		}
@@ -440,7 +439,6 @@ func (a *StreamAgent) Collaborate(ctx context.Context, task *multiagent.Collabor
 	err := a.StreamAnalyze(ctx, fmt.Sprintf("%v", task.Input), func(chunk string) {
 		content.WriteString(chunk)
 	})
-
 	if err != nil {
 		assignment.Status = multiagent.TaskStatusFailed
 		return assignment, err

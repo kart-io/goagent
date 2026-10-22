@@ -17,12 +17,12 @@ import (
 	"sync/atomic"
 	"time"
 
+	loggercore "github.com/kart-io/logger/core"
+
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/multiagent"
 	"github.com/kart-io/goagent/tools"
 	"github.com/kart-io/goagent/tools/middleware"
-
-	loggercore "github.com/kart-io/logger/core"
 )
 
 func main() {
@@ -876,9 +876,11 @@ func (r *LogRecorder) Debugw(msg string, keysAndValues ...interface{}) {}
 func (r *LogRecorder) Infow(msg string, keysAndValues ...interface{}) {
 	r.logw("INFO", msg, keysAndValues...)
 }
+
 func (r *LogRecorder) Warnw(msg string, keysAndValues ...interface{}) {
 	r.logw("WARN", msg, keysAndValues...)
 }
+
 func (r *LogRecorder) Errorw(msg string, keysAndValues ...interface{}) {
 	r.logw("ERROR", msg, keysAndValues...)
 }

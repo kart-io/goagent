@@ -1,15 +1,16 @@
 package providers
 
 import (
-	"github.com/kart-io/goagent/llm/common"
 	"os"
 	"testing"
 	"time"
 
-	agentllm "github.com/kart-io/goagent/llm"
-	"github.com/kart-io/goagent/llm/constants"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	agentllm "github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/common"
+	"github.com/kart-io/goagent/llm/constants"
 )
 
 func TestNewBaseProvider(t *testing.T) {

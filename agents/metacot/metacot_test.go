@@ -5,12 +5,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/constants"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 )
 
 // MockLLMClient for testing
@@ -610,7 +611,6 @@ func TestMetaCoTAgent_Stream(t *testing.T) {
 }
 
 func TestMetaCoTAgent_WithCallbacks(t *testing.T) {
-
 	callback := &testCallback{
 		onStart: func(ctx context.Context, input interface{}) error {
 			return nil

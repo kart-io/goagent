@@ -15,11 +15,11 @@ import (
 	"strings"
 	"time"
 
+	loggercore "github.com/kart-io/logger/core"
+
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/providers"
 	"github.com/kart-io/goagent/multiagent"
-
-	loggercore "github.com/kart-io/logger/core"
 )
 
 func main() {
@@ -382,7 +382,6 @@ func demonstrateTokenTracking(ctx context.Context) {
 	response, err := client.Chat(ctx, []llm.Message{
 		llm.UserMessage(prompt),
 	})
-
 	if err != nil {
 		fmt.Printf("✗ 调用失败: %v\n", err)
 		demonstrateMockTokenTracking()

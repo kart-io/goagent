@@ -7,9 +7,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"golang.org/x/time/rate"
-
 	loggercore "github.com/kart-io/logger/core"
+	"golang.org/x/time/rate"
 
 	"github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"

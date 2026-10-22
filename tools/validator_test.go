@@ -7,8 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kart-io/goagent/interfaces"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/kart-io/goagent/interfaces"
 )
 
 // mockValidatableTool 实现 ValidatableTool 接口的 mock 工具

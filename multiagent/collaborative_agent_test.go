@@ -5,11 +5,11 @@ import (
 	"testing"
 	"time"
 
+	loggercore "github.com/kart-io/logger/core"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/kart-io/goagent/core"
-	loggercore "github.com/kart-io/logger/core"
 )
 
 // MockLogger is shared from system_test.go but defined here for clarity

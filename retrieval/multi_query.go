@@ -5,9 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/kart-io/goagent/interfaces"
-
 	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 )
 

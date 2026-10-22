@@ -99,7 +99,6 @@ func (p *OpenAIProvider) Complete(ctx context.Context, req *agentllm.CompletionR
 		Stop:        req.Stop,
 		TopP:        float32(req.TopP),
 	})
-
 	if err != nil {
 		return nil, agentErrors.NewLLMRequestError(p.ProviderName(), model, err)
 	}

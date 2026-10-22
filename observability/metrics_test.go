@@ -138,7 +138,6 @@ func TestRecordAgentError(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
 			RecordAgentError(tt.agentName, tt.service, tt.errorType)
 
 			m := GetMetrics()
@@ -187,7 +186,6 @@ func TestRecordToolCall(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
 			RecordToolCall(tt.toolName, tt.agentName, tt.status, tt.duration)
 
 			m := GetMetrics()
@@ -232,7 +230,6 @@ func TestRecordToolError(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
 			RecordToolError(tt.toolName, tt.agentName, tt.errorType)
 
 			m := GetMetrics()
@@ -281,7 +278,6 @@ func TestRecordRemoteAgentCall(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
 			RecordRemoteAgentCall(tt.service, tt.agentName, tt.status, tt.duration)
 
 			m := GetMetrics()
@@ -326,7 +322,6 @@ func TestRecordRemoteAgentError(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
 			RecordRemoteAgentError(tt.service, tt.agentName, tt.errorType)
 
 			m := GetMetrics()
@@ -382,7 +377,6 @@ func TestUpdateServiceInstances(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
 			UpdateServiceInstances(tt.service, tt.total, tt.healthy)
 
 			m := GetMetrics()
@@ -393,7 +387,6 @@ func TestUpdateServiceInstances(t *testing.T) {
 }
 
 func TestIncrementConcurrentExecutions(t *testing.T) {
-
 	m := GetMetrics()
 
 	IncrementConcurrentExecutions()
@@ -405,7 +398,6 @@ func TestIncrementConcurrentExecutions(t *testing.T) {
 }
 
 func TestDecrementConcurrentExecutions(t *testing.T) {
-
 	m := GetMetrics()
 
 	// First increment
@@ -420,7 +412,6 @@ func TestDecrementConcurrentExecutions(t *testing.T) {
 }
 
 func TestConcurrentMetricsUpdates(t *testing.T) {
-
 	m := GetMetrics()
 	assert.NotNil(t, m)
 
@@ -483,7 +474,6 @@ func TestConcurrentMetricsUpdates(t *testing.T) {
 }
 
 func TestMetricsWithDifferentLabels(t *testing.T) {
-
 	agents := []string{"agent-1", "agent-2", "agent-3"}
 	services := []string{"service-1", "service-2"}
 	statuses := []string{"success", "error", "timeout"}
@@ -501,7 +491,6 @@ func TestMetricsWithDifferentLabels(t *testing.T) {
 }
 
 func TestMetricRecordingWithVariousDurations(t *testing.T) {
-
 	durations := []time.Duration{
 		1 * time.Millisecond,
 		10 * time.Millisecond,
@@ -523,7 +512,6 @@ func TestMetricRecordingWithVariousDurations(t *testing.T) {
 }
 
 func BenchmarkRecordAgentExecution(b *testing.B) {
-
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		RecordAgentExecution("test-agent", "test-service", "success", time.Second)
@@ -531,7 +519,6 @@ func BenchmarkRecordAgentExecution(b *testing.B) {
 }
 
 func BenchmarkRecordToolCall(b *testing.B) {
-
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		RecordToolCall("test-tool", "test-agent", "success", 100*time.Millisecond)
@@ -539,7 +526,6 @@ func BenchmarkRecordToolCall(b *testing.B) {
 }
 
 func BenchmarkIncrementConcurrentExecutions(b *testing.B) {
-
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		IncrementConcurrentExecutions()
@@ -548,7 +534,6 @@ func BenchmarkIncrementConcurrentExecutions(b *testing.B) {
 }
 
 func BenchmarkConcurrentMetricsUpdates(b *testing.B) {
-
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			RecordAgentExecution("test-agent", "test-service", "success", time.Second)

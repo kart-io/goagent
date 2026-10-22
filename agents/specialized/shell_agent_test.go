@@ -5,11 +5,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kart-io/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	agentcore "github.com/kart-io/goagent/core"
-	"github.com/kart-io/logger"
 )
 
 func TestNewShellAgent(t *testing.T) {

@@ -6,12 +6,11 @@ import (
 	"os"
 	"strings"
 
-	"github.com/kart-io/goagent/utils/json"
-
 	"github.com/kart-io/goagent/examples/advanced/multi-agent-modular/agents"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/constants"
 	"github.com/kart-io/goagent/llm/providers"
+	"github.com/kart-io/goagent/utils/json"
 )
 
 func main() {

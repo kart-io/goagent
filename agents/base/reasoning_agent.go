@@ -226,7 +226,6 @@ func (b *BaseReasoningAgent) RunGenerator(ctx context.Context, input *agentcore.
 		// 执行策略的Generator版本
 		// 策略负责yield所有中间结果和最终结果
 		_, err := b.strategy.ExecuteWithGenerator(ctx, input, b.llm, b.tools, b.toolsByName, accumulated, yield, startTime)
-
 		if err != nil {
 			errorOutput := b.createStepOutput(accumulated, "Strategy execution failed", startTime)
 			errorOutput.Status = interfaces.StatusFailed

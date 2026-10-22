@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/kart-io/goagent/utils/json"
 	"time"
 
 	"gorm.io/datatypes"
@@ -14,6 +13,7 @@ import (
 
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/store"
+	"github.com/kart-io/goagent/utils/json"
 )
 
 // Store is a PostgreSQL-backed implementation of the store.Store interface.

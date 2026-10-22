@@ -39,7 +39,6 @@ func TestKeywordRetrieverBM25Algorithm(t *testing.T) {
 
 	ctx := context.Background()
 	results, err := retriever.GetRelevantDocuments(ctx, "container")
-
 	if err != nil {
 		t.Fatalf("BM25 retrieval failed: %v", err)
 	}
@@ -66,7 +65,6 @@ func TestKeywordRetrieverTFIDFAlgorithm(t *testing.T) {
 
 	ctx := context.Background()
 	results, err := retriever.GetRelevantDocuments(ctx, "machine learning")
-
 	if err != nil {
 		t.Fatalf("TF-IDF retrieval failed: %v", err)
 	}
@@ -106,7 +104,6 @@ func TestKeywordRetrieverMinScoreFiltering(t *testing.T) {
 
 	ctx := context.Background()
 	results, err := retriever.GetRelevantDocuments(ctx, "machine learning")
-
 	if err != nil {
 		t.Fatalf("Retrieval failed: %v", err)
 	}

@@ -178,7 +178,6 @@ func (t *APICallerTool) Execute(ctx context.Context, input *interfaces.ToolInput
 
 	// Execute request (retries are handled by resty)
 	response, err := t.executeRequest(ctx, params)
-
 	if err != nil {
 		attempts := 1
 		if response != nil {

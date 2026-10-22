@@ -97,7 +97,6 @@ func main() {
 		WithTimeout(60 * time.Second).
 		WithVerbose(true).
 		Build()
-
 	if err != nil {
 		fmt.Printf("✗ 创建 Agent 失败: %v\n", err)
 		return
@@ -122,7 +121,6 @@ func main() {
 		fmt.Println("─────────────────────────────")
 
 		output, err := agent.ExecuteWithTools(ctx, query)
-
 		if err != nil {
 			fmt.Printf("✗ 执行失败: %v\n", err)
 			continue
