@@ -726,3 +726,25 @@ func BenchmarkWriter_WriteChunk(b *testing.B) {
 		writer.WriteChunk(chunk)
 	}
 }
+
+// TestReader_Next_RetryDelayRespectsCancellation 错误重试等待期间取消 context 应立即返回
+func TestReader_Next_RetryDelayRespectsCancellation(t *testing.T) {
+	ch := make(chan *core.LegacyStreamChunk, 1)
+	ch <- core.NewErrorChunk(errors.New("upstream error"))
+
+	opts := core.DefaultStreamOptions()
+	opts.RetryOnError = true
+	opts.MaxRetries = 3
+	opts.RetryDelay = 5 * time.Second
+
+	ctx, cancel := context.WithCancel(context.Background())
+	reader := NewReader(ctx, ch, opts)
+
+	time.AfterFunc(50*time.Millisecond, cancel)
+
+	start := time.Now()
+	_, err := reader.Next()
+
+	assert.ErrorIs(t, err, context.Canceled)
+	assert.Less(t, time.Since(start), time.Second)
+}

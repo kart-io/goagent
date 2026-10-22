@@ -118,8 +118,14 @@ func (r *Reader) Next() (*core.LegacyStreamChunk, error) {
 
 			// 根据配置决定是否重试
 			if r.opts.RetryOnError && r.stats.ErrorCount <= int64(r.opts.MaxRetries) {
-				time.Sleep(r.opts.RetryDelay)
-				return r.Next()
+				select {
+				case <-time.After(r.opts.RetryDelay):
+					return r.Next()
+				case <-r.ctx.Done():
+					r.closed.Store(true)
+					r.state.Store(core.StreamStateClosed)
+					return nil, r.ctx.Err()
+				}
 			}
 
 			return nil, chunk.Error
