@@ -4,10 +4,10 @@ import (
 	"context"
 	"time"
 
+	"github.com/kart-io/logger/core"
 	"go.opentelemetry.io/otel/attribute"
 
 	agentcore "github.com/kart-io/goagent/core"
-	"github.com/kart-io/logger/core"
 )
 
 // InstrumentedAgent 带可观测性的 Agent 包装器

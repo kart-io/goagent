@@ -10,6 +10,11 @@ GOPATH=$(shell go env GOPATH)
 GOLINT=$(GOPATH)/bin/golangci-lint
 GOVET=$(GOCMD) vet
 
+# module name
+GO_MOD_NAME := github.com/kart-io/goagent
+
+
+
 # Binary name
 BINARY_NAME=goagent
 BINARY_UNIX=$(BINARY_NAME)_unix
@@ -172,8 +177,10 @@ lint-version:
 ## fmt: Format code
 fmt:
 	@echo "$(YELLOW)Formatting code...$(NC)"
-	$(GOFMT) -s -w .
-	$(GOCMD) fmt ./...
+	@gofumpt -version || go install mvdan.cc/gofumpt@latest
+	gofumpt -w .
+	@gci -v || go install github.com/daixiang0/gci@latest
+	gci write -s standard -s default -s 'Prefix($(GO_MOD_NAME))' --skip-generated .
 
 ## vet: Run go vet
 vet:

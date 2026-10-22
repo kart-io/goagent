@@ -3,12 +3,13 @@ package planning
 import (
 	"context"
 
+	loggercore "github.com/kart-io/logger/core"
+
 	"github.com/kart-io/goagent/core"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/constants"
-	loggercore "github.com/kart-io/logger/core"
 )
 
 // Compile-time interface verification

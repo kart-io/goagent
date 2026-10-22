@@ -301,7 +301,6 @@ func (t *WebScraperTool) fetchPage(ctx context.Context, urlStr string) (*goquery
 		SetContext(ctx).
 		SetHeader(interfaces.HeaderUserAgent, t.userAgent).
 		Get(urlStr)
-
 	if err != nil {
 		return nil, err
 	}

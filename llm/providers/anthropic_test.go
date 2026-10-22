@@ -9,15 +9,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/llm"
 	agentllm "github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/common"
 	"github.com/kart-io/goagent/llm/constants"
 	"github.com/kart-io/goagent/utils/json"
-
-	agentErrors "github.com/kart-io/goagent/errors"
-	"github.com/kart-io/goagent/llm"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // TestNewAnthropic tests the constructor

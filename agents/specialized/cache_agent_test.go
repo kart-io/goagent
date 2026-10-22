@@ -6,12 +6,12 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
+	"github.com/kart-io/logger"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	agentcore "github.com/kart-io/goagent/core"
-	"github.com/kart-io/logger"
 )
 
 func setupRedisClient(t *testing.T) *redis.Client {

@@ -7,11 +7,11 @@ import (
 	"testing"
 	"time"
 
+	loggerCore "github.com/kart-io/logger/core"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/kart-io/goagent/interfaces"
-	loggerCore "github.com/kart-io/logger/core"
 )
 
 // mockLogger 用于测试的模拟日志器

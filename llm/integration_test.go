@@ -6,11 +6,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/constants"
 	"github.com/kart-io/goagent/llm/providers"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // TestOptionPatternIntegration 测试 option 模式的完整集成
@@ -258,7 +259,6 @@ func TestExampleOpenAIOptions(t *testing.T) {
 		llm.WithRetryDelay(2*time.Second),
 		llm.WithCache(true, 15*time.Minute),
 	)
-
 	if err != nil {
 		panic(err)
 	}

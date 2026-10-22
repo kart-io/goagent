@@ -5,12 +5,11 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/kart-io/goagent/interfaces"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
 	"github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/store"
 )
 

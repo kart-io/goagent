@@ -6,12 +6,11 @@ import (
 	"os"
 	"strings"
 
+	aiplatform "cloud.google.com/go/aiplatform/apiv1"
 	"cloud.google.com/go/aiplatform/apiv1/aiplatformpb"
 	"github.com/sashabaranov/go-openai"
 	"google.golang.org/api/option"
 	"google.golang.org/protobuf/types/known/structpb"
-
-	aiplatform "cloud.google.com/go/aiplatform/apiv1"
 
 	agentErrors "github.com/kart-io/goagent/errors"
 )

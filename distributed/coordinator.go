@@ -6,9 +6,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kart-io/logger/core"
+
 	agentcore "github.com/kart-io/goagent/core"
 	agentErrors "github.com/kart-io/goagent/errors"
-	"github.com/kart-io/logger/core"
 )
 
 // Coordinator 分布式 Agent 协调器

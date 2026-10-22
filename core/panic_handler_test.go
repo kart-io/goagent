@@ -8,9 +8,10 @@ import (
 	"testing"
 	"time"
 
-	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // =============================================================================

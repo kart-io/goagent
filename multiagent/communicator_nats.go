@@ -4,11 +4,12 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"github.com/kart-io/goagent/utils/json"
 	"sync"
 
-	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/nats-io/nats.go"
+
+	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/utils/json"
 )
 
 // NATSCommunicator NATS 通信器（分布式）

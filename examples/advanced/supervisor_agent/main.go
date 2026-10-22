@@ -293,7 +293,6 @@ func createSimpleAgent(llmClient llm.Client, name, description string) core.Agen
 				{Role: "user", Content: input.Task},
 			},
 		})
-
 		if err != nil {
 			return nil, err
 		}
@@ -352,7 +351,6 @@ func createSecurityReviewAgent(llmClient llm.Client) core.Agent {
 				{Role: "user", Content: prompt},
 			},
 		})
-
 		if err != nil {
 			return nil, err
 		}
@@ -391,7 +389,6 @@ func createPerformanceReviewAgent(llmClient llm.Client) core.Agent {
 				{Role: "user", Content: prompt},
 			},
 		})
-
 		if err != nil {
 			return nil, err
 		}
@@ -430,7 +427,6 @@ func createReadabilityReviewAgent(llmClient llm.Client) core.Agent {
 				{Role: "user", Content: prompt},
 			},
 		})
-
 		if err != nil {
 			return nil, err
 		}

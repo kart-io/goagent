@@ -2,11 +2,11 @@ package parsers
 
 import (
 	"context"
-	"github.com/kart-io/goagent/utils/json"
 	"regexp"
 	"strings"
 
 	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/utils/json"
 )
 
 // ReActOutput ReAct 解析器的输出结构

@@ -1,11 +1,12 @@
 package providers
 
 import (
-	"github.com/kart-io/goagent/llm/common"
 	"testing"
 
-	agentllm "github.com/kart-io/goagent/llm"
 	"github.com/stretchr/testify/assert"
+
+	agentllm "github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/common"
 )
 
 func TestNewProviderCapabilities(t *testing.T) {

@@ -3,10 +3,10 @@ package planning
 import (
 	"context"
 	"fmt"
-	"github.com/kart-io/goagent/utils/json"
 
 	"github.com/kart-io/goagent/core"
 	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/utils/json"
 )
 
 // PlanningAgent is an agent that creates and executes plans

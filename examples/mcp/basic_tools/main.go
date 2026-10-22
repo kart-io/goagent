@@ -93,7 +93,7 @@ func main() {
 	fmt.Println("步骤 7: 创建临时测试文件")
 	tmpFile := "/tmp/mcp_test_file.txt"
 	testContent := "Hello, MCP Toolbox!\n这是一个测试文件。\nCreated at: " + time.Now().Format(time.RFC3339)
-	if err := os.WriteFile(tmpFile, []byte(testContent), 0644); err != nil {
+	if err := os.WriteFile(tmpFile, []byte(testContent), 0o644); err != nil {
 		fmt.Printf("  ✗ 创建失败: %v\n", err)
 		return
 	}

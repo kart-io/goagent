@@ -6,9 +6,8 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/kart-io/goagent/interfaces"
-
 	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/interfaces"
 )
 
 // KeywordRetriever 关键词检索器

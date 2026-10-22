@@ -128,7 +128,6 @@ func example1AgentWithMonitoring(apiKey, providerName string) {
 		WithVerbose(true).             // 启用详细日志
 
 		Build()
-
 	if err != nil {
 		log.Fatalf("创建 Agent 失败: %v", err)
 	}
@@ -173,7 +172,6 @@ func example2AgentWithPerformanceControl(apiKey, providerName string) {
 		WithMaxTokens(3000).          // 最多 3000 tokens
 
 		Build()
-
 	if err != nil {
 		log.Fatalf("创建 Agent 失败: %v", err)
 	}
@@ -229,7 +227,6 @@ func example3AgentWithMemory(apiKey, providerName string) {
 		WithMaxConversationHistory(10). // 最多保留 10 轮历史对话
 
 		Build()
-
 	if err != nil {
 		log.Fatalf("创建 Agent 失败: %v", err)
 	}
@@ -326,7 +323,6 @@ func example4AgentWithErrorHandling(apiKey, providerName string) {
 		// Core API - 错误处理
 		WithErrorHandler(errorHandler).
 		Build()
-
 	if err != nil {
 		log.Fatalf("创建 Agent 失败: %v", err)
 	}
@@ -401,7 +397,6 @@ func createCalculatorTool() interfaces.Tool {
 			return nil, fmt.Errorf("无效的表达式格式")
 		}).
 		Build()
-
 	if err != nil {
 		panic(fmt.Sprintf("创建计算器工具失败: %v", err))
 	}

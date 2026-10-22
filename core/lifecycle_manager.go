@@ -519,11 +519,11 @@ func (m *DefaultLifecycleManager) resolveDependencies(entries []*componentEntry)
 		}
 	}
 
-	// Find nodes with no dependencies (in-degree = 0)
+	// Find nodes with no dependencies (in-degree = 0), keeping priority order
 	var queue []string
-	for name, degree := range inDegree {
-		if degree == 0 {
-			queue = append(queue, name)
+	for _, entry := range entries {
+		if inDegree[entry.name] == 0 {
+			queue = append(queue, entry.name)
 		}
 	}
 

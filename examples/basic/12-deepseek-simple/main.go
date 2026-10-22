@@ -208,7 +208,6 @@ func simpleTool(name, description string, handler func(context.Context, string) 
 			return handler(ctx, input)
 		}).
 		Build()
-
 	if err != nil {
 		panic(fmt.Sprintf("创建工具失败: %v", err))
 	}

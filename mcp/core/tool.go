@@ -3,14 +3,13 @@ package core
 import (
 	"context"
 	"errors"
-	"github.com/kart-io/goagent/utils/json"
 	"time"
+
+	"github.com/kart-io/goagent/utils/json"
 )
 
-var (
-	// ErrNotImplemented is returned when an abstract method is called on a base type
-	ErrNotImplemented = errors.New("method must be implemented by concrete tool")
-)
+// ErrNotImplemented is returned when an abstract method is called on a base type
+var ErrNotImplemented = errors.New("method must be implemented by concrete tool")
 
 // MCPTool MCP 工具接口
 //

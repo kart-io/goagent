@@ -104,7 +104,6 @@ func demonstrateBasicPlanning(ctx context.Context, llmClient llm.Client, memMgr 
 		MaxSteps:    10,
 		MaxDuration: 30 * time.Minute,
 	})
-
 	if err != nil {
 		fmt.Printf("  ✗ 创建计划失败: %v\n", err)
 		return
@@ -166,7 +165,6 @@ func demonstrateTaskDecomposition(ctx context.Context, llmClient llm.Client, mem
 			"task": task,
 		},
 	})
-
 	if err != nil {
 		fmt.Printf("  ✗ 任务分解失败: %v\n", err)
 		return
@@ -227,7 +225,6 @@ func demonstratePlanOptimization(ctx context.Context, llmClient llm.Client, memM
 			},
 		},
 	})
-
 	if err != nil {
 		fmt.Printf("  ✗ 执行失败: %v\n", err)
 		return

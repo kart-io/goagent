@@ -3,8 +3,9 @@ package agents
 import (
 	"context"
 	"fmt"
-	"github.com/kart-io/goagent/utils/json"
 	"time"
+
+	"github.com/kart-io/goagent/utils/json"
 )
 
 // HTTPTool performs HTTP requests

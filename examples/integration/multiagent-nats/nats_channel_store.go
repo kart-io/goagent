@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/nats-io/nats.go"
+
 	"github.com/kart-io/goagent/multiagent"
 	"github.com/kart-io/goagent/utils/json"
-	"github.com/nats-io/nats.go"
 )
 
 // NATSChannelStore 实现基于 NATS 的分布式 ChannelStore
@@ -65,7 +66,6 @@ func (s *NATSChannelStore) GetOrCreateChannel(agentID string) chan *multiagent.A
 			fmt.Printf("Warning: channel full for agent %s, dropping message\n", agentID)
 		}
 	})
-
 	if err != nil {
 		fmt.Printf("Failed to subscribe to %s: %v\n", subject, err)
 		return ch
