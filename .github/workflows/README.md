@@ -6,7 +6,7 @@ This directory contains GitHub Actions workflows for CI/CD automation.
 
 ### 🔄 CI (`ci.yml`)
 
-**Trigger**: Push to `main`/`develop`, Pull Requests
+**Trigger**: Push to `master`/`develop`, Pull Requests
 
 **Purpose**: Continuous Integration
 
