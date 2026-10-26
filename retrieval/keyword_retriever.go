@@ -129,7 +129,10 @@ func (k *KeywordRetriever) calculateBM25Scores(query string) []float64 {
 		if df == 0 {
 			continue
 		}
-		idf := math.Log((numDocs - df + 0.5) / (df + 0.5))
+		// Positive BM25 IDF (as used by Lucene). The unsmoothed log can
+		// be zero or negative when a term occurs in at least half the corpus,
+		// causing matching documents to be removed by the positive-score filter.
+		idf := math.Log1p((numDocs - df + 0.5) / (df + 0.5))
 
 		// 对每个文档计算得分
 		for i, doc := range k.Documents {
