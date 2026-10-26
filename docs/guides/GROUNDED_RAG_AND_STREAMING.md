@@ -48,6 +48,17 @@ output, err := agent.Execute(ctx, "退款政策是什么？")
 go run ./examples/rag/grounded
 ```
 
+使用 DeepSeek 的 OpenAI 兼容接口时，可复用环境中的 `DEEPSEEK_API_KEY`，只为当前命令设置配置：
+
+```bash
+OPENAI_API_KEY="$DEEPSEEK_API_KEY" \
+OPENAI_BASE_URL=https://api.deepseek.com \
+OPENAI_MODEL=deepseek-flash \
+go run ./examples/rag/grounded
+```
+
+模型名称以 [DeepSeek 官方文档](https://api-docs.deepseek.com/) 为准。
+
 ## ReAct 步骤流
 
 ```go
