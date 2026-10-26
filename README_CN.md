@@ -15,6 +15,10 @@ GoAgent 是一个 Go 语言 AI Agent 框架，灵感来源于 LangChain。它提
 
 推荐新编排使用 `agent.AsRunnable()`。参见[执行契约与能力状态](docs/guides/EXECUTION_CONTRACT.md)和[GoAgent 评测](evaluation/agentbench/README.md)。
 
+流程编排：[泛型图、条件分支、并行汇合与有界循环](workflow/README.md)。
+
+上下文治理：[工具结果卸载与历史摘要](docs/guides/CONTEXT_POLICY.md)。框架对照：[GoAgent / Eino](evaluation/einocompare/README.md)。
+
 ## 特性
 
 - **智能代理** - 具备推理能力和工具执行的自主代理
@@ -69,7 +73,7 @@ func main() {
     }
 
     // 执行代理
-    result, err := agent.Execute(context.Background(), "分析最新的销售数据")
+    result, err := agent.AsRunnable().Invoke(context.Background(), "分析最新的销售数据")
     if err != nil {
         log.Fatal(err)
     }
@@ -196,6 +200,7 @@ sequenceDiagram
 | 模块 | 说明 | 文档 |
 |------|------|------|
 | **[core](core/)** | 执行引擎、状态管理、运行时 | [README](core/README.md) |
+| **[workflow](workflow/)** | 泛型图编译、条件分支、并行汇合与有界循环 | [README](workflow/README.md) |
 | **[llm](llm/)** | LLM 提供商集成（OpenAI、Anthropic 等） | [README](llm/README.md) |
 | **[builder](builder/)** | 代理构建流畅 API | [README](builder/README.md) |
 | **[agents](agents/)** | 推理策略（ReAct、CoT、ToT） | [README](agents/README.md) |

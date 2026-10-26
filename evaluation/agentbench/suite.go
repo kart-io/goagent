@@ -1,6 +1,7 @@
 package agentbench
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"sort"
@@ -14,6 +15,19 @@ type SuiteCase struct {
 	Case
 	Category       string `json:"category"`
 	DirectEligible bool   `json:"direct_eligible"`
+}
+
+// DecodeSuite imports into fresh values: omitted optional fields must never
+// inherit evidence or eligibility from a previously generated synthetic suite.
+func DecodeSuite(data []byte) ([]SuiteCase, error) {
+	var cases []SuiteCase
+	if err := json.Unmarshal(data, &cases); err != nil {
+		return nil, err
+	}
+	if err := ValidateSuite(cases); err != nil {
+		return nil, err
+	}
+	return cases, nil
 }
 
 // ValidateSuite 防止重复 ID、空标签或无工具直返被当成有效样本。

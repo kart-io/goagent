@@ -392,6 +392,7 @@ func TestDatabaseQuery_RealWorldScenarios(t *testing.T) {
 // This test requires CGO and the SQLite driver to be available
 func TestDatabaseQuery_SQLiteInMemory(t *testing.T) {
 	tool := NewDatabaseQueryTool()
+	t.Cleanup(func() { _ = tool.Close() })
 	ctx := context.Background()
 
 	// Create a table
@@ -408,8 +409,8 @@ func TestDatabaseQuery_SQLiteInMemory(t *testing.T) {
 	}
 
 	output, err := tool.Execute(ctx, createTableInput)
-	if err != nil && strings.Contains(err.Error(), "unknown driver") {
-		t.Skip("SQLite driver not available (requires CGO)")
+	if err != nil && strings.Contains(err.Error(), "requires cgo") {
+		t.Skip("SQLite requires a CGO-enabled build")
 	}
 	require.NoError(t, err, "Table creation should succeed")
 	require.NotNil(t, output)

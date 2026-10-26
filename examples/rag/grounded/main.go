@@ -37,11 +37,21 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if *streaming {
-		events, err := agent.ExecuteStream(ctx, "What is the refund policy?")
+		chunks, err := agent.AsRunnable().Stream(ctx, "What is the refund policy?")
 		if err != nil {
 			log.Fatal(err)
 		}
-		for event := range events {
+		for chunk := range chunks {
+			if chunk.Error != nil {
+				log.Fatal(chunk.Error)
+			}
+			if chunk.Done {
+				fmt.Printf("\nFinal: %v\n", chunk.Data.Result)
+			}
+			event := chunk.Event
+			if event == nil {
+				continue
+			}
 			switch event.Type {
 			case "sources":
 				fmt.Printf("Sources: %+v\n", event.Sources)
@@ -49,8 +59,6 @@ func main() {
 				fmt.Print(event.Delta)
 			case "usage":
 				fmt.Printf("\nUsage: %+v\n", event.Usage)
-			case "error":
-				log.Fatal(event.Error)
 			}
 		}
 		if err := ctx.Err(); err != nil {
@@ -58,7 +66,7 @@ func main() {
 		}
 		return
 	}
-	output, err := agent.Execute(ctx, "What is the refund policy?")
+	output, err := agent.AsRunnable().Invoke(ctx, "What is the refund policy?")
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -46,8 +46,11 @@ type Result struct {
 	UsageComplete bool                    `json:"usage_complete"`
 }
 
-const instruction = "完成用户任务。若存在 lookup 工具，必须先调用该工具，不能仅回复将要查询。该无参数工具每题只需查询一次，收到成功结果后不要重复查询。若用户要求原样返回工具文本，成功工具返回的非空正文就是完整答案，保留所有字符、语言和换行，不翻译、不加引号或 Markdown，不将合法状态值改成 UNKNOWN。若用户要求事实提取或计算，则依据工具结果回答，只有无法从资料得出所问事实时才输出 UNKNOWN。最终只输出答案本身，不要解释。"
-const toolDescription = "查询本题的参考资料，无需参数。"
+// SystemInstruction is shared by framework comparison executors.
+const SystemInstruction = "完成用户任务。若存在 lookup 工具，必须先调用该工具，不能仅回复将要查询。该无参数工具每题只需查询一次，收到成功结果后不要重复查询。若用户要求原样返回工具文本，成功工具返回的非空正文就是完整答案，保留所有字符、语言和换行，不翻译、不加引号或 Markdown，不将合法状态值改成 UNKNOWN。若用户要求事实提取或计算，则依据工具结果回答，只有无法从资料得出所问事实时才输出 UNKNOWN。最终只输出答案本身，不要解释。"
+
+// LookupDescription describes the identical evidence tool for each framework.
+const LookupDescription = "查询本题的参考资料，无需参数。"
 
 // lookup 返回本题的工具资料，并记录实际调用次数。
 type lookup struct {
@@ -56,7 +59,7 @@ type lookup struct {
 }
 
 func (t *lookup) Name() string        { return "lookup" }
-func (t *lookup) Description() string { return toolDescription }
+func (t *lookup) Description() string { return LookupDescription }
 func (t *lookup) ArgsSchema() string  { return `{"type":"object","properties":{}}` }
 func (t *lookup) Invoke(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 	if err := ctx.Err(); err != nil {
@@ -68,7 +71,26 @@ func (t *lookup) Invoke(ctx context.Context, input *interfaces.ToolInput) (*inte
 
 // Run 执行一个 GoAgent 评测任务。失败也保留结果；首次文本时间不等同于工具参数首帧时间。
 func Run(parent context.Context, c Case, config Config) Result {
-	result := Result{Framework: "goagent", CaseID: c.ID}
+	return RunWithExecutor(parent, c, config, "goagent", func(ctx context.Context, baseURL string, cfg Config, c Case, onText, onFinal func(string)) (int32, error) {
+		t := &lookup{evidence: c.Evidence}
+		err := runGoAgent(ctx, baseURL, cfg, c, t, onText, onFinal)
+		return t.calls.Load(), err
+	})
+}
+
+// Executor runs a framework through the supplied metered BaseURL. It reports
+// transient text and the authoritative final answer separately, plus tool calls.
+// Executors must honor ctx and finish all requests before returning.
+type Executor func(context.Context, string, Config, Case, func(string), func(string)) (int32, error)
+
+// RunWithExecutor shares validation, timeout, metering and exact-match scoring.
+// Only the supplied framework executor changes between comparison runs.
+func RunWithExecutor(parent context.Context, c Case, config Config, framework string, execute Executor) Result {
+	result := Result{Framework: framework, CaseID: c.ID}
+	if execute == nil || framework == "" {
+		result.Error = "framework and executor are required"
+		return result
+	}
 	if config.APIKey == "" || config.BaseURL == "" || config.Timeout <= 0 || config.Budget.MaxCalls <= 0 || config.Budget.MaxOutputTokens <= 0 || config.Budget.Model == "" || c.ID == "" || c.Question == "" || c.Answer == "" {
 		result.Error = "题目、凭据、地址、模型、超时和正数预算不能为空"
 		return result
@@ -90,13 +112,19 @@ func Run(parent context.Context, c Case, config Config) Result {
 		}
 		text.WriteString(delta)
 	}
-	lookupTool := &lookup{evidence: c.Evidence}
-	runErr := runGoAgent(ctx, proxy.URL, config, c, lookupTool, onText, func(final string) { text.Reset(); text.WriteString(final) })
+	finalSeen := false
+	toolCalls, runErr := execute(ctx, proxy.URL, config, c, onText, func(final string) { finalSeen = true; text.Reset(); text.WriteString(final) })
+	if runErr == nil {
+		runErr = ctx.Err()
+	}
+	if runErr == nil && !finalSeen {
+		runErr = io.ErrUnexpectedEOF
+	}
 	cancel()
 	proxy.Close()
 	result.DurationMS = float64(time.Since(start).Microseconds()) / 1000
 	result.Answer = strings.TrimSpace(text.String())
-	result.ToolCalls = lookupTool.calls.Load()
+	result.ToolCalls = toolCalls
 	result.Measurements = meter.Measurements()
 	result.UsageComplete = result.Measurements.Calls > 0 && result.Measurements.Calls == result.Measurements.UsageReports
 	result.Success = runErr == nil && result.Answer == c.Answer && (c.Evidence == "" || result.ToolCalls > 0)
@@ -111,7 +139,7 @@ func runGoAgent(ctx context.Context, baseURL string, cfg Config, c Case, t *look
 	if err != nil {
 		return err
 	}
-	b := builder.NewSimpleBuilder(client).WithSystemPrompt(instruction).WithMaxIterations(cfg.Budget.MaxCalls).WithMaxTokens(cfg.Budget.MaxOutputTokens).WithTemperature(cfg.Budget.Temperature).WithTimeout(cfg.Timeout)
+	b := builder.NewSimpleBuilder(client).WithSystemPrompt(SystemInstruction).WithMaxIterations(cfg.Budget.MaxCalls).WithMaxTokens(cfg.Budget.MaxOutputTokens).WithTemperature(cfg.Budget.Temperature).WithTimeout(cfg.Timeout)
 	if c.Evidence != "" {
 		b.WithTools(t)
 		if cfg.DirectTools {

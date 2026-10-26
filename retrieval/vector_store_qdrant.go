@@ -111,6 +111,7 @@ func NewQdrantVectorStore(ctx context.Context, config QdrantConfig) (*QdrantVect
 
 	// 创建或验证集合
 	if err := store.ensureCollection(ctx); err != nil {
+		_ = client.Close()
 		return nil, err
 	}
 
@@ -186,17 +187,18 @@ func (q *QdrantVectorStore) Add(ctx context.Context, docs []*interfaces.Document
 
 		// 转换 metadata 为 payload
 		payload := make(map[string]*qdrant.Value)
-		payload["page_content"] = qdrant.NewValueString(doc.PageContent)
-		payload["id"] = qdrant.NewValueString(id)
-
 		if doc.Metadata != nil {
 			for k, v := range doc.Metadata {
 				payload[k] = convertToQdrantValue(v)
 			}
 		}
 
+		// Document identity and body are reserved payload fields. Metadata
+		// must not change the identity later returned to Search/Delete callers.
+		payload["page_content"] = qdrant.NewValueString(doc.PageContent)
+		payload["id"] = qdrant.NewValueString(id)
 		points[i] = &qdrant.PointStruct{
-			Id:      qdrant.NewID(id),
+			Id:      qdrantPointID(id),
 			Vectors: qdrant.NewVectors(vectors[i]...),
 			Payload: payload,
 		}
@@ -204,6 +206,7 @@ func (q *QdrantVectorStore) Add(ctx context.Context, docs []*interfaces.Document
 
 	// 批量上传点
 	batchSize := 100
+	wait := true
 	for i := 0; i < len(points); i += batchSize {
 		end := i + batchSize
 		if end > len(points) {
@@ -213,6 +216,7 @@ func (q *QdrantVectorStore) Add(ctx context.Context, docs []*interfaces.Document
 		batch := points[i:end]
 		_, err := q.client.Upsert(ctx, &qdrant.UpsertPoints{
 			CollectionName: q.config.CollectionName,
+			Wait:           &wait,
 			Points:         batch,
 		})
 		if err != nil {
@@ -225,6 +229,15 @@ func (q *QdrantVectorStore) Add(ctx context.Context, docs []*interfaces.Document
 	}
 
 	return nil
+}
+
+// qdrantPointID preserves existing UUID point IDs while mapping arbitrary
+// business IDs deterministically. The original document ID remains in payload.
+func qdrantPointID(id string) *qdrant.PointId {
+	if parsed, err := uuid.Parse(id); err == nil {
+		return qdrant.NewID(parsed.String())
+	}
+	return qdrant.NewID(uuid.NewSHA1(uuid.NameSpaceURL, []byte("goagent:qdrant:document:"+id)).String())
 }
 
 // convertToQdrantValue 转换 Go 值为 Qdrant Value
@@ -348,17 +361,15 @@ func convertFromQdrantValue(v *qdrant.Value) interface{} {
 		return nil
 	}
 
-	if str := v.GetStringValue(); str != "" {
-		return str
-	}
-	if v.GetIntegerValue() != 0 {
-		return v.GetIntegerValue()
-	}
-	if v.GetDoubleValue() != 0 {
-		return v.GetDoubleValue()
-	}
-	if v.GetBoolValue() {
-		return true
+	switch value := v.Kind.(type) {
+	case *qdrant.Value_StringValue:
+		return value.StringValue
+	case *qdrant.Value_IntegerValue:
+		return value.IntegerValue
+	case *qdrant.Value_DoubleValue:
+		return value.DoubleValue
+	case *qdrant.Value_BoolValue:
+		return value.BoolValue
 	}
 
 	return nil
@@ -388,12 +399,14 @@ func (q *QdrantVectorStore) Delete(ctx context.Context, ids []string) error {
 	// 转换 ID 为 Qdrant PointId
 	pointIDs := make([]*qdrant.PointId, len(ids))
 	for i, id := range ids {
-		pointIDs[i] = qdrant.NewID(id)
+		pointIDs[i] = qdrantPointID(id)
 	}
 
-	// 删除点
+	// Wait for deletion so subsequent reads observe the completed operation.
+	wait := true
 	_, err := q.client.Delete(ctx, &qdrant.DeletePoints{
 		CollectionName: q.config.CollectionName,
+		Wait:           &wait,
 		Points: &qdrant.PointsSelector{
 			PointsSelectorOneOf: &qdrant.PointsSelector_Points{
 				Points: &qdrant.PointsIdsList{

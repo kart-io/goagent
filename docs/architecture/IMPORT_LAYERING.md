@@ -57,6 +57,7 @@ retrieval/     - 文档检索
 observability/ - 遥测和监控
 performance/   - 性能工具
 planning/      - 规划工具
+workflow/      - 基于 core.Runnable 的通用图编排
 prompt/        - 提示工程
 reflection/    - 反射工具
 ```

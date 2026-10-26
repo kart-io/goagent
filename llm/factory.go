@@ -15,6 +15,9 @@ type ClientFactory interface {
 
 // NewClientWithOptions 使用选项模式创建 LLM 客户端
 // 注意：实际的客户端创建需要在应用层或 providers 包中实现
+//
+// Deprecated: Use provider-specific constructors in llm/providers. This legacy
+// entry validates options but cannot construct a client without circular imports.
 func NewClientWithOptions(opts ...ClientOption) (Client, error) {
 	// 创建配置
 	config := NewLLMOptionsWithOptions(opts...)

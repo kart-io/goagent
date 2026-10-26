@@ -8,6 +8,7 @@ GoAgent 是一个全面的 Go AI Agent 框架，提供 Agent、工具、内存�
 
 - **[快速入门指南](guides/QUICKSTART.md)** - 5 分钟快速上手
 - **[使用指南](guides/USER_GUIDE.md)** - 完整使用教程
+- **[通用流程编排](../workflow/README.md)** - 图编译、分支、并行汇合、循环和 Agent 适配
 
 ### 架构设计
 
@@ -75,41 +76,12 @@ GoAgent 是一个全面的 Go AI Agent 框架，提供 Agent、工具、内存�
 
 ## 快速示例
 
-```go
-package main
+推荐入口、完整可运行代码和旧接口迁移说明统一维护在[快速入门](guides/QUICKSTART.md)。
 
-import (
-    "context"
-    "fmt"
-    "os"
+- [执行契约与能力状态](guides/EXECUTION_CONTRACT.md)
+- [工具上下文与历史摘要](guides/CONTEXT_POLICY.md)
+- [GoAgent / Eino 对照与编排验证](../evaluation/einocompare/README.md)
 
-    "github.com/kart-io/goagent/builder"
-    "github.com/kart-io/goagent/interfaces"
-    "github.com/kart-io/goagent/llm/providers"
-)
-
-func main() {
-    // 创建 LLM 客户端
-    client, _ := providers.NewOpenAIWithOptions(
-        providers.WithAPIKey(os.Getenv("OPENAI_API_KEY")),
-        providers.WithModel("gpt-4"),
-    )
-
-    // 创建 Agent
-    agent, _ := builder.NewSimpleBuilder(client).
-        WithSystemPrompt("你是一个有帮助的助手").
-        Build()
-
-    // 调用
-    output, _ := agent.Invoke(context.Background(), &interfaces.Input{
-        Messages: []interfaces.Message{
-            {Role: "user", Content: "你好"},
-        },
-    })
-
-    fmt.Println(output.Messages[0].Content)
-}
-```
 
 ## 文档结构
 

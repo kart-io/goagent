@@ -15,6 +15,57 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestRunWithExecutorUsesSharedMeterAndScoring(t *testing.T) {
+	upstream := fakeModel(t)
+	defer upstream.Close()
+	c := Case{ID: "external", Question: "6*7", Answer: "42"}
+	result := RunWithExecutor(context.Background(), c, testConfig(upstream.URL), "external", func(ctx context.Context, base string, cfg Config, c Case, onText, onFinal func(string)) (int32, error) {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/chat/completions", strings.NewReader(`{"messages":[],"stream":false}`))
+		if err != nil {
+			return 0, err
+		}
+		response, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return 0, err
+		}
+		defer response.Body.Close()
+		_, err = io.Copy(io.Discard, response.Body)
+		onText("temporary")
+		onFinal("42")
+		return 0, err
+	})
+	require.True(t, result.Success, "%+v", result)
+	require.Equal(t, "external", result.Framework)
+	require.Equal(t, "42", result.Answer)
+	require.Equal(t, 1, result.Measurements.Calls)
+	require.Equal(t, 5, result.Measurements.Usage.TotalTokens)
+	require.True(t, result.UsageComplete)
+	failed := RunWithExecutor(context.Background(), c, testConfig(upstream.URL), "external", func(context.Context, string, Config, Case, func(string), func(string)) (int32, error) {
+		return 0, fmt.Errorf("failed executor")
+	})
+	require.False(t, failed.Success)
+	require.Contains(t, failed.Error, "failed executor")
+
+	missingFinal := RunWithExecutor(context.Background(), c, testConfig(upstream.URL), "external", func(_ context.Context, _ string, _ Config, _ Case, onText, _ func(string)) (int32, error) {
+		onText("42")
+		return 0, nil
+	})
+	require.False(t, missingFinal.Success, "transient text cannot be scored as final output")
+	require.NotEmpty(t, missingFinal.Error)
+}
+
+func TestRunWithExecutorCannotSucceedAfterDeadline(t *testing.T) {
+	cfg := testConfig("http://unused.invalid")
+	cfg.Timeout = time.Millisecond
+	result := RunWithExecutor(context.Background(), Case{ID: "late", Question: "q", Answer: "42"}, cfg, "external", func(ctx context.Context, _ string, _ Config, _ Case, _, onFinal func(string)) (int32, error) {
+		<-ctx.Done()
+		onFinal("42")
+		return 0, nil
+	})
+	require.False(t, result.Success)
+	require.Contains(t, result.Error, "deadline exceeded")
+}
+
 // fakeModel 只验证真实 SDK、工具和事件链路，不产生模型质量或性能结论。
 func fakeModel(t *testing.T) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

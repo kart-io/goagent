@@ -165,7 +165,7 @@ func (s *Store) Put(ctx context.Context, namespace []string, key string, value i
 
 	// Check if exists
 	var existing storeModel
-	result := s.getDB().Where("namespace = ? AND key = ?", nsKey, key).First(&existing)
+	result := s.getDB().WithContext(ctx).Where("namespace = ? AND key = ?", nsKey, key).First(&existing)
 
 	now := time.Now()
 
@@ -174,7 +174,7 @@ func (s *Store) Put(ctx context.Context, namespace []string, key string, value i
 		existing.Value = valueJSON
 		existing.UpdatedAt = now
 
-		if err := s.getDB().Save(&existing).Error; err != nil {
+		if err := s.getDB().WithContext(ctx).Save(&existing).Error; err != nil {
 			return agentErrors.Wrap(err, agentErrors.CodeStoreConnection, "failed to update value").
 				WithComponent("postgres_store").
 				WithOperation("put").
@@ -192,7 +192,7 @@ func (s *Store) Put(ctx context.Context, namespace []string, key string, value i
 			UpdatedAt: now,
 		}
 
-		if err := s.getDB().Create(&model).Error; err != nil {
+		if err := s.getDB().WithContext(ctx).Create(&model).Error; err != nil {
 			return agentErrors.Wrap(err, agentErrors.CodeStoreConnection, "failed to create value").
 				WithComponent("postgres_store").
 				WithOperation("put").
@@ -215,7 +215,7 @@ func (s *Store) Get(ctx context.Context, namespace []string, key string) (*store
 	nsKey := namespaceToKey(namespace)
 
 	var model storeModel
-	result := s.getDB().Where("namespace = ? AND key = ?", nsKey, key).First(&model)
+	result := s.getDB().WithContext(ctx).Where("namespace = ? AND key = ?", nsKey, key).First(&model)
 
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
@@ -262,7 +262,7 @@ func (s *Store) Get(ctx context.Context, namespace []string, key string) (*store
 func (s *Store) Delete(ctx context.Context, namespace []string, key string) error {
 	nsKey := namespaceToKey(namespace)
 
-	result := s.getDB().Where("namespace = ? AND key = ?", nsKey, key).Delete(&storeModel{})
+	result := s.getDB().WithContext(ctx).Where("namespace = ? AND key = ?", nsKey, key).Delete(&storeModel{})
 	if result.Error != nil {
 		return agentErrors.Wrap(result.Error, agentErrors.CodeStoreConnection, "failed to delete value").
 			WithComponent("postgres_store").
@@ -278,7 +278,7 @@ func (s *Store) Delete(ctx context.Context, namespace []string, key string) erro
 func (s *Store) Search(ctx context.Context, namespace []string, filter map[string]interface{}) ([]*store.Value, error) {
 	nsKey := namespaceToKey(namespace)
 
-	query := s.getDB().Where("namespace = ?", nsKey)
+	query := s.getDB().WithContext(ctx).Where("namespace = ?", nsKey)
 
 	// Apply metadata filters using JSONB queries
 	for key, value := range filter {
@@ -338,7 +338,7 @@ func (s *Store) List(ctx context.Context, namespace []string) ([]string, error) 
 	nsKey := namespaceToKey(namespace)
 
 	var keys []string
-	err := s.getDB().
+	err := s.getDB().WithContext(ctx).
 		Model(&storeModel{}).
 		Where("namespace = ?", nsKey).
 		Pluck("key", &keys).
@@ -357,7 +357,7 @@ func (s *Store) List(ctx context.Context, namespace []string) ([]string, error) 
 func (s *Store) Clear(ctx context.Context, namespace []string) error {
 	nsKey := namespaceToKey(namespace)
 
-	result := s.getDB().Where("namespace = ?", nsKey).Delete(&storeModel{})
+	result := s.getDB().WithContext(ctx).Where("namespace = ?", nsKey).Delete(&storeModel{})
 	if result.Error != nil {
 		return agentErrors.Wrap(result.Error, agentErrors.CodeStoreConnection, "failed to clear namespace").
 			WithComponent("postgres_store").
@@ -397,7 +397,7 @@ func (s *Store) Ping(ctx context.Context) error {
 // Size returns the total number of stored values
 func (s *Store) Size(ctx context.Context) (int64, error) {
 	var count int64
-	err := s.getDB().Model(&storeModel{}).Count(&count).Error
+	err := s.getDB().WithContext(ctx).Model(&storeModel{}).Count(&count).Error
 	if err != nil {
 		return 0, agentErrors.Wrap(err, agentErrors.CodeStoreConnection, "failed to count values").
 			WithComponent("postgres_store").

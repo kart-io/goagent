@@ -45,7 +45,13 @@ if err := ctx.Err(); err != nil { return err }
 
 同一 Builder 的状态和记忆属于一个会话。由它创建的多个适配器共享可取消的串行执行门，Batch 保持输入顺序。跨会话并发应创建独立 Builder。不要将旧 Execute 与新适配器混用来并发操作同一个会话。Runnable 回调是额外的编排层回调，Builder 已配置的回调仍独立执行，不要把同一个副作用回调注册两次。
 
-`Pipe` 的现有语义是等待上游最终输出，再执行下游；不会逐 Token 变换上游流。本次没有新增 Graph 编译器或逐块变换接口。
+`Pipe` 的现有语义是等待上游最终输出，再执行下游；不会逐 Token 变换上游流。通用编排使用新的 [workflow.Graph[T]](../../workflow/README.md)，支持条件分支、显式并行 Clone/Merge 和有界循环；仍不提供跨节点逐块 Transform。
+
+## 可选上下文治理
+
+`WithContextPolicy` 为原生工具流增加执行内存中的大结果卸载、分页读取和显式历史摘要。默认关闭；摘要计入 MaxIterations、model_calls 和累计用量，未知用量不补零。最后一轮恢复已卸载原文，避免只剩无法读取的引用。它不限制进程内存、不恢复跨进程工具证据，也不应用于旧 Execute。详见[上下文策略](CONTEXT_POLICY.md)。
+
+入门代码统一见[快速入门与迁移](QUICKSTART.md)。主模块复杂流程使用 [workflow.Graph[T]](../../workflow/README.md)；与 Eino 的不同执行语义可通过独立的 [Eino 对照模块](../../evaluation/einocompare/README.md)验证，主模块仍不引入 Eino。
 
 ## 减少模型请求与 Token
 
@@ -119,3 +125,14 @@ agent, err := builder.NewSimpleBuilder(client).
 下一步用真实业务标注替换合成题，并对格式成功、工具正确性、引用蕴含和成本分别评分。业务数据尚未提供，不用合成三题代替业务验收。
 
 当前不新增分布式调度器。需要跨主机接管时，先明确最长任务时间、消息丢失容忍度、重复副作用要求和工作节点规模；再验证持久化队列确认、租约与 fencing、幂等记录、崩溃重投递和故障注入。FileStore 与 Core NATS 不满足这些验收条件，应复用成熟持久化消息/工作流系统，而非把本地锁包装成高可用承诺。
+
+
+## 通用图执行
+
+`workflow.NewGraph[T]().Compile(ctx)` 生成标准 StreamRunnable，单次调用、步骤流、批处理、组合和回调共用同一执行源。AddRunnable 接入同类型节点，Adapt 显式转换异构 Agent 输入与输出。默认 MaxSteps=100，每次进入节点计一步；超限通过 errors.Is(err, workflow.ErrMaxSteps) 检查。
+
+条件路由只能返回预先声明的目标，每次选择一个后继；普通多入边不等待未选中路径。并行节点必须提供 Clone 和 Merge，按注册顺序汇合；MaxConcurrency 默认 4，约束每个并行节点的 worker。并行失败取消同组分支并等待退出，函数必须响应 context。
+
+节点事件透传并附带 Step 作用域；节点 Done 不作为图 Done。图模式声明为 steps，不代表边上逐 Token 执行。自定义 Runnable 的缺失/重复终态和迟到错误会阻止下游。原始数据中的指针/map/slice 不自动深复制；没有隐式重试、事务回滚、图持久化恢复或跨主机接管。
+
+参见[完整 API 与状态边界](../../workflow/README.md)以及[离线示例](../../examples/workflow/main.go)。
