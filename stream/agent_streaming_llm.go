@@ -13,10 +13,9 @@ import (
 
 // StreamingLLMAgent LLM 流式响应 Agent
 //
-// StreamingLLMAgent 支持 LLM 的流式输出：
-// - 逐字返回生成的文本
-// - 实时显示思考过程
-// - 降低首字符延迟
+// StreamingLLMAgent waits for a complete model response, then emits text chunks.
+// This compatibility implementation simulates streaming and does not improve
+// time to first token. Use StreamingLLMAgentWithRealStreaming for provider streams.
 type StreamingLLMAgent struct {
 	*core.BaseAgent
 	llmClient llm.Client
@@ -285,37 +284,6 @@ func NewStreamingLLMAgentWithRealStreaming(llmClient llm.Client, config *Streami
 	return &StreamingLLMAgentWithRealStreaming{
 		StreamingLLMAgent: NewStreamingLLMAgent(llmClient, config),
 	}
-}
-
-// ExecuteStream 使用真实的流式 API
-func (a *StreamingLLMAgentWithRealStreaming) ExecuteStream(ctx context.Context, input *core.AgentInput) (core.StreamOutput, error) {
-	opts := core.DefaultStreamOptions()
-	writer := NewWriter(ctx, opts)
-
-	go func() {
-		defer func() {
-			if err := writer.Close(); err != nil {
-				fmt.Printf("failed to close stream writer: %v\n", err)
-			}
-		}()
-
-		// 注意：真实的 LLM 流式 API 调用需要 LLM 客户端支持 ChatStream 接口
-		// 示例用法：
-		// streamChan, err := a.llmClient.ChatStream(ctx, messages)
-		// for chunk := range streamChan {
-		//     writer.WriteText(chunk.Text)
-		// }
-		// 当前返回错误提示，需要集成具体 LLM 提供商的流式 API
-
-		if err := writer.WriteError(agentErrors.New(agentErrors.CodeInternal, "real streaming API not implemented yet").
-			WithComponent("streaming_llm_agent").
-			WithOperation("ExecuteStream")); err != nil {
-			fmt.Printf("failed to write error: %v", err)
-		}
-	}()
-
-	reader := NewReader(ctx, writer.Channel(), opts)
-	return reader, nil
 }
 
 // SimpleStreamConsumer 简单的流消费者实现

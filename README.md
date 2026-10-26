@@ -41,17 +41,22 @@ package main
 import (
     "context"
     "log"
+    "time"
 
     "github.com/kart-io/goagent/builder"
     "github.com/kart-io/goagent/llm"
+    "github.com/kart-io/goagent/llm/providers"
 )
 
 func main() {
     // Create LLM client
-    llmClient := llm.NewOpenAIClient("your-api-key")
+    llmClient, err := providers.NewOpenAIWithOptions(llm.WithAPIKey("your-api-key"))
+    if err != nil {
+        log.Fatal(err)
+    }
 
     // Build agent with fluent API
-    agent, err := builder.NewAgentBuilder(llmClient).
+    agent, err := builder.NewSimpleBuilder(llmClient).
         WithSystemPrompt("You are a helpful assistant").
         WithMaxIterations(10).
         WithTimeout(30 * time.Second).
@@ -83,6 +88,15 @@ analysisAgent, err := builder.AnalysisAgent(llmClient, dataSource)
 // Create a monitoring agent (long-running, periodic checks)
 monitoringAgent, err := builder.MonitoringAgent(llmClient, 30*time.Second)
 ```
+
+### Grounded RAG and incremental output
+
+- `RAGAgent(client, retriever)` retrieves evidence and returns reference provenance in `retrieval_sources`.
+- `WithRetriever(retriever, RetrievalConfig{...})` bounds document count and context size, and accepts hybrid or reranking retrievers.
+- ReAct `Stream()` emits reasoning and tool-result snapshots; `RunGenerator()` shares the same execution loop and supports early termination.
+- The OpenAI provider supports `CompleteStream` / `ChatStream` with text deltas, token usage, and asynchronous errors.
+
+See the [RAG and streaming guide](docs/guides/GROUNDED_RAG_AND_STREAMING.md) and [runnable RAG example](examples/rag/grounded/main.go).
 
 ## Architecture
 

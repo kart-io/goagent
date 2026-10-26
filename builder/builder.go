@@ -59,7 +59,9 @@ type AgentBuilder[C any, S core.State] struct {
 	middlewares []middleware.Middleware
 
 	// 对话记忆管理（支持多轮对话）
-	memoryManager interfaces.MemoryManager
+	memoryManager   interfaces.MemoryManager
+	retriever       interfaces.DocumentRetriever
+	retrievalConfig RetrievalConfig
 
 	// 配置
 	config *AgentConfig
@@ -95,6 +97,12 @@ func (b *AgentBuilder[C, S]) Build() (*ConfigurableAgent[C, S], error) {
 	// 验证必需组件
 	if b.llmClient == nil {
 		return nil, agentErrors.NewInvalidConfigError("builder", "llm_client", "LLM client is required")
+	}
+	if b.retriever != nil && isNilRetriever(b.retriever) {
+		return nil, agentErrors.NewInvalidConfigError("builder", "retriever", "retriever must not be a typed nil")
+	}
+	if b.retrievalConfig.MaxDocuments < 0 || b.retrievalConfig.MaxContextRunes < 0 {
+		return nil, agentErrors.NewInvalidConfigError("builder", "retrieval", "retrieval limits must not be negative")
 	}
 
 	// 如果未提供则设置默认值
@@ -140,16 +148,18 @@ func (b *AgentBuilder[C, S]) Build() (*ConfigurableAgent[C, S], error) {
 
 	// 创建 Agent
 	agent := &ConfigurableAgent[C, S]{
-		llmClient:     b.llmClient,
-		tools:         b.tools,
-		systemPrompt:  b.systemPrompt,
-		runtime:       runtime,
-		chain:         chain,
-		config:        b.config,
-		callbacks:     b.callbacks,
-		errorHandler:  b.errorHandler,
-		metadata:      b.metadata,
-		memoryManager: b.memoryManager,
+		llmClient:       b.llmClient,
+		tools:           b.tools,
+		systemPrompt:    b.systemPrompt,
+		runtime:         runtime,
+		chain:           chain,
+		config:          b.config,
+		callbacks:       b.callbacks,
+		errorHandler:    b.errorHandler,
+		metadata:        b.metadata,
+		memoryManager:   b.memoryManager,
+		retriever:       b.retriever,
+		retrievalConfig: b.retrievalConfig,
 	}
 
 	// 如果需要则初始化
@@ -226,6 +236,20 @@ func (b *AgentBuilder[C, S]) createHandler(runtime *execution.Runtime[C, S]) mid
 						Content: conv.Content,
 					})
 				}
+			}
+		}
+
+		if b.retriever != nil {
+			evidence, metadata, err := retrieveContext(ctx, b.retriever, b.retrievalConfig, inputStr)
+			if err != nil {
+				return nil, err
+			}
+			messages = append(messages, llm.SystemMessage(retrievalInstruction), llm.UserMessage(evidence))
+			if request.Metadata == nil {
+				request.Metadata = make(map[string]interface{})
+			}
+			for key, value := range metadata {
+				request.Metadata[key] = value
 			}
 		}
 
