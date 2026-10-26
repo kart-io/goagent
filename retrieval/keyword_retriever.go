@@ -49,6 +49,7 @@ func NewKeywordRetriever(docs []*interfaces.Document, config RetrieverConfig) *K
 	retriever.TopK = config.TopK
 	retriever.MinScore = config.MinScore
 	retriever.Name = config.Name
+	retriever.retrieve = retriever.GetRelevantDocuments
 
 	// 构建索引
 	retriever.buildIndex()
@@ -58,6 +59,9 @@ func NewKeywordRetriever(docs []*interfaces.Document, config RetrieverConfig) *K
 
 // GetRelevantDocuments 检索相关文档
 func (k *KeywordRetriever) GetRelevantDocuments(ctx context.Context, query string) ([]*interfaces.Document, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if len(k.Documents) == 0 {
 		return []*interfaces.Document{}, nil
 	}
@@ -135,9 +139,9 @@ func (k *KeywordRetriever) calculateBM25Scores(query string) []float64 {
 		idf := math.Log1p((numDocs - df + 0.5) / (df + 0.5))
 
 		// 对每个文档计算得分
-		for i, doc := range k.Documents {
+		for i := range k.Documents {
 			tf := float64(k.Index.TermFrequency(i, term))
-			docLen := float64(len(tokenize(doc.PageContent)))
+			docLen := float64(k.Index.docLengths[i])
 
 			// BM25 公式
 			numerator := tf * (k1 + 1)
@@ -166,9 +170,9 @@ func (k *KeywordRetriever) calculateTFIDFScores(query string) []float64 {
 		idf := math.Log(numDocs / df)
 
 		// 对每个文档计算得分
-		for i, doc := range k.Documents {
+		for i := range k.Documents {
 			tf := float64(k.Index.TermFrequency(i, term))
-			totalTerms := float64(len(tokenize(doc.PageContent)))
+			totalTerms := float64(k.Index.docLengths[i])
 
 			// TF-IDF 公式
 			if totalTerms > 0 {
@@ -261,25 +265,43 @@ func (idx *InvertedIndex) AverageDocLength() float64 {
 
 // 文本处理辅助函数
 
-// tokenize 分词
+// tokenize keeps Latin words and uses overlapping Han bigrams. Single Han
+// characters are retained too, so one-character queries remain searchable.
+// This dependency-free tokenizer is lexical retrieval, not Chinese segmentation.
 func tokenize(text string) []string {
-	// 转换为小写
-	text = strings.ToLower(text)
-
-	// 分割单词
-	words := strings.FieldsFunc(text, func(r rune) bool {
-		return !unicode.IsLetter(r) && !unicode.IsNumber(r)
-	})
-
-	// 过滤停用词（简化版本）
-	filtered := make([]string, 0)
-	for _, word := range words {
-		if len(word) > 2 && !isStopWord(word) {
-			filtered = append(filtered, word)
+	var tokens []string
+	var word, han []rune
+	flushWord := func() {
+		if len(word) > 2 && !isStopWord(string(word)) {
+			tokens = append(tokens, string(word))
+		}
+		word = word[:0]
+	}
+	flushHan := func() {
+		for i, r := range han {
+			tokens = append(tokens, string(r))
+			if i > 0 {
+				tokens = append(tokens, string(han[i-1:i+1]))
+			}
+		}
+		han = han[:0]
+	}
+	for _, r := range strings.ToLower(text) {
+		switch {
+		case unicode.Is(unicode.Han, r):
+			flushWord()
+			han = append(han, r)
+		case unicode.IsLetter(r) || unicode.IsNumber(r):
+			flushHan()
+			word = append(word, r)
+		default:
+			flushWord()
+			flushHan()
 		}
 	}
-
-	return filtered
+	flushWord()
+	flushHan()
+	return tokens
 }
 
 // isStopWord 判断是否为停用词

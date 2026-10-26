@@ -276,6 +276,14 @@ func (c *MiddlewareChain) Execute(ctx context.Context, request *MiddlewareReques
 	return response, nil
 }
 
+// WithHandler snapshots this chain's middleware with a per-execution handler.
+// Middleware instances are shared, just as they are across Execute calls.
+func (c *MiddlewareChain) WithHandler(handler Handler) *MiddlewareChain {
+	clone := NewMiddlewareChain(handler)
+	clone.middlewares.Store(c.middlewares.Load())
+	return clone
+}
+
 // Size 返回当前 middleware 数量
 func (c *MiddlewareChain) Size() int {
 	return len(c.middlewares.Load().items)

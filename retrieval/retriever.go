@@ -2,8 +2,10 @@ package retrieval
 
 import (
 	"context"
+	"reflect"
 
 	"github.com/kart-io/goagent/core"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 )
 
@@ -29,7 +31,9 @@ type Retriever interface {
 // BaseRetriever 提供 Retriever 的基础实现
 //
 // 实现了 Runnable 接口的通用功能
-// 子类只需实现 GetRelevantDocuments 方法
+// Concrete constructors bind their retrieval function explicitly. Go embedding
+// does not dispatch calls to an embedding type's methods. Custom implementations
+// should use AsRetriever or NewFuncRetriever to obtain the Runnable contract.
 type BaseRetriever struct {
 	*core.BaseRunnable[string, []*interfaces.Document]
 
@@ -40,7 +44,23 @@ type BaseRetriever struct {
 	MinScore float64
 
 	// Name 检索器名称（用于日志和追踪）
-	Name string
+	Name     string
+	retrieve func(context.Context, string) ([]*interfaces.Document, error)
+}
+
+// NewFuncRetriever adapts a retrieval function to all Runnable entry points.
+func NewFuncRetriever(fn func(context.Context, string) ([]*interfaces.Document, error)) *BaseRetriever {
+	r := NewBaseRetriever()
+	r.retrieve = fn
+	return r
+}
+
+// AsRetriever adapts a document retriever without relying on embedded dispatch.
+func AsRetriever(source interfaces.DocumentRetriever) Retriever {
+	if source == nil || (reflect.ValueOf(source).Kind() == reflect.Pointer && reflect.ValueOf(source).IsNil()) {
+		return NewBaseRetriever()
+	}
+	return NewFuncRetriever(source.GetRelevantDocuments)
 }
 
 // NewBaseRetriever 创建基础检索器
@@ -55,6 +75,9 @@ func NewBaseRetriever() *BaseRetriever {
 
 // Invoke 执行检索（实现 Runnable 接口）
 func (r *BaseRetriever) Invoke(ctx context.Context, query string) ([]*interfaces.Document, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	// 触发回调
 	config := r.GetConfig()
 	for _, cb := range config.Callbacks {
@@ -65,13 +88,18 @@ func (r *BaseRetriever) Invoke(ctx context.Context, query string) ([]*interfaces
 
 	// 执行检索（由子类实现）
 	docs, err := r.GetRelevantDocuments(ctx, query)
+	if err == nil {
+		err = ctx.Err()
+	}
 
 	// 触发回调
 	for _, cb := range config.Callbacks {
 		if err != nil {
 			_ = cb.OnError(ctx, err)
 		} else {
-			_ = cb.OnEnd(ctx, docs)
+			if callbackErr := cb.OnEnd(ctx, docs); callbackErr != nil {
+				return nil, callbackErr
+			}
 		}
 	}
 
@@ -80,6 +108,9 @@ func (r *BaseRetriever) Invoke(ctx context.Context, query string) ([]*interfaces
 
 // Stream 流式执行（默认实现）
 func (r *BaseRetriever) Stream(ctx context.Context, query string) (<-chan core.StreamChunk[[]*interfaces.Document], error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	outChan := make(chan core.StreamChunk[[]*interfaces.Document], 1)
 
 	go func() {
@@ -120,11 +151,16 @@ func (r *BaseRetriever) WithConfig(config core.RunnableConfig) core.Runnable[str
 	return &newRetriever
 }
 
-// GetRelevantDocuments 基础实现（返回空列表）
-//
-// 子类应该重写此方法
+// GetRelevantDocuments invokes the bound implementation. An unbound base is a
+// configuration error, not a successful search with no matching documents.
 func (r *BaseRetriever) GetRelevantDocuments(ctx context.Context, query string) ([]*interfaces.Document, error) {
-	return []*interfaces.Document{}, nil
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if r.retrieve == nil {
+		return nil, agentErrors.New(agentErrors.CodeInvalidConfig, "retriever has no retrieval function; use a concrete constructor or AsRetriever")
+	}
+	return r.retrieve(ctx, query)
 }
 
 // FilterByScore 按分数过滤文档

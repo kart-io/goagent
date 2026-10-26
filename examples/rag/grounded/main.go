@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log"
 	"time"
@@ -14,6 +15,8 @@ import (
 )
 
 func main() {
+	streaming := flag.Bool("stream", false, "emit unified sources/text/usage events")
+	flag.Parse()
 	client, err := providers.NewOpenAIWithOptions()
 	if err != nil {
 		log.Fatal(err)
@@ -33,6 +36,28 @@ func main() {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+	if *streaming {
+		events, err := agent.ExecuteStream(ctx, "What is the refund policy?")
+		if err != nil {
+			log.Fatal(err)
+		}
+		for event := range events {
+			switch event.Type {
+			case "sources":
+				fmt.Printf("Sources: %+v\n", event.Sources)
+			case "text":
+				fmt.Print(event.Delta)
+			case "usage":
+				fmt.Printf("\nUsage: %+v\n", event.Usage)
+			case "error":
+				log.Fatal(event.Error)
+			}
+		}
+		if err := ctx.Err(); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 	output, err := agent.Execute(ctx, "What is the refund policy?")
 	if err != nil {
 		log.Fatal(err)

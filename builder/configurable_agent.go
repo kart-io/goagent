@@ -60,6 +60,10 @@ func (a *ConfigurableAgent[C, S]) Initialize(ctx context.Context) error {
 
 // Execute 使用给定输入运行 Agent
 func (a *ConfigurableAgent[C, S]) Execute(ctx context.Context, input interface{}) (*AgentOutput, error) {
+	return a.execute(ctx, input, a.chain)
+}
+
+func (a *ConfigurableAgent[C, S]) execute(ctx context.Context, input interface{}, chain *middleware.MiddlewareChain) (*AgentOutput, error) {
 	// 如果配置了超时则应用
 	if a.config.Timeout > 0 {
 		var cancel context.CancelFunc
@@ -83,7 +87,7 @@ func (a *ConfigurableAgent[C, S]) Execute(ctx context.Context, input interface{}
 	}
 
 	// 通过中间件链执行
-	response, err := a.chain.Execute(ctx, request)
+	response, err := chain.Execute(ctx, request)
 	if err != nil {
 		// 处理错误
 		if a.errorHandler != nil {
@@ -448,6 +452,12 @@ func (a *ConfigurableAgent[C, S]) executeToolCall(ctx context.Context, call Tool
 			if err != nil {
 				return nil, err
 			}
+			if output == nil {
+				return nil, fmt.Errorf("tool %s returned nil output", call.Name)
+			}
+			if output.Error != "" {
+				return nil, fmt.Errorf("tool %s: %s", call.Name, output.Error)
+			}
 			return output.Result, nil
 		}
 	}
@@ -531,6 +541,10 @@ func (w *stdToolCallerWrapper) GenerateWithTools(ctx context.Context, prompt str
 	resp, err := w.client.GenerateWithTools(ctx, prompt, tools)
 	if err != nil {
 		return nil, err
+	}
+
+	if resp == nil {
+		return nil, fmt.Errorf("tool-calling client returned nil response")
 	}
 
 	// 转换 llm.ToolCallResponse 到 common.ToolCallResponse

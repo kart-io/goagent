@@ -41,12 +41,15 @@ func NewReActOutputParser() *ReActOutputParser {
 		thoughtPattern:     regexp.MustCompile(`(?i)` + regexp.QuoteMeta(MarkerThought) + `\s*(.+?)(?:\n|$)`),
 		actionPattern:      regexp.MustCompile(`(?i)` + regexp.QuoteMeta(MarkerAction) + `\s*(.+?)(?:\n|$)`),
 		actionInputPattern: regexp.MustCompile(`(?i)` + regexp.QuoteMeta(MarkerActionInput) + `\s*(.+?)(?:\n|$)`),
-		finalAnswerPattern: regexp.MustCompile(`(?i)` + regexp.QuoteMeta(MarkerFinalAnswer) + `\s*(.+?)(?:\n\n|$)`),
+		finalAnswerPattern: regexp.MustCompile(`(?ims)^[\t ]*(?:#{1,6}[\t ]+)?(?:\*\*)?(?:final[\t ]+answer|answer|最终答案|最终回答)(?:\*\*)?[\t ]*[:：](?:\*\*)?[\t ]*(.*)\z`),
 	}
 }
 
 // Parse 解析 ReAct 输出
 func (p *ReActOutputParser) Parse(ctx context.Context, text string) (*ReActOutput, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	result := &ReActOutput{}
 
 	// 清理输出
@@ -55,7 +58,10 @@ func (p *ReActOutputParser) Parse(ctx context.Context, text string) (*ReActOutpu
 	// 检查是否是最终答案
 	if matches := p.finalAnswerPattern.FindStringSubmatch(text); len(matches) > 1 {
 		result.FinalAnswer = strings.TrimSpace(matches[1])
-		return result, nil
+		if result.FinalAnswer != "" {
+			return result, nil
+		}
+		return nil, agentErrors.New(agentErrors.CodeParserMissingField, "final answer is empty")
 	}
 
 	// 解析思考

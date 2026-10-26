@@ -1,0 +1,58 @@
+{
+  "cases": [
+    {
+      "duration_ms": 0,
+      "query": "退款政策",
+      "retrieval": {
+        "recall_at_k": 1,
+        "reciprocal_rank": 1
+      }
+    },
+    {
+      "duration_ms": 0,
+      "query": "配送需要多久",
+      "retrieval": {
+        "recall_at_k": 1,
+        "reciprocal_rank": 1
+      }
+    },
+    {
+      "duration_ms": 0,
+      "query": "忘记密码",
+      "retrieval": {
+        "recall_at_k": 1,
+        "reciprocal_rank": 1
+      }
+    },
+    {
+      "duration_ms": 0,
+      "query": "refund policy",
+      "retrieval": {
+        "recall_at_k": 1,
+        "reciprocal_rank": 1
+      }
+    },
+    {
+      "duration_ms": 0,
+      "query": "standard shipping",
+      "retrieval": {
+        "recall_at_k": 1,
+        "reciprocal_rank": 1
+      }
+    },
+    {
+      "duration_ms": 0,
+      "query": "reset password",
+      "retrieval": {
+        "recall_at_k": 1,
+        "reciprocal_rank": 1
+      }
+    }
+  ],
+  "citation_scope": "reference validity and labeled source precision/recall; not claim entailment",
+  "k": 2,
+  "live": false,
+  "mean_recall_at_k": 1,
+  "mrr": 1,
+  "synthetic": true
+}

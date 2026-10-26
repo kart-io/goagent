@@ -61,48 +61,47 @@ func NewHybridRetriever(
 	retriever.TopK = config.TopK
 	retriever.MinScore = config.MinScore
 	retriever.Name = config.Name
+	retriever.retrieve = retriever.GetRelevantDocuments
 
 	return retriever
 }
 
 // GetRelevantDocuments 检索相关文档
 func (h *HybridRetriever) GetRelevantDocuments(ctx context.Context, query string) ([]*interfaces.Document, error) {
-	// 并发执行两种检索
-	type result struct {
-		docs []*interfaces.Document
-		err  error
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
-
-	vectorChan := make(chan result, 1)
-	keywordChan := make(chan result, 1)
-
-	// 向量检索
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	type result struct {
+		docs   []*interfaces.Document
+		err    error
+		vector bool
+	}
+	results := make(chan result, 2)
 	go func() {
 		docs, err := h.VectorRetriever.GetRelevantDocuments(ctx, query)
-		vectorChan <- result{docs: docs, err: err}
+		results <- result{docs: docs, err: err, vector: true}
 	}()
-
-	// 关键词检索
 	go func() {
 		docs, err := h.KeywordRetriever.GetRelevantDocuments(ctx, query)
-		keywordChan <- result{docs: docs, err: err}
+		results <- result{docs: docs, err: err}
 	}()
-
-	// 等待结果
-	vectorResult := <-vectorChan
-	keywordResult := <-keywordChan
-
-	if vectorResult.err != nil {
-		return nil, agentErrors.Wrap(vectorResult.err, agentErrors.CodeRetrievalSearch, "vector retrieval failed").
-			WithComponent("hybrid_retriever").
-			WithOperation("get_relevant_documents").
-			WithContext("query", query)
-	}
-	if keywordResult.err != nil {
-		return nil, agentErrors.Wrap(keywordResult.err, agentErrors.CodeRetrievalSearch, "keyword retrieval failed").
-			WithComponent("hybrid_retriever").
-			WithOperation("get_relevant_documents").
-			WithContext("query", query)
+	var vectorResult, keywordResult result
+	for i := 0; i < 2; i++ {
+		select {
+		case res := <-results:
+			if res.err != nil {
+				return nil, agentErrors.Wrap(res.err, agentErrors.CodeRetrievalSearch, "hybrid retrieval failed").WithContext("vector", res.vector)
+			}
+			if res.vector {
+				vectorResult = res
+			} else {
+				keywordResult = res
+			}
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
 	}
 
 	// 融合结果
@@ -142,21 +141,21 @@ func (h *HybridRetriever) weightedSumFusion(vectorDocs, keywordDocs []*interface
 	docMap := make(map[string]*interfaces.Document)
 
 	// 添加向量检索结果
-	for i, doc := range vectorNormalized {
+	for _, doc := range vectorNormalized {
 		docCopy := doc.Clone()
-		docCopy.Score = vectorDocs[i].Score * h.VectorWeight
+		docCopy.Score = doc.Score * h.VectorWeight
 		docMap[doc.ID] = docCopy
 	}
 
 	// 融合关键词检索结果
-	for i, doc := range keywordNormalized {
+	for _, doc := range keywordNormalized {
 		if existing, ok := docMap[doc.ID]; ok {
 			// 文档已存在，累加分数
-			existing.Score += keywordDocs[i].Score * h.KeywordWeight
+			existing.Score += doc.Score * h.KeywordWeight
 		} else {
 			// 新文档
 			docCopy := doc.Clone()
-			docCopy.Score = keywordDocs[i].Score * h.KeywordWeight
+			docCopy.Score = doc.Score * h.KeywordWeight
 			docMap[doc.ID] = docCopy
 		}
 	}

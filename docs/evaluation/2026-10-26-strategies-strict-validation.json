@@ -1,0 +1,221 @@
+{
+  "budget": {
+    "model": "deepseek-flash",
+    "temperature": 0.2,
+    "max_calls": 8,
+    "max_output_tokens_per_call": 800,
+    "observed_token_stop": 10000
+  },
+  "dataset": "evaluation/testdata/reasoning_synthetic.json",
+  "results": [
+    {
+      "agent_status": "success",
+      "agent_usage": {
+        "prompt_tokens": 179,
+        "completion_tokens": 179,
+        "total_tokens": 358
+      },
+      "answer": "9",
+      "case": "apples",
+      "duration_ms": 2316,
+      "measurements": {
+        "calls": 1,
+        "usage": {
+          "prompt_tokens": 179,
+          "completion_tokens": 179,
+          "total_tokens": 358
+        },
+        "usage_reports": 1
+      },
+      "strategy": "react",
+      "success": true
+    },
+    {
+      "agent_status": "success",
+      "agent_usage": {
+        "prompt_tokens": 129,
+        "completion_tokens": 96,
+        "total_tokens": 225
+      },
+      "answer": "9",
+      "case": "apples",
+      "duration_ms": 1162,
+      "measurements": {
+        "calls": 1,
+        "usage": {
+          "prompt_tokens": 129,
+          "completion_tokens": 96,
+          "total_tokens": 225
+        },
+        "usage_reports": 1
+      },
+      "strategy": "cot",
+      "success": true
+    },
+    {
+      "agent_status": "failed",
+      "agent_usage": {
+        "prompt_tokens": 405,
+        "completion_tokens": 1219,
+        "total_tokens": 1624
+      },
+      "answer": "",
+      "case": "apples",
+      "duration_ms": 7808,
+      "error": "invalid thought score: expected a finite number in [0,1]",
+      "measurements": {
+        "calls": 2,
+        "usage": {
+          "prompt_tokens": 405,
+          "completion_tokens": 1219,
+          "total_tokens": 1624
+        },
+        "usage_reports": 2
+      },
+      "strategy": "tot",
+      "success": false
+    },
+    {
+      "agent_status": "success",
+      "agent_usage": {
+        "prompt_tokens": 125,
+        "completion_tokens": 109,
+        "total_tokens": 234
+      },
+      "answer": "15",
+      "case": "boxes",
+      "duration_ms": 1666,
+      "measurements": {
+        "calls": 1,
+        "usage": {
+          "prompt_tokens": 125,
+          "completion_tokens": 109,
+          "total_tokens": 234
+        },
+        "usage_reports": 1
+      },
+      "strategy": "cot",
+      "success": true
+    },
+    {
+      "agent_status": "success",
+      "agent_usage": {
+        "prompt_tokens": 1514,
+        "completion_tokens": 2437,
+        "total_tokens": 3951
+      },
+      "answer": "15",
+      "case": "boxes",
+      "duration_ms": 21964,
+      "measurements": {
+        "calls": 8,
+        "usage": {
+          "prompt_tokens": 1514,
+          "completion_tokens": 2437,
+          "total_tokens": 3951
+        },
+        "usage_reports": 8
+      },
+      "strategy": "tot",
+      "success": true
+    },
+    {
+      "agent_status": "success",
+      "agent_usage": {
+        "prompt_tokens": 175,
+        "completion_tokens": 176,
+        "total_tokens": 351
+      },
+      "answer": "15",
+      "case": "boxes",
+      "duration_ms": 1698,
+      "measurements": {
+        "calls": 1,
+        "usage": {
+          "prompt_tokens": 175,
+          "completion_tokens": 176,
+          "total_tokens": 351
+        },
+        "usage_reports": 1
+      },
+      "strategy": "react",
+      "success": true
+    },
+    {
+      "agent_status": "failed",
+      "agent_usage": {
+        "prompt_tokens": 389,
+        "completion_tokens": 1077,
+        "total_tokens": 1466
+      },
+      "answer": "",
+      "case": "discount",
+      "duration_ms": 7544,
+      "error": "invalid thought score: expected a finite number in [0,1]",
+      "measurements": {
+        "calls": 2,
+        "usage": {
+          "prompt_tokens": 389,
+          "completion_tokens": 1077,
+          "total_tokens": 1466
+        },
+        "usage_reports": 2
+      },
+      "strategy": "tot",
+      "success": false
+    },
+    {
+      "agent_status": "success",
+      "agent_usage": {
+        "prompt_tokens": 175,
+        "completion_tokens": 104,
+        "total_tokens": 279
+      },
+      "answer": "60",
+      "case": "discount",
+      "duration_ms": 1204,
+      "measurements": {
+        "calls": 1,
+        "usage": {
+          "prompt_tokens": 175,
+          "completion_tokens": 104,
+          "total_tokens": 279
+        },
+        "usage_reports": 1
+      },
+      "strategy": "react",
+      "success": true
+    },
+    {
+      "agent_status": "success",
+      "agent_usage": {
+        "prompt_tokens": 125,
+        "completion_tokens": 105,
+        "total_tokens": 230
+      },
+      "answer": "60",
+      "case": "discount",
+      "duration_ms": 1426,
+      "measurements": {
+        "calls": 1,
+        "usage": {
+          "prompt_tokens": 125,
+          "completion_tokens": 105,
+          "total_tokens": 230
+        },
+        "usage_reports": 1
+      },
+      "strategy": "cot",
+      "success": true
+    }
+  ],
+  "scoring": "last numeric ANSWER marker or exact numeric output; synthetic regression, not a business benchmark",
+  "success_rates": {
+    "cot": 1,
+    "react": 1,
+    "tot": 0.3333333333333333
+  },
+  "synthetic": true,
+  "timeout": "1m30s",
+  "tool_count": 0
+}

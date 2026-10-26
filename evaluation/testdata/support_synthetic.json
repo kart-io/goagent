@@ -1,0 +1,19 @@
+{
+ "synthetic":true,
+ "documents":[
+  {"id":"refund-zh","page_content":"退款政策允许在购买后三十天内退货。"},
+  {"id":"shipping-zh","page_content":"标准配送需要三至五个工作日。"},
+  {"id":"password-zh","page_content":"忘记密码时，通过注册邮箱重置密码。"},
+  {"id":"refund-en","page_content":"The refund policy allows returns within 30 days of purchase."},
+  {"id":"shipping-en","page_content":"Standard shipping takes three to five business days."},
+  {"id":"password-en","page_content":"Reset your password using your registered email address."}
+ ],
+ "cases":[
+  {"query":"退款政策","relevant":["refund-zh"]},
+  {"query":"配送需要多久","relevant":["shipping-zh"]},
+  {"query":"忘记密码","relevant":["password-zh"]},
+  {"query":"refund policy","relevant":["refund-en"]},
+  {"query":"standard shipping","relevant":["shipping-en"]},
+  {"query":"reset password","relevant":["password-en"]}
+ ]
+}

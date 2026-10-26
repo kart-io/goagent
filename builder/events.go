@@ -1,0 +1,236 @@
+package builder
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"strings"
+	"time"
+
+	"github.com/kart-io/goagent/core/middleware"
+	"github.com/kart-io/goagent/interfaces"
+	"github.com/kart-io/goagent/llm"
+)
+
+// AgentEvent is one event in ExecuteStream. Type is sources, step, text, usage,
+// error, or done. Only done contains the final, middleware-processed Output.
+// Tool selection is request/response; text deltas come from the native model
+// stream. Intermediate events are provisional until done.
+type AgentEvent struct {
+	Type    string                 `json:"type"`
+	Sources []RetrievalSource      `json:"sources,omitempty"`
+	Step    string                 `json:"step,omitempty"`
+	Tool    string                 `json:"tool,omitempty"`
+	Delta   string                 `json:"delta,omitempty"`
+	Usage   *interfaces.TokenUsage `json:"usage,omitempty"`
+	Output  *AgentOutput           `json:"output,omitempty"`
+	Error   error                  `json:"-"`
+	Message string                 `json:"error,omitempty"`
+}
+
+// ExecuteStream combines retrieval, bounded tool selection/execution and native
+// answer streaming. It retains Execute's middleware and completion callbacks.
+// Cancel ctx when abandoning the stream; cancellation closes it promptly. On
+// cancellation an error event is best-effort, and ctx.Err() is authoritative.
+// A cached middleware response may produce only done, with no model deltas.
+func (a *ConfigurableAgent[C, S]) ExecuteStream(ctx context.Context, input interface{}) (<-chan AgentEvent, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	client, ok := a.llmClient.(llm.StreamClient)
+	if !ok {
+		return nil, fmt.Errorf("ExecuteStream requires llm.StreamClient")
+	}
+	var caller commonToolCallingClient
+	if len(a.tools) > 0 {
+		caller, _ = a.llmClient.(commonToolCallingClient)
+		if caller == nil {
+			if c, ok := a.llmClient.(llm.ToolCallingClient); ok {
+				caller = &stdToolCallerWrapper{client: c}
+			}
+		}
+		if caller == nil {
+			return nil, fmt.Errorf("configured tools require tool-calling support")
+		}
+	}
+	events := make(chan AgentEvent, 1)
+	go func() {
+		defer close(events)
+		ctx, cancel := context.WithCancel(ctx)
+		defer cancel()
+		if a.config.Timeout > 0 {
+			var timeoutCancel context.CancelFunc
+			ctx, timeoutCancel = context.WithTimeout(ctx, a.config.Timeout)
+			defer timeoutCancel()
+		}
+		emit := func(e AgentEvent) error {
+			select {
+			case events <- e:
+				return nil
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+		chain := a.chain.WithHandler(func(runCtx context.Context, request *middleware.MiddlewareRequest) (*middleware.MiddlewareResponse, error) {
+			// Respect Execute's configured timeout for sends as well as upstream calls.
+			send := func(e AgentEvent) error {
+				select {
+				case events <- e:
+					return nil
+				case <-runCtx.Done():
+					return runCtx.Err()
+				}
+			}
+			return a.runEvents(runCtx, request, client, caller, send)
+		})
+		output, err := a.execute(ctx, input, chain)
+		if err != nil {
+			_ = emit(AgentEvent{Type: "error", Error: err, Message: err.Error()})
+			return
+		}
+		_ = emit(AgentEvent{Type: "done", Output: output})
+	}()
+	return events, nil
+}
+
+func (a *ConfigurableAgent[C, S]) runEvents(ctx context.Context, request *middleware.MiddlewareRequest, client llm.StreamClient, caller commonToolCallingClient, emit func(AgentEvent) error) (*middleware.MiddlewareResponse, error) {
+	input := fmt.Sprint(request.Input)
+	prompt := a.buildPromptWithHistory(ctx, request.Input)
+	metadata := make(map[string]interface{}, len(request.Metadata))
+	for k, v := range request.Metadata {
+		metadata[k] = v
+	}
+	if a.retriever != nil {
+		evidence, details, err := retrieveContext(ctx, a.retriever, a.retrievalConfig, input)
+		if err != nil {
+			return nil, err
+		}
+		for k, v := range details {
+			metadata[k] = v
+		}
+		prompt = retrievalInstruction + "\n\n" + evidence + "\n" + prompt
+		if err := emit(AgentEvent{Type: "sources", Sources: details["retrieval_sources"].([]RetrievalSource)}); err != nil {
+			return nil, err
+		}
+	}
+	usage := &interfaces.TokenUsage{}
+	if caller != nil {
+		ready := false
+		for round := 0; round < a.config.MaxIterations; round++ {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			if err := emit(AgentEvent{Type: "step", Step: "select_tools"}); err != nil {
+				return nil, err
+			}
+			response, err := caller.GenerateWithTools(ctx, prompt+"\nSelect tools needed to answer. When no further tools are needed, return READY without an answer.", a.tools)
+			if err != nil {
+				return nil, err
+			}
+			if response == nil {
+				return nil, fmt.Errorf("nil tool selection response")
+			}
+			usage.Add(response.Usage)
+			if len(response.ToolCalls) == 0 {
+				ready = true
+				break
+			}
+			for _, tc := range response.ToolCalls {
+				call := ToolCall{Name: tc.Name, Input: tc.Arguments}
+				if call.Name == "" && tc.Function != nil {
+					call.Name = tc.Function.Name
+					if err := json.Unmarshal([]byte(tc.Function.Arguments), &call.Input); err != nil {
+						return nil, fmt.Errorf("invalid arguments for %s: %w", call.Name, err)
+					}
+				}
+				if call.Name == "" {
+					return nil, fmt.Errorf("tool call has no name")
+				}
+				if err := ctx.Err(); err != nil {
+					return nil, err
+				}
+				if err := emit(AgentEvent{Type: "step", Step: "tool_start", Tool: call.Name}); err != nil {
+					return nil, err
+				}
+				result, err := a.executeToolCall(ctx, call)
+				if err != nil {
+					return nil, err
+				}
+				data, err := json.Marshal(result)
+				if err != nil {
+					return nil, err
+				}
+				prompt += fmt.Sprintf("\nUntrusted tool result from %s:\n%s\n", call.Name, data)
+				if err := emit(AgentEvent{Type: "step", Step: "tool_end", Tool: call.Name}); err != nil {
+					return nil, err
+				}
+			}
+		}
+		if !ready {
+			return nil, fmt.Errorf("maximum tool selection iterations reached")
+		}
+	}
+	system := a.buildSystemPromptContent()
+	if a.retriever != nil {
+		system += "\n" + retrievalInstruction
+	}
+	messages := []llm.Message{{Role: "system", Content: system}, {Role: "user", Content: prompt}}
+	stream, err := client.CompleteStream(ctx, &llm.CompletionRequest{Messages: messages, MaxTokens: a.config.MaxTokens, Temperature: a.config.Temperature})
+	if err != nil {
+		return nil, err
+	}
+	if stream == nil {
+		return nil, fmt.Errorf("model returned nil stream")
+	}
+	var answer strings.Builder
+	var finalUsage *llm.Usage
+	done := false
+	for !done {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case chunk, ok := <-stream:
+			if !ok {
+				return nil, io.ErrUnexpectedEOF
+			}
+			if chunk == nil {
+				continue
+			}
+			if chunk.Error != nil {
+				return nil, chunk.Error
+			}
+			if chunk.Delta != "" {
+				answer.WriteString(chunk.Delta)
+				if err := emit(AgentEvent{Type: "text", Delta: chunk.Delta}); err != nil {
+					return nil, err
+				}
+			}
+			if chunk.Usage != nil {
+				finalUsage = chunk.Usage
+			}
+			done = chunk.Done
+		}
+	}
+	if finalUsage != nil {
+		usage.Add(&interfaces.TokenUsage{PromptTokens: finalUsage.PromptTokens, CompletionTokens: finalUsage.CompletionTokens, TotalTokens: finalUsage.TotalTokens})
+	}
+	metadata["answer_usage_reported"] = finalUsage != nil
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if err := emit(AgentEvent{Type: "usage", Usage: usage}); err != nil {
+		return nil, err
+	}
+	a.saveConversation(ctx, input, answer.String())
+	if request.State != nil {
+		request.State.Set("last_response", answer.String())
+		request.State.Set("last_timestamp", time.Now())
+	}
+	if a.config.EnableAutoSave && a.runtime.Checkpointer != nil {
+		if err := a.runtime.SaveState(ctx); err != nil {
+			return nil, fmt.Errorf("stream checkpoint save: %w", err)
+		}
+	}
+	return &middleware.MiddlewareResponse{Output: answer.String(), State: request.State, Metadata: metadata, TokenUsage: usage}, nil
+}
