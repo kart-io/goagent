@@ -15,6 +15,10 @@ GoAgent is an AI agent framework for Go, inspired by LangChain. It provides agen
 
 新编排入口：`agent.AsRunnable()`。参见[执行契约与能力状态](docs/guides/EXECUTION_CONTRACT.md)和[GoAgent 评测](evaluation/agentbench/README.md)。
 
+Workflow orchestration: [typed graphs, branches, parallel joins and bounded loops](workflow/README.md).
+
+Context governance: [tool-result offloading and history summaries](docs/guides/CONTEXT_POLICY.md). Framework comparison: [GoAgent / Eino](evaluation/einocompare/README.md).
+
 ## Features
 
 - **Intelligent Agents** - Autonomous agents with reasoning capabilities and tool execution
@@ -69,7 +73,7 @@ func main() {
     }
 
     // Execute agent
-    result, err := agent.Execute(context.Background(), "Analyze the latest sales data")
+    result, err := agent.AsRunnable().Invoke(context.Background(), "Analyze the latest sales data")
     if err != nil {
         log.Fatal(err)
     }
@@ -196,6 +200,7 @@ See [Architecture Documentation](docs/architecture/) for details.
 | Module | Description | Documentation |
 |--------|-------------|---------------|
 | **[core](core/)** | Execution engine, state management, runtime | [README](core/README.md) |
+| **[workflow](workflow/)** | Typed graph compilation, branches, parallel joins and bounded loops | [README](workflow/README.md) |
 | **[llm](llm/)** | LLM provider integration (OpenAI, Anthropic, etc.) | [README](llm/README.md) |
 | **[builder](builder/)** | Fluent API for agent construction | [README](builder/README.md) |
 | **[agents](agents/)** | Reasoning strategies (ReAct, CoT, ToT) | [README](agents/README.md) |

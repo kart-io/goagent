@@ -2,6 +2,8 @@
 
 评测包已纳入主 Go 模块，使用实际 OpenAI 兼容 SDK、统一请求计量和严格评分。无独立模块依赖，根目录测试会包含本包。
 
+同题、同模型、同预算的 Eino 对照位于独立模块 [einocompare](../einocompare/README.md)，通过 `RunWithExecutor` 复用此处计量、评分与最终输出检查。
+
 ## 离线验证
 
 在仓库根目录执行：

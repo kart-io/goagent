@@ -1,0 +1,1605 @@
+{
+  "date": "2026-10-26",
+  "go": "1.25.3 darwin/arm64",
+  "main": {
+    "counts": {
+      "all_test_pass": 4731,
+      "top_test_pass": 2715,
+      "package_pass": 187,
+      "all_test_skip": 14,
+      "top_test_skip": 12,
+      "package_skip": 2
+    },
+    "coverage": 40.3,
+    "library_coverage": 69.1,
+    "packages": [
+      {
+        "package": "github.com/kart-io/goagent/agents",
+        "statements": 468,
+        "covered": 372,
+        "coverage": 79.5,
+        "tests": {
+          "pass": 114
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/agents/base",
+        "statements": 415,
+        "covered": 124,
+        "coverage": 29.9,
+        "tests": {
+          "pass": 40
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/agents/cot",
+        "statements": 212,
+        "covered": 170,
+        "coverage": 80.2,
+        "tests": {
+          "pass": 65
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/agents/executor",
+        "statements": 135,
+        "covered": 88,
+        "coverage": 65.2,
+        "tests": {
+          "pass": 36
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/agents/got",
+        "statements": 475,
+        "covered": 323,
+        "coverage": 68.0,
+        "tests": {
+          "pass": 32
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/agents/metacot",
+        "statements": 329,
+        "covered": 220,
+        "coverage": 66.9,
+        "tests": {
+          "pass": 30
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/agents/pot",
+        "statements": 320,
+        "covered": 210,
+        "coverage": 65.6,
+        "tests": {
+          "pass": 38
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/agents/react",
+        "statements": 278,
+        "covered": 237,
+        "coverage": 85.3,
+        "tests": {
+          "pass": 31
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/agents/sot",
+        "statements": 350,
+        "covered": 260,
+        "coverage": 74.3,
+        "tests": {
+          "pass": 24
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/agents/specialized",
+        "statements": 258,
+        "covered": 244,
+        "coverage": 94.6,
+        "tests": {
+          "pass": 122
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/agents/tot",
+        "statements": 648,
+        "covered": 479,
+        "coverage": 73.9,
+        "tests": {
+          "pass": 48
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/builder",
+        "statements": 1269,
+        "covered": 864,
+        "coverage": 68.1,
+        "tests": {
+          "pass": 197
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/cache",
+        "statements": 241,
+        "covered": 216,
+        "coverage": 89.6,
+        "tests": {
+          "pass": 41
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/core",
+        "statements": 1474,
+        "covered": 1041,
+        "coverage": 70.6,
+        "tests": {
+          "pass": 275
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/core/checkpoint",
+        "statements": 360,
+        "covered": 327,
+        "coverage": 90.8,
+        "tests": {
+          "pass": 100
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/core/durable",
+        "statements": 120,
+        "covered": 92,
+        "coverage": 76.7,
+        "tests": {
+          "pass": 3
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/core/execution",
+        "statements": 50,
+        "covered": 44,
+        "coverage": 88.0,
+        "tests": {
+          "pass": 15
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/core/middleware",
+        "statements": 388,
+        "covered": 344,
+        "coverage": 88.7,
+        "tests": {
+          "pass": 124
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/core/state",
+        "statements": 287,
+        "covered": 250,
+        "coverage": 87.1,
+        "tests": {
+          "pass": 86
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/distributed",
+        "statements": 365,
+        "covered": 352,
+        "coverage": 96.4,
+        "tests": {
+          "pass": 142
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/document",
+        "statements": 664,
+        "covered": 545,
+        "coverage": 82.1,
+        "tests": {
+          "pass": 101
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/document/examples/advanced",
+        "statements": 69,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/document/examples/loaders",
+        "statements": 70,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/document/examples/splitters",
+        "statements": 72,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/errors",
+        "statements": 171,
+        "covered": 126,
+        "coverage": 73.7,
+        "tests": {
+          "pass": 73
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/evaluation",
+        "statements": 68,
+        "covered": 62,
+        "coverage": 91.2,
+        "tests": {
+          "pass": 2
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/evaluation/agentbench",
+        "statements": 275,
+        "covered": 245,
+        "coverage": 89.1,
+        "tests": {
+          "pass": 58
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/evaluation/agentbench/cmd/run",
+        "statements": 47,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/evaluation/agentbench/cmd/stress",
+        "statements": 113,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/advanced",
+        "statements": 177,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/advanced/multi-agent-collaboration",
+        "statements": 441,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/advanced/multi-agent-demo",
+        "statements": 95,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/advanced/multi-agent-modular",
+        "statements": 102,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/advanced/multi-agent-modular/agents",
+        "statements": 284,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/advanced/multi-agent-simple",
+        "statements": 159,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/advanced/multi-mode-streaming",
+        "statements": 127,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/advanced/multiagent-patterns",
+        "statements": 443,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/advanced/observability",
+        "statements": 80,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/advanced/parallel-execution",
+        "statements": 124,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/advanced/pool-decoupled-architecture",
+        "statements": 168,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/advanced/react",
+        "statements": 86,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/advanced/streaming",
+        "statements": 96,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/advanced/supervisor_agent",
+        "statements": 169,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/advanced/supervisor_agent/features",
+        "statements": 160,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/advanced/tool-runtime",
+        "statements": 58,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/advanced/tool-selector",
+        "statements": 144,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/agents/react_generator",
+        "statements": 77,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/basic/01-simple-agent",
+        "statements": 57,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/basic/02-tools",
+        "statements": 158,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/basic/03-agent-with-memory",
+        "statements": 143,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/basic/04-ollama-agent",
+        "statements": 212,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/basic/05-provider-consistency",
+        "statements": 58,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/basic/06-all-providers",
+        "statements": 101,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/basic/07-smart-agent-with-tools",
+        "statements": 120,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/basic/08-deepseek-agent",
+        "statements": 150,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/basic/09-deepseek-simple",
+        "statements": 79,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/basic/09-deepseek-simple/invokefast",
+        "statements": 233,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/basic/10-object-pooling",
+        "statements": 150,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/basic/11-deepseek-with-builder",
+        "statements": 224,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/basic/12-deepseek-simple",
+        "statements": 68,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/basic/13-simple-builder-deepseek",
+        "statements": 234,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/basic/14-reasoning-agents",
+        "statements": 169,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/basic/15-simple-builder-kimi",
+        "statements": 263,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/basic/16-pdf-rag",
+        "statements": 100,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/basic/17-vertexai-rag",
+        "statements": 124,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/builder/advanced",
+        "statements": 185,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/builder/core",
+        "statements": 172,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/builder/serialization",
+        "statements": 22,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/builder/simple",
+        "statements": 157,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/comprehensive",
+        "statements": 423,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/error_handling",
+        "statements": 180,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/evaluation/retrieval",
+        "statements": 83,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/evaluation/strategies",
+        "statements": 72,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/generator/advanced",
+        "statements": 120,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/generator/basic",
+        "statements": 72,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/integration/human-in-loop",
+        "statements": 161,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/integration/langchain-complete",
+        "statements": 186,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/integration/langchain-inspired",
+        "statements": 149,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/integration/langchain-phase1",
+        "statements": 192,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/integration/langchain-phase2",
+        "statements": 179,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/integration/multiagent",
+        "statements": 127,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/integration/multiagent-nats",
+        "statements": 398,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/integration/preconfig-agents",
+        "statements": 118,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/intelligent-ops",
+        "statements": 470,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/llm/advanced",
+        "statements": 224,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/llm/anthropic",
+        "statements": 92,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/llm/cohere",
+        "statements": 87,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/llm/huggingface",
+        "statements": 94,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/llm/kimi",
+        "statements": 17,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/mcp/basic_tools",
+        "statements": 118,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/mcp/custom_tool",
+        "statements": 213,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/mcp/tool_chain",
+        "statements": 130,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/multiagent/01-basic-system",
+        "statements": 115,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/multiagent/02-collaboration-types",
+        "statements": 205,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/multiagent/03-team-management",
+        "statements": 172,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/multiagent/04-specialized-agents",
+        "statements": 208,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/multiagent/05-llm-collaborative-agents",
+        "statements": 225,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/multiagent/06-llm-tool-calling",
+        "statements": 346,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/multiagent/07-multiagent-llm-stream",
+        "statements": 239,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/multiagent/08-multiagent-tool-registry",
+        "statements": 212,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/multiagent/09-multiagent-with-middleware",
+        "statements": 238,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/multiagent/10-multiagent-integrated",
+        "statements": 308,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/multiagent/11-planning-multiagent",
+        "statements": 335,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/multiagent/12-structured-planning",
+        "statements": 51,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/multiagent/common",
+        "statements": 53,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/optimization/02-cache-presets",
+        "statements": 13,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/optimization/cot_vs_react",
+        "statements": 109,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/optimization/hybrid_mode",
+        "statements": 444,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/optimization/planning_execution",
+        "statements": 203,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/performance",
+        "statements": 81,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/planning",
+        "statements": 179,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/rag",
+        "statements": 153,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/rag/grounded",
+        "statements": 37,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/retry-jitter",
+        "statements": 35,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/skills/01-demo",
+        "statements": 773,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/skills/02-weather-skill",
+        "statements": 180,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/skills/02-weather-skill/internal/handler",
+        "statements": 46,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/skills/02-weather-skill/internal/llmtools",
+        "statements": 44,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/skills/02-weather-skill/internal/logic",
+        "statements": 45,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/skills/02-weather-skill/internal/skill",
+        "statements": 155,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/skills/02-weather-skill/internal/svc",
+        "statements": 36,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/skills/02-weather-skill/internal/types",
+        "statements": 1,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/testhelpers",
+        "statements": 48,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/tools/01-calculator",
+        "statements": 62,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/tools/02-http-api",
+        "statements": 107,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/tools/03-shell",
+        "statements": 114,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/tools/04-search",
+        "statements": 100,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/tools/05-file-operations",
+        "statements": 189,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/tools/06-web-scraper",
+        "statements": 121,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/tools/07-function-tool",
+        "statements": 147,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/tools/08-tool-with-agent",
+        "statements": 132,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/tools/middleware",
+        "statements": 394,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/tools/registry",
+        "statements": 297,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/translate",
+        "statements": 89,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/translate/interactive",
+        "statements": 80,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples/workflow",
+        "statements": 72,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/interfaces",
+        "statements": 47,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {
+          "pass": 41
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/llm",
+        "statements": 217,
+        "covered": 128,
+        "coverage": 59.0,
+        "tests": {
+          "pass": 40,
+          "skip": 2
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/llm/cache",
+        "statements": 311,
+        "covered": 171,
+        "coverage": 55.0,
+        "tests": {
+          "pass": 24
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/llm/common",
+        "statements": 193,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/llm/providers",
+        "statements": 1148,
+        "covered": 829,
+        "coverage": 72.2,
+        "tests": {
+          "pass": 378
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/mcp/core",
+        "statements": 20,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/mcp/remote",
+        "statements": 28,
+        "covered": 20,
+        "coverage": 71.4,
+        "tests": {
+          "pass": 2
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/mcp/toolbox",
+        "statements": 330,
+        "covered": 164,
+        "coverage": 49.7,
+        "tests": {
+          "pass": 12
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/mcp/tools",
+        "statements": 234,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/memory",
+        "statements": 672,
+        "covered": 572,
+        "coverage": 85.1,
+        "tests": {
+          "pass": 213
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/middleware",
+        "statements": 273,
+        "covered": 81,
+        "coverage": 29.7,
+        "tests": {
+          "pass": 22
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/multiagent",
+        "statements": 714,
+        "covered": 544,
+        "coverage": 76.2,
+        "tests": {
+          "pass": 99
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/observability",
+        "statements": 360,
+        "covered": 335,
+        "coverage": 93.1,
+        "tests": {
+          "pass": 250
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/options",
+        "statements": 145,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/parsers",
+        "statements": 234,
+        "covered": 73,
+        "coverage": 31.2,
+        "tests": {
+          "pass": 20
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/performance",
+        "statements": 907,
+        "covered": 688,
+        "coverage": 75.9,
+        "tests": {
+          "pass": 115,
+          "skip": 1
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/planning",
+        "statements": 722,
+        "covered": 573,
+        "coverage": 79.4,
+        "tests": {
+          "pass": 119
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/prompt",
+        "statements": 703,
+        "covered": 567,
+        "coverage": 80.7,
+        "tests": {
+          "pass": 163
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/reflection",
+        "statements": 277,
+        "covered": 57,
+        "coverage": 20.6,
+        "tests": {
+          "pass": 2
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/retrieval",
+        "statements": 1537,
+        "covered": 1260,
+        "coverage": 82.0,
+        "tests": {
+          "pass": 305
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/retrieval/examples/advanced",
+        "statements": 119,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/retrieval/examples/basic",
+        "statements": 118,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/store",
+        "statements": 207,
+        "covered": 171,
+        "coverage": 82.6,
+        "tests": {
+          "pass": 19
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/store/adapters",
+        "statements": 166,
+        "covered": 55,
+        "coverage": 33.1,
+        "tests": {
+          "pass": 12
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/store/adapters/example",
+        "statements": 51,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/store/decorator",
+        "statements": 15,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/store/factory",
+        "statements": 84,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/store/memory",
+        "statements": 163,
+        "covered": 145,
+        "coverage": 89.0,
+        "tests": {
+          "pass": 19
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/store/postgres",
+        "statements": 156,
+        "covered": 107,
+        "coverage": 68.6,
+        "tests": {
+          "pass": 25,
+          "skip": 1
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/store/redis",
+        "statements": 170,
+        "covered": 151,
+        "coverage": 88.8,
+        "tests": {
+          "pass": 25
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/stream",
+        "statements": 1592,
+        "covered": 777,
+        "coverage": 48.8,
+        "tests": {
+          "pass": 176
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/testing",
+        "statements": 35,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/testing/mocks",
+        "statements": 333,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/testing/testutil",
+        "statements": 87,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/toolkits",
+        "statements": 127,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/tools",
+        "statements": 1590,
+        "covered": 1054,
+        "coverage": 66.3,
+        "tests": {
+          "pass": 262,
+          "skip": 6
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/tools/compute",
+        "statements": 128,
+        "covered": 111,
+        "coverage": 86.7,
+        "tests": {
+          "pass": 59
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/tools/http",
+        "statements": 70,
+        "covered": 69,
+        "coverage": 98.6,
+        "tests": {
+          "pass": 32
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/tools/middleware",
+        "statements": 212,
+        "covered": 184,
+        "coverage": 86.8,
+        "tests": {
+          "pass": 38
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/tools/plugingen",
+        "statements": 330,
+        "covered": 259,
+        "coverage": 78.5,
+        "tests": {
+          "pass": 28
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/tools/plugingen/cmd/plugingen",
+        "statements": 83,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/tools/plugingen/examples",
+        "statements": 66,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/tools/practical",
+        "statements": 1263,
+        "covered": 770,
+        "coverage": 61.0,
+        "tests": {
+          "pass": 234
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/tools/search",
+        "statements": 65,
+        "covered": 58,
+        "coverage": 89.2,
+        "tests": {
+          "pass": 21
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/tools/shell",
+        "statements": 79,
+        "covered": 75,
+        "coverage": 94.9,
+        "tests": {
+          "pass": 21
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/utils",
+        "statements": 172,
+        "covered": 168,
+        "coverage": 97.7,
+        "tests": {
+          "pass": 67
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/utils/httpclient",
+        "statements": 92,
+        "covered": 86,
+        "coverage": 93.5,
+        "tests": {
+          "pass": 22
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/utils/json",
+        "statements": 76,
+        "covered": 45,
+        "coverage": 59.2,
+        "tests": {
+          "pass": 27
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/workflow",
+        "statements": 276,
+        "covered": 242,
+        "coverage": 87.7,
+        "tests": {
+          "pass": 39
+        }
+      }
+    ],
+    "skips": [
+      {
+        "package": "github.com/kart-io/goagent/examples",
+        "test": "TestSupervisorAgent_DeepSeek_Optimized",
+        "reason": "supervisor_agent_example_optimized_test.go:20: DEEPSEEK_API_KEY environment variable not set"
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples",
+        "test": "TestSupervisorAgent_MultipleScenarios/simple_task",
+        "reason": "supervisor_agent_example_optimized_test.go:178: Skipping table-driven test - requires mock LLM implementation"
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples",
+        "test": "TestSupervisorAgent_MultipleScenarios/multi_agent_task",
+        "reason": "supervisor_agent_example_optimized_test.go:178: Skipping table-driven test - requires mock LLM implementation"
+      },
+      {
+        "package": "github.com/kart-io/goagent/examples",
+        "test": "TestSupervisorAgent_DeepSeek_Example",
+        "reason": "supervisor_agent_example_test.go:106: DEEPSEEK_API_KEY environment variable not set"
+      },
+      {
+        "package": "github.com/kart-io/goagent/llm",
+        "test": "TestExampleOpenAIOptions",
+        "reason": "integration_test.go:247: Example only"
+      },
+      {
+        "package": "github.com/kart-io/goagent/llm",
+        "test": "TestExampleConfigWithOptions",
+        "reason": "integration_test.go:272: Example only"
+      },
+      {
+        "package": "github.com/kart-io/goagent/performance",
+        "test": "TestCachedAgent_MaxSizeEviction",
+        "reason": "cache_test.go:252: SimpleCache 不支持 maxSize 驱逐策略，已简化为仅支持 TTL"
+      },
+      {
+        "package": "github.com/kart-io/goagent/store/postgres",
+        "test": "TestNew",
+        "reason": "postgres_test.go:45: Requires real PostgreSQL connection"
+      },
+      {
+        "package": "github.com/kart-io/goagent/tools",
+        "test": "TestToolExecutor_Timeout",
+        "reason": "parallel_test.go:374: Skipping flaky timeout test - behavior varies by execution environment"
+      },
+      {
+        "package": "github.com/kart-io/goagent/tools",
+        "test": "TestInvalidateByPattern",
+        "reason": "tool_cache_invalidation_test.go:18: SimpleToolCache 已删除模式失效功能,CachedTool使用独立缓存实例"
+      },
+      {
+        "package": "github.com/kart-io/goagent/tools",
+        "test": "TestInvalidateByTool",
+        "reason": "tool_cache_invalidation_test.go:144: SimpleToolCache 已删除工具失效功能,CachedTool使用独立缓存实例"
+      },
+      {
+        "package": "github.com/kart-io/goagent/tools",
+        "test": "TestDependencyTracking",
+        "reason": "tool_cache_invalidation_test.go:230: SimpleToolCache 已删除依赖追踪功能"
+      },
+      {
+        "package": "github.com/kart-io/goagent/tools",
+        "test": "TestVersioning",
+        "reason": "tool_cache_invalidation_test.go:367: SimpleToolCache 已删除版本号失效功能"
+      },
+      {
+        "package": "github.com/kart-io/goagent/tools",
+        "test": "TestInvalidationStatistics",
+        "reason": "tool_cache_invalidation_test.go:442: SimpleToolCache 已简化统计功能"
+      }
+    ]
+  },
+  "eino": {
+    "counts": {
+      "all_test_pass": 12,
+      "top_test_pass": 4,
+      "package_pass": 3
+    },
+    "coverage": 40.5,
+    "library_coverage": 78.6,
+    "packages": [
+      {
+        "package": "github.com/kart-io/goagent/evaluation/einocompare",
+        "statements": 103,
+        "covered": 81,
+        "coverage": 78.6,
+        "tests": {
+          "pass": 12
+        }
+      },
+      {
+        "package": "github.com/kart-io/goagent/evaluation/einocompare/cmd/compare",
+        "statements": 85,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      },
+      {
+        "package": "github.com/kart-io/goagent/evaluation/einocompare/cmd/workflow",
+        "statements": 12,
+        "covered": 0,
+        "coverage": 0.0,
+        "tests": {}
+      }
+    ],
+    "skips": []
+  },
+  "smokes": [
+    {
+      "name": "workflow",
+      "build_exit": 0,
+      "run_exit": 0,
+      "missing_markers": [],
+      "elapsed_seconds": 0.716,
+      "passed": true
+    },
+    {
+      "name": "workflow-stream",
+      "build_exit": 0,
+      "run_exit": 0,
+      "missing_markers": [],
+      "elapsed_seconds": 0.538,
+      "passed": true
+    },
+    {
+      "name": "splitters",
+      "build_exit": 0,
+      "run_exit": 0,
+      "missing_markers": [],
+      "elapsed_seconds": 1.482,
+      "passed": true
+    },
+    {
+      "name": "generator",
+      "build_exit": 0,
+      "run_exit": 0,
+      "missing_markers": [],
+      "elapsed_seconds": 1.27,
+      "passed": true
+    },
+    {
+      "name": "skills",
+      "build_exit": 0,
+      "run_exit": 0,
+      "missing_markers": [],
+      "elapsed_seconds": 1.231,
+      "passed": true
+    },
+    {
+      "name": "performance",
+      "build_exit": 0,
+      "run_exit": 0,
+      "missing_markers": [],
+      "elapsed_seconds": 4.193,
+      "passed": true
+    },
+    {
+      "name": "calculator",
+      "build_exit": 0,
+      "run_exit": 0,
+      "missing_markers": [],
+      "elapsed_seconds": 0.949,
+      "passed": true
+    }
+  ],
+  "production_models_called": false,
+  "service_versions": [
+    "postgres:16-alpine",
+    "redis:7-alpine",
+    "nats:2.11.10-alpine",
+    "qdrant/qdrant:v1.16.2"
+  ]
+}

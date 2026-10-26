@@ -44,6 +44,9 @@ var outputFormatPrompts = map[OutputFormat]string{
 
 // AgentConfig 保存 Agent 配置选项
 type AgentConfig struct {
+	// ContextPolicy is opt-in governance for the native tool execution path.
+	ContextPolicy *ContextPolicy
+
 	// ReturnDirectTools 允许单个工具调用直接提供最终答案；仅作用于原生工具流。
 	ReturnDirectTools []string
 

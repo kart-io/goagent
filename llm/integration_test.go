@@ -14,15 +14,13 @@ import (
 	"github.com/kart-io/goagent/llm/providers"
 )
 
-// TestOptionPatternIntegration 测试 option 模式的完整集成
+// TestOptionPatternIntegration tests the supported provider constructor with options.
 func TestOptionPatternIntegration(t *testing.T) {
-	// 跳过需要真实 API key 的测试
-	if os.Getenv("OPENAI_API_KEY") == "" {
-		t.Skip("Skipping test that requires OPENAI_API_KEY")
-	}
+	// Constructors do not send requests, so no real API credentials are needed.
+	t.Setenv("OPENAI_API_KEY", "test-constructor-key")
 
 	t.Run("CreateWithOptions", func(t *testing.T) {
-		client, err := llm.NewClientWithOptions(
+		client, err := providers.NewOpenAIWithOptions(
 			llm.WithProvider(constants.ProviderOpenAI),
 			llm.WithModel("gpt-3.5-turbo"),
 			llm.WithMaxTokens(1000),
@@ -35,7 +33,7 @@ func TestOptionPatternIntegration(t *testing.T) {
 	})
 
 	t.Run("CreateWithExplicitOptions", func(t *testing.T) {
-		client, err := llm.NewClientWithOptions(
+		client, err := providers.NewOpenAIWithOptions(
 			llm.WithProvider(constants.ProviderOpenAI),
 			llm.WithModel("gpt-3.5-turbo"),
 			llm.WithMaxTokens(1000),
@@ -49,7 +47,7 @@ func TestOptionPatternIntegration(t *testing.T) {
 	})
 
 	t.Run("CreateWithScenarioOptions", func(t *testing.T) {
-		client, err := llm.NewClientWithOptions(
+		client, err := providers.NewOpenAIWithOptions(
 			llm.WithProvider(constants.ProviderOpenAI),
 			llm.WithTemperature(0.2),
 			llm.WithMaxTokens(2500),
@@ -62,11 +60,15 @@ func TestOptionPatternIntegration(t *testing.T) {
 	})
 }
 
+func TestLegacyClientFactoryExplicitlyRequiresProviderConstructor(t *testing.T) {
+	client, err := llm.NewClientWithOptions(llm.WithProvider(constants.ProviderOpenAI), llm.WithAPIKey("test-key"))
+	require.Nil(t, client)
+	require.ErrorContains(t, err, "use providers package directly")
+}
+
 // TestOpenAIBuilder 测试 OpenAI Builder 模式
 func TestOpenAIBuilder(t *testing.T) {
-	if os.Getenv("OPENAI_API_KEY") == "" {
-		t.Skip("Skipping test that requires OPENAI_API_KEY")
-	}
+	t.Setenv("OPENAI_API_KEY", "test-constructor-key")
 
 	t.Run("OptionPattern", func(t *testing.T) {
 		client, err := providers.NewOpenAIWithOptions(
@@ -102,9 +104,7 @@ func TestOpenAIBuilder(t *testing.T) {
 
 // TestConvenienceMethods 测试便捷方法
 func TestConvenienceMethods(t *testing.T) {
-	if os.Getenv("OPENAI_API_KEY") == "" {
-		t.Skip("Skipping test that requires OPENAI_API_KEY")
-	}
+	t.Setenv("OPENAI_API_KEY", "test-constructor-key")
 
 	t.Run("CreateWithOptionsForOpenAI", func(t *testing.T) {
 		config := llm.NewLLMOptionsWithOptions(
@@ -172,7 +172,7 @@ func TestConfigMigration(t *testing.T) {
 // ExampleNewClientWithOptions 展示如何使用 option 模式创建客户端
 func ExampleNewClientWithOptions() {
 	// 基本使用
-	client, err := llm.NewClientWithOptions(
+	client, err := providers.NewOpenAIWithOptions(
 		llm.WithProvider(constants.ProviderOpenAI),
 		llm.WithAPIKey("your-api-key"),
 		llm.WithModel("gpt-4"),
@@ -198,7 +198,7 @@ func ExampleNewClientWithOptions() {
 // ExampleNewClientWithOptions_explicit 展示使用显式配置
 func ExampleNewClientWithOptions_explicit() {
 	// 使用生产环境配置
-	client, err := llm.NewClientWithOptions(
+	client, err := providers.NewOpenAIWithOptions(
 		llm.WithProvider(constants.ProviderOpenAI),
 		llm.WithAPIKey("your-api-key"),
 		llm.WithModel("gpt-4"),
@@ -218,7 +218,7 @@ func ExampleNewClientWithOptions_explicit() {
 // ExampleNewClientWithOptions_useCase 展示针对使用场景优化
 func ExampleNewClientWithOptions_useCase() {
 	// 为代码生成优化
-	client, err := llm.NewClientWithOptions(
+	client, err := providers.NewOpenAIWithOptions(
 		llm.WithProvider(constants.ProviderOpenAI),
 		llm.WithAPIKey("your-api-key"),
 		llm.WithTemperature(0.2),

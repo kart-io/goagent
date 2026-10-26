@@ -121,6 +121,20 @@ func (b *AgentBuilder[C, S]) Build() (*ConfigurableAgent[C, S], error) {
 		}
 	}
 
+	if err := validateContextPolicy(b.config.ContextPolicy); err != nil {
+		return nil, err
+	}
+	if b.config.ContextPolicy != nil {
+		if _, ok := b.llmClient.(llm.ToolStreamClient); !ok || len(b.tools) == 0 {
+			return nil, fmt.Errorf("ContextPolicy requires tools and llm.ToolStreamClient")
+		}
+		for _, tool := range b.tools {
+			if tool != nil && tool.Name() == contextReadTool {
+				return nil, fmt.Errorf("tool name %q is reserved by ContextPolicy", contextReadTool)
+			}
+		}
+	}
+
 	// 如果未提供则设置默认值
 	var zero S
 	if reflect.DeepEqual(b.state, zero) {

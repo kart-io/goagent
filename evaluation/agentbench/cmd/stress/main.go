@@ -50,7 +50,7 @@ func run() error {
 		if err != nil {
 			return err
 		}
-		if err = json.Unmarshal(data, &cases); err != nil {
+		if cases, err = bench.DecodeSuite(data); err != nil {
 			return err
 		}
 	}

@@ -2,6 +2,8 @@
 
 本模块是 goagent 框架的核心执行引擎，提供统一的可执行接口、智能体执行框架、链式处理和工作流编排能力。
 
+新的通用图编排位于 [workflow](../workflow/README.md)：支持条件分支、并行 Clone/Merge、有界循环和 Runnable/Agent 适配，编译结果复用 core.StreamRunnable。
+
 ## 目录
 
 - [架构设计](#架构设计)

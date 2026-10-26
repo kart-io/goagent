@@ -40,6 +40,21 @@ func TestSuiteGenerationAndScheduling(t *testing.T) {
 	}
 }
 
+func TestDecodeSuiteUsesOnlyImportedFields(t *testing.T) {
+	cases, err := DecodeSuite([]byte(`[{"id":"plain","category":"plain","question":"Return 42","answer":"42"},{"id":"direct","category":"direct","question":"Return evidence","evidence":"value","answer":"value","direct_eligible":true}]`))
+	require.NoError(t, err)
+	require.Len(t, cases, 2)
+	require.Empty(t, cases[0].Evidence)
+	require.False(t, cases[0].DirectEligible)
+	jobs, err := SelectSuiteJobs(SuiteJobs(cases, 1), "all")
+	require.NoError(t, err)
+	require.Len(t, jobs, 3, "plain task must not inherit a synthetic tool or direct flag")
+	for _, input := range []string{`null`, `[]`, `{}`, `[{"id":"missing"}]`} {
+		_, err := DecodeSuite([]byte(input))
+		require.Error(t, err)
+	}
+}
+
 func TestSuiteValidation(t *testing.T) {
 	require.Error(t, ValidateSuite(nil))
 	for _, field := range []string{"id", "category", "question", "answer", "evidence", "duplicate"} {

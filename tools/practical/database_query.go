@@ -250,7 +250,8 @@ func (t *DatabaseQueryTool) Execute(ctx context.Context, input *interfaces.ToolI
 	}
 
 	return &interfaces.ToolOutput{
-		Result: result,
+		Result:  result,
+		Success: true,
 	}, nil
 }
 
@@ -316,7 +317,13 @@ func (t *DatabaseQueryTool) getConnection(config connectionConfig) (*sql.DB, err
 	}
 
 	// Create new connection
-	db, err := sql.Open(config.Driver, config.DSN)
+	driver := config.Driver
+	// The public schema uses sqlite; mattn/go-sqlite3 registers sqlite3.
+	// Keep accepting sqlite3 for existing callers as well.
+	if driver == "sqlite" {
+		driver = "sqlite3"
+	}
+	db, err := sql.Open(driver, config.DSN)
 	if err != nil {
 		return nil, err
 	}

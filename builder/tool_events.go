@@ -41,7 +41,23 @@ func (a *ConfigurableAgent[C, S]) streamMessages(ctx context.Context, input, evi
 func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *middleware.MiddlewareRequest, client llm.ToolStreamClient, messages []llm.Message, metadata map[string]interface{}, emit func(AgentEvent) error) (*middleware.MiddlewareResponse, error) {
 	usage := &interfaces.TokenUsage{}
 	reports := 0
-	for round := 0; round < a.config.MaxIterations; round++ {
+	policy := newToolContext(a.config.ContextPolicy)
+	var summary *llm.StreamChunk
+	var err error
+	messages, summary, err = policy.prepare(ctx, messages, a.config.MaxIterations)
+	if err != nil {
+		return nil, err
+	}
+	callsUsed := 0
+	if summary != nil {
+		callsUsed = 1
+		metadata["summary_calls"] = 1
+		if summary.Usage != nil {
+			reports++
+			usage.Add(&interfaces.TokenUsage{PromptTokens: summary.Usage.PromptTokens, CompletionTokens: summary.Usage.CompletionTokens, TotalTokens: summary.Usage.TotalTokens})
+		}
+	}
+	for round := callsUsed; round < a.config.MaxIterations; round++ {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
@@ -50,6 +66,21 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 		}
 		turnCtx, cancel := context.WithCancel(ctx)
 		tools := a.tools
+		if a.config.ContextPolicy != nil && a.config.ContextPolicy.MaxToolResultRunes > 0 {
+			tools = append(slices.Clone(tools), policy)
+		}
+		if round > 0 && round+1 == a.config.MaxIterations {
+			messages = policy.restore(messages)
+		} else {
+			messages, err = policy.reduce(ctx, messages)
+		}
+		if err != nil {
+			cancel()
+			return nil, err
+		}
+		if a.config.ContextPolicy != nil {
+			metadata["context_offloaded_results"] = policy.offloaded
+		}
 		// 已有结果的最后一轮只能回答或使用显式配置的终态工具。
 		// 首轮及尚有更多额度时保留完整工具集，支持连续查询。
 		if round > 0 && round+1 == a.config.MaxIterations {
@@ -99,6 +130,16 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 			if tc.ID == "" || ids[tc.ID] || tc.Function.Name == "" {
 				return nil, fmt.Errorf("工具调用 ID 或名称无效")
 			}
+			known := false
+			for _, offered := range tools {
+				if offered.Name() == tc.Function.Name {
+					known = true
+					break
+				}
+			}
+			if !known {
+				return nil, fmt.Errorf("model requested unoffered tool %q", tc.Function.Name)
+			}
 			ids[tc.ID] = true
 			calls[i] = ToolCall{Name: tc.Function.Name}
 			if err := json.Unmarshal([]byte(tc.Function.Arguments), &calls[i].Input); err != nil || calls[i].Input == nil {
@@ -113,7 +154,13 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 			if err := emit(AgentEvent{Type: "step", Step: "tool_start", Tool: call.Name}); err != nil {
 				return nil, err
 			}
-			output, err := a.invokeToolCall(ctx, call)
+			var output *interfaces.ToolOutput
+			var err error
+			if call.Name == contextReadTool && a.config.ContextPolicy != nil && a.config.ContextPolicy.MaxToolResultRunes > 0 {
+				output, err = policy.Invoke(ctx, &interfaces.ToolInput{Args: call.Input})
+			} else {
+				output, err = a.invokeToolCall(ctx, call)
+			}
 			if err != nil {
 				return nil, err
 			}
