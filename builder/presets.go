@@ -13,14 +13,9 @@ import (
 
 // ConfigureForRAG 添加常用的 RAG (检索增强生成) 组件
 func (b *AgentBuilder[C, S]) ConfigureForRAG() *AgentBuilder[C, S] {
-	// 添加常用的 RAG 中间件
-	b.WithMiddleware(
-		middleware.NewCacheMiddleware(5*time.Minute),
-		middleware.NewDynamicPromptMiddleware(func(req *middleware.MiddlewareRequest) string {
-			// 从检索添加上下文
-			return fmt.Sprintf("Use the following context to answer: %v", req.Input)
-		}),
-	)
+	// Retrieve fresh evidence for each request; answer caching must be explicit
+	// because documents and conversation history can change for the same query.
+	b.WithMiddleware(middleware.NewTimingMiddleware())
 
 	// 设置合适的配置
 	b.WithMaxTokens(3000)

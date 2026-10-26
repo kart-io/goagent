@@ -170,6 +170,7 @@ func (w *Writer) Close() error {
 
 	select {
 	case w.ch <- lastChunk:
+	case <-w.ctx.Done():
 	case <-time.After(time.Second):
 		// 超时则强制关闭
 	}

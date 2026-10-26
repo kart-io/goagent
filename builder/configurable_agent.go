@@ -20,17 +20,19 @@ import (
 
 // ConfigurableAgent 是具有完整配置的已构建 Agent
 type ConfigurableAgent[C any, S core.State] struct {
-	llmClient     llm.Client
-	tools         []interfaces.Tool
-	systemPrompt  string
-	runtime       *execution.Runtime[C, S]
-	chain         *middleware.MiddlewareChain
-	config        *AgentConfig
-	callbacks     []core.Callback
-	errorHandler  func(error) error
-	metadata      map[string]interface{}
-	memoryManager interfaces.MemoryManager // 对话记忆管理
-	mu            sync.RWMutex
+	llmClient       llm.Client
+	tools           []interfaces.Tool
+	systemPrompt    string
+	runtime         *execution.Runtime[C, S]
+	chain           *middleware.MiddlewareChain
+	config          *AgentConfig
+	callbacks       []core.Callback
+	errorHandler    func(error) error
+	metadata        map[string]interface{}
+	memoryManager   interfaces.MemoryManager // 对话记忆管理
+	retriever       interfaces.DocumentRetriever
+	retrievalConfig RetrievalConfig
+	mu              sync.RWMutex
 }
 
 // Initialize 准备 Agent 执行
@@ -154,6 +156,15 @@ func (a *ConfigurableAgent[C, S]) ExecuteWithTools(ctx context.Context, input in
 
 	// 构建初始提示（包含历史对话）
 	prompt := a.buildPromptWithHistory(ctx, input)
+	retrievalMetadata := make(map[string]interface{})
+	if a.retriever != nil {
+		evidence, metadata, err := retrieveContext(ctx, a.retriever, a.retrievalConfig, inputStr)
+		if err != nil {
+			return nil, err
+		}
+		prompt = retrievalInstruction + "\n\n" + evidence + "\n" + prompt
+		retrievalMetadata = metadata
+	}
 
 	for iterations < a.config.MaxIterations {
 		// 使用工具调用接口
@@ -178,7 +189,7 @@ func (a *ConfigurableAgent[C, S]) ExecuteWithTools(ctx context.Context, input in
 			return &AgentOutput{
 				Result:     response.Content,
 				State:      a.runtime.State,
-				Metadata:   make(map[string]interface{}),
+				Metadata:   retrievalMetadata,
 				Duration:   time.Since(startTime),
 				Timestamp:  time.Now(),
 				TokenUsage: totalTokenUsage,
@@ -230,14 +241,14 @@ func (a *ConfigurableAgent[C, S]) ExecuteWithTools(ctx context.Context, input in
 
 	// 达到最大迭代次数
 	return &AgentOutput{
-			Result:     "达到最大迭代次数，无法完成任务",
-			State:      a.runtime.State,
-			Metadata:   make(map[string]interface{}),
-			Duration:   time.Since(startTime),
-			Timestamp:  time.Now(),
-			TokenUsage: totalTokenUsage,
-		}, agentErrors.New(agentErrors.CodeAgentExecution, "max iterations reached").
-			WithContext("max_iterations", a.config.MaxIterations)
+		Result:     "达到最大迭代次数，无法完成任务",
+		State:      a.runtime.State,
+		Metadata:   retrievalMetadata,
+		Duration:   time.Since(startTime),
+		Timestamp:  time.Now(),
+		TokenUsage: totalTokenUsage,
+	}, agentErrors.New(agentErrors.CodeAgentExecution, "max iterations reached").
+		WithContext("max_iterations", a.config.MaxIterations)
 }
 
 // buildPromptWithSystemMessage 构建包含系统消息的提示

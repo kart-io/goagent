@@ -1,12 +1,14 @@
 package builder
 
 import (
+	"context"
 	"fmt"
 	"time"
 
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/middleware"
 	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 )
 
@@ -21,14 +23,36 @@ func QuickAgent(llmClient llm.Client, systemPrompt string) (*SimpleAgent, error)
 		Build()
 }
 
-// RAGAgent 创建一个预配置的 RAG Agent
+// RAGAgent creates a retrieval-grounded agent. It accepts a DocumentRetriever,
+// a retriever exposing Retrieve, or a VectorStore (top 4 results).
+// A nil retriever preserves the legacy prompt-only preset.
 func RAGAgent(llmClient llm.Client, retriever interface{}) (*SimpleAgent, error) {
-	return NewSimpleBuilder(llmClient).
+	b := NewSimpleBuilder(llmClient).
 		WithSystemPrompt("You are a helpful assistant. Answer questions based on the provided context.").
 		ConfigureForRAG().
 		WithState(core.NewAgentState()).
-		WithMetadata("type", "rag").
-		Build()
+		WithMetadata("type", "rag")
+	if retriever == nil {
+		return b.Build()
+	}
+	if isNilRetriever(retriever) {
+		return nil, agentErrors.NewInvalidConfigError("builder", "retriever", "retriever must not be a typed nil")
+	}
+	switch r := retriever.(type) {
+	case interfaces.DocumentRetriever:
+		b.WithRetriever(r)
+	case interface {
+		Retrieve(context.Context, string) ([]*interfaces.Document, error)
+	}:
+		b.WithRetriever(documentRetrieverFunc(r.Retrieve))
+	case interfaces.VectorStore:
+		b.WithRetriever(documentRetrieverFunc(func(ctx context.Context, query string) ([]*interfaces.Document, error) {
+			return r.SimilaritySearch(ctx, query, 4)
+		}))
+	default:
+		return nil, agentErrors.NewInvalidConfigError("builder", "retriever", "expected DocumentRetriever, Retrieve method, or VectorStore")
+	}
+	return b.Build()
 }
 
 // ChatAgent 创建一个预配置的聊天机器人 Agent

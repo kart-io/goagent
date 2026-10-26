@@ -45,14 +45,18 @@ import (
 
     "github.com/kart-io/goagent/builder"
     "github.com/kart-io/goagent/llm"
+    "github.com/kart-io/goagent/llm/providers"
 )
 
 func main() {
     // 创建 LLM 客户端
-    llmClient := llm.NewOpenAIClient("your-api-key")
+    llmClient, err := providers.NewOpenAIWithOptions(llm.WithAPIKey("your-api-key"))
+    if err != nil {
+        log.Fatal(err)
+    }
 
     // 使用流畅 API 构建代理
-    agent, err := builder.NewAgentBuilder(llmClient).
+    agent, err := builder.NewSimpleBuilder(llmClient).
         WithSystemPrompt("你是一个有帮助的助手").
         WithMaxIterations(10).
         WithTimeout(30 * time.Second).
@@ -84,6 +88,15 @@ analysisAgent, err := builder.AnalysisAgent(llmClient, dataSource)
 // 创建监控代理（长时间运行，周期性检查）
 monitoringAgent, err := builder.MonitoringAgent(llmClient, 30*time.Second)
 ```
+
+### 可追溯 RAG 与增量输出
+
+- `RAGAgent(client, retriever)` 实际执行检索，并在输出的 `retrieval_sources` 中返回来源；支持现有检索器、RAGRetriever 和向量存储。
+- `WithRetriever(retriever, RetrievalConfig{...})` 限制文档数量和上下文字符数，可组合混合检索与重排序。
+- ReAct 的 `Stream()` 按推理步骤和工具结果增量输出；`RunGenerator()` 共用执行逻辑，支持提前终止。
+- OpenAI Provider 实现 `CompleteStream` / `ChatStream`，传递增量文本、Token 用量和流中错误。
+
+详见 [RAG 与流式执行指南](docs/guides/GROUNDED_RAG_AND_STREAMING.md) 和 [可运行 RAG 示例](examples/rag/grounded/main.go)。
 
 ## 架构设计
 
