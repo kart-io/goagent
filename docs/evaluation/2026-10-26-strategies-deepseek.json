@@ -1,0 +1,168 @@
+{
+  "budget": {
+    "model": "deepseek-flash",
+    "temperature": 0.2,
+    "max_calls": 8,
+    "max_output_tokens_per_call": 800,
+    "observed_token_stop": 10000
+  },
+  "dataset": "evaluation/testdata/reasoning_synthetic.json",
+  "results": [
+    {
+      "answer": "\u003cnil\u003e",
+      "case": "apples",
+      "duration_ms": 2632,
+      "error": "[PARSER_MISSING_FIELD] [react_parser] operation=parse: no action found in output (text_length=163)",
+      "measurements": {
+        "calls": 1,
+        "usage": {
+          "prompt_tokens": 179,
+          "completion_tokens": 220,
+          "total_tokens": 399
+        },
+        "usage_reports": 1
+      },
+      "strategy": "react",
+      "success": false
+    },
+    {
+      "answer": "9",
+      "case": "apples",
+      "duration_ms": 1421,
+      "measurements": {
+        "calls": 1,
+        "usage": {
+          "prompt_tokens": 129,
+          "completion_tokens": 139,
+          "total_tokens": 268
+        },
+        "usage_reports": 1
+      },
+      "strategy": "cot",
+      "success": true
+    },
+    {
+      "answer": "Based on tree-of-thought reasoning:\n\nStep 1: 先计算送出5个、又买8个后的苹果数：15 - 5 + 8 = 18。\nStep 2: 最后送出剩余的一半，所以剩下的也是原来的一半：18 ÷ 2 = 9。",
+      "case": "apples",
+      "duration_ms": 22527,
+      "measurements": {
+        "calls": 8,
+        "usage": {
+          "prompt_tokens": 1470,
+          "completion_tokens": 2987,
+          "total_tokens": 4457
+        },
+        "usage_reports": 8
+      },
+      "strategy": "tot",
+      "success": false
+    },
+    {
+      "answer": "15",
+      "case": "boxes",
+      "duration_ms": 1379,
+      "measurements": {
+        "calls": 1,
+        "usage": {
+          "prompt_tokens": 125,
+          "completion_tokens": 83,
+          "total_tokens": 208
+        },
+        "usage_reports": 1
+      },
+      "strategy": "cot",
+      "success": true
+    },
+    {
+      "answer": "\u003cnil\u003e",
+      "case": "boxes",
+      "duration_ms": 7056,
+      "error": "[AGENT_EXECUTION] [tot_agent] operation=beamSearch: no valid paths found",
+      "measurements": {
+        "calls": 2,
+        "usage": {
+          "prompt_tokens": 318,
+          "completion_tokens": 878,
+          "total_tokens": 1196
+        },
+        "usage_reports": 2
+      },
+      "strategy": "tot",
+      "success": false
+    },
+    {
+      "answer": "\u003cnil\u003e",
+      "case": "boxes",
+      "duration_ms": 2089,
+      "error": "[PARSER_MISSING_FIELD] [react_parser] operation=parse: no action found in output (text_length=92)",
+      "measurements": {
+        "calls": 1,
+        "usage": {
+          "prompt_tokens": 175,
+          "completion_tokens": 175,
+          "total_tokens": 350
+        },
+        "usage_reports": 1
+      },
+      "strategy": "react",
+      "success": false
+    },
+    {
+      "answer": "Based on tree-of-thought reasoning:\n\nStep 1: Calculate the discount amount by finding 25% of $80, which is \\(0.25 \\times 80 = 20\\), then subtract that from $80.\nStep 2: Subtract the $20 discount from $80: \\(80 - 20 = 60\\), so the discounted price is $60.",
+      "case": "discount",
+      "duration_ms": 21510,
+      "measurements": {
+        "calls": 8,
+        "usage": {
+          "prompt_tokens": 1512,
+          "completion_tokens": 2590,
+          "total_tokens": 4102
+        },
+        "usage_reports": 8
+      },
+      "strategy": "tot",
+      "success": false
+    },
+    {
+      "answer": "60",
+      "case": "discount",
+      "duration_ms": 1319,
+      "measurements": {
+        "calls": 1,
+        "usage": {
+          "prompt_tokens": 175,
+          "completion_tokens": 105,
+          "total_tokens": 280
+        },
+        "usage_reports": 1
+      },
+      "strategy": "react",
+      "success": true
+    },
+    {
+      "answer": "60",
+      "case": "discount",
+      "duration_ms": 1496,
+      "measurements": {
+        "calls": 1,
+        "usage": {
+          "prompt_tokens": 125,
+          "completion_tokens": 114,
+          "total_tokens": 239
+        },
+        "usage_reports": 1
+      },
+      "strategy": "cot",
+      "success": true
+    }
+  ],
+  "scoring": "last numeric ANSWER marker or exact numeric output; synthetic regression, not a business benchmark",
+  "success_rates": {
+    "cot": 1,
+    "react": 0.3333333333333333,
+    "tot": 0
+  },
+  "synthetic": true,
+  "timeout": "1m30s",
+  "tool_count": 0
+}

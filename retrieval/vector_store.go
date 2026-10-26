@@ -53,12 +53,16 @@ func NewVectorStoreRetriever(vectorStore interfaces.VectorStore, config Retrieve
 	retriever.TopK = config.TopK
 	retriever.MinScore = config.MinScore
 	retriever.Name = config.Name
+	retriever.retrieve = retriever.GetRelevantDocuments
 
 	return retriever
 }
 
 // GetRelevantDocuments 检索相关文档
 func (v *VectorStoreRetriever) GetRelevantDocuments(ctx context.Context, query string) ([]*interfaces.Document, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	var docs []*interfaces.Document
 	var err error
 

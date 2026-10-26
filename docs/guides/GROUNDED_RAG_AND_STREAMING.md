@@ -127,3 +127,7 @@ for chunk := range chunks {
 2. 补齐真实搜索、LLM/CrossEncoder 重排序与 MCP 协议互操作，并明确模拟组件边界。
 3. 验证持久化中断在进程重启后恢复，覆盖重复工具调用和幂等处理。
 4. 在这些行为稳定后逐步统一 Agent/Runnable 适配，保留已有调用方的迁移路径。
+
+## 后续能力
+
+参见 [检索、统一事件流、MCP 与可恢复步骤](PRIORITY_CAPABILITIES.md) 和 [合成评测记录](../evaluation/README.md)。`examples/rag/grounded` 新增 `-stream`，可在同一入口查看来源、原生文本增量和用量。

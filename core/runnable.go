@@ -166,23 +166,38 @@ func (r *BaseRunnable[I, O]) Batch(ctx context.Context, inputs []I, invoker func
 		err    error
 	}
 
-	results := make(chan result, len(inputs))
-	semaphore := make(chan struct{}, maxConcurrency)
-
-	// 并发执行
-	for i, input := range inputs {
-		go func(index int, inp I) {
-			semaphore <- struct{}{}        // 获取信号量
-			defer func() { <-semaphore }() // 释放信号量
-
-			output, err := invoker(ctx, inp)
-			results <- result{
-				index:  index,
-				output: output,
-				err:    err,
-			}
-		}(i, input)
+	if maxConcurrency > len(inputs) {
+		maxConcurrency = len(inputs)
 	}
+	jobs := make(chan int)
+	results := make(chan result, maxConcurrency)
+	workerCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	for worker := 0; worker < maxConcurrency; worker++ {
+		go func() {
+			for index := range jobs {
+				if workerCtx.Err() != nil {
+					return
+				}
+				output, err := invoker(workerCtx, inputs[index])
+				select {
+				case results <- result{index: index, output: output, err: err}:
+				case <-workerCtx.Done():
+					return
+				}
+			}
+		}()
+	}
+	go func() {
+		defer close(jobs)
+		for index := range inputs {
+			select {
+			case jobs <- index:
+			case <-workerCtx.Done():
+				return
+			}
+		}
+	}()
 
 	// 收集结果
 	outputs := make([]O, len(inputs))
@@ -206,7 +221,7 @@ func (r *BaseRunnable[I, O]) Batch(ctx context.Context, inputs []I, invoker func
 // WithCallbacks 添加回调
 func (r *BaseRunnable[I, O]) WithCallbacks(callbacks ...Callback) *BaseRunnable[I, O] {
 	newRunnable := *r
-	newRunnable.config.Callbacks = append(newRunnable.config.Callbacks, callbacks...)
+	newRunnable.config.Callbacks = append(append([]Callback(nil), r.config.Callbacks...), callbacks...)
 	return &newRunnable
 }
 
@@ -266,35 +281,52 @@ func (p *RunnablePipe[I, M, O]) Invoke(ctx context.Context, input I) (O, error) 
 
 // Stream 流式执行管道
 func (p *RunnablePipe[I, M, O]) Stream(ctx context.Context, input I) (<-chan StreamChunk[O], error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	outChan := make(chan StreamChunk[O])
-
 	go func() {
 		defer close(outChan)
-
-		// 执行第一个 Runnable（带 panic 保护）
+		ctx, cancel := context.WithCancel(ctx)
+		defer cancel()
+		send := func(chunk StreamChunk[O]) bool {
+			select {
+			case outChan <- chunk:
+				return true
+			case <-ctx.Done():
+				return false
+			}
+		}
 		middle, err := safeInvoke(p.first.Invoke, ctx, input)
 		if err != nil {
-			outChan <- StreamChunk[O]{Error: agentErrors.Wrap(err, agentErrors.CodeAgentExecution, "first runnable failed").
-				WithComponent("runnable_pipe").
-				WithOperation("stream")}
+			send(StreamChunk[O]{Error: agentErrors.Wrap(err, agentErrors.CodeAgentExecution, "first runnable failed"), Done: true})
 			return
 		}
-
-		// 流式执行第二个 Runnable
+		if ctx.Err() != nil {
+			return
+		}
 		stream, err := p.second.Stream(ctx, middle)
 		if err != nil {
-			outChan <- StreamChunk[O]{Error: agentErrors.Wrap(err, agentErrors.CodeStreamRead, "second runnable stream failed").
-				WithComponent("runnable_pipe").
-				WithOperation("stream")}
+			send(StreamChunk[O]{Error: agentErrors.Wrap(err, agentErrors.CodeStreamRead, "second runnable stream failed"), Done: true})
 			return
 		}
-
-		// 转发流
-		for chunk := range stream {
-			outChan <- chunk
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case chunk, ok := <-stream:
+				if !ok {
+					return
+				}
+				if !send(chunk) {
+					return
+				}
+				if chunk.Done || chunk.Error != nil {
+					return
+				}
+			}
 		}
 	}()
-
 	return outChan, nil
 }
 

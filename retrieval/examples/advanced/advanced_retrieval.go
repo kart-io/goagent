@@ -155,10 +155,14 @@ func retrievalPipeline(ctx context.Context, docs []*interfaces.Document) {
 		minScore:      0.3,
 	}
 
+	filterRetriever.BaseRetriever = retrieval.NewFuncRetriever(filterRetriever.GetRelevantDocuments)
+
 	enrichRetriever := &EnrichRetriever{
 		BaseRetriever: retrieval.NewBaseRetriever(),
 		retriever:     filterRetriever,
 	}
+
+	enrichRetriever.BaseRetriever = retrieval.NewFuncRetriever(enrichRetriever.GetRelevantDocuments)
 
 	// 使用组合的检索器
 	pipeline := enrichRetriever
@@ -250,11 +254,13 @@ type CategoryRetriever struct {
 
 // NewCategoryRetriever 创建类别检索器
 func NewCategoryRetriever(docs []*interfaces.Document, category string) *CategoryRetriever {
-	return &CategoryRetriever{
+	r := &CategoryRetriever{
 		BaseRetriever: retrieval.NewBaseRetriever(),
 		docs:          docs,
 		category:      category,
 	}
+	r.BaseRetriever = retrieval.NewFuncRetriever(r.GetRelevantDocuments)
+	return r
 }
 
 // GetRelevantDocuments 实现检索逻辑

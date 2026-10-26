@@ -1,0 +1,5 @@
+[
+ {"id":"apples","question":"小明有15个苹果，送出5个，又买8个，最后送出剩余的一半。他还剩几个？","answer":"9"},
+ {"id":"boxes","question":"There are 4 boxes with 6 pencils each. Nine pencils are given away. How many remain?","answer":"15"},
+ {"id":"discount","question":"A product costs 80 dollars before a 25 percent discount. What is the discounted price in dollars?","answer":"60"}
+]

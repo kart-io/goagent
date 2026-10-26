@@ -47,6 +47,7 @@ func NewMultiQueryRetriever(
 	retriever.TopK = config.TopK
 	retriever.MinScore = config.MinScore
 	retriever.Name = config.Name
+	retriever.retrieve = retriever.GetRelevantDocuments
 
 	return retriever
 }
@@ -67,6 +68,9 @@ Generate {{.NumQueries}} alternative questions (one per line):`
 
 // GetRelevantDocuments 检索相关文档
 func (m *MultiQueryRetriever) GetRelevantDocuments(ctx context.Context, query string) ([]*interfaces.Document, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	// 1. 生成查询变体
 	queries, err := m.generateQueries(ctx, query)
 	if err != nil {
@@ -83,8 +87,7 @@ func (m *MultiQueryRetriever) GetRelevantDocuments(ctx context.Context, query st
 	for _, q := range queries {
 		docs, err := m.Retriever.GetRelevantDocuments(ctx, q)
 		if err != nil {
-			// 记录错误但继续处理其他查询
-			continue
+			return nil, agentErrors.Wrap(err, agentErrors.CodeRetrievalSearch, "query retrieval failed").WithContext("query", q)
 		}
 
 		for _, doc := range docs {
@@ -222,12 +225,18 @@ func NewEnsembleRetriever(
 	retriever.TopK = config.TopK
 	retriever.MinScore = config.MinScore
 	retriever.Name = config.Name
+	retriever.retrieve = retriever.GetRelevantDocuments
 
 	return retriever
 }
 
 // GetRelevantDocuments 检索相关文档
 func (e *EnsembleRetriever) GetRelevantDocuments(ctx context.Context, query string) ([]*interfaces.Document, error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if len(e.Retrievers) == 0 {
 		return []*interfaces.Document{}, nil
 	}
@@ -255,10 +264,14 @@ func (e *EnsembleRetriever) GetRelevantDocuments(ctx context.Context, query stri
 	// 收集结果
 	results := make([]result, len(e.Retrievers))
 	for i := 0; i < len(e.Retrievers); i++ {
-		res := <-resultsChan
+		var res result
+		select {
+		case res = <-resultsChan:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
 		if res.err != nil {
-			// 记录错误但继续处理其他结果
-			continue
+			return nil, agentErrors.Wrap(res.err, agentErrors.CodeRetrievalSearch, "ensemble retrieval failed").WithContext("retriever_index", res.index)
 		}
 		results[res.index] = res
 	}

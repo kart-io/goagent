@@ -23,28 +23,30 @@ import (
 // 4. 循环直到得出最终答案
 type ReActAgent struct {
 	*agentcore.BaseAgent
-	llm          llm.Client
-	tools        []interfaces.Tool
-	toolsByName  map[string]interfaces.Tool
-	parser       *parsers.ReActOutputParser
-	maxSteps     int
-	stopPattern  []string
-	promptPrefix string
-	promptSuffix string
-	formatInstr  string
+	llm             llm.Client
+	tools           []interfaces.Tool
+	toolsByName     map[string]interfaces.Tool
+	parser          *parsers.ReActOutputParser
+	maxSteps        int
+	maxParseRetries int
+	stopPattern     []string
+	promptPrefix    string
+	promptSuffix    string
+	formatInstr     string
 }
 
 // ReActConfig ReAct Agent 配置
 type ReActConfig struct {
-	Name         string            // Agent 名称
-	Description  string            // Agent 描述
-	LLM          llm.Client        // LLM 客户端
-	Tools        []interfaces.Tool // 可用工具列表
-	MaxSteps     int               // 最大步数
-	StopPattern  []string          // 停止模式
-	PromptPrefix string            // Prompt 前缀
-	PromptSuffix string            // Prompt 后缀
-	FormatInstr  string            // 格式说明
+	Name            string            // Agent 名称
+	Description     string            // Agent 描述
+	LLM             llm.Client        // LLM 客户端
+	Tools           []interfaces.Tool // 可用工具列表
+	MaxSteps        int               // 最大步数
+	MaxParseRetries int               // Optional format repairs within MaxSteps; zero disables repairs.
+	StopPattern     []string          // 停止模式
+	PromptPrefix    string            // Prompt 前缀
+	PromptSuffix    string            // Prompt 后缀
+	FormatInstr     string            // 格式说明
 }
 
 // NewReActAgent 创建 ReAct Agent
@@ -80,16 +82,17 @@ func NewReActAgent(config ReActConfig) *ReActAgent {
 	parser := parsers.NewReActOutputParser()
 
 	agent := &ReActAgent{
-		BaseAgent:    agentcore.NewBaseAgent(config.Name, config.Description, capabilities),
-		llm:          config.LLM,
-		tools:        config.Tools,
-		toolsByName:  toolsByName,
-		parser:       parser,
-		maxSteps:     config.MaxSteps,
-		stopPattern:  config.StopPattern,
-		promptPrefix: config.PromptPrefix,
-		promptSuffix: config.PromptSuffix,
-		formatInstr:  config.FormatInstr,
+		BaseAgent:       agentcore.NewBaseAgent(config.Name, config.Description, capabilities),
+		llm:             config.LLM,
+		tools:           config.Tools,
+		toolsByName:     toolsByName,
+		parser:          parser,
+		maxSteps:        config.MaxSteps,
+		maxParseRetries: config.MaxParseRetries,
+		stopPattern:     config.StopPattern,
+		promptPrefix:    config.PromptPrefix,
+		promptSuffix:    config.PromptSuffix,
+		formatInstr:     config.FormatInstr,
 	}
 
 	return agent
@@ -165,6 +168,7 @@ func (r *ReActAgent) executeCore(ctx context.Context, input *agentcore.AgentInpu
 	// ReAct 循环
 	var finalAnswer string
 	scratchpad := ""
+	parseRetries := 0
 
 	for step := 0; step < r.maxSteps; step++ {
 		if err := ctx.Err(); err != nil {
@@ -196,6 +200,13 @@ func (r *ReActAgent) executeCore(ctx context.Context, input *agentcore.AgentInpu
 			return r.handleErrorFast(output, step, "LLM call failed", err, startTime)
 		}
 
+		if llmResp == nil {
+			return r.handleErrorFast(output, step, "LLM call failed", fmt.Errorf("nil LLM response"), startTime)
+		}
+		if err := ctx.Err(); err != nil {
+			return r.handleErrorFast(output, step, "Execution canceled", err, startTime)
+		}
+
 		// Collect token usage
 		if llmResp.Usage != nil {
 			output.TokenUsage.Add(llmResp.Usage)
@@ -213,6 +224,12 @@ func (r *ReActAgent) executeCore(ctx context.Context, input *agentcore.AgentInpu
 		// 解析 LLM 输出
 		parsed, err := r.parser.Parse(ctx, llmOutput)
 		if err != nil {
+			if parseRetries < r.maxParseRetries && step+1 < r.maxSteps {
+				parseRetries++
+				output.Metadata["parse_retries"] = parseRetries
+				scratchpad += "\nPrevious model output (format rejected, no tool executed):\n" + llmOutput + "\nReturn either Final Answer: followed by the complete answer in the requested format, or Action: <tool> and Action Input: <JSON>. Do not repeat completed tool calls.\n"
+				continue
+			}
 			return r.handleErrorFast(output, step, "Failed to parse LLM output", err, startTime)
 		}
 

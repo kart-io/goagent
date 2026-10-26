@@ -161,7 +161,7 @@ type Reranker interface {
 
 #### 1. CrossEncoderReranker 交叉编码器
 
-使用交叉编码器模型重排序：
+旧实现为词汇重合启发式，不调用交叉编码器模型，已弃用。真实重排序请使用下方 LLM 或 Cohere 入口：
 
 ```go
 reranker := retrieval.NewCrossEncoderReranker("model-name", 10)
@@ -185,7 +185,8 @@ reranked, err := reranker.Rerank(ctx, query, docs)
 使用 LLM 进行重排序：
 
 ```go
-reranker := retrieval.NewLLMReranker(10)
+// client 是配置好的 llm.Client（支持 OpenAI 兼容客户端）。
+reranker := retrieval.NewLLMRerankerWithClient(client, 10)
 reranked, err := reranker.Rerank(ctx, query, docs)
 ```
 
@@ -194,7 +195,8 @@ reranked, err := reranker.Rerank(ctx, query, docs)
 使用 Cohere Rerank API：
 
 ```go
-reranker := retrieval.NewCohereReranker(apiKey, "model-name", 10)
+reranker, err := retrieval.NewCohereReranker(apiKey, "model-name", 10)
+if err != nil { return err }
 reranked, err := reranker.Rerank(ctx, query, docs)
 ```
 
@@ -509,6 +511,15 @@ func (c *CustomRetriever) GetRelevantDocuments(ctx context.Context, query string
     return docs, nil
 }
 ```
+
+仅嵌入 BaseRetriever 不会自动分派到自定义方法。进入 Runnable 管道时请显式适配：
+
+```go
+r := retrieval.AsRetriever(customRetriever)
+docs, err := r.Invoke(ctx, query) // Stream、Batch、Pipe 使用相同检索实现
+```
+
+中文索引、重排序限制和迁移说明见 [能力指南](../docs/guides/PRIORITY_CAPABILITIES.md)。
 
 ### 自定义重排序器
 

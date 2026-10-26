@@ -683,14 +683,13 @@ func (tc *testCallback) OnToolError(ctx context.Context, toolName string, err er
 func TestToTAgent_RunGenerator(t *testing.T) {
 	// Simplified test: find solution at depth 1
 	mockLLM := NewMockLLMClient(
-		// Depth 0: Check if root is solution
-		"no",
 		// Depth 0: Generate thoughts from root
 		"Step 1: First thought\nStep 2: Second thought",
 		// Depth 0: Evaluate each thought
 		"0.8", "0.7",
 		// Depth 1: Check if first thought is solution
 		"yes", // First thought IS the solution!
+		`{"solved":true,"answer":"Completed answer"}`,
 	)
 
 	agent := NewToTAgent(ToTConfig{
@@ -824,13 +823,14 @@ func TestToTAgent_RunGenerator_DFS(t *testing.T) {
 		// Generate thoughts
 		"Step 1: DFS thought 1\nStep 2: DFS thought 2",
 		// Evaluate
-		"0.7", "0.6",
+		"0.7",
 		// Check solution
 		"no",
 		// More thoughts at depth 2
 		"Step 1: DFS thought 3",
 		"0.5",
 		"yes", // This one is the solution
+		`{"solved":true,"answer":"Completed answer"}`,
 	)
 
 	agent := NewToTAgent(ToTConfig{

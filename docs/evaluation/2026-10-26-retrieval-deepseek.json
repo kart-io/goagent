@@ -1,0 +1,100 @@
+{
+  "cases": [
+    {
+      "answer": "未提供具体问题。根据材料，退款政策允许在购买后三十天内退货[1]。",
+      "citations": {
+        "reference_validity": 1,
+        "source_precision": 1,
+        "source_recall": 1
+      },
+      "duration_ms": 3379,
+      "query": "退款政策",
+      "retrieval": {
+        "recall_at_k": 1,
+        "reciprocal_rank": 1
+      }
+    },
+    {
+      "answer": "标准配送需要三至五个工作日。[1]",
+      "citations": {
+        "reference_validity": 1,
+        "source_precision": 1,
+        "source_recall": 1
+      },
+      "duration_ms": 2475,
+      "query": "配送需要多久",
+      "retrieval": {
+        "recall_at_k": 1,
+        "reciprocal_rank": 1
+      }
+    },
+    {
+      "answer": "忘记密码时，可通过注册邮箱重置密码[1]。",
+      "citations": {
+        "reference_validity": 1,
+        "source_precision": 1,
+        "source_recall": 1
+      },
+      "duration_ms": 3009,
+      "query": "忘记密码",
+      "retrieval": {
+        "recall_at_k": 1,
+        "reciprocal_rank": 1
+      }
+    },
+    {
+      "answer": "Refund policy: returns are allowed within 30 days of purchase [1].",
+      "citations": {
+        "reference_validity": 1,
+        "source_precision": 1,
+        "source_recall": 1
+      },
+      "duration_ms": 2341,
+      "query": "refund policy",
+      "retrieval": {
+        "recall_at_k": 1,
+        "reciprocal_rank": 1
+      }
+    },
+    {
+      "answer": "Standard shipping takes three to five business days [1].",
+      "citations": {
+        "reference_validity": 1,
+        "source_precision": 1,
+        "source_recall": 1
+      },
+      "duration_ms": 3104,
+      "query": "standard shipping",
+      "retrieval": {
+        "recall_at_k": 1,
+        "reciprocal_rank": 1
+      }
+    },
+    {
+      "answer": "Use your registered email address to reset your password [1].",
+      "citations": {
+        "reference_validity": 1,
+        "source_precision": 1,
+        "source_recall": 1
+      },
+      "duration_ms": 3398,
+      "query": "reset password",
+      "retrieval": {
+        "recall_at_k": 1,
+        "reciprocal_rank": 1
+      }
+    }
+  ],
+  "citation_scope": "reference validity and labeled source precision/recall; not claim entailment",
+  "k": 2,
+  "live": true,
+  "mean_recall_at_k": 1,
+  "model_calls": 12,
+  "mrr": 1,
+  "synthetic": true,
+  "usage": {
+    "prompt_tokens": 1362,
+    "completion_tokens": 1036,
+    "total_tokens": 2398
+  }
+}
