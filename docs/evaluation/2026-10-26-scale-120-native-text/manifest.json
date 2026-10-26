@@ -1,0 +1,30 @@
+{
+  "cases": 120,
+  "config": {
+    "direct_tools": false,
+    "budget": {
+      "model": "deepseek-flash",
+      "temperature": 0.2,
+      "max_calls": 2,
+      "max_output_tokens_per_call": 512,
+      "observed_token_stop": 8000
+    },
+    "timeout": 45000000000
+  },
+  "dataset_sha256": "ccb05e344001dcb663171d983cf6e658211da72309f814332e443fe792108ea3",
+  "generated": true,
+  "goagent_dirty": true,
+  "goagent_revision": "cb41a04adc767a8b4f1a9210390d668e2dc78720",
+  "limitations": "固定模板合成数据，样本相关；无业务生产数据；默认与直返只在适用类别配对；失败不重试筛选；未知用量单列；并发延迟受负载影响，不做速度排名；最大请求数不等于金额上限",
+  "live": true,
+  "maximum_upstream_requests": 240,
+  "mode": "baseline",
+  "planned_runs": 120,
+  "repeats": 1,
+  "seed": 20261026,
+  "timestamp": "2026-10-26T11:14:00.406936056Z",
+  "tool_result_format": "native_text",
+  "workers": 4,
+  "retained_scope": "goagent",
+  "record_processing": "仅保留本项目记录；历史模型结果未重跑，汇总按保留记录计算。"
+}

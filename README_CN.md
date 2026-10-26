@@ -11,7 +11,9 @@
 
 [English](README.md) | [中文](README_CN.md)
 
-GoAgent 是一个功能完整、生产就绪的 Go 语言 AI Agent 框架，灵感来源于 LangChain。它提供智能代理、工具系统、记忆管理、LLM 抽象和编排能力，具备企业级特性如分布式追踪、持久化存储和多代理协调。
+GoAgent 是一个 Go 语言 AI Agent 框架，灵感来源于 LangChain。它提供智能代理、工具系统、记忆管理、LLM 抽象和编排能力，集成分布式追踪、持久化存储和多代理协调；各模块的验证范围不同。
+
+推荐新编排使用 `agent.AsRunnable()`。参见[执行契约与能力状态](docs/guides/EXECUTION_CONTRACT.md)和[GoAgent 评测](evaluation/agentbench/README.md)。
 
 ## 特性
 
@@ -23,7 +25,7 @@ GoAgent 是一个功能完整、生产就绪的 Go 语言 AI Agent 框架，灵�
 - **工具系统** - 可扩展工具注册表，支持并行执行和依赖管理
 - **状态管理** - 线程安全状态，支持检查点和持久化
 - **可观测性** - OpenTelemetry 集成，分布式追踪
-- **企业就绪** - 支持 Redis、PostgreSQL、NATS 消息队列和高可用
+- **基础设施集成** - 支持 Redis、PostgreSQL 和 NATS；可靠投递与跨主机恢复需另行设计
 
 ## 快速开始
 
@@ -483,7 +485,7 @@ GoAgent 的灵感来源：
 
 ---
 
-**状态**: 生产就绪
+**状态**: 核心入口有回归验证，实验与弃用模块见能力说明
 **版本**: 1.0
 **Go 版本**: 1.25.0+
-**最后更新**: 2025-12-07
+**最后更新**: 2026-10-26

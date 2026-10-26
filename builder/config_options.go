@@ -44,6 +44,9 @@ var outputFormatPrompts = map[OutputFormat]string{
 
 // AgentConfig 保存 Agent 配置选项
 type AgentConfig struct {
+	// ReturnDirectTools 允许单个工具调用直接提供最终答案；仅作用于原生工具流。
+	ReturnDirectTools []string
+
 	// MaxIterations 限制推理步骤的最大次数
 	MaxIterations int
 
@@ -83,6 +86,15 @@ type AgentConfig struct {
 	// CustomOutputPrompt 自定义输出格式提示词
 	// 仅当 OutputFormat 为 OutputFormatCustom 时生效
 	CustomOutputPrompt string
+}
+
+// WithReturnDirectTools 指定结果已可直接展示的终态工具，省去模型总结请求。
+// 仅 ExecuteStream/AsRunnable 生效，并要求 ToolStreamClient。每次调用替换名单。
+// 本轮多个工具调用时仍走完整模型循环；字符串原样输出，其他结果编码为 JSON。
+// 启用者负责工具结果的格式、完整性与适用场景，模型输出格式指令不会再被执行。
+func (b *AgentBuilder[C, S]) WithReturnDirectTools(names ...string) *AgentBuilder[C, S] {
+	b.config.ReturnDirectTools = append([]string(nil), names...)
+	return b
 }
 
 // DefaultAgentConfig 返回默认配置

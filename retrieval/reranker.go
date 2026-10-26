@@ -38,41 +38,41 @@ func (b *BaseReranker) Rerank(ctx context.Context, query string, docs []*interfa
 	return docs, nil
 }
 
-// CrossEncoderReranker 交叉编码器重排序器
-//
-// Legacy lexical-overlap heuristic; this does not call a cross-encoder model.
-// Deprecated: use a real LLMRerankerWithClient or CohereReranker.
-type CrossEncoderReranker struct {
+// LexicalOverlapReranker 使用词汇重合率排序，不调用模型或交叉编码器。
+type LexicalOverlapReranker struct {
 	*BaseReranker
-
-	// Model 模型名称
+	// Model 仅为旧 API 保留，不参与评分。
 	Model string
-
-	// TopN 返回前 N 个文档
-	TopN int
+	TopN  int
 }
 
-// NewCrossEncoderReranker 创建交叉编码器重排序器
+func NewLexicalOverlapReranker(topN int) *LexicalOverlapReranker {
+	return &LexicalOverlapReranker{BaseReranker: NewBaseReranker("lexical_overlap"), TopN: topN}
+}
+
+// CrossEncoderReranker 是旧名称，实际执行词汇重合排序。
+// Deprecated: 使用 LexicalOverlapReranker；真实模型排序使用 LLMReranker 或 CohereReranker。
+type CrossEncoderReranker = LexicalOverlapReranker
+
+// NewCrossEncoderReranker 不会加载 model 对应的模型。
+// Deprecated: 使用 NewLexicalOverlapReranker 或真实模型重排序器。
 func NewCrossEncoderReranker(model string, topN int) *CrossEncoderReranker {
-	return &CrossEncoderReranker{
-		BaseReranker: NewBaseReranker("cross_encoder"),
-		Model:        model,
-		TopN:         topN,
-	}
+	r := NewLexicalOverlapReranker(topN)
+	r.Model = model
+	return r
 }
 
 // Rerank 重新排序文档
-func (c *CrossEncoderReranker) Rerank(ctx context.Context, query string, docs []*interfaces.Document) ([]*interfaces.Document, error) {
+func (c *LexicalOverlapReranker) Rerank(ctx context.Context, query string, docs []*interfaces.Document) ([]*interfaces.Document, error) {
 	if len(docs) == 0 {
 		return docs, nil
 	}
 
-	// 模拟交叉编码器评分
-	// 实际应该调用真实的模型 API
+	// 词汇基线只衡量表面重合，不代表语义相关性。
 	scored := make([]*interfaces.Document, len(docs))
 	for i, doc := range docs {
 		docCopy := doc.Clone()
-		// 模拟评分：基于内容相似度
+		// 按词汇重合计算分数
 		docCopy.Score = c.calculateRelevanceScore(query, doc.PageContent)
 		scored[i] = docCopy
 	}
@@ -89,9 +89,9 @@ func (c *CrossEncoderReranker) Rerank(ctx context.Context, query string, docs []
 	return collection, nil
 }
 
-// calculateRelevanceScore 计算相关性分数（模拟）
-func (c *CrossEncoderReranker) calculateRelevanceScore(query, content string) float64 {
-	// 简单的基于关键词匹配的模拟
+// calculateRelevanceScore 计算词汇重合分数
+func (c *LexicalOverlapReranker) calculateRelevanceScore(query, content string) float64 {
+	// 使用与关键词检索一致的切词规则
 	queryWords := tokenize(query)
 	contentWords := tokenize(content)
 

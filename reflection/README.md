@@ -2,6 +2,8 @@
 
 本模块是 goagent 框架的自反思系统，提供 Agent 的自我评估、学习提取和持续改进能力。
 
+任务执行必须通过 `WithTaskExecutor(executor)` 委派给真实 Agent。未配置时返回 `ErrTaskExecutorRequired`，不再返回固定成功结果；Invoke、Stream、Batch 和配置包装均绑定同一执行逻辑。Stream 仅输出最终块，自动反思和学习效果仍属于实验能力。详见[执行契约](../docs/guides/EXECUTION_CONTRACT.md)。
+
 ## 目录
 
 - [架构设计](#架构设计)

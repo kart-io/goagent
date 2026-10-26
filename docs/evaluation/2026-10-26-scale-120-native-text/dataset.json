@@ -1,0 +1,952 @@
+[
+  {
+    "id": "case-0000-087157",
+    "question": "查询记录 case-0000-087157。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "订单 case-0000-087157 已发货，预计 11 天后送达。",
+    "evidence": "订单 case-0000-087157 已发货，预计 11 天后送达。",
+    "category": "中文订单",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0001-702952",
+    "question": "查询记录 case-0001-702952。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "Refund case-0001-702952 approved: USD 16.00; expected in 3 business days.",
+    "evidence": "Refund case-0001-702952 approved: USD 16.00; expected in 3 business days.",
+    "category": "英文退款",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0002-165264",
+    "question": "查询记录 case-0002-165264。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "工单：case-0002-165264\n状态：处理中\n负责人：支持组 49",
+    "evidence": "工单：case-0002-165264\n状态：处理中\n负责人：支持组 49",
+    "category": "多行文本",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0003-479965",
+    "question": "查询记录 case-0003-479965。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "{\"id\":\"case-0003-479965\",\"status\":\"ready\",\"count\":20}",
+    "evidence": "{\"id\":\"case-0003-479965\",\"status\":\"ready\",\"count\":20}",
+    "category": "JSON文本",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0004-115462",
+    "question": "查询记录 case-0004-115462。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "✅ case-0004-115462：東京 / München / café / مرحبا；余额 83 元。",
+    "evidence": "✅ case-0004-115462：東京 / München / café / مرحبا；余额 83 元。",
+    "category": "Unicode",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0005-016260",
+    "question": "查询记录 case-0005-016260。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "记录 case-0005-016260：路径 C:\\data\\67；备注 \"保持原样\"；字段\tOK。",
+    "evidence": "记录 case-0005-016260：路径 C:\\data\\67；备注 \"保持原样\"；字段\tOK。",
+    "category": "转义字符",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0006-775626",
+    "question": "查询记录 case-0006-775626。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "批次 case-0006-775626\n检查项67：通过；检查项67：通过；检查项67：通过；检查项67：通过；检查项67：通过；检查项67：通过；检查项67：通过；检查项67：通过；检查项67：通过；检查项67：通过；检查项67：通过；检查项67：通过；检查项67：通过；检查项67：通过；检查项67：通过；检查项67：通过；\n处理结束。",
+    "evidence": "批次 case-0006-775626\n检查项67：通过；检查项67：通过；检查项67：通过；检查项67：通过；检查项67：通过；检查项67：通过；检查项67：通过；检查项67：通过；检查项67：通过；检查项67：通过；检查项67：通过；检查项67：通过；检查项67：通过；检查项67：通过；检查项67：通过；检查项67：通过；\n处理结束。",
+    "category": "长结果",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0007-074061",
+    "question": "查询记录 case-0007-074061。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "0",
+    "evidence": "0",
+    "category": "状态边界",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0008-377632",
+    "question": "记录 case-0008-377632 的退款期限是多少天？只输出天数数字。",
+    "answer": "10",
+    "evidence": "配送需要 13 天，退款期限为 10 天，保修期 365 天。",
+    "category": "证据筛选",
+    "direct_eligible": false
+  },
+  {
+    "id": "case-0009-427506",
+    "question": "查询记录 case-0009-427506，计算商品总价，只输出整数。",
+    "answer": "15",
+    "evidence": "单价 5 元，购买 3 件，运费 0 元，无优惠。",
+    "category": "证据计算",
+    "direct_eligible": false
+  },
+  {
+    "id": "case-0010-061588",
+    "question": "记录 case-0010-061588 的国际退款手续费是多少？资料不足时只输出 UNKNOWN。",
+    "answer": "UNKNOWN",
+    "evidence": "国内配送期限为 55 天。此资料未说明退款手续费。",
+    "category": "无证据拒答",
+    "direct_eligible": false
+  },
+  {
+    "id": "case-0011-661260",
+    "question": "计算 33 + 28，只输出整数。",
+    "answer": "61",
+    "category": "无工具算术",
+    "direct_eligible": false
+  },
+  {
+    "id": "case-0012-814745",
+    "question": "查询记录 case-0012-814745。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "订单 case-0012-814745 已发货，预计 49 天后送达。",
+    "evidence": "订单 case-0012-814745 已发货，预计 49 天后送达。",
+    "category": "中文订单",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0013-772555",
+    "question": "查询记录 case-0013-772555。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "Refund case-0013-772555 approved: USD 37.00; expected in 3 business days.",
+    "evidence": "Refund case-0013-772555 approved: USD 37.00; expected in 3 business days.",
+    "category": "英文退款",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0014-766042",
+    "question": "查询记录 case-0014-766042。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "工单：case-0014-766042\n状态：处理中\n负责人：支持组 72",
+    "evidence": "工单：case-0014-766042\n状态：处理中\n负责人：支持组 72",
+    "category": "多行文本",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0015-810210",
+    "question": "查询记录 case-0015-810210。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "{\"id\":\"case-0015-810210\",\"status\":\"ready\",\"count\":80}",
+    "evidence": "{\"id\":\"case-0015-810210\",\"status\":\"ready\",\"count\":80}",
+    "category": "JSON文本",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0016-092150",
+    "question": "查询记录 case-0016-092150。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "✅ case-0016-092150：東京 / München / café / مرحبا；余额 32 元。",
+    "evidence": "✅ case-0016-092150：東京 / München / café / مرحبا；余额 32 元。",
+    "category": "Unicode",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0017-485453",
+    "question": "查询记录 case-0017-485453。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "记录 case-0017-485453：路径 C:\\data\\26；备注 \"保持原样\"；字段\tOK。",
+    "evidence": "记录 case-0017-485453：路径 C:\\data\\26；备注 \"保持原样\"；字段\tOK。",
+    "category": "转义字符",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0018-332887",
+    "question": "查询记录 case-0018-332887。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "批次 case-0018-332887\n检查项21：通过；检查项21：通过；检查项21：通过；检查项21：通过；检查项21：通过；检查项21：通过；检查项21：通过；检查项21：通过；检查项21：通过；检查项21：通过；检查项21：通过；检查项21：通过；检查项21：通过；检查项21：通过；\n处理结束。",
+    "evidence": "批次 case-0018-332887\n检查项21：通过；检查项21：通过；检查项21：通过；检查项21：通过；检查项21：通过；检查项21：通过；检查项21：通过；检查项21：通过；检查项21：通过；检查项21：通过；检查项21：通过；检查项21：通过；检查项21：通过；检查项21：通过；\n处理结束。",
+    "category": "长结果",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0019-406053",
+    "question": "查询记录 case-0019-406053。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "false",
+    "evidence": "false",
+    "category": "状态边界",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0020-641508",
+    "question": "记录 case-0020-641508 的退款期限是多少天？只输出天数数字。",
+    "answer": "78",
+    "evidence": "配送需要 81 天，退款期限为 78 天，保修期 365 天。",
+    "category": "证据筛选",
+    "direct_eligible": false
+  },
+  {
+    "id": "case-0021-473464",
+    "question": "查询记录 case-0021-473464，计算商品总价，只输出整数。",
+    "answer": "258",
+    "evidence": "单价 86 元，购买 3 件，运费 0 元，无优惠。",
+    "category": "证据计算",
+    "direct_eligible": false
+  },
+  {
+    "id": "case-0022-841081",
+    "question": "记录 case-0022-841081 的国际退款手续费是多少？资料不足时只输出 UNKNOWN。",
+    "answer": "UNKNOWN",
+    "evidence": "国内配送期限为 43 天。此资料未说明退款手续费。",
+    "category": "无证据拒答",
+    "direct_eligible": false
+  },
+  {
+    "id": "case-0023-375265",
+    "question": "计算 81 + 40，只输出整数。",
+    "answer": "121",
+    "category": "无工具算术",
+    "direct_eligible": false
+  },
+  {
+    "id": "case-0024-551425",
+    "question": "查询记录 case-0024-551425。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "订单 case-0024-551425 已发货，预计 61 天后送达。",
+    "evidence": "订单 case-0024-551425 已发货，预计 61 天后送达。",
+    "category": "中文订单",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0025-054554",
+    "question": "查询记录 case-0025-054554。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "Refund case-0025-054554 approved: USD 36.00; expected in 3 business days.",
+    "evidence": "Refund case-0025-054554 approved: USD 36.00; expected in 3 business days.",
+    "category": "英文退款",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0026-623271",
+    "question": "查询记录 case-0026-623271。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "工单：case-0026-623271\n状态：处理中\n负责人：支持组 21",
+    "evidence": "工单：case-0026-623271\n状态：处理中\n负责人：支持组 21",
+    "category": "多行文本",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0027-443151",
+    "question": "查询记录 case-0027-443151。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "{\"id\":\"case-0027-443151\",\"status\":\"ready\",\"count\":41}",
+    "evidence": "{\"id\":\"case-0027-443151\",\"status\":\"ready\",\"count\":41}",
+    "category": "JSON文本",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0028-212540",
+    "question": "查询记录 case-0028-212540。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "✅ case-0028-212540：東京 / München / café / مرحبا；余额 46 元。",
+    "evidence": "✅ case-0028-212540：東京 / München / café / مرحبا；余额 46 元。",
+    "category": "Unicode",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0029-267219",
+    "question": "查询记录 case-0029-267219。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "记录 case-0029-267219：路径 C:\\data\\70；备注 \"保持原样\"；字段\tOK。",
+    "evidence": "记录 case-0029-267219：路径 C:\\data\\70；备注 \"保持原样\"；字段\tOK。",
+    "category": "转义字符",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0030-217102",
+    "question": "查询记录 case-0030-217102。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "批次 case-0030-217102\n检查项34：通过；检查项34：通过；检查项34：通过；检查项34：通过；检查项34：通过；检查项34：通过；检查项34：通过；检查项34：通过；检查项34：通过；检查项34：通过；检查项34：通过；检查项34：通过；\n处理结束。",
+    "evidence": "批次 case-0030-217102\n检查项34：通过；检查项34：通过；检查项34：通过；检查项34：通过；检查项34：通过；检查项34：通过；检查项34：通过；检查项34：通过；检查项34：通过；检查项34：通过；检查项34：通过；检查项34：通过；\n处理结束。",
+    "category": "长结果",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0031-977314",
+    "question": "查询记录 case-0031-977314。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "null",
+    "evidence": "null",
+    "category": "状态边界",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0032-082376",
+    "question": "记录 case-0032-082376 的退款期限是多少天？只输出天数数字。",
+    "answer": "28",
+    "evidence": "配送需要 31 天，退款期限为 28 天，保修期 365 天。",
+    "category": "证据筛选",
+    "direct_eligible": false
+  },
+  {
+    "id": "case-0033-651149",
+    "question": "查询记录 case-0033-651149，计算商品总价，只输出整数。",
+    "answer": "90",
+    "evidence": "单价 30 元，购买 3 件，运费 0 元，无优惠。",
+    "category": "证据计算",
+    "direct_eligible": false
+  },
+  {
+    "id": "case-0034-128318",
+    "question": "记录 case-0034-128318 的国际退款手续费是多少？资料不足时只输出 UNKNOWN。",
+    "answer": "UNKNOWN",
+    "evidence": "国内配送期限为 70 天。此资料未说明退款手续费。",
+    "category": "无证据拒答",
+    "direct_eligible": false
+  },
+  {
+    "id": "case-0035-185624",
+    "question": "计算 63 + 52，只输出整数。",
+    "answer": "115",
+    "category": "无工具算术",
+    "direct_eligible": false
+  },
+  {
+    "id": "case-0036-196339",
+    "question": "查询记录 case-0036-196339。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "订单 case-0036-196339 已发货，预计 62 天后送达。",
+    "evidence": "订单 case-0036-196339 已发货，预计 62 天后送达。",
+    "category": "中文订单",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0037-342181",
+    "question": "查询记录 case-0037-342181。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "Refund case-0037-342181 approved: USD 10.00; expected in 3 business days.",
+    "evidence": "Refund case-0037-342181 approved: USD 10.00; expected in 3 business days.",
+    "category": "英文退款",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0038-703751",
+    "question": "查询记录 case-0038-703751。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "工单：case-0038-703751\n状态：处理中\n负责人：支持组 90",
+    "evidence": "工单：case-0038-703751\n状态：处理中\n负责人：支持组 90",
+    "category": "多行文本",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0039-834709",
+    "question": "查询记录 case-0039-834709。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "{\"id\":\"case-0039-834709\",\"status\":\"ready\",\"count\":15}",
+    "evidence": "{\"id\":\"case-0039-834709\",\"status\":\"ready\",\"count\":15}",
+    "category": "JSON文本",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0040-178370",
+    "question": "查询记录 case-0040-178370。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "✅ case-0040-178370：東京 / München / café / مرحبا；余额 62 元。",
+    "evidence": "✅ case-0040-178370：東京 / München / café / مرحبا；余额 62 元。",
+    "category": "Unicode",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0041-733069",
+    "question": "查询记录 case-0041-733069。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "记录 case-0041-733069：路径 C:\\data\\19；备注 \"保持原样\"；字段\tOK。",
+    "evidence": "记录 case-0041-733069：路径 C:\\data\\19；备注 \"保持原样\"；字段\tOK。",
+    "category": "转义字符",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0042-272646",
+    "question": "查询记录 case-0042-272646。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "批次 case-0042-272646\n检查项24：通过；检查项24：通过；检查项24：通过；检查项24：通过；检查项24：通过；检查项24：通过；检查项24：通过；检查项24：通过；检查项24：通过；检查项24：通过；\n处理结束。",
+    "evidence": "批次 case-0042-272646\n检查项24：通过；检查项24：通过；检查项24：通过；检查项24：通过；检查项24：通过；检查项24：通过；检查项24：通过；检查项24：通过；检查项24：通过；检查项24：通过；\n处理结束。",
+    "category": "长结果",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0043-091269",
+    "question": "查询记录 case-0043-091269。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "UNKNOWN",
+    "evidence": "UNKNOWN",
+    "category": "状态边界",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0044-074124",
+    "question": "记录 case-0044-074124 的退款期限是多少天？只输出天数数字。",
+    "answer": "72",
+    "evidence": "配送需要 75 天，退款期限为 72 天，保修期 365 天。",
+    "category": "证据筛选",
+    "direct_eligible": false
+  },
+  {
+    "id": "case-0045-543529",
+    "question": "查询记录 case-0045-543529，计算商品总价，只输出整数。",
+    "answer": "90",
+    "evidence": "单价 30 元，购买 3 件，运费 0 元，无优惠。",
+    "category": "证据计算",
+    "direct_eligible": false
+  },
+  {
+    "id": "case-0046-355916",
+    "question": "记录 case-0046-355916 的国际退款手续费是多少？资料不足时只输出 UNKNOWN。",
+    "answer": "UNKNOWN",
+    "evidence": "国内配送期限为 52 天。此资料未说明退款手续费。",
+    "category": "无证据拒答",
+    "direct_eligible": false
+  },
+  {
+    "id": "case-0047-156736",
+    "question": "计算 38 + 64，只输出整数。",
+    "answer": "102",
+    "category": "无工具算术",
+    "direct_eligible": false
+  },
+  {
+    "id": "case-0048-828804",
+    "question": "查询记录 case-0048-828804。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "订单 case-0048-828804 已发货，预计 19 天后送达。",
+    "evidence": "订单 case-0048-828804 已发货，预计 19 天后送达。",
+    "category": "中文订单",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0049-135229",
+    "question": "查询记录 case-0049-135229。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "Refund case-0049-135229 approved: USD 69.00; expected in 3 business days.",
+    "evidence": "Refund case-0049-135229 approved: USD 69.00; expected in 3 business days.",
+    "category": "英文退款",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0050-301427",
+    "question": "查询记录 case-0050-301427。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "工单：case-0050-301427\n状态：处理中\n负责人：支持组 8",
+    "evidence": "工单：case-0050-301427\n状态：处理中\n负责人：支持组 8",
+    "category": "多行文本",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0051-464844",
+    "question": "查询记录 case-0051-464844。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "{\"id\":\"case-0051-464844\",\"status\":\"ready\",\"count\":89}",
+    "evidence": "{\"id\":\"case-0051-464844\",\"status\":\"ready\",\"count\":89}",
+    "category": "JSON文本",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0052-449326",
+    "question": "查询记录 case-0052-449326。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "✅ case-0052-449326：東京 / München / café / مرحبا；余额 69 元。",
+    "evidence": "✅ case-0052-449326：東京 / München / café / مرحبا；余额 69 元。",
+    "category": "Unicode",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0053-084459",
+    "question": "查询记录 case-0053-084459。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "记录 case-0053-084459：路径 C:\\data\\70；备注 \"保持原样\"；字段\tOK。",
+    "evidence": "记录 case-0053-084459：路径 C:\\data\\70；备注 \"保持原样\"；字段\tOK。",
+    "category": "转义字符",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0054-983157",
+    "question": "查询记录 case-0054-983157。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "批次 case-0054-983157\n检查项20：通过；检查项20：通过；检查项20：通过；检查项20：通过；检查项20：通过；检查项20：通过；检查项20：通过；检查项20：通过；检查项20：通过；检查项20：通过；检查项20：通过；检查项20：通过；检查项20：通过；检查项20：通过；检查项20：通过；\n处理结束。",
+    "evidence": "批次 case-0054-983157\n检查项20：通过；检查项20：通过；检查项20：通过；检查项20：通过；检查项20：通过；检查项20：通过；检查项20：通过；检查项20：通过；检查项20：通过；检查项20：通过；检查项20：通过；检查项20：通过；检查项20：通过；检查项20：通过；检查项20：通过；\n处理结束。",
+    "category": "长结果",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0055-967336",
+    "question": "查询记录 case-0055-967336。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "未找到匹配记录。",
+    "evidence": "未找到匹配记录。",
+    "category": "状态边界",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0056-271116",
+    "question": "记录 case-0056-271116 的退款期限是多少天？只输出天数数字。",
+    "answer": "53",
+    "evidence": "配送需要 56 天，退款期限为 53 天，保修期 365 天。",
+    "category": "证据筛选",
+    "direct_eligible": false
+  },
+  {
+    "id": "case-0057-450293",
+    "question": "查询记录 case-0057-450293，计算商品总价，只输出整数。",
+    "answer": "252",
+    "evidence": "单价 84 元，购买 3 件，运费 0 元，无优惠。",
+    "category": "证据计算",
+    "direct_eligible": false
+  },
+  {
+    "id": "case-0058-755639",
+    "question": "记录 case-0058-755639 的国际退款手续费是多少？资料不足时只输出 UNKNOWN。",
+    "answer": "UNKNOWN",
+    "evidence": "国内配送期限为 81 天。此资料未说明退款手续费。",
+    "category": "无证据拒答",
+    "direct_eligible": false
+  },
+  {
+    "id": "case-0059-736838",
+    "question": "计算 56 + 76，只输出整数。",
+    "answer": "132",
+    "category": "无工具算术",
+    "direct_eligible": false
+  },
+  {
+    "id": "case-0060-625465",
+    "question": "查询记录 case-0060-625465。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "订单 case-0060-625465 已发货，预计 20 天后送达。",
+    "evidence": "订单 case-0060-625465 已发货，预计 20 天后送达。",
+    "category": "中文订单",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0061-402439",
+    "question": "查询记录 case-0061-402439。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "Refund case-0061-402439 approved: USD 55.00; expected in 3 business days.",
+    "evidence": "Refund case-0061-402439 approved: USD 55.00; expected in 3 business days.",
+    "category": "英文退款",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0062-517030",
+    "question": "查询记录 case-0062-517030。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "工单：case-0062-517030\n状态：处理中\n负责人：支持组 77",
+    "evidence": "工单：case-0062-517030\n状态：处理中\n负责人：支持组 77",
+    "category": "多行文本",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0063-930952",
+    "question": "查询记录 case-0063-930952。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "{\"id\":\"case-0063-930952\",\"status\":\"ready\",\"count\":61}",
+    "evidence": "{\"id\":\"case-0063-930952\",\"status\":\"ready\",\"count\":61}",
+    "category": "JSON文本",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0064-286859",
+    "question": "查询记录 case-0064-286859。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "✅ case-0064-286859：東京 / München / café / مرحبا；余额 84 元。",
+    "evidence": "✅ case-0064-286859：東京 / München / café / مرحبا；余额 84 元。",
+    "category": "Unicode",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0065-099728",
+    "question": "查询记录 case-0065-099728。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "记录 case-0065-099728：路径 C:\\data\\30；备注 \"保持原样\"；字段\tOK。",
+    "evidence": "记录 case-0065-099728：路径 C:\\data\\30；备注 \"保持原样\"；字段\tOK。",
+    "category": "转义字符",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0066-862945",
+    "question": "查询记录 case-0066-862945。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "批次 case-0066-862945\n检查项6：通过；检查项6：通过；检查项6：通过；检查项6：通过；检查项6：通过；检查项6：通过；检查项6：通过；检查项6：通过；检查项6：通过；检查项6：通过；检查项6：通过；检查项6：通过；检查项6：通过；\n处理结束。",
+    "evidence": "批次 case-0066-862945\n检查项6：通过；检查项6：通过；检查项6：通过；检查项6：通过；检查项6：通过；检查项6：通过；检查项6：通过；检查项6：通过；检查项6：通过；检查项6：通过；检查项6：通过；检查项6：通过；检查项6：通过；\n处理结束。",
+    "category": "长结果",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0067-760184",
+    "question": "查询记录 case-0067-760184。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "0",
+    "evidence": "0",
+    "category": "状态边界",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0068-688443",
+    "question": "记录 case-0068-688443 的退款期限是多少天？只输出天数数字。",
+    "answer": "17",
+    "evidence": "配送需要 20 天，退款期限为 17 天，保修期 365 天。",
+    "category": "证据筛选",
+    "direct_eligible": false
+  },
+  {
+    "id": "case-0069-298076",
+    "question": "查询记录 case-0069-298076，计算商品总价，只输出整数。",
+    "answer": "258",
+    "evidence": "单价 86 元，购买 3 件，运费 0 元，无优惠。",
+    "category": "证据计算",
+    "direct_eligible": false
+  },
+  {
+    "id": "case-0070-429914",
+    "question": "记录 case-0070-429914 的国际退款手续费是多少？资料不足时只输出 UNKNOWN。",
+    "answer": "UNKNOWN",
+    "evidence": "国内配送期限为 38 天。此资料未说明退款手续费。",
+    "category": "无证据拒答",
+    "direct_eligible": false
+  },
+  {
+    "id": "case-0071-554772",
+    "question": "计算 11 + 88，只输出整数。",
+    "answer": "99",
+    "category": "无工具算术",
+    "direct_eligible": false
+  },
+  {
+    "id": "case-0072-453280",
+    "question": "查询记录 case-0072-453280。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "订单 case-0072-453280 已发货，预计 81 天后送达。",
+    "evidence": "订单 case-0072-453280 已发货，预计 81 天后送达。",
+    "category": "中文订单",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0073-256630",
+    "question": "查询记录 case-0073-256630。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "Refund case-0073-256630 approved: USD 78.00; expected in 3 business days.",
+    "evidence": "Refund case-0073-256630 approved: USD 78.00; expected in 3 business days.",
+    "category": "英文退款",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0074-817267",
+    "question": "查询记录 case-0074-817267。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "工单：case-0074-817267\n状态：处理中\n负责人：支持组 62",
+    "evidence": "工单：case-0074-817267\n状态：处理中\n负责人：支持组 62",
+    "category": "多行文本",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0075-519536",
+    "question": "查询记录 case-0075-519536。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "{\"id\":\"case-0075-519536\",\"status\":\"ready\",\"count\":29}",
+    "evidence": "{\"id\":\"case-0075-519536\",\"status\":\"ready\",\"count\":29}",
+    "category": "JSON文本",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0076-706116",
+    "question": "查询记录 case-0076-706116。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "✅ case-0076-706116：東京 / München / café / مرحبا；余额 36 元。",
+    "evidence": "✅ case-0076-706116：東京 / München / café / مرحبا；余额 36 元。",
+    "category": "Unicode",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0077-390066",
+    "question": "查询记录 case-0077-390066。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "记录 case-0077-390066：路径 C:\\data\\37；备注 \"保持原样\"；字段\tOK。",
+    "evidence": "记录 case-0077-390066：路径 C:\\data\\37；备注 \"保持原样\"；字段\tOK。",
+    "category": "转义字符",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0078-846411",
+    "question": "查询记录 case-0078-846411。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "批次 case-0078-846411\n检查项8：通过；检查项8：通过；检查项8：通过；检查项8：通过；检查项8：通过；检查项8：通过；检查项8：通过；检查项8：通过；检查项8：通过；检查项8：通过；检查项8：通过；\n处理结束。",
+    "evidence": "批次 case-0078-846411\n检查项8：通过；检查项8：通过；检查项8：通过；检查项8：通过；检查项8：通过；检查项8：通过；检查项8：通过；检查项8：通过；检查项8：通过；检查项8：通过；检查项8：通过；\n处理结束。",
+    "category": "长结果",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0079-029990",
+    "question": "查询记录 case-0079-029990。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "false",
+    "evidence": "false",
+    "category": "状态边界",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0080-206931",
+    "question": "记录 case-0080-206931 的退款期限是多少天？只输出天数数字。",
+    "answer": "55",
+    "evidence": "配送需要 58 天，退款期限为 55 天，保修期 365 天。",
+    "category": "证据筛选",
+    "direct_eligible": false
+  },
+  {
+    "id": "case-0081-373596",
+    "question": "查询记录 case-0081-373596，计算商品总价，只输出整数。",
+    "answer": "81",
+    "evidence": "单价 27 元，购买 3 件，运费 0 元，无优惠。",
+    "category": "证据计算",
+    "direct_eligible": false
+  },
+  {
+    "id": "case-0082-372930",
+    "question": "记录 case-0082-372930 的国际退款手续费是多少？资料不足时只输出 UNKNOWN。",
+    "answer": "UNKNOWN",
+    "evidence": "国内配送期限为 7 天。此资料未说明退款手续费。",
+    "category": "无证据拒答",
+    "direct_eligible": false
+  },
+  {
+    "id": "case-0083-709406",
+    "question": "计算 2 + 100，只输出整数。",
+    "answer": "102",
+    "category": "无工具算术",
+    "direct_eligible": false
+  },
+  {
+    "id": "case-0084-570397",
+    "question": "查询记录 case-0084-570397。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "订单 case-0084-570397 已发货，预计 57 天后送达。",
+    "evidence": "订单 case-0084-570397 已发货，预计 57 天后送达。",
+    "category": "中文订单",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0085-052317",
+    "question": "查询记录 case-0085-052317。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "Refund case-0085-052317 approved: USD 47.00; expected in 3 business days.",
+    "evidence": "Refund case-0085-052317 approved: USD 47.00; expected in 3 business days.",
+    "category": "英文退款",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0086-131226",
+    "question": "查询记录 case-0086-131226。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "工单：case-0086-131226\n状态：处理中\n负责人：支持组 89",
+    "evidence": "工单：case-0086-131226\n状态：处理中\n负责人：支持组 89",
+    "category": "多行文本",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0087-788190",
+    "question": "查询记录 case-0087-788190。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "{\"id\":\"case-0087-788190\",\"status\":\"ready\",\"count\":29}",
+    "evidence": "{\"id\":\"case-0087-788190\",\"status\":\"ready\",\"count\":29}",
+    "category": "JSON文本",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0088-288071",
+    "question": "查询记录 case-0088-288071。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "✅ case-0088-288071：東京 / München / café / مرحبا；余额 5 元。",
+    "evidence": "✅ case-0088-288071：東京 / München / café / مرحبا；余额 5 元。",
+    "category": "Unicode",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0089-964534",
+    "question": "查询记录 case-0089-964534。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "记录 case-0089-964534：路径 C:\\data\\63；备注 \"保持原样\"；字段\tOK。",
+    "evidence": "记录 case-0089-964534：路径 C:\\data\\63；备注 \"保持原样\"；字段\tOK。",
+    "category": "转义字符",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0090-606980",
+    "question": "查询记录 case-0090-606980。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "批次 case-0090-606980\n检查项42：通过；检查项42：通过；检查项42：通过；检查项42：通过；检查项42：通过；检查项42：通过；检查项42：通过；检查项42：通过；检查项42：通过；检查项42：通过；检查项42：通过；检查项42：通过；检查项42：通过；检查项42：通过；检查项42：通过；检查项42：通过；\n处理结束。",
+    "evidence": "批次 case-0090-606980\n检查项42：通过；检查项42：通过；检查项42：通过；检查项42：通过；检查项42：通过；检查项42：通过；检查项42：通过；检查项42：通过；检查项42：通过；检查项42：通过；检查项42：通过；检查项42：通过；检查项42：通过；检查项42：通过；检查项42：通过；检查项42：通过；\n处理结束。",
+    "category": "长结果",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0091-192124",
+    "question": "查询记录 case-0091-192124。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "null",
+    "evidence": "null",
+    "category": "状态边界",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0092-772331",
+    "question": "记录 case-0092-772331 的退款期限是多少天？只输出天数数字。",
+    "answer": "17",
+    "evidence": "配送需要 20 天，退款期限为 17 天，保修期 365 天。",
+    "category": "证据筛选",
+    "direct_eligible": false
+  },
+  {
+    "id": "case-0093-416184",
+    "question": "查询记录 case-0093-416184，计算商品总价，只输出整数。",
+    "answer": "84",
+    "evidence": "单价 28 元，购买 3 件，运费 0 元，无优惠。",
+    "category": "证据计算",
+    "direct_eligible": false
+  },
+  {
+    "id": "case-0094-182912",
+    "question": "记录 case-0094-182912 的国际退款手续费是多少？资料不足时只输出 UNKNOWN。",
+    "answer": "UNKNOWN",
+    "evidence": "国内配送期限为 39 天。此资料未说明退款手续费。",
+    "category": "无证据拒答",
+    "direct_eligible": false
+  },
+  {
+    "id": "case-0095-932771",
+    "question": "计算 21 + 112，只输出整数。",
+    "answer": "133",
+    "category": "无工具算术",
+    "direct_eligible": false
+  },
+  {
+    "id": "case-0096-914185",
+    "question": "查询记录 case-0096-914185。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "订单 case-0096-914185 已发货，预计 31 天后送达。",
+    "evidence": "订单 case-0096-914185 已发货，预计 31 天后送达。",
+    "category": "中文订单",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0097-147441",
+    "question": "查询记录 case-0097-147441。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "Refund case-0097-147441 approved: USD 52.00; expected in 3 business days.",
+    "evidence": "Refund case-0097-147441 approved: USD 52.00; expected in 3 business days.",
+    "category": "英文退款",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0098-011905",
+    "question": "查询记录 case-0098-011905。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "工单：case-0098-011905\n状态：处理中\n负责人：支持组 52",
+    "evidence": "工单：case-0098-011905\n状态：处理中\n负责人：支持组 52",
+    "category": "多行文本",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0099-490178",
+    "question": "查询记录 case-0099-490178。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "{\"id\":\"case-0099-490178\",\"status\":\"ready\",\"count\":82}",
+    "evidence": "{\"id\":\"case-0099-490178\",\"status\":\"ready\",\"count\":82}",
+    "category": "JSON文本",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0100-965057",
+    "question": "查询记录 case-0100-965057。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "✅ case-0100-965057：東京 / München / café / مرحبا；余额 86 元。",
+    "evidence": "✅ case-0100-965057：東京 / München / café / مرحبا；余额 86 元。",
+    "category": "Unicode",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0101-486214",
+    "question": "查询记录 case-0101-486214。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "记录 case-0101-486214：路径 C:\\data\\29；备注 \"保持原样\"；字段\tOK。",
+    "evidence": "记录 case-0101-486214：路径 C:\\data\\29；备注 \"保持原样\"；字段\tOK。",
+    "category": "转义字符",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0102-416797",
+    "question": "查询记录 case-0102-416797。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "批次 case-0102-416797\n检查项10：通过；检查项10：通过；检查项10：通过；检查项10：通过；检查项10：通过；检查项10：通过；检查项10：通过；检查项10：通过；检查项10：通过；检查项10：通过；检查项10：通过；检查项10：通过；检查项10：通过；检查项10：通过；\n处理结束。",
+    "evidence": "批次 case-0102-416797\n检查项10：通过；检查项10：通过；检查项10：通过；检查项10：通过；检查项10：通过；检查项10：通过；检查项10：通过；检查项10：通过；检查项10：通过；检查项10：通过；检查项10：通过；检查项10：通过；检查项10：通过；检查项10：通过；\n处理结束。",
+    "category": "长结果",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0103-687912",
+    "question": "查询记录 case-0103-687912。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "UNKNOWN",
+    "evidence": "UNKNOWN",
+    "category": "状态边界",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0104-220985",
+    "question": "记录 case-0104-220985 的退款期限是多少天？只输出天数数字。",
+    "answer": "42",
+    "evidence": "配送需要 45 天，退款期限为 42 天，保修期 365 天。",
+    "category": "证据筛选",
+    "direct_eligible": false
+  },
+  {
+    "id": "case-0105-307779",
+    "question": "查询记录 case-0105-307779，计算商品总价，只输出整数。",
+    "answer": "51",
+    "evidence": "单价 17 元，购买 3 件，运费 0 元，无优惠。",
+    "category": "证据计算",
+    "direct_eligible": false
+  },
+  {
+    "id": "case-0106-177829",
+    "question": "记录 case-0106-177829 的国际退款手续费是多少？资料不足时只输出 UNKNOWN。",
+    "answer": "UNKNOWN",
+    "evidence": "国内配送期限为 48 天。此资料未说明退款手续费。",
+    "category": "无证据拒答",
+    "direct_eligible": false
+  },
+  {
+    "id": "case-0107-732278",
+    "question": "计算 59 + 124，只输出整数。",
+    "answer": "183",
+    "category": "无工具算术",
+    "direct_eligible": false
+  },
+  {
+    "id": "case-0108-534324",
+    "question": "查询记录 case-0108-534324。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "订单 case-0108-534324 已发货，预计 80 天后送达。",
+    "evidence": "订单 case-0108-534324 已发货，预计 80 天后送达。",
+    "category": "中文订单",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0109-099049",
+    "question": "查询记录 case-0109-099049。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "Refund case-0109-099049 approved: USD 24.00; expected in 3 business days.",
+    "evidence": "Refund case-0109-099049 approved: USD 24.00; expected in 3 business days.",
+    "category": "英文退款",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0110-330405",
+    "question": "查询记录 case-0110-330405。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "工单：case-0110-330405\n状态：处理中\n负责人：支持组 78",
+    "evidence": "工单：case-0110-330405\n状态：处理中\n负责人：支持组 78",
+    "category": "多行文本",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0111-013472",
+    "question": "查询记录 case-0111-013472。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "{\"id\":\"case-0111-013472\",\"status\":\"ready\",\"count\":20}",
+    "evidence": "{\"id\":\"case-0111-013472\",\"status\":\"ready\",\"count\":20}",
+    "category": "JSON文本",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0112-357582",
+    "question": "查询记录 case-0112-357582。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "✅ case-0112-357582：東京 / München / café / مرحبا；余额 89 元。",
+    "evidence": "✅ case-0112-357582：東京 / München / café / مرحبا；余额 89 元。",
+    "category": "Unicode",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0113-971862",
+    "question": "查询记录 case-0113-971862。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "记录 case-0113-971862：路径 C:\\data\\69；备注 \"保持原样\"；字段\tOK。",
+    "evidence": "记录 case-0113-971862：路径 C:\\data\\69；备注 \"保持原样\"；字段\tOK。",
+    "category": "转义字符",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0114-603440",
+    "question": "查询记录 case-0114-603440。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "批次 case-0114-603440\n检查项24：通过；检查项24：通过；检查项24：通过；检查项24：通过；检查项24：通过；检查项24：通过；检查项24：通过；检查项24：通过；检查项24：通过；检查项24：通过；检查项24：通过；检查项24：通过；\n处理结束。",
+    "evidence": "批次 case-0114-603440\n检查项24：通过；检查项24：通过；检查项24：通过；检查项24：通过；检查项24：通过；检查项24：通过；检查项24：通过；检查项24：通过；检查项24：通过；检查项24：通过；检查项24：通过；检查项24：通过；\n处理结束。",
+    "category": "长结果",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0115-954358",
+    "question": "查询记录 case-0115-954358。只输出 lookup 返回的完整文本，保持所有字符和换行，不要改写或添加 Markdown 围栏。",
+    "answer": "未找到匹配记录。",
+    "evidence": "未找到匹配记录。",
+    "category": "状态边界",
+    "direct_eligible": true
+  },
+  {
+    "id": "case-0116-170474",
+    "question": "记录 case-0116-170474 的退款期限是多少天？只输出天数数字。",
+    "answer": "76",
+    "evidence": "配送需要 79 天，退款期限为 76 天，保修期 365 天。",
+    "category": "证据筛选",
+    "direct_eligible": false
+  },
+  {
+    "id": "case-0117-728227",
+    "question": "查询记录 case-0117-728227，计算商品总价，只输出整数。",
+    "answer": "9",
+    "evidence": "单价 3 元，购买 3 件，运费 0 元，无优惠。",
+    "category": "证据计算",
+    "direct_eligible": false
+  },
+  {
+    "id": "case-0118-843778",
+    "question": "记录 case-0118-843778 的国际退款手续费是多少？资料不足时只输出 UNKNOWN。",
+    "answer": "UNKNOWN",
+    "evidence": "国内配送期限为 77 天。此资料未说明退款手续费。",
+    "category": "无证据拒答",
+    "direct_eligible": false
+  },
+  {
+    "id": "case-0119-479671",
+    "question": "计算 84 + 136，只输出整数。",
+    "answer": "220",
+    "category": "无工具算术",
+    "direct_eligible": false
+  }
+]

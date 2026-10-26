@@ -159,12 +159,12 @@ type Reranker interface {
 
 ### 重排序器类型
 
-#### 1. CrossEncoderReranker 交叉编码器
+#### 1. LexicalOverlapReranker 词汇重合基线
 
-旧实现为词汇重合启发式，不调用交叉编码器模型，已弃用。真实重排序请使用下方 LLM 或 Cohere 入口：
+按词汇重合计算分数，不调用模型。旧 CrossEncoderReranker 名称已弃用。真实模型重排序请使用下方 LLM 或 Cohere 入口：
 
 ```go
-reranker := retrieval.NewCrossEncoderReranker("model-name", 10)
+reranker := retrieval.NewLexicalOverlapReranker(10)
 reranked, err := reranker.Rerank(ctx, query, docs)
 ```
 
@@ -209,7 +209,7 @@ reranked, err := reranker.Rerank(ctx, query, docs)
 baseRetriever := retrieval.NewKeywordRetriever(docs, config)
 
 // 创建重排序器
-reranker := retrieval.NewCrossEncoderReranker("model", 10)
+reranker := retrieval.NewLexicalOverlapReranker(10)
 
 // 创建带重排序的检索器
 config.TopK = 5

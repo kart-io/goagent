@@ -28,6 +28,10 @@ type Message struct {
 	Role    string `json:"role"`           // "system", "user", "assistant"
 	Content string `json:"content"`        // 消息内容
 	Name    string `json:"name,omitempty"` // 可选的消息名称
+	// ToolCalls 与 ToolCallID 用于保留 assistant/tool 的原生对话关系。
+	ToolCalls        []ToolCall `json:"tool_calls,omitempty"`
+	ReasoningContent string     `json:"reasoning_content,omitempty"`
+	ToolCallID       string     `json:"tool_call_id,omitempty"`
 }
 
 // CompletionRequest 定义补全请求

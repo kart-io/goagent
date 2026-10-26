@@ -1,0 +1,82 @@
+{
+  "config": {
+    "budget": {
+      "model": "deepseek-flash",
+      "temperature": 0.2,
+      "max_calls": 4,
+      "max_output_tokens_per_call": 256,
+      "observed_token_stop": 8000
+    },
+    "timeout": 60000000000
+  },
+  "dataset": "testdata/cases.json",
+  "dataset_sha256": "d8e8687cd56b79c8754d6c3801918d519699e4e17de80b236613cde7684e865a",
+  "goagent_dirty": true,
+  "goagent_revision": "cb41a04adc767a8b4f1a9210390d668e2dc78720",
+  "limitations": "历史合成任务；供应商缓存未禁用；Token 阈值不是硬性计费上限；不评价持久化恢复。",
+  "live": true,
+  "repeats": 1,
+  "results": [
+    {
+      "framework": "goagent",
+      "case_id": "arithmetic",
+      "answer": "42",
+      "success": true,
+      "duration_ms": 1348.658,
+      "first_text_ms": 1348.42,
+      "tool_calls": 0,
+      "measurements": {
+        "calls": 1,
+        "usage": {
+          "prompt_tokens": 114,
+          "completion_tokens": 46,
+          "total_tokens": 160
+        },
+        "usage_reports": 1
+      },
+      "usage_complete": true
+    },
+    {
+      "framework": "goagent",
+      "case_id": "refund",
+      "answer": "30",
+      "success": true,
+      "duration_ms": 4768.029,
+      "first_text_ms": 4767.902,
+      "tool_calls": 1,
+      "measurements": {
+        "calls": 3,
+        "usage": {
+          "prompt_tokens": 869,
+          "completion_tokens": 191,
+          "total_tokens": 1060
+        },
+        "usage_reports": 3
+      },
+      "usage_complete": true
+    },
+    {
+      "framework": "goagent",
+      "case_id": "unknown",
+      "answer": "UNKNOWN",
+      "success": true,
+      "duration_ms": 6397.876,
+      "first_text_ms": 6397.669,
+      "tool_calls": 1,
+      "measurements": {
+        "calls": 3,
+        "usage": {
+          "prompt_tokens": 863,
+          "completion_tokens": 519,
+          "total_tokens": 1382
+        },
+        "usage_reports": 3
+      },
+      "usage_complete": true
+    }
+  ],
+  "scoring": "最终答案去除首尾空白后完全匹配；有证据的题目还必须调用工具；失败样本保留",
+  "timestamp": "2026-10-26T10:26:04.736607471Z",
+  "retained_scope": "goagent",
+  "record_processing": "仅保留本项目记录；历史模型结果未重跑，汇总按保留记录计算。"
+}

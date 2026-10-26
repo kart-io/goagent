@@ -193,8 +193,8 @@ func (p *OpenAIProvider) Stream(ctx context.Context, prompt string) (<-chan stri
 // GenerateWithTools implements tool calling
 // 返回 *agentllm.ToolCallResponse 以符合 llm.ToolCallingClient 接口
 func (p *OpenAIProvider) GenerateWithTools(ctx context.Context, prompt string, tools []interfaces.Tool) (*agentllm.ToolCallResponse, error) {
-	// Convert tools to OpenAI function format
-	functions := p.convertToolsToFunctions(tools)
+	// 使用当前工具协议；响应仍兼容旧 function_call。
+	toolDefinitions := p.convertTools(tools)
 
 	messages := []openai.ChatCompletionMessage{}
 	if p.Config.SystemPrompt != "" {
@@ -217,7 +217,7 @@ func (p *OpenAIProvider) GenerateWithTools(ctx context.Context, prompt string, t
 		Messages:    messages,
 		MaxTokens:   maxTokens,
 		Temperature: float32(temperature),
-		Functions:   functions,
+		Tools:       toolDefinitions,
 	})
 	if err != nil {
 		return nil, agentErrors.NewLLMRequestError(p.ProviderName(), model, err).
@@ -229,12 +229,20 @@ func (p *OpenAIProvider) GenerateWithTools(ctx context.Context, prompt string, t
 	}
 
 	choice := resp.Choices[0]
-	result := &agentllm.ToolCallResponse{
-		Content: choice.Message.Content,
+	result := &agentllm.ToolCallResponse{Content: choice.Message.Content}
+	// SDK 将缺失 usage 解码为零值；不把无法确认的零值声明为已报告用量。
+	if resp.Usage.TotalTokens > 0 || resp.Usage.PromptTokens > 0 || resp.Usage.CompletionTokens > 0 {
+		result.Usage = &interfaces.TokenUsage{
+			PromptTokens: resp.Usage.PromptTokens, CompletionTokens: resp.Usage.CompletionTokens, TotalTokens: resp.Usage.TotalTokens,
+		}
+	}
+
+	for _, call := range choice.Message.ToolCalls {
+		result.ToolCalls = append(result.ToolCalls, toToolCall(call))
 	}
 
 	// Parse function calls - 转换为 agentllm.ToolCall 格式
-	if choice.Message.FunctionCall != nil {
+	if len(result.ToolCalls) == 0 && choice.Message.FunctionCall != nil {
 		result.ToolCalls = []agentllm.ToolCall{
 			{
 				ID:   common.GenerateCallID(),
@@ -256,134 +264,122 @@ func (p *OpenAIProvider) GenerateWithTools(ctx context.Context, prompt string, t
 // StreamWithTools implements streaming tool calls
 // 返回 <-chan agentllm.ToolChunk 以符合 llm.ToolCallingClient 接口
 func (p *OpenAIProvider) StreamWithTools(ctx context.Context, prompt string, tools []interfaces.Tool) (<-chan agentllm.ToolChunk, error) {
-	chunks := make(chan agentllm.ToolChunk, 100)
-	functions := p.convertToolsToFunctions(tools)
-
-	model := p.GetModel("")
-	maxTokens := p.GetMaxTokens(0)
-	temperature := p.GetTemperature(0)
-
 	messages := []openai.ChatCompletionMessage{}
 	if p.Config.SystemPrompt != "" {
-		messages = append(messages, openai.ChatCompletionMessage{
-			Role:    openai.ChatMessageRoleSystem,
-			Content: p.Config.SystemPrompt,
-		})
+		messages = append(messages, openai.ChatCompletionMessage{Role: "system", Content: p.Config.SystemPrompt})
 	}
-	messages = append(messages, openai.ChatCompletionMessage{
-		Role:    openai.ChatMessageRoleUser,
-		Content: prompt,
-	})
-
+	messages = append(messages, openai.ChatCompletionMessage{Role: "user", Content: prompt})
 	stream, err := p.client.CreateChatCompletionStream(ctx, openai.ChatCompletionRequest{
-		Model:       model,
-		Messages:    messages,
-		Functions:   functions,
-		MaxTokens:   maxTokens,
-		Temperature: float32(temperature),
-		Stream:      true,
+		Model: p.GetModel(""), Messages: messages, Tools: p.convertTools(tools),
+		MaxTokens: p.GetMaxTokens(0), Temperature: float32(p.GetTemperature(0)), Stream: true,
 	})
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError(p.ProviderName(), model, err).
-			WithContext("stream", true).
-			WithContext("tool_calling", true)
+		return nil, err
 	}
-
+	chunks := make(chan agentllm.ToolChunk, 1)
 	go func() {
 		defer close(chunks)
 		defer func() { _ = stream.Close() }()
-
-		var currentCall *agentllm.ToolCall
-		var argsBuffer string
-
+		send := func(kind string, value any) bool {
+			select {
+			case chunks <- agentllm.ToolChunk{Type: kind, Value: value}:
+				return true
+			case <-ctx.Done():
+				return false
+			}
+		}
+		calls := map[int]*agentllm.ToolCall{}
+		order := []int{}
+		finished := false
 		for {
 			response, err := stream.Recv()
 			if err != nil {
-				if errors.Is(err, io.EOF) {
-					// Finalize last tool call if exists
-					if currentCall != nil && argsBuffer != "" {
-						currentCall.Function.Arguments = argsBuffer
-						select {
-						case chunks <- agentllm.ToolChunk{Type: "tool_call", Value: currentCall}:
-							// Successfully sent
-						case <-ctx.Done():
-							// Context cancelled, exit immediately
-							return
-						}
-					}
+				if !errors.Is(err, io.EOF) {
+					send("error", err)
 					return
 				}
-				return
-			}
-
-			if len(response.Choices) == 0 {
-				continue
-			}
-
-			choice := response.Choices[0]
-
-			// Handle content
-			if choice.Delta.Content != "" {
-				select {
-				case chunks <- agentllm.ToolChunk{Type: "content", Value: choice.Delta.Content}:
-					// Successfully sent
-				case <-ctx.Done():
-					// Context cancelled, exit immediately
+				if !finished {
+					send("error", io.ErrUnexpectedEOF)
 					return
 				}
-			}
-
-			// Handle function calls
-			if choice.Delta.FunctionCall != nil {
-				if choice.Delta.FunctionCall.Name != "" {
-					// New function call - finalize previous call first
-					if currentCall != nil && argsBuffer != "" {
-						currentCall.Function.Arguments = argsBuffer
-						select {
-						case chunks <- agentllm.ToolChunk{Type: "tool_call", Value: currentCall}:
-							// Successfully sent
-						case <-ctx.Done():
-							// Context cancelled, exit immediately
-							return
-						}
+				for _, index := range order {
+					call := calls[index]
+					if call.Function.Name == "" {
+						send("error", fmt.Errorf("工具调用缺少名称"))
+						return
 					}
-
-					// Create new tool call with agentllm.ToolCall format
-					currentCall = &agentllm.ToolCall{
-						ID:   common.GenerateCallID(),
-						Type: "function",
-						Function: struct {
-							Name      string `json:"name"`
-							Arguments string `json:"arguments"`
-						}{
-							Name: choice.Delta.FunctionCall.Name,
-						},
+					if call.ID == "" {
+						call.ID = common.GenerateCallID()
 					}
-					argsBuffer = ""
-					select {
-					case chunks <- agentllm.ToolChunk{Type: "tool_name", Value: choice.Delta.FunctionCall.Name}:
-						// Successfully sent
-					case <-ctx.Done():
-						// Context cancelled, exit immediately
+					if !send("tool_call", call) {
 						return
 					}
 				}
-
-				if choice.Delta.FunctionCall.Arguments != "" {
-					argsBuffer += choice.Delta.FunctionCall.Arguments
-					select {
-					case chunks <- agentllm.ToolChunk{Type: "tool_args", Value: choice.Delta.FunctionCall.Arguments}:
-						// Successfully sent
-					case <-ctx.Done():
-						// Context cancelled, exit immediately
+				return
+			}
+			if len(response.Choices) == 0 {
+				continue
+			}
+			choice := response.Choices[0]
+			if choice.FinishReason != "" {
+				finished = true
+			}
+			if choice.Delta.Content != "" && !send("content", choice.Delta.Content) {
+				return
+			}
+			deltas := choice.Delta.ToolCalls
+			// 旧服务只返回 function_call 时按索引 0 合并，不重复计入现代协议。
+			if len(deltas) == 0 && choice.Delta.FunctionCall != nil {
+				index := 0
+				deltas = []openai.ToolCall{{Index: &index, Type: openai.ToolTypeFunction, Function: *choice.Delta.FunctionCall}}
+			}
+			for _, delta := range deltas {
+				index := 0
+				if delta.Index != nil {
+					index = *delta.Index
+				}
+				call := calls[index]
+				if call == nil {
+					call = &agentllm.ToolCall{ID: delta.ID, Type: "function"}
+					calls[index] = call
+					order = append(order, index)
+				}
+				if delta.ID != "" {
+					call.ID = delta.ID
+				}
+				if delta.Function.Name != "" {
+					call.Function.Name += delta.Function.Name
+					if !send("tool_name", delta.Function.Name) {
+						return
+					}
+				}
+				if delta.Function.Arguments != "" {
+					call.Function.Arguments += delta.Function.Arguments
+					if !send("tool_args", delta.Function.Arguments) {
 						return
 					}
 				}
 			}
 		}
 	}()
-
 	return chunks, nil
+}
+
+// convertTools 复用现有 JSON Schema 转换，并采用现代工具协议。
+func (p *OpenAIProvider) convertTools(tools []interfaces.Tool) []openai.Tool {
+	functions := p.convertToolsToFunctions(tools)
+	result := make([]openai.Tool, len(functions))
+	for i := range functions {
+		result[i] = openai.Tool{Type: openai.ToolTypeFunction, Function: &functions[i]}
+	}
+	return result
+}
+
+func toToolCall(call openai.ToolCall) agentllm.ToolCall {
+	result := agentllm.ToolCall{ID: call.ID, Type: string(call.Type)}
+	result.Function.Name = call.Function.Name
+	result.Function.Arguments = call.Function.Arguments
+	return result
 }
 
 // Embed generates embeddings for text

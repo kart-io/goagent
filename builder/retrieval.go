@@ -17,12 +17,7 @@ type RetrievalConfig struct {
 }
 
 // RetrievalSource identifies a numbered reference included in the model input.
-type RetrievalSource struct {
-	Reference int     `json:"reference"`
-	ID        string  `json:"id"`
-	Source    string  `json:"source,omitempty"`
-	Score     float64 `json:"score"`
-}
+type RetrievalSource = interfaces.RetrievalSource
 
 // WithRetriever adds retrieval to both Execute and ExecuteWithTools.
 // It accepts hybrid, reranking, vector, or custom document retrievers.

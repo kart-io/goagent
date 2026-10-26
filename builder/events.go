@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"strings"
 	"time"
 
 	"github.com/kart-io/goagent/core/middleware"
@@ -15,8 +13,8 @@ import (
 
 // AgentEvent is one event in ExecuteStream. Type is sources, step, text, usage,
 // error, or done. Only done contains the final, middleware-processed Output.
-// Tool selection is request/response; text deltas come from the native model
-// stream. Intermediate events are provisional until done.
+// 支持 ToolStreamClient 时，模型在同一轮选择工具或直接回答。
+// 中间文本可能包含工具调用前的说明，只有 done.Output 是最终答案。
 type AgentEvent struct {
 	Type    string                 `json:"type"`
 	Sources []RetrievalSource      `json:"sources,omitempty"`
@@ -50,7 +48,7 @@ func (a *ConfigurableAgent[C, S]) ExecuteStream(ctx context.Context, input inter
 				caller = &stdToolCallerWrapper{client: c}
 			}
 		}
-		if caller == nil {
+		if _, native := a.llmClient.(llm.ToolStreamClient); caller == nil && !native {
 			return nil, fmt.Errorf("configured tools require tool-calling support")
 		}
 	}
@@ -96,22 +94,36 @@ func (a *ConfigurableAgent[C, S]) ExecuteStream(ctx context.Context, input inter
 
 func (a *ConfigurableAgent[C, S]) runEvents(ctx context.Context, request *middleware.MiddlewareRequest, client llm.StreamClient, caller commonToolCallingClient, emit func(AgentEvent) error) (*middleware.MiddlewareResponse, error) {
 	input := fmt.Sprint(request.Input)
-	prompt := a.buildPromptWithHistory(ctx, request.Input)
+	evidence := ""
+	var prompt string
 	metadata := make(map[string]interface{}, len(request.Metadata))
 	for k, v := range request.Metadata {
 		metadata[k] = v
 	}
 	if a.retriever != nil {
-		evidence, details, err := retrieveContext(ctx, a.retriever, a.retrievalConfig, input)
+		retrieved, details, err := retrieveContext(ctx, a.retriever, a.retrievalConfig, input)
 		if err != nil {
 			return nil, err
 		}
 		for k, v := range details {
 			metadata[k] = v
 		}
-		prompt = retrievalInstruction + "\n\n" + evidence + "\n" + prompt
+		evidence = retrieved
 		if err := emit(AgentEvent{Type: "sources", Sources: details["retrieval_sources"].([]RetrievalSource)}); err != nil {
 			return nil, err
+		}
+	}
+	var messages []llm.Message
+	if native, ok := client.(llm.ToolStreamClient); ok && len(a.tools) > 0 {
+		return a.runToolEvents(ctx, request, native, a.streamMessages(ctx, input, evidence), metadata, emit)
+	}
+	if caller == nil {
+		messages = a.streamMessages(ctx, input, evidence)
+	}
+	if caller != nil {
+		prompt = a.buildPromptWithHistory(ctx, request.Input)
+		if evidence != "" {
+			prompt = retrievalInstruction + "\n\n" + evidence + "\n" + prompt
 		}
 	}
 	usage := &interfaces.TokenUsage{}
@@ -171,60 +183,39 @@ func (a *ConfigurableAgent[C, S]) runEvents(ctx context.Context, request *middle
 			return nil, fmt.Errorf("maximum tool selection iterations reached")
 		}
 	}
-	system := a.buildSystemPromptContent()
-	if a.retriever != nil {
-		system += "\n" + retrievalInstruction
+	if caller != nil {
+		system := a.buildSystemPromptContent()
+		if a.retriever != nil {
+			system += "\n" + retrievalInstruction
+		}
+		messages = []llm.Message{{Role: "system", Content: system}, {Role: "user", Content: prompt}}
 	}
-	messages := []llm.Message{{Role: "system", Content: system}, {Role: "user", Content: prompt}}
 	stream, err := client.CompleteStream(ctx, &llm.CompletionRequest{Messages: messages, MaxTokens: a.config.MaxTokens, Temperature: a.config.Temperature})
 	if err != nil {
 		return nil, err
 	}
-	if stream == nil {
-		return nil, fmt.Errorf("model returned nil stream")
+	turn, err := readToolTurn(ctx, stream, emit)
+	if err != nil {
+		return nil, err
 	}
-	var answer strings.Builder
-	var finalUsage *llm.Usage
-	done := false
-	for !done {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case chunk, ok := <-stream:
-			if !ok {
-				return nil, io.ErrUnexpectedEOF
-			}
-			if chunk == nil {
-				continue
-			}
-			if chunk.Error != nil {
-				return nil, chunk.Error
-			}
-			if chunk.Delta != "" {
-				answer.WriteString(chunk.Delta)
-				if err := emit(AgentEvent{Type: "text", Delta: chunk.Delta}); err != nil {
-					return nil, err
-				}
-			}
-			if chunk.Usage != nil {
-				finalUsage = chunk.Usage
-			}
-			done = chunk.Done
-		}
+	if turn.Usage != nil {
+		usage.Add(&interfaces.TokenUsage{PromptTokens: turn.Usage.PromptTokens, CompletionTokens: turn.Usage.CompletionTokens, TotalTokens: turn.Usage.TotalTokens})
 	}
-	if finalUsage != nil {
-		usage.Add(&interfaces.TokenUsage{PromptTokens: finalUsage.PromptTokens, CompletionTokens: finalUsage.CompletionTokens, TotalTokens: finalUsage.TotalTokens})
-	}
-	metadata["answer_usage_reported"] = finalUsage != nil
+	metadata["answer_usage_reported"] = turn.Usage != nil
+
+	return a.finishEvents(ctx, request, input, turn.Content, usage, metadata, emit)
+}
+
+func (a *ConfigurableAgent[C, S]) finishEvents(ctx context.Context, request *middleware.MiddlewareRequest, input, answer string, usage *interfaces.TokenUsage, metadata map[string]interface{}, emit func(AgentEvent) error) (*middleware.MiddlewareResponse, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	if err := emit(AgentEvent{Type: "usage", Usage: usage}); err != nil {
 		return nil, err
 	}
-	a.saveConversation(ctx, input, answer.String())
+	a.saveConversation(ctx, input, answer)
 	if request.State != nil {
-		request.State.Set("last_response", answer.String())
+		request.State.Set("last_response", answer)
 		request.State.Set("last_timestamp", time.Now())
 	}
 	if a.config.EnableAutoSave && a.runtime.Checkpointer != nil {
@@ -232,5 +223,5 @@ func (a *ConfigurableAgent[C, S]) runEvents(ctx context.Context, request *middle
 			return nil, fmt.Errorf("stream checkpoint save: %w", err)
 		}
 	}
-	return &middleware.MiddlewareResponse{Output: answer.String(), State: request.State, Metadata: metadata, TokenUsage: usage}, nil
+	return &middleware.MiddlewareResponse{Output: answer, State: request.State, Metadata: metadata, TokenUsage: usage}, nil
 }

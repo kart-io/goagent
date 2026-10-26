@@ -143,6 +143,7 @@ type SelfReflectiveAgent struct {
 	reflectionInterval time.Duration
 	minExperiences     int
 	learningThreshold  float64
+	taskExecutor       TaskExecutor
 }
 
 // NewSelfReflectiveAgentWithContext creates a new self-reflective agent with a parent context
@@ -213,6 +214,15 @@ func (a *SelfReflectiveAgent) Shutdown(ctx context.Context) error {
 
 // Execute implements the Agent interface with reflection
 func (a *SelfReflectiveAgent) Execute(ctx context.Context, input *core.AgentInput) (*core.AgentOutput, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if input == nil {
+		return nil, fmt.Errorf("自反思任务输入不能为空")
+	}
+	if a.taskExecutor == nil {
+		return nil, ErrTaskExecutorRequired
+	}
 	startTime := time.Now()
 
 	// Record the experience
@@ -228,7 +238,7 @@ func (a *SelfReflectiveAgent) Execute(ctx context.Context, input *core.AgentInpu
 
 	// Complete the experience record
 	experience.Duration = time.Since(startTime)
-	experience.Success = err == nil
+	experience.Success = err == nil && output != nil && output.Status == "success"
 	if err != nil {
 		experience.Error = err.Error()
 	} else if output != nil {
@@ -439,36 +449,20 @@ func (a *SelfReflectiveAgent) ApplyLearnings(ctx context.Context, learnings []Le
 // Helper methods
 
 func (a *SelfReflectiveAgent) executeTask(ctx context.Context, input *core.AgentInput) (*core.AgentOutput, error) {
-	// This would contain the actual task execution logic
-	// For demonstration, we'll simulate task execution
-
-	// Check if we can apply previous learnings
-	relevantLearnings := a.learningModel.GetRelevantLearnings(input.Context)
-
-	// Adjust strategy based on learnings
-	if len(relevantLearnings) > 0 {
-		if input.Context == nil {
-			input.Context = make(map[string]interface{})
-		}
-		input.Context["learnings_applied"] = len(relevantLearnings)
+	output, err := a.taskExecutor.Invoke(ctx, input)
+	if err != nil {
+		return output, err
 	}
-
-	// Simulate task execution
-	output := &core.AgentOutput{
-		Result: map[string]interface{}{
-			"result":            "Task completed",
-			"learnings_applied": len(relevantLearnings),
-		},
-		Status: "success",
-		Metadata: map[string]interface{}{
-			"reflection_enabled": true,
-		},
+	if output == nil {
+		return nil, fmt.Errorf("任务执行器未返回结果")
 	}
-
 	return output, nil
 }
 
 func (a *SelfReflectiveAgent) storeExperience(ctx context.Context, experience *Experience) {
+	if a.memory == nil {
+		return
+	}
 	// Store in memory
 	_ = a.memory.StoreTyped(ctx, experience.ID, experience, memory.MemoryTypeEpisodic, memory.StoreOptions{
 		Tags: []string{"experience"},
@@ -476,6 +470,9 @@ func (a *SelfReflectiveAgent) storeExperience(ctx context.Context, experience *E
 }
 
 func (a *SelfReflectiveAgent) shouldReflect() bool {
+	if a.memory == nil {
+		return false
+	}
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 

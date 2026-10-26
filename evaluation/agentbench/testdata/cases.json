@@ -1,0 +1,5 @@
+[
+ {"id":"arithmetic","question":"计算 17 加 25。","answer":"42"},
+ {"id":"refund","question":"根据资料，退款期限是多少天？只输出数字。","answer":"30","evidence":"退款期限为购买后的 30 天。配送时效为 5 天。"},
+ {"id":"unknown","question":"根据资料，国际退款的手续费是多少？","answer":"UNKNOWN","evidence":"标准配送需要 3 至 5 个工作日，资料没有退款手续费。"}
+]

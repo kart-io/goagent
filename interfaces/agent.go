@@ -4,8 +4,8 @@ import "context"
 
 // Agent 表示可以处理输入并产生输出的自主智能体
 //
-// 所有智能体实现（react、executor、specialized）都应实现此接口
-// 这是规范定义，其他所有引用都应使用类型别名
+// 此接口保留旧消息式输入协议；现有推理 Agent 使用 core.Agent。
+// Deprecated: 新编排使用 core.Runnable[I, O]；Builder 使用 AsRunnable。
 //
 // Agent 接口扩展了 Runnable 并添加了智能体特定的方法用于：
 //   - 识别智能体（Name、Description、Capabilities）
@@ -35,7 +35,8 @@ type Agent interface {
 	Plan(ctx context.Context, input *Input) (*Plan, error)
 }
 
-// Runnable 表示可以使用输入调用并产生输出的任何组件
+// Runnable 表示旧消息式协议的可执行组件。
+// Deprecated: 新编排使用 core.Runnable[I, O]，不再扩展此旧接口。
 //
 // 这是由智能体、链和工具实现的基础接口
 // 它提供核心执行能力，包括：
