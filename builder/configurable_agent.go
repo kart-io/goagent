@@ -33,6 +33,7 @@ type ConfigurableAgent[C any, S core.State] struct {
 	retriever       interfaces.DocumentRetriever
 	retrievalConfig RetrievalConfig
 	mu              sync.RWMutex
+	executionGate   chan struct{}
 }
 
 // Initialize 准备 Agent 执行
@@ -438,6 +439,15 @@ func (a *ConfigurableAgent[C, S]) convertLLMToolCalls(llmCalls []llm.ToolCall) [
 
 // executeToolCall 执行单个工具调用
 func (a *ConfigurableAgent[C, S]) executeToolCall(ctx context.Context, call ToolCall) (interface{}, error) {
+	output, err := a.invokeToolCall(ctx, call)
+	if err != nil {
+		return nil, err
+	}
+	return output.Result, nil
+}
+
+// invokeToolCall 保留工具状态，供直接返回路径校验成功标志。
+func (a *ConfigurableAgent[C, S]) invokeToolCall(ctx context.Context, call ToolCall) (*interfaces.ToolOutput, error) {
 	// 查找工具
 	for _, tool := range a.tools {
 		if tool.Name() == call.Name {
@@ -458,7 +468,7 @@ func (a *ConfigurableAgent[C, S]) executeToolCall(ctx context.Context, call Tool
 			if output.Error != "" {
 				return nil, fmt.Errorf("tool %s: %s", call.Name, output.Error)
 			}
-			return output.Result, nil
+			return output, nil
 		}
 	}
 	return nil, agentErrors.NewToolNotFoundError(call.Name)

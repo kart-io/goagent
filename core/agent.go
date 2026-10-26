@@ -50,6 +50,9 @@ type Agent interface {
 	Capabilities() []string
 }
 
+// StreamMode 标识基类的最终结果块，步骤流实现应显式覆盖。
+func (a *BaseAgent) StreamMode() StreamMode { return StreamModeFinal }
+
 // AgentInput Agent 输入
 type AgentInput struct {
 	// 任务描述

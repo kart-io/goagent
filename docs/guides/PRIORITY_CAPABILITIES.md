@@ -50,7 +50,7 @@ for event := range stream {
 }
 ```
 
-需要 `llm.StreamClient`；配置了工具还需支持工具调用。工具选择采用普通请求，最后单独发起一次流式答案请求，因此有额外模型调用。工具参数不做逐 Token 展示。选择轮数使用 `MaxIterations`，达到限制报错，不输出伪成功答案。
+需要 `llm.StreamClient`；配置了工具还需支持工具调用。实现 `llm.ToolStreamClient` 的 Provider 使用原生工具对话循环：模型每轮选择工具或直接回答，省去 READY 确认与独立答案请求。OpenAI 兼容入口已实现；其他 Provider 保留原有普通工具选择加最终答案流的路径。工具参数不做逐 Token 展示。原生路径的 `MaxIterations` 计入全部模型请求，达到上限报错；元数据记录 `model_calls` 和 `usage_complete`。详见[执行契约与请求优化](EXECUTION_CONTRACT.md)。
 
 中间件与 Execute 共用，包括 OnBefore、OnAfter、OnError；中间事件是暂态内容，以 done 为最终成功依据。缓存命中可能只有 done，OnAfter 修改的最终文本也可能与已发出的增量不同。错误终止不会再发送 done。取消时 error 事件是尽力发送，调用方同时检查 context；正常完成也应收到 done。消费者必须继续读取或取消，避免背压挂起上游。最终请求遵守 Builder 的 MaxTokens/Temperature；成功生成后更新状态，启用自动保存时写检查点（保存失败终止，不发送 done）。未知用量不会估算为真实值，`answer_usage_reported` 表示最终模型是否报告用量。
 

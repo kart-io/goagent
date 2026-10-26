@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/kart-io/goagent/interfaces"
+
 	"github.com/kart-io/goagent/llm/constants"
 )
 
@@ -20,8 +22,19 @@ type StreamClient interface {
 	ChatStream(ctx context.Context, messages []Message) (<-chan *StreamChunk, error)
 }
 
+// ToolStreamClient 在一次请求内选择工具或直接流式回答，保留原生消息和用量。
+// 工具列表只在无错误的 Done 块中返回完整值；不能执行未完成的参数分片。
+type ToolStreamClient interface {
+	StreamClient
+	CompleteToolsStream(context.Context, *CompletionRequest, []interfaces.Tool) (<-chan *StreamChunk, error)
+}
+
 // StreamChunk LLM 流式响应块
 type StreamChunk struct {
+	// ToolCalls 仅在成功终止块中包含本轮完整的工具调用。
+	ToolCalls []ToolCall `json:"tool_calls,omitempty"`
+	// ReasoningContent 仅用于工具回合的原生续接，不作为答案文本增量展示。
+	ReasoningContent string `json:"reasoning_content,omitempty"`
 	// Content 完整内容（累积）
 	Content string `json:"content"`
 

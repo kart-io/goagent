@@ -1,0 +1,349 @@
+{
+  "complete": true,
+  "completed": 200,
+  "contract_failures": 45,
+  "groups": [
+    {
+      "framework": "goagent",
+      "direct": false,
+      "category": "JSON文本",
+      "total": 10,
+      "passed": 6,
+      "contract_passed": 6,
+      "usage_complete": 10,
+      "calls": 20,
+      "usage": {
+        "prompt_tokens": 7562,
+        "completion_tokens": 3587,
+        "total_tokens": 11149
+      },
+      "p50_ms": 4142.557,
+      "p95_ms": 5410.58
+    },
+    {
+      "framework": "goagent",
+      "direct": false,
+      "category": "Unicode",
+      "total": 10,
+      "passed": 8,
+      "contract_passed": 8,
+      "usage_complete": 10,
+      "calls": 20,
+      "usage": {
+        "prompt_tokens": 7587,
+        "completion_tokens": 1025,
+        "total_tokens": 8612
+      },
+      "p50_ms": 2590.822,
+      "p95_ms": 3262.207
+    },
+    {
+      "framework": "goagent",
+      "direct": false,
+      "category": "中文订单",
+      "total": 10,
+      "passed": 2,
+      "contract_passed": 2,
+      "usage_complete": 10,
+      "calls": 20,
+      "usage": {
+        "prompt_tokens": 7492,
+        "completion_tokens": 490,
+        "total_tokens": 7982
+      },
+      "p50_ms": 2386.482,
+      "p95_ms": 3819.747
+    },
+    {
+      "framework": "goagent",
+      "direct": false,
+      "category": "多行文本",
+      "total": 10,
+      "passed": 7,
+      "contract_passed": 7,
+      "usage_complete": 10,
+      "calls": 20,
+      "usage": {
+        "prompt_tokens": 7601,
+        "completion_tokens": 1411,
+        "total_tokens": 9012
+      },
+      "p50_ms": 2931.89,
+      "p95_ms": 5240.637
+    },
+    {
+      "framework": "goagent",
+      "direct": false,
+      "category": "无工具算术",
+      "total": 10,
+      "passed": 10,
+      "contract_passed": 10,
+      "usage_complete": 10,
+      "calls": 10,
+      "usage": {
+        "prompt_tokens": 750,
+        "completion_tokens": 520,
+        "total_tokens": 1270
+      },
+      "p50_ms": 1406.167,
+      "p95_ms": 2040.302
+    },
+    {
+      "framework": "goagent",
+      "direct": false,
+      "category": "无证据拒答",
+      "total": 10,
+      "passed": 10,
+      "contract_passed": 10,
+      "usage_complete": 10,
+      "calls": 20,
+      "usage": {
+        "prompt_tokens": 7243,
+        "completion_tokens": 524,
+        "total_tokens": 7767
+      },
+      "p50_ms": 2492.592,
+      "p95_ms": 3631.71
+    },
+    {
+      "framework": "goagent",
+      "direct": false,
+      "category": "状态边界",
+      "total": 10,
+      "passed": 3,
+      "contract_passed": 3,
+      "usage_complete": 10,
+      "calls": 20,
+      "usage": {
+        "prompt_tokens": 7301,
+        "completion_tokens": 1580,
+        "total_tokens": 8881
+      },
+      "p50_ms": 2838.78,
+      "p95_ms": 5003.177
+    },
+    {
+      "framework": "goagent",
+      "direct": false,
+      "category": "英文退款",
+      "total": 10,
+      "passed": 2,
+      "contract_passed": 2,
+      "usage_complete": 10,
+      "calls": 20,
+      "usage": {
+        "prompt_tokens": 7523,
+        "completion_tokens": 805,
+        "total_tokens": 8328
+      },
+      "p50_ms": 2425.876,
+      "p95_ms": 3903.486
+    },
+    {
+      "framework": "goagent",
+      "direct": false,
+      "category": "证据筛选",
+      "total": 10,
+      "passed": 10,
+      "contract_passed": 10,
+      "usage_complete": 10,
+      "calls": 20,
+      "usage": {
+        "prompt_tokens": 7218,
+        "completion_tokens": 503,
+        "total_tokens": 7721
+      },
+      "p50_ms": 2452.927,
+      "p95_ms": 4495.246
+    },
+    {
+      "framework": "goagent",
+      "direct": false,
+      "category": "证据计算",
+      "total": 10,
+      "passed": 10,
+      "contract_passed": 10,
+      "usage_complete": 10,
+      "calls": 20,
+      "usage": {
+        "prompt_tokens": 7229,
+        "completion_tokens": 494,
+        "total_tokens": 7723
+      },
+      "p50_ms": 2558.908,
+      "p95_ms": 3824.541
+    },
+    {
+      "framework": "goagent",
+      "direct": false,
+      "category": "转义字符",
+      "total": 10,
+      "passed": 5,
+      "contract_passed": 5,
+      "usage_complete": 10,
+      "calls": 20,
+      "usage": {
+        "prompt_tokens": 7589,
+        "completion_tokens": 1499,
+        "total_tokens": 9088
+      },
+      "p50_ms": 2979.47,
+      "p95_ms": 4106.479
+    },
+    {
+      "framework": "goagent",
+      "direct": false,
+      "category": "长结果",
+      "total": 10,
+      "passed": 2,
+      "contract_passed": 2,
+      "usage_complete": 10,
+      "calls": 20,
+      "usage": {
+        "prompt_tokens": 8194,
+        "completion_tokens": 1461,
+        "total_tokens": 9655
+      },
+      "p50_ms": 2816.258,
+      "p95_ms": 4440.014
+    },
+    {
+      "framework": "goagent",
+      "direct": true,
+      "category": "JSON文本",
+      "total": 10,
+      "passed": 10,
+      "contract_passed": 10,
+      "usage_complete": 10,
+      "calls": 10,
+      "usage": {
+        "prompt_tokens": 3450,
+        "completion_tokens": 311,
+        "total_tokens": 3761
+      },
+      "p50_ms": 1182.111,
+      "p95_ms": 1559.52
+    },
+    {
+      "framework": "goagent",
+      "direct": true,
+      "category": "Unicode",
+      "total": 10,
+      "passed": 10,
+      "contract_passed": 10,
+      "usage_complete": 10,
+      "calls": 10,
+      "usage": {
+        "prompt_tokens": 3450,
+        "completion_tokens": 314,
+        "total_tokens": 3764
+      },
+      "p50_ms": 1204.279,
+      "p95_ms": 1940.09
+    },
+    {
+      "framework": "goagent",
+      "direct": true,
+      "category": "中文订单",
+      "total": 10,
+      "passed": 10,
+      "contract_passed": 10,
+      "usage_complete": 10,
+      "calls": 10,
+      "usage": {
+        "prompt_tokens": 3450,
+        "completion_tokens": 379,
+        "total_tokens": 3829
+      },
+      "p50_ms": 1273.634,
+      "p95_ms": 1695.87
+    },
+    {
+      "framework": "goagent",
+      "direct": true,
+      "category": "多行文本",
+      "total": 10,
+      "passed": 10,
+      "contract_passed": 10,
+      "usage_complete": 10,
+      "calls": 10,
+      "usage": {
+        "prompt_tokens": 3450,
+        "completion_tokens": 263,
+        "total_tokens": 3713
+      },
+      "p50_ms": 1243.862,
+      "p95_ms": 2936.613
+    },
+    {
+      "framework": "goagent",
+      "direct": true,
+      "category": "状态边界",
+      "total": 10,
+      "passed": 10,
+      "contract_passed": 10,
+      "usage_complete": 10,
+      "calls": 10,
+      "usage": {
+        "prompt_tokens": 3450,
+        "completion_tokens": 327,
+        "total_tokens": 3777
+      },
+      "p50_ms": 1210.884,
+      "p95_ms": 2459.763
+    },
+    {
+      "framework": "goagent",
+      "direct": true,
+      "category": "英文退款",
+      "total": 10,
+      "passed": 10,
+      "contract_passed": 10,
+      "usage_complete": 10,
+      "calls": 10,
+      "usage": {
+        "prompt_tokens": 3450,
+        "completion_tokens": 351,
+        "total_tokens": 3801
+      },
+      "p50_ms": 1186.774,
+      "p95_ms": 2978.306
+    },
+    {
+      "framework": "goagent",
+      "direct": true,
+      "category": "转义字符",
+      "total": 10,
+      "passed": 10,
+      "contract_passed": 10,
+      "usage_complete": 10,
+      "calls": 10,
+      "usage": {
+        "prompt_tokens": 3450,
+        "completion_tokens": 347,
+        "total_tokens": 3797
+      },
+      "p50_ms": 1192.75,
+      "p95_ms": 1525.192
+    },
+    {
+      "framework": "goagent",
+      "direct": true,
+      "category": "长结果",
+      "total": 10,
+      "passed": 10,
+      "contract_passed": 10,
+      "usage_complete": 10,
+      "calls": 10,
+      "usage": {
+        "prompt_tokens": 3450,
+        "completion_tokens": 378,
+        "total_tokens": 3828
+      },
+      "p50_ms": 1345.034,
+      "p95_ms": 2000.01
+    }
+  ],
+  "planned": 200,
+  "record_processing": "仅保留本项目记录；历史模型结果未重跑，汇总按保留记录计算。"
+}

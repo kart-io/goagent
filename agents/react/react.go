@@ -759,3 +759,6 @@ func NewCachedReActAgent(config ReActConfig, cacheConfig *performance.CacheConfi
 
 	return performance.NewCachedAgent(agent, *cacheConfig)
 }
+
+// StreamMode 标记 ReAct 输出推理步骤，而非模型逐 Token 增量。
+func (r *ReActAgent) StreamMode() agentcore.StreamMode { return agentcore.StreamModeSteps }

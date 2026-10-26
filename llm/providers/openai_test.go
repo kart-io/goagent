@@ -332,7 +332,7 @@ func TestOpenAI_GenerateWithTools(t *testing.T) {
 		// 验证请求包含 tools
 		var reqBody map[string]interface{}
 		json.NewDecoder(r.Body).Decode(&reqBody)
-		assert.NotNil(t, reqBody["functions"]) // OpenAI 使用 functions 字段
+		assert.NotNil(t, reqBody["tools"]) // 请求使用现代工具协议，响应兼容旧服务
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -398,6 +398,8 @@ func TestOpenAI_GenerateWithTools(t *testing.T) {
 	assert.NotNil(t, result)
 	assert.NotEmpty(t, result.ToolCalls)
 	assert.Equal(t, "get_weather", result.ToolCalls[0].Function.Name)
+	require.NotNil(t, result.Usage)
+	require.Equal(t, 50, result.Usage.TotalTokens)
 	// 解析 Arguments JSON 字符串
 	var args map[string]interface{}
 	json.Unmarshal([]byte(result.ToolCalls[0].Function.Arguments), &args)

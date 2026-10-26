@@ -104,6 +104,22 @@ func (b *AgentBuilder[C, S]) Build() (*ConfigurableAgent[C, S], error) {
 	if b.retrievalConfig.MaxDocuments < 0 || b.retrievalConfig.MaxContextRunes < 0 {
 		return nil, agentErrors.NewInvalidConfigError("builder", "retrieval", "retrieval limits must not be negative")
 	}
+	if len(b.config.ReturnDirectTools) > 0 {
+		if _, ok := b.llmClient.(llm.ToolStreamClient); !ok {
+			return nil, fmt.Errorf("ReturnDirectTools 需要 llm.ToolStreamClient")
+		}
+		for _, name := range b.config.ReturnDirectTools {
+			matches := 0
+			for _, tool := range b.tools {
+				if tool != nil && tool.Name() == name {
+					matches++
+				}
+			}
+			if strings.TrimSpace(name) == "" || matches != 1 {
+				return nil, fmt.Errorf("直接返回工具 %q 必须唯一注册", name)
+			}
+		}
+	}
 
 	// 如果未提供则设置默认值
 	var zero S
@@ -148,6 +164,7 @@ func (b *AgentBuilder[C, S]) Build() (*ConfigurableAgent[C, S], error) {
 
 	// 创建 Agent
 	agent := &ConfigurableAgent[C, S]{
+		executionGate:   make(chan struct{}, 1),
 		llmClient:       b.llmClient,
 		tools:           b.tools,
 		systemPrompt:    b.systemPrompt,

@@ -42,9 +42,10 @@ type Runnable[I, O any] interface {
 
 // StreamChunk 流式输出的数据块
 type StreamChunk[T any] struct {
-	Data  T     // 数据
-	Error error // 错误（如果有）
-	Done  bool  // 是否完成
+	Data  T            // 数据
+	Error error        // 错误（如果有）
+	Done  bool         // 是否完成
+	Event *StreamEvent // 可选增量事件；只有 Done 且 Error 为空时 Data 才是最终结果
 }
 
 // RunnableConfig Runnable 配置
