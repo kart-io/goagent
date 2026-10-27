@@ -40,8 +40,9 @@ type StreamSource[I, O any] func(context.Context, I, func(StreamChunk[O]) error)
 // 最终块在执行源和完成回调均成功后发出，避免错误后仍出现成功终止块。
 type StreamRunnable[I, O any] struct {
 	*BaseRunnable[I, O]
-	source StreamSource[I, O]
-	mode   StreamMode
+	source      StreamSource[I, O]
+	mode        StreamMode
+	description func() any
 }
 
 func NewStreamRunnable[I, O any](mode StreamMode, source StreamSource[I, O]) *StreamRunnable[I, O] {
@@ -161,4 +162,19 @@ func (r *StreamRunnable[I, O]) WithCallbacks(callbacks ...Callback) Runnable[I, 
 	clone := *r
 	clone.BaseRunnable = r.BaseRunnable.WithCallbacks(callbacks...)
 	return &clone
+}
+
+// WithDescription attaches an optional read-only description factory without changing Runnable.
+func (r *StreamRunnable[I, O]) WithDescription(describe func() any) *StreamRunnable[I, O] {
+	copy := *r
+	copy.description = describe
+	return &copy
+}
+
+// Description returns a fresh metadata value, if supplied by the compiler.
+func (r *StreamRunnable[I, O]) Description() any {
+	if r.description == nil {
+		return nil
+	}
+	return r.description()
 }

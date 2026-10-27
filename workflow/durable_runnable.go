@@ -31,5 +31,5 @@ func (d *DurableGraph[T]) AsRunnable() *core.StreamRunnable[RunRequest[T], *Grap
 			return err
 		}
 		return emit(core.StreamChunk[*GraphSnapshot[T]]{Done: true, Data: snapshot})
-	})
+	}).WithDescription(func() any { return describe(d.graph) })
 }

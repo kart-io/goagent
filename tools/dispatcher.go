@@ -13,6 +13,7 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/durable"
+	"github.com/kart-io/goagent/core/observe"
 	"github.com/kart-io/goagent/interfaces"
 )
 
@@ -138,6 +139,9 @@ func (d *Dispatcher) Invoke(ctx context.Context, req ToolRequest) (out *interfac
 	return d.invoke(ctx, req, func(*core.StreamEvent) error { return nil })
 }
 func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*core.StreamEvent) error) (out *interfaces.ToolOutput, err error) {
+	endTool := func(error, bool) {}
+	replayed := false
+	defer func() { endTool(err, replayed) }()
 	defer func() {
 		if recover() != nil {
 			out = nil
@@ -175,6 +179,7 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 		ctx = durable.WithExecutionKey(ctx, input.ExecutionKey)
 		input.ExecutionKey = durable.ChildKey(input.ExecutionKey, "tool/"+input.CallID)
 	}
+	ctx, endTool = observe.Start(ctx, observe.Event{Type: "tool", Path: req.Name, OperationKey: input.ExecutionKey})
 	select {
 	case d.slots <- struct{}{}:
 		defer func() { <-d.slots }()
@@ -263,6 +268,7 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 		decoder := json.NewDecoder(bytes.NewReader(record.Value))
 		decoder.UseNumber()
 		err = decoder.Decode(&out)
+		replayed = record.Replayed
 		if record.Replayed && err == nil {
 			err = emit(&core.StreamEvent{Type: "tool_replayed", Tool: req.Name})
 		}

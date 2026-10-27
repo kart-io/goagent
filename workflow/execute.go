@@ -6,9 +6,12 @@ import (
 	"io"
 
 	"github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/core/observe"
 )
 
-func (g *compiled[T]) run(ctx context.Context, state T, emit func(core.StreamChunk[T]) error) error {
+func (g *compiled[T]) run(ctx context.Context, state T, emit func(core.StreamChunk[T]) error) (graphErr error) {
+	ctx, finish := observe.Start(ctx, observe.Event{Type: "graph", Path: "graph"})
+	defer func() { finish(graphErr, false) }()
 	name := g.entry
 	for step := 0; step < g.config.MaxSteps; step++ {
 		if err := ctx.Err(); err != nil {
@@ -17,7 +20,8 @@ func (g *compiled[T]) run(ctx context.Context, state T, emit func(core.StreamChu
 		if err := emit(core.StreamChunk[T]{Event: &core.StreamEvent{Type: "node_start", Step: name}}); err != nil {
 			return err
 		}
-		next, err := g.nodes[name](ctx, state, func(chunk core.StreamChunk[T]) error {
+		nodeCtx, endNode := observe.Start(ctx, observe.Event{Type: "node", Path: name})
+		next, err := g.nodes[name](nodeCtx, state, func(chunk core.StreamChunk[T]) error {
 			if chunk.Event != nil {
 				event := *chunk.Event
 				event.Step = name
@@ -28,6 +32,7 @@ func (g *compiled[T]) run(ctx context.Context, state T, emit func(core.StreamChu
 			}
 			return emit(chunk)
 		})
+		endNode(err, false)
 		if err != nil {
 			return fmt.Errorf("node %q: %w", name, err)
 		}

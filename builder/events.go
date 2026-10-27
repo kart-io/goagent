@@ -8,6 +8,7 @@ import (
 
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/middleware"
+	"github.com/kart-io/goagent/core/observe"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 )
@@ -65,6 +66,9 @@ func (a *ConfigurableAgent[C, S]) ExecuteStream(ctx context.Context, input inter
 	go func() {
 		defer close(events)
 		defer release()
+		ctx, endAgent := observe.Start(ctx, observe.Event{Type: "agent", Path: "agent"})
+		var agentErr error
+		defer func() { endAgent(agentErr, false) }()
 		emit := func(e AgentEvent) error {
 			select {
 			case events <- e:
@@ -86,6 +90,7 @@ func (a *ConfigurableAgent[C, S]) ExecuteStream(ctx context.Context, input inter
 			return a.runEvents(runCtx, request, client, caller, send)
 		})
 		output, err := a.execute(ctx, input, chain)
+		agentErr = err
 		if err != nil {
 			_ = emit(AgentEvent{Type: "error", Error: err, Message: err.Error()})
 			return

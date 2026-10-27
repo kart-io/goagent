@@ -185,7 +185,7 @@ func (g *Graph[T]) Compile(ctx context.Context) (*core.StreamRunnable[T, T], err
 	if err != nil {
 		return nil, err
 	}
-	return core.NewStreamRunnable(core.StreamModeSteps, snapshot.run), nil
+	return core.NewStreamRunnable(core.StreamModeSteps, snapshot.run).WithDescription(func() any { return describe(snapshot) }), nil
 }
 
 func (g *Graph[T]) compile(ctx context.Context) (*compiled[T], error) {
