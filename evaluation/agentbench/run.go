@@ -2,10 +2,12 @@ package agentbench
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -18,13 +20,16 @@ import (
 
 // Case 的 Evidence 是查询工具结果；空值表示无工具任务。
 type Case struct {
-	ID       string `json:"id"`
-	Question string `json:"question"`
-	Answer   string `json:"answer"`
-	Evidence string `json:"evidence,omitempty"`
+	ID       string      `json:"id"`
+	Question string      `json:"question"`
+	Answer   string      `json:"answer"`
+	Evidence string      `json:"evidence,omitempty"`
+	Lookup   *LookupCase `json:"lookup,omitempty"`
 }
 
 type Config struct {
+	// Provider selects the native implementation; empty preserves OpenAI compatibility.
+	Provider string `json:"provider,omitempty"`
 	// DirectTools 仅用于工具结果已是完整答案的独立题集，显式启用。
 	DirectTools bool              `json:"direct_tools"`
 	APIKey      string            `json:"-"`
@@ -34,16 +39,18 @@ type Config struct {
 }
 
 type Result struct {
-	Framework     string                  `json:"framework"`
-	CaseID        string                  `json:"case_id"`
-	Answer        string                  `json:"answer"`
-	Success       bool                    `json:"success"`
-	Error         string                  `json:"error,omitempty"`
-	DurationMS    float64                 `json:"duration_ms"`
-	FirstTextMS   *float64                `json:"first_text_ms,omitempty"`
-	ToolCalls     int32                   `json:"tool_calls"`
-	Measurements  evaluation.Measurements `json:"measurements"`
-	UsageComplete bool                    `json:"usage_complete"`
+	ToolArgumentsPassed *bool                   `json:"tool_arguments_passed,omitempty"`
+	ActualToolArguments []json.RawMessage       `json:"actual_tool_arguments,omitempty"`
+	Framework           string                  `json:"framework"`
+	CaseID              string                  `json:"case_id"`
+	Answer              string                  `json:"answer"`
+	Success             bool                    `json:"success"`
+	Error               string                  `json:"error,omitempty"`
+	DurationMS          float64                 `json:"duration_ms"`
+	FirstTextMS         *float64                `json:"first_text_ms,omitempty"`
+	ToolCalls           int32                   `json:"tool_calls"`
+	Measurements        evaluation.Measurements `json:"measurements"`
+	UsageComplete       bool                    `json:"usage_complete"`
 }
 
 // SystemInstruction is shared by framework comparison executors.
@@ -54,28 +61,64 @@ const LookupDescription = "查询本题的参考资料，无需参数。"
 
 // lookup 返回本题的工具资料，并记录实际调用次数。
 type lookup struct {
-	evidence string
-	calls    atomic.Int32
+	evidence   string
+	calls      atomic.Int32
+	parameters json.RawMessage
+	mu         sync.Mutex
+	arguments  []json.RawMessage
 }
 
-func (t *lookup) Name() string        { return "lookup" }
-func (t *lookup) Description() string { return LookupDescription }
-func (t *lookup) ArgsSchema() string  { return `{"type":"object","properties":{}}` }
+func (t *lookup) Name() string { return "lookup" }
+func (t *lookup) Description() string {
+	if len(t.parameters) > 0 {
+		return "查询本题的参考资料，请根据用户问题填写工具参数。"
+	}
+	return LookupDescription
+}
+func (t *lookup) ArgsSchema() string {
+	if len(t.parameters) > 0 {
+		return string(t.parameters)
+	}
+	return `{"type":"object","properties":{}}`
+}
 func (t *lookup) Invoke(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	t.calls.Add(1)
+	if len(t.parameters) > 0 {
+		if input == nil {
+			return nil, fmt.Errorf("missing tool input")
+		}
+		data, err := json.Marshal(input.Args)
+		if err != nil {
+			return nil, err
+		}
+		t.mu.Lock()
+		t.arguments = append(t.arguments, data)
+		t.mu.Unlock()
+	}
 	return &interfaces.ToolOutput{Result: t.evidence, Success: true}, nil
 }
 
 // Run 执行一个 GoAgent 评测任务。失败也保留结果；首次文本时间不等同于工具参数首帧时间。
 func Run(parent context.Context, c Case, config Config) Result {
-	return RunWithExecutor(parent, c, config, "goagent", func(ctx context.Context, baseURL string, cfg Config, c Case, onText, onFinal func(string)) (int32, error) {
-		t := &lookup{evidence: c.Evidence}
+	t := &lookup{evidence: c.Evidence}
+	if c.Lookup != nil {
+		t.parameters = c.Lookup.Parameters
+	}
+	result := RunWithExecutor(parent, c, config, "goagent", func(ctx context.Context, baseURL string, cfg Config, c Case, onText, onFinal func(string)) (int32, error) {
 		err := runGoAgent(ctx, baseURL, cfg, c, t, onText, onFinal)
 		return t.calls.Load(), err
 	})
+	if c.Lookup != nil {
+		t.mu.Lock()
+		result.ActualToolArguments = append([]json.RawMessage(nil), t.arguments...)
+		t.mu.Unlock()
+		passed := len(result.ActualToolArguments) == 1 && equalArguments(c.Lookup.ExpectedArguments, result.ActualToolArguments[0])
+		result.ToolArgumentsPassed = &passed
+	}
+	return result
 }
 
 // Executor runs a framework through the supplied metered BaseURL. It reports
@@ -89,6 +132,14 @@ func RunWithExecutor(parent context.Context, c Case, config Config, framework st
 	result := Result{Framework: framework, CaseID: c.ID}
 	if execute == nil || framework == "" {
 		result.Error = "framework and executor are required"
+		return result
+	}
+	if err := ValidateLookupCase(c); err != nil {
+		result.Error = err.Error()
+		return result
+	}
+	if config.Provider != "" && config.Provider != "openai" && config.Provider != "deepseek" {
+		result.Error = "provider must be openai or deepseek"
 		return result
 	}
 	if config.APIKey == "" || config.BaseURL == "" || config.Timeout <= 0 || config.Budget.MaxCalls <= 0 || config.Budget.MaxOutputTokens <= 0 || config.Budget.Model == "" || c.ID == "" || c.Question == "" || c.Answer == "" {
@@ -135,11 +186,22 @@ func RunWithExecutor(parent context.Context, c Case, config Config, framework st
 }
 
 func runGoAgent(ctx context.Context, baseURL string, cfg Config, c Case, t *lookup, onText func(string), onFinal func(string)) error {
-	client, err := providers.NewOpenAIWithOptions(llm.WithAPIKey(cfg.APIKey), llm.WithBaseURL(baseURL), llm.WithModel(cfg.Budget.Model), llm.WithMaxTokens(cfg.Budget.MaxOutputTokens), llm.WithTemperature(cfg.Budget.Temperature))
+	options := []llm.ClientOption{llm.WithAPIKey(cfg.APIKey), llm.WithBaseURL(baseURL), llm.WithModel(cfg.Budget.Model), llm.WithMaxTokens(cfg.Budget.MaxOutputTokens), llm.WithTemperature(cfg.Budget.Temperature), llm.WithTimeout(cfg.Timeout)}
+	var client llm.Client
+	var err error
+	if cfg.Provider == "deepseek" {
+		client, err = providers.NewDeepSeekWithOptions(options...)
+	} else {
+		client, err = providers.NewOpenAIWithOptions(options...)
+	}
 	if err != nil {
 		return err
 	}
-	b := builder.NewSimpleBuilder(client).WithSystemPrompt(SystemInstruction).WithMaxIterations(cfg.Budget.MaxCalls).WithMaxTokens(cfg.Budget.MaxOutputTokens).WithTemperature(cfg.Budget.Temperature).WithTimeout(cfg.Timeout)
+	instruction := SystemInstruction
+	if c.Lookup != nil {
+		instruction = strings.Replace(instruction, "该无参数工具每题只需查询一次", "根据用户问题填写工具参数，每题只需查询一次", 1)
+	}
+	b := builder.NewSimpleBuilder(client).WithSystemPrompt(instruction).WithMaxIterations(cfg.Budget.MaxCalls).WithMaxTokens(cfg.Budget.MaxOutputTokens).WithTemperature(cfg.Budget.Temperature).WithTimeout(cfg.Timeout)
 	if c.Evidence != "" {
 		b.WithTools(t)
 		if cfg.DirectTools {

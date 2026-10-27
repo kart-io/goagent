@@ -59,8 +59,19 @@ func (a *ConfigurableAgent[C, S]) Initialize(ctx context.Context) error {
 	return nil
 }
 
-// Execute 使用给定输入运行 Agent
+// Execute preserves synchronous execution without implicit tool calls.
+//
+// For the native tool/stream pipeline use AsRunnable().Invoke. This synchronous
+// entry remains supported for clients without structured streaming.
 func (a *ConfigurableAgent[C, S]) Execute(ctx context.Context, input interface{}) (*AgentOutput, error) {
+	if a.config.ContextPolicy != nil || len(a.config.ReturnDirectTools) > 0 {
+		return nil, fmt.Errorf("Execute does not apply ContextPolicy or ReturnDirectTools; use AsRunnable().Invoke")
+	}
+	ctx, release, err := a.beginExecution(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	return a.execute(ctx, input, a.chain)
 }
 
@@ -126,8 +137,23 @@ func (a *ConfigurableAgent[C, S]) execute(ctx context.Context, input interface{}
 	return output, nil
 }
 
-// ExecuteWithTools 使用工具执行能力运行 Agent
+// ExecuteWithTools uses the unified pipeline when structured streaming is
+// available. Non-streaming clients retain the legacy tool loop.
+//
+// Prefer AsRunnable().Invoke when the client supports structured streaming.
 func (a *ConfigurableAgent[C, S]) ExecuteWithTools(ctx context.Context, input interface{}) (*AgentOutput, error) {
+	if llm.HasStreaming(a.llmClient) {
+		return a.AsRunnable().Invoke(ctx, input)
+	}
+	ctx, release, err := a.beginExecution(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	return a.executeWithTools(ctx, input)
+}
+
+func (a *ConfigurableAgent[C, S]) executeWithTools(ctx context.Context, input interface{}) (*AgentOutput, error) {
 	// 检查 LLM 客户端是否支持工具调用
 	// 优先检查 commonToolCallingClient（实际实现使用的接口）
 	toolCaller, ok := a.llmClient.(commonToolCallingClient)
@@ -138,13 +164,13 @@ func (a *ConfigurableAgent[C, S]) ExecuteWithTools(ctx context.Context, input in
 			toolCaller = &stdToolCallerWrapper{client: stdToolCaller}
 		} else {
 			// 不支持工具调用，回退到普通执行
-			return a.Execute(ctx, input)
+			return a.execute(ctx, input, a.chain)
 		}
 	}
 
 	// 如果没有工具配置，直接执行
 	if len(a.tools) == 0 {
-		return a.Execute(ctx, input)
+		return a.execute(ctx, input, a.chain)
 	}
 
 	// 如果配置了超时则应用

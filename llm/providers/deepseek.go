@@ -151,6 +151,8 @@ func NewDeepSeekWithOptions(opts ...agentllm.ClientOption) (*DeepSeekProvider, e
 			agentllm.CapabilityCompletion,
 			agentllm.CapabilityChat,
 			agentllm.CapabilityStreaming,
+			agentllm.CapabilityStructuredStreaming,
+			agentllm.CapabilityToolStreaming,
 			agentllm.CapabilityToolCalling,
 			agentllm.CapabilityEmbedding,
 		),

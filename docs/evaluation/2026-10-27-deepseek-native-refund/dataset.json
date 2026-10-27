@@ -1,0 +1,80 @@
+[
+  {
+    "id": "refund-window",
+    "question": "查询订单 DEMO-1001 的退款期限，只输出 refund_window_days 的数字。",
+    "answer": "7",
+    "evidence": "{\"order_id\":\"DEMO-1001\",\"delivery_days\":3,\"refund_window_days\":7}",
+    "lookup": {
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "order_id": {
+            "type": "string",
+            "description": "从用户问题中提取的订单编号"
+          }
+        },
+        "required": [
+          "order_id"
+        ],
+        "additionalProperties": false
+      },
+      "expected_arguments": {
+        "order_id": "DEMO-1001"
+      }
+    },
+    "category": "退款期限提取",
+    "direct_eligible": false
+  },
+  {
+    "id": "refund-status",
+    "question": "查询订单 DEMO-1002 的退款状态，原样返回工具文本。",
+    "answer": "订单 DEMO-1002：退款已受理，预计 3 个工作日到账。",
+    "evidence": "订单 DEMO-1002：退款已受理，预计 3 个工作日到账。",
+    "lookup": {
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "order_id": {
+            "type": "string",
+            "description": "从用户问题中提取的订单编号"
+          }
+        },
+        "required": [
+          "order_id"
+        ],
+        "additionalProperties": false
+      },
+      "expected_arguments": {
+        "order_id": "DEMO-1002"
+      }
+    },
+    "category": "退款状态直返",
+    "direct_eligible": true
+  },
+  {
+    "id": "refund-fee-unknown",
+    "question": "查询订单 DEMO-1003 的国际退款手续费，只输出 international_refund_fee 的值；资料未提供时输出 UNKNOWN。",
+    "answer": "UNKNOWN",
+    "evidence": "{\"order_id\":\"DEMO-1003\",\"refund_window_days\":7,\"domestic_shipping_fee\":0}",
+    "lookup": {
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "order_id": {
+            "type": "string",
+            "description": "从用户问题中提取的订单编号"
+          }
+        },
+        "required": [
+          "order_id"
+        ],
+        "additionalProperties": false
+      },
+      "expected_arguments": {
+        "order_id": "DEMO-1003"
+      }
+    },
+    "category": "资料不足拒答",
+    "direct_eligible": false
+  }
+]

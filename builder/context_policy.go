@@ -37,7 +37,8 @@ type HistorySummaryConfig struct {
 }
 
 // WithContextPolicy configures opt-in context governance for ExecuteStream and
-// AsRunnable with tools and a ToolStreamClient. Execute remains unchanged.
+// AsRunnable (including ExecuteWithTools on streaming clients) with tools and
+// a ToolStreamClient. Legacy Execute rejects this configuration.
 func (b *AgentBuilder[C, S]) WithContextPolicy(policy ContextPolicy) *AgentBuilder[C, S] {
 	policy.ExcludeTools = slices.Clone(policy.ExcludeTools)
 	if policy.HistorySummary != nil {

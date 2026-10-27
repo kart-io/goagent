@@ -1,6 +1,6 @@
 # 检索、事件流、MCP 与可恢复步骤
 
-本轮在原有 API 之外补充可直接使用、可验证的入口。原有 `Execute`、`ExecuteWithTools` 和 `InterruptManager` 不会自动迁移为新流程。
+本轮在原有 API 之外补充可直接使用、可验证的入口。`ExecuteWithTools` 在支持结构化流的 Provider 上使用统一执行管道；非流式客户端保留兼容循环。`Execute` 保留同步语义，`InterruptManager` 不会自动迁移为持久化步骤。
 
 ## Retriever 执行契约
 
@@ -50,7 +50,7 @@ for event := range stream {
 }
 ```
 
-需要 `llm.StreamClient`；配置了工具还需支持工具调用。实现 `llm.ToolStreamClient` 的 Provider 使用原生工具对话循环：模型每轮选择工具或直接回答，省去 READY 确认与独立答案请求。OpenAI 兼容入口已实现；其他 Provider 保留原有普通工具选择加最终答案流的路径。工具参数不做逐 Token 展示。原生路径的 `MaxIterations` 计入全部模型请求，达到上限报错；元数据记录 `model_calls` 和 `usage_complete`。详见[执行契约与请求优化](EXECUTION_CONTRACT.md)。
+需要 `llm.StreamClient`；配置了工具还需支持工具调用。实现 `llm.ToolStreamClient` 的 Provider 使用原生工具对话循环：模型每轮选择工具或直接回答，省去 READY 确认与独立答案请求。OpenAI 和 DeepSeek 原生入口已实现；其他 Provider 是否能使用此入口取决于实际接口能力。工具参数不做逐 Token 展示。原生路径的 `MaxIterations` 计入全部模型请求，达到上限报错；元数据记录 `model_calls` 和 `usage_complete`。详见[执行契约与请求优化](EXECUTION_CONTRACT.md)。
 
 中间件与 Execute 共用，包括 OnBefore、OnAfter、OnError；中间事件是暂态内容，以 done 为最终成功依据。缓存命中可能只有 done，OnAfter 修改的最终文本也可能与已发出的增量不同。错误终止不会再发送 done。取消时 error 事件是尽力发送，调用方同时检查 context；正常完成也应收到 done。消费者必须继续读取或取消，避免背压挂起上游。最终请求遵守 Builder 的 MaxTokens/Temperature；成功生成后更新状态，启用自动保存时写检查点（保存失败终止，不发送 done）。未知用量不会估算为真实值，`answer_usage_reported` 表示最终模型是否报告用量。
 
@@ -100,6 +100,8 @@ snapshot, err = runner.Run(ctx, "request-123", nil, snapshot.Key)
 执行副作用后、检查点保存前崩溃，会以**相同键重试**该步骤；这是至少一次执行，需要外部服务按键去重，不保证恰好一次。审批键不是认证凭证，应用负责身份、授权与审批界面。同一运行初始数据只写入一次。FileStore 面向具有可靠锁/原子替换语义的本地文件系统，不是跨主机租约服务。
 
 测试包含真实子进程退出后恢复、审批匹配、失败后复用幂等键、已完成步骤不重跑、锁等待取消和损坏检查点拒绝。它用于显式注册的顺序步骤，不恢复任意 Agent 调用栈、动态图或旧 InterruptManager 的内存 channel。
+
+[退款审批与崩溃恢复案例](../../examples/workflow/refund-recovery/README.md)组合只读检查图、审批检查点与独立 SQLite 模拟退款服务，并通过真实进程退出验证副作用提交后的幂等重试。持久化边界是整个检查图完成后，不是图内每个节点。
 
 ## 推理输出契约补充
 

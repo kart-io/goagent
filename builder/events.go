@@ -52,16 +52,14 @@ func (a *ConfigurableAgent[C, S]) ExecuteStream(ctx context.Context, input inter
 			return nil, fmt.Errorf("configured tools require tool-calling support")
 		}
 	}
+	ctx, release, err := a.beginExecution(ctx)
+	if err != nil {
+		return nil, err
+	}
 	events := make(chan AgentEvent, 1)
 	go func() {
 		defer close(events)
-		ctx, cancel := context.WithCancel(ctx)
-		defer cancel()
-		if a.config.Timeout > 0 {
-			var timeoutCancel context.CancelFunc
-			ctx, timeoutCancel = context.WithTimeout(ctx, a.config.Timeout)
-			defer timeoutCancel()
-		}
+		defer release()
 		emit := func(e AgentEvent) error {
 			select {
 			case events <- e:
