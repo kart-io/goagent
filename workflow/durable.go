@@ -260,7 +260,7 @@ func (d *DurableGraph[T]) run(ctx context.Context, id string, initial T, approva
 			}
 			return done(core.StreamChunk[T]{Done: true, Data: out})
 		})
-		output, e := runner.Invoke(durable.WithExecutionKey(ctx, intent.Key), input.State)
+		output, e := runner.Invoke(durable.WithJournal(durable.WithExecutionKey(ctx, intent.Key), d.store), input.State)
 		if e != nil {
 			return result, fmt.Errorf("node %q: %w", state.Node, e)
 		}

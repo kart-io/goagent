@@ -132,6 +132,12 @@ func execute[T any](ctx context.Context, opts options, out io.Writer, store dura
 	}
 	snapshot, err := g.AsRunnable().Invoke(ctx, workflow.RunRequest[T]{RunID: opts.run, Initial: initial, ApprovalKey: opts.approval})
 	if err != nil {
+		if backend.model != nil && backend.model.last.Load() != nil {
+			if encodeErr := json.NewEncoder(out).Encode(map[string]any{"status": "needs_attention", "case": opts.scenario, "live_model": opts.live, "simulated": true,
+				"model_review": backend.model.last.Load(), "model_calls_this_invocation": backend.model.calls.Load()}); encodeErr != nil {
+				return encodeErr
+			}
+		}
 		return err
 	}
 	status := "completed"

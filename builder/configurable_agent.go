@@ -272,14 +272,14 @@ func (a *ConfigurableAgent[C, S]) executeWithTools(ctx context.Context, input in
 
 	// 达到最大迭代次数
 	return &AgentOutput{
-		Result:     "达到最大迭代次数，无法完成任务",
-		State:      a.runtime.State,
-		Metadata:   retrievalMetadata,
-		Duration:   time.Since(startTime),
-		Timestamp:  time.Now(),
-		TokenUsage: totalTokenUsage,
-	}, agentErrors.New(agentErrors.CodeAgentExecution, "max iterations reached").
-		WithContext("max_iterations", a.config.MaxIterations)
+			Result:     "达到最大迭代次数，无法完成任务",
+			State:      a.runtime.State,
+			Metadata:   retrievalMetadata,
+			Duration:   time.Since(startTime),
+			Timestamp:  time.Now(),
+			TokenUsage: totalTokenUsage,
+		}, agentErrors.New(agentErrors.CodeAgentExecution, "max iterations reached").
+			WithContext("max_iterations", a.config.MaxIterations)
 }
 
 // buildPromptWithSystemMessage 构建包含系统消息的提示
@@ -479,6 +479,7 @@ func (a *ConfigurableAgent[C, S]) invokeToolCall(ctx context.Context, call ToolC
 		if tool.Name() == call.Name {
 			// 创建工具输入
 			toolInput := &interfaces.ToolInput{
+				CallID:  call.ID,
 				Args:    call.Input,
 				Context: ctx,
 			}
@@ -546,6 +547,7 @@ func (a *ConfigurableAgent[C, S]) Shutdown(ctx context.Context) error {
 
 // ToolCall 表示工具调用请求
 type ToolCall struct {
+	ID    string
 	Name  string
 	Input map[string]interface{}
 }

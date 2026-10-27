@@ -1,0 +1,26 @@
+{
+  "provider": "gemini",
+  "model": "gemini-2.5-flash",
+  "passed": true,
+  "model_calls_by_phase": [
+    1,
+    1,
+    0
+  ],
+  "tool_attempts": [
+    "A",
+    "B",
+    "B"
+  ],
+  "effects": 2,
+  "distinct_keys": true,
+  "known_tokens": 836,
+  "usage_reports": 2,
+  "operation_statuses": {
+    "model/turn/0": "completed",
+    "model/turn/1": "completed",
+    "tool/turn/0/call/call_1793101203985938597_b4a137f2169ced4e": "completed",
+    "tool/turn/0/call/call_1793101203985943655_ca0851f30f8c19a1": "completed"
+  },
+  "limitations": "One synthetic native function-calling case. Real process exit after second local effect, before tool result checkpoint. External business effects are simulated. MiniMax is buffered final-only. Missing provider usage cannot be reconstructed."
+}

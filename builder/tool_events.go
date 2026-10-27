@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/middleware"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
@@ -39,6 +40,17 @@ func (a *ConfigurableAgent[C, S]) streamMessages(ctx context.Context, input, evi
 
 // runToolEvents 每轮直接选择工具或输出答案，MaxIterations 包含最终答案请求。
 func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *middleware.MiddlewareRequest, client llm.ToolStreamClient, messages []llm.Message, metadata map[string]interface{}, emit func(AgentEvent) error) (*middleware.MiddlewareResponse, error) {
+	if durable.HasJournal(ctx) && a.config.ContextPolicy != nil {
+		return nil, fmt.Errorf("durable tool loops require a fixed context; ContextPolicy is not checkpointed")
+	}
+	if durable.HasJournal(ctx) {
+		for _, tool := range a.tools {
+			capability, ok := tool.(interfaces.DurableCallTool)
+			if !ok || !capability.SupportsDurableCalls() {
+				return nil, fmt.Errorf("durable tool %q requires a journaled adapter such as Dispatcher.Tools", tool.Name())
+			}
+		}
+	}
 	usage := &interfaces.TokenUsage{}
 	reports := 0
 	policy := newToolContext(a.config.ContextPolicy)
@@ -92,12 +104,7 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 			}
 			metadata["final_answer_only"] = len(tools) == 0
 		}
-		stream, err := client.CompleteToolsStream(turnCtx, &llm.CompletionRequest{Messages: messages, MaxTokens: a.config.MaxTokens, Temperature: a.config.Temperature}, tools)
-		if err != nil {
-			cancel()
-			return nil, err
-		}
-		turn, err := readToolTurn(turnCtx, stream, emit)
+		turn, err := readJournaledTurn(turnCtx, round, client, &llm.CompletionRequest{Messages: messages, MaxTokens: a.config.MaxTokens, Temperature: a.config.Temperature}, tools, emit)
 		cancel()
 		if err != nil {
 			return nil, err
@@ -142,6 +149,9 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 			}
 			ids[tc.ID] = true
 			calls[i] = ToolCall{Name: tc.Function.Name}
+			if durable.HasJournal(ctx) {
+				calls[i].ID = fmt.Sprintf("turn/%d/call/%s", round, tc.ID)
+			}
 			if err := json.Unmarshal([]byte(tc.Function.Arguments), &calls[i].Input); err != nil || calls[i].Input == nil {
 				return nil, fmt.Errorf("工具 %s 的参数必须为 JSON 对象", tc.Function.Name)
 			}
@@ -203,39 +213,46 @@ func readToolTurn(ctx context.Context, stream <-chan *llm.StreamChunk, emit func
 		return nil, fmt.Errorf("模型返回空流")
 	}
 	var content strings.Builder
-	var usage *llm.Usage
+	var result llm.StreamChunk
+	partial := func() *llm.StreamChunk {
+		copy := result
+		if content.Len() > 0 {
+			copy.Content = content.String()
+		}
+		return &copy
+	}
 	for {
 		select {
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return partial(), ctx.Err()
 		case chunk, ok := <-stream:
 			if !ok {
-				return nil, io.ErrUnexpectedEOF
+				return partial(), io.ErrUnexpectedEOF
 			}
 			if chunk == nil {
 				continue
 			}
-			if chunk.Error != nil {
-				return nil, chunk.Error
-			}
-			if chunk.Delta != "" {
-				content.WriteString(chunk.Delta)
-				if err := emit(AgentEvent{Type: "text", Delta: chunk.Delta}); err != nil {
-					return nil, err
-				}
-			}
+			usage := result.Usage
+			result = *chunk
 			if chunk.Usage != nil {
 				copy := *chunk.Usage
 				usage = &copy
 			}
+			result.Usage = usage
+			if chunk.Delta != "" {
+				content.WriteString(chunk.Delta)
+				if err := emit(AgentEvent{Type: "text", Delta: chunk.Delta}); err != nil {
+					return partial(), err
+				}
+			}
+			if chunk.Error != nil {
+				return partial(), chunk.Error
+			}
 			if chunk.Done {
 				if chunk.FinishReason == "length" || chunk.FinishReason == "content_filter" {
-					return nil, fmt.Errorf("模型输出未完整结束：%s", chunk.FinishReason)
+					return partial(), fmt.Errorf("模型输出未完整结束：%s", chunk.FinishReason)
 				}
-				result := *chunk
-				result.Content = content.String()
-				result.Usage = usage
-				return &result, nil
+				return partial(), nil
 			}
 		}
 	}

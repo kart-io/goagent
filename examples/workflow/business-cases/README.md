@@ -116,7 +116,7 @@ go run ./examples/workflow/business-cases -live -provider deepseek -model deepse
 - 文章审核：模型判断文章语义，拒绝危险医疗误导等内容；本地硬性拒绝和长度规则仍有效，模型不能将已拒绝内容直接放行。
 - 自动回复：模型将口语化问题映射到 FAQ 来源，或决定转人工。宿主按来源读取固定答案，避免模型任意编造回复正文；这不是自由生成式客服质量测试。
 
-每次 CLI 调用最多一次模型请求，90 秒超时、最多 2048 输出 Token、无自动重试。请求失败、截断、JSON 无效、动作越界或来源不存在时停止流程，不产生业务效果。模型判断、理由、Token 用量与耗时保存在 `snapshot.State.model_review` 中；模型节点保存成功后的审批恢复和流程重放不再调用模型。模型调用成功但检查点落盘前崩溃，仍可能在显式重启时重复付费调用。
+每次 CLI 调用最多一次模型请求，90 秒超时、最多 2048 输出 Token、无自动重试。请求失败、截断、JSON 无效、动作越界或来源不存在时停止流程，不产生业务效果。模型判断、理由、Token 用量与耗时保存在 `snapshot.State.model_review` 中；模型节点保存成功后的审批恢复和流程重放不再调用模型。模型请求前先保存操作意图；失败、无效结果或请求后检查点未落盘时进入 needs_attention，重启不再付费重试。失败判断保存已知用量、错误类别和响应摘要；未收到的用量无法重建。
 
 provider、model 和提示词版本绑定持久化计划；离线和真实模式、不同模型之间不能复用同一运行检查点，请使用不同 `-dir` / `-run`。本地业务去重仍按业务 ID 生效。
 
@@ -135,12 +135,12 @@ MINIMAX_MODEL=MiniMax-M3.1-Flash bash scripts/business_cases_live.sh minimax /tm
 
 ### MiniMax 接入
 
-MiniMax 使用本案例内的 `completionClient` 适配器调用官方 OpenAI 兼容 Chat Completions API，仅实现所需文本补全，不宣称已实现完整 GoAgent Provider、流式或原生工具调用接口。
+MiniMax 使用本案例适配器调用官方 OpenAI 兼容 Chat Completions API，支持文本补全和原生工具调用续接。输出为缓冲后的 final-only，Agent 适配器声明 steps；不宣称原生逐 token 流，也未添加全局 Provider 注册。
 
 - 配置 `MINIMAX_CN_API_KEY` 时默认请求中国区 `https://api.minimax.cn/v1`。
 - 配置 `MINIMAX_API_KEY` 时默认请求国际区 `https://api.minimax.io/v1`；两个 Key 均存在时，使用此国际区 Key。
 - `MINIMAX_BASE_URL` 可显式覆盖地址，凭据应与目标区域匹配；不读取 `OPENAI_API_KEY` / `OPENAI_BASE_URL`。
-- 发送 `reasoning_split: true`，只将最终 `content` 送入业务 JSON 校验，思考正文不写入报告或业务状态。
+- 发送 `reasoning_split: true`，只将最终 `content` 送入业务 JSON 校验，思考正文不写入报告或业务状态；原生工具循环的本地操作检查点须保留它以供协议续接。
 - `MiniMax-M3.1-Flash` 设置 `reasoning_effort: low`，生成上限为 2048 Token，含思考用量。官方文档说明该模型忽略请求温度、固定为 1，因此这里不做同温度模型质量排名。
 
 以上参数参考[中国区官方接口文档](https://platform.minimax.cn/docs/api-reference/text-openai-api)。与其他案例一样，业务动作使用本地模拟；请求失败、截断或非法判断会停止流程，不自动修复或重试。
@@ -149,3 +149,19 @@ MiniMax 使用本案例内的 `completionClient` 适配器调用官方 OpenAI �
 go run ./examples/workflow/business-cases -live -provider minimax -model MiniMax-M3.1-Flash \
   -case auto-reply -dir /tmp/goagent-live-minimax-reply
 ```
+
+
+## 原生多工具循环与进程恢复
+
+`native_loop.go` 让一个持久 Agent 节点调用 `record_A`、`record_B`，它们只写本地模拟回执。模型原生选择工具，Dispatcher 校验 stage 枚举并持久化调用。测试在 B 效果提交、工具结果检查点保存前直接退出进程；重启复用模型计划、跳过 A、用同一子键恢复 B，然后生成答案。完成后再启动不会付费或执行工具。
+
+```sh
+go test -race ./examples/workflow/business-cases -run TestNativeToolLoopProcessRecovery
+GEMINI_MODEL=gemini-2.5-flash bash scripts/business_tool_loop_live.sh gemini /tmp/gemini-loop.json
+DEEPSEEK_MODEL=deepseek-flash bash scripts/business_tool_loop_live.sh deepseek /tmp/deepseek-loop.json
+MINIMAX_MODEL=MiniMax-M3.1-Flash bash scripts/business_tool_loop_live.sh minimax /tmp/minimax-loop.json
+```
+
+使用新报告路径；每次最多 4 个真实请求（跨进程累计），失败不自动修复或覆盖。报告保存各阶段请求数、工具尝试、效果数量、不同子键、操作状态和已知用量。默认 `go test` 不运行真实模型。此测试补充前述 Complete 分类案例，覆盖原生 function calling 和协议续接；[实测报告](../../../docs/evaluation/2026-10-27-durable-tool-loop/REPORT.md)保留首次失败与调整后的验证结果。
+
+失败的分类请求会输出 `status: needs_attention`、`model_review` 和本次模型调用次数，并以错误退出。成功判断仍在 `snapshot.State.model_review`。旧的 business-judge-v1 检查点与新策略不兼容，须使用新的运行版本/目录并核对已有业务效果。
