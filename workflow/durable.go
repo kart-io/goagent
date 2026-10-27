@@ -13,6 +13,7 @@ import (
 
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/durable"
+	"github.com/kart-io/goagent/core/observe"
 )
 
 // DurableConfig binds the graph to a host-controlled schema/code version.
@@ -113,6 +114,9 @@ func (d *DurableGraph[T]) Run(ctx context.Context, id string, initial T, approva
 }
 
 func (d *DurableGraph[T]) run(ctx context.Context, id string, initial T, approvalKey string, emit func(*core.StreamEvent) error) (result *GraphSnapshot[T], err error) {
+	ctx = observe.WithRunID(ctx, id)
+	ctx, endGraph := observe.Start(ctx, observe.Event{Type: "graph", Path: "graph"})
+	defer func() { endGraph(err, false) }()
 	defer func() {
 		if recover() != nil {
 			err = fmt.Errorf("durable graph storage or serialization panicked")
@@ -260,7 +264,9 @@ func (d *DurableGraph[T]) run(ctx context.Context, id string, initial T, approva
 			}
 			return done(core.StreamChunk[T]{Done: true, Data: out})
 		})
-		output, e := runner.Invoke(durable.WithJournal(durable.WithExecutionKey(ctx, intent.Key), d.store), input.State)
+		nodeCtx, endNode := observe.Start(durable.WithJournal(durable.WithExecutionKey(ctx, intent.Key), d.store), observe.Event{Type: "node", Path: nodeName, OperationKey: intent.Key})
+		output, e := runner.Invoke(nodeCtx, input.State)
+		endNode(e, false)
 		if e != nil {
 			return result, fmt.Errorf("node %q: %w", state.Node, e)
 		}

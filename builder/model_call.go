@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
+	"github.com/kart-io/goagent/core/observe"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 )
@@ -49,15 +50,18 @@ func recordTurnUsage(ctx context.Context, key string, turn *llm.StreamChunk) err
 	defer cancel()
 	return c.RecordUsage(saveCtx, key, usage)
 }
-func modelOperation(ctx context.Context, id string, intent json.RawMessage, invoke func(context.Context) (*llm.StreamChunk, error), validate func(*llm.StreamChunk) error, emit func(AgentEvent) error) (*llm.StreamChunk, error) {
-	if err := validateModelBudget(ctx); err != nil {
-		return nil, err
-	}
-	c, metered := budget.FromContext(ctx)
+func modelOperation(ctx context.Context, id string, intent json.RawMessage, invoke func(context.Context) (*llm.StreamChunk, error), validate func(*llm.StreamChunk) error, emit func(AgentEvent) error) (result *llm.StreamChunk, resultErr error) {
 	key := durable.ChildKey(durable.ExecutionKey(ctx), id)
 	if key == "" {
 		key = uuid.NewString()
 	}
+	ctx, endModel := observe.Start(ctx, observe.Event{Type: "model", Path: id, OperationKey: key})
+	replayed := false
+	defer func() { endModel(resultErr, replayed) }()
+	if err := validateModelBudget(ctx); err != nil {
+		return nil, err
+	}
+	c, metered := budget.FromContext(ctx)
 	call := func(callCtx context.Context) (*llm.StreamChunk, error) {
 		if metered {
 			if err := c.Reserve(callCtx, key); err != nil {
@@ -98,6 +102,9 @@ func modelOperation(ctx context.Context, id string, intent json.RawMessage, invo
 		data, e := json.Marshal(&copy)
 		return data, errors.Join(err, e)
 	})
+	if record != nil {
+		replayed = record.Replayed
+	}
 	var turn *llm.StreamChunk
 	// Failed operations retain known usage. An intent mismatch is not a replay.
 	if record != nil && (opErr == nil || record.Replayed || attempted) && len(record.Value) > 0 && string(record.Value) != "null" {

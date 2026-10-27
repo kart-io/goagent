@@ -9,6 +9,7 @@ import (
 
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/durable"
+	"github.com/kart-io/goagent/core/observe"
 )
 
 // Inputs are frozen before dispatch. Outputs are committed independently in the
@@ -101,7 +102,9 @@ func runDurableParallel[T any](ctx context.Context, input T, cfg ParallelConfig[
 				})
 				key := graphDigest([]string{DurableKey(ctx), "branch", b.Name})
 				var zero T
-				out, e := runner.Invoke(durable.WithExecutionKey(workCtx, key), zero)
+				branchCtx, endBranch := observe.Start(durable.WithExecutionKey(workCtx, key), observe.Event{Type: "branch", Path: b.Name, OperationKey: key})
+				out, e := runner.Invoke(branchCtx, zero)
+				endBranch(e, false)
 				results <- completion{index: i, data: out, err: e}
 			}
 		}()
