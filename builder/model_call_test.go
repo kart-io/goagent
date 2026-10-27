@@ -140,3 +140,18 @@ func TestSummarySharesRootAdmission(t *testing.T) {
 	require.ErrorIs(t, err, budget.ErrBudgetExceeded)
 	require.Empty(t, model.requests)
 }
+
+func TestMemoryBudgetDoesNotTreatHostKeyAsReplay(t *testing.T) {
+	c, err := budget.New(budget.Config{RootKey: "root", Version: "v1", MaxModelRequests: 2})
+	require.NoError(t, err)
+	ctx := budget.WithController(durable.WithExecutionKey(context.Background(), "host-node"), c)
+	m := nativeModel([]*llm.StreamChunk{{Done: true, Content: "one", FinishReason: "stop"}}, []*llm.StreamChunk{{Done: true, Content: "two", FinishReason: "stop"}})
+	for range 2 {
+		_, err = readJournaledTurn(ctx, 0, m, &llm.CompletionRequest{}, nil, func(AgentEvent) error { return nil })
+		require.NoError(t, err)
+	}
+	require.Len(t, m.requests, 2)
+	s, err := c.Snapshot(ctx)
+	require.NoError(t, err)
+	require.Equal(t, 2, s.ReservedRequests)
+}
