@@ -14,12 +14,6 @@ import (
 // 同一 Builder 的状态与记忆属于一个会话，适配器串行执行，等待可被取消。
 func (a *ConfigurableAgent[C, S]) AsRunnable() *core.StreamRunnable[any, *AgentOutput] {
 	return core.NewStreamRunnable(core.StreamModeTokens, func(ctx context.Context, input any, emit func(core.StreamChunk[*AgentOutput]) error) error {
-		select {
-		case a.executionGate <- struct{}{}:
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-		defer func() { <-a.executionGate }()
 		events, err := a.ExecuteStream(ctx, input)
 		if err != nil {
 			return err

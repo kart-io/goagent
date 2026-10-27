@@ -37,6 +37,9 @@ func ValidateSuite(cases []SuiteCase) error {
 	}
 	seen := map[string]bool{}
 	for _, c := range cases {
+		if err := ValidateLookupCase(c.Case); err != nil {
+			return err
+		}
 		if strings.TrimSpace(c.ID) == "" || seen[c.ID] || strings.TrimSpace(c.Category) == "" || strings.TrimSpace(c.Question) == "" || strings.TrimSpace(c.Answer) == "" {
 			return fmt.Errorf("题目 %q 需要唯一 ID、类别、问题和答案", c.ID)
 		}
@@ -170,21 +173,24 @@ func ScoreSuiteJob(job SuiteJob, result Result) SuiteOutcome {
 			calls = 2
 		}
 	}
-	return SuiteOutcome{CaseID: job.Case.ID, Category: job.Case.Category, Direct: job.Direct, Repeat: job.Repeat, ExpectedCalls: calls, ContractPassed: result.Success && result.Measurements.Calls == calls && result.ToolCalls == tools, Result: result}
+	argumentsPassed := job.Case.Lookup == nil || (result.ToolArgumentsPassed != nil && *result.ToolArgumentsPassed)
+	return SuiteOutcome{CaseID: job.Case.ID, Category: job.Case.Category, Direct: job.Direct, Repeat: job.Repeat, ExpectedCalls: calls, ContractPassed: result.Success && argumentsPassed && result.Measurements.Calls == calls && result.ToolCalls == tools, Result: result}
 }
 
 type SuiteSummary struct {
-	Framework      string                `json:"framework"`
-	Direct         bool                  `json:"direct"`
-	Category       string                `json:"category"`
-	Total          int                   `json:"total"`
-	Passed         int                   `json:"passed"`
-	ContractPassed int                   `json:"contract_passed"`
-	UsageComplete  int                   `json:"usage_complete"`
-	Calls          int                   `json:"calls"`
-	Usage          interfaces.TokenUsage `json:"usage"`
-	P50MS          float64               `json:"p50_ms"`
-	P95MS          float64               `json:"p95_ms"`
+	ToolArgumentsEvaluated int                   `json:"tool_arguments_evaluated"`
+	ToolArgumentsPassed    int                   `json:"tool_arguments_passed"`
+	Framework              string                `json:"framework"`
+	Direct                 bool                  `json:"direct"`
+	Category               string                `json:"category"`
+	Total                  int                   `json:"total"`
+	Passed                 int                   `json:"passed"`
+	ContractPassed         int                   `json:"contract_passed"`
+	UsageComplete          int                   `json:"usage_complete"`
+	Calls                  int                   `json:"calls"`
+	Usage                  interfaces.TokenUsage `json:"usage"`
+	P50MS                  float64               `json:"p50_ms"`
+	P95MS                  float64               `json:"p95_ms"`
 }
 
 // SummarizeSuite 保留失败的调用/用量，未知用量另外计数，不只统计成功样本。
@@ -205,6 +211,12 @@ func SummarizeSuite(results []SuiteOutcome) []SuiteSummary {
 		s := SuiteSummary{Framework: rs[0].Result.Framework, Direct: rs[0].Direct, Category: rs[0].Category, Total: len(rs)}
 		var durations []float64
 		for _, r := range rs {
+			if r.Result.ToolArgumentsPassed != nil {
+				s.ToolArgumentsEvaluated++
+				if *r.Result.ToolArgumentsPassed {
+					s.ToolArgumentsPassed++
+				}
+			}
 			if r.Result.Success {
 				s.Passed++
 			}

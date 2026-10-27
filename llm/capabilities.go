@@ -9,13 +9,9 @@ import (
 // ToolCallingClient defines the interface for LLM providers that support tool/function calling.
 // Implement this interface in addition to Client to enable tool-based interactions.
 //
-// Not all providers support tool calling - use CapabilityChecker.HasCapability("tool_calling")
-// to check at runtime.
-//
-// Implementations:
-//   - providers.OpenAIProvider
-//   - providers.DeepSeekProvider
-//   - providers.GeminiProvider
+// This is the legacy prompt-based signature. A provider may instead expose
+// ToolStreamClient or a legacy common.ToolCallResponse signature. For the native
+// Builder path use HasToolStreaming/AsToolStreamClient, not advertised features.
 type ToolCallingClient interface {
 	// GenerateWithTools sends a prompt with available tools and returns the response.
 	// The LLM may respond with content, tool calls, or both.
@@ -121,6 +117,13 @@ const (
 	// CapabilityStreaming indicates streaming response support
 	CapabilityStreaming Capability = "streaming"
 
+	// CapabilityStructuredStreaming indicates StreamClient, including terminal
+	// status and usage. Legacy string/token streams do not imply this capability.
+	CapabilityStructuredStreaming Capability = "structured_streaming"
+
+	// CapabilityToolStreaming indicates ToolStreamClient's native message loop.
+	CapabilityToolStreaming Capability = "tool_streaming"
+
 	// CapabilityToolCalling indicates function/tool calling support
 	CapabilityToolCalling Capability = "tool_calling"
 
@@ -167,8 +170,12 @@ type FullClient interface {
 
 // Helper functions for capability checking
 
-// HasToolCalling checks if a client supports tool calling.
+// HasToolCalling checks native tool streaming or the legacy ToolCallingClient.
+// Native support does not imply AsToolCaller can return the legacy interface.
 func HasToolCalling(client Client) bool {
+	if HasToolStreaming(client) {
+		return true
+	}
 	_, ok := client.(ToolCallingClient)
 	return ok
 }
@@ -183,6 +190,21 @@ func HasEmbedding(client Client) bool {
 func HasStreaming(client Client) bool {
 	_, ok := client.(StreamClient)
 	return ok
+}
+
+// HasToolStreaming checks the executable interface, not a provider's advertised
+// feature list. Server/model support must still be validated by the application.
+func HasToolStreaming(client Client) bool {
+	_, ok := client.(ToolStreamClient)
+	return ok
+}
+
+// AsToolStreamClient returns the structured native tool-stream interface.
+func AsToolStreamClient(client Client) ToolStreamClient {
+	if c, ok := client.(ToolStreamClient); ok {
+		return c
+	}
+	return nil
 }
 
 // HasTokenStreaming checks if a client supports simple token streaming.

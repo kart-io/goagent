@@ -147,6 +147,10 @@ type Client interface {
 
 ### StreamClient 流式接口
 
+字符串流与结构化工具流是不同的契约。OpenAI、DeepSeek 专用 Provider 均实现 `StreamClient` 和 `ToolStreamClient`，共用完成状态、工具调用 ID、reasoning_content、用量及取消处理。通过 `llm.HasStreaming(client)` 和 `llm.HasToolStreaming(client)` 检查实际接口；`CapabilityStreaming` 本身不能证明具有这两种能力。精确声明分别是 `CapabilityStructuredStreaming` 和 `CapabilityToolStreaming`。
+
+DeepSeek 原生工具流可直接使用 `providers.NewDeepSeekWithOptions`，无需额外的兼容 Provider 包装。旧字符串流和同步 API 保留；新流式路径不隐式重试。接口能力并不保证任意模型或自定义端点可用。
+
 ```go
 type StreamClient interface {
     Client

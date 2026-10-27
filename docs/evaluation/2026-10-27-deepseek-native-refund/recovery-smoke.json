@@ -1,0 +1,15 @@
+{
+  "timestamp": "2026-10-27T04:26:12.512415+00:00",
+  "scope": "synthetic local refund service; no model calls or real payments",
+  "initial_status": "approval_required",
+  "refunds_before_approval": 0,
+  "injected_exit_code": 86,
+  "refunds_after_crash": 1,
+  "checkpoint_next_after_crash": 1,
+  "approval_persisted": true,
+  "final_status": "completed",
+  "final_next": 2,
+  "preparation_replayed": false,
+  "repeat_returned_same_snapshot": true,
+  "final_refund_rows": 1
+}

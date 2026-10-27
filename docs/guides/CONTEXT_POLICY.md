@@ -1,6 +1,6 @@
 # 工具上下文与历史摘要
 
-新应用使用 `agent.AsRunnable().Invoke/Stream`。`WithContextPolicy` 显式启用上下文治理，要求配置工具并使用 `llm.ToolStreamClient`；当前 OpenAI 兼容 Provider 支持该接口。旧 `Execute/ExecuteWithTools` 不应用此策略。
+新应用使用 `agent.AsRunnable().Invoke/Stream`。`WithContextPolicy` 显式启用上下文治理，要求配置工具并使用 `llm.ToolStreamClient`；OpenAI 与 DeepSeek 专用 Provider 均支持该接口。ExecuteWithTools 在流式 Provider 上委派同一管线，也应用此策略；旧 Execute 会明确报错并提示迁移，不再静默忽略。
 
 ```go
 agent, err := builder.NewSimpleBuilder(client).

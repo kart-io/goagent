@@ -1,0 +1,33 @@
+{
+  "cases": 3,
+  "config": {
+    "provider": "deepseek",
+    "direct_tools": false,
+    "budget": {
+      "model": "deepseek-flash",
+      "temperature": 0.2,
+      "max_calls": 2,
+      "max_output_tokens_per_call": 2048,
+      "observed_token_stop": 8000
+    },
+    "timeout": 90000000000
+  },
+  "dataset_sha256": "ce75dd705698861be8d47fbdba5e0bf127eb632ac97bb08504b0eacebc63ac5d",
+  "generated": false,
+  "goagent_dirty": true,
+  "goagent_final_turn": "omit_tools_after_results",
+  "goagent_revision": "91e6bbb923cf6269a76e98ad4b4c4a50cc3f33b1",
+  "limitations": "外部题集需调用方自行确认脱敏、代表性和标签质量；失败保留；未知用量单列；并发延迟不可直接用于速度排名",
+  "live": true,
+  "maximum_upstream_requests": 24,
+  "mode": "all",
+  "parameter_labeled_cases": 3,
+  "planned_runs": 12,
+  "prompt_version": "task-semantics-v3-lookup-arguments",
+  "repeats": 3,
+  "seed": 20261026,
+  "timestamp": "2026-10-27T04:20:20.137669354Z",
+  "tool_argument_scoring": "optional lookup labels; exact JSON structure; missing/extra arguments fail; labels are not model inputs",
+  "tool_result_format": "native_text",
+  "workers": 1
+}

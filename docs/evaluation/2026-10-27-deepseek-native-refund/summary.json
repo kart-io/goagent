@@ -1,0 +1,84 @@
+{
+  "complete": true,
+  "completed": 12,
+  "contract_failures": 0,
+  "groups": [
+    {
+      "tool_arguments_evaluated": 3,
+      "tool_arguments_passed": 3,
+      "framework": "goagent",
+      "direct": false,
+      "category": "资料不足拒答",
+      "total": 3,
+      "passed": 3,
+      "contract_passed": 3,
+      "usage_complete": 3,
+      "calls": 6,
+      "usage": {
+        "prompt_tokens": 2202,
+        "completion_tokens": 183,
+        "total_tokens": 2385
+      },
+      "p50_ms": 2680.406,
+      "p95_ms": 2725.302
+    },
+    {
+      "tool_arguments_evaluated": 3,
+      "tool_arguments_passed": 3,
+      "framework": "goagent",
+      "direct": false,
+      "category": "退款期限提取",
+      "total": 3,
+      "passed": 3,
+      "contract_passed": 3,
+      "usage_complete": 3,
+      "calls": 6,
+      "usage": {
+        "prompt_tokens": 2142,
+        "completion_tokens": 135,
+        "total_tokens": 2277
+      },
+      "p50_ms": 2513.681,
+      "p95_ms": 2611.476
+    },
+    {
+      "tool_arguments_evaluated": 3,
+      "tool_arguments_passed": 3,
+      "framework": "goagent",
+      "direct": false,
+      "category": "退款状态直返",
+      "total": 3,
+      "passed": 3,
+      "contract_passed": 3,
+      "usage_complete": 3,
+      "calls": 6,
+      "usage": {
+        "prompt_tokens": 2109,
+        "completion_tokens": 192,
+        "total_tokens": 2301
+      },
+      "p50_ms": 2501.934,
+      "p95_ms": 2789.201
+    },
+    {
+      "tool_arguments_evaluated": 3,
+      "tool_arguments_passed": 3,
+      "framework": "goagent",
+      "direct": true,
+      "category": "退款状态直返",
+      "total": 3,
+      "passed": 3,
+      "contract_passed": 3,
+      "usage_complete": 3,
+      "calls": 3,
+      "usage": {
+        "prompt_tokens": 1374,
+        "completion_tokens": 129,
+        "total_tokens": 1503
+      },
+      "p50_ms": 1370.794,
+      "p95_ms": 1517.064
+    }
+  ],
+  "planned": 12
+}

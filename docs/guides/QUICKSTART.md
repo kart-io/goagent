@@ -1,6 +1,6 @@
 # GoAgent 快速入门
 
-新应用统一使用 `agent.AsRunnable()`。同步和流式调用使用相同执行源，配置的工具、检索器、中间件及完成回调走同一路径。要求 Go 1.25+，以及支持流式补全的模型；使用工具时建议 OpenAI 兼容 Provider 的原生工具流。
+新应用统一使用 `agent.AsRunnable()`。同步和流式调用使用相同执行源，配置的工具、检索器、中间件及完成回调走同一路径。要求 Go 1.25+，以及支持流式补全的模型；使用工具时建议 OpenAI 或 DeepSeek Provider 的原生工具流。
 
 ```sh
 go get github.com/kart-io/goagent
@@ -78,7 +78,7 @@ for chunk := range chunks {
 if err := ctx.Err(); err != nil { return err }
 ```
 
-事件还包含 sources、step、usage。usage 是累计快照，不要重复求和。一个 Builder 的记忆和状态属于同一会话；AsRunnable 会串行化该会话的执行，跨会话并发应创建独立 Builder。
+事件还包含 sources、step、usage。usage 是累计快照，不要重复求和。一个 Builder 的记忆和状态属于同一会话；所有 Builder 执行入口会串行化该会话的执行，排队计入 Timeout，跨会话并发应创建独立 Builder。
 
 ## 旧接口迁移
 
@@ -88,4 +88,4 @@ if err := ctx.Err(); err != nil { return err }
 | `agent.ExecuteWithTools(ctx, input)` | `agent.AsRunnable().Invoke(ctx, input)` | 原生工具流与最终输出统一，预算包含最终回答 |
 | `agent.ExecuteStream(ctx, input)` | `agent.AsRunnable().Stream(ctx, input)` | 保留同一事件源，增加 Runnable 的组合能力 |
 
-旧方法保留兼容语义，不自动迁移。ReAct 的步骤流和其他推理策略不等同于 Builder 的 Token 流。`Pipe` 等待上游最终结果后再调用下游；复杂分支、并行汇合和有界循环使用 [workflow.Graph](../../workflow/README.md)，通过 Adapt 接入现有 Agent。详细边界见[执行契约](EXECUTION_CONTRACT.md)。
+旧 Execute 保留同步语义；配置 ContextPolicy/ReturnDirect 时会提示改用 AsRunnable。ExecuteWithTools 在支持 StreamClient 时已委派统一管线，非流式客户端仍保留旧循环。ReAct 的步骤流和其他推理策略不等同于 Builder 的 Token 流。`Pipe` 等待上游最终结果后再调用下游；复杂分支、并行汇合和有界循环使用 [workflow.Graph](../../workflow/README.md)，通过 Adapt 接入现有 Agent。详细边界见[执行契约](EXECUTION_CONTRACT.md)。

@@ -1,0 +1,19 @@
+[
+  {
+    "id": "example-order-parameter",
+    "category": "订单参数提取示例",
+    "question": "查询订单 DEMO-1001，原样返回工具文本。",
+    "evidence": "订单 DEMO-1001 已发货。",
+    "answer": "订单 DEMO-1001 已发货。",
+    "direct_eligible": true,
+    "lookup": {
+      "parameters": {
+        "type": "object",
+        "properties": {"order_id": {"type": "string", "description": "订单编号"}},
+        "required": ["order_id"],
+        "additionalProperties": false
+      },
+      "expected_arguments": {"order_id": "DEMO-1001"}
+    }
+  }
+]

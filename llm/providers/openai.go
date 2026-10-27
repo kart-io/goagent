@@ -55,6 +55,8 @@ func NewOpenAIWithOptions(opts ...agentllm.ClientOption) (*OpenAIProvider, error
 			agentllm.CapabilityCompletion,
 			agentllm.CapabilityChat,
 			agentllm.CapabilityStreaming,
+			agentllm.CapabilityStructuredStreaming,
+			agentllm.CapabilityToolStreaming,
 			agentllm.CapabilityToolCalling,
 			agentllm.CapabilityEmbedding,
 			agentllm.CapabilityVision,

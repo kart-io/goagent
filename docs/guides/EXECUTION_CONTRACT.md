@@ -23,10 +23,10 @@ output, err := runnable.Invoke(ctx, "退款政策是什么？")
 
 | Builder 入口 | 工具与上下文策略 | 同一 Builder 的并发保护 | 用途 |
 |---|---|---|---|
-| `AsRunnable().Invoke/Stream` | 自动执行已配置工具；原生 `ToolStreamClient` 路径支持 ContextPolicy 和 ReturnDirect | 适配器共享串行执行门 | 新业务与 Runnable 编排的推荐入口 |
-| `ExecuteStream` | 与 AsRunnable 共用执行源及能力 | 不自行获取适配器执行门；调用方负责隔离会话 | 直接消费 Builder 事件 |
-| `Execute` | 不自动调用工具；不应用 ContextPolicy/ReturnDirect | 不受适配器执行门保护 | 保留已有同步调用语义 |
-| `ExecuteWithTools` | 旧工具循环；不应用 ContextPolicy/ReturnDirect | 不受适配器执行门保护 | 兼容存量工具调用 |
+| `AsRunnable().Invoke/Stream` | 自动执行已配置工具；原生 `ToolStreamClient` 路径支持 ContextPolicy 和 ReturnDirect | 所有入口共享串行执行门 | 新业务与 Runnable 编排的推荐入口 |
+| `ExecuteStream` | 与 AsRunnable 共用执行源及能力 | 获取同一串行执行门 | 直接消费 Builder 事件 |
+| `Execute` | 不自动调用工具；配置 ContextPolicy/ReturnDirect 时明确报错 | 获取同一串行执行门 | 保留已有同步调用语义 |
+| `ExecuteWithTools` | 支持 StreamClient 时委派 AsRunnable；否则保留旧工具循环 | 获取同一串行执行门 | 兼容存量工具调用 |
 
 仅实现 `StreamClient` 不等于支持原生工具流。配置 ContextPolicy 或 ReturnDirect 时还须满足 `ToolStreamClient` 等构建校验；不同 Provider 的能力不能由方法名称推断。
 
@@ -54,7 +54,7 @@ if err := ctx.Err(); err != nil { return err }
 
 `NewStreamRunnable` 显式绑定执行源，统一支持 Batch、Pipe、WithConfig、WithCallbacks。执行源必须串行发送，恰好提交一个最终块，并传播 emit 错误；缺少最终块、重复终止、终止后出错和回调失败都不会产生成功块。
 
-同一 Builder 的状态和记忆属于一个会话。由它创建的多个适配器共享可取消的串行执行门，Batch 保持输入顺序。跨会话并发应创建独立 Builder。不要将旧 Execute 与新适配器混用来并发操作同一个会话。Runnable 回调是额外的编排层回调，Builder 已配置的回调仍独立执行，不要把同一个副作用回调注册两次。
+同一 Builder 的状态和记忆属于一个会话。Execute、ExecuteWithTools、ExecuteStream 及所有 AsRunnable 适配器共享可取消的串行执行门，配置的 Timeout 包含排队时间，Batch 保持输入顺序。跨会话并发应创建独立 Builder。工具或 Builder 回调不能重入调用同一个会话；尚未消费完事件时应先取消原调用再发起新调用。Initialize、Shutdown 及配置变更仍应由调用方安排在执行前后。Runnable 回调是额外的编排层回调，Builder 已配置的回调仍独立执行，不要把同一个副作用回调注册两次。
 
 `Pipe` 的现有语义是等待上游最终输出，再执行下游；不会逐 Token 变换上游流。通用编排使用新的 [workflow.Graph[T]](../../workflow/README.md)，支持条件分支、显式并行 Clone/Merge 和有界循环；仍不提供跨节点逐块 Transform。
 
@@ -75,7 +75,7 @@ if err := ctx.Err(); err != nil { return err }
 
 ## 减少模型请求与 Token
 
-OpenAI Provider 新增可选 `llm.ToolStreamClient`：模型每轮可以选择工具或直接流式回答。典型一次工具任务从三次请求（调用工具、确认 READY、生成答案）减少到两次；不需要工具时只请求一次。Builder 自动优先使用该能力，`AsRunnable().Invoke` 与 `ExecuteStream` 共用优化路径。旧 Execute/ExecuteWithTools 和不支持新接口的 Provider 不会自动改为这条路径。
+OpenAI 与 DeepSeek Provider 实现可选 `llm.ToolStreamClient`：模型每轮可以选择工具或直接流式回答。典型一次工具任务从三次请求（调用工具、确认 READY、生成答案）减少到两次；不需要工具时只请求一次。Builder 自动优先使用该能力，`AsRunnable().Invoke` 与 `ExecuteStream` 共用优化路径。旧 Execute 保留同步语义；ExecuteWithTools 对支持 StreamClient 的 Provider 委派统一入口，对非流式 Provider 保留兼容循环。该迁移会统一完成回调和原生模型调用预算，已有调用方应检查预算配置。
 
 新路径将系统指令只放在 system 消息中，将历史保留为原生角色消息，工具结果通过 tool_call_id 关联到 assistant.tool_calls。检索指令和参考资料各发送一次。保留模型要求的 reasoning_content 用于工具续接，但不会作为答案文本展示。未静默截断历史或工具结果，也没有引入答案缓存。
 
@@ -87,7 +87,9 @@ OpenAI Provider 新增可选 `llm.ToolStreamClient`：模型每轮可以选择�
 
 原生流的 `model_start` 步骤标记新模型回合。模型可能在工具调用前输出说明文字，因此所有 text 增量都是暂态内容；最终答案必须读取 done.Output.Result。需要逐回合展示时在 model_start 重置当前文本面板。中断、输出截断、参数损坏或调用 ID 重复不会执行不完整的工具调用。
 
-该能力目前由 OpenAI Provider 实现，DeepSeek 等兼容服务可通过 `providers.NewOpenAIWithOptions` 配置 BaseURL 接入。其他 Provider 若未实现 ToolStreamClient，仍保留原有选择工具再生成答案的兼容路径。
+OpenAI 和 DeepSeek 专用 Provider 共用原生 SSE 解码与完成状态检查。DeepSeek 可直接通过 `providers.NewDeepSeekWithOptions` 接入，无需借用 OpenAI 构造器；新流式路径不执行隐式重试。其他 Provider 若未实现 ToolStreamClient，仍保留已有兼容能力，不因为声明 streaming 就假定支持原生工具循环。
+
+运行时用 `llm.HasStreaming(client)` / `llm.HasToolStreaming(client)` 检查实际接口。声明中的 `structured_streaming` 与 `tool_streaming` 分别对应 StreamClient 和 ToolStreamClient；旧的 `streaming` 也可能仅表示字符串流。接口可用不保证所选模型或自定义端点支持相同协议，仍需业务端点测试。
 
 ## 流式能力声明
 
@@ -136,7 +138,7 @@ agent, err := builder.NewSimpleBuilder(client).
 // 检查 err 后，通过 agent.AsRunnable().Invoke(ctx, question) 执行。
 ```
 
-仅 `ExecuteStream/AsRunnable` 原生工具路径生效，Build 会验证 Provider 支持 `ToolStreamClient` 且名称唯一注册。本轮只有一个工具且命中名单时，成功工具的字符串直接输出，其他结果 JSON 编码；工具失败、空结果与取消不会转成成功。最终答案必须已经满足业务展示要求，模型不会再总结、补引用或执行输出格式指令。多工具调用继续模型循环，所以需要更大的 MaxIterations。旧 `Execute/ExecuteWithTools` 不应用此设置。
+仅 `ExecuteStream/AsRunnable` 原生工具路径生效，Build 会验证 Provider 支持 `ToolStreamClient` 且名称唯一注册。本轮只有一个工具且命中名单时，成功工具的字符串直接输出，其他结果 JSON 编码；工具失败、空结果与取消不会转成成功。最终答案必须已经满足业务展示要求，模型不会再总结、补引用或执行输出格式指令。多工具调用继续模型循环，所以需要更大的 MaxIterations。`ExecuteWithTools` 在流式 Provider 上也应用此设置；旧 `Execute` 会明确报错并提示迁移，避免静默忽略。
 
 直接返回仍经过记忆、状态、检查点、中间件和回调，元数据标明 `answer_source=tool`、`return_direct_tool`。工具前模型说明仍属临时文本，最终以 `done.Output` 为准。[其他框架成本控制调研](../evaluation/2026-10-26-framework-cost-research.md) 解释了选择依据与后续工作。
 

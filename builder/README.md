@@ -2,7 +2,7 @@
 
 本模块是 goagent 框架的 Agent 构造工厂，提供流畅 API（Fluent API）模式构建不同类型的 Agent。
 
-新业务通过 `agent.AsRunnable().Invoke/Stream` 执行，参见[快速入门](../docs/guides/QUICKSTART.md)和[执行入口能力对照](../docs/guides/EXECUTION_CONTRACT.md)。下文保留的 `Execute/ExecuteWithTools` 是兼容入口，不应用 ContextPolicy 或 ReturnDirect；同一 Builder 的串行保护仅覆盖 AsRunnable 适配器。
+支持结构化流的新业务通过 `agent.AsRunnable().Invoke/Stream` 执行，参见[快速入门](../docs/guides/QUICKSTART.md)和[执行入口能力对照](../docs/guides/EXECUTION_CONTRACT.md)。`Execute/ExecuteWithTools` 继续支持兼容调用。Execute 保留同步语义，对 ContextPolicy 或 ReturnDirect 明确报错；ExecuteWithTools 在流式 Provider 上委派统一入口，其他客户端保留兼容循环。所有执行入口共用会话串行保护和排队超时。
 
 ## 目录
 

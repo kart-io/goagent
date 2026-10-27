@@ -92,7 +92,8 @@ type AgentConfig struct {
 }
 
 // WithReturnDirectTools 指定结果已可直接展示的终态工具，省去模型总结请求。
-// 仅 ExecuteStream/AsRunnable 生效，并要求 ToolStreamClient。每次调用替换名单。
+// 在 ExecuteStream/AsRunnable 及其 ExecuteWithTools 委派中生效，要求 ToolStreamClient。
+// 旧 Execute 会报错而非忽略此配置。每次调用替换名单。
 // 本轮多个工具调用时仍走完整模型循环；字符串原样输出，其他结果编码为 JSON。
 // 启用者负责工具结果的格式、完整性与适用场景，模型输出格式指令不会再被执行。
 func (b *AgentBuilder[C, S]) WithReturnDirectTools(names ...string) *AgentBuilder[C, S] {
