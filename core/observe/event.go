@@ -36,8 +36,9 @@ type tracerKey struct{}
 type scopeKey struct{}
 type pathKey struct{}
 type scope struct {
-	id  string
-	seq atomic.Uint64
+	id         string
+	invocation string
+	seq        atomic.Uint64
 }
 
 var noTracer = noop.NewTracerProvider().Tracer("goagent")
@@ -60,12 +61,13 @@ func TracerFromContext(ctx context.Context) trace.Tracer {
 	return noTracer
 }
 
-// WithRunID sets observation identity independently of execution/idempotency keys.
+// WithRunID retains business identity and creates a fresh invocation scope.
+// EventID and VisitID are opaque, invocation-unique identities, not operation keys.
 func WithRunID(ctx context.Context, id string) context.Context {
 	if id == "" {
 		id = uuid.NewString()
 	}
-	return context.WithValue(ctx, scopeKey{}, &scope{id: id})
+	return context.WithValue(ctx, scopeKey{}, &scope{id: id, invocation: uuid.NewString()})
 }
 
 // Enabled reports whether a sink or tracer is configured.
@@ -120,7 +122,7 @@ func startEnabled(ctx context.Context, e Event) (context.Context, func(error, bo
 		e.OperationKey = durable.ExecutionKey(ctx)
 	}
 	n := sc.seq.Add(1)
-	e.VisitID = strconv.FormatUint(n, 10)
+	e.VisitID = sc.invocation + "/" + strconv.FormatUint(n, 10)
 	e.At = time.Now()
 	kind := e.Type
 	parent := trace.SpanContextFromContext(ctx)
@@ -134,7 +136,7 @@ func startEnabled(ctx context.Context, e Event) (context.Context, func(error, bo
 		e.ParentSpanID = parent.SpanID().String()
 	}
 	e.Type = kind + "_start"
-	e.EventID = strconv.FormatUint(n, 10)
+	e.EventID = sc.invocation + "/" + strconv.FormatUint(n, 10)
 	send(ctx, e)
 	var once sync.Once
 	return ctx, func(err error, replayed bool) {
@@ -154,7 +156,7 @@ func startEnabled(ctx context.Context, e Event) (context.Context, func(error, bo
 					e.Type = kind + "_waiting"
 				}
 			}
-			e.EventID = strconv.FormatUint(sc.seq.Add(1), 10)
+			e.EventID = sc.invocation + "/" + strconv.FormatUint(sc.seq.Add(1), 10)
 			send(ctx, e)
 			span.End()
 		})
