@@ -1,0 +1,32 @@
+name: Provider contracts
+on:
+  push:
+    branches: [master, develop]
+  pull_request:
+    branches: [master, develop]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+      - name: Protocol, continuation, cancellation, usage and capability contracts
+        run: bash scripts/provider_regression.sh
+      - name: Check recommended examples for legacy API candidates
+        run: |
+          go run ./scripts/apicheck -mode migration -strict -root examples/rag/grounded
+          go run ./scripts/apicheck -mode migration -strict -root examples/workflow
+          go run ./scripts/apicheck -mode migration -strict -root examples/llm/gemini-verify
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: provider-contracts-${{ github.sha }}
+          path: provider-contracts.jsonl
+          retention-days: 14

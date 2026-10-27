@@ -58,14 +58,15 @@ if err := ctx.Err(); err != nil { return err }
 
 `Pipe` 的现有语义是等待上游最终输出，再执行下游；不会逐 Token 变换上游流。通用编排使用新的 [workflow.Graph[T]](../../workflow/README.md)，支持条件分支、显式并行 Clone/Merge 和有界循环；仍不提供跨节点逐块 Transform。
 
-编排与恢复目前是分开的能力：
+编排与恢复按入口区分：
 
 | 组件 | 已提供 | 不应据此推断 |
 |---|---|---|
-| `workflow.Graph[T]` | 同一状态类型的分支、并行汇合、有界循环、节点事件转发 | 异构字段自动映射、跨节点流变换、图检查点恢复 |
+| `workflow.Graph[T].Compile` | 同一状态类型的分支、并行汇合、有界循环、节点事件转发 | 异构字段自动映射、跨节点流变换、自动持久化 |
+| `workflow.Graph[T].CompileDurable` | 节点边界检查点、条件分支、循环预算、审批和单机重启恢复 | 并行分支检查点、节点内部调用栈恢复、流事件重放、跨主机接管 |
 | `core/durable` | 已注册顺序步骤的持久化、审批、进程重启恢复 | 自动保存任意 Agent 调用栈、自动恢复 workflow 图 |
 
-`core/durable` 当前使用本地文件存储，步骤按至少一次语义执行；外部写操作需要服务端幂等。Builder 保存状态或检查点也不等于已实现任意图的断点恢复。需要图恢复的业务应先定义恢复位置、状态存储及副作用去重契约，再验证执行器。
+`core/durable` 当前使用本地文件存储，步骤按至少一次语义执行；外部写操作需要服务端幂等。`CompileDurable` 通过同一 Store 保存状态和节点位置；拓扑变化拒绝旧检查点，函数或状态结构变化须提升版本。业务写入须使用 `workflow.DurableKey(ctx)` 或业务请求 ID 去重，宿主负责审批授权。详见 [workflow 恢复契约](../../workflow/README.md#节点边界的持久化恢复)。
 
 ## 可选上下文治理
 
@@ -75,7 +76,7 @@ if err := ctx.Err(); err != nil { return err }
 
 ## 减少模型请求与 Token
 
-OpenAI 与 DeepSeek Provider 实现可选 `llm.ToolStreamClient`：模型每轮可以选择工具或直接流式回答。典型一次工具任务从三次请求（调用工具、确认 READY、生成答案）减少到两次；不需要工具时只请求一次。Builder 自动优先使用该能力，`AsRunnable().Invoke` 与 `ExecuteStream` 共用优化路径。旧 Execute 保留同步语义；ExecuteWithTools 对支持 StreamClient 的 Provider 委派统一入口，对非流式 Provider 保留兼容循环。该迁移会统一完成回调和原生模型调用预算，已有调用方应检查预算配置。
+OpenAI、DeepSeek 与 Gemini Provider 实现可选 `llm.ToolStreamClient`：模型每轮可以选择工具或直接流式回答。典型一次工具任务从三次请求（调用工具、确认 READY、生成答案）减少到两次；不需要工具时只请求一次。Builder 自动优先使用该能力，`AsRunnable().Invoke` 与 `ExecuteStream` 共用优化路径。旧 Execute 保留同步语义；ExecuteWithTools 对支持 StreamClient 的 Provider 委派统一入口，对非流式 Provider 保留兼容循环。该迁移会统一完成回调和原生模型调用预算，已有调用方应检查预算配置。
 
 新路径将系统指令只放在 system 消息中，将历史保留为原生角色消息，工具结果通过 tool_call_id 关联到 assistant.tool_calls。检索指令和参考资料各发送一次。保留模型要求的 reasoning_content 用于工具续接，但不会作为答案文本展示。未静默截断历史或工具结果，也没有引入答案缓存。
 
@@ -155,6 +156,6 @@ agent, err := builder.NewSimpleBuilder(client).
 
 条件路由只能返回预先声明的目标，每次选择一个后继；普通多入边不等待未选中路径。并行节点必须提供 Clone 和 Merge，按注册顺序汇合；MaxConcurrency 默认 4，约束每个并行节点的 worker。并行失败取消同组分支并等待退出，函数必须响应 context。
 
-节点事件透传并附带 Step 作用域；节点 Done 不作为图 Done。图模式声明为 steps，不代表边上逐 Token 执行。自定义 Runnable 的缺失/重复终态和迟到错误会阻止下游。原始数据中的指针/map/slice 不自动深复制；没有隐式重试、事务回滚、图持久化恢复或跨主机接管。
+节点事件透传并附带 Step 作用域；节点 Done 不作为图 Done。图模式声明为 steps，不代表边上逐 Token 执行。自定义 Runnable 的缺失/重复终态和迟到错误会阻止下游。原始数据中的指针/map/slice 不自动深复制；`Compile` 没有隐式重试、事务回滚、自动持久化或跨主机接管；持久化入口 `CompileDurable` 的 JSON 状态与恢复限制见上文。
 
 参见[完整 API 与状态边界](../../workflow/README.md)以及[离线示例](../../examples/workflow/main.go)。

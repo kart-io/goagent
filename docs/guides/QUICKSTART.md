@@ -1,6 +1,6 @@
 # GoAgent 快速入门
 
-新应用统一使用 `agent.AsRunnable()`。同步和流式调用使用相同执行源，配置的工具、检索器、中间件及完成回调走同一路径。要求 Go 1.25+，以及支持流式补全的模型；使用工具时建议 OpenAI 或 DeepSeek Provider 的原生工具流。
+新应用统一使用 `agent.AsRunnable()`。同步和流式调用使用相同执行源，配置的工具、检索器、中间件及完成回调走同一路径。要求 Go 1.25+，以及支持流式补全的模型；使用工具时可使用 OpenAI、DeepSeek 或 Gemini Provider 的原生工具流。
 
 ```sh
 go get github.com/kart-io/goagent
@@ -89,3 +89,16 @@ if err := ctx.Err(); err != nil { return err }
 | `agent.ExecuteStream(ctx, input)` | `agent.AsRunnable().Stream(ctx, input)` | 保留同一事件源，增加 Runnable 的组合能力 |
 
 旧 Execute 保留同步语义；配置 ContextPolicy/ReturnDirect 时会提示改用 AsRunnable。ExecuteWithTools 在支持 StreamClient 时已委派统一管线，非流式客户端仍保留旧循环。ReAct 的步骤流和其他推理策略不等同于 Builder 的 Token 流。`Pipe` 等待上游最终结果后再调用下游；复杂分支、并行汇合和有界循环使用 [workflow.Graph](../../workflow/README.md)，通过 Adapt 接入现有 Agent。详细边界见[执行契约](EXECUTION_CONTRACT.md)。
+
+## 迁移检查与持续验证
+
+```sh
+# 列出指定目录里的迁移候选，不自动改代码。
+go run ./scripts/apicheck -mode migration -root ./examples/my-app
+# 检查真实 Go import 的层级约束。
+bash scripts/verify_imports.sh
+```
+
+迁移检查基于 Go AST：识别旧 `interfaces.Agent/Runnable`（支持导入别名），并在导入 Builder 的文件中标记 `Execute/ExecuteWithTools` 选择器。它不做接收者类型推导、跨文件数据流或包装函数分析，因此是候选清单，可能误报或漏报。默认只报告；选定已迁移目录可加 `-strict` 作为门禁。不要据此批量替换：逐项确认 Provider 的 StreamClient/ToolStreamClient、自动工具执行、预算和回调语义。
+
+[Provider 持续回归](PROVIDER_REGRESSION.md)提供离线门禁与有界真实测试。退款应用可复用 [refund.Service](../../workflow/refund/README.md)；串行图恢复使用 [CompileDurable](../../workflow/README.md#节点边界的持久化恢复)。当前没有拆分主模块，新退款组件只依赖标准库，先保持现有导入兼容。

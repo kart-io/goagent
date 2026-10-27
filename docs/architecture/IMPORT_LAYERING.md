@@ -2,7 +2,7 @@
 
 ## 概述
 
-GoAgent 强制执行严格的 4 层架构，通过自动化验证确保导入规则的正确性。违反导入规则将导致 CI 失败。
+自动检查通过 Go AST 读取当前模块的真实 import，扫描仓库生产 Go 文件（排除测试与 vendor）。检查覆盖基础包隔离、core/builder 的禁止依赖、tools/parsers 的禁止依赖，以及非示例代码导入 examples；不宣称覆盖以下所有概念层级组合。Go 编译器另外检查循环依赖。违反已实现规则将导致 CI 失败。
 
 ## 层级定义
 
@@ -19,8 +19,9 @@ utils/       - 工具函数
 
 **导入规则：**
 
-- 只能导入标准库和外部依赖
-- **禁止**导入任何 GoAgent 内部包
+- `interfaces`、`errors` 仅允许标准库和外部依赖。
+- `utils` 可导入自己的子包。`cache` 可导入自己的子包及既有的 `utils/json`。
+- 禁止这些基础包导入其他 GoAgent 业务包。
 
 **示例：**
 
@@ -313,3 +314,8 @@ CI 会在以下情况失败：
 
 - [架构概述](ARCHITECTURE.md)
 - [测试最佳实践](../development/TESTING_BEST_PRACTICES.md)
+## 已知兼容例外与检查修复
+
+`builder/reasoning_builders.go`、`builder/reasoning_presets.go` 为既有公开推理工厂，仍依赖指定的 `agents` 子包。检查器只允许这两个文件的现有依赖清单；其他 Builder 文件、新的 Agent 依赖仍拒绝。下一次破坏性 API 调整再迁移这些工厂，不以扩大豁免隐藏新增耦合。
+
+2026-10-27 修复了旧脚本把扫描根目录设为 scripts、匹配旧 pkg/agent 路径的问题。旧报告中的“导入检查通过”不能作为分层已验证证据。新入口 `bash scripts/verify_imports.sh` 委派 `scripts/apicheck`，有违规规则和精确例外的回归测试，当前真实扫描为 0 findings。

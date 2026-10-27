@@ -1,0 +1,15 @@
+{
+  "go_version": "1.25.0",
+  "command": "bash scripts/provider_regression.sh /tmp/goagent-improvements-contracts.jsonl",
+  "packages_passed": [
+    "github.com/kart-io/goagent/llm/cache",
+    "github.com/kart-io/goagent/evaluation/agentbench/cmd/stress",
+    "github.com/kart-io/goagent/builder",
+    "github.com/kart-io/goagent/llm",
+    "github.com/kart-io/goagent/evaluation/agentbench",
+    "github.com/kart-io/goagent/llm/providers"
+  ],
+  "tests_and_subtests_passed": 820,
+  "failures": [],
+  "raw_jsonl_sha256": "de9032a522ad023de65a23402b13ad41f7cd4eabfab91ca26bba612a059b1f79"
+}
