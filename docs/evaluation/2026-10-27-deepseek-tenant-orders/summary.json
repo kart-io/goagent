@@ -1,0 +1,130 @@
+{
+  "complete": true,
+  "completed": 12,
+  "contract_failures": 0,
+  "groups": [
+    {
+      "lookup_backend": "tenant_orders",
+      "tool_arguments_evaluated": 2,
+      "tool_arguments_passed": 2,
+      "framework": "goagent",
+      "direct": false,
+      "category": "资料不足拒答",
+      "total": 2,
+      "passed": 2,
+      "contract_passed": 2,
+      "usage_complete": 2,
+      "calls": 4,
+      "usage": {
+        "prompt_tokens": 1440,
+        "completion_tokens": 118,
+        "total_tokens": 1558
+      },
+      "p50_ms": 2672.845,
+      "p95_ms": 2754.407
+    },
+    {
+      "lookup_backend": "tenant_orders",
+      "tool_arguments_evaluated": 2,
+      "tool_arguments_passed": 2,
+      "framework": "goagent",
+      "direct": false,
+      "category": "退款期限提取",
+      "total": 2,
+      "passed": 2,
+      "contract_passed": 2,
+      "usage_complete": 2,
+      "calls": 4,
+      "usage": {
+        "prompt_tokens": 1412,
+        "completion_tokens": 88,
+        "total_tokens": 1500
+      },
+      "p50_ms": 2661.94,
+      "p95_ms": 3073.247
+    },
+    {
+      "lookup_backend": "tenant_orders",
+      "lookup_misses": 2,
+      "tool_arguments_evaluated": 2,
+      "tool_arguments_passed": 2,
+      "framework": "goagent",
+      "direct": true,
+      "category": "不存在的订单",
+      "total": 2,
+      "passed": 2,
+      "contract_passed": 2,
+      "usage_complete": 2,
+      "calls": 2,
+      "usage": {
+        "prompt_tokens": 908,
+        "completion_tokens": 82,
+        "total_tokens": 990
+      },
+      "p50_ms": 1492.806,
+      "p95_ms": 1688.227
+    },
+    {
+      "lookup_backend": "tenant_orders",
+      "tool_arguments_evaluated": 2,
+      "tool_arguments_passed": 2,
+      "framework": "goagent",
+      "direct": true,
+      "category": "租户A同号订单",
+      "total": 2,
+      "passed": 2,
+      "contract_passed": 2,
+      "usage_complete": 2,
+      "calls": 2,
+      "usage": {
+        "prompt_tokens": 914,
+        "completion_tokens": 86,
+        "total_tokens": 1000
+      },
+      "p50_ms": 1741.576,
+      "p95_ms": 2466.289
+    },
+    {
+      "lookup_backend": "tenant_orders",
+      "tool_arguments_evaluated": 2,
+      "tool_arguments_passed": 2,
+      "framework": "goagent",
+      "direct": true,
+      "category": "租户B同号订单",
+      "total": 2,
+      "passed": 2,
+      "contract_passed": 2,
+      "usage_complete": 2,
+      "calls": 2,
+      "usage": {
+        "prompt_tokens": 914,
+        "completion_tokens": 86,
+        "total_tokens": 1000
+      },
+      "p50_ms": 1362.023,
+      "p95_ms": 1807.836
+    },
+    {
+      "lookup_backend": "tenant_orders",
+      "lookup_misses": 2,
+      "tool_arguments_evaluated": 2,
+      "tool_arguments_passed": 2,
+      "framework": "goagent",
+      "direct": true,
+      "category": "跨租户不可见",
+      "total": 2,
+      "passed": 2,
+      "contract_passed": 2,
+      "usage_complete": 2,
+      "calls": 2,
+      "usage": {
+        "prompt_tokens": 912,
+        "completion_tokens": 108,
+        "total_tokens": 1020
+      },
+      "p50_ms": 1448.642,
+      "p95_ms": 1822.701
+    }
+  ],
+  "planned": 12
+}

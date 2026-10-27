@@ -2,9 +2,14 @@ package llm
 
 import (
 	"context"
+	"errors"
 
 	"github.com/kart-io/goagent/interfaces"
 )
+
+// ErrUnsupportedCapability means the provider has no implementation for the
+// requested operation. Callers must not treat placeholder data as success.
+var ErrUnsupportedCapability = errors.New("provider capability is not supported")
 
 // ToolCallingClient defines the interface for LLM providers that support tool/function calling.
 // Implement this interface in addition to Client to enable tool-based interactions.
@@ -48,7 +53,8 @@ type ToolCallingClient interface {
 //
 // Implementations:
 //   - providers.OpenAIProvider
-//   - providers.DeepSeekProvider
+//
+// Legacy Embed methods on other providers do not imply advertised support.
 type EmbeddingClient interface {
 	// Embed generates a vector embedding for the given text.
 	// The embedding can be used for semantic search, similarity, clustering, etc.
@@ -180,8 +186,12 @@ func HasToolCalling(client Client) bool {
 	return ok
 }
 
-// HasEmbedding checks if a client supports embeddings.
+// HasEmbedding requires an implementation and respects an explicit capability
+// denial. A legacy method can remain callable while returning unsupported.
 func HasEmbedding(client Client) bool {
+	if checker, ok := client.(CapabilityChecker); ok && !checker.HasCapability(CapabilityEmbedding) {
+		return false
+	}
 	_, ok := client.(EmbeddingClient)
 	return ok
 }
@@ -225,6 +235,9 @@ func AsToolCaller(client Client) ToolCallingClient {
 // AsEmbedder safely casts a client to EmbeddingClient.
 // Returns nil if the client doesn't support embeddings.
 func AsEmbedder(client Client) EmbeddingClient {
+	if !HasEmbedding(client) {
+		return nil
+	}
 	if ec, ok := client.(EmbeddingClient); ok {
 		return ec
 	}

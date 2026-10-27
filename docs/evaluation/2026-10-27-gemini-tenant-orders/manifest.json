@@ -1,0 +1,34 @@
+{
+  "cases": 6,
+  "config": {
+    "provider": "gemini-openai",
+    "direct_tools": false,
+    "budget": {
+      "model": "gemini-2.5-flash",
+      "temperature": 0.2,
+      "max_calls": 2,
+      "max_output_tokens_per_call": 2048,
+      "observed_token_stop": 8000
+    },
+    "timeout": 90000000000
+  },
+  "dataset_sha256": "238e381283b6d9ce15cee1c290a97043963e7d4bfb224d64ce28e02d62ee8eb7",
+  "generated": false,
+  "goagent_dirty": true,
+  "goagent_final_turn": "omit_tools_after_results",
+  "goagent_revision": "c9d4e6c8263052b99bd7c2e9b4c86468bea15077",
+  "limitations": "外部题集需调用方自行确认脱敏、代表性和标签质量；失败保留；未知用量单列；并发延迟不可直接用于速度排名",
+  "live": true,
+  "maximum_upstream_requests": 24,
+  "mode": "contract",
+  "parameter_labeled_cases": 6,
+  "planned_runs": 12,
+  "prompt_version": "task-semantics-v4-tenant-orders",
+  "repeats": 2,
+  "seed": 20261026,
+  "tenant_order_cases": 6,
+  "timestamp": "2026-10-27T06:27:47.214489314Z",
+  "tool_argument_scoring": "optional lookup labels; exact JSON structure; missing/extra arguments fail; labels are not model inputs",
+  "tool_result_format": "native_text",
+  "workers": 1
+}

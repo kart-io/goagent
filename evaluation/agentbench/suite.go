@@ -43,7 +43,7 @@ func ValidateSuite(cases []SuiteCase) error {
 		if strings.TrimSpace(c.ID) == "" || seen[c.ID] || strings.TrimSpace(c.Category) == "" || strings.TrimSpace(c.Question) == "" || strings.TrimSpace(c.Answer) == "" {
 			return fmt.Errorf("题目 %q 需要唯一 ID、类别、问题和答案", c.ID)
 		}
-		if c.DirectEligible && c.Evidence == "" {
+		if c.DirectEligible && !hasLookupTool(c.Case) {
 			return fmt.Errorf("直返题目 %q 需要工具结果", c.ID)
 		}
 		seen[c.ID] = true
@@ -167,7 +167,7 @@ type SuiteOutcome struct {
 
 func ScoreSuiteJob(job SuiteJob, result Result) SuiteOutcome {
 	calls, tools := 1, int32(0)
-	if job.Case.Evidence != "" {
+	if hasLookupTool(job.Case.Case) {
 		tools = 1
 		if !job.Direct {
 			calls = 2
@@ -178,6 +178,8 @@ func ScoreSuiteJob(job SuiteJob, result Result) SuiteOutcome {
 }
 
 type SuiteSummary struct {
+	LookupBackend          string                `json:"lookup_backend,omitempty"`
+	LookupMisses           int32                 `json:"lookup_misses,omitempty"`
 	ToolArgumentsEvaluated int                   `json:"tool_arguments_evaluated"`
 	ToolArgumentsPassed    int                   `json:"tool_arguments_passed"`
 	Framework              string                `json:"framework"`
@@ -197,7 +199,7 @@ type SuiteSummary struct {
 func SummarizeSuite(results []SuiteOutcome) []SuiteSummary {
 	groups := map[string][]SuiteOutcome{}
 	for _, r := range results {
-		key := fmt.Sprintf("%s/%t/%s", r.Result.Framework, r.Direct, r.Category)
+		key := fmt.Sprintf("%s/%s/%t/%s", r.Result.Framework, r.Result.LookupBackend, r.Direct, r.Category)
 		groups[key] = append(groups[key], r)
 	}
 	keys := make([]string, 0, len(groups))
@@ -209,8 +211,10 @@ func SummarizeSuite(results []SuiteOutcome) []SuiteSummary {
 	for _, key := range keys {
 		rs := groups[key]
 		s := SuiteSummary{Framework: rs[0].Result.Framework, Direct: rs[0].Direct, Category: rs[0].Category, Total: len(rs)}
+		s.LookupBackend = rs[0].Result.LookupBackend
 		var durations []float64
 		for _, r := range rs {
+			s.LookupMisses += r.Result.LookupMisses
 			if r.Result.ToolArgumentsPassed != nil {
 				s.ToolArgumentsEvaluated++
 				if *r.Result.ToolArgumentsPassed {

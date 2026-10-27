@@ -13,6 +13,7 @@ import (
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	agentllm "github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/utils/json"
 )
 
 var _ agentllm.ToolStreamClient = (*OpenAIProvider)(nil)
@@ -70,6 +71,7 @@ func (p *OpenAIProvider) completeStream(ctx context.Context, req *agentllm.Compl
 		var usage *agentllm.Usage
 		var finishReason string
 		calls := map[int]*agentllm.ToolCall{}
+		completeBatchSeen := false
 		order := []int{}
 		index := 0
 		send := func(chunk *agentllm.StreamChunk) bool {
@@ -121,6 +123,18 @@ func (p *OpenAIProvider) completeStream(ctx context.Context, req *agentllm.Compl
 				send(&agentllm.StreamChunk{Done: true, Error: fmt.Errorf("原生工具流需要 tool_calls 响应，服务返回了旧 function_call 协议")})
 				return
 			}
+			if len(choice.Delta.ToolCalls) > 0 {
+				if completeBatchSeen {
+					send(&agentllm.StreamChunk{Done: true, Error: fmt.Errorf("完整工具调用结束帧后仍收到工具分片")})
+					return
+				}
+				completeBatch, err := indexCompleteToolBatch(choice.Delta.ToolCalls, string(choice.FinishReason), len(calls) > 0)
+				if err != nil {
+					send(&agentllm.StreamChunk{Done: true, Error: err})
+					return
+				}
+				completeBatchSeen = completeBatch
+			}
 			for _, delta := range choice.Delta.ToolCalls {
 				if delta.Index == nil || *delta.Index < 0 {
 					send(&agentllm.StreamChunk{Done: true, Error: fmt.Errorf("工具分片缺少有效索引")})
@@ -152,4 +166,35 @@ func (p *OpenAIProvider) completeStream(ctx context.Context, req *agentllm.Compl
 		}
 	}()
 	return out, nil
+}
+
+// Google may send complete tool calls without indices in a single terminal frame.
+// Only that unambiguous form is accepted; fragmented/mixed batches still fail.
+func indexCompleteToolBatch(calls []openai.ToolCall, finish string, hasPrevious bool) (bool, error) {
+	missing := false
+	for _, call := range calls {
+		missing = missing || call.Index == nil
+	}
+	if !missing {
+		return false, nil
+	}
+	invalid := func() (bool, error) {
+		return false, fmt.Errorf("缺少索引的工具调用必须为独立、完整的结束帧")
+	}
+	if hasPrevious || finish != "tool_calls" {
+		return invalid()
+	}
+	ids := make(map[string]bool, len(calls))
+	for _, call := range calls {
+		var args map[string]json.RawMessage
+		if call.Index != nil || call.ID == "" || ids[call.ID] || call.Type != "function" || call.Function.Name == "" || json.Unmarshal([]byte(call.Function.Arguments), &args) != nil || args == nil {
+			return invalid()
+		}
+		ids[call.ID] = true
+	}
+	for i := range calls {
+		index := i
+		calls[i].Index = &index
+	}
+	return true, nil
 }

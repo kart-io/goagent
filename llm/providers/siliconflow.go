@@ -19,6 +19,7 @@ import (
 // SiliconFlow 是一个提供多种开源模型的服务平台
 type SiliconFlowClient struct {
 	*common.BaseProvider
+	*common.ProviderCapabilities
 	apiKey  string
 	baseURL string
 	client  *httpclient.Client
@@ -54,10 +55,11 @@ func NewSiliconFlowWithOptions(opts ...agentllm.ClientOption) (*SiliconFlowClien
 	})
 
 	return &SiliconFlowClient{
-		BaseProvider: base,
-		apiKey:       base.Config.APIKey,
-		baseURL:      strings.TrimRight(base.Config.BaseURL, "/"),
-		client:       client,
+		BaseProvider:         base,
+		ProviderCapabilities: common.NewProviderCapabilities(agentllm.CapabilityCompletion, agentllm.CapabilityChat),
+		apiKey:               base.Config.APIKey,
+		baseURL:              strings.TrimRight(base.Config.BaseURL, "/"),
+		client:               client,
 	}, nil
 }
 

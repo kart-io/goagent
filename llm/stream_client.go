@@ -31,6 +31,7 @@ type ToolStreamClient interface {
 
 // StreamChunk LLM 流式响应块
 type StreamChunk struct {
+	ProviderState *ProviderState `json:"provider_state,omitempty"`
 	// ToolCalls 仅在成功终止块中包含本轮完整的工具调用。
 	ToolCalls []ToolCall `json:"tool_calls,omitempty"`
 	// ReasoningContent 仅用于工具回合的原生续接，不作为答案文本增量展示。

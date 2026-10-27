@@ -56,9 +56,10 @@ const (
 	EnvDeepSeekModel   = "DEEPSEEK_MODEL"
 
 	// Gemini
-	EnvGeminiAPIKey  = "GEMINI_API_KEY"
-	EnvGeminiBaseURL = "GEMINI_BASE_URL"
-	EnvGeminiModel   = "GEMINI_MODEL"
+	EnvGeminiAPIKey         = "GEMINI_API_KEY"
+	EnvGeminiBaseURL        = "GEMINI_BASE_URL"
+	EnvGeminiModel          = "GEMINI_MODEL"
+	EnvGeminiEmbeddingModel = "GEMINI_EMBEDDING_MODEL"
 
 	// Ollama
 	EnvOllamaBaseURL = "OLLAMA_BASE_URL"

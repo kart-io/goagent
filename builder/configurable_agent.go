@@ -561,8 +561,8 @@ type AgentOutput struct {
 }
 
 // commonToolCallingClient 定义内部接口，兼容 common.ToolCallResponse 返回类型
-// 这是因为 llm.ToolCallingClient 要求返回 *llm.ToolCallResponse
-// 但 DeepSeek/OpenAI 等实际返回的是 *common.ToolCallResponse
+// 用于返回 common 类型的旧自定义客户端；内置 OpenAI、DeepSeek、Gemini
+// 返回标准 llm.ToolCallResponse，通过下面的 stdToolCallerWrapper 转换。
 type commonToolCallingClient interface {
 	GenerateWithTools(ctx context.Context, prompt string, tools []interfaces.Tool) (*common.ToolCallResponse, error)
 }

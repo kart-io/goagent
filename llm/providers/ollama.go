@@ -18,6 +18,7 @@ import (
 // OllamaClient Ollama LLM 客户端
 type OllamaClient struct {
 	*common.BaseProvider
+	*common.ProviderCapabilities
 	baseURL string
 	client  *httpclient.Client
 }
@@ -52,9 +53,10 @@ func NewOllamaWithOptions(opts ...agentllm.ClientOption) (*OllamaClient, error) 
 	})
 
 	return &OllamaClient{
-		BaseProvider: base,
-		baseURL:      strings.TrimRight(base.Config.BaseURL, "/"),
-		client:       client,
+		BaseProvider:         base,
+		ProviderCapabilities: common.NewProviderCapabilities(agentllm.CapabilityCompletion, agentllm.CapabilityChat),
+		baseURL:              strings.TrimRight(base.Config.BaseURL, "/"),
+		client:               client,
 	}, nil
 }
 

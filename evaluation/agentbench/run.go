@@ -18,7 +18,7 @@ import (
 	"github.com/kart-io/goagent/llm/providers"
 )
 
-// Case 的 Evidence 是查询工具结果；空值表示无工具任务。
+// Case uses fixed Evidence or Lookup.Orders; neither means a task without tools.
 type Case struct {
 	ID       string      `json:"id"`
 	Question string      `json:"question"`
@@ -28,7 +28,7 @@ type Case struct {
 }
 
 type Config struct {
-	// Provider selects the native implementation; empty preserves OpenAI compatibility.
+	// Provider selects openai, deepseek or gemini-openai; empty defaults to openai.
 	Provider string `json:"provider,omitempty"`
 	// DirectTools 仅用于工具结果已是完整答案的独立题集，显式启用。
 	DirectTools bool              `json:"direct_tools"`
@@ -39,6 +39,8 @@ type Config struct {
 }
 
 type Result struct {
+	LookupBackend       string                  `json:"lookup_backend,omitempty"`
+	LookupMisses        int32                   `json:"lookup_misses,omitempty"`
 	ToolArgumentsPassed *bool                   `json:"tool_arguments_passed,omitempty"`
 	ActualToolArguments []json.RawMessage       `json:"actual_tool_arguments,omitempty"`
 	Framework           string                  `json:"framework"`
@@ -66,10 +68,15 @@ type lookup struct {
 	parameters json.RawMessage
 	mu         sync.Mutex
 	arguments  []json.RawMessage
+	orders     *OrderLookupBackend
+	misses     atomic.Int32
 }
 
 func (t *lookup) Name() string { return "lookup" }
 func (t *lookup) Description() string {
+	if t.orders != nil {
+		return "在当前会话授权范围查询订单，仅接受 order_id；未找到或无权限统一返回 NOT_FOUND。"
+	}
 	if len(t.parameters) > 0 {
 		return "查询本题的参考资料，请根据用户问题填写工具参数。"
 	}
@@ -98,6 +105,19 @@ func (t *lookup) Invoke(ctx context.Context, input *interfaces.ToolInput) (*inte
 		t.arguments = append(t.arguments, data)
 		t.mu.Unlock()
 	}
+	if t.orders != nil {
+		if input == nil {
+			return nil, fmt.Errorf("missing tool input")
+		}
+		text, missed, err := t.orders.query(ctx, input.Args)
+		if err != nil {
+			return nil, err
+		}
+		if missed {
+			t.misses.Add(1)
+		}
+		return &interfaces.ToolOutput{Result: text, Success: true}, nil
+	}
 	return &interfaces.ToolOutput{Result: t.evidence, Success: true}, nil
 }
 
@@ -106,11 +126,19 @@ func Run(parent context.Context, c Case, config Config) Result {
 	t := &lookup{evidence: c.Evidence}
 	if c.Lookup != nil {
 		t.parameters = c.Lookup.Parameters
+		t.orders = c.Lookup.Orders
 	}
 	result := RunWithExecutor(parent, c, config, "goagent", func(ctx context.Context, baseURL string, cfg Config, c Case, onText, onFinal func(string)) (int32, error) {
 		err := runGoAgent(ctx, baseURL, cfg, c, t, onText, onFinal)
 		return t.calls.Load(), err
 	})
+	if hasLookupTool(c) {
+		result.LookupBackend = "fixed_evidence"
+		if t.orders != nil {
+			result.LookupBackend = "tenant_orders"
+			result.LookupMisses = t.misses.Load()
+		}
+	}
 	if c.Lookup != nil {
 		t.mu.Lock()
 		result.ActualToolArguments = append([]json.RawMessage(nil), t.arguments...)
@@ -138,8 +166,8 @@ func RunWithExecutor(parent context.Context, c Case, config Config, framework st
 		result.Error = err.Error()
 		return result
 	}
-	if config.Provider != "" && config.Provider != "openai" && config.Provider != "deepseek" {
-		result.Error = "provider must be openai or deepseek"
+	if config.Provider != "" && config.Provider != "openai" && config.Provider != "deepseek" && config.Provider != "gemini-openai" {
+		result.Error = "provider must be openai, deepseek or gemini-openai"
 		return result
 	}
 	if config.APIKey == "" || config.BaseURL == "" || config.Timeout <= 0 || config.Budget.MaxCalls <= 0 || config.Budget.MaxOutputTokens <= 0 || config.Budget.Model == "" || c.ID == "" || c.Question == "" || c.Answer == "" {
@@ -178,7 +206,7 @@ func RunWithExecutor(parent context.Context, c Case, config Config, framework st
 	result.ToolCalls = toolCalls
 	result.Measurements = meter.Measurements()
 	result.UsageComplete = result.Measurements.Calls > 0 && result.Measurements.Calls == result.Measurements.UsageReports
-	result.Success = runErr == nil && result.Answer == c.Answer && (c.Evidence == "" || result.ToolCalls > 0)
+	result.Success = runErr == nil && result.Answer == c.Answer && (!hasLookupTool(c) || result.ToolCalls > 0)
 	if runErr != nil {
 		result.Error = runErr.Error()
 	}
@@ -192,6 +220,7 @@ func runGoAgent(ctx context.Context, baseURL string, cfg Config, c Case, t *look
 	if cfg.Provider == "deepseek" {
 		client, err = providers.NewDeepSeekWithOptions(options...)
 	} else {
+		// gemini-openai uses Google's compatibility endpoint, not GeminiProvider.
 		client, err = providers.NewOpenAIWithOptions(options...)
 	}
 	if err != nil {
@@ -202,7 +231,7 @@ func runGoAgent(ctx context.Context, baseURL string, cfg Config, c Case, t *look
 		instruction = strings.Replace(instruction, "该无参数工具每题只需查询一次", "根据用户问题填写工具参数，每题只需查询一次", 1)
 	}
 	b := builder.NewSimpleBuilder(client).WithSystemPrompt(instruction).WithMaxIterations(cfg.Budget.MaxCalls).WithMaxTokens(cfg.Budget.MaxOutputTokens).WithTemperature(cfg.Budget.Temperature).WithTimeout(cfg.Timeout)
-	if c.Evidence != "" {
+	if hasLookupTool(c) {
 		b.WithTools(t)
 		if cfg.DirectTools {
 			b.WithReturnDirectTools(t.Name())

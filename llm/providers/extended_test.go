@@ -444,7 +444,7 @@ func TestGeminiProvider_DefaultModel(t *testing.T) {
 
 	provider, err := NewGeminiWithOptions(common.ConfigToOptions(config)...)
 	require.NoError(t, err)
-	assert.Equal(t, "gemini-pro", provider.GetModel(""))
+	assert.Equal(t, "gemini-2.5-flash", provider.GetModel(""))
 }
 
 // TestGeminiProvider_ConvertToolsToFunctions tests tool conversion
@@ -453,12 +453,13 @@ func TestGeminiProvider_ConvertToolsToFunctions(t *testing.T) {
 	require.NoError(t, err)
 
 	mockTool := &MockTool{}
-	functions := provider.convertToolsToFunctions([]interfaces.Tool{mockTool})
+	functions, err := provider.convertToolsToFunctions([]interfaces.Tool{mockTool})
+	require.NoError(t, err)
 
 	assert.Len(t, functions, 1)
 	assert.Equal(t, "mock_tool", functions[0].Name)
 	assert.Equal(t, "A mock tool for testing", functions[0].Description)
-	assert.NotNil(t, functions[0].Parameters)
+	assert.NotNil(t, functions[0].ParametersJsonSchema)
 }
 
 // TestGeminiProvider_ToolSchemaToGeminiSchema tests schema conversion
@@ -466,9 +467,10 @@ func TestGeminiProvider_ToolSchemaToGeminiSchema(t *testing.T) {
 	provider, err := NewGeminiWithOptions(agentllm.WithAPIKey("test-key"))
 	require.NoError(t, err)
 
-	schema := provider.toolSchemaToGeminiSchema(nil)
+	schema, err := provider.toolSchemaToGeminiSchema(nil)
+	require.NoError(t, err)
 	assert.NotNil(t, schema)
-	assert.NotNil(t, schema.Properties)
+	assert.NotNil(t, schema["properties"])
 	// 默认 schema 的 Required 为空
 }
 

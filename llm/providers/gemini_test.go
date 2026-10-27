@@ -2,6 +2,8 @@ package providers
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -27,8 +29,7 @@ func TestGemini_NewGeminiWithOptions_Success(t *testing.T) {
 	assert.NotNil(t, provider.BaseProvider)
 	assert.NotNil(t, provider.ProviderCapabilities)
 	assert.NotNil(t, provider.client)
-	assert.NotNil(t, provider.model)
-	assert.Equal(t, "gemini-pro", provider.modelName)
+	assert.Equal(t, "gemini-pro", provider.ModelName())
 }
 
 // TestGemini_NewGeminiWithOptions_MissingAPIKey 测试缺少 API key 的错误
@@ -52,7 +53,7 @@ func TestGemini_NewGeminiWithOptions_DefaultModel(t *testing.T) {
 	)
 
 	require.NoError(t, err)
-	assert.Equal(t, "gemini-pro", provider.ModelName())
+	assert.Equal(t, "gemini-2.5-flash", provider.ModelName())
 }
 
 // TestGemini_NewGeminiWithOptions_CustomParameters 测试自定义参数
@@ -79,7 +80,9 @@ func TestGemini_NewGeminiWithOptions_LargeMaxTokens(t *testing.T) {
 
 	require.NoError(t, err)
 	// MaxTokens 应该被限制在合理范围内
-	assert.NotNil(t, provider.model.MaxOutputTokens)
+	_, cfg, err := provider.request(&agentllm.CompletionRequest{Messages: []agentllm.Message{agentllm.UserMessage("test")}}, nil)
+	require.NoError(t, err)
+	assert.EqualValues(t, 0x7fffffff, cfg.MaxOutputTokens)
 }
 
 // TestGemini_Provider 测试 Provider 方法
@@ -122,7 +125,7 @@ func TestGemini_ModelName(t *testing.T) {
 		{
 			name:     "default model",
 			model:    "",
-			expected: "gemini-pro",
+			expected: "gemini-2.5-flash",
 		},
 	}
 
@@ -167,14 +170,11 @@ func TestGemini_MaxTokens(t *testing.T) {
 
 // TestGemini_IsAvailable 测试 IsAvailable 方法（不需要真实 API 调用）
 func TestGemini_IsAvailable(t *testing.T) {
-	provider, err := NewGeminiWithOptions(
-		agentllm.WithAPIKey("test-api-key"),
-	)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.Error(w, "unavailable", 503) }))
+	defer server.Close()
+	provider, err := NewGeminiWithOptions(agentllm.WithAPIKey("test-api-key"), agentllm.WithBaseURL(server.URL))
 	require.NoError(t, err)
-
-	// IsAvailable 应该返回 false，因为没有真实的 API 连接
-	available := provider.IsAvailable()
-	assert.False(t, available)
+	assert.False(t, provider.IsAvailable())
 }
 
 // TestGemini_ConvertToolsToFunctions 测试工具转换功能
@@ -205,12 +205,13 @@ func TestGemini_ConvertToolsToFunctions(t *testing.T) {
 		},
 	}
 
-	functions := provider.convertToolsToFunctions(tools)
+	functions, err := provider.convertToolsToFunctions(tools)
 
+	require.NoError(t, err)
 	assert.Len(t, functions, 1)
 	assert.Equal(t, "get_weather", functions[0].Name)
 	assert.Equal(t, "Get weather information", functions[0].Description)
-	assert.NotNil(t, functions[0].Parameters)
+	assert.NotNil(t, functions[0].ParametersJsonSchema)
 }
 
 // TestGemini_ConvertToolsToFunctions_Multiple 测试多个工具转换
@@ -226,13 +227,14 @@ func TestGemini_ConvertToolsToFunctions_Multiple(t *testing.T) {
 		&mockTool{name: "tool3", description: "Tool 3", schema: map[string]interface{}{"type": "object"}},
 	}
 
-	functions := provider.convertToolsToFunctions(tools)
+	functions, err := provider.convertToolsToFunctions(tools)
 
+	require.NoError(t, err)
 	assert.Len(t, functions, 3)
 	for i, fn := range functions {
 		assert.NotEmpty(t, fn.Name)
 		assert.NotEmpty(t, fn.Description)
-		assert.NotNil(t, fn.Parameters)
+		assert.NotNil(t, fn.ParametersJsonSchema)
 		_ = i
 	}
 }
@@ -244,8 +246,9 @@ func TestGemini_ConvertToolsToFunctions_EmptyList(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	functions := provider.convertToolsToFunctions([]interfaces.Tool{})
+	functions, err := provider.convertToolsToFunctions([]interfaces.Tool{})
 
+	require.NoError(t, err)
 	assert.Empty(t, functions)
 }
 
@@ -256,10 +259,11 @@ func TestGemini_ToolSchemaToGeminiSchema_NilSchema(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	schema := provider.toolSchemaToGeminiSchema(nil)
+	schema, err := provider.toolSchemaToGeminiSchema(nil)
 
+	require.NoError(t, err)
 	assert.NotNil(t, schema)
-	assert.NotNil(t, schema.Properties)
+	assert.NotNil(t, schema["properties"])
 	// 默认 schema 的 Required 为空
 }
 
@@ -285,10 +289,11 @@ func TestGemini_ToolSchemaToGeminiSchema_ValidSchema(t *testing.T) {
 		"required": []string{"name"},
 	}
 
-	schema := provider.toolSchemaToGeminiSchema(inputSchema)
+	schema, err := provider.toolSchemaToGeminiSchema(inputSchema)
 
+	require.NoError(t, err)
 	assert.NotNil(t, schema)
-	assert.NotNil(t, schema.Properties)
+	assert.NotNil(t, schema["properties"])
 }
 
 // TestGemini_Complete_EmptyMessages 测试空消息列表
@@ -305,8 +310,8 @@ func TestGemini_Complete_EmptyMessages(t *testing.T) {
 
 	// 应该返回错误或空结果
 	// 注意：这可能会因为 Gemini API 拒绝空消息而失败
-	_ = result
-	_ = err
+	require.Error(t, err)
+	require.Nil(t, result)
 	// 我们不断言具体结果，因为这取决于 Gemini SDK 的行为
 }
 
@@ -321,8 +326,8 @@ func TestGemini_Chat_EmptyMessages(t *testing.T) {
 	result, err := provider.Chat(ctx, []agentllm.Message{})
 
 	// 应该返回错误或空结果
-	_ = result
-	_ = err
+	require.Error(t, err)
+	require.Nil(t, result)
 }
 
 // ==============================================================================
@@ -393,7 +398,7 @@ func TestGeminiStreaming_DefaultValues(t *testing.T) {
 	require.NoError(t, err)
 
 	// 验证默认值
-	assert.Equal(t, "gemini-pro", provider.ModelName())
+	assert.Equal(t, "gemini-2.5-flash", provider.ModelName())
 	assert.NotZero(t, provider.MaxTokens())
 }
 
@@ -497,7 +502,7 @@ func TestGemini_Configuration_Comprehensive(t *testing.T) {
 			opts: []agentllm.ClientOption{
 				agentllm.WithAPIKey("test-key"),
 			},
-			expectModel: "gemini-pro",
+			expectModel: "gemini-2.5-flash",
 			expectMaxT:  0,
 			expectTemp:  0,
 		},

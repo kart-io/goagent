@@ -1,0 +1,28 @@
+{
+  "provider": "GeminiProvider",
+  "backend": "BackendGeminiAPI",
+  "sdk": "google.golang.org/genai v1.76.0",
+  "generation_model": "gemini-2.5-flash",
+  "embedding_model": "gemini-embedding-001",
+  "endpoint": "https://generativelanguage.googleapis.com",
+  "api_version": "v1beta",
+  "model_list_preflight": "Both models returned by authenticated models list",
+  "toolchain": "go1.25",
+  "baseline_revision": "c9d4e6c",
+  "workspace_dirty": true,
+  "code_sha256": {
+    "llm/providers/gemini.go": "16947dabfbe13bc39580edd4bb89e0ea238fa2d35c2c945297b5c5e6247e993b",
+    "llm/providers/gemini_native.go": "26275b0af8c682b9d7edb22def659bbb970299bb073df8d9d09726d7f9d8548a",
+    "llm/client.go": "ff94f76f2105a54b207c1cb078bb7d7ea4dddaae24176ca45039f41a06c12104",
+    "llm/stream_client.go": "b47d686d0093498a418dd62acc56509db93a34c40976bc1533bfbf951fbe50d6",
+    "llm/options.go": "ffa84e84119ac35bfd4a0dbdd847bb00dc61cfc606abb38acf611eafdd941da9",
+    "llm/common/base.go": "646edb384f90c07a2d2c6b276d2872cfa532c44c450c5060bfffde3af715edfc",
+    "builder/tool_events.go": "01792bb60c9c722f5bb9009be6a859a825f2171ab4a775f7a6f870a54c81d408",
+    "examples/llm/gemini-verify/main.go": "f6cda930c5515e5f599ef72e8d2f13ab7136a02c17e4e6d9f3fd25257aaa3273",
+    "examples/llm/gemini-verify/native.go": "d34bbd6cb5ab05d61934ef71bb2970368be6b7dcc8205b54b2009faf56040578"
+  },
+  "generation_requests": 16,
+  "embedding_requests": 4,
+  "sdk_retries": 0,
+  "credentials_recorded": false
+}

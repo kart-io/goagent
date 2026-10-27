@@ -1,0 +1,67 @@
+{
+  "complete": true,
+  "completed": 3,
+  "contract_failures": 0,
+  "groups": [
+    {
+      "tool_arguments_evaluated": 0,
+      "tool_arguments_passed": 0,
+      "framework": "goagent",
+      "direct": false,
+      "category": "无工具算术",
+      "total": 1,
+      "passed": 1,
+      "contract_passed": 1,
+      "usage_complete": 1,
+      "calls": 1,
+      "usage": {
+        "prompt_tokens": 140,
+        "completion_tokens": 2,
+        "total_tokens": 173
+      },
+      "p50_ms": 1060.732,
+      "p95_ms": 1060.732
+    },
+    {
+      "lookup_backend": "tenant_orders",
+      "tool_arguments_evaluated": 1,
+      "tool_arguments_passed": 1,
+      "framework": "goagent",
+      "direct": false,
+      "category": "退款期限提取",
+      "total": 1,
+      "passed": 1,
+      "contract_passed": 1,
+      "usage_complete": 1,
+      "calls": 2,
+      "usage": {
+        "prompt_tokens": 409,
+        "completion_tokens": 19,
+        "total_tokens": 480
+      },
+      "p50_ms": 1647.985,
+      "p95_ms": 1647.985
+    },
+    {
+      "lookup_backend": "tenant_orders",
+      "tool_arguments_evaluated": 1,
+      "tool_arguments_passed": 1,
+      "framework": "goagent",
+      "direct": true,
+      "category": "租户A同号订单",
+      "total": 1,
+      "passed": 1,
+      "contract_passed": 1,
+      "usage_complete": 1,
+      "calls": 1,
+      "usage": {
+        "prompt_tokens": 205,
+        "completion_tokens": 17,
+        "total_tokens": 278
+      },
+      "p50_ms": 1155.596,
+      "p95_ms": 1155.596
+    }
+  ],
+  "planned": 3
+}
