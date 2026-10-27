@@ -1,0 +1,32 @@
+{
+  "started_utc": "2026-10-27T14:25:05.850613+00:00",
+  "git_head": "3bfeea70fcce35c3e925a295cc42546c1ec80b1b",
+  "platform": "macOS-26.7.1-arm64-arm-64bit-Mach-O",
+  "machine": "arm64",
+  "cpu_count": 14,
+  "python": "3.14.8",
+  "go": "go version go1.27.2 darwin/arm64",
+  "gomaxprocs": 4,
+  "asyncio_debug": false,
+  "samples": 400,
+  "warmup": 50,
+  "repeats": 5,
+  "seed": 20261027,
+  "network": "local fake models; Python socket connect disabled; no credentials used",
+  "timed_scope": "compiled warm execution; excludes construction/import/session prepare+cleanup; includes framework execution and model protocol objects",
+  "source_sha256": {
+    "evaluation/frameworkbench/test_statistics.py": "7821ddaa07e2aeac1f53dceca3661af4d433748f51b09d0ae303921820f04cfb",
+    "evaluation/frameworkbench/go.mod": "778e7dd95dfe4fa5061c89510830ba34240849b5b2082a328bac5b27d4483a78",
+    "evaluation/frameworkbench/python_runner.py": "de554c22a06ecd42a63451719c8172ad3ea2f436026dea881081b7049c93e420",
+    "evaluation/frameworkbench/runner.go": "e94cca10339a0289af53f98a1ce16dd3f7d6a0fd425f7c93fd9aa40ec9ad6bf4",
+    "evaluation/frameworkbench/test_python_runner.py": "da548ccd5f7833eb59170b1d2fbec5eb0cc119a3a9bff5bfadc4f4abf20e334d",
+    "evaluation/frameworkbench/go.sum": "7bb5f5ce3859f567be317a4378b758e8868ee5855cfea4a4d3647a9e239b97a3",
+    "evaluation/frameworkbench/contract_test.go": "c794a5322b213edf7aa030f6b2370c58ece81b5a6e15ef6df3de7d4365197eed",
+    "evaluation/frameworkbench/run_comparison.py": "0b7472b8328f6a2d31b7ef17622d18fd266e89141d8f7963f94edfb3a1d41353",
+    "evaluation/frameworkbench/requirements.lock": "c1c28ff7466bbeb1591952380af2b4953887bed60388c86f4a1dee310661c38c",
+    "evaluation/frameworkbench/cmd/runner/main.go": "a8e9dbe45dd05fefd396eceb91eea35eb6e2d28d4136a5f80d03fb917738a2bf"
+  },
+  "completed_utc": "2026-10-27T14:26:08.837345+00:00",
+  "successful_jobs": 80,
+  "measured_operations": 32000
+}
