@@ -1,0 +1,53 @@
+{
+  "engine": "GoAgent native graph + Dispatcher + SQLite demo",
+  "waiting": {
+    "status": "approval_required",
+    "snapshot": {
+      "State": {
+        "request_id": "refund-request-1",
+        "order_version": 1,
+        "valid_until": "2026-10-27T10:13:40.718463864Z",
+        "order_id": "DEMO-1001",
+        "amount_cents": 9900,
+        "currency": "CNY",
+        "paid_cents": 9900,
+        "delivery_days": 3,
+        "prepared_at": "2026-10-27T10:03:40.718462403Z"
+      },
+      "Node": "issue_refund",
+      "Steps": 3,
+      "Routing": false,
+      "Key": "5651335a4675ecdc1a1d08e988661bb2e7f3943aa50f99d26cf85fa7926fee17",
+      "Waiting": true,
+      "Done": false
+    }
+  },
+  "crash_exit_code": 86,
+  "recovered": {
+    "status": "completed",
+    "snapshot": {
+      "State": {
+        "request_id": "refund-request-1",
+        "order_version": 1,
+        "valid_until": "2026-10-27T10:13:40.718463864Z",
+        "order_id": "DEMO-1001",
+        "amount_cents": 9900,
+        "currency": "CNY",
+        "paid_cents": 9900,
+        "delivery_days": 3,
+        "prepared_at": "2026-10-27T10:03:40.718462403Z",
+        "receipt_id": "demo-refund-882b2ae9f2e0338587f6f4259ca7c2d2372bb4cc4c87dd339b089c46509312a8"
+      },
+      "Node": "__end__",
+      "Steps": 4,
+      "Routing": false,
+      "Key": "",
+      "Waiting": false,
+      "Done": true
+    }
+  },
+  "replay_same_result": true,
+  "refund_count": 1,
+  "refunded_cents": 9900,
+  "model_calls": 0
+}

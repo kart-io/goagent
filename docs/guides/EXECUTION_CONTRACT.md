@@ -63,7 +63,7 @@ if err := ctx.Err(); err != nil { return err }
 | 组件 | 已提供 | 不应据此推断 |
 |---|---|---|
 | `workflow.Graph[T].Compile` | 同一状态类型的分支、并行汇合、有界循环、节点事件转发 | 异构字段自动映射、跨节点流变换、自动持久化 |
-| `workflow.Graph[T].CompileDurable` | 节点边界检查点、条件分支、循环预算、审批和单机重启恢复 | 并行分支检查点、节点内部调用栈恢复、流事件重放、跨主机接管 |
+| `workflow.Graph[T].CompileDurable` | 节点及并行分支检查点、条件分支、循环预算、审批和单机重启恢复；AsRunnable 统一入口 | 节点内部调用栈恢复、持久化流事件重放、跨主机接管 |
 | `core/durable` | 已注册顺序步骤的持久化、审批、进程重启恢复 | 自动保存任意 Agent 调用栈、自动恢复 workflow 图 |
 
 `core/durable` 当前使用本地文件存储，步骤按至少一次语义执行；外部写操作需要服务端幂等。`CompileDurable` 通过同一 Store 保存状态和节点位置；拓扑变化拒绝旧检查点，函数或状态结构变化须提升版本。业务写入须使用 `workflow.DurableKey(ctx)` 或业务请求 ID 去重，宿主负责审批授权。详见 [workflow 恢复契约](../../workflow/README.md#节点边界的持久化恢复)。
@@ -159,3 +159,9 @@ agent, err := builder.NewSimpleBuilder(client).
 节点事件透传并附带 Step 作用域；节点 Done 不作为图 Done。图模式声明为 steps，不代表边上逐 Token 执行。自定义 Runnable 的缺失/重复终态和迟到错误会阻止下游。原始数据中的指针/map/slice 不自动深复制；`Compile` 没有隐式重试、事务回滚、自动持久化或跨主机接管；持久化入口 `CompileDurable` 的 JSON 状态与恢复限制见上文。
 
 参见[完整 API 与状态边界](../../workflow/README.md)以及[离线示例](../../examples/workflow/main.go)。
+
+## 原生工具执行与持久图事件
+
+`tools.Dispatcher` 为图节点和 Builder 工具提供同一调度入口，详见[原生编排与工具体系](NATIVE_ORCHESTRATION.md)。默认不重试，失败结果不能转为成功，工具执行键由宿主 context 注入。
+
+`DurableGraph.AsRunnable` 的 Stream Done 表示本次调用结束；业务完成检查 `Data.Done`。审批等待返回 `Data.Waiting=true`、`Data.Done=false`，兼容 `Run` 保留 `durable.ErrApprovalRequired`。已保存并行分支在恢复时跳过，Merge 保持无副作用并可能重做；节点内部模型循环仍作为整体执行。

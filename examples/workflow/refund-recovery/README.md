@@ -60,3 +60,18 @@ go test -race -count=1 -v ./examples/workflow/refund-recovery
 ## 复用业务保护
 
 幂等、审批、订单版本与累计金额检查已提取为 [`workflow/refund.Service`](../../../workflow/refund/README.md)。本例 `ledgerTx` 实现事务存储接口，`service()` 注入演示授权和七天规则；原 SQLite schema v2 与已有请求数据保持兼容。新效果执行前会再次检查授权，已提交回执的恢复不依赖审批仍然有效。生产宿主应实现真实身份授权与订单事务存储。
+
+## 原生图与工具执行模式
+
+新增 `-engine graph`：恢复申请 → 并行查询订单/校验申请 → 注册审核快照 → 审批 → Dispatcher 退款工具。所有执行均在 GoAgent 内部，工具获得节点的稳定 ExecutionKey。`-engine steps` 仍为旧默认模式，检查点目录分别是 graph-checkpoints 与 checkpoints，账本共享业务 ID 去重。
+
+```sh
+go run ./examples/workflow/refund-recovery -engine graph -dir /tmp/refund-native
+# 复制输出的 snapshot.Key 到 KEY；演示审批人不是生产身份认证。
+go run ./examples/workflow/refund-recovery -engine graph -dir /tmp/refund-native \
+  -approve KEY -approver demo-reviewer -crash-after-refund
+# 模拟退出码 86 后重启，只确认原退款，不重复写入。
+go run ./examples/workflow/refund-recovery -engine graph -dir /tmp/refund-native
+```
+
+graph 模式输出 snapshot.State、snapshot.Waiting、snapshot.Done。完整约束见[原生编排文档](../../../docs/guides/NATIVE_ORCHESTRATION.md)。

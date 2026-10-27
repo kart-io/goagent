@@ -52,7 +52,7 @@ type Graph[T any] struct {
 	nodes     map[string]nodeRunner[T]
 	edges     map[string]string
 	branches  map[string]routing[T]
-	parallel  map[string]bool
+	parallel  map[string]ParallelConfig[T]
 }
 
 func NewGraph[T any](configs ...Config) *Graph[T] {
@@ -66,7 +66,7 @@ func NewGraph[T any](configs ...Config) *Graph[T] {
 	if config.MaxConcurrency == 0 {
 		config.MaxConcurrency = 4
 	}
-	g := &Graph[T]{config: config, nodes: map[string]nodeRunner[T]{}, edges: map[string]string{}, branches: map[string]routing[T]{}, parallel: map[string]bool{}}
+	g := &Graph[T]{config: config, nodes: map[string]nodeRunner[T]{}, edges: map[string]string{}, branches: map[string]routing[T]{}, parallel: map[string]ParallelConfig[T]{}}
 	if len(configs) > 1 {
 		g.configErr = fmt.Errorf("provide at most one workflow config")
 	}
@@ -169,6 +169,7 @@ func (g *Graph[T]) AddBranch(from string, choose Router[T], targets ...string) e
 }
 
 type compiled[T any] struct {
+	parallel map[string]ParallelConfig[T]
 	config   Config
 	entry    string
 	nodes    map[string]nodeRunner[T]
@@ -246,7 +247,7 @@ func (g *Graph[T]) compile(ctx context.Context) (*compiled[T], error) {
 			return nil, fmt.Errorf("node %q has no path to END", name)
 		}
 	}
-	snapshot := &compiled[T]{config: g.config, entry: entry, nodes: maps.Clone(g.nodes), edges: maps.Clone(g.edges), branches: map[string]routing[T]{}}
+	snapshot := &compiled[T]{parallel: maps.Clone(g.parallel), config: g.config, entry: entry, nodes: maps.Clone(g.nodes), edges: maps.Clone(g.edges), branches: map[string]routing[T]{}}
 	for name, branch := range g.branches {
 		snapshot.branches[name] = routing[T]{choose: branch.choose, targets: maps.Clone(branch.targets)}
 	}

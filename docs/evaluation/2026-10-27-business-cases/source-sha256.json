@@ -1,0 +1,16 @@
+{
+  "examples/workflow/business-cases/README.md": "488e277677bad861ee0ae3b888316abf2fa7f0e50775a930db327562b9ef8474",
+  "examples/workflow/business-cases/article.go": "dd8acd351b5b8421df363642747adcffa0de9458a67d701ce7b873265817645f",
+  "examples/workflow/business-cases/devops.go": "d9c2d97d38a2678c813cb949cb0dccba0e57ffadc45d946d458c1490a6b2c441",
+  "examples/workflow/business-cases/fixtures/article-reject.json": "94b596dde1ef74e4c5a797ff30152ffefdf3da29af9ef24a50fc28b33e75d830",
+  "examples/workflow/business-cases/fixtures/article-review.json": "1c171a9026b95ee2db9f289558740887070ff2c986fc5de83cf04837fdbb394f",
+  "examples/workflow/business-cases/fixtures/devops-escalate.json": "c6401f25718f97d47048cc59dee604ace876085b754189f7420c89efe8a9f240",
+  "examples/workflow/business-cases/fixtures/devops-healthy.json": "39fdc205ab9ae8a2d16577ee364b0fae7b51efe6bf5a0288ee0289d8c46f8678",
+  "examples/workflow/business-cases/fixtures/reply-handoff.json": "3a4232c81c4e007e149ff59823fea46e9e3f6a7b1da286bdf7dbc00813aba20e",
+  "examples/workflow/business-cases/fixtures/reply-password.json": "877f4d5b6a05e2a1554997b23b558ff86f8a597eff26ef87163c0bc20a138983",
+  "examples/workflow/business-cases/main.go": "db1cdac9798030a2460037743dec9e4eca085ed7c9a692b21fd81633bef29401",
+  "examples/workflow/business-cases/main_test.go": "d03fdc4324a6b4273b2006861cc7944044ce389c317af87964cb4073062350b3",
+  "examples/workflow/business-cases/reply.go": "fe22b984ee194683dc69c851d1f28344944b3189c7f0300ef7a207c2f8a00245",
+  "examples/workflow/business-cases/scenarios_test.go": "258e218f1a1145b4a3e9cd26fd6ef47792576c5262a02d90c09f1e062dd62b97",
+  "examples/workflow/business-cases/support.go": "083802d0762bf5b707d0817eb004752704b8ebbc2dc12c9e242636e01e42a4dc"
+}

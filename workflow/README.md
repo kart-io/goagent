@@ -115,7 +115,7 @@ flowchart LR
 
 ## 节点边界的持久化恢复
 
-`CompileDurable` 使用相同图定义和 `core/durable.Store`。支持串行节点、条件分支、有界循环、节点前审批和单机重启恢复；目前不支持 `AddParallel`，编译时明确拒绝。原 `Compile` 的内存执行和流式语义保持不变。
+`CompileDurable` 使用相同图定义和 `core/durable.Store`。支持串行节点、条件分支、有界循环、节点前审批和单机重启恢复。`AddParallel` 会保存各分支输入与成功结果，恢复时跳过已保存的分支，按注册顺序汇合。原 `Compile` 的内存执行和流式语义保持不变。
 
 ```go
 store, err := durable.NewFileStore("./checkpoints")
@@ -138,10 +138,14 @@ if errors.Is(err, durable.ErrApprovalRequired) {
 
 执行前持久化意图，节点成功后保存输出，再单独保存下一条路由。因此路由失败不会重跑已保存的节点。Router 必须无副作用，其执行可能在崩溃后重放；Router 对输入的修改不保存。`MaxSteps` 跨重启累计。审批键绑定 run、版本计划和具体节点访问，循环每轮使用不同键；它不是身份认证凭证。
 
-节点通过 `workflow.DurableKey(ctx)` 读取稳定执行键。效果提交后、检查点保存前发生崩溃时节点仍可能重跑，外部服务必须用该键或更强的业务请求 ID 去重。节点内部 Agent/工具循环作为整体重跑，不恢复任意调用栈。当前 `Run` 返回状态，不承诺持久化流事件重放。FileStore 只提供本地锁与原子文件保存，不提供跨主机租约或接管。并行分支检查点是后续独立阶段。
+节点通过 `workflow.DurableKey(ctx)` 读取稳定执行键。效果提交后、检查点保存前发生崩溃时节点仍可能重跑，外部服务必须用该键或更强的业务请求 ID 去重。节点内部 Agent/工具循环作为整体重跑，不恢复任意调用栈。`AsRunnable` 为持久图提供 Invoke/Stream/Batch；审批暂停返回 Waiting=true、Done=false 的状态。兼容 `Run` 仍返回审批哨兵错误。实时事件不承诺持久化重放。FileStore 只提供本地锁与原子文件保存，不提供跨主机租约或接管。Merge 必须无副作用；效果完成后但分支检查点保存前仍可能重跑，业务服务须执行幂等。
 
 ```sh
 go test -race ./workflow -run DurableGraph
 ```
 
 包含真实子进程在效果落盘后退出、重新启动仅产生一个效果的测试，以及审批、循环预算、路由失败、保存失败、取消等待与损坏检查点测试。
+
+## 原生工具与统一恢复入口
+
+`tools.Dispatcher.AsRunnable()` 可通过 Adapt 注册为图节点；`dispatcher.Tools()` 可注册给 Builder。两者共享参数校验、授权钩子、超时与并发限制，且不自动重试。持久节点/分支的执行键会自动注入 ToolInput.ExecutionKey。完整配置、恢复语义及可运行退款案例见[原生编排与工具体系](../docs/guides/NATIVE_ORCHESTRATION.md)。

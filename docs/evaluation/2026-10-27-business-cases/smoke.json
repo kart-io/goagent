@@ -1,0 +1,80 @@
+{
+  "simulated": true,
+  "model_calls": 0,
+  "external_business_calls": 0,
+  "effect_records": 5,
+  "cases": [
+    {
+      "case": "devops",
+      "run": "default",
+      "approval_required": true,
+      "outcome": "recovered",
+      "has_receipt": true,
+      "repeat_unchanged": true
+    },
+    {
+      "case": "article-review",
+      "run": "default",
+      "approval_required": false,
+      "outcome": "published",
+      "has_receipt": true,
+      "repeat_unchanged": true
+    },
+    {
+      "case": "auto-reply",
+      "run": "default",
+      "approval_required": false,
+      "outcome": "replied",
+      "has_receipt": true,
+      "repeat_unchanged": true
+    },
+    {
+      "case": "devops",
+      "run": "healthy",
+      "approval_required": false,
+      "outcome": "healthy",
+      "has_receipt": false,
+      "repeat_unchanged": true
+    },
+    {
+      "case": "devops",
+      "run": "escalate",
+      "approval_required": false,
+      "outcome": "escalated",
+      "has_receipt": false,
+      "repeat_unchanged": true
+    },
+    {
+      "case": "article-review",
+      "run": "reject",
+      "approval_required": false,
+      "outcome": "rejected",
+      "has_receipt": false,
+      "repeat_unchanged": true
+    },
+    {
+      "case": "article-review",
+      "run": "review",
+      "approval_required": true,
+      "outcome": "published",
+      "has_receipt": true,
+      "repeat_unchanged": true
+    },
+    {
+      "case": "auto-reply",
+      "run": "handoff",
+      "approval_required": false,
+      "outcome": "human_handoff",
+      "has_receipt": false,
+      "repeat_unchanged": true
+    },
+    {
+      "case": "auto-reply",
+      "run": "password",
+      "approval_required": false,
+      "outcome": "replied",
+      "has_receipt": true,
+      "repeat_unchanged": true
+    }
+  ]
+}

@@ -129,7 +129,7 @@ func (r *Runner) Run(ctx context.Context, id string, initial json.RawMessage, ap
 		if err = r.Store.Save(ctx, id, snapshot); err != nil {
 			return snapshot, err
 		}
-		output, e := step.Run(ctx, StepInput{Data: append(json.RawMessage(nil), snapshot.Data...), Key: snapshot.Key})
+		output, e := step.Run(WithExecutionKey(ctx, snapshot.Key), StepInput{Data: append(json.RawMessage(nil), snapshot.Data...), Key: snapshot.Key})
 		if e != nil {
 			return snapshot, e
 		}

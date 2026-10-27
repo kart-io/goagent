@@ -1,0 +1,46 @@
+{
+  "recorded_at": "2026-10-27T10:42:59.037944+00:00",
+  "go_version": "go1.25.0",
+  "dirty_workspace": true,
+  "business_effects_simulated": true,
+  "summary": [
+    {
+      "provider": "gemini",
+      "model": "gemini-2.5-flash",
+      "passed": 6,
+      "cases": 6,
+      "model_calls": 6,
+      "reported_total_tokens": 3037,
+      "cases_reporting_usage": 6
+    },
+    {
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "passed": 6,
+      "cases": 6,
+      "model_calls": 6,
+      "reported_total_tokens": 2021,
+      "cases_reporting_usage": 6
+    }
+  ],
+  "source_sha256": {
+    "examples/workflow/business-cases/README.md": "7c8f09902a3b00f853d60ca8b6b5be3ffe415a056a23b062f00b255aaade1582",
+    "examples/workflow/business-cases/article.go": "58fb3dafad80fa7ed38139d6e6d0f422f4c4651507f621e43be7b8cf25aa200e",
+    "examples/workflow/business-cases/devops.go": "d7c57db09f22ac2e5d3c4ed0c2521580a2fbc855dd3ee8638acf71d782b87233",
+    "examples/workflow/business-cases/fixtures/article-reject.json": "94b596dde1ef74e4c5a797ff30152ffefdf3da29af9ef24a50fc28b33e75d830",
+    "examples/workflow/business-cases/fixtures/article-review.json": "1c171a9026b95ee2db9f289558740887070ff2c986fc5de83cf04837fdbb394f",
+    "examples/workflow/business-cases/fixtures/devops-escalate.json": "c6401f25718f97d47048cc59dee604ace876085b754189f7420c89efe8a9f240",
+    "examples/workflow/business-cases/fixtures/devops-healthy.json": "39fdc205ab9ae8a2d16577ee364b0fae7b51efe6bf5a0288ee0289d8c46f8678",
+    "examples/workflow/business-cases/fixtures/reply-handoff.json": "3a4232c81c4e007e149ff59823fea46e9e3f6a7b1da286bdf7dbc00813aba20e",
+    "examples/workflow/business-cases/fixtures/reply-password.json": "877f4d5b6a05e2a1554997b23b558ff86f8a597eff26ef87163c0bc20a138983",
+    "examples/workflow/business-cases/live_test.go": "d502b93ac59a22c19e8db29e5bdbe482201e8fb09c00ce4605c3e5703c164165",
+    "examples/workflow/business-cases/main.go": "e2ad729f871b696582d5d8b253a07bbcda21579a43197b3cf9097516084e06e7",
+    "examples/workflow/business-cases/main_test.go": "d03fdc4324a6b4273b2006861cc7944044ce389c317af87964cb4073062350b3",
+    "examples/workflow/business-cases/model.go": "b5115dbf229506726093c2449df6d4a7863c53c7048f66ce54a5dbb07f83802c",
+    "examples/workflow/business-cases/model_test.go": "33ecb7981a5788ecba5ededc51d26ee1527fd43db31dd3f68c3db9e14ec61275",
+    "examples/workflow/business-cases/reply.go": "f16ecebf21bf31babf90af6736b6df87a49adbd3619baa295cefe80ad4bbed6a",
+    "examples/workflow/business-cases/scenarios_test.go": "258e218f1a1145b4a3e9cd26fd6ef47792576c5262a02d90c09f1e062dd62b97",
+    "examples/workflow/business-cases/support.go": "eca5a33ed1e03950ad4b78ebb8f4d6740c464a9e2e7cc12e9ba1a526917e42cc",
+    "scripts/business_cases_live.sh": "a1116df704b5217e80c1787cb7e60e4a75c2d6c34b96516db3578fd86edc9d36"
+  }
+}
