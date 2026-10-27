@@ -1,0 +1,14 @@
+{
+  "version": "v1",
+  "plan": "3076f3ec283f796096a7401acfa4fef1afcbe76cd45115e31128d087b33bd755",
+  "run_id": "legacy",
+  "next": 0,
+  "data": {
+    "node": "effect",
+    "routing": false,
+    "state": 41
+  },
+  "waiting": true,
+  "approved": false,
+  "key": "99f4568b08c0794ac593da0974100bb8bef62117b896b4c0ddce778a3c444275"
+}

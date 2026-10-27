@@ -1,0 +1,28 @@
+{
+  "summary": {
+    "model": "MiniMax-M3.1-Flash",
+    "endpoint": "https://api.minimax.cn/v1/chat/completions",
+    "passed": 6,
+    "cases": 6,
+    "requests": 6,
+    "reported_total_tokens": 2556,
+    "replay_unchanged": true,
+    "timestamp": "2026-10-27T10:53:59.424378252Z"
+  },
+  "test_cache_disabled": true,
+  "source_sha256": {
+    "examples/workflow/business-cases/article.go": "58fb3dafad80fa7ed38139d6e6d0f422f4c4651507f621e43be7b8cf25aa200e",
+    "examples/workflow/business-cases/devops.go": "d7c57db09f22ac2e5d3c4ed0c2521580a2fbc855dd3ee8638acf71d782b87233",
+    "examples/workflow/business-cases/live_test.go": "7334487c6a11a8ac110242aa58054d4b2c1d8c21f7e397b9c1be8b559fa0a14d",
+    "examples/workflow/business-cases/main.go": "e4b0646fcb2e2e6511d641809b7c9c924f112c5c0c69173e1b97cead2fe38bb4",
+    "examples/workflow/business-cases/main_test.go": "d03fdc4324a6b4273b2006861cc7944044ce389c317af87964cb4073062350b3",
+    "examples/workflow/business-cases/minimax.go": "ecadbb396725dcb90940d973c3104fe1f0a9b4c38e42583deb25e6ae185ac017",
+    "examples/workflow/business-cases/minimax_test.go": "af07cbe90ad1c300d0d4f78f6e99dbc57dc7f810348a7a5b23739ddda39b608a",
+    "examples/workflow/business-cases/model.go": "a2c69c0a0102092af6653c9f1045c1b5ec39f848b69fd4c01cd48e746f60575d",
+    "examples/workflow/business-cases/model_test.go": "33ecb7981a5788ecba5ededc51d26ee1527fd43db31dd3f68c3db9e14ec61275",
+    "examples/workflow/business-cases/reply.go": "f16ecebf21bf31babf90af6736b6df87a49adbd3619baa295cefe80ad4bbed6a",
+    "examples/workflow/business-cases/scenarios_test.go": "258e218f1a1145b4a3e9cd26fd6ef47792576c5262a02d90c09f1e062dd62b97",
+    "examples/workflow/business-cases/support.go": "eca5a33ed1e03950ad4b78ebb8f4d6740c464a9e2e7cc12e9ba1a526917e42cc",
+    "scripts/business_cases_live.sh": "1eb798454ba7abfe45097dd26fcdf71dc5ef21ae949d8e2a886ced97ba2b0a24"
+  }
+}

@@ -25,8 +25,8 @@ type DurableConfig struct {
 }
 
 // DurableGraph resumes at node boundaries. Branch routing is checkpointed
-// separately from successful node output. AddParallel is intentionally rejected:
-// this executor does not yet persist individual fork/join branch results.
+// separately from successful node output. Parallel branches checkpoint their
+// individual results; recovery runs only branches without a committed result.
 type DurableGraph[T any] struct {
 	graph         *compiled[T]
 	store         durable.Store
@@ -46,20 +46,15 @@ type GraphSnapshot[T any] struct {
 }
 
 type graphState[T any] struct {
-	Node    string `json:"node"`
-	Routing bool   `json:"routing"`
-	State   T      `json:"state"`
+	Parallel *parallelCheckpoint `json:"parallel,omitempty"`
+	Node     string              `json:"node"`
+	Routing  bool                `json:"routing"`
+	State    T                   `json:"state"`
 }
 
-type durableKeyContext struct{}
-
-// DurableKey is stable for retries of the same run/plan/node visit, distinct for
-// separate loop visits. Side-effect services must deduplicate by this key (or a
-// stronger business key). It is not an authentication token.
-func DurableKey(ctx context.Context) string {
-	key, _ := ctx.Value(durableKeyContext{}).(string)
-	return key
-}
+// DurableKey identifies this node/branch visit across retries. External effect
+// services must deduplicate by this key or a stronger business request ID.
+func DurableKey(ctx context.Context) string { return durable.ExecutionKey(ctx) }
 func graphDigest(value any) string {
 	data, _ := json.Marshal(value)
 	sum := sha256.Sum256(data)
@@ -74,9 +69,6 @@ func (g *Graph[T]) CompileDurable(ctx context.Context, cfg DurableConfig) (*Dura
 	if err != nil {
 		return nil, err
 	}
-	if len(g.parallel) != 0 {
-		return nil, fmt.Errorf("durable graph does not yet support AddParallel; use sequential nodes")
-	}
 	approvals := map[string]bool{}
 	for _, node := range cfg.ApprovalNodes {
 		if graph.nodes[node] == nil || approvals[node] {
@@ -88,6 +80,12 @@ func (g *Graph[T]) CompileDurable(ctx context.Context, cfg DurableConfig) (*Dura
 	for name, branch := range graph.branches {
 		branches[name] = slices.Sorted(maps.Keys(branch.targets))
 	}
+	parallel := map[string][]string{}
+	for name, cfg := range graph.parallel {
+		for _, branch := range cfg.Branches {
+			parallel[name] = append(parallel[name], branch.Name)
+		}
+	}
 	descriptor := struct {
 		Format    string
 		Version   string
@@ -96,7 +94,8 @@ func (g *Graph[T]) CompileDurable(ctx context.Context, cfg DurableConfig) (*Dura
 		Edges     map[string]string
 		Branches  map[string][]string
 		Approvals map[string]bool
-	}{"goagent-graph-v1", cfg.Version, graph.config, slices.Sorted(maps.Keys(graph.nodes)), graph.edges, branches, approvals}
+		Parallel  map[string][]string `json:",omitempty"`
+	}{"goagent-graph-v1", cfg.Version, graph.config, slices.Sorted(maps.Keys(graph.nodes)), graph.edges, branches, approvals, parallel}
 	return &DurableGraph[T]{graph: graph, store: cfg.Store, version: cfg.Version, plan: graphDigest(descriptor), approvals: approvals}, nil
 }
 
@@ -109,7 +108,16 @@ func publicGraphSnapshot[T any](s *durable.Snapshot, state graphState[T]) *Graph
 // supplying it; the key only binds the approval to this precise node visit.
 // Effects are at least once if a process dies after the effect but before Save.
 // Routers must be pure; they may repeat after a crash before routing is saved.
-func (d *DurableGraph[T]) Run(ctx context.Context, id string, initial T, approvalKey string) (result *GraphSnapshot[T], err error) {
+func (d *DurableGraph[T]) Run(ctx context.Context, id string, initial T, approvalKey string) (*GraphSnapshot[T], error) {
+	return d.run(ctx, id, initial, approvalKey, func(*core.StreamEvent) error { return nil })
+}
+
+func (d *DurableGraph[T]) run(ctx context.Context, id string, initial T, approvalKey string, emit func(*core.StreamEvent) error) (result *GraphSnapshot[T], err error) {
+	defer func() {
+		if recover() != nil {
+			err = fmt.Errorf("durable graph storage or serialization panicked")
+		}
+	}()
 	if d == nil || d.store == nil || id == "" {
 		return nil, fmt.Errorf("compiled durable graph and run ID are required")
 	}
@@ -120,7 +128,11 @@ func (d *DurableGraph[T]) Run(ctx context.Context, id string, initial T, approva
 	if err != nil {
 		return nil, err
 	}
-	defer func() { err = errors.Join(err, unlock()) }()
+	defer func() {
+		if e := unlock(); e != nil {
+			err = errors.Join(err, e)
+		}
+	}()
 	checkpoint, err := d.store.Load(ctx, id)
 	if errors.Is(err, os.ErrNotExist) {
 		if approvalKey != "" {
@@ -137,14 +149,8 @@ func (d *DurableGraph[T]) Run(ctx context.Context, id string, initial T, approva
 	} else if err != nil {
 		return nil, err
 	}
-	var state graphState[T]
-	if checkpoint == nil || checkpoint.Plan != d.plan || checkpoint.Version != d.version || checkpoint.RunID != id || checkpoint.Next < 0 || checkpoint.Next > d.graph.config.MaxSteps || json.Unmarshal(checkpoint.Data, &state) != nil {
-		return nil, fmt.Errorf("checkpoint does not match versioned graph or is corrupt")
-	}
-	if state.Node != END && d.graph.nodes[state.Node] == nil {
-		return nil, fmt.Errorf("checkpoint contains unknown node")
-	}
-	if err = d.validateContinuation(id, checkpoint, state); err != nil {
+	state, err := d.decodeCheckpoint(id, checkpoint)
+	if err != nil {
 		return nil, err
 	}
 	result = publicGraphSnapshot(checkpoint, state)
@@ -202,6 +208,9 @@ func (d *DurableGraph[T]) Run(ctx context.Context, id string, initial T, approva
 				if err = save(intent, state); err != nil {
 					return result, err
 				}
+				if err = emit(&core.StreamEvent{Type: "approval_required", Step: state.Node}); err != nil {
+					return result, err
+				}
 				return result, durable.ErrApprovalRequired
 			}
 		}
@@ -214,15 +223,44 @@ func (d *DurableGraph[T]) Run(ctx context.Context, id string, initial T, approva
 		if err = json.Unmarshal(checkpoint.Data, &input); err != nil {
 			return result, err
 		}
+		if err = emit(&core.StreamEvent{Type: "node_start", Step: state.Node}); err != nil {
+			return result, err
+		}
 		node := d.graph.nodes[state.Node]
-		runner := core.NewStreamRunnable(core.StreamModeSteps, func(ctx context.Context, in T, emit func(core.StreamChunk[T]) error) error {
-			out, e := node(ctx, in, emit)
+		nodeName := state.Node
+		runner := core.NewStreamRunnable(core.StreamModeSteps, func(ctx context.Context, in T, done func(core.StreamChunk[T]) error) error {
+			var out T
+			var e error
+			if cfg, ok := d.graph.parallel[nodeName]; ok {
+				out, e = runDurableParallel(ctx, in, cfg, d.graph.config.MaxConcurrency, state.Parallel,
+					func(progress *parallelCheckpoint) error {
+						nextState := state
+						nextState.Parallel = progress
+						return save(*checkpoint, nextState)
+					}, func(event *core.StreamEvent) error {
+						copy := *event
+						copy.Step = nodeName + "/" + event.Step
+						return emit(&copy)
+					})
+			} else {
+				out, e = node(ctx, in, func(chunk core.StreamChunk[T]) error {
+					if chunk.Event == nil {
+						return nil
+					}
+					event := *chunk.Event
+					event.Step = nodeName
+					if chunk.Event.Step != "" {
+						event.Step += "/" + chunk.Event.Step
+					}
+					return emit(&event)
+				})
+			}
 			if e != nil {
 				return e
 			}
-			return emit(core.StreamChunk[T]{Done: true, Data: out})
+			return done(core.StreamChunk[T]{Done: true, Data: out})
 		})
-		output, e := runner.Invoke(context.WithValue(ctx, durableKeyContext{}, intent.Key), input.State)
+		output, e := runner.Invoke(durable.WithExecutionKey(ctx, intent.Key), input.State)
 		if e != nil {
 			return result, fmt.Errorf("node %q: %w", state.Node, e)
 		}
@@ -234,11 +272,67 @@ func (d *DurableGraph[T]) Run(ctx context.Context, id string, initial T, approva
 		if err = save(next, graphState[T]{Node: state.Node, Routing: true, State: output}); err != nil {
 			return result, err
 		}
+		if err = emit(&core.StreamEvent{Type: "node_end", Step: nodeName}); err != nil {
+			return result, err
+		}
 	}
 	return result, nil
 }
 
+func (d *DurableGraph[T]) decodeCheckpoint(id string, checkpoint *durable.Snapshot) (state graphState[T], err error) {
+	defer func() {
+		if recover() != nil {
+			err = fmt.Errorf("checkpoint decoding panicked")
+		}
+	}()
+	if checkpoint == nil || checkpoint.Plan != d.plan || checkpoint.Version != d.version || checkpoint.RunID != id || checkpoint.Next < 0 || checkpoint.Next > d.graph.config.MaxSteps || json.Unmarshal(checkpoint.Data, &state) != nil {
+		return state, fmt.Errorf("checkpoint does not match versioned graph or is corrupt")
+	}
+	if state.Node != END && d.graph.nodes[state.Node] == nil {
+		return state, fmt.Errorf("checkpoint contains unknown node")
+	}
+	if err = d.validateContinuation(id, checkpoint, state); err != nil {
+		return state, err
+	}
+	return state, nil
+}
+
+// Snapshot loads and validates a continuation without executing it. It takes the
+// run lock and may wait for active work; use a bounded context for status reads.
+func (d *DurableGraph[T]) Snapshot(ctx context.Context, id string) (out *GraphSnapshot[T], err error) {
+	if d == nil || d.store == nil || id == "" {
+		return nil, fmt.Errorf("compiled durable graph and run ID are required")
+	}
+	unlock, err := d.store.Lock(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if e := unlock(); e != nil {
+			err = errors.Join(err, e)
+		}
+	}()
+	cp, err := d.store.Load(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	state, err := d.decodeCheckpoint(id, cp)
+	if err != nil {
+		return nil, err
+	}
+	return publicGraphSnapshot(cp, state), nil
+}
+
 func (d *DurableGraph[T]) validateContinuation(id string, cp *durable.Snapshot, state graphState[T]) error {
+	if state.Parallel != nil {
+		cfg, ok := d.graph.parallel[state.Node]
+		if !ok || state.Routing || cp.Key == "" || cp.Waiting || (d.approvals[state.Node] && !cp.Approved) {
+			return fmt.Errorf("corrupt parallel continuation")
+		}
+		if err := validateParallel[T](cfg, state.Parallel); err != nil {
+			return err
+		}
+	}
 	if state.Routing && (state.Node == END || cp.Next == 0) {
 		return fmt.Errorf("corrupt graph routing position")
 	}

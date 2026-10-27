@@ -181,17 +181,11 @@ func TestDurableGraphCheckpointFailureReplaysStableKey(t *testing.T) {
 	require.Equal(t, keys[0], keys[1])
 }
 
-func TestDurableGraphRejectsParallelAndCorruption(t *testing.T) {
+func TestDurableGraphRejectsCorruption(t *testing.T) {
 	ctx := context.Background()
-	g := workflow.NewGraph[int]()
-	require.NoError(t, g.AddParallel("fork", workflow.ParallelConfig[int]{Branches: []workflow.Branch[int]{{Name: "a", Run: func(_ context.Context, n int) (int, error) { return n, nil }}}, Clone: func(n int) int { return n }, Merge: func(_ context.Context, n int, _ []int) (int, error) { return n, nil }}))
-	require.NoError(t, g.AddEdge(workflow.START, "fork"))
-	require.NoError(t, g.AddEdge("fork", workflow.END))
 	cfg := workflow.DurableConfig{Store: newStore(t), Version: "v1"}
-	_, err := g.CompileDurable(ctx, cfg)
-	require.ErrorContains(t, err, "AddParallel")
 	calls := 0
-	g = oneNode(t, func(_ context.Context, n int) (int, error) { calls++; return n, nil })
+	g := oneNode(t, func(_ context.Context, n int) (int, error) { calls++; return n, nil })
 	cfg.ApprovalNodes = []string{"effect"}
 	run, err := g.CompileDurable(ctx, cfg)
 	require.NoError(t, err)

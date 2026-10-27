@@ -1,0 +1,110 @@
+{
+  "started_at": "2026-10-27T11:01:27.231586+00:00",
+  "repeats": 3,
+  "maximum_model_requests": 54,
+  "models": {
+    "gemini": "gemini-2.5-flash",
+    "deepseek": "deepseek-flash",
+    "minimax": "MiniMax-M3.1-Flash"
+  },
+  "source_sha256": {
+    "examples/workflow/business-cases/article.go": "58fb3dafad80fa7ed38139d6e6d0f422f4c4651507f621e43be7b8cf25aa200e",
+    "examples/workflow/business-cases/devops.go": "d7c57db09f22ac2e5d3c4ed0c2521580a2fbc855dd3ee8638acf71d782b87233",
+    "examples/workflow/business-cases/live_test.go": "7334487c6a11a8ac110242aa58054d4b2c1d8c21f7e397b9c1be8b559fa0a14d",
+    "examples/workflow/business-cases/main.go": "e4b0646fcb2e2e6511d641809b7c9c924f112c5c0c69173e1b97cead2fe38bb4",
+    "examples/workflow/business-cases/main_test.go": "d03fdc4324a6b4273b2006861cc7944044ce389c317af87964cb4073062350b3",
+    "examples/workflow/business-cases/minimax.go": "ecadbb396725dcb90940d973c3104fe1f0a9b4c38e42583deb25e6ae185ac017",
+    "examples/workflow/business-cases/minimax_test.go": "af07cbe90ad1c300d0d4f78f6e99dbc57dc7f810348a7a5b23739ddda39b608a",
+    "examples/workflow/business-cases/model.go": "a2c69c0a0102092af6653c9f1045c1b5ec39f848b69fd4c01cd48e746f60575d",
+    "examples/workflow/business-cases/model_test.go": "33ecb7981a5788ecba5ededc51d26ee1527fd43db31dd3f68c3db9e14ec61275",
+    "examples/workflow/business-cases/reply.go": "f16ecebf21bf31babf90af6736b6df87a49adbd3619baa295cefe80ad4bbed6a",
+    "examples/workflow/business-cases/scenarios_test.go": "258e218f1a1145b4a3e9cd26fd6ef47792576c5262a02d90c09f1e062dd62b97",
+    "examples/workflow/business-cases/support.go": "eca5a33ed1e03950ad4b78ebb8f4d6740c464a9e2e7cc12e9ba1a526917e42cc",
+    "scripts/business_cases_live.sh": "1eb798454ba7abfe45097dd26fcdf71dc5ef21ae949d8e2a886ced97ba2b0a24"
+  },
+  "runs": [
+    {
+      "round": 1,
+      "provider": "gemini",
+      "model": "gemini-2.5-flash",
+      "exit_code": 0,
+      "duration_seconds": 14.488,
+      "results": "round-1-gemini.json",
+      "log": "round-1-gemini.log"
+    },
+    {
+      "round": 1,
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "exit_code": 0,
+      "duration_seconds": 9.78,
+      "results": "round-1-deepseek.json",
+      "log": "round-1-deepseek.log"
+    },
+    {
+      "round": 1,
+      "provider": "minimax",
+      "model": "MiniMax-M3.1-Flash",
+      "exit_code": 0,
+      "duration_seconds": 10.18,
+      "results": "round-1-minimax.json",
+      "log": "round-1-minimax.log"
+    },
+    {
+      "round": 2,
+      "provider": "gemini",
+      "model": "gemini-2.5-flash",
+      "exit_code": 1,
+      "duration_seconds": 12.334,
+      "results": "round-2-gemini.json",
+      "log": "round-2-gemini.log"
+    },
+    {
+      "round": 2,
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "exit_code": 0,
+      "duration_seconds": 9.884,
+      "results": "round-2-deepseek.json",
+      "log": "round-2-deepseek.log"
+    },
+    {
+      "round": 2,
+      "provider": "minimax",
+      "model": "MiniMax-M3.1-Flash",
+      "exit_code": 0,
+      "duration_seconds": 12.739,
+      "results": "round-2-minimax.json",
+      "log": "round-2-minimax.log"
+    },
+    {
+      "round": 3,
+      "provider": "gemini",
+      "model": "gemini-2.5-flash",
+      "exit_code": 0,
+      "duration_seconds": 13.288,
+      "results": "round-3-gemini.json",
+      "log": "round-3-gemini.log"
+    },
+    {
+      "round": 3,
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "exit_code": 0,
+      "duration_seconds": 9.429,
+      "results": "round-3-deepseek.json",
+      "log": "round-3-deepseek.log"
+    },
+    {
+      "round": 3,
+      "provider": "minimax",
+      "model": "MiniMax-M3.1-Flash",
+      "exit_code": 0,
+      "duration_seconds": 22.856,
+      "results": "round-3-minimax.json",
+      "log": "round-3-minimax.log"
+    }
+  ],
+  "source_unchanged": true,
+  "finished_at": "2026-10-27T11:03:22.212492+00:00"
+}

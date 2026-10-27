@@ -1,6 +1,8 @@
 package tools
 
 import (
+	"fmt"
+	"strings"
 	"sync"
 
 	agentErrors "github.com/kart-io/goagent/errors"
@@ -22,10 +24,16 @@ func NewRegistry() *Registry {
 
 // Register adds a tool to the registry
 func (r *Registry) Register(tool interfaces.Tool) error {
+	if r == nil || nilTool(tool) {
+		return fmt.Errorf("registry and non-nil tool are required")
+	}
+	name := tool.Name()
+	if name == "" || strings.TrimSpace(name) != name {
+		return fmt.Errorf("invalid tool name")
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	name := tool.Name()
 	if _, exists := r.tools[name]; exists {
 		return agentErrors.New(agentErrors.CodeToolValidation, "tool already registered").
 			WithComponent("registry").
@@ -33,6 +41,9 @@ func (r *Registry) Register(tool interfaces.Tool) error {
 			WithContext("tool_name", name)
 	}
 
+	if r.tools == nil {
+		r.tools = make(map[string]interfaces.Tool)
+	}
 	r.tools[name] = tool
 	return nil
 }

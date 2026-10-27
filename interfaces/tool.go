@@ -103,6 +103,11 @@ type ToolExecutor interface {
 // 此结构包含执行工具所需的所有信息
 // 包括参数和用于追踪和调试的元数据
 type ToolInput struct {
+	// ExecutionKey is supplied by the host/execution context, never inferred from
+	// model arguments. Effect services must implement idempotency with this key
+	// or a stronger business ID. Empty means execution is not durably identified.
+	ExecutionKey string `json:"execution_key,omitempty"`
+
 	// Args 包含工具的输入参数
 	//
 	// Args 的结构应与工具的 ArgsSchema 匹配

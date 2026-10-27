@@ -102,3 +102,5 @@ bash scripts/verify_imports.sh
 迁移检查基于 Go AST：识别旧 `interfaces.Agent/Runnable`（支持导入别名），并在导入 Builder 的文件中标记 `Execute/ExecuteWithTools` 选择器。它不做接收者类型推导、跨文件数据流或包装函数分析，因此是候选清单，可能误报或漏报。默认只报告；选定已迁移目录可加 `-strict` 作为门禁。不要据此批量替换：逐项确认 Provider 的 StreamClient/ToolStreamClient、自动工具执行、预算和回调语义。
 
 [Provider 持续回归](PROVIDER_REGRESSION.md)提供离线门禁与有界真实测试。退款应用可复用 [refund.Service](../../workflow/refund/README.md)；串行图恢复使用 [CompileDurable](../../workflow/README.md#节点边界的持久化恢复)。当前没有拆分主模块，新退款组件只依赖标准库，先保持现有导入兼容。
+
+复杂业务可以完全采用 [GoAgent 原生编排与工具体系](NATIVE_ORCHESTRATION.md)：Dispatcher 同时服务图节点与 Builder，持久图 AsRunnable 提供统一调用、步骤事件和审批恢复。无需引入其他编排框架。

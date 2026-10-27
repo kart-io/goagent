@@ -47,7 +47,7 @@ func (g *Graph[T]) AddParallel(name string, config ParallelConfig[T]) error {
 		return runParallel(ctx, in, config, limit, emit)
 	})
 	if err == nil {
-		g.parallel[name] = true
+		g.parallel[name] = config
 	}
 	return err
 }

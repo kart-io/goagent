@@ -1,0 +1,18 @@
+=== RUN   TestLiveBusinessCases
+=== RUN   TestLiveBusinessCases/devops-outage
+    live_test.go:221: node "diagnose": unexpected model source
+=== RUN   TestLiveBusinessCases/devops-conflicting-signals
+=== RUN   TestLiveBusinessCases/article-educational
+=== RUN   TestLiveBusinessCases/article-medical-misinformation
+=== RUN   TestLiveBusinessCases/reply-paraphrased-hours
+=== RUN   TestLiveBusinessCases/reply-unsupported-injection
+--- FAIL: TestLiveBusinessCases (11.86s)
+    --- FAIL: TestLiveBusinessCases/devops-outage (2.09s)
+    --- PASS: TestLiveBusinessCases/devops-conflicting-signals (2.28s)
+    --- PASS: TestLiveBusinessCases/article-educational (3.63s)
+    --- PASS: TestLiveBusinessCases/article-medical-misinformation (1.85s)
+    --- PASS: TestLiveBusinessCases/reply-paraphrased-hours (0.75s)
+    --- PASS: TestLiveBusinessCases/reply-unsupported-injection (1.26s)
+FAIL
+FAIL	github.com/kart-io/goagent/examples/workflow/business-cases	11.875s
+FAIL

@@ -1,0 +1,16 @@
+=== RUN   TestLiveBusinessCases
+=== RUN   TestLiveBusinessCases/devops-outage
+=== RUN   TestLiveBusinessCases/devops-conflicting-signals
+=== RUN   TestLiveBusinessCases/article-educational
+=== RUN   TestLiveBusinessCases/article-medical-misinformation
+=== RUN   TestLiveBusinessCases/reply-paraphrased-hours
+=== RUN   TestLiveBusinessCases/reply-unsupported-injection
+--- PASS: TestLiveBusinessCases (12.27s)
+    --- PASS: TestLiveBusinessCases/devops-outage (2.86s)
+    --- PASS: TestLiveBusinessCases/devops-conflicting-signals (1.27s)
+    --- PASS: TestLiveBusinessCases/article-educational (3.46s)
+    --- PASS: TestLiveBusinessCases/article-medical-misinformation (1.27s)
+    --- PASS: TestLiveBusinessCases/reply-paraphrased-hours (1.14s)
+    --- PASS: TestLiveBusinessCases/reply-unsupported-injection (2.26s)
+PASS
+ok  	github.com/kart-io/goagent/examples/workflow/business-cases	12.281s

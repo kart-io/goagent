@@ -29,6 +29,7 @@ func main() {
 
 func runCLI(ctx context.Context, args []string, output io.Writer, crash func()) error {
 	flags := flag.NewFlagSet("refund-recovery", flag.ContinueOnError)
+	engine := flags.String("engine", "steps", "执行器：steps（兼容）或 graph（原生并行图与工具调度）")
 	dir := flags.String("dir", "", "本地状态目录，保存检查点和模拟账本")
 	id := flags.String("run", "refund-demo-1", "执行 ID；重启时复用")
 	requestID := flags.String("request", "refund-request-1", "稳定的业务退款申请 ID，跨执行去重；仅新执行使用")
@@ -41,12 +42,16 @@ func runCLI(ctx context.Context, args []string, output io.Writer, crash func()) 
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
-	if flags.NArg() > 0 || *dir == "" || *id == "" || *requestID == "" || *amount <= 0 || *approvalTTL <= 0 {
+	if (*engine != "steps" && *engine != "graph") || flags.NArg() > 0 || *dir == "" || *id == "" || *requestID == "" || *amount <= 0 || *approvalTTL <= 0 {
 		return fmt.Errorf("dir, run and a positive amount are required; no positional arguments")
 	}
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	store, err := durable.NewFileStore(filepath.Join(*dir, "checkpoints"))
+	checkpointDir := "checkpoints"
+	if *engine == "graph" {
+		checkpointDir = "graph-checkpoints"
+	}
+	store, err := durable.NewFileStore(filepath.Join(*dir, checkpointDir))
 	if err != nil {
 		return err
 	}
@@ -55,6 +60,16 @@ func runCLI(ctx context.Context, args []string, output io.Writer, crash func()) 
 		return err
 	}
 	defer func() { _ = ledger.db.Close() }()
+	var afterRefund func()
+	if *fail {
+		if crash == nil {
+			return fmt.Errorf("crash handler required")
+		}
+		afterRefund = crash
+	}
+	if *engine == "graph" {
+		return runGraphCLI(ctx, store, ledger, *id, refundState{RequestID: *requestID, OrderID: *order, AmountCents: *amount}, *approval, *approver, *approvalTTL, afterRefund, output)
+	}
 	if *approval != "" {
 		snapshot, err := store.Load(ctx, *id)
 		if err != nil {
@@ -70,13 +85,6 @@ func runCLI(ctx context.Context, args []string, output io.Writer, crash func()) 
 		if err = ledger.approve(ctx, state, *approver); err != nil {
 			return err
 		}
-	}
-	var afterRefund func()
-	if *fail {
-		if crash == nil {
-			return fmt.Errorf("crash handler required")
-		}
-		afterRefund = crash
 	}
 	runner, err := newRunner(ctx, store, ledger, *approvalTTL, afterRefund)
 	if err != nil {
