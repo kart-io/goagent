@@ -17,7 +17,7 @@ GoAgent 是一个 Go 语言 AI Agent 框架，灵感来源于 LangChain。它提
 
 流程编排：[泛型图、条件分支、并行汇合与有界循环](workflow/README.md)。
 
-上下文治理：[工具结果卸载与历史摘要](docs/guides/CONTEXT_POLICY.md)。框架对照：[GoAgent / Eino](evaluation/einocompare/README.md)。
+上下文治理：[工具结果卸载与历史摘要](docs/guides/CONTEXT_POLICY.md)。
 
 ## 特性
 

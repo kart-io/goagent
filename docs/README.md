@@ -80,7 +80,6 @@ GoAgent 是一个全面的 Go AI Agent 框架，提供 Agent、工具、内存�
 
 - [执行契约与能力状态](guides/EXECUTION_CONTRACT.md)
 - [工具上下文与历史摘要](guides/CONTEXT_POLICY.md)
-- [GoAgent / Eino 对照与编排验证](../evaluation/einocompare/README.md)
 
 
 ## 文档结构

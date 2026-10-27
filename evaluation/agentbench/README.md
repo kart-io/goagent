@@ -2,8 +2,6 @@
 
 评测包已纳入主 Go 模块，使用实际 OpenAI 兼容 SDK、统一请求计量和严格评分。无独立模块依赖，根目录测试会包含本包。
 
-同题、同模型、同预算的 Eino 对照位于独立模块 [einocompare](../einocompare/README.md)，通过 `RunWithExecutor` 复用此处计量、评分与最终输出检查。
-
 ## 离线验证
 
 在仓库根目录执行：
@@ -41,6 +39,20 @@ OPENAI_MODEL=deepseek-flash go run ./cmd/stress -live \
 系统提示版本 `task-semantics-v2` 区分原样输出和事实推理。已有工具结果的最后一轮只保留显式终态工具，其他情况下使用剩余预算回答；不保证证据充分。生产原样输出业务应显式配置 `WithReturnDirectTools`，推理任务保持模型回答。
 
 ## 自有数据与小题集
+
+[退款客服题集](testdata/refund-cases.json)覆盖退款期限提取、状态直返和资料不足拒答。离线回归使用本地模拟模型运行真实 GoAgent SDK 和工具循环，验证 12 次正常运行与 4 次响应缺少完成标记的失败运行：
+
+```sh
+# 从仓库根目录运行，无需 API Key。
+go test -race -count=1 -v ./evaluation/agentbench -run '^TestRefundScenario$'
+
+# 仅生成退款案例运行计划，不调用模型。
+go run ./evaluation/agentbench/cmd/stress \
+  -dataset evaluation/agentbench/testdata/refund-cases.json \
+  -mode all -repeats 3 -workers 1 -out /tmp/goagent-refund-preview
+```
+
+已保留 [DeepSeek 真实测试报告](../../docs/evaluation/2026-10-27-deepseek-refund/REPORT.md)：GoAgent 12/12 通过，共 21 个模型请求。报告注明原始参数和当前运行命令的区别；示例题不代表生产业务验收。
 
 `-dataset /path/to/cases.json` 替代生成题集：
 

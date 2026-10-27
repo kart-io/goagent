@@ -19,6 +19,17 @@ output, err := runnable.Invoke(ctx, "退款政策是什么？")
 
 `Invoke` 和 `Stream` 共用 `ExecuteStream` 执行源；Invoke 只收集最终输出，**不会再额外调用一次同步模型**。这条入口要求模型实现 `llm.StreamClient`，配置工具时还要求工具调用能力。旧 `Execute()` 不自动调用工具的语义仍保留，因此迁移到 AsRunnable 后会执行已配置工具。
 
+以下对照用于选择入口；旧 API 示例不代表新能力在旧路径也生效。
+
+| Builder 入口 | 工具与上下文策略 | 同一 Builder 的并发保护 | 用途 |
+|---|---|---|---|
+| `AsRunnable().Invoke/Stream` | 自动执行已配置工具；原生 `ToolStreamClient` 路径支持 ContextPolicy 和 ReturnDirect | 适配器共享串行执行门 | 新业务与 Runnable 编排的推荐入口 |
+| `ExecuteStream` | 与 AsRunnable 共用执行源及能力 | 不自行获取适配器执行门；调用方负责隔离会话 | 直接消费 Builder 事件 |
+| `Execute` | 不自动调用工具；不应用 ContextPolicy/ReturnDirect | 不受适配器执行门保护 | 保留已有同步调用语义 |
+| `ExecuteWithTools` | 旧工具循环；不应用 ContextPolicy/ReturnDirect | 不受适配器执行门保护 | 兼容存量工具调用 |
+
+仅实现 `StreamClient` 不等于支持原生工具流。配置 ContextPolicy 或 ReturnDirect 时还须满足 `ToolStreamClient` 等构建校验；不同 Provider 的能力不能由方法名称推断。
+
 ```go
 ctx, cancel := context.WithCancel(ctx)
 defer cancel()
@@ -47,11 +58,20 @@ if err := ctx.Err(); err != nil { return err }
 
 `Pipe` 的现有语义是等待上游最终输出，再执行下游；不会逐 Token 变换上游流。通用编排使用新的 [workflow.Graph[T]](../../workflow/README.md)，支持条件分支、显式并行 Clone/Merge 和有界循环；仍不提供跨节点逐块 Transform。
 
+编排与恢复目前是分开的能力：
+
+| 组件 | 已提供 | 不应据此推断 |
+|---|---|---|
+| `workflow.Graph[T]` | 同一状态类型的分支、并行汇合、有界循环、节点事件转发 | 异构字段自动映射、跨节点流变换、图检查点恢复 |
+| `core/durable` | 已注册顺序步骤的持久化、审批、进程重启恢复 | 自动保存任意 Agent 调用栈、自动恢复 workflow 图 |
+
+`core/durable` 当前使用本地文件存储，步骤按至少一次语义执行；外部写操作需要服务端幂等。Builder 保存状态或检查点也不等于已实现任意图的断点恢复。需要图恢复的业务应先定义恢复位置、状态存储及副作用去重契约，再验证执行器。
+
 ## 可选上下文治理
 
 `WithContextPolicy` 为原生工具流增加执行内存中的大结果卸载、分页读取和显式历史摘要。默认关闭；摘要计入 MaxIterations、model_calls 和累计用量，未知用量不补零。最后一轮恢复已卸载原文，避免只剩无法读取的引用。它不限制进程内存、不恢复跨进程工具证据，也不应用于旧 Execute。详见[上下文策略](CONTEXT_POLICY.md)。
 
-入门代码统一见[快速入门与迁移](QUICKSTART.md)。主模块复杂流程使用 [workflow.Graph[T]](../../workflow/README.md)；与 Eino 的不同执行语义可通过独立的 [Eino 对照模块](../../evaluation/einocompare/README.md)验证，主模块仍不引入 Eino。
+入门代码统一见[快速入门与迁移](QUICKSTART.md)。主模块复杂流程使用 [workflow.Graph[T]](../../workflow/README.md)。
 
 ## 减少模型请求与 Token
 

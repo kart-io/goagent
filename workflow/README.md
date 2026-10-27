@@ -1,6 +1,6 @@
 # 通用流程编排
 
-`workflow.Graph[T]` 将串行节点、条件分支、显式并行汇合与有界循环编译为 `core.StreamRunnable[T,T]`。主模块不依赖 Eino。节点共享同一状态类型 T；不同输入/输出的 Agent 使用 Adapt 显式转换。
+`workflow.Graph[T]` 将串行节点、条件分支、显式并行汇合与有界循环编译为 `core.StreamRunnable[T,T]`。节点共享同一状态类型 T；不同输入/输出的 Agent 使用 Adapt 显式转换。
 
 ```go
 graph := workflow.NewGraph[int](workflow.Config{MaxSteps: 20, MaxConcurrency: 4})

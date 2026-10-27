@@ -1,0 +1,25 @@
+{
+  "config": {
+    "direct_tools": false,
+    "budget": {
+      "model": "deepseek-flash",
+      "temperature": 0.2,
+      "max_calls": 2,
+      "max_output_tokens_per_call": 2048,
+      "observed_token_stop": 8000
+    },
+    "timeout": 90000000000
+  },
+  "dataset_sha256": "9ccb6ed1978450f49fd43c10810aa2d5d04f780254a189a83f3e200cc5a28dce",
+  "dataset_source": "provided",
+  "live": true,
+  "mode": "all",
+  "repeats": 3,
+  "scope": "handwritten synthetic refund cases; not production acceptance or pure framework overhead",
+  "seed": 20261026,
+  "task_count": 3,
+  "framework": "goagent",
+  "retained_runs": 12,
+  "retained_upstream_requests": 21,
+  "provenance": "GoAgent subset of the original live run; filtered after removing comparison content, no new model calls"
+}
