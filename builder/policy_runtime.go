@@ -128,14 +128,8 @@ func policyContext(ctx context.Context, p *policyRuntime) context.Context {
 }
 func (p *policyRuntime) apply(ctx context.Context, turn contextpolicy.Turn, final bool) (contextpolicy.Turn, error) {
 	for i, policy := range p.policies {
-		data, err := json.Marshal(turn)
-		if err != nil {
-			return turn, err
-		}
-		var copy contextpolicy.Turn
-		if err = json.Unmarshal(data, &copy); err != nil {
-			return turn, err
-		}
+		copy := clonePolicyTurn(turn)
+		var err error
 		var next contextpolicy.Turn
 		if final {
 			if restore, ok := policy.(contextpolicy.FinalTurnRestorer); ok {
@@ -157,7 +151,7 @@ func (p *policyRuntime) apply(ctx context.Context, turn contextpolicy.Turn, fina
 		}
 		for j, m := range turn.Messages {
 			n := next.Messages[j]
-			if m.Role != "system" {
+			if m.Role != "system" && m.ProviderState == nil {
 				n.Content = m.Content
 			}
 			if !reflect.DeepEqual(m, n) {
@@ -176,4 +170,19 @@ func (p *policyRuntime) stats(metadata map[string]interface{}) {
 			}
 		}
 	}
+}
+
+// Preserve opaque provider bytes exactly; a JSON round trip compacts RawMessage
+// and may invalidate signed continuation state even for an identity transform.
+func clonePolicyTurn(turn contextpolicy.Turn) contextpolicy.Turn {
+	turn.Messages = slices.Clone(turn.Messages)
+	for i, m := range turn.Messages {
+		turn.Messages[i].ToolCalls = slices.Clone(m.ToolCalls)
+		if m.ProviderState != nil {
+			state := *m.ProviderState
+			state.Data = slices.Clone(state.Data)
+			turn.Messages[i].ProviderState = &state
+		}
+	}
+	return turn
 }

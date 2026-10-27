@@ -23,6 +23,8 @@ go run ./examples/orchestration/composed-order /tmp/goagent-order-demo
 
 宿主用 `budget.New(Config{RootKey, Version, MaxModelRequests})` 或 `budget.NewDurable(config, store)` 构造账本，以 `budget.WithController(ctx, controller)` 传入根调用。RootKey 是受信业务运行 ID，不能来自模型参数。父子调用继承同一 context，不能另建预算来重置额度。
 
+显式绑定根预算时，旧 Execute 和不支持流的 ExecuteWithTools 在请求前报错；迁移到 AsRunnable 统一入口，避免静默忽略额度。未绑定预算的旧入口行为保留。
+
 统一模型入口在实际请求前预留；成功回放跳过预留。预留不退款，崩溃时可能无法判断请求是否发送。持久日志配内存预算会在请求前拒绝。同一 RootKey 改版本或上限会报错。账本和模型操作不是跨文件事务；结果已保存而用量登记失败时返回错误，后续读取已有记录修复用量，不重新付费取证。
 
 `Snapshot` 分开报告 ReservedRequests、KnownUsageEntries、UnknownUsageEntries、KnownTokens。未知包含预留后没有证据的条目，不能当作零费用；子输出的 TokenUsage 不再作为另一笔请求加入根账本。输出 `root_budget` 是根快照，`new_model_invocations` 是本次执行范围新增实际调用数，`model_calls` 是本层逻辑回合数。父子并行时以根账本及 transport 计数为准。Provider 内部重试、宿主自定义客户端或隐藏模型调用需宿主另行管控；这个预算限制统一入口的请求次数。
@@ -43,7 +45,7 @@ go run ./examples/orchestration/composed-order /tmp/goagent-order-demo
 
 旧 `WithContextPolicy` 保留内存分页、最后回合恢复和摘要行为；旧配置在持久工具循环仍拒绝。新入口 `WithContextPolicies(factories...)` 每次执行创建独立策略，两种入口同时使用报错。要求 native `llm.ToolStreamClient` 和已配置的业务工具。
 
-策略只转换非 system 的 Content。Builder 对每次输入做深复制并验证：Round、RemainingCalls、消息数量、Role、Name、ToolCallID、ToolCalls、ReasoningContent、ProviderState 均不能修改。描述符 ID 唯一，Version 和 ConfigHash 非空且执行期间固定；顺序及配置加入模型意图。宿主自定义语义必须自行版本化，Durable 标记是能力声明，仍需恢复测试。
+策略只转换非 system 的 Content。Builder 对消息、工具调用、ProviderState 对象和原始数据字节分别做深复制，保持 opaque 字节完全不变，并验证：Round、RemainingCalls、消息数量、Role、Name、ToolCallID、ToolCalls、ReasoningContent、ProviderState 均不能修改。带 ProviderState 的消息正文也受到保护，避免破坏原生签名/续接关系。描述符 ID 唯一，Version 和 ConfigHash 非空且执行期间固定；顺序及配置加入模型意图。宿主自定义语义必须自行版本化，Durable 标记是能力声明，仍需恢复测试。
 
 `contextpolicy.NewOffload` 消费共享 ResultStore；阈值、保留轮数、分页、排除项、Namespace 均进入指纹。内存实例采用独立 nonce；持久实例从已记录回合和工具 ID 派生稳定引用。Namespace 必须标识真实后端配置，切换后端需修改它或 Version。
 
@@ -53,7 +55,7 @@ go run ./examples/orchestration/composed-order /tmp/goagent-order-demo
 
 ## 观察与报告
 
-`observe.WithTracer(ctx, existingTracer)` 复用宿主 OTel；不设置全局 Provider。`WithObserver` 接收窄元数据事件。OperationKey 用于跨恢复关联，VisitID/EventID 区分本次访问；恢复产生新 span。未配置观察时不创建运行身份或 span。自定义 observer 必须及时返回，panic 被隔离。
+`observe.WithTracer(ctx, existingTracer)` 复用宿主 OTel；不设置全局 Provider。`WithObserver` 接收窄元数据事件。OperationKey 用于跨恢复关联，VisitID/EventID 包含本次调用的独立身份，区分重复访问与恢复；业务 RunID 和 OperationKey 保持稳定，恢复产生新 span。未配置观察时不创建运行身份或 span。自定义 observer 必须及时返回，panic 被隔离。
 
 `devtools.NewRecorder` 默认队列 64、最多 10,000 事件，写入异步，溢出累计 Dropped。新 JSONL 文件权限 0600、目录 0700；Close 返回写入错误。自定义 Writer 必须合作返回。事件结构不含输入、输出及原始异常文本；宿主应使用不含敏感信息的节点名和运行 ID。
 

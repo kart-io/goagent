@@ -9,7 +9,7 @@ ok  	github.com/kart-io/goagent/agents/react	(cached)
 ok  	github.com/kart-io/goagent/agents/sot	(cached)
 ok  	github.com/kart-io/goagent/agents/specialized	(cached)
 ok  	github.com/kart-io/goagent/agents/tot	(cached)
-ok  	github.com/kart-io/goagent/builder	(cached)
+ok  	github.com/kart-io/goagent/builder	2.212s
 ok  	github.com/kart-io/goagent/builder/contextpolicy	(cached)
 ok  	github.com/kart-io/goagent/cache	(cached)
 ok  	github.com/kart-io/goagent/core	(cached)
@@ -29,9 +29,9 @@ ok  	github.com/kart-io/goagent/document	(cached)
 ?   	github.com/kart-io/goagent/document/examples/splitters	[no test files]
 ok  	github.com/kart-io/goagent/errors	(cached)
 ok  	github.com/kart-io/goagent/evaluation	(cached)
-ok  	github.com/kart-io/goagent/evaluation/agentbench	5.398s
+ok  	github.com/kart-io/goagent/evaluation/agentbench	3.084s
 ?   	github.com/kart-io/goagent/evaluation/agentbench/cmd/run	[no test files]
-ok  	github.com/kart-io/goagent/evaluation/agentbench/cmd/stress	2.047s
+ok  	github.com/kart-io/goagent/evaluation/agentbench/cmd/stress	2.251s
 ok  	github.com/kart-io/goagent/examples	(cached)
 ?   	github.com/kart-io/goagent/examples/advanced	[no test files]
 ?   	github.com/kart-io/goagent/examples/advanced/multi-agent-collaboration	[no test files]
@@ -114,12 +114,12 @@ ok  	github.com/kart-io/goagent/examples	(cached)
 ?   	github.com/kart-io/goagent/examples/optimization/cot_vs_react	[no test files]
 ?   	github.com/kart-io/goagent/examples/optimization/hybrid_mode	[no test files]
 ?   	github.com/kart-io/goagent/examples/optimization/planning_execution	[no test files]
-ok  	github.com/kart-io/goagent/examples/orchestration/agent-tool	1.242s
-ok  	github.com/kart-io/goagent/examples/orchestration/composed-order	(cached)
+ok  	github.com/kart-io/goagent/examples/orchestration/agent-tool	1.478s
+ok  	github.com/kart-io/goagent/examples/orchestration/composed-order	2.338s
 ok  	github.com/kart-io/goagent/examples/orchestration/context-recovery	(cached)
-ok  	github.com/kart-io/goagent/examples/orchestration/field-adapter	1.520s
+ok  	github.com/kart-io/goagent/examples/orchestration/field-adapter	(cached)
 ?   	github.com/kart-io/goagent/examples/orchestration/internal/demomodel	[no test files]
-ok  	github.com/kart-io/goagent/examples/orchestration/parallel-diagnostics	1.374s
+ok  	github.com/kart-io/goagent/examples/orchestration/parallel-diagnostics	(cached)
 ?   	github.com/kart-io/goagent/examples/orchestration/runnable-tool	[no test files]
 ?   	github.com/kart-io/goagent/examples/orchestration/stream-pipeline	[no test files]
 ?   	github.com/kart-io/goagent/examples/performance	[no test files]
@@ -150,15 +150,15 @@ ok  	github.com/kart-io/goagent/examples/orchestration/parallel-diagnostics	1.37
 ?   	github.com/kart-io/goagent/examples/translate	[no test files]
 ?   	github.com/kart-io/goagent/examples/translate/interactive	[no test files]
 ?   	github.com/kart-io/goagent/examples/workflow	[no test files]
-ok  	github.com/kart-io/goagent/examples/workflow/business-cases	20.594s
-ok  	github.com/kart-io/goagent/examples/workflow/refund-recovery	11.348s
+ok  	github.com/kart-io/goagent/examples/workflow/business-cases	20.636s
+ok  	github.com/kart-io/goagent/examples/workflow/refund-recovery	(cached)
 ok  	github.com/kart-io/goagent/integration	(cached)
 ok  	github.com/kart-io/goagent/interfaces	(cached)
 ok  	github.com/kart-io/goagent/llm	(cached)
 ok  	github.com/kart-io/goagent/llm/cache	(cached)
 ?   	github.com/kart-io/goagent/llm/common	[no test files]
 ?   	github.com/kart-io/goagent/llm/constants	[no test files]
-ok  	github.com/kart-io/goagent/llm/providers	33.427s
+ok  	github.com/kart-io/goagent/llm/providers	31.201s
 ?   	github.com/kart-io/goagent/mcp/core	[no test files]
 ok  	github.com/kart-io/goagent/mcp/remote	(cached)
 ok  	github.com/kart-io/goagent/mcp/toolbox	(cached)
@@ -190,7 +190,7 @@ ok  	github.com/kart-io/goagent/stream	(cached)
 ?   	github.com/kart-io/goagent/testing/mocks	[no test files]
 ?   	github.com/kart-io/goagent/testing/testutil	[no test files]
 ?   	github.com/kart-io/goagent/toolkits	[no test files]
-ok  	github.com/kart-io/goagent/tools	24.990s
+ok  	github.com/kart-io/goagent/tools	(cached)
 ok  	github.com/kart-io/goagent/tools/compute	(cached)
 ok  	github.com/kart-io/goagent/tools/http	(cached)
 ok  	github.com/kart-io/goagent/tools/middleware	(cached)
@@ -203,5 +203,5 @@ ok  	github.com/kart-io/goagent/tools/shell	(cached)
 ok  	github.com/kart-io/goagent/utils	(cached)
 ok  	github.com/kart-io/goagent/utils/httpclient	(cached)
 ok  	github.com/kart-io/goagent/utils/json	(cached)
-ok  	github.com/kart-io/goagent/workflow	(cached)
+ok  	github.com/kart-io/goagent/workflow	8.747s
 ok  	github.com/kart-io/goagent/workflow/refund	(cached)

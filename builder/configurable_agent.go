@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/execution"
 	"github.com/kart-io/goagent/core/middleware"
 	agentErrors "github.com/kart-io/goagent/errors"
@@ -64,6 +65,10 @@ func (a *ConfigurableAgent[C, S]) Initialize(ctx context.Context) error {
 // For the native tool/stream pipeline use AsRunnable().Invoke. This synchronous
 // entry remains supported for clients without structured streaming.
 func (a *ConfigurableAgent[C, S]) Execute(ctx context.Context, input interface{}) (*AgentOutput, error) {
+	if _, bound := budget.FromContext(ctx); bound {
+		return nil, fmt.Errorf("root budget requires the unified AsRunnable execution entry")
+	}
+
 	if a.config.ContextPolicy != nil || len(a.config.ContextPolicies) > 0 || len(a.config.ReturnDirectTools) > 0 {
 		return nil, fmt.Errorf("Execute does not apply ContextPolicy or ReturnDirectTools; use AsRunnable().Invoke")
 	}
@@ -144,6 +149,9 @@ func (a *ConfigurableAgent[C, S]) execute(ctx context.Context, input interface{}
 func (a *ConfigurableAgent[C, S]) ExecuteWithTools(ctx context.Context, input interface{}) (*AgentOutput, error) {
 	if llm.HasStreaming(a.llmClient) {
 		return a.AsRunnable().Invoke(ctx, input)
+	}
+	if _, bound := budget.FromContext(ctx); bound {
+		return nil, fmt.Errorf("root budget requires a streaming client and the unified AsRunnable execution entry")
 	}
 	ctx, release, err := a.beginExecution(ctx)
 	if err != nil {
