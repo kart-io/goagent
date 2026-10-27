@@ -10,6 +10,7 @@ import (
 )
 
 func (g *compiled[T]) run(ctx context.Context, state T, emit func(core.StreamChunk[T]) error) (graphErr error) {
+	observed := observe.Enabled(ctx)
 	ctx, finish := observe.Start(ctx, observe.Event{Type: "graph", Path: "graph"})
 	defer func() {
 		if v := recover(); v != nil {
@@ -26,27 +27,34 @@ func (g *compiled[T]) run(ctx context.Context, state T, emit func(core.StreamChu
 		if err := emit(core.StreamChunk[T]{Event: &core.StreamEvent{Type: "node_start", Step: name}}); err != nil {
 			return err
 		}
-		nodeCtx, endNode := observe.Start(ctx, observe.Event{Type: "node", Path: name})
-		next, err := func() (next T, nodeErr error) {
-			defer func() {
-				if v := recover(); v != nil {
-					endNode(fmt.Errorf("execution panic"), false)
-					panic(v)
+		forward := func(chunk core.StreamChunk[T]) error {
+			if chunk.Event != nil {
+				event := *chunk.Event
+				event.Step = name
+				if chunk.Event.Step != "" {
+					event.Step += "/" + chunk.Event.Step
 				}
-				endNode(nodeErr, false)
-			}()
-			return g.nodes[name](nodeCtx, state, func(chunk core.StreamChunk[T]) error {
-				if chunk.Event != nil {
-					event := *chunk.Event
-					event.Step = name
-					if chunk.Event.Step != "" {
-						event.Step += "/" + chunk.Event.Step
+				chunk.Event = &event
+			}
+			return emit(chunk)
+		}
+		var next T
+		var err error
+		if !observed {
+			next, err = g.nodes[name](ctx, state, forward)
+		} else {
+			nodeCtx, endNode := observe.Start(ctx, observe.Event{Type: "node", Path: name})
+			next, err = func() (next T, nodeErr error) {
+				defer func() {
+					if v := recover(); v != nil {
+						endNode(fmt.Errorf("execution panic"), false)
+						panic(v)
 					}
-					chunk.Event = &event
-				}
-				return emit(chunk)
-			})
-		}()
+					endNode(nodeErr, false)
+				}()
+				return g.nodes[name](nodeCtx, state, forward)
+			}()
+		}
 		if err != nil {
 			return fmt.Errorf("node %q: %w", name, err)
 		}
