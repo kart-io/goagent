@@ -83,7 +83,7 @@ if snapshot.Waiting {
 
 `workflow.DurableKey(ctx)` 与 `durable.ExecutionKey(ctx)` 返回同一执行键。Dispatcher 将该键注入 ToolInput.ExecutionKey；`core/durable.Runner` 同样向步骤 context 注入键。模型的 Args 无权覆盖此元数据。
 
-一个键对应一个逻辑效果。如果在一个节点内自行执行多个写操作，必须派生不同键或使用各自的业务请求 ID；将完整 Builder 放入一个节点，并不意味着内部每轮工具调用已经获得独立检查点。
+一个键对应一个逻辑效果。手写多工具节点为每个操作设置稳定 CallID，Dispatcher 自动派生子键；Builder 原生工具循环通过已持久化的模型回合和调用 ID 生成 CallID。裸 Tool 不承诺调用级恢复，持久 Builder 会在模型请求前拒绝它。详见下文。
 
 图中的状态和分支结果要求可 JSON 往返。串行 v1 检查点保持兼容；并行分支名称、顺序变化会改变计划指纹，拒绝旧检查点。函数、Merge、Clone 或状态结构发生语义变化时仍须提升 Version。FileStore 只提供单机可靠文件系统上的运行锁与原子保存，没有跨主机租约、接管或自动补偿。
 
@@ -125,3 +125,46 @@ go test -race ./examples/workflow/business-cases
 ## 后续能力边界
 
 当前保留同一图状态类型，异构数据用 Adapt 显式转换。跨节点 Collect/Transform、字段映射 DSL、可视化调试器和分布式调度尚未实现。原生编排和工具执行已经连通，不等于所有通用编排能力均已覆盖。
+
+
+## 工具调用级日志与恢复
+
+```go
+// ctx 来自持久图节点，包含 store 和该次节点访问的父执行键。
+out, err := dispatcher.Invoke(ctx, tools.ToolRequest{
+    Name: "reserve_stock",
+    Input: &interfaces.ToolInput{
+        CallID: "reserve", // 宿主定义的稳定逻辑 ID；第二个效果必须使用不同 ID
+        Args: map[string]any{"sku": "demo", "quantity": 1},
+    },
+})
+```
+
+每次操作依次执行：获取子操作锁 → 校验意图摘要 → 保存 pending 与尝试次数 → 执行 → 保存 completed/failed。重复的完成调用返回保存结果；同一 ID 的参数、schema、调用方或尝试预算改变时拒绝恢复。调用输出跨 JSON 边界，fresh/replay 都按 JSON 解码：对象为 map、数值为 json.Number，自定义 Go 类型须在应用边界显式转换。旧空 CallID 不启用此日志，不改变原工具输出类型。
+
+`DispatchConfig.MaxAttempts` 默认 3，包含首次执行；只有下一次显式调用才会尝试失败或未确定的操作。恢复每次仍先做 schema、自定义校验及授权。授权函数不能有副作用；首次执行和回放都可能调用。日志不提供外部效果 exactly-once：崩溃窗口里的工具必须让目标系统将去重键和业务写入放在同一事务中。保存失败不会被当成成功。
+
+Builder 用 `model/turn/N` 保存完整模型回合，再用 `tool/turn/N/call/ID` 保存每个工具。因此 Gemini 的 ProviderState 与 DeepSeek/MiniMax 的 reasoning_content 可在重启后续接，已执行的调用 ID 不依赖重新生成。原生续接数据仅在本地检查点中使用，公开测试报告不包含这些内容。Store 可能包含业务数据和模型内容，宿主负责访问控制与保留期限。
+
+模型回合先验证所有工具名、ID、JSON 参数及 Schema；任一调用无效则整轮不执行工具。网络错误、截断、无效计划也保存已取得的用量。模型操作最多请求一次：请求后崩溃但结果未落盘会保留 pending/ambiguous，恢复返回 `ErrOperationAttention`，不会再次付费；此时尚未得到的用量无法重建。`InspectOperation(ctx, "model/turn/0")` 可读取详细状态。处理不确定效果后，由业务宿主决定补偿或启动新工作流；不直接删除日志强制重试。
+
+`durable.Do` 可供其他节点保存具名子操作，`WithJournal` 与 `WithExecutionKey` 可供宿主显式接入。其输入保存摘要，输出保存 JSON，错误仅保存类别。默认一次尝试；`RetryFailed: true` 配合 MaxAttempts 允许显式恢复。未绑定日志时直接执行，不提供持久性。
+
+模型、提示词、工具实现、策略或输入结构改变时，必须提升 `DurableConfig.Version`。模型请求中的 provider、消息与工具定义另有意图校验，但框架不能推断闭包配置的全部变化。恢复要求固定输入和上下文；当前不支持持久工具循环使用 ContextPolicy（在模型请求前拒绝）。外部记忆、检索、中间件、完成回调也不是任意调用栈检查点，需由宿主保证稳定或自行持久化。
+
+## 类型化流适配与能力声明
+
+`workflow.AdaptStream` 增加显式 intermediate chunk 映射，保留类型化预览和业务事件；最终映射仍在合法终态及 EOF 后运行。预览不提交图状态、不调度下游，可在恢复时重复。映射错误、取消和上游协议错误会终止执行。
+
+Builder 会读取模型可选的 `core.StreamCapability`。MiniMax 案例适配器当前支持真实原生工具调用，但 HTTP 响应完整后才交付：模型为 final，Agent 为 steps，不宣称逐 token 流。跨节点 Collect/Transform 仍未实现，也未引入外部编排框架依赖。
+
+## 多工具真实进程恢复验证
+
+```sh
+# 默认离线：模拟原生协议，验证真实子进程退出与续接。
+go test -race ./examples/workflow/business-cases -run TestNativeToolLoopProcessRecovery
+# 显式真实模型：选择一个 provider，每次最多 4 个请求。
+DEEPSEEK_MODEL=deepseek-flash bash scripts/business_tool_loop_live.sh deepseek /tmp/deepseek-loop.json
+```
+
+同一个 Agent 节点执行 A、B 两个工具，在 B 效果落盘后 `os.Exit(86)`；新进程应跳过 A、恢复 B 并仅请求最终回答；第三次进程启动应零模型/工具调用。效果按子执行键去重，断言只有两条记录、两个不同键及最终答案包含两条回执。见[三模型实测及首次失败记录](../evaluation/2026-10-27-durable-tool-loop/REPORT.md)。

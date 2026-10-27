@@ -215,6 +215,9 @@ func TestLiveBusinessCases(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 			defer cancel()
 			result.liveObservation, err = tc.run(ctx, store, b)
+			if result.Evidence == nil {
+				result.Evidence = b.model.last.Load()
+			}
 			result.ModelCalls = b.model.calls.Load()
 			if err != nil {
 				result.Error = redactModelError(err.Error())

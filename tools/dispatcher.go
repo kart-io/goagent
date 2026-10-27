@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -18,6 +19,9 @@ import (
 // DispatchConfig is immutable after construction. Timeout includes queueing;
 // tools must honor context. No implicit retries or background timeout workers.
 type DispatchConfig struct {
+	// MaxAttempts bounds explicit resume attempts for a journaled CallID.
+	// Default 3. No retries occur inside a single Invoke.
+	MaxAttempts    int
 	MaxConcurrency int           // default 4, shared by all calls on this dispatcher
 	Timeout        time.Duration // default 30 seconds
 	Authorize      func(context.Context, string, *interfaces.ToolInput) error
@@ -59,10 +63,13 @@ func NewDispatcher(registry *Registry, cfg DispatchConfig) (dispatcher *Dispatch
 	if cfg.MaxConcurrency == 0 {
 		cfg.MaxConcurrency = 4
 	}
+	if cfg.MaxAttempts == 0 {
+		cfg.MaxAttempts = 3
+	}
 	if cfg.Timeout == 0 {
 		cfg.Timeout = 30 * time.Second
 	}
-	if cfg.MaxConcurrency < 1 || cfg.Timeout < 0 {
+	if cfg.MaxConcurrency < 1 || cfg.Timeout < 0 || cfg.MaxAttempts < 1 {
 		return nil, fmt.Errorf("positive tool concurrency and timeout required")
 	}
 	d := &Dispatcher{entries: map[string]dispatchEntry{}, config: cfg, slots: make(chan struct{}, cfg.MaxConcurrency)}
@@ -142,6 +149,12 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 	if key := durable.ExecutionKey(ctx); key != "" {
 		input.ExecutionKey = key
 	}
+	if input.CallID != "" && input.ExecutionKey != "" {
+		// Keep the parent in ctx for journal lookup; expose the child key to
+		// validators/authorizers as well as the actual tool implementation.
+		ctx = durable.WithExecutionKey(ctx, input.ExecutionKey)
+		input.ExecutionKey = durable.ChildKey(input.ExecutionKey, "tool/"+input.CallID)
+	}
 	select {
 	case d.slots <- struct{}{}:
 		defer func() { <-d.slots }()
@@ -176,18 +189,53 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 	if err = ctx.Err(); err != nil {
 		return nil, err
 	}
-	out, err = entry.tool.Invoke(ctx, &input)
+	invoke := func(callCtx context.Context) (*interfaces.ToolOutput, error) {
+		input.Context = callCtx
+		result, e := entry.tool.Invoke(callCtx, &input)
+		if e != nil {
+			return nil, e
+		}
+		if e = callCtx.Err(); e != nil {
+			return nil, e
+		}
+		if result == nil {
+			return nil, fmt.Errorf("tool %q returned nil output", req.Name)
+		}
+		if !result.Success || result.Error != "" {
+			return nil, fmt.Errorf("tool %q failed: %s", req.Name, result.Error)
+		}
+		return result, nil
+	}
+	if input.CallID == "" {
+		out, err = invoke(ctx)
+	} else {
+		intent, e := json.Marshal(struct {
+			Name, Schema, Caller string
+			Args                 map[string]any
+		}{entry.name, entry.schema, input.CallerID, input.Args})
+		if e != nil {
+			return nil, e
+		}
+		record, e := durable.Do(ctx, "tool/"+input.CallID, intent, durable.OperationPolicy{MaxAttempts: d.config.MaxAttempts, RetryFailed: true}, func(callCtx context.Context) (json.RawMessage, error) {
+			result, invokeErr := invoke(callCtx)
+			if invokeErr != nil {
+				return nil, invokeErr
+			}
+			return json.Marshal(result)
+		})
+		if e != nil {
+			return nil, e
+		}
+		// Journaled outputs use a JSON boundary on fresh and replayed calls alike.
+		decoder := json.NewDecoder(bytes.NewReader(record.Value))
+		decoder.UseNumber()
+		err = decoder.Decode(&out)
+		if record.Replayed && err == nil {
+			err = emit(&core.StreamEvent{Type: "tool_replayed", Tool: req.Name})
+		}
+	}
 	if err != nil {
 		return nil, err
-	}
-	if err = ctx.Err(); err != nil {
-		return nil, err
-	}
-	if out == nil {
-		return nil, fmt.Errorf("tool %q returned nil output", req.Name)
-	}
-	if !out.Success || out.Error != "" {
-		return nil, fmt.Errorf("tool %q failed: %s", req.Name, out.Error)
 	}
 	if err = emit(&core.StreamEvent{Type: "tool_end", Tool: req.Name}); err != nil {
 		return nil, err
@@ -225,9 +273,10 @@ type dispatchedTool struct {
 	entry dispatchEntry
 }
 
-func (t *dispatchedTool) Name() string        { return t.entry.name }
-func (t *dispatchedTool) Description() string { return t.entry.description }
-func (t *dispatchedTool) ArgsSchema() string  { return t.entry.schema }
+func (t *dispatchedTool) SupportsDurableCalls() bool { return true }
+func (t *dispatchedTool) Name() string               { return t.entry.name }
+func (t *dispatchedTool) Description() string        { return t.entry.description }
+func (t *dispatchedTool) ArgsSchema() string         { return t.entry.schema }
 func (t *dispatchedTool) Invoke(ctx context.Context, in *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 	return t.d.Invoke(ctx, ToolRequest{Name: t.entry.name, Input: in})
 }

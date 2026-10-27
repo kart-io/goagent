@@ -25,6 +25,7 @@ result, err := run.Invoke(ctx, 0) // 3
 | `AddNode(name, Node[T])` | 注册同步状态变换函数 |
 | `AddRunnable(name, core.Runnable[T,T])` | 接入已有 Runnable、子图并保留事件 |
 | `Adapt(runnable, input, output)` | 将 Runnable[I,O] 映射为 Runnable[T,T] |
+| `AdaptStream(runnable, input, output, intermediate)` | 显式转换中间 Data/Event，终态仍单独校验 |
 | `AddEdge(from, to)` | 唯一普通后继 |
 | `AddBranch(from, router, targets...)` | 从节点输出选择一个预先声明的后继 |
 | `AddParallel(name, ParallelConfig[T])` | 注册并行分支及显式汇合 |
@@ -138,7 +139,7 @@ if errors.Is(err, durable.ErrApprovalRequired) {
 
 执行前持久化意图，节点成功后保存输出，再单独保存下一条路由。因此路由失败不会重跑已保存的节点。Router 必须无副作用，其执行可能在崩溃后重放；Router 对输入的修改不保存。`MaxSteps` 跨重启累计。审批键绑定 run、版本计划和具体节点访问，循环每轮使用不同键；它不是身份认证凭证。
 
-节点通过 `workflow.DurableKey(ctx)` 读取稳定执行键。效果提交后、检查点保存前发生崩溃时节点仍可能重跑，外部服务必须用该键或更强的业务请求 ID 去重。节点内部 Agent/工具循环作为整体重跑，不恢复任意调用栈。`AsRunnable` 为持久图提供 Invoke/Stream/Batch；审批暂停返回 Waiting=true、Done=false 的状态。兼容 `Run` 仍返回审批哨兵错误。实时事件不承诺持久化重放。FileStore 只提供本地锁与原子文件保存，不提供跨主机租约或接管。Merge 必须无副作用；效果完成后但分支检查点保存前仍可能重跑，业务服务须执行幂等。
+节点通过 `workflow.DurableKey(ctx)` 读取稳定执行键。效果提交后、检查点保存前发生崩溃时节点仍可能重跑，外部服务必须用该键或更强的业务请求 ID 去重。节点函数仍从入口重新执行；使用 Dispatcher.Tools 的 Builder 原生工具循环会按模型回合和工具调用恢复，详见下文。它不恢复任意 Go 调用栈。`AsRunnable` 为持久图提供 Invoke/Stream/Batch；审批暂停返回 Waiting=true、Done=false 的状态。兼容 `Run` 仍返回审批哨兵错误。实时事件不承诺持久化重放。FileStore 只提供本地锁与原子文件保存，不提供跨主机租约或接管。Merge 必须无副作用；效果完成后但分支检查点保存前仍可能重跑，业务服务须执行幂等。
 
 ```sh
 go test -race ./workflow -run DurableGraph
@@ -149,3 +150,14 @@ go test -race ./workflow -run DurableGraph
 ## 原生工具与统一恢复入口
 
 `tools.Dispatcher.AsRunnable()` 可通过 Adapt 注册为图节点；`dispatcher.Tools()` 可注册给 Builder。两者共享参数校验、授权钩子、超时与并发限制，且不自动重试。持久节点/分支的执行键会自动注入 ToolInput.ExecutionKey。完整配置、恢复语义及可运行退款案例见[原生编排与工具体系](../docs/guides/NATIVE_ORCHESTRATION.md)。
+
+
+## 单节点内的模型与多工具恢复
+
+持久图和 `core/durable.Runner` 自动向节点 context 注入操作日志。Builder 的原生工具循环会先保存模型计划（调用 ID、参数、用量、Provider 续接状态），整轮 Schema 预检通过后才执行工具；恢复先重放计划和已完成工具结果。工具必须经 `Dispatcher.Tools()` 或实现 `interfaces.DurableCallTool` 的适配器接入；裸 Tool 在付费请求前被拒绝。
+
+手写多工具节点使用宿主生成的稳定 `ToolInput.CallID`，例如 `"reserve"`、`"notify"`。Dispatcher 将 `父执行键 + tool/CallID` 派生为独立子键，注入工具的 context 与 ExecutionKey。已完成调用直接读取结果；效果已提交但结果未保存的调用只能依靠目标服务对同一子键去重。旧的空 CallID 保持单效果节点行为。
+
+失败模型回合不会自动重试，`durable.InspectOperation` 可读取状态与已知用量，后续恢复返回 `durable.ErrOperationAttention`。工具的 `MaxAttempts` 默认 3，限制跨显式恢复的总尝试数，单次 Invoke 不循环重试。详细约束与代码见[操作日志指南](../docs/guides/NATIVE_ORCHESTRATION.md#工具调用级日志与恢复)。
+
+`AdaptStream` 的 intermediate 回调接收原状态和中间 chunk，可显式保留 Data 与 Event；它不能返回 Done，也不能修改共享原状态。中间块只是预览，可能在恢复时重放，不驱动后继节点或写入图状态。最终 output 仍需等待完整合法流；映射失败会取消上游。

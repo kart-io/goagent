@@ -2,7 +2,10 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -10,12 +13,13 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/providers"
 )
 
-const modelPromptVersion = "business-judge-v1"
+const modelPromptVersion = "business-judge-v2"
 const modelMaxTokens = 2048
 const modelTimeout = 90 * time.Second
 
@@ -30,6 +34,9 @@ type modelDecision struct {
 }
 
 type modelEvidence struct {
+	Status       string `json:"status"`
+	Failure      string `json:"failure,omitempty"`
+	ResponseHash string `json:"response_hash,omitempty"`
 	modelDecision
 	Provider      string                 `json:"provider"`
 	Model         string                 `json:"model"`
@@ -42,6 +49,7 @@ type modelJudge struct {
 	client          completionClient
 	provider, model string
 	calls           atomic.Int32
+	last            atomic.Pointer[modelEvidence]
 }
 
 func newModelJudge(provider, model string) (*modelJudge, error) {
@@ -56,6 +64,7 @@ func newModelJudge(provider, model string) (*modelJudge, error) {
 		if err != nil {
 			return nil, err
 		}
+		client.model = model
 		return &modelJudge{client: client, provider: provider, model: model}, nil
 	}
 	key := os.Getenv(strings.ToUpper(provider) + "_API_KEY")
@@ -113,31 +122,57 @@ func (m *modelJudge) judge(ctx context.Context, scenario string, input any) (*mo
 	if err = ctx.Err(); err != nil {
 		return nil, err
 	}
-	// One request per CLI invocation/test case. Resume after a failed request is
-	// explicit; there is no automatic retry or repair prompt consuming extra calls.
-	if !m.calls.CompareAndSwap(0, 1) {
-		return nil, fmt.Errorf("model request budget exhausted")
-	}
-	ctx, cancel := context.WithTimeout(ctx, modelTimeout)
-	defer cancel()
-	start := time.Now()
-	response, err := m.client.Complete(ctx, &llm.CompletionRequest{Model: m.model, MaxTokens: modelMaxTokens, Temperature: 0.2, Messages: []llm.Message{
-		{Role: "system", Content: judgeSystem + policy}, {Role: "user", Content: string(data)},
-	}})
-	if err != nil {
-		return nil, fmt.Errorf("model request failed: %s", redactModelError(err.Error()))
-	}
-	if err = ctx.Err(); err != nil {
-		return nil, err
-	}
-	if response == nil || response.FinishReason != "stop" {
-		return nil, fmt.Errorf("model returned incomplete response")
-	}
-	decision, err := decodeDecision(scenario, response.Content)
+	intent, err := json.Marshal(struct {
+		Provider, Model, Prompt string
+		Input                   json.RawMessage
+	}{m.provider, m.model, modelPromptVersion + policy, data})
 	if err != nil {
 		return nil, err
 	}
-	return &modelEvidence{modelDecision: decision, Provider: m.provider, Model: m.model, PromptVersion: modelPromptVersion, DurationMS: time.Since(start).Milliseconds(), Usage: response.Usage}, nil
+	record, operationErr := durable.Do(ctx, "model/decision", intent, durable.OperationPolicy{}, func(callCtx context.Context) (json.RawMessage, error) {
+		if !m.calls.CompareAndSwap(0, 1) {
+			return nil, fmt.Errorf("model request budget exhausted")
+		}
+		callCtx, cancel := context.WithTimeout(callCtx, modelTimeout)
+		defer cancel()
+		start := time.Now()
+		evidence := &modelEvidence{Provider: m.provider, Model: m.model, PromptVersion: modelPromptVersion, Status: "needs_attention"}
+		response, callErr := m.client.Complete(callCtx, &llm.CompletionRequest{Model: m.model, MaxTokens: modelMaxTokens, Temperature: 0.2, Messages: []llm.Message{{Role: "system", Content: judgeSystem + policy}, {Role: "user", Content: string(data)}}})
+		evidence.DurationMS = time.Since(start).Milliseconds()
+		if response != nil {
+			evidence.Usage = response.Usage
+			hash := sha256.Sum256([]byte(response.Content))
+			evidence.ResponseHash = hex.EncodeToString(hash[:])
+		}
+		switch {
+		case callErr != nil:
+			evidence.Failure = "provider_request_failed"
+			callErr = fmt.Errorf("model request failed: %s", redactModelError(callErr.Error()))
+		case callCtx.Err() != nil:
+			evidence.Failure = "request_canceled"
+			callErr = callCtx.Err()
+		case response == nil || response.FinishReason != "stop":
+			evidence.Failure = "incomplete_response"
+			callErr = fmt.Errorf("model returned incomplete response")
+		default:
+			evidence.modelDecision, callErr = decodeDecision(scenario, response.Content)
+			if callErr != nil {
+				evidence.Failure = callErr.Error()
+			} else {
+				evidence.Status = "completed"
+			}
+		}
+		encoded, encodeErr := json.Marshal(evidence)
+		return encoded, errors.Join(callErr, encodeErr)
+	})
+	var evidence *modelEvidence
+	if record != nil && len(record.Value) > 0 && string(record.Value) != "null" {
+		if err = json.Unmarshal(record.Value, &evidence); err != nil {
+			return nil, errors.Join(operationErr, err)
+		}
+		m.last.Store(evidence)
+	}
+	return evidence, operationErr
 }
 
 func decodeDecision(scenario, text string) (modelDecision, error) {

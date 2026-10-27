@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kart-io/goagent/core/durable"
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/stretchr/testify/require"
 )
@@ -129,4 +131,31 @@ func TestModelBudgetAndInputBound(t *testing.T) {
 	_, err = m.judge(context.Background(), "auto-reply", "question")
 	require.ErrorContains(t, err, "budget")
 	require.EqualValues(t, 1, m.calls.Load())
+}
+
+func TestFailedDecisionPersistsUsageAndStopsPaidReplay(t *testing.T) {
+	ctx := context.Background()
+	store, b := testStores(t)
+	b.model = &modelJudge{provider: "fake", model: "audit", client: completionFunc(func(context.Context, *llm.CompletionRequest) (*llm.CompletionResponse, error) {
+		return &llm.CompletionResponse{Content: "invalid-json", FinishReason: "stop", Usage: &interfaces.TokenUsage{TotalTokens: 73}}, nil
+	})}
+	graph, err := replyGraph(ctx, store, b)
+	require.NoError(t, err)
+	_, err = graph.Run(ctx, "failed", replyState{MessageID: "failed", Recipient: "demo-user", Message: "hours?"}, "")
+	require.Error(t, err)
+	require.Equal(t, "needs_attention", b.model.last.Load().Status)
+	require.Equal(t, 73, b.model.last.Load().Usage.TotalTokens)
+	require.NotEmpty(t, b.model.last.Load().ResponseHash)
+	// A new model instance represents a restarted process. Its client must never run.
+	b.model = &modelJudge{provider: "fake", model: "audit", client: completionFunc(func(context.Context, *llm.CompletionRequest) (*llm.CompletionResponse, error) {
+		t.Error("paid retry after persisted failure")
+		return nil, errors.New("unexpected call")
+	})}
+	graph, err = replyGraph(ctx, store, b)
+	require.NoError(t, err)
+	_, err = graph.Run(ctx, "failed", replyState{}, "")
+	require.ErrorIs(t, err, durable.ErrOperationAttention)
+	require.Zero(t, b.model.calls.Load())
+	require.Equal(t, 73, b.model.last.Load().Usage.TotalTokens)
+	noEffect(t, b, "send_reply", "failed")
 }

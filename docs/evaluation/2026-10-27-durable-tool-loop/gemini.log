@@ -1,0 +1,4 @@
+=== RUN   TestLiveNativeToolLoop
+--- PASS: TestLiveNativeToolLoop (3.35s)
+PASS
+ok  	github.com/kart-io/goagent/examples/workflow/business-cases	3.359s

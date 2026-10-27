@@ -1,0 +1,26 @@
+{
+  "provider": "minimax",
+  "model": "MiniMax-M3.1-Flash",
+  "passed": true,
+  "model_calls_by_phase": [
+    1,
+    1,
+    0
+  ],
+  "tool_attempts": [
+    "A",
+    "B",
+    "B"
+  ],
+  "effects": 2,
+  "distinct_keys": true,
+  "known_tokens": 1341,
+  "usage_reports": 2,
+  "operation_statuses": {
+    "model/turn/0": "completed",
+    "model/turn/1": "completed",
+    "tool/turn/0/call/call_hq1wZlqzWLvhxvhh3pkIIUzR": "completed",
+    "tool/turn/0/call/call_iuf95H5SlF1lyVabdbsDsa1i": "completed"
+  },
+  "limitations": "One synthetic native function-calling case. Real process exit after second local effect, before tool result checkpoint. External business effects are simulated. MiniMax is buffered final-only. Missing provider usage cannot be reconstructed."
+}

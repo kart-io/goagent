@@ -50,6 +50,14 @@ type Tool interface {
 	ArgsSchema() string
 }
 
+// DurableCallTool declares that Invoke journals ToolInput.CallID under the host
+// execution key and store, preserving child keys and replaying completed results.
+// Dispatcher.Tools implements this contract. A bare Tool does not imply recovery.
+type DurableCallTool interface {
+	Tool
+	SupportsDurableCalls() bool
+}
+
 // ValidatableTool 是工具可以实现的可选接口
 // 用于提供自定义输入验证逻辑
 //
@@ -103,6 +111,9 @@ type ToolExecutor interface {
 // 此结构包含执行工具所需的所有信息
 // 包括参数和用于追踪和调试的元数据
 type ToolInput struct {
+	// CallID is a host-owned stable child operation ID. Multiple effects in one
+	// durable node require distinct IDs; never read this from model arguments.
+	CallID string `json:"call_id,omitempty"`
 	// ExecutionKey is supplied by the host/execution context, never inferred from
 	// model arguments. Effect services must implement idempotency with this key
 	// or a stronger business ID. Empty means execution is not durably identified.
