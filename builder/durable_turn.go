@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/kart-io/goagent/builder/contextpolicy"
+	"github.com/kart-io/goagent/core/durable"
 	"strings"
 
 	"github.com/google/jsonschema-go/jsonschema"
@@ -19,6 +20,9 @@ func readJournaledTurn(ctx context.Context, round int, client llm.ToolStreamClie
 			return nil, err
 		}
 		return readToolTurn(callCtx, stream, emit)
+	}
+	if !durable.HasJournal(ctx) {
+		return modelOperation(ctx, fmt.Sprintf("model/turn/%d", round), nil, invoke, nil, emit)
 	}
 	type definition struct{ Name, Description, Schema string }
 	definitions := make([]definition, 0, len(tools))

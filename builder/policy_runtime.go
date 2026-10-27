@@ -32,9 +32,15 @@ type policyRuntime struct {
 	tools       []interfaces.Tool
 	byName      map[string]interfaces.Tool
 }
+
+var emptyPolicyRuntime policyRuntime
+
 type policyDescriptorsKey struct{}
 
 func (a *ConfigurableAgent[C, S]) newPolicyRuntime(ctx context.Context) (*policyRuntime, error) {
+	if len(a.config.ContextPolicies) == 0 {
+		return &emptyPolicyRuntime, nil
+	}
 	p := &policyRuntime{byName: map[string]interfaces.Tool{}}
 	ids, names := map[string]bool{}, map[string]bool{}
 	for _, t := range a.tools {
@@ -135,7 +141,7 @@ func (p *policyRuntime) apply(ctx context.Context, turn contextpolicy.Turn, fina
 			if restore, ok := policy.(contextpolicy.FinalTurnRestorer); ok {
 				next, err = restore.BeforeFinalTurn(ctx, copy)
 			} else {
-				next = copy
+				next, err = policy.BeforeTurn(ctx, copy)
 			}
 		} else {
 			next, err = policy.BeforeTurn(ctx, copy)
