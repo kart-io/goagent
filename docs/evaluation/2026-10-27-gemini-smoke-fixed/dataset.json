@@ -1,0 +1,109 @@
+[
+  {
+    "id": "gemini-text-smoke",
+    "question": "计算 17 加 25，只输出整数。",
+    "answer": "42",
+    "category": "无工具算术",
+    "direct_eligible": false
+  },
+  {
+    "id": "tenant-a",
+    "question": "查询订单 SHARED-1，原样返回工具文本。",
+    "answer": "订单 SHARED-1：A 商户已发货。",
+    "lookup": {
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "order_id": {
+            "type": "string",
+            "description": "订单编号"
+          }
+        },
+        "required": [
+          "order_id"
+        ],
+        "additionalProperties": false
+      },
+      "expected_arguments": {
+        "order_id": "SHARED-1"
+      },
+      "orders": {
+        "tenant_id": "A",
+        "records": [
+          {
+            "tenant_id": "A",
+            "order_id": "SHARED-1",
+            "text": "订单 SHARED-1：A 商户已发货。"
+          },
+          {
+            "tenant_id": "B",
+            "order_id": "SHARED-1",
+            "text": "订单 SHARED-1：B 商户已退款。"
+          },
+          {
+            "tenant_id": "B",
+            "order_id": "B-ONLY",
+            "text": "仅 B 商户可见的订单资料。"
+          },
+          {
+            "tenant_id": "A",
+            "order_id": "REFUND-1",
+            "text": "{\"refund_window_days\":7,\"delivery_days\":3,\"domestic_shipping_fee\":0}"
+          }
+        ]
+      }
+    },
+    "category": "租户A同号订单",
+    "direct_eligible": true
+  },
+  {
+    "id": "refund-window",
+    "question": "查询订单 REFUND-1，只输出 refund_window_days 的数字。",
+    "answer": "7",
+    "lookup": {
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "order_id": {
+            "type": "string",
+            "description": "订单编号"
+          }
+        },
+        "required": [
+          "order_id"
+        ],
+        "additionalProperties": false
+      },
+      "expected_arguments": {
+        "order_id": "REFUND-1"
+      },
+      "orders": {
+        "tenant_id": "A",
+        "records": [
+          {
+            "tenant_id": "A",
+            "order_id": "SHARED-1",
+            "text": "订单 SHARED-1：A 商户已发货。"
+          },
+          {
+            "tenant_id": "B",
+            "order_id": "SHARED-1",
+            "text": "订单 SHARED-1：B 商户已退款。"
+          },
+          {
+            "tenant_id": "B",
+            "order_id": "B-ONLY",
+            "text": "仅 B 商户可见的订单资料。"
+          },
+          {
+            "tenant_id": "A",
+            "order_id": "REFUND-1",
+            "text": "{\"refund_window_days\":7,\"delivery_days\":3,\"domestic_shipping_fee\":0}"
+          }
+        ]
+      }
+    },
+    "category": "退款期限提取",
+    "direct_eligible": false
+  }
+]

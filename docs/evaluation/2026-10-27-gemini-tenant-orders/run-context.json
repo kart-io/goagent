@@ -1,0 +1,19 @@
+{
+  "provider": "gemini-openai",
+  "implementation": "OpenAIProvider via Google official compatibility endpoint; not legacy GeminiProvider",
+  "endpoint": "https://generativelanguage.googleapis.com/v1beta/openai",
+  "model": "gemini-2.5-flash",
+  "model_list_preflight": "HTTP 200; generateContent model found",
+  "toolchain": "go1.25",
+  "workspace_dirty": true,
+  "code_sha256": {
+    "llm/providers/openai_stream.go": "0cd99a6f6bf82e9ea39dbc70d5ff8921795a4990c914175fc870c7d891cbe805",
+    "evaluation/agentbench/run.go": "2bfa6bdd6b4bcf2319035830985a91c547888b4fcac5dabc8c562a0107981c8a",
+    "evaluation/agentbench/cmd/stress/main.go": "c8a38ee8724705ebc9c0d51b8ed19143b59be92c9a13d3c03f4a0b12897afef7",
+    "evaluation/agentbench/order_backend.go": "001caa8fbe81279a0a6b7002f88a0bb3e297305da18478135cc41f5fbfdb8542"
+  },
+  "all_generation_requests": 24,
+  "all_reported_total_tokens": 6233,
+  "protocol_diagnostic_requests": 1,
+  "credentials_recorded": false
+}

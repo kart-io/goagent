@@ -32,7 +32,7 @@ go run ./cmd/stress -live -provider deepseek -model deepseek-flash \
 - `-repeats` 增加重复次数，`-workers` 限制并发，`-timeout` 设置单任务超时。
 - `-max-calls`、`-max-output-tokens`、`-token-stop` 设置请求预算；`-provider deepseek` 直接使用 DeepSeek 专用 Provider。
 
-Provider 配置按名称隔离：默认 `openai` 读取 `OPENAI_API_KEY/BASE_URL/MODEL`；`deepseek` 读取 `DEEPSEEK_API_KEY/BASE_URL/MODEL`，未配置地址时使用官方端点。`-model` 覆盖对应 MODEL 环境变量，两组凭据不会交叉回退。
+Provider 配置按名称隔离：默认 `openai` 读取 `OPENAI_API_KEY/BASE_URL/MODEL`；`deepseek` 读取 `DEEPSEEK_API_KEY/BASE_URL/MODEL`，未配置地址时使用官方端点。`gemini-openai` 读取 `GEMINI_API_KEY/BASE_URL/MODEL`，默认地址为 Google 官方 OpenAI 兼容端点 `https://generativelanguage.googleapis.com/v1beta/openai`（自定义地址也须包含兼容路径）。`-model` 覆盖对应 MODEL 环境变量，三组凭据不会交叉回退。
 
 默认每任务最多两次模型请求、每次输出上限 512 Token、已观测用量阈值 8000、超时 45 秒。阈值不等于硬性计费上限，最后一次请求可能超额。无隐藏重试。成功要求最终输出去除首尾空白后严格匹配；有证据时必须执行工具。调用契约另外要求工具恰好一次，终态直返/无工具一次请求，其余两次请求。
 
@@ -101,6 +101,65 @@ go run ./evaluation/agentbench/cmd/stress -live \
 
 输出目录权限为 0700，数据文件为 0600。manifest 不记录凭据或端点；题集、实际参数和结果仍可能包含业务信息。题集来源、独立验收集、评分门槛及人工证据检查见[业务评测要求](BUSINESS_EVALUATION.md)。
 
+### 按参数查询的隔离订单后端
+
+[tenant-order-cases.json](testdata/tenant-order-cases.json)为六道合成题，覆盖租户同号订单、跨租户不可见、不存在订单、事实提取和资料不足。它使用 `lookup.orders` 替代固定 `evidence`，两者不能混用。模型只获得工具 schema，实际工具返回由查询参数和宿主绑定的租户决定；后端不读取 `answer` 或 `expected_arguments`。
+
+```json
+"lookup": {
+  "parameters": {
+    "type": "object",
+    "properties": {"order_id": {"type": "string"}},
+    "required": ["order_id"],
+    "additionalProperties": false
+  },
+  "expected_arguments": {"order_id": "SHARED-1"},
+  "orders": {
+    "tenant_id": "A",
+    "records": [
+      {"tenant_id": "A", "order_id": "SHARED-1", "text": "A 的订单结果"},
+      {"tenant_id": "B", "order_id": "SHARED-1", "text": "B 的订单结果"}
+    ]
+  }
+}
+```
+
+后端仅接受非空字符串 `order_id`，拒绝额外参数（包括模型传入的 `tenant_id`）、缺失参数和错误类型。跨租户订单与不存在的订单均返回 `NOT_FOUND`，不泄露跨租户存在性。同租户查错订单会返回那个订单的真实测试记录，由答案和参数评分发现错误。
+
+逐次结果与汇总标注 `lookup_backend=tenant_orders`，记录 `lookup_misses`；不同后端分别汇总，manifest 包含 `tenant_order_cases` 和提示版本 v4。旧固定证据模式保留，历史报告不改写。
+
+```sh
+go run ./evaluation/agentbench/cmd/stress -live \
+  -provider deepseek -model deepseek-flash \
+  -dataset evaluation/agentbench/testdata/tenant-order-cases.json \
+  -mode contract -repeats 2 -workers 1 \
+  -max-calls 2 -max-output-tokens 2048 -token-stop 8000 -timeout 90s \
+  -out /tmp/goagent-tenant-orders-live
+```
+
+去掉 `-live` 可生成计划。已完成的[DeepSeek 实测](../../docs/evaluation/2026-10-27-deepseek-tenant-orders/REPORT.md)为 12/12，共 16 次请求、7,068 Token。此后端是隔离测试数据库，租户绑定模拟宿主授权上下文；没有接入真实订单服务、登录身份或生产权限系统。
+
 小题集入口 `go run ./cmd/run -live -dataset testdata/cases.json` 使用环境中的模型与凭据；终态小题集为 `testdata/direct-cases.json`，可加 `-direct-tools`。该入口支持 `-max-calls`、`-max-output-tokens`、`-token-stop`、`-repeats` 和 `-timeout`。
 
 历史报告仅保留 GoAgent 记录，数据清理标记写在 `record_processing`；记录未重新调用模型，汇总按保留记录计算。原有失败仍在。完整说明见 [评测报告](../../docs/evaluation/README.md)。
+
+### 真实 Gemini 测试
+
+先设置 `GEMINI_API_KEY`，从仓库根目录执行：
+
+```sh
+go run ./evaluation/agentbench/cmd/stress -live \
+  -provider gemini-openai -model gemini-2.5-flash \
+  -dataset evaluation/agentbench/testdata/tenant-order-cases.json \
+  -mode contract -repeats 2 -workers 1 \
+  -max-calls 2 -max-output-tokens 2048 -token-stop 8000 -timeout 90s \
+  -out /tmp/goagent-gemini-orders-live
+```
+
+这条路径以 OpenAI 协议适配器调用 Google 官方服务，**不是 OpenAI 模型，也不是旧 `GeminiProvider` 的验证**。模型须在当前 Key 可用列表中；本轮选择 `gemini-2.5-flash`。Google 可能将完整工具调用一次性放在结束帧中且省略索引，解析器仅对包含唯一 ID、名称与完整对象参数的独立结束帧补索引；不接受无索引的分片或混合帧。新型号和其他能力需另行验证。
+
+[真实 Gemini 报告](../../docs/evaluation/2026-10-27-gemini-tenant-orders/REPORT.md)保留首次失败、协议诊断、修复后的冒烟和完整题集结果。Token 总量使用供应商报告值，可能包含未拆出的思考 Token，不强行等于输入与可见输出之和。
+
+旧 `GeminiProvider` 已另行修复并完成[原生 API 验证](../../docs/evaluation/2026-10-27-gemini-provider/REPORT.md)，入口为 `go run ./examples/llm/gemini-verify -live`。该验证与此处 `gemini-openai` 路径分别记录。
+
+GeminiProvider 的原生工具循环和 Embedding 已补齐；真实验证运行 `go run ./examples/llm/gemini-verify -live -suite native`，见[能力报告](../../docs/evaluation/2026-10-27-gemini-native-support/REPORT.md)。此处 stress 命令的 `gemini-openai` 保留其兼容端点含义。

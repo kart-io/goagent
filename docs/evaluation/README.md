@@ -1,5 +1,13 @@
 # 可复现评测（合成数据）
 
+最新能力：[Gemini 原生工具循环与真实 Embedding](2026-10-27-gemini-native-support/REPORT.md)。已实现 AsRunnable、完整工具续接及签名保留、终态直返和独立向量模型。真实案例 12/12 通过，16 次生成请求加 4 次 Embedding；3,817 个生成 Token 不包含向量用量。
+
+最新补充：[旧 GeminiProvider 原生 API 验证](2026-10-27-gemini-provider/REPORT.md)。复现 Vertex AI/API Key 认证失败后，保留公开入口并修复底层接入；六个方法各两次，真实测试 12/12 通过。该阶段尚不支持原生循环与 Embedding；现已由上述后续能力实现补齐。
+
+最新实测：[真实 Gemini 与工具流修复](2026-10-27-gemini-tenant-orders/REPORT.md)。Google 官方兼容端点、`gemini-2.5-flash`；修复完整工具结束帧缺少索引的兼容问题后，冒烟 3/3、隔离订单 12/12，通过后者共 16 次请求、4,433 Token。首次失败与独立协议诊断全部保留；不代表旧 GeminiProvider 已验证。
+
+按参数查询新增验证：[DeepSeek 隔离订单后端](2026-10-27-deepseek-tenant-orders/REPORT.md)，覆盖同号订单租户隔离、跨租户不可见、未知订单和事实提取，12/12 通过，共 16 次模型请求、7,068 Token。退款恢复案例另补业务申请去重、累计额度、审批有效期和订单版本复核，未接入真实支付与身份系统。
+
 最新补充：[DeepSeek 原生 Provider 与订单参数实测](2026-10-27-deepseek-native-refund/REPORT.md)，12 次运行的答案、参数和调用契约全部通过，共 21 次请求、8,466 Token。另新增[退款审批与崩溃恢复案例](../../examples/workflow/refund-recovery/README.md)，验证独立进程恢复与模拟退款幂等。两者分别验证模型工具调用和持久化副作用边界，不代替真实业务验收。
 
 后续修复：[剩余失败与执行策略验证](2026-10-26-remaining-failures.md)。默认流程经提示与最后回合工具控制修复后为 117/120；按预先声明的原样输出/推理契约分流后，同题和另一种子的两组均为 120/120，原有 8 个失败全部通过。两种配置分别统计，不将契约模式成绩当作默认自由生成的成绩。

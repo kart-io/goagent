@@ -2,6 +2,7 @@ package llm
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/kart-io/goagent/interfaces"
@@ -32,6 +33,14 @@ type Message struct {
 	ToolCalls        []ToolCall `json:"tool_calls,omitempty"`
 	ReasoningContent string     `json:"reasoning_content,omitempty"`
 	ToolCallID       string     `json:"tool_call_id,omitempty"`
+	// ProviderState preserves opaque response parts (e.g. Gemini signatures).
+	// Replay unchanged with the matching assistant content and tool calls.
+	ProviderState *ProviderState `json:"provider_state,omitempty"`
+}
+
+type ProviderState struct {
+	Provider constants.Provider `json:"provider"`
+	Data     json.RawMessage    `json:"data"`
 }
 
 // CompletionRequest 定义补全请求
@@ -71,10 +80,11 @@ var (
 // Config 定义 LLM 配置
 type LLMOptions struct {
 	// 基础配置
-	Provider constants.Provider `json:"provider"`           // 提供商
-	APIKey   string             `json:"api_key"`            // API 密钥
-	BaseURL  string             `json:"base_url,omitempty"` // 自定义 API 端点
-	Model    string             `json:"model"`              // 默认模型
+	Provider       constants.Provider `json:"provider"`                  // 提供商
+	APIKey         string             `json:"api_key"`                   // API 密钥
+	BaseURL        string             `json:"base_url,omitempty"`        // 自定义 API 端点
+	Model          string             `json:"model"`                     // 默认模型
+	EmbeddingModel string             `json:"embedding_model,omitempty"` // Separate embedding model, currently used by Gemini.
 
 	// 生成参数
 	MaxTokens      int             `json:"max_tokens"`                // 默认最大 token 数

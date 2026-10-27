@@ -1,0 +1,302 @@
+[
+  {
+    "id": "tenant-a",
+    "question": "查询订单 SHARED-1，原样返回工具文本。",
+    "answer": "订单 SHARED-1：A 商户已发货。",
+    "lookup": {
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "order_id": {
+            "type": "string",
+            "description": "订单编号"
+          }
+        },
+        "required": [
+          "order_id"
+        ],
+        "additionalProperties": false
+      },
+      "expected_arguments": {
+        "order_id": "SHARED-1"
+      },
+      "orders": {
+        "tenant_id": "A",
+        "records": [
+          {
+            "tenant_id": "A",
+            "order_id": "SHARED-1",
+            "text": "订单 SHARED-1：A 商户已发货。"
+          },
+          {
+            "tenant_id": "B",
+            "order_id": "SHARED-1",
+            "text": "订单 SHARED-1：B 商户已退款。"
+          },
+          {
+            "tenant_id": "B",
+            "order_id": "B-ONLY",
+            "text": "仅 B 商户可见的订单资料。"
+          },
+          {
+            "tenant_id": "A",
+            "order_id": "REFUND-1",
+            "text": "{\"refund_window_days\":7,\"delivery_days\":3,\"domestic_shipping_fee\":0}"
+          }
+        ]
+      }
+    },
+    "category": "租户A同号订单",
+    "direct_eligible": true
+  },
+  {
+    "id": "tenant-b",
+    "question": "查询订单 SHARED-1，原样返回工具文本。",
+    "answer": "订单 SHARED-1：B 商户已退款。",
+    "lookup": {
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "order_id": {
+            "type": "string",
+            "description": "订单编号"
+          }
+        },
+        "required": [
+          "order_id"
+        ],
+        "additionalProperties": false
+      },
+      "expected_arguments": {
+        "order_id": "SHARED-1"
+      },
+      "orders": {
+        "tenant_id": "B",
+        "records": [
+          {
+            "tenant_id": "A",
+            "order_id": "SHARED-1",
+            "text": "订单 SHARED-1：A 商户已发货。"
+          },
+          {
+            "tenant_id": "B",
+            "order_id": "SHARED-1",
+            "text": "订单 SHARED-1：B 商户已退款。"
+          },
+          {
+            "tenant_id": "B",
+            "order_id": "B-ONLY",
+            "text": "仅 B 商户可见的订单资料。"
+          },
+          {
+            "tenant_id": "A",
+            "order_id": "REFUND-1",
+            "text": "{\"refund_window_days\":7,\"delivery_days\":3,\"domestic_shipping_fee\":0}"
+          }
+        ]
+      }
+    },
+    "category": "租户B同号订单",
+    "direct_eligible": true
+  },
+  {
+    "id": "foreign-order",
+    "question": "查询订单 B-ONLY，原样返回工具文本。",
+    "answer": "NOT_FOUND",
+    "lookup": {
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "order_id": {
+            "type": "string",
+            "description": "订单编号"
+          }
+        },
+        "required": [
+          "order_id"
+        ],
+        "additionalProperties": false
+      },
+      "expected_arguments": {
+        "order_id": "B-ONLY"
+      },
+      "orders": {
+        "tenant_id": "A",
+        "records": [
+          {
+            "tenant_id": "A",
+            "order_id": "SHARED-1",
+            "text": "订单 SHARED-1：A 商户已发货。"
+          },
+          {
+            "tenant_id": "B",
+            "order_id": "SHARED-1",
+            "text": "订单 SHARED-1：B 商户已退款。"
+          },
+          {
+            "tenant_id": "B",
+            "order_id": "B-ONLY",
+            "text": "仅 B 商户可见的订单资料。"
+          },
+          {
+            "tenant_id": "A",
+            "order_id": "REFUND-1",
+            "text": "{\"refund_window_days\":7,\"delivery_days\":3,\"domestic_shipping_fee\":0}"
+          }
+        ]
+      }
+    },
+    "category": "跨租户不可见",
+    "direct_eligible": true
+  },
+  {
+    "id": "missing-order",
+    "question": "查询订单 MISSING，原样返回工具文本。",
+    "answer": "NOT_FOUND",
+    "lookup": {
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "order_id": {
+            "type": "string",
+            "description": "订单编号"
+          }
+        },
+        "required": [
+          "order_id"
+        ],
+        "additionalProperties": false
+      },
+      "expected_arguments": {
+        "order_id": "MISSING"
+      },
+      "orders": {
+        "tenant_id": "A",
+        "records": [
+          {
+            "tenant_id": "A",
+            "order_id": "SHARED-1",
+            "text": "订单 SHARED-1：A 商户已发货。"
+          },
+          {
+            "tenant_id": "B",
+            "order_id": "SHARED-1",
+            "text": "订单 SHARED-1：B 商户已退款。"
+          },
+          {
+            "tenant_id": "B",
+            "order_id": "B-ONLY",
+            "text": "仅 B 商户可见的订单资料。"
+          },
+          {
+            "tenant_id": "A",
+            "order_id": "REFUND-1",
+            "text": "{\"refund_window_days\":7,\"delivery_days\":3,\"domestic_shipping_fee\":0}"
+          }
+        ]
+      }
+    },
+    "category": "不存在的订单",
+    "direct_eligible": true
+  },
+  {
+    "id": "refund-window",
+    "question": "查询订单 REFUND-1，只输出 refund_window_days 的数字。",
+    "answer": "7",
+    "lookup": {
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "order_id": {
+            "type": "string",
+            "description": "订单编号"
+          }
+        },
+        "required": [
+          "order_id"
+        ],
+        "additionalProperties": false
+      },
+      "expected_arguments": {
+        "order_id": "REFUND-1"
+      },
+      "orders": {
+        "tenant_id": "A",
+        "records": [
+          {
+            "tenant_id": "A",
+            "order_id": "SHARED-1",
+            "text": "订单 SHARED-1：A 商户已发货。"
+          },
+          {
+            "tenant_id": "B",
+            "order_id": "SHARED-1",
+            "text": "订单 SHARED-1：B 商户已退款。"
+          },
+          {
+            "tenant_id": "B",
+            "order_id": "B-ONLY",
+            "text": "仅 B 商户可见的订单资料。"
+          },
+          {
+            "tenant_id": "A",
+            "order_id": "REFUND-1",
+            "text": "{\"refund_window_days\":7,\"delivery_days\":3,\"domestic_shipping_fee\":0}"
+          }
+        ]
+      }
+    },
+    "category": "退款期限提取",
+    "direct_eligible": false
+  },
+  {
+    "id": "refund-unknown",
+    "question": "查询订单 REFUND-1，只输出 international_refund_fee；资料未提供时输出 UNKNOWN。",
+    "answer": "UNKNOWN",
+    "lookup": {
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "order_id": {
+            "type": "string",
+            "description": "订单编号"
+          }
+        },
+        "required": [
+          "order_id"
+        ],
+        "additionalProperties": false
+      },
+      "expected_arguments": {
+        "order_id": "REFUND-1"
+      },
+      "orders": {
+        "tenant_id": "A",
+        "records": [
+          {
+            "tenant_id": "A",
+            "order_id": "SHARED-1",
+            "text": "订单 SHARED-1：A 商户已发货。"
+          },
+          {
+            "tenant_id": "B",
+            "order_id": "SHARED-1",
+            "text": "订单 SHARED-1：B 商户已退款。"
+          },
+          {
+            "tenant_id": "B",
+            "order_id": "B-ONLY",
+            "text": "仅 B 商户可见的订单资料。"
+          },
+          {
+            "tenant_id": "A",
+            "order_id": "REFUND-1",
+            "text": "{\"refund_window_days\":7,\"delivery_days\":3,\"domestic_shipping_fee\":0}"
+          }
+        ]
+      }
+    },
+    "category": "资料不足拒答",
+    "direct_eligible": false
+  }
+]

@@ -154,7 +154,6 @@ func NewDeepSeekWithOptions(opts ...agentllm.ClientOption) (*DeepSeekProvider, e
 			agentllm.CapabilityStructuredStreaming,
 			agentllm.CapabilityToolStreaming,
 			agentllm.CapabilityToolCalling,
-			agentllm.CapabilityEmbedding,
 		),
 		client:  client,
 		apiKey:  base.Config.APIKey,
@@ -483,7 +482,8 @@ func (p *DeepSeekProvider) StreamWithTools(ctx context.Context, prompt string, t
 	return chunks, nil
 }
 
-// Embed generates embeddings for text
+// Embed retains a legacy OpenAI-compatible embedding request for custom
+// endpoints. It is not advertised as a verified DeepSeek embedding capability.
 func (p *DeepSeekProvider) Embed(ctx context.Context, text string) ([]float64, error) {
 	// DeepSeek embeddings API
 	type EmbedRequest struct {

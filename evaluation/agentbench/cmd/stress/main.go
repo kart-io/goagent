@@ -37,7 +37,7 @@ func run(args []string) error {
 	mode := flags.String("mode", "all", "all 全部对照；baseline 默认循环；contract 按预先声明的任务契约选择直返/推理")
 	out := flags.String("out", "stress-results", "新建结果目录，不覆盖已有目录")
 	model := flags.String("model", "", "模型名称，默认读取对应 Provider 的 MODEL 环境变量")
-	provider := flags.String("provider", "openai", "原生 Provider: openai 或 deepseek")
+	provider := flags.String("provider", "openai", "Provider: openai、deepseek 或 gemini-openai（Google 官方兼容端点）")
 	maxCalls := flags.Int("max-calls", 2, "每任务最大上游请求数，包括重试")
 	maxTokens := flags.Int("max-output-tokens", 512, "每次请求输出 Token 上限")
 	tokenStop := flags.Int("token-stop", 8000, "观察 Token 阈值，0 表示不限制后续请求")
@@ -54,8 +54,8 @@ func run(args []string) error {
 	if *maxCalls < 1 || *maxTokens < 1 || *tokenStop < 0 {
 		return fmt.Errorf("invalid request or token budget")
 	}
-	if *provider != "openai" && *provider != "deepseek" {
-		return fmt.Errorf("provider must be openai or deepseek")
+	if *provider != "openai" && *provider != "deepseek" && *provider != "gemini-openai" {
+		return fmt.Errorf("provider must be openai, deepseek or gemini-openai")
 	}
 	apiKey, endpoint := os.Getenv("OPENAI_API_KEY"), os.Getenv("OPENAI_BASE_URL")
 	if *provider == "deepseek" {
@@ -65,6 +65,14 @@ func run(args []string) error {
 		}
 		if *model == "" {
 			*model = os.Getenv("DEEPSEEK_MODEL")
+		}
+	} else if *provider == "gemini-openai" {
+		apiKey, endpoint = os.Getenv("GEMINI_API_KEY"), os.Getenv("GEMINI_BASE_URL")
+		if endpoint == "" {
+			endpoint = "https://generativelanguage.googleapis.com/v1beta/openai"
+		}
+		if *model == "" {
+			*model = os.Getenv("GEMINI_MODEL")
 		}
 	} else if *model == "" {
 		*model = os.Getenv("OPENAI_MODEL")
@@ -110,14 +118,22 @@ func run(args []string) error {
 	manifest["mode"] = *mode
 	manifest["prompt_version"] = "task-semantics-v2"
 	parameterCases := 0
+	orderCases := 0
 	for _, c := range cases {
 		if c.Lookup != nil {
 			parameterCases++
+			if c.Lookup.Orders != nil {
+				orderCases++
+			}
 		}
 	}
 	manifest["parameter_labeled_cases"] = parameterCases
 	if parameterCases > 0 {
 		manifest["prompt_version"] = "task-semantics-v3-lookup-arguments"
+	}
+	manifest["tenant_order_cases"] = orderCases
+	if orderCases > 0 {
+		manifest["prompt_version"] = "task-semantics-v4-tenant-orders"
 	}
 	manifest["goagent_final_turn"] = "omit_tools_after_results"
 	manifest["tool_result_format"] = "native_text"

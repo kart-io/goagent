@@ -2,6 +2,8 @@
 
 本模块是 goagent 框架的 LLM（大语言模型）集成层，提供统一的接口与多个 LLM 服务提供商交互。
 
+各适配器实际支持的字符串流、结构化流、工具调用及 Embedding 以[能力矩阵](../docs/guides/PROVIDER_CAPABILITIES.md)为准。Gemini 的旧 Embed 不再返回模拟向量；DeepSeek 的兼容 Embed 不再默认声明为已验证能力。
+
 ## 目录
 
 - [架构设计](#架构设计)
@@ -605,3 +607,9 @@ llm/
 - [builder](../builder/) - Agent 构建器
 - [tools](../tools/) - 工具系统
 - [interfaces](../interfaces/) - 接口定义
+
+### GeminiProvider 原生 API 实测
+
+`NewGeminiWithOptions` 现使用 Google GenAI SDK 与 Gemini API Key 认证，默认 `gemini-2.5-flash`，保留 Complete/Chat、字符串流与旧工具接口。可运行[原生验证案例](../examples/llm/gemini-verify/README.md)，六个方法真实测试 12/12 通过；后续已补齐 StreamClient/ToolStreamClient、AsRunnable 工具循环及真实 Embedding，见[原生能力实测](../docs/evaluation/2026-10-27-gemini-native-support/REPORT.md)。原生 `GEMINI_BASE_URL` 填根地址，不使用 `/v1beta/openai` 路径。
+
+Gemini 通过 `WithEmbeddingModel("gemini-embedding-001")` 或 `GEMINI_EMBEDDING_MODEL` 单独指定向量模型。原生工具循环保留 `ProviderState` 中的 Content/Parts 与思考签名；自管消息历史应原样续接此字段。

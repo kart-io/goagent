@@ -48,6 +48,11 @@ func WithModel(model string) ClientOption {
 	}
 }
 
+// WithEmbeddingModel selects a separate embedding model for providers that support it.
+func WithEmbeddingModel(model string) ClientOption {
+	return func(c *LLMOptions) { c.EmbeddingModel = model }
+}
+
 // WithMaxTokens 设置最大 token 数
 func WithMaxTokens(maxTokens int) ClientOption {
 	return func(c *LLMOptions) {

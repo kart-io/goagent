@@ -58,7 +58,9 @@ func TestRefundRecoveryAcrossProcesses(t *testing.T) {
 	invoke(0)
 	require.Contains(t, string(invoke(1, "-approve", "wrong-key")), "approval does not match")
 	count(0)
-	invoke(crashExitCode, "-approve", waiting.Snapshot.Key, "-crash-after-refund")
+	require.Contains(t, string(invoke(1, "-approve", waiting.Snapshot.Key, "-approver", "unauthorized")), "not authorized")
+	count(0)
+	invoke(crashExitCode, "-approve", waiting.Snapshot.Key, "-approver", "demo-reviewer", "-crash-after-refund")
 	count(1)
 	store, err := durable.NewFileStore(filepath.Join(dir, "checkpoints"))
 	require.NoError(t, err)
@@ -88,6 +90,16 @@ func TestRefundRecoveryAcrossProcesses(t *testing.T) {
 	count(1)
 	repeated := invoke(0)
 	require.Contains(t, string(repeated), receipt)
+	count(1)
+	// A different execution ID cannot create a second refund for the same
+	// business request, or silently change its approved payload.
+	var secondRun struct {
+		Snapshot durable.Snapshot `json:"snapshot"`
+	}
+	require.NoError(t, json.Unmarshal(invoke(0, "-run", "execution-2"), &secondRun))
+	secondDone := invoke(0, "-run", "execution-2", "-approve", secondRun.Snapshot.Key, "-approver", "demo-reviewer")
+	require.Contains(t, string(secondDone), receipt)
+	require.Contains(t, string(invoke(1, "-run", "execution-3", "-amount-cents", "1")), "different refund")
 	count(1)
 }
 
@@ -130,7 +142,8 @@ func TestLedgerDeduplicatesAndRejectsChangedPayload(t *testing.T) {
 	ledger, err := openLedger(t.TempDir())
 	require.NoError(t, err)
 	defer func() { require.NoError(t, ledger.db.Close()) }()
-	state := refundState{OrderID: "DEMO-1001", AmountCents: 9900, Currency: "CNY"}
+	state := preparedRequest(t, ledger, "business-1", 9900)
+	require.NoError(t, ledger.approve(context.Background(), state, "demo-reviewer"))
 	const callers = 8
 	var wg sync.WaitGroup
 	errors := make([]error, callers)

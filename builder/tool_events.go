@@ -146,7 +146,7 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 				return nil, fmt.Errorf("工具 %s 的参数必须为 JSON 对象", tc.Function.Name)
 			}
 		}
-		messages = append(messages, llm.Message{Role: "assistant", Content: turn.Content, ReasoningContent: turn.ReasoningContent, ToolCalls: turn.ToolCalls})
+		messages = append(messages, llm.Message{Role: "assistant", Content: turn.Content, ReasoningContent: turn.ReasoningContent, ToolCalls: turn.ToolCalls, ProviderState: turn.ProviderState})
 		for i, call := range calls {
 			if err := ctx.Err(); err != nil {
 				return nil, err

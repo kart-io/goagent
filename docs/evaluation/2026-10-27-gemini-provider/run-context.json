@@ -1,0 +1,23 @@
+{
+  "provider": "GeminiProvider",
+  "public_constructor": "NewGeminiWithOptions",
+  "backend": "BackendGeminiAPI",
+  "sdk": "google.golang.org/genai v1.76.0",
+  "model": "gemini-2.5-flash",
+  "endpoint": "https://generativelanguage.googleapis.com",
+  "api_version": "v1beta",
+  "compatibility_endpoint_used": false,
+  "go_toolchain": "go1.25",
+  "baseline_revision": "c9d4e6c",
+  "workspace_dirty": true,
+  "code_sha256": {
+    "llm/providers/gemini.go": "daf46e8784135dcfaf1fc69290de8723f885da46f91efbf260efbb5afc20d4ac",
+    "examples/llm/gemini-verify/main.go": "258cb26db2872e3c589319085b774e0665217c0ba2f8992b64fb32ee717d606d",
+    "go.mod": "0dcd47b3afd60aa5bce331a2425a1aba9b5443c2c9ea497b332e7e660877f8a8",
+    "go.sum": "be37d4ddf77c2b74a8706ec17bf0b889b26d5b375617dc6302224a13c58116c5"
+  },
+  "before_fix_generation_attempts": 1,
+  "after_fix_generation_calls": 12,
+  "sdk_automatic_retries": false,
+  "credentials_recorded": false
+}

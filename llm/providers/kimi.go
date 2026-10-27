@@ -19,6 +19,7 @@ import (
 // Kimi 是月之暗面推出的智能助手，支持超长上下文（最高200K tokens）
 type KimiClient struct {
 	*common.BaseProvider
+	*common.ProviderCapabilities
 	apiKey  string
 	baseURL string
 	client  *httpclient.Client
@@ -54,10 +55,11 @@ func NewKimiWithOptions(opts ...agentllm.ClientOption) (*KimiClient, error) {
 	})
 
 	return &KimiClient{
-		BaseProvider: base,
-		apiKey:       base.Config.APIKey,
-		baseURL:      strings.TrimRight(base.Config.BaseURL, "/"),
-		client:       client,
+		BaseProvider:         base,
+		ProviderCapabilities: common.NewProviderCapabilities(agentllm.CapabilityCompletion, agentllm.CapabilityChat),
+		apiKey:               base.Config.APIKey,
+		baseURL:              strings.TrimRight(base.Config.BaseURL, "/"),
+		client:               client,
 	}, nil
 }
 
