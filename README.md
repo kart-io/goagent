@@ -17,7 +17,7 @@ GoAgent is an AI agent framework for Go, inspired by LangChain. It provides agen
 
 Workflow orchestration: [typed graphs, branches, parallel joins and bounded loops](workflow/README.md).
 
-Context governance: [tool-result offloading and history summaries](docs/guides/CONTEXT_POLICY.md). Framework comparison: [GoAgent / Eino](evaluation/einocompare/README.md).
+Context governance: [tool-result offloading and history summaries](docs/guides/CONTEXT_POLICY.md).
 
 ## Features
 

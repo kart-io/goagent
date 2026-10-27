@@ -4,6 +4,8 @@
 
 新的通用图编排位于 [workflow](../workflow/README.md)：支持条件分支、并行 Clone/Merge、有界循环和 Runnable/Agent 适配，编译结果复用 core.StreamRunnable。
 
+新调用方统一使用 `core.Runnable[I, O]`。图编排与 `core/durable` 的顺序步骤恢复是独立能力，目前不会自动组合为图检查点恢复；入口、流式和持久化边界以[执行契约](../docs/guides/EXECUTION_CONTRACT.md)为准。
+
 ## 目录
 
 - [架构设计](#架构设计)

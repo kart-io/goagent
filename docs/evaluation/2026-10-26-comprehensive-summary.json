@@ -1502,41 +1502,6 @@
       }
     ]
   },
-  "eino": {
-    "counts": {
-      "all_test_pass": 12,
-      "top_test_pass": 4,
-      "package_pass": 3
-    },
-    "coverage": 40.5,
-    "library_coverage": 78.6,
-    "packages": [
-      {
-        "package": "github.com/kart-io/goagent/evaluation/einocompare",
-        "statements": 103,
-        "covered": 81,
-        "coverage": 78.6,
-        "tests": {
-          "pass": 12
-        }
-      },
-      {
-        "package": "github.com/kart-io/goagent/evaluation/einocompare/cmd/compare",
-        "statements": 85,
-        "covered": 0,
-        "coverage": 0.0,
-        "tests": {}
-      },
-      {
-        "package": "github.com/kart-io/goagent/evaluation/einocompare/cmd/workflow",
-        "statements": 12,
-        "covered": 0,
-        "coverage": 0.0,
-        "tests": {}
-      }
-    ],
-    "skips": []
-  },
   "smokes": [
     {
       "name": "workflow",

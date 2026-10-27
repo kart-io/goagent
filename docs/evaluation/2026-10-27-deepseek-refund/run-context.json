@@ -1,0 +1,13 @@
+{
+  "started_at": "2026-10-27T03:05:47.532439+00:00",
+  "finished_at": "2026-10-27T03:06:42.565959+00:00",
+  "goagent_revision": "335d5c6446e0271af379f77aae4874118761af41",
+  "goagent_dirty": true,
+  "go_version": "go version go1.27.1 linux/amd64",
+  "provider": "DeepSeek official API",
+  "model": "deepseek-flash",
+  "thinking": "server default; no explicit override",
+  "dataset_kind": "handwritten synthetic refund example; no real customer data",
+  "command_exit_code": 0,
+  "provenance": "Original session timing and source state retained; results contain only the 12 GoAgent runs; no model requests repeated during cleanup"
+}

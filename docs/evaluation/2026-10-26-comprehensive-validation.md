@@ -1,6 +1,6 @@
 # 全量功能验证
 
-日期：2026-10-26。范围为当前工作区主模块、独立 Eino 子模块、真实服务集成和可离线执行的示例。Go 1.25.3，darwin/arm64，CGO 开启。全量测试不带 -short，启用竞态检测和 atomic 覆盖率；没有调用线上模型。
+日期：2026-10-26。范围为当时工作区主模块、真实服务集成和可离线执行的示例。Go 1.25.3，darwin/arm64，CGO 开启。全量测试不带 -short，启用竞态检测和 atomic 覆盖率；没有调用线上模型。
 
 ## 结果
 
@@ -10,7 +10,6 @@
 | 实际有测试的主模块包 | 60 个 |
 | 主模块顶层测试 | 2,715 通过，12 跳过，0 失败 |
 | 计入子用例 | 4,731 通过，14 跳过，0 失败 |
-| Eino 独立模块 | 3 个包检查通过；4 个顶层测试 / 12 个含子用例通过 |
 | 全仓 go build、go vet | 退出码 0 |
 | golangci-lint v2.6.2 | 0 issues |
 | 离线冒烟 | 7 项通过，实际运行并检查输出标记 |
@@ -145,6 +144,6 @@ GO_TEST_MODE=true GOMAXPROCS=2 go test -json -p 2 -race \
   -count=1 -timeout 300s ./...
 ```
 
-真实服务端点、PDF 路径和移除线上密钥的进程环境按 integration README 配置。独立模块需另行执行 `cd evaluation/einocompare && go test -race ./...`。
+真实服务端点、PDF 路径和移除线上密钥的进程环境按 integration README 配置。
 
 机器可读结果：[summary JSON](2026-10-26-comprehensive-summary.json)。本次完整 JSONL、覆盖率 HTML/profile、初次失败记录与冒烟日志保存在 `/tmp/goagent-full-validation-20261026/`，未写入仓库。

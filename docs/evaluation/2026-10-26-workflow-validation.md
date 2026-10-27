@@ -1,6 +1,6 @@
 # 通用流程编排验证
 
-日期：2026-10-26。新增主模块 workflow 包，保留原有 Builder、core 和独立 Eino 对照模块。
+日期：2026-10-26。新增主模块 workflow 包，保留原有 Builder 和 core。
 
 ## 已实现
 
@@ -20,11 +20,9 @@ GOMAXPROCS=2 go test -p 2 -race ./workflow -count=10 -timeout 60s
 go vet ./workflow ./examples/workflow
 go run ./examples/workflow
 go run ./examples/workflow -stream
-cd evaluation/einocompare
-GOMAXPROCS=2 go test -p 2 -race ./... -short -count=1 -timeout 120s
 ```
 
-本机设置匹配工具链的进程级 GOROOT=/opt/homebrew/opt/go/libexec，未修改全局配置。主模块 59 个有测试包通过；workflow 的 19 个测试函数及子用例通过 10 轮竞态检查。独立 Eino 模块回归、go vet 和 diff 检查通过。
+本机设置匹配工具链的进程级 GOROOT=/opt/homebrew/opt/go/libexec，未修改全局配置。主模块 59 个有测试包通过；workflow 的 19 个测试函数及子用例通过 10 轮竞态检查。go vet 和 diff 检查通过。
 
 覆盖分支只执行选中路径、循环更新状态与超限、编译拒绝非法定义、图快照、批处理与回调、并行真实重叠与 worker 上限、状态复制、结果顺序、错误/panic/取消、事件作用域、缺失/重复终态与迟到错误、Adapt 输入/输出错误，以及 Builder Agent 的实际流式接入。SDK、模型、外部服务和图持久化恢复不属于此验证范围。
 

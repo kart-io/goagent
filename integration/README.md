@@ -33,10 +33,6 @@ env -u DEEPSEEK_API_KEY GO_TEST_MODE=true GOMAXPROCS=2 \
 go vet ./...
 go build ./...
 go tool cover -html=/tmp/goagent-full.coverage.out -o /tmp/goagent-coverage.html
-
-# 独立模块不会被根目录 ./... 遍历。
-cd evaluation/einocompare
-go test -race ./... -count=1 -timeout 120s
 ```
 
 查看 JSON 中的 pass、fail、skip，应分别统计顶层与子用例，不能将子用例当作独立业务样本。示例进程正常退出只属于冒烟验证，不等于模型效果或生产验收。
