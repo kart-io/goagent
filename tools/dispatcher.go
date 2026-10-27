@@ -147,6 +147,10 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 	if d == nil {
 		return nil, fmt.Errorf("dispatcher is required")
 	}
+	ctx, err = enterDispatcher(ctx, d)
+	if err != nil {
+		return nil, err
+	}
 	ctx, cancel := context.WithTimeout(ctx, d.config.Timeout)
 	defer cancel()
 	if err = ctx.Err(); err != nil {
