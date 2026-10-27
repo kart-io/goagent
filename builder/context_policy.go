@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math"
 	"slices"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/google/uuid"
+	"github.com/kart-io/goagent/builder/contextpolicy"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 )
@@ -67,55 +67,43 @@ func validateContextPolicy(policy *ContextPolicy) error {
 // Each instance belongs to a single execution and is never installed globally.
 type toolContext struct {
 	policy    *ContextPolicy
-	results   map[string]string
-	replaced  map[int]bool
+	offload   *contextpolicy.Offload
+	scope     string
+	initErr   error
 	original  map[int]string
 	offloaded int
 }
 
 func newToolContext(policy *ContextPolicy) *toolContext {
-	return &toolContext{policy: policy, results: map[string]string{}, replaced: map[int]bool{}, original: map[int]string{}}
+	p := &toolContext{policy: policy, scope: uuid.NewString(), original: map[int]string{}}
+	if policy != nil && policy.MaxToolResultRunes > 0 {
+		p.offload, p.initErr = contextpolicy.NewOffload(contextpolicy.OffloadConfig{ID: "legacy", Namespace: "execution-memory", Store: contextpolicy.NewMemoryStore(), MaxToolResultRunes: policy.MaxToolResultRunes, KeepRecentToolRounds: policy.KeepRecentToolRounds, ReadPageRunes: policy.ReadPageRunes, ExcludeTools: policy.ExcludeTools})
+	}
+	return p
 }
-
 func (p *toolContext) reduce(ctx context.Context, messages []llm.Message) ([]llm.Message, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if p.policy == nil || p.policy.MaxToolResultRunes == 0 {
+	if p.initErr != nil {
+		return nil, p.initErr
+	}
+	if p.offload == nil {
 		return messages, nil
 	}
-	rounds := 0
-	for _, m := range messages {
-		if m.Role == "assistant" && len(m.ToolCalls) > 0 {
-			rounds++
-		}
+	out, err := p.offload.BeforeTurn(contextpolicy.WithResultScope(ctx, p.scope), contextpolicy.Turn{Messages: messages})
+	if err != nil {
+		return nil, err
 	}
-	names := map[string]string{}
-	round := 0
-	result := slices.Clone(messages)
 	for i, m := range messages {
-		if m.Role == "assistant" && len(m.ToolCalls) > 0 {
-			round++
-			for _, call := range m.ToolCalls {
-				names[call.ID] = call.Function.Name
+		if m.Content != out.Messages[i].Content {
+			if _, ok := p.original[i]; !ok {
+				p.original[i] = m.Content
 			}
 		}
-		name := names[m.ToolCallID]
-		if m.Role != "tool" || round > rounds-p.policy.KeepRecentToolRounds || p.replaced[i] || name == contextReadTool || slices.Contains(p.policy.ExcludeTools, name) || utf8.RuneCountInString(m.Content) <= p.policy.MaxToolResultRunes {
-			continue
-		}
-		key := uuid.NewString()
-		p.results[key] = m.Content
-		data, err := json.Marshal(map[string]any{"context_result": key, "runes": utf8.RuneCountInString(m.Content), "read_tool": contextReadTool})
-		if err != nil {
-			return nil, err
-		}
-		p.original[i] = m.Content
-		result[i].Content = string(data)
-		p.replaced[i] = true
-		p.offloaded++
 	}
-	return result, nil
+	p.offloaded = int(p.offload.Stats()["offloaded_results"])
+	return out.Messages, nil
 }
 
 // restore makes every reference usable when no reader call can fit in the budget.
@@ -137,37 +125,11 @@ func (p *toolContext) Description() string {
 func (p *toolContext) ArgsSchema() string {
 	return `{"type":"object","properties":{"key":{"type":"string"},"offset":{"type":"integer","minimum":0}},"required":["key"],"additionalProperties":false}`
 }
-func (p *toolContext) Invoke(ctx context.Context, in *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	if in == nil {
-		return nil, fmt.Errorf("context read requires arguments")
-	}
-	key, _ := in.Args["key"].(string)
-	content, ok := p.results[key]
-	if !ok {
+func (p *toolContext) Invoke(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+	if p.offload == nil {
 		return nil, fmt.Errorf("unknown context result in this execution")
 	}
-	runes := []rune(content)
-	offset := 0
-	if value, exists := in.Args["offset"]; exists {
-		n, ok := value.(float64)
-		if !ok || math.IsNaN(n) || math.IsInf(n, 0) || n < 0 || n > float64(len(runes)) || math.Trunc(n) != n {
-			return nil, fmt.Errorf("offset must be an integer within the result")
-		}
-		offset = int(n)
-	}
-	limit := 1024
-	if p.policy.ReadPageRunes > 0 {
-		limit = p.policy.ReadPageRunes
-	}
-	end := offset + min(limit, len(runes)-offset)
-	data, err := json.Marshal(map[string]any{"text": string(runes[offset:end]), "next_offset": end, "done": end == len(runes)})
-	if err != nil {
-		return nil, err
-	}
-	return &interfaces.ToolOutput{Success: true, Result: string(data)}, nil
+	return p.offload.Invoke(contextpolicy.WithResultScope(ctx, p.scope), input)
 }
 
 func (p *toolContext) prepare(ctx context.Context, messages []llm.Message, budget int) ([]llm.Message, *llm.StreamChunk, error) {
