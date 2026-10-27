@@ -1,5 +1,7 @@
 # 可复现评测（合成数据）
 
+框架性能新增：[GoAgent、Eino、LangGraph/LangChain、OpenAI Agents SDK、Google ADK 对测](2026-10-27-framework-performance-v2/REPORT.md)。本地即时模型、四种工作负载、80 组/32,000 次有效操作；分别报告同语言延迟、Go 分配和跨运行时观察。没有真实推理、持久化和并发吞吐排名。
+
 最新能力：[Gemini 原生工具循环与真实 Embedding](2026-10-27-gemini-native-support/REPORT.md)。已实现 AsRunnable、完整工具续接及签名保留、终态直返和独立向量模型。真实案例 12/12 通过，16 次生成请求加 4 次 Embedding；3,817 个生成 Token 不包含向量用量。
 
 最新补充：[旧 GeminiProvider 原生 API 验证](2026-10-27-gemini-provider/REPORT.md)。复现 Vertex AI/API Key 认证失败后，保留公开入口并修复底层接入；六个方法各两次，真实测试 12/12 通过。该阶段尚不支持原生循环与 Embedding；现已由上述后续能力实现补齐。

@@ -18,6 +18,10 @@ GoAgent 是一个全面的 Go AI Agent 框架，提供 Agent、工具、内存�
 
 ### 设计文档
 
+- **[框架性能对测](evaluation/2026-10-27-framework-performance-v2/REPORT.md)** - GoAgent/Eino 同语言基线与 Python 框架观察，32,000 次有效操作及复跑代码
+- **[多框架调研与方案复审](research/2026-10-27-framework-orchestration-review.md)** - Eino、LangGraph/LangChain、OpenAI Agents SDK、Google ADK、Temporal 的依据与取舍
+- **[可组合编排需求](superpowers/specs/2026-10-27-composable-orchestration-requirements.md)** - R2：工具化、根预算、上下文与观察；流处理先原型，反射映射后置
+- **[可组合编排实现方案](superpowers/plans/2026-10-27-composable-orchestration.md)** - R2 API、阶段依赖、文件改动与实施任务（尚未实现）
 - **[设计概述](design/DESIGN_OVERVIEW.md)** - 核心设计理念和模式
 - **[时序图](design/SEQUENCE_DIAGRAMS.md)** - 详细的交互时序图（Mermaid）
 - **[流程图](design/FLOW_DIAGRAMS.md)** - 核心流程图（Mermaid）

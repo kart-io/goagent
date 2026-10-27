@@ -1,0 +1,23 @@
+File: goagent-frameworkbench.test
+Type: cpu
+Time: 2026-10-27 22:27:20 +08
+Duration: 3s, Total samples = 4.48s (149.24%)
+Showing nodes accounting for 4.34s, 96.88% of 4.48s total
+Dropped 43 nodes (cum <= 0.02s)
+Showing top 15 nodes out of 67
+      flat  flat%   sum%        cum   cum%
+     1.89s 42.19% 42.19%      1.89s 42.19%  runtime.pthread_cond_wait
+     1.58s 35.27% 77.46%      1.58s 35.27%  runtime.pthread_cond_signal
+     0.50s 11.16% 88.62%      0.50s 11.16%  runtime.usleep
+     0.19s  4.24% 92.86%      0.19s  4.24%  runtime.pthread_kill
+     0.13s  2.90% 95.76%      0.13s  2.90%  runtime.madvise
+     0.01s  0.22% 95.98%      0.03s  0.67%  runtime.chanrecv
+     0.01s  0.22% 96.21%      0.06s  1.34%  runtime.lock2
+     0.01s  0.22% 96.43%      0.03s  0.67%  runtime.mallocgcSmallScanNoHeader
+     0.01s  0.22% 96.65%      2.55s 56.92%  runtime.park_m
+     0.01s  0.22% 96.88%      0.47s 10.49%  runtime.stealWork
+         0     0% 96.88%      1.17s 26.12%  _.goready.func1
+         0     0% 96.88%      0.03s  0.67%  github.com/kart-io/goagent-frameworkbench.(*Runner).Run (inline)
+         0     0% 96.88%      0.03s  0.67%  github.com/kart-io/goagent-frameworkbench.BenchmarkFramework.func1
+         0     0% 96.88%      0.03s  0.67%  github.com/kart-io/goagent-frameworkbench.newGoAgent.func5
+         0     0% 96.88%      0.03s  0.67%  github.com/kart-io/goagent/builder.(*ConfigurableAgent[go.shape.interface {},go.shape.*uint8]).AsRunnable.func1
