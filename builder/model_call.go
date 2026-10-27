@@ -51,8 +51,9 @@ func recordTurnUsage(ctx context.Context, key string, turn *llm.StreamChunk) err
 	return c.RecordUsage(saveCtx, key, usage)
 }
 func modelOperation(ctx context.Context, id string, intent json.RawMessage, invoke func(context.Context) (*llm.StreamChunk, error), validate func(*llm.StreamChunk) error, emit func(AgentEvent) error) (result *llm.StreamChunk, resultErr error) {
+	c, metered := budget.FromContext(ctx)
 	key := durable.ChildKey(durable.ExecutionKey(ctx), id)
-	if !durable.HasJournal(ctx) || key == "" {
+	if (metered || observe.Enabled(ctx)) && (!durable.HasJournal(ctx) || key == "") {
 		key = uuid.NewString()
 	}
 	ctx, endModel := observe.Start(ctx, observe.Event{Type: "model", Path: id, OperationKey: key})
@@ -67,7 +68,6 @@ func modelOperation(ctx context.Context, id string, intent json.RawMessage, invo
 	if err := validateModelBudget(ctx); err != nil {
 		return nil, err
 	}
-	c, metered := budget.FromContext(ctx)
 	call := func(callCtx context.Context) (*llm.StreamChunk, error) {
 		if metered {
 			if err := c.Reserve(callCtx, key); err != nil {
@@ -142,10 +142,14 @@ func modelOperation(ctx context.Context, id string, intent json.RawMessage, invo
 	return turn, nil
 }
 func readPlainModelTurn(ctx context.Context, id string, client llm.StreamClient, req *llm.CompletionRequest, emit func(AgentEvent) error) (*llm.StreamChunk, error) {
-	intent, err := json.Marshal(struct {
-		Provider string
-		Request  *llm.CompletionRequest
-	}{string(client.Provider()), req})
+	var intent json.RawMessage
+	var err error
+	if durable.HasJournal(ctx) {
+		intent, err = json.Marshal(struct {
+			Provider string
+			Request  *llm.CompletionRequest
+		}{string(client.Provider()), req})
+	}
 	if err != nil {
 		return nil, err
 	}

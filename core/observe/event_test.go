@@ -44,3 +44,10 @@ func TestObserverFailureDoesNotChangeRun(t *testing.T) {
 	require.NotNil(t, ctx)
 	require.NotPanics(t, func() { end(nil, false) })
 }
+
+func TestDisabledObservationDoesNotAllocate(t *testing.T) {
+	allocations := testing.AllocsPerRun(100, func() { _, end := Start(context.Background(), Event{Type: "node", Path: "public"}); end(nil, false) })
+	if allocations != 0 {
+		t.Fatalf("disabled observation allocated %v times", allocations)
+	}
+}

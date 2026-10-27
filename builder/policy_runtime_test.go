@@ -160,3 +160,11 @@ func TestPolicyReferenceSaveBeforeRequestAndConfigMismatch(t *testing.T) {
 	require.Error(t, err)
 	require.Len(t, m.requests, 2, "configuration mismatch must not request model")
 }
+
+func TestOrdinaryPolicyRunsOnFinalTurn(t *testing.T) {
+	policy := &testPolicy{change: func(turn contextpolicy.Turn) contextpolicy.Turn { turn.Messages[0].Content = "filtered"; return turn }}
+	runtime := &policyRuntime{policies: []contextpolicy.Policy{policy}, descriptors: []contextpolicy.Descriptor{policy.Descriptor()}}
+	turn, err := runtime.apply(context.Background(), contextpolicy.Turn{Messages: []llm.Message{llm.UserMessage("raw")}}, true)
+	require.NoError(t, err)
+	require.Equal(t, "filtered", turn.Messages[0].Content)
+}

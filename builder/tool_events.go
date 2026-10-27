@@ -82,7 +82,10 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 			return nil, err
 		}
 		turnCtx, cancel := context.WithCancel(ctx)
-		tools := append(slices.Clone(a.tools), runtime.tools...)
+		tools := a.tools
+		if len(runtime.tools) > 0 {
+			tools = append(slices.Clone(tools), runtime.tools...)
+		}
 		if a.config.ContextPolicy != nil && a.config.ContextPolicy.MaxToolResultRunes > 0 {
 			tools = append(slices.Clone(tools), policy)
 		}

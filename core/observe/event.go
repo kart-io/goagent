@@ -103,6 +103,9 @@ func Start(ctx context.Context, e Event) (context.Context, func(error, bool)) {
 	if !Enabled(ctx) {
 		return ctx, disabledEnd
 	}
+	return startEnabled(ctx, e)
+}
+func startEnabled(ctx context.Context, e Event) (context.Context, func(error, bool)) {
 	sc, _ := ctx.Value(scopeKey{}).(*scope)
 	if sc == nil {
 		ctx = WithRunID(ctx, "")
