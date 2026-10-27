@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/kart-io/goagent/builder/contextpolicy"
 	"io"
 	"slices"
 	"strings"
@@ -51,11 +52,15 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 			}
 		}
 	}
+	runtime, err := a.newPolicyRuntime(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ctx = policyContext(ctx, runtime)
 	usage := &interfaces.TokenUsage{}
 	reports := 0
 	policy := newToolContext(a.config.ContextPolicy)
 	var summary *llm.StreamChunk
-	var err error
 	messages, summary, err = policy.prepare(ctx, messages, a.config.MaxIterations)
 	if err != nil {
 		return nil, err
@@ -77,7 +82,7 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 			return nil, err
 		}
 		turnCtx, cancel := context.WithCancel(ctx)
-		tools := a.tools
+		tools := append(slices.Clone(a.tools), runtime.tools...)
 		if a.config.ContextPolicy != nil && a.config.ContextPolicy.MaxToolResultRunes > 0 {
 			tools = append(slices.Clone(tools), policy)
 		}
@@ -90,6 +95,13 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 			cancel()
 			return nil, err
 		}
+		transformed, applyErr := runtime.apply(ctx, contextpolicy.Turn{Round: round, RemainingCalls: a.config.MaxIterations - round, Messages: messages}, round > 0 && round+1 == a.config.MaxIterations)
+		if applyErr != nil {
+			cancel()
+			return nil, applyErr
+		}
+		messages = transformed.Messages
+		runtime.stats(metadata)
 		if a.config.ContextPolicy != nil {
 			metadata["context_offloaded_results"] = policy.offloaded
 		}
@@ -168,11 +180,16 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 			var err error
 			if call.Name == contextReadTool && a.config.ContextPolicy != nil && a.config.ContextPolicy.MaxToolResultRunes > 0 {
 				output, err = policy.Invoke(ctx, &interfaces.ToolInput{Args: call.Input})
+			} else if tool, ok := runtime.byName[call.Name]; ok {
+				output, err = tool.Invoke(ctx, &interfaces.ToolInput{Args: call.Input, CallID: call.ID})
 			} else {
 				output, err = a.invokeToolCall(ctx, call)
 			}
 			if err != nil {
 				return nil, err
+			}
+			if output == nil {
+				return nil, fmt.Errorf("tool returned nil output")
 			}
 			if direct && !output.Success {
 				return nil, fmt.Errorf("直接返回工具 %s 未成功完成", call.Name)

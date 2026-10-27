@@ -90,7 +90,7 @@ func (p *Offload) BeforeTurn(ctx context.Context, turn Turn) (Turn, error) {
 	if run == "" {
 		return turn, fmt.Errorf("offload result scope required")
 	}
-	if p.descriptor.Durable && !durable.HasJournal(ctx) {
+	if p.descriptor.Durable && (!durable.HasJournal(ctx) || durable.ExecutionKey(ctx) == "") {
 		return turn, fmt.Errorf("durable offload requires journal and stable execution key")
 	}
 	messages := slices.Clone(turn.Messages)
@@ -149,6 +149,11 @@ func (p *Offload) BeforeFinalTurn(ctx context.Context, turn Turn) (Turn, error) 
 	}
 	turn.Messages = messages
 	return turn, nil
+}
+
+// DurableIntentVersion binds reader operations to the policy configuration.
+func (p *Offload) DurableIntentVersion() string {
+	return p.descriptor.Version + ":" + p.descriptor.ConfigHash
 }
 func (p *Offload) Name() string { return ReadToolName }
 func (p *Offload) Description() string {

@@ -121,6 +121,14 @@ func (b *AgentBuilder[C, S]) Build() (*ConfigurableAgent[C, S], error) {
 		}
 	}
 
+	if len(b.config.ContextPolicies) > 0 {
+		if b.config.ContextPolicy != nil {
+			return nil, fmt.Errorf("ContextPolicy and ContextPolicies are mutually exclusive")
+		}
+		if _, ok := b.llmClient.(llm.ToolStreamClient); !ok || len(b.tools) == 0 {
+			return nil, fmt.Errorf("ContextPolicies requires tools and llm.ToolStreamClient")
+		}
+	}
 	if err := validateContextPolicy(b.config.ContextPolicy); err != nil {
 		return nil, err
 	}

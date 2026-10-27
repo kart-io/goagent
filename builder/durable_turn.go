@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/kart-io/goagent/builder/contextpolicy"
 	"strings"
 
 	"github.com/google/jsonschema-go/jsonschema"
@@ -31,6 +32,15 @@ func readJournaledTurn(ctx context.Context, round int, client llm.ToolStreamClie
 	}{string(client.Provider()), req, definitions})
 	if err != nil {
 		return nil, err
+	}
+	if descriptors, ok := ctx.Value(policyDescriptorsKey{}).([]contextpolicy.Descriptor); ok {
+		intent, err = json.Marshal(struct {
+			Original json.RawMessage
+			Policies []contextpolicy.Descriptor
+		}{intent, descriptors})
+		if err != nil {
+			return nil, err
+		}
 	}
 	return modelOperation(ctx, fmt.Sprintf("model/turn/%d", round), intent, invoke, func(turn *llm.StreamChunk) error { return validateDurableTurn(turn, tools) }, emit)
 }

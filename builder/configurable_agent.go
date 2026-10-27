@@ -64,7 +64,7 @@ func (a *ConfigurableAgent[C, S]) Initialize(ctx context.Context) error {
 // For the native tool/stream pipeline use AsRunnable().Invoke. This synchronous
 // entry remains supported for clients without structured streaming.
 func (a *ConfigurableAgent[C, S]) Execute(ctx context.Context, input interface{}) (*AgentOutput, error) {
-	if a.config.ContextPolicy != nil || len(a.config.ReturnDirectTools) > 0 {
+	if a.config.ContextPolicy != nil || len(a.config.ContextPolicies) > 0 || len(a.config.ReturnDirectTools) > 0 {
 		return nil, fmt.Errorf("Execute does not apply ContextPolicy or ReturnDirectTools; use AsRunnable().Invoke")
 	}
 	ctx, release, err := a.beginExecution(ctx)
@@ -272,14 +272,14 @@ func (a *ConfigurableAgent[C, S]) executeWithTools(ctx context.Context, input in
 
 	// 达到最大迭代次数
 	return &AgentOutput{
-			Result:     "达到最大迭代次数，无法完成任务",
-			State:      a.runtime.State,
-			Metadata:   retrievalMetadata,
-			Duration:   time.Since(startTime),
-			Timestamp:  time.Now(),
-			TokenUsage: totalTokenUsage,
-		}, agentErrors.New(agentErrors.CodeAgentExecution, "max iterations reached").
-			WithContext("max_iterations", a.config.MaxIterations)
+		Result:     "达到最大迭代次数，无法完成任务",
+		State:      a.runtime.State,
+		Metadata:   retrievalMetadata,
+		Duration:   time.Since(startTime),
+		Timestamp:  time.Now(),
+		TokenUsage: totalTokenUsage,
+	}, agentErrors.New(agentErrors.CodeAgentExecution, "max iterations reached").
+		WithContext("max_iterations", a.config.MaxIterations)
 }
 
 // buildPromptWithSystemMessage 构建包含系统消息的提示
