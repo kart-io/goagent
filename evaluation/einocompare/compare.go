@@ -88,6 +88,12 @@ func execute(ctx context.Context, baseURL string, cfg bench.Config, c bench.Case
 		if message == nil {
 			continue
 		}
+		// EOF/[DONE] only closes the transport. Match GoAgent's requirement
+		// for a completed model turn, including turns that request tools.
+		// Direct tool results are not model messages and have no finish reason.
+		if message.Role == schema.Assistant && (message.ResponseMeta == nil || message.ResponseMeta.FinishReason == "") {
+			return lookup.calls.Load(), io.ErrUnexpectedEOF
+		}
 		if meta := message.ResponseMeta; meta != nil && (meta.FinishReason == "length" || meta.FinishReason == "content_filter") {
 			return lookup.calls.Load(), fmt.Errorf("incomplete model output: %s", meta.FinishReason)
 		}
