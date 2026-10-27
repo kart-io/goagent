@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/middleware"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
@@ -33,6 +34,10 @@ type AgentEvent struct {
 // cancellation an error event is best-effort, and ctx.Err() is authoritative.
 // A cached middleware response may produce only done, with no model deltas.
 func (a *ConfigurableAgent[C, S]) ExecuteStream(ctx context.Context, input interface{}) (<-chan AgentEvent, error) {
+	ctx = ensureModelScope(ctx)
+	if err := validateModelBudget(ctx); err != nil {
+		return nil, err
+	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -115,6 +120,9 @@ func (a *ConfigurableAgent[C, S]) runEvents(ctx context.Context, request *middle
 	if native, ok := client.(llm.ToolStreamClient); ok && len(a.tools) > 0 {
 		return a.runToolEvents(ctx, request, native, a.streamMessages(ctx, input, evidence), metadata, emit)
 	}
+	if _, metered := budget.FromContext(ctx); metered && caller != nil {
+		return nil, fmt.Errorf("root budgets require native ToolStreamClient for tool selection")
+	}
 	if caller == nil {
 		messages = a.streamMessages(ctx, input, evidence)
 	}
@@ -188,14 +196,11 @@ func (a *ConfigurableAgent[C, S]) runEvents(ctx context.Context, request *middle
 		}
 		messages = []llm.Message{{Role: "system", Content: system}, {Role: "user", Content: prompt}}
 	}
-	stream, err := client.CompleteStream(ctx, &llm.CompletionRequest{Messages: messages, MaxTokens: a.config.MaxTokens, Temperature: a.config.Temperature})
+	turn, err := readPlainModelTurn(ctx, "model/answer/0", client, &llm.CompletionRequest{Messages: messages, MaxTokens: a.config.MaxTokens, Temperature: a.config.Temperature}, emit)
 	if err != nil {
 		return nil, err
 	}
-	turn, err := readToolTurn(ctx, stream, emit)
-	if err != nil {
-		return nil, err
-	}
+
 	if turn.Usage != nil {
 		usage.Add(&interfaces.TokenUsage{PromptTokens: turn.Usage.PromptTokens, CompletionTokens: turn.Usage.CompletionTokens, TotalTokens: turn.Usage.TotalTokens})
 	}
@@ -205,6 +210,14 @@ func (a *ConfigurableAgent[C, S]) runEvents(ctx context.Context, request *middle
 }
 
 func (a *ConfigurableAgent[C, S]) finishEvents(ctx context.Context, request *middleware.MiddlewareRequest, input, answer string, usage *interfaces.TokenUsage, metadata map[string]interface{}, emit func(AgentEvent) error) (*middleware.MiddlewareResponse, error) {
+	if c, ok := budget.FromContext(ctx); ok {
+		snapshot, err := c.Snapshot(ctx)
+		if err != nil {
+			return nil, err
+		}
+		metadata["root_budget"] = snapshot
+		metadata["new_model_invocations"] = modelInvocations(ctx)
+	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
