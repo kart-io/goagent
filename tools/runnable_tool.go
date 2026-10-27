@@ -1,0 +1,94 @@
+package tools
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"reflect"
+	"strings"
+
+	"github.com/google/jsonschema-go/jsonschema"
+	"github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/core/durable"
+	"github.com/kart-io/goagent/interfaces"
+)
+
+// ErrToolWorkflowWaiting prevents host-required continuation from becoming an answer.
+var ErrToolWorkflowWaiting = errors.New("tool workflow requires host continuation")
+
+// DurableIntentVersioner versions otherwise opaque tool implementation semantics.
+type DurableIntentVersioner interface{ DurableIntentVersion() string }
+
+// DurablePolicyProvider specifies an explicit journal policy for composite calls.
+type DurablePolicyProvider interface {
+	DurableOperationPolicy() durable.OperationPolicy
+}
+
+// RunnableToolConfig defines trusted codecs and version identity. ModelInvoking is
+// a host declaration, not a mechanism to discover hidden SDK requests.
+type RunnableToolConfig[I, O any] struct {
+	Name, Description, ArgsSchema, Version string
+	Decode                                 func(map[string]any) (I, error)
+	Encode                                 func(O) (any, error)
+	ModelInvoking                          bool
+	MaxDepth                               int
+}
+type runnableTool[I, O any] struct {
+	config RunnableToolConfig[I, O]
+	run    core.Runnable[I, O]
+	schema *jsonschema.Resolved
+}
+
+// NewRunnableTool adapts a fixed runnable without taking ownership of its resources.
+func NewRunnableTool[I, O any](run core.Runnable[I, O], cfg RunnableToolConfig[I, O]) (interfaces.Tool, error) {
+	if run == nil || (reflect.ValueOf(run).Kind() == reflect.Pointer && reflect.ValueOf(run).IsNil()) {
+		return nil, fmt.Errorf("runnable required")
+	}
+	if cfg.Name == "" || strings.TrimSpace(cfg.Name) != cfg.Name || cfg.Version == "" || cfg.Decode == nil || cfg.Encode == nil || cfg.MaxDepth < 0 {
+		return nil, fmt.Errorf("tool requires name, version, codecs and valid depth")
+	}
+	var schema jsonschema.Schema
+	if err := json.Unmarshal([]byte(cfg.ArgsSchema), &schema); err != nil {
+		return nil, err
+	}
+	if schema.Type != "object" {
+		return nil, fmt.Errorf("tool schema must be object")
+	}
+	resolved, err := schema.Resolve(nil)
+	if err != nil {
+		return nil, err
+	}
+	if cfg.MaxDepth == 0 {
+		cfg.MaxDepth = 8
+	}
+	return &runnableTool[I, O]{config: cfg, run: run, schema: resolved}, nil
+}
+func (t *runnableTool[I, O]) Name() string                 { return t.config.Name }
+func (t *runnableTool[I, O]) Description() string          { return t.config.Description }
+func (t *runnableTool[I, O]) ArgsSchema() string           { return t.config.ArgsSchema }
+func (t *runnableTool[I, O]) DurableIntentVersion() string { return t.config.Version }
+func (t *runnableTool[I, O]) DurableOperationPolicy() durable.OperationPolicy {
+	return durable.OperationPolicy{MaxAttempts: 1}
+}
+func (t *runnableTool[I, O]) Invoke(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+	if input == nil || input.Args == nil {
+		return nil, fmt.Errorf("tool object arguments required")
+	}
+	if err := t.schema.Validate(input.Args); err != nil {
+		return nil, err
+	}
+	value, err := t.config.Decode(input.Args)
+	if err != nil {
+		return nil, err
+	}
+	output, err := t.run.Invoke(ctx, value)
+	if err != nil {
+		return nil, err
+	}
+	encoded, err := t.config.Encode(output)
+	if err != nil {
+		return nil, err
+	}
+	return &interfaces.ToolOutput{Success: true, Result: encoded}, nil
+}

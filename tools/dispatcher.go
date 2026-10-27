@@ -38,6 +38,8 @@ type dispatchEntry struct {
 	tool                      interfaces.Tool
 	name, description, schema string
 	resolved                  *jsonschema.Resolved
+	version                   string
+	policy                    *durable.OperationPolicy
 }
 
 // Dispatcher snapshots a Registry and provides one execution path for native
@@ -96,7 +98,21 @@ func NewDispatcher(registry *Registry, cfg DispatchConfig) (dispatcher *Dispatch
 		if e != nil {
 			return nil, fmt.Errorf("tool %q schema: %w", name, e)
 		}
-		d.entries[name] = dispatchEntry{tool: tool, name: name, description: tool.Description(), schema: raw, resolved: resolved}
+		entry := dispatchEntry{tool: tool, name: name, description: tool.Description(), schema: raw, resolved: resolved}
+		if v, ok := tool.(DurableIntentVersioner); ok {
+			entry.version = v.DurableIntentVersion()
+			if entry.version == "" {
+				return nil, fmt.Errorf("tool version required")
+			}
+		}
+		if v, ok := tool.(DurablePolicyProvider); ok {
+			policy := v.DurableOperationPolicy()
+			if policy.MaxAttempts < 1 {
+				return nil, fmt.Errorf("tool attempt policy required")
+			}
+			entry.policy = &policy
+		}
+		d.entries[name] = entry
 		d.names = append(d.names, name)
 	}
 	slices.Sort(d.names)
@@ -216,7 +232,20 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 		if e != nil {
 			return nil, e
 		}
-		record, e := durable.Do(ctx, "tool/"+input.CallID, intent, durable.OperationPolicy{MaxAttempts: d.config.MaxAttempts, RetryFailed: true}, func(callCtx context.Context) (json.RawMessage, error) {
+		if entry.version != "" {
+			intent, e = json.Marshal(struct {
+				Original json.RawMessage
+				Version  string
+			}{intent, entry.version})
+			if e != nil {
+				return nil, e
+			}
+		}
+		policy := durable.OperationPolicy{MaxAttempts: d.config.MaxAttempts, RetryFailed: true}
+		if entry.policy != nil {
+			policy = *entry.policy
+		}
+		record, e := durable.Do(ctx, "tool/"+input.CallID, intent, policy, func(callCtx context.Context) (json.RawMessage, error) {
 			result, invokeErr := invoke(callCtx)
 			if invokeErr != nil {
 				return nil, invokeErr
