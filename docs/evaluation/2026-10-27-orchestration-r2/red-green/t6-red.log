@@ -1,0 +1,14 @@
+# github.com/kart-io/goagent/builder/contextpolicy [github.com/kart-io/goagent/builder/contextpolicy.test]
+builder/contextpolicy/store_test.go:10:82: undefined: NewDurableResultStore
+builder/contextpolicy/store_test.go:11:23: undefined: ResultStore
+builder/contextpolicy/store_test.go:11:35: undefined: NewMemoryStore
+builder/contextpolicy/store_test.go:12:8: undefined: WithResultScope
+builder/contextpolicy/store_test.go:12:84: undefined: NewRef
+builder/contextpolicy/store_test.go:15:12: undefined: NewRef
+builder/contextpolicy/store_test.go:16:19: undefined: WithResultScope
+builder/contextpolicy/store_test.go:18:21: undefined: NewRef
+builder/contextpolicy/store_test.go:21:10: undefined: OffloadConfig
+builder/contextpolicy/store_test.go:21:52: undefined: NewMemoryStore
+builder/contextpolicy/store_test.go:21:52: too many errors
+FAIL	github.com/kart-io/goagent/builder/contextpolicy [build failed]
+FAIL

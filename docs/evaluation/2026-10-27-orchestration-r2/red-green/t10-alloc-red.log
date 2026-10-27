@@ -1,0 +1,5 @@
+--- FAIL: TestDisabledObservationDoesNotAllocate (0.00s)
+    event_test.go:50: disabled observation allocated 1 times
+FAIL
+FAIL	github.com/kart-io/goagent/core/observe	0.157s
+FAIL

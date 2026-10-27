@@ -59,3 +59,7 @@ policy := builder.ContextPolicy{
 - `context_offloaded_results`：本次执行累计卸载的结果数，最终回合即使恢复原文也保留此计数。
 
 字符减少不等于 Token 或费用必然减少；摘要会增加请求，分页可能增加工具回合。当前回归覆盖执行协议、分页、预算和隔离；效果验收仍需长会话业务题集，同时比较正确率、完整请求用量和延迟。
+
+## 可组合编排 R2
+
+新增根预算、受控 Runnable 工具、OTel 观察及不可变上下文结果引用；见 [可组合编排指南](COMPOSABLE_ORCHESTRATION.md)。旧 ContextPolicy 的持久限制继续保留；需要持久引用时使用每次执行独立的 WithContextPolicies 工厂和宿主 WithPolicyToolAdapter。流预览仍不代表业务终态，core/flow 仅为实验原型。

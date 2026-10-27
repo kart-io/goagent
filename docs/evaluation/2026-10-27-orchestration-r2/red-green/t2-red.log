@@ -1,0 +1,29 @@
+--- FAIL: TestBudgetCoversParentChildAndSummary (0.00s)
+    model_call_test.go:19: 
+        	Error Trace:	/Users/costalong/.codex/worktrees/4bd1/goagent/builder/model_call_test.go:19
+        	Error:      	Not equal: 
+        	            	expected: 1
+        	            	actual  : 2
+        	Test:       	TestBudgetCoversParentChildAndSummary
+--- FAIL: TestReplayUsageIsNotNewCost (0.05s)
+    model_call_test.go:27: 
+        	Error Trace:	/Users/costalong/.codex/worktrees/4bd1/goagent/builder/model_call_test.go:27
+        	Error:      	Not equal: 
+        	            	expected: 1
+        	            	actual  : 0
+        	Test:       	TestReplayUsageIsNotNewCost
+--- FAIL: TestFailedModelUsageReconciliation (0.03s)
+    model_call_test.go:34: 
+        	Error Trace:	/Users/costalong/.codex/worktrees/4bd1/goagent/builder/model_call_test.go:34
+        	Error:      	Not equal: 
+        	            	expected: 19
+        	            	actual  : 0
+        	Test:       	TestFailedModelUsageReconciliation
+--- FAIL: TestDurableModelRejectsMemoryBudget (0.02s)
+    model_call_test.go:39: 
+        	Error Trace:	/Users/costalong/.codex/worktrees/4bd1/goagent/builder/model_call_test.go:39
+        	Error:      	Error "发生了多余模型请求" does not contain "durable"
+        	Test:       	TestDurableModelRejectsMemoryBudget
+FAIL
+FAIL	github.com/kart-io/goagent/builder	0.304s
+FAIL

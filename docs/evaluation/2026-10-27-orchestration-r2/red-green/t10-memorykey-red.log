@@ -1,0 +1,9 @@
+--- FAIL: TestMemoryBudgetDoesNotTreatHostKeyAsReplay (0.00s)
+    model_call_test.go:151: 
+        	Error Trace:	/Users/costalong/.codex/worktrees/4bd1/goagent/builder/model_call_test.go:151
+        	Error:      	Received unexpected error:
+        	            	model request reservation already exists
+        	Test:       	TestMemoryBudgetDoesNotTreatHostKeyAsReplay
+FAIL
+FAIL	github.com/kart-io/goagent/builder	0.244s
+FAIL

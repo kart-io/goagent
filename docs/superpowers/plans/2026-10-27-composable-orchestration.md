@@ -11,7 +11,7 @@
 **Spec:** [R2 需求](../specs/2026-10-27-composable-orchestration-requirements.md)  
 **Review:** [多框架依据与复审记录](../../research/2026-10-27-framework-orchestration-review.md)
 
-状态：R2 草案，尚未实现；本文件替代初版 T1–T11 的交付顺序与候选 API。代码基线为 `3bfeea70fcce35c3e925a295cc42546c1ec80b1b`。
+状态：R2 首轮任务已实施（流 API 为实验性）；本文件替代初版 T1–T11 的交付顺序与候选 API。代码基线为 `3bfeea70fcce35c3e925a295cc42546c1ec80b1b`。
 
 ## Global Constraints
 
@@ -217,103 +217,103 @@ func AsRunnable[I,D,O any](open func(context.Context,I)(Source[D],error), fold F
 **Files:** 新建 core/budget/controller.go、durable.go、controller_test.go、durable_test.go。
 **Interfaces:** 产出 2.1 Config/Controller/New/NewDurable/WithController/FromContext/Reserve/Snapshot。
 
-- [ ] 写 TestRootBudgetConcurrentAdmission：额度 2，三个屏障并发请求最多两个 Reserve 成功；重复操作键拒绝，未重置额度。
-- [ ] 写 TestBudgetSurvivesProcessExit：预留后真实子进程退出，重启额度仍占用；修改额度或版本拒绝；Save 失败不成功准入；与图锁使用不同 ID。
-- [ ] 运行 `go test ./core/budget -run 'TestRootBudget|TestBudget' -count=1`，确认新能力缺失失败。
-- [ ] 实现独立账本、锁顺序和预留语义，运行 `go test -race ./core/budget ./core/durable`，提交 `feat: reserve shared model request budgets`。
+- [x] 写 TestRootBudgetConcurrentAdmission：额度 2，三个屏障并发请求最多两个 Reserve 成功；重复操作键拒绝，未重置额度。
+- [x] 写 TestBudgetSurvivesProcessExit：预留后真实子进程退出，重启额度仍占用；修改额度或版本拒绝；Save 失败不成功准入；与图锁使用不同 ID。
+- [x] 运行 `go test ./core/budget -run 'TestRootBudget|TestBudget' -count=1`，确认新能力缺失失败。
+- [x] 实现独立账本、锁顺序和预留语义，运行 `go test -race ./core/budget ./core/durable`，提交 `feat: reserve shared model request budgets`。
 
 ### Task 2: 模型入口与父子用量归属，FR-06 / M0
 
 **Files:** 新建 core/budget/usage.go、usage_test.go、builder/model_call.go、model_call_test.go；修改 builder/durable_turn.go、tool_events.go、context_policy.go、events.go。
 **Interfaces:** 消费 T1；产出 RecordUsage 与统一模型调用辅助入口。公开 Builder API 保持兼容。
 
-- [ ] 写 TestBudgetCoversParentChildAndSummary：父 1 次、两个子竞争剩余 1 次，fake transport 总计 2 次；摘要同样计数，局部 MaxIterations 仍限制。
-- [ ] 写 TestReplayUsageIsNotNewCost：保存模型回合重放无新 Reserve/调用；根账本按操作键只加一次，不再累加子 AgentOutput；nil 用量标未知。
-- [ ] 写 TestBudgetAndModelSaveWindows：预算保存失败零请求；预留后未发请求进程退出不退款；模型结果保存/用量登记任一步失败保留证据并停止，恢复不重复付费，可从已保存操作读回用量。
-- [ ] 写 TestFailedModelUsageReconciliation：无效模型计划仍附已知用量；登记失败后只读保存的 failed/completed 证据补登记；err 非 nil 的 OperationRecord.Value 不丢弃，根统计最终只加一次。
-- [ ] 先运行新增测试见失败，再将 Reserve 放在 durable.Do 的真实调用闭包内、模型请求前；无日志时用本次稳定请求 scope。不可在 replay 查找前扣费。
-- [ ] 运行 `go test -race ./builder ./core/budget ./core/durable`；保留无预算的旧意图 fixture，提交 `feat: account nested model calls at the root`。
+- [x] 写 TestBudgetCoversParentChildAndSummary：父 1 次、两个子竞争剩余 1 次，fake transport 总计 2 次；摘要同样计数，局部 MaxIterations 仍限制。
+- [x] 写 TestReplayUsageIsNotNewCost：保存模型回合重放无新 Reserve/调用；根账本按操作键只加一次，不再累加子 AgentOutput；nil 用量标未知。
+- [x] 写 TestBudgetAndModelSaveWindows：预算保存失败零请求；预留后未发请求进程退出不退款；模型结果保存/用量登记任一步失败保留证据并停止，恢复不重复付费，可从已保存操作读回用量。
+- [x] 写 TestFailedModelUsageReconciliation：无效模型计划仍附已知用量；登记失败后只读保存的 failed/completed 证据补登记；err 非 nil 的 OperationRecord.Value 不丢弃，根统计最终只加一次。
+- [x] 先运行新增测试见失败，再将 Reserve 放在 durable.Do 的真实调用闭包内、模型请求前；无日志时用本次稳定请求 scope。不可在 replay 查找前扣费。
+- [x] 运行 `go test -race ./builder ./core/budget ./core/durable`；保留无预算的旧意图 fixture，提交 `feat: account nested model calls at the root`。
 
 ### Task 3: 普通 Runnable 工具适配，FR-02 / M1
 
 **Files:** 新建 tools/runnable_tool.go、runnable_tool_test.go；修改 tools/dispatcher.go；新增 examples/orchestration/runnable-tool/。
 **Interfaces:** 产出 2.2 NewRunnableTool、DurableIntentVersioner、DurablePolicyProvider；消费 T1 context。
 
-- [ ] 写 TestRunnableToolCodecAndVersion：非法对象 Schema/空版本/缺 Codec 在构造时拒绝；Decode、Invoke、Encode 错误不成功；原普通工具哈希不变。
-- [ ] 写 TestOpaqueToolReplayAndPending：completed 同 CallID 只执行一次；failed/pending 不重入 Runnable，返回 ErrOperationAttention；版本变更拒绝。无 journal 调用不宣称跨进程去重。
-- [ ] 写 TestWaitingOutputIsNotSuccess：Encode 明确拒绝等待/未完成输出；审批型 DurableGraph 不作为本例输入。
-- [ ] 先运行 `go test ./tools -run 'TestRunnableTool|TestOpaqueTool|TestWaiting'` 见失败，实现后运行 `go test -race ./tools ./workflow`，提交 `feat: expose opaque runnable tools`。
+- [x] 写 TestRunnableToolCodecAndVersion：非法对象 Schema/空版本/缺 Codec 在构造时拒绝；Decode、Invoke、Encode 错误不成功；原普通工具哈希不变。
+- [x] 写 TestOpaqueToolReplayAndPending：completed 同 CallID 只执行一次；failed/pending 不重入 Runnable，返回 ErrOperationAttention；版本变更拒绝。无 journal 调用不宣称跨进程去重。
+- [x] 写 TestWaitingOutputIsNotSuccess：Encode 明确拒绝等待/未完成输出；审批型 DurableGraph 不作为本例输入。
+- [x] 先运行 `go test ./tools -run 'TestRunnableTool|TestOpaqueTool|TestWaiting'` 见失败，实现后运行 `go test -race ./tools ./workflow`，提交 `feat: expose opaque runnable tools`。
 
 ### Task 4: owned 子会话、调用作用域与清理，FR-02/06 / M1
 
 **Files:** 新建 tools/call_scope.go、call_scope_test.go；扩展 runnable_tool.go；新增 workflow/runnable_tool_integration_test.go、examples/orchestration/agent-tool/。
 **Interfaces:** 产出 OwnedRunnable/NewRunnableToolFactory、深度/重入错误；消费 T1/T2 的共享 budget。
 
-- [ ] 写 TestOwnedAgentIsolation：两个并发 factory 分配独立 SessionID、MemoryManager 命名空间与 Dispatcher；不同指针但共享 SessionID 的负例在示例验证中失败。父历史不复制，身份/预算/deadline 显式继承。
-- [ ] 写 TestOwnedRunnableCleanup：成功、Decode 后执行错误、取消、factory 部分产物错误均关闭已取得资源；Close 失败合并主错误且不保存 completed；固定共享 Runnable 不关闭。
-- [ ] 写 TestNestedDispatcherScope：父子独立 MaxConcurrency=1 可完成；同实例重入排队前失败；深度 8 可进入，9 不调用子对象；父 deadline 不延长。
-- [ ] 写 TestModelToolRequiresRootBudget：缺预算在 factory 前拒绝；持久运行绑定内存 Controller 零模型请求，宿主构造测试校验 Store/root scope 归属；根预算的 transport 次数与 T2 一致。Opaque 父 pending 即使子日志 completed 也不续跑。
-- [ ] 先失败后实现，运行 `go test -race ./tools ./builder ./workflow ./core/budget`，提交 `feat: own and bound nested agent sessions`。
+- [x] 写 TestOwnedAgentIsolation：两个并发 factory 分配独立 SessionID、MemoryManager 命名空间与 Dispatcher；不同指针但共享 SessionID 的负例在示例验证中失败。父历史不复制，身份/预算/deadline 显式继承。
+- [x] 写 TestOwnedRunnableCleanup：成功、Decode 后执行错误、取消、factory 部分产物错误均关闭已取得资源；Close 失败合并主错误且不保存 completed；固定共享 Runnable 不关闭。
+- [x] 写 TestNestedDispatcherScope：父子独立 MaxConcurrency=1 可完成；同实例重入排队前失败；深度 8 可进入，9 不调用子对象；父 deadline 不延长。
+- [x] 写 TestModelToolRequiresRootBudget：缺预算在 factory 前拒绝；持久运行绑定内存 Controller 零模型请求，宿主构造测试校验 Store/root scope 归属；根预算的 transport 次数与 T2 一致。Opaque 父 pending 即使子日志 completed 也不续跑。
+- [x] 先失败后实现，运行 `go test -race ./tools ./builder ./workflow ./core/budget`，提交 `feat: own and bound nested agent sessions`。
 
 ### Task 5: 复用 OTel 与最小只读事件，FR-04 / M0
 
 **Files:** 新建 core/observe/event.go、observability/execution.go、workflow/describe.go、devtools/recorder.go 及测试；修改 workflow 的 graph/execute/parallel/durable 路径、builder/durable_turn.go、tools/dispatcher.go。
 **Interfaces:** 产出 2.3 Event/Observer/WithObserver、可选 GraphDescriber；不新增自有 Span 生成器。
 
-- [ ] 写 TestExecutionUsesExistingOTelParent：使用内存 OTel exporter，节点/工具/模型继承同一 trace 的父子 span；恢复产生新 span，用稳定操作键关联。
-- [ ] 写 TestDescribeSnapshotAndVisit：拓扑排序固定，编译后修改原图不影响描述；循环访问、分支与重放区分，无闭包/正文。
-- [ ] 写 TestRecorderBoundedAndRedacted：队列满、10,000 事件截断、磁盘失败、异常字符串包含敏感值时主结果不变且正文不泄漏；Close 报错/丢弃可见；无 OTel provider 时 TraceID 可为空。
-- [ ] 先运行新测试见失败，再在既有生命周期接入；由宿主选择 OTel 桥接，不设置全局 provider。运行 `go test -race ./core/observe ./observability ./workflow ./builder ./tools ./devtools`，提交 `feat: correlate workflow observations with otel`。
+- [x] 写 TestExecutionUsesExistingOTelParent：使用内存 OTel exporter，节点/工具/模型继承同一 trace 的父子 span；恢复产生新 span，用稳定操作键关联。
+- [x] 写 TestDescribeSnapshotAndVisit：拓扑排序固定，编译后修改原图不影响描述；循环访问、分支与重放区分，无闭包/正文。
+- [x] 写 TestRecorderBoundedAndRedacted：队列满、10,000 事件截断、磁盘失败、异常字符串包含敏感值时主结果不变且正文不泄漏；Close 报错/丢弃可见；无 OTel provider 时 TraceID 可为空。
+- [x] 先运行新测试见失败，再在既有生命周期接入；由宿主选择 OTel 桥接，不设置全局 provider。运行 `go test -race ./core/observe ./observability ./workflow ./builder ./tools ./devtools`，提交 `feat: correlate workflow observations with otel`。
 
 ### Task 6: 上下文内部组件与不可变存储，FR-05 / M2
 
 **Files:** 新建 builder/contextpolicy/policy.go、offload.go、store.go、memory_store.go 及测试；修改 builder/context_policy.go。
 **Interfaces:** 产出 2.4 Ref/ResultStore/Descriptor，先在内部适配，不立即开放任意消息重写。
 
-- [ ] 写 TestLegacyContextPolicyParity：分页 Unicode、排除工具、最后回合恢复、摘要预算与缺失用量保持旧行为。
-- [ ] 写 TestReferenceContentIdentity：相同 key/摘要幂等、不同内容拒绝、跨运行/摘要/格式不符拒绝；返回数据不共享可写数组；结构化 ID 中包含斜线不会碰撞。
-- [ ] 写 TestContextConfigFingerprint：改变阈值/分页/排除工具/Store 命名空间导致 ConfigHash 不同，顺序变化可见，默认无策略意图不变。
-- [ ] 先失败后抽取，运行 `go test -race ./builder/...`，提交 `refactor: isolate context policies and immutable results`。
+- [x] 写 TestLegacyContextPolicyParity：分页 Unicode、排除工具、最后回合恢复、摘要预算与缺失用量保持旧行为。
+- [x] 写 TestReferenceContentIdentity：相同 key/摘要幂等、不同内容拒绝、跨运行/摘要/格式不符拒绝；返回数据不共享可写数组；结构化 ID 中包含斜线不会碰撞。
+- [x] 写 TestContextConfigFingerprint：改变阈值/分页/排除工具/Store 命名空间导致 ConfigHash 不同，顺序变化可见，默认无策略意图不变。
+- [x] 先失败后抽取，运行 `go test -race ./builder/...`，提交 `refactor: isolate context policies and immutable results`。
 
 ### Task 7: 持久引用与窄策略扩展，FR-05 / M2
 
 **Files:** 新建 builder/contextpolicy/durable_store.go、durable_store_test.go；修改 builder/config_options.go、tool_events.go、durable_turn.go；新增 examples/orchestration/context-recovery/ 及子进程测试。
 **Interfaces:** 产出 2.4 Policy/Factory/ToolProvider/FinalTurnRestorer/StatsProvider、Builder.WithContextPolicies/WithPolicyToolAdapter，durable Store 适配。
 
-- [ ] 写 TestPolicyLifecycleAndProtocol：执行顺序固定，独立实例；新旧入口冲突；system/tool ID/原生字段/预算篡改含嵌套原地修改均拒绝；摘要不能绕过 T2。
-- [ ] 写 TestPolicyReadToolAuthorization：分页工具名称/Schema 冲突拒绝；持久缺 adapter/裸 Tool 拒绝；调用与回放授权，最后回合恢复原文移除读取工具。
-- [ ] 写 TestReferencesProcessRecovery：引用保存前失败零请求；引用已存、模型意图未存时重启得到相同引用；模型已发结果未落盘则 ErrOperationAttention；读取固定内容，ConfigHash 变化拒绝。
-- [ ] 持久摘要和不支持持久的策略先验拒绝。先验证失败，实施后运行 `go test -race ./builder/... ./core/durable ./core/budget ./examples/orchestration/context-recovery`，提交 `feat: recover immutable context references`。
+- [x] 写 TestPolicyLifecycleAndProtocol：执行顺序固定，独立实例；新旧入口冲突；system/tool ID/原生字段/预算篡改含嵌套原地修改均拒绝；摘要不能绕过 T2。
+- [x] 写 TestPolicyReadToolAuthorization：分页工具名称/Schema 冲突拒绝；持久缺 adapter/裸 Tool 拒绝；调用与回放授权，最后回合恢复原文移除读取工具。
+- [x] 写 TestReferencesProcessRecovery：引用保存前失败零请求；引用已存、模型意图未存时重启得到相同引用；模型已发结果未落盘则 ErrOperationAttention；读取固定内容，ConfigHash 变化拒绝。
+- [x] 持久摘要和不支持持久的策略先验拒绝。先验证失败，实施后运行 `go test -race ./builder/... ./core/durable ./core/budget ./examples/orchestration/context-recovery`，提交 `feat: recover immutable context references`。
 
 ### Task 8: 只读增量管道原型，FR-01 / M3
 
 **Files:** 新建 experimental core/flow/source.go、fold.go、adapter.go 及测试；新增 examples/orchestration/stream-pipeline/、workflow/flow_integration_test.go。
 **Interfaces:** 产出 2.5 Source/Map/Fold/Limits/AsRunnable；暂不稳定发布四范式接口。
 
-- [ ] 写 TestIncrementalBeforeSourceReturns：阻塞 Source 返回前下游收到第一项；0/false/空字符串均处理，不把事件或最终值重复 Fold。
-- [ ] 写 TestFoldLateErrorDoesNotCommit：Source 在若干项后返回错误，或忽略 Map.fn/Add/preview 返回错误，均无成功 Done；Map 在首错后不再变换/透传，图不调度下游。
-- [ ] 写 TestSourceCancellationAndLimits：取消使合作式模型源退出；1025 项超限；MaxBytes 开启而缺 Size/返回负值拒绝；并发 Invoke 不共享 Init 累积对象。
-- [ ] 先失败后实现无额外队列的同步原型，运行 `go test -race ./core/flow ./core/... ./workflow`。记录首帧屏障证据、基准、API 采用/推迟结论，提交 `feat: prototype incremental read-only pipelines`。
+- [x] 写 TestIncrementalBeforeSourceReturns：阻塞 Source 返回前下游收到第一项；0/false/空字符串均处理，不把事件或最终值重复 Fold。
+- [x] 写 TestFoldLateErrorDoesNotCommit：Source 在若干项后返回错误，或忽略 Map.fn/Add/preview 返回错误，均无成功 Done；Map 在首错后不再变换/透传，图不调度下游。
+- [x] 写 TestSourceCancellationAndLimits：取消使合作式模型源退出；1025 项超限；MaxBytes 开启而缺 Size/返回负值拒绝；并发 Invoke 不共享 Init 累积对象。
+- [x] 先失败后实现无额外队列的同步原型，运行 `go test -race ./core/flow ./core/... ./workflow`。记录首帧屏障证据、基准、API 采用/推迟结论，提交 `feat: prototype incremental read-only pipelines`。
 
 ### Task 9: 类型化适配示例与离线报告，FR-03/04 / M1、M3
 
 **Files:** 新增 examples/orchestration/field-adapter/、parallel-diagnostics/、devtools/report.go、assets/report.html 及测试。
 **Interfaces:** 复用现有 Adapt/Clone/Merge、T5 拓扑/事件；不新增反射 Mapping 和 Debugger.Run。
 
-- [ ] 写 TestTypedAdapterErrorsStopNode：订单与并行结果显式转换，零值保留，nil/错误不调用下游，不修改来源状态；假工具无真实副作用。
-- [ ] 写 TestOfflineReportEscapesContent：拓扑/事件中脚本样字符串只作文本；无 Args/提示词；报告标明观察缺失和非恢复依据。
-- [ ] 先失败后实现示例及只读报告；浏览器人工检查循环/分支/等待/失败展示，运行 `go test -race ./devtools ./workflow ./examples/orchestration/...`，提交 `docs: demonstrate typed adapters and readonly reports`。
+- [x] 写 TestTypedAdapterErrorsStopNode：订单与并行结果显式转换，零值保留，nil/错误不调用下游，不修改来源状态；假工具无真实副作用。
+- [x] 写 TestOfflineReportEscapesContent：拓扑/事件中脚本样字符串只作文本；无 Args/提示词；报告标明观察缺失和非恢复依据。
+- [x] 先失败后实现示例及只读报告；浏览器人工检查循环/分支/等待/失败展示，运行 `go test -race ./devtools ./workflow ./examples/orchestration/...`，提交 `docs: demonstrate typed adapters and readonly reports`。
 
 ### Task 10: 订单闭环、兼容与交付证据，全部首轮需求
 
 **Files:** 新增 examples/orchestration/composed-order/ 与测试；新增 docs/guides/COMPOSABLE_ORCHESTRATION.md；更新 EXECUTION_CONTRACT、NATIVE_ORCHESTRATION、CONTEXT_POLICY 和 docs 索引。
 **Interfaces:** 仅消费已交付能力，不为闭环新增动态 DAG/隐藏重试。
 
-- [ ] 验证普通规则图工具、独立政策子 Agent、根额度争用、类型化 Adapt、长证据固定引用、重启与 OTel/JSONL 关联。分别断言实际请求、预算预留、累计用量和 replay 新增用量。
-- [ ] 使用旧检查点/工具意图 fixture 验证无配置兼容；新配置改变拒绝旧运行；pending 不删除、不退款、不强制重试。
-- [ ] 运行 `GO_TEST_MODE=true go test -race -timeout 10m ./...`、`go build ./...`、`golangci-lint run ./...`、`bash scripts/verify_imports.sh`，全部退出码 0 并记录工具版本、第三方警告。
-- [ ] 同机前后各跑相关 benchmark 5 次，比较 ns/op、B/op、allocs/op；解释显著回退，不用远端模型延迟代表框架开销。
-- [ ] 真实模型只显式启用，设置根预算、保留失败及已知/未知用量。更新能力状态，提交 `docs: verify composable execution boundaries`。
+- [x] 验证普通规则图工具、独立政策子 Agent、根额度争用、类型化 Adapt、长证据固定引用、重启与 OTel/JSONL 关联。分别断言实际请求、预算预留、累计用量和 replay 新增用量。
+- [x] 使用旧检查点/工具意图 fixture 验证无配置兼容；新配置改变拒绝旧运行；pending 不删除、不退款、不强制重试。
+- [x] 运行 `GO_TEST_MODE=true go test -race -timeout 10m ./...`、`go build ./...`、`golangci-lint run ./...`、`bash scripts/verify_imports.sh`，全部退出码 0 并记录工具版本、第三方警告。
+- [x] 同机前后各跑相关 benchmark 5 次，比较 ns/op、B/op、allocs/op；解释显著回退，不用远端模型延迟代表框架开销。
+- [x] 真实模型只显式启用，设置根预算、保留失败及已知/未知用量。更新能力状态，提交 `docs: verify composable execution boundaries`。
 
 ## 4. 顺序与阶段完成定义
 
@@ -343,4 +343,4 @@ M0–M2 需交付实现、失败回归、离线示例与迁移说明。M3 流原
 
 回退先停止新版本运行，保留对应版本 worker/二进制完成或人工处置存量。旧二进制不得读取新账本后假成功，不能删除 pending/failed 日志强制重做。预算、引用、检查点按运行统一保留及清理，不删除活跃引用。
 
-此文档定义建议实现路径；本次复审没有执行 T1–T10，也没有性能或生产可靠性实测结论。
+T1–T10 首轮任务已执行；文件可按职责合并，真实子会话与闭环验证集中在 T10。交付命令、性能回退与实验范围见 [验证记录](../../evaluation/2026-10-27-orchestration-r2/REPORT.md)。这不构成生产可靠性或远端模型性能结论。
