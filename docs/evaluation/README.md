@@ -105,3 +105,7 @@ ToT 在 apples 题仍报 `model returned no candidate thoughts`，调用 4 次�
 记录：[默认循环](2026-10-26-terminal-tools-baseline.json)、[直接返回](2026-10-26-terminal-tools-direct.json)。该组请求减少 50%、Token 观测减少 52.9%；不能据此承诺其他任务同样节省。多工具和需要推理的任务仍使用模型循环。
 
 更多依据见[成本控制调研](2026-10-26-framework-cost-research.md)、[大规模验证](2026-10-26-scale-validation.md)和[剩余失败修复](2026-10-26-remaining-failures.md)。
+
+## 可组合编排 R2 交付验证
+
+[2026-10-27 R2 验证报告](2026-10-27-orchestration-r2/REPORT.md)：T1–T10 实施、全量 race/构建/lint/导入检查、整分支审查修复、GoAgent/Eino 同机前后 5 次基准；保留回退和修正证据。
