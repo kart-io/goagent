@@ -1,0 +1,9 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'"><title>GoAgent 执行观察</title><style>
+body{font:16px/1.6 system-ui,sans-serif;max-width:1200px;margin:32px auto;padding:0 24px;color:#172b4d;background:#f5f7fb}h1,h2{line-height:1.3}table{border-collapse:collapse;width:100%;background:white;margin-bottom:28px}td,th{padding:10px 12px;border-bottom:1px solid #dce2eb;text-align:left;overflow-wrap:anywhere}th{background:#e7edf7}code{font-size:13px}small{color:#52647e}.note{padding:12px 18px;background:#fff4d6;border-left:4px solid #c78b00}.error{background:#ffe9e7}.waiting{background:#fff4d6}.replayed{background:#e5f4ed}
+</style></head><body><h1>GoAgent 执行观察</h1><p class="note">这是只读观察报告，不是恢复依据。事件可能因队列或上限而缺失；检查点和操作日志才决定执行状态。报告不包含提示词、参数或模型正文。</p>
+<h2>拓扑</h2><small>{{.Graph.FormatVersion}} · 分支为候选路由，循环可多次访问。</small>
+<table><thead><tr><th>节点</th><th>种类</th><th>并行分支</th></tr></thead><tbody>{{range .Graph.Nodes}}<tr><td><code>{{.ID}}</code></td><td>{{.Kind}}</td><td>{{range .Branches}}{{.}} {{end}}</td></tr>{{end}}</tbody></table>
+<table><thead><tr><th>来源</th><th>目标</th><th>边</th></tr></thead><tbody>{{range .Graph.Edges}}<tr><td>{{.From}}</td><td>{{.To}}</td><td>{{.Kind}}</td></tr>{{end}}</tbody></table>
+<h2>事件时间线</h2><p>丢弃记录数：{{.Dropped}}。没有事件不代表节点未执行；不同 VisitID 表示重复访问或新恢复尝试。</p>
+<table><thead><tr><th>事件 / 时间</th><th>路径 / Visit</th><th>Operation / Run</th><th>耗时 / 错误类别</th><th>Trace / Span</th></tr></thead><tbody>{{range .Events}}<tr class="{{eventClass .}}"><td>{{.Type}}<br><small>{{.At}}</small></td><td>{{.Path}}<br><small>{{.VisitID}} / #{{.EventID}}</small></td><td><code>{{.OperationKey}}<br>{{.RunID}}</code></td><td>{{.Duration}}<br>{{.ErrorKind}}</td><td><code>{{.TraceID}}<br>{{.SpanID}}</code></td></tr>{{end}}</tbody></table></body></html>
