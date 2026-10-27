@@ -212,7 +212,7 @@ func AsRunnable[I,D,O any](open func(context.Context,I)(Source[D],error), fold F
 
 ## 3. 实施任务
 
-### T1 根预算控制器与持久预留，FR-06 / M0
+### Task 1: 根预算控制器与持久预留，FR-06 / M0
 
 **Files:** 新建 core/budget/controller.go、durable.go、controller_test.go、durable_test.go。
 **Interfaces:** 产出 2.1 Config/Controller/New/NewDurable/WithController/FromContext/Reserve/Snapshot。
@@ -222,7 +222,7 @@ func AsRunnable[I,D,O any](open func(context.Context,I)(Source[D],error), fold F
 - [ ] 运行 `go test ./core/budget -run 'TestRootBudget|TestBudget' -count=1`，确认新能力缺失失败。
 - [ ] 实现独立账本、锁顺序和预留语义，运行 `go test -race ./core/budget ./core/durable`，提交 `feat: reserve shared model request budgets`。
 
-### T2 模型入口与父子用量归属，FR-06 / M0
+### Task 2: 模型入口与父子用量归属，FR-06 / M0
 
 **Files:** 新建 core/budget/usage.go、usage_test.go、builder/model_call.go、model_call_test.go；修改 builder/durable_turn.go、tool_events.go、context_policy.go、events.go。
 **Interfaces:** 消费 T1；产出 RecordUsage 与统一模型调用辅助入口。公开 Builder API 保持兼容。
@@ -234,7 +234,7 @@ func AsRunnable[I,D,O any](open func(context.Context,I)(Source[D],error), fold F
 - [ ] 先运行新增测试见失败，再将 Reserve 放在 durable.Do 的真实调用闭包内、模型请求前；无日志时用本次稳定请求 scope。不可在 replay 查找前扣费。
 - [ ] 运行 `go test -race ./builder ./core/budget ./core/durable`；保留无预算的旧意图 fixture，提交 `feat: account nested model calls at the root`。
 
-### T3 普通 Runnable 工具适配，FR-02 / M1
+### Task 3: 普通 Runnable 工具适配，FR-02 / M1
 
 **Files:** 新建 tools/runnable_tool.go、runnable_tool_test.go；修改 tools/dispatcher.go；新增 examples/orchestration/runnable-tool/。
 **Interfaces:** 产出 2.2 NewRunnableTool、DurableIntentVersioner、DurablePolicyProvider；消费 T1 context。
@@ -244,7 +244,7 @@ func AsRunnable[I,D,O any](open func(context.Context,I)(Source[D],error), fold F
 - [ ] 写 TestWaitingOutputIsNotSuccess：Encode 明确拒绝等待/未完成输出；审批型 DurableGraph 不作为本例输入。
 - [ ] 先运行 `go test ./tools -run 'TestRunnableTool|TestOpaqueTool|TestWaiting'` 见失败，实现后运行 `go test -race ./tools ./workflow`，提交 `feat: expose opaque runnable tools`。
 
-### T4 owned 子会话、调用作用域与清理，FR-02/06 / M1
+### Task 4: owned 子会话、调用作用域与清理，FR-02/06 / M1
 
 **Files:** 新建 tools/call_scope.go、call_scope_test.go；扩展 runnable_tool.go；新增 workflow/runnable_tool_integration_test.go、examples/orchestration/agent-tool/。
 **Interfaces:** 产出 OwnedRunnable/NewRunnableToolFactory、深度/重入错误；消费 T1/T2 的共享 budget。
@@ -255,7 +255,7 @@ func AsRunnable[I,D,O any](open func(context.Context,I)(Source[D],error), fold F
 - [ ] 写 TestModelToolRequiresRootBudget：缺预算在 factory 前拒绝；持久运行绑定内存 Controller 零模型请求，宿主构造测试校验 Store/root scope 归属；根预算的 transport 次数与 T2 一致。Opaque 父 pending 即使子日志 completed 也不续跑。
 - [ ] 先失败后实现，运行 `go test -race ./tools ./builder ./workflow ./core/budget`，提交 `feat: own and bound nested agent sessions`。
 
-### T5 复用 OTel 与最小只读事件，FR-04 / M0
+### Task 5: 复用 OTel 与最小只读事件，FR-04 / M0
 
 **Files:** 新建 core/observe/event.go、observability/execution.go、workflow/describe.go、devtools/recorder.go 及测试；修改 workflow 的 graph/execute/parallel/durable 路径、builder/durable_turn.go、tools/dispatcher.go。
 **Interfaces:** 产出 2.3 Event/Observer/WithObserver、可选 GraphDescriber；不新增自有 Span 生成器。
@@ -265,7 +265,7 @@ func AsRunnable[I,D,O any](open func(context.Context,I)(Source[D],error), fold F
 - [ ] 写 TestRecorderBoundedAndRedacted：队列满、10,000 事件截断、磁盘失败、异常字符串包含敏感值时主结果不变且正文不泄漏；Close 报错/丢弃可见；无 OTel provider 时 TraceID 可为空。
 - [ ] 先运行新测试见失败，再在既有生命周期接入；由宿主选择 OTel 桥接，不设置全局 provider。运行 `go test -race ./core/observe ./observability ./workflow ./builder ./tools ./devtools`，提交 `feat: correlate workflow observations with otel`。
 
-### T6 上下文内部组件与不可变存储，FR-05 / M2
+### Task 6: 上下文内部组件与不可变存储，FR-05 / M2
 
 **Files:** 新建 builder/contextpolicy/policy.go、offload.go、store.go、memory_store.go 及测试；修改 builder/context_policy.go。
 **Interfaces:** 产出 2.4 Ref/ResultStore/Descriptor，先在内部适配，不立即开放任意消息重写。
@@ -275,7 +275,7 @@ func AsRunnable[I,D,O any](open func(context.Context,I)(Source[D],error), fold F
 - [ ] 写 TestContextConfigFingerprint：改变阈值/分页/排除工具/Store 命名空间导致 ConfigHash 不同，顺序变化可见，默认无策略意图不变。
 - [ ] 先失败后抽取，运行 `go test -race ./builder/...`，提交 `refactor: isolate context policies and immutable results`。
 
-### T7 持久引用与窄策略扩展，FR-05 / M2
+### Task 7: 持久引用与窄策略扩展，FR-05 / M2
 
 **Files:** 新建 builder/contextpolicy/durable_store.go、durable_store_test.go；修改 builder/config_options.go、tool_events.go、durable_turn.go；新增 examples/orchestration/context-recovery/ 及子进程测试。
 **Interfaces:** 产出 2.4 Policy/Factory/ToolProvider/FinalTurnRestorer/StatsProvider、Builder.WithContextPolicies/WithPolicyToolAdapter，durable Store 适配。
@@ -285,7 +285,7 @@ func AsRunnable[I,D,O any](open func(context.Context,I)(Source[D],error), fold F
 - [ ] 写 TestReferencesProcessRecovery：引用保存前失败零请求；引用已存、模型意图未存时重启得到相同引用；模型已发结果未落盘则 ErrOperationAttention；读取固定内容，ConfigHash 变化拒绝。
 - [ ] 持久摘要和不支持持久的策略先验拒绝。先验证失败，实施后运行 `go test -race ./builder/... ./core/durable ./core/budget ./examples/orchestration/context-recovery`，提交 `feat: recover immutable context references`。
 
-### T8 只读增量管道原型，FR-01 / M3
+### Task 8: 只读增量管道原型，FR-01 / M3
 
 **Files:** 新建 experimental core/flow/source.go、fold.go、adapter.go 及测试；新增 examples/orchestration/stream-pipeline/、workflow/flow_integration_test.go。
 **Interfaces:** 产出 2.5 Source/Map/Fold/Limits/AsRunnable；暂不稳定发布四范式接口。
@@ -295,7 +295,7 @@ func AsRunnable[I,D,O any](open func(context.Context,I)(Source[D],error), fold F
 - [ ] 写 TestSourceCancellationAndLimits：取消使合作式模型源退出；1025 项超限；MaxBytes 开启而缺 Size/返回负值拒绝；并发 Invoke 不共享 Init 累积对象。
 - [ ] 先失败后实现无额外队列的同步原型，运行 `go test -race ./core/flow ./core/... ./workflow`。记录首帧屏障证据、基准、API 采用/推迟结论，提交 `feat: prototype incremental read-only pipelines`。
 
-### T9 类型化适配示例与离线报告，FR-03/04 / M1、M3
+### Task 9: 类型化适配示例与离线报告，FR-03/04 / M1、M3
 
 **Files:** 新增 examples/orchestration/field-adapter/、parallel-diagnostics/、devtools/report.go、assets/report.html 及测试。
 **Interfaces:** 复用现有 Adapt/Clone/Merge、T5 拓扑/事件；不新增反射 Mapping 和 Debugger.Run。
@@ -304,7 +304,7 @@ func AsRunnable[I,D,O any](open func(context.Context,I)(Source[D],error), fold F
 - [ ] 写 TestOfflineReportEscapesContent：拓扑/事件中脚本样字符串只作文本；无 Args/提示词；报告标明观察缺失和非恢复依据。
 - [ ] 先失败后实现示例及只读报告；浏览器人工检查循环/分支/等待/失败展示，运行 `go test -race ./devtools ./workflow ./examples/orchestration/...`，提交 `docs: demonstrate typed adapters and readonly reports`。
 
-### T10 订单闭环、兼容与交付证据，全部首轮需求
+### Task 10: 订单闭环、兼容与交付证据，全部首轮需求
 
 **Files:** 新增 examples/orchestration/composed-order/ 与测试；新增 docs/guides/COMPOSABLE_ORCHESTRATION.md；更新 EXECUTION_CONTRACT、NATIVE_ORCHESTRATION、CONTEXT_POLICY 和 docs 索引。
 **Interfaces:** 仅消费已交付能力，不为闭环新增动态 DAG/隐藏重试。
