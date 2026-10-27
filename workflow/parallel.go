@@ -43,9 +43,13 @@ func (g *Graph[T]) AddParallel(name string, config ParallelConfig[T]) error {
 	}
 	config.Branches = slices.Clone(config.Branches)
 	limit := g.config.MaxConcurrency
-	return g.addRunner(name, func(ctx context.Context, in T, emit func(core.StreamChunk[T]) error) (T, error) {
+	err := g.addRunner(name, func(ctx context.Context, in T, emit func(core.StreamChunk[T]) error) (T, error) {
 		return runParallel(ctx, in, config, limit, emit)
 	})
+	if err == nil {
+		g.parallel[name] = true
+	}
+	return err
 }
 
 func runParallel[T any](ctx context.Context, in T, config ParallelConfig[T], limit int, emit func(core.StreamChunk[T]) error) (result T, err error) {

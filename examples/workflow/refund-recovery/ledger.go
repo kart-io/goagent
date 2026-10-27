@@ -2,9 +2,7 @@ package main
 
 import (
 	"context"
-	"crypto/sha256"
 	"database/sql"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +10,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/kart-io/goagent/workflow/refund"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -22,12 +21,7 @@ type refundLedger struct {
 	now func() time.Time
 }
 
-type orderRecord struct {
-	PaidCents    int64
-	Currency     string
-	DeliveryDays int
-	Version      int64
-}
+type orderRecord = refund.Order
 
 type rowQuerier interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
@@ -109,151 +103,86 @@ func readRequest(ctx context.Context, q rowQuerier, id string) (refundState, str
 	return state, actor, err
 }
 
-func sameRequest(a, b refundState) bool {
-	return a.RequestID == b.RequestID && a.OrderID == b.OrderID && a.AmountCents == b.AmountCents
-}
-
-func (l *refundLedger) existingRequest(ctx context.Context, state refundState) (refundState, bool, error) {
-	if state.RequestID == "" {
-		return state, false, fmt.Errorf("business request ID is required")
-	}
-	existing, _, err := readRequest(ctx, l.db, state.RequestID)
-	if errors.Is(err, sql.ErrNoRows) {
-		return state, false, nil
-	}
-	if err != nil {
-		return state, false, err
-	}
-	if !sameRequest(existing, state) {
-		return state, false, fmt.Errorf("business request ID belongs to a different refund")
-	}
-	return existing, true, nil
-}
-
-// checkCurrent also runs inside the refund transaction immediately before money
-// would move. An approval is bound to the exact observed order revision.
-func (l *refundLedger) checkCurrent(ctx context.Context, q rowQuerier, state refundState) error {
-	deadline, err := time.Parse(time.RFC3339Nano, state.ValidUntil)
-	if err != nil || !l.now().Before(deadline) {
-		return fmt.Errorf("approval expired; create a new reviewed business request")
-	}
-	order, err := readOrder(ctx, q, state.OrderID)
-	if err != nil {
-		return err
-	}
-	if order.Version != state.OrderVersion || order.PaidCents != state.PaidCents || order.Currency != state.Currency || order.DeliveryDays != state.DeliveryDays {
-		return fmt.Errorf("order changed; a new review is required")
-	}
-	if state.AmountCents <= 0 || state.AmountCents > order.PaidCents || order.DeliveryDays < 0 || order.DeliveryDays > 7 {
-		return fmt.Errorf("refund does not satisfy the synthetic policy")
-	}
-	return nil
-}
-
-func (l *refundLedger) register(ctx context.Context, state refundState) (refundState, error) {
-	tx, err := l.db.BeginTx(ctx, nil)
-	if err != nil {
-		return state, err
-	}
-	defer func() { _ = tx.Rollback() }()
-	existing, _, err := readRequest(ctx, tx, state.RequestID)
-	if err == nil {
-		if !sameRequest(existing, state) {
-			return state, fmt.Errorf("business request ID belongs to a different refund")
-		}
-		return existing, nil
-	}
-	if !errors.Is(err, sql.ErrNoRows) {
-		return state, err
-	}
-	if state.RequestID == "" {
-		return state, fmt.Errorf("business request ID is required")
-	}
-	if err = l.checkCurrent(ctx, tx, state); err != nil {
-		return state, err
-	}
-	data, err := json.Marshal(state)
-	if err != nil {
-		return state, err
-	}
-	if _, err = tx.ExecContext(ctx, "INSERT INTO refund_requests(request_id,state_json) VALUES (?,?)", state.RequestID, data); err != nil {
-		return state, err
-	}
-	return state, tx.Commit()
-}
-
-// The CLI supplies a demo identity. A production host must authenticate it
-// before calling this boundary; a caller-provided name is not authentication.
-func (l *refundLedger) approve(ctx context.Context, state refundState, actor string) error {
-	if actor != "demo-reviewer" {
-		return fmt.Errorf("approver is not authorized by the demo policy")
-	}
+// Transaction adapts the local SQLite backend to the reusable guard service.
+func (l *refundLedger) Transaction(ctx context.Context, f func(refund.Transaction) error) error {
 	tx, err := l.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
-	stored, _, err := readRequest(ctx, tx, state.RequestID)
-	if err != nil {
-		return err
-	}
-	if stored != state {
-		return fmt.Errorf("approval payload differs from registered request")
-	}
-	if err = l.checkCurrent(ctx, tx, stored); err != nil {
-		return err
-	}
-	_, err = tx.ExecContext(ctx, "UPDATE refund_requests SET approved_by = ?, approved_at = ? WHERE request_id = ?", actor, l.now().UTC().Format(time.RFC3339Nano), state.RequestID)
-	if err != nil {
+	if err = f(ledgerTx{tx}); err != nil {
 		return err
 	}
 	return tx.Commit()
 }
 
-func (l *refundLedger) refund(ctx context.Context, key string, state refundState) (string, error) {
-	if key == "" {
-		return "", fmt.Errorf("execution key is required")
+type ledgerTx struct{ *sql.Tx }
+
+func notFound(err error) error {
+	if errors.Is(err, sql.ErrNoRows) {
+		return refund.ErrNotFound
 	}
-	tx, err := l.db.BeginTx(ctx, nil)
-	if err != nil {
-		return "", err
-	}
-	defer func() { _ = tx.Rollback() }()
-	stored, actor, err := readRequest(ctx, tx, state.RequestID)
-	if err != nil {
-		return "", err
-	}
-	if stored != state {
-		return "", fmt.Errorf("business request ID belongs to a different refund")
-	}
-	// A committed effect is returned even if the order/approval later changes.
-	// Rejecting it would leave recovery unable to acknowledge a real refund.
+	return err
+}
+func (t ledgerTx) Order(ctx context.Context, id string) (refund.Order, error) {
+	order, err := readOrder(ctx, t.Tx, id)
+	return order, notFound(err)
+}
+func (t ledgerTx) Request(ctx context.Context, id string) (refund.Request, string, error) {
+	req, actor, err := readRequest(ctx, t.Tx, id)
+	return req, actor, notFound(err)
+}
+func (t ledgerTx) Receipt(ctx context.Context, id string) (string, error) {
 	var receipt string
-	err = tx.QueryRowContext(ctx, "SELECT receipt_id FROM refunds WHERE request_id = ?", state.RequestID).Scan(&receipt)
-	if err == nil {
-		return receipt, nil
-	}
-	if !errors.Is(err, sql.ErrNoRows) {
-		return "", err
-	}
-	if actor == "" {
-		return "", fmt.Errorf("refund requires an authorized approval")
-	}
-	if err = l.checkCurrent(ctx, tx, state); err != nil {
-		return "", err
-	}
-	var refunded int64
-	if err = tx.QueryRowContext(ctx, "SELECT COALESCE(SUM(amount_cents),0) FROM refunds WHERE order_id = ?", state.OrderID).Scan(&refunded); err != nil {
-		return "", err
-	}
-	if state.AmountCents > state.PaidCents-refunded {
-		return "", fmt.Errorf("cumulative refund exceeds paid amount")
-	}
-	hash := sha256.Sum256([]byte(state.RequestID))
-	receipt = "demo-refund-" + hex.EncodeToString(hash[:])
-	_, err = tx.ExecContext(ctx, "INSERT INTO refunds VALUES (?,?,?,?,?,?)", state.RequestID, key, state.OrderID, state.AmountCents, state.Currency, receipt)
+	err := t.QueryRowContext(ctx, "SELECT receipt_id FROM refunds WHERE request_id = ?", id).Scan(&receipt)
+	return receipt, notFound(err)
+}
+func (t ledgerTx) TotalRefunded(ctx context.Context, id string) (int64, error) {
+	var amount int64
+	err := t.QueryRowContext(ctx, "SELECT COALESCE(SUM(amount_cents),0) FROM refunds WHERE order_id = ?", id).Scan(&amount)
+	return amount, err
+}
+func (t ledgerTx) InsertRequest(ctx context.Context, req refund.Request) error {
+	data, err := json.Marshal(req)
 	if err != nil {
-		return "", err
+		return err
 	}
-	return receipt, tx.Commit()
+	_, err = t.ExecContext(ctx, "INSERT INTO refund_requests(request_id,state_json) VALUES (?,?)", req.RequestID, data)
+	return err
+}
+func (t ledgerTx) Approve(ctx context.Context, id, actor string, at time.Time) error {
+	_, err := t.ExecContext(ctx, "UPDATE refund_requests SET approved_by = ?, approved_at = ? WHERE request_id = ?", actor, at.Format(time.RFC3339Nano), id)
+	return err
+}
+func (t ledgerTx) InsertRefund(ctx context.Context, key string, req refund.Request, receipt string) error {
+	_, err := t.ExecContext(ctx, "INSERT INTO refunds VALUES (?,?,?,?,?,?)", req.RequestID, key, req.OrderID, req.AmountCents, req.Currency, receipt)
+	return err
+}
+func (l *refundLedger) service() *refund.Service {
+	return &refund.Service{Store: l, Now: l.now,
+		Authorizer: refund.AuthorizeFunc(func(_ context.Context, actor string, _ refund.Request) error {
+			if actor != "demo-reviewer" {
+				return fmt.Errorf("approver is not authorized by the demo policy")
+			}
+			return nil
+		}),
+		Policy: func(_ context.Context, _ refund.Request, order refund.Order) error {
+			if order.DeliveryDays < 0 || order.DeliveryDays > 7 {
+				return fmt.Errorf("refund does not satisfy the synthetic policy")
+			}
+			return nil
+		},
+	}
+}
+func (l *refundLedger) existingRequest(ctx context.Context, state refundState) (refundState, bool, error) {
+	return l.service().Existing(ctx, state)
+}
+func (l *refundLedger) register(ctx context.Context, state refundState) (refundState, error) {
+	return l.service().Register(ctx, state)
+}
+func (l *refundLedger) approve(ctx context.Context, state refundState, actor string) error {
+	return l.service().Approve(ctx, state, actor)
+}
+func (l *refundLedger) refund(ctx context.Context, key string, state refundState) (string, error) {
+	return l.service().Refund(ctx, key, state)
 }

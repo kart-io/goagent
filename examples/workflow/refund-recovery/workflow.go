@@ -8,21 +8,11 @@ import (
 
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/workflow"
+	"github.com/kart-io/goagent/workflow/refund"
 )
 
 // refundState is the entire persisted business state. All orders are synthetic.
-type refundState struct {
-	RequestID    string `json:"request_id"`
-	OrderVersion int64  `json:"order_version"`
-	ValidUntil   string `json:"valid_until"`
-	OrderID      string `json:"order_id"`
-	AmountCents  int64  `json:"amount_cents"`
-	Currency     string `json:"currency"`
-	PaidCents    int64  `json:"paid_cents"`
-	DeliveryDays int    `json:"delivery_days"`
-	PreparedAt   string `json:"prepared_at,omitempty"`
-	ReceiptID    string `json:"receipt_id,omitempty"`
-}
+type refundState = refund.Request
 
 func newRunner(ctx context.Context, store durable.Store, ledger *refundLedger, approvalTTL time.Duration, afterRefund func()) (*durable.Runner, error) {
 	g := workflow.NewGraph[refundState]()

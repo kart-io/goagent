@@ -1,0 +1,24 @@
+{
+  "verified_at": "2026-10-27T09:03:36.231085+00:00",
+  "go_version": "1.25.0",
+  "tests": {
+    "command": "GO_TEST_MODE=true go test -race -timeout 10m ./...",
+    "exit_code": 0,
+    "passed_packages": 64,
+    "short_mode": false
+  },
+  "build": {
+    "command": "go build ./...",
+    "exit_code": 0
+  },
+  "lint": {
+    "version": "2.6.2",
+    "exit_code": 0,
+    "issues": 0
+  },
+  "imports": {
+    "command": "bash scripts/verify_imports.sh --strict",
+    "findings": 0
+  },
+  "live_tests": "Existing Gemini 6/6 and DeepSeek 6/6 evidence retained; source hashes verified unchanged; no additional paid calls in commit verification."
+}

@@ -52,6 +52,7 @@ type Graph[T any] struct {
 	nodes     map[string]nodeRunner[T]
 	edges     map[string]string
 	branches  map[string]routing[T]
+	parallel  map[string]bool
 }
 
 func NewGraph[T any](configs ...Config) *Graph[T] {
@@ -65,7 +66,7 @@ func NewGraph[T any](configs ...Config) *Graph[T] {
 	if config.MaxConcurrency == 0 {
 		config.MaxConcurrency = 4
 	}
-	g := &Graph[T]{config: config, nodes: map[string]nodeRunner[T]{}, edges: map[string]string{}, branches: map[string]routing[T]{}}
+	g := &Graph[T]{config: config, nodes: map[string]nodeRunner[T]{}, edges: map[string]string{}, branches: map[string]routing[T]{}, parallel: map[string]bool{}}
 	if len(configs) > 1 {
 		g.configErr = fmt.Errorf("provide at most one workflow config")
 	}
@@ -179,6 +180,14 @@ type compiled[T any] struct {
 // definition backed by core.StreamRunnable. Cycles require an exit path and are
 // bounded by MaxSteps at runtime; validation cannot prove a router takes its exit.
 func (g *Graph[T]) Compile(ctx context.Context) (*core.StreamRunnable[T, T], error) {
+	snapshot, err := g.compile(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return core.NewStreamRunnable(core.StreamModeSteps, snapshot.run), nil
+}
+
+func (g *Graph[T]) compile(ctx context.Context) (*compiled[T], error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -241,7 +250,7 @@ func (g *Graph[T]) Compile(ctx context.Context) (*core.StreamRunnable[T, T], err
 	for name, branch := range g.branches {
 		snapshot.branches[name] = routing[T]{choose: branch.choose, targets: maps.Clone(branch.targets)}
 	}
-	return core.NewStreamRunnable(core.StreamModeSteps, snapshot.run), nil
+	return snapshot, nil
 }
 
 func walk(start string, adjacency map[string][]string) map[string]bool {

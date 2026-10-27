@@ -111,4 +111,37 @@ flowchart LR
     fast --> finish
 ```
 
-当前不提供异构节点自动类型推断、字段映射 DSL、跨节点 Collect/Transform、持久化图中断恢复或分布式调度。已有 core/durable 仍用于显式可恢复顺序步骤。
+当前不提供异构节点自动类型推断、字段映射 DSL、跨节点 Collect/Transform 或分布式调度。`Compile` 为内存执行；节点边界恢复使用下文的 `CompileDurable`。`core/durable.Runner` 仍用于显式可恢复顺序步骤。
+
+## 节点边界的持久化恢复
+
+`CompileDurable` 使用相同图定义和 `core/durable.Store`。支持串行节点、条件分支、有界循环、节点前审批和单机重启恢复；目前不支持 `AddParallel`，编译时明确拒绝。原 `Compile` 的内存执行和流式语义保持不变。
+
+```go
+store, err := durable.NewFileStore("./checkpoints")
+if err != nil { return err }
+runnable, err := graph.CompileDurable(ctx, workflow.DurableConfig{
+    Store: store,
+    Version: "order-flow-v1",
+    ApprovalNodes: []string{"issue_refund"},
+})
+if err != nil { return err }
+snapshot, err := runnable.Run(ctx, runID, initialState, "")
+if errors.Is(err, durable.ErrApprovalRequired) {
+    // 持久化等待已保存。宿主完成身份认证和业务授权后，才传回 snapshot.Key。
+    // 下次调用：runnable.Run(ctx, runID, initialState, snapshot.Key)
+}
+// 成功时 snapshot.Done=true，最终业务状态在 snapshot.State。
+```
+
+状态必须可无损 JSON 往返，使用具名结构体，避免接口字段中的具体类型丢失。恢复忽略新 initialState。节点代码、状态结构或业务策略变化须增加 `Version`；节点、边、候选路由、执行预算和审批配置的变化自动导致计划指纹不匹配并拒绝旧检查点。
+
+执行前持久化意图，节点成功后保存输出，再单独保存下一条路由。因此路由失败不会重跑已保存的节点。Router 必须无副作用，其执行可能在崩溃后重放；Router 对输入的修改不保存。`MaxSteps` 跨重启累计。审批键绑定 run、版本计划和具体节点访问，循环每轮使用不同键；它不是身份认证凭证。
+
+节点通过 `workflow.DurableKey(ctx)` 读取稳定执行键。效果提交后、检查点保存前发生崩溃时节点仍可能重跑，外部服务必须用该键或更强的业务请求 ID 去重。节点内部 Agent/工具循环作为整体重跑，不恢复任意调用栈。当前 `Run` 返回状态，不承诺持久化流事件重放。FileStore 只提供本地锁与原子文件保存，不提供跨主机租约或接管。并行分支检查点是后续独立阶段。
+
+```sh
+go test -race ./workflow -run DurableGraph
+```
+
+包含真实子进程在效果落盘后退出、重新启动仅产生一个效果的测试，以及审批、循环预算、路由失败、保存失败、取消等待与损坏检查点测试。

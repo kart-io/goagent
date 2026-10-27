@@ -1,0 +1,155 @@
+{
+  "backend": "Gemini native API (Google GenAI SDK)",
+  "completed": 6,
+  "embedding_model": "gemini-embedding-001",
+  "known_usage_only": {
+    "prompt_tokens": 1340,
+    "completion_tokens": 74,
+    "total_tokens": 1915
+  },
+  "limitations": "Legacy string/tool streams and Embed do not expose token usage; known usage excludes those requests. Native suite exercises bounded tool loops on synthetic read-only tools; no production backend or broad retrieval quality validation.",
+  "max_output_tokens": 2048,
+  "maximum_upstream_requests": 10,
+  "model": "gemini-2.5-flash",
+  "passed": 6,
+  "provider": "GeminiProvider",
+  "results": [
+    {
+      "method": "RunnableInvoke",
+      "repeat": 0,
+      "passed": true,
+      "answer": "42",
+      "usage": {
+        "prompt_tokens": 62,
+        "completion_tokens": 2,
+        "total_tokens": 94
+      },
+      "duration_ms": 1082,
+      "details": {
+        "agent_metadata": {
+          "answer_usage_reported": true
+        },
+        "executed_order_ids": null
+      }
+    },
+    {
+      "method": "RunnableStream",
+      "repeat": 0,
+      "passed": true,
+      "answer": "42",
+      "usage": {
+        "prompt_tokens": 62,
+        "completion_tokens": 2,
+        "total_tokens": 95
+      },
+      "duration_ms": 763,
+      "details": {
+        "agent_metadata": {
+          "answer_usage_reported": true
+        },
+        "executed_order_ids": null,
+        "stream_text": "42"
+      }
+    },
+    {
+      "method": "RunnableToolLoop",
+      "repeat": 0,
+      "passed": true,
+      "answer": "7",
+      "usage": {
+        "prompt_tokens": 269,
+        "completion_tokens": 18,
+        "total_tokens": 338
+      },
+      "duration_ms": 1398,
+      "details": {
+        "agent_metadata": {
+          "answer_usage_reported": true,
+          "final_answer_only": true,
+          "model_calls": 2,
+          "usage_complete": true,
+          "usage_reports": 2
+        },
+        "executed_order_ids": [
+          "SHARED-1"
+        ]
+      }
+    },
+    {
+      "method": "RunnableDirectTool",
+      "repeat": 0,
+      "passed": true,
+      "answer": "订单 SHARED-1 已发货。",
+      "usage": {
+        "prompt_tokens": 103,
+        "completion_tokens": 17,
+        "total_tokens": 171
+      },
+      "duration_ms": 895,
+      "details": {
+        "agent_metadata": {
+          "answer_source": "tool",
+          "answer_usage_reported": false,
+          "model_calls": 1,
+          "return_direct_tool": "lookup",
+          "usage_complete": true,
+          "usage_reports": 1
+        },
+        "executed_order_ids": [
+          "SHARED-1"
+        ]
+      }
+    },
+    {
+      "method": "RunnableSequentialTools",
+      "repeat": 0,
+      "passed": true,
+      "answer": "7",
+      "usage": {
+        "prompt_tokens": 844,
+        "completion_tokens": 35,
+        "total_tokens": 1217
+      },
+      "duration_ms": 3612,
+      "details": {
+        "agent_metadata": {
+          "answer_usage_reported": true,
+          "final_answer_only": true,
+          "model_calls": 3,
+          "usage_complete": true,
+          "usage_reports": 3
+        },
+        "executed_order_ids": [
+          "FIRST-1",
+          "SECOND-2"
+        ]
+      }
+    },
+    {
+      "method": "Embedding",
+      "repeat": 0,
+      "passed": true,
+      "answer": "distinct finite vectors",
+      "duration_ms": 715,
+      "details": {
+        "cosine_similarity": 0.5413693087905952,
+        "dimensions": 3072,
+        "embedding_requests": 2,
+        "input_texts": [
+          "订单已发货，预计明天送达。",
+          "The galaxy contains billions of stars and distant planets."
+        ],
+        "vector_sha256": [
+          "3544fbb2ed0e8a8586e3da4c8d186efba044a0d516eb6d3aba06da0df6de06fc",
+          "4d3041c1e5e6a6142802465408266b0245ebbff128832386037a05bb23dde10d"
+        ]
+      }
+    }
+  ],
+  "sdk_retries": 0,
+  "suite": "native",
+  "temperature": 0.2,
+  "timeout_seconds": 90,
+  "timestamp": "2026-10-27T08:16:26.600877675Z",
+  "usage_reported_cases": 5
+}
