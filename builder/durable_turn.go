@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/google/jsonschema-go/jsonschema"
-	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 )
@@ -19,9 +18,6 @@ func readJournaledTurn(ctx context.Context, round int, client llm.ToolStreamClie
 			return nil, err
 		}
 		return readToolTurn(callCtx, stream, emit)
-	}
-	if !durable.HasJournal(ctx) {
-		return invoke(ctx)
 	}
 	type definition struct{ Name, Description, Schema string }
 	definitions := make([]definition, 0, len(tools))
@@ -36,40 +32,7 @@ func readJournaledTurn(ctx context.Context, round int, client llm.ToolStreamClie
 	if err != nil {
 		return nil, err
 	}
-	record, err := durable.Do(ctx, fmt.Sprintf("model/turn/%d", round), intent, durable.OperationPolicy{}, func(callCtx context.Context) (json.RawMessage, error) {
-		turn, callErr := invoke(callCtx)
-		if turn != nil {
-			copy := *turn
-			copy.Error = nil
-			if callErr == nil {
-				callErr = validateDurableTurn(&copy, tools)
-			}
-			data, marshalErr := json.Marshal(&copy)
-			if marshalErr != nil {
-				return nil, marshalErr
-			}
-			return data, callErr
-		}
-		return nil, callErr
-	})
-	if err != nil {
-		return nil, err
-	}
-	var turn llm.StreamChunk
-	if err = json.Unmarshal(record.Value, &turn); err != nil {
-		return nil, err
-	}
-	if record.Replayed {
-		if err = emit(AgentEvent{Type: "step", Step: "model_replayed"}); err != nil {
-			return nil, err
-		}
-		if turn.Content != "" {
-			if err = emit(AgentEvent{Type: "text", Delta: turn.Content}); err != nil {
-				return nil, err
-			}
-		}
-	}
-	return &turn, nil
+	return modelOperation(ctx, fmt.Sprintf("model/turn/%d", round), intent, invoke, func(turn *llm.StreamChunk) error { return validateDurableTurn(turn, tools) }, emit)
 }
 
 func validateDurableTurn(turn *llm.StreamChunk, tools []interfaces.Tool) error {
