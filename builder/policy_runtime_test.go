@@ -2,6 +2,7 @@ package builder
 
 import (
 	"context"
+	"errors"
 	"github.com/kart-io/goagent/builder/contextpolicy"
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/durable"
@@ -9,6 +10,7 @@ import (
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/tools"
 	"github.com/stretchr/testify/require"
+	"strings"
 	"testing"
 )
 
@@ -102,4 +104,59 @@ func TestPolicyReadToolAuthorizationAndReplay(t *testing.T) {
 	turn, e = p.apply(scope, turn, true)
 	require.NoError(t, e)
 	require.Equal(t, "long evidence", turn.Messages[3].Content)
+}
+
+type referenceSaveFailure struct {
+	durable.Store
+	fail bool
+}
+
+func (s *referenceSaveFailure) Save(ctx context.Context, id string, snapshot *durable.Snapshot) error {
+	if s.fail && strings.HasPrefix(id, "goagent/context-result/") {
+		return errors.New("reference save failed")
+	}
+	return s.Store.Save(ctx, id, snapshot)
+}
+func TestPolicyReferenceSaveBeforeRequestAndConfigMismatch(t *testing.T) {
+	file, err := durable.NewFileStore(t.TempDir())
+	require.NoError(t, err)
+	fault := &referenceSaveFailure{Store: file, fail: true}
+	store, err := contextpolicy.NewDurableResultStore(fault)
+	require.NoError(t, err)
+	ctx := durable.WithJournal(durable.WithExecutionKey(context.Background(), "save-order"), file)
+	adapter := func(ts []interfaces.Tool) ([]interfaces.Tool, error) {
+		reg := tools.NewRegistry()
+		for _, tool := range ts {
+			require.NoError(t, reg.Register(tool))
+		}
+		d, e := tools.NewDispatcher(reg, tools.DispatchConfig{})
+		if e != nil {
+			return nil, e
+		}
+		return d.Tools(), nil
+	}
+	business, err := adapter([]interfaces.Tool{NewMockTool("lookup", "long evidence")})
+	require.NoError(t, err)
+	m := nativeModel([]*llm.StreamChunk{{Done: true, FinishReason: "tool_calls", ToolCalls: []llm.ToolCall{nativeCall("a", "lookup", "{}")}}}, []*llm.StreamChunk{{Done: true, FinishReason: "stop", Content: "answer"}})
+	namespace := "original"
+	build := func() *ConfigurableAgent[any, *core.AgentState] {
+		a, e := NewSimpleBuilder(m).WithTools(business...).WithMaxIterations(3).WithContextPolicies(func() contextpolicy.Policy {
+			p, e := contextpolicy.NewOffload(contextpolicy.OffloadConfig{Store: store, Namespace: namespace, MaxToolResultRunes: 3})
+			require.NoError(t, e)
+			return p
+		}).WithPolicyToolAdapter(adapter).Build()
+		require.NoError(t, e)
+		return a
+	}
+	_, err = build().AsRunnable().Invoke(ctx, "question")
+	require.ErrorContains(t, err, "reference save failed")
+	require.Len(t, m.requests, 1, "never send a dangling reference")
+	fault.fail = false
+	_, err = build().AsRunnable().Invoke(ctx, "question")
+	require.NoError(t, err)
+	require.Len(t, m.requests, 2)
+	namespace = "different-store"
+	_, err = build().AsRunnable().Invoke(ctx, "question")
+	require.Error(t, err)
+	require.Len(t, m.requests, 2, "configuration mismatch must not request model")
 }

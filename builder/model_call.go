@@ -52,12 +52,18 @@ func recordTurnUsage(ctx context.Context, key string, turn *llm.StreamChunk) err
 }
 func modelOperation(ctx context.Context, id string, intent json.RawMessage, invoke func(context.Context) (*llm.StreamChunk, error), validate func(*llm.StreamChunk) error, emit func(AgentEvent) error) (result *llm.StreamChunk, resultErr error) {
 	key := durable.ChildKey(durable.ExecutionKey(ctx), id)
-	if key == "" {
+	if !durable.HasJournal(ctx) || key == "" {
 		key = uuid.NewString()
 	}
 	ctx, endModel := observe.Start(ctx, observe.Event{Type: "model", Path: id, OperationKey: key})
 	replayed := false
-	defer func() { endModel(resultErr, replayed) }()
+	defer func() {
+		if v := recover(); v != nil {
+			endModel(fmt.Errorf("execution panic"), replayed)
+			panic(v)
+		}
+		endModel(resultErr, replayed)
+	}()
 	if err := validateModelBudget(ctx); err != nil {
 		return nil, err
 	}
