@@ -168,3 +168,7 @@ DEEPSEEK_MODEL=deepseek-flash bash scripts/business_tool_loop_live.sh deepseek /
 ```
 
 同一个 Agent 节点执行 A、B 两个工具，在 B 效果落盘后 `os.Exit(86)`；新进程应跳过 A、恢复 B 并仅请求最终回答；第三次进程启动应零模型/工具调用。效果按子执行键去重，断言只有两条记录、两个不同键及最终答案包含两条回执。见[三模型实测及首次失败记录](../evaluation/2026-10-27-durable-tool-loop/REPORT.md)。
+
+## 可组合编排 R2
+
+新增根预算、受控 Runnable 工具、OTel 观察及不可变上下文结果引用；见 [可组合编排指南](COMPOSABLE_ORCHESTRATION.md)。旧 ContextPolicy 的持久限制继续保留；需要持久引用时使用每次执行独立的 WithContextPolicies 工厂和宿主 WithPolicyToolAdapter。流预览仍不代表业务终态，core/flow 仅为实验原型。

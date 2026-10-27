@@ -1,0 +1,5 @@
+# github.com/kart-io/goagent/builder [github.com/kart-io/goagent/builder.test]
+builder/policy_runtime_test.go:19:79: NewSimpleBuilder(nativeModel()).WithTools(NewMockTool("lookup", "x")).WithContextPolicies undefined (type *AgentBuilder[any, *"github.com/kart-io/goagent/core".AgentState] has no field or method WithContextPolicies)
+builder/policy_runtime_test.go:26:113: NewSimpleBuilder(nativeModel()).WithTools(NewMockTool("lookup", "x")).WithContextPolicy(ContextPolicy{}).WithContextPolicies undefined (type *AgentBuilder[any, *"github.com/kart-io/goagent/core".AgentState] has no field or method WithContextPolicies)
+FAIL	github.com/kart-io/goagent/builder [build failed]
+FAIL

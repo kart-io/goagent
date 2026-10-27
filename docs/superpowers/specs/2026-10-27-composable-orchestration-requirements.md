@@ -1,7 +1,8 @@
 # GoAgent 可组合编排能力需求文档
 
 日期：2026-10-27  
-状态：R2 复审草案，尚未实现；替代本文件初版的优先级与接口范围  
+状态：R2 首轮已实施；实验与后置范围仍按本文约束
+
 代码基线：`3bfeea70fcce35c3e925a295cc42546c1ec80b1b`  
 配套：[实现方案](../plans/2026-10-27-composable-orchestration.md)、[多框架调研与复审](../../research/2026-10-27-framework-orchestration-review.md)
 
@@ -11,7 +12,7 @@
 
 参考 Eino、LangGraph/LangChain、OpenAI Agents SDK、Google ADK 和 Temporal 后，本版调整为：工具化前补根级预算和资源生命周期；观察复用 OTel；持久引用先固定内容身份；数据流先原型；反射字段映射推迟。框架事实与本项目推导分列在调研文档中。
 
-需求面向 GoAgent 使用者和维护者。本版是建议设计，不表示用户已确认所有拟新增 API、默认值或交付日期。
+需求面向 GoAgent 使用者和维护者。用户已授权按文档实施；本轮交付与验证见 [验证记录](../../evaluation/2026-10-27-orchestration-r2/REPORT.md)，不包含后置候选范围。
 
 ## 2. 当前能力与范围
 
