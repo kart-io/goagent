@@ -1,0 +1,290 @@
+### minimax alert-rca 17:02:41
+=== RUN   TestScriptedConclusionAccepted
+--- PASS: TestScriptedConclusionAccepted (0.04s)
+=== RUN   TestScriptedRepair
+--- PASS: TestScriptedRepair (0.03s)
+=== RUN   TestScriptedRepairLimit
+--- PASS: TestScriptedRepairLimit (0.04s)
+=== RUN   TestLiveAlertRCA
+    main_test.go:140: minimax/MiniMax-M3.1-Flash：{Answer:结论：config_change
+        10:02 的配置变更将 checkout-api 的数据库连接池上限 db.max_open_conns 从 200 下调为 50，导致连接耗尽、请求排队超时，5xx 错误率在 10:05 升至约 18%，p99 延迟从 120ms 涨到约 3s。 Decision:config_change Accepted:0xc0003642c0 Submissions:2 Repairs:1 Rejections:[evidence[11] 的摘录 "[]"过短，短于 3 个字母或数字时必须是完整的字段值] DataToolRuns:11 NewModelCalls:5 Budget:{ReservedRequests:5 KnownUsageEntries:5 UnknownUsageEntries:0 KnownTokens:{PromptTokens:8940 CompletionTokens:1643 TotalTokens:10583 CachedTokens:0}}}
+--- PASS: TestLiveAlertRCA (16.18s)
+=== RUN   TestScriptedAnswerBoundToConclusion
+--- PASS: TestScriptedAnswerBoundToConclusion (0.02s)
+=== RUN   TestScriptedConclusionAccepted
+--- PASS: TestScriptedConclusionAccepted (0.03s)
+=== RUN   TestScriptedRepair
+--- PASS: TestScriptedRepair (0.03s)
+=== RUN   TestScriptedRepairLimit
+--- PASS: TestScriptedRepairLimit (0.03s)
+=== RUN   TestLiveAlertRCA
+    main_test.go:140: minimax/MiniMax-M3.1-Flash：{Answer:结论：config_change
+        10:02 配置将 checkout-api 的 db.max_open_conns 由 200 下调为 50，导致数据库连接池在 10:04 起耗尽、连接获取超时，checkout-api 5xx 错误率升至约 18%。 Decision:config_change Accepted:0xc000364b80 Submissions:1 Repairs:0 Rejections:[] DataToolRuns:13 NewModelCalls:3 Budget:{ReservedRequests:3 KnownUsageEntries:3 UnknownUsageEntries:0 KnownTokens:{PromptTokens:5085 CompletionTokens:894 TotalTokens:5979 CachedTokens:0}}}
+--- PASS: TestLiveAlertRCA (7.10s)
+=== RUN   TestScriptedAnswerBoundToConclusion
+--- PASS: TestScriptedAnswerBoundToConclusion (0.02s)
+PASS
+ok  	github.com/kart-io/goagent/examples/orchestration/ops/alert-rca	24.539s
+exit=0
+### minimax sql-review 17:03:26
+=== RUN   TestCheckRules
+--- PASS: TestCheckRules (0.00s)
+=== RUN   TestParseVerdict
+--- PASS: TestParseVerdict (0.00s)
+=== RUN   TestApplyChangeIsIdempotent
+--- PASS: TestApplyChangeIsIdempotent (0.00s)
+=== RUN   TestScriptedBatch
+--- PASS: TestScriptedBatch (0.02s)
+=== RUN   TestScriptedApproveApplies
+--- PASS: TestScriptedApproveApplies (0.02s)
+=== RUN   TestScriptedEditBlocksApproval
+--- PASS: TestScriptedEditBlocksApproval (0.03s)
+=== RUN   TestScriptedRevertedEditApproves
+--- PASS: TestScriptedRevertedEditApproves (0.02s)
+=== RUN   TestScriptedNonStatementEditBlocksApproval
+=== RUN   TestScriptedNonStatementEditBlocksApproval/est_rows
+=== RUN   TestScriptedNonStatementEditBlocksApproval/env
+--- PASS: TestScriptedNonStatementEditBlocksApproval (0.04s)
+    --- PASS: TestScriptedNonStatementEditBlocksApproval/est_rows (0.02s)
+    --- PASS: TestScriptedNonStatementEditBlocksApproval/env (0.02s)
+=== RUN   TestScriptedEditBeforeAutoApplyInvalidates
+--- PASS: TestScriptedEditBeforeAutoApplyInvalidates (0.02s)
+=== RUN   TestLiveSQLReview
+    main_test.go:390: minimax/MiniMax-M3.1-Flash：{Outcomes:[{Review:{Ticket:{ID:T-101 Env:test Statements:[INSERT INTO demo_coupons (code, discount) VALUES ('WELCOME5', 5)] EstRows:1} Hash:97b02fc47dbc5d3c6e4ffb73d7116a84dbf7bc14dbeec52e2d3deacc14a4abfd Checks:[{SQL:INSERT INTO demo_coupons (code, discount) VALUES ('WELCOME5', 5) Level:ok Rules:[]}] RuleVerdict:pass Verdict:0xc00003b680 ModelError: Status:applied Receipt:APPLY-T-101-97b02fc4} RunID:sql/T-101@97b02fc47dbc ApprovalKey:} {Review:{Ticket:{ID:T-102 Env:test Statements:[DROP TABLE demo_sessions_old] EstRows:0} Hash:52aaed91bc924649d75164bc8f8bf7aa57be5113ed4befc4ebd11e1cbe930a12 Checks:[{SQL:DROP TABLE demo_sessions_old Level:block Rules:[R1-禁止 DROP/TRUNCATE]}] RuleVerdict:reject Verdict:<nil> ModelError: Status:rejected Receipt:} RunID:sql/T-102@52aaed91bc92 ApprovalKey:} {Review:{Ticket:{ID:T-103 Env:test Statements:[TRUNCATE TABLE demo_audit_tmp] EstRows:0} Hash:e138d86b5efd3c1ee084f8538cebbb00db4079dccbfbb3feec9e2198d4f101b5 Checks:[{SQL:TRUNCATE TABLE demo_audit_tmp Level:block Rules:[R1-禁止 DROP/TRUNCATE]}] RuleVerdict:reject Verdict:<nil> ModelError: Status:rejected Receipt:} RunID:sql/T-103@e138d86b5efd ApprovalKey:} {Review:{Ticket:{ID:T-104 Env:test Statements:[ALTER TABLE demo_users ADD COLUMN level INT UPDATE demo_users SET level = 1 WHERE id < 100] EstRows:99} Hash:772a1f0262aa30bbe792c74437fcd376d10f13f092caccb303a7157e570c5ffc Checks:[{SQL:ALTER TABLE demo_users ADD COLUMN level INT Level:block Rules:[R2-同一工单不得混合 DDL 与 DML]} {SQL:UPDATE demo_users SET level = 1 WHERE id < 100 Level:block Rules:[R2-同一工单不得混合 DDL 与 DML]}] RuleVerdict:reject Verdict:<nil> ModelError: Status:rejected Receipt:} RunID:sql/T-104@772a1f0262aa ApprovalKey:} {Review:{Ticket:{ID:T-105 Env:test Statements:[UPDATE demo_orders SET status = 'closed'] EstRows:0} Hash:9ac7d763fc87493ad85d312fb3eb42d492b115fa38be4f2b9fa77517dad24407 Checks:[{SQL:UPDATE demo_orders SET status = 'closed' Level:block Rules:[R3-UPDATE/DELETE 必须带 WHERE]}] RuleVerdict:reject Verdict:<nil> ModelError: Status:rejected Receipt:} RunID:sql/T-105@9ac7d763fc87 ApprovalKey:} {Review:{Ticket:{ID:T-106 Env:test Statements:[DELETE FROM demo_events WHERE created_at < '2026-01-01'] EstRows:2400000} Hash:02376e662c3fcc8a414c9541961831b86205a32d92a1dac87024523b36f00919 Checks:[{SQL:DELETE FROM demo_events WHERE created_at < '2026-01-01' Level:warn Rules:[R5-自报影响行数 2400000 超过 10000]}] RuleVerdict:review Verdict:0xc00068a190 ModelError: Status:waiting Receipt:} RunID:sql/T-106@02376e662c3f ApprovalKey:47b2675edc669bfac52399f24f393f1230ddbcc7d9346f43f075b7f9d1b62297} {Review:{Ticket:{ID:T-107 Env:prod Statements:[UPDATE demo_users SET nickname = 'guest_42' WHERE id = 42] EstRows:1} Hash:f6e7463588d69558fcf07a2f15daa157391af463be83415c5552b4ba8e1a6cd2 Checks:[{SQL:UPDATE demo_users SET nickname = 'guest_42' WHERE id = 42 Level:ok Rules:[]}] RuleVerdict:pass Verdict:0xc00003a690 ModelError: Status:waiting Receipt:} RunID:sql/T-107@f6e7463588d6 ApprovalKey:b80f0e2e593f61088fe6aa3f4611308bb758b9a2d17267f8c6b8fc9397aab095} {Review:{Ticket:{ID:T-108 Env:test Statements:[UPDATE demo_flags SET enabled = 1 WHERE name = 'beta_search'] EstRows:1} Hash:2992e818392b041981dea4880bfb002784027437e03caf595ed7ca74575e7357 Checks:[{SQL:UPDATE demo_flags SET enabled = 1 WHERE name = 'beta_search' Level:ok Rules:[]}] RuleVerdict:pass Verdict:0xc00003b360 ModelError: Status:applied Receipt:APPLY-T-108-2992e818} RunID:sql/T-108@2992e818392b ApprovalKey:}] NewModelCalls:4 NewApplies:2 Budget:{ReservedRequests:4 KnownUsageEntries:4 UnknownUsageEntries:0 KnownTokens:{PromptTokens:1567 CompletionTokens:525 TotalTokens:2092 CachedTokens:0}}}
+--- PASS: TestLiveSQLReview (23.80s)
+=== RUN   TestScriptedModelFailureEscalates
+--- PASS: TestScriptedModelFailureEscalates (0.02s)
+=== RUN   TestCheckRules
+--- PASS: TestCheckRules (0.00s)
+=== RUN   TestParseVerdict
+--- PASS: TestParseVerdict (0.00s)
+=== RUN   TestApplyChangeIsIdempotent
+--- PASS: TestApplyChangeIsIdempotent (0.00s)
+=== RUN   TestScriptedBatch
+--- PASS: TestScriptedBatch (0.02s)
+=== RUN   TestScriptedApproveApplies
+--- PASS: TestScriptedApproveApplies (0.02s)
+=== RUN   TestScriptedEditBlocksApproval
+--- PASS: TestScriptedEditBlocksApproval (0.03s)
+=== RUN   TestScriptedRevertedEditApproves
+--- PASS: TestScriptedRevertedEditApproves (0.02s)
+=== RUN   TestScriptedNonStatementEditBlocksApproval
+=== RUN   TestScriptedNonStatementEditBlocksApproval/est_rows
+=== RUN   TestScriptedNonStatementEditBlocksApproval/env
+--- PASS: TestScriptedNonStatementEditBlocksApproval (0.05s)
+    --- PASS: TestScriptedNonStatementEditBlocksApproval/est_rows (0.02s)
+    --- PASS: TestScriptedNonStatementEditBlocksApproval/env (0.02s)
+=== RUN   TestScriptedEditBeforeAutoApplyInvalidates
+--- PASS: TestScriptedEditBeforeAutoApplyInvalidates (0.02s)
+=== RUN   TestLiveSQLReview
+    main_test.go:390: minimax/MiniMax-M3.1-Flash：{Outcomes:[{Review:{Ticket:{ID:T-101 Env:test Statements:[INSERT INTO demo_coupons (code, discount) VALUES ('WELCOME5', 5)] EstRows:1} Hash:97b02fc47dbc5d3c6e4ffb73d7116a84dbf7bc14dbeec52e2d3deacc14a4abfd Checks:[{SQL:INSERT INTO demo_coupons (code, discount) VALUES ('WELCOME5', 5) Level:ok Rules:[]}] RuleVerdict:pass Verdict:0xc00068be50 ModelError: Status:applied Receipt:APPLY-T-101-97b02fc4} RunID:sql/T-101@97b02fc47dbc ApprovalKey:} {Review:{Ticket:{ID:T-102 Env:test Statements:[DROP TABLE demo_sessions_old] EstRows:0} Hash:52aaed91bc924649d75164bc8f8bf7aa57be5113ed4befc4ebd11e1cbe930a12 Checks:[{SQL:DROP TABLE demo_sessions_old Level:block Rules:[R1-禁止 DROP/TRUNCATE]}] RuleVerdict:reject Verdict:<nil> ModelError: Status:rejected Receipt:} RunID:sql/T-102@52aaed91bc92 ApprovalKey:} {Review:{Ticket:{ID:T-103 Env:test Statements:[TRUNCATE TABLE demo_audit_tmp] EstRows:0} Hash:e138d86b5efd3c1ee084f8538cebbb00db4079dccbfbb3feec9e2198d4f101b5 Checks:[{SQL:TRUNCATE TABLE demo_audit_tmp Level:block Rules:[R1-禁止 DROP/TRUNCATE]}] RuleVerdict:reject Verdict:<nil> ModelError: Status:rejected Receipt:} RunID:sql/T-103@e138d86b5efd ApprovalKey:} {Review:{Ticket:{ID:T-104 Env:test Statements:[ALTER TABLE demo_users ADD COLUMN level INT UPDATE demo_users SET level = 1 WHERE id < 100] EstRows:99} Hash:772a1f0262aa30bbe792c74437fcd376d10f13f092caccb303a7157e570c5ffc Checks:[{SQL:ALTER TABLE demo_users ADD COLUMN level INT Level:block Rules:[R2-同一工单不得混合 DDL 与 DML]} {SQL:UPDATE demo_users SET level = 1 WHERE id < 100 Level:block Rules:[R2-同一工单不得混合 DDL 与 DML]}] RuleVerdict:reject Verdict:<nil> ModelError: Status:rejected Receipt:} RunID:sql/T-104@772a1f0262aa ApprovalKey:} {Review:{Ticket:{ID:T-105 Env:test Statements:[UPDATE demo_orders SET status = 'closed'] EstRows:0} Hash:9ac7d763fc87493ad85d312fb3eb42d492b115fa38be4f2b9fa77517dad24407 Checks:[{SQL:UPDATE demo_orders SET status = 'closed' Level:block Rules:[R3-UPDATE/DELETE 必须带 WHERE]}] RuleVerdict:reject Verdict:<nil> ModelError: Status:rejected Receipt:} RunID:sql/T-105@9ac7d763fc87 ApprovalKey:} {Review:{Ticket:{ID:T-106 Env:test Statements:[DELETE FROM demo_events WHERE created_at < '2026-01-01'] EstRows:2400000} Hash:02376e662c3fcc8a414c9541961831b86205a32d92a1dac87024523b36f00919 Checks:[{SQL:DELETE FROM demo_events WHERE created_at < '2026-01-01' Level:warn Rules:[R5-自报影响行数 2400000 超过 10000]}] RuleVerdict:review Verdict:0xc00048e190 ModelError: Status:waiting Receipt:} RunID:sql/T-106@02376e662c3f ApprovalKey:47b2675edc669bfac52399f24f393f1230ddbcc7d9346f43f075b7f9d1b62297} {Review:{Ticket:{ID:T-107 Env:prod Statements:[UPDATE demo_users SET nickname = 'guest_42' WHERE id = 42] EstRows:1} Hash:f6e7463588d69558fcf07a2f15daa157391af463be83415c5552b4ba8e1a6cd2 Checks:[{SQL:UPDATE demo_users SET nickname = 'guest_42' WHERE id = 42 Level:ok Rules:[]}] RuleVerdict:pass Verdict:0xc000314190 ModelError: Status:waiting Receipt:} RunID:sql/T-107@f6e7463588d6 ApprovalKey:b80f0e2e593f61088fe6aa3f4611308bb758b9a2d17267f8c6b8fc9397aab095} {Review:{Ticket:{ID:T-108 Env:test Statements:[UPDATE demo_flags SET enabled = 1 WHERE name = 'beta_search'] EstRows:1} Hash:2992e818392b041981dea4880bfb002784027437e03caf595ed7ca74575e7357 Checks:[{SQL:UPDATE demo_flags SET enabled = 1 WHERE name = 'beta_search' Level:ok Rules:[]}] RuleVerdict:pass Verdict:0xc000314a50 ModelError: Status:applied Receipt:APPLY-T-108-2992e818} RunID:sql/T-108@2992e818392b ApprovalKey:}] NewModelCalls:4 NewApplies:2 Budget:{ReservedRequests:4 KnownUsageEntries:4 UnknownUsageEntries:0 KnownTokens:{PromptTokens:1567 CompletionTokens:454 TotalTokens:2021 CachedTokens:0}}}
+--- PASS: TestLiveSQLReview (15.19s)
+=== RUN   TestScriptedModelFailureEscalates
+--- PASS: TestScriptedModelFailureEscalates (0.01s)
+PASS
+ok  	github.com/kart-io/goagent/examples/orchestration/ops/sql-review	40.373s
+exit=0
+### minimax capacity-review 17:04:27
+=== RUN   TestRulesAndGuard
+--- PASS: TestRulesAndGuard (0.00s)
+=== RUN   TestScriptedNormalMatrixAndReplay
+--- PASS: TestScriptedNormalMatrixAndReplay (0.02s)
+=== RUN   TestScriptedScreenBatchVoid
+=== RUN   TestScriptedScreenBatchVoid/多出_id
+=== RUN   TestScriptedScreenBatchVoid/证据不完整却给_scale
+=== RUN   TestScriptedScreenBatchVoid/非法_JSON
+=== RUN   TestScriptedScreenBatchVoid/字段名大小写不符
+=== RUN   TestScriptedScreenBatchVoid/evidence_complete_为_null
+=== RUN   TestScriptedScreenBatchVoid/漏掉_id
+=== RUN   TestScriptedScreenBatchVoid/重复_id
+--- PASS: TestScriptedScreenBatchVoid (0.06s)
+    --- PASS: TestScriptedScreenBatchVoid/多出_id (0.01s)
+    --- PASS: TestScriptedScreenBatchVoid/证据不完整却给_scale (0.01s)
+    --- PASS: TestScriptedScreenBatchVoid/非法_JSON (0.01s)
+    --- PASS: TestScriptedScreenBatchVoid/字段名大小写不符 (0.01s)
+    --- PASS: TestScriptedScreenBatchVoid/evidence_complete_为_null (0.01s)
+    --- PASS: TestScriptedScreenBatchVoid/漏掉_id (0.01s)
+    --- PASS: TestScriptedScreenBatchVoid/重复_id (0.01s)
+=== RUN   TestScriptedDeepDowngrade
+=== RUN   TestScriptedDeepDowngrade/比规则更激进或空操作
+--- PASS: TestScriptedDeepDowngrade (0.03s)
+    --- PASS: TestScriptedDeepDowngrade/比规则更激进或空操作 (0.01s)
+=== RUN   TestScriptedKeepNeverExecutable
+--- PASS: TestScriptedKeepNeverExecutable (0.01s)
+=== RUN   TestScriptedBudgetLimit
+--- PASS: TestScriptedBudgetLimit (0.01s)
+=== RUN   TestLiveCapacityReview
+    main_test.go:352: minimax/MiniMax-M3.1-Flash：{Items:[{ID:cap-a Rule:scale_down RulePlan:0xc000341470 Screen:scale_down Verdict:confirm Final:execute Plan:0xc0003a22e0 Reasons:[]} {ID:cap-b Rule:scale_up RulePlan:0xc0003414a0 Screen:scale_up Verdict:confirm Final:execute Plan:0xc000341eb0 Reasons:[]} {ID:cap-c Rule:keep RulePlan:<nil> Screen:keep Verdict: Final:keep Plan:<nil> Reasons:[]} {ID:cap-d Rule:scale_down RulePlan:0xc0003414d0 Screen:scale_down Verdict:confirm Final:execute Plan:0xc0003a2980 Reasons:[]} {ID:cap-e Rule:insufficient_evidence RulePlan:<nil> Screen:keep Verdict: Final:manual_review Plan:<nil> Reasons:[规则：证据不完整]} {ID:cap-f Rule:scale_up RulePlan:0xc000341500 Screen:scale_up Verdict:confirm Final:execute Plan:0xc00019e3e0 Reasons:[]} {ID:cap-g Rule:keep RulePlan:<nil> Screen:keep Verdict: Final:keep Plan:<nil> Reasons:[]} {ID:cap-h Rule:scale_down RulePlan:0xc000341520 Screen:scale_down Verdict:confirm Final:execute Plan:0xc000424480 Reasons:[]} {ID:cap-i Rule:insufficient_evidence RulePlan:<nil> Screen:keep Verdict: Final:manual_review Plan:<nil> Reasons:[规则：证据不完整]} {ID:cap-j Rule:keep RulePlan:<nil> Screen:keep Verdict: Final:keep Plan:<nil> Reasons:[]} {ID:cap-k Rule:scale_up RulePlan:0xc000341560 Screen:scale_up Verdict:confirm Final:execute Plan:0xc0002865e0 Reasons:[]} {ID:cap-l Rule:insufficient_evidence RulePlan:<nil> Screen:keep Verdict: Final:manual_review Plan:<nil> Reasons:[规则：证据不完整]}] BatchErrors:[] DeepReviews:6 ChildrenCreated:6 ChildrenClosed:6 NewModelCalls:8 Budget:{ReservedRequests:8 KnownUsageEntries:8 UnknownUsageEntries:0 KnownTokens:{PromptTokens:3837 CompletionTokens:1215 TotalTokens:5052 CachedTokens:0}}}
+--- PASS: TestLiveCapacityReview (11.68s)
+=== RUN   TestRulesAndGuard
+--- PASS: TestRulesAndGuard (0.00s)
+=== RUN   TestScriptedNormalMatrixAndReplay
+--- PASS: TestScriptedNormalMatrixAndReplay (0.02s)
+=== RUN   TestScriptedScreenBatchVoid
+=== RUN   TestScriptedScreenBatchVoid/证据不完整却给_scale
+=== RUN   TestScriptedScreenBatchVoid/非法_JSON
+=== RUN   TestScriptedScreenBatchVoid/字段名大小写不符
+=== RUN   TestScriptedScreenBatchVoid/evidence_complete_为_null
+=== RUN   TestScriptedScreenBatchVoid/漏掉_id
+=== RUN   TestScriptedScreenBatchVoid/重复_id
+=== RUN   TestScriptedScreenBatchVoid/多出_id
+--- PASS: TestScriptedScreenBatchVoid (0.05s)
+    --- PASS: TestScriptedScreenBatchVoid/证据不完整却给_scale (0.01s)
+    --- PASS: TestScriptedScreenBatchVoid/非法_JSON (0.01s)
+    --- PASS: TestScriptedScreenBatchVoid/字段名大小写不符 (0.01s)
+    --- PASS: TestScriptedScreenBatchVoid/evidence_complete_为_null (0.01s)
+    --- PASS: TestScriptedScreenBatchVoid/漏掉_id (0.01s)
+    --- PASS: TestScriptedScreenBatchVoid/重复_id (0.01s)
+    --- PASS: TestScriptedScreenBatchVoid/多出_id (0.01s)
+=== RUN   TestScriptedDeepDowngrade
+=== RUN   TestScriptedDeepDowngrade/比规则更激进或空操作
+--- PASS: TestScriptedDeepDowngrade (0.03s)
+    --- PASS: TestScriptedDeepDowngrade/比规则更激进或空操作 (0.01s)
+=== RUN   TestScriptedKeepNeverExecutable
+--- PASS: TestScriptedKeepNeverExecutable (0.01s)
+=== RUN   TestScriptedBudgetLimit
+--- PASS: TestScriptedBudgetLimit (0.01s)
+=== RUN   TestLiveCapacityReview
+    main_test.go:352: minimax/MiniMax-M3.1-Flash：{Items:[{ID:cap-a Rule:scale_down RulePlan:0xc00019f6c0 Screen:scale_down Verdict:confirm Final:execute Plan:0xc00019fe00 Reasons:[]} {ID:cap-b Rule:scale_up RulePlan:0xc00019f6f0 Screen:scale_up Verdict:confirm Final:execute Plan:0xc0004246b0 Reasons:[]} {ID:cap-c Rule:keep RulePlan:<nil> Screen:keep Verdict: Final:keep Plan:<nil> Reasons:[]} {ID:cap-d Rule:scale_down RulePlan:0xc00019f720 Screen:scale_down Verdict:confirm Final:execute Plan:0xc00019e9d0 Reasons:[]} {ID:cap-e Rule:insufficient_evidence RulePlan:<nil> Screen:keep Verdict: Final:manual_review Plan:<nil> Reasons:[规则：证据不完整]} {ID:cap-f Rule:scale_up RulePlan:0xc00019f750 Screen:scale_up Verdict:confirm Final:execute Plan:0xc000018f60 Reasons:[]} {ID:cap-g Rule:keep RulePlan:<nil> Screen:keep Verdict: Final:keep Plan:<nil> Reasons:[]} {ID:cap-h Rule:scale_down RulePlan:0xc00019f770 Screen:scale_down Verdict:confirm Final:execute Plan:0xc000424550 Reasons:[]} {ID:cap-i Rule:insufficient_evidence RulePlan:<nil> Screen:keep Verdict: Final:manual_review Plan:<nil> Reasons:[规则：证据不完整]} {ID:cap-j Rule:keep RulePlan:<nil> Screen:keep Verdict: Final:keep Plan:<nil> Reasons:[]} {ID:cap-k Rule:scale_up RulePlan:0xc00019f7b0 Screen:scale_up Verdict:confirm Final:execute Plan:0xc00019ee90 Reasons:[]} {ID:cap-l Rule:insufficient_evidence RulePlan:<nil> Screen:keep Verdict: Final:manual_review Plan:<nil> Reasons:[规则：证据不完整]}] BatchErrors:[] DeepReviews:6 ChildrenCreated:6 ChildrenClosed:6 NewModelCalls:8 Budget:{ReservedRequests:8 KnownUsageEntries:8 UnknownUsageEntries:0 KnownTokens:{PromptTokens:3837 CompletionTokens:1252 TotalTokens:5089 CachedTokens:0}}}
+--- PASS: TestLiveCapacityReview (13.99s)
+PASS
+ok  	github.com/kart-io/goagent/examples/orchestration/ops/capacity-review	26.965s
+exit=0
+### minimax cost-attribution 17:05:14
+=== RUN   TestCompareCents
+--- PASS: TestCompareCents (0.00s)
+=== RUN   TestMissingAmountNotZero
+--- PASS: TestMissingAmountNotZero (0.00s)
+=== RUN   TestNoDataBeforeStart
+--- PASS: TestNoDataBeforeStart (0.00s)
+=== RUN   TestNoDataAcrossAccounts
+--- PASS: TestNoDataAcrossAccounts (0.00s)
+=== RUN   TestZeroBaseUnranked
+--- PASS: TestZeroBaseUnranked (0.00s)
+=== RUN   TestCostQueryArgumentErrors
+--- PASS: TestCostQueryArgumentErrors (0.00s)
+=== RUN   TestCheckSummary
+--- PASS: TestCheckSummary (0.01s)
+=== RUN   TestCheckSummaryNumbers
+--- PASS: TestCheckSummaryNumbers (0.01s)
+=== RUN   TestCheckSummaryBypasses
+--- PASS: TestCheckSummaryBypasses (0.00s)
+=== RUN   TestCheckTop
+--- PASS: TestCheckTop (0.00s)
+=== RUN   TestScriptedConclusionAccepted
+--- PASS: TestScriptedConclusionAccepted (0.03s)
+=== RUN   TestScriptedAnswerBoundToConclusion
+--- PASS: TestScriptedAnswerBoundToConclusion (0.01s)
+=== RUN   TestScriptedTopRepair
+--- PASS: TestScriptedTopRepair (0.02s)
+=== RUN   TestScriptedArgumentRepair
+--- PASS: TestScriptedArgumentRepair (0.02s)
+=== RUN   TestScriptedSummaryRepair
+--- PASS: TestScriptedSummaryRepair (0.03s)
+=== RUN   TestScriptedRepairLimit
+--- PASS: TestScriptedRepairLimit (0.02s)
+=== RUN   TestScriptedUnauthorizedAborts
+--- PASS: TestScriptedUnauthorizedAborts (0.01s)
+=== RUN   TestLiveCostAttribution
+    main_test.go:375: minimax/MiniMax-M3.1-Flash：{Answer:结论：USD/ai
+        2026-09 相对 2026-08，环比涨幅（百分比）最大的币种是 USD（美元），最大的大类�� ai（AI）。依据：USD 维度 ai 大类由 600.00 增至 1125.00，delta 525.00，pct 87.5%，是所有参与排序项中涨幅最高的一项；其余项涨幅均远低于该值（USD compute 3.3%、storage 4.0%、network 5.0%、database 0.0%；CNY compute 8.1%、storage 2.4%、ai 4.0%、network -3.2%）。CNY 的 database 大类因基期金额不完整（missing: rds）处于 unranked，不参与排序，且缺失不等于 0，故无法判定其涨幅。跨币种不换汇、不相加，仅比较 pct。 Decision:USD/ai Accepted:0xc00003a410 Submissions:1 Repairs:0 Rejections:[] DataToolRuns:4 NewModelCalls:3 Budget:{ReservedRequests:3 KnownUsageEntries:3 UnknownUsageEntries:0 KnownTokens:{PromptTokens:4829 CompletionTokens:921 TotalTokens:5750 CachedTokens:0}}}
+--- PASS: TestLiveCostAttribution (9.25s)
+=== RUN   TestCompareCents
+--- PASS: TestCompareCents (0.00s)
+=== RUN   TestMissingAmountNotZero
+--- PASS: TestMissingAmountNotZero (0.00s)
+=== RUN   TestNoDataBeforeStart
+--- PASS: TestNoDataBeforeStart (0.00s)
+=== RUN   TestNoDataAcrossAccounts
+--- PASS: TestNoDataAcrossAccounts (0.00s)
+=== RUN   TestZeroBaseUnranked
+--- PASS: TestZeroBaseUnranked (0.00s)
+=== RUN   TestCostQueryArgumentErrors
+--- PASS: TestCostQueryArgumentErrors (0.00s)
+=== RUN   TestCheckSummary
+--- PASS: TestCheckSummary (0.00s)
+=== RUN   TestCheckSummaryNumbers
+--- PASS: TestCheckSummaryNumbers (0.00s)
+=== RUN   TestCheckSummaryBypasses
+--- PASS: TestCheckSummaryBypasses (0.00s)
+=== RUN   TestCheckTop
+--- PASS: TestCheckTop (0.00s)
+=== RUN   TestScriptedConclusionAccepted
+--- PASS: TestScriptedConclusionAccepted (0.03s)
+=== RUN   TestScriptedAnswerBoundToConclusion
+--- PASS: TestScriptedAnswerBoundToConclusion (0.01s)
+=== RUN   TestScriptedTopRepair
+--- PASS: TestScriptedTopRepair (0.02s)
+=== RUN   TestScriptedArgumentRepair
+--- PASS: TestScriptedArgumentRepair (0.02s)
+=== RUN   TestScriptedSummaryRepair
+--- PASS: TestScriptedSummaryRepair (0.02s)
+=== RUN   TestScriptedRepairLimit
+--- PASS: TestScriptedRepairLimit (0.02s)
+=== RUN   TestScriptedUnauthorizedAborts
+--- PASS: TestScriptedUnauthorizedAborts (0.01s)
+=== RUN   TestLiveCostAttribution
+    main_test.go:375: minimax/MiniMax-M3.1-Flash：{Answer:结论：USD/ai
+        环比涨幅最大的是 USD 币种下的 ai 大类：2026-09 为 1125.00，2026-08 为 600.00，环比涨幅 87.5%（delta 525.00），为全部已排名项中最高。CNY 侧涨幅最高的是 compute，环比 8.1%（base 12300.00 → current 13300.00，delta 1000.00），远低于 USD 的 ai。CNY 的 database 因金额不完整（缺失 rds）处于 unranked，不参与排序，缺失不等于 0。跨币种仅比较 pct，不做金额换汇或相加。 Decision:USD/ai Accepted:0xc000448280 Submissions:1 Repairs:0 Rejections:[] DataToolRuns:2 NewModelCalls:2 Budget:{ReservedRequests:2 KnownUsageEntries:2 UnknownUsageEntries:0 KnownTokens:{PromptTokens:2747 CompletionTokens:608 TotalTokens:3355 CachedTokens:0}}}
+--- PASS: TestLiveCostAttribution (6.94s)
+PASS
+ok  	github.com/kart-io/goagent/examples/orchestration/ops/cost-attribution	17.514s
+exit=0
+### minimax scoped-lookup 17:05:53
+=== RUN   TestScriptedScopedLookup
+--- PASS: TestScriptedScopedLookup (0.06s)
+=== RUN   TestScriptedAnswerBoundToConclusion
+--- PASS: TestScriptedAnswerBoundToConclusion (0.02s)
+=== RUN   TestScriptedPairCheck
+--- PASS: TestScriptedPairCheck (0.03s)
+=== RUN   TestScriptedRecoverAfterLookups
+--- PASS: TestScriptedRecoverAfterLookups (0.06s)
+=== RUN   TestScriptedUnofferedTool
+--- PASS: TestScriptedUnofferedTool (0.01s)
+=== RUN   TestScriptedNestedRejected
+--- PASS: TestScriptedNestedRejected (0.02s)
+=== RUN   TestScriptedRepair
+--- PASS: TestScriptedRepair (0.03s)
+=== RUN   TestScriptedRepairLimit
+--- PASS: TestScriptedRepairLimit (0.03s)
+=== RUN   TestScriptedInnerArgumentErrorBarrier
+=== RUN   TestScriptedInnerArgumentErrorBarrier/子模型改正
+=== RUN   TestScriptedInnerArgumentErrorBarrier/穿出子会话即中止
+--- PASS: TestScriptedInnerArgumentErrorBarrier (0.04s)
+    --- PASS: TestScriptedInnerArgumentErrorBarrier/子模型改正 (0.03s)
+    --- PASS: TestScriptedInnerArgumentErrorBarrier/穿出子会话即中止 (0.01s)
+=== RUN   TestLiveScopedLookup
+    main_test.go:365: minimax/MiniMax-M3.1-Flash：{Answer:结论：inventory-svc
+        操作：reserve
+        拖慢 order-svc 下单接口的下游服务是 inventory-svc，操作是 reserve。14:05 起 inventory-svc 的 reserve 出现内部 db.lock_wait（p99 约 760ms），使 reserve 整体 p99 升至约 810ms，并在 92% 的慢下单 trace 中出现；order-svc 侧表现为调用 inventory-svc.reserve 超时重试（14:09 起 deadline exceeded，2 次重试后失败），共同将下单 p99 从 180ms 推高至约 1.2s。相对地，pricing-svc（p99 126ms，仅出现在 5% 慢 trace 中）正常，payment-svc 无 ERROR 日志，非本次瓶颈。 Decision:inventory-svc Accepted:0xc00003a640 Submissions:1 Repairs:0 DataToolRuns:7 Rejections:[] Lookups:[{Focus:metrics Calls:[metrics_query metrics_query metrics_query] Refs:[E20a447 E58f14a E2e4348]} {Focus:logs Calls:[logs_query logs_query] Refs:[E2294a0 E264bca]} {Focus:traces Calls:[traces_query traces_query] Refs:[Edd9052 E8e04a4]}] LookupsCreated:3 LookupsDone:3 PeakLookups:3 NewModelCalls:8 Budget:{ReservedRequests:8 KnownUsageEntries:8 UnknownUsageEntries:0 KnownTokens:{PromptTokens:7247 CompletionTokens:1867 TotalTokens:9114 CachedTokens:0}}}
+--- PASS: TestLiveScopedLookup (19.67s)
+=== RUN   TestScriptedScopedLookup
+--- PASS: TestScriptedScopedLookup (0.06s)
+=== RUN   TestScriptedAnswerBoundToConclusion
+--- PASS: TestScriptedAnswerBoundToConclusion (0.02s)
+=== RUN   TestScriptedPairCheck
+--- PASS: TestScriptedPairCheck (0.03s)
+=== RUN   TestScriptedRecoverAfterLookups
+--- PASS: TestScriptedRecoverAfterLookups (0.06s)
+=== RUN   TestScriptedUnofferedTool
+--- PASS: TestScriptedUnofferedTool (0.01s)
+=== RUN   TestScriptedNestedRejected
+--- PASS: TestScriptedNestedRejected (0.02s)
+=== RUN   TestScriptedRepair
+--- PASS: TestScriptedRepair (0.03s)
+=== RUN   TestScriptedRepairLimit
+--- PASS: TestScriptedRepairLimit (0.03s)
+=== RUN   TestScriptedInnerArgumentErrorBarrier
+=== RUN   TestScriptedInnerArgumentErrorBarrier/子模型改正
+=== RUN   TestScriptedInnerArgumentErrorBarrier/穿出子会话即中止
+--- PASS: TestScriptedInnerArgumentErrorBarrier (0.04s)
+    --- PASS: TestScriptedInnerArgumentErrorBarrier/子模型改正 (0.02s)
+    --- PASS: TestScriptedInnerArgumentErrorBarrier/穿出子会话即中止 (0.01s)
+=== RUN   TestLiveScopedLookup
+    main_test.go:365: minimax/MiniMax-M3.1-Flash：{Answer:结论：inventory-svc
+        操作：reserve
+        下单变慢由 inventory-svc 的 reserve（库存预留）操作拖慢：其 p99 从 14:00 的 45ms 升至 14:10 的 820ms、14:20 的 870ms，error_rate 同步由 0.1% 升至 2.4%–2.6%，日志出现 "call inventory-svc.reserve failed after 2 retries: deadline exceeded"，重试叠加导致 order-svc 下单 p99 升至约 1.2s。对比项 payment-svc authorize（trace p99 126ms）与 pricing-svc quote（p99 21ms）均正常，payment-svc 亦无错误日志，可排除。 Decision:inventory-svc Accepted:0xc00003a410 Submissions:1 Repairs:0 DataToolRuns:8 Rejections:[] Lookups:[{Focus:metrics Calls:[metrics_query metrics_query] Refs:[Ebe3675 E6b2746]} {Focus:metrics Calls:[metrics_query metrics_query] Refs:[E39cc42 E66e903]} {Focus:logs Calls:[logs_query logs_query] Refs:[Eff7e0c E2b034d]} {Focus:traces Calls:[traces_query traces_query] Refs:[E7ecf7d E01b590]}] LookupsCreated:4 LookupsDone:4 PeakLookups:3 NewModelCalls:11 Budget:{ReservedRequests:11 KnownUsageEntries:11 UnknownUsageEntries:0 KnownTokens:{PromptTokens:10659 CompletionTokens:2786 TotalTokens:13445 CachedTokens:0}}}
+--- PASS: TestLiveScopedLookup (36.26s)
+PASS
+ok  	github.com/kart-io/goagent/examples/orchestration/ops/scoped-lookup	57.533s
+exit=0

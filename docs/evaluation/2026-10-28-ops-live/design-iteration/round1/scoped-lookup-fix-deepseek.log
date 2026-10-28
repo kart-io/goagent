@@ -1,0 +1,10 @@
+=== RUN   TestLiveScopedLookup
+    main_test.go:249: deepseek/deepseek-flash：{Answer:结论：inventory-svc
+        拖慢下单的是 inventory-svc 的 reserve（库存预占）操作：14:05 起其 p99 由 45ms 升至约 870ms，慢链路中 92% 含该 span，子 span db.lock_wait p99 760ms 表明是库存行锁等待所致，order-svc 侧出现 reserve 重试后 deadline exceeded；payment-svc、pricing-svc 无异常。 Decision:inventory-svc Accepted:0xc00017e640 Submissions:1 Repairs:0 DataToolRuns:9 Lookups:[{Focus:metrics Calls:[metrics_query metrics_query metrics_query metrics_query metrics_query] Refs:[E1 E2 E3 E4 E5]} {Focus:traces Calls:[traces_query traces_query] Refs:[E6 E7]} {Focus:logs Calls:[logs_query logs_query] Refs:[E8 E9]}] LookupsCreated:3 LookupsDone:3 PeakLookups:1 NewModelCalls:10 Budget:{ReservedRequests:10 KnownUsageEntries:10 UnknownUsageEntries:0 KnownTokens:{PromptTokens:10212 CompletionTokens:2314 TotalTokens:12526 CachedTokens:0}}}
+--- PASS: TestLiveScopedLookup (17.32s)
+=== RUN   TestLiveScopedLookup
+    main_test.go:249: deepseek/deepseek-flash：{Answer:结论：inventory-svc
+        拖慢下单的是 inventory-svc 的 reserve（库存预占）操作，其 p99 从 45ms 升至 820ms 且卡在 db.lock_wait 锁等待（p99 760ms），占 92% 慢下单 trace，而 payment-svc 的 authorize 始终平稳在 ~126ms。 Decision:inventory-svc Accepted:0xc00017eaa0 Submissions:1 Repairs:0 DataToolRuns:6 Lookups:[{Focus:metrics Calls:[metrics_query metrics_query] Refs:[E1 E2]} {Focus:logs Calls:[logs_query logs_query] Refs:[E3 E4]} {Focus:traces Calls:[traces_query traces_query] Refs:[E5 E6]}] LookupsCreated:3 LookupsDone:3 PeakLookups:1 NewModelCalls:9 Budget:{ReservedRequests:9 KnownUsageEntries:9 UnknownUsageEntries:0 KnownTokens:{PromptTokens:9231 CompletionTokens:2790 TotalTokens:12021 CachedTokens:0}}}
+--- PASS: TestLiveScopedLookup (20.38s)
+PASS
+ok  	github.com/kart-io/goagent/examples/orchestration/ops/scoped-lookup	38.724s

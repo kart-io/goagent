@@ -1,0 +1,17 @@
+=== RUN   TestLiveLogTriageCrashRecovery
+    main_test.go:86: gemini/gemini-2.5-flash 恢复：{Answer:错误码：PGW-504
+        上游：bank-gw-3
+        处置建议：上游网关bank-gw-3超时导致熔断，请排查bank-gw-3服务状态。 NewModelCalls:3 FetchRuns:0 PageReads:3 Offloaded:1 Budget:{ReservedRequests:5 KnownUsageEntries:5 UnknownUsageEntries:0 KnownTokens:{PromptTokens:12674 CompletionTokens:137 TotalTokens:13276 CachedTokens:0}}}
+--- PASS: TestLiveLogTriageCrashRecovery (6.29s)
+=== RUN   TestLiveLogTriageCrashRecovery
+    main_test.go:86: gemini/gemini-2.5-flash 恢复：{Answer:错误码：PGW-504
+        上游：bank-gw-3
+        处置建议：上游网关bank-gw-3超时，已熔断，请检查 bank-gw-3 服务状态。 NewModelCalls:3 FetchRuns:0 PageReads:3 Offloaded:1 Budget:{ReservedRequests:5 KnownUsageEntries:5 UnknownUsageEntries:0 KnownTokens:{PromptTokens:12597 CompletionTokens:137 TotalTokens:13096 CachedTokens:0}}}
+--- PASS: TestLiveLogTriageCrashRecovery (5.78s)
+=== RUN   TestLiveLogTriageCrashRecovery
+    main_test.go:86: gemini/gemini-2.5-flash 恢复：{Answer:错误码：PGW-504
+        上游：bank-gw-3
+        处置建议：上游网关超时，已熔断，请检查上游 bank-gw-3 服务。 NewModelCalls:3 FetchRuns:0 PageReads:3 Offloaded:1 Budget:{ReservedRequests:5 KnownUsageEntries:5 UnknownUsageEntries:0 KnownTokens:{PromptTokens:12699 CompletionTokens:133 TotalTokens:13234 CachedTokens:0}}}
+--- PASS: TestLiveLogTriageCrashRecovery (6.12s)
+PASS
+ok  	github.com/kart-io/goagent/examples/orchestration/live/log-triage	18.204s
