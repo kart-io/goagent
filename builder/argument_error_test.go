@@ -73,13 +73,68 @@ func TestArgumentErrorAbortsWhenDisabled(t *testing.T) {
 	require.Empty(t, calls)
 }
 
-// 直接返回工具不能把参数错误当作最终答案。
+// 直接返回工具传错参数：错误作为普通工具结果交还模型，改正后的调用直接结束，参数错误不会成为答案。
 func TestArgumentErrorNeverBecomesDirectAnswer(t *testing.T) {
-	model := nativeModel([]*llm.StreamChunk{{Done: true, FinishReason: "tool_calls", ToolCalls: []llm.ToolCall{nativeCall("a", "lookup", `{"id":""}`)}}})
-	agent, err := NewSimpleBuilder(model).WithTools(argumentTools(t, tools.DispatchConfig{ReturnArgumentErrors: true}, map[string]int{})...).
-		WithReturnDirectTools("lookup").WithMaxIterations(4).Build()
+	for _, persistent := range []bool{false, true} {
+		t.Run(map[bool]string{false: "非持久", true: "持久"}[persistent], func(t *testing.T) {
+			ctx := context.Background()
+			if persistent {
+				store, err := durable.NewFileStore(t.TempDir())
+				require.NoError(t, err)
+				ctx = durable.WithJournal(durable.WithExecutionKey(ctx, "direct-arg"), store)
+			}
+			model := nativeModel(
+				[]*llm.StreamChunk{{Done: true, FinishReason: "tool_calls", ToolCalls: []llm.ToolCall{nativeCall("a", "lookup", `{"id":""}`)}}},
+				[]*llm.StreamChunk{{Done: true, FinishReason: "tool_calls", ToolCalls: []llm.ToolCall{nativeCall("b", "lookup", `{"id":"k1"}`)}}},
+			)
+			calls := map[string]int{}
+			business := argumentTools(t, tools.DispatchConfig{ReturnArgumentErrors: true}, calls)
+			runs := 1
+			if persistent {
+				runs = 2
+			}
+			for range runs {
+				agent, err := NewSimpleBuilder(model).WithDurableScope("arg").WithTools(business...).
+					WithReturnDirectTools("lookup").WithMaxIterations(4).Build()
+				require.NoError(t, err)
+				out, err := agent.AsRunnable().Invoke(ctx, "question")
+				require.NoError(t, err)
+				require.Equal(t, "lookup:k1", out.Result)
+				require.Equal(t, "lookup", out.Metadata["return_direct_tool"])
+			}
+			require.Len(t, model.requests, 2, "持久模式第二次运行全部回放")
+			require.Equal(t, map[string]int{"lookup": 1}, calls)
+			second := model.requests[1].Messages
+			require.Equal(t, "a", second[len(second)-1].ToolCallID)
+			require.Contains(t, second[len(second)-1].Content, `"error":"invalid_arguments"`)
+		})
+	}
+}
+
+// 最后一轮直接返回工具仍传错参数：报额度耗尽并附带参数错误。
+func TestDirectArgumentErrorOnLastRoundExhausts(t *testing.T) {
+	model := nativeModel(
+		[]*llm.StreamChunk{{Done: true, FinishReason: "tool_calls", ToolCalls: []llm.ToolCall{nativeCall("a", "lookup", `{"id":""}`)}}},
+		[]*llm.StreamChunk{{Done: true, FinishReason: "tool_calls", ToolCalls: []llm.ToolCall{nativeCall("b", "lookup", `{}`)}}},
+	)
+	calls := map[string]int{}
+	agent, err := NewSimpleBuilder(model).WithTools(argumentTools(t, tools.DispatchConfig{ReturnArgumentErrors: true}, calls)...).
+		WithReturnDirectTools("lookup").WithMaxIterations(2).Build()
 	require.NoError(t, err)
 	_, err = agent.AsRunnable().Invoke(context.Background(), "question")
+	require.ErrorContains(t, err, "MaxIterations")
+	require.ErrorContains(t, err, `missing properties: ["id"]`)
+	require.Len(t, model.requests, 2)
+	require.Empty(t, calls)
+}
+
+// 直接返回工具的非参数错误失败结果仍然中止，不交还模型。
+func TestDirectToolNonArgumentFailureStillAborts(t *testing.T) {
+	model := nativeModel([]*llm.StreamChunk{{Done: true, FinishReason: "tool_calls", ToolCalls: []llm.ToolCall{nativeCall("id", "status", "{}")}}})
+	tool := &directResultTool{MockTool: NewMockTool("status", ""), output: &interfaces.ToolOutput{Result: map[string]any{"error": "other", "message": "失败"}}}
+	agent, err := NewSimpleBuilder(model).WithTools(tool).WithReturnDirectTools("status").WithMaxIterations(4).Build()
+	require.NoError(t, err)
+	_, err = agent.AsRunnable().Invoke(context.Background(), "状态")
 	require.ErrorContains(t, err, "未成功完成")
 	require.Len(t, model.requests, 1)
 }

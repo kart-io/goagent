@@ -58,6 +58,12 @@ type AgentConfig struct {
 	// ReturnDirectTools 允许单个工具调用直接提供最终答案；仅作用于原生工具流。
 	ReturnDirectTools []string
 
+	// EmptyAnswerRetries 是模型正常结束却返回空回答时允许重问的次数，仅作用于原生工具流；0 表示不重问。
+	EmptyAnswerRetries int
+
+	// ParallelToolCalls 限制同一轮可并发执行的工具调用数；0 表示只受工具自身限流，1 表示按顺序执行。
+	ParallelToolCalls int
+
 	// MaxIterations 限制推理步骤的最大次数
 	MaxIterations int
 
@@ -114,6 +120,28 @@ func (b *AgentBuilder[C, S]) WithDurableScope(scope string) *AgentBuilder[C, S] 
 // 启用者负责工具结果的格式、完整性与适用场景，模型输出格式指令不会再被执行。
 func (b *AgentBuilder[C, S]) WithReturnDirectTools(names ...string) *AgentBuilder[C, S] {
 	b.config.ReturnDirectTools = append([]string(nil), names...)
+	return b
+}
+
+// WithEmptyAnswerRetries 设置空回答重问次数（默认 0，不重问）。
+//
+// [Advanced] 模型以 stop 结束、没有正文也没有工具调用时，不追加空 assistant 消息，
+// 改为追加一条固定的 user 消息要求直接回答或调用工具，再请求下一轮。每次重问占用一次
+// MaxIterations 额度并消耗一次预算；超过 n 次或已是最后一轮时按原方式报错。
+// 持久模式下空回合按已完成记录，恢复时回放。负数视为 0。
+func (b *AgentBuilder[C, S]) WithEmptyAnswerRetries(n int) *AgentBuilder[C, S] {
+	b.config.EmptyAnswerRetries = max(n, 0)
+	return b
+}
+
+// WithParallelToolCalls 设置同一轮工具调用的并发上限（默认 0，不另设上限）。
+//
+// [Advanced] 仅作用于原生工具流。一轮有多个调用、且每个调用的工具都实现
+// interfaces.ConcurrentCallTool（如 Dispatcher.Tools）时并发执行，实际峰值还受工具自身
+// 限流（Dispatcher.MaxConcurrency）约束；含上下文策略工具时仍按顺序执行。n=1 关闭并发，负数视为 0。
+// 结果按模型给出的顺序交还模型；某个调用失败不取消其他调用，全部结束后返回顺序最靠前的错误。
+func (b *AgentBuilder[C, S]) WithParallelToolCalls(n int) *AgentBuilder[C, S] {
+	b.config.ParallelToolCalls = max(n, 0)
 	return b
 }
 

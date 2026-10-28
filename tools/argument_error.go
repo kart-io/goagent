@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+
+	"github.com/kart-io/goagent/interfaces"
 )
 
 // ArgumentError 表示模型生成的参数不合法。Message 会原样交给模型，不得包含内部细节；
@@ -120,4 +122,12 @@ func argumentErrorMessage(err error, settled *settledSet) (string, bool) {
 		return argumentErrorMessage(e.Unwrap(), settled)
 	}
 	return "", false
+}
+
+// ArgumentErrorResult 判断 out 是否为 Dispatcher 交还模型的参数错误结果，并返回其中的 message。
+func ArgumentErrorResult(out *interfaces.ToolOutput) (string, bool) {
+	if out == nil {
+		return "", false
+	}
+	return argumentResultMessage(out)
 }

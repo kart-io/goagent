@@ -695,3 +695,19 @@ func TestDispatcherNilContext(t *testing.T) {
 	require.EqualError(t, err, `tool "op" panicked`)
 	require.Nil(t, Settle(nil, nil))
 }
+
+func TestArgumentErrorResultRecognizesOnlyArgumentShape(t *testing.T) {
+	message, ok := ArgumentErrorResult(&interfaces.ToolOutput{Result: map[string]any{"error": "invalid_arguments", "message": "缺少 id"}})
+	require.True(t, ok)
+	require.Equal(t, "缺少 id", message)
+	for _, out := range []*interfaces.ToolOutput{
+		nil,
+		{Success: true, Result: map[string]any{"error": "invalid_arguments"}},
+		{Error: "失败", Result: map[string]any{"error": "invalid_arguments"}},
+		{Result: map[string]any{"error": "other"}},
+		{Result: "invalid_arguments"},
+	} {
+		_, ok := ArgumentErrorResult(out)
+		require.False(t, ok)
+	}
+}

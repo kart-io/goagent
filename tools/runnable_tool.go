@@ -26,9 +26,14 @@ type DurablePolicyProvider interface {
 	DurableOperationPolicy() durable.OperationPolicy
 }
 
+// DispatchTimeoutProvider 声明工具经 Dispatcher 调用时的超时，正值替代 DispatchConfig.Timeout，0 表示沿用它。
+type DispatchTimeoutProvider interface{ DispatchTimeout() time.Duration }
+
 // RunnableToolConfig defines trusted codecs and version identity. ModelInvoking is
 // a host declaration, not a mechanism to discover hidden SDK requests.
 // CleanupTimeout bounds OwnedRunnable.Close after parent cancellation; 0 means 5s.
+// Timeout 经 DispatchTimeoutProvider 交给 Dispatcher，0 表示沿用 Dispatcher 默认值；子 Agent 通常需要显式放宽。
+// 直接调用 Invoke 时它不生效，超时由调用方 ctx 决定。
 type RunnableToolConfig[I, O any] struct {
 	Name, Description, ArgsSchema, Version string
 	Decode                                 func(map[string]any) (I, error)
@@ -36,6 +41,7 @@ type RunnableToolConfig[I, O any] struct {
 	ModelInvoking                          bool
 	MaxDepth                               int
 	CleanupTimeout                         time.Duration
+	Timeout                                time.Duration
 }
 type runnableTool[I, O any] struct {
 	config  RunnableToolConfig[I, O]
@@ -87,8 +93,8 @@ func nilRunnable(value any) bool {
 	return false
 }
 func newRunnableTool[I, O any](cfg RunnableToolConfig[I, O]) (*runnableTool[I, O], error) {
-	if cfg.Name == "" || strings.TrimSpace(cfg.Name) != cfg.Name || cfg.Version == "" || cfg.Decode == nil || cfg.Encode == nil || cfg.MaxDepth < 0 || cfg.CleanupTimeout < 0 {
-		return nil, fmt.Errorf("tool requires name, version, codecs, valid depth and cleanup timeout")
+	if cfg.Name == "" || strings.TrimSpace(cfg.Name) != cfg.Name || cfg.Version == "" || cfg.Decode == nil || cfg.Encode == nil || cfg.MaxDepth < 0 || cfg.CleanupTimeout < 0 || cfg.Timeout < 0 {
+		return nil, fmt.Errorf("tool requires name, version, codecs, valid depth, cleanup timeout and timeout")
 	}
 	var schema jsonschema.Schema
 	if err := json.Unmarshal([]byte(cfg.ArgsSchema), &schema); err != nil {
@@ -116,6 +122,7 @@ func (t *runnableTool[I, O]) DurableIntentVersion() string { return t.config.Ver
 func (t *runnableTool[I, O]) DurableOperationPolicy() durable.OperationPolicy {
 	return durable.OperationPolicy{MaxAttempts: 1}
 }
+func (t *runnableTool[I, O]) DispatchTimeout() time.Duration { return t.config.Timeout }
 func (t *runnableTool[I, O]) Invoke(ctx context.Context, input *interfaces.ToolInput) (out *interfaces.ToolOutput, err error) {
 	defer func() {
 		if v := recover(); v != nil {

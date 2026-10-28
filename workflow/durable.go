@@ -33,6 +33,17 @@ type DurableGraph[T any] struct {
 	store         durable.Store
 	version, plan string
 	approvals     map[string]bool
+	beforeApprove func(context.Context, string, *GraphSnapshot[T]) error
+}
+
+// DurableOption 配置与状态类型 T 相关的持久图行为。
+type DurableOption[T any] func(*DurableGraph[T])
+
+// WithBeforeApprove 在运行锁内、批准生效前调用 fn，用于核对暂停期间外部数据是否被改动
+// （先 Snapshot 再 Run 的两次加锁之间存在窗口）。fn 返回错误或 panic 时拒绝本次批准且不改动状态，
+// 之后仍可再次以正确条件批准。fn 拿到的是锁内最新检查点的独立副本，修改它不影响运行。
+func WithBeforeApprove[T any](fn func(ctx context.Context, id string, snap *GraphSnapshot[T]) error) DurableOption[T] {
+	return func(d *DurableGraph[T]) { d.beforeApprove = fn }
 }
 
 // GraphSnapshot exposes continuation and business state without the storage envelope.
@@ -65,7 +76,7 @@ func graphDigest(value any) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func (g *Graph[T]) CompileDurable(ctx context.Context, cfg DurableConfig) (*DurableGraph[T], error) {
+func (g *Graph[T]) CompileDurable(ctx context.Context, cfg DurableConfig, opts ...DurableOption[T]) (*DurableGraph[T], error) {
 	if cfg.Store == nil || cfg.Version == "" {
 		return nil, fmt.Errorf("durable graph requires store and version")
 	}
@@ -100,7 +111,11 @@ func (g *Graph[T]) CompileDurable(ctx context.Context, cfg DurableConfig) (*Dura
 		Approvals map[string]bool
 		Parallel  map[string][]string `json:",omitempty"`
 	}{"goagent-graph-v1", cfg.Version, graph.config, slices.Sorted(maps.Keys(graph.nodes)), graph.edges, branches, approvals, parallel}
-	return &DurableGraph[T]{graph: graph, store: cfg.Store, version: cfg.Version, plan: graphDigest(descriptor), approvals: approvals}, nil
+	d := &DurableGraph[T]{graph: graph, store: cfg.Store, version: cfg.Version, plan: graphDigest(descriptor), approvals: approvals}
+	for _, opt := range opts {
+		opt(d)
+	}
+	return d, nil
 }
 
 func publicGraphSnapshot[T any](s *durable.Snapshot, state graphState[T]) *GraphSnapshot[T] {
@@ -166,6 +181,11 @@ func (d *DurableGraph[T]) run(ctx context.Context, id string, initial T, approva
 	result = publicGraphSnapshot(checkpoint, state)
 	if approvalKey != "" && (!checkpoint.Waiting || checkpoint.Key != approvalKey) {
 		return result, fmt.Errorf("approval does not match waiting node")
+	}
+	if approvalKey != "" && d.beforeApprove != nil {
+		if err = d.checkBeforeApprove(ctx, id, checkpoint); err != nil {
+			return result, err
+		}
 	}
 	// Save using fresh snapshots; failed writes leave the last acknowledged state.
 	save := func(next durable.Snapshot, nextState graphState[T]) error {
@@ -293,6 +313,23 @@ func (d *DurableGraph[T]) run(ctx context.Context, id string, initial T, approva
 		}
 	}
 	return result, nil
+}
+
+func (d *DurableGraph[T]) checkBeforeApprove(ctx context.Context, id string, checkpoint *durable.Snapshot) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("批准前置校验 panic: %v", r)
+		}
+	}()
+	// 重新解码出独立副本，避免钩子修改的状态随后续 Save 写入检查点。
+	state, err := d.decodeCheckpoint(id, checkpoint)
+	if err != nil {
+		return err
+	}
+	if err = d.beforeApprove(ctx, id, publicGraphSnapshot(checkpoint, state)); err != nil {
+		return fmt.Errorf("批准前置校验拒绝: %w", err)
+	}
+	return nil
 }
 
 func (d *DurableGraph[T]) decodeCheckpoint(id string, checkpoint *durable.Snapshot) (state graphState[T], err error) {

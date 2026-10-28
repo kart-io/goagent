@@ -7,7 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking
+
+- Builder 原生工具流默认并发执行同一轮的多个工具调用：每个调用的工具都实现新增的 `interfaces.ConcurrentCallTool`（`Dispatcher.Tools()` 已实现）时并发派发，峰值为 `min(WithParallelToolCalls 上限, Dispatcher.MaxConcurrency)`；含上下文策略工具或任一工具未声明并发能力时仍按顺序执行。工具消息与 `tool_start`/`tool_end` 事件仍按模型给出的顺序（`tool_start` 全部在派发前发出，`tool_end` 全部在结束后发出）。某个调用失败不取消其他调用，全部结束后返回顺序最靠前的错误。宿主在工具内部按执行顺序分配编号、共享按调用顺序应答的脚本模型、或假设同轮工具串行的代码会变得不确定；需要旧行为时设置 `WithParallelToolCalls(1)`。
+
 ### Added
+
+- Builder 新增 `WithParallelToolCalls(n)`（默认 0 不另设上限，1 关闭并发）与标记接口 `interfaces.ConcurrentCallTool`。
+
+- Builder 新增 `WithEmptyAnswerRetries(n)`（默认 0，关闭时行为与日志不变）：模型以 stop 结束且无正文、无工具调用时，不追加空 assistant 消息，改为追加固定 user 消息重问；每次重问占用一次 MaxIterations 额度并消耗一次预算，持久模式下空回合按已完成记录、恢复时回放。超过次数或已是最后一轮仍按原方式报错。
+
+- 新增 `tools.ArgumentErrorResult`，识别 Dispatcher 交还模型的参数错误结果。
+
+- `DispatchConfig.OnResult` 在每次工具结果（首次执行、日志回放、交还模型的参数错误）后同步回调 `tools.DispatchResult`，宿主可在崩溃恢复后按调用顺序重建证据编号等状态；回调失败或 panic 中止本次调用，不影响日志。
+
+- 新增 `tools.DispatchTimeoutProvider` 与 `RunnableToolConfig.Timeout`，工具可声明经 Dispatcher 调用时的超时，子 Agent 不再受 30 秒默认值限制。
+
+- 持久图新增 `workflow.WithBeforeApprove`（`CompileDurable` 增加可变参数 `opts ...DurableOption[T]`），`durable.Runner` 新增 `BeforeApprove`：在运行锁内、批准生效前核对外部数据，拒绝或 panic 时不改动检查点。
+
+- 预算新增 `Controller.Remaining(ctx)`；nil 控制器返回 `budget.Unlimited`。
 
 - 批量评测增加按预先声明任务契约选择直返/推理的模式，，原始答案标签不参与路由。
 
@@ -25,6 +43,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Real streaming agent support for structured and token-only clients, including upstream cancellation on reader close.
 
 ### Changed
+
+- `DispatchConfig.Timeout` 改为单次调用的默认超时，工具声明的超时替代它；计时从取得并发槽位开始，不再包含排队。需要限制排队加执行总耗时的调用方应在 ctx 上设置截止时间。
+- 原生工具循环的结构化工具结果不再做 HTML 转义，`<`、`>`、`&` 原样交给模型与直接答案，也不带尾随换行。结果含这些字符且运行到一半的持久运行，恢复时后续模型回合的意图摘要会变化而被拒绝；升级前需排空这类运行。
+
+- 直接返回工具遇到 Dispatcher 交还的参数错误时，不再中止，改为按普通工具结果交还模型改正并继续循环；最后一轮仍传错时按 MaxIterations 耗尽报错并附带参数错误。其他失败仍中止。
+
+- 持久模式的无效工具计划按原因分别报错（缺少 ID、ID 重复、未提供的工具、参数不是 JSON 对象）并带工具名，替代统一的 `model returned invalid tool plan`；日志仍只记录失败类别。
 
 - Builder 原生工具循环在已有工具结果且只剩最后一次请求时停止提供工具，将额度用于最终回答，避免无预算收尾的重复调用；应用评测提示区分原样返回和证据推理。
 

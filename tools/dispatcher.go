@@ -17,20 +17,36 @@ import (
 	"github.com/kart-io/goagent/interfaces"
 )
 
-// DispatchConfig is immutable after construction. Timeout includes queueing;
-// tools must honor context. No implicit retries or background timeout workers.
+// DispatchConfig is immutable after construction. Tools must honor context.
+// No implicit retries or background timeout workers.
 type DispatchConfig struct {
 	// MaxAttempts bounds explicit resume attempts for a journaled CallID.
 	// Default 3. No retries occur inside a single Invoke.
 	MaxAttempts    int
-	MaxConcurrency int           // default 4, shared by all calls on this dispatcher
-	Timeout        time.Duration // default 30 seconds
+	MaxConcurrency int // default 4, shared by all calls on this dispatcher
+	// Timeout 是单次调用的默认超时，默认 30 秒；实现 DispatchTimeoutProvider 的工具以自己声明的值替代它，可长可短。
+	// 计时从取得并发槽位开始，不含排队；排队只受调用方 ctx 约束，每个占用槽位的调用都有超时，排队因此有界。
+	Timeout time.Duration
 	// Authorize 在开启 ReturnArgumentErrors 时也会对参数不合法的模型调用执行，可能收到不满足 Schema 的参数。
 	Authorize func(context.Context, string, *interfaces.ToolInput) error
+	// OnResult 在每次得到结果后、tool_end 之前同步调用：首次执行、日志回放和交还模型的参数错误结果都会触发，
+	// 宿主据此在崩溃恢复后按调用顺序重建自身状态（如证据编号）。返回错误或 panic 时本次调用失败，
+	// 但已写入的日志不变，恢复时回放会再次触发。同一 Dispatcher 的并发调用会并发触发它，宿主需自行加锁。
+	OnResult func(context.Context, DispatchResult) error
 	// ReturnArgumentErrors 只作用于 Tools() 返回的模型调用路径：参数校验失败和工具返回的 *ArgumentError
 	// 不再中止，而是返回 Success=false、Error 为空的结果交给模型改正，并按已完成写入日志。
 	// Invoke 与 AsRunnable 不受影响，仍以 error 报告参数错误。授权、超时、深度和重入错误仍然中止。
 	ReturnArgumentErrors bool
+}
+
+// DispatchResult 是交给 OnResult 的一次调用结果。Args 与 Output 归调用方所有，回调不得修改。
+// ExecutionKey 在带 CallID 的持久调用中是由父键和 CallID 派生的子键，重启后保持不变，可作为宿主侧去重键。
+type DispatchResult struct {
+	Name, CallID, ExecutionKey string
+	Args                       map[string]any
+	// Output 在持久调用中总是从日志解码（数字为 json.Number），首次执行与回放得到相同的值。
+	Output   *interfaces.ToolOutput
+	Replayed bool
 }
 
 // ToolRequest selects a registered tool. Identity and execution metadata must
@@ -46,6 +62,7 @@ type dispatchEntry struct {
 	resolved                  *jsonschema.Resolved
 	version                   string
 	policy                    *durable.OperationPolicy
+	timeout                   time.Duration
 }
 
 // Dispatcher snapshots a Registry and provides one execution path for native
@@ -104,7 +121,14 @@ func NewDispatcher(registry *Registry, cfg DispatchConfig) (dispatcher *Dispatch
 		if e != nil {
 			return nil, fmt.Errorf("tool %q schema: %w", name, e)
 		}
-		entry := dispatchEntry{tool: tool, name: name, description: tool.Description(), schema: raw, resolved: resolved}
+		entry := dispatchEntry{tool: tool, name: name, description: tool.Description(), schema: raw, resolved: resolved, timeout: cfg.Timeout}
+		if v, ok := tool.(DispatchTimeoutProvider); ok {
+			if timeout := v.DispatchTimeout(); timeout > 0 {
+				entry.timeout = timeout
+			} else if timeout < 0 {
+				return nil, fmt.Errorf("tool %q timeout must not be negative", name)
+			}
+		}
 		if v, ok := tool.(DurableIntentVersioner); ok {
 			entry.version = v.DurableIntentVersion()
 			if entry.version == "" {
@@ -170,8 +194,6 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 	if recoverArgs {
 		ctx, settled = withSettledSet(ctx)
 	}
-	ctx, cancel := context.WithTimeout(ctx, d.config.Timeout)
-	defer cancel()
 	if err = ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -201,6 +223,9 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
+	ctx, cancel := context.WithTimeout(ctx, entry.timeout)
+	defer cancel()
+	input.Context = ctx
 	if err = ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -324,6 +349,19 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 	if err != nil {
 		return nil, err
 	}
+	if d.config.OnResult != nil {
+		err = func() (e error) {
+			defer func() {
+				if recover() != nil {
+					e = fmt.Errorf("tool %q result callback panicked", req.Name)
+				}
+			}()
+			return d.config.OnResult(ctx, DispatchResult{Name: req.Name, CallID: input.CallID, ExecutionKey: input.ExecutionKey, Args: input.Args, Output: out, Replayed: replayed})
+		}()
+		if err != nil {
+			return nil, err
+		}
+	}
 	if err = emit(&core.StreamEvent{Type: "tool_end", Tool: req.Name}); err != nil {
 		return nil, err
 	}
@@ -389,3 +427,6 @@ func (t *dispatchedTool) ArgsSchema() string         { return t.entry.schema }
 func (t *dispatchedTool) Invoke(ctx context.Context, in *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 	return t.d.invoke(ctx, ToolRequest{Name: t.entry.name, Input: in}, func(*core.StreamEvent) error { return nil }, t.d.config.ReturnArgumentErrors)
 }
+
+// SupportsConcurrentCalls 实现 interfaces.ConcurrentCallTool：同一轮的多个调用共享 MaxConcurrency 限流，可并发执行。
+func (t *dispatchedTool) SupportsConcurrentCalls() bool { return true }

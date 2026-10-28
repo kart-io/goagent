@@ -108,3 +108,50 @@ func TestBudgetSaveFailureDoesNotAdmit(t *testing.T) {
 	_, err = NewDurable(Config{RootKey: "x", Version: "v1", MaxModelRequests: 2}, failingStore{s})
 	require.ErrorContains(t, err, "save failed")
 }
+
+func TestRemainingDecreasesAfterReserve(t *testing.T) {
+	ctx := context.Background()
+	mem, err := New(Config{RootKey: "run", Version: "v1", MaxModelRequests: 2})
+	require.NoError(t, err)
+	store, err := durable.NewFileStore(t.TempDir())
+	require.NoError(t, err)
+	cfg := Config{RootKey: "run", Version: "v1", MaxModelRequests: 2}
+	dur, err := NewDurable(cfg, store)
+	require.NoError(t, err)
+	for _, c := range []*Controller{mem, dur} {
+		n, err := c.Remaining(ctx)
+		require.NoError(t, err)
+		require.Equal(t, 2, n)
+		require.NoError(t, c.Reserve(ctx, "a"))
+		n, err = c.Remaining(ctx)
+		require.NoError(t, err)
+		require.Equal(t, 1, n)
+		// 重复预留被拒绝时余量不变。
+		require.ErrorIs(t, c.Reserve(ctx, "a"), ErrReservationExists)
+		require.NoError(t, c.Reserve(ctx, "b"))
+		require.ErrorIs(t, c.Reserve(ctx, "c"), ErrBudgetExceeded)
+		n, err = c.Remaining(ctx)
+		require.NoError(t, err)
+		require.Zero(t, n)
+	}
+	// 持久余量来自 Store：另一个控制器实例（模拟另一进程）看到同一账本。
+	other, err := NewDurable(cfg, store)
+	require.NoError(t, err)
+	n, err := other.Remaining(ctx)
+	require.NoError(t, err)
+	require.Zero(t, n)
+}
+
+func TestRemainingUnlimitedAndCanceled(t *testing.T) {
+	c, ok := FromContext(context.Background())
+	require.False(t, ok)
+	n, err := c.Remaining(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, Unlimited, n)
+	bound, err := New(Config{RootKey: "run", Version: "v1", MaxModelRequests: 1})
+	require.NoError(t, err)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err = bound.Remaining(ctx)
+	require.ErrorIs(t, err, context.Canceled)
+}

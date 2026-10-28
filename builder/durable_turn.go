@@ -15,7 +15,8 @@ import (
 	"github.com/kart-io/goagent/llm"
 )
 
-func readJournaledTurn(ctx context.Context, round int, client llm.StreamClient, req *llm.CompletionRequest, tools []interfaces.Tool, emit func(AgentEvent) error) (*llm.StreamChunk, error) {
+// allowEmpty 为真时，正常结束的空回答按已完成记录，由调用方重问。
+func readJournaledTurn(ctx context.Context, round int, client llm.StreamClient, req *llm.CompletionRequest, tools []interfaces.Tool, allowEmpty bool, emit func(AgentEvent) error) (*llm.StreamChunk, error) {
 	invoke := func(callCtx context.Context) (*llm.StreamChunk, error) {
 		var stream <-chan *llm.StreamChunk
 		var err error
@@ -54,12 +55,15 @@ func readJournaledTurn(ctx context.Context, round int, client llm.StreamClient, 
 			return nil, err
 		}
 	}
-	return modelOperation(ctx, fmt.Sprintf("model/turn/%d", round), intent, invoke, func(turn *llm.StreamChunk) error { return validateDurableTurn(turn, tools) }, emit)
+	return modelOperation(ctx, fmt.Sprintf("model/turn/%d", round), intent, invoke, func(turn *llm.StreamChunk) error { return validateDurableTurn(turn, tools, allowEmpty) }, emit)
 }
 
-func validateDurableTurn(turn *llm.StreamChunk, tools []interfaces.Tool) error {
+func validateDurableTurn(turn *llm.StreamChunk, tools []interfaces.Tool, allowEmpty bool) error {
 	if turn.FinishReason != "stop" && turn.FinishReason != "tool_calls" {
 		return fmt.Errorf("incomplete model turn")
+	}
+	if allowEmpty && isEmptyAnswer(turn) {
+		return nil
 	}
 	if len(turn.ToolCalls) == 0 {
 		if turn.FinishReason == "tool_calls" || strings.TrimSpace(turn.Content) == "" {
@@ -81,9 +85,19 @@ func validateDurableTurn(turn *llm.StreamChunk, tools []interfaces.Tool) error {
 		known[t.Name()] = resolved
 	}
 	for _, call := range turn.ToolCalls {
+		// 错误文本只返回给调用方，日志只记录 FailureKind。
+		name := call.Function.Name
+		switch {
+		case call.ID == "":
+			return fmt.Errorf("模型返回的工具 %q 调用缺少 ID", name)
+		case ids[call.ID]:
+			return fmt.Errorf("模型返回的工具 %q 调用 ID 重复", name)
+		case known[name] == nil:
+			return fmt.Errorf("模型请求了未提供的工具 %q", name)
+		}
 		var args map[string]any
-		if call.ID == "" || ids[call.ID] || known[call.Function.Name] == nil || json.Unmarshal([]byte(call.Function.Arguments), &args) != nil || args == nil {
-			return fmt.Errorf("model returned invalid tool plan")
+		if json.Unmarshal([]byte(call.Function.Arguments), &args) != nil || args == nil {
+			return fmt.Errorf("模型返回的工具 %q 参数不是 JSON 对象", name)
 		}
 		// 工具会把参数错误作为结果交还模型时，回合照常提交。
 		returns, ok := byName[call.Function.Name].(interfaces.ArgumentErrorTool)

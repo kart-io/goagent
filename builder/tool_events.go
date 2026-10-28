@@ -1,6 +1,7 @@
 package builder
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -8,15 +9,25 @@ import (
 	"io"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/middleware"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/tools"
 )
 
 // maxFailureRunes 限制 MaxIterations 报错附带的工具失败文本长度。
 const maxFailureRunes = 500
+
+// emptyAnswerPrompt 是空回答后追加的固定重问消息；固定文本保证持久恢复时意图不变。
+const emptyAnswerPrompt = "上一轮没有输出，请直接给出最终回答或调用工具。"
+
+// isEmptyAnswer 判断模型正常结束却既无正文也无工具调用。
+func isEmptyAnswer(turn *llm.StreamChunk) bool {
+	return turn.FinishReason == "stop" && len(turn.ToolCalls) == 0 && strings.TrimSpace(turn.Content) == ""
+}
 
 // streamMessages 保留消息角色，系统指令与证据各发送一次，避免重复包装。
 func (a *ConfigurableAgent[C, S]) streamMessages(ctx context.Context, input, evidence string) []llm.Message {
@@ -65,6 +76,7 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 		}
 		return fmt.Errorf("模型调用达到 MaxIterations 上限，尚未生成答案")
 	}
+	emptyRetries := 0
 	callsUsed := 0
 	if summary != nil {
 		callsUsed = 1
@@ -119,7 +131,9 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 			}
 			metadata["final_answer_only"] = len(tools) == 0
 		}
-		turn, err := readJournaledTurn(turnCtx, round, client, &llm.CompletionRequest{Messages: messages, MaxTokens: a.config.MaxTokens, Temperature: a.config.Temperature}, tools, emit)
+		// 重问需要下一轮额度，最后一轮的空回答按原方式报错。
+		allowEmpty := emptyRetries < a.config.EmptyAnswerRetries && round+1 < a.config.MaxIterations
+		turn, err := readJournaledTurn(turnCtx, round, client, &llm.CompletionRequest{Messages: messages, MaxTokens: a.config.MaxTokens, Temperature: a.config.Temperature}, tools, allowEmpty, emit)
 		cancel()
 		if err != nil {
 			return nil, err
@@ -136,6 +150,13 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 				return nil, fmt.Errorf("最终回答回合未提供工具，模型仍返回工具调用；%w", exhausted())
 			}
 			return nil, fmt.Errorf("最终回答回合未提供工具，模型仍返回工具调用")
+		}
+		if allowEmpty && isEmptyAnswer(turn) {
+			// 不追加空 assistant 消息：部分提供方拒绝空内容。
+			emptyRetries++
+			metadata["empty_answer_retries"] = emptyRetries
+			messages = append(messages, llm.UserMessage(emptyAnswerPrompt))
+			continue
 		}
 		if len(turn.ToolCalls) == 0 {
 			if turn.FinishReason == "tool_calls" || strings.TrimSpace(turn.Content) == "" {
@@ -175,21 +196,42 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 			}
 		}
 		messages = append(messages, llm.Message{Role: "assistant", Content: turn.Content, ReasoningContent: turn.ReasoningContent, ToolCalls: turn.ToolCalls, ProviderState: turn.ProviderState})
-		for i, call := range calls {
+		invoke := func(call ToolCall) (*interfaces.ToolOutput, error) {
+			if call.Name == contextReadTool && a.config.ContextPolicy != nil && a.config.ContextPolicy.MaxToolResultRunes > 0 {
+				return policy.Invoke(ctx, &interfaces.ToolInput{Args: call.Input})
+			}
+			if tool, ok := runtime.byName[call.Name]; ok {
+				return tool.Invoke(ctx, &interfaces.ToolInput{Args: call.Input, CallID: call.ID})
+			}
+			return a.invokeToolCall(ctx, call)
+		}
+		// 并发时 tool_start 在派发前按序发出，tool_end 在全部结束后按序发出，事件顺序与执行时序无关。
+		parallel := a.concurrentCalls(calls, runtime)
+		var results []toolCallResult
+		if parallel {
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
-			if err := emit(AgentEvent{Type: "step", Step: "tool_start", Tool: call.Name}); err != nil {
-				return nil, err
+			for _, call := range calls {
+				if err := emit(AgentEvent{Type: "step", Step: "tool_start", Tool: call.Name}); err != nil {
+					return nil, err
+				}
 			}
+			results = invokeConcurrently(calls, a.config.ParallelToolCalls, invoke)
+		}
+		for i, call := range calls {
 			var output *interfaces.ToolOutput
 			var err error
-			if call.Name == contextReadTool && a.config.ContextPolicy != nil && a.config.ContextPolicy.MaxToolResultRunes > 0 {
-				output, err = policy.Invoke(ctx, &interfaces.ToolInput{Args: call.Input})
-			} else if tool, ok := runtime.byName[call.Name]; ok {
-				output, err = tool.Invoke(ctx, &interfaces.ToolInput{Args: call.Input, CallID: call.ID})
+			if parallel {
+				output, err = results[i].output, results[i].err
 			} else {
-				output, err = a.invokeToolCall(ctx, call)
+				if err := ctx.Err(); err != nil {
+					return nil, err
+				}
+				if err := emit(AgentEvent{Type: "step", Step: "tool_start", Tool: call.Name}); err != nil {
+					return nil, err
+				}
+				output, err = invoke(call)
 			}
 			if err != nil {
 				return nil, err
@@ -197,16 +239,17 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 			if output == nil {
 				return nil, fmt.Errorf("tool returned nil output")
 			}
+			// Dispatcher 交还的参数错误按普通工具结果交给模型改正，其他失败不能成为答案。
 			if direct && !output.Success {
-				return nil, fmt.Errorf("直接返回工具 %s 未成功完成", call.Name)
+				if !isArgumentErrorResult(output) {
+					return nil, fmt.Errorf("直接返回工具 %s 未成功完成", call.Name)
+				}
 			}
 			text, isText := output.Result.(string)
 			if !isText {
-				data, err := json.Marshal(output.Result)
-				if err != nil {
+				if text, err = toolResultText(output.Result); err != nil {
 					return nil, err
 				}
-				text = string(data)
 			}
 			lastFailure = ""
 			if !output.Success {
@@ -225,6 +268,12 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 			if err := emit(AgentEvent{Type: "step", Step: "tool_end", Tool: call.Name}); err != nil {
 				return nil, err
 			}
+			if direct && !output.Success {
+				if round+1 >= a.config.MaxIterations {
+					return nil, exhausted()
+				}
+				break
+			}
 			if direct {
 				answer := text
 				if output.Result == nil || (!isText && text == "null") || strings.TrimSpace(answer) == "" {
@@ -241,6 +290,80 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 		}
 	}
 	return nil, exhausted()
+}
+
+type toolCallResult struct {
+	output *interfaces.ToolOutput
+	err    error
+}
+
+// concurrentCalls 判断本轮调用能否并发：多个调用且每个工具都声明支持并发调用。
+// 上下文策略工具会读取本轮之前写入的状态，始终按顺序执行。
+func (a *ConfigurableAgent[C, S]) concurrentCalls(calls []ToolCall, runtime *policyRuntime) bool {
+	if len(calls) < 2 || a.config.ParallelToolCalls == 1 {
+		return false
+	}
+	for _, call := range calls {
+		if call.Name == contextReadTool && a.config.ContextPolicy != nil && a.config.ContextPolicy.MaxToolResultRunes > 0 {
+			return false
+		}
+		if _, ok := runtime.byName[call.Name]; ok {
+			return false
+		}
+		i := slices.IndexFunc(a.tools, func(t interfaces.Tool) bool { return t.Name() == call.Name })
+		if i < 0 {
+			return false
+		}
+		if c, ok := a.tools[i].(interfaces.ConcurrentCallTool); !ok || !c.SupportsConcurrentCalls() {
+			return false
+		}
+	}
+	return true
+}
+
+// invokeConcurrently 按下标收集结果，并在全部调用结束后返回。不取消兄弟调用：
+// 持久工具被取消会记为失败，且组合工具只允许一次尝试，恢复时需要宿主处理。
+func invokeConcurrently(calls []ToolCall, limit int, invoke func(ToolCall) (*interfaces.ToolOutput, error)) []toolCallResult {
+	if limit < 1 || limit > len(calls) {
+		limit = len(calls)
+	}
+	results := make([]toolCallResult, len(calls))
+	slots := make(chan struct{}, limit)
+	var wg sync.WaitGroup
+	for i, call := range calls {
+		wg.Add(1)
+		slots <- struct{}{}
+		go func() {
+			defer wg.Done()
+			defer func() { <-slots }()
+			defer func() {
+				if recover() != nil {
+					results[i] = toolCallResult{err: fmt.Errorf("工具 %s 执行时发生 panic", call.Name)}
+				}
+			}()
+			output, err := invoke(call)
+			results[i] = toolCallResult{output: output, err: err}
+		}()
+	}
+	wg.Wait()
+	return results
+}
+
+// isArgumentErrorResult 位于包级，避免被循环内的 tools 变量遮蔽。
+func isArgumentErrorResult(out *interfaces.ToolOutput) bool {
+	_, ok := tools.ArgumentErrorResult(out)
+	return ok
+}
+
+// toolResultText 不做 HTML 转义，模型与直接答案看到的是原始 <>&。
+func toolResultText(result any) (string, error) {
+	var buf bytes.Buffer
+	encoder := json.NewEncoder(&buf)
+	encoder.SetEscapeHTML(false)
+	if err := encoder.Encode(result); err != nil {
+		return "", err
+	}
+	return strings.TrimSuffix(buf.String(), "\n"), nil
 }
 
 func readToolTurn(ctx context.Context, stream <-chan *llm.StreamChunk, emit func(AgentEvent) error) (*llm.StreamChunk, error) {

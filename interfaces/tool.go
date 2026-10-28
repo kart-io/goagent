@@ -65,6 +65,13 @@ type ArgumentErrorTool interface {
 	ReturnsArgumentErrors() bool
 }
 
+// ConcurrentCallTool 声明 Invoke 可被同一轮的多个调用并发执行，且实现自行限制并发度。
+// Dispatcher.Tools 实现此契约；包装器必须显式转发，否则 Builder 按顺序执行该轮调用。
+type ConcurrentCallTool interface {
+	Tool
+	SupportsConcurrentCalls() bool
+}
+
 // ValidatableTool 是工具可以实现的可选接口
 // 用于提供自定义输入验证逻辑
 //

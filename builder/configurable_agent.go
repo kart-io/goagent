@@ -278,8 +278,8 @@ func (a *ConfigurableAgent[C, S]) executeWithTools(ctx context.Context, input in
 			}
 
 			// 格式化工具结果
-			resultStr, _ := json.Marshal(result)
-			toolResults = append(toolResults, fmt.Sprintf("工具 %s 执行结果: %s", call.Name, string(resultStr)))
+			resultStr, _ := toolResultText(result)
+			toolResults = append(toolResults, fmt.Sprintf("工具 %s 执行结果: %s", call.Name, resultStr))
 		}
 
 		// 构建下一轮的提示，包含工具结果
