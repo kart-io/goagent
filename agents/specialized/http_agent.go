@@ -110,15 +110,15 @@ func (a *HTTPAgent) Execute(ctx context.Context, input *agentcore.AgentInput) (*
 
 	if err != nil {
 		return &agentcore.AgentOutput{
-				Status:    interfaces.StatusFailed,
-				Message:   "HTTP request failed",
-				Latency:   time.Since(start),
-				Timestamp: start,
-			}, agentErrors.Wrap(err, agentErrors.CodeToolExecution, "http request failed").
-				WithComponent("http_agent").
-				WithOperation("Execute").
-				WithContext(interfaces.FieldURL, url).
-				WithContext(interfaces.FieldMethod, method)
+			Status:    interfaces.StatusFailed,
+			Message:   "HTTP request failed",
+			Latency:   time.Since(start),
+			Timestamp: start,
+		}, agentErrors.Wrap(err, agentErrors.CodeToolExecution, "http request failed").
+			WithComponent("http_agent").
+			WithOperation("Execute").
+			WithContext(interfaces.FieldURL, url).
+			WithContext(interfaces.FieldMethod, method)
 	}
 
 	// 尝试解析 JSON
