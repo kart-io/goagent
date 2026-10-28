@@ -1,0 +1,8 @@
+test_inherited_debug_is_removed_not_set_to_zero (test_statistics.EnvironmentTest.test_inherited_debug_is_removed_not_set_to_zero) ... ok
+test_nearest_rank_tail (test_statistics.StatisticsTest.test_nearest_rank_tail) ... ok
+test_round_medians_and_tail_are_separate (test_statistics.StatisticsTest.test_round_medians_and_tail_are_separate) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.017s
+
+OK
