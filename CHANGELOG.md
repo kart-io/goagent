@@ -9,20 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking
 
-- Builder 原生工具流默认并发执行同一轮的多个工具调用：每个调用的工具都实现新增的 `interfaces.ConcurrentCallTool`（`Dispatcher.Tools()` 已实现）时并发派发，峰值为 `min(WithParallelToolCalls 上限, Dispatcher.MaxConcurrency)`；含上下文策略工具或任一工具未声明并发能力时仍按顺序执行。工具消息与 `tool_start`/`tool_end` 事件仍按模型给出的顺序（`tool_start` 全部在派发前发出，`tool_end` 全部在结束后发出）。某个调用失败不取消其他调用，全部结束后返回顺序最靠前的错误。宿主在工具内部按执行顺序分配编号、共享按调用顺序应答的脚本模型、或假设同轮工具串行的代码会变得不确定；需要旧行为时设置 `WithParallelToolCalls(1)`。
+- 同轮工具并发改为显式开启：`WithParallelToolCalls` 默认 0，小于 2 时按顺序执行，与 master 一致；n>=2 时最多 n 个并发，不另设上限传 `math.MaxInt`。本分支早先的“默认并发”已撤回。迁移：依赖同轮并发的代码显式设置 `WithParallelToolCalls(n)`；原先为关闭并发而设置的 `WithParallelToolCalls(1)` 可以删除。并发时执行先后不保证与模型顺序一致（`Dispatcher.MaxConcurrency=1` 也一样），结果仍按模型顺序交还，某个调用失败不取消其他调用。
 - panic 统一转为 `*errors.PanicError`（`github.com/kart-io/goagent/errors`），可用 `errors.As` 取 `Value` 与 `Stack`。错误文本改为“<位置> 发生 panic”，例如 `工具 "op" 发生 panic`、`工具 "op" 的授权回调 发生 panic`、`工具 "op" 的结果回调 发生 panic`、`持久操作 发生 panic`，替代 `tool "op" panicked`、`operation panicked` 等；按旧文本匹配的代码需改用 `errors.As`。Dispatcher 与持久操作的错误文本仍不含 panic 值，`RunnableTool` 保持在文本中附带 panic 值。
 - 同步 `Execute` 不再向调用方抛出中间件链（中间件、模型客户端）内的 panic，改为返回 `*errors.PanicError`，并先经过 errorHandler 与 `OnError`。errorHandler、`OnError`、`OnEnd`、`OnStart`（`Build`/`Initialize`）、`OnShutdown`（`Shutdown`）自身的 panic 同样转为该错误返回，但不再交给 errorHandler 或任何回调，也不再调用剩余回调。非流式客户端的 `ExecuteWithTools` 旧工具循环中（工具、模型、检索、记忆）的 panic 也转为该错误，与该循环的普通错误一样不经过 errorHandler 与回调；`ExecuteStream` 启动 goroutine 前（如持久能力检查）的 panic 转为返回的错误并释放执行权。迁移：调用方原先用 `recover` 接住这类 panic 的，改为检查返回的错误并用 `errors.As` 识别。
 - core Runnable 层（`safeInvoke`/`RunnableFunc`、`core.StreamRunnable`、`TypedToDynamicAdapter`、`LifecycleManager` 的 Init/Start/Stop/HealthCheck）经 `PanicHandlerRegistry.HandlePanic` 得到的错误，现在总能用 `errors.As` 取到 `*errors.PanicError`（Op 为 `<component>.<operation>`），`observe.ErrorKind` 因此返回 `panic` 而非 `execution`。`DefaultPanicHandler` 仍返回同文本的 `*AgentError`（CodeInternal），其 `Cause` 改为该 `PanicError`，`Unwrap` 不再为 nil；自定义 `PanicHandler` 的接口不变、仍被调用并决定错误文本，返回值不含 `PanicError` 时由 registry 包装补上，因此不能再对结果做 `err.(*AgentError)` 等具体类型断言，需改用 `errors.As`；handler 返回 nil 时改为返回该 `PanicError`，不再吞掉 panic。传给 handler 与 logger 的调用栈来自该 `PanicError`；panic 值已是 `*PanicError` 时沿用它最初的调用栈。`core.StreamRunnable` 的 `OnStart`、`OnEnd`、`OnError` 自身 panic 时返回 `*PanicError`，不再调用剩余回调，也不再交给 `OnError`；此前 `OnError` 的 panic 会直接抛出使进程退出，`OnStart`/`OnEnd` 的 panic 还会再交给各回调的 `OnError`。执行源的 panic 仍交给 `OnError`。同样的语义（回调自身 panic 时返回 `*PanicError` 替代原结果，不再调用剩余回调，也不交给 `OnError`）扩展到所有调用 `core.Callback` 的位置：`RunnableFunc`、`BaseAgent`、`BaseChain`（`OnChainStart`/`OnChainEnd`/`OnChainError`，含 `Stream`）、`CallbackManager`（`OnStart`/`OnEnd`/`OnError`/`TriggerCallbacks`）、`retrieval.BaseRetriever`、`document` 各加载器，以及 ReAct、SoT、GoT、MetaCoT、PoT、ToT 与 `BaseReasoningAgent` 的回调（含 `OnLLM*`、`OnTool*`、`OnAgentFinish`）；此前这些位置的回调 panic 直接抛给调用方，`BaseChain.Stream` 中会使进程退出。`OnError`、`OnChainError`、`OnChainEnd` 等返回值被忽略的回调，其 panic 现在同样替代原错误返回；`BaseAgent.Invoke` 中 `OnAgentFinish` 的 panic 不再被 `ErrNotImplemented` 掩盖，`BaseChain.Stream` 中 `OnChainEnd` 的 panic 作为最终块的错误。新增 `core.NotifyCallbacks` 与 `CallbackManager.NotifyError` 供自定义组件复用这一语义。`LifecycleManager.HealthCheckAll` 中 HealthCheck panic 时，`HealthStatus.Message` 改为 `PanicError` 的文本（如 `lifecycle_manager.health_check 发生 panic`），`Details` 改为 `{"error_kind": "panic", "panic_op": <Op>}`，与 handler 无关；不再含 panic 值与调用栈（此前默认 handler 带 `panic_value`/`stack_trace`、自定义 handler 为空），二者由 `PanicLogger`/`PanicMetricsCollector` 接收。
 
 ### Added
 
-- Builder 新增 `WithParallelToolCalls(n)`（默认 0 不另设上限，1 关闭并发）与标记接口 `interfaces.ConcurrentCallTool`。
+- Builder 新增 `WithParallelToolCalls(n)`（默认 0 按顺序执行，n>=2 开启并发）与标记接口 `interfaces.ConcurrentCallTool`。
 
 - Builder 新增 `WithEmptyAnswerRetries(n)`（默认 0，关闭时行为与日志不变）：模型以 stop 结束且无正文、无工具调用时，不追加空 assistant 消息，改为追加固定 user 消息重问；每次重问占用一次 MaxIterations 额度并消耗一次预算，持久模式下空回合按已完成记录、恢复时回放。超过次数或已是最后一轮仍按原方式报错。
 
 - 新增 `tools.ArgumentErrorResult`，识别 Dispatcher 交还模型的参数错误结果。
 
-- `DispatchConfig.OnResult` 在每次工具结果（首次执行、日志回放、交还模型的参数错误）后同步回调 `tools.DispatchResult`，宿主可在崩溃恢复后按调用顺序重建证据编号等状态；回调失败或 panic 中止本次调用，不影响日志。
+- `DispatchConfig.OnResult` 在每次工具结果（首次执行、日志回放、交还模型的参数错误）后同步回调 `tools.DispatchResult`，宿主可在崩溃恢复后重建证据编号等状态；回调失败或 panic 中止本次调用，不影响日志。Builder 同轮并发执行时，回调经新增的 `tools.DeferResults` 推迟到整轮结束后按模型给出的顺序触发，首次执行与恢复回放顺序一致；宿主自行并发调用 `Invoke` 时顺序不确定，应从 `ExecutionKey` 派生编号。回调不受 `DispatchConfig.Timeout` 约束。
 
 - 新增 `tools.DispatchTimeoutProvider` 与 `RunnableToolConfig.Timeout`，工具可声明经 Dispatcher 调用时的超时，子 Agent 不再受 30 秒默认值限制。
 

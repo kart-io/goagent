@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/jsonschema-go/jsonschema"
@@ -31,8 +32,12 @@ type DispatchConfig struct {
 	// Authorize 在开启 ReturnArgumentErrors 时也会对参数不合法的模型调用执行，可能收到不满足 Schema 的参数。
 	Authorize func(context.Context, string, *interfaces.ToolInput) error
 	// OnResult 在每次得到结果后、tool_end 之前同步调用：首次执行、日志回放和交还模型的参数错误结果都会触发，
-	// 宿主据此在崩溃恢复后按调用顺序重建自身状态（如证据编号）。返回错误或 panic 时本次调用失败，
-	// 但已写入的日志不变，恢复时回放会再次触发。同一 Dispatcher 的并发调用会并发触发它，宿主需自行加锁。
+	// 宿主据此在崩溃恢复后重建自身状态（如证据编号）。返回错误或 panic 时本次调用失败，
+	// 但已写入的日志不变，恢复时回放会再次触发。回调不受 Timeout 约束。
+	//
+	// 顺序：顺序执行的调用按调用顺序触发。Builder 同一轮并发执行的调用经 DeferResults 推迟到整轮结束后，
+	// 按模型给出的顺序逐个触发，首次执行与恢复回放顺序一致。宿主自行并发调用 Invoke 时触发顺序不确定，
+	// 且会并发触发，需自行加锁；此时按到达顺序编号不可重建，应从 ExecutionKey 派生编号。
 	OnResult func(context.Context, DispatchResult) error
 	// ReturnArgumentErrors 只作用于 Tools() 返回的模型调用路径：参数校验失败和工具返回的 *ArgumentError
 	// 不再中止，而是返回 Success=false、Error 为空的结果交给模型改正，并按已完成写入日志。
@@ -186,6 +191,9 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 	if d == nil {
 		return nil, fmt.Errorf("dispatcher is required")
 	}
+	// 推迟只作用于本层调用，工具内部再经 Dispatcher 的调用照常即时回调。
+	var deferred *deferredResult
+	ctx, deferred = takeDeferredResult(ctx)
 	ctx, err = enterDispatcher(ctx, d)
 	if err != nil {
 		return nil, err
@@ -224,6 +232,8 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
+	// 结果回调使用不含单次超时的 ctx：推迟回调时整轮结束才触发，不应因等待兄弟调用而超时。
+	resultCtx := ctx
 	ctx, cancel := context.WithTimeout(ctx, entry.timeout)
 	defer cancel()
 	input.Context = ctx
@@ -350,23 +360,78 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 	if err != nil {
 		return nil, err
 	}
-	if d.config.OnResult != nil {
-		err = func() (e error) {
-			defer func() {
-				if v := recover(); v != nil {
-					e = agentErrors.NewPanicError(fmt.Sprintf("工具 %q 的结果回调", req.Name), v)
-				}
-			}()
-			return d.config.OnResult(ctx, DispatchResult{Name: req.Name, CallID: input.CallID, ExecutionKey: input.ExecutionKey, Args: input.Args, Output: out, Replayed: replayed})
-		}()
-		if err != nil {
-			return nil, err
-		}
+	result := DispatchResult{Name: req.Name, CallID: input.CallID, ExecutionKey: input.ExecutionKey, Args: input.Args, Output: out, Replayed: replayed}
+	if deferred != nil {
+		deferred.add(func() error { return Settle(caller, d.deliverResult(resultCtx, result, emit)) })
+		return out, nil
 	}
-	if err = emit(&core.StreamEvent{Type: "tool_end", Tool: req.Name}); err != nil {
+	if err = d.deliverResult(resultCtx, result, emit); err != nil {
 		return nil, err
 	}
 	return out, nil
+}
+
+// deliverResult 触发 OnResult 并发出 tool_end；回调失败时不发 tool_end。
+func (d *Dispatcher) deliverResult(ctx context.Context, result DispatchResult, emit func(*core.StreamEvent) error) error {
+	if d.config.OnResult != nil {
+		err := func() (e error) {
+			defer func() {
+				if v := recover(); v != nil {
+					e = agentErrors.NewPanicError(fmt.Sprintf("工具 %q 的结果回调", result.Name), v)
+				}
+			}()
+			return d.config.OnResult(ctx, result)
+		}()
+		if err != nil {
+			return err
+		}
+	}
+	return emit(&core.StreamEvent{Type: "tool_end", Tool: result.Name})
+}
+
+type deferredResultKey struct{}
+
+// deferredResult 保存经同一 ctx 发起的调用推迟的结果回调，按调用成功的先后追加；宿主可能在同一 ctx 下多次或并发调用。
+type deferredResult struct {
+	mu       sync.Mutex
+	delivers []func() error
+}
+
+func (p *deferredResult) add(deliver func() error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.delivers = append(p.delivers, deliver)
+}
+
+// DeferResults 让经 ctx 发起的 Dispatcher 调用推迟 OnResult 与 tool_end：调用成功时只返回结果，
+// 回调在调用方执行 deliver 时才触发。调用失败或未经 Dispatcher 时不追加回调。
+// 用于同一轮并发调用：全部结束后按调用顺序依次 deliver，回调顺序因此与执行先后无关。
+// 同一 ctx 下的多次调用按成功的先后各追加一个回调，并发调用时先后不确定；需要确定顺序时每个调用使用各自的 ctx。
+// deliver 须在调用返回后执行，依次触发尚未触发的全部回调，每个回调只触发一次；
+// 与 Builder 同轮并发语义一致，某个回调失败不跳过其余回调（失败的那个不发 tool_end），全部触发后返回最靠前的错误。
+func DeferResults(ctx context.Context) (context.Context, func() error) {
+	pending := &deferredResult{}
+	return context.WithValue(ctx, deferredResultKey{}, pending), func() error {
+		pending.mu.Lock()
+		delivers := pending.delivers
+		pending.delivers = nil
+		pending.mu.Unlock()
+		var first error
+		for _, deliver := range delivers {
+			if err := deliver(); err != nil && first == nil {
+				first = err
+			}
+		}
+		return first
+	}
+}
+
+func takeDeferredResult(ctx context.Context) (context.Context, *deferredResult) {
+	pending, _ := ctx.Value(deferredResultKey{}).(*deferredResult)
+	if pending == nil {
+		return ctx, nil
+	}
+	return context.WithValue(ctx, deferredResultKey{}, (*deferredResult)(nil)), pending
 }
 
 func argumentResult(err error, settled *settledSet) (*interfaces.ToolOutput, bool) {

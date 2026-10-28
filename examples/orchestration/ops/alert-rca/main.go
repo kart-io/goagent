@@ -146,7 +146,7 @@ func Run(ctx context.Context, client *livemodel.Client, dir string) (Result, err
 		return out, err
 	}
 	agent, err := builder.NewSimpleBuilder(client).WithDurableScope("rca").WithSystemPrompt(systemPrompt).
-		WithTools(dispatched...).WithReturnDirectTools(opscase.SubmitTool).WithEmptyAnswerRetries(1).WithMaxIterations(9).WithMaxTokens(livemodel.MaxTokens).WithTimeout(10 * livemodel.RequestTimeout).Build()
+		WithTools(dispatched...).WithParallelToolCalls(4).WithReturnDirectTools(opscase.SubmitTool).WithEmptyAnswerRetries(1).WithMaxIterations(9).WithMaxTokens(livemodel.MaxTokens).WithTimeout(10 * livemodel.RequestTimeout).Build()
 	if err != nil {
 		return out, err
 	}

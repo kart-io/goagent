@@ -20,7 +20,7 @@
   - 证据不完整的项给出 `scale_*`；
   - 输出不是合法 JSON，或模型调用失败（包括被根预算拒绝）。
 - 深评：`deep_review` 由 `tools.NewRunnableToolFactory` 创建，每次调用新建一个带唯一 `SessionID` 的子 Agent，调用结束即清理。模型只能看到宿主按可信数据生成的输入，工具参数也只有 `id`。
-  - 宿主用 goroutine 经 `Dispatcher.Invoke` 并行调用，并发上限由 `MaxConcurrency=3` 控制。选它而不是 workflow 并行节点，是因为候选数在运行时才确定。并发由宿主发起，不经过 Builder 原生工具循环，同轮工具调用默认并发与 `WithParallelToolCalls` 与本案例无关；测试只按集合比对深评对象，不依赖顺序。
+  - 宿主用 goroutine 经 `Dispatcher.Invoke` 并行调用，并发上限由 `MaxConcurrency=3` 控制。选它而不是 workflow 并行节点，是因为候选数在运行时才确定。并发由宿主发起，不经过 Builder 原生工具循环，Builder 的同轮工具并发（`WithParallelToolCalls`）与本案例无关；测试只按集合比对深评对象，不依赖顺序。
   - 超时用 `RunnableToolConfig.Timeout` 声明在工具上（2 倍单次请求超时），只计执行时间，不含等待并发名额的排队。
   - `CallID` 由 id 派生，持久回放时直接取已保存结果，不新建子 Agent。
 - 深评护栏在宿主强制，任一不满足就把该项降为 `manual_review` 并清空计划：

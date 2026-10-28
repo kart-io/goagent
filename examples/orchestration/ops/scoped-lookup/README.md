@@ -23,7 +23,7 @@
 ## 框架行为说明
 
 - **未授予的工具**：子 Agent 的工具集里根本没有其他方向的工具。模型仍然调用时，持久模式下 Builder 在提交回合前就以“模型请求了未提供的工具”拒绝。这是致命错误，不交还模型改正，该子会话中止并清理；同一轮的其他子调查不被取消，照常跑完后整条链再以该错误中止。
-- **并行**：同一轮的多个 `delegate_lookup` 默认并发执行，峰值受主 Dispatcher 的 `MaxConcurrency: 3` 限制。账本编号、`Result.Lookups` 的排列（按 metrics、logs、traces）都与完成顺序无关。
+- **并行**：同一轮的多个 `delegate_lookup` 经 `WithParallelToolCalls(MaxParallel)` 并发执行，峰值受主 Dispatcher 的 `MaxConcurrency: 3` 限制。账本编号、`Result.Lookups` 的排列（按 metrics、logs、traces）都与完成顺序无关。
 - **内层参数错误**：子 Dispatcher 开启参数错误交还时，子调查传错参数由子模型自己改正。若子 Dispatcher 不交还，`*tools.ArgumentError` 穿出子会话后，主 Dispatcher 按 95bc8c6 的屏障把它当作工具执行失败而中止，不会要求主模型改正它没有传过的参数；返回的仍是原始错误值。
 
 ```sh
