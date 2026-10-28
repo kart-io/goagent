@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/kart-io/goagent/core/checkpoint"
 	"github.com/kart-io/goagent/core/state"
 	agentErrors "github.com/kart-io/goagent/errors"
@@ -48,6 +50,9 @@ const (
 // Interrupt represents a point where human intervention is needed.
 type Interrupt struct {
 	// ID is a unique identifier for this interrupt
+	//
+	// 需要在 CreateInterrupt 等待期间响应时应预先设置 ID：CreateInterrupt 只给内部副本分配 ID，不回写传入对象。
+	// 为空时自动生成，只能经 OnInterruptCreated 钩子、ListPendingInterrupts 或返回值取得。
 	ID string
 
 	// Type specifies what kind of interrupt this is
@@ -103,6 +108,8 @@ type InterruptManager struct {
 	channels   map[string]chan *InterruptResponse
 	// creating 记录 onCreated 钩子尚未执行完的中断，期间到达的响应暂存其中，由 CreateInterrupt 在钩子完成后处理
 	creating map[string]*createGate
+	// reserved 记录已通过重复检查、正在保存状态快照尚未登记的 ID
+	reserved map[string]struct{}
 	mu       sync.RWMutex
 
 	// Checkpointer for persisting interrupted state
@@ -125,6 +132,7 @@ func NewInterruptManager(checkpointer checkpoint.Checkpointer) *InterruptManager
 		responses:    make(map[string]*InterruptResponse),
 		channels:     make(map[string]chan *InterruptResponse),
 		creating:     make(map[string]*createGate),
+		reserved:     make(map[string]struct{}),
 		checkpointer: checkpointer,
 	}
 }
@@ -135,6 +143,8 @@ func NewInterruptManager(checkpointer checkpoint.Checkpointer) *InterruptManager
 // 返回时（收到响应、被 CancelInterrupt 取消、超时或 ctx 结束）都会清理该中断的内部状态，之后的 RespondToInterrupt
 // 返回 not found；被取消时返回 CodeContextCanceled 错误，响应为 nil 时错误必不为 nil。超时或 ctx 结束时若响应
 // 已被 RespondToInterrupt 接受，以该响应为准。onCreated 执行期间到达的响应等它执行完后才调用 onResolved 并返回。
+// ID 与尚未清理完的中断重复时立即返回 CodeAlreadyExists 错误，不保存快照、不登记、不调用 onCreated；
+// 已结束并清理的中断的 ID 可以复用。
 func (m *InterruptManager) CreateInterrupt(ctx context.Context, interrupt *Interrupt) (*Interrupt, *InterruptResponse, error) {
 	// Create a copy to avoid concurrent access issues
 	interruptCopy := *interrupt
@@ -147,13 +157,34 @@ func (m *InterruptManager) CreateInterrupt(ctx context.Context, interrupt *Inter
 		interruptCopy.CreatedAt = time.Now()
 	}
 
+	// 先占用 ID 再保存快照：重复的 ID 不得覆盖仍在等待的中断的快照
+	m.mu.Lock()
+	if m.idInUseLocked(interruptCopy.ID) {
+		m.mu.Unlock()
+		return &interruptCopy, nil, agentErrors.New(agentErrors.CodeAlreadyExists, "中断 ID 已被仍在等待的中断占用").
+			WithComponent("interrupt_manager").
+			WithOperation("create_interrupt").
+			WithContext("interrupt_id", interruptCopy.ID)
+	}
+	m.reserved[interruptCopy.ID] = struct{}{}
+	m.mu.Unlock()
+
 	// 先保存状态再登记：中断一旦可见就可能被响应，快照必须已经写入
+	// 保存失败照旧忽略；checkpointer panic 时释放占用的 ID 并返回错误，否则该 ID 会永久被判为占用
 	if m.checkpointer != nil && interruptCopy.State != nil {
-		_ = m.checkpointer.Save(ctx, fmt.Sprintf("interrupt_%s", interruptCopy.ID), interruptCopy.State)
+		if panicked, err := CallSafely(ctx, "interrupt_manager", "save_state", func() error {
+			return m.checkpointer.Save(ctx, fmt.Sprintf("interrupt_%s", interruptCopy.ID), interruptCopy.State)
+		}); panicked {
+			m.mu.Lock()
+			delete(m.reserved, interruptCopy.ID)
+			m.mu.Unlock()
+			return &interruptCopy, nil, err
+		}
 	}
 
 	// Store interrupt under lock
 	m.mu.Lock()
+	delete(m.reserved, interruptCopy.ID)
 	m.interrupts[interruptCopy.ID] = &interruptCopy
 	responseChan := make(chan *InterruptResponse, 1)
 	m.channels[interruptCopy.ID] = responseChan
@@ -224,6 +255,16 @@ func (m *InterruptManager) CreateInterrupt(ctx context.Context, interrupt *Inter
 		return &interruptCopy, response, nil
 	}
 	return &interruptCopy, nil, interruptCanceledError(interruptCopy.ID)
+}
+
+// idInUseLocked 判断 ID 是否仍被某次 CreateInterrupt 占用（包括已被响应或取消、等待方尚未退出清理的）；调用方须持有 m.mu。
+func (m *InterruptManager) idInUseLocked(id string) bool {
+	_, reserved := m.reserved[id]
+	_, registered := m.interrupts[id]
+	_, waiting := m.channels[id]
+	_, creating := m.creating[id]
+	_, responded := m.responses[id]
+	return reserved || registered || waiting || creating || responded
 }
 
 // removeInterrupt 在等待方退出时清理该中断的全部状态，可重复调用。
@@ -467,16 +508,9 @@ func (e *InterruptableExecutor) ExecuteWithInterrupts(
 
 // Helper functions
 
-var (
-	interruptCounter   uint64
-	interruptCounterMu sync.Mutex
-)
-
+// generateInterruptID 用随机 UUID：时间戳加进程内计数器在同一秒内重启后会重复，多个进程共用 checkpointer 时快照 key 冲突
 func generateInterruptID() string {
-	interruptCounterMu.Lock()
-	defer interruptCounterMu.Unlock()
-	interruptCounter++
-	return fmt.Sprintf("interrupt_%d_%d", time.Now().Unix(), interruptCounter)
+	return "interrupt_" + uuid.NewString()
 }
 
 func getTimeoutForInterrupt(interrupt *Interrupt) time.Duration {

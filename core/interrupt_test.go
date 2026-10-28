@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/kart-io/goagent/core/checkpoint"
+	"github.com/kart-io/goagent/core/state"
 	agentErrors "github.com/kart-io/goagent/errors"
 )
 
@@ -639,6 +640,7 @@ func requireInterruptCleaned(t *testing.T, manager *InterruptManager) {
 	require.Empty(t, manager.channels, "channels 未清理")
 	require.Empty(t, manager.responses, "responses 未清理")
 	require.Empty(t, manager.creating, "creating 未清理")
+	require.Empty(t, manager.reserved, "reserved 未清理")
 }
 
 // CancelInterrupt 后 CreateInterrupt 返回明确的取消错误，不再返回 nil 响应配 nil 错误。
@@ -860,4 +862,170 @@ func TestInterruptManager_CreatedHookPanicWithPendingResponse(t *testing.T) {
 	require.Nil(t, response)
 	require.False(t, resolved)
 	requireInterruptCleaned(t, manager)
+}
+
+// 调用方自带的 ID 与仍在等待的中断重复时立即返回 CodeAlreadyExists：不覆盖原登记与状态快照、不调用 onCreated，
+// 原等待方仍能收到响应。
+func TestInterruptManager_DuplicateIDRejected(t *testing.T) {
+	checkpointer := checkpoint.NewInMemorySaver()
+	manager := NewInterruptManager(checkpointer)
+	var createdCount int
+	var countMu sync.Mutex
+	created := make(chan string, 2)
+	manager.OnInterruptCreated(func(i *Interrupt) {
+		countMu.Lock()
+		createdCount++
+		countMu.Unlock()
+		created <- i.ID
+	})
+
+	firstState := NewAgentState()
+	firstState.Set("owner", "first")
+	type result struct {
+		response *InterruptResponse
+		err      error
+	}
+	done := make(chan result, 1)
+	go func() {
+		_, response, err := manager.CreateInterrupt(context.Background(), &Interrupt{ID: "dup", Type: InterruptTypeApproval, State: firstState})
+		done <- result{response, err}
+	}()
+	require.Equal(t, "dup", <-created)
+
+	secondState := NewAgentState()
+	secondState.Set("owner", "second")
+	// ctx 已取消：即使被错误地登记，第二个调用也会立即返回，测试不会挂起
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, response, err := manager.CreateInterrupt(ctx, &Interrupt{ID: "dup", Type: InterruptTypeApproval, State: secondState})
+	require.True(t, agentErrors.IsCode(err, agentErrors.CodeAlreadyExists), "重复 ID 应返回 CodeAlreadyExists，实际 %v", err)
+	require.Nil(t, response)
+	countMu.Lock()
+	require.Equal(t, 1, createdCount, "重复 ID 不应调用 onCreated")
+	countMu.Unlock()
+
+	saved, err := checkpointer.Load(context.Background(), "interrupt_dup")
+	require.NoError(t, err)
+	owner, _ := saved.Get("owner")
+	require.Equal(t, "first", owner, "重复 ID 覆盖了原中断的状态快照")
+
+	require.NoError(t, manager.RespondToInterrupt("dup", &InterruptResponse{Approved: true, Reason: "first"}))
+	select {
+	case res := <-done:
+		require.NoError(t, res.err)
+		require.Equal(t, "first", res.response.Reason)
+	case <-time.After(hookLimit):
+		t.Fatal("原等待方未收到响应")
+	}
+	requireInterruptCleaned(t, manager)
+}
+
+// 已结束并清理的中断，其 ID 可以复用。
+func TestInterruptManager_ReuseFinishedID(t *testing.T) {
+	manager := NewInterruptManager(nil)
+	created := make(chan string, 1)
+	manager.OnInterruptCreated(func(i *Interrupt) { created <- i.ID })
+	create := func(ctx context.Context) <-chan error {
+		done := make(chan error, 1)
+		go func() {
+			_, _, err := manager.CreateInterrupt(ctx, &Interrupt{ID: "reuse", Type: InterruptTypeApproval})
+			done <- err
+		}()
+		require.Equal(t, "reuse", <-created)
+		return done
+	}
+
+	done := create(context.Background())
+	require.NoError(t, manager.RespondToInterrupt("reuse", &InterruptResponse{Approved: true}))
+	require.NoError(t, <-done)
+
+	done = create(context.Background())
+	require.NoError(t, manager.CancelInterrupt("reuse"))
+	require.True(t, agentErrors.IsCode(<-done, agentErrors.CodeContextCanceled))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done = create(ctx)
+	cancel()
+	require.ErrorIs(t, <-done, context.Canceled)
+
+	done = create(context.Background())
+	require.NoError(t, manager.RespondToInterrupt("reuse", &InterruptResponse{Approved: true}))
+	require.NoError(t, <-done)
+	requireInterruptCleaned(t, manager)
+}
+
+// 并发自动生成的 ID 互不相同，并发创建的中断都能各自登记。
+func TestInterruptManager_ConcurrentGeneratedIDs(t *testing.T) {
+	const goroutines, perGoroutine = 32, 200
+	ids := make(chan string, goroutines*perGoroutine)
+	var wg sync.WaitGroup
+	for g := 0; g < goroutines; g++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := 0; i < perGoroutine; i++ {
+				ids <- generateInterruptID()
+			}
+		}()
+	}
+	wg.Wait()
+	close(ids)
+	seen := make(map[string]struct{}, goroutines*perGoroutine)
+	for id := range ids {
+		_, dup := seen[id]
+		require.False(t, dup, "ID 重复：%s", id)
+		seen[id] = struct{}{}
+	}
+
+	manager := NewInterruptManager(nil)
+	created := make(chan string, goroutines)
+	manager.OnInterruptCreated(func(i *Interrupt) { created <- i.ID })
+	errs := make(chan error, goroutines)
+	for g := 0; g < goroutines; g++ {
+		go func() {
+			_, _, err := manager.CreateInterrupt(context.Background(), &Interrupt{Type: InterruptTypeApproval})
+			errs <- err
+		}()
+	}
+	for g := 0; g < goroutines; g++ {
+		require.NoError(t, manager.RespondToInterrupt(<-created, &InterruptResponse{Approved: true}))
+	}
+	for g := 0; g < goroutines; g++ {
+		require.NoError(t, <-errs)
+	}
+	requireInterruptCleaned(t, manager)
+}
+
+// panicSaveCheckpointer 在 Save 时 panic，模拟有缺陷的自定义 checkpointer。
+type panicSaveCheckpointer struct{ checkpoint.Checkpointer }
+
+func (panicSaveCheckpointer) Save(context.Context, string, state.State) error { panic("save boom") }
+
+// checkpointer 的 Save panic 时，CreateInterrupt 返回 *PanicError 并释放占用的 ID，同一 ID 之后仍可使用。
+func TestInterruptManager_CheckpointerPanicReleasesID(t *testing.T) {
+	manager := NewInterruptManager(panicSaveCheckpointer{checkpoint.NewInMemorySaver()})
+	state := NewAgentState()
+	state.Set("k", "v")
+
+	_, _, err := manager.CreateInterrupt(context.Background(), &Interrupt{ID: "boom", Type: InterruptTypeApproval, State: state})
+	var panicErr *agentErrors.PanicError
+	require.ErrorAs(t, err, &panicErr)
+	require.Equal(t, "save boom", panicErr.Value)
+	requireInterruptCleaned(t, manager)
+
+	manager.checkpointer = nil
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, _, err = manager.CreateInterrupt(ctx, &Interrupt{ID: "boom", Type: InterruptTypeApproval})
+	require.ErrorIs(t, err, context.Canceled, "ID 应已释放，不应返回已占用错误")
+}
+
+// 自动生成的 ID 不依赖进程内状态，跨进程（计数器重置）也不重复。
+func TestGenerateInterruptIDUnique(t *testing.T) {
+	seen := map[string]bool{}
+	for range 1000 {
+		id := generateInterruptID()
+		require.False(t, seen[id], id)
+		seen[id] = true
+	}
 }
