@@ -26,6 +26,9 @@ type DispatchConfig struct {
 	MaxConcurrency int           // default 4, shared by all calls on this dispatcher
 	Timeout        time.Duration // default 30 seconds
 	Authorize      func(context.Context, string, *interfaces.ToolInput) error
+	// ReturnArgumentErrors 为 true 时，参数校验失败和工具返回的 *ArgumentError 不再中止调用方，
+	// 而是返回 Success=false 的结果交给模型改正，并按已完成写入日志。授权、超时、深度和重入错误仍然中止。
+	ReturnArgumentErrors bool
 }
 
 // ToolRequest selects a registered tool. Identity and execution metadata must
@@ -190,10 +193,17 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 		return nil, err
 	}
 	if err = entry.resolved.Validate(input.Args); err != nil {
-		return nil, fmt.Errorf("tool %q arguments: %w", req.Name, err)
+		err = &ArgumentError{Message: fmt.Sprintf("tool %q arguments: %v", req.Name, err), Err: err}
+		if out, ok := d.argumentResult(err); ok {
+			return out, nil
+		}
+		return nil, err
 	}
 	if custom, ok := entry.tool.(interfaces.ValidatableTool); ok {
 		if err = custom.Validate(ctx, &input); err != nil {
+			if out, ok := d.argumentResult(err); ok {
+				return out, nil
+			}
 			return nil, err
 		}
 		if err = entry.resolved.Validate(input.Args); err != nil {
@@ -218,6 +228,9 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 		input.Context = callCtx
 		result, e := entry.tool.Invoke(callCtx, &input)
 		if e != nil {
+			if out, ok := d.argumentResult(e); ok && callCtx.Err() == nil {
+				return out, nil
+			}
 			return nil, e
 		}
 		if e = callCtx.Err(); e != nil {
@@ -246,6 +259,16 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 				Original json.RawMessage
 				Version  string
 			}{intent, entry.version})
+			if e != nil {
+				return nil, e
+			}
+		}
+		// 开启后参数错误会按已完成记录；写进意图，避免关闭后把旧的错误结果当作成功回放。
+		if d.config.ReturnArgumentErrors {
+			intent, e = json.Marshal(struct {
+				Original       json.RawMessage
+				ArgumentErrors bool
+			}{intent, true})
 			if e != nil {
 				return nil, e
 			}
@@ -281,6 +304,21 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 	}
 	return out, nil
 }
+
+func (d *Dispatcher) argumentResult(err error) (*interfaces.ToolOutput, bool) {
+	if !d.config.ReturnArgumentErrors {
+		return nil, false
+	}
+	message, ok := argumentErrorMessage(err)
+	if !ok {
+		return nil, false
+	}
+	// 不设置 Error 字段：调用方把 Error 视为执行失败，这里的结果要原样交给模型。
+	return &interfaces.ToolOutput{Success: false, Result: map[string]any{"error": "invalid_arguments", "message": message}}, true
+}
+
+// ReturnsArgumentErrors 告诉 Builder 不要在提交模型回合前拒绝不合法的参数，由本工具交还模型。
+func (t *dispatchedTool) ReturnsArgumentErrors() bool { return t.d.config.ReturnArgumentErrors }
 
 func (d *Dispatcher) AsRunnable() *core.StreamRunnable[ToolRequest, *interfaces.ToolOutput] {
 	return core.NewStreamRunnable(core.StreamModeSteps, func(ctx context.Context, req ToolRequest, emit func(core.StreamChunk[*interfaces.ToolOutput]) error) error {

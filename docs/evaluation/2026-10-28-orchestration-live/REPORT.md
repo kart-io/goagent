@@ -93,9 +93,12 @@ Gemini 第 1 轮长日志排障失败 1 次（[日志](live-gemini.log)），报
 - 修复（`builder/contextpolicy/offload.go`）：模型看到的引用改为按卸载顺序编号的短别名 `r1`、`r2`…；键不存在时不再报错中止，而是把错误和合法键列表作为工具结果交还模型。引用文本变化使旧日志无法复用，默认版本升为 `v2`。
 - 回归测试：`TestOffloadAliasStableAndMissRecoverable`、`TestPolicyReadWrongKeyIsReturnedToModel`。修复后全量测试带 `-race` 通过；长日志排障真实模型复跑 Gemini 3/3、DeepSeek 2/2、MiniMax 2/2（[Gemini](alias-fix-gemini.log)、[DeepSeek](alias-fix-deepseek.log)、[MiniMax](alias-fix-minimax.log)）。
 
-## 未解决
+### 工具参数错误会中止整个 Agent（已增加可选处理）
 
-- **工具报错会中止整个 Agent**：框架不会把错误作为工具结果交还给模型让它重试。对深度超限、Dispatcher 重入这类宿主配置错误，这是正确的；但对模型传错参数这类可恢复错误，可能过于严格。上面的引用键问题只在读取工具内单独处理；是否在 Dispatcher 层通用地区分两类错误，是设计取舍，本轮没有改动。
+原先任何工具错误都会中止 Agent，模型传错参数也没有改正的机会。现在 `DispatchConfig.ReturnArgumentErrors` 开启后，参数校验错误和工具返回的 `tools.ArgumentError` 会作为结果交还模型；授权、深度、重入、超时等宿主侧错误仍然中止。默认关闭，现有行为与执行日志不变。契约见 [原生编排指南](../../guides/NATIVE_ORCHESTRATION.md#参数错误交还模型)。
+
+- 回归测试：`tools/argument_error_test.go`、`builder/argument_error_test.go`，覆盖错误分类、同轮混合调用、日志回放与开关切换、组合工具不创建子会话、直接返回工具。
+- 本轮 8 个案例都没有开启该选项，所以没有真实模型数据。
 
 ## 验证了什么
 

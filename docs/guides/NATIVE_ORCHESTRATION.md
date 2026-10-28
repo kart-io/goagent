@@ -51,6 +51,16 @@ Dispatcher 构造时冻结工具名、描述与 Schema，Registry 后续增删�
 
 超时包含排队；执行中的工具必须响应 context，执行器不会启动一个无法回收的后台 goroutine 来伪造超时。nil 输出、Success=false、Error 字段非空、panic、取消均返回错误。Authorize 可为空（无额外调度层授权）；涉及业务权限必须由宿主提供授权或由业务服务执行检查。CallerID 与审批身份不能来自模型参数。
 
+### 参数错误交还模型
+
+默认任何工具错误都会中止 Agent。设置 `DispatchConfig{ReturnArgumentErrors: true}` 后，以下错误改为返回 `Success=false`、`Result={"error":"invalid_arguments","message":...}` 的结果，由模型在下一轮改正：
+
+- Schema 校验失败；
+- 自定义 `Validate` 或工具 `Invoke` 返回的 `*tools.ArgumentError`（可被 `%w` 包装；`errors.Join` 只有每个分支都是参数错误才算）。`Message` 原样展示给模型，`Err` 不展示；
+- `NewRunnableTool`/`NewRunnableToolFactory` 的 Schema 与 Decode 错误，此时不会创建子会话。
+
+授权拒绝、超时与取消、嵌套深度超限、Dispatcher 重入、等待宿主继续、未知工具、参数不是 JSON 对象，以及子会话执行失败，仍然中止。同一轮的其他合法调用照常执行。参数错误结果按已完成写入日志，恢复时回放；开关写入调用意图，关闭后不会复用开启时的记录。Builder 持久模式下，这类工具的参数不合法时模型回合照常提交。直接返回工具遇到参数错误仍报错，不会把错误当作答案。反复传错由 `WithMaxIterations` 兜底。
+
 旧 `ToolExecutor` 保留已有行为，包括原有重试配置。需要本文契约的调用方显式采用 Dispatcher；本轮未静默改变所有历史调用方。
 
 ## 持久图的统一入口

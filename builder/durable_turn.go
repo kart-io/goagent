@@ -67,8 +67,9 @@ func validateDurableTurn(turn *llm.StreamChunk, tools []interfaces.Tool) error {
 		}
 		return nil
 	}
-	known, ids := map[string]*jsonschema.Resolved{}, map[string]bool{}
+	known, ids, byName := map[string]*jsonschema.Resolved{}, map[string]bool{}, map[string]interfaces.Tool{}
 	for _, t := range tools {
+		byName[t.Name()] = t
 		var schema jsonschema.Schema
 		if err := json.Unmarshal([]byte(t.ArgsSchema()), &schema); err != nil {
 			return fmt.Errorf("invalid tool schema %q", t.Name())
@@ -84,8 +85,12 @@ func validateDurableTurn(turn *llm.StreamChunk, tools []interfaces.Tool) error {
 		if call.ID == "" || ids[call.ID] || known[call.Function.Name] == nil || json.Unmarshal([]byte(call.Function.Arguments), &args) != nil || args == nil {
 			return fmt.Errorf("model returned invalid tool plan")
 		}
-		if err := known[call.Function.Name].Validate(args); err != nil {
-			return fmt.Errorf("model returned invalid arguments for %q: %w", call.Function.Name, err)
+		// 工具会把参数错误作为结果交还模型时，回合照常提交。
+		returns, ok := byName[call.Function.Name].(interface{ ReturnsArgumentErrors() bool })
+		if !ok || !returns.ReturnsArgumentErrors() {
+			if err := known[call.Function.Name].Validate(args); err != nil {
+				return fmt.Errorf("model returned invalid arguments for %q: %w", call.Function.Name, err)
+			}
 		}
 		ids[call.ID] = true
 	}
