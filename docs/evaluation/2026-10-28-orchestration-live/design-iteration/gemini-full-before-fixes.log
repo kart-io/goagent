@@ -1,0 +1,221 @@
+=== RUN   TestConfigFromEnv
+=== RUN   TestConfigFromEnv/默认_deepseek
+=== RUN   TestConfigFromEnv/大小写与空白
+=== RUN   TestConfigFromEnv/覆盖_deepseek_模型
+=== RUN   TestConfigFromEnv/覆盖_minimax_模型
+=== RUN   TestConfigFromEnv/gemini_默认模型
+=== RUN   TestConfigFromEnv/不支持的提供方
+--- PASS: TestConfigFromEnv (0.00s)
+    --- PASS: TestConfigFromEnv/默认_deepseek (0.00s)
+    --- PASS: TestConfigFromEnv/大小写与空白 (0.00s)
+    --- PASS: TestConfigFromEnv/覆盖_deepseek_模型 (0.00s)
+    --- PASS: TestConfigFromEnv/覆盖_minimax_模型 (0.00s)
+    --- PASS: TestConfigFromEnv/gemini_默认模型 (0.00s)
+    --- PASS: TestConfigFromEnv/不支持的提供方 (0.00s)
+=== RUN   TestRequireSkipsWithoutOptIn
+=== RUN   TestRequireSkipsWithoutOptIn/skip
+    livemodel_test.go:47: 设置 GOAGENT_LIVE=1 以调用真实模型
+--- PASS: TestRequireSkipsWithoutOptIn (0.00s)
+    --- SKIP: TestRequireSkipsWithoutOptIn/skip (0.00s)
+=== RUN   TestMiniMaxRequiresKey
+--- PASS: TestMiniMaxRequiresKey (0.00s)
+=== RUN   TestRedact
+--- PASS: TestRedact (0.00s)
+=== RUN   TestWrapCountsAndFillsModel
+--- PASS: TestWrapCountsAndFillsModel (0.00s)
+=== RUN   TestWrapKeepsDeclaredStreamMode
+--- PASS: TestWrapKeepsDeclaredStreamMode (0.00s)
+PASS
+ok  	github.com/kart-io/goagent/examples/internal/livemodel	1.040s
+=== RUN   TestPayIsIdempotentPerRequest
+--- PASS: TestPayIsIdempotentPerRequest (0.00s)
+=== RUN   TestScriptedApprovalFlows
+=== RUN   TestScriptedApprovalFlows/R-SMALL
+    main_test.go:83: R-SMALL：{Status:completed Decision:退款 Receipt:PAY-28dcbfe3 ApprovalKey: NewPayments:1 NewModelCalls:1 Budget:{ReservedRequests:1 KnownUsageEntries:1 UnknownUsageEntries:0 KnownTokens:{PromptTokens:0 CompletionTokens:0 TotalTokens:2 CachedTokens:0}}}
+=== RUN   TestScriptedApprovalFlows/R-REJECT
+    main_test.go:83: R-REJECT：{Status:completed Decision:拒绝 Receipt: ApprovalKey: NewPayments:0 NewModelCalls:1 Budget:{ReservedRequests:1 KnownUsageEntries:1 UnknownUsageEntries:0 KnownTokens:{PromptTokens:0 CompletionTokens:0 TotalTokens:2 CachedTokens:0}}}
+=== RUN   TestScriptedApprovalFlows/R-LARGE
+--- PASS: TestScriptedApprovalFlows (0.20s)
+    --- PASS: TestScriptedApprovalFlows/R-SMALL (0.01s)
+    --- PASS: TestScriptedApprovalFlows/R-REJECT (0.00s)
+    --- PASS: TestScriptedApprovalFlows/R-LARGE (0.19s)
+=== RUN   TestLiveApprovalFlows
+    main_test.go:168: 模型：gemini/gemini-2.5-flash
+=== RUN   TestLiveApprovalFlows/R-SMALL
+    main_test.go:83: R-SMALL：{Status:completed Decision:退款 Receipt:PAY-28dcbfe3 ApprovalKey: NewPayments:1 NewModelCalls:1 Budget:{ReservedRequests:1 KnownUsageEntries:1 UnknownUsageEntries:0 KnownTokens:{PromptTokens:94 CompletionTokens:19 TotalTokens:358 CachedTokens:0}}}
+=== RUN   TestLiveApprovalFlows/R-REJECT
+    main_test.go:83: R-REJECT：{Status:completed Decision:拒绝 Receipt: ApprovalKey: NewPayments:0 NewModelCalls:1 Budget:{ReservedRequests:1 KnownUsageEntries:1 UnknownUsageEntries:0 KnownTokens:{PromptTokens:98 CompletionTokens:18 TotalTokens:428 CachedTokens:0}}}
+=== RUN   TestLiveApprovalFlows/R-LARGE
+--- PASS: TestLiveApprovalFlows (6.47s)
+    --- PASS: TestLiveApprovalFlows/R-SMALL (2.40s)
+    --- PASS: TestLiveApprovalFlows/R-REJECT (1.94s)
+    --- PASS: TestLiveApprovalFlows/R-LARGE (2.13s)
+PASS
+ok  	github.com/kart-io/goagent/examples/orchestration/live/approval	7.721s
+=== RUN   TestExpectedAndParse
+--- PASS: TestExpectedAndParse (0.00s)
+=== RUN   TestScriptedDelegation
+--- PASS: TestScriptedDelegation (0.04s)
+=== RUN   TestScriptedDepthLimit
+--- PASS: TestScriptedDepthLimit (0.01s)
+=== RUN   TestScriptedDispatcherReentry
+--- PASS: TestScriptedDispatcherReentry (0.01s)
+=== RUN   TestLiveDelegation
+    main_test.go:130: gemini/gemini-2.5-flash：{Answer:结论：9031.20 元
+        根据财务专家计算，供应商报价 1200 美元，加 6% 增值税后含税总价为 9031.20 元人民币。 Total:9031.2 ExpertsCreated:1 ExpertsDone:1 ConvertRuns:1 TaxRuns:1 NewModelCalls:5 Budget:{ReservedRequests:5 KnownUsageEntries:5 UnknownUsageEntries:0 KnownTokens:{PromptTokens:1737 CompletionTokens:183 TotalTokens:2410 CachedTokens:0}}}
+--- PASS: TestLiveDelegation (6.25s)
+PASS
+ok  	github.com/kart-io/goagent/examples/orchestration/live/delegation	7.373s
+=== RUN   TestDecision
+--- PASS: TestDecision (0.00s)
+PASS
+ok  	github.com/kart-io/goagent/examples/orchestration/live/internal/livecase	1.034s
+=== RUN   TestMissingPhrases
+--- PASS: TestMissingPhrases (0.00s)
+=== RUN   TestGlossaryPolicy
+--- PASS: TestGlossaryPolicy (0.00s)
+=== RUN   TestScriptedLocalizeRecovery
+    main_test.go:157: 恢复：{Result:{English:Within 7 days of delivery confirmation, unopened items get a no-questions-asked refund, refunded to the original payment method in 3 business days. TranslatorLookups:0 StyleLookups:1 GlossaryInjected:1 NewModelCalls:2 Budget:{ReservedRequests:4 KnownUsageEntries:4 UnknownUsageEntries:0 KnownTokens:{PromptTokens:0 CompletionTokens:0 TotalTokens:8 CachedTokens:0}}} Calls:2 Err:}
+--- PASS: TestScriptedLocalizeRecovery (0.17s)
+=== RUN   TestLiveLocalizeRecovery
+    main_test.go:185: 模型：gemini/gemini-2.5-flash
+    main_test.go:147: 
+        	Error Trace:	/home/costalong/code/go/src/github.com/kart-io/goagent/examples/orchestration/live/localize/main_test.go:147
+        	            				/home/costalong/code/go/src/github.com/kart-io/goagent/examples/orchestration/live/localize/main_test.go:186
+        	Error:      	"1" is not greater than or equal to "2"
+        	Test:       	TestLiveLocalizeRecovery
+        	Messages:   	翻译至少一次工具回合加一次作答
+--- FAIL: TestLiveLocalizeRecovery (2.86s)
+FAIL
+FAIL	github.com/kart-io/goagent/examples/orchestration/live/localize	3.068s
+=== RUN   TestPaymentLogsRequirePaging
+--- PASS: TestPaymentLogsRequirePaging (0.00s)
+=== RUN   TestLiveLogTriageCrashRecovery
+    main_test.go:86: gemini/gemini-2.5-flash 恢复：{Answer:错误码：PGW-504
+        上游：bank-gw-3
+        处置建议：上游网关超时，已熔断，请检查 bank-gw-3 网关服务状态。 NewModelCalls:3 FetchRuns:0 PageReads:3 Offloaded:1 Budget:{ReservedRequests:5 KnownUsageEntries:5 UnknownUsageEntries:0 KnownTokens:{PromptTokens:13422 CompletionTokens:308 TotalTokens:14241 CachedTokens:0}}}
+--- PASS: TestLiveLogTriageCrashRecovery (8.79s)
+PASS
+ok  	github.com/kart-io/goagent/examples/orchestration/live/log-triage	9.826s
+=== RUN   TestTopology
+--- PASS: TestTopology (0.00s)
+=== RUN   TestLiveParallelDiagnostics
+    main_test.go:45: gemini/gemini-2.5-flash：{Findings:map[cpu:异常 db:正常 network:异常] Decision:升级 NewModelCalls:4 Budget:{ReservedRequests:4 KnownUsageEntries:4 UnknownUsageEntries:0 KnownTokens:{PromptTokens:327 CompletionTokens:133 TotalTokens:2469 CachedTokens:0}} EventCounts:map[agent_end:4 agent_start:4 branch_end:3 branch_start:3 graph_end:1 graph_start:1 model_end:4 model_start:4 node_end:2 node_start:2] Dropped:0 EventsPath:/tmp/TestLiveParallelDiagnostics3347237420/001/events.jsonl ReportPath:/tmp/TestLiveParallelDiagnostics3347237420/001/report.html}
+--- PASS: TestLiveParallelDiagnostics (6.75s)
+PASS
+ok  	github.com/kart-io/goagent/examples/orchestration/live/parallel-diagnostics	7.781s
+=== RUN   TestMissingFacts
+--- PASS: TestMissingFacts (0.00s)
+=== RUN   TestLoopTopology
+--- PASS: TestLoopTopology (0.00s)
+=== RUN   TestLiveReviewLoopRecovery
+    main_test.go:78: gemini/gemini-2.5-flash 恢复：轮次 3，新增请求 4，预留 6
+        **退款政策公告**
+        
+        收到商品7天内可申请退货。
+        
+        **退货规定：**
+        *   商品需全新、未使用，原包装、吊牌、配件、赠品齐全。
+        *   以下商品不支持退货：特价/清仓品、定制品、贴身衣物、已开封消耗品、礼品卡。
+        
+        **退货流程：**
+        请联系客服并提供订单号及退货原因。
+        
+        **退款处理：**
+        确认符合条件后，我们将在**3个工作日内**原路退款至您的支付账户。
+        
+        **运费：**
+        质量问题运费由我们承担；非质量问题退货运费需您自理。
+        
+        **请注意：**
+        任何退货问题，请先联系客服。
+        咨询邮箱：`refund@demo.example`
+    main_test.go:80: 
+        	Error Trace:	/home/costalong/code/go/src/github.com/kart-io/goagent/examples/orchestration/live/review-loop/main_test.go:80
+        	Error:      	Not equal: 
+        	            	expected: "通过"
+        	            	actual  : "修改"
+        	            	
+        	            	Diff:
+        	            	--- Expected
+        	            	+++ Actual
+        	            	@@ -1 +1 @@
+        	            	-通过
+        	            	+修改
+        	Test:       	TestLiveReviewLoopRecovery
+        	Messages:   	**退款政策公告**
+        	            	
+        	            	收到商品7天内可申请退货。
+        	            	
+        	            	**退货规定：**
+        	            	*   商品需全新、未使用，原包装、吊牌、配件、赠品齐全。
+        	            	*   以下商品不支持退货：特价/清仓品、定制品、贴身衣物、已开封消耗品、礼品卡。
+        	            	
+        	            	**退货流程：**
+        	            	请联系客服并提供订单号及退货原因。
+        	            	
+        	            	**退款处理：**
+        	            	确认符合条件后，我们将在**3个工作日内**原路退款至您的支付账户。
+        	            	
+        	            	**运费：**
+        	            	质量问题运费由我们承担；非质量问题退货运费需您自理。
+        	            	
+        	            	**请注意：**
+        	            	任何退货问题，请先联系客服。
+        	            	咨询邮箱：`refund@demo.example`
+--- FAIL: TestLiveReviewLoopRecovery (57.74s)
+FAIL
+FAIL	github.com/kart-io/goagent/examples/orchestration/live/review-loop	57.764s
+=== RUN   TestSummarizeOffline
+=== RUN   TestSummarizeOffline/多段流式：预览拼接等于终态
+=== RUN   TestSummarizeOffline/一次性输出：只有一段预览
+=== RUN   TestSummarizeOffline/空输出不提交终态
+=== RUN   TestSummarizeOffline/调用方取消
+--- PASS: TestSummarizeOffline (0.00s)
+    --- PASS: TestSummarizeOffline/多段流式：预览拼接等于终态 (0.00s)
+    --- PASS: TestSummarizeOffline/一次性输出：只有一段预览 (0.00s)
+    --- PASS: TestSummarizeOffline/空输出不提交终态 (0.00s)
+    --- PASS: TestSummarizeOffline/调用方取消 (0.00s)
+=== RUN   TestContendOffline
+=== RUN   TestContendOffline/3个子Agent共享2次
+=== RUN   TestContendOffline/5个子Agent共享1次
+=== RUN   TestContendOffline/4个子Agent共享4次
+=== RUN   TestContendOffline/2个子Agent共享5次
+=== RUN   TestContendOffline/10个子Agent共享3次
+--- PASS: TestContendOffline (0.11s)
+    --- PASS: TestContendOffline/3个子Agent共享2次 (0.02s)
+    --- PASS: TestContendOffline/5个子Agent共享1次 (0.02s)
+    --- PASS: TestContendOffline/4个子Agent共享4次 (0.02s)
+    --- PASS: TestContendOffline/2个子Agent共享5次 (0.02s)
+    --- PASS: TestContendOffline/10个子Agent共享3次 (0.02s)
+=== RUN   TestLiveSummarize
+    main_test.go:115: gemini/gemini-2.5-flash：预览 2 段，首段 3.359474658s，总 3.360155215s
+        结论：库存查询直连数据库导致数据库过载。
+        影响：持续9分钟，约3200笔订单失败。
+        改进：库存查询恢复缓存并增加压测门禁。
+--- PASS: TestLiveSummarize (3.36s)
+=== RUN   TestLiveContend
+    main_test.go:143: gemini/gemini-2.5-flash：{Succeeded:2 Rejected:1 Answers:[市场因剧烈波动达到预设阈值时，暂停交易以稳定市场的机制。 下游系统处理能力不足时，要求上游减速。] Errors:[root model request budget exceeded] NewModelCalls:2 Budget:{ReservedRequests:2 KnownUsageEntries:2 UnknownUsageEntries:0 KnownTokens:{PromptTokens:46 CompletionTokens:32 TotalTokens:535 CachedTokens:0}}}
+--- PASS: TestLiveContend (1.91s)
+PASS
+ok  	github.com/kart-io/goagent/examples/orchestration/live/stream-budget	6.411s
+=== RUN   TestOrderLookupTool
+--- PASS: TestOrderLookupTool (0.00s)
+=== RUN   TestLiveTicketTriage
+=== RUN   TestLiveTicketTriage/A1001
+    main_test.go:34: gemini/gemini-2.5-flash 首次：{Ticket:A1001 Decision:批准 Answer:结论：批准
+        理由：商品在签收7天内（3天）且未拆封，符合无理由退款政策。 NewModelCalls:4 LookupRuns:1 ChildCreated:1 ChildClose:1 Budget:{ReservedRequests:4 KnownUsageEntries:4 UnknownUsageEntries:0 KnownTokens:{PromptTokens:1407 CompletionTokens:132 TotalTokens:2711 CachedTokens:0}}}
+=== RUN   TestLiveTicketTriage/A1002
+    main_test.go:34: gemini/gemini-2.5-flash 首次：{Ticket:A1002 Decision:拒绝 Answer:结论：拒绝
+        理由：订单A1002已签收20天，超过了7天无理由退款的政策期限。 NewModelCalls:4 LookupRuns:1 ChildCreated:1 ChildClose:1 Budget:{ReservedRequests:4 KnownUsageEntries:4 UnknownUsageEntries:0 KnownTokens:{PromptTokens:1426 CompletionTokens:125 TotalTokens:2854 CachedTokens:0}}}
+=== RUN   TestLiveTicketTriage/A1003
+    main_test.go:34: gemini/gemini-2.5-flash 首次：{Ticket:A1003 Decision:拒绝 Answer:结论：拒绝
+        理由：定制刻字商品属于定制类商品，不支持无理由退款。 NewModelCalls:4 LookupRuns:1 ChildCreated:1 ChildClose:1 Budget:{ReservedRequests:4 KnownUsageEntries:4 UnknownUsageEntries:0 KnownTokens:{PromptTokens:1402 CompletionTokens:116 TotalTokens:2735 CachedTokens:0}}}
+--- PASS: TestLiveTicketTriage (24.67s)
+    --- PASS: TestLiveTicketTriage/A1001 (8.08s)
+    --- PASS: TestLiveTicketTriage/A1002 (8.42s)
+    --- PASS: TestLiveTicketTriage/A1003 (8.17s)
+PASS
+ok  	github.com/kart-io/goagent/examples/orchestration/live/ticket-triage	25.700s
+FAIL
+exit=1
