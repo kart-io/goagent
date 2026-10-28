@@ -139,7 +139,10 @@ func (g *GoTAgent) Invoke(ctx context.Context, input *agentcore.AgentInput) (*ag
 	}
 
 	// Build thought graph
-	graph := g.buildThoughtGraph(ctx, input, output)
+	graph, err := g.buildThoughtGraph(ctx, input, output)
+	if err != nil {
+		return g.handleError(ctx, output, "Failed to build thought graph", err, startTime)
+	}
 
 	// Check for cycles if enabled
 	if g.config.CycleDetection && g.hasCycles(graph) {
@@ -150,7 +153,6 @@ func (g *GoTAgent) Invoke(ctx context.Context, input *agentcore.AgentInput) (*ag
 
 	// Execute graph (parallel or sequential)
 	var finalResult interface{}
-	var err error
 
 	if g.config.ParallelExecution {
 		finalResult, err = g.executeGraphParallel(ctx, graph, input, output)
@@ -355,7 +357,14 @@ func (g *GoTAgent) InvokeFast(ctx context.Context, input *agentcore.AgentInput) 
 	}
 
 	// Build thought graph
-	graph := g.buildThoughtGraph(ctx, input, output)
+	graph, err := g.buildThoughtGraph(ctx, input, output)
+	if err != nil {
+		output.Status = interfaces.StatusFailed
+		output.Message = "Failed to build thought graph: " + err.Error()
+		output.Timestamp = time.Now()
+		output.Latency = time.Since(startTime)
+		return output, err
+	}
 
 	// Check for cycles if enabled
 	if g.config.CycleDetection && g.hasCycles(graph) {
@@ -371,7 +380,6 @@ func (g *GoTAgent) InvokeFast(ctx context.Context, input *agentcore.AgentInput) 
 
 	// Execute graph (parallel or sequential)
 	var finalResult interface{}
-	var err error
 
 	if g.config.ParallelExecution {
 		finalResult, err = g.executeGraphParallel(ctx, graph, input, output)
@@ -404,8 +412,8 @@ func (g *GoTAgent) InvokeFast(ctx context.Context, input *agentcore.AgentInput) 
 	return output, nil
 }
 
-// buildThoughtGraph constructs the DAG of thoughts
-func (g *GoTAgent) buildThoughtGraph(ctx context.Context, input *agentcore.AgentInput, output *agentcore.AgentOutput) []*GraphNode {
+// buildThoughtGraph constructs the DAG of thoughts；ctx 取消时返回 ctx.Err()
+func (g *GoTAgent) buildThoughtGraph(ctx context.Context, input *agentcore.AgentInput, output *agentcore.AgentOutput) ([]*GraphNode, error) {
 	// Initialize with root node
 	root := &GraphNode{
 		ID:           "root",
@@ -423,12 +431,8 @@ func (g *GoTAgent) buildThoughtGraph(ctx context.Context, input *agentcore.Agent
 	// Build graph iteratively
 	for len(graph) < g.config.MaxNodes {
 		// 检查上下文是否已取消（超时控制）
-		select {
-		case <-ctx.Done():
-			// 上下文已取消，停止构建图，返回当前已构建的部分
-			return graph
-		default:
-			// 继续执行
+		if err := ctx.Err(); err != nil {
+			return graph, err
 		}
 
 		// Select nodes for expansion
@@ -437,12 +441,11 @@ func (g *GoTAgent) buildThoughtGraph(ctx context.Context, input *agentcore.Agent
 			break
 		}
 
+		// 候选只由图状态决定：一轮没有新增节点（LLM 失败、输出无法解析或全被剪枝）时下一轮完全相同，必须停止
+		before := len(graph)
 		for _, node := range candidates {
-			// 每次生成前检查上下文
-			select {
-			case <-ctx.Done():
-				return graph
-			default:
+			if err := ctx.Err(); err != nil {
+				return graph, err
 			}
 
 			// Generate new thoughts from this node
@@ -489,9 +492,12 @@ func (g *GoTAgent) buildThoughtGraph(ctx context.Context, input *agentcore.Agent
 				}
 			}
 		}
+		if len(graph) == before {
+			break
+		}
 	}
 
-	return graph
+	return graph, nil
 }
 
 // executeGraphParallel executes independent nodes in parallel
@@ -1098,7 +1104,13 @@ func (g *GoTAgent) RunGenerator(ctx context.Context, input *agentcore.AgentInput
 
 		// Phase 1: Build thought graph
 		graphStart := time.Now()
-		graph := g.buildThoughtGraph(ctx, input, accumulated)
+		graph, err := g.buildThoughtGraph(ctx, input, accumulated)
+		if err != nil {
+			errorOutput := g.createStepOutput(accumulated, "Failed to build thought graph", startTime)
+			errorOutput.Status = interfaces.StatusFailed
+			yield(errorOutput, err)
+			return
+		}
 
 		// Check for cycles if enabled
 		if g.config.CycleDetection && g.hasCycles(graph) {
@@ -1136,7 +1148,6 @@ func (g *GoTAgent) RunGenerator(ctx context.Context, input *agentcore.AgentInput
 		// Phase 2: Execute graph
 		executionStart := time.Now()
 		var finalResult interface{}
-		var err error
 
 		if g.config.ParallelExecution {
 			finalResult, err = g.executeGraphParallel(ctx, graph, input, accumulated)

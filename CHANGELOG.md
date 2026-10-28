@@ -57,6 +57,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - OpenAI 工具请求采用 `tools/tool_calls`，保留旧 `function_call` 响应兼容；支持并发工具分片合并、用量传递和流中错误。仅支持旧 `functions` 请求的服务需要升级端点。
 - 自反思任务必须显式提供 `WithTaskExecutor`，不再返回模拟成功结果；各执行入口委派给同一真实执行器。
+- GoT 非极简模式构图时，一轮扩展没有新增节点（LLM 失败、输出无法解析或全部被剪枝）即停止构图，不再对同一批候选反复调用 LLM 空转到 ctx 截止（无截止时间时永不返回，master 上已存在）；LLM 持续失败时 `Invoke` 在两次调用后返回该错误。构图期间 ctx 被取消时 `Invoke`、`InvokeFast`、`RunGenerator` 返回 ctx 错误，不再带着半张图继续执行。
 
 - `RAGAgent` now uses supplied retrievers or vector stores. Unsupported non-nil inputs fail validation; nil preserves the prompt-only preset.
 - `ConfigureForRAG` no longer caches answers implicitly or rewrites the question as context. Applications should configure caching explicitly when evidence freshness and session isolation are accounted for.
