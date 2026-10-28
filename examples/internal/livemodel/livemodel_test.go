@@ -40,16 +40,6 @@ func TestConfigFromEnv(t *testing.T) {
 	}
 }
 
-func TestRequireSkipsWithoutOptIn(t *testing.T) {
-	t.Setenv("GOAGENT_LIVE", "")
-	ran := false
-	t.Run("skip", func(t *testing.T) {
-		Require(t)
-		ran = true
-	})
-	require.False(t, ran, "未设置 GOAGENT_LIVE=1 时不得调用真实模型")
-}
-
 func TestMiniMaxRequiresKey(t *testing.T) {
 	t.Setenv("MINIMAX_API_KEY", "")
 	t.Setenv("MINIMAX_CN_API_KEY", "")

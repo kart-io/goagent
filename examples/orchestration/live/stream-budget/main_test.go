@@ -12,6 +12,7 @@ import (
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/examples/internal/livemodel"
+	"github.com/kart-io/goagent/examples/internal/livemodel/livemodeltest"
 	"github.com/kart-io/goagent/examples/orchestration/internal/demomodel"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
@@ -110,7 +111,7 @@ func TestContendOffline(t *testing.T) {
 }
 
 func TestLiveSummarize(t *testing.T) {
-	client := livemodel.Require(t)
+	client := livemodeltest.Require(t)
 	out, err := Summarize(context.Background(), client, nil)
 	t.Logf("%s/%s：预览 %d 段，首段 %v，总 %v\n%s", client.Live.Provider, client.Live.Model, len(out.Previews), out.FirstPreview, out.Elapsed, out.Final)
 	require.NoError(t, err)
@@ -138,7 +139,7 @@ func TestLiveSummarize(t *testing.T) {
 }
 
 func TestLiveContend(t *testing.T) {
-	client := livemodel.Require(t)
+	client := livemodeltest.Require(t)
 	out, err := Contend(context.Background(), client, 3, 2)
 	t.Logf("%s/%s：%+v", client.Live.Provider, client.Live.Model, out)
 	require.NoError(t, err)

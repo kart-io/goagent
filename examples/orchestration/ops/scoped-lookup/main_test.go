@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/examples/internal/livemodel"
+	"github.com/kart-io/goagent/examples/internal/livemodel/livemodeltest"
 	"github.com/kart-io/goagent/examples/orchestration/internal/demomodel"
 	"github.com/kart-io/goagent/examples/orchestration/internal/livecase"
 	"github.com/kart-io/goagent/examples/orchestration/internal/livecase/livecasetest"
@@ -360,7 +361,7 @@ func TestScriptedInnerArgumentErrorBarrier(t *testing.T) {
 }
 
 func TestLiveScopedLookup(t *testing.T) {
-	client := livemodel.Require(t)
+	client := livemodeltest.Require(t)
 	dir := t.TempDir()
 	first, err := Run(context.Background(), client, dir)
 	t.Logf("%s/%s：%+v", client.Live.Provider, client.Live.Model, first)

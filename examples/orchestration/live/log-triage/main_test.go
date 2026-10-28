@@ -13,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/kart-io/goagent/examples/internal/livemodel"
+	"github.com/kart-io/goagent/examples/internal/livemodel/livemodeltest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -58,7 +59,7 @@ func TestLiveLogTriageCrashRecovery(t *testing.T) {
 	if os.Getenv(childDir) != "" {
 		runChild(t)
 	}
-	client := livemodel.Require(t)
+	client := livemodeltest.Require(t)
 	dir := t.TempDir()
 	child := func(mode string) string {
 		cmd := exec.Command(os.Args[0], "-test.run=^TestLiveLogTriageCrashRecovery$")

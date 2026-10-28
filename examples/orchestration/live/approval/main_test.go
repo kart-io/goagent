@@ -10,6 +10,7 @@ import (
 
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/examples/internal/livemodel"
+	"github.com/kart-io/goagent/examples/internal/livemodel/livemodeltest"
 	"github.com/kart-io/goagent/examples/orchestration/internal/demomodel"
 	"github.com/kart-io/goagent/examples/orchestration/internal/livecase"
 	"github.com/kart-io/goagent/examples/orchestration/internal/livecase/livecasetest"
@@ -165,7 +166,7 @@ func TestLiveApprovalFlows(t *testing.T) {
 	if os.Getenv(childDir) != "" {
 		childMain("TestLiveApprovalFlows")
 	}
-	client := livemodel.Require(t)
+	client := livemodeltest.Require(t)
 	t.Logf("模型：%s/%s", client.Live.Provider, client.Live.Model)
 	exerciseFlows(t, client, "TestLiveApprovalFlows", false)
 }

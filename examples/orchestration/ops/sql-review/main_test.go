@@ -12,6 +12,7 @@ import (
 
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/examples/internal/livemodel"
+	"github.com/kart-io/goagent/examples/internal/livemodel/livemodeltest"
 	"github.com/kart-io/goagent/examples/orchestration/internal/demomodel"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
@@ -384,7 +385,7 @@ func TestScriptedEditBeforeAutoApplyInvalidates(t *testing.T) {
 // 真实模型：状态必须等于规则去向与模型结论推出的唯一状态（模型降级不算失败）；
 // 规则拒绝的不调模型，只有 test 环境 approve+low 才自动执行；T-107 未被模型拒绝时必须等待，批准后执行一次。
 func TestLiveSQLReview(t *testing.T) {
-	client := livemodel.Require(t)
+	client := livemodeltest.Require(t)
 	dir := t.TempDir()
 	first, err := Run(context.Background(), client, dir)
 	t.Logf("%s/%s：%+v", client.Live.Provider, client.Live.Model, first)

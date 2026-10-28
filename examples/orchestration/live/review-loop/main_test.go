@@ -10,6 +10,7 @@ import (
 
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/examples/internal/livemodel"
+	"github.com/kart-io/goagent/examples/internal/livemodel/livemodeltest"
 	"github.com/kart-io/goagent/examples/orchestration/internal/livecase"
 	"github.com/kart-io/goagent/examples/orchestration/internal/livecase/livecasetest"
 	"github.com/stretchr/testify/require"
@@ -66,7 +67,7 @@ func TestLiveReviewLoopRecovery(t *testing.T) {
 		}
 		livecase.ExitWithResult(out)
 	}
-	client := livemodel.Require(t)
+	client := livemodeltest.Require(t)
 	dir := t.TempDir()
 	env := func(mode string) []string { return []string{childDir + "=" + dir, childMode + "=" + mode} }
 
