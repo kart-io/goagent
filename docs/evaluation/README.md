@@ -1,5 +1,7 @@
 # 可复现评测（合成数据）
 
+最新整合：[R2 分支修复与评测资料恢复验证](2026-10-28-r2-integration/REPORT.md)。
+
 归档要求见[评测资料保留约定](RETENTION.md)。历史原始结果与失败日志随代码保留，新增验证独立归档。
 
 框架性能新增：[GoAgent、Eino、LangGraph/LangChain、OpenAI Agents SDK、Google ADK 对测](2026-10-27-framework-performance-v2/REPORT.md)。本地即时模型、四种工作负载、80 组/32,000 次有效操作；分别报告同语言延迟、Go 分配和跨运行时观察。没有真实推理、持久化和并发吞吐排名。

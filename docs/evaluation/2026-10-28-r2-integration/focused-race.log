@@ -1,0 +1,10 @@
+ok  	github.com/kart-io/goagent/builder	1.397s
+ok  	github.com/kart-io/goagent/workflow	7.614s
+ok  	github.com/kart-io/goagent/examples/orchestration/agent-tool	1.027s
+ok  	github.com/kart-io/goagent/examples/orchestration/composed-order	1.116s
+ok  	github.com/kart-io/goagent/examples/orchestration/context-recovery	1.030s
+ok  	github.com/kart-io/goagent/examples/orchestration/field-adapter	1.025s
+?   	github.com/kart-io/goagent/examples/orchestration/internal/demomodel	[no test files]
+ok  	github.com/kart-io/goagent/examples/orchestration/parallel-diagnostics	1.021s
+?   	github.com/kart-io/goagent/examples/orchestration/runnable-tool	[no test files]
+?   	github.com/kart-io/goagent/examples/orchestration/stream-pipeline	[no test files]

@@ -1,0 +1,1016 @@
+{
+  "source_commit": "0b461d65fee3902c59aa755875207bb1d3148547",
+  "restored_count": 202,
+  "files": [
+    {
+      "path": "docs/evaluation/2026-10-27-business-cases-live/all-race.log",
+      "bytes": 14206,
+      "sha256": "8cef377c0513f0c8e21b0fb40bec107c4960c9a148692ee039877067f73fe98c"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-business-cases-live/build.log",
+      "bytes": 537,
+      "sha256": "2597e4ee3445fd36db3cfa09c1bc1366b850c87746e49caf7b44f33c4efafa9b"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-business-cases-live/deepseek.log",
+      "bytes": 893,
+      "sha256": "2f2b723c577fb3e8a8f46962059791eaeca5342f843f6c2013d4ecf056919b7c"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-business-cases-live/gemini.log",
+      "bytes": 895,
+      "sha256": "a7dc8a1dcbaeade83399e7d7abca55e2be2f5a301886a6f1dfcdafcb1b46f30f"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-business-cases-live/lint.log",
+      "bytes": 10,
+      "sha256": "e92606b0bf483111dff0a120c315ea165821348f31365020e2468a0059095c47"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-business-cases-minimax/all-race.log",
+      "bytes": 14206,
+      "sha256": "07979872fc32b0412b36491a20cb92e49c15f5d6117bb4a4b6fc786af6f0a4a7"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-business-cases-minimax/build.log",
+      "bytes": 537,
+      "sha256": "2597e4ee3445fd36db3cfa09c1bc1366b850c87746e49caf7b44f33c4efafa9b"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-business-cases-minimax/lint.log",
+      "bytes": 10,
+      "sha256": "e92606b0bf483111dff0a120c315ea165821348f31365020e2468a0059095c47"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-business-cases-minimax/minimax.log",
+      "bytes": 896,
+      "sha256": "32d68d6c7b7df9841f67ac59f3d26a5e8009ef4a32f98e54d3885bb678908c81"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-business-cases-minimax/protocol-race.log",
+      "bytes": 72,
+      "sha256": "5c185138e185c5ae3df6f13d905f8ae49fd5e8166b5a7a664ce1179704453e39"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-business-cases-minimax/retest-20261027T105337Z/run.log",
+      "bytes": 895,
+      "sha256": "11e34f6482fbcc365f72be6e89e8a55ebfaa28d73a09c06d2510e0932b3e5751"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-business-cases/all-race.log",
+      "bytes": 14203,
+      "sha256": "df2a5d360e96a36d58a69cc6d611f0eee34668c58c8a5f9575d9f0fe756cfbaf"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-business-cases/cases-race.log",
+      "bytes": 3981,
+      "sha256": "070b892722a0cafb4b914a204c876e5941cf81c2822571dc851894a32023a80e"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-business-cases/lint.log",
+      "bytes": 10,
+      "sha256": "e92606b0bf483111dff0a120c315ea165821348f31365020e2468a0059095c47"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-durable-tool-loop/build.log",
+      "bytes": 537,
+      "sha256": "2597e4ee3445fd36db3cfa09c1bc1366b850c87746e49caf7b44f33c4efafa9b"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-durable-tool-loop/deepseek-v2.log",
+      "bytes": 151,
+      "sha256": "2b3ba97b0fa6ee44b82ac0deb1741a56b4c4a35b473ebc800d83d9f14ee8207f"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-durable-tool-loop/deepseek.log",
+      "bytes": 872,
+      "sha256": "0a5abcdf32d6fcc24e27b0c442cc74e0b0c7c591b0172844caa808d9105fa523"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-durable-tool-loop/gemini-v2.log",
+      "bytes": 151,
+      "sha256": "962f97f5b1cde52ab923a532012386289190a3ed359d33ce1f2eeb66cff78309"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-durable-tool-loop/gemini.log",
+      "bytes": 151,
+      "sha256": "58f2c241028b18d5e48e4a702e80a0f5593b434973200452a1f47d51ac2cf2f2"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-durable-tool-loop/imports.log",
+      "bytes": 20,
+      "sha256": "8d6ba6df29b2831c5156989aadbb697325bb6d188e96fefc6f19d139c944a420"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-durable-tool-loop/lint.log",
+      "bytes": 10,
+      "sha256": "e92606b0bf483111dff0a120c315ea165821348f31365020e2468a0059095c47"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-durable-tool-loop/minimax-v2.log",
+      "bytes": 151,
+      "sha256": "87d7f96f4666eb8014f1a7f8332e30815304cf6d171fa6f65d2b3dafc0c2e356"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-durable-tool-loop/minimax.log",
+      "bytes": 151,
+      "sha256": "d9a7be305ff09af32da762c25327a72e21bed68bb276859813e291e499ebc24d"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-durable-tool-loop/native-offline.log",
+      "bytes": 119,
+      "sha256": "feb1bd08e6de27a639310feaacbf213503dbeb562e74fde9744a00dd84722f45"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-durable-tool-loop/offline-race.log",
+      "bytes": 14152,
+      "sha256": "135451a00594683aa0957ae81f37b0f351ffa9e3844f44ff2744a5c1e3d2122e"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-durable-tool-loop/storage-final.log",
+      "bytes": 52,
+      "sha256": "c27aad3c27a49edb7a6a4d47f0f6e28aa82ff5953a656d1ef0cd9bff154cd637"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-durable-tool-loop/storage-lint.log",
+      "bytes": 10,
+      "sha256": "e92606b0bf483111dff0a120c315ea165821348f31365020e2468a0059095c47"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/0-eino-agent_tool.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/0-eino-branch_loop_8.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/0-eino-graph_8.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/0-eino-stream_64.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/0-goagent-agent_tool.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/0-goagent-branch_loop_8.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/0-goagent-graph_8.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/0-goagent-stream_64.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/0-google_adk-agent_tool.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/0-google_adk-stream_64.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/0-langchain-agent_tool.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/0-langchain-stream_64.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/0-langgraph-branch_loop_8.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/0-langgraph-graph_8.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/0-openai_agents-agent_tool.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/0-openai_agents-stream_64.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/1-eino-agent_tool.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/1-eino-branch_loop_8.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/1-eino-graph_8.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/1-eino-stream_64.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/1-goagent-agent_tool.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/1-goagent-branch_loop_8.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/1-goagent-graph_8.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/1-goagent-stream_64.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/1-google_adk-agent_tool.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/1-google_adk-stream_64.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/1-langchain-agent_tool.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/1-langchain-stream_64.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/1-langgraph-branch_loop_8.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/1-langgraph-graph_8.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/1-openai_agents-agent_tool.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/1-openai_agents-stream_64.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/2-eino-agent_tool.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/2-eino-branch_loop_8.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/2-eino-graph_8.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/2-eino-stream_64.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/2-goagent-agent_tool.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/2-goagent-branch_loop_8.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/2-goagent-graph_8.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/2-goagent-stream_64.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/2-google_adk-agent_tool.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/2-google_adk-stream_64.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/2-langchain-agent_tool.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/2-langchain-stream_64.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/2-langgraph-branch_loop_8.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/2-langgraph-graph_8.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/2-openai_agents-agent_tool.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/2-openai_agents-stream_64.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/3-eino-agent_tool.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/3-eino-branch_loop_8.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/3-eino-graph_8.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/3-eino-stream_64.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/3-goagent-agent_tool.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/3-goagent-branch_loop_8.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/3-goagent-graph_8.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/3-goagent-stream_64.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/3-google_adk-agent_tool.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/3-google_adk-stream_64.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/3-langchain-agent_tool.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/3-langchain-stream_64.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/3-langgraph-branch_loop_8.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/3-langgraph-graph_8.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/3-openai_agents-agent_tool.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/3-openai_agents-stream_64.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/4-eino-agent_tool.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/4-eino-branch_loop_8.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/4-eino-graph_8.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/4-eino-stream_64.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/4-goagent-agent_tool.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/4-goagent-branch_loop_8.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/4-goagent-graph_8.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/4-goagent-stream_64.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/4-google_adk-agent_tool.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/4-google_adk-stream_64.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/4-langchain-agent_tool.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/4-langchain-stream_64.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/4-langgraph-branch_loop_8.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/4-langgraph-graph_8.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/4-openai_agents-agent_tool.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/4-openai_agents-stream_64.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/go-allocations.log",
+      "bytes": 4372,
+      "sha256": "27f3bc6e3287a628e591f0f67a1657d8860e885e41ba462e8b014c128bd5e091"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/go-race.log",
+      "bytes": 128,
+      "sha256": "27c26c2b41e79f76a5fdff37b7e5f7987ab3dd712192c09a5f9087feebaa3ac5"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/profile-run.log",
+      "bytes": 258,
+      "sha256": "d754669527ee8629e3e4c1c4d3b00d6e00b34c6777a77d1fbd30b6b93553fb3d"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/python-tests.log",
+      "bytes": 3148,
+      "sha256": "34c0adbaf65b9df84a6a7e3297fbd926ec492a568bf4c1ef22a1f8a40bafb440"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance-v2/root-tests.log",
+      "bytes": 13549,
+      "sha256": "983000a4505dc737ae966ec24981900fb40393e3cebbf0bb66c1521661b48b99"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance/0-eino-agent_tool.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance/0-eino-branch_loop_8.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance/0-eino-graph_8.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance/0-eino-stream_64.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance/0-goagent-agent_tool.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance/0-goagent-branch_loop_8.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance/0-goagent-graph_8.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance/0-goagent-stream_64.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance/0-google_adk-agent_tool.stderr.log",
+      "bytes": 665,
+      "sha256": "6b168092c6e182e649de146d21864f6040ee0dde417ed76fac9818f4999d065e"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance/0-google_adk-stream_64.stderr.log",
+      "bytes": 665,
+      "sha256": "7e211077e69a703ca756de72742928585bd5d4f6115d34ec127026e951a64e46"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance/0-langchain-agent_tool.stderr.log",
+      "bytes": 827,
+      "sha256": "1281a97a63378e69eccf09e954fc34656dda5f50f9fd1096206cb91643dd8ead"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance/0-langchain-stream_64.stderr.log",
+      "bytes": 665,
+      "sha256": "430a06c7588e89e6b92cfb7144906d8bd53a3ba6dc1fc232fb6e3bbc16c42b4a"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance/0-langgraph-branch_loop_8.stderr.log",
+      "bytes": 827,
+      "sha256": "a4d4c8d7a6493122bd96a933da3a38326c0c07096bdd40cf8ad6fcbea9c2cf00"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance/0-langgraph-graph_8.stderr.log",
+      "bytes": 827,
+      "sha256": "21bc630bd0ea7822fc33fc92de7c3db6a2f5f5cee8681a845cda1bf232cad670"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance/0-openai_agents-agent_tool.stderr.log",
+      "bytes": 833,
+      "sha256": "32467ecc3df04877b97c83d7ca794c663e0385cdb01d5d7462990a427c1b9db3"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance/0-openai_agents-stream_64.stderr.log",
+      "bytes": 828,
+      "sha256": "0fa072ed58075f6d7e5d6f5a561488f0e790ebcd330d85852f4c7b961934c480"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance/1-eino-agent_tool.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance/1-eino-branch_loop_8.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance/1-eino-graph_8.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance/1-eino-stream_64.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance/1-goagent-agent_tool.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance/1-goagent-branch_loop_8.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance/1-goagent-graph_8.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance/1-goagent-stream_64.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance/1-google_adk-agent_tool.stderr.log",
+      "bytes": 665,
+      "sha256": "6a862713ba4e9b25bca3aa614eb2f3f55e1ed893dbfaa671dcbff8afb6ce42fb"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance/1-google_adk-stream_64.stderr.log",
+      "bytes": 665,
+      "sha256": "8a07e1d59b30a76b5907184f2f24fc0824abb698a5a654023ca30e70e4ed52bf"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance/1-langchain-agent_tool.stderr.log",
+      "bytes": 827,
+      "sha256": "eff4108d567bb1b2d61f2eb1f2e64b0cfca5804328fb9214f68ad1abd8770ae7"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance/1-langchain-stream_64.stderr.log",
+      "bytes": 665,
+      "sha256": "74778f61f6e8812b6fbc4a98d0746417dadceff47a5cbaa4ae0270c6c96a86ac"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance/1-langgraph-branch_loop_8.stderr.log",
+      "bytes": 827,
+      "sha256": "359d2386ea9d4eaaa79e036de5aa1f37c88b6d629257ac05d65408f98afae284"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance/1-langgraph-graph_8.stderr.log",
+      "bytes": 827,
+      "sha256": "2b1fcbcfb3f445ab4aae3d2696d6da8116a72dd7621698c64791a35898f49d24"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance/1-openai_agents-agent_tool.stderr.log",
+      "bytes": 833,
+      "sha256": "d0798c5cdd121478f4fbe09fb13edf7a2f95a3ce504839858baf3bd353137659"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance/1-openai_agents-stream_64.stderr.log",
+      "bytes": 828,
+      "sha256": "285d59077fe1ea74e663acc6e49220408f29cda21e616061d84e9711231896b3"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance/2-eino-agent_tool.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance/2-goagent-branch_loop_8.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance/2-goagent-graph_8.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance/2-google_adk-agent_tool.stderr.log",
+      "bytes": 665,
+      "sha256": "b67d78677b69cefc0850ec4fea6846ebf01964e45f069931f51dec2d84857ff2"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance/2-google_adk-stream_64.stderr.log",
+      "bytes": 665,
+      "sha256": "1c773fc278f3c5495678a5b8c8f58d048fe03399cfb0af291a10756db66c52b5"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance/2-langchain-agent_tool.stderr.log",
+      "bytes": 827,
+      "sha256": "36535aa3459dfc85fe72ff56e25b97240de40384ac7e72d4e54f60608a8cb640"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance/2-langchain-stream_64.stderr.log",
+      "bytes": 665,
+      "sha256": "a0399bd7d6b46d78a2ca29081dc2b92e8b14029417e9e01d8eeed136bd91b612"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-framework-performance/2-langgraph-branch_loop_8.stderr.log",
+      "bytes": 827,
+      "sha256": "1476821fa0a5f9e58e5d694ad0e12303daf0fa71ce0f779f69ee695d5cb88290"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-model-consistency/compare.py",
+      "bytes": 4576,
+      "sha256": "927227af88df905f6781014c0a8694a38bfbe0593f59ef7fdc4490e99cfbbc65"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-model-consistency/round-1-deepseek.log",
+      "bytes": 893,
+      "sha256": "9c30e489c937fa51a7b07b0f59d769135b5b02c7df11be2675cb935bc331bfb2"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-model-consistency/round-1-gemini.log",
+      "bytes": 895,
+      "sha256": "39eac88ef50dbf3932978f2f674abfc200e73671e441e0585f7433fc039877b2"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-model-consistency/round-1-minimax.log",
+      "bytes": 893,
+      "sha256": "1900409b6409306e537dbfd254e8760d74df878360164d6877d44908c8720579"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-model-consistency/round-2-deepseek.log",
+      "bytes": 893,
+      "sha256": "76478908b6f8e6a75e591ccd6557279b5d3d933451d2c07f72c0e8cdfc4003d6"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-model-consistency/round-2-gemini.log",
+      "bytes": 963,
+      "sha256": "5aa58b4fdb61055486ca651a1b140ad44df0d86b99c6843ca037b05a0f2d10b4"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-model-consistency/round-2-minimax.log",
+      "bytes": 895,
+      "sha256": "ff20be84bfb630cdb22efa968cda906d96ac589570e369d1f64ff25a2afdb37d"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-model-consistency/round-3-deepseek.log",
+      "bytes": 893,
+      "sha256": "bf42fffdda67681987faa9cd13543fc6287125ae4eab878db425066b838624f0"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-model-consistency/round-3-gemini.log",
+      "bytes": 895,
+      "sha256": "2c242fb3b44da8415b71850a15f2cd0d55a10dd46366ba0661a1f69bd1b4eec2"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-model-consistency/round-3-minimax.log",
+      "bytes": 895,
+      "sha256": "3225403785814a9a5bef5367ed83670be5fac1f77cd6df039cab50b89b3a3463"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-model-consistency/run.py",
+      "bytes": 2114,
+      "sha256": "c74153b3441b6c382c80f17289be44bdf234ed081c209e5703273a0746433fae"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-native-orchestration/all-race.log",
+      "bytes": 14072,
+      "sha256": "13ed4b1aad466b8e87024f7b17123d6a57a62f4deb6a319ecb84c8d1fb1a7818"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-native-orchestration/lint.log",
+      "bytes": 10,
+      "sha256": "e92606b0bf483111dff0a120c315ea165821348f31365020e2468a0059095c47"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-native-orchestration/runnable-final.log",
+      "bytes": 48,
+      "sha256": "f6910bb55ec04888575f9a8846508ed39477e5ae078ab2f20544ea5323728a83"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-orchestration-r2/after-allocation-fix.log",
+      "bytes": 4372,
+      "sha256": "ff2ef00bddd1da59d13a24c65f45cf0454b2aa92d2111040c5613aa6d244ba70"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-orchestration-r2/after-before-final-review.log",
+      "bytes": 4372,
+      "sha256": "f1ebbae2cb021a5182a566774bda20a8b0f1e4eedc1af4a70dce078f5ff2cd4f"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-orchestration-r2/after-initial-regression.log",
+      "bytes": 4352,
+      "sha256": "8b63d233d9935b4e14466b4387bda94c846680125660673f3f07d7f095e759de"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-orchestration-r2/after.log",
+      "bytes": 4372,
+      "sha256": "928b1446c45b8f2ea543d24dda0c71fbff13f1f526752849401e9804d9b99849"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-orchestration-r2/before.log",
+      "bytes": 4372,
+      "sha256": "13734ba3d637050c865b9b215a54de066b75ea2dcfc45551979a327fec21d053"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-orchestration-r2/benchmark-contracts.log",
+      "bytes": 128,
+      "sha256": "40fd7ae4b54b2912f09509945b92d9954a8a0df2c256cfc35d34c79ecf53ba8e"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-orchestration-r2/build.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-orchestration-r2/flow.log",
+      "bytes": 541,
+      "sha256": "19cdb1e71a482160a9462586f73638688a37d369f44b40279e2b0fdf931dac7a"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-orchestration-r2/imports.log",
+      "bytes": 20,
+      "sha256": "8d6ba6df29b2831c5156989aadbb697325bb6d188e96fefc6f19d139c944a420"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-orchestration-r2/lint.log",
+      "bytes": 10,
+      "sha256": "e92606b0bf483111dff0a120c315ea165821348f31365020e2468a0059095c47"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-orchestration-r2/red-green/final-review-green.log",
+      "bytes": 149,
+      "sha256": "242986b7a495c90f121b6d916d35e4c2eb91a770d5c35b5333afda353e88aeb5"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-orchestration-r2/red-green/final-review-red.log",
+      "bytes": 2055,
+      "sha256": "8541a26b1fa0972955b4fec6cf1ce0d5072afde474e724b5cedf9cee0525a3d7"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-orchestration-r2/red-green/t1-red.log",
+      "bytes": 797,
+      "sha256": "5e9acaba2febb9220f0d33162a60847280bbb62c5353f1fcdca8b88670cde3bd"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-orchestration-r2/red-green/t10-alloc-red.log",
+      "bytes": 180,
+      "sha256": "0841e739aadde80e5f1028f51071315bb12ba4c52db8d59bcd2ab45bd74c0a44"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-orchestration-r2/red-green/t10-finalpolicy-red.log",
+      "bytes": 629,
+      "sha256": "eca3ef10d058599f840c1435912f48926d38fcfb7cfa3692f0c6457246a501c8"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-orchestration-r2/red-green/t10-memorykey-red.log",
+      "bytes": 426,
+      "sha256": "1d52b80c3a641d16d4148e003348b568b1f556e5ad4a367b3e6f6819c58c674f"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-orchestration-r2/red-green/t10-panic-red.log",
+      "bytes": 427,
+      "sha256": "590b9dc5ab535a8ef1434a3351c5d554d1260b166dd6c6e61aafffe7fa336dfb"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-orchestration-r2/red-green/t10-red.log",
+      "bytes": 301,
+      "sha256": "66f750ceba55f4b6fb4134f09a4459ffbe6d1426a27260789c93479b52b699ba"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-orchestration-r2/red-green/t2-red.log",
+      "bytes": 1391,
+      "sha256": "9ed56edc84821f6517ad4a689846265dc38191c3f538fdb51ef61cac0f8f2595"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-orchestration-r2/red-green/t3-red.log",
+      "bytes": 817,
+      "sha256": "5821307eaa9e6b4e986f9d810a35fbf463ff5bfa03b18ae53ccaf757ca73dcc4"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-orchestration-r2/red-green/t4-red.log",
+      "bytes": 624,
+      "sha256": "7b8b56208b3c6b3988d003f3bc440a39d09f27ffbe5e3f2c8c8a05e6dc09d74e"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-orchestration-r2/red-green/t5-red.log",
+      "bytes": 1183,
+      "sha256": "0f0a022a6dca71745518382ac6af1e3c1d90caed9f240057560e28d3e3ab0795"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-orchestration-r2/red-green/t6-red.log",
+      "bytes": 910,
+      "sha256": "b2d8b96b814ee174e5230bf079838a094dcc7072b26f3c4c864bf93aa26dab69"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-orchestration-r2/red-green/t7-red.log",
+      "bytes": 683,
+      "sha256": "e73b0741e1e8a51b4b40a192719059a5f3a4263f974dbc7b7509a630a19d48f0"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-orchestration-r2/red-green/t8-red.log",
+      "bytes": 700,
+      "sha256": "9ea2db93e13cb1b96bcb76adaf347f20f8c50a167a1bfbf45faba44814e26f58"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-orchestration-r2/red-green/t9-red.log",
+      "bytes": 195,
+      "sha256": "d784ebbba1990e1987e37b6975cb812cc26d938583bd3efa60d36ebdce18784f"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-orchestration-r2/tests-go125.log",
+      "bytes": 14587,
+      "sha256": "161cdac3d82b8ca1e21f4739a1b29ed226291b045d0b686050ba946c48c084fe"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-orchestration-r2/tests-go127.log",
+      "bytes": 14496,
+      "sha256": "a2e52ed9bc80723a3e30cab4a73b05471aeb500521a15fde53bea98c7949a193"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-provider-regression/lint.log",
+      "bytes": 10,
+      "sha256": "e92606b0bf483111dff0a120c315ea165821348f31365020e2468a0059095c47"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-provider-regression/precommit-race.log",
+      "bytes": 14010,
+      "sha256": "f856a8327c8cd2273a50f1aecfb40649832b41d764a4e6e2cff8b68206ca4d1b"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-provider-regression/state-race.log",
+      "bytes": 821,
+      "sha256": "d7199993a9b25d97f0221ae5a31e931b9873c733cb8a6b0272fe2313fb650a97"
+    },
+    {
+      "path": "docs/evaluation/2026-10-27-provider-regression/tests-short.log",
+      "bytes": 14008,
+      "sha256": "51bd72e8fef9bca7ea5f94cf0d2ecf79632c4106b767bf1bf575fcbfafff6308"
+    },
+    {
+      "path": "evaluation/frameworkbench/python_runner.py",
+      "bytes": 13632,
+      "sha256": "de554c22a06ecd42a63451719c8172ad3ea2f436026dea881081b7049c93e420"
+    },
+    {
+      "path": "evaluation/frameworkbench/run_comparison.py",
+      "bytes": 5647,
+      "sha256": "0b7472b8328f6a2d31b7ef17622d18fd266e89141d8f7963f94edfb3a1d41353"
+    },
+    {
+      "path": "evaluation/frameworkbench/test_python_runner.py",
+      "bytes": 1538,
+      "sha256": "da548ccd5f7833eb59170b1d2fbec5eb0cc119a3a9bff5bfadc4f4abf20e334d"
+    },
+    {
+      "path": "evaluation/frameworkbench/test_statistics.py",
+      "bytes": 1167,
+      "sha256": "7821ddaa07e2aeac1f53dceca3661af4d433748f51b09d0ae303921820f04cfb"
+    }
+  ]
+}
