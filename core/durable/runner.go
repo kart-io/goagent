@@ -49,6 +49,9 @@ type Runner struct {
 	Store   Store
 	Version string
 	Steps   []Step
+	// BeforeApprove 在运行锁内、批准生效前调用，用于核对暂停期间外部数据是否被改动。
+	// 返回错误或 panic 时拒绝本次批准且不改动检查点；snap 是独立副本。
+	BeforeApprove func(ctx context.Context, id string, snap *Snapshot) error
 }
 
 // Run starts or resumes a run. Initial data is used only for a new run. To resume
@@ -105,6 +108,11 @@ func (r *Runner) Run(ctx context.Context, id string, initial json.RawMessage, ap
 	if approvalKey != "" && (!snapshot.Waiting || snapshot.Key != approvalKey) {
 		return snapshot, fmt.Errorf("approval does not match waiting step")
 	}
+	if approvalKey != "" && r.BeforeApprove != nil {
+		if err = r.checkBeforeApprove(ctx, id, snapshot); err != nil {
+			return snapshot, err
+		}
+	}
 	for snapshot.Next < len(r.Steps) {
 		if err = ctx.Err(); err != nil {
 			return snapshot, err
@@ -148,5 +156,18 @@ func (r *Runner) Run(ctx context.Context, id string, initial json.RawMessage, ap
 		snapshot = &next
 	}
 	return snapshot, nil
+}
+func (r *Runner) checkBeforeApprove(ctx context.Context, id string, snapshot *Snapshot) (err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			err = fmt.Errorf("批准前置校验 panic: %v", p)
+		}
+	}()
+	snap := *snapshot
+	snap.Data = append(json.RawMessage(nil), snapshot.Data...)
+	if err = r.BeforeApprove(ctx, id, &snap); err != nil {
+		return fmt.Errorf("批准前置校验拒绝: %w", err)
+	}
+	return nil
 }
 func digest(s string) string { sum := sha256.Sum256([]byte(s)); return hex.EncodeToString(sum[:]) }

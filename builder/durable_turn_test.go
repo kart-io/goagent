@@ -28,9 +28,9 @@ func TestJournaledTurnRetainsFailedUsageAndDoesNotRetry(t *testing.T) {
 			}
 			model := nativeModel([]*llm.StreamChunk{chunk})
 			emit := func(AgentEvent) error { return nil }
-			_, err = readJournaledTurn(ctx, 0, model, &llm.CompletionRequest{}, nil, emit)
+			_, err = readJournaledTurn(ctx, 0, model, &llm.CompletionRequest{}, nil, false, emit)
 			require.Error(t, err)
-			_, err = readJournaledTurn(ctx, 0, model, &llm.CompletionRequest{}, nil, emit)
+			_, err = readJournaledTurn(ctx, 0, model, &llm.CompletionRequest{}, nil, false, emit)
 			require.ErrorIs(t, err, durable.ErrOperationAttention)
 			require.Len(t, model.requests, 1)
 			record, err := durable.InspectOperation(ctx, "model/turn/0")
@@ -76,4 +76,35 @@ func TestDurableLoopRejectsUnjournaledToolsBeforeModelRequest(t *testing.T) {
 	_, err = agent.AsRunnable().Invoke(ctx, "run")
 	require.ErrorContains(t, err, "journaled adapter")
 	require.Empty(t, model.requests)
+}
+
+// 无效工具计划按原因分别报错并带工具名；日志只保存失败类别，不保存错误文本。
+func TestInvalidToolPlanReportsReason(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		calls []llm.ToolCall
+		want  string
+	}{
+		{"缺少ID", []llm.ToolCall{nativeCall("", "lookup", "{}")}, `模型返回的工具 "lookup" 调用缺少 ID`},
+		{"ID重复", []llm.ToolCall{nativeCall("a", "lookup", "{}"), nativeCall("a", "lookup", "{}")}, `模型返回的工具 "lookup" 调用 ID 重复`},
+		{"未知工具", []llm.ToolCall{nativeCall("a", "missing", "{}")}, `模型请求了未提供的工具 "missing"`},
+		{"参数非JSON", []llm.ToolCall{nativeCall("a", "lookup", `{"id":`)}, `模型返回的工具 "lookup" 参数不是 JSON 对象`},
+		{"参数为null", []llm.ToolCall{nativeCall("a", "lookup", "null")}, `模型返回的工具 "lookup" 参数不是 JSON 对象`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store, err := durable.NewFileStore(t.TempDir())
+			require.NoError(t, err)
+			ctx := durable.WithJournal(durable.WithExecutionKey(context.Background(), "node"), store)
+			model := nativeModel([]*llm.StreamChunk{{Done: true, FinishReason: "tool_calls", ToolCalls: tc.calls}})
+			_, err = readJournaledTurn(ctx, 0, model, &llm.CompletionRequest{}, []interfaces.Tool{NewMockTool("lookup", "结果")}, false, func(AgentEvent) error { return nil })
+			require.EqualError(t, err, tc.want)
+			record, err := durable.InspectOperation(ctx, "model/turn/0")
+			require.NoError(t, err)
+			require.Equal(t, "failed", record.Status)
+			require.Equal(t, "execution", record.FailureKind)
+			data, err := json.Marshal(record)
+			require.NoError(t, err)
+			require.NotContains(t, string(data), "模型")
+		})
+	}
 }

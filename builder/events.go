@@ -190,7 +190,7 @@ func (a *ConfigurableAgent[C, S]) runEvents(ctx context.Context, request *middle
 				if err != nil {
 					return nil, err
 				}
-				data, err := json.Marshal(result)
+				data, err := toolResultText(result)
 				if err != nil {
 					return nil, err
 				}

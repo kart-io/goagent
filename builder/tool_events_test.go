@@ -241,3 +241,31 @@ func TestCompactStreamPreservesHistoryAndOriginalQuestion(t *testing.T) {
 	require.Equal(t, "新问题", history[2].Content)
 	require.Equal(t, "新答案", history[3].Content)
 }
+
+// 结构化结果不做 HTML 转义、数字保持原样、不带尾随换行；直接答案与工具消息使用同一文本。
+func TestToolResultTextKeepsHTMLCharacters(t *testing.T) {
+	result := map[string]any{"expr": "a<b && c>d", "n": 12345678.0, "big": 1e20}
+	want := `{"big":100000000000000000000,"expr":"a<b && c>d","n":12345678}`
+	t.Run("工具消息", func(t *testing.T) {
+		model := nativeModel(
+			[]*llm.StreamChunk{{Done: true, FinishReason: "tool_calls", ToolCalls: []llm.ToolCall{nativeCall("id", "calc", "{}")}}},
+			[]*llm.StreamChunk{{Delta: "完成"}, {Done: true, FinishReason: "stop"}},
+		)
+		tool := &directResultTool{MockTool: NewMockTool("calc", ""), output: &interfaces.ToolOutput{Success: true, Result: result}}
+		agent, err := NewSimpleBuilder(model).WithTools(tool).WithMaxIterations(2).Build()
+		require.NoError(t, err)
+		_, err = agent.AsRunnable().Invoke(context.Background(), "计算")
+		require.NoError(t, err)
+		messages := model.requests[1].Messages
+		require.Equal(t, want, messages[len(messages)-1].Content)
+	})
+	t.Run("直接答案", func(t *testing.T) {
+		model := nativeModel([]*llm.StreamChunk{{Done: true, FinishReason: "tool_calls", ToolCalls: []llm.ToolCall{nativeCall("id", "calc", "{}")}}})
+		tool := &directResultTool{MockTool: NewMockTool("calc", ""), output: &interfaces.ToolOutput{Success: true, Result: result}}
+		agent, err := NewSimpleBuilder(model).WithTools(tool).WithReturnDirectTools("calc").WithMaxIterations(1).Build()
+		require.NoError(t, err)
+		out, err := agent.AsRunnable().Invoke(context.Background(), "计算")
+		require.NoError(t, err)
+		require.Equal(t, want, out.Result)
+	})
+}

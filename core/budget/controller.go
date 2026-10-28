@@ -9,12 +9,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"sync"
 
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/interfaces"
 )
+
+// Unlimited 是未绑定预算（nil *Controller）时 Remaining 返回的余量，可直接参与大小比较。
+const Unlimited = math.MaxInt
 
 var (
 	ErrBudgetExceeded    = errors.New("root model request budget exceeded")
@@ -166,6 +170,20 @@ func (c *Controller) Reserve(ctx context.Context, key string) error {
 		l.Entries[key] = nil
 		return nil
 	})
+}
+
+// Remaining 返回尚可预留的模型请求次数；持久预算在 Store 锁内读取，计入其他进程的预留。
+// 结果只是时点快照，并发预留可能随即消耗余量，准入仍以 Reserve 为准。
+// nil 接收者表示未绑定预算，返回 Unlimited，可与 FromContext 直接配合使用。
+func (c *Controller) Remaining(ctx context.Context) (remaining int, err error) {
+	if c == nil {
+		return Unlimited, nil
+	}
+	err = c.transaction(ctx, false, func(l *ledger) error {
+		remaining = c.config.MaxModelRequests - len(l.Entries)
+		return nil
+	})
+	return
 }
 func validUsage(u *interfaces.TokenUsage) bool {
 	return u == nil || (u.PromptTokens >= 0 && u.CompletionTokens >= 0 && u.TotalTokens >= 0 && u.CachedTokens >= 0)
