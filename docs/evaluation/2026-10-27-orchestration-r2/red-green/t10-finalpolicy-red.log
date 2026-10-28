@@ -1,6 +1,6 @@
 --- FAIL: TestOrdinaryPolicyRunsOnFinalTurn (0.00s)
     policy_runtime_test.go:169: 
-        	Error Trace:	/Users/costalong/.codex/worktrees/4bd1/goagent/builder/policy_runtime_test.go:169
+        	Error Trace:	<repo>/builder/policy_runtime_test.go:169
         	Error:      	Not equal: 
         	            	expected: "filtered"
         	            	actual  : "raw"
