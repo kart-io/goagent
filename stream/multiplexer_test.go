@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -786,5 +787,169 @@ func TestMultiplexerStartReturnsOnContextCancel(t *testing.T) {
 	errs := consumer.GetErrors()
 	if assert.Len(t, errs, 1) {
 		assert.ErrorIs(t, errs[0], context.Canceled)
+	}
+}
+
+// stepSource 每次 Next 先向 entered 发送信号，再从 items 取块；items 关闭后返回 io.EOF。
+// 测试据此确定源正停在哪一次 Next 上，从而确定性地安排 AddConsumer 的时机。
+type stepSource struct {
+	mockStreamOutput
+	entered chan struct{}
+	items   chan *core.LegacyStreamChunk
+}
+
+func newStepSource() *stepSource {
+	return &stepSource{entered: make(chan struct{}), items: make(chan *core.LegacyStreamChunk)}
+}
+
+func (s *stepSource) Next() (*core.LegacyStreamChunk, error) {
+	s.entered <- struct{}{}
+	chunk, ok := <-s.items
+	if !ok {
+		return nil, io.EOF
+	}
+	return chunk, nil
+}
+
+// gatedConsumer 在 OnChunk 中阻塞到 gate 关闭，用来确认 Start 会等待它。
+type gatedConsumer struct {
+	mockConsumer
+	gate chan struct{}
+}
+
+func (c *gatedConsumer) OnChunk(chunk *core.LegacyStreamChunk) error {
+	<-c.gate
+	return c.mockConsumer.OnChunk(chunk)
+}
+
+// Start 运行中加入的消费者从加入时起接收后续数据，源结束后照常收到 OnError/OnComplete，Start 等它处理完才返回。
+func TestMultiplexerConsumerAddedWhileRunning(t *testing.T) {
+	ctx := context.Background()
+	mux := NewMultiplexer(ctx, nil)
+	defer mux.Close()
+	early := &mockConsumer{}
+	_, err := mux.AddConsumer(early)
+	assert.NoError(t, err)
+
+	source := newStepSource()
+	done := make(chan error, 1)
+	go func() { done <- mux.Start(ctx, source) }()
+
+	<-source.entered
+	source.items <- core.NewTextChunk("before")
+	// 第二次进入 Next 说明 "before" 已广播完
+	<-source.entered
+	late := &gatedConsumer{gate: make(chan struct{})}
+	_, err = mux.AddConsumer(late)
+	assert.NoError(t, err)
+	source.items <- core.NewTextChunk("after")
+	<-source.entered
+	close(source.items)
+
+	select {
+	case <-done:
+		t.Fatal("Start 在运行中加入的消费者处理完之前就返回了")
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(late.gate)
+	select {
+	case err := <-done:
+		assert.NoError(t, err)
+	case <-time.After(startReturnLimit):
+		t.Fatalf("Start 在 %v 内未返回", startReturnLimit)
+	}
+
+	assert.Equal(t, []string{"before", "after"}, chunkTexts(early.GetChunks()))
+	assert.Equal(t, []string{"after"}, chunkTexts(late.GetChunks()), "只接收加入之后的数据")
+	errs := late.GetErrors()
+	if assert.Len(t, errs, 1) {
+		assert.ErrorIs(t, errs[0], io.EOF)
+	}
+	assert.True(t, late.IsComplete())
+}
+
+func chunkTexts(chunks []*core.LegacyStreamChunk) []string {
+	texts := make([]string, 0, len(chunks))
+	for _, c := range chunks {
+		texts = append(texts, c.Text)
+	}
+	return texts
+}
+
+// seqConsumer 检查回调串行且 OnComplete 之后不再有回调。
+type seqConsumer struct {
+	inCall    atomic.Int32
+	completed atomic.Bool
+	violation atomic.Value
+}
+
+func (c *seqConsumer) enter(name string) func() {
+	if c.inCall.Add(1) != 1 {
+		c.violation.Store(name + ": 回调并发执行")
+	}
+	if c.completed.Load() {
+		c.violation.Store(name + ": OnComplete 之后仍有回调")
+	}
+	return func() { c.inCall.Add(-1) }
+}
+
+func (c *seqConsumer) OnStart() error { return nil }
+func (c *seqConsumer) OnChunk(*core.LegacyStreamChunk) error {
+	defer c.enter("OnChunk")()
+	return nil
+}
+func (c *seqConsumer) OnError(error) error {
+	defer c.enter("OnError")()
+	return nil
+}
+func (c *seqConsumer) OnComplete() error {
+	defer c.enter("OnComplete")()
+	c.completed.Store(true)
+	return nil
+}
+
+// AddConsumer 与源结束、Close 并发：Start 都能及时返回，回调串行且 OnComplete 之后没有回调；
+// 在源结束前加入的消费者都收到 OnComplete（未被 Close 时）。
+func TestMultiplexerAddConsumerRacesWithEndAndClose(t *testing.T) {
+	for i := 0; i < 200; i++ {
+		withClose := i%2 == 1
+		ctx := context.Background()
+		mux := NewMultiplexer(ctx, nil)
+		_, err := mux.AddConsumer(&seqConsumer{})
+		assert.NoError(t, err)
+
+		source := &mockStreamOutput{chunks: textChunks("a", "b", "c")}
+		var added []*seqConsumer
+		var addWG sync.WaitGroup
+		var addMu sync.Mutex
+		for j := 0; j < 4; j++ {
+			addWG.Add(1)
+			go func() {
+				defer addWG.Done()
+				c := &seqConsumer{}
+				if _, err := mux.AddConsumer(c); err == nil {
+					addMu.Lock()
+					added = append(added, c)
+					addMu.Unlock()
+				}
+			}()
+		}
+		if withClose {
+			addWG.Add(1)
+			go func() {
+				defer addWG.Done()
+				_ = mux.Close()
+			}()
+		}
+		assert.NoError(t, startWithin(t, ctx, mux, source))
+		addWG.Wait()
+		if !withClose {
+			_ = mux.Close()
+		}
+		for _, c := range added {
+			if v := c.violation.Load(); v != nil {
+				t.Fatalf("第 %d 轮: %v", i, v)
+			}
+		}
 	}
 }
