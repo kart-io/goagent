@@ -85,8 +85,8 @@ func (l *PDFLoader) Load(ctx context.Context) ([]*interfaces.Document, error) {
 	}
 
 	if err != nil {
-		if l.callbackManager != nil {
-			_ = l.callbackManager.OnError(ctx, err)
+		if cbErr := l.callbackManager.NotifyError(ctx, err); cbErr != nil {
+			return nil, cbErr
 		}
 		return nil, err
 	}
@@ -94,8 +94,8 @@ func (l *PDFLoader) Load(ctx context.Context) ([]*interfaces.Document, error) {
 	// 解析 PDF
 	content, pageCount, err := l.parsePDF(pdfReader, size)
 	if err != nil {
-		if l.callbackManager != nil {
-			_ = l.callbackManager.OnError(ctx, err)
+		if cbErr := l.callbackManager.NotifyError(ctx, err); cbErr != nil {
+			return nil, cbErr
 		}
 		return nil, err
 	}
@@ -151,8 +151,8 @@ func (l *PDFLoader) LoadByPage(ctx context.Context) ([]*interfaces.Document, err
 	}
 
 	if err != nil {
-		if l.callbackManager != nil {
-			_ = l.callbackManager.OnError(ctx, err)
+		if cbErr := l.callbackManager.NotifyError(ctx, err); cbErr != nil {
+			return nil, cbErr
 		}
 		return nil, err
 	}
@@ -160,8 +160,8 @@ func (l *PDFLoader) LoadByPage(ctx context.Context) ([]*interfaces.Document, err
 	// 解析 PDF 并按页提取
 	docs, err := l.parsePDFByPage(pdfReader, size)
 	if err != nil {
-		if l.callbackManager != nil {
-			_ = l.callbackManager.OnError(ctx, err)
+		if cbErr := l.callbackManager.NotifyError(ctx, err); cbErr != nil {
+			return nil, cbErr
 		}
 		return nil, err
 	}

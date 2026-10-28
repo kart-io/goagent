@@ -14,6 +14,7 @@ import (
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/observe"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 )
 
@@ -77,9 +78,9 @@ type Dispatcher struct {
 
 func NewDispatcher(registry *Registry, cfg DispatchConfig) (dispatcher *Dispatcher, err error) {
 	defer func() {
-		if recover() != nil {
+		if v := recover(); v != nil {
 			dispatcher = nil
-			err = fmt.Errorf("tool metadata panicked")
+			err = agentErrors.NewPanicError("工具元数据", v)
 		}
 	}()
 	if registry == nil {
@@ -177,9 +178,9 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 	caller := ctx
 	defer func() { Settle(caller, err) }()
 	defer func() {
-		if recover() != nil {
+		if v := recover(); v != nil {
 			out = nil
-			err = fmt.Errorf("tool %q panicked", req.Name)
+			err = agentErrors.NewPanicError(fmt.Sprintf("工具 %q", req.Name), v)
 		}
 	}()
 	if d == nil {
@@ -251,8 +252,8 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 		// 参数可能不满足 Schema，Authorize 的 panic 单独报告，不算作工具失败。
 		err = func() (e error) {
 			defer func() {
-				if recover() != nil {
-					e = fmt.Errorf("tool %q authorize panicked", req.Name)
+				if v := recover(); v != nil {
+					e = agentErrors.NewPanicError(fmt.Sprintf("工具 %q 的授权回调", req.Name), v)
 				}
 			}()
 			return d.config.Authorize(ctx, req.Name, &input)
@@ -352,8 +353,8 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 	if d.config.OnResult != nil {
 		err = func() (e error) {
 			defer func() {
-				if recover() != nil {
-					e = fmt.Errorf("tool %q result callback panicked", req.Name)
+				if v := recover(); v != nil {
+					e = agentErrors.NewPanicError(fmt.Sprintf("工具 %q 的结果回调", req.Name), v)
 				}
 			}()
 			return d.config.OnResult(ctx, DispatchResult{Name: req.Name, CallID: input.CallID, ExecutionKey: input.ExecutionKey, Args: input.Args, Output: out, Replayed: replayed})

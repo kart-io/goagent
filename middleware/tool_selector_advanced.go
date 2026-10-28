@@ -613,7 +613,12 @@ func (m *ContextEnrichmentMiddleware) Process(ctx context.Context, state core.St
 					defer cancel()
 				}
 
-				data, err := e.Enrich(enrichCtx, state)
+				// Enrich 是宿主代码，panic 与它返回的错误一样记为该 enricher 的失败
+				var data map[string]interface{}
+				_, err := core.CallSafely(enrichCtx, "context_enrichment", "enrich", func() (err error) {
+					data, err = e.Enrich(enrichCtx, state)
+					return err
+				})
 
 				mu.Lock()
 				defer mu.Unlock()

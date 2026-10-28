@@ -173,6 +173,11 @@ func TestDefaultPanicHandler(t *testing.T) {
 		assert.Equal(t, "test panic", agentErr.Context["panic_value"])
 		assert.Equal(t, "stack trace here", agentErr.Context["stack_trace"])
 		assert.Contains(t, agentErr.Message, "panic recovered")
+
+		var panicErr *agentErrors.PanicError
+		require.ErrorAs(t, err, &panicErr)
+		assert.Equal(t, "test panic", panicErr.Value)
+		assert.Equal(t, "stack trace here", string(panicErr.Stack))
 	})
 
 	t.Run("Handles nil panic value", func(t *testing.T) {
@@ -318,6 +323,11 @@ func TestPanicHandlerRegistry_HandlePanic(t *testing.T) {
 	t.Run("Returns error from handler", func(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "mock panic")
+
+		var panicErr *agentErrors.PanicError
+		require.ErrorAs(t, err, &panicErr)
+		assert.Equal(t, "test panic", panicErr.Value)
+		assert.Equal(t, mockHandler.GetCalls()[0].StackTrace, string(panicErr.Stack))
 	})
 }
 

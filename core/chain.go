@@ -209,19 +209,35 @@ func (c *BaseChain) Steps() int {
 	return len(c.steps)
 }
 
+// notify 通知本链的回调，回调 panic 的语义见 NotifyCallbacks。
+func (c *BaseChain) notify(ctx context.Context, operation string, call func(Callback) error) (panicked bool, err error) {
+	return NotifyCallbacks(ctx, "base_chain", operation, c.GetConfig().Callbacks, call)
+}
+
+// executeStep 执行一个步骤：步骤 panic 时 panicked 为 true，err 可用 errors.As 识别出 *agentErrors.PanicError。
+// panic 说明步骤状态未知，调用方无论 StopOnError 如何都终止本链。
+func executeStep(ctx context.Context, step Step, data interface{}) (result interface{}, panicked bool, err error) {
+	panicked, err = CallSafely(ctx, "base_chain", "step_execute", func() (stepErr error) {
+		result, stepErr = step.Execute(ctx, data)
+		return stepErr
+	})
+	return result, panicked, err
+}
+
 // Invoke 执行链式处理（实现 Runnable 接口）
 func (c *BaseChain) Invoke(ctx context.Context, input *ChainInput) (*ChainOutput, error) {
 	start := time.Now()
 
 	// 触发 Chain 开始回调
-	config := c.GetConfig()
-	for _, cb := range config.Callbacks {
-		if err := cb.OnChainStart(ctx, c.name, input); err != nil {
-			return nil, agentErrors.Wrap(err, agentErrors.CodeAgentExecution, "callback OnChainStart failed").
-				WithComponent("base_chain").
-				WithOperation("invoke").
-				WithContext("chain_name", c.name)
-		}
+	if panicked, err := c.notify(ctx, "on_chain_start", func(cb Callback) error {
+		return cb.OnChainStart(ctx, c.name, input)
+	}); panicked {
+		return nil, err
+	} else if err != nil {
+		return nil, agentErrors.Wrap(err, agentErrors.CodeAgentExecution, "callback OnChainStart failed").
+			WithComponent("base_chain").
+			WithOperation("invoke").
+			WithContext("chain_name", c.name)
 	}
 
 	output := &ChainOutput{
@@ -252,7 +268,7 @@ func (c *BaseChain) Invoke(ctx context.Context, input *ChainInput) (*ChainOutput
 
 		// 执行步骤
 		stepStart := time.Now()
-		result, err := step.Execute(ctx, currentData)
+		result, panicked, err := executeStep(ctx, step, currentData)
 		duration := time.Since(stepStart)
 
 		execution := StepExecution{
@@ -269,13 +285,16 @@ func (c *BaseChain) Invoke(ctx context.Context, input *ChainInput) (*ChainOutput
 			execution.Error = err.Error()
 			output.StepsExecuted = append(output.StepsExecuted, execution)
 
-			if input.Options.StopOnError {
+			if input.Options.StopOnError || panicked {
 				output.Status = "failed"
 				output.TotalLatency = time.Since(start)
 
 				// 触发 Chain 错误回调
-				for _, cb := range config.Callbacks {
+				if panicked, panicErr := c.notify(ctx, "on_chain_error", func(cb Callback) error {
 					_ = cb.OnChainError(ctx, c.name, err)
+					return nil
+				}); panicked {
+					return output, panicErr
 				}
 
 				return output, err
@@ -292,8 +311,11 @@ func (c *BaseChain) Invoke(ctx context.Context, input *ChainInput) (*ChainOutput
 	output.TotalLatency = time.Since(start)
 
 	// 触发 Chain 结束回调
-	for _, cb := range config.Callbacks {
+	if panicked, panicErr := c.notify(ctx, "on_chain_end", func(cb Callback) error {
 		_ = cb.OnChainEnd(ctx, c.name, output)
+		return nil
+	}); panicked {
+		return output, panicErr
 	}
 
 	return output, nil
@@ -309,6 +331,17 @@ func (c *BaseChain) Stream(ctx context.Context, input *ChainInput) (<-chan Strea
 
 	go func() {
 		defer close(outChan)
+		// 兜底步骤 Name/Description 等其余宿主代码：本 goroutine 的 panic 调用方无法 recover，转为终止块的错误。
+		var panicErr error
+		defer func() {
+			if panicErr != nil {
+				select {
+				case outChan <- StreamChunk[*ChainOutput]{Error: panicErr, Done: true}:
+				case <-ctx.Done():
+				}
+			}
+		}()
+		defer RecoverPanic(ctx, "base_chain", "stream", &panicErr)
 
 		// 辅助函数：安全发送，检查 context 是否取消
 		send := func(chunk StreamChunk[*ChainOutput]) bool {
@@ -327,20 +360,19 @@ func (c *BaseChain) Stream(ctx context.Context, input *ChainInput) (<-chan Strea
 		}
 
 		start := time.Now()
-		config := c.GetConfig()
 
 		// 触发 Chain 开始回调
-		for _, cb := range config.Callbacks {
-			if err := cb.OnChainStart(ctx, c.name, input); err != nil {
-				send(StreamChunk[*ChainOutput]{
-					Error: agentErrors.Wrap(err, agentErrors.CodeAgentExecution, "callback OnChainStart failed").
-						WithComponent("base_chain").
-						WithOperation("stream").
-						WithContext("chain_name", c.name),
-					Done: true,
-				})
-				return
+		if panicked, err := c.notify(ctx, "on_chain_start", func(cb Callback) error {
+			return cb.OnChainStart(ctx, c.name, input)
+		}); err != nil {
+			if !panicked {
+				err = agentErrors.Wrap(err, agentErrors.CodeAgentExecution, "callback OnChainStart failed").
+					WithComponent("base_chain").
+					WithOperation("stream").
+					WithContext("chain_name", c.name)
 			}
+			send(StreamChunk[*ChainOutput]{Error: err, Done: true})
+			return
 		}
 
 		output := &ChainOutput{
@@ -402,7 +434,7 @@ func (c *BaseChain) Stream(ctx context.Context, input *ChainInput) (<-chan Strea
 
 			// 执行步骤
 			stepStart := time.Now()
-			result, err := step.Execute(execCtx, currentData)
+			result, panicked, err := executeStep(execCtx, step, currentData)
 			duration := time.Since(stepStart)
 
 			execution := StepExecution{
@@ -419,14 +451,17 @@ func (c *BaseChain) Stream(ctx context.Context, input *ChainInput) (<-chan Strea
 				execution.Error = err.Error()
 				output.StepsExecuted = append(output.StepsExecuted, execution)
 
-				if input.Options.StopOnError {
+				if input.Options.StopOnError || panicked {
 					output.Status = "failed"
 					output.TotalLatency = time.Since(start)
 					output.Data = currentData
 
 					// 触发错误回调
-					for _, cb := range config.Callbacks {
+					if panicked, panicErr := c.notify(ctx, "on_chain_error", func(cb Callback) error {
 						_ = cb.OnChainError(ctx, c.name, err)
+						return nil
+					}); panicked {
+						err = panicErr
 					}
 
 					// 发送错误结果
@@ -464,14 +499,16 @@ func (c *BaseChain) Stream(ctx context.Context, input *ChainInput) (<-chan Strea
 		output.TotalLatency = time.Since(start)
 
 		// 触发结束回调
-		for _, cb := range config.Callbacks {
+		_, endErr := c.notify(ctx, "on_chain_end", func(cb Callback) error {
 			_ = cb.OnChainEnd(ctx, c.name, output)
-		}
+			return nil
+		})
 
 		// 发送最终结果
 		send(StreamChunk[*ChainOutput]{
-			Data: output,
-			Done: true,
+			Data:  output,
+			Error: endErr,
+			Done:  true,
 		})
 	}()
 

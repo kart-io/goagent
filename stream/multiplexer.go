@@ -2,6 +2,7 @@ package stream
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -37,6 +38,8 @@ type consumerState struct {
 	ch       chan *core.LegacyStreamChunk
 	errors   int
 	active   bool
+	// panicErr 记录消费者回调的 panic；此后不再向它投递数据或调用它的回调
+	panicErr error
 }
 
 // NewMultiplexer 创建新的多路复用器
@@ -91,9 +94,12 @@ func (m *Multiplexer) AddConsumer(consumer core.StreamConsumer) (string, error) 
 
 	m.consumers[id] = state
 
-	// 通知消费者开始
-	if err := consumer.OnStart(); err != nil {
+	// 通知消费者开始；OnStart 自身 panic 时返回 PanicError，语义同 core.NotifyCallbacks
+	if panicked, err := core.CallSafely(m.ctx, "stream_multiplexer", "on_start", consumer.OnStart); err != nil {
 		delete(m.consumers, id)
+		if panicked {
+			return "", err
+		}
 		return "", agentErrors.Wrap(err, agentErrors.CodeStreamWrite, "consumer OnStart failed").
 			WithComponent("stream_multiplexer").
 			WithOperation("AddConsumer").
@@ -137,6 +143,8 @@ func (m *Multiplexer) Consumers() []string {
 }
 
 // Start 开始多路复用
+//
+// 消费者回调 panic 时只停止向该消费者投递，其他消费者照常接收；全部处理结束后返回这些 panic 的 PanicError。
 func (m *Multiplexer) Start(ctx context.Context, source core.StreamOutput) error {
 	m.mu.Lock()
 	if m.running {
@@ -156,7 +164,9 @@ func (m *Multiplexer) Start(ctx context.Context, source core.StreamOutput) error
 
 	// 启动每个消费者的处理协程
 	var wg sync.WaitGroup
+	states := make([]*consumerState, 0, len(m.consumers))
 	for _, state := range m.consumers {
+		states = append(states, state)
 		wg.Add(1)
 		go m.processConsumer(ctx, state, &wg)
 	}
@@ -183,7 +193,13 @@ func (m *Multiplexer) Start(ctx context.Context, source core.StreamOutput) error
 	// 等待所有消费者处理完成
 	wg.Wait()
 
-	return nil
+	var panics []error
+	for _, state := range states {
+		if state.panicErr != nil {
+			panics = append(panics, state.panicErr)
+		}
+	}
+	return errors.Join(panics...)
 }
 
 // Close 关闭多路复用器
@@ -251,6 +267,7 @@ func (m *Multiplexer) broadcastError(err error) {
 			m.wg.Add(1)
 			go func(s *consumerState) {
 				defer m.wg.Done()
+				defer core.ReportPanic(m.ctx, "stream_multiplexer", "on_error")
 				if err := s.consumer.OnError(err); err != nil {
 					fmt.Printf("failed to broadcast error: %v", err)
 				}
@@ -270,6 +287,7 @@ func (m *Multiplexer) broadcastComplete() {
 			m.wg.Add(1)
 			go func(s *consumerState) {
 				defer m.wg.Done()
+				defer core.ReportPanic(m.ctx, "stream_multiplexer", "on_complete")
 				if err := s.consumer.OnComplete(); err != nil {
 					fmt.Printf("failed to broadcast complete: %v", err)
 				}
@@ -281,6 +299,8 @@ func (m *Multiplexer) broadcastComplete() {
 // processConsumer 处理单个消费者
 func (m *Multiplexer) processConsumer(ctx context.Context, state *consumerState, wg *sync.WaitGroup) {
 	defer wg.Done()
+	defer m.stopPanickedConsumer(state)
+	defer core.RecoverPanic(ctx, "stream_multiplexer", "consume", &state.panicErr)
 
 	for {
 		select {
@@ -303,6 +323,16 @@ func (m *Multiplexer) processConsumer(ctx context.Context, state *consumerState,
 			return
 		}
 	}
+}
+
+// stopPanickedConsumer 在消费者回调 panic 后将其标记为非活跃，broadcast 与完成/错误通知随之跳过它。
+func (m *Multiplexer) stopPanickedConsumer(state *consumerState) {
+	if state.panicErr == nil {
+		return
+	}
+	m.mu.Lock()
+	state.active = false
+	m.mu.Unlock()
 }
 
 // Stats 获取多路复用器统计信息

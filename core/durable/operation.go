@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"os"
 	"time"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 type journalContext struct{}
@@ -185,8 +187,8 @@ func Do(ctx context.Context, id string, input json.RawMessage, policy OperationP
 
 func invokeOperation(ctx context.Context, run func(context.Context) (json.RawMessage, error)) (value json.RawMessage, err error) {
 	defer func() {
-		if recover() != nil {
-			err = fmt.Errorf("operation panicked")
+		if v := recover(); v != nil {
+			value, err = nil, agentErrors.NewPanicError("持久操作", v)
 		}
 	}()
 	return run(ctx)

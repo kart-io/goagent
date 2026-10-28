@@ -58,13 +58,8 @@ func modelOperation(ctx context.Context, id string, intent json.RawMessage, invo
 	}
 	ctx, endModel := observe.Start(ctx, observe.Event{Type: "model", Path: id, OperationKey: key})
 	replayed := false
-	defer func() {
-		if v := recover(); v != nil {
-			endModel(fmt.Errorf("execution panic"), replayed)
-			panic(v)
-		}
-		endModel(resultErr, replayed)
-	}()
+	defer func() { endModel(resultErr, replayed) }()
+	defer recoverPanic("模型调用", &resultErr)
 	if err := validateModelBudget(ctx); err != nil {
 		return nil, err
 	}

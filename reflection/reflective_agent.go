@@ -481,7 +481,10 @@ func (a *SelfReflectiveAgent) shouldReflect() bool {
 	return len(experiences) >= a.minExperiences
 }
 
+// performReflection 只在后台 goroutine 中运行：LLM 客户端与记忆是宿主提供的实现，没有调用方接收错误，
+// panic 交给全局 PanicHandler 记录，周期反思循环不因此退出。
 func (a *SelfReflectiveAgent) performReflection(ctx context.Context) {
+	defer core.ReportPanic(ctx, "self_reflective_agent", "reflect")
 	// Get recent experiences
 	experiences, _ := a.memory.GetByType(ctx, memory.MemoryTypeEpisodic, 50)
 

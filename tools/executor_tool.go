@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kart-io/goagent/core"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 )
@@ -360,12 +361,18 @@ func (e *ToolExecutor) executeWithRetry(ctx context.Context, call *ToolCallReque
 		break
 	}
 
-	// 所有尝试都失败
+	// 所有尝试都失败；errorHandler 是宿主代码，它的 panic 替代原错误作为本次调用的结果
+	if _, err := core.CallSafely(ctx, "tool_executor", "error_handler", func() error {
+		lastError = e.errorHandler(call, lastError)
+		return nil
+	}); err != nil {
+		lastError = err
+	}
 	return &ToolResult{
 		CallID:   call.ID,
 		Output:   nil,
 		Duration: time.Since(startTime),
-		Error:    e.errorHandler(call, lastError),
+		Error:    lastError,
 	}
 }
 
@@ -387,9 +394,12 @@ func (e *ToolExecutor) executeSingle(ctx context.Context, call *ToolCallRequest)
 	// 确保输入有上下文
 	call.Input.Context = ctx
 
-	// 执行工具
-	output, err := call.Tool.Invoke(ctx, call.Input)
-	if err != nil {
+	// 执行工具；工具 panic 转为可用 errors.As 识别的 *agentErrors.PanicError，作为本次调用的错误
+	var output *interfaces.ToolOutput
+	if _, err := core.CallSafely(ctx, "tool_executor", "invoke", func() (err error) {
+		output, err = call.Tool.Invoke(ctx, call.Input)
+		return err
+	}); err != nil {
 		return nil, err
 	}
 
@@ -399,6 +409,12 @@ func (e *ToolExecutor) executeSingle(ctx context.Context, call *ToolCallRequest)
 // shouldRetry 判断是否应该重试
 func (e *ToolExecutor) shouldRetry(err error) bool {
 	if e.retryPolicy == nil {
+		return false
+	}
+
+	// panic 是宿主代码的缺陷，重试不会改变结果
+	var panicErr *agentErrors.PanicError
+	if errors.As(err, &panicErr) {
 		return false
 	}
 

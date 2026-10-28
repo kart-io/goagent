@@ -72,6 +72,17 @@ func ToChannel[T any](ctx context.Context, gen Generator[T], bufferSize int) <-c
 
 	go func() {
 		defer close(ch)
+		// Generator 是宿主代码，它在本 goroutine 中的 panic 调用方无法 recover，转为最后一个块的错误。
+		var panicErr error
+		defer func() {
+			if panicErr != nil {
+				select {
+				case ch <- StreamChunk[T]{Error: panicErr}:
+				case <-ctx.Done():
+				}
+			}
+		}()
+		defer RecoverPanic(ctx, "generator", "to_channel", &panicErr)
 
 		gen(func(data T, err error) bool {
 			select {

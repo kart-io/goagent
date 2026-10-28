@@ -63,8 +63,8 @@ func (l *BaseDocumentLoader) LoadAndSplit(
 	// 加载文档
 	docs, err := loader.Load(ctx)
 	if err != nil {
-		if l.callbackManager != nil {
-			_ = l.callbackManager.OnError(ctx, err)
+		if cbErr := l.callbackManager.NotifyError(ctx, err); cbErr != nil {
+			return nil, cbErr
 		}
 		return nil, err
 	}
@@ -73,8 +73,8 @@ func (l *BaseDocumentLoader) LoadAndSplit(
 	if splitter != nil {
 		docs, err = splitter.SplitDocuments(docs)
 		if err != nil {
-			if l.callbackManager != nil {
-				_ = l.callbackManager.OnError(ctx, err)
+			if cbErr := l.callbackManager.NotifyError(ctx, err); cbErr != nil {
+				return nil, cbErr
 			}
 			return nil, err
 		}

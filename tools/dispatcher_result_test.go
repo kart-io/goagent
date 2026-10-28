@@ -10,6 +10,7 @@ import (
 
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/stretchr/testify/require"
 )
@@ -129,7 +130,10 @@ func TestDispatcherOnResultPanicReported(t *testing.T) {
 	d := argDispatcher(t, DispatchConfig{OnResult: func(context.Context, DispatchResult) error { panic("boom") }}, tool)
 	out, err := d.Invoke(context.Background(), ToolRequest{Name: "op", Input: callInput("a", "")})
 	require.Nil(t, out)
-	require.EqualError(t, err, `tool "op" result callback panicked`)
+	require.EqualError(t, err, `工具 "op" 的结果回调 发生 panic`)
+	var panicErr *agentErrors.PanicError
+	require.ErrorAs(t, err, &panicErr)
+	require.Equal(t, "boom", panicErr.Value)
 }
 
 // evidenceLedger 按结果到达顺序分配引用号，只存在于进程内存中。

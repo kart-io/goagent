@@ -3,6 +3,7 @@ package retrieval
 import (
 	"context"
 
+	"github.com/kart-io/goagent/core"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 )
@@ -79,14 +80,15 @@ func (h *HybridRetriever) GetRelevantDocuments(ctx context.Context, query string
 		vector bool
 	}
 	results := make(chan result, 2)
-	go func() {
-		docs, err := h.VectorRetriever.GetRelevantDocuments(ctx, query)
-		results <- result{docs: docs, err: err, vector: true}
-	}()
-	go func() {
-		docs, err := h.KeywordRetriever.GetRelevantDocuments(ctx, query)
-		results <- result{docs: docs, err: err}
-	}()
+	// 检索器是宿主代码，panic 作为该路检索的错误结果
+	retrieve := func(r Retriever, vector bool) {
+		res := result{vector: vector}
+		defer func() { results <- res }()
+		defer core.RecoverPanic(ctx, "hybrid_retriever", "get_relevant_documents", &res.err)
+		res.docs, res.err = r.GetRelevantDocuments(ctx, query)
+	}
+	go retrieve(h.VectorRetriever, true)
+	go retrieve(h.KeywordRetriever, false)
 	var vectorResult, keywordResult result
 	for i := 0; i < 2; i++ {
 		select {

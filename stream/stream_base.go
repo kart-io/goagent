@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/kart-io/goagent/core"
 )
 
 // StreamManager 流式管理器
@@ -118,7 +120,17 @@ func (h *FuncStreamHandler) OnError(err error) error {
 }
 
 // Process 处理流式数据
+//
+// handler 的回调在调用方 goroutine 上执行，语义同 core.NotifyCallbacks：回调 panic 时返回 PanicError，
+// 之后不再调用任何回调（也不把它交给 OnError）。
 func (m *StreamManager) Process(ctx context.Context, stream <-chan *StreamChunk, handler StreamHandler) error {
+	_, err := core.CallSafely(ctx, "stream_manager", "process", func() error {
+		return m.process(ctx, stream, handler)
+	})
+	return err
+}
+
+func (m *StreamManager) process(ctx context.Context, stream <-chan *StreamChunk, handler StreamHandler) error {
 	// 创建带超时的上下文
 	timeoutCtx, cancel := context.WithTimeout(ctx, m.timeout)
 	defer cancel()
@@ -169,7 +181,12 @@ func (m *StreamManager) Transform(ctx context.Context, input <-chan *StreamChunk
 				}
 				return
 			default:
-				transformed, err := transformer(chunk)
+				// transformer 的 panic 与它返回的错误一样作为终止块写出
+				var transformed *StreamChunk
+				_, err := core.CallSafely(ctx, "stream_manager", "transform", func() (err error) {
+					transformed, err = transformer(chunk)
+					return err
+				})
 				if err != nil {
 					output <- &StreamChunk{
 						Error: err,
@@ -206,7 +223,15 @@ func (m *StreamManager) Filter(ctx context.Context, input <-chan *StreamChunk, p
 				}
 				return
 			default:
-				if predicate(chunk) {
+				var keep bool
+				if _, err := core.CallSafely(ctx, "stream_manager", "filter", func() error {
+					keep = predicate(chunk)
+					return nil
+				}); err != nil {
+					output <- &StreamChunk{Error: err, Done: true}
+					return
+				}
+				if keep {
 					output <- chunk
 				}
 

@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
@@ -82,10 +83,14 @@ func send(ctx context.Context, e Event) {
 }
 
 // ErrorKind returns a bounded category, never the original error text.
+// panic 只记类别，panic 值与调用栈不进入 Event 或 span。
 func ErrorKind(err error) string {
+	var panicErr *agentErrors.PanicError
 	switch {
 	case err == nil:
 		return ""
+	case errors.As(err, &panicErr):
+		return "panic"
 	case errors.Is(err, context.Canceled):
 		return "canceled"
 	case errors.Is(err, context.DeadlineExceeded):

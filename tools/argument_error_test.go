@@ -682,7 +682,7 @@ func TestAuthorizePanicReported(t *testing.T) {
 	}}, tool)
 	out, err := modelCall(context.Background(), d, "op", &interfaces.ToolInput{Args: map[string]any{}})
 	require.Nil(t, out)
-	require.EqualError(t, err, `tool "op" authorize panicked`)
+	require.EqualError(t, err, `工具 "op" 的授权回调 发生 panic`)
 }
 
 func TestDispatcherNilContext(t *testing.T) {
@@ -692,7 +692,7 @@ func TestDispatcherNilContext(t *testing.T) {
 	//nolint:staticcheck // 验证 nil ctx 不会让 panic 逃出 Dispatcher
 	out, err := d.Invoke(nil, ToolRequest{Name: "op", Input: &interfaces.ToolInput{Args: map[string]any{}}})
 	require.Nil(t, out)
-	require.EqualError(t, err, `tool "op" panicked`)
+	require.ErrorContains(t, err, `工具 "op" 发生 panic`)
 	require.Nil(t, Settle(nil, nil))
 }
 

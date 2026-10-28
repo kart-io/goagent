@@ -336,11 +336,7 @@ func invokeConcurrently(calls []ToolCall, limit int, invoke func(ToolCall) (*int
 		go func() {
 			defer wg.Done()
 			defer func() { <-slots }()
-			defer func() {
-				if recover() != nil {
-					results[i] = toolCallResult{err: fmt.Errorf("工具 %s 执行时发生 panic", call.Name)}
-				}
-			}()
+			defer recoverPanic(fmt.Sprintf("工具 %q", call.Name), &results[i].err)
 			output, err := invoke(call)
 			results[i] = toolCallResult{output: output, err: err}
 		}()
