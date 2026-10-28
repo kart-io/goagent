@@ -1,5 +1,7 @@
 # MiniMax 真实业务案例测试
 
+> 清理说明：本目录的测试日志及 Python 脚本已删除；历史测试结论和现存 JSON/Markdown 汇总保留。
+
 2026-10-27，使用当前环境中已有的中国区凭据，真实调用 `https://api.minimax.cn/v1/chat/completions`，模型为 `MiniMax-M3.1-Flash`。凭据只从环境读取，未写入代码、报告或命令参数。业务动作继续使用本地模拟。
 
 ## 结果
@@ -17,7 +19,7 @@
 
 DevOps 故障案例验证审批前零效果；审批后注入“效果已提交、响应丢失”错误，再构建持久图恢复，复用原收据。所有六条运行均完成重放检查，每条仍只有一次模型请求。
 
-原始模型判断、理由、用量、耗时与断言结果见 [minimax.json](minimax.json)，运行日志见 [minimax.log](minimax.log)。`manifest.json` 保存最终源码 SHA-256 和汇总。报告未保存模型思考正文。
+原始模型判断、理由、用量、耗时与断言结果见 [minimax.json](minimax.json)，运行日志见 minimax.log（原文件已清理）。`manifest.json` 保存最终源码 SHA-256 和汇总。报告未保存模型思考正文。
 
 ## 实现与参数
 

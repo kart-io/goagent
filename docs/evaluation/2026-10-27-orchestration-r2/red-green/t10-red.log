@@ -1,4 +1,0 @@
-# github.com/kart-io/goagent/examples/orchestration/composed-order [github.com/kart-io/goagent/examples/orchestration/composed-order.test]
-examples/orchestration/composed-order/main_test.go:3:72: undefined: run
-FAIL	github.com/kart-io/goagent/examples/orchestration/composed-order [build failed]
-FAIL

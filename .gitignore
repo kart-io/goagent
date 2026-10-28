@@ -36,3 +36,8 @@ go.work.sum
 
 # Coverage
 *.out
+
+# Generated test logs and Python caches
+*.log
+__pycache__/
+*.pyc

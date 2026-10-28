@@ -1,9 +1,0 @@
-# github.com/mattn/go-sqlite3
-sqlite3-binding.c: In function ‘sqlite3ShadowTableName’:
-sqlite3-binding.c:125566:9: warning: assignment discards ‘const’ qualifier from pointer target type [-Wdiscarded-qualifiers]
-125566 |   zTail = strrchr(zName, '_');
-       |         ^
-sqlite3-binding.c: In function ‘unistrFunc’:
-sqlite3-binding.c:131584:15: warning: initialization discards ‘const’ qualifier from pointer target type [-Wdiscarded-qualifiers]
-131584 |     char *z = strchr(&zIn[i],'\\');
-       |               ^~~~~~

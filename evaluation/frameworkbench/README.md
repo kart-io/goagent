@@ -4,7 +4,9 @@
 
 This is an isolated benchmark module. Its dependencies do not change the main GoAgent module.
 
-The benchmark runs real public framework entry points against deterministic local models. No credentials or paid APIs are used. Python network connections are rejected and external tracing is disabled. This measures warm framework execution plus native model/tool protocol object handling, not model quality, HTTP/SSE parsing, provider inference, distributed durability, or production throughput.
+The benchmark runs real public framework entry points against deterministic local models. No credentials or paid APIs are used. The historical Python runs rejected network connections and disabled external tracing. This measures warm framework execution plus native model/tool protocol object handling, not model quality, HTTP/SSE parsing, provider inference, distributed durability, or production throughput.
+
+The table and Python methodology below describe the archived comparison. Only the Go workloads remain executable.
 
 ## Compared entry points
 
@@ -32,30 +34,22 @@ Frameworks, graphs, agents and tools are constructed before timing. GoAgent has 
 
 All framework-default state updates, model object construction, tool argument decoding, and completion work remain timed. Tracing exporters are disabled/noop for all. Python GC is enabled. All Python agent/graph entries use one asyncio loop per benchmark job; no per-operation asyncio.run. Python nodes, routes and tools are native async callbacks, avoiding avoidable executor hops for tiny operations. The driver removes PYTHONASYNCIODEBUG (setting it to "0" would still enable debugging), and rejects rows whose event loop reports debug enabled. Go is set to GOMAXPROCS=4. Cross-language numbers include runtime and framework differences; Go allocations are only compared with Go allocations.
 
-## Reproduce
+## Reproduce the Go comparison
 
-Use a native arm64 Python 3.14 environment on the recorded machine, or record the replacement runtime in a new report. No global environment configuration is modified. `env -u GOROOT` avoids stale local GOROOT settings; it is not needed on a correctly configured installation.
+The Python drivers and tests have been removed. The cross-language report above is historical; its JSON results and dependency lock remain as provenance. The runnable module now compares GoAgent and Eino through Go entry points.
 
 ```sh
 cd evaluation/frameworkbench
-python3.14 -m venv /tmp/goagent-frameworkbench
-/tmp/goagent-frameworkbench/bin/python -m pip install -r requirements.lock
-
-env -u GOROOT go test -race ./...
-/tmp/goagent-frameworkbench/bin/python -m unittest test_python_runner test_statistics
-env -u GOROOT go build -o /tmp/goagent-frameworkbench-runner ./cmd/runner
-
-/tmp/goagent-frameworkbench/bin/python run_comparison.py \
-  --go-runner /tmp/goagent-frameworkbench-runner \
-  --out /tmp/framework-comparison-new \
-  --samples 400 --warmup 50 --repeats 5
-
-GOMAXPROCS=4 env -u GOROOT go test -run '^$' -bench '^BenchmarkFramework$' \
-  -benchmem -benchtime=300ms -count=5 > /tmp/framework-go-allocations.log
+env -u GOROOT GOTOOLCHAIN=go1.25.0 go test -race ./...
+env -u GOROOT GOTOOLCHAIN=go1.25.0 go build -o /tmp/goagent-frameworkbench-runner ./cmd/runner
+GOMAXPROCS=4 /tmp/goagent-frameworkbench-runner \
+  -framework goagent -scenario agent_tool -samples 400 -warmup 50
+GOMAXPROCS=4 /tmp/goagent-frameworkbench-runner \
+  -framework eino -scenario agent_tool -samples 400 -warmup 50
+GOMAXPROCS=4 env -u GOROOT GOTOOLCHAIN=go1.25.0 go test -run '^$' \
+  -bench '^BenchmarkFramework$' -benchmem -benchtime=300ms -count=5
 ```
 
-The output directory must not already exist. Jobs run sequentially, with a seeded random order within each repetition, in fresh processes. Do not compile, test or run another benchmark concurrently with timing. Defaults yield 80 jobs and 32,000 measured operations, plus warmups.
+Run benchmarks serially without other tests or compilation competing for CPU. Construction is excluded from Go testing.B timing. Keep generated command output outside the repository; log files are ignored by Git.
 
-`results.jsonl` retains every timing sample. `summary.json` reports the median of five per-process p50 values, median of per-process nearest-rank p95 values, and the min/max p50 across repeats. It does not pool samples from different processes into an apparent single confidence interval. First-delta medians are summarized separately. Go `ns/op`, `B/op`, and `allocs/op` are measured in a separate pass with testing.B, construction outside ResetTimer. Throughput under concurrent load, RSS attribution, and durability require separate workloads.
-
-`manifest.json` records source SHA256, dependency versions in each Python row, Git baseline, runtime, GOMAXPROCS, sample counts and schedule seed. The local GoAgent tree may include uncommitted documentation/benchmark changes; source hashes identify the benchmark code. Reports must state that the local GoAgent implementation under test is the recorded commit, and record any subsequent production changes.
+Historical `results.jsonl`, `summary.json` and manifests retain the recorded samples, statistics, dependency versions and source hashes. Removed Python sources are historical provenance entries, not current executable paths. These results do not measure concurrent throughput, distributed durability or production model latency.

@@ -1,4 +1,0 @@
-# github.com/kart-io/goagent/devtools [github.com/kart-io/goagent/devtools.test]
-devtools/report_test.go:3:78: undefined: WriteReport
-FAIL	github.com/kart-io/goagent/devtools [build failed]
-FAIL
