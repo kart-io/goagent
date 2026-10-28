@@ -9,9 +9,10 @@ import (
 工具错误处理规范：
 
 1. 验证错误（输入无效）：
-   - 返回: &ToolOutput{Success: false, Error: message}, error
+   - 返回: &ToolOutput{Success: false, Error: message}, error（*AgentError，已标记 MarkModelArgument）
    - 示例: return resp.ValidationError("url is required")
    - 使用场景：参数缺失、类型错误、格式错误
+   - Dispatcher.Tools() 开启 ReturnArgumentErrors 时会交还模型改正
 
 2. 执行错误（操作失败但有部分结果）：
    - 返回: &ToolOutput{Success: false, Result: partialResult, Error: message}, error
@@ -32,6 +33,8 @@ import (
 - 始终返回 ToolOutput 对象（非 nil）以保持向后兼容性
 - Success 字段明确标识成功/失败状态
 - 错误时同时设置 Error 字段和返回 error
+- 唯一例外：Dispatcher.Tools() 开启 ReturnArgumentErrors 时，参数错误以
+  &ToolOutput{Success: false, Result: {"error":"invalid_arguments","message":...}}、Error 为空、err 为 nil 返回
 */
 
 // ToolErrorResponse 统一的工具错误响应构建器
@@ -60,7 +63,9 @@ func (r *ToolErrorResponse) WithOperation(op string) *ToolErrorResponse {
 
 // ValidationError 返回验证错误（输入无效）
 //
-// 规范：返回 &ToolOutput{Success: false, Error: message} + error
+// 规范：返回 &ToolOutput{Success: false, Error: message} + *AgentError（CodeInvalidInput）。
+// 错误已标记 MarkModelArgument：Dispatcher.Tools() 开启 ReturnArgumentErrors 时只把 message 交还模型，
+// component、operation 与 details 不展示给模型。
 //
 // 使用场景：
 //   - 必需参数缺失
@@ -78,7 +83,8 @@ func (r *ToolErrorResponse) WithOperation(op string) *ToolErrorResponse {
 func (r *ToolErrorResponse) ValidationError(message string, details ...interface{}) (*interfaces.ToolOutput, error) {
 	err := agentErrors.New(agentErrors.CodeInvalidInput, message).
 		WithComponent(r.toolName).
-		WithOperation(r.operation)
+		WithOperation(r.operation).
+		MarkModelArgument()
 
 	// 添加上下文详情
 	for i := 0; i < len(details)-1; i += 2 {

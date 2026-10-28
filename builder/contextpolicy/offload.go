@@ -175,7 +175,7 @@ func (p *Offload) Invoke(ctx context.Context, input *interfaces.ToolInput) (*int
 	known := slices.Sorted(maps.Keys(p.refs))
 	p.mu.Unlock()
 	if !ok {
-		// 以成功结果返回，让模型改正参数；Dispatcher 会把 Success=false 当作致命错误中止执行。
+		// 以成功结果返回，让模型改正参数；不依赖调用方是否开启 ReturnArgumentErrors。
 		b, err := json.Marshal(map[string]any{"error": "unknown context_result key", "valid_keys": known})
 		if err != nil {
 			return nil, err
@@ -199,7 +199,12 @@ func (p *Offload) Invoke(ctx context.Context, input *interfaces.ToolInput) (*int
 			err = fmt.Errorf("invalid offset type")
 		}
 		if err != nil || math.IsNaN(n) || math.IsInf(n, 0) || n < 0 || n > float64(len(runes)) || math.Trunc(n) != n {
-			return nil, fmt.Errorf("invalid evidence offset")
+			// 与未知键一致，以成功结果交还模型改正。
+			b, err := json.Marshal(map[string]any{"error": "invalid offset", "min_offset": 0, "max_offset": len(runes)})
+			if err != nil {
+				return nil, err
+			}
+			return &interfaces.ToolOutput{Success: true, Result: string(b)}, nil
 		}
 		offset = int(n)
 	}

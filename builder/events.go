@@ -11,6 +11,7 @@ import (
 	"github.com/kart-io/goagent/core/observe"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/tools"
 )
 
 // AgentEvent is one event in ExecuteStream. Type is sources, step, text, usage,
@@ -95,6 +96,7 @@ func (a *ConfigurableAgent[C, S]) ExecuteStream(ctx context.Context, input inter
 			return a.runEvents(runCtx, request, client, caller, send)
 		})
 		output, err := a.execute(ctx, input, chain)
+		err = tools.Settle(ctx, err)
 		agentErr = err
 		// 先结束观测再发终态：调用方收到 done/error 即可能返回并关闭记录器。
 		// endAgent 只生效一次，上面的 defer 仍兜底 panic 路径。

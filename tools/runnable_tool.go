@@ -130,13 +130,14 @@ func (t *runnableTool[I, O]) Invoke(ctx context.Context, input *interfaces.ToolI
 	if input == nil || input.Args == nil {
 		return nil, fmt.Errorf("tool object arguments required")
 	}
-	// 参数问题在启动子会话之前发现，可交还模型改正；子会话自身的失败不在此列。
+	// 参数问题在启动子会话之前发现，可交还模型改正；Decode 只有返回 *ArgumentError 才可恢复。
+	// 子会话及其内层工具的错误一律定性为本工具的执行失败，不能被外层当作参数错误。
 	if err = t.schema.Validate(input.Args); err != nil {
 		return nil, &ArgumentError{Message: err.Error(), Err: err}
 	}
 	value, err := t.config.Decode(input.Args)
 	if err != nil {
-		return nil, &ArgumentError{Message: err.Error(), Err: err}
+		return nil, err
 	}
 	run := t.run
 	if t.factory != nil {
@@ -145,14 +146,14 @@ func (t *runnableTool[I, O]) Invoke(ctx context.Context, input *interfaces.ToolI
 			defer func() {
 				cleanCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), t.config.CleanupTimeout)
 				defer cancel()
-				err = errors.Join(err, owned.Close(cleanCtx))
+				err = errors.Join(err, Settle(ctx, owned.Close(cleanCtx)))
 				if err != nil {
 					out = nil
 				}
 			}()
 		}
 		if e != nil {
-			return nil, e
+			return nil, Settle(ctx, e)
 		}
 		if owned.Close == nil || nilRunnable(owned.Runnable) {
 			return nil, fmt.Errorf("owned runnable and cleanup required")
@@ -161,11 +162,11 @@ func (t *runnableTool[I, O]) Invoke(ctx context.Context, input *interfaces.ToolI
 	}
 	output, err := run.Invoke(ctx, value)
 	if err != nil {
-		return nil, err
+		return nil, Settle(ctx, err)
 	}
 	encoded, err := t.config.Encode(output)
 	if err != nil {
-		return nil, err
+		return nil, Settle(ctx, err)
 	}
 	return &interfaces.ToolOutput{Success: true, Result: encoded}, nil
 }

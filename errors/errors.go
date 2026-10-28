@@ -133,6 +133,8 @@ type AgentError struct {
 
 	// Stack contains the stack trace where the error was created
 	Stack []StackFrame
+
+	modelArgument bool
 }
 
 // StackFrame represents a single frame in a stack trace
@@ -253,6 +255,18 @@ func (e *AgentError) WithOperation(operation string) *AgentError {
 func (e *AgentError) WithComponent(component string) *AgentError {
 	e.Component = component
 	return e
+}
+
+// MarkModelArgument 标记此错误由模型生成的参数不合法引起，Message 可原样交还模型改正，
+// 因此 Message 不得包含内部细节。不改变 Error() 文本、错误码与类型。
+func (e *AgentError) MarkModelArgument() *AgentError {
+	e.modelArgument = true
+	return e
+}
+
+// ModelArgumentMessage 返回可交还模型的参数错误消息；未经 MarkModelArgument 标记时第二个值为 false。
+func (e *AgentError) ModelArgumentMessage() (string, bool) {
+	return e.Message, e.modelArgument
 }
 
 // WithContext adds a single key-value pair to the context
