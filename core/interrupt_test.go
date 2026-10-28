@@ -483,3 +483,147 @@ func TestGenerateInterruptID(t *testing.T) {
 	assert.NotEqual(t, id1, id2, "IDs should be unique")
 	assert.Contains(t, id1, "interrupt_")
 }
+
+// hookLimit 只用来防止测试挂起，不参与正确性判断。
+const hookLimit = 2 * time.Second
+
+// createInBackground 在 goroutine 中调用 CreateInterrupt，经 onCreated 钩子取得中断 ID。
+func createInBackground(t *testing.T, manager *InterruptManager, created <-chan string) (string, <-chan error) {
+	t.Helper()
+	done := make(chan error, 1)
+	go func() {
+		_, _, err := manager.CreateInterrupt(context.Background(), &Interrupt{Type: InterruptTypeApproval, Message: "m"})
+		done <- err
+	}()
+	select {
+	case id := <-created:
+		return id, done
+	case <-time.After(hookLimit):
+		t.Fatal("onCreated 钩子未被调用")
+		return "", nil
+	}
+}
+
+// CreateInterrupt 返回时 onResolved 钩子必须已执行完：钩子阻塞期间等待方不得返回。
+func TestInterruptManager_ResolvedHookRunsBeforeWaiterReturns(t *testing.T) {
+	manager := NewInterruptManager(nil)
+	created := make(chan string, 1)
+	manager.OnInterruptCreated(func(i *Interrupt) { created <- i.ID })
+	returnedEarly := make(chan bool, 1)
+	var done <-chan error
+	manager.OnInterruptResolved(func(*Interrupt, *InterruptResponse) {
+		// 等待方若提前返回，这里会在 100ms 内观察到；修复后它在钩子返回前不可能返回
+		select {
+		case <-done:
+			returnedEarly <- true
+		case <-time.After(100 * time.Millisecond):
+			returnedEarly <- false
+		}
+	})
+
+	var id string
+	id, done = createInBackground(t, manager, created)
+	require.NoError(t, manager.RespondToInterrupt(id, &InterruptResponse{Approved: true}))
+	require.False(t, <-returnedEarly, "CreateInterrupt 在 onResolved 钩子执行完之前返回")
+	select {
+	case err := <-done:
+		require.NoError(t, err)
+	case <-time.After(hookLimit):
+		t.Fatal("CreateInterrupt 未返回")
+	}
+}
+
+// 钩子在锁外执行：钩子里调用 manager 的方法不会死锁。
+func TestInterruptManager_HooksCanCallManager(t *testing.T) {
+	manager := NewInterruptManager(nil)
+	created := make(chan string, 1)
+	manager.OnInterruptCreated(func(i *Interrupt) {
+		_, err := manager.GetInterrupt(i.ID)
+		require.NoError(t, err)
+		created <- i.ID
+	})
+	var got *Interrupt
+	var getErr error
+	var pending []*Interrupt
+	manager.OnInterruptResolved(func(i *Interrupt, _ *InterruptResponse) {
+		got, getErr = manager.GetInterrupt(i.ID)
+		pending = manager.ListPendingInterrupts()
+	})
+
+	id, done := createInBackground(t, manager, created)
+	responded := make(chan error, 1)
+	go func() { responded <- manager.RespondToInterrupt(id, &InterruptResponse{Approved: true}) }()
+	select {
+	case err := <-responded:
+		require.NoError(t, err)
+	case <-time.After(hookLimit):
+		t.Fatal("RespondToInterrupt 死锁：钩子在持锁时被调用")
+	}
+	require.NoError(t, getErr)
+	require.Equal(t, id, got.ID)
+	require.Empty(t, pending, "钩子执行时响应已记录")
+	require.NoError(t, <-done)
+}
+
+// onResolved 钩子 panic 时 RespondToInterrupt 返回 PanicError，等待方照常收到响应，不会永远阻塞。
+func TestInterruptManager_ResolvedHookPanic(t *testing.T) {
+	manager := NewInterruptManager(nil)
+	created := make(chan string, 1)
+	manager.OnInterruptCreated(func(i *Interrupt) { created <- i.ID })
+	manager.OnInterruptResolved(func(*Interrupt, *InterruptResponse) { panic("resolved boom") })
+
+	id, done := createInBackground(t, manager, created)
+	err := manager.RespondToInterrupt(id, &InterruptResponse{Approved: true})
+	requirePanicError(t, err, "resolved boom", "TestInterruptManager_ResolvedHookPanic")
+	select {
+	case err := <-done:
+		require.NoError(t, err)
+	case <-time.After(hookLimit):
+		t.Fatal("onResolved 钩子 panic 后等待方未收到响应")
+	}
+}
+
+// onCreated 钩子 panic 时 CreateInterrupt 返回 PanicError，中断随之撤销，不留在待处理列表中。
+func TestInterruptManager_CreatedHookPanic(t *testing.T) {
+	manager := NewInterruptManager(nil)
+	manager.OnInterruptCreated(func(*Interrupt) { panic("created boom") })
+
+	_, _, err := manager.CreateInterrupt(context.Background(), &Interrupt{Type: InterruptTypeApproval})
+	requirePanicError(t, err, "created boom", "TestInterruptManager_CreatedHookPanic")
+	require.Empty(t, manager.ListPendingInterrupts())
+}
+
+// gatedSaver 的 Save 通知 saving 后阻塞到 release 关闭。
+type gatedSaver struct {
+	checkpoint.Checkpointer
+	saving  chan struct{}
+	release chan struct{}
+}
+
+func (g *gatedSaver) Save(ctx context.Context, threadID string, s State) error {
+	close(g.saving)
+	<-g.release
+	return g.Checkpointer.Save(ctx, threadID, s)
+}
+
+// 中断在状态保存之后才对外可见：响应方不可能在快照写入之前看到并处理它。
+func TestInterruptManager_StateSavedBeforeVisible(t *testing.T) {
+	saver := &gatedSaver{Checkpointer: checkpoint.NewInMemorySaver(), saving: make(chan struct{}), release: make(chan struct{})}
+	manager := NewInterruptManager(saver)
+	created := make(chan string, 1)
+	manager.OnInterruptCreated(func(i *Interrupt) { created <- i.ID })
+	state := NewAgentState()
+	state.Set("k", "v")
+	done := make(chan error, 1)
+	go func() {
+		_, _, err := manager.CreateInterrupt(context.Background(), &Interrupt{Type: InterruptTypeApproval, State: state})
+		done <- err
+	}()
+
+	<-saver.saving
+	require.Empty(t, manager.ListPendingInterrupts(), "状态保存完成前中断不应可见")
+	close(saver.release)
+	id := <-created
+	require.NoError(t, manager.RespondToInterrupt(id, &InterruptResponse{Approved: true}))
+	require.NoError(t, <-done)
+}
