@@ -12,7 +12,7 @@ import (
 	"github.com/kart-io/goagent/builder/contextpolicy"
 	"github.com/kart-io/goagent/examples/internal/livemodel"
 	"github.com/kart-io/goagent/examples/orchestration/internal/demomodel"
-	"github.com/kart-io/goagent/examples/orchestration/live/internal/livecase"
+	"github.com/kart-io/goagent/examples/orchestration/internal/livecase"
 	"github.com/kart-io/goagent/llm"
 	"github.com/stretchr/testify/require"
 )
