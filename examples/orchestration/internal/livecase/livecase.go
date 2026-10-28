@@ -39,7 +39,7 @@ func DispatchTools(ts []interfaces.Tool) ([]interfaces.Tool, error) {
 	return out, nil
 }
 
-var conclusion = regexp.MustCompile(`结论[:：]\s*(\S+?)(?:[\s，。,.;；]|$)`)
+var conclusion = regexp.MustCompile(`结论[:：]\s*(\S+?)(?:[\s，。,.;；（(]|$)`)
 
 // Decision 从模型回答中取出“结论：X”，且 X 必须在允许集合内。
 // 模型输出不可信，取不到合法结论就报错，不猜测。
