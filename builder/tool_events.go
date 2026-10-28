@@ -41,17 +41,6 @@ func (a *ConfigurableAgent[C, S]) streamMessages(ctx context.Context, input, evi
 
 // runToolEvents 每轮直接选择工具或输出答案，MaxIterations 包含最终答案请求。
 func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *middleware.MiddlewareRequest, client llm.ToolStreamClient, messages []llm.Message, metadata map[string]interface{}, emit func(AgentEvent) error) (*middleware.MiddlewareResponse, error) {
-	if durable.HasJournal(ctx) && a.config.ContextPolicy != nil {
-		return nil, fmt.Errorf("durable tool loops require a fixed context; ContextPolicy is not checkpointed")
-	}
-	if durable.HasJournal(ctx) {
-		for _, tool := range a.tools {
-			capability, ok := tool.(interfaces.DurableCallTool)
-			if !ok || !capability.SupportsDurableCalls() {
-				return nil, fmt.Errorf("durable tool %q requires a journaled adapter such as Dispatcher.Tools", tool.Name())
-			}
-		}
-	}
 	runtime, err := a.newPolicyRuntime(ctx)
 	if err != nil {
 		return nil, err

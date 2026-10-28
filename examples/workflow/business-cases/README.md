@@ -153,7 +153,7 @@ go run ./examples/workflow/business-cases -live -provider minimax -model MiniMax
 
 ## 原生多工具循环与进程恢复
 
-`native_loop.go` 让一个持久 Agent 节点调用 `record_A`、`record_B`，它们只写本地模拟回执。模型原生选择工具，Dispatcher 校验 stage 枚举并持久化调用。测试在 B 效果提交、工具结果检查点保存前直接退出进程；重启复用模型计划、跳过 A、用同一子键恢复 B，然后生成答案。完成后再启动不会付费或执行工具。
+`native_loop.go` 使用稳定 `WithDurableScope("native-loop")`（工作流版本 native-loop-v3），让一个持久 Agent 节点调用 `record_A`、`record_B`，它们只写本地模拟回执。模型原生选择工具，Dispatcher 校验 stage 枚举并持久化调用。测试在 B 效果提交、工具结果检查点保存前直接退出进程；重启复用模型计划、跳过 A、用同一子键恢复 B，然后生成答案。完成后再启动不会付费或执行工具。
 
 ```sh
 go test -race ./examples/workflow/business-cases -run TestNativeToolLoopProcessRecovery
@@ -165,3 +165,6 @@ MINIMAX_MODEL=MiniMax-M3.1-Flash bash scripts/business_tool_loop_live.sh minimax
 使用新报告路径；每次最多 4 个真实请求（跨进程累计），失败不自动修复或覆盖。报告保存各阶段请求数、工具尝试、效果数量、不同子键、操作状态和已知用量。默认 `go test` 不运行真实模型。此测试补充前述 Complete 分类案例，覆盖原生 function calling 和协议续接；[实测报告](../../../docs/evaluation/2026-10-27-durable-tool-loop/REPORT.md)保留首次失败与调整后的验证结果。
 
 失败的分类请求会输出 `status: needs_attention`、`model_review` 和本次模型调用次数，并以错误退出。成功判断仍在 `snapshot.State.model_review`。旧的 business-judge-v1 检查点与新策略不兼容，须使用新的运行版本/目录并核对已有业务效果。
+
+
+2026-10-28 修复补充了多 Agent 作用域隔离、无工具模型的日志入口、旧协议持久化拒绝和类型化流预览转发。本轮仅运行离线模拟和真实子进程恢复测试，不重复调用付费模型；历史三模型报告仍对应当时的 v2 案例。旧 v2 运行需核对效果后由宿主处理迁移，不能用 v3 自动续接。

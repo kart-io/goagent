@@ -56,7 +56,7 @@ func TestInvalidSecondToolPlanBlocksWholeRound(t *testing.T) {
 	dispatcher, err := tools.NewDispatcher(registry, tools.DispatchConfig{})
 	require.NoError(t, err)
 	model := nativeModel([]*llm.StreamChunk{{Done: true, FinishReason: "tool_calls", ToolCalls: []llm.ToolCall{nativeCall("a", "write", `{"stage":"A"}`), nativeCall("b", "write", `{"key":"unexpected"}`)}, Usage: &llm.Usage{TotalTokens: 23}}})
-	agent, err := NewSimpleBuilder(model).WithTools(dispatcher.Tools()...).WithMaxIterations(2).Build()
+	agent, err := NewSimpleBuilder(model).WithDurableScope("agent").WithTools(dispatcher.Tools()...).WithMaxIterations(2).Build()
 	require.NoError(t, err)
 	_, err = agent.AsRunnable().Invoke(ctx, "run")
 	require.ErrorContains(t, err, "invalid arguments")

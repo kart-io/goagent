@@ -1,0 +1,12 @@
+withTools=false attempt=1 err=node "agent": injected loss before node output checkpoint
+withTools=false attempt=2 err=node "agent": injected loss before node output checkpoint
+withTools=false actual_model_requests=2
+withTools=true attempt=1 err=node "agent": injected loss before node output checkpoint
+withTools=true attempt=2 err=node "agent": injected loss before node output checkpoint
+withTools=true actual_model_requests=1
+legacy attempt=1 error=node "legacy": injected node failure
+legacy attempt=2 error=node "legacy": injected node failure
+legacy bare_tool_executions=2 model_selections=4 answers=2
+two_agents snapshot=&{State:agent-A + agent-A Node:__end__ Steps:1 Routing:false Key: Waiting:false Done:true} err=<nil> model_requests=A:1 B:0
+regular preview data=7
+durable preview data=<nil>

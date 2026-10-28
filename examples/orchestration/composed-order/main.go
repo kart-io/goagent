@@ -91,7 +91,7 @@ func run(ctx context.Context, dir string) (result, error) {
 	childTool, err := tools.NewRunnableToolFactory(func(context.Context) (tools.OwnedRunnable[any, *builder.AgentOutput], error) {
 		created.Add(1)
 		model := &demomodel.Model{Calls: &calls, Respond: func(*llm.CompletionRequest) llm.StreamChunk { return llm.StreamChunk{Content: "政策允许退款"} }}
-		child, e := builder.NewSimpleBuilder(model).WithSystemPrompt("仅检查政策；父历史不传入").WithMemory(mem).WithSessionID("policy/" + uuid.NewString()).Build()
+		child, e := builder.NewSimpleBuilder(model).WithDurableScope("policy").WithSystemPrompt("仅检查政策；父历史不传入").WithMemory(mem).WithSessionID("policy/" + uuid.NewString()).Build()
 		if e != nil {
 			return tools.OwnedRunnable[any, *builder.AgentOutput]{}, e
 		}
@@ -129,7 +129,7 @@ func run(ctx context.Context, dir string) (result, error) {
 			return llm.StreamChunk{Content: "批准退款：满足期限与政策。"}
 		}
 	}}
-	agent, err := builder.NewSimpleBuilder(model).WithTools(business...).WithMaxIterations(4).WithContextPolicies(func() contextpolicy.Policy {
+	agent, err := builder.NewSimpleBuilder(model).WithDurableScope("order-review").WithTools(business...).WithMaxIterations(4).WithContextPolicies(func() contextpolicy.Policy {
 		p, e := contextpolicy.NewOffload(contextpolicy.OffloadConfig{Store: results, MaxToolResultRunes: 40, KeepRecentToolRounds: 1, Namespace: "order-evidence"})
 		if e != nil {
 			panic(e)

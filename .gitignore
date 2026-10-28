@@ -36,3 +36,7 @@ go.work.sum
 
 # Coverage
 *.out
+
+# Python caches (archived evaluation logs remain tracked)
+__pycache__/
+*.pyc

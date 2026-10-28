@@ -82,7 +82,7 @@ func TestPolicyReadToolAuthorizationAndReplay(t *testing.T) {
 	require.NoError(t, err)
 	model := nativeModel([]*llm.StreamChunk{{Done: true, FinishReason: "tool_calls", ToolCalls: []llm.ToolCall{nativeCall("a", "lookup", "{}")}}}, []*llm.StreamChunk{{Done: true, FinishReason: "stop", Content: "answer"}})
 	makeAgent := func() *ConfigurableAgent[any, *core.AgentState] {
-		agent, e := NewSimpleBuilder(model).WithSystemPrompt("system").WithTools(business...).WithMaxIterations(3).WithContextPolicies(factories...).WithPolicyToolAdapter(adapter).Build()
+		agent, e := NewSimpleBuilder(model).WithDurableScope("policy").WithSystemPrompt("system").WithTools(business...).WithMaxIterations(3).WithContextPolicies(factories...).WithPolicyToolAdapter(adapter).Build()
 		require.NoError(t, e)
 		return agent
 	}
@@ -140,7 +140,7 @@ func TestPolicyReferenceSaveBeforeRequestAndConfigMismatch(t *testing.T) {
 	m := nativeModel([]*llm.StreamChunk{{Done: true, FinishReason: "tool_calls", ToolCalls: []llm.ToolCall{nativeCall("a", "lookup", "{}")}}}, []*llm.StreamChunk{{Done: true, FinishReason: "stop", Content: "answer"}})
 	namespace := "original"
 	build := func() *ConfigurableAgent[any, *core.AgentState] {
-		a, e := NewSimpleBuilder(m).WithTools(business...).WithMaxIterations(3).WithContextPolicies(func() contextpolicy.Policy {
+		a, e := NewSimpleBuilder(m).WithDurableScope("policy").WithTools(business...).WithMaxIterations(3).WithContextPolicies(func() contextpolicy.Policy {
 			p, e := contextpolicy.NewOffload(contextpolicy.OffloadConfig{Store: store, Namespace: namespace, MaxToolResultRunes: 3})
 			require.NoError(t, e)
 			return p

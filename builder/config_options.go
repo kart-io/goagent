@@ -46,6 +46,10 @@ var outputFormatPrompts = map[OutputFormat]string{
 
 // AgentConfig 保存 Agent 配置选项
 type AgentConfig struct {
+	// DurableScope identifies one logical Agent invocation within a durable node.
+	// It must be unique among siblings and stable across restarts.
+	DurableScope string
+
 	// ContextPolicy is opt-in governance for the native tool execution path.
 	ContextPolicy     *ContextPolicy
 	ContextPolicies   []contextpolicy.Factory                            `json:"-"`
@@ -93,6 +97,14 @@ type AgentConfig struct {
 	// CustomOutputPrompt 自定义输出格式提示词
 	// 仅当 OutputFormat 为 OutputFormatCustom 时生效
 	CustomOutputPrompt string
+}
+
+// WithDurableScope sets a host-owned stable invocation name. Durable execution
+// requires it; different agents/calls in the same node must use different scopes.
+// Reusing the same scope means replaying the same logical invocation.
+func (b *AgentBuilder[C, S]) WithDurableScope(scope string) *AgentBuilder[C, S] {
+	b.config.DurableScope = scope
+	return b
 }
 
 // WithReturnDirectTools 指定结果已可直接展示的终态工具，省去模型总结请求。

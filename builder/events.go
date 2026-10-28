@@ -62,6 +62,11 @@ func (a *ConfigurableAgent[C, S]) ExecuteStream(ctx context.Context, input inter
 	if err != nil {
 		return nil, err
 	}
+	ctx, err = a.scopeDurableExecution(ctx)
+	if err != nil {
+		release()
+		return nil, err
+	}
 	events := make(chan AgentEvent, 1)
 	go func() {
 		defer close(events)

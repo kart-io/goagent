@@ -10,6 +10,7 @@ import (
 
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/budget"
+	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/execution"
 	"github.com/kart-io/goagent/core/middleware"
 	agentErrors "github.com/kart-io/goagent/errors"
@@ -65,6 +66,9 @@ func (a *ConfigurableAgent[C, S]) Initialize(ctx context.Context) error {
 // For the native tool/stream pipeline use AsRunnable().Invoke. This synchronous
 // entry remains supported for clients without structured streaming.
 func (a *ConfigurableAgent[C, S]) Execute(ctx context.Context, input interface{}) (*AgentOutput, error) {
+	if durable.HasJournal(ctx) {
+		return nil, fmt.Errorf("durable execution requires AsRunnable().Invoke with a StreamClient")
+	}
 	if _, bound := budget.FromContext(ctx); bound {
 		return nil, fmt.Errorf("root budget requires the unified AsRunnable execution entry")
 	}
@@ -149,6 +153,9 @@ func (a *ConfigurableAgent[C, S]) execute(ctx context.Context, input interface{}
 func (a *ConfigurableAgent[C, S]) ExecuteWithTools(ctx context.Context, input interface{}) (*AgentOutput, error) {
 	if llm.HasStreaming(a.llmClient) {
 		return a.AsRunnable().Invoke(ctx, input)
+	}
+	if durable.HasJournal(ctx) {
+		return nil, fmt.Errorf("durable execution requires AsRunnable().Invoke with a StreamClient")
 	}
 	if _, bound := budget.FromContext(ctx); bound {
 		return nil, fmt.Errorf("root budget requires a streaming client and the unified AsRunnable execution entry")
@@ -280,14 +287,14 @@ func (a *ConfigurableAgent[C, S]) executeWithTools(ctx context.Context, input in
 
 	// 达到最大迭代次数
 	return &AgentOutput{
-		Result:     "达到最大迭代次数，无法完成任务",
-		State:      a.runtime.State,
-		Metadata:   retrievalMetadata,
-		Duration:   time.Since(startTime),
-		Timestamp:  time.Now(),
-		TokenUsage: totalTokenUsage,
-	}, agentErrors.New(agentErrors.CodeAgentExecution, "max iterations reached").
-		WithContext("max_iterations", a.config.MaxIterations)
+			Result:     "达到最大迭代次数，无法完成任务",
+			State:      a.runtime.State,
+			Metadata:   retrievalMetadata,
+			Duration:   time.Since(startTime),
+			Timestamp:  time.Now(),
+			TokenUsage: totalTokenUsage,
+		}, agentErrors.New(agentErrors.CodeAgentExecution, "max iterations reached").
+			WithContext("max_iterations", a.config.MaxIterations)
 }
 
 // buildPromptWithSystemMessage 构建包含系统消息的提示
