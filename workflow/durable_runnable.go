@@ -20,11 +20,11 @@ type RunRequest[T any] struct {
 // Snapshot.Waiting=true and Snapshot.Done=false. Stream Done terminates this
 // invocation, not necessarily the business process. Run retains ErrApprovalRequired
 // for compatibility. Events are live observations, not a persisted event log.
+// Intermediate node chunks carry Data.Preview=true and an uncommitted State.
+// Only a non-preview final snapshot represents the saved continuation.
 func (d *DurableGraph[T]) AsRunnable() *core.StreamRunnable[RunRequest[T], *GraphSnapshot[T]] {
 	return core.NewStreamRunnable(core.StreamModeSteps, func(ctx context.Context, req RunRequest[T], emit func(core.StreamChunk[*GraphSnapshot[T]]) error) error {
-		snapshot, err := d.run(ctx, req.RunID, req.Initial, req.ApprovalKey, func(event *core.StreamEvent) error {
-			return emit(core.StreamChunk[*GraphSnapshot[T]]{Event: event})
-		})
+		snapshot, err := d.run(ctx, req.RunID, req.Initial, req.ApprovalKey, emit)
 		// Only the actual durable wait is a normal pause. Joined unlock errors or
 		// observer errors must not be converted to a successful invocation.
 		if err != nil && (err != durable.ErrApprovalRequired || snapshot == nil || !snapshot.Waiting) {

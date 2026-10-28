@@ -72,3 +72,9 @@ Graph.Describe 或编译产物可选 Description 返回排序、独立的 `goage
 没有新配置时不添加预算/策略意图字段。普通工具原意图 fixture 和已有执行测试保持通过。新工具版本、策略配置或根预算配置变化会拒绝旧运行；不能删除 pending、退款或增加重试次数来强行恢复。
 
 先停止新版本运行，保留对应版本 worker 处理存量。账本、引用和检查点统一按业务运行保留；活跃引用不能提前清理。测试与性能实测见 [交付验证记录](../evaluation/2026-10-27-orchestration-r2/REPORT.md)。真实模型仅由宿主显式接入并设置预算，本轮交付证据使用本地模型。
+
+## 持久 Agent 作用域与升级
+
+所有在持久 context 中执行的 Builder Agent 必须配置 `WithDurableScope("stable-name")`；同一父节点中的逻辑调用名称必须不同且跨重启稳定。`composed-order` 分别使用 `order-review` 和 `policy`，模型日志、工具日志和默认上下文结果引用位于对应 Agent 子作用域；根预算与 OTel context 继续共享。无工具 StreamClient 保留 R2 的 `model/answer/0` 日志和预算统计，原生工具循环使用 `model/turn/N`。
+
+检测到旧的无作用域 `model/turn/0` 或 `model/answer/0` 记录时提前拒绝，避免换键重跑。已有目录不能直接当作新运行；先核对业务效果，再制定版本迁移。演示新运行可使用新的空目录，不能通过删除旧评测或检查点来掩盖迁移问题。详细契约见[多 Agent 作用域与入口约束](NATIVE_ORCHESTRATION.md#多-agent-作用域与入口约束)。

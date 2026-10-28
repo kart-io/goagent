@@ -154,10 +154,15 @@ go test -race ./workflow -run DurableGraph
 
 ## 单节点内的模型与多工具恢复
 
-持久图和 `core/durable.Runner` 自动向节点 context 注入操作日志。Builder 的原生工具循环会先保存模型计划（调用 ID、参数、用量、Provider 续接状态），整轮 Schema 预检通过后才执行工具；恢复先重放计划和已完成工具结果。工具必须经 `Dispatcher.Tools()` 或实现 `interfaces.DurableCallTool` 的适配器接入；裸 Tool 在付费请求前被拒绝。
+持久图和 `core/durable.Runner` 自动向节点 context 注入操作日志。Builder 必须设置 `WithDurableScope("agent-name")`，同一节点内不同逻辑调用使用不同稳定名称。Builder 的原生工具循环会先保存模型计划（调用 ID、参数、用量、Provider 续接状态），整轮 Schema 预检通过后才执行工具；恢复先重放计划和已完成工具结果。工具必须经 `Dispatcher.Tools()` 或实现 `interfaces.DurableCallTool` 的适配器接入；裸 Tool 在付费请求前被拒绝。
 
 手写多工具节点使用宿主生成的稳定 `ToolInput.CallID`，例如 `"reserve"`、`"notify"`。Dispatcher 将 `父执行键 + tool/CallID` 派生为独立子键，注入工具的 context 与 ExecutionKey。已完成调用直接读取结果；效果已提交但结果未保存的调用只能依靠目标服务对同一子键去重。旧的空 CallID 保持单效果节点行为。
 
-失败模型回合不会自动重试，`durable.InspectOperation` 可读取状态与已知用量，后续恢复返回 `durable.ErrOperationAttention`。工具的 `MaxAttempts` 默认 3，限制跨显式恢复的总尝试数，单次 Invoke 不循环重试。详细约束与代码见[操作日志指南](../docs/guides/NATIVE_ORCHESTRATION.md#工具调用级日志与恢复)。
+失败模型回合不会自动重试，`durable.InspectOperation` 在 Agent 子作用域 context 中可读取状态与已知用量，后续恢复返回 `durable.ErrOperationAttention`。工具的 `MaxAttempts` 默认 3，限制跨显式恢复的总尝试数，单次 Invoke 不循环重试。详细约束与代码见[操作日志指南](../docs/guides/NATIVE_ORCHESTRATION.md#工具调用级日志与恢复)。
 
 `AdaptStream` 的 intermediate 回调接收原状态和中间 chunk，可显式保留 Data 与 Event；它不能返回 Done，也不能修改共享原状态。中间块只是预览，可能在恢复时重放，不驱动后继节点或写入图状态。最终 output 仍需等待完整合法流；映射失败会取消上游。
+
+
+持久图的 `AsRunnable().Stream` 同样保留 `AdaptStream` 的类型化预览：中间块 `Data.Preview=true`，预览值在 `Data.State`。即使没有 Event 或数据为零值也不丢弃。预览不写入检查点；失败或取消后 `Snapshot` 仍返回上次提交状态，Preview=false。最终成功块也为 Preview=false，业务完成须继续检查 Data.Done。
+
+持久化入口现支持无工具 StreamClient 的模型日志与恢复。旧 GenerateWithTools 协议、同步 Execute 及无流 ExecuteWithTools 在持久上下文中提前拒绝，非持久执行不变。旧无作用域模型日志不会自动迁移为新键；补充 scope、核对已有业务效果并提升 Version，详见[接入约束](../docs/guides/NATIVE_ORCHESTRATION.md#多-agent-作用域与入口约束)。

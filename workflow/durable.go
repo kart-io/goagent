@@ -37,6 +37,9 @@ type DurableGraph[T any] struct {
 
 // GraphSnapshot exposes continuation and business state without the storage envelope.
 type GraphSnapshot[T any] struct {
+	// Preview marks a transient node chunk. Its State is not committed and must
+	// not be used as a resume checkpoint or a completed business result.
+	Preview bool
 	State   T
 	Node    string
 	Steps   int
@@ -110,10 +113,10 @@ func publicGraphSnapshot[T any](s *durable.Snapshot, state graphState[T]) *Graph
 // Effects are at least once if a process dies after the effect but before Save.
 // Routers must be pure; they may repeat after a crash before routing is saved.
 func (d *DurableGraph[T]) Run(ctx context.Context, id string, initial T, approvalKey string) (*GraphSnapshot[T], error) {
-	return d.run(ctx, id, initial, approvalKey, func(*core.StreamEvent) error { return nil })
+	return d.run(ctx, id, initial, approvalKey, func(core.StreamChunk[*GraphSnapshot[T]]) error { return nil })
 }
 
-func (d *DurableGraph[T]) run(ctx context.Context, id string, initial T, approvalKey string, emit func(*core.StreamEvent) error) (result *GraphSnapshot[T], err error) {
+func (d *DurableGraph[T]) run(ctx context.Context, id string, initial T, approvalKey string, emitChunk func(core.StreamChunk[*GraphSnapshot[T]]) error) (result *GraphSnapshot[T], err error) {
 	ctx = observe.WithRunID(ctx, id)
 	ctx, endGraph := observe.Start(ctx, observe.Event{Type: "graph", Path: "graph"})
 	defer func() { endGraph(err, false) }()
@@ -122,6 +125,9 @@ func (d *DurableGraph[T]) run(ctx context.Context, id string, initial T, approva
 			err = fmt.Errorf("durable graph storage or serialization panicked")
 		}
 	}()
+	emit := func(event *core.StreamEvent) error {
+		return emitChunk(core.StreamChunk[*GraphSnapshot[T]]{Event: event})
+	}
 	if d == nil || d.store == nil || id == "" {
 		return nil, fmt.Errorf("compiled durable graph and run ID are required")
 	}
@@ -248,15 +254,19 @@ func (d *DurableGraph[T]) run(ctx context.Context, id string, initial T, approva
 					})
 			} else {
 				out, e = node(ctx, in, func(chunk core.StreamChunk[T]) error {
-					if chunk.Event == nil {
-						return nil
+					var event *core.StreamEvent
+					if chunk.Event != nil {
+						copy := *chunk.Event
+						copy.Step = nodeName
+						if chunk.Event.Step != "" {
+							copy.Step += "/" + chunk.Event.Step
+						}
+						event = &copy
 					}
-					event := *chunk.Event
-					event.Step = nodeName
-					if chunk.Event.Step != "" {
-						event.Step += "/" + chunk.Event.Step
-					}
-					return emit(&event)
+					preview := publicGraphSnapshot(checkpoint, state)
+					preview.State = chunk.Data
+					preview.Preview, preview.Done, preview.Waiting = true, false, false
+					return emitChunk(core.StreamChunk[*GraphSnapshot[T]]{Data: preview, Event: event})
 				})
 			}
 			if e != nil {

@@ -41,6 +41,7 @@ if err := graph.AddRunnable("lookup", node); err != nil { return err }
 
 // 也可以供模型选择调用；使用相同的校验、授权和并发门。
 agent, err := builder.NewSimpleBuilder(client).
+    WithDurableScope("assistant").
     WithTools(dispatcher.Tools()...).
     WithMaxIterations(3).
     Build()
@@ -144,9 +145,9 @@ out, err := dispatcher.Invoke(ctx, tools.ToolRequest{
 
 `DispatchConfig.MaxAttempts` 默认 3，包含首次执行；只有下一次显式调用才会尝试失败或未确定的操作。恢复每次仍先做 schema、自定义校验及授权。授权函数不能有副作用；首次执行和回放都可能调用。日志不提供外部效果 exactly-once：崩溃窗口里的工具必须让目标系统将去重键和业务写入放在同一事务中。保存失败不会被当成成功。
 
-Builder 用 `model/turn/N` 保存完整模型回合，再用 `tool/turn/N/call/ID` 保存每个工具。因此 Gemini 的 ProviderState 与 DeepSeek/MiniMax 的 reasoning_content 可在重启后续接，已执行的调用 ID 不依赖重新生成。原生续接数据仅在本地检查点中使用，公开测试报告不包含这些内容。Store 可能包含业务数据和模型内容，宿主负责访问控制与保留期限。
+Builder 要求显式配置 `WithDurableScope("assistant")`，先从节点键派生 Agent 调用键，再在其下用 `model/turn/N` 保存完整模型回合、用 `tool/turn/N/call/ID` 保存每个工具。因此 Gemini 的 ProviderState 与 DeepSeek/MiniMax 的 reasoning_content 可在重启后续接，已执行的调用 ID 不依赖重新生成。原生续接数据仅在本地检查点中使用，公开测试报告不包含这些内容。Store 可能包含业务数据和模型内容，宿主负责访问控制与保留期限。
 
-模型回合先验证所有工具名、ID、JSON 参数及 Schema；任一调用无效则整轮不执行工具。网络错误、截断、无效计划也保存已取得的用量。模型操作最多请求一次：请求后崩溃但结果未落盘会保留 pending/ambiguous，恢复返回 `ErrOperationAttention`，不会再次付费；此时尚未得到的用量无法重建。`InspectOperation(ctx, "model/turn/0")` 可读取详细状态。处理不确定效果后，由业务宿主决定补偿或启动新工作流；不直接删除日志强制重试。
+模型回合先验证所有工具名、ID、JSON 参数及 Schema；任一调用无效则整轮不执行工具。网络错误、截断、无效计划也保存已取得的用量。模型操作最多请求一次：请求后崩溃但结果未落盘会保留 pending/ambiguous，恢复返回 `ErrOperationAttention`，不会再次付费；此时尚未得到的用量无法重建。在对应 Agent 作用域 context 上调用 `InspectOperation(ctx, "model/turn/0")` 可读取详细状态；不能直接使用节点的父 context 查询子作用域。处理不确定效果后，由业务宿主决定补偿或启动新工作流；不直接删除日志强制重试。
 
 `durable.Do` 可供其他节点保存具名子操作，`WithJournal` 与 `WithExecutionKey` 可供宿主显式接入。其输入保存摘要，输出保存 JSON，错误仅保存类别。默认一次尝试；`RetryFailed: true` 配合 MaxAttempts 允许显式恢复。未绑定日志时直接执行，不提供持久性。
 
@@ -172,3 +173,28 @@ DEEPSEEK_MODEL=deepseek-flash bash scripts/business_tool_loop_live.sh deepseek /
 ## 可组合编排 R2
 
 新增根预算、受控 Runnable 工具、OTel 观察及不可变上下文结果引用；见 [可组合编排指南](COMPOSABLE_ORCHESTRATION.md)。旧 ContextPolicy 的持久限制继续保留；需要持久引用时使用每次执行独立的 WithContextPolicies 工厂和宿主 WithPolicyToolAdapter。流预览仍不代表业务终态，core/flow 仅为实验原型。
+
+
+## 多 Agent 作用域与入口约束
+
+同一节点中的每个逻辑 Agent 调用必须有不同且跨重启稳定的作用域：
+
+```go
+author, err := builder.NewSimpleBuilder(client).
+    WithDurableScope("author").WithTools(dispatcher.Tools()...).Build()
+// 检查 err 后构造另一组件：
+reviewer, err := builder.NewSimpleBuilder(client).
+    WithDurableScope("reviewer").WithTools(dispatcher.Tools()...).Build()
+```
+
+调用键派生为 `durable.ChildKey(nodeKey, "agent/" + scope)`，模型和工具日志均在此键下。重用同一个 scope 表示恢复**同一次逻辑调用**，不是启动新工作；同一 Agent 在一个节点内处理多个业务项时，宿主应使用稳定业务 ID 派生不同父键，或使用不同作用域/图节点。不要使用随机 ID、进程指针或并发完成顺序。没有作用域、空白作用域或旧的无作用域日志都会在模型请求前报错。
+
+无工具的 `StreamClient` 也通过相同的模型操作日志执行，成功结果可重放，失败保留已知用量并停止重复请求。有工具的持久化 Agent 必须使用 `ToolStreamClient` 和 `Dispatcher.Tools()`（或等价 DurableCallTool）；旧 GenerateWithTools 协议在持久化模式下会提前拒绝，普通非持久执行保持兼容。同步 `Execute` 和不支持流的 `ExecuteWithTools` 在持久上下文中也会拒绝，避免绕过日志；使用 `AsRunnable().Invoke` / `ExecuteStream`。这些检查在中间件、检索及模型请求前完成，日志检查的锁等待计入 Agent 超时。
+
+这是持久化接入契约的变更。原有宿主需要补充作用域并提升 `DurableConfig.Version`；先核对旧运行已发生的业务效果，再决定迁移或发起新的逻辑工作，不直接删除检查点重试。检测到节点下旧 `model/turn/0` 或 `model/answer/0` 日志时，不会悄悄换键执行。原生多工具案例已提升为 native-loop-v3，避免把历史 v2 运行当成新键继续执行。
+
+## 持久流中的类型化预览
+
+持久图 `AsRunnable().Stream` 保留节点中间 Data：通过 `chunk.Data.State` 获取，且 `chunk.Data.Preview=true`、`chunk.Done=false`。零值数据和没有 Event 的数据块也会转发；事件仍保留节点作用域。纯事件块的 State 可能是 T 的零值，不应据此推断业务状态。
+
+Preview 是本次执行的临时观察，不是检查点；不驱动下游、不提交持久状态，也不代表审批或完成。消费方不要把它用作恢复状态。`Snapshot`/`Run` 返回的持久状态以及最终成功块均为 Preview=false。预览之后出错或取消，恢复仍从上次已提交状态开始；重新执行可能再次产生预览。

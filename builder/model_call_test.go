@@ -155,3 +155,41 @@ func TestMemoryBudgetDoesNotTreatHostKeyAsReplay(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 2, s.ReservedRequests)
 }
+
+// A plain StreamClient must keep R2 budget accounting when scope isolation is added.
+func TestScopedPlainAgentsShareBudgetAndReplay(t *testing.T) {
+	store, err := durable.NewFileStore(t.TempDir())
+	require.NoError(t, err)
+	cfg := budget.Config{RootKey: "plain-agents", Version: "v1", MaxModelRequests: 2}
+	for _, replay := range []bool{false, true} {
+		controller, err := budget.NewDurable(cfg, store)
+		require.NoError(t, err)
+		ctx := budget.WithController(durable.WithJournal(durable.WithExecutionKey(context.Background(), "node"), store), controller)
+		for _, answer := range []string{"A", "B"} {
+			model := &eventModel{MockLLMClient: NewMockLLMClient()}
+			if !replay {
+				model.chunks = []*llm.StreamChunk{{Delta: answer}, {Done: true, FinishReason: "stop", Usage: &llm.Usage{TotalTokens: 7}}}
+			}
+			agent, err := NewSimpleBuilder(model).WithDurableScope(answer).Build()
+			require.NoError(t, err)
+			out, err := agent.AsRunnable().Invoke(ctx, "same question")
+			require.NoError(t, err)
+			require.Equal(t, answer, out.Result)
+			if replay {
+				require.Nil(t, model.request, "completed calls must not issue a new model request")
+			}
+		}
+		if !replay {
+			model := &eventModel{MockLLMClient: NewMockLLMClient()}
+			agent, err := NewSimpleBuilder(model).WithDurableScope("over-budget").Build()
+			require.NoError(t, err)
+			_, err = agent.AsRunnable().Invoke(ctx, "same question")
+			require.ErrorIs(t, err, budget.ErrBudgetExceeded)
+			require.Nil(t, model.request)
+		}
+		ledger, err := controller.Snapshot(ctx)
+		require.NoError(t, err)
+		require.Equal(t, 2, ledger.ReservedRequests)
+		require.Equal(t, 14, ledger.KnownTokens.TotalTokens)
+	}
+}

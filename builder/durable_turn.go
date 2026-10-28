@@ -3,19 +3,27 @@ package builder
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"github.com/kart-io/goagent/builder/contextpolicy"
-	"github.com/kart-io/goagent/core/durable"
+	"os"
 	"strings"
 
 	"github.com/google/jsonschema-go/jsonschema"
+	"github.com/kart-io/goagent/builder/contextpolicy"
+	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 )
 
-func readJournaledTurn(ctx context.Context, round int, client llm.ToolStreamClient, req *llm.CompletionRequest, tools []interfaces.Tool, emit func(AgentEvent) error) (*llm.StreamChunk, error) {
+func readJournaledTurn(ctx context.Context, round int, client llm.StreamClient, req *llm.CompletionRequest, tools []interfaces.Tool, emit func(AgentEvent) error) (*llm.StreamChunk, error) {
 	invoke := func(callCtx context.Context) (*llm.StreamChunk, error) {
-		stream, err := client.CompleteToolsStream(callCtx, req, tools)
+		var stream <-chan *llm.StreamChunk
+		var err error
+		if native, ok := client.(llm.ToolStreamClient); ok {
+			stream, err = native.CompleteToolsStream(callCtx, req, tools)
+		} else {
+			stream, err = client.CompleteStream(callCtx, req)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -82,4 +90,40 @@ func validateDurableTurn(turn *llm.StreamChunk, tools []interfaces.Tool) error {
 		ids[call.ID] = true
 	}
 	return nil
+}
+
+// scopeDurableExecution runs before middleware, retrieval and model calls so
+// unsupported paths cannot silently bypass journaling or consume paid requests.
+func (a *ConfigurableAgent[C, S]) scopeDurableExecution(ctx context.Context) (context.Context, error) {
+	if !durable.HasJournal(ctx) {
+		return ctx, nil
+	}
+	if a.config.ContextPolicy != nil {
+		return nil, fmt.Errorf("durable execution requires a fixed context; ContextPolicy is not checkpointed")
+	}
+	if len(a.tools) > 0 {
+		if _, ok := a.llmClient.(llm.ToolStreamClient); !ok {
+			return nil, fmt.Errorf("durable tools require llm.ToolStreamClient; legacy tool selection is not journaled")
+		}
+		for _, tool := range a.tools {
+			capability, ok := tool.(interfaces.DurableCallTool)
+			if !ok || !capability.SupportsDurableCalls() {
+				return nil, fmt.Errorf("durable tool %q requires a journaled adapter such as Dispatcher.Tools", tool.Name())
+			}
+		}
+	}
+	scope := a.config.DurableScope
+	if strings.TrimSpace(scope) == "" || strings.TrimSpace(scope) != scope {
+		return nil, fmt.Errorf("durable Agent requires a nonempty stable DurableScope; use WithDurableScope")
+	}
+	// Do not silently move an old unscoped run to new keys: that would rerun
+	// completed tools under different idempotency keys.
+	for _, id := range []string{"model/turn/0", "model/answer/0"} {
+		if _, err := durable.InspectOperation(ctx, id); err == nil {
+			return nil, fmt.Errorf("unscoped checkpoint exists; reconcile its effects and migrate the workflow version before using DurableScope")
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return nil, err
+		}
+	}
+	return durable.WithExecutionKey(ctx, durable.ChildKey(durable.ExecutionKey(ctx), "agent/"+scope)), nil
 }

@@ -1,5 +1,7 @@
 # 可复现评测（合成数据）
 
+归档要求见[评测资料保留约定](RETENTION.md)。历史原始结果与失败日志随代码保留，新增验证独立归档。
+
 框架性能新增：[GoAgent、Eino、LangGraph/LangChain、OpenAI Agents SDK、Google ADK 对测](2026-10-27-framework-performance-v2/REPORT.md)。本地即时模型、四种工作负载、80 组/32,000 次有效操作；分别报告同语言延迟、Go 分配和跨运行时观察。没有真实推理、持久化和并发吞吐排名。
 
 最新能力：[Gemini 原生工具循环与真实 Embedding](2026-10-27-gemini-native-support/REPORT.md)。已实现 AsRunnable、完整工具续接及签名保留、终态直返和独立向量模型。真实案例 12/12 通过，16 次生成请求加 4 次 Embedding；3,817 个生成 Token 不包含向量用量。

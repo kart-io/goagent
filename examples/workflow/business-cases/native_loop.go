@@ -43,7 +43,7 @@ func nativeLoopGraph(ctx context.Context, store durable.Store, b *demoBackend, c
 	if err != nil {
 		return nil, err
 	}
-	agent, err := builder.NewSimpleBuilder(client).WithTools(dispatch.Tools()...).WithMaxIterations(4).WithMaxTokens(modelMaxTokens).
+	agent, err := builder.NewSimpleBuilder(client).WithDurableScope("native-loop").WithTools(dispatch.Tools()...).WithMaxIterations(4).WithMaxTokens(modelMaxTokens).
 		WithTimeout(4 * modelTimeout).WithSystemPrompt(`You are testing a local simulated workflow. Call record_A once, then record_B once. Arguments must be exactly {"stage":"A"} for record_A and {"stage":"B"} for record_B. You may request both tools in the same turn in A,B order. After receiving both receipts, answer briefly with both exact receipt strings. Do not call a completed tool again. No external effects are available.`).Build()
 	if err != nil {
 		return nil, err
@@ -62,5 +62,5 @@ func nativeLoopGraph(ctx context.Context, store durable.Store, b *demoBackend, c
 	if err = graph.AddEdge("agent", workflow.END); err != nil {
 		return nil, err
 	}
-	return graph.CompileDurable(ctx, workflow.DurableConfig{Store: store, Version: "native-loop-v2/" + version})
+	return graph.CompileDurable(ctx, workflow.DurableConfig{Store: store, Version: "native-loop-v3/" + version})
 }
