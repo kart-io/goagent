@@ -25,9 +25,11 @@ type DispatchConfig struct {
 	MaxAttempts    int
 	MaxConcurrency int           // default 4, shared by all calls on this dispatcher
 	Timeout        time.Duration // default 30 seconds
-	Authorize      func(context.Context, string, *interfaces.ToolInput) error
-	// ReturnArgumentErrors 为 true 时，参数校验失败和工具返回的 *ArgumentError 不再中止调用方，
-	// 而是返回 Success=false 的结果交给模型改正，并按已完成写入日志。授权、超时、深度和重入错误仍然中止。
+	// Authorize 在开启 ReturnArgumentErrors 时也会对参数不合法的模型调用执行，可能收到不满足 Schema 的参数。
+	Authorize func(context.Context, string, *interfaces.ToolInput) error
+	// ReturnArgumentErrors 只作用于 Tools() 返回的模型调用路径：参数校验失败和工具返回的 *ArgumentError
+	// 不再中止，而是返回 Success=false、Error 为空的结果交给模型改正，并按已完成写入日志。
+	// Invoke 与 AsRunnable 不受影响，仍以 error 报告参数错误。授权、超时、深度和重入错误仍然中止。
 	ReturnArgumentErrors bool
 }
 
@@ -139,12 +141,17 @@ func nilTool(tool interfaces.Tool) bool {
 // execution and strict result checking. Caller-owned Args must not be mutated
 // concurrently; the underlying tool receives the original Go value types.
 func (d *Dispatcher) Invoke(ctx context.Context, req ToolRequest) (out *interfaces.ToolOutput, err error) {
-	return d.invoke(ctx, req, func(*core.StreamEvent) error { return nil })
+	return d.invoke(ctx, req, func(*core.StreamEvent) error { return nil }, false)
 }
-func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*core.StreamEvent) error) (out *interfaces.ToolOutput, err error) {
+
+// recoverArgs 仅在模型调用路径为真；此时参数错误作为结果返回，其余情况 out 要么成功要么带 error。
+func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*core.StreamEvent) error, recoverArgs bool) (out *interfaces.ToolOutput, err error) {
 	endTool := func(error, bool) {}
 	replayed := false
 	defer func() { endTool(err, replayed) }()
+	// 本层返回的错误登记给调用方，外层模型路径不会把它当作外层模型的参数错误。
+	caller := ctx
+	defer func() { Settle(caller, err) }()
 	defer func() {
 		if recover() != nil {
 			out = nil
@@ -157,6 +164,11 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 	ctx, err = enterDispatcher(ctx, d)
 	if err != nil {
 		return nil, err
+	}
+	// settled 为 nil 表示本路径不恢复参数错误。
+	var settled *settledSet
+	if recoverArgs {
+		ctx, settled = withSettledSet(ctx)
 	}
 	ctx, cancel := context.WithTimeout(ctx, d.config.Timeout)
 	defer cancel()
@@ -192,26 +204,35 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 	if err = ctx.Err(); err != nil {
 		return nil, err
 	}
+	// 参数错误结果与正常执行走同一授权、事件和日志路径，只是不调用工具。
+	var argResult *interfaces.ToolOutput
 	if err = entry.resolved.Validate(input.Args); err != nil {
 		err = &ArgumentError{Message: fmt.Sprintf("tool %q arguments: %v", req.Name, err), Err: err}
-		if out, ok := d.argumentResult(err); ok {
-			return out, nil
-		}
-		return nil, err
-	}
-	if custom, ok := entry.tool.(interfaces.ValidatableTool); ok {
-		if err = custom.Validate(ctx, &input); err != nil {
-			if out, ok := d.argumentResult(err); ok {
-				return out, nil
+	} else if custom, ok := entry.tool.(interfaces.ValidatableTool); ok {
+		if err = custom.Validate(ctx, &input); err == nil {
+			if err = entry.resolved.Validate(input.Args); err != nil {
+				return nil, err
 			}
+		}
+	}
+	if err != nil {
+		var ok bool
+		if argResult, ok = argumentResult(err, settled); !ok {
 			return nil, err
 		}
-		if err = entry.resolved.Validate(input.Args); err != nil {
-			return nil, err
-		}
+		err = nil
 	}
 	if d.config.Authorize != nil {
-		if err = d.config.Authorize(ctx, req.Name, &input); err != nil {
+		// 参数可能不满足 Schema，Authorize 的 panic 单独报告，不算作工具失败。
+		err = func() (e error) {
+			defer func() {
+				if recover() != nil {
+					e = fmt.Errorf("tool %q authorize panicked", req.Name)
+				}
+			}()
+			return d.config.Authorize(ctx, req.Name, &input)
+		}()
+		if err != nil {
 			return nil, err
 		}
 	}
@@ -225,10 +246,13 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 		return nil, err
 	}
 	invoke := func(callCtx context.Context) (*interfaces.ToolOutput, error) {
+		if argResult != nil {
+			return argResult, nil
+		}
 		input.Context = callCtx
 		result, e := entry.tool.Invoke(callCtx, &input)
 		if e != nil {
-			if out, ok := d.argumentResult(e); ok && callCtx.Err() == nil {
+			if out, ok := argumentResult(e, settled); ok && callCtx.Err() == nil {
 				return out, nil
 			}
 			return nil, e
@@ -240,7 +264,15 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 			return nil, fmt.Errorf("tool %q returned nil output", req.Name)
 		}
 		if !result.Success || result.Error != "" {
-			return nil, fmt.Errorf("tool %q failed: %s", req.Name, result.Error)
+			// 只透传直接注册的内层 Dispatcher 工具交还的参数错误结果；其他工具的同形状结果按失败处理。
+			message, isArg := argumentResultMessage(result)
+			if inner, ok := entry.tool.(*dispatchedTool); recoverArgs && isArg && ok && inner.d.config.ReturnArgumentErrors {
+				return result, nil
+			}
+			if result.Error != "" {
+				message = result.Error
+			}
+			return nil, fmt.Errorf("tool %q failed: %s", req.Name, message)
 		}
 		return result, nil
 	}
@@ -263,16 +295,6 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 				return nil, e
 			}
 		}
-		// 开启后参数错误会按已完成记录；写进意图，避免关闭后把旧的错误结果当作成功回放。
-		if d.config.ReturnArgumentErrors {
-			intent, e = json.Marshal(struct {
-				Original       json.RawMessage
-				ArgumentErrors bool
-			}{intent, true})
-			if e != nil {
-				return nil, e
-			}
-		}
 		policy := durable.OperationPolicy{MaxAttempts: d.config.MaxAttempts, RetryFailed: true}
 		if entry.policy != nil {
 			policy = *entry.policy
@@ -291,6 +313,9 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 		decoder := json.NewDecoder(bytes.NewReader(record.Value))
 		decoder.UseNumber()
 		err = decoder.Decode(&out)
+		if err == nil && out != nil && !out.Success && !recoverArgs {
+			err = fmt.Errorf("tool %q journaled an argument error result, but argument recovery is not enabled on this path", req.Name)
+		}
 		replayed = record.Replayed
 		if record.Replayed && err == nil {
 			err = emit(&core.StreamEvent{Type: "tool_replayed", Tool: req.Name})
@@ -305,11 +330,11 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 	return out, nil
 }
 
-func (d *Dispatcher) argumentResult(err error) (*interfaces.ToolOutput, bool) {
-	if !d.config.ReturnArgumentErrors {
+func argumentResult(err error, settled *settledSet) (*interfaces.ToolOutput, bool) {
+	if settled == nil {
 		return nil, false
 	}
-	message, ok := argumentErrorMessage(err)
+	message, ok := argumentErrorMessage(err, settled)
 	if !ok {
 		return nil, false
 	}
@@ -317,14 +342,21 @@ func (d *Dispatcher) argumentResult(err error) (*interfaces.ToolOutput, bool) {
 	return &interfaces.ToolOutput{Success: false, Result: map[string]any{"error": "invalid_arguments", "message": message}}, true
 }
 
-// ReturnsArgumentErrors 告诉 Builder 不要在提交模型回合前拒绝不合法的参数，由本工具交还模型。
+// argumentResultMessage 返回结果中的 message；第二个值表示结果是否为参数错误结果的形状。
+func argumentResultMessage(out *interfaces.ToolOutput) (string, bool) {
+	m, _ := out.Result.(map[string]any)
+	message, _ := m["message"].(string)
+	return message, !out.Success && out.Error == "" && m["error"] == "invalid_arguments"
+}
+
+// ReturnsArgumentErrors 实现 interfaces.ArgumentErrorTool：Builder 不在提交模型回合前拒绝不合法的参数。
 func (t *dispatchedTool) ReturnsArgumentErrors() bool { return t.d.config.ReturnArgumentErrors }
 
 func (d *Dispatcher) AsRunnable() *core.StreamRunnable[ToolRequest, *interfaces.ToolOutput] {
 	return core.NewStreamRunnable(core.StreamModeSteps, func(ctx context.Context, req ToolRequest, emit func(core.StreamChunk[*interfaces.ToolOutput]) error) error {
 		out, err := d.invoke(ctx, req, func(event *core.StreamEvent) error {
 			return emit(core.StreamChunk[*interfaces.ToolOutput]{Event: event})
-		})
+		}, false)
 		if err != nil {
 			return err
 		}
@@ -355,5 +387,5 @@ func (t *dispatchedTool) Name() string               { return t.entry.name }
 func (t *dispatchedTool) Description() string        { return t.entry.description }
 func (t *dispatchedTool) ArgsSchema() string         { return t.entry.schema }
 func (t *dispatchedTool) Invoke(ctx context.Context, in *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
-	return t.d.Invoke(ctx, ToolRequest{Name: t.entry.name, Input: in})
+	return t.d.invoke(ctx, ToolRequest{Name: t.entry.name, Input: in}, func(*core.StreamEvent) error { return nil }, t.d.config.ReturnArgumentErrors)
 }

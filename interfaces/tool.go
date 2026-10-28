@@ -58,6 +58,13 @@ type DurableCallTool interface {
 	SupportsDurableCalls() bool
 }
 
+// ArgumentErrorTool 声明 Invoke 会把模型传错的参数作为结果交还模型改正，宿主无需预先拒绝。
+// Dispatcher.Tools 实现此契约；包装器必须显式转发，否则宿主仍会在调用前校验参数。
+type ArgumentErrorTool interface {
+	Tool
+	ReturnsArgumentErrors() bool
+}
+
 // ValidatableTool 是工具可以实现的可选接口
 // 用于提供自定义输入验证逻辑
 //

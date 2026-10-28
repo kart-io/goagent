@@ -15,6 +15,9 @@ import (
 	"github.com/kart-io/goagent/llm"
 )
 
+// maxFailureRunes 限制 MaxIterations 报错附带的工具失败文本长度。
+const maxFailureRunes = 500
+
 // streamMessages 保留消息角色，系统指令与证据各发送一次，避免重复包装。
 func (a *ConfigurableAgent[C, S]) streamMessages(ctx context.Context, input, evidence string) []llm.Message {
 	system := a.buildSystemPromptContent()
@@ -53,6 +56,14 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 	messages, summary, err = policy.prepare(ctx, messages, a.config.MaxIterations)
 	if err != nil {
 		return nil, err
+	}
+	// 反复失败直至额度耗尽时，把最近一次工具失败带进报错，便于定位。
+	lastFailure := ""
+	exhausted := func() error {
+		if lastFailure != "" {
+			return fmt.Errorf("模型调用达到 MaxIterations 上限，尚未生成答案；最近一次工具失败：%s", lastFailure)
+		}
+		return fmt.Errorf("模型调用达到 MaxIterations 上限，尚未生成答案")
 	}
 	callsUsed := 0
 	if summary != nil {
@@ -121,6 +132,9 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 		metadata["usage_reports"] = reports
 		metadata["usage_complete"] = reports == round+1
 		if len(tools) == 0 && len(turn.ToolCalls) > 0 {
+			if lastFailure != "" {
+				return nil, fmt.Errorf("最终回答回合未提供工具，模型仍返回工具调用；%w", exhausted())
+			}
 			return nil, fmt.Errorf("最终回答回合未提供工具，模型仍返回工具调用")
 		}
 		if len(turn.ToolCalls) == 0 {
@@ -133,7 +147,7 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 		direct := len(turn.ToolCalls) == 1 && slices.Contains(a.config.ReturnDirectTools, turn.ToolCalls[0].Function.Name)
 		// 直接返回无需下一次模型请求；其余路径预留最终答案额度。
 		if !direct && round+1 >= a.config.MaxIterations {
-			return nil, fmt.Errorf("模型调用达到 MaxIterations 上限，尚未生成答案")
+			return nil, exhausted()
 		}
 		calls := make([]ToolCall, len(turn.ToolCalls))
 		ids := map[string]bool{}
@@ -194,6 +208,18 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 				}
 				text = string(data)
 			}
+			lastFailure = ""
+			if !output.Success {
+				lastFailure = text
+				if m, ok := output.Result.(map[string]any); ok {
+					if message, ok := m["message"].(string); ok {
+						lastFailure = message
+					}
+				}
+				if r := []rune(lastFailure); len(r) > maxFailureRunes {
+					lastFailure = string(r[:maxFailureRunes]) + "…"
+				}
+			}
 			// 字符串已是工具正文，不再包一层 JSON 引号或转义。
 			messages = append(messages, llm.Message{Role: "tool", Content: text, ToolCallID: turn.ToolCalls[i].ID})
 			if err := emit(AgentEvent{Type: "step", Step: "tool_end", Tool: call.Name}); err != nil {
@@ -214,7 +240,7 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 			}
 		}
 	}
-	return nil, fmt.Errorf("模型调用达到 MaxIterations 上限，尚未生成答案")
+	return nil, exhausted()
 }
 
 func readToolTurn(ctx context.Context, stream <-chan *llm.StreamChunk, emit func(AgentEvent) error) (*llm.StreamChunk, error) {

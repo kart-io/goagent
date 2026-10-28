@@ -9,6 +9,7 @@ import (
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/tools"
 	"github.com/stretchr/testify/require"
 )
 
@@ -63,4 +64,34 @@ func TestOffloadAliasStableAndMissRecoverable(t *testing.T) {
 	other, err := newPolicy().Invoke(ctx, &interfaces.ToolInput{Args: map[string]any{"key": "r1"}})
 	require.NoError(t, err)
 	require.Contains(t, other.Result, "unknown context_result key")
+}
+
+// offset 越界与未知键一致：直接调用和经 Dispatcher（未开启参数错误恢复）调用都返回合法范围，不中止执行。
+func TestOffloadInvalidOffsetRecoverable(t *testing.T) {
+	ctx := WithResultScope(context.Background(), "exec")
+	p, err := NewOffload(OffloadConfig{Store: NewMemoryStore(), MaxToolResultRunes: 10, ReadPageRunes: 5})
+	require.NoError(t, err)
+	call := llm.ToolCall{ID: "c1", Type: "function"}
+	call.Function.Name, call.Function.Arguments = "fetch", "{}"
+	_, err = p.BeforeTurn(ctx, Turn{Messages: []llm.Message{
+		{Role: "assistant", ToolCalls: []llm.ToolCall{call}},
+		{Role: "tool", ToolCallID: "c1", Content: strings.Repeat("x", 50)},
+	}})
+	require.NoError(t, err)
+	reg := tools.NewRegistry()
+	require.NoError(t, reg.Register(p))
+	d, err := tools.NewDispatcher(reg, tools.DispatchConfig{})
+	require.NoError(t, err)
+	for name, invoke := range map[string]func(*interfaces.ToolInput) (*interfaces.ToolOutput, error){
+		"直接调用":         func(in *interfaces.ToolInput) (*interfaces.ToolOutput, error) { return p.Invoke(ctx, in) },
+		"经 Dispatcher": func(in *interfaces.ToolInput) (*interfaces.ToolOutput, error) { return d.Tools()[0].Invoke(ctx, in) },
+	} {
+		out, err := invoke(&interfaces.ToolInput{Args: map[string]any{"key": "r1", "offset": float64(51)}})
+		require.NoError(t, err, name)
+		require.True(t, out.Success, name)
+		require.JSONEq(t, `{"error":"invalid offset","min_offset":0,"max_offset":50}`, out.Result.(string), name)
+		out, err = invoke(&interfaces.ToolInput{Args: map[string]any{"key": "r1", "offset": float64(50)}})
+		require.NoError(t, err, name)
+		require.Contains(t, out.Result, `"done":true`, name)
+	}
 }

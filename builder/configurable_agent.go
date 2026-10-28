@@ -17,6 +17,7 @@ import (
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/common"
+	"github.com/kart-io/goagent/tools"
 	"github.com/kart-io/goagent/utils/json"
 )
 
@@ -81,7 +82,9 @@ func (a *ConfigurableAgent[C, S]) Execute(ctx context.Context, input interface{}
 		return nil, err
 	}
 	defer release()
-	return a.execute(ctx, input, a.chain)
+	// Agent 作为别的工具的子会话时，其错误归内层所有，外层模型不得当作自己的参数错误。
+	output, err := a.execute(ctx, input, a.chain)
+	return output, tools.Settle(ctx, err)
 }
 
 func (a *ConfigurableAgent[C, S]) execute(ctx context.Context, input interface{}, chain *middleware.MiddlewareChain) (*AgentOutput, error) {
@@ -165,7 +168,8 @@ func (a *ConfigurableAgent[C, S]) ExecuteWithTools(ctx context.Context, input in
 		return nil, err
 	}
 	defer release()
-	return a.executeWithTools(ctx, input)
+	output, err := a.executeWithTools(ctx, input)
+	return output, tools.Settle(ctx, err)
 }
 
 func (a *ConfigurableAgent[C, S]) executeWithTools(ctx context.Context, input interface{}) (*AgentOutput, error) {

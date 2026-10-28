@@ -86,7 +86,7 @@ func validateDurableTurn(turn *llm.StreamChunk, tools []interfaces.Tool) error {
 			return fmt.Errorf("model returned invalid tool plan")
 		}
 		// 工具会把参数错误作为结果交还模型时，回合照常提交。
-		returns, ok := byName[call.Function.Name].(interface{ ReturnsArgumentErrors() bool })
+		returns, ok := byName[call.Function.Name].(interfaces.ArgumentErrorTool)
 		if !ok || !returns.ReturnsArgumentErrors() {
 			if err := known[call.Function.Name].Validate(args); err != nil {
 				return fmt.Errorf("model returned invalid arguments for %q: %w", call.Function.Name, err)

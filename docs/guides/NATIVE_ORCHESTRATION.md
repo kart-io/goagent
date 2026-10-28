@@ -53,13 +53,16 @@ Dispatcher 构造时冻结工具名、描述与 Schema，Registry 后续增删�
 
 ### 参数错误交还模型
 
-默认任何工具错误都会中止 Agent。设置 `DispatchConfig{ReturnArgumentErrors: true}` 后，以下错误改为返回 `Success=false`、`Result={"error":"invalid_arguments","message":...}` 的结果，由模型在下一轮改正：
+默认任何工具错误都会中止 Agent。设置 `DispatchConfig{ReturnArgumentErrors: true}` 后，经 `Dispatcher.Tools()` 发起的模型调用遇到以下错误时，改为返回 `Success=false`、`Error` 为空、`Result={"error":"invalid_arguments","message":...}` 的结果，由模型在下一轮改正：
 
 - Schema 校验失败；
-- 自定义 `Validate` 或工具 `Invoke` 返回的 `*tools.ArgumentError`（可被 `%w` 包装；`errors.Join` 只有每个分支都是参数错误才算）。`Message` 原样展示给模型，`Err` 不展示；
-- `NewRunnableTool`/`NewRunnableToolFactory` 的 Schema 与 Decode 错误，此时不会创建子会话。
+- 自定义 `Validate` 或工具 `Invoke` 返回的 `*tools.ArgumentError`（可被 `%w` 包装；`errors.Join` 只有每个分支都是参数错误才算），包括内置工具 `ValidationError` 的返回值与经 `MarkModelArgument()` 标记的 `*errors.AgentError`。`Message` 原样展示给模型，`Err` 不展示；
+- `NewRunnableTool`/`NewRunnableToolFactory` 的 Schema 错误，以及 `Decode` 返回的 `*tools.ArgumentError`，此时不会创建子会话。`Decode` 的其他错误仍然中止；
+- 直接注册进本 Dispatcher、且自身开启该选项的另一个 Dispatcher 工具交还的参数错误结果，原样透传。其他工具返回同形状的结果仍按失败中止。
 
-授权拒绝、超时与取消、嵌套深度超限、Dispatcher 重入、等待宿主继续、未知工具、参数不是 JSON 对象，以及子会话执行失败，仍然中止。同一轮的其他合法调用照常执行。参数错误结果按已完成写入日志，恢复时回放；开关写入调用意图，关闭后不会复用开启时的记录。Builder 持久模式下，这类工具的参数不合法时模型回合照常提交。直接返回工具遇到参数错误仍报错，不会把错误当作答案。反复传错由 `WithMaxIterations` 兜底。
+`Dispatcher.Invoke` 与 `AsRunnable`（workflow 节点等宿主路径）不受开关影响，仍以 error 报告参数错误。授权拒绝、超时与取消、嵌套深度超限、Dispatcher 重入、等待宿主继续、未知工具、参数不是 JSON 对象仍然中止；参数不合法时也会先执行 `Authorize`，拒绝即中止，因此 `Authorize` 可能收到不满足 Schema 的参数。子会话或内层 Dispatcher 报告的任何错误（包括内层的参数错误）都属于本工具执行失败，外层不会当作自己模型的参数错误。内层 Dispatcher、组合工具和 Builder Agent 的执行入口会自动登记；自己调用其他内层组件的包装器须透传收到的 ctx，并用 `tools.Settle(ctx, err)` 登记返回的错误；丢弃 ctx 时屏障、重入与深度保护都会失效。工具把内层错误重新包进新的参数错误，视为本层重新定性；这一判定按错误值身份在本次调用内登记完成，不包装错误，经 Dispatcher 与组合工具返回的 error 仍是工具原始返回的同一个值。同一包级哨兵若在同一次调用中既由内层返回、又由工具自己返回，会保守地按内层错误中止。同一轮的其他合法调用照常执行。
+
+参数错误结果与正常执行使用同一调用意图和日志记录，按已完成写入，恢复时回放原结果而不执行工具；开关不进入意图，切换后合法调用照常回放，但参数错误记录在未开启恢复的路径上回放会中止。开关关闭时已写入的失败记录，打开开关后只有允许重试失败的操作（默认工具策略）会重新判定；组合工具（`MaxAttempts=1`）与被拒绝的模型回合仍需宿主处理。Builder 持久模式下，实现 `interfaces.ArgumentErrorTool` 且返回 true 的工具，参数不合法时模型回合照常提交；包装器须显式转发该接口。直接返回工具遇到参数错误仍报错，不会把错误当作答案。反复传错由 `WithMaxIterations` 兜底，耗尽时报错附带最后一次工具失败信息（之后的调用成功则不附带，超过 500 字符截断）。
 
 旧 `ToolExecutor` 保留已有行为，包括原有重试配置。需要本文契约的调用方显式采用 Dispatcher；本轮未静默改变所有历史调用方。
 
