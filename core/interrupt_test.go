@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/kart-io/goagent/core/checkpoint"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 func TestNewInterruptManager(t *testing.T) {
@@ -626,4 +628,236 @@ func TestInterruptManager_StateSavedBeforeVisible(t *testing.T) {
 	id := <-created
 	require.NoError(t, manager.RespondToInterrupt(id, &InterruptResponse{Approved: true}))
 	require.NoError(t, <-done)
+}
+
+// requireInterruptCleaned 断言等待方退出后 manager 内部不再保留该中断的任何状态。
+func requireInterruptCleaned(t *testing.T, manager *InterruptManager) {
+	t.Helper()
+	manager.mu.RLock()
+	defer manager.mu.RUnlock()
+	require.Empty(t, manager.interrupts, "interrupts 未清理")
+	require.Empty(t, manager.channels, "channels 未清理")
+	require.Empty(t, manager.responses, "responses 未清理")
+	require.Empty(t, manager.creating, "creating 未清理")
+}
+
+// CancelInterrupt 后 CreateInterrupt 返回明确的取消错误，不再返回 nil 响应配 nil 错误。
+func TestInterruptManager_CancelReturnsError(t *testing.T) {
+	manager := NewInterruptManager(nil)
+	created := make(chan string, 1)
+	manager.OnInterruptCreated(func(i *Interrupt) { created <- i.ID })
+
+	type result struct {
+		response *InterruptResponse
+		err      error
+	}
+	done := make(chan result, 1)
+	go func() {
+		_, response, err := manager.CreateInterrupt(context.Background(), &Interrupt{Type: InterruptTypeApproval})
+		done <- result{response, err}
+	}()
+	id := <-created
+	require.NoError(t, manager.CancelInterrupt(id))
+
+	res := <-done
+	require.Nil(t, res.response)
+	require.Error(t, res.err)
+	require.True(t, agentErrors.IsCode(res.err, agentErrors.CodeContextCanceled), "错误码应为 CONTEXT_CANCELED，实际 %v", res.err)
+	requireInterruptCleaned(t, manager)
+	require.Error(t, manager.RespondToInterrupt(id, &InterruptResponse{Approved: true}), "取消后的响应应返回错误")
+}
+
+// ExecuteWithInterrupts 遇到被取消的中断返回错误，不解引用 nil 响应。
+func TestInterruptableExecutor_CanceledInterrupt(t *testing.T) {
+	manager := NewInterruptManager(nil)
+	manager.OnInterruptCreated(func(i *Interrupt) { require.NoError(t, manager.CancelInterrupt(i.ID)) })
+	executor := NewInterruptableExecutor(manager, nil)
+	executor.AddInterruptRule(InterruptRule{
+		Name:            "always",
+		Condition:       func(context.Context, State) bool { return true },
+		CreateInterrupt: func(context.Context, State) *Interrupt { return &Interrupt{Type: InterruptTypeApproval} },
+	})
+
+	executed := false
+	err := executor.ExecuteWithInterrupts(context.Background(), NewAgentState(), func(context.Context, State) error {
+		executed = true
+		return nil
+	})
+	require.Error(t, err)
+	require.True(t, agentErrors.IsCode(errors.Unwrap(err), agentErrors.CodeContextCanceled), "应返回取消错误，实际 %v", err)
+	require.False(t, executed)
+}
+
+// ctx 结束、超时、收到响应后，等待方退出时清理全部内部状态；迟到的 Respond 返回 not found。
+func TestInterruptManager_WaiterExitCleansUp(t *testing.T) {
+	t.Run("ctx 结束", func(t *testing.T) {
+		manager := NewInterruptManager(nil)
+		created := make(chan string, 1)
+		manager.OnInterruptCreated(func(i *Interrupt) { created <- i.ID })
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan error, 1)
+		go func() {
+			_, _, err := manager.CreateInterrupt(ctx, &Interrupt{Type: InterruptTypeApproval})
+			done <- err
+		}()
+		id := <-created
+		cancel()
+		require.ErrorIs(t, <-done, context.Canceled)
+		requireInterruptCleaned(t, manager)
+		require.Empty(t, manager.ListPendingInterrupts())
+		err := manager.RespondToInterrupt(id, &InterruptResponse{Approved: true})
+		require.True(t, agentErrors.IsCode(err, agentErrors.CodeAgentNotFound), "迟到的响应应返回 not found，实际 %v", err)
+	})
+	t.Run("超时", func(t *testing.T) {
+		manager := NewInterruptManager(nil)
+		expires := time.Now().Add(10 * time.Millisecond)
+		_, _, err := manager.CreateInterrupt(context.Background(), &Interrupt{ID: "expiring", Type: InterruptTypeApproval, ExpiresAt: &expires})
+		require.True(t, agentErrors.IsCode(err, agentErrors.CodeContextTimeout), "实际 %v", err)
+		requireInterruptCleaned(t, manager)
+		err = manager.RespondToInterrupt("expiring", &InterruptResponse{Approved: true})
+		require.True(t, agentErrors.IsCode(err, agentErrors.CodeAgentNotFound), "迟到的响应应返回 not found，实际 %v", err)
+	})
+	t.Run("收到响应", func(t *testing.T) {
+		manager := NewInterruptManager(nil)
+		created := make(chan string, 1)
+		manager.OnInterruptCreated(func(i *Interrupt) { created <- i.ID })
+		id, done := createInBackground(t, manager, created)
+		require.NoError(t, manager.RespondToInterrupt(id, &InterruptResponse{Approved: true}))
+		require.NoError(t, <-done)
+		requireInterruptCleaned(t, manager)
+		err := manager.RespondToInterrupt(id, &InterruptResponse{Approved: true})
+		require.True(t, agentErrors.IsCode(err, agentErrors.CodeAgentNotFound), "重复响应应返回 not found，实际 %v", err)
+	})
+}
+
+// Respond 与 ctx 结束、Cancel 并发：不 panic，结果一致（Respond 成功则等待方拿到该响应），退出后状态清空。
+func TestInterruptManager_RespondRacesWithExit(t *testing.T) {
+	for i := 0; i < 300; i++ {
+		manager := NewInterruptManager(nil)
+		created := make(chan string, 1)
+		manager.OnInterruptCreated(func(i *Interrupt) { created <- i.ID })
+		ctx, cancel := context.WithCancel(context.Background())
+		type result struct {
+			response *InterruptResponse
+			err      error
+		}
+		done := make(chan result, 1)
+		go func() {
+			_, response, err := manager.CreateInterrupt(ctx, &Interrupt{Type: InterruptTypeApproval})
+			done <- result{response, err}
+		}()
+		id := <-created
+
+		var wg sync.WaitGroup
+		var respondErr error
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			respondErr = manager.RespondToInterrupt(id, &InterruptResponse{Approved: true, Reason: "ok"})
+		}()
+		go func() {
+			defer wg.Done()
+			if i%2 == 0 {
+				cancel()
+			} else {
+				_ = manager.CancelInterrupt(id)
+			}
+		}()
+		wg.Wait()
+		res := <-done
+		cancel()
+		if respondErr == nil {
+			require.NoError(t, res.err, "第 %d 轮：Respond 成功但等待方返回错误", i)
+			require.Equal(t, "ok", res.response.Reason)
+		} else {
+			require.Error(t, res.err, "第 %d 轮", i)
+			require.Nil(t, res.response)
+		}
+		requireInterruptCleaned(t, manager)
+	}
+}
+
+// 对同一个中断，onCreated 一定先于 onResolved 完成：onCreated 执行期间到达的响应等它完成后才处理。
+func TestInterruptManager_CreatedHookCompletesBeforeResolved(t *testing.T) {
+	manager := NewInterruptManager(nil)
+	var mu sync.Mutex
+	var events []string
+	record := func(e string) {
+		mu.Lock()
+		defer mu.Unlock()
+		events = append(events, e)
+	}
+	created := make(chan string, 1)
+	gate := make(chan struct{})
+	manager.OnInterruptCreated(func(i *Interrupt) {
+		created <- i.ID
+		<-gate
+		record("created")
+	})
+	manager.OnInterruptResolved(func(*Interrupt, *InterruptResponse) { record("resolved") })
+
+	done := make(chan error, 1)
+	go func() {
+		_, response, err := manager.CreateInterrupt(context.Background(), &Interrupt{Type: InterruptTypeApproval})
+		if err == nil && !response.Approved {
+			err = errors.New("响应内容错误")
+		}
+		done <- err
+	}()
+	id := <-created
+	// onCreated 仍在执行时响应：Respond 不得阻塞，也不得先于 onCreated 调用 onResolved
+	require.NoError(t, manager.RespondToInterrupt(id, &InterruptResponse{Approved: true}))
+	close(gate)
+	select {
+	case err := <-done:
+		require.NoError(t, err)
+	case <-time.After(hookLimit):
+		t.Fatal("CreateInterrupt 未返回")
+	}
+	mu.Lock()
+	require.Equal(t, []string{"created", "resolved"}, events)
+	mu.Unlock()
+	requireInterruptCleaned(t, manager)
+}
+
+// onCreated 内响应同一个中断不会死锁，onResolved 仍在 onCreated 之后执行。
+func TestInterruptManager_RespondInsideCreatedHook(t *testing.T) {
+	manager := NewInterruptManager(nil)
+	var order []string
+	manager.OnInterruptCreated(func(i *Interrupt) {
+		require.NoError(t, manager.RespondToInterrupt(i.ID, &InterruptResponse{Approved: true}))
+		order = append(order, "created")
+	})
+	manager.OnInterruptResolved(func(*Interrupt, *InterruptResponse) { order = append(order, "resolved") })
+
+	done := make(chan error, 1)
+	go func() {
+		_, _, err := manager.CreateInterrupt(context.Background(), &Interrupt{Type: InterruptTypeApproval})
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		require.NoError(t, err)
+	case <-time.After(hookLimit):
+		t.Fatal("onCreated 内响应导致死锁")
+	}
+	require.Equal(t, []string{"created", "resolved"}, order)
+	requireInterruptCleaned(t, manager)
+}
+
+// onCreated panic 时，期间到达的响应随中断一起撤销：不调用 onResolved，等待方与响应方都不阻塞。
+func TestInterruptManager_CreatedHookPanicWithPendingResponse(t *testing.T) {
+	manager := NewInterruptManager(nil)
+	resolved := false
+	manager.OnInterruptCreated(func(i *Interrupt) {
+		require.NoError(t, manager.RespondToInterrupt(i.ID, &InterruptResponse{Approved: true}))
+		panic("created boom")
+	})
+	manager.OnInterruptResolved(func(*Interrupt, *InterruptResponse) { resolved = true })
+
+	_, response, err := manager.CreateInterrupt(context.Background(), &Interrupt{Type: InterruptTypeApproval})
+	requirePanicError(t, err, "created boom", "TestInterruptManager_CreatedHookPanicWithPendingResponse")
+	require.Nil(t, response)
+	require.False(t, resolved)
+	requireInterruptCleaned(t, manager)
 }
