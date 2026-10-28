@@ -3,9 +3,11 @@ package builder
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"slices"
+	"time"
 
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/google/uuid"
@@ -113,18 +115,35 @@ func (a *ConfigurableAgent[C, S]) newPolicyRuntime(ctx context.Context) (*policy
 	}
 	return p, nil
 }
-func policyContext(ctx context.Context, p *policyRuntime) context.Context {
+
+// policyContext 补齐结果作用域；第二个返回值表示作用域是本次执行临时生成的，执行结束后应释放。
+// 没有持久日志时恢复不会发生，执行键作用域没有复用价值，因此同样使用临时作用域。
+func policyContext(ctx context.Context, p *policyRuntime) (context.Context, bool) {
 	if len(p.policies) == 0 {
-		return ctx
+		return ctx, false
 	}
+	ephemeral := false
 	if contextpolicy.ResultScope(ctx) == "" {
 		scope := durable.ExecutionKey(ctx)
-		if scope == "" {
-			scope = uuid.NewString()
+		if scope == "" || !durable.HasJournal(ctx) {
+			scope, ephemeral = uuid.NewString(), true
 		}
 		ctx = contextpolicy.WithResultScope(ctx, scope)
 	}
-	return context.WithValue(ctx, policyDescriptorsKey{}, p.descriptors)
+	return context.WithValue(ctx, policyDescriptorsKey{}, p.descriptors), ephemeral
+}
+
+// release 调用实现 Releaser 的策略。不受执行取消影响，回收在超时或取消后同样进行。
+func (p *policyRuntime) release(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	var errs []error
+	for _, policy := range p.policies {
+		if r, ok := policy.(contextpolicy.Releaser); ok {
+			errs = append(errs, r.Release(ctx))
+		}
+	}
+	return errors.Join(errs...)
 }
 func (p *policyRuntime) apply(ctx context.Context, turn contextpolicy.Turn, final bool) (contextpolicy.Turn, error) {
 	for i, policy := range p.policies {

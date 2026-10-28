@@ -49,7 +49,7 @@ go run ./examples/orchestration/composed-order /tmp/goagent-order-demo
 
 策略只转换非 system 的 Content。Builder 对消息、工具调用、ProviderState 对象和原始数据字节分别做深复制，保持 opaque 字节完全不变，并验证：Round、RemainingCalls、消息数量、Role、Name、ToolCallID、ToolCalls、ReasoningContent、ProviderState 均不能修改。带 ProviderState 的消息正文也受到保护，避免破坏原生签名/续接关系。描述符 ID 唯一，Version 和 ConfigHash 非空且执行期间固定；顺序及配置加入模型意图。宿主自定义语义必须自行版本化，Durable 标记是能力声明，仍需恢复测试。
 
-`contextpolicy.NewOffload` 消费共享 ResultStore；阈值、保留轮数、分页、排除项、Namespace 均进入指纹。内存实例采用独立 nonce；持久实例从已记录回合和工具 ID 派生稳定引用。Namespace 必须标识真实后端配置，切换后端需修改它或 Version。
+`contextpolicy.NewOffload` 消费共享 ResultStore；阈值、保留轮数、分页、排除项、Namespace 均进入指纹。内存实例采用独立 nonce；持久实例从已记录回合和工具 ID 派生稳定引用。Namespace 必须标识真实后端配置，切换后端需修改它或 Version。证据保留到对其运行键调用 `ResultStore.Release`：非持久执行未提供作用域时，Builder 生成临时作用域并在执行结束后自动释放；宿主经 `WithResultScope` 提供作用域（包括持久执行）时，由宿主在运行不再恢复后释放。释放后该运行键不可复用，迟到的写入返回 `contextpolicy.ErrReleased`。持久 ResultStore 的底层存储需实现 `durable.Scoped`（`durable.FileStore` 已实现）才支持释放：每次运行一个作用域，释放时整体删除，并为每个已释放运行保留一个 8 字节墓碑。墓碑（内存版是运行键与释放时间）由宿主定期调用 `ResultStore.PruneReleased(ctx, olderThan)` 回收：只删除释放早于 `olderThan` 的墓碑，与写入互斥；阈值内的迟到写入仍被拒绝，回收后的迟到写入不再被拒绝并可能留下残留，因此 `olderThan` 须大于最长的重试或恢复窗口（进程崩溃重启、重试）。跨进程拒绝写入、写入进程被杀后锁自动释放、释放中途崩溃后重试清理均有真实子进程测试覆盖（`builder/contextpolicy/store_process_test.go`、`core/durable/file_store_test.go`），仅适用于同一主机上可靠 flock/rename 的本地文件系统。
 
 持久模式用 `NewDurableResultStore(store)`，并配置 `WithPolicyToolAdapter` 将策略工具注册到宿主 Dispatcher。缺 adapter、返回裸工具、改变工具身份或与业务工具重名都会在首个模型请求前失败。`composed-order` 中的 journalTools 是完整示例。策略读取工具同样有标准 CallID 和版本意图。
 
