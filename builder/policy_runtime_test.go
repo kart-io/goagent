@@ -11,6 +11,7 @@ import (
 	"github.com/kart-io/goagent/tools"
 	"github.com/stretchr/testify/require"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -96,7 +97,7 @@ func TestPolicyReadToolAuthorizationAndReplay(t *testing.T) {
 	// Last local turn restores the raw evidence and removes reader tools.
 	p, e := makeAgent().newPolicyRuntime(ctx)
 	require.NoError(t, e)
-	scope := policyContext(ctx, p)
+	scope, _ := policyContext(ctx, p)
 	raw := append([]llm.Message(nil), model.requests[1].Messages...)
 	raw[3].Content = "long evidence"
 	turn, e := p.apply(scope, contextpolicy.Turn{Messages: raw}, false)
@@ -167,4 +168,65 @@ func TestOrdinaryPolicyRunsOnFinalTurn(t *testing.T) {
 	turn, err := runtime.apply(context.Background(), contextpolicy.Turn{Messages: []llm.Message{llm.UserMessage("raw")}}, true)
 	require.NoError(t, err)
 	require.Equal(t, "filtered", turn.Messages[0].Content)
+}
+
+// trackingStore 记录尚未释放的运行键。
+type trackingStore struct {
+	contextpolicy.ResultStore
+	mu   sync.Mutex
+	live map[string]bool
+}
+
+func (s *trackingStore) PutIfAbsent(ctx context.Context, ref contextpolicy.Ref, data []byte) error {
+	s.mu.Lock()
+	s.live[ref.RunKey] = true
+	s.mu.Unlock()
+	return s.ResultStore.PutIfAbsent(ctx, ref, data)
+}
+func (s *trackingStore) Release(ctx context.Context, run string) error {
+	s.mu.Lock()
+	delete(s.live, run)
+	s.mu.Unlock()
+	return s.ResultStore.Release(ctx, run)
+}
+
+// 非持久执行共享同一 ResultStore 时，Builder 生成的临时作用域在执行结束（成功或失败）后自动释放；
+// 宿主经 WithResultScope 提供的作用域不自动释放，留给宿主回收。
+func TestPolicyEphemeralScopeReleased(t *testing.T) {
+	store := &trackingStore{ResultStore: contextpolicy.NewMemoryStore(), live: map[string]bool{}}
+	run := func(ctx context.Context, fail bool) error {
+		second := []*llm.StreamChunk{{Delta: "答"}, {Done: true, FinishReason: "stop"}}
+		if fail {
+			second = []*llm.StreamChunk{{Error: errors.New("模型失败")}}
+		}
+		model := nativeModel(
+			[]*llm.StreamChunk{{Done: true, FinishReason: "tool_calls", ToolCalls: []llm.ToolCall{nativeCall("a", "lookup", "{}")}}},
+			[]*llm.StreamChunk{{Done: true, FinishReason: "tool_calls", ToolCalls: []llm.ToolCall{nativeCall("b", "lookup", "{}")}}},
+			second,
+		)
+		agent, err := NewSimpleBuilder(model).WithTools(NewMockTool("lookup", "long evidence")).WithMaxIterations(4).
+			WithContextPolicies(func() contextpolicy.Policy {
+				p, e := contextpolicy.NewOffload(contextpolicy.OffloadConfig{Store: store, MaxToolResultRunes: 3})
+				require.NoError(t, e)
+				return p
+			}).Build()
+		require.NoError(t, err)
+		_, err = agent.AsRunnable().Invoke(ctx, "question")
+		return err
+	}
+	for i := range 20 {
+		err := run(context.Background(), i%2 == 1)
+		if i%2 == 1 {
+			require.Error(t, err)
+		} else {
+			require.NoError(t, err)
+		}
+	}
+	require.Empty(t, store.live, "临时作用域全部释放")
+
+	hosted := contextpolicy.WithResultScope(context.Background(), "host-run")
+	require.NoError(t, run(hosted, false))
+	require.Equal(t, map[string]bool{"host-run": true}, store.live, "宿主作用域由宿主释放")
+	require.NoError(t, store.Release(hosted, "host-run"))
+	require.Empty(t, store.live)
 }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/kart-io/goagent/builder/contextpolicy"
 	"io"
@@ -54,12 +55,19 @@ func (a *ConfigurableAgent[C, S]) streamMessages(ctx context.Context, input, evi
 }
 
 // runToolEvents 每轮直接选择工具或输出答案，MaxIterations 包含最终答案请求。
-func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *middleware.MiddlewareRequest, client llm.ToolStreamClient, messages []llm.Message, metadata map[string]interface{}, emit func(AgentEvent) error) (*middleware.MiddlewareResponse, error) {
+func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *middleware.MiddlewareRequest, client llm.ToolStreamClient, messages []llm.Message, metadata map[string]interface{}, emit func(AgentEvent) error) (response *middleware.MiddlewareResponse, err error) {
 	runtime, err := a.newPolicyRuntime(ctx)
 	if err != nil {
 		return nil, err
 	}
-	ctx = policyContext(ctx, runtime)
+	ctx, ephemeral := policyContext(ctx, runtime)
+	if ephemeral {
+		defer func() {
+			if e := runtime.release(ctx); e != nil {
+				response, err = nil, errors.Join(err, e)
+			}
+		}()
+	}
 	usage := &interfaces.TokenUsage{}
 	reports := 0
 	policy := newToolContext(a.config.ContextPolicy)

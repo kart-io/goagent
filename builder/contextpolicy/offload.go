@@ -28,7 +28,10 @@ type OffloadConfig struct {
 	Store                                                   ResultStore
 }
 
-// Offload is mutable per execution; ResultStore is safe to share across executions.
+// Offload is mutable per execution. ResultStore 可被多次执行并发共享，但每次运行写入的证据会一直保留到
+// 对该运行键调用 Release：Builder 自动生成作用域的非持久执行结束时经 Releaser 自动回收；
+// 宿主经 WithResultScope 提供作用域（包括持久执行）时须由宿主在运行不再恢复后调用 ResultStore.Release；
+// 释放后该运行键不再接受写入，不可复用。
 type Offload struct {
 	config     OffloadConfig
 	descriptor Descriptor
@@ -79,6 +82,14 @@ func (p *Offload) Stats() map[string]int64 {
 	return map[string]int64{"offloaded_results": p.offloaded}
 }
 func (p *Offload) Tools() []interfaces.Tool { return []interfaces.Tool{p} }
+
+// Release 实现 Releaser：删除当前结果作用域的全部证据。
+func (p *Offload) Release(ctx context.Context) error {
+	if run := ResultScope(ctx); run != "" {
+		return p.config.Store.Release(ctx, run)
+	}
+	return nil
+}
 
 // BeforeTurn stores evidence before substituting an immutable reference in the request.
 func (p *Offload) BeforeTurn(ctx context.Context, turn Turn) (Turn, error) {

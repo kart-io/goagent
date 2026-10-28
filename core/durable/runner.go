@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"time"
 )
 
 var ErrApprovalRequired = errors.New("durable step requires approval")
@@ -44,6 +45,21 @@ type Store interface {
 	Lock(context.Context, string) (func() error, error)
 	Load(context.Context, string) (*Snapshot, error)
 	Save(context.Context, string, *Snapshot) error
+}
+
+// ErrScopeRemoved 表示作用域已被 RemoveScope 删除，不再接受读写。
+var ErrScopeRemoved = errors.New("持久作用域已删除，拒绝读写")
+
+// Scoped 是 Store 可选的分区能力：Scope 返回独立命名空间（按需创建，只读不产生文件），
+// RemoveScope 整体删除该命名空间并留下墓碑，使其拒绝读写（Lock/Save/Load 返回 ErrScopeRemoved），作用域不存在时同样生效；
+// 删除中途崩溃时墓碑已生效，残留数据在再次 RemoveScope 之前同样不可读。名称删除后不可复用。
+//
+// PruneRemoved 删除早于 olderThan 写下的墓碑（连同崩溃残留的数据），与写入互斥。墓碑删除后该名称的 Load 返回 os.ErrNotExist，
+// 迟到的写入不再被拒绝、可能留下残留且可被读到，因此 olderThan 须大于最长的重试或恢复窗口；未过期的墓碑照常拒绝读写。
+type Scoped interface {
+	Scope(name string) Store
+	RemoveScope(ctx context.Context, name string) error
+	PruneRemoved(ctx context.Context, olderThan time.Duration) error
 }
 type Runner struct {
 	Store   Store

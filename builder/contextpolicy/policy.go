@@ -37,3 +37,10 @@ type FinalTurnRestorer interface {
 
 // StatsProvider provides policy-scoped integer statistics.
 type StatsProvider interface{ Stats() map[string]int64 }
+
+// Releaser 释放一次执行写入的资源。Builder 只在本次执行使用它自动生成的临时结果作用域时
+// （无持久日志且宿主未调用 WithResultScope），于执行结束后调用一次，返回的错误计入执行结果。
+// 持久执行或宿主提供作用域时不调用：作用域可能被恢复或复用，由宿主在不再需要时调用 ResultStore.Release。
+type Releaser interface {
+	Release(context.Context) error
+}
