@@ -8,7 +8,6 @@ import (
 	"os"
 	"strings"
 	"sync/atomic"
-	"testing"
 	"time"
 
 	"github.com/kart-io/goagent/core"
@@ -95,19 +94,6 @@ func FromEnv() (*Client, error) {
 		return nil, err
 	}
 	return New(cfg)
-}
-
-// Require 在未设置 GOAGENT_LIVE=1 时跳过测试，避免默认测试产生费用。
-func Require(t testing.TB) *Client {
-	t.Helper()
-	if os.Getenv("GOAGENT_LIVE") != "1" {
-		t.Skip("设置 GOAGENT_LIVE=1 以调用真实模型")
-	}
-	c, err := FromEnv()
-	if err != nil {
-		t.Fatal(err)
-	}
-	return c
 }
 
 // Calls 返回本客户端真实发出的模型请求数。

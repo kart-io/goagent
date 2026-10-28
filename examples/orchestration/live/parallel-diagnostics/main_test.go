@@ -8,6 +8,7 @@ import (
 
 	"github.com/kart-io/goagent/core/observe"
 	"github.com/kart-io/goagent/examples/internal/livemodel"
+	"github.com/kart-io/goagent/examples/internal/livemodel/livemodeltest"
 	"github.com/stretchr/testify/require"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
@@ -33,7 +34,7 @@ func TestTopology(t *testing.T) {
 }
 
 func TestLiveParallelDiagnostics(t *testing.T) {
-	client := livemodel.Require(t)
+	client := livemodeltest.Require(t)
 	exporter := tracetest.NewInMemoryExporter()
 	provider := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
 	t.Cleanup(func() { require.NoError(t, provider.Shutdown(context.Background())) })

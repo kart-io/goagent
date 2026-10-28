@@ -5,7 +5,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/kart-io/goagent/examples/internal/livemodel"
+	"github.com/kart-io/goagent/examples/internal/livemodel/livemodeltest"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/stretchr/testify/require"
 )
@@ -26,7 +26,7 @@ func TestOrderLookupTool(t *testing.T) {
 }
 
 func TestLiveTicketTriage(t *testing.T) {
-	client := livemodel.Require(t)
+	client := livemodeltest.Require(t)
 	for id, ticket := range Tickets {
 		t.Run(id, func(t *testing.T) {
 			dir := t.TempDir()
