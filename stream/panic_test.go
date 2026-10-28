@@ -69,31 +69,31 @@ func textChunks(texts ...string) []*core.LegacyStreamChunk {
 
 // 消费者回调在多路复用器的 goroutine 中 panic 时进程不得退出：
 // 该消费者不再收到任何回调，其他消费者照常收到全部数据；OnChunk 的 panic 由 Start 返回，
-// OnError/OnComplete 的 panic 没有调用方，交给全局 PanicHandler 记录。
+// OnError/OnComplete 的 panic 只交给全局 PanicHandler 记录。
 func TestMultiplexerConsumerPanicDoesNotKillProcess(t *testing.T) {
 	panictest.Run(t, func(t *testing.T) {
 		recorder := &panictest.Recorder{}
 		core.SetGlobalMetricsCollector(recorder)
-		ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
-		defer cancel()
+		ctx := context.Background()
 		mux := NewMultiplexer(ctx, nil)
 		bad := &panicConsumer{panicOn: "chunk"}
 		good := &panicConsumer{}
-		// OnError/OnComplete 与 OnChunk 在不同 goroutine 中触发，先后不定，这两个消费者只用于验证 panic 被记录
+		// 这两个消费者分别在 OnError、OnComplete 中 panic，只用于验证 panic 被记录
 		for _, c := range []*panicConsumer{bad, good, {panicOn: "error"}, {panicOn: "complete"}} {
 			_, err := mux.AddConsumer(c)
 			require.NoError(t, err)
 		}
 
-		err := mux.Start(ctx, &mockStreamOutput{chunks: textChunks("a", "b", "c")})
+		err := startWithin(t, ctx, mux, &mockStreamOutput{chunks: textChunks("a", "b", "c")})
 		requireStreamPanic(t, err, "chunk boom")
 		require.EqualValues(t, 1, bad.chunkN.Load(), "panic 后不再向该消费者投递")
 		require.Len(t, good.GetChunks(), 3, "其他消费者照常收到全部数据")
-		require.NoError(t, mux.Close())
 		require.True(t, good.IsComplete())
+		require.NoError(t, mux.Close())
 
+		// Start 返回前全部回调已执行完，panic 都已记录
 		ops := map[string]bool{}
-		for _, e := range recorder.Wait(3, 2*time.Second) {
+		for _, e := range recorder.Wait(3, 0) {
 			ops[e.Component+"."+e.Operation] = true
 		}
 		for _, op := range []string{"stream_multiplexer.consume", "stream_multiplexer.on_error", "stream_multiplexer.on_complete"} {
@@ -143,9 +143,7 @@ func TestMultiplexerPanickedConsumerGetsNoFinishCallbacks(t *testing.T) {
 		recorder := &gatedRecorder{panicked: make(chan struct{}), release: make(chan struct{})}
 		core.SetGlobalMetricsCollector(recorder)
 		defer close(recorder.release)
-		// Start 要等 ctx 结束才返回，这里给一个短超时
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		defer cancel()
+		ctx := context.Background()
 		mux := NewMultiplexer(ctx, nil)
 		bad := &panicConsumer{panicOn: "chunk"}
 		good := &panicConsumer{}
@@ -154,7 +152,7 @@ func TestMultiplexerPanickedConsumerGetsNoFinishCallbacks(t *testing.T) {
 		_, err = mux.AddConsumer(good)
 		require.NoError(t, err)
 
-		err = mux.Start(ctx, &gatedSource{mockStreamOutput: mockStreamOutput{chunks: textChunks("a")}, gate: recorder.panicked})
+		err = startWithin(t, ctx, mux, &gatedSource{mockStreamOutput: mockStreamOutput{chunks: textChunks("a")}, gate: recorder.panicked})
 		requireStreamPanic(t, err, "chunk boom")
 		require.Equal(t, 1, mux.Stats().ActiveConsumers)
 		require.NoError(t, mux.Close())

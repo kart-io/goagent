@@ -28,7 +28,6 @@ type Multiplexer struct {
 
 	running bool
 	closed  bool
-	wg      sync.WaitGroup // Track all goroutines
 }
 
 // consumerState 消费者状态
@@ -38,6 +37,13 @@ type consumerState struct {
 	ch       chan *core.LegacyStreamChunk
 	errors   int
 	active   bool
+
+	// 以下字段受 Multiplexer.mu 保护：chClosed 表示 ch 已关闭；detached 表示已被 RemoveConsumer/Close 移除，
+	// 不再收到任何回调；finishing 表示 ch 由 Start 在源结束时关闭，处理完缓冲数据后以 finishErr 收尾
+	chClosed  bool
+	detached  bool
+	finishing bool
+	finishErr error
 
 	// callMu 串行化对该消费者的回调；panicked 在其保护下置位，之后的回调一律跳过
 	callMu   sync.Mutex
@@ -127,7 +133,8 @@ func (m *Multiplexer) RemoveConsumer(id string) error {
 	}
 
 	state.active = false
-	close(state.ch)
+	state.detached = true
+	closeConsumerCh(state)
 	delete(m.consumers, id)
 
 	return nil
@@ -148,7 +155,10 @@ func (m *Multiplexer) Consumers() []string {
 
 // Start 开始多路复用
 //
-// 消费者回调 panic 时只停止向该消费者投递，其他消费者照常接收；全部处理结束后返回这些 panic 的 PanicError。
+// 源结束（返回错误，包括 EOF）时关闭各消费者通道，每个消费者处理完已缓冲的数据后依次收到 OnError(该错误) 与 OnComplete，
+// 全部处理完 Start 才返回；ctx 结束时不再处理缓冲数据，消费者收到 OnError(ctx 的错误) 与 OnComplete 后 Start 返回。
+// 消费者回调 panic 时只停止向该消费者投递，其他消费者照常接收；全部处理结束后返回 OnChunk 的 panic 的 PanicError，
+// OnError/OnComplete 的 panic 只交给全局 PanicHandler 记录。
 func (m *Multiplexer) Start(ctx context.Context, source core.StreamOutput) error {
 	m.mu.Lock()
 	if m.running {
@@ -158,6 +168,18 @@ func (m *Multiplexer) Start(ctx context.Context, source core.StreamOutput) error
 			WithOperation("Start")
 	}
 	m.running = true
+
+	// 启动每个消费者的处理协程；通道已关闭的消费者已结束，不再处理
+	var wg sync.WaitGroup
+	states := make([]*consumerState, 0, len(m.consumers))
+	for _, state := range m.consumers {
+		if state.chClosed {
+			continue
+		}
+		states = append(states, state)
+		wg.Add(1)
+		go m.processConsumer(ctx, state, &wg)
+	}
 	m.mu.Unlock()
 
 	defer func() {
@@ -166,33 +188,39 @@ func (m *Multiplexer) Start(ctx context.Context, source core.StreamOutput) error
 		m.mu.Unlock()
 	}()
 
-	// 启动每个消费者的处理协程
-	var wg sync.WaitGroup
-	states := make([]*consumerState, 0, len(m.consumers))
-	for _, state := range m.consumers {
-		states = append(states, state)
-		wg.Add(1)
-		go m.processConsumer(ctx, state, &wg)
-	}
-
-	// 从源读取并广播
+	// 从源读取并广播，直到源结束或 ctx 结束
+	var endErr error
 	for {
+		if endErr = ctx.Err(); endErr != nil {
+			break
+		}
+		if endErr = m.ctx.Err(); endErr != nil {
+			break
+		}
+
 		chunk, err := source.Next()
 		if err != nil {
-			// 通知所有消费者错误
-			m.broadcastError(err)
+			endErr = err
 			break
 		}
 
 		// 广播数据块
 		if err := m.broadcast(chunk); err != nil {
-			m.broadcastError(err)
+			endErr = err
 			break
 		}
 	}
 
-	// 通知所有消费者完成
-	m.broadcastComplete()
+	// 关闭消费者通道：结束信号排在已缓冲的数据之后，由 processConsumer 处理完数据后收尾
+	m.mu.Lock()
+	for _, state := range states {
+		if !state.chClosed {
+			state.finishing = true
+			state.finishErr = endErr
+			closeConsumerCh(state)
+		}
+	}
+	m.mu.Unlock()
 
 	// 等待所有消费者处理完成
 	wg.Wait()
@@ -207,32 +235,38 @@ func (m *Multiplexer) Start(ctx context.Context, source core.StreamOutput) error
 }
 
 // Close 关闭多路复用器
+//
+// 被关闭的消费者不再收到任何回调，包括 OnError/OnComplete。
 func (m *Multiplexer) Close() error {
 	m.mu.Lock()
+	defer m.mu.Unlock()
 	if m.closed {
-		m.mu.Unlock()
 		return agentErrors.New(agentErrors.CodeStreamWrite, "multiplexer already closed").
 			WithComponent("stream_multiplexer").
 			WithOperation("Close")
 	}
 
 	m.closed = true
+
+	// 先在锁内标记移除再取消 ctx：processConsumer 看到 ctx 结束后需要取锁检查 detached，因此不会给它们收尾
+	for _, state := range m.consumers {
+		state.active = false
+		state.detached = true
+		closeConsumerCh(state)
+	}
 	m.cancel()
 
-	// 关闭所有消费者通道
-	for _, state := range m.consumers {
-		if state.active {
-			close(state.ch)
-		}
-	}
-
 	m.consumers = make(map[string]*consumerState)
-	m.mu.Unlock()
-
-	// Wait for all goroutines to finish
-	m.wg.Wait()
 
 	return nil
+}
+
+// closeConsumerCh 关闭消费者通道，可重复调用；调用方须持有 m.mu。
+func closeConsumerCh(state *consumerState) {
+	if !state.chClosed {
+		state.chClosed = true
+		close(state.ch)
+	}
 }
 
 // broadcast 广播数据块到所有消费者
@@ -241,7 +275,7 @@ func (m *Multiplexer) broadcast(chunk *core.LegacyStreamChunk) error {
 	defer m.mu.RUnlock()
 
 	for _, state := range m.consumers {
-		if !state.active {
+		if !state.active || state.chClosed {
 			continue
 		}
 
@@ -260,46 +294,8 @@ func (m *Multiplexer) broadcast(chunk *core.LegacyStreamChunk) error {
 	return nil
 }
 
-// broadcastError 广播错误到所有消费者
-func (m *Multiplexer) broadcastError(err error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	for _, state := range m.consumers {
-		if state.active {
-			// Track goroutines
-			m.wg.Add(1)
-			go func(s *consumerState) {
-				defer m.wg.Done()
-				// panic 没有调用方接收，只由全局 PanicHandler 记录
-				if panicked, err := m.callConsumer(m.ctx, s, "on_error", func() error { return s.consumer.OnError(err) }); err != nil && !panicked {
-					fmt.Printf("failed to broadcast error: %v", err)
-				}
-			}(state)
-		}
-	}
-}
-
-// broadcastComplete 广播完成通知到所有消费者
-func (m *Multiplexer) broadcastComplete() {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	for _, state := range m.consumers {
-		if state.active {
-			// Track goroutines
-			m.wg.Add(1)
-			go func(s *consumerState) {
-				defer m.wg.Done()
-				if panicked, err := m.callConsumer(m.ctx, s, "on_complete", s.consumer.OnComplete); err != nil && !panicked {
-					fmt.Printf("failed to broadcast complete: %v", err)
-				}
-			}(state)
-		}
-	}
-}
-
-// processConsumer 处理单个消费者
+// processConsumer 处理单个消费者：按顺序处理通道中的数据块，通道由 Start 关闭或 ctx 结束时调用结束回调后退出，
+// 因此同一消费者的结束回调总在它已处理的数据块之后。
 func (m *Multiplexer) processConsumer(ctx context.Context, state *consumerState, wg *sync.WaitGroup) {
 	defer wg.Done()
 
@@ -307,6 +303,10 @@ func (m *Multiplexer) processConsumer(ctx context.Context, state *consumerState,
 		select {
 		case chunk, ok := <-state.ch:
 			if !ok {
+				// 通道关闭先于接收发生，finishing/finishErr 在关闭前写入，这里无需加锁
+				if state.finishing {
+					m.finishConsumer(ctx, state, state.finishErr)
+				}
 				return
 			}
 
@@ -325,11 +325,35 @@ func (m *Multiplexer) processConsumer(ctx context.Context, state *consumerState,
 			}
 
 		case <-ctx.Done():
+			m.finishCanceledConsumer(ctx, state, ctx.Err())
 			return
 
 		case <-m.ctx.Done():
+			m.finishCanceledConsumer(ctx, state, m.ctx.Err())
 			return
 		}
+	}
+}
+
+// finishCanceledConsumer 在 ctx 结束时为消费者收尾；已被 RemoveConsumer/Close 移除的消费者不再回调。
+func (m *Multiplexer) finishCanceledConsumer(ctx context.Context, state *consumerState, err error) {
+	m.mu.RLock()
+	detached := state.detached
+	m.mu.RUnlock()
+	if !detached {
+		m.finishConsumer(ctx, state, err)
+	}
+}
+
+// finishConsumer 依次调用 OnError(err)（err 非 nil 时）与 OnComplete；panic 没有调用方接收，只由全局 PanicHandler 记录。
+func (m *Multiplexer) finishConsumer(ctx context.Context, state *consumerState, err error) {
+	if err != nil {
+		if panicked, cbErr := m.callConsumer(ctx, state, "on_error", func() error { return state.consumer.OnError(err) }); cbErr != nil && !panicked {
+			fmt.Printf("failed to broadcast error: %v", cbErr)
+		}
+	}
+	if panicked, cbErr := m.callConsumer(ctx, state, "on_complete", state.consumer.OnComplete); cbErr != nil && !panicked {
+		fmt.Printf("failed to broadcast complete: %v", cbErr)
 	}
 }
 

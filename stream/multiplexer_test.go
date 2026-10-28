@@ -237,8 +237,7 @@ func TestMultiplexer_Broadcast_Multiple(t *testing.T) {
 
 // TestMultiplexer_Start_SingleConsumer tests multiplexer start with single consumer
 func TestMultiplexer_Start_SingleConsumer(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
+	ctx := context.Background()
 
 	mux := NewMultiplexer(ctx, nil)
 	defer mux.Close()
@@ -253,16 +252,15 @@ func TestMultiplexer_Start_SingleConsumer(t *testing.T) {
 
 	source := &mockStreamOutput{chunks: chunks}
 
-	// Run with timeout context
-	mux.Start(ctx, source)
+	assert.NoError(t, startWithin(t, ctx, mux, source))
 
+	assert.Len(t, consumer.GetChunks(), 2)
 	assert.True(t, consumer.IsComplete())
 }
 
 // TestMultiplexer_Start_MultipleConsumers tests start with multiple consumers
 func TestMultiplexer_Start_MultipleConsumers(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
+	ctx := context.Background()
 
 	mux := NewMultiplexer(ctx, nil)
 	defer mux.Close()
@@ -280,8 +278,10 @@ func TestMultiplexer_Start_MultipleConsumers(t *testing.T) {
 
 	source := &mockStreamOutput{chunks: chunks}
 
-	mux.Start(ctx, source)
+	assert.NoError(t, startWithin(t, ctx, mux, source))
 
+	assert.Len(t, consumer1.GetChunks(), 2)
+	assert.Len(t, consumer2.GetChunks(), 2)
 	assert.True(t, consumer1.IsComplete())
 	assert.True(t, consumer2.IsComplete())
 }
@@ -358,12 +358,12 @@ func TestMultiplexer_ConsumerError(t *testing.T) {
 	consumer := &mockConsumer{}
 	mux.AddConsumer(consumer)
 
-	testErr := errors.New("test error")
-	mux.broadcastError(testErr)
+	assert.NoError(t, startWithin(t, ctx, mux, &mockStreamOutput{}))
 
-	time.Sleep(50 * time.Millisecond)
-
-	assert.Len(t, consumer.GetErrors(), 1)
+	errs := consumer.GetErrors()
+	if assert.Len(t, errs, 1) {
+		assert.EqualError(t, errs[0], "no more chunks")
+	}
 }
 
 // TestMultiplexer_ConsumerComplete tests handling consumer completion
@@ -375,9 +375,7 @@ func TestMultiplexer_ConsumerComplete(t *testing.T) {
 	consumer := &mockConsumer{}
 	mux.AddConsumer(consumer)
 
-	mux.broadcastComplete()
-
-	time.Sleep(50 * time.Millisecond)
+	assert.NoError(t, startWithin(t, ctx, mux, &mockStreamOutput{}))
 
 	assert.True(t, consumer.IsComplete())
 }
@@ -393,13 +391,14 @@ func TestMultiplexer_ContextTimeout(t *testing.T) {
 	consumer := &mockConsumer{}
 	mux.AddConsumer(consumer)
 
-	// Create infinite source
-	source := &mockStreamOutput{
-		chunks: []*core.LegacyStreamChunk{core.NewTextChunk("a")},
-		index:  0,
-	}
+	// 源永不结束，Start 只能因超时返回
+	assert.NoError(t, startWithin(t, ctx, mux, &endlessSource{}))
 
-	mux.Start(ctx, source)
+	assert.True(t, consumer.IsComplete())
+	errs := consumer.GetErrors()
+	if assert.Len(t, errs, 1) {
+		assert.ErrorIs(t, errs[0], context.DeadlineExceeded)
+	}
 }
 
 // Concurrent operation tests
@@ -588,8 +587,7 @@ func BenchmarkMultiplexer_BroadcastMultiple(b *testing.B) {
 
 // TestMultiplexer_StartWithNoConsumers tests starting with no consumers
 func TestMultiplexer_StartWithNoConsumers(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
+	ctx := context.Background()
 
 	mux := NewMultiplexer(ctx, nil)
 	defer mux.Close()
@@ -600,15 +598,12 @@ func TestMultiplexer_StartWithNoConsumers(t *testing.T) {
 
 	source := &mockStreamOutput{chunks: chunks}
 
-	err := mux.Start(ctx, source)
-
-	assert.NoError(t, err)
+	assert.NoError(t, startWithin(t, ctx, mux, source))
 }
 
 // TestMultiplexer_StartAlreadyRunning tests starting already running multiplexer
 func TestMultiplexer_StartAlreadyRunning(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
+	ctx := context.Background()
 
 	mux := NewMultiplexer(ctx, nil)
 	defer mux.Close()
@@ -616,23 +611,180 @@ func TestMultiplexer_StartAlreadyRunning(t *testing.T) {
 	consumer := &mockConsumer{}
 	mux.AddConsumer(consumer)
 
-	chunks := []*core.LegacyStreamChunk{
-		core.NewTextChunk("a"),
-		core.NewTextChunk("b"),
-		core.NewTextChunk("c"),
-	}
-
-	source := &mockStreamOutput{chunks: chunks}
-
-	// Start first time should succeed - run in goroutine to keep it running
-	go mux.Start(ctx, source)
-
-	// Give it a moment to set the running flag
-	time.Sleep(10 * time.Millisecond)
+	// 第一次 Start 读完数据后卡在源上，保持运行状态
+	gate := make(chan struct{})
+	source := &drainedSource{mockStreamOutput: mockStreamOutput{chunks: textChunks("a", "b", "c")}, drained: make(chan struct{}), gate: gate}
+	done := make(chan error, 1)
+	go func() { done <- mux.Start(ctx, source) }()
+	<-source.drained
 
 	// Try to start again - should fail
-	source2 := &mockStreamOutput{chunks: chunks}
-	err := mux.Start(ctx, source2)
-
+	err := mux.Start(ctx, &mockStreamOutput{chunks: textChunks("a")})
 	assert.Error(t, err)
+
+	close(gate)
+	select {
+	case err := <-done:
+		assert.NoError(t, err)
+	case <-time.After(startReturnLimit):
+		t.Fatalf("Start 在 %v 内未返回", startReturnLimit)
+	}
+}
+
+// startReturnLimit 只用来防止测试挂起：默认流超时为 5 分钟，在此时限内返回就说明 Start 没有等 ctx 结束。
+const startReturnLimit = 2 * time.Second
+
+// startWithin 在 goroutine 中运行 Start，超过 startReturnLimit 仍未返回即判失败。
+func startWithin(t *testing.T, ctx context.Context, mux *Multiplexer, source core.StreamOutput) error {
+	t.Helper()
+	done := make(chan error, 1)
+	go func() { done <- mux.Start(ctx, source) }()
+	select {
+	case err := <-done:
+		return err
+	case <-time.After(startReturnLimit):
+		t.Fatalf("Start 在 %v 内未返回", startReturnLimit)
+		return nil
+	}
+}
+
+// 源结束（EOF 或错误）后 Start 应在消费者处理完数据与结束回调后返回，不等 ctx 结束。
+func TestMultiplexerStartReturnsWhenSourceEnds(t *testing.T) {
+	mux := NewMultiplexer(context.Background(), nil)
+	defer mux.Close()
+	consumers := []*mockConsumer{{}, {}}
+	for _, c := range consumers {
+		_, err := mux.AddConsumer(c)
+		assert.NoError(t, err)
+	}
+
+	err := startWithin(t, context.Background(), mux, &mockStreamOutput{chunks: textChunks("a", "b", "c")})
+	assert.NoError(t, err)
+	for _, c := range consumers {
+		assert.Len(t, c.GetChunks(), 3)
+		assert.Len(t, c.GetErrors(), 1, "源的结束错误交给 OnError")
+		assert.True(t, c.IsComplete())
+	}
+}
+
+// orderConsumer 按调用顺序记录回调；第一个块阻塞到 gate 关闭，使其余块在缓冲区积压。
+type orderConsumer struct {
+	gate      chan struct{}
+	completed chan struct{}
+	mu        sync.Mutex
+	events    []string
+}
+
+func (c *orderConsumer) record(event string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.events = append(c.events, event)
+}
+
+func (c *orderConsumer) OnStart() error { return nil }
+
+func (c *orderConsumer) OnChunk(chunk *core.LegacyStreamChunk) error {
+	if chunk.Text == "0" {
+		<-c.gate
+	}
+	c.record("chunk:" + chunk.Text)
+	return nil
+}
+
+func (c *orderConsumer) OnError(error) error {
+	c.record("error")
+	return nil
+}
+
+func (c *orderConsumer) OnComplete() error {
+	c.record("complete")
+	close(c.completed)
+	return nil
+}
+
+// drainedSource 产出全部块后关闭 drained，gate 非 nil 时再等它关闭，然后返回结束错误。
+type drainedSource struct {
+	mockStreamOutput
+	drained chan struct{}
+	gate    <-chan struct{}
+}
+
+func (s *drainedSource) Next() (*core.LegacyStreamChunk, error) {
+	if s.index >= len(s.chunks) {
+		close(s.drained)
+		if s.gate != nil {
+			<-s.gate
+		}
+	}
+	return s.mockStreamOutput.Next()
+}
+
+// 每个消费者按“数据块 → 结束回调”的顺序收到回调：源结束时缓冲区里还积压着数据，OnError/OnComplete 也要排在它们之后。
+func TestMultiplexerFinishCallbacksAfterBufferedChunks(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	mux := NewMultiplexer(ctx, nil)
+	defer mux.Close()
+	consumer := &orderConsumer{gate: make(chan struct{}), completed: make(chan struct{})}
+	_, err := mux.AddConsumer(consumer)
+	assert.NoError(t, err)
+
+	texts := []string{"0", "1", "2", "3", "4", "5", "6", "7"}
+	source := &drainedSource{mockStreamOutput: mockStreamOutput{chunks: textChunks(texts...)}, drained: make(chan struct{})}
+	done := make(chan error, 1)
+	go func() { done <- mux.Start(ctx, source) }()
+	// 源已读完时消费者仍卡在第一个块上，其余块都在缓冲区中
+	<-source.drained
+	close(consumer.gate)
+	select {
+	case <-consumer.completed:
+	case <-time.After(startReturnLimit):
+		t.Fatalf("OnComplete 在 %v 内未被调用", startReturnLimit)
+	}
+
+	want := make([]string, 0, len(texts)+2)
+	for _, text := range texts {
+		want = append(want, "chunk:"+text)
+	}
+	want = append(want, "error", "complete")
+	consumer.mu.Lock()
+	assert.Equal(t, want, consumer.events)
+	consumer.mu.Unlock()
+	cancel()
+	assert.NoError(t, <-done)
+}
+
+// endlessSource 每次都返回数据块；cancel 非 nil 时在第 cancelAt 次调用时取消 ctx，用来确定性地触发 ctx 结束。
+type endlessSource struct {
+	mockStreamOutput
+	calls    int
+	cancelAt int
+	cancel   context.CancelFunc
+}
+
+func (s *endlessSource) Next() (*core.LegacyStreamChunk, error) {
+	s.calls++
+	if s.cancel != nil && s.calls == s.cancelAt {
+		s.cancel()
+	}
+	return core.NewTextChunk("x"), nil
+}
+
+// 源不结束时，ctx 取消后 Start 依然及时返回，消费者收到 ctx 的错误与完成通知。
+func TestMultiplexerStartReturnsOnContextCancel(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	mux := NewMultiplexer(context.Background(), nil)
+	defer mux.Close()
+	consumer := &mockConsumer{}
+	_, err := mux.AddConsumer(consumer)
+	assert.NoError(t, err)
+
+	err = startWithin(t, ctx, mux, &endlessSource{cancelAt: 3, cancel: cancel})
+	assert.NoError(t, err)
+	assert.True(t, consumer.IsComplete())
+	errs := consumer.GetErrors()
+	if assert.Len(t, errs, 1) {
+		assert.ErrorIs(t, errs[0], context.Canceled)
+	}
 }
