@@ -1,6 +1,6 @@
 # SDD ledger — plan: docs/superpowers/plans/2026-10-27-composable-orchestration.md
 
-Execution branch: codex/composable-orchestration-r2. Workspace: /Users/costalong/.codex/worktrees/4bd1/goagent.
+Execution branch: codex/composable-orchestration-r2. Workspace: <repo>.
 Baseline: 3bfeea7; documentation/benchmark inputs committed separately as b60e033. Root source checkout left unchanged.
 
 Pre-flight: T1 produces Controller consumed by T2/T4; persist-mode checks and config identity required. T3/T4 agree on owned/fixed resource lifecycle. T5 OTel API lives in core/observe, bridge in observability, no exporter in execution packages. T6/T7 use immutable store and deep message validation. T8 wraps existing final-state contract. T9/T10 consume public APIs only.

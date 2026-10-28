@@ -1,4 +1,4 @@
-github.com/kart-io/goagent/core/observe: no non-test Go files in /Users/costalong/.codex/worktrees/4bd1/goagent/core/observe
+github.com/kart-io/goagent/core/observe: no non-test Go files in <repo>/core/observe
 # github.com/kart-io/goagent/workflow [github.com/kart-io/goagent/workflow.test]
 workflow/describe_test.go:12:22: run.Description undefined (type *core.StreamRunnable[int, int] has no field or method Description)
 # github.com/kart-io/goagent/core/observe [github.com/kart-io/goagent/core/observe.test]
