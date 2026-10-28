@@ -11,6 +11,7 @@ import (
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/examples/internal/livemodel"
 	"github.com/kart-io/goagent/examples/orchestration/internal/livecase"
+	"github.com/kart-io/goagent/examples/orchestration/internal/livecase/livecasetest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -70,11 +71,11 @@ func TestLiveReviewLoopRecovery(t *testing.T) {
 	env := func(mode string) []string { return []string{childDir + "=" + dir, childMode + "=" + mode} }
 
 	var crash crashed
-	livecase.Result(t, livecase.Child(t, "TestLiveReviewLoopRecovery", env("crash")...), &crash)
+	livecasetest.Result(t, livecasetest.Child(t, "TestLiveReviewLoopRecovery", env("crash")...), &crash)
 	require.Equal(t, int64(2), crash.Calls, "第 1 轮写与审各 1 次请求；第一稿缺少邮箱，必然进入第 2 轮")
 
 	var resumed Result
-	livecase.Result(t, livecase.Child(t, "TestLiveReviewLoopRecovery", env("resume")...), &resumed)
+	livecasetest.Result(t, livecasetest.Child(t, "TestLiveReviewLoopRecovery", env("resume")...), &resumed)
 	t.Logf("%s/%s 恢复：轮次 %d，新增请求 %d，预留 %d\n%s", client.Live.Provider, client.Live.Model, resumed.Rounds, resumed.NewModelCalls, resumed.Budget.ReservedRequests, resumed.Draft)
 	require.True(t, resumed.Done)
 	require.Equal(t, "通过", resumed.Verdict, resumed.Draft)
@@ -87,7 +88,7 @@ func TestLiveReviewLoopRecovery(t *testing.T) {
 	require.Equal(t, 2*resumed.Rounds, resumed.Budget.ReservedRequests)
 
 	var replayed Result
-	livecase.Result(t, livecase.Child(t, "TestLiveReviewLoopRecovery", env("replay")...), &replayed)
+	livecasetest.Result(t, livecasetest.Child(t, "TestLiveReviewLoopRecovery", env("replay")...), &replayed)
 	require.Zero(t, replayed.NewModelCalls)
 	require.Zero(t, replayed.WriterRuns+replayed.ReviewerRuns)
 	require.Equal(t, resumed.Draft, replayed.Draft)

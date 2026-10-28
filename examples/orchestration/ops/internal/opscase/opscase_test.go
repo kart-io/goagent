@@ -15,6 +15,7 @@ import (
 	"github.com/kart-io/goagent/examples/internal/livemodel"
 	"github.com/kart-io/goagent/examples/orchestration/internal/demomodel"
 	"github.com/kart-io/goagent/examples/orchestration/internal/livecase"
+	"github.com/kart-io/goagent/examples/orchestration/internal/livecase/livecasetest"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/tools"
@@ -313,7 +314,7 @@ func TestLedgerRebuiltAfterCrash(t *testing.T) {
 		t.Fatalf("应在数据工具落盘后退出：%v", err)
 	}
 	dir := t.TempDir()
-	livecase.Child(t, "TestLedgerRebuiltAfterCrash", "OPSCASE_CRASH_DIR="+dir)
+	livecasetest.Child(t, "TestLedgerRebuiltAfterCrash", "OPSCASE_CRASH_DIR="+dir)
 	c := &agentCase{}
 	got, err := c.run(t, dir)
 	require.NoError(t, err)
