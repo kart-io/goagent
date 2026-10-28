@@ -28,12 +28,14 @@ type DurablePolicyProvider interface {
 
 // RunnableToolConfig defines trusted codecs and version identity. ModelInvoking is
 // a host declaration, not a mechanism to discover hidden SDK requests.
+// CleanupTimeout bounds OwnedRunnable.Close after parent cancellation; 0 means 5s.
 type RunnableToolConfig[I, O any] struct {
 	Name, Description, ArgsSchema, Version string
 	Decode                                 func(map[string]any) (I, error)
 	Encode                                 func(O) (any, error)
 	ModelInvoking                          bool
 	MaxDepth                               int
+	CleanupTimeout                         time.Duration
 }
 type runnableTool[I, O any] struct {
 	config  RunnableToolConfig[I, O]
@@ -85,8 +87,8 @@ func nilRunnable(value any) bool {
 	return false
 }
 func newRunnableTool[I, O any](cfg RunnableToolConfig[I, O]) (*runnableTool[I, O], error) {
-	if cfg.Name == "" || strings.TrimSpace(cfg.Name) != cfg.Name || cfg.Version == "" || cfg.Decode == nil || cfg.Encode == nil || cfg.MaxDepth < 0 {
-		return nil, fmt.Errorf("tool requires name, version, codecs and valid depth")
+	if cfg.Name == "" || strings.TrimSpace(cfg.Name) != cfg.Name || cfg.Version == "" || cfg.Decode == nil || cfg.Encode == nil || cfg.MaxDepth < 0 || cfg.CleanupTimeout < 0 {
+		return nil, fmt.Errorf("tool requires name, version, codecs, valid depth and cleanup timeout")
 	}
 	var schema jsonschema.Schema
 	if err := json.Unmarshal([]byte(cfg.ArgsSchema), &schema); err != nil {
@@ -102,6 +104,9 @@ func newRunnableTool[I, O any](cfg RunnableToolConfig[I, O]) (*runnableTool[I, O
 	if cfg.MaxDepth == 0 {
 		cfg.MaxDepth = 8
 	}
+	if cfg.CleanupTimeout == 0 {
+		cfg.CleanupTimeout = 5 * time.Second
+	}
 	return &runnableTool[I, O]{config: cfg, schema: resolved}, nil
 }
 func (t *runnableTool[I, O]) Name() string                 { return t.config.Name }
@@ -113,9 +118,9 @@ func (t *runnableTool[I, O]) DurableOperationPolicy() durable.OperationPolicy {
 }
 func (t *runnableTool[I, O]) Invoke(ctx context.Context, input *interfaces.ToolInput) (out *interfaces.ToolOutput, err error) {
 	defer func() {
-		if recover() != nil {
+		if v := recover(); v != nil {
 			out = nil
-			err = errors.Join(err, fmt.Errorf("runnable tool panicked"))
+			err = errors.Join(err, fmt.Errorf("runnable tool panicked: %v", v))
 		}
 	}()
 	ctx, err = enterRunnable(ctx, t.config.MaxDepth, t.config.ModelInvoking)
@@ -137,7 +142,7 @@ func (t *runnableTool[I, O]) Invoke(ctx context.Context, input *interfaces.ToolI
 		owned, e := t.factory(ctx)
 		if owned.Close != nil {
 			defer func() {
-				cleanCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+				cleanCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), t.config.CleanupTimeout)
 				defer cancel()
 				err = errors.Join(err, owned.Close(cleanCtx))
 				if err != nil {
