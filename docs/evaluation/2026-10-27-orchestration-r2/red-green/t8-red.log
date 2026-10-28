@@ -1,0 +1,14 @@
+# github.com/kart-io/goagent/core/flow [github.com/kart-io/goagent/core/flow.test]
+core/flow/adapter_test.go:3:15: undefined: Fold
+core/flow/adapter_test.go:6:9: undefined: AsRunnable
+core/flow/adapter_test.go:6:46: undefined: Source
+core/flow/adapter_test.go:6: undefined: Limits
+core/flow/adapter_test.go:13:10: undefined: Source
+core/flow/adapter_test.go:14:10: undefined: Map
+core/flow/adapter_test.go:15:9: undefined: AsRunnable
+core/flow/adapter_test.go:15:46: undefined: Source
+core/flow/adapter_test.go:15:98: undefined: Limits
+core/flow/adapter_test.go:18:8: undefined: AsRunnable
+core/flow/adapter_test.go:18:8: too many errors
+FAIL	github.com/kart-io/goagent/core/flow [build failed]
+FAIL

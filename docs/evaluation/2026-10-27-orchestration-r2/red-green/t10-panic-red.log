@@ -1,0 +1,8 @@
+--- FAIL: TestPanickingNodeObservationIsNotSuccess (0.00s)
+    observation_failure_test.go:5: 
+        	Error Trace:	/Users/costalong/.codex/worktrees/4bd1/goagent/workflow/observation_failure_test.go:5
+        	Error:      	[]string{"graph_start", "node_start", "graph_end"} does not contain "node_error"
+        	Test:       	TestPanickingNodeObservationIsNotSuccess
+FAIL
+FAIL	github.com/kart-io/goagent/workflow	0.211s
+FAIL

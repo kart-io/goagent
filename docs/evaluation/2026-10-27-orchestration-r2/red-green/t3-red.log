@@ -1,0 +1,14 @@
+# github.com/kart-io/goagent/tools [github.com/kart-io/goagent/tools.test]
+tools/runnable_tool_test.go:13:22: undefined: RunnableToolConfig
+tools/runnable_tool_test.go:16:43: undefined: NewRunnableTool
+tools/runnable_tool_test.go:18:27: undefined: RunnableToolConfig
+tools/runnable_tool_test.go:18: undefined: NewRunnableTool
+tools/runnable_tool_test.go:19:92: undefined: NewRunnableTool
+tools/runnable_tool_test.go:23:44: undefined: NewRunnableTool
+tools/runnable_tool_test.go:26:33: undefined: NewRunnableTool
+tools/runnable_tool_test.go:29:124: undefined: ErrToolWorkflowWaiting
+tools/runnable_tool_test.go:29:158: undefined: NewRunnableTool
+tools/runnable_tool_test.go:29: undefined: ErrToolWorkflowWaiting
+tools/runnable_tool_test.go:29: too many errors
+FAIL	github.com/kart-io/goagent/tools [build failed]
+FAIL

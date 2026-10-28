@@ -1,0 +1,33 @@
+--- FAIL: TestLegacyEntriesRejectBoundRootBudgetBeforeRequest (0.00s)
+    --- FAIL: TestLegacyEntriesRejectBoundRootBudgetBeforeRequest/Execute (0.00s)
+        review_boundaries_test.go:30: 
+            	Error Trace:	/Users/costalong/.codex/worktrees/4bd1/goagent/builder/review_boundaries_test.go:30
+            	Error:      	An error is expected but got nil.
+            	Test:       	TestLegacyEntriesRejectBoundRootBudgetBeforeRequest/Execute
+    --- FAIL: TestLegacyEntriesRejectBoundRootBudgetBeforeRequest/ExecuteWithTools (0.00s)
+        review_boundaries_test.go:30: 
+            	Error Trace:	/Users/costalong/.codex/worktrees/4bd1/goagent/builder/review_boundaries_test.go:30
+            	Error:      	An error is expected but got nil.
+            	Test:       	TestLegacyEntriesRejectBoundRootBudgetBeforeRequest/ExecuteWithTools
+--- FAIL: TestIdentityPolicyPreservesOpaqueProviderBytes (0.00s)
+    review_boundaries_test.go:49: 
+        	Error Trace:	/Users/costalong/.codex/worktrees/4bd1/goagent/builder/review_boundaries_test.go:49
+        	Error:      	Received unexpected error:
+        	            	policy changed protected message protocol
+        	Test:       	TestIdentityPolicyPreservesOpaqueProviderBytes
+--- FAIL: TestPolicyRejectsBoundAssistantContentBeforeAdmission (0.00s)
+    review_boundaries_test.go:75: 
+        	Error Trace:	/Users/costalong/.codex/worktrees/4bd1/goagent/builder/review_boundaries_test.go:75
+        	Error:      	An error is expected but got nil.
+        	Test:       	TestPolicyRejectsBoundAssistantContentBeforeAdmission
+FAIL
+FAIL	github.com/kart-io/goagent/builder	0.843s
+--- FAIL: TestDurableResumesHaveDistinctObservationIdentities (0.05s)
+    observation_failure_test.go:52: 
+        	Error Trace:	/Users/costalong/.codex/worktrees/4bd1/goagent/workflow/observation_failure_test.go:52
+        	Error:      	Should be false
+        	Test:       	TestDurableResumesHaveDistinctObservationIdentities
+        	Messages:   	duplicate EventID 1
+FAIL
+FAIL	github.com/kart-io/goagent/workflow	1.340s
+FAIL

@@ -1,0 +1,46 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/kart-io/goagent-frameworkbench
+cpu: Apple M4 Pro
+BenchmarkFramework/goagent/graph_8-4         	  486187	       708.3 ns/op	    2049 B/op	      32 allocs/op
+BenchmarkFramework/goagent/graph_8-4         	  528734	       709.0 ns/op	    2049 B/op	      32 allocs/op
+BenchmarkFramework/goagent/graph_8-4         	  537738	       698.5 ns/op	    2049 B/op	      32 allocs/op
+BenchmarkFramework/goagent/graph_8-4         	  479413	       717.9 ns/op	    2049 B/op	      32 allocs/op
+BenchmarkFramework/goagent/graph_8-4         	  531099	       740.2 ns/op	    2049 B/op	      32 allocs/op
+BenchmarkFramework/goagent/branch_loop_8-4   	  498890	       723.9 ns/op	    2049 B/op	      32 allocs/op
+BenchmarkFramework/goagent/branch_loop_8-4   	  527713	       703.3 ns/op	    2049 B/op	      32 allocs/op
+BenchmarkFramework/goagent/branch_loop_8-4   	  513762	       734.2 ns/op	    2049 B/op	      32 allocs/op
+BenchmarkFramework/goagent/branch_loop_8-4   	  483805	       750.9 ns/op	    2049 B/op	      32 allocs/op
+BenchmarkFramework/goagent/branch_loop_8-4   	  518937	       788.7 ns/op	    2049 B/op	      32 allocs/op
+BenchmarkFramework/goagent/agent_tool-4      	   38452	      9375 ns/op	    7941 B/op	      97 allocs/op
+BenchmarkFramework/goagent/agent_tool-4      	   37081	      9631 ns/op	    7924 B/op	      97 allocs/op
+BenchmarkFramework/goagent/agent_tool-4      	   32172	     10048 ns/op	    7932 B/op	      97 allocs/op
+BenchmarkFramework/goagent/agent_tool-4      	   39118	      9274 ns/op	    7938 B/op	      97 allocs/op
+BenchmarkFramework/goagent/agent_tool-4      	   39597	      9357 ns/op	    7939 B/op	      97 allocs/op
+BenchmarkFramework/goagent/stream_64-4       	    8340	     44834 ns/op	   22809 B/op	     192 allocs/op
+BenchmarkFramework/goagent/stream_64-4       	    7756	     44603 ns/op	   22812 B/op	     192 allocs/op
+BenchmarkFramework/goagent/stream_64-4       	    8170	     46801 ns/op	   22808 B/op	     192 allocs/op
+BenchmarkFramework/goagent/stream_64-4       	    8196	     44721 ns/op	   22808 B/op	     192 allocs/op
+BenchmarkFramework/goagent/stream_64-4       	    8335	     44744 ns/op	   22808 B/op	     192 allocs/op
+BenchmarkFramework/eino/graph_8-4            	   25587	     14935 ns/op	   33392 B/op	     358 allocs/op
+BenchmarkFramework/eino/graph_8-4            	   25454	     15821 ns/op	   33392 B/op	     358 allocs/op
+BenchmarkFramework/eino/graph_8-4            	   25915	     13934 ns/op	   33392 B/op	     358 allocs/op
+BenchmarkFramework/eino/graph_8-4            	   22350	     14593 ns/op	   33392 B/op	     358 allocs/op
+BenchmarkFramework/eino/graph_8-4            	   25389	     13908 ns/op	   33392 B/op	     358 allocs/op
+BenchmarkFramework/eino/branch_loop_8-4      	   28948	     12529 ns/op	   30264 B/op	     339 allocs/op
+BenchmarkFramework/eino/branch_loop_8-4      	   29246	     12973 ns/op	   30264 B/op	     339 allocs/op
+BenchmarkFramework/eino/branch_loop_8-4      	   28914	     13437 ns/op	   30264 B/op	     339 allocs/op
+BenchmarkFramework/eino/branch_loop_8-4      	   29289	     12447 ns/op	   30264 B/op	     339 allocs/op
+BenchmarkFramework/eino/branch_loop_8-4      	   28954	     12874 ns/op	   30264 B/op	     339 allocs/op
+BenchmarkFramework/eino/agent_tool-4         	    5658	     61341 ns/op	   87971 B/op	    1345 allocs/op
+BenchmarkFramework/eino/agent_tool-4         	    5838	     64292 ns/op	   87937 B/op	    1345 allocs/op
+BenchmarkFramework/eino/agent_tool-4         	    5260	     60056 ns/op	   87964 B/op	    1345 allocs/op
+BenchmarkFramework/eino/agent_tool-4         	    6034	     60121 ns/op	   87967 B/op	    1345 allocs/op
+BenchmarkFramework/eino/agent_tool-4         	    5726	     60279 ns/op	   87971 B/op	    1345 allocs/op
+BenchmarkFramework/eino/stream_64-4          	   10000	     35832 ns/op	   57909 B/op	     783 allocs/op
+BenchmarkFramework/eino/stream_64-4          	   10000	     31083 ns/op	   57909 B/op	     783 allocs/op
+BenchmarkFramework/eino/stream_64-4          	   10000	     31352 ns/op	   57909 B/op	     783 allocs/op
+BenchmarkFramework/eino/stream_64-4          	   10000	     30730 ns/op	   57910 B/op	     783 allocs/op
+BenchmarkFramework/eino/stream_64-4          	   10000	     30916 ns/op	   57909 B/op	     783 allocs/op
+PASS
+ok  	github.com/kart-io/goagent-frameworkbench	17.312s
