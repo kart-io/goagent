@@ -130,12 +130,13 @@ func (t *runnableTool[I, O]) Invoke(ctx context.Context, input *interfaces.ToolI
 	if input == nil || input.Args == nil {
 		return nil, fmt.Errorf("tool object arguments required")
 	}
+	// 参数问题在启动子会话之前发现，可交还模型改正；子会话自身的失败不在此列。
 	if err = t.schema.Validate(input.Args); err != nil {
-		return nil, err
+		return nil, &ArgumentError{Message: err.Error(), Err: err}
 	}
 	value, err := t.config.Decode(input.Args)
 	if err != nil {
-		return nil, err
+		return nil, &ArgumentError{Message: err.Error(), Err: err}
 	}
 	run := t.run
 	if t.factory != nil {
