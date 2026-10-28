@@ -1,7 +1,7 @@
 === RUN   TestLiveLocalizeRecovery
     main_test.go:185: 模型：minimax/MiniMax-M3.1-Flash
     main_test.go:157: 恢复：{Result:{English:Within 7 days of receiving delivery confirmation, you can return unopened Aurora Wireless Earbuds for a full refund with no questions asked, and the money will go back to your original payment method within 3 business days. TranslatorLookups:0 StyleLookups:1 GlossaryInjected:1 NewModelCalls:2 Budget:{ReservedRequests:4 KnownUsageEntries:4 UnknownUsageEntries:0 KnownTokens:{PromptTokens:2294 CompletionTokens:190 TotalTokens:2484 CachedTokens:0}}} Calls:2 Err:}
-    main_test.go:159: 
+    main_test.go:159:
         	Error Trace:	/home/costalong/code/go/src/github.com/kart-io/goagent/examples/orchestration/live/localize/main_test.go:159
         	            				/home/costalong/code/go/src/github.com/kart-io/goagent/examples/orchestration/live/localize/main_test.go:186
         	Error:      	Should be empty, but was [no-questions-asked refund]

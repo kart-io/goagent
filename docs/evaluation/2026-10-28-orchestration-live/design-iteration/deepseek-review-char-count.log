@@ -7,12 +7,12 @@ ok  	github.com/kart-io/goagent/examples/orchestration/live/localize	7.699s
 === RUN   TestLiveReviewLoopRecovery
     main_test.go:78: deepseek/deepseek-flash 恢复：轮次 3，新增请求 4，预留 6
         亲爱的顾客：感谢支持！我们支持7天无理由退换货：签收后7天内，商品不影响二次销售即可申请；定制刻字类商品不适用。质量问题我们承担来回运费，非质量问题运费自理。退款将在3个工作日内原路退回。如有疑问，请联系 refund@demo.example。祝购物愉快！
-    main_test.go:80: 
+    main_test.go:80:
         	Error Trace:	/home/costalong/code/go/src/github.com/kart-io/goagent/examples/orchestration/live/review-loop/main_test.go:80
-        	Error:      	Not equal: 
+        	Error:      	Not equal:
         	            	expected: "通过"
         	            	actual  : "修改"
-        	            	
+
         	            	Diff:
         	            	--- Expected
         	            	+++ Actual

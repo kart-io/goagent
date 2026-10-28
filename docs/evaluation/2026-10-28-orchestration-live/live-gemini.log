@@ -86,10 +86,10 @@ ok  	github.com/kart-io/goagent/examples/orchestration/live/localize	7.692s
 === RUN   TestPaymentLogsRequirePaging
 --- PASS: TestPaymentLogsRequirePaging (0.00s)
 === RUN   TestLiveLogTriageCrashRecovery
-    main_test.go:69: 
+    main_test.go:69:
         	Error Trace:	/home/costalong/code/go/src/github.com/kart-io/goagent/examples/orchestration/live/log-triage/main_test.go:69
         	            				/home/costalong/code/go/src/github.com/kart-io/goagent/examples/orchestration/live/log-triage/main_test.go:85
-        	Error:      	Not equal: 
+        	Error:      	Not equal:
         	            	expected: 86
         	            	actual  : 2
         	Test:       	TestLiveLogTriageCrashRecovery
@@ -111,15 +111,15 @@ ok  	github.com/kart-io/goagent/examples/orchestration/live/parallel-diagnostics
 === RUN   TestLiveReviewLoopRecovery
     main_test.go:78: gemini/gemini-2.5-flash 恢复：轮次 2，新增请求 2，预留 4
         亲爱的顾客，
-        
+
         为确保您有愉快的购物体验，本店提供完善的退款服务。
-        
+
         如对商品不满意，在签收7天内，商品全新、未使用且包装完好，即可申请退货退款。定制刻字类商品不适用无理由退款。
-        
+
         请您退货前务必联系在线客服，我们将全程协助。收到退回商品确认无误后，退款将在3个工作日内原路返回。
-        
+
         如有任何疑问，请发送邮件至 refund@demo.example。
-        
+
         感谢您的理解与支持！
 --- PASS: TestLiveReviewLoopRecovery (15.30s)
 PASS
