@@ -38,7 +38,11 @@ type consumerState struct {
 	ch       chan *core.LegacyStreamChunk
 	errors   int
 	active   bool
-	// panicErr 记录消费者回调的 panic；此后不再向它投递数据或调用它的回调
+
+	// callMu 串行化对该消费者的回调；panicked 在其保护下置位，之后的回调一律跳过
+	callMu   sync.Mutex
+	panicked bool
+	// panicErr 记录处理协程中回调的 panic，由 Start 返回
 	panicErr error
 }
 
@@ -267,8 +271,8 @@ func (m *Multiplexer) broadcastError(err error) {
 			m.wg.Add(1)
 			go func(s *consumerState) {
 				defer m.wg.Done()
-				defer core.ReportPanic(m.ctx, "stream_multiplexer", "on_error")
-				if err := s.consumer.OnError(err); err != nil {
+				// panic 没有调用方接收，只由全局 PanicHandler 记录
+				if panicked, err := m.callConsumer(m.ctx, s, "on_error", func() error { return s.consumer.OnError(err) }); err != nil && !panicked {
 					fmt.Printf("failed to broadcast error: %v", err)
 				}
 			}(state)
@@ -287,8 +291,7 @@ func (m *Multiplexer) broadcastComplete() {
 			m.wg.Add(1)
 			go func(s *consumerState) {
 				defer m.wg.Done()
-				defer core.ReportPanic(m.ctx, "stream_multiplexer", "on_complete")
-				if err := s.consumer.OnComplete(); err != nil {
+				if panicked, err := m.callConsumer(m.ctx, s, "on_complete", s.consumer.OnComplete); err != nil && !panicked {
 					fmt.Printf("failed to broadcast complete: %v", err)
 				}
 			}(state)
@@ -299,8 +302,6 @@ func (m *Multiplexer) broadcastComplete() {
 // processConsumer 处理单个消费者
 func (m *Multiplexer) processConsumer(ctx context.Context, state *consumerState, wg *sync.WaitGroup) {
 	defer wg.Done()
-	defer m.stopPanickedConsumer(state)
-	defer core.RecoverPanic(ctx, "stream_multiplexer", "consume", &state.panicErr)
 
 	for {
 		select {
@@ -309,11 +310,18 @@ func (m *Multiplexer) processConsumer(ctx context.Context, state *consumerState,
 				return
 			}
 
-			if err := state.consumer.OnChunk(chunk); err != nil {
-				state.errors++
-				if err := state.consumer.OnError(err); err != nil {
-					fmt.Printf("failed to broadcast error: %v", err)
+			panicked, err := m.callConsumer(ctx, state, "consume", func() error {
+				if err := state.consumer.OnChunk(chunk); err != nil {
+					state.errors++
+					if err := state.consumer.OnError(err); err != nil {
+						fmt.Printf("failed to broadcast error: %v", err)
+					}
 				}
+				return nil
+			})
+			if panicked {
+				state.panicErr = err
+				return
 			}
 
 		case <-ctx.Done():
@@ -325,14 +333,23 @@ func (m *Multiplexer) processConsumer(ctx context.Context, state *consumerState,
 	}
 }
 
-// stopPanickedConsumer 在消费者回调 panic 后将其标记为非活跃，broadcast 与完成/错误通知随之跳过它。
-func (m *Multiplexer) stopPanickedConsumer(state *consumerState) {
-	if state.panicErr == nil {
-		return
+// callConsumer 在 callMu 下调用消费者回调，消费者已 panic 过则跳过。
+// 回调 panic 时在释放 callMu 之前将其标记为 panicked 与非活跃，返回 PanicError；
+// 已排队等待 callMu 的完成/错误通知因此看到标记而跳过，不存在 panic 之后仍被回调的窗口。
+func (m *Multiplexer) callConsumer(ctx context.Context, state *consumerState, operation string, call func() error) (bool, error) {
+	state.callMu.Lock()
+	defer state.callMu.Unlock()
+	if state.panicked {
+		return false, nil
 	}
-	m.mu.Lock()
-	state.active = false
-	m.mu.Unlock()
+	panicked, err := core.CallSafely(ctx, "stream_multiplexer", operation, call)
+	if panicked {
+		state.panicked = true
+		m.mu.Lock()
+		state.active = false
+		m.mu.Unlock()
+	}
+	return panicked, err
 }
 
 // Stats 获取多路复用器统计信息
