@@ -61,7 +61,7 @@ type AgentConfig struct {
 	// EmptyAnswerRetries 是模型正常结束却返回空回答时允许重问的次数，仅作用于原生工具流；0 表示不重问。
 	EmptyAnswerRetries int
 
-	// ParallelToolCalls 限制同一轮可并发执行的工具调用数；0 表示只受工具自身限流，1 表示按顺序执行。
+	// ParallelToolCalls 是同一轮可并发执行的工具调用数上限；小于 2（默认 0）时按顺序执行。
 	ParallelToolCalls int
 
 	// MaxIterations 限制推理步骤的最大次数
@@ -134,12 +134,17 @@ func (b *AgentBuilder[C, S]) WithEmptyAnswerRetries(n int) *AgentBuilder[C, S] {
 	return b
 }
 
-// WithParallelToolCalls 设置同一轮工具调用的并发上限（默认 0，不另设上限）。
+// WithParallelToolCalls 设置同一轮工具调用的并发上限（默认 0，按顺序执行）。
 //
-// [Advanced] 仅作用于原生工具流。一轮有多个调用、且每个调用的工具都实现
-// interfaces.ConcurrentCallTool（如 Dispatcher.Tools）时并发执行，实际峰值还受工具自身
-// 限流（Dispatcher.MaxConcurrency）约束；含上下文策略工具时仍按顺序执行。n=1 关闭并发，负数视为 0。
-// 结果按模型给出的顺序交还模型；某个调用失败不取消其他调用，全部结束后返回顺序最靠前的错误。
+// [Advanced] 仅作用于原生工具流。n>=2 时，一轮有多个调用、且每个调用的工具都实现
+// interfaces.ConcurrentCallTool（如 Dispatcher.Tools）时最多 n 个并发执行，实际峰值还受工具自身
+// 限流（Dispatcher.MaxConcurrency）约束；不另设上限时传 math.MaxInt。n<2 按顺序执行，负数视为 0；
+// 含上下文策略工具或任一工具未声明并发能力时整轮按顺序执行。
+//
+// 并发时执行先后不保证与模型给出的顺序一致，即使 Dispatcher.MaxConcurrency=1 也一样；工具内部不要
+// 按执行顺序分配编号或依赖同轮调用的先后。结果仍按模型给出的顺序交还模型，tool_start 在派发前、
+// tool_end 在全部结束后按该顺序发出，Dispatcher 的 OnResult 也在全部结束后按该顺序触发。
+// 某个调用失败不取消其他调用，全部结束后返回顺序最靠前的错误。
 func (b *AgentBuilder[C, S]) WithParallelToolCalls(n int) *AgentBuilder[C, S] {
 	b.config.ParallelToolCalls = max(n, 0)
 	return b

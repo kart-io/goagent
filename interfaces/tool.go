@@ -67,6 +67,7 @@ type ArgumentErrorTool interface {
 
 // ConcurrentCallTool 声明 Invoke 可被同一轮的多个调用并发执行，且实现自行限制并发度。
 // Dispatcher.Tools 实现此契约；包装器必须显式转发，否则 Builder 按顺序执行该轮调用。
+// 声明只表示允许并发，Builder 还需 WithParallelToolCalls(n>=2) 才会并发执行。
 type ConcurrentCallTool interface {
 	Tool
 	SupportsConcurrentCalls() bool

@@ -357,7 +357,7 @@ func run(ctx context.Context, client *livemodel.Client, dir string, opt options)
 		return out, err
 	}
 	agent, err := builder.NewSimpleBuilder(client).WithDurableScope("lead").WithSystemPrompt(parentPrompt).
-		WithTools(dispatched...).WithReturnDirectTools(opscase.SubmitTool).WithEmptyAnswerRetries(1).WithMaxIterations(7).WithMaxTokens(livemodel.MaxTokens).WithTimeout(20 * livemodel.RequestTimeout).Build()
+		WithTools(dispatched...).WithParallelToolCalls(MaxParallel).WithReturnDirectTools(opscase.SubmitTool).WithEmptyAnswerRetries(1).WithMaxIterations(7).WithMaxTokens(livemodel.MaxTokens).WithTimeout(20 * livemodel.RequestTimeout).Build()
 	if err != nil {
 		return out, err
 	}

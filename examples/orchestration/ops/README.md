@@ -12,7 +12,7 @@
 
 ## 示例层能力
 
-以下能力放在 [opscase](internal/opscase/opscase.go)，建立在框架的 Dispatcher（参数错误交还、`OnResult`）与 Builder（`WithReturnDirectTools`、`WithEmptyAnswerRetries`、同轮工具并发）之上：
+以下能力放在 [opscase](internal/opscase/opscase.go)，建立在框架的 Dispatcher（参数错误交还、`OnResult`）与 Builder（`WithReturnDirectTools`、`WithEmptyAnswerRetries`、`WithParallelToolCalls` 开启的同轮工具并发）之上：
 
 - `Dispatch`：开启 `ReturnArgumentErrors` 的 Dispatcher，参数错误交还模型改正。并发上限沿用框架默认值。
 - `Ledger`：给工具结果编号，结果以字符串交给模型。

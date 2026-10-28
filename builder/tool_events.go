@@ -196,7 +196,7 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 			}
 		}
 		messages = append(messages, llm.Message{Role: "assistant", Content: turn.Content, ReasoningContent: turn.ReasoningContent, ToolCalls: turn.ToolCalls, ProviderState: turn.ProviderState})
-		invoke := func(call ToolCall) (*interfaces.ToolOutput, error) {
+		invoke := func(ctx context.Context, call ToolCall) (*interfaces.ToolOutput, error) {
 			if call.Name == contextReadTool && a.config.ContextPolicy != nil && a.config.ContextPolicy.MaxToolResultRunes > 0 {
 				return policy.Invoke(ctx, &interfaces.ToolInput{Args: call.Input})
 			}
@@ -205,7 +205,8 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 			}
 			return a.invokeToolCall(ctx, call)
 		}
-		// 并发时 tool_start 在派发前按序发出，tool_end 在全部结束后按序发出，事件顺序与执行时序无关。
+		// 并发时 tool_start 在派发前按序发出，tool_end 在全部结束后按序发出，事件顺序与执行时序无关；
+		// Dispatcher 的结果回调同样推迟到全部结束后按序触发。
 		parallel := a.concurrentCalls(calls, runtime)
 		var results []toolCallResult
 		if parallel {
@@ -217,7 +218,7 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 					return nil, err
 				}
 			}
-			results = invokeConcurrently(calls, a.config.ParallelToolCalls, invoke)
+			results = invokeConcurrently(ctx, calls, a.config.ParallelToolCalls, invoke)
 		}
 		for i, call := range calls {
 			var output *interfaces.ToolOutput
@@ -231,7 +232,7 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 				if err := emit(AgentEvent{Type: "step", Step: "tool_start", Tool: call.Name}); err != nil {
 					return nil, err
 				}
-				output, err = invoke(call)
+				output, err = invoke(ctx, call)
 			}
 			if err != nil {
 				return nil, err
@@ -297,10 +298,10 @@ type toolCallResult struct {
 	err    error
 }
 
-// concurrentCalls 判断本轮调用能否并发：多个调用且每个工具都声明支持并发调用。
+// concurrentCalls 判断本轮调用能否并发：显式开启并发、多个调用且每个工具都声明支持并发调用。
 // 上下文策略工具会读取本轮之前写入的状态，始终按顺序执行。
 func (a *ConfigurableAgent[C, S]) concurrentCalls(calls []ToolCall, runtime *policyRuntime) bool {
-	if len(calls) < 2 || a.config.ParallelToolCalls == 1 {
+	if len(calls) < 2 || a.config.ParallelToolCalls < 2 {
 		return false
 	}
 	for _, call := range calls {
@@ -323,25 +324,38 @@ func (a *ConfigurableAgent[C, S]) concurrentCalls(calls []ToolCall, runtime *pol
 
 // invokeConcurrently 按下标收集结果，并在全部调用结束后返回。不取消兄弟调用：
 // 持久工具被取消会记为失败，且组合工具只允许一次尝试，恢复时需要宿主处理。
-func invokeConcurrently(calls []ToolCall, limit int, invoke func(ToolCall) (*interfaces.ToolOutput, error)) []toolCallResult {
-	if limit < 1 || limit > len(calls) {
+// 全部结束后按调用顺序触发推迟的结果回调，回调顺序与执行先后无关，首次执行与恢复回放一致；
+// 执行失败的调用没有回调，其余调用的回调照常触发，与它们已写入的日志保持一致。
+func invokeConcurrently(ctx context.Context, calls []ToolCall, limit int, invoke func(context.Context, ToolCall) (*interfaces.ToolOutput, error)) []toolCallResult {
+	if limit > len(calls) {
 		limit = len(calls)
 	}
 	results := make([]toolCallResult, len(calls))
+	delivers := make([]func() error, len(calls))
 	slots := make(chan struct{}, limit)
 	var wg sync.WaitGroup
 	for i, call := range calls {
+		callCtx, deliver := tools.DeferResults(ctx)
+		delivers[i] = deliver
 		wg.Add(1)
 		slots <- struct{}{}
 		go func() {
 			defer wg.Done()
 			defer func() { <-slots }()
 			defer recoverPanic(fmt.Sprintf("工具 %q", call.Name), &results[i].err)
-			output, err := invoke(call)
+			output, err := invoke(callCtx, call)
 			results[i] = toolCallResult{output: output, err: err}
 		}()
 	}
 	wg.Wait()
+	for i, deliver := range delivers {
+		if results[i].err != nil {
+			continue
+		}
+		if err := deliver(); err != nil {
+			results[i] = toolCallResult{err: err}
+		}
+	}
 	return results
 }
 

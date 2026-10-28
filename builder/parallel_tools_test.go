@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"sync"
 	"testing"
 	"time"
@@ -67,15 +68,16 @@ func probeCalls(ids ...string) []llm.ToolCall {
 	return calls
 }
 
-// 峰值等于 min(n, MaxConcurrency)；工具消息与事件按调用顺序，与完成顺序无关。
+// 默认顺序执行；n>=2 时峰值等于 min(n, MaxConcurrency)；工具消息与事件按调用顺序，与完成顺序无关。
 func TestParallelToolCallsPeakAndOrder(t *testing.T) {
 	for _, tc := range []struct {
 		name                  string
 		limit, maxConcurrency int
 		wantPeak              int
 	}{
-		{"默认受工具限流", 0, 3, 3},
-		{"默认全部并发", 0, 5, 5},
+		{"默认顺序执行", 0, 5, 1},
+		{"不另设上限受工具限流", math.MaxInt, 3, 3},
+		{"不另设上限全部并发", math.MaxInt, 5, 5},
 		{"上限更小", 2, 4, 2},
 		{"关闭", 1, 4, 1},
 	} {
@@ -98,7 +100,7 @@ func TestParallelToolCallsPeakAndOrder(t *testing.T) {
 				}
 			}
 			require.Equal(t, tc.wantPeak, probe.peak)
-			if tc.limit != 1 {
+			if tc.wantPeak > 1 {
 				require.Equal(t, []string{"tool_start", "tool_start", "tool_start", "tool_start", "tool_start", "tool_end", "tool_end", "tool_end", "tool_end", "tool_end"}, steps)
 			}
 			messages := model.requests[1].Messages
@@ -119,7 +121,7 @@ func TestParallelToolCallFailureDoesNotCancelSiblings(t *testing.T) {
 	ctx := durable.WithJournal(durable.WithExecutionKey(context.Background(), "node"), store)
 	probe := &concurrencyProbe{}
 	model := nativeModel([]*llm.StreamChunk{{Done: true, FinishReason: "tool_calls", ToolCalls: probeCalls("1", "bad", "2")}})
-	agent, err := NewSimpleBuilder(model).WithDurableScope("parallel").WithTools(probeTools(t, probe, 4)...).WithMaxIterations(3).Build()
+	agent, err := NewSimpleBuilder(model).WithDurableScope("parallel").WithTools(probeTools(t, probe, 4)...).WithParallelToolCalls(4).WithMaxIterations(3).Build()
 	require.NoError(t, err)
 	_, err = agent.AsRunnable().Invoke(ctx, "并发")
 	require.ErrorContains(t, err, "执行失败")
@@ -151,7 +153,7 @@ func TestParallelToolCallsReplay(t *testing.T) {
 		[]*llm.StreamChunk{{Delta: "汇总"}, {Done: true, FinishReason: "stop"}},
 	)
 	for range 2 {
-		agent, err := NewSimpleBuilder(model).WithDurableScope("parallel").WithTools(business...).WithMaxIterations(3).Build()
+		agent, err := NewSimpleBuilder(model).WithDurableScope("parallel").WithTools(business...).WithParallelToolCalls(4).WithMaxIterations(3).Build()
 		require.NoError(t, err)
 		out, err := agent.AsRunnable().Invoke(ctx, "并发")
 		require.NoError(t, err)
@@ -183,7 +185,7 @@ func TestParallelToolCallsFallBackToSequential(t *testing.T) {
 		)
 		policyTool := NewMockTool("policy_probe", "策略结果")
 		agent, err := NewSimpleBuilder(model).WithTools(probeTools(t, probe, 4)...).
-			WithContextPolicies(func() contextpolicy.Policy { return &probePolicy{tool: policyTool} }).WithMaxIterations(3).Build()
+			WithContextPolicies(func() contextpolicy.Policy { return &probePolicy{tool: policyTool} }).WithParallelToolCalls(4).WithMaxIterations(3).Build()
 		require.NoError(t, err)
 		_, err = agent.AsRunnable().Invoke(context.Background(), "并发")
 		require.NoError(t, err)
@@ -196,7 +198,7 @@ func TestParallelToolCallsFallBackToSequential(t *testing.T) {
 			[]*llm.StreamChunk{{Done: true, FinishReason: "tool_calls", ToolCalls: calls}},
 			[]*llm.StreamChunk{{Delta: "汇总"}, {Done: true, FinishReason: "stop"}},
 		)
-		agent, err := NewSimpleBuilder(model).WithTools(append(probeTools(t, probe, 4), NewMockTool("plain", "结果"))...).WithMaxIterations(3).Build()
+		agent, err := NewSimpleBuilder(model).WithTools(append(probeTools(t, probe, 4), NewMockTool("plain", "结果"))...).WithParallelToolCalls(4).WithMaxIterations(3).Build()
 		require.NoError(t, err)
 		_, err = agent.AsRunnable().Invoke(context.Background(), "并发")
 		require.NoError(t, err)

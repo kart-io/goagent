@@ -280,7 +280,7 @@ func (c *agentCase) run(t *testing.T, dir string) (string, error) {
 
 // 同一轮并发执行时，引用号由执行键派生：与执行先后无关、互不相同，换目录重跑或改为顺序执行都得到同样的编号。
 func TestLedgerRefsUnderConcurrency(t *testing.T) {
-	concurrent := &agentCase{barrier: true}
+	concurrent := &agentCase{barrier: true, parallel: 2}
 	got, err := concurrent.run(t, t.TempDir())
 	require.NoError(t, err, "两个数据工具必须同时在执行，否则屏障超时")
 	require.Equal(t, "结论：pool", got, "submit_conclusion 直接给出最终回答")
@@ -290,7 +290,7 @@ func TestLedgerRefsUnderConcurrency(t *testing.T) {
 	require.Regexp(t, `^E[0-9a-f]{6}$`, refs[0])
 	require.NotEqual(t, refs[0], refs[1])
 
-	again := &agentCase{barrier: true}
+	again := &agentCase{barrier: true, parallel: 2}
 	_, err = again.run(t, t.TempDir())
 	require.NoError(t, err)
 	sequential := &agentCase{parallel: 1}
