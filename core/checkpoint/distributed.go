@@ -373,11 +373,22 @@ func (dc *DistributedCheckpointer) replicationWorker() {
 
 		switch task.operation {
 		case "save":
-			_ = secondary.Save(ctx, task.threadID, task.state)
+			_ = callBackend(func() error { return secondary.Save(ctx, task.threadID, task.state) })
 		case "delete":
-			_ = secondary.Delete(ctx, task.threadID)
+			_ = callBackend(func() error { return secondary.Delete(ctx, task.threadID) })
 		}
 	}
+}
+
+// callBackend 在后台 goroutine 中调用可由宿主替换的存储后端，panic 转为 *agentErrors.PanicError 按普通失败处理
+// （复制失败被忽略，健康检查记为不健康）。core 导入本包，这里无法使用 core 的 PanicHandler。
+func callBackend(call func() error) (err error) {
+	defer func() {
+		if v := recover(); v != nil {
+			err = agentErrors.NewPanicError("检查点存储后端", v)
+		}
+	}()
+	return call()
 }
 
 // startHealthCheck starts background health monitoring
@@ -411,7 +422,7 @@ func (dc *DistributedCheckpointer) checkBackendHealth() {
 	// Check primary
 	primaryHealthy := true
 	if pinger, ok := dc.config.PrimaryBackend.(interface{ Ping(context.Context) error }); ok {
-		if err := pinger.Ping(ctx); err != nil {
+		if err := callBackend(func() error { return pinger.Ping(ctx) }); err != nil {
 			primaryHealthy = false
 		}
 	}
@@ -420,7 +431,7 @@ func (dc *DistributedCheckpointer) checkBackendHealth() {
 	secondaryHealthy := false
 	if dc.config.SecondaryBackend != nil {
 		if pinger, ok := dc.config.SecondaryBackend.(interface{ Ping(context.Context) error }); ok {
-			if err := pinger.Ping(ctx); err == nil {
+			if err := callBackend(func() error { return pinger.Ping(ctx) }); err == nil {
 				secondaryHealthy = true
 			}
 		}

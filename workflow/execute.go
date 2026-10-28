@@ -7,6 +7,7 @@ import (
 
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/observe"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 func (g *compiled[T]) run(ctx context.Context, state T, emit func(core.StreamChunk[T]) error) (graphErr error) {
@@ -14,7 +15,7 @@ func (g *compiled[T]) run(ctx context.Context, state T, emit func(core.StreamChu
 	ctx, finish := observe.Start(ctx, observe.Event{Type: "graph", Path: "graph"})
 	defer func() {
 		if v := recover(); v != nil {
-			finish(fmt.Errorf("execution panic"), false)
+			finish(agentErrors.NewPanicError("图执行", v), false)
 			panic(v)
 		}
 		finish(graphErr, false)
@@ -47,7 +48,7 @@ func (g *compiled[T]) run(ctx context.Context, state T, emit func(core.StreamChu
 			next, err = func() (next T, nodeErr error) {
 				defer func() {
 					if v := recover(); v != nil {
-						endNode(fmt.Errorf("execution panic"), false)
+						endNode(agentErrors.NewPanicError(fmt.Sprintf("节点 %q", name), v), false)
 						panic(v)
 					}
 					endNode(nodeErr, false)

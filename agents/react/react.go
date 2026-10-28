@@ -195,7 +195,7 @@ func (r *ReActAgent) executeCore(ctx context.Context, input *agentcore.AgentInpu
 		llmResp, err := r.llm.Chat(ctx, messages)
 		if err != nil {
 			if withCallbacks {
-				_ = r.triggerOnLLMError(ctx, err)
+				err = r.triggerOnLLMError(ctx, err)
 			}
 			return r.handleErrorFast(output, step, "LLM call failed", err, startTime)
 		}
@@ -505,7 +505,7 @@ func (r *ReActAgent) executeTool(ctx context.Context, toolName string, input map
 
 	output, err := tool.Invoke(ctx, toolInput)
 	if err != nil {
-		_ = r.triggerOnToolError(ctx, toolName, err)
+		err = r.triggerOnToolError(ctx, toolName, err)
 		return nil, err
 	}
 
@@ -609,96 +609,77 @@ func (r *ReActAgent) handleErrorFast(output *agentcore.AgentOutput, step int, me
 
 // 回调触发辅助方法
 func (r *ReActAgent) triggerOnStart(ctx context.Context, input *agentcore.AgentInput) error {
-	config := r.GetConfig()
-	for _, cb := range config.Callbacks {
-		if err := cb.OnStart(ctx, input); err != nil {
-			return err
-		}
-	}
-	return nil
+	_, err := agentcore.NotifyCallbacks(ctx, "react_agent", "on_start", r.GetConfig().Callbacks, func(cb agentcore.Callback) error {
+		return cb.OnStart(ctx, input)
+	})
+	return err
 }
 
 func (r *ReActAgent) triggerOnFinish(ctx context.Context, output *agentcore.AgentOutput) error {
-	config := r.GetConfig()
-	for _, cb := range config.Callbacks {
-		if err := cb.OnAgentFinish(ctx, output); err != nil {
-			return err
-		}
-	}
-	return nil
+	_, err := agentcore.NotifyCallbacks(ctx, "react_agent", "on_agent_finish", r.GetConfig().Callbacks, func(cb agentcore.Callback) error {
+		return cb.OnAgentFinish(ctx, output)
+	})
+	return err
 }
 
-// triggerOnError 触发错误回调
+// triggerOnError 触发错误回调，返回应交给调用方的错误：回调自身 panic 时为 *PanicError，否则为原错误 err
 //
 //nolint:unused // Reserved for potential future use in error handling paths
 func (r *ReActAgent) triggerOnError(ctx context.Context, err error) error {
-	config := r.GetConfig()
-	for _, cb := range config.Callbacks {
-		if cbErr := cb.OnError(ctx, err); cbErr != nil {
-			return cbErr
-		}
+	if panicked, panicErr := agentcore.NotifyCallbacks(ctx, "react_agent", "on_error", r.GetConfig().Callbacks, func(cb agentcore.Callback) error {
+		return cb.OnError(ctx, err)
+	}); panicked {
+		return panicErr
 	}
-	return nil
+	return err
 }
 
 func (r *ReActAgent) triggerOnLLMStart(ctx context.Context, prompts []string) error {
-	config := r.GetConfig()
-	for _, cb := range config.Callbacks {
-		if err := cb.OnLLMStart(ctx, prompts, ""); err != nil {
-			return err
-		}
-	}
-	return nil
+	_, err := agentcore.NotifyCallbacks(ctx, "react_agent", "on_llm_start", r.GetConfig().Callbacks, func(cb agentcore.Callback) error {
+		return cb.OnLLMStart(ctx, prompts, "")
+	})
+	return err
 }
 
 func (r *ReActAgent) triggerOnLLMEnd(ctx context.Context, output string, tokenUsage int) error {
-	config := r.GetConfig()
-	for _, cb := range config.Callbacks {
-		if err := cb.OnLLMEnd(ctx, output, tokenUsage); err != nil {
-			return err
-		}
-	}
-	return nil
+	_, err := agentcore.NotifyCallbacks(ctx, "react_agent", "on_llm_end", r.GetConfig().Callbacks, func(cb agentcore.Callback) error {
+		return cb.OnLLMEnd(ctx, output, tokenUsage)
+	})
+	return err
 }
 
+// triggerOnLLMError 触发错误回调，返回应交给调用方的错误：回调自身 panic 时为 *PanicError，否则为原错误 err
 func (r *ReActAgent) triggerOnLLMError(ctx context.Context, err error) error {
-	config := r.GetConfig()
-	for _, cb := range config.Callbacks {
-		if cbErr := cb.OnLLMError(ctx, err); cbErr != nil {
-			return cbErr
-		}
+	if panicked, panicErr := agentcore.NotifyCallbacks(ctx, "react_agent", "on_llm_error", r.GetConfig().Callbacks, func(cb agentcore.Callback) error {
+		return cb.OnLLMError(ctx, err)
+	}); panicked {
+		return panicErr
 	}
-	return nil
+	return err
 }
 
 func (r *ReActAgent) triggerOnToolStart(ctx context.Context, toolName string, input interface{}) error {
-	config := r.GetConfig()
-	for _, cb := range config.Callbacks {
-		if err := cb.OnToolStart(ctx, toolName, input); err != nil {
-			return err
-		}
-	}
-	return nil
+	_, err := agentcore.NotifyCallbacks(ctx, "react_agent", "on_tool_start", r.GetConfig().Callbacks, func(cb agentcore.Callback) error {
+		return cb.OnToolStart(ctx, toolName, input)
+	})
+	return err
 }
 
 func (r *ReActAgent) triggerOnToolEnd(ctx context.Context, toolName string, output interface{}) error {
-	config := r.GetConfig()
-	for _, cb := range config.Callbacks {
-		if err := cb.OnToolEnd(ctx, toolName, output); err != nil {
-			return err
-		}
-	}
-	return nil
+	_, err := agentcore.NotifyCallbacks(ctx, "react_agent", "on_tool_end", r.GetConfig().Callbacks, func(cb agentcore.Callback) error {
+		return cb.OnToolEnd(ctx, toolName, output)
+	})
+	return err
 }
 
+// triggerOnToolError 触发错误回调，返回应交给调用方的错误：回调自身 panic 时为 *PanicError，否则为原错误 err
 func (r *ReActAgent) triggerOnToolError(ctx context.Context, toolName string, err error) error {
-	config := r.GetConfig()
-	for _, cb := range config.Callbacks {
-		if cbErr := cb.OnToolError(ctx, toolName, err); cbErr != nil {
-			return cbErr
-		}
+	if panicked, panicErr := agentcore.NotifyCallbacks(ctx, "react_agent", "on_tool_error", r.GetConfig().Callbacks, func(cb agentcore.Callback) error {
+		return cb.OnToolError(ctx, toolName, err)
+	}); panicked {
+		return panicErr
 	}
-	return nil
+	return err
 }
 
 // 默认 ReAct Prompts

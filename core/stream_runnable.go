@@ -59,20 +59,25 @@ func (r *StreamRunnable[I, O]) run(ctx context.Context, input I, send func(Strea
 		return result, fmt.Errorf("流式执行源未配置")
 	}
 	callbacks := r.GetConfig().Callbacks
+	callbackPanicked := false
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			err = panicToError(ctx, "stream_runnable", "run", recovered)
 		}
-		if err != nil {
-			for _, cb := range callbacks {
-				_ = cb.OnError(ctx, err)
+		if err != nil && !callbackPanicked {
+			failure := err
+			if panicked, panicErr := NotifyCallbacks(ctx, "stream_runnable", "on_error", callbacks, func(cb Callback) error {
+				_ = cb.OnError(ctx, failure)
+				return nil
+			}); panicked {
+				err = panicErr
 			}
 		}
 	}()
-	for _, cb := range callbacks {
-		if err = cb.OnStart(ctx, input); err != nil {
-			return result, err
-		}
+	if callbackPanicked, err = NotifyCallbacks(ctx, "stream_runnable", "on_start", callbacks, func(cb Callback) error {
+		return cb.OnStart(ctx, input)
+	}); err != nil {
+		return result, err
 	}
 	var final StreamChunk[O]
 	finished := false
@@ -102,13 +107,31 @@ func (r *StreamRunnable[I, O]) run(ctx context.Context, input I, send func(Strea
 		return result, io.ErrUnexpectedEOF
 	}
 	result = final.Data
-	for _, cb := range callbacks {
-		if err = cb.OnEnd(ctx, result); err != nil {
-			return result, err
-		}
+	if callbackPanicked, err = NotifyCallbacks(ctx, "stream_runnable", "on_end", callbacks, func(cb Callback) error {
+		return cb.OnEnd(ctx, result)
+	}); err != nil {
+		return result, err
 	}
 	err = send(final)
 	return result, err
+}
+
+// NotifyCallbacks 依次调用宿主回调，遇到错误即停止，供所有调用 Callback 的组件共用。
+// 回调自身 panic 时 panicked 为 true，err 可用 errors.As 识别出 *agentErrors.PanicError（经全局 PanicHandler 转换）；
+// 调用方应返回该错误，不再调用剩余回调，也不把它交给 OnError，避免回调处理自身 panic 形成递归
+// （与 builder 的 handleError/notifyEnd 一致）。忽略回调错误的通知（如 OnError）让 call 返回 nil。
+func NotifyCallbacks(ctx context.Context, component, operation string, callbacks []Callback, call func(Callback) error) (panicked bool, err error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			panicked, err = true, panicToError(ctx, component, operation, recovered)
+		}
+	}()
+	for _, cb := range callbacks {
+		if err = call(cb); err != nil {
+			return false, err
+		}
+	}
+	return false, nil
 }
 
 func (r *StreamRunnable[I, O]) Invoke(ctx context.Context, input I) (O, error) {

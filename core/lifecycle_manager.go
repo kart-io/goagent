@@ -9,7 +9,7 @@ package core
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"sort"
 	"sync"
 	"time"
@@ -192,13 +192,12 @@ func (m *DefaultLifecycleManager) initComponent(ctx context.Context, entry *comp
 			if r := recover(); r != nil {
 				// 使用全局 PanicHandlerRegistry 处理 panic
 				panicErr := panicToError(ctx, "lifecycle_manager", "init", r)
-				// 包装为 lifecycle 特定的错误
-				if agentErr, ok := panicErr.(*agentErrors.AgentError); ok {
-					agentErr.Context["component_name"] = name
-					err = agentErr
-				} else {
-					err = panicErr
+				// 自定义 handler 的错误可能被包装以保留 *PanicError，因此用 errors.As 取 AgentError
+				var agentErr *agentErrors.AgentError
+				if errors.As(panicErr, &agentErr) {
+					agentErr.WithContext("component_name", name)
 				}
+				err = panicErr
 			}
 		}()
 		err = component.Init(ctx, config)
@@ -262,13 +261,12 @@ func (m *DefaultLifecycleManager) startComponent(ctx context.Context, entry *com
 			if r := recover(); r != nil {
 				// 使用全局 PanicHandlerRegistry 处理 panic
 				panicErr := panicToError(ctx, "lifecycle_manager", "start", r)
-				// 包装为 lifecycle 特定的错误
-				if agentErr, ok := panicErr.(*agentErrors.AgentError); ok {
-					agentErr.Context["component_name"] = name
-					err = agentErr
-				} else {
-					err = panicErr
+				// 自定义 handler 的错误可能被包装以保留 *PanicError，因此用 errors.As 取 AgentError
+				var agentErr *agentErrors.AgentError
+				if errors.As(panicErr, &agentErr) {
+					agentErr.WithContext("component_name", name)
 				}
+				err = panicErr
 			}
 		}()
 		err = component.Start(ctx)
@@ -337,13 +335,12 @@ func (m *DefaultLifecycleManager) stopComponent(ctx context.Context, entry *comp
 			if r := recover(); r != nil {
 				// 使用全局 PanicHandlerRegistry 处理 panic
 				panicErr := panicToError(ctx, "lifecycle_manager", "stop", r)
-				// 包装为 lifecycle 特定的错误
-				if agentErr, ok := panicErr.(*agentErrors.AgentError); ok {
-					agentErr.Context["component_name"] = name
-					err = agentErr
-				} else {
-					err = panicErr
+				// 自定义 handler 的错误可能被包装以保留 *PanicError，因此用 errors.As 取 AgentError
+				var agentErr *agentErrors.AgentError
+				if errors.As(panicErr, &agentErr) {
+					agentErr.WithContext("component_name", name)
 				}
+				err = panicErr
 			}
 		}()
 		err = component.Stop(ctx)
@@ -393,22 +390,16 @@ func (m *DefaultLifecycleManager) HealthCheckAll(ctx context.Context) map[string
 						// 使用全局 PanicHandlerRegistry 处理 panic（记录指标和日志）
 						panicErr := panicToError(ctx, "lifecycle_manager", "health_check", r)
 
-						// Panic 转换为 Unhealthy 状态
+						// 健康状态会被上报和展示，与 observe 一样只带位置，不带 panic 值与调用栈；
+						// 二者由 PanicHandler 的日志与指标接收。panicToError 的结果总能取到 *PanicError，与 handler 无关。
+						var p *agentErrors.PanicError
+						errors.As(panicErr, &p)
 						status = interfaces.HealthStatus{
 							State:         interfaces.HealthUnhealthy,
-							Message:       fmt.Sprintf("health check panicked: %v", r),
+							Message:       p.Error(),
+							Details:       map[string]interface{}{"error_kind": "panic", "panic_op": p.Op},
 							ComponentName: e.name,
 							LastChecked:   time.Now(),
-						}
-
-						// 如果 PanicHandler 返回的是 AgentError，提取详细信息
-						if agentErr, ok := panicErr.(*agentErrors.AgentError); ok {
-							if stackTrace, exists := agentErr.Context["stack_trace"]; exists {
-								status.Details = map[string]interface{}{
-									"panic_value": agentErr.Context["panic_value"],
-									"stack_trace": stackTrace,
-								}
-							}
 						}
 					}
 				}()

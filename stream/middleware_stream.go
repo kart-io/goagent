@@ -3,6 +3,7 @@ package stream
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/kart-io/goagent/core"
@@ -116,6 +117,7 @@ func (m *ThrottleMiddleware) Apply(ctx context.Context, source execution.StreamO
 
 	go func() {
 		defer utils.CloseQuietly(writer)
+		defer writer.recoverPanic(ctx, "stream_middleware", "throttle")
 
 		lastChunkTime := time.Now()
 
@@ -174,6 +176,7 @@ func (m *TransformMiddleware) Apply(ctx context.Context, source execution.Stream
 				fmt.Printf("failed to close writer: %v", err)
 			}
 		}()
+		defer writer.recoverPanic(ctx, "stream_middleware", "transform")
 
 		for {
 			chunk, err := source.Next()
@@ -240,7 +243,8 @@ func (m *TeeMiddleware) Apply(ctx context.Context, source execution.StreamOutput
 	writer := NewWriter(ctx, opts)
 	reader := NewReader(ctx, writer.Channel(), opts)
 
-	// 启动多路复用
+	// 启动多路复用；消费者回调没有流可以传递错误，panic 交给全局 PanicHandler 记录
+	panicked := make([]atomic.Bool, len(m.outputs))
 	go func() {
 		defer func() {
 			if err := writer.Close(); err != nil {
@@ -250,6 +254,7 @@ func (m *TeeMiddleware) Apply(ctx context.Context, source execution.StreamOutput
 				fmt.Printf("failed to close multiplexer: %v", err)
 			}
 		}()
+		defer writer.recoverPanic(ctx, "stream_middleware", "tee")
 
 		for {
 			chunk, err := source.Next()
@@ -265,13 +270,23 @@ func (m *TeeMiddleware) Apply(ctx context.Context, source execution.StreamOutput
 				return
 			}
 
-			// 广播到所有消费者
-			for _, consumer := range m.outputs {
-				go func(c execution.StreamConsumer) {
+			// 广播到所有消费者；某个消费者 panic 后不再向它投递，其他消费者与主流不受影响
+			for i, consumer := range m.outputs {
+				if panicked[i].Load() {
+					continue
+				}
+				go func(i int, c execution.StreamConsumer) {
+					var panicErr error
+					defer func() {
+						if panicErr != nil {
+							panicked[i].Store(true)
+						}
+					}()
+					defer core.RecoverPanic(ctx, "stream_tee", "on_chunk", &panicErr)
 					if err := c.OnChunk(chunk); err != nil {
 						fmt.Printf("failed to write error: %v", err)
 					}
-				}(consumer)
+				}(i, consumer)
 			}
 		}
 	}()
@@ -306,6 +321,7 @@ func (m *FilterMiddleware) Apply(ctx context.Context, source execution.StreamOut
 				fmt.Printf("failed to close writer: %v", err)
 			}
 		}()
+		defer writer.recoverPanic(ctx, "stream_middleware", "filter")
 
 		for {
 			chunk, err := source.Next()
@@ -357,6 +373,7 @@ func (m *BatchMiddleware) Apply(ctx context.Context, source execution.StreamOutp
 				fmt.Printf("failed to close writer: %v", err)
 			}
 		}()
+		defer writer.recoverPanic(ctx, "stream_middleware", "batch")
 
 		batch := make([]*execution.LegacyStreamChunk, 0, m.batchSize)
 		timer := time.NewTimer(m.timeout)
@@ -460,6 +477,7 @@ func (m *RetryMiddleware) Apply(ctx context.Context, source execution.StreamOutp
 				fmt.Printf("failed to close writer: %v", err)
 			}
 		}()
+		defer writer.recoverPanic(ctx, "stream_middleware", "retry")
 
 		for {
 			chunk, err := source.Next()

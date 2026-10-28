@@ -211,6 +211,7 @@ func (a *DataPipelineAgent) ProcessWithTransform(
 
 	go func() {
 		defer utils.CloseQuietly(writer)
+		defer writer.recoverPanic(ctx, "data_pipeline_agent", "transform")
 
 		totalItems := len(dataSource)
 		for i, item := range dataSource {
@@ -273,6 +274,7 @@ func (a *DataPipelineAgent) StreamFilter(
 				fmt.Printf("failed to close writer: %v", err)
 			}
 		}()
+		defer writer.recoverPanic(ctx, "data_pipeline_agent", "filter")
 
 		for {
 			chunk, err := source.Next()
@@ -305,6 +307,7 @@ func (a *DataPipelineAgent) StreamMap(
 
 	go func() {
 		defer utils.CloseQuietly(writer)
+		defer writer.recoverPanic(ctx, "data_pipeline_agent", "map")
 
 		for {
 			chunk, err := source.Next()

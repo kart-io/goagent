@@ -12,6 +12,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/observe"
 )
 
@@ -88,6 +89,8 @@ func (r *Recorder) Observe(_ context.Context, e observe.Event) {
 }
 func (r *Recorder) write() {
 	defer close(r.done)
+	// 宿主提供的 Writer 在本 goroutine 中 panic 时，经全局 PanicHandler 转换后由 Close 返回；之后的事件不再写出。
+	defer core.RecoverPanic(context.Background(), "devtools_recorder", "write", &r.err)
 	encoder := json.NewEncoder(r.writer)
 	for e := range r.queue {
 		if r.err == nil {

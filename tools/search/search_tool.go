@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kart-io/goagent/core"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/tools"
@@ -242,12 +243,18 @@ func (a *AggregatedSearchEngine) Search(ctx context.Context, query string, maxRe
 			engineCtx, cancel := context.WithTimeout(ctx, a.engineTimeout)
 			defer cancel()
 
-			results, err := e.Search(engineCtx, query, maxResults)
-			if err != nil {
-				errorsChan <- err
-				return
-			}
-			resultsChan <- results
+			var results []SearchResult
+			var err error
+			defer func() {
+				if err != nil {
+					errorsChan <- err
+					return
+				}
+				resultsChan <- results
+			}()
+			// 搜索引擎是宿主代码，panic 作为该引擎的错误
+			defer core.RecoverPanic(engineCtx, "search_tool", "search", &err)
+			results, err = e.Search(engineCtx, query, maxResults)
 		}(engine)
 	}
 

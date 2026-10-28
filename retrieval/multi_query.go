@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/kart-io/goagent/core"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
@@ -252,12 +253,11 @@ func (e *EnsembleRetriever) GetRelevantDocuments(ctx context.Context, query stri
 
 	for i, retriever := range e.Retrievers {
 		go func(idx int, r Retriever) {
-			docs, err := r.GetRelevantDocuments(ctx, query)
-			resultsChan <- result{
-				index: idx,
-				docs:  docs,
-				err:   err,
-			}
+			// 检索器是宿主代码，panic 作为该检索器的错误结果
+			res := result{index: idx}
+			defer func() { resultsChan <- res }()
+			defer core.RecoverPanic(ctx, "multi_query_retriever", "get_relevant_documents", &res.err)
+			res.docs, res.err = r.GetRelevantDocuments(ctx, query)
 		}(i, retriever)
 	}
 

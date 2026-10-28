@@ -1414,39 +1414,32 @@ func (t *ToTAgent) handleError(ctx context.Context, output *agentcore.AgentOutpu
 	output.Timestamp = time.Now()
 	output.Latency = time.Since(startTime)
 
-	_ = t.triggerOnError(ctx, err)
-	return output, err
+	return output, t.triggerOnError(ctx, err)
 }
 
 // Callback triggers
 func (t *ToTAgent) triggerOnStart(ctx context.Context, input *agentcore.AgentInput) error {
-	config := t.GetConfig()
-	for _, cb := range config.Callbacks {
-		if err := cb.OnStart(ctx, input); err != nil {
-			return err
-		}
-	}
-	return nil
+	_, err := agentcore.NotifyCallbacks(ctx, "tot_agent", "on_start", t.GetConfig().Callbacks, func(cb agentcore.Callback) error {
+		return cb.OnStart(ctx, input)
+	})
+	return err
 }
 
 func (t *ToTAgent) triggerOnFinish(ctx context.Context, output *agentcore.AgentOutput) error {
-	config := t.GetConfig()
-	for _, cb := range config.Callbacks {
-		if err := cb.OnAgentFinish(ctx, output); err != nil {
-			return err
-		}
-	}
-	return nil
+	_, err := agentcore.NotifyCallbacks(ctx, "tot_agent", "on_agent_finish", t.GetConfig().Callbacks, func(cb agentcore.Callback) error {
+		return cb.OnAgentFinish(ctx, output)
+	})
+	return err
 }
 
+// triggerOnError 触发错误回调，返回应交给调用方的错误：回调自身 panic 时为 *PanicError，否则为原错误 err
 func (t *ToTAgent) triggerOnError(ctx context.Context, err error) error {
-	config := t.GetConfig()
-	for _, cb := range config.Callbacks {
-		if cbErr := cb.OnError(ctx, err); cbErr != nil {
-			return cbErr
-		}
+	if panicked, panicErr := agentcore.NotifyCallbacks(ctx, "tot_agent", "on_error", t.GetConfig().Callbacks, func(cb agentcore.Callback) error {
+		return cb.OnError(ctx, err)
+	}); panicked {
+		return panicErr
 	}
-	return nil
+	return err
 }
 
 // WithCallbacks adds callback handlers

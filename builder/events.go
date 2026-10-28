@@ -35,7 +35,9 @@ type AgentEvent struct {
 // Cancel ctx when abandoning the stream; cancellation closes it promptly. On
 // cancellation an error event is best-effort, and ctx.Err() is authoritative.
 // A cached middleware response may produce only done, with no model deltas.
-func (a *ConfigurableAgent[C, S]) ExecuteStream(ctx context.Context, input interface{}) (<-chan AgentEvent, error) {
+func (a *ConfigurableAgent[C, S]) ExecuteStream(ctx context.Context, input interface{}) (_ <-chan AgentEvent, err error) {
+	// 同步阶段也会调用宿主代码（如 scopeDurableExecution 中的工具与持久存储），panic 时转为错误返回。
+	defer recoverPanic("Agent 流式执行启动", &err)
 	ctx = ensureModelScope(ctx)
 	if err := validateModelBudget(ctx); err != nil {
 		return nil, err
@@ -63,18 +65,23 @@ func (a *ConfigurableAgent[C, S]) ExecuteStream(ctx context.Context, input inter
 	if err != nil {
 		return nil, err
 	}
+	// 启动 goroutine 前出错或 panic 都要释放执行权，之后由 goroutine 释放。
+	started := false
+	defer func() {
+		if !started {
+			release()
+		}
+	}()
 	ctx, err = a.scopeDurableExecution(ctx)
 	if err != nil {
-		release()
 		return nil, err
 	}
 	events := make(chan AgentEvent, 1)
+	started = true
 	go func() {
 		defer close(events)
 		defer release()
 		ctx, endAgent := observe.Start(ctx, observe.Event{Type: "agent", Path: "agent"})
-		var agentErr error
-		defer func() { endAgent(agentErr, false) }()
 		emit := func(e AgentEvent) error {
 			select {
 			case events <- e:
@@ -83,23 +90,26 @@ func (a *ConfigurableAgent[C, S]) ExecuteStream(ctx context.Context, input inter
 				return ctx.Err()
 			}
 		}
-		chain := a.chain.WithHandler(func(runCtx context.Context, request *middleware.MiddlewareRequest) (*middleware.MiddlewareResponse, error) {
-			// Respect Execute's configured timeout for sends as well as upstream calls.
-			send := func(e AgentEvent) error {
-				select {
-				case events <- e:
-					return nil
-				case <-runCtx.Done():
-					return runCtx.Err()
+		// 链内与回调的 panic 已由 execute 转为错误；这里兜底其余代码：本 goroutine 的 panic 调用方无法 recover，
+		// 转为错误走观测与 error 事件。
+		output, err := func() (output *AgentOutput, err error) {
+			defer recoverPanic("Agent 流式执行", &err)
+			chain := a.chain.WithHandler(func(runCtx context.Context, request *middleware.MiddlewareRequest) (*middleware.MiddlewareResponse, error) {
+				// Respect Execute's configured timeout for sends as well as upstream calls.
+				send := func(e AgentEvent) error {
+					select {
+					case events <- e:
+						return nil
+					case <-runCtx.Done():
+						return runCtx.Err()
+					}
 				}
-			}
-			return a.runEvents(runCtx, request, client, caller, send)
-		})
-		output, err := a.execute(ctx, input, chain)
+				return a.runEvents(runCtx, request, client, caller, send)
+			})
+			return a.execute(ctx, input, chain)
+		}()
 		err = tools.Settle(ctx, err)
-		agentErr = err
 		// 先结束观测再发终态：调用方收到 done/error 即可能返回并关闭记录器。
-		// endAgent 只生效一次，上面的 defer 仍兜底 panic 路径。
 		endAgent(err, false)
 		if err != nil {
 			_ = emit(AgentEvent{Type: "error", Error: err, Message: err.Error()})

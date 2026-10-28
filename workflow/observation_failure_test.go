@@ -25,6 +25,9 @@ func TestPanickingNodeObservationIsNotSuccess(t *testing.T) {
 	for _, e := range sink.events {
 		types = append(types, e.Type)
 		require.NotContains(t, e.ErrorKind, "sensitive")
+		if e.Type == "node_error" || e.Type == "graph_error" {
+			require.Equal(t, "panic", e.ErrorKind, e.Type)
+		}
 	}
 	require.Contains(t, types, "node_error")
 	require.Contains(t, types, "graph_error")

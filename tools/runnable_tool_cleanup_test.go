@@ -11,6 +11,7 @@ import (
 
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/stretchr/testify/require"
 )
@@ -376,7 +377,9 @@ func TestRunnableToolPanicValueIsReported(t *testing.T) {
 			require.NoError(t, err)
 			out, err := tool.Invoke(context.Background(), incrementInput())
 			require.Nil(t, out)
-			require.ErrorContains(t, err, "runnable tool panicked")
+			var panicErr *agentErrors.PanicError
+			require.ErrorAs(t, err, &panicErr)
+			require.NotEmpty(t, panicErr.Stack)
 			require.ErrorContains(t, err, tc.want)
 			require.Zero(t, calls)
 		})

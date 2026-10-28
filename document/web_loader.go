@@ -82,8 +82,8 @@ func (l *WebLoader) Load(ctx context.Context) ([]*interfaces.Document, error) {
 		SetHeaders(l.headers).
 		Get(l.url)
 	if err != nil {
-		if l.callbackManager != nil {
-			_ = l.callbackManager.OnError(ctx, err)
+		if cbErr := l.callbackManager.NotifyError(ctx, err); cbErr != nil {
+			return nil, cbErr
 		}
 		return nil, errors.Wrap(err, errors.CodeInternal, "failed to fetch url")
 	}
@@ -91,8 +91,8 @@ func (l *WebLoader) Load(ctx context.Context) ([]*interfaces.Document, error) {
 	// 检查状态码
 	if resp.StatusCode() != 200 {
 		err := errors.New(errors.CodeInternal, "http status: "+resp.Status())
-		if l.callbackManager != nil {
-			_ = l.callbackManager.OnError(ctx, err)
+		if cbErr := l.callbackManager.NotifyError(ctx, err); cbErr != nil {
+			return nil, cbErr
 		}
 		return nil, err
 	}

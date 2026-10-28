@@ -79,11 +79,11 @@ func (r *BaseRetriever) Invoke(ctx context.Context, query string) ([]*interfaces
 		return nil, err
 	}
 	// 触发回调
-	config := r.GetConfig()
-	for _, cb := range config.Callbacks {
-		if err := cb.OnStart(ctx, query); err != nil {
-			return nil, err
-		}
+	callbacks := r.GetConfig().Callbacks
+	if _, err := core.NotifyCallbacks(ctx, "retriever", "on_start", callbacks, func(cb core.Callback) error {
+		return cb.OnStart(ctx, query)
+	}); err != nil {
+		return nil, err
 	}
 
 	// 执行检索（由子类实现）
@@ -93,17 +93,22 @@ func (r *BaseRetriever) Invoke(ctx context.Context, query string) ([]*interfaces
 	}
 
 	// 触发回调
-	for _, cb := range config.Callbacks {
-		if err != nil {
+	if err != nil {
+		if panicked, panicErr := core.NotifyCallbacks(ctx, "retriever", "on_error", callbacks, func(cb core.Callback) error {
 			_ = cb.OnError(ctx, err)
-		} else {
-			if callbackErr := cb.OnEnd(ctx, docs); callbackErr != nil {
-				return nil, callbackErr
-			}
+			return nil
+		}); panicked {
+			return nil, panicErr
 		}
+		return docs, err
+	}
+	if _, callbackErr := core.NotifyCallbacks(ctx, "retriever", "on_end", callbacks, func(cb core.Callback) error {
+		return cb.OnEnd(ctx, docs)
+	}); callbackErr != nil {
+		return nil, callbackErr
 	}
 
-	return docs, err
+	return docs, nil
 }
 
 // Stream 流式执行（默认实现）
