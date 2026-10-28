@@ -12,6 +12,7 @@ import (
 	"github.com/kart-io/goagent/examples/internal/livemodel"
 	"github.com/kart-io/goagent/examples/orchestration/internal/demomodel"
 	"github.com/kart-io/goagent/examples/orchestration/internal/livecase"
+	"github.com/kart-io/goagent/examples/orchestration/internal/livecase/livecasetest"
 	"github.com/kart-io/goagent/llm"
 	"github.com/stretchr/testify/require"
 )
@@ -111,7 +112,7 @@ func exerciseFlows(t *testing.T, client *livemodel.Client, testName string, scri
 			return append(e, extra...)
 		}
 		var waiting Result
-		livecase.Result(t, livecase.Child(t, testName, env("start")...), &waiting)
+		livecasetest.Result(t, livecasetest.Child(t, testName, env("start")...), &waiting)
 		require.Equal(t, "waiting", waiting.Status)
 		require.Equal(t, "退款", waiting.Decision)
 		require.NotEmpty(t, waiting.ApprovalKey)
@@ -122,7 +123,7 @@ func exerciseFlows(t *testing.T, client *livemodel.Client, testName string, scri
 
 		// 再次推进不带审批键：仍在等待，不重复请求模型。
 		var still Result
-		livecase.Result(t, livecase.Child(t, testName, env("start")...), &still)
+		livecasetest.Result(t, livecasetest.Child(t, testName, env("start")...), &still)
 		require.Equal(t, "waiting", still.Status)
 		require.Equal(t, waiting.ApprovalKey, still.ApprovalKey)
 		require.Zero(t, still.NewModelCalls)
@@ -133,14 +134,14 @@ func exerciseFlows(t *testing.T, client *livemodel.Client, testName string, scri
 		require.False(t, paid, "错误审批键不得付款")
 
 		var crashed Result
-		livecase.Result(t, livecase.Child(t, testName, env("approve-crash", childKey+"="+waiting.ApprovalKey)...), &crashed)
+		livecasetest.Result(t, livecasetest.Child(t, testName, env("approve-crash", childKey+"="+waiting.ApprovalKey)...), &crashed)
 		require.Equal(t, "crashed-after-pay", crashed.Status)
 		receipt, paid, err := LedgerReceipt(dir, "R-LARGE")
 		require.NoError(t, err)
 		require.True(t, paid, "付款已写入账本，但检查点未保存")
 
 		var resumed Result
-		livecase.Result(t, livecase.Child(t, testName, env("resume")...), &resumed)
+		livecasetest.Result(t, livecasetest.Child(t, testName, env("resume")...), &resumed)
 		require.Equal(t, "completed", resumed.Status, "已批准的节点恢复时无需再次审批")
 		require.Equal(t, receipt, resumed.Receipt, "重试返回原收据")
 		require.Zero(t, resumed.NewPayments, "账本按申请单号去重，不再付款")
@@ -148,7 +149,7 @@ func exerciseFlows(t *testing.T, client *livemodel.Client, testName string, scri
 		require.Equal(t, 1, resumed.Budget.ReservedRequests)
 
 		var replayed Result
-		livecase.Result(t, livecase.Child(t, testName, env("resume")...), &replayed)
+		livecasetest.Result(t, livecasetest.Child(t, testName, env("resume")...), &replayed)
 		require.Equal(t, resumed, replayed)
 	})
 }

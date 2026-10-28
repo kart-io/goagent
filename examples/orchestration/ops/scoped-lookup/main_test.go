@@ -15,6 +15,7 @@ import (
 	"github.com/kart-io/goagent/examples/internal/livemodel"
 	"github.com/kart-io/goagent/examples/orchestration/internal/demomodel"
 	"github.com/kart-io/goagent/examples/orchestration/internal/livecase"
+	"github.com/kart-io/goagent/examples/orchestration/internal/livecase/livecasetest"
 	"github.com/kart-io/goagent/examples/orchestration/ops/internal/opscase"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/tools"
@@ -271,7 +272,7 @@ func TestScriptedRecoverAfterLookups(t *testing.T) {
 		t.Fatalf("应在三个子调查落盘后退出：%v", err)
 	}
 	dir := t.TempDir()
-	livecase.Child(t, "TestScriptedRecoverAfterLookups", "SCOPED_LOOKUP_CRASH_DIR="+dir)
+	livecasetest.Child(t, "TestScriptedRecoverAfterLookups", "SCOPED_LOOKUP_CRASH_DIR="+dir)
 	s := &scripted{parent: parent}
 	out, err := Run(context.Background(), s.client(), dir)
 	require.NoError(t, err)

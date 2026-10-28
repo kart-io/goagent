@@ -13,6 +13,7 @@ import (
 	"github.com/kart-io/goagent/examples/internal/livemodel"
 	"github.com/kart-io/goagent/examples/orchestration/internal/demomodel"
 	"github.com/kart-io/goagent/examples/orchestration/internal/livecase"
+	"github.com/kart-io/goagent/examples/orchestration/internal/livecase/livecasetest"
 	"github.com/kart-io/goagent/llm"
 	"github.com/stretchr/testify/require"
 )
@@ -143,17 +144,17 @@ func exercise(t *testing.T, testName string, scripted bool) {
 		return e
 	}
 	var crashed childResult
-	livecase.Result(t, livecase.Child(t, testName, env("crash")...), &crashed)
+	livecasetest.Result(t, livecasetest.Child(t, testName, env("crash")...), &crashed)
 	require.GreaterOrEqual(t, crashed.Calls, int64(2), "商品名只能查工具：翻译至少一次工具回合加一次作答")
 
 	var changed childResult
-	livecase.Result(t, livecase.Child(t, testName, env("changed-glossary")...), &changed)
+	livecasetest.Result(t, livecasetest.Child(t, testName, env("changed-glossary")...), &changed)
 	require.Contains(t, changed.Err, "intent", "术语表改变后不能复用旧翻译日志")
 	require.Zero(t, changed.NewModelCalls, "在请求模型前拒绝")
 	require.Zero(t, changed.TranslatorLookups+changed.StyleLookups)
 
 	var resumed childResult
-	livecase.Result(t, livecase.Child(t, testName, env("resume")...), &resumed)
+	livecasetest.Result(t, livecasetest.Child(t, testName, env("resume")...), &resumed)
 	t.Logf("恢复：%+v", resumed)
 	require.Empty(t, resumed.Err)
 	require.Empty(t, MissingPhrases(resumed.English), resumed.English)
@@ -162,7 +163,7 @@ func exercise(t *testing.T, testName string, scripted bool) {
 	require.Equal(t, int(crashed.Calls+resumed.NewModelCalls), resumed.Budget.ReservedRequests, "崩溃前的翻译请求不重发")
 
 	var replayed childResult
-	livecase.Result(t, livecase.Child(t, testName, env("resume")...), &replayed)
+	livecasetest.Result(t, livecasetest.Child(t, testName, env("resume")...), &replayed)
 	require.Empty(t, replayed.Err)
 	require.Zero(t, replayed.NewModelCalls)
 	require.Zero(t, replayed.TranslatorLookups+replayed.StyleLookups)
