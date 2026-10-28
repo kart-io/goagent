@@ -1,5 +1,7 @@
 # 同一业务代码与输入，多模型循环一致性实测
 
+> 清理说明：本目录的测试日志及 Python 脚本已删除；历史测试结论和现存 JSON/Markdown 汇总保留。
+
 结论：**不能保证完全一致。** 本次三个模型各运行三轮、每轮六个案例，54 次真实模型请求中有 53 次通过；五类案例的业务决策全部一致，DevOps 故障案例出现一次模型输出格式违约。解释文字也存在变化。
 
 ## 实验设置
@@ -45,7 +47,7 @@ Gemini 第二轮 `devops-outage` 返回：
 node "diagnose": unexpected model source
 ```
 
-此错误来自 `decodeDecision` 对非回复决策的 `source` 字段校验：该字段必须为空，但模型返回了非空值。诊断节点因此中止，尚未进入审批和重启工具节点。失败保留在 [round-2-gemini.json](round-2-gemini.json) 和 [round-2-gemini.log](round-2-gemini.log)，没有通过重试将其替换成成功结果。
+此错误来自 `decodeDecision` 对非回复决策的 `source` 字段校验：该字段必须为空，但模型返回了非空值。诊断节点因此中止，尚未进入审批和重启工具节点。失败保留在 [round-2-gemini.json](round-2-gemini.json)，对应命令日志已清理；没有通过重试将其替换成成功结果。
 
 失败响应的完整文本没有被现有测试保存，因此只能确认这个字段约束违约，不能复原其具体 source 值或全部模型输出。
 
@@ -67,10 +69,6 @@ node "diagnose": unexpected model source
 
 - [summary.json](summary.json)：一致性、通过率、解释变体及用量统计。
 - [manifest.json](manifest.json)：模型配置、开始/结束时间、九次运行退出码和源码摘要。
-- `round-N-PROVIDER.json` / `.log`：每轮原始测试结果与命令输出。
-- [run.py](run.py)：本次循环执行脚本；它会发出真实模型请求，复用时应复制到新的输出目录。
-- [compare.py](compare.py)：只读取已有结果重新计算统计，不调用模型。
+- `round-N-PROVIDER.json`：保留每轮原始测试结果。
 
-```sh
-python3 docs/evaluation/2026-10-27-model-consistency/compare.py
-```
+Python 循环执行和统计脚本已删除，当前目录保留历史统计结果。
