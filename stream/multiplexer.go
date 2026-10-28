@@ -28,6 +28,15 @@ type Multiplexer struct {
 
 	running bool
 	closed  bool
+	// run 是本次 Start 的运行状态，受 mu 保护；源结束、各消费者通道关闭后置 nil，此后加入的消费者留给下一次 Start
+	run *multiplexerRun
+}
+
+// multiplexerRun 记录一次 Start 的处理协程，运行中加入的消费者也登记到这里，Start 等它们全部处理完才返回。
+type multiplexerRun struct {
+	ctx    context.Context
+	wg     sync.WaitGroup
+	states []*consumerState
 }
 
 // consumerState 消费者状态
@@ -75,6 +84,9 @@ func NewMultiplexer(ctx context.Context, opts *core.StreamOptions) *Multiplexer 
 }
 
 // AddConsumer 添加消费者
+//
+// Start 运行中加入的消费者从加入时起接收后续数据，源结束时与其他消费者一样在处理完缓冲数据后收到 OnError/OnComplete，
+// Start 等它处理完才返回；源结束之后（即使 Start 尚未返回）加入的消费者不属于本次运行，由下一次 Start 处理。
 func (m *Multiplexer) AddConsumer(consumer core.StreamConsumer) (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -114,6 +126,11 @@ func (m *Multiplexer) AddConsumer(consumer core.StreamConsumer) (string, error) 
 			WithComponent("stream_multiplexer").
 			WithOperation("AddConsumer").
 			WithContext("consumer_id", id)
+	}
+
+	// 持锁登记到运行中的 Start：与源结束时关闭通道互斥，要么在关闭前登记并随其他消费者收尾，要么留给下一次 Start
+	if m.run != nil {
+		m.attachConsumer(m.run, state)
 	}
 
 	return id, nil
@@ -170,16 +187,14 @@ func (m *Multiplexer) Start(ctx context.Context, source core.StreamOutput) error
 	m.running = true
 
 	// 启动每个消费者的处理协程；通道已关闭的消费者已结束，不再处理
-	var wg sync.WaitGroup
-	states := make([]*consumerState, 0, len(m.consumers))
+	run := &multiplexerRun{ctx: ctx, states: make([]*consumerState, 0, len(m.consumers))}
 	for _, state := range m.consumers {
 		if state.chClosed {
 			continue
 		}
-		states = append(states, state)
-		wg.Add(1)
-		go m.processConsumer(ctx, state, &wg)
+		m.attachConsumer(run, state)
 	}
+	m.run = run
 	m.mu.Unlock()
 
 	defer func() {
@@ -213,6 +228,8 @@ func (m *Multiplexer) Start(ctx context.Context, source core.StreamOutput) error
 
 	// 关闭消费者通道：结束信号排在已缓冲的数据之后，由 processConsumer 处理完数据后收尾
 	m.mu.Lock()
+	m.run = nil
+	states := run.states
 	for _, state := range states {
 		if !state.chClosed {
 			state.finishing = true
@@ -222,8 +239,8 @@ func (m *Multiplexer) Start(ctx context.Context, source core.StreamOutput) error
 	}
 	m.mu.Unlock()
 
-	// 等待所有消费者处理完成
-	wg.Wait()
+	// 等待所有消费者处理完成；m.run 已置 nil，不会再有 wg.Add
+	run.wg.Wait()
 
 	var panics []error
 	for _, state := range states {
@@ -259,6 +276,13 @@ func (m *Multiplexer) Close() error {
 	m.consumers = make(map[string]*consumerState)
 
 	return nil
+}
+
+// attachConsumer 为消费者启动本次运行的处理协程；调用方须持有 m.mu。
+func (m *Multiplexer) attachConsumer(run *multiplexerRun, state *consumerState) {
+	run.states = append(run.states, state)
+	run.wg.Add(1)
+	go m.processConsumer(run.ctx, state, &run.wg)
 }
 
 // closeConsumerCh 关闭消费者通道，可重复调用；调用方须持有 m.mu。
