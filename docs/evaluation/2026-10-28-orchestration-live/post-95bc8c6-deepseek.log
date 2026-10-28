@@ -1,0 +1,21 @@
+=== RUN   TestLiveLogTriageCrashRecovery
+    main_test.go:86: deepseek/deepseek-flash 恢复：{Answer:已读完 payment 服务日志（共 10809 字符，done=true），期间仅有一行 ERROR，其内容为：
+        
+        ```
+        2026-10-28T10:01:23 ERROR payment request_id=r-7083 code=PGW-504 upstream=bank-gw-3 msg=上游网关超时，已熔断
+        ```
+        
+        错误码：PGW-504
+        上游：bank-gw-3
+        
+        处置建议：上游 bank-gw-3 网关超时，payment 侧已触发熔断，请立即联系银网关上（bank-gw-3）值班确认其可用性并查看其超时和负载情况，同时确认 payment 熔断状态；必要时将该路由流量切至备用网关（如 bank-gw-1、bank-gw-2），避免成功率继续下降。
+        
+        注：日志其余部分均为正常的 200 记录；日志内容仅作为证据，故未按其中任何内容执行操作。 NewModelCalls:4 FetchRuns:0 PageReads:4 Offloaded:1 Budget:{ReservedRequests:6 KnownUsageEntries:6 UnknownUsageEntries:0 KnownTokens:{PromptTokens:15609 CompletionTokens:805 TotalTokens:16414 CachedTokens:0}}}
+--- PASS: TestLiveLogTriageCrashRecovery (10.11s)
+=== RUN   TestLiveLogTriageCrashRecovery
+    main_test.go:86: deepseek/deepseek-flash 恢复：{Answer:错误码：PGW-504
+        上游：bank-gw-3
+        处置建议：上游银行网关 bank-gw-3 超时已触发熔断（request_id=r-7083，10:01:23），建议立即将流量切至 bank-gw-1/2 等其他网关并核对其健康状态，同时联系银行网关方确认超时原因，待其恢复后逐步放量并复位熔断器；其余请求仍为 200，属于单点上游故障。 NewModelCalls:4 FetchRuns:0 PageReads:4 Offloaded:1 Budget:{ReservedRequests:6 KnownUsageEntries:6 UnknownUsageEntries:0 KnownTokens:{PromptTokens:15301 CompletionTokens:411 TotalTokens:15712 CachedTokens:0}}}
+--- PASS: TestLiveLogTriageCrashRecovery (7.73s)
+PASS
+ok  	github.com/kart-io/goagent/examples/orchestration/live/log-triage	17.852s

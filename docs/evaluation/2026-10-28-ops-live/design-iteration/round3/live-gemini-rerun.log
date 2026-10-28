@@ -1,0 +1,27 @@
+=== RUN   TestLiveCapacityReview
+    main_test.go:340: gemini/gemini-2.5-flash：{Items:[{ID:cap-a Rule:scale_down RulePlan:0xc000323ba0 Screen:scale_down Verdict:confirm Final:execute Plan:0xc000bede30 Reasons:[]} {ID:cap-b Rule:scale_up RulePlan:0xc000323bc0 Screen:scale_up Verdict:confirm Final:execute Plan:0xc000bed550 Reasons:[]} {ID:cap-c Rule:keep RulePlan:<nil> Screen:keep Verdict: Final:keep Plan:<nil> Reasons:[]} {ID:cap-d Rule:scale_down RulePlan:0xc000323bf0 Screen:scale_down Verdict:confirm Final:execute Plan:0xc000939080 Reasons:[]} {ID:cap-e Rule:insufficient_evidence RulePlan:<nil> Screen:keep Verdict: Final:manual_review Plan:<nil> Reasons:[规则：证据不完整]} {ID:cap-f Rule:scale_up RulePlan:0xc000323c10 Screen:scale_up Verdict:confirm Final:execute Plan:0xc000bec920 Reasons:[]} {ID:cap-g Rule:keep RulePlan:<nil> Screen:keep Verdict: Final:keep Plan:<nil> Reasons:[]} {ID:cap-h Rule:scale_down RulePlan:0xc000323c30 Screen:scale_down Verdict:confirm Final:execute Plan:0xc000810fa0 Reasons:[]} {ID:cap-i Rule:insufficient_evidence RulePlan:<nil> Screen:keep Verdict: Final:manual_review Plan:<nil> Reasons:[规则：证据不完整]} {ID:cap-j Rule:keep RulePlan:<nil> Screen:keep Verdict: Final:keep Plan:<nil> Reasons:[]} {ID:cap-k Rule:scale_up RulePlan:0xc000323c60 Screen:scale_up Verdict:confirm Final:execute Plan:0xc000bed0a0 Reasons:[]} {ID:cap-l Rule:insufficient_evidence RulePlan:<nil> Screen:keep Verdict: Final:manual_review Plan:<nil> Reasons:[规则：证据不完整]}] BatchErrors:[] DeepReviews:6 ChildrenCreated:6 ChildrenClosed:6 NewModelCalls:8 Budget:{ReservedRequests:8 KnownUsageEntries:8 UnknownUsageEntries:0 KnownTokens:{PromptTokens:2716 CompletionTokens:713 TotalTokens:15517 CachedTokens:0}}}
+--- PASS: TestLiveCapacityReview (30.67s)
+=== RUN   TestLiveCapacityReview
+    main_test.go:340: gemini/gemini-2.5-flash：{Items:[{ID:cap-a Rule:scale_down RulePlan:0xc000a8c4c0 Screen:scale_down Verdict:confirm Final:execute Plan:0xc0009f6d50 Reasons:[]} {ID:cap-b Rule:scale_up RulePlan:0xc000a8c4e0 Screen:scale_up Verdict:confirm Final:execute Plan:0xc000810a20 Reasons:[]} {ID:cap-c Rule:keep RulePlan:<nil> Screen:keep Verdict: Final:keep Plan:<nil> Reasons:[]} {ID:cap-d Rule:scale_down RulePlan:0xc000a8c510 Screen:scale_down Verdict:confirm Final:execute Plan:0xc000811ac0 Reasons:[]} {ID:cap-e Rule:insufficient_evidence RulePlan:<nil> Screen:keep Verdict: Final:manual_review Plan:<nil> Reasons:[规则：证据不完整]} {ID:cap-f Rule:scale_up RulePlan:0xc000a8c530 Screen:scale_up Verdict:confirm Final:execute Plan:0xc0009f7170 Reasons:[]} {ID:cap-g Rule:keep RulePlan:<nil> Screen:keep Verdict: Final:keep Plan:<nil> Reasons:[]} {ID:cap-h Rule:scale_down RulePlan:0xc000a8c550 Screen:scale_down Verdict:confirm Final:execute Plan:0xc0009f7720 Reasons:[]} {ID:cap-i Rule:insufficient_evidence RulePlan:<nil> Screen:keep Verdict: Final:manual_review Plan:<nil> Reasons:[规则：证据不完整]} {ID:cap-j Rule:keep RulePlan:<nil> Screen:keep Verdict: Final:keep Plan:<nil> Reasons:[]} {ID:cap-k Rule:scale_up RulePlan:0xc000a8c580 Screen:scale_up Verdict:confirm Final:execute Plan:0xc0009f67b0 Reasons:[]} {ID:cap-l Rule:insufficient_evidence RulePlan:<nil> Screen:keep Verdict: Final:manual_review Plan:<nil> Reasons:[规则：证据不完整]}] BatchErrors:[] DeepReviews:6 ChildrenCreated:6 ChildrenClosed:6 NewModelCalls:8 Budget:{ReservedRequests:8 KnownUsageEntries:8 UnknownUsageEntries:0 KnownTokens:{PromptTokens:2716 CompletionTokens:778 TotalTokens:16040 CachedTokens:0}}}
+--- PASS: TestLiveCapacityReview (31.98s)
+PASS
+ok  	github.com/kart-io/goagent/examples/orchestration/ops/capacity-review	63.680s
+=== RUN   TestLiveCostAttribution
+    main_test.go:320: gemini/gemini-2.5-flash：{Answer: Decision: Accepted:<nil> Submissions:0 Repairs:0 Rejections:[] DataToolRuns:9 NewModelCalls:10 Budget:{ReservedRequests:10 KnownUsageEntries:9 UnknownUsageEntries:1 KnownTokens:{PromptTokens:18258 CompletionTokens:491 TotalTokens:20010 CachedTokens:0}}}
+    main_test.go:321: 
+        	Error Trace:	examples/orchestration/ops/cost-attribution/main_test.go:321
+        	Error:      	Received unexpected error:
+        	            	gemini: incomplete or blocked response (finish="UNEXPECTED_TOOL_CALL")
+        	Test:       	TestLiveCostAttribution
+--- FAIL: TestLiveCostAttribution (16.09s)
+=== RUN   TestLiveCostAttribution
+    main_test.go:320: gemini/gemini-2.5-flash：{Answer: Decision: Accepted:<nil> Submissions:1 Repairs:0 Rejections:[] DataToolRuns:2 NewModelCalls:3 Budget:{ReservedRequests:3 KnownUsageEntries:3 UnknownUsageEntries:0 KnownTokens:{PromptTokens:4483 CompletionTokens:439 TotalTokens:5569 CachedTokens:0}}}
+    main_test.go:321: 
+        	Error Trace:	examples/orchestration/ops/cost-attribution/main_test.go:321
+        	Error:      	Received unexpected error:
+        	            	model returned no final answer or tool calls
+        	Test:       	TestLiveCostAttribution
+--- FAIL: TestLiveCostAttribution (5.96s)
+FAIL
+FAIL	github.com/kart-io/goagent/examples/orchestration/ops/cost-attribution	22.079s
+FAIL

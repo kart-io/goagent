@@ -1,0 +1,11 @@
+=== RUN   TestLiveScopedLookup
+    main_test.go:249: minimax/MiniMax-M3.1-Flash：{Answer:结论：inventory-svc
+        
+        拖慢下单的下游是 inventory-svc 的 reserve 操作（p99 约 810ms，覆盖 92% 慢下单链路，瓶颈为子 span db.lock_wait 约 760ms，14:09:40 出现重试后 deadline exceeded）。 Decision:inventory-svc Accepted:0xc00017e460 Submissions:1 Repairs:0 DataToolRuns:7 Lookups:[{Focus:metrics Calls:[metrics_query metrics_query] Refs:[E1 E2]} {Focus:logs Calls:[logs_query logs_query] Refs:[E3 E4]} {Focus:traces Calls:[traces_query traces_query traces_query] Refs:[E5 E6 E7]}] LookupsCreated:3 LookupsDone:3 PeakLookups:1 NewModelCalls:10 Budget:{ReservedRequests:10 KnownUsageEntries:10 UnknownUsageEntries:0 KnownTokens:{PromptTokens:9815 CompletionTokens:1825 TotalTokens:11640 CachedTokens:0}}}
+--- PASS: TestLiveScopedLookup (49.98s)
+=== RUN   TestLiveScopedLookup
+    main_test.go:249: minimax/MiniMax-M3.1-Flash：{Answer:结论：inventory-svc
+        order-svc 下单变慢由下游 inventory-svc 的 reserve 操作引起（reserve p99 升至 810ms、500ms 超时重试、92% 慢 trace 命中，瓶颈在 db.lock_wait 760ms），payment-svc 与 pricing-svc 正常。 Decision:inventory-svc Accepted:0xc00017e460 Submissions:1 Repairs:0 DataToolRuns:10 Lookups:[{Focus:metrics Calls:[metrics_query metrics_query metrics_query] Refs:[E1 E2 E3]} {Focus:logs Calls:[logs_query logs_query logs_query logs_query logs_query] Refs:[E4 E5 E6 E7 E8]} {Focus:traces Calls:[traces_query traces_query] Refs:[E9 E10]}] LookupsCreated:3 LookupsDone:3 PeakLookups:1 NewModelCalls:11 Budget:{ReservedRequests:11 KnownUsageEntries:11 UnknownUsageEntries:0 KnownTokens:{PromptTokens:11280 CompletionTokens:1930 TotalTokens:13210 CachedTokens:0}}}
+--- PASS: TestLiveScopedLookup (25.25s)
+PASS
+ok  	github.com/kart-io/goagent/examples/orchestration/ops/scoped-lookup	76.257s
