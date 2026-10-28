@@ -1,0 +1,207 @@
+ok  	github.com/kart-io/goagent/agents	(cached)
+ok  	github.com/kart-io/goagent/agents/base	(cached)
+ok  	github.com/kart-io/goagent/agents/cot	(cached)
+ok  	github.com/kart-io/goagent/agents/executor	(cached)
+ok  	github.com/kart-io/goagent/agents/got	(cached)
+ok  	github.com/kart-io/goagent/agents/metacot	(cached)
+ok  	github.com/kart-io/goagent/agents/pot	(cached)
+ok  	github.com/kart-io/goagent/agents/react	(cached)
+ok  	github.com/kart-io/goagent/agents/sot	(cached)
+ok  	github.com/kart-io/goagent/agents/specialized	(cached)
+ok  	github.com/kart-io/goagent/agents/tot	(cached)
+ok  	github.com/kart-io/goagent/builder	2.212s
+ok  	github.com/kart-io/goagent/builder/contextpolicy	(cached)
+ok  	github.com/kart-io/goagent/cache	(cached)
+ok  	github.com/kart-io/goagent/core	(cached)
+ok  	github.com/kart-io/goagent/core/budget	(cached)
+ok  	github.com/kart-io/goagent/core/checkpoint	(cached)
+ok  	github.com/kart-io/goagent/core/durable	(cached)
+ok  	github.com/kart-io/goagent/core/execution	(cached)
+ok  	github.com/kart-io/goagent/core/flow	(cached)
+ok  	github.com/kart-io/goagent/core/middleware	(cached)
+ok  	github.com/kart-io/goagent/core/observe	(cached)
+ok  	github.com/kart-io/goagent/core/state	(cached)
+ok  	github.com/kart-io/goagent/devtools	(cached)
+ok  	github.com/kart-io/goagent/distributed	(cached)
+ok  	github.com/kart-io/goagent/document	(cached)
+?   	github.com/kart-io/goagent/document/examples/advanced	[no test files]
+?   	github.com/kart-io/goagent/document/examples/loaders	[no test files]
+?   	github.com/kart-io/goagent/document/examples/splitters	[no test files]
+ok  	github.com/kart-io/goagent/errors	(cached)
+ok  	github.com/kart-io/goagent/evaluation	(cached)
+ok  	github.com/kart-io/goagent/evaluation/agentbench	3.084s
+?   	github.com/kart-io/goagent/evaluation/agentbench/cmd/run	[no test files]
+ok  	github.com/kart-io/goagent/evaluation/agentbench/cmd/stress	2.251s
+ok  	github.com/kart-io/goagent/examples	(cached)
+?   	github.com/kart-io/goagent/examples/advanced	[no test files]
+?   	github.com/kart-io/goagent/examples/advanced/multi-agent-collaboration	[no test files]
+?   	github.com/kart-io/goagent/examples/advanced/multi-agent-demo	[no test files]
+?   	github.com/kart-io/goagent/examples/advanced/multi-agent-modular	[no test files]
+?   	github.com/kart-io/goagent/examples/advanced/multi-agent-modular/agents	[no test files]
+?   	github.com/kart-io/goagent/examples/advanced/multi-agent-simple	[no test files]
+?   	github.com/kart-io/goagent/examples/advanced/multi-mode-streaming	[no test files]
+?   	github.com/kart-io/goagent/examples/advanced/multiagent-patterns	[no test files]
+?   	github.com/kart-io/goagent/examples/advanced/observability	[no test files]
+?   	github.com/kart-io/goagent/examples/advanced/parallel-execution	[no test files]
+?   	github.com/kart-io/goagent/examples/advanced/pool-decoupled-architecture	[no test files]
+?   	github.com/kart-io/goagent/examples/advanced/react	[no test files]
+?   	github.com/kart-io/goagent/examples/advanced/streaming	[no test files]
+?   	github.com/kart-io/goagent/examples/advanced/supervisor_agent	[no test files]
+?   	github.com/kart-io/goagent/examples/advanced/supervisor_agent/features	[no test files]
+?   	github.com/kart-io/goagent/examples/advanced/tool-runtime	[no test files]
+?   	github.com/kart-io/goagent/examples/advanced/tool-selector	[no test files]
+?   	github.com/kart-io/goagent/examples/agents/react_generator	[no test files]
+?   	github.com/kart-io/goagent/examples/basic/01-simple-agent	[no test files]
+?   	github.com/kart-io/goagent/examples/basic/02-tools	[no test files]
+?   	github.com/kart-io/goagent/examples/basic/03-agent-with-memory	[no test files]
+?   	github.com/kart-io/goagent/examples/basic/04-ollama-agent	[no test files]
+?   	github.com/kart-io/goagent/examples/basic/05-provider-consistency	[no test files]
+?   	github.com/kart-io/goagent/examples/basic/06-all-providers	[no test files]
+?   	github.com/kart-io/goagent/examples/basic/07-smart-agent-with-tools	[no test files]
+?   	github.com/kart-io/goagent/examples/basic/08-deepseek-agent	[no test files]
+?   	github.com/kart-io/goagent/examples/basic/09-deepseek-simple	[no test files]
+?   	github.com/kart-io/goagent/examples/basic/09-deepseek-simple/invokefast	[no test files]
+?   	github.com/kart-io/goagent/examples/basic/10-object-pooling	[no test files]
+?   	github.com/kart-io/goagent/examples/basic/11-deepseek-with-builder	[no test files]
+?   	github.com/kart-io/goagent/examples/basic/12-deepseek-simple	[no test files]
+?   	github.com/kart-io/goagent/examples/basic/13-simple-builder-deepseek	[no test files]
+?   	github.com/kart-io/goagent/examples/basic/14-reasoning-agents	[no test files]
+?   	github.com/kart-io/goagent/examples/basic/15-simple-builder-kimi	[no test files]
+?   	github.com/kart-io/goagent/examples/basic/16-pdf-rag	[no test files]
+?   	github.com/kart-io/goagent/examples/basic/17-vertexai-rag	[no test files]
+?   	github.com/kart-io/goagent/examples/builder/advanced	[no test files]
+?   	github.com/kart-io/goagent/examples/builder/core	[no test files]
+?   	github.com/kart-io/goagent/examples/builder/serialization	[no test files]
+?   	github.com/kart-io/goagent/examples/builder/simple	[no test files]
+?   	github.com/kart-io/goagent/examples/comprehensive	[no test files]
+?   	github.com/kart-io/goagent/examples/error_handling	[no test files]
+?   	github.com/kart-io/goagent/examples/evaluation/retrieval	[no test files]
+?   	github.com/kart-io/goagent/examples/evaluation/strategies	[no test files]
+?   	github.com/kart-io/goagent/examples/generator/advanced	[no test files]
+?   	github.com/kart-io/goagent/examples/generator/basic	[no test files]
+?   	github.com/kart-io/goagent/examples/integration/human-in-loop	[no test files]
+?   	github.com/kart-io/goagent/examples/integration/langchain-complete	[no test files]
+?   	github.com/kart-io/goagent/examples/integration/langchain-inspired	[no test files]
+?   	github.com/kart-io/goagent/examples/integration/langchain-phase1	[no test files]
+?   	github.com/kart-io/goagent/examples/integration/langchain-phase2	[no test files]
+?   	github.com/kart-io/goagent/examples/integration/multiagent	[no test files]
+?   	github.com/kart-io/goagent/examples/integration/multiagent-nats	[no test files]
+?   	github.com/kart-io/goagent/examples/integration/preconfig-agents	[no test files]
+?   	github.com/kart-io/goagent/examples/intelligent-ops	[no test files]
+?   	github.com/kart-io/goagent/examples/llm/advanced	[no test files]
+?   	github.com/kart-io/goagent/examples/llm/anthropic	[no test files]
+?   	github.com/kart-io/goagent/examples/llm/cohere	[no test files]
+?   	github.com/kart-io/goagent/examples/llm/gemini-verify	[no test files]
+?   	github.com/kart-io/goagent/examples/llm/huggingface	[no test files]
+?   	github.com/kart-io/goagent/examples/llm/kimi	[no test files]
+?   	github.com/kart-io/goagent/examples/mcp/basic_tools	[no test files]
+?   	github.com/kart-io/goagent/examples/mcp/custom_tool	[no test files]
+?   	github.com/kart-io/goagent/examples/mcp/tool_chain	[no test files]
+?   	github.com/kart-io/goagent/examples/multiagent/01-basic-system	[no test files]
+?   	github.com/kart-io/goagent/examples/multiagent/02-collaboration-types	[no test files]
+?   	github.com/kart-io/goagent/examples/multiagent/03-team-management	[no test files]
+?   	github.com/kart-io/goagent/examples/multiagent/04-specialized-agents	[no test files]
+?   	github.com/kart-io/goagent/examples/multiagent/05-llm-collaborative-agents	[no test files]
+?   	github.com/kart-io/goagent/examples/multiagent/06-llm-tool-calling	[no test files]
+?   	github.com/kart-io/goagent/examples/multiagent/07-multiagent-llm-stream	[no test files]
+?   	github.com/kart-io/goagent/examples/multiagent/08-multiagent-tool-registry	[no test files]
+?   	github.com/kart-io/goagent/examples/multiagent/09-multiagent-with-middleware	[no test files]
+?   	github.com/kart-io/goagent/examples/multiagent/10-multiagent-integrated	[no test files]
+?   	github.com/kart-io/goagent/examples/multiagent/11-planning-multiagent	[no test files]
+?   	github.com/kart-io/goagent/examples/multiagent/12-structured-planning	[no test files]
+?   	github.com/kart-io/goagent/examples/multiagent/common	[no test files]
+?   	github.com/kart-io/goagent/examples/optimization/02-cache-presets	[no test files]
+?   	github.com/kart-io/goagent/examples/optimization/cot_vs_react	[no test files]
+?   	github.com/kart-io/goagent/examples/optimization/hybrid_mode	[no test files]
+?   	github.com/kart-io/goagent/examples/optimization/planning_execution	[no test files]
+ok  	github.com/kart-io/goagent/examples/orchestration/agent-tool	1.478s
+ok  	github.com/kart-io/goagent/examples/orchestration/composed-order	2.338s
+ok  	github.com/kart-io/goagent/examples/orchestration/context-recovery	(cached)
+ok  	github.com/kart-io/goagent/examples/orchestration/field-adapter	(cached)
+?   	github.com/kart-io/goagent/examples/orchestration/internal/demomodel	[no test files]
+ok  	github.com/kart-io/goagent/examples/orchestration/parallel-diagnostics	(cached)
+?   	github.com/kart-io/goagent/examples/orchestration/runnable-tool	[no test files]
+?   	github.com/kart-io/goagent/examples/orchestration/stream-pipeline	[no test files]
+?   	github.com/kart-io/goagent/examples/performance	[no test files]
+?   	github.com/kart-io/goagent/examples/planning	[no test files]
+?   	github.com/kart-io/goagent/examples/rag	[no test files]
+?   	github.com/kart-io/goagent/examples/rag/grounded	[no test files]
+?   	github.com/kart-io/goagent/examples/retry-jitter	[no test files]
+?   	github.com/kart-io/goagent/examples/skills/01-demo	[no test files]
+?   	github.com/kart-io/goagent/examples/skills/02-weather-skill	[no test files]
+?   	github.com/kart-io/goagent/examples/skills/02-weather-skill/internal/config	[no test files]
+?   	github.com/kart-io/goagent/examples/skills/02-weather-skill/internal/handler	[no test files]
+?   	github.com/kart-io/goagent/examples/skills/02-weather-skill/internal/llmtools	[no test files]
+?   	github.com/kart-io/goagent/examples/skills/02-weather-skill/internal/logic	[no test files]
+?   	github.com/kart-io/goagent/examples/skills/02-weather-skill/internal/skill	[no test files]
+?   	github.com/kart-io/goagent/examples/skills/02-weather-skill/internal/svc	[no test files]
+?   	github.com/kart-io/goagent/examples/skills/02-weather-skill/internal/types	[no test files]
+?   	github.com/kart-io/goagent/examples/testhelpers	[no test files]
+?   	github.com/kart-io/goagent/examples/tools/01-calculator	[no test files]
+?   	github.com/kart-io/goagent/examples/tools/02-http-api	[no test files]
+?   	github.com/kart-io/goagent/examples/tools/03-shell	[no test files]
+?   	github.com/kart-io/goagent/examples/tools/04-search	[no test files]
+?   	github.com/kart-io/goagent/examples/tools/05-file-operations	[no test files]
+?   	github.com/kart-io/goagent/examples/tools/06-web-scraper	[no test files]
+?   	github.com/kart-io/goagent/examples/tools/07-function-tool	[no test files]
+?   	github.com/kart-io/goagent/examples/tools/08-tool-with-agent	[no test files]
+?   	github.com/kart-io/goagent/examples/tools/middleware	[no test files]
+?   	github.com/kart-io/goagent/examples/tools/registry	[no test files]
+?   	github.com/kart-io/goagent/examples/translate	[no test files]
+?   	github.com/kart-io/goagent/examples/translate/interactive	[no test files]
+?   	github.com/kart-io/goagent/examples/workflow	[no test files]
+ok  	github.com/kart-io/goagent/examples/workflow/business-cases	20.636s
+ok  	github.com/kart-io/goagent/examples/workflow/refund-recovery	(cached)
+ok  	github.com/kart-io/goagent/integration	(cached)
+ok  	github.com/kart-io/goagent/interfaces	(cached)
+ok  	github.com/kart-io/goagent/llm	(cached)
+ok  	github.com/kart-io/goagent/llm/cache	(cached)
+?   	github.com/kart-io/goagent/llm/common	[no test files]
+?   	github.com/kart-io/goagent/llm/constants	[no test files]
+ok  	github.com/kart-io/goagent/llm/providers	31.201s
+?   	github.com/kart-io/goagent/mcp/core	[no test files]
+ok  	github.com/kart-io/goagent/mcp/remote	(cached)
+ok  	github.com/kart-io/goagent/mcp/toolbox	(cached)
+?   	github.com/kart-io/goagent/mcp/tools	[no test files]
+ok  	github.com/kart-io/goagent/memory	(cached)
+ok  	github.com/kart-io/goagent/middleware	(cached)
+ok  	github.com/kart-io/goagent/multiagent	(cached)
+ok  	github.com/kart-io/goagent/observability	(cached)
+?   	github.com/kart-io/goagent/options	[no test files]
+ok  	github.com/kart-io/goagent/parsers	(cached)
+ok  	github.com/kart-io/goagent/performance	(cached)
+ok  	github.com/kart-io/goagent/planning	(cached)
+ok  	github.com/kart-io/goagent/prompt	(cached)
+ok  	github.com/kart-io/goagent/reflection	(cached)
+ok  	github.com/kart-io/goagent/retrieval	(cached)
+?   	github.com/kart-io/goagent/retrieval/examples/advanced	[no test files]
+?   	github.com/kart-io/goagent/retrieval/examples/basic	[no test files]
+ok  	github.com/kart-io/goagent/scripts/apicheck	(cached)
+ok  	github.com/kart-io/goagent/store	(cached)
+ok  	github.com/kart-io/goagent/store/adapters	(cached)
+?   	github.com/kart-io/goagent/store/adapters/example	[no test files]
+?   	github.com/kart-io/goagent/store/decorator	[no test files]
+?   	github.com/kart-io/goagent/store/factory	[no test files]
+ok  	github.com/kart-io/goagent/store/memory	(cached)
+ok  	github.com/kart-io/goagent/store/postgres	(cached)
+ok  	github.com/kart-io/goagent/store/redis	(cached)
+ok  	github.com/kart-io/goagent/stream	(cached)
+?   	github.com/kart-io/goagent/testing	[no test files]
+?   	github.com/kart-io/goagent/testing/mocks	[no test files]
+?   	github.com/kart-io/goagent/testing/testutil	[no test files]
+?   	github.com/kart-io/goagent/toolkits	[no test files]
+ok  	github.com/kart-io/goagent/tools	(cached)
+ok  	github.com/kart-io/goagent/tools/compute	(cached)
+ok  	github.com/kart-io/goagent/tools/http	(cached)
+ok  	github.com/kart-io/goagent/tools/middleware	(cached)
+ok  	github.com/kart-io/goagent/tools/plugingen	(cached)
+?   	github.com/kart-io/goagent/tools/plugingen/cmd/plugingen	[no test files]
+?   	github.com/kart-io/goagent/tools/plugingen/examples	[no test files]
+ok  	github.com/kart-io/goagent/tools/practical	(cached)
+ok  	github.com/kart-io/goagent/tools/search	(cached)
+ok  	github.com/kart-io/goagent/tools/shell	(cached)
+ok  	github.com/kart-io/goagent/utils	(cached)
+ok  	github.com/kart-io/goagent/utils/httpclient	(cached)
+ok  	github.com/kart-io/goagent/utils/json	(cached)
+ok  	github.com/kart-io/goagent/workflow	8.747s
+ok  	github.com/kart-io/goagent/workflow/refund	(cached)

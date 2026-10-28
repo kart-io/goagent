@@ -1,7 +1,5 @@
 # GoAgent 原生编排与工具体系验证
 
-> 清理说明：本目录的测试日志及 Python 脚本已删除；历史测试结论和现存 JSON/Markdown 汇总保留。
-
 本轮基于提交 `8b4aa16` 开发，改动尚未提交。图执行、工具调度与恢复均由 GoAgent 自身实现，没有添加其他编排框架依赖。已有的 google/jsonschema-go v0.4.3 从间接依赖调整为直接依赖，版本未变化。[源码与验证上下文](run-context.json)。
 
 ## 已实现
@@ -23,7 +21,7 @@
 | workflow 示例迁移检查 | 0 findings |
 | 独立 CLI 崩溃恢复实跑 | 退出码 86 后恢复成功，重复运行同一回执，账本 1 笔 / 9900 分 |
 
-日志：全库竞态（原文件已清理）、lint（原文件已清理）、最后 Runnable/兼容性复测（原文件已清理）、[退款实跑结果](refund-smoke.json)。SQLite 依赖仍输出已有 C const 编译警告，不影响检查结果。
+日志：[全库竞态](all-race.log)、[lint](lint.log)、[最后 Runnable/兼容性复测](runnable-final.log)、[退款实跑结果](refund-smoke.json)。SQLite 依赖仍输出已有 C const 编译警告，不影响检查结果。
 
 重点回归包括：分支失败后仅重跑未保存分支、Merge 失败不重跑分支、分支保存失败沿用效果键、并发上限与取消后等待退出、子进程在效果落盘后崩溃、分支序列化 panic 转错误、旧串行 v1 审批检查点兼容；工具嵌套 Schema 校验、整数参数不损失精度、未授权不执行、失败无重试、排队/执行超时，以及 Builder 实际 Provider 协议路径使用同一个 Dispatcher。
 

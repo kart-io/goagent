@@ -1,0 +1,19 @@
+github.com/kart-io/goagent/core/observe: no non-test Go files in /Users/costalong/.codex/worktrees/4bd1/goagent/core/observe
+# github.com/kart-io/goagent/workflow [github.com/kart-io/goagent/workflow.test]
+workflow/describe_test.go:12:22: run.Description undefined (type *core.StreamRunnable[int, int] has no field or method Description)
+# github.com/kart-io/goagent/core/observe [github.com/kart-io/goagent/core/observe.test]
+core/observe/event_test.go:12:32: undefined: Event
+core/observe/event_test.go:13:47: undefined: Event
+core/observe/event_test.go:16:26: undefined: WithObserver
+core/observe/event_test.go:16:39: undefined: WithTracer
+core/observe/event_test.go:16:106: undefined: WithRunID
+core/observe/event_test.go:17:14: undefined: Start
+core/observe/event_test.go:17:24: undefined: Event
+core/observe/event_test.go:17:96: undefined: Start
+core/observe/event_test.go:17:109: undefined: Event
+core/observe/event_test.go:23:44: undefined: Event
+core/observe/event_test.go:17:109: too many errors
+FAIL	github.com/kart-io/goagent/core/observe [build failed]
+FAIL	github.com/kart-io/goagent/devtools [build failed]
+FAIL	github.com/kart-io/goagent/workflow [build failed]
+FAIL

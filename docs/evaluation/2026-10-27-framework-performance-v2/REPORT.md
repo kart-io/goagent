@@ -1,7 +1,5 @@
 # 框架性能对测报告
 
-> 清理说明：本目录的测试日志及 Python 脚本已删除；历史测试结论和现存 JSON/Markdown 汇总保留。
-
 日期：2026-10-27。有效数据为 v2；初轮无效数据保留在 [preliminary](../2026-10-27-framework-performance/INVALID.md)。
 
 ## 结论与适用范围
@@ -66,7 +64,7 @@
 | 两轮模型＋一次工具 | 9375.0 | 60279.0 | 7938 | 87967 | 97 | 1345 |
 | 64 段文本流 | 44744.0 | 31083.0 | 22808 | 57909 | 192 | 783 |
 
-[分配汇总](go-allocations-summary.json) 保留五轮结果，原始分配日志已清理。流场景再次表现为 GoAgent 分配较少、完成时间更高，不能以分配量单独推导吞吐。
+原始 [go-allocations.log](go-allocations.log) 与 [分配汇总](go-allocations-summary.json) 保留全部五轮。流场景再次表现为 GoAgent 分配较少、完成时间更高，不能以分配量单独推导吞吐。
 
 ## Python 与跨运行时观察
 
@@ -125,6 +123,6 @@ Python ADK 包含运行事件与会话服务路径；各 SDK 的协议模型、�
 [对测代码和命令](../../../evaluation/frameworkbench/README.md)。运行目录必须新建；不覆盖旧结果。主要证据：
 
 - [每次操作延迟 results.jsonl](results.jsonl)、[summary.json](summary.json)、[随机顺序 schedule.json](schedule.json)。
-- [manifest.json](manifest.json)、[分配汇总](go-allocations-summary.json)。
-- 主项目测试、独立模块 race、Python 测试和 CPU profile 的原始命令日志已清理。
+- [manifest.json](manifest.json)、[Go 分配日志](go-allocations.log)、[分配汇总](go-allocations-summary.json)。
+- [主项目测试](root-tests.log)、[独立模块 race](go-race.log)、[Python 测试](python-tests.log)、[CPU profile 运行](profile-run.log)。
 - 各 job 的 stderr 单独保留；只有依赖警告的行不作失败忽略，若真实退出非零将产生 failure.json 并停止采样。

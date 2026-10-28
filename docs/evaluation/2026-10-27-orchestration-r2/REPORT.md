@@ -1,7 +1,5 @@
 # 可组合编排 R2 交付验证
 
-> 清理说明：本目录的测试日志及 Python 脚本已删除；历史测试结论和现存 JSON/Markdown 汇总保留。
-
 日期：2026-10-27。实现代码：`772925f`（含性能修正与整分支审查修复）；源摘要见 [manifest.json](manifest.json)。基线：`3bfeea70fcce35c3e925a295cc42546c1ec80b1b`。文档/初次对测输入单独记录为 `b60e033`，不改变生产基线。
 
 ## 功能证据
@@ -33,7 +31,7 @@ env -u GOROOT GOTOOLCHAIN=go1.25.0 /tmp/goagent-r2-tools/golangci-lint run ./...
 env -u GOROOT GOTOOLCHAIN=go1.25.0 bash scripts/verify_imports.sh
 ```
 
-全量测试、构建、lint、导入检查和对测模块契约的原始命令日志已清理，历史结论保留。Go 1.27 不能被旧 lint 的 export-data 解析器正确读取，此工具兼容错误通过使用声明的 Go 1.25 loader 解决，不是项目源码告警。Eino 仍只出现在隔离对测模块中；该模块 tidy 补充现有 OTel API 的间接依赖。
+日志：[Go 1.25 race](tests-go125.log)、[Go 1.27 初次全量](tests-go127.log)、[build](build.log)、[lint](lint.log)、[imports](imports.log)、[独立对测模块契约](benchmark-contracts.log)。Go 1.27 不能被旧 lint 的 export-data 解析器正确读取，此工具兼容错误通过使用声明的 Go 1.25 loader 解决，不是项目源码告警。Eino 仍只出现在隔离对测模块中；该模块 tidy 补充现有 OTel API 的间接依赖。
 
 ## 同机前后性能与 Eino 参照
 
@@ -50,9 +48,9 @@ env -u GOROOT GOTOOLCHAIN=go1.25.0 bash scripts/verify_imports.sh
 | eino/agent_tool | 62744 | 64617 | +3.0% | 87898 → 87897 | 1348 → 1348 |
 | eino/stream_64 | 33247 | 33440 | +0.6% | 57909 → 57909 | 783 → 783 |
 
-前后对测数值见 [结构化汇总](benchmark-summary.json)，原始命令日志已清理。Eino 的小幅波动说明存在机器噪声，不能将几个百分点外推成确定的收益。
+原始数据：[before.log](before.log)、[after.log](after.log)、[结构化汇总](benchmark-summary.json)。Eino 的小幅波动说明存在机器噪声，不能将几个百分点外推成确定的收益。
 
-初测发现默认路径不必要分配 observe.Event、序列化持久意图并生成请求 UUID：图 770→1247 ns、32→41 allocs，工具循环 9639→18050 ns。保留 [初测汇总](benchmark-summary-initial.json)，初测原始日志已清理。修正后未启用观察不分配事件、未启用持久化不序列化意图，图分配回到基线；中间修正版的原始命令日志已清理。
+初测发现默认路径不必要分配 observe.Event、序列化持久意图并生成请求 UUID：图 770→1247 ns、32→41 allocs，工具循环 9639→18050 ns。保留 [初测原始数据](after-initial-regression.log) 和 [初测汇总](benchmark-summary-initial.json)。修正后未启用观察不分配事件、未启用持久化不序列化意图，图分配回到基线；[中间修正版](after-allocation-fix.log) 也保留。
 
 最终图执行约 +1.8%、分支循环约 -4.4%（含噪声），分配不变；工具循环仍约 +10.4%（约 1 µs、+60 B/+4 allocs），64 块流约 +4.8%（约 +54 B/+2 allocs）。剩余开销来自统一调用计数、执行范围和上下文传递，未通过牺牲预算/错误证据移除。该回退明确记录，不预设 5% SLA。GoAgent 在这组图和工具微基准较快，Eino 在 64 块流的总耗时较快；不能声称整体优于其他框架。
 
@@ -64,7 +62,7 @@ env -u GOROOT GOTOOLCHAIN=go1.25.0 GOMAXPROCS=4 go test -run '^$' \
   -bench '^BenchmarkFramework$' -benchmem -benchtime=300ms -count=5
 ```
 
-流原型的 32 项 Fold 中位数 338.1 ns/op、416 B/op、11 allocs/op；结果保留于本报告，原始命令日志已清理。它没有旧同等 API，不能算作前后性能提升。采用结论为保留 experimental 包验证只读增量语义，不发布完整四范式。
+流原型的 32 项 Fold 中位数 338.1 ns/op、416 B/op、11 allocs/op，见 [flow.log](flow.log)。它没有旧同等 API，不能算作前后性能提升。采用结论为保留 experimental 包验证只读增量语义，不发布完整四范式。
 
 ## 交付范围与运行限制
 
@@ -72,4 +70,4 @@ R2 T1–T10 首轮范围已实现。完整四范式、反射 Mapping、可恢复
 
 预算账本、引用及模型操作不构成跨文件事务。保留 pending/failed 和原版本 worker，不退款或删除日志来强制重试。迁移与 API 示例见 [可组合编排指南](../../guides/COMPOSABLE_ORCHESTRATION.md)。
 
-最终整分支独立审查发现的 4 个 Important 均已用失败回归修复，最终全量 race 再次通过。详见 [审查与修复记录](FINAL_REVIEW.md)。审查前的原始性能快照日志已清理；主表为审查修复后复跑 5 次的数据。
+最终整分支独立审查发现的 4 个 Important 均已用失败回归修复，最终全量 race 再次通过。详见 [审查与修复记录](FINAL_REVIEW.md)。[审查前的性能快照](after-before-final-review.log) 继续保留；主表为审查修复后复跑 5 次的数据。

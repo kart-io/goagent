@@ -1,7 +1,5 @@
 # R2 整分支独立审查与修复
 
-> 清理说明：本目录的测试日志及 Python 脚本已删除；历史测试结论和现存 JSON/Markdown 汇总保留。
-
 审查范围：`b60e033..72f67f0`，由一次独立上下文审查完成；原结论为 With fixes。无 Critical、无另列 Minor。依执行协议，四个 Important 统一在一轮修复，先验证失败、后验证通过，不重复派发审查。
 
 | 问题 | 最终行为 | RED→GREEN 测试 |
@@ -11,7 +9,7 @@
 | 策略可改写与原生续接状态绑定的助手正文 | 带 ProviderState 的消息 Content 受保护，在下次准入前失败 | TestPolicyRejectsBoundAssistantContentBeforeAdmission |
 | 恢复后重用 RunID 下的 EventID/VisitID | 每次观察调用创建独立 invocation nonce；业务 RunID/OperationKey 不变 | TestDurableResumesHaveDistinctObservationIdentities |
 
-上述回归均经历先失败、修复后通过的验证；对应原始日志已清理。全量 race、build、lint 和 imports 的最终结果见 [交付记录](REPORT.md)。
+原始证据：[失败测试](red-green/final-review-red.log)、[修复后定向 race 测试](red-green/final-review-green.log)。全量 race、build、lint 和 imports 的最终结果见 [交付记录](REPORT.md)。
 
 审查明确保留的边界及维护者裁决：
 

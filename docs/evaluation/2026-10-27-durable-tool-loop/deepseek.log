@@ -1,0 +1,13 @@
+=== RUN   TestLiveNativeToolLoop
+    native_loop_test.go:260: phase exit 1, expected 86: --- FAIL: TestNativeToolLoopChild (1.49s)
+            native_loop_test.go:199:
+                    Error Trace:    /home/costalong/code/go/src/github.com/kart-io/goagent/examples/workflow/business-cases/native_loop_test.go:94
+                                                /home/costalong/code/go/src/github.com/kart-io/goagent/examples/workflow/business-cases/native_loop_test.go:199
+                    Error:          Received unexpected error:
+                                    node "agent": tool "record_A" arguments: validating root: unexpected additional properties ["key"]
+                    Test:           TestNativeToolLoopChild
+        FAIL
+--- FAIL: TestLiveNativeToolLoop (1.50s)
+FAIL
+FAIL    github.com/kart-io/goagent/examples/workflow/business-cases 1.511s
+FAIL
