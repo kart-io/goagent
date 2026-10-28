@@ -201,21 +201,7 @@ func TestStreamMiddlewarePanicDoesNotKillProcess(t *testing.T) {
 			out, err := tc.middleware.Apply(ctx, tc.source)
 			require.NoError(t, err, name)
 			chunks := rawChunks(t, out)
-			if name == "transform" {
-				// TransformMiddleware 同时把转换函数设为 writer 的 TransformFunc，错误块写出时也会经过它而再次 panic，
-				// 写出失败；panic 已由全局 PanicHandler 记录。
-				require.Nil(t, errorChunk(chunks))
-				require.Eventually(t, func() bool {
-					for _, e := range recorder.Wait(0, 0) {
-						if e.Value == "transform boom" {
-							return true
-						}
-					}
-					return false
-				}, 2*time.Second, 5*time.Millisecond)
-			} else {
-				requireStreamPanic(t, errorChunk(chunks), tc.value)
-			}
+			requireStreamPanic(t, errorChunk(chunks), tc.value)
 			require.True(t, chunks[len(chunks)-1].IsLast, "%s: 流应正常关闭", name)
 		}
 	})

@@ -164,9 +164,8 @@ func NewTransformMiddleware(fn core.ChunkTransformFunc) *TransformMiddleware {
 
 // Apply 应用中间件
 func (m *TransformMiddleware) Apply(ctx context.Context, source execution.StreamOutput) (execution.StreamOutput, error) {
+	// 转换只在下方 goroutine 中执行；不设置 writer 的 TransformFunc，否则每个块（包括错误块）会被再转换一次
 	opts := execution.DefaultStreamOptions()
-	opts.EnableTransform = true
-	opts.TransformFunc = m.transformFunc
 
 	writer := NewWriter(ctx, opts)
 
