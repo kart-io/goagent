@@ -2,40 +2,40 @@
 [logging] Response: Complete flow response (duration: 4.169µs)
 --- FAIL: TestPolicyReadToolAuthorizationAndReplay (0.00s)
     policy_runtime_test.go:91:
-        	Error Trace:	/home/costalong/code/go/src/github.com/kart-io/goagent/builder/policy_runtime_test.go:91
-        	Error:      	Received unexpected error:
-        	            	durable Agent requires a nonempty stable DurableScope; use WithDurableScope
-        	Test:       	TestPolicyReadToolAuthorizationAndReplay
+                Error Trace:	/home/costalong/code/go/src/github.com/kart-io/goagent/builder/policy_runtime_test.go:91
+                Error:      	Received unexpected error:
+                                durable Agent requires a nonempty stable DurableScope; use WithDurableScope
+                Test:       	TestPolicyReadToolAuthorizationAndReplay
 --- FAIL: TestPolicyReferenceSaveBeforeRequestAndConfigMismatch (0.00s)
     policy_runtime_test.go:152:
-        	Error Trace:	/home/costalong/code/go/src/github.com/kart-io/goagent/builder/policy_runtime_test.go:152
-        	Error:      	Error "durable Agent requires a nonempty stable DurableScope; use WithDurableScope" does not contain "reference save failed"
-        	Test:       	TestPolicyReferenceSaveBeforeRequestAndConfigMismatch
+                Error Trace:	/home/costalong/code/go/src/github.com/kart-io/goagent/builder/policy_runtime_test.go:152
+                Error:      	Error "durable Agent requires a nonempty stable DurableScope; use WithDurableScope" does not contain "reference save failed"
+                Test:       	TestPolicyReferenceSaveBeforeRequestAndConfigMismatch
 FAIL
 FAIL	github.com/kart-io/goagent/builder	0.189s
 ok  	github.com/kart-io/goagent/workflow	2.461s
 ok  	github.com/kart-io/goagent/examples/orchestration/agent-tool	0.008s
 --- FAIL: TestComposedOrderReplay (0.00s)
     main_test.go:19:
-        	Error Trace:	/home/costalong/code/go/src/github.com/kart-io/goagent/examples/orchestration/composed-order/main_test.go:19
-        	Error:      	Received unexpected error:
-        	            	durable Agent requires a nonempty stable DurableScope; use WithDurableScope
-        	Test:       	TestComposedOrderReplay
+                Error Trace:	/home/costalong/code/go/src/github.com/kart-io/goagent/examples/orchestration/composed-order/main_test.go:19
+                Error:      	Received unexpected error:
+                                durable Agent requires a nonempty stable DurableScope; use WithDurableScope
+                Test:       	TestComposedOrderReplay
 --- FAIL: TestComposedOrderProcessRecovery (0.01s)
     main_test.go:50:
-        	Error Trace:	/home/costalong/code/go/src/github.com/kart-io/goagent/examples/orchestration/composed-order/main_test.go:50
-        	            				/home/costalong/code/go/src/github.com/kart-io/goagent/examples/orchestration/composed-order/main_test.go:53
-        	Error:      	Not equal:
-        	            	expected: 86
-        	            	actual  : 2
-        	Test:       	TestComposedOrderProcessRecovery
-        	Messages:   	durable Agent requires a nonempty stable DurableScope; use WithDurableScope
+                Error Trace:	/home/costalong/code/go/src/github.com/kart-io/goagent/examples/orchestration/composed-order/main_test.go:50
+                                                        /home/costalong/code/go/src/github.com/kart-io/goagent/examples/orchestration/composed-order/main_test.go:53
+                Error:      	Not equal:
+                                expected: 86
+                                actual  : 2
+                Test:       	TestComposedOrderProcessRecovery
+                Messages:   	durable Agent requires a nonempty stable DurableScope; use WithDurableScope
 --- FAIL: TestComposedOrderUsesExistingTrace (0.00s)
     main_test.go:65:
-        	Error Trace:	/home/costalong/code/go/src/github.com/kart-io/goagent/examples/orchestration/composed-order/main_test.go:65
-        	Error:      	Received unexpected error:
-        	            	durable Agent requires a nonempty stable DurableScope; use WithDurableScope
-        	Test:       	TestComposedOrderUsesExistingTrace
+                Error Trace:	/home/costalong/code/go/src/github.com/kart-io/goagent/examples/orchestration/composed-order/main_test.go:65
+                Error:      	Received unexpected error:
+                                durable Agent requires a nonempty stable DurableScope; use WithDurableScope
+                Test:       	TestComposedOrderUsesExistingTrace
 FAIL
 FAIL	github.com/kart-io/goagent/examples/orchestration/composed-order	0.016s
 ok  	github.com/kart-io/goagent/examples/orchestration/context-recovery	0.007s
