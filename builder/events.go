@@ -96,6 +96,9 @@ func (a *ConfigurableAgent[C, S]) ExecuteStream(ctx context.Context, input inter
 		})
 		output, err := a.execute(ctx, input, chain)
 		agentErr = err
+		// 先结束观测再发终态：调用方收到 done/error 即可能返回并关闭记录器。
+		// endAgent 只生效一次，上面的 defer 仍兜底 panic 路径。
+		endAgent(err, false)
 		if err != nil {
 			_ = emit(AgentEvent{Type: "error", Error: err, Message: err.Error()})
 			return
