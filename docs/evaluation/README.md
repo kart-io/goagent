@@ -2,6 +2,8 @@
 
 最新整合：[R2 分支修复与评测资料恢复验证](2026-10-28-r2-integration/REPORT.md)。
 
+真实模型编排案例：[DeepSeek、MiniMax 与 Gemini 验证 R2 新能力](2026-10-28-orchestration-live/REPORT.md)。8 个案例覆盖预算、子 Agent 工具、多级委派、上下文卸载与自定义策略、持久图循环与审批、观测与流原型；三个模型各 2–3 轮，除 Gemini 长日志排障 1 次未复现的失败外全部通过。案例暴露并修复了 Agent 结束观测晚于终态事件的框架缺陷。
+
 归档要求见[评测资料保留约定](RETENTION.md)。历史原始结果与失败日志随代码保留，新增验证独立归档。
 
 框架性能新增：[GoAgent、Eino、LangGraph/LangChain、OpenAI Agents SDK、Google ADK 对测](2026-10-27-framework-performance-v2/REPORT.md)。本地即时模型、四种工作负载、80 组/32,000 次有效操作；分别报告同语言延迟、Go 分配和跨运行时观察。没有真实推理、持久化和并发吞吐排名。

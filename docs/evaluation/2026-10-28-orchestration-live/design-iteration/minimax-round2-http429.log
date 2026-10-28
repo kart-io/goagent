@@ -1,0 +1,119 @@
+=== RUN   TestLiveApprovalFlows
+    main_test.go:168: 模型：minimax/MiniMax-M3.1-Flash
+=== RUN   TestLiveApprovalFlows/R-SMALL
+    main_test.go:83: R-SMALL：{Status:completed Decision:退款 Receipt:PAY-28dcbfe3 ApprovalKey: NewPayments:1 NewModelCalls:1 Budget:{ReservedRequests:1 KnownUsageEntries:1 UnknownUsageEntries:0 KnownTokens:{PromptTokens:273 CompletionTokens:22 TotalTokens:295 CachedTokens:0}}}
+=== RUN   TestLiveApprovalFlows/R-REJECT
+    main_test.go:83: R-REJECT：{Status: Decision: Receipt: ApprovalKey: NewPayments:0 NewModelCalls:1 Budget:{ReservedRequests:1 KnownUsageEntries:0 UnknownUsageEntries:1 KnownTokens:{PromptTokens:0 CompletionTokens:0 TotalTokens:0 CachedTokens:0}}}
+    main_test.go:84: 
+        	Error Trace:	/home/costalong/code/go/src/github.com/kart-io/goagent/examples/orchestration/live/approval/main_test.go:84
+        	Error:      	Received unexpected error:
+        	            	node "assess": MiniMax HTTP 状态 429
+        	Test:       	TestLiveApprovalFlows/R-REJECT
+=== RUN   TestLiveApprovalFlows/R-LARGE
+    main_test.go:114: 子进程应以 86 退出，实际 exit status 2
+        node "assess": MiniMax HTTP 状态 429
+--- FAIL: TestLiveApprovalFlows (1.71s)
+    --- PASS: TestLiveApprovalFlows/R-SMALL (1.26s)
+    --- FAIL: TestLiveApprovalFlows/R-REJECT (0.18s)
+    --- FAIL: TestLiveApprovalFlows/R-LARGE (0.27s)
+FAIL
+FAIL	github.com/kart-io/goagent/examples/orchestration/live/approval	1.715s
+=== RUN   TestLiveDelegation
+    main_test.go:130: minimax/MiniMax-M3.1-Flash：{Answer: Total:0 ExpertsCreated:1 ExpertsDone:1 ConvertRuns:0 TaxRuns:0 NewModelCalls:2 Budget:{ReservedRequests:2 KnownUsageEntries:1 UnknownUsageEntries:1 KnownTokens:{PromptTokens:515 CompletionTokens:56 TotalTokens:571 CachedTokens:0}}}
+    main_test.go:131: 
+        	Error Trace:	/home/costalong/code/go/src/github.com/kart-io/goagent/examples/orchestration/live/delegation/main_test.go:131
+        	Error:      	Received unexpected error:
+        	            	MiniMax HTTP 状态 429
+        	Test:       	TestLiveDelegation
+--- FAIL: TestLiveDelegation (1.81s)
+FAIL
+FAIL	github.com/kart-io/goagent/examples/orchestration/live/delegation	1.816s
+testing: warning: no tests to run
+PASS
+ok  	github.com/kart-io/goagent/examples/orchestration/live/internal/livecase	0.009s [no tests to run]
+=== RUN   TestLiveLocalizeRecovery
+    main_test.go:185: 模型：minimax/MiniMax-M3.1-Flash
+    main_test.go:157: 恢复：{Result:{English: TranslatorLookups:0 StyleLookups:0 GlossaryInjected:1 NewModelCalls:0 Budget:{ReservedRequests:2 KnownUsageEntries:1 UnknownUsageEntries:1 KnownTokens:{PromptTokens:564 CompletionTokens:31 TotalTokens:595 CachedTokens:0}}} Calls:0 Err:node "localize": operation "model/turn/1" needs host attention (execution)}
+    main_test.go:158: 
+        	Error Trace:	/home/costalong/code/go/src/github.com/kart-io/goagent/examples/orchestration/live/localize/main_test.go:158
+        	            				/home/costalong/code/go/src/github.com/kart-io/goagent/examples/orchestration/live/localize/main_test.go:186
+        	Error:      	Should be empty, but was node "localize": operation "model/turn/1" needs host attention (execution)
+        	Test:       	TestLiveLocalizeRecovery
+--- FAIL: TestLiveLocalizeRecovery (1.12s)
+FAIL
+FAIL	github.com/kart-io/goagent/examples/orchestration/live/localize	1.129s
+=== RUN   TestLiveLogTriageCrashRecovery
+    main_test.go:69: 
+        	Error Trace:	/home/costalong/code/go/src/github.com/kart-io/goagent/examples/orchestration/live/log-triage/main_test.go:69
+        	            				/home/costalong/code/go/src/github.com/kart-io/goagent/examples/orchestration/live/log-triage/main_test.go:80
+        	Error:      	Not equal: 
+        	            	expected: 86
+        	            	actual  : 2
+        	Test:       	TestLiveLogTriageCrashRecovery
+        	Messages:   	MiniMax HTTP 状态 429
+--- FAIL: TestLiveLogTriageCrashRecovery (1.24s)
+FAIL
+FAIL	github.com/kart-io/goagent/examples/orchestration/live/log-triage	1.252s
+=== RUN   TestLiveParallelDiagnostics
+    main_test.go:45: minimax/MiniMax-M3.1-Flash：{Findings:map[] Decision: NewModelCalls:4 Budget:{ReservedRequests:4 KnownUsageEntries:3 UnknownUsageEntries:1 KnownTokens:{PromptTokens:828 CompletionTokens:153 TotalTokens:981 CachedTokens:0}} EventCounts:map[agent_end:3 agent_error:1 agent_start:4 branch_end:3 branch_start:3 graph_error:1 graph_start:1 model_end:3 model_error:1 model_start:4 node_end:1 node_error:1 node_start:2] Dropped:0 EventsPath:/tmp/TestLiveParallelDiagnostics1719833233/001/events.jsonl ReportPath:/tmp/TestLiveParallelDiagnostics1719833233/001/report.html}
+    main_test.go:46: 
+        	Error Trace:	/home/costalong/code/go/src/github.com/kart-io/goagent/examples/orchestration/live/parallel-diagnostics/main_test.go:46
+        	Error:      	Received unexpected error:
+        	            	node "summarize": MiniMax HTTP 状态 429
+        	Test:       	TestLiveParallelDiagnostics
+--- FAIL: TestLiveParallelDiagnostics (1.90s)
+FAIL
+FAIL	github.com/kart-io/goagent/examples/orchestration/live/parallel-diagnostics	1.908s
+=== RUN   TestLiveReviewLoopRecovery
+    main_test.go:73: 子进程应以 86 退出，实际 exit status 2
+        node "review": MiniMax HTTP 状态 429
+--- FAIL: TestLiveReviewLoopRecovery (4.90s)
+FAIL
+FAIL	github.com/kart-io/goagent/examples/orchestration/live/review-loop	4.911s
+=== RUN   TestLiveSummarize
+    main_test.go:115: minimax/MiniMax-M3.1-Flash：预览 1 段，首段 1.790384378s，总 1.790642112s
+        结论：发布将库存查询由缓存改为直连数据库，导致数据库负载激增并拖慢订单接口。
+        影响：故障持续约9分钟，约3200笔下单失败，成功率降至71%，但无数据丢失。
+        改进：发布前增加数据库直连场景的压测门禁，并配置数据库负载告警与自动回滚机制。
+--- PASS: TestLiveSummarize (1.79s)
+=== RUN   TestLiveContend
+    main_test.go:143: minimax/MiniMax-M3.1-Flash：{Succeeded:0 Rejected:1 Answers:[] Errors:[root model request budget exceeded MiniMax HTTP 状态 429 MiniMax HTTP 状态 429] NewModelCalls:2 Budget:{ReservedRequests:2 KnownUsageEntries:0 UnknownUsageEntries:2 KnownTokens:{PromptTokens:0 CompletionTokens:0 TotalTokens:0 CachedTokens:0}}}
+    main_test.go:145: 
+        	Error Trace:	/home/costalong/code/go/src/github.com/kart-io/goagent/examples/orchestration/live/stream-budget/main_test.go:145
+        	Error:      	Not equal: 
+        	            	expected: 2
+        	            	actual  : 0
+        	Test:       	TestLiveContend
+--- FAIL: TestLiveContend (0.07s)
+FAIL
+FAIL	github.com/kart-io/goagent/examples/orchestration/live/stream-budget	1.868s
+=== RUN   TestLiveTicketTriage
+=== RUN   TestLiveTicketTriage/A1001
+    main_test.go:34: minimax/MiniMax-M3.1-Flash 首次：{Ticket:A1001 Decision: Answer: NewModelCalls:2 LookupRuns:1 ChildCreated:0 ChildClose:0 Budget:{ReservedRequests:2 KnownUsageEntries:1 UnknownUsageEntries:1 KnownTokens:{PromptTokens:627 CompletionTokens:103 TotalTokens:730 CachedTokens:0}}}
+    main_test.go:35: 
+        	Error Trace:	/home/costalong/code/go/src/github.com/kart-io/goagent/examples/orchestration/live/ticket-triage/main_test.go:35
+        	Error:      	Received unexpected error:
+        	            	MiniMax HTTP 状态 429
+        	Test:       	TestLiveTicketTriage/A1001
+=== RUN   TestLiveTicketTriage/A1002
+    main_test.go:34: minimax/MiniMax-M3.1-Flash 首次：{Ticket:A1002 Decision: Answer: NewModelCalls:1 LookupRuns:0 ChildCreated:0 ChildClose:0 Budget:{ReservedRequests:1 KnownUsageEntries:0 UnknownUsageEntries:1 KnownTokens:{PromptTokens:0 CompletionTokens:0 TotalTokens:0 CachedTokens:0}}}
+    main_test.go:35: 
+        	Error Trace:	/home/costalong/code/go/src/github.com/kart-io/goagent/examples/orchestration/live/ticket-triage/main_test.go:35
+        	Error:      	Received unexpected error:
+        	            	MiniMax HTTP 状态 429
+        	Test:       	TestLiveTicketTriage/A1002
+=== RUN   TestLiveTicketTriage/A1003
+    main_test.go:34: minimax/MiniMax-M3.1-Flash 首次：{Ticket:A1003 Decision: Answer: NewModelCalls:1 LookupRuns:0 ChildCreated:0 ChildClose:0 Budget:{ReservedRequests:1 KnownUsageEntries:0 UnknownUsageEntries:1 KnownTokens:{PromptTokens:0 CompletionTokens:0 TotalTokens:0 CachedTokens:0}}}
+    main_test.go:35: 
+        	Error Trace:	/home/costalong/code/go/src/github.com/kart-io/goagent/examples/orchestration/live/ticket-triage/main_test.go:35
+        	Error:      	Received unexpected error:
+        	            	MiniMax HTTP 状态 429
+        	Test:       	TestLiveTicketTriage/A1003
+--- FAIL: TestLiveTicketTriage (2.07s)
+    --- FAIL: TestLiveTicketTriage/A1001 (1.95s)
+    --- FAIL: TestLiveTicketTriage/A1002 (0.06s)
+    --- FAIL: TestLiveTicketTriage/A1003 (0.06s)
+FAIL
+FAIL	github.com/kart-io/goagent/examples/orchestration/live/ticket-triage	2.080s
+FAIL
+exit=1
