@@ -26,7 +26,7 @@
 | 人工审批暂停 | 2/2 | 2/2 | 3/3 |
 | 本地化（崩溃 → 换术语表 → 恢复 → 回放） | 2/2 | 2/2 | 3/3 |
 
-Gemini 第 1 轮的长日志排障有 1 次失败，见下文“未解决”。其余全部通过。
+Gemini 第 1 轮的长日志排障有 1 次失败，原因是模型抄错引用键，已修复，见下文。其余全部通过。
 
 原始日志：
 
@@ -83,10 +83,19 @@ MiniMax 第 2 轮的并行诊断出现 `agent_start` 4 个、`agent_end` 3 个�
 | MiniMax 终稿丢失术语译法 | 校对 Agent 看不到术语表，润色时改写了术语 | 校对 Agent 也挂上术语表策略 | [日志](design-iteration/minimax-localize-term-rewrite.log) |
 | MiniMax 第 2 轮 8 个测试失败 | HTTP 429 限流：三个模型并行跑，且两轮间隔太短 | 单独重跑，全部通过 | [日志](design-iteration/minimax-round2-http429.log) |
 
+### 框架缺陷：模型抄错引用键会中止 Agent（已修复）
+
+Gemini 第 1 轮长日志排障失败 1 次（[日志](live-gemini.log)），报错 `unknown evidence reference`。
+
+- 原因：Gemini 调用 `read_context_result` 时把 64 位十六进制引用键的最后一位抄错（`…32c9` 写成 `…32c4`）。错误键已经出现在 SDK 返回的原始参数里，不是框架改写的。
+- 失败位置在恢复进程，不在第一个进程。案例的崩溃点设在读取工具执行之前，错误键当时没有被校验；恢复进程回放已保存的模型回合，重新执行读取时才查不到。早先版本的本报告写成"第一个进程、崩溃注入之前"，是错误的。
+- 复现：加探针用真实 Gemini 跑 12 次，复现 1 次，约每 45 次抄键错 1 次；DeepSeek、MiniMax 未出现。
+- 修复（`builder/contextpolicy/offload.go`）：模型看到的引用改为按卸载顺序编号的短别名 `r1`、`r2`…；键不存在时不再报错中止，而是把错误和合法键列表作为工具结果交还模型。引用文本变化使旧日志无法复用，默认版本升为 `v2`。
+- 回归测试：`TestOffloadAliasStableAndMissRecoverable`、`TestPolicyReadWrongKeyIsReturnedToModel`。修复后全量测试带 `-race` 通过；长日志排障真实模型复跑 Gemini 3/3、DeepSeek 2/2、MiniMax 2/2（[Gemini](alias-fix-gemini.log)、[DeepSeek](alias-fix-deepseek.log)、[MiniMax](alias-fix-minimax.log)）。
+
 ## 未解决
 
-- **Gemini 长日志排障偶发失败（1/3）**：第一个进程中，`read_context_result` 返回 `unknown evidence reference`，Agent 随即中止，发生在崩溃注入之前。之后加临时探针复跑 5 次、正式第 2、3 轮都没有复现，原因**未能确认**。推测是模型传错了很长的引用键，但没有证据。
-- **工具报错会中止整个 Agent**：框架不会把错误作为工具结果交还给模型让它重试。对深度超限、Dispatcher 重入这类宿主配置错误，这是正确的；但对模型传错参数这类可恢复错误，可能过于严格。是否区分两类错误是设计取舍，本轮没有改动。
+- **工具报错会中止整个 Agent**：框架不会把错误作为工具结果交还给模型让它重试。对深度超限、Dispatcher 重入这类宿主配置错误，这是正确的；但对模型传错参数这类可恢复错误，可能过于严格。上面的引用键问题只在读取工具内单独处理；是否在 Dispatcher 层通用地区分两类错误，是设计取舍，本轮没有改动。
 
 ## 验证了什么
 

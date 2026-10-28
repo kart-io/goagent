@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"math"
 	"slices"
 	"strconv"
@@ -47,7 +48,7 @@ func NewOffload(cfg OffloadConfig) (*Offload, error) {
 		cfg.ID = "offload"
 	}
 	if cfg.Version == "" {
-		cfg.Version = "v1"
+		cfg.Version = "v2"
 	}
 	if cfg.Namespace == "" {
 		cfg.Namespace = "results"
@@ -121,11 +122,13 @@ func (p *Offload) BeforeTurn(ctx context.Context, turn Turn) (Turn, error) {
 		if err := p.config.Store.PutIfAbsent(ctx, ref, []byte(m.Content)); err != nil {
 			return turn, err
 		}
-		b, err := json.Marshal(map[string]any{"context_result": ref.Key, "runes": utf8.RuneCountInString(m.Content), "read_tool": ReadToolName})
+		// 模型抄写 64 位哈希会偶发改错字符；短别名只在本实例内解析，按处理顺序确定，恢复时重建结果一致。
+		alias := "r" + strconv.Itoa(len(p.refs)+1)
+		b, err := json.Marshal(map[string]any{"context_result": alias, "runes": utf8.RuneCountInString(m.Content), "read_tool": ReadToolName})
 		if err != nil {
 			return turn, err
 		}
-		p.refs[ref.Key] = ref
+		p.refs[alias] = ref
 		p.original[i] = ref
 		messages[i].Content = string(b)
 		p.offloaded++
@@ -169,9 +172,15 @@ func (p *Offload) Invoke(ctx context.Context, input *interfaces.ToolInput) (*int
 	key, _ := input.Args["key"].(string)
 	p.mu.Lock()
 	ref, ok := p.refs[key]
+	known := slices.Sorted(maps.Keys(p.refs))
 	p.mu.Unlock()
 	if !ok {
-		return nil, fmt.Errorf("unknown evidence reference")
+		// 以成功结果返回，让模型改正参数；Dispatcher 会把 Success=false 当作致命错误中止执行。
+		b, err := json.Marshal(map[string]any{"error": "unknown context_result key", "valid_keys": known})
+		if err != nil {
+			return nil, err
+		}
+		return &interfaces.ToolOutput{Success: true, Result: string(b)}, nil
 	}
 	data, err := p.config.Store.Get(ctx, ref)
 	if err != nil {
