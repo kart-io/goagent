@@ -164,8 +164,14 @@ func NewInterruptManager(checkpointer checkpoint.Checkpointer) *InterruptManager
 // 不再登记、不调用 onCreated。超时或 ctx 结束时若响应已被 RespondToInterrupt 接受，以该响应为准。onCreated
 // 执行期间到达的响应等它执行完后才调用 onResolved 并返回。
 // ID 与尚未清理完的中断（包括已被响应或取消、等待方尚未退出的）重复时立即返回 CodeAlreadyExists 错误，
-// 不保存快照、不登记、不调用 onCreated；已结束并清理的中断的 ID 可以复用。
+// 不保存快照、不登记、不调用 onCreated；已结束并清理的中断的 ID 可以复用。interrupt 为 nil 时返回 CodeInvalidInput 错误。
 func (m *InterruptManager) CreateInterrupt(ctx context.Context, interrupt *Interrupt) (*Interrupt, *InterruptResponse, error) {
+	if interrupt == nil {
+		return nil, nil, agentErrors.New(agentErrors.CodeInvalidInput, "中断不能为 nil").
+			WithComponent("interrupt_manager").
+			WithOperation("create_interrupt")
+	}
+
 	// Create a copy to avoid concurrent access issues
 	interruptCopy := *interrupt
 
@@ -422,14 +428,17 @@ func (m *InterruptManager) ListPendingInterrupts() []*Interrupt {
 // CancelInterrupt cancels a pending interrupt.
 //
 // 等待中的 CreateInterrupt 返回 CodeContextCanceled；正在保存状态快照的，保存完成后不再登记并返回同样的错误。
-// 已被响应的中断不受影响（等待方仍拿到该响应），但之后对外不可见。ID 不存在时什么也不做。
+// 已被响应的中断不受影响（等待方仍拿到该响应），但之后对外不可见。ID 不存在（或等待方已退出）时返回 not found 错误。
 func (m *InterruptManager) CancelInterrupt(interruptID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	entry, ok := m.entries[interruptID]
 	if !ok {
-		return nil
+		return agentErrors.New(agentErrors.CodeAgentNotFound, "interrupt not found").
+			WithComponent("interrupt_manager").
+			WithOperation("cancel_interrupt").
+			WithContext("interrupt_id", interruptID)
 	}
 	if !entry.claimed() {
 		close(entry.ch)
