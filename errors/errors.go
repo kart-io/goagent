@@ -3,12 +3,15 @@ package errors
 import (
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/url"
 	"runtime"
 	"sort"
 	"strings"
 	"unicode"
+
+	"go.uber.org/zap/zapcore"
 )
 
 // ErrorCode defines different error categories for agent operations
@@ -185,11 +188,7 @@ func (e *AgentError) LogValue() slog.Value {
 	attrs = append(attrs, slog.String("message", e.Message))
 
 	if len(e.Context) > 0 {
-		keys := make([]string, 0, len(e.Context))
-		for k := range e.Context {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
+		keys := e.sortedContextKeys()
 		ctxAttrs := make([]any, 0, len(keys))
 		for _, k := range keys {
 			ctxAttrs = append(ctxAttrs, slog.Any(k, e.Context[k]))
@@ -202,6 +201,70 @@ func (e *AgentError) LogValue() slog.Value {
 	}
 
 	return slog.GroupValue(attrs...)
+}
+
+// MarshalLogObject 实现 zapcore.ObjectMarshaler，输出与 LogValue 相同的字段（含 Context），
+// 使 zap 及基于 zap 的日志引擎记录 *AgentError 时不只得到 Error() 文本。
+func (e *AgentError) MarshalLogObject(enc zapcore.ObjectEncoder) error {
+	enc.AddString("code", string(e.Code))
+	if e.Component != "" {
+		enc.AddString("component", e.Component)
+	}
+	if e.Operation != "" {
+		enc.AddString("operation", e.Operation)
+	}
+	enc.AddString("message", e.Message)
+
+	if len(e.Context) > 0 {
+		keys := e.sortedContextKeys()
+		if err := enc.AddObject("context", zapcore.ObjectMarshalerFunc(func(ctxEnc zapcore.ObjectEncoder) error {
+			for _, k := range keys {
+				if err := ctxEnc.AddReflected(k, e.Context[k]); err != nil {
+					return err
+				}
+			}
+			return nil
+		})); err != nil {
+			return err
+		}
+	}
+
+	if e.Cause != nil {
+		enc.AddString("cause", e.Cause.Error())
+	}
+	return nil
+}
+
+// Format 实现 fmt.Formatter：%v、%s 与 Error() 相同，%q 为其带引号形式；
+// %+v 在 Error() 之后附带按键排序的 Context，仅用于本地调试与日志，不应交给模型。
+func (e *AgentError) Format(s fmt.State, verb rune) {
+	switch verb {
+	case 'v':
+		_, _ = io.WriteString(s, e.Error())
+		if s.Flag('+') && len(e.Context) > 0 {
+			keys := e.sortedContextKeys()
+			pairs := make([]string, 0, len(keys))
+			for _, k := range keys {
+				pairs = append(pairs, fmt.Sprintf("%s=%v", k, e.Context[k]))
+			}
+			_, _ = io.WriteString(s, " context: "+strings.Join(pairs, ", "))
+		}
+	case 's':
+		_, _ = io.WriteString(s, e.Error())
+	case 'q':
+		_, _ = fmt.Fprintf(s, "%q", e.Error())
+	default:
+		_, _ = fmt.Fprintf(s, "%%!%c(*errors.AgentError=%s)", verb, e.Error())
+	}
+}
+
+func (e *AgentError) sortedContextKeys() []string {
+	keys := make([]string, 0, len(e.Context))
+	for k := range e.Context {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 // RedactURL 去掉 URL 中的 userinfo、query 与 fragment，用于把地址写入错误 Context 之前脱敏。
