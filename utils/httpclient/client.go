@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -133,8 +134,9 @@ func NewClient(config *Config) *Client {
 	}
 }
 
-// restyLogger 与 resty 默认 logger 格式一致，但对参数中的错误做 URL 脱敏：
-// resty 重试时会以 Warnf("%v, Attempt %v", err, ...) 打印原始 *url.Error，其中 query 可能含 API key。
+// restyLogger 与 resty 默认 logger 格式一致，但对参数中的错误和文本做 URL 脱敏：
+// resty 重试时会以 Warnf("%v, Attempt %v", err, ...) 打印原始 *url.Error，Debug 模式下以 Debugf("%s", log)
+// 打印含 query 的请求 URI，其中都可能含 API key。
 type restyLogger struct{ l *log.Logger }
 
 func newRestyLogger(w io.Writer) resty.Logger {
@@ -147,12 +149,18 @@ func (r restyLogger) Debugf(format string, v ...interface{}) { r.output("DEBUG R
 
 func (r restyLogger) output(format string, v []interface{}) {
 	for i, arg := range v {
-		if err, ok := arg.(error); ok {
-			v[i] = agentErrors.RedactURLError(err)
+		switch a := arg.(type) {
+		case error:
+			v[i] = agentErrors.RedactURLError(a)
+		case string:
+			v[i] = urlToken.ReplaceAllStringFunc(a, agentErrors.RedactURL)
 		}
 	}
 	r.l.Printf(format, v...)
 }
+
+// urlToken 匹配文本中的绝对 URL 与带 query 或 fragment 的请求 URI（如 resty 调试日志的 "GET  /v1?key=x  HTTP/1.1"）。
+var urlToken = regexp.MustCompile(`[A-Za-z][A-Za-z0-9+.-]*://\S+|/\S*[?#]\S*`)
 
 // R 返回一个新的请求
 //
