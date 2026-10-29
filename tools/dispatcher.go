@@ -305,6 +305,9 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 		if result == nil {
 			return nil, fmt.Errorf("tool %q returned nil output", req.Name)
 		}
+		if _, rejected := RejectedResult(result); rejected {
+			return result, nil
+		}
 		if !result.Success || result.Error != "" {
 			// 只透传直接注册的内层 Dispatcher 工具交还的参数错误结果；其他工具的同形状结果按失败处理。
 			message, isArg := argumentResultMessage(result)
@@ -341,6 +344,21 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 		if entry.policy != nil {
 			policy = *entry.policy
 		}
+		if r, ok := entry.tool.(ReconcilableTool); ok && argResult == nil {
+			policy.Reconcile = func(callCtx context.Context) (json.RawMessage, bool, error) {
+				lookup := input
+				lookup.Context = callCtx
+				result, found, e := r.Reconcile(callCtx, &lookup)
+				if e != nil || !found {
+					return nil, false, e
+				}
+				if _, rejected := RejectedResult(result); result == nil || result.Error != "" || (!result.Success && !rejected) {
+					return nil, false, fmt.Errorf("tool %q reconciled an unsuccessful result", req.Name)
+				}
+				data, e := json.Marshal(result)
+				return data, e == nil, e
+			}
+		}
 		record, e := durable.Do(ctx, "tool/"+input.CallID, intent, policy, func(callCtx context.Context) (json.RawMessage, error) {
 			result, invokeErr := invoke(callCtx)
 			if invokeErr != nil {
@@ -355,7 +373,7 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 		decoder := json.NewDecoder(bytes.NewReader(record.Value))
 		decoder.UseNumber()
 		err = decoder.Decode(&out)
-		if err == nil && out != nil && !out.Success && !recoverArgs {
+		if _, rejected := RejectedResult(out); err == nil && out != nil && !out.Success && !rejected && !recoverArgs {
 			err = fmt.Errorf("tool %q journaled an argument error result, but argument recovery is not enabled on this path", req.Name)
 		}
 		replayed = record.Replayed

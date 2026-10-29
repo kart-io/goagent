@@ -248,9 +248,9 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 			if output == nil {
 				return nil, fmt.Errorf("tool returned nil output")
 			}
-			// Dispatcher 交还的参数错误按普通工具结果交给模型改正，其他失败不能成为答案。
+			// 参数错误与业务拒绝按普通工具结果交给模型，其他失败不能成为答案。
 			if direct && !output.Success {
-				if !isArgumentErrorResult(output) {
+				if !isArgumentErrorResult(output) && !isRejectedResult(output) {
 					return nil, fmt.Errorf("直接返回工具 %s 未成功完成", call.Name)
 				}
 			}
@@ -370,6 +370,11 @@ func invokeConcurrently(ctx context.Context, calls []ToolCall, limit int, invoke
 // isArgumentErrorResult 位于包级，避免被循环内的 tools 变量遮蔽。
 func isArgumentErrorResult(out *interfaces.ToolOutput) bool {
 	_, ok := tools.ArgumentErrorResult(out)
+	return ok
+}
+
+func isRejectedResult(out *interfaces.ToolOutput) bool {
+	_, ok := tools.RejectedResult(out)
 	return ok
 }
 
