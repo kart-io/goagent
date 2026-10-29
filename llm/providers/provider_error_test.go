@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -33,6 +34,9 @@ func TestOpenAICompatibleStreamsExposeProviderError(t *testing.T) {
 		}{
 			{429, "2", 2 * time.Second, true},
 			{429, "", 0, true},
+			{429, "soon", 0, true},
+			{429, "-5", 0, true},
+			{429, "99999999999999999", math.MaxInt64 / time.Second * time.Second, true},
 			{503, "1", time.Second, true},
 			{400, "", 0, false},
 		} {
