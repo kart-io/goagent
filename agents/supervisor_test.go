@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/mock"
 
 	"github.com/kart-io/goagent/core"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/constants"
 	"github.com/kart-io/goagent/tools"
@@ -893,6 +894,24 @@ func TestRetryableError(t *testing.T) {
 	t.Run("nil error", func(t *testing.T) {
 		assert.False(t, supervisor.isRetryableError(nil))
 	})
+}
+
+// RetryableErrors 按 Error() 子串匹配：AgentError 的错误码（含被 %w 包装、作为 cause 的内层错误码）与消息都在文本中，
+// Context 不在文本中，按 Context 值配置的条目不会命中。
+func TestRetryableErrorMatchesAgentErrorCode(t *testing.T) {
+	supervisor := NewSupervisorAgent(&MockLLMClient{}, &SupervisorConfig{
+		RetryPolicy: &tools.RetryPolicy{
+			RetryableErrors: []string{string(agentErrors.CodeLLMRateLimit), "upstream busy"},
+		},
+	})
+	rateLimited := agentErrors.New(agentErrors.CodeLLMRateLimit, "rate limited").WithContext("endpoint", "api-a")
+
+	assert.True(t, supervisor.isRetryableError(rateLimited), "按错误码匹配")
+	assert.True(t, supervisor.isRetryableError(fmt.Errorf("sub agent: %w", rateLimited)), "包装后仍按错误码匹配")
+	assert.True(t, supervisor.isRetryableError(agentErrors.Wrap(rateLimited, agentErrors.CodeAgentExecution, "failed")), "内层错误码作为 cause 匹配")
+	assert.True(t, supervisor.isRetryableError(agentErrors.New(agentErrors.CodeAgentExecution, "upstream busy")), "按消息子串匹配")
+	assert.False(t, supervisor.isRetryableError(agentErrors.New(agentErrors.CodeAgentExecution, "failed").WithContext("reason", "upstream busy")), "Context 值不参与匹配")
+	assert.False(t, supervisor.isRetryableError(agentErrors.New(agentErrors.CodeLLMRequest, "bad request")))
 }
 
 // Test concurrent execution with race detection
