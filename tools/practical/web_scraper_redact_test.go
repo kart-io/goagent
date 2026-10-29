@@ -52,3 +52,29 @@ func TestWebScraperTool_ResultURLRedacted(t *testing.T) {
 		})
 	}
 }
+
+// TestWebScraperTool_ResolvedLinksDropCallerCredentials 相对链接解析后不得继承请求 URL 的 userinfo 与 query
+func TestWebScraperTool_ResolvedLinksDropCallerCredentials(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = w.Write([]byte(`<html><body>
+<a href="/next?page=2">n</a><a href="#top">t</a><a href="https://other.example/x">o</a>
+<img src="img/a.png"></body></html>`))
+	}))
+	defer server.Close()
+
+	host := strings.TrimPrefix(server.URL, "http://")
+	rawURL := "http://user:pass@" + host + "/dir/page?token=secret"
+	output, err := NewWebScraperTool().Execute(context.Background(), &interfaces.ToolInput{
+		Args: map[string]interface{}{"url": rawURL, "extract_links": true, "extract_images": true},
+	})
+	require.NoError(t, err)
+	result := output.Result.(map[string]interface{})
+
+	assert.Equal(t, []string{
+		"http://" + host + "/next?page=2",
+		"http://" + host + "/dir/page#top",
+		"https://other.example/x",
+	}, result["links"])
+	assert.Equal(t, []string{"http://" + host + "/dir/img/a.png"}, result["images"])
+}

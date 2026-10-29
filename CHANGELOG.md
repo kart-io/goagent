@@ -104,6 +104,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `api_caller.ExecuteWithRuntime` 从 runtime state（键 `api_key_<url>`）读取的 api key 真正用于请求，此前写在重新解析出的参数副本上、`Execute` 又解析原始参数，注入从不生效；`credentials` 缺省时不再因写 nil map 而 panic。
 - `executor.AgentExecutor` 的 `Execute` 与 `RunGenerator` 经 `core.CallSafely` 调用 `Memory.SaveContext`：SaveContext panic 或返回 `*errors.PanicError` 时本次执行失败，`Execute` 返回 Status 为 `failed` 的输出与该错误，`RunGenerator` 在成功输出之后再产出一条 `failed` 输出与该错误，此前 panic 直接崩溃调用方、PanicError 被当作普通错误吞掉；普通错误仍尽力而为、不影响结果。
 - `tools/practical.WebScraperTool` 成功与失败结果中的 `url`，以及 `document.WebLoader` 回调的 `url`、`document.PDFLoader` 远程来源回调的 `source`，改为经 `errors.RedactURL` 脱敏，此前原样带出 userinfo 与 query 凭据；本地文件路径与文档 `Metadata["source"]`（数据）保持原值。
+- `tools/practical.WebScraperTool` 以请求 URL 解析页面相对链接与图片时先去掉请求的 userinfo，只含 fragment 的自引用不再继承请求 query；此前 `links`/`images` 会带出 `user:pass@` 与 query 中的令牌。页面中的绝对链接保持原样。
 ### Deprecated
 
 - `interfaces.Agent/Runnable` 为旧消息协议，新增编排统一使用 `core.Runnable[I,O]`；现有 API 保留迁移路径。

@@ -367,11 +367,7 @@ func (t *WebScraperTool) extractLinks(doc *goquery.Document, selector string, ba
 		if exists {
 			// Resolve relative URLs
 			if !strings.HasPrefix(href, "http") && baseURL != "" {
-				if base, err := url.Parse(baseURL); err == nil {
-					if resolved, err := base.Parse(href); err == nil {
-						href = resolved.String()
-					}
-				}
+				href = resolveAgainst(baseURL, href)
 			}
 
 			if !seen[href] {
@@ -382,6 +378,24 @@ func (t *WebScraperTool) extractLinks(doc *goquery.Document, selector string, ba
 	})
 
 	return links
+}
+
+// resolveAgainst 以请求 URL 解析页面中的相对引用。请求 URL 的 userinfo 与 query 属于调用方凭据而非页面数据：
+// 解析前去掉 userinfo；只含 fragment 的自引用会继承请求 query，也一并去掉。页面中的绝对链接不经此处，保持原样。
+func resolveAgainst(baseURL, ref string) string {
+	base, err := url.Parse(baseURL)
+	if err != nil {
+		return ref
+	}
+	base.User = nil
+	resolved, err := base.Parse(ref)
+	if err != nil {
+		return ref
+	}
+	if r, err := url.Parse(ref); err == nil && r.Path == "" && r.RawQuery == "" && r.Opaque == "" {
+		resolved.RawQuery = ""
+	}
+	return resolved.String()
 }
 
 func (t *WebScraperTool) extractImages(doc *goquery.Document, selector string, baseURL string) []string {
@@ -397,11 +411,7 @@ func (t *WebScraperTool) extractImages(doc *goquery.Document, selector string, b
 		if exists {
 			// Resolve relative URLs
 			if !strings.HasPrefix(src, "http") && baseURL != "" {
-				if base, err := url.Parse(baseURL); err == nil {
-					if resolved, err := base.Parse(src); err == nil {
-						src = resolved.String()
-					}
-				}
+				src = resolveAgainst(baseURL, src)
 			}
 
 			if !seen[src] {
