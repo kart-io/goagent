@@ -72,6 +72,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ConfigureForRAG` no longer caches answers implicitly or rewrites the question as context. Applications should configure caching explicitly when evidence freshness and session isolation are accounted for.
 - ReAct `Stream` now emits intermediate reasoning/tool snapshots and one terminal chunk. `Invoke`, `InvokeFast`, `Stream`, and `RunGenerator` share the execution loop; consumers stopping early must cancel their context.
 
+- 推理 Agent 的工具回调 panic、或工具返回 `*errors.PanicError` 时中止本次执行并以失败结束，不再写入 observation 继续调用模型（ReAct、CoT、ToT、MetaCoT）；各推理 Agent 的 `Stream` 与 GoT/SoT 并行 worker 在 goroutine 边界恢复宿主 panic 并转为 `*errors.PanicError`，不再使进程退出。
 ### Deprecated
 
 - `interfaces.Agent/Runnable` 为旧消息协议，新增编排统一使用 `core.Runnable[I,O]`；现有 API 保留迁移路径。

@@ -378,8 +378,11 @@ func (s *SoTAgent) elaborateSkeletonParallel(ctx context.Context, skeleton []*Sk
 				elaborateCtx, cancel := context.WithTimeout(ctx, s.config.ElaborationTimeout)
 				defer cancel()
 
-				// Elaborate the point
-				err := s.elaboratePoint(elaborateCtx, p, skeleton, input)
+				// Elaborate the point；LLM panic 转为 worker 错误，使本次执行以失败结束
+				err := func() (err error) {
+					defer agentcore.RecoverPanic(elaborateCtx, "sot_agent", "elaborate_point", &err)
+					return s.elaboratePoint(elaborateCtx, p, skeleton, input)
+				}()
 				if err != nil {
 					errors <- agentErrors.Wrap(err, agentErrors.CodeAgentExecution, "failed to elaborate point").
 						WithComponent("sot_agent").
@@ -745,7 +748,13 @@ func (s *SoTAgent) Stream(ctx context.Context, input *agentcore.AgentInput) (<-c
 	go func() {
 		defer close(outChan)
 
-		output, err := s.Invoke(ctx, input)
+		var output *agentcore.AgentOutput
+		err := func() (err error) {
+			// 宿主代码在本 goroutine 中 panic 时转为流错误，避免进程退出
+			defer agentcore.RecoverPanic(ctx, "sot_agent", "stream", &err)
+			output, err = s.Invoke(ctx, input)
+			return err
+		}()
 		outChan <- agentcore.StreamChunk[*agentcore.AgentOutput]{
 			Data:  output,
 			Error: err,

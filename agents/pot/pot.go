@@ -623,7 +623,13 @@ func (p *PoTAgent) Stream(ctx context.Context, input *agentcore.AgentInput) (<-c
 	go func() {
 		defer close(outChan)
 
-		output, err := p.Invoke(ctx, input)
+		var output *agentcore.AgentOutput
+		err := func() (err error) {
+			// 宿主代码在本 goroutine 中 panic 时转为流错误，避免进程退出
+			defer agentcore.RecoverPanic(ctx, "pot_agent", "stream", &err)
+			output, err = p.Invoke(ctx, input)
+			return err
+		}()
 		outChan <- agentcore.StreamChunk[*agentcore.AgentOutput]{
 			Data:  output,
 			Error: err,
