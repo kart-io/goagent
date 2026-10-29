@@ -103,14 +103,9 @@ type InterruptResponse struct {
 
 // InterruptManager manages interrupts and their lifecycle.
 type InterruptManager struct {
-	interrupts map[string]*Interrupt
-	responses  map[string]*InterruptResponse
-	channels   map[string]chan *InterruptResponse
-	// creating 记录 onCreated 钩子尚未执行完的中断，期间到达的响应暂存其中，由 CreateInterrupt 在钩子完成后处理
-	creating map[string]*createGate
-	// reserved 记录已通过重复检查、正在保存状态快照尚未登记的 ID
-	reserved map[string]struct{}
-	mu       sync.RWMutex
+	// entries 以 ID 为键，记录每次 CreateInterrupt 从占用 ID 到等待方退出的全部状态；条目删除前该 ID 不可复用
+	entries map[string]*interruptEntry
+	mu      sync.RWMutex
 
 	// Checkpointer for persisting interrupted state
 	checkpointer checkpoint.Checkpointer
@@ -120,19 +115,43 @@ type InterruptManager struct {
 	onInterruptResolved func(*Interrupt, *InterruptResponse)
 }
 
-// createGate 暂存 onCreated 执行期间到达的响应，受 InterruptManager.mu 保护。
-type createGate struct {
+// interruptPhase 是一次 CreateInterrupt 在登记流程中所处的阶段。
+type interruptPhase int
+
+const (
+	// phaseSaving 已占用 ID、正在保存状态快照，对外不可见
+	phaseSaving interruptPhase = iota
+	// phaseCreating 已登记、onCreated 钩子尚未执行完，期间到达的响应由 CreateInterrupt 在钩子完成后处理
+	phaseCreating
+	// phaseWaiting 等待响应
+	phaseWaiting
+)
+
+// interruptEntry 是一次 CreateInterrupt 的状态，字段受 InterruptManager.mu 保护。
+// response 非 nil 或 canceled 为 true 即 ch 已被认领：只有认领者向 ch 发送响应或关闭它。
+type interruptEntry struct {
+	interrupt *Interrupt
+	phase     interruptPhase
+	// ch 带 1 个缓冲，认领者写入后不会阻塞
+	ch chan *InterruptResponse
+	// response 是已被 RespondToInterrupt 接受的响应
 	response *InterruptResponse
+	// canceled 表示已被 CancelInterrupt 取消，对外不可见；在 phaseSaving 时取消由 CreateInterrupt 在保存完成后处理
+	canceled bool
+}
+
+func (e *interruptEntry) visible() bool {
+	return e.phase != phaseSaving && !e.canceled
+}
+
+func (e *interruptEntry) claimed() bool {
+	return e.response != nil || e.canceled
 }
 
 // NewInterruptManager creates a new interrupt manager.
 func NewInterruptManager(checkpointer checkpoint.Checkpointer) *InterruptManager {
 	return &InterruptManager{
-		interrupts:   make(map[string]*Interrupt),
-		responses:    make(map[string]*InterruptResponse),
-		channels:     make(map[string]chan *InterruptResponse),
-		creating:     make(map[string]*createGate),
-		reserved:     make(map[string]struct{}),
+		entries:      make(map[string]*interruptEntry),
 		checkpointer: checkpointer,
 	}
 }
@@ -141,10 +160,11 @@ func NewInterruptManager(checkpointer checkpoint.Checkpointer) *InterruptManager
 // Returns the created interrupt (with ID assigned) and the response.
 //
 // 返回时（收到响应、被 CancelInterrupt 取消、超时或 ctx 结束）都会清理该中断的内部状态，之后的 RespondToInterrupt
-// 返回 not found；被取消时返回 CodeContextCanceled 错误，响应为 nil 时错误必不为 nil。超时或 ctx 结束时若响应
-// 已被 RespondToInterrupt 接受，以该响应为准。onCreated 执行期间到达的响应等它执行完后才调用 onResolved 并返回。
-// ID 与尚未清理完的中断重复时立即返回 CodeAlreadyExists 错误，不保存快照、不登记、不调用 onCreated；
-// 已结束并清理的中断的 ID 可以复用。
+// 返回 not found；被取消时返回 CodeContextCanceled 错误，响应为 nil 时错误必不为 nil。保存状态快照期间被取消时
+// 不再登记、不调用 onCreated。超时或 ctx 结束时若响应已被 RespondToInterrupt 接受，以该响应为准。onCreated
+// 执行期间到达的响应等它执行完后才调用 onResolved 并返回。
+// ID 与尚未清理完的中断（包括已被响应或取消、等待方尚未退出的）重复时立即返回 CodeAlreadyExists 错误，
+// 不保存快照、不登记、不调用 onCreated；已结束并清理的中断的 ID 可以复用。
 func (m *InterruptManager) CreateInterrupt(ctx context.Context, interrupt *Interrupt) (*Interrupt, *InterruptResponse, error) {
 	// Create a copy to avoid concurrent access issues
 	interruptCopy := *interrupt
@@ -158,16 +178,10 @@ func (m *InterruptManager) CreateInterrupt(ctx context.Context, interrupt *Inter
 	}
 
 	// 先占用 ID 再保存快照：重复的 ID 不得覆盖仍在等待的中断的快照
-	m.mu.Lock()
-	if m.idInUseLocked(interruptCopy.ID) {
-		m.mu.Unlock()
-		return &interruptCopy, nil, agentErrors.New(agentErrors.CodeAlreadyExists, "中断 ID 已被仍在等待的中断占用").
-			WithComponent("interrupt_manager").
-			WithOperation("create_interrupt").
-			WithContext("interrupt_id", interruptCopy.ID)
+	entry, err := m.reserve(&interruptCopy)
+	if err != nil {
+		return &interruptCopy, nil, err
 	}
-	m.reserved[interruptCopy.ID] = struct{}{}
-	m.mu.Unlock()
 
 	// 先保存状态再登记：中断一旦可见就可能被响应，快照必须已经写入
 	// 保存失败照旧忽略；checkpointer panic 时释放占用的 ID 并返回错误，否则该 ID 会永久被判为占用
@@ -175,26 +189,16 @@ func (m *InterruptManager) CreateInterrupt(ctx context.Context, interrupt *Inter
 		if panicked, err := CallSafely(ctx, "interrupt_manager", "save_state", func() error {
 			return m.checkpointer.Save(ctx, fmt.Sprintf("interrupt_%s", interruptCopy.ID), interruptCopy.State)
 		}); panicked {
-			m.mu.Lock()
-			delete(m.reserved, interruptCopy.ID)
-			m.mu.Unlock()
+			m.remove(entry)
 			return &interruptCopy, nil, err
 		}
 	}
 
-	// Store interrupt under lock
-	m.mu.Lock()
-	delete(m.reserved, interruptCopy.ID)
-	m.interrupts[interruptCopy.ID] = &interruptCopy
-	responseChan := make(chan *InterruptResponse, 1)
-	m.channels[interruptCopy.ID] = responseChan
-	onCreated := m.onInterruptCreated
-	gate := &createGate{}
-	if onCreated != nil {
-		m.creating[interruptCopy.ID] = gate
+	onCreated, canceled := m.register(entry)
+	if canceled {
+		return &interruptCopy, nil, interruptCanceledError(interruptCopy.ID)
 	}
-	m.mu.Unlock()
-	defer m.removeInterrupt(&interruptCopy, responseChan)
+	defer m.remove(entry)
 
 	// 钩子在锁外调用，可以调用 manager 的方法；panic 时撤销该中断并返回 PanicError
 	if onCreated != nil {
@@ -202,17 +206,7 @@ func (m *InterruptManager) CreateInterrupt(ctx context.Context, interrupt *Inter
 			onCreated(&interruptCopy)
 			return nil
 		})
-		m.mu.Lock()
-		if m.creating[interruptCopy.ID] == gate {
-			delete(m.creating, interruptCopy.ID)
-		}
-		deferred := gate.response
-		onResolved := m.onInterruptResolved
-		if panicked {
-			// 与清除 creating 在同一临界区内撤销，响应方不会在撤销前把它当作普通中断处理；暂存的响应随之丢弃
-			m.removeInterruptLocked(&interruptCopy, responseChan)
-		}
-		m.mu.Unlock()
+		deferred, onResolved := m.finishCreating(entry, panicked)
 		if panicked {
 			return &interruptCopy, nil, err
 		}
@@ -226,7 +220,7 @@ func (m *InterruptManager) CreateInterrupt(ctx context.Context, interrupt *Inter
 	// Wait for response or context cancellation
 	var exitErr error
 	select {
-	case response, ok := <-responseChan:
+	case response, ok := <-entry.ch:
 		if !ok {
 			return &interruptCopy, nil, interruptCanceledError(interruptCopy.ID)
 		}
@@ -240,50 +234,84 @@ func (m *InterruptManager) CreateInterrupt(ctx context.Context, interrupt *Inter
 			WithContext("interrupt_id", interruptCopy.ID)
 	}
 
-	// 通道仍登记说明无人认领：撤销后返回，之后的响应返回 not found。已被 RespondToInterrupt/CancelInterrupt
-	// 认领则它们必定随后发送响应或关闭通道，以其结果为准，避免响应方成功而等待方报错
-	m.mu.Lock()
-	unclaimed := m.channels[interruptCopy.ID] == responseChan
-	if unclaimed {
-		m.removeInterruptLocked(&interruptCopy, responseChan)
-	}
-	m.mu.Unlock()
-	if unclaimed {
+	// 无人认领则撤销后返回，之后的响应返回 not found。已被 RespondToInterrupt/CancelInterrupt 认领则它们必定
+	// 随后发送响应或关闭通道，以其结果为准，避免响应方成功而等待方报错
+	if m.removeIfUnclaimed(entry) {
 		return &interruptCopy, nil, exitErr
 	}
-	if response, ok := <-responseChan; ok {
+	if response, ok := <-entry.ch; ok {
 		return &interruptCopy, response, nil
 	}
 	return &interruptCopy, nil, interruptCanceledError(interruptCopy.ID)
 }
 
-// idInUseLocked 判断 ID 是否仍被某次 CreateInterrupt 占用（包括已被响应或取消、等待方尚未退出清理的）；调用方须持有 m.mu。
-func (m *InterruptManager) idInUseLocked(id string) bool {
-	_, reserved := m.reserved[id]
-	_, registered := m.interrupts[id]
-	_, waiting := m.channels[id]
-	_, creating := m.creating[id]
-	_, responded := m.responses[id]
-	return reserved || registered || waiting || creating || responded
-}
-
-// removeInterrupt 在等待方退出时清理该中断的全部状态，可重复调用。
-func (m *InterruptManager) removeInterrupt(interrupt *Interrupt, ch chan *InterruptResponse) {
+// reserve 为 interrupt 占用 ID，ID 仍被未清理完的中断占用时返回 CodeAlreadyExists。
+func (m *InterruptManager) reserve(interrupt *Interrupt) (*interruptEntry, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.removeInterruptLocked(interrupt, ch)
+	if _, inUse := m.entries[interrupt.ID]; inUse {
+		return nil, agentErrors.New(agentErrors.CodeAlreadyExists, "中断 ID 已被仍在等待的中断占用").
+			WithComponent("interrupt_manager").
+			WithOperation("create_interrupt").
+			WithContext("interrupt_id", interrupt.ID)
+	}
+	entry := &interruptEntry{interrupt: interrupt, phase: phaseSaving, ch: make(chan *InterruptResponse, 1)}
+	m.entries[interrupt.ID] = entry
+	return entry, nil
 }
 
-// removeInterruptLocked 只删除仍属于该次 CreateInterrupt 的条目，同 ID 的新中断不受影响；调用方须持有 m.mu。
-// CancelInterrupt 已删除 interrupts 条目时 responses 也一并清理。
-func (m *InterruptManager) removeInterruptLocked(interrupt *Interrupt, ch chan *InterruptResponse) {
-	id := interrupt.ID
-	if m.channels[id] == ch {
-		delete(m.channels, id)
+// register 使中断对外可见并返回需要调用的 onCreated；保存快照期间已被取消时删除条目，canceled 为 true。
+func (m *InterruptManager) register(entry *interruptEntry) (onCreated func(*Interrupt), canceled bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if entry.canceled {
+		m.removeLocked(entry)
+		return nil, true
 	}
-	if cur, ok := m.interrupts[id]; !ok || cur == interrupt {
-		delete(m.interrupts, id)
-		delete(m.responses, id)
+	onCreated = m.onInterruptCreated
+	if onCreated != nil {
+		entry.phase = phaseCreating
+	} else {
+		entry.phase = phaseWaiting
+	}
+	return onCreated, false
+}
+
+// finishCreating 在 onCreated 返回后结束 phaseCreating，返回期间暂存的响应。钩子 panic 时在同一临界区内撤销该中断，
+// 响应方不会在撤销前把它当作普通中断处理；暂存的响应随之丢弃。
+func (m *InterruptManager) finishCreating(entry *interruptEntry, panicked bool) (deferred *InterruptResponse, onResolved func(*Interrupt, *InterruptResponse)) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	entry.phase = phaseWaiting
+	if panicked {
+		m.removeLocked(entry)
+		return nil, nil
+	}
+	return entry.response, m.onInterruptResolved
+}
+
+// removeIfUnclaimed 在 ch 尚未被认领时删除条目并返回 true。
+func (m *InterruptManager) removeIfUnclaimed(entry *interruptEntry) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if entry.claimed() {
+		return false
+	}
+	m.removeLocked(entry)
+	return true
+}
+
+// remove 在等待方退出时清理该中断的全部状态，可重复调用。
+func (m *InterruptManager) remove(entry *interruptEntry) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.removeLocked(entry)
+}
+
+// removeLocked 只删除仍属于该次 CreateInterrupt 的条目，同 ID 的新中断不受影响；调用方须持有 m.mu。
+func (m *InterruptManager) removeLocked(entry *interruptEntry) {
+	if m.entries[entry.interrupt.ID] == entry {
+		delete(m.entries, entry.interrupt.ID)
 	}
 }
 
@@ -309,48 +337,55 @@ func callResolvedHook(onResolved func(*Interrupt, *InterruptResponse), interrupt
 // onResolved 钩子在锁外、把响应交给等待中的 CreateInterrupt 之前执行，CreateInterrupt 返回时钩子已执行完；
 // 钩子 panic 时仍把响应交给等待方，并返回 PanicError。若该中断的 onCreated 仍在执行，响应先暂存、本方法立即返回，
 // 由 CreateInterrupt 在 onCreated 完成后调用 onResolved（其 panic 只交给全局 PanicHandler），因此在 onCreated
-// 中响应同一个中断也不会死锁。已被响应过的中断返回 CodeInvalidInput 错误，等待方已退出的返回 not found。
+// 中响应同一个中断也不会死锁。response 为 nil 或中断已被响应过时返回 CodeInvalidInput 错误，等待方已退出的返回 not found。
 func (m *InterruptManager) RespondToInterrupt(interruptID string, response *InterruptResponse) error {
-	m.mu.Lock()
-	interrupt, ok := m.interrupts[interruptID]
-	if !ok {
-		m.mu.Unlock()
-		return agentErrors.New(agentErrors.CodeAgentNotFound, "interrupt not found").
+	if response == nil {
+		return agentErrors.New(agentErrors.CodeInvalidInput, "中断响应不能为 nil").
 			WithComponent("interrupt_manager").
 			WithOperation("respond_to_interrupt").
 			WithContext("interrupt_id", interruptID)
 	}
 
-	// 取走通道即认领该中断：之后的 CancelInterrupt 不会再关闭它，等待方超时退出时也会以本响应为准
-	ch, pending := m.channels[interruptID]
-	if !pending {
-		m.mu.Unlock()
-		return agentErrors.New(agentErrors.CodeInvalidInput, "中断已被响应").
+	entry, onResolved, deliver, err := m.acceptResponse(interruptID, response)
+	if err != nil || !deliver {
+		return err
+	}
+
+	_, hookErr := callResolvedHook(onResolved, entry.interrupt, response)
+
+	// 只有认领者写入 ch，等待方已退出也不会阻塞
+	entry.ch <- response
+	close(entry.ch)
+
+	return hookErr
+}
+
+// acceptResponse 记录响应即认领该中断：之后的 CancelInterrupt 不会再关闭 ch，等待方超时退出时也会以本响应为准。
+// deliver 为 false 表示 onCreated 仍在执行，响应已暂存，由 CreateInterrupt 处理。
+func (m *InterruptManager) acceptResponse(interruptID string, response *InterruptResponse) (entry *interruptEntry, onResolved func(*Interrupt, *InterruptResponse), deliver bool, err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	entry, ok := m.entries[interruptID]
+	if !ok || !entry.visible() {
+		return nil, nil, false, agentErrors.New(agentErrors.CodeAgentNotFound, "interrupt not found").
 			WithComponent("interrupt_manager").
 			WithOperation("respond_to_interrupt").
 			WithContext("interrupt_id", interruptID)
 	}
-	delete(m.channels, interruptID)
+	if entry.response != nil {
+		return nil, nil, false, agentErrors.New(agentErrors.CodeInvalidInput, "中断已被响应").
+			WithComponent("interrupt_manager").
+			WithOperation("respond_to_interrupt").
+			WithContext("interrupt_id", interruptID)
+	}
 
 	response.InterruptID = interruptID
 	response.RespondedAt = time.Now()
-	m.responses[interruptID] = response
-
-	if gate, creating := m.creating[interruptID]; creating {
-		gate.response = response
-		m.mu.Unlock()
-		return nil
+	entry.response = response
+	if entry.phase == phaseCreating {
+		return entry, nil, false, nil
 	}
-	onResolved := m.onInterruptResolved
-	m.mu.Unlock()
-
-	_, hookErr := callResolvedHook(onResolved, interrupt, response)
-
-	// 通道带 1 个缓冲且只由认领者写入，等待方已退出也不会阻塞
-	ch <- response
-	close(ch)
-
-	return hookErr
+	return entry, m.onInterruptResolved, true, nil
 }
 
 // GetInterrupt retrieves an interrupt by ID.
@@ -358,15 +393,15 @@ func (m *InterruptManager) GetInterrupt(interruptID string) (*Interrupt, error) 
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	interrupt, ok := m.interrupts[interruptID]
-	if !ok {
+	entry, ok := m.entries[interruptID]
+	if !ok || !entry.visible() {
 		return nil, agentErrors.New(agentErrors.CodeAgentNotFound, "interrupt not found").
 			WithComponent("interrupt_manager").
 			WithOperation("get_interrupt").
 			WithContext("interrupt_id", interruptID)
 	}
 
-	return interrupt, nil
+	return entry.interrupt, nil
 }
 
 // ListPendingInterrupts returns all interrupts awaiting response.
@@ -375,9 +410,9 @@ func (m *InterruptManager) ListPendingInterrupts() []*Interrupt {
 	defer m.mu.RUnlock()
 
 	pending := make([]*Interrupt, 0)
-	for id, interrupt := range m.interrupts {
-		if _, responded := m.responses[id]; !responded {
-			pending = append(pending, interrupt)
+	for _, entry := range m.entries {
+		if entry.visible() && entry.response == nil {
+			pending = append(pending, entry.interrupt)
 		}
 	}
 
@@ -385,17 +420,21 @@ func (m *InterruptManager) ListPendingInterrupts() []*Interrupt {
 }
 
 // CancelInterrupt cancels a pending interrupt.
+//
+// 等待中的 CreateInterrupt 返回 CodeContextCanceled；正在保存状态快照的，保存完成后不再登记并返回同样的错误。
+// 已被响应的中断不受影响（等待方仍拿到该响应），但之后对外不可见。ID 不存在时什么也不做。
 func (m *InterruptManager) CancelInterrupt(interruptID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	ch, ok := m.channels[interruptID]
-	if ok {
-		close(ch)
-		delete(m.channels, interruptID)
+	entry, ok := m.entries[interruptID]
+	if !ok {
+		return nil
 	}
-
-	delete(m.interrupts, interruptID)
+	if !entry.claimed() {
+		close(entry.ch)
+	}
+	entry.canceled = true
 	return nil
 }
 

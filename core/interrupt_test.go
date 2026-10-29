@@ -20,9 +20,7 @@ func TestNewInterruptManager(t *testing.T) {
 	manager := NewInterruptManager(checkpointer)
 
 	assert.NotNil(t, manager)
-	assert.NotNil(t, manager.interrupts)
-	assert.NotNil(t, manager.responses)
-	assert.NotNil(t, manager.channels)
+	assert.NotNil(t, manager.entries)
 	assert.Equal(t, checkpointer, manager.checkpointer)
 }
 
@@ -148,8 +146,7 @@ func TestInterruptManager_ListPending(t *testing.T) {
 		if interrupt.ID == "" {
 			interrupt.ID = generateInterruptID()
 		}
-		manager.interrupts[interrupt.ID] = interrupt
-		manager.channels[interrupt.ID] = make(chan *InterruptResponse, 1)
+		manager.entries[interrupt.ID] = &interruptEntry{interrupt: interrupt, phase: phaseWaiting, ch: make(chan *InterruptResponse, 1)}
 		manager.mu.Unlock()
 	}
 
@@ -636,11 +633,7 @@ func requireInterruptCleaned(t *testing.T, manager *InterruptManager) {
 	t.Helper()
 	manager.mu.RLock()
 	defer manager.mu.RUnlock()
-	require.Empty(t, manager.interrupts, "interrupts 未清理")
-	require.Empty(t, manager.channels, "channels 未清理")
-	require.Empty(t, manager.responses, "responses 未清理")
-	require.Empty(t, manager.creating, "creating 未清理")
-	require.Empty(t, manager.reserved, "reserved 未清理")
+	require.Empty(t, manager.entries, "entries 未清理")
 }
 
 // CancelInterrupt 后 CreateInterrupt 返回明确的取消错误，不再返回 nil 响应配 nil 错误。
@@ -1028,4 +1021,127 @@ func TestGenerateInterruptIDUnique(t *testing.T) {
 		require.False(t, seen[id], id)
 		seen[id] = true
 	}
+}
+
+// RespondToInterrupt 传入 nil 响应时返回 CodeInvalidInput，不 panic、不改动状态、不遗留锁，中断仍可正常响应。
+func TestInterruptManager_RespondNilResponse(t *testing.T) {
+	manager := NewInterruptManager(nil)
+	created := make(chan string, 1)
+	manager.OnInterruptCreated(func(i *Interrupt) { created <- i.ID })
+	id, done := createInBackground(t, manager, created)
+
+	var err error
+	panicked := func() (panicked bool) {
+		defer func() {
+			if recover() != nil {
+				panicked = true
+			}
+		}()
+		err = manager.RespondToInterrupt(id, nil)
+		return false
+	}()
+	locked := manager.mu.TryLock()
+	if locked {
+		manager.mu.Unlock()
+	}
+	require.True(t, locked, "nil 响应返回后锁未释放")
+	require.False(t, panicked, "nil 响应导致 panic")
+	require.True(t, agentErrors.IsCode(err, agentErrors.CodeInvalidInput), "应返回 CodeInvalidInput，实际 %v", err)
+
+	require.Len(t, manager.ListPendingInterrupts(), 1, "nil 响应不应改动中断状态")
+	require.NoError(t, manager.RespondToInterrupt(id, &InterruptResponse{Approved: true}))
+	select {
+	case err := <-done:
+		require.NoError(t, err)
+	case <-time.After(hookLimit):
+		t.Fatal("CreateInterrupt 未返回")
+	}
+	requireInterruptCleaned(t, manager)
+}
+
+// 正在保存状态快照（尚未登记）时取消：取消被记录，CreateInterrupt 在保存完成后不再登记、不调用 onCreated，
+// 直接返回 CodeContextCanceled。
+func TestInterruptManager_CancelWhileSaving(t *testing.T) {
+	saver := &gatedSaver{Checkpointer: checkpoint.NewInMemorySaver(), saving: make(chan struct{}), release: make(chan struct{})}
+	manager := NewInterruptManager(saver)
+	createdCalled := make(chan struct{}, 1)
+	manager.OnInterruptCreated(func(*Interrupt) { createdCalled <- struct{}{} })
+	state := NewAgentState()
+	state.Set("k", "v")
+
+	type result struct {
+		response *InterruptResponse
+		err      error
+	}
+	// ctx 只用于测试失败时结束等待方，避免 goroutine 挂起
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan result, 1)
+	go func() {
+		_, response, err := manager.CreateInterrupt(ctx, &Interrupt{ID: "saving", Type: InterruptTypeApproval, State: state})
+		done <- result{response, err}
+	}()
+
+	<-saver.saving
+	require.NoError(t, manager.CancelInterrupt("saving"))
+	close(saver.release)
+
+	select {
+	case res := <-done:
+		require.Nil(t, res.response)
+		require.True(t, agentErrors.IsCode(res.err, agentErrors.CodeContextCanceled), "应返回 CodeContextCanceled，实际 %v", res.err)
+	case <-time.After(hookLimit):
+		t.Fatal("保存期间的取消被丢弃，中断仍在等待审批")
+	}
+	select {
+	case <-createdCalled:
+		t.Fatal("已取消的中断不应调用 onCreated")
+	default:
+	}
+	requireInterruptCleaned(t, manager)
+	err := manager.RespondToInterrupt("saving", &InterruptResponse{Approved: true})
+	require.True(t, agentErrors.IsCode(err, agentErrors.CodeAgentNotFound), "取消后的响应应返回 not found，实际 %v", err)
+}
+
+// onCreated 执行期间取消：钩子完成后 CreateInterrupt 返回 CodeContextCanceled，不调用 onResolved。
+func TestInterruptManager_CancelWhileCreatedHookRuns(t *testing.T) {
+	manager := NewInterruptManager(nil)
+	created := make(chan string, 1)
+	gate := make(chan struct{})
+	manager.OnInterruptCreated(func(i *Interrupt) {
+		created <- i.ID
+		<-gate
+	})
+	resolved := make(chan struct{}, 1)
+	manager.OnInterruptResolved(func(*Interrupt, *InterruptResponse) { resolved <- struct{}{} })
+
+	type result struct {
+		response *InterruptResponse
+		err      error
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan result, 1)
+	go func() {
+		_, response, err := manager.CreateInterrupt(ctx, &Interrupt{Type: InterruptTypeApproval})
+		done <- result{response, err}
+	}()
+	id := <-created
+	require.NoError(t, manager.CancelInterrupt(id))
+	require.Empty(t, manager.ListPendingInterrupts(), "取消后中断不应再列为待处理")
+	close(gate)
+
+	select {
+	case res := <-done:
+		require.Nil(t, res.response)
+		require.True(t, agentErrors.IsCode(res.err, agentErrors.CodeContextCanceled), "应返回 CodeContextCanceled，实际 %v", res.err)
+	case <-time.After(hookLimit):
+		t.Fatal("onCreated 期间的取消被丢弃")
+	}
+	select {
+	case <-resolved:
+		t.Fatal("已取消的中断不应调用 onResolved")
+	default:
+	}
+	requireInterruptCleaned(t, manager)
 }
