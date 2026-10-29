@@ -178,7 +178,13 @@ func (d *Dispatcher) Invoke(ctx context.Context, req ToolRequest) (out *interfac
 func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*core.StreamEvent) error, recoverArgs bool) (out *interfaces.ToolOutput, err error) {
 	endTool := func(error, bool) {}
 	replayed := false
-	defer func() { endTool(err, replayed) }()
+	// 推迟交付时观测交给 deliver 或放弃交付结束，使观测结果与回调结果一致。
+	handedOff := false
+	defer func() {
+		if !handedOff {
+			endTool(err, replayed)
+		}
+	}()
 	// 本层返回的错误登记给调用方，外层模型路径不会把它当作外层模型的参数错误。
 	caller := ctx
 	defer func() { Settle(caller, err) }()
@@ -362,7 +368,17 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 	}
 	result := DispatchResult{Name: req.Name, CallID: input.CallID, ExecutionKey: input.ExecutionKey, Args: input.Args, Output: out, Replayed: replayed}
 	if deferred != nil {
-		deferred.add(func() error { return Settle(caller, d.deliverResult(resultCtx, result, emit)) })
+		if err = deferred.add(deferredCall{
+			deliver: func() error {
+				e := Settle(caller, d.deliverResult(resultCtx, result, emit))
+				endTool(e, replayed)
+				return e
+			},
+			abandon: func(e error) { endTool(e, replayed) },
+		}); err != nil {
+			return nil, err
+		}
+		handedOff = true
 		return out, nil
 	}
 	if err = d.deliverResult(resultCtx, result, emit); err != nil {
@@ -392,33 +408,70 @@ func (d *Dispatcher) deliverResult(ctx context.Context, result DispatchResult, e
 type deferredResultKey struct{}
 
 // deferredResult 保存经同一 ctx 发起的调用推迟的结果回调，按调用成功的先后追加；宿主可能在同一 ctx 下多次或并发调用。
+// 每个调用只会被 deliver 或 ctx 结束时的放弃交付之一认领。
 type deferredResult struct {
-	mu       sync.Mutex
-	delivers []func() error
+	ctx     context.Context
+	mu      sync.Mutex
+	calls   []deferredCall
+	stop    func() bool
+	dropped error // 放弃交付的原因，由下一次 deliver 报告
 }
 
-func (p *deferredResult) add(deliver func() error) {
+type deferredCall struct {
+	deliver func() error
+	abandon func(error)
+}
+
+func (p *deferredResult) add(c deferredCall) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.delivers = append(p.delivers, deliver)
+	if err := p.ctx.Err(); err != nil {
+		return err
+	}
+	p.calls = append(p.calls, c)
+	// 只在有待交付调用时登记；不可取消的 ctx 上不登记，也不启动 goroutine。
+	if p.stop == nil {
+		p.stop = context.AfterFunc(p.ctx, p.abandon)
+	}
+	return nil
+}
+
+func (p *deferredResult) abandon() {
+	p.mu.Lock()
+	calls := p.calls
+	p.calls, p.stop = nil, nil
+	err := p.ctx.Err()
+	if len(calls) > 0 {
+		p.dropped = err
+	}
+	p.mu.Unlock()
+	for _, c := range calls {
+		c.abandon(err)
+	}
 }
 
 // DeferResults 让经 ctx 发起的 Dispatcher 调用推迟 OnResult 与 tool_end：调用成功时只返回结果，
 // 回调在调用方执行 deliver 时才触发。调用失败或未经 Dispatcher 时不追加回调。
+// 只对 Invoke 与 Tools() 返回的工具生效；AsRunnable 的事件随 runnable 的流结束，照常即时交付。
+// 推迟的调用的观测由 deliver 结束，回调失败时以错误结束。deliver 前 ctx 结束时，未交付的调用放弃交付：
+// 观测以 ctx 的错误结束，回调不再触发（日志不变，恢复时回放会再次触发），下一次 deliver 返回该错误。
 // 用于同一轮并发调用：全部结束后按调用顺序依次 deliver，回调顺序因此与执行先后无关。
 // 同一 ctx 下的多次调用按成功的先后各追加一个回调，并发调用时先后不确定；需要确定顺序时每个调用使用各自的 ctx。
 // deliver 须在调用返回后执行，依次触发尚未触发的全部回调，每个回调只触发一次；
 // 与 Builder 同轮并发语义一致，某个回调失败不跳过其余回调（失败的那个不发 tool_end），全部触发后返回最靠前的错误。
 func DeferResults(ctx context.Context) (context.Context, func() error) {
-	pending := &deferredResult{}
+	pending := &deferredResult{ctx: ctx}
 	return context.WithValue(ctx, deferredResultKey{}, pending), func() error {
 		pending.mu.Lock()
-		delivers := pending.delivers
-		pending.delivers = nil
+		calls, first := pending.calls, pending.dropped
+		pending.calls, pending.dropped = nil, nil
+		if pending.stop != nil {
+			pending.stop()
+			pending.stop = nil
+		}
 		pending.mu.Unlock()
-		var first error
-		for _, deliver := range delivers {
-			if err := deliver(); err != nil && first == nil {
+		for _, c := range calls {
+			if err := c.deliver(); err != nil && first == nil {
 				first = err
 			}
 		}
@@ -458,6 +511,8 @@ func (t *dispatchedTool) ReturnsArgumentErrors() bool { return t.d.config.Return
 
 func (d *Dispatcher) AsRunnable() *core.StreamRunnable[ToolRequest, *interfaces.ToolOutput] {
 	return core.NewStreamRunnable(core.StreamModeSteps, func(ctx context.Context, req ToolRequest, emit func(core.StreamChunk[*interfaces.ToolOutput]) error) error {
+		// runnable 返回后流已结束、内部 ctx 已取消，推迟的 tool_end 无处可发，因此不推迟。
+		ctx, _ = takeDeferredResult(ctx)
 		out, err := d.invoke(ctx, req, func(event *core.StreamEvent) error {
 			return emit(core.StreamChunk[*interfaces.ToolOutput]{Event: event})
 		}, false)
