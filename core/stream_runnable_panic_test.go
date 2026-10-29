@@ -282,7 +282,7 @@ func TestLifecycleStartStopPanicIsPanicError(t *testing.T) {
 				err := tc.run(context.Background(), manager)
 				panicErr := requirePanicError(t, err, "源 panic", "core.sourcePanicSite")
 				require.Equal(t, "lifecycle_manager."+phase, panicErr.Op)
-				require.Contains(t, err.Error(), "component_name=panicky")
+				require.Equal(t, "panicky", agentErrors.GetContext(errors.Unwrap(err))["component_name"])
 				state, stateErr := manager.GetState("panicky")
 				require.NoError(t, stateErr)
 				require.Equal(t, interfaces.StateFailed, state)
@@ -323,7 +323,7 @@ func TestLifecycleInitPanicIsPanicError(t *testing.T) {
 			require.NoError(t, manager.Register("panicky", panicInitComponent{newMockComponent("panicky")}, 0))
 			err := manager.InitAll(context.Background())
 			requirePanicError(t, err, "源 panic", "core.sourcePanicSite")
-			require.Contains(t, err.Error(), "component_name=panicky")
+			require.Equal(t, "panicky", agentErrors.GetContext(errors.Unwrap(err))["component_name"])
 		})
 	}
 }

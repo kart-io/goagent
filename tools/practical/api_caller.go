@@ -161,7 +161,7 @@ func (t *APICallerTool) Execute(ctx context.Context, input *interfaces.ToolInput
 		return nil, agentErrors.New(agentErrors.CodeToolExecution, "rate limit exceeded").
 			WithComponent("api_caller_tool").
 			WithOperation("execute").
-			WithContext("url", params.URL)
+			WithContext("url", agentErrors.RedactURL(params.URL))
 	}
 
 	// Check cache for GET requests
@@ -325,7 +325,7 @@ func (t *APICallerTool) executeRequest(ctx context.Context, params *apiParams) (
 		return nil, agentErrors.Wrap(err, agentErrors.CodeToolExecution, "authentication error").
 			WithComponent("api_caller_tool").
 			WithOperation("executeRequest").
-			WithContext("url", params.URL).
+			WithContext("url", agentErrors.RedactURL(params.URL)).
 			WithContext("auth_type", params.Auth.Type)
 	}
 
@@ -389,7 +389,7 @@ func (t *APICallerTool) executeRequest(ctx context.Context, params *apiParams) (
 		return result, agentErrors.New(agentErrors.CodeToolExecution, "HTTP request failed").
 			WithComponent("api_caller_tool").
 			WithOperation("executeRequest").
-			WithContext("url", params.URL).
+			WithContext("url", agentErrors.RedactURL(params.URL)).
 			WithContext("method", params.Method).
 			WithContext("status_code", resp.StatusCode()).
 			WithContext("status", resp.Status())
@@ -709,7 +709,7 @@ func (t *APICallerRuntimeTool) ExecuteWithRuntime(ctx context.Context, input *in
 				return nil, agentErrors.Wrap(err, agentErrors.CodeToolExecution, "failed to put to store").
 					WithComponent("api_caller_tool").
 					WithOperation("executeWithRuntime").
-					WithContext("url", params.URL)
+					WithContext("url", agentErrors.RedactURL(params.URL))
 			}
 		}
 	}

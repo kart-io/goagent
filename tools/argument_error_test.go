@@ -361,7 +361,7 @@ func marked(message string) error {
 
 // ValidationError 的类型与 Error() 文本与引入恢复前一致；仅在开启恢复的模型调用路径上交还 message。
 func TestValidationErrorIsModelArgument(t *testing.T) {
-	const legacy = "[INVALID_INPUT] [fetch] operation=run: url 必填 (field=url)"
+	const legacy = "[INVALID_INPUT] [fetch] operation=run: url 必填"
 	resp := NewToolErrorResponse("fetch").WithOperation("run")
 	out, verr := resp.ValidationError("url 必填", "field", "url")
 	require.Equal(t, &interfaces.ToolOutput{Success: false, Error: "url 必填"}, out)
@@ -370,6 +370,7 @@ func TestValidationErrorIsModelArgument(t *testing.T) {
 	require.Equal(t, legacy, verr.Error())
 	require.Equal(t, agentErrors.CodeInvalidInput, agentErr.Code)
 	require.Nil(t, agentErr.Cause)
+	require.Equal(t, "url", agentErr.Context["field"])
 	require.Equal(t, agentErrors.CodeInvalidInput, agentErrors.ErrorWithRetry(verr, 1, 3).Code)
 
 	tool := NewBaseTool("fetch", "test", `{"type":"object"}`, func(context.Context, *interfaces.ToolInput) (*interfaces.ToolOutput, error) {

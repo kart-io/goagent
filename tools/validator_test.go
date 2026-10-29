@@ -1119,3 +1119,40 @@ func TestValidateFormat_Email(t *testing.T) {
 		})
 	}
 }
+
+// Error() 会交还模型：应带校验原因与参数名，不带参数值。
+func TestInputValidator_ErrorHasReasonWithoutValue(t *testing.T) {
+	validator := NewInputValidator()
+	tool := NewBaseTool(
+		"test_tool",
+		"Test tool",
+		`{
+			"type": "object",
+			"properties": {
+				"mode": {"type": "string", "enum": ["fast", "slow"]},
+				"email": {"type": "string", "format": "email"},
+				"query": {"type": "string"}
+			},
+			"required": ["query"]
+		}`,
+		nil,
+	)
+
+	tests := []struct {
+		name string
+		args map[string]interface{}
+		want string
+	}{
+		{"缺少必填参数", map[string]interface{}{}, "required parameter validation failed: required parameter is missing: query"},
+		{"枚举不匹配", map[string]interface{}{"query": "q", "mode": "secret-mode-value"}, "parameter type validation failed: parameter must be one of enum values: mode"},
+		{"格式不合法", map[string]interface{}{"query": "q", "email": "secret-email-value"}, "parameter type validation failed: invalid email format"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validator.Validate(context.Background(), tool, &interfaces.ToolInput{Args: tt.args})
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), tt.want)
+			assert.NotContains(t, err.Error(), "secret-")
+		})
+	}
+}

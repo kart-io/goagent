@@ -100,12 +100,10 @@ func TestCoordinator_ExecuteAgent_Failover(t *testing.T) {
 	client := NewClient(log)
 	coordinator := NewCoordinator(registry, client, log)
 
-	// Primary server fails with connection error (retryable)
-	primaryServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("connection timeout"))
-	}))
-	defer primaryServer.Close()
+	// 主实例已关闭，请求得到真实的 connection refused（可重试）；
+	// 响应体不再进入 Error() 文本，不能靠 500 响应体里的关键字触发故障转移
+	primaryServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	primaryServer.Close()
 
 	// Secondary server succeeds
 	secondaryServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

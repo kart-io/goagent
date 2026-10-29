@@ -77,7 +77,7 @@ func (c *Client) ExecuteAgent(ctx context.Context, endpoint, agentName string, i
 			return nil, agentErrors.Wrap(err, agentErrors.CodeDistributedConnection, "circuit breaker is open").
 				WithComponent("distributed_client").
 				WithOperation("execute_agent").
-				WithContext(interfaces.FieldEndpoint, endpoint).
+				WithContext(interfaces.FieldEndpoint, agentErrors.RedactURL(endpoint)).
 				WithContext(interfaces.FieldAgentName, agentName).
 				WithContext("circuit_state", c.circuitBreaker.State().String()).
 				WithContext("failures", c.circuitBreaker.Failures())
@@ -107,7 +107,7 @@ func (c *Client) executeAgentInternal(ctx context.Context, endpoint, agentName s
 		return nil, agentErrors.Wrap(err, agentErrors.CodeDistributedConnection, "failed to send request").
 			WithComponent("distributed_client").
 			WithOperation("execute_agent").
-			WithContext(interfaces.FieldEndpoint, endpoint).
+			WithContext(interfaces.FieldEndpoint, agentErrors.RedactURL(endpoint)).
 			WithContext(interfaces.FieldAgentName, agentName)
 	}
 
@@ -147,7 +147,7 @@ func (c *Client) ExecuteAgentAsync(ctx context.Context, endpoint, agentName stri
 		return "", agentErrors.Wrap(err, agentErrors.CodeDistributedConnection, "failed to send request").
 			WithComponent("distributed_client").
 			WithOperation("execute_agent_async").
-			WithContext(interfaces.FieldEndpoint, endpoint).
+			WithContext(interfaces.FieldEndpoint, agentErrors.RedactURL(endpoint)).
 			WithContext(interfaces.FieldAgentName, agentName)
 	}
 
@@ -188,7 +188,7 @@ func (c *Client) GetAsyncResult(ctx context.Context, endpoint, taskID string) (*
 		return nil, false, agentErrors.Wrap(err, agentErrors.CodeDistributedConnection, "failed to send request").
 			WithComponent("distributed_client").
 			WithOperation("get_async_result").
-			WithContext(interfaces.FieldEndpoint, endpoint).
+			WithContext(interfaces.FieldEndpoint, agentErrors.RedactURL(endpoint)).
 			WithContext("task_id", taskID)
 	}
 
@@ -254,7 +254,7 @@ func (c *Client) Ping(ctx context.Context, endpoint string) error {
 		return agentErrors.Wrap(err, agentErrors.CodeDistributedConnection, "failed to send request").
 			WithComponent("distributed_client").
 			WithOperation("ping").
-			WithContext(interfaces.FieldEndpoint, endpoint)
+			WithContext(interfaces.FieldEndpoint, agentErrors.RedactURL(endpoint))
 	}
 
 	if resp.StatusCode() != 200 {
@@ -262,7 +262,7 @@ func (c *Client) Ping(ctx context.Context, endpoint string) error {
 			WithComponent("distributed_client").
 			WithOperation("ping").
 			WithContext(interfaces.FieldStatusCode, resp.StatusCode()).
-			WithContext(interfaces.FieldEndpoint, endpoint)
+			WithContext(interfaces.FieldEndpoint, agentErrors.RedactURL(endpoint))
 	}
 
 	return nil
@@ -279,7 +279,7 @@ func (c *Client) ListAgents(ctx context.Context, endpoint string) ([]string, err
 		return nil, agentErrors.Wrap(err, agentErrors.CodeDistributedConnection, "failed to send request").
 			WithComponent("distributed_client").
 			WithOperation("list_agents").
-			WithContext("endpoint", endpoint)
+			WithContext("endpoint", agentErrors.RedactURL(endpoint))
 	}
 
 	if resp.StatusCode() != 200 {
@@ -287,7 +287,7 @@ func (c *Client) ListAgents(ctx context.Context, endpoint string) ([]string, err
 			WithComponent("distributed_client").
 			WithOperation("list_agents").
 			WithContext("status_code", resp.StatusCode()).
-			WithContext("endpoint", endpoint)
+			WithContext("endpoint", agentErrors.RedactURL(endpoint))
 	}
 
 	var result struct {
