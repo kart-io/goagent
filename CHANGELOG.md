@@ -82,6 +82,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `core.InterruptManager.CreateInterrupt` 传入 nil 中断返回 `CodeInvalidInput`，此前对 nil 解引用 panic。
 - `core.InterruptManager.CancelInterrupt` 对不存在或已清理的 ID 返回 `CodeAgentNotFound`（与 `RespondToInterrupt` 一致），此前返回 nil，调用方无法区分是否真的取消。
 - `mcp/remote` 的 stdio 互操作测试改用 `exec.CommandContext` 并设置 `WaitDelay`，超时后子进程被杀掉并回收。
+- `ExecuteStream` 中工具执行失败时，终态 `error` 事件的 `Tool` 填为失败的工具名（工具选择路径与原生工具流的顺序、并发执行均适用），此前为空，消费者无法知道是哪个工具失败。
 ### Deprecated
 
 - `interfaces.Agent/Runnable` 为旧消息协议，新增编排统一使用 `core.Runnable[I,O]`；现有 API 保留迁移路径。

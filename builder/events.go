@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
+	"sync"
 	"time"
 
 	"github.com/kart-io/goagent/core/budget"
@@ -18,6 +20,7 @@ import (
 // error, or done. Only done contains the final, middleware-processed Output.
 // 支持 ToolStreamClient 时，模型在同一轮选择工具或直接回答。
 // 中间文本可能包含工具调用前的说明，只有 done.Output 是最终答案。
+// 失败发生在工具 tool_start 之后、tool_end 之前时，error 事件的 Tool 为该工具名，否则为空。
 type AgentEvent struct {
 	Type    string                 `json:"type"`
 	Sources []RetrievalSource      `json:"sources,omitempty"`
@@ -92,17 +95,36 @@ func (a *ConfigurableAgent[C, S]) ExecuteStream(ctx context.Context, input inter
 		}
 		// 链内与回调的 panic 已由 execute 转为错误；这里兜底其余代码：本 goroutine 的 panic 调用方无法 recover，
 		// 转为错误走观测与 error 事件。
+		// running 记录本次处理已发 tool_start 未发 tool_end 的工具：工具失败时不发 tool_end，error 事件据此带上工具名。
+		// 并发调用的结果按调用顺序处理，最早未结束的即失败的那个。
+		var mu sync.Mutex
+		var running []string
 		output, err := func() (output *AgentOutput, err error) {
 			defer recoverPanic("Agent 流式执行", &err)
 			chain := a.chain.WithHandler(func(runCtx context.Context, request *middleware.MiddlewareRequest) (*middleware.MiddlewareResponse, error) {
+				mu.Lock()
+				running = nil
+				mu.Unlock()
 				// Respect Execute's configured timeout for sends as well as upstream calls.
 				send := func(e AgentEvent) error {
 					select {
 					case events <- e:
-						return nil
 					case <-runCtx.Done():
 						return runCtx.Err()
 					}
+					if e.Type == "step" && e.Tool != "" {
+						mu.Lock()
+						switch e.Step {
+						case "tool_start":
+							running = append(running, e.Tool)
+						case "tool_end":
+							if i := slices.Index(running, e.Tool); i >= 0 {
+								running = slices.Delete(running, i, i+1)
+							}
+						}
+						mu.Unlock()
+					}
+					return nil
 				}
 				return a.runEvents(runCtx, request, client, caller, send)
 			})
@@ -112,7 +134,13 @@ func (a *ConfigurableAgent[C, S]) ExecuteStream(ctx context.Context, input inter
 		// 先结束观测再发终态：调用方收到 done/error 即可能返回并关闭记录器。
 		endAgent(err, false)
 		if err != nil {
-			_ = emit(AgentEvent{Type: "error", Error: err, Message: err.Error()})
+			failed := AgentEvent{Type: "error", Error: err, Message: err.Error()}
+			mu.Lock()
+			if len(running) > 0 {
+				failed.Tool = running[0]
+			}
+			mu.Unlock()
+			_ = emit(failed)
 			return
 		}
 		_ = emit(AgentEvent{Type: "done", Output: output})
