@@ -89,6 +89,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `specialized.HTTPAgent` 请求失败时，错误 Context 的 `url`、底层 `*url.Error` 进入错误文本的 URL 以及请求日志中的 `url` 均经 `errors.RedactURL` 去掉 userinfo、query 与 fragment，此前为原始 URL。
 - 推理 Agent 的 LLM 降级分支不再吞掉 panic：LLM 调用返回 `*errors.PanicError`（回调或 LLM 客户端 panic 被恢复）时，SoT 加权聚合、GoT 思考扩展与 LLM 评分、CoT 工具结果后的再推理、MetaCoT 的问题分解/追问/综合/自我批评/改进不再退回默认答案、中性分或跳过该步，而是返回该错误、以失败结束且不再调用模型；`agents.HybridRouter` 中某个策略返回 `*PanicError` 时直接返回，不再投票或退回 fallback。普通 LLM 错误的降级行为不变。
 - `workflow.DurableGraph` 中存储/序列化、检查点解码与分支路由的 panic 改为返回 `*errors.PanicError`（保留 panic 值与调用栈，可用 `errors.As` 识别），此前为丢弃 panic 信息的固定文本错误；错误文本由 `... panicked` 变为 `... 发生 panic`。
+- `tools.ValidateInputWithSchema`（`mcp/toolbox.StandardToolBox.Validate` 使用）的校验错误 Message 带上字段名（如 `required field is missing: name`、`expected string: tags[1]`），不含参数值，此前字段名只在 Context，`Error()` 交还模型时无从知道是哪个字段。
+- `InputValidator` 的自定义校验（`ValidatableTool.Validate`）返回非 `AgentError` 时，`Error()` 只给固定的 `tool custom validation failed: 校验未通过`，原文仅放在 Context 的 `validation_error`，此前原文（可能含参数值）直接拼进 Message；返回 `AgentError` 时取其 Message 与参数名。
 ### Deprecated
 
 - `interfaces.Agent/Runnable` 为旧消息协议，新增编排统一使用 `core.Runnable[I,O]`；现有 API 保留迁移路径。

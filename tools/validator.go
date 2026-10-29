@@ -124,11 +124,12 @@ func (v *InputValidator) Validate(ctx context.Context, tool interfaces.Tool, inp
 }
 
 // validationReason 返回校验失败的具体原因：AgentError 取固定描述的 Message 与参数名，不含参数值，
-// 因为 Error() 会交还模型。
+// 因为 Error() 会交还模型。非 AgentError（如自定义校验的 fmt.Errorf）原文可能含参数值，只返回固定文本，
+// 原文由调用方放入 Context。
 func validationReason(err error) string {
 	var agentErr *agentErrors.AgentError
 	if !errors.As(err, &agentErr) {
-		return err.Error()
+		return "校验未通过"
 	}
 	for _, key := range []string{"parameter", "field", "property"} {
 		if name, ok := agentErr.Context[key].(string); ok && name != "" {
@@ -529,10 +530,10 @@ func ValidateInputWithSchema(schema *core.ToolSchema, input map[string]interface
 	// 检查必需字段
 	for _, required := range schema.Required {
 		if _, exists := input[required]; !exists {
-			return agentErrors.New(agentErrors.CodeToolValidation, "required field is missing").
+			return withFieldReason(agentErrors.New(agentErrors.CodeToolValidation, "required field is missing").
 				WithComponent("validator").
 				WithOperation("validate_input_with_schema").
-				WithContext("field", required)
+				WithContext("field", required))
 		}
 	}
 
@@ -541,20 +542,29 @@ func ValidateInputWithSchema(schema *core.ToolSchema, input map[string]interface
 		propSchema, exists := schema.Properties[key]
 		if !exists {
 			if !schema.AdditionalProperties && strict {
-				return agentErrors.New(agentErrors.CodeToolValidation, "field not defined in schema").
+				return withFieldReason(agentErrors.New(agentErrors.CodeToolValidation, "field not defined in schema").
 					WithComponent("validator").
 					WithOperation("validate_input_with_schema").
-					WithContext("field", key)
+					WithContext("field", key))
 			}
 			continue
 		}
 
 		if err := validateValueWithPropertySchema(key, value, &propSchema); err != nil {
-			return err
+			return withFieldReason(err)
 		}
 	}
 
 	return nil
+}
+
+// withFieldReason 把字段名并入 Message：Error() 不输出 Context，缺了字段名模型无法修正调用。
+func withFieldReason(err error) error {
+	var agentErr *agentErrors.AgentError
+	if errors.As(err, &agentErr) {
+		agentErr.Message = validationReason(agentErr)
+	}
+	return err
 }
 
 // validateValueWithPropertySchema 验证值符合属性 Schema
