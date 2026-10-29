@@ -120,7 +120,7 @@ func (t *WebScraperTool) Execute(ctx context.Context, input *interfaces.ToolInpu
 	if err != nil {
 		return &interfaces.ToolOutput{
 			Result: map[string]interface{}{
-				"url":   params.URL,
+				"url":   agentErrors.RedactURL(params.URL),
 				"error": err.Error(),
 			},
 			Error: err.Error(),
@@ -129,7 +129,7 @@ func (t *WebScraperTool) Execute(ctx context.Context, input *interfaces.ToolInpu
 
 	// Extract data
 	result := map[string]interface{}{
-		"url": params.URL,
+		"url": agentErrors.RedactURL(params.URL),
 	}
 
 	// Extract title

@@ -66,7 +66,7 @@ func (l *PDFLoader) Load(ctx context.Context) ([]*interfaces.Document, error) {
 	if l.callbackManager != nil {
 		if err := l.callbackManager.OnStart(ctx, map[string]interface{}{
 			"loader": "pdf",
-			"source": l.source,
+			"source": l.callbackSource(),
 		}); err != nil {
 			return nil, err
 		}
@@ -133,7 +133,7 @@ func (l *PDFLoader) LoadByPage(ctx context.Context) ([]*interfaces.Document, err
 	if l.callbackManager != nil {
 		if err := l.callbackManager.OnStart(ctx, map[string]interface{}{
 			"loader": "pdf",
-			"source": l.source,
+			"source": l.callbackSource(),
 			"mode":   "by_page",
 		}); err != nil {
 			return nil, err
@@ -177,6 +177,14 @@ func (l *PDFLoader) LoadByPage(ctx context.Context) ([]*interfaces.Document, err
 	}
 
 	return docs, nil
+}
+
+// callbackSource 返回交给回调的来源：远程 URL 脱敏，本地路径原样返回
+func (l *PDFLoader) callbackSource() string {
+	if l.isURL {
+		return errors.RedactURL(l.source)
+	}
+	return l.source
 }
 
 // downloadPDF 从 URL 下载 PDF
