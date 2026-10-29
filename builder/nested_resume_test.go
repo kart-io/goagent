@@ -42,10 +42,15 @@ func refundGraph(t *testing.T, store durable.Store, effects map[string]int) *wor
 
 func refundTool(t *testing.T, graph *workflow.DurableGraph[refundState], name string) interfaces.Tool {
 	t.Helper()
+	return refundToolWith(t, graph, name, true)
+}
+
+func refundToolWith(t *testing.T, graph *workflow.DurableGraph[refundState], name string, resumable bool) interfaces.Tool {
+	t.Helper()
 	tool, err := tools.NewRunnableToolFactory(func(context.Context) (tools.OwnedRunnable[refundState, refundState], error) {
 		return tools.OwnedRunnable[refundState, refundState]{Runnable: graph.AsChildRunnable(), Close: func(context.Context) error { return nil }}, nil
 	}, tools.RunnableToolConfig[refundState, refundState]{
-		Name: name, Description: "退款流程", Version: "v1", Resumable: true,
+		Name: name, Description: "退款流程", Version: "v1", Resumable: resumable,
 		ArgsSchema: `{"type":"object","properties":{"order_id":{"type":"string"}},"required":["order_id"]}`,
 		Decode: func(args map[string]any) (refundState, error) {
 			return refundState{OrderID: args["order_id"].(string)}, nil
@@ -239,4 +244,35 @@ func TestNestedResumeAfterCrashDoesNotRepeatEffect(t *testing.T) {
 		require.Equal(t, 1, n, "子图已完成的节点不重跑")
 	}
 	require.Len(t, model.requests, 2)
+}
+
+// 没有声明 Resumable 的工具无法续跑：子图在执行任何节点之前失败并说明原因，不留下永远续不上的等待。
+func TestChildGraphInNonResumableToolFailsBeforeRunning(t *testing.T) {
+	store, err := durable.NewFileStore(t.TempDir())
+	require.NoError(t, err)
+	ctx := durable.WithJournal(durable.WithExecutionKey(context.Background(), "ticket-4"), store)
+	checked := 0
+	g := workflow.NewGraph[refundState]()
+	require.NoError(t, g.AddNode("check", func(_ context.Context, s refundState) (refundState, error) { checked++; return s, nil }))
+	require.NoError(t, g.AddEdge(workflow.START, "check"))
+	require.NoError(t, g.AddEdge("check", workflow.END))
+	graph, err := g.CompileDurable(context.Background(), workflow.DurableConfig{Store: store, Version: "v1"})
+	require.NoError(t, err)
+	model := nativeModel(
+		[]*llm.StreamChunk{{Done: true, FinishReason: "tool_calls", ToolCalls: []llm.ToolCall{nativeCall("c1", "refund_workflow", `{"order_id":"D4"}`)}}},
+		answerTurn("不应到达", 1),
+	)
+	agent, err := NewSimpleBuilder(model).WithDurableScope("support").
+		WithTools(dispatcherFor(t, refundToolWith(t, graph, "refund_workflow", false)).Tools()...).
+		WithMaxIterations(2).Build()
+	require.NoError(t, err)
+
+	_, err = agent.AsRunnable().Invoke(ctx, "退款 D4")
+	require.ErrorIs(t, err, durable.ErrWaitNotResumable)
+	require.NotErrorIs(t, err, ErrWaiting)
+	require.Zero(t, checked, "子图一个节点都没有执行")
+
+	_, err = agent.AsRunnable().Invoke(durable.WithResume(ctx, "any", "key"), "退款 D4")
+	require.ErrorIs(t, err, durable.ErrOperationAttention, "失败记录交给宿主处理，而不是一直返回等待")
+	require.Len(t, model.requests, 1)
 }
