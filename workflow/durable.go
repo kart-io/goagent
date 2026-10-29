@@ -47,6 +47,16 @@ func WithBeforeApprove[T any](fn func(ctx context.Context, id string, snap *Grap
 	return func(d *DurableGraph[T]) { d.beforeApprove = fn }
 }
 
+// ErrApprovalMismatch 表示提供的审批键与等待中的节点不符；检查点不变，仍在等待。
+var ErrApprovalMismatch = errors.New("approval does not match waiting node")
+
+// ApprovalRejectedError 是 WithBeforeApprove 的钩子返回错误时的拒绝；检查点不变，仍在等待。
+// 钩子 panic 时返回 *errors.PanicError，不属于拒绝。
+type ApprovalRejectedError struct{ Err error }
+
+func (e *ApprovalRejectedError) Error() string { return "批准前置校验拒绝: " + e.Err.Error() }
+func (e *ApprovalRejectedError) Unwrap() error { return e.Err }
+
 // GraphSnapshot exposes continuation and business state without the storage envelope.
 type GraphSnapshot[T any] struct {
 	// Preview marks a transient node chunk. Its State is not committed and must
@@ -182,7 +192,7 @@ func (d *DurableGraph[T]) run(ctx context.Context, store durable.Store, id strin
 	}
 	result = publicGraphSnapshot(checkpoint, state)
 	if approvalKey != "" && (!checkpoint.Waiting || checkpoint.Key != approvalKey) {
-		return result, fmt.Errorf("approval does not match waiting node")
+		return result, ErrApprovalMismatch
 	}
 	if approvalKey != "" && d.beforeApprove != nil {
 		if err = d.checkBeforeApprove(ctx, id, checkpoint); err != nil {
@@ -329,7 +339,7 @@ func (d *DurableGraph[T]) checkBeforeApprove(ctx context.Context, id string, che
 		return err
 	}
 	if err = d.beforeApprove(ctx, id, publicGraphSnapshot(checkpoint, state)); err != nil {
-		return fmt.Errorf("批准前置校验拒绝: %w", err)
+		return &ApprovalRejectedError{Err: err}
 	}
 	return nil
 }

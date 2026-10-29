@@ -44,9 +44,34 @@ type ChildContinuation struct {
 	RunID       string `json:"run_id"`
 	Node        string `json:"node"`
 	ApprovalKey string `json:"approval_key"`
-	// Rejected 表示本次提供的审批未被采纳（与等待的节点不符、被 WithBeforeApprove 拒绝等），
-	// 图的状态未改变，仍在等待。
-	Rejected bool `json:"rejected,omitempty"`
+	// Rejected 表示本次提供的审批未被采纳，图的状态未改变，仍在等待；Reason 为原因类别
+	// RejectApprovalMismatch 或 RejectBeforeApprove。存储失败、panic 等不属于拒绝，照常作为失败返回。
+	Rejected bool   `json:"rejected,omitempty"`
+	Reason   string `json:"reason,omitempty"`
+}
+
+// ChildContinuation.Reason 的取值。
+const (
+	RejectApprovalMismatch = "approval_mismatch" // 审批键与等待的节点不符
+	RejectBeforeApprove    = "before_approve"    // WithBeforeApprove 的钩子拒绝
+)
+
+// approvalWait 判断 err 是否为审批暂停或未被采纳的审批，并返回拒绝原因类别（审批暂停时为空）。
+// 与别的错误并列（如解锁失败）时不算，照常作为失败。
+func approvalWait(err error) (reason string, ok bool) {
+	if joined, isJoined := err.(interface{ Unwrap() []error }); isJoined && len(joined.Unwrap()) > 1 {
+		return "", false
+	}
+	var rejected *ApprovalRejectedError
+	switch {
+	case errors.Is(err, durable.ErrApprovalRequired):
+		return "", true
+	case errors.Is(err, ErrApprovalMismatch):
+		return RejectApprovalMismatch, true
+	case errors.As(err, &rejected):
+		return RejectBeforeApprove, true
+	}
+	return "", false
 }
 
 // AsChildRunnable 供图作为子流程嵌套运行，例如经 tools.NewRunnableToolFactory 包成可续跑工具。
@@ -82,9 +107,10 @@ func (d *DurableGraph[T]) AsChildRunnable() *core.RunnableFunc[T, T] {
 			}
 		}
 		snapshot, err := d.run(ctx, store, id, initial, approvalKey, func(core.StreamChunk[*GraphSnapshot[T]]) error { return nil })
-		// 审批被采纳之前出错时检查点未变、仍在等待：报告为等待，避免上层把这次续跑记成失败而无法再续。
-		if err != nil && snapshot != nil && snapshot.Waiting && ctx.Err() == nil {
-			continuation, e := json.Marshal(ChildContinuation{RunID: id, Node: snapshot.Node, ApprovalKey: snapshot.Key, Rejected: err != durable.ErrApprovalRequired})
+		// 审批暂停与未被采纳的审批报告为等待，避免上层把这次续跑记成失败而无法再续；其他错误照常失败。
+		reason, waiting := approvalWait(err)
+		if waiting && snapshot != nil && snapshot.Waiting && ctx.Err() == nil {
+			continuation, e := json.Marshal(ChildContinuation{RunID: id, Node: snapshot.Node, ApprovalKey: snapshot.Key, Rejected: reason != "", Reason: reason})
 			if e != nil {
 				return zero, e
 			}
