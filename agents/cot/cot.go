@@ -156,7 +156,12 @@ func (s *CoTStrategy) Execute(
 			messages = append(messages, llm.AssistantMessage(response))
 			messages = append(messages, llm.UserMessage(toolContext))
 
+			// 重新推理失败时保留首轮答案；失败原因是 *PanicError 时不降级，返回该错误中止本次执行
 			llmResp2, err := llmClient.Chat(ctx, messages)
+			var panicErr *agentErrors.PanicError
+			if errors.As(err, &panicErr) {
+				return nil, err
+			}
 			if err == nil {
 				// 收集第二次LLM调用的token使用量
 				if llmResp2.Usage != nil {
@@ -268,7 +273,12 @@ func (s *CoTStrategy) ExecuteWithGenerator(
 			messages = append(messages, llm.AssistantMessage(response))
 			messages = append(messages, llm.UserMessage(toolContext))
 
+			// 重新推理失败时保留首轮答案；失败原因是 *PanicError 时不降级，返回该错误中止本次执行
 			llmResp2, err := llmClient.Chat(ctx, messages)
+			var panicErr *agentErrors.PanicError
+			if errors.As(err, &panicErr) {
+				return nil, err
+			}
 			if err == nil {
 				if llmResp2.Usage != nil {
 					output.TokenUsage.Add(llmResp2.Usage)
