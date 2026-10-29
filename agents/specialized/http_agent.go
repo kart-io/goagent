@@ -2,7 +2,9 @@ package specialized
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	neturl "net/url"
 	"time"
 
 	"github.com/go-resty/resty/v2"
@@ -73,7 +75,7 @@ func (a *HTTPAgent) Execute(ctx context.Context, input *agentcore.AgentInput) (*
 
 	a.logger.Info("Executing HTTP request",
 		"method", method,
-		"url", url)
+		"url", agentErrors.RedactURL(url))
 
 	// 创建请求
 	req := a.client.R().
@@ -109,6 +111,12 @@ func (a *HTTPAgent) Execute(ctx context.Context, input *agentcore.AgentInput) (*
 	}
 
 	if err != nil {
+		redacted := agentErrors.RedactURL(url)
+		// 底层 *url.Error 的文本含完整 URL（userinfo、query 中可能有凭据），随 cause 进入错误文本前同样脱敏
+		var urlErr *neturl.Error
+		if errors.As(err, &urlErr) {
+			urlErr.URL = redacted
+		}
 		return &agentcore.AgentOutput{
 			Status:    interfaces.StatusFailed,
 			Message:   "HTTP request failed",
@@ -117,7 +125,7 @@ func (a *HTTPAgent) Execute(ctx context.Context, input *agentcore.AgentInput) (*
 		}, agentErrors.Wrap(err, agentErrors.CodeToolExecution, "http request failed").
 			WithComponent("http_agent").
 			WithOperation("Execute").
-			WithContext(interfaces.FieldURL, url).
+			WithContext(interfaces.FieldURL, redacted).
 			WithContext(interfaces.FieldMethod, method)
 	}
 
