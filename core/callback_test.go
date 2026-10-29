@@ -319,3 +319,62 @@ func TestNewStdoutCallback(t *testing.T) {
 	cb.OnToolEnd(ctx, "tool", "output")
 	cb.OnError(ctx, errors.New("error"))
 }
+
+// requireReturnsWithin 断言 fn 在 d 内返回；超时说明 fn 被锁住（例如持锁调用宿主代码时重入）。
+func requireReturnsWithin(t *testing.T, d time.Duration, fn func()) {
+	t.Helper()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		fn()
+	}()
+	select {
+	case <-done:
+	case <-time.After(d):
+		t.Fatalf("%v 内未返回，疑似死锁", d)
+	}
+}
+
+// mutatingCallback 在 OnStart 中修改所属的 CallbackManager。
+type mutatingCallback struct {
+	*BaseCallback
+	onStart func(self Callback)
+	calls   int
+}
+
+func (c *mutatingCallback) OnStart(ctx context.Context, input interface{}) error {
+	c.calls++
+	if c.onStart != nil {
+		c.onStart(c)
+	}
+	return nil
+}
+
+// 回调内增删回调不会死锁；本轮通知使用调用时的回调快照，改动从下一轮生效。
+func TestCallbackManager_CallbackMutatesManager(t *testing.T) {
+	m := NewCallbackManager()
+	added := &mutatingCallback{BaseCallback: NewBaseCallback()}
+	second := &mutatingCallback{BaseCallback: NewBaseCallback()}
+	first := &mutatingCallback{BaseCallback: NewBaseCallback()}
+	first.onStart = func(self Callback) {
+		m.AddCallback(added)
+		m.RemoveCallback(self)
+		m.RemoveCallback(second)
+	}
+	m.AddCallback(first)
+	m.AddCallback(second)
+
+	requireReturnsWithin(t, 5*time.Second, func() {
+		if err := m.OnStart(context.Background(), "x"); err != nil {
+			t.Errorf("OnStart 返回错误：%v", err)
+		}
+	})
+	if first.calls != 1 || second.calls != 1 || added.calls != 0 {
+		t.Fatalf("本轮应只通知快照中的回调：first=%d second=%d added=%d", first.calls, second.calls, added.calls)
+	}
+
+	requireReturnsWithin(t, 5*time.Second, func() { _ = m.OnStart(context.Background(), "x") })
+	if first.calls != 1 || second.calls != 1 || added.calls != 1 {
+		t.Fatalf("下一轮应只通知新增的回调：first=%d second=%d added=%d", first.calls, second.calls, added.calls)
+	}
+}

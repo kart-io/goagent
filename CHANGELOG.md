@@ -78,6 +78,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `tools.DeferResults`：推迟的调用改由 deliver 结束观测，结果回调失败时记为 `tool_error`，此前 invoke 返回时即按成功结束；`AsRunnable` 不再推迟，避免延迟的 `tool_end` 返回 `context canceled`；未 deliver 的调用在 `DeferResults` 的 ctx 结束时放弃交付并以该错误结束观测。
 - 子进程测试统一设置截止时间：新增 `panictest.CombinedOutput`/`panictest.ChildTimeout`，超时即杀掉并回收子进程、输出可定位的错误，测试超时退出时不再遗留孤儿进程。
 - panic 转成的错误文本不再包含 panic 值与调用栈：默认 `PanicHandler` 的 Message 固定为“panic 已恢复”，不再向 Context 写入 `panic_value`/`stack_trace`；`RunnableTool`、`durable.Runner` 与 `workflow.DurableGraph` 的批准前置校验改为返回 `*errors.PanicError`。panic 值与调用栈只能用 `errors.As` 取 `*errors.PanicError` 读取，按旧文本（`panic recovered`、文本含 panic 值）匹配的代码需改用 `errors.As`；自定义 handler 的错误文本同样不应包含二者。
+- `CallbackManager`、`Container.Resolve`、`EnhancedPluginRegistry` 与 `PluginRegistry.Register` 改为在锁外调用宿主回调、工厂与插件方法，回调或工厂中增删回调、解析其他服务、访问注册表不再死锁；`CallbackManager` 本轮只通知复制下来的回调，增删从下一轮生效；`Container` 并发首次解析可能各调用一次工厂，先写入者胜出。
 ### Deprecated
 
 - `interfaces.Agent/Runnable` 为旧消息协议，新增编排统一使用 `core.Runnable[I,O]`；现有 API 保留迁移路径。
