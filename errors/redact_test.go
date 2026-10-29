@@ -2,9 +2,12 @@ package errors
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"net/url"
 	"testing"
+
+	"go.uber.org/zap/zapcore"
 )
 
 func TestRedactURL_Bypass(t *testing.T) {
@@ -41,4 +44,55 @@ func TestRedactURL_Bypass(t *testing.T) {
 func newURLErr() (*url.Error, *net.OpError) {
 	op := &net.OpError{Op: "dial", Net: "tcp", Err: errors.New("connection refused")}
 	return &url.Error{Op: "Get", URL: "http://u:pw@127.0.0.1:1/v1/data?key=APIKEYSECRET", Err: op}, op
+}
+
+func TestAgentError_MarshalLogObject(t *testing.T) {
+	err := Wrap(fmt.Errorf("底层错误"), CodeToolExecution, "tool failed").
+		WithComponent("tool").
+		WithOperation("run").
+		WithContext("tool_name", "search").
+		WithContext("attempt", 2)
+
+	enc := zapcore.NewMapObjectEncoder()
+	if merr := err.MarshalLogObject(enc); merr != nil {
+		t.Fatal(merr)
+	}
+	want := map[string]any{
+		"code":      "TOOL_EXECUTION",
+		"component": "tool",
+		"operation": "run",
+		"message":   "tool failed",
+		"context":   map[string]any{"tool_name": "search", "attempt": 2},
+		"cause":     "底层错误",
+	}
+	if got, w := fmt.Sprint(enc.Fields), fmt.Sprint(want); got != w {
+		t.Errorf("MarshalLogObject = %s, want %s", got, w)
+	}
+
+	min := zapcore.NewMapObjectEncoder()
+	_ = New(CodeInternal, "boom").MarshalLogObject(min)
+	if len(min.Fields) != 2 || min.Fields["code"] != "INTERNAL_ERROR" || min.Fields["message"] != "boom" {
+		t.Errorf("最小字段 = %v", min.Fields)
+	}
+}
+
+func TestAgentError_Format(t *testing.T) {
+	err := Wrap(errors.New("cause"), CodeToolExecution, "failed").
+		WithContext("b", 2).
+		WithContext("a", "x")
+	if got := fmt.Sprintf("%v", err); got != err.Error() {
+		t.Errorf("%%v = %q", got)
+	}
+	if got := fmt.Sprintf("%s", err); got != err.Error() {
+		t.Errorf("%%s = %q", got)
+	}
+	if got, want := fmt.Sprintf("%q", err), fmt.Sprintf("%q", err.Error()); got != want {
+		t.Errorf("%%q = %s, want %s", got, want)
+	}
+	if got, want := fmt.Sprintf("%+v", err), err.Error()+" context: a=x, b=2"; got != want {
+		t.Errorf("%%+v = %q, want %q", got, want)
+	}
+	if got := fmt.Sprintf("%+v", New(CodeInternal, "boom")); got != "[INTERNAL_ERROR]: boom" {
+		t.Errorf("无 Context 的 %%+v = %q", got)
+	}
 }

@@ -98,6 +98,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `core.InterruptManager.CancelInterrupt` 对已取消的中断返回 `CodeAgentNotFound`，此前同 ID 重复取消返回 nil；保存状态快照期间的首次取消仍然生效。
 - `planning.AgentExecutor` 的可重试错误判断改为不区分大小写的子串匹配，此前只匹配前缀/后缀，`dial tcp ...: connection refused by peer`、`Service Unavailable` 等错误不会重试。
 - `errors.RedactURL` 堵住绕过：逗号分隔的多地址（NATS 集群）逐段脱敏，query 中逗号之后的片段一并丢弃；密码含未转义 `/`、`?`、`#` 时丢弃 scheme 之后到最后一个 `@` 为止的内容（`host:port/path` 且路径含 `@` 的地址会被过度裁剪）；key=value 形式 DSN 只保留 `host`、`port`、`dbname`。凭据放在路径中的 URL（Slack webhook、Telegram bot）不处理。
+- `*errors.AgentError` 实现 `zapcore.ObjectMarshaler`，zap 引擎（含 kart-io/logger 的 `Errorw(..., "error", err)`）以对象输出与 `LogValue` 相同的字段（含 `context`），此前只有 `Error()` 文本、Context 丢失；同时实现 `fmt.Formatter`，`%v`/`%s` 同 `Error()`，`%+v` 追加按键排序的 `context: k=v, ...`（`zap.Error` 的 `errorVerbose` 字段随之包含 Context）。zap 日志中该字段由字符串变为对象；`go.uber.org/zap` 由间接依赖变为直接依赖。
 ### Deprecated
 
 - `interfaces.Agent/Runnable` 为旧消息协议，新增编排统一使用 `core.Runnable[I,O]`；现有 API 保留迁移路径。
