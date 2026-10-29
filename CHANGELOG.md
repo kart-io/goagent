@@ -74,6 +74,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - 推理 Agent 的工具回调 panic、或工具返回 `*errors.PanicError` 时中止本次执行并以失败结束，不再写入 observation 继续调用模型（ReAct、CoT、ToT、MetaCoT）；各推理 Agent 的 `Stream` 与 GoT/SoT 并行 worker 在 goroutine 边界恢复宿主 panic 并转为 `*errors.PanicError`，不再使进程退出。
 - `core.InterruptManager`：`RespondToInterrupt` 传入 nil 响应返回 `CodeInvalidInput`，此前在持锁时 panic 并永久占住锁、整个 manager 卡死；保存状态快照期间的 `CancelInterrupt` 不再被静默丢弃，`CreateInterrupt` 在保存完成后不再登记并返回 `CodeContextCanceled`；内部状态改为每个 ID 一个条目，所有加锁处统一 defer 解锁；已取消但等待方尚未退出的 ID 不可复用。
+- `stream.Multiplexer` 被 `RemoveConsumer`/`Close` 移除的消费者不再收到缓冲数据与结束回调；错误计数改为原子操作，消除数据竞争；`AddConsumer` 改在锁外调用 `OnStart`，回调中可以调用 `Stats`/`Consumers`/`Close`。`TeeMiddleware` 对同一消费者按顺序串行回调，panic 后不再调用它。
 ### Deprecated
 
 - `interfaces.Agent/Runnable` 为旧消息协议，新增编排统一使用 `core.Runnable[I,O]`；现有 API 保留迁移路径。

@@ -953,3 +953,186 @@ func TestMultiplexerAddConsumerRacesWithEndAndClose(t *testing.T) {
 		}
 	}
 }
+
+// removingConsumer 在第一个块上阻塞到 gate 关闭并返回错误，随后在 OnError 中调用 remove 把自己移除；按调用顺序记录回调。
+type removingConsumer struct {
+	orderConsumer
+	remove func()
+}
+
+func (c *removingConsumer) OnChunk(chunk *core.LegacyStreamChunk) error {
+	if err := c.orderConsumer.OnChunk(chunk); err != nil {
+		return err
+	}
+	if chunk.Text == "0" {
+		return errors.New("chunk failed")
+	}
+	return nil
+}
+
+func (c *removingConsumer) OnError(err error) error {
+	c.record("error")
+	if c.remove != nil {
+		remove := c.remove
+		c.remove = nil
+		remove()
+	}
+	return nil
+}
+
+func (c *removingConsumer) OnComplete() error {
+	c.record("complete")
+	return nil
+}
+
+// signalConsumer 收到源的结束错误时关闭 finished。
+type signalConsumer struct {
+	mockConsumer
+	finished chan struct{}
+}
+
+func (c *signalConsumer) OnError(err error) error {
+	close(c.finished)
+	return c.mockConsumer.OnError(err)
+}
+
+// 消费者被 RemoveConsumer/Close 移除后不再收到任何回调：即使源已结束、缓冲区里还积压着数据，
+// 也不再收到这些数据块与 OnError/OnComplete。
+func TestMultiplexerRemovedConsumerGetsNoMoreCallbacks(t *testing.T) {
+	cases := map[string]func(mux *Multiplexer, id string){
+		"RemoveConsumer": func(mux *Multiplexer, id string) { _ = mux.RemoveConsumer(id) },
+		"Close":          func(mux *Multiplexer, _ string) { _ = mux.Close() },
+	}
+	for name, remove := range cases {
+		t.Run(name, func(t *testing.T) {
+			ctx := context.Background()
+			mux := NewMultiplexer(ctx, nil)
+			defer mux.Close()
+			consumer := &removingConsumer{orderConsumer: orderConsumer{gate: make(chan struct{})}}
+			id, err := mux.AddConsumer(consumer)
+			assert.NoError(t, err)
+			consumer.remove = func() { remove(mux, id) }
+			witness := &signalConsumer{finished: make(chan struct{})}
+			_, err = mux.AddConsumer(witness)
+			assert.NoError(t, err)
+
+			done := make(chan error, 1)
+			go func() { done <- mux.Start(ctx, &mockStreamOutput{chunks: textChunks("0", "1", "2")}) }()
+			// witness 收到结束错误说明 Start 已进入关闭通道的临界区；Stats 取锁等它退出，此时所有通道都已标记为源结束
+			<-witness.finished
+			_ = mux.Stats()
+			close(consumer.gate)
+			select {
+			case err := <-done:
+				assert.NoError(t, err)
+			case <-time.After(startReturnLimit):
+				t.Fatalf("Start 在 %v 内未返回", startReturnLimit)
+			}
+
+			consumer.mu.Lock()
+			defer consumer.mu.Unlock()
+			assert.Equal(t, []string{"chunk:0", "error"}, consumer.events, "移除之后不应再收到缓冲数据与结束回调")
+		})
+	}
+}
+
+// failingConsumer 的 OnChunk 总返回错误；第一个块阻塞到 gate 关闭，使后续块因缓冲区满而被丢弃。
+type failingConsumer struct {
+	gate chan struct{}
+	once sync.Once
+}
+
+func (c *failingConsumer) OnStart() error { return nil }
+func (c *failingConsumer) OnChunk(*core.LegacyStreamChunk) error {
+	c.once.Do(func() { <-c.gate })
+	return errors.New("chunk failed")
+}
+func (c *failingConsumer) OnError(error) error { return nil }
+func (c *failingConsumer) OnComplete() error   { return nil }
+
+// 广播丢块与消费者报错都累加错误计数，Stats 并发读取：在 -race 下不得有数据竞争，结束后计数等于块数。
+func TestMultiplexerErrorCountRaceFree(t *testing.T) {
+	const total = 50
+	ctx := context.Background()
+	opts := core.DefaultStreamOptions()
+	opts.BufferSize = 1
+	opts.EnableBackpressure = true
+	mux := NewMultiplexer(ctx, opts)
+	defer mux.Close()
+	consumer := &failingConsumer{gate: make(chan struct{})}
+	_, err := mux.AddConsumer(consumer)
+	assert.NoError(t, err)
+
+	texts := make([]string, total)
+	for i := range texts {
+		texts[i] = fmt.Sprint(i)
+	}
+	source := &drainedSource{mockStreamOutput: mockStreamOutput{chunks: textChunks(texts...)}, drained: make(chan struct{})}
+	done := make(chan error, 1)
+	go func() { done <- mux.Start(ctx, source) }()
+
+	statsDone := make(chan struct{})
+	go func() {
+		defer close(statsDone)
+		for {
+			select {
+			case <-done:
+				return
+			default:
+				_ = mux.Stats()
+			}
+		}
+	}()
+	<-source.drained
+	close(consumer.gate)
+	<-statsDone
+	// 每个块要么被丢弃、要么被消费者处理并返回错误，各计一次
+	assert.Equal(t, total, mux.Stats().TotalErrors)
+}
+
+// hookConsumer 在 OnStart 中调用 hook。
+type hookConsumer struct {
+	mockConsumer
+	hook func()
+}
+
+func (c *hookConsumer) OnStart() error {
+	c.hook()
+	return nil
+}
+
+// OnStart 等宿主回调在锁外调用：回调里调用多路复用器的 Stats/Consumers/Close 不会死锁。
+func TestMultiplexerOnStartCanCallMultiplexer(t *testing.T) {
+	cases := map[string]struct {
+		hook    func(mux *Multiplexer)
+		wantErr bool
+	}{
+		"Stats":     {hook: func(mux *Multiplexer) { _ = mux.Stats() }},
+		"Consumers": {hook: func(mux *Multiplexer) { _ = mux.Consumers() }},
+		"Close":     {hook: func(mux *Multiplexer) { _ = mux.Close() }, wantErr: true},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			// 死锁时 mux.mu 一直被占用，不能 defer Close，只在 AddConsumer 返回后关闭
+			mux := NewMultiplexer(context.Background(), nil)
+			done := make(chan error, 1)
+			go func() {
+				_, err := mux.AddConsumer(&hookConsumer{hook: func() { tc.hook(mux) }})
+				done <- err
+			}()
+			select {
+			case err := <-done:
+				if tc.wantErr {
+					assert.Error(t, err, "OnStart 期间多路复用器已关闭，消费者不应被加入")
+					assert.Empty(t, mux.Consumers())
+				} else {
+					assert.NoError(t, err)
+					assert.Len(t, mux.Consumers(), 1)
+				}
+				_ = mux.Close()
+			case <-time.After(startReturnLimit):
+				t.Fatalf("AddConsumer 在 %v 内未返回，OnStart 中调用 %s 死锁", startReturnLimit, name)
+			}
+		})
+	}
+}
