@@ -41,7 +41,7 @@ type AgentEvent struct {
 func (a *ConfigurableAgent[C, S]) ExecuteStream(ctx context.Context, input interface{}) (_ <-chan AgentEvent, err error) {
 	// 同步阶段也会调用宿主代码（如 scopeDurableExecution 中的工具与持久存储），panic 时转为错误返回。
 	defer recoverPanic("Agent 流式执行启动", &err)
-	ctx = ensureModelScope(ctx)
+	ctx = withModelRetry(ensureModelScope(ctx), a.config.ModelRetries, a.config.ModelRetryBackoff)
 	if err := validateModelBudget(ctx); err != nil {
 		return nil, err
 	}

@@ -17,7 +17,7 @@ import (
 
 // allowEmpty 为真时，正常结束的空回答按已完成记录，由调用方重问。
 func readJournaledTurn(ctx context.Context, round int, client llm.StreamClient, req *llm.CompletionRequest, tools []interfaces.Tool, allowEmpty bool, emit func(AgentEvent) error) (*llm.StreamChunk, error) {
-	invoke := func(callCtx context.Context) (*llm.StreamChunk, error) {
+	invoke := func(callCtx context.Context, emit func(AgentEvent) error) (*llm.StreamChunk, error) {
 		var stream <-chan *llm.StreamChunk
 		var err error
 		if native, ok := client.(llm.ToolStreamClient); ok {
