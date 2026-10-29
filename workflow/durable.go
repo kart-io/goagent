@@ -129,10 +129,11 @@ func publicGraphSnapshot[T any](s *durable.Snapshot, state graphState[T]) *Graph
 // Effects are at least once if a process dies after the effect but before Save.
 // Routers must be pure; they may repeat after a crash before routing is saved.
 func (d *DurableGraph[T]) Run(ctx context.Context, id string, initial T, approvalKey string) (*GraphSnapshot[T], error) {
-	return d.run(ctx, id, initial, approvalKey, func(core.StreamChunk[*GraphSnapshot[T]]) error { return nil })
+	return d.run(ctx, d.store, id, initial, approvalKey, func(core.StreamChunk[*GraphSnapshot[T]]) error { return nil })
 }
 
-func (d *DurableGraph[T]) run(ctx context.Context, id string, initial T, approvalKey string, emitChunk func(core.StreamChunk[*GraphSnapshot[T]]) error) (result *GraphSnapshot[T], err error) {
+// run 把检查点与节点内持久操作都记在 store 中：独立运行时是 DurableConfig.Store，嵌套运行时是父操作日志的 Store。
+func (d *DurableGraph[T]) run(ctx context.Context, store durable.Store, id string, initial T, approvalKey string, emitChunk func(core.StreamChunk[*GraphSnapshot[T]]) error) (result *GraphSnapshot[T], err error) {
 	ctx = observe.WithRunID(ctx, id)
 	ctx, endGraph := observe.Start(ctx, observe.Event{Type: "graph", Path: "graph"})
 	defer func() { endGraph(err, false) }()
@@ -144,13 +145,13 @@ func (d *DurableGraph[T]) run(ctx context.Context, id string, initial T, approva
 	emit := func(event *core.StreamEvent) error {
 		return emitChunk(core.StreamChunk[*GraphSnapshot[T]]{Event: event})
 	}
-	if d == nil || d.store == nil || id == "" {
+	if d == nil || store == nil || id == "" {
 		return nil, fmt.Errorf("compiled durable graph and run ID are required")
 	}
 	if err = ctx.Err(); err != nil {
 		return nil, err
 	}
-	unlock, err := d.store.Lock(ctx, id)
+	unlock, err := store.Lock(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -159,7 +160,7 @@ func (d *DurableGraph[T]) run(ctx context.Context, id string, initial T, approva
 			err = errors.Join(err, e)
 		}
 	}()
-	checkpoint, err := d.store.Load(ctx, id)
+	checkpoint, err := store.Load(ctx, id)
 	if errors.Is(err, os.ErrNotExist) {
 		if approvalKey != "" {
 			return nil, fmt.Errorf("cannot approve a run that does not exist")
@@ -169,7 +170,7 @@ func (d *DurableGraph[T]) run(ctx context.Context, id string, initial T, approva
 			return nil, e
 		}
 		checkpoint = &durable.Snapshot{Version: d.version, Plan: d.plan, RunID: id, Data: data}
-		if err = d.store.Save(ctx, id, checkpoint); err != nil {
+		if err = store.Save(ctx, id, checkpoint); err != nil {
 			return nil, err
 		}
 	} else if err != nil {
@@ -195,7 +196,7 @@ func (d *DurableGraph[T]) run(ctx context.Context, id string, initial T, approva
 			return e
 		}
 		next.Data = data
-		if e = d.store.Save(ctx, id, &next); e != nil {
+		if e = store.Save(ctx, id, &next); e != nil {
 			return e
 		}
 		checkpoint = &next
@@ -295,7 +296,7 @@ func (d *DurableGraph[T]) run(ctx context.Context, id string, initial T, approva
 			}
 			return done(core.StreamChunk[T]{Done: true, Data: out})
 		})
-		nodeCtx, endNode := observe.Start(durable.WithJournal(durable.WithExecutionKey(ctx, intent.Key), d.store), observe.Event{Type: "node", Path: nodeName, OperationKey: intent.Key})
+		nodeCtx, endNode := observe.Start(durable.WithJournal(durable.WithExecutionKey(ctx, intent.Key), store), observe.Event{Type: "node", Path: nodeName, OperationKey: intent.Key})
 		output, e := runner.Invoke(nodeCtx, input.State)
 		endNode(e, false)
 		if e != nil {
@@ -354,10 +355,17 @@ func (d *DurableGraph[T]) decodeCheckpoint(id string, checkpoint *durable.Snapsh
 // Snapshot loads and validates a continuation without executing it. It takes the
 // run lock and may wait for active work; use a bounded context for status reads.
 func (d *DurableGraph[T]) Snapshot(ctx context.Context, id string) (out *GraphSnapshot[T], err error) {
-	if d == nil || d.store == nil || id == "" {
+	if d == nil {
 		return nil, fmt.Errorf("compiled durable graph and run ID are required")
 	}
-	unlock, err := d.store.Lock(ctx, id)
+	return d.snapshot(ctx, d.store, id)
+}
+
+func (d *DurableGraph[T]) snapshot(ctx context.Context, store durable.Store, id string) (out *GraphSnapshot[T], err error) {
+	if store == nil || id == "" {
+		return nil, fmt.Errorf("compiled durable graph and run ID are required")
+	}
+	unlock, err := store.Lock(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -366,7 +374,7 @@ func (d *DurableGraph[T]) Snapshot(ctx context.Context, id string) (out *GraphSn
 			err = errors.Join(err, e)
 		}
 	}()
-	cp, err := d.store.Load(ctx, id)
+	cp, err := store.Load(ctx, id)
 	if err != nil {
 		return nil, err
 	}

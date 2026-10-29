@@ -236,6 +236,7 @@ Provider 需要提供的错误信息和实现约束见 2.4 节。
 | R1-4 续跑输入 | `durable.WithResume(ctx, key, input)`，key 取等待路径最后一项的 `Key` | 与等待发生处的执行键一一对应，多处等待可分别提供 |
 | R1 补充 | 审批未被采纳（键不符、被 `WithBeforeApprove` 拒绝）时仍报告为等待并标记 `Rejected`；图已越过审批时忽略续跑输入 | 否则一次错误的审批会把记录写成 failed，之后再也无法续跑；中断后宿主再次调用时通常仍带着同一审批输入 |
 | R1-2 `durable.Do` 遇到 `WaitError` 记为 `waiting` | 只有声明 `Resumable` 的操作记为 `waiting`；其他操作记为 `failed/not_resumable` 并返回 `durable.ErrWaitNotResumable`，再次调用返回 `OperationError`。`durable.CanWait(ctx)` 报告最内层操作能否承载等待，`AsChildRunnable` 不满足时在执行任何节点前失败 | 不可续跑的操作以后不会重新进入，记成等待后每次只返回已存的等待，审批后用 `WithResume` 也续不上，且没有诊断；在子图入口提前检查可避免执行审批前的节点 |
+| R1-1 factory 须用同一 Store 构建子图 | `AsChildRunnable` 的检查点与节点内持久操作直接写在父操作日志的 Store（`durable.JournalStore(ctx)`）中，`DurableConfig.Store` 只用于独立运行（`Run`、`AsRunnable`、`Snapshot`） | 原先只检查父 ctx 有日志，子图检查点却写在自己的 Store；子图配了内存等其他 Store 时崩溃后从头重跑，已执行的退款重复执行。比对两个 Store 是否“相同”无法覆盖包装过的 Store，由构造保证共用更可靠，也与子 Agent 本来就使用父日志 Store 一致 |
 | R1-3 `builder.ErrWaiting` | `ErrWaiting` 哨兵加 `*WaitingError{Waits}`；同一轮并发调用中有真失败时优先报告失败 | 等待不能掩盖同轮的真实失败 |
 | R2-1 `Rejected` 的 `Result` 为 `map` | `Result` 为包外无法构造的类型，JSON 编码为 `{"error":"rejected","message","data"}`；`RejectedResult` 只认该类型。Dispatcher 日志在 `ToolOutput` 字段之外写 `goagent_rejected` 标记，回放时重建 | 按形状识别时，透传上游 JSON 的工具拿到同形状数据，失败会被当作已完成的业务拒绝；标记放在工具写不到的层级，经 JSON 往返后仍可识别 |
 | R2-3 重试计入 `model_calls` | 计入 `new_model_invocations`（实际请求数），不计入 `model_calls`（文档定义为逻辑回合数） | 与 `COMPOSABLE_ORCHESTRATION.md` 已有的指标定义一致 |

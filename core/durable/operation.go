@@ -21,6 +21,12 @@ func WithJournal(ctx context.Context, store Store) context.Context {
 	return context.WithValue(ctx, journalContext{}, store)
 }
 
+// JournalStore 返回 ctx 绑定的日志 Store，没有时为 nil。嵌套的子流程用它把状态写在父日志的同一 Store 中。
+func JournalStore(ctx context.Context) Store {
+	s, _ := ctx.Value(journalContext{}).(Store)
+	return s
+}
+
 func HasJournal(ctx context.Context) bool {
 	s, _ := ctx.Value(journalContext{}).(Store)
 	return s != nil && ExecutionKey(ctx) != ""
