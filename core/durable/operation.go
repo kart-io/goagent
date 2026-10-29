@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
+	"strings"
 	"time"
 
 	agentErrors "github.com/kart-io/goagent/errors"
@@ -39,19 +41,34 @@ type OperationPolicy struct {
 	// RetryFailed permits another attempt on a subsequent explicit invocation.
 	// Do never loops or retries within a single invocation.
 	RetryFailed bool
+	// Reconcile 在记录停在 pending（上次执行中断、结果未知）时先于重跑调用，按派生执行键查询效果是否已生效：
+	// found 为真时用 value 补记为 completed，不执行 run、不计尝试次数；返回错误时记录不变。
+	Reconcile func(ctx context.Context) (value json.RawMessage, found bool, err error)
+	// Resumable 声明 run 的全部效果都记在派生执行键下，重新进入只会回放已完成的步骤：
+	// waiting 记录总是重新进入且不计尝试次数，pending 记录在 MaxAttempts 内重新进入。
+	Resumable bool
 }
 
 type OperationRecord struct {
 	ID          string          `json:"id"`
 	Key         string          `json:"key"`
 	InputHash   string          `json:"input_hash"`
-	Status      string          `json:"status"` // pending, completed, failed
+	Status      string          `json:"status"` // pending, completed, failed, waiting
 	Attempts    int             `json:"attempts"`
 	MaxAttempts int             `json:"max_attempts"`
 	Value       json.RawMessage `json:"value"`
 	FailureKind string          `json:"failure_kind,omitempty"`
-	Replayed    bool            `json:"-"`
+	// Continuation 是 waiting 记录保存的等待项（[]*WaitError 的 JSON），只含定位信息。
+	Continuation json.RawMessage `json:"continuation,omitempty"`
+	// Reconciled 表示 completed 结果来自 Reconcile 核对，而非本次执行。
+	Reconciled bool `json:"reconciled,omitempty"`
+	Replayed   bool `json:"-"`
 }
+
+const (
+	operationVersionV1 = "goagent-operation-v1"
+	operationVersion   = "goagent-operation-v2"
+)
 
 var ErrOperationAttention = errors.New("durable operation needs host attention")
 
@@ -61,6 +78,85 @@ func (e *OperationError) Error() string {
 	return fmt.Sprintf("operation %q needs host attention (%s)", e.ID, e.Kind)
 }
 func (e *OperationError) Unwrap() error { return ErrOperationAttention }
+
+// WaitStep locates one journaled operation on the path to a wait, outermost first.
+type WaitStep struct {
+	ID  string `json:"id"`
+	Key string `json:"key"`
+}
+
+// WaitError is a normal pause awaiting host continuation (e.g. an approval).
+// It is neither a failure nor a result. Do records it as waiting and prefixes
+// its own step, so the path leads from the outermost operation to the wait.
+type WaitError struct {
+	Path         []WaitStep      `json:"path,omitempty"`
+	Continuation json.RawMessage `json:"continuation,omitempty"`
+}
+
+func (e *WaitError) Error() string {
+	ids := make([]string, len(e.Path))
+	for i, step := range e.Path {
+		ids[i] = step.ID
+	}
+	return fmt.Sprintf("operation waiting for host continuation at %q", strings.Join(ids, " > "))
+}
+
+// Waits returns the waits in err when every failure in its tree is a wait;
+// otherwise nil, because a joined real failure must not be recorded as a pause.
+func Waits(err error) []*WaitError {
+	var waits []*WaitError
+	var walk func(error) bool
+	walk = func(e error) bool {
+		if w, ok := e.(*WaitError); ok {
+			waits = append(waits, w)
+			return true
+		}
+		switch u := e.(type) {
+		case interface{ Unwrap() []error }:
+			branches := u.Unwrap()
+			for _, b := range branches {
+				if b != nil && !walk(b) {
+					return false
+				}
+			}
+			return len(branches) > 0
+		case interface{ Unwrap() error }:
+			if inner := u.Unwrap(); inner != nil {
+				return walk(inner)
+			}
+		}
+		return false
+	}
+	if err == nil || !walk(err) {
+		return nil
+	}
+	return waits
+}
+
+func decodeWaits(r *OperationRecord) ([]*WaitError, error) {
+	var waits []*WaitError
+	if json.Unmarshal(r.Continuation, &waits) != nil || len(waits) == 0 || slices.Contains(waits, nil) {
+		return nil, fmt.Errorf("invalid durable operation record")
+	}
+	return waits, nil
+}
+
+// storedWaits rebuilds the waits of a waiting record, prefixed with its own step.
+func storedWaits(r *OperationRecord) error {
+	waits, err := decodeWaits(r)
+	if err != nil {
+		return err
+	}
+	errs := make([]error, len(waits))
+	for i, w := range waits {
+		w.Path = append([]WaitStep{{ID: r.ID, Key: r.Key}}, w.Path...)
+		errs[i] = w
+	}
+	if len(errs) == 1 {
+		return errs[0]
+	}
+	return errors.Join(errs...)
+}
 
 func operationStorageID(key string) string { return "goagent/operation/" + key }
 
@@ -85,10 +181,20 @@ func loadOperation(ctx context.Context, store Store, key, id string) (*Operation
 		return nil, err
 	}
 	var r OperationRecord
-	if snapshot == nil || snapshot.Version != "goagent-operation-v1" || snapshot.RunID != operationStorageID(key) || json.Unmarshal(snapshot.Data, &r) != nil ||
+	if snapshot == nil || (snapshot.Version != operationVersion && snapshot.Version != operationVersionV1) || snapshot.RunID != operationStorageID(key) || json.Unmarshal(snapshot.Data, &r) != nil ||
 		r.ID != id || r.Key != key || r.InputHash == "" || r.Attempts < 1 || r.MaxAttempts < 1 || r.Attempts > r.MaxAttempts || !json.Valid(r.Value) ||
-		(r.Status != "pending" && r.Status != "completed" && r.Status != "failed") {
+		(r.Status != "pending" && r.Status != "completed" && r.Status != "failed" && r.Status != "waiting") {
 		return nil, fmt.Errorf("invalid durable operation record")
+	}
+	// v1 记录没有等待与核对语义，不能被重新解释。
+	if (r.Status == "waiting") != (len(r.Continuation) > 0) || (r.Reconciled && r.Status != "completed") ||
+		(snapshot.Version == operationVersionV1 && (r.Status == "waiting" || r.Reconciled)) {
+		return nil, fmt.Errorf("invalid durable operation record")
+	}
+	if r.Status == "waiting" {
+		if _, err := decodeWaits(&r); err != nil {
+			return nil, err
+		}
 	}
 	return &r, nil
 }
@@ -139,22 +245,34 @@ func Do(ctx context.Context, id string, input json.RawMessage, policy OperationP
 			record.Replayed = true
 			return record, nil
 		}
-		if !policy.RetryFailed || record.Attempts >= policy.MaxAttempts {
+		if record.Status == "pending" && policy.Reconcile != nil {
+			value, found, e := reconcileOperation(childCtx, policy.Reconcile)
+			if e != nil {
+				return record, e
+			}
+			if found {
+				record.Status, record.FailureKind, record.Value, record.Reconciled, record.Replayed = "completed", "", value, true, true
+				return record, saveOperation(ctx, store, storageID, record)
+			}
+		}
+		resume := policy.Resumable && (record.Status == "waiting" || (record.Status == "pending" && record.Attempts < policy.MaxAttempts))
+		if record.Status == "waiting" && !resume {
+			record.Replayed = true
+			return record, storedWaits(record)
+		}
+		if !resume && (!policy.RetryFailed || record.Attempts >= policy.MaxAttempts) {
 			record.Replayed = true
 			return record, &OperationError{ID: id, Kind: record.FailureKind}
 		}
 	} else {
 		record = &OperationRecord{ID: id, Key: key, InputHash: inputHash, MaxAttempts: policy.MaxAttempts}
 	}
-	record.Attempts++
-	record.Status, record.FailureKind, record.Value = "pending", "ambiguous", json.RawMessage(`null`)
-	save := func(saveCtx context.Context) error {
-		data, e := json.Marshal(record)
-		if e != nil {
-			return e
-		}
-		return store.Save(saveCtx, storageID, &Snapshot{RunID: storageID, Version: "goagent-operation-v1", Data: data})
+	// 从等待中续跑不是新的尝试。
+	if record.Status != "waiting" {
+		record.Attempts++
 	}
+	record.Status, record.FailureKind, record.Value, record.Continuation = "pending", "ambiguous", json.RawMessage(`null`), nil
+	save := func(saveCtx context.Context) error { return saveOperation(saveCtx, store, storageID, record) }
 	if err = save(ctx); err != nil {
 		return record, err
 	}
@@ -170,7 +288,15 @@ func Do(ctx context.Context, id string, input json.RawMessage, policy OperationP
 		callErr = errors.Join(callErr, fmt.Errorf("operation output is not JSON"))
 	}
 	record.Value, record.Status, record.FailureKind = value, "completed", ""
-	if callErr != nil {
+	if waits := Waits(callErr); waits != nil {
+		record.Status = "waiting"
+		if record.Continuation, err = json.Marshal(waits); err != nil {
+			record.Status, record.FailureKind, record.Continuation = "failed", "execution", nil
+			callErr = errors.Join(callErr, err)
+		} else {
+			callErr = storedWaits(record)
+		}
+	} else if callErr != nil {
 		record.Status, record.FailureKind = "failed", "execution"
 		if errors.Is(callErr, context.Canceled) {
 			record.FailureKind = "canceled"
@@ -183,6 +309,32 @@ func Do(ctx context.Context, id string, input json.RawMessage, policy OperationP
 	saveCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
 	return record, errors.Join(callErr, save(saveCtx))
+}
+
+func saveOperation(ctx context.Context, store Store, storageID string, record *OperationRecord) error {
+	data, err := json.Marshal(record)
+	if err != nil {
+		return err
+	}
+	return store.Save(ctx, storageID, &Snapshot{RunID: storageID, Version: operationVersion, Data: data})
+}
+
+func reconcileOperation(ctx context.Context, reconcile func(context.Context) (json.RawMessage, bool, error)) (value json.RawMessage, found bool, err error) {
+	defer func() {
+		if v := recover(); v != nil {
+			value, found, err = nil, false, agentErrors.NewPanicError("持久操作的核对", v)
+		}
+	}()
+	value, found, err = reconcile(ctx)
+	if err == nil && found {
+		if len(value) == 0 {
+			value = json.RawMessage(`null`)
+		}
+		if !json.Valid(value) {
+			return nil, false, fmt.Errorf("reconciled output is not JSON")
+		}
+	}
+	return value, found, err
 }
 
 func invokeOperation(ctx context.Context, run func(context.Context) (json.RawMessage, error)) (value json.RawMessage, err error) {

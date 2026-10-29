@@ -125,7 +125,7 @@ func exerciseNativeProcesses(t *testing.T, env []string, report *nativeLoopRepor
 				continue
 			}
 			var s durable.Snapshot
-			if json.Unmarshal(b, &s) != nil || s.Version != "goagent-operation-v1" {
+			if json.Unmarshal(b, &s) != nil || (s.Version != "goagent-operation-v1" && s.Version != "goagent-operation-v2") {
 				continue
 			}
 			var op durable.OperationRecord

@@ -95,7 +95,7 @@ func ErrorKind(err error) string {
 		return "canceled"
 	case errors.Is(err, context.DeadlineExceeded):
 		return "deadline"
-	case errors.Is(err, durable.ErrApprovalRequired):
+	case errors.Is(err, durable.ErrApprovalRequired) || durable.Waits(err) != nil:
 		return "waiting"
 	case errors.Is(err, durable.ErrOperationAttention):
 		return "attention"
