@@ -46,6 +46,7 @@ type OperationPolicy struct {
 	Reconcile func(ctx context.Context) (value json.RawMessage, found bool, err error)
 	// Resumable 声明 run 的全部效果都记在派生执行键下，重新进入只会回放已完成的步骤：
 	// waiting 记录总是重新进入且不计尝试次数，pending 记录在 MaxAttempts 内重新进入。
+	// 只有声明它的操作能把 *WaitError 记为等待。
 	Resumable bool
 }
 
@@ -72,6 +73,19 @@ const (
 
 var ErrOperationAttention = errors.New("durable operation needs host attention")
 
+// ErrWaitNotResumable 表示没有声明 Resumable 的持久操作收到了等待：它以后不会重新进入，等待无法续跑，
+// 因此记为失败（FailureKind 为 not_resumable）。承载等待的操作（如包住子图的工具）须声明 Resumable。
+var ErrWaitNotResumable = errors.New("等待只能由声明 Resumable 的持久操作承载")
+
+type waitableContext struct{}
+
+// CanWait 报告在 ctx 中返回 *WaitError 能否被续跑：ctx 所在的最内层持久操作带日志且声明了 Resumable。
+// 会产生等待的子流程（如 DurableGraph.AsChildRunnable）据此在执行任何步骤之前失败。
+func CanWait(ctx context.Context) bool {
+	ok, _ := ctx.Value(waitableContext{}).(bool)
+	return ok
+}
+
 type OperationError struct{ ID, Kind string }
 
 func (e *OperationError) Error() string {
@@ -88,6 +102,7 @@ type WaitStep struct {
 // WaitError is a normal pause awaiting host continuation (e.g. an approval).
 // It is neither a failure nor a result. Do records it as waiting and prefixes
 // its own step, so the path leads from the outermost operation to the wait.
+// 只有声明 Resumable 的操作能承载等待，其余操作把它记为失败并返回 ErrWaitNotResumable。
 type WaitError struct {
 	Path         []WaitStep      `json:"path,omitempty"`
 	Continuation json.RawMessage `json:"continuation,omitempty"`
@@ -222,6 +237,7 @@ func Do(ctx context.Context, id string, input json.RawMessage, policy OperationP
 		childCtx = WithExecutionKey(ctx, key)
 	}
 	store, _ := ctx.Value(journalContext{}).(Store)
+	childCtx = context.WithValue(childCtx, waitableContext{}, policy.Resumable && store != nil && key != "")
 	if store == nil || key == "" {
 		value, e := run(childCtx)
 		return &OperationRecord{ID: id, Key: key, Value: value, Attempts: 1}, e
@@ -258,7 +274,7 @@ func Do(ctx context.Context, id string, input json.RawMessage, policy OperationP
 		resume := policy.Resumable && (record.Status == "waiting" || (record.Status == "pending" && record.Attempts < policy.MaxAttempts))
 		if record.Status == "waiting" && !resume {
 			record.Replayed = true
-			return record, storedWaits(record)
+			return record, &OperationError{ID: id, Kind: "not_resumable"}
 		}
 		if !resume && (!policy.RetryFailed || record.Attempts >= policy.MaxAttempts) {
 			record.Replayed = true
@@ -288,7 +304,10 @@ func Do(ctx context.Context, id string, input json.RawMessage, policy OperationP
 		callErr = errors.Join(callErr, fmt.Errorf("operation output is not JSON"))
 	}
 	record.Value, record.Status, record.FailureKind = value, "completed", ""
-	if waits := Waits(callErr); waits != nil {
+	if waits := Waits(callErr); waits != nil && !policy.Resumable {
+		record.Status, record.FailureKind = "failed", "not_resumable"
+		callErr = fmt.Errorf("%w：操作 %q 收到 %v", ErrWaitNotResumable, id, callErr)
+	} else if waits != nil {
 		record.Status = "waiting"
 		if record.Continuation, err = json.Marshal(waits); err != nil {
 			record.Status, record.FailureKind, record.Continuation = "failed", "execution", nil

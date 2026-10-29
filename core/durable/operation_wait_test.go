@@ -16,21 +16,61 @@ func waitingRun(calls *int) func(context.Context) (json.RawMessage, error) {
 	}
 }
 
-func TestOperationWaitIsRecordedAndReplayedWithoutRerun(t *testing.T) {
+func TestOperationWaitIsRecordedAndReentered(t *testing.T) {
 	ctx := operationContext(t)
 	calls := 0
-	record, err := Do(ctx, "tool/c1", json.RawMessage(`{}`), OperationPolicy{}, waitingRun(&calls))
+	policy := OperationPolicy{Resumable: true}
+	record, err := Do(ctx, "tool/c1", json.RawMessage(`{}`), policy, waitingRun(&calls))
 	waits := Waits(err)
 	require.Len(t, waits, 1)
 	require.Equal(t, "waiting", record.Status)
 	require.Equal(t, []WaitStep{{ID: "tool/c1", Key: ChildKey("node-key", "tool/c1")}}, waits[0].Path)
 	require.JSONEq(t, `{"node":"approve"}`, string(waits[0].Continuation))
 	require.NotErrorIs(t, err, ErrOperationAttention)
+}
 
-	again, err := Do(ctx, "tool/c1", json.RawMessage(`{}`), OperationPolicy{}, waitingRun(&calls))
-	require.Len(t, Waits(err), 1)
-	require.True(t, again.Replayed)
-	require.Equal(t, 1, calls, "不可续跑的操作在等待时不重新进入")
+// 不可续跑的操作以后不会重新进入，记成等待就永远续不上；它收到的等待按失败处理并说明原因。
+func TestOperationWaitWithoutResumablePolicyFails(t *testing.T) {
+	ctx := operationContext(t)
+	calls := 0
+	var sawWaitable bool
+	record, err := Do(ctx, "tool/c1", json.RawMessage(`{}`), OperationPolicy{}, func(ctx context.Context) (json.RawMessage, error) {
+		sawWaitable = CanWait(ctx)
+		return waitingRun(&calls)(ctx)
+	})
+	require.ErrorIs(t, err, ErrWaitNotResumable)
+	require.Nil(t, Waits(err), "不能作为等待向上传递")
+	require.False(t, sawWaitable)
+	require.Equal(t, "failed", record.Status)
+	require.Equal(t, "not_resumable", record.FailureKind)
+
+	_, err = Do(ctx, "tool/c1", json.RawMessage(`{}`), OperationPolicy{}, waitingRun(&calls))
+	var attention *OperationError
+	require.ErrorAs(t, err, &attention)
+	require.Equal(t, "not_resumable", attention.Kind)
+	require.Equal(t, 1, calls)
+}
+
+func TestCanWaitFollowsInnermostOperation(t *testing.T) {
+	ctx := operationContext(t)
+	require.False(t, CanWait(ctx))
+	var outer, inner bool
+	_, err := Do(ctx, "outer", json.RawMessage(`{}`), OperationPolicy{Resumable: true}, func(ctx context.Context) (json.RawMessage, error) {
+		outer = CanWait(ctx)
+		_, err := Do(ctx, "inner", json.RawMessage(`{}`), OperationPolicy{}, func(ctx context.Context) (json.RawMessage, error) {
+			inner = CanWait(ctx)
+			return nil, nil
+		})
+		return nil, err
+	})
+	require.NoError(t, err)
+	require.True(t, outer)
+	require.False(t, inner)
+	_, err = Do(context.Background(), "plain", json.RawMessage(`{}`), OperationPolicy{Resumable: true}, func(ctx context.Context) (json.RawMessage, error) {
+		require.False(t, CanWait(ctx), "没有日志时等待无处保存")
+		return nil, nil
+	})
+	require.NoError(t, err)
 }
 
 func TestOperationResumableReentersWaitWithoutConsumingAttempts(t *testing.T) {
@@ -167,8 +207,9 @@ func TestOperationWaitJoinedWithFailureIsFailure(t *testing.T) {
 
 func TestOperationNestedWaitsPrefixPath(t *testing.T) {
 	ctx := operationContext(t)
-	_, err := Do(ctx, "outer", json.RawMessage(`{}`), OperationPolicy{}, func(ctx context.Context) (json.RawMessage, error) {
-		_, inner := Do(ctx, "inner", json.RawMessage(`{}`), OperationPolicy{}, func(context.Context) (json.RawMessage, error) {
+	resumable := OperationPolicy{Resumable: true}
+	_, err := Do(ctx, "outer", json.RawMessage(`{}`), resumable, func(ctx context.Context) (json.RawMessage, error) {
+		_, inner := Do(ctx, "inner", json.RawMessage(`{}`), resumable, func(context.Context) (json.RawMessage, error) {
 			return nil, &WaitError{Continuation: json.RawMessage(`"gate"`)}
 		})
 		return nil, inner
