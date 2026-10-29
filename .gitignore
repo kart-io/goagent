@@ -40,3 +40,15 @@ go.work.sum
 # Python caches (archived evaluation logs remain tracked)
 __pycache__/
 *.pyc
+
+# 示例与工具的 go build 产物（按路径列出，避免误伤同名源码目录）
+/examples/advanced/multi-agent-modular/multi-agent-modular
+/examples/advanced/multi-agent-simple/multi-agent-simple
+/examples/advanced/multiagent-patterns/multiagent-patterns
+/examples/advanced/pool-decoupled-architecture/bin/
+/examples/advanced/pool-decoupled-architecture/main
+/examples/advanced/supervisor_agent/supervisor_agent
+/examples/basic/05-provider-consistency/05-provider-consistency
+/examples/basic/06-all-providers/06-all-providers
+/tools/plugingen/cmd/plugingen/plugingen
+/tools/plugingen/plugingen
