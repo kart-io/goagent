@@ -62,3 +62,13 @@ func TestRejectedDirectToolContinuesToModel(t *testing.T) {
 	require.Equal(t, "未找到该订单", out.Result, "业务拒绝不能作为直接答案")
 	require.Len(t, model.requests, 2)
 }
+
+func TestRejectedMessageReportedWhenIterationsExhausted(t *testing.T) {
+	calls := 0
+	model := nativeModel(rejectionTurns()...)
+	agent, err := NewSimpleBuilder(model).WithTools(rejectingDispatcher(t, &calls).Tools()...).WithReturnDirectTools("refund").WithMaxIterations(1).Build()
+	require.NoError(t, err)
+	_, err = agent.AsRunnable().Invoke(context.Background(), "退订单 A1")
+	require.ErrorContains(t, err, "最近一次工具失败：订单不存在")
+	require.NotContains(t, err.Error(), `"error"`, "只报告拒绝的 message")
+}
