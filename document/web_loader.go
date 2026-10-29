@@ -70,7 +70,7 @@ func (l *WebLoader) Load(ctx context.Context) ([]*interfaces.Document, error) {
 	if l.callbackManager != nil {
 		if err := l.callbackManager.OnStart(ctx, map[string]interface{}{
 			"loader": "web",
-			"url":    l.url,
+			"url":    errors.RedactURL(l.url),
 		}); err != nil {
 			return nil, err
 		}
