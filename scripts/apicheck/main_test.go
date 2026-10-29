@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestImportRulesUseCurrentModuleAndExactExceptions(t *testing.T) {
+func TestImportRulesUseCurrentModuleAndLayeredExceptions(t *testing.T) {
 	for _, tc := range []struct {
 		file, dep string
 		bad       bool
@@ -24,7 +24,9 @@ func TestImportRulesUseCurrentModuleAndExactExceptions(t *testing.T) {
 		{"cache/x.go", "utils/json", false},
 		{"cache/x.go", "utils/httpclient", true},
 		{"utils/httpclient/client.go", "errors", false},
-		{"utils/json/x.go", "errors", true},
+		{"utils/json/x.go", "errors", false},
+		{"utils/x.go", "errors", false},
+		{"utils/httpclient/client.go", "errors/sub", true},
 		{"utils/httpclient/client.go", "core", true},
 		{"tools/x.go", "examples/test", true},
 		{"workflow/x.go", "core/durable", false},
