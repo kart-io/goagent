@@ -1145,3 +1145,34 @@ func TestInterruptManager_CancelWhileCreatedHookRuns(t *testing.T) {
 	}
 	requireInterruptCleaned(t, manager)
 }
+
+// CreateInterrupt 传入 nil 时返回 CodeInvalidInput 错误而不是 panic。
+func TestInterruptManager_CreateNilInterrupt(t *testing.T) {
+	manager := NewInterruptManager(nil)
+	created, response, err := manager.CreateInterrupt(context.Background(), nil)
+	require.Nil(t, created)
+	require.Nil(t, response)
+	require.True(t, agentErrors.IsCode(err, agentErrors.CodeInvalidInput), "应返回 CodeInvalidInput，实际 %v", err)
+	requireInterruptCleaned(t, manager)
+}
+
+// CancelInterrupt 对不存在或已清理的 ID 返回与 RespondToInterrupt 一致的 not found 错误。
+func TestInterruptManager_CancelUnknownID(t *testing.T) {
+	manager := NewInterruptManager(nil)
+	err := manager.CancelInterrupt("missing")
+	require.True(t, agentErrors.IsCode(err, agentErrors.CodeAgentNotFound), "应返回 CodeAgentNotFound，实际 %v", err)
+	respondErr := manager.RespondToInterrupt("missing", &InterruptResponse{Approved: true})
+	require.Equal(t, agentErrors.GetCode(respondErr), agentErrors.GetCode(err))
+
+	created := make(chan string, 1)
+	manager.OnInterruptCreated(func(i *Interrupt) { created <- i.ID })
+	done := make(chan error, 1)
+	go func() {
+		_, _, err := manager.CreateInterrupt(context.Background(), &Interrupt{Type: InterruptTypeApproval})
+		done <- err
+	}()
+	id := <-created
+	require.NoError(t, manager.RespondToInterrupt(id, &InterruptResponse{Approved: true}))
+	require.NoError(t, <-done)
+	require.True(t, agentErrors.IsCode(manager.CancelInterrupt(id), agentErrors.CodeAgentNotFound), "等待方退出后取消应返回 not found")
+}
