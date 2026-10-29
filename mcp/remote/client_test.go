@@ -64,8 +64,10 @@ func TestOfficialSDKStdioInteroperability(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	cmd := exec.Command(os.Args[0], "-test.run=^TestOfficialSDKStdioInteroperability$")
+	// ctx 超时后杀掉子进程；WaitDelay 保证子进程残留的管道不会让 Wait 一直阻塞
+	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestOfficialSDKStdioInteroperability$")
 	cmd.Env = append(os.Environ(), "GOAGENT_MCP_CHILD=1")
+	cmd.WaitDelay = time.Second
 	session, err := Connect(ctx, &mcp.CommandTransport{Command: cmd})
 	require.NoError(t, err)
 	defer session.Close()
