@@ -2,6 +2,7 @@ package planning
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
@@ -704,7 +705,5 @@ func (r *AgentRegistry) GetAgent(name string) core.Agent {
 
 // contains checks if a string contains a substring (case-insensitive)
 func contains(s, substr string) bool {
-	return len(s) > 0 && len(substr) > 0 &&
-		(s == substr || len(s) > len(substr) &&
-			(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr))
+	return substr != "" && strings.Contains(strings.ToLower(s), strings.ToLower(substr))
 }
