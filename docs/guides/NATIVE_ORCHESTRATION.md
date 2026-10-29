@@ -103,33 +103,38 @@ if snapshot.Waiting {
 
 ## 可运行退款案例
 
+案例位于 [goagent-examples](https://github.com/kart-io/goagent-examples/blob/main/workflow/refund-recovery/README.md)，本节命令在该仓库根目录运行。
+
 ```sh
 # 使用一个新目录，第一次运行停在审批前，无模型调用。
-go run ./examples/workflow/refund-recovery -engine graph -dir /tmp/refund-native
+go run ./workflow/refund-recovery -engine graph -dir /tmp/refund-native
 # 将 KEY 替换为上一步 snapshot.Key。
-go run ./examples/workflow/refund-recovery -engine graph -dir /tmp/refund-native \
+go run ./workflow/refund-recovery -engine graph -dir /tmp/refund-native \
   -approve KEY -approver demo-reviewer -crash-after-refund
 # 上一步模拟退出码 86。重启返回原回执，账本仅一条退款。
-go run ./examples/workflow/refund-recovery -engine graph -dir /tmp/refund-native
+go run ./workflow/refund-recovery -engine graph -dir /tmp/refund-native
 ```
 
 图流程：恢复既有申请 → 并行查询订单/校验申请 → 注册审核快照 → 审批 → Dispatcher 退款工具 → 完成。工具调用真实的本地 SQLite 事务适配器，订单与审批身份仍是演示数据，不连接支付机构。`-engine steps` 是旧默认入口，两个执行器使用独立检查点子目录，共享业务账本去重。
 
 ```sh
-go test -race ./workflow ./tools ./core/durable ./examples/workflow/refund-recovery
+# goagent 仓库
+go test -race ./workflow ./tools ./core/durable
+# goagent-examples 仓库
+go test -race ./workflow/refund-recovery
 ```
 
 覆盖分支成功后跳过、失败/取消、汇合重试、分支保存失败的稳定键、真实进程崩溃、旧检查点兼容、工具 Schema/授权/结果失败、Builder 原生工具路径，以及退款图跨进程恢复。
 
 ## DevOps、文章审核、自动回复
 
-[三个业务案例](../../examples/workflow/business-cases/README.md)提供完整 CLI、JSON 输入夹具和自动化测试：DevOps 并行诊断与审批后模拟重启；文章并行审核、拒绝与人工复核；自动回复基于本地 FAQ，有来源才回复，未知问题转人工。
+[三个业务案例](https://github.com/kart-io/goagent-examples/blob/main/workflow/business-cases/README.md)位于 goagent-examples 仓库，本节命令在该仓库根目录运行。案例提供完整 CLI、JSON 输入夹具和自动化测试：DevOps 并行诊断与审批后模拟重启；文章并行审核、拒绝与人工复核；自动回复基于本地 FAQ，有来源才回复，未知问题转人工。
 
 ```sh
-go run ./examples/workflow/business-cases -case devops -dir /tmp/goagent-devops
-go run ./examples/workflow/business-cases -case article-review -dir /tmp/goagent-article
-go run ./examples/workflow/business-cases -case auto-reply -dir /tmp/goagent-reply
-go test -race ./examples/workflow/business-cases
+go run ./workflow/business-cases -case devops -dir /tmp/goagent-devops
+go run ./workflow/business-cases -case article-review -dir /tmp/goagent-article
+go run ./workflow/business-cases -case auto-reply -dir /tmp/goagent-reply
+go test -race ./workflow/business-cases
 ```
 
 三个案例默认使用离线规则，可通过 `-live -provider gemini|deepseek|minimax -model MODEL` 接入真实模型；业务效果始终为本地模拟。模型判断持久化后，审批恢复和流程重放不再调用模型。测试覆盖审批前零效果、Schema 校验、失败/取消恢复、跨进程崩溃与业务 ID 去重。
@@ -176,9 +181,11 @@ Builder 会读取模型可选的 `core.StreamCapability`。MiniMax 案例适配�
 
 ## 多工具真实进程恢复验证
 
+以下命令在 goagent-examples 仓库根目录运行。
+
 ```sh
 # 默认离线：模拟原生协议，验证真实子进程退出与续接。
-go test -race ./examples/workflow/business-cases -run TestNativeToolLoopProcessRecovery
+go test -race ./workflow/business-cases -run TestNativeToolLoopProcessRecovery
 # 显式真实模型：选择一个 provider，每次最多 4 个请求。
 DEEPSEEK_MODEL=deepseek-flash bash scripts/business_tool_loop_live.sh deepseek /tmp/deepseek-loop.json
 ```

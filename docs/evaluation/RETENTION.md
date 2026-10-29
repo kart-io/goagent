@@ -9,3 +9,5 @@
 - 本机路径脱敏只替换路径前缀，其余内容保持原样：仓库根目录写作 `<repo>`，评测用 Python 虚拟环境写作 `<venv>`，Python 安装目录写作 `<python>`。
 
 2026-10-28：在 `codex/composable-orchestration-r2` 反向撤销清理提交 `92bf21b`，恢复其删除的 196 份日志和 6 个 Python 脚本，并恢复相关报告和复现说明。历史文件取自该清理提交的父提交，恢复不表示重新运行评测。另保留本次整合前的独立本地备份。
+
+2026-10-29：业务验证案例迁出到 [goagent-examples](https://github.com/kart-io/goagent-examples)，来源提交为 `d429c47`。迁出内容为 `examples/workflow/business-cases`、`examples/workflow/refund-recovery`、`examples/orchestration`、`examples/internal/livemodel`，以及 `scripts/business_cases_live.sh`、`scripts/business_tool_loop_live.sh`；在新仓库中去掉 `examples/` 前缀，脚本仍在 `scripts/`。历史报告与日志不改写：其中指向上述路径的相对链接和命令以 goagent `d429c47` 为准，新的评测在 goagent-examples 中运行。

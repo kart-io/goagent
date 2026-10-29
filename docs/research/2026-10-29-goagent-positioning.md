@@ -80,7 +80,7 @@ GoAgent 定位为**嵌入 Go 业务服务的可恢复、可计量、可观测 Ag
 | 包 | 依据 |
 | --- | --- |
 | `prompt` | 主模块无导入方，2025-12-07 后无改动 |
-| `examples/` 中与核心入口无关的部分 | 保留 `orchestration`、`workflow`、`builder`、`mcp`、`basic` 等核心入口与业务验证案例；其余随对应 contrib 模块迁移或删除 |
+| `examples/` 中与核心入口无关的部分 | 业务验证案例（`workflow/business-cases`、`workflow/refund-recovery`、`orchestration`）已于 2026-10-29 迁到 [goagent-examples](https://github.com/kart-io/goagent-examples)；其余目录保留 `workflow`、`builder`、`mcp`、`basic` 等核心入口，其他随对应 contrib 模块迁移或删除 |
 
 确认是否内部服务仍在使用后再删；如果主要服务内部宿主，可以把 4.2 中无人使用的包直接删除，不必保留 contrib。
 

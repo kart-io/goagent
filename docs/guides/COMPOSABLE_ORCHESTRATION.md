@@ -4,16 +4,16 @@
 
 ## 离线运行
 
-所有示例使用本地确定性模型，无需密钥、没有真实退款等副作用：
+示例位于 [goagent-examples](https://github.com/kart-io/goagent-examples) 仓库，以下命令在其根目录运行。所有示例使用本地确定性模型，无需密钥、没有真实退款等副作用：
 
 ```sh
-go run ./examples/orchestration/runnable-tool
-go run ./examples/orchestration/agent-tool
-go run ./examples/orchestration/field-adapter
-go run ./examples/orchestration/parallel-diagnostics
-go run ./examples/orchestration/stream-pipeline
-go run ./examples/orchestration/context-recovery /tmp/goagent-evidence-demo
-go run ./examples/orchestration/composed-order /tmp/goagent-order-demo
+go run ./orchestration/runnable-tool
+go run ./orchestration/agent-tool
+go run ./orchestration/field-adapter
+go run ./orchestration/parallel-diagnostics
+go run ./orchestration/stream-pipeline
+go run ./orchestration/context-recovery /tmp/goagent-evidence-demo
+go run ./orchestration/composed-order /tmp/goagent-order-demo
 # 使用相同目录再次运行 composed-order：新增模型请求应为 0。
 ```
 
@@ -73,7 +73,7 @@ Graph.Describe 或编译产物可选 Description 返回排序、独立的 `goage
 
 没有新配置时不添加预算/策略意图字段。普通工具原意图 fixture 和已有执行测试保持通过。新工具版本、策略配置或根预算配置变化会拒绝旧运行；不能删除 pending、退款或增加重试次数来强行恢复。
 
-先停止新版本运行，保留对应版本 worker 处理存量。账本、引用和检查点统一按业务运行保留；活跃引用不能提前清理。测试与性能实测见 [交付验证记录](../evaluation/2026-10-27-orchestration-r2/REPORT.md)。真实模型仅由宿主显式接入并设置预算，本轮交付证据使用本地模型。接入 DeepSeek、MiniMax 与 Gemini 的可运行案例见 [examples/orchestration/live](../../examples/orchestration/live/README.md)，验证记录见[真实模型编排案例](../evaluation/2026-10-28-orchestration-live/REPORT.md)。
+先停止新版本运行，保留对应版本 worker 处理存量。账本、引用和检查点统一按业务运行保留；活跃引用不能提前清理。测试与性能实测见 [交付验证记录](../evaluation/2026-10-27-orchestration-r2/REPORT.md)。真实模型仅由宿主显式接入并设置预算，本轮交付证据使用本地模型。接入 DeepSeek、MiniMax 与 Gemini 的可运行案例见 [orchestration/live](https://github.com/kart-io/goagent-examples/blob/main/orchestration/live/README.md)，验证记录见[真实模型编排案例](../evaluation/2026-10-28-orchestration-live/REPORT.md)。
 
 ## 持久 Agent 作用域与升级
 
