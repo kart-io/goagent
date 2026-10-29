@@ -26,6 +26,7 @@ func TestRefundRecoveryAcrossProcesses(t *testing.T) {
 		args := append([]string{"-test.run=^TestRefundChildProcess$", "--", "-dir", dir, "-run", "request-1"}, extra...)
 		cmd := exec.CommandContext(ctx, os.Args[0], args...)
 		cmd.Env = append(os.Environ(), "GOAGENT_REFUND_CHILD=1")
+		cmd.WaitDelay = time.Second
 		output, err := cmd.CombinedOutput()
 		if code == 0 {
 			require.NoError(t, err, string(output))

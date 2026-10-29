@@ -8,9 +8,11 @@ import (
 	"os/exec"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/interfaces"
+	"github.com/kart-io/goagent/testing/panictest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -78,10 +80,10 @@ func TestBudgetSurvivesProcessExit(t *testing.T) {
 	dir := t.TempDir()
 	cmd := exec.Command(os.Args[0], "-test.run=^TestBudgetSurvivesProcessExit$")
 	cmd.Env = append(os.Environ(), "GOAGENT_BUDGET_CHILD="+dir)
-	err := cmd.Run()
+	output, err := panictest.CombinedOutput(cmd, panictest.ChildTimeout(t, time.Minute))
 	var exited *exec.ExitError
-	require.ErrorAs(t, err, &exited)
-	require.Equal(t, 86, exited.ExitCode())
+	require.ErrorAs(t, err, &exited, string(output))
+	require.Equal(t, 86, exited.ExitCode(), string(output))
 	store, err := durable.NewFileStore(dir)
 	require.NoError(t, err)
 	cfg := Config{RootKey: "run", Version: "v1", MaxModelRequests: 1}

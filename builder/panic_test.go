@@ -20,6 +20,7 @@ import (
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/testing/panictest"
 	"github.com/kart-io/goagent/tools"
 )
 
@@ -219,7 +220,7 @@ func TestStreamPanicDoesNotKillProcess(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cmd := exec.Command(os.Args[0], "-test.run=^TestPanicChild$", "-test.v")
 			cmd.Env = append(os.Environ(), panicCaseEnv+"="+tc.name, panicCaseEnv+"_DIR="+t.TempDir())
-			out, err := cmd.CombinedOutput()
+			out, err := panictest.CombinedOutput(cmd, panictest.ChildTimeout(t, 2*time.Minute))
 			text := string(out)
 			if err != nil || strings.Contains(text, "panic:") {
 				t.Fatalf("子进程崩溃：%v\n%s", err, text)

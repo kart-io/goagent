@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kart-io/goagent/testing/panictest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -44,7 +45,7 @@ func TestRemoveScopeCrashAfterTombstoneProcess(t *testing.T) {
 
 	cmd := exec.Command(os.Args[0], "-test.run=^TestRemoveScopeCrashAfterTombstoneProcess$")
 	cmd.Env = append(os.Environ(), "GOAGENT_SCOPE_CRASH_DIR="+dir)
-	output, err := cmd.CombinedOutput()
+	output, err := panictest.CombinedOutput(cmd, panictest.ChildTimeout(t, time.Minute))
 	var exit *exec.ExitError
 	require.ErrorAs(t, err, &exit, string(output))
 	require.Equal(t, 3, exit.ExitCode(), string(output))
