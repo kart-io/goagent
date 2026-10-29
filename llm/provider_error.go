@@ -22,8 +22,8 @@ type ProviderError struct {
 func (e *ProviderError) Error() string { return e.Err.Error() }
 func (e *ProviderError) Unwrap() error { return e.Err }
 
-// Retryable 报告失败是否可能因重试而消失：429、5xx，以及连接层错误。
-// 其他 4xx、取消与超时、协议或解码错误都不可重试。
+// Retryable 报告失败是否可能因重试而消失：429、5xx，以及暂时性的连接错误（网络超时、连接被拒绝或重置、
+// 连接意外关闭、DNS 暂时失败）。其他 4xx、取消与上下文超时、证书与 TLS 错误、域名不存在、协议或解码错误都不可重试。
 func (e *ProviderError) Retryable() bool {
 	switch {
 	case e.StatusCode == 429 || (e.StatusCode >= 500 && e.StatusCode <= 599):
@@ -31,6 +31,19 @@ func (e *ProviderError) Retryable() bool {
 	case e.StatusCode != 0 || errors.Is(e.Err, context.Canceled) || errors.Is(e.Err, context.DeadlineExceeded):
 		return false
 	}
+	// 只按白名单判断：*url.Error 总是实现 net.Error，不能据此认定为连接层的暂时性错误。
+	var dnsErr *net.DNSError
+	if errors.As(e.Err, &dnsErr) {
+		return !dnsErr.IsNotFound && (dnsErr.IsTimeout || dnsErr.IsTemporary)
+	}
 	var netErr net.Error
-	return errors.As(e.Err, &netErr) || errors.Is(e.Err, io.ErrUnexpectedEOF) || errors.Is(e.Err, syscall.ECONNRESET)
+	if errors.As(e.Err, &netErr) && netErr.Timeout() {
+		return true
+	}
+	for _, transient := range []error{syscall.ECONNREFUSED, syscall.ECONNRESET, syscall.ECONNABORTED, syscall.EPIPE, io.ErrUnexpectedEOF, io.EOF} {
+		if errors.Is(e.Err, transient) {
+			return true
+		}
+	}
+	return false
 }
