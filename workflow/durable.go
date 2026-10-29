@@ -137,8 +137,8 @@ func (d *DurableGraph[T]) run(ctx context.Context, id string, initial T, approva
 	ctx, endGraph := observe.Start(ctx, observe.Event{Type: "graph", Path: "graph"})
 	defer func() { endGraph(err, false) }()
 	defer func() {
-		if recover() != nil {
-			err = fmt.Errorf("durable graph storage or serialization panicked")
+		if r := recover(); r != nil {
+			err = agentErrors.NewPanicError("durable graph storage or serialization", r)
 		}
 	}()
 	emit := func(event *core.StreamEvent) error {
@@ -335,8 +335,8 @@ func (d *DurableGraph[T]) checkBeforeApprove(ctx context.Context, id string, che
 
 func (d *DurableGraph[T]) decodeCheckpoint(id string, checkpoint *durable.Snapshot) (state graphState[T], err error) {
 	defer func() {
-		if recover() != nil {
-			err = fmt.Errorf("checkpoint decoding panicked")
+		if r := recover(); r != nil {
+			err = agentErrors.NewPanicError("checkpoint decoding", r)
 		}
 	}()
 	if checkpoint == nil || checkpoint.Plan != d.plan || checkpoint.Version != d.version || checkpoint.RunID != id || checkpoint.Next < 0 || checkpoint.Next > d.graph.config.MaxSteps || json.Unmarshal(checkpoint.Data, &state) != nil {
@@ -416,8 +416,8 @@ func (d *DurableGraph[T]) validateContinuation(id string, cp *durable.Snapshot, 
 
 func (d *DurableGraph[T]) route(ctx context.Context, name string, state T) (target string, err error) {
 	defer func() {
-		if recover() != nil {
-			err = fmt.Errorf("branch %q panicked", name)
+		if r := recover(); r != nil {
+			err = agentErrors.NewPanicError(fmt.Sprintf("branch %q", name), r)
 		}
 	}()
 	target = d.graph.edges[name]
