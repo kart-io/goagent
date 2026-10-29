@@ -54,13 +54,14 @@ func (p *OpenAIProvider) completeStream(ctx context.Context, req *agentllm.Compl
 		messages = append(messages, message)
 	}
 	model := p.GetModel(req.Model)
+	ctx, retryAfter := withRetryAfterSlot(ctx)
 	stream, err := p.client.CreateChatCompletionStream(ctx, openai.ChatCompletionRequest{
 		Model: model, Messages: messages, Tools: p.convertTools(tools), MaxTokens: p.GetMaxTokens(req.MaxTokens),
 		Temperature: float32(p.GetTemperature(req.Temperature)), TopP: float32(req.TopP),
 		Stop: req.Stop, Stream: true, StreamOptions: &openai.StreamOptions{IncludeUsage: true},
 	})
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError(p.ProviderName(), model, err).WithContext("stream", true)
+		return nil, agentErrors.NewLLMRequestError(p.ProviderName(), model, openAIProviderError(err, *retryAfter)).WithContext("stream", true)
 	}
 	out := make(chan *agentllm.StreamChunk)
 	go func() {
@@ -90,7 +91,7 @@ func (p *OpenAIProvider) completeStream(ctx context.Context, req *agentllm.Compl
 			if err != nil {
 				terminal := &agentllm.StreamChunk{Content: content.String(), ReasoningContent: reasoning.String(), FinishReason: finishReason, Usage: usage, Done: true}
 				if !errors.Is(err, io.EOF) {
-					terminal.Error = agentErrors.NewLLMRequestError(p.ProviderName(), model, err)
+					terminal.Error = agentErrors.NewLLMRequestError(p.ProviderName(), model, openAIProviderError(err, 0))
 				} else if finishReason == "" {
 					terminal.Error = io.ErrUnexpectedEOF
 				} else {
