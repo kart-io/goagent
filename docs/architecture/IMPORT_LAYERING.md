@@ -20,7 +20,7 @@ utils/       - 工具函数
 **导入规则：**
 
 - `interfaces`、`errors` 仅允许标准库和外部依赖。
-- `utils` 可导入自己的子包；`utils/httpclient` 另可导入 `errors`，用于日志中的 URL 脱敏。`cache` 可导入自己的子包及既有的 `utils/json`。
+- `utils` 及其子包可导入自己的子包和 `errors`（`errors` 是不依赖任何内部包的叶子包，不会成环）。`cache` 可导入自己的子包及既有的 `utils/json`。
 - 禁止这些基础包导入其他 GoAgent 业务包。
 
 **示例：**
