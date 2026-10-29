@@ -20,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `tools.Rejected(message, data)` 与 `tools.RejectedResult`：业务拒绝作为工具结果交给模型，经 Dispatcher 持久执行时记为已完成、恢复时只回放；此前 Dispatcher 把任何 `Success=false` 结果当作失败并中止执行。直接返回工具收到业务拒绝时不作为答案，继续下一轮。
+- `tools.Rejected(message, data)` 与 `tools.RejectedResult`：业务拒绝作为工具结果交给模型，经 Dispatcher 持久执行时记为已完成、恢复时只回放；此前 Dispatcher 把任何 `Success=false` 结果当作失败并中止执行。直接返回工具收到业务拒绝时不作为答案，继续下一轮。业务拒绝只认 `Rejected` 构造的结果：`Result` 是包外无法构造的类型（JSON 编码仍为 `{"error":"rejected","message":...,"data":...}`），透传上游 JSON 的工具拿到同形状的 map 按普通失败处理；Dispatcher 日志在 `ToolOutput` 之外以 `goagent_rejected` 字段标记拒绝，回放时据此重建。迁移：按 `Result.(map[string]any)` 读取拒绝内容的代码改用 `tools.RejectedResult` 取 message，或对 `Result` 做 JSON 编码；此前写入、没有该标记的拒绝记录回放时按普通失败处理，进行中的持久运行须在升级前结束。
 - `tools.ReconcilableTool`：执行中断、结果未知的调用在重跑前按原执行键核对，已生效则补记为完成而不再执行。`durable.OperationPolicy` 新增 `Reconcile` 与 `Resumable`。
 - Builder 新增 `WithModelRetry(n, backoff)`（默认 0，不重试）：原生流路径在 429、5xx、连接错误时于同一回合内重试，已输出文本后不重试；优先按 `Retry-After` 等待，不越过截止时间，`Retry-After` 超过 1 分钟时不等待、直接失败（等待期间持有回合的操作锁）；OpenAI/DeepSeek 的 `Retry-After` 无法解析时视为未给出、改用 backoff，此前按 60 秒处理；每次重试先占根预算（预算键为回合键派生的 `retry/N`），计入 `new_model_invocations`，不计入 `model_calls` 与 `MaxIterations`；持久日志仍为一条回合记录，配置不进入意图。新增观测事件 `model_retry`。
 - `llm.ProviderError`（`StatusCode`、`RetryAfter`、`Retryable()`）。`Retryable` 对没有状态码的错误按白名单判断：网络超时、连接被拒绝或重置、连接意外关闭（EOF）、DNS 暂时失败可重试；证书与 TLS 错误、域名不存在、不支持的协议等不重试（`*url.Error` 总是实现 `net.Error`，不能据此认定为连接错误）。OpenAI/DeepSeek 截取 `Retry-After` 响应头，Gemini 读取 `google.rpc.RetryInfo`。

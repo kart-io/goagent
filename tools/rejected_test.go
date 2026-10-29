@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 
@@ -54,6 +55,8 @@ func TestUnsuccessfulResultOtherThanRejectedStillFails(t *testing.T) {
 		{Success: false, Result: "x"},
 		{Success: false, Result: map[string]any{"error": "rejected", "message": "m"}, Error: "boom"},
 		{Success: false, Result: map[string]any{"error": "other", "message": "m"}},
+		// 透传上游 JSON 的工具拿到与业务拒绝同形状的数据，不能被当作业务拒绝。
+		{Success: false, Result: map[string]any{"error": "rejected", "message": "m"}},
 	} {
 		d := singleToolDispatcher(t, NewBaseTool("op", "test", `{"type":"object"}`, func(context.Context, *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 			return out, nil
@@ -141,5 +144,37 @@ func TestDispatcherReconcilesAmbiguousCall(t *testing.T) {
 				require.True(t, ok)
 			}
 		})
+	}
+}
+
+func TestRejectedSurvivesJournalButShapeCannotBeForged(t *testing.T) {
+	store, err := durable.NewFileStore(t.TempDir())
+	require.NoError(t, err)
+	ctx := journalForTest(t, store)
+	forged := &interfaces.ToolOutput{Success: false, Result: map[string]any{"error": "rejected", "message": "上游错误"}}
+	_, ok := RejectedResult(forged)
+	require.False(t, ok, "按形状无法伪造业务拒绝")
+
+	d := singleToolDispatcher(t, NewBaseTool("proxy", "test", `{"type":"object"}`, func(_ context.Context, in *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+		if in.Args["forge"] == true {
+			return forged, nil
+		}
+		return Rejected("余额不足 <100>", map[string]any{"balance": 3}), nil
+	}))
+	_, err = d.Invoke(ctx, ToolRequest{Name: "proxy", Input: &interfaces.ToolInput{CallID: "forged", Args: map[string]any{"forge": true}}})
+	require.ErrorContains(t, err, "failed", "持久路径同样不接受伪造的拒绝")
+
+	req := ToolRequest{Name: "proxy", Input: &interfaces.ToolInput{CallID: "real", Args: map[string]any{}}}
+	first, err := d.Invoke(ctx, req)
+	require.NoError(t, err)
+	replayed, err := d.Invoke(ctx, req)
+	require.NoError(t, err)
+	for _, out := range []*interfaces.ToolOutput{first, replayed} {
+		message, ok := RejectedResult(out)
+		require.True(t, ok, "经日志 JSON 往返后仍识别为业务拒绝")
+		require.Equal(t, "余额不足 <100>", message)
+		data, err := json.Marshal(out.Result)
+		require.NoError(t, err)
+		require.JSONEq(t, `{"error":"rejected","message":"余额不足 <100>","data":{"balance":3}}`, string(data))
 	}
 }

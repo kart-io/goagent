@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -355,7 +354,7 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 				if _, rejected := RejectedResult(result); result == nil || result.Error != "" || (!result.Success && !rejected) {
 					return nil, false, fmt.Errorf("tool %q reconciled an unsuccessful result", req.Name)
 				}
-				data, e := json.Marshal(result)
+				data, e := encodeJournaledOutput(result)
 				return data, e == nil, e
 			}
 		}
@@ -364,15 +363,13 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 			if invokeErr != nil {
 				return nil, invokeErr
 			}
-			return json.Marshal(result)
+			return encodeJournaledOutput(result)
 		})
 		if e != nil {
 			return nil, e
 		}
 		// Journaled outputs use a JSON boundary on fresh and replayed calls alike.
-		decoder := json.NewDecoder(bytes.NewReader(record.Value))
-		decoder.UseNumber()
-		err = decoder.Decode(&out)
+		out, err = decodeJournaledOutput(record.Value)
 		if _, rejected := RejectedResult(out); err == nil && out != nil && !out.Success && !rejected && !recoverArgs {
 			err = fmt.Errorf("tool %q journaled an argument error result, but argument recovery is not enabled on this path", req.Name)
 		}

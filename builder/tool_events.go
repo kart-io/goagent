@@ -269,7 +269,9 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 			lastFailure = ""
 			if !output.Success {
 				lastFailure = text
-				if m, ok := output.Result.(map[string]any); ok {
+				if message, ok := rejectedMessage(output); ok {
+					lastFailure = message
+				} else if m, ok := output.Result.(map[string]any); ok {
 					if message, ok := m["message"].(string); ok {
 						lastFailure = message
 					}
@@ -383,6 +385,9 @@ func isRejectedResult(out *interfaces.ToolOutput) bool {
 	_, ok := tools.RejectedResult(out)
 	return ok
 }
+
+// rejectedMessage 同样位于包级，避免被循环内的 tools 变量遮蔽。
+func rejectedMessage(out *interfaces.ToolOutput) (string, bool) { return tools.RejectedResult(out) }
 
 // toolResultText 不做 HTML 转义，模型与直接答案看到的是原始 <>&。
 func toolResultText(result any) (string, error) {

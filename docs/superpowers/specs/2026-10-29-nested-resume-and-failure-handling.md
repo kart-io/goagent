@@ -236,6 +236,7 @@ Provider 需要提供的错误信息和实现约束见 2.4 节。
 | R1-4 续跑输入 | `durable.WithResume(ctx, key, input)`，key 取等待路径最后一项的 `Key` | 与等待发生处的执行键一一对应，多处等待可分别提供 |
 | R1 补充 | 审批未被采纳（键不符、被 `WithBeforeApprove` 拒绝）时仍报告为等待并标记 `Rejected`；图已越过审批时忽略续跑输入 | 否则一次错误的审批会把记录写成 failed，之后再也无法续跑；中断后宿主再次调用时通常仍带着同一审批输入 |
 | R1-3 `builder.ErrWaiting` | `ErrWaiting` 哨兵加 `*WaitingError{Waits}`；同一轮并发调用中有真失败时优先报告失败 | 等待不能掩盖同轮的真实失败 |
+| R2-1 `Rejected` 的 `Result` 为 `map` | `Result` 为包外无法构造的类型，JSON 编码为 `{"error":"rejected","message","data"}`；`RejectedResult` 只认该类型。Dispatcher 日志在 `ToolOutput` 字段之外写 `goagent_rejected` 标记，回放时重建 | 按形状识别时，透传上游 JSON 的工具拿到同形状数据，失败会被当作已完成的业务拒绝；标记放在工具写不到的层级，经 JSON 往返后仍可识别 |
 | R2-3 重试计入 `model_calls` | 计入 `new_model_invocations`（实际请求数），不计入 `model_calls`（文档定义为逻辑回合数） | 与 `COMPOSABLE_ORCHESTRATION.md` 已有的指标定义一致 |
 | R2-3 预算键 | 第 N 次重试的预算键为 `ChildKey(回合键, "retry/N")`；持久回合记录新增 `model_attempt` 字段，恢复时据此找回登记用量的键 | 账本中同一键不能重复预留，已登记的用量不可改写 |
 | R2-4 观测 | 每次重试一对 `model_retry` 事件（路径 `retry/N`、错误类别），不在 `Event` 上新增状态码与等待时长字段；工具失败沿用已有的 `tool_error` 事件统计，未另加计数；`ErrorKind` 对等待返回 `waiting` | 不改变 JSONL 事件结构 |
