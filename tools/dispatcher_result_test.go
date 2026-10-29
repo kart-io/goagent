@@ -6,12 +6,14 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/durable"
+	"github.com/kart-io/goagent/core/observe"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/stretchr/testify/require"
@@ -409,4 +411,105 @@ func TestDispatcherDeferResultsSameContextConcurrent(t *testing.T) {
 	for id, c := range got {
 		require.Equal(t, 1, c, id)
 	}
+}
+
+// AsRunnable 的事件随 runnable 的流结束，DeferResults 对它不生效：结果回调与 tool_end 在返回前即时交付。
+func TestDispatcherDeferResultsRunnableDeliversImmediately(t *testing.T) {
+	var got []string
+	d := argDispatcher(t, DispatchConfig{OnResult: func(_ context.Context, r DispatchResult) error {
+		got = append(got, r.Args["id"].(string))
+		return nil
+	}}, NewBaseTool("t", "t", idSchema, func(context.Context, *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+		return &interfaces.ToolOutput{Success: true, Result: "ok"}, nil
+	}))
+	ctx, deliver := DeferResults(context.Background())
+	_, err := d.AsRunnable().Invoke(ctx, ToolRequest{Name: "t", Input: callInput("a", "")})
+	require.NoError(t, err)
+	require.Equal(t, []string{"a"}, got, "Invoke 返回前已触发回调")
+	require.NoError(t, deliver(), "没有推迟的回调，deliver 不会向已结束的流发事件")
+
+	ctx, deliver = DeferResults(context.Background())
+	chunks, err := d.AsRunnable().Stream(ctx, ToolRequest{Name: "t", Input: callInput("b", "")})
+	require.NoError(t, err)
+	var events []string
+	for chunk := range chunks {
+		require.NoError(t, chunk.Error)
+		if chunk.Event != nil {
+			events = append(events, chunk.Event.Type)
+		}
+	}
+	require.Equal(t, []string{"tool_start", "tool_end"}, events, "tool_end 仍在流内发出")
+	require.NoError(t, deliver())
+	require.Equal(t, []string{"a", "b"}, got)
+}
+
+type observeCollector struct {
+	mu     sync.Mutex
+	events []string
+}
+
+func (c *observeCollector) Observe(_ context.Context, e observe.Event) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.events = append(c.events, e.Type)
+}
+
+func (c *observeCollector) types() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return slices.Clone(c.events)
+}
+
+// 推迟的调用由 deliver 结束观测：回调失败时观测以 tool_error 结束，成功时以 tool_end 结束。
+func TestDispatcherDeferResultsObservationEndsAtDeliver(t *testing.T) {
+	d := argDispatcher(t, DispatchConfig{OnResult: func(_ context.Context, r DispatchResult) error {
+		if r.Args["id"] == "bad" {
+			return errors.New("ledger unavailable")
+		}
+		return nil
+	}}, NewBaseTool("t", "t", idSchema, func(context.Context, *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+		return &interfaces.ToolOutput{Success: true, Result: "ok"}, nil
+	}))
+	for _, tc := range []struct{ id, end string }{{"bad", "tool_error"}, {"good", "tool_end"}} {
+		sink := &observeCollector{}
+		ctx, deliver := DeferResults(observe.WithObserver(context.Background(), sink))
+		var events []string
+		_, err := d.invoke(ctx, ToolRequest{Name: "t", Input: callInput(tc.id, "")}, func(e *core.StreamEvent) error {
+			events = append(events, e.Type)
+			return nil
+		}, false)
+		require.NoError(t, err)
+		require.Equal(t, []string{"tool_start"}, sink.types(), "%s：deliver 前观测尚未结束", tc.id)
+		err = deliver()
+		require.Equal(t, []string{"tool_start", tc.end}, sink.types(), tc.id)
+		if tc.end == "tool_error" {
+			require.EqualError(t, err, "ledger unavailable")
+			require.Equal(t, []string{"tool_start"}, events, "回调失败时不发 tool_end")
+		} else {
+			require.NoError(t, err)
+			require.Equal(t, []string{"tool_start", "tool_end"}, events)
+		}
+	}
+}
+
+// 未 deliver 的推迟调用在 DeferResults 的 ctx 结束时放弃交付：观测以 ctx 的错误结束，回调不再触发，deliver 报告该错误。
+func TestDispatcherDeferResultsAbandonedOnCancel(t *testing.T) {
+	fired := 0
+	d := argDispatcher(t, DispatchConfig{OnResult: func(context.Context, DispatchResult) error {
+		fired++
+		return nil
+	}}, NewBaseTool("t", "t", idSchema, func(context.Context, *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+		return &interfaces.ToolOutput{Success: true, Result: "ok"}, nil
+	}))
+	sink := &observeCollector{}
+	parent, cancel := context.WithCancel(observe.WithObserver(context.Background(), sink))
+	ctx, deliver := DeferResults(parent)
+	_, err := d.Invoke(ctx, ToolRequest{Name: "t", Input: callInput("a", "")})
+	require.NoError(t, err)
+	cancel()
+	require.Eventually(t, func() bool { return len(sink.types()) == 2 }, time.Second, time.Millisecond)
+	require.Equal(t, []string{"tool_start", "tool_error"}, sink.types())
+	require.ErrorIs(t, deliver(), context.Canceled)
+	require.Zero(t, fired, "放弃交付的调用不触发回调")
+	require.NoError(t, deliver(), "已报告的放弃不重复报告")
 }
