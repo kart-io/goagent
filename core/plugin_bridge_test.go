@@ -267,8 +267,7 @@ func TestTypedToDynamicAdapter_InvokeDynamic_PanicRecovery(t *testing.T) {
 		// 验证
 		require.Error(t, err)
 		assert.Nil(t, result)
-		assert.Contains(t, err.Error(), "panic recovered")
-		assert.Contains(t, err.Error(), "plugin crashed in Invoke")
+		requireRedactedPanic(t, err, "plugin crashed in Invoke")
 
 		// 验证是 AgentError
 		agentErr, ok := err.(*agentErrors.AgentError)
@@ -288,7 +287,7 @@ func TestTypedToDynamicAdapter_InvokeDynamic_PanicRecovery(t *testing.T) {
 
 		require.Error(t, err)
 		assert.Nil(t, result)
-		assert.Contains(t, err.Error(), "panic recovered")
+		requireRedactedPanic(t, err, "runtime error: invalid memory address or nil pointer dereference")
 	})
 }
 
@@ -306,8 +305,7 @@ func TestTypedToDynamicAdapter_StreamDynamic_PanicRecovery(t *testing.T) {
 		// 验证 panic 被捕获
 		require.Error(t, err)
 		assert.Nil(t, stream)
-		assert.Contains(t, err.Error(), "panic recovered")
-		assert.Contains(t, err.Error(), "panic in Stream method")
+		requireRedactedPanic(t, err, "panic in Stream method")
 	})
 }
 
@@ -325,8 +323,7 @@ func TestTypedToDynamicAdapter_BatchDynamic_PanicRecovery(t *testing.T) {
 		// 验证 panic 被捕获
 		require.Error(t, err)
 		assert.Nil(t, results)
-		assert.Contains(t, err.Error(), "panic recovered")
-		assert.Contains(t, err.Error(), "panic in Batch method")
+		requireRedactedPanic(t, err, "panic in Batch method")
 	})
 }
 
@@ -356,8 +353,7 @@ func TestPluginRegistry_WithPanicPlugin(t *testing.T) {
 	// 验证 panic 被捕获，系统继续运行
 	require.Error(t, err)
 	assert.Nil(t, result)
-	assert.Contains(t, err.Error(), "panic recovered")
-	assert.Contains(t, err.Error(), "registered plugin panicked")
+	requireRedactedPanic(t, err, "registered plugin panicked")
 
 	// 验证 registry 仍然可用
 	plugins := registry.List()

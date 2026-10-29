@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"os"
 	"time"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 var ErrApprovalRequired = errors.New("durable step requires approval")
@@ -176,7 +178,7 @@ func (r *Runner) Run(ctx context.Context, id string, initial json.RawMessage, ap
 func (r *Runner) checkBeforeApprove(ctx context.Context, id string, snapshot *Snapshot) (err error) {
 	defer func() {
 		if p := recover(); p != nil {
-			err = fmt.Errorf("批准前置校验 panic: %v", p)
+			err = agentErrors.NewPanicError("批准前置校验", p)
 		}
 	}()
 	snap := *snapshot

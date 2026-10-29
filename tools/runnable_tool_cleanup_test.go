@@ -224,7 +224,7 @@ func TestRunnableToolCleanupOnEveryPath(t *testing.T) {
 			c.Encode = func(int) (any, error) { panic("encode exploded") }
 			calls := 0
 			return probedFactory(p, &calls)
-		}, "encode exploded", 1},
+		}, "Runnable 工具 发生 panic", 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			p := &cleanupProbe{}
@@ -380,7 +380,8 @@ func TestRunnableToolPanicValueIsReported(t *testing.T) {
 			var panicErr *agentErrors.PanicError
 			require.ErrorAs(t, err, &panicErr)
 			require.NotEmpty(t, panicErr.Stack)
-			require.ErrorContains(t, err, tc.want)
+			require.Contains(t, fmt.Sprint(panicErr.Value), tc.want)
+			require.NotContains(t, err.Error(), tc.want)
 			require.Zero(t, calls)
 		})
 	}
@@ -428,7 +429,7 @@ func TestRunnableToolPanicLocations(t *testing.T) {
 			require.NoError(t, err)
 			out, err := tool.Invoke(context.Background(), incrementInput())
 			require.Nil(t, out)
-			require.ErrorContains(t, err, "boom-"+tc.location)
+			requireRedactedPanic(t, err, "boom-"+tc.location)
 			require.Equal(t, tc.wantClosed, closeAttempts)
 		})
 	}
@@ -447,7 +448,7 @@ func TestDispatcherSurfacesRunnableToolPanic(t *testing.T) {
 		require.NoError(t, err)
 		out, err := d.Invoke(context.Background(), ToolRequest{Name: "increment", Input: incrementInput()})
 		require.Nil(t, out)
-		require.ErrorContains(t, err, "dispatcher-visible")
+		requireRedactedPanic(t, err, "dispatcher-visible")
 	})
 	t.Run("durable", func(t *testing.T) {
 		var panics atomic.Int64
@@ -462,9 +463,18 @@ func TestDispatcherSurfacesRunnableToolPanic(t *testing.T) {
 		d, ctx := journalDispatcher(t, tool)
 		req := ToolRequest{Name: "increment", Input: &interfaces.ToolInput{CallID: "panic", Args: map[string]any{"n": float64(2)}}}
 		_, err = d.Invoke(ctx, req)
-		require.ErrorContains(t, err, "journaled-panic")
+		requireRedactedPanic(t, err, "journaled-panic")
 		_, err = d.Invoke(ctx, req)
 		require.ErrorIs(t, err, durable.ErrOperationAttention)
 		require.Equal(t, int64(1), panics.Load(), "a panicking opaque call is not retried")
 	})
+}
+
+// requireRedactedPanic 断言 err 携带 panic 值为 value 的 *PanicError，且错误文本不含该值。
+func requireRedactedPanic(t *testing.T, err error, value string) {
+	t.Helper()
+	var panicErr *agentErrors.PanicError
+	require.ErrorAs(t, err, &panicErr)
+	require.Equal(t, value, panicErr.Value)
+	require.NotContains(t, err.Error(), value)
 }
