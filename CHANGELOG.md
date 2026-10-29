@@ -102,6 +102,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 新增 `errors.RedactURLError`：返回把错误链上 `*url.Error` 的 URL 经 `RedactURL` 脱敏后的新错误，不修改原错误，`Unwrap` 仍得到原底层错误（如 `*net.OpError`），`errors.Is(context.DeadlineExceeded)`、`Timeout()` 与外层 `*AgentError` 的 Code 不受影响。`tools/practical` 的 `api_caller`（`auth.location=query` 时注入的 api key）与 `web_scraper`、`tools/http.APITool`、`mcp/tools.HTTPRequestTool`、`distributed.Client` 全部请求方法、`document.WebLoader`/`PDFLoader` 的传输与 URL 解析错误，在返回、写入 `ToolOutput.Error`/`ToolResult.Error` 或交给回调前统一脱敏，此前 resty/net/http 错误文本中的完整 URL（含 query 凭据）会经 observation 交给模型；`distributed.Client` 的 Debug 日志中的 `endpoint`/`url` 同样脱敏；`specialized.HTTPAgent` 改用该函数（不再就地改写底层 `*url.Error`），成功路径 `ToolCalls[].Input.url` 也脱敏。
 - `utils/httpclient.NewClient` 创建的 resty 客户端改用对错误参数做 URL 脱敏的 logger，重试时的 `WARN RESTY ... Attempt` 日志不再打印 query 中的 api key 与 userinfo。
 - `api_caller.ExecuteWithRuntime` 从 runtime state（键 `api_key_<url>`）读取的 api key 真正用于请求，此前写在重新解析出的参数副本上、`Execute` 又解析原始参数，注入从不生效；`credentials` 缺省时不再因写 nil map 而 panic。
+- `executor.AgentExecutor` 的 `Execute` 与 `RunGenerator` 经 `core.CallSafely` 调用 `Memory.SaveContext`：SaveContext panic 或返回 `*errors.PanicError` 时本次执行失败，`Execute` 返回 Status 为 `failed` 的输出与该错误，`RunGenerator` 在成功输出之后再产出一条 `failed` 输出与该错误，此前 panic 直接崩溃调用方、PanicError 被当作普通错误吞掉；普通错误仍尽力而为、不影响结果。
 ### Deprecated
 
 - `interfaces.Agent/Runnable` 为旧消息协议，新增编排统一使用 `core.Runnable[I,O]`；现有 API 保留迁移路径。
