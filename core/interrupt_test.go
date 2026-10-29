@@ -1084,6 +1084,7 @@ func TestInterruptManager_CancelWhileSaving(t *testing.T) {
 
 	<-saver.saving
 	require.NoError(t, manager.CancelInterrupt("saving"))
+	require.True(t, agentErrors.IsCode(manager.CancelInterrupt("saving"), agentErrors.CodeAgentNotFound), "重复取消应返回 not found")
 	close(saver.release)
 
 	select {
@@ -1128,6 +1129,7 @@ func TestInterruptManager_CancelWhileCreatedHookRuns(t *testing.T) {
 	}()
 	id := <-created
 	require.NoError(t, manager.CancelInterrupt(id))
+	require.True(t, agentErrors.IsCode(manager.CancelInterrupt(id), agentErrors.CodeAgentNotFound), "重复取消应返回 not found")
 	require.Empty(t, manager.ListPendingInterrupts(), "取消后中断不应再列为待处理")
 	close(gate)
 
