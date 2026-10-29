@@ -36,14 +36,17 @@ func TestRestyDebugLogRedactsRequestURI(t *testing.T) {
 	var buf bytes.Buffer
 	c.resty.SetLogger(newRestyLogger(&buf))
 
-	if _, err := c.R().Get(srv.URL + "/v1/models?key=APIKEYSECRET&alt=sse"); err != nil {
+	req := c.R().SetHeader("Authorization", "Bearer BEARERSECRET").SetHeader("X-Goog-Api-Key", "HEADERKEYSECRET")
+	if _, err := req.Get(srv.URL + "/v1/models?key=APIKEYSECRET&alt=sse"); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
 	if !strings.Contains(out, "/v1/models") {
 		t.Fatalf("期望出现调试日志，实际：%q", out)
 	}
-	if strings.Contains(out, "APIKEYSECRET") {
-		t.Fatalf("调试日志泄漏 query：%s", out)
+	for _, secret := range []string{"APIKEYSECRET", "BEARERSECRET", "HEADERKEYSECRET"} {
+		if strings.Contains(out, secret) {
+			t.Fatalf("调试日志泄漏 %q：%s", secret, out)
+		}
 	}
 }
