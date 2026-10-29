@@ -2,6 +2,7 @@ package got
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -449,18 +450,26 @@ func (g *GoTAgent) buildThoughtGraph(ctx context.Context, input *agentcore.Agent
 			}
 
 			// Generate new thoughts from this node
-			newThoughts := g.generateThoughtsFromNode(ctx, node, input)
+			newThoughts, err := g.generateThoughtsFromNode(ctx, node, input)
+			if err != nil {
+				return graph, err
+			}
 
 			for _, thought := range newThoughts {
 				if len(graph) >= g.config.MaxNodes {
 					break
 				}
 
+				score, err := g.evaluateThought(ctx, thought, input)
+				if err != nil {
+					return graph, err
+				}
+
 				// Create new node
 				newNode := &GraphNode{
 					ID:           fmt.Sprintf("node_%d", len(graph)),
 					Thought:      thought,
-					Score:        g.evaluateThought(ctx, thought, input),
+					Score:        score,
 					Dependencies: []*GraphNode{node},
 					Dependents:   []*GraphNode{},
 					State:        g.copyState(node.State),
@@ -649,7 +658,8 @@ func (g *GoTAgent) selectExpansionCandidates(graph []*GraphNode) []*GraphNode {
 	return candidates
 }
 
-func (g *GoTAgent) generateThoughtsFromNode(ctx context.Context, node *GraphNode, input *agentcore.AgentInput) []string {
+// generateThoughtsFromNode LLM 失败时视为没有新思考；失败原因是 *PanicError 时返回该错误，由调用方中止本次执行
+func (g *GoTAgent) generateThoughtsFromNode(ctx context.Context, node *GraphNode, input *agentcore.AgentInput) ([]string, error) {
 	prompt := fmt.Sprintf(`Given the task: %s
 Current thought: %s
 
@@ -664,7 +674,11 @@ Format each thought on a new line starting with "- " or numbered like "1. "`,
 
 	llmResp, err := g.llm.Chat(ctx, messages)
 	if err != nil {
-		return nil
+		var panicErr *agentErrors.PanicError
+		if errors.As(err, &panicErr) {
+			return nil, err
+		}
+		return nil, nil
 	}
 
 	// 使用解析器解析思考
@@ -694,7 +708,7 @@ Format each thought on a new line starting with "- " or numbered like "1. "`,
 		}
 	}
 
-	return thoughts
+	return thoughts, nil
 }
 
 // isSkippableLine 检查是否应该跳过的行
@@ -725,11 +739,11 @@ func (g *GoTAgent) findAdditionalDependencies(node *GraphNode, graph []*GraphNod
 	}
 }
 
-func (g *GoTAgent) evaluateThought(ctx context.Context, thought string, input *agentcore.AgentInput) float64 {
+func (g *GoTAgent) evaluateThought(ctx context.Context, thought string, input *agentcore.AgentInput) (float64, error) {
 	// 快速评估模式：使用启发式评分，跳过 LLM 调用
 	// 这是主要的性能优化点，避免每个思考都进行 LLM 调用
 	if g.config.FastEvaluation {
-		return g.evaluateThoughtFast(thought, input)
+		return g.evaluateThoughtFast(thought, input), nil
 	}
 
 	// 完整评估模式：使用 LLM 评分（可能导致超时）
@@ -749,9 +763,14 @@ Respond with just a number between 0 and 1.`,
 	evalCtx, cancel := context.WithTimeout(ctx, g.config.NodeTimeout)
 	defer cancel()
 
+	// LLM 失败时取中性分 0.5；失败原因是 *PanicError 时返回该错误，由调用方中止本次执行
 	llmResp, err := g.llm.Chat(evalCtx, messages)
 	if err != nil {
-		return 0.5
+		var panicErr *agentErrors.PanicError
+		if errors.As(err, &panicErr) {
+			return 0, err
+		}
+		return 0.5, nil
 	}
 
 	var score float64
@@ -767,7 +786,7 @@ Respond with just a number between 0 and 1.`,
 		score = 1
 	}
 
-	return score
+	return score, nil
 }
 
 // evaluateThoughtFast 使用启发式方法快速评估思考质量

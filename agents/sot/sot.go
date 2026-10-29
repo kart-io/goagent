@@ -2,6 +2,7 @@ package sot
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -163,7 +164,10 @@ func (s *SoTAgent) Invoke(ctx context.Context, input *agentcore.AgentInput) (*ag
 
 	// Phase 3: Aggregate results
 	aggregationStart := time.Now()
-	finalAnswer := s.aggregateResults(ctx, skeleton, input)
+	finalAnswer, err := s.aggregateResults(ctx, skeleton, input)
+	if err != nil {
+		return s.handleError(ctx, output, "Aggregation failed", err, startTime)
+	}
 
 	// Record aggregation
 	output.Steps = append(output.Steps, agentcore.AgentStep{
@@ -235,7 +239,14 @@ func (s *SoTAgent) InvokeFast(ctx context.Context, input *agentcore.AgentInput) 
 	}
 
 	// Phase 3: Aggregate results
-	finalAnswer := s.aggregateResults(ctx, skeleton, input)
+	finalAnswer, err := s.aggregateResults(ctx, skeleton, input)
+	if err != nil {
+		output.Status = interfaces.StatusFailed
+		output.Message = "Aggregation failed: " + err.Error()
+		output.Timestamp = time.Now()
+		output.Latency = time.Since(startTime)
+		return output, err
+	}
 
 	// Set final output
 	output.Status = interfaces.StatusSuccess
@@ -463,20 +474,20 @@ Provide a detailed elaboration that fully addresses this point.`,
 }
 
 // aggregateResults combines all elaborated points into final answer
-func (s *SoTAgent) aggregateResults(ctx context.Context, skeleton []*SkeletonPoint, input *agentcore.AgentInput) string {
+func (s *SoTAgent) aggregateResults(ctx context.Context, skeleton []*SkeletonPoint, input *agentcore.AgentInput) (string, error) {
 	switch s.config.AggregationStrategy {
 	case "hierarchical":
-		return s.aggregateHierarchical(skeleton)
+		return s.aggregateHierarchical(skeleton), nil
 
 	case "weighted":
 		return s.aggregateWeighted(ctx, skeleton, input)
 
 	case "sequential":
 	default:
-		return s.aggregateSequential(skeleton)
+		return s.aggregateSequential(skeleton), nil
 	}
 
-	return s.aggregateSequential(skeleton)
+	return s.aggregateSequential(skeleton), nil
 }
 
 // aggregateSequential combines results in sequential order
@@ -522,8 +533,8 @@ func (s *SoTAgent) aggregateHierarchical(skeleton []*SkeletonPoint) string {
 	return result.String()
 }
 
-// aggregateWeighted combines results with importance weighting
-func (s *SoTAgent) aggregateWeighted(ctx context.Context, skeleton []*SkeletonPoint, input *agentcore.AgentInput) string {
+// aggregateWeighted LLM 失败时回退为顺序聚合；失败原因是 *PanicError 时不回退，返回该错误由调用方中止本次执行
+func (s *SoTAgent) aggregateWeighted(ctx context.Context, skeleton []*SkeletonPoint, input *agentcore.AgentInput) (string, error) {
 	// Use LLM to synthesize with weights
 	var elaborations strings.Builder
 	for _, point := range skeleton {
@@ -546,11 +557,15 @@ Synthesize them into a coherent answer, giving appropriate weight to each point 
 
 	llmResp, err := s.llm.Chat(ctx, messages)
 	if err != nil {
+		var panicErr *agentErrors.PanicError
+		if errors.As(err, &panicErr) {
+			return "", err
+		}
 		// Fallback to sequential
-		return s.aggregateSequential(skeleton)
+		return s.aggregateSequential(skeleton), nil
 	}
 
-	return llmResp.Content
+	return llmResp.Content, nil
 }
 
 // Helper methods
@@ -871,7 +886,13 @@ func (s *SoTAgent) RunGenerator(ctx context.Context, input *agentcore.AgentInput
 
 		// Phase 3: Aggregate results
 		aggregationStart := time.Now()
-		finalAnswer := s.aggregateResults(ctx, skeleton, input)
+		finalAnswer, err := s.aggregateResults(ctx, skeleton, input)
+		if err != nil {
+			errorOutput := s.createStepOutput(accumulated, "Aggregation failed", startTime)
+			errorOutput.Status = interfaces.StatusFailed
+			yield(errorOutput, err)
+			return
+		}
 
 		// Record aggregation
 		accumulated.Steps = append(accumulated.Steps, agentcore.AgentStep{

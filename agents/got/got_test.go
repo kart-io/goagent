@@ -562,7 +562,8 @@ func TestGoTAgent_EvaluateThought(t *testing.T) {
 				FastEvaluation: false, // 禁用快速评估以测试 LLM 评估
 			})
 
-			score := agent.evaluateThought(ctx, "test thought", &core.AgentInput{Task: "test"})
+			score, err := agent.evaluateThought(ctx, "test thought", &core.AgentInput{Task: "test"})
+			assert.NoError(t, err)
 			assert.Equal(t, tt.expectedScore, score)
 		})
 	}
@@ -588,7 +589,8 @@ func TestGoTAgent_GenerateThoughtsFromNode(t *testing.T) {
 		Thought: "Initial thought",
 	}
 
-	thoughts := agent.generateThoughtsFromNode(ctx, node, &core.AgentInput{Task: "test"})
+	thoughts, err := agent.generateThoughtsFromNode(ctx, node, &core.AgentInput{Task: "test"})
+	assert.NoError(t, err)
 
 	assert.Len(t, thoughts, 3)
 	assert.Equal(t, "First thought", thoughts[0])

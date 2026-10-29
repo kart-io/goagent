@@ -339,7 +339,8 @@ func TestSoTAgent_AggregationStrategies(t *testing.T) {
 			})
 
 			input := &core.AgentInput{Task: "Test task"}
-			result := agent.aggregateResults(ctx, tt.skeleton, input)
+			result, err := agent.aggregateResults(ctx, tt.skeleton, input)
+			assert.NoError(t, err)
 			tt.check(t, result)
 		})
 	}

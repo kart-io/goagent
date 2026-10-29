@@ -87,6 +87,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `InputValidator` 的校验错误 Message 带上具体原因与参数名（如 `required parameter validation failed: required parameter is missing: query`），不含参数值，`Error()` 交还模型时仍可据此改正。
 - `postgres.New` 连接失败时不再把 DSN 写入错误，Context 的 `endpoint` 改为由 pgx 解析出的 `host/dbname`，解析失败则不写，key=value 形式 DSN 中的密码不再进入 Context 与 `Error()`；`github.com/jackc/pgx/v5` 由间接依赖变为直接依赖。
 - `specialized.HTTPAgent` 请求失败时，错误 Context 的 `url`、底层 `*url.Error` 进入错误文本的 URL 以及请求日志中的 `url` 均经 `errors.RedactURL` 去掉 userinfo、query 与 fragment，此前为原始 URL。
+- 推理 Agent 的 LLM 降级分支不再吞掉 panic：LLM 调用返回 `*errors.PanicError`（回调或 LLM 客户端 panic 被恢复）时，SoT 加权聚合、GoT 思考扩展与 LLM 评分、CoT 工具结果后的再推理、MetaCoT 的问题分解/追问/综合/自我批评/改进不再退回默认答案、中性分或跳过该步，而是返回该错误、以失败结束且不再调用模型；`agents.HybridRouter` 中某个策略返回 `*PanicError` 时直接返回，不再投票或退回 fallback。普通 LLM 错误的降级行为不变。
 ### Deprecated
 
 - `interfaces.Agent/Runnable` 为旧消息协议，新增编排统一使用 `core.Runnable[I,O]`；现有 API 保留迁移路径。
