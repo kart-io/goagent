@@ -91,6 +91,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `workflow.DurableGraph` 中存储/序列化、检查点解码与分支路由的 panic 改为返回 `*errors.PanicError`（保留 panic 值与调用栈，可用 `errors.As` 识别），此前为丢弃 panic 信息的固定文本错误；错误文本由 `... panicked` 变为 `... 发生 panic`。
 - `tools.ValidateInputWithSchema`（`mcp/toolbox.StandardToolBox.Validate` 使用）的校验错误 Message 带上字段名（如 `required field is missing: name`、`expected string: tags[1]`），不含参数值，此前字段名只在 Context，`Error()` 交还模型时无从知道是哪个字段。
 - `InputValidator` 的自定义校验（`ValidatableTool.Validate`）返回非 `AgentError` 时，`Error()` 只给固定的 `tool custom validation failed: 校验未通过`，原文仅放在 Context 的 `validation_error`，此前原文（可能含参数值）直接拼进 Message；返回 `AgentError` 时取其 Message 与参数名。
+- `distributed.Coordinator` 改为按错误类型决定故障转移：`context.DeadlineExceeded`、`net.Error` 超时、`ECONNREFUSED`/`ECONNRESET` 以及 Context `status_code` 为 502/503/504 时转移，调用方 ctx 已结束时不转移；此前靠匹配 `Error()` 文本，网关类状态码与 `Client.Timeout` 超时都不会转移，而仅文本含 `timeout` 等关键字的错误会被误转移。
 ### Deprecated
 
 - `interfaces.Agent/Runnable` 为旧消息协议，新增编排统一使用 `core.Runnable[I,O]`；现有 API 保留迁移路径。

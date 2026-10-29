@@ -2,14 +2,18 @@ package distributed
 
 import (
 	"context"
-	"strings"
+	"errors"
+	"net"
+	"net/http"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/kart-io/logger/core"
 
 	agentcore "github.com/kart-io/goagent/core"
 	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/interfaces"
 )
 
 // Coordinator 分布式 Agent 协调器
@@ -86,7 +90,7 @@ func (c *Coordinator) ExecuteAgent(ctx context.Context, serviceName, agentName s
 		c.registry.MarkUnhealthy(instance.ID)
 
 		// 尝试故障转移
-		if c.shouldRetry(err) {
+		if c.shouldRetry(ctx, err) {
 			c.logger.Warnw("Agent execution failed, trying failover",
 				"error", err,
 				"instance", instance.ID)
@@ -305,19 +309,31 @@ func (c *Coordinator) executeWithFailover(ctx context.Context, serviceName, agen
 	return c.client.ExecuteAgent(ctx, instance.Endpoint, agentName, input)
 }
 
-// shouldRetry 判断是否应该重试
-func (c *Coordinator) shouldRetry(err error) bool {
-	// 可以根据错误类型判断是否重试
-	// 例如：网络错误可以重试，业务逻辑错误不重试
-	if err == nil {
+// shouldRetry 判断是否应故障转移到其他实例：仅传输层故障（超时、连接拒绝/重置）与网关类状态码
+// 502/503/504 才转移；调用方 ctx 已结束时转移无意义。按类型判断而非匹配 Error() 文本，
+// 因为 Error() 不含 Context，且底层库的错误措辞不稳定。
+func (c *Coordinator) shouldRetry(ctx context.Context, err error) bool {
+	if err == nil || ctx.Err() != nil {
 		return false
 	}
 
-	errStr := err.Error()
-	// 网络错误 - use standard library strings.Contains for O(n) performance
-	return strings.Contains(errStr, "connection refused") ||
-		strings.Contains(errStr, "timeout") ||
-		strings.Contains(errStr, "connection reset")
+	if errors.Is(err, context.DeadlineExceeded) ||
+		errors.Is(err, syscall.ECONNREFUSED) ||
+		errors.Is(err, syscall.ECONNRESET) {
+		return true
+	}
+
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return true
+	}
+
+	// 状态码由 Client 在非 2xx 响应时写入 Context
+	switch agentErrors.GetContext(err)[interfaces.FieldStatusCode] {
+	case http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+		return true
+	}
+	return false
 }
 
 // AgentTask Agent 任务
