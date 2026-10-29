@@ -93,6 +93,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `InputValidator` 的自定义校验（`ValidatableTool.Validate`）返回非 `AgentError` 时，`Error()` 只给固定的 `tool custom validation failed: 校验未通过`，原文仅放在 Context 的 `validation_error`，此前原文（可能含参数值）直接拼进 Message；返回 `AgentError` 时取其 Message 与参数名。
 - `distributed.Coordinator` 改为按错误类型决定故障转移：`context.DeadlineExceeded`、`net.Error` 超时、`ECONNREFUSED`/`ECONNRESET` 以及 Context `status_code` 为 502/503/504 时转移，调用方 ctx 已结束时不转移；此前靠匹配 `Error()` 文本，网关类状态码与 `Client.Timeout` 超时都不会转移，而仅文本含 `timeout` 等关键字的错误会被误转移。
 - MetaCoT 搜索失败后回退为直接回答时，直接回答返回的 `*errors.PanicError` 不再被丢弃，本次执行以该错误失败；普通错误仍只留空答案。推理 Agent 与 `HybridRouter` 的降级分支统一用 `agents/base.IsPanic` 判断。
+- `agents.SupervisorAgent` 子任务 goroutine 中路由器或子 Agent 直接 panic 时不再导致进程退出：panic 转为 `*errors.PanicError` 写入该任务的 `TaskResult`。
+- `agents.SupervisorAgent.Invoke` 如实反映子任务结果，此前不论子任务是否失败都返回 nil 并计为成功：任一子任务结果含 `*errors.PanicError` 时返回这些错误（`errors.Join`，可用 `errors.As` 识别）；全部子任务失败时返回包装全部子任务错误的 `CodeAgentExecution`；部分失败仍返回汇总结果，`Status` 为 `partial`、`Metadata["tasks_failed"]` 为失败数，计入新增的 `partial_tasks` 指标而不计入 `successful_tasks`。返回错误时同时返回 `Status` 为 `failed` 的汇总输出。新增 `SupervisorConfig.FailOnAnyError`（默认 false），为 true 时任一子任务失败即返回错误。重试等待改为响应 ctx 取消，`*PanicError` 不再重试（即使匹配 `RetryableErrors`）。
 ### Deprecated
 
 - `interfaces.Agent/Runnable` 为旧消息协议，新增编排统一使用 `core.Runnable[I,O]`；现有 API 保留迁移路径。

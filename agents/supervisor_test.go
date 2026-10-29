@@ -637,8 +637,10 @@ func TestTaskExecutionErrorHandling(t *testing.T) {
 
 		ctx := context.Background()
 		output, err := supervisor.Invoke(ctx, &core.AgentInput{Task: "test"})
-		assert.NoError(t, err)
+		// 唯一的子任务失败即全部失败，返回错误，同时仍返回汇总结果
+		assert.Error(t, err)
 		assert.NotNil(t, output)
+		assert.Equal(t, "failed", output.Status)
 
 		// Check that the result contains an error
 		result, ok := output.Result.(map[string]interface{})
