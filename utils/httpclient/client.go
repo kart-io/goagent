@@ -4,13 +4,18 @@ package httpclient
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"io"
+	"log"
 	"net/http"
+	"os"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/go-resty/resty/v2"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // Client HTTP 客户端管理器
@@ -79,7 +84,8 @@ func NewClient(config *Config) *Client {
 		SetRetryCount(config.RetryCount).
 		SetRetryWaitTime(config.RetryWaitTime).
 		SetRetryMaxWaitTime(config.RetryMaxWaitTime).
-		SetHeaders(config.Headers)
+		SetHeaders(config.Headers).
+		SetLogger(newRestyLogger(os.Stderr))
 
 	// 设置基础 URL
 	if config.BaseURL != "" {
@@ -125,6 +131,27 @@ func NewClient(config *Config) *Client {
 		resty:  restyClient,
 		config: config,
 	}
+}
+
+// restyLogger 与 resty 默认 logger 格式一致，但对参数中的错误做 URL 脱敏：
+// resty 重试时会以 Warnf("%v, Attempt %v", err, ...) 打印原始 *url.Error，其中 query 可能含 API key。
+type restyLogger struct{ l *log.Logger }
+
+func newRestyLogger(w io.Writer) resty.Logger {
+	return restyLogger{l: log.New(w, "", log.Ldate|log.Lmicroseconds)}
+}
+
+func (r restyLogger) Errorf(format string, v ...interface{}) { r.output("ERROR RESTY "+format, v) }
+func (r restyLogger) Warnf(format string, v ...interface{})  { r.output("WARN RESTY "+format, v) }
+func (r restyLogger) Debugf(format string, v ...interface{}) { r.output("DEBUG RESTY "+format, v) }
+
+func (r restyLogger) output(format string, v []interface{}) {
+	for i, arg := range v {
+		if err, ok := arg.(error); ok {
+			v[i] = agentErrors.RedactURLError(err)
+		}
+	}
+	r.l.Printf(format, v...)
 }
 
 // R 返回一个新的请求

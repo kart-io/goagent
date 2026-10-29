@@ -82,6 +82,8 @@ func (l *WebLoader) Load(ctx context.Context) ([]*interfaces.Document, error) {
 		SetHeaders(l.headers).
 		Get(l.url)
 	if err != nil {
+		// 错误文本含完整请求 URL，交给回调与调用方前先脱敏
+		err = errors.RedactURLError(err)
 		if cbErr := l.callbackManager.NotifyError(ctx, err); cbErr != nil {
 			return nil, cbErr
 		}

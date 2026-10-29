@@ -1,10 +1,12 @@
 package errors
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
 	"net/url"
+	"strings"
 	"testing"
 
 	"go.uber.org/zap/zapcore"
@@ -44,6 +46,95 @@ func TestRedactURL_Bypass(t *testing.T) {
 func newURLErr() (*url.Error, *net.OpError) {
 	op := &net.OpError{Op: "dial", Net: "tcp", Err: errors.New("connection refused")}
 	return &url.Error{Op: "Get", URL: "http://u:pw@127.0.0.1:1/v1/data?key=APIKEYSECRET", Err: op}, op
+}
+
+func TestRedactURLError(t *testing.T) {
+	t.Run("nil 与无 url.Error 原样返回", func(t *testing.T) {
+		if RedactURLError(nil) != nil {
+			t.Fatal("nil 应原样返回")
+		}
+		plain := errors.New("x")
+		if RedactURLError(plain) != plain {
+			t.Fatal("无 *url.Error 应原样返回")
+		}
+		clean := &url.Error{Op: "Get", URL: "http://h/p", Err: plain}
+		if RedactURLError(clean) != error(clean) {
+			t.Fatal("URL 无需脱敏时应原样返回")
+		}
+	})
+
+	t.Run("顶层 url.Error", func(t *testing.T) {
+		orig, op := newURLErr()
+		got := RedactURLError(orig)
+		if s := got.Error(); strings.Contains(s, "APIKEYSECRET") || strings.Contains(s, "pw") {
+			t.Fatalf("未脱敏: %s", s)
+		}
+		if want := `Get "http://127.0.0.1:1/v1/data": ` + op.Error(); got.Error() != want {
+			t.Errorf("Error() = %q, want %q", got.Error(), want)
+		}
+		if !strings.Contains(orig.URL, "APIKEYSECRET") {
+			t.Error("原错误被修改")
+		}
+		var gotOp *net.OpError
+		if !errors.As(got, &gotOp) || gotOp != op {
+			t.Error("Unwrap 链应保留原底层 *net.OpError")
+		}
+		var ue *url.Error
+		if !errors.As(got, &ue) || strings.Contains(ue.URL, "APIKEYSECRET") {
+			t.Error("errors.As 取到的 *url.Error 应已脱敏")
+		}
+	})
+
+	t.Run("deadline 与 Timeout 保持", func(t *testing.T) {
+		orig := &url.Error{Op: "Get", URL: "http://h/?token=T", Err: context.DeadlineExceeded}
+		got := RedactURLError(orig)
+		if !errors.Is(got, context.DeadlineExceeded) {
+			t.Error("errors.Is(DeadlineExceeded) 应保持")
+		}
+		if te, ok := got.(interface{ Timeout() bool }); !ok || !te.Timeout() {
+			t.Error("Timeout() 应保持")
+		}
+	})
+
+	t.Run("链中间的 url.Error", func(t *testing.T) {
+		orig, op := newURLErr()
+		sentinel := errors.New("sentinel")
+		wrapped := fmt.Errorf("外层: %w", fmt.Errorf("%w: %w", sentinel, orig))
+		got := RedactURLError(wrapped)
+		if s := got.Error(); strings.Contains(s, "APIKEYSECRET") || !strings.HasPrefix(s, "外层: sentinel: Get ") {
+			t.Fatalf("Error() = %s", s)
+		}
+		if !errors.Is(got, sentinel) {
+			t.Error("errors.Is 应按原错误链判断")
+		}
+		var gotOp *net.OpError
+		if !errors.As(got, &gotOp) || gotOp != op {
+			t.Error("应能取到原底层 *net.OpError")
+		}
+		var ue *url.Error
+		if !errors.As(got, &ue) || strings.Contains(ue.URL, "APIKEYSECRET") {
+			t.Error("errors.As 取到的 *url.Error 应已脱敏")
+		}
+	})
+
+	t.Run("AgentError 包装后 Code 判断保持", func(t *testing.T) {
+		orig, _ := newURLErr()
+		got := RedactURLError(Wrap(orig, CodeToolExecution, "failed"))
+		if strings.Contains(got.Error(), "APIKEYSECRET") {
+			t.Fatalf("未脱敏: %s", got)
+		}
+		var ae *AgentError
+		if !errors.As(got, &ae) || ae.Code != CodeToolExecution || ae.Message != "failed" {
+			t.Errorf("应仍为 *AgentError 且保留 Code: %#v", got)
+		}
+		var gotURL *url.Error
+		if !errors.As(got, &gotURL) || strings.Contains(gotURL.URL, "APIKEYSECRET") {
+			t.Error("Cause 中的 *url.Error 应已脱敏")
+		}
+		if !strings.Contains(orig.URL, "APIKEYSECRET") {
+			t.Error("原错误被修改")
+		}
+	})
 }
 
 func TestAgentError_MarshalLogObject(t *testing.T) {

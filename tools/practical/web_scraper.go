@@ -302,7 +302,7 @@ func (t *WebScraperTool) fetchPage(ctx context.Context, urlStr string) (*goquery
 		SetHeader(interfaces.HeaderUserAgent, t.userAgent).
 		Get(urlStr)
 	if err != nil {
-		return nil, err
+		return nil, agentErrors.RedactURLError(err)
 	}
 
 	if !resp.IsSuccess() {

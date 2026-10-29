@@ -99,6 +99,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `planning.AgentExecutor` 的可重试错误判断改为不区分大小写的子串匹配，此前只匹配前缀/后缀，`dial tcp ...: connection refused by peer`、`Service Unavailable` 等错误不会重试。
 - `errors.RedactURL` 堵住绕过：逗号分隔的多地址（NATS 集群）逐段脱敏，query 中逗号之后的片段一并丢弃；密码含未转义 `/`、`?`、`#` 时丢弃 scheme 之后到最后一个 `@` 为止的内容（`host:port/path` 且路径含 `@` 的地址会被过度裁剪）；key=value 形式 DSN 只保留 `host`、`port`、`dbname`。凭据放在路径中的 URL（Slack webhook、Telegram bot）不处理。
 - `*errors.AgentError` 实现 `zapcore.ObjectMarshaler`，zap 引擎（含 kart-io/logger 的 `Errorw(..., "error", err)`）以对象输出与 `LogValue` 相同的字段（含 `context`），此前只有 `Error()` 文本、Context 丢失；同时实现 `fmt.Formatter`，`%v`/`%s` 同 `Error()`，`%+v` 追加按键排序的 `context: k=v, ...`（`zap.Error` 的 `errorVerbose` 字段随之包含 Context）。zap 日志中该字段由字符串变为对象；`go.uber.org/zap` 由间接依赖变为直接依赖。
+- 新增 `errors.RedactURLError`：返回把错误链上 `*url.Error` 的 URL 经 `RedactURL` 脱敏后的新错误，不修改原错误，`Unwrap` 仍得到原底层错误（如 `*net.OpError`），`errors.Is(context.DeadlineExceeded)`、`Timeout()` 与外层 `*AgentError` 的 Code 不受影响。`tools/practical` 的 `api_caller`（`auth.location=query` 时注入的 api key）与 `web_scraper`、`tools/http.APITool`、`mcp/tools.HTTPRequestTool`、`distributed.Client` 全部请求方法、`document.WebLoader`/`PDFLoader` 的传输与 URL 解析错误，在返回、写入 `ToolOutput.Error`/`ToolResult.Error` 或交给回调前统一脱敏，此前 resty/net/http 错误文本中的完整 URL（含 query 凭据）会经 observation 交给模型；`distributed.Client` 的 Debug 日志中的 `endpoint`/`url` 同样脱敏；`specialized.HTTPAgent` 改用该函数（不再就地改写底层 `*url.Error`），成功路径 `ToolCalls[].Input.url` 也脱敏。
+- `utils/httpclient.NewClient` 创建的 resty 客户端改用对错误参数做 URL 脱敏的 logger，重试时的 `WARN RESTY ... Attempt` 日志不再打印 query 中的 api key 与 userinfo。
+- `api_caller.ExecuteWithRuntime` 从 runtime state（键 `api_key_<url>`）读取的 api key 真正用于请求，此前写在重新解析出的参数副本上、`Execute` 又解析原始参数，注入从不生效；`credentials` 缺省时不再因写 nil map 而 panic。
 ### Deprecated
 
 - `interfaces.Agent/Runnable` 为旧消息协议，新增编排统一使用 `core.Runnable[I,O]`；现有 API 保留迁移路径。

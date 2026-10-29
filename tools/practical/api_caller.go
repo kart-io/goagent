@@ -155,7 +155,11 @@ func (t *APICallerTool) Execute(ctx context.Context, input *interfaces.ToolInput
 			WithComponent("api_caller_tool").
 			WithOperation("execute")
 	}
+	return t.execute(ctx, params)
+}
 
+// execute 按已解析的参数执行调用，供 ExecuteWithRuntime 在注入凭据后复用
+func (t *APICallerTool) execute(ctx context.Context, params *apiParams) (*interfaces.ToolOutput, error) {
 	// Check rate limit
 	if !t.rateLimiter.Allow() {
 		return nil, agentErrors.New(agentErrors.CodeToolExecution, "rate limit exceeded").
@@ -361,10 +365,10 @@ func (t *APICallerTool) executeRequest(ctx context.Context, params *apiParams) (
 	}
 
 	if err != nil {
-		// Return result with attempt count even on error
+		// Return result with attempt count even on error；传输错误文本含带 query 凭据的完整 URL，先脱敏
 		return map[string]interface{}{
 			"attempts": attemptCount,
-		}, err
+		}, agentErrors.RedactURLError(err)
 	}
 
 	// Parse response
@@ -686,31 +690,36 @@ func (t *APICallerRuntimeTool) ExecuteWithRuntime(ctx context.Context, input *in
 		}
 	}
 
-	// Get stored API keys from runtime
-	if runtime != nil {
-		params, _ := t.parseAPIInput(input.Args)
-		if params != nil && params.Auth != nil && params.Auth.Type == "api_key" {
+	var result *interfaces.ToolOutput
+	params, err := t.parseAPIInput(input.Args)
+	if err != nil {
+		err = agentErrors.Wrap(err, agentErrors.CodeInvalidInput, "invalid input").
+			WithComponent("api_caller_tool").
+			WithOperation("executeWithRuntime")
+	} else {
+		// Get stored API keys from runtime
+		if runtime != nil && params.Auth != nil && params.Auth.Type == "api_key" {
 			// Try to get API key from runtime state
 			if key, err := runtime.GetState("api_key_" + params.URL); err == nil {
+				if params.Auth.Credentials == nil {
+					params.Auth.Credentials = make(map[string]interface{})
+				}
 				params.Auth.Credentials["key"] = key
 			}
 		}
-	}
 
-	// Execute the API call
-	result, err := t.Execute(ctx, input)
+		// Execute the API call
+		result, err = t.execute(ctx, params)
+	}
 
 	// Store successful results in runtime
 	if err == nil && runtime != nil {
-		params, _ := t.parseAPIInput(input.Args)
-		if params != nil {
-			// Store last successful response
-			if err := runtime.PutToStore([]string{"api_responses"}, params.URL, result); err != nil {
-				return nil, agentErrors.Wrap(err, agentErrors.CodeToolExecution, "failed to put to store").
-					WithComponent("api_caller_tool").
-					WithOperation("executeWithRuntime").
-					WithContext("url", agentErrors.RedactURL(params.URL))
-			}
+		// Store last successful response
+		if err := runtime.PutToStore([]string{"api_responses"}, params.URL, result); err != nil {
+			return nil, agentErrors.Wrap(err, agentErrors.CodeToolExecution, "failed to put to store").
+				WithComponent("api_caller_tool").
+				WithOperation("executeWithRuntime").
+				WithContext("url", agentErrors.RedactURL(params.URL))
 		}
 	}
 
