@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/core/durable"
+	"github.com/kart-io/goagent/testing/panictest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -107,18 +108,32 @@ func TestResultStoreChildProcess(t *testing.T) {
 }
 
 type child struct {
-	cmd    *exec.Cmd
-	stdin  io.WriteCloser
-	lines  chan string
+	cmd   *exec.Cmd
+	ctx   context.Context
+	stdin io.WriteCloser
+	lines chan string
+	// done 在子进程被回收后关闭；之后才能读取 err 与 stderr。
+	done   chan struct{}
+	err    error
 	stderr strings.Builder
 }
 
+const childTimeout = 2 * time.Minute
+
 func startChild(t *testing.T, role, dir, prefix string, runs int) *child {
 	t.Helper()
-	c := &child{lines: make(chan string, 4096)}
-	c.cmd = exec.Command(os.Args[0], "-test.run=^TestResultStoreChildProcess$")
+	return startChildTimeout(t, role, dir, prefix, runs, panictest.ChildTimeout(t, childTimeout))
+}
+
+// startChildTimeout 启动子进程，超过 timeout 未退出时杀掉；测试结束时子进程一定已被杀掉并回收。
+func startChildTimeout(t *testing.T, role, dir, prefix string, runs int, timeout time.Duration) *child {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	c := &child{ctx: ctx, lines: make(chan string, 4096), done: make(chan struct{})}
+	c.cmd = exec.CommandContext(ctx, os.Args[0], "-test.run=^TestResultStoreChildProcess$")
 	c.cmd.Env = append(os.Environ(), childRoleEnv+"="+role, childDirEnv+"="+dir, childPrefixEnv+"="+prefix, childRunsEnv+"="+strconv.Itoa(runs))
 	c.cmd.Stderr = &c.stderr
+	c.cmd.WaitDelay = time.Second
 	var err error
 	c.stdin, err = c.cmd.StdinPipe()
 	require.NoError(t, err)
@@ -133,9 +148,24 @@ func startChild(t *testing.T, role, dir, prefix string, runs int) *child {
 			}
 		}
 		close(c.lines)
+		// StdoutPipe 要求读完输出后才能 Wait。
+		c.err = c.cmd.Wait()
+		close(c.done)
 	}()
-	t.Cleanup(func() { _ = c.cmd.Process.Kill() })
+	t.Cleanup(func() {
+		cancel()
+		<-c.done
+	})
 	return c
+}
+
+// describe 等子进程被回收后描述其退出情况，供失败信息定位；会阻塞到子进程退出，只能在确认失败后调用。
+func (c *child) describe() string {
+	<-c.done
+	if c.ctx.Err() != nil {
+		return fmt.Sprintf("子进程超时被杀掉（%v）：%v\nstderr: %s", c.ctx.Err(), c.err, c.stderr.String())
+	}
+	return fmt.Sprintf("子进程退出：%v\nstderr: %s", c.err, c.stderr.String())
 }
 
 // expect 读取子进程的下一条报告行。
@@ -143,21 +173,32 @@ func (c *child) expect(t *testing.T, want string) {
 	t.Helper()
 	select {
 	case line, ok := <-c.lines:
-		require.True(t, ok, "子进程提前退出：%s", c.stderr.String())
+		if !ok {
+			t.Fatalf("子进程提前退出，未报告 %q：%s", want, c.describe())
+		}
 		require.Equal(t, want, line)
 	case <-time.After(30 * time.Second):
 		t.Fatalf("等待子进程报告 %q 超时", want)
 	}
 }
 
-// wait 读完剩余报告行并等待子进程退出。
-func (c *child) wait(t *testing.T) []string {
-	t.Helper()
+// exit 读完剩余报告行，等待子进程退出并被回收，返回报告行与退出错误；子进程超时时会被杀掉，因此不会无限等待。
+func (c *child) exit() ([]string, error) {
 	var lines []string
 	for line := range c.lines {
 		lines = append(lines, line)
 	}
-	require.NoError(t, c.cmd.Wait(), "stderr: %s", c.stderr.String())
+	<-c.done
+	return lines, c.err
+}
+
+// wait 读完剩余报告行并断言子进程正常退出。
+func (c *child) wait(t *testing.T) []string {
+	t.Helper()
+	lines, err := c.exit()
+	if err != nil {
+		t.Fatalf("子进程未正常退出：%s", c.describe())
+	}
 	return lines
 }
 
@@ -206,7 +247,9 @@ func TestResultStoreProcessConcurrentRelease(t *testing.T) {
 		require.NoError(t, err)
 		select {
 		case line, ok := <-c.lines:
-			require.True(t, ok, "子进程提前退出：%s", c.stderr.String())
+			if !ok {
+				t.Fatalf("子进程提前退出：%s", c.describe())
+			}
 			first[i] = line
 		case <-time.After(30 * time.Second):
 			t.Fatal("等待子进程第一条写入结果超时")
@@ -269,10 +312,9 @@ func TestResultStoreProcessKilledWriter(t *testing.T) {
 	require.NoError(t, err)
 
 	require.NoError(t, c.cmd.Process.Kill())
-	for range c.lines {
-	}
+	_, err = c.exit()
 	var exit *exec.ExitError
-	require.ErrorAs(t, c.cmd.Wait(), &exit)
+	require.ErrorAs(t, err, &exit)
 	require.False(t, exit.Success())
 
 	start := time.Now()
@@ -284,4 +326,18 @@ func TestResultStoreProcessKilledWriter(t *testing.T) {
 	ref, data := childRef(run, 1)
 	require.ErrorIs(t, s.PutIfAbsent(ctx, ref, data), ErrReleased)
 	requireOnlyTombstones(t, dir, 1)
+}
+
+// 子进程卡住时按时限被杀掉并回收，读取报告行不会无限等待，失败信息能指出超时。
+func TestResultStoreProcessChildTimeout(t *testing.T) {
+	c := startChildTimeout(t, "hold", t.TempDir(), "timeout", 1, 2*time.Second)
+	c.expect(t, "ready")
+	start := time.Now()
+	_, err := c.exit()
+	require.Less(t, time.Since(start), 30*time.Second)
+	var exit *exec.ExitError
+	require.ErrorAs(t, err, &exit)
+	require.ErrorIs(t, c.ctx.Err(), context.DeadlineExceeded)
+	require.NotNil(t, c.cmd.ProcessState, "子进程已被回收")
+	require.Contains(t, c.describe(), "子进程超时被杀掉")
 }

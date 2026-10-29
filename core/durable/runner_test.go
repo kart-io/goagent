@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kart-io/goagent/testing/panictest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -91,7 +92,7 @@ func TestDurableProcessRestart(t *testing.T) {
 	dir := t.TempDir()
 	cmd := exec.Command(os.Args[0], "-test.run=^TestDurableProcessRestart$")
 	cmd.Env = append(os.Environ(), "GOAGENT_DURABLE_CHILD_DIR="+dir)
-	output, err := cmd.CombinedOutput()
+	output, err := panictest.CombinedOutput(cmd, panictest.ChildTimeout(t, time.Minute))
 	require.NoError(t, err, string(output))
 	store, err := NewFileStore(dir)
 	require.NoError(t, err)

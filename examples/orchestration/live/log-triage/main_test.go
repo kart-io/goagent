@@ -10,10 +10,12 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 
 	"github.com/kart-io/goagent/examples/internal/livemodel"
 	"github.com/kart-io/goagent/examples/internal/livemodel/livemodeltest"
+	"github.com/kart-io/goagent/testing/panictest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -64,7 +66,7 @@ func TestLiveLogTriageCrashRecovery(t *testing.T) {
 	child := func(mode string) string {
 		cmd := exec.Command(os.Args[0], "-test.run=^TestLiveLogTriageCrashRecovery$")
 		cmd.Env = append(os.Environ(), childDir+"="+dir, childMode+"="+mode)
-		b, err := cmd.CombinedOutput()
+		b, err := panictest.CombinedOutput(cmd, panictest.ChildTimeout(t, 5*time.Minute))
 		var exit *exec.ExitError
 		require.ErrorAs(t, err, &exit, string(b))
 		require.Equal(t, 86, exit.ExitCode(), string(b))

@@ -2,7 +2,9 @@
 package panictest
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -29,10 +31,52 @@ func Run(t *testing.T, fn func(t *testing.T)) {
 	}
 	cmd := exec.Command(os.Args[0], "-test.run=^"+regexp.QuoteMeta(t.Name())+"$", "-test.v", "-test.count=1")
 	cmd.Env = append(os.Environ(), childEnv+"="+t.Name())
-	out, err := cmd.CombinedOutput()
+	out, err := CombinedOutput(cmd, ChildTimeout(t, defaultChildTimeout))
 	text := string(out)
 	if err != nil || strings.Contains(text, "panic:") || !strings.Contains(text, survivedMarker) {
 		t.Fatalf("子进程未正常存活：%v\n%s", err, text)
+	}
+}
+
+const defaultChildTimeout = 2 * time.Minute
+
+// ChildTimeout 返回子进程的运行时限：不超过 limit，且不超过测试剩余时间的九成，
+// 保证测试二进制因 -test.timeout 退出前已杀掉并回收子进程。
+func ChildTimeout(t *testing.T, limit time.Duration) time.Duration {
+	if deadline, ok := t.Deadline(); ok {
+		if rest := time.Until(deadline) * 9 / 10; rest < limit {
+			return rest
+		}
+	}
+	return limit
+}
+
+// CombinedOutput 同 exec.Cmd.CombinedOutput，但最多运行 timeout：超时后杀掉并回收子进程，
+// 返回已产生的输出与包装 context.DeadlineExceeded 的错误。cmd 的 Stdout、Stderr 必须为空。
+func CombinedOutput(cmd *exec.Cmd, timeout time.Duration) ([]byte, error) {
+	if cmd.Stdout != nil || cmd.Stderr != nil {
+		return nil, errors.New("panictest: Stdout 或 Stderr 已设置")
+	}
+	var out bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &out, &out
+	if cmd.WaitDelay == 0 {
+		// 子进程留下的孙进程持有输出管道时，Wait 也能在杀掉子进程后返回。
+		cmd.WaitDelay = time.Second
+	}
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case err := <-done:
+		return out.Bytes(), err
+	case <-timer.C:
+		_ = cmd.Process.Kill()
+		err := <-done
+		return out.Bytes(), fmt.Errorf("子进程 %v 运行超过 %v，已杀掉并回收（%v）：%w", cmd.Args, timeout, err, context.DeadlineExceeded)
 	}
 }
 

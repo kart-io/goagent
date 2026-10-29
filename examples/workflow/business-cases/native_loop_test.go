@@ -148,6 +148,7 @@ func exerciseNativeProcesses(t *testing.T, env []string, report *nativeLoopRepor
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestNativeToolLoopChild$")
 		cmd.Env = append(append(os.Environ(), env...), "GOAGENT_NATIVE_CHILD_DIR="+dir)
+		cmd.WaitDelay = time.Second
 		out, err := cmd.CombinedOutput()
 		cancel()
 		after := len(auditLines(filepath.Join(dir, "requests")))

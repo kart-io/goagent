@@ -63,6 +63,7 @@ func TestCasesRecoverAcrossProcesses(t *testing.T) {
 				args := append([]string{"-test.run=^TestBusinessCaseChild$", "--"}, base...)
 				cmd := exec.CommandContext(ctx, os.Args[0], append(args, extra...)...)
 				cmd.Env = append(os.Environ(), "GOAGENT_BUSINESS_CASE_CHILD=1")
+				cmd.WaitDelay = time.Second
 				output, err := cmd.CombinedOutput()
 				if code == 0 {
 					require.NoError(t, err, string(output))

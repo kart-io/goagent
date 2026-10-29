@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/kart-io/goagent/core/observe"
+	"github.com/kart-io/goagent/testing/panictest"
 	"github.com/stretchr/testify/require"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
@@ -11,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"testing"
+	"time"
 )
 
 func TestComposedOrderReplay(t *testing.T) {
@@ -44,7 +46,7 @@ func TestComposedOrderProcessRecovery(t *testing.T) {
 	child := func() string {
 		cmd := exec.Command(os.Args[0], "-test.run=^TestComposedOrderProcessRecovery$")
 		cmd.Env = append(os.Environ(), "GOAGENT_ORDER_CHILD="+dir)
-		b, err := cmd.CombinedOutput()
+		b, err := panictest.CombinedOutput(cmd, panictest.ChildTimeout(t, 2*time.Minute))
 		var exit *exec.ExitError
 		require.ErrorAs(t, err, &exit)
 		require.Equal(t, 86, exit.ExitCode(), string(b))

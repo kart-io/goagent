@@ -76,6 +76,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `core.InterruptManager`：`RespondToInterrupt` 传入 nil 响应返回 `CodeInvalidInput`，此前在持锁时 panic 并永久占住锁、整个 manager 卡死；保存状态快照期间的 `CancelInterrupt` 不再被静默丢弃，`CreateInterrupt` 在保存完成后不再登记并返回 `CodeContextCanceled`；内部状态改为每个 ID 一个条目，所有加锁处统一 defer 解锁；已取消但等待方尚未退出的 ID 不可复用。
 - `stream.Multiplexer` 被 `RemoveConsumer`/`Close` 移除的消费者不再收到缓冲数据与结束回调；错误计数改为原子操作，消除数据竞争；`AddConsumer` 改在锁外调用 `OnStart`，回调中可以调用 `Stats`/`Consumers`/`Close`。`TeeMiddleware` 对同一消费者按顺序串行回调，panic 后不再调用它。
 - `tools.DeferResults`：推迟的调用改由 deliver 结束观测，结果回调失败时记为 `tool_error`，此前 invoke 返回时即按成功结束；`AsRunnable` 不再推迟，避免延迟的 `tool_end` 返回 `context canceled`；未 deliver 的调用在 `DeferResults` 的 ctx 结束时放弃交付并以该错误结束观测。
+- 子进程测试统一设置截止时间：新增 `panictest.CombinedOutput`/`panictest.ChildTimeout`，超时即杀掉并回收子进程、输出可定位的错误，测试超时退出时不再遗留孤儿进程。
 ### Deprecated
 
 - `interfaces.Agent/Runnable` 为旧消息协议，新增编排统一使用 `core.Runnable[I,O]`；现有 API 保留迁移路径。

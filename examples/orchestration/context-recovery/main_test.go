@@ -1,10 +1,12 @@
 package main
 
 import (
+	"github.com/kart-io/goagent/testing/panictest"
 	"github.com/stretchr/testify/require"
 	"os"
 	"os/exec"
 	"testing"
+	"time"
 )
 
 func TestReferencesProcessRecovery(t *testing.T) {
@@ -20,7 +22,7 @@ func TestReferencesProcessRecovery(t *testing.T) {
 	child := func() string {
 		cmd := exec.Command(os.Args[0], "-test.run=^TestReferencesProcessRecovery$")
 		cmd.Env = append(os.Environ(), "GOAGENT_REFERENCE_CHILD="+dir)
-		b, err := cmd.CombinedOutput()
+		b, err := panictest.CombinedOutput(cmd, panictest.ChildTimeout(t, 2*time.Minute))
 		var exit *exec.ExitError
 		require.ErrorAs(t, err, &exit)
 		require.Equal(t, 86, exit.ExitCode(), string(b))
