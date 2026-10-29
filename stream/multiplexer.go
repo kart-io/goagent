@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"github.com/google/uuid"
 
@@ -28,6 +29,8 @@ type Multiplexer struct {
 
 	running bool
 	closed  bool
+	// pending 是 OnStart 尚未返回、已占用 MaxConsumers 名额的消费者数，受 mu 保护
+	pending int
 	// run 是本次 Start 的运行状态，受 mu 保护；源结束、各消费者通道关闭后置 nil，此后加入的消费者留给下一次 Start
 	run *multiplexerRun
 }
@@ -44,20 +47,23 @@ type consumerState struct {
 	id       string
 	consumer core.StreamConsumer
 	ch       chan *core.LegacyStreamChunk
-	errors   int
-	active   bool
+	// errors 由广播协程（丢块）与处理协程（回调报错）累加、Stats 并发读取，因此用原子计数
+	errors atomic.Int64
+	active bool
 
-	// 以下字段受 Multiplexer.mu 保护：chClosed 表示 ch 已关闭；detached 表示已被 RemoveConsumer/Close 移除，
-	// 不再收到任何回调；finishing 表示 ch 由 Start 在源结束时关闭，处理完缓冲数据后以 finishErr 收尾
+	// 以下字段受 Multiplexer.mu 保护：chClosed 表示 ch 已关闭；finishing 表示 ch 由 Start 在源结束时关闭，
+	// 处理完缓冲数据后以 finishErr 收尾
 	chClosed  bool
-	detached  bool
 	finishing bool
 	finishErr error
 
-	// callMu 串行化对该消费者的回调；panicked 在其保护下置位，之后的回调一律跳过
-	callMu   sync.Mutex
+	// detached 表示已被 RemoveConsumer/Close 移除；处理协程每次回调前检查，置位后不再回调，包括缓冲数据与结束回调
+	detached atomic.Bool
+
+	// 以下字段只由该消费者的处理协程读写：每个消费者至多有一个处理协程，OnStart 在它启动前返回，
+	// 回调因此天然串行，panicked 置位后的回调一律跳过
 	panicked bool
-	// panicErr 记录处理协程中回调的 panic，由 Start 返回
+	// panicErr 记录处理协程中回调的 panic，由 Start 在等待处理协程结束后读取并返回
 	panicErr error
 }
 
@@ -85,40 +91,37 @@ func NewMultiplexer(ctx context.Context, opts *core.StreamOptions) *Multiplexer 
 
 // AddConsumer 添加消费者
 //
+// OnStart 在锁外调用，其中可以调用多路复用器的方法；OnStart 返回后消费者才被加入，期间多路复用器被关闭则返回错误。
 // Start 运行中加入的消费者从加入时起接收后续数据，源结束时与其他消费者一样在处理完缓冲数据后收到 OnError/OnComplete，
 // Start 等它处理完才返回；源结束之后（即使 Start 尚未返回）加入的消费者不属于本次运行，由下一次 Start 处理。
 func (m *Multiplexer) AddConsumer(consumer core.StreamConsumer) (string, error) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	if m.closed {
-		return "", agentErrors.New(agentErrors.CodeStreamWrite, "multiplexer is closed").
-			WithComponent("stream_multiplexer").
-			WithOperation("AddConsumer")
+		m.mu.Unlock()
+		return "", errMultiplexerClosed()
 	}
 
-	// 检查消费者数量限制
-	if m.opts.MaxConsumers > 0 && len(m.consumers) >= m.opts.MaxConsumers {
+	// 检查消费者数量限制；OnStart 期间先占用名额，避免并发加入超过上限
+	if current := len(m.consumers) + m.pending; m.opts.MaxConsumers > 0 && current >= m.opts.MaxConsumers {
+		m.mu.Unlock()
 		return "", agentErrors.New(agentErrors.CodeInvalidConfig, "max consumers limit reached").
 			WithComponent("stream_multiplexer").
 			WithOperation("AddConsumer").
 			WithContext("max_consumers", m.opts.MaxConsumers).
-			WithContext("current_consumers", len(m.consumers))
+			WithContext("current_consumers", current)
 	}
+	m.pending++
+	m.mu.Unlock()
 
 	id := uuid.New().String()
-	state := &consumerState{
-		id:       id,
-		consumer: consumer,
-		ch:       make(chan *core.LegacyStreamChunk, m.opts.BufferSize),
-		active:   true,
-	}
-
-	m.consumers[id] = state
 
 	// 通知消费者开始；OnStart 自身 panic 时返回 PanicError，语义同 core.NotifyCallbacks
-	if panicked, err := core.CallSafely(m.ctx, "stream_multiplexer", "on_start", consumer.OnStart); err != nil {
-		delete(m.consumers, id)
+	panicked, err := core.CallSafely(m.ctx, "stream_multiplexer", "on_start", consumer.OnStart)
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.pending--
+	if err != nil {
 		if panicked {
 			return "", err
 		}
@@ -127,6 +130,17 @@ func (m *Multiplexer) AddConsumer(consumer core.StreamConsumer) (string, error) 
 			WithOperation("AddConsumer").
 			WithContext("consumer_id", id)
 	}
+	if m.closed {
+		return "", errMultiplexerClosed()
+	}
+
+	state := &consumerState{
+		id:       id,
+		consumer: consumer,
+		ch:       make(chan *core.LegacyStreamChunk, m.opts.BufferSize),
+		active:   true,
+	}
+	m.consumers[id] = state
 
 	// 持锁登记到运行中的 Start：与源结束时关闭通道互斥，要么在关闭前登记并随其他消费者收尾，要么留给下一次 Start
 	if m.run != nil {
@@ -136,7 +150,16 @@ func (m *Multiplexer) AddConsumer(consumer core.StreamConsumer) (string, error) 
 	return id, nil
 }
 
+func errMultiplexerClosed() error {
+	return agentErrors.New(agentErrors.CodeStreamWrite, "multiplexer is closed").
+		WithComponent("stream_multiplexer").
+		WithOperation("AddConsumer")
+}
+
 // RemoveConsumer 移除消费者
+//
+// 被移除的消费者不再收到任何回调，包括已缓冲的数据与 OnError/OnComplete；可以在该消费者自己的回调中调用。
+// 从其他协程调用时，调用前已开始的那次回调不受影响。
 func (m *Multiplexer) RemoveConsumer(id string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -150,7 +173,7 @@ func (m *Multiplexer) RemoveConsumer(id string) error {
 	}
 
 	state.active = false
-	state.detached = true
+	state.detached.Store(true)
 	closeConsumerCh(state)
 	delete(m.consumers, id)
 
@@ -265,10 +288,10 @@ func (m *Multiplexer) Close() error {
 
 	m.closed = true
 
-	// 先在锁内标记移除再取消 ctx：processConsumer 看到 ctx 结束后需要取锁检查 detached，因此不会给它们收尾
+	// 先标记移除再取消 ctx：处理协程看到 ctx 结束时一定也能看到 detached，因此不会给它们收尾
 	for _, state := range m.consumers {
 		state.active = false
-		state.detached = true
+		state.detached.Store(true)
 		closeConsumerCh(state)
 	}
 	m.cancel()
@@ -310,7 +333,7 @@ func (m *Multiplexer) broadcast(chunk *core.LegacyStreamChunk) error {
 		default:
 			// 通道已满，跳过此消费者（背压处理）
 			if m.opts.EnableBackpressure {
-				state.errors++
+				state.errors.Add(1)
 			}
 		}
 	}
@@ -336,7 +359,11 @@ func (m *Multiplexer) processConsumer(ctx context.Context, state *consumerState,
 
 			panicked, err := m.callConsumer(ctx, state, "consume", func() error {
 				if err := state.consumer.OnChunk(chunk); err != nil {
-					state.errors++
+					state.errors.Add(1)
+					// OnChunk 中可能已把自己移除
+					if state.detached.Load() {
+						return nil
+					}
 					if err := state.consumer.OnError(err); err != nil {
 						fmt.Printf("failed to broadcast error: %v", err)
 					}
@@ -349,23 +376,13 @@ func (m *Multiplexer) processConsumer(ctx context.Context, state *consumerState,
 			}
 
 		case <-ctx.Done():
-			m.finishCanceledConsumer(ctx, state, ctx.Err())
+			m.finishConsumer(ctx, state, ctx.Err())
 			return
 
 		case <-m.ctx.Done():
-			m.finishCanceledConsumer(ctx, state, m.ctx.Err())
+			m.finishConsumer(ctx, state, m.ctx.Err())
 			return
 		}
-	}
-}
-
-// finishCanceledConsumer 在 ctx 结束时为消费者收尾；已被 RemoveConsumer/Close 移除的消费者不再回调。
-func (m *Multiplexer) finishCanceledConsumer(ctx context.Context, state *consumerState, err error) {
-	m.mu.RLock()
-	detached := state.detached
-	m.mu.RUnlock()
-	if !detached {
-		m.finishConsumer(ctx, state, err)
 	}
 }
 
@@ -381,13 +398,10 @@ func (m *Multiplexer) finishConsumer(ctx context.Context, state *consumerState, 
 	}
 }
 
-// callConsumer 在 callMu 下调用消费者回调，消费者已 panic 过则跳过。
-// 回调 panic 时在释放 callMu 之前将其标记为 panicked 与非活跃，返回 PanicError；
-// 已排队等待 callMu 的完成/错误通知因此看到标记而跳过，不存在 panic 之后仍被回调的窗口。
+// callConsumer 调用消费者回调，只在该消费者的处理协程中调用；消费者已 panic 或已被移除时跳过。
+// 回调 panic 时将其标记为 panicked 与非活跃并返回 PanicError，同一协程上之后的回调因此全部跳过。
 func (m *Multiplexer) callConsumer(ctx context.Context, state *consumerState, operation string, call func() error) (bool, error) {
-	state.callMu.Lock()
-	defer state.callMu.Unlock()
-	if state.panicked {
+	if state.panicked || state.detached.Load() {
 		return false, nil
 	}
 	panicked, err := core.CallSafely(ctx, "stream_multiplexer", operation, call)
@@ -414,7 +428,7 @@ func (m *Multiplexer) Stats() MultiplexerStats {
 		if state.active {
 			stats.ActiveConsumers++
 		}
-		stats.TotalErrors += state.errors
+		stats.TotalErrors += int(state.errors.Load())
 	}
 
 	return stats
