@@ -23,6 +23,9 @@ func TestImportRulesUseCurrentModuleAndExactExceptions(t *testing.T) {
 		{"interfaces/x.go", "utils/json", true},
 		{"cache/x.go", "utils/json", false},
 		{"cache/x.go", "utils/httpclient", true},
+		{"utils/httpclient/client.go", "errors", false},
+		{"utils/json/x.go", "errors", true},
+		{"utils/httpclient/client.go", "core", true},
 		{"tools/x.go", "examples/test", true},
 		{"workflow/x.go", "core/durable", false},
 	} {
