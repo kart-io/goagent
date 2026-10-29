@@ -1,9 +1,13 @@
 package errors
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
+	"strings"
 	"testing"
 )
 
@@ -51,6 +55,101 @@ func TestAgentError_Error(t *testing.T) {
 				t.Errorf("Error() = %v, want to contain %v", got, tt.wantMsg)
 			}
 		})
+	}
+}
+
+// Error() 文本会传播到日志、事件与模型输入，不得包含 Context 的键与值。
+func TestAgentError_ErrorExcludesContext(t *testing.T) {
+	err := Wrap(fmt.Errorf("底层错误"), CodeLLMRequest, "request failed").
+		WithComponent("llm").
+		WithOperation("call").
+		WithContext("url", "https://api.example.com/v1?key=secret").
+		WithContext("prompt", "用户输入")
+
+	want := "[LLM_REQUEST] [llm] operation=call: request failed: 底层错误"
+	if got := err.Error(); got != want {
+		t.Fatalf("Error() = %q, want %q", got, want)
+	}
+	for _, leaked := range []string{"secret", "用户输入", "url=", "prompt="} {
+		if strings.Contains(err.Error(), leaked) {
+			t.Errorf("Error() 不应包含 %q: %s", leaked, err.Error())
+		}
+	}
+	if GetContext(err)["prompt"] != "用户输入" {
+		t.Errorf("GetContext 应保留 Context: %v", GetContext(err))
+	}
+}
+
+func TestAgentError_LogValue(t *testing.T) {
+	err := Wrap(fmt.Errorf("底层错误"), CodeToolExecution, "tool failed").
+		WithComponent("tool").
+		WithOperation("run").
+		WithContext("tool_name", "search").
+		WithContext("attempt", 2)
+
+	var buf bytes.Buffer
+	slog.New(slog.NewJSONHandler(&buf, nil)).Error("失败", "err", err)
+
+	var record struct {
+		Err map[string]any `json:"err"`
+	}
+	if jerr := json.Unmarshal(buf.Bytes(), &record); jerr != nil {
+		t.Fatalf("解析日志失败: %v, 原文: %s", jerr, buf.String())
+	}
+	want := map[string]any{
+		"code":      "TOOL_EXECUTION",
+		"component": "tool",
+		"operation": "run",
+		"message":   "tool failed",
+		"context":   map[string]any{"tool_name": "search", "attempt": float64(2)},
+		"cause":     "底层错误",
+	}
+	got, _ := json.Marshal(record.Err)
+	wantJSON, _ := json.Marshal(want)
+	if string(got) != string(wantJSON) {
+		t.Errorf("LogValue = %s, want %s", got, wantJSON)
+	}
+
+	// 无 Context、Component、Operation、Cause 时只输出 code 与 message
+	attrs := New(CodeInternal, "boom").LogValue().Group()
+	if len(attrs) != 2 || attrs[0].Key != "code" || attrs[1].Key != "message" {
+		t.Errorf("最小 LogValue = %v", attrs)
+	}
+}
+
+func TestRedactURL(t *testing.T) {
+	tests := []struct {
+		in   string
+		want string
+	}{
+		{"https://user:pass@api.example.com/v1/chat?key=secret#frag", "https://api.example.com/v1/chat"},
+		{"https://api.example.com/v1?", "https://api.example.com/v1"},
+		{"nats://token@nats.example.com:4222", "nats://nats.example.com:4222"},
+		{"postgres://admin:pw@db:5432/app?sslmode=disable&password=x", "postgres://db:5432/app"},
+		{"http://localhost:8080", "http://localhost:8080"},
+		{"localhost:6379", "localhost:6379"},
+		{"127.0.0.1:6379", "127.0.0.1:6379"},
+		{"user:pw@10.0.0.1:6379", "10.0.0.1:6379"},
+		{"://bad@host/path?token=1", "://host/path"},
+		{"", ""},
+	}
+	for _, tt := range tests {
+		if got := RedactURL(tt.in); got != tt.want {
+			t.Errorf("RedactURL(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+}
+
+func TestConnectionErrorsRedactEndpoint(t *testing.T) {
+	cause := fmt.Errorf("connection refused")
+	for _, err := range []*AgentError{
+		NewStoreConnectionError("postgres", "postgres://admin:pw@db:5432/app?sslmode=disable", cause),
+		NewDistributedConnectionError("https://u:p@node.example.com/api?token=t", cause),
+	} {
+		ep, _ := err.Context["endpoint"].(string)
+		if strings.ContainsAny(ep, "@?") || strings.Contains(ep, "pw") || strings.Contains(ep, "token") {
+			t.Errorf("endpoint 未脱敏: %q", ep)
+		}
 	}
 }
 

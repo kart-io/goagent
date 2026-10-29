@@ -165,7 +165,7 @@ func (p *TelemetryProvider) initTracer(res *resource.Resource) (*sdktrace.Tracer
 			return nil, agentErrors.Wrap(err, agentErrors.CodeInternal, "failed to create OTLP exporter").
 				WithComponent("telemetry").
 				WithOperation("initTracer").
-				WithContext("endpoint", p.config.TraceEndpoint)
+				WithContext("endpoint", agentErrors.RedactURL(p.config.TraceEndpoint))
 		}
 	case "stdout":
 		// stdout exporter 不再支持，使用 noop 替代
@@ -209,7 +209,7 @@ func (p *TelemetryProvider) createOTLPExporter() (sdktrace.SpanExporter, error) 
 		return nil, agentErrors.Wrap(err, agentErrors.CodeStoreConnection, "failed to create gRPC connection").
 			WithComponent("telemetry").
 			WithOperation("createOTLPExporter").
-			WithContext("endpoint", p.config.TraceEndpoint)
+			WithContext("endpoint", agentErrors.RedactURL(p.config.TraceEndpoint))
 	}
 
 	// 创建 OTLP trace 导出器
@@ -223,7 +223,7 @@ func (p *TelemetryProvider) createOTLPExporter() (sdktrace.SpanExporter, error) 
 		return nil, agentErrors.Wrap(err, agentErrors.CodeInternal, "failed to create OTLP trace exporter").
 			WithComponent("telemetry").
 			WithOperation("createOTLPExporter").
-			WithContext("endpoint", p.config.TraceEndpoint)
+			WithContext("endpoint", agentErrors.RedactURL(p.config.TraceEndpoint))
 	}
 
 	return exporter, nil

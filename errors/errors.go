@@ -3,7 +3,10 @@ package errors
 import (
 	"errors"
 	"fmt"
+	"log/slog"
+	"net/url"
 	"runtime"
+	"sort"
 	"strings"
 )
 
@@ -144,7 +147,8 @@ type StackFrame struct {
 	Function string
 }
 
-// Error implements the error interface
+// Error 实现 error 接口。文本会流入日志、事件与模型输入，因此不包含 Context；
+// 需要 Context 时使用 GetContext 或结构化日志（LogValue）。
 func (e *AgentError) Error() string {
 	var sb strings.Builder
 
@@ -161,24 +165,71 @@ func (e *AgentError) Error() string {
 	sb.WriteString(": ")
 	sb.WriteString(e.Message)
 
-	if len(e.Context) > 0 {
-		sb.WriteString(" (")
-		first := true
-		for k, v := range e.Context {
-			if !first {
-				sb.WriteString(", ")
-			}
-			sb.WriteString(fmt.Sprintf("%s=%v", k, v))
-			first = false
-		}
-		sb.WriteString(")")
-	}
-
 	if e.Cause != nil {
 		sb.WriteString(fmt.Sprintf(": %v", e.Cause))
 	}
 
 	return sb.String()
+}
+
+// LogValue 实现 slog.LogValuer，以 group 形式输出错误的结构化字段（含 Context），供结构化日志使用。
+func (e *AgentError) LogValue() slog.Value {
+	attrs := []slog.Attr{slog.String("code", string(e.Code))}
+	if e.Component != "" {
+		attrs = append(attrs, slog.String("component", e.Component))
+	}
+	if e.Operation != "" {
+		attrs = append(attrs, slog.String("operation", e.Operation))
+	}
+	attrs = append(attrs, slog.String("message", e.Message))
+
+	if len(e.Context) > 0 {
+		keys := make([]string, 0, len(e.Context))
+		for k := range e.Context {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		ctxAttrs := make([]any, 0, len(keys))
+		for _, k := range keys {
+			ctxAttrs = append(ctxAttrs, slog.Any(k, e.Context[k]))
+		}
+		attrs = append(attrs, slog.Group("context", ctxAttrs...))
+	}
+
+	if e.Cause != nil {
+		attrs = append(attrs, slog.String("cause", e.Cause.Error()))
+	}
+
+	return slog.GroupValue(attrs...)
+}
+
+// RedactURL 去掉 URL 中的 userinfo、query 与 fragment，用于把地址写入错误 Context 之前脱敏。
+// 无法按 URL 解析出主机的输入（如 host:port）按同样规则做字符串裁剪。
+func RedactURL(raw string) string {
+	if u, err := url.Parse(raw); err == nil && u.Host != "" {
+		u.User = nil
+		u.RawQuery = ""
+		u.ForceQuery = false
+		u.Fragment = ""
+		u.RawFragment = ""
+		return u.String()
+	}
+
+	if i := strings.IndexAny(raw, "?#"); i >= 0 {
+		raw = raw[:i]
+	}
+	prefix, rest := "", raw
+	if i := strings.Index(raw, "://"); i >= 0 {
+		prefix, rest = raw[:i+3], raw[i+3:]
+	}
+	authority := rest
+	if i := strings.Index(rest, "/"); i >= 0 {
+		authority = rest[:i]
+	}
+	if i := strings.LastIndex(authority, "@"); i >= 0 {
+		rest = rest[i+1:]
+	}
+	return prefix + rest
 }
 
 // Unwrap returns the underlying cause for error chain support

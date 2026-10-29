@@ -105,13 +105,13 @@ func (t *WebScraperTool) Execute(ctx context.Context, input *interfaces.ToolInpu
 		return nil, agentErrors.Wrap(err, agentErrors.CodeInvalidInput, "invalid URL").
 			WithComponent("web_scraper_tool").
 			WithOperation("execute").
-			WithContext("url", params.URL)
+			WithContext("url", agentErrors.RedactURL(params.URL))
 	}
 	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
 		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "only HTTP(S) URLs are supported").
 			WithComponent("web_scraper_tool").
 			WithOperation("execute").
-			WithContext("url", params.URL).
+			WithContext("url", agentErrors.RedactURL(params.URL)).
 			WithContext("scheme", parsedURL.Scheme)
 	}
 
@@ -309,7 +309,7 @@ func (t *WebScraperTool) fetchPage(ctx context.Context, urlStr string) (*goquery
 		return nil, agentErrors.New(agentErrors.CodeToolExecution, "HTTP request failed").
 			WithComponent("web_scraper_tool").
 			WithOperation("fetchPage").
-			WithContext(interfaces.FieldURL, urlStr).
+			WithContext(interfaces.FieldURL, agentErrors.RedactURL(urlStr)).
 			WithContext(interfaces.FieldStatusCode, resp.StatusCode()).
 			WithContext(interfaces.FieldStatus, resp.Status())
 	}

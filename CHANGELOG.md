@@ -83,6 +83,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `core.InterruptManager.CancelInterrupt` 对不存在或已清理的 ID 返回 `CodeAgentNotFound`（与 `RespondToInterrupt` 一致），此前返回 nil，调用方无法区分是否真的取消。
 - `mcp/remote` 的 stdio 互操作测试改用 `exec.CommandContext` 并设置 `WaitDelay`，超时后子进程被杀掉并回收。
 - `ExecuteStream` 中工具执行失败时，终态 `error` 事件的 `Tool` 填为失败的工具名（工具选择路径与原生工具流的顺序、并发执行均适用），此前为空，消费者无法知道是哪个工具失败。
+- 破坏性变更：`(*errors.AgentError).Error()` 不再输出 `Context`（此前追加 `(k=v, ...)`），避免 URL、模型参数、用户输入随错误文本进入日志、事件与模型输入；`*AgentError` 新增 `LogValue()` 实现 `slog.LogValuer`，结构化日志以 group 输出含 `context` 的全部字段；新增 `errors.RedactURL`，连接类错误与各工具、存储、通信组件写入 `url`/`endpoint` 前去掉 userinfo、query 与 fragment。按 `Error()` 文本匹配 Context 键值的代码需改用 `GetContext` 或 `LogValue`；`distributed.Coordinator` 不再因非 2xx 响应体含 `timeout` 等关键字而故障转移。
+- `InputValidator` 的校验错误 Message 带上具体原因与参数名（如 `required parameter validation failed: required parameter is missing: query`），不含参数值，`Error()` 交还模型时仍可据此改正。
 ### Deprecated
 
 - `interfaces.Agent/Runnable` 为旧消息协议，新增编排统一使用 `core.Runnable[I,O]`；现有 API 保留迁移路径。

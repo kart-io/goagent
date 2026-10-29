@@ -189,7 +189,7 @@ func (a *APITool) run(ctx context.Context, input *interfaces.ToolInput) (*interf
 		return resp.ExecutionError(fmt.Sprintf("HTTP request failed with status %d", httpResp.StatusCode()), result,
 			agentErrors.New(agentErrors.CodeToolExecution, "HTTP request failed with non-2xx status").
 				WithContext(interfaces.FieldStatusCode, httpResp.StatusCode()).
-				WithContext(interfaces.FieldURL, urlStr))
+				WithContext(interfaces.FieldURL, agentErrors.RedactURL(urlStr)))
 	}
 
 	return resp.Success(result, map[string]interface{}{

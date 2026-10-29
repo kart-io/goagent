@@ -228,10 +228,17 @@ func errorToHTTPStatus(err error) (int, string) {
 }
 ```
 
-### 结构化日志
+### Error() 文本与结构化日志
+
+`Error()` 只输出 `[CODE] [component] operation=xxx: message: cause`，不包含 `Context`。错误文本会流入日志、事件 Message 与模型输入，`Context` 中的 URL、模型参数、用户输入等不应随之传播；需要时用 `GetContext` 读取，或交给结构化日志。
+
+`*AgentError` 实现了 `slog.LogValuer`，作为 slog 属性值时以 group 输出 `code`、`component`、`operation`、`message`、`context`、`cause`（为空的字段省略）。把地址写入 `Context` 前用 `errors.RedactURL` 去掉 userinfo、query 与 fragment。
 
 ```go
-// 提取错误信息用于日志
+// slog 直接记录 *AgentError，Context 以 err.context 分组输出
+slog.Error("operation failed", "err", agentErr)
+
+// 其他日志库可逐项提取
 logger.Error("operation failed",
     "error_code", errors.GetCode(err),
     "component", errors.GetComponent(err),
@@ -266,6 +273,10 @@ func (e *AgentError) WithOperation(operation string) *AgentError
 func (e *AgentError) WithComponent(component string) *AgentError
 func (e *AgentError) WithContext(key string, value interface{}) *AgentError
 func (e *AgentError) WithContextMap(ctx map[string]interface{}) *AgentError
+func (e *AgentError) LogValue() slog.Value
+
+// 写入 Context 前脱敏 URL
+RedactURL(raw string) string
 ```
 
 ### 检查函数
