@@ -29,13 +29,13 @@ GoAgent 定位为**嵌入 Go 业务服务的可恢复、可计量、可观测 Ag
 ### 2.2 负担
 
 - **外围模块成熟度低**：执行契约将推理策略、自动反思列为“实验”；`reflection` 源码约 1071 行、测试 93 行；`distributed`/`multiagent` 使用 Core NATS，不支持持久化消费；`cache`、`options`、`prompt` 自 2025-12-07 以来没有改动，`prompt` 在主模块中没有被任何包导入。
-- **示例过大**：`examples/` 约 5.5 万行，超过 `core`+`builder`+`tools`+`workflow` 源码总和。
+- **示例过大**：`examples/` 约 5.5 万行（迁出业务案例后仍约 4.8 万行），超过 `core`+`builder`+`tools`+`workflow` 源码总和。
 - **单一 go.mod 依赖面宽**：aiplatform、qdrant、cohere、gorm/pgx、mysql、lib/pq、go-sqlite3（cgo）、nats、goquery、pdf、viper 都在主模块。只使用 `builder` 的宿主也会因最小版本选择受这些依赖传递要求的版本约束（如 grpc、otel、protobuf），容易与宿主现有版本冲突；编译本身只涉及被导入的包。
 - **采用度与发布**：GitHub 7 star、4 fork；GitHub Release 停在 v0.1.9，git tag 已到 v0.15.0。外部用户少，意味着现在收敛的迁移成本最低。
 
 ### 2.3 使用方
 
-2026-10-29 检查本机 `$HOME/code` 下全部 `go.mod`，依赖 goagent 的只有 [goagent-examples](https://github.com/kart-io/goagent-examples)。它导入的全部是第 4.1 节的保留包（`interfaces`、`core/durable`、`llm`、`workflow`、`tools`、`core/budget`、`builder` 等）；外围包只被 goagent 自身 `examples/` 中的演示导入。外部开源使用方无法核实，仅有 GitHub star/fork 数可参考。
+2026-10-29 检查本机 `$HOME/code` 下全部 `go.mod`，依赖 goagent 的只有 [goagent-examples](https://github.com/kart-io/goagent-examples) 和仓内子模块 `evaluation/frameworkbench`（`replace` 指向主模块）。goagent-examples 导入的是第 4.1 节的保留包（`interfaces`、`core/durable`、`llm`、`workflow`、`tools`、`core/budget`、`builder` 等），以及 `workflow/refund` 与测试辅助 `testing/panictest`；外围包只被 goagent 自身 `examples/` 中的演示导入。外部开源使用方无法核实，仅有 GitHub star/fork 数可参考。
 
 ## 3. 方向比较
 
@@ -79,7 +79,7 @@ GoAgent 定位为**嵌入 Go 业务服务的可恢复、可计量、可观测 Ag
 | `store/{postgres,redis,factory,adapters}`、`options` | gorm、pgx、go-redis、pflag、viper | 存储后端由宿主实现 `store.Store` |
 | `core/checkpoint/redis.go` | go-redis | 核心层不再直接依赖 Redis |
 | `tools/practical`、`toolkits`、`tools/plugingen` | mysql、lib/pq、go-sqlite3、goquery、yaml.v3 | 主模块去掉 cgo 依赖 |
-| `stream` | gorilla/websocket | 主模块内无导入方；与 `core.StreamRunnable` 职责重叠 |
+| `stream` | — | 主模块内无导入方；与 `core.StreamRunnable` 职责重叠。gorilla/websocket 仍经 genai 间接引入 |
 | `prompt` | — | 主模块无导入方，2025-12-07 后无改动 |
 
 ### 4.3 示例
@@ -95,8 +95,9 @@ GoAgent 定位为**嵌入 Go 业务服务的可恢复、可计量、可观测 Ag
 1. `builder/reasoning_builders.go`、`builder/reasoning_presets.go`（共 1285 行）导入 `agents` 及全部推理策略包，随 `agents` 一并删除，Builder 只保留原生工具循环入口。
 2. `core/checkpoint/redis.go` 导入 go-redis，删除；`checkpoint.Checkpointer` 接口保留在核心。
 3. `testing/test_token_usage.go` 导入 `agents/cot`，改用 mock 或删除。
+4. 导入待删包的测试随之删除或改写：`builder/reasoning_presets_test.go`、`tools/toolkits_integration_test.go`、`integration/services_test.go`、`core/checkpoint/redis*_test.go`、`examples/supervisor_agent_example*_test.go`；示例 `examples/basic/14-reasoning-agents`、`examples/advanced/multiagent-patterns` 一并删除。
 
-删除后主模块预计不再依赖：aiplatform、cohere、qdrant、google api、gorm 系列、pgx、lib/pq、mysql、go-sqlite3、nats、goquery、pdf、viper、pflag、go-redis、yaml.v3。实际结果以删除后 `go mod tidy` 和 `go mod graph` 为准。
+2026-10-29 在临时工作树中按上述清单删除后，`go build`、`go vet`、`go mod tidy` 通过，`go.mod` 从 125 行降到 81 行，不再依赖：aiplatform、cohere、qdrant、google api、gorm 系列、pgx、lib/pq、mysql、go-sqlite3、nats、goquery、pdf、viper、go-redis。仍残留：pflag（经 `kart-io/logger`）、yaml.v3（经 zap、testify、sonic，均为 indirect）、gorilla/websocket（经 genai）。
 
 `scripts/apicheck` 中针对 `builder/reasoning_*.go` 导入 `agents` 的兼容例外随之删除。
 
