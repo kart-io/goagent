@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/testing/panictest"
 	"github.com/stretchr/testify/require"
 )
@@ -153,7 +154,11 @@ func TestBeforeApproveRunsUnderLock(t *testing.T) {
 	require.Equal(t, wait, after)
 	runner.BeforeApprove = func(context.Context, string, *Snapshot) error { panic("boom") }
 	_, err = runner.Run(ctx, "run", nil, wait.Key)
-	require.ErrorContains(t, err, "批准前置校验 panic: boom")
+	require.ErrorContains(t, err, "批准前置校验 发生 panic")
+	require.NotContains(t, err.Error(), "boom")
+	var panicErr *agentErrors.PanicError
+	require.ErrorAs(t, err, &panicErr)
+	require.Equal(t, "boom", panicErr.Value)
 	require.Zero(t, effects)
 	runner.BeforeApprove = func(_ context.Context, _ string, snap *Snapshot) error {
 		require.JSONEq(t, `{"ticket":"h1"}`, string(snap.Data))

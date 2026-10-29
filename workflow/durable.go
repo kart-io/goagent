@@ -14,6 +14,7 @@ import (
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/observe"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // DurableConfig binds the graph to a host-controlled schema/code version.
@@ -318,7 +319,7 @@ func (d *DurableGraph[T]) run(ctx context.Context, id string, initial T, approva
 func (d *DurableGraph[T]) checkBeforeApprove(ctx context.Context, id string, checkpoint *durable.Snapshot) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			err = fmt.Errorf("批准前置校验 panic: %v", r)
+			err = agentErrors.NewPanicError("批准前置校验", r)
 		}
 	}()
 	// 重新解码出独立副本，避免钩子修改的状态随后续 Save 写入检查点。

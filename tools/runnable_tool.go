@@ -128,8 +128,7 @@ func (t *runnableTool[I, O]) Invoke(ctx context.Context, input *interfaces.ToolI
 	defer func() {
 		if v := recover(); v != nil {
 			out = nil
-			// 组合工具的 panic 值由宿主代码产生，保留在错误文本中便于定位；仍可用 errors.As 取调用栈。
-			err = errors.Join(err, fmt.Errorf("%w：%v", agentErrors.NewPanicError("Runnable 工具", v), v))
+			err = errors.Join(err, agentErrors.NewPanicError("Runnable 工具", v))
 		}
 	}()
 	ctx, err = enterRunnable(ctx, t.config.MaxDepth, t.config.ModelInvoking)

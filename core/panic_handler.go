@@ -10,7 +10,6 @@ package core
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 	"sync/atomic"
 
@@ -40,6 +39,9 @@ type PanicHandler interface {
 	//
 	// Returns:
 	//   - An error representing the panic, suitable for returning to callers
+	//
+	// 返回错误的文本不应包含 panicValue 与 stackTrace：registry 不改写 handler 的文本，
+	// 二者应留给 PanicLogger、指标或 errors.As 取到的 *agentErrors.PanicError。
 	HandlePanic(ctx context.Context, component, operation string, panicValue interface{}, stackTrace string) error
 }
 
@@ -89,9 +91,11 @@ type PanicLogger interface {
 //
 // Behavior:
 //   - Converts all panics to AgentError with CodeInternal
-//   - Preserves panic value and stack trace in error context
-//   - Cause 为 *agentErrors.PanicError，可用 errors.As 识别
+//   - Cause 为 *agentErrors.PanicError，可用 errors.As 识别并读取 panic 值与调用栈
 //   - Compatible with existing error handling infrastructure
+//
+// 错误文本会进入流错误、日志甚至交给模型，Message 与 Context 因此不含 panic 值与调用栈，
+// 文本以 PanicError 的“<位置> 发生 panic”结尾。
 type DefaultPanicHandler struct{}
 
 // HandlePanic implements PanicHandler interface.
@@ -99,12 +103,10 @@ func (h *DefaultPanicHandler) HandlePanic(ctx context.Context, component, operat
 	return agentErrors.Wrap(
 		newPanicCause(component, operation, panicValue, []byte(stackTrace)),
 		agentErrors.CodeInternal,
-		fmt.Sprintf("panic recovered: %v", panicValue),
+		"panic 已恢复",
 	).
 		WithComponent(component).
-		WithOperation(operation).
-		WithContext("panic_value", panicValue).
-		WithContext("stack_trace", stackTrace)
+		WithOperation(operation)
 }
 
 // NoOpMetricsCollector is a no-op metrics collector (default).

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/workflow"
 	"github.com/stretchr/testify/require"
 )
@@ -342,7 +343,11 @@ func TestDurableGraphBeforeApproveUnderLock(t *testing.T) {
 
 	check = func(context.Context, string, *workflow.GraphSnapshot[map[string]int]) error { panic("boom") }
 	_, err = run.Run(ctx, "sql", nil, wait.Key)
-	require.ErrorContains(t, err, "批准前置校验 panic: boom")
+	require.ErrorContains(t, err, "批准前置校验 发生 panic")
+	require.NotContains(t, err.Error(), "boom")
+	var panicErr *agentErrors.PanicError
+	require.ErrorAs(t, err, &panicErr)
+	require.Equal(t, "boom", panicErr.Value)
 	require.Zero(t, effects)
 
 	check = func(ctx context.Context, id string, snap *workflow.GraphSnapshot[map[string]int]) error {

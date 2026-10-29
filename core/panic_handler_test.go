@@ -170,9 +170,11 @@ func TestDefaultPanicHandler(t *testing.T) {
 		assert.Equal(t, agentErrors.CodeInternal, agentErr.Code)
 		assert.Equal(t, "test_component", agentErr.Component)
 		assert.Equal(t, "test_op", agentErr.Operation)
-		assert.Equal(t, "test panic", agentErr.Context["panic_value"])
-		assert.Equal(t, "stack trace here", agentErr.Context["stack_trace"])
-		assert.Contains(t, agentErr.Message, "panic recovered")
+		assert.Empty(t, agentErr.Context, "panic 值与调用栈不进入 Context")
+		assert.Equal(t, "panic 已恢复", agentErr.Message)
+		assert.Contains(t, err.Error(), "test_component.test_op 发生 panic")
+		assert.NotContains(t, err.Error(), "test panic")
+		assert.NotContains(t, err.Error(), "stack trace here")
 
 		var panicErr *agentErrors.PanicError
 		require.ErrorAs(t, err, &panicErr)
@@ -183,7 +185,10 @@ func TestDefaultPanicHandler(t *testing.T) {
 	t.Run("Handles nil panic value", func(t *testing.T) {
 		err := handler.HandlePanic(ctx, "comp", "op", nil, "")
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "panic recovered")
+		assert.Contains(t, err.Error(), "comp.op 发生 panic")
+		var panicErr *agentErrors.PanicError
+		require.ErrorAs(t, err, &panicErr)
+		assert.Nil(t, panicErr.Value)
 	})
 
 	t.Run("Handles complex panic value", func(t *testing.T) {
@@ -194,8 +199,10 @@ func TestDefaultPanicHandler(t *testing.T) {
 		err := handler.HandlePanic(ctx, "comp", "op", complexValue, "")
 		require.Error(t, err)
 
-		agentErr := err.(*agentErrors.AgentError)
-		assert.Equal(t, complexValue, agentErr.Context["panic_value"])
+		assert.NotContains(t, err.Error(), "detailed error")
+		var panicErr *agentErrors.PanicError
+		require.ErrorAs(t, err, &panicErr)
+		assert.Equal(t, complexValue, panicErr.Value)
 	})
 }
 
@@ -604,4 +611,75 @@ func TestHotSwapping_ConcurrentWithUsage(t *testing.T) {
 	// Verify registry is still functional
 	err := registry.HandlePanic(ctx, "final", "test", "final panic")
 	require.Error(t, err)
+}
+
+// panic 值与调用栈只能经 errors.As 取 *PanicError 读取，任何 handler 下错误文本都不含二者。
+func TestPanicErrorTextRedactsValueAndStack(t *testing.T) {
+	const secret = "secret-panic-value-42"
+	ctx := context.Background()
+
+	assertRedacted := func(t *testing.T, err error) {
+		t.Helper()
+		require.Error(t, err)
+		text := err.Error()
+		assert.NotContains(t, text, secret)
+		assert.NotContains(t, text, "goroutine ")
+		assert.NotContains(t, text, "panic_handler_test.go")
+		var p *agentErrors.PanicError
+		require.ErrorAs(t, err, &p)
+		assert.Equal(t, secret, p.Value)
+		assert.Contains(t, string(p.Stack), "goroutine ")
+	}
+
+	t.Run("默认 handler", func(t *testing.T) {
+		err := NewPanicHandlerRegistry().HandlePanic(ctx, "comp", "op", secret)
+		assertRedacted(t, err)
+		assert.Contains(t, err.Error(), "comp.op 发生 panic")
+		var agentErr *agentErrors.AgentError
+		require.ErrorAs(t, err, &agentErr)
+		assert.Equal(t, agentErrors.CodeInternal, agentErr.Code)
+		assert.NotContains(t, fmt.Sprint(agentErr.Context), secret)
+	})
+
+	t.Run("直接调用默认 handler", func(t *testing.T) {
+		err := (&DefaultPanicHandler{}).HandlePanic(ctx, "comp", "op", secret, "goroutine 1 [running]:\npanic_handler_test.go:1")
+		assertRedacted(t, err)
+	})
+
+	t.Run("自定义 handler", func(t *testing.T) {
+		r := NewPanicHandlerRegistry()
+		h := NewMockPanicHandler()
+		h.errorToReturn = agentErrors.New(agentErrors.CodeAgentExecution, "自定义处理")
+		r.SetHandler(h)
+		err := r.HandlePanic(ctx, "comp", "op", secret)
+		assertRedacted(t, err)
+		assert.Contains(t, err.Error(), "自定义处理")
+	})
+
+	t.Run("裸 PanicError", func(t *testing.T) {
+		r := NewPanicHandlerRegistry()
+		r.SetHandler(nilPanicHandler{})
+		err := r.HandlePanic(ctx, "comp", "op", secret)
+		assertRedacted(t, err)
+		assert.Equal(t, "comp.op 发生 panic", err.Error())
+	})
+
+	t.Run("recover 路径", func(t *testing.T) {
+		panicked, err := CallSafely(ctx, "comp", "op", func() error { panic(secret) })
+		require.True(t, panicked)
+		assertRedacted(t, err)
+	})
+}
+
+// requireRedactedPanic 断言 err 是脱敏后的 panic 错误：文本含“发生 panic”而不含 panic 值，panic 值只能经 errors.As 读取。
+func requireRedactedPanic(t *testing.T, err error, value string) *agentErrors.PanicError {
+	t.Helper()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "发生 panic")
+	assert.NotContains(t, err.Error(), value)
+	var p *agentErrors.PanicError
+	require.ErrorAs(t, err, &p)
+	assert.Equal(t, value, fmt.Sprint(p.Value))
+	assert.NotEmpty(t, p.Stack)
+	return p
 }
