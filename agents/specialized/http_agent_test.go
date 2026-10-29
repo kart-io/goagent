@@ -674,3 +674,19 @@ func TestHTTPAgent_Execute_RequestErrorRedactsURL(t *testing.T) {
 		assert.NotContains(t, err.Error(), secret)
 	}
 }
+
+// 成功路径中 ToolCalls 记录的 url 同样脱敏，避免凭据随输出传播。
+func TestHTTPAgent_Execute_ToolCallInputRedactsURL(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer server.Close()
+
+	l, _ := logger.NewWithDefaults()
+	out, err := NewHTTPAgent(l).Execute(context.Background(), &agentcore.AgentInput{
+		Context: map[string]interface{}{"url": server.URL + "/path?token=abc"},
+	})
+	require.NoError(t, err)
+	require.Len(t, out.ToolCalls, 1)
+	assert.Equal(t, server.URL+"/path", out.ToolCalls[0].Input[interfaces.FieldURL])
+}

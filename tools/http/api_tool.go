@@ -161,7 +161,8 @@ func (a *APITool) run(ctx context.Context, input *interfaces.ToolInput) (*interf
 	duration := time.Since(startTime)
 
 	if err != nil {
-		// 网络错误，完全失败
+		// 网络错误，完全失败；错误文本含完整请求 URL，先脱敏
+		err = agentErrors.RedactURLError(err)
 		return resp.ExecutionError(fmt.Sprintf("http request failed: %v", err), nil, err)
 	}
 

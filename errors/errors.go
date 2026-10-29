@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -374,6 +375,51 @@ func redactKeyValueDSN(raw string) string {
 	}
 	return strings.Join(kept, " ")
 }
+
+// RedactURLError 返回把错误链上首个 *url.Error 的 URL 经 RedactURL 脱敏后的错误，用于把底层 HTTP 错误
+// （resty、net/http 的错误文本含完整请求 URL 与 query 中的凭据）返回调用方、写入工具输出或日志之前。
+// 原错误不被修改；err 为 nil、链上没有 *url.Error 或 URL 无需脱敏时原样返回。
+//   - *url.Error 位于顶层：返回其副本，Unwrap 仍得到原底层错误（如 *net.OpError），Timeout() 与
+//     errors.Is(context.DeadlineExceeded) 不受影响；
+//   - 位于 *AgentError 之下：返回该 *AgentError 的浅拷贝，Cause 递归脱敏，Code 等字段不变；
+//   - 位于其他包装之下：返回的错误文本中 URL 被替换，errors.Is 按原错误链判断，
+//     errors.As 只能取到脱敏后的 *url.Error 及其底层错误，中间的包装类型不再可见。
+func RedactURLError(err error) error {
+	var ue *url.Error
+	if !errors.As(err, &ue) {
+		return err
+	}
+	safe := RedactURL(ue.URL)
+	if safe == ue.URL {
+		return err
+	}
+	redacted := &url.Error{Op: ue.Op, URL: safe, Err: ue.Err}
+
+	switch top := err.(type) {
+	case *url.Error:
+		return redacted
+	case *AgentError:
+		cp := *top
+		cp.Cause = RedactURLError(top.Cause)
+		return &cp
+	}
+
+	msg := strings.ReplaceAll(err.Error(), strconv.Quote(ue.URL), strconv.Quote(safe))
+	msg = strings.ReplaceAll(msg, ue.URL, safe)
+	return &urlRedactedError{msg: msg, orig: err, redacted: redacted}
+}
+
+type urlRedactedError struct {
+	msg      string
+	orig     error
+	redacted *url.Error
+}
+
+func (e *urlRedactedError) Error() string { return e.msg }
+
+func (e *urlRedactedError) Unwrap() error { return e.redacted }
+
+func (e *urlRedactedError) Is(target error) bool { return errors.Is(e.orig, target) }
 
 // Unwrap returns the underlying cause for error chain support
 func (e *AgentError) Unwrap() error {

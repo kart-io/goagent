@@ -183,12 +183,12 @@ func (l *PDFLoader) LoadByPage(ctx context.Context) ([]*interfaces.Document, err
 func (l *PDFLoader) downloadPDF(ctx context.Context) (io.ReaderAt, int64, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", l.source, nil)
 	if err != nil {
-		return nil, 0, errors.Wrap(err, errors.CodeInternal, "failed to create HTTP request")
+		return nil, 0, errors.Wrap(errors.RedactURLError(err), errors.CodeInternal, "failed to create HTTP request")
 	}
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, 0, errors.Wrap(err, errors.CodeInternal, "failed to download PDF")
+		return nil, 0, errors.Wrap(errors.RedactURLError(err), errors.CodeInternal, "failed to download PDF")
 	}
 	defer func() {
 		_ = resp.Body.Close()
