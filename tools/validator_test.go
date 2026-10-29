@@ -9,7 +9,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
+	"github.com/kart-io/goagent/mcp/core"
 )
 
 // mockValidatableTool 实现 ValidatableTool 接口的 mock 工具
@@ -288,7 +290,7 @@ func TestInputValidator_CustomValidation(t *testing.T) {
 			},
 			args:    map[string]interface{}{"amount": -50.0},
 			wantErr: true,
-			errMsg:  "amount must be non-negative",
+			errMsg:  "tool custom validation failed: 校验未通过",
 		},
 	}
 
@@ -1153,6 +1155,88 @@ func TestInputValidator_ErrorHasReasonWithoutValue(t *testing.T) {
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), tt.want)
 			assert.NotContains(t, err.Error(), "secret-")
+		})
+	}
+}
+
+// 自定义校验的非 AgentError 原文可能含参数值，Error() 只给固定文本，原文留在 Context。
+func TestInputValidator_CustomValidationErrorHidesValue(t *testing.T) {
+	validator := NewInputValidator()
+	baseTool := NewBaseTool("test_tool", "Test tool", `{"type": "object", "properties": {"password": {"type": "string"}}}`, nil)
+
+	tests := []struct {
+		name    string
+		err     error
+		want    string
+		wantCtx string
+	}{
+		{"普通错误", fmt.Errorf("invalid password hunter2"), "tool custom validation failed: 校验未通过", "invalid password hunter2"},
+		{
+			"AgentError 取 Message 与参数名",
+			agentErrors.New(agentErrors.CodeToolValidation, "password too weak").
+				WithContext("parameter", "password").
+				WithContext("value", "hunter2"),
+			"tool custom validation failed: password too weak: password",
+			"",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tool := &mockValidatableTool{
+				BaseTool: baseTool,
+				validateFunc: func(ctx context.Context, input *interfaces.ToolInput) error {
+					return tt.err
+				},
+			}
+			err := validator.Validate(context.Background(), tool, &interfaces.ToolInput{Args: map[string]interface{}{"password": "hunter2"}})
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), tt.want)
+			assert.NotContains(t, err.Error(), "hunter2")
+			if tt.wantCtx != "" {
+				assert.Equal(t, tt.wantCtx, agentErrors.GetContext(err)["validation_error"])
+			}
+		})
+	}
+}
+
+// ValidateInputWithSchema 的 Error() 应带字段名，不带参数值。
+func TestValidateInputWithSchema_ErrorHasFieldWithoutValue(t *testing.T) {
+	minLen := 3
+	schema := &core.ToolSchema{
+		Type: "object",
+		Properties: map[string]core.PropertySchema{
+			"name":  {Type: "string", MinLength: &minLen},
+			"mode":  {Type: "string", Enum: []interface{}{"fast", "slow"}},
+			"email": {Type: "string", Format: "email"},
+			"age":   {Type: "integer"},
+			"tags":  {Type: "array", Items: &core.PropertySchema{Type: "string"}},
+		},
+		Required: []string{"name"},
+	}
+
+	tests := []struct {
+		name   string
+		input  map[string]interface{}
+		strict bool
+		want   string
+	}{
+		{"缺少必填字段", map[string]interface{}{}, false, "required field is missing: name"},
+		{"类型错误", map[string]interface{}{"name": 12345}, false, "expected string: name"},
+		{"长度不足", map[string]interface{}{"name": "se"}, false, "length must be at least minimum: name"},
+		{"枚举不匹配", map[string]interface{}{"name": "abc", "mode": "secret-mode"}, false, "value must be one of enum: mode"},
+		{"格式不合法", map[string]interface{}{"name": "abc", "email": "secret-email"}, false, "format validation failed: email"},
+		{"整数不合法", map[string]interface{}{"name": "abc", "age": 1.5}, false, "expected integer value: age"},
+		{"数组元素类型错误", map[string]interface{}{"name": "abc", "tags": []interface{}{"ok", 7}}, false, "expected string: tags[1]"},
+		{"未定义字段", map[string]interface{}{"name": "abc", "secret-key": 1}, true, "field not defined in schema"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateInputWithSchema(schema, tt.input, tt.strict)
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), tt.want)
+			assert.NotContains(t, err.Error(), "secret-mode")
+			assert.NotContains(t, err.Error(), "secret-email")
+			assert.NotContains(t, err.Error(), "12345")
 		})
 	}
 }
