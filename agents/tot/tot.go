@@ -2,6 +2,7 @@ package tot
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"sort"
@@ -520,7 +521,10 @@ func (t *ToTAgent) generateThoughts(ctx context.Context, parent *ThoughtNode, in
 
 		// Check if tools are needed
 		if t.needsTools(thought) {
-			toolResults := t.executeToolsForThought(ctx, thought, output)
+			toolResults, err := t.executeToolsForThought(ctx, thought, output)
+			if err != nil {
+				return nil, err
+			}
 			child.ToolCalls = toolResults
 		}
 
@@ -830,7 +834,8 @@ func (t *ToTAgent) needsTools(thought string) bool {
 	return false
 }
 
-func (t *ToTAgent) executeToolsForThought(ctx context.Context, thought string, output *agentcore.AgentOutput) []agentcore.AgentToolCall {
+// executeToolsForThought 工具返回 *PanicError 时立即返回该错误，由调用方中止本次执行
+func (t *ToTAgent) executeToolsForThought(ctx context.Context, thought string, output *agentcore.AgentOutput) ([]agentcore.AgentToolCall, error) {
 	// This is simplified - in practice, you'd parse the thought to determine which tools to use
 	toolCalls := make([]agentcore.AgentToolCall, 0)
 
@@ -845,6 +850,10 @@ func (t *ToTAgent) executeToolsForThought(ctx context.Context, thought string, o
 			}
 
 			result, err := calc.Invoke(ctx, input)
+			var panicErr *agentErrors.PanicError
+			if errors.As(err, &panicErr) {
+				return nil, err
+			}
 			toolCall := agentcore.AgentToolCall{
 				ToolName: "calculator",
 				Input:    input.Args,
@@ -862,7 +871,7 @@ func (t *ToTAgent) executeToolsForThought(ctx context.Context, thought string, o
 		}
 	}
 
-	return toolCalls
+	return toolCalls, nil
 }
 
 // MCTS helper methods
@@ -938,7 +947,13 @@ func (t *ToTAgent) Stream(ctx context.Context, input *agentcore.AgentInput) (<-c
 	go func() {
 		defer close(outChan)
 
-		output, err := t.Invoke(ctx, input)
+		var output *agentcore.AgentOutput
+		err := func() (err error) {
+			// 宿主代码在本 goroutine 中 panic 时转为流错误，避免进程退出
+			defer agentcore.RecoverPanic(ctx, "tot_agent", "stream", &err)
+			output, err = t.Invoke(ctx, input)
+			return err
+		}()
 		outChan <- agentcore.StreamChunk[*agentcore.AgentOutput]{
 			Data:  output,
 			Error: err,

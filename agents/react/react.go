@@ -2,6 +2,7 @@ package react
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -291,6 +292,11 @@ func (r *ReActAgent) executeCore(ctx context.Context, input *agentcore.AgentInpu
 		} else {
 			observation, toolErr = r.executeToolFast(ctx, action, actionInput)
 		}
+		// 回调或工具 panic 不是可交还模型的工具失败：工具可能已产生副作用，panic 文本也不应发给模型
+		var panicErr *agentErrors.PanicError
+		if errors.As(toolErr, &panicErr) {
+			return r.handleErrorFast(output, step, "Tool execution panicked", toolErr, startTime)
+		}
 
 		// 记录工具调用
 		toolCall := agentcore.AgentToolCall{
@@ -394,19 +400,23 @@ func (r *ReActAgent) Stream(ctx context.Context, input *agentcore.AgentInput) (<
 				return false
 			}
 		}
-		startTime := time.Now()
-		if err := r.triggerOnStart(ctx, input); err != nil {
-			send(agentcore.StreamChunk[*agentcore.AgentOutput]{Error: err, Done: true})
-			return
-		}
-		output, err := r.executeCore(ctx, input, startTime, true, func(snapshot *agentcore.AgentOutput) bool {
-			return send(agentcore.StreamChunk[*agentcore.AgentOutput]{Data: snapshot})
-		})
+		var output *agentcore.AgentOutput
+		err := func() (err error) {
+			// 生产者 goroutine 中模型、工具等宿主代码 panic 时转为流错误，避免进程退出
+			defer agentcore.RecoverPanic(ctx, "react_agent", "stream", &err)
+			if err = r.triggerOnStart(ctx, input); err != nil {
+				return err
+			}
+			output, err = r.executeCore(ctx, input, time.Now(), true, func(snapshot *agentcore.AgentOutput) bool {
+				return send(agentcore.StreamChunk[*agentcore.AgentOutput]{Data: snapshot})
+			})
+			if err == nil && ctx.Err() == nil {
+				err = r.triggerOnFinish(ctx, output)
+			}
+			return err
+		}()
 		if ctx.Err() != nil {
 			return
-		}
-		if err == nil {
-			err = r.triggerOnFinish(ctx, output)
 		}
 		send(agentcore.StreamChunk[*agentcore.AgentOutput]{Data: output, Error: err, Done: true})
 	}()

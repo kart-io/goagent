@@ -2,12 +2,14 @@ package metacot
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/kart-io/goagent/agents/base"
 	agentcore "github.com/kart-io/goagent/core"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 )
@@ -293,7 +295,9 @@ func (m *MetaCoTAgent) processSelfAsk(ctx context.Context, question *Question, d
 	for _, fq := range followupQuestions {
 		// Check if we need to search for information
 		if m.needsExternalInfo(fq) && len(m.tools) > 0 {
-			m.searchForAnswer(ctx, fq, output)
+			if err := m.searchForAnswer(ctx, fq, output); err != nil {
+				return err
+			}
 		} else {
 			// Recursively process sub-question
 			if err := m.processSelfAsk(ctx, fq, depth+1, output); err != nil {
@@ -571,7 +575,8 @@ func (m *MetaCoTAgent) needsExternalInfo(question *Question) bool {
 	return m.parser.NeedsExternalInfo(question.Text)
 }
 
-func (m *MetaCoTAgent) searchForAnswer(ctx context.Context, question *Question, output *agentcore.AgentOutput) {
+// searchForAnswer 搜索失败时回退为直接回答；搜索工具返回 *PanicError 时不回退，返回该错误由调用方中止本次执行
+func (m *MetaCoTAgent) searchForAnswer(ctx context.Context, question *Question, output *agentcore.AgentOutput) error {
 	// Use search tool if available
 	if searchTool, exists := m.toolsByName["search"]; exists {
 		toolInput := &interfaces.ToolInput{
@@ -582,6 +587,10 @@ func (m *MetaCoTAgent) searchForAnswer(ctx context.Context, question *Question, 
 		}
 
 		result, err := searchTool.Invoke(ctx, toolInput)
+		var panicErr *agentErrors.PanicError
+		if errors.As(err, &panicErr) {
+			return err
+		}
 		if err == nil && result.Success {
 			question.Answer = fmt.Sprintf("%v", result.Result)
 			question.Status = "answered"
@@ -601,6 +610,7 @@ func (m *MetaCoTAgent) searchForAnswer(ctx context.Context, question *Question, 
 	if question.Status != "answered" {
 		_ = m.answerDirectly(ctx, question, output)
 	}
+	return nil
 }
 
 func (m *MetaCoTAgent) buildQuestionTree(mainQuestion *Question) *Question {
@@ -660,7 +670,13 @@ func (m *MetaCoTAgent) Stream(ctx context.Context, input *agentcore.AgentInput) 
 	go func() {
 		defer close(outChan)
 
-		output, err := m.Invoke(ctx, input)
+		var output *agentcore.AgentOutput
+		err := func() (err error) {
+			// 宿主代码在本 goroutine 中 panic 时转为流错误，避免进程退出
+			defer agentcore.RecoverPanic(ctx, "metacot_agent", "stream", &err)
+			output, err = m.Invoke(ctx, input)
+			return err
+		}()
 		outChan <- agentcore.StreamChunk[*agentcore.AgentOutput]{
 			Data:  output,
 			Error: err,
@@ -857,7 +873,9 @@ func (m *MetaCoTAgent) processSelfAskGenerator(ctx context.Context, question *Qu
 	for i, fq := range followupQuestions {
 		// Check if we need to search for information
 		if m.needsExternalInfo(fq) && len(m.tools) > 0 {
-			m.searchForAnswer(ctx, fq, accumulated)
+			if err := m.searchForAnswer(ctx, fq, accumulated); err != nil {
+				return err
+			}
 		} else {
 			// Recursively process sub-question
 			if err := m.processSelfAskGenerator(ctx, fq, depth+1, accumulated, yield, startTime); err != nil {

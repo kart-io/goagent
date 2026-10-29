@@ -2,12 +2,14 @@ package cot
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/kart-io/goagent/agents/base"
 	agentcore "github.com/kart-io/goagent/core"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 )
@@ -144,7 +146,10 @@ func (s *CoTStrategy) Execute(
 
 	// 如果工具可用且需要，执行工具
 	if len(tools) > 0 {
-		toolResults := s.executeToolsIfNeeded(ctx, steps, toolsByName, output)
+		toolResults, err := s.executeToolsIfNeeded(ctx, steps, toolsByName, output)
+		if err != nil {
+			return nil, err
+		}
 		if len(toolResults) > 0 {
 			// 使用工具结果重新推理
 			toolContext := s.formatToolResults(toolResults)
@@ -244,7 +249,10 @@ func (s *CoTStrategy) ExecuteWithGenerator(
 
 	// 如果工具可用且需要，执行工具
 	if len(tools) > 0 {
-		toolResults := s.executeToolsIfNeeded(ctx, steps, toolsByName, output)
+		toolResults, err := s.executeToolsIfNeeded(ctx, steps, toolsByName, output)
+		if err != nil {
+			return nil, err
+		}
 		if len(toolResults) > 0 {
 			// Yield工具执行完成
 			toolOutput := createStepOutput(output, "Tools executed", startTime)
@@ -495,7 +503,8 @@ func (s *CoTStrategy) isAnswerParagraph(para string) bool {
 	return false
 }
 
-func (s *CoTStrategy) executeToolsIfNeeded(ctx context.Context, steps []string, toolsByName map[string]interfaces.Tool, output *agentcore.AgentOutput) map[string]interface{} {
+// executeToolsIfNeeded 执行步骤中请求的工具；工具返回 *PanicError 时立即返回该错误，由调用方中止本次执行
+func (s *CoTStrategy) executeToolsIfNeeded(ctx context.Context, steps []string, toolsByName map[string]interfaces.Tool, output *agentcore.AgentOutput) (map[string]interface{}, error) {
 	toolResults := make(map[string]interface{})
 
 	for _, step := range steps {
@@ -524,6 +533,10 @@ func (s *CoTStrategy) executeToolsIfNeeded(ctx context.Context, steps []string, 
 
 					startTime := time.Now()
 					result, err := tool.Invoke(ctx, toolIn)
+					var panicErr *agentErrors.PanicError
+					if errors.As(err, &panicErr) {
+						return nil, err
+					}
 
 					toolCall := agentcore.AgentToolCall{
 						ToolName: toolName,
@@ -545,7 +558,7 @@ func (s *CoTStrategy) executeToolsIfNeeded(ctx context.Context, steps []string, 
 		}
 	}
 
-	return toolResults
+	return toolResults, nil
 }
 
 func (s *CoTStrategy) formatToolResults(results map[string]interface{}) string {
