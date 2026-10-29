@@ -85,6 +85,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ExecuteStream` 中工具执行失败时，终态 `error` 事件的 `Tool` 填为失败的工具名（工具选择路径与原生工具流的顺序、并发执行均适用），此前为空，消费者无法知道是哪个工具失败。
 - 破坏性变更：`(*errors.AgentError).Error()` 不再输出 `Context`（此前追加 `(k=v, ...)`），避免 URL、模型参数、用户输入随错误文本进入日志、事件与模型输入；`*AgentError` 新增 `LogValue()` 实现 `slog.LogValuer`，结构化日志以 group 输出含 `context` 的全部字段；新增 `errors.RedactURL`，连接类错误与各工具、存储、通信组件写入 `url`/`endpoint` 前去掉 userinfo、query 与 fragment。按 `Error()` 文本匹配 Context 键值的代码需改用 `GetContext` 或 `LogValue`；`distributed.Coordinator` 不再因非 2xx 响应体含 `timeout` 等关键字而故障转移。
 - `InputValidator` 的校验错误 Message 带上具体原因与参数名（如 `required parameter validation failed: required parameter is missing: query`），不含参数值，`Error()` 交还模型时仍可据此改正。
+- `postgres.New` 连接失败时不再把 DSN 写入错误，Context 的 `endpoint` 改为由 pgx 解析出的 `host/dbname`，解析失败则不写，key=value 形式 DSN 中的密码不再进入 Context 与 `Error()`；`github.com/jackc/pgx/v5` 由间接依赖变为直接依赖。
 ### Deprecated
 
 - `interfaces.Agent/Runnable` 为旧消息协议，新增编排统一使用 `core.Runnable[I,O]`；现有 API 保留迁移路径。
