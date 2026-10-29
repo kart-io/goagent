@@ -1,7 +1,7 @@
 # GoAgent 定位决策与模块去留清单
 
 日期：2026-10-29  
-状态：提议，待维护者确认  
+状态：已确认（2026-10-29，外围模块直接删除）  
 代码基线：`c167cf9`（`codex/composable-orchestration-r2`）  
 相关：[可组合编排需求](../superpowers/specs/2026-10-27-composable-orchestration-requirements.md)、[多框架调研与复审](2026-10-27-framework-orchestration-review.md)、[执行契约与能力状态](../guides/EXECUTION_CONTRACT.md)、[导入层级](../architecture/IMPORT_LAYERING.md)
 
@@ -10,7 +10,7 @@
 GoAgent 定位为**嵌入 Go 业务服务的可恢复、可计量、可观测 Agent 编排内核**，不再以“Go 版 LangChain 全家桶”扩展功能广度。
 
 - 核心模块持续投入：执行契约、原生工具循环、Dispatcher、Graph 与持久恢复、预算与计量、OTel 观测、上下文策略、MCP。
-- 外围能力拆为独立 Go module（`contrib`）并标注实验，或在无人使用时删除。
+- 外围能力直接删除，不拆 `contrib` 模块：本机没有任何宿主导入这些包（见 2.3）。
 - 分布式调度、跨主机接管等能力不自建，需要时适配成熟工作流系统。
 
 ## 2. 现状证据
@@ -32,6 +32,10 @@ GoAgent 定位为**嵌入 Go 业务服务的可恢复、可计量、可观测 Ag
 - **示例过大**：`examples/` 约 5.5 万行，超过 `core`+`builder`+`tools`+`workflow` 源码总和。
 - **单一 go.mod 依赖面宽**：aiplatform、qdrant、cohere、gorm/pgx、mysql、lib/pq、go-sqlite3（cgo）、nats、goquery、pdf、viper 都在主模块。只使用 `builder` 的宿主也会因最小版本选择受这些依赖传递要求的版本约束（如 grpc、otel、protobuf），容易与宿主现有版本冲突；编译本身只涉及被导入的包。
 - **采用度与发布**：GitHub 7 star、4 fork；GitHub Release 停在 v0.1.9，git tag 已到 v0.15.0。外部用户少，意味着现在收敛的迁移成本最低。
+
+### 2.3 使用方
+
+2026-10-29 检查本机 `$HOME/code` 下全部 `go.mod`，依赖 goagent 的只有 [goagent-examples](https://github.com/kart-io/goagent-examples)。它导入的全部是第 4.1 节的保留包（`interfaces`、`core/durable`、`llm`、`workflow`、`tools`、`core/budget`、`builder` 等）；外围包只被 goagent 自身 `examples/` 中的演示导入。外部开源使用方无法核实，仅有 GitHub star/fork 数可参考。
 
 ## 3. 方向比较
 
@@ -61,40 +65,40 @@ GoAgent 定位为**嵌入 Go 业务服务的可恢复、可计量、可观测 Ag
 | `store`、`store/memory`、`store/decorator` | — | `core/execution` 与 `builder` 依赖 `store.Store` 接口 |
 | `memory`、`cache`、`parsers` | — | `tools` 依赖 `cache`；`parsers` 随 react 移出后再评估是否保留 |
 
-### 4.2 移至 contrib（独立 module，标注实验）
+### 4.2 删除
 
-| 包 | 外部依赖 | 移出后效果 |
+没有宿主使用，保留 contrib 需要多模块 tag 与 CI，维护成本没有收益，因此直接删除。代码保留在 git 历史与 `v0.16.0` tag 中，需要时可从中恢复。
+
+| 包 | 外部依赖 | 删除后效果 |
 | --- | --- | --- |
-| `agents`、`agents/{base,cot,got,metacot,pot,react,sot,tot,executor}` 与 `builder/reasoning_*.go` | x/sync | 推理策略整体成组；`performance` 只被 `agents` 使用，一并移出 |
+| `agents`、`agents/{base,cot,got,metacot,pot,react,sot,tot,executor}` 与 `builder/reasoning_*.go` | x/sync | 推理策略整体删除；`performance` 只被 `agents` 使用，一并删除 |
 | `agents/specialized` | gorm、go-redis、resty、logger | 主模块去掉 gorm 的生产引用 |
 | `reflection`、`planning` | logger | 实验能力 |
 | `multiagent`、`distributed` | nats、otel/propagation | 主模块去掉 nats；不再暗示提供可靠分布式投递 |
-| `retrieval`、`document` | aiplatform、cohere、qdrant、google api、pdf | 去掉最重的一组依赖；RAG 作为独立模块版本化 |
-| `store/{postgres,redis,factory,adapters}`、`options` | gorm、pgx、go-redis、pflag、viper | 存储后端按需引入 |
+| `retrieval`、`document` | aiplatform、cohere、qdrant、google api、pdf | 去掉最重的一组依赖 |
+| `store/{postgres,redis,factory,adapters}`、`options` | gorm、pgx、go-redis、pflag、viper | 存储后端由宿主实现 `store.Store` |
 | `core/checkpoint/redis.go` | go-redis | 核心层不再直接依赖 Redis |
 | `tools/practical`、`toolkits`、`tools/plugingen` | mysql、lib/pq、go-sqlite3、goquery、yaml.v3 | 主模块去掉 cgo 依赖 |
-| `stream` | gorilla/websocket | 主模块内无导入方；与 `core.StreamRunnable` 职责重叠，移出并评估是否删除 |
+| `stream` | gorilla/websocket | 主模块内无导入方；与 `core.StreamRunnable` 职责重叠 |
+| `prompt` | — | 主模块无导入方，2025-12-07 后无改动 |
 
-### 4.3 删除候选
+### 4.3 示例
 
 | 包 | 依据 |
 | --- | --- |
-| `prompt` | 主模块无导入方，2025-12-07 后无改动 |
-| `examples/` 中与核心入口无关的部分 | 业务验证案例（`workflow/business-cases`、`workflow/refund-recovery`、`orchestration`）已于 2026-10-29 迁到 [goagent-examples](https://github.com/kart-io/goagent-examples)；其余目录保留 `workflow`、`builder`、`mcp`、`basic` 等核心入口，其他随对应 contrib 模块迁移或删除 |
+| `examples/` 中与核心入口无关的部分 | 业务验证案例（`workflow/business-cases`、`workflow/refund-recovery`、`orchestration`）已于 2026-10-29 迁到 [goagent-examples](https://github.com/kart-io/goagent-examples)；其余目录保留 `workflow`、`builder`、`mcp`、`basic` 等核心入口，只演示 4.2 中包的示例随之删除 |
 
-确认是否内部服务仍在使用后再删；如果主要服务内部宿主，可以把 4.2 中无人使用的包直接删除，不必保留 contrib。
+### 4.4 删除前置改动
 
-### 4.4 拆分前置改动
+保留包对外围包的生产依赖只有三处：
 
-主模块对外围包的生产依赖只有三处，拆分可行：
+1. `builder/reasoning_builders.go`、`builder/reasoning_presets.go`（共 1285 行）导入 `agents` 及全部推理策略包，随 `agents` 一并删除，Builder 只保留原生工具循环入口。
+2. `core/checkpoint/redis.go` 导入 go-redis，删除；`checkpoint.Checkpointer` 接口保留在核心。
+3. `testing/test_token_usage.go` 导入 `agents/cot`，改用 mock 或删除。
 
-1. `builder/reasoning_builders.go`、`builder/reasoning_presets.go`（共 1285 行）导入 `agents` 及全部推理策略包。移到 contrib 的 `reasoning` 模块，以 `core.Runnable` 或 Builder 公共选项接入，不反向依赖。
-2. `core/checkpoint/redis.go` 导入 go-redis。移到 `contrib/store/redis`，保留 `checkpoint.Checkpointer` 接口在核心。
-3. `testing/test_token_usage.go` 导入 `agents/cot`。随推理模块迁移或改用 mock。
+删除后主模块预计不再依赖：aiplatform、cohere、qdrant、google api、gorm 系列、pgx、lib/pq、mysql、go-sqlite3、nats、goquery、pdf、viper、pflag、go-redis、yaml.v3。实际结果以删除后 `go mod tidy` 和 `go mod graph` 为准。
 
-拆分后主模块预计不再依赖：aiplatform、cohere、qdrant、google api、gorm 系列、pgx、lib/pq、mysql、go-sqlite3、nats、goquery、pdf、viper、pflag、go-redis、yaml.v3。实际结果以拆分后 `go mod tidy` 和 `go mod graph` 为准。
-
-`scripts/verify_imports.sh` 需新增规则：主模块生产代码禁止导入 contrib 路径。
+`scripts/apicheck` 中针对 `builder/reasoning_*.go` 导入 `agents` 的兼容例外随之删除。
 
 ## 5. 能力路线
 
@@ -112,16 +116,15 @@ GoAgent 定位为**嵌入 Go 业务服务的可恢复、可计量、可观测 Ag
 
 1. R2 的 Breaking 变更作为 v0.16.0 合入 master，CHANGELOG 已有迁移说明。
 2. 修复 GitHub Release 流程，使 Release 与 tag 一致。
-3. 模块拆分单独作为 v0.17.0：主模块与各 contrib 模块分别打 tag（如 `contrib/retrieval/v0.17.0`），提供 import 路径迁移表。
+3. 外围模块删除单独作为 v0.17.0，CHANGELOG 列出删除的包与替代方式（推理策略改用原生工具循环、存储后端由宿主实现 `store.Store`），并注明可从 `v0.16.0` 恢复。
 4. 主模块进入 v1 前，至少完成第 5 节第 1、2 项，并有一个内部宿主在生产使用。
 
 ## 7. 风险与待确认
 
 | 项 | 说明 |
 | --- | --- |
-| 使用方构成 | 未确认主要是内部服务还是开源社区；影响 4.2 是保留 contrib 还是直接删除。 |
-| 内部宿主依赖 | 拆分前需检查内部服务是否导入 `retrieval`、`agents`、`store/postgres` 等，按结果排迁移顺序。 |
-| 多模块维护成本 | contrib 多模块需要各自 tag 与 CI；若维护人手有限，可先合并为一个 `contrib` 模块。 |
+| 外部使用方 | 本机无宿主使用外围包（2.3）；未知的外部用户升级到 v0.17.0 会编译失败，只能停留在 v0.16.0 或自行复制代码。 |
+| 缺少生产宿主 | 目前没有内部服务在生产使用 goagent，v1 门槛（第 6 节第 4 条）尚无候选。 |
 | 性能结论适用范围 | 对测结论来自单机合成任务，不代表生产吞吐。 |
 
 ## 8. 验证方式
@@ -132,6 +135,7 @@ GoAgent 定位为**嵌入 Go 业务服务的可恢复、可计量、可观测 Ag
 go list -f '{{.ImportPath}}|{{join .Imports ","}}' ./... | grep -v '/examples/'
 grep -rln 'goagent/\(agents/\(cot\|got\|tot\|metacot\|pot\|sot\)\|reflection\|planning\|multiagent\|distributed\)"' \
   --include='*.go' . | grep -v _test | grep -v '^./\(agents\|reflection\|planning\|multiagent\|distributed\|examples\)/'
+grep -rl --include=go.mod 'kart-io/goagent' "$HOME/code" | grep -v '/kart-io/goagent/'
 ```
 
-第二条命令当前输出 `builder/reasoning_presets.go`、`builder/reasoning_builders.go`、`testing/test_token_usage.go`，即 4.4 列出的前置改动点。
+第三条命令列出依赖 goagent 的本机模块。第二条命令当前输出 `builder/reasoning_presets.go`、`builder/reasoning_builders.go`、`testing/test_token_usage.go`，即 4.4 列出的前置改动点。
