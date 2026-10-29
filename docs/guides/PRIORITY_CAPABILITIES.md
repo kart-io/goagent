@@ -101,7 +101,7 @@ snapshot, err = runner.Run(ctx, "request-123", nil, snapshot.Key)
 
 测试包含真实子进程退出后恢复、审批匹配、失败后复用幂等键、已完成步骤不重跑、锁等待取消和损坏检查点拒绝。它用于显式注册的顺序步骤，不恢复任意 Agent 调用栈、动态图或旧 InterruptManager 的内存 channel。
 
-[退款审批与崩溃恢复案例](../../examples/workflow/refund-recovery/README.md)组合只读检查图、审批检查点与独立 SQLite 模拟退款服务，并通过真实进程退出验证副作用提交后的幂等重试。持久化边界是整个检查图完成后，不是图内每个节点。
+[退款审批与崩溃恢复案例](https://github.com/kart-io/goagent-examples/blob/main/workflow/refund-recovery/README.md)组合只读检查图、审批检查点与独立 SQLite 模拟退款服务，并通过真实进程退出验证副作用提交后的幂等重试。持久化边界是整个检查图完成后，不是图内每个节点。
 
 ## 推理输出契约补充
 

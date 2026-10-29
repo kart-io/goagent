@@ -56,7 +56,7 @@ go run ./evaluation/agentbench/cmd/stress \
 
 已保留 [DeepSeek 真实测试报告](../../docs/evaluation/2026-10-27-deepseek-refund/REPORT.md)：GoAgent 12/12 通过，共 21 个模型请求。报告注明原始参数和当前运行命令的区别；示例题不代表生产业务验收。
 
-新增 [DeepSeek 原生 Provider 参数实测](../../docs/evaluation/2026-10-27-deepseek-native-refund/REPORT.md)使用 [refund-parameter-cases.json](testdata/refund-parameter-cases.json)：答案、调用契约和订单参数均为 12/12，共 21 个模型请求、8,466 Token。它是本轮重新执行的合成题实测，历史报告保持原样。写操作恢复另见[退款审批与崩溃恢复案例](../../examples/workflow/refund-recovery/README.md)。
+新增 [DeepSeek 原生 Provider 参数实测](../../docs/evaluation/2026-10-27-deepseek-native-refund/REPORT.md)使用 [refund-parameter-cases.json](testdata/refund-parameter-cases.json)：答案、调用契约和订单参数均为 12/12，共 21 个模型请求、8,466 Token。它是本轮重新执行的合成题实测，历史报告保持原样。写操作恢复另见[退款审批与崩溃恢复案例](https://github.com/kart-io/goagent-examples/blob/main/workflow/refund-recovery/README.md)。
 
 `-dataset /path/to/cases.json` 替代生成题集：
 
