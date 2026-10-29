@@ -213,9 +213,9 @@ func (p *GeminiProvider) stream(ctx context.Context, req *agentllm.CompletionReq
 		stop()
 		cancel()
 		if err == nil {
-			err = io.ErrUnexpectedEOF
+			return nil, io.ErrUnexpectedEOF
 		}
-		return nil, err
+		return nil, geminiProviderError(err)
 	}
 	out := make(chan *agentllm.StreamChunk)
 	go func() {
@@ -265,7 +265,7 @@ func (p *GeminiProvider) stream(ctx context.Context, req *agentllm.CompletionReq
 			}
 			resp, err, ok = geminiSDKNext(next)
 			if err != nil {
-				send(&agentllm.StreamChunk{Done: true, Error: err})
+				send(&agentllm.StreamChunk{Done: true, Error: geminiProviderError(err)})
 				return
 			}
 			if !ok {
