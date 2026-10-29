@@ -81,6 +81,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `CallbackManager`、`Container.Resolve`、`EnhancedPluginRegistry` 与 `PluginRegistry.Register` 改为在锁外调用宿主回调、工厂与插件方法，回调或工厂中增删回调、解析其他服务、访问注册表不再死锁；`CallbackManager` 本轮只通知复制下来的回调，增删从下一轮生效；`Container` 并发首次解析可能各调用一次工厂，先写入者胜出。
 - `core.InterruptManager.CreateInterrupt` 传入 nil 中断返回 `CodeInvalidInput`，此前对 nil 解引用 panic。
 - `core.InterruptManager.CancelInterrupt` 对不存在或已清理的 ID 返回 `CodeAgentNotFound`（与 `RespondToInterrupt` 一致），此前返回 nil，调用方无法区分是否真的取消。
+- `mcp/remote` 的 stdio 互操作测试改用 `exec.CommandContext` 并设置 `WaitDelay`，超时后子进程被杀掉并回收。
 ### Deprecated
 
 - `interfaces.Agent/Runnable` 为旧消息协议，新增编排统一使用 `core.Runnable[I,O]`；现有 API 保留迁移路径。
