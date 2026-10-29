@@ -2,7 +2,6 @@ package sot
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -557,8 +556,7 @@ Synthesize them into a coherent answer, giving appropriate weight to each point 
 
 	llmResp, err := s.llm.Chat(ctx, messages)
 	if err != nil {
-		var panicErr *agentErrors.PanicError
-		if errors.As(err, &panicErr) {
+		if base.IsPanic(err) {
 			return "", err
 		}
 		// Fallback to sequential

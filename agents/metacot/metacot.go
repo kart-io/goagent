@@ -2,14 +2,12 @@ package metacot
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/kart-io/goagent/agents/base"
 	agentcore "github.com/kart-io/goagent/core"
-	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 )
@@ -375,8 +373,7 @@ func (m *MetaCoTAgent) generateFollowupQuestions(ctx context.Context, question *
 
 	llmResp, err := m.llm.Chat(ctx, messages)
 	if err != nil {
-		var panicErr *agentErrors.PanicError
-		if errors.As(err, &panicErr) {
+		if base.IsPanic(err) {
 			return nil, err
 		}
 		return nil, nil
@@ -518,8 +515,7 @@ Generate 2-4 sub-questions. Format each on a new line starting with "Q: "`, ques
 
 	llmResp, err := m.llm.Chat(ctx, messages)
 	if err != nil {
-		var panicErr *agentErrors.PanicError
-		if errors.As(err, &panicErr) {
+		if base.IsPanic(err) {
 			return nil, err
 		}
 		return nil, nil
@@ -555,8 +551,7 @@ Provide a brief critique.`, originalQuestion, answer)
 
 	llmResp, err := m.llm.Chat(ctx, messages)
 	if err != nil {
-		var panicErr *agentErrors.PanicError
-		if errors.As(err, &panicErr) {
+		if base.IsPanic(err) {
 			return "", err
 		}
 		return "Unable to generate critique", nil
@@ -580,8 +575,7 @@ Improved Answer:`, answer, critique)
 
 	llmResp, err := m.llm.Chat(ctx, messages)
 	if err != nil {
-		var panicErr *agentErrors.PanicError
-		if errors.As(err, &panicErr) {
+		if base.IsPanic(err) {
 			return "", err
 		}
 		return answer, nil // Return original if refinement fails
@@ -611,8 +605,7 @@ Synthesize a complete answer to: %s`, subAnswers.String(), questionTree.Text)
 
 		llmResp, err := m.llm.Chat(ctx, messages)
 		if err != nil {
-			var panicErr *agentErrors.PanicError
-			if errors.As(err, &panicErr) {
+			if base.IsPanic(err) {
 				return "", err
 			}
 			return questionTree.Answer, nil
@@ -651,8 +644,7 @@ func (m *MetaCoTAgent) searchForAnswer(ctx context.Context, question *Question, 
 		}
 
 		result, err := searchTool.Invoke(ctx, toolInput)
-		var panicErr *agentErrors.PanicError
-		if errors.As(err, &panicErr) {
+		if base.IsPanic(err) {
 			return err
 		}
 		if err == nil && result.Success {
@@ -670,9 +662,11 @@ func (m *MetaCoTAgent) searchForAnswer(ctx context.Context, question *Question, 
 		}
 	}
 
-	// Fallback to direct answer if search fails
+	// Fallback to direct answer if search fails；直接回答的普通失败只是留空答案，*PanicError 须返回
 	if question.Status != "answered" {
-		_ = m.answerDirectly(ctx, question, output)
+		if err := m.answerDirectly(ctx, question, output); base.IsPanic(err) {
+			return err
+		}
 	}
 	return nil
 }
