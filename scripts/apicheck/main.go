@@ -35,7 +35,9 @@ func forbidden(file, path string) bool {
 	case "interfaces", "errors":
 		return true
 	case "utils":
-		return dest != "utils"
+		// httpclient 的 resty 日志写出前要对错误中的 URL 脱敏；errors 不依赖任何内部包，不会成环。
+		redactor := filepath.ToSlash(filepath.Dir(file)) == "utils/httpclient" && dep == "errors"
+		return dest != "utils" && !redactor
 	case "cache":
 		return dest != "cache" && dep != "utils/json"
 	case "core":
