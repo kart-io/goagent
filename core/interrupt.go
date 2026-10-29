@@ -428,13 +428,14 @@ func (m *InterruptManager) ListPendingInterrupts() []*Interrupt {
 // CancelInterrupt cancels a pending interrupt.
 //
 // 等待中的 CreateInterrupt 返回 CodeContextCanceled；正在保存状态快照的，保存完成后不再登记并返回同样的错误。
-// 已被响应的中断不受影响（等待方仍拿到该响应），但之后对外不可见。ID 不存在（或等待方已退出）时返回 not found 错误。
+// 已被响应的中断不受影响（等待方仍拿到该响应），但之后对外不可见。ID 不存在、等待方已退出或已被取消时返回 not found 错误。
 func (m *InterruptManager) CancelInterrupt(interruptID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	// 不用 visible()：phaseSaving 的中断对外不可见，但必须仍可取消
 	entry, ok := m.entries[interruptID]
-	if !ok {
+	if !ok || entry.canceled {
 		return agentErrors.New(agentErrors.CodeAgentNotFound, "interrupt not found").
 			WithComponent("interrupt_manager").
 			WithOperation("cancel_interrupt").
