@@ -28,7 +28,7 @@ type RunRequest[T any] struct {
 // Only a non-preview final snapshot represents the saved continuation.
 func (d *DurableGraph[T]) AsRunnable() *core.StreamRunnable[RunRequest[T], *GraphSnapshot[T]] {
 	return core.NewStreamRunnable(core.StreamModeSteps, func(ctx context.Context, req RunRequest[T], emit func(core.StreamChunk[*GraphSnapshot[T]]) error) error {
-		snapshot, err := d.run(ctx, req.RunID, req.Initial, req.ApprovalKey, emit)
+		snapshot, err := d.run(ctx, d.store, req.RunID, req.Initial, req.ApprovalKey, emit)
 		// Only the actual durable wait is a normal pause. Joined unlock errors or
 		// observer errors must not be converted to a successful invocation.
 		if err != nil && (err != durable.ErrApprovalRequired || snapshot == nil || !snapshot.Waiting) {
@@ -50,6 +50,8 @@ type ChildContinuation struct {
 }
 
 // AsChildRunnable 供图作为子流程嵌套运行，例如经 tools.NewRunnableToolFactory 包成可续跑工具。
+// 检查点与节点内的持久操作写在父操作日志的 Store 中，不使用 DurableConfig.Store：子流程必须与父流程共用
+// 同一 Store，否则崩溃后子图从头重跑、已执行的节点再执行一次。读取子图状态时以该 Store 编译图后调用 Snapshot。
 // 运行 ID 取当前执行键，须在声明 Resumable 的持久操作内调用（见 durable.CanWait），否则在执行任何节点前
 // 返回 durable.ErrWaitNotResumable：其他操作不会重新进入，审批之后无法续跑。审批暂停返回 *durable.WaitError 而不是成功，
 // 等待不会被当作结果交给上层。续跑时从 durable.ResumeInput 读取审批键，首次运行时它被忽略。
@@ -64,10 +66,12 @@ func (d *DurableGraph[T]) AsChildRunnable() *core.RunnableFunc[T, T] {
 		if !durable.CanWait(ctx) {
 			return zero, fmt.Errorf("%w：子图须在可续跑的操作内运行，如 RunnableToolConfig.Resumable", durable.ErrWaitNotResumable)
 		}
+		// CanWait 为真时 ctx 必有日志。
+		store := durable.JournalStore(ctx)
 		// 续跑输入只用于仍在等待的图；已越过审批后中断再进入时，宿主多半还带着同一输入。
 		approvalKey, ok := durable.ResumeInput(ctx)
 		if ok {
-			current, err := d.Snapshot(ctx, id)
+			current, err := d.snapshot(ctx, store, id)
 			switch {
 			case errors.Is(err, os.ErrNotExist):
 				approvalKey = ""
@@ -77,7 +81,7 @@ func (d *DurableGraph[T]) AsChildRunnable() *core.RunnableFunc[T, T] {
 				approvalKey = ""
 			}
 		}
-		snapshot, err := d.run(ctx, id, initial, approvalKey, func(core.StreamChunk[*GraphSnapshot[T]]) error { return nil })
+		snapshot, err := d.run(ctx, store, id, initial, approvalKey, func(core.StreamChunk[*GraphSnapshot[T]]) error { return nil })
 		// 审批被采纳之前出错时检查点未变、仍在等待：报告为等待，避免上层把这次续跑记成失败而无法再续。
 		if err != nil && snapshot != nil && snapshot.Waiting && ctx.Err() == nil {
 			continuation, e := json.Marshal(ChildContinuation{RunID: id, Node: snapshot.Node, ApprovalKey: snapshot.Key, Rejected: err != durable.ErrApprovalRequired})

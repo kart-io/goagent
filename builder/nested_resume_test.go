@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/interfaces"
@@ -275,4 +276,47 @@ func TestChildGraphInNonResumableToolFailsBeforeRunning(t *testing.T) {
 	_, err = agent.AsRunnable().Invoke(durable.WithResume(ctx, "any", "key"), "退款 D4")
 	require.ErrorIs(t, err, durable.ErrOperationAttention, "失败记录交给宿主处理，而不是一直返回等待")
 	require.Len(t, model.requests, 1)
+}
+
+// 子图配置了另一个（如进程内存）Store 时，崩溃后它的检查点随之丢失；子图检查点必须写在父日志的 Store 里，
+// 否则续跑会从头重跑，已执行的退款再执行一次。
+func TestChildGraphCheckpointsLiveInParentJournalStore(t *testing.T) {
+	journal, err := durable.NewFileStore(t.TempDir())
+	require.NoError(t, err)
+	crash := false
+	store := failOnSave{Store: journal, fail: func(v *durable.Snapshot) bool {
+		return crash && strings.Contains(string(v.Data), `"status":"completed"`) && strings.Contains(string(v.Data), `"tool/turn/0/call/c1"`)
+	}}
+	ctx := durable.WithJournal(durable.WithExecutionKey(context.Background(), "ticket-5"), store)
+	effects := map[string]int{}
+	model := nativeModel(
+		[]*llm.StreamChunk{{Done: true, FinishReason: "tool_calls", ToolCalls: []llm.ToolCall{nativeCall("c1", "refund_workflow", `{"order_id":"E5"}`)}}},
+		answerTurn("已退款", 1),
+	)
+	// 每次“进程启动”都换一个新的子图 Store，模拟进程内存中的检查点在崩溃后丢失。
+	newAgent := func() *ConfigurableAgent[any, *core.AgentState] {
+		volatile, err := durable.NewFileStore(t.TempDir())
+		require.NoError(t, err)
+		agent, err := NewSimpleBuilder(model).WithDurableScope("support").
+			WithTools(dispatcherFor(t, refundTool(t, refundGraph(t, volatile, effects), "refund_workflow")).Tools()...).
+			WithMaxIterations(2).Build()
+		require.NoError(t, err)
+		return agent
+	}
+	_, err = newAgent().AsRunnable().Invoke(ctx, "退款 E5")
+	wait, c := requireWaiting(t, err)
+	resumeCtx := durable.WithResume(ctx, wait.Path[len(wait.Path)-1].Key, c.ApprovalKey)
+
+	crash = true
+	_, err = newAgent().AsRunnable().Invoke(resumeCtx, "退款 E5")
+	require.ErrorContains(t, err, "crash")
+	require.Len(t, effects, 1)
+
+	crash = false
+	out, err := newAgent().AsRunnable().Invoke(resumeCtx, "退款 E5")
+	require.NoError(t, err)
+	require.Equal(t, "已退款", out.Result)
+	for _, n := range effects {
+		require.Equal(t, 1, n, "崩溃后续跑不重复退款")
+	}
 }
