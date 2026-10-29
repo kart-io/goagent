@@ -97,6 +97,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `agents.SupervisorAgent.Invoke` 如实反映子任务结果，此前不论子任务是否失败都返回 nil 并计为成功：任一子任务结果含 `*errors.PanicError` 时返回这些错误（`errors.Join`，可用 `errors.As` 识别）；全部子任务失败时返回包装全部子任务错误的 `CodeAgentExecution`；部分失败仍返回汇总结果，`Status` 为 `partial`、`Metadata["tasks_failed"]` 为失败数，计入新增的 `partial_tasks` 指标而不计入 `successful_tasks`。返回错误时同时返回 `Status` 为 `failed` 的汇总输出。新增 `SupervisorConfig.FailOnAnyError`（默认 false），为 true 时任一子任务失败即返回错误。重试等待改为响应 ctx 取消，`*PanicError` 不再重试（即使匹配 `RetryableErrors`）。
 - `core.InterruptManager.CancelInterrupt` 对已取消的中断返回 `CodeAgentNotFound`，此前同 ID 重复取消返回 nil；保存状态快照期间的首次取消仍然生效。
 - `planning.AgentExecutor` 的可重试错误判断改为不区分大小写的子串匹配，此前只匹配前缀/后缀，`dial tcp ...: connection refused by peer`、`Service Unavailable` 等错误不会重试。
+- `errors.RedactURL` 堵住绕过：逗号分隔的多地址（NATS 集群）逐段脱敏，query 中逗号之后的片段一并丢弃；密码含未转义 `/`、`?`、`#` 时丢弃 scheme 之后到最后一个 `@` 为止的内容（`host:port/path` 且路径含 `@` 的地址会被过度裁剪）；key=value 形式 DSN 只保留 `host`、`port`、`dbname`。凭据放在路径中的 URL（Slack webhook、Telegram bot）不处理。
 ### Deprecated
 
 - `interfaces.Agent/Runnable` 为旧消息协议，新增编排统一使用 `core.Runnable[I,O]`；现有 API 保留迁移路径。
