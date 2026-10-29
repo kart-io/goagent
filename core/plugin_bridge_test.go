@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -416,4 +417,33 @@ func (m *mockPanicInBatchRunnable) WithCallbacks(callbacks ...Callback) Runnable
 
 func (m *mockPanicInBatchRunnable) WithConfig(config RunnableConfig) Runnable[string, string] {
 	return m
+}
+
+// reentrantTypeInfoRunnable 在 TypeInfo 中回调注册表。
+type reentrantTypeInfoRunnable struct {
+	DynamicRunnable
+	onTypeInfo func()
+}
+
+func (r *reentrantTypeInfoRunnable) TypeInfo() TypeInfo {
+	r.onTypeInfo()
+	return r.DynamicRunnable.TypeInfo()
+}
+
+// Register 在锁外读取插件的 TypeInfo，插件回调注册表不会死锁。
+func TestPluginRegistry_RegisterTypeInfoReentry(t *testing.T) {
+	registry := NewPluginRegistry()
+	plugin := &reentrantTypeInfoRunnable{
+		DynamicRunnable: NewTypedToDynamicAdapter(NewRunnableFunc(func(ctx context.Context, input string) (string, error) {
+			return input, nil
+		}), "reentrant"),
+		onTypeInfo: func() { _ = registry.List() },
+	}
+
+	var err error
+	requireReturnsWithin(t, 5*time.Second, func() { err = registry.Register("reentrant", plugin, nil) })
+	require.NoError(t, err)
+	meta, err := registry.GetMetadata("reentrant")
+	require.NoError(t, err)
+	assert.Equal(t, plugin.DynamicRunnable.TypeInfo(), meta.TypeInfo)
 }

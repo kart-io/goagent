@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 )
@@ -136,10 +137,12 @@ func (m *CallbackManager) TriggerCallbacks(fn func(Callback) error) error {
 	return err
 }
 
+// notify 在锁外调用回调：回调内增删回调时持锁会死锁。本轮通知使用调用时的快照，增删从下一轮生效。
 func (m *CallbackManager) notify(ctx context.Context, operation string, fn func(Callback) error) (panicked bool, err error) {
 	m.mu.RLock()
-	defer m.mu.RUnlock()
-	return NotifyCallbacks(ctx, "callback_manager", operation, m.callbacks, fn)
+	callbacks := slices.Clone(m.callbacks)
+	m.mu.RUnlock()
+	return NotifyCallbacks(ctx, "callback_manager", operation, callbacks, fn)
 }
 
 // OnStart 触发 OnStart 回调

@@ -73,15 +73,7 @@ func (c *Container) Resolve(name string) (interface{}, error) {
 			WithContext("name", name)
 	}
 
-	// Create instance from factory
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	// Double-check after acquiring write lock
-	if service, exists := c.services[name]; exists {
-		return service, nil
-	}
-
+	// 工厂在锁外调用：工厂内常会解析其他服务，持锁调用会死锁。并发的首次解析可能各自调用工厂，先写入者胜出。
 	instance, err := factory()
 	if err != nil {
 		return nil, agentErrors.Wrap(err, agentErrors.CodeInternal, "factory failed").
@@ -90,6 +82,11 @@ func (c *Container) Resolve(name string) (interface{}, error) {
 			WithContext("name", name)
 	}
 
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if service, exists := c.services[name]; exists {
+		return service, nil
+	}
 	c.services[name] = instance
 	return instance, nil
 }
@@ -213,11 +210,11 @@ func (r *EnhancedPluginRegistry) Lifecycle() *DefaultLifecycleManager {
 
 // RegisterPlugin registers a plugin with optional version.
 func (r *EnhancedPluginRegistry) RegisterPlugin(plugin Plugin, config *PluginConfig) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
 	name := plugin.Name()
 	version := plugin.Version()
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
 	// Create version map if needed
 	if r.plugins[name] == nil {
@@ -337,30 +334,28 @@ func (r *EnhancedPluginRegistry) ListVersions(name string) []string {
 
 // GetAllTools returns all tools from all registered plugins.
 func (r *EnhancedPluginRegistry) GetAllTools() map[string][]DynamicRunnable {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	result := make(map[string][]DynamicRunnable)
-	for name, versions := range r.plugins {
-		for version, plugin := range versions {
-			key := fmt.Sprintf("%s@%s", name, version)
-			result[key] = plugin.GetTools()
-		}
-	}
-	return result
+	return r.collect(Plugin.GetTools)
 }
 
 // GetAllAgents returns all agents from all registered plugins.
 func (r *EnhancedPluginRegistry) GetAllAgents() map[string][]DynamicRunnable {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
+	return r.collect(Plugin.GetAgents)
+}
 
-	result := make(map[string][]DynamicRunnable)
+// collect 在锁内复制插件列表、锁外调用插件，插件回调注册表时不会死锁。
+func (r *EnhancedPluginRegistry) collect(get func(Plugin) []DynamicRunnable) map[string][]DynamicRunnable {
+	r.mu.RLock()
+	plugins := make(map[string]Plugin)
 	for name, versions := range r.plugins {
 		for version, plugin := range versions {
-			key := fmt.Sprintf("%s@%s", name, version)
-			result[key] = plugin.GetAgents()
+			plugins[fmt.Sprintf("%s@%s", name, version)] = plugin
 		}
+	}
+	r.mu.RUnlock()
+
+	result := make(map[string][]DynamicRunnable, len(plugins))
+	for key, plugin := range plugins {
+		result[key] = get(plugin)
 	}
 	return result
 }
