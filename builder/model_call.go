@@ -67,10 +67,14 @@ func defaultModelRetryBackoff(retry int) time.Duration {
 	return min(500*time.Millisecond<<min(retry-1, 5), 8*time.Second)
 }
 
-// delay 只重试尚未向消费者输出任何内容、且 Provider 判定为暂时性的失败；等待不能越过截止时间。
+// maxModelRetryAfter 是愿意按服务端 Retry-After 等待的上限：等待期间持有回合的操作锁，
+// 更长的建议说明服务端短期内不会恢复，不如立即失败交给宿主。
+const maxModelRetryAfter = time.Minute
+
+// delay 只重试尚未向消费者输出任何内容、且 Provider 判定为暂时性的失败；等待不能越过截止时间与 Retry-After 上限。
 func (r modelRetry) delay(ctx context.Context, retry int, emitted bool, err error) (time.Duration, bool) {
 	var pe *llm.ProviderError
-	if err == nil || emitted || retry > r.max || !errors.As(err, &pe) || !pe.Retryable() {
+	if err == nil || emitted || retry > r.max || !errors.As(err, &pe) || !pe.Retryable() || pe.RetryAfter > maxModelRetryAfter {
 		return 0, false
 	}
 	delay := pe.RetryAfter

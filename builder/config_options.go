@@ -144,7 +144,7 @@ func (b *AgentBuilder[C, S]) WithEmptyAnswerRetries(n int) *AgentBuilder[C, S] {
 // [Advanced] 仅作用于原生流路径（AsRunnable、ExecuteStream），只重试 Provider 报告为暂时性的失败：
 // 429、5xx 与连接错误，见 llm.ProviderError.Retryable。本回合已向消费者输出文本后不再重试，避免内容重复。
 // 服务端给出 Retry-After 时按它等待，否则用 backoff（nil 时 500ms 起指数增长、上限 8s）；
-// 等待会越过 ctx 截止时间时直接失败。每次重试先通过根预算准入并计入 new_model_invocations，不计入 model_calls（逻辑回合数）与 MaxIterations。
+// 等待会越过 ctx 截止时间，或 Retry-After 超过 1 分钟时直接失败。每次重试先通过根预算准入并计入 new_model_invocations，不计入 model_calls（逻辑回合数）与 MaxIterations。
 // 持久模式下重试发生在同一条回合记录内，重试中途崩溃时恢复返回需宿主处理的错误。
 // 配置不进入持久意图，修改后已有运行仍可恢复。子 Agent 不继承此设置。负数视为 0。
 func (b *AgentBuilder[C, S]) WithModelRetry(retries int, backoff func(retry int) time.Duration) *AgentBuilder[C, S] {

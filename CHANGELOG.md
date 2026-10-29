@@ -22,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `tools.Rejected(message, data)` 与 `tools.RejectedResult`：业务拒绝作为工具结果交给模型，经 Dispatcher 持久执行时记为已完成、恢复时只回放；此前 Dispatcher 把任何 `Success=false` 结果当作失败并中止执行。直接返回工具收到业务拒绝时不作为答案，继续下一轮。
 - `tools.ReconcilableTool`：执行中断、结果未知的调用在重跑前按原执行键核对，已生效则补记为完成而不再执行。`durable.OperationPolicy` 新增 `Reconcile` 与 `Resumable`。
-- Builder 新增 `WithModelRetry(n, backoff)`（默认 0，不重试）：原生流路径在 429、5xx、连接错误时于同一回合内重试，已输出文本后不重试；优先按 `Retry-After` 等待，不越过截止时间；每次重试先占根预算（预算键为回合键派生的 `retry/N`），计入 `new_model_invocations`，不计入 `model_calls` 与 `MaxIterations`；持久日志仍为一条回合记录，配置不进入意图。新增观测事件 `model_retry`。
+- Builder 新增 `WithModelRetry(n, backoff)`（默认 0，不重试）：原生流路径在 429、5xx、连接错误时于同一回合内重试，已输出文本后不重试；优先按 `Retry-After` 等待，不越过截止时间，`Retry-After` 超过 1 分钟时不等待、直接失败（等待期间持有回合的操作锁）；OpenAI/DeepSeek 的 `Retry-After` 无法解析时视为未给出、改用 backoff，此前按 60 秒处理；每次重试先占根预算（预算键为回合键派生的 `retry/N`），计入 `new_model_invocations`，不计入 `model_calls` 与 `MaxIterations`；持久日志仍为一条回合记录，配置不进入意图。新增观测事件 `model_retry`。
 - `llm.ProviderError`（`StatusCode`、`RetryAfter`、`Retryable()`）。`Retryable` 对没有状态码的错误按白名单判断：网络超时、连接被拒绝或重置、连接意外关闭（EOF）、DNS 暂时失败可重试；证书与 TLS 错误、域名不存在、不支持的协议等不重试（`*url.Error` 总是实现 `net.Error`，不能据此认定为连接错误）。OpenAI/DeepSeek 截取 `Retry-After` 响应头，Gemini 读取 `google.rpc.RetryInfo`。
 - 嵌套续跑：`RunnableToolConfig.Resumable`、`workflow.DurableGraph.AsChildRunnable`、`durable.WaitError`/`durable.Waits`、`durable.WithResume`/`ResumeInput`、`builder.WaitingError`/`builder.ErrWaiting`。子图审批暂停时父 Agent 以 `ErrWaiting` 结束，宿主按等待路径提供审批后用同一执行键再次调用即可续跑，已完成的模型回合与工具调用只回放。未被采纳的审批（键不符、被 `WithBeforeApprove` 拒绝）保持等待并标记 `Rejected`。观测的错误类别对等待记为 `waiting`。
 

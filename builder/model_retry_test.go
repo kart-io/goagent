@@ -113,6 +113,18 @@ func TestModelRetryHonorsRetryAfter(t *testing.T) {
 	require.GreaterOrEqual(t, time.Since(started), 60*time.Millisecond)
 }
 
+func TestModelRetryDoesNotWaitBeyondRetryAfterCap(t *testing.T) {
+	model := &flakyModel{nativeEventModel: nativeModel(answerTurn("ok", 1)), steps: []error{unavailable(429, 2*maxModelRetryAfter)}}
+	agent, err := NewSimpleBuilder(model).WithModelRetry(1, noWait).WithTimeout(time.Hour).Build()
+	require.NoError(t, err)
+	started := time.Now()
+	_, err = agent.AsRunnable().Invoke(context.Background(), "q")
+	var pe *llm.ProviderError
+	require.True(t, errors.As(err, &pe), "%v", err)
+	require.Equal(t, 1, model.calls, "超过上限的 Retry-After 不等待、不重试")
+	require.Less(t, time.Since(started), time.Second)
+}
+
 func TestModelRetryRejectedByBudgetBeforeSend(t *testing.T) {
 	c, err := budget.New(budget.Config{RootKey: "root", Version: "v1", MaxModelRequests: 1})
 	require.NoError(t, err)
