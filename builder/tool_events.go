@@ -227,6 +227,9 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 				}
 			}
 			results = invokeConcurrently(ctx, calls, a.config.ParallelToolCalls, invoke)
+			if err := parallelFailure(results); err != nil {
+				return nil, err
+			}
 		}
 		for i, call := range calls {
 			var output *interfaces.ToolOutput
@@ -241,6 +244,9 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 					return nil, err
 				}
 				output, err = invoke(ctx, call)
+			}
+			if waits := durable.Waits(err); waits != nil {
+				return nil, &WaitingError{Waits: waits}
 			}
 			if err != nil {
 				return nil, err

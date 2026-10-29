@@ -2,6 +2,10 @@ package workflow
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
 
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/durable"
@@ -32,4 +36,58 @@ func (d *DurableGraph[T]) AsRunnable() *core.StreamRunnable[RunRequest[T], *Grap
 		}
 		return emit(core.StreamChunk[*GraphSnapshot[T]]{Done: true, Data: snapshot})
 	}).WithDescription(func() any { return describe(d.graph) })
+}
+
+// ChildContinuation 是嵌套运行的图在审批暂停时放进 durable.WaitError 的定位信息。
+// 宿主续跑时用 durable.WithResume(ctx, 等待处的执行键, ApprovalKey) 提供批准。
+type ChildContinuation struct {
+	RunID       string `json:"run_id"`
+	Node        string `json:"node"`
+	ApprovalKey string `json:"approval_key"`
+	// Rejected 表示本次提供的审批未被采纳（与等待的节点不符、被 WithBeforeApprove 拒绝等），
+	// 图的状态未改变，仍在等待。
+	Rejected bool `json:"rejected,omitempty"`
+}
+
+// AsChildRunnable 供图作为子流程嵌套运行，例如经 tools.NewRunnableToolFactory 包成可续跑工具。
+// 运行 ID 取当前执行键，须在持久操作内调用；审批暂停返回 *durable.WaitError 而不是成功，
+// 等待不会被当作结果交给上层。续跑时从 durable.ResumeInput 读取审批键，首次运行时它被忽略。
+// 完成时返回最终状态。
+func (d *DurableGraph[T]) AsChildRunnable() *core.RunnableFunc[T, T] {
+	return core.NewRunnableFunc(func(ctx context.Context, initial T) (T, error) {
+		var zero T
+		id := durable.ExecutionKey(ctx)
+		if id == "" {
+			return zero, fmt.Errorf("child graph requires an execution key")
+		}
+		// 续跑输入只用于仍在等待的图；已越过审批后中断再进入时，宿主多半还带着同一输入。
+		approvalKey, ok := durable.ResumeInput(ctx)
+		if ok {
+			current, err := d.Snapshot(ctx, id)
+			switch {
+			case errors.Is(err, os.ErrNotExist):
+				approvalKey = ""
+			case err != nil:
+				return zero, err
+			case !current.Waiting:
+				approvalKey = ""
+			}
+		}
+		snapshot, err := d.run(ctx, id, initial, approvalKey, func(core.StreamChunk[*GraphSnapshot[T]]) error { return nil })
+		// 审批被采纳之前出错时检查点未变、仍在等待：报告为等待，避免上层把这次续跑记成失败而无法再续。
+		if err != nil && snapshot != nil && snapshot.Waiting && ctx.Err() == nil {
+			continuation, e := json.Marshal(ChildContinuation{RunID: id, Node: snapshot.Node, ApprovalKey: snapshot.Key, Rejected: err != durable.ErrApprovalRequired})
+			if e != nil {
+				return zero, e
+			}
+			return zero, &durable.WaitError{Continuation: continuation}
+		}
+		if err != nil {
+			return zero, err
+		}
+		if !snapshot.Done {
+			return zero, fmt.Errorf("child graph stopped before completion")
+		}
+		return snapshot.State, nil
+	})
 }

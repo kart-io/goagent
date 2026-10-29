@@ -35,11 +35,15 @@ type DispatchTimeoutProvider interface{ DispatchTimeout() time.Duration }
 // CleanupTimeout bounds OwnedRunnable.Close after parent cancellation; 0 means 5s.
 // Timeout 经 DispatchTimeoutProvider 交给 Dispatcher，0 表示沿用 Dispatcher 默认值；子 Agent 通常需要显式放宽。
 // 直接调用 Invoke 时它不生效，超时由调用方 ctx 决定。
+// Resumable 声明子流程的全部效果都记在调用的派生执行键下（同一 Store、稳定作用域），重新进入只会回放：
+// 等待（*durable.WaitError，如 DurableGraph.AsChildRunnable 的审批暂停）后可续跑，执行中断后可重新进入。
+// 开启后必须经带日志的 Dispatcher 调用，否则在启动子流程前失败。
 type RunnableToolConfig[I, O any] struct {
 	Name, Description, ArgsSchema, Version string
 	Decode                                 func(map[string]any) (I, error)
 	Encode                                 func(O) (any, error)
 	ModelInvoking                          bool
+	Resumable                              bool
 	MaxDepth                               int
 	CleanupTimeout                         time.Duration
 	Timeout                                time.Duration
@@ -121,8 +125,16 @@ func (t *runnableTool[I, O]) Description() string          { return t.config.Des
 func (t *runnableTool[I, O]) ArgsSchema() string           { return t.config.ArgsSchema }
 func (t *runnableTool[I, O]) DurableIntentVersion() string { return t.config.Version }
 func (t *runnableTool[I, O]) DurableOperationPolicy() durable.OperationPolicy {
+	if t.config.Resumable {
+		return durable.OperationPolicy{MaxAttempts: resumableAttempts, Resumable: true}
+	}
 	return durable.OperationPolicy{MaxAttempts: 1}
 }
+
+// resumableAttempts 限制可续跑工具在执行中断后重新进入的次数；重新进入只回放已完成的步骤，
+// 但反复中断说明需要宿主介入。从等待中续跑不计次数。
+const resumableAttempts = 3
+
 func (t *runnableTool[I, O]) DispatchTimeout() time.Duration { return t.config.Timeout }
 func (t *runnableTool[I, O]) Invoke(ctx context.Context, input *interfaces.ToolInput) (out *interfaces.ToolOutput, err error) {
 	defer func() {
@@ -134,6 +146,9 @@ func (t *runnableTool[I, O]) Invoke(ctx context.Context, input *interfaces.ToolI
 	ctx, err = enterRunnable(ctx, t.config.MaxDepth, t.config.ModelInvoking)
 	if err != nil {
 		return nil, err
+	}
+	if t.config.Resumable && !durable.HasJournal(ctx) {
+		return nil, fmt.Errorf("resumable tool %q requires a journaled dispatcher call", t.config.Name)
 	}
 	if input == nil || input.Args == nil {
 		return nil, fmt.Errorf("tool object arguments required")
