@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/datatypes"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -75,6 +76,15 @@ func New(dsn string, opts ...PostgresOption) (*Store, error) {
 	return newFromConfig(config)
 }
 
+// dsnEndpoint 只取 DSN 中的 host 与 dbname 用于错误 Context，DSN 本身可能含密码；解析失败返回空串。
+func dsnEndpoint(dsn string) string {
+	cfg, err := pgconn.ParseConfig(dsn)
+	if err != nil {
+		return ""
+	}
+	return cfg.Host + "/" + cfg.Database
+}
+
 // newFromConfig is the internal constructor that creates a store from config
 func newFromConfig(config *Config) (*Store, error) {
 	// Open database connection
@@ -82,7 +92,11 @@ func newFromConfig(config *Config) (*Store, error) {
 		Logger: logger.Default.LogMode(config.LogLevel),
 	})
 	if err != nil {
-		return nil, agentErrors.NewStoreConnectionError("postgres", config.DSN, err)
+		connErr := agentErrors.NewStoreConnectionError("postgres", dsnEndpoint(config.DSN), err)
+		if connErr.Context["endpoint"] == "" {
+			delete(connErr.Context, "endpoint")
+		}
+		return nil, connErr
 	}
 
 	// Get underlying SQL database
