@@ -2,7 +2,6 @@ package got
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -674,8 +673,7 @@ Format each thought on a new line starting with "- " or numbered like "1. "`,
 
 	llmResp, err := g.llm.Chat(ctx, messages)
 	if err != nil {
-		var panicErr *agentErrors.PanicError
-		if errors.As(err, &panicErr) {
+		if base.IsPanic(err) {
 			return nil, err
 		}
 		return nil, nil
@@ -766,8 +764,7 @@ Respond with just a number between 0 and 1.`,
 	// LLM 失败时取中性分 0.5；失败原因是 *PanicError 时返回该错误，由调用方中止本次执行
 	llmResp, err := g.llm.Chat(evalCtx, messages)
 	if err != nil {
-		var panicErr *agentErrors.PanicError
-		if errors.As(err, &panicErr) {
+		if base.IsPanic(err) {
 			return 0, err
 		}
 		return 0.5, nil

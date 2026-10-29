@@ -2,14 +2,12 @@ package cot
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/kart-io/goagent/agents/base"
 	agentcore "github.com/kart-io/goagent/core"
-	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 )
@@ -158,8 +156,7 @@ func (s *CoTStrategy) Execute(
 
 			// 重新推理失败时保留首轮答案；失败原因是 *PanicError 时不降级，返回该错误中止本次执行
 			llmResp2, err := llmClient.Chat(ctx, messages)
-			var panicErr *agentErrors.PanicError
-			if errors.As(err, &panicErr) {
+			if base.IsPanic(err) {
 				return nil, err
 			}
 			if err == nil {
@@ -275,8 +272,7 @@ func (s *CoTStrategy) ExecuteWithGenerator(
 
 			// 重新推理失败时保留首轮答案；失败原因是 *PanicError 时不降级，返回该错误中止本次执行
 			llmResp2, err := llmClient.Chat(ctx, messages)
-			var panicErr *agentErrors.PanicError
-			if errors.As(err, &panicErr) {
+			if base.IsPanic(err) {
 				return nil, err
 			}
 			if err == nil {
@@ -543,8 +539,7 @@ func (s *CoTStrategy) executeToolsIfNeeded(ctx context.Context, steps []string, 
 
 					startTime := time.Now()
 					result, err := tool.Invoke(ctx, toolIn)
-					var panicErr *agentErrors.PanicError
-					if errors.As(err, &panicErr) {
+					if base.IsPanic(err) {
 						return nil, err
 					}
 

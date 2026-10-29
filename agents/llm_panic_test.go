@@ -93,6 +93,16 @@ func TestReasoningAgentLLMPanicErrorNotDegraded(t *testing.T) {
 		"critique":   "Critically evaluate this answer",
 		"refine":     "Given this answer and critique",
 	}
+	// 搜索工具普通失败后回退为直接回答，直接回答的 LLM 调用返回 *PanicError
+	cases["metacot/search_fallback"] = func(m *panicOnPromptLLM) (agentRunnable, string) {
+		m.marker, m.reply = "Answer this question directly and concisely", "1. What is the definition of this concept?\n2. What is the history of this concept?"
+		search := tools.NewBaseTool("search", "搜索", `{"type":"object"}`, func(context.Context, *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+			return nil, errLLM
+		})
+		return metacot.NewMetaCoTAgent(metacot.MetaCoTConfig{
+			Name: "metacot", LLM: m, MaxDepth: 1, Tools: []interfaces.Tool{search},
+		}), "What is the answer?"
+	}
 	for name, marker := range metacotMarkers {
 		cases["metacot/"+name] = func(m *panicOnPromptLLM) (agentRunnable, string) {
 			m.marker, m.reply = marker, questions

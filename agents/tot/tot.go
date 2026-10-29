@@ -2,7 +2,6 @@ package tot
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math"
 	"sort"
@@ -850,8 +849,7 @@ func (t *ToTAgent) executeToolsForThought(ctx context.Context, thought string, o
 			}
 
 			result, err := calc.Invoke(ctx, input)
-			var panicErr *agentErrors.PanicError
-			if errors.As(err, &panicErr) {
+			if base.IsPanic(err) {
 				return nil, err
 			}
 			toolCall := agentcore.AgentToolCall{

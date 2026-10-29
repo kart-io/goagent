@@ -2,11 +2,11 @@ package react
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/kart-io/goagent/agents/base"
 	agentcore "github.com/kart-io/goagent/core"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
@@ -293,8 +293,7 @@ func (r *ReActAgent) executeCore(ctx context.Context, input *agentcore.AgentInpu
 			observation, toolErr = r.executeToolFast(ctx, action, actionInput)
 		}
 		// 回调或工具 panic 不是可交还模型的工具失败：工具可能已产生副作用，panic 文本也不应发给模型
-		var panicErr *agentErrors.PanicError
-		if errors.As(toolErr, &panicErr) {
+		if base.IsPanic(toolErr) {
 			return r.handleErrorFast(output, step, "Tool execution panicked", toolErr, startTime)
 		}
 
