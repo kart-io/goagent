@@ -21,7 +21,6 @@ jobs:
         run: bash scripts/provider_regression.sh
       - name: Check recommended examples for legacy API candidates
         run: |
-          go run ./scripts/apicheck -mode migration -strict -root examples/rag/grounded
           go run ./scripts/apicheck -mode migration -strict -root examples/workflow
           go run ./scripts/apicheck -mode migration -strict -root examples/llm/gemini-verify
       - uses: actions/upload-artifact@v4

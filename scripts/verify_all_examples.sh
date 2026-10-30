@@ -55,14 +55,7 @@ for example in $EXAMPLES; do
     # Run with timeout
     # Attempt 1: Run specific file (works for self-contained files)
     
-    # Configure arguments for specific examples
     ARGS=""
-    if [[ "$example" == *"16-pdf-rag/main.go"* ]]; then
-        ARGS="-pdf examples/basic/16-pdf-rag/cymbal-starlight-2024.pdf -prompt 'summary'"
-    elif [[ "$example" == *"17-vertexai-rag/main.go"* ]]; then
-        # Use existing PDF from example 16 and simple mode
-        ARGS="-pdf examples/basic/16-pdf-rag/cymbal-starlight-2024.pdf -prompt 'summary' -simple"
-    fi
 
     OUTPUT=$(timeout "$TIMEOUT_DURATION" go run "$example" $ARGS 2>&1)
     EXIT_CODE=$?
