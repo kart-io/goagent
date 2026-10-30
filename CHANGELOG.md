@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-10-30
+
+### Added
+
+- `memory.WithEmbedder` 与 `memory.TextEmbedder`：为 `HierarchicalMemory` 配置嵌入生成后，`Store`/`StoreTyped` 写入的短期与长期记忆立即生成向量并写入向量存储，可被 `VectorSearch` 检索。接受任何实现 `Embed(ctx, text) ([]float64, error)` 的类型，如 `llm.EmbeddingClient`（目前为 `OpenAIProvider`，固定使用 text-embedding-ada-002，1536 维，向量存储维度须一致）。`string`、`[]byte`、`fmt.Stringer` 直接取文本，其余类型取 JSON 序列化结果；nil、空文本或无法序列化的内容不生成向量，条目照常写入。嵌入生成失败返回 `CodeRetrievalEmbedding` 错误，条目不写入。未配置时行为不变。
+
+### Fixed
+
+- DeepSeek 流式请求超过超时（默认 60 秒）被截断：`CompleteStream`/`ChatStream`/`CompleteToolsStream`/`Stream`/`StreamWithTools` 与 `DeepSeekStreamingProvider.StreamWithMetadata` 的超时现只限制等待响应头，流开始后不再计时。
+- DeepSeek `Stream`、`StreamWithTools`、`StreamWithMetadata` 无法解析真实 SSE 响应（`data: ...`），且要读完整个响应才产出首块；现改走与 OpenAI 相同的原生 SSE 流，边收边产出。
+- 宿主替换 `http.DefaultTransport`（otelhttp、httpmock 等）后 OpenAI/DeepSeek 首次请求 panic；现每次请求使用当时的 `http.DefaultTransport`。等待响应头超时的错误满足 `net.Error` 且 `Timeout()` 为 true。
+- OpenAI `Stream`、`StreamWithTools` 请求阶段的错误丢失状态码与 `Retry-After`；现可通过 `errors.As` 取得 `*llm.ProviderError`。
+- `HierarchicalMemory.VectorSearch` 并发调用时在读锁下写共享条目的 `Metadata`，可导致 `fatal error: concurrent map writes`；现返回条目副本，相似度写在副本的 `Metadata["similarity_score"]`。
+- `VectorSearch` 的 `threshold` 参数此前不生效；现丢弃相似度低于 `threshold` 的结果。
+- `WithShortTermCapacity` 此前不生效（短期记忆总以容量 100 构造）。
+- 短期条目因容量淘汰、`Forget` 或访问晋升离开时，向量存储残留孤儿向量或误删长期条目的向量；现每个 ID 只保留一个向量：另一层仍持有带向量的同 ID 条目时恢复为它的向量，否则删除。
+- `utils/httpclient.GetOrCreateClient` 的缓存键只含 BaseURL 与 Headers，超时、重试等配置不同的客户端被复用为先创建者，例如两个地址与请求头相同但 `WithTimeout` 不同的 DeepSeek Provider，非流式请求共用先创建者的超时；现缓存键包含 `Config` 的全部字段。
+- `HierarchicalMemory.Get` 在读锁下更新访问计数并晋升条目，并发 `Get` 同一 key 存在数据竞争；现改持写锁。
+
+### Changed
+
+- DeepSeek `Stream`、`StreamWithTools`、`StreamWithMetadata` 不再自动重试（此前请求阶段最多发 3 次，包括 429 与超时），由调用方控制重试。
+- DeepSeek `StreamWithMetadata` 请求阶段的 429 错误码由 `LLM_RATE_LIMIT` 改为 `LLM_REQUEST`，状态码与 `Retry-After` 通过 `*llm.ProviderError` 提供。
+- DeepSeek `StreamWithTools`：`tool_call` 块在流正常结束后按工具调用 index 顺序发出，排在所有 `content`/`tool_name`/`tool_args` 之后；参数为空的工具调用不再被丢弃；流在 `finish_reason` 前中断时发出 `error` 块（`io.ErrUnexpectedEOF`）；返回通道缓冲由 100 改为 1；请求不再显式携带 `tool_choice: "auto"`。
+- DeepSeek `StreamWithMetadata` 现在发送 `WithSystemPrompt` 设置的 system 消息并携带 `stream_options.include_usage`；正常结束时一定发出 `finish` 块，流中断时以 `error` 块结束。
+- 流式方法在流开始后只受 ctx 控制：消费者不再读取时必须取消 ctx，否则 goroutine 与连接不会释放。
+- `LongTermMemory.Store`（含 `StoreTyped` 的长期类型与 `Consolidate`）改为先写向量、成功后才写入条目：向量写入失败时返回错误且不留下条目，`Consolidate` 失败的条目保留在短期记忆中。
+- `VectorSearch` 返回条目副本，修改返回值不再影响已存储的记忆；同 ID 同时存在于短期与长期时，优先返回持有向量的那一个。
+
+### Known Issues
+
+- `Stream`（返回 `<-chan string`）在流中断或解码失败时只打印日志并关闭通道，调用方无法区分正常结束与中断；需要区分时使用 `CompleteStream`/`ChatStream`。
+
 ## [0.18.0] - 2026-10-30
 
 ### Added
