@@ -4,7 +4,10 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"slices"
 	"sync"
+
+	"gopkg.in/yaml.v3"
 )
 
 // Needs 是组件配置需要的能力，用于信任检查：来自不可信层的组件超出 Limits 的部分属于扩权项。
@@ -125,5 +128,25 @@ func secretsIn(cfg any) []string {
 		}
 	}
 	walk(reflect.ValueOf(cfg))
-	return names
+	// map 的遍历顺序随机，排序使扩权项与授权摘要稳定。
+	slices.Sort(names)
+	return slices.Compact(names)
+}
+
+// Value 是字面量或秘密引用，配置中写作字符串或 {secret: NAME}，用于环境变量、请求头等可能含秘密的字段。
+type Value struct {
+	Literal string  `yaml:"-"`
+	Secret  *Secret `yaml:"-"`
+}
+
+// UnmarshalYAML 只接受字符串或只含 secret 键的映射。
+func (v *Value) UnmarshalYAML(n *yaml.Node) error {
+	switch {
+	case n.Kind == yaml.ScalarNode:
+		return n.Decode(&v.Literal)
+	case n.Kind == yaml.MappingNode && len(n.Content) == 2 && n.Content[0].Value == "secret" && n.Content[1].Kind == yaml.ScalarNode:
+		v.Secret = &Secret{Name: n.Content[1].Value}
+		return nil
+	}
+	return fmt.Errorf("第 %d 行：值只能是字符串或 {secret: NAME}", n.Line)
 }

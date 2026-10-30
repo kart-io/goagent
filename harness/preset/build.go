@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/tools"
 	"github.com/kart-io/goagent/tools/coding"
@@ -64,6 +65,7 @@ type Assembler struct {
 }
 
 type contribution struct {
+	info    map[string]string
 	prompts []string
 	tools   []interfaces.Tool
 	pre     []tools.PreHook
@@ -73,6 +75,17 @@ type contribution struct {
 }
 
 func (a *Assembler) slot() *contribution { return &a.contribs[a.cur] }
+
+// ComponentID 返回正在初始化的组件行的 id。
+func (a *Assembler) ComponentID() string { return a.preset.Rows[a.cur].ID }
+
+// SetInfo 在装配清单中记录本组件的运行时信息（如 MCP 服务的名称与版本），信息变化会改变清单摘要。
+func (a *Assembler) SetInfo(key, value string) {
+	if a.slot().info == nil {
+		a.slot().info = map[string]string{}
+	}
+	a.slot().info[key] = value
+}
 
 // Root 返回规范化后的工作区根目录，未设置时为空串。
 func (a *Assembler) Root() string { return a.host.Root }
@@ -138,6 +151,14 @@ func (a *Assembler) Secret(s Secret) (string, error) {
 		return "", fmt.Errorf("秘密 %s 未设置", s.Name)
 	}
 	return v, nil
+}
+
+// Value 解析字面量或秘密引用。
+func (a *Assembler) Value(v Value) (string, error) {
+	if v.Secret != nil {
+		return a.Secret(*v.Secret)
+	}
+	return v.Literal, nil
 }
 
 // Assembly 是 Build 的结果，交给 Builder：WithSystemPrompt(SystemPrompt)、WithTools(Tools...)。
@@ -317,7 +338,7 @@ func (a *Assembler) publish() (*Assembly, error) {
 		Workspace:    a.workspace,
 		closers:      a.closers,
 	}
-	if asm.Manifest, err = a.manifest(asm.SystemPrompt, all); err != nil {
+	if asm.Manifest, err = a.manifest(asm.SystemPrompt); err != nil {
 		return nil, err
 	}
 	return asm, nil
@@ -338,12 +359,16 @@ type ManifestComponent struct {
 	Use     string `json:"use"`
 	Version string `json:"version"`
 	Config  any    `json:"config,omitempty"`
+	// Info 是组件在初始化时记录的运行时信息。
+	Info map[string]string `json:"info,omitempty"`
 }
 
-// ManifestTool 是装配清单中的一个工具。
+// ManifestTool 是装配清单中的一个工具，Component 是提供它的组件行。
 type ManifestTool struct {
-	Name         string `json:"name"`
-	SchemaSHA256 string `json:"schema_sha256"`
+	Name              string `json:"name"`
+	Component         string `json:"component"`
+	SchemaSHA256      string `json:"schema_sha256"`
+	DescriptionSHA256 string `json:"description_sha256"`
 }
 
 // Digest 返回清单 JSON 的 SHA-256。
@@ -357,17 +382,17 @@ func sha256Hex(s string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func (a *Assembler) manifest(prompt string, all []interfaces.Tool) (Manifest, error) {
+func (a *Assembler) manifest(prompt string) (Manifest, error) {
 	m := Manifest{Preset: a.preset.ID, PromptSHA256: sha256Hex(prompt)}
-	for _, r := range a.preset.Rows {
+	for i, r := range a.preset.Rows {
 		cfg, err := rawJSON(r)
 		if err != nil {
 			return Manifest{}, err
 		}
-		m.Components = append(m.Components, ManifestComponent{ID: r.ID, Use: r.Use, Version: r.comp.version, Config: cfg})
-	}
-	for _, t := range all {
-		m.Tools = append(m.Tools, ManifestTool{Name: t.Name(), SchemaSHA256: sha256Hex(t.ArgsSchema())})
+		m.Components = append(m.Components, ManifestComponent{ID: r.ID, Use: r.Use, Version: r.comp.version, Config: cfg, Info: a.contribs[i].info})
+		for _, t := range a.contribs[i].tools {
+			m.Tools = append(m.Tools, ManifestTool{Name: t.Name(), Component: r.ID, SchemaSHA256: sha256Hex(t.ArgsSchema()), DescriptionSHA256: sha256Hex(t.Description())})
+		}
 	}
 	if a.workspace != nil {
 		info := a.workspaceInfo
@@ -386,4 +411,43 @@ func rawJSON(r *Row) (any, error) {
 		return nil, fmt.Errorf("组件 %s: %w", r.ID, err)
 	}
 	return v, nil
+}
+
+// ErrManifestChanged 表示恢复持久运行时，装配清单与运行开始时记录的不一致。
+var ErrManifestChanged = errors.New("装配清单与持久运行开始时记录的不一致")
+
+const manifestOperation = "preset/manifest"
+
+// PinManifest 在持久运行中固定装配清单：首次运行把摘要写入日志，恢复时比对，不一致返回 ErrManifestChanged，
+// 由宿主决定新建会话。ctx 须是交给 Agent 的同一个 ctx（带日志与执行键），在调用 Agent 之前执行；没有日志时什么也不做。
+// 摘要只保证执行语义一致，外部副作用仍依赖各工具的核对。
+func (a *Assembly) PinManifest(ctx context.Context) error {
+	if !durable.HasJournal(ctx) {
+		return nil
+	}
+	if durable.ExecutionKey(ctx) == "" {
+		return errors.New("持久运行缺少执行键")
+	}
+	digest := a.Manifest.Digest()
+	record, err := durable.InspectOperation(ctx, manifestOperation)
+	if err == nil && record.Status == "completed" {
+		var pinned string
+		if err := json.Unmarshal(record.Value, &pinned); err != nil {
+			return fmt.Errorf("日志中的装配清单摘要无效: %w", err)
+		}
+		if pinned != digest {
+			return fmt.Errorf("%w：运行开始时为 %s，当前为 %s", ErrManifestChanged, pinned, digest)
+		}
+		return nil
+	}
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	value, err := json.Marshal(digest)
+	if err != nil {
+		return err
+	}
+	_, err = durable.Do(ctx, manifestOperation, json.RawMessage(`"goagent-preset-manifest-v1"`), durable.OperationPolicy{MaxAttempts: 3, RetryFailed: true},
+		func(context.Context) (json.RawMessage, error) { return value, nil })
+	return err
 }
