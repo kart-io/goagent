@@ -60,6 +60,10 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 	if err != nil {
 		return nil, err
 	}
+	// 会话级审批授权按会话隔离；宿主已声明会话时沿用宿主的值。
+	if tools.SessionIDFrom(ctx) == "" && a.config.SessionID != "" {
+		ctx = tools.WithSessionID(ctx, a.config.SessionID)
+	}
 	ctx, ephemeral := policyContext(ctx, runtime)
 	if ephemeral {
 		defer func() {
@@ -231,6 +235,7 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 				return nil, err
 			}
 		}
+		var additional []string
 		for i, call := range calls {
 			var output *interfaces.ToolOutput
 			var err error
@@ -282,6 +287,7 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 			}
 			// 字符串已是工具正文，不再包一层 JSON 引号或转义。
 			messages = append(messages, llm.Message{Role: "tool", Content: text, ToolCallID: turn.ToolCalls[i].ID})
+			additional = append(additional, output.AdditionalContext...)
 			if err := emit(AgentEvent{Type: "step", Step: "tool_end", Tool: call.Name}); err != nil {
 				return nil, err
 			}
@@ -304,6 +310,10 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 				}
 				return a.finishEvents(ctx, request, fmt.Sprint(request.Input), answer, usage, metadata, emit)
 			}
+		}
+		// 调用后钩子追加的上下文在本批工具结果之后作为一条 user 消息注入；assistant(tool_calls)→tool→user 在各 provider 上都合法。
+		if len(additional) > 0 {
+			messages = append(messages, llm.Message{Role: "user", Content: additionalContextMessage(additional)})
 		}
 	}
 	return nil, exhausted()
@@ -448,4 +458,14 @@ func readToolTurn(ctx context.Context, stream <-chan *llm.StreamChunk, emit func
 			}
 		}
 	}
+}
+
+func additionalContextMessage(items []string) string {
+	var sb strings.Builder
+	sb.WriteString("[工具附加上下文]")
+	for _, item := range items {
+		sb.WriteString("\n- ")
+		sb.WriteString(item)
+	}
+	return sb.String()
 }

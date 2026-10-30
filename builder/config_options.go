@@ -179,7 +179,7 @@ func DefaultAgentConfig() *AgentConfig {
 		SaveInterval:           30 * time.Second,
 		MaxTokens:              2000,
 		Temperature:            0.7,
-		SessionID:              fmt.Sprintf("session-%d", time.Now().Unix()),
+		SessionID:              fmt.Sprintf("session-%d", time.Now().UnixNano()),
 		Verbose:                false,
 		MaxConversationHistory: 20, // 默认保留最近 20 轮对话
 	}
