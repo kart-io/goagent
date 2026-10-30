@@ -69,6 +69,15 @@ type AgentConfig struct {
 	// ParallelToolCalls 是同一轮可并发执行的工具调用数上限；小于 2（默认 0）时按顺序执行。
 	ParallelToolCalls int
 
+	// 循环扩展点与提示词组装，见 loop_hooks.go；仅作用于原生工具流。
+	PreStep              []PreStepHook      `json:"-"`
+	RequestHooks         []RequestHook      `json:"-"`
+	RequestErrorHooks    []RequestErrorHook `json:"-"`
+	MaxRequestRecoveries int
+	TurnStopping         []TurnStoppingHook `json:"-"`
+	PromptSections       []PromptSection    `json:"-"`
+	PromptContexts       []PromptContext    `json:"-"`
+
 	// MaxIterations 限制推理步骤的最大次数
 	MaxIterations int
 

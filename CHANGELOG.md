@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Agent 句柄：`ConfigurableAgent.Start(ctx, input)` 返回 `*Handle`，运行中可 `Steer`（下一步追加，结束前唤醒续跑）、`Inject`（下一步追加，不唤醒）、`Redirect`（取消进行中的模型请求，保留已流出的文本后重新请求；工具执行中或持久运行中降级为 Steer）、`Followup`（本轮结束后续接对话开始新一轮）、`Interrupt`，`Wait` 取得结果；轮次结束后再追加输入返回 `ErrHandleDone`。只支持原生工具流。
+- 循环扩展点（原生工具流）：`WithPreStep`（改写消息或不请求模型直接结束）、`WithRequestHook`（替换客户端或调整参数）、`WithRequestError`（按错误分类重试、压缩或回退，单步恢复次数有上限）、`WithTurnStopping`（返回 user 消息续跑）。
+- 提示词组装：`WithPromptSections` 追加到 system 且同一轮内字节不变；`WithPromptContexts` 每步重算，附在请求末尾、不进入之后的历史。
+- 持久运行中 PreStep、TurnStopping、提示词段落与上下文、收件箱输入按步骤记入日志，恢复时回放；RequestError 钩子与 Redirect 只在非持久运行中生效。
+- `llm.ClassifyError`：把模型请求错误分为限流、服务端、网络、超出上下文、鉴权、不存在、请求错误、取消，并给出 `Retryable`、`ShouldCompress`、`ShouldFallback` 提示。
+
+## [0.22.0] - 2026-10-30
+
+### Added
+
 - `harness/preset`：声明式自定义 Agent。一个 preset 由组件行组成，`preset.Load` 按 内置 → 用户 → 项目 → 本地 → 宿主 叠加并严格校验，`preset.Build` 装配出系统提示词、经 Pipeline 的工具、工作区与装配清单 `Manifest`。
   - 合并：preset 与组件按 id 合并，同 id 整行替换并保留位置，`remove`/`replace`/`locked` 显式表达删除、换实现与锁定；`Set.Dump()` 标注每行来源、覆盖与删除。
   - 信任：权限上限 `limits` 只由可信层声明；项目层与本地层的扩权项（超出上限、`allow` 规则、替换或删除可信层组件、宿主进程、秘密引用）须经 `TrustStore` 授权，否则 `Build` 返回 `*TrustRequiredError`；授权绑定项目根目录与扩权项摘要。提供 `FileTrustStore`、`MemoryTrustStore`。
