@@ -268,7 +268,7 @@ if err != nil {
 
 ## 扩展阅读
 
-- [MCP 模块文档](../../../mcp/README.md)
-- [工具接口定义](../../../mcp/core/tool.go)
-- [工具箱实现](../../../mcp/toolbox/toolbox.go)
-- [内置工具列表](../../../mcp/tools/)
+- [MCP 模块文档](../../mcp/README.md)
+- [工具接口定义](../../mcp/core/tool.go)
+- [工具箱实现](../../mcp/toolbox/toolbox.go)
+- [内置工具列表](../../mcp/tools/)

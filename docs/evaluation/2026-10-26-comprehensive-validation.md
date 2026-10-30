@@ -136,7 +136,7 @@
 
 ## 复现与产物
 
-配置隔离测试服务后，参见 [真实服务验证说明](../../integration/README.md)。本轮主命令：
+配置隔离测试服务后，参见 [真实服务验证说明](https://github.com/kart-io/goagent/blob/v0.16.1/integration/README.md)（该目录已在 v0.17.0 删除）。本轮主命令：
 
 ```sh
 GO_TEST_MODE=true GOMAXPROCS=2 go test -json -p 2 -race \

@@ -115,14 +115,12 @@ OpenAI 和 DeepSeek 专用 Provider 共用原生 SSE 解码与完成状态检查
 | 已验证入口 | Builder RAG、原生事件流、Runnable 适配 | 来源限制、用量、错误、取消和组合执行；不自动证明事实正确性 |
 | 已验证入口 | 官方 MCP 客户端适配 | HTTP/stdio 工具互操作；交互授权仍由应用处理 |
 | 已验证入口 | core/durable | 显式顺序步骤、审批和真实进程重启；至少一次执行，外部服务按幂等键去重 |
-| 实验 | 多种推理策略、自动反思与学习 | 需要业务题集验证；策略多不等于成功率高 |
-| 基础设施集成 | NATS、Redis、PostgreSQL | NATS 当前消息路径为 Core Publish/Subscribe，不能据此宣称持久化消费和故障重投递 |
-| 词汇基线 | LexicalOverlapReranker | 词汇重合打分，无交叉编码器推理 |
-| 弃用 | CrossEncoderReranker、interfaces.Agent/Runnable | 保留迁移入口，不再作为新开发推荐 |
+| 词汇基线 | LexicalOverlapReranker（goagent-contrib/retrieval） | 词汇重合打分，无交叉编码器推理 |
+| 弃用 | CrossEncoderReranker（goagent-contrib/retrieval）、interfaces.Agent/Runnable | 保留迁移入口，不再作为新开发推荐 |
 
-自反思 Agent 不再返回固定的 `Task completed`。必须传入 `reflection.WithTaskExecutor(executor)`，其中 executor 实现 `Invoke(context.Context, *core.AgentInput) (*core.AgentOutput, error)`。未配置时返回 `ErrTaskExecutorRequired`，执行失败、nil 输出和 partial 状态不会被伪装成成功。自动反思本身仍是实验能力，不代表任务效果已经改善。
+自反思 Agent 所在的 `reflection` 包已在 v0.17.0 删除，无替代，代码保留在 `v0.16.1`。
 
-原 `NewCrossEncoderReranker(model, topN)` 迁移为 `NewLexicalOverlapReranker(topN)`；如需真实模型排序，使用 `NewLLMRerankerWithClient` 或 `CohereReranker`。
+原 `NewCrossEncoderReranker(model, topN)` 迁移为 `NewLexicalOverlapReranker(topN)`；如需真实模型排序，使用 `NewLLMRerankerWithClient` 或 `CohereReranker`。三者均在 goagent-contrib：前两个在 `retrieval`，`CohereReranker` 在 `retrieval/cohere`。
 
 OpenAI 兼容 Provider 改为发送 `tools` 并解析 `tool_calls`，保留旧 `function_call` 响应解析。工具流按索引合并并发调用，流中错误通过 error 事件返回。仅接受旧请求协议的服务需升级兼容端点，不会通过隐藏重试重复调用模型。
 

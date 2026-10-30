@@ -375,10 +375,8 @@ if core.IsFastInvoker(agent) {
 
 ## 相关资源
 
-- [InvokeFast 完整文档](../../../docs/guides/INVOKE_FAST_OPTIMIZATION.md)
-- [InvokeFast 快速入门](../../../docs/guides/INVOKE_FAST_QUICKSTART.md)
-- [GoAgent 架构文档](../../../docs/architecture/ARCHITECTURE.md)
-- [DeepSeek Provider 文档](../../../docs/guides/LLM_PROVIDERS.md#deepseek)
+- [GoAgent 架构文档](../../../../docs/architecture/ARCHITECTURE.md)
+- [DeepSeek Provider 文档](../../../../docs/guides/LLM_PROVIDERS.md#deepseek)
 
 ## 总结
 

@@ -249,7 +249,6 @@ vecStore := memory.NewInMemoryVectorStore(1536)
 // 创建分层记忆
 hierMem := memory.NewHierarchicalMemoryWithContext(ctx, vecStore,
     memory.WithShortTermCapacity(100),
-    memory.WithConsolidationInterval(5*time.Minute),
 )
 
 // 存储带类型的记忆

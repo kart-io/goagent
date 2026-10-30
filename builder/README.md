@@ -29,11 +29,6 @@ graph TD
             AD["Advanced<br/>WithState<br/>WithContext<br/>WithMetadata"]
         end
 
-        subgraph "推理策略"
-            RP["ReasoningPresets<br/>WithChainOfThought<br/>WithTreeOfThought<br/>WithReAct"]
-            RB["ReasoningBuilders<br/>CoTAgent<br/>ReActAgent<br/>ToTAgent"]
-        end
-
         subgraph "快速创建"
             QK["QuickBuilders<br/>QuickAgent<br/>RAGAgent<br/>ChatAgent"]
             PS["Presets<br/>ConfigureForRAG<br/>ConfigureForChatbot"]
@@ -55,7 +50,6 @@ graph TD
     SC --> AB
     CO --> AB
     AD --> AB
-    RP --> AB
 
     AB --> LLC
     CA --> RT
@@ -108,10 +102,6 @@ sequenceDiagram
 │  │  通用构建API (95% 场景)                          │  │
 │  │  - NewSimpleBuilder / NewAgentBuilder           │  │
 │  │  - WithXxx() 流畅配置链                         │  │
-│  └──────────────────────────────────────────────────┘  │
-│  ┌──────────────────────────────────────────────────┐  │
-│  │  推理策略API (特定场景)                          │  │
-│  │  - WithChainOfThought / WithReAct ...           │  │
 │  └──────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -256,37 +246,6 @@ agent, err := builder.NewAgentBuilder[MyContext, *MyState](llmClient).
     Build()
 ```
 
-### 推理策略 Agent
-
-```go
-// Chain-of-Thought Agent
-agent := builder.NewSimpleBuilder(llmClient).
-    WithChainOfThought().
-    Build()
-
-// ReAct Agent
-agent := builder.NewSimpleBuilder(llmClient).
-    WithReAct(react.ReActConfig{
-        MaxIterations: 5,
-        Verbose:       true,
-    }).
-    WithTools(searchTool, calculatorTool).
-    Build()
-
-// Tree-of-Thought Agent
-agent := builder.NewSimpleBuilder(llmClient).
-    WithTreeOfThought(tot.ToTConfig{
-        MaxDepth:   3,
-        BeamWidth:  4,
-    }).
-    Build()
-
-// 快速创建推理 Agent
-cotAgent := builder.QuickCoTAgent(llmClient)
-reactAgent := builder.QuickReActAgent(llmClient, tools)
-totAgent := builder.QuickToTAgent(llmClient)
-```
-
 ### 场景预设
 
 ```go
@@ -358,45 +317,7 @@ WithStreamingEnabled(enabled bool)    // 流式响应
 
 ## 推理策略
 
-### 支持的推理算法
-
-| 策略 | 说明 | 适用场景 |
-|------|------|---------|
-| **CoT** | Chain-of-Thought 链式思维 | 逻辑推理、数学问题 |
-| **ReAct** | Reasoning + Acting | 需要工具调用的任务 |
-| **ToT** | Tree-of-Thought 树状思维 | 复杂决策、规划问题 |
-| **GoT** | Graph-of-Thought 图状思维 | 多路径推理 |
-| **PoT** | Program-of-Thought | 编程问题、计算任务 |
-| **SoT** | Skeleton-of-Thought | 长文本生成 |
-| **MetaCoT** | 元推理 | 自适应策略选择 |
-
-### 配置推理策略
-
-```go
-// Zero-shot CoT
-agent := builder.NewSimpleBuilder(llmClient).
-    WithZeroShotCoT().
-    Build()
-
-// Few-shot CoT
-examples := []cot.CoTExample{
-    {Input: "问题1", Reasoning: "推理1", Output: "答案1"},
-    {Input: "问题2", Reasoning: "推理2", Output: "答案2"},
-}
-agent := builder.NewSimpleBuilder(llmClient).
-    WithFewShotCoT(examples).
-    Build()
-
-// Beam Search ToT
-agent := builder.NewSimpleBuilder(llmClient).
-    WithBeamSearchToT(4, 3). // beamWidth=4, maxDepth=3
-    Build()
-
-// Monte Carlo ToT
-agent := builder.NewSimpleBuilder(llmClient).
-    WithMonteCarloToT().
-    Build()
-```
+CoT、ReAct、ToT、GoT、PoT、SoT、MetaCoT 等推理策略及其 `With*` 预设、`*Agent` 构建函数已在 v0.17.0 删除，代码保留在 `v0.16.1`。需要工具调用时用 `WithTools` 走原生工具循环，多步流程用 `workflow` Graph，见[原生编排与工具体系](../docs/guides/NATIVE_ORCHESTRATION.md)。
 
 ## 代码结构
 
@@ -410,10 +331,7 @@ builder/
 ├── tool_options.go         # 工具配置
 ├── presets.go              # 场景预设配置
 ├── quick_builders.go       # 快速创建函数
-├── reasoning_builders.go   # 推理型 Agent 构建
-├── reasoning_presets.go    # 推理策略预设
-├── builder_test.go         # 单元测试
-└── reasoning_presets_test.go # 推理算法测试
+└── builder_test.go         # 单元测试
 ```
 
 ## 输出格式

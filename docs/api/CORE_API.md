@@ -40,8 +40,6 @@ type Agent interface {
 
 **实现位置：**
 - `core.BaseAgent` - 基础实现
-- `agents/executor.ExecutorAgent` - 工具执行智能体
-- `agents/react.ReactAgent` - ReAct 推理智能体
 
 ### interfaces.Input
 
