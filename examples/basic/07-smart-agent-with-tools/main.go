@@ -323,35 +323,35 @@ func demonstrateAgentWithLLM() {
 	fmt.Println("--- 使用 LLM 创建完整 Agent (示例代码) ---")
 	// 打印示例代码
 	exampleCode := `
-// 1. 创建 Agent 并配置 LLM
-agent, err := builder.NewAgentBuilder().
-    WithName("SmartAssistant").
-    WithDescription("智能助手，可以获取时间和查询天气").
-    WithOpenAI(os.Getenv("OPENAI_API_KEY"), "gpt-4").  // 或使用其他 LLM
+// 1. 创建 LLM 客户端与 Agent
+llmClient, err := providers.NewOpenAIWithOptions(
+    llm.WithAPIKey(os.Getenv("OPENAI_API_KEY")),
+    llm.WithModel("gpt-4"), // 或使用其他 LLM
+)
+if err != nil {
+    log.Fatal(err)
+}
+
+agent, err := builder.NewSimpleBuilder(llmClient).
+    WithSystemPrompt("你是智能助手，可以获取时间和查询天气").
     WithTools(
         createTimeTool(),
         createWeatherAPITool(),
         createAPITool(),
     ).
     Build()
-
 if err != nil {
     log.Fatal(err)
 }
 
 // 2. 运行 Agent
-ctx := context.Background()
-state := map[string]interface{}{
-    "input": "现在几点了？北京的天气怎么样？",
-}
-
-result, err := agent.Invoke(ctx, state)
+output, err := agent.Execute(context.Background(), "现在几点了？北京的天气怎么样？")
 if err != nil {
     log.Fatal(err)
 }
 
 // 3. 获取结果
-fmt.Printf("Agent 回复: ` + `%v\n", result["output"])` + `
+fmt.Printf("Agent 回复: %v\n", output.Result)
 	`
 	fmt.Println(exampleCode)
 	fmt.Println()

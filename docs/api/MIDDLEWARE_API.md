@@ -287,7 +287,6 @@ type CacheMiddleware struct {
     *BaseMiddleware
     cache     *ShardedCache
     ttl       time.Duration
-    keyFunc   func(*MiddlewareRequest) string
 }
 
 // NewCacheMiddleware 创建缓存中间件
@@ -295,9 +294,6 @@ func NewCacheMiddleware(ttl time.Duration) *CacheMiddleware
 
 // NewCacheMiddlewareWithShards 创建带分片的缓存中间件
 func NewCacheMiddlewareWithShards(ttl time.Duration, numShards uint32) *CacheMiddleware
-
-// WithKeyFunc 设置缓存键生成函数
-func (m *CacheMiddleware) WithKeyFunc(fn func(*MiddlewareRequest) string) *CacheMiddleware
 
 // Clear 清空缓存
 func (m *CacheMiddleware) Clear()
@@ -314,12 +310,6 @@ cacheMW := middleware.NewCacheMiddleware(5 * time.Minute)
 
 // 带分片（高并发场景）
 shardedCacheMW := middleware.NewCacheMiddlewareWithShards(5*time.Minute, 32)
-
-// 自定义缓存键
-customCacheMW := middleware.NewCacheMiddleware(5*time.Minute).
-    WithKeyFunc(func(req *MiddlewareRequest) string {
-        return fmt.Sprintf("%s:%v", req.Input, req.Metadata["session_id"])
-    })
 ```
 
 ### RateLimitMiddleware

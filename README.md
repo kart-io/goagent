@@ -304,15 +304,13 @@ results, err := executor.ExecuteParallel(ctx, []tools.ToolCallRequest{
 
 ## Documentation
 
-- **[Quick Start Guide](docs/guides/quickstart.md)** - Get started in 5 minutes
+- **[Quick Start Guide](docs/guides/QUICKSTART.md)** - Get started in 5 minutes
 - **[Architecture](docs/architecture/)** - System design and import layering
-- **[Migration Guide](docs/guides/MIGRATION_GUIDE.md)** - Upgrade from older versions
 - **[LLM Providers](docs/guides/LLM_PROVIDERS.md)** - Supported LLM integrations
 - **[Testing Best Practices](docs/development/TESTING_BEST_PRACTICES.md)** - Writing tests
-- **[Production Deployment](docs/guides/PRODUCTION_DEPLOYMENT.md)** - Deploy at scale
 - **[API Reference](docs/api/)** - Complete API documentation
 
-See [DOCUMENTATION_INDEX.md](DOCUMENTATION_INDEX.md) for a complete guide.
+See [docs/README.md](docs/README.md) for a complete guide.
 
 ## Examples
 
@@ -358,7 +356,7 @@ GoAgent provides **InvokeFast**, a hot path optimization that bypasses callbacks
 - Chain compositions with multiple agents
 - Performance-critical production workloads
 
-See [InvokeFast Optimization Guide](docs/guides/INVOKE_FAST_OPTIMIZATION.md) for implementation details and benchmarks.
+See InvokeFast Optimization Guide for implementation details and benchmarks.
 
 ### Benchmarking Your Agents
 
@@ -384,11 +382,11 @@ func BenchmarkYourAgent(b *testing.B) {
 }
 ```
 
-See [Test Coverage Report](docs/development/TEST_COVERAGE_REPORT.md) for detailed benchmarks.
+See Test Coverage Report for detailed benchmarks.
 
 ## Contributing
 
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+We welcome contributions! Please see CONTRIBUTING.md for guidelines.
 
 ### Development Setup
 
@@ -426,7 +424,7 @@ go run examples/basic/01-simple-agent/main.go
 - [ ] Agent versioning and A/B testing
 - [ ] Performance optimizations (connection pooling, batch processing)
 
-See [archived roadmaps](docs/archive/roadmaps/) for historical planning.
+See archived roadmaps for historical planning.
 
 ## Design Principles
 

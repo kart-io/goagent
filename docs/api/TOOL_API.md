@@ -458,19 +458,14 @@ result, err := executor.ExecuteTool(ctx, "calculator", map[string]interface{}{
 ```go
 package shell
 
-type ShellTool struct {
-    allowedCommands []string
-    timeout         time.Duration
-    workDir         string
-}
+// NewShellTool 创建 Shell 工具，只允许执行 allowedCommands 中的命令
+func NewShellTool(allowedCommands []string, timeout time.Duration) *ShellTool
 
-// NewShellTool 创建 Shell 工具
-func NewShellTool(opts ...ShellOption) *ShellTool
-
-// ShellOption 选项
-func WithAllowedCommands(cmds []string) ShellOption
-func WithShellTimeout(timeout time.Duration) ShellOption
-func WithWorkDir(dir string) ShellOption
+// NewShellToolBuilder 以构建器方式创建
+func NewShellToolBuilder() *ShellToolBuilder
+func (b *ShellToolBuilder) WithAllowedCommands(commands ...string) *ShellToolBuilder
+func (b *ShellToolBuilder) WithTimeout(timeout time.Duration) *ShellToolBuilder
+func (b *ShellToolBuilder) Build() *ShellTool
 ```
 
 ### Calculator 工具
@@ -515,47 +510,17 @@ type SearchTool struct {
 func NewSearchTool(provider SearchProvider, opts ...SearchOption) *SearchTool
 ```
 
-### Web Scraper 工具
+### Web Scraper、File Operations 与 Database Query 工具
+
+`tools/practical` 已在 v0.17.0 迁到 goagent-contrib：网页爬取与文件操作工具在 [`github.com/kart-io/goagent-contrib/tools/practical`](https://github.com/kart-io/goagent-contrib/tree/master/tools/practical)，数据库查询工具在子模块 [`github.com/kart-io/goagent-contrib/tools/database`](https://github.com/kart-io/goagent-contrib/tree/master/tools/database)。
 
 ```go
-package practical
+// github.com/kart-io/goagent-contrib/tools/practical
+func NewWebScraperTool() *WebScraperTool
+func NewFileOperationsTool(basePath string) *FileOperationsTool
 
-type WebScraper struct {
-    userAgent string
-    timeout   time.Duration
-}
-
-// NewWebScraper 创建网页爬取工具
-func NewWebScraper(opts ...ScraperOption) *WebScraper
-```
-
-### File Operations 工具
-
-```go
-package practical
-
-type FileOperations struct {
-    allowedPaths []string
-    maxFileSize  int64
-}
-
-// NewFileOperations 创建文件操作工具
-func NewFileOperations(opts ...FileOption) *FileOperations
-```
-
-### Database Query 工具
-
-```go
-package practical
-
-type DatabaseQuery struct {
-    driver     string
-    datasource string
-    maxRows    int
-}
-
-// NewDatabaseQuery 创建数据库查询工具
-func NewDatabaseQuery(driver, datasource string, opts ...DBOption) *DatabaseQuery
+// github.com/kart-io/goagent-contrib/tools/database
+func NewDatabaseQueryTool() *DatabaseQueryTool
 ```
 
 ### 使用示例
@@ -565,34 +530,16 @@ import (
     "github.com/kart-io/goagent/tools/shell"
     "github.com/kart-io/goagent/tools/compute"
     "github.com/kart-io/goagent/tools/http"
-    "github.com/kart-io/goagent-contrib/tools/practical"
 )
 
 // 创建各种内置工具
-shellTool := shell.NewShellTool(
-    shell.WithAllowedCommands([]string{"ls", "cat", "grep"}),
-    shell.WithShellTimeout(10 * time.Second),
-)
+shellTool := shell.NewShellTool([]string{"ls", "cat", "grep"}, 10*time.Second)
 
 calculator := compute.NewCalculator()
 
 apiTool := http.NewAPITool(
     http.WithBaseURL("https://api.example.com"),
     http.WithHeaders(map[string]string{"Authorization": "Bearer token"}),
-)
-
-webScraper := practical.NewWebScraper(
-    practical.WithUserAgent("GoAgent/1.0"),
-)
-
-fileOps := practical.NewFileOperations(
-    practical.WithAllowedPaths([]string{"/tmp", "/data"}),
-)
-
-dbQuery := practical.NewDatabaseQuery(
-    "postgres",
-    "postgres://user:pass@localhost/db",
-    practical.WithMaxRows(1000),
 )
 ```
 

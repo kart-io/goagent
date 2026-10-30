@@ -144,35 +144,9 @@ agent, _ := builder.NewSimpleBuilder(client).
     Build()
 ```
 
-### 使用不同推理模式
+### 推理模式
 
-```go
-// ReAct 模式
-reactAgent, _ := builder.NewSimpleBuilder(client).
-    WithReAct().
-    WithTools(tools...).
-    Build()
-
-// 零样本思维链
-cotAgent, _ := builder.NewSimpleBuilder(client).
-    WithZeroShotCoT().
-    Build()
-
-// 少样本思维链
-fewShotAgent, _ := builder.NewSimpleBuilder(client).
-    WithFewShotCoT(examples).
-    Build()
-
-// 思维树（束搜索）
-totAgent, _ := builder.NewSimpleBuilder(client).
-    WithBeamSearchToT(beamWidth, maxDepth).
-    Build()
-
-// 思维树（蒙特卡洛）
-mctsAgent, _ := builder.NewSimpleBuilder(client).
-    WithMonteCarloToT().
-    Build()
-```
+ReAct、CoT、ToT 等推理预设（`WithReAct`、`WithZeroShotCoT`、`WithBeamSearchToT` 等）已在 v0.17.0 删除，代码保留在 `v0.16.1`。当前替代方案是原生工具循环与 `workflow` Graph，见[原生编排与工具体系](NATIVE_ORCHESTRATION.md)。
 
 ---
 
@@ -286,7 +260,7 @@ memManager := memory.NewDefaultManager()
 
 // 创建带内存的 Agent
 agent, _ := builder.NewSimpleBuilder(client).
-    WithMemoryManager(memManager).
+    WithMemory(memManager).
     WithConfig(&builder.AgentConfig{
         SessionID:              "session-001",
         MaxConversationHistory: 20,
@@ -342,9 +316,6 @@ import "github.com/kart-io/goagent/core/checkpoint"
 
 // 创建检查点管理器
 cp := checkpoint.NewInMemorySaver()
-
-// 或使用 Redis
-// cp := checkpoint.NewRedisCheckpointer(redisClient)
 
 agent, _ := builder.NewSimpleBuilder(client).
     WithCheckpointer(cp).

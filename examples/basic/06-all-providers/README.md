@@ -52,8 +52,6 @@ client, err := registry.New(constants.ProviderOpenAI, opts...)
 ## 相关示例
 
 - **本示例**: 传统方式使用多个 providers
-- [13-provider-registry](../13-provider-registry/) - Registry 方式的完整示例
-- [Provider 使用指南](../../docs/guides/PROVIDER_USAGE_GUIDE.md) - 两种方式的详细对比
 
 ## 向后兼容
 
@@ -79,9 +77,3 @@ client2, _ := registry.New(constants.ProviderOpenAI, opts...)
 4. **Anthropic** - Claude 3
 5. **Cohere** - Command models
 6. **HuggingFace** - Open source models
-
-## 更多信息
-
-- [Registry 完整文档](../../llm/registry/README.md)
-- [Contrib Providers](../../contrib/llm-providers/)
-- [迁移指南](../../docs/guides/PROVIDER_USAGE_GUIDE.md#迁移指南)

@@ -64,9 +64,3 @@ go run main.go
 4. **添加上下文**: 使用 `WithContext()` 添加调试所需的关键信息
 5. **智能重试**: 只对可重试的错误（如速率限制、超时）进行重试
 6. **降级策略**: 基于错误类型实现服务降级
-
-## 相关文档
-
-- [错误处理最佳实践](../../docs/guides/ERROR_HANDLING.md) - 完整指南
-- [错误代码参考](../../docs/guides/ERROR_HANDLING.md#错误代码参考) - 所有可用错误代码
-- [迁移指南](../../docs/guides/ERROR_HANDLING.md#迁移指南) - 从 fmt.Errorf 迁移

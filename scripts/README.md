@@ -334,13 +334,6 @@ for dir in */; do
 done
 ```
 
-## 相关文档
-
-- [Provider 使用指南](../docs/guides/PROVIDER_USAGE_GUIDE.md)
-- [Registry 迁移指南](../docs/guides/REGISTRY_MIGRATION_GUIDE.md)
-- [Registry 完整文档](../llm/registry/README.md)
-- [Registry 示例](../examples/basic/13-provider-registry/)
-
 ## 贡献
 
 如果你发现脚本的问题或有改进建议，欢迎提交 Issue 或 Pull Request。

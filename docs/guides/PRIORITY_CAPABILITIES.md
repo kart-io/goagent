@@ -4,6 +4,8 @@
 
 ## Retriever 执行契约
 
+`retrieval` 包已在 v0.17.0 迁到 [goagent-contrib/retrieval](https://github.com/kart-io/goagent-contrib/tree/master/retrieval)，导入路径为 `github.com/kart-io/goagent-contrib/retrieval`，本节与下一节的 API 均在该模块中。
+
 内置检索器构造函数显式绑定检索实现，`Invoke/Stream/Batch/Pipe`、`WithConfig/WithCallbacks` 不再误调用嵌入基类的空实现。自定义检索器使用：
 
 ```go
@@ -54,13 +56,6 @@ for event := range stream {
 
 中间件与 Execute 共用，包括 OnBefore、OnAfter、OnError；中间事件是暂态内容，以 done 为最终成功依据。缓存命中可能只有 done，OnAfter 修改的最终文本也可能与已发出的增量不同。错误终止不会再发送 done。取消时 error 事件是尽力发送，调用方同时检查 context；正常完成也应收到 done。消费者必须继续读取或取消，避免背压挂起上游。最终请求遵守 Builder 的 MaxTokens/Temperature；成功生成后更新状态，启用自动保存时写检查点（保存失败终止，不发送 done）。未知用量不会估算为真实值，`answer_usage_reported` 表示最终模型是否报告用量。
 
-实跑示例：
-
-```sh
-OPENAI_API_KEY="$DEEPSEEK_API_KEY" OPENAI_BASE_URL=https://api.deepseek.com \
-OPENAI_MODEL=deepseek-flash go run ./examples/rag/grounded -stream
-```
-
 ## 官方 MCP 客户端适配
 
 ```go
@@ -105,32 +100,4 @@ snapshot, err = runner.Run(ctx, "request-123", nil, snapshot.Key)
 
 ## 推理输出契约补充
 
-### ReAct
-
-解析器支持位于行首的 `Final Answer:`、`ANSWER:`、`最终答案：`、`最终回答：`，以及常见 Markdown 标题/加粗形式；保留答案中的换行和段落。不会把 Thought 或工具 JSON 参数中嵌入的 `Final Answer:` 当作最终答案。空答案依然报错。
-
-可选择启用一次格式修复：
-
-```go
-agent := react.NewReActAgent(react.ReActConfig{
-    LLM: client,
-    MaxSteps: 8,
-    MaxParseRetries: 1,
-})
-```
-
-默认 `MaxParseRetries=0`，保持失败即返回的调用成本。修复使用下一次循环额度，计入 MaxSteps、模型调用数和 Token 用量；达到任一上限就停止，不通过额外隐藏请求突破预算。格式错误的响应不执行工具，`Metadata["parse_retries"]` 记录修复次数。Invoke、InvokeFast、Stream、RunGenerator 共用此逻辑。
-
-### ToT
-
-生成候选、评分、检查完成状态、生成最终答案的模型错误均向上传播，不再用 `0.5` 默认分数或 `false` 掩盖失败。评分必须是 `[0,1]` 有限数；检查完成状态必须明确返回 yes/no。评分和检查指令放在 system 消息中，题目和候选路径作为数据传递，避免题目要求的最终输出格式覆盖评估协议。
-
-搜索达到边界后的候选路径不再直接作为成功结果。新增一次受同一预算限制的最终请求，返回 `{"solved":true,"answer":"..."}` 或 `{"solved":false,"answer":""}`：
-
-- `success`：模型确认完成且答案非空，Result 仅包含最终答案。
-- `partial`：没有可完成的候选，或模型确认仍不完整，Result 不伪装为成功答案。
-- `failed`：模型调用、预算、评分协议或最终 JSON 失败，调用返回原错误或可解包的包装错误。
-
-**兼容变化：** Result 不再拼接整条搜索路径。路径保存在 `candidate_path`，成功时另有 `solution_path`；消费方须检查 Status。最终验证仍是模型判断，不是事实正确性的数学证明。它需要一个模型调用额度，预算不足会明确失败。根节点只是问题，不再为它发送无意义的“是否已解答”请求。
-
-Invoke、InvokeFast、Stream 和 RunGenerator 使用相同最终答案处理。Stream 仍是单个最终块，不代表 Token 流；RunGenerator 的中间事件均为暂态，以最后的状态和错误为准。ToT 的 TokenUsage 汇总所有模型阶段，快照复制用量以避免后续修改旧事件。
+ReAct、ToT 等推理策略已在 v0.17.0 删除，代码保留在 `v0.16.1`。当前替代方案是原生工具循环与 `workflow` Graph，见[原生编排与工具体系](NATIVE_ORCHESTRATION.md)。

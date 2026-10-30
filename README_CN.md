@@ -308,15 +308,13 @@ results, err := executor.ExecuteParallel(ctx, []tools.ToolCallRequest{
 
 ## 文档
 
-- **[快速入门指南](docs/guides/quickstart.md)** - 5 分钟快速上手
+- **[快速入门指南](docs/guides/QUICKSTART.md)** - 5 分钟快速上手
 - **[架构设计](docs/architecture/)** - 系统设计和导入分层
-- **[迁移指南](docs/guides/MIGRATION_GUIDE.md)** - 从旧版本升级
 - **[LLM 提供商](docs/guides/LLM_PROVIDERS.md)** - 支持的 LLM 集成
 - **[测试最佳实践](docs/development/TESTING_BEST_PRACTICES.md)** - 编写测试
-- **[生产部署](docs/guides/PRODUCTION_DEPLOYMENT.md)** - 大规模部署
 - **[API 参考](docs/api/)** - 完整 API 文档
 
-完整指南见 [DOCUMENTATION_INDEX.md](DOCUMENTATION_INDEX.md)。
+完整指南见 [docs/README.md](docs/README.md)。
 
 ## 示例
 
@@ -363,7 +361,7 @@ GoAgent 提供 **InvokeFast**，一种热路径优化，为内部调用绕过回
 - 多个 Agent 的链式组合
 - 性能关键的生产负载
 
-详见 [InvokeFast 优化指南](docs/guides/INVOKE_FAST_OPTIMIZATION.md)。
+详见 InvokeFast 优化指南。
 
 ### 代理基准测试
 
@@ -389,11 +387,11 @@ func BenchmarkYourAgent(b *testing.B) {
 }
 ```
 
-详见 [测试覆盖率报告](docs/development/TEST_COVERAGE_REPORT.md)。
+详见 测试覆盖率报告。
 
 ## 贡献
 
-欢迎贡献！请查看 [CONTRIBUTING.md](CONTRIBUTING.md) 了解指南。
+欢迎贡献！请查看 CONTRIBUTING.md 了解指南。
 
 ### 开发设置
 
@@ -431,7 +429,7 @@ go run examples/basic/01-simple-agent/main.go
 - [ ] 代理版本控制和 A/B 测试
 - [ ] 性能优化（连接池、批处理）
 
-历史规划见 [归档路线图](docs/archive/roadmaps/)。
+历史规划见 归档路线图。
 
 ## 设计原则
 

@@ -155,15 +155,14 @@ import (
 )
 
 // 创建 LLM 客户端
-llmClient := providers.NewOpenAIClient(
-    os.Getenv("OPENAI_API_KEY"),
-    "gpt-4",
+llmClient, err := providers.NewOpenAIWithOptions(
+    llm.WithAPIKey(os.Getenv("OPENAI_API_KEY")),
+    llm.WithModel("gpt-4"),
 )
 
 // 创建 Agent
-agent, err := builder.NewAgentBuilder(llmClient).
-    WithName("SmartAssistant").
-    WithDescription("智能助手").
+agent, err := builder.NewSimpleBuilder(llmClient).
+    WithSystemPrompt("你是智能助手，可以获取时间和查询天气").
     WithTools(
         createTimeTool(),
         createWeatherAPITool(),
@@ -296,7 +295,7 @@ tool := tools.NewFunctionToolBuilder("monitored_tool").
 
 ## 📖 相关文档
 
-- [工具系统详解](../02-tools/README.md)
+- [工具系统详解](../../tools/README.md)
 - [Agent 构建指南](../../../docs/guides/)
 - [API 参考](../../../docs/api/)
 

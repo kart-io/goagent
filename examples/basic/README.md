@@ -71,10 +71,6 @@ cd 13-provider-registry
 go run main.go
 ```
 
-**相关文档：**
-- [Registry 完整指南](../../llm/registry/README.md)
-- [Provider 使用对比](../../docs/guides/PROVIDER_USAGE_GUIDE.md)
-
 ---
 
 查看各子目录以获取具体示例文档。

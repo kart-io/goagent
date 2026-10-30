@@ -136,16 +136,23 @@ output, err := apiTool.Invoke(ctx, &tools.ToolInput{
 ### 集成到 Agent（需要 LLM 配置）
 
 ```go
-agent, err := builder.NewAgentBuilder().
-    WithName("SmartAssistant").
-    WithDescription("智能助手").
-    WithOpenAI(os.Getenv("OPENAI_API_KEY"), "gpt-4").
+llmClient, err := providers.NewOpenAIWithOptions(
+    llm.WithAPIKey(os.Getenv("OPENAI_API_KEY")),
+    llm.WithModel("gpt-4"),
+)
+if err != nil {
+    return err
+}
+
+agent, err := builder.NewSimpleBuilder(llmClient).
+    WithSystemPrompt("你是智能助手，可以获取时间和查询天气").
     WithTools(timeTool, apiTool, weatherTool).
     Build()
+if err != nil {
+    return err
+}
 
-result, err := agent.Invoke(ctx, map[string]interface{}{
-    "input": "现在几点了？北京的天气怎么样？",
-})
+output, err := agent.Execute(ctx, "现在几点了？北京的天气怎么样？")
 ```
 
 ## 扩展建议
@@ -182,23 +189,7 @@ func createRealWeatherTool() tools.Tool {
 
 ### 3. 添加缓存机制
 
-```go
-// 缓存时间查询结果
-cachedTimeTool := cache.WithCache(timeTool, cache.NewMemoryCache(5*time.Minute))
-
-// 缓存 API 响应
-cachedAPITool := cache.WithCache(apiTool, cache.NewMemoryCache(10*time.Minute))
-```
-
-### 4. 添加重试机制
-
-```go
-// 为 API 调用添加重试
-retryAPITool := retry.WithRetry(apiTool, retry.Config{
-    MaxAttempts: 3,
-    Backoff: retry.ExponentialBackoff,
-})
-```
+工具结果缓存使用 `tools/middleware` 的 `Caching` 中间件，用法见[工具中间件](../../../docs/guides/TOOL_MIDDLEWARE.md)。
 
 ## 常见问题
 
@@ -246,9 +237,9 @@ customTool := tools.NewFunctionToolBuilder("my_tool").
 ## 相关资源
 
 - [GoAgent 文档](../../README.md)
-- [工具系统详解](../02-tools/README.md)
-- [Agent 构建指南](../../docs/guides/)
-- [API 参考](../../docs/api/)
+- [工具系统详解](../../tools/README.md)
+- [Agent 构建指南](../../../docs/guides/)
+- [API 参考](../../../docs/api/)
 
 ## 许可证
 

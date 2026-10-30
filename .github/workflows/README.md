@@ -56,7 +56,7 @@ git push origin master
 # Select version bump type: auto, major, minor, or patch
 ```
 
-**See Also**: [VERSION_MANAGEMENT.md](../../VERSION_MANAGEMENT.md) for detailed documentation
+**See Also**: VERSION_MANAGEMENT.md for detailed documentation
 
 ---
 
@@ -327,9 +327,8 @@ Fix the import structure:
 
 ## Additional Resources
 
-- **[Version Management Guide](../../VERSION_MANAGEMENT.md)** - Comprehensive guide on automatic versioning and releases
-- [Architecture Documentation](../docs/architecture/ARCHITECTURE.md)
-- [Import Layering Rules](../docs/architecture/IMPORT_LAYERING.md)
+- [Architecture Documentation](../../docs/architecture/ARCHITECTURE.md)
+- [Import Layering Rules](../../docs/architecture/IMPORT_LAYERING.md)
 - [Conventional Commits Specification](https://www.conventionalcommits.org/)
 - [Semantic Versioning](https://semver.org/)
 - [GitHub Actions Documentation](https://docs.github.com/en/actions)

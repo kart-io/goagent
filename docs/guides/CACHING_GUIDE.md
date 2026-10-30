@@ -645,8 +645,7 @@ func GetUserSafe(ctx context.Context, userID string) (*User, error) {
 ## 相关资源
 
 - [工具中间件文档](./TOOL_MIDDLEWARE.md) - 缓存中间件的详细配置
-- [架构设计文档](../architecture/CORE_ARCHITECTURE.md) - 缓存在 GoAgent 架构中的位置
-- [性能优化指南](../performance/OPTIMIZATION.md) - 缓存性能调优
+- [架构设计文档](../architecture/ARCHITECTURE.md) - 缓存在 GoAgent 架构中的位置
 - [API 文档](../../cache/) - Cache 接口完整定义
 
 ---

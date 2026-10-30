@@ -54,13 +54,8 @@ builder/       - 流式 API 构建器 (AgentBuilder)
 llm/           - LLM 客户端实现
 memory/        - 内存管理
 store/         - 存储实现
-retrieval/     - 文档检索
 observability/ - 遥测和监控
-performance/   - 性能工具
-planning/      - 规划工具
 workflow/      - 基于 core.Runnable 的通用图编排
-prompt/        - 提示工程
-reflection/    - 反射工具
 ```
 
 **导入规则：**
@@ -82,7 +77,7 @@ import (
 // 错误
 package core
 
-import "github.com/kart-io/goagent/agents"  // 禁止导入第 3 层！
+import "github.com/kart-io/goagent/middleware"  // 禁止导入第 3 层！
 ```
 
 ### 第 3 层：实现层
@@ -90,22 +85,16 @@ import "github.com/kart-io/goagent/agents"  // 禁止导入第 3 层！
 **包列表：**
 
 ```text
-agents/       - Agent 实现
 tools/        - 工具实现
 middleware/   - 中间件实现
 parsers/      - 输出解析器
-stream/       - 流处理
-multiagent/   - 多 Agent 编排
-distributed/  - 分布式执行
 mcp/          - 模型上下文协议
-document/     - 文档处理
-toolkits/     - 工具集合
 ```
 
 **导入规则：**
 
 - 可以导入第 1 层和第 2 层
-- 同层有限的交叉导入（如 agents 可以导入 tools）
+- 同层有限的交叉导入（如 middleware 可以导入 tools）
 - **tools/ 禁止导入 agents/、middleware/ 或 parsers/**
 - **parsers/ 禁止导入 agents/、tools/ 或 middleware/**
 
@@ -113,7 +102,7 @@ toolkits/     - 工具集合
 
 ```go
 // 正确
-package agents
+package middleware
 
 import (
     "github.com/kart-io/goagent/core"
@@ -122,9 +111,9 @@ import (
 )
 
 // 错误
-package tools
+package parsers
 
-import "github.com/kart-io/goagent/agents"  // 禁止！
+import "github.com/kart-io/goagent/middleware"  // 禁止！
 ```
 
 ### 第 4 层：示例和测试
@@ -152,11 +141,11 @@ import "github.com/kart-io/goagent/core"  // 禁止
 
 // 第 2 层导入第 3 层
 package core
-import "github.com/kart-io/goagent/agents"  // 禁止
+import "github.com/kart-io/goagent/middleware"  // 禁止
 
-// tools 导入 agents
-package tools
-import "github.com/kart-io/goagent/agents"  // 禁止
+// parsers 导入 middleware
+package parsers
+import "github.com/kart-io/goagent/middleware"  // 禁止
 
 // 循环依赖
 package core
@@ -165,7 +154,7 @@ import "github.com/kart-io/goagent/builder"
 import "github.com/kart-io/goagent/core"  // 可能造成循环
 
 // 生产代码导入 examples
-package agents
+package tools
 import "github.com/kart-io/goagent/examples"  // 禁止
 ```
 
@@ -180,7 +169,7 @@ import (
 )
 
 // 第 3 层导入第 1 和第 2 层
-package agents
+package middleware
 import (
     "github.com/kart-io/goagent/core"
     "github.com/kart-io/goagent/interfaces"
@@ -188,9 +177,9 @@ import (
 )
 
 // 测试可以导入任何层
-package agents_test
+package middleware_test
 import (
-    "github.com/kart-io/goagent/agents"
+    "github.com/kart-io/goagent/middleware"
     "github.com/kart-io/goagent/tools"
 )
 ```

@@ -247,97 +247,39 @@ output, _ := tool.Delete(ctx, "/api/users/1", headers)
 output, _ := tool.Patch(ctx, "/api/users/1", body, headers)
 ```
 
-## 工具集 (Toolkit)
-
-### 创建工具集
-
-```go
-// 标准工具集
-toolkit := tools.NewStandardToolkit()
-
-// 开发工具集
-toolkit := tools.NewDevelopmentToolkit()
-
-// 自定义工具集
-toolkit := tools.NewBaseToolkit(
-    tools.NewCalculatorTool(),
-    tools.NewSearchTool(engine),
-    tools.NewShellTool(commands, timeout),
-)
-
-// 使用构建器
-toolkit := tools.NewToolkitBuilder().
-    WithCalculator().
-    WithSearch(engine).
-    WithShell(allowedCommands).
-    WithAPI(baseURL, headers).
-    AddTool(customTool).
-    Build()
-```
-
-### 使用工具集
-
-```go
-// 获取所有工具
-tools := toolkit.GetTools()
-
-// 获取工具名称
-names := toolkit.GetToolNames()
-
-// 根据名称获取工具
-tool, err := toolkit.GetToolByName("calculator")
-
-// 执行工具
-output, err := tool.Invoke(ctx, input)
-```
-
 ## 工具注册表
 
-全局工具注册和发现：
-
 ```go
-// 创建注册表
-registry := tools.NewToolRegistry()
+registry := tools.NewRegistry()
 
-// 注册工具
+// 同名工具重复注册返回错误
 _ = registry.Register(tools.NewCalculatorTool())
 _ = registry.Register(customTool)
 
-// 获取工具
-tool, _ := registry.Get("calculator")
-
-// 列出所有工具
+tool := registry.Get("calculator") // 不存在时返回 nil
 allTools := registry.List()
-
-// 从注册表创建工具集
-toolkit, _ := registry.CreateToolkit("calculator", "search")
-
-// 使用全局注册表
-tools.RegisterTool(myTool)
-tool, _ := tools.GetTool("myTool")
-allTools := tools.ListTools()
 ```
+
+原 `toolkits` 包（`NewStandardToolkit`、`NewToolkitBuilder`、`CreateToolkit` 等）已在 v0.17.0 删除，代码保留在 `v0.16.1`；需要一组工具时直接把工具切片传给 Builder 的 `WithTools`。
 
 ## 工具执行器
 
-高级工具执行功能：
-
 ```go
-executor := tools.NewToolExecutor(toolkit)
+executor := tools.NewToolExecutor(
+    tools.WithMaxConcurrency(4),
+    tools.WithTimeout(10*time.Second),
+)
 
-// 执行单个工具
-output, err := executor.Execute(ctx, "calculator", input)
+calls := []*tools.ToolCallRequest{
+    {ID: "calc", Tool: calcTool, Input: calcInput},
+    {ID: "search", Tool: searchTool, Input: searchInput},
+}
 
-// 顺序执行多个工具
-executor.WithParallel(false)
-results, err := executor.ExecuteMultiple(ctx, map[string]*tools.ToolInput{
-    "calculator": calcInput,
-    "search": searchInput,
-})
+// 并行执行
+results, err := executor.ExecuteParallel(ctx, calls)
 
-// 并行执行多个工具
-executor.WithParallel(true)
-results, err := executor.ExecuteMultiple(ctx, requests)
+// 顺序执行
+results, err = executor.ExecuteSequential(ctx, calls)
 ```
 
 ## 回调集成
@@ -464,17 +406,15 @@ tool := tools.NewAPIToolBuilder().
 
 ### 4. 工具组合
 
-使用工具集和执行器组合多个工具：
+用注册表管理多个工具，用执行器并行调用：
 
 ```go
-toolkit := tools.NewToolkitBuilder().
-    WithCalculator().
-    WithSearch(engine).
-    WithAPI(baseURL, nil).
-    Build()
+registry := tools.NewRegistry()
+_ = registry.Register(calcTool)
+_ = registry.Register(searchTool)
 
-executor := tools.NewToolExecutor(toolkit).
-    WithParallel(true)
+executor := tools.NewToolExecutor(tools.WithMaxConcurrency(4))
+results, err := executor.ExecuteParallel(ctx, calls)
 ```
 
 ### 5. 监控和日志
@@ -490,11 +430,10 @@ tool := tool.WithCallbacks(metricsCallback, loggingCallback)
 
 ## 示例
 
-完整示例见 `examples/tools/main.go`：
+完整示例见 [examples/tools](../examples/tools/README.md)：
 
 ```bash
-# 运行示例
-go run examples/tools/main.go
+go run ./examples/tools/01-calculator
 ```
 
 ## 测试
@@ -597,7 +536,7 @@ BaseTool
 
 ## 性能考虑
 
-1. **并发执行**: 使用 `ToolExecutor.WithParallel(true)` 并行执行多个工具
+1. **并发执行**: 使用 `ToolExecutor.ExecuteParallel` 并行执行多个工具，`WithMaxConcurrency` 限制并发数
 2. **批量处理**: 使用 `Batch()` 方法批量处理多个输入
 3. **资源池**: Shell 和 API 工具内部使用连接池
 4. **缓存**: 考虑为搜索结果等添加缓存层

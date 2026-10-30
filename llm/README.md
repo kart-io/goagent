@@ -433,7 +433,7 @@ client, err := providers.NewOpenAIWithOptions(
 ```go
 client, err := providers.NewOpenAIWithOptions(
     llm.WithAPIKey("sk-xxx"),
-    llm.WithProxyURL("http://proxy.example.com:8080"),
+    llm.WithProxy("http://proxy.example.com:8080"),
 )
 ```
 
@@ -477,18 +477,17 @@ WithResponseFormat(format *ResponseFormat)
 
 // 网络配置
 WithTimeout(timeout int)
-WithProxyURL(url string)
+WithProxy(proxyURL string)
 
 // 重试配置
 WithRetryCount(count int)
 WithRetryDelay(delay time.Duration)
 
 // 速率限制
-WithRateLimitRPM(rpm int)
+WithRateLimiting(requestsPerMinute int)
 
 // 缓存配置
-WithCacheEnabled(enabled bool)
-WithCacheTTL(ttl time.Duration)
+WithCache(enabled bool, ttl time.Duration)
 
 // 流式响应
 WithStreamingEnabled(enabled bool)

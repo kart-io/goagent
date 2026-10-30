@@ -416,9 +416,3 @@ cancel()
 2. **使用并行执行**: 对于独立的技能调用，使用 `ExecuteParallel`
 3. **缓存路由结果**: 对于相同上下文，可缓存路由结果避免重复计算
 4. **精简关键词**: 使用准确的关键词提高路由效率
-
-## 相关示例
-
-- [tools/registry](../tools/registry) - 工具注册表示例
-- [multiagent/08-multiagent-tool-registry](../multiagent/08-multiagent-tool-registry) - 多智能体工具注册表
-- [multiagent/10-multiagent-integrated](../multiagent/10-multiagent-integrated) - 多智能体集成示例

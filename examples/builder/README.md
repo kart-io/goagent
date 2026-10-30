@@ -199,7 +199,7 @@ go run main.go
   - 安装步骤
   - 基础概念
 
-- **架构文档**: [../../docs/architecture/CORE_ARCHITECTURE.md](../../docs/architecture/CORE_ARCHITECTURE.md)
+- **架构文档**: [../../docs/architecture/ARCHITECTURE.md](../../docs/architecture/ARCHITECTURE.md)
   - 系统架构
   - 设计原则
   - 核心组件

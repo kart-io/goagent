@@ -191,18 +191,7 @@ type Agent interface {
 }
 ```
 
-#### Agent 类型
-
-| Agent 类型 | 描述 | 位置 |
-|-----------|------|------|
-| ExecutorAgent | 工具执行 Agent | `agents/executor/` |
-| ReActAgent | ReAct 推理 Agent | `agents/react/` |
-| CoTAgent | 思维链 Agent | `agents/cot/` |
-| ToTAgent | 思维树 Agent | `agents/tot/` |
-| GoTAgent | 思维图 Agent | `agents/got/` |
-| PoTAgent | 程序思维 Agent | `agents/pot/` |
-| SoTAgent | 骨架思维 Agent | `agents/sot/` |
-| MetaCoTAgent | 元思维链 Agent | `agents/metacot/` |
+ExecutorAgent 与 ReAct、CoT、ToT 等推理 Agent（原 `agents/` 目录）已在 v0.17.0 删除，代码保留在 `v0.16.1`；当前由 Builder 构建的原生工具循环 Agent 执行，编排使用 `workflow` Graph。
 
 ### Builder 模式
 
@@ -216,24 +205,6 @@ agent := builder.NewAgentBuilder(llmClient).
     WithMiddleware(loggingMW, cacheMW).
     WithTimeout(30 * time.Second).
     Build()
-```
-
-#### 推理预设
-
-Builder 支持多种推理模式预设：
-
-```go
-// 零样本思维链
-agent := builder.NewAgentBuilder(llm).WithZeroShotCoT().Build()
-
-// 少样本思维链
-agent := builder.NewAgentBuilder(llm).WithFewShotCoT(examples).Build()
-
-// 思维树（束搜索）
-agent := builder.NewAgentBuilder(llm).WithBeamSearchToT(beamWidth, maxDepth).Build()
-
-// 思维树（蒙特卡洛）
-agent := builder.NewAgentBuilder(llm).WithMonteCarloToT().Build()
 ```
 
 ### Runnable 模式

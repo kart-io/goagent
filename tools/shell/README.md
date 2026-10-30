@@ -444,8 +444,7 @@ if err != nil || !output.Success {
 
 ## 相关文档
 
-- [GoAgent 工具系统](../../docs/guides/TOOLS.md)
-- [安全最佳实践](../../docs/guides/SECURITY.md)
+- [GoAgent 工具系统](../README.md)
 - [错误处理指南](../../errors/README.md)
 
 ## 贡献

@@ -11,7 +11,6 @@
 - [Core API（标准功能）](#core-api标准功能)
 - [Advanced API（高级功能）](#advanced-api高级功能)
 - [快速构建函数](#快速构建函数)
-- [推理 Agent 专用](#推理-agent-专用)
 - [使用示例](#使用示例)
 
 ---
@@ -50,12 +49,9 @@ GoAgent Builder API 采用三层设计，帮助用户逐步学习：
 | **WithMaxIterations** | `int` | 最大推理步骤数 | 10 | 简单任务 5-10<br>复杂任务 15-30 |
 | **WithTemperature** | `float64` | 控制 LLM 创造性 | 0.7 | 精确 0.0-0.3<br>平衡 0.4-0.7<br>创造 0.8-1.0 |
 
-### 推理模式（可选，二选一）
+### 推理模式
 
-| 方法 | 参数 | 描述 | 适用场景 |
-|------|------|------|----------|
-| **WithChainOfThought** | `cot.Config` | 链式思考推理 | 多步骤逻辑推理 |
-| **WithReAct** | `react.Config` | 推理-行动循环 | 需要工具调用的任务 |
+推理策略（CoT、ReAct、ToT、GoT、PoT、SoT、MetaCoT）及其 `With*` 配置方法、`Quick*Agent` 快速函数已在 v0.17.0 删除，代码保留在 `v0.16.1`。需要工具调用时用 `WithTools` 走原生工具循环，多步流程用 `workflow` Graph，见[原生编排与工具体系](NATIVE_ORCHESTRATION.md)。
 
 ### Simple API 完整示例
 
@@ -71,12 +67,6 @@ agent, err := builder.NewSimpleBuilder(llmClient).
     WithTools(calculator, searchTool).
     WithMaxIterations(15).
     WithTemperature(0.3).
-    Build()
-
-// 带推理的 Agent
-agent, err := builder.NewSimpleBuilder(llmClient).
-    WithSystemPrompt("你是一个推理专家").
-    WithChainOfThought(cot.Config{ZeroShot: true}).
     Build()
 ```
 
@@ -107,14 +97,6 @@ Core API 在 Simple API 基础上增加以下方法：
 |------|------|------|--------|----------|
 | **WithStore** | `Store` | 长期存储 | 内存存储 | 持久化数据 |
 | **WithCheckpointer** | `Checkpointer` | 检查点器 | 无 | 状态恢复 |
-
-### 更多推理模式
-
-| 方法 | 参数 | 描述 | 适用场景 |
-|------|------|------|----------|
-| **WithTreeOfThought** | `tot.Config` | 树形思考推理 | 多路径探索 |
-| **WithGraphOfThought** | `got.Config` | 图形思考推理 | 复杂依赖关系 |
-| **WithProgramOfThought** | `pot.Config` | 程序式思考 | 代码生成和执行 |
 
 ### Core API 完整示例
 
@@ -162,13 +144,6 @@ Advanced API 在 Core API 基础上增加以下方法：
 |------|------|------|----------|
 | **WithMiddleware** | `...Middleware` | 添加中间件 | 功能扩展、拦截 |
 | **WithMetadata** | `string, interface{}` | 添加元数据 | 自定义键值对 |
-
-### 高级推理
-
-| 方法 | 参数 | 描述 | 适用场景 |
-|------|------|------|----------|
-| **WithSkeletonOfThought** | `sot.Config` | 骨架式思考 | 长文本并行生成 |
-| **WithMetaCoT** | `metacot.Config` | 元认知链式思考 | 深度分析和自我反思 |
 
 ### 流式和性能
 
@@ -231,18 +206,6 @@ agent, err := builder.NewAgentBuilder[any, *CustomState](llmClient).
 | **MonitoringAgent** | `llm, interval` | 监控告警 | 系统监控 |
 | **ResearchAgent** | `llm, sources` | 研究助手 | 文献调研 |
 
-### 推理 Agent
-
-| 函数 | 参数 | 描述 | 适用场景 |
-|------|------|------|----------|
-| **QuickCoTAgent** | `llm` | CoT Agent | 逻辑推理 |
-| **QuickReActAgent** | `llm, tools` | ReAct Agent | 工具调用 |
-| **QuickToTAgent** | `llm` | ToT Agent | 多路径探索 |
-| **QuickPoTAgent** | `llm` | PoT Agent | 代码生成 |
-| **QuickSoTAgent** | `llm` | SoT Agent | 长文本生成 |
-| **QuickGoTAgent** | `llm` | GoT Agent | 复杂DAG推理 |
-| **QuickMetaCoTAgent** | `llm` | MetaCoT Agent | 自我反思 |
-
 ### 快速函数示例
 
 ```go
@@ -251,61 +214,6 @@ agent, err := builder.QuickAgent(llmClient, "你是一个助手")
 
 // 一行代码创建 RAG Agent
 agent, err := builder.RAGAgent(llmClient, vectorStoreRetriever)
-
-// 一行代码创建 ReAct Agent
-agent, err := builder.QuickReActAgent(llmClient, []interfaces.Tool{tool1, tool2})
-```
-
----
-
-## 推理 Agent 专用
-
-### Chain-of-Thought (CoT)
-
-```go
-// 零样本 CoT
-agent, _ := builder.NewSimpleBuilder(llm).
-    WithChainOfThought(cot.Config{ZeroShot: true}).
-    Build()
-
-// 少样本 CoT
-agent, _ := builder.NewSimpleBuilder(llm).
-    WithFewShotCoT([]cot.Example{
-        {Question: "2+2=?", Reasoning: "2加2等于4", Answer: "4"},
-    }).
-    Build()
-```
-
-### Tree-of-Thought (ToT)
-
-```go
-// DFS 搜索
-agent, _ := builder.NewSimpleBuilder(llm).
-    WithDFSToT().
-    Build()
-
-// Beam Search
-agent, _ := builder.NewSimpleBuilder(llm).
-    WithBeamSearchToT(width, depth).
-    Build()
-
-// Monte Carlo Tree Search
-agent, _ := builder.NewSimpleBuilder(llm).
-    WithMCTSToT(iterations).
-    Build()
-```
-
-### ReAct（推理-行动）
-
-```go
-// 标准 ReAct
-agent, _ := builder.NewSimpleBuilder(llm).
-    WithTools(tool1, tool2).
-    WithReAct(react.Config{
-        MaxIterations: 10,
-        ReasoningPrompt: "...",
-    }).
-    Build()
 ```
 
 ---
@@ -468,23 +376,16 @@ agent, _ := builder.NewSimpleBuilder(llm).
 | ConfigureForRAG | Simple | 无 | RAG 预设 |
 | WithAutoSaveEnabled | Advanced | bool | 自动保存开关 |
 | WithCallbacks | Core | ...Callback | 回调函数 |
-| WithChainOfThought | Simple | cot.Config | CoT 推理 |
 | WithCheckpointer | Core | Checkpointer | 检查点器 |
 | WithCommunicator | Advanced | interface{} | Agent 通信 |
 | WithContext | Advanced | C | 自定义上下文 |
 | WithErrorHandler | Core | func(error)error | 错误处理 |
-| WithFewShotCoT | Simple | []Example | 少样本 CoT |
-| WithGraphOfThought | Core | got.Config | GoT 推理 |
 | WithMaxIterations | Simple | int | 最大步骤数 |
 | WithMaxTokens | Core | int | 最大 token 数 |
 | WithMetadata | Advanced | string, interface{} | 元数据 |
-| WithMetaCoT | Advanced | metacot.Config | MetaCoT 推理 |
 | WithMiddleware | Advanced | ...Middleware | 中间件 |
-| WithProgramOfThought | Core | pot.Config | PoT 推理 |
-| WithReAct | Simple | react.Config | ReAct 推理 |
 | WithSaveInterval | Advanced | time.Duration | 保存间隔 |
 | WithSessionID | Advanced | string | 会话 ID |
-| WithSkeletonOfThought | Advanced | sot.Config | SoT 推理 |
 | WithState | Advanced | S | 自定义状态 |
 | WithStore | Core | Store | 长期存储 |
 | WithStreamingEnabled | Advanced | bool | 流式响应 |
@@ -493,9 +394,7 @@ agent, _ := builder.NewSimpleBuilder(llm).
 | WithTemperature | Simple | float64 | 温度参数 |
 | WithTimeout | Core | time.Duration | 超时时间 |
 | WithTools | Simple | ...Tool | 添加工具 |
-| WithTreeOfThought | Core | tot.Config | ToT 推理 |
 | WithVerbose | Core | bool | 详细日志 |
-| WithZeroShotCoT | Simple | 无 | 零样本 CoT |
 
 ### 按使用频率
 
@@ -534,7 +433,6 @@ agent, _ := builder.NewSimpleBuilder(llm).
 1. 学习配置参数：`WithMaxIterations`, `WithTemperature`
 2. 添加监控：`WithCallbacks`, `WithVerbose`
 3. 配置存储：`WithStore`
-4. 尝试推理模式：`WithChainOfThought`
 
 ### 第 3 天：Advanced API（2 小时）
 
@@ -567,17 +465,7 @@ agent, _ := builder.NewSimpleBuilder(llm).
 
 根据项目阶段选择：原型阶段用快速函数，生产阶段用 Builder。
 
-### Q5: 如何知道我应该用哪个推理方法？
-
-**A**: 推理方法选择指南：
-- **CoT**：多步骤逻辑推理（数学、逻辑题）
-- **ReAct**：需要工具调用的任务（搜索、计算）
-- **ToT**：需要探索多个可能性（创意、规划）
-- **GoT**：复杂依赖关系（流程图、因果分析）
-- **PoT**：代码生成和执行（数据处理、自动化）
-- **SoT**：长文本生成（文章、报告）
-
-### Q6: 为什么有些方法标记为 [Advanced]？
+### Q5: 为什么有些方法标记为 [Advanced]？
 
 **A**: [Advanced] 方法通常有以下特征：
 - 需要深入理解 GoAgent 架构
@@ -600,7 +488,7 @@ agent, _ := builder.NewSimpleBuilder(llm).
   - [快速开始](./QUICKSTART.md)
   - [工具中间件](./TOOL_MIDDLEWARE.md)
   - [缓存指南](./CACHING_GUIDE.md)
-  - [架构文档](../architecture/CORE_ARCHITECTURE.md)
+  - [架构文档](../architecture/ARCHITECTURE.md)
 
 ---
 
