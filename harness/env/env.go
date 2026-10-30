@@ -21,6 +21,8 @@ var (
 	ErrStale = errors.New("file changed since it was read")
 	// ErrNotObserved 表示修改已存在的文件前没有读取过它。
 	ErrNotObserved = errors.New("file has not been read")
+	// ErrReadOnly 表示经 ReadOnly 包装的文件系统拒绝写入与删除。
+	ErrReadOnly = errors.New("file system is read-only")
 )
 
 // Version 标识文件内容，内容相同则版本相同。空串表示没有版本。
@@ -69,6 +71,8 @@ type Capabilities struct {
 	Container bool
 	// Network 表示命令可以访问网络。
 	Network bool
+	// ReadOnlyRoot 表示命令看到的工作区是只读的，命令无法改动工作区文件。
+	ReadOnlyRoot bool
 }
 
 // Command 是一次在工作区内执行的命令。

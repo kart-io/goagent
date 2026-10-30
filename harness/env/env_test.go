@@ -323,9 +323,35 @@ func TestDockerExecutor(t *testing.T) {
 	defer cancel()
 	_, err = e.Run(ctx, Command{Argv: []string{"sleep", "60"}})
 	require.ErrorIs(t, err, context.DeadlineExceeded)
-	left, err := exec.Command("docker", "ps", "-aq", "--filter", "name=goagent-env-").Output()
+	left, err := exec.Command("docker", "ps", "-aq", "--filter", "name=goagent-env-", "--filter", "volume="+root).Output()
 	require.NoError(t, err)
 	require.Empty(t, strings.TrimSpace(string(left)), "timed out container must be removed")
+
+	ro := DockerExecutor{Root: root, Image: image, ReadOnly: true}
+	require.True(t, ro.Capabilities().ReadOnlyRoot)
+	res, err = ro.Run(context.Background(), Command{Argv: []string{"sh", "-c", "cat in.txt; echo x > in.txt"}, Dir: "sub"})
+	require.NoError(t, err)
+	require.NotZero(t, res.ExitCode)
+	require.Contains(t, string(res.Output), "from host")
+	data, err = os.ReadFile(filepath.Join(root, "sub/in.txt"))
+	require.NoError(t, err)
+	require.Equal(t, "from host", string(data), "read-only mount must not be writable")
+}
+
+func TestReadOnly(t *testing.T) {
+	ctx := context.Background()
+	l := newLocal(t)
+	put(t, l, "a.txt", "keep")
+	ro := ReadOnly(l)
+	data, _, err := ro.ReadFile(ctx, "a.txt")
+	require.NoError(t, err)
+	require.Equal(t, "keep", string(data))
+	_, err = ro.WriteFile(ctx, "a.txt", []byte("x"), WriteIntent{})
+	require.ErrorIs(t, err, ErrReadOnly)
+	require.ErrorIs(t, ro.Remove(ctx, "a.txt"), ErrReadOnly)
+	_, err = NewObserved(NewCheckpointed(ro)).WriteFile(ctx, "new.txt", []byte("x"), WriteIntent{})
+	require.ErrorIs(t, err, ErrReadOnly)
+	require.Equal(t, "keep", get(t, l, "a.txt"))
 }
 
 // 包装器删除的也是链接本身，不是工作区内的链接目标。
