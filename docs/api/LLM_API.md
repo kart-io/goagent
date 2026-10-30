@@ -272,13 +272,16 @@ func NewOpenAIWithOptions(opts ...ClientOption) (*OpenAIProvider, error)
 **使用示例：**
 
 ```go
-import "github.com/kart-io/goagent/llm/providers"
+import (
+    "github.com/kart-io/goagent/llm"
+    "github.com/kart-io/goagent/llm/providers"
+)
 
 client, err := providers.NewOpenAIWithOptions(
-    providers.WithAPIKey(os.Getenv("OPENAI_API_KEY")),
-    providers.WithModel("gpt-4"),
-    providers.WithTemperature(0.7),
-    providers.WithMaxTokens(2000),
+    llm.WithAPIKey(os.Getenv("OPENAI_API_KEY")),
+    llm.WithModel("gpt-4"),
+    llm.WithTemperature(0.7),
+    llm.WithMaxTokens(2000),
 )
 
 response, err := client.Complete(ctx, &llm.CompletionRequest{
@@ -304,8 +307,8 @@ func NewAnthropicWithOptions(opts ...ClientOption) (*AnthropicProvider, error)
 
 ```go
 client, err := providers.NewAnthropicWithOptions(
-    providers.WithAPIKey(os.Getenv("ANTHROPIC_API_KEY")),
-    providers.WithModel("claude-3-sonnet-20240229"),
+    llm.WithAPIKey(os.Getenv("ANTHROPIC_API_KEY")),
+    llm.WithModel("claude-3-sonnet-20240229"),
 )
 ```
 
@@ -325,8 +328,8 @@ func NewGeminiWithOptions(opts ...ClientOption) (*GeminiProvider, error)
 
 ```go
 client, err := providers.NewGeminiWithOptions(
-    providers.WithAPIKey(os.Getenv("GOOGLE_API_KEY")),
-    providers.WithModel("gemini-pro"),
+    llm.WithAPIKey(os.Getenv("GOOGLE_API_KEY")),
+    llm.WithModel("gemini-pro"),
 )
 ```
 
@@ -345,8 +348,8 @@ func NewDeepSeekWithOptions(opts ...ClientOption) (*DeepSeekProvider, error)
 
 ```go
 client, err := providers.NewDeepSeekWithOptions(
-    providers.WithAPIKey(os.Getenv("DEEPSEEK_API_KEY")),
-    providers.WithModel("deepseek-chat"),
+    llm.WithAPIKey(os.Getenv("DEEPSEEK_API_KEY")),
+    llm.WithModel("deepseek-chat"),
 )
 ```
 
@@ -367,8 +370,8 @@ func NewOllamaWithOptions(opts ...ClientOption) (*OllamaProvider, error)
 
 ```go
 client, err := providers.NewOllamaWithOptions(
-    providers.WithBaseURL("http://localhost:11434"),
-    providers.WithModel("llama3"),
+    llm.WithBaseURL("http://localhost:11434"),
+    llm.WithModel("llama3"),
 )
 ```
 
@@ -407,8 +410,8 @@ func NewKimiWithOptions(opts ...ClientOption) (*KimiProvider, error)
 
 ```go
 client, err := providers.NewKimiWithOptions(
-    providers.WithAPIKey(os.Getenv("KIMI_API_KEY")),
-    providers.WithModel("moonshot-v1-32k"),
+    llm.WithAPIKey(os.Getenv("KIMI_API_KEY")),
+    llm.WithModel("moonshot-v1-32k"),
 )
 ```
 
@@ -429,14 +432,23 @@ func NewSiliconFlowWithOptions(opts ...ClientOption) (*SiliconFlowProvider, erro
 package llm
 
 type StreamClient interface {
-    // StreamComplete 流式补全
-    StreamComplete(ctx context.Context, req *CompletionRequest) (<-chan *StreamChunk, error)
+    Client
+
+    // CompleteStream 流式补全
+    CompleteStream(ctx context.Context, req *CompletionRequest) (<-chan *StreamChunk, error)
+
+    // ChatStream 流式对话
+    ChatStream(ctx context.Context, messages []Message) (<-chan *StreamChunk, error)
 }
 
+// StreamChunk 的主要字段
 type StreamChunk struct {
-    Content      string `json:"content"`
-    Done         bool   `json:"done"`
-    FinishReason string `json:"finish_reason,omitempty"`
+    Content      string // 累积的完整内容
+    Delta        string // 本块的增量内容
+    FinishReason string
+    Usage        *Usage // 仅在最后一个块
+    Done         bool
+    Error        error  // 流中错误
 }
 ```
 
@@ -448,17 +460,20 @@ import "github.com/kart-io/goagent/llm"
 // 假设 client 实现了 StreamClient 接口
 streamClient := client.(llm.StreamClient)
 
-chunks, err := streamClient.StreamComplete(ctx, &llm.CompletionRequest{
+chunks, err := streamClient.CompleteStream(ctx, &llm.CompletionRequest{
     Messages: []llm.Message{
         llm.UserMessage("写一首诗"),
     },
 })
 
+if err != nil {
+    return err
+}
 for chunk := range chunks {
-    fmt.Print(chunk.Content)
-    if chunk.Done {
-        break
+    if chunk.Error != nil {
+        return chunk.Error
     }
+    fmt.Print(chunk.Delta)
 }
 ```
 
@@ -483,12 +498,12 @@ func main() {
 
     // 创建 OpenAI 客户端
     client, err := providers.NewOpenAIWithOptions(
-        providers.WithAPIKey(os.Getenv("OPENAI_API_KEY")),
-        providers.WithModel("gpt-4"),
-        providers.WithTemperature(0.7),
-        providers.WithMaxTokens(2000),
-        providers.WithTimeout(30 * time.Second),
-        providers.WithRetryCount(3),
+        llm.WithAPIKey(os.Getenv("OPENAI_API_KEY")),
+        llm.WithModel("gpt-4"),
+        llm.WithTemperature(0.7),
+        llm.WithMaxTokens(2000),
+        llm.WithTimeout(30 * time.Second),
+        llm.WithRetryCount(3),
     )
     if err != nil {
         panic(err)

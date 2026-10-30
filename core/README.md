@@ -474,7 +474,6 @@ state.GetFloat64(key) (float64, bool)
 ```go
 // 创建 Checkpointer
 checkpoint.NewInMemorySaver() *InMemorySaver
-checkpoint.NewRedisSaver(client redis.Client) *RedisSaver
 checkpoint.NewDistributedCheckpointer(config) *DistributedCheckpointer
 ```
 

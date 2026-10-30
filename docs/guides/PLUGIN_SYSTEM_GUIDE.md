@@ -192,112 +192,30 @@ fmt.Printf("Latest version: %s\n", version) // 2.0.0
 
 ---
 
-## 方案二：基于 MCP 的远程插件
+## 方案二：接入 MCP 服务器
 
-### MCP 服务器插件示例
+MCP 服务器的工具不需要包装为插件。`mcp/remote` 基于官方 SDK 建立会话，`remote.Tools` 返回的 `interfaces.Tool` 可直接传给 Builder：
 
 ```go
-package mcpplugin
-
 import (
-    "context"
-    "github.com/kart-io/goagent/core"
-    "github.com/kart-io/goagent/mcp"
+    "github.com/kart-io/goagent/mcp/remote"
+    "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// MCPPlugin 包装远程 MCP 服务器
-type MCPPlugin struct {
-    *core.BasePlugin
-    client *mcp.Client
+session, err := remote.Connect(ctx, &mcp.CommandTransport{Command: exec.Command("./my-mcp-server")})
+if err != nil {
+    return err
 }
+defer session.Close()
 
-func NewMCPPlugin(serverPath string) (*MCPPlugin, error) {
-    plugin := &MCPPlugin{
-        BasePlugin: core.NewBasePlugin("mcp-plugin", "1.0.0"),
-    }
-
-    // 创建 MCP 客户端（连接到外部进程）
-    client, err := mcp.NewStdioClient(serverPath)
-    if err != nil {
-        return nil, err
-    }
-    plugin.client = client
-
-    return plugin, nil
+mcpTools, err := remote.Tools(ctx, session)
+if err != nil {
+    return err
 }
-
-func (p *MCPPlugin) Init(ctx context.Context, config interface{}) error {
-    // 初始化 MCP 连接
-    return p.client.Initialize(ctx)
-}
-
-func (p *MCPPlugin) GetTools() []core.DynamicRunnable {
-    // 获取远程工具列表
-    mcpTools, _ := p.client.ListTools(context.Background())
-
-    // 包装为 DynamicRunnable
-    tools := make([]core.DynamicRunnable, len(mcpTools))
-    for i, mcpTool := range mcpTools {
-        tools[i] = &MCPToolAdapter{
-            client:   p.client,
-            toolName: mcpTool.Name,
-        }
-    }
-    return tools
-}
-
-func (p *MCPPlugin) Stop(ctx context.Context) error {
-    return p.client.Close()
-}
+agent, err := builder.NewSimpleBuilder(client).WithTools(mcpTools...).Build()
 ```
 
-### MCP 工具适配器
-
-```go
-// MCPToolAdapter 将 MCP 工具适配为 DynamicRunnable
-type MCPToolAdapter struct {
-    client   *mcp.Client
-    toolName string
-}
-
-func (a *MCPToolAdapter) InvokeDynamic(ctx context.Context, input any) (any, error) {
-    // 将输入转换为 MCP 格式
-    params := input.(map[string]any)
-
-    // 调用远程工具
-    result, err := a.client.CallTool(ctx, a.toolName, params)
-    if err != nil {
-        return nil, err
-    }
-
-    return result, nil
-}
-
-func (a *MCPToolAdapter) StreamDynamic(ctx context.Context, input any) (<-chan core.DynamicStreamChunk, error) {
-    // 实现流式调用
-    return nil, nil
-}
-
-func (a *MCPToolAdapter) BatchDynamic(ctx context.Context, inputs []any) ([]any, error) {
-    results := make([]any, len(inputs))
-    for i, input := range inputs {
-        result, err := a.InvokeDynamic(ctx, input)
-        if err != nil {
-            return nil, err
-        }
-        results[i] = result
-    }
-    return results, nil
-}
-
-func (a *MCPToolAdapter) TypeInfo() core.TypeInfo {
-    return core.TypeInfo{
-        Name: a.toolName,
-    }
-}
-```
-
----
+HTTP 传输与行为说明见[官方 MCP 客户端适配](PRIORITY_CAPABILITIES.md#官方-mcp-客户端适配)。
 
 ## 依赖注入容器
 

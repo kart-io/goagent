@@ -41,8 +41,8 @@ policy := builder.ContextPolicy{
         MaxTokens: 1000,
     },
 }
-// builder.WithMemory(...) 启用的历史由原 MaxConversationHistory 先行限制。
-// builder.WithContextPolicy(policy)
+// Builder 的 WithMemory(...) 启用的历史由原 MaxConversationHistory 先行限制。
+// 通过 Builder 的 WithContextPolicy(policy) 启用。
 ```
 
 每次执行开始，加载到的普通对话历史超过 TriggerRunes 且存在可压缩前缀时，进行一次摘要。保留 system 消息、最近指定数量的历史消息，以及当前问题和检索证据。摘要放在标为不可信数据的 user 消息中，不提升为 system 指令。持久化记忆中的原始历史不被修改；后续执行可能再次摘要。

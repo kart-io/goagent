@@ -125,7 +125,7 @@ apiTool := http.NewAPIToolBuilder().
     Build()
 
 // 使用工具
-output, err := apiTool.Invoke(ctx, &tools.ToolInput{
+output, err := apiTool.Invoke(ctx, &interfaces.ToolInput{
     Args: map[string]interface{}{
         "method": "GET",
         "url": "/endpoint",
@@ -152,7 +152,7 @@ if err != nil {
     return err
 }
 
-output, err := agent.Execute(ctx, "现在几点了？北京的天气怎么样？")
+output, err := agent.ExecuteWithTools(ctx, "现在几点了？北京的天气怎么样？")
 ```
 
 ## 扩展建议
@@ -174,7 +174,7 @@ emailTool := createEmailTool()
 
 ```go
 // 集成 OpenWeatherMap API
-func createRealWeatherTool() tools.Tool {
+func createRealWeatherTool() interfaces.Tool {
     return tools.NewFunctionToolBuilder("get_weather").
         WithFunction(func(ctx context.Context, args map[string]interface{}) (interface{}, error) {
             city := args["city"].(string)
@@ -208,7 +208,7 @@ export ANTHROPIC_API_KEY=your_api_key
 A: 修改 API 工具的 URL 和参数：
 
 ```go
-output, err := apiTool.Invoke(ctx, &tools.ToolInput{
+output, err := apiTool.Invoke(ctx, &interfaces.ToolInput{
     Args: map[string]interface{}{
         "method": "GET",
         "url": "https://your-api.com/endpoint",

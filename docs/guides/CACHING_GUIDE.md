@@ -101,21 +101,21 @@ key := keyGen.GenerateKey(map[string]interface{}{
 
 ```go
 // 创建缓存（5 分钟 TTL）
-cache := cache.NewSimpleCache(5 * time.Minute)
+c := cache.NewSimpleCache(5 * time.Minute)
 
 // 写入缓存（使用默认 TTL）
-err := cache.Set(ctx, "user:123", userData, 0)
+err := c.Set(ctx, "user:123", userData, 0)
 
 // 写入缓存（自定义 TTL）
-err := cache.Set(ctx, "temp:token", token, 1*time.Minute)
+err := c.Set(ctx, "temp:token", token, 1*time.Minute)
 
 // 读取缓存
-value, err := cache.Get(ctx, "user:123")
+value, err := c.Get(ctx, "user:123")
 if err != nil {
     if err == cache.ErrCacheMiss {
         // 缓存未命中，从数据源加载
         value = loadFromDatabase()
-        cache.Set(ctx, "user:123", value, 0)
+        c.Set(ctx, "user:123", value, 0)
     } else {
         // 其他错误
         log.Error("Cache error", err)
@@ -158,7 +158,7 @@ result2, _ := cachedTool.Execute(ctx, args)
 
 ```go
 // 获取缓存统计
-stats := cache.GetStats(ctx)
+stats := c.GetStats()
 
 fmt.Printf("命中率: %.2f%%\n",
     float64(stats.Hits) / float64(stats.Hits + stats.Misses) * 100)
@@ -208,13 +208,13 @@ keys := []string{"key1", "key2", "key3"}
 values := []interface{}{"val1", "val2", "val3"}
 
 for i, key := range keys {
-    cache.Set(ctx, key, values[i], 0)
+    c.Set(ctx, key, values[i], 0)
 }
 
 // 批量读取
 results := make([]interface{}, len(keys))
 for i, key := range keys {
-    val, _ := cache.Get(ctx, key)
+    val, _ := c.Get(ctx, key)
     results[i] = val
 }
 ```
@@ -233,7 +233,7 @@ func preloadCache(cache cache.Cache) error {
         }
 
         // 预热缓存，使用较长的 TTL
-        if err := cache.Set(context.Background(), key, data, 1*time.Hour); err != nil {
+        if err := c.Set(context.Background(), key, data, 1*time.Hour); err != nil {
             return err
         }
     }
@@ -282,7 +282,7 @@ func monitorCache(cache cache.Cache) {
     defer ticker.Stop()
 
     for range ticker.C {
-        stats := cache.GetStats(context.Background())
+        stats := c.GetStats(context.Background())
         hitRate := float64(stats.Hits) / float64(stats.Hits + stats.Misses) * 100
 
         // 告警：命中率过低
@@ -309,17 +309,17 @@ func monitorCache(cache cache.Cache) {
 
 ```go
 // ✅ 1. 使用 SimpleCache 作为默认选择
-cache := cache.NewSimpleCache(5 * time.Minute)
+c := cache.NewSimpleCache(5 * time.Minute)
 
 // ✅ 2. 合理设置 TTL（根据数据新鲜度要求）
-cache.Set(ctx, "hot-data", value, 1*time.Minute)   // 频繁变化
-cache.Set(ctx, "cold-data", value, 1*time.Hour)    // 稳定数据
+c.Set(ctx, "hot-data", value, 1*time.Minute)   // 频繁变化
+c.Set(ctx, "cold-data", value, 1*time.Hour)    // 稳定数据
 
 // ✅ 3. 处理缓存未命中（Cache-Aside 模式）
-value, err := cache.Get(ctx, key)
+value, err := c.Get(ctx, key)
 if err == cache.ErrCacheMiss {
     value = loadFromDatabase(key)
-    cache.Set(ctx, key, value, 0)
+    c.Set(ctx, key, value, 0)
 }
 
 // ✅ 4. 使用标准化键名
@@ -327,7 +327,7 @@ keyGen := cache.NewCacheKeyGenerator("namespace")
 key := keyGen.GenerateKeySimple("identifier")
 
 // ✅ 5. 监控缓存命中率
-stats := cache.GetStats(ctx)
+stats := c.GetStats()
 hitRate := float64(stats.Hits) / float64(stats.Hits + stats.Misses) * 100
 ```
 
@@ -335,22 +335,22 @@ hitRate := float64(stats.Hits) / float64(stats.Hits + stats.Misses) * 100
 
 ```go
 // ❌ 1. 缓存敏感信息
-cache.Set(ctx, "user:password", password, 0)  // 错误！
+c.Set(ctx, "user:password", password, 0)  // 错误！
 
 // ❌ 2. 过长或过短的 TTL
-cache.Set(ctx, "data", value, 7*24*time.Hour)  // 过长，可能导致陈旧数据
-cache.Set(ctx, "data", value, 100*time.Millisecond)  // 过短，失去缓存意义
+c.Set(ctx, "data", value, 7*24*time.Hour)  // 过长，可能导致陈旧数据
+c.Set(ctx, "data", value, 100*time.Millisecond)  // 过短，失去缓存意义
 
 // ❌ 3. 忽略错误处理
-cache.Set(ctx, key, value, 0)  // 缺少错误检查
-value, _ := cache.Get(ctx, key)  // 忽略错误
+c.Set(ctx, key, value, 0)  // 缺少错误检查
+value, _ := c.Get(ctx, key)  // 忽略错误
 
 // ❌ 4. 缓存不可序列化的对象
-cache.Set(ctx, "conn", databaseConnection, 0)  // 错误！
+c.Set(ctx, "conn", databaseConnection, 0)  // 错误！
 
 // ❌ 5. 在循环中逐个操作（应使用批量操作）
 for _, item := range items {
-    cache.Set(ctx, item.Key, item.Value, 0)  // 效率低
+    c.Set(ctx, item.Key, item.Value, 0)  // 效率低
 }
 ```
 
@@ -362,7 +362,7 @@ for _, item := range items {
 // 读取流程：先查缓存，未命中则查数据库并回填
 func GetUser(ctx context.Context, userID string) (*User, error) {
     // 1. 尝试从缓存获取
-    cached, err := cache.Get(ctx, "user:"+userID)
+    cached, err := c.Get(ctx, "user:"+userID)
     if err == nil {
         return cached.(*User), nil
     }
@@ -374,7 +374,7 @@ func GetUser(ctx context.Context, userID string) (*User, error) {
     }
 
     // 3. 回填缓存
-    cache.Set(ctx, "user:"+userID, user, 10*time.Minute)
+    c.Set(ctx, "user:"+userID, user, 10*time.Minute)
 
     return user, nil
 }
@@ -391,7 +391,7 @@ func UpdateUser(ctx context.Context, user *User) error {
     }
 
     // 2. 更新缓存
-    cache.Set(ctx, "user:"+user.ID, user, 10*time.Minute)
+    c.Set(ctx, "user:"+user.ID, user, 10*time.Minute)
 
     return nil
 }
@@ -403,7 +403,7 @@ func UpdateUser(ctx context.Context, user *User) error {
 // 写入流程：先写缓存，异步写入数据库（适用于高写入场景）
 func UpdateUserAsync(ctx context.Context, user *User) error {
     // 1. 立即更新缓存
-    cache.Set(ctx, "user:"+user.ID, user, 10*time.Minute)
+    c.Set(ctx, "user:"+user.ID, user, 10*time.Minute)
 
     // 2. 异步写入数据库
     go func() {
@@ -432,7 +432,7 @@ func UpdateUserAsync(ctx context.Context, user *User) error {
 
 ```go
 // ❌ Deprecated: 参数复杂，维护成本高
-cache := cache.NewInMemoryCache(
+c := cache.NewInMemoryCache(
     100,           // maxSize
     5*time.Minute, // defaultTTL
     1*time.Minute, // cleanupInterval
@@ -443,7 +443,7 @@ cache := cache.NewInMemoryCache(
 
 ```go
 // ✅ 推荐: 更简洁，性能更好
-cache := cache.NewSimpleCache(5 * time.Minute)
+c := cache.NewSimpleCache(5 * time.Minute)
 ```
 
 **迁移差异说明**：
@@ -460,14 +460,14 @@ cache := cache.NewSimpleCache(5 * time.Minute)
 
 ```go
 // ❌ Deprecated: LRU 驱逐策略在实际场景中使用率极低
-cache := cache.NewLRUCache(100, 5*time.Minute, 1*time.Minute)
+c := cache.NewLRUCache(100, 5*time.Minute, 1*time.Minute)
 ```
 
 #### 迁移后（推荐）
 
 ```go
 // ✅ 推荐: TTL 驱逐策略更简单有效
-cache := cache.NewSimpleCache(5 * time.Minute)
+c := cache.NewSimpleCache(5 * time.Minute)
 ```
 
 **为什么不需要 LRU？**
@@ -493,7 +493,7 @@ multiCache := cache.NewMultiTierCache(tier1, tier2)
 
 ```go
 // ✅ 推荐: 单级缓存满足 90% 场景
-cache := cache.NewSimpleCache(5 * time.Minute)
+c := cache.NewSimpleCache(5 * time.Minute)
 
 // 如果确实需要多级缓存（例如分布式场景），
 // 建议使用外部解决方案（Redis + 本地缓存）
@@ -541,7 +541,7 @@ go run tools/migrate-cache.go replace ./...
 **解决方案**：
 ```go
 // 1. 检查 TTL 设置
-stats := cache.GetStats(ctx)
+stats := c.GetStats()
 fmt.Printf("Hits: %d, Misses: %d, Hit Rate: %.2f%%\n",
     stats.Hits, stats.Misses,
     float64(stats.Hits) / float64(stats.Hits + stats.Misses) * 100)
@@ -553,7 +553,7 @@ key2 := keyGen.GenerateKey(args)
 assert.Equal(t, key1, key2)  // 必须相同
 
 // 3. 调整 TTL
-cache := cache.NewSimpleCache(10 * time.Minute)  // 增加 TTL
+c := cache.NewSimpleCache(10 * time.Minute)  // 增加 TTL
 ```
 
 ### 问题 2：内存占用过高
@@ -574,10 +574,10 @@ if len(serializedData) > maxCacheSize {
 }
 
 // 2. 缩短 TTL
-cache := cache.NewSimpleCache(2 * time.Minute)  // 减少 TTL
+c := cache.NewSimpleCache(2 * time.Minute)  // 减少 TTL
 
 // 3. 分析缓存键分布
-stats := cache.GetStats(ctx)
+stats := c.GetStats()
 // 使用 pprof 或自定义监控检查键数量
 ```
 
@@ -591,7 +591,7 @@ stats := cache.GetStats(ctx)
 func setWithJitter(cache cache.Cache, key string, value interface{}, baseTTL time.Duration) error {
     jitter := time.Duration(rand.Int63n(int64(baseTTL / 10)))  // ±10% 抖动
     ttl := baseTTL + jitter
-    return cache.Set(context.Background(), key, value, ttl)
+    return c.Set(context.Background(), key, value, ttl)
 }
 
 // 使用示例
@@ -616,7 +616,7 @@ func GetUserSafe(ctx context.Context, userID string) (*User, error) {
     // singleflight 确保同一时刻只有一个请求去加载数据
     val, err, _ := sf.Do(key, func() (interface{}, error) {
         // 1. 尝试从缓存获取
-        cached, err := cache.Get(ctx, key)
+        cached, err := c.Get(ctx, key)
         if err == nil {
             return cached.(*User), nil
         }
@@ -628,7 +628,7 @@ func GetUserSafe(ctx context.Context, userID string) (*User, error) {
         }
 
         // 3. 回填缓存
-        cache.Set(ctx, key, user, 10*time.Minute)
+        c.Set(ctx, key, user, 10*time.Minute)
 
         return user, nil
     })

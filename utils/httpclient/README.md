@@ -245,9 +245,6 @@ config := client.Config()
 ```go
 // 获取 resty 客户端
 restyClient := client.Resty()
-
-// 或使用别名方法（已弃用）
-restyClient := client.GetClient()
 ```
 
 ## 完整示例

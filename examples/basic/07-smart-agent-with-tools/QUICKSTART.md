@@ -35,7 +35,7 @@ go run main.go
 使用 `FunctionToolBuilder`：
 
 ```go
-timeTool := tools.NewFunctionToolBuilder("get_current_time").
+timeTool, err := tools.NewFunctionToolBuilder("get_current_time").
     WithDescription("获取当前时间").
     WithArgsSchema(`{"type": "object", "properties": {...}}`).
     WithFunction(func(ctx context.Context, args map[string]interface{}) (interface{}, error) {
@@ -48,7 +48,7 @@ timeTool := tools.NewFunctionToolBuilder("get_current_time").
 ### 如何使用工具？
 
 ```go
-output, err := timeTool.Invoke(ctx, &tools.ToolInput{
+output, err := timeTool.Invoke(ctx, &interfaces.ToolInput{
     Args: map[string]interface{}{
         "timezone": "Asia/Shanghai",
     },
@@ -76,7 +76,7 @@ fmt.Printf("结果: %v\n", output.Result)
 
 **使用示例：**
 ```go
-output, err := timeTool.Invoke(ctx, &tools.ToolInput{
+output, err := timeTool.Invoke(ctx, &interfaces.ToolInput{
     Args: map[string]interface{}{
         "format":   "2006-01-02 15:04:05",
         "timezone": "Asia/Shanghai",
@@ -99,7 +99,7 @@ output, err := timeTool.Invoke(ctx, &tools.ToolInput{
 **使用示例：**
 ```go
 // GET 请求
-output, err := apiTool.Invoke(ctx, &tools.ToolInput{
+output, err := apiTool.Invoke(ctx, &interfaces.ToolInput{
     Args: map[string]interface{}{
         "method": "GET",
         "url":    "https://api.example.com/users/1",
@@ -107,7 +107,7 @@ output, err := apiTool.Invoke(ctx, &tools.ToolInput{
 })
 
 // POST 请求
-output, err := apiTool.Invoke(ctx, &tools.ToolInput{
+output, err := apiTool.Invoke(ctx, &interfaces.ToolInput{
     Args: map[string]interface{}{
         "method": "POST",
         "url":    "https://api.example.com/posts",
@@ -127,7 +127,7 @@ output, err := apiTool.Invoke(ctx, &tools.ToolInput{
 
 **使用示例：**
 ```go
-output, err := weatherTool.Invoke(ctx, &tools.ToolInput{
+output, err := weatherTool.Invoke(ctx, &interfaces.ToolInput{
     Args: map[string]interface{}{
         "city": "Beijing",
     },
@@ -175,16 +175,12 @@ agent, err := builder.NewSimpleBuilder(llmClient).
 
 ```go
 ctx := context.Background()
-state := map[string]interface{}{
-    "input": "现在几点了？北京的天气怎么样？",
-}
-
-result, err := agent.Invoke(ctx, state)
+output, err := agent.ExecuteWithTools(ctx, "现在几点了？北京的天气怎么样？")
 if err != nil {
     log.Fatal(err)
 }
 
-fmt.Printf("Agent 回复: %v\n", result["output"])
+fmt.Printf("Agent 回复: %v\n", output.Result)
 ```
 
 ## 🎯 实际应用场景
@@ -193,27 +189,21 @@ fmt.Printf("Agent 回复: %v\n", result["output"])
 
 ```go
 // Agent 自动获取时间并执行任务
-agent.Invoke(ctx, map[string]interface{}{
-    "input": "如果现在是下午 3 点之后，请获取用户列表",
-})
+agent.ExecuteWithTools(ctx, "如果现在是下午 3 点之后，请获取用户列表")
 ```
 
 ### 场景 2: API 数据分析
 
 ```go
 // Agent 调用 API 并分析数据
-agent.Invoke(ctx, map[string]interface{}{
-    "input": "请获取最近 10 篇文章，并总结主要话题",
-})
+agent.ExecuteWithTools(ctx, "请获取最近 10 篇文章，并总结主要话题")
 ```
 
 ### 场景 3: 多步骤任务
 
 ```go
 // Agent 串联多个工具完成复杂任务
-agent.Invoke(ctx, map[string]interface{}{
-    "input": "查询北京的天气，如果温度低于 10 度，发送提醒邮件",
-})
+agent.ExecuteWithTools(ctx, "查询北京的天气，如果温度低于 10 度，发送提醒邮件")
 ```
 
 ## 🔥 进阶技巧
@@ -221,7 +211,7 @@ agent.Invoke(ctx, map[string]interface{}{
 ### 1. 添加错误处理和重试
 
 ```go
-tool := tools.NewFunctionToolBuilder("api_call").
+tool, err := tools.NewFunctionToolBuilder("api_call").
     WithFunction(func(ctx context.Context, args map[string]interface{}) (interface{}, error) {
         maxRetries := 3
         for i := 0; i < maxRetries; i++ {
@@ -242,7 +232,7 @@ tool := tools.NewFunctionToolBuilder("api_call").
 var cache = make(map[string]interface{})
 var cacheMutex sync.RWMutex
 
-tool := tools.NewFunctionToolBuilder("cached_api").
+tool, err := tools.NewFunctionToolBuilder("cached_api").
     WithFunction(func(ctx context.Context, args map[string]interface{}) (interface{}, error) {
         key := fmt.Sprintf("%v", args)
 
@@ -273,7 +263,7 @@ tool := tools.NewFunctionToolBuilder("cached_api").
 ### 3. 添加日志和监控
 
 ```go
-tool := tools.NewFunctionToolBuilder("monitored_tool").
+tool, err := tools.NewFunctionToolBuilder("monitored_tool").
     WithFunction(func(ctx context.Context, args map[string]interface{}) (interface{}, error) {
         start := time.Now()
 
@@ -327,10 +317,10 @@ output, err := tool.Invoke(ctx, input)
 
 A: 使用 goroutines 并发执行：
 ```go
-results := make(chan *tools.ToolOutput, len(tools))
+results := make(chan *interfaces.ToolOutput, len(tools))
 
 for _, tool := range tools {
-    go func(t tools.Tool) {
+    go func(t interfaces.Tool) {
         output, _ := t.Invoke(ctx, input)
         results <- output
     }(tool)

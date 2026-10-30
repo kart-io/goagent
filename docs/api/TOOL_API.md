@@ -535,12 +535,10 @@ import (
 // 创建各种内置工具
 shellTool := shell.NewShellTool([]string{"ls", "cat", "grep"}, 10*time.Second)
 
-calculator := compute.NewCalculator()
+calculator := compute.NewCalculatorTool()
 
-apiTool := http.NewAPITool(
-    http.WithBaseURL("https://api.example.com"),
-    http.WithHeaders(map[string]string{"Authorization": "Bearer token"}),
-)
+apiTool := http.NewAPITool("https://api.example.com", 30*time.Second,
+    map[string]string{"Authorization": "Bearer token"})
 ```
 
 ---

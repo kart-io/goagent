@@ -295,14 +295,14 @@ provider := observability.NewTelemetryProvider(&observability.TelemetryConfig{
 
 ```go
 // 并发执行多个工具
-executor := tools.NewToolExecutor(tools.ToolExecutorConfig{
-    MaxConcurrency: 10,
-    Timeout: 30 * time.Second,
-})
+executor := tools.NewToolExecutor(
+    tools.WithMaxConcurrency(10),
+    tools.WithTimeout(30*time.Second),
+)
 
-results, err := executor.ExecuteParallel(ctx, []tools.ToolCallRequest{
-    {Tool: searchTool, Input: map[string]interface{}{"query": "Go"}},
-    {Tool: calcTool, Input: map[string]interface{}{"expr": "2+2"}},
+results, err := executor.ExecuteParallel(ctx, []*tools.ToolCallRequest{
+    {ID: "search", Tool: searchTool, Input: &interfaces.ToolInput{Args: map[string]interface{}{"query": "Go"}}},
+    {ID: "calc", Tool: calcTool, Input: &interfaces.ToolInput{Args: map[string]interface{}{"expression": "2+2"}}},
 })
 ```
 
@@ -361,8 +361,6 @@ GoAgent 提供 **InvokeFast**，一种热路径优化，为内部调用绕过回
 - 多个 Agent 的链式组合
 - 性能关键的生产负载
 
-详见 InvokeFast 优化指南。
-
 ### 代理基准测试
 
 ```go
@@ -387,11 +385,9 @@ func BenchmarkYourAgent(b *testing.B) {
 }
 ```
 
-详见 测试覆盖率报告。
-
 ## 贡献
 
-欢迎贡献！请查看 CONTRIBUTING.md 了解指南。
+欢迎贡献！
 
 ### 开发设置
 
@@ -428,8 +424,6 @@ go run examples/basic/01-simple-agent/main.go
 - [ ] 增强监控仪表板
 - [ ] 代理版本控制和 A/B 测试
 - [ ] 性能优化（连接池、批处理）
-
-历史规划见 归档路线图。
 
 ## 设计原则
 

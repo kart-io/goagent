@@ -291,14 +291,14 @@ Wrap a child agent or a `workflow.DurableGraph` as a tool with `tools.NewRunnabl
 
 ```go
 // Execute multiple tools concurrently
-executor := tools.NewToolExecutor(tools.ToolExecutorConfig{
-    MaxConcurrency: 10,
-    Timeout: 30 * time.Second,
-})
+executor := tools.NewToolExecutor(
+    tools.WithMaxConcurrency(10),
+    tools.WithTimeout(30*time.Second),
+)
 
-results, err := executor.ExecuteParallel(ctx, []tools.ToolCallRequest{
-    {Tool: searchTool, Input: map[string]interface{}{"query": "Go"}},
-    {Tool: calcTool, Input: map[string]interface{}{"expr": "2+2"}},
+results, err := executor.ExecuteParallel(ctx, []*tools.ToolCallRequest{
+    {ID: "search", Tool: searchTool, Input: &interfaces.ToolInput{Args: map[string]interface{}{"query": "Go"}}},
+    {ID: "calc", Tool: calcTool, Input: &interfaces.ToolInput{Args: map[string]interface{}{"expression": "2+2"}}},
 })
 ```
 
@@ -356,8 +356,6 @@ GoAgent provides **InvokeFast**, a hot path optimization that bypasses callbacks
 - Chain compositions with multiple agents
 - Performance-critical production workloads
 
-See InvokeFast Optimization Guide for implementation details and benchmarks.
-
 ### Benchmarking Your Agents
 
 ```go
@@ -382,11 +380,9 @@ func BenchmarkYourAgent(b *testing.B) {
 }
 ```
 
-See Test Coverage Report for detailed benchmarks.
-
 ## Contributing
 
-We welcome contributions! Please see CONTRIBUTING.md for guidelines.
+We welcome contributions!
 
 ### Development Setup
 
@@ -423,8 +419,6 @@ go run examples/basic/01-simple-agent/main.go
 - [ ] Enhanced monitoring dashboard
 - [ ] Agent versioning and A/B testing
 - [ ] Performance optimizations (connection pooling, batch processing)
-
-See archived roadmaps for historical planning.
 
 ## Design Principles
 

@@ -71,7 +71,7 @@ for chunk := range chunks {
 
 `Delta` 是新增文本，`Content` 是累计文本。`finish_reason` 后可能还有用量帧，因此只有终止块标记 `Done=true`。流中读取错误通过 `chunk.Error` 传回，不再仅写日志。兼容服务需支持 `stream_options.include_usage`，这是新的结构化流入口使用的请求选项。
 
-原 `stream` 包（`StreamOutput.Next()`、`NewStreamingLLMAgentWithRealStreaming`、`StreamingLLMAgent`）已在 v0.17.0 删除，代码保留在 `v0.16.1`；改用 `core.StreamRunnable` 与 Builder 的原生流。
+原 `stream` 包中基于 `core.StreamOutput` 的流式 LLM Agent（`NewStreamingLLMAgentWithRealStreaming`、`StreamingLLMAgent`）已在 v0.17.0 删除，代码保留在 `v0.16.1`；`core.StreamOutput` 接口本身仍在 `core` 中。新代码改用 `core.StreamRunnable` 与 Builder 的原生流。
 
 ## 后续优势建设顺序
 

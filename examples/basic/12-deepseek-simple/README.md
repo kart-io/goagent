@@ -251,10 +251,8 @@ if err != nil {
 // 迁移步骤 2: 添加配置
 agent, err := builder.NewAgentBuilder[any, core.State](llm).
     WithSystemPrompt(prompt).
-    WithConfig(&builder.AgentConfig{
-        Timeout: 30 * time.Second,
-        Verbose: true,
-    }).
+    WithTimeout(30 * time.Second).
+    WithVerbose(true).
     Build()
 
 // 迁移步骤 3: 添加中间件和回调

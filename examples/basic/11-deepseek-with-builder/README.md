@@ -100,7 +100,7 @@ llmClient, err := providers.NewDeepSeekWithOptions(
 // 使用 AgentBuilder 构建 Agent
 agent, err := builder.NewAgentBuilder[any, core.State](llmClient).
     WithSystemPrompt("你是一个友好的 AI 助手").
-    WithState(state.NewMemoryState()).
+    WithState(core.NewAgentState()).
     Build()
 
 // 运行 Agent
@@ -110,7 +110,7 @@ input := &core.AgentInput{
     Timestamp: time.Now(),
 }
 
-output, err := agent.Invoke(ctx, input)
+output, err := agent.Execute(ctx, input)
 fmt.Printf("回复: %v\n", output.Result)
 ```
 
@@ -125,13 +125,14 @@ weatherTool := createWeatherTool()
 agent, err := builder.NewAgentBuilder[any, core.State](llmClient).
     WithSystemPrompt("你是一个智能助手").
     WithTools(calculatorTool, weatherTool).
-    WithState(state.NewMemoryState()).
-    WithConfig(&builder.AgentConfig{
-        MaxIterations: 10,
-        Timeout:       30 * time.Second,
-        Verbose:       true,
-    }).
+    WithState(core.NewAgentState()).
+    WithMaxIterations(10).
+    WithTimeout(30 * time.Second).
+    WithVerbose(true).
     Build()
+
+// 配置了工具时用 ExecuteWithTools 执行
+output, err := agent.ExecuteWithTools(ctx, input)
 ```
 
 ### 添加回调和中间件
@@ -146,7 +147,7 @@ costTracker := core.NewCostTrackingCallback(pricing)
 // 构建 Agent
 agent, err := builder.NewAgentBuilder[any, core.State](llmClient).
     WithSystemPrompt("你是一个专业的 AI 助手").
-    WithState(state.NewMemoryState()).
+    WithState(core.NewAgentState()).
     WithCallbacks(costTracker).
     WithConfig(&builder.AgentConfig{
         Verbose: true, // 自动添加日志和计时中间件
@@ -164,7 +165,7 @@ fmt.Printf("总成本: $%.6f\n", costTracker.GetTotalCost())
 // 聊天机器人配置
 agent, err := builder.NewAgentBuilder[any, core.State](llmClient).
     WithSystemPrompt("你是一个友好的聊天机器人").
-    WithState(state.NewMemoryState()).
+    WithState(core.NewAgentState()).
     ConfigureForChatbot(). // 预设配置
     Build()
 ```
@@ -379,12 +380,12 @@ DeepSeek 的定价如下：
 ### 4. 错误处理
 
 ```go
-output, err := agent.Invoke(ctx, input)
+output, err := agent.Execute(ctx, input)
 if err != nil {
-    // 检查错误类型
-    if agentErrors.IsLLMError(err) {
+    // 按错误码判断
+    if agentErrors.IsCode(err, agentErrors.CodeLLMRequest) || agentErrors.IsCode(err, agentErrors.CodeLLMTimeout) {
         log.Printf("LLM 错误: %v", err)
-    } else if agentErrors.IsToolError(err) {
+    } else if agentErrors.IsCode(err, agentErrors.CodeToolExecution) {
         log.Printf("工具执行错误: %v", err)
     } else {
         log.Printf("未知错误: %v", err)

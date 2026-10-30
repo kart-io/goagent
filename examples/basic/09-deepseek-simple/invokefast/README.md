@@ -35,7 +35,10 @@ go run main.go
 
 ```go
 // 创建 DeepSeek Provider
-client, err := providers.NewDeepSeek(config)
+client, err := providers.NewDeepSeekWithOptions(
+    llm.WithAPIKey(apiKey),
+    llm.WithModel("deepseek-chat"),
+)
 
 // 使用 Builder 构建 Agent
 agent, err := builder.NewAgentBuilder[any, *agentcore.AgentState](client).

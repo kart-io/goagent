@@ -26,23 +26,20 @@ go run main.go
 ### 方式 1：直接使用 Provider（最简单）
 
 ```go
-// 1. 创建配置
-config := &llm.Config{
-    APIKey: apiKey,
-    Model: "deepseek-chat",
-}
+// 1. 创建 Provider
+client, err := providers.NewDeepSeekWithOptions(
+    llm.WithAPIKey(apiKey),
+    llm.WithModel("deepseek-chat"),
+)
 
-// 2. 创建 Provider
-client, err := providers.NewDeepSeek(config)
-
-// 3. 发送消息
+// 2. 发送消息
 messages := []llm.Message{
     llm.SystemMessage("你是一个友好的助手"),
     llm.UserMessage("你好！"),
 }
 response, err := client.Chat(ctx, messages)
 
-// 4. 获取回复
+// 3. 获取回复
 fmt.Println(response.Content)
 ```
 
@@ -50,7 +47,10 @@ fmt.Println(response.Content)
 
 ```go
 // 1. 创建 Provider
-client, err := providers.NewDeepSeek(config)
+client, err := providers.NewDeepSeekWithOptions(
+    llm.WithAPIKey(apiKey),
+    llm.WithModel("deepseek-chat"),
+)
 
 // 2. 构建 Agent（注意泛型参数）
 agent, err := builder.NewAgentBuilder[any, *agentcore.AgentState](client).
@@ -74,13 +74,13 @@ fmt.Println(output.Result)
 ### 配置参数
 
 ```go
-config := &llm.Config{
-    APIKey:      "your-key",      // 必填
-    Model:       "deepseek-chat", // 模型名称
-    Temperature: 0.7,             // 随机性 (0-1)
-    MaxTokens:   1000,            // 最大输出长度
-    Timeout:     30,              // 超时（秒）
-}
+client, err := providers.NewDeepSeekWithOptions(
+    llm.WithAPIKey("your-key"),          // 必填
+    llm.WithModel("deepseek-chat"),      // 模型名称
+    llm.WithTemperature(0.7),            // 随机性 (0-1)
+    llm.WithMaxTokens(1000),             // 最大输出长度
+    llm.WithTimeout(30*time.Second),     // 超时
+)
 ```
 
 ### 消息类型
