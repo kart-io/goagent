@@ -15,6 +15,7 @@ import (
 
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/interfaces"
+	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/tools"
 	"github.com/kart-io/goagent/tools/coding"
 	"github.com/kart-io/goagent/tools/policy"
@@ -37,6 +38,8 @@ type Host struct {
 	Dispatch tools.DispatchConfig
 	// RunAgent 运行子 Agent 并返回最终答复，subagent 组件需要它；模型由宿主选择，可用 BuilderRunner。
 	RunAgent func(ctx context.Context, asm *Assembly, task string) (string, error)
+	// CompactionModel 生成对话摘要，compaction 组件需要它。
+	CompactionModel llm.Client
 }
 
 // buildOptions 是作为子 Agent 装配时的约束。
@@ -93,6 +96,7 @@ type contribution struct {
 	guards  []tools.Guard
 	around  []tools.Around
 	post    []tools.PostHook
+	loop    Loop
 }
 
 func (a *Assembler) slot() *contribution { return &a.contribs[a.cur] }
@@ -182,10 +186,12 @@ func (a *Assembler) Value(v Value) (string, error) {
 	return v.Literal, nil
 }
 
-// Assembly 是 Build 的结果，交给 Builder：WithSystemPrompt(SystemPrompt)、WithTools(Tools...)。
+// Assembly 是 Build 的结果，用 Configure 交给 Builder。
 type Assembly struct {
 	PresetID     string
 	SystemPrompt string
+	// Loop 是组件贡献的循环扩展点，只作用于原生工具流。
+	Loop Loop
 	// Tools 已经过 Dispatcher 与 Pipeline。
 	Tools      []interfaces.Tool
 	Dispatcher *tools.Dispatcher
@@ -345,6 +351,7 @@ func buildOrder(rows []*Row) ([]int, error) {
 func (a *Assembler) publish(cfgs []any) (*Assembly, error) {
 	var (
 		prompts  []string
+		loop     Loop
 		all      []interfaces.Tool
 		pipeline = &tools.Pipeline{Approver: a.host.Approver}
 	)
@@ -355,6 +362,7 @@ func (a *Assembler) publish(cfgs []any) (*Assembly, error) {
 		pipeline.Guards = append(pipeline.Guards, c.guards...)
 		pipeline.Around = append(pipeline.Around, c.around...)
 		pipeline.Post = append(pipeline.Post, c.post...)
+		loop.add(c.loop)
 	}
 	registry := tools.NewRegistry()
 	names := map[string]bool{}
@@ -425,6 +433,7 @@ func (a *Assembler) publish(cfgs []any) (*Assembly, error) {
 	asm := &Assembly{
 		PresetID:     a.preset.ID,
 		SystemPrompt: strings.Join(prompts, "\n\n"),
+		Loop:         loop,
 		Tools:        d.Tools(),
 		Dispatcher:   d,
 		Pipeline:     pipeline,

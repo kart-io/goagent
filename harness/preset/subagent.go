@@ -145,11 +145,7 @@ func (t *subagentTool) Invoke(ctx context.Context, input *interfaces.ToolInput) 
 // BuilderRunner 返回用 builder 运行子 Agent 的 Host.RunAgent：client 为模型，maxIterations 为子 Agent 的最大轮数。
 func BuilderRunner(client llm.Client, maxIterations int) func(context.Context, *Assembly, string) (string, error) {
 	return func(ctx context.Context, asm *Assembly, task string) (string, error) {
-		agent, err := builder.NewSimpleBuilder(client).
-			WithSystemPrompt(asm.SystemPrompt).
-			WithTools(asm.Tools...).
-			WithMaxIterations(maxIterations).
-			Build()
+		agent, err := Configure(builder.NewSimpleBuilder(client), asm).WithMaxIterations(maxIterations).Build()
 		if err != nil {
 			return "", err
 		}

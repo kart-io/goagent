@@ -96,7 +96,7 @@ func TestClaudeCodeHooks(t *testing.T) {
 	require.Len(t, approver.reasons, 2, "reads stay allowed by the coding base rules")
 
 	for name, cfg := range map[string]string{
-		"unsupported event": `{hooks: {Stop: [{hooks: [{type: command, command: x}]}]}}`,
+		"unsupported event": `{hooks: {Notification: [{hooks: [{type: command, command: x}]}]}}`,
 		"unsupported type":  `{hooks: {PreToolUse: [{hooks: [{type: prompt, command: x}]}]}}`,
 		"bad matcher":       `{hooks: {PreToolUse: [{matcher: "(", hooks: [{type: command, command: x}]}]}}`,
 		"empty":             `{}`,
@@ -113,8 +113,8 @@ func TestClaudeCodeHooksFileTrust(t *testing.T) {
 	settings := filepath.Join(root, ".claude", "settings.json")
 	write := func(command string) {
 		data, err := json.Marshal(map[string]any{"hooks": map[string]any{
-			"PreToolUse": []any{map[string]any{"matcher": "Bash", "hooks": []any{map[string]any{"type": "command", "command": command}}}},
-			"Stop":       []any{map[string]any{"hooks": []any{map[string]any{"type": "command", "command": "ignored"}}}},
+			"PreToolUse":   []any{map[string]any{"matcher": "Bash", "hooks": []any{map[string]any{"type": "command", "command": command}}}},
+			"Notification": []any{map[string]any{"hooks": []any{map[string]any{"type": "command", "command": "ignored"}}}},
 		}})
 		require.NoError(t, err)
 		require.NoError(t, os.WriteFile(settings, data, 0o644))
