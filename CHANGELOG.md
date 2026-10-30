@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.1] - 2026-10-30
+
+只改文档与发布流程，代码与 v0.17.0 相同。
+
+- 发布说明中的仓库内相对链接改写为指向对应 tag 的完整地址，v0.17.0 说明里的定位文档链接此前在 Release 页面上无法打开。
+- 本文件去掉从未发布的 `[1.0.0]` 标签（改为“初始提取”）、重复的 `[Unreleased]` 计划列表与失效的尾部链接。
+- 设计文档记录 contrib `durable/pgstore/v0.1.1`：作用域墓碑事务改为强制同步提交，并补测获取租约结果不确定时的清理。
+
 ## [0.17.0] - 2026-10-30
 
 按[定位决策](docs/research/2026-10-29-goagent-positioning.md)收敛为可恢复编排内核，删除外围模块。主模块 `go.mod` 由 125 行降到 81 行，不再依赖 aiplatform、cohere、qdrant、google api、gorm 系列、pgx、lib/pq、mysql、go-sqlite3（cgo）、nats、goquery、pdf、viper、go-redis。删除的代码保留在 `v0.16.1`，需要时可从该版本恢复。
@@ -457,7 +465,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/kart-io/goagent/compare/v0.17.0...HEAD
+[Unreleased]: https://github.com/kart-io/goagent/compare/v0.17.1...HEAD
+[0.17.1]: https://github.com/kart-io/goagent/compare/v0.17.0...v0.17.1
 [0.17.0]: https://github.com/kart-io/goagent/compare/v0.16.1...v0.17.0
 [0.16.1]: https://github.com/kart-io/goagent/compare/v0.16.0...v0.16.1
 [0.16.0]: https://github.com/kart-io/goagent/compare/v0.15.0...v0.16.0
