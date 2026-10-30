@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-10-30
+
+### Changed
+
+- **破坏性**：`errors.AgentError` 删除导出字段 `Stack`，改为方法 `StackFrames()`。构造时只记录程序计数器，调用 `StackFrames`/`FormatStack` 时才解析；`New` 约从 960ns、656B、3 次分配降到 170ns、32B、1 次分配，`Wrap` 加 `Error()` 约从 1.8µs、18 次分配降到 540ns、11 次分配；结果逃逸到堆上时 `New` 为约 230ns、2 次分配。迁移：`err.Stack` 改为 `err.StackFrames()`。
+- **破坏性**：`errors.GetCode(nil)` 返回空字符串，此前返回 `CodeInternal`，使 `IsCode(nil, CodeInternal)` 为 true。依赖 nil 得到 `CodeInternal` 的调用方需先判断 `err != nil`。
+- `New`/`Wrap` 不再预先分配 `Context`，未写入时为 nil；`GetContext` 与读取 `Context` 不受影响。
+- `ErrorWithRetry`/`ErrorWithDuration` 返回附带信息的副本，不再修改传入的错误；错误链上已有 `*AgentError` 时沿用其错误码，此前被包装后的错误码一律为 `CodeInternal`。
+
+### Fixed
+
+- `Wrap(nil, ...)` 及以 cause 为参数的辅助函数（如 `NewLLMRequestError(p, m, nil)`）在链式调用 `With*` 时 panic；现 `With*`、`Error`、`Unwrap`、`Is`、`Format`、`LogValue` 等方法对 nil 的 `*AgentError` 安全，nil 进 nil 出。
+- `mcp/toolbox` 的 `ExecuteWithRetry` 在工具每次都以 `Success=false` 返回而不报错时，`ChainOutputParser.Parse`/`ParseWithPrompt` 未配置解析器时，`ReActOutputParser.ParseWithRetry` 的 `maxRetries <= 0` 时，返回值为 nil 的 `*AgentError`：`err != nil` 成立但没有原因，调用 `Error()` 会 panic；现返回带原因的错误。
+- `NewRetrievalEmbeddingError`、`NewParserError`、`NewParserInvalidJSONError` 的内容预览按字节截断，会把中文等多字节字符切成非法 UTF-8；现按字符截断。
+
 ## [0.19.0] - 2026-10-30
 
 ### Added
