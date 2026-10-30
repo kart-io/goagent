@@ -316,6 +316,6 @@ CI 会在以下情况失败：
 - [测试最佳实践](../development/TESTING_BEST_PRACTICES.md)
 ## 已知兼容例外与检查修复
 
-`builder/reasoning_builders.go`、`builder/reasoning_presets.go` 为既有公开推理工厂，仍依赖指定的 `agents` 子包。检查器只允许这两个文件的现有依赖清单；其他 Builder 文件、新的 Agent 依赖仍拒绝。下一次破坏性 API 调整再迁移这些工厂，不以扩大豁免隐藏新增耦合。
+v0.17.0 删除推理策略及 `builder/reasoning_*.go` 后，检查器不再有兼容例外，Builder 导入 `agents` 或 `middleware` 一律拒绝。
 
 2026-10-27 修复了旧脚本把扫描根目录设为 scripts、匹配旧 pkg/agent 路径的问题。旧报告中的“导入检查通过”不能作为分层已验证证据。新入口 `bash scripts/verify_imports.sh` 委派 `scripts/apicheck`，有违规规则和精确例外的回归测试，当前真实扫描为 0 findings。

@@ -258,8 +258,6 @@ API returned status 429: Rate limit exceeded
 学习更多功能，请参考：
 
 - **InvokeFast 性能优化**: [invokefast](./invokefast) - 自动提升 Agent 性能
-- **工具调用**: [examples/basic/08-deepseek-agent](../08-deepseek-agent)
-- **流式输出**: [examples/advanced/streaming](../../advanced/streaming)
 - **多 Agent 协作**: [examples/advanced/multi-agent-collaboration](../../advanced/multi-agent-collaboration)
 
 ## 相关资源

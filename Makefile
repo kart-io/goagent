@@ -27,8 +27,6 @@ BUILD_TIME=$(shell date -u '+%Y-%m-%d_%H:%M:%S')
 LDFLAGS=-ldflags "-X main.Version=$(VERSION) -X main.Commit=$(COMMIT) -X main.BuildTime=$(BUILD_TIME)"
 
 # PluginGen build variables
-PLUGINGEN_VERSION?=v1.0.0
-PLUGINGEN_LDFLAGS=-ldflags "-X main.Version=$(PLUGINGEN_VERSION) -X main.GitCommit=$(COMMIT) -X main.BuildDate=$(BUILD_TIME)"
 
 # Directories
 CMD_DIR=./cmd
@@ -43,7 +41,7 @@ GREEN=\033[0;32m
 YELLOW=\033[1;33m
 NC=\033[0m # No Color
 
-.PHONY: all build clean test coverage deps help plugingen plugingen-install
+.PHONY: all build clean test coverage deps help
 
 ## help: Display this help message
 help:
@@ -84,16 +82,6 @@ build-darwin:
 run: build
 	@echo "$(GREEN)Running $(BINARY_NAME)...$(NC)"
 	./$(BINARY_NAME)
-
-## plugingen: Build the plugingen code generation tool
-plugingen:
-	@echo "$(GREEN)Building plugingen $(PLUGINGEN_VERSION)...$(NC)"
-	$(GOBUILD) $(PLUGINGEN_LDFLAGS) -o tools/plugingen/plugingen ./tools/plugingen/cmd/plugingen
-
-## plugingen-install: Install plugingen to GOPATH/bin
-plugingen-install:
-	@echo "$(GREEN)Installing plugingen $(PLUGINGEN_VERSION)...$(NC)"
-	$(GOCMD) install $(PLUGINGEN_LDFLAGS) ./tools/plugingen/cmd/plugingen
 
 ## test: Run all tests
 test:

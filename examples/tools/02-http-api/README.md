@@ -267,5 +267,5 @@ output, err := apiTool.Post(ctx, "https://httpbin.org/post", body, nil)
 ## 扩展阅读
 
 - [01-calculator](../01-calculator/) - 计算器工具示例
-- [06-web-scraper](../06-web-scraper/) - 网页抓取工具示例
+- [tools/practical](https://github.com/kart-io/goagent-contrib/tree/master/tools/practical) - 网页抓取等实用工具（goagent-contrib）
 - [tools/http 包](../../../tools/http/) - HTTP 工具实现

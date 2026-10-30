@@ -272,5 +272,5 @@ commonTools := shell.CommonShellTools()
 
 ## 扩展阅读
 
-- [05-file-operations](../05-file-operations/) - 文件操作工具示例
+- [tools/practical](https://github.com/kart-io/goagent-contrib/tree/master/tools/practical) - 文件操作等实用工具（goagent-contrib）
 - [tools/shell 包](../../../tools/shell/) - Shell 工具实现

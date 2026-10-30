@@ -281,5 +281,5 @@ googleTool := search.NewSearchTool(googleEngine)
 
 ## 扩展阅读
 
-- [06-web-scraper](../06-web-scraper/) - 网页抓取工具示例
+- [tools/practical](https://github.com/kart-io/goagent-contrib/tree/master/tools/practical) - 网页抓取等实用工具（goagent-contrib）
 - [tools/search 包](../../../tools/search/) - 搜索工具实现

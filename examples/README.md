@@ -23,10 +23,7 @@ Simple, focused examples demonstrating individual features:
 
 Examples combining multiple features:
 
-- Streaming execution
-- Multi-mode streaming
 - Observability integration
-- ReAct agents
 - Parallel execution
 - Tool runtime
 - Tool selector
@@ -38,7 +35,6 @@ Examples combining multiple features:
 Complete system integration examples:
 
 - LangChain-inspired workflows
-- Multi-agent systems
 - Human-in-the-loop
 - Pre-configured agents
 

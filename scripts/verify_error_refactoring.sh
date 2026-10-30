@@ -82,7 +82,7 @@ fi
 # Run quick tests
 echo
 echo -e "${BLUE}5. Running quick tests on refactored modules...${NC}"
-TEST_MODULES="core builder agents/executor tools/compute middleware store/memory"
+TEST_MODULES="core builder tools/compute middleware store/memory"
 FAILED_TESTS=""
 
 for module in $TEST_MODULES; do

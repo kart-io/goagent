@@ -1,7 +1,7 @@
 # GoAgent 定位决策与模块去留清单
 
 日期：2026-10-29  
-状态：已确认（2026-10-29，外围模块直接删除）  
+状态：已确认（2026-10-29，外围模块直接删除）；已于 2026-10-30 实施（v0.17.0），其中 `retrieval`、`document`、`tools/practical` 迁到 [goagent-contrib](https://github.com/kart-io/goagent-contrib) 而非仅删除  
 代码基线：`c167cf9`（`codex/composable-orchestration-r2`）  
 相关：[可组合编排需求](../superpowers/specs/2026-10-27-composable-orchestration-requirements.md)、[多框架调研与复审](2026-10-27-framework-orchestration-review.md)、[执行契约与能力状态](../guides/EXECUTION_CONTRACT.md)、[导入层级](../architecture/IMPORT_LAYERING.md)
 

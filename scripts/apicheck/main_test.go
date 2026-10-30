@@ -15,11 +15,6 @@ func TestImportRulesUseCurrentModuleAndLayeredExceptions(t *testing.T) {
 	}{
 		{"core/sub/x.go", "agents/react", true},
 		{"builder/new.go", "agents/react", true},
-		{"builder/reasoning_builders.go", "agents/react", false},
-		{"builder/reasoning_presets.go", "agents/react", false},
-		{"builder/reasoning_presets.go", "agents/executor", true},
-		{"builder/reasoning_builders.go", "agents/new", true},
-		{"builder/reasoning_builders.go", "middleware", true},
 		{"interfaces/x.go", "utils/json", true},
 		{"cache/x.go", "utils/json", false},
 		{"cache/x.go", "utils/httpclient", true},

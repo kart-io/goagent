@@ -54,25 +54,9 @@ linters:
           - staticcheck
           - unused
 
-      # 对性能测试代码禁用检查
-      # 性能测试代码可能包含特殊的优化模式
-      - path: performance/
-        linters:
-          - errcheck
-          - govet
-          - staticcheck
-
       # 对可观测性相关代码禁用检查
       # 监控和日志代码可能有特殊的模式
       - path: observability/
-        linters:
-          - errcheck
-          - govet
-          - staticcheck
-
-      # 对分布式系统相关代码禁用检查
-      # 分布式代码可能包含复杂的并发模式
-      - path: distributed/
         linters:
           - errcheck
           - govet
