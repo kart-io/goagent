@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"reflect"
 	"sync"
 	"time"
 
@@ -93,6 +94,7 @@ type HierarchicalMemory struct {
 	shortTerm    *ShortTermMemory
 	longTerm     *LongTermMemory
 	vectorStore  VectorStore
+	embedder     TextEmbedder
 	consolidator *MemoryConsolidator
 	mu           sync.RWMutex
 
@@ -113,7 +115,6 @@ type HierarchicalMemory struct {
 func NewHierarchicalMemoryWithContext(parentCtx context.Context, vectorStore VectorStore, opts ...MemoryOption) *HierarchicalMemory {
 	ctx, cancel := context.WithCancel(parentCtx)
 	m := &HierarchicalMemory{
-		shortTerm:              NewShortTermMemory(100),
 		longTerm:               NewLongTermMemory(vectorStore),
 		vectorStore:            vectorStore,
 		consolidator:           NewMemoryConsolidator(),
@@ -129,6 +130,8 @@ func NewHierarchicalMemoryWithContext(parentCtx context.Context, vectorStore Vec
 	for _, opt := range opts {
 		opt(m)
 	}
+	// 容量来自选项，必须在选项应用后构造
+	m.shortTerm = NewShortTermMemory(m.shortTermCapacity)
 
 	// Start background consolidation with proper lifecycle management
 	m.wg.Add(1)
@@ -151,6 +154,21 @@ func WithShortTermCapacity(capacity int) MemoryOption {
 func WithDecayRate(rate float64) MemoryOption {
 	return func(m *HierarchicalMemory) {
 		m.decayRate = rate
+	}
+}
+
+// TextEmbedder 把文本转换为向量，如 llm.EmbeddingClient（目前只有 providers.OpenAIProvider 声明支持，
+// 固定使用 text-embedding-ada-002，1536 维）；向量维度须与向量存储一致。
+// 比 Embedder 少了 EmbedBatch，因为 provider 客户端不实现批量接口；包内 SimpleEmbeddingModel
+// 返回 []float32，不满足本接口。
+type TextEmbedder interface {
+	Embed(ctx context.Context, text string) ([]float64, error)
+}
+
+// WithEmbedder 让 StoreTyped 为可提取文本的内容生成向量并写入向量存储，使其能被 VectorSearch 检索。
+func WithEmbedder(e TextEmbedder) MemoryOption {
+	return func(m *HierarchicalMemory) {
+		m.embedder = e
 	}
 }
 
@@ -182,6 +200,15 @@ func (m *HierarchicalMemory) Store(ctx context.Context, key string, value interf
 
 // StoreTyped stores memory with specific type
 func (m *HierarchicalMemory) StoreTyped(ctx context.Context, key string, value interface{}, memType MemoryType, opts StoreOptions) error {
+	// Embed 可能是网络调用，必须在持锁前完成
+	embedding, err := m.embed(ctx, value)
+	if err != nil {
+		return agentErrors.Wrap(err, agentErrors.CodeRetrievalEmbedding, "failed to generate memory embedding").
+			WithComponent("hierarchical_memory").
+			WithOperation("store_typed").
+			WithContext("key", key)
+	}
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -197,27 +224,143 @@ func (m *HierarchicalMemory) StoreTyped(ctx context.Context, key string, value i
 		Decay:       1.0,
 		Tags:        opts.Tags,
 		Metadata:    make(map[string]interface{}),
+		Embedding:   embedding,
 	}
-
-	// 向量嵌入生成：当前 VectorStore 接口不包含 GenerateEmbedding 方法
-	// 如需支持向量搜索，需扩展 VectorStore 接口或使用独立的嵌入服务
 
 	// Store based on type
 	switch memType {
-	case MemoryTypeShortTerm:
-		return m.shortTerm.Store(ctx, entry)
 	case MemoryTypeLongTerm, MemoryTypeEpisodic, MemoryTypeSemantic, MemoryTypeProcedural:
-		return m.longTerm.Store(ctx, entry)
+		err = m.longTerm.Store(ctx, entry)
 	default:
-		// Default to short-term
-		return m.shortTerm.Store(ctx, entry)
+		err = m.storeShortTerm(ctx, entry)
 	}
+	if err != nil {
+		return err
+	}
+	// 用无法生成向量的内容覆盖同一 key 时，旧向量不能继续指向新内容
+	if m.embedder != nil && len(embedding) == 0 {
+		m.syncVector(ctx, key)
+	}
+	return nil
+}
+
+// storeShortTerm 让短期条目也立即可被 VectorSearch 检索，并同步被容量淘汰条目的向量。
+func (m *HierarchicalMemory) storeShortTerm(ctx context.Context, entry *MemoryEntry) error {
+	if m.vectorStore != nil && len(entry.Embedding) > 0 {
+		if err := m.vectorStore.Add(ctx, entry.ID, toFloat64(entry.Embedding), entry.Metadata); err != nil {
+			return agentErrors.Wrap(err, agentErrors.CodeStateSave, "failed to index short-term memory").
+				WithComponent("hierarchical_memory").
+				WithOperation("store_typed").
+				WithContext("key", entry.ID)
+		}
+	}
+
+	m.syncEvicted(ctx, m.shortTerm.storeEvicting(entry))
+	return nil
+}
+
+// syncEvicted 只处理带向量的被淘汰条目；不带向量的条目从未写入向量存储。
+func (m *HierarchicalMemory) syncEvicted(ctx context.Context, evicted *MemoryEntry) {
+	if evicted != nil && len(evicted.Embedding) > 0 {
+		m.syncVector(ctx, evicted.ID)
+	}
+}
+
+// syncVector 在条目离开某一层或被覆盖后，让向量存储中该 ID 的向量与仍持有它的条目一致：
+// 有持有者则重写其向量（恢复归属），否则删除，避免孤儿向量占用搜索名额。
+func (m *HierarchicalMemory) syncVector(ctx context.Context, id string) {
+	if m.vectorStore == nil {
+		return
+	}
+	if holder := m.vectorHolder(ctx, id); holder != nil {
+		if err := m.vectorStore.Add(ctx, id, toFloat64(holder.Embedding), holder.Metadata); err != nil {
+			// 向量数据库写入失败，记录但继续
+			fmt.Fprintf(os.Stderr, "vector store restore failed (id=%s): %v\n", id, err)
+		}
+		return
+	}
+	if err := m.vectorStore.Delete(ctx, id); err != nil {
+		// 向量数据库删除失败，记录但继续
+		fmt.Fprintf(os.Stderr, "vector store delete failed (id=%s): %v\n", id, err)
+	}
+}
+
+// vectorHolder 返回该 ID 下带向量的条目，短期优先，与 VectorSearch 的查找顺序一致。
+func (m *HierarchicalMemory) vectorHolder(ctx context.Context, id string) *MemoryEntry {
+	if e, err := m.shortTerm.Get(ctx, id); err == nil && len(e.Embedding) > 0 {
+		return e
+	}
+	if e, err := m.longTerm.Get(ctx, id); err == nil && len(e.Embedding) > 0 {
+		return e
+	}
+	return nil
+}
+
+// embed 未配置 embedder 或内容无法提取文本时返回 nil，此时条目照常写入但不建向量索引。
+func (m *HierarchicalMemory) embed(ctx context.Context, value interface{}) ([]float32, error) {
+	if m.embedder == nil {
+		return nil, nil
+	}
+	text, ok := embeddingText(value)
+	if !ok {
+		return nil, nil
+	}
+	vec, err := m.embedder.Embed(ctx, text)
+	if err != nil {
+		return nil, err
+	}
+	return toFloat32(vec), nil
+}
+
+// embeddingText 依次支持 string、[]byte、fmt.Stringer，其余类型取 JSON 序列化结果；
+// nil 与 nil 指针/map/slice 等视为无法提取（nil 指针的 String() 可能 panic）。
+func embeddingText(value interface{}) (string, bool) {
+	if isNil(value) {
+		return "", false
+	}
+	var text string
+	switch v := value.(type) {
+	case string:
+		text = v
+	case []byte:
+		text = string(v)
+	case fmt.Stringer:
+		text = v.String()
+	default:
+		data, err := json.Marshal(v)
+		if err != nil {
+			return "", false
+		}
+		text = string(data)
+	}
+	return text, text != ""
+}
+
+func isNil(value interface{}) bool {
+	if value == nil {
+		return true
+	}
+	rv := reflect.ValueOf(value)
+	switch rv.Kind() {
+	case reflect.Ptr, reflect.Map, reflect.Slice, reflect.Interface, reflect.Func, reflect.Chan:
+		return rv.IsNil()
+	}
+	return false
+}
+
+func toFloat64(v []float32) []float64 {
+	out := make([]float64, len(v))
+	for i, x := range v {
+		out[i] = float64(x)
+	}
+	return out
 }
 
 // Get retrieves a value from memory
 func (m *HierarchicalMemory) Get(ctx context.Context, key string) (interface{}, error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	// 更新访问计数并可能晋升条目，属于写操作
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	// Check short-term first
 	if entry, err := m.shortTerm.Get(ctx, key); err == nil {
@@ -231,10 +374,7 @@ func (m *HierarchicalMemory) Get(ctx context.Context, key string) (interface{}, 
 
 		// Promote frequently accessed long-term memories to short-term
 		if entry.AccessCount > 10 {
-			if err := m.shortTerm.Store(ctx, entry); err != nil {
-				// 缓存提升失败，记录但继续
-				fmt.Fprintf(os.Stderr, "memory promotion to short-term failed (key=%s): %v\n", key, err)
-			}
+			m.syncEvicted(ctx, m.shortTerm.storeEvicting(entry))
 		}
 
 		return entry.Content, nil
@@ -297,18 +437,22 @@ func (m *HierarchicalMemory) VectorSearch(ctx context.Context, embedding []float
 	// Retrieve memory entries
 	var entries []*MemoryEntry
 	for _, result := range results {
-		id := result.ID
-		// Try to get from short-term
-		if entry, err := m.shortTerm.Get(ctx, id); err == nil {
-			entry.Metadata["similarity_score"] = result.Score
-			entries = append(entries, entry)
+		// Score 是相似度，越大越相似
+		if result.Score < threshold {
 			continue
 		}
-
-		// Try to get from long-term
-		if entry, err := m.longTerm.Get(ctx, id); err == nil {
-			entry.Metadata["similarity_score"] = result.Score
-			entries = append(entries, entry)
+		id := result.ID
+		// 优先返回向量真正所属的条目，再回退到同 ID 的任意条目
+		entry := m.vectorHolder(ctx, id)
+		if entry == nil {
+			if e, err := m.shortTerm.Get(ctx, id); err == nil {
+				entry = e
+			} else if e, err := m.longTerm.Get(ctx, id); err == nil {
+				entry = e
+			}
+		}
+		if entry != nil {
+			entries = append(entries, withSimilarity(entry, result.Score))
 		}
 	}
 
@@ -318,6 +462,17 @@ func (m *HierarchicalMemory) VectorSearch(ctx context.Context, embedding []float
 	}
 
 	return entries, nil
+}
+
+// withSimilarity 返回带分数的副本：读锁下并发搜索不能写共享条目的 Metadata。
+func withSimilarity(entry *MemoryEntry, score float64) *MemoryEntry {
+	cp := *entry
+	cp.Metadata = make(map[string]interface{}, len(entry.Metadata)+1)
+	for k, v := range entry.Metadata {
+		cp.Metadata[k] = v
+	}
+	cp.Metadata["similarity_score"] = score
+	return &cp
 }
 
 // GetByType retrieves memories by type
@@ -401,14 +556,9 @@ func (m *HierarchicalMemory) Forget(ctx context.Context, threshold float64) erro
 	// Forget long-term memories below threshold (more conservative)
 	longTermForgotten := m.longTerm.Forget(threshold * 0.5)
 
-	// Remove from vector store
-	if m.vectorStore != nil {
-		for _, id := range append(shortTermForgotten, longTermForgotten...) {
-			if err := m.vectorStore.Delete(ctx, id); err != nil {
-				// 向量数据库删除失败，记录但继续
-				fmt.Fprintf(os.Stderr, "vector store delete failed during forget (id=%s): %v\n", id, err)
-			}
-		}
+	// 另一层仍持有同 ID 条目时保留其向量，否则删除
+	for _, id := range append(shortTermForgotten, longTermForgotten...) {
+		m.syncVector(ctx, id)
 	}
 
 	return nil

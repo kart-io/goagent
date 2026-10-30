@@ -66,13 +66,15 @@ sequenceDiagram
     participant Vec as 向量存储
 
     Agent->>Mgr: StoreTyped(key, value)
+    Mgr->>Mgr: 生成向量嵌入（配置 WithEmbedder 时）
+    Mgr->>Vec: 写入向量索引
     Mgr->>Short: 存入短期记忆
     Short-->>Mgr: 存储成功
 
     Note over Short,Long: 后台巩固任务
 
     Short->>Long: 高重要性记忆
-    Long->>Vec: 生成向量嵌入
+    Long->>Vec: 更新向量索引
     Vec-->>Long: 索引完成
 
     Agent->>Mgr: VectorSearch(query)
@@ -246,22 +248,29 @@ manager.Delete(ctx, "user:preferences")
 // 内置向量存储经 AsVectorStore 适配为分层记忆需要的 memory.VectorStore
 vecStore := memory.AsVectorStore(memory.NewInMemoryVectorStore(1536))
 
-// 创建分层记忆
+// embedder 是实现 Embed(ctx, text) ([]float64, error) 的任意类型，如 llm.EmbeddingClient（目前为 OpenAIProvider，
+// 固定使用 text-embedding-ada-002，1536 维）；向量维度须与向量存储一致。
+// 包内 SimpleEmbeddingModel 返回 []float32，不能直接传入
 hierMem := memory.NewHierarchicalMemoryWithContext(ctx, vecStore,
     memory.WithShortTermCapacity(100),
+    memory.WithEmbedder(embedder),
 )
 
-// 存储带类型的记忆
-hierMem.StoreTyped(ctx, "query-plan-001", planData,
+// 存储带类型的记忆：配置了 embedder 时同时生成向量并写入向量存储
+err := hierMem.StoreTyped(ctx, "query-plan-001", "慢查询加索引的数据库优化方案",
     memory.MemoryTypeEpisodic,
-    memory.StoreOptions{Importance: 0.8},
+    memory.StoreOptions{Tags: []string{"database"}},
 )
 
 // 按类型检索
 entries, err := hierMem.GetByType(ctx, memory.MemoryTypeEpisodic, 10)
 
-// 向量搜索
-embedding := getEmbedding("数据库优化")
+// 向量搜索：查询向量用同一个 embedder 生成，只返回相似度 >= 0.8 的记忆
+query, err := embedder.Embed(ctx, "数据库优化")
+embedding := make([]float32, len(query))
+for i, v := range query {
+    embedding[i] = float32(v)
+}
 results, err := hierMem.VectorSearch(ctx, embedding, 5, 0.8)
 
 // 创建记忆关联
@@ -327,6 +336,11 @@ Clear(ctx) error
 ```go
 // 创建
 NewHierarchicalMemoryWithContext(ctx, vectorStore, opts ...MemoryOption) *HierarchicalMemory
+
+// 选项
+WithShortTermCapacity(capacity int) MemoryOption
+WithDecayRate(rate float64) MemoryOption
+WithEmbedder(e TextEmbedder) MemoryOption // TextEmbedder: Embed(ctx, text string) ([]float64, error)
 
 // 类型化存储
 StoreTyped(ctx, key, value, memType, opts) error
@@ -415,6 +429,11 @@ config := memory.DefaultConfig()
 - 基于余弦相似度计算
 - 支持设置相似度阈值
 - 可集成外部向量数据库
+- `VectorSearch(ctx, embedding, limit, threshold)` 的 `threshold` 是相似度下限（内置存储为余弦相似度，越大越相似），相似度低于它的结果被丢弃；返回的是条目副本，相似度写在副本的 `Metadata["similarity_score"]`，修改返回值不影响已存储的记忆
+- 分层记忆通过 `WithEmbedder` 配置嵌入生成后，`Store`/`StoreTyped` 写入的短期与长期记忆都会立即建立向量索引；未配置时只有自带 `Embedding` 的条目可被 `VectorSearch` 检索
+- 用于生成向量的文本：`string` 原样使用，`[]byte` 转为字符串，实现 `fmt.Stringer` 的取 `String()`，其余类型取 JSON 序列化结果；`nil`（含 nil 指针）、空文本或无法序列化的内容不生成向量，条目照常写入，同一 key 的旧向量随之删除
+- 嵌入生成失败时 `StoreTyped` 返回 `CodeRetrievalEmbedding` 错误；向量写入向量存储失败（如维度不匹配）时同样返回错误。两种情况下短期、长期条目都不写入
+- 每个 ID 在向量存储中只有一个向量。短期条目因容量淘汰、被 `Forget` 或被访问晋升挤出时，若长期记忆仍有同 ID 且带向量的条目，则恢复为长期条目的向量，否则删除该向量
 
 ## 扩展阅读
 

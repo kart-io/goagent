@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -591,4 +592,31 @@ func BenchmarkHierarchicalMemory_Search(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		hm.Search(ctx, "test", 10)
 	}
+}
+
+// TestHierarchicalMemoryConcurrentGet Get 会更新访问计数并可能晋升条目，并发读取同一 key 不能产生数据竞争。
+func TestHierarchicalMemoryConcurrentGet(t *testing.T) {
+	ctx := context.Background()
+	hm := NewHierarchicalMemoryWithContext(ctx, nil)
+	defer func() { _ = hm.Shutdown(ctx) }()
+
+	require.NoError(t, hm.StoreTyped(ctx, "short", "短期内容", MemoryTypeShortTerm, StoreOptions{}))
+	require.NoError(t, hm.StoreTyped(ctx, "long", "长期内容", MemoryTypeLongTerm, StoreOptions{}))
+
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 20; j++ {
+				_, _ = hm.Get(ctx, "short")
+				_, _ = hm.Get(ctx, "long")
+			}
+		}()
+	}
+	wg.Wait()
+
+	entry, err := hm.shortTerm.Get(ctx, "short")
+	require.NoError(t, err)
+	assert.Equal(t, 160, entry.AccessCount)
 }
