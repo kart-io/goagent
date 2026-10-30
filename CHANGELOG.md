@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-10-30
+
+按[定位决策](docs/research/2026-10-29-goagent-positioning.md)收敛为可恢复编排内核，删除外围模块。主模块 `go.mod` 由 125 行降到 81 行，不再依赖 aiplatform、cohere、qdrant、google api、gorm 系列、pgx、lib/pq、mysql、go-sqlite3（cgo）、nats、goquery、pdf、viper、go-redis。删除的代码保留在 `v0.16.1`，需要时可从该版本恢复。
+
+### Breaking
+
+| 删除的包 | 去向 |
+| --- | --- |
+| `retrieval` | 迁到 [`goagent-contrib/retrieval`](https://github.com/kart-io/goagent-contrib/tree/master/retrieval)（BM25、混合检索、重排、内存向量库、RAG、OpenAI/HuggingFace 嵌入）；Qdrant、Cohere（嵌入与重排）、Vertex AI 分别在子模块 `retrieval/qdrant`、`retrieval/cohere`、`retrieval/vertexai`。`NewEmbedder` 使用 Cohere 或 Vertex AI 前须空导入对应子包，未导入时返回指明导入路径的错误，`GetSupportedProviders` 不再包含这两项 |
+| `document` | 迁到 [`goagent-contrib/document`](https://github.com/kart-io/goagent-contrib/tree/master/document)；`PDFLoader` 在子模块 `document/pdf`（`pdf.NewPDFLoader`） |
+| `tools/practical` | 迁到 [`goagent-contrib/tools/practical`](https://github.com/kart-io/goagent-contrib/tree/master/tools/practical)；`DatabaseQueryTool` 在子模块 `tools/database`（`database.NewDatabaseQueryTool`） |
+| `agents`、`agents/{base,cot,tot,got,sot,pot,metacot,react,executor,specialized}`、`performance` | 推理策略整体删除。改用原生工具循环 `builder.NewAgentBuilder(...).Build()` 与 `AsRunnable()`，多步流程用 `workflow` Graph；Shell/HTTP 等专用 Agent 改为把 `tools/shell`、`tools/http` 交给原生工具循环 |
+| Builder 推理工厂：`CoTAgent`、`QuickCoTAgent`、`ReActAgent`、`QuickReActAgent`、`ToTAgent`、`QuickToTAgent`、`GoTAgent`、`GoTAgentForSlowAPI`、`QuickGoTAgent`、`SoTAgent`、`QuickSoTAgent`、`PoTAgent`、`QuickPoTAgent`、`MetaCoTAgent`、`QuickMetaCoTAgent`、`SupervisorAgent`、`AgentExecutor`、`BuildReasoningAgent` 及 `WithChainOfThought`、`WithZeroShotCoT`、`WithFewShotCoT`、`WithReAct`、`WithTreeOfThought`、`WithBeamSearchToT`、`WithMonteCarloToT`、`WithGraphOfThought`、`WithSkeletonOfThought`、`WithProgramOfThought`、`WithMetaCoT` | 同上 |
+| `multiagent`、`distributed` | 进程内子 Agent 用 `tools.NewRunnableToolFactory` 包装，支持持久续跑；跨主机调度不自建，需要时适配 Temporal 等工作流系统。断路器见 `core/middleware` |
+| `stream` | 使用 `core.StreamRunnable` 与 Builder 的原生流 |
+| `store/postgres`、`store/redis`、`store/factory`、`store/adapters`、`options` | 存储后端由宿主实现 `store.Store`；持久恢复的多实例存储使用 [`goagent-contrib/durable/pgstore`](https://github.com/kart-io/goagent-contrib/tree/master/durable/pgstore) |
+| `core/checkpoint` 的 `RedisCheckpointer`、`RedisCheckpointerConfig`、`NewRedisCheckpointer`、`NewRedisCheckpointerFromClient`、`DefaultRedisCheckpointerConfig` | 实现 `checkpoint.Checkpointer`；进程内使用 `checkpoint.NewInMemorySaver` |
+| `reflection`、`planning`、`prompt`、`toolkits`、`tools/plugingen` | 删除，无替代 |
+
+同时删除依赖上述包的测试（`integration` 真实服务测试、`testing/test_token_usage.go`、`tools/toolkits_integration_test.go`）与示例（推理策略、multiagent、RAG、文件/网页工具、流式等 40 余个示例目录）。GitHub Release 不再附带 plugingen 二进制。导入检查器删除推理工厂的兼容例外。
+
 ## [0.16.1] - 2026-10-30
 
 ### Fixed
@@ -464,6 +485,7 @@ For breaking changes, see:
 Historical development is documented in the [archive](docs/archive/) directory.
 
 [1.0.0]: https://github.com/kart-io/goagent/releases/tag/v1.0.0
-[Unreleased]: https://github.com/kart-io/goagent/compare/v0.16.1...HEAD
+[Unreleased]: https://github.com/kart-io/goagent/compare/v0.17.0...HEAD
+[0.17.0]: https://github.com/kart-io/goagent/compare/v0.16.1...v0.17.0
 [0.16.1]: https://github.com/kart-io/goagent/compare/v0.16.0...v0.16.1
 [0.16.0]: https://github.com/kart-io/goagent/compare/v0.15.0...v0.16.0

@@ -424,4 +424,3 @@ func (wt *WeatherTools) createNewTool() *tools.FunctionTool {
 ## 相关资源
 
 - [01-demo](../01-demo) - 基础 Skill 示例
-- [06-llm-tool-calling](../../multiagent/06-llm-tool-calling) - LLM 工具调用示例

@@ -38,7 +38,7 @@ GoAgent 是一个全面的 Go AI Agent 框架，提供 Agent、工具、内存�
 - **[可组合编排 R2](guides/COMPOSABLE_ORCHESTRATION.md)** - 根预算、子 Agent 工具、持久上下文引用与只读观察
 
 - **[LLM 提供商指南](guides/LLM_PROVIDERS.md)** - 配置各种 LLM 提供商
-- **[Embedder 提供商指南](guides/EMBEDDER_PROVIDERS.md)** - 配置向量嵌入提供商
+- **[Embedder 提供商指南](https://github.com/kart-io/goagent-contrib/blob/master/retrieval/EMBEDDER_PROVIDERS.md)** - 配置向量嵌入提供商（goagent-contrib）
 - **[Provider 最佳实践](guides/PROVIDER_BEST_PRACTICES.md)** - Provider 使用最佳实践
 - **[插件系统指南](guides/PLUGIN_SYSTEM_GUIDE.md)** - 插件开发和使用
 - **[工具中间件指南](guides/TOOL_MIDDLEWARE.md)** - 工具中间件使用
@@ -110,7 +110,6 @@ docs/
 │   ├── QUICKSTART.md             # 快速入门
 │   ├── USER_GUIDE.md             # 使用指南
 │   ├── LLM_PROVIDERS.md          # LLM 提供商
-│   ├── EMBEDDER_PROVIDERS.md     # Embedder 提供商
 │   ├── PROVIDER_BEST_PRACTICES.md # Provider 最佳实践
 │   ├── PLUGIN_SYSTEM_GUIDE.md    # 插件系统
 │   ├── TOOL_MIDDLEWARE.md        # 工具中间件

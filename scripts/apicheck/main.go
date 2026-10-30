@@ -42,14 +42,7 @@ func forbidden(file, path string) bool {
 	case "core":
 		return dest == "agents" || dest == "tools" || dest == "middleware" || dest == "parsers" || dest == "builder"
 	case "builder":
-		// Compatibility factories intentionally import reasoning agents; no other
-		// production builder file may introduce this dependency.
-		compatibility := filepath.ToSlash(file) == "builder/reasoning_builders.go" || filepath.ToSlash(file) == "builder/reasoning_presets.go"
-		allowedAgent := dep == "agents/cot" || dep == "agents/got" || dep == "agents/metacot" || dep == "agents/pot" || dep == "agents/react" || dep == "agents/sot" || dep == "agents/tot"
-		if filepath.ToSlash(file) == "builder/reasoning_builders.go" {
-			allowedAgent = allowedAgent || dep == "agents" || dep == "agents/executor"
-		}
-		return dest == "middleware" || (dest == "agents" && (!compatibility || !allowedAgent))
+		return dest == "middleware" || dest == "agents"
 	case "tools":
 		return dest == "agents"
 	case "parsers":

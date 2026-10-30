@@ -565,7 +565,7 @@ import (
     "github.com/kart-io/goagent/tools/shell"
     "github.com/kart-io/goagent/tools/compute"
     "github.com/kart-io/goagent/tools/http"
-    "github.com/kart-io/goagent/tools/practical"
+    "github.com/kart-io/goagent-contrib/tools/practical"
 )
 
 // 创建各种内置工具

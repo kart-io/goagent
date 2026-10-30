@@ -11,7 +11,7 @@
 
 [English](README.md) | [中文](README_CN.md)
 
-GoAgent is an AI agent framework for Go, inspired by LangChain. It provides agents, tools, memory, LLM abstraction, and orchestration capabilities with integrations for distributed tracing, persistent storage, and multi-agent coordination.
+GoAgent is a recoverable, budgeted and observable agent orchestration kernel for Go services: native tool loops, typed workflow graphs with durable checkpoints and approvals, request budgets, OpenTelemetry events and MCP. Retrieval, document loaders, practical tools and multi-instance durable storage live in [goagent-contrib](https://github.com/kart-io/goagent-contrib).
 
 新编排入口：`agent.AsRunnable()`。参见[执行契约与能力状态](docs/guides/EXECUTION_CONTRACT.md)和[GoAgent 评测](evaluation/agentbench/README.md)。
 
@@ -25,15 +25,15 @@ Context governance: [tool-result offloading and history summaries](docs/guides/C
 
 ## Features
 
-- **Intelligent Agents** - Autonomous agents with reasoning capabilities and tool execution
+- **Native Tool Loop** - Model-driven tool calling with durable, replayable tool calls
 - **High Performance** - Hot path optimization with InvokeFast reducing latency by 4-6%
 - **Flexible Architecture** - 4-layer modular design with clear separation of concerns
 - **LLM Abstraction** - Support for multiple LLM providers (OpenAI, Anthropic Claude, Cohere, HuggingFace, Gemini, DeepSeek)
-- **Memory Management** - Conversation history, case-based reasoning, and vector storage
+- **Memory Management** - Conversation history and case-based memory
 - **Tool System** - Extensible tool registry with parallel execution and dependency management
 - **State Management** - Thread-safe state with checkpointing and persistence
 - **Observability** - OpenTelemetry integration with distributed tracing
-- **Infrastructure Integrations** - Redis, PostgreSQL support and NATS messaging
+- **Durable Execution** - File-based `durable.Store` in core; multi-instance Postgres store in [goagent-contrib](https://github.com/kart-io/goagent-contrib/tree/master/durable/pgstore)
 
 ## Quick Start
 
@@ -103,10 +103,9 @@ monitoringAgent, err := builder.MonitoringAgent(llmClient, 30*time.Second)
 
 - `RAGAgent(client, retriever)` retrieves evidence and returns reference provenance in `retrieval_sources`.
 - `WithRetriever(retriever, RetrievalConfig{...})` bounds document count and context size, and accepts hybrid or reranking retrievers.
-- ReAct `Stream()` emits reasoning and tool-result snapshots; `RunGenerator()` shares the same execution loop and supports early termination.
 - The OpenAI provider supports `CompleteStream` / `ChatStream` with text deltas, token usage, and asynchronous errors.
 
-See the [RAG and streaming guide](docs/guides/GROUNDED_RAG_AND_STREAMING.md) and [runnable RAG example](examples/rag/grounded/main.go).
+Retrievers (BM25, hybrid, reranking, Qdrant) are provided by [goagent-contrib/retrieval](https://github.com/kart-io/goagent-contrib/tree/master/retrieval) and satisfy `interfaces.DocumentRetriever`. See the [RAG and streaming guide](docs/guides/GROUNDED_RAG_AND_STREAMING.md).
 
 ## Architecture
 
@@ -120,20 +119,15 @@ graph TB
     end
 
     subgraph "Layer 3: Implementation"
-        Agents["agents<br/>Reasoning Strategies"]
         Tools["tools<br/>Tool System"]
         Middleware["middleware<br/>Request Pipeline"]
         Parsers["parsers<br/>Output Parsing"]
-        Planning["planning<br/>Task Planning"]
-        Reflection["reflection<br/>Self-Reflection"]
     end
 
     subgraph "Layer 2: Business Logic"
         Core["core<br/>Execution Engine"]
         LLM["llm<br/>LLM Integration"]
         Memory["memory<br/>Memory Management"]
-        Stream["stream<br/>Streaming"]
-        MultiAgent["multiagent<br/>Multi-Agent"]
         Observability["observability<br/>Tracing & Metrics"]
     end
 
@@ -141,17 +135,13 @@ graph TB
         Interfaces["interfaces<br/>Core Interfaces"]
         Errors["errors<br/>Error Types"]
         Cache["cache<br/>Caching"]
-        Options["options<br/>Configuration"]
     end
 
-    Examples --> Agents
     Examples --> Builder
     UserApps --> Builder
 
-    Agents --> Core
     Tools --> Core
     Middleware --> Core
-    Planning --> Core
 
     Core --> LLM
     Core --> Memory
@@ -207,24 +197,17 @@ See [Architecture Documentation](docs/architecture/) for details.
 | **[workflow](workflow/)** | Typed graph compilation, branches, parallel joins and bounded loops | [README](workflow/README.md) |
 | **[llm](llm/)** | LLM provider integration (OpenAI, Anthropic, etc.) | [README](llm/README.md) |
 | **[builder](builder/)** | Fluent API for agent construction | [README](builder/README.md) |
-| **[agents](agents/)** | Reasoning strategies (ReAct, CoT, ToT) | [README](agents/README.md) |
 | **[tools](tools/)** | Tool system and registry | [README](tools/README.md) |
 | **[memory](memory/)** | Memory management and vector storage | [README](memory/README.md) |
-| **[multiagent](multiagent/)** | Multi-agent coordination | [README](multiagent/README.md) |
-| **[stream](stream/)** | Streaming data processing | [README](stream/README.md) |
 | **[middleware](middleware/)** | Request/response middleware | [README](middleware/README.md) |
 | **[observability](observability/)** | Tracing and metrics | [README](observability/README.md) |
 | **[cache](cache/)** | Caching system | [README](cache/README.md) |
 | **[interfaces](interfaces/)** | Core interface definitions | [README](interfaces/README.md) |
 | **[errors](errors/)** | Error types and handling | [README](errors/README.md) |
-| **[planning](planning/)** | Task planning system | [README](planning/README.md) |
-| **[reflection](reflection/)** | Self-reflective agents | [README](reflection/README.md) |
-| **[prompt](prompt/)** | Prompt templates | [README](prompt/README.md) |
 | **[parsers](parsers/)** | Output parsing | [README](parsers/README.md) |
-| **[options](options/)** | Configuration options | [README](options/README.md) |
-| **[toolkits](toolkits/)** | Toolkit management | [README](toolkits/README.md) |
 | **[testing](testing/)** | Testing utilities and mocks | [README](testing/README.md) |
-| **[distributed](distributed/)** | Distributed computing | [README](distributed/README.md) |
+
+Retrieval, document loaders, file/web/API tools, database tools and the multi-instance Postgres `durable.Store` are separate modules in [goagent-contrib](https://github.com/kart-io/goagent-contrib).
 
 ## Core Components
 
@@ -279,8 +262,8 @@ agent := builder.NewAgentBuilder(llmClient).
 ### State Management & Checkpointing
 
 ```go
-// Create checkpointer for session persistence
-checkpointer := core.NewRedisCheckpointer(redisClient, "agent:")
+// Session checkpoints; implement checkpoint.Checkpointer for external storage
+checkpointer := checkpoint.NewInMemorySaver()
 
 agent := builder.NewAgentBuilder(llmClient).
     WithCheckpointer(checkpointer).
@@ -300,21 +283,9 @@ provider := observability.NewTelemetryProvider(&observability.TelemetryConfig{
 // Traces are automatically propagated across agent calls
 ```
 
-### Multi-Agent Communication
+### Sub-Agents and Sub-Workflows
 
-```go
-// NATS-based distributed communication
-comm := multiagent.NewNATSCommunicator("agent-1", natsConn, tracer)
-
-// Send message to another agent
-message := &multiagent.AgentMessage{
-    From: "agent-1",
-    To: "agent-2",
-    Type: multiagent.MessageTypeRequest,
-    Payload: map[string]interface{}{"task": "analyze"},
-}
-comm.Send(ctx, "agent-2", message)
-```
+Wrap a child agent or a `workflow.DurableGraph` as a tool with `tools.NewRunnableToolFactory`. Child model turns, tool calls and checkpoints are journaled under the parent's execution key, so a child waiting for approval suspends the parent with `builder.ErrWaiting` and resumes with `durable.WithResume`. See [Composable Orchestration](docs/guides/COMPOSABLE_ORCHESTRATION.md).
 
 ### Parallel Tool Execution
 
@@ -352,7 +323,6 @@ Explore working examples in the [`examples/`](examples/) directory:
 - **Integration** - Multi-component systems
 - **Streaming** - Real-time streaming responses
 - **Observability** - Tracing and metrics
-- **Multi-agent** - Agent-to-agent communication
 
 Run an example:
 
@@ -374,20 +344,17 @@ go run examples/basic/01-simple-agent/main.go
 
 GoAgent provides **InvokeFast**, a hot path optimization that bypasses callbacks and middleware for internal calls:
 
-**Performance Gains** (ReActAgent benchmarks on Intel i7-14700KF):
+**Performance Gains** (agent benchmarks on Intel i7-14700KF):
 - **Latency**: 4-6% faster execution (1494ns → 1399ns per call)
 - **Memory**: 5-8% reduction in allocations
 - **Chain Calls (10x)**: 4.4% faster (15508ns → 14825ns)
 
 **Automatic Optimization**:
 - `ChainableAgent` automatically uses InvokeFast for internal calls
-- `SupervisorAgent` optimizes sub-agent coordination
-- `ExecutorAgent` optimizes wrapped agent execution
 - Zero code changes required for existing applications
 
 **Use Cases**:
-- Multi-agent systems with nested calls
-- High-frequency reasoning loops (ReAct)
+- Nested agent calls
 - Chain compositions with multiple agents
 - Performance-critical production workloads
 
@@ -453,7 +420,7 @@ go run examples/basic/01-simple-agent/main.go
 ## Roadmap
 
 - [x] Additional LLM providers (Anthropic Claude, Cohere, Hugging Face)
-- [ ] Production vector database integration (Qdrant, Milvus, Pinecone)
+- [x] Production vector database integration (Qdrant, in goagent-contrib)
 - [ ] Graphical workflow designer
 - [ ] Enhanced monitoring dashboard
 - [ ] Agent versioning and A/B testing
