@@ -463,6 +463,5 @@ metrics := agent.GetMetrics()
 ## 扩展阅读
 
 - [core](../core/) - 核心执行引擎
-- [agents](../agents/) - 推理策略实现
 - [llm](../llm/) - LLM 客户端
 - [tools](../tools/) - 工具系统

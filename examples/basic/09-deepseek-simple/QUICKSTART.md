@@ -183,13 +183,11 @@ if err != nil {
 ## 下一步学习
 
 1. **工具调用**：学习如何让 AI 使用工具
-   - 查看 [08-deepseek-agent](../08-deepseek-agent/main.go)
 
 2. **InvokeFast 性能优化**：了解如何自动提升 Agent 性能
    - 查看 [invokefast](./invokefast/)
 
 3. **流式输出**：实时接收 AI 生成的文本
-   - 查看 [streaming](../../advanced/streaming/)
 
 4. **多 Agent 协作**：构建复杂的 AI 系统
    - 查看 [multi-agent-collaboration](../../advanced/multi-agent-collaboration/)

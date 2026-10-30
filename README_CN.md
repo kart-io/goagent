@@ -11,7 +11,7 @@
 
 [English](README.md) | [中文](README_CN.md)
 
-GoAgent 是一个 Go 语言 AI Agent 框架，灵感来源于 LangChain。它提供智能代理、工具系统、记忆管理、LLM 抽象和编排能力，集成分布式追踪、持久化存储和多代理协调；各模块的验证范围不同。
+GoAgent 是嵌入 Go 业务服务的可恢复、可计量、可观测 Agent 编排内核：原生工具循环、带持久检查点与审批的类型化工作流图、请求预算、OpenTelemetry 事件与 MCP。检索、文档加载、实用工具与多实例持久存储位于 [goagent-contrib](https://github.com/kart-io/goagent-contrib)。
 
 推荐新编排使用 `agent.AsRunnable()`。参见[执行契约与能力状态](docs/guides/EXECUTION_CONTRACT.md)和[GoAgent 评测](evaluation/agentbench/README.md)。
 
@@ -25,15 +25,15 @@ GoAgent 是一个 Go 语言 AI Agent 框架，灵感来源于 LangChain。它提
 
 ## 特性
 
-- **智能代理** - 具备推理能力和工具执行的自主代理
+- **原生工具循环** - 模型驱动的工具调用，工具调用可持久化并回放
 - **高性能** - 热路径优化，InvokeFast 减少 4-6% 延迟
 - **灵活架构** - 4 层模块化设计，职责分离清晰
 - **LLM 抽象** - 支持多个 LLM 提供商（OpenAI、Anthropic Claude、Cohere、HuggingFace、Gemini、DeepSeek）
-- **记忆管理** - 对话历史、案例推理和向量存储
+- **记忆管理** - 对话历史与案例记忆
 - **工具系统** - 可扩展工具注册表，支持并行执行和依赖管理
 - **状态管理** - 线程安全状态，支持检查点和持久化
 - **可观测性** - OpenTelemetry 集成，分布式追踪
-- **基础设施集成** - 支持 Redis、PostgreSQL 和 NATS；可靠投递与跨主机恢复需另行设计
+- **持久执行** - 核心提供基于文件的 `durable.Store`；多实例 Postgres 存储见 [goagent-contrib](https://github.com/kart-io/goagent-contrib/tree/master/durable/pgstore)
 
 ## 快速开始
 
@@ -103,10 +103,9 @@ monitoringAgent, err := builder.MonitoringAgent(llmClient, 30*time.Second)
 
 - `RAGAgent(client, retriever)` 实际执行检索，并在输出的 `retrieval_sources` 中返回来源；支持现有检索器、RAGRetriever 和向量存储。
 - `WithRetriever(retriever, RetrievalConfig{...})` 限制文档数量和上下文字符数，可组合混合检索与重排序。
-- ReAct 的 `Stream()` 按推理步骤和工具结果增量输出；`RunGenerator()` 共用执行逻辑，支持提前终止。
 - OpenAI Provider 实现 `CompleteStream` / `ChatStream`，传递增量文本、Token 用量和流中错误。
 
-详见 [RAG 与流式执行指南](docs/guides/GROUNDED_RAG_AND_STREAMING.md) 和 [可运行 RAG 示例](examples/rag/grounded/main.go)。
+检索器（BM25、混合检索、重排、Qdrant）由 [goagent-contrib/retrieval](https://github.com/kart-io/goagent-contrib/tree/master/retrieval) 提供，满足 `interfaces.DocumentRetriever`。详见 [RAG 与流式执行指南](docs/guides/GROUNDED_RAG_AND_STREAMING.md)。
 
 ## 架构设计
 
@@ -120,20 +119,15 @@ graph TB
     end
 
     subgraph "第3层: 实现层"
-        Agents["agents<br/>推理策略"]
         Tools["tools<br/>工具系统"]
         Middleware["middleware<br/>请求管道"]
         Parsers["parsers<br/>输出解析"]
-        Planning["planning<br/>任务规划"]
-        Reflection["reflection<br/>自反思"]
     end
 
     subgraph "第2层: 业务逻辑层"
         Core["core<br/>执行引擎"]
         LLM["llm<br/>LLM 集成"]
         Memory["memory<br/>记忆管理"]
-        Stream["stream<br/>流式处理"]
-        MultiAgent["multiagent<br/>多代理"]
         Observability["observability<br/>追踪与指标"]
     end
 
@@ -141,17 +135,13 @@ graph TB
         Interfaces["interfaces<br/>核心接口"]
         Errors["errors<br/>错误类型"]
         Cache["cache<br/>缓存系统"]
-        Options["options<br/>配置选项"]
     end
 
-    Examples --> Agents
     Examples --> Builder
     UserApps --> Builder
 
-    Agents --> Core
     Tools --> Core
     Middleware --> Core
-    Planning --> Core
 
     Core --> LLM
     Core --> Memory
@@ -207,24 +197,17 @@ sequenceDiagram
 | **[workflow](workflow/)** | 泛型图编译、条件分支、并行汇合与有界循环 | [README](workflow/README.md) |
 | **[llm](llm/)** | LLM 提供商集成（OpenAI、Anthropic 等） | [README](llm/README.md) |
 | **[builder](builder/)** | 代理构建流畅 API | [README](builder/README.md) |
-| **[agents](agents/)** | 推理策略（ReAct、CoT、ToT） | [README](agents/README.md) |
 | **[tools](tools/)** | 工具系统和注册表 | [README](tools/README.md) |
 | **[memory](memory/)** | 记忆管理和向量存储 | [README](memory/README.md) |
-| **[multiagent](multiagent/)** | 多代理协调 | [README](multiagent/README.md) |
-| **[stream](stream/)** | 流式数据处理 | [README](stream/README.md) |
 | **[middleware](middleware/)** | 请求/响应中间件 | [README](middleware/README.md) |
 | **[observability](observability/)** | 追踪和指标 | [README](observability/README.md) |
 | **[cache](cache/)** | 缓存系统 | [README](cache/README.md) |
 | **[interfaces](interfaces/)** | 核心接口定义 | [README](interfaces/README.md) |
 | **[errors](errors/)** | 错误类型和处理 | [README](errors/README.md) |
-| **[planning](planning/)** | 任务规划系统 | [README](planning/README.md) |
-| **[reflection](reflection/)** | 自反思代理 | [README](reflection/README.md) |
-| **[prompt](prompt/)** | 提示词模板 | [README](prompt/README.md) |
 | **[parsers](parsers/)** | 输出解析 | [README](parsers/README.md) |
-| **[options](options/)** | 配置选项 | [README](options/README.md) |
-| **[toolkits](toolkits/)** | 工具包管理 | [README](toolkits/README.md) |
 | **[testing](testing/)** | 测试工具和 Mock | [README](testing/README.md) |
-| **[distributed](distributed/)** | 分布式计算 | [README](distributed/README.md) |
+
+检索、文档加载、文件/网页/API 工具、数据库工具与多实例 Postgres `durable.Store` 是 [goagent-contrib](https://github.com/kart-io/goagent-contrib) 中的独立模块。
 
 ## 核心组件
 
@@ -283,8 +266,8 @@ agent := builder.NewAgentBuilder(llmClient).
 ### 状态管理与检查点
 
 ```go
-// 创建检查点器用于会话持久化
-checkpointer := core.NewRedisCheckpointer(redisClient, "agent:")
+// 会话检查点；外部存储需实现 checkpoint.Checkpointer
+checkpointer := checkpoint.NewInMemorySaver()
 
 agent := builder.NewAgentBuilder(llmClient).
     WithCheckpointer(checkpointer).
@@ -304,21 +287,9 @@ provider := observability.NewTelemetryProvider(&observability.TelemetryConfig{
 // 追踪自动跨代理调用传播
 ```
 
-### 多代理通信
+### 子 Agent 与子工作流
 
-```go
-// 基于 NATS 的分布式通信
-comm := multiagent.NewNATSCommunicator("agent-1", natsConn, tracer)
-
-// 发送消息给另一个代理
-message := &multiagent.AgentMessage{
-    From: "agent-1",
-    To: "agent-2",
-    Type: multiagent.MessageTypeRequest,
-    Payload: map[string]interface{}{"task": "analyze"},
-}
-comm.Send(ctx, "agent-2", message)
-```
+用 `tools.NewRunnableToolFactory` 把子 Agent 或 `workflow.DurableGraph` 包装成工具。子流程的模型回合、工具调用与检查点记录在父执行键下，子流程等待审批时父 Agent 以 `builder.ErrWaiting` 暂停，用 `durable.WithResume` 续跑。详见[可组合编排](docs/guides/COMPOSABLE_ORCHESTRATION.md)。
 
 ### 并行工具执行
 
@@ -356,7 +327,6 @@ results, err := executor.ExecuteParallel(ctx, []tools.ToolCallRequest{
 - **集成** - 多组件系统
 - **流式** - 实时流式响应
 - **可观测性** - 追踪和指标
-- **多代理** - 代理间通信
 
 运行示例：
 
@@ -379,21 +349,18 @@ go run examples/basic/01-simple-agent/main.go
 
 GoAgent 提供 **InvokeFast**，一种热路径优化，为内部调用绕过回调和中间件：
 
-**性能提升**（ReActAgent 基准测试，Intel i7-14700KF）：
+**性能提升**（Agent 基准测试，Intel i7-14700KF）：
 - **延迟**: 执行快 4-6%（1494ns → 1399ns 每次调用）
 - **内存**: 分配减少 5-8%
 - **链式调用（10x）**: 快 4.4%（15508ns → 14825ns）
 
 **自动优化**：
 - `ChainableAgent` 自动为内部调用使用 InvokeFast
-- `SupervisorAgent` 优化子代理协调
-- `ExecutorAgent` 优化包装代理执行
 - 现有应用零代码更改
 
 **适用场景**：
-- 嵌套调用的多代理系统
-- 高频推理循环（ReAct）
-- 多代理链式组合
+- 嵌套的 Agent 调用
+- 多个 Agent 的链式组合
 - 性能关键的生产负载
 
 详见 [InvokeFast 优化指南](docs/guides/INVOKE_FAST_OPTIMIZATION.md)。
@@ -458,7 +425,7 @@ go run examples/basic/01-simple-agent/main.go
 ## 路线图
 
 - [x] 更多 LLM 提供商（Anthropic Claude、Cohere、Hugging Face）
-- [ ] 生产级向量数据库集成（Qdrant、Milvus、Pinecone）
+- [x] 生产级向量数据库集成（Qdrant，见 goagent-contrib）
 - [ ] 图形化工作流设计器
 - [ ] 增强监控仪表板
 - [ ] 代理版本控制和 A/B 测试

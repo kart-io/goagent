@@ -547,7 +547,5 @@ for item, err := range gen {
 
 ## 扩展阅读
 
-- [agents](../agents/) - 推理策略实现
 - [builder](../builder/) - Agent 构建器
-- [multiagent](../multiagent/) - 多智能体协作
 - [middleware](../middleware/) - 中间件系统

@@ -351,6 +351,5 @@ if toolCalls, ok := output.Metadata["tool_calls"]; ok {
 ## 扩展阅读
 
 - [07-function-tool](../07-function-tool/) - 自定义函数工具示例
-- [examples/agents](../../agents/) - Agent 示例目录
 - [builder 包](../../../builder/) - Agent 构建器实现
 - [llm 包](../../../llm/) - LLM 客户端实现

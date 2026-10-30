@@ -57,7 +57,7 @@ agent, err := builder.NewSimpleBuilder(client).
 - 结果已完整可展示的单个终态工具，可显式配置 `WithReturnDirectTools("lookup")`；不会再调用模型总结或补充引用。
 - `WithMemory(manager).WithSessionID(sessionID)` 启用会话记忆；`WithMaxConversationHistory` 限制加载历史数量。
 - 长任务可显式启用 [ContextPolicy](CONTEXT_POLICY.md)，卸载较早的大工具结果并选择历史摘要模型。默认关闭，摘要请求也消耗预算。
-- [可运行的 RAG 示例](../../examples/rag/grounded/main.go)展示来源、检索和原生增量输出；[MCP 与可恢复步骤](PRIORITY_CAPABILITIES.md)展示外部工具及审批恢复。
+- 检索器实现见 [goagent-contrib/retrieval](https://github.com/kart-io/goagent-contrib/tree/master/retrieval)；[MCP 与可恢复步骤](PRIORITY_CAPABILITIES.md)展示外部工具及审批恢复。
 
 ## 流式调用
 

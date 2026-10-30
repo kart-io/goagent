@@ -419,4 +419,4 @@ config := memory.DefaultConfig()
 - [core](../core/) - 核心执行引擎
 - [llm](../llm/) - LLM 集成
 - [store](../store/) - 存储适配器
-- [retrieval](../retrieval/) - 检索系统
+- [retrieval](https://github.com/kart-io/goagent-contrib/tree/master/retrieval) - 检索系统（goagent-contrib）

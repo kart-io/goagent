@@ -476,7 +476,6 @@ llmClient, err := providers.NewDeepSeekWithOptions(
 ### 其他示例
 
 - [基础示例](../01-simple-agent/)
-- [工具示例](../02-tools/)
 - [高级示例](../../advanced/)
 
 ## 许可证

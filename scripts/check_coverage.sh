@@ -19,7 +19,6 @@ declare -A CRITICAL_FILES=(
     ["llm/providers/openai.go"]=70
     ["llm/providers/gemini.go"]=65
     ["llm/common/base.go"]=50
-    ["tools/practical/database_query.go"]=40
 )
 
 # 检查覆盖率文件是否存在
@@ -106,13 +105,6 @@ TOOLS_COVERAGE=$(go tool cover -func=coverage.out | grep "^github.com/kart-io/go
 if [ -n "$TOOLS_COVERAGE" ] && [ "$TOOLS_COVERAGE" != "0" ]; then
     TOOLS_COVERAGE=$(printf "%.1f" "$TOOLS_COVERAGE")
     echo "   tools/: ${TOOLS_COVERAGE}%"
-fi
-
-# agents 模块
-AGENTS_COVERAGE=$(go tool cover -func=coverage.out | grep "^github.com/kart-io/goagent/agents/" | grep -v "_test.go" | awk '{sum+=$3; count++} END {if (count>0) print sum/count; else print 0}')
-if [ -n "$AGENTS_COVERAGE" ] && [ "$AGENTS_COVERAGE" != "0" ]; then
-    AGENTS_COVERAGE=$(printf "%.1f" "$AGENTS_COVERAGE")
-    echo "   agents/: ${AGENTS_COVERAGE}%"
 fi
 
 echo ""
