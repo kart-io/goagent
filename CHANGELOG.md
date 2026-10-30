@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `harness/env`：`DockerExecutor.ReadOnly` 以只读方式挂载工作区，`Capabilities.ReadOnlyRoot`；`env.ReadOnly` 包装器拒绝写入与删除（`ErrReadOnly`）。
 - `coding.Workspace.ProjectInstructionsFrom` 读取指定的项目说明文件。
 - `harness/preset` 的 `mcp` 组件：stdio 与 streamable-http 两种传输，工具名为 `mcp__<组件 id>__<工具名>`（可用 `aliases` 改名、`tools` 取子集），环境变量与请求头可引用秘密（`preset.Value`），stdio 服务只继承少量宿主环境变量；远端错误结果交给模型，持久运行中不重跑中断的 MCP 调用；服务信息与工具摘要记入装配清单。
+- `harness/preset` 的 `claude-code-hooks` 组件：兼容 Claude Code 的 `PreToolUse`/`PostToolUse` 命令钩子（stdin JSON、退出码 2 阻止、`permissionDecision`/`decision`/`additionalContext`），裁决按 deny > ask > allow 与权限规则一起聚合；编码工具以 Claude Code 的名称出现。`path` 指向的工作区文件属于不可信内容，其中的命令需要授权，文件改动后授权失效。
+- `harness/preset` 的 `skills` 组件：读取 `SKILL.md` 技能目录，提示词列出名称与描述，`load_skill` 读取说明与技能目录内的文件。
+- `harness/preset` 的 `subagent` 组件：把任务交给另一个 preset 装配的子 Agent，由 `Host.RunAgent`（或 `preset.BuilderRunner`）运行；子 Agent 的调用同样经过父 Agent 的钩子与守卫、沙箱不宽于父 Agent，`toolFilter` 在初始化前生效，引用有环与超过 `maxDepth` 时报错。
+- `preset.Spec` 新增 `Resolve`（Build 时从工作区补全配置，补全内容计入授权摘要）、`References`（引用的其他 preset）、`FilterTools`（子 Agent 工具过滤）；`Assembler` 新增 `AfterPublish`、`Depth`。
 - `Assembly.PinManifest`：持久运行首次执行时把装配清单摘要写入日志，恢复时不一致返回 `preset.ErrManifestChanged`。
 - `mcp/remote.Tools` 新增选项 `WithToolName`（改名或跳过工具）、`WithToolErrorsAsRejected`（远端错误结果作为 `tools.Rejected`）、`WithDurablePolicy`（声明持久日志策略）；不传选项时行为不变。
 

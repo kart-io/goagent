@@ -34,8 +34,27 @@ type Spec[C any] struct {
 	// Validate 在 Load 时校验配置，可在其中填充默认值。
 	Validate func(*C) error
 	Needs    func(*C) Needs
+	// Resolve 在 Build 时、信任检查之前调用，可读取工作区内的文件补全配置（如钩子定义），不得启动进程或连网。
+	// 返回的 Needs 来自工作区内容，无论组件行来自哪一层都按不可信处理；补全后的配置计入授权摘要。
+	Resolve func(root string, c *C) (Needs, error)
+	// References 返回配置引用的其他 preset，Load 检查它们存在且没有环。
+	References func(*C) []string
+	// FilterTools 在作为子 Agent 初始化之前按工具过滤收窄配置；返回 false 表示组件不会提供保留的工具，不必初始化。
+	// 未提供时组件照常初始化，工具在装配后按名称过滤。
+	FilterTools func(c *C, rowID string, f ToolFilter) bool
 	// Build 向装配器贡献内容。失败时已登记的资源按逆序关闭。
 	Build func(context.Context, *Assembler, *C) error
+}
+
+// ToolFilter 限定子 Agent 的工具：Allow 非 nil 时只保留其中的工具，Deny 中的工具总被去掉。
+type ToolFilter struct {
+	Allow []string `yaml:"allow"`
+	Deny  []string `yaml:"deny"`
+}
+
+// Keeps 报告 name 是否保留。
+func (f ToolFilter) Keeps(name string) bool {
+	return (f.Allow == nil || slices.Contains(f.Allow, name)) && !slices.Contains(f.Deny, name)
 }
 
 type component struct {
@@ -45,6 +64,9 @@ type component struct {
 	newConfig     func() any
 	validate      func(any) error
 	needs         func(any) Needs
+	resolve       func(root string, cfg any) (any, Needs, error)
+	references    func(any) []string
+	filterTools   func(cfg any, rowID string, f ToolFilter) (any, bool)
 	build         func(context.Context, *Assembler, any) error
 }
 
@@ -74,6 +96,23 @@ func Register[C any](s Spec[C]) {
 			return s.Needs(cfg.(*C))
 		},
 		build: func(ctx context.Context, a *Assembler, cfg any) error { return s.Build(ctx, a, cfg.(*C)) },
+	}
+	// 补全与过滤作用于配置的副本，Load 得到的配置在多次 Build 之间保持不变。
+	if s.Resolve != nil {
+		c.resolve = func(root string, cfg any) (any, Needs, error) {
+			cp := *cfg.(*C)
+			n, err := s.Resolve(root, &cp)
+			return &cp, n, err
+		}
+	}
+	if s.References != nil {
+		c.references = func(cfg any) []string { return s.References(cfg.(*C)) }
+	}
+	if s.FilterTools != nil {
+		c.filterTools = func(cfg any, rowID string, f ToolFilter) (any, bool) {
+			cp := *cfg.(*C)
+			return &cp, s.FilterTools(&cp, rowID, f)
+		}
 	}
 	registry.Lock()
 	defer registry.Unlock()

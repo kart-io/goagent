@@ -35,29 +35,26 @@ func (e *TrustRequiredError) Error() string {
 	return fmt.Sprintf("preset %s 含有需要授权的扩权项（项目 %s）：\n%s", e.Preset, e.Root, strings.Join(lines, "\n"))
 }
 
-// expansionDigest 覆盖每个扩权项及其所在组件的完整配置，配置任何变化都使授权失效。
-func expansionDigest(root string, p *Resolved) (string, error) {
+// expansionDigest 覆盖每个扩权项及其所在组件的有效配置（含 Resolve 从工作区补全的内容），配置任何变化都使授权失效。
+func expansionDigest(root string, p *Resolved, items []Expansion, cfgs []any) (string, error) {
 	type item struct {
 		Component, Layer, Path, Reason string
 		Config                         any
 	}
-	items := make([]item, 0, len(p.Expansions))
-	for _, e := range p.Expansions {
+	out := make([]item, 0, len(items))
+	for _, e := range items {
 		var cfg any
-		for _, r := range p.Rows {
+		for i, r := range p.Rows {
 			if r.ID == e.Component {
-				var err error
-				if cfg, err = rawJSON(r); err != nil {
-					return "", err
-				}
+				cfg = cfgs[i]
 			}
 		}
-		items = append(items, item{e.Component, e.Origin.Layer, e.Origin.Path, e.Reason, cfg})
+		out = append(out, item{e.Component, e.Origin.Layer, e.Origin.Path, e.Reason, cfg})
 	}
 	data, err := json.Marshal(struct {
 		Root, Preset string
 		Items        []item
-	}{root, p.ID, items})
+	}{root, p.ID, out})
 	if err != nil {
 		return "", err
 	}
