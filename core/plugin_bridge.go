@@ -384,6 +384,9 @@ func NewPluginRegistry() *PluginRegistry {
 
 // Register 注册插件
 func (r *PluginRegistry) Register(name string, plugin DynamicRunnable, metadata *PluginMetadata) error {
+	// TypeInfo 是插件代码，在锁外调用以免插件回调注册表时死锁
+	typeInfo := plugin.TypeInfo()
+
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -397,12 +400,12 @@ func (r *PluginRegistry) Register(name string, plugin DynamicRunnable, metadata 
 	r.plugins[name] = plugin
 	if metadata != nil {
 		metadata.Name = name
-		metadata.TypeInfo = plugin.TypeInfo()
+		metadata.TypeInfo = typeInfo
 		r.metadata[name] = metadata
 	} else {
 		r.metadata[name] = &PluginMetadata{
 			Name:     name,
-			TypeInfo: plugin.TypeInfo(),
+			TypeInfo: typeInfo,
 		}
 	}
 

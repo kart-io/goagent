@@ -2,6 +2,7 @@ package agents
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"sort"
@@ -11,8 +12,10 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
+	"github.com/kart-io/goagent/agents/base"
 	"github.com/kart-io/goagent/core"
 	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/performance"
 	"github.com/kart-io/goagent/tools"
@@ -64,6 +67,10 @@ type SupervisorConfig struct {
 
 	// AggregationStrategy defines how to aggregate results
 	AggregationStrategy AggregationStrategy
+
+	// FailOnAnyError 为 true 时任一子任务失败即令 Invoke 返回错误；默认 false，部分失败仍返回汇总结果并标记为 partial。
+	// 全部子任务失败、或任一子任务结果含 *PanicError 时，无论此项取值 Invoke 都返回错误。
+	FailOnAnyError bool
 }
 
 // DefaultSupervisorConfig returns default configuration
@@ -239,20 +246,59 @@ func (s *SupervisorAgent) Invoke(ctx context.Context, input *core.AgentInput) (*
 
 	// Aggregate results
 	finalResult := s.ResultAggregator.Aggregate(results)
+	status, failed, execErr := s.summarizeResults(results)
 
 	// Update metrics
 	s.metrics.UpdateExecutionTime(time.Since(startTime))
-	s.metrics.IncrementSuccessfulTasks()
+	switch status {
+	case interfaces.StatusSuccess:
+		s.metrics.IncrementSuccessfulTasks()
+	case interfaces.StatusPartial:
+		s.metrics.IncrementPartialTasks()
+	default:
+		s.metrics.IncrementFailedTasks()
+	}
 
 	return &core.AgentOutput{
 		Result: finalResult,
+		Status: status,
 		Metadata: map[string]interface{}{
 			"tasks_executed": len(tasks),
+			"tasks_failed":   failed,
 			"agents_used":    s.getUsedAgents(results),
 			"execution_time": time.Since(startTime),
 			"execution_plan": plan,
 		},
-	}, nil
+	}, execErr
+}
+
+// summarizeResults 汇总子任务结果：任一结果含 *PanicError 时返回这些 panic；全部失败、或开启 FailOnAnyError 时
+// 有任一失败，返回全部子任务错误；其余部分失败只标记为 partial，不返回错误。
+func (s *SupervisorAgent) summarizeResults(results []TaskResult) (status string, failed int, err error) {
+	var errs, panics []error
+	for _, result := range results {
+		if result.Error == nil {
+			continue
+		}
+		errs = append(errs, result.Error)
+		if base.IsPanic(result.Error) {
+			panics = append(panics, result.Error)
+		}
+	}
+	failed = len(errs)
+	switch {
+	case len(panics) > 0:
+		return interfaces.StatusFailed, failed, errors.Join(panics...)
+	case failed == 0:
+		return interfaces.StatusSuccess, 0, nil
+	case failed == len(results) || s.config.FailOnAnyError:
+		return interfaces.StatusFailed, failed, agentErrors.Wrap(errors.Join(errs...), agentErrors.CodeAgentExecution,
+			fmt.Sprintf("%d/%d 个子任务失败", failed, len(results))).
+			WithComponent("supervisor_agent").
+			WithOperation("Invoke")
+	default:
+		return interfaces.StatusPartial, failed, nil
+	}
 }
 
 // parseTasks converts input into a list of tasks
@@ -467,12 +513,24 @@ func (s *SupervisorAgent) executePlan(ctx context.Context, plan *ExecutionPlan, 
 }
 
 // executeTask executes a single task
-func (s *SupervisorAgent) executeTask(ctx context.Context, task Task, originalInput interface{}) TaskResult {
+// 路由器或子 Agent panic 时转为 *PanicError 写入该任务的结果，不让 errgroup 的 goroutine 带崩进程
+func (s *SupervisorAgent) executeTask(ctx context.Context, task Task, originalInput interface{}) (result TaskResult) {
 	startTime := time.Now()
-	result := TaskResult{
+	result = TaskResult{
 		TaskID:    task.ID,
 		StartTime: startTime,
 	}
+	var panicErr error
+	defer func() {
+		if panicErr != nil {
+			result.Error = panicErr
+			result.ErrorString = panicErr.Error()
+			result.Confidence = 0.1
+			result.EndTime = time.Now()
+			result.Duration = result.EndTime.Sub(startTime)
+		}
+	}()
+	defer core.RecoverPanic(ctx, "supervisor_agent", "executeTask", &panicErr)
 
 	// Create timeout context
 	taskCtx, cancel := context.WithTimeout(ctx, s.config.SubAgentTimeout)
@@ -526,7 +584,16 @@ func (s *SupervisorAgent) executeTask(ctx context.Context, task Task, originalIn
 					break
 				}
 			}
-			time.Sleep(delay)
+			timer := time.NewTimer(delay)
+			select {
+			case <-timer.C:
+			case <-taskCtx.Done():
+				timer.Stop()
+				execErr = errors.Join(execErr, taskCtx.Err())
+			}
+			if taskCtx.Err() != nil {
+				break
+			}
 		}
 
 		// Create agent input with original input preserved
@@ -587,7 +654,7 @@ func (s *SupervisorAgent) executeTask(ctx context.Context, task Task, originalIn
 
 // isRetryableError checks if an error is retryable
 func (s *SupervisorAgent) isRetryableError(err error) bool {
-	if err == nil || s.config.RetryPolicy == nil {
+	if err == nil || s.config.RetryPolicy == nil || base.IsPanic(err) {
 		return false
 	}
 
@@ -830,6 +897,7 @@ type SupervisorMetrics struct {
 	totalTasks      int64
 	successfulTasks int64
 	failedTasks     int64
+	partialTasks    int64 // 部分子任务失败但仍返回汇总结果的执行，不计入 successfulTasks
 	totalTime       time.Duration
 	averageTime     time.Duration
 	mu              sync.RWMutex
@@ -861,6 +929,13 @@ func (m *SupervisorMetrics) IncrementFailedTasks() {
 	m.failedTasks++
 }
 
+// IncrementPartialTasks 统计一次部分子任务失败的执行
+func (m *SupervisorMetrics) IncrementPartialTasks() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.partialTasks++
+}
+
 // UpdateExecutionTime updates execution time metrics
 func (m *SupervisorMetrics) UpdateExecutionTime(duration time.Duration) {
 	m.mu.Lock()
@@ -881,6 +956,7 @@ func (m *SupervisorMetrics) GetSnapshot() map[string]interface{} {
 		"total_tasks":      m.totalTasks,
 		"successful_tasks": m.successfulTasks,
 		"failed_tasks":     m.failedTasks,
+		"partial_tasks":    m.partialTasks,
 		"total_time":       m.totalTime,
 		"average_time":     m.averageTime,
 		"success_rate":     float64(m.successfulTasks) / float64(m.totalTasks),

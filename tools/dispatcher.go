@@ -1,30 +1,57 @@
 package tools
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"reflect"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/durable"
+	"github.com/kart-io/goagent/core/observe"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 )
 
-// DispatchConfig is immutable after construction. Timeout includes queueing;
-// tools must honor context. No implicit retries or background timeout workers.
+// DispatchConfig is immutable after construction. Tools must honor context.
+// No implicit retries or background timeout workers.
 type DispatchConfig struct {
 	// MaxAttempts bounds explicit resume attempts for a journaled CallID.
 	// Default 3. No retries occur inside a single Invoke.
 	MaxAttempts    int
-	MaxConcurrency int           // default 4, shared by all calls on this dispatcher
-	Timeout        time.Duration // default 30 seconds
-	Authorize      func(context.Context, string, *interfaces.ToolInput) error
+	MaxConcurrency int // default 4, shared by all calls on this dispatcher
+	// Timeout 是单次调用的默认超时，默认 30 秒；实现 DispatchTimeoutProvider 的工具以自己声明的值替代它，可长可短。
+	// 计时从取得并发槽位开始，不含排队；排队只受调用方 ctx 约束，每个占用槽位的调用都有超时，排队因此有界。
+	Timeout time.Duration
+	// Authorize 在开启 ReturnArgumentErrors 时也会对参数不合法的模型调用执行，可能收到不满足 Schema 的参数。
+	Authorize func(context.Context, string, *interfaces.ToolInput) error
+	// OnResult 在每次得到结果后、tool_end 之前同步调用：首次执行、日志回放和交还模型的参数错误结果都会触发，
+	// 宿主据此在崩溃恢复后重建自身状态（如证据编号）。返回错误或 panic 时本次调用失败，
+	// 但已写入的日志不变，恢复时回放会再次触发。回调不受 Timeout 约束。
+	//
+	// 顺序：顺序执行的调用按调用顺序触发。Builder 同一轮并发执行的调用经 DeferResults 推迟到整轮结束后，
+	// 按模型给出的顺序逐个触发，首次执行与恢复回放顺序一致。宿主自行并发调用 Invoke 时触发顺序不确定，
+	// 且会并发触发，需自行加锁；此时按到达顺序编号不可重建，应从 ExecutionKey 派生编号。
+	OnResult func(context.Context, DispatchResult) error
+	// ReturnArgumentErrors 只作用于 Tools() 返回的模型调用路径：参数校验失败和工具返回的 *ArgumentError
+	// 不再中止，而是返回 Success=false、Error 为空的结果交给模型改正，并按已完成写入日志。
+	// Invoke 与 AsRunnable 不受影响，仍以 error 报告参数错误。授权、超时、深度和重入错误仍然中止。
+	ReturnArgumentErrors bool
+}
+
+// DispatchResult 是交给 OnResult 的一次调用结果。Args 与 Output 归调用方所有，回调不得修改。
+// ExecutionKey 在带 CallID 的持久调用中是由父键和 CallID 派生的子键，重启后保持不变，可作为宿主侧去重键。
+type DispatchResult struct {
+	Name, CallID, ExecutionKey string
+	Args                       map[string]any
+	// Output 在持久调用中总是从日志解码（数字为 json.Number），首次执行与回放得到相同的值。
+	Output   *interfaces.ToolOutput
+	Replayed bool
 }
 
 // ToolRequest selects a registered tool. Identity and execution metadata must
@@ -38,6 +65,9 @@ type dispatchEntry struct {
 	tool                      interfaces.Tool
 	name, description, schema string
 	resolved                  *jsonschema.Resolved
+	version                   string
+	policy                    *durable.OperationPolicy
+	timeout                   time.Duration
 }
 
 // Dispatcher snapshots a Registry and provides one execution path for native
@@ -52,9 +82,9 @@ type Dispatcher struct {
 
 func NewDispatcher(registry *Registry, cfg DispatchConfig) (dispatcher *Dispatcher, err error) {
 	defer func() {
-		if recover() != nil {
+		if v := recover(); v != nil {
 			dispatcher = nil
-			err = fmt.Errorf("tool metadata panicked")
+			err = agentErrors.NewPanicError("工具元数据", v)
 		}
 	}()
 	if registry == nil {
@@ -96,7 +126,28 @@ func NewDispatcher(registry *Registry, cfg DispatchConfig) (dispatcher *Dispatch
 		if e != nil {
 			return nil, fmt.Errorf("tool %q schema: %w", name, e)
 		}
-		d.entries[name] = dispatchEntry{tool: tool, name: name, description: tool.Description(), schema: raw, resolved: resolved}
+		entry := dispatchEntry{tool: tool, name: name, description: tool.Description(), schema: raw, resolved: resolved, timeout: cfg.Timeout}
+		if v, ok := tool.(DispatchTimeoutProvider); ok {
+			if timeout := v.DispatchTimeout(); timeout > 0 {
+				entry.timeout = timeout
+			} else if timeout < 0 {
+				return nil, fmt.Errorf("tool %q timeout must not be negative", name)
+			}
+		}
+		if v, ok := tool.(DurableIntentVersioner); ok {
+			entry.version = v.DurableIntentVersion()
+			if entry.version == "" {
+				return nil, fmt.Errorf("tool version required")
+			}
+		}
+		if v, ok := tool.(DurablePolicyProvider); ok {
+			policy := v.DurableOperationPolicy()
+			if policy.MaxAttempts < 1 {
+				return nil, fmt.Errorf("tool attempt policy required")
+			}
+			entry.policy = &policy
+		}
+		d.entries[name] = entry
 		d.names = append(d.names, name)
 	}
 	slices.Sort(d.names)
@@ -119,20 +170,44 @@ func nilTool(tool interfaces.Tool) bool {
 // execution and strict result checking. Caller-owned Args must not be mutated
 // concurrently; the underlying tool receives the original Go value types.
 func (d *Dispatcher) Invoke(ctx context.Context, req ToolRequest) (out *interfaces.ToolOutput, err error) {
-	return d.invoke(ctx, req, func(*core.StreamEvent) error { return nil })
+	return d.invoke(ctx, req, func(*core.StreamEvent) error { return nil }, false)
 }
-func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*core.StreamEvent) error) (out *interfaces.ToolOutput, err error) {
+
+// recoverArgs 仅在模型调用路径为真；此时参数错误作为结果返回，其余情况 out 要么成功要么带 error。
+func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*core.StreamEvent) error, recoverArgs bool) (out *interfaces.ToolOutput, err error) {
+	endTool := func(error, bool) {}
+	replayed := false
+	// 推迟交付时观测交给 deliver 或放弃交付结束，使观测结果与回调结果一致。
+	handedOff := false
 	defer func() {
-		if recover() != nil {
+		if !handedOff {
+			endTool(err, replayed)
+		}
+	}()
+	// 本层返回的错误登记给调用方，外层模型路径不会把它当作外层模型的参数错误。
+	caller := ctx
+	defer func() { Settle(caller, err) }()
+	defer func() {
+		if v := recover(); v != nil {
 			out = nil
-			err = fmt.Errorf("tool %q panicked", req.Name)
+			err = agentErrors.NewPanicError(fmt.Sprintf("工具 %q", req.Name), v)
 		}
 	}()
 	if d == nil {
 		return nil, fmt.Errorf("dispatcher is required")
 	}
-	ctx, cancel := context.WithTimeout(ctx, d.config.Timeout)
-	defer cancel()
+	// 推迟只作用于本层调用，工具内部再经 Dispatcher 的调用照常即时回调。
+	var deferred *deferredResult
+	ctx, deferred = takeDeferredResult(ctx)
+	ctx, err = enterDispatcher(ctx, d)
+	if err != nil {
+		return nil, err
+	}
+	// settled 为 nil 表示本路径不恢复参数错误。
+	var settled *settledSet
+	if recoverArgs {
+		ctx, settled = withSettledSet(ctx)
+	}
 	if err = ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -155,28 +230,50 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 		ctx = durable.WithExecutionKey(ctx, input.ExecutionKey)
 		input.ExecutionKey = durable.ChildKey(input.ExecutionKey, "tool/"+input.CallID)
 	}
+	ctx, endTool = observe.Start(ctx, observe.Event{Type: "tool", Path: req.Name, OperationKey: input.ExecutionKey})
 	select {
 	case d.slots <- struct{}{}:
 		defer func() { <-d.slots }()
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
+	// 结果回调使用不含单次超时的 ctx：推迟回调时整轮结束才触发，不应因等待兄弟调用而超时。
+	resultCtx := ctx
+	ctx, cancel := context.WithTimeout(ctx, entry.timeout)
+	defer cancel()
+	input.Context = ctx
 	if err = ctx.Err(); err != nil {
 		return nil, err
 	}
+	// 参数错误结果与正常执行走同一授权、事件和日志路径，只是不调用工具。
+	var argResult *interfaces.ToolOutput
 	if err = entry.resolved.Validate(input.Args); err != nil {
-		return nil, fmt.Errorf("tool %q arguments: %w", req.Name, err)
+		err = &ArgumentError{Message: fmt.Sprintf("tool %q arguments: %v", req.Name, err), Err: err}
+	} else if custom, ok := entry.tool.(interfaces.ValidatableTool); ok {
+		if err = custom.Validate(ctx, &input); err == nil {
+			if err = entry.resolved.Validate(input.Args); err != nil {
+				return nil, err
+			}
+		}
 	}
-	if custom, ok := entry.tool.(interfaces.ValidatableTool); ok {
-		if err = custom.Validate(ctx, &input); err != nil {
+	if err != nil {
+		var ok bool
+		if argResult, ok = argumentResult(err, settled); !ok {
 			return nil, err
 		}
-		if err = entry.resolved.Validate(input.Args); err != nil {
-			return nil, err
-		}
+		err = nil
 	}
 	if d.config.Authorize != nil {
-		if err = d.config.Authorize(ctx, req.Name, &input); err != nil {
+		// 参数可能不满足 Schema，Authorize 的 panic 单独报告，不算作工具失败。
+		err = func() (e error) {
+			defer func() {
+				if v := recover(); v != nil {
+					e = agentErrors.NewPanicError(fmt.Sprintf("工具 %q 的授权回调", req.Name), v)
+				}
+			}()
+			return d.config.Authorize(ctx, req.Name, &input)
+		}()
+		if err != nil {
 			return nil, err
 		}
 	}
@@ -190,9 +287,15 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 		return nil, err
 	}
 	invoke := func(callCtx context.Context) (*interfaces.ToolOutput, error) {
+		if argResult != nil {
+			return argResult, nil
+		}
 		input.Context = callCtx
 		result, e := entry.tool.Invoke(callCtx, &input)
 		if e != nil {
+			if out, ok := argumentResult(e, settled); ok && callCtx.Err() == nil {
+				return out, nil
+			}
 			return nil, e
 		}
 		if e = callCtx.Err(); e != nil {
@@ -201,8 +304,19 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 		if result == nil {
 			return nil, fmt.Errorf("tool %q returned nil output", req.Name)
 		}
+		if _, rejected := RejectedResult(result); rejected {
+			return result, nil
+		}
 		if !result.Success || result.Error != "" {
-			return nil, fmt.Errorf("tool %q failed: %s", req.Name, result.Error)
+			// 只透传直接注册的内层 Dispatcher 工具交还的参数错误结果；其他工具的同形状结果按失败处理。
+			message, isArg := argumentResultMessage(result)
+			if inner, ok := entry.tool.(*dispatchedTool); recoverArgs && isArg && ok && inner.d.config.ReturnArgumentErrors {
+				return result, nil
+			}
+			if result.Error != "" {
+				message = result.Error
+			}
+			return nil, fmt.Errorf("tool %q failed: %s", req.Name, message)
 		}
 		return result, nil
 	}
@@ -216,20 +330,50 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 		if e != nil {
 			return nil, e
 		}
-		record, e := durable.Do(ctx, "tool/"+input.CallID, intent, durable.OperationPolicy{MaxAttempts: d.config.MaxAttempts, RetryFailed: true}, func(callCtx context.Context) (json.RawMessage, error) {
+		if entry.version != "" {
+			intent, e = json.Marshal(struct {
+				Original json.RawMessage
+				Version  string
+			}{intent, entry.version})
+			if e != nil {
+				return nil, e
+			}
+		}
+		policy := durable.OperationPolicy{MaxAttempts: d.config.MaxAttempts, RetryFailed: true}
+		if entry.policy != nil {
+			policy = *entry.policy
+		}
+		if r, ok := entry.tool.(ReconcilableTool); ok && argResult == nil {
+			policy.Reconcile = func(callCtx context.Context) (json.RawMessage, bool, error) {
+				lookup := input
+				lookup.Context = callCtx
+				result, found, e := r.Reconcile(callCtx, &lookup)
+				if e != nil || !found {
+					return nil, false, e
+				}
+				if _, rejected := RejectedResult(result); result == nil || result.Error != "" || (!result.Success && !rejected) {
+					return nil, false, fmt.Errorf("tool %q reconciled an unsuccessful result", req.Name)
+				}
+				data, e := encodeJournaledOutput(result)
+				return data, e == nil, e
+			}
+		}
+		record, e := durable.Do(ctx, "tool/"+input.CallID, intent, policy, func(callCtx context.Context) (json.RawMessage, error) {
 			result, invokeErr := invoke(callCtx)
 			if invokeErr != nil {
 				return nil, invokeErr
 			}
-			return json.Marshal(result)
+			return encodeJournaledOutput(result)
 		})
 		if e != nil {
 			return nil, e
 		}
 		// Journaled outputs use a JSON boundary on fresh and replayed calls alike.
-		decoder := json.NewDecoder(bytes.NewReader(record.Value))
-		decoder.UseNumber()
-		err = decoder.Decode(&out)
+		out, err = decodeJournaledOutput(record.Value)
+		if _, rejected := RejectedResult(out); err == nil && out != nil && !out.Success && !rejected && !recoverArgs {
+			err = fmt.Errorf("tool %q journaled an argument error result, but argument recovery is not enabled on this path", req.Name)
+		}
+		replayed = record.Replayed
 		if record.Replayed && err == nil {
 			err = emit(&core.StreamEvent{Type: "tool_replayed", Tool: req.Name})
 		}
@@ -237,17 +381,156 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 	if err != nil {
 		return nil, err
 	}
-	if err = emit(&core.StreamEvent{Type: "tool_end", Tool: req.Name}); err != nil {
+	result := DispatchResult{Name: req.Name, CallID: input.CallID, ExecutionKey: input.ExecutionKey, Args: input.Args, Output: out, Replayed: replayed}
+	if deferred != nil {
+		if err = deferred.add(deferredCall{
+			deliver: func() error {
+				e := Settle(caller, d.deliverResult(resultCtx, result, emit))
+				endTool(e, replayed)
+				return e
+			},
+			abandon: func(e error) { endTool(e, replayed) },
+		}); err != nil {
+			return nil, err
+		}
+		handedOff = true
+		return out, nil
+	}
+	if err = d.deliverResult(resultCtx, result, emit); err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
+// deliverResult 触发 OnResult 并发出 tool_end；回调失败时不发 tool_end。
+func (d *Dispatcher) deliverResult(ctx context.Context, result DispatchResult, emit func(*core.StreamEvent) error) error {
+	if d.config.OnResult != nil {
+		err := func() (e error) {
+			defer func() {
+				if v := recover(); v != nil {
+					e = agentErrors.NewPanicError(fmt.Sprintf("工具 %q 的结果回调", result.Name), v)
+				}
+			}()
+			return d.config.OnResult(ctx, result)
+		}()
+		if err != nil {
+			return err
+		}
+	}
+	return emit(&core.StreamEvent{Type: "tool_end", Tool: result.Name})
+}
+
+type deferredResultKey struct{}
+
+// deferredResult 保存经同一 ctx 发起的调用推迟的结果回调，按调用成功的先后追加；宿主可能在同一 ctx 下多次或并发调用。
+// 每个调用只会被 deliver 或 ctx 结束时的放弃交付之一认领。
+type deferredResult struct {
+	ctx     context.Context
+	mu      sync.Mutex
+	calls   []deferredCall
+	stop    func() bool
+	dropped error // 放弃交付的原因，由下一次 deliver 报告
+}
+
+type deferredCall struct {
+	deliver func() error
+	abandon func(error)
+}
+
+func (p *deferredResult) add(c deferredCall) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if err := p.ctx.Err(); err != nil {
+		return err
+	}
+	p.calls = append(p.calls, c)
+	// 只在有待交付调用时登记；不可取消的 ctx 上不登记，也不启动 goroutine。
+	if p.stop == nil {
+		p.stop = context.AfterFunc(p.ctx, p.abandon)
+	}
+	return nil
+}
+
+func (p *deferredResult) abandon() {
+	p.mu.Lock()
+	calls := p.calls
+	p.calls, p.stop = nil, nil
+	err := p.ctx.Err()
+	if len(calls) > 0 {
+		p.dropped = err
+	}
+	p.mu.Unlock()
+	for _, c := range calls {
+		c.abandon(err)
+	}
+}
+
+// DeferResults 让经 ctx 发起的 Dispatcher 调用推迟 OnResult 与 tool_end：调用成功时只返回结果，
+// 回调在调用方执行 deliver 时才触发。调用失败或未经 Dispatcher 时不追加回调。
+// 只对 Invoke 与 Tools() 返回的工具生效；AsRunnable 的事件随 runnable 的流结束，照常即时交付。
+// 推迟的调用的观测由 deliver 结束，回调失败时以错误结束。deliver 前 ctx 结束时，未交付的调用放弃交付：
+// 观测以 ctx 的错误结束，回调不再触发（日志不变，恢复时回放会再次触发），下一次 deliver 返回该错误。
+// 用于同一轮并发调用：全部结束后按调用顺序依次 deliver，回调顺序因此与执行先后无关。
+// 同一 ctx 下的多次调用按成功的先后各追加一个回调，并发调用时先后不确定；需要确定顺序时每个调用使用各自的 ctx。
+// deliver 须在调用返回后执行，依次触发尚未触发的全部回调，每个回调只触发一次；
+// 与 Builder 同轮并发语义一致，某个回调失败不跳过其余回调（失败的那个不发 tool_end），全部触发后返回最靠前的错误。
+func DeferResults(ctx context.Context) (context.Context, func() error) {
+	pending := &deferredResult{ctx: ctx}
+	return context.WithValue(ctx, deferredResultKey{}, pending), func() error {
+		pending.mu.Lock()
+		calls, first := pending.calls, pending.dropped
+		pending.calls, pending.dropped = nil, nil
+		if pending.stop != nil {
+			pending.stop()
+			pending.stop = nil
+		}
+		pending.mu.Unlock()
+		for _, c := range calls {
+			if err := c.deliver(); err != nil && first == nil {
+				first = err
+			}
+		}
+		return first
+	}
+}
+
+func takeDeferredResult(ctx context.Context) (context.Context, *deferredResult) {
+	pending, _ := ctx.Value(deferredResultKey{}).(*deferredResult)
+	if pending == nil {
+		return ctx, nil
+	}
+	return context.WithValue(ctx, deferredResultKey{}, (*deferredResult)(nil)), pending
+}
+
+func argumentResult(err error, settled *settledSet) (*interfaces.ToolOutput, bool) {
+	if settled == nil {
+		return nil, false
+	}
+	message, ok := argumentErrorMessage(err, settled)
+	if !ok {
+		return nil, false
+	}
+	// 不设置 Error 字段：调用方把 Error 视为执行失败，这里的结果要原样交给模型。
+	return &interfaces.ToolOutput{Success: false, Result: map[string]any{"error": "invalid_arguments", "message": message}}, true
+}
+
+// argumentResultMessage 返回结果中的 message；第二个值表示结果是否为参数错误结果的形状。
+func argumentResultMessage(out *interfaces.ToolOutput) (string, bool) {
+	m, _ := out.Result.(map[string]any)
+	message, _ := m["message"].(string)
+	return message, !out.Success && out.Error == "" && m["error"] == "invalid_arguments"
+}
+
+// ReturnsArgumentErrors 实现 interfaces.ArgumentErrorTool：Builder 不在提交模型回合前拒绝不合法的参数。
+func (t *dispatchedTool) ReturnsArgumentErrors() bool { return t.d.config.ReturnArgumentErrors }
+
 func (d *Dispatcher) AsRunnable() *core.StreamRunnable[ToolRequest, *interfaces.ToolOutput] {
 	return core.NewStreamRunnable(core.StreamModeSteps, func(ctx context.Context, req ToolRequest, emit func(core.StreamChunk[*interfaces.ToolOutput]) error) error {
+		// runnable 返回后流已结束、内部 ctx 已取消，推迟的 tool_end 无处可发，因此不推迟。
+		ctx, _ = takeDeferredResult(ctx)
 		out, err := d.invoke(ctx, req, func(event *core.StreamEvent) error {
 			return emit(core.StreamChunk[*interfaces.ToolOutput]{Event: event})
-		})
+		}, false)
 		if err != nil {
 			return err
 		}
@@ -278,5 +561,8 @@ func (t *dispatchedTool) Name() string               { return t.entry.name }
 func (t *dispatchedTool) Description() string        { return t.entry.description }
 func (t *dispatchedTool) ArgsSchema() string         { return t.entry.schema }
 func (t *dispatchedTool) Invoke(ctx context.Context, in *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
-	return t.d.Invoke(ctx, ToolRequest{Name: t.entry.name, Input: in})
+	return t.d.invoke(ctx, ToolRequest{Name: t.entry.name, Input: in}, func(*core.StreamEvent) error { return nil }, t.d.config.ReturnArgumentErrors)
 }
+
+// SupportsConcurrentCalls 实现 interfaces.ConcurrentCallTool：同一轮的多个调用共享 MaxConcurrency 限流，可并发执行。
+func (t *dispatchedTool) SupportsConcurrentCalls() bool { return true }

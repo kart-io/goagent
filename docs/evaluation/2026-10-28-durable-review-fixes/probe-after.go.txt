@@ -1,0 +1,56 @@
+package main
+import (
+ "context"
+ "fmt"
+ "os"
+ "github.com/kart-io/goagent/builder"
+ "github.com/kart-io/goagent/core"
+ "github.com/kart-io/goagent/core/durable"
+ "github.com/kart-io/goagent/interfaces"
+ "github.com/kart-io/goagent/llm"
+ "github.com/kart-io/goagent/llm/constants"
+ "github.com/kart-io/goagent/llm/common"
+ "github.com/kart-io/goagent/tools"
+ "github.com/kart-io/goagent/workflow"
+)
+type model struct{ calls int; label string }
+func(m *model)Provider() constants.Provider{return constants.Provider("fake")}
+func(m *model)IsAvailable()bool{return true}
+func(m *model)Complete(context.Context,*llm.CompletionRequest)(*llm.CompletionResponse,error){panic("unused")}
+func(m *model)Chat(context.Context,[]llm.Message)(*llm.CompletionResponse,error){panic("unused")}
+func(m *model)ChatStream(ctx context.Context,msg []llm.Message)(<-chan *llm.StreamChunk,error){return m.CompleteStream(ctx,&llm.CompletionRequest{Messages:msg})}
+func(m *model)CompleteStream(context.Context,*llm.CompletionRequest)(<-chan *llm.StreamChunk,error){m.calls++;ch:=make(chan *llm.StreamChunk,1);ch<-&llm.StreamChunk{Content:m.label,Delta:m.label,Done:true,FinishReason:"stop",Usage:&llm.Usage{TotalTokens:10}};close(ch);return ch,nil}
+func(m *model)CompleteToolsStream(ctx context.Context,r *llm.CompletionRequest,_ []interfaces.Tool)(<-chan *llm.StreamChunk,error){return m.CompleteStream(ctx,r)}
+type legacyModel struct{ llm.StreamClient; selections int }
+func(m *legacyModel)GenerateWithTools(context.Context,string,[]interfaces.Tool)(*common.ToolCallResponse,error){m.selections++;if m.selections%2==1{return &common.ToolCallResponse{ToolCalls:[]common.ToolCall{{Name:"write",Arguments:map[string]interface{}{}}}},nil};return &common.ToolCallResponse{},nil}
+func check(e error){if e!=nil{panic(e)}}
+func store() durable.Store{dir,e:=os.MkdirTemp("","goagent-review-store-");check(e);s,e:=durable.NewFileStore(dir);check(e);return s}
+func unusedTools() []interfaces.Tool{reg:=tools.NewRegistry();check(reg.Register(tools.NewBaseTool("lookup","lookup",`{"type":"object"}`,func(context.Context,*interfaces.ToolInput)(*interfaces.ToolOutput,error){return &interfaces.ToolOutput{Success:true,Result:"x"},nil})));d,e:=tools.NewDispatcher(reg,tools.DispatchConfig{});check(e);return d.Tools()}
+func main(){
+ ctx:=context.Background()
+ // Same failure after successful model output, differing only in registered tools.
+ for _,withTools:=range []bool{false,true}{
+  m:=&model{label:"answer"};b:=builder.NewSimpleBuilder(m).WithDurableScope("answer");if withTools{b=b.WithTools(unusedTools()...)};agent,e:=b.Build();check(e)
+  g:=workflow.NewGraph[string]();check(g.AddNode("agent",func(ctx context.Context,in string)(string,error){_,e:=agent.AsRunnable().Invoke(ctx,in);if e!=nil{return "",e};return "",fmt.Errorf("injected loss before node output checkpoint")}));check(g.AddEdge(workflow.START,"agent"));check(g.AddEdge("agent",workflow.END));d,e:=g.CompileDurable(ctx,workflow.DurableConfig{Store:store(),Version:"v1"});check(e)
+  for i:=0;i<2;i++{_,e=d.Run(ctx,"run","question","");fmt.Printf("withTools=%v attempt=%d err=%v\n",withTools,i+1,e)}
+  fmt.Printf("withTools=%v actual_model_requests=%d\n",withTools,m.calls)
+ }
+
+ legacyBase:=&model{label:"answer"};legacy:=&legacyModel{StreamClient:legacyBase};writes:=0
+ bare:=tools.NewBaseTool("write","write",`{"type":"object"}`,func(context.Context,*interfaces.ToolInput)(*interfaces.ToolOutput,error){writes++;return &interfaces.ToolOutput{Success:true,Result:"receipt"},nil})
+ legacyAgent,e:=builder.NewSimpleBuilder(legacy).WithDurableScope("legacy").WithTools(bare).Build();check(e)
+ lg:=workflow.NewGraph[string]();check(lg.AddNode("legacy",func(ctx context.Context,in string)(string,error){_,e:=legacyAgent.AsRunnable().Invoke(ctx,in);if e!=nil{return "",e};return "",fmt.Errorf("injected node failure")}));check(lg.AddEdge(workflow.START,"legacy"));check(lg.AddEdge("legacy",workflow.END));ld,e:=lg.CompileDurable(ctx,workflow.DurableConfig{Store:store(),Version:"v1"});check(e)
+ for i:=0;i<2;i++{_,e=ld.Run(ctx,"run","question","");fmt.Printf("legacy attempt=%d error=%v\n",i+1,e)}
+ fmt.Printf("legacy bare_tool_executions=%d model_selections=%d answers=%d\n",writes,legacy.selections,legacyBase.calls)
+ // Two distinct agent components inside one public graph node.
+ m1,m2:=&model{label:"agent-A"},&model{label:"agent-B"}
+ a,e:=builder.NewSimpleBuilder(m1).WithDurableScope("A").WithTools(unusedTools()...).Build();check(e)
+ b,e:=builder.NewSimpleBuilder(m2).WithDurableScope("B").WithTools(unusedTools()...).Build();check(e)
+ g:=workflow.NewGraph[string]();check(g.AddNode("combined",func(ctx context.Context,in string)(string,error){first,e:=a.AsRunnable().Invoke(ctx,in);if e!=nil{return "",e};second,e:=b.AsRunnable().Invoke(ctx,in);if e!=nil{return "",e};return fmt.Sprintf("%v + %v",first.Result,second.Result),nil}));check(g.AddEdge(workflow.START,"combined"));check(g.AddEdge("combined",workflow.END));d,e:=g.CompileDurable(ctx,workflow.DurableConfig{Store:store(),Version:"v1"});check(e)
+ out,e:=d.Run(ctx,"run","question","");fmt.Printf("two_agents snapshot=%+v err=%v model_requests=A:%d B:%d\n",out,e,m1.calls,m2.calls)
+ // Same AdaptStream under Compile versus CompileDurable.
+ source:=core.NewStreamRunnable(core.StreamModeTokens,func(ctx context.Context,in int,emit func(core.StreamChunk[int])error)error{if e:=emit(core.StreamChunk[int]{Data:7,Event:&core.StreamEvent{Type:"preview"}});e!=nil{return e};return emit(core.StreamChunk[int]{Done:true,Data:9})})
+ adapted,e:=workflow.AdaptStream(source,func(n int)(int,error){return n,nil},func(_,n int)(int,error){return n,nil},func(_ int,c core.StreamChunk[int])(core.StreamChunk[int],error){return c,nil});check(e)
+ h:=workflow.NewGraph[int]();check(h.AddRunnable("stream",adapted));check(h.AddEdge(workflow.START,"stream"));check(h.AddEdge("stream",workflow.END));regular,e:=h.Compile(ctx);check(e);stream,e:=regular.Stream(ctx,0);check(e);for c:=range stream{if c.Event!=nil&&c.Event.Type=="preview"{fmt.Printf("regular preview data=%v\n",c.Data)}}
+ hd,e:=h.CompileDurable(ctx,workflow.DurableConfig{Store:store(),Version:"v1"});check(e);s,e:=hd.AsRunnable().Stream(ctx,workflow.RunRequest[int]{RunID:"run"});check(e);for c:=range s{if c.Event!=nil&&c.Event.Type=="preview"{fmt.Printf("durable preview data=%v\n",c.Data)}}
+}

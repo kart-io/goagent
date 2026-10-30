@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
+	agentcore "github.com/kart-io/goagent/core"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/mcp/core"
 	"github.com/kart-io/goagent/tools"
@@ -203,9 +204,9 @@ func (tb *StandardToolBox) ExecuteBatch(ctx context.Context, calls []*core.ToolC
 		wg.Add(1)
 		go func(idx int, c *core.ToolCall) {
 			defer wg.Done()
-			result, err := tb.Execute(ctx, c)
-			results[idx] = result
-			errors[idx] = err
+			// 工具是宿主代码，panic 作为该调用的错误结果
+			defer agentcore.RecoverPanic(ctx, "standard_toolbox", "execute_batch", &errors[idx])
+			results[idx], errors[idx] = tb.Execute(ctx, c)
 		}(i, call)
 	}
 

@@ -299,7 +299,7 @@ func NewDistributedConnectionError(endpoint string, cause error) *AgentError {
 	return Wrap(cause, CodeDistributedConnection, "distributed connection failed").
 		WithComponent("distributed").
 		WithOperation("connect").
-		WithContext("endpoint", endpoint)
+		WithContext("endpoint", RedactURL(endpoint))
 }
 
 // NewDistributedSerializationError creates an error for serialization failures
@@ -471,7 +471,7 @@ func NewStoreConnectionError(storeType, endpoint string, cause error) *AgentErro
 		WithComponent("store").
 		WithOperation("connect").
 		WithContext("store_type", storeType).
-		WithContext("endpoint", endpoint)
+		WithContext("endpoint", RedactURL(endpoint))
 }
 
 // NewStoreSerializationError creates an error for store serialization failures

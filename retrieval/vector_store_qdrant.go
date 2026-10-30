@@ -101,7 +101,7 @@ func NewQdrantVectorStore(ctx context.Context, config QdrantConfig) (*QdrantVect
 		return nil, agentErrors.Wrap(err, agentErrors.CodeInternal, "failed to create Qdrant client").
 			WithComponent("qdrant_store").
 			WithOperation("create").
-			WithContext("url", config.URL)
+			WithContext("url", agentErrors.RedactURL(config.URL))
 	}
 
 	store := &QdrantVectorStore{

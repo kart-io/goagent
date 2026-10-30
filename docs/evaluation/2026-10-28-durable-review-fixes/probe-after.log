@@ -1,0 +1,12 @@
+withTools=false attempt=1 err=node "agent": injected loss before node output checkpoint
+withTools=false attempt=2 err=node "agent": injected loss before node output checkpoint
+withTools=false actual_model_requests=1
+withTools=true attempt=1 err=node "agent": injected loss before node output checkpoint
+withTools=true attempt=2 err=node "agent": injected loss before node output checkpoint
+withTools=true actual_model_requests=1
+legacy attempt=1 error=node "legacy": durable tools require llm.ToolStreamClient; legacy tool selection is not journaled
+legacy attempt=2 error=node "legacy": durable tools require llm.ToolStreamClient; legacy tool selection is not journaled
+legacy bare_tool_executions=0 model_selections=0 answers=0
+two_agents snapshot=&{Preview:false State:agent-A + agent-B Node:__end__ Steps:1 Routing:false Key: Waiting:false Done:true} err=<nil> model_requests=A:1 B:1
+regular preview data=7
+durable preview data=&{true 7 stream 0 false 31b1cde6e910a337ea33dfe25ced0008ba4635ea1d022a7b230154a73209b80b false false}

@@ -128,7 +128,14 @@ func (m *MetaCoTAgent) InvokeFast(ctx context.Context, input *agentcore.AgentInp
 
 	// Phase 1: Question decomposition (if needed)
 	if m.shouldDecompose(mainQuestion.Text) {
-		subQuestions := m.decomposeQuestion(ctx, mainQuestion, output)
+		subQuestions, err := m.decomposeQuestion(ctx, mainQuestion, output)
+		if err != nil {
+			output.Status = interfaces.StatusFailed
+			output.Message = "Question decomposition failed: " + err.Error()
+			output.Timestamp = time.Now()
+			output.Latency = time.Since(startTime)
+			return output, err
+		}
 		mainQuestion.SubQuestions = subQuestions
 
 		output.Steps = append(output.Steps, agentcore.AgentStep{
@@ -153,12 +160,26 @@ func (m *MetaCoTAgent) InvokeFast(ctx context.Context, input *agentcore.AgentInp
 	}
 
 	// Phase 3: Synthesize final answer
-	finalAnswer := m.synthesizeAnswer(ctx, questionTree, output)
+	finalAnswer, err := m.synthesizeAnswer(ctx, questionTree, output)
+	if err != nil {
+		output.Status = interfaces.StatusFailed
+		output.Message = "Answer synthesis failed: " + err.Error()
+		output.Timestamp = time.Now()
+		output.Latency = time.Since(startTime)
+		return output, err
+	}
 
 	// Phase 4: Self-critique (if enabled)
 	if m.config.SelfCritique {
 		critiqueStart := time.Now()
-		critique := m.selfCritique(ctx, input.Task, finalAnswer)
+		critique, err := m.selfCritique(ctx, input.Task, finalAnswer)
+		if err != nil {
+			output.Status = interfaces.StatusFailed
+			output.Message = "Self-critique failed: " + err.Error()
+			output.Timestamp = time.Now()
+			output.Latency = time.Since(startTime)
+			return output, err
+		}
 
 		output.Steps = append(output.Steps, agentcore.AgentStep{
 			Step:        len(output.Steps) + 1,
@@ -171,7 +192,14 @@ func (m *MetaCoTAgent) InvokeFast(ctx context.Context, input *agentcore.AgentInp
 
 		// Refine answer if critique suggests improvements
 		if m.needsRefinement(critique) {
-			finalAnswer = m.refineAnswer(ctx, finalAnswer, critique)
+			finalAnswer, err = m.refineAnswer(ctx, finalAnswer, critique)
+			if err != nil {
+				output.Status = interfaces.StatusFailed
+				output.Message = "Answer refinement failed: " + err.Error()
+				output.Timestamp = time.Now()
+				output.Latency = time.Since(startTime)
+				return output, err
+			}
 		}
 	}
 
@@ -216,7 +244,10 @@ func (m *MetaCoTAgent) Invoke(ctx context.Context, input *agentcore.AgentInput) 
 
 	// Phase 1: Question decomposition (if needed)
 	if m.shouldDecompose(mainQuestion.Text) {
-		subQuestions := m.decomposeQuestion(ctx, mainQuestion, output)
+		subQuestions, err := m.decomposeQuestion(ctx, mainQuestion, output)
+		if err != nil {
+			return m.handleError(ctx, output, "Question decomposition failed", err, startTime)
+		}
 		mainQuestion.SubQuestions = subQuestions
 
 		output.Steps = append(output.Steps, agentcore.AgentStep{
@@ -237,12 +268,18 @@ func (m *MetaCoTAgent) Invoke(ctx context.Context, input *agentcore.AgentInput) 
 	}
 
 	// Phase 3: Synthesize final answer
-	finalAnswer := m.synthesizeAnswer(ctx, questionTree, output)
+	finalAnswer, err := m.synthesizeAnswer(ctx, questionTree, output)
+	if err != nil {
+		return m.handleError(ctx, output, "Answer synthesis failed", err, startTime)
+	}
 
 	// Phase 4: Self-critique (if enabled)
 	if m.config.SelfCritique {
 		critiqueStart := time.Now()
-		critique := m.selfCritique(ctx, input.Task, finalAnswer)
+		critique, err := m.selfCritique(ctx, input.Task, finalAnswer)
+		if err != nil {
+			return m.handleError(ctx, output, "Self-critique failed", err, startTime)
+		}
 
 		output.Steps = append(output.Steps, agentcore.AgentStep{
 			Step:        len(output.Steps) + 1,
@@ -255,7 +292,10 @@ func (m *MetaCoTAgent) Invoke(ctx context.Context, input *agentcore.AgentInput) 
 
 		// Refine answer if critique suggests improvements
 		if m.needsRefinement(critique) {
-			finalAnswer = m.refineAnswer(ctx, finalAnswer, critique)
+			finalAnswer, err = m.refineAnswer(ctx, finalAnswer, critique)
+			if err != nil {
+				return m.handleError(ctx, output, "Answer refinement failed", err, startTime)
+			}
 		}
 	}
 
@@ -287,13 +327,18 @@ func (m *MetaCoTAgent) processSelfAsk(ctx context.Context, question *Question, d
 	}
 
 	// Generate follow-up questions
-	followupQuestions := m.generateFollowupQuestions(ctx, question, output)
+	followupQuestions, err := m.generateFollowupQuestions(ctx, question, output)
+	if err != nil {
+		return err
+	}
 
 	// Process each follow-up question
 	for _, fq := range followupQuestions {
 		// Check if we need to search for information
 		if m.needsExternalInfo(fq) && len(m.tools) > 0 {
-			m.searchForAnswer(ctx, fq, output)
+			if err := m.searchForAnswer(ctx, fq, output); err != nil {
+				return err
+			}
 		} else {
 			// Recursively process sub-question
 			if err := m.processSelfAsk(ctx, fq, depth+1, output); err != nil {
@@ -317,7 +362,8 @@ func (m *MetaCoTAgent) processSelfAsk(ctx context.Context, question *Question, d
 }
 
 // generateFollowupQuestions generates follow-up questions
-func (m *MetaCoTAgent) generateFollowupQuestions(ctx context.Context, question *Question, output *agentcore.AgentOutput) []*Question {
+// generateFollowupQuestions LLM 失败时视为没有追问；失败原因是 *PanicError 时返回该错误，由调用方中止本次执行
+func (m *MetaCoTAgent) generateFollowupQuestions(ctx context.Context, question *Question, output *agentcore.AgentOutput) ([]*Question, error) {
 	prompt := m.buildFollowupPrompt(question)
 
 	messages := []llm.Message{
@@ -327,7 +373,10 @@ func (m *MetaCoTAgent) generateFollowupQuestions(ctx context.Context, question *
 
 	llmResp, err := m.llm.Chat(ctx, messages)
 	if err != nil {
-		return nil
+		if base.IsPanic(err) {
+			return nil, err
+		}
+		return nil, nil
 	}
 
 	// Parse follow-up questions
@@ -338,7 +387,7 @@ func (m *MetaCoTAgent) generateFollowupQuestions(ctx context.Context, question *
 		questions = questions[:m.config.MaxQuestions]
 	}
 
-	return questions
+	return questions, nil
 }
 
 // buildFollowupPrompt builds prompt for generating follow-up questions
@@ -452,8 +501,8 @@ Now answer the original question: %s`, context.String(), question.Text)
 	return nil
 }
 
-// decomposeQuestion decomposes a complex question into sub-questions
-func (m *MetaCoTAgent) decomposeQuestion(ctx context.Context, question *Question, output *agentcore.AgentOutput) []*Question {
+// decomposeQuestion LLM 失败时视为不分解；失败原因是 *PanicError 时返回该错误，由调用方中止本次执行
+func (m *MetaCoTAgent) decomposeQuestion(ctx context.Context, question *Question, output *agentcore.AgentOutput) ([]*Question, error) {
 	prompt := fmt.Sprintf(`Decompose this complex question into simpler sub-questions that, when answered together, will provide the complete answer:
 
 Question: %s
@@ -466,7 +515,10 @@ Generate 2-4 sub-questions. Format each on a new line starting with "Q: "`, ques
 
 	llmResp, err := m.llm.Chat(ctx, messages)
 	if err != nil {
-		return nil
+		if base.IsPanic(err) {
+			return nil, err
+		}
+		return nil, nil
 	}
 
 	// Parse sub-questions
@@ -475,11 +527,11 @@ Generate 2-4 sub-questions. Format each on a new line starting with "Q: "`, ques
 		sq.Type = "decomposed"
 	}
 
-	return subQuestions
+	return subQuestions, nil
 }
 
-// selfCritique critiques the generated answer
-func (m *MetaCoTAgent) selfCritique(ctx context.Context, originalQuestion string, answer string) string {
+// selfCritique LLM 失败时返回占位评语；失败原因是 *PanicError 时返回该错误，由调用方中止本次执行
+func (m *MetaCoTAgent) selfCritique(ctx context.Context, originalQuestion string, answer string) (string, error) {
 	prompt := fmt.Sprintf(`Critically evaluate this answer to the question:
 
 Question: %s
@@ -499,14 +551,17 @@ Provide a brief critique.`, originalQuestion, answer)
 
 	llmResp, err := m.llm.Chat(ctx, messages)
 	if err != nil {
-		return "Unable to generate critique"
+		if base.IsPanic(err) {
+			return "", err
+		}
+		return "Unable to generate critique", nil
 	}
 
-	return llmResp.Content
+	return llmResp.Content, nil
 }
 
-// refineAnswer refines the answer based on critique
-func (m *MetaCoTAgent) refineAnswer(ctx context.Context, answer string, critique string) string {
+// refineAnswer LLM 失败时保留原答案；失败原因是 *PanicError 时返回该错误，由调用方中止本次执行
+func (m *MetaCoTAgent) refineAnswer(ctx context.Context, answer string, critique string) (string, error) {
 	prompt := fmt.Sprintf(`Given this answer and critique, provide an improved answer:
 
 Original Answer: %s
@@ -520,14 +575,17 @@ Improved Answer:`, answer, critique)
 
 	llmResp, err := m.llm.Chat(ctx, messages)
 	if err != nil {
-		return answer // Return original if refinement fails
+		if base.IsPanic(err) {
+			return "", err
+		}
+		return answer, nil // Return original if refinement fails
 	}
 
-	return llmResp.Content
+	return llmResp.Content, nil
 }
 
-// synthesizeAnswer synthesizes the final answer from the question tree
-func (m *MetaCoTAgent) synthesizeAnswer(ctx context.Context, questionTree *Question, output *agentcore.AgentOutput) string {
+// synthesizeAnswer LLM 失败时退回主问题的答案；失败原因是 *PanicError 时返回该错误，由调用方中止本次执行
+func (m *MetaCoTAgent) synthesizeAnswer(ctx context.Context, questionTree *Question, output *agentcore.AgentOutput) (string, error) {
 	// If main question has sub-questions, synthesize from them
 	if len(questionTree.SubQuestions) > 0 {
 		var subAnswers strings.Builder
@@ -547,13 +605,16 @@ Synthesize a complete answer to: %s`, subAnswers.String(), questionTree.Text)
 
 		llmResp, err := m.llm.Chat(ctx, messages)
 		if err != nil {
-			return questionTree.Answer
+			if base.IsPanic(err) {
+				return "", err
+			}
+			return questionTree.Answer, nil
 		}
 
-		return llmResp.Content
+		return llmResp.Content, nil
 	}
 
-	return questionTree.Answer
+	return questionTree.Answer, nil
 }
 
 // Helper methods
@@ -571,7 +632,8 @@ func (m *MetaCoTAgent) needsExternalInfo(question *Question) bool {
 	return m.parser.NeedsExternalInfo(question.Text)
 }
 
-func (m *MetaCoTAgent) searchForAnswer(ctx context.Context, question *Question, output *agentcore.AgentOutput) {
+// searchForAnswer 搜索失败时回退为直接回答；搜索工具返回 *PanicError 时不回退，返回该错误由调用方中止本次执行
+func (m *MetaCoTAgent) searchForAnswer(ctx context.Context, question *Question, output *agentcore.AgentOutput) error {
 	// Use search tool if available
 	if searchTool, exists := m.toolsByName["search"]; exists {
 		toolInput := &interfaces.ToolInput{
@@ -582,6 +644,9 @@ func (m *MetaCoTAgent) searchForAnswer(ctx context.Context, question *Question, 
 		}
 
 		result, err := searchTool.Invoke(ctx, toolInput)
+		if base.IsPanic(err) {
+			return err
+		}
 		if err == nil && result.Success {
 			question.Answer = fmt.Sprintf("%v", result.Result)
 			question.Status = "answered"
@@ -597,10 +662,13 @@ func (m *MetaCoTAgent) searchForAnswer(ctx context.Context, question *Question, 
 		}
 	}
 
-	// Fallback to direct answer if search fails
+	// Fallback to direct answer if search fails；直接回答的普通失败只是留空答案，*PanicError 须返回
 	if question.Status != "answered" {
-		_ = m.answerDirectly(ctx, question, output)
+		if err := m.answerDirectly(ctx, question, output); base.IsPanic(err) {
+			return err
+		}
 	}
+	return nil
 }
 
 func (m *MetaCoTAgent) buildQuestionTree(mainQuestion *Question) *Question {
@@ -660,7 +728,13 @@ func (m *MetaCoTAgent) Stream(ctx context.Context, input *agentcore.AgentInput) 
 	go func() {
 		defer close(outChan)
 
-		output, err := m.Invoke(ctx, input)
+		var output *agentcore.AgentOutput
+		err := func() (err error) {
+			// 宿主代码在本 goroutine 中 panic 时转为流错误，避免进程退出
+			defer agentcore.RecoverPanic(ctx, "metacot_agent", "stream", &err)
+			output, err = m.Invoke(ctx, input)
+			return err
+		}()
 		outChan <- agentcore.StreamChunk[*agentcore.AgentOutput]{
 			Data:  output,
 			Error: err,
@@ -724,7 +798,13 @@ func (m *MetaCoTAgent) RunGenerator(ctx context.Context, input *agentcore.AgentI
 		// Phase 1: Question decomposition (if needed)
 		if m.shouldDecompose(mainQuestion.Text) {
 			decompositionStart := time.Now()
-			subQuestions := m.decomposeQuestion(ctx, mainQuestion, accumulated)
+			subQuestions, err := m.decomposeQuestion(ctx, mainQuestion, accumulated)
+			if err != nil {
+				errorOutput := m.createStepOutput(accumulated, "Question decomposition failed", startTime)
+				errorOutput.Status = interfaces.StatusFailed
+				yield(errorOutput, err)
+				return
+			}
 			mainQuestion.SubQuestions = subQuestions
 
 			accumulated.Steps = append(accumulated.Steps, agentcore.AgentStep{
@@ -761,7 +841,13 @@ func (m *MetaCoTAgent) RunGenerator(ctx context.Context, input *agentcore.AgentI
 
 		// Phase 3: Synthesize final answer
 		synthesisStart := time.Now()
-		finalAnswer := m.synthesizeAnswer(ctx, questionTree, accumulated)
+		finalAnswer, err := m.synthesizeAnswer(ctx, questionTree, accumulated)
+		if err != nil {
+			errorOutput := m.createStepOutput(accumulated, "Answer synthesis failed", startTime)
+			errorOutput.Status = interfaces.StatusFailed
+			yield(errorOutput, err)
+			return
+		}
 
 		accumulated.Steps = append(accumulated.Steps, agentcore.AgentStep{
 			Step:        len(accumulated.Steps) + 1,
@@ -784,7 +870,13 @@ func (m *MetaCoTAgent) RunGenerator(ctx context.Context, input *agentcore.AgentI
 		// Phase 4: Self-critique (if enabled)
 		if m.config.SelfCritique {
 			critiqueStart := time.Now()
-			critique := m.selfCritique(ctx, input.Task, finalAnswer)
+			critique, err := m.selfCritique(ctx, input.Task, finalAnswer)
+			if err != nil {
+				errorOutput := m.createStepOutput(accumulated, "Self-critique failed", startTime)
+				errorOutput.Status = interfaces.StatusFailed
+				yield(errorOutput, err)
+				return
+			}
 
 			accumulated.Steps = append(accumulated.Steps, agentcore.AgentStep{
 				Step:        len(accumulated.Steps) + 1,
@@ -808,7 +900,13 @@ func (m *MetaCoTAgent) RunGenerator(ctx context.Context, input *agentcore.AgentI
 			// Refine answer if critique suggests improvements
 			if m.needsRefinement(critique) {
 				refinementStart := time.Now()
-				finalAnswer = m.refineAnswer(ctx, finalAnswer, critique)
+				finalAnswer, err = m.refineAnswer(ctx, finalAnswer, critique)
+				if err != nil {
+					errorOutput := m.createStepOutput(accumulated, "Answer refinement failed", startTime)
+					errorOutput.Status = interfaces.StatusFailed
+					yield(errorOutput, err)
+					return
+				}
 
 				accumulated.Steps = append(accumulated.Steps, agentcore.AgentStep{
 					Step:        len(accumulated.Steps) + 1,
@@ -851,13 +949,18 @@ func (m *MetaCoTAgent) processSelfAskGenerator(ctx context.Context, question *Qu
 	}
 
 	// Generate follow-up questions
-	followupQuestions := m.generateFollowupQuestions(ctx, question, accumulated)
+	followupQuestions, err := m.generateFollowupQuestions(ctx, question, accumulated)
+	if err != nil {
+		return err
+	}
 
 	// Process each follow-up question
 	for i, fq := range followupQuestions {
 		// Check if we need to search for information
 		if m.needsExternalInfo(fq) && len(m.tools) > 0 {
-			m.searchForAnswer(ctx, fq, accumulated)
+			if err := m.searchForAnswer(ctx, fq, accumulated); err != nil {
+				return err
+			}
 		} else {
 			// Recursively process sub-question
 			if err := m.processSelfAskGenerator(ctx, fq, depth+1, accumulated, yield, startTime); err != nil {
@@ -931,39 +1034,32 @@ func (m *MetaCoTAgent) handleError(ctx context.Context, output *agentcore.AgentO
 	output.Timestamp = time.Now()
 	output.Latency = time.Since(startTime)
 
-	_ = m.triggerOnError(ctx, err)
-	return output, err
+	return output, m.triggerOnError(ctx, err)
 }
 
 // Callback triggers
 func (m *MetaCoTAgent) triggerOnStart(ctx context.Context, input *agentcore.AgentInput) error {
-	config := m.GetConfig()
-	for _, cb := range config.Callbacks {
-		if err := cb.OnStart(ctx, input); err != nil {
-			return err
-		}
-	}
-	return nil
+	_, err := agentcore.NotifyCallbacks(ctx, "metacot_agent", "on_start", m.GetConfig().Callbacks, func(cb agentcore.Callback) error {
+		return cb.OnStart(ctx, input)
+	})
+	return err
 }
 
 func (m *MetaCoTAgent) triggerOnFinish(ctx context.Context, output *agentcore.AgentOutput) error {
-	config := m.GetConfig()
-	for _, cb := range config.Callbacks {
-		if err := cb.OnAgentFinish(ctx, output); err != nil {
-			return err
-		}
-	}
-	return nil
+	_, err := agentcore.NotifyCallbacks(ctx, "metacot_agent", "on_agent_finish", m.GetConfig().Callbacks, func(cb agentcore.Callback) error {
+		return cb.OnAgentFinish(ctx, output)
+	})
+	return err
 }
 
+// triggerOnError 触发错误回调，返回应交给调用方的错误：回调自身 panic 时为 *PanicError，否则为原错误 err
 func (m *MetaCoTAgent) triggerOnError(ctx context.Context, err error) error {
-	config := m.GetConfig()
-	for _, cb := range config.Callbacks {
-		if cbErr := cb.OnError(ctx, err); cbErr != nil {
-			return cbErr
-		}
+	if panicked, panicErr := agentcore.NotifyCallbacks(ctx, "metacot_agent", "on_error", m.GetConfig().Callbacks, func(cb agentcore.Callback) error {
+		return cb.OnError(ctx, err)
+	}); panicked {
+		return panicErr
 	}
-	return nil
+	return err
 }
 
 // WithCallbacks adds callback handlers

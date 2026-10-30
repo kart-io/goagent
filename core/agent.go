@@ -328,11 +328,9 @@ func (a *BaseAgent) Invoke(ctx context.Context, input *AgentInput) (*AgentOutput
 		Latency:   time.Since(startTime),
 	}
 
-	// 触发回调
-	if err := a.triggerOnFinish(ctx, output); err != nil {
-		// Log callback error but return the original NotImplemented error
-		// as it's more important for the caller to know the method needs implementation
-		return output, ErrNotImplemented
+	// 回调的普通错误让位于 ErrNotImplemented，调用方更需要知道该方法须被重写；回调 panic 则照常返回
+	if panicked, err := a.triggerOnFinish(ctx, output); panicked {
+		return output, err
 	}
 
 	return output, ErrNotImplemented
@@ -453,37 +451,27 @@ func (a *BaseAgent) WithConfig(config RunnableConfig) Runnable[*AgentInput, *Age
 
 // triggerOnStart 触发开始回调
 func (a *BaseAgent) triggerOnStart(ctx context.Context, input *AgentInput) error {
-	config := a.GetConfig()
-	for _, cb := range config.Callbacks {
-		if err := cb.OnStart(ctx, input); err != nil {
-			return err
-		}
-	}
-	return nil
+	_, err := NotifyCallbacks(ctx, "base_agent", "on_start", a.GetConfig().Callbacks, func(cb Callback) error {
+		return cb.OnStart(ctx, input)
+	})
+	return err
 }
 
-// triggerOnFinish 触发完成回调
-func (a *BaseAgent) triggerOnFinish(ctx context.Context, output *AgentOutput) error {
-	config := a.GetConfig()
-	for _, cb := range config.Callbacks {
-		if err := cb.OnAgentFinish(ctx, output); err != nil {
-			return err
-		}
-	}
-	return nil
+// triggerOnFinish 触发完成回调，panicked 表示回调自身 panic
+func (a *BaseAgent) triggerOnFinish(ctx context.Context, output *AgentOutput) (panicked bool, err error) {
+	return NotifyCallbacks(ctx, "base_agent", "on_agent_finish", a.GetConfig().Callbacks, func(cb Callback) error {
+		return cb.OnAgentFinish(ctx, output)
+	})
 }
 
 // triggerOnAction 触发操作回调
 //
 //nolint:unused // Reserved for future agent action tracking
 func (a *BaseAgent) triggerOnAction(ctx context.Context, action *AgentAction) error {
-	config := a.GetConfig()
-	for _, cb := range config.Callbacks {
-		if err := cb.OnAgentAction(ctx, action); err != nil {
-			return err
-		}
-	}
-	return nil
+	_, err := NotifyCallbacks(ctx, "base_agent", "on_agent_action", a.GetConfig().Callbacks, func(cb Callback) error {
+		return cb.OnAgentAction(ctx, action)
+	})
+	return err
 }
 
 // DefaultAgentOptions 返回默认的 Agent 选项

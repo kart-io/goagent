@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 
+	"github.com/kart-io/goagent/core"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/tools/compute"
@@ -413,12 +414,11 @@ func (e *ToolkitExecutor) executeParallel(ctx context.Context, requests map[stri
 
 	for toolName, input := range requests {
 		go func(name string, inp *interfaces.ToolInput) {
-			output, err := e.Execute(ctx, name, inp)
-			resultsChan <- result{
-				toolName: name,
-				output:   output,
-				err:      err,
-			}
+			// 工具是宿主代码，panic 作为该工具的错误结果
+			res := result{toolName: name}
+			defer func() { resultsChan <- res }()
+			defer core.RecoverPanic(ctx, "toolkit_executor", "execute_parallel", &res.err)
+			res.output, res.err = e.Execute(ctx, name, inp)
 		}(toolName, input)
 	}
 

@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/mail"
 	"regexp"
@@ -68,7 +69,7 @@ func (v *InputValidator) Validate(ctx context.Context, tool interfaces.Tool, inp
 	// 1. 如果工具实现了 ValidatableTool，调用自定义验证
 	if validatable, ok := tool.(interfaces.ValidatableTool); ok {
 		if err := validatable.Validate(ctx, input); err != nil {
-			return agentErrors.New(agentErrors.CodeToolValidation, "tool custom validation failed").
+			return agentErrors.New(agentErrors.CodeToolValidation, "tool custom validation failed: "+validationReason(err)).
 				WithComponent("input_validator").
 				WithOperation("validate").
 				WithContext("tool_name", tool.Name()).
@@ -79,7 +80,7 @@ func (v *InputValidator) Validate(ctx context.Context, tool interfaces.Tool, inp
 	// 2. 解析 JSON Schema
 	schema, err := v.parseSchema(tool.ArgsSchema())
 	if err != nil {
-		return agentErrors.New(agentErrors.CodeInvalidInput, "schema parsing failed").
+		return agentErrors.New(agentErrors.CodeInvalidInput, "schema parsing failed: "+validationReason(err)).
 			WithComponent("input_validator").
 			WithOperation("parse_schema").
 			WithContext("tool_name", tool.Name()).
@@ -89,7 +90,7 @@ func (v *InputValidator) Validate(ctx context.Context, tool interfaces.Tool, inp
 	// 3. 验证必需参数
 	if v.ValidateRequired {
 		if err := v.validateRequired(schema, input.Args); err != nil {
-			return agentErrors.New(agentErrors.CodeToolValidation, "required parameter validation failed").
+			return agentErrors.New(agentErrors.CodeToolValidation, "required parameter validation failed: "+validationReason(err)).
 				WithComponent("input_validator").
 				WithOperation("validate_required").
 				WithContext("tool_name", tool.Name()).
@@ -100,7 +101,7 @@ func (v *InputValidator) Validate(ctx context.Context, tool interfaces.Tool, inp
 	// 4. 验证参数类型
 	if v.ValidateTypes {
 		if err := v.validateTypes(schema, input.Args); err != nil {
-			return agentErrors.New(agentErrors.CodeToolValidation, "parameter type validation failed").
+			return agentErrors.New(agentErrors.CodeToolValidation, "parameter type validation failed: "+validationReason(err)).
 				WithComponent("input_validator").
 				WithOperation("validate_types").
 				WithContext("tool_name", tool.Name()).
@@ -111,7 +112,7 @@ func (v *InputValidator) Validate(ctx context.Context, tool interfaces.Tool, inp
 	// 5. 严格模式：验证是否有未定义的参数
 	if v.StrictMode {
 		if err := v.validateNoExtraArgs(schema, input.Args); err != nil {
-			return agentErrors.New(agentErrors.CodeToolValidation, "extra parameters not allowed").
+			return agentErrors.New(agentErrors.CodeToolValidation, "extra parameters not allowed: "+validationReason(err)).
 				WithComponent("input_validator").
 				WithOperation("validate_strict").
 				WithContext("tool_name", tool.Name()).
@@ -120,6 +121,22 @@ func (v *InputValidator) Validate(ctx context.Context, tool interfaces.Tool, inp
 	}
 
 	return nil
+}
+
+// validationReason 返回校验失败的具体原因：AgentError 取固定描述的 Message 与参数名，不含参数值，
+// 因为 Error() 会交还模型。非 AgentError（如自定义校验的 fmt.Errorf）原文可能含参数值，只返回固定文本，
+// 原文由调用方放入 Context。
+func validationReason(err error) string {
+	var agentErr *agentErrors.AgentError
+	if !errors.As(err, &agentErr) {
+		return "校验未通过"
+	}
+	for _, key := range []string{"parameter", "field", "property"} {
+		if name, ok := agentErr.Context[key].(string); ok && name != "" {
+			return agentErr.Message + ": " + name
+		}
+	}
+	return agentErr.Message
 }
 
 // schema 表示简化的 JSON Schema
@@ -513,10 +530,10 @@ func ValidateInputWithSchema(schema *core.ToolSchema, input map[string]interface
 	// 检查必需字段
 	for _, required := range schema.Required {
 		if _, exists := input[required]; !exists {
-			return agentErrors.New(agentErrors.CodeToolValidation, "required field is missing").
+			return withFieldReason(agentErrors.New(agentErrors.CodeToolValidation, "required field is missing").
 				WithComponent("validator").
 				WithOperation("validate_input_with_schema").
-				WithContext("field", required)
+				WithContext("field", required))
 		}
 	}
 
@@ -525,20 +542,29 @@ func ValidateInputWithSchema(schema *core.ToolSchema, input map[string]interface
 		propSchema, exists := schema.Properties[key]
 		if !exists {
 			if !schema.AdditionalProperties && strict {
-				return agentErrors.New(agentErrors.CodeToolValidation, "field not defined in schema").
+				return withFieldReason(agentErrors.New(agentErrors.CodeToolValidation, "field not defined in schema").
 					WithComponent("validator").
 					WithOperation("validate_input_with_schema").
-					WithContext("field", key)
+					WithContext("field", key))
 			}
 			continue
 		}
 
 		if err := validateValueWithPropertySchema(key, value, &propSchema); err != nil {
-			return err
+			return withFieldReason(err)
 		}
 	}
 
 	return nil
+}
+
+// withFieldReason 把字段名并入 Message：Error() 不输出 Context，缺了字段名模型无法修正调用。
+func withFieldReason(err error) error {
+	var agentErr *agentErrors.AgentError
+	if errors.As(err, &agentErr) {
+		agentErr.Message = validationReason(agentErr)
+	}
+	return err
 }
 
 // validateValueWithPropertySchema 验证值符合属性 Schema

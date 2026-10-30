@@ -520,7 +520,10 @@ func (t *ToTAgent) generateThoughts(ctx context.Context, parent *ThoughtNode, in
 
 		// Check if tools are needed
 		if t.needsTools(thought) {
-			toolResults := t.executeToolsForThought(ctx, thought, output)
+			toolResults, err := t.executeToolsForThought(ctx, thought, output)
+			if err != nil {
+				return nil, err
+			}
 			child.ToolCalls = toolResults
 		}
 
@@ -830,7 +833,8 @@ func (t *ToTAgent) needsTools(thought string) bool {
 	return false
 }
 
-func (t *ToTAgent) executeToolsForThought(ctx context.Context, thought string, output *agentcore.AgentOutput) []agentcore.AgentToolCall {
+// executeToolsForThought 工具返回 *PanicError 时立即返回该错误，由调用方中止本次执行
+func (t *ToTAgent) executeToolsForThought(ctx context.Context, thought string, output *agentcore.AgentOutput) ([]agentcore.AgentToolCall, error) {
 	// This is simplified - in practice, you'd parse the thought to determine which tools to use
 	toolCalls := make([]agentcore.AgentToolCall, 0)
 
@@ -845,6 +849,9 @@ func (t *ToTAgent) executeToolsForThought(ctx context.Context, thought string, o
 			}
 
 			result, err := calc.Invoke(ctx, input)
+			if base.IsPanic(err) {
+				return nil, err
+			}
 			toolCall := agentcore.AgentToolCall{
 				ToolName: "calculator",
 				Input:    input.Args,
@@ -862,7 +869,7 @@ func (t *ToTAgent) executeToolsForThought(ctx context.Context, thought string, o
 		}
 	}
 
-	return toolCalls
+	return toolCalls, nil
 }
 
 // MCTS helper methods
@@ -938,7 +945,13 @@ func (t *ToTAgent) Stream(ctx context.Context, input *agentcore.AgentInput) (<-c
 	go func() {
 		defer close(outChan)
 
-		output, err := t.Invoke(ctx, input)
+		var output *agentcore.AgentOutput
+		err := func() (err error) {
+			// 宿主代码在本 goroutine 中 panic 时转为流错误，避免进程退出
+			defer agentcore.RecoverPanic(ctx, "tot_agent", "stream", &err)
+			output, err = t.Invoke(ctx, input)
+			return err
+		}()
 		outChan <- agentcore.StreamChunk[*agentcore.AgentOutput]{
 			Data:  output,
 			Error: err,
@@ -1414,39 +1427,32 @@ func (t *ToTAgent) handleError(ctx context.Context, output *agentcore.AgentOutpu
 	output.Timestamp = time.Now()
 	output.Latency = time.Since(startTime)
 
-	_ = t.triggerOnError(ctx, err)
-	return output, err
+	return output, t.triggerOnError(ctx, err)
 }
 
 // Callback triggers
 func (t *ToTAgent) triggerOnStart(ctx context.Context, input *agentcore.AgentInput) error {
-	config := t.GetConfig()
-	for _, cb := range config.Callbacks {
-		if err := cb.OnStart(ctx, input); err != nil {
-			return err
-		}
-	}
-	return nil
+	_, err := agentcore.NotifyCallbacks(ctx, "tot_agent", "on_start", t.GetConfig().Callbacks, func(cb agentcore.Callback) error {
+		return cb.OnStart(ctx, input)
+	})
+	return err
 }
 
 func (t *ToTAgent) triggerOnFinish(ctx context.Context, output *agentcore.AgentOutput) error {
-	config := t.GetConfig()
-	for _, cb := range config.Callbacks {
-		if err := cb.OnAgentFinish(ctx, output); err != nil {
-			return err
-		}
-	}
-	return nil
+	_, err := agentcore.NotifyCallbacks(ctx, "tot_agent", "on_agent_finish", t.GetConfig().Callbacks, func(cb agentcore.Callback) error {
+		return cb.OnAgentFinish(ctx, output)
+	})
+	return err
 }
 
+// triggerOnError 触发错误回调，返回应交给调用方的错误：回调自身 panic 时为 *PanicError，否则为原错误 err
 func (t *ToTAgent) triggerOnError(ctx context.Context, err error) error {
-	config := t.GetConfig()
-	for _, cb := range config.Callbacks {
-		if cbErr := cb.OnError(ctx, err); cbErr != nil {
-			return cbErr
-		}
+	if panicked, panicErr := agentcore.NotifyCallbacks(ctx, "tot_agent", "on_error", t.GetConfig().Callbacks, func(cb agentcore.Callback) error {
+		return cb.OnError(ctx, err)
+	}); panicked {
+		return panicErr
 	}
-	return nil
+	return err
 }
 
 // WithCallbacks adds callback handlers

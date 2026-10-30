@@ -410,7 +410,7 @@ func (s *MultiAgentSystem) executeParallelTask(ctx context.Context, task *Collab
 		go func(id string, a CollaborativeAgent) {
 			defer wg.Done()
 
-			result, err := a.Collaborate(ctx, task)
+			result, err := collaborate(ctx, a, task)
 			if err != nil {
 				errors <- err
 				return
@@ -557,7 +557,7 @@ func (s *MultiAgentSystem) executeHierarchicalTask(ctx context.Context, task *Co
 			workerTask := *task
 			workerTask.Input = work
 
-			result, err := agent.Collaborate(ctx, &workerTask)
+			result, err := collaborate(ctx, agent, &workerTask)
 			if err != nil {
 				s.logger.Errorw("Worker failed",
 					"worker_id", id,
@@ -783,7 +783,11 @@ func (s *MultiAgentSystem) executeConsensusTask(ctx context.Context, task *Colla
 		go func(id string, a CollaborativeAgent) {
 			defer wg.Done()
 
-			vote, err := a.Vote(ctx, task.Input)
+			var vote bool
+			_, err := core.CallSafely(ctx, "multiagent_system", "vote", func() (err error) {
+				vote, err = a.Vote(ctx, task.Input)
+				return err
+			})
 			if err != nil {
 				s.logger.Errorw("Agent failed to vote",
 					"agent_id", id,
@@ -1026,6 +1030,15 @@ func (s *MultiAgentSystem) routeMessages() {
 	}
 }
 
+// collaborate 在框架启动的 goroutine 中调用宿主 Agent：panic 转为可用 errors.As 识别的 *agentErrors.PanicError 返回。
+func collaborate(ctx context.Context, agent CollaborativeAgent, task *CollaborativeTask) (result *Assignment, err error) {
+	_, err = core.CallSafely(ctx, "multiagent_system", "collaborate", func() (err error) {
+		result, err = agent.Collaborate(ctx, task)
+		return err
+	})
+	return result, err
+}
+
 // deliverMessage 投递消息到目标 Agent
 func (s *MultiAgentSystem) deliverMessage(message Message) {
 	s.mu.RLock()
@@ -1043,7 +1056,10 @@ func (s *MultiAgentSystem) deliverMessage(message Message) {
 	// background goroutine for message routing. Each message should have its own
 	// lifecycle independent of specific request contexts.
 	ctx := context.Background()
-	if err := recipient.ReceiveMessage(ctx, message); err != nil {
+	// 接收方是宿主代码：panic 与投递错误一样记录，路由 goroutine 继续投递后续消息
+	if _, err := core.CallSafely(ctx, "multiagent_system", "receive_message", func() error {
+		return recipient.ReceiveMessage(ctx, message)
+	}); err != nil {
 		s.logger.Errorw("Failed to deliver message",
 			"to", message.To,
 			"from", message.From,

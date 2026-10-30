@@ -6,9 +6,20 @@ import (
 	"io"
 
 	"github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/core/observe"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
-func (g *compiled[T]) run(ctx context.Context, state T, emit func(core.StreamChunk[T]) error) error {
+func (g *compiled[T]) run(ctx context.Context, state T, emit func(core.StreamChunk[T]) error) (graphErr error) {
+	observed := observe.Enabled(ctx)
+	ctx, finish := observe.Start(ctx, observe.Event{Type: "graph", Path: "graph"})
+	defer func() {
+		if v := recover(); v != nil {
+			finish(agentErrors.NewPanicError("图执行", v), false)
+			panic(v)
+		}
+		finish(graphErr, false)
+	}()
 	name := g.entry
 	for step := 0; step < g.config.MaxSteps; step++ {
 		if err := ctx.Err(); err != nil {
@@ -17,7 +28,7 @@ func (g *compiled[T]) run(ctx context.Context, state T, emit func(core.StreamChu
 		if err := emit(core.StreamChunk[T]{Event: &core.StreamEvent{Type: "node_start", Step: name}}); err != nil {
 			return err
 		}
-		next, err := g.nodes[name](ctx, state, func(chunk core.StreamChunk[T]) error {
+		forward := func(chunk core.StreamChunk[T]) error {
 			if chunk.Event != nil {
 				event := *chunk.Event
 				event.Step = name
@@ -27,7 +38,24 @@ func (g *compiled[T]) run(ctx context.Context, state T, emit func(core.StreamChu
 				chunk.Event = &event
 			}
 			return emit(chunk)
-		})
+		}
+		var next T
+		var err error
+		if !observed {
+			next, err = g.nodes[name](ctx, state, forward)
+		} else {
+			nodeCtx, endNode := observe.Start(ctx, observe.Event{Type: "node", Path: name})
+			next, err = func() (next T, nodeErr error) {
+				defer func() {
+					if v := recover(); v != nil {
+						endNode(agentErrors.NewPanicError(fmt.Sprintf("节点 %q", name), v), false)
+						panic(v)
+					}
+					endNode(nodeErr, false)
+				}()
+				return g.nodes[name](nodeCtx, state, forward)
+			}()
+		}
 		if err != nil {
 			return fmt.Errorf("node %q: %w", name, err)
 		}

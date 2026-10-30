@@ -35,9 +35,9 @@ func TestRunnableFunc_PanicRecovery(t *testing.T) {
 		require.True(t, ok, "error should be AgentError")
 		assert.Equal(t, agentErrors.CodeInternal, agentErr.Code)
 
-		// 验证错误信息包含 panic 信息
-		assert.Contains(t, err.Error(), "panic recovered")
-		assert.Contains(t, err.Error(), "runtime error")
+		// 错误文本只含位置，panic 信息经 errors.As 读取
+		requireRedactedPanic(t, err, "runtime error: invalid memory address or nil pointer dereference")
+		assert.Contains(t, err.Error(), "runnable.invoke 发生 panic")
 	})
 
 	t.Run("Index out of bounds panic", func(t *testing.T) {
@@ -49,8 +49,7 @@ func TestRunnableFunc_PanicRecovery(t *testing.T) {
 
 		require.Error(t, err)
 		assert.Zero(t, output)
-		assert.Contains(t, err.Error(), "panic recovered")
-		assert.Contains(t, err.Error(), "index out of range")
+		requireRedactedPanic(t, err, "runtime error: index out of range [10] with length 3")
 	})
 
 	t.Run("String panic", func(t *testing.T) {
@@ -62,8 +61,7 @@ func TestRunnableFunc_PanicRecovery(t *testing.T) {
 
 		require.Error(t, err)
 		assert.Empty(t, output)
-		assert.Contains(t, err.Error(), "panic recovered")
-		assert.Contains(t, err.Error(), "custom panic message")
+		requireRedactedPanic(t, err, "custom panic message")
 	})
 
 	t.Run("Stack trace captured", func(t *testing.T) {
@@ -75,18 +73,10 @@ func TestRunnableFunc_PanicRecovery(t *testing.T) {
 
 		require.Error(t, err)
 
-		// 验证 AgentError 包含堆栈信息
-		agentErr, ok := err.(*agentErrors.AgentError)
-		require.True(t, ok)
-
-		// 检查上下文中是否包含 stack_trace
-		stackTrace, hasStack := agentErr.Context["stack_trace"]
-		assert.True(t, hasStack, "error should contain stack_trace in Context")
-
-		stackStr, ok := stackTrace.(string)
-		require.True(t, ok)
-		assert.NotEmpty(t, stackStr)
-		assert.Contains(t, stackStr, "runnable_panic_test.go") // 应包含当前测试文件名
+		// 调用栈经 errors.As 取 *PanicError 读取，不进入错误文本
+		p := requireRedactedPanic(t, err, "test panic for stack trace")
+		assert.Contains(t, string(p.Stack), "runnable_panic_test.go") // 应包含当前测试文件名
+		assert.NotContains(t, err.Error(), "runnable_panic_test.go")
 	})
 }
 
@@ -109,8 +99,7 @@ func TestRunnablePipe_PanicRecovery(t *testing.T) {
 
 		require.Error(t, err)
 		assert.Empty(t, output)
-		assert.Contains(t, err.Error(), "panic recovered")
-		assert.Contains(t, err.Error(), "first runnable panic")
+		requireRedactedPanic(t, err, "first runnable panic")
 		assert.Contains(t, err.Error(), "first runnable failed")
 	})
 
@@ -131,8 +120,7 @@ func TestRunnablePipe_PanicRecovery(t *testing.T) {
 
 		require.Error(t, err)
 		assert.Empty(t, output)
-		assert.Contains(t, err.Error(), "panic recovered")
-		assert.Contains(t, err.Error(), "second runnable panic")
+		requireRedactedPanic(t, err, "second runnable panic")
 		assert.Contains(t, err.Error(), "second runnable failed")
 	})
 
@@ -156,7 +144,7 @@ func TestRunnablePipe_PanicRecovery(t *testing.T) {
 		chunk := <-stream
 		assert.Empty(t, chunk.Data) // For string type, zero value is ""
 		require.Error(t, chunk.Error)
-		assert.Contains(t, chunk.Error.Error(), "panic recovered")
+		requireRedactedPanic(t, chunk.Error, "runtime error: invalid memory address or nil pointer dereference")
 		assert.Contains(t, chunk.Error.Error(), "first runnable failed")
 	})
 }
@@ -177,8 +165,7 @@ func TestRunnableSequence_PanicRecovery(t *testing.T) {
 
 		require.Error(t, err)
 		assert.Nil(t, output)
-		assert.Contains(t, err.Error(), "panic recovered")
-		assert.Contains(t, err.Error(), "first panic")
+		requireRedactedPanic(t, err, "first panic")
 	})
 
 	t.Run("Middle runnable panics", func(t *testing.T) {
@@ -198,8 +185,7 @@ func TestRunnableSequence_PanicRecovery(t *testing.T) {
 
 		require.Error(t, err)
 		assert.Nil(t, output)
-		assert.Contains(t, err.Error(), "panic recovered")
-		assert.Contains(t, err.Error(), "middle panic")
+		requireRedactedPanic(t, err, "middle panic")
 
 		// 验证错误上下文包含索引信息
 		agentErr, ok := err.(*agentErrors.AgentError)
@@ -224,8 +210,7 @@ func TestRunnableSequence_PanicRecovery(t *testing.T) {
 
 		require.Error(t, err)
 		assert.Nil(t, output)
-		assert.Contains(t, err.Error(), "panic recovered")
-		assert.Contains(t, err.Error(), "last panic")
+		requireRedactedPanic(t, err, "last panic")
 	})
 
 	t.Run("Sequence Stream with panic", func(t *testing.T) {
@@ -245,8 +230,7 @@ func TestRunnableSequence_PanicRecovery(t *testing.T) {
 		chunk := <-stream
 		assert.Nil(t, chunk.Data)
 		require.Error(t, chunk.Error)
-		assert.Contains(t, chunk.Error.Error(), "panic recovered")
-		assert.Contains(t, chunk.Error.Error(), "stream panic")
+		requireRedactedPanic(t, chunk.Error, "stream panic")
 	})
 }
 
@@ -257,17 +241,16 @@ func TestPanicToError(t *testing.T) {
 	t.Run("String panic value", func(t *testing.T) {
 		err := panicToError(ctx, "test_component", "test_operation", "test panic")
 
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "panic recovered")
-		assert.Contains(t, err.Error(), "test panic")
+		requireRedactedPanic(t, err, "test panic")
+		assert.Contains(t, err.Error(), "test_component.test_operation 发生 panic")
 
 		agentErr, ok := err.(*agentErrors.AgentError)
 		require.True(t, ok)
 		assert.Equal(t, agentErrors.CodeInternal, agentErr.Code)
 
-		// 检查上下文
-		assert.Equal(t, "test panic", agentErr.Context["panic_value"])
-		assert.NotEmpty(t, agentErr.Context["stack_trace"])
+		// panic 值与调用栈不进入 Context，避免随 Error() 输出
+		assert.NotContains(t, agentErr.Context, "panic_value")
+		assert.NotContains(t, agentErr.Context, "stack_trace")
 	})
 
 	t.Run("Error panic value", func(t *testing.T) {
@@ -275,13 +258,12 @@ func TestPanicToError(t *testing.T) {
 		err := panicToError(ctx, "comp", "op", originalErr)
 
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "panic recovered")
+		assert.Contains(t, err.Error(), "comp.op 发生 panic")
+		assert.NotContains(t, err.Error(), "original error")
 
-		agentErr, ok := err.(*agentErrors.AgentError)
-		require.True(t, ok)
-
-		panicValue := agentErr.Context["panic_value"]
-		assert.Equal(t, originalErr, panicValue)
+		var p *agentErrors.PanicError
+		require.ErrorAs(t, err, &p)
+		assert.Equal(t, originalErr, p.Value)
 	})
 
 	t.Run("Struct panic value", func(t *testing.T) {
@@ -294,12 +276,12 @@ func TestPanicToError(t *testing.T) {
 		err := panicToError(ctx, "comp", "op", customErr)
 
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "panic recovered")
+		assert.Contains(t, err.Error(), "comp.op 发生 panic")
+		assert.NotContains(t, err.Error(), "custom error")
 
-		agentErr, ok := err.(*agentErrors.AgentError)
-		require.True(t, ok)
-
-		assert.Equal(t, customErr, agentErr.Context["panic_value"])
+		var p *agentErrors.PanicError
+		require.ErrorAs(t, err, &p)
+		assert.Equal(t, customErr, p.Value)
 	})
 }
 
@@ -337,8 +319,7 @@ func TestSafeInvoke(t *testing.T) {
 
 		require.Error(t, err)
 		assert.Zero(t, output)
-		assert.Contains(t, err.Error(), "panic recovered")
-		assert.Contains(t, err.Error(), "test panic")
+		requireRedactedPanic(t, err, "test panic")
 	})
 }
 
@@ -393,7 +374,7 @@ func TestPanicRecovery_RealWorldScenario(t *testing.T) {
 		result2, err2 := tool2.Invoke(context.Background(), "test")
 		assert.Error(t, err2)
 		assert.Empty(t, result2)
-		assert.Contains(t, err2.Error(), "panic recovered")
+		requireRedactedPanic(t, err2, "tool2 has a bug")
 
 		// Tool 3 仍然可以正常执行
 		result3, err3 := tool3.Invoke(context.Background(), "test")
@@ -421,12 +402,9 @@ func TestPanicRecovery_ErrorDetails(t *testing.T) {
 	// 验证操作信息（使用接口化后的新值）
 	assert.Equal(t, "invoke", agentErr.Operation)
 
-	// 验证详细信息
-	assert.Contains(t, agentErr.Context, "panic_value")
-	assert.Contains(t, agentErr.Context, "stack_trace")
-
-	// 验证堆栈包含有用信息
-	stackTrace := agentErr.Context["stack_trace"].(string)
+	// 详细信息经 errors.As 取 *PanicError 读取
+	p := requireRedactedPanic(t, err, "detailed panic test")
+	stackTrace := string(p.Stack)
 	assert.Contains(t, stackTrace, "goroutine")
 	assert.True(t, strings.Contains(stackTrace, "panic") || strings.Contains(stackTrace, "runnable"))
 }

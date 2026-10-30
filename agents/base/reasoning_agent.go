@@ -183,7 +183,13 @@ func (b *BaseReasoningAgent) Stream(ctx context.Context, input *agentcore.AgentI
 	go func() {
 		defer close(outChan)
 
-		output, err := b.Invoke(ctx, input)
+		var output *agentcore.AgentOutput
+		err := func() (err error) {
+			// 宿主代码在本 goroutine 中 panic 时转为流错误，避免进程退出
+			defer agentcore.RecoverPanic(ctx, "reasoning_agent", "stream", &err)
+			output, err = b.Invoke(ctx, input)
+			return err
+		}()
 		outChan <- agentcore.StreamChunk[*agentcore.AgentOutput]{
 			Data:  output,
 			Error: err,
@@ -315,38 +321,31 @@ func (b *BaseReasoningAgent) handleError(ctx context.Context, output *agentcore.
 	output.Timestamp = time.Now()
 	output.Latency = time.Since(startTime)
 
-	_ = b.triggerOnError(ctx, err)
-	return output, err
+	return output, b.triggerOnError(ctx, err)
 }
 
 // 回调触发方法
 
 func (b *BaseReasoningAgent) triggerOnStart(ctx context.Context, input *agentcore.AgentInput) error {
-	config := b.GetConfig()
-	for _, cb := range config.Callbacks {
-		if err := cb.OnStart(ctx, input); err != nil {
-			return err
-		}
-	}
-	return nil
+	_, err := agentcore.NotifyCallbacks(ctx, "reasoning_agent", "on_start", b.GetConfig().Callbacks, func(cb agentcore.Callback) error {
+		return cb.OnStart(ctx, input)
+	})
+	return err
 }
 
 func (b *BaseReasoningAgent) triggerOnFinish(ctx context.Context, output *agentcore.AgentOutput) error {
-	config := b.GetConfig()
-	for _, cb := range config.Callbacks {
-		if err := cb.OnAgentFinish(ctx, output); err != nil {
-			return err
-		}
-	}
-	return nil
+	_, err := agentcore.NotifyCallbacks(ctx, "reasoning_agent", "on_agent_finish", b.GetConfig().Callbacks, func(cb agentcore.Callback) error {
+		return cb.OnAgentFinish(ctx, output)
+	})
+	return err
 }
 
+// triggerOnError 触发错误回调，返回应交给调用方的错误：回调自身 panic 时为 *PanicError，否则为原错误 err
 func (b *BaseReasoningAgent) triggerOnError(ctx context.Context, err error) error {
-	config := b.GetConfig()
-	for _, cb := range config.Callbacks {
-		if cbErr := cb.OnError(ctx, err); cbErr != nil {
-			return cbErr
-		}
+	if panicked, panicErr := agentcore.NotifyCallbacks(ctx, "reasoning_agent", "on_error", b.GetConfig().Callbacks, func(cb agentcore.Callback) error {
+		return cb.OnError(ctx, err)
+	}); panicked {
+		return panicErr
 	}
-	return nil
+	return err
 }

@@ -1,0 +1,7 @@
+=== RUN   TestLiveReviewLoopRecovery
+    main_test.go:77: 子进程应以 86 退出，实际 exit status 2
+        node "write": 模型输出未完整结束：length
+--- FAIL: TestLiveReviewLoopRecovery (21.21s)
+FAIL
+FAIL	github.com/kart-io/goagent/examples/orchestration/live/review-loop	21.219s
+FAIL

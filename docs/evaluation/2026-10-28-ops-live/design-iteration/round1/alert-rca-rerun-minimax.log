@@ -1,0 +1,12 @@
+=== RUN   TestLiveAlertRCA
+    main_test.go:135: minimax/MiniMax-M3.1-Flash：{Answer:结论：config_change
+        
+        10:02 的变更 CFG-118 将 checkout-api 的 `db.max_open_conns` 从 200 下调为 50，连接池耗尽导致取连接超时、checkout 返回 503，错误率由 0.2% 升至约 18%（QPS 平稳、order-db-proxy 无异常，非流量或依赖故障）。建议回滚该配置或将池上限恢复至 200。 Decision:config_change Accepted:0xc0002cf500 Submissions:1 Repairs:0 DataToolRuns:11 NewModelCalls:4 Budget:{ReservedRequests:4 KnownUsageEntries:4 UnknownUsageEntries:0 KnownTokens:{PromptTokens:7023 CompletionTokens:944 TotalTokens:7967 CachedTokens:0}}}
+--- PASS: TestLiveAlertRCA (6.43s)
+=== RUN   TestLiveAlertRCA
+    main_test.go:135: minimax/MiniMax-M3.1-Flash：{Answer:结论：config_change
+        
+        10:02 的变更 CFG-118 将 checkout-api 的 db.max_open_conns 从 200 降为 50，导致连接池耗尽、请求 503，错误率从 0.2% 升至约 18%（QPS 与 order-db-proxy 均正常，非流量或依赖问题）。 Decision:config_change Accepted:0xc00072c900 Submissions:2 Repairs:1 DataToolRuns:11 NewModelCalls:5 Budget:{ReservedRequests:5 KnownUsageEntries:5 UnknownUsageEntries:0 KnownTokens:{PromptTokens:10195 CompletionTokens:1364 TotalTokens:11559 CachedTokens:0}}}
+--- PASS: TestLiveAlertRCA (18.09s)
+PASS
+ok  	github.com/kart-io/goagent/examples/orchestration/ops/alert-rca	25.541s

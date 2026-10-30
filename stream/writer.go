@@ -80,9 +80,13 @@ func (w *Writer) WriteChunk(chunk *core.LegacyStreamChunk) error {
 	chunk.Metadata.Sequence = w.sequence.Add(1)
 	chunk.Metadata.Timestamp = time.Now()
 
-	// 应用转换函数
+	// 应用转换函数；它是宿主代码，panic 与普通错误一样返回，可用 errors.As 识别出 *agentErrors.PanicError
 	if w.opts.EnableTransform && w.opts.TransformFunc != nil {
-		transformed, err := w.opts.TransformFunc(chunk)
+		var transformed *core.LegacyStreamChunk
+		_, err := core.CallSafely(w.ctx, "stream_writer", "transform", func() (err error) {
+			transformed, err = w.opts.TransformFunc(chunk)
+			return err
+		})
 		if err != nil {
 			w.mu.Lock()
 			w.stats.ErrorCount++
@@ -149,6 +153,14 @@ func (w *Writer) WriteStatus(status string) error {
 func (w *Writer) WriteError(err error) error {
 	chunk := core.NewErrorChunk(err)
 	return w.WriteChunk(chunk)
+}
+
+// recoverPanic 供写入 goroutine 直接 defer：其中宿主代码的 panic 经全局 PanicHandler 转换并记录后作为流错误写出，
+// 读取方据此得到可用 errors.As 识别的 *agentErrors.PanicError。须在关闭 writer 的 defer 之后注册，先于关闭执行。
+func (w *Writer) recoverPanic(ctx context.Context, component, operation string) {
+	if recovered := recover(); recovered != nil {
+		_ = w.WriteError(core.GlobalPanicHandlerRegistry().HandlePanic(ctx, component, operation, recovered))
+	}
 }
 
 // Close 关闭写入器

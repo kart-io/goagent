@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kart-io/goagent/core"
 	agentErrors "github.com/kart-io/goagent/errors"
 )
 
@@ -108,8 +109,11 @@ func NewMultiModeStream(ctx context.Context, config *StreamConfig) *MultiModeStr
 }
 
 // processMode processes events for a specific mode
+//
+// Callback 没有调用方接收错误：它 panic 时交给全局 PanicHandler 记录，本模式此后不再调用它，其他模式不受影响。
 func (s *MultiModeStream) processMode(mode StreamMode, ch <-chan StreamEvent) {
 	defer s.wg.Done()
+	defer core.ReportPanic(s.ctx, "stream_modes", "callback")
 
 	for {
 		select {
@@ -435,6 +439,8 @@ func FilterStream(input <-chan StreamEvent, filter *StreamFilter) <-chan StreamE
 
 	go func() {
 		defer close(output)
+		// Predicate 的 panic 交给全局 PanicHandler 记录，输出流随之结束
+		defer core.ReportPanic(context.Background(), "stream_modes", "filter")
 
 		for event := range input {
 			if filter.Apply(event) {
@@ -456,6 +462,8 @@ func TransformStream(input <-chan StreamEvent, transform func(StreamEvent) Strea
 
 	go func() {
 		defer close(output)
+		// transform 的 panic 交给全局 PanicHandler 记录，输出流随之结束
+		defer core.ReportPanic(context.Background(), "stream_modes", "transform")
 
 		for event := range input {
 			transformed := transform(event)

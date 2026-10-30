@@ -155,29 +155,33 @@ func (e *StandardExecutor) ExecuteWithTimeout(ctx context.Context, tool core.MCP
 	resultChan := make(chan executeResult, 1)
 
 	go func() {
-		result, err := e.Execute(ctx, tool, call)
+		var res executeResult
 		// 使用 select 检查 context 是否已取消
 		// 如果已取消，直接退出，不阻塞在 channel 发送上
-		select {
-		case resultChan <- executeResult{result: result, err: err}:
-		case <-ctx.Done():
-			// context 已取消，直接退出
-			return
-		}
+		defer func() {
+			select {
+			case resultChan <- res:
+			case <-ctx.Done():
+				// context 已取消，直接退出
+			}
+		}()
+		// 工具是宿主代码，panic 作为本次执行的错误结果
+		defer coreTimeout.RecoverPanic(ctx, "standard_executor", "execute", &res.err)
+		res.result, res.err = e.Execute(ctx, tool, call)
 	}()
 
 	// 等待结果或超时
 	select {
 	case <-ctx.Done():
 		return &core.ToolResult{
-				Success:   false,
-				Error:     "execution timeout",
-				ErrorCode: "TIMEOUT_ERROR",
-				Timestamp: time.Now(),
-			}, agentErrors.New(agentErrors.CodeContextTimeout, "execution timeout").
-				WithComponent("standard_executor").
-				WithOperation("execute_with_timeout").
-				WithContext("timeout", timeout.String())
+			Success:   false,
+			Error:     "execution timeout",
+			ErrorCode: "TIMEOUT_ERROR",
+			Timestamp: time.Now(),
+		}, agentErrors.New(agentErrors.CodeContextTimeout, "execution timeout").
+			WithComponent("standard_executor").
+			WithOperation("execute_with_timeout").
+			WithContext("timeout", timeout.String())
 	case res := <-resultChan:
 		return res.result, res.err
 	}

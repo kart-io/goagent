@@ -64,14 +64,14 @@ func (a *ShellAgent) Execute(ctx context.Context, input *agentcore.AgentInput) (
 	// 安全检查：命令白名单
 	if !a.allowedCommands[command] {
 		return &agentcore.AgentOutput{
-				Status:    interfaces.StatusFailed,
-				Message:   "Command not allowed",
-				Latency:   time.Since(start),
-				Timestamp: start,
-			}, agentErrors.New(agentErrors.CodeInvalidInput, "command not allowed").
-				WithComponent("shell_agent").
-				WithOperation("Execute").
-				WithContext("command", command)
+			Status:    interfaces.StatusFailed,
+			Message:   "Command not allowed",
+			Latency:   time.Since(start),
+			Timestamp: start,
+		}, agentErrors.New(agentErrors.CodeInvalidInput, "command not allowed").
+			WithComponent("shell_agent").
+			WithOperation("Execute").
+			WithContext("command", command)
 	}
 
 	// 应用超时

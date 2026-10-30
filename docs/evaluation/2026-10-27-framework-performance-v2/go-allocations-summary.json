@@ -1,0 +1,66 @@
+[
+  {
+    "framework": "eino",
+    "scenario": "agent_tool",
+    "repeats": 5,
+    "ns_op": 60279.0,
+    "bytes_op": 87967,
+    "allocs_op": 1345
+  },
+  {
+    "framework": "eino",
+    "scenario": "branch_loop_8",
+    "repeats": 5,
+    "ns_op": 12874.0,
+    "bytes_op": 30264,
+    "allocs_op": 339
+  },
+  {
+    "framework": "eino",
+    "scenario": "graph_8",
+    "repeats": 5,
+    "ns_op": 14593.0,
+    "bytes_op": 33392,
+    "allocs_op": 358
+  },
+  {
+    "framework": "eino",
+    "scenario": "stream_64",
+    "repeats": 5,
+    "ns_op": 31083.0,
+    "bytes_op": 57909,
+    "allocs_op": 783
+  },
+  {
+    "framework": "goagent",
+    "scenario": "agent_tool",
+    "repeats": 5,
+    "ns_op": 9375.0,
+    "bytes_op": 7938,
+    "allocs_op": 97
+  },
+  {
+    "framework": "goagent",
+    "scenario": "branch_loop_8",
+    "repeats": 5,
+    "ns_op": 734.2,
+    "bytes_op": 2049,
+    "allocs_op": 32
+  },
+  {
+    "framework": "goagent",
+    "scenario": "graph_8",
+    "repeats": 5,
+    "ns_op": 709.0,
+    "bytes_op": 2049,
+    "allocs_op": 32
+  },
+  {
+    "framework": "goagent",
+    "scenario": "stream_64",
+    "repeats": 5,
+    "ns_op": 44744.0,
+    "bytes_op": 22808,
+    "allocs_op": 192
+  }
+]

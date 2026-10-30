@@ -6,7 +6,7 @@
 - `Approve`：核对注册快照、授权、到期时间、当前订单版本和全部金额/币种/交付事实。
 - `Refund`：先返回已提交回执；新效果重新检查授权与事实，在同一事务内检查累计退款额度并写入回执。提交失败不返回成功回执。
 
-`Store.Transaction` 必须跨请求、跨连接串行化同一订单的写入，回调失败回滚，成功后原子提交。仅锁 RequestID 不够，因为不同请求可能退款同一订单。`Transaction` 的缺失记录统一返回 `ErrNotFound`，存储必须有业务请求和回执唯一约束。[SQLite 适配器](../../examples/workflow/refund-recovery/ledger.go)使用即时写事务；原有跨进程崩溃和并发超额测试继续覆盖此接口。
+`Store.Transaction` 必须跨请求、跨连接串行化同一订单的写入，回调失败回滚，成功后原子提交。仅锁 RequestID 不够，因为不同请求可能退款同一订单。`Transaction` 的缺失记录统一返回 `ErrNotFound`，存储必须有业务请求和回执唯一约束。[SQLite 适配器](https://github.com/kart-io/goagent-examples/blob/main/workflow/refund-recovery/ledger.go)使用即时写事务；原有跨进程崩溃和并发超额测试继续覆盖此接口。
 
 ```go
 service := &refund.Service{
@@ -27,5 +27,7 @@ receipt, err := service.Refund(ctx, workflow.DurableKey(ctx), registered)
 运行验证：
 
 ```sh
-go test -race ./workflow/refund ./examples/workflow/refund-recovery
+go test -race ./workflow/refund
+# 退款案例位于 goagent-examples 仓库，在其根目录运行
+go test -race ./workflow/refund-recovery
 ```

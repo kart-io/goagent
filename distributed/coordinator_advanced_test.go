@@ -2,7 +2,6 @@ package distributed
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -100,12 +99,10 @@ func TestCoordinator_ExecuteAgent_Failover(t *testing.T) {
 	client := NewClient(log)
 	coordinator := NewCoordinator(registry, client, log)
 
-	// Primary server fails with connection error (retryable)
-	primaryServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("connection timeout"))
-	}))
-	defer primaryServer.Close()
+	// 主实例已关闭，请求得到真实的 connection refused（可重试）；
+	// 响应体不再进入 Error() 文本，不能靠 500 响应体里的关键字触发故障转移
+	primaryServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	primaryServer.Close()
 
 	// Secondary server succeeds
 	secondaryServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -713,44 +710,53 @@ func TestCoordinator_ConcurrentExecutions(t *testing.T) {
 	assert.Equal(t, int32(0), errorCount)
 }
 
-// TestCoordinator_ShouldRetry_NetworkErrors tests retry logic for various network errors
-func TestCoordinator_ShouldRetry_NetworkErrors(t *testing.T) {
-	log := createTestLogger()
-	registry := NewRegistry(log)
-	client := NewClient(log)
-	coordinator := NewCoordinator(registry, client, log)
-
-	networkErrors := []string{
-		"connection refused",
-		"timeout",
-		"connection reset by peer",
-		"i/o timeout",
-		"connection refused by server",
-		"tcp: timeout",
+// TestCoordinator_ExecuteAgent_FailoverByStatus 网关类状态码转移到其他实例，其余非 2xx 不转移
+func TestCoordinator_ExecuteAgent_FailoverByStatus(t *testing.T) {
+	tests := []struct {
+		name         string
+		status       int
+		wantFailover bool
+	}{
+		{"502 转移", http.StatusBadGateway, true},
+		{"503 转移", http.StatusServiceUnavailable, true},
+		{"504 转移", http.StatusGatewayTimeout, true},
+		{"500 不转移", http.StatusInternalServerError, false},
+		{"400 不转移", http.StatusBadRequest, false},
 	}
 
-	for _, errMsg := range networkErrors {
-		assert.True(t, coordinator.shouldRetry(errors.New(errMsg)), "should retry: "+errMsg)
-	}
-}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			log := createTestLogger()
+			registry := NewRegistry(log)
+			coordinator := NewCoordinator(registry, NewClient(log), log)
 
-// TestCoordinator_ShouldRetry_NonNetworkErrors tests retry logic for non-network errors
-func TestCoordinator_ShouldRetry_NonNetworkErrors(t *testing.T) {
-	log := createTestLogger()
-	registry := NewRegistry(log)
-	client := NewClient(log)
-	coordinator := NewCoordinator(registry, client, log)
+			primary := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(tt.status)
+			}))
+			defer primary.Close()
 
-	nonNetworkErrors := []string{
-		"invalid input",
-		"agent not found",
-		"unauthorized",
-		"forbidden",
-		"bad request",
-	}
+			var secondaryCalls int32
+			secondary := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				atomic.AddInt32(&secondaryCalls, 1)
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(agentcore.AgentOutput{Status: "success", Result: "from secondary"})
+			}))
+			defer secondary.Close()
 
-	for _, errMsg := range nonNetworkErrors {
-		assert.False(t, coordinator.shouldRetry(errors.New(errMsg)), "should not retry: "+errMsg)
+			// 首次 round-robin 选中 instance-1
+			_ = registry.Register(&ServiceInstance{ID: "instance-1", ServiceName: "svc", Endpoint: primary.URL, Agents: []string{"A"}})
+			_ = registry.Register(&ServiceInstance{ID: "instance-2", ServiceName: "svc", Endpoint: secondary.URL, Agents: []string{"A"}})
+
+			output, err := coordinator.ExecuteAgent(context.Background(), "svc", "A", &agentcore.AgentInput{Task: "t"})
+			if tt.wantFailover {
+				require.NoError(t, err)
+				assert.Equal(t, "from secondary", output.Result)
+				assert.Equal(t, int32(1), atomic.LoadInt32(&secondaryCalls))
+			} else {
+				assert.Error(t, err)
+				assert.Equal(t, int32(0), atomic.LoadInt32(&secondaryCalls))
+			}
+		})
 	}
 }
 
@@ -762,8 +768,7 @@ func TestCoordinator_ExecuteWithFailover_NoAvailableInstances(t *testing.T) {
 	coordinator := NewCoordinator(registry, client, log)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("connection timeout"))
+		w.WriteHeader(http.StatusServiceUnavailable)
 	}))
 	defer server.Close()
 

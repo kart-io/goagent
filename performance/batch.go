@@ -272,7 +272,11 @@ func (b *BatchExecutor) worker(
 
 		// Execute task
 		taskStart := time.Now()
-		output, err := b.agent.Invoke(ctx, task.input)
+		var output *core.AgentOutput
+		_, err := core.CallSafely(ctx, "batch_executor", "invoke", func() (err error) {
+			output, err = b.agent.Invoke(ctx, task.input)
+			return err
+		})
 		taskDuration := time.Since(taskStart)
 
 		if err != nil {

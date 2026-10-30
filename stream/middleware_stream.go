@@ -3,6 +3,7 @@ package stream
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/kart-io/goagent/core"
@@ -116,6 +117,7 @@ func (m *ThrottleMiddleware) Apply(ctx context.Context, source execution.StreamO
 
 	go func() {
 		defer utils.CloseQuietly(writer)
+		defer writer.recoverPanic(ctx, "stream_middleware", "throttle")
 
 		lastChunkTime := time.Now()
 
@@ -162,9 +164,8 @@ func NewTransformMiddleware(fn core.ChunkTransformFunc) *TransformMiddleware {
 
 // Apply 应用中间件
 func (m *TransformMiddleware) Apply(ctx context.Context, source execution.StreamOutput) (execution.StreamOutput, error) {
+	// 转换只在下方 goroutine 中执行；不设置 writer 的 TransformFunc，否则每个块（包括错误块）会被再转换一次
 	opts := execution.DefaultStreamOptions()
-	opts.EnableTransform = true
-	opts.TransformFunc = m.transformFunc
 
 	writer := NewWriter(ctx, opts)
 
@@ -174,6 +175,7 @@ func (m *TransformMiddleware) Apply(ctx context.Context, source execution.Stream
 				fmt.Printf("failed to close writer: %v", err)
 			}
 		}()
+		defer writer.recoverPanic(ctx, "stream_middleware", "transform")
 
 		for {
 			chunk, err := source.Next()
@@ -240,9 +242,17 @@ func (m *TeeMiddleware) Apply(ctx context.Context, source execution.StreamOutput
 	writer := NewWriter(ctx, opts)
 	reader := NewReader(ctx, writer.Channel(), opts)
 
-	// 启动多路复用
+	// 启动多路复用；消费者回调没有流可以传递错误，panic 交给全局 PanicHandler 记录
+	outputs := make([]*teeOutput, len(m.outputs))
+	for i, consumer := range m.outputs {
+		outputs[i] = newTeeOutput(consumer)
+		go outputs[i].run(ctx)
+	}
 	go func() {
 		defer func() {
+			for _, output := range outputs {
+				output.close()
+			}
 			if err := writer.Close(); err != nil {
 				fmt.Printf("failed to close writer: %v", err)
 			}
@@ -250,6 +260,7 @@ func (m *TeeMiddleware) Apply(ctx context.Context, source execution.StreamOutput
 				fmt.Printf("failed to close multiplexer: %v", err)
 			}
 		}()
+		defer writer.recoverPanic(ctx, "stream_middleware", "tee")
 
 		for {
 			chunk, err := source.Next()
@@ -265,18 +276,79 @@ func (m *TeeMiddleware) Apply(ctx context.Context, source execution.StreamOutput
 				return
 			}
 
-			// 广播到所有消费者
-			for _, consumer := range m.outputs {
-				go func(c execution.StreamConsumer) {
-					if err := c.OnChunk(chunk); err != nil {
-						fmt.Printf("failed to write error: %v", err)
-					}
-				}(consumer)
+			// 广播到所有消费者；入队不阻塞，慢消费者与 panic 的消费者都不影响主流与其他消费者
+			for _, output := range outputs {
+				output.push(chunk)
 			}
 		}
 	}()
 
 	return reader, nil
+}
+
+// teeOutput 把数据块按顺序交给一个消费者：由单个协程串行回调，与 Multiplexer 一致，
+// 消费者 panic 后丢弃剩余数据且不再调用它。队列不设上限，保持 Tee 不因慢消费者阻塞主流的语义。
+type teeOutput struct {
+	consumer execution.StreamConsumer
+
+	mu      sync.Mutex
+	cond    *sync.Cond
+	queue   []*execution.LegacyStreamChunk
+	closed  bool
+	stopped bool
+}
+
+func newTeeOutput(consumer execution.StreamConsumer) *teeOutput {
+	o := &teeOutput{consumer: consumer}
+	o.cond = sync.NewCond(&o.mu)
+	return o
+}
+
+func (o *teeOutput) push(chunk *execution.LegacyStreamChunk) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if o.stopped {
+		return
+	}
+	o.queue = append(o.queue, chunk)
+	o.cond.Signal()
+}
+
+// close 表示不会再有数据；run 处理完已入队的数据后退出。
+func (o *teeOutput) close() {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.closed = true
+	o.cond.Signal()
+}
+
+func (o *teeOutput) run(ctx context.Context) {
+	for {
+		o.mu.Lock()
+		for len(o.queue) == 0 && !o.closed {
+			o.cond.Wait()
+		}
+		if len(o.queue) == 0 {
+			o.mu.Unlock()
+			return
+		}
+		chunk := o.queue[0]
+		o.queue[0] = nil
+		o.queue = o.queue[1:]
+		o.mu.Unlock()
+
+		panicked, err := core.CallSafely(ctx, "stream_tee", "on_chunk", func() error { return o.consumer.OnChunk(chunk) })
+		if panicked {
+			o.mu.Lock()
+			o.stopped = true
+			o.queue = nil
+			o.mu.Unlock()
+			return
+		}
+		if err != nil {
+			fmt.Printf("failed to write error: %v", err)
+		}
+	}
 }
 
 // FilterMiddleware 过滤中间件
@@ -306,6 +378,7 @@ func (m *FilterMiddleware) Apply(ctx context.Context, source execution.StreamOut
 				fmt.Printf("failed to close writer: %v", err)
 			}
 		}()
+		defer writer.recoverPanic(ctx, "stream_middleware", "filter")
 
 		for {
 			chunk, err := source.Next()
@@ -357,6 +430,7 @@ func (m *BatchMiddleware) Apply(ctx context.Context, source execution.StreamOutp
 				fmt.Printf("failed to close writer: %v", err)
 			}
 		}()
+		defer writer.recoverPanic(ctx, "stream_middleware", "batch")
 
 		batch := make([]*execution.LegacyStreamChunk, 0, m.batchSize)
 		timer := time.NewTimer(m.timeout)
@@ -460,6 +534,7 @@ func (m *RetryMiddleware) Apply(ctx context.Context, source execution.StreamOutp
 				fmt.Printf("failed to close writer: %v", err)
 			}
 		}()
+		defer writer.recoverPanic(ctx, "stream_middleware", "retry")
 
 		for {
 			chunk, err := source.Next()

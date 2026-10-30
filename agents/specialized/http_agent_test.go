@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -12,6 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	agentcore "github.com/kart-io/goagent/core"
+	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/utils/json"
 )
 
@@ -651,4 +654,39 @@ func TestHTTPAgent_Execute_ContentTypeDetection(t *testing.T) {
 			tt.checkBody(t, result["body"])
 		})
 	}
+}
+
+// 请求失败时 Context 与错误文本中的 URL 均已去掉 userinfo、query 与 fragment。
+func TestHTTPAgent_Execute_RequestErrorRedactsURL(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	server.Close() // 关闭后请求必然连接失败
+	raw := strings.Replace(server.URL, "http://", "http://user:secret@", 1) + "/path?token=abc#frag"
+
+	l, _ := logger.NewWithDefaults()
+	_, err := NewHTTPAgent(l).Execute(context.Background(), &agentcore.AgentInput{
+		Context: map[string]interface{}{"url": raw},
+	})
+	require.Error(t, err)
+	want := server.URL + "/path"
+	assert.Equal(t, want, agentErrors.GetContext(err)[interfaces.FieldURL])
+	assert.Contains(t, err.Error(), want)
+	for _, secret := range []string{"user", "secret", "token=abc", "frag"} {
+		assert.NotContains(t, err.Error(), secret)
+	}
+}
+
+// 成功路径中 ToolCalls 记录的 url 同样脱敏，避免凭据随输出传播。
+func TestHTTPAgent_Execute_ToolCallInputRedactsURL(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer server.Close()
+
+	l, _ := logger.NewWithDefaults()
+	out, err := NewHTTPAgent(l).Execute(context.Background(), &agentcore.AgentInput{
+		Context: map[string]interface{}{"url": server.URL + "/path?token=abc"},
+	})
+	require.NoError(t, err)
+	require.Len(t, out.ToolCalls, 1)
+	assert.Equal(t, server.URL+"/path", out.ToolCalls[0].Input[interfaces.FieldURL])
 }

@@ -391,9 +391,13 @@ type PoolStats struct {
 	UtilizationPct float64       // 利用率百分比
 }
 
-// createAgent 创建新的 Agent
+// createAgent 创建新的 Agent；工厂是宿主代码，也会在 Acquire 的等待 goroutine 中调用，panic 转为错误返回
 func (p *AgentPool) createAgent() (*pooledAgent, error) {
-	agent, err := p.factory()
+	var agent core.Agent
+	_, err := core.CallSafely(context.Background(), "agent_pool", "factory", func() (err error) {
+		agent, err = p.factory()
+		return err
+	})
 	if err != nil {
 		return nil, err
 	}

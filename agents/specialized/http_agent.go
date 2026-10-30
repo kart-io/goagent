@@ -73,7 +73,7 @@ func (a *HTTPAgent) Execute(ctx context.Context, input *agentcore.AgentInput) (*
 
 	a.logger.Info("Executing HTTP request",
 		"method", method,
-		"url", url)
+		"url", agentErrors.RedactURL(url))
 
 	// 创建请求
 	req := a.client.R().
@@ -108,17 +108,18 @@ func (a *HTTPAgent) Execute(ctx context.Context, input *agentcore.AgentInput) (*
 			WithContext(interfaces.FieldMethod, method)
 	}
 
+	redacted := agentErrors.RedactURL(url)
 	if err != nil {
 		return &agentcore.AgentOutput{
-				Status:    interfaces.StatusFailed,
-				Message:   "HTTP request failed",
-				Latency:   time.Since(start),
-				Timestamp: start,
-			}, agentErrors.Wrap(err, agentErrors.CodeToolExecution, "http request failed").
-				WithComponent("http_agent").
-				WithOperation("Execute").
-				WithContext(interfaces.FieldURL, url).
-				WithContext(interfaces.FieldMethod, method)
+			Status:    interfaces.StatusFailed,
+			Message:   "HTTP request failed",
+			Latency:   time.Since(start),
+			Timestamp: start,
+		}, agentErrors.Wrap(agentErrors.RedactURLError(err), agentErrors.CodeToolExecution, "http request failed").
+			WithComponent("http_agent").
+			WithOperation("Execute").
+			WithContext(interfaces.FieldURL, redacted).
+			WithContext(interfaces.FieldMethod, method)
 	}
 
 	// 尝试解析 JSON
@@ -143,7 +144,7 @@ func (a *HTTPAgent) Execute(ctx context.Context, input *agentcore.AgentInput) (*
 				ToolName: "http",
 				Input: map[string]interface{}{
 					interfaces.FieldMethod: method,
-					interfaces.FieldURL:    url,
+					interfaces.FieldURL:    redacted,
 					interfaces.FieldBody:   body,
 				},
 				Output: map[string]interface{}{

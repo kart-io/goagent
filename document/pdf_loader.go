@@ -66,7 +66,7 @@ func (l *PDFLoader) Load(ctx context.Context) ([]*interfaces.Document, error) {
 	if l.callbackManager != nil {
 		if err := l.callbackManager.OnStart(ctx, map[string]interface{}{
 			"loader": "pdf",
-			"source": l.source,
+			"source": l.callbackSource(),
 		}); err != nil {
 			return nil, err
 		}
@@ -85,8 +85,8 @@ func (l *PDFLoader) Load(ctx context.Context) ([]*interfaces.Document, error) {
 	}
 
 	if err != nil {
-		if l.callbackManager != nil {
-			_ = l.callbackManager.OnError(ctx, err)
+		if cbErr := l.callbackManager.NotifyError(ctx, err); cbErr != nil {
+			return nil, cbErr
 		}
 		return nil, err
 	}
@@ -94,8 +94,8 @@ func (l *PDFLoader) Load(ctx context.Context) ([]*interfaces.Document, error) {
 	// 解析 PDF
 	content, pageCount, err := l.parsePDF(pdfReader, size)
 	if err != nil {
-		if l.callbackManager != nil {
-			_ = l.callbackManager.OnError(ctx, err)
+		if cbErr := l.callbackManager.NotifyError(ctx, err); cbErr != nil {
+			return nil, cbErr
 		}
 		return nil, err
 	}
@@ -133,7 +133,7 @@ func (l *PDFLoader) LoadByPage(ctx context.Context) ([]*interfaces.Document, err
 	if l.callbackManager != nil {
 		if err := l.callbackManager.OnStart(ctx, map[string]interface{}{
 			"loader": "pdf",
-			"source": l.source,
+			"source": l.callbackSource(),
 			"mode":   "by_page",
 		}); err != nil {
 			return nil, err
@@ -151,8 +151,8 @@ func (l *PDFLoader) LoadByPage(ctx context.Context) ([]*interfaces.Document, err
 	}
 
 	if err != nil {
-		if l.callbackManager != nil {
-			_ = l.callbackManager.OnError(ctx, err)
+		if cbErr := l.callbackManager.NotifyError(ctx, err); cbErr != nil {
+			return nil, cbErr
 		}
 		return nil, err
 	}
@@ -160,8 +160,8 @@ func (l *PDFLoader) LoadByPage(ctx context.Context) ([]*interfaces.Document, err
 	// 解析 PDF 并按页提取
 	docs, err := l.parsePDFByPage(pdfReader, size)
 	if err != nil {
-		if l.callbackManager != nil {
-			_ = l.callbackManager.OnError(ctx, err)
+		if cbErr := l.callbackManager.NotifyError(ctx, err); cbErr != nil {
+			return nil, cbErr
 		}
 		return nil, err
 	}
@@ -179,16 +179,24 @@ func (l *PDFLoader) LoadByPage(ctx context.Context) ([]*interfaces.Document, err
 	return docs, nil
 }
 
+// callbackSource 返回交给回调的来源：远程 URL 脱敏，本地路径原样返回
+func (l *PDFLoader) callbackSource() string {
+	if l.isURL {
+		return errors.RedactURL(l.source)
+	}
+	return l.source
+}
+
 // downloadPDF 从 URL 下载 PDF
 func (l *PDFLoader) downloadPDF(ctx context.Context) (io.ReaderAt, int64, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", l.source, nil)
 	if err != nil {
-		return nil, 0, errors.Wrap(err, errors.CodeInternal, "failed to create HTTP request")
+		return nil, 0, errors.Wrap(errors.RedactURLError(err), errors.CodeInternal, "failed to create HTTP request")
 	}
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, 0, errors.Wrap(err, errors.CodeInternal, "failed to download PDF")
+		return nil, 0, errors.Wrap(errors.RedactURLError(err), errors.CodeInternal, "failed to download PDF")
 	}
 	defer func() {
 		_ = resp.Body.Close()

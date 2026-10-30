@@ -131,6 +131,7 @@ func (a *StreamingLLMAgent) processStreamAsync(ctx context.Context, input *core.
 			fmt.Printf("failed to close stream writer: %v\n", err)
 		}
 	}()
+	defer writer.recoverPanic(ctx, "streaming_llm_agent", "process")
 
 	startTime := time.Now()
 

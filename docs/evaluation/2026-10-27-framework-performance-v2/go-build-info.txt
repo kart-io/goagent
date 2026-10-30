@@ -1,0 +1,64 @@
+/tmp/goagent-frameworkbench-runner: go1.27.2
+	path	github.com/kart-io/goagent-frameworkbench/cmd/runner
+	mod	github.com/kart-io/goagent-frameworkbench	(devel)	
+	dep	github.com/bahlo/generic-list-go	v0.2.0	h1:5sz/EEAK+ls5wF+NeqDpk5+iNdMDXrh3z3nPnH1Wvgk=
+	dep	github.com/buger/jsonparser	v1.1.1	h1:2PnMjfWD7wBILjqQbt530v576A/cAbQvEW9gGIpYMUs=
+	dep	github.com/bytedance/gopkg	v0.1.3	h1:TPBSwH8RsouGCBcMBktLt1AymVo2TVsBVCY4b6TnZ/M=
+	dep	github.com/bytedance/sonic	v1.15.4	h1:FgtV/4aBHpla9AxuMpuuzVUpa/Cf3izufkxNmnEzdI8=
+	dep	github.com/cespare/xxhash/v2	v2.3.0	h1:UL815xU9SqsFlibzuggzjXhog7bL6oX9BbNZnL2UFvs=
+	dep	github.com/cloudwego/eino	v0.9.22	h1:qBSgj+H5geYTysjta/bgdE9OVXX+9MVXP74vA6QA4GQ=
+	dep	github.com/dgryski/go-rendezvous	v0.0.0-20200823014737-9f7001d12a5f	h1:lO4WD4F/rVNCu3HqELle0jiPLLBs70cWOduZpkS1E78=
+	dep	github.com/dustin/go-humanize	v1.0.1	h1:GzkhY7T5VNhEkwH0PVJgjz+fX1rhBrR7pRT3mDkpeCY=
+	dep	github.com/eino-contrib/jsonschema	v1.0.3	h1:2Kfsm1xlMV0ssY2nuxshS4AwbLFuqmPmzIjLVJ1Fsp0=
+	dep	github.com/go-resty/resty/v2	v2.16.5	h1:hBKqmWrr7uRc3euHVqmh1HTHcKn99Smr7o5spptdhTM=
+	dep	github.com/go-viper/mapstructure/v2	v2.4.0	h1:EBsztssimR/CONLSZZ04E8qAkxNYq4Qp9LvH92wZUgs=
+	dep	github.com/gofrs/flock	v0.13.0	h1:95JolYOvGMqeH31+FC7D2+uULf6mG61mEZ/A8dRYMzw=
+	dep	github.com/google/jsonschema-go	v0.4.3	h1:/DBOLZTfDow7pe2GmaJNhltueGTtDKICi8V8p+DQPd0=
+	dep	github.com/google/uuid	v1.6.0	h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
+	dep	github.com/goph/emperror	v0.17.2	h1:yLapQcmEsO0ipe9p5TaN22djm3OFV/TfM/fcYP0/J18=
+	dep	github.com/grpc-ecosystem/grpc-gateway/v2	v2.27.2	h1:8Tjv8EJ+pM1xP8mK6egEbD1OgnVTyacbefKhmbLhIhU=
+	dep	github.com/json-iterator/go	v1.1.12	h1:PV8peI4a0ysnczrg+LtxykD8LfKY9ML6u2jnxaEnrnM=
+	dep	github.com/kart-io/goagent	v0.0.0
+	=>	../..	(devel)	
+	
+	dep	github.com/kart-io/logger	v0.2.2	h1:YLTNkqR4nL5z1nvPbmSfhY3WvodVIYwFoml+JWgvNl8=
+	dep	github.com/mailru/easyjson	v0.7.7	h1:UGYAvKxe3sBsEDzO8ZeWOSlIQfWFlxbzLZe7hwFURr0=
+	dep	github.com/modern-go/concurrent	v0.0.0-20180306012644-bacd9c7ef1dd	h1:TRLaZ9cD/w8PVh93nsPXa1VrQ6jlwL5oN8l14QlcNfg=
+	dep	github.com/modern-go/reflect2	v1.0.2	h1:xBagoLtFs94CBntxluKeaWgTMpvLxC4ur3nMaC9Gz0M=
+	dep	github.com/nikolalohinski/gonja	v1.5.3	h1:GsA+EEaZDZPGJ8JtpeGN78jidhOlxeJROpqMT9fTj9c=
+	dep	github.com/pelletier/go-toml/v2	v2.2.4	h1:mye9XuhQ6gvn5h28+VilKrrPoQVanw5PMw/TB0t5Ec4=
+	dep	github.com/pkg/errors	v0.9.1	h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
+	dep	github.com/redis/go-redis/v9	v9.16.0	h1:OotgqgLSRCmzfqChbQyG1PHC3tLNR89DG4jdOERSEP4=
+	dep	github.com/sirupsen/logrus	v1.9.3	h1:dueUQJ1C2q9oE3F7wvmSGAaVtTmUizReu6fjN8uqzbQ=
+	dep	github.com/slongfield/pyfmt	v0.0.0-20220222012616-ea85ff4c361f	h1:Z2cODYsUxQPofhpYRMQVwWz4yUVpHF+vPi+eUdruUYI=
+	dep	github.com/spf13/pflag	v1.0.10	h1:4EBh2KAYBwaONj6b2Ye1GiHfwjqyROoF4RwYO+vPwFk=
+	dep	github.com/wk8/go-ordered-map/v2	v2.1.8	h1:5h/BUHu93oj4gIdvHHHGsScSTMijfx5PeYkE/fJgbpc=
+	dep	github.com/yargevad/filepathx	v1.0.0	h1:SYcT+N3tYGi+NvazubCNlvgIPbzAk7i7y2dwg3I5FYc=
+	dep	go.opentelemetry.io/proto/otlp	v1.7.1	h1:gTOMpGDb0WTBOP8JaO72iL3auEZhVmAQg4ipjOVAtj4=
+	dep	golang.org/x/arch	v0.11.0	h1:KXV8WWKCXm6tRpLirl2szsO5j/oOODwZf4hATmGVNs4=
+	dep	golang.org/x/exp	v0.0.0-20230713183714-613f0c0eb8a1	h1:MGwJjxBy0HJshjDNfLsYO8xppfqWlA5ZT9OhtUUhTNw=
+	dep	golang.org/x/net	v0.47.0	h1:Mx+4dIFzqraBXUugkia1OOvlD6LemFo1ALMHjrXDOhY=
+	dep	golang.org/x/sync	v0.20.0	h1:e0PTpb7pjO8GAtTs2dQ6jYa5BWYlMuX047Dco/pItO4=
+	dep	golang.org/x/sys	v0.41.0	h1:Ivj+2Cp/ylzLiEU89QhWblYnOE9zerudt9Ftecq2C6k=
+	dep	golang.org/x/text	v0.31.0	h1:aC8ghyu4JhP8VojJ2lEHBnochRno1sgL6nEi9WGFGMM=
+	dep	golang.org/x/time	v0.15.0	h1:bbrp8t3bGUeFOx08pvsMYRTCVSMk89u4tKbNOZbp88U=
+	dep	google.golang.org/genproto/googleapis/api	v0.0.0-20251020155222-88f65dc88635	h1:1wvBeYv+A2zfEbxROscJl69OP0m74S8wGEO+Syat26o=
+	dep	google.golang.org/genproto/googleapis/rpc	v0.0.0-20251111163417-95abcf5c77ba	h1:UKgtfRM7Yh93Sya0Fo8ZzhDP4qBckrrxEr2oF5UIVb8=
+	dep	google.golang.org/grpc	v1.76.0	h1:UnVkv1+uMLYXoIz6o7chp59WfQUYA2ex/BXQ9rHZu7A=
+	dep	google.golang.org/protobuf	v1.36.10	h1:AYd7cD/uASjIL6Q9LiTjz8JLcrh/88q5UObnmY3aOOE=
+	dep	gopkg.in/yaml.v3	v3.0.1	h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=
+	build	-buildmode=exe
+	build	-compiler=gc
+	build	DefaultGODEBUG=cryptocustomrand=1,httpservecontentmaxranges=1,tlssecpmlkem=0,tracebacklabels=0,urlstrictcolons=0,x509sslcertoverrideplatform=0
+	build	CGO_ENABLED=1
+	build	CGO_CFLAGS=
+	build	CGO_CPPFLAGS=
+	build	CGO_CXXFLAGS=
+	build	CGO_LDFLAGS=
+	build	GOARCH=arm64
+	build	GOOS=darwin
+	build	GOARM64=v8.0
+	build	vcs=git
+	build	vcs.revision=3bfeea70fcce35c3e925a295cc42546c1ec80b1b
+	build	vcs.time=2026-10-27T11:50:33Z
+	build	vcs.modified=true

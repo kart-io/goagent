@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -345,4 +346,53 @@ func TestGlobalEnhancedPluginRegistry(t *testing.T) {
 	registry2 := GlobalEnhancedPluginRegistry()
 
 	assert.Same(t, registry1, registry2)
+}
+
+// 工厂内解析其他服务（常见的依赖注入写法）不会死锁。
+func TestContainer_FactoryResolvesDependency(t *testing.T) {
+	container := NewContainer()
+	container.Register("dep", &mockService{name: "dep"})
+	container.RegisterFactory("service", func() (interface{}, error) {
+		dep, err := ResolveTyped[*mockService](container, "dep")
+		if err != nil {
+			return nil, err
+		}
+		return &mockService{name: "service:" + dep.name}, nil
+	})
+
+	var resolved interface{}
+	var err error
+	requireReturnsWithin(t, 5*time.Second, func() { resolved, err = container.Resolve("service") })
+	require.NoError(t, err)
+	assert.Equal(t, "service:dep", resolved.(*mockService).name)
+
+	again, err := container.Resolve("service")
+	require.NoError(t, err)
+	assert.Same(t, resolved, again, "工厂结果被缓存")
+}
+
+// reentrantPlugin 在 GetTools 中回调所属的注册表。
+type reentrantPlugin struct {
+	*mockPlugin
+	onGetTools func()
+}
+
+func (p *reentrantPlugin) GetTools() []DynamicRunnable {
+	p.onGetTools()
+	return p.mockPlugin.GetTools()
+}
+
+// GetAllTools 在锁外调用插件，插件回调注册表不会死锁。
+func TestEnhancedPluginRegistry_GetAllToolsPluginReentry(t *testing.T) {
+	registry := NewEnhancedPluginRegistry()
+	plugin := &reentrantPlugin{mockPlugin: newMockPlugin("reentrant", "1.0.0")}
+	plugin.onGetTools = func() {
+		_ = registry.RegisterPlugin(newMockPlugin("late", "1.0.0"), nil)
+	}
+	require.NoError(t, registry.RegisterPlugin(plugin, nil))
+
+	var tools map[string][]DynamicRunnable
+	requireReturnsWithin(t, 5*time.Second, func() { tools = registry.GetAllTools() })
+	assert.Contains(t, tools, "reentrant@1.0.0")
+	assert.Contains(t, registry.ListPlugins(), "late")
 }

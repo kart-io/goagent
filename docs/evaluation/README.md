@@ -1,5 +1,13 @@
 # 可复现评测（合成数据）
 
+最新整合：[R2 分支修复与评测资料恢复验证](2026-10-28-r2-integration/REPORT.md)。
+
+真实模型编排案例：[DeepSeek、MiniMax 与 Gemini 验证 R2 新能力](2026-10-28-orchestration-live/REPORT.md)。8 个案例覆盖预算、子 Agent 工具、多级委派、上下文卸载与自定义策略、持久图循环与审批、观测与流原型；三个模型各 2–3 轮，除 Gemini 长日志排障 1 次未复现的失败外全部通过。案例暴露并修复了 Agent 结束观测晚于终态事件的框架缺陷。
+
+归档要求见[评测资料保留约定](RETENTION.md)。历史原始结果与失败日志随代码保留，新增验证独立归档。
+
+框架性能新增：[GoAgent、Eino、LangGraph/LangChain、OpenAI Agents SDK、Google ADK 对测](2026-10-27-framework-performance-v2/REPORT.md)。本地即时模型、四种工作负载、80 组/32,000 次有效操作；分别报告同语言延迟、Go 分配和跨运行时观察。没有真实推理、持久化和并发吞吐排名。
+
 最新能力：[Gemini 原生工具循环与真实 Embedding](2026-10-27-gemini-native-support/REPORT.md)。已实现 AsRunnable、完整工具续接及签名保留、终态直返和独立向量模型。真实案例 12/12 通过，16 次生成请求加 4 次 Embedding；3,817 个生成 Token 不包含向量用量。
 
 最新补充：[旧 GeminiProvider 原生 API 验证](2026-10-27-gemini-provider/REPORT.md)。复现 Vertex AI/API Key 认证失败后，保留公开入口并修复底层接入；六个方法各两次，真实测试 12/12 通过。该阶段尚不支持原生循环与 Embedding；现已由上述后续能力实现补齐。
@@ -103,3 +111,7 @@ ToT 在 apples 题仍报 `model returned no candidate thoughts`，调用 4 次�
 记录：[默认循环](2026-10-26-terminal-tools-baseline.json)、[直接返回](2026-10-26-terminal-tools-direct.json)。该组请求减少 50%、Token 观测减少 52.9%；不能据此承诺其他任务同样节省。多工具和需要推理的任务仍使用模型循环。
 
 更多依据见[成本控制调研](2026-10-26-framework-cost-research.md)、[大规模验证](2026-10-26-scale-validation.md)和[剩余失败修复](2026-10-26-remaining-failures.md)。
+
+## 可组合编排 R2 交付验证
+
+[2026-10-27 R2 验证报告](2026-10-27-orchestration-r2/REPORT.md)：T1–T10 实施、全量 race/构建/lint/导入检查、整分支审查修复、GoAgent/Eino 同机前后 5 次基准；保留回退和修正证据。

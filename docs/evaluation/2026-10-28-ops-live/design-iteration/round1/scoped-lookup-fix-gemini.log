@@ -1,0 +1,10 @@
+=== RUN   TestLiveScopedLookup
+    main_test.go:249: gemini/gemini-2.5-flash：{Answer:结论：inventory-svc
+        order-svc 下单接口 P99 延迟升高是由于其下游服务 inventory-svc 的 reserve 操作 P99 延迟从 14:05 起显著升高，traces 显示其子 span db.lock_wait 耗时过长。 Decision:inventory-svc Accepted:0xc000804410 Submissions:1 Repairs:0 DataToolRuns:6 Lookups:[{Focus:metrics Calls:[metrics_query metrics_query] Refs:[E1 E2]} {Focus:logs Calls:[logs_query logs_query] Refs:[E3 E4]} {Focus:traces Calls:[traces_query traces_query] Refs:[E5 E6]}] LookupsCreated:3 LookupsDone:3 PeakLookups:1 NewModelCalls:10 Budget:{ReservedRequests:10 KnownUsageEntries:10 UnknownUsageEntries:0 KnownTokens:{PromptTokens:9048 CompletionTokens:932 TotalTokens:12727 CachedTokens:0}}}
+--- PASS: TestLiveScopedLookup (23.74s)
+=== RUN   TestLiveScopedLookup
+    main_test.go:249: gemini/gemini-2.5-flash：{Answer:结论：inventory-svc
+        order-svc 下单接口 P99 延迟增加是由于下游服务 inventory-svc 的 reserve 操作变慢，具体表现为数据库锁等待时间增加。 Decision:inventory-svc Accepted:0xc0008041e0 Submissions:1 Repairs:0 DataToolRuns:6 Lookups:[{Focus:metrics Calls:[metrics_query metrics_query] Refs:[E1 E2]} {Focus:logs Calls:[logs_query logs_query] Refs:[E3 E4]} {Focus:traces Calls:[traces_query traces_query] Refs:[E5 E6]}] LookupsCreated:3 LookupsDone:3 PeakLookups:1 NewModelCalls:10 Budget:{ReservedRequests:10 KnownUsageEntries:10 UnknownUsageEntries:0 KnownTokens:{PromptTokens:8846 CompletionTokens:1046 TotalTokens:12942 CachedTokens:0}}}
+--- PASS: TestLiveScopedLookup (23.32s)
+PASS
+ok  	github.com/kart-io/goagent/examples/orchestration/ops/scoped-lookup	48.084s

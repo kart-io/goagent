@@ -228,10 +228,31 @@ func errorToHTTPStatus(err error) (int, string) {
 }
 ```
 
-### 结构化日志
+### Error() 文本与结构化日志
+
+`Error()` 只输出 `[CODE] [component] operation=xxx: message: cause`，不包含 `Context`。错误文本会流入日志、事件 Message 与模型输入，`Context` 中的 URL、模型参数、用户输入等不应随之传播；需要时用 `GetContext` 读取，或交给结构化日志。
+
+`*AgentError` 实现了 `slog.LogValuer`，作为 slog 属性值时以 group 输出 `code`、`component`、`operation`、`message`、`context`、`cause`（为空的字段省略）；同时实现 `zapcore.ObjectMarshaler`，zap（含 kart-io/logger 的 zap 引擎）以对象输出相同字段。`fmt` 格式化时 `%v`/`%s` 与 `Error()` 相同，`%+v` 追加按键排序的 `context: k=v, ...`，仅用于本地调试与日志，不应交给模型。
+
+### URL 脱敏
+
+- `RedactURL(raw)`：把地址写入 `Context` 或日志前去掉 userinfo、query 与 fragment。逗号分隔的多地址（如 NATS 集群）逐段处理；密码含未转义 `/`、`?`、`#` 时丢弃 scheme 之后到最后一个 `@` 为止的内容（`host:port/path` 且路径含 `@` 的地址会被过度裁剪）；key=value 形式 DSN 只保留 `host`、`port`、`dbname`。**不处理**把凭据放在路径中的 URL（如 Slack webhook、Telegram bot token），这类地址不应写入错误与日志。
+- `RedactURLError(err)`：resty、net/http 返回的 `*url.Error` 文本含完整请求 URL（query 中可能有 api key/token）。返回调用方、写入 `ToolOutput.Error` 或日志前调用它，得到 URL 已脱敏的新错误；原错误不被修改，`Unwrap` 仍得到原底层错误，`errors.Is(context.DeadlineExceeded)`、`Timeout()` 与外层 `*AgentError` 的 Code 不受影响，链上没有 `*url.Error` 时原样返回。
 
 ```go
-// 提取错误信息用于日志
+// slog 直接记录 *AgentError，Context 以 err.context 分组输出
+slog.Error("operation failed", "err", agentErr)
+
+// zap / kart-io/logger 的 zap 引擎：以对象输出，含 context
+logger.Errorw("operation failed", "error", agentErr)
+
+// 底层 HTTP 错误先脱敏再包装
+resp, err := client.R().Get(rawURL)
+if err != nil {
+    return errors.Wrap(errors.RedactURLError(err), errors.CodeToolExecution, "request failed")
+}
+
+// 其他日志库可逐项提取
 logger.Error("operation failed",
     "error_code", errors.GetCode(err),
     "component", errors.GetComponent(err),
@@ -266,6 +287,14 @@ func (e *AgentError) WithOperation(operation string) *AgentError
 func (e *AgentError) WithComponent(component string) *AgentError
 func (e *AgentError) WithContext(key string, value interface{}) *AgentError
 func (e *AgentError) WithContextMap(ctx map[string]interface{}) *AgentError
+func (e *AgentError) LogValue() slog.Value
+func (e *AgentError) MarshalLogObject(enc zapcore.ObjectEncoder) error
+func (e *AgentError) Format(s fmt.State, verb rune)
+
+// 写入 Context 前脱敏 URL
+RedactURL(raw string) string
+// 脱敏错误链上 *url.Error 的 URL
+RedactURLError(err error) error
 ```
 
 ### 检查函数

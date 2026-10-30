@@ -51,11 +51,16 @@ func TestContextPolicyOffloadPreservesProtocolAndPages(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, reduced, again)
 	other := newToolContext(&ContextPolicy{MaxToolResultRunes: 3})
-	_, err = other.Invoke(context.Background(), &interfaces.ToolInput{Args: map[string]interface{}{"key": reference.Key}})
-	require.Error(t, err, "references belong to one execution")
+	foreign, err := other.Invoke(context.Background(), &interfaces.ToolInput{Args: map[string]interface{}{"key": reference.Key}})
+	require.NoError(t, err)
+	require.Contains(t, foreign.Result, "unknown context_result key", "references belong to one execution")
+	require.NotContains(t, foreign.Result, "甲")
+	// 非法 offset 与未知键一致：返回合法范围交还模型改正，不中止执行。
 	for _, offset := range []interface{}{-1.0, 1.5, "2", 999.0} {
-		_, err = p.Invoke(context.Background(), &interfaces.ToolInput{Args: map[string]interface{}{"key": reference.Key, "offset": offset}})
-		require.Error(t, err)
+		bad, err := p.Invoke(context.Background(), &interfaces.ToolInput{Args: map[string]interface{}{"key": reference.Key, "offset": offset}})
+		require.NoError(t, err)
+		require.True(t, bad.Success)
+		require.JSONEq(t, `{"error":"invalid offset","min_offset":0,"max_offset":5}`, bad.Result.(string))
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()

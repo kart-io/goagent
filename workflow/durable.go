@@ -13,6 +13,8 @@ import (
 
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/durable"
+	"github.com/kart-io/goagent/core/observe"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // DurableConfig binds the graph to a host-controlled schema/code version.
@@ -32,10 +34,34 @@ type DurableGraph[T any] struct {
 	store         durable.Store
 	version, plan string
 	approvals     map[string]bool
+	beforeApprove func(context.Context, string, *GraphSnapshot[T]) error
 }
+
+// DurableOption 配置与状态类型 T 相关的持久图行为。
+type DurableOption[T any] func(*DurableGraph[T])
+
+// WithBeforeApprove 在运行锁内、批准生效前调用 fn，用于核对暂停期间外部数据是否被改动
+// （先 Snapshot 再 Run 的两次加锁之间存在窗口）。fn 返回错误或 panic 时拒绝本次批准且不改动状态，
+// 之后仍可再次以正确条件批准。fn 拿到的是锁内最新检查点的独立副本，修改它不影响运行。
+func WithBeforeApprove[T any](fn func(ctx context.Context, id string, snap *GraphSnapshot[T]) error) DurableOption[T] {
+	return func(d *DurableGraph[T]) { d.beforeApprove = fn }
+}
+
+// ErrApprovalMismatch 表示提供的审批键与等待中的节点不符；检查点不变，仍在等待。
+var ErrApprovalMismatch = errors.New("approval does not match waiting node")
+
+// ApprovalRejectedError 是 WithBeforeApprove 的钩子返回错误时的拒绝；检查点不变，仍在等待。
+// 钩子 panic 时返回 *errors.PanicError，不属于拒绝。
+type ApprovalRejectedError struct{ Err error }
+
+func (e *ApprovalRejectedError) Error() string { return "批准前置校验拒绝: " + e.Err.Error() }
+func (e *ApprovalRejectedError) Unwrap() error { return e.Err }
 
 // GraphSnapshot exposes continuation and business state without the storage envelope.
 type GraphSnapshot[T any] struct {
+	// Preview marks a transient node chunk. Its State is not committed and must
+	// not be used as a resume checkpoint or a completed business result.
+	Preview bool
 	State   T
 	Node    string
 	Steps   int
@@ -61,7 +87,7 @@ func graphDigest(value any) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func (g *Graph[T]) CompileDurable(ctx context.Context, cfg DurableConfig) (*DurableGraph[T], error) {
+func (g *Graph[T]) CompileDurable(ctx context.Context, cfg DurableConfig, opts ...DurableOption[T]) (*DurableGraph[T], error) {
 	if cfg.Store == nil || cfg.Version == "" {
 		return nil, fmt.Errorf("durable graph requires store and version")
 	}
@@ -96,7 +122,11 @@ func (g *Graph[T]) CompileDurable(ctx context.Context, cfg DurableConfig) (*Dura
 		Approvals map[string]bool
 		Parallel  map[string][]string `json:",omitempty"`
 	}{"goagent-graph-v1", cfg.Version, graph.config, slices.Sorted(maps.Keys(graph.nodes)), graph.edges, branches, approvals, parallel}
-	return &DurableGraph[T]{graph: graph, store: cfg.Store, version: cfg.Version, plan: graphDigest(descriptor), approvals: approvals}, nil
+	d := &DurableGraph[T]{graph: graph, store: cfg.Store, version: cfg.Version, plan: graphDigest(descriptor), approvals: approvals}
+	for _, opt := range opts {
+		opt(d)
+	}
+	return d, nil
 }
 
 func publicGraphSnapshot[T any](s *durable.Snapshot, state graphState[T]) *GraphSnapshot[T] {
@@ -109,22 +139,29 @@ func publicGraphSnapshot[T any](s *durable.Snapshot, state graphState[T]) *Graph
 // Effects are at least once if a process dies after the effect but before Save.
 // Routers must be pure; they may repeat after a crash before routing is saved.
 func (d *DurableGraph[T]) Run(ctx context.Context, id string, initial T, approvalKey string) (*GraphSnapshot[T], error) {
-	return d.run(ctx, id, initial, approvalKey, func(*core.StreamEvent) error { return nil })
+	return d.run(ctx, d.store, id, initial, approvalKey, func(core.StreamChunk[*GraphSnapshot[T]]) error { return nil })
 }
 
-func (d *DurableGraph[T]) run(ctx context.Context, id string, initial T, approvalKey string, emit func(*core.StreamEvent) error) (result *GraphSnapshot[T], err error) {
+// run 把检查点与节点内持久操作都记在 store 中：独立运行时是 DurableConfig.Store，嵌套运行时是父操作日志的 Store。
+func (d *DurableGraph[T]) run(ctx context.Context, store durable.Store, id string, initial T, approvalKey string, emitChunk func(core.StreamChunk[*GraphSnapshot[T]]) error) (result *GraphSnapshot[T], err error) {
+	ctx = observe.WithRunID(ctx, id)
+	ctx, endGraph := observe.Start(ctx, observe.Event{Type: "graph", Path: "graph"})
+	defer func() { endGraph(err, false) }()
 	defer func() {
-		if recover() != nil {
-			err = fmt.Errorf("durable graph storage or serialization panicked")
+		if r := recover(); r != nil {
+			err = agentErrors.NewPanicError("durable graph storage or serialization", r)
 		}
 	}()
-	if d == nil || d.store == nil || id == "" {
+	emit := func(event *core.StreamEvent) error {
+		return emitChunk(core.StreamChunk[*GraphSnapshot[T]]{Event: event})
+	}
+	if d == nil || store == nil || id == "" {
 		return nil, fmt.Errorf("compiled durable graph and run ID are required")
 	}
 	if err = ctx.Err(); err != nil {
 		return nil, err
 	}
-	unlock, err := d.store.Lock(ctx, id)
+	unlock, err := store.Lock(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +170,7 @@ func (d *DurableGraph[T]) run(ctx context.Context, id string, initial T, approva
 			err = errors.Join(err, e)
 		}
 	}()
-	checkpoint, err := d.store.Load(ctx, id)
+	checkpoint, err := store.Load(ctx, id)
 	if errors.Is(err, os.ErrNotExist) {
 		if approvalKey != "" {
 			return nil, fmt.Errorf("cannot approve a run that does not exist")
@@ -143,7 +180,7 @@ func (d *DurableGraph[T]) run(ctx context.Context, id string, initial T, approva
 			return nil, e
 		}
 		checkpoint = &durable.Snapshot{Version: d.version, Plan: d.plan, RunID: id, Data: data}
-		if err = d.store.Save(ctx, id, checkpoint); err != nil {
+		if err = store.Save(ctx, id, checkpoint); err != nil {
 			return nil, err
 		}
 	} else if err != nil {
@@ -155,7 +192,12 @@ func (d *DurableGraph[T]) run(ctx context.Context, id string, initial T, approva
 	}
 	result = publicGraphSnapshot(checkpoint, state)
 	if approvalKey != "" && (!checkpoint.Waiting || checkpoint.Key != approvalKey) {
-		return result, fmt.Errorf("approval does not match waiting node")
+		return result, ErrApprovalMismatch
+	}
+	if approvalKey != "" && d.beforeApprove != nil {
+		if err = d.checkBeforeApprove(ctx, id, checkpoint); err != nil {
+			return result, err
+		}
 	}
 	// Save using fresh snapshots; failed writes leave the last acknowledged state.
 	save := func(next durable.Snapshot, nextState graphState[T]) error {
@@ -164,7 +206,7 @@ func (d *DurableGraph[T]) run(ctx context.Context, id string, initial T, approva
 			return e
 		}
 		next.Data = data
-		if e = d.store.Save(ctx, id, &next); e != nil {
+		if e = store.Save(ctx, id, &next); e != nil {
 			return e
 		}
 		checkpoint = &next
@@ -244,15 +286,19 @@ func (d *DurableGraph[T]) run(ctx context.Context, id string, initial T, approva
 					})
 			} else {
 				out, e = node(ctx, in, func(chunk core.StreamChunk[T]) error {
-					if chunk.Event == nil {
-						return nil
+					var event *core.StreamEvent
+					if chunk.Event != nil {
+						copy := *chunk.Event
+						copy.Step = nodeName
+						if chunk.Event.Step != "" {
+							copy.Step += "/" + chunk.Event.Step
+						}
+						event = &copy
 					}
-					event := *chunk.Event
-					event.Step = nodeName
-					if chunk.Event.Step != "" {
-						event.Step += "/" + chunk.Event.Step
-					}
-					return emit(&event)
+					preview := publicGraphSnapshot(checkpoint, state)
+					preview.State = chunk.Data
+					preview.Preview, preview.Done, preview.Waiting = true, false, false
+					return emitChunk(core.StreamChunk[*GraphSnapshot[T]]{Data: preview, Event: event})
 				})
 			}
 			if e != nil {
@@ -260,7 +306,9 @@ func (d *DurableGraph[T]) run(ctx context.Context, id string, initial T, approva
 			}
 			return done(core.StreamChunk[T]{Done: true, Data: out})
 		})
-		output, e := runner.Invoke(durable.WithJournal(durable.WithExecutionKey(ctx, intent.Key), d.store), input.State)
+		nodeCtx, endNode := observe.Start(durable.WithJournal(durable.WithExecutionKey(ctx, intent.Key), store), observe.Event{Type: "node", Path: nodeName, OperationKey: intent.Key})
+		output, e := runner.Invoke(nodeCtx, input.State)
+		endNode(e, false)
 		if e != nil {
 			return result, fmt.Errorf("node %q: %w", state.Node, e)
 		}
@@ -279,10 +327,27 @@ func (d *DurableGraph[T]) run(ctx context.Context, id string, initial T, approva
 	return result, nil
 }
 
+func (d *DurableGraph[T]) checkBeforeApprove(ctx context.Context, id string, checkpoint *durable.Snapshot) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = agentErrors.NewPanicError("批准前置校验", r)
+		}
+	}()
+	// 重新解码出独立副本，避免钩子修改的状态随后续 Save 写入检查点。
+	state, err := d.decodeCheckpoint(id, checkpoint)
+	if err != nil {
+		return err
+	}
+	if err = d.beforeApprove(ctx, id, publicGraphSnapshot(checkpoint, state)); err != nil {
+		return &ApprovalRejectedError{Err: err}
+	}
+	return nil
+}
+
 func (d *DurableGraph[T]) decodeCheckpoint(id string, checkpoint *durable.Snapshot) (state graphState[T], err error) {
 	defer func() {
-		if recover() != nil {
-			err = fmt.Errorf("checkpoint decoding panicked")
+		if r := recover(); r != nil {
+			err = agentErrors.NewPanicError("checkpoint decoding", r)
 		}
 	}()
 	if checkpoint == nil || checkpoint.Plan != d.plan || checkpoint.Version != d.version || checkpoint.RunID != id || checkpoint.Next < 0 || checkpoint.Next > d.graph.config.MaxSteps || json.Unmarshal(checkpoint.Data, &state) != nil {
@@ -300,10 +365,17 @@ func (d *DurableGraph[T]) decodeCheckpoint(id string, checkpoint *durable.Snapsh
 // Snapshot loads and validates a continuation without executing it. It takes the
 // run lock and may wait for active work; use a bounded context for status reads.
 func (d *DurableGraph[T]) Snapshot(ctx context.Context, id string) (out *GraphSnapshot[T], err error) {
-	if d == nil || d.store == nil || id == "" {
+	if d == nil {
 		return nil, fmt.Errorf("compiled durable graph and run ID are required")
 	}
-	unlock, err := d.store.Lock(ctx, id)
+	return d.snapshot(ctx, d.store, id)
+}
+
+func (d *DurableGraph[T]) snapshot(ctx context.Context, store durable.Store, id string) (out *GraphSnapshot[T], err error) {
+	if store == nil || id == "" {
+		return nil, fmt.Errorf("compiled durable graph and run ID are required")
+	}
+	unlock, err := store.Lock(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -312,7 +384,7 @@ func (d *DurableGraph[T]) Snapshot(ctx context.Context, id string) (out *GraphSn
 			err = errors.Join(err, e)
 		}
 	}()
-	cp, err := d.store.Load(ctx, id)
+	cp, err := store.Load(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -362,8 +434,8 @@ func (d *DurableGraph[T]) validateContinuation(id string, cp *durable.Snapshot, 
 
 func (d *DurableGraph[T]) route(ctx context.Context, name string, state T) (target string, err error) {
 	defer func() {
-		if recover() != nil {
-			err = fmt.Errorf("branch %q panicked", name)
+		if r := recover(); r != nil {
+			err = agentErrors.NewPanicError(fmt.Sprintf("branch %q", name), r)
 		}
 	}()
 	target = d.graph.edges[name]

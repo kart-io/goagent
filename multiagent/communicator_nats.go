@@ -48,7 +48,7 @@ func NewNATSCommunicator(agentID string, config *NATSConfig) (*NATSCommunicator,
 		return nil, agentErrors.Wrap(err, agentErrors.CodeStoreConnection, "failed to connect to NATS").
 			WithComponent("nats_communicator").
 			WithOperation("new_communicator").
-			WithContext("url", config.URL)
+			WithContext("url", agentErrors.RedactURL(config.URL))
 	}
 
 	js, err := conn.JetStream()

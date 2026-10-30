@@ -390,9 +390,10 @@ func TestToolExecutor_RetryWithJitter(t *testing.T) {
 		}
 		executor := NewToolExecutor(WithRetryPolicy(policy))
 
-		// 多次计算延迟，验证存在随机性
-		delays := make([]time.Duration, 10)
-		for i := 0; i < 10; i++ {
+		// 多次计算延迟，验证存在随机性。低于 InitialDelay 的抖动会被抬到 InitialDelay，约一半样本相同，
+		// 样本过少时会偶发全部相同。
+		delays := make([]time.Duration, 100)
+		for i := 0; i < 100; i++ {
 			delays[i] = executor.calculateRetryDelay(0)
 		}
 

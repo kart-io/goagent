@@ -1,0 +1,14 @@
+=== RUN   TestLiveLogTriageCrashRecovery
+    main_test.go:86: minimax/MiniMax-M3.1-Flash 恢复：{Answer:错误码：PGW-504
+        上游：bank-gw-3
+        处置建议：确认 bank-gw-3 网关健康状态与网络连通性，恢复后按幂等键对熔断期间失败订单做补偿重试。 NewModelCalls:4 FetchRuns:0 PageReads:4 Offloaded:1 Budget:{ReservedRequests:6 KnownUsageEntries:6 UnknownUsageEntries:0 KnownTokens:{PromptTokens:15765 CompletionTokens:243 TotalTokens:16008 CachedTokens:0}}}
+--- PASS: TestLiveLogTriageCrashRecovery (10.48s)
+=== RUN   TestLiveLogTriageCrashRecovery
+    main_test.go:86: minimax/MiniMax-M3.1-Flash 恢复：{Answer:日志中唯一一条 ERROR 位于 10:01:23，request_id=r-7083。
+        
+        错误码：PGW-504
+        上游：bank-gw-3
+        处置建议：确认 bank-gw-3 网关侧的超时与熔断状态，检查其连通性与容量，必要时切流至备用网关并对失败请求做重试/补单以恢复成功率。 NewModelCalls:4 FetchRuns:0 PageReads:4 Offloaded:1 Budget:{ReservedRequests:6 KnownUsageEntries:6 UnknownUsageEntries:0 KnownTokens:{PromptTokens:15811 CompletionTokens:316 TotalTokens:16127 CachedTokens:0}}}
+--- PASS: TestLiveLogTriageCrashRecovery (10.71s)
+PASS
+ok  	github.com/kart-io/goagent/examples/orchestration/live/log-triage	21.192s
