@@ -60,7 +60,7 @@ func runBasicExample(apiKey string) {
 		llm.WithModel("deepseek-chat"),
 		llm.WithTemperature(0.7),
 		llm.WithMaxTokens(500),
-		llm.WithTimeout(120),
+		llm.WithTimeout(120*time.Second),
 	)
 	if err != nil {
 		log.Fatalf("创建 DeepSeek provider 失败: %v", err)
@@ -106,7 +106,7 @@ func runMultiStepExample(apiKey string) {
 		llm.WithModel("deepseek-chat"),
 		llm.WithTemperature(0.7),
 		llm.WithMaxTokens(400),
-		llm.WithTimeout(120),
+		llm.WithTimeout(120*time.Second),
 	)
 	if err != nil {
 		log.Fatalf("创建 DeepSeek provider 失败: %v", err)
@@ -187,7 +187,7 @@ func runStructuredDataExample(apiKey string) {
 		llm.WithModel("deepseek-chat"),
 		llm.WithTemperature(0.3),
 		llm.WithMaxTokens(500),
-		llm.WithTimeout(120),
+		llm.WithTimeout(120*time.Second),
 	)
 	if err != nil {
 		log.Fatalf("创建 DeepSeek provider 失败: %v", err)

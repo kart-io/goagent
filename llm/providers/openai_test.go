@@ -205,7 +205,7 @@ func TestOpenAI_Complete_Timeout(t *testing.T) {
 	provider, err := NewOpenAIWithOptions(
 		agentllm.WithAPIKey("test-api-key"),
 		agentllm.WithBaseURL(server.URL+"/v1"),
-		agentllm.WithTimeout(1), // 1 second timeout
+		agentllm.WithTimeout(1*time.Second), // 1 second timeout
 	)
 	require.NoError(t, err)
 

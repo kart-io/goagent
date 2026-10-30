@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/kart-io/goagent/builder"
 	agentcore "github.com/kart-io/goagent/core"
@@ -55,7 +56,7 @@ func runProviderExample(apiKey string) {
 		llm.WithModel("deepseek-chat"),
 		llm.WithTemperature(0.7),
 		llm.WithMaxTokens(1000),
-		llm.WithTimeout(30),
+		llm.WithTimeout(30*time.Second),
 	)
 	if err != nil {
 		log.Fatalf("创建 DeepSeek provider 失败: %v", err)
@@ -97,7 +98,7 @@ func runBuilderExample(apiKey string) {
 		llm.WithModel("deepseek-chat"),
 		llm.WithTemperature(0.7),
 		llm.WithMaxTokens(1000),
-		llm.WithTimeout(30),
+		llm.WithTimeout(30*time.Second),
 	)
 	if err != nil {
 		log.Fatalf("创建 DeepSeek provider 失败: %v", err)
@@ -143,7 +144,7 @@ func runStructuredOutputExample(apiKey string) {
 		llm.WithModel("deepseek-chat"),
 		llm.WithTemperature(0.3), // 使用较低的 temperature 以获得更稳定的输出
 		llm.WithMaxTokens(1000),
-		llm.WithTimeout(30),
+		llm.WithTimeout(30*time.Second),
 	)
 	if err != nil {
 		log.Fatalf("创建 DeepSeek provider 失败: %v", err)
