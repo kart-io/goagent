@@ -1,7 +1,7 @@
 # 多实例 durable.Store：接口设计
 
 日期：2026-10-29（2026-10-30 按评审修订）  
-状态：P0 已实施（见第 11 节）；P1、P2 待评审  
+状态：P0、P1 已实施（见第 11、12 节）；P2 待评审  
 代码基线：`1c4fa91`（`codex/composable-orchestration-r2`）  
 来源：[定位决策](../../research/2026-10-29-goagent-positioning.md) 第 4、5 节；[嵌套恢复与失败处理](2026-10-29-nested-resume-and-failure-handling.md)
 
@@ -158,7 +158,7 @@ CREATE TABLE goagent_durable_snapshot (
 );
 CREATE TABLE goagent_durable_lease (
   ns text NOT NULL, id text NOT NULL,
-  token uuid NOT NULL, owner text NOT NULL,
+  token text NOT NULL, owner text NOT NULL,
   expires_at timestamptz NOT NULL,
   PRIMARY KEY (ns, id)
 ) WITH (fillfactor = 70);       -- 续约走 HOT 更新
@@ -288,7 +288,7 @@ MySQL 可以用同样的表结构实现（`GET_LOCK` 不适合，原因同 advis
 | 阶段 | 内容 | 验证 |
 | --- | --- | --- |
 | P0（已完成） | 契约、哨兵错误、`storetest`，`FileStore` 接入 | 见第 11 节 |
-| P1 | `goagent-contrib/durable/pgstore`；`storetest` 增加 `Options.LeaseTTL` 与模拟持有者崩溃的钩子，补接管、令牌隔离（含同进程旧持有者）、获取结果不确定后的清理用例；离线导入命令 | 本地 Docker Postgres（含同步复制）运行 `storetest.Run`；两个进程的崩溃续跑测试；主库重启期间的写入失败与恢复测试 |
+| P1（已完成） | `goagent-contrib/durable/pgstore`；`storetest` 增加 `Options.LeaseTTL` 与模拟持有者崩溃的钩子，补接管、令牌隔离（含同进程旧持有者）、获取结果不确定后的清理用例；离线导入命令 | 本地 Docker Postgres（含同步复制）运行 `storetest.Run`；两个进程的崩溃续跑测试；主库重启期间的写入失败与恢复测试 |
 | P2 | `redisstore`；`LISTEN/NOTIFY` 唤醒；可选接口 `LeaseLocker`（`Lock` 额外返回租约丢失时取消的 ctx，让旧持有者尽早停止模型请求），需改动第 2 节 C9 表中全部 7 处调用点 | 同 P1 |
 
 | 待确认 | 说明 |
@@ -334,3 +334,36 @@ MySQL 可以用同样的表结构实现（`GET_LOCK` 不适合，原因同 advis
   “写入原子”是概率性检测：半成品窗口 50µs 时 5 次运行 5 次失败。
 - `TestFileStoreConformance` 在 `-race -count=10` 下全部通过；`go vet ./...` 与 `scripts/verify_imports.sh` 无问题；`go test -race -count=1 ./core/... ./workflow/... ./builder/... ./tools/...` 通过；`go test ./...` 共 199 个包、5618 个测试通过。
 - 未执行 golangci-lint：本机为 v1，仓库配置要求 v2。
+
+## 12. P1 实施记录
+
+实施于 2026-10-30。代码在本地仓库 `goagent-contrib`（`durable/pgstore`，独立 `go.mod`），尚未创建远程仓库；`go.mod` 用 `replace` 指向本地 goagent，发布前须改为正式版本。
+
+| 项 | 实现 |
+| --- | --- |
+| 进程内闸门、租约、令牌校验 | `pgstore.go`：闸门持有到自己的 unlock；获取与解锁用内部超时；获取出错时按自己的令牌删除；写入单条 CTE 只校验令牌并顺带续约；后台批量续约与过期租约清理 |
+| 作用域 | `scope.go`：事务级 advisory 锁，加锁与查墓碑分成两条语句（READ COMMITTED 下同一语句的快照取于等锁之前，会看不到等锁期间提交的墓碑）；两段式删除，每批 1000 行 |
+| 导入 | `import.go`：`ImportFileStore` 按文件名核对 `RunID` 的摘要后导入根命名空间，已存在的不覆盖；作用域不导入 |
+| `storetest` 租约用例 | `Options.Leases{TTL, Expire, Crash}`：崩溃后接管、续约维持长时间持锁、接管后旧持有者写入被拒、同进程旧持有者不放行新持有者、过期未接管时仍可写入 |
+
+与设计的差异：
+
+| 设计 | 实际 | 原因 |
+| --- | --- | --- |
+| 令牌列 `uuid` | `text`，取自 `crypto/rand.Text()` | 不引入 uuid 依赖；令牌只做相等比较 |
+| `Config.Meter` 与第 9 节指标 | 未实现，只提供 `Config.OnError` 回调，接收续约、清理、解锁删除租约时被吞掉的错误 | 先保证正确性，指标按宿主的观测方式另行补充 |
+| 7.1 中写事务各语句批量发送（1–2 次往返） | 逐条执行：BEGIN、`set_config`、作用域锁与墓碑（仅作用域）、CTE、COMMIT，约 4–6 次往返 | 先求简单；有性能需求时改为 pgx 批量发送 |
+| 获取结果不确定时的清理 | 已实现，无自动化测试 | 需要在提交后、响应前切断连接，通用环境难以稳定构造 |
+| 同步复制前提 | 只写进包文档，未测试 | 测试环境为单节点 |
+
+验证（本地 Docker `postgres:17.6-alpine`）：
+
+- `scripts/test-pgstore.sh`：启动临时容器，`go vet` 与 `go test -race -count=1 ./...` 全部通过后删除容器。包含：
+  - `storetest.Run` 全部 20 个子用例（15 个通用、5 个租约）；
+  - 表结构版本不符拒绝启动、关闭后拒绝加锁、`Close` 超时后释放剩余租约、过期租约被后台清理；
+  - 子进程持锁写入后直接退出，父进程的另一实例在 TTL 后接管并用审批键续跑，崩溃前完成的步骤不重复执行；
+  - 持锁期间 `docker restart` 数据库（耗时约 3 秒，超过测试用的 1 秒 TTL），重启期间写入失败，恢复后令牌未变，写入成功；
+  - FileStore 上停在审批等待并含已完成持久操作的运行，导入后在 pgstore 上续跑，操作只回放；重复导入不覆盖。
+- 变异测试（临时修改后还原）：闸门改为不阻塞时“同进程旧持有者不放行新持有者”失败；写入加上过期检查时“过期未接管时仍可写入”失败；写入不校验令牌时“接管后旧持有者写入被拒”失败。
+- 清理后的代码对“接管后”“同进程”两个用例 `-count=15` 连跑，无偶发失败。
+- goagent 侧：`go test -race -count=1 ./core/durable/...` 与全量 `go test ./...`（199 个包、5618 个测试）通过。

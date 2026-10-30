@@ -22,6 +22,18 @@ import (
 type Options struct {
 	// Scoped 为真时两个实例都须实现 durable.Scoped，并运行作用域用例。
 	Scoped bool
+	// Leases 非 nil 时运行租约用例，适用于以带过期时间的租约实现锁的后端。
+	Leases *Leases
+}
+
+// Leases 描述租约后端，钩子用于在测试中制造续约中断与进程崩溃。
+type Leases struct {
+	// TTL 是实例配置的租约时长，用例按它设定等待上限。
+	TTL time.Duration
+	// Expire 使 s 持有的根命名空间 id 的租约在后端立即过期，并停止 s 对它的续约；s 仍以为自己持有该锁。
+	Expire func(t *testing.T, s durable.Store, id string)
+	// Crash 使 s 停止全部续约且不释放任何租约，模拟进程崩溃。
+	Crash func(t *testing.T, s durable.Store)
 }
 
 // blockedWait 是判定 Lock 处于等待状态所用的时长。
@@ -63,6 +75,27 @@ func Run(t *testing.T, newPair func(t *testing.T) (a, b durable.Store), opts Opt
 			require.NotNil(t, b)
 			c.run(t, a, b)
 		})
+	}
+	if l := opts.Leases; l != nil {
+		require.Positive(t, l.TTL)
+		require.NotNil(t, l.Expire)
+		require.NotNil(t, l.Crash)
+		leaseCases := []struct {
+			name string
+			run  func(*testing.T, *Leases, durable.Store, durable.Store)
+		}{
+			{"崩溃后接管", testCrashTakeover},
+			{"续约维持长时间持锁", testRenewal},
+			{"接管后旧持有者写入被拒", testFencing},
+			{"同进程旧持有者不放行新持有者", testSameProcessFencing},
+			{"过期未接管时仍可写入", testExpiredNotTaken},
+		}
+		for _, c := range leaseCases {
+			t.Run(c.name, func(t *testing.T) {
+				a, b := newPair(t)
+				c.run(t, l, a, b)
+			})
+		}
 	}
 }
 
@@ -390,4 +423,77 @@ func testPruneRemoved(t *testing.T, a, b durable.Store) {
 	require.NoError(t, scoped(t, b).PruneRemoved(ctx, pruneMargin))
 	_, err := scoped(t, a).Scope("gone").Load(ctx, "run")
 	require.ErrorIs(t, err, os.ErrNotExist, "墓碑回收后同名作用域视为不存在")
+}
+
+func lockWithin(t *testing.T, s durable.Store, id string, within time.Duration) func() {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), within)
+	defer cancel()
+	unlock, err := s.Lock(ctx, id)
+	require.NoError(t, err)
+	return func() { require.NoError(t, unlock()) }
+}
+
+func snapshot(version string) *durable.Snapshot {
+	return &durable.Snapshot{Version: version, RunID: "run", Data: json.RawMessage(`{"v":"` + version + `"}`)}
+}
+
+func testCrashTakeover(t *testing.T, l *Leases, a, b durable.Store) {
+	_, err := a.Lock(context.Background(), "run")
+	require.NoError(t, err)
+	require.NoError(t, a.Save(context.Background(), "run", snapshot("v1")))
+	l.Crash(t, a)
+	start := time.Now()
+	unlock := lockWithin(t, b, "run", 3*l.TTL)
+	defer unlock()
+	require.Less(t, time.Since(start), 2*l.TTL, "租约过期后应被接管")
+	requireVersion(t, b, "run", "v1")
+	require.NoError(t, b.Save(context.Background(), "run", snapshot("v2")))
+}
+
+func testRenewal(t *testing.T, l *Leases, a, b durable.Store) {
+	unlock := lock(t, a, "run")
+	time.Sleep(2 * l.TTL)
+	requireBlocked(t, b, "run")
+	require.NoError(t, a.Save(context.Background(), "run", snapshot("v1")))
+	unlock()
+	requireVersion(t, b, "run", "v1")
+}
+
+func testFencing(t *testing.T, l *Leases, a, b durable.Store) {
+	unlockA, err := a.Lock(context.Background(), "run")
+	require.NoError(t, err)
+	l.Expire(t, a, "run")
+	unlockB := lockWithin(t, b, "run", 5*time.Second)
+	require.NoError(t, b.Save(context.Background(), "run", snapshot("b")))
+	require.ErrorIs(t, a.Save(context.Background(), "run", snapshot("a")), durable.ErrLeaseLost)
+	require.NoError(t, unlockA(), "租约被接管后解锁不报错")
+	requireVersion(t, b, "run", "b")
+	require.NoError(t, b.Save(context.Background(), "run", snapshot("b2")), "旧持有者解锁不影响新持有者")
+	unlockB()
+	requireVersion(t, a, "run", "b2")
+}
+
+// testSameProcessFencing：G1 失去租约后，同实例的 G2 在 G1 解锁前不能获得锁，G1 也不能借用别人的令牌写入。
+func testSameProcessFencing(t *testing.T, l *Leases, a, b durable.Store) {
+	unlockG1, err := a.Lock(context.Background(), "run")
+	require.NoError(t, err)
+	l.Expire(t, a, "run")
+	lockWithin(t, b, "run", 5*time.Second)()
+	requireBlocked(t, a, "run")
+	require.ErrorIs(t, a.Save(context.Background(), "run", snapshot("g1")), durable.ErrLeaseLost)
+	require.NoError(t, unlockG1())
+	unlockG2 := lock(t, a, "run")
+	require.NoError(t, a.Save(context.Background(), "run", snapshot("g2")))
+	unlockG2()
+	requireVersion(t, b, "run", "g2")
+}
+
+// testExpiredNotTaken：令牌未被改写时写入仍然安全，不应因租约过期而失败。
+func testExpiredNotTaken(t *testing.T, l *Leases, a, b durable.Store) {
+	unlock := lock(t, a, "run")
+	l.Expire(t, a, "run")
+	require.NoError(t, a.Save(context.Background(), "run", snapshot("v1")))
+	unlock()
+	requireVersion(t, b, "run", "v1")
 }
