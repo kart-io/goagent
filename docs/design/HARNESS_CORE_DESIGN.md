@@ -338,7 +338,7 @@ type PreDecision struct {
 
 ## 13. 第一阶段实施记录（2026-10-30）
 
-已实现：`tools.Pipeline`（第 4.1、4.2、10.1、10.4 节）、`harness/env`（4.3、10.2）、`tools/policy`、`tools/coding` 改为消费者、结果溢出（4.4，`coding.SpillHook`）、编辑后检查（10.2，`coding.WithLinter`）、`ToolOutput.AdditionalContext` 注入与预留 `Labels`、Builder 设置会话 ID。
+已实现：`tools.Pipeline`（第 4.1、4.2、10.1、10.4 节）、`harness/env`（4.3、10.2）、`tools/policy`、`tools/coding` 改为消费者、结果溢出（4.4，`coding.SpillHook`，A1 起移至 `tools/spill`）、编辑后检查（10.2，`coding.WithLinter`）、`ToolOutput.AdditionalContext` 注入与预留 `Labels`、Builder 设置会话 ID。
 
 与设计的差异：
 
@@ -549,3 +549,21 @@ Build 分阶段执行，任一阶段失败都按初始化的逆序关闭已创�
 | 11 | spill 与只读、裁剪、恢复冲突 | 14.8：写入宿主产物目录，自带 `read_spill`，失败不重跑 |
 | 12 | 子 Agent 授权与资源约束 | 14.11 |
 | 13 | A 期范围过宽，缺少阻断验收 | 14.12：拆为 A0/A1/A2，每期列出阻断验收 |
+
+### 14.14 A0、A1 实施记录（2026-10-30）
+
+A0（`2fc040b`）：Pipeline 裁决聚合与按钩子记录授权；`tools/policy` 取最严格者。A1：`harness/preset`、`tools/spill`、Docker 只读挂载与 `env.ReadOnly`，示例改为配置驱动。
+
+与 14.2–14.8 的差异：
+
+| 设计 | 实施 | 原因 |
+|---|---|---|
+| 配置文件为 preset 列表 | 顶层为 `{limits, presets}` | 权限上限需要与 preset 并列声明，且只允许出现在可信层 |
+| permissions 为单例 | 可多行，全部规则合并为一个策略 | 不可信层新增一行 deny/ask 即可收紧，无需替换可信层的行（替换属于扩权项） |
+| 沙箱模式写在 permissions 上 | 写在 workspace 上 | 沙箱约束的是执行环境，与工作区一起创建、一起校验 |
+| 规则引用的工具须存在 | 只检查用户书写的规则 | `base: coding` 等内置规则在只读模式下会引用被裁掉的写入类工具 |
+| 宿主基线含 `.git` 写保护守卫 | 由 coding 工具自身拒绝写入 `.git` | 已有实现，重复的守卫没有收益 |
+| 删除不存在的组件给出警告 | 报错 | 合并结果须确定，静默忽略会掩盖拼写错误 |
+| 秘密名单外的引用 | 来自可信层的引用不受名单约束 | 名单是对不可信层的上限 |
+
+未在 A1 验证：`workspace-write` 加 Docker 执行器的端到端运行（本机无 Go 镜像）；只读挂载由 `harness/env` 的 Docker 测试覆盖。

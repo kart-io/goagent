@@ -157,8 +157,13 @@ var projectInstructionFiles = []string{"AGENTS.md", "CLAUDE.md"}
 // ProjectInstructions 读取工作区根目录的 AGENTS.md 与 CLAUDE.md，供宿主拼进系统提示词；都不存在时返回空串。
 // 指向工作区外、不是文本文件的说明文件被跳过，以免工作区外的内容进入提示词发给模型提供方。
 func (w *Workspace) ProjectInstructions(ctx context.Context) (string, error) {
+	return w.ProjectInstructionsFrom(ctx, projectInstructionFiles...)
+}
+
+// ProjectInstructionsFrom 与 ProjectInstructions 相同，但读取指定的文件（相对工作区根目录），按顺序拼接。
+func (w *Workspace) ProjectInstructionsFrom(ctx context.Context, files ...string) (string, error) {
 	var sb strings.Builder
-	for _, name := range projectInstructionFiles {
+	for _, name := range files {
 		data, err := w.readText(ctx, name, false)
 		if errors.Is(err, fs.ErrNotExist) || errors.Is(err, errNotText) || errors.Is(err, env.ErrOutsideWorkspace) {
 			continue

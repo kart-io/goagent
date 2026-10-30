@@ -8,8 +8,9 @@ ws, err := coding.NewWorkspace("/path/to/repo",
     coding.WithLinter(func(path string) []string { ... }),                                 // 可选：编辑后检查
 )
 
+store, _ := spill.New(artifactDir, 100_000) // 可选：超长结果写入宿主目录（tools/spill）
 registry := tools.NewRegistry()
-for _, t := range ws.Tools() {
+for _, t := range append(ws.Tools(), store.ReadTool()) {
     _ = registry.Register(t)
 }
 dispatcher, _ := tools.NewDispatcher(registry, tools.DispatchConfig{
@@ -17,7 +18,7 @@ dispatcher, _ := tools.NewDispatcher(registry, tools.DispatchConfig{
     Pipeline: &tools.Pipeline{
         Pre:      []tools.PreHook{coding.DefaultPolicy().Hook()},
         Approver: approver, // 命令行提示、IM 卡片……
-        Post:     []tools.PostHook{coding.SpillHook(ws, 100_000)},
+        Post:     []tools.PostHook{store.Hook()},
     },
 })
 instructions, _ := ws.ProjectInstructions(ctx) // AGENTS.md、CLAUDE.md，拼进系统提示词
@@ -29,7 +30,7 @@ agent, _ := builder.NewSimpleBuilder(client).
     Build()
 ```
 
-完整示例见 [examples/tools/09-coding-agent](../../examples/tools/09-coding-agent)：Agent 在临时仓库里运行测试、定位 bug、编辑代码并提交。
+也可以用声明式配置组合上述各部分（工作区、沙箱、工具子集、权限、溢出），见 [`harness/preset`](../../harness/preset/README.md)。完整示例见 [examples/tools/09-coding-agent](../../examples/tools/09-coding-agent)：Agent 在临时仓库里运行测试、定位 bug、编辑代码并提交。
 
 ## 工具
 
@@ -72,7 +73,7 @@ agent, _ := builder.NewSimpleBuilder(client).
 
 ## 结果溢出
 
-`coding.SpillHook(ws, maxBytes)` 是调用后钩子：任何工具的成功结果按 JSON 编码超过 `maxBytes` 时完整写入 `.goagent/spill/`（建议加入 `.gitignore`），交给模型的结果替换为 1500 字符预览与 `spill_path`，模型用 `read_file` 分段读取。溢出文件不计入 `Changes`。
+由 [`tools/spill`](../spill/spill.go) 提供：`spill.New(dir, maxBytes)` 的 `Hook()` 把任何工具超长的成功结果写入宿主目录 `dir`（不在工作区内），交给模型的结果替换为 1500 字符预览与 `spill_path`；模型用 `ReadTool()` 提供的 `read_spill` 分段读取。写入失败时只返回预览并说明原因，不中止运行。
 
 ## 测试
 
