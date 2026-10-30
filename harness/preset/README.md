@@ -79,6 +79,7 @@ presets:
 | `coding-tools` | `tools`（缺省为沙箱下可用的全部） | 依赖 `workspace`；列出不可用的工具时 Build 失败 |
 | `permissions` | `approval`（ask/never）、`base`（coding）、`rules`、`sessionTools` | 可多行，全部规则合并为一个策略，按 Deny > Ask > Allow 取最严格者 |
 | `spill` | `maxBytes`（默认 100000）、`retention`（默认 168h） | 超长结果写入 `Host.ArtifactDir`，提供 `read_spill` |
+| `mcp` | `transport`（stdio/streamable-http）、`command`、`args`、`env`、`url`、`headers`、`tools`、`aliases`、`startupTimeout`（默认 30s） | 可多行，见下文 |
 
 | 沙箱模式 | 文件工具 | 命令（含 git、lint） |
 |---|---|---|
@@ -89,6 +90,32 @@ presets:
 执行器的网络能力必须与 `network` 一致（本地执行器总能联网，须写 `network: true`），做不到即 Build 失败，不静默降级。
 
 宿主基线：没有任何规则匹配的调用需要审批；`approval: never` 时 Ask 自动拒绝；未提供 `Approver` 时 Ask 的结果为 Unavailable，同样按拒绝处理。
+
+## MCP
+
+```yaml
+- {id: github, use: mcp, config: {transport: stdio, command: github-mcp, env: {GITHUB_TOKEN: {secret: GITHUB_TOKEN}}}}
+- {id: docs, use: mcp, config: {transport: streamable-http, url: "https://example.com/mcp", headers: {Authorization: {secret: DOCS_AUTH}}, tools: [search]}}
+```
+
+- 工具名为 `mcp__<组件 id>__<远端工具名>`，`aliases` 可改名，最终名称须全局唯一且匹配 `^[A-Za-z0-9_-]{1,64}$`；权限规则按最终名称匹配。
+- 工具列表在 Build 时取快照；服务名称与版本、每个工具的 schema 与描述摘要记入装配清单。
+- 远端返回的错误结果作为拒绝交给模型；连接错误中止调用。持久运行中中断或失败的 MCP 调用不会在恢复时重跑。
+- stdio 服务在宿主机启动、不受沙箱约束，只继承 `PATH`、`HOME`、`USER`、`LANG`、`TMPDIR`，其余环境变量须在 `env` 中列出。
+- 来自不可信层时：stdio 属于"在宿主机启动进程"（`limits.hostProcesses` 按命令名放行），streamable-http 属于"联网"。
+- `Assembly.Close` 关闭会话并结束 stdio 进程；Build 中途失败时已连接的会话同样被关闭。
+
+## 持久运行
+
+```go
+asm, _ := preset.Build(ctx, coder, host)
+if err := asm.PinManifest(runCtx); errors.Is(err, preset.ErrManifestChanged) {
+    // 配置在中断后发生了变化：新建会话，不在旧日志上继续
+}
+agent.Invoke(runCtx, input)
+```
+
+`PinManifest` 在首次运行时把装配清单摘要写入日志，恢复时比对；`runCtx` 是交给 Agent 的同一个带日志的 ctx。
 
 ## 自定义组件
 
@@ -115,7 +142,7 @@ func init() {
 }
 ```
 
-秘密只能经 `Secret` 类型的字段引用，Build 时解析；`Dump`、错误与 `Assembly.Manifest` 中只出现引用。`Manifest.Digest()` 覆盖组件配置与版本、工具 schema、提示词与工作区，可用于在恢复持久运行前核对执行语义。
+秘密只能经 `Secret` 或 `Value`（字面量或 `{secret: NAME}`）类型的字段引用，Build 时用 `a.Secret`/`a.Value` 解析；`Dump`、错误与 `Assembly.Manifest` 中只出现引用。`Manifest.Digest()` 覆盖组件配置与版本、工具 schema、提示词与工作区，可用于在恢复持久运行前核对执行语义。
 
 ## 测试
 

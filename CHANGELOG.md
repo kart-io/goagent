@@ -17,6 +17,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `tools/spill`：超长工具结果写入宿主目录，提供 `read_spill` 分段读取；写入失败时只返回预览不报错，`Prune` 清理过期文件。
 - `harness/env`：`DockerExecutor.ReadOnly` 以只读方式挂载工作区，`Capabilities.ReadOnlyRoot`；`env.ReadOnly` 包装器拒绝写入与删除（`ErrReadOnly`）。
 - `coding.Workspace.ProjectInstructionsFrom` 读取指定的项目说明文件。
+- `harness/preset` 的 `mcp` 组件：stdio 与 streamable-http 两种传输，工具名为 `mcp__<组件 id>__<工具名>`（可用 `aliases` 改名、`tools` 取子集），环境变量与请求头可引用秘密（`preset.Value`），stdio 服务只继承少量宿主环境变量；远端错误结果交给模型，持久运行中不重跑中断的 MCP 调用；服务信息与工具摘要记入装配清单。
+- `Assembly.PinManifest`：持久运行首次执行时把装配清单摘要写入日志，恢复时不一致返回 `preset.ErrManifestChanged`。
+- `mcp/remote.Tools` 新增选项 `WithToolName`（改名或跳过工具）、`WithToolErrorsAsRejected`（远端错误结果作为 `tools.Rejected`）、`WithDurablePolicy`（声明持久日志策略）；不传选项时行为不变。
+
+### Fixed
+
+- `mcp/remote` 的工具返回错误结果时，错误信息为 `<nil>`：服务端把错误放在文本内容中，此前只读取了 `GetError()`。
 
 ### Changed
 
