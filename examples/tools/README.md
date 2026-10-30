@@ -24,6 +24,7 @@ examples/tools/
 ├── 08-tool-with-agent/         # 工具与 Agent 集成示例
 │   └── main.go
 ├── 09-coding-agent/            # 编码 Agent 示例
+├── 10-plan-agent/              # 计划模式、钩子、压缩与运行中交互的端到端案例
 │   └── main.go
 ├── middleware/                 # 工具中间件示例（已有）
 └── registry/                   # 工具注册表示例（已有）
@@ -159,6 +160,20 @@ export DEEPSEEK_API_KEY=your-api-key
 go run ./examples/tools/09-coding-agent
 # 命令在断网容器中执行
 CODING_DOCKER_IMAGE=golang:1.25 go run ./examples/tools/09-coding-agent
+```
+
+### 10-plan-agent - 循环扩展点端到端案例
+
+用真实模型跑一次编码任务，覆盖第二阶段与 C 期的能力，结束时逐项核对，任一项不通过即以非零状态退出：
+
+- 计划模式：先调查并提交计划，计划获批前不能写入；
+- 仓库内 `.claude/settings.json` 的 `UserPromptSubmit`、`Stop`、`SessionStart` 钩子（首次 Build 需要授权）；
+- 运行中 `Steer` 追加要求、`Followup` 开始第二轮；
+- 对话变长后压缩为摘要。
+
+```bash
+export DEEPSEEK_API_KEY=your-api-key
+go run ./examples/tools/10-plan-agent
 ```
 
 ## 内置工具一览
