@@ -530,7 +530,7 @@ Build 分阶段执行，任一阶段失败都按初始化的逆序关闭已创�
 | A1 | `harness/preset`：格式、合并、严格校验、无副作用 Dump、信任模型、宿主基线、沙箱校验（含 Docker 只读挂载）、组件 `persona`、`instructions`、`workspace`、`coding-tools`、`permissions`、`spill`；`Assembly` 与 `Manifest`；示例改为配置驱动 | 恶意项目配置（扩权、删除锁定组件、引用秘密）被拦截且 Load 无副作用；执行器做不到所选模式时 Build 失败；合并语义逐条有测试；部分初始化失败时资源被关闭 |
 | A2 | `mcp` 组件（命名空间、生命周期、失败契约）；持久运行记录并核验清单摘要 | 工具重名报错；秘密在 Dump、错误、清单中脱敏；配置变化后恢复被拒绝 |
 | B | `claude-code-hooks`（PreToolUse/PostToolUse，扩权项）、`skills`（`SKILL.md` frontmatter）、`subagent` | 子 Agent 不能扩大父 Agent 的权限；引用有环时报错 |
-| C | 依赖第二阶段循环扩展点：UserPromptSubmit/Stop/SessionStart 钩子、计划模式、压缩组件 | — |
+| C | 依赖第二阶段循环扩展点：UserPromptSubmit/Stop/SessionStart 钩子、计划模式、压缩组件 | 钩子阻止与续跑、计划模式拒绝写入且退出需审批、压缩不拆开工具调用并在超出上下文时重试（见 14.17） |
 
 ### 14.13 Codex 审核意见处理
 
@@ -596,6 +596,23 @@ A0（`2fc040b`）：Pipeline 裁决聚合与按钩子记录授权；`tools/polic
 | — | 子 Agent 中目标 preset 自己的规则可引用被过滤的工具 | 只在顶层检查规则引用的工具存在 |
 
 未实现：总预算的跨 Agent 继承（子 Agent 只继承取消与超时）；Windows 上的命令钩子（使用 `sh -c`）。
+
+### 14.17 C 期实施记录（2026-10-30）
+
+基于第二阶段的循环扩展点实现：`claude-code-hooks` 的 `UserPromptSubmit`、`Stop`、`SessionStart`，`plan-mode` 与 `compaction` 组件。组件经 `Assembler.AddPreStep` 等贡献扩展点，装配结果的 `Loop` 由 `preset.Configure` 交给 Builder。
+
+| 设计 / 参考 | 实施 | 原因 |
+|---|---|---|
+| UserPromptSubmit 针对用户提交的提示词 | 本步新收到的每条用户输入各执行一次（轮次输入、Steer、Inject、Redirect），由新增的 `Step.Inputs` 标出；TurnStopping 的续跑消息不算 | 运行中追加的输入同样是用户提交的；只靠消息角色无法区分续跑消息 |
+| Claude Code：被阻止的提示词展示给用户 | 轮次输入被阻止时以原因作为答复结束本轮；被阻止的 Steer 只被去掉 | 本轮的答复是告知用户的唯一通道；Steer 被阻止不应中止正在进行的工作 |
+| Stop 钩子的 `stop_hook_active` | 由新增的 `Stopping.Continued` 给出，另提供 `last_assistant_message` | 会话不写成文件，`transcript_path` 为空，钩子只能从 stdin 取得答复 |
+| SessionStart 在会话启动时执行 | 作为 PromptSection，每个会话（按 SessionID）第一次运行时执行一次，source 固定为 startup | 输出进入 system 且同一会话内不变，前缀缓存不失效；PromptSection 不带 ctx，钩子只受自身超时约束 |
+| 计划模式只改 Context（dsh `plan`） | 另有调用前钩子拒绝 `allow` 以外的工具；`exit_plan_mode` 总需审批 | 只靠提示词无法保证不写入；审批即"计划获批" |
+| — | 模式每步从对话中最近一次成功的切换结果恢复，只认两个计划工具的结果 | 进程内状态在持久运行恢复与 Followup 时会丢失；对话是唯一可靠的来源，其他工具的结果无法伪造切换 |
+| 压缩组件 | PreStep 中按估算长度触发，用 `Host.CompactionModel` 生成摘要；RequestError 中遇到超出上下文时强制压缩后重试 | 模型由宿主选择（14.5），可用更便宜的模型；摘要随 PreStep 记入日志，恢复时不再调用 |
+| — | `builder.PromptScope.SessionID` 改为与工具调用一致的会话 ID | 计划模式的上下文与工具准入须看到同一个会话 |
+
+未实现：宿主在会话中途切换计划模式（只能经 `initial` 或模型调用 `enter_plan_mode`）；`PreCompact`、`SubagentStop`、`Notification` 等其他钩子事件；持久运行恢复时，中断那一步中尚未完成的调用按进程内状态或 `initial` 判断计划模式；压缩的长度为估算值，不读取提供方返回的用量。
 
 ## 15. 第二阶段实施记录（2026-10-30）
 

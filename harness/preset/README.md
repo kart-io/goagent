@@ -14,10 +14,9 @@ if errors.As(err, &trustErr) {
 }
 defer asm.Close()
 
-agent, _ := builder.NewSimpleBuilder(client).
+// 系统提示词、工具与组件贡献的循环扩展点（计划模式、压缩、Claude Code 的提交与停止钩子）
+agent, _ := preset.Configure(builder.NewSimpleBuilder(client), asm).
     WithSessionID(sessionID).
-    WithSystemPrompt(asm.SystemPrompt).
-    WithTools(asm.Tools...).
     Build()
 ```
 
@@ -83,6 +82,8 @@ presets:
 | `claude-code-hooks` | `path`、`hooks`、`toolNames`、`timeout`（默认 60s） | 单例。Claude Code 命令钩子，见下文 |
 | `skills` | `dirs`（默认 .agents/skills、.claude/skills） | 单例。列出技能并提供 `load_skill` |
 | `subagent` | `preset`、`toolName`、`description`、`toolFilter`、`maxDepth`（默认 1）、`timeout`（默认 10m） | 可多行。把任务交给另一个 preset 装配的子 Agent |
+| `plan-mode` | `initial`（默认 true）、`allow`（缺省为只读工具） | 单例。计划模式，见下文 |
+| `compaction` | `maxTokens`（默认 100000）、`keepTokens`（默认 maxTokens/4）、`instructions` | 单例。对话压缩，需要 `Host.CompactionModel`，见下文 |
 
 | 沙箱模式 | 文件工具 | 命令（含 git、lint） |
 |---|---|---|
@@ -114,10 +115,13 @@ presets:
 - {id: hooks, use: claude-code-hooks, config: {path: .claude/settings.json}}
 ```
 
-- 支持 `PreToolUse` 与 `PostToolUse` 的 `command` 钩子，协议与 Claude Code 相同：命令经 `sh -c` 在工作区根目录执行（设置 `CLAUDE_PROJECT_DIR`），stdin 为 `session_id`、`cwd`、`hook_event_name`、`tool_name`、`tool_input`（调用后另有 `tool_response`）的 JSON。
+- 支持 `PreToolUse`、`PostToolUse`、`UserPromptSubmit`、`Stop`、`SessionStart` 的 `command` 钩子，协议与 Claude Code 相同：命令经 `sh -c` 在工作区根目录执行（设置 `CLAUDE_PROJECT_DIR`），stdin 为 `session_id`、`cwd`、`hook_event_name` 与各事件字段的 JSON（工具事件有 `tool_name`、`tool_input`，调用后另有 `tool_response`）；`transcript_path` 总为空串。
 - 调用前：退出码 2 阻止调用、stderr 作为原因交给模型；stdout 的 `hookSpecificOutput.permissionDecision`（allow/ask/deny）或 `decision`（approve/block）给出裁决。多个钩子按 deny > ask > allow 合并，并与权限规则一起聚合：钩子的 allow 不越过规则的 ask。
 - 调用后：退出码 2、`decision: block` 的原因与 `additionalContext` 作为附加上下文交给模型（工具已经执行）。
-- 其他非零退出码、无法启动与超时不阻止调用。
+- `UserPromptSubmit`（stdin 另有 `prompt`）：本步新收到的每条用户输入各执行一次，包括轮次输入与运行中 Steer、Inject、Redirect 的输入。退出码 2 或 `decision: block` 去掉该输入；轮次输入被阻止时不请求模型，以原因作为答复结束本轮。stdout 纯文本或 `additionalContext` 追加在该输入之后。
+- `Stop`（stdin 另有 `stop_hook_active`、`last_assistant_message`）：模型给出最终答复时执行；退出码 2 或 `decision: block` 把原因作为 user 消息续跑。本轮已续跑过时 `stop_hook_active` 为 true，钩子应据此避免无限续跑；续跑也受 `MaxIterations` 限制。
+- `SessionStart`（stdin 另有 `source: startup`，`matcher` 匹配 source）：每个会话第一次运行时执行一次，stdout 纯文本或 `additionalContext` 进入 system 提示词，同一会话之后的轮次沿用。
+- 其他非零退出码、无法启动与超时不阻止。`UserPromptSubmit`、`Stop`、`SessionStart` 经循环扩展点实现，只在原生工具流中生效（`llm.ToolStreamClient` 且配置了工具）。
 - 编码工具在钩子中以 Claude Code 的名称出现（`run_command` → `Bash`、`read_file` → `Read`、`write_file` → `Write`、`edit_file` → `Edit` 等），文件类工具的参数另带 `file_path`；`matcher` 按完整匹配的正则同时匹配两种名称。
 - `path` 文件在 Build 时读取，其中不支持的事件与类型被忽略。文件属于工作区内容：即使本行来自可信层，文件中的命令也需要授权（或列入 `limits.hostProcesses`），文件改动后授权失效。内联的 `hooks` 来自不可信层时同样是扩权项。
 
@@ -141,6 +145,32 @@ presets:
 - `toolFilter` 在初始化之前生效：被完全过滤掉的组件（如允许列表中没有其工具的 MCP 服务）不初始化。允许列表引用不存在的工具时 Build 失败。
 - preset 引用有环时 Load 失败；嵌套深度超过 `maxDepth` 时 Build 失败。关闭父 Agent 同时关闭子 Agent。
 - 子 Agent 不写持久日志：父 Agent 的日志记录整次委派，中断的委派按父调用的策略整体重跑。
+
+## 计划模式
+
+```yaml
+- {id: plan, use: plan-mode}                     # 会话开始即进入计划模式
+- {id: plan, use: plan-mode, config: {initial: false, allow: [read_file, grep, mcp__docs__search]}}
+```
+
+- 计划模式中只能调用 `allow` 中的工具（缺省为 `read_file`、`glob`、`grep`、`git_status`、`git_diff`、`git_log`、`todo_write`、`read_spill`、`load_skill`），其余调用被拒绝并提示模型先提交计划。
+- 模型调用 `exit_plan_mode` 提交计划，总是需要审批（项目层的 allow 越不过）：批准后退出计划模式，拒绝时仍在计划模式；`approval: never` 时无法退出。`enter_plan_mode` 无需审批。
+- 处于计划模式时每步附加一段运行上下文说明；切换模式不增删工具，system 前缀不变。
+- 模式按会话记录，每步开始时从对话中最近一次成功的切换结果恢复（只认这两个工具的结果），因此 Followup 与持久运行恢复后的后续步骤状态一致；对话中没有切换结果（如只带文本的记忆历史）时沿用进程内状态，进程内也没有时取 `initial`。持久运行恢复时，中断那一步中尚未完成的调用按进程内状态或 `initial` 判断。
+
+## 压缩
+
+```yaml
+- {id: compact, use: compaction, config: {maxTokens: 60000, instructions: "保留所有文件路径"}}
+```
+
+```go
+preset.Build(ctx, p, preset.Host{..., CompactionModel: cheapClient})
+```
+
+- 每步请求前估算对话长度（UTF-8 字节数的三分之一，对英文偏保守），超过 `maxTokens` 时把较早的消息交给 `Host.CompactionModel` 写成一条 `[此前对话的摘要]` user 消息；system、最近约 `keepTokens` 的消息与本步新收到的输入原样保留，保留区从非 tool 消息开始，不会拆开工具调用与其结果。
+- 模型请求因超出上下文失败时（`llm.ClassifyError` 的 `ShouldCompress`）强制压缩后重试，只在非持久运行中生效。
+- 持久运行中压缩随该步的 PreStep 记入日志，恢复时回放摘要，不再调用摘要模型。
 
 ## 持久运行
 
@@ -184,5 +214,5 @@ func init() {
 ## 测试
 
 ```bash
-go test ./harness/preset/ ./tools/spill/
+go test ./harness/preset/ ./tools/spill/ ./builder/
 ```

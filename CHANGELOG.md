@@ -14,6 +14,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 提示词组装：`WithPromptSections` 追加到 system 且同一轮内字节不变；`WithPromptContexts` 每步重算，附在请求末尾、不进入之后的历史。
 - 持久运行中 PreStep、TurnStopping、提示词段落与上下文、收件箱输入按步骤记入日志，恢复时回放；RequestError 钩子与 Redirect 只在非持久运行中生效。
 - `llm.ClassifyError`：把模型请求错误分为限流、服务端、网络、超出上下文、鉴权、不存在、请求错误、取消，并给出 `Retryable`、`ShouldCompress`、`ShouldFallback` 提示。
+- `harness/preset` 的 `claude-code-hooks` 组件支持 `UserPromptSubmit`（阻止或补充用户输入）、`Stop`（阻止结束并续跑，提供 `stop_hook_active`）、`SessionStart`（每个会话一次，输出进入 system）。
+- `harness/preset` 的 `plan-mode` 组件：计划模式中只能调用只读工具，`exit_plan_mode` 提交计划并经审批后退出，`enter_plan_mode` 进入；模式从对话中恢复，切换不改变 system 前缀。
+- `harness/preset` 的 `compaction` 组件：对话超过阈值时用 `Host.CompactionModel` 把较早的消息压缩为摘要，请求因超出上下文失败时压缩后重试。
+- `preset.Configure` 把装配结果（系统提示词、工具、循环扩展点）交给 Builder；`Assembly.Loop` 与 `Assembler.AddPreStep`/`AddRequestError`/`AddTurnStopping`/`AddPromptSection`/`AddPromptContext` 供组件贡献循环扩展点。
+- `builder.Step.Inputs`（本步新收到的用户输入条数）、`builder.Stopping.Continued`（本轮已续跑次数）。
+
+### Changed
+
+- `builder.PromptScope.SessionID` 改为与工具调用一致的会话 ID：宿主在 ctx 中声明的会话优先（此前总是 `WithSessionID` 的值）。
+- `claude-code-hooks` 的 `path` 文件中的 `UserPromptSubmit`、`Stop`、`SessionStart` 钩子此前被忽略，现在生效，并同样计入授权摘要：已授权的项目若文件中含这些钩子，需要重新授权。
 
 ## [0.22.0] - 2026-10-30
 

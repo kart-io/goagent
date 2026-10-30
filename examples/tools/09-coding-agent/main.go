@@ -140,10 +140,8 @@ func run(apiKey string) error {
 	if err != nil {
 		return err
 	}
-	agent, err := builder.NewSimpleBuilder(client).
+	agent, err := preset.Configure(builder.NewSimpleBuilder(client), asm).
 		WithSessionID("coding-demo").
-		WithSystemPrompt(asm.SystemPrompt).
-		WithTools(asm.Tools...).
 		WithMaxIterations(30).
 		Build()
 	if err != nil {
