@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `tools.Pipeline`（`DispatchConfig.Pipeline`）：Dispatcher 对参数合法的调用依次执行调用前钩子 → 审批 → 守卫 → 执行包装 → 工具 → 调用后钩子，对任何工具生效。
+  - `PreHook` 裁决 `PreAllow`/`PreDeny`（以 `tools.Rejected` 把反馈交给模型修订）/`PreAsk`/`PreStop`（以 `*StopError` 终止运行）/`PreSubstitute`（改为执行另一个已注册工具，按其 Schema、自定义校验与 `Authorize` 检查后重新经过准入，结果元数据记录替代关系）。管线不改写参数。
+  - `Approver` 结果为闭合集合 `AllowedOnce`/`AllowedSession`/`Rejected`/`Cancelled`/`Unavailable`，没有审批人或超时（`ApprovalTimeout` 默认 10 分钟，迟到的批准不算数）按拒绝处理。`PreAsk` 可附带 `SessionGrant`，"本会话允许"后放行同会话中匹配的调用；会话由 `tools.WithSessionID` 声明，Builder 以 `WithSessionID` 自动设置；没有会话 ID 时会话级批准按单次批准处理。同一会话中工具与参数相同的并发审批请求只询问一次，发起询问的调用被取消时其余调用重新询问。
+  - `Guard` 只能拒绝，在审批之后执行，人的批准也无法越过；`Around` 洋葱式包住工具执行；`PostHook` 可替换结果或追加 `AdditionalContext`。
+  - 准入阶段（调用前钩子、审批、守卫）在操作日志之外执行：终止、取消与审批出错不留记录、不消耗尝试次数；拒绝结果与执行结果一样写入日志，回放已完成的调用不再询问。单次 `Timeout` 约束校验、授权、日志读写、执行包装、工具与调用后钩子，在准入阶段暂停计时；等待审批时占用并发槽位。
+- `interfaces.ToolOutput` 新增 `AdditionalContext`（Builder 在本批工具结果之后作为一条 user 消息注入）与预留的 `Labels`（数据来源与可信度标签，目前不传播）。
+- `harness/env`：执行环境能力接口 `FileSystem`（工作区相对路径、条件写入 `WriteIntent`）与 `Executor`（含 `Capabilities`）。实现 `LocalFS`（每次操作重新解析并限定路径）、`LocalExecutor`（Unix 上按进程组清理）、`DockerExecutor`（断网一次性容器，超时删除）；包装器 `Observed`（先读后改）与 `Checkpointed`（改动记录与回滚）。
+- `tools/policy`：按工具名与命令前缀裁决 Allow/Ask/Deny 的规则，`Policy.Hook()` 作为调用前钩子；会话批准收窄为命令前缀（`CommandGrant`），列入 `SessionTools` 的工具可整工具批准（`ToolGrant`），含 shell 控制符的命令只能单次批准。
+- `tools/coding`：编码 Agent 工作区工具 `read_file`、`write_file`、`edit_file`、`multi_edit`、`glob`、`grep`、`run_command`、`git_status`/`git_diff`/`git_log`/`git_commit`、`todo_write`，经 `env.FileSystem` 与 `env.Executor` 访问工作区。`coding.DefaultPolicy()` 放行读写、命令与提交需审批；`WithLinter` 在写入后检查，失败时撤销写入并把输出交给模型；`SpillHook` 把超长结果写入 `.goagent/spill/`，模型只看到预览与路径；`Workspace.Changes()`/`Revert()` 回滚；`ProjectInstructions()` 读取 AGENTS.md 与 CLAUDE.md。写入类工具拒绝 `.git` 目录，git 工具关闭 fsmonitor、hooks 与外部 diff。示例见 `examples/tools/09-coding-agent`。
+
+### Changed
+
+- Builder 默认 `SessionID` 改为 `session-<纳秒时间戳>`，此前精确到秒，同一秒内创建的 Agent 会共享会话级批准与记忆会话。
+
 ## [0.20.0] - 2026-10-30
 
 ### Changed
