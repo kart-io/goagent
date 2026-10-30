@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"slices"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -59,6 +60,7 @@ type Resolved struct {
 	Expansions []Expansion
 
 	removals []Expansion
+	set      *Set
 }
 
 // Row 是一行组件配置。
@@ -99,11 +101,52 @@ func Load(sources ...Source) (*Set, error) {
 	}
 	for _, p := range set.presets {
 		p.Limits = set.limits
+		p.set = set
 		if err := p.validate(); err != nil {
 			return nil, fmt.Errorf("preset %s: %w", p.ID, err)
 		}
 	}
+	if err := set.checkReferences(); err != nil {
+		return nil, err
+	}
 	return set, nil
+}
+
+// checkReferences 检查组件引用的 preset 存在且引用关系没有环。
+func (s *Set) checkReferences() error {
+	state := map[string]int{} // 1 访问中，2 完成
+	var visit func(p *Resolved, path []string) error
+	visit = func(p *Resolved, path []string) error {
+		switch state[p.ID] {
+		case 1:
+			return fmt.Errorf("preset 引用有环：%s", strings.Join(append(path, p.ID), " → "))
+		case 2:
+			return nil
+		}
+		state[p.ID] = 1
+		for _, r := range p.Rows {
+			if r.comp.references == nil {
+				continue
+			}
+			for _, id := range r.comp.references(r.config) {
+				target, ok := s.Get(id)
+				if !ok {
+					return fmt.Errorf("preset %s 组件 %s 引用的 preset %s 不存在", p.ID, r.ID, id)
+				}
+				if err := visit(target, append(path, p.ID)); err != nil {
+					return err
+				}
+			}
+		}
+		state[p.ID] = 2
+		return nil
+	}
+	for _, p := range s.presets {
+		if err := visit(p, nil); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Set) apply(src Source, origin Origin) error {
@@ -267,25 +310,40 @@ func (p *Resolved) validate() error {
 			}
 		}
 	}
-	p.Expansions = nil
-	for _, r := range p.Rows {
+	cfgs := make([]any, len(p.Rows))
+	for i, r := range p.Rows {
+		cfgs[i] = r.config
+	}
+	p.Expansions = p.expansions(cfgs, nil, "")
+	return nil
+}
+
+// expansions 计算扩权项。cfgs 是各行的有效配置；contentNeeds 是 Resolve 从工作区内容得到的需求，按不可信处理。
+func (p *Resolved) expansions(cfgs []any, contentNeeds []Needs, root string) []Expansion {
+	var out []Expansion
+	for i, r := range p.Rows {
 		if r.replacedTrusted {
-			p.Expansions = append(p.Expansions, Expansion{Preset: p.ID, Component: r.ID, Origin: r.Origin, Reason: "替换来自可信层的组件"})
+			out = append(out, Expansion{Preset: p.ID, Component: r.ID, Origin: r.Origin, Reason: "替换来自可信层的组件"})
 		}
-		if r.Origin.Trusted {
-			continue
+		if !r.Origin.Trusted {
+			for _, reason := range p.Limits.exceeded(r.comp.needs(cfgs[i]), secretsIn(cfgs[i])) {
+				out = append(out, Expansion{Preset: p.ID, Component: r.ID, Origin: r.Origin, Reason: reason})
+			}
 		}
-		for _, reason := range p.Limits.exceeded(r.comp.needs(r.config), secretsIn(r.config)) {
-			p.Expansions = append(p.Expansions, Expansion{Preset: p.ID, Component: r.ID, Origin: r.Origin, Reason: reason})
+		if i < len(contentNeeds) {
+			workspace := Origin{Layer: "workspace", Path: root}
+			for _, reason := range p.Limits.exceeded(contentNeeds[i], nil) {
+				out = append(out, Expansion{Preset: p.ID, Component: r.ID, Origin: workspace, Reason: reason})
+			}
 		}
 	}
 	for _, e := range p.removals {
 		// 被可信层重新加入的组件不再算作删除。
 		if !slices.ContainsFunc(p.Rows, func(r *Row) bool { return r.ID == e.Component && r.Origin.Trusted }) {
-			p.Expansions = append(p.Expansions, e)
+			out = append(out, e)
 		}
 	}
-	return nil
+	return out
 }
 
 // Get 返回 id 对应的 preset。

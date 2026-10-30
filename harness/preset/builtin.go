@@ -229,6 +229,8 @@ var (
 type CodingToolsConfig struct {
 	// Tools 列出要提供的工具，缺省为沙箱模式下可用的全部工具；列出不可用的工具时 Build 失败。
 	Tools []string `yaml:"tools"`
+	// onlyAvailable 由子 Agent 的工具过滤设置：Tools 中不可用的工具直接略过。
+	onlyAvailable bool
 }
 
 var codingToolsSpec = Spec[CodingToolsConfig]{
@@ -240,6 +242,21 @@ var codingToolsSpec = Spec[CodingToolsConfig]{
 			}
 		}
 		return nil
+	},
+	FilterTools: func(c *CodingToolsConfig, _ string, f ToolFilter) bool {
+		candidates := c.Tools
+		if len(candidates) == 0 {
+			candidates = codingAllTools
+			c.onlyAvailable = true
+		}
+		var kept []string
+		for _, name := range candidates {
+			if f.Keeps(name) {
+				kept = append(kept, name)
+			}
+		}
+		c.Tools = kept
+		return len(kept) > 0
 	},
 	Build: func(_ context.Context, a *Assembler, c *CodingToolsConfig) error {
 		w, info, err := a.Workspace()
@@ -256,13 +273,14 @@ var codingToolsSpec = Spec[CodingToolsConfig]{
 			return ""
 		}
 		for _, name := range c.Tools {
-			if reason := unavailable(name); reason != "" {
+			if reason := unavailable(name); reason != "" && !c.onlyAvailable {
 				return fmt.Errorf("工具 %s 不可用：%s", name, reason)
 			}
 		}
 		var out []interfaces.Tool
 		for _, t := range w.Tools() {
-			if (len(c.Tools) == 0 && unavailable(t.Name()) == "") || slices.Contains(c.Tools, t.Name()) {
+			listed := slices.Contains(c.Tools, t.Name()) && (!c.onlyAvailable || unavailable(t.Name()) == "")
+			if (len(c.Tools) == 0 && unavailable(t.Name()) == "") || listed {
 				out = append(out, t)
 			}
 		}

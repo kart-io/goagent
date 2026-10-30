@@ -18,6 +18,7 @@ import (
 	"github.com/kart-io/goagent/tools"
 	"github.com/kart-io/goagent/tools/coding"
 	"github.com/kart-io/goagent/tools/policy"
+	"github.com/kart-io/goagent/tools/spill"
 )
 
 // Host 是宿主提供给 Build 的环境。模型、SessionID、持久化作用域与预算由宿主在 Builder 上配置。
@@ -34,6 +35,23 @@ type Host struct {
 	Secret func(name string) (string, bool)
 	// Dispatch 是 Dispatcher 的基础配置；Pipeline 由 Build 设置，ReturnArgumentErrors 总是开启。
 	Dispatch tools.DispatchConfig
+	// RunAgent 运行子 Agent 并返回最终答复，subagent 组件需要它；模型由宿主选择，可用 BuilderRunner。
+	RunAgent func(ctx context.Context, asm *Assembly, task string) (string, error)
+}
+
+// buildOptions 是作为子 Agent 装配时的约束。
+type buildOptions struct {
+	depth  int
+	parent *parentScope
+	filter *ToolFilter
+}
+
+// parentScope 是父 Agent 的权限：子 Agent 的调用同样要经过父 Agent 的调用前钩子与守卫，权限因此不超过父 Agent。
+type parentScope struct {
+	pre          []tools.PreHook
+	guards       []tools.Guard
+	sandbox      Sandbox
+	denyApproval bool
 }
 
 // WorkspaceInfo 描述 workspace 组件创建的工作区及其沙箱。
@@ -62,6 +80,9 @@ type Assembler struct {
 
 	workspace     *coding.Workspace
 	workspaceInfo WorkspaceInfo
+
+	opts         buildOptions
+	afterPublish []func(*tools.Pipeline) error
 }
 
 type contribution struct {
@@ -193,7 +214,11 @@ func closeAll(closers []func() error) error {
 }
 
 // Build 按依赖顺序初始化组件并装配。含未授权扩权项时返回 *TrustRequiredError；任一组件失败时已创建的资源按逆序关闭。
-func Build(ctx context.Context, p *Resolved, host Host) (asm *Assembly, err error) {
+func Build(ctx context.Context, p *Resolved, host Host) (*Assembly, error) {
+	return build(ctx, p, host, buildOptions{})
+}
+
+func build(ctx context.Context, p *Resolved, host Host, opts buildOptions) (asm *Assembly, err error) {
 	if p == nil {
 		return nil, errors.New("preset is required")
 	}
@@ -216,8 +241,18 @@ func Build(ctx context.Context, p *Resolved, host Host) (asm *Assembly, err erro
 	if host.Secret == nil {
 		host.Secret = os.LookupEnv
 	}
-	if len(p.Expansions) > 0 {
-		digest, err := expansionDigest(host.Root, p)
+	cfgs := make([]any, len(p.Rows))
+	contentNeeds := make([]Needs, len(p.Rows))
+	for i, r := range p.Rows {
+		cfgs[i] = r.config
+		if r.comp.resolve != nil {
+			if cfgs[i], contentNeeds[i], err = r.comp.resolve(host.Root, r.config); err != nil {
+				return nil, fmt.Errorf("组件 %s: %w", r.ID, err)
+			}
+		}
+	}
+	if expansions := p.expansions(cfgs, contentNeeds, host.Root); len(expansions) > 0 {
+		digest, err := expansionDigest(host.Root, p, expansions, cfgs)
 		if err != nil {
 			return nil, err
 		}
@@ -228,27 +263,50 @@ func Build(ctx context.Context, p *Resolved, host Host) (asm *Assembly, err erro
 			}
 		}
 		if !trusted {
-			return nil, &TrustRequiredError{Preset: p.ID, Root: host.Root, Digest: digest, Items: slices.Clone(p.Expansions)}
+			return nil, &TrustRequiredError{Preset: p.ID, Root: host.Root, Digest: digest, Items: expansions}
 		}
 	}
 	order, err := buildOrder(p.Rows)
 	if err != nil {
 		return nil, err
 	}
-	a := &Assembler{host: host, preset: p, contribs: make([]contribution, len(p.Rows))}
+	if opts.filter != nil {
+		for i, r := range p.Rows {
+			if r.comp.filterTools == nil {
+				continue
+			}
+			var keep bool
+			if cfgs[i], keep = r.comp.filterTools(cfgs[i], r.ID, *opts.filter); !keep {
+				cfgs[i] = nil
+			}
+		}
+	}
+	a := &Assembler{host: host, preset: p, contribs: make([]contribution, len(p.Rows)), opts: opts}
 	defer func() {
 		if err != nil {
 			err = errors.Join(err, closeAll(a.closers))
 		}
 	}()
 	for _, i := range order {
+		// 过滤后不提供任何工具的组件不初始化，也就不启动进程。
+		if cfgs[i] == nil {
+			continue
+		}
 		a.cur = i
-		if err := p.Rows[i].comp.build(ctx, a, p.Rows[i].config); err != nil {
+		if err := p.Rows[i].comp.build(ctx, a, cfgs[i]); err != nil {
 			return nil, fmt.Errorf("组件 %s: %w", p.Rows[i].ID, err)
 		}
 	}
-	return a.publish()
+	return a.publish(cfgs)
 }
+
+// AfterPublish 登记在本 Agent 的 Pipeline 建成后执行的函数（如以它为父权限装配子 Agent），失败时 Build 失败。
+func (a *Assembler) AfterPublish(fn func(parent *tools.Pipeline) error) {
+	a.afterPublish = append(a.afterPublish, fn)
+}
+
+// Depth 返回嵌套深度：顶层 Agent 为 0，其子 Agent 为 1。
+func (a *Assembler) Depth() int { return a.opts.depth }
 
 // buildOrder 返回初始化顺序：被依赖的组件先于依赖它的组件，其余保持列表顺序。
 func buildOrder(rows []*Row) ([]int, error) {
@@ -284,7 +342,7 @@ func buildOrder(rows []*Row) ([]int, error) {
 	return order, nil
 }
 
-func (a *Assembler) publish() (*Assembly, error) {
+func (a *Assembler) publish(cfgs []any) (*Assembly, error) {
 	var (
 		prompts  []string
 		all      []interfaces.Tool
@@ -309,14 +367,44 @@ func (a *Assembler) publish() (*Assembly, error) {
 			return nil, err
 		}
 	}
-	for _, r := range a.checkedRules {
-		if r.Tool != "*" && !names[r.Tool] {
-			return nil, fmt.Errorf("权限规则引用的工具 %s 不存在", r.Tool)
+	// 作为子 Agent 时，被过滤掉的工具也可能出现在目标 preset 自己的规则里，因此只在顶层检查。
+	if a.opts.filter == nil {
+		for _, r := range a.checkedRules {
+			if r.Tool != "*" && !names[r.Tool] {
+				return nil, fmt.Errorf("权限规则引用的工具 %s 不存在", r.Tool)
+			}
 		}
+	}
+	if f := a.opts.filter; f != nil {
+		for _, name := range f.Allow {
+			if !names[name] {
+				return nil, fmt.Errorf("工具过滤引用的工具 %s 不存在", name)
+			}
+		}
+		registry = tools.NewRegistry()
+		kept := all[:0:0]
+		for _, t := range all {
+			// 溢出结果须能被读取，read_spill 随 spill 组件保留。
+			if f.Keeps(t.Name()) || t.Name() == spill.ToolReadSpill {
+				kept = append(kept, t)
+				if err := registry.Register(t); err != nil {
+					return nil, err
+				}
+			}
+		}
+		all = kept
 	}
 	// 宿主基线：没有任何规则匹配的调用需要审批，不会因漏配权限组件而全放行。
 	pol := &policy.Policy{Rules: a.rules, Default: policy.Ask, SessionTools: a.sessionTools}
 	pipeline.Pre = append([]tools.PreHook{pol.Hook()}, pipeline.Pre...)
+	if parent := a.opts.parent; parent != nil {
+		pipeline.Pre = append(slices.Clone(parent.pre), pipeline.Pre...)
+		pipeline.Guards = append(slices.Clone(parent.guards), pipeline.Guards...)
+		a.denyApproval = a.denyApproval || parent.denyApproval
+		if parent.sandbox != "" && a.workspace != nil && a.workspaceInfo.Sandbox.rank() > parent.sandbox.rank() {
+			return nil, fmt.Errorf("子 Agent 的沙箱模式 %s 宽于父 Agent 的 %s", a.workspaceInfo.Sandbox, parent.sandbox)
+		}
+	}
 	if a.denyApproval {
 		pipeline.Approver = tools.ApproverFunc(func(context.Context, tools.ApprovalRequest) (tools.ApprovalResult, error) {
 			return tools.ApprovalResult{Outcome: tools.ApprovalRejected, Feedback: "approval policy is never"}, nil
@@ -329,6 +417,11 @@ func (a *Assembler) publish() (*Assembly, error) {
 	if err != nil {
 		return nil, err
 	}
+	for _, fn := range a.afterPublish {
+		if err := fn(pipeline); err != nil {
+			return nil, err
+		}
+	}
 	asm := &Assembly{
 		PresetID:     a.preset.ID,
 		SystemPrompt: strings.Join(prompts, "\n\n"),
@@ -338,7 +431,11 @@ func (a *Assembler) publish() (*Assembly, error) {
 		Workspace:    a.workspace,
 		closers:      a.closers,
 	}
-	if asm.Manifest, err = a.manifest(asm.SystemPrompt); err != nil {
+	kept := map[string]bool{}
+	for _, t := range all {
+		kept[t.Name()] = true
+	}
+	if asm.Manifest, err = a.manifest(asm.SystemPrompt, cfgs, kept); err != nil {
 		return nil, err
 	}
 	return asm, nil
@@ -382,15 +479,15 @@ func sha256Hex(s string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func (a *Assembler) manifest(prompt string) (Manifest, error) {
+// manifest 记录各行的有效配置（含默认值与 Resolve 补全的内容；被工具过滤跳过的行为 null）与保留下来的工具。
+func (a *Assembler) manifest(prompt string, cfgs []any, kept map[string]bool) (Manifest, error) {
 	m := Manifest{Preset: a.preset.ID, PromptSHA256: sha256Hex(prompt)}
 	for i, r := range a.preset.Rows {
-		cfg, err := rawJSON(r)
-		if err != nil {
-			return Manifest{}, err
-		}
-		m.Components = append(m.Components, ManifestComponent{ID: r.ID, Use: r.Use, Version: r.comp.version, Config: cfg, Info: a.contribs[i].info})
+		m.Components = append(m.Components, ManifestComponent{ID: r.ID, Use: r.Use, Version: r.comp.version, Config: cfgs[i], Info: a.contribs[i].info})
 		for _, t := range a.contribs[i].tools {
+			if !kept[t.Name()] {
+				continue
+			}
 			m.Tools = append(m.Tools, ManifestTool{Name: t.Name(), Component: r.ID, SchemaSHA256: sha256Hex(t.ArgsSchema()), DescriptionSHA256: sha256Hex(t.Description())})
 		}
 	}

@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"os"
 	"os/exec"
 	"regexp"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/kart-io/goagent/core/durable"
@@ -87,6 +89,18 @@ func init() {
 				return Needs{HostProcesses: []string{c.Command}}
 			}
 			return Needs{Network: true}
+		},
+		// 允许列表中没有本服务的工具时不连接服务，也就不启动进程。
+		FilterTools: func(c *MCPConfig, rowID string, f ToolFilter) bool {
+			if f.Allow == nil {
+				return true
+			}
+			for _, name := range f.Allow {
+				if strings.HasPrefix(name, "mcp__"+rowID+"__") || slices.Contains(slices.Collect(maps.Values(c.Aliases)), name) {
+					return true
+				}
+			}
+			return false
 		},
 		Build: buildMCP,
 	})
