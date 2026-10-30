@@ -29,6 +29,12 @@ func NewShortTermMemory(capacity int) *ShortTermMemory {
 
 // Store stores an entry in short-term memory
 func (m *ShortTermMemory) Store(ctx context.Context, entry *MemoryEntry) error {
+	m.storeEvicting(entry)
+	return nil
+}
+
+// storeEvicting 返回因容量淘汰的条目（无淘汰为 nil），供调用方清理该条目的向量。
+func (m *ShortTermMemory) storeEvicting(entry *MemoryEntry) *MemoryEntry {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -40,16 +46,17 @@ func (m *ShortTermMemory) Store(ctx context.Context, entry *MemoryEntry) error {
 	}
 
 	// Check capacity
+	var evicted *MemoryEntry
 	if len(m.entries) >= m.capacity {
 		// Evict least recently used
-		m.evictLRU()
+		evicted = m.evictLRU()
 	}
 
 	// Store entry
 	m.entries[entry.ID] = entry
 	m.order = append(m.order, entry.ID)
 
-	return nil
+	return evicted
 }
 
 // Get retrieves an entry from short-term memory
@@ -205,10 +212,10 @@ func (m *ShortTermMemory) Clear() {
 	m.order = make([]string, 0, m.capacity)
 }
 
-// evictLRU evicts the least recently used entry
-func (m *ShortTermMemory) evictLRU() {
+// evictLRU evicts the least recently used entry and returns it
+func (m *ShortTermMemory) evictLRU() *MemoryEntry {
 	if len(m.order) == 0 {
-		return
+		return nil
 	}
 
 	// Find entry with lowest importance and access
@@ -227,6 +234,7 @@ func (m *ShortTermMemory) evictLRU() {
 		}
 	}
 
+	evicted := m.entries[evictID]
 	if evictID != "" {
 		delete(m.entries, evictID)
 
@@ -239,6 +247,7 @@ func (m *ShortTermMemory) evictLRU() {
 		}
 		m.order = newOrder
 	}
+	return evicted
 }
 
 // LongTermMemory implements long-term/persistent memory
@@ -263,6 +272,18 @@ func (m *LongTermMemory) Store(ctx context.Context, entry *MemoryEntry) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	// 先写向量：失败时不留下无法被向量检索的条目
+	if m.vectorStore != nil && len(entry.Embedding) > 0 {
+		// Convert float32 to float64 for VectorStore interface
+		embedding64 := make([]float64, len(entry.Embedding))
+		for i, v := range entry.Embedding {
+			embedding64[i] = float64(v)
+		}
+		if err := m.vectorStore.Add(ctx, entry.ID, embedding64, entry.Metadata); err != nil {
+			return err
+		}
+	}
+
 	// Store entry
 	m.entries[entry.ID] = entry
 
@@ -281,16 +302,6 @@ func (m *LongTermMemory) Store(ctx context.Context, entry *MemoryEntry) error {
 	}
 	if !found {
 		m.index[entry.Type] = append(m.index[entry.Type], entry.ID)
-	}
-
-	// Store in vector database if available
-	if m.vectorStore != nil && len(entry.Embedding) > 0 {
-		// Convert float32 to float64 for VectorStore interface
-		embedding64 := make([]float64, len(entry.Embedding))
-		for i, v := range entry.Embedding {
-			embedding64[i] = float64(v)
-		}
-		return m.vectorStore.Add(ctx, entry.ID, embedding64, entry.Metadata)
 	}
 
 	return nil
