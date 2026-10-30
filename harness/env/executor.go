@@ -47,13 +47,15 @@ type DockerExecutor struct {
 	Image string
 	// Network 是 docker --network 的取值，空串表示 "none"。
 	Network string
+	// ReadOnly 以只读方式挂载工作区。
+	ReadOnly bool
 	// Docker 是 docker 可执行文件，空串表示 "docker"。
 	Docker string
 }
 
 // Capabilities 实现 Executor。
 func (e DockerExecutor) Capabilities() Capabilities {
-	return Capabilities{Container: true, Network: e.Network != "" && e.Network != "none"}
+	return Capabilities{Container: true, Network: e.Network != "" && e.Network != "none", ReadOnlyRoot: e.ReadOnly}
 }
 
 // Run 实现 Executor。ctx 结束时强制删除容器，避免 docker 客户端退出后容器仍在运行。
@@ -76,8 +78,12 @@ func (e DockerExecutor) Run(ctx context.Context, cmd Command) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
+	mount := e.Root + ":/workspace"
+	if e.ReadOnly {
+		mount += ":ro"
+	}
 	args := []string{"run", "--rm", "--name", name, "--network", network,
-		"-v", e.Root + ":/workspace", "-w", path.Join("/workspace", cmd.Dir),
+		"-v", mount, "-w", path.Join("/workspace", cmd.Dir),
 		// 以宿主机 uid 运行时镜像里没有对应用户，HOME 默认为不可写的 /，工具链缓存会写失败。
 		"-e", "HOME=/tmp"}
 	if uid, gid := os.Getuid(), os.Getgid(); uid >= 0 && gid >= 0 {

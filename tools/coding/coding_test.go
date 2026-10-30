@@ -376,7 +376,7 @@ func TestDockerExecutorWorkspace(t *testing.T) {
 	require.NoError(t, err)
 	res = mustSucceed(t, w, ToolRunCommand, map[string]any{"command": "sleep 60"})
 	require.Equal(t, true, res["timed_out"])
-	left, err := exec.Command("docker", "ps", "-aq", "--filter", "name=goagent-env-").Output()
+	left, err := exec.Command("docker", "ps", "-aq", "--filter", "name=goagent-env-", "--filter", "volume="+root).Output()
 	require.NoError(t, err)
 	require.Empty(t, strings.TrimSpace(string(left)), "timed out container must be removed")
 }
