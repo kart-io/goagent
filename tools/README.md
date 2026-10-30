@@ -42,7 +42,7 @@ type ToolOutput struct {
 
 ## 内置工具
 
-计算器、搜索、Shell、API 工具分别位于子包 `tools/compute`、`tools/search`、`tools/shell`、`tools/http`（导入路径 `github.com/kart-io/goagent/tools/<子包>`），编码 Agent 的工作区工具位于 [`tools/coding`](coding/README.md)；`Tool`、`ToolInput`、`ToolOutput` 定义在 `interfaces` 包。
+计算器、搜索、Shell、API 工具分别位于子包 `tools/compute`、`tools/search`、`tools/shell`、`tools/http`（导入路径 `github.com/kart-io/goagent/tools/<子包>`），编码 Agent 的工作区工具已迁至独立模块 `github.com/kart-io/goagent-harness/tools/coding`，见 [迁移指南](../docs/guides/HARNESS_MIGRATION.md)；`Tool`、`ToolInput`、`ToolOutput` 定义在 `interfaces` 包。
 
 ### 1. BaseTool
 

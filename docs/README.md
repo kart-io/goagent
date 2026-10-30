@@ -1,5 +1,7 @@
 # GoAgent 文档
 
+Harness 装配、编码工具与相关示例已迁至独立项目，见 [迁移指南](guides/HARNESS_MIGRATION.md)。
+
 GoAgent 是一个全面的 Go AI Agent 框架，提供 Agent、工具、内存、LLM 抽象和编排能力。
 
 ## 文档导航

@@ -23,8 +23,6 @@ examples/tools/
 │   └── main.go
 ├── 08-tool-with-agent/         # 工具与 Agent 集成示例
 │   └── main.go
-├── 09-coding-agent/            # 编码 Agent 示例
-├── 10-plan-agent/              # 计划模式、钩子、压缩与运行中交互的端到端案例
 │   └── main.go
 ├── middleware/                 # 工具中间件示例（已有）
 └── registry/                   # 工具注册表示例（已有）
@@ -151,30 +149,9 @@ cd examples/tools/08-tool-with-agent
 go run main.go
 ```
 
-### 09-coding-agent - 编码 Agent
+### 已迁出的工程 Agent 示例
 
-演示用 [`harness/preset`](../../harness/preset/README.md) 声明式配置编码 Agent：宿主层定义工作区、沙箱、工具、权限与结果溢出，仓库内的 `.goagent/agents.yml` 追加一条 deny 规则收紧权限。Agent 在临时 Go 仓库中运行测试、阅读代码、精确编辑修复 bug 并提交，结束后独立运行测试核对。
-
-```bash
-export DEEPSEEK_API_KEY=your-api-key
-go run ./examples/tools/09-coding-agent
-# 命令在断网容器中执行
-CODING_DOCKER_IMAGE=golang:1.25 go run ./examples/tools/09-coding-agent
-```
-
-### 10-plan-agent - 循环扩展点端到端案例
-
-用真实模型跑一次编码任务，覆盖第二阶段与 C 期的能力，结束时逐项核对，任一项不通过即以非零状态退出：
-
-- 计划模式：先调查并提交计划，计划获批前不能写入；
-- 仓库内 `.claude/settings.json` 的 `UserPromptSubmit`、`Stop`、`SessionStart` 钩子（首次 Build 需要授权）；
-- 运行中 `Steer` 追加要求、`Followup` 开始第二轮；
-- 对话变长后压缩为摘要。
-
-```bash
-export DEEPSEEK_API_KEY=your-api-key
-go run ./examples/tools/10-plan-agent
-```
+编码修复与计划模式、钩子、压缩、运行中交互示例已迁到独立 `goagent-harness` 项目的 `examples/coding-agent` 与 `examples/plan-agent`。本模块保留通用工具与执行能力，详见 [Harness 迁移指南](../../docs/guides/HARNESS_MIGRATION.md)。
 
 ## 内置工具一览
 
@@ -185,7 +162,6 @@ go run ./examples/tools/10-plan-agent
 | APITool | `tools/http` | HTTP API 调用 |
 | ShellTool | `tools/shell` | Shell 命令执行 |
 | SearchTool | `tools/search` | 搜索功能 |
-| Workspace.Tools() | `tools/coding` | 编码 Agent 工作区工具：读写编辑、glob/grep、命令、git |
 | FileOperationsTool | `tools/practical` | 文件系统操作 |
 | WebScraperTool | `tools/practical` | 网页内容抓取 |
 | DatabaseQueryTool | `tools/practical` | 数据库查询 |

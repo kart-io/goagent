@@ -130,6 +130,10 @@ examples/     - 使用示例
 - 可以导入所有层
 - 生产代码禁止导入第 4 层
 
+## 上层项目边界
+
+`github.com/kart-io/goagent-harness` 依赖 GoAgent，主模块的生产代码与示例均禁止反向导入 Harness，由 `scripts/apicheck` 检查。Preset 与编码工具的迁移见 [迁移指南](../guides/HARNESS_MIGRATION.md)。`harness/env` 仍是核心的通用环境接口包。
+
 ## 关键导入限制
 
 ### 禁止的导入模式

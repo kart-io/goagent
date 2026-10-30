@@ -36,13 +36,26 @@ func (l *arrivalLedger) record(_ context.Context, r tools.DispatchResult) error 
 func TestOnResultReplayOrderAfterConcurrentRun(t *testing.T) {
 	store, err := durable.NewFileStore(t.TempDir())
 	require.NoError(t, err)
-	ctx := durable.WithJournal(durable.WithExecutionKey(context.Background(), "node"), store)
-	// id 越小越慢：首次完成顺序为 4,3,2,1,0。
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	ctx = durable.WithJournal(durable.WithExecutionKey(ctx, "node"), store)
+	// 人为拉开完成时间，验证结果交付仍按模型调用顺序。
 	var active, peak atomic.Int64
-	tool := tools.NewBaseTool("probe", "probe", argSchema, func(_ context.Context, in *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+	var entered atomic.Int64
+	ready := make(chan struct{})
+	tool := tools.NewBaseTool("probe", "probe", argSchema, func(ctx context.Context, in *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 		now := active.Add(1)
 		defer active.Add(-1)
 		for p := peak.Load(); now > p && !peak.CompareAndSwap(p, now); p = peak.Load() {
+		}
+		// 等首批四个调用都进入工具体，再开始完成；避免磁盘和调度延迟让 sleep 窗口不重叠。
+		if entered.Add(1) == 4 {
+			close(ready)
+		}
+		select {
+		case <-ready:
+		case <-ctx.Done():
+			return nil, ctx.Err()
 		}
 		var n int
 		_, _ = fmt.Sscanf(in.Args["id"].(string), "%d", &n)

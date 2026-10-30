@@ -30,6 +30,15 @@ func TestImportRulesUseCurrentModuleAndLayeredExceptions(t *testing.T) {
 	}
 	require.False(t, forbidden("core/a.go", "example.com/agents"))
 }
+
+func TestCoreDoesNotDependOnHarness(t *testing.T) {
+	for _, file := range []string{"builder/x.go", "core/x.go", "harness/env/x.go", "tools/spill/x.go", "examples/demo/main.go"} {
+		for _, dep := range []string{"github.com/kart-io/goagent-harness", "github.com/kart-io/goagent-harness/preset", "github.com/kart-io/goagent-harness/tools/coding"} {
+			require.True(t, forbidden(file, dep), file+" -> "+dep)
+		}
+	}
+	require.False(t, forbidden("core/x.go", "github.com/kart-io/goagent-harness-extra/client"))
+}
 func TestMigrationCandidatesIgnoreCommentsAndStrings(t *testing.T) {
 	source := `package demo
 import (

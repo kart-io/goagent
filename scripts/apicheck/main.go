@@ -22,6 +22,11 @@ type finding struct {
 }
 
 func forbidden(file, path string) bool {
+	// 核心不得反向依赖上层 Harness，示例也不能把它重新带回主模块依赖图。
+	const harnessModule = "github.com/kart-io/goagent-harness"
+	if path == harnessModule || strings.HasPrefix(path, harnessModule+"/") {
+		return true
+	}
 	if !strings.HasPrefix(path, module) {
 		return false
 	}
