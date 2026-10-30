@@ -10,7 +10,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/interfaces"
+	"github.com/kart-io/goagent/tools"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/require"
 )
@@ -77,4 +79,33 @@ func TestOfficialSDKStdioInteroperability(t *testing.T) {
 	result, err := tools[0].Invoke(ctx, &interfaces.ToolInput{Args: map[string]interface{}{}})
 	require.NoError(t, err)
 	require.Equal(t, "pong", result.Result.(*mcp.CallToolResult).Content[0].(*mcp.TextContent).Text)
+}
+
+func TestToolOptions(t *testing.T) {
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "1"}, nil)
+	for _, name := range []string{"echo", "hidden"} {
+		mcp.AddTool(server, &mcp.Tool{Name: name}, func(context.Context, *mcp.CallToolRequest, map[string]any) (*mcp.CallToolResult, any, error) {
+			return nil, nil, fmt.Errorf("deliberate failure")
+		})
+	}
+	httpServer := httptest.NewServer(mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, &mcp.StreamableHTTPOptions{JSONResponse: true}))
+	defer httpServer.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	session, err := Connect(ctx, &mcp.StreamableClientTransport{Endpoint: httpServer.URL})
+	require.NoError(t, err)
+	defer session.Close()
+	adapted, err := Tools(ctx, session,
+		WithToolName(func(name string) (string, bool) { return "mcp__srv__" + name, name != "hidden" }),
+		WithToolErrorsAsRejected(),
+		WithDurablePolicy(durable.OperationPolicy{MaxAttempts: 1}))
+	require.NoError(t, err)
+	require.Len(t, adapted, 1)
+	require.Equal(t, "mcp__srv__echo", adapted[0].Name())
+	require.Equal(t, 1, adapted[0].(tools.DurablePolicyProvider).DurableOperationPolicy().MaxAttempts)
+	out, err := adapted[0].Invoke(ctx, &interfaces.ToolInput{Args: map[string]any{}})
+	require.NoError(t, err)
+	msg, rejected := tools.RejectedResult(out)
+	require.True(t, rejected)
+	require.Contains(t, msg, "deliberate failure")
 }
