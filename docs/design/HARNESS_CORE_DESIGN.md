@@ -1,3 +1,5 @@
+> 历史设计记录：Preset 装配、行为组件和编码工具已迁至独立 `goagent-harness` 项目，以下旧路径描述迁出前的实现。执行循环与扩展点、`harness/env` 留在 GoAgent。当前边界与导入路径见 [迁移指南](../guides/HARNESS_MIGRATION.md)。
+
 # Harness 核心化设计（草案）
 
 状态：待评审　日期：2026-10-30　参考：DeepSeek Harness（dsh）、Hermes Agent（NousResearch）、第 12 节文献

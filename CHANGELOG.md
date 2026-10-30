@@ -7,7 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- **破坏性**：Preset 与编码工具迁至独立模块 `github.com/kart-io/goagent-harness`：`harness/preset` 改为新模块的 `preset`，`tools/coding` 改为新模块的同名路径；两个工程 Agent 示例随之迁出。不保留转发兼容层。配置格式、Builder 与循环扩展点不变，`harness/env`、`tools/policy`、`tools/spill` 留在核心。当前为本地拆分，发布本版本前须先发布新模块，迁移与发布顺序见 `docs/guides/HARNESS_MIGRATION.md`。
+
 ### Fixed
+
+- `TestOnResultReplayOrderAfterConcurrentRun` 使用同步屏障等待首批并发调用全部进入工具体，消除磁盘与调度延迟导致的峰值断言偶发失败；保留并发上限与恢复交付顺序的验证。
 
 - `harness/env.LocalFS` 的条件写入改为同进程所有实例按真实路径协调，删除也参与同一协调；修复并发创建时偶发误报悬空链接。Unix 本地文件写入改为同目录临时文件同步后原子发布，避免覆盖过程中读到截断内容；`CreateIfAbsent` 使用硬链接发布，避免覆盖抢先创建的文件。明确 `IfVersion` 不协调直接写入或其他进程，替换会更换 inode，发布后同步失败须重新读取确认；已取消的写入和删除不再改动文件。
 
