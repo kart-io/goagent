@@ -130,18 +130,21 @@ const defaultApprovalTimeout = 10 * time.Minute
 // Pipeline 是 Dispatcher 对每次模型可见调用执行的管线：PreHook → 审批 → Guard → Around（含超时）→ 工具 → PostHook。
 // 参数不合法的调用不进入管线。准入阶段（PreHook、审批、Guard）在操作日志之外执行：终止、取消和出错不留记录、
 // 不消耗尝试次数；拒绝结果与执行结果一样写入日志，回放已完成的调用不再经过准入阶段。
-// 准入阶段占用并发槽位，但不计入 DispatchConfig.Timeout；Around、工具与 PostHook 在超时之内。
+// 准入阶段使用可配置的独立准入槽位，不占工具执行槽位，也不计入 DispatchConfig.Timeout；Around、工具与 PostHook 在超时之内。
 type Pipeline struct {
 	Pre      []PreHook
 	Approver Approver
 	// ApprovalTimeout 是单次等待审批的上限，默认 10 分钟，超时后迟到的批准也按拒绝处理。
 	ApprovalTimeout time.Duration
-	Guards          []Guard
-	Around          []Around
-	Post            []PostHook
+	// GrantTTL 从批准时起限制新会话授权的有效期；小于等于零表示不过期。
+	GrantTTL time.Duration
+	Guards   []Guard
+	Around   []Around
+	Post     []PostHook
 
-	grants   sync.Map // SessionID -> *grantSet
-	inflight sync.Map // 审批合并键 -> *pendingApproval
+	grantsMu sync.Mutex // 串行协调授权映射的清理、新增和撤销
+	grants   sync.Map   // SessionID -> *grantSet
+	inflight sync.Map   // 审批合并键 -> *pendingApproval
 }
 
 // StopError 表示 PreStop 终止了运行。
@@ -161,8 +164,9 @@ type grantSet struct {
 }
 
 type hookGrant struct {
-	hook  int
-	grant SessionGrant
+	hook      int
+	grant     SessionGrant
+	expiresAt time.Time
 }
 
 // granted 报告每个提出 Ask 的钩子是否都已有本会话内匹配的授权。
@@ -170,33 +174,20 @@ func (p *Pipeline) granted(call *Call, asks []hookAsk) bool {
 	if call.SessionID == "" {
 		return false
 	}
-	v, ok := p.grants.Load(call.SessionID)
-	if !ok {
-		return false
-	}
-	set := v.(*grantSet)
-	set.mu.Lock()
-	defer set.mu.Unlock()
+	grants := p.grantSnapshot(call.SessionID)
+	now := time.Now()
 	for _, a := range asks {
-		if !slices.ContainsFunc(set.grants, func(g hookGrant) bool { return g.hook == a.hook && g.grant.Matches(call) }) {
+		if !slices.ContainsFunc(grants, func(g hookGrant) bool { return !g.expired(now) && g.hook == a.hook && g.grant.Matches(call) }) {
 			return false
 		}
 	}
-	return true
+	return len(grants) > 0
 }
 
-func (p *Pipeline) addGrants(sessionID string, asks []hookAsk) {
-	v, _ := p.grants.LoadOrStore(sessionID, &grantSet{})
-	set := v.(*grantSet)
-	set.mu.Lock()
-	defer set.mu.Unlock()
-	for _, a := range asks {
-		set.grants = append(set.grants, hookGrant{hook: a.hook, grant: a.decision.Grant})
-	}
-}
-
-// Grants 返回会话中已批准的会话级授权说明，供宿主展示或撤销前核对。
-func (p *Pipeline) Grants(sessionID string) []string {
+// 调用宿主 Matches/Describe 前取得快照，避免持锁执行宿主回调。
+func (p *Pipeline) grantSnapshot(sessionID string) []hookGrant {
+	p.grantsMu.Lock()
+	defer p.grantsMu.Unlock()
 	v, ok := p.grants.Load(sessionID)
 	if !ok {
 		return nil
@@ -204,15 +195,73 @@ func (p *Pipeline) Grants(sessionID string) []string {
 	set := v.(*grantSet)
 	set.mu.Lock()
 	defer set.mu.Unlock()
-	out := make([]string, len(set.grants))
-	for i, g := range set.grants {
-		out[i] = g.grant.Describe()
+	return slices.Clone(set.grants)
+}
+
+func (p *Pipeline) addGrants(sessionID string, asks []hookAsk) {
+	p.grantsMu.Lock()
+	defer p.grantsMu.Unlock()
+	var expiresAt time.Time
+	if p.GrantTTL > 0 {
+		expiresAt = time.Now().Add(p.GrantTTL)
+	}
+	v, _ := p.grants.LoadOrStore(sessionID, &grantSet{})
+	set := v.(*grantSet)
+	set.mu.Lock()
+	defer set.mu.Unlock()
+	for _, a := range asks {
+		set.grants = append(set.grants, hookGrant{hook: a.hook, grant: a.decision.Grant, expiresAt: expiresAt})
+	}
+}
+
+// Grants 返回会话中已批准的会话级授权说明，供宿主展示或撤销前核对。
+func (p *Pipeline) Grants(sessionID string) []string {
+	grants := p.grantSnapshot(sessionID)
+	if grants == nil {
+		return nil
+	}
+	out := make([]string, 0, len(grants))
+	now := time.Now()
+	for _, g := range grants {
+		if !g.expired(now) {
+			out = append(out, g.grant.Describe())
+		}
 	}
 	return out
 }
 
 // RevokeGrants 清除会话的全部会话级授权。
-func (p *Pipeline) RevokeGrants(sessionID string) { p.grants.Delete(sessionID) }
+func (p *Pipeline) RevokeGrants(sessionID string) {
+	p.grantsMu.Lock()
+	defer p.grantsMu.Unlock()
+	p.grants.Delete(sessionID)
+}
+
+func (g hookGrant) expired(now time.Time) bool {
+	return !g.expiresAt.IsZero() && !now.Before(g.expiresAt)
+}
+
+// PruneGrants 删除过期授权和空会话条目，返回删除的授权条目数。
+// 此方法不修改或取消在途审批；过期授权即使尚未清理，也不能继续放行调用。
+func (p *Pipeline) PruneGrants() int {
+	p.grantsMu.Lock()
+	defer p.grantsMu.Unlock()
+	now := time.Now()
+	removed := 0
+	p.grants.Range(func(key, value any) bool {
+		set := value.(*grantSet)
+		set.mu.Lock()
+		before := len(set.grants)
+		set.grants = slices.DeleteFunc(set.grants, func(g hookGrant) bool { return g.expired(now) })
+		removed += before - len(set.grants)
+		if len(set.grants) == 0 {
+			p.grants.Delete(key)
+		}
+		set.mu.Unlock()
+		return true
+	})
+	return removed
+}
 
 type pendingApproval struct {
 	done   chan struct{}
