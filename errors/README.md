@@ -112,7 +112,7 @@ type AgentError struct {
     Component string                 // 组件名称
     Context   map[string]interface{} // 上下文信息
     Cause     error                  // 底层错误
-    Stack     []StackFrame           // 堆栈跟踪
+    // 创建处的调用栈只记录程序计数器，通过 StackFrames()/FormatStack() 按需解析
 }
 
 type StackFrame struct {
@@ -280,6 +280,15 @@ Wrap(err error, code ErrorCode, message string) *AgentError
 Wrapf(err error, code ErrorCode, format string, args ...interface{}) *AgentError
 ```
 
+`err` 为 nil 时 `Wrap`/`Wrapf` 及以 cause 为参数的辅助函数返回 nil 的 `*AgentError`，后续 `With*` 链式调用对 nil 安全。但 nil 的 `*AgentError` 装进 `error` 接口后不等于 nil，cause 可能为 nil 时先判断再包装：
+
+```go
+if err != nil {
+    return errors.Wrap(err, errors.CodeToolExecution, "tool failed")
+}
+return nil
+```
+
 ### 流式方法
 
 ```go
@@ -290,6 +299,8 @@ func (e *AgentError) WithContextMap(ctx map[string]interface{}) *AgentError
 func (e *AgentError) LogValue() slog.Value
 func (e *AgentError) MarshalLogObject(enc zapcore.ObjectEncoder) error
 func (e *AgentError) Format(s fmt.State, verb rune)
+func (e *AgentError) StackFrames() []StackFrame // 创建处的调用栈，调用时解析
+func (e *AgentError) FormatStack() string
 
 // 写入 Context 前脱敏 URL
 RedactURL(raw string) string
@@ -300,7 +311,7 @@ RedactURLError(err error) error
 ### 检查函数
 
 ```go
-// 错误代码检查
+// 错误代码检查：nil 返回空字符串，非 AgentError 返回 CodeInternal
 GetCode(err error) ErrorCode
 IsCode(err error, code ErrorCode) bool
 
@@ -357,7 +368,7 @@ NewPlanValidationError(planID, reason string) *AgentError
 NewPlanExecutionError(planID, stepID string, cause error) *AgentError
 NewPlanNotFoundError(planID string) *AgentError
 
-// 通用工具
+// 通用工具：返回附带信息的新错误，不修改 err；err 链上已有 AgentError 时沿用其错误码
 ErrorWithRetry(err error, attempt, maxAttempts int) *AgentError
 ErrorWithDuration(err error, durationMs int64) *AgentError
 ```

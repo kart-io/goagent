@@ -139,8 +139,8 @@ type AgentError struct {
 	// Cause is the underlying error (for error chain)
 	Cause error
 
-	// Stack contains the stack trace where the error was created
-	Stack []StackFrame
+	// pcs 只记录创建处的程序计数器，符号解析推迟到 StackFrames/FormatStack，避免每个错误都付出解析开销
+	pcs []uintptr
 
 	modelArgument bool
 }
@@ -155,23 +155,32 @@ type StackFrame struct {
 // Error 实现 error 接口。文本会流入日志、事件与模型输入，因此不包含 Context；
 // 需要 Context 时使用 GetContext 或结构化日志（LogValue）。
 func (e *AgentError) Error() string {
+	if e == nil {
+		return "<nil>"
+	}
 	var sb strings.Builder
 
-	sb.WriteString(fmt.Sprintf("[%s]", e.Code))
+	sb.WriteByte('[')
+	sb.WriteString(string(e.Code))
+	sb.WriteByte(']')
 
 	if e.Component != "" {
-		sb.WriteString(fmt.Sprintf(" [%s]", e.Component))
+		sb.WriteString(" [")
+		sb.WriteString(e.Component)
+		sb.WriteByte(']')
 	}
 
 	if e.Operation != "" {
-		sb.WriteString(fmt.Sprintf(" operation=%s", e.Operation))
+		sb.WriteString(" operation=")
+		sb.WriteString(e.Operation)
 	}
 
 	sb.WriteString(": ")
 	sb.WriteString(e.Message)
 
 	if e.Cause != nil {
-		sb.WriteString(fmt.Sprintf(": %v", e.Cause))
+		// 经 fmt 输出：Cause 可能是值为 nil 的自定义错误指针，fmt 会把其 Error() 的 panic 转成文本
+		_, _ = fmt.Fprintf(&sb, ": %v", e.Cause)
 	}
 
 	return sb.String()
@@ -179,6 +188,9 @@ func (e *AgentError) Error() string {
 
 // LogValue 实现 slog.LogValuer，以 group 形式输出错误的结构化字段（含 Context），供结构化日志使用。
 func (e *AgentError) LogValue() slog.Value {
+	if e == nil {
+		return slog.StringValue("<nil>")
+	}
 	attrs := []slog.Attr{slog.String("code", string(e.Code))}
 	if e.Component != "" {
 		attrs = append(attrs, slog.String("component", e.Component))
@@ -207,6 +219,9 @@ func (e *AgentError) LogValue() slog.Value {
 // MarshalLogObject 实现 zapcore.ObjectMarshaler，输出与 LogValue 相同的字段（含 Context），
 // 使 zap 及基于 zap 的日志引擎记录 *AgentError 时不只得到 Error() 文本。
 func (e *AgentError) MarshalLogObject(enc zapcore.ObjectEncoder) error {
+	if e == nil {
+		return nil
+	}
 	enc.AddString("code", string(e.Code))
 	if e.Component != "" {
 		enc.AddString("component", e.Component)
@@ -242,7 +257,7 @@ func (e *AgentError) Format(s fmt.State, verb rune) {
 	switch verb {
 	case 'v':
 		_, _ = io.WriteString(s, e.Error())
-		if s.Flag('+') && len(e.Context) > 0 {
+		if s.Flag('+') && e != nil && len(e.Context) > 0 {
 			keys := e.sortedContextKeys()
 			pairs := make([]string, 0, len(keys))
 			for _, k := range keys {
@@ -423,13 +438,16 @@ func (e *urlRedactedError) Is(target error) bool { return errors.Is(e.orig, targ
 
 // Unwrap returns the underlying cause for error chain support
 func (e *AgentError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
 	return e.Cause
 }
 
 // Is supports error comparison with errors.Is
 func (e *AgentError) Is(target error) bool {
 	t, ok := target.(*AgentError)
-	if !ok {
+	if !ok || e == nil || t == nil {
 		return false
 	}
 	return e.Code == t.Code
@@ -440,8 +458,7 @@ func New(code ErrorCode, message string) *AgentError {
 	return &AgentError{
 		Code:    code,
 		Message: message,
-		Context: make(map[string]interface{}),
-		Stack:   captureStack(2),
+		pcs:     callers(),
 	}
 }
 
@@ -450,12 +467,13 @@ func Newf(code ErrorCode, format string, args ...interface{}) *AgentError {
 	return &AgentError{
 		Code:    code,
 		Message: fmt.Sprintf(format, args...),
-		Context: make(map[string]interface{}),
-		Stack:   captureStack(2),
+		pcs:     callers(),
 	}
 }
 
-// Wrap wraps an existing error with context
+// Wrap wraps an existing error with context.
+// err 为 nil 时返回 nil 的 *AgentError，With* 等链式方法对其安全；但不要把结果直接作为 error 返回，
+// nil 的 *AgentError 装进 error 接口后不等于 nil。cause 可能为 nil 时先判断再包装。
 func Wrap(err error, code ErrorCode, message string) *AgentError {
 	if err == nil {
 		return nil
@@ -464,9 +482,8 @@ func Wrap(err error, code ErrorCode, message string) *AgentError {
 	return &AgentError{
 		Code:    code,
 		Message: message,
-		Context: make(map[string]interface{}),
 		Cause:   err,
-		Stack:   captureStack(2),
+		pcs:     callers(),
 	}
 }
 
@@ -479,20 +496,25 @@ func Wrapf(err error, code ErrorCode, format string, args ...interface{}) *Agent
 	return &AgentError{
 		Code:    code,
 		Message: fmt.Sprintf(format, args...),
-		Context: make(map[string]interface{}),
 		Cause:   err,
-		Stack:   captureStack(2),
+		pcs:     callers(),
 	}
 }
 
 // WithOperation sets the operation context
 func (e *AgentError) WithOperation(operation string) *AgentError {
+	if e == nil {
+		return nil
+	}
 	e.Operation = operation
 	return e
 }
 
 // WithComponent sets the component context
 func (e *AgentError) WithComponent(component string) *AgentError {
+	if e == nil {
+		return nil
+	}
 	e.Component = component
 	return e
 }
@@ -500,17 +522,26 @@ func (e *AgentError) WithComponent(component string) *AgentError {
 // MarkModelArgument 标记此错误由模型生成的参数不合法引起，Message 可原样交还模型改正，
 // 因此 Message 不得包含内部细节。不改变 Error() 文本、错误码与类型。
 func (e *AgentError) MarkModelArgument() *AgentError {
+	if e == nil {
+		return nil
+	}
 	e.modelArgument = true
 	return e
 }
 
 // ModelArgumentMessage 返回可交还模型的参数错误消息；未经 MarkModelArgument 标记时第二个值为 false。
 func (e *AgentError) ModelArgumentMessage() (string, bool) {
+	if e == nil {
+		return "", false
+	}
 	return e.Message, e.modelArgument
 }
 
 // WithContext adds a single key-value pair to the context
 func (e *AgentError) WithContext(key string, value interface{}) *AgentError {
+	if e == nil {
+		return nil
+	}
 	if e.Context == nil {
 		e.Context = make(map[string]interface{})
 	}
@@ -520,6 +551,9 @@ func (e *AgentError) WithContext(key string, value interface{}) *AgentError {
 
 // WithContextMap adds multiple key-value pairs to the context
 func (e *AgentError) WithContextMap(ctx map[string]interface{}) *AgentError {
+	if e == nil {
+		return nil
+	}
 	if e.Context == nil {
 		e.Context = make(map[string]interface{})
 	}
@@ -529,10 +563,14 @@ func (e *AgentError) WithContextMap(ctx map[string]interface{}) *AgentError {
 	return e
 }
 
-// GetCode extracts the error code from any error
+// GetCode extracts the error code from any error.
+// err 为 nil 时返回空字符串；不是 *AgentError（也未包装）时返回 CodeInternal。
 func GetCode(err error) ErrorCode {
+	if err == nil {
+		return ""
+	}
 	var agentErr *AgentError
-	if errors.As(err, &agentErr) {
+	if errors.As(err, &agentErr) && agentErr != nil {
 		return agentErr.Code
 	}
 	return CodeInternal
@@ -541,7 +579,7 @@ func GetCode(err error) ErrorCode {
 // GetOperation extracts the operation from any error
 func GetOperation(err error) string {
 	var agentErr *AgentError
-	if errors.As(err, &agentErr) {
+	if errors.As(err, &agentErr) && agentErr != nil {
 		return agentErr.Operation
 	}
 	return ""
@@ -550,7 +588,7 @@ func GetOperation(err error) string {
 // GetComponent extracts the component from any error
 func GetComponent(err error) string {
 	var agentErr *AgentError
-	if errors.As(err, &agentErr) {
+	if errors.As(err, &agentErr) && agentErr != nil {
 		return agentErr.Component
 	}
 	return ""
@@ -559,7 +597,7 @@ func GetComponent(err error) string {
 // GetContext extracts the context from any error
 func GetContext(err error) map[string]interface{} {
 	var agentErr *AgentError
-	if errors.As(err, &agentErr) {
+	if errors.As(err, &agentErr) && agentErr != nil {
 		return agentErr.Context
 	}
 	return nil
@@ -576,15 +614,22 @@ func IsAgentError(err error) bool {
 	return errors.As(err, &agentErr)
 }
 
-// captureStack captures the current stack trace
-func captureStack(skip int) []StackFrame {
+// callers 记录调用 New/Wrap 等构造函数处的调用栈，只能由构造函数直接调用。
+func callers() []uintptr {
 	const maxDepth = 32
-	pcs := make([]uintptr, maxDepth)
-	n := runtime.Callers(skip+1, pcs)
+	var pcs [maxDepth]uintptr
+	// 跳过 runtime.Callers、callers 与构造函数本身
+	n := runtime.Callers(3, pcs[:])
+	return append([]uintptr(nil), pcs[:n]...)
+}
 
-	frames := make([]StackFrame, 0, n)
-	callersFrames := runtime.CallersFrames(pcs[:n])
-
+// StackFrames 返回错误创建处的调用栈，每次调用时解析。
+func (e *AgentError) StackFrames() []StackFrame {
+	if e == nil || len(e.pcs) == 0 {
+		return nil
+	}
+	frames := make([]StackFrame, 0, len(e.pcs))
+	callersFrames := runtime.CallersFrames(e.pcs)
 	for {
 		frame, more := callersFrames.Next()
 		frames = append(frames, StackFrame{
@@ -592,24 +637,23 @@ func captureStack(skip int) []StackFrame {
 			Line:     frame.Line,
 			Function: frame.Function,
 		})
-
 		if !more {
 			break
 		}
 	}
-
 	return frames
 }
 
 // FormatStack formats the stack trace for logging
 func (e *AgentError) FormatStack() string {
-	if len(e.Stack) == 0 {
+	frames := e.StackFrames()
+	if len(frames) == 0 {
 		return ""
 	}
 
 	var sb strings.Builder
 	sb.WriteString("Stack trace:\n")
-	for _, frame := range e.Stack {
+	for _, frame := range frames {
 		sb.WriteString(fmt.Sprintf("  %s:%d %s\n", frame.File, frame.Line, frame.Function))
 	}
 	return sb.String()

@@ -269,7 +269,7 @@ func example8Logging() {
 
 	// 获取堆栈跟踪 (err 已经是 *errors.AgentError 类型)
 	fmt.Printf("  stack_trace:\n")
-	stackFrames := err.Stack
+	stackFrames := err.StackFrames()
 	maxFrames := 3
 	if len(stackFrames) < maxFrames {
 		maxFrames = len(stackFrames)

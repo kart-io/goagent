@@ -2,7 +2,9 @@ package errors
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"unicode/utf8"
 )
 
 // Agent Execution Errors
@@ -261,35 +263,38 @@ func NewInternalError(component, operation string, cause error) *AgentError {
 		WithOperation(operation)
 }
 
-// ErrorWithRetry wraps an error with retry information
+// ErrorWithRetry 返回附带重试信息的错误，不修改 err。
+// 错误链顶层是 *AgentError 时返回其副本（Context 另行复制）；否则包装 err 并沿用链上已有的错误码。
 func ErrorWithRetry(err error, attempt, maxAttempts int) *AgentError {
-	if err == nil {
-		return nil
-	}
-
-	if agentErr, ok := err.(*AgentError); ok {
-		return agentErr.
-			WithContext("retry_attempt", attempt).
-			WithContext("max_attempts", maxAttempts)
-	}
-
-	return Wrap(err, CodeInternal, "operation failed").
+	return annotate(err).
 		WithContext("retry_attempt", attempt).
 		WithContext("max_attempts", maxAttempts)
 }
 
-// ErrorWithDuration wraps an error with duration information
+// ErrorWithDuration 返回附带耗时信息的错误，不修改 err，规则同 ErrorWithRetry。
 func ErrorWithDuration(err error, durationMs int64) *AgentError {
+	return annotate(err).WithContext("duration_ms", durationMs)
+}
+
+// annotate 返回可安全追加 Context 的错误：原错误可能被多处共享，直接修改会产生数据竞争与意外的上下文。
+func annotate(err error) *AgentError {
 	if err == nil {
 		return nil
 	}
-
-	if agentErr, ok := err.(*AgentError); ok {
-		return agentErr.WithContext("duration_ms", durationMs)
+	if agentErr, ok := err.(*AgentError); ok && agentErr != nil {
+		cp := *agentErr
+		cp.Context = make(map[string]interface{}, len(agentErr.Context)+2)
+		for k, v := range agentErr.Context {
+			cp.Context[k] = v
+		}
+		return &cp
 	}
-
-	return Wrap(err, CodeInternal, "operation failed").
-		WithContext("duration_ms", durationMs)
+	code := CodeInternal
+	var inner *AgentError
+	if errors.As(err, &inner) && inner != nil {
+		code = inner.Code
+	}
+	return &AgentError{Code: code, Message: "operation failed", Cause: err, pcs: callers()}
 }
 
 // Distributed Errors
@@ -329,14 +334,10 @@ func NewRetrievalSearchError(query string, cause error) *AgentError {
 
 // NewRetrievalEmbeddingError creates an error for embedding generation failures
 func NewRetrievalEmbeddingError(text string, cause error) *AgentError {
-	textPreview := text
-	if len(text) > 100 {
-		textPreview = text[:100] + "..."
-	}
 	return Wrap(cause, CodeRetrievalEmbedding, "retrieval embedding failed").
 		WithComponent("retrieval").
 		WithOperation("generate_embedding").
-		WithContext("text_preview", textPreview)
+		WithContext("text_preview", preview(text, 100))
 }
 
 // NewDocumentNotFoundError creates an error when a document is not found
@@ -395,27 +396,19 @@ func NewPlanNotFoundError(planID string) *AgentError {
 
 // NewParserError creates an error for parser failures
 func NewParserError(parserType, content string, cause error) *AgentError {
-	contentPreview := content
-	if len(content) > 200 {
-		contentPreview = content[:200] + "..."
-	}
 	return Wrap(cause, CodeParserFailed, "parser failed").
 		WithComponent("parser").
 		WithOperation("parse").
 		WithContext("parser_type", parserType).
-		WithContext("content_preview", contentPreview)
+		WithContext("content_preview", preview(content, 200))
 }
 
 // NewParserInvalidJSONError creates an error for invalid JSON parsing
 func NewParserInvalidJSONError(content string, cause error) *AgentError {
-	contentPreview := content
-	if len(content) > 200 {
-		contentPreview = content[:200] + "..."
-	}
 	return Wrap(cause, CodeParserInvalidJSON, "invalid JSON").
 		WithComponent("parser").
 		WithOperation("parse_json").
-		WithContext("content_preview", contentPreview)
+		WithContext("content_preview", preview(content, 200))
 }
 
 // NewParserMissingFieldError creates an error when a required field is missing
@@ -517,4 +510,19 @@ func NewRouterOverloadError(capacity, current int) *AgentError {
 		WithOperation("queue").
 		WithContext("capacity", capacity).
 		WithContext("current", current)
+}
+
+// preview 按字符截取前 n 个字符，避免按字节截断把多字节字符切成非法 UTF-8。
+func preview(s string, n int) string {
+	if utf8.RuneCountInString(s) <= n {
+		return s
+	}
+	i := 0
+	for pos := range s {
+		if i == n {
+			return s[:pos] + "..."
+		}
+		i++
+	}
+	return s
 }
