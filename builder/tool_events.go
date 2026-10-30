@@ -40,7 +40,10 @@ func (a *ConfigurableAgent[C, S]) streamMessages(ctx context.Context, input, evi
 	if system != "" {
 		messages = append(messages, llm.SystemMessage(system))
 	}
-	if a.memoryManager != nil && a.config.SessionID != "" {
+	// Handle 的 Followup 轮次续接上一轮的对话，不再读取记忆。
+	if history, ok := ctx.Value(historyKey{}).([]llm.Message); ok {
+		messages = append(messages, history...)
+	} else if a.memoryManager != nil && a.config.SessionID != "" {
 		history, err := a.memoryManager.GetConversationHistory(ctx, a.config.SessionID, a.config.MaxConversationHistory)
 		if err == nil {
 			for _, entry := range history {
@@ -74,6 +77,29 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 	}
 	usage := &interfaces.TokenUsage{}
 	reports := 0
+	box := inboxFrom(ctx)
+	if len(a.config.PromptSections) > 0 {
+		sections, err := journaled(ctx, "loop/sections", func(context.Context) (string, error) {
+			return a.sectionText(PromptScope{SessionID: a.config.SessionID}), nil
+		})
+		if err != nil {
+			return nil, err
+		}
+		messages = withSections(messages, sections)
+	}
+	// finish 结束本轮：记下对话供 Handle 的 Followup 续接。
+	finish := func(answer string, final llm.Message) (*middleware.MiddlewareResponse, error) {
+		if box != nil {
+			transcript := slices.Clone(messages)
+			if len(transcript) > 0 && transcript[0].Role == "system" {
+				transcript = transcript[1:]
+			}
+			box.mu.Lock()
+			box.transcript = append(transcript, final)
+			box.mu.Unlock()
+		}
+		return a.finishEvents(ctx, request, fmt.Sprint(request.Input), answer, usage, metadata, emit)
+	}
 	policy := newToolContext(a.config.ContextPolicy)
 	var summary *llm.StreamChunk
 	messages, summary, err = policy.prepare(ctx, messages, a.config.MaxIterations)
@@ -102,10 +128,18 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
+		if box != nil {
+			items, err := journaled(ctx, fmt.Sprintf("loop/inbox/%d", round), func(context.Context) ([]inboxItem, error) { return box.drain(), nil })
+			if err != nil {
+				return nil, err
+			}
+			for _, item := range items {
+				messages = append(messages, llm.UserMessage(item.Text))
+			}
+		}
 		if err := emit(AgentEvent{Type: "step", Step: "model_start"}); err != nil {
 			return nil, err
 		}
-		turnCtx, cancel := context.WithCancel(ctx)
 		tools := a.tools
 		if len(runtime.tools) > 0 {
 			tools = append(slices.Clone(tools), runtime.tools...)
@@ -119,12 +153,10 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 			messages, err = policy.reduce(ctx, messages)
 		}
 		if err != nil {
-			cancel()
 			return nil, err
 		}
 		transformed, applyErr := runtime.apply(ctx, contextpolicy.Turn{Round: round, RemainingCalls: a.config.MaxIterations - round, Messages: messages}, round > 0 && round+1 == a.config.MaxIterations)
 		if applyErr != nil {
-			cancel()
 			return nil, applyErr
 		}
 		messages = transformed.Messages
@@ -143,12 +175,33 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 			}
 			metadata["final_answer_only"] = len(tools) == 0
 		}
+		var pre PreStepResult
+		if messages, pre, err = a.runPreStep(ctx, round, messages); err != nil {
+			return nil, err
+		}
+		if pre.Halt {
+			metadata["answer_source"] = "pre_step"
+			return finish(pre.Answer, llm.Message{Role: "assistant", Content: pre.Answer})
+		}
 		// 重问需要下一轮额度，最后一轮的空回答按原方式报错。
 		allowEmpty := emptyRetries < a.config.EmptyAnswerRetries && round+1 < a.config.MaxIterations
-		turn, err := readJournaledTurn(turnCtx, round, client, &llm.CompletionRequest{Messages: messages, MaxTokens: a.config.MaxTokens, Temperature: a.config.Temperature}, tools, allowEmpty, emit)
-		cancel()
+		turn, redirected, recovered, err := a.requestTurn(ctx, box, round, client, messages, tools, allowEmpty, emit)
 		if err != nil {
 			return nil, err
+		}
+		messages = recovered
+		if redirected != nil {
+			// 保留已流出的文本，追加纠正后重新请求；重新请求占用一次额度。
+			if redirected.partial != "" {
+				messages = append(messages, llm.Message{Role: "assistant", Content: redirected.partial})
+			}
+			for _, msg := range redirected.messages {
+				messages = append(messages, llm.UserMessage(msg))
+			}
+			if round+1 >= a.config.MaxIterations {
+				return nil, exhausted()
+			}
+			continue
 		}
 		if turn.Usage != nil {
 			usage.Add(&interfaces.TokenUsage{PromptTokens: turn.Usage.PromptTokens, CompletionTokens: turn.Usage.CompletionTokens, TotalTokens: turn.Usage.TotalTokens})
@@ -175,7 +228,31 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 				return nil, fmt.Errorf("模型未返回最终答案或完整工具调用")
 			}
 			metadata["answer_usage_reported"] = turn.Usage != nil
-			return a.finishEvents(ctx, request, fmt.Sprint(request.Input), turn.Content, usage, metadata, emit)
+			final := llm.Message{Role: "assistant", Content: turn.Content, ReasoningContent: turn.ReasoningContent, ProviderState: turn.ProviderState}
+			// 收件箱中的 Steer 唤醒续跑，下一步领取；否则询问 TurnStopping。没有剩余额度时按原答复结束。
+			if round+1 < a.config.MaxIterations {
+				wake := false
+				if box != nil {
+					if wake, err = journaled(ctx, fmt.Sprintf("loop/wake/%d", round), func(context.Context) (bool, error) { return box.wakes(), nil }); err != nil {
+						return nil, err
+					}
+				}
+				next := ""
+				if !wake {
+					if next, err = a.runTurnStopping(ctx, round, turn.Content); err != nil {
+						return nil, err
+					}
+				}
+				if wake || next != "" {
+					messages = append(messages, final)
+					if next != "" {
+						messages = append(messages, llm.UserMessage(next))
+					}
+					metadata["continued_turns"] = metadataInt(metadata, "continued_turns") + 1
+					continue
+				}
+			}
+			return finish(turn.Content, final)
 		}
 		direct := len(turn.ToolCalls) == 1 && slices.Contains(a.config.ReturnDirectTools, turn.ToolCalls[0].Function.Name)
 		// 直接返回无需下一次模型请求；其余路径预留最终答案额度。
@@ -308,7 +385,7 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 				if err := emit(AgentEvent{Type: "text", Delta: answer}); err != nil {
 					return nil, err
 				}
-				return a.finishEvents(ctx, request, fmt.Sprint(request.Input), answer, usage, metadata, emit)
+				return finish(answer, llm.Message{Role: "assistant", Content: answer})
 			}
 		}
 		// 调用后钩子追加的上下文在本批工具结果之后作为一条 user 消息注入；assistant(tool_calls)→tool→user 在各 provider 上都合法。

@@ -596,3 +596,20 @@ A0（`2fc040b`）：Pipeline 裁决聚合与按钩子记录授权；`tools/polic
 | — | 子 Agent 中目标 preset 自己的规则可引用被过滤的工具 | 只在顶层检查规则引用的工具存在 |
 
 未实现：总预算的跨 Agent 继承（子 Agent 只继承取消与超时）；Windows 上的命令钩子（使用 `sh -c`）。
+
+## 15. 第二阶段实施记录（2026-10-30）
+
+已实现第 5 节：Agent 句柄与收件箱（`ConfigurableAgent.Start` → `*Handle`）、四个循环扩展点、`llm.ClassifyError`、提示词 `PromptSection`/`PromptContext`。第 9 节的验收：Steer、Redirect、Followup 的端到端测试，TurnStopping 续跑测试，system 前缀跨步骤字节不变的测试，以及持久运行中钩子结果回放的测试（`builder/loop_hooks_test.go`）。
+
+与设计的差异：
+
+| 设计 | 实施 | 原因 |
+|---|---|---|
+| `Handle` 为接口，方法无返回值 | 具体类型，`Steer`/`Inject`/`Followup`/`Redirect` 返回 error | 轮次结束后的输入须能告知宿主（`ErrHandleDone`），否则被静默丢弃 |
+| 持久运行与收件箱无约定 | 收件箱输入、PreStep、TurnStopping、段落与上下文按步骤记入日志（`loop/...`），恢复时回放 | 模型回合的日志意图包含完整消息，运行中注入的内容不记录就无法恢复 |
+| RequestError 统一处理重试、压缩、回退 | 只在非持久运行中生效；持久运行的模型失败仍交给宿主 | 持久日志中失败的回合不可在同一记录上重试，钩子的回退客户端也无法记录 |
+| Redirect 取消进行中的请求 | 持久运行中降级为 Steer | 取消的回合在日志中记为失败，无法在恢复时重现 |
+| Request 钩子可替换模型 | 须是确定性的 | 替换的客户端无法序列化；提供方与请求参数已在回合意图中，非确定的钩子会在恢复时被发现 |
+| `contextpolicy.BeforeTurn` 并入 PreStep、`WithModelRetry` 并入 RequestError | 保持现有机制，新扩展点与之并存 | 二者已有持久化与预算语义，迁移是独立的破坏性变更，留待第三阶段统一会话日志时进行 |
+
+未实现：Handle 与 Builder 的事件流（`Stream`）结合；`Followup` 续接对话时不读取记忆，只使用上一轮的对话。
