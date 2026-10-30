@@ -518,7 +518,7 @@ func (m *RetryMiddleware) WithRetryCondition(condition func(error) bool) *RetryM
 
 // OnError implements retry logic
 func (m *RetryMiddleware) OnError(ctx context.Context, err error) error {
-	if !m.retryOn(err) {
+	if err == nil || !m.retryOn(err) {
 		return err
 	}
 

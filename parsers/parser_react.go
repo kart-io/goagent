@@ -2,6 +2,7 @@ package parsers
 
 import (
 	"context"
+	"fmt"
 	"regexp"
 	"strings"
 
@@ -120,6 +121,9 @@ func (p *ReActOutputParser) ParseWithRetry(ctx context.Context, text string, max
 			return result, nil
 		}
 		lastErr = err
+	}
+	if lastErr == nil {
+		lastErr = fmt.Errorf("no parse attempted: maxRetries=%d", maxRetries)
 	}
 	return nil, agentErrors.Wrap(lastErr, agentErrors.CodeParserFailed, "failed to parse after retries").
 		WithComponent("react_parser").

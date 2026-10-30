@@ -2,6 +2,7 @@ package toolbox
 
 import (
 	"context"
+	"fmt"
 	"math/rand"
 	"time"
 
@@ -103,6 +104,14 @@ func (e *StandardExecutor) ExecuteWithRetry(ctx context.Context, tool core.MCPTo
 		}
 	}
 
+	// 工具可能只以 Success=false 表示失败而不返回错误，此时 lastErr 为 nil，Wrap 会得到 nil
+	if lastErr == nil {
+		if result == nil {
+			lastErr = fmt.Errorf("no attempt made: maxRetries=%d", maxRetries)
+		} else {
+			lastErr = fmt.Errorf("tool reported failure: %s", result.Error)
+		}
+	}
 	return result, agentErrors.Wrap(lastErr, agentErrors.CodeAgentExecution, "execution failed after retries").
 		WithComponent("standard_executor").
 		WithOperation("execute_with_retry").

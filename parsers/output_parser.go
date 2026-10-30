@@ -572,6 +572,9 @@ func NewChainOutputParser[T any](parsers ...OutputParser[T]) *ChainOutputParser[
 	}
 }
 
+// errNoParsers 作为未配置任何解析器时的失败原因，避免 Wrap(nil) 返回值为 nil 的错误。
+var errNoParsers = errors.New("no parsers configured")
+
 // Parse 尝试所有解析器
 func (p *ChainOutputParser[T]) Parse(ctx context.Context, text string) (T, error) {
 	var lastErr error
@@ -583,6 +586,9 @@ func (p *ChainOutputParser[T]) Parse(ctx context.Context, text string) (T, error
 		lastErr = err
 	}
 
+	if lastErr == nil {
+		lastErr = errNoParsers
+	}
 	var zero T
 	return zero, agentErrors.Wrap(lastErr, agentErrors.CodeParserFailed, "all parsers in chain failed").
 		WithComponent("chain_parser").
@@ -601,6 +607,9 @@ func (p *ChainOutputParser[T]) ParseWithPrompt(ctx context.Context, text, prompt
 		lastErr = err
 	}
 
+	if lastErr == nil {
+		lastErr = errNoParsers
+	}
 	var zero T
 	return zero, agentErrors.Wrap(lastErr, agentErrors.CodeParserFailed, "all parsers in chain failed with prompt").
 		WithComponent("chain_parser").
