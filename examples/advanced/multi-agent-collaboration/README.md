@@ -264,21 +264,18 @@ This multi-agent system is perfect for:
 
 ```go
 // Create a new specialized agent
-func createCustomAgent(llmClient llm.Client) (interfaces.Agent, error) {
+func createCustomAgent(llmClient llm.Client) (*builder.ConfigurableAgent[any, core.State], error) {
     // Add custom tools
-    customTool := &MyCustomTool{}
-
     registry := tools.NewRegistry()
-    registry.Register(customTool)
+    if err := registry.Register(&MyCustomTool{}); err != nil {
+        return nil, err
+    }
 
-    agent := agents.NewBasicAgent(
-        "CustomAgent",
-        llmClient,
-        registry,
-        agents.WithSystemPrompt("Your custom prompt"),
-    )
-
-    return agent, nil
+    return builder.NewAgentBuilder[any, core.State](llmClient).
+        WithSystemPrompt("Your custom prompt").
+        WithTools(registry.List()...).
+        WithState(core.NewAgentState()).
+        Build()
 }
 ```
 

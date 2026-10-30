@@ -177,8 +177,8 @@ func (b *AgentBuilder[C, S]) WithTools(tools ...interfaces.Tool) *AgentBuilder[C
 // WithMiddleware 添加中间件
 func (b *AgentBuilder[C, S]) WithMiddleware(mw ...middleware.Middleware) *AgentBuilder[C, S]
 
-// WithMemoryManager 设置内存管理器
-func (b *AgentBuilder[C, S]) WithMemoryManager(manager interfaces.MemoryManager) *AgentBuilder[C, S]
+// WithMemory 设置内存管理器
+func (b *AgentBuilder[C, S]) WithMemory(memMgr interfaces.MemoryManager) *AgentBuilder[C, S]
 
 // WithStore 设置存储后端
 func (b *AgentBuilder[C, S]) WithStore(store store.Store) *AgentBuilder[C, S]
@@ -200,9 +200,6 @@ func (b *AgentBuilder[C, S]) WithErrorHandler(handler func(error) error) *AgentB
 
 // WithMetadata 设置元数据
 func (b *AgentBuilder[C, S]) WithMetadata(key string, value interface{}) *AgentBuilder[C, S]
-
-// WithConfig 设置配置
-func (b *AgentBuilder[C, S]) WithConfig(config *AgentConfig) *AgentBuilder[C, S]
 
 // Build 构建 Agent
 func (b *AgentBuilder[C, S]) Build() (*ConfigurableAgent[C, S], error)
@@ -272,37 +269,34 @@ const (
 ```go
 import (
     "github.com/kart-io/goagent/builder"
+    "github.com/kart-io/goagent/llm"
     "github.com/kart-io/goagent/llm/providers"
 )
 
 // 创建 LLM 客户端
-llmClient, _ := providers.NewOpenAIWithOptions(
-    providers.WithAPIKey("your-api-key"),
-    providers.WithModel("gpt-4"),
+llmClient, err := providers.NewOpenAIWithOptions(
+    llm.WithAPIKey("your-api-key"),
+    llm.WithModel("gpt-4"),
 )
+if err != nil {
+    log.Fatal(err)
+}
 
 // 使用 Builder 创建 Agent
 agent, err := builder.NewSimpleBuilder(llmClient).
     WithSystemPrompt("你是一个有帮助的助手").
     WithTools(calculatorTool, searchTool).
     WithMiddleware(loggingMW).
-    WithConfig(&builder.AgentConfig{
-        MaxTokens:   2000,
-        Temperature: 0.7,
-        SessionID:   "session-123",
-    }).
+    WithMaxTokens(2000).
+    WithTemperature(0.7).
+    WithSessionID("session-123").
     Build()
-
 if err != nil {
     log.Fatal(err)
 }
 
-// 使用 Agent
-output, err := agent.Invoke(ctx, &interfaces.Input{
-    Messages: []interfaces.Message{
-        {Role: "user", Content: "你好"},
-    },
-})
+// 使用 Agent（配置了工具时用 ExecuteWithTools）
+output, err := agent.ExecuteWithTools(ctx, "你好")
 ```
 
 ---
@@ -340,11 +334,11 @@ func (s *AgentState) Delete(key string)
 // Keys 返回所有键
 func (s *AgentState) Keys() []string
 
-// ToMap 转换为 map
-func (s *AgentState) ToMap() map[string]interface{}
+// Snapshot 返回当前状态的 map 副本
+func (s *AgentState) Snapshot() map[string]interface{}
 
-// FromMap 从 map 加载
-func (s *AgentState) FromMap(data map[string]interface{})
+// Update 批量写入
+func (s *AgentState) Update(updates map[string]interface{})
 ```
 
 ---
@@ -405,45 +399,46 @@ type CheckpointMetadata struct {
 
 ### 检查点实现
 
+`core/checkpoint` 提供按线程（会话）ID 保存状态的 `Checkpointer`，Builder 的 `WithCheckpointer` 接收的就是它：
+
 ```go
 package checkpoint
 
-// NewInMemorySaver 创建内存检查点
-func NewInMemorySaver() Checkpointer
+type Checkpointer interface {
+    Save(ctx context.Context, threadID string, state state.State) error
+    Load(ctx context.Context, threadID string) (state.State, error)
+    List(ctx context.Context) ([]CheckpointInfo, error)
+    Delete(ctx context.Context, threadID string) error
+    Exists(ctx context.Context, threadID string) (bool, error)
+}
 
-// NewRedisCheckpointer 创建 Redis 检查点
-func NewRedisCheckpointer(client *redis.Client) Checkpointer
+// NewInMemorySaver 创建内存检查点
+func NewInMemorySaver() *InMemorySaver
 
 // NewDistributedCheckpointer 创建分布式检查点
-func NewDistributedCheckpointer(opts ...Option) Checkpointer
+func NewDistributedCheckpointer(config *DistributedCheckpointerConfig) (*DistributedCheckpointer, error)
 ```
 
 ### 使用示例
 
 ```go
 import (
+    "github.com/kart-io/goagent/core"
     "github.com/kart-io/goagent/core/checkpoint"
-    "github.com/kart-io/goagent/interfaces"
 )
 
-// 创建检查点管理器
 cp := checkpoint.NewInMemorySaver()
 
-// 保存检查点
-err := cp.SaveCheckpoint(ctx, &interfaces.Checkpoint{
-    ID:       "ckpt-001",
-    ThreadID: "thread-123",
-    State: interfaces.State{
-        "step": 5,
-        "data": "some data",
-    },
-})
+// 保存线程状态
+st := core.NewAgentState()
+st.Set("step", 5)
+err := cp.Save(ctx, "thread-123", st)
 
-// 加载检查点
-loaded, err := cp.LoadCheckpoint(ctx, "ckpt-001")
+// 加载
+loaded, err := cp.Load(ctx, "thread-123")
 
-// 列出检查点
-list, err := cp.ListCheckpoints(ctx, "thread-123", 10)
+// 列出所有检查点
+list, err := cp.List(ctx)
 ```
 
 ---

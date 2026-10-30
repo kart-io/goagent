@@ -56,8 +56,6 @@ git push origin master
 # Select version bump type: auto, major, minor, or patch
 ```
 
-**See Also**: VERSION_MANAGEMENT.md for detailed documentation
-
 ---
 
 ### 🚀 Release (`release.yml`)

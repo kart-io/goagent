@@ -19,52 +19,12 @@ go run main.go
 
 ## 代码说明
 
-本示例使用**传统方式**（直接导入）创建 providers：
+本示例直接使用 `llm/providers` 中各 Provider 的构造函数创建客户端：
 
 ```go
 import "github.com/kart-io/goagent/llm/providers"
 
 client, err := providers.NewOpenAIWithOptions(opts...)
-```
-
-### 新方式：使用 Provider Registry
-
-GoAgent 现在也支持使用 **Provider Registry** 方式动态创建 providers。
-
-使用 Registry 的优势：
-- ✓ 运行时动态选择 provider
-- ✓ 配置驱动，易于切换
-- ✓ 支持 provider fallback
-- ✓ 更易于测试和 mock
-
-**Registry 示例代码**:
-
-```go
-import (
-    _ "github.com/kart-io/goagent/contrib/llm-providers/openai"
-    "github.com/kart-io/goagent/llm/registry"
-    "github.com/kart-io/goagent/llm/constants"
-)
-
-client, err := registry.New(constants.ProviderOpenAI, opts...)
-```
-
-## 相关示例
-
-- **本示例**: 传统方式使用多个 providers
-
-## 向后兼容
-
-两种方式**完全向后兼容**，可以在同一项目中共存：
-
-```go
-// 传统方式
-client1, _ := openai.New(opts...)
-
-// Registry 方式
-client2, _ := registry.New(constants.ProviderOpenAI, opts...)
-
-// 两者都可以正常工作
 ```
 
 ## 支持的 Providers

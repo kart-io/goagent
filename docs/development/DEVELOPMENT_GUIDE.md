@@ -180,7 +180,7 @@ import agentErrors "github.com/kart-io/goagent/errors"
 
 // 创建错误
 if input == nil {
-    return nil, agentErrors.NewValidationError("input", "input cannot be nil")
+    return nil, agentErrors.NewInvalidInputError("my_component", "input", "input cannot be nil")
 }
 
 // 包装错误
@@ -189,9 +189,9 @@ if err != nil {
     return nil, agentErrors.Wrap(err, agentErrors.CodeInternal, "failed to do something")
 }
 
-// 检查错误类型
-if agentErrors.IsValidationError(err) {
-    // 处理验证错误
+// 按错误码判断
+if agentErrors.IsCode(err, agentErrors.CodeInvalidInput) {
+    // 处理输入错误
 }
 ```
 

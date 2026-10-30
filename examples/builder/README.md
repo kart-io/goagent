@@ -355,13 +355,15 @@ go build ./examples/builder/simple/
 
 ### 问题 2: LLM 客户端未配置
 
-示例使用 `mockllm.MockLLMClient` 进行演示。生产环境请使用真实的 LLM 客户端：
+`simple`、`core`、`advanced` 示例通过 `createLLMClient` 创建 DeepSeek 或 Kimi 客户端，需要设置 `DEEPSEEK_API_KEY` 或 `KIMI_API_KEY`；`serialization` 示例只使用 DeepSeek。使用其他 Provider 时替换为对应的构造函数：
 
 ```go
-// 替换为真实的 LLM 客户端
-import "github.com/kart-io/goagent/llm/providers/openai"
+import (
+    "github.com/kart-io/goagent/llm"
+    "github.com/kart-io/goagent/llm/providers"
+)
 
-llmClient := openai.NewClient(apiKey)
+llmClient, err := providers.NewOpenAIWithOptions(llm.WithAPIKey(apiKey))
 ```
 
 ### 问题 3: 找不到包

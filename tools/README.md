@@ -42,6 +42,8 @@ type ToolOutput struct {
 
 ## 内置工具
 
+计算器、搜索、Shell、API 工具分别位于子包 `tools/compute`、`tools/search`、`tools/shell`、`tools/http`（导入路径 `github.com/kart-io/goagent/tools/<子包>`）；`Tool`、`ToolInput`、`ToolOutput` 定义在 `interfaces` 包。
+
 ### 1. BaseTool
 
 基础工具实现，可以包装任意函数：
@@ -51,9 +53,9 @@ tool := tools.NewBaseTool(
     "hello",
     "Says hello to a name",
     `{"type": "object", "properties": {"name": {"type": "string"}}}`,
-    func(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
+    func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
         name, _ := input.Args["name"].(string)
-        return &tools.ToolOutput{
+        return &interfaces.ToolOutput{
             Result:  fmt.Sprintf("Hello, %s!", name),
             Success: true,
         }, nil
@@ -78,7 +80,7 @@ tool := tools.NewFunctionTool(
 )
 
 // 使用构建器
-tool := tools.NewFunctionToolBuilder("multiplier").
+tool, err := tools.NewFunctionToolBuilder("multiplier").
     WithDescription("Multiplies two numbers").
     WithArgsSchema(`{...}`).
     WithFunction(func(ctx context.Context, args map[string]interface{}) (interface{}, error) {
@@ -120,9 +122,9 @@ tool := tools.NewTypedFunctionTool[CalculatorInput, float64](
 数学计算工具：
 
 ```go
-tool := tools.NewCalculatorTool()
+tool := compute.NewCalculatorTool()
 
-output, _ := tool.Invoke(ctx, &tools.ToolInput{
+output, _ := tool.Invoke(ctx, &interfaces.ToolInput{
     Args: map[string]interface{}{
         "expression": "2 + 3 * 4",
     },
@@ -138,7 +140,7 @@ output, _ := tool.Invoke(ctx, &tools.ToolInput{
 高级计算器工具：
 
 ```go
-tool := tools.NewAdvancedCalculatorTool(tools.CalculatorOperations{
+tool := compute.NewAdvancedCalculatorTool(compute.CalculatorOperations{
     Add:      true,
     Subtract: true,
     Multiply: true,
@@ -148,7 +150,7 @@ tool := tools.NewAdvancedCalculatorTool(tools.CalculatorOperations{
     Abs:      true,
 })
 
-output, _ := tool.Invoke(ctx, &tools.ToolInput{
+output, _ := tool.Invoke(ctx, &interfaces.ToolInput{
     Args: map[string]interface{}{
         "operation": "sqrt",
         "operands":  []interface{}{16.0},
@@ -162,22 +164,22 @@ output, _ := tool.Invoke(ctx, &tools.ToolInput{
 
 ```go
 // 使用模拟搜索引擎
-engine := tools.NewMockSearchEngine()
-tool := tools.NewSearchTool(engine)
+engine := search.NewMockSearchEngine()
+tool := search.NewSearchTool(engine)
 
 // 使用 Google 搜索
-engine := tools.NewGoogleSearchEngine(apiKey, cx)
-tool := tools.NewSearchTool(engine)
+engine := search.NewGoogleSearchEngine(apiKey, cx)
+tool := search.NewSearchTool(engine)
 
 // 使用聚合搜索引擎
-engine := tools.NewAggregatedSearchEngine(
-    tools.NewGoogleSearchEngine(apiKey, cx),
-    tools.NewDuckDuckGoSearchEngine(),
+engine := search.NewAggregatedSearchEngine(
+    search.NewGoogleSearchEngine(apiKey, cx),
+    search.NewDuckDuckGoSearchEngine(),
 )
-tool := tools.NewSearchTool(engine)
+tool := search.NewSearchTool(engine)
 
 // 执行搜索
-output, _ := tool.Invoke(ctx, &tools.ToolInput{
+output, _ := tool.Invoke(ctx, &interfaces.ToolInput{
     Args: map[string]interface{}{
         "query":       "Go programming",
         "max_results": 5.0,
@@ -191,13 +193,13 @@ output, _ := tool.Invoke(ctx, &tools.ToolInput{
 
 ```go
 // 使用构建器
-tool := tools.NewShellToolBuilder().
+tool := shell.NewShellToolBuilder().
     WithAllowedCommands("ls", "pwd", "echo", "cat").
     WithTimeout(30 * time.Second).
     Build()
 
 // 执行命令
-output, _ := tool.Invoke(ctx, &tools.ToolInput{
+output, _ := tool.Invoke(ctx, &interfaces.ToolInput{
     Args: map[string]interface{}{
         "command": "echo",
         "args":    []interface{}{"Hello, World!"},
@@ -217,7 +219,7 @@ HTTP API 调用工具：
 
 ```go
 // 使用构建器
-tool := tools.NewAPIToolBuilder().
+tool := http.NewAPIToolBuilder().
     WithBaseURL("https://api.example.com").
     WithTimeout(30 * time.Second).
     WithHeader("Content-Type", "application/json").
@@ -225,7 +227,7 @@ tool := tools.NewAPIToolBuilder().
     Build()
 
 // 执行请求
-output, _ := tool.Invoke(ctx, &tools.ToolInput{
+output, _ := tool.Invoke(ctx, &interfaces.ToolInput{
     Args: map[string]interface{}{
         "method": "POST",
         "url":    "/api/users",
@@ -253,7 +255,7 @@ output, _ := tool.Patch(ctx, "/api/users/1", body, headers)
 registry := tools.NewRegistry()
 
 // 同名工具重复注册返回错误
-_ = registry.Register(tools.NewCalculatorTool())
+_ = registry.Register(compute.NewCalculatorTool())
 _ = registry.Register(customTool)
 
 tool := registry.Get("calculator") // 不存在时返回 nil
@@ -303,7 +305,7 @@ func (c *MyCallback) OnToolEnd(ctx context.Context, toolName string, output inte
 }
 
 // 为工具添加回调
-toolWithCallback := tool.WithCallbacks(callback).(tools.Tool)
+toolWithCallback := tool.WithCallbacks(callback).(interfaces.Tool)
 
 // 执行会触发回调
 output, _ := toolWithCallback.Invoke(ctx, input)
@@ -334,7 +336,7 @@ for chunk := range stream {
 ### 3. 批量执行
 
 ```go
-inputs := []*tools.ToolInput{input1, input2, input3}
+inputs := []*interfaces.ToolInput{input1, input2, input3}
 outputs, err := tool.Batch(ctx, inputs)
 ```
 
@@ -369,10 +371,10 @@ toolWithConfig := tool.WithConfig(config)
 
 ```go
 // 好的做法
-tool := tools.NewShellTool([]string{"ls", "cat", "grep"}, 30*time.Second)
+tool := shell.NewShellTool([]string{"ls", "cat", "grep"}, 30*time.Second)
 
 // 不好的做法 - 不要允许所有命令
-tool := tools.NewShellTool([]string{"bash", "sh"}, 0)
+tool := shell.NewShellTool([]string{"bash", "sh"}, 0)
 ```
 
 ### 2. 错误处理
@@ -397,7 +399,7 @@ if !output.Success {
 使用构建器创建复杂工具：
 
 ```go
-tool := tools.NewAPIToolBuilder().
+tool := http.NewAPIToolBuilder().
     WithBaseURL("https://api.example.com").
     WithTimeout(30 * time.Second).
     WithAuth(token).
@@ -476,9 +478,9 @@ func NewMyCustomTool(config MyConfig) *MyCustomTool {
     return tool
 }
 
-func (m *MyCustomTool) run(ctx context.Context, input *tools.ToolInput) (*tools.ToolOutput, error) {
+func (m *MyCustomTool) run(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
     // 实现工具逻辑
-    return &tools.ToolOutput{
+    return &interfaces.ToolOutput{
         Result:  result,
         Success: true,
     }, nil
@@ -490,14 +492,14 @@ func (m *MyCustomTool) run(ctx context.Context, input *tools.ToolInput) (*tools.
 ```go
 type MySearchEngine struct{}
 
-func (m *MySearchEngine) Search(ctx context.Context, query string, maxResults int) ([]tools.SearchResult, error) {
+func (m *MySearchEngine) Search(ctx context.Context, query string, maxResults int) ([]search.SearchResult, error) {
     // 实现搜索逻辑
     return results, nil
 }
 
 // 使用自定义搜索引擎
 engine := &MySearchEngine{}
-tool := tools.NewSearchTool(engine)
+tool := search.NewSearchTool(engine)
 ```
 
 ## 架构设计

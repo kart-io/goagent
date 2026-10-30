@@ -345,7 +345,7 @@ if err != nil {
 }
 
 // 2. 运行 Agent
-output, err := agent.Execute(context.Background(), "现在几点了？北京的天气怎么样？")
+output, err := agent.ExecuteWithTools(context.Background(), "现在几点了？北京的天气怎么样？")
 if err != nil {
     log.Fatal(err)
 }

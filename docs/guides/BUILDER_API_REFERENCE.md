@@ -114,7 +114,7 @@ agent, err := builder.NewSimpleBuilder(llmClient).
     WithMaxTokens(3000).
     WithCallbacks(
         core.NewStdoutCallback(true),
-        core.NewMetricsCallback(),
+        core.NewMetricsCallback(metrics), // metrics 为应用实现的 core.MetricsCollector
     ).
     WithStore(redisStore).
     WithVerbose(false).
@@ -176,8 +176,8 @@ agent, err := builder.NewAgentBuilder[any, *CustomState](llmClient).
     }).
     WithMiddleware(
         middleware.NewLoggingMiddleware(nil),
-        middleware.NewCachingMiddleware(cache.NewSimpleCache(5*time.Minute)),
-        middleware.NewRateLimitMiddleware(10, 1),
+        middleware.NewCacheMiddleware(5*time.Minute),
+        middleware.NewRateLimiterMiddleware(10, time.Second),
     ).
     WithSessionID("user-123-session-456").
     WithStreamingEnabled(true).
@@ -304,10 +304,8 @@ agent, err := builder.NewAgentBuilder[any, *CustomState](llmClient).
         BusinessContext: loadBusinessContext(),
     }).
     WithMiddleware(
-        middleware.NewAuthMiddleware(authProvider),
-        middleware.NewCachingMiddleware(redisCache),
-        middleware.NewRateLimitMiddleware(100, 60),
-        middleware.NewAuditMiddleware(auditLog),
+        middleware.NewAuthenticationMiddleware(authFunc),
+        middleware.NewRateLimiterMiddleware(100, time.Minute),
     ).
     WithSessionID(generateSessionID()).
     WithStreamingEnabled(true).

@@ -189,7 +189,7 @@ type MemoryEntry struct {
 manager := memory.NewInMemoryManager(memory.DefaultConfig())
 
 // 添加对话
-conv := &memory.Conversation{
+conv := &interfaces.Conversation{
     SessionID: "user-123",
     Role:      "user",
     Content:   "如何优化数据库查询？",
@@ -208,7 +208,7 @@ manager.ClearConversation(ctx, "user-123")
 
 ```go
 // 添加案例
-caseMemory := &memory.Case{
+caseMemory := &interfaces.Case{
     Title:    "数据库查询超时",
     Problem:  "查询执行时间超过 30 秒",
     Solution: "为外键列添加索引",
@@ -243,8 +243,9 @@ manager.Delete(ctx, "user:preferences")
 ### 分层记忆系统
 
 ```go
-// 创建向量存储
-vecStore := memory.NewInMemoryVectorStore(1536)
+// 分层记忆需要实现 memory.VectorStore（Add/Search/Delete，向量为 []float64）的存储，
+// 由应用提供；下文的内置向量存储实现的是另一组接口，不能直接传入。
+var vecStore memory.VectorStore = newMyVectorStore()
 
 // 创建分层记忆
 hierMem := memory.NewHierarchicalMemoryWithContext(ctx, vecStore,
@@ -292,10 +293,10 @@ ids, scores, err := vecStore.Search(ctx, queryEmbedding, 10, 0.8)
 
 // 使用外部嵌入模型
 embeddingModel := memory.NewSimpleEmbeddingModel(1536)
-vecStore := memory.NewEmbeddingVectorStore(embeddingModel)
+embeddingStore := memory.NewEmbeddingVectorStore(embeddingModel)
 
 // Chroma 向量数据库集成
-chromaStore := memory.NewChromaVectorStore(chromaClient, "collection-name")
+chromaStore := memory.NewChromaVectorStore(chromaClient, "collection-name", 1536)
 ```
 
 ## API 参考
@@ -356,7 +357,7 @@ NewInMemoryVectorStore(dimension int) *InMemoryVectorStore
 NewEmbeddingVectorStore(model EmbeddingModel) *EmbeddingVectorStore
 
 // Chroma 向量存储
-NewChromaVectorStore(client ChromaClient, collection string) *ChromaVectorStore
+NewChromaVectorStore(client ChromaClient, collection string, dimension int) *ChromaVectorStore
 
 // 通用操作
 Store(ctx, id string, vector []float32) error

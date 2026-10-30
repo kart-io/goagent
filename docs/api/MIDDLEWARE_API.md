@@ -226,9 +226,6 @@ func (m *TimingMiddleware) GetTimings() map[string]time.Duration
 
 // GetAverageLatency 获取平均延迟
 func (m *TimingMiddleware) GetAverageLatency() time.Duration
-
-// Reset 重置计时器
-func (m *TimingMiddleware) Reset()
 ```
 
 **使用示例：**
@@ -285,7 +282,8 @@ retryMW := middleware.NewRetryMiddleware(3, 100*time.Millisecond).
 ```go
 type CacheMiddleware struct {
     *BaseMiddleware
-    cache     *ShardedCache
+    shards    []*cacheShard
+    numShards uint32
     ttl       time.Duration
 }
 
@@ -312,32 +310,23 @@ cacheMW := middleware.NewCacheMiddleware(5 * time.Minute)
 shardedCacheMW := middleware.NewCacheMiddlewareWithShards(5*time.Minute, 32)
 ```
 
-### RateLimitMiddleware
+### RateLimiterMiddleware
 
-速率限制中间件。
+固定窗口速率限制中间件，按请求中的用户 ID 分别计数，超过上限时返回错误。
 
 ```go
-type RateLimitMiddleware struct {
-    *BaseMiddleware
-    limiter *rate.Limiter
-}
+// NewRateLimiterMiddleware 创建速率限制中间件：每个 windowSize 窗口内最多 maxRequests 次
+func NewRateLimiterMiddleware(maxRequests int, windowSize time.Duration) *RateLimiterMiddleware
 
-// NewRateLimitMiddleware 创建速率限制中间件
-// rps: 每秒请求数
-func NewRateLimitMiddleware(rps float64) *RateLimitMiddleware
-
-// NewRateLimitMiddlewareWithBurst 创建带突发的速率限制中间件
-func NewRateLimitMiddlewareWithBurst(rps float64, burst int) *RateLimitMiddleware
+// Reset 清空所有计数窗口
+func (m *RateLimiterMiddleware) Reset()
 ```
 
 **使用示例：**
 
 ```go
-// 每秒 10 个请求
-rateLimitMW := middleware.NewRateLimitMiddleware(10)
-
-// 每秒 10 个请求，允许突发 20 个
-burstRateLimitMW := middleware.NewRateLimitMiddlewareWithBurst(10, 20)
+// 每分钟 100 个请求
+rateLimitMW := middleware.NewRateLimiterMiddleware(100, time.Minute)
 ```
 
 ### MiddlewareFunc

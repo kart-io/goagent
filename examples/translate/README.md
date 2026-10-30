@@ -85,12 +85,12 @@ import (
 func main() {
     // 1. 初始化 DeepSeek 客户端
     apiKey := os.Getenv("DEEPSEEK_API_KEY")
-    llmClient, err := providers.NewDeepSeek(&llm.Config{
-        APIKey:      apiKey,
-        Model:       "deepseek-chat",
-        Temperature: 0.3,
-        MaxTokens:   2000,
-    })
+    llmClient, err := providers.NewDeepSeekWithOptions(
+        llm.WithAPIKey(apiKey),
+        llm.WithModel("deepseek-chat"),
+        llm.WithTemperature(0.3),
+        llm.WithMaxTokens(2000),
+    )
     if err != nil {
         log.Fatal(err)
     }
@@ -644,12 +644,12 @@ type MultiAgentTranslator struct {
 ### DeepSeek 配置
 
 ```go
-&llm.Config{
-    APIKey:      "your-api-key",
-    Model:       "deepseek-chat",  // DeepSeek 对话模型
-    Temperature: 0.3,               // 低温度获得更准确的翻译
-    MaxTokens:   2000,              // 最大 token 数
-}
+providers.NewDeepSeekWithOptions(
+    llm.WithAPIKey("your-api-key"),
+    llm.WithModel("deepseek-chat"), // DeepSeek 对话模型
+    llm.WithTemperature(0.3),       // 低温度获得更准确的翻译
+    llm.WithMaxTokens(2000),        // 最大 token 数
+)
 ```
 
 ### Agent 配置

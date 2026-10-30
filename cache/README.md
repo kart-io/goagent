@@ -138,32 +138,32 @@ type CacheStats struct {
 
 ```go
 // 创建缓存（推荐）
-cache := cache.NewSimpleCache(5 * time.Minute)
+c := cache.NewSimpleCache(5 * time.Minute)
 
 // 设置缓存
-err := cache.Set(ctx, "key", "value", 10*time.Minute)
+err := c.Set(ctx, "key", "value", 10*time.Minute)
 
 // 获取缓存
-value, err := cache.Get(ctx, "key")
+value, err := c.Get(ctx, "key")
 if err == cache.ErrCacheMiss {
     // 缓存未命中
 }
 
 // 检查是否存在
-exists, err := cache.Has(ctx, "key")
+exists, err := c.Has(ctx, "key")
 
 // 删除缓存
-err := cache.Delete(ctx, "key")
+err := c.Delete(ctx, "key")
 
 // 清空所有缓存
-err := cache.Clear(ctx)
+err := c.Clear(ctx)
 
 // 获取统计信息
-stats := cache.GetStats()
+stats := c.GetStats()
 fmt.Printf("命中率: %.2f%%\n", stats.HitRate*100)
 
 // 关闭缓存（停止后台清理）
-cache.Close()
+c.Close()
 ```
 
 ### LLM 调用缓存
@@ -201,14 +201,19 @@ return response, nil
 ### 工具执行缓存
 
 ```go
-// 使用缓存中间件
+import (
+    "github.com/kart-io/goagent/cache"
+    "github.com/kart-io/goagent/tools"
+    "github.com/kart-io/goagent/tools/middleware"
+)
+
 cacheMW := middleware.NewCachingMiddleware(
     middleware.WithCache(cache.NewSimpleCache(10*time.Minute)),
     middleware.WithTTL(10*time.Minute),
 )
 
 // 包装工具
-cachedTool := cacheMW.Wrap(originalTool)
+cachedTool := tools.WithMiddleware(originalTool, cacheMW)
 
 // 执行（自动缓存）
 result, err := cachedTool.Invoke(ctx, input)
@@ -236,11 +241,11 @@ key := gen.GenerateKeySimple("model", "gpt4", "system")
 
 ```go
 // 使用空缓存实现
-cache := cache.NewNoOpCache()
+c := cache.NewNoOpCache()
 
 // 所有操作都是空操作
-cache.Set(ctx, "key", "value", time.Hour) // 不存储
-value, err := cache.Get(ctx, "key")        // 总是返回 ErrCacheMiss
+c.Set(ctx, "key", "value", time.Hour) // 不存储
+value, err := c.Get(ctx, "key")        // 总是返回 ErrCacheMiss
 ```
 
 ### 基于配置创建

@@ -443,37 +443,17 @@ if err != nil {
 2. 实现工具接口
 3. 注册到 `registry.go`
 
-### 自定义验证器
+### 调整工具箱
+
+`StandardToolBox` 可从包外设置权限管理器与调用历史长度：
 
 ```go
-type CustomValidator struct {
-    *toolbox.JSONSchemaValidator
-}
-
-func (v *CustomValidator) ValidateInput(schema, input) error {
-    // 自定义验证逻辑
-    return nil
-}
-
-tb.validator = NewCustomValidator()
+tb := toolbox.NewStandardToolBox()
+tb.SetPermissionManager(toolbox.NewPermissionManager())
+tb.SetMaxHistorySize(500)
 ```
 
-### 自定义执行器
-
-```go
-type CustomExecutor struct {
-    *toolbox.StandardExecutor
-}
-
-func (e *CustomExecutor) Execute(ctx, tool, call) (*core.ToolResult, error) {
-    // 添加预处理
-    result, err := e.StandardExecutor.Execute(ctx, tool, call)
-    // 添加后处理
-    return result, err
-}
-
-tb.executor = NewCustomExecutor()
-```
+执行器与输入校验目前不可从包外替换。
 
 ## 性能指标
 

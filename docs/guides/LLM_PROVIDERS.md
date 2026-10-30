@@ -57,23 +57,26 @@ type StreamClient interface {
 ### OpenAI
 
 ```go
-import "github.com/kart-io/goagent/llm/providers"
+import (
+    "github.com/kart-io/goagent/llm"
+    "github.com/kart-io/goagent/llm/providers"
+)
 
 // 基本配置
-client := providers.NewOpenAIClient(
-    os.Getenv("OPENAI_API_KEY"),
-    "gpt-4",
+client, err := providers.NewOpenAIWithOptions(
+    llm.WithAPIKey(os.Getenv("OPENAI_API_KEY")),
+    llm.WithModel("gpt-4"),
 )
 
 // 高级配置
-client := providers.NewOpenAIClientWithConfig(providers.OpenAIConfig{
-    APIKey:      os.Getenv("OPENAI_API_KEY"),
-    Model:       "gpt-4-turbo",
-    BaseURL:     "https://api.openai.com/v1",  // 可自定义端点
-    MaxTokens:   4096,
-    Temperature: 0.7,
-    Timeout:     60,
-})
+client, err := providers.NewOpenAIWithOptions(
+    llm.WithAPIKey(os.Getenv("OPENAI_API_KEY")),
+    llm.WithModel("gpt-4-turbo"),
+    llm.WithBaseURL("https://api.openai.com/v1"),
+    llm.WithMaxTokens(4096),
+    llm.WithTemperature(0.7),
+)
+// OpenAI Provider 目前不读取 llm.WithTimeout，用 ctx 的截止时间控制请求超时
 ```
 
 **支持的模型：**
@@ -86,21 +89,24 @@ client := providers.NewOpenAIClientWithConfig(providers.OpenAIConfig{
 ### Anthropic
 
 ```go
-import "github.com/kart-io/goagent/llm/providers"
+import (
+    "github.com/kart-io/goagent/llm"
+    "github.com/kart-io/goagent/llm/providers"
+)
 
 // 基本配置
-client := providers.NewAnthropicClient(
-    os.Getenv("ANTHROPIC_API_KEY"),
-    "claude-3-sonnet-20240229",
+client, err := providers.NewAnthropicWithOptions(
+    llm.WithAPIKey(os.Getenv("ANTHROPIC_API_KEY")),
+    llm.WithModel("claude-3-sonnet-20240229"),
 )
 
 // 高级配置
-client := providers.NewAnthropicClientWithConfig(providers.AnthropicConfig{
-    APIKey:      os.Getenv("ANTHROPIC_API_KEY"),
-    Model:       "claude-3-opus-20240229",
-    MaxTokens:   4096,
-    Temperature: 0.7,
-})
+client, err := providers.NewAnthropicWithOptions(
+    llm.WithAPIKey(os.Getenv("ANTHROPIC_API_KEY")),
+    llm.WithModel("claude-3-opus-20240229"),
+    llm.WithMaxTokens(4096),
+    llm.WithTemperature(0.7),
+)
 ```
 
 **支持的模型：**
@@ -112,21 +118,24 @@ client := providers.NewAnthropicClientWithConfig(providers.AnthropicConfig{
 ### Google Gemini
 
 ```go
-import "github.com/kart-io/goagent/llm/providers"
+import (
+    "github.com/kart-io/goagent/llm"
+    "github.com/kart-io/goagent/llm/providers"
+)
 
 // 基本配置
-client := providers.NewGeminiClient(
-    os.Getenv("GOOGLE_API_KEY"),
-    "gemini-pro",
+client, err := providers.NewGeminiWithOptions(
+    llm.WithAPIKey(os.Getenv("GOOGLE_API_KEY")),
+    llm.WithModel("gemini-pro"),
 )
 
 // 高级配置
-client := providers.NewGeminiClientWithConfig(providers.GeminiConfig{
-    APIKey:      os.Getenv("GOOGLE_API_KEY"),
-    Model:       "gemini-1.5-pro",
-    MaxTokens:   4096,
-    Temperature: 0.7,
-})
+client, err := providers.NewGeminiWithOptions(
+    llm.WithAPIKey(os.Getenv("GOOGLE_API_KEY")),
+    llm.WithModel("gemini-1.5-pro"),
+    llm.WithMaxTokens(4096),
+    llm.WithTemperature(0.7),
+)
 ```
 
 **支持的模型：**
@@ -138,22 +147,25 @@ client := providers.NewGeminiClientWithConfig(providers.GeminiConfig{
 ### DeepSeek
 
 ```go
-import "github.com/kart-io/goagent/llm/providers"
+import (
+    "github.com/kart-io/goagent/llm"
+    "github.com/kart-io/goagent/llm/providers"
+)
 
 // 基本配置
-client := providers.NewDeepSeekClient(
-    os.Getenv("DEEPSEEK_API_KEY"),
-    "deepseek-chat",
+client, err := providers.NewDeepSeekWithOptions(
+    llm.WithAPIKey(os.Getenv("DEEPSEEK_API_KEY")),
+    llm.WithModel("deepseek-chat"),
 )
 
 // 高级配置
-client := providers.NewDeepSeekClientWithConfig(providers.DeepSeekConfig{
-    APIKey:      os.Getenv("DEEPSEEK_API_KEY"),
-    Model:       "deepseek-coder",
-    BaseURL:     "https://api.deepseek.com",
-    MaxTokens:   4096,
-    Temperature: 0.7,
-})
+client, err := providers.NewDeepSeekWithOptions(
+    llm.WithAPIKey(os.Getenv("DEEPSEEK_API_KEY")),
+    llm.WithModel("deepseek-coder"),
+    llm.WithBaseURL("https://api.deepseek.com"),
+    llm.WithMaxTokens(4096),
+    llm.WithTemperature(0.7),
+)
 ```
 
 **支持的模型：**
@@ -164,21 +176,24 @@ client := providers.NewDeepSeekClientWithConfig(providers.DeepSeekConfig{
 ### Cohere
 
 ```go
-import "github.com/kart-io/goagent/llm/providers"
+import (
+    "github.com/kart-io/goagent/llm"
+    "github.com/kart-io/goagent/llm/providers"
+)
 
 // 基本配置
-client := providers.NewCohereClient(
-    os.Getenv("COHERE_API_KEY"),
-    "command",
+client, err := providers.NewCohereWithOptions(
+    llm.WithAPIKey(os.Getenv("COHERE_API_KEY")),
+    llm.WithModel("command"),
 )
 
 // 高级配置
-client := providers.NewCohereClientWithConfig(providers.CohereConfig{
-    APIKey:      os.Getenv("COHERE_API_KEY"),
-    Model:       "command-r-plus",
-    MaxTokens:   4096,
-    Temperature: 0.7,
-})
+client, err := providers.NewCohereWithOptions(
+    llm.WithAPIKey(os.Getenv("COHERE_API_KEY")),
+    llm.WithModel("command-r-plus"),
+    llm.WithMaxTokens(4096),
+    llm.WithTemperature(0.7),
+)
 ```
 
 **支持的模型：**
@@ -190,41 +205,47 @@ client := providers.NewCohereClientWithConfig(providers.CohereConfig{
 ### HuggingFace
 
 ```go
-import "github.com/kart-io/goagent/llm/providers"
+import (
+    "github.com/kart-io/goagent/llm"
+    "github.com/kart-io/goagent/llm/providers"
+)
 
 // 基本配置
-client := providers.NewHuggingFaceClient(
-    os.Getenv("HUGGINGFACE_API_KEY"),
-    "meta-llama/Llama-2-70b-chat-hf",
+client, err := providers.NewHuggingFaceWithOptions(
+    llm.WithAPIKey(os.Getenv("HUGGINGFACE_API_KEY")),
+    llm.WithModel("meta-llama/Llama-2-70b-chat-hf"),
 )
 
 // 高级配置
-client := providers.NewHuggingFaceClientWithConfig(providers.HuggingFaceConfig{
-    APIKey:      os.Getenv("HUGGINGFACE_API_KEY"),
-    Model:       "mistralai/Mixtral-8x7B-Instruct-v0.1",
-    MaxTokens:   4096,
-    Temperature: 0.7,
-})
+client, err := providers.NewHuggingFaceWithOptions(
+    llm.WithAPIKey(os.Getenv("HUGGINGFACE_API_KEY")),
+    llm.WithModel("mistralai/Mixtral-8x7B-Instruct-v0.1"),
+    llm.WithMaxTokens(4096),
+    llm.WithTemperature(0.7),
+)
 ```
 
 ### Ollama（本地部署）
 
 ```go
-import "github.com/kart-io/goagent/llm/providers"
+import (
+    "github.com/kart-io/goagent/llm"
+    "github.com/kart-io/goagent/llm/providers"
+)
 
 // 基本配置
-client := providers.NewOllamaClient(
-    "http://localhost:11434",
-    "llama2",
+client, err := providers.NewOllamaWithOptions(
+    llm.WithBaseURL("http://localhost:11434"),
+    llm.WithModel("llama2"),
 )
 
 // 高级配置
-client := providers.NewOllamaClientWithConfig(providers.OllamaConfig{
-    BaseURL:     "http://localhost:11434",
-    Model:       "codellama",
-    MaxTokens:   4096,
-    Temperature: 0.7,
-})
+client, err := providers.NewOllamaWithOptions(
+    llm.WithBaseURL("http://localhost:11434"),
+    llm.WithModel("codellama"),
+    llm.WithMaxTokens(4096),
+    llm.WithTemperature(0.7),
+)
 ```
 
 **常用模型：**
@@ -237,24 +258,30 @@ client := providers.NewOllamaClientWithConfig(providers.OllamaConfig{
 ### SiliconFlow
 
 ```go
-import "github.com/kart-io/goagent/llm/providers"
+import (
+    "github.com/kart-io/goagent/llm"
+    "github.com/kart-io/goagent/llm/providers"
+)
 
 // 基本配置
-client := providers.NewSiliconFlowClient(
-    os.Getenv("SILICONFLOW_API_KEY"),
-    "Qwen/Qwen2-72B-Instruct",
+client, err := providers.NewSiliconFlowWithOptions(
+    llm.WithAPIKey(os.Getenv("SILICONFLOW_API_KEY")),
+    llm.WithModel("Qwen/Qwen2-72B-Instruct"),
 )
 ```
 
 ### Kimi
 
 ```go
-import "github.com/kart-io/goagent/llm/providers"
+import (
+    "github.com/kart-io/goagent/llm"
+    "github.com/kart-io/goagent/llm/providers"
+)
 
 // 基本配置
-client := providers.NewKimiClient(
-    os.Getenv("KIMI_API_KEY"),
-    "moonshot-v1-8k",
+client, err := providers.NewKimiWithOptions(
+    llm.WithAPIKey(os.Getenv("KIMI_API_KEY")),
+    llm.WithModel("moonshot-v1-8k"),
 )
 ```
 
@@ -269,7 +296,10 @@ client := providers.NewKimiClient(
 ### 基本对话
 
 ```go
-client := providers.NewOpenAIClient(apiKey, "gpt-4")
+client, err := providers.NewOpenAIWithOptions(llm.WithAPIKey(apiKey), llm.WithModel("gpt-4"))
+if err != nil {
+    log.Fatal(err)
+}
 
 messages := []llm.Message{
     llm.SystemMessage("你是一个有帮助的助手。"),
@@ -287,7 +317,10 @@ fmt.Println(resp.Content)
 ### 流式对话
 
 ```go
-client := providers.NewOpenAIClient(apiKey, "gpt-4")
+client, err := providers.NewOpenAIWithOptions(llm.WithAPIKey(apiKey), llm.WithModel("gpt-4"))
+if err != nil {
+    log.Fatal(err)
+}
 
 messages := []llm.Message{
     llm.UserMessage("请写一首诗。"),
@@ -313,7 +346,10 @@ for chunk := range stream {
 ### 自定义参数
 
 ```go
-client := providers.NewOpenAIClient(apiKey, "gpt-4")
+client, err := providers.NewOpenAIWithOptions(llm.WithAPIKey(apiKey), llm.WithModel("gpt-4"))
+if err != nil {
+    log.Fatal(err)
+}
 
 req := &llm.CompletionRequest{
     Messages: []llm.Message{
@@ -337,34 +373,37 @@ fmt.Println(resp.Content)
 GoAgent 的统一接口使得切换提供商非常简单：
 
 ```go
-func createClient(provider string) llm.Client {
+func createClient(provider string) (llm.Client, error) {
     switch provider {
     case "openai":
-        return providers.NewOpenAIClient(
-            os.Getenv("OPENAI_API_KEY"),
-            "gpt-4",
+        return providers.NewOpenAIWithOptions(
+            llm.WithAPIKey(os.Getenv("OPENAI_API_KEY")),
+            llm.WithModel("gpt-4"),
         )
     case "anthropic":
-        return providers.NewAnthropicClient(
-            os.Getenv("ANTHROPIC_API_KEY"),
-            "claude-3-sonnet-20240229",
+        return providers.NewAnthropicWithOptions(
+            llm.WithAPIKey(os.Getenv("ANTHROPIC_API_KEY")),
+            llm.WithModel("claude-3-sonnet-20240229"),
         )
     case "deepseek":
-        return providers.NewDeepSeekClient(
-            os.Getenv("DEEPSEEK_API_KEY"),
-            "deepseek-chat",
+        return providers.NewDeepSeekWithOptions(
+            llm.WithAPIKey(os.Getenv("DEEPSEEK_API_KEY")),
+            llm.WithModel("deepseek-chat"),
         )
     default:
-        return providers.NewOllamaClient(
-            "http://localhost:11434",
-            "llama2",
+        return providers.NewOllamaWithOptions(
+            llm.WithBaseURL("http://localhost:11434"),
+            llm.WithModel("llama2"),
         )
     }
 }
 
 // 使用
-client := createClient(os.Getenv("LLM_PROVIDER"))
-agent := builder.NewAgentBuilder(client).Build()
+client, err := createClient(os.Getenv("LLM_PROVIDER"))
+if err != nil {
+    log.Fatal(err)
+}
+agent, err := builder.NewSimpleBuilder(client).Build()
 ```
 
 ## Token 使用统计

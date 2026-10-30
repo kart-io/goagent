@@ -216,7 +216,7 @@ agent, err := builder.NewAgentBuilder[MyContext, *MyState](llmClient).
 
     // 存储和状态
     WithStore(redisStore).
-    WithCheckpointer(checkpoint.NewRedisSaver(redisClient)).
+    WithCheckpointer(checkpoint.NewInMemorySaver()).
     WithState(initialState).
     WithSessionID("session-001").
 
@@ -228,7 +228,7 @@ agent, err := builder.NewAgentBuilder[MyContext, *MyState](llmClient).
     WithMiddleware(
         middleware.NewLoggingMiddleware(logger),
         middleware.NewTimingMiddleware(),
-        middleware.NewRateLimiterMiddleware(100),
+        middleware.NewRateLimiterMiddleware(100, time.Minute),
     ).
 
     // 回调

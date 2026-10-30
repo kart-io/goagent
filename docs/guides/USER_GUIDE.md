@@ -1,11 +1,10 @@
 # GoAgent 使用指南
 
-本文档提供 GoAgent 框架的完整使用指南。
+本文档介绍用 Builder 创建 Agent、接入工具与记忆、使用中间件、流式输出与错误处理的基本方式。编排多步任务见[原生编排与工具体系](NATIVE_ORCHESTRATION.md)，Builder 的完整方法见 [Builder API 参考](BUILDER_API_REFERENCE.md)。
 
 ## 目录
 
 - [安装配置](#安装配置)
-- [核心概念](#核心概念)
 - [Agent 使用](#agent-使用)
 - [工具使用](#工具使用)
 - [内存管理](#内存管理)
@@ -29,65 +28,16 @@
 go get github.com/kart-io/goagent
 ```
 
-### 环境变量配置
+### 环境变量
+
+Provider 未显式传入 API Key 时从环境变量读取：
 
 ```bash
-# LLM API 密钥
 export OPENAI_API_KEY="sk-..."
 export ANTHROPIC_API_KEY="sk-ant-..."
 export DEEPSEEK_API_KEY="sk-..."
-export GOOGLE_API_KEY="..."
-
-# 国内服务
 export KIMI_API_KEY="..."
 export SILICONFLOW_API_KEY="..."
-
-# 可选配置
-export GOAGENT_LOG_LEVEL="info"     # debug, info, warn, error
-export GOAGENT_LOG_FORMAT="json"    # json, text
-export GOAGENT_TIMEOUT="30s"        # 默认超时
-```
-
----
-
-## 核心概念
-
-### Agent
-
-Agent 是能够推理、使用工具和做出决策的自主智能体。
-
-```mermaid
-graph LR
-    INPUT[用户输入] --> AGENT[Agent]
-    AGENT --> LLM[LLM]
-    AGENT --> TOOLS[工具]
-    AGENT --> MEMORY[内存]
-    AGENT --> OUTPUT[输出]
-```
-
-### 推理模式
-
-GoAgent 支持多种推理模式：
-
-| 模式 | 描述 | 适用场景 |
-|------|------|----------|
-| ReAct | 推理与行动交替 | 需要工具调用的任务 |
-| CoT | 思维链推理 | 复杂推理任务 |
-| ToT | 思维树搜索 | 需要探索多种方案 |
-| GoT | 思维图推理 | 复杂依赖关系 |
-| PoT | 程序化思维 | 结构化问题 |
-
-### 组件关系
-
-```mermaid
-graph TB
-    BUILDER[AgentBuilder] --> AGENT[Agent]
-    AGENT --> LLM[LLM Client]
-    AGENT --> TOOLS[Tools]
-    AGENT --> MW[Middleware]
-    AGENT --> MEM[Memory]
-    AGENT --> CP[Checkpoint]
-    AGENT --> STORE[Store]
 ```
 
 ---
@@ -99,54 +49,52 @@ graph TB
 ```go
 import (
     "github.com/kart-io/goagent/builder"
+    "github.com/kart-io/goagent/llm"
     "github.com/kart-io/goagent/llm/providers"
 )
 
 // 1. 创建 LLM 客户端
-client, _ := providers.NewOpenAIWithOptions(
-    providers.WithAPIKey(os.Getenv("OPENAI_API_KEY")),
-    providers.WithModel("gpt-4"),
+client, err := providers.NewOpenAIWithOptions(
+    llm.WithAPIKey(os.Getenv("OPENAI_API_KEY")),
+    llm.WithModel("gpt-4"),
 )
+if err != nil {
+    return err
+}
 
 // 2. 使用 Builder 创建 Agent
-agent, _ := builder.NewSimpleBuilder(client).
+agent, err := builder.NewSimpleBuilder(client).
     WithSystemPrompt("你是一个有帮助的助手").
     Build()
+if err != nil {
+    return err
+}
 
-// 3. 调用 Agent
-output, _ := agent.Invoke(ctx, &interfaces.Input{
-    Messages: []interfaces.Message{
-        {Role: "user", Content: "你好"},
-    },
-})
-
-fmt.Println(output.Messages[0].Content)
+// 3. 执行
+output, err := agent.Execute(ctx, "你好")
+if err != nil {
+    return err
+}
+fmt.Println(output.Result)
 ```
+
+`Execute` 只调用一次模型，不执行工具；配置了工具时使用 `ExecuteWithTools` 或 `AsRunnable().Invoke`（见[工具使用](#工具使用)）。
 
 ### 配置选项
 
 ```go
-agent, _ := builder.NewSimpleBuilder(client).
+agent, err := builder.NewSimpleBuilder(client).
     WithSystemPrompt("你是一个助手").
-    WithConfig(&builder.AgentConfig{
-        MaxIterations:          10,              // 最大迭代次数
-        Timeout:                30 * time.Second, // 超时时间
-        EnableStreaming:        true,            // 启用流式
-        EnableAutoSave:         true,            // 自动保存
-        SaveInterval:           5 * time.Second, // 保存间隔
-        MaxTokens:              2000,            // 最大 Token
-        Temperature:            0.7,             // 温度
-        SessionID:              "session-001",   // 会话 ID
-        Verbose:                true,            // 详细模式
-        MaxConversationHistory: 20,              // 最大历史数
-        OutputFormat:           builder.OutputFormatMarkdown,
-    }).
+    WithMaxIterations(10).
+    WithTimeout(30 * time.Second).
+    WithMaxTokens(2000).
+    WithTemperature(0.7).
+    WithSessionID("session-001").
+    WithMaxConversationHistory(20).
+    WithVerbose(true).
+    WithOutputFormat(builder.OutputFormatMarkdown).
     Build()
 ```
-
-### 推理模式
-
-ReAct、CoT、ToT 等推理预设（`WithReAct`、`WithZeroShotCoT`、`WithBeamSearchToT` 等）已在 v0.17.0 删除，代码保留在 `v0.16.1`。当前替代方案是原生工具循环与 `workflow` Graph，见[原生编排与工具体系](NATIVE_ORCHESTRATION.md)。
 
 ---
 
@@ -154,72 +102,33 @@ ReAct、CoT、ToT 等推理预设（`WithReAct`、`WithZeroShotCoT`、`WithBeamS
 
 ### 创建工具
 
-**方式 1: 实现 Tool 接口**
-
-```go
-type MyTool struct{}
-
-func (t *MyTool) Name() string {
-    return "my_tool"
-}
-
-func (t *MyTool) Description() string {
-    return "工具描述"
-}
-
-func (t *MyTool) ArgsSchema() string {
-    return `{
-        "type": "object",
-        "properties": {
-            "param": {"type": "string"}
-        },
-        "required": ["param"]
-    }`
-}
-
-func (t *MyTool) Invoke(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
-    param := input.Args["param"].(string)
-    result := doSomething(param)
-    return &interfaces.ToolOutput{
-        Result:  result,
-        Success: true,
-    }, nil
-}
-```
-
-**方式 2: 使用 FunctionTool**
-
 ```go
 import "github.com/kart-io/goagent/tools"
 
-myTool := tools.NewFunctionTool(
-    "my_tool",
-    "工具描述",
-    `{"type": "object", "properties": {"param": {"type": "string"}}, "required": ["param"]}`,
+weatherTool := tools.NewFunctionTool(
+    "get_weather",
+    "查询城市天气",
+    `{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}`,
     func(ctx context.Context, args map[string]interface{}) (interface{}, error) {
-        param := args["param"].(string)
-        return doSomething(param), nil
+        city, _ := args["city"].(string)
+        return map[string]string{"city": city, "weather": "晴"}, nil
     },
 )
 ```
 
-**方式 3: 使用 Builder**
+也可以使用构建器，并从结构体生成参数 Schema：
 
 ```go
-myTool := tools.NewFunctionToolBuilder("my_tool").
-    WithDescription("工具描述").
-    WithArgsSchema(`{"type": "object", "properties": {"param": {"type": "string"}}}`).
+type WeatherArgs struct {
+    City string `json:"city"`
+}
+
+weatherTool, err := tools.NewFunctionToolBuilder("get_weather").
+    WithDescription("查询城市天气").
+    WithArgsSchemaFromStruct(WeatherArgs{}).
     WithFunction(func(ctx context.Context, args map[string]interface{}) (interface{}, error) {
-        return args["param"], nil
+        return "晴", nil
     }).
-    MustBuild()
-```
-
-### 注册工具
-
-```go
-agent, _ := builder.NewSimpleBuilder(client).
-    WithTools(tool1, tool2, tool3).
     Build()
 ```
 
@@ -227,23 +136,28 @@ agent, _ := builder.NewSimpleBuilder(client).
 
 ```go
 import (
-    "github.com/kart-io/goagent/tools/shell"
     "github.com/kart-io/goagent/tools/compute"
     "github.com/kart-io/goagent/tools/http"
+    "github.com/kart-io/goagent/tools/shell"
 )
 
-// Shell 工具
-shellTool := shell.NewShellTool()
+shellTool := shell.NewShellTool([]string{"ls", "cat"}, 10*time.Second)
+calculator := compute.NewCalculatorTool()
+apiTool := http.NewAPITool("https://api.example.com", 30*time.Second, nil)
+```
 
-// 计算器
-calculator := compute.NewCalculator()
+### 让 Agent 调用工具
 
-// HTTP 工具
-apiTool := http.NewAPITool()
-
-agent, _ := builder.NewSimpleBuilder(client).
-    WithTools(shellTool, calculator, apiTool).
+```go
+agent, err := builder.NewSimpleBuilder(client).
+    WithSystemPrompt("你可以查询天气和做计算").
+    WithTools(weatherTool, calculator).
     Build()
+if err != nil {
+    return err
+}
+
+output, err := agent.ExecuteWithTools(ctx, "北京天气怎么样？")
 ```
 
 ---
@@ -255,82 +169,62 @@ agent, _ := builder.NewSimpleBuilder(client).
 ```go
 import "github.com/kart-io/goagent/memory"
 
-// 创建内存管理器
-memManager := memory.NewDefaultManager()
+memManager := memory.NewInMemoryManager(memory.DefaultConfig())
 
-// 创建带内存的 Agent
-agent, _ := builder.NewSimpleBuilder(client).
+agent, err := builder.NewSimpleBuilder(client).
     WithMemory(memManager).
-    WithConfig(&builder.AgentConfig{
-        SessionID:              "session-001",
-        MaxConversationHistory: 20,
-    }).
+    WithSessionID("session-001").
+    WithMaxConversationHistory(20).
     Build()
-
-// 对话会自动保存
-output1, _ := agent.Invoke(ctx, input1)
-output2, _ := agent.Invoke(ctx, input2) // 包含历史上下文
 ```
+
+同一 `SessionID` 下的对话写入记忆，后续调用会带上历史上下文。
 
 ### 手动管理对话
 
 ```go
-// 添加对话
-memManager.AddConversation(ctx, &interfaces.Conversation{
+_ = memManager.AddConversation(ctx, &interfaces.Conversation{
     SessionID: "session-001",
     Role:      "user",
     Content:   "你好",
     Timestamp: time.Now(),
 })
 
-// 获取历史
-history, _ := memManager.GetConversationHistory(ctx, "session-001", 10)
+history, err := memManager.GetConversationHistory(ctx, "session-001", 10)
 
-// 清除对话
-memManager.ClearConversation(ctx, "session-001")
+_ = memManager.ClearConversation(ctx, "session-001")
 ```
 
-### 案例记忆（基于案例推理）
+### 案例记忆
 
 ```go
-// 添加案例
-memManager.AddCase(ctx, &interfaces.Case{
+_ = memManager.AddCase(ctx, &interfaces.Case{
     Title:    "数据库连接超时",
-    Problem:  "应用无法连接数据库",
-    Solution: "增加连接超时到 30 秒",
-    Category: "infrastructure",
-    Tags:     []string{"database", "timeout"},
+    Problem:  "应用启动时连接数据库超时",
+    Solution: "检查连接池配置与网络策略",
+    Category: "database",
 })
 
-// 搜索相似案例
-cases, _ := memManager.SearchSimilarCases(ctx, "数据库连接问题", 5)
+cases, err := memManager.SearchSimilarCases(ctx, "数据库连接问题", 5)
 for _, c := range cases {
     fmt.Printf("相似度 %.2f: %s\n", c.Similarity, c.Title)
 }
 ```
 
-### 使用 Checkpoint
+### 检查点
 
 ```go
 import "github.com/kart-io/goagent/core/checkpoint"
 
-// 创建检查点管理器
-cp := checkpoint.NewInMemorySaver()
-
-agent, _ := builder.NewSimpleBuilder(client).
-    WithCheckpointer(cp).
-    WithConfig(&builder.AgentConfig{
-        EnableAutoSave: true,
-        SaveInterval:   5 * time.Second,
-    }).
+agent, err := builder.NewSimpleBuilder(client).
+    WithCheckpointer(checkpoint.NewInMemorySaver()).
+    WithSessionID("session-001").
+    WithAutoSaveEnabled(true).
+    WithSaveInterval(5 * time.Second).
     Build()
-
-// 手动保存检查点
-checkpointID, _ := agent.SaveCheckpoint(ctx)
-
-// 恢复检查点
-agent.LoadCheckpoint(ctx, checkpointID)
 ```
+
+需要进程重启后续跑的多步任务使用 `core/durable`，见[原生编排与工具体系](NATIVE_ORCHESTRATION.md)。
 
 ---
 
@@ -341,38 +235,35 @@ agent.LoadCheckpoint(ctx, checkpointID)
 ```go
 import "github.com/kart-io/goagent/core/middleware"
 
-agent, _ := builder.NewSimpleBuilder(client).
+agent, err := builder.NewSimpleBuilder(client).
     WithMiddleware(
-        middleware.NewLoggingMiddleware(nil),
+        middleware.NewLoggingMiddleware(func(msg string) { log.Println(msg) }),
         middleware.NewTimingMiddleware(),
-        middleware.NewCacheMiddleware(5 * time.Minute),
-        middleware.NewRateLimitMiddleware(10), // 每秒 10 请求
+        middleware.NewCacheMiddleware(5*time.Minute),
+        middleware.NewRateLimiterMiddleware(10, time.Second),
     ).
     Build()
 ```
 
 ### 自定义中间件
 
+嵌入 `*middleware.BaseMiddleware`，只覆盖需要的钩子：
+
 ```go
-type MyMiddleware struct {
+type TraceMiddleware struct {
     *middleware.BaseMiddleware
 }
 
-func NewMyMiddleware() *MyMiddleware {
-    return &MyMiddleware{
-        BaseMiddleware: middleware.NewBaseMiddleware("my_middleware"),
-    }
+func NewTraceMiddleware() *TraceMiddleware {
+    return &TraceMiddleware{BaseMiddleware: middleware.NewBaseMiddleware("trace")}
 }
 
-func (m *MyMiddleware) OnBefore(ctx context.Context, req *middleware.MiddlewareRequest) (*middleware.MiddlewareRequest, error) {
-    // 前置处理
+func (m *TraceMiddleware) OnBefore(ctx context.Context, req *middleware.MiddlewareRequest) (*middleware.MiddlewareRequest, error) {
+    if req.Metadata == nil {
+        req.Metadata = map[string]interface{}{}
+    }
     req.Metadata["start_time"] = time.Now()
     return req, nil
-}
-
-func (m *MyMiddleware) OnAfter(ctx context.Context, resp *middleware.MiddlewareResponse) (*middleware.MiddlewareResponse, error) {
-    // 后置处理
-    return resp, nil
 }
 ```
 
@@ -380,68 +271,51 @@ func (m *MyMiddleware) OnAfter(ctx context.Context, resp *middleware.MiddlewareR
 
 ## 流式处理
 
-### 基本流式输出
+`ExecuteStream` 返回事件通道：`text` 事件携带增量文本，`done` 事件携带最终输出，`error` 事件携带错误。需要客户端支持结构化流式接口。
 
 ```go
-stream, err := agent.Stream(ctx, input)
+events, err := agent.ExecuteStream(ctx, "请写一首诗")
 if err != nil {
     return err
 }
 
-for chunk := range stream {
-    if chunk.Done {
-        break
+var full strings.Builder
+for event := range events {
+    switch event.Type {
+    case "text":
+        full.WriteString(event.Delta)
+        fmt.Print(event.Delta)
+    case "error":
+        return event.Error
+    case "done":
+        fmt.Println("\n完整内容:", full.String())
     }
-    fmt.Print(chunk.Content)
 }
 ```
 
-### 带错误处理的流式
-
-```go
-stream, err := agent.Stream(ctx, input)
-if err != nil {
-    return err
-}
-
-var fullContent strings.Builder
-for chunk := range stream {
-    if chunk.Error != nil {
-        log.Printf("流错误: %v", chunk.Error)
-        continue
-    }
-    fullContent.WriteString(chunk.Content)
-    fmt.Print(chunk.Content)
-    if chunk.Done {
-        break
-    }
-}
-
-fmt.Println("\n完整内容:", fullContent.String())
-```
+消费方须读完通道或取消 ctx，否则上游会因背压挂起。
 
 ---
 
 ## 错误处理
 
-### 错误类型
+### 按错误码判断
 
 ```go
 import agentErrors "github.com/kart-io/goagent/errors"
 
-output, err := agent.Invoke(ctx, input)
+output, err := agent.Execute(ctx, "你好")
 if err != nil {
     switch {
-    case agentErrors.IsValidationError(err):
-        log.Printf("验证错误: %v", err)
-    case agentErrors.IsLLMError(err):
+    case agentErrors.IsCode(err, agentErrors.CodeInvalidInput):
+        log.Printf("输入错误: %v", err)
+    case agentErrors.IsCode(err, agentErrors.CodeLLMRequest),
+        agentErrors.IsCode(err, agentErrors.CodeLLMTimeout):
         log.Printf("LLM 错误: %v", err)
-    case agentErrors.IsToolError(err):
+    case agentErrors.IsCode(err, agentErrors.CodeToolExecution):
         log.Printf("工具错误: %v", err)
-    case agentErrors.IsTimeoutError(err):
-        log.Printf("超时错误: %v", err)
     default:
-        log.Printf("未知错误: %v", err)
+        log.Printf("其他错误: %v", err)
     }
 }
 ```
@@ -449,27 +323,21 @@ if err != nil {
 ### 自定义错误处理
 
 ```go
-agent, _ := builder.NewSimpleBuilder(client).
+agent, err := builder.NewSimpleBuilder(client).
     WithErrorHandler(func(err error) error {
-        // 自定义错误处理逻辑
         log.Printf("Agent 错误: %v", err)
-
-        // 可以转换或包装错误
         return fmt.Errorf("wrapped: %w", err)
     }).
     Build()
 ```
 
-### 重试策略
+### 模型调用重试
 
 ```go
-agent, _ := builder.NewSimpleBuilder(client).
-    WithMiddleware(
-        middleware.NewRetryMiddleware(3, 100*time.Millisecond).
-            WithRetryCondition(func(err error) bool {
-                return agentErrors.IsRetryable(err)
-            }),
-    ).
+agent, err := builder.NewSimpleBuilder(client).
+    WithModelRetry(3, func(retry int) time.Duration {
+        return time.Duration(retry) * 100 * time.Millisecond
+    }).
     Build()
 ```
 
@@ -477,86 +345,30 @@ agent, _ := builder.NewSimpleBuilder(client).
 
 ## 最佳实践
 
-### 1. 使用上下文控制
+### 1. 用上下文控制超时与取消
 
 ```go
-// 设置超时
 ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 defer cancel()
 
-output, err := agent.Invoke(ctx, input)
+output, err := agent.Execute(ctx, "你好")
 ```
 
-### 2. 资源清理
+### 2. 关闭时释放资源
 
 ```go
-defer func() {
-    if closer, ok := agent.(io.Closer); ok {
-        closer.Close()
-    }
-}()
-```
-
-### 3. 日志和监控
-
-```go
-agent, _ := builder.NewSimpleBuilder(client).
-    WithMiddleware(
-        middleware.NewLoggingMiddleware(func(msg string) {
-            zap.L().Info(msg)
-        }),
-        middleware.NewTimingMiddleware(),
-    ).
-    WithCallbacks(
-        &myCallback{},
-    ).
-    Build()
-```
-
-### 4. 配置管理
-
-```go
-config := &builder.AgentConfig{
-    MaxIterations: getEnvInt("AGENT_MAX_ITERATIONS", 10),
-    Timeout:       getEnvDuration("AGENT_TIMEOUT", 30*time.Second),
-    Temperature:   getEnvFloat("AGENT_TEMPERATURE", 0.7),
-}
-
-agent, _ := builder.NewSimpleBuilder(client).
-    WithConfig(config).
-    Build()
-```
-
-### 5. 测试友好
-
-```go
-// 使用接口便于 mock
-type AgentService interface {
-    Process(ctx context.Context, input string) (string, error)
-}
-
-// 实现
-type DefaultAgentService struct {
-    agent *builder.ConfigurableAgent[any, *core.AgentState]
-}
-
-func (s *DefaultAgentService) Process(ctx context.Context, input string) (string, error) {
-    output, err := s.agent.Invoke(ctx, &interfaces.Input{
-        Messages: []interfaces.Message{{Role: "user", Content: input}},
-    })
-    if err != nil {
-        return "", err
-    }
-    return output.Messages[0].Content, nil
+if err := agent.Shutdown(ctx); err != nil {
+    log.Printf("关闭 Agent 失败: %v", err)
 }
 ```
 
----
+### 3. 测试中使用 Mock 客户端
 
-## 相关文档
+```go
+import "github.com/kart-io/goagent/testing/mocks"
 
-- [快速入门](QUICKSTART.md)
-- [LLM 提供商指南](LLM_PROVIDERS.md)
-- [工具中间件指南](TOOL_MIDDLEWARE.md)
-- [API 参考](../api/CORE_API.md)
-- [架构概述](../architecture/ARCHITECTURE.md)
+mockClient := mocks.NewMockLLMClient()
+mockClient.SetResponses(llm.CompletionResponse{Content: "预设回答"})
+
+agent, err := builder.NewSimpleBuilder(mockClient).Build()
+```

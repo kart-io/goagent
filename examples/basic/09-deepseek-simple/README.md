@@ -46,17 +46,14 @@ go run main.go
 ### 示例 1: Provider 直接对话
 
 ```go
-// 创建 DeepSeek 配置
-config := &llm.Config{
-    APIKey:      apiKey,
-    Model:       "deepseek-chat",
-    Temperature: 0.7,
-    MaxTokens:   1000,
-    Timeout:     30,
-}
-
-// 创建 Provider
-client, err := providers.NewDeepSeek(config)
+// 创建 DeepSeek Provider
+client, err := providers.NewDeepSeekWithOptions(
+    llm.WithAPIKey(apiKey),
+    llm.WithModel("deepseek-chat"),
+    llm.WithTemperature(0.7),
+    llm.WithMaxTokens(1000),
+    llm.WithTimeout(30*time.Second),
+)
 
 // 发送消息
 response, err := client.Chat(ctx, messages)

@@ -328,8 +328,8 @@ if err != nil {
 
 // 处理工具调用
 for _, toolCall := range response.ToolCalls {
-    fmt.Printf("调用工具: %s\n", toolCall.Name)
-    fmt.Printf("参数: %v\n", toolCall.Arguments)
+    fmt.Printf("调用工具: %s\n", toolCall.Function.Name)
+    fmt.Printf("参数: %v\n", toolCall.Function.Arguments)
 }
 ```
 
@@ -414,7 +414,7 @@ cachedClient, err := cache.NewCachedLLMClient(&cache.CachedLLMClientConfig{
 response, err := cachedClient.Complete(ctx, req)
 
 // 获取缓存统计
-stats := cachedClient.Cache().Stats()
+stats := cachedClient.Stats()
 fmt.Printf("命中率: %.2f%%\n", stats.HitRate*100)
 ```
 
@@ -476,7 +476,7 @@ WithTopP(topP float64)
 WithResponseFormat(format *ResponseFormat)
 
 // 网络配置
-WithTimeout(timeout int)
+WithTimeout(timeout time.Duration)
 WithProxy(proxyURL string)
 
 // 重试配置
