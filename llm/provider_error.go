@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -46,4 +47,76 @@ func (e *ProviderError) Retryable() bool {
 		}
 	}
 	return false
+}
+
+// ErrorReason 是模型请求失败的分类。
+type ErrorReason string
+
+const (
+	ReasonRateLimit     ErrorReason = "rate_limit"
+	ReasonServer        ErrorReason = "server"
+	ReasonNetwork       ErrorReason = "network"
+	ReasonContextLength ErrorReason = "context_length"
+	ReasonAuth          ErrorReason = "auth"
+	ReasonNotFound      ErrorReason = "not_found"
+	ReasonBadRequest    ErrorReason = "bad_request"
+	ReasonCanceled      ErrorReason = "canceled"
+	ReasonUnknown       ErrorReason = "unknown"
+)
+
+// ClassifiedError 是模型请求失败的分类与恢复提示。提示只供恢复策略参考，是否重试、压缩或回退由调用方决定。
+type ClassifiedError struct {
+	Reason ErrorReason
+	// Retryable 表示原样重试可能成功（与 ProviderError.Retryable 一致）。
+	Retryable bool
+	// ShouldCompress 表示请求超出上下文窗口，缩短消息后重试可能成功。
+	ShouldCompress bool
+	// ShouldFallback 表示换一个模型或提供方可能成功（限流、服务端错误、鉴权失败、模型不存在）。
+	ShouldFallback bool
+}
+
+// contextLengthMarkers 是各提供方表示超出上下文窗口的错误片段（小写）。
+var contextLengthMarkers = []string{
+	"context_length_exceeded", "maximum context length", "context length", "context window",
+	"prompt is too long", "too many tokens", "input is too long", "reduce the length",
+}
+
+// ClassifyError 对模型请求的错误分类，复用 ProviderError 的状态码与暂时性判断。
+func ClassifyError(err error) ClassifiedError {
+	switch {
+	case err == nil:
+		return ClassifiedError{Reason: ReasonUnknown}
+	case errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded):
+		return ClassifiedError{Reason: ReasonCanceled}
+	}
+	text := strings.ToLower(err.Error())
+	for _, marker := range contextLengthMarkers {
+		if strings.Contains(text, marker) {
+			return ClassifiedError{Reason: ReasonContextLength, ShouldCompress: true}
+		}
+	}
+	var pe *ProviderError
+	if !errors.As(err, &pe) {
+		return ClassifiedError{Reason: ReasonUnknown}
+	}
+	c := ClassifiedError{Retryable: pe.Retryable()}
+	switch {
+	case pe.StatusCode == 429:
+		c.Reason, c.ShouldFallback = ReasonRateLimit, true
+	case pe.StatusCode >= 500 && pe.StatusCode <= 599:
+		c.Reason, c.ShouldFallback = ReasonServer, true
+	case pe.StatusCode == 401 || pe.StatusCode == 403:
+		c.Reason, c.ShouldFallback = ReasonAuth, true
+	case pe.StatusCode == 404:
+		c.Reason, c.ShouldFallback = ReasonNotFound, true
+	case pe.StatusCode == 413:
+		c.Reason, c.ShouldCompress = ReasonContextLength, true
+	case pe.StatusCode >= 400 && pe.StatusCode <= 499:
+		c.Reason = ReasonBadRequest
+	case c.Retryable:
+		c.Reason = ReasonNetwork
+	default:
+		c.Reason = ReasonUnknown
+	}
+	return c
 }
