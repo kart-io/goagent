@@ -49,6 +49,22 @@ func TestDecide(t *testing.T) {
 	require.Equal(t, Allow, (&Policy{Rules: []Rule{{Tool: "*", Decision: Allow}}}).Decide(call("x", "")))
 }
 
+// 匹配的规则中最严格者生效，与顺序无关；Default 只在没有规则匹配时使用。
+func TestDecideStrictestWins(t *testing.T) {
+	allowTest := Rule{Tool: "run_command", Command: "go test", Decision: Allow}
+	askAll := Rule{Tool: "run_command", Decision: Ask}
+	denyAll := Rule{Tool: "*", Decision: Deny}
+	for _, rules := range [][]Rule{{allowTest, askAll}, {askAll, allowTest}} {
+		require.Equal(t, Ask, (&Policy{Rules: rules, Default: Allow}).Decide(call("run_command", "go test ./...")))
+	}
+	for _, rules := range [][]Rule{{allowTest, denyAll}, {denyAll, allowTest}} {
+		require.Equal(t, Deny, (&Policy{Rules: rules}).Decide(call("run_command", "go test ./...")))
+	}
+	p := &Policy{Rules: []Rule{allowTest}, Default: Ask}
+	require.Equal(t, Allow, p.Decide(call("run_command", "go test ./...")))
+	require.Equal(t, Ask, p.Decide(call("run_command", "make")))
+}
+
 func TestHookAndGrants(t *testing.T) {
 	p := &Policy{Default: Ask, SessionTools: []string{"git_commit"}, Rules: []Rule{{Tool: "rm_all", Decision: Deny}}}
 	hook := p.Hook()

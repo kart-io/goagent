@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **破坏性**：`tools.Pipeline` 的调用前钩子全部执行，裁决按 Stop > Deny > Substitute > Ask > Allow 聚合，与钩子顺序无关；此前第一个非 Allow 的裁决生效，获批的 Ask 之后其他钩子的 Deny 不再执行。
+  - 多个 Deny 的反馈以 `; ` 合并交给模型；多个 Substitute 视为错误。
+  - 多个 Ask 合并为一次审批，`ApprovalRequest.Reason` 为各钩子理由以 `; ` 合并；只有每个提出 Ask 的钩子都给出 `SessionGrant` 时才提供"本会话允许"。
+  - 会话授权按钩子分别记录，一个钩子的授权不再满足另一个钩子的 Ask。
+  - 迁移：依赖"前面的钩子放行后，后面的钩子不再执行"的宿主，需在后面的钩子里自行判断。
+- **破坏性**：`tools/policy` 在所有匹配的规则中取最严格的裁决（Deny > Ask > Allow），与规则顺序无关，`Default` 只在没有规则匹配时使用；此前取第一条匹配的规则。`coding.DefaultPolicy()` 的规则互不重叠，行为不变。迁移：靠"先写 allow 特例、再写 ask/deny 通配"实现例外的规则需改为让通配规则不覆盖该例外（例如改用更窄的 `Command` 前缀）。
+
+## [0.21.0] - 2026-10-30
+
 ### Added
 
 - `tools.Pipeline`（`DispatchConfig.Pipeline`）：Dispatcher 对参数合法的调用依次执行调用前钩子 → 审批 → 守卫 → 执行包装 → 工具 → 调用后钩子，对任何工具生效。

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -27,7 +29,7 @@ type Call struct {
 type PreKind int
 
 const (
-	// PreAllow 交给后续 PreHook，全部放行后进入 Guard。
+	// PreAllow 不提出异议；全部 PreHook 都放行时进入 Guard。
 	PreAllow PreKind = iota
 	// PreDeny 不执行工具，以 Rejected(Feedback) 交给模型修订。
 	PreDeny
@@ -64,7 +66,8 @@ type SessionGrant interface {
 	Matches(call *Call) bool
 }
 
-// PreHook 依次执行，第一个给出非 PreAllow 裁决者生效。返回 error 中止运行。
+// PreHook 全部依次执行，裁决按 Stop > Deny > Substitute > Ask > Allow 聚合，与钩子顺序无关：
+// 多个 Deny 的反馈合并交给模型；多个 Ask 合并为一次审批；多个 Substitute 视为错误。返回 error 中止运行。
 type PreHook func(ctx context.Context, call *Call) (PreDecision, error)
 
 // Guard 只能拒绝不能放行，用于不可绕过的硬性约束；返回非空串即拒绝，以 Rejected 交给模型。
@@ -151,12 +154,19 @@ func (e *StopError) Error() string {
 	return fmt.Sprintf("tool %q stopped the run: %s", e.Tool, e.Reason)
 }
 
+// grantSet 按提出 Ask 的 PreHook 分别记录授权，一个钩子的授权不会满足另一个钩子的 Ask。
 type grantSet struct {
 	mu     sync.Mutex
-	grants []SessionGrant
+	grants []hookGrant
 }
 
-func (p *Pipeline) granted(call *Call) bool {
+type hookGrant struct {
+	hook  int
+	grant SessionGrant
+}
+
+// granted 报告每个提出 Ask 的钩子是否都已有本会话内匹配的授权。
+func (p *Pipeline) granted(call *Call, asks []hookAsk) bool {
 	if call.SessionID == "" {
 		return false
 	}
@@ -167,20 +177,22 @@ func (p *Pipeline) granted(call *Call) bool {
 	set := v.(*grantSet)
 	set.mu.Lock()
 	defer set.mu.Unlock()
-	for _, g := range set.grants {
-		if g.Matches(call) {
-			return true
+	for _, a := range asks {
+		if !slices.ContainsFunc(set.grants, func(g hookGrant) bool { return g.hook == a.hook && g.grant.Matches(call) }) {
+			return false
 		}
 	}
-	return false
+	return true
 }
 
-func (p *Pipeline) addGrant(sessionID string, g SessionGrant) {
+func (p *Pipeline) addGrants(sessionID string, asks []hookAsk) {
 	v, _ := p.grants.LoadOrStore(sessionID, &grantSet{})
 	set := v.(*grantSet)
 	set.mu.Lock()
-	set.grants = append(set.grants, g)
-	set.mu.Unlock()
+	defer set.mu.Unlock()
+	for _, a := range asks {
+		set.grants = append(set.grants, hookGrant{hook: a.hook, grant: a.decision.Grant})
+	}
 }
 
 // Grants 返回会话中已批准的会话级授权说明，供宿主展示或撤销前核对。
@@ -194,7 +206,7 @@ func (p *Pipeline) Grants(sessionID string) []string {
 	defer set.mu.Unlock()
 	out := make([]string, len(set.grants))
 	for i, g := range set.grants {
-		out[i] = g.Describe()
+		out[i] = g.grant.Describe()
 	}
 	return out
 }
@@ -294,34 +306,55 @@ func callApprover(ctx context.Context, a Approver, req ApprovalRequest) (res App
 	return a.Approve(ctx, req)
 }
 
-// gate 执行 PreHook、审批与 Guard。返回非 nil 的 out 表示调用不执行（拒绝），返回 sub 表示改为执行替代调用。
+// hookAsk 是第 hook 个 PreHook 给出的 Ask。
+type hookAsk struct {
+	hook     int
+	decision PreDecision
+}
+
+// gate 执行全部 PreHook 并聚合裁决，再执行 Guard。返回非 nil 的 out 表示调用不执行（拒绝），返回 sub 表示改为执行替代调用。
 func (p *Pipeline) gate(ctx context.Context, call *Call, allowSubstitute bool) (out *interfaces.ToolOutput, sub *Substitution, err error) {
-	for _, hook := range p.Pre {
-		var d PreDecision
-		d, err = callPre(ctx, hook, call)
+	var (
+		stop   *StopError
+		denied []string
+		subs   []*Substitution
+		asks   []hookAsk
+	)
+	for i, hook := range p.Pre {
+		d, err := callPre(ctx, hook, call)
 		if err != nil {
 			return nil, nil, err
 		}
 		switch d.Kind {
 		case PreAllow:
-			continue
 		case PreDeny:
-			return Rejected(nonEmpty(d.Feedback, call.Tool+" is denied by policy"), nil), nil, nil
+			denied = append(denied, nonEmpty(d.Feedback, call.Tool+" is denied by policy"))
 		case PreStop:
-			return nil, nil, &StopError{Tool: call.Tool, Reason: d.Feedback}
+			if stop == nil {
+				stop = &StopError{Tool: call.Tool, Reason: d.Feedback}
+			}
 		case PreSubstitute:
-			if !allowSubstitute || d.Substitute == nil {
-				return nil, nil, fmt.Errorf("tool %q: invalid substitution", call.Tool)
-			}
-			return nil, d.Substitute, nil
+			subs = append(subs, d.Substitute)
 		case PreAsk:
-			if out, err = p.ask(ctx, call, d); out != nil || err != nil {
-				return out, nil, err
-			}
+			asks = append(asks, hookAsk{hook: i, decision: d})
 		default:
 			return nil, nil, fmt.Errorf("tool %q: unknown pre decision %d", call.Tool, d.Kind)
 		}
-		break
+	}
+	switch {
+	case stop != nil:
+		return nil, nil, stop
+	case len(denied) > 0:
+		return Rejected(strings.Join(denied, "; "), nil), nil, nil
+	case len(subs) > 0:
+		if !allowSubstitute || len(subs) > 1 || subs[0] == nil {
+			return nil, nil, fmt.Errorf("tool %q: invalid substitution", call.Tool)
+		}
+		return nil, subs[0], nil
+	case len(asks) > 0:
+		if out, err = p.ask(ctx, call, asks); out != nil || err != nil {
+			return out, nil, err
+		}
 	}
 	for _, guard := range p.Guards {
 		reason, gerr := callGuard(ctx, guard, call)
@@ -335,19 +368,38 @@ func (p *Pipeline) gate(ctx context.Context, call *Call, allowSubstitute bool) (
 	return nil, nil, nil
 }
 
-// ask 处理 PreAsk：会话已批准的范围直接放行，否则询问审批人。返回 nil, nil 表示放行。
-func (p *Pipeline) ask(ctx context.Context, call *Call, d PreDecision) (*interfaces.ToolOutput, error) {
-	if p.granted(call) {
+// ask 把全部 Ask 合并为一次审批：每个钩子都已有匹配的会话授权时直接放行，否则询问审批人。
+// 只有每个钩子都给出 Grant 时才提供"本会话允许"。返回 nil, nil 表示放行。
+func (p *Pipeline) ask(ctx context.Context, call *Call, asks []hookAsk) (*interfaces.ToolOutput, error) {
+	if p.granted(call, asks) {
 		return nil, nil
 	}
-	res, err := p.approve(ctx, ApprovalRequest{Call: call, Reason: d.Feedback, Grant: d.Grant})
+	var reasons []string
+	grants := make(combinedGrant, 0, len(asks))
+	for _, a := range asks {
+		if a.decision.Feedback != "" {
+			reasons = append(reasons, a.decision.Feedback)
+		}
+		if a.decision.Grant != nil {
+			grants = append(grants, a.decision.Grant)
+		}
+	}
+	var grant SessionGrant
+	switch {
+	case len(grants) < len(asks):
+	case len(grants) == 1:
+		grant = grants[0]
+	default:
+		grant = grants
+	}
+	res, err := p.approve(ctx, ApprovalRequest{Call: call, Reason: strings.Join(reasons, "; "), Grant: grant})
 	if err != nil {
 		return nil, err
 	}
 	switch res.Outcome {
 	case ApprovalAllowedSession:
-		if d.Grant != nil && call.SessionID != "" {
-			p.addGrant(call.SessionID, d.Grant)
+		if grant != nil && call.SessionID != "" {
+			p.addGrants(call.SessionID, asks)
 		}
 		return nil, nil
 	case ApprovalAllowedOnce:
@@ -360,6 +412,26 @@ func (p *Pipeline) ask(ctx context.Context, call *Call, d PreDecision) (*interfa
 		msg += ": " + res.Feedback
 	}
 	return Rejected(msg, nil), nil
+}
+
+// combinedGrant 是多个钩子的 Grant 的组合，全部匹配才算匹配。
+type combinedGrant []SessionGrant
+
+func (g combinedGrant) Describe() string {
+	parts := make([]string, len(g))
+	for i, x := range g {
+		parts[i] = x.Describe()
+	}
+	return strings.Join(parts, "；")
+}
+
+func (g combinedGrant) Matches(call *Call) bool {
+	for _, x := range g {
+		if !x.Matches(call) {
+			return false
+		}
+	}
+	return true
 }
 
 // around 按注册顺序由外到内包住 body。

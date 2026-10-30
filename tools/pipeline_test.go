@@ -84,10 +84,10 @@ func TestPipelinePreDecisions(t *testing.T) {
 				}
 				return PreDecision{}, nil
 			},
-			// 前一个钩子已给出裁决时不再执行。
+			// 全部钩子都执行，后面钩子的 Deny 与前面的 Deny 合并。
 			func(_ context.Context, c *Call) (PreDecision, error) {
-				if c.Args["cmd"] == "rm" || c.Args["cmd"] == "halt" {
-					t.Fatalf("later hook must not run after a decision")
+				if c.Args["cmd"] == "rm" {
+					return PreDecision{Kind: PreDeny, Feedback: "rm is blocked"}, nil
 				}
 				return PreDecision{}, nil
 			},
@@ -104,7 +104,7 @@ func TestPipelinePreDecisions(t *testing.T) {
 	require.Equal(t, "ran ls", out.Result)
 
 	out, err = f.call(ctx, "rm")
-	requireRejected(t, out, err, "use trash instead")
+	requireRejected(t, out, err, "use trash instead; rm is blocked")
 	_, ran := f.ran.Load("rm")
 	require.False(t, ran)
 	require.Equal(t, []string{"ls", "rm"}, seenPost, "denied calls still pass through post hooks")
@@ -528,4 +528,113 @@ func TestPipelineRejectsUnsuccessfulHookOutput(t *testing.T) {
 	f := newPipelineFixture(t, p, DispatchConfig{})
 	_, err := f.call(context.Background(), "ls")
 	require.ErrorContains(t, err, "broken")
+}
+
+// 裁决按 Stop > Deny > Substitute > Ask > Allow 聚合，与钩子顺序无关；获批的 Ask 不能越过其他钩子的 Deny。
+func TestPipelineAggregatesDecisions(t *testing.T) {
+	approveAll := ApproverFunc(func(context.Context, ApprovalRequest) (ApprovalResult, error) {
+		return ApprovalResult{Outcome: ApprovalAllowedOnce}, nil
+	})
+	sub := func(_ context.Context, c *Call) (PreDecision, error) {
+		if c.Tool != "run" {
+			return PreDecision{}, nil
+		}
+		return PreDecision{Kind: PreSubstitute, Substitute: &Substitution{Tool: "safe_run", Args: map[string]any{"cmd": "ls"}}}, nil
+	}
+	cases := []struct {
+		name  string
+		hooks []PreHook
+		check func(t *testing.T, out *interfaces.ToolOutput, err error)
+	}{
+		{"ask then deny", []PreHook{decide(PreAsk, ""), decide(PreDeny, "no")}, func(t *testing.T, out *interfaces.ToolOutput, err error) {
+			requireRejected(t, out, err, "no")
+		}},
+		{"deny then stop", []PreHook{decide(PreDeny, "no"), decide(PreStop, "halt")}, func(t *testing.T, _ *interfaces.ToolOutput, err error) {
+			var stop *StopError
+			require.ErrorAs(t, err, &stop)
+		}},
+		{"ask then substitute", []PreHook{decide(PreAsk, ""), sub}, func(t *testing.T, out *interfaces.ToolOutput, err error) {
+			require.NoError(t, err)
+			require.Equal(t, "safely ran ls", out.Result)
+		}},
+		{"two substitutes", []PreHook{sub, sub}, func(t *testing.T, _ *interfaces.ToolOutput, err error) {
+			require.ErrorContains(t, err, "invalid substitution")
+		}},
+	}
+	for _, c := range cases {
+		for _, hooks := range [][]PreHook{c.hooks, {c.hooks[1], c.hooks[0]}} {
+			f := newPipelineFixture(t, &Pipeline{Pre: hooks, Approver: approveAll}, DispatchConfig{})
+			out, err := f.call(context.Background(), "x")
+			c.check(t, out, err)
+			require.Zero(t, f.calls.Load(), c.name)
+		}
+	}
+}
+
+type toolOnlyGrant struct{}
+
+func (toolOnlyGrant) Describe() string     { return "all run calls" }
+func (toolOnlyGrant) Matches(c *Call) bool { return c.Tool == "run" }
+
+// 多个 Ask 合并为一次审批；会话授权按钩子分别记录，一个钩子的授权不满足另一个钩子的 Ask。
+func TestPipelineCombinesAsks(t *testing.T) {
+	var requests []ApprovalRequest
+	p := &Pipeline{
+		Pre: []PreHook{
+			askWithGrant,
+			func(_ context.Context, c *Call) (PreDecision, error) {
+				if c.Args["cmd"] == "go build" {
+					return PreDecision{Kind: PreAsk, Feedback: "builds are slow", Grant: toolOnlyGrant{}}, nil
+				}
+				return PreDecision{}, nil
+			},
+		},
+		Approver: ApproverFunc(func(_ context.Context, req ApprovalRequest) (ApprovalResult, error) {
+			requests = append(requests, req)
+			return ApprovalResult{Outcome: ApprovalAllowedSession}, nil
+		}),
+	}
+	f := newPipelineFixture(t, p, DispatchConfig{})
+	ctx := WithSessionID(context.Background(), "s")
+	call := func(cmd string) {
+		out, err := f.call(ctx, cmd)
+		require.NoError(t, err)
+		require.Equal(t, "ran "+cmd, out.Result)
+	}
+
+	call("go test")
+	require.Len(t, requests, 1)
+	require.Equal(t, prefixGrant("go "), requests[0].Grant)
+
+	// 第一个钩子的授权已覆盖 go build，但第二个钩子的 Ask 仍要询问，两条理由合并为一次。
+	call("go build")
+	require.Len(t, requests, 2)
+	require.Equal(t, "needs approval; builds are slow", requests[1].Reason)
+	require.Equal(t, "run commands starting with go ；all run calls", requests[1].Grant.Describe())
+
+	call("go build")
+	call("go vet")
+	require.Len(t, requests, 2, "both hooks' grants now cover these calls")
+	require.Equal(t, []string{"run commands starting with go ", "run commands starting with go ", "all run calls"}, p.Grants("s"))
+}
+
+// 任一钩子的 Ask 没有给出 Grant 时不提供会话级批准。
+func TestPipelineCombinedAskWithoutGrant(t *testing.T) {
+	var asked atomic.Int32
+	p := &Pipeline{
+		Pre: []PreHook{askWithGrant, decide(PreAsk, "")},
+		Approver: ApproverFunc(func(_ context.Context, req ApprovalRequest) (ApprovalResult, error) {
+			asked.Add(1)
+			require.Nil(t, req.Grant)
+			return ApprovalResult{Outcome: ApprovalAllowedSession}, nil
+		}),
+	}
+	f := newPipelineFixture(t, p, DispatchConfig{})
+	ctx := WithSessionID(context.Background(), "s")
+	for range 2 {
+		_, err := f.call(ctx, "go test")
+		require.NoError(t, err)
+	}
+	require.EqualValues(t, 2, asked.Load())
+	require.Empty(t, p.Grants("s"))
 }

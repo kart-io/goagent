@@ -70,7 +70,7 @@ type PreDecision struct {
 	Reason string  // Deny/Ask 时交给模型或审批界面
 }
 
-// PreHook 依次执行，第一个给出非 Allow 决定者生效；都放行则进入 Guard。
+// PreHook 全部执行，裁决按 Stop > Deny > Substitute > Ask > Allow 聚合（见 14.6）；都放行则进入 Guard。
 type PreHook func(ctx context.Context, call *Call) (PreDecision, error)
 
 // Guard 只能拒绝不能放行，注册顺序无法把拒绝翻成允许，用于不可绕过的硬线（工作区越界、.git 写保护）。

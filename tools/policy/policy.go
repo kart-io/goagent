@@ -36,7 +36,8 @@ type Rule struct {
 	Decision Decision
 }
 
-// Policy 按顺序取第一条匹配的规则，都不匹配时用 Default。
+// Policy 在所有匹配的规则中取最严格的裁决（Deny > Ask > Allow），与规则顺序无关；都不匹配时用 Default。
+// 因此追加的规则只能收紧已有规则的结果，不能越过已有的 Deny 或 Ask。
 type Policy struct {
 	Rules   []Rule
 	Default Decision
@@ -57,6 +58,7 @@ func (p *Policy) commandArg() string {
 // Decide 返回调用的裁决。
 func (p *Policy) Decide(call *tools.Call) Decision {
 	command, hasCommand := call.Args[p.commandArg()].(string)
+	decision, matched := Allow, false
 	for _, r := range p.Rules {
 		if r.Tool != "*" && r.Tool != call.Tool {
 			continue
@@ -64,9 +66,24 @@ func (p *Policy) Decide(call *tools.Call) Decision {
 		if r.Command != "" && (!hasCommand || !commandHasPrefix(command, r.Command)) {
 			continue
 		}
-		return r.Decision
+		if !matched || strictness(r.Decision) > strictness(decision) {
+			decision, matched = r.Decision, true
+		}
 	}
-	return p.Default
+	if !matched {
+		return p.Default
+	}
+	return decision
+}
+
+func strictness(d Decision) int {
+	switch d {
+	case Deny:
+		return 2
+	case Ask:
+		return 1
+	}
+	return 0
 }
 
 // Hook 把策略适配为 tools.PreHook。
