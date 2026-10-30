@@ -23,6 +23,8 @@ examples/tools/
 │   └── main.go
 ├── 08-tool-with-agent/         # 工具与 Agent 集成示例
 │   └── main.go
+├── 09-coding-agent/            # 编码 Agent 示例
+│   └── main.go
 ├── middleware/                 # 工具中间件示例（已有）
 └── registry/                   # 工具注册表示例（已有）
 ```
@@ -148,6 +150,17 @@ cd examples/tools/08-tool-with-agent
 go run main.go
 ```
 
+### 09-coding-agent - 编码 Agent
+
+演示 `tools/coding` 工作区工具：Agent 在临时 Go 仓库中运行测试、阅读代码、精确编辑修复 bug 并提交，结束后独立运行测试核对。
+
+```bash
+export DEEPSEEK_API_KEY=your-api-key
+go run ./examples/tools/09-coding-agent
+# 命令在断网容器中执行
+CODING_DOCKER_IMAGE=golang:1.25 go run ./examples/tools/09-coding-agent
+```
+
 ## 内置工具一览
 
 | 工具 | 包路径 | 说明 |
@@ -157,6 +170,7 @@ go run main.go
 | APITool | `tools/http` | HTTP API 调用 |
 | ShellTool | `tools/shell` | Shell 命令执行 |
 | SearchTool | `tools/search` | 搜索功能 |
+| Workspace.Tools() | `tools/coding` | 编码 Agent 工作区工具：读写编辑、glob/grep、命令、git |
 | FileOperationsTool | `tools/practical` | 文件系统操作 |
 | WebScraperTool | `tools/practical` | 网页内容抓取 |
 | DatabaseQueryTool | `tools/practical` | 数据库查询 |
