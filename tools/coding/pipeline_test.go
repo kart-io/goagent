@@ -4,7 +4,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -91,41 +90,6 @@ func TestLinterUndoesFailingEdits(t *testing.T) {
 	require.Equal(t, []env.Change{{Path: "a.txt"}}, w.Changes(), "a rejected new file leaves no change record")
 
 	mustSucceed(t, w, ToolWriteFile, map[string]any{"path": "skip.go", "content": "BAD"})
-}
-
-func TestSpillHook(t *testing.T) {
-	w := newTestWorkspace(t)
-	big := strings.Repeat("中", 3000)
-	p := &tools.Pipeline{Post: []tools.PostHook{SpillHook(w, 1000)}}
-	registry := tools.NewRegistry()
-	require.NoError(t, registry.Register(tools.NewBaseTool("fetch", "test", `{"type":"object"}`, func(context.Context, *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
-		return &interfaces.ToolOutput{Success: true, Result: map[string]any{"body": big}}, nil
-	})))
-	require.NoError(t, registry.Register(tools.NewBaseTool("small", "test", `{"type":"object"}`, func(context.Context, *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
-		return &interfaces.ToolOutput{Success: true, Result: "ok"}, nil
-	})))
-	for _, tool := range w.Tools() {
-		require.NoError(t, registry.Register(tool))
-	}
-	d, err := tools.NewDispatcher(registry, tools.DispatchConfig{Pipeline: p})
-	require.NoError(t, err)
-
-	out, err := d.Invoke(context.Background(), tools.ToolRequest{Name: "fetch", Input: &interfaces.ToolInput{CallID: "c/1", Args: map[string]any{}}})
-	require.NoError(t, err)
-	res := out.Result.(map[string]any)
-	require.Equal(t, true, res["truncated"])
-	require.Equal(t, ".goagent/spill/fetch-c_1.txt", res["spill_path"])
-	require.Equal(t, 1500, len([]rune(res["preview"].(string))))
-	require.Contains(t, readFile(t, w, ".goagent/spill/fetch-c_1.txt"), big)
-	require.Empty(t, w.Changes(), "spill files are not workspace changes")
-
-	// 溢出文件可用 read_file 读取；小结果不受影响。
-	read, err := d.Invoke(context.Background(), tools.ToolRequest{Name: ToolReadFile, Input: &interfaces.ToolInput{Args: map[string]any{"path": res["spill_path"], "limit": float64(1)}}})
-	require.NoError(t, err)
-	require.Equal(t, "     1\t== body ==\n", read.Result.(map[string]any)["content"])
-	out, err = d.Invoke(context.Background(), tools.ToolRequest{Name: "small", Input: &interfaces.ToolInput{Args: map[string]any{}}})
-	require.NoError(t, err)
-	require.Equal(t, "ok", out.Result)
 }
 
 // linter 起不来或自行改动文件后失败时，编辑都被撤销并交给模型，运行不中止。

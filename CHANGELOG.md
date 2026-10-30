@@ -7,7 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `harness/preset`：声明式自定义 Agent。一个 preset 由组件行组成，`preset.Load` 按 内置 → 用户 → 项目 → 本地 → 宿主 叠加并严格校验，`preset.Build` 装配出系统提示词、经 Pipeline 的工具、工作区与装配清单 `Manifest`。
+  - 合并：preset 与组件按 id 合并，同 id 整行替换并保留位置，`remove`/`replace`/`locked` 显式表达删除、换实现与锁定；`Set.Dump()` 标注每行来源、覆盖与删除。
+  - 信任：权限上限 `limits` 只由可信层声明；项目层与本地层的扩权项（超出上限、`allow` 规则、替换或删除可信层组件、宿主进程、秘密引用）须经 `TrustStore` 授权，否则 `Build` 返回 `*TrustRequiredError`；授权绑定项目根目录与扩权项摘要。提供 `FileTrustStore`、`MemoryTrustStore`。
+  - 内置组件 `persona`、`instructions`、`workspace`、`coding-tools`、`permissions`、`spill`；`preset.Register` 注册自定义组件，秘密经 `preset.Secret` 引用。
+  - 沙箱模式（read-only / workspace-write / danger-full-access）是对执行环境的要求，执行器做不到即 Build 失败；没有规则匹配的调用一律需要审批。
+- `tools/spill`：超长工具结果写入宿主目录，提供 `read_spill` 分段读取；写入失败时只返回预览不报错，`Prune` 清理过期文件。
+- `harness/env`：`DockerExecutor.ReadOnly` 以只读方式挂载工作区，`Capabilities.ReadOnlyRoot`；`env.ReadOnly` 包装器拒绝写入与删除（`ErrReadOnly`）。
+- `coding.Workspace.ProjectInstructionsFrom` 读取指定的项目说明文件。
+
 ### Changed
+
+- **破坏性**：删除 `coding.SpillHook` 与 `coding.SpillDir`，改用 `tools/spill`。溢出文件不再写入工作区的 `.goagent/spill/`，而是写入宿主目录，模型用 `read_spill` 而非 `read_file` 读取。迁移：`coding.SpillHook(ws, n)` 改为 `store, _ := spill.New(dir, n)`，把 `store.Hook()` 加入 `Pipeline.Post`、`store.ReadTool()` 注册为工具。
 
 - **破坏性**：`tools.Pipeline` 的调用前钩子全部执行，裁决按 Stop > Deny > Substitute > Ask > Allow 聚合，与钩子顺序无关；此前第一个非 Allow 的裁决生效，获批的 Ask 之后其他钩子的 Deny 不再执行。
   - 多个 Deny 的反馈以 `; ` 合并交给模型；多个 Substitute 视为错误。

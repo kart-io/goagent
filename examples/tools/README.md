@@ -152,7 +152,7 @@ go run main.go
 
 ### 09-coding-agent - 编码 Agent
 
-演示 `tools/coding` 工作区工具：Agent 在临时 Go 仓库中运行测试、阅读代码、精确编辑修复 bug 并提交，结束后独立运行测试核对。
+演示用 [`harness/preset`](../../harness/preset/README.md) 声明式配置编码 Agent：宿主层定义工作区、沙箱、工具、权限与结果溢出，仓库内的 `.goagent/agents.yml` 追加一条 deny 规则收紧权限。Agent 在临时 Go 仓库中运行测试、阅读代码、精确编辑修复 bug 并提交，结束后独立运行测试核对。
 
 ```bash
 export DEEPSEEK_API_KEY=your-api-key
