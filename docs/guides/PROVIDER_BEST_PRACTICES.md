@@ -89,7 +89,7 @@ llm.WithTimeout(30 * time.Second) // 30 秒
 llm.WithTimeout(30)               // 写错单位：30 纳秒，向上取整为 1 秒
 ```
 
-OpenAI Provider 用它限制等待响应开始的时间：非流式请求在生成完毕后才返回，因而整体受此限；流式请求在首块到达后不再受限，长回复不会被截断。其他 Provider 将它作为整个 HTTP 请求的时限。
+OpenAI Provider 与 DeepSeek 的流式方法用它限制等待响应开始的时间：非流式请求在生成完毕后才返回，因而整体受此限；流式请求在首块到达后不再受限，长回复不会被截断。流开始后只受 ctx 控制，消费者不再读取时必须取消 ctx，否则 goroutine 与连接不会释放。其他 Provider 及 DeepSeek 的非流式方法将它作为整个 HTTP 请求的时限。
 
 ## 相关文档
 

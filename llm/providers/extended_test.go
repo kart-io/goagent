@@ -66,7 +66,6 @@ func TestDeepSeekProvider_IsAvailable_Unavailable(t *testing.T) {
 // TestDeepSeekProvider_Stream_WithContext tests streaming with context cancellation
 func TestDeepSeekProvider_Stream_WithContext(t *testing.T) {
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
 		resp := DeepSeekStreamResponse{
 			ID:    "stream-test",
 			Model: "deepseek-chat",
@@ -77,7 +76,7 @@ func TestDeepSeekProvider_Stream_WithContext(t *testing.T) {
 				},
 			},
 		}
-		json.NewEncoder(w).Encode(resp)
+		writeDeepSeekSSE(w, true, resp)
 	}))
 	defer mockServer.Close()
 
@@ -161,56 +160,12 @@ func TestDeepSeekProvider_CompleteWithAllFields(t *testing.T) {
 // TestDeepSeekProvider_StreamWithTools_InvalidJSON tests streaming with invalid JSON args
 func TestDeepSeekProvider_StreamWithTools_InvalidJSON(t *testing.T) {
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-
 		// Stream with invalid JSON in arguments
-		streamResponses := []DeepSeekStreamResponse{
-			{
-				ID:    "tool-stream-1",
-				Model: "deepseek-chat",
-				Choices: []DeepSeekChoice{
-					{
-						Index: 0,
-						Delta: DeepSeekMessage{Content: "Calling tool..."},
-					},
-				},
-			},
-			{
-				ID:    "tool-stream-2",
-				Model: "deepseek-chat",
-				Choices: []DeepSeekChoice{
-					{
-						Index: 0,
-						Delta: DeepSeekMessage{
-							ToolCalls: []DeepSeekToolCall{
-								{
-									ID:   "call_123",
-									Type: "function",
-									Function: DeepSeekFunctionCall{
-										Name:      "test",
-										Arguments: `{invalid`,
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			{
-				ID:    "tool-stream-3",
-				Model: "deepseek-chat",
-				Choices: []DeepSeekChoice{
-					{
-						Index:        0,
-						FinishReason: "tool_calls",
-					},
-				},
-			},
-		}
-
-		for _, resp := range streamResponses {
-			json.NewEncoder(w).Encode(resp)
-		}
+		writeDeepSeekSSE(w, true,
+			json.RawMessage(`{"id":"tool-stream-1","model":"deepseek-chat","choices":[{"index":0,"delta":{"content":"Calling tool..."}}]}`),
+			json.RawMessage(`{"id":"tool-stream-2","model":"deepseek-chat","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_123","type":"function","function":{"name":"test","arguments":"{invalid"}}]}}]}`),
+			json.RawMessage(`{"id":"tool-stream-3","model":"deepseek-chat","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}`),
+		)
 	}))
 	defer mockServer.Close()
 
@@ -220,12 +175,20 @@ func TestDeepSeekProvider_StreamWithTools_InvalidJSON(t *testing.T) {
 	chunks, err := provider.StreamWithTools(context.Background(), "test", []interfaces.Tool{&MockTool{}})
 	require.NoError(t, err)
 
-	// Should still process the stream, skipping invalid JSON
-	var chunkCount int
-	for range chunks {
-		chunkCount++
+	// 参数不做 JSON 校验，原样交给调用方
+	var types []string
+	var call *agentllm.ToolCall
+	for chunk := range chunks {
+		types = append(types, chunk.Type)
+		if chunk.Type == "tool_call" {
+			call = chunk.Value.(*agentllm.ToolCall)
+		}
 	}
-	assert.Greater(t, chunkCount, 0)
+	assert.Equal(t, []string{"content", "tool_name", "tool_args", "tool_call"}, types)
+	require.NotNil(t, call)
+	assert.Equal(t, "call_123", call.ID)
+	assert.Equal(t, "test", call.Function.Name)
+	assert.Equal(t, `{invalid`, call.Function.Arguments)
 }
 
 // TestDeepSeekProvider_ChatWithMultipleMessages tests chat with many messages
@@ -321,7 +284,6 @@ func TestDeepSeekProvider_EmbedMultipleChunks(t *testing.T) {
 // TestDeepSeekStreamingProvider_StreamWithMetadata_ErrorHandling tests error during streaming
 func TestDeepSeekStreamingProvider_StreamWithMetadata_ErrorHandling(t *testing.T) {
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
 
 		// Send one good response, then close connection
 		resp := DeepSeekStreamResponse{
@@ -334,7 +296,7 @@ func TestDeepSeekStreamingProvider_StreamWithMetadata_ErrorHandling(t *testing.T
 				},
 			},
 		}
-		json.NewEncoder(w).Encode(resp)
+		writeDeepSeekSSE(w, false, resp)
 	}))
 	defer mockServer.Close()
 
@@ -345,12 +307,17 @@ func TestDeepSeekStreamingProvider_StreamWithMetadata_ErrorHandling(t *testing.T
 	require.NoError(t, err)
 
 	var tokenCount int
-	for t := range tokens {
-		if t.Type == "token" {
+	var last TokenWithMetadata
+	for token := range tokens {
+		if token.Type == "token" {
 			tokenCount++
 		}
+		last = token
 	}
 	assert.Greater(t, tokenCount, 0)
+	// 缺少 finish_reason 与 [DONE] 即被截断的流必须以 error 结束，而不是伪装成正常完成
+	assert.Equal(t, "error", last.Type)
+	assert.Error(t, last.Error)
 }
 
 // TestDeepSeekStreamingProvider_Inheritance tests inherited methods from base provider

@@ -2,8 +2,6 @@ package providers
 
 import (
 	"context"
-	"fmt"
-	"io"
 	"strings"
 	"time"
 
@@ -240,71 +238,10 @@ func (p *DeepSeekProvider) Chat(ctx context.Context, messages []agentllm.Message
 	})
 }
 
-// Stream implements streaming generation
+// Stream implements streaming generation over the native SSE path.
+// 超时只约束拿到响应头，流开始后不再计时；消费者不再读取时必须取消 ctx，否则 goroutine 与连接不会释放。
 func (p *DeepSeekProvider) Stream(ctx context.Context, prompt string) (<-chan string, error) {
-	tokens := make(chan string, 100)
-
-	model := p.GetModel("")
-	maxTokens := p.GetMaxTokens(0)
-	temperature := p.GetTemperature(0)
-
-	// Prepare messages
-	messages := make([]DeepSeekMessage, 0, 2)
-	if p.Config.SystemPrompt != "" {
-		messages = append(messages, DeepSeekMessage{Role: "system", Content: p.Config.SystemPrompt})
-	}
-	messages = append(messages, DeepSeekMessage{Role: "user", Content: prompt})
-
-	// Prepare request
-	dsReq := DeepSeekRequest{
-		Model:       model,
-		Messages:    messages,
-		Temperature: temperature,
-		MaxTokens:   maxTokens,
-		Stream:      true,
-	}
-
-	// Make streaming API call
-	resp, err := p.callAPI(ctx, "/chat/completions", dsReq)
-	if err != nil {
-		return nil, agentErrors.NewLLMRequestError(p.ProviderName(), model, err).
-			WithContext("operation", "stream")
-	}
-
-	go func() {
-		defer close(tokens)
-
-		decoder := json.NewDecoder(strings.NewReader(resp.String()))
-		for {
-			var streamResp DeepSeekStreamResponse
-			if err := decoder.Decode(&streamResp); err != nil {
-				if err == io.EOF {
-					return
-				}
-				// Log error but continue
-				fmt.Printf("DeepSeek stream decode error: %v\n", err)
-				return
-			}
-
-			if len(streamResp.Choices) > 0 && streamResp.Choices[0].Delta.Content != "" {
-				// Use select to handle context cancellation
-				select {
-				case tokens <- streamResp.Choices[0].Delta.Content:
-					// Successfully sent
-				case <-ctx.Done():
-					// Context cancelled, exit immediately
-					return
-				}
-			}
-
-			// Check for completion
-			if len(streamResp.Choices) > 0 && streamResp.Choices[0].FinishReason != "" {
-				return
-			}
-		}
-	}()
-
-	return tokens, nil
+	return p.nativeStreamProvider().Stream(ctx, prompt)
 }
 
 // GenerateWithTools implements tool calling
@@ -375,110 +312,15 @@ func (p *DeepSeekProvider) GenerateWithTools(ctx context.Context, prompt string,
 	return result, nil
 }
 
-// StreamWithTools implements streaming tool calls
+// StreamWithTools implements streaming tool calls over the native SSE path.
 // 返回 <-chan agentllm.ToolChunk 以符合 llm.ToolCallingClient 接口
+// 超时只约束拿到响应头，流开始后不再计时；消费者不再读取时必须取消 ctx，否则 goroutine 与连接不会释放。
 func (p *DeepSeekProvider) StreamWithTools(ctx context.Context, prompt string, tools []interfaces.Tool) (<-chan agentllm.ToolChunk, error) {
-	chunks := make(chan agentllm.ToolChunk, 100)
-
-	// Convert tools to DeepSeek format
-	dsTools := p.convertToolsToDeepSeek(tools)
-
-	model := p.GetModel("")
-	maxTokens := p.GetMaxTokens(0)
-	temperature := p.GetTemperature(0)
-
-	// Prepare messages
-	messages := make([]DeepSeekMessage, 0, 2)
-	if p.Config.SystemPrompt != "" {
-		messages = append(messages, DeepSeekMessage{Role: "system", Content: p.Config.SystemPrompt})
-	}
-	messages = append(messages, DeepSeekMessage{Role: "user", Content: prompt})
-
-	// Prepare request
-	dsReq := DeepSeekRequest{
-		Model:       model,
-		Messages:    messages,
-		Temperature: temperature,
-		MaxTokens:   maxTokens,
-		Tools:       dsTools,
-		ToolChoice:  "auto",
-		Stream:      true,
-	}
-
-	// Make streaming API call
-	resp, err := p.callAPI(ctx, "/chat/completions", dsReq)
+	chunks, err := p.nativeStreamProvider().StreamWithTools(ctx, prompt, tools)
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError(p.ProviderName(), model, err).
+		return nil, agentErrors.NewLLMRequestError(p.ProviderName(), p.GetModel(""), err).
 			WithContext("operation", "stream_with_tools")
 	}
-
-	go func() {
-		defer close(chunks)
-
-		decoder := json.NewDecoder(strings.NewReader(resp.String()))
-		var currentToolCall *agentllm.ToolCall
-		var argsBuffer string
-
-		for {
-			var streamResp DeepSeekStreamResponse
-			if err := decoder.Decode(&streamResp); err != nil {
-				if err == io.EOF {
-					// Finalize last tool call
-					if currentToolCall != nil && argsBuffer != "" {
-						currentToolCall.Function.Arguments = argsBuffer
-						chunks <- agentllm.ToolChunk{Type: "tool_call", Value: currentToolCall}
-					}
-					return
-				}
-				chunks <- agentllm.ToolChunk{Type: "error", Value: err}
-				return
-			}
-
-			if len(streamResp.Choices) > 0 {
-				choice := streamResp.Choices[0]
-
-				// Handle content
-				if choice.Delta.Content != "" {
-					chunks <- agentllm.ToolChunk{Type: "content", Value: choice.Delta.Content}
-				}
-
-				// Handle tool calls
-				for _, tc := range choice.Delta.ToolCalls {
-					if tc.Function.Name != "" {
-						// New tool call - finalize previous call first
-						if currentToolCall != nil && argsBuffer != "" {
-							currentToolCall.Function.Arguments = argsBuffer
-							chunks <- agentllm.ToolChunk{Type: "tool_call", Value: currentToolCall}
-						}
-
-						// Create new tool call with llm.ToolCall format
-						currentToolCall = &agentllm.ToolCall{
-							ID:   tc.ID,
-							Type: tc.Type,
-							Function: struct {
-								Name      string `json:"name"`
-								Arguments string `json:"arguments"`
-							}{
-								Name: tc.Function.Name,
-							},
-						}
-						argsBuffer = tc.Function.Arguments
-						chunks <- agentllm.ToolChunk{Type: "tool_name", Value: tc.Function.Name}
-					} else if tc.Function.Arguments != "" {
-						// Continue arguments
-						argsBuffer += tc.Function.Arguments
-						chunks <- agentllm.ToolChunk{Type: "tool_args", Value: tc.Function.Arguments}
-					}
-				}
-
-				// Check for completion
-				if choice.FinishReason != "" {
-					return
-				}
-			}
-		}
-	}()
-
 	return chunks, nil
 }
 
@@ -672,87 +514,51 @@ func NewDeepSeekStreaming(config *agentllm.LLMOptions) (*DeepSeekStreamingProvid
 	}, nil
 }
 
-// StreamWithMetadata streams tokens with additional metadata
+// StreamWithMetadata streams tokens with additional metadata over the native SSE path.
+// "finish" is sent only after a complete stream; a truncated stream ends with "error".
+// 超时只约束拿到响应头，流开始后不再计时；消费者不再读取时必须取消 ctx，否则 goroutine 与连接不会释放。
 func (p *DeepSeekStreamingProvider) StreamWithMetadata(ctx context.Context, prompt string) (<-chan TokenWithMetadata, error) {
-	tokens := make(chan TokenWithMetadata, 100)
-
 	model := p.GetModel("")
-	maxTokens := p.GetMaxTokens(0)
-	temperature := p.GetTemperature(0)
-
-	// Prepare request
-	dsReq := DeepSeekRequest{
-		Model: model,
-		Messages: []DeepSeekMessage{
-			{Role: "user", Content: prompt},
-		},
-		Temperature: temperature,
-		MaxTokens:   maxTokens,
-		Stream:      true,
-	}
-
-	// Make streaming API call
-	resp, err := p.callAPI(ctx, "/chat/completions", dsReq)
+	chunks, err := p.nativeStreamProvider().CompleteStream(ctx, &agentllm.CompletionRequest{Messages: []agentllm.Message{agentllm.UserMessage(prompt)}})
 	if err != nil {
 		return nil, err
 	}
 
+	tokens := make(chan TokenWithMetadata, 100)
 	go func() {
 		defer close(tokens)
 
-		decoder := json.NewDecoder(strings.NewReader(resp.String()))
 		tokenCount := 0
-
-		for {
-			var streamResp DeepSeekStreamResponse
-			if err := decoder.Decode(&streamResp); err != nil {
-				if err == io.EOF {
-					select {
-					case tokens <- TokenWithMetadata{
-						Type: "finish",
-						Metadata: map[string]interface{}{
-							"total_tokens": tokenCount,
-							"model":        model,
-						},
-					}:
-					case <-ctx.Done():
-					}
-					return
+		for chunk := range chunks {
+			var token TokenWithMetadata
+			switch {
+			case chunk.Done && chunk.Error != nil:
+				token = TokenWithMetadata{Type: "error", Error: chunk.Error}
+			case chunk.Done:
+				token = TokenWithMetadata{
+					Type: "finish",
+					Metadata: map[string]interface{}{
+						"total_tokens": tokenCount,
+						"model":        model,
+					},
 				}
-				select {
-				case tokens <- TokenWithMetadata{
-					Type:  "error",
-					Error: err,
-				}:
-				case <-ctx.Done():
+			case chunk.Delta != "":
+				tokenCount++
+				token = TokenWithMetadata{
+					Type:    "token",
+					Content: chunk.Delta,
+					Metadata: map[string]interface{}{
+						"index":         tokenCount,
+						"finish_reason": chunk.FinishReason,
+					},
 				}
-				return
+			default:
+				continue
 			}
-
-			if len(streamResp.Choices) > 0 {
-				choice := streamResp.Choices[0]
-
-				if choice.Delta.Content != "" {
-					tokenCount++
-					select {
-					case tokens <- TokenWithMetadata{
-						Type:    "token",
-						Content: choice.Delta.Content,
-						Metadata: map[string]interface{}{
-							"index":         tokenCount,
-							"finish_reason": choice.FinishReason,
-						},
-					}:
-						// Successfully sent
-					case <-ctx.Done():
-						// Context cancelled, exit immediately
-						return
-					}
-				}
-
-				if choice.FinishReason != "" {
-					return
-				}
+			select {
+			case tokens <- token:
+			case <-ctx.Done():
+				return
 			}
 		}
 	}()

@@ -16,10 +16,12 @@ var _ agentllm.ToolStreamClient = (*DeepSeekProvider)(nil)
 // nativeStreamProvider reuses the same SSE decoder and completion checks as
 // OpenAI-compatible endpoints, retaining DeepSeek configuration and transport.
 // It performs no implicit retries; callers own the request budget.
+// The resty client's overall Timeout would cut long SSE bodies, so the timeout
+// only bounds the wait for response headers here.
 func (p *DeepSeekProvider) nativeStreamProvider() *OpenAIProvider {
 	config := openai.DefaultConfig(p.Config.APIKey)
 	config.BaseURL = strings.TrimRight(p.Config.BaseURL, "/")
-	config.HTTPClient = retryAfterDoer{next: &deepSeekStreamHTTPClient{client: p.client.Resty().GetClient(), headers: p.Config.CustomHeaders}}
+	config.HTTPClient = retryAfterDoer{next: &deepSeekStreamHTTPClient{client: responseHeaderTimeoutClient(p.GetTimeout()), headers: p.Config.CustomHeaders}}
 	return &OpenAIProvider{BaseProvider: p.BaseProvider, client: openai.NewClientWithConfig(config)}
 }
 

@@ -2,15 +2,19 @@ package providers
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/kart-io/goagent/interfaces"
 	agentllm "github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/utils/json"
 )
@@ -199,6 +203,8 @@ func TestOpenAITimeoutBoundsResponseWait(t *testing.T) {
 	_, err = client.Chat(context.Background(), []agentllm.Message{agentllm.UserMessage("question")})
 	require.Error(t, err)
 	require.Less(t, time.Since(start), 5*time.Second)
+	var netErr net.Error
+	require.True(t, errors.As(err, &netErr) && netErr.Timeout(), "超时错误应可识别为 net.Error.Timeout()，实际 %T: %v", err, err)
 }
 
 // 超时只约束响应头：首块之后的流式读取超过超时也不会被截断
@@ -223,4 +229,64 @@ func TestOpenAITimeoutDoesNotCutStream(t *testing.T) {
 	require.NotNil(t, last)
 	require.NoError(t, last.Error)
 	require.Equal(t, "first second", last.Content)
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+// 宿主把 DefaultTransport 换成非 *http.Transport（如 otelhttp、httpmock）时不能 panic，且每次请求都经过当前的 DefaultTransport。
+// 修改全局变量，不能并行。
+func TestHeaderTimeoutUsesCurrentDefaultTransport(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"content\":\"ok\"},\"finish_reason\":\"stop\"}]}\n\n")
+		fmt.Fprint(w, "data: [DONE]\n\n")
+	}))
+	defer server.Close()
+	original := http.DefaultTransport
+	t.Cleanup(func() { http.DefaultTransport = original })
+	var calls int32
+	http.DefaultTransport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		atomic.AddInt32(&calls, 1)
+		return original.RoundTrip(r)
+	})
+	// 取其它测试不用的超时值：若退回“按超时缓存并 Clone DefaultTransport”的实现，首次创建时就会暴露问题
+	opts := []agentllm.ClientOption{agentllm.WithAPIKey("test"), agentllm.WithTimeout(1700 * time.Millisecond)}
+	openAIClient, err := NewOpenAIWithOptions(append(opts, agentllm.WithBaseURL(server.URL+"/v1"))...)
+	require.NoError(t, err)
+	deepSeekClient, err := NewDeepSeekWithOptions(append(opts, agentllm.WithBaseURL(server.URL))...)
+	require.NoError(t, err)
+	for _, client := range []agentllm.StreamClient{openAIClient, deepSeekClient} {
+		chunks, err := client.ChatStream(context.Background(), []agentllm.Message{agentllm.UserMessage("question")})
+		require.NoError(t, err)
+		var last *agentllm.StreamChunk
+		for chunk := range chunks {
+			last = chunk
+		}
+		require.NotNil(t, last)
+		require.NoError(t, last.Error)
+		require.Equal(t, "ok", last.Content)
+	}
+	require.EqualValues(t, 2, atomic.LoadInt32(&calls))
+}
+
+// Stream / StreamWithTools 请求阶段的 429 也要带上状态码与 Retry-After
+func TestOpenAILegacyStreamsExposeProviderError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Retry-After", "7")
+		w.WriteHeader(http.StatusTooManyRequests)
+		fmt.Fprint(w, `{"error":{"message":"slow down","type":"rate_limit"}}`)
+	}))
+	defer server.Close()
+	client, err := NewOpenAIWithOptions(agentllm.WithAPIKey("test"), agentllm.WithBaseURL(server.URL+"/v1"), agentllm.WithTimeout(time.Second))
+	require.NoError(t, err)
+	_, streamErr := client.Stream(context.Background(), "q")
+	_, toolsErr := client.StreamWithTools(context.Background(), "q", []interfaces.Tool{&MockTool{}})
+	for name, err := range map[string]error{"Stream": streamErr, "StreamWithTools": toolsErr} {
+		var providerErr *agentllm.ProviderError
+		require.True(t, errors.As(err, &providerErr), "%s: got %T: %v", name, err, err)
+		require.Equal(t, http.StatusTooManyRequests, providerErr.StatusCode, name)
+		require.Equal(t, 7*time.Second, providerErr.RetryAfter, name)
+	}
 }
