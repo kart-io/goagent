@@ -82,14 +82,14 @@ client.SetResponses(llm.CompletionResponse{Content: "预设回答"})
 
 ## 超时配置
 
-`llm.WithTimeout` 的参数是 `time.Duration`，内部按整秒保存，不足 1 秒视为未设置，使用默认的 30 秒：
+`llm.WithTimeout` 的参数是 `time.Duration`，按整秒保存，正数向上取整；未设置时为 60 秒：
 
 ```go
-llm.WithTimeout(30 * time.Second) // 正确
-llm.WithTimeout(30)               // 错误：30 纳秒，按未设置处理
+llm.WithTimeout(30 * time.Second) // 30 秒
+llm.WithTimeout(30)               // 写错单位：30 纳秒，向上取整为 1 秒
 ```
 
-OpenAI Provider 目前不读取该配置，HTTP 请求没有客户端超时，需通过 ctx 的截止时间控制。
+OpenAI Provider 用它限制等待响应开始的时间：非流式请求在生成完毕后才返回，因而整体受此限；流式请求在首块到达后不再受限，长回复不会被截断。其他 Provider 将它作为整个 HTTP 请求的时限。
 
 ## 相关文档
 

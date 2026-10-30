@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
+	"sync"
 	"time"
 
 	"github.com/sashabaranov/go-openai"
@@ -48,7 +50,7 @@ func NewOpenAIWithOptions(opts ...agentllm.ClientOption) (*OpenAIProvider, error
 	if base.Config.BaseURL != "" {
 		clientConfig.BaseURL = base.Config.BaseURL
 	}
-	clientConfig.HTTPClient = retryAfterDoer{next: clientConfig.HTTPClient}
+	clientConfig.HTTPClient = retryAfterDoer{next: responseHeaderTimeoutClient(base.GetTimeout())}
 
 	provider := &OpenAIProvider{
 		BaseProvider: base,
@@ -67,6 +69,21 @@ func NewOpenAIWithOptions(opts ...agentllm.ClientOption) (*OpenAIProvider, error
 	}
 
 	return provider, nil
+}
+
+// headerTimeoutClients 按超时复用 HTTP 客户端，避免每个 Provider 各持一个连接池。
+var headerTimeoutClients sync.Map
+
+// responseHeaderTimeoutClient 把超时用作等待响应头的时限：非流式请求在生成完毕后才返回响应头，因而整体受限；
+// 流式请求的响应头随首块到达，之后的读取只受 ctx 控制，长回复不会被截断。
+func responseHeaderTimeoutClient(timeout time.Duration) *http.Client {
+	if c, ok := headerTimeoutClients.Load(timeout); ok {
+		return c.(*http.Client)
+	}
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.ResponseHeaderTimeout = timeout
+	c, _ := headerTimeoutClients.LoadOrStore(timeout, &http.Client{Transport: transport})
+	return c.(*http.Client)
 }
 
 // Complete implements basic text completion
