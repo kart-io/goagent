@@ -402,3 +402,49 @@ func BenchmarkCosineSimilarity(b *testing.B) {
 		cosineSimilarity(v1, v2)
 	}
 }
+
+func TestAsVectorStore(t *testing.T) {
+	ctx := context.Background()
+	store := AsVectorStore(NewInMemoryVectorStore(3))
+
+	require.NoError(t, store.Add(ctx, "x", []float64{1, 0, 0}, nil))
+	require.NoError(t, store.Add(ctx, "y", []float64{0, 1, 0}, nil))
+	require.NoError(t, store.Add(ctx, "neg", []float64{-1, 0, 0}, nil))
+
+	results, err := store.Search(ctx, []float64{1, 0.1, 0}, 3)
+	require.NoError(t, err)
+	require.Len(t, results, 3, "相似度为负的结果也不应被过滤")
+	assert.Equal(t, "x", results[0].ID)
+	assert.Greater(t, results[0].Score, results[1].Score)
+
+	require.NoError(t, store.Delete(ctx, "x"))
+	results, err = store.Search(ctx, []float64{1, 0, 0}, 3)
+	require.NoError(t, err)
+	assert.Len(t, results, 2)
+
+	require.NoError(t, store.Clear(ctx))
+	results, err = store.Search(ctx, []float64{1, 0, 0}, 3)
+	require.NoError(t, err)
+	assert.Empty(t, results)
+}
+
+// 内置向量存储经 AsVectorStore 接入分层记忆后可被向量搜索命中
+func TestAsVectorStoreWithHierarchicalMemory(t *testing.T) {
+	ctx := context.Background()
+	hm := NewHierarchicalMemoryWithContext(ctx, AsVectorStore(NewInMemoryVectorStore(3)))
+	defer func() { _ = hm.Shutdown(ctx) }()
+
+	require.NoError(t, hm.longTerm.Store(ctx, &MemoryEntry{
+		ID:        "plan-1",
+		Type:      MemoryTypeLongTerm,
+		Content:   "数据库优化方案",
+		Embedding: []float32{1, 0, 0},
+		Metadata:  map[string]interface{}{},
+	}))
+
+	entries, err := hm.VectorSearch(ctx, []float32{1, 0, 0}, 5, 0.5)
+	require.NoError(t, err)
+	require.Len(t, entries, 1)
+	assert.Equal(t, "plan-1", entries[0].ID)
+	assert.InDelta(t, 1.0, entries[0].Metadata["similarity_score"], 1e-6)
+}
