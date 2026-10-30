@@ -59,3 +59,27 @@ type timeoutError struct{}
 func (timeoutError) Error() string   { return "i/o timeout" }
 func (timeoutError) Timeout() bool   { return true }
 func (timeoutError) Temporary() bool { return true }
+
+func TestClassifyError(t *testing.T) {
+	cases := []struct {
+		err  error
+		want ClassifiedError
+	}{
+		{&ProviderError{StatusCode: 429, Err: errors.New("slow down")}, ClassifiedError{Reason: ReasonRateLimit, Retryable: true, ShouldFallback: true}},
+		{&ProviderError{StatusCode: 503, Err: errors.New("unavailable")}, ClassifiedError{Reason: ReasonServer, Retryable: true, ShouldFallback: true}},
+		{&ProviderError{StatusCode: 401, Err: errors.New("bad key")}, ClassifiedError{Reason: ReasonAuth, ShouldFallback: true}},
+		{&ProviderError{StatusCode: 404, Err: errors.New("no such model")}, ClassifiedError{Reason: ReasonNotFound, ShouldFallback: true}},
+		{&ProviderError{StatusCode: 400, Err: errors.New("This model's maximum context length is 128000 tokens")}, ClassifiedError{Reason: ReasonContextLength, ShouldCompress: true}},
+		{&ProviderError{StatusCode: 413, Err: errors.New("payload too large")}, ClassifiedError{Reason: ReasonContextLength, ShouldCompress: true}},
+		{&ProviderError{StatusCode: 400, Err: errors.New("invalid tool schema")}, ClassifiedError{Reason: ReasonBadRequest}},
+		{&ProviderError{Err: io.ErrUnexpectedEOF}, ClassifiedError{Reason: ReasonNetwork, Retryable: true}},
+		{fmt.Errorf("wrapped: %w", context.Canceled), ClassifiedError{Reason: ReasonCanceled}},
+		{errors.New("prompt is too long: 250000 tokens"), ClassifiedError{Reason: ReasonContextLength, ShouldCompress: true}},
+		{errors.New("something odd"), ClassifiedError{Reason: ReasonUnknown}},
+	}
+	for _, c := range cases {
+		if got := ClassifyError(c.err); got != c.want {
+			t.Errorf("ClassifyError(%v) = %+v, want %+v", c.err, got, c.want)
+		}
+	}
+}
