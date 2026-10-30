@@ -99,10 +99,11 @@ OpenAI 和 DeepSeek 专用 Provider 共用原生 SSE 解码与完成状态检查
 | 入口 | 能力 | 边界 |
 |---|---|---|
 | Builder.AsRunnable | tokens | 原生答案增量；支持 ToolStreamClient 时工具与答案共用原生对话循环，其他 Provider 保留兼容路径 |
-| ReAct.Stream | steps | 推理步骤和工具结果，不是逐 Token 输出 |
-| ToT 和其他基类最终块实现 | final | 完整结果后返回一个块 |
-| SelfReflectiveAgent.Stream | final | 委派真实任务后返回最终结果 |
-| 旧 StreamingLLMAgent.ExecuteStream | 兼容展示 | 完整模型响应后分块，不改善首字延迟 |
+| workflow.Graph.Compile | steps | 节点事件与最终状态，不代表跨节点逐Token变换 |
+| DurableGraph.AsRunnable | steps | 本次调用的等待或完成快照，业务终态检查Data.Done |
+| core.BaseAgent | final | 基类默认实现执行完成后返回最终块 |
+
+ReAct、ToT、自反思等已删除模块不再列入当前能力矩阵。Pipe/Sequence仍按阶段执行，最后阶段保留实际事件；没有跨节点逐Token转换。
 
 旧消息式接口的迁移从本次开始：不新增调用方；现有调用方迁移到泛型接口后，才在明确宣布的下一个主版本删除。当前没有发布删除日期或承诺所有旧接口已消失。
 
