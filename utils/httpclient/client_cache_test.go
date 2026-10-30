@@ -212,3 +212,37 @@ func BenchmarkClientCachingParallel(b *testing.B) {
 		}
 	})
 }
+
+// TestClientCachingDistinguishesBehaviorFields 超时、重试等影响请求行为的配置不同，不能共用同一客户端
+func TestClientCachingDistinguishesBehaviorFields(t *testing.T) {
+	base := func() *httpclient.Config {
+		return &httpclient.Config{
+			Timeout: 30 * time.Second,
+			Headers: map[string]string{"X-API-Key": "same"},
+			BaseURL: "https://api.example.com",
+		}
+	}
+	variants := map[string]func(*httpclient.Config){
+		"Timeout":             func(c *httpclient.Config) { c.Timeout = 5 * time.Second },
+		"RetryCount":          func(c *httpclient.Config) { c.RetryCount = 3 },
+		"RetryWaitTime":       func(c *httpclient.Config) { c.RetryWaitTime = time.Second },
+		"RetryMaxWaitTime":    func(c *httpclient.Config) { c.RetryMaxWaitTime = time.Minute },
+		"Debug":               func(c *httpclient.Config) { c.Debug = true },
+		"DisableKeepAlive":    func(c *httpclient.Config) { c.DisableKeepAlive = true },
+		"MaxIdleConnsPerHost": func(c *httpclient.Config) { c.MaxIdleConnsPerHost = 50 },
+	}
+	for name, mutate := range variants {
+		t.Run(name, func(t *testing.T) {
+			httpclient.ClearCache()
+			first := httpclient.GetOrCreateClient(base())
+			cfg := base()
+			mutate(cfg)
+			if httpclient.GetOrCreateClient(cfg) == first {
+				t.Errorf("%s 不同的配置不应复用同一客户端", name)
+			}
+			if httpclient.GetOrCreateClient(base()) != first {
+				t.Error("相同配置应复用同一客户端")
+			}
+		})
+	}
+}

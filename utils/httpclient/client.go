@@ -4,6 +4,7 @@ package httpclient
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -262,13 +263,13 @@ var (
 )
 
 // 全局客户端缓存：优化 LLM Provider HTTP 客户端复用
-// Key: 基于 (BaseURL, Headers) 生成的唯一标识
+// Key: 基于完整 Config（BaseURL、Headers、超时、重试等）生成的唯一标识
 // Value: 复用的 HTTP 客户端实例
 var (
 	clientCache   sync.Map // map[string]*Client
 	cachingConfig = &CachingConfig{
 		Enabled:   true,
-		KeyFields: []string{"BaseURL", "Headers"},
+		KeyFields: []string{"BaseURL", "Headers", "Timeout", "RetryCount", "RetryWaitTime", "RetryMaxWaitTime", "Debug", "DisableKeepAlive", "MaxIdleConnsPerHost"},
 	}
 )
 
@@ -302,6 +303,11 @@ func generateCacheKey(config *Config) string {
 		sort.Strings(headerPairs)
 		parts = append(parts, "headers:"+strings.Join(headerPairs, ","))
 	}
+
+	// 其余字段同样决定客户端行为，遗漏会让不同超时或重试设置的 Provider 共用先创建者的配置
+	parts = append(parts, fmt.Sprintf("timeout:%d|retry:%d,%d,%d|debug:%t|nokeepalive:%t|maxidle:%d",
+		config.Timeout, config.RetryCount, config.RetryWaitTime, config.RetryMaxWaitTime,
+		config.Debug, config.DisableKeepAlive, config.MaxIdleConnsPerHost))
 
 	// 生成 SHA256 哈希作为缓存 key
 	data := strings.Join(parts, "|")
