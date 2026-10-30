@@ -297,7 +297,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Test compilation errors in reasoning agent test files
 - Mock setup issues in test suites
 
-## [1.0.0] - 2025-11-15
+## 初始提取 - 2025-11-15
+
+该段原标为 1.0.0，但项目从未发布 v1.0.0；内容对应首个 tag v0.0.1 之前的初始代码，其中多数模块已在 0.17.0 删除。
 
 ### Added - Core Framework
 
@@ -441,50 +443,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added input validation middleware
 - Secure context propagation in distributed tracing
 
-## [Unreleased]
+## 版本说明
 
-### Planned Features
+### 版本号
 
-- Additional LLM providers (Anthropic Claude, Cohere, Hugging Face)
-- Production vector database integration (Qdrant, Milvus, Pinecone)
-- Graphical workflow designer
-- Enhanced monitoring dashboard
-- Agent versioning and A/B testing
-- Performance optimizations (connection pooling, batch processing)
+遵循[语义化版本](https://semver.org/lang/zh-CN/)。1.0 之前，破坏性变更只升次版本号（如 0.16 → 0.17）。
 
----
+### 发布流程
 
-## Version History
-
-### Version Numbering
-
-GoAgent follows [Semantic Versioning](https://semver.org/):
-
-- **MAJOR** version for incompatible API changes
-- **MINOR** version for new functionality in a backward compatible manner
-- **PATCH** version for backward compatible bug fixes
-
-### Release Process
-
-1. Update CHANGELOG.md with changes
-2. Update version in code
-3. Create git tag (e.g., v1.0.0)
-4. Push tag to GitHub
-5. Create GitHub release with notes
-6. Update documentation
-
-### Migration Guides
-
-For breaking changes, see:
-- [Migration Guide](docs/guides/MIGRATION_GUIDE.md) - Detailed upgrade instructions
-- [Migration Summary](docs/guides/MIGRATION_SUMMARY.md) - Quick reference
+1. 在本文件对应版本下记录变更
+2. 合入 master 后由 Auto Tag 工作流按提交类型计算版本并打 tag
+3. Release 工作流从本文件提取同名版本段落作为发布说明
 
 ---
 
-**Note**: This is the initial release (1.0.0) extracted from the goagent project.
-Historical development is documented in the [archive](docs/archive/) directory.
-
-[1.0.0]: https://github.com/kart-io/goagent/releases/tag/v1.0.0
 [Unreleased]: https://github.com/kart-io/goagent/compare/v0.17.0...HEAD
 [0.17.0]: https://github.com/kart-io/goagent/compare/v0.16.1...v0.17.0
 [0.16.1]: https://github.com/kart-io/goagent/compare/v0.16.0...v0.16.1
