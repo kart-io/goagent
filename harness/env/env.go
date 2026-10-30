@@ -49,14 +49,16 @@ type WriteIntent struct {
 	Perm fs.FileMode
 }
 
-// FileSystem 是工作区文件系统。实现须保证所有操作都不越出工作区（含经符号链接），
-// 且 IfVersion/CreateIfAbsent 的检查与写入是原子的。
+// FileSystem 是工作区文件系统。实现负责限定路径（含符号链接），并声明路径解析的并发限制。
+// 条件检查与写入须相对于参与实现所声明协调协议的写者原子执行；各实现须说明协调范围，
+// 不应据此推断对绕过接口的外部写者也具有 CAS 保证。LocalFS 的具体范围见其文档。
 type FileSystem interface {
 	// Resolve 把相对路径或工作区内的绝对路径规范为相对路径。
 	Resolve(path string) (string, error)
 	Stat(ctx context.Context, path string) (Info, error)
 	ReadFile(ctx context.Context, path string) ([]byte, Version, error)
-	// WriteFile 写入文件并按需创建父目录，返回新版本。
+	// WriteFile 写入文件并按需创建父目录，返回新版本。提交后的持久化确认也可能出错，
+	// 此时文件可能已经更新，调用方应重新读取确认，而不能把任意 error 都视为未写入。
 	WriteFile(ctx context.Context, path string, data []byte, intent WriteIntent) (Version, error)
 	Remove(ctx context.Context, path string) error
 	// Walk 按词法顺序遍历 path 下的条目（含 path 自身），不跟随符号链接；fn 返回 fs.SkipDir、fs.SkipAll 的语义同 filepath.WalkDir。

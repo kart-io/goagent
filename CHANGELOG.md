@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `harness/env.LocalFS` 的条件写入改为同进程所有实例按真实路径协调，删除也参与同一协调；修复并发创建时偶发误报悬空链接。Unix 本地文件写入改为同目录临时文件同步后原子发布，避免覆盖过程中读到截断内容；`CreateIfAbsent` 使用硬链接发布，避免覆盖抢先创建的文件。明确 `IfVersion` 不协调直接写入或其他进程，替换会更换 inode，发布后同步失败须重新读取确认；已取消的写入和删除不再改动文件。
+
 ### Added
 
 - Agent 句柄：`ConfigurableAgent.Start(ctx, input)` 返回 `*Handle`，运行中可 `Steer`（下一步追加，结束前唤醒续跑）、`Inject`（下一步追加，不唤醒）、`Redirect`（取消进行中的模型请求，保留已流出的文本后重新请求；工具执行中或持久运行中降级为 Steer）、`Followup`（本轮结束后续接对话开始新一轮）、`Interrupt`，`Wait` 取得结果；轮次结束后再追加输入返回 `ErrHandleDone`。只支持原生工具流。
