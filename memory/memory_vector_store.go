@@ -32,6 +32,49 @@ type SimpleVectorStore interface {
 	Size() int
 }
 
+// AsVectorStore 把 SimpleVectorStore（如 InMemoryVectorStore、ChromaVectorStore）适配为 HierarchicalMemory 需要的 VectorStore。
+// 元数据不随向量保存，搜索结果只含 ID 与相似度。
+func AsVectorStore(store SimpleVectorStore) VectorStore {
+	return simpleVectorStoreAdapter{store: store}
+}
+
+type simpleVectorStoreAdapter struct {
+	store SimpleVectorStore
+}
+
+func (a simpleVectorStoreAdapter) Add(ctx context.Context, id string, embedding []float64, _ map[string]interface{}) error {
+	return a.store.Store(ctx, id, toFloat32(embedding))
+}
+
+// Search 以余弦相似度下限 -1 为阈值，不过滤任何结果，与 VectorStore 的语义一致。
+func (a simpleVectorStoreAdapter) Search(ctx context.Context, embedding []float64, limit int) ([]*SearchResult, error) {
+	ids, scores, err := a.store.Search(ctx, toFloat32(embedding), limit, -1)
+	if err != nil {
+		return nil, err
+	}
+	results := make([]*SearchResult, len(ids))
+	for i, id := range ids {
+		results[i] = &SearchResult{ID: id, Score: scores[i]}
+	}
+	return results, nil
+}
+
+func (a simpleVectorStoreAdapter) Delete(ctx context.Context, id string) error {
+	return a.store.Delete(ctx, id)
+}
+
+func (a simpleVectorStoreAdapter) Clear(ctx context.Context) error {
+	return a.store.Clear(ctx)
+}
+
+func toFloat32(v []float64) []float32 {
+	out := make([]float32, len(v))
+	for i, x := range v {
+		out[i] = float32(x)
+	}
+	return out
+}
+
 // InMemoryVectorStore is a simple in-memory vector store implementation
 type InMemoryVectorStore struct {
 	vectors   map[string][]float32

@@ -243,9 +243,8 @@ manager.Delete(ctx, "user:preferences")
 ### 分层记忆系统
 
 ```go
-// 分层记忆需要实现 memory.VectorStore（Add/Search/Delete，向量为 []float64）的存储，
-// 由应用提供；下文的内置向量存储实现的是另一组接口，不能直接传入。
-var vecStore memory.VectorStore = newMyVectorStore()
+// 内置向量存储经 AsVectorStore 适配为分层记忆需要的 memory.VectorStore
+vecStore := memory.AsVectorStore(memory.NewInMemoryVectorStore(1536))
 
 // 创建分层记忆
 hierMem := memory.NewHierarchicalMemoryWithContext(ctx, vecStore,
@@ -358,6 +357,9 @@ NewEmbeddingVectorStore(model EmbeddingModel) *EmbeddingVectorStore
 
 // Chroma 向量存储
 NewChromaVectorStore(client ChromaClient, collection string, dimension int) *ChromaVectorStore
+
+// 适配为分层记忆使用的 VectorStore（元数据不随向量保存）
+AsVectorStore(store SimpleVectorStore) VectorStore
 
 // 通用操作
 Store(ctx, id string, vector []float32) error
