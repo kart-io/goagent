@@ -66,7 +66,7 @@ jobs:
           if [ -f "CHANGELOG.md" ]; then
             # CHANGELOG 标题不带 v（如 ## [0.16.0] - 日期），两种写法都接受
             ver="${GITHUB_REF_NAME#v}"
-            awk -v ver="$ver" 'index($0, "## [" ver "]") == 1 || index($0, "## [v" ver "]") == 1 {flag=1; next} /^## \[/{flag=0} flag' CHANGELOG.md > release_notes.md
+            awk -v ver="$ver" 'index($0, "## [" ver "]") == 1 || index($0, "## [v" ver "]") == 1 {flag=1; next} /^## /{flag=0} flag' CHANGELOG.md > release_notes.md
 
             # If no specific notes found, use a default message
             if [ ! -s release_notes.md ]; then
@@ -86,6 +86,9 @@ jobs:
             echo "" >> release_notes.md
             echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/$(git describe --tags --abbrev=0 HEAD^)...${{ github.ref_name }}" >> release_notes.md
           fi
+
+          # Release 页面不解析仓库内相对链接，改写为指向该 tag 的完整地址
+          sed -i -E "s#\]\(([^)#:][^):]*)\)#](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/\1)#g" release_notes.md
 
           cat release_notes.md
 
