@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.2] - 2026-10-30
+
+### Fixed
+
+- 示例中的 `llm.WithTimeout(30)` 等整数写法实为纳秒，按整秒保存后为 0，被当作未设置而回退到默认超时；改为 `30*time.Second` 等（`examples/basic/05-provider-consistency`、`09-deepseek-simple`、`examples/llm/huggingface`，以及 `llm/providers` 的测试）。
+
+### Removed
+
+- `scripts/migrate-to-registry.sh`：会把代码改写为导入不存在的 `llm/registry` 与 `contrib/llm-providers`，执行后无法编译。
+
+### Documentation
+
+- 删除或改写仍在介绍 v0.17.0 已删除包的文档（推理预设、toolkits、stream、reflection、Redis 检查点等），迁到 goagent-contrib 的包注明新导入路径。
+- `PROVIDER_BEST_PRACTICES.md` 按实际 API 重写：直接使用 `providers.NewXxxWithOptions`，不存在按名称查找 Provider 的注册表。
+- `USER_GUIDE.md` 按当前 API 重写；`LLM_PROVIDERS.md`、`CORE_API.md`、`LLM_API.md`、`tools/README.md`、`memory/README.md`、`mcp/README.md`、各示例 README 等文档中不存在的 API（`WithConfig`、Builder Agent 的 `Invoke`、`providers.WithXxx`、`tools.ToolInput`、`IsLLMError` 等）改为实际 API。所有代码块逐块编译检查，签名清单与示意片段除外。
+- 配置了工具的示例改用 `ExecuteWithTools`：`Execute` 只调用一次模型，不执行工具。
+- 注明 OpenAI Provider 不读取 `llm.WithTimeout`，需用 ctx 截止时间控制超时；`memory.HierarchicalMemory` 需要应用提供 `memory.VectorStore` 实现。
+- 修复 64 处失效的相对链接（带日期的评测记录除外）。
+
 ## [0.17.1] - 2026-10-30
 
 只改文档与发布流程，代码与 v0.17.0 相同。
@@ -465,7 +484,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/kart-io/goagent/compare/v0.17.1...HEAD
+[Unreleased]: https://github.com/kart-io/goagent/compare/v0.17.2...HEAD
+[0.17.2]: https://github.com/kart-io/goagent/compare/v0.17.1...v0.17.2
 [0.17.1]: https://github.com/kart-io/goagent/compare/v0.17.0...v0.17.1
 [0.17.0]: https://github.com/kart-io/goagent/compare/v0.16.1...v0.17.0
 [0.16.1]: https://github.com/kart-io/goagent/compare/v0.16.0...v0.16.1
