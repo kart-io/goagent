@@ -180,7 +180,7 @@ func modelLoadingExample() {
 	provider, err := providers.NewHuggingFaceWithOptions(
 		llm.WithAPIKey(os.Getenv("HUGGINGFACE_API_KEY")),
 		llm.WithModel("mistralai/Mixtral-8x7B-Instruct-v0.1"),
-		llm.WithTimeout(180), // 3 minutes timeout for model loading)
+		llm.WithTimeout(180*time.Second), // 3 minutes timeout for model loading)
 	)
 	if err != nil {
 		log.Fatalf("Failed to create provider: %v", err)

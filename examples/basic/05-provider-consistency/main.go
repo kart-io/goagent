@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/providers"
@@ -26,7 +27,7 @@ func main() {
 			llm.WithModel("gpt-3.5-turbo"),
 			llm.WithMaxTokens(1000),
 			llm.WithTemperature(0.7),
-			llm.WithTimeout(30),
+			llm.WithTimeout(30*time.Second),
 		); err == nil {
 			clients = append(clients, client)
 			fmt.Println("✅ OpenAI Provider 创建成功")
@@ -41,7 +42,7 @@ func main() {
 			llm.WithModel("deepseek-chat"),
 			llm.WithMaxTokens(1000),
 			llm.WithTemperature(0.7),
-			llm.WithTimeout(30),
+			llm.WithTimeout(30*time.Second),
 		); err == nil {
 			clients = append(clients, client)
 			fmt.Println("✅ DeepSeek Provider 创建成功")
@@ -55,7 +56,7 @@ func main() {
 			llm.WithModel("gemini-pro"),
 			llm.WithMaxTokens(1000),
 			llm.WithTemperature(0.7),
-			llm.WithTimeout(30),
+			llm.WithTimeout(30*time.Second),
 		); err == nil {
 			clients = append(clients, client)
 			fmt.Println("✅ Gemini Provider 创建成功")
