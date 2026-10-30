@@ -80,7 +80,7 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 	box := inboxFrom(ctx)
 	if len(a.config.PromptSections) > 0 {
 		sections, err := journaled(ctx, "loop/sections", func(context.Context) (string, error) {
-			return a.sectionText(PromptScope{SessionID: a.config.SessionID}), nil
+			return a.sectionText(PromptScope{SessionID: tools.SessionIDFrom(ctx)}), nil
 		})
 		if err != nil {
 			return nil, err
@@ -115,6 +115,8 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 		return fmt.Errorf("模型调用达到 MaxIterations 上限，尚未生成答案")
 	}
 	emptyRetries := 0
+	// inputs 是尚未交给 PreStep 的用户输入条数，起始为轮次输入。
+	inputs := 1
 	callsUsed := 0
 	if summary != nil {
 		callsUsed = 1
@@ -136,6 +138,7 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 			for _, item := range items {
 				messages = append(messages, llm.UserMessage(item.Text))
 			}
+			inputs += len(items)
 		}
 		if err := emit(AgentEvent{Type: "step", Step: "model_start"}); err != nil {
 			return nil, err
@@ -176,9 +179,10 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 			metadata["final_answer_only"] = len(tools) == 0
 		}
 		var pre PreStepResult
-		if messages, pre, err = a.runPreStep(ctx, round, messages); err != nil {
+		if messages, pre, err = a.runPreStep(ctx, round, inputs, messages); err != nil {
 			return nil, err
 		}
+		inputs = 0
 		if pre.Halt {
 			metadata["answer_source"] = "pre_step"
 			return finish(pre.Answer, llm.Message{Role: "assistant", Content: pre.Answer})
@@ -198,6 +202,7 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 			for _, msg := range redirected.messages {
 				messages = append(messages, llm.UserMessage(msg))
 			}
+			inputs += len(redirected.messages)
 			if round+1 >= a.config.MaxIterations {
 				return nil, exhausted()
 			}
@@ -239,7 +244,7 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 				}
 				next := ""
 				if !wake {
-					if next, err = a.runTurnStopping(ctx, round, turn.Content); err != nil {
+					if next, err = a.runTurnStopping(ctx, round, metadataInt(metadata, "continued_turns"), turn.Content); err != nil {
 						return nil, err
 					}
 				}

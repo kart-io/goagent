@@ -12,6 +12,7 @@ import (
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
+	toolspkg "github.com/kart-io/goagent/tools"
 )
 
 // 循环扩展点只作用于原生工具流（llm.ToolStreamClient 且配置了工具）。持久运行中，PreStep、TurnStopping、
@@ -24,6 +25,9 @@ type Step struct {
 	Index int
 	// Messages 是将要发送的消息，PreStep 可以改写（如压缩）。改写后的消息成为之后各步的历史。
 	Messages []llm.Message
+	// Inputs 是 Messages 末尾本步新收到的用户输入条数：轮次输入、Steer、Inject 与 Redirect 的纠正，
+	// 不含 TurnStopping 的续跑消息。
+	Inputs int
 }
 
 // PreStepResult 是 PreStep 的结果。Halt 为真时不再请求模型，以 Answer 作为本轮最终答复结束。
@@ -81,6 +85,8 @@ type RequestErrorHook func(ctx context.Context, failure *RequestFailure) (Reques
 type Stopping struct {
 	Step   int
 	Answer string
+	// Continued 是本轮已经续跑的次数（Steer 唤醒与 TurnStopping），钩子可据此避免无限续跑。
+	Continued int
 }
 
 // TurnStoppingHook 在模型给出最终答复、收件箱没有待处理的 Steer 时执行；返回非空字符串时把它作为 user 消息追加并续跑
@@ -89,6 +95,7 @@ type TurnStoppingHook func(ctx context.Context, stopping *Stopping) (continueWit
 
 // PromptScope 是计算提示词段落与上下文时可用的信息。
 type PromptScope struct {
+	// SessionID 与工具调用看到的会话 ID 相同：宿主在 ctx 中声明的会话优先，否则为 WithSessionID 的值。
 	SessionID string
 	Step      int
 }
@@ -229,7 +236,7 @@ func withSections(messages []llm.Message, text string) []llm.Message {
 	return append([]llm.Message{llm.SystemMessage(text)}, messages...)
 }
 
-func (a *ConfigurableAgent[C, S]) runPreStep(ctx context.Context, round int, messages []llm.Message) ([]llm.Message, PreStepResult, error) {
+func (a *ConfigurableAgent[C, S]) runPreStep(ctx context.Context, round, inputs int, messages []llm.Message) ([]llm.Message, PreStepResult, error) {
 	if len(a.config.PreStep) == 0 {
 		return messages, PreStepResult{}, nil
 	}
@@ -238,7 +245,7 @@ func (a *ConfigurableAgent[C, S]) runPreStep(ctx context.Context, round int, mes
 		Result   PreStepResult `json:"result"`
 	}
 	o, err := journaled(ctx, fmt.Sprintf("loop/pre/%d", round), func(ctx context.Context) (outcome, error) {
-		step := &Step{Index: round, Messages: messages}
+		step := &Step{Index: round, Messages: messages, Inputs: inputs}
 		for _, hook := range a.config.PreStep {
 			var r PreStepResult
 			if err := callHook("PreStep", func() (e error) { r, e = hook(ctx, step); return }); err != nil {
@@ -253,14 +260,17 @@ func (a *ConfigurableAgent[C, S]) runPreStep(ctx context.Context, round int, mes
 	return o.Messages, o.Result, err
 }
 
-func (a *ConfigurableAgent[C, S]) runTurnStopping(ctx context.Context, round int, answer string) (string, error) {
+func (a *ConfigurableAgent[C, S]) runTurnStopping(ctx context.Context, round, continued int, answer string) (string, error) {
 	if len(a.config.TurnStopping) == 0 {
 		return "", nil
 	}
 	return journaled(ctx, fmt.Sprintf("loop/stopping/%d", round), func(ctx context.Context) (string, error) {
 		for _, hook := range a.config.TurnStopping {
 			var next string
-			if err := callHook("TurnStopping", func() (e error) { next, e = hook(ctx, &Stopping{Step: round, Answer: answer}); return }); err != nil {
+			if err := callHook("TurnStopping", func() (e error) {
+				next, e = hook(ctx, &Stopping{Step: round, Answer: answer, Continued: continued})
+				return
+			}); err != nil {
 				return "", err
 			}
 			if strings.TrimSpace(next) != "" {
@@ -305,7 +315,7 @@ func (a *ConfigurableAgent[C, S]) requestTurn(ctx context.Context, box *inbox, r
 			return msgs, nil
 		}
 		text, err := journaled(ctx, fmt.Sprintf("loop/context/%d", round), func(context.Context) (string, error) {
-			return a.contextText(PromptScope{SessionID: a.config.SessionID, Step: round}), nil
+			return a.contextText(PromptScope{SessionID: toolspkg.SessionIDFrom(ctx), Step: round}), nil
 		})
 		if err != nil || text == "" {
 			return msgs, err

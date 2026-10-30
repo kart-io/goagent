@@ -139,7 +139,13 @@ func waitAnswer(t *testing.T, h *Handle) *AgentOutput {
 func TestHandleSteerDuringTool(t *testing.T) {
 	started, release := make(chan struct{}), make(chan struct{})
 	model := newScriptModel(callTool("c1", "lookup"), answer("答"))
-	agent, err := NewSimpleBuilder(model).WithTools(blockingTool(started, release)).WithMaxIterations(4).Build()
+	var inputs []int
+	agent, err := NewSimpleBuilder(model).WithTools(blockingTool(started, release)).WithMaxIterations(4).
+		WithPreStep(func(_ context.Context, s *Step) (PreStepResult, error) {
+			inputs = append(inputs, s.Inputs)
+			return PreStepResult{}, nil
+		}).
+		Build()
 	require.NoError(t, err)
 	h := agent.Start(context.Background(), "问题")
 	<-started
@@ -151,6 +157,7 @@ func TestHandleSteerDuringTool(t *testing.T) {
 	require.Equal(t, "tool", tail[0].Role)
 	require.Equal(t, llm.UserMessage("顺便检查 B"), tail[1])
 	require.Equal(t, llm.UserMessage("工具执行中的纠正降级为 Steer"), tail[2])
+	require.Equal(t, []int{1, 2}, inputs, "PreStep sees the turn input, then the two steered messages")
 	require.ErrorIs(t, h.Steer("太晚了"), ErrHandleDone)
 }
 
@@ -236,8 +243,10 @@ func TestHandleInterrupt(t *testing.T) {
 func TestTurnStopping(t *testing.T) {
 	model := newScriptModel(answer("草稿"), answer("定稿"))
 	var seen []string
+	var continued []int
 	hook := func(_ context.Context, s *Stopping) (string, error) {
 		seen = append(seen, s.Answer)
+		continued = append(continued, s.Continued)
 		if len(seen) == 1 {
 			return "检查是否满足要求", nil
 		}
@@ -249,6 +258,7 @@ func TestTurnStopping(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "定稿", out.Result)
 	require.Equal(t, []string{"草稿", "定稿"}, seen)
+	require.Equal(t, []int{0, 1}, continued)
 	require.Equal(t, []llm.Message{{Role: "assistant", Content: "草稿"}, llm.UserMessage("检查是否满足要求")}, lastMessages(model.request(1), 2))
 
 	// 没有剩余额度时不再续跑。
