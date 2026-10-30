@@ -185,6 +185,12 @@ type ToolOutput struct {
 	//   - retries: 重试次数
 	//   - cost: API 调用成本（对于外部服务）
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
+
+	// AdditionalContext 由调用后钩子追加，Builder 在本批工具结果之后作为 user 消息注入模型上下文。
+	AdditionalContext []string `json:"additional_context,omitempty"`
+
+	// Labels 预留给数据来源与可信度标签（如 source=web、trust=untrusted），策略可据此判定；目前不传播。
+	Labels map[string]string `json:"labels,omitempty"`
 }
 
 // ToolResult 表示 ToolExecutor 执行工具的结果

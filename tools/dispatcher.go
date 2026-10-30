@@ -3,7 +3,9 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"os"
 	"reflect"
 	"slices"
 	"strings"
@@ -26,7 +28,7 @@ type DispatchConfig struct {
 	MaxAttempts    int
 	MaxConcurrency int // default 4, shared by all calls on this dispatcher
 	// Timeout 是单次调用的默认超时，默认 30 秒；实现 DispatchTimeoutProvider 的工具以自己声明的值替代它，可长可短。
-	// 计时从取得并发槽位开始，不含排队；排队只受调用方 ctx 约束，每个占用槽位的调用都有超时，排队因此有界。
+	// 计时从取得并发槽位开始，不含排队与 Pipeline 的准入阶段；排队只受调用方 ctx 约束，每个占用槽位的调用都有超时，排队因此有界。
 	Timeout time.Duration
 	// Authorize 在开启 ReturnArgumentErrors 时也会对参数不合法的模型调用执行，可能收到不满足 Schema 的参数。
 	Authorize func(context.Context, string, *interfaces.ToolInput) error
@@ -42,6 +44,9 @@ type DispatchConfig struct {
 	// 不再中止，而是返回 Success=false、Error 为空的结果交给模型改正，并按已完成写入日志。
 	// Invoke 与 AsRunnable 不受影响，仍以 error 报告参数错误。授权、超时、深度和重入错误仍然中止。
 	ReturnArgumentErrors bool
+	// Pipeline 对参数合法的调用执行调用前钩子、审批、守卫、执行包装与调用后钩子，nil 表示直接执行。
+	// 它面向模型行为（拒绝时交还模型修订）；Authorize 面向宿主授权（拒绝即中止），两者互补。
+	Pipeline *Pipeline
 }
 
 // DispatchResult 是交给 OnResult 的一次调用结果。Args 与 Output 归调用方所有，回调不得修改。
@@ -239,10 +244,12 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 	}
 	// 结果回调使用不含单次超时的 ctx：推迟回调时整轮结束才触发，不应因等待兄弟调用而超时。
 	resultCtx := ctx
-	ctx, cancel := context.WithTimeout(ctx, entry.timeout)
+	// 单次超时约束校验、授权、日志读写与执行，在管线准入阶段（含等待人工审批）暂停计时。
+	deadline := time.Now().Add(entry.timeout)
+	vctx, cancel := context.WithDeadline(ctx, deadline)
 	defer cancel()
-	input.Context = ctx
-	if err = ctx.Err(); err != nil {
+	input.Context = vctx
+	if err = vctx.Err(); err != nil {
 		return nil, err
 	}
 	// 参数错误结果与正常执行走同一授权、事件和日志路径，只是不调用工具。
@@ -250,7 +257,7 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 	if err = entry.resolved.Validate(input.Args); err != nil {
 		err = &ArgumentError{Message: fmt.Sprintf("tool %q arguments: %v", req.Name, err), Err: err}
 	} else if custom, ok := entry.tool.(interfaces.ValidatableTool); ok {
-		if err = custom.Validate(ctx, &input); err == nil {
+		if err = custom.Validate(vctx, &input); err == nil {
 			if err = entry.resolved.Validate(input.Args); err != nil {
 				return nil, err
 			}
@@ -263,19 +270,8 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 		}
 		err = nil
 	}
-	if d.config.Authorize != nil {
-		// 参数可能不满足 Schema，Authorize 的 panic 单独报告，不算作工具失败。
-		err = func() (e error) {
-			defer func() {
-				if v := recover(); v != nil {
-					e = agentErrors.NewPanicError(fmt.Sprintf("工具 %q 的授权回调", req.Name), v)
-				}
-			}()
-			return d.config.Authorize(ctx, req.Name, &input)
-		}()
-		if err != nil {
-			return nil, err
-		}
+	if err = d.authorize(vctx, req.Name, &input); err != nil {
+		return nil, err
 	}
 	if err = ctx.Err(); err != nil {
 		return nil, err
@@ -286,42 +282,36 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 	if err = ctx.Err(); err != nil {
 		return nil, err
 	}
+	// 准入阶段在日志之外：终止、取消与审批出错不留记录；日志中已完成的调用直接回放，不再询问。
+	var admitted *admission
+	if argResult == nil {
+		completed := false
+		if d.config.Pipeline != nil {
+			if completed, err = journalCompleted(ctx, input.CallID); err != nil {
+				return nil, err
+			}
+		}
+		if !completed {
+			remaining := time.Until(deadline)
+			if admitted, err = d.admit(ctx, entry, input); err != nil {
+				return nil, err
+			}
+			deadline = time.Now().Add(remaining)
+		}
+	}
+	ectx, ecancel := context.WithDeadline(ctx, deadline)
+	defer ecancel()
 	invoke := func(callCtx context.Context) (*interfaces.ToolOutput, error) {
 		if argResult != nil {
 			return argResult, nil
 		}
-		input.Context = callCtx
-		result, e := entry.tool.Invoke(callCtx, &input)
-		if e != nil {
-			if out, ok := argumentResult(e, settled); ok && callCtx.Err() == nil {
-				return out, nil
-			}
-			return nil, e
+		if admitted == nil {
+			return nil, fmt.Errorf("tool %q: journaled call is no longer completed", req.Name)
 		}
-		if e = callCtx.Err(); e != nil {
-			return nil, e
-		}
-		if result == nil {
-			return nil, fmt.Errorf("tool %q returned nil output", req.Name)
-		}
-		if _, rejected := RejectedResult(result); rejected {
-			return result, nil
-		}
-		if !result.Success || result.Error != "" {
-			// 只透传直接注册的内层 Dispatcher 工具交还的参数错误结果；其他工具的同形状结果按失败处理。
-			message, isArg := argumentResultMessage(result)
-			if inner, ok := entry.tool.(*dispatchedTool); recoverArgs && isArg && ok && inner.d.config.ReturnArgumentErrors {
-				return result, nil
-			}
-			if result.Error != "" {
-				message = result.Error
-			}
-			return nil, fmt.Errorf("tool %q failed: %s", req.Name, message)
-		}
-		return result, nil
+		return d.execute(callCtx, admitted, settled, recoverArgs)
 	}
 	if input.CallID == "" {
-		out, err = invoke(ctx)
+		out, err = invoke(ectx)
 	} else {
 		intent, e := json.Marshal(struct {
 			Name, Schema, Caller string
@@ -358,7 +348,7 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 				return data, e == nil, e
 			}
 		}
-		record, e := durable.Do(ctx, "tool/"+input.CallID, intent, policy, func(callCtx context.Context) (json.RawMessage, error) {
+		record, e := durable.Do(ectx, "tool/"+input.CallID, intent, policy, func(callCtx context.Context) (json.RawMessage, error) {
 			result, invokeErr := invoke(callCtx)
 			if invokeErr != nil {
 				return nil, invokeErr
@@ -400,6 +390,176 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 		return nil, err
 	}
 	return out, nil
+}
+
+// admission 是准入阶段的结论：rejected 非 nil 时不执行工具，否则执行 entry 与 input（替代调用时为目标工具）。
+type admission struct {
+	call           *Call
+	entry          dispatchEntry
+	input          interfaces.ToolInput
+	rejected       *interfaces.ToolOutput
+	substitutedFor string
+}
+
+func newCall(ctx context.Context, entry dispatchEntry, input interfaces.ToolInput) *Call {
+	return &Call{Tool: entry.name, CallID: input.CallID, ExecutionKey: input.ExecutionKey, CallerID: input.CallerID, SessionID: SessionIDFrom(ctx), Args: input.Args}
+}
+
+// admit 执行管线的调用前钩子、审批与守卫；替代调用按目标工具重新校验、授权并经过准入，但不能再被替代。
+func (d *Dispatcher) admit(ctx context.Context, entry dispatchEntry, input interfaces.ToolInput) (*admission, error) {
+	a := &admission{call: newCall(ctx, entry, input), entry: entry, input: input}
+	p := d.config.Pipeline
+	if p == nil {
+		return a, nil
+	}
+	rejected, sub, err := p.gate(ctx, a.call, true)
+	if err != nil {
+		return nil, err
+	}
+	if sub == nil {
+		a.rejected = rejected
+		return a, nil
+	}
+	target, ok := d.entries[sub.Tool]
+	if !ok {
+		return nil, fmt.Errorf("tool %q substitution %q: %w", entry.name, sub.Tool, errSubstituteUnknown)
+	}
+	if sub.Args == nil {
+		return nil, fmt.Errorf("tool %q substitution %q requires object arguments", entry.name, sub.Tool)
+	}
+	input.Args = sub.Args
+	if err = d.checkSubstitute(ctx, target, &input); err != nil {
+		return nil, fmt.Errorf("tool %q substitution %q: %w", entry.name, sub.Tool, err)
+	}
+	a = &admission{call: newCall(ctx, target, input), entry: target, input: input, substitutedFor: entry.name}
+	if a.rejected, _, err = p.gate(ctx, a.call, false); err != nil {
+		return nil, err
+	}
+	return a, nil
+}
+
+// checkSubstitute 对替代调用执行与模型调用相同的校验与授权。替代参数来自宿主钩子，不合法即中止。
+func (d *Dispatcher) checkSubstitute(ctx context.Context, target dispatchEntry, input *interfaces.ToolInput) error {
+	vctx, cancel := context.WithTimeout(ctx, target.timeout)
+	defer cancel()
+	input.Context = vctx
+	if err := target.resolved.Validate(input.Args); err != nil {
+		return err
+	}
+	if custom, ok := target.tool.(interfaces.ValidatableTool); ok {
+		if err := custom.Validate(vctx, input); err != nil {
+			return err
+		}
+		if err := target.resolved.Validate(input.Args); err != nil {
+			return err
+		}
+	}
+	return d.authorize(vctx, target.name, input)
+}
+
+// authorize 执行 DispatchConfig.Authorize。参数可能不满足 Schema，其 panic 单独报告，不算作工具失败。
+func (d *Dispatcher) authorize(ctx context.Context, name string, input *interfaces.ToolInput) (err error) {
+	if d.config.Authorize == nil {
+		return nil
+	}
+	defer func() {
+		if v := recover(); v != nil {
+			err = agentErrors.NewPanicError(fmt.Sprintf("工具 %q 的授权回调", name), v)
+		}
+	}()
+	return d.config.Authorize(ctx, name, input)
+}
+
+// journalCompleted 报告 CallID 在日志中是否已有完成记录。
+func journalCompleted(ctx context.Context, callID string) (bool, error) {
+	if callID == "" || !durable.HasJournal(ctx) || durable.ExecutionKey(ctx) == "" {
+		return false, nil
+	}
+	record, err := durable.InspectOperation(ctx, "tool/"+callID)
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return record.Status == "completed", nil
+}
+
+// execute 执行已准入的调用：Around 包住工具，PostHook 处理成功与拒绝结果。
+func (d *Dispatcher) execute(ctx context.Context, a *admission, settled *settledSet, recoverArgs bool) (*interfaces.ToolOutput, error) {
+	p := d.config.Pipeline
+	if p == nil {
+		return d.runTool(ctx, a.entry, a.input, settled, recoverArgs)
+	}
+	out := a.rejected
+	if out == nil {
+		var err error
+		out, err = p.around(ctx, a.call, func(c context.Context) (*interfaces.ToolOutput, error) {
+			return d.runTool(c, a.entry, a.input, settled, recoverArgs)
+		})
+		if err != nil {
+			return nil, err
+		}
+		if out == nil {
+			return nil, fmt.Errorf("tool %q returned nil output", a.entry.name)
+		}
+	}
+	// 交还模型的参数错误结果不经过调用后钩子，保持其形状供上层识别。
+	if _, isArg := argumentResultMessage(out); isArg {
+		return out, nil
+	}
+	out, err := p.post(ctx, a.call, out)
+	if err != nil {
+		return nil, err
+	}
+	// Around 与 PostHook 给出的结果同样只能是成功或拒绝。
+	if _, rejected := RejectedResult(out); !rejected && (!out.Success || out.Error != "") {
+		return nil, fmt.Errorf("tool %q failed: %s", a.entry.name, nonEmpty(out.Error, "unsuccessful output from pipeline"))
+	}
+	if a.substitutedFor == "" {
+		return out, nil
+	}
+	copied := *out
+	copied.Metadata = make(map[string]any, len(out.Metadata)+2)
+	for k, v := range out.Metadata {
+		copied.Metadata[k] = v
+	}
+	copied.Metadata["substituted_for"] = a.substitutedFor
+	copied.Metadata["substitute"] = a.entry.name
+	return &copied, nil
+}
+
+// runTool 调用工具本身并校验结果。
+func (d *Dispatcher) runTool(callCtx context.Context, entry dispatchEntry, input interfaces.ToolInput, settled *settledSet, recoverArgs bool) (*interfaces.ToolOutput, error) {
+	input.Context = callCtx
+	result, e := entry.tool.Invoke(callCtx, &input)
+	if e != nil {
+		if out, ok := argumentResult(e, settled); ok && callCtx.Err() == nil {
+			return out, nil
+		}
+		return nil, e
+	}
+	if e = callCtx.Err(); e != nil {
+		return nil, e
+	}
+	if result == nil {
+		return nil, fmt.Errorf("tool %q returned nil output", entry.name)
+	}
+	if _, rejected := RejectedResult(result); rejected {
+		return result, nil
+	}
+	if !result.Success || result.Error != "" {
+		// 只透传直接注册的内层 Dispatcher 工具交还的参数错误结果；其他工具的同形状结果按失败处理。
+		message, isArg := argumentResultMessage(result)
+		if inner, ok := entry.tool.(*dispatchedTool); recoverArgs && isArg && ok && inner.d.config.ReturnArgumentErrors {
+			return result, nil
+		}
+		if result.Error != "" {
+			message = result.Error
+		}
+		return nil, fmt.Errorf("tool %q failed: %s", entry.name, message)
+	}
+	return result, nil
 }
 
 // deliverResult 触发 OnResult 并发出 tool_end；回调失败时不发 tool_end。
