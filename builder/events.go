@@ -41,6 +41,7 @@ type AgentEvent struct {
 func (a *ConfigurableAgent[C, S]) ExecuteStream(ctx context.Context, input interface{}) (_ <-chan AgentEvent, err error) {
 	// 同步阶段也会调用宿主代码（如 scopeDurableExecution 中的工具与持久存储），panic 时转为错误返回。
 	defer recoverPanic("Agent 流式执行启动", &err)
+	ctx = withTokenEstimator(ctx, a.config.TokenEstimator)
 	ctx = withModelRetry(ensureModelScope(ctx), a.config.ModelRetries, a.config.ModelRetryBackoff)
 	if err := validateModelBudget(ctx); err != nil {
 		return nil, err
@@ -171,16 +172,28 @@ func (a *ConfigurableAgent[C, S]) runEvents(ctx context.Context, request *middle
 	}
 	var messages []llm.Message
 	if native, ok := client.(llm.ToolStreamClient); ok && len(a.tools) > 0 {
-		return a.runToolEvents(ctx, request, native, a.streamMessages(ctx, input, evidence), metadata, emit)
+		messages, err := a.streamMessages(ctx, input, evidence)
+		if err != nil {
+			return nil, err
+		}
+		return a.runToolEvents(ctx, request, native, messages, metadata, emit)
 	}
 	if _, metered := budget.FromContext(ctx); metered && caller != nil {
 		return nil, fmt.Errorf("root budgets require native ToolStreamClient for tool selection")
 	}
 	if caller == nil {
-		messages = a.streamMessages(ctx, input, evidence)
+		var err error
+		messages, err = a.streamMessages(ctx, input, evidence)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if caller != nil {
-		prompt = a.buildPromptWithHistory(ctx, request.Input)
+		var err error
+		prompt, err = a.buildPromptWithHistory(ctx, request.Input)
+		if err != nil {
+			return nil, err
+		}
 		if evidence != "" {
 			prompt = retrievalInstruction + "\n\n" + evidence + "\n" + prompt
 		}
@@ -277,7 +290,9 @@ func (a *ConfigurableAgent[C, S]) finishEvents(ctx context.Context, request *mid
 	if err := emit(AgentEvent{Type: "usage", Usage: usage}); err != nil {
 		return nil, err
 	}
-	a.saveConversation(ctx, input, answer)
+	if err := a.saveConversation(ctx, input, answer); err != nil {
+		return nil, err
+	}
 	if request.State != nil {
 		request.State.Set("last_response", answer)
 		request.State.Set("last_timestamp", time.Now())

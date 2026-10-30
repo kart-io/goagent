@@ -31,7 +31,7 @@ func isEmptyAnswer(turn *llm.StreamChunk) bool {
 }
 
 // streamMessages 保留消息角色，系统指令与证据各发送一次，避免重复包装。
-func (a *ConfigurableAgent[C, S]) streamMessages(ctx context.Context, input, evidence string) []llm.Message {
+func (a *ConfigurableAgent[C, S]) streamMessages(ctx context.Context, input, evidence string) ([]llm.Message, error) {
 	system := a.buildSystemPromptContent()
 	if a.retriever != nil {
 		system += "\n" + retrievalInstruction
@@ -44,17 +44,18 @@ func (a *ConfigurableAgent[C, S]) streamMessages(ctx context.Context, input, evi
 	if history, ok := ctx.Value(historyKey{}).([]llm.Message); ok {
 		messages = append(messages, history...)
 	} else if a.memoryManager != nil && a.config.SessionID != "" {
-		history, err := a.memoryManager.GetConversationHistory(ctx, a.config.SessionID, a.config.MaxConversationHistory)
-		if err == nil {
-			for _, entry := range history {
-				messages = append(messages, llm.Message{Role: entry.Role, Content: entry.Content})
-			}
+		history, err := readMemory(ctx, a.memoryManager, a.config)
+		if err != nil {
+			return nil, err
+		}
+		for _, entry := range history {
+			messages = append(messages, llm.Message{Role: entry.Role, Content: entry.Content})
 		}
 	}
 	if evidence != "" {
 		input = evidence + "\n用户请求：" + input
 	}
-	return append(messages, llm.UserMessage(input))
+	return append(messages, llm.UserMessage(input)), nil
 }
 
 // runToolEvents 每轮直接选择工具或输出答案，MaxIterations 包含最终答案请求。

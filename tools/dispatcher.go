@@ -13,7 +13,9 @@ import (
 	"time"
 
 	"github.com/google/jsonschema-go/jsonschema"
+	"github.com/google/uuid"
 	"github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/observe"
 	agentErrors "github.com/kart-io/goagent/errors"
@@ -26,9 +28,15 @@ type DispatchConfig struct {
 	// MaxAttempts bounds explicit resume attempts for a journaled CallID.
 	// Default 3. No retries occur inside a single Invoke.
 	MaxAttempts    int
-	MaxConcurrency int // default 4, shared by all calls on this dispatcher
+	MaxConcurrency int // 默认 4，限制执行并发，审批等待不占执行槽位
+	// MaxAdmissionConcurrency 独立限制校验与管线准入并发。
+	// 零值不限准入；审批等待不占执行槽位。
+	MaxAdmissionConcurrency int
+	// MaxQueued 限制两个阶段合计阻塞等待的调用数，零值不限。
+	// 立即取得空闲槽位的调用不消耗排队额度。
+	MaxQueued int
 	// Timeout 是单次调用的默认超时，默认 30 秒；实现 DispatchTimeoutProvider 的工具以自己声明的值替代它，可长可短。
-	// 计时从取得并发槽位开始，不含排队与 Pipeline 的准入阶段；排队只受调用方 ctx 约束，每个占用槽位的调用都有超时，排队因此有界。
+	// 校验、授权、日志和执行累计计时；准入与两段排队暂停计时，等待只受宿主及根预算 ctx 约束。
 	Timeout time.Duration
 	// Authorize 在开启 ReturnArgumentErrors 时也会对参数不合法的模型调用执行，可能收到不满足 Schema 的参数。
 	Authorize func(context.Context, string, *interfaces.ToolInput) error
@@ -79,10 +87,13 @@ type dispatchEntry struct {
 // graph nodes and Builder tools. Underlying tools must support concurrent use;
 // set MaxConcurrency=1 otherwise. Later Registry changes do not change the set.
 type Dispatcher struct {
-	entries map[string]dispatchEntry
-	names   []string
-	config  DispatchConfig
-	slots   chan struct{}
+	entries        map[string]dispatchEntry
+	names          []string
+	config         DispatchConfig
+	slots          chan struct{}
+	admissionSlots chan struct{}
+	queueMu        sync.Mutex
+	queued         int
 }
 
 func NewDispatcher(registry *Registry, cfg DispatchConfig) (dispatcher *Dispatcher, err error) {
@@ -104,10 +115,13 @@ func NewDispatcher(registry *Registry, cfg DispatchConfig) (dispatcher *Dispatch
 	if cfg.Timeout == 0 {
 		cfg.Timeout = 30 * time.Second
 	}
-	if cfg.MaxConcurrency < 1 || cfg.Timeout < 0 || cfg.MaxAttempts < 1 {
+	if cfg.MaxConcurrency < 1 || cfg.Timeout < 0 || cfg.MaxAttempts < 1 || cfg.MaxAdmissionConcurrency < 0 || cfg.MaxQueued < 0 {
 		return nil, fmt.Errorf("positive tool concurrency and timeout required")
 	}
 	d := &Dispatcher{entries: map[string]dispatchEntry{}, config: cfg, slots: make(chan struct{}, cfg.MaxConcurrency)}
+	if cfg.MaxAdmissionConcurrency > 0 {
+		d.admissionSlots = make(chan struct{}, cfg.MaxAdmissionConcurrency)
+	}
 	for _, tool := range registry.List() {
 		if nilTool(tool) {
 			return nil, fmt.Errorf("nil tool")
@@ -201,6 +215,14 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 	if d == nil {
 		return nil, fmt.Errorf("dispatcher is required")
 	}
+	if controller, ok := budget.FromContext(ctx); ok && durable.HasJournal(ctx) && !controller.IsDurable() {
+		return nil, fmt.Errorf("持久工具执行需要持久根预算")
+	}
+	if controller, ok := budget.FromContext(ctx); ok && controller.Configuration().DeadlineUnixMilli > 0 {
+		var stop context.CancelFunc
+		ctx, stop = budget.Bind(ctx, controller)
+		defer stop()
+	}
 	// 推迟只作用于本层调用，工具内部再经 Dispatcher 的调用照常即时回调。
 	var deferred *deferredResult
 	ctx, deferred = takeDeferredResult(ctx)
@@ -235,15 +257,21 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 		ctx = durable.WithExecutionKey(ctx, input.ExecutionKey)
 		input.ExecutionKey = durable.ChildKey(input.ExecutionKey, "tool/"+input.CallID)
 	}
-	ctx, endTool = observe.Start(ctx, observe.Event{Type: "tool", Path: req.Name, OperationKey: input.ExecutionKey})
-	select {
-	case d.slots <- struct{}{}:
-		defer func() { <-d.slots }()
-	case <-ctx.Done():
-		return nil, ctx.Err()
+	// 宿主输入键可以在原 ctx 没有执行键时启用日志，因此也校验最终绑定。
+	if controller, ok := budget.FromContext(ctx); ok && durable.HasJournal(ctx) && !controller.IsDurable() {
+		return nil, fmt.Errorf("持久工具执行需要持久根预算")
 	}
+	ctx, endTool = observe.Start(ctx, observe.Event{Type: "tool", Path: req.Name, OperationKey: input.ExecutionKey})
+	releaseAdmission, err := d.acquireSlot(ctx, d.admissionSlots)
+	if err != nil {
+		return nil, err
+	}
+	defer releaseAdmission()
 	// 结果回调使用不含单次超时的 ctx：推迟回调时整轮结束才触发，不应因等待兄弟调用而超时。
 	resultCtx := ctx
+	if controller, ok := budget.FromContext(ctx); ok && controller.Configuration().DeadlineUnixMilli > 0 {
+		resultCtx = caller
+	}
 	// 单次超时约束校验、授权、日志读写与执行，在管线准入阶段（含等待人工审批）暂停计时。
 	deadline := time.Now().Add(entry.timeout)
 	vctx, cancel := context.WithDeadline(ctx, deadline)
@@ -285,23 +313,36 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 	// 准入阶段在日志之外：终止、取消与审批出错不留记录；日志中已完成的调用直接回放，不再询问。
 	var admitted *admission
 	if argResult == nil {
-		completed := false
-		if d.config.Pipeline != nil {
-			if completed, err = journalCompleted(ctx, input.CallID); err != nil {
-				return nil, err
-			}
+		completed, checkErr := journalCompleted(vctx, input.CallID)
+		if checkErr != nil {
+			return nil, checkErr
 		}
 		if !completed {
-			remaining := time.Until(deadline)
-			if admitted, err = d.admit(ctx, entry, input); err != nil {
+			if admitted, err = d.admit(ctx, entry, input, &deadline); err != nil {
 				return nil, err
 			}
-			deadline = time.Now().Add(remaining)
 		}
+	}
+	releaseAdmission()
+	// 在进入 durable.Do 前等待：排队取消不应留下 pending 操作；日志回放和拒绝不占执行槽位。
+	if argResult == nil && admitted != nil && admitted.rejected == nil {
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			return nil, context.DeadlineExceeded
+		}
+		releaseExecution, waitErr := d.acquireSlot(ctx, d.slots)
+		if waitErr != nil {
+			return nil, waitErr
+		}
+		defer releaseExecution()
+		deadline = time.Now().Add(remaining)
 	}
 	ectx, ecancel := context.WithDeadline(ctx, deadline)
 	defer ecancel()
 	invoke := func(callCtx context.Context) (*interfaces.ToolOutput, error) {
+		if err := callCtx.Err(); err != nil {
+			return nil, err
+		}
 		if argResult != nil {
 			return argResult, nil
 		}
@@ -406,13 +447,23 @@ func newCall(ctx context.Context, entry dispatchEntry, input interfaces.ToolInpu
 }
 
 // admit 执行管线的调用前钩子、审批与守卫；替代调用按目标工具重新校验、授权并经过准入，但不能再被替代。
-func (d *Dispatcher) admit(ctx context.Context, entry dispatchEntry, input interfaces.ToolInput) (*admission, error) {
+func (d *Dispatcher) admit(ctx context.Context, entry dispatchEntry, input interfaces.ToolInput, deadline *time.Time) (*admission, error) {
 	a := &admission{call: newCall(ctx, entry, input), entry: entry, input: input}
 	p := d.config.Pipeline
 	if p == nil {
 		return a, nil
 	}
-	rejected, sub, err := p.gate(ctx, a.call, true)
+	// 仅管线准入暂停原超时计时；替代目标的校验、授权仍消耗原调用的剩余额度。
+	gate := func(call *Call, allowSubstitution bool) (*interfaces.ToolOutput, *Substitution, error) {
+		remaining := time.Until(*deadline)
+		if remaining <= 0 {
+			return nil, nil, context.DeadlineExceeded
+		}
+		rejected, sub, err := p.gate(ctx, call, allowSubstitution)
+		*deadline = time.Now().Add(remaining)
+		return rejected, sub, err
+	}
+	rejected, sub, err := gate(a.call, true)
 	if err != nil {
 		return nil, err
 	}
@@ -428,11 +479,13 @@ func (d *Dispatcher) admit(ctx context.Context, entry dispatchEntry, input inter
 		return nil, fmt.Errorf("tool %q substitution %q requires object arguments", entry.name, sub.Tool)
 	}
 	input.Args = sub.Args
-	if err = d.checkSubstitute(ctx, target, &input); err != nil {
+	vctx, cancel := context.WithDeadline(ctx, *deadline)
+	defer cancel()
+	if err = d.checkSubstitute(vctx, target, &input); err != nil {
 		return nil, fmt.Errorf("tool %q substitution %q: %w", entry.name, sub.Tool, err)
 	}
 	a = &admission{call: newCall(ctx, target, input), entry: target, input: input, substitutedFor: entry.name}
-	if a.rejected, _, err = p.gate(ctx, a.call, false); err != nil {
+	if a.rejected, _, err = gate(a.call, false); err != nil {
 		return nil, err
 	}
 	return a, nil
@@ -531,6 +584,11 @@ func (d *Dispatcher) execute(ctx context.Context, a *admission, settled *settled
 
 // runTool 调用工具本身并校验结果。
 func (d *Dispatcher) runTool(callCtx context.Context, entry dispatchEntry, input interfaces.ToolInput, settled *settledSet, recoverArgs bool) (*interfaces.ToolOutput, error) {
+	if controller, ok := budget.FromContext(callCtx); ok {
+		if e := controller.ReserveTool(callCtx, uuid.NewString()); e != nil {
+			return nil, e
+		}
+	}
 	input.Context = callCtx
 	result, e := entry.tool.Invoke(callCtx, &input)
 	if e != nil {
@@ -726,3 +784,53 @@ func (t *dispatchedTool) Invoke(ctx context.Context, in *interfaces.ToolInput) (
 
 // SupportsConcurrentCalls 实现 interfaces.ConcurrentCallTool：同一轮的多个调用共享 MaxConcurrency 限流，可并发执行。
 func (t *dispatchedTool) SupportsConcurrentCalls() bool { return true }
+
+// ErrDispatcherBusy 表示可选的共享等待队列已满，可用 errors.Is 识别。
+var ErrDispatcherBusy = errors.New("Dispatcher 等待队列已满")
+
+// acquireSlot 仅在不能立即取得槽位时计入排队。取得槽位后重查取消，
+// 避免空闲槽位与 ctx 取消竞争时迟到执行；释放函数幂等，支持提前交接阶段。
+func (d *Dispatcher) acquireSlot(ctx context.Context, slots chan struct{}) (func(), error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if slots == nil {
+		return func() {}, nil
+	}
+	var once sync.Once
+	release := func() { once.Do(func() { <-slots }) }
+	acquired := func() (func(), error) {
+		done := release
+		if err := ctx.Err(); err != nil {
+			done()
+			return nil, err
+		}
+		return done, nil
+	}
+	select {
+	case slots <- struct{}{}:
+		return acquired()
+	default:
+	}
+	d.queueMu.Lock()
+	// 首次尝试后可能已有槽位释放；不向已无需等待的调用报告队列满。
+	select {
+	case slots <- struct{}{}:
+		d.queueMu.Unlock()
+		return acquired()
+	default:
+	}
+	if d.config.MaxQueued > 0 && d.queued >= d.config.MaxQueued {
+		d.queueMu.Unlock()
+		return nil, ErrDispatcherBusy
+	}
+	d.queued++
+	d.queueMu.Unlock()
+	defer func() { d.queueMu.Lock(); d.queued--; d.queueMu.Unlock() }()
+	select {
+	case slots <- struct{}{}:
+		return acquired()
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}

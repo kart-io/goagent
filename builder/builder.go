@@ -98,6 +98,9 @@ func (b *AgentBuilder[C, S]) Build() (*ConfigurableAgent[C, S], error) {
 	if b.llmClient == nil {
 		return nil, agentErrors.NewInvalidConfigError("builder", "llm_client", "LLM client is required")
 	}
+	if b.config.MemoryFailurePolicy != MemoryFailureBestEffort && b.config.MemoryFailurePolicy != MemoryFailureStrict {
+		return nil, agentErrors.NewInvalidConfigError("builder", "memory_failure_policy", "unknown memory failure policy")
+	}
 	if b.retriever != nil && isNilRetriever(b.retriever) {
 		return nil, agentErrors.NewInvalidConfigError("builder", "retriever", "retriever must not be a typed nil")
 	}
@@ -265,17 +268,12 @@ func (b *AgentBuilder[C, S]) createHandler(runtime *execution.Runtime[C, S]) mid
 			})
 		}
 
-		// 如果配置了 MemoryManager，加载历史对话
-		if b.memoryManager != nil && b.config.SessionID != "" {
-			history, err := b.memoryManager.GetConversationHistory(ctx, b.config.SessionID, b.config.MaxConversationHistory)
-			if err == nil && len(history) > 0 {
-				for _, conv := range history {
-					messages = append(messages, llm.Message{
-						Role:    conv.Role,
-						Content: conv.Content,
-					})
-				}
-			}
+		history, err := readMemory(ctx, b.memoryManager, b.config)
+		if err != nil {
+			return nil, err
+		}
+		for _, conv := range history {
+			messages = append(messages, llm.Message{Role: conv.Role, Content: conv.Content})
 		}
 
 		if b.retriever != nil {
@@ -311,26 +309,8 @@ func (b *AgentBuilder[C, S]) createHandler(runtime *execution.Runtime[C, S]) mid
 			return nil, agentErrors.Wrap(err, agentErrors.CodeLLMRequest, "LLM completion error")
 		}
 
-		// 如果配置了 MemoryManager，保存对话到记忆
-		if b.memoryManager != nil && b.config.SessionID != "" {
-			// 保存用户输入
-			if err := b.memoryManager.AddConversation(ctx, &interfaces.Conversation{
-				SessionID: b.config.SessionID,
-				Role:      "user",
-				Content:   inputStr,
-			}); err != nil {
-				// 记录错误但不中断请求，对话记忆不是关键路径
-				fmt.Fprintf(os.Stderr, "Failed to save user conversation: %v\n", err)
-			}
-			// 保存 AI 响应
-			if err := b.memoryManager.AddConversation(ctx, &interfaces.Conversation{
-				SessionID: b.config.SessionID,
-				Role:      "assistant",
-				Content:   response.Content,
-			}); err != nil {
-				// 记录错误但不中断请求
-				fmt.Fprintf(os.Stderr, "Failed to save assistant conversation: %v\n", err)
-			}
+		if err := writeMemory(ctx, b.memoryManager, b.config, inputStr, response.Content); err != nil {
+			return nil, err
 		}
 
 		// 触发 OnLLMEnd 回调

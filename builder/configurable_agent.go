@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -44,12 +45,20 @@ func (a *ConfigurableAgent[C, S]) Initialize(ctx context.Context) (err error) {
 	defer recoverPanic("Agent 初始化", &err)
 	// 如果存在则加载先前状态
 	if a.runtime.Checkpointer != nil {
-		if exists, _ := a.runtime.Checkpointer.Exists(ctx, a.config.SessionID); exists {
+		exists, err := a.runtime.Checkpointer.Exists(ctx, a.config.SessionID)
+		if err != nil {
+			return fmt.Errorf("checkpoint exists: %w", err)
+		}
+		if exists {
 			state, err := a.runtime.Checkpointer.Load(ctx, a.config.SessionID)
-			if err == nil {
-				// 更新运行时状态
-				a.runtime.State = state.(S)
+			if err != nil {
+				return fmt.Errorf("checkpoint load: %w", err)
 			}
+			loaded, ok := state.(S)
+			if !ok || isNilState(loaded) {
+				return fmt.Errorf("checkpoint state type mismatch: got %T", state)
+			}
+			a.runtime.State = loaded
 		}
 	}
 
@@ -224,7 +233,10 @@ func (a *ConfigurableAgent[C, S]) executeWithTools(ctx context.Context, input in
 	inputStr := fmt.Sprintf("%v", input)
 
 	// 构建初始提示（包含历史对话）
-	prompt := a.buildPromptWithHistory(ctx, input)
+	prompt, err := a.buildPromptWithHistory(ctx, input)
+	if err != nil {
+		return nil, err
+	}
 	retrievalMetadata := make(map[string]interface{})
 	if a.retriever != nil {
 		evidence, metadata, err := retrieveContext(ctx, a.retriever, a.retrievalConfig, inputStr)
@@ -253,7 +265,9 @@ func (a *ConfigurableAgent[C, S]) executeWithTools(ctx context.Context, input in
 		// 如果没有工具调用，返回结果并保存对话
 		if len(response.ToolCalls) == 0 {
 			// 保存对话到记忆
-			a.saveConversation(ctx, inputStr, response.Content)
+			if err := a.saveConversation(ctx, inputStr, response.Content); err != nil {
+				return nil, err
+			}
 
 			return &AgentOutput{
 				Result:     response.Content,
@@ -331,7 +345,7 @@ func (a *ConfigurableAgent[C, S]) buildPromptWithSystemMessage(input interface{}
 }
 
 // buildPromptWithHistory 构建包含历史对话的提示
-func (a *ConfigurableAgent[C, S]) buildPromptWithHistory(ctx context.Context, input interface{}) string {
+func (a *ConfigurableAgent[C, S]) buildPromptWithHistory(ctx context.Context, input interface{}) (string, error) {
 	inputStr := fmt.Sprintf("%v", input)
 	var sb strings.Builder
 
@@ -345,8 +359,11 @@ func (a *ConfigurableAgent[C, S]) buildPromptWithHistory(ctx context.Context, in
 
 	// 如果配置了 MemoryManager，加载历史对话
 	if a.memoryManager != nil && a.config.SessionID != "" {
-		history, err := a.memoryManager.GetConversationHistory(ctx, a.config.SessionID, a.config.MaxConversationHistory)
-		if err == nil && len(history) > 0 {
+		history, err := readMemory(ctx, a.memoryManager, a.config)
+		if err != nil {
+			return "", err
+		}
+		if len(history) > 0 {
 			sb.WriteString("历史对话:\n")
 			for _, conv := range history {
 				switch conv.Role {
@@ -369,7 +386,7 @@ func (a *ConfigurableAgent[C, S]) buildPromptWithHistory(ctx context.Context, in
 	sb.WriteString("用户请求: ")
 	sb.WriteString(inputStr)
 
-	return sb.String()
+	return sb.String(), nil
 }
 
 // buildSystemPromptContent 构建完整的系统提示内容（包含输出格式指示）
@@ -402,27 +419,21 @@ func (a *ConfigurableAgent[C, S]) buildSystemPromptContent() string {
 }
 
 // saveConversation 保存对话到记忆
-func (a *ConfigurableAgent[C, S]) saveConversation(ctx context.Context, userInput, assistantResponse string) {
-	if a.memoryManager != nil && a.config.SessionID != "" {
-		// 保存用户输入
-		if err := a.memoryManager.AddConversation(ctx, &interfaces.Conversation{
-			SessionID: a.config.SessionID,
-			Role:      "user",
-			Content:   userInput,
-		}); err != nil {
-			// 记录错误但不中断流程，对话记忆不是关键路径
-			fmt.Fprintf(os.Stderr, "Failed to save user conversation: %v\n", err)
-		}
-		// 保存 AI 响应
-		if err := a.memoryManager.AddConversation(ctx, &interfaces.Conversation{
-			SessionID: a.config.SessionID,
-			Role:      "assistant",
-			Content:   assistantResponse,
-		}); err != nil {
-			// 记录错误但不中断流程
-			fmt.Fprintf(os.Stderr, "Failed to save assistant conversation: %v\n", err)
-		}
+func (a *ConfigurableAgent[C, S]) saveConversation(ctx context.Context, userInput, assistantResponse string) error {
+	return writeMemory(ctx, a.memoryManager, a.config, userInput, assistantResponse)
+}
+
+// isNilState 拒绝接口内包装的空指针，避免替换成不可用状态。
+func isNilState(value any) bool {
+	if value == nil {
+		return true
 	}
+	v := reflect.ValueOf(value)
+	switch v.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return v.IsNil()
+	}
+	return false
 }
 
 // extractToolCalls 从 LLM 输出中提取工具调用
