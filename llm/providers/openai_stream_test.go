@@ -181,3 +181,46 @@ func TestOpenAIStreamCompleteUnindexedTools(t *testing.T) {
 		})
 	}
 }
+
+// WithTimeout 限制等待响应头：服务端迟迟不响应时，未设 ctx 截止时间的请求也会失败
+func TestOpenAITimeoutBoundsResponseWait(t *testing.T) {
+	release := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-release:
+		case <-r.Context().Done():
+		}
+	}))
+	defer server.Close()
+	defer close(release)
+	client, err := NewOpenAIWithOptions(agentllm.WithAPIKey("test"), agentllm.WithBaseURL(server.URL+"/v1"), agentllm.WithTimeout(time.Second))
+	require.NoError(t, err)
+	start := time.Now()
+	_, err = client.Chat(context.Background(), []agentllm.Message{agentllm.UserMessage("question")})
+	require.Error(t, err)
+	require.Less(t, time.Since(start), 5*time.Second)
+}
+
+// 超时只约束响应头：首块之后的流式读取超过超时也不会被截断
+func TestOpenAITimeoutDoesNotCutStream(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"content\":\"first \"}}]}\n\n")
+		w.(http.Flusher).Flush()
+		time.Sleep(1500 * time.Millisecond)
+		fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"content\":\"second\"},\"finish_reason\":\"stop\"}]}\n\n")
+		fmt.Fprint(w, "data: [DONE]\n\n")
+	}))
+	defer server.Close()
+	client, err := NewOpenAIWithOptions(agentllm.WithAPIKey("test"), agentllm.WithBaseURL(server.URL+"/v1"), agentllm.WithTimeout(time.Second))
+	require.NoError(t, err)
+	chunks, err := client.ChatStream(context.Background(), []agentllm.Message{agentllm.UserMessage("question")})
+	require.NoError(t, err)
+	var last *agentllm.StreamChunk
+	for chunk := range chunks {
+		last = chunk
+	}
+	require.NotNil(t, last)
+	require.NoError(t, last.Error)
+	require.Equal(t, "first second", last.Content)
+}

@@ -208,3 +208,22 @@ func TestValidateConfig(t *testing.T) {
 		require.NoError(t, err)
 	})
 }
+
+// TestWithTimeoutRoundsUp 正数时长向上取整到秒，不会被截断为 0（未设置）
+func TestWithTimeoutRoundsUp(t *testing.T) {
+	cases := []struct {
+		in   time.Duration
+		want int
+	}{
+		{30, 1},
+		{500 * time.Millisecond, 1},
+		{1500 * time.Millisecond, 2},
+		{30 * time.Second, 30},
+		{0, 0},
+		{-time.Second, 0},
+	}
+	for _, c := range cases {
+		config := NewLLMOptionsWithOptions(WithTimeout(c.in))
+		assert.Equal(t, c.want, config.Timeout, "WithTimeout(%v)", c.in)
+	}
+}

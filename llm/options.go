@@ -71,10 +71,13 @@ func WithTemperature(temperature float64) ClientOption {
 	}
 }
 
-// WithTimeout 设置请求超时时间
+// WithTimeout 设置请求超时时间。配置按整秒保存，正数时长向上取整，避免不足 1 秒的值被截断为 0 而当作未设置。
 func WithTimeout(timeout time.Duration) ClientOption {
 	return func(c *LLMOptions) {
-		c.Timeout = int(timeout.Seconds())
+		c.Timeout = 0
+		if timeout > 0 {
+			c.Timeout = int((timeout + time.Second - 1) / time.Second)
+		}
 	}
 }
 

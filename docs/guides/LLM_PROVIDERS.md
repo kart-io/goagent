@@ -75,8 +75,8 @@ client, err := providers.NewOpenAIWithOptions(
     llm.WithBaseURL("https://api.openai.com/v1"),
     llm.WithMaxTokens(4096),
     llm.WithTemperature(0.7),
+    llm.WithTimeout(60 * time.Second), // 限制等待响应开始的时间，流式读取不受此限
 )
-// OpenAI Provider 目前不读取 llm.WithTimeout，用 ctx 的截止时间控制请求超时
 ```
 
 **支持的模型：**
