@@ -2,6 +2,8 @@ package core
 
 import (
 	"context"
+	"maps"
+	"slices"
 
 	agentErrors "github.com/kart-io/goagent/errors"
 )
@@ -229,8 +231,20 @@ func (r *BaseRunnable[I, O]) WithCallbacks(callbacks ...Callback) *BaseRunnable[
 // WithConfig 配置 Runnable
 func (r *BaseRunnable[I, O]) WithConfig(config RunnableConfig) *BaseRunnable[I, O] {
 	newRunnable := *r
-	newRunnable.config = config
+	newRunnable.config = cloneRunnableConfig(config)
 	return &newRunnable
+}
+
+// cloneRunnableConfig 复制配置容器，避免克隆间互相修改；回调对象本身仍共享。
+func cloneRunnableConfig(config RunnableConfig) RunnableConfig {
+	config.Callbacks = slices.Clone(config.Callbacks)
+	config.Tags = slices.Clone(config.Tags)
+	config.Metadata = maps.Clone(config.Metadata)
+	if config.RetryPolicy != nil {
+		policy := *config.RetryPolicy
+		config.RetryPolicy = &policy
+	}
+	return config
 }
 
 // GetConfig 获取配置
@@ -259,6 +273,17 @@ func NewRunnablePipe[I, M, O any](first Runnable[I, M], second Runnable[M, O]) *
 
 // Invoke 执行管道
 func (p *RunnablePipe[I, M, O]) Invoke(ctx context.Context, input I) (O, error) {
+	runner := NewStreamRunnable(StreamModeFinal, func(ctx context.Context, input I, emit func(StreamChunk[O]) error) error {
+		output, err := p.invoke(ctx, input)
+		if err != nil {
+			return err
+		}
+		return emit(StreamChunk[O]{Data: output, Done: true})
+	})
+	return runner.WithConfig(p.config).Invoke(ctx, input)
+}
+
+func (p *RunnablePipe[I, M, O]) invoke(ctx context.Context, input I) (O, error) {
 	// 执行第一个 Runnable（带 panic 保护）
 	middle, err := safeInvoke(p.first.Invoke, ctx, input)
 	if err != nil {
@@ -266,6 +291,11 @@ func (p *RunnablePipe[I, M, O]) Invoke(ctx context.Context, input I) (O, error) 
 		return zero, agentErrors.Wrap(err, agentErrors.CodeAgentExecution, "first runnable failed").
 			WithComponent("runnable_pipe").
 			WithOperation("invoke")
+	}
+
+	if err := ctx.Err(); err != nil {
+		var zero O
+		return zero, err
 	}
 
 	// 执行第二个 Runnable（带 panic 保护）
@@ -282,78 +312,27 @@ func (p *RunnablePipe[I, M, O]) Invoke(ctx context.Context, input I) (O, error) 
 
 // Stream 流式执行管道
 func (p *RunnablePipe[I, M, O]) Stream(ctx context.Context, input I) (<-chan StreamChunk[O], error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	outChan := make(chan StreamChunk[O])
-	go func() {
-		defer close(outChan)
-		ctx, cancel := context.WithCancel(ctx)
-		defer cancel()
-		send := func(chunk StreamChunk[O]) bool {
-			select {
-			case outChan <- chunk:
-				return true
-			case <-ctx.Done():
-				return false
-			}
-		}
+	runner := NewStreamRunnable(StreamModeSteps, func(ctx context.Context, input I, emit func(StreamChunk[O]) error) error {
 		middle, err := safeInvoke(p.first.Invoke, ctx, input)
 		if err != nil {
-			send(StreamChunk[O]{Error: agentErrors.Wrap(err, agentErrors.CodeAgentExecution, "first runnable failed"), Done: true})
-			return
+			return agentErrors.Wrap(err, agentErrors.CodeAgentExecution, "first runnable failed").WithComponent("runnable_pipe").WithOperation("stream")
 		}
-		if ctx.Err() != nil {
-			return
+		if err := ctx.Err(); err != nil {
+			return err
 		}
 		stream, err := safeInvoke(p.second.Stream, ctx, middle)
 		if err != nil {
-			send(StreamChunk[O]{Error: agentErrors.Wrap(err, agentErrors.CodeStreamRead, "second runnable stream failed"), Done: true})
-			return
+			return agentErrors.Wrap(err, agentErrors.CodeStreamRead, "second runnable stream failed").WithComponent("runnable_pipe").WithOperation("stream")
 		}
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case chunk, ok := <-stream:
-				if !ok {
-					return
-				}
-				if !send(chunk) {
-					return
-				}
-				if chunk.Done || chunk.Error != nil {
-					return
-				}
-			}
-		}
-	}()
-	return outChan, nil
+		return forwardRunnableStream(ctx, stream, emit)
+	})
+	return runner.WithConfig(p.config).Stream(ctx, input)
 }
 
 // Batch 批量执行管道
 func (p *RunnablePipe[I, M, O]) Batch(ctx context.Context, inputs []I) ([]O, error) {
-	if len(inputs) == 0 {
-		return []O{}, nil
-	}
-
-	// 执行第一个 Runnable 的批处理
-	middles, err := p.first.Batch(ctx, inputs)
-	if err != nil {
-		return nil, agentErrors.Wrap(err, agentErrors.CodeAgentExecution, "first runnable batch failed").
-			WithComponent("runnable_pipe").
-			WithOperation("batch")
-	}
-
-	// 执行第二个 Runnable 的批处理
-	outputs, err := p.second.Batch(ctx, middles)
-	if err != nil {
-		return nil, agentErrors.Wrap(err, agentErrors.CodeAgentExecution, "second runnable batch failed").
-			WithComponent("runnable_pipe").
-			WithOperation("batch")
-	}
-
-	return outputs, nil
+	base := NewBaseRunnable[I, O]().WithConfig(p.config)
+	return base.Batch(ctx, inputs, p.Invoke)
 }
 
 // Pipe 连接到另一个 Runnable
@@ -364,14 +343,14 @@ func (p *RunnablePipe[I, M, O]) Pipe(next Runnable[O, any]) Runnable[I, any] {
 // WithCallbacks 添加回调
 func (p *RunnablePipe[I, M, O]) WithCallbacks(callbacks ...Callback) Runnable[I, O] {
 	newPipe := *p
-	newPipe.config.Callbacks = append(newPipe.config.Callbacks, callbacks...)
+	newPipe.config.Callbacks = append(slices.Clone(p.config.Callbacks), callbacks...)
 	return &newPipe
 }
 
 // WithConfig 配置管道
 func (p *RunnablePipe[I, M, O]) WithConfig(config RunnableConfig) Runnable[I, O] {
 	newPipe := *p
-	newPipe.config = config
+	newPipe.config = cloneRunnableConfig(config)
 	return &newPipe
 }
 
@@ -469,7 +448,7 @@ type RunnableSequence struct {
 // NewRunnableSequence 创建顺序执行的 Runnable 序列
 func NewRunnableSequence(runnables ...Runnable[any, any]) *RunnableSequence {
 	return &RunnableSequence{
-		runnables: runnables,
+		runnables: slices.Clone(runnables),
 		config: RunnableConfig{
 			Callbacks:      []Callback{},
 			MaxConcurrency: 10,
@@ -479,9 +458,23 @@ func NewRunnableSequence(runnables ...Runnable[any, any]) *RunnableSequence {
 
 // Invoke 顺序执行所有 Runnable
 func (s *RunnableSequence) Invoke(ctx context.Context, input any) (any, error) {
+	runner := NewStreamRunnable(StreamModeFinal, func(ctx context.Context, input any, emit func(StreamChunk[any]) error) error {
+		output, err := s.invoke(ctx, input)
+		if err != nil {
+			return err
+		}
+		return emit(StreamChunk[any]{Data: output, Done: true})
+	})
+	return runner.WithConfig(s.config).Invoke(ctx, input)
+}
+
+func (s *RunnableSequence) invoke(ctx context.Context, input any) (any, error) {
 	current := input
 
 	for i, runnable := range s.runnables {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		// 带 panic 保护执行每个 Runnable
 		output, err := safeInvoke(runnable.Invoke, ctx, current)
 		if err != nil {
@@ -498,80 +491,55 @@ func (s *RunnableSequence) Invoke(ctx context.Context, input any) (any, error) {
 
 // Stream 流式执行序列
 func (s *RunnableSequence) Stream(ctx context.Context, input any) (<-chan StreamChunk[any], error) {
-	outChan := make(chan StreamChunk[any])
-
-	go func() {
-		defer close(outChan)
-
+	runner := NewStreamRunnable(StreamModeSteps, func(ctx context.Context, input any, emit func(StreamChunk[any]) error) error {
 		current := input
 		for i, runnable := range s.runnables {
-			// 如果不是最后一个，使用 Invoke（带 panic 保护）
-			if i < len(s.runnables)-1 {
-				output, err := safeInvoke(runnable.Invoke, ctx, current)
-				if err != nil {
-					outChan <- StreamChunk[any]{Error: agentErrors.Wrap(err, agentErrors.CodeAgentExecution, "runnable failed").
-						WithComponent("runnable_sequence").
-						WithOperation("stream").
-						WithContext("index", i)}
-					return
-				}
-				current = output
-			} else {
-				// 最后一个使用 Stream
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			if i == len(s.runnables)-1 {
 				stream, err := safeInvoke(runnable.Stream, ctx, current)
 				if err != nil {
-					outChan <- StreamChunk[any]{Error: agentErrors.Wrap(err, agentErrors.CodeStreamRead, "runnable stream failed").
-						WithComponent("runnable_sequence").
-						WithOperation("stream").
-						WithContext("index", i)}
-					return
+					return agentErrors.Wrap(err, agentErrors.CodeStreamRead, "runnable stream failed").WithComponent("runnable_sequence").WithOperation("stream").WithContext("index", i)
 				}
-
-				// 转发流
-				for chunk := range stream {
-					outChan <- chunk
-				}
+				return forwardRunnableStream(ctx, stream, emit)
 			}
+			output, err := safeInvoke(runnable.Invoke, ctx, current)
+			if err != nil {
+				return agentErrors.Wrap(err, agentErrors.CodeAgentExecution, "runnable failed").WithComponent("runnable_sequence").WithOperation("stream").WithContext("index", i)
+			}
+			current = output
 		}
-	}()
-
-	return outChan, nil
+		return emit(StreamChunk[any]{Data: current, Done: true})
+	})
+	return runner.WithConfig(s.config).Stream(ctx, input)
 }
 
 // Batch 批量执行序列
 func (s *RunnableSequence) Batch(ctx context.Context, inputs []any) ([]any, error) {
-	current := inputs
-
-	for i, runnable := range s.runnables {
-		outputs, err := runnable.Batch(ctx, current)
-		if err != nil {
-			return nil, agentErrors.Wrap(err, agentErrors.CodeAgentExecution, "runnable batch failed").
-				WithComponent("runnable_sequence").
-				WithOperation("batch").
-				WithContext("index", i)
-		}
-		current = outputs
-	}
-
-	return current, nil
+	base := NewBaseRunnable[any, any]().WithConfig(s.config)
+	return base.Batch(ctx, inputs, s.Invoke)
 }
 
 // Pipe 连接到另一个 Runnable
 func (s *RunnableSequence) Pipe(next Runnable[any, any]) Runnable[any, any] {
-	newRunnables := append(s.runnables, next)
-	return NewRunnableSequence(newRunnables...)
+	newRunnables := append(slices.Clone(s.runnables), next)
+	clone := *s
+	clone.runnables = newRunnables
+	clone.config = cloneRunnableConfig(s.config)
+	return &clone
 }
 
 // WithCallbacks 添加回调
 func (s *RunnableSequence) WithCallbacks(callbacks ...Callback) Runnable[any, any] {
 	newSeq := *s
-	newSeq.config.Callbacks = append(newSeq.config.Callbacks, callbacks...)
+	newSeq.config.Callbacks = append(slices.Clone(s.config.Callbacks), callbacks...)
 	return &newSeq
 }
 
 // WithConfig 配置序列
 func (s *RunnableSequence) WithConfig(config RunnableConfig) Runnable[any, any] {
 	newSeq := *s
-	newSeq.config = config
+	newSeq.config = cloneRunnableConfig(config)
 	return &newSeq
 }

@@ -89,10 +89,10 @@ func (r *StreamRunnable[I, O]) run(ctx context.Context, input I, send func(Strea
 		switch {
 		case ctx.Err() != nil:
 			emitErr = ctx.Err()
-		case finished:
-			emitErr = fmt.Errorf("最终块之后不能继续发送事件")
 		case chunk.Error != nil:
 			emitErr = chunk.Error
+		case finished:
+			emitErr = fmt.Errorf("最终块之后不能继续发送事件")
 		case chunk.Done:
 			final, finished = chunk, true
 		default:
@@ -100,7 +100,17 @@ func (r *StreamRunnable[I, O]) run(ctx context.Context, input I, send func(Strea
 		}
 		return emitErr
 	})
-	if err = errors.Join(err, emitErr, ctx.Err()); err != nil {
+	// 只有执行源报错时保留其具体类型，兼容现有调用方。
+	for _, additional := range []error{emitErr, ctx.Err()} {
+		if additional != nil && !errors.Is(err, additional) {
+			if err == nil {
+				err = additional
+			} else {
+				err = errors.Join(err, additional)
+			}
+		}
+	}
+	if err != nil {
 		return result, err
 	}
 	if !finished {
@@ -200,4 +210,24 @@ func (r *StreamRunnable[I, O]) Description() any {
 		return nil
 	}
 	return r.description()
+}
+
+// forwardRunnableStream 收到 Done 后仍等待通道关闭，由共同执行源检查
+// 缺失或重复终态，以及最终块之后的错误。
+// 取消会解除本适配器的接收和发送阻塞。忽略 ctx 的第三方 Invoke、Stream
+// 或生产者函数无法被强制停止；生产者发送时必须同时监听 ctx.Done，退出时关闭通道。
+func forwardRunnableStream[T any](ctx context.Context, stream <-chan StreamChunk[T], emit func(StreamChunk[T]) error) error {
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case chunk, ok := <-stream:
+			if !ok {
+				return nil
+			}
+			if err := emit(chunk); err != nil {
+				return err
+			}
+		}
+	}
 }
