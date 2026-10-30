@@ -727,7 +727,7 @@ func TestMetaCoTAgent_SearchForAnswer(t *testing.T) {
 			ToolCalls: make([]core.AgentToolCall, 0),
 		}
 
-		agent.searchForAnswer(ctx, question, output)
+		assert.NoError(t, agent.searchForAnswer(ctx, question, output))
 
 		assert.Equal(t, "answered", question.Status)
 		assert.Equal(t, "Search result for the question", question.Answer)
@@ -755,7 +755,7 @@ func TestMetaCoTAgent_SearchForAnswer(t *testing.T) {
 		}
 		output := &core.AgentOutput{}
 
-		agent.searchForAnswer(ctx, question, output)
+		assert.NoError(t, agent.searchForAnswer(ctx, question, output))
 
 		assert.Equal(t, "answered", question.Status)
 		assert.Equal(t, "Direct answer without tool", question.Answer)

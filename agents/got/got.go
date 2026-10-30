@@ -139,7 +139,10 @@ func (g *GoTAgent) Invoke(ctx context.Context, input *agentcore.AgentInput) (*ag
 	}
 
 	// Build thought graph
-	graph := g.buildThoughtGraph(ctx, input, output)
+	graph, err := g.buildThoughtGraph(ctx, input, output)
+	if err != nil {
+		return g.handleError(ctx, output, "Failed to build thought graph", err, startTime)
+	}
 
 	// Check for cycles if enabled
 	if g.config.CycleDetection && g.hasCycles(graph) {
@@ -150,7 +153,6 @@ func (g *GoTAgent) Invoke(ctx context.Context, input *agentcore.AgentInput) (*ag
 
 	// Execute graph (parallel or sequential)
 	var finalResult interface{}
-	var err error
 
 	if g.config.ParallelExecution {
 		finalResult, err = g.executeGraphParallel(ctx, graph, input, output)
@@ -355,7 +357,14 @@ func (g *GoTAgent) InvokeFast(ctx context.Context, input *agentcore.AgentInput) 
 	}
 
 	// Build thought graph
-	graph := g.buildThoughtGraph(ctx, input, output)
+	graph, err := g.buildThoughtGraph(ctx, input, output)
+	if err != nil {
+		output.Status = interfaces.StatusFailed
+		output.Message = "Failed to build thought graph: " + err.Error()
+		output.Timestamp = time.Now()
+		output.Latency = time.Since(startTime)
+		return output, err
+	}
 
 	// Check for cycles if enabled
 	if g.config.CycleDetection && g.hasCycles(graph) {
@@ -371,7 +380,6 @@ func (g *GoTAgent) InvokeFast(ctx context.Context, input *agentcore.AgentInput) 
 
 	// Execute graph (parallel or sequential)
 	var finalResult interface{}
-	var err error
 
 	if g.config.ParallelExecution {
 		finalResult, err = g.executeGraphParallel(ctx, graph, input, output)
@@ -404,8 +412,8 @@ func (g *GoTAgent) InvokeFast(ctx context.Context, input *agentcore.AgentInput) 
 	return output, nil
 }
 
-// buildThoughtGraph constructs the DAG of thoughts
-func (g *GoTAgent) buildThoughtGraph(ctx context.Context, input *agentcore.AgentInput, output *agentcore.AgentOutput) []*GraphNode {
+// buildThoughtGraph constructs the DAG of thoughts；ctx 取消时返回 ctx.Err()
+func (g *GoTAgent) buildThoughtGraph(ctx context.Context, input *agentcore.AgentInput, output *agentcore.AgentOutput) ([]*GraphNode, error) {
 	// Initialize with root node
 	root := &GraphNode{
 		ID:           "root",
@@ -423,12 +431,8 @@ func (g *GoTAgent) buildThoughtGraph(ctx context.Context, input *agentcore.Agent
 	// Build graph iteratively
 	for len(graph) < g.config.MaxNodes {
 		// 检查上下文是否已取消（超时控制）
-		select {
-		case <-ctx.Done():
-			// 上下文已取消，停止构建图，返回当前已构建的部分
-			return graph
-		default:
-			// 继续执行
+		if err := ctx.Err(); err != nil {
+			return graph, err
 		}
 
 		// Select nodes for expansion
@@ -437,27 +441,34 @@ func (g *GoTAgent) buildThoughtGraph(ctx context.Context, input *agentcore.Agent
 			break
 		}
 
+		// 候选只由图状态决定：一轮没有新增节点（LLM 失败、输出无法解析或全被剪枝）时下一轮完全相同，必须停止
+		before := len(graph)
 		for _, node := range candidates {
-			// 每次生成前检查上下文
-			select {
-			case <-ctx.Done():
-				return graph
-			default:
+			if err := ctx.Err(); err != nil {
+				return graph, err
 			}
 
 			// Generate new thoughts from this node
-			newThoughts := g.generateThoughtsFromNode(ctx, node, input)
+			newThoughts, err := g.generateThoughtsFromNode(ctx, node, input)
+			if err != nil {
+				return graph, err
+			}
 
 			for _, thought := range newThoughts {
 				if len(graph) >= g.config.MaxNodes {
 					break
 				}
 
+				score, err := g.evaluateThought(ctx, thought, input)
+				if err != nil {
+					return graph, err
+				}
+
 				// Create new node
 				newNode := &GraphNode{
 					ID:           fmt.Sprintf("node_%d", len(graph)),
 					Thought:      thought,
-					Score:        g.evaluateThought(ctx, thought, input),
+					Score:        score,
 					Dependencies: []*GraphNode{node},
 					Dependents:   []*GraphNode{},
 					State:        g.copyState(node.State),
@@ -489,9 +500,12 @@ func (g *GoTAgent) buildThoughtGraph(ctx context.Context, input *agentcore.Agent
 				}
 			}
 		}
+		if len(graph) == before {
+			break
+		}
 	}
 
-	return graph
+	return graph, nil
 }
 
 // executeGraphParallel executes independent nodes in parallel
@@ -521,8 +535,11 @@ func (g *GoTAgent) executeGraphParallel(ctx context.Context, graph []*GraphNode,
 					}
 				}
 
-				// Process node
-				err := g.processNode(ctx, n, input, output)
+				// Process node；LLM panic 转为 worker 错误，使本次执行以失败结束
+				err := func() (err error) {
+					defer agentcore.RecoverPanic(ctx, "got_agent", "process_node", &err)
+					return g.processNode(ctx, n, input, output)
+				}()
 				if err != nil {
 					errors <- err
 				}
@@ -640,7 +657,8 @@ func (g *GoTAgent) selectExpansionCandidates(graph []*GraphNode) []*GraphNode {
 	return candidates
 }
 
-func (g *GoTAgent) generateThoughtsFromNode(ctx context.Context, node *GraphNode, input *agentcore.AgentInput) []string {
+// generateThoughtsFromNode LLM 失败时视为没有新思考；失败原因是 *PanicError 时返回该错误，由调用方中止本次执行
+func (g *GoTAgent) generateThoughtsFromNode(ctx context.Context, node *GraphNode, input *agentcore.AgentInput) ([]string, error) {
 	prompt := fmt.Sprintf(`Given the task: %s
 Current thought: %s
 
@@ -655,7 +673,10 @@ Format each thought on a new line starting with "- " or numbered like "1. "`,
 
 	llmResp, err := g.llm.Chat(ctx, messages)
 	if err != nil {
-		return nil
+		if base.IsPanic(err) {
+			return nil, err
+		}
+		return nil, nil
 	}
 
 	// 使用解析器解析思考
@@ -685,7 +706,7 @@ Format each thought on a new line starting with "- " or numbered like "1. "`,
 		}
 	}
 
-	return thoughts
+	return thoughts, nil
 }
 
 // isSkippableLine 检查是否应该跳过的行
@@ -716,11 +737,11 @@ func (g *GoTAgent) findAdditionalDependencies(node *GraphNode, graph []*GraphNod
 	}
 }
 
-func (g *GoTAgent) evaluateThought(ctx context.Context, thought string, input *agentcore.AgentInput) float64 {
+func (g *GoTAgent) evaluateThought(ctx context.Context, thought string, input *agentcore.AgentInput) (float64, error) {
 	// 快速评估模式：使用启发式评分，跳过 LLM 调用
 	// 这是主要的性能优化点，避免每个思考都进行 LLM 调用
 	if g.config.FastEvaluation {
-		return g.evaluateThoughtFast(thought, input)
+		return g.evaluateThoughtFast(thought, input), nil
 	}
 
 	// 完整评估模式：使用 LLM 评分（可能导致超时）
@@ -740,9 +761,13 @@ Respond with just a number between 0 and 1.`,
 	evalCtx, cancel := context.WithTimeout(ctx, g.config.NodeTimeout)
 	defer cancel()
 
+	// LLM 失败时取中性分 0.5；失败原因是 *PanicError 时返回该错误，由调用方中止本次执行
 	llmResp, err := g.llm.Chat(evalCtx, messages)
 	if err != nil {
-		return 0.5
+		if base.IsPanic(err) {
+			return 0, err
+		}
+		return 0.5, nil
 	}
 
 	var score float64
@@ -758,7 +783,7 @@ Respond with just a number between 0 and 1.`,
 		score = 1
 	}
 
-	return score
+	return score, nil
 }
 
 // evaluateThoughtFast 使用启发式方法快速评估思考质量
@@ -1045,7 +1070,13 @@ func (g *GoTAgent) Stream(ctx context.Context, input *agentcore.AgentInput) (<-c
 	go func() {
 		defer close(outChan)
 
-		output, err := g.Invoke(ctx, input)
+		var output *agentcore.AgentOutput
+		err := func() (err error) {
+			// 宿主代码在本 goroutine 中 panic 时转为流错误，避免进程退出
+			defer agentcore.RecoverPanic(ctx, "got_agent", "stream", &err)
+			output, err = g.Invoke(ctx, input)
+			return err
+		}()
 		outChan <- agentcore.StreamChunk[*agentcore.AgentOutput]{
 			Data:  output,
 			Error: err,
@@ -1098,7 +1129,13 @@ func (g *GoTAgent) RunGenerator(ctx context.Context, input *agentcore.AgentInput
 
 		// Phase 1: Build thought graph
 		graphStart := time.Now()
-		graph := g.buildThoughtGraph(ctx, input, accumulated)
+		graph, err := g.buildThoughtGraph(ctx, input, accumulated)
+		if err != nil {
+			errorOutput := g.createStepOutput(accumulated, "Failed to build thought graph", startTime)
+			errorOutput.Status = interfaces.StatusFailed
+			yield(errorOutput, err)
+			return
+		}
 
 		// Check for cycles if enabled
 		if g.config.CycleDetection && g.hasCycles(graph) {
@@ -1136,7 +1173,6 @@ func (g *GoTAgent) RunGenerator(ctx context.Context, input *agentcore.AgentInput
 		// Phase 2: Execute graph
 		executionStart := time.Now()
 		var finalResult interface{}
-		var err error
 
 		if g.config.ParallelExecution {
 			finalResult, err = g.executeGraphParallel(ctx, graph, input, accumulated)
@@ -1226,39 +1262,32 @@ func (g *GoTAgent) handleError(ctx context.Context, output *agentcore.AgentOutpu
 	output.Timestamp = time.Now()
 	output.Latency = time.Since(startTime)
 
-	_ = g.triggerOnError(ctx, err)
-	return output, err
+	return output, g.triggerOnError(ctx, err)
 }
 
 // Callback triggers
 func (g *GoTAgent) triggerOnStart(ctx context.Context, input *agentcore.AgentInput) error {
-	config := g.GetConfig()
-	for _, cb := range config.Callbacks {
-		if err := cb.OnStart(ctx, input); err != nil {
-			return err
-		}
-	}
-	return nil
+	_, err := agentcore.NotifyCallbacks(ctx, "got_agent", "on_start", g.GetConfig().Callbacks, func(cb agentcore.Callback) error {
+		return cb.OnStart(ctx, input)
+	})
+	return err
 }
 
 func (g *GoTAgent) triggerOnFinish(ctx context.Context, output *agentcore.AgentOutput) error {
-	config := g.GetConfig()
-	for _, cb := range config.Callbacks {
-		if err := cb.OnAgentFinish(ctx, output); err != nil {
-			return err
-		}
-	}
-	return nil
+	_, err := agentcore.NotifyCallbacks(ctx, "got_agent", "on_agent_finish", g.GetConfig().Callbacks, func(cb agentcore.Callback) error {
+		return cb.OnAgentFinish(ctx, output)
+	})
+	return err
 }
 
+// triggerOnError 触发错误回调，返回应交给调用方的错误：回调自身 panic 时为 *PanicError，否则为原错误 err
 func (g *GoTAgent) triggerOnError(ctx context.Context, err error) error {
-	config := g.GetConfig()
-	for _, cb := range config.Callbacks {
-		if cbErr := cb.OnError(ctx, err); cbErr != nil {
-			return cbErr
-		}
+	if panicked, panicErr := agentcore.NotifyCallbacks(ctx, "got_agent", "on_error", g.GetConfig().Callbacks, func(cb agentcore.Callback) error {
+		return cb.OnError(ctx, err)
+	}); panicked {
+		return panicErr
 	}
-	return nil
+	return err
 }
 
 // WithCallbacks adds callback handlers

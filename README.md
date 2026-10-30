@@ -17,7 +17,7 @@ GoAgent is an AI agent framework for Go, inspired by LangChain. It provides agen
 
 原生编排与工具：`workflow.Graph`、持久图 `AsRunnable`、分支级恢复及 `tools.Dispatcher`，参见[接入与退款案例](docs/guides/NATIVE_ORCHESTRATION.md)。
 
-业务验证案例：[DevOps、文章审核、自动回复](examples/workflow/business-cases/README.md)，支持 Gemini / DeepSeek / MiniMax 真实模型调用，包含离线输入、审批恢复和跨进程崩溃测试。
+业务验证案例：[DevOps、文章审核、自动回复](https://github.com/kart-io/goagent-examples/blob/main/workflow/business-cases/README.md)，支持 Gemini / DeepSeek / MiniMax 真实模型调用，包含离线输入、审批恢复和跨进程崩溃测试。
 
 Workflow orchestration: [typed graphs, branches, parallel joins and bounded loops](workflow/README.md).
 

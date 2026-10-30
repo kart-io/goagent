@@ -144,14 +144,21 @@ func (s *CoTStrategy) Execute(
 
 	// 如果工具可用且需要，执行工具
 	if len(tools) > 0 {
-		toolResults := s.executeToolsIfNeeded(ctx, steps, toolsByName, output)
+		toolResults, err := s.executeToolsIfNeeded(ctx, steps, toolsByName, output)
+		if err != nil {
+			return nil, err
+		}
 		if len(toolResults) > 0 {
 			// 使用工具结果重新推理
 			toolContext := s.formatToolResults(toolResults)
 			messages = append(messages, llm.AssistantMessage(response))
 			messages = append(messages, llm.UserMessage(toolContext))
 
+			// 重新推理失败时保留首轮答案；失败原因是 *PanicError 时不降级，返回该错误中止本次执行
 			llmResp2, err := llmClient.Chat(ctx, messages)
+			if base.IsPanic(err) {
+				return nil, err
+			}
 			if err == nil {
 				// 收集第二次LLM调用的token使用量
 				if llmResp2.Usage != nil {
@@ -244,7 +251,10 @@ func (s *CoTStrategy) ExecuteWithGenerator(
 
 	// 如果工具可用且需要，执行工具
 	if len(tools) > 0 {
-		toolResults := s.executeToolsIfNeeded(ctx, steps, toolsByName, output)
+		toolResults, err := s.executeToolsIfNeeded(ctx, steps, toolsByName, output)
+		if err != nil {
+			return nil, err
+		}
 		if len(toolResults) > 0 {
 			// Yield工具执行完成
 			toolOutput := createStepOutput(output, "Tools executed", startTime)
@@ -260,7 +270,11 @@ func (s *CoTStrategy) ExecuteWithGenerator(
 			messages = append(messages, llm.AssistantMessage(response))
 			messages = append(messages, llm.UserMessage(toolContext))
 
+			// 重新推理失败时保留首轮答案；失败原因是 *PanicError 时不降级，返回该错误中止本次执行
 			llmResp2, err := llmClient.Chat(ctx, messages)
+			if base.IsPanic(err) {
+				return nil, err
+			}
 			if err == nil {
 				if llmResp2.Usage != nil {
 					output.TokenUsage.Add(llmResp2.Usage)
@@ -495,7 +509,8 @@ func (s *CoTStrategy) isAnswerParagraph(para string) bool {
 	return false
 }
 
-func (s *CoTStrategy) executeToolsIfNeeded(ctx context.Context, steps []string, toolsByName map[string]interfaces.Tool, output *agentcore.AgentOutput) map[string]interface{} {
+// executeToolsIfNeeded 执行步骤中请求的工具；工具返回 *PanicError 时立即返回该错误，由调用方中止本次执行
+func (s *CoTStrategy) executeToolsIfNeeded(ctx context.Context, steps []string, toolsByName map[string]interfaces.Tool, output *agentcore.AgentOutput) (map[string]interface{}, error) {
 	toolResults := make(map[string]interface{})
 
 	for _, step := range steps {
@@ -524,6 +539,9 @@ func (s *CoTStrategy) executeToolsIfNeeded(ctx context.Context, steps []string, 
 
 					startTime := time.Now()
 					result, err := tool.Invoke(ctx, toolIn)
+					if base.IsPanic(err) {
+						return nil, err
+					}
 
 					toolCall := agentcore.AgentToolCall{
 						ToolName: toolName,
@@ -545,7 +563,7 @@ func (s *CoTStrategy) executeToolsIfNeeded(ctx context.Context, steps []string, 
 		}
 	}
 
-	return toolResults
+	return toolResults, nil
 }
 
 func (s *CoTStrategy) formatToolResults(results map[string]interface{}) string {

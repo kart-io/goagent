@@ -82,7 +82,7 @@ type BackoffPolicy interface {
 // Panic Recovery for Plugin Isolation
 // =============================================================================
 
-// panicToError 将 panic 转换为 AgentError（使用全局 PanicHandler）
+// panicToError 将 panic 转换为错误（使用全局 PanicHandler），结果总能用 errors.As 识别出 *agentErrors.PanicError
 //
 // 这是插件隔离的关键：即使第三方插件发生 panic（如空指针解引用），
 // 也不会导致整个 Agent 系统崩溃。
@@ -97,7 +97,7 @@ type BackoffPolicy interface {
 //   - r: panic 的值
 //
 // 返回:
-//   - 表示 panic 的错误
+//   - 表示 panic 的错误；必须在 defer 的 recover 处调用，调用栈才指向 panic 发生处
 func panicToError(ctx context.Context, component, operation string, r interface{}) error {
 	return GlobalPanicHandlerRegistry().HandlePanic(ctx, component, operation, r)
 }
@@ -180,7 +180,7 @@ func (r *BaseRunnable[I, O]) Batch(ctx context.Context, inputs []I, invoker func
 				if workerCtx.Err() != nil {
 					return
 				}
-				output, err := invoker(workerCtx, inputs[index])
+				output, err := safeInvoke(invoker, workerCtx, inputs[index])
 				select {
 				case results <- result{index: index, output: output, err: err}:
 				case <-workerCtx.Done():
@@ -306,7 +306,7 @@ func (p *RunnablePipe[I, M, O]) Stream(ctx context.Context, input I) (<-chan Str
 		if ctx.Err() != nil {
 			return
 		}
-		stream, err := p.second.Stream(ctx, middle)
+		stream, err := safeInvoke(p.second.Stream, ctx, middle)
 		if err != nil {
 			send(StreamChunk[O]{Error: agentErrors.Wrap(err, agentErrors.CodeStreamRead, "second runnable stream failed"), Done: true})
 			return
@@ -393,26 +393,26 @@ func NewRunnableFunc[I, O any](fn func(context.Context, I) (O, error)) *Runnable
 
 // Invoke 执行函数
 func (f *RunnableFunc[I, O]) Invoke(ctx context.Context, input I) (O, error) {
-	// 触发回调
-	for _, cb := range f.GetConfig().Callbacks {
-		if err := cb.OnStart(ctx, input); err != nil {
-			var zero O
-			return zero, err
-		}
+	callbacks := f.GetConfig().Callbacks
+	if _, err := NotifyCallbacks(ctx, "runnable_func", "on_start", callbacks, func(cb Callback) error {
+		return cb.OnStart(ctx, input)
+	}); err != nil {
+		var zero O
+		return zero, err
 	}
 
 	// 执行函数（带 panic 保护 - 这是保护第三方插件的关键）
 	output, err := safeInvoke(f.fn, ctx, input)
 
-	// 触发回调
-	for _, cb := range f.GetConfig().Callbacks {
-		if err != nil {
-			_ = cb.OnError(ctx, err)
-		} else {
-			_ = cb.OnEnd(ctx, output)
-		}
+	// OnError/OnEnd 的返回值被忽略，只有其自身 panic 会替代结果返回
+	operation, notify := "on_end", func(cb Callback) error { _ = cb.OnEnd(ctx, output); return nil }
+	if err != nil {
+		failure := err
+		operation, notify = "on_error", func(cb Callback) error { _ = cb.OnError(ctx, failure); return nil }
 	}
-
+	if panicked, panicErr := NotifyCallbacks(ctx, "runnable_func", operation, callbacks, notify); panicked {
+		return output, panicErr
+	}
 	return output, err
 }
 
@@ -518,7 +518,7 @@ func (s *RunnableSequence) Stream(ctx context.Context, input any) (<-chan Stream
 				current = output
 			} else {
 				// 最后一个使用 Stream
-				stream, err := runnable.Stream(ctx, current)
+				stream, err := safeInvoke(runnable.Stream, ctx, current)
 				if err != nil {
 					outChan <- StreamChunk[any]{Error: agentErrors.Wrap(err, agentErrors.CodeStreamRead, "runnable stream failed").
 						WithComponent("runnable_sequence").

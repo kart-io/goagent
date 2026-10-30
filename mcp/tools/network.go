@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-resty/resty/v2"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/mcp/core"
 	"github.com/kart-io/goagent/utils/httpclient"
 	"github.com/kart-io/goagent/utils/json"
@@ -140,6 +141,8 @@ func (t *HTTPRequestTool) Execute(ctx context.Context, input map[string]interfac
 	}
 
 	if err != nil {
+		// 错误文本含完整请求 URL，先脱敏
+		err = agentErrors.RedactURLError(err)
 		return &core.ToolResult{
 			Success:   false,
 			Error:     fmt.Sprintf("request failed: %v", err),

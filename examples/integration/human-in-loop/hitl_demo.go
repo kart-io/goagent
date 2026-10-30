@@ -7,6 +7,7 @@ import (
 
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/checkpoint"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 func main() {
@@ -51,7 +52,9 @@ func demo1BasicInterrupt() {
 	ctx := context.Background()
 
 	// Create an interrupt requiring approval for a dangerous action
+	// 预先设置 ID：CreateInterrupt 阻塞等待期间，审批方要凭它响应
 	interrupt := &core.Interrupt{
+		ID:       "approve-delete-production-db",
 		Type:     core.InterruptTypeApproval,
 		Priority: core.InterruptPriorityHigh,
 		Message:  "Please approve: Delete production database",
@@ -73,7 +76,7 @@ func demo1BasicInterrupt() {
 		fmt.Println("\n[Human Reviewer] Reviewing interrupt...")
 		fmt.Println("[Human Reviewer] Decision: APPROVED (with caution)")
 
-		if err := manager.RespondToInterrupt(interrupt.ID, &core.InterruptResponse{
+		if err := respondWhenPending(manager, interrupt.ID, &core.InterruptResponse{
 			Approved:    true,
 			Reason:      "Approved by senior engineer for maintenance",
 			RespondedBy: "admin@example.com",
@@ -117,6 +120,7 @@ func demo2PriorityLevels() {
 	// Create interrupts with different priorities
 	for i, priority := range priorities {
 		interrupt := &core.Interrupt{
+			ID:       fmt.Sprintf("priority-%s", priority),
 			Type:     core.InterruptTypeApproval,
 			Priority: priority,
 			Message:  fmt.Sprintf("Action requiring %s priority approval", priority),
@@ -125,7 +129,7 @@ func demo2PriorityLevels() {
 		// Respond immediately to avoid blocking
 		go func(idx int, intr *core.Interrupt) {
 			time.Sleep(100 * time.Millisecond)
-			_ = manager.RespondToInterrupt(intr.ID, &core.InterruptResponse{
+			_ = respondWhenPending(manager, intr.ID, &core.InterruptResponse{
 				Approved:    true,
 				Reason:      fmt.Sprintf("Auto-approved for demo %d", idx),
 				RespondedBy: "system",
@@ -133,11 +137,17 @@ func demo2PriorityLevels() {
 		}(i, interrupt)
 
 		// Create the interrupt
-		_, _, _ = manager.CreateInterrupt(ctx, interrupt)
+		created, response, err := manager.CreateInterrupt(ctx, interrupt)
+		if err != nil {
+			fmt.Printf("Error: %v\n", err)
+			return
+		}
 
+		// CreatedAt 由 CreateInterrupt 填在返回的中断上，传入的对象不会被修改
 		fmt.Printf("Priority %s:\n", priority)
-		fmt.Printf("  Message: %s\n", interrupt.Message)
-		fmt.Printf("  Created: %v\n\n", interrupt.CreatedAt)
+		fmt.Printf("  Message: %s\n", created.Message)
+		fmt.Printf("  Created: %v\n", created.CreatedAt)
+		fmt.Printf("  Approved: %v\n\n", response.Approved)
 	}
 
 	fmt.Printf("All %d priority levels demonstrated\n", len(priorities))
@@ -152,6 +162,7 @@ func demo3HumanInput() {
 
 	// Create interrupt requesting human input
 	interrupt := &core.Interrupt{
+		ID:       "collect-config-values",
 		Type:     core.InterruptTypeInput,
 		Priority: core.InterruptPriorityMedium,
 		Message:  "Please provide configuration values",
@@ -168,7 +179,7 @@ func demo3HumanInput() {
 		time.Sleep(500 * time.Millisecond)
 		fmt.Println("\n[Human Operator] Providing configuration...")
 
-		_ = manager.RespondToInterrupt(interrupt.ID, &core.InterruptResponse{
+		_ = respondWhenPending(manager, interrupt.ID, &core.InterruptResponse{
 			Approved:    true,
 			RespondedBy: "operator@example.com",
 			Input: map[string]interface{}{
@@ -292,6 +303,7 @@ func demo5StatePersistence() {
 	state.Set("current_batch", "batch_042")
 
 	interrupt := &core.Interrupt{
+		ID:       "continue-or-pause-workflow",
 		Type:     core.InterruptTypeDecision,
 		Priority: core.InterruptPriorityMedium,
 		Message:  "Decide: Continue processing or pause for maintenance?",
@@ -311,7 +323,7 @@ func demo5StatePersistence() {
 		fmt.Println("\n[Decision Maker] Reviewing workflow state...")
 		fmt.Println("[Decision Maker] Decision: CONTINUE processing")
 
-		_ = manager.RespondToInterrupt(interrupt.ID, &core.InterruptResponse{
+		_ = respondWhenPending(manager, interrupt.ID, &core.InterruptResponse{
 			Approved:    true,
 			Reason:      "System stable, continue to completion",
 			RespondedBy: "ops_manager",
@@ -363,11 +375,13 @@ func demo6InterruptHooks() {
 	// Create and resolve multiple interrupts
 	interrupts := []*core.Interrupt{
 		{
+			ID:       "approve-deployment",
 			Type:     core.InterruptTypeApproval,
 			Priority: core.InterruptPriorityHigh,
 			Message:  "Approval needed for deployment",
 		},
 		{
+			ID:       "review-code-change",
 			Type:     core.InterruptTypeReview,
 			Priority: core.InterruptPriorityMedium,
 			Message:  "Code review required",
@@ -378,7 +392,7 @@ func demo6InterruptHooks() {
 		// Respond in background
 		go func(idx int, intr *core.Interrupt) {
 			time.Sleep(300 * time.Millisecond)
-			_ = manager.RespondToInterrupt(intr.ID, &core.InterruptResponse{
+			_ = respondWhenPending(manager, intr.ID, &core.InterruptResponse{
 				Approved:    idx == 0, // Approve first, reject second
 				Reason:      fmt.Sprintf("Response for interrupt %d", idx),
 				RespondedBy: "reviewer",
@@ -391,4 +405,17 @@ func demo6InterruptHooks() {
 	fmt.Printf("\n[Summary]\n")
 	fmt.Printf("  Total interrupts created: %d\n", createdCount)
 	fmt.Printf("  Total interrupts resolved: %d\n", resolvedCount)
+}
+
+// respondWhenPending 在中断登记前一直重试：审批 goroutine 与 CreateInterrupt 并发启动，
+// 只靠 sleep 无法保证中断已登记，先到的响应会得到 not found，等待方则一直等到超时。
+func respondWhenPending(manager *core.InterruptManager, id string, response *core.InterruptResponse) error {
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		err := manager.RespondToInterrupt(id, response)
+		if err == nil || !agentErrors.IsCode(err, agentErrors.CodeAgentNotFound) || time.Now().After(deadline) {
+			return err
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }

@@ -211,6 +211,7 @@ func TestDurableParallelProcessCrash(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestDurableParallelProcessCrash$")
 		cmd.Env = append(os.Environ(), "GOAGENT_PARALLEL_CRASH_DIR="+dir)
+		cmd.WaitDelay = time.Second
 		output, err := cmd.CombinedOutput()
 		cancel()
 		if want == 0 {

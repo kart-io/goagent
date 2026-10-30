@@ -1,10 +1,13 @@
 package distributed
 
 import (
+	"context"
 	"errors"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/kart-io/goagent/core"
 )
 
 // CircuitState represents the current state of the circuit breaker
@@ -227,8 +230,14 @@ func (cb *CircuitBreaker) setState(newState CircuitState) {
 
 	if oldState != newState && cb.config.OnStateChange != nil {
 		// Call the callback without holding the lock
-		go cb.config.OnStateChange(oldState, newState)
+		go cb.notifyStateChange(oldState, newState)
 	}
+}
+
+// notifyStateChange 在独立 goroutine 中调用宿主回调；没有调用方接收错误，panic 只交给全局 PanicHandler 记录。
+func (cb *CircuitBreaker) notifyStateChange(from, to CircuitState) {
+	defer core.ReportPanic(context.Background(), "circuit_breaker", "on_state_change")
+	cb.config.OnStateChange(from, to)
 }
 
 // State returns the current state of the circuit breaker
@@ -252,6 +261,6 @@ func (cb *CircuitBreaker) Reset() {
 	cb.lastFailTime.Store(0)
 
 	if oldState != StateClosed && cb.config.OnStateChange != nil {
-		go cb.config.OnStateChange(oldState, StateClosed)
+		go cb.notifyStateChange(oldState, StateClosed)
 	}
 }

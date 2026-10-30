@@ -72,8 +72,8 @@ func (l *JSONLoader) Load(ctx context.Context) ([]*interfaces.Document, error) {
 	// 读取文件
 	content, err := os.ReadFile(l.filePath)
 	if err != nil {
-		if l.callbackManager != nil {
-			_ = l.callbackManager.OnError(ctx, err)
+		if cbErr := l.callbackManager.NotifyError(ctx, err); cbErr != nil {
+			return nil, cbErr
 		}
 		return nil, errors.Wrap(err, errors.CodeInternal, "failed to read json file")
 	}
@@ -87,8 +87,8 @@ func (l *JSONLoader) Load(ctx context.Context) ([]*interfaces.Document, error) {
 	}
 
 	if err != nil {
-		if l.callbackManager != nil {
-			_ = l.callbackManager.OnError(ctx, err)
+		if cbErr := l.callbackManager.NotifyError(ctx, err); cbErr != nil {
+			return nil, cbErr
 		}
 		return nil, err
 	}

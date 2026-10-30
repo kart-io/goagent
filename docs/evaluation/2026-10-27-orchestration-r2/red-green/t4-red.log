@@ -1,0 +1,11 @@
+# github.com/kart-io/goagent/tools [github.com/kart-io/goagent/tools.test]
+tools/call_scope_test.go:19:13: undefined: NewRunnableToolFactory
+tools/call_scope_test.go:19:58: undefined: OwnedRunnable
+tools/call_scope_test.go:21:11: undefined: OwnedRunnable
+tools/call_scope_test.go:29:12: undefined: NewRunnableToolFactory
+tools/call_scope_test.go:29:57: undefined: OwnedRunnable
+tools/call_scope_test.go:38:151: undefined: ErrDispatcherReentry
+tools/call_scope_test.go:41:53: undefined: NewRunnableToolFactory
+tools/call_scope_test.go:41:98: undefined: OwnedRunnable
+FAIL	github.com/kart-io/goagent/tools [build failed]
+FAIL

@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 )
@@ -130,38 +131,56 @@ func (m *CallbackManager) RemoveCallback(cb Callback) {
 	}
 }
 
-// TriggerCallbacks 触发所有回调的指定方法
+// TriggerCallbacks 触发所有回调的指定方法；回调 panic 时返回 *agentErrors.PanicError，语义见 NotifyCallbacks
 func (m *CallbackManager) TriggerCallbacks(fn func(Callback) error) error {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	_, err := m.notify(context.Background(), "trigger_callbacks", fn)
+	return err
+}
 
-	for _, cb := range m.callbacks {
-		if err := fn(cb); err != nil {
-			return err
-		}
-	}
-	return nil
+// notify 在锁外调用回调：回调内增删回调时持锁会死锁。本轮通知使用调用时的快照，增删从下一轮生效。
+func (m *CallbackManager) notify(ctx context.Context, operation string, fn func(Callback) error) (panicked bool, err error) {
+	m.mu.RLock()
+	callbacks := slices.Clone(m.callbacks)
+	m.mu.RUnlock()
+	return NotifyCallbacks(ctx, "callback_manager", operation, callbacks, fn)
 }
 
 // OnStart 触发 OnStart 回调
 func (m *CallbackManager) OnStart(ctx context.Context, input interface{}) error {
-	return m.TriggerCallbacks(func(cb Callback) error {
+	_, err := m.notify(ctx, "on_start", func(cb Callback) error {
 		return cb.OnStart(ctx, input)
 	})
+	return err
 }
 
 // OnEnd 触发 OnEnd 回调
 func (m *CallbackManager) OnEnd(ctx context.Context, output interface{}) error {
-	return m.TriggerCallbacks(func(cb Callback) error {
+	_, err := m.notify(ctx, "on_end", func(cb Callback) error {
 		return cb.OnEnd(ctx, output)
 	})
+	return err
 }
 
 // OnError 触发 OnError 回调
 func (m *CallbackManager) OnError(ctx context.Context, err error) error {
-	return m.TriggerCallbacks(func(cb Callback) error {
+	_, cbErr := m.notify(ctx, "on_error", func(cb Callback) error {
 		return cb.OnError(ctx, err)
 	})
+	return cbErr
+}
+
+// NotifyError 为已失败的操作触发 OnError：回调返回的错误被忽略，仅当回调自身 panic 时返回 *agentErrors.PanicError，
+// 调用方应以它替代原错误返回。m 为 nil 时返回 nil。
+func (m *CallbackManager) NotifyError(ctx context.Context, err error) error {
+	if m == nil {
+		return nil
+	}
+	if panicked, panicErr := m.notify(ctx, "on_error", func(cb Callback) error {
+		return cb.OnError(ctx, err)
+	}); panicked {
+		return panicErr
+	}
+	return nil
 }
 
 // LoggingCallback 日志记录回调

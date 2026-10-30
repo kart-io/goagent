@@ -1,0 +1,27 @@
+--- FAIL: TestDurableAgentRequiresExplicitScope (0.00s)
+    durable_entry_test.go:22:
+            Error Trace:    /home/costalong/code/go/src/github.com/kart-io/goagent/builder/durable_entry_test.go:22
+            Error:          Error "unexpected EOF" does not contain "DurableScope"
+            Test:           TestDurableAgentRequiresExplicitScope
+--- FAIL: TestDurableTextOnlyReplaysWithoutModelRequest (0.00s)
+    durable_entry_test.go:33:
+            Error Trace:    /home/costalong/code/go/src/github.com/kart-io/goagent/builder/durable_entry_test.go:33
+            Error:          Received unexpected error:
+                            unexpected EOF
+            Test:           TestDurableTextOnlyReplaysWithoutModelRequest
+--- FAIL: TestDurableLegacyToolsRejectedBeforeModel (0.00s)
+    durable_entry_test.go:42:
+            Error Trace:    /home/costalong/code/go/src/github.com/kart-io/goagent/builder/durable_entry_test.go:42
+            Error:          An error is expected but got nil.
+            Test:           TestDurableLegacyToolsRejectedBeforeModel
+FAIL
+FAIL    github.com/kart-io/goagent/builder  0.010s
+--- FAIL: TestDurableAdaptStreamPreservesPreviewWithoutCommittingIt (0.00s)
+    durable_preview_test.go:29:
+            Error Trace:    /home/costalong/code/go/src/github.com/kart-io/goagent/workflow/durable_preview_test.go:29
+            Error:          Expected value not to be nil.
+            Test:           TestDurableAdaptStreamPreservesPreviewWithoutCommittingIt
+            Messages:       typed preview was dropped
+FAIL
+FAIL    github.com/kart-io/goagent/workflow 0.006s
+FAIL

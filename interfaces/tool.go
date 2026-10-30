@@ -58,6 +58,21 @@ type DurableCallTool interface {
 	SupportsDurableCalls() bool
 }
 
+// ArgumentErrorTool 声明 Invoke 会把模型传错的参数作为结果交还模型改正，宿主无需预先拒绝。
+// Dispatcher.Tools 实现此契约；包装器必须显式转发，否则宿主仍会在调用前校验参数。
+type ArgumentErrorTool interface {
+	Tool
+	ReturnsArgumentErrors() bool
+}
+
+// ConcurrentCallTool 声明 Invoke 可被同一轮的多个调用并发执行，且实现自行限制并发度。
+// Dispatcher.Tools 实现此契约；包装器必须显式转发，否则 Builder 按顺序执行该轮调用。
+// 声明只表示允许并发，Builder 还需 WithParallelToolCalls(n>=2) 才会并发执行。
+type ConcurrentCallTool interface {
+	Tool
+	SupportsConcurrentCalls() bool
+}
+
 // ValidatableTool 是工具可以实现的可选接口
 // 用于提供自定义输入验证逻辑
 //

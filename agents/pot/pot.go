@@ -623,7 +623,13 @@ func (p *PoTAgent) Stream(ctx context.Context, input *agentcore.AgentInput) (<-c
 	go func() {
 		defer close(outChan)
 
-		output, err := p.Invoke(ctx, input)
+		var output *agentcore.AgentOutput
+		err := func() (err error) {
+			// 宿主代码在本 goroutine 中 panic 时转为流错误，避免进程退出
+			defer agentcore.RecoverPanic(ctx, "pot_agent", "stream", &err)
+			output, err = p.Invoke(ctx, input)
+			return err
+		}()
 		outChan <- agentcore.StreamChunk[*agentcore.AgentOutput]{
 			Data:  output,
 			Error: err,
@@ -845,39 +851,32 @@ func (p *PoTAgent) handleError(ctx context.Context, output *agentcore.AgentOutpu
 	output.Timestamp = time.Now()
 	output.Latency = time.Since(startTime)
 
-	_ = p.triggerOnError(ctx, err)
-	return output, err
+	return output, p.triggerOnError(ctx, err)
 }
 
 // Callback triggers
 func (p *PoTAgent) triggerOnStart(ctx context.Context, input *agentcore.AgentInput) error {
-	config := p.GetConfig()
-	for _, cb := range config.Callbacks {
-		if err := cb.OnStart(ctx, input); err != nil {
-			return err
-		}
-	}
-	return nil
+	_, err := agentcore.NotifyCallbacks(ctx, "pot_agent", "on_start", p.GetConfig().Callbacks, func(cb agentcore.Callback) error {
+		return cb.OnStart(ctx, input)
+	})
+	return err
 }
 
 func (p *PoTAgent) triggerOnFinish(ctx context.Context, output *agentcore.AgentOutput) error {
-	config := p.GetConfig()
-	for _, cb := range config.Callbacks {
-		if err := cb.OnAgentFinish(ctx, output); err != nil {
-			return err
-		}
-	}
-	return nil
+	_, err := agentcore.NotifyCallbacks(ctx, "pot_agent", "on_agent_finish", p.GetConfig().Callbacks, func(cb agentcore.Callback) error {
+		return cb.OnAgentFinish(ctx, output)
+	})
+	return err
 }
 
+// triggerOnError 触发错误回调，返回应交给调用方的错误：回调自身 panic 时为 *PanicError，否则为原错误 err
 func (p *PoTAgent) triggerOnError(ctx context.Context, err error) error {
-	config := p.GetConfig()
-	for _, cb := range config.Callbacks {
-		if cbErr := cb.OnError(ctx, err); cbErr != nil {
-			return cbErr
-		}
+	if panicked, panicErr := agentcore.NotifyCallbacks(ctx, "pot_agent", "on_error", p.GetConfig().Callbacks, func(cb agentcore.Callback) error {
+		return cb.OnError(ctx, err)
+	}); panicked {
+		return panicErr
 	}
-	return nil
+	return err
 }
 
 // WithCallbacks adds callback handlers

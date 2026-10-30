@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/core/observe"
 )
 
 // Branch is one named function inside an explicit parallel fork/join.
@@ -99,7 +100,9 @@ func runParallel[T any](ctx context.Context, in T, config ParallelConfig[T], lim
 					}
 					return emit(core.StreamChunk[T]{Done: true, Data: out})
 				})
-				out, err := runner.Invoke(ctx, inputs[index])
+				branchCtx, endBranch := observe.Start(ctx, observe.Event{Type: "branch", Path: branch.Name})
+				out, err := runner.Invoke(branchCtx, inputs[index])
+				endBranch(err, false)
 				if err != nil {
 					fail(fmt.Errorf("parallel branch %q: %w", branch.Name, err))
 					return

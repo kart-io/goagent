@@ -48,6 +48,7 @@ func NewOpenAIWithOptions(opts ...agentllm.ClientOption) (*OpenAIProvider, error
 	if base.Config.BaseURL != "" {
 		clientConfig.BaseURL = base.Config.BaseURL
 	}
+	clientConfig.HTTPClient = retryAfterDoer{next: clientConfig.HTTPClient}
 
 	provider := &OpenAIProvider{
 		BaseProvider: base,

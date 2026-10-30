@@ -613,7 +613,10 @@ func TestCoTStrategy_executeToolsIfNeeded(t *testing.T) {
 				Metadata:  make(map[string]interface{}),
 			}
 
-			results := strategy.executeToolsIfNeeded(context.Background(), tt.steps, toolsByName, output)
+			results, err := strategy.executeToolsIfNeeded(context.Background(), tt.steps, toolsByName, output)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
 			if tt.expectResults && len(results) == 0 {
 				t.Error("Expected tool results, got none")

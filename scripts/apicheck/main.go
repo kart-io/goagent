@@ -35,7 +35,8 @@ func forbidden(file, path string) bool {
 	case "interfaces", "errors":
 		return true
 	case "utils":
-		return dest != "utils"
+		// errors 已被上面的规则限定为不导入任何内部包的叶子包，utils 依赖它不会成环。
+		return dest != "utils" && dep != "errors"
 	case "cache":
 		return dest != "cache" && dep != "utils/json"
 	case "core":

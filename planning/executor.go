@@ -2,6 +2,7 @@ package planning
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
@@ -453,8 +454,12 @@ func (e *AgentExecutor) executeStep(ctx context.Context, step *Step) *StepResult
 	execCtx, cancel := context.WithTimeout(ctx, e.timeout)
 	defer cancel()
 
-	// Execute agent
-	output, err := agent.Invoke(execCtx, input)
+	// Execute agent；Agent 是宿主代码，并行执行时运行在框架的 goroutine 中，panic 记为该步骤的失败
+	var output *core.AgentOutput
+	_, err := core.CallSafely(execCtx, "agent_executor", "invoke", func() (err error) {
+		output, err = agent.Invoke(execCtx, input)
+		return err
+	})
 
 	// Build result
 	result := &StepResult{
@@ -700,7 +705,5 @@ func (r *AgentRegistry) GetAgent(name string) core.Agent {
 
 // contains checks if a string contains a substring (case-insensitive)
 func contains(s, substr string) bool {
-	return len(s) > 0 && len(substr) > 0 &&
-		(s == substr || len(s) > len(substr) &&
-			(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr))
+	return substr != "" && strings.Contains(strings.ToLower(s), strings.ToLower(substr))
 }

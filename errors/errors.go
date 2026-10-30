@@ -3,8 +3,16 @@ package errors
 import (
 	"errors"
 	"fmt"
+	"io"
+	"log/slog"
+	"net/url"
 	"runtime"
+	"sort"
+	"strconv"
 	"strings"
+	"unicode"
+
+	"go.uber.org/zap/zapcore"
 )
 
 // ErrorCode defines different error categories for agent operations
@@ -133,6 +141,8 @@ type AgentError struct {
 
 	// Stack contains the stack trace where the error was created
 	Stack []StackFrame
+
+	modelArgument bool
 }
 
 // StackFrame represents a single frame in a stack trace
@@ -142,7 +152,8 @@ type StackFrame struct {
 	Function string
 }
 
-// Error implements the error interface
+// Error 实现 error 接口。文本会流入日志、事件与模型输入，因此不包含 Context；
+// 需要 Context 时使用 GetContext 或结构化日志（LogValue）。
 func (e *AgentError) Error() string {
 	var sb strings.Builder
 
@@ -159,25 +170,256 @@ func (e *AgentError) Error() string {
 	sb.WriteString(": ")
 	sb.WriteString(e.Message)
 
-	if len(e.Context) > 0 {
-		sb.WriteString(" (")
-		first := true
-		for k, v := range e.Context {
-			if !first {
-				sb.WriteString(", ")
-			}
-			sb.WriteString(fmt.Sprintf("%s=%v", k, v))
-			first = false
-		}
-		sb.WriteString(")")
-	}
-
 	if e.Cause != nil {
 		sb.WriteString(fmt.Sprintf(": %v", e.Cause))
 	}
 
 	return sb.String()
 }
+
+// LogValue 实现 slog.LogValuer，以 group 形式输出错误的结构化字段（含 Context），供结构化日志使用。
+func (e *AgentError) LogValue() slog.Value {
+	attrs := []slog.Attr{slog.String("code", string(e.Code))}
+	if e.Component != "" {
+		attrs = append(attrs, slog.String("component", e.Component))
+	}
+	if e.Operation != "" {
+		attrs = append(attrs, slog.String("operation", e.Operation))
+	}
+	attrs = append(attrs, slog.String("message", e.Message))
+
+	if len(e.Context) > 0 {
+		keys := e.sortedContextKeys()
+		ctxAttrs := make([]any, 0, len(keys))
+		for _, k := range keys {
+			ctxAttrs = append(ctxAttrs, slog.Any(k, e.Context[k]))
+		}
+		attrs = append(attrs, slog.Group("context", ctxAttrs...))
+	}
+
+	if e.Cause != nil {
+		attrs = append(attrs, slog.String("cause", e.Cause.Error()))
+	}
+
+	return slog.GroupValue(attrs...)
+}
+
+// MarshalLogObject 实现 zapcore.ObjectMarshaler，输出与 LogValue 相同的字段（含 Context），
+// 使 zap 及基于 zap 的日志引擎记录 *AgentError 时不只得到 Error() 文本。
+func (e *AgentError) MarshalLogObject(enc zapcore.ObjectEncoder) error {
+	enc.AddString("code", string(e.Code))
+	if e.Component != "" {
+		enc.AddString("component", e.Component)
+	}
+	if e.Operation != "" {
+		enc.AddString("operation", e.Operation)
+	}
+	enc.AddString("message", e.Message)
+
+	if len(e.Context) > 0 {
+		keys := e.sortedContextKeys()
+		if err := enc.AddObject("context", zapcore.ObjectMarshalerFunc(func(ctxEnc zapcore.ObjectEncoder) error {
+			for _, k := range keys {
+				if err := ctxEnc.AddReflected(k, e.Context[k]); err != nil {
+					return err
+				}
+			}
+			return nil
+		})); err != nil {
+			return err
+		}
+	}
+
+	if e.Cause != nil {
+		enc.AddString("cause", e.Cause.Error())
+	}
+	return nil
+}
+
+// Format 实现 fmt.Formatter：%v、%s 与 Error() 相同，%q 为其带引号形式；
+// %+v 在 Error() 之后附带按键排序的 Context，仅用于本地调试与日志，不应交给模型。
+func (e *AgentError) Format(s fmt.State, verb rune) {
+	switch verb {
+	case 'v':
+		_, _ = io.WriteString(s, e.Error())
+		if s.Flag('+') && len(e.Context) > 0 {
+			keys := e.sortedContextKeys()
+			pairs := make([]string, 0, len(keys))
+			for _, k := range keys {
+				pairs = append(pairs, fmt.Sprintf("%s=%v", k, e.Context[k]))
+			}
+			_, _ = io.WriteString(s, " context: "+strings.Join(pairs, ", "))
+		}
+	case 's':
+		_, _ = io.WriteString(s, e.Error())
+	case 'q':
+		_, _ = fmt.Fprintf(s, "%q", e.Error())
+	default:
+		_, _ = fmt.Fprintf(s, "%%!%c(*errors.AgentError=%s)", verb, e.Error())
+	}
+}
+
+func (e *AgentError) sortedContextKeys() []string {
+	keys := make([]string, 0, len(e.Context))
+	for k := range e.Context {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// RedactURL 去掉 URL 中的 userinfo、query 与 fragment，用于把地址写入错误 Context 之前脱敏。
+//   - 无法按 URL 解析出主机的输入（如 host:port）按同样规则做字符串裁剪；
+//   - 逗号分隔的多地址（如 NATS 集群）逐段处理，query/fragment 中逗号之后的片段一并丢弃；
+//   - 密码含未转义的 /、?、# 时，scheme 之后到首个空白前最后一个 @ 之前的内容整体丢弃，
+//     因此 host:port/path 且路径含 @ 的地址会被过度裁剪；
+//   - key=value 形式的 DSN（如 "host=h password=p dbname=d"）只保留 host、port、dbname。
+//
+// 不处理把凭据放在路径中的 URL（如 Slack webhook、Telegram bot token），这类地址不应写入错误与日志。
+func RedactURL(raw string) string {
+	if isKeyValueDSN(raw) {
+		return redactKeyValueDSN(raw)
+	}
+	if !strings.Contains(raw, ",") {
+		return redactSingleURL(raw)
+	}
+
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	inQuery := false
+	for _, part := range parts {
+		// 上一段已进入 query/fragment 时，不含 scheme 的后续片段仍属于它
+		if inQuery && !strings.Contains(part, "://") {
+			continue
+		}
+		inQuery = strings.ContainsAny(stripUserinfo(part), "?#")
+		out = append(out, redactSingleURL(part))
+	}
+	return strings.Join(out, ",")
+}
+
+func redactSingleURL(raw string) string {
+	prefix, rest := "", raw
+	if i := strings.Index(raw, "://"); i >= 0 {
+		prefix, rest = raw[:i+3], raw[i+3:]
+	}
+	raw = prefix + stripUserinfo(rest)
+
+	if u, err := url.Parse(raw); err == nil && u.Host != "" {
+		u.User = nil
+		u.RawQuery = ""
+		u.ForceQuery = false
+		u.Fragment = ""
+		u.RawFragment = ""
+		return u.String()
+	}
+
+	if i := strings.IndexAny(raw, "?#"); i >= 0 {
+		raw = raw[:i]
+	}
+	return raw
+}
+
+// stripUserinfo 去掉 scheme 之后部分开头的 userinfo。authority 内有 @ 时去到其中最后一个 @；
+// 否则若首个 @ 之前含 :（密码含未转义的 /、?、# 使 authority 被提前截断），去到首个空白前最后一个 @。
+func stripUserinfo(rest string) string {
+	span := rest
+	if i := strings.IndexFunc(rest, unicode.IsSpace); i >= 0 {
+		span = rest[:i]
+	}
+	authority := span
+	if i := strings.IndexAny(span, "/?#"); i >= 0 {
+		authority = span[:i]
+	}
+	if i := strings.LastIndex(authority, "@"); i >= 0 {
+		return rest[i+1:]
+	}
+	if at := strings.Index(span, "@"); at >= 0 && strings.Contains(span[:at], ":") {
+		return rest[strings.LastIndex(span, "@")+1:]
+	}
+	return rest
+}
+
+// isKeyValueDSN 判断是否为 libpq 风格的 key=value DSN：不含 ://，且首个字段形如 identifier=value。
+func isKeyValueDSN(raw string) bool {
+	if strings.Contains(raw, "://") {
+		return false
+	}
+	fields := strings.Fields(raw)
+	if len(fields) == 0 {
+		return false
+	}
+	key, _, ok := strings.Cut(fields[0], "=")
+	if !ok || key == "" {
+		return false
+	}
+	for _, r := range key {
+		if r != '_' && !unicode.IsLetter(r) && !unicode.IsDigit(r) {
+			return false
+		}
+	}
+	return true
+}
+
+func redactKeyValueDSN(raw string) string {
+	kept := make([]string, 0, 3)
+	for _, field := range strings.Fields(raw) {
+		key, _, ok := strings.Cut(field, "=")
+		if !ok {
+			continue
+		}
+		switch key {
+		case "host", "port", "dbname":
+			kept = append(kept, field)
+		}
+	}
+	return strings.Join(kept, " ")
+}
+
+// RedactURLError 返回把错误链上首个 *url.Error 的 URL 经 RedactURL 脱敏后的错误，用于把底层 HTTP 错误
+// （resty、net/http 的错误文本含完整请求 URL 与 query 中的凭据）返回调用方、写入工具输出或日志之前。
+// 原错误不被修改；err 为 nil、链上没有 *url.Error 或 URL 无需脱敏时原样返回。
+//   - *url.Error 位于顶层：返回其副本，Unwrap 仍得到原底层错误（如 *net.OpError），Timeout() 与
+//     errors.Is(context.DeadlineExceeded) 不受影响；
+//   - 位于 *AgentError 之下：返回该 *AgentError 的浅拷贝，Cause 递归脱敏，Code 等字段不变；
+//   - 位于其他包装之下：返回的错误文本中 URL 被替换，errors.Is 按原错误链判断，
+//     errors.As 只能取到脱敏后的 *url.Error 及其底层错误，中间的包装类型不再可见。
+func RedactURLError(err error) error {
+	var ue *url.Error
+	if !errors.As(err, &ue) {
+		return err
+	}
+	safe := RedactURL(ue.URL)
+	if safe == ue.URL {
+		return err
+	}
+	redacted := &url.Error{Op: ue.Op, URL: safe, Err: ue.Err}
+
+	switch top := err.(type) {
+	case *url.Error:
+		return redacted
+	case *AgentError:
+		cp := *top
+		cp.Cause = RedactURLError(top.Cause)
+		return &cp
+	}
+
+	msg := strings.ReplaceAll(err.Error(), strconv.Quote(ue.URL), strconv.Quote(safe))
+	msg = strings.ReplaceAll(msg, ue.URL, safe)
+	return &urlRedactedError{msg: msg, orig: err, redacted: redacted}
+}
+
+type urlRedactedError struct {
+	msg      string
+	orig     error
+	redacted *url.Error
+}
+
+func (e *urlRedactedError) Error() string { return e.msg }
+
+func (e *urlRedactedError) Unwrap() error { return e.redacted }
+
+func (e *urlRedactedError) Is(target error) bool { return errors.Is(e.orig, target) }
 
 // Unwrap returns the underlying cause for error chain support
 func (e *AgentError) Unwrap() error {
@@ -253,6 +495,18 @@ func (e *AgentError) WithOperation(operation string) *AgentError {
 func (e *AgentError) WithComponent(component string) *AgentError {
 	e.Component = component
 	return e
+}
+
+// MarkModelArgument 标记此错误由模型生成的参数不合法引起，Message 可原样交还模型改正，
+// 因此 Message 不得包含内部细节。不改变 Error() 文本、错误码与类型。
+func (e *AgentError) MarkModelArgument() *AgentError {
+	e.modelArgument = true
+	return e
+}
+
+// ModelArgumentMessage 返回可交还模型的参数错误消息；未经 MarkModelArgument 标记时第二个值为 false。
+func (e *AgentError) ModelArgumentMessage() (string, bool) {
+	return e.Message, e.modelArgument
 }
 
 // WithContext adds a single key-value pair to the context

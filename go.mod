@@ -36,6 +36,7 @@ require (
 	go.opentelemetry.io/otel/sdk v1.38.0
 	go.opentelemetry.io/otel/sdk/metric v1.38.0
 	go.opentelemetry.io/otel/trace v1.38.0
+	go.uber.org/zap v1.27.0
 	golang.org/x/sync v0.20.0
 	golang.org/x/text v0.31.0
 	golang.org/x/time v0.15.0
@@ -80,7 +81,7 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.27.2 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
-	github.com/jackc/pgx/v5 v5.6.0 // indirect
+	github.com/jackc/pgx/v5 v5.6.0
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
@@ -110,7 +111,6 @@ require (
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.63.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.7.1 // indirect
 	go.uber.org/multierr v1.10.0 // indirect
-	go.uber.org/zap v1.27.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/arch v0.3.0 // indirect

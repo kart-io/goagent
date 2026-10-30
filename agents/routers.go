@@ -9,6 +9,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/kart-io/goagent/agents/base"
 	"github.com/kart-io/goagent/core"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
@@ -462,8 +463,12 @@ func (h *HybridRouter) Route(ctx context.Context, task Task, agents map[string]c
 	// Collect votes from each strategy
 	votes := make(map[string]float64)
 
+	// 单个策略失败只是不投票；失败原因是 *PanicError 时不降级，返回该错误
 	for _, strategy := range h.strategies {
 		agentName, err := strategy.router.Route(ctx, task, agents)
+		if base.IsPanic(err) {
+			return "", err
+		}
 		if err == nil {
 			votes[agentName] += strategy.weight
 		}

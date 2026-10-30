@@ -1,0 +1,74 @@
+=== RUN   TestLiveApprovalFlows
+    main_test.go:168: 模型：deepseek/deepseek-flash
+=== RUN   TestLiveApprovalFlows/R-SMALL
+    main_test.go:83: R-SMALL：{Status:completed Decision:退款 Receipt:PAY-28dcbfe3 ApprovalKey: NewPayments:1 NewModelCalls:1 Budget:{ReservedRequests:1 KnownUsageEntries:1 UnknownUsageEntries:0 KnownTokens:{PromptTokens:116 CompletionTokens:75 TotalTokens:191 CachedTokens:0}}}
+=== RUN   TestLiveApprovalFlows/R-REJECT
+    main_test.go:83: R-REJECT：{Status:completed Decision:拒绝 Receipt: ApprovalKey: NewPayments:0 NewModelCalls:1 Budget:{ReservedRequests:1 KnownUsageEntries:1 UnknownUsageEntries:0 KnownTokens:{PromptTokens:116 CompletionTokens:54 TotalTokens:170 CachedTokens:0}}}
+=== RUN   TestLiveApprovalFlows/R-LARGE
+--- PASS: TestLiveApprovalFlows (4.57s)
+    --- PASS: TestLiveApprovalFlows/R-SMALL (1.56s)
+    --- PASS: TestLiveApprovalFlows/R-REJECT (1.31s)
+    --- PASS: TestLiveApprovalFlows/R-LARGE (1.70s)
+PASS
+ok  	github.com/kart-io/goagent/examples/orchestration/live/approval	4.578s
+=== RUN   TestLiveDelegation
+    main_test.go:130: deepseek/deepseek-flash：{Answer:结论：9031.20 元
+        按 7.1 汇率折算为 8520.00 元，再加 6% 增值税 511.20 元，得到含税总价。 Total:9031.2 ExpertsCreated:1 ExpertsDone:1 ConvertRuns:1 TaxRuns:1 NewModelCalls:5 Budget:{ReservedRequests:5 KnownUsageEntries:5 UnknownUsageEntries:0 KnownTokens:{PromptTokens:2740 CompletionTokens:348 TotalTokens:3088 CachedTokens:0}}}
+--- PASS: TestLiveDelegation (6.58s)
+PASS
+ok  	github.com/kart-io/goagent/examples/orchestration/live/delegation	6.588s
+testing: warning: no tests to run
+PASS
+ok  	github.com/kart-io/goagent/examples/orchestration/live/internal/livecase	0.006s [no tests to run]
+=== RUN   TestLiveLocalizeRecovery
+    main_test.go:185: 模型：deepseek/deepseek-flash
+    main_test.go:157: 恢复：{Result:{English:For Aurora Wireless Earbuds, unopened products are eligible for a no-questions-asked refund within 7 days of delivery confirmation, and the amount will be refunded to the original payment method within 3 business days. TranslatorLookups:0 StyleLookups:1 GlossaryInjected:2 NewModelCalls:2 Budget:{ReservedRequests:4 KnownUsageEntries:4 UnknownUsageEntries:0 KnownTokens:{PromptTokens:2042 CompletionTokens:617 TotalTokens:2659 CachedTokens:0}}} Calls:2 Err:}
+--- PASS: TestLiveLocalizeRecovery (6.91s)
+PASS
+ok  	github.com/kart-io/goagent/examples/orchestration/live/localize	6.915s
+=== RUN   TestLiveLogTriageCrashRecovery
+    main_test.go:86: deepseek/deepseek-flash 恢复：{Answer:错误码：PGW-504
+        上游：bank-gw-3
+        处置建议：payment 调用 bank-gw-3 上游网关超时已触发熔断（见 10:01:23 r-7083），请立即联系银行网关侧确认可用性，同时将流量切至其他可用上游网关（如 bank-gw-1/2）并持续观察熔断恢复后的成功率。 NewModelCalls:3 FetchRuns:0 PageReads:3 Offloaded:1 Budget:{ReservedRequests:5 KnownUsageEntries:5 UnknownUsageEntries:0 KnownTokens:{PromptTokens:10641 CompletionTokens:644 TotalTokens:11285 CachedTokens:0}}}
+--- PASS: TestLiveLogTriageCrashRecovery (8.27s)
+PASS
+ok  	github.com/kart-io/goagent/examples/orchestration/live/log-triage	8.282s
+=== RUN   TestLiveParallelDiagnostics
+    main_test.go:45: deepseek/deepseek-flash：{Findings:map[cpu:异常 db:正常 network:异常] Decision:升级 NewModelCalls:4 Budget:{ReservedRequests:4 KnownUsageEntries:4 UnknownUsageEntries:0 KnownTokens:{PromptTokens:424 CompletionTokens:470 TotalTokens:894 CachedTokens:0}} EventCounts:map[agent_end:4 agent_start:4 branch_end:3 branch_start:3 graph_end:1 graph_start:1 model_end:4 model_start:4 node_end:2 node_start:2] Dropped:0 EventsPath:/tmp/TestLiveParallelDiagnostics2525309660/001/events.jsonl ReportPath:/tmp/TestLiveParallelDiagnostics2525309660/001/report.html}
+--- PASS: TestLiveParallelDiagnostics (3.33s)
+PASS
+ok  	github.com/kart-io/goagent/examples/orchestration/live/parallel-diagnostics	3.333s
+=== RUN   TestLiveReviewLoopRecovery
+    main_test.go:78: deepseek/deepseek-flash 恢复：轮次 2，新增请求 2，预留 4
+        亲爱的顾客，感谢支持！质量问题或与描述不符，请签收后7天内联系客服退换。非质量问题退货需商品完好、不影响二次销售，运费按平台规则承担；定制刻字类商品不适用无理由退款。退款将在3个工作日内原路退回。有疑问请联系客服或发邮件至refund@demo.example，我们会尽快帮您解决。
+--- PASS: TestLiveReviewLoopRecovery (14.75s)
+PASS
+ok  	github.com/kart-io/goagent/examples/orchestration/live/review-loop	14.756s
+=== RUN   TestLiveSummarize
+    main_test.go:115: deepseek/deepseek-flash：预览 68 段，首段 1.284569418s，总 1.589047205s
+        结论：订单服务新版本将库存查询由缓存改为直连数据库，导致数据库 CPU 过载、下单成功率下降。
+        影响：故障持续约 9 分钟，约 3200 笔下单失败，无数据丢失。
+        改进：库存查询恢复缓存，并在发布前增加数据库负载压测门禁。
+--- PASS: TestLiveSummarize (1.59s)
+=== RUN   TestLiveContend
+    main_test.go:143: deepseek/deepseek-flash：{Succeeded:2 Rejected:1 Answers:[背压是下游处理速度跟不上时，向上游反馈的流量控制信号，迫使上游降速。 熔断是当依赖故障或错误率超阈值时自动切断请求，防止故障扩散的自我保护机制。] Errors:[root model request budget exceeded] NewModelCalls:2 Budget:{ReservedRequests:2 KnownUsageEntries:2 UnknownUsageEntries:0 KnownTokens:{PromptTokens:98 CompletionTokens:219 TotalTokens:317 CachedTokens:0}}}
+--- PASS: TestLiveContend (1.83s)
+PASS
+ok  	github.com/kart-io/goagent/examples/orchestration/live/stream-budget	3.426s
+=== RUN   TestLiveTicketTriage
+=== RUN   TestLiveTicketTriage/A1001
+    main_test.go:34: deepseek/deepseek-flash 首次：{Ticket:A1001 Decision:批准 Answer:结论：批准
+        该订单签收仅 3 天且在 7 天窗口内，商品为电子配件且未拆封，符合第 1 条无理由退款政策。 NewModelCalls:4 LookupRuns:1 ChildCreated:1 ChildClose:1 Budget:{ReservedRequests:4 KnownUsageEntries:4 UnknownUsageEntries:0 KnownTokens:{PromptTokens:2003 CompletionTokens:289 TotalTokens:2292 CachedTokens:0}}}
+=== RUN   TestLiveTicketTriage/A1002
+    main_test.go:34: deepseek/deepseek-flash 首次：{Ticket:A1002 Decision:拒绝 Answer:结论：拒绝
+        理由：订单 A1002 签收已 20 天，超出 7 天无理由退款窗口（条款3），即使充电器未拆封也不符合退款政策；如有质量问题需另行走售后流程。 NewModelCalls:4 LookupRuns:1 ChildCreated:1 ChildClose:1 Budget:{ReservedRequests:4 KnownUsageEntries:4 UnknownUsageEntries:0 KnownTokens:{PromptTokens:2096 CompletionTokens:397 TotalTokens:2493 CachedTokens:0}}}
+=== RUN   TestLiveTicketTriage/A1003
+    main_test.go:34: deepseek/deepseek-flash 首次：{Ticket:A1003 Decision:拒绝 Answer:结论：拒绝
+        理由：该订单为定制刻字类商品，依据退款政策第 2 条不支持无理由退款，即使签收仅 2 天且未拆封也不例外。 NewModelCalls:4 LookupRuns:1 ChildCreated:1 ChildClose:1 Budget:{ReservedRequests:4 KnownUsageEntries:4 UnknownUsageEntries:0 KnownTokens:{PromptTokens:2123 CompletionTokens:443 TotalTokens:2566 CachedTokens:0}}}
+--- PASS: TestLiveTicketTriage (17.03s)
+    --- PASS: TestLiveTicketTriage/A1001 (5.96s)
+    --- PASS: TestLiveTicketTriage/A1002 (5.36s)
+    --- PASS: TestLiveTicketTriage/A1003 (5.71s)
+PASS
+ok  	github.com/kart-io/goagent/examples/orchestration/live/ticket-triage	17.040s
+exit=0

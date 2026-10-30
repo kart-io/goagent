@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/kart-io/goagent/agents/base"
 	agentcore "github.com/kart-io/goagent/core"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
@@ -168,11 +169,14 @@ func (e *AgentExecutor) Execute(ctx context.Context, input *agentcore.AgentInput
 			"input":  input.Task,
 			"output": output.Result,
 		}
-		if err := e.memory.SaveContext(ctx, input.SessionID, memoryInput, output.Metadata); err != nil {
-			// 记录错误但不中断执行
-			if e.verbose {
-				fmt.Printf("Warning: failed to save to memory: %v\n", err)
-			}
+		if err := e.saveContext(ctx, input.SessionID, memoryInput, output.Metadata); err != nil {
+			output.Status = "failed"
+			output.Message = "Failed to save memory"
+			output.Latency = time.Since(startTime)
+			return output, agentErrors.Wrap(err, agentErrors.CodeInternal, "failed to save memory").
+				WithComponent("executor_agent").
+				WithOperation("Execute").
+				WithContext("session_id", input.SessionID)
 		}
 	}
 
@@ -368,14 +372,39 @@ func (e *AgentExecutor) RunGenerator(ctx context.Context, input *agentcore.Agent
 				"input":  input.Task,
 				"output": lastOutput.Result,
 			}
-			if err := e.memory.SaveContext(ctx, input.SessionID, memoryInput, lastOutput.Metadata); err != nil {
-				// 记录错误但不中断（记忆保存失败不应该影响执行结果）
-				if e.verbose {
-					fmt.Printf("Warning: failed to save to memory: %v\n", err)
+			if err := e.saveContext(ctx, input.SessionID, memoryInput, lastOutput.Metadata); err != nil {
+				errorOutput := &agentcore.AgentOutput{
+					Status:    "failed",
+					Message:   "Failed to save memory",
+					Timestamp: time.Now(),
+					Latency:   time.Since(startTime),
+					Metadata:  make(map[string]interface{}),
 				}
+				yield(errorOutput, agentErrors.Wrap(err, agentErrors.CodeInternal, "failed to save memory").
+					WithComponent("executor_agent").
+					WithOperation("RunGenerator").
+					WithContext("session_id", input.SessionID))
 			}
 		}
 	}
+}
+
+// saveContext 尽力保存记忆：普通错误只在 verbose 时打印、返回 nil，不影响执行结果；
+// SaveContext panic 或返回 *PanicError 时返回该错误，由调用方让本次执行失败。
+func (e *AgentExecutor) saveContext(ctx context.Context, sessionID string, input, output map[string]interface{}) error {
+	_, err := agentcore.CallSafely(ctx, "executor_agent", "save_context", func() error {
+		return e.memory.SaveContext(ctx, sessionID, input, output)
+	})
+	if err == nil {
+		return nil
+	}
+	if base.IsPanic(err) {
+		return err
+	}
+	if e.verbose {
+		fmt.Printf("Warning: failed to save to memory: %v\n", err)
+	}
+	return nil
 }
 
 // Batch 批量执行

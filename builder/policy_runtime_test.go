@@ -1,0 +1,232 @@
+package builder
+
+import (
+	"context"
+	"errors"
+	"github.com/kart-io/goagent/builder/contextpolicy"
+	"github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/core/durable"
+	"github.com/kart-io/goagent/interfaces"
+	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/tools"
+	"github.com/stretchr/testify/require"
+	"strings"
+	"sync"
+	"testing"
+)
+
+type testPolicy struct {
+	change func(contextpolicy.Turn) contextpolicy.Turn
+}
+
+func (p *testPolicy) Descriptor() contextpolicy.Descriptor {
+	return contextpolicy.Descriptor{ID: "test", Version: "v1", ConfigHash: "hash", Durable: true}
+}
+func (p *testPolicy) BeforeTurn(_ context.Context, t contextpolicy.Turn) (contextpolicy.Turn, error) {
+	return p.change(t), nil
+}
+func TestPolicyLifecycleAndProtocol(t *testing.T) {
+	for _, change := range []func(contextpolicy.Turn) contextpolicy.Turn{
+		func(t contextpolicy.Turn) contextpolicy.Turn { t.RemainingCalls++; return t },
+		func(t contextpolicy.Turn) contextpolicy.Turn { t.Messages[0].Content = "overwrite system"; return t },
+		func(t contextpolicy.Turn) contextpolicy.Turn {
+			t.Messages[1].ToolCalls[0].ID = "overwrite nested"
+			return t
+		},
+	} {
+		a, err := NewSimpleBuilder(nativeModel()).WithTools(NewMockTool("lookup", "x")).WithContextPolicies(func() contextpolicy.Policy { return &testPolicy{change} }).Build()
+		require.NoError(t, err)
+		runtime, err := a.newPolicyRuntime(context.Background())
+		require.NoError(t, err)
+		messages := []llm.Message{llm.SystemMessage("system"), {Role: "assistant", ToolCalls: []llm.ToolCall{nativeCall("id", "lookup", "{}")}}}
+		_, err = runtime.apply(context.Background(), contextpolicy.Turn{Messages: messages, RemainingCalls: 2}, false)
+		require.Error(t, err)
+		require.Equal(t, "id", messages[1].ToolCalls[0].ID)
+		require.Equal(t, "system", messages[0].Content)
+	}
+	_, err := NewSimpleBuilder(nativeModel()).WithTools(NewMockTool("lookup", "x")).WithContextPolicy(ContextPolicy{}).WithContextPolicies(func() contextpolicy.Policy { return &testPolicy{} }).Build()
+	require.Error(t, err)
+}
+
+func TestPolicyReadToolAuthorizationAndReplay(t *testing.T) {
+	file, err := durable.NewFileStore(t.TempDir())
+	require.NoError(t, err)
+	store, err := contextpolicy.NewDurableResultStore(file)
+	require.NoError(t, err)
+	ctx := durable.WithJournal(durable.WithExecutionKey(context.Background(), "root-node"), file)
+	factories := []contextpolicy.Factory{func() contextpolicy.Policy {
+		p, e := contextpolicy.NewOffload(contextpolicy.OffloadConfig{Store: store, MaxToolResultRunes: 3})
+		require.NoError(t, e)
+		return p
+	}}
+	a, err := NewSimpleBuilder(nativeModel()).WithTools(NewMockTool("lookup", "long evidence")).WithContextPolicies(factories...).Build()
+	require.NoError(t, err)
+	_, err = a.newPolicyRuntime(ctx)
+	require.ErrorContains(t, err, "adapter")
+	a.config.PolicyToolAdapter = func(ts []interfaces.Tool) ([]interfaces.Tool, error) { return ts, nil }
+	_, err = a.newPolicyRuntime(ctx)
+	require.ErrorContains(t, err, "unjournaled")
+	adapter := func(ts []interfaces.Tool) ([]interfaces.Tool, error) {
+		r := tools.NewRegistry()
+		for _, tool := range ts {
+			if err := r.Register(tool); err != nil {
+				return nil, err
+			}
+		}
+		d, e := tools.NewDispatcher(r, tools.DispatchConfig{})
+		if e != nil {
+			return nil, e
+		}
+		return d.Tools(), nil
+	}
+	business, err := adapter([]interfaces.Tool{NewMockTool("lookup", "long evidence")})
+	require.NoError(t, err)
+	model := nativeModel([]*llm.StreamChunk{{Done: true, FinishReason: "tool_calls", ToolCalls: []llm.ToolCall{nativeCall("a", "lookup", "{}")}}}, []*llm.StreamChunk{{Done: true, FinishReason: "stop", Content: "answer"}})
+	makeAgent := func() *ConfigurableAgent[any, *core.AgentState] {
+		agent, e := NewSimpleBuilder(model).WithDurableScope("policy").WithSystemPrompt("system").WithTools(business...).WithMaxIterations(3).WithContextPolicies(factories...).WithPolicyToolAdapter(adapter).Build()
+		require.NoError(t, e)
+		return agent
+	}
+	for range 2 {
+		out, e := makeAgent().AsRunnable().Invoke(ctx, "question")
+		require.NoError(t, e)
+		require.Equal(t, "answer", out.Result)
+	}
+	require.Len(t, model.requests, 2)
+	require.Contains(t, model.requests[1].Messages[3].Content, "context_result")
+	// Last local turn restores the raw evidence and removes reader tools.
+	p, e := makeAgent().newPolicyRuntime(ctx)
+	require.NoError(t, e)
+	scope, _ := policyContext(ctx, p)
+	raw := append([]llm.Message(nil), model.requests[1].Messages...)
+	raw[3].Content = "long evidence"
+	turn, e := p.apply(scope, contextpolicy.Turn{Messages: raw}, false)
+	require.NoError(t, e)
+	turn, e = p.apply(scope, turn, true)
+	require.NoError(t, e)
+	require.Equal(t, "long evidence", turn.Messages[3].Content)
+}
+
+type referenceSaveFailure struct {
+	durable.Store
+	fail bool
+}
+
+func (s *referenceSaveFailure) Save(ctx context.Context, id string, snapshot *durable.Snapshot) error {
+	if s.fail && strings.HasPrefix(id, "goagent/context-result/") {
+		return errors.New("reference save failed")
+	}
+	return s.Store.Save(ctx, id, snapshot)
+}
+func TestPolicyReferenceSaveBeforeRequestAndConfigMismatch(t *testing.T) {
+	file, err := durable.NewFileStore(t.TempDir())
+	require.NoError(t, err)
+	fault := &referenceSaveFailure{Store: file, fail: true}
+	store, err := contextpolicy.NewDurableResultStore(fault)
+	require.NoError(t, err)
+	ctx := durable.WithJournal(durable.WithExecutionKey(context.Background(), "save-order"), file)
+	adapter := func(ts []interfaces.Tool) ([]interfaces.Tool, error) {
+		reg := tools.NewRegistry()
+		for _, tool := range ts {
+			require.NoError(t, reg.Register(tool))
+		}
+		d, e := tools.NewDispatcher(reg, tools.DispatchConfig{})
+		if e != nil {
+			return nil, e
+		}
+		return d.Tools(), nil
+	}
+	business, err := adapter([]interfaces.Tool{NewMockTool("lookup", "long evidence")})
+	require.NoError(t, err)
+	m := nativeModel([]*llm.StreamChunk{{Done: true, FinishReason: "tool_calls", ToolCalls: []llm.ToolCall{nativeCall("a", "lookup", "{}")}}}, []*llm.StreamChunk{{Done: true, FinishReason: "stop", Content: "answer"}})
+	namespace := "original"
+	build := func() *ConfigurableAgent[any, *core.AgentState] {
+		a, e := NewSimpleBuilder(m).WithDurableScope("policy").WithTools(business...).WithMaxIterations(3).WithContextPolicies(func() contextpolicy.Policy {
+			p, e := contextpolicy.NewOffload(contextpolicy.OffloadConfig{Store: store, Namespace: namespace, MaxToolResultRunes: 3})
+			require.NoError(t, e)
+			return p
+		}).WithPolicyToolAdapter(adapter).Build()
+		require.NoError(t, e)
+		return a
+	}
+	_, err = build().AsRunnable().Invoke(ctx, "question")
+	require.ErrorContains(t, err, "reference save failed")
+	require.Len(t, m.requests, 1, "never send a dangling reference")
+	fault.fail = false
+	_, err = build().AsRunnable().Invoke(ctx, "question")
+	require.NoError(t, err)
+	require.Len(t, m.requests, 2)
+	namespace = "different-store"
+	_, err = build().AsRunnable().Invoke(ctx, "question")
+	require.Error(t, err)
+	require.Len(t, m.requests, 2, "configuration mismatch must not request model")
+}
+
+func TestOrdinaryPolicyRunsOnFinalTurn(t *testing.T) {
+	policy := &testPolicy{change: func(turn contextpolicy.Turn) contextpolicy.Turn { turn.Messages[0].Content = "filtered"; return turn }}
+	runtime := &policyRuntime{policies: []contextpolicy.Policy{policy}, descriptors: []contextpolicy.Descriptor{policy.Descriptor()}}
+	turn, err := runtime.apply(context.Background(), contextpolicy.Turn{Messages: []llm.Message{llm.UserMessage("raw")}}, true)
+	require.NoError(t, err)
+	require.Equal(t, "filtered", turn.Messages[0].Content)
+}
+
+// trackingStore 记录尚未释放的运行键。
+type trackingStore struct {
+	contextpolicy.ResultStore
+	mu   sync.Mutex
+	live map[string]bool
+}
+
+func (s *trackingStore) PutIfAbsent(ctx context.Context, ref contextpolicy.Ref, data []byte) error {
+	s.mu.Lock()
+	s.live[ref.RunKey] = true
+	s.mu.Unlock()
+	return s.ResultStore.PutIfAbsent(ctx, ref, data)
+}
+func (s *trackingStore) Release(ctx context.Context, run string) error {
+	s.mu.Lock()
+	delete(s.live, run)
+	s.mu.Unlock()
+	return s.ResultStore.Release(ctx, run)
+}
+
+// 非持久执行共享同一 ResultStore 时，Builder 生成的临时作用域在执行结束（成功或失败）后自动释放；
+// 宿主经 WithResultScope 提供的作用域不自动释放，留给宿主回收。
+func TestPolicyEphemeralScopeReleased(t *testing.T) {
+	store := &trackingStore{ResultStore: contextpolicy.NewMemoryStore(), live: map[string]bool{}}
+	run := func(ctx context.Context, fail bool) error {
+		second := []*llm.StreamChunk{{Delta: "答"}, {Done: true, FinishReason: "stop"}}
+		if fail {
+			second = []*llm.StreamChunk{{Error: errors.New("模型失败")}}
+		}
+		model := nativeModel(
+			[]*llm.StreamChunk{{Done: true, FinishReason: "tool_calls", ToolCalls: []llm.ToolCall{nativeCall("a", "lookup", "{}")}}},
+			[]*llm.StreamChunk{{Done: true, FinishReason: "tool_calls", ToolCalls: []llm.ToolCall{nativeCall("b", "lookup", "{}")}}},
+			second,
+		)
+		agent, err := NewSimpleBuilder(model).WithTools(NewMockTool("lookup", "long evidence")).WithMaxIterations(4).
+			WithContextPolicies(func() contextpolicy.Policy {
+				p, e := contextpolicy.NewOffload(contextpolicy.OffloadConfig{Store: store, MaxToolResultRunes: 3})
+				require.NoError(t, e)
+				return p
+			}).Build()
+		require.NoError(t, err)
+		_, err = agent.AsRunnable().Invoke(ctx, "question")
+		return err
+	}
+	for i := range 20 {
+		err := run(context.Background(), i%2 == 1)
+		if i%2 == 1 {
+			require.Error(t, err)
+		} else {
+			require.NoError(t, err)
+		}
+	}
+	require.Empty(t, store.live, "临时作用域全部释放")
+
+	hosted := contextpolicy.WithResultScope(context.Background(), "host-run")
+	require.NoError(t, run(hosted, false))
+	require.Equal(t, map[string]bool{"host-run": true}, store.live, "宿主作用域由宿主释放")
+	require.NoError(t, store.Release(hosted, "host-run"))
+	require.Empty(t, store.live)
+}

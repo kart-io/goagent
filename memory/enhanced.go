@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kart-io/goagent/core"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/utils/json"
 )
@@ -640,11 +641,19 @@ func (m *HierarchicalMemory) backgroundConsolidation() {
 		case <-m.ctx.Done():
 			return // Clean shutdown
 		case <-ticker.C:
-			// Consolidate memories
-			_ = m.Consolidate(m.ctx)
-
-			// Forget unimportant memories
-			_ = m.Forget(m.ctx, m.importanceThreshold)
+			m.maintain()
 		}
 	}
+}
+
+// maintain 执行一次后台整理：VectorStore 是宿主提供的实现，没有调用方接收错误，
+// panic 交给全局 PanicHandler 记录，后台循环继续下一轮。
+func (m *HierarchicalMemory) maintain() {
+	defer core.ReportPanic(m.ctx, "hierarchical_memory", "maintain")
+
+	// Consolidate memories
+	_ = m.Consolidate(m.ctx)
+
+	// Forget unimportant memories
+	_ = m.Forget(m.ctx, m.importanceThreshold)
 }

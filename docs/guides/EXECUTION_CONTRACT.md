@@ -165,3 +165,9 @@ agent, err := builder.NewSimpleBuilder(client).
 `tools.Dispatcher` 为图节点和 Builder 工具提供同一调度入口，详见[原生编排与工具体系](NATIVE_ORCHESTRATION.md)。默认不重试，失败结果不能转为成功，工具执行键由宿主 context 注入。
 
 `DurableGraph.AsRunnable` 的 Stream Done 表示本次调用结束；业务完成检查 `Data.Done`。审批等待返回 `Data.Waiting=true`、`Data.Done=false`，兼容 `Run` 保留 `durable.ErrApprovalRequired`。已保存并行分支在恢复时跳过，Merge 保持无副作用并可能重做；节点内部模型循环仍作为整体执行。
+
+## 可组合编排 R2
+
+新增根预算、受控 Runnable 工具、OTel 观察及不可变上下文结果引用；见 [可组合编排指南](COMPOSABLE_ORCHESTRATION.md)。旧 ContextPolicy 的持久限制继续保留；需要持久引用时使用每次执行独立的 WithContextPolicies 工厂和宿主 WithPolicyToolAdapter。流预览仍不代表业务终态，core/flow 仅为实验原型。
+
+根预算只在统一入口执行；绑定 Controller 后，旧 Execute 与非流式 ExecuteWithTools 会在模型请求前明确报错。未绑定时保留同步兼容语义。

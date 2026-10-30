@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/testing/panictest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -91,7 +93,7 @@ func TestDurableProcessRestart(t *testing.T) {
 	dir := t.TempDir()
 	cmd := exec.Command(os.Args[0], "-test.run=^TestDurableProcessRestart$")
 	cmd.Env = append(os.Environ(), "GOAGENT_DURABLE_CHILD_DIR="+dir)
-	output, err := cmd.CombinedOutput()
+	output, err := panictest.CombinedOutput(cmd, panictest.ChildTimeout(t, time.Minute))
 	require.NoError(t, err, string(output))
 	store, err := NewFileStore(dir)
 	require.NoError(t, err)
@@ -119,4 +121,55 @@ func processSteps(dir string) []Step {
 		}},
 		{Name: "approved", RequireApproval: true, Run: func(context.Context, StepInput) (json.RawMessage, error) { return json.RawMessage(`"done"`), nil }},
 	}
+}
+
+func TestBeforeApproveRunsUnderLock(t *testing.T) {
+	ctx := context.Background()
+	store, err := NewFileStore(t.TempDir())
+	require.NoError(t, err)
+	effects := 0
+	runner := &Runner{Store: store, Version: "v1", Steps: []Step{
+		{Name: "effect", RequireApproval: true, Run: func(context.Context, StepInput) (json.RawMessage, error) {
+			effects++
+			return json.RawMessage(`"done"`), nil
+		}},
+	}}
+	wait, err := runner.Run(ctx, "run", json.RawMessage(`{"ticket":"h1"}`), "")
+	require.ErrorIs(t, err, ErrApprovalRequired)
+	var seen *Snapshot
+	reject := errors.New("工单已变更")
+	runner.BeforeApprove = func(_ context.Context, id string, snap *Snapshot) error {
+		require.Equal(t, "run", id)
+		seen = snap
+		snap.Data = json.RawMessage(`"tampered"`)
+		snap.Approved = true
+		return reject
+	}
+	_, err = runner.Run(ctx, "run", nil, wait.Key)
+	require.ErrorIs(t, err, reject)
+	require.True(t, seen.Waiting)
+	require.Zero(t, effects)
+	after, err := store.Load(ctx, "run")
+	require.NoError(t, err)
+	require.Equal(t, wait, after)
+	runner.BeforeApprove = func(context.Context, string, *Snapshot) error { panic("boom") }
+	_, err = runner.Run(ctx, "run", nil, wait.Key)
+	require.ErrorContains(t, err, "批准前置校验 发生 panic")
+	require.NotContains(t, err.Error(), "boom")
+	var panicErr *agentErrors.PanicError
+	require.ErrorAs(t, err, &panicErr)
+	require.Equal(t, "boom", panicErr.Value)
+	require.Zero(t, effects)
+	runner.BeforeApprove = func(_ context.Context, _ string, snap *Snapshot) error {
+		require.JSONEq(t, `{"ticket":"h1"}`, string(snap.Data))
+		return nil
+	}
+	done, err := runner.Run(ctx, "run", nil, wait.Key)
+	require.NoError(t, err)
+	require.Equal(t, 1, effects)
+	require.Equal(t, 1, done.Next)
+	// 非批准恢复不调用钩子。
+	runner.BeforeApprove = func(context.Context, string, *Snapshot) error { panic("不应调用") }
+	_, err = runner.Run(ctx, "run", nil, "")
+	require.NoError(t, err)
 }

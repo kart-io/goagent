@@ -139,6 +139,8 @@ if errors.Is(err, durable.ErrApprovalRequired) {
 
 执行前持久化意图，节点成功后保存输出，再单独保存下一条路由。因此路由失败不会重跑已保存的节点。Router 必须无副作用，其执行可能在崩溃后重放；Router 对输入的修改不保存。`MaxSteps` 跨重启累计。审批键绑定 run、版本计划和具体节点访问，循环每轮使用不同键；它不是身份认证凭证。
 
+宿主需要在批准生效前核对外部数据（例如 SQL 工单在审批暂停期间是否被改动）时，用 `g.CompileDurable(ctx, cfg, workflow.WithBeforeApprove(fn))` 注册前置校验。它在运行锁内、审批键匹配之后、批准写入之前调用，`snap` 是锁内最新检查点的独立副本，先 `Snapshot` 再 `Run` 之间的窗口由它覆盖。返回错误时批准被拒绝，检查点保持 Waiting、审批键不变，错误以 `批准前置校验拒绝: %w` 包装；panic 报告为 `批准前置校验 panic: ...`。`Run` 与 `AsRunnable` 两条入口都会调用，不带审批键的恢复不调用。钩子不参与计划指纹。钩子内不要再对同一 run 调用 `Snapshot`/`Run`，运行锁已被持有。`durable.Runner` 的 `BeforeApprove` 字段语义相同。
+
 节点通过 `workflow.DurableKey(ctx)` 读取稳定执行键。效果提交后、检查点保存前发生崩溃时节点仍可能重跑，外部服务必须用该键或更强的业务请求 ID 去重。节点函数仍从入口重新执行；使用 Dispatcher.Tools 的 Builder 原生工具循环会按模型回合和工具调用恢复，详见下文。它不恢复任意 Go 调用栈。`AsRunnable` 为持久图提供 Invoke/Stream/Batch；审批暂停返回 Waiting=true、Done=false 的状态。兼容 `Run` 仍返回审批哨兵错误。实时事件不承诺持久化重放。FileStore 只提供本地锁与原子文件保存，不提供跨主机租约或接管。Merge 必须无副作用；效果完成后但分支检查点保存前仍可能重跑，业务服务须执行幂等。
 
 ```sh
@@ -154,10 +156,15 @@ go test -race ./workflow -run DurableGraph
 
 ## 单节点内的模型与多工具恢复
 
-持久图和 `core/durable.Runner` 自动向节点 context 注入操作日志。Builder 的原生工具循环会先保存模型计划（调用 ID、参数、用量、Provider 续接状态），整轮 Schema 预检通过后才执行工具；恢复先重放计划和已完成工具结果。工具必须经 `Dispatcher.Tools()` 或实现 `interfaces.DurableCallTool` 的适配器接入；裸 Tool 在付费请求前被拒绝。
+持久图和 `core/durable.Runner` 自动向节点 context 注入操作日志。Builder 必须设置 `WithDurableScope("agent-name")`，同一节点内不同逻辑调用使用不同稳定名称。Builder 的原生工具循环会先保存模型计划（调用 ID、参数、用量、Provider 续接状态），整轮 Schema 预检通过后才执行工具；恢复先重放计划和已完成工具结果。工具必须经 `Dispatcher.Tools()` 或实现 `interfaces.DurableCallTool` 的适配器接入；裸 Tool 在付费请求前被拒绝。
 
 手写多工具节点使用宿主生成的稳定 `ToolInput.CallID`，例如 `"reserve"`、`"notify"`。Dispatcher 将 `父执行键 + tool/CallID` 派生为独立子键，注入工具的 context 与 ExecutionKey。已完成调用直接读取结果；效果已提交但结果未保存的调用只能依靠目标服务对同一子键去重。旧的空 CallID 保持单效果节点行为。
 
-失败模型回合不会自动重试，`durable.InspectOperation` 可读取状态与已知用量，后续恢复返回 `durable.ErrOperationAttention`。工具的 `MaxAttempts` 默认 3，限制跨显式恢复的总尝试数，单次 Invoke 不循环重试。详细约束与代码见[操作日志指南](../docs/guides/NATIVE_ORCHESTRATION.md#工具调用级日志与恢复)。
+失败模型回合不会自动重试，`durable.InspectOperation` 在 Agent 子作用域 context 中可读取状态与已知用量，后续恢复返回 `durable.ErrOperationAttention`。工具的 `MaxAttempts` 默认 3，限制跨显式恢复的总尝试数，单次 Invoke 不循环重试。详细约束与代码见[操作日志指南](../docs/guides/NATIVE_ORCHESTRATION.md#工具调用级日志与恢复)。
 
 `AdaptStream` 的 intermediate 回调接收原状态和中间 chunk，可显式保留 Data 与 Event；它不能返回 Done，也不能修改共享原状态。中间块只是预览，可能在恢复时重放，不驱动后继节点或写入图状态。最终 output 仍需等待完整合法流；映射失败会取消上游。
+
+
+持久图的 `AsRunnable().Stream` 同样保留 `AdaptStream` 的类型化预览：中间块 `Data.Preview=true`，预览值在 `Data.State`。即使没有 Event 或数据为零值也不丢弃。预览不写入检查点；失败或取消后 `Snapshot` 仍返回上次提交状态，Preview=false。最终成功块也为 Preview=false，业务完成须继续检查 Data.Done。
+
+持久化入口现支持无工具 StreamClient 的模型日志与恢复。旧 GenerateWithTools 协议、同步 Execute 及无流 ExecuteWithTools 在持久上下文中提前拒绝，非持久执行不变。旧无作用域模型日志不会自动迁移为新键；补充 scope、核对已有业务效果并提升 Version，详见[接入约束](../docs/guides/NATIVE_ORCHESTRATION.md#多-agent-作用域与入口约束)。

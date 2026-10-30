@@ -9,12 +9,15 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/core/budget"
+	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/execution"
 	"github.com/kart-io/goagent/core/middleware"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/common"
+	"github.com/kart-io/goagent/tools"
 	"github.com/kart-io/goagent/utils/json"
 )
 
@@ -37,7 +40,8 @@ type ConfigurableAgent[C any, S core.State] struct {
 }
 
 // Initialize 准备 Agent 执行
-func (a *ConfigurableAgent[C, S]) Initialize(ctx context.Context) error {
+func (a *ConfigurableAgent[C, S]) Initialize(ctx context.Context) (err error) {
+	defer recoverPanic("Agent 初始化", &err)
 	// 如果存在则加载先前状态
 	if a.runtime.Checkpointer != nil {
 		if exists, _ := a.runtime.Checkpointer.Exists(ctx, a.config.SessionID); exists {
@@ -63,8 +67,17 @@ func (a *ConfigurableAgent[C, S]) Initialize(ctx context.Context) error {
 //
 // For the native tool/stream pipeline use AsRunnable().Invoke. This synchronous
 // entry remains supported for clients without structured streaming.
-func (a *ConfigurableAgent[C, S]) Execute(ctx context.Context, input interface{}) (*AgentOutput, error) {
-	if a.config.ContextPolicy != nil || len(a.config.ReturnDirectTools) > 0 {
+func (a *ConfigurableAgent[C, S]) Execute(ctx context.Context, input interface{}) (_ *AgentOutput, err error) {
+	// 兜底 execute 未覆盖的代码；链内与回调的 panic 已在 execute 中转为错误。
+	defer recoverPanic("Agent 执行", &err)
+	if durable.HasJournal(ctx) {
+		return nil, fmt.Errorf("durable execution requires AsRunnable().Invoke with a StreamClient")
+	}
+	if _, bound := budget.FromContext(ctx); bound {
+		return nil, fmt.Errorf("root budget requires the unified AsRunnable execution entry")
+	}
+
+	if a.config.ContextPolicy != nil || len(a.config.ContextPolicies) > 0 || len(a.config.ReturnDirectTools) > 0 {
 		return nil, fmt.Errorf("Execute does not apply ContextPolicy or ReturnDirectTools; use AsRunnable().Invoke")
 	}
 	ctx, release, err := a.beginExecution(ctx)
@@ -72,7 +85,9 @@ func (a *ConfigurableAgent[C, S]) Execute(ctx context.Context, input interface{}
 		return nil, err
 	}
 	defer release()
-	return a.execute(ctx, input, a.chain)
+	// Agent 作为别的工具的子会话时，其错误归内层所有，外层模型不得当作自己的参数错误。
+	output, err := a.execute(ctx, input, a.chain)
+	return output, tools.Settle(ctx, err)
 }
 
 func (a *ConfigurableAgent[C, S]) execute(ctx context.Context, input interface{}, chain *middleware.MiddlewareChain) (*AgentOutput, error) {
@@ -98,23 +113,14 @@ func (a *ConfigurableAgent[C, S]) execute(ctx context.Context, input interface{}
 		request.Metadata[k] = v
 	}
 
-	// 通过中间件链执行
-	response, err := chain.Execute(ctx, request)
+	// 通过中间件链执行；链内（中间件、模型、工具）的 panic 转为 *agentErrors.PanicError，
+	// 与普通错误一样经过 errorHandler、OnError 与观测，同步 Execute 也因此不再向调用方抛 panic。
+	response, err := func() (response *middleware.MiddlewareResponse, err error) {
+		defer recoverPanic("Agent 执行", &err)
+		return chain.Execute(ctx, request)
+	}()
 	if err != nil {
-		// 处理错误
-		if a.errorHandler != nil {
-			err = a.errorHandler(err)
-		}
-
-		// 通知回调
-		for _, cb := range a.callbacks {
-			if err := cb.OnError(ctx, err); err != nil {
-				// 记录回调错误但不覆盖原始错误
-				fmt.Fprintf(os.Stderr, "Callback OnError failed: %v\n", err)
-			}
-		}
-
-		return nil, err
+		return nil, a.handleError(ctx, err)
 	}
 
 	// 创建输出
@@ -127,30 +133,62 @@ func (a *ConfigurableAgent[C, S]) execute(ctx context.Context, input interface{}
 		TokenUsage: response.TokenUsage,
 	}
 
-	// 通知回调
+	return output, a.notifyEnd(ctx, output)
+}
+
+// handleError 让错误依次经过 errorHandler 与各回调的 OnError。
+// errorHandler 或 OnError 自身 panic 时直接返回 *PanicError，不再调用剩余回调，
+// 也不把这个 panic 再交给 errorHandler 或 OnError，避免回调处理自身 panic 形成递归。
+func (a *ConfigurableAgent[C, S]) handleError(ctx context.Context, err error) (handled error) {
+	defer recoverPanic("Agent 错误处理回调", &handled)
+	if a.errorHandler != nil {
+		err = a.errorHandler(err)
+	}
 	for _, cb := range a.callbacks {
-		if err := cb.OnEnd(ctx, output); err != nil {
-			return output, err
+		if cbErr := cb.OnError(ctx, err); cbErr != nil {
+			// 记录回调错误但不覆盖原始错误
+			fmt.Fprintf(os.Stderr, "Callback OnError failed: %v\n", cbErr)
 		}
 	}
+	return err
+}
 
-	return output, nil
+// notifyEnd 通知各回调的 OnEnd。OnEnd 自身 panic 时直接返回 *PanicError，
+// 不再调用剩余回调，也不交给 errorHandler 或 OnError（同 handleError，避免回调递归）。
+func (a *ConfigurableAgent[C, S]) notifyEnd(ctx context.Context, output *AgentOutput) (err error) {
+	defer recoverPanic("Agent 完成回调", &err)
+	for _, cb := range a.callbacks {
+		if err := cb.OnEnd(ctx, output); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // ExecuteWithTools uses the unified pipeline when structured streaming is
 // available. Non-streaming clients retain the legacy tool loop.
 //
 // Prefer AsRunnable().Invoke when the client supports structured streaming.
-func (a *ConfigurableAgent[C, S]) ExecuteWithTools(ctx context.Context, input interface{}) (*AgentOutput, error) {
+func (a *ConfigurableAgent[C, S]) ExecuteWithTools(ctx context.Context, input interface{}) (_ *AgentOutput, err error) {
 	if llm.HasStreaming(a.llmClient) {
 		return a.AsRunnable().Invoke(ctx, input)
+	}
+	// 旧工具循环不经 execute：其中工具、模型、检索、记忆等宿主代码的 panic 在此转为 *PanicError，
+	// 与该循环的普通错误一致，不经过 errorHandler 与回调；回退到 execute 的部分仍照常经过。
+	defer recoverPanic("Agent 工具循环", &err)
+	if durable.HasJournal(ctx) {
+		return nil, fmt.Errorf("durable execution requires AsRunnable().Invoke with a StreamClient")
+	}
+	if _, bound := budget.FromContext(ctx); bound {
+		return nil, fmt.Errorf("root budget requires a streaming client and the unified AsRunnable execution entry")
 	}
 	ctx, release, err := a.beginExecution(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer release()
-	return a.executeWithTools(ctx, input)
+	output, err := a.executeWithTools(ctx, input)
+	return output, tools.Settle(ctx, err)
 }
 
 func (a *ConfigurableAgent[C, S]) executeWithTools(ctx context.Context, input interface{}) (*AgentOutput, error) {
@@ -259,8 +297,8 @@ func (a *ConfigurableAgent[C, S]) executeWithTools(ctx context.Context, input in
 			}
 
 			// 格式化工具结果
-			resultStr, _ := json.Marshal(result)
-			toolResults = append(toolResults, fmt.Sprintf("工具 %s 执行结果: %s", call.Name, string(resultStr)))
+			resultStr, _ := toolResultText(result)
+			toolResults = append(toolResults, fmt.Sprintf("工具 %s 执行结果: %s", call.Name, resultStr))
 		}
 
 		// 构建下一轮的提示，包含工具结果
@@ -272,14 +310,14 @@ func (a *ConfigurableAgent[C, S]) executeWithTools(ctx context.Context, input in
 
 	// 达到最大迭代次数
 	return &AgentOutput{
-			Result:     "达到最大迭代次数，无法完成任务",
-			State:      a.runtime.State,
-			Metadata:   retrievalMetadata,
-			Duration:   time.Since(startTime),
-			Timestamp:  time.Now(),
-			TokenUsage: totalTokenUsage,
-		}, agentErrors.New(agentErrors.CodeAgentExecution, "max iterations reached").
-			WithContext("max_iterations", a.config.MaxIterations)
+		Result:     "达到最大迭代次数，无法完成任务",
+		State:      a.runtime.State,
+		Metadata:   retrievalMetadata,
+		Duration:   time.Since(startTime),
+		Timestamp:  time.Now(),
+		TokenUsage: totalTokenUsage,
+	}, agentErrors.New(agentErrors.CodeAgentExecution, "max iterations reached").
+		WithContext("max_iterations", a.config.MaxIterations)
 }
 
 // buildPromptWithSystemMessage 构建包含系统消息的提示
@@ -525,7 +563,8 @@ func (a *ConfigurableAgent[C, S]) GetMetrics() map[string]interface{} {
 }
 
 // Shutdown 优雅地关闭 Agent
-func (a *ConfigurableAgent[C, S]) Shutdown(ctx context.Context) error {
+func (a *ConfigurableAgent[C, S]) Shutdown(ctx context.Context) (err error) {
+	defer recoverPanic("Agent 关闭", &err)
 	// 保存最终状态
 	if a.runtime.Checkpointer != nil {
 		if err := a.runtime.SaveState(ctx); err != nil {

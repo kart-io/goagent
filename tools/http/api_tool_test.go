@@ -557,3 +557,16 @@ func BenchmarkAPITool_POST(b *testing.B) {
 		_, _ = tool.Post(ctx, "/test", body, nil)
 	}
 }
+
+// 传输错误文本含完整请求 URL，query 中的凭据不得进入返回错误与 ToolOutput.Error。
+func TestAPITool_TransportErrorRedactsURL(t *testing.T) {
+	output, err := NewAPITool("", time.Second, nil).Invoke(context.Background(), &interfaces.ToolInput{
+		Args: map[string]interface{}{"url": "http://u:pw@127.0.0.1:1/v1?token=SECRET"},
+	})
+	require.Error(t, err)
+	for _, s := range []string{err.Error(), output.Error} {
+		assert.NotContains(t, s, "SECRET")
+		assert.NotContains(t, s, "pw")
+		assert.Contains(t, s, "http://127.0.0.1:1/v1")
+	}
+}

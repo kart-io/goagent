@@ -419,6 +419,16 @@ func TestIsRetryableError(t *testing.T) {
 			wantRetryable: true,
 		},
 		{
+			name:          "pattern in middle",
+			errorMsg:      "dial tcp 10.0.0.1:443: connection refused by peer",
+			wantRetryable: true,
+		},
+		{
+			name:          "case insensitive",
+			errorMsg:      "Service Unavailable (503)",
+			wantRetryable: true,
+		},
+		{
 			name:          "permanent error",
 			errorMsg:      "invalid input",
 			wantRetryable: false,
@@ -533,9 +543,27 @@ func TestContains(t *testing.T) {
 			want:   false,
 		},
 		{
+			name:   "middle match",
+			s:      "request timeout after retry",
+			substr: "timeout",
+			want:   true,
+		},
+		{
+			name:   "case insensitive",
+			s:      "Request Timeout",
+			substr: "timeout",
+			want:   true,
+		},
+		{
 			name:   "empty string",
 			s:      "",
 			substr: "timeout",
+			want:   false,
+		},
+		{
+			name:   "empty substr",
+			s:      "timeout",
+			substr: "",
 			want:   false,
 		},
 	}

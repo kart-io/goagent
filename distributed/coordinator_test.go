@@ -3,6 +3,11 @@ package distributed
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net"
+	"net/url"
+	"os"
+	"syscall"
 	"testing"
 	"time"
 
@@ -10,6 +15,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	agentcore "github.com/kart-io/goagent/core"
+	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/interfaces"
 )
 
 func TestNewCoordinator(t *testing.T) {
@@ -78,48 +85,57 @@ func TestCoordinator_SelectInstance_RoundRobin(t *testing.T) {
 	assert.Equal(t, "instance-3", selectedIDs[5])
 }
 
+// timeoutError 模拟 http.Client.Timeout 触发的超时：只实现 net.Error，文本不含固定关键字
+type timeoutError struct{}
+
+func (timeoutError) Error() string   { return "Client.Timeout exceeded while awaiting headers" }
+func (timeoutError) Timeout() bool   { return true }
+func (timeoutError) Temporary() bool { return true }
+
 func TestCoordinator_ShouldRetry(t *testing.T) {
 	log := createTestLogger()
 	registry := NewRegistry(log)
 	client := NewClient(log)
 	coordinator := NewCoordinator(registry, client, log)
 
+	// 与 Client 的包装方式一致：传输错误经 Wrap 保留链，非 2xx 只在 Context 带状态码
+	wrapTransport := func(err error) error {
+		return agentErrors.Wrap(err, agentErrors.CodeDistributedConnection, "failed to send request")
+	}
+	statusErr := func(code int) error {
+		return agentErrors.New(agentErrors.CodeAgentExecution, "agent execution failed").
+			WithContext(interfaces.FieldStatusCode, code)
+	}
+	opErr := func(errno syscall.Errno) error {
+		return &url.Error{Op: "Post", URL: "http://x", Err: &net.OpError{Op: "dial", Net: "tcp", Err: os.NewSyscallError("connect", errno)}}
+	}
+	canceled, cancel := context.WithCancel(context.Background())
+	cancel()
+
 	tests := []struct {
 		name        string
+		ctx         context.Context
 		err         error
 		shouldRetry bool
 	}{
-		{
-			name:        "nil error",
-			err:         nil,
-			shouldRetry: false,
-		},
-		{
-			name:        "connection refused",
-			err:         errors.New("connection refused"),
-			shouldRetry: true,
-		},
-		{
-			name:        "timeout",
-			err:         errors.New("timeout occurred"),
-			shouldRetry: true,
-		},
-		{
-			name:        "connection reset",
-			err:         errors.New("connection reset by peer"),
-			shouldRetry: true,
-		},
-		{
-			name:        "business logic error",
-			err:         errors.New("invalid input"),
-			shouldRetry: false,
-		},
+		{"nil error", context.Background(), nil, false},
+		{"连接拒绝", context.Background(), wrapTransport(opErr(syscall.ECONNREFUSED)), true},
+		{"连接重置", context.Background(), wrapTransport(opErr(syscall.ECONNRESET)), true},
+		{"net.Error 超时", context.Background(), wrapTransport(&url.Error{Op: "Post", URL: "http://x", Err: timeoutError{}}), true},
+		{"DeadlineExceeded", context.Background(), wrapTransport(fmt.Errorf("attempt: %w", context.DeadlineExceeded)), true},
+		{"502", context.Background(), statusErr(502), true},
+		{"503", context.Background(), statusErr(503), true},
+		{"504", context.Background(), statusErr(504), true},
+		{"500 不转移", context.Background(), statusErr(500), false},
+		{"400 不转移", context.Background(), statusErr(400), false},
+		{"熔断打开不转移", context.Background(), ErrCircuitOpen, false},
+		{"仅文本含关键字不转移", context.Background(), errors.New("connection refused timeout"), false},
+		{"调用方 ctx 已取消不转移", canceled, wrapTransport(opErr(syscall.ECONNREFUSED)), false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := coordinator.shouldRetry(tt.err)
-			assert.Equal(t, tt.shouldRetry, result)
+			assert.Equal(t, tt.shouldRetry, coordinator.shouldRetry(tt.ctx, tt.err))
 		})
 	}
 }

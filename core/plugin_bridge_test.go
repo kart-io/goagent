@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -267,8 +268,7 @@ func TestTypedToDynamicAdapter_InvokeDynamic_PanicRecovery(t *testing.T) {
 		// 验证
 		require.Error(t, err)
 		assert.Nil(t, result)
-		assert.Contains(t, err.Error(), "panic recovered")
-		assert.Contains(t, err.Error(), "plugin crashed in Invoke")
+		requireRedactedPanic(t, err, "plugin crashed in Invoke")
 
 		// 验证是 AgentError
 		agentErr, ok := err.(*agentErrors.AgentError)
@@ -288,7 +288,7 @@ func TestTypedToDynamicAdapter_InvokeDynamic_PanicRecovery(t *testing.T) {
 
 		require.Error(t, err)
 		assert.Nil(t, result)
-		assert.Contains(t, err.Error(), "panic recovered")
+		requireRedactedPanic(t, err, "runtime error: invalid memory address or nil pointer dereference")
 	})
 }
 
@@ -306,8 +306,7 @@ func TestTypedToDynamicAdapter_StreamDynamic_PanicRecovery(t *testing.T) {
 		// 验证 panic 被捕获
 		require.Error(t, err)
 		assert.Nil(t, stream)
-		assert.Contains(t, err.Error(), "panic recovered")
-		assert.Contains(t, err.Error(), "panic in Stream method")
+		requireRedactedPanic(t, err, "panic in Stream method")
 	})
 }
 
@@ -325,8 +324,7 @@ func TestTypedToDynamicAdapter_BatchDynamic_PanicRecovery(t *testing.T) {
 		// 验证 panic 被捕获
 		require.Error(t, err)
 		assert.Nil(t, results)
-		assert.Contains(t, err.Error(), "panic recovered")
-		assert.Contains(t, err.Error(), "panic in Batch method")
+		requireRedactedPanic(t, err, "panic in Batch method")
 	})
 }
 
@@ -356,8 +354,7 @@ func TestPluginRegistry_WithPanicPlugin(t *testing.T) {
 	// 验证 panic 被捕获，系统继续运行
 	require.Error(t, err)
 	assert.Nil(t, result)
-	assert.Contains(t, err.Error(), "panic recovered")
-	assert.Contains(t, err.Error(), "registered plugin panicked")
+	requireRedactedPanic(t, err, "registered plugin panicked")
 
 	// 验证 registry 仍然可用
 	plugins := registry.List()
@@ -420,4 +417,33 @@ func (m *mockPanicInBatchRunnable) WithCallbacks(callbacks ...Callback) Runnable
 
 func (m *mockPanicInBatchRunnable) WithConfig(config RunnableConfig) Runnable[string, string] {
 	return m
+}
+
+// reentrantTypeInfoRunnable 在 TypeInfo 中回调注册表。
+type reentrantTypeInfoRunnable struct {
+	DynamicRunnable
+	onTypeInfo func()
+}
+
+func (r *reentrantTypeInfoRunnable) TypeInfo() TypeInfo {
+	r.onTypeInfo()
+	return r.DynamicRunnable.TypeInfo()
+}
+
+// Register 在锁外读取插件的 TypeInfo，插件回调注册表不会死锁。
+func TestPluginRegistry_RegisterTypeInfoReentry(t *testing.T) {
+	registry := NewPluginRegistry()
+	plugin := &reentrantTypeInfoRunnable{
+		DynamicRunnable: NewTypedToDynamicAdapter(NewRunnableFunc(func(ctx context.Context, input string) (string, error) {
+			return input, nil
+		}), "reentrant"),
+		onTypeInfo: func() { _ = registry.List() },
+	}
+
+	var err error
+	requireReturnsWithin(t, 5*time.Second, func() { err = registry.Register("reentrant", plugin, nil) })
+	require.NoError(t, err)
+	meta, err := registry.GetMetadata("reentrant")
+	require.NoError(t, err)
+	assert.Equal(t, plugin.DynamicRunnable.TypeInfo(), meta.TypeInfo)
 }

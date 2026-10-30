@@ -1,6 +1,6 @@
 # 真实业务评测要求
 
-当前状态：执行入口与 OpenAI/DeepSeek 原生工具流契约已有回归；评测工具支持 Provider 选择、可配置预算和参数标签。[DeepSeek 合成退款实测](../../docs/evaluation/2026-10-27-deepseek-native-refund/REPORT.md)已完成 12 次运行，答案、参数和调用契约全部通过。[退款审批恢复案例](../../examples/workflow/refund-recovery/README.md)验证检查图后的持久化边界、进程退出和独立模拟账本幂等。尚未收到真实业务题集及验收标准，因此这些结果不代表业务质量验收。
+当前状态：执行入口与 OpenAI/DeepSeek 原生工具流契约已有回归；评测工具支持 Provider 选择、可配置预算和参数标签。[DeepSeek 合成退款实测](../../docs/evaluation/2026-10-27-deepseek-native-refund/REPORT.md)已完成 12 次运行，答案、参数和调用契约全部通过。[退款审批恢复案例](https://github.com/kart-io/goagent-examples/blob/main/workflow/refund-recovery/README.md)验证检查图后的持久化边界、进程退出和独立模拟账本幂等。尚未收到真实业务题集及验收标准，因此这些结果不代表业务质量验收。
 
 ## 提供的数据
 

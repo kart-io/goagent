@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/workflow"
 	"github.com/stretchr/testify/require"
 )
@@ -236,6 +237,7 @@ func TestDurableGraphRealProcessCrash(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestDurableGraphRealProcessCrash$")
 		cmd.Env = append(os.Environ(), "GOAGENT_GRAPH_CRASH_DIR="+dir)
+		cmd.WaitDelay = time.Second
 		output, err := cmd.CombinedOutput()
 		cancel()
 		if want == 0 {
@@ -283,4 +285,87 @@ func TestDurableGraphRunLockCancellation(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 2, result.State)
 	require.EqualValues(t, 1, calls.Load())
+}
+
+func TestDurableGraphBeforeApproveUnderLock(t *testing.T) {
+	ctx := context.Background()
+	store := newStore(t)
+	effects := 0
+	g := workflow.NewGraph[map[string]int]()
+	require.NoError(t, g.AddNode("apply", func(_ context.Context, s map[string]int) (map[string]int, error) {
+		effects++
+		s["applied"] = s["ticket"]
+		return s, nil
+	}))
+	require.NoError(t, g.AddEdge(workflow.START, "apply"))
+	require.NoError(t, g.AddEdge("apply", workflow.END))
+	cfg := workflow.DurableConfig{Store: store, Version: "v1", ApprovalNodes: []string{"apply"}}
+	var check func(context.Context, string, *workflow.GraphSnapshot[map[string]int]) error
+	run, err := g.CompileDurable(ctx, cfg, workflow.WithBeforeApprove(func(ctx context.Context, id string, snap *workflow.GraphSnapshot[map[string]int]) error {
+		return check(ctx, id, snap)
+	}))
+	require.NoError(t, err)
+	wait, err := run.Run(ctx, "sql", map[string]int{"ticket": 1}, "")
+	require.ErrorIs(t, err, durable.ErrApprovalRequired)
+	// 宿主先看到 ticket=1，随后暂停期间检查点被改写为 ticket=2（模拟工单在 Snapshot 与 Run 之间变化）。
+	seenByHost, err := run.Snapshot(ctx, "sql")
+	require.NoError(t, err)
+	require.Equal(t, 1, seenByHost.State["ticket"])
+	raw, err := store.Load(ctx, "sql")
+	require.NoError(t, err)
+	raw.Data = []byte(strings.Replace(string(raw.Data), `"ticket":1`, `"ticket":2`, 1))
+	require.NoError(t, store.Save(ctx, "sql", raw))
+
+	reject := errors.New("工单哈希不一致")
+	check = func(_ context.Context, id string, snap *workflow.GraphSnapshot[map[string]int]) error {
+		require.Equal(t, "sql", id)
+		require.True(t, snap.Waiting)
+		require.Equal(t, wait.Key, snap.Key)
+		require.Equal(t, 2, snap.State["ticket"])
+		stale := snap.State["ticket"] != seenByHost.State["ticket"]
+		snap.State["ticket"] = 999 // 钩子修改副本不得写回检查点。
+		if stale {
+			return reject
+		}
+		return nil
+	}
+	got, err := run.Run(ctx, "sql", nil, wait.Key)
+	require.ErrorIs(t, err, reject)
+	require.ErrorContains(t, err, "批准前置校验拒绝")
+	require.True(t, got.Waiting)
+	_, err = run.AsRunnable().Invoke(ctx, workflow.RunRequest[map[string]int]{RunID: "sql", ApprovalKey: wait.Key})
+	require.ErrorIs(t, err, reject)
+	still, err := run.Snapshot(ctx, "sql")
+	require.NoError(t, err)
+	require.True(t, still.Waiting)
+	require.Equal(t, wait.Key, still.Key)
+	require.Equal(t, map[string]int{"ticket": 2}, still.State)
+
+	check = func(context.Context, string, *workflow.GraphSnapshot[map[string]int]) error { panic("boom") }
+	_, err = run.Run(ctx, "sql", nil, wait.Key)
+	require.ErrorContains(t, err, "批准前置校验 发生 panic")
+	require.NotContains(t, err.Error(), "boom")
+	var panicErr *agentErrors.PanicError
+	require.ErrorAs(t, err, &panicErr)
+	require.Equal(t, "boom", panicErr.Value)
+	require.Zero(t, effects)
+
+	check = func(ctx context.Context, id string, snap *workflow.GraphSnapshot[map[string]int]) error {
+		// 钩子执行时运行锁仍被持有，其他调用拿不到锁。
+		lockCtx, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
+		defer cancel()
+		_, e := run.Snapshot(lockCtx, id)
+		require.ErrorIs(t, e, context.DeadlineExceeded)
+		require.Equal(t, 2, snap.State["ticket"])
+		return nil
+	}
+	done, err := run.Run(ctx, "sql", nil, wait.Key)
+	require.NoError(t, err)
+	require.True(t, done.Done)
+	require.Equal(t, 2, done.State["applied"])
+	require.Equal(t, 1, effects)
+	// 非批准恢复不调用钩子。
+	check = func(context.Context, string, *workflow.GraphSnapshot[map[string]int]) error { panic("不应调用") }
+	_, err = run.Run(ctx, "sql", nil, "")
+	require.NoError(t, err)
 }

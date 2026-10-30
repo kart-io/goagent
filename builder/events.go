@@ -4,17 +4,23 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
+	"sync"
 	"time"
 
+	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/middleware"
+	"github.com/kart-io/goagent/core/observe"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/tools"
 )
 
 // AgentEvent is one event in ExecuteStream. Type is sources, step, text, usage,
 // error, or done. Only done contains the final, middleware-processed Output.
 // 支持 ToolStreamClient 时，模型在同一轮选择工具或直接回答。
 // 中间文本可能包含工具调用前的说明，只有 done.Output 是最终答案。
+// 失败发生在工具 tool_start 之后、tool_end 之前时，error 事件的 Tool 为该工具名，否则为空。
 type AgentEvent struct {
 	Type    string                 `json:"type"`
 	Sources []RetrievalSource      `json:"sources,omitempty"`
@@ -32,7 +38,13 @@ type AgentEvent struct {
 // Cancel ctx when abandoning the stream; cancellation closes it promptly. On
 // cancellation an error event is best-effort, and ctx.Err() is authoritative.
 // A cached middleware response may produce only done, with no model deltas.
-func (a *ConfigurableAgent[C, S]) ExecuteStream(ctx context.Context, input interface{}) (<-chan AgentEvent, error) {
+func (a *ConfigurableAgent[C, S]) ExecuteStream(ctx context.Context, input interface{}) (_ <-chan AgentEvent, err error) {
+	// 同步阶段也会调用宿主代码（如 scopeDurableExecution 中的工具与持久存储），panic 时转为错误返回。
+	defer recoverPanic("Agent 流式执行启动", &err)
+	ctx = withModelRetry(ensureModelScope(ctx), a.config.ModelRetries, a.config.ModelRetryBackoff)
+	if err := validateModelBudget(ctx); err != nil {
+		return nil, err
+	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -56,10 +68,23 @@ func (a *ConfigurableAgent[C, S]) ExecuteStream(ctx context.Context, input inter
 	if err != nil {
 		return nil, err
 	}
+	// 启动 goroutine 前出错或 panic 都要释放执行权，之后由 goroutine 释放。
+	started := false
+	defer func() {
+		if !started {
+			release()
+		}
+	}()
+	ctx, err = a.scopeDurableExecution(ctx)
+	if err != nil {
+		return nil, err
+	}
 	events := make(chan AgentEvent, 1)
+	started = true
 	go func() {
 		defer close(events)
 		defer release()
+		ctx, endAgent := observe.Start(ctx, observe.Event{Type: "agent", Path: "agent"})
 		emit := func(e AgentEvent) error {
 			select {
 			case events <- e:
@@ -68,21 +93,54 @@ func (a *ConfigurableAgent[C, S]) ExecuteStream(ctx context.Context, input inter
 				return ctx.Err()
 			}
 		}
-		chain := a.chain.WithHandler(func(runCtx context.Context, request *middleware.MiddlewareRequest) (*middleware.MiddlewareResponse, error) {
-			// Respect Execute's configured timeout for sends as well as upstream calls.
-			send := func(e AgentEvent) error {
-				select {
-				case events <- e:
+		// 链内与回调的 panic 已由 execute 转为错误；这里兜底其余代码：本 goroutine 的 panic 调用方无法 recover，
+		// 转为错误走观测与 error 事件。
+		// running 记录本次处理已发 tool_start 未发 tool_end 的工具：工具失败时不发 tool_end，error 事件据此带上工具名。
+		// 并发调用的结果按调用顺序处理，最早未结束的即失败的那个。
+		var mu sync.Mutex
+		var running []string
+		output, err := func() (output *AgentOutput, err error) {
+			defer recoverPanic("Agent 流式执行", &err)
+			chain := a.chain.WithHandler(func(runCtx context.Context, request *middleware.MiddlewareRequest) (*middleware.MiddlewareResponse, error) {
+				mu.Lock()
+				running = nil
+				mu.Unlock()
+				// Respect Execute's configured timeout for sends as well as upstream calls.
+				send := func(e AgentEvent) error {
+					select {
+					case events <- e:
+					case <-runCtx.Done():
+						return runCtx.Err()
+					}
+					if e.Type == "step" && e.Tool != "" {
+						mu.Lock()
+						switch e.Step {
+						case "tool_start":
+							running = append(running, e.Tool)
+						case "tool_end":
+							if i := slices.Index(running, e.Tool); i >= 0 {
+								running = slices.Delete(running, i, i+1)
+							}
+						}
+						mu.Unlock()
+					}
 					return nil
-				case <-runCtx.Done():
-					return runCtx.Err()
 				}
-			}
-			return a.runEvents(runCtx, request, client, caller, send)
-		})
-		output, err := a.execute(ctx, input, chain)
+				return a.runEvents(runCtx, request, client, caller, send)
+			})
+			return a.execute(ctx, input, chain)
+		}()
+		err = tools.Settle(ctx, err)
+		// 先结束观测再发终态：调用方收到 done/error 即可能返回并关闭记录器。
+		endAgent(err, false)
 		if err != nil {
-			_ = emit(AgentEvent{Type: "error", Error: err, Message: err.Error()})
+			failed := AgentEvent{Type: "error", Error: err, Message: err.Error()}
+			mu.Lock()
+			if len(running) > 0 {
+				failed.Tool = running[0]
+			}
+			mu.Unlock()
+			_ = emit(failed)
 			return
 		}
 		_ = emit(AgentEvent{Type: "done", Output: output})
@@ -114,6 +172,9 @@ func (a *ConfigurableAgent[C, S]) runEvents(ctx context.Context, request *middle
 	var messages []llm.Message
 	if native, ok := client.(llm.ToolStreamClient); ok && len(a.tools) > 0 {
 		return a.runToolEvents(ctx, request, native, a.streamMessages(ctx, input, evidence), metadata, emit)
+	}
+	if _, metered := budget.FromContext(ctx); metered && caller != nil {
+		return nil, fmt.Errorf("root budgets require native ToolStreamClient for tool selection")
 	}
 	if caller == nil {
 		messages = a.streamMessages(ctx, input, evidence)
@@ -167,7 +228,7 @@ func (a *ConfigurableAgent[C, S]) runEvents(ctx context.Context, request *middle
 				if err != nil {
 					return nil, err
 				}
-				data, err := json.Marshal(result)
+				data, err := toolResultText(result)
 				if err != nil {
 					return nil, err
 				}
@@ -188,14 +249,11 @@ func (a *ConfigurableAgent[C, S]) runEvents(ctx context.Context, request *middle
 		}
 		messages = []llm.Message{{Role: "system", Content: system}, {Role: "user", Content: prompt}}
 	}
-	stream, err := client.CompleteStream(ctx, &llm.CompletionRequest{Messages: messages, MaxTokens: a.config.MaxTokens, Temperature: a.config.Temperature})
+	turn, err := readPlainModelTurn(ctx, "model/answer/0", client, &llm.CompletionRequest{Messages: messages, MaxTokens: a.config.MaxTokens, Temperature: a.config.Temperature}, emit)
 	if err != nil {
 		return nil, err
 	}
-	turn, err := readToolTurn(ctx, stream, emit)
-	if err != nil {
-		return nil, err
-	}
+
 	if turn.Usage != nil {
 		usage.Add(&interfaces.TokenUsage{PromptTokens: turn.Usage.PromptTokens, CompletionTokens: turn.Usage.CompletionTokens, TotalTokens: turn.Usage.TotalTokens})
 	}
@@ -205,6 +263,14 @@ func (a *ConfigurableAgent[C, S]) runEvents(ctx context.Context, request *middle
 }
 
 func (a *ConfigurableAgent[C, S]) finishEvents(ctx context.Context, request *middleware.MiddlewareRequest, input, answer string, usage *interfaces.TokenUsage, metadata map[string]interface{}, emit func(AgentEvent) error) (*middleware.MiddlewareResponse, error) {
+	if c, ok := budget.FromContext(ctx); ok {
+		snapshot, err := c.Snapshot(ctx)
+		if err != nil {
+			return nil, err
+		}
+		metadata["root_budget"] = snapshot
+		metadata["new_model_invocations"] = modelInvocations(ctx)
+	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}

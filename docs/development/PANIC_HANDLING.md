@@ -33,6 +33,8 @@ type PanicHandler interface {
 - 实现重试逻辑
 - 优雅降级策略
 
+**约定**：返回错误的文本（包括 `AgentError` 的 Message 与 Context）不应包含 `panicValue` 与 `stackTrace`。错误文本会进入流错误、日志甚至交给模型；registry 不改写 handler 返回的文本，panic 值与调用栈应交给 `PanicLogger`、`PanicMetricsCollector`，调用方需要时用 `errors.As` 取 `*agentErrors.PanicError` 读取。
+
 ### PanicMetricsCollector - 指标收集
 
 收集 panic 统计信息用于监控：
@@ -93,10 +95,12 @@ type PanicLogger interface {
 ```
 
 **默认行为**：
-- 将所有 panic 转换为 `AgentError`，错误码为 `CodeInternal`
-- 保留完整的堆栈追踪和 panic 值
+- 将所有 panic 转换为 `AgentError`，错误码为 `CodeInternal`，Message 固定为 `panic 已恢复`
+- Cause 为 `*agentErrors.PanicError`，文本以 `<component>.<operation> 发生 panic` 结尾；panic 值与调用栈只保存在它的 `Value`、`Stack` 字段中，不出现在错误文本里
 - 不记录指标
 - 不输出日志
+
+无论使用哪个 handler，registry 返回的错误链中都能用 `errors.As` 取到 `*agentErrors.PanicError`：handler 的结果不含它时由 registry 补上（不改变 handler 错误的文本），handler 返回 nil 时直接返回它。
 
 ## 使用方式
 
@@ -109,7 +113,12 @@ package main
 
 import (
     "context"
+    "errors"
+    "fmt"
+    "log"
+
     "github.com/kart-io/goagent/core"
+    agentErrors "github.com/kart-io/goagent/errors"
 )
 
 func main() {
@@ -121,9 +130,15 @@ func main() {
     })
 
     result, err := agent.Invoke(context.Background(), "test")
-    // err 是 AgentError，包含完整的堆栈信息
     if err != nil {
+        // 错误文本只说明在哪里发生了 panic，不含 panic 值与调用栈
         fmt.Printf("Error: %v\n", err)
+
+        var p *agentErrors.PanicError
+        if errors.As(err, &p) {
+            // 仅在受控位置（如内部日志）读取 panic 值与调用栈
+            log.Printf("panic 位置=%s 值=%v\n%s", p.Op, p.Value, p.Stack)
+        }
     }
 }
 ```
@@ -238,7 +253,7 @@ package errors
 
 import (
     "context"
-    "fmt"
+
     agentErrors "github.com/kart-io/goagent/errors"
     "github.com/kart-io/goagent/core"
 )
@@ -260,21 +275,14 @@ func (h *CustomPanicHandler) HandlePanic(
     // 自定义错误码选择
     errorCode := h.selectErrorCode(component)
 
-    // 提取业务上下文
-    userID := ctx.Value("user_id")
-    requestID := ctx.Value("request_id")
-
-    return agentErrors.New(
-        errorCode,
-        fmt.Sprintf("[%s] %s.%s panic: %v", h.serviceName, component, operation, panicValue),
-    ).
+    // Message 与 Context 都会出现在 Error() 文本中：不写入 panicValue、stackTrace 或其他敏感数据。
+    // registry 会在返回的错误链中补上 *agentErrors.PanicError，调用方可用 errors.As 读取 panic 值与调用栈；
+    // 需要记录二者时实现 PanicLogger。
+    return agentErrors.New(errorCode, "panic 已恢复").
         WithComponent(component).
         WithOperation(operation).
         WithContext("service", h.serviceName).
-        WithContext("user_id", userID).
-        WithContext("request_id", requestID).
-        WithContext("panic_value", panicValue).
-        WithContext("stack_trace", stackTrace)
+        WithContext("request_id", ctx.Value("request_id"))
 }
 
 func (h *CustomPanicHandler) selectErrorCode(component string) agentErrors.ErrorCode {
@@ -293,7 +301,7 @@ func main() {
     handler := NewCustomPanicHandler("my-service")
     core.SetGlobalPanicHandler(handler)
 
-    // panic 错误现在包含业务上下文
+    // panic 错误现在带有错误码与业务上下文，panic 值与调用栈仍只能经 errors.As 取得
 }
 ```
 
@@ -390,11 +398,11 @@ HandlePanic 不应该再次 panic：
 
 ```go
 // ✅ 正确：捕获所有错误
-func (h *SafeHandler) HandlePanic(ctx context.Context, component, operation string, panicValue interface{}, stackTrace string) error {
+func (h *SafeHandler) HandlePanic(ctx context.Context, component, operation string, panicValue interface{}, stackTrace string) (err error) {
     defer func() {
         if r := recover(); r != nil {
-            // Handler 自身 panic，返回基本错误
-            return fmt.Errorf("handler panic: %v", r)
+            // Handler 自身 panic，返回不含 panic 值的基本错误；registry 仍会补上原 panic 的 *PanicError
+            err = errors.New("panic handler 自身发生 panic")
         }
     }()
 
@@ -482,6 +490,7 @@ package mypackage_test
 
 import (
     "context"
+    "errors"
     "testing"
     "github.com/kart-io/goagent/core"
     "github.com/stretchr/testify/assert"
@@ -509,7 +518,8 @@ func (m *MockPanicHandler) HandlePanic(
         Operation:  operation,
         PanicValue: panicValue,
     })
-    return fmt.Errorf("mock panic: %v", panicValue)
+    // panic 值记在 calls 中供断言，不写进错误文本
+    return errors.New("mock panic")
 }
 
 func TestMyComponent_PanicHandling(t *testing.T) {
