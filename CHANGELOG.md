@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-10-30
+
 ### Breaking
 
 - 持久操作记录升级为 `goagent-operation-v2`：新增 `waiting` 状态、`Continuation`、`Reconciled` 字段。v1 记录仍可读取并按原语义处理，写入一律为 v2；直接读取日志文件、按版本号 `goagent-operation-v1` 过滤的宿主代码需同时接受 v2。降级到旧版本后无法读取 v2 记录，回滚前须结束进行中的持久运行。
@@ -455,4 +457,5 @@ For breaking changes, see:
 Historical development is documented in the [archive](docs/archive/) directory.
 
 [1.0.0]: https://github.com/kart-io/goagent/releases/tag/v1.0.0
-[Unreleased]: https://github.com/kart-io/goagent/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/kart-io/goagent/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/kart-io/goagent/compare/v0.15.0...v0.16.0
