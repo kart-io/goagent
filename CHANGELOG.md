@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 执行可靠性与治理
+
+- 初始化严格传播检查点Exists/Load及状态类型错误；新增 `WithMemoryFailurePolicy`，默认尽力、可选严格，所有入口共用记忆错误处理与结构化观察，取消直接stderr记忆错误输出。
+- Pipe/Sequence统一流终态与取消，空Sequence恒等；显式父回调生效，Batch逐输入Invoke并保留有序部分结果。父子重复副作用回调及依赖子自定义Batch的调用方须按扩展契约迁移。
+- 根预算新增保守Token预留、工具调用次数与绝对截止时间；宿主提供版本化TokenEstimator，未知用量不补零，预留不退款。零值新字段保持旧日志及completed模型意图兼容，配置漂移拒绝恢复。
+- Runner/持久图新增只读Diagnose，报告等待、完成、版本障碍与结果未知，显式操作记录提供失败证据，不自动恢复副作用。
+- Dispatcher独立准入/执行并发和有界排队，新增ErrDispatcherBusy；审批不再占用执行槽，需限制审批量的宿主应显式配置MaxAdmissionConcurrency。排队/准入暂停单次Timeout，校验授权日志执行累计计时。
+- 新增固定worker的有界AsyncObserver和可取消Close、丢弃统计；Pipeline新增GrantTTL和PruneGrants，过期授权不会继续生效。
+- 补齐OpenAI、DeepSeek、Gemini工具流、未知usage和停止消费后取消契约测试；新增扩展/治理文档与发布验收清单。
+
 ### Removed
 
 - **破坏性**：Preset 与编码工具迁至独立模块 `github.com/kart-io/goagent-harness`：`harness/preset` 改为新模块的 `preset`，`tools/coding` 改为新模块的同名路径；两个工程 Agent 示例随之迁出。不保留转发兼容层。配置格式、Builder 与循环扩展点不变，`harness/env`、`tools/policy`、`tools/spill` 留在核心。当前为本地拆分，发布本版本前须先发布新模块，迁移与发布顺序见 `docs/guides/HARNESS_MIGRATION.md`。

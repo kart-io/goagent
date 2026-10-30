@@ -169,3 +169,9 @@ agent, err := builder.NewSimpleBuilder(client).
 新增根预算、受控 Runnable 工具、OTel 观察及不可变上下文结果引用；见 [可组合编排指南](COMPOSABLE_ORCHESTRATION.md)。旧 ContextPolicy 的持久限制继续保留；需要持久引用时使用每次执行独立的 WithContextPolicies 工厂和宿主 WithPolicyToolAdapter。流预览仍不代表业务终态，core/flow 仅为实验原型。
 
 根预算只在统一入口执行；绑定 Controller 后，旧 Execute 与非流式 ExecuteWithTools 会在模型请求前明确报错。未绑定时保留同步兼容语义。
+
+## 执行可靠性与治理更新
+
+初始化不再忽略检查点读取失败；记忆可选择严格模式。Pipe/Sequence复用共同流终态与取消规则，显式父回调和父Batch并发配置生效。新增预算限制、只读运行诊断、两阶段工具准入及有界异步观察。
+
+接口与迁移细节见 [扩展契约](EXTENSION_CONTRACT.md) 和 [执行治理指南](EXECUTION_GOVERNANCE.md)。旧同步入口仍保留既有能力边界。

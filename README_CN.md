@@ -25,6 +25,8 @@ GoAgent 是嵌入 Go 业务服务的可恢复、可计量、可观测 Agent 编�
 
 Harness 装配与编码工具已迁入独立项目 `github.com/kart-io/goagent-harness`：Preset、计划模式、技能、子 Agent 组件与编码工具由上层项目维护；GoAgent 保留执行循环、工作流、恢复、预算和环境接口。当前拆分尚未发布，接入方式与发布顺序见 [Harness 迁移指南](docs/guides/HARNESS_MIGRATION.md)。
 
+执行可靠性、扩展点与资源治理：[扩展契约](docs/guides/EXTENSION_CONTRACT.md)、[预算、诊断与资源治理](docs/guides/EXECUTION_GOVERNANCE.md)。
+
 ## 特性
 
 - **原生工具循环** - 模型驱动的工具调用，工具调用可持久化并回放

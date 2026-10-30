@@ -34,7 +34,7 @@ cd ../goagent-harness
 
 ## 发布顺序
 
-本次仅建立本地仓库，没有创建远程仓库或发布新模块。发布包含本次删除的 GoAgent 版本前，必须先发布 GoAgent Harness 的远程仓库与版本，验证外部下载后再发布核心破坏性版本。
+Harness源码已推送到 `kart-io/goagent-harness` 的 `main` 分支，尚未发布版本标签。发布包含本次删除的 GoAgent 版本前，必须先发布 GoAgent Harness 的远程仓库与版本，验证外部下载后再发布核心破坏性版本。
 在此之前，外部使用者继续使用 GoAgent v0.23.0；本地使用者通过新仓库或临时 workspace 验证。两个模块各自的 go.mod 均不依赖本地路径。
 
 新项目中的历史设计文档保留来源；本仓库的 Harness 历史设计不再代表上层组件的维护位置。
