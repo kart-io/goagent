@@ -213,7 +213,7 @@ type HTTPClientConfig struct {
 // It merges the provided headers with any custom headers from the config.
 //
 // 性能优化：使用全局客户端缓存，减少连接建立开销（10-20ms/次）
-// 相同 (BaseURL, Headers) 配置的客户端实例将被复用
+// 相同配置（BaseURL、Headers、超时等）的客户端实例将被复用
 func (b *BaseProvider) NewHTTPClient(cfg HTTPClientConfig) *httpclient.Client {
 	timeout := cfg.Timeout
 	if timeout == 0 {
