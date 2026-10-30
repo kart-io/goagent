@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 func TestAgentError_Error(t *testing.T) {
@@ -218,7 +219,7 @@ func TestGetCode(t *testing.T) {
 		{
 			name: "nil error",
 			err:  nil,
-			want: CodeInternal,
+			want: "",
 		},
 	}
 
@@ -487,7 +488,7 @@ func TestErrorWithDuration(t *testing.T) {
 func TestStackTrace(t *testing.T) {
 	err := New(CodeAgentExecution, "test error")
 
-	if len(err.Stack) == 0 {
+	if len(err.StackFrames()) == 0 {
 		t.Error("Stack should not be empty")
 	}
 
@@ -825,4 +826,128 @@ func TestHelpers_RouterErrors(t *testing.T) {
 			t.Errorf("Context[current] = %v, want 150", err.Context["current"])
 		}
 	})
+}
+
+func TestNilAgentErrorIsSafe(t *testing.T) {
+	var cause error
+	wrapped := Wrap(cause, CodeLLMRequest, "x").WithComponent("c").WithOperation("o").
+		WithContext("k", 1).WithContextMap(map[string]interface{}{"a": 2}).MarkModelArgument()
+	if wrapped != nil {
+		t.Fatalf("Wrap(nil) 链式调用应保持 nil，得到 %v", wrapped)
+	}
+	if NewLLMRequestError("p", "m", nil) != nil {
+		t.Error("cause 为 nil 的辅助构造函数应返回 nil 而不是 panic")
+	}
+	if ErrorWithRetry(nil, 1, 3) != nil || ErrorWithDuration(nil, 1) != nil {
+		t.Error("nil 错误不应被包装")
+	}
+	var nilErr *AgentError
+	if got := nilErr.Error(); got != "<nil>" {
+		t.Errorf("nil.Error() = %q", got)
+	}
+	if got := fmt.Sprintf("%+v", nilErr); got != "<nil>" {
+		t.Errorf("%%+v = %q", got)
+	}
+	if msg, ok := nilErr.ModelArgumentMessage(); msg != "" || ok {
+		t.Error("nil.ModelArgumentMessage() 应为空")
+	}
+	if nilErr.StackFrames() != nil || nilErr.FormatStack() != "" || nilErr.Unwrap() != nil {
+		t.Error("nil 的栈与 Unwrap 应为空")
+	}
+	if nilErr.Is(New(CodeLLMRequest, "x")) {
+		t.Error("nil 不应匹配任何错误码")
+	}
+}
+
+func TestGetCodeNil(t *testing.T) {
+	if got := GetCode(nil); got != "" {
+		t.Errorf("GetCode(nil) = %q, want empty", got)
+	}
+	if IsCode(nil, CodeInternal) {
+		t.Error("IsCode(nil, CodeInternal) 应为 false")
+	}
+	if got := GetCode(fmt.Errorf("plain")); got != CodeInternal {
+		t.Errorf("非 AgentError 应为 CodeInternal，得到 %q", got)
+	}
+}
+
+func TestAnnotateDoesNotMutateInput(t *testing.T) {
+	base := New(CodeToolExecution, "tool failed").WithContext("tool", "x")
+	retried := ErrorWithRetry(base, 2, 3)
+	timed := ErrorWithDuration(base, 10)
+	if _, ok := base.Context["retry_attempt"]; ok {
+		t.Error("ErrorWithRetry 不应修改原错误")
+	}
+	if _, ok := base.Context["duration_ms"]; ok {
+		t.Error("ErrorWithDuration 不应修改原错误")
+	}
+	if retried.Context["tool"] != "x" || timed.Context["tool"] != "x" {
+		t.Error("副本应保留原 Context")
+	}
+	if retried == base || retried.Code != CodeToolExecution {
+		t.Error("顶层 *AgentError 应返回同错误码的副本")
+	}
+
+	wrapped := fmt.Errorf("外层: %w", New(CodeLLMTimeout, "timeout"))
+	got := ErrorWithRetry(wrapped, 1, 3)
+	if got.Code != CodeLLMTimeout {
+		t.Errorf("被包装的 *AgentError 应沿用其错误码，得到 %s", got.Code)
+	}
+	if !errors.Is(got, wrapped) {
+		t.Error("应保留原错误链")
+	}
+}
+
+func TestPreviewKeepsValidUTF8(t *testing.T) {
+	text := strings.Repeat("中", 150)
+	got := NewRetrievalEmbeddingError(text, fmt.Errorf("x")).Context["text_preview"].(string)
+	if !utf8.ValidString(got) || got != strings.Repeat("中", 100)+"..." {
+		t.Errorf("预览应按字符截断为 100 个字符，得到 %d 个字符", utf8.RuneCountInString(got))
+	}
+	content := strings.Repeat("é", 250)
+	got = NewParserInvalidJSONError(content, fmt.Errorf("x")).Context["content_preview"].(string)
+	if !utf8.ValidString(got) || utf8.RuneCountInString(got) != 203 {
+		t.Errorf("内容预览应为 200 个字符加省略号，得到 %d", utf8.RuneCountInString(got))
+	}
+	if short := NewParserError("json", "短", fmt.Errorf("x")).Context["content_preview"]; short != "短" {
+		t.Errorf("短内容不截断，得到 %v", short)
+	}
+}
+
+func TestStackFramesPointToCaller(t *testing.T) {
+	frames := New(CodeInternal, "x").StackFrames()
+	if len(frames) == 0 || !strings.HasSuffix(frames[0].Function, "TestStackFramesPointToCaller") {
+		t.Fatalf("首帧应为调用 New 的函数，得到 %+v", frames)
+	}
+	frames = NewLLMRequestError("p", "m", fmt.Errorf("x")).StackFrames()
+	if len(frames) < 2 || !strings.HasSuffix(frames[1].Function, "TestStackFramesPointToCaller") {
+		t.Fatalf("辅助构造函数之后应为调用方，得到 %+v", frames)
+	}
+}
+
+func BenchmarkNew(b *testing.B) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_ = New(CodeInternal, "x")
+	}
+}
+
+func BenchmarkWrapWithContextError(b *testing.B) {
+	b.ReportAllocs()
+	cause := fmt.Errorf("cause")
+	for i := 0; i < b.N; i++ {
+		_ = NewLLMRequestError("openai", "gpt", cause).Error()
+	}
+}
+
+type nilPtrErr struct{ msg string }
+
+func (e *nilPtrErr) Error() string { return e.msg }
+
+func TestErrorWithNilPointerCause(t *testing.T) {
+	var cause *nilPtrErr
+	got := Wrap(cause, CodeInternal, "m").Error()
+	if !strings.HasPrefix(got, "[INTERNAL_ERROR]: m: ") {
+		t.Errorf("Cause 为值是 nil 的指针时不应 panic，得到 %q", got)
+	}
 }
