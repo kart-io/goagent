@@ -427,7 +427,8 @@ func TestSyncEntryPanicReturnsPanicError(t *testing.T) {
 			},
 			run:       func(ctx context.Context, agent *agentT, _ *panicCallback) error { return agent.Shutdown(ctx) },
 			wantCalls: map[string]int{"OnShutdown": 1}},
-		{name: "legacy_tool", wantValue: "boom boom", frame: "builder.panicTool.",
+		// panicTool 返回闭包，被内联时帧名为 Test….funcN.panicTool.1，不内联时为 builder.panicTool.func1。
+		{name: "legacy_tool", wantValue: "boom boom", frame: "panicTool.",
 			build: func(cb *panicCallback) *SimpleAgentBuilder {
 				return NewSimpleBuilder(&legacyToolModel{MockLLMClient: NewMockLLMClient()}).WithTools(panicTool("boom")).WithCallbacks(cb)
 			},

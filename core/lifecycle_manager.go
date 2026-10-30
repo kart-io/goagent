@@ -195,7 +195,7 @@ func (m *DefaultLifecycleManager) initComponent(ctx context.Context, entry *comp
 				// 自定义 handler 的错误可能被包装以保留 *PanicError，因此用 errors.As 取 AgentError
 				var agentErr *agentErrors.AgentError
 				if errors.As(panicErr, &agentErr) {
-					agentErr.WithContext("component_name", name)
+					_ = agentErr.WithContext("component_name", name)
 				}
 				err = panicErr
 			}
@@ -264,7 +264,7 @@ func (m *DefaultLifecycleManager) startComponent(ctx context.Context, entry *com
 				// 自定义 handler 的错误可能被包装以保留 *PanicError，因此用 errors.As 取 AgentError
 				var agentErr *agentErrors.AgentError
 				if errors.As(panicErr, &agentErr) {
-					agentErr.WithContext("component_name", name)
+					_ = agentErr.WithContext("component_name", name)
 				}
 				err = panicErr
 			}
@@ -338,7 +338,7 @@ func (m *DefaultLifecycleManager) stopComponent(ctx context.Context, entry *comp
 				// 自定义 handler 的错误可能被包装以保留 *PanicError，因此用 errors.As 取 AgentError
 				var agentErr *agentErrors.AgentError
 				if errors.As(panicErr, &agentErr) {
-					agentErr.WithContext("component_name", name)
+					_ = agentErr.WithContext("component_name", name)
 				}
 				err = panicErr
 			}
