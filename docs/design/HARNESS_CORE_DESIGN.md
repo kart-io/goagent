@@ -353,3 +353,199 @@ type PreDecision struct {
 | 等待审批不占并发槽位 | 等待审批时占用槽位 | 释放再获取槽位会改变 Dispatcher 的排队语义，先在文档中注明 |
 | — | 准入阶段在日志操作之外，执行前先查日志：已完成的调用直接回放 | 准入在日志内会让终止与审批中取消计为失败尝试，耗尽 `MaxAttempts` 后调用永久失败，且等待审批期间持有日志锁 |
 | — | 上次执行中断（pending）的调用恢复时重新经过准入，可能再次询问 | 核对（Reconcile）在日志操作内执行，先于准入核对需要拆开 `durable.Do`，收益小 |
+
+## 14. 声明式自定义 Agent（参考 dsh preset，草案 v2）
+
+v1 经 Codex 审核（2026-10-30，13 项，结论"修改后推进"），v2 逐项修订；对应关系见 14.13。
+
+### 14.1 借鉴与取舍
+
+dsh 中一个自定义 Agent 就是一行 `dsh-agent-preset`：`id`、`name`、`description` 加 `plugins` 列表，**列表即该 Agent 的全部能力**；配置在加载时按 schema 校验；多层 YAML patch 叠加，`--dump-config` 输出合并结果并标注来源；会话只保存 preset `id`。
+
+| dsh | goagent 取舍 |
+|---|---|
+| Cordis 插件行，npm 包名定位插件 | 组件行 `use: <组件名>`，组件在 Go 中注册（`preset.Register`，带实现版本），不做运行时插件加载 |
+| Schemastery 加载期校验 | 组件配置严格解码（未知字段即报错）；需要连接才能确定的错误（MCP 工具列表）在 Build 阶段报告 |
+| patch 进不了 preset 的 `plugins`，也改不了 `disabled` | preset 按 id 合并，组件按组件 id 合并，语义见 14.3 |
+| 各层同等可信 | **覆盖顺序与权限上限分离**：项目层只能收紧，扩权需宿主授权（14.2） |
+| `!!js` 表达式 | 不支持；秘密只能经类型化引用注入（14.4） |
+| 沙箱模式只管文件写入 | 沙箱模式是可验证的能力要求，执行环境做不到即 Build 失败（14.7） |
+| 钩子按 deny > ask > allow 合并 | 合并下沉到 Pipeline：全部调用前钩子的裁决统一聚合（14.6） |
+| 会话只存 preset id | 会话固定解析后的装配清单摘要，恢复时核验（14.9） |
+| 模型只在子 Agent 的 `agentOptions` | 模型完全由宿主提供，preset 不声明模型 |
+
+### 14.2 信任模型
+
+| 层 | 文件 | 信任 |
+|---|---|---|
+| 内置 | 编译进二进制 | 可信 |
+| 用户 | `~/.goagent/agents.yml` | 可信 |
+| 项目 | `<root>/.goagent/agents.yml` | 不可信 |
+| 本地 | `<root>/.goagent/agents.local.yml` | 不可信（位于仓库目录内，可被仓库中的脚本写入） |
+| 宿主 | `preset.Layers.Host`（代码传入） | 可信 |
+
+覆盖顺序为 内置 → 用户 → 项目 → 本地 → 宿主，但**权限上限只由可信层决定**：
+
+- 可信层可声明 `limits`：沙箱模式上限、可用执行器与镜像、是否允许网络、允许的 MCP 服务与钩子命令、可引用的秘密名单。未声明时上限为 `workspace-write`、禁止网络、禁止启动宿主进程、不可引用秘密。
+- **扩权项**：项目层或本地层中的下列内容需要授权才生效——启动宿主进程的组件（stdio MCP、命令钩子）、联网、引用秘密、`allow` 规则、放宽沙箱模式、删除或替换来自可信层的组件。收紧（加 `deny`/`ask` 规则、降低沙箱模式、删除自己层的组件）无需授权。
+- **授权**：宿主实现 `preset.TrustStore`，按"规范化后的项目根路径 + 扩权项的规范化摘要"记录授权。Build 发现未授权的扩权项时返回 `*TrustRequiredError`（列出每一项及其来源文件），由宿主询问用户后调用 `TrustStore.Grant` 再重试；摘要变化即失效，需重新授权。不提供"跳过未授权项继续"的隐式降级。
+- **锁定**：可信层组件可标 `locked: true`，项目层与本地层不能替换或删除它（尝试即 Load 报错）。
+- **宿主基线**：Build 总是注入不在组件列表中、配置无法删除的安全基线——沙箱守卫（14.7）、`.git` 写保护、缺省权限 Ask（没有 permissions 组件时不会全放行）。
+- **无副作用加载**：`Load`、`Dump`、信任检查都是纯函数，不启动进程、不连网络、不读取秘密的值。
+
+### 14.3 配置格式与合并语义
+
+```yaml
+# <root>/.goagent/agents.yml
+- id: coder
+  name: 编码助手
+  description: 在仓库中修复缺陷并提交
+  components:
+    - {id: persona, use: persona, config: {prefix: "你是一个严谨的编码 Agent……"}}
+    - {id: instructions, use: instructions, config: {files: [AGENTS.md, CLAUDE.md], maxBytes: 32768}}
+    - {id: workspace, use: workspace, config: {sandbox: workspace-write, executor: docker, image: golang:1.25, commandTimeout: 2m}}
+    - {id: coding, use: coding-tools}
+    - id: permissions
+      use: permissions
+      config:
+        approval: ask
+        rules:
+          - {tool: run_command, command: "go test", decision: allow}   # 扩权项，需授权
+          - {tool: git_commit, decision: ask}
+    - {id: spill, use: spill, config: {maxBytes: 100000}}
+    - id: github
+      use: mcp
+      config: {transport: stdio, command: github-mcp, env: {GITHUB_TOKEN: {secret: GITHUB_TOKEN}}}   # 扩权项
+```
+
+合并规则（确定性，无隐式深合并）：
+
+- **preset**：按 `id` 合并。后层出现的标量字段替换前层，未出现保持不变，写空串即设为空；`remove: true` 删除整个 preset。
+- **组件**：按组件 `id` 合并。
+  - 同 id 整行替换并**保留原位置**；`config` 整体替换，不深合并。
+  - 替换不得改变 `use`，否则 Load 报错；确需换实现时写 `replace: true`。
+  - `remove: true` 删除；删除后在更后的层重新出现时追加到末尾。
+  - 新 id 按 层顺序、文件内顺序 追加。
+  - 同一层同一 preset 内重复 id 报错。
+- **顺序即语义**：提示词段落、调用前/后钩子、执行包装的顺序就是最终组件列表顺序；依赖关系只用于初始化顺序，不改变钩子顺序。
+- **Dump**：输出最终组件列表，每行标注来源层与文件，并列出被覆盖、被删除的行及删除者；秘密只显示引用。
+
+### 14.4 秘密
+
+- 只在组件配置中声明为秘密类型的字段（如 MCP 的 `env`、`headers` 的值）接受 `{secret: NAME}` 引用；提示词、规则等普通字符串字段不做任何插值，因此无需转义规则。
+- 引用在 Build 阶段解析，Load 只检查语法与名单；名称必须在可信层 `limits.secrets` 中，项目层引用名单外的秘密属于扩权项。
+- 缺失的秘密 Build 报错；Dump、错误信息与装配清单只出现 `secret:NAME`，不出现值。
+
+### 14.5 组件与装配契约
+
+组件注册信息：名称、实现版本、是否单例（`workspace`、`permissions`、`spill` 为单例）、依赖（`coding-tools`、`spill` 依赖 `workspace`）、能力需求（启动进程、网络、秘密、写入），能力需求同时用于信任检查和沙箱校验。
+
+Build 分阶段执行，任一阶段失败都按初始化的逆序关闭已创建的资源：
+
+1. **静态校验**（Load 已完成）：严格解码、合并、id 唯一、单例数量、依赖存在、引用的工具名可解析。
+2. **信任检查**：计算扩权项并比对 `TrustStore`。
+3. **沙箱校验**：执行环境能否兑现所选模式（14.7）。
+4. **资源初始化**：按依赖拓扑序创建工作区、执行器、MCP 会话。
+5. **工具发现**：MCP 列出工具并加命名空间（14.10）。
+6. **最终校验**：工具名全局唯一、规则引用的工具存在、组合约束成立（如 spill 自带读取工具）。
+7. **发布装配结果**。
+
+`preset.Build(ctx, def, preset.Host{Root, Approver, TrustStore, ArtifactDir})` 返回 `*Assembly`，而不是 Agent：
+
+- `SystemPrompt`：按组件顺序拼接的段落。
+- `Tools`：已经过 Dispatcher 与 Pipeline 的工具，交给 `builder.WithTools`。
+- `Workspace`、`Manifest`（14.9）、幂等的 `Close()`。
+- 组件可以贡献：提示词段落、工具、`PreHook`、`Guard`、`Around`、`PostHook`、执行器、需关闭的资源。
+
+宿主负责：模型、稳定的 `SessionID`、持久化作用域、预算与并发上限，以及 `Approver`。`approval: never` 时 Ask 自动拒绝；`approval: ask` 而宿主未提供 `Approver` 时结果为 Unavailable，同样按拒绝处理。
+
+### 14.6 权限
+
+**管线级聚合（Pipeline 破坏性变更）**：现行 `gate` 在第一个非 Allow 裁决处停止，Ask 获批后后续钩子的 Deny 不再执行，钩子顺序会改变权限结果。改为：
+
+- 全部 `PreHook` 都执行，裁决按 Stop > Deny > Ask > Allow 聚合。
+- `Substitute` 只在没有 Stop/Deny 且只有一个钩子提出时生效，多个钩子提出时报错。
+- 多个 Ask 合并为**一次**审批，理由逐条列出；只有每个提出 Ask 的钩子都给出 `SessionGrant` 时才提供"本会话允许"，记录的授权是这些 Grant 的组合，必须全部匹配才算命中。因此某一来源的授权不会满足另一来源的 Ask。
+- 会话授权属于一个 Pipeline 实例；每次 Build 创建新实例，配置变化后旧授权不迁移。
+- 不可删除的硬限制放在宿主基线的 `Guard` 与执行环境中，不依赖钩子。
+
+**`tools/policy` 求值改为 deny > ask > allow**：在所有匹配的规则中取最严格的裁决，`Default` 只在没有规则匹配时使用。现有 `coding.DefaultPolicy` 的规则互不重叠，行为不变，由测试锁定。可信层与项目层的规则合并为同一策略；由于 deny 优先，项目层的 `allow` 无法越过可信层的 `ask`/`deny`，但能放行可信层未覆盖的调用，所以属于扩权项。
+
+### 14.7 沙箱
+
+沙箱模式写在 `workspace` 组件上，是对执行环境的**可验证要求**：
+
+| 模式 | 文件工具 | 命令（含 git、lint） |
+|---|---|---|
+| `read-only` | 文件系统包装为只读，写入与删除一律拒绝 | 只能在以只读方式挂载工作区的容器中执行；执行器做不到则禁用命令工具 |
+| `workspace-write` | 写入限于工作区（`LocalFS` 路径限定） | 只能在只挂载工作区与临时目录的容器中执行 |
+| `danger-full-access` | 同上 | 可在宿主机执行 |
+
+- `harness/env` 补充能力：`DockerExecutor` 增加只读挂载；`Capabilities` 增加 `ReadOnlyRoot` 等字段，由执行器如实声明。
+- 网络按 `limits` 与组件配置决定，执行器声明的 `Network` 不符即 Build 失败。
+- `LocalExecutor` 不提供隔离：选它而模式低于 `danger-full-access` 时 Build 失败，**不静默降级**。
+- 命令前缀规则不是隔离手段：放行 `go test` 等于允许执行仓库代码，文档明确说明。
+- stdio MCP 与命令钩子在宿主机运行、不受沙箱约束，因此列为扩权项，并标注"不受沙箱保护"。
+
+### 14.8 结果溢出
+
+- 溢出文件写入宿主提供的 `ArtifactDir`（默认在用户缓存目录），按会话与执行键分目录，不写工作区，因此不受只读模式影响，也不计入 `Changes()`。
+- spill 组件自带只读工具 `read_spill`，不依赖 `read_file` 是否被裁掉。
+- 写入失败时返回截断的原结果并附说明，不报错，避免已产生副作用的工具被重新执行。
+- 保留期由 `retention` 配置，宿主负责清理；恢复时文件缺失，`read_spill` 返回明确的拒绝结果。
+
+### 14.9 恢复与装配清单
+
+`Assembly.Manifest` 是解析后执行语义的规范化 JSON 及其摘要：
+
+- 最终组件列表（含配置与顺序，秘密只存引用）与各组件的实现版本；
+- 工具清单：名称、schema 摘要、`DurableIntentVersion`、MCP 工具来源（服务与工具列表快照摘要）；
+- 提示词全文摘要（含指令文件内容）；
+- 工作区根路径、执行器种类与镜像、沙箱模式、权限规则。
+
+持久运行开始时把清单摘要记入日志；恢复时摘要不一致即拒绝（`ErrManifestChanged`），由宿主决定新建会话。不提供自动迁移。摘要只保证执行语义一致，外部副作用仍依赖各工具的核对（Reconcile）。
+
+### 14.10 MCP
+
+- **工具名**：工具名为 `mcp__<组件id>__<工具名>`；可配别名，别名同样须全局唯一，权限规则按最终名称匹配。
+- **超时**：启动和工具发现各有超时。
+- **工具列表**：Build 时取快照，服务端之后的变更在下次 Build 才生效。
+- **失败处理**：
+  - 远端返回的错误结果（`IsError`）作为 `tools.Rejected` 交给模型，不中止运行。
+  - 传输错误中止本次调用；MCP 工具的日志策略不自动重试，因为副作用无法确认。
+- **关闭**：`Close` 幂等，取消在途调用，按初始化的逆序关闭会话与进程。
+
+### 14.11 子 Agent（B 期）
+
+- Load 检查 preset 引用图，有环即报错；嵌套深度经 ctx 传递，受 `maxDepth` 约束。
+- 子 Agent 的权限取三者交集：父 Agent 的有效权限、目标 preset 的权限、宿主上限。
+- `toolFilter` 在资源初始化之前生效，工具全部被过滤掉的组件不初始化，也不启动进程。
+- 子 Agent 使用独立的 Dispatcher 与并发槽位，避免父调用占满槽位造成死锁；继承父调用的取消与总预算。
+
+### 14.12 分期与验收
+
+| 期 | 内容 | 阻断验收 |
+|---|---|---|
+| A0 | Pipeline 裁决聚合与组合授权；`tools/policy` 改为 deny > ask > allow。独立发布（破坏性） | 钩子顺序不影响结果；获批 Ask 之后的 Deny 生效；单一来源的授权不满足另一来源的 Ask；`DefaultPolicy` 行为不变 |
+| A1 | `harness/preset`：格式、合并、严格校验、无副作用 Dump、信任模型、宿主基线、沙箱校验（含 Docker 只读挂载）、组件 `persona`、`instructions`、`workspace`、`coding-tools`、`permissions`、`spill`；`Assembly` 与 `Manifest`；示例改为配置驱动 | 恶意项目配置（扩权、删除锁定组件、引用秘密）被拦截且 Load 无副作用；执行器做不到所选模式时 Build 失败；合并语义逐条有测试；部分初始化失败时资源被关闭 |
+| A2 | `mcp` 组件（命名空间、生命周期、失败契约）；持久运行记录并核验清单摘要 | 工具重名报错；秘密在 Dump、错误、清单中脱敏；配置变化后恢复被拒绝 |
+| B | `claude-code-hooks`（PreToolUse/PostToolUse，扩权项）、`skills`（`SKILL.md` frontmatter）、`subagent` | 子 Agent 不能扩大父 Agent 的权限；引用有环时报错 |
+| C | 依赖第二阶段循环扩展点：UserPromptSubmit/Stop/SessionStart 钩子、计划模式、压缩组件 | — |
+
+### 14.13 Codex 审核意见处理
+
+| # | 意见 | 处理 |
+|---|---|---|
+| 1 | 项目配置被当作授权来源 | 14.2 信任模型：项目层只能收紧，扩权需授权并绑定摘要，Load/Dump 无副作用 |
+| 2 | 沙箱承诺超出实现 | 14.7：模式即可验证要求，做不到即 Build 失败；补 Docker 只读挂载 |
+| 3 | 改规则优先级不能保证全管线 deny 优先 | 14.6：Pipeline 聚合全部裁决，组合授权（A0） |
+| 4 | 只绑定 preset id 不足以保证恢复 | 14.9：装配清单摘要，不一致拒绝恢复 |
+| 5 | 规则优先级是独立的破坏性变更 | 拆为 A0 单独交付；`Default` 只在无匹配时使用 |
+| 6 | 合并规则不完整 | 14.3：位置、删除、重加、改 `use`、重复 id、标量清除逐条规定 |
+| 7 | 装配契约不完整 | 14.5：单例与依赖、分阶段 Build、失败逆序清理、补上 `Around`、缺省权限 Ask |
+| 8 | MCP 名称空间与生命周期 | 14.10 |
+| 9 | `${ENV}` 与 Dump 泄漏秘密 | 14.4：取消文本插值，只接受类型化秘密引用并脱敏 |
+| 10 | Build 返回值、模型、审批不明确 | 14.5：返回 `Assembly`；模型由宿主提供；`never`/无 Approver 的语义 |
+| 11 | spill 与只读、裁剪、恢复冲突 | 14.8：写入宿主产物目录，自带 `read_spill`，失败不重跑 |
+| 12 | 子 Agent 授权与资源约束 | 14.11 |
+| 13 | A 期范围过宽，缺少阻断验收 | 14.12：拆为 A0/A1/A2，每期列出阻断验收 |
