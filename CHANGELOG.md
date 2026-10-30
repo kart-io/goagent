@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-10-30
+
+### Added
+
+- `memory.AsVectorStore`：把 `InMemoryVectorStore`、`ChromaVectorStore` 等 `SimpleVectorStore` 适配为 `HierarchicalMemory` 需要的 `VectorStore`。此前包内没有任何实现满足该接口，分层记忆无法接入内置向量存储。元数据不随向量保存，搜索结果只含 ID 与相似度。
+
+### Fixed
+
+- OpenAI Provider 应用 `llm.WithTimeout`（未设置时为 60 秒），此前完全忽略该配置。超时用于限制等待响应开始的时间：非流式请求整体受限，流式请求在首块到达后不再受限，长回复不会被截断。
+- `llm.WithTimeout` 对正数时长向上取整到秒，此前不足 1 秒的值被截断为 0 而当作未设置。
+
+### Changed
+
+- OpenAI 非流式请求超过 60 秒（或所设超时）会返回错误，此前没有时限；耗时较长的推理模型请求需用 `llm.WithTimeout` 调大。
+
 ## [0.17.2] - 2026-10-30
 
 ### Fixed
@@ -484,7 +499,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/kart-io/goagent/compare/v0.17.2...HEAD
+[Unreleased]: https://github.com/kart-io/goagent/compare/v0.18.0...HEAD
+[0.18.0]: https://github.com/kart-io/goagent/compare/v0.17.2...v0.18.0
 [0.17.2]: https://github.com/kart-io/goagent/compare/v0.17.1...v0.17.2
 [0.17.1]: https://github.com/kart-io/goagent/compare/v0.17.0...v0.17.1
 [0.17.0]: https://github.com/kart-io/goagent/compare/v0.16.1...v0.17.0
