@@ -93,7 +93,6 @@ jobs:
             - llm/providers/openai.go ≥ 70%
             - llm/providers/gemini.go ≥ 65%
             - llm/common/base.go ≥ 50%
-            - tools/practical/database_query.go ≥ 40%
 
             运行 \`./scripts/check_coverage.sh\` 查看详细报告。
 

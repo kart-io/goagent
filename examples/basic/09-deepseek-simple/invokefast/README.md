@@ -380,25 +380,6 @@ if core.IsFastInvoker(agent) {
 - [GoAgent 架构文档](../../../docs/architecture/ARCHITECTURE.md)
 - [DeepSeek Provider 文档](../../../docs/guides/LLM_PROVIDERS.md#deepseek)
 
-## 性能基准测试
-
-在 GoAgent 代码库中运行基准测试：
-
-```bash
-cd /home/costalong/code/go/src/github.com/kart-io/goagent/agents/react
-go test -bench=BenchmarkInvokeFast -benchmem
-```
-
-预期结果：
-
-```text
-BenchmarkInvokeFast-8           800000    1399 ns/op    320 B/op    8 allocs/op
-BenchmarkInvoke-8              750000    1494 ns/op    352 B/op    9 allocs/op
-
-性能提升: ~6.3%
-内存减少: ~9%
-```
-
 ## 总结
 
 InvokeFast 是 GoAgent 的重要性能优化特性：

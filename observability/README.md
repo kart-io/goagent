@@ -433,4 +433,3 @@ observability/
 
 - [core](../core/) - 核心执行引擎
 - [middleware](../middleware/) - 中间件系统
-- [distributed](../distributed/) - 分布式协调

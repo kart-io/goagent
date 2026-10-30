@@ -465,5 +465,4 @@ const (
 ## 扩展阅读
 
 - [llm](../llm/) - LLM 集成
-- [agents](../agents/) - Agent 实现
 - [core](../core/) - 核心执行引擎

@@ -604,4 +604,3 @@ const (
 - [core](../core/) - 核心执行引擎
 - [memory](../memory/) - 内存管理实现
 - [tools](../tools/) - 工具系统
-- [agents](../agents/) - Agent 实现

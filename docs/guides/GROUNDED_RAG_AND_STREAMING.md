@@ -42,47 +42,7 @@ output, err := agent.Execute(ctx, "退款政策是什么？")
 | `retrieval_context_runes` | 实际采用的正文字符数 |
 | `retrieval_truncated` | 是否因文档数或字符预算省略了证据 |
 
-完整示例：[`examples/rag/grounded`](../../examples/rag/grounded/main.go)。设置 `OPENAI_API_KEY`，按需设置 `OPENAI_BASE_URL`、`OPENAI_MODEL`，然后执行：
-
-```bash
-go run ./examples/rag/grounded
-```
-
-使用 DeepSeek 的 OpenAI 兼容接口时，可复用环境中的 `DEEPSEEK_API_KEY`，只为当前命令设置配置：
-
-```bash
-OPENAI_API_KEY="$DEEPSEEK_API_KEY" \
-OPENAI_BASE_URL=https://api.deepseek.com \
-OPENAI_MODEL=deepseek-flash \
-go run ./examples/rag/grounded
-```
-
-模型名称以 [DeepSeek 官方文档](https://api-docs.deepseek.com/) 为准。
-
-## ReAct 步骤流
-
-```go
-ctx, cancel := context.WithCancel(ctx)
-defer cancel() // 提前停止消费时，取消生产者及上游工作
-chunks, err := agent.Stream(ctx, input)
-if err != nil {
-    return err
-}
-for chunk := range chunks {
-    if chunk.Error != nil {
-        return chunk.Error
-    }
-    if chunk.Done {
-        fmt.Println("最终结果:", chunk.Data.Result)
-        continue
-    }
-    fmt.Println(chunk.Data.Metadata["step_type"], chunk.Data.Message)
-}
-```
-
-`thought` 事件在工具调用之前发出，`action` 事件在工具返回后发出。正常执行或执行错误会产生一个 `Done=true` 终止块；达到步数限制时，终止块的状态为 `partial`。取消后通道关闭，不保证额外发送终止块。
-
-这些是步骤事件，不能作为模型首 Token 延迟的证明。`Stream()` 保留 Agent、LLM 和工具回调。`RunGenerator()` 没有生产者 goroutine，`break` 会停止后续步骤；它保留原有的 LLM/工具回调语义，不执行 Agent 级别的开始/结束回调。输出快照中的切片和 Token 统计不会随后续步骤增长；自定义工具返回的嵌套对象仍应按只读数据处理。
+检索器实现（BM25、混合检索、重排、Qdrant 等）位于 [goagent-contrib/retrieval](https://github.com/kart-io/goagent-contrib/tree/master/retrieval)，均满足 `interfaces.DocumentRetriever`，可直接传给 `RAGAgent` 或 `WithRetriever`。
 
 ## 真实模型 Token 流
 
@@ -130,4 +90,4 @@ for chunk := range chunks {
 
 ## 后续能力
 
-参见 [检索、统一事件流、MCP 与可恢复步骤](PRIORITY_CAPABILITIES.md) 和 [合成评测记录](../evaluation/README.md)。`examples/rag/grounded` 新增 `-stream`，可在同一入口查看来源、原生文本增量和用量。
+参见 [检索、统一事件流、MCP 与可恢复步骤](PRIORITY_CAPABILITIES.md) 和 [合成评测记录](../evaluation/README.md)。
