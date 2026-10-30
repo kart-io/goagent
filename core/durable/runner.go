@@ -41,13 +41,28 @@ type Snapshot struct {
 	Key      string          `json:"key,omitempty"`
 }
 
-// Store locks a run across the entire execution and atomically saves snapshots.
-// Unlock must also occur after process exit (as OS-backed file locks do).
+// Store 在整个执行期间为一个运行加锁，并原子保存快照。实现须满足以下契约：
+//   - Lock 等待到获得锁为止，ctx 结束前未获得时返回同时包装 ErrLockUnavailable 与 ctx 错误的错误。
+//     同一 ID 不可重入，同一进程内的第二次 Lock 同样等待；锁之间不做死锁检测，嵌套成环时只能等到 ctx 结束。
+//   - 锁可能持有很久（整张图、整个持久操作），同一进程会同时持有多个 ID；持有者进程退出后，锁须在有界时间内释放。
+//   - Save 只在调用方持有该 ID 的锁时调用，也可能在 Lock 的 ctx 取消后以 WithoutCancel 的 ctx 调用。
+//     Save 原子且持久，Snapshot 的全部字段原样保存。持有者已失去锁时，实现可以拒绝写入并返回 ErrLeaseLost。
+//   - Load 不需要持锁，读到的是最近一次成功 Save 的完整快照（不能来自滞后的副本），成功时快照非 nil；
+//     记录不存在时返回可用 errors.Is(err, os.ErrNotExist) 识别的错误。
+//
+// core/durable/storetest 验证其中可在通用环境检验的部分，不覆盖长时间持锁、进程退出后释放与 ErrLeaseLost。
 type Store interface {
 	Lock(context.Context, string) (func() error, error)
 	Load(context.Context, string) (*Snapshot, error)
 	Save(context.Context, string, *Snapshot) error
 }
+
+// ErrLockUnavailable 表示 ctx 结束前未能获得锁：运行锁通常是其他持有者正在执行同一运行，
+// 作用域相关的操作也可能在等待作用域的删除或写入结束。
+var ErrLockUnavailable = errors.New("持久运行锁不可用")
+
+// ErrLeaseLost 表示写入时调用方已不再持有该 ID 的锁（如租约过期后被其他实例接管），写入被拒绝。
+var ErrLeaseLost = errors.New("持久运行锁已失效，拒绝写入")
 
 // ErrScopeRemoved 表示作用域已被 RemoveScope 删除，不再接受读写。
 var ErrScopeRemoved = errors.New("持久作用域已删除，拒绝读写")
@@ -55,6 +70,7 @@ var ErrScopeRemoved = errors.New("持久作用域已删除，拒绝读写")
 // Scoped 是 Store 可选的分区能力：Scope 返回独立命名空间（按需创建，只读不产生文件），
 // RemoveScope 整体删除该命名空间并留下墓碑，使其拒绝读写（Lock/Save/Load 返回 ErrScopeRemoved），作用域不存在时同样生效；
 // 删除中途崩溃时墓碑已生效，残留数据在再次 RemoveScope 之前同样不可读。名称删除后不可复用。
+// RemoveScope 返回时不保证进行中的持锁者已经结束（FileStore 会等待其释放），只保证之后的写入被拒绝；重复调用不刷新墓碑时间。
 //
 // PruneRemoved 删除早于 olderThan 写下的墓碑（连同崩溃残留的数据），与写入互斥。墓碑删除后该名称的 Load 返回 os.ErrNotExist，
 // 迟到的写入不再被拒绝、可能留下残留且可被读到，因此 olderThan 须大于最长的重试或恢复窗口；未过期的墓碑照常拒绝读写。

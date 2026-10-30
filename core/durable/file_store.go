@@ -33,10 +33,10 @@ func (s *FileStore) Lock(ctx context.Context, id string) (func() error, error) {
 	lock := flock.New(s.path(id) + ".lock")
 	ok, err := lock.TryLockContext(ctx, 20*time.Millisecond)
 	if err != nil {
-		return nil, err
+		return nil, lockError(ctx, err)
 	}
 	if !ok {
-		return nil, fmt.Errorf("run lock unavailable")
+		return nil, ErrLockUnavailable
 	}
 	return lock.Close, nil
 }
@@ -216,10 +216,10 @@ func lockGate(ctx context.Context, path string, shared, create bool) (*flock.Flo
 		}
 		ok, err := try(ctx, 20*time.Millisecond)
 		if err == nil && !ok {
-			err = fmt.Errorf("scope lock unavailable")
+			err = ErrLockUnavailable
 		}
 		if err != nil {
-			return nil, err
+			return nil, lockError(ctx, err)
 		}
 		held, err := gate.Stat()
 		var current os.FileInfo
@@ -236,6 +236,14 @@ func lockGate(ctx context.Context, path string, shared, create bool) (*flock.Flo
 			return nil, os.ErrNotExist
 		}
 	}
+}
+
+// lockError 把 ctx 结束导致的等锁失败标记为 ErrLockUnavailable，同时保留 ctx 错误；其他错误（如 I/O）原样返回。
+func lockError(ctx context.Context, err error) error {
+	if ctx.Err() != nil && errors.Is(err, ctx.Err()) {
+		return fmt.Errorf("%w: %w", ErrLockUnavailable, err)
+	}
+	return err
 }
 
 func ignoreNotExist(err error) error {
