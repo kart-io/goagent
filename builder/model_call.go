@@ -120,7 +120,7 @@ func modelOperation(ctx context.Context, id string, intent json.RawMessage, invo
 	}
 	reserve := func(callCtx context.Context, n int) error {
 		if metered {
-			return c.Reserve(callCtx, attemptKey(n))
+			return reserveModelBudget(callCtx, c, attemptKey(n))
 		}
 		return nil
 	}
@@ -230,6 +230,7 @@ func modelOperation(ctx context.Context, id string, intent json.RawMessage, invo
 	return turn, nil
 }
 func readPlainModelTurn(ctx context.Context, id string, client llm.StreamClient, req *llm.CompletionRequest, emit func(AgentEvent) error) (*llm.StreamChunk, error) {
+	ctx = withTokenRequest(ctx, req, nil)
 	var intent json.RawMessage
 	var err error
 	if durable.HasJournal(ctx) {
