@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/sashabaranov/go-openai"
@@ -71,20 +70,57 @@ func NewOpenAIWithOptions(opts ...agentllm.ClientOption) (*OpenAIProvider, error
 	return provider, nil
 }
 
-// headerTimeoutClients 按超时复用 HTTP 客户端，避免每个 Provider 各持一个连接池。
-var headerTimeoutClients sync.Map
-
-// responseHeaderTimeoutClient 把超时用作等待响应头的时限：非流式请求在生成完毕后才返回响应头，因而整体受限；
+// responseHeaderTimeoutClient 把超时用作拿到响应头的时限：非流式请求在生成完毕后才返回响应头，因而整体受限；
 // 流式请求的响应头随首块到达，之后的读取只受 ctx 控制，长回复不会被截断。
 func responseHeaderTimeoutClient(timeout time.Duration) *http.Client {
-	if c, ok := headerTimeoutClients.Load(timeout); ok {
-		return c.(*http.Client)
-	}
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.ResponseHeaderTimeout = timeout
-	c, _ := headerTimeoutClients.LoadOrStore(timeout, &http.Client{Transport: transport})
-	return c.(*http.Client)
+	return &http.Client{Transport: headerTimeoutTransport{timeout: timeout}}
 }
+
+// headerTimeoutTransport 每次请求都使用当时的 http.DefaultTransport（宿主可能替换为 otelhttp、httpmock 等任意实现），
+// 连接池也由它统一持有。计时从发起请求开始，覆盖建连与写请求。
+type headerTimeoutTransport struct{ timeout time.Duration }
+
+func (t headerTimeoutTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if t.timeout <= 0 {
+		return http.DefaultTransport.RoundTrip(req)
+	}
+	ctx, cancel := context.WithCancel(req.Context())
+	timer := time.AfterFunc(t.timeout, cancel)
+	resp, err := http.DefaultTransport.RoundTrip(req.WithContext(ctx))
+	// 定时器已触发时 ctx 已取消，即便响应恰好返回其 Body 也不可读，统一按超时处理。
+	if !timer.Stop() {
+		if err == nil {
+			_ = resp.Body.Close()
+		}
+		return nil, errResponseHeaderTimeout
+	}
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+	resp.Body = &cancelOnCloseBody{ReadCloser: resp.Body, cancel: cancel}
+	return resp, nil
+}
+
+type cancelOnCloseBody struct {
+	io.ReadCloser
+	cancel context.CancelFunc
+}
+
+func (b *cancelOnCloseBody) Close() error {
+	err := b.ReadCloser.Close()
+	b.cancel()
+	return err
+}
+
+// errResponseHeaderTimeout 实现 net.Error 且 Timeout() 为 true，与 http.Transport.ResponseHeaderTimeout 的错误可同样识别。
+var errResponseHeaderTimeout error = responseHeaderTimeoutError{}
+
+type responseHeaderTimeoutError struct{}
+
+func (responseHeaderTimeoutError) Error() string   { return "等待响应头超时" }
+func (responseHeaderTimeoutError) Timeout() bool   { return true }
+func (responseHeaderTimeoutError) Temporary() bool { return true }
 
 // Complete implements basic text completion
 // 优化：使用 sync.Pool 复用消息切片以减少内存分配
@@ -149,6 +185,7 @@ func (p *OpenAIProvider) Chat(ctx context.Context, messages []agentllm.Message) 
 }
 
 // Stream implements streaming generation
+// 超时只约束拿到响应头，流开始后不再计时；消费者不再读取时必须取消 ctx，否则 goroutine 与连接不会释放。
 func (p *OpenAIProvider) Stream(ctx context.Context, prompt string) (<-chan string, error) {
 	tokens := make(chan string, 100)
 
@@ -168,6 +205,7 @@ func (p *OpenAIProvider) Stream(ctx context.Context, prompt string) (<-chan stri
 		Content: prompt,
 	})
 
+	ctx, retryAfter := withRetryAfterSlot(ctx)
 	stream, err := p.client.CreateChatCompletionStream(ctx, openai.ChatCompletionRequest{
 		Model:       model,
 		Messages:    messages,
@@ -176,7 +214,7 @@ func (p *OpenAIProvider) Stream(ctx context.Context, prompt string) (<-chan stri
 		Stream:      true,
 	})
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError(p.ProviderName(), model, err).
+		return nil, agentErrors.NewLLMRequestError(p.ProviderName(), model, openAIProviderError(err, *retryAfter)).
 			WithContext("stream", true)
 	}
 
@@ -283,18 +321,20 @@ func (p *OpenAIProvider) GenerateWithTools(ctx context.Context, prompt string, t
 
 // StreamWithTools implements streaming tool calls
 // 返回 <-chan agentllm.ToolChunk 以符合 llm.ToolCallingClient 接口
+// 超时只约束拿到响应头，流开始后不再计时；消费者不再读取时必须取消 ctx，否则 goroutine 与连接不会释放。
 func (p *OpenAIProvider) StreamWithTools(ctx context.Context, prompt string, tools []interfaces.Tool) (<-chan agentllm.ToolChunk, error) {
 	messages := []openai.ChatCompletionMessage{}
 	if p.Config.SystemPrompt != "" {
 		messages = append(messages, openai.ChatCompletionMessage{Role: "system", Content: p.Config.SystemPrompt})
 	}
 	messages = append(messages, openai.ChatCompletionMessage{Role: "user", Content: prompt})
+	ctx, retryAfter := withRetryAfterSlot(ctx)
 	stream, err := p.client.CreateChatCompletionStream(ctx, openai.ChatCompletionRequest{
 		Model: p.GetModel(""), Messages: messages, Tools: p.convertTools(tools),
 		MaxTokens: p.GetMaxTokens(0), Temperature: float32(p.GetTemperature(0)), Stream: true,
 	})
 	if err != nil {
-		return nil, err
+		return nil, openAIProviderError(err, *retryAfter)
 	}
 	chunks := make(chan agentllm.ToolChunk, 1)
 	go func() {

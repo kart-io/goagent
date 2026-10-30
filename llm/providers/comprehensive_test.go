@@ -338,7 +338,6 @@ func TestDeepSeekProvider_Chat(t *testing.T) {
 // TestDeepSeekProvider_Stream tests streaming responses
 func TestDeepSeekProvider_Stream(t *testing.T) {
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
 
 		// Send streaming responses
 		streamResponses := []DeepSeekStreamResponse{
@@ -381,9 +380,7 @@ func TestDeepSeekProvider_Stream(t *testing.T) {
 			},
 		}
 
-		for _, resp := range streamResponses {
-			json.NewEncoder(w).Encode(resp)
-		}
+		writeDeepSeekSSE(w, true, streamResponses...)
 	}))
 	defer mockServer.Close()
 
@@ -467,77 +464,14 @@ func TestDeepSeekProvider_GenerateWithTools(t *testing.T) {
 // TestDeepSeekProvider_StreamWithTools tests streaming tool calls
 func TestDeepSeekProvider_StreamWithTools(t *testing.T) {
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-
-		streamResponses := []DeepSeekStreamResponse{
-			{
-				ID:     "chatcmpl-tool-stream-1",
-				Object: "chat.completion.chunk",
-				Model:  "deepseek-chat",
-				Choices: []DeepSeekChoice{
-					{
-						Index: 0,
-						Delta: DeepSeekMessage{Content: "Processing..."},
-					},
-				},
-			},
-			{
-				ID:     "chatcmpl-tool-stream-2",
-				Object: "chat.completion.chunk",
-				Model:  "deepseek-chat",
-				Choices: []DeepSeekChoice{
-					{
-						Index: 0,
-						Delta: DeepSeekMessage{
-							ToolCalls: []DeepSeekToolCall{
-								{
-									ID:   "call_002",
-									Type: "function",
-									Function: DeepSeekFunctionCall{
-										Name:      "tool_name",
-										Arguments: `{"param":`,
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			{
-				ID:     "chatcmpl-tool-stream-3",
-				Object: "chat.completion.chunk",
-				Model:  "deepseek-chat",
-				Choices: []DeepSeekChoice{
-					{
-						Index: 0,
-						Delta: DeepSeekMessage{
-							ToolCalls: []DeepSeekToolCall{
-								{
-									Function: DeepSeekFunctionCall{
-										Arguments: `"value"}`,
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			{
-				ID:     "chatcmpl-tool-stream-4",
-				Object: "chat.completion.chunk",
-				Model:  "deepseek-chat",
-				Choices: []DeepSeekChoice{
-					{
-						Index:        0,
-						FinishReason: "tool_calls",
-					},
-				},
-			},
-		}
-
-		for _, resp := range streamResponses {
-			json.NewEncoder(w).Encode(resp)
-		}
+		// 与 DeepSeek 真实帧一致：首个分片带 index/id/name，后续分片只带 index 与参数片段
+		writeDeepSeekSSE(w, true,
+			json.RawMessage(`{"id":"chatcmpl-tool-stream","object":"chat.completion.chunk","model":"deepseek-chat","choices":[{"index":0,"delta":{"role":"assistant","content":"Processing..."}}]}`),
+			json.RawMessage(`{"id":"chatcmpl-tool-stream","object":"chat.completion.chunk","model":"deepseek-chat","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_002","type":"function","function":{"name":"tool_name","arguments":""}}]}}]}`),
+			json.RawMessage(`{"id":"chatcmpl-tool-stream","object":"chat.completion.chunk","model":"deepseek-chat","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"param\":"}}]}}]}`),
+			json.RawMessage(`{"id":"chatcmpl-tool-stream","object":"chat.completion.chunk","model":"deepseek-chat","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\"value\"}"}}]}}]}`),
+			json.RawMessage(`{"id":"chatcmpl-tool-stream","object":"chat.completion.chunk","model":"deepseek-chat","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}`),
+		)
 	}))
 	defer mockServer.Close()
 
@@ -548,13 +482,32 @@ func TestDeepSeekProvider_StreamWithTools(t *testing.T) {
 	chunks, err := provider.StreamWithTools(context.Background(), "Test", []interfaces.Tool{mockTool})
 	require.NoError(t, err)
 
-	var chunkCount int
+	var types []string
+	var args []string
+	var call *llm.ToolCall
 	for chunk := range chunks {
-		chunkCount++
-		assert.NotEmpty(t, chunk.Type)
+		types = append(types, chunk.Type)
+		switch chunk.Type {
+		case "content":
+			assert.Equal(t, "Processing...", chunk.Value)
+		case "tool_name":
+			assert.Equal(t, "tool_name", chunk.Value)
+		case "tool_args":
+			args = append(args, chunk.Value.(string))
+		case "tool_call":
+			call = chunk.Value.(*llm.ToolCall)
+		case "error":
+			t.Fatalf("unexpected error chunk: %v", chunk.Value)
+		}
 	}
 
-	assert.Greater(t, chunkCount, 0)
+	assert.Equal(t, []string{"content", "tool_name", "tool_args", "tool_args", "tool_call"}, types)
+	assert.Equal(t, []string{`{"param":`, `"value"}`}, args)
+	require.NotNil(t, call)
+	assert.Equal(t, "call_002", call.ID)
+	assert.Equal(t, "function", call.Type)
+	assert.Equal(t, "tool_name", call.Function.Name)
+	assert.Equal(t, `{"param":"value"}`, call.Function.Arguments)
 }
 
 // TestDeepSeekProvider_Embed tests embedding generation
@@ -666,7 +619,6 @@ func TestDeepSeekStreamingProvider_Creation(t *testing.T) {
 // TestDeepSeekStreamingProvider_StreamWithMetadata tests streaming with metadata
 func TestDeepSeekStreamingProvider_StreamWithMetadata(t *testing.T) {
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
 
 		streamResponses := []DeepSeekStreamResponse{
 			{
@@ -701,9 +653,7 @@ func TestDeepSeekStreamingProvider_StreamWithMetadata(t *testing.T) {
 			},
 		}
 
-		for _, resp := range streamResponses {
-			json.NewEncoder(w).Encode(resp)
-		}
+		writeDeepSeekSSE(w, true, streamResponses...)
 	}))
 	defer mockServer.Close()
 
@@ -1286,10 +1236,9 @@ func TestDeepSeekProvider_InvalidRequestPayload(t *testing.T) {
 // TestDeepSeekProvider_StreamReadError tests stream read error handling
 func TestDeepSeekProvider_StreamReadError(t *testing.T) {
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"id":"test"}`))
-		w.Write([]byte("\n{invalid json"))
-		w.Write([]byte("\n"))
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Write([]byte("data: {\"id\":\"test\"}\n\n"))
+		w.Write([]byte("data: {invalid json\n\n"))
 	}))
 	defer mockServer.Close()
 
@@ -1299,12 +1248,12 @@ func TestDeepSeekProvider_StreamReadError(t *testing.T) {
 	tokens, err := provider.Stream(context.Background(), "Test")
 	require.NoError(t, err)
 
-	// Stream should handle the error gracefully
+	// 首帧没有 choices，次帧解码失败：通道应关闭且不产出 token
 	tokenCount := 0
 	for range tokens {
 		tokenCount++
 	}
-	// May get 0 tokens due to invalid JSON after first response
+	assert.Zero(t, tokenCount)
 }
 
 // TestMultipleToolCalls tests multiple tool calls in one response
