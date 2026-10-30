@@ -186,7 +186,7 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 	}()
 	// 本层返回的错误登记给调用方，外层模型路径不会把它当作外层模型的参数错误。
 	caller := ctx
-	defer func() { Settle(caller, err) }()
+	defer func() { _ = Settle(caller, err) }()
 	defer func() {
 		if v := recover(); v != nil {
 			out = nil

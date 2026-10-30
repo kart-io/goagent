@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.1] - 2026-10-30
+
+### Fixed
+
+- v0.16.0 的发布工作流在 Go 1.25 下失败，未创建 GitHub Release：`builder` 的 panic 测试断言调用栈含 `builder.panicTool.`，而 Go 1.25 把返回闭包的 `panicTool` 内联后帧名为 `Test….funcN.panicTool.1`；改为匹配 `panicTool.`。功能代码与 v0.16.0 相同，v0.16.0 的变更与迁移说明见下文。
+- golangci-lint v2.6.2 的 errcheck：`core/lifecycle_manager.go` 的 `AgentError.WithContext` 与 `tools/dispatcher.go` 的 `Settle` 显式丢弃返回值，行为不变。
+
 ## [0.16.0] - 2026-10-30
 
 ### Breaking
@@ -457,5 +464,6 @@ For breaking changes, see:
 Historical development is documented in the [archive](docs/archive/) directory.
 
 [1.0.0]: https://github.com/kart-io/goagent/releases/tag/v1.0.0
-[Unreleased]: https://github.com/kart-io/goagent/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/kart-io/goagent/compare/v0.16.1...HEAD
+[0.16.1]: https://github.com/kart-io/goagent/compare/v0.16.0...v0.16.1
 [0.16.0]: https://github.com/kart-io/goagent/compare/v0.15.0...v0.16.0
