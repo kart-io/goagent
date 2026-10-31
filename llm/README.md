@@ -148,3 +148,7 @@ fmt.Printf("命中率: %.2f%%\n", cached.Stats().HitRate*100)
 - [builder](../builder/) - Agent 构建器
 - [tools](../tools/) - 工具系统
 - [interfaces](../interfaces/) - 接口定义
+
+## 显式零温
+
+`llm.WithTemperature(0)` 设置客户端零温；使用 Builder 时同时设置 `builder.WithTemperature(0)`（Builder 默认值为 `0.7`，优先于客户端）。直接构造请求使用 `llm.CompletionRequest{Temperature: 0, TemperatureSet: true}`。JSON 的 `"temperature":0` 会自动保留显式设置，未设置的旧请求仍沿用默认回落。自定义 Provider 应使用 `BaseProvider.ResolveTemperature(req)`，详见 [LLM API](../docs/api/LLM_API.md)。

@@ -74,6 +74,7 @@ func AssistantMessage(content string) Message
 type CompletionRequest struct {
     Messages    []Message
     Temperature float64
+    TemperatureSet bool // Go 结构体显式指定零时设为 true；不生成 JSON 字段
     MaxTokens   int
     Model       string   // 为空时使用客户端配置的模型
     Stop        []string
@@ -89,6 +90,10 @@ type CompletionResponse struct {
     Usage        *interfaces.TokenUsage // 可能为 nil，读取前判空
 }
 ```
+
+温度的优先级为请求、客户端配置、默认值 `0.7`。`llm.WithTemperature(0)` 和 Builder 的 `WithTemperature(0)` 均保留显式零。直接构造请求时使用 `CompletionRequest{Temperature: 0, TemperatureSet: true}`；直接构造客户端配置时也需设置 `LLMOptions.TemperatureSet`。JSON 中 `"temperature":0` 自动标记为显式设置，缺省字段保持原值，`null` 清除设置。旧的零值请求继续回落到客户端配置。Builder 始终提供其温度（默认 `0.7`），因此需要零温时也应在 Builder 上设置。
+
+自定义 Provider 可调用 `BaseProvider.ResolveTemperature(req)` 保留请求的显式零；旧的 `GetTemperature(float64)` 接口无法区分零与缺省。
 
 `ToolCall` 的结构为 `ID`、`Type`（`"function"`）和 `Function{Name, Arguments}`，`Arguments` 是 JSON 字符串。
 

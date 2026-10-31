@@ -29,7 +29,7 @@ type DeepSeekProvider struct {
 type DeepSeekRequest struct {
 	Model          string                  `json:"model"`
 	Messages       []DeepSeekMessage       `json:"messages"`
-	Temperature    float64                 `json:"temperature,omitempty"`
+	Temperature    float64                 `json:"temperature"`
 	MaxTokens      int                     `json:"max_tokens,omitempty"`
 	TopP           float64                 `json:"top_p,omitempty"`
 	Stream         bool                    `json:"stream,omitempty"`
@@ -186,7 +186,7 @@ func (p *DeepSeekProvider) Complete(ctx context.Context, req *agentllm.Completio
 	dsReq := DeepSeekRequest{
 		Model:       model,
 		Messages:    messages,
-		Temperature: p.GetTemperature(req.Temperature),
+		Temperature: p.ResolveTemperature(req),
 		MaxTokens:   p.GetMaxTokens(req.MaxTokens),
 		TopP:        req.TopP,
 		Stop:        req.Stop,

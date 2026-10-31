@@ -22,7 +22,7 @@
 | `WithMaxIterations(int)` | 10 | 模型请求上限，包含最终回答；非正数忽略 |
 | `WithTimeout(time.Duration)` | 5 分钟 | 单次执行超时，排队等待会话串行锁也计入 |
 | `WithMaxTokens(int)` | 2000 | 模型最大输出 Token |
-| `WithTemperature(float64)` | 0.7 | 采样温度 |
+| `WithTemperature(float64)` | 0.7 | 采样温度，支持显式 `0`；Builder 值优先于客户端配置 |
 | `WithOutputFormat(OutputFormat)` | `OutputFormatDefault` | 在系统提示词后追加格式说明：`OutputFormatPlainText`、`OutputFormatMarkdown`、`OutputFormatJSON` |
 | `WithCustomOutputFormat(string)` | 无 | 自定义格式说明（`OutputFormatCustom`） |
 | `WithInputSerializer(InputSerializer)` | `DefaultInputSerializer` | 把任意输入转为提示文本 |

@@ -33,7 +33,7 @@ type CohereRequest struct {
 	Model            string          `json:"model"`
 	Message          string          `json:"message"`
 	ChatHistory      []CohereMessage `json:"chat_history,omitempty"`
-	Temperature      float64         `json:"temperature,omitempty"`
+	Temperature      float64         `json:"temperature"`
 	MaxTokens        int             `json:"max_tokens,omitempty"`
 	P                float64         `json:"p,omitempty"` // Top-p
 	K                int             `json:"k,omitempty"` // Top-k
@@ -175,7 +175,7 @@ func (p *CohereProvider) buildRequest(req *agentllm.CompletionRequest) *CohereRe
 	// 使用 common.BaseProvider 的统一参数处理方法
 	model := p.GetModel(req.Model)
 	maxTokens := p.GetMaxTokens(req.MaxTokens)
-	temperature := p.GetTemperature(req.Temperature)
+	temperature := p.ResolveTemperature(req)
 
 	return &CohereRequest{
 		Model:         model,

@@ -1,0 +1,135 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.15.0, pytest-9.1.1, pluggy-1.7.0
+rootdir: /private/var/folders/7j/6j1y9dtx54d9qzsqp8vx_kdr0000gn/T/goagent-acp-live-e5khh181/venv/lib/python3.15/site-packages/tck/v1/conformance
+collected 74 items
+
+venv/lib/python3.15/site-packages/tck/v1/conformance/test_authentication.py . [  1%]
+.s..s                                                                    [  8%]
+venv/lib/python3.15/site-packages/tck/v1/conformance/test_cancel.py ..   [ 10%]
+venv/lib/python3.15/site-packages/tck/v1/conformance/test_client_capabilities.py . [ 12%]
+......                                                                   [ 20%]
+venv/lib/python3.15/site-packages/tck/v1/conformance/test_diagnostics.py . [ 21%]
+...                                                                      [ 25%]
+venv/lib/python3.15/site-packages/tck/v1/conformance/test_extensibility.py . [ 27%]
+...                                                                      [ 31%]
+venv/lib/python3.15/site-packages/tck/v1/conformance/test_informational.py . [ 32%]
+..                                                                       [ 35%]
+venv/lib/python3.15/site-packages/tck/v1/conformance/test_initialize.py . [ 36%]
+....                                                                     [ 41%]
+venv/lib/python3.15/site-packages/tck/v1/conformance/test_jsonrpc.py ... [ 45%]
+......                                                                   [ 54%]
+venv/lib/python3.15/site-packages/tck/v1/conformance/test_prompt.py .... [ 59%]
+                                                                         [ 59%]
+venv/lib/python3.15/site-packages/tck/v1/conformance/test_prompt_capabilities.py s [ 60%]
+s.                                                                       [ 63%]
+venv/lib/python3.15/site-packages/tck/v1/conformance/test_session.py ... [ 67%]
+.                                                                        [ 68%]
+venv/lib/python3.15/site-packages/tck/v1/conformance/test_session_capabilities.py . [ 70%]
+..ss..sss..ssss                                                          [ 90%]
+venv/lib/python3.15/site-packages/tck/v1/conformance/test_session_config.py s [ 91%]
+sss.                                                                     [ 97%]
+venv/lib/python3.15/site-packages/tck/v1/conformance/test_transport.py . [ 98%]
+.                                                                        [100%]
+========================= ACP TCK requirement summary ==========================
+
+[MANDATORY]
+  ACP-AUTH-002                 PASS
+  ACP-AUTH-006                 PASS
+  ACP-CANCEL-001               PASS
+  ACP-CANCEL-002               PASS
+  ACP-CLIENTCAP-001            PASS
+  ACP-CLIENTCAP-002            PASS
+  ACP-CLIENTCAP-003            PASS
+  ACP-CLIENTCAP-004            PASS
+  ACP-CLIENTCAP-005            PASS
+  ACP-CLIENTCAP-006            PASS
+  ACP-CLIENTCAP-007            PASS
+  ACP-CONFIG-003               PASS
+  ACP-EXT-001                  PASS
+  ACP-INIT-001                 PASS
+  ACP-INIT-002                 PASS
+  ACP-INIT-003                 PASS
+  ACP-JSONRPC-001              PASS
+  ACP-JSONRPC-002              PASS
+  ACP-JSONRPC-003              PASS
+  ACP-JSONRPC-006              PASS
+  ACP-JSONRPC-007              PASS
+  ACP-PROMPT-001               PASS
+  ACP-PROMPT-002               PASS
+  ACP-PROMPT-003               PASS
+  ACP-PROMPT-004               PASS
+  ACP-SCHEMA-001               PASS
+  ACP-SESSION-001              PASS
+  ACP-SESSION-002              PASS
+  ACP-SESSION-003              PASS
+  ACP-TRANSPORT-001            PASS
+  ACP-TRANSPORT-002            PASS
+[CAPABILITY]
+  ACP-ADDDIRS-001              SKIPPED
+  ACP-AUTH-003                 SKIPPED
+  ACP-AUTH-004                 SKIPPED
+  ACP-CLOSE-001                PASS
+  ACP-CLOSE-002                PASS
+  ACP-CONFIG-001               SKIPPED
+  ACP-CONFIG-002               SKIPPED
+  ACP-DELETE-001               SKIPPED
+  ACP-DELETE-003               SKIPPED
+  ACP-LIST-001                 PASS
+  ACP-LIST-002                 PASS
+  ACP-LOAD-001                 PASS
+  ACP-LOAD-002                 PASS
+  ACP-MODES-001                SKIPPED
+  ACP-MODES-002                SKIPPED
+  ACP-PROMPTCAP-001            SKIPPED
+  ACP-PROMPTCAP-002            SKIPPED
+  ACP-PROMPTCAP-003            PASS
+  ACP-RESUME-001               SKIPPED
+  ACP-RESUME-002               SKIPPED
+  ACP-SYSPROMPT-001            SKIPPED
+  ACP-SYSPROMPT-002            SKIPPED
+  ACP-SYSPROMPT-003            SKIPPED
+[ADVISORY]
+  ACP-AUTH-001                 PASS
+  ACP-AUTH-005                 PASS
+  ACP-DELETE-002               SKIPPED
+  ACP-ERROR-001                PASS
+  ACP-ERROR-002                PASS
+  ACP-EXT-002                  PASS
+  ACP-INIT-004                 PASS
+  ACP-JSONRPC-004              PASS
+  ACP-JSONRPC-005              PASS
+  ACP-LOAD-003                 PASS
+  ACP-META-001                 PASS
+  ACP-SCHEMA-002               PASS
+  ACP-SESSION-004              PASS
+[INFORMATIONAL]
+  ACP-INFO-INVALIDREQ-001      PASS  (silent; conn after: usable (sessionId='sess_658cf370-9055-44e5-b38a-07203f76c93f'))
+  ACP-INFO-PARSE-001           PASS  (silent; conn after: usable (sessionId='sess_51c60013-cb15-45bb-a13b-b0c88198fede'))
+  ACP-INFO-UNKNOWNSESSION-001  PASS  (replied with error code -32602)
+  ACP-SHUTDOWN-001             PASS
+  ACP-STDERR-001               PASS  (158 stderr byte(s))
+
+  MANDATORY      PASS=31, FAIL=0, SKIPPED=0, NOT_TESTED=0
+  CAPABILITY     PASS=7, FAIL=0, SKIPPED=16, NOT_TESTED=0
+  ADVISORY       PASS=12, FAIL=0, SKIPPED=1, NOT_TESTED=0
+  INFORMATIONAL  PASS=5, FAIL=0, SKIPPED=0, NOT_TESTED=0
+VERDICT: CONFORMANT
+=========================== short test summary info ============================
+SKIPPED [1] venv/lib/python3.15/site-packages/tck/v1/conformance/test_authentication.py:77: no --tck-auth-method given; cannot exercise the authenticate flow
+SKIPPED [1] venv/lib/python3.15/site-packages/tck/v1/conformance/test_authentication.py:176: capability 'agentCapabilities.auth.logout' not advertised by the agent under test
+SKIPPED [1] venv/lib/python3.15/site-packages/tck/v1/conformance/test_prompt_capabilities.py:46: capability 'agentCapabilities.promptCapabilities.image' not advertised by the agent under test
+SKIPPED [1] venv/lib/python3.15/site-packages/tck/v1/conformance/test_prompt_capabilities.py:65: capability 'agentCapabilities.promptCapabilities.audio' not advertised by the agent under test
+SKIPPED [1] venv/lib/python3.15/site-packages/tck/v1/conformance/test_session_capabilities.py:124: capability 'agentCapabilities.sessionCapabilities.resume' not advertised by the agent under test
+SKIPPED [1] venv/lib/python3.15/site-packages/tck/v1/conformance/test_session_capabilities.py:143: capability 'agentCapabilities.sessionCapabilities.resume' not advertised by the agent under test
+SKIPPED [1] venv/lib/python3.15/site-packages/tck/v1/conformance/test_session_capabilities.py:253: capability 'agentCapabilities.sessionCapabilities.delete' not advertised by the agent under test
+SKIPPED [1] venv/lib/python3.15/site-packages/tck/v1/conformance/test_session_capabilities.py:271: capability 'agentCapabilities.sessionCapabilities.delete' not advertised by the agent under test
+SKIPPED [1] venv/lib/python3.15/site-packages/tck/v1/conformance/test_session_capabilities.py:290: capability 'agentCapabilities.sessionCapabilities.delete' not advertised by the agent under test
+SKIPPED [1] venv/lib/python3.15/site-packages/tck/v1/conformance/test_session_capabilities.py:434: capability 'agentCapabilities.sessionCapabilities.additionalDirectories' not advertised by the agent under test
+SKIPPED [1] venv/lib/python3.15/site-packages/tck/v1/conformance/test_session_capabilities.py:475: capability 'agentCapabilities.sessionCapabilities.systemPrompt' not advertised by the agent under test
+SKIPPED [1] venv/lib/python3.15/site-packages/tck/v1/conformance/test_session_capabilities.py:494: capability 'agentCapabilities.sessionCapabilities.systemPrompt' not advertised by the agent under test
+SKIPPED [1] venv/lib/python3.15/site-packages/tck/v1/conformance/test_session_capabilities.py:516: capability 'agentCapabilities.sessionCapabilities.systemPrompt' not advertised by the agent under test
+SKIPPED [1] venv/lib/python3.15/site-packages/tck/v1/conformance/test_session_config.py:73: session/new returned no modes/configOptions
+SKIPPED [1] venv/lib/python3.15/site-packages/tck/v1/conformance/test_session_config.py:97: session/new returned no modes/configOptions
+SKIPPED [1] venv/lib/python3.15/site-packages/tck/v1/conformance/test_session_config.py:166: session/new returned no modes/configOptions
+SKIPPED [1] venv/lib/python3.15/site-packages/tck/v1/conformance/test_session_config.py:197: session/new returned no modes/configOptions
+======================= 57 passed, 17 skipped in 52.78s ========================

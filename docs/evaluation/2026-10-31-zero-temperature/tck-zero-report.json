@@ -1,0 +1,1455 @@
+{
+  "tck_version": "0.2.0",
+  "protocol_version": 1,
+  "schema_revision": "beac4ba96190018e9f6d82e148ff275084c5aa3e",
+  "agent_command": [
+    "/var/folders/7j/6j1y9dtx54d9qzsqp8vx_kdr0000gn/T/goagent-acp-live-e5khh181/goagent-acp-live"
+  ],
+  "agent_info": {
+    "name": "goagent-acp-live-verification",
+    "version": "local"
+  },
+  "agent_capabilities": {
+    "auth": {},
+    "loadSession": true,
+    "mcpCapabilities": {},
+    "promptCapabilities": {
+      "embeddedContext": true
+    },
+    "sessionCapabilities": {
+      "close": {},
+      "list": {}
+    }
+  },
+  "started_at": "2026-10-31T13:39:24.692288+00:00",
+  "finished_at": "2026-10-31T13:40:17.456902+00:00",
+  "requirements": [
+    {
+      "id": "ACP-ADDDIRS-001",
+      "tier": "CAPABILITY",
+      "capability": "agentCapabilities.sessionCapabilities.additionalDirectories",
+      "text": "`session/new` with an absolute `additionalDirectories` entry is accepted.",
+      "citation": "docs/protocol/v1/draft/session-setup.mdx:351-380; schema/v1/schema.unstable.json#/$defs/NewSessionRequest/properties/additionalDirectories (C2, A1, A2) @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "SKIPPED",
+      "tests": [
+        {
+          "nodeid": "test_session_capabilities.py::test_new_session_with_additional_directories_is_accepted",
+          "status": "SKIPPED",
+          "message": "('/private/var/folders/7j/6j1y9dtx54d9qzsqp8vx_kdr0000gn/T/goagent-acp-live-e5khh181/venv/lib/python3.15/site-packages/tck/v1/conformance/test_session_capabilities.py', 434, \"Skipped: capability 'agentCapabilities.sessionCapabilities.additionalDirectories' not advertised by the agent under test\")",
+          "duration_s": 0.00042470800690352917,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-AUTH-001",
+      "tier": "ADVISORY",
+      "capability": null,
+      "text": "When `initialize`'s `authMethods` is present, its entries' string `id`s are unique. Shape (array-ness, `id`/`name` present and typed) is ACP-SCHEMA-001's concern, so entries without a string `id` are left to it. ADVISORY: the schema only describes `id` as a \"Unique identifier\", without a MUST.",
+      "citation": "schema/v1/schema.unstable.json#/$defs/AuthMethodAgent/properties/id; schema/v1/schema.unstable.json#/$defs/AuthMethodTerminal/properties/id @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_authentication.py::test_auth_methods_have_unique_ids",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 0.03327787504531443,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-AUTH-002",
+      "tier": "MANDATORY",
+      "capability": null,
+      "text": "No `authMethods[*].type == \"terminal\"` entry is advertised unless the client advertised `clientCapabilities.auth.terminal` -- checked by connecting once without that capability.",
+      "citation": "schema/v1/schema.unstable.json#/$defs/AuthMethodTerminal (description: agents MUST advertise it only when the client enabled terminal authentication); docs/protocol/v1/draft/authentication.mdx:126-128; docs/protocol/v1/draft/initialization.mdx:123-127 @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_authentication.py::test_no_terminal_auth_method_without_client_capability",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 0.025970665854401886,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-AUTH-003",
+      "tier": "CAPABILITY",
+      "capability": "inferred:authMethods",
+      "text": "After a successful `authenticate`, `session/new` on the same connection does not fail with `-32000` (authentication required). `capability=\"inferred:authMethods\"` is documentation-only (same encoding as ACP-MODES-001): the test runs only when `authMethods` is non-empty and `--tck-auth-method <id>` names one of its non-terminal entries, and SKIPs otherwise -- the client MUST NOT `authenticate` with a `terminal` method, and the TCK cannot guess a valid `methodId`. An `authenticate` error SKIPs too, since a real agent may legitimately reject bad or expired credentials. When it returns a result, that result is a JSON object (shape only) and the `session/new` check above is the one hard assertion.",
+      "citation": "docs/protocol/v1/draft/authentication.mdx:136-167,187-188; docs/protocol/v1/draft/session-setup.mdx:10; schema/v1/schema.unstable.json#/$defs/AuthenticateRequest; schema/v1/schema.unstable.json#/$defs/AuthenticateResponse @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "SKIPPED",
+      "tests": [
+        {
+          "nodeid": "test_authentication.py::test_authenticate_then_session_new_succeeds",
+          "status": "SKIPPED",
+          "message": "('/private/var/folders/7j/6j1y9dtx54d9qzsqp8vx_kdr0000gn/T/goagent-acp-live-e5khh181/venv/lib/python3.15/site-packages/tck/v1/conformance/test_authentication.py', 77, 'Skipped: no --tck-auth-method given; cannot exercise the authenticate flow')",
+          "duration_s": 0.005216916906647384,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-AUTH-004",
+      "tier": "CAPABILITY",
+      "capability": "agentCapabilities.auth.logout",
+      "text": "When `agentCapabilities.auth.logout` is advertised (object marker), `logout` succeeds with an object result. Nothing is asserted about sessions after logout (the spec leaves that unspecified) -- if `--tck-auth-method` was given, `logout` is called after a successful `authenticate`; otherwise it is called standalone and only its own success is checked. Only exercised when `--allow-logout`/`--tck-allow-logout` is given (destructive: may revoke the operator's own credentials); SKIPs otherwise.",
+      "citation": "docs/protocol/v1/draft/authentication.mdx:74-76,190-213; schema/v1/schema.unstable.json#/$defs/AgentAuthCapabilities; schema/v1/schema.unstable.json#/$defs/LogoutCapabilities; schema/v1/schema.unstable.json#/$defs/LogoutRequest @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "SKIPPED",
+      "tests": [
+        {
+          "nodeid": "test_authentication.py::test_logout_succeeds",
+          "status": "SKIPPED",
+          "message": "('/private/var/folders/7j/6j1y9dtx54d9qzsqp8vx_kdr0000gn/T/goagent-acp-live-e5khh181/venv/lib/python3.15/site-packages/tck/v1/conformance/test_authentication.py', 176, \"Skipped: capability 'agentCapabilities.auth.logout' not advertised by the agent under test\")",
+          "duration_s": 0.00029091606847941875,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-AUTH-005",
+      "tier": "ADVISORY",
+      "capability": null,
+      "text": "If `initialize`'s `authMethods` is empty or absent, `session/new` does not fail with `-32000` (authentication required). `session/new` may fail that way only if the agent requires authentication, and with no advertised method there is no defined remedy. Only `-32000` is judged here; any other `session/new` failure is ACP-SESSION-001's concern. `skip_if_auth_gated` only excuses `-32000` when `authMethods` is non-empty, so with it empty the session-dependent tests fail on their own terms too.",
+      "citation": "schema/v1/schema.unstable.json#/$defs/InitializeResponse/properties/authMethods; docs/protocol/v1/draft/session-setup.mdx:10; docs/protocol/v1/draft/authentication.mdx:46-48 @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_authentication.py::test_session_new_not_gated_when_no_auth_methods_advertised",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 0.02521045715548098,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-AUTH-006",
+      "tier": "MANDATORY",
+      "capability": null,
+      "text": "When the client advertises `clientCapabilities.auth.terminal: true`, the `initialize` result validates against the schema, including any `type: \"terminal\"` auth methods it now advertises (`args` an array of strings, `env` a string map). `type` is the `AuthMethod` discriminator, so a `type: \"terminal\"` entry is also checked against `AuthMethodTerminal` itself (the schema's `anyOf` would otherwise accept it as an `agent` method). Passes with no terminal-specific evidence if the agent advertises none. The TCK never launches the terminal flow.",
+      "citation": "schema/v1/schema.unstable.json#/$defs/AuthMethod; schema/v1/schema.unstable.json#/$defs/AuthMethodTerminal; docs/protocol/v1/draft/initialization.mdx:123-127 @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_authentication.py::test_terminal_auth_capability_initialize_validates",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 0.1845665400614962,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-CANCEL-001",
+      "tier": "MANDATORY",
+      "capability": null,
+      "text": "After `session/cancel` during an in-flight `session/prompt`, the prompt request resolves with a successful result whose `stopReason` is `cancelled`, not an error.",
+      "citation": "docs/protocol/v1/draft/prompt-turn.mdx:618,625 (Reqs 25, 26) @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_cancel.py::test_cancel_resolves_with_cancelled_stop_reason",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 0.5276300831465051,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-CANCEL-002",
+      "tier": "MANDATORY",
+      "capability": null,
+      "text": "Content and tool call updates (`user_message_chunk`, `agent_message_chunk`, `agent_thought_chunk`, `tool_call`, `tool_call_update`) for the cancelled session arrive before the `session/prompt` response; none arrive after it. Session-state updates (e.g. `session_info_update`, `usage_update`) are allowed outside a turn and are not judged. \"None arrive after it\" is checked with a quiet period derived from --tck-timeout (tck.v1.conformance._helpers.quiet_period), not an infinite wait.",
+      "citation": "docs/protocol/v1/draft/prompt-turn.mdx:38,629 @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_cancel.py::test_no_session_update_follows_the_cancelled_response",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 2.5412400829372928,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-CLIENTCAP-001",
+      "tier": "MANDATORY",
+      "capability": null,
+      "text": "The agent MUST NOT call `fs/read_text_file` or `fs/write_text_file` during a session/prompt turn when the client did not advertise `fs` support -- the mock client always advertises `clientCapabilities: {}`, so no `fs/*` request may ever be observed. PASS is vacuous for an agent that never needs file access.",
+      "citation": "docs/protocol/v1/draft/file-system.mdx:10,29; schema/v1/schema.unstable.json#/$defs/FileSystemCapabilities (Req 29) @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_client_capabilities.py::test_no_unadvertised_clientcap_fs_call",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 0.7246944979997352,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-CLIENTCAP-002",
+      "tier": "MANDATORY",
+      "capability": null,
+      "text": "The agent MUST NOT call any `terminal/*` method during a session/prompt turn when the client did not advertise `clientCapabilities.terminal === true`. PASS is vacuous for an agent that never needs a terminal.",
+      "citation": "docs/protocol/v1/draft/terminals.mdx:10,26 (Req 30) @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_client_capabilities.py::test_no_unadvertised_clientcap_terminal_call",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 1.7797566261142492,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-CLIENTCAP-003",
+      "tier": "MANDATORY",
+      "capability": null,
+      "text": "The agent MUST NOT call `elicitation/create` during a session/prompt turn when the client did not advertise any elicitation mode. PASS is vacuous for an agent that never elicits.",
+      "citation": "docs/protocol/v1/draft/elicitation.mdx:40-47,54; docs/protocol/v1/draft/initialization.mdx:160-166 @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_client_capabilities.py::test_no_unadvertised_clientcap_elicitation_call",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 1.7807402909966186,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-CLIENTCAP-004",
+      "tier": "MANDATORY",
+      "capability": null,
+      "text": "The agent MUST NOT send a `notice` session update unless the client advertised `clientCapabilities.session.notices` -- checked over a whole connection with `clientCapabilities: {}` (session/new, one prompt turn, `session/load` when advertised, then a quiet period). PASS is vacuous for an agent that never sends notices.",
+      "citation": "docs/protocol/v1/draft/prompt-turn.mdx:266-269; docs/protocol/v1/draft/initialization.mdx:211-217; schema/v1/schema.unstable.json#/$defs/Notice @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_client_capabilities.py::test_no_notice_without_client_capability",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 4.795193415950052,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-CLIENTCAP-005",
+      "tier": "MANDATORY",
+      "capability": null,
+      "text": "The agent MUST NOT send `compaction_update` or `compaction_summary_chunk` unless the client advertised `clientCapabilities.session.compaction`, live or during `session/load` replay -- checked the same way as ACP-CLIENTCAP-004. PASS is vacuous for an agent that never reports compaction.",
+      "citation": "docs/protocol/v1/draft/prompt-turn.mdx:328-333; docs/protocol/v1/draft/session-setup.mdx:139-142; docs/protocol/v1/draft/initialization.mdx:193-199; schema/v1/schema.unstable.json#/$defs/CompactionUpdate; schema/v1/schema.unstable.json#/$defs/CompactionSummaryChunk @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_client_capabilities.py::test_no_compaction_update_without_client_capability",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 3.951208334066905,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-CLIENTCAP-006",
+      "tier": "MANDATORY",
+      "capability": null,
+      "text": "The agent MUST NOT send `plan_update` or `plan_removed` unless the client advertised `clientCapabilities.plan` -- checked the same way as ACP-CLIENTCAP-004. Unstable feature: an agent that does not implement plan operations never sends these and passes vacuously.",
+      "citation": "docs/protocol/v1/draft/agent-plan.mdx:10,53; docs/protocol/v1/draft/prompt-turn.mdx:25-26; schema/v1/schema.unstable.json#/$defs/PlanCapabilities @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_client_capabilities.py::test_no_plan_operation_without_client_capability",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 4.206857583951205,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-CLIENTCAP-007",
+      "tier": "MANDATORY",
+      "capability": null,
+      "text": "The agent MUST NOT send `subagent_update`, `session_message`, or `session_message_chunk` unless the client advertised `clientCapabilities.subagents` -- checked the same way as ACP-CLIENTCAP-004. Unstable feature: an agent that does not expose subagents never sends these and passes vacuously.",
+      "citation": "docs/protocol/v1/draft/prompt-turn.mdx:19-21,42; docs/rfds/subagents.mdx:72-74; schema/v1/schema.unstable.json#/$defs/SubagentCapabilities @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_client_capabilities.py::test_no_subagent_update_without_client_capability",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 3.9799573329510167,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-CLOSE-001",
+      "tier": "CAPABILITY",
+      "capability": "agentCapabilities.sessionCapabilities.close",
+      "text": "`session/close` for an existing, idle session succeeds with a schema-valid empty-object result.",
+      "citation": "docs/protocol/v1/draft/session-setup.mdx:328-343; schema/v1/schema.unstable.json#/$defs/CloseSessionRequest; schema/v1/schema.unstable.json#/$defs/CloseSessionResponse (C2, X1) @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_session_capabilities.py::test_close_idle_session_succeeds",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 0.18402708496432751,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-CLOSE-002",
+      "tier": "CAPABILITY",
+      "capability": "agentCapabilities.sessionCapabilities.close",
+      "text": "`session/close` on a session with an in-flight `session/prompt` cancels the ongoing work as if `session/cancel` had been called, so the prompt resolves with `stopReason: \"cancelled\"`. Derived obligation, medium confidence -- the spec states the cancel-as-if via X2 and never says \"close\" explicitly next to `stopReason`; inferred by reference to the cancellation contract (X3).",
+      "citation": "docs/protocol/v1/draft/session-setup.mdx:332-334 -> docs/protocol/v1/draft/prompt-turn.mdx:618,625,629 (X2, X3) @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_session_capabilities.py::test_close_in_flight_prompt_resolves_cancelled",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 0.5244939589174464,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-CONFIG-001",
+      "tier": "CAPABILITY",
+      "capability": "inferred:configOptions",
+      "text": "When `session/new` returns a non-null `configOptions`, every entry's `currentValue` is valid per its declared type: a `boolean` entry's `currentValue` is a bool; a `select` entry's `currentValue` is one of its `options` (flat or grouped shape). Inferred support, same encoding as ACP-MODES-001 -- `capability=\"inferred:configOptions\"` is documentation-only.",
+      "citation": "docs/protocol/v1/draft/session-config-options.mdx:118-127,242; schema/v1/schema.unstable.json#/$defs/SessionConfigOption; schema/v1/schema.unstable.json#/$defs/SessionConfigSelect; schema/v1/schema.unstable.json#/$defs/SessionConfigBoolean (\u00a77, \u00a70) @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "SKIPPED",
+      "tests": [
+        {
+          "nodeid": "test_session_config.py::test_config_options_current_values_are_valid",
+          "status": "SKIPPED",
+          "message": "('/private/var/folders/7j/6j1y9dtx54d9qzsqp8vx_kdr0000gn/T/goagent-acp-live-e5khh181/venv/lib/python3.15/site-packages/tck/v1/conformance/test_session_config.py', 166, 'Skipped: session/new returned no modes/configOptions')",
+          "duration_s": 0.01725008198991418,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-CONFIG-002",
+      "tier": "CAPABILITY",
+      "capability": "inferred:configOptions",
+      "text": "`session/set_config_option` responds with a schema-valid result carrying the *complete* list of every previously-advertised `configOptions` id (not only the changed one), with the new value applied to the option that was changed -- stated as a MUST twice in the docs.",
+      "citation": "docs/protocol/v1/draft/session-config-options.mdx:301,328-333; schema/v1/schema.unstable.json#/$defs/SetSessionConfigOptionRequest; schema/v1/schema.unstable.json#/$defs/SetSessionConfigOptionResponse (\u00a77 'complete list' rule) @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "SKIPPED",
+      "tests": [
+        {
+          "nodeid": "test_session_config.py::test_set_config_option_returns_the_complete_list",
+          "status": "SKIPPED",
+          "message": "('/private/var/folders/7j/6j1y9dtx54d9qzsqp8vx_kdr0000gn/T/goagent-acp-live-e5khh181/venv/lib/python3.15/site-packages/tck/v1/conformance/test_session_config.py', 197, 'Skipped: session/new returned no modes/configOptions')",
+          "duration_s": 0.016569248982705176,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-CONFIG-003",
+      "tier": "MANDATORY",
+      "capability": null,
+      "text": "An agent MUST NOT include a `type: \"boolean\"` config option in any `configOptions` payload unless the client advertised `clientCapabilities.session.configOptions.boolean: {}` -- a genuine client- controlled MUST NOT. Checked on `session/new`'s result, a `session/set_config_option` result, `session/load`/`session/resume` results when advertised, and any `config_option_update` seen meanwhile. Passes vacuously if the agent has no config options, or none of `type: \"boolean\"`, at all.",
+      "citation": "schema/v1/schema.unstable.json#/$defs/SessionConfigOption/oneOf/1; schema/v1/schema.unstable.json#/$defs/SessionConfigBoolean (SessionConfigOption boolean variant); docs/protocol/v1/draft/session-config-options.mdx:204-206 (normative MUST NOT text); docs/protocol/v1/draft/initialization.mdx:172-181 @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_session_config.py::test_no_boolean_config_option_without_client_capability",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 0.021403584047220647,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-DELETE-001",
+      "tier": "CAPABILITY",
+      "capability": "agentCapabilities.sessionCapabilities.delete",
+      "text": "`session/delete` for a session created earlier on the same connection succeeds with a schema-valid empty-object result. Deleting an active session is implementation-defined, so the session is closed first when `close` is advertised; otherwise an error from deleting the still-active session SKIPs rather than FAILs.",
+      "citation": "docs/protocol/v1/draft/session-delete.mdx:69-81,89; schema/v1/schema.unstable.json#/$defs/DeleteSessionRequest; schema/v1/schema.unstable.json#/$defs/DeleteSessionResponse (C2, D1) @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "SKIPPED",
+      "tests": [
+        {
+          "nodeid": "test_session_capabilities.py::test_delete_existing_session_succeeds",
+          "status": "SKIPPED",
+          "message": "('/private/var/folders/7j/6j1y9dtx54d9qzsqp8vx_kdr0000gn/T/goagent-acp-live-e5khh181/venv/lib/python3.15/site-packages/tck/v1/conformance/test_session_capabilities.py', 253, \"Skipped: capability 'agentCapabilities.sessionCapabilities.delete' not advertised by the agent under test\")",
+          "duration_s": 0.00030499999411404133,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-DELETE-002",
+      "tier": "ADVISORY",
+      "capability": null,
+      "text": "Deleting an already-deleted or never-created `sessionId` SHOULD succeed silently, rather than erroring.",
+      "citation": "docs/protocol/v1/draft/session-delete.mdx:86 (D2) @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "SKIPPED",
+      "tests": [
+        {
+          "nodeid": "test_session_capabilities.py::test_delete_unknown_session_succeeds_silently",
+          "status": "SKIPPED",
+          "message": "('/private/var/folders/7j/6j1y9dtx54d9qzsqp8vx_kdr0000gn/T/goagent-acp-live-e5khh181/venv/lib/python3.15/site-packages/tck/v1/conformance/test_session_capabilities.py', 271, \"Skipped: capability 'agentCapabilities.sessionCapabilities.delete' not advertised by the agent under test\")",
+          "duration_s": 0.000148500083014369,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-DELETE-003",
+      "tier": "CAPABILITY",
+      "capability": "agentCapabilities.sessionCapabilities.delete",
+      "text": "After a successful `session/delete`, the deleted `sessionId` does not appear in a subsequent `session/list` result (all pages, filtered by the session's `cwd`). Also needs `sessionCapabilities.list`; SKIPs without it. The session is closed first when `close` is advertised, as for ACP-DELETE-001.",
+      "citation": "docs/protocol/v1/draft/session-delete.mdx:85,89 @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "SKIPPED",
+      "tests": [
+        {
+          "nodeid": "test_session_capabilities.py::test_deleted_session_is_absent_from_list",
+          "status": "SKIPPED",
+          "message": "('/private/var/folders/7j/6j1y9dtx54d9qzsqp8vx_kdr0000gn/T/goagent-acp-live-e5khh181/venv/lib/python3.15/site-packages/tck/v1/conformance/test_session_capabilities.py', 290, \"Skipped: capability 'agentCapabilities.sessionCapabilities.delete' not advertised by the agent under test\")",
+          "duration_s": 0.00014679098967462778,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-ERROR-001",
+      "tier": "ADVISORY",
+      "capability": null,
+      "text": "Every error object's `message` is non-empty and free of embedded newlines (the schema says it \"should be limited to a concise single sentence\" -- checked leniently, exact wording is never asserted); `data` needs no further shape check. Evidence comes from an unrecognized-method request and an invalid-params `session/new`. A probe the agent leaves unanswered contributes no sample (silence on the custom method is ACP-EXT-001's concern); passes vacuously if the agent returns no errors.",
+      "citation": "agent-client-protocol-schema/src/v1/error.rs:40-42; schema/v1/schema.unstable.json#/$defs/Error/properties/message @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_diagnostics.py::test_error_messages_are_non_empty_single_line",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 0.009987124940380454,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-ERROR-002",
+      "tier": "ADVISORY",
+      "capability": null,
+      "text": "A request with invalid params (`session/new` without the required `cwd`) yields error `-32602` (Invalid params). SKIPs on `-32000`, since the agent may check authentication before params.",
+      "citation": "schema/v1/schema.unstable.json#/$defs/ErrorCode; schema/v1/schema.unstable.json#/$defs/NewSessionRequest; JSON-RPC 2.0 section 5.1; rust-sdk@d5e8bf4 src/agent-client-protocol/tests/jsonrpc_error_handling.rs:746,846; python-sdk@11f8a4c tests/test_rpc.py:515-529 @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_diagnostics.py::test_invalid_params_yield_invalid_params_error",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 0.009329125052317977,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-EXT-001",
+      "tier": "MANDATORY",
+      "capability": null,
+      "text": "A request to an unknown, `_`-prefixed custom method receives *some* response -- a result or any error, not necessarily `-32601`. Custom requests must get a response (ACP follows JSON-RPC 2.0, where every request expects a result or error); only the specific `-32601` code is a \"should\", which is ACP-JSONRPC-004's concern.",
+      "citation": "docs/protocol/v1/draft/extensibility.mdx:47,56,69,84; docs/protocol/v1/draft/overview.mdx:10-12 @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_extensibility.py::test_unknown_custom_method_receives_a_response",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 0.01097029191441834,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-EXT-002",
+      "tier": "ADVISORY",
+      "capability": null,
+      "text": "An unrecognized `_`-prefixed custom notification is ignored: the connection stays usable and a subsequent `session/new` still succeeds. That it gets no reply is ACP-JSONRPC-003's concern.",
+      "citation": "docs/protocol/v1/draft/extensibility.mdx:113 @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_extensibility.py::test_unknown_custom_notification_is_ignored",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 0.01665654208045453,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-INFO-INVALIDREQ-001",
+      "tier": "INFORMATIONAL",
+      "capability": null,
+      "text": "Behaviour on a syntactically-valid JSON value that is not a JSON-RPC envelope (`{\"foo\": \"bar\"}`) is recorded, same shape as ACP-INFO-PARSE-001. Spec silent; reference SDKs disagree (rust-sdk replies -32600, python-sdk silently drops it). Never asserts on the probed behaviour itself, but still FAILs if the prerequisite `initialize` handshake fails.",
+      "citation": "docs/protocol/v1/draft/transports.mdx:27 (the client MUST NOT send this, so agent behaviour is undefined); rust-sdk vs python-sdk divergence @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_informational.py::test_structurally_invalid_request_behaviour",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 2.0236097919987515,
+          "properties": {
+            "behaviour": "silent",
+            "connection_usable_after": "usable (sessionId='sess_658cf370-9055-44e5-b38a-07203f76c93f')"
+          },
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-INFO-PARSE-001",
+      "tier": "INFORMATIONAL",
+      "capability": null,
+      "text": "Behaviour on a malformed (non-JSON) stdin line is recorded -- reply `-32700` with `id: null`, reply otherwise, or stay silent -- along with whether the connection remains usable afterwards (a subsequent `session/new` still succeeds). Spec silent; reference SDKs disagree (rust-sdk replies -32700, python-sdk silently drops the line). Never asserts on the probed behaviour itself, but still FAILs if the prerequisite `initialize` handshake fails.",
+      "citation": "docs/protocol/v1/draft/transports.mdx:27 (the client MUST NOT send this, so agent behaviour is undefined); rust-sdk vs python-sdk divergence @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_informational.py::test_malformed_json_line_behaviour",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 2.112688082852401,
+          "properties": {
+            "behaviour": "silent",
+            "connection_usable_after": "usable (sessionId='sess_51c60013-cb15-45bb-a13b-b0c88198fede')"
+          },
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-INFO-UNKNOWNSESSION-001",
+      "tier": "INFORMATIONAL",
+      "capability": null,
+      "text": "The error code (if any) returned for `session/prompt` against a `sessionId` the agent never created is recorded, never asserted -- v1 does not specify one. Even a successful result is only recorded. Never asserts on the probed behaviour itself, but still FAILs if the prerequisite `initialize`/`session/new` handshake fails.",
+      "citation": "docs/protocol/v1/draft/error.mdx:6 (stub) @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_informational.py::test_unknown_session_id_behaviour",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 0.024052668013609946,
+          "properties": {
+            "behaviour": "replied with error code -32602"
+          },
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-INIT-001",
+      "tier": "MANDATORY",
+      "capability": null,
+      "text": "`initialize` succeeds and the result validates against the schema, with an integer `protocolVersion`.",
+      "citation": "docs/protocol/v1/draft/initialization.mdx:57; schema/v1/schema.unstable.json#/$defs/InitializeResponse @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_initialize.py::test_initialize_succeeds_and_validates",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 0.01231199991889298,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-INIT-002",
+      "tier": "MANDATORY",
+      "capability": null,
+      "text": "When the client requests protocol version 1, the agent returns 1.",
+      "citation": "docs/protocol/v1/draft/initialization.mdx:99 @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_initialize.py::test_requested_v1_is_echoed",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 0.01068754110019654,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-INIT-003",
+      "tier": "MANDATORY",
+      "capability": null,
+      "text": "When the client requests an unsupported protocol version (65535), the agent returns a successful result whose integer `protocolVersion` (a) is not 65535 -- echoing an unsupported version verbatim breaks the MUST to answer with the latest supported version -- and (b) is at least the version the same agent returns for a v1 request. Equality is not required: an agent supporting several versions (e.g. 1 for a v1 request, 2 for anything >= 2) may answer higher than its v1 answer. The probe's params also carry a v2-shaped `info` object alongside the v1 fields: dual-version routers, and v1-only Rust SDK agents (which parse `info` for any requested version >= 2), reject such a request without it with `-32602`, a params-shape reason unrelated to version negotiation.",
+      "citation": "docs/protocol/v1/draft/initialization.mdx:97-101; rust-sdk@d5e8bf4 src/agent-client-protocol/src/jsonrpc/protocol_compat.rs:454-484, src/agent-client-protocol/tests/protocol_negotiation.rs:59-133,162-187 @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_initialize.py::test_unsupported_version_still_succeeds",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 0.01895495899952948,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-INIT-004",
+      "tier": "ADVISORY",
+      "capability": null,
+      "text": "`agentInfo` with `name` and `version` is present in the `initialize` result.",
+      "citation": "docs/protocol/v1/draft/initialization.mdx:57,323; schema/v1/schema.unstable.json#/$defs/Implementation @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_initialize.py::test_agent_info_present",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 0.010128499008715153,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-JSONRPC-001",
+      "tier": "MANDATORY",
+      "capability": null,
+      "text": "A response's `id` echoes the request `id` exactly, for both integer and string ids.",
+      "citation": "agent-client-protocol-schema/src/rpc.rs:14-16 @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_jsonrpc.py::test_id_is_echoed_for_integer_and_string_ids",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 0.01720908295828849,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-JSONRPC-002",
+      "tier": "MANDATORY",
+      "capability": null,
+      "text": "A response carries exactly one of `result`/`error`; an error object has an integer `code` and a string `message`.",
+      "citation": "docs/protocol/v1/draft/overview.mdx:235-239; agent-client-protocol-schema/src/v1/error.rs:25-49; schema/v1/schema.unstable.json#/$defs/Error @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_jsonrpc.py::test_response_envelope_is_result_xor_error_with_valid_shape",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 0.009741458925418556,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-JSONRPC-003",
+      "tier": "MANDATORY",
+      "capability": null,
+      "text": "Notifications never receive a response, success or error. Probed with `session/cancel` (no prompt in flight), an unrecognized `_`-prefixed custom notification, and `$/cancel_request` for a request id the agent never saw. Messages the agent itself initiates (they carry `method`) are not responses. Concluding \"no response arrived\" is a heuristic wait (a quiet period derived from --tck-timeout) -- see tck.v1.conformance._helpers.quiet_period.",
+      "citation": "docs/protocol/v1/draft/overview.mdx:239; agent-client-protocol-schema/src/v1/error.rs:9 @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_jsonrpc.py::test_notification_receives_no_response",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 2.018629707978107,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        },
+        {
+          "nodeid": "test_jsonrpc.py::test_custom_notification_receives_no_response",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 2.01168279198464,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        },
+        {
+          "nodeid": "test_jsonrpc.py::test_cancel_request_for_unknown_id_receives_no_response",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 2.0153543748892844,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-JSONRPC-004",
+      "tier": "ADVISORY",
+      "capability": null,
+      "text": "An unknown method yields error `-32601`. Only the code is a \"should\"; replying at all is ACP-EXT-001's concern.",
+      "citation": "docs/protocol/v1/draft/extensibility.mdx:84-96 @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_jsonrpc.py::test_unknown_method_yields_method_not_found",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 0.009759707027114928,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-JSONRPC-005",
+      "tier": "ADVISORY",
+      "capability": null,
+      "text": "After an erroneous request, the connection remains usable (subsequent requests still succeed).",
+      "citation": "docs/protocol/v1/draft/overview.mdx:235-239; docs/protocol/v1/draft/extensibility.mdx:84-96; spec silent, de-facto rule from reference-SDK regression tests -- rust-sdk@d5e8bf4 src/agent-client-protocol/tests/jsonrpc_error_handling.rs:697-772,796-886, python-sdk@11f8a4c tests/test_rpc.py:515-531 @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_jsonrpc.py::test_connection_survives_an_erroneous_request",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 0.02111341606359929,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-JSONRPC-006",
+      "tier": "MANDATORY",
+      "capability": null,
+      "text": "After a `$/cancel_request` notification naming a request id the agent never received, the connection stays usable: a subsequent `session/new` still succeeds. An agent is free to ignore `$/` notifications it does not support, but a notification must never break the connection.",
+      "citation": "docs/protocol/v1/draft/cancellation.mdx:12-14; schema/v1/schema.unstable.json#/anyOf/2/properties/params/anyOf/0; schema/v1/schema.unstable.json#/$defs/CancelRequestNotification @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_jsonrpc.py::test_connection_survives_cancel_request_for_unknown_id",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 0.028050875174812973,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-JSONRPC-007",
+      "tier": "MANDATORY",
+      "capability": null,
+      "text": "After `$/cancel_request` for an in-flight `session/prompt`, the agent still sends exactly one response to that request: a schema-valid `PromptResponse` result, or an error with code `-32800` (Request cancelled). Any other error code fails. An agent that does not support `$/cancel_request` and finishes the turn normally also satisfies this. SKIPs (\"cancellation not exercised\") when the prompt resolved before the notification could be sent, or when no response arrives within --tck-timeout: support is optional, so an ignored notification and a still-running turn look the same.",
+      "citation": "docs/protocol/v1/draft/cancellation.mdx:16-22; schema/v1/schema.unstable.json#/$defs/CancelRequestNotification; schema/v1/schema.unstable.json#/$defs/ErrorCode @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_jsonrpc.py::test_cancel_request_for_in_flight_prompt_gets_one_valid_response",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 2.5295216670492664,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-LIST-001",
+      "tier": "CAPABILITY",
+      "capability": "agentCapabilities.sessionCapabilities.list",
+      "text": "`session/list` with `params: {}` succeeds with a schema-valid `ListSessionsResponse` whose `sessions` field is present as an array.",
+      "citation": "docs/protocol/v1/draft/session-list.mdx:82,94; schema/v1/schema.unstable.json#/$defs/ListSessionsRequest; schema/v1/schema.unstable.json#/$defs/ListSessionsResponse; schema/v1/schema.unstable.json#/$defs/SessionInfo (C2, S1, S3, S4) @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_session_capabilities.py::test_list_succeeds_and_validates",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 0.18215087486896664,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-LIST-002",
+      "tier": "CAPABILITY",
+      "capability": "agentCapabilities.sessionCapabilities.list",
+      "text": "`session/list` filtered by a `cwd` that no session uses returns `sessions: []` (an empty array, never `null`, never an error).",
+      "citation": "docs/protocol/v1/draft/session-list.mdx:84-87,166; schema/v1/schema.unstable.json#/$defs/ListSessionsRequest/properties/cwd (S2, S5) @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_session_capabilities.py::test_list_with_unmatched_cwd_filter_returns_empty_array",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 0.01637004199437797,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-LOAD-001",
+      "tier": "CAPABILITY",
+      "capability": "agentCapabilities.loadSession",
+      "text": "`session/load` with a valid `sessionId`, `cwd`, and `mcpServers` succeeds with a schema-valid `LoadSessionResponse` object.",
+      "citation": "docs/protocol/v1/draft/session-setup.mdx:106,110-200 (`{}` result example at 191-200); schema/v1/schema.unstable.json#/$defs/AgentCapabilities/properties/loadSession; schema/v1/schema.unstable.json#/$defs/LoadSessionResponse; schema/v1/schema.unstable.json#/$defs/LoadSessionRequest (C1, L1, L4) @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_session_capabilities.py::test_load_succeeds_and_validates",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 0.3161342499079183,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-LOAD-002",
+      "tier": "CAPABILITY",
+      "capability": "agentCapabilities.loadSession",
+      "text": "Every history update belonging to the `session/load` replay arrives before the `session/load` response; no history-kind update (`user_message_chunk`, `agent_message_chunk`, `agent_thought_chunk`, `tool_call`, `tool_call_update`) for the session arrives after it. Session-state updates (e.g. `available_commands_update`) are allowed outside a turn and are not judged. No claim is made about how many history updates are replayed or their fidelity.",
+      "citation": "docs/protocol/v1/draft/session-setup.mdx:136-142,191-192; docs/protocol/v1/draft/prompt-turn.mdx:38 @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_session_capabilities.py::test_load_replays_before_responding_and_nothing_after",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 2.15095116593875,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-LOAD-003",
+      "tier": "ADVISORY",
+      "capability": null,
+      "text": "The `session/load` empty result is `{}` (an object), not `null`. The schema allows only an object and the docs example shows `{}` (corrected from `null` upstream in `d89c8d31`). ADVISORY only: upstream's Rust schema crate tolerates `null` for defaultable payloads on receipt (`ac82df63`, deserialization only; the schema is unchanged), and the Python SDK coerces it too, so mandatory schema validation (ACP-LOAD-001) treats `null` as equivalent for an all-optional object response.",
+      "citation": "docs/protocol/v1/draft/session-setup.mdx:194-200; schema/v1/schema.unstable.json#/$defs/LoadSessionResponse; agent-client-protocol-schema/src/serde_util.rs:30-38 @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_session_capabilities.py::test_load_empty_result_is_object_not_null",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 0.033074208069592714,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-META-001",
+      "tier": "ADVISORY",
+      "capability": null,
+      "text": "A `session/prompt` carrying `_meta` (including a `traceparent` key, reserved for trace context) is accepted and resolves with a normal, defined `stopReason`.",
+      "citation": "docs/protocol/v1/draft/extensibility.mdx:10-14,37-43; schema/v1/schema.unstable.json#/$defs/PromptRequest/properties/_meta @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_extensibility.py::test_prompt_meta_field_is_accepted",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 0.2904115420533344,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-MODES-001",
+      "tier": "CAPABILITY",
+      "capability": "inferred:modes",
+      "text": "When `session/new` returns a non-null `modes`, it validates against the schema and `currentModeId` refers to one of `availableModes` (derived from the field descriptions, not a stated MUST). Inferred support, not a boolean/object marker in `initialize` -- there is no `agentCapabilities` field for this; support is inferred from `session/new`'s own response (`capability` is a documentation-only string, not a real initialize-result path -- see module docstring of `test_session_config.py`). SKIPs with reason 'session/new returned no modes/configOptions' when absent.",
+      "citation": "docs/protocol/v1/draft/session-modes.mdx:17,49-75; schema/v1/schema.unstable.json#/$defs/SessionModeState; schema/v1/schema.unstable.json#/$defs/SessionMode (\u00a77, \u00a70) @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "SKIPPED",
+      "tests": [
+        {
+          "nodeid": "test_session_config.py::test_modes_validate_and_current_mode_is_available",
+          "status": "SKIPPED",
+          "message": "('/private/var/folders/7j/6j1y9dtx54d9qzsqp8vx_kdr0000gn/T/goagent-acp-live-e5khh181/venv/lib/python3.15/site-packages/tck/v1/conformance/test_session_config.py', 73, 'Skipped: session/new returned no modes/configOptions')",
+          "duration_s": 0.022886292077600956,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-MODES-002",
+      "tier": "CAPABILITY",
+      "capability": "inferred:modes",
+      "text": "`session/set_mode` to a different `modeId` succeeds with a schema-valid `SetSessionModeResponse`. No echo notification is required (\u00a77: \"do not assert an echo notification\"), but if a `current_mode_update` (`session/update` with `sessionUpdate: \"current_mode_update\"`) for the session is observed, it MUST carry the schema field name `currentModeId` -- the docs' example at `session-modes.mdx:117-119` showed `modeId` until upstream fixed that docs bug in `b96b439`; the schema was always the source of truth here.",
+      "citation": "docs/protocol/v1/draft/session-modes.mdx:83-122 (`currentModeId` example at 117-119 since upstream b96b439); schema/v1/schema.unstable.json#/$defs/SetSessionModeRequest; schema/v1/schema.unstable.json#/$defs/SetSessionModeResponse; schema/v1/schema.unstable.json#/$defs/CurrentModeUpdate (\u00a77) @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "SKIPPED",
+      "tests": [
+        {
+          "nodeid": "test_session_config.py::test_set_mode_succeeds_and_update_uses_currentModeId",
+          "status": "SKIPPED",
+          "message": "('/private/var/folders/7j/6j1y9dtx54d9qzsqp8vx_kdr0000gn/T/goagent-acp-live-e5khh181/venv/lib/python3.15/site-packages/tck/v1/conformance/test_session_config.py', 97, 'Skipped: session/new returned no modes/configOptions')",
+          "duration_s": 0.022920750197954476,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-PROMPT-001",
+      "tier": "MANDATORY",
+      "capability": null,
+      "text": "A text-only `session/prompt` resolves with a successful result whose `stopReason` is one of the defined `StopReason` values.",
+      "citation": "docs/protocol/v1/draft/prompt-turn.mdx:503; schema/v1/schema.unstable.json#/$defs/PromptResponse; schema/v1/schema.unstable.json#/$defs/StopReason (Req 24); docs/protocol/v1/draft/initialization.mdx:247, docs/protocol/v1/draft/content.mdx:31 (baseline text support, Req 7) @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_prompt.py::test_text_only_prompt_resolves_with_a_valid_stop_reason",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 0.2704105001175776,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-PROMPT-002",
+      "tier": "MANDATORY",
+      "capability": null,
+      "text": "Every `session/update` notification emitted during a prompt turn validates against the schema and carries the `sessionId` of the session being prompted. An agent that emits no updates during the turn is allowed (Req 1 places no MUST on emitting them, only on being *able* to send them); this test passes vacuously in that case.",
+      "citation": "docs/protocol/v1/draft/initialization.mdx:289 (Req 1); schema/v1/schema.unstable.json#/$defs/SessionNotification (SessionNotification); Testability notes 'Weakly assertable' first bullet @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_prompt.py::test_updates_validate_and_carry_the_right_session_id",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 0.14049754198640585,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-PROMPT-003",
+      "tier": "MANDATORY",
+      "capability": null,
+      "text": "A prompt containing a `resource_link` content block alongside text resolves with a successful result whose `stopReason` is a defined value. `initialization.mdx:247` and the schema's `PromptCapabilities` description both make Text and ResourceLink the baseline every agent MUST support; `content.mdx:31` only mentions text but does not exclude `resource_link`, which carries no prompt-capability requirement.",
+      "citation": "docs/protocol/v1/draft/initialization.mdx:247; schema/v1/schema.unstable.json#/$defs/PromptCapabilities; docs/protocol/v1/draft/content.mdx:31 @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_prompt.py::test_resource_link_content_block_is_accepted",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 1.336453041061759,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-PROMPT-004",
+      "tier": "MANDATORY",
+      "capability": null,
+      "text": "Every file path the agent emits is absolute: `locations[].path` and `diff` content `path` on any `tool_call`/`tool_call_update`, and `sessions[].cwd` in a `session/list` result (when `list` is advertised). Absolute means POSIX `/...`, a Windows drive path, or a UNC path. Passes vacuously when the agent emits no paths.",
+      "citation": "docs/protocol/v1/draft/overview.mdx:230; docs/protocol/v1/draft/session-list.mdx:136-137; schema/v1/schema.unstable.json#/$defs/ToolCallLocation/properties/path; schema/v1/schema.unstable.json#/$defs/Diff/properties/path @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_prompt.py::test_emitted_file_paths_are_absolute",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 1.360943540930748,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-PROMPTCAP-001",
+      "tier": "CAPABILITY",
+      "capability": "agentCapabilities.promptCapabilities.image",
+      "text": "When `agentCapabilities.promptCapabilities.image` is `true`, a `session/prompt` containing an `image` content block (`ImageContent`: `data`, `mimeType`) alongside text resolves with a successful result whose `stopReason` is a defined value.",
+      "citation": "docs/protocol/v1/draft/initialization.mdx:249-253; docs/protocol/v1/draft/content.mdx:54-56; schema/v1/schema.unstable.json#/$defs/PromptCapabilities; schema/v1/schema.unstable.json#/$defs/ImageContent @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "SKIPPED",
+      "tests": [
+        {
+          "nodeid": "test_prompt_capabilities.py::test_prompt_with_image_block_resolves",
+          "status": "SKIPPED",
+          "message": "('/private/var/folders/7j/6j1y9dtx54d9qzsqp8vx_kdr0000gn/T/goagent-acp-live-e5khh181/venv/lib/python3.15/site-packages/tck/v1/conformance/test_prompt_capabilities.py', 46, \"Skipped: capability 'agentCapabilities.promptCapabilities.image' not advertised by the agent under test\")",
+          "duration_s": 0.0006700409576296806,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-PROMPTCAP-002",
+      "tier": "CAPABILITY",
+      "capability": "agentCapabilities.promptCapabilities.audio",
+      "text": "When `agentCapabilities.promptCapabilities.audio` is `true`, a `session/prompt` containing an `audio` content block (`AudioContent`: `data`, `mimeType`) alongside text resolves with a successful result whose `stopReason` is a defined value.",
+      "citation": "docs/protocol/v1/draft/initialization.mdx:255-257; schema/v1/schema.unstable.json#/$defs/PromptCapabilities; schema/v1/schema.unstable.json#/$defs/AudioContent @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "SKIPPED",
+      "tests": [
+        {
+          "nodeid": "test_prompt_capabilities.py::test_prompt_with_audio_block_resolves",
+          "status": "SKIPPED",
+          "message": "('/private/var/folders/7j/6j1y9dtx54d9qzsqp8vx_kdr0000gn/T/goagent-acp-live-e5khh181/venv/lib/python3.15/site-packages/tck/v1/conformance/test_prompt_capabilities.py', 65, \"Skipped: capability 'agentCapabilities.promptCapabilities.audio' not advertised by the agent under test\")",
+          "duration_s": 0.00023158395197242498,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-PROMPTCAP-003",
+      "tier": "CAPABILITY",
+      "capability": "agentCapabilities.promptCapabilities.embeddedContext",
+      "text": "When `agentCapabilities.promptCapabilities.embeddedContext` is `true`, a `session/prompt` containing a `resource` content block (`EmbeddedResource` wrapping a text or blob resource) alongside text resolves with a successful result whose `stopReason` is a defined value.",
+      "citation": "docs/protocol/v1/draft/initialization.mdx:259-261; docs/protocol/v1/draft/content.mdx:122-125; schema/v1/schema.unstable.json#/$defs/PromptCapabilities; schema/v1/schema.unstable.json#/$defs/EmbeddedResource @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_prompt_capabilities.py::test_prompt_with_embedded_resource_block_resolves",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 3.406561249983497,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-RESUME-001",
+      "tier": "CAPABILITY",
+      "capability": "agentCapabilities.sessionCapabilities.resume",
+      "text": "`session/resume` with `sessionId`, `cwd`, and `mcpServers: []` succeeds with a schema-valid `ResumeSessionResponse` object.",
+      "citation": "docs/protocol/v1/draft/session-setup.mdx:239-244,266-277; schema/v1/schema.unstable.json#/$defs/ResumeSessionRequest; schema/v1/schema.unstable.json#/$defs/ResumeSessionResponse (C2, R1, R3) @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "SKIPPED",
+      "tests": [
+        {
+          "nodeid": "test_session_capabilities.py::test_resume_succeeds_and_validates",
+          "status": "SKIPPED",
+          "message": "('/private/var/folders/7j/6j1y9dtx54d9qzsqp8vx_kdr0000gn/T/goagent-acp-live-e5khh181/venv/lib/python3.15/site-packages/tck/v1/conformance/test_session_capabilities.py', 124, \"Skipped: capability 'agentCapabilities.sessionCapabilities.resume' not advertised by the agent under test\")",
+          "duration_s": 0.0003424999304115772,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-RESUME-002",
+      "tier": "CAPABILITY",
+      "capability": "agentCapabilities.sessionCapabilities.resume",
+      "text": "No `session/update` carrying conversation history (`user_message_chunk`, `agent_message_chunk`, `agent_thought_chunk`, `tool_call`, `tool_call_update`) for the resumed session arrives before the `session/resume` response -- the prohibition is scoped to history updates in the pre-response window only, not to every update kind or to updates after the response.",
+      "citation": "docs/protocol/v1/draft/session-setup.mdx:266-269 (R2) @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "SKIPPED",
+      "tests": [
+        {
+          "nodeid": "test_session_capabilities.py::test_resume_sends_no_history_before_responding",
+          "status": "SKIPPED",
+          "message": "('/private/var/folders/7j/6j1y9dtx54d9qzsqp8vx_kdr0000gn/T/goagent-acp-live-e5khh181/venv/lib/python3.15/site-packages/tck/v1/conformance/test_session_capabilities.py', 143, \"Skipped: capability 'agentCapabilities.sessionCapabilities.resume' not advertised by the agent under test\")",
+          "duration_s": 0.00019158399663865566,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-SCHEMA-001",
+      "tier": "MANDATORY",
+      "capability": null,
+      "text": "Every message the agent emits during a basic exchange validates against the vendored v1 schema.",
+      "citation": "schema/v1/schema.unstable.json#/anyOf/0 (the `Agent` envelope) @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_initialize.py::test_full_exchange_validates_against_schema",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 0.6683073330204934,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-SCHEMA-002",
+      "tier": "ADVISORY",
+      "capability": null,
+      "text": "No agent-emitted spec object (a request/notification `params`, a successful response `result`, or an error object) carries a root-level key outside its `$def`'s resolved `properties` union (following `allOf`/`anyOf`/`oneOf`/`$ref`). `_meta` is allowed, except on error objects: `Error` defines only `code`, `message` and `data`. Implementations MUST NOT add custom root fields; ADVISORY only because the check is an approximation -- the vendored schema has no `additionalProperties: false`, so the allowed-keys union is built by hand (`tck.v1.validation.find_unknown_root_keys`), and a false positive against a conforming agent would be an unfair FAIL.",
+      "citation": "docs/protocol/v1/draft/extensibility.mdx:10-14,43; schema/v1/schema.unstable.json#/$defs/Error @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_extensibility.py::test_full_exchange_has_no_unknown_root_keys",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 0.21331195789389312,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-SESSION-001",
+      "tier": "MANDATORY",
+      "capability": null,
+      "text": "`session/new` with an absolute `cwd` and `mcpServers: []` succeeds with a non-empty string `sessionId`, and the response validates against the schema.",
+      "citation": "docs/protocol/v1/draft/session-setup.mdx:73; schema/v1/schema.unstable.json#/$defs/NewSessionResponse (Req 9; Testability notes 'session/new with an absolute cwd...') @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_session.py::test_session_new_succeeds_with_a_unique_session_id",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 0.016146750072948635,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-SESSION-002",
+      "tier": "MANDATORY",
+      "capability": null,
+      "text": "Two `session/new` calls on the same connection return distinct `sessionId`s.",
+      "citation": "docs/protocol/v1/draft/session-setup.mdx:73; schema/v1/schema.unstable.json#/$defs/NewSessionResponse (Req 9 'unique') @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_session.py::test_two_sessions_get_distinct_ids",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 0.021595833939500153,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-SESSION-003",
+      "tier": "MANDATORY",
+      "capability": null,
+      "text": "`session/new` with one stdio MCP server entry (`name`, absolute `command`, `args`, `env`) succeeds with a schema-valid result -- all agents MUST support the stdio MCP transport. The entry points at a stub MCP server shipped with the TCK (`tck.v1.conformance._mcp_stub`), run by the TCK's own Python interpreter.",
+      "citation": "docs/protocol/v1/draft/session-setup.mdx:468,476-501; schema/v1/schema.unstable.json#/$defs/McpServer; schema/v1/schema.unstable.json#/$defs/McpServerStdio @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_session.py::test_session_new_accepts_a_stdio_mcp_server",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 0.04110991605557501,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-SESSION-004",
+      "tier": "ADVISORY",
+      "capability": null,
+      "text": "After `session/new` with that stdio MCP server entry and one prompt turn, the agent has launched the stub server and sent it an MCP `initialize` request. SHOULD-level (\"Agents SHOULD connect to all MCP servers specified by the Client\"); the prompt turn gives an agent that connects lazily a chance to do so before the check.",
+      "citation": "docs/protocol/v1/draft/session-setup.mdx:638 @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_session.py::test_agent_connects_to_the_stdio_mcp_server",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 0.2691320829326287,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-SHUTDOWN-001",
+      "tier": "INFORMATIONAL",
+      "capability": null,
+      "text": "After the client closes stdin, the agent process exits on its own within the close grace period, without needing SIGTERM/SIGKILL. Informational: the spec defines no shutdown method or timing, only that the client closes stdin and terminates the subprocess. FAILs if the agent needed a signal, or if `initialize`/`session/new` got no response at all (timeout or exit).",
+      "citation": "docs/protocol/v1/draft/transports.mdx:40 @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_diagnostics.py::test_agent_exits_promptly_after_stdin_close",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 0.023974373936653137,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-STDERR-001",
+      "tier": "INFORMATIONAL",
+      "capability": null,
+      "text": "The byte count of stderr output observed during an ordinary exchange is reported for information only, never asserted (the agent MAY log UTF-8 to stderr). FAILs only if `initialize` or `session/new` got no response at all (timeout or exit).",
+      "citation": "docs/protocol/v1/draft/transports.mdx:25 @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_diagnostics.py::test_stderr_byte_count_is_recorded",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 0.019245457951910794,
+          "properties": {
+            "acp_tck_stderr_bytes": "158"
+          },
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-SYSPROMPT-001",
+      "tier": "CAPABILITY",
+      "capability": "agentCapabilities.sessionCapabilities.systemPrompt",
+      "text": "`session/new` with `systemPrompt: {mode: \"append\", content: [<text block>]}` succeeds with a schema-valid result: every agent advertising the capability supports `append`, and MUST accept text content blocks. Unstable feature.",
+      "citation": "docs/protocol/v1/draft/session-setup.mdx:411,415; schema/v1/schema.unstable.json#/$defs/SystemPrompt; schema/v1/schema.unstable.json#/$defs/SessionSystemPromptModeCapabilities @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "SKIPPED",
+      "tests": [
+        {
+          "nodeid": "test_session_capabilities.py::test_new_session_with_append_system_prompt_is_accepted",
+          "status": "SKIPPED",
+          "message": "('/private/var/folders/7j/6j1y9dtx54d9qzsqp8vx_kdr0000gn/T/goagent-acp-live-e5khh181/venv/lib/python3.15/site-packages/tck/v1/conformance/test_session_capabilities.py', 475, \"Skipped: capability 'agentCapabilities.sessionCapabilities.systemPrompt' not advertised by the agent under test\")",
+          "duration_s": 0.00017395790200680494,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-SYSPROMPT-002",
+      "tier": "CAPABILITY",
+      "capability": "agentCapabilities.sessionCapabilities.systemPrompt",
+      "text": "`session/new` with a `systemPrompt.mode` the agent cannot support (the implementation-reserved `_tck_unsupported`) returns an error rather than creating the session. The error code is recorded, not asserted (`-32602` is only RECOMMENDED). Unstable feature.",
+      "citation": "docs/protocol/v1/draft/session-setup.mdx:412,418; schema/v1/schema.unstable.json#/$defs/SystemPromptMode @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "SKIPPED",
+      "tests": [
+        {
+          "nodeid": "test_session_capabilities.py::test_new_session_with_unsupported_system_prompt_mode_errors",
+          "status": "SKIPPED",
+          "message": "('/private/var/folders/7j/6j1y9dtx54d9qzsqp8vx_kdr0000gn/T/goagent-acp-live-e5khh181/venv/lib/python3.15/site-packages/tck/v1/conformance/test_session_capabilities.py', 494, \"Skipped: capability 'agentCapabilities.sessionCapabilities.systemPrompt' not advertised by the agent under test\")",
+          "duration_s": 0.00015816697850823402,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-SYSPROMPT-003",
+      "tier": "CAPABILITY",
+      "capability": "agentCapabilities.sessionCapabilities.systemPrompt",
+      "text": "`session/new` with a non-text `systemPrompt.content` block (`resource_link`) returns an error rather than creating the session -- only text blocks are supported for now. Unstable feature.",
+      "citation": "docs/protocol/v1/draft/session-setup.mdx:415,418; schema/v1/schema.unstable.json#/$defs/SystemPrompt/properties/content @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "SKIPPED",
+      "tests": [
+        {
+          "nodeid": "test_session_capabilities.py::test_new_session_with_non_text_system_prompt_content_errors",
+          "status": "SKIPPED",
+          "message": "('/private/var/folders/7j/6j1y9dtx54d9qzsqp8vx_kdr0000gn/T/goagent-acp-live-e5khh181/venv/lib/python3.15/site-packages/tck/v1/conformance/test_session_capabilities.py', 516, \"Skipped: capability 'agentCapabilities.sessionCapabilities.systemPrompt' not advertised by the agent under test\")",
+          "duration_s": 0.0001592080807313323,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-TRANSPORT-001",
+      "tier": "MANDATORY",
+      "capability": null,
+      "text": "Every line the agent writes to stdout is a single valid JSON-RPC 2.0 message.",
+      "citation": "docs/protocol/v1/draft/transports.mdx:23,24,26 @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_transport.py::test_stdout_is_clean_ndjson_jsonrpc",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 1.551425251062028,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    },
+    {
+      "id": "ACP-TRANSPORT-002",
+      "tier": "MANDATORY",
+      "capability": null,
+      "text": "The agent's stdout is valid UTF-8.",
+      "citation": "docs/protocol/v1/draft/transports.mdx:6 @ beac4ba96190018e9f6d82e148ff275084c5aa3e",
+      "status": "PASS",
+      "tests": [
+        {
+          "nodeid": "test_transport.py::test_stdout_is_valid_utf8",
+          "status": "PASS",
+          "message": "",
+          "duration_s": 1.9544102509971708,
+          "properties": {},
+          "transcript": null,
+          "stderr": null
+        }
+      ]
+    }
+  ],
+  "verdict": {
+    "conformant": true,
+    "tier_counts": {
+      "MANDATORY": {
+        "PASS": 31,
+        "FAIL": 0,
+        "SKIPPED": 0,
+        "NOT_TESTED": 0
+      },
+      "CAPABILITY": {
+        "PASS": 7,
+        "FAIL": 0,
+        "SKIPPED": 16,
+        "NOT_TESTED": 0
+      },
+      "ADVISORY": {
+        "PASS": 12,
+        "FAIL": 0,
+        "SKIPPED": 1,
+        "NOT_TESTED": 0
+      },
+      "INFORMATIONAL": {
+        "PASS": 5,
+        "FAIL": 0,
+        "SKIPPED": 0,
+        "NOT_TESTED": 0
+      }
+    },
+    "blocked_by_auth": false,
+    "blocked_by_version_mismatch": false
+  }
+}

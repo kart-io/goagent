@@ -1,0 +1,193 @@
+package main
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	acp "github.com/kart-io/goagent-contrib/acp"
+	"github.com/kart-io/goagent/builder"
+	"github.com/kart-io/goagent/core/session"
+	"github.com/kart-io/goagent/harness/env"
+	"github.com/kart-io/goagent/interfaces"
+	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/providers"
+	"github.com/kart-io/goagent/mcp/remote"
+	"github.com/kart-io/goagent/tools"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"io"
+	"net"
+	"net/http"
+	"net/http/httputil"
+	"net/url"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"sync/atomic"
+	"time"
+)
+
+type transport func(*http.Request) (*http.Response, error)
+
+func (f transport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+func main() {
+	if err := run(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}
+func run() error {
+	storePath := os.Getenv("LIVE_AGENT_STORE")
+	if storePath == "" {
+		var err error
+		storePath, err = os.MkdirTemp("", "acp-live-state-")
+		if err != nil {
+			return err
+		}
+		defer os.RemoveAll(storePath)
+	}
+	store, err := session.NewFileStore(storePath)
+	if err != nil {
+		return err
+	}
+	model := os.Getenv("LIVE_AGENT_MODEL")
+	if model == "" {
+		model = "llama3.1:8b"
+	}
+	target, _ := url.Parse("http://127.0.0.1:11434")
+	proxy := httputil.NewSingleHostReverseProxy(target)
+	var requests atomic.Int64
+	proxy.Transport = transport(func(r *http.Request) (*http.Response, error) {
+		n := requests.Add(1)
+		data, _ := io.ReadAll(r.Body)
+		r.Body = io.NopCloser(bytes.NewReader(data))
+		_ = os.WriteFile(filepath.Join(storePath, "last-model-request.json"), data, 0600)
+		start := time.Now()
+		response, err := http.DefaultTransport.RoundTrip(r)
+		status := 0
+		if response != nil {
+			status = response.StatusCode
+		}
+		_ = json.NewEncoder(os.Stderr).Encode(map[string]any{"event": "real_model_request", "n": n, "model": model, "status": status, "elapsed_ms": time.Since(start).Milliseconds()})
+		return response, err
+	})
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return err
+	}
+	server := &http.Server{Handler: proxy, ReadHeaderTimeout: 5 * time.Second}
+	go func() { _ = server.Serve(listener) }()
+	defer server.Close()
+	client, err := providers.NewOpenAIWithOptions(llm.WithModel(model), llm.WithAPIKey("local-ollama"), llm.WithBaseURL("http://"+listener.Addr().String()+"/v1"), llm.WithMaxTokens(512), llm.WithTemperature(0), llm.WithTimeout(120*time.Second))
+	if err != nil {
+		return err
+	}
+	srv := acp.NewServer(func(ctx context.Context, s *acp.Session) (acp.Runner, error) {
+		reg := tools.NewRegistry()
+		for _, server := range s.MCPServers() {
+			if server.Stdio == nil {
+				return nil, fmt.Errorf("验证程序未配置此 MCP 传输")
+			}
+			config := server.Stdio
+			command := exec.Command(config.Command, config.Args...)
+			command.Dir = s.Cwd()
+			command.Env = os.Environ()
+			for _, variable := range config.Env {
+				command.Env = append(command.Env, variable.Name+"="+variable.Value)
+			}
+			clientSession, err := remote.Connect(ctx, &mcp.CommandTransport{Command: command})
+			if err != nil {
+				return nil, err
+			}
+			if err := s.OnClose(func(context.Context) error { return clientSession.Close() }); err != nil {
+				_ = clientSession.Close()
+				return nil, err
+			}
+			mcpTools, err := remote.Tools(ctx, clientSession)
+			if err != nil {
+				return nil, err
+			}
+			for _, tool := range mcpTools {
+				if err := reg.Register(tool); err != nil {
+					return nil, err
+				}
+			}
+			_ = json.NewEncoder(os.Stderr).Encode(map[string]any{"event": "mcp_connected", "name": config.Name})
+		}
+		list := []interfaces.Tool{
+			tools.NewBaseTool("read_file", "读取相对工作区路径文件", `{"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}`, func(ctx context.Context, in *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+				path, _ := in.Args["path"].(string)
+				data, _, err := s.FileSystem().ReadFile(ctx, path)
+				if err != nil {
+					return tools.Rejected(err.Error(), nil), nil
+				}
+				return &interfaces.ToolOutput{Success: true, Result: string(data)}, nil
+			}),
+			tools.NewBaseTool("write_file", "写入相对工作区路径的文本文件", `{"type":"object","properties":{"path":{"type":"string"},"content":{"type":"string"}},"required":["path","content"]}`, func(ctx context.Context, in *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+				path, _ := in.Args["path"].(string)
+				content, _ := in.Args["content"].(string)
+				_, err := s.FileSystem().WriteFile(ctx, path, []byte(content), env.WriteIntent{})
+				if err != nil {
+					return tools.Rejected(err.Error(), nil), nil
+				}
+				return &interfaces.ToolOutput{Success: true, Result: "已写入 " + path}, nil
+			}),
+			tools.NewBaseTool("run_command", "执行命令；argv 是参数数组，仅支持 printf、sleep、ls、cat", `{"type":"object","properties":{"argv":{"type":"array","items":{"type":"string"},"minItems":1}},"required":["argv"]}`, func(ctx context.Context, in *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+				raw, _ := in.Args["argv"].([]any)
+				var argv []string
+				for _, item := range raw {
+					v, ok := item.(string)
+					if !ok {
+						return tools.Rejected("参数必须是字符串", nil), nil
+					}
+					argv = append(argv, v)
+				}
+				if len(argv) == 0 {
+					return tools.Rejected("命令为空", nil), nil
+				}
+				allowed := map[string]bool{"printf": true, "sleep": true, "ls": true, "cat": true, "/bin/sleep": true, "/bin/ls": true, "/bin/cat": true, "/usr/bin/printf": true}
+				if !allowed[argv[0]] {
+					return tools.Rejected("验证程序仅允许 printf/sleep/ls/cat", nil), nil
+				}
+				out, err := s.Executor().Run(ctx, env.Command{Argv: argv})
+				if err != nil {
+					return nil, err
+				}
+				return &interfaces.ToolOutput{Success: out.ExitCode == 0, Result: string(out.Output)}, nil
+			}),
+		}
+		for _, t := range list {
+			if err := reg.Register(t); err != nil {
+				return nil, err
+			}
+		}
+		pipeline := s.Pipeline()
+		pipeline.Pre = append(pipeline.Pre, func(_ context.Context, call *tools.Call) (tools.PreDecision, error) {
+			if call.Tool == "run_command" || call.Tool == "write_file" {
+				return tools.PreDecision{Kind: tools.PreAsk, Feedback: "真实验证操作需审批"}, nil
+			}
+			return tools.PreDecision{}, nil
+		})
+		dispatcher, err := tools.NewDispatcher(reg, tools.DispatchConfig{Pipeline: pipeline, ReturnArgumentErrors: true})
+		if err != nil {
+			return nil, err
+		}
+		agent, err := builder.NewSimpleBuilder(client).WithSessionID(s.ID()).WithSessionLog(store).WithTools(dispatcher.Tools()...).WithMaxIterations(8).WithTemperature(0).WithMaxTokens(512).WithSystemPrompt("你是本地验证助手。仅在用户明确要求读取文件、写文件或运行命令时使用对应工具，必须使用用户给定的路径、内容和 argv 参数，不能编造结果。调用工具成功后直接简短回答。工具拒绝时停止重试并报告拒绝。普通问候只回复简短文本。").Build()
+		if err != nil {
+			return nil, err
+		}
+		if err := s.OnClose(func(context.Context) error {
+			_ = json.NewEncoder(os.Stderr).Encode(map[string]any{"event": "session_closed", "session_id": s.ID()})
+			return nil
+		}); err != nil {
+			return nil, err
+		}
+		return agent, nil
+	}, acp.WithAgentInfo("goagent-acp-live-verification", "local"), acp.WithSessionStore(store), acp.WithTerminalCapabilities(env.Capabilities{Network: true}))
+	err = srv.Serve(context.Background(), os.Stdin, os.Stdout)
+	if errors.Is(err, context.Canceled) {
+		return nil
+	}
+	return err
+}

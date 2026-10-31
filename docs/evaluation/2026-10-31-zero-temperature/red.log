@@ -1,0 +1,87 @@
+--- FAIL: TestTemperatureZeroJSONRoundTrip (0.00s)
+    --- FAIL: TestTemperatureZeroJSONRoundTrip/标准JSON (0.00s)
+        temperature_presence_test.go:25: 
+            	Error Trace:	/Users/costalong/code/go/src/github.com/kart/goagent/llm/temperature_presence_test.go:25
+            	Error:      	map[string]interface {}{"messages":[]interface {}{map[string]interface {}{"content":"你好", "role":"user"}}} does not contain "temperature"
+            	Test:       	TestTemperatureZeroJSONRoundTrip/标准JSON
+            	Messages:   	显式零不能在序列化时丢失
+    --- FAIL: TestTemperatureZeroJSONRoundTrip/项目JSON (0.00s)
+        temperature_presence_test.go:25: 
+            	Error Trace:	/Users/costalong/code/go/src/github.com/kart/goagent/llm/temperature_presence_test.go:25
+            	Error:      	map[string]interface {}{"messages":[]interface {}{map[string]interface {}{"content":"你好", "role":"user"}}} does not contain "temperature"
+            	Test:       	TestTemperatureZeroJSONRoundTrip/项目JSON
+            	Messages:   	显式零不能在序列化时丢失
+FAIL
+FAIL	github.com/kart-io/goagent/llm	1.102s
+--- FAIL: TestConfiguredZeroTemperatureIsPreserved (0.00s)
+    temperature_zero_test.go:12: 
+        	Error Trace:	/Users/costalong/code/go/src/github.com/kart/goagent/llm/common/temperature_zero_test.go:12
+        	Error:      	Should be zero, but was 0.7
+        	Test:       	TestConfiguredZeroTemperatureIsPreserved
+FAIL
+FAIL	github.com/kart-io/goagent/llm/common	0.664s
+--- FAIL: TestOpenAIWireTemperatureSelection (0.00s)
+    --- FAIL: TestOpenAIWireTemperatureSelection/Complete (0.00s)
+        temperature_zero_test.go:93: 
+            	Error Trace:	/Users/costalong/code/go/src/github.com/kart/goagent/llm/providers/temperature_zero_test.go:45
+            	            				/Users/costalong/code/go/src/github.com/kart/goagent/llm/providers/temperature_zero_test.go:93
+            	Error:      	Max difference between 0 and 0.7 allowed is 1e-06, but difference was -0.7
+            	Test:       	TestOpenAIWireTemperatureSelection/Complete
+    --- FAIL: TestOpenAIWireTemperatureSelection/CompleteStream (0.00s)
+        temperature_zero_test.go:93: 
+            	Error Trace:	/Users/costalong/code/go/src/github.com/kart/goagent/llm/providers/temperature_zero_test.go:45
+            	            				/Users/costalong/code/go/src/github.com/kart/goagent/llm/providers/temperature_zero_test.go:93
+            	Error:      	Max difference between 0 and 0.7 allowed is 1e-06, but difference was -0.7
+            	Test:       	TestOpenAIWireTemperatureSelection/CompleteStream
+    --- FAIL: TestOpenAIWireTemperatureSelection/CompleteToolsStream (0.00s)
+        temperature_zero_test.go:93: 
+            	Error Trace:	/Users/costalong/code/go/src/github.com/kart/goagent/llm/providers/temperature_zero_test.go:45
+            	            				/Users/costalong/code/go/src/github.com/kart/goagent/llm/providers/temperature_zero_test.go:93
+            	Error:      	Max difference between 0 and 0.7 allowed is 1e-06, but difference was -0.7
+            	Test:       	TestOpenAIWireTemperatureSelection/CompleteToolsStream
+    --- FAIL: TestOpenAIWireTemperatureSelection/Stream (0.00s)
+        temperature_zero_test.go:93: 
+            	Error Trace:	/Users/costalong/code/go/src/github.com/kart/goagent/llm/providers/temperature_zero_test.go:45
+            	            				/Users/costalong/code/go/src/github.com/kart/goagent/llm/providers/temperature_zero_test.go:93
+            	Error:      	Max difference between 0 and 0.7 allowed is 1e-06, but difference was -0.7
+            	Test:       	TestOpenAIWireTemperatureSelection/Stream
+    --- FAIL: TestOpenAIWireTemperatureSelection/GenerateWithTools (0.00s)
+        temperature_zero_test.go:93: 
+            	Error Trace:	/Users/costalong/code/go/src/github.com/kart/goagent/llm/providers/temperature_zero_test.go:45
+            	            				/Users/costalong/code/go/src/github.com/kart/goagent/llm/providers/temperature_zero_test.go:93
+            	Error:      	Max difference between 0 and 0.7 allowed is 1e-06, but difference was -0.7
+            	Test:       	TestOpenAIWireTemperatureSelection/GenerateWithTools
+    --- FAIL: TestOpenAIWireTemperatureSelection/StreamWithTools (0.00s)
+        temperature_zero_test.go:93: 
+            	Error Trace:	/Users/costalong/code/go/src/github.com/kart/goagent/llm/providers/temperature_zero_test.go:45
+            	            				/Users/costalong/code/go/src/github.com/kart/goagent/llm/providers/temperature_zero_test.go:93
+            	Error:      	Max difference between 0 and 0.7 allowed is 1e-06, but difference was -0.7
+            	Test:       	TestOpenAIWireTemperatureSelection/StreamWithTools
+--- FAIL: TestBuilderExplicitZeroOverridesProvider (0.00s)
+    --- FAIL: TestBuilderExplicitZeroOverridesProvider/同步 (0.00s)
+        temperature_zero_test.go:125: 
+            	Error Trace:	/Users/costalong/code/go/src/github.com/kart/goagent/llm/providers/temperature_zero_test.go:45
+            	            				/Users/costalong/code/go/src/github.com/kart/goagent/llm/providers/temperature_zero_test.go:125
+            	Error:      	Max difference between 0 and 0.8 allowed is 1e-06, but difference was -0.8
+            	Test:       	TestBuilderExplicitZeroOverridesProvider/同步
+    --- FAIL: TestBuilderExplicitZeroOverridesProvider/流式 (0.00s)
+        temperature_zero_test.go:125: 
+            	Error Trace:	/Users/costalong/code/go/src/github.com/kart/goagent/llm/providers/temperature_zero_test.go:45
+            	            				/Users/costalong/code/go/src/github.com/kart/goagent/llm/providers/temperature_zero_test.go:125
+            	Error:      	Max difference between 0 and 0.8 allowed is 1e-06, but difference was -0.8
+            	Test:       	TestBuilderExplicitZeroOverridesProvider/流式
+    --- FAIL: TestBuilderExplicitZeroOverridesProvider/原生工具流 (0.00s)
+        temperature_zero_test.go:125: 
+            	Error Trace:	/Users/costalong/code/go/src/github.com/kart/goagent/llm/providers/temperature_zero_test.go:45
+            	            				/Users/costalong/code/go/src/github.com/kart/goagent/llm/providers/temperature_zero_test.go:125
+            	Error:      	Max difference between 0 and 0.8 allowed is 1e-06, but difference was -0.8
+            	Test:       	TestBuilderExplicitZeroOverridesProvider/原生工具流
+--- FAIL: TestJSONExplicitZeroOverridesProvider (0.00s)
+    temperature_zero_test.go:137: 
+        	Error Trace:	/Users/costalong/code/go/src/github.com/kart/goagent/llm/providers/temperature_zero_test.go:45
+        	            				/Users/costalong/code/go/src/github.com/kart/goagent/llm/providers/temperature_zero_test.go:137
+        	Error:      	Max difference between 0 and 0.8 allowed is 1e-06, but difference was -0.8
+        	Test:       	TestJSONExplicitZeroOverridesProvider
+FAIL
+FAIL	github.com/kart-io/goagent/llm/providers	1.648s
+FAIL
