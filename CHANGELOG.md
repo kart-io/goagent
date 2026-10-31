@@ -5,6 +5,13 @@ All notable changes to GoAgent will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `core/session/sessiontest`：`session.Store` 实现的一致性测试（比较并交换与并发追加、事件往返、按字节序列出、分叉、锁），并以 `session.DurableStore` 视图运行 `core/durable/storetest`；`Options.Leases` 为租约后端另跑接管与写入隔离用例。`FileStore` 与 `MemoryStore` 改用它测试。
+- `session.DurableLockName`：`DurableStore` 为快照加锁所用的名称，供以租约实现锁的 `Store` 在追加快照时校验持有者。
+
 ## [0.25.0] - 2026-10-31
 
 ### Added

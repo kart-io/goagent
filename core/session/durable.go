@@ -13,10 +13,13 @@ import (
 
 // DurableStore 把会话 id 的日志作为 durable.Store：每次 Save 追加一条 boundary/snapshot 事件，Load 取该 ID 最近一次写入的快照。
 // 持久操作的记录因此与对话位于同一份日志，按执行键（边界 + 次数）寻址；会话视图（DeriveMessages）忽略这些事件，
-// Rewind 也不影响它们。Lock 委托给 Store.Lock。
+// Rewind 也不影响它们。Lock 委托给 Store.Lock，名称为 DurableLockName(name)。
 func DurableStore(store Store, id string) durable.Store {
 	return &durableStore{store: store, id: id, snaps: map[string]json.RawMessage{}}
 }
+
+// DurableLockName 是 DurableStore 为快照 name 在会话上加锁所用的名称。以租约实现锁的 Store 据此在追加该快照时校验持有者。
+func DurableLockName(name string) string { return "durable/" + name }
 
 type durableStore struct {
 	store Store
@@ -28,7 +31,7 @@ type durableStore struct {
 }
 
 func (s *durableStore) Lock(ctx context.Context, name string) (func() error, error) {
-	return s.store.Lock(ctx, s.id, "durable/"+name)
+	return s.store.Lock(ctx, s.id, DurableLockName(name))
 }
 
 // refresh 读入上次之后的快照事件；调用方持有 s.mu。

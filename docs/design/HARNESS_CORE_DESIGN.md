@@ -650,7 +650,7 @@ A0（`2fc040b`）：Pipeline 裁决聚合与按钩子记录授权；`tools/polic
 | 核心类型含 `step/*`、`assistant/attempt`、`inbox/spliced`、`approval/*`、`todo/write` | 未实现；另有 `system/message`、`tool/definitions` 供导出 | 当前的验收与导出不依赖它们；运行中追加的输入作为普通 user 消息记录 |
 | 中断的轮次 | 持久运行以同一执行键恢复时续写该轮；其他情况在下一轮开始时记为中止，其消息不进入历史 | 中断的非持久轮次可能停在工具调用与结果之间，交给模型会被提供方拒绝 |
 
-未实现：PostgreSQL 存储（`contrib/pgstore`，需要引入驱动依赖与测试数据库）；`testing` 包中的 cut-point replay；`contextpolicy.BeforeTurn` 并入 PreStep、`WithModelRetry` 并入 RequestError（第二阶段留下的归并）；非原生工具流的会话日志；持久运行中 Fork 出的会话从分叉点继续执行（未验证）。
+未实现：`contextpolicy.BeforeTurn` 并入 PreStep、`WithModelRetry` 并入 RequestError（第二阶段留下的归并）；非原生工具流的会话日志；持久运行中 Fork 出的会话从分叉点继续执行（未验证）。
 
 已知开销：每次同步重新推导对话并按 JSON 比较消息，单轮为 O(消息数)；`FileStore` 在一轮开始时读取整个会话文件（含 durable 快照）。一轮结束前崩溃的非持久运行，其最后一批工具结果不会进入日志（该轮会被记为中止）。
 
@@ -672,3 +672,19 @@ A0（`2fc040b`）：Pipeline 裁决聚合与按钩子记录授权；`tools/polic
 - 只覆盖持久操作。`durable.Runner` 的工作流快照会被覆盖写，重放读到的是最终状态。
 - 被回放边界的输入变了时（如改了提示词而没有从那里切开），durable 以 `operation intent or attempt policy changed` 失败。覆盖层看不到新的输入摘要，无法自动转为实跑；顺序执行时 `Report` 的最后一项是出错的边界（`TestChangedInputWithoutCut`），并行的工具调用除外。
 - 带时间戳等不确定内容的工具结果在实跑时总会被判为分歧，应只回放这类边界。
+
+## 18. PostgreSQL 会话存储实施记录（2026-10-31）
+
+`session.Store` 的 Postgres 实现放在 goagent-contrib 的 `durable/pgstore`（`SessionStore`），一致性测试抽为 `core/session/sessiontest`（File、Memory、Postgres 三个实现共用）。
+
+| 问题 | 实施 | 原因 |
+|---|---|---|
+| 放在哪里 | 与 durable 的 `pgstore.Store` 同包，共享连接池、租约、续约与进程内闸门；会话锁位于命名空间 `session:<id>` | `Lock` 须在持有者退出后有界时间内释放，Postgres 上只能用租约，复用已验证的租约实现 |
+| 租约下的旧持有者 | 追加 `boundary/snapshot` 时在同一事务内校验本进程持有 `session.DurableLockName(快照 ID)` 的租约令牌，被接管后返回 `durable.ErrLeaseLost` | 暂停超过 TTL 的旧持有者会在接管者之后写入同一操作的快照，`DurableStore` 的冲突重试会让它成功；`FileStore` 的 flock 随进程释放，没有这个问题 |
+| 比较并交换 | 会话行 `last_seq` 的条件更新，持有行锁到提交 | 并发追加串行判定，失败方读到最新序号后返回 `ErrConflict` |
+| 事件编码 | 整条事件的 JSON 存为 `bytea` | `jsonb` 会改写 `Data` 的键序与数字写法 |
+| 表结构 | `SessionSchema` 独立的版本表，依赖 `Schema` 的租约表 | 只用 `durable.Store` 的部署不需要迁移 |
+
+测试：`sessiontest` 全部用例与 durable 的租约用例（崩溃接管、旧持有者写入被拒、同进程旧持有者、过期未接管）在 Postgres 上通过；去掉租约校验后旧持有者的两个用例失败。Agent 在一个实例的工具执行中中断、另一个实例以同一执行键恢复，日志中只有一轮、消息不重复。
+
+限制：快照只能在持锁时追加，直接向会话写入 `boundary/snapshot` 的工具须先 `Lock`；`Read` 每次查询数据库，`OpenRecorder` 读取整个会话。
