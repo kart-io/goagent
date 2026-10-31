@@ -1,0 +1,215 @@
+package audit
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/gorilla/websocket"
+	"github.com/kart-io/goagent/builder"
+	"github.com/kart-io/goagent/interfaces"
+	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/constants"
+	"github.com/kart-io/goagent/llm/providers"
+	"github.com/kart-io/goagent/plugin"
+	"github.com/kart-io/goagent/tools"
+)
+
+type toolPlugin struct{ tool interfaces.Tool }
+
+func (toolPlugin) Name() string    { return "probe" }
+func (toolPlugin) Version() string { return "1" }
+func (p toolPlugin) Contribute(context.Context, *plugin.Env) (plugin.Contribution, error) {
+	return plugin.Contribution{Tools: []interfaces.Tool{p.tool}}, nil
+}
+
+// 真正运行 Builder、Plugin、Provider 和工具，仅模型响应由本地 HTTP 服务脚本化。
+func TestExecuteAndNativeToolPathDiffer(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var request struct {
+			Stream   bool          `json:"stream"`
+			Messages []llm.Message `json:"messages"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+		if !request.Stream {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `{"id":"probe","model":"probe","choices":[{"index":0,"message":{"role":"assistant","content":"同步文本"},"finish_reason":"stop"}]}`)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		hasResult := false
+		for _, m := range request.Messages {
+			if m.Role == "tool" {
+				hasResult = true
+			}
+		}
+		if hasResult {
+			fmt.Fprint(w, "data: {\"id\":\"probe\",\"model\":\"probe\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"工具结果\"},\"finish_reason\":\"stop\"}]}\n\n")
+		} else {
+			fmt.Fprint(w, "data: {\"id\":\"probe\",\"model\":\"probe\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call-1\",\"type\":\"function\",\"function\":{\"name\":\"probe_tool\",\"arguments\":\"{}\"}}]},\"finish_reason\":\"tool_calls\"}]}\n\n")
+		}
+		fmt.Fprint(w, "data: [DONE]\n\n")
+	}))
+	defer server.Close()
+	client, err := providers.NewOpenAIWithOptions(llm.WithAPIKey("local-probe"), llm.WithModel("probe"), llm.WithBaseURL(server.URL))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var invoked atomic.Int32
+	tool := tools.NewBaseTool("probe_tool", "探针工具", `{"type":"object","properties":{}}`, func(context.Context, *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+		invoked.Add(1)
+		return &interfaces.ToolOutput{Success: true, Result: "工具执行成功"}, nil
+	})
+	host, err := plugin.NewHost(toolPlugin{tool: tool})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = host.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	defer host.Stop(context.Background())
+	b := builder.NewSimpleBuilder(client).WithMaxIterations(4)
+	if err = plugin.Install(context.Background(), b, host); err != nil {
+		t.Fatal(err)
+	}
+	agent, err := b.Build()
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := agent.Execute(context.Background(), "请执行工具")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if invoked.Load() != 0 {
+		t.Fatal("同步 Execute 意外执行工具")
+	}
+	t.Logf("Execute: result=%v tool_calls=%d", out.Result, invoked.Load())
+	out, err = agent.AsRunnable().Invoke(context.Background(), "请执行工具")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if invoked.Load() != 1 {
+		t.Fatalf("原生执行预期一次工具调用，实际 %d", invoked.Load())
+	}
+	t.Logf("AsRunnable.Invoke: result=%v tool_calls=%d", out.Result, invoked.Load())
+}
+
+type syncOnly struct{}
+
+func (*syncOnly) Complete(context.Context, *llm.CompletionRequest) (*llm.CompletionResponse, error) {
+	return &llm.CompletionResponse{Content: "ok"}, nil
+}
+func (m *syncOnly) Chat(ctx context.Context, msg []llm.Message) (*llm.CompletionResponse, error) {
+	return m.Complete(ctx, &llm.CompletionRequest{Messages: msg})
+}
+func (*syncOnly) Provider() constants.Provider { return "probe" }
+
+func (*syncOnly) IsAvailable() bool { return true }
+func TestStreamMethodDoesNotProveCapability(t *testing.T) {
+	agent, err := builder.NewSimpleBuilder(&syncOnly{}).Build()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, ok := any(agent).(interface {
+		ExecuteStream(context.Context, any) (<-chan builder.AgentEvent, error)
+	})
+	if !ok {
+		t.Fatal("Builder 应具备方法")
+	}
+	_, err = agent.ExecuteStream(context.Background(), "hello")
+	if err == nil || !strings.Contains(err.Error(), "requires llm.StreamClient") {
+		t.Fatalf("预期不支持流式，实际 %v", err)
+	}
+	t.Logf("方法断言=true，实际调用错误=%v", err)
+}
+
+func TestHTTPShutdownDoesNotCancelActiveRequest(t *testing.T) {
+	started, finished := make(chan struct{}), make(chan struct{})
+	var observed atomic.Bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		close(started)
+		defer close(finished)
+		select {
+		case <-r.Context().Done():
+			observed.Store(true)
+		case <-time.After(150 * time.Millisecond):
+		}
+		fmt.Fprint(w, "ok")
+	}))
+	defer server.Close()
+	go func() {
+		resp, err := server.Client().Get(server.URL)
+		if err == nil {
+			resp.Body.Close()
+		}
+	}()
+	<-started
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
+	defer cancel()
+	err := server.Config.Shutdown(ctx)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("预期等待活动请求超时，实际 %v", err)
+	}
+	if observed.Load() {
+		t.Fatal("Shutdown 不应自动取消请求 context")
+	}
+	<-finished
+	t.Log("先等待 http.Server.Shutdown 不会触发运行取消，30ms 截止返回 context deadline exceeded")
+}
+
+func TestWebSocketSurvivesHTTPShutdown(t *testing.T) {
+	closed := make(chan struct{})
+	up := websocket.Upgrader{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		c, err := up.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer c.Close()
+		defer close(closed)
+		for {
+			kind, data, err := c.ReadMessage()
+			if err != nil {
+				return
+			}
+			if c.WriteMessage(kind, data) != nil {
+				return
+			}
+		}
+	}))
+	defer server.Close()
+	c, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(server.URL, "http"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err = server.Config.Shutdown(ctx); err != nil {
+		t.Fatal(err)
+	}
+	c.SetReadDeadline(time.Now().Add(time.Second))
+	if err = c.WriteMessage(websocket.TextMessage, []byte("仍然在线")); err != nil {
+		t.Fatal(err)
+	}
+	_, got, err := c.ReadMessage()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "仍然在线" {
+		t.Fatalf("响应不符 %q", got)
+	}
+	c.Close()
+	<-closed
+	t.Log("http.Server.Shutdown 返回成功后，真实 WebSocket 仍可双向收发")
+}

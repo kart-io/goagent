@@ -1,0 +1,9 @@
+{
+  "date": "2026-10-31",
+  "design_commit": "57c0f05",
+  "core_base": "f364a20",
+  "go": "1.25.0",
+  "websocket": "v1.5.3",
+  "probe_command": "env -u GOROOT GOTOOLCHAIN=go1.25.0 go test -race -count=1 -v ./.claude/httpagent-design-probes",
+  "probe_kind": "真实本地HTTP/WS与Builder/Plugin；模型响应脚本化，不是线上模型测试"
+}
