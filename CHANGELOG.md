@@ -5,7 +5,7 @@ All notable changes to GoAgent will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.28.0] - 2026-10-31
 
 ### Added
 
@@ -22,6 +22,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **破坏性**：Offload 的引用增加 `stored` 字段（证据的键与摘要），默认 Version 改为 `v3`；用旧版本记录、尚未结束的持久运行须在升级前结束。
+
+## [0.27.0] - 2026-10-31
+
+### 宿主接入与开销
+
+- 新增 BuildContext，向初始化存储与回调传递宿主上下文并检查取消；Build 保持原入口行为。
+- 新增顶层 execution.Scope 和 ConfigureBuilder，统一运行、会话、日志、预算、期限及观察装配，并检查上下文冲突；新增离线示例与接入指南。
+- 预算账本改为类型化深复制，持久读取前跳过无用内存复制；持久格式、锁及同步保存语义保持一致，新增隔离性与分配回归测试。
+- 新增离线执行探针与固定账本微基准，保存三模式实测原始数据及测量边界。
+
+### 执行可靠性与治理
+
+- 初始化严格传播检查点Exists/Load及状态类型错误；新增 `WithMemoryFailurePolicy`，默认尽力、可选严格，所有入口共用记忆错误处理与结构化观察，取消直接stderr记忆错误输出。
+- Pipe/Sequence统一流终态与取消，空Sequence恒等；显式父回调生效，Batch逐输入Invoke并保留有序部分结果。父子重复副作用回调及依赖子自定义Batch的调用方须按扩展契约迁移。
+- 根预算新增保守Token预留、工具调用次数与绝对截止时间；宿主提供版本化TokenEstimator，未知用量不补零，预留不退款。零值新字段保持旧日志及completed模型意图兼容，配置漂移拒绝恢复。
+- Runner/持久图新增只读Diagnose，报告等待、完成、版本障碍与结果未知，显式操作记录提供失败证据，不自动恢复副作用。
+- Dispatcher独立准入/执行并发和有界排队，新增ErrDispatcherBusy；审批不再占用执行槽，需限制审批量的宿主应显式配置MaxAdmissionConcurrency。排队/准入暂停单次Timeout，校验授权日志执行累计计时。
+- 新增固定worker的有界AsyncObserver和可取消Close、丢弃统计；Pipeline新增GrantTTL和PruneGrants，过期授权不会继续生效。
+- 补齐OpenAI、DeepSeek、Gemini工具流、未知usage和停止消费后取消契约测试；新增扩展/治理文档与发布验收清单。
+
+### Removed
+
+- **破坏性**：Preset 与编码工具迁至独立模块 `github.com/kart-io/goagent-harness`：`harness/preset` 改为新模块的 `preset`，`tools/coding` 改为新模块的同名路径；两个工程 Agent 示例随之迁出。不保留转发兼容层。配置格式、Builder 与循环扩展点不变，`harness/env`、`tools/policy`、`tools/spill` 留在核心。当前为本地拆分，发布本版本前须先发布新模块，迁移与发布顺序见 `docs/guides/HARNESS_MIGRATION.md`。
+
+### Fixed
+
+- `TestOnResultReplayOrderAfterConcurrentRun` 使用同步屏障等待首批并发调用全部进入工具体，消除磁盘与调度延迟导致的峰值断言偶发失败；保留并发上限与恢复交付顺序的验证。
+
+- `harness/env.LocalFS` 的条件写入改为同进程所有实例按真实路径协调，删除也参与同一协调；修复并发创建时偶发误报悬空链接。Unix 本地文件写入改为同目录临时文件同步后原子发布，避免覆盖过程中读到截断内容；`CreateIfAbsent` 使用硬链接发布，避免覆盖抢先创建的文件。明确 `IfVersion` 不协调直接写入或其他进程，替换会更换 inode，发布后同步失败须重新读取确认；已取消的写入和删除不再改动文件。
 
 ## [0.26.0] - 2026-10-31
 
@@ -70,33 +99,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CHANGELOG 中 0.23.0 的条目此前列在 Unreleased 下，已归入 0.23.0。
 
 ## [0.23.0] - 2026-10-30
-
-### 宿主接入与开销
-
-- 新增 BuildContext，向初始化存储与回调传递宿主上下文并检查取消；Build 保持原入口行为。
-- 新增顶层 execution.Scope 和 ConfigureBuilder，统一运行、会话、日志、预算、期限及观察装配，并检查上下文冲突；新增离线示例与接入指南。
-- 预算账本改为类型化深复制，持久读取前跳过无用内存复制；持久格式、锁及同步保存语义保持一致，新增隔离性与分配回归测试。
-- 新增离线执行探针与固定账本微基准，保存三模式实测原始数据及测量边界。
-
-### 执行可靠性与治理
-
-- 初始化严格传播检查点Exists/Load及状态类型错误；新增 `WithMemoryFailurePolicy`，默认尽力、可选严格，所有入口共用记忆错误处理与结构化观察，取消直接stderr记忆错误输出。
-- Pipe/Sequence统一流终态与取消，空Sequence恒等；显式父回调生效，Batch逐输入Invoke并保留有序部分结果。父子重复副作用回调及依赖子自定义Batch的调用方须按扩展契约迁移。
-- 根预算新增保守Token预留、工具调用次数与绝对截止时间；宿主提供版本化TokenEstimator，未知用量不补零，预留不退款。零值新字段保持旧日志及completed模型意图兼容，配置漂移拒绝恢复。
-- Runner/持久图新增只读Diagnose，报告等待、完成、版本障碍与结果未知，显式操作记录提供失败证据，不自动恢复副作用。
-- Dispatcher独立准入/执行并发和有界排队，新增ErrDispatcherBusy；审批不再占用执行槽，需限制审批量的宿主应显式配置MaxAdmissionConcurrency。排队/准入暂停单次Timeout，校验授权日志执行累计计时。
-- 新增固定worker的有界AsyncObserver和可取消Close、丢弃统计；Pipeline新增GrantTTL和PruneGrants，过期授权不会继续生效。
-- 补齐OpenAI、DeepSeek、Gemini工具流、未知usage和停止消费后取消契约测试；新增扩展/治理文档与发布验收清单。
-
-### Removed
-
-- **破坏性**：Preset 与编码工具迁至独立模块 `github.com/kart-io/goagent-harness`：`harness/preset` 改为新模块的 `preset`，`tools/coding` 改为新模块的同名路径；两个工程 Agent 示例随之迁出。不保留转发兼容层。配置格式、Builder 与循环扩展点不变，`harness/env`、`tools/policy`、`tools/spill` 留在核心。当前为本地拆分，发布本版本前须先发布新模块，迁移与发布顺序见 `docs/guides/HARNESS_MIGRATION.md`。
-
-### Fixed
-
-- `TestOnResultReplayOrderAfterConcurrentRun` 使用同步屏障等待首批并发调用全部进入工具体，消除磁盘与调度延迟导致的峰值断言偶发失败；保留并发上限与恢复交付顺序的验证。
-
-- `harness/env.LocalFS` 的条件写入改为同进程所有实例按真实路径协调，删除也参与同一协调；修复并发创建时偶发误报悬空链接。Unix 本地文件写入改为同目录临时文件同步后原子发布，避免覆盖过程中读到截断内容；`CreateIfAbsent` 使用硬链接发布，避免覆盖抢先创建的文件。明确 `IfVersion` 不协调直接写入或其他进程，替换会更换 inode，发布后同步失败须重新读取确认；已取消的写入和删除不再改动文件。
 
 ### Added
 
