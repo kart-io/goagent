@@ -61,3 +61,20 @@ go run ./cmd/client -case ws-cancel
 完整适配在 `internal/hostws/handler.go`，运行说明见SCENARIOS.md的“宿主框架自行升级WebSocket”。标准HTTP路径的默认Origin为无Origin允许、带Origin同源；配置CheckOrigin可覆盖。自行升级路径由宿主管理策略。已经升级后的容量拒绝不能再返回升级前HTTP状态，只返回错误并关闭连接。
 
 新扩展尚未推送，发布前运行示例仍需本地workspace。接口化提供替换点，不删除Gorilla依赖，也不为尚未接入的框架承诺期限、关闭和握手正确性。
+
+
+## 用户授权后的推送与远端依赖复验
+
+随后用户明确要求提交推送。三个仓库均已推送 `feat/httpagent-webhooks-20261031`，未合并主分支、未打tag；前文“未推送”记录的是实施验收当时的状态。
+
+扩展 cfb3e85 已可从公共Go模块源获取，版本为 `v0.0.0-20261031151618-cfb3e85df18a`。首次关闭workspace的只读依赖测试因缺少该未发布阶段无法生成的go.sum项失败；实际下载远端源码并补齐两个校验条目后，使用以下命令重新验证成功：
+
+```sh
+GOWORK=off go test -mod=readonly -race -count=1 ./...
+GOWORK=off go vet -mod=readonly ./...
+GOWORK=off go build -mod=readonly ./...
+```
+
+Go工具链仍为1.25.0且清除错误GOROOT。根案例包2.252秒、接收器2.068秒；[竞态测试](remote-dependency-race.log)、[vet](remote-dependency-vet.log)。go list确认使用模块缓存中下载的远端版本，而非本地contrib工作树。示例README/SCENARIOS已更新为直接运行，本地workspace仅用于开发联调。
+
+推送前亦重新通过本地扩展完整race（4.636秒）、案例完整race及JS6/6。无生产代码行为变更，仅补齐依赖校验和更新交付说明。
