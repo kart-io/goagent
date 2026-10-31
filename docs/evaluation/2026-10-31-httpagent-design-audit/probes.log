@@ -1,0 +1,15 @@
+=== RUN   TestExecuteAndNativeToolPathDiffer
+    audit_test.go:96: Execute: result=同步文本 tool_calls=0
+    audit_test.go:104: AsRunnable.Invoke: result=工具结果 tool_calls=1
+--- PASS: TestExecuteAndNativeToolPathDiffer (0.01s)
+=== RUN   TestStreamMethodDoesNotProveCapability
+    audit_test.go:133: 方法断言=true，实际调用错误=ExecuteStream requires llm.StreamClient
+--- PASS: TestStreamMethodDoesNotProveCapability (0.00s)
+=== RUN   TestHTTPShutdownDoesNotCancelActiveRequest
+    audit_test.go:167: 先等待 http.Server.Shutdown 不会触发运行取消，30ms 截止返回 context deadline exceeded
+--- PASS: TestHTTPShutdownDoesNotCancelActiveRequest (0.15s)
+=== RUN   TestWebSocketSurvivesHTTPShutdown
+    audit_test.go:214: http.Server.Shutdown 返回成功后，真实 WebSocket 仍可双向收发
+--- PASS: TestWebSocketSurvivesHTTPShutdown (0.00s)
+PASS
+ok  	github.com/kart-io/goagent/.claude/httpagent-design-probes	1.813s
