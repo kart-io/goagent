@@ -87,7 +87,7 @@ for name, status := range registry.Lifecycle().HealthCheckAll(ctx) {
 行为要点（以代码为准）：
 
 - 插件以 `Name()`、`Version()` 为键；同名同版本重复注册返回错误，不同版本可共存。
-- 只有传入非 nil `PluginConfig` 时，插件才以 `name@version`、优先级 100 登记到生命周期管理器，`Init` 收到 `PluginConfig.Config`；传 nil 只登记到注册表，`InitializeAll`/`StartAll` 不会调用它。`PluginConfig` 的 `Name`、`Version`、`Dependencies`、`Enabled` 当前不被注册中心读取。
+- 只有传入非 nil `PluginConfig` 时，插件才以 `name@version`、优先级 100 登记到生命周期管理器，`Init` 收到 `PluginConfig.Config`；传 nil 只登记到注册表，`InitializeAll`/`StartAll` 不会调用它。`PluginConfig` 只有 `Config` 一个字段。
 - `InitializeAll` 按优先级升序初始化；`StartAll` 另按组件实现的 `interfaces.DependencyAware.Dependencies()`（填写生命周期名，即 `name@version`）排序；`StopAll` 按优先级逆序停止。单个操作默认超时 30 秒，默认遇错即停。
 - `GetPlugin(name, version)` 取指定版本；`GetLatestPlugin(name)` 按版本**字符串**比较取最大值（`"1.10.0"` 小于 `"1.9.0"`），不是语义化版本比较。另有 `ListPlugins`、`ListVersions`、`GetAllAgents`。
 - `BasePlugin.GetMiddleware` 返回 nil；需要时在自定义插件中覆盖。
