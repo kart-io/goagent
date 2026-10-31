@@ -148,33 +148,10 @@ type Plugin interface {
 }
 
 // PluginConfig contains configuration for a plugin instance.
+// 插件的名称与版本取自 Plugin.Name()、Plugin.Version()；启动顺序依赖由组件实现 interfaces.DependencyAware 声明。
 type PluginConfig struct {
-	// Name is the plugin identifier
-	Name string
-
-	// Version is the plugin version
-	Version string
-
 	// Config is plugin-specific configuration
 	Config map[string]interface{}
-
-	// Dependencies lists other plugins this plugin depends on
-	Dependencies []PluginDependency
-
-	// Enabled determines if the plugin should be loaded
-	Enabled bool
-}
-
-// PluginDependency specifies a dependency on another plugin.
-type PluginDependency struct {
-	// Name of the required plugin
-	Name string
-
-	// VersionConstraint (e.g., ">=1.0.0", "~1.2.0")
-	VersionConstraint string
-
-	// Optional marks this dependency as optional
-	Optional bool
 }
 
 // =============================================================================
