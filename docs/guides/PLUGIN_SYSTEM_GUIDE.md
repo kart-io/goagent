@@ -33,7 +33,7 @@ agent, err := b.Build()
 
 规则（以代码为准）：
 
-- 插件名在 Host 内唯一：非空、无首尾空白、不含 `/` 与 `@`；版本非空、无首尾空白、不含 `/`。`NewHost` 一次报告全部问题，包括依赖未注册与循环依赖。
+- 插件名在 Host 内唯一：非空、无首尾空白、不含 `/` 与 `@`；版本非空、无首尾空白、不含 `/`。`NewHost` 一次报告名称、版本、重名与依赖未注册的全部问题；这些都通过后再检查循环依赖。
 - `Host.Start` 按依赖拓扑顺序（同层保持注册顺序）调用 `Starter.Start`；任一失败或 ctx 结束时逆序停止已启动的插件，失败的插件自身不调用 `Stop`。Host 不可重启，`Stop` 逆序停止并合并错误，重复调用返回 nil。
 - 资源只能在本插件 `Start` 中经 `env.Provide("<插件名>.<名称>", v)` 发布；其他插件用 `plugin.Lookup[T]` 取出。Host 停止后资源清空，须先停用 Agent 再停止 Host。
 - `Install` 要求 Host 已启动；先调用所选插件的 `Contribute` 并校验（工具、提示词片段、提示词上下文、中间件重名，PreStep 缺少 Identity，nil 钩子），全部通过后才写入 Builder。`Only(names...)` 选择插件；`Dispatch(cfg)` 把插件工具统一经一个 Dispatcher 包装，持久运行必须使用。
