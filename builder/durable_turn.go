@@ -145,5 +145,9 @@ func (a *ConfigurableAgent[C, S]) scopeDurableExecution(ctx context.Context) (co
 			return nil, err
 		}
 	}
+	ctx = context.WithValue(ctx, hostExecutionKey{}, durable.ExecutionKey(ctx))
 	return durable.WithExecutionKey(ctx, durable.ChildKey(durable.ExecutionKey(ctx), "agent/"+scope)), nil
 }
+
+// hostExecutionKey 保存宿主传入的执行键（DurableScope 派生之前），会话日志据此记录可直接用于恢复与重放的键。
+type hostExecutionKey struct{}

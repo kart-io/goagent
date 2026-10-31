@@ -5,6 +5,23 @@ All notable changes to GoAgent will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.26.0] - 2026-10-31
+
+### Added
+
+- `core/session/sessiontest`：`session.Store` 实现的一致性测试（比较并交换与并发追加、事件往返、按字节序列出、分叉、锁），并以 `session.DurableStore` 视图运行 `core/durable/storetest`；`Options.Leases` 为租约后端另跑接管与写入隔离用例。`FileStore` 与 `MemoryStore` 改用它测试。
+- `session.DurableLockName`：`DurableStore` 为快照加锁所用的名称，供以租约实现锁的 `Store` 在追加快照时校验持有者。
+
+## [0.25.0] - 2026-10-31
+
+### Added
+
+- `testing/replay`：把会话日志中的持久运行转为回归测试（cut-point replay）。`Replayer.Prepare` 返回重放一轮所需的 ctx（执行键与只读原日志的 durable 存储）和该轮之前的会话副本；`Cut` 选中的边界及之后实跑，`Live` 选中的边界单独实跑，实跑结果与记录不同之后的边界一律实跑；`Report` 给出每个边界的处理方式、记录值与实跑值。
+
+### Fixed
+
+- 会话日志 `turn/start` 中的执行键改为宿主传入的执行键：此前记录的是 DurableScope 派生之后的内部键，按它恢复或重放会再派生一次，找不到记录。
+
 ## [0.24.0] - 2026-10-31
 
 ### Added
