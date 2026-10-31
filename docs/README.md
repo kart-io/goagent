@@ -24,7 +24,7 @@ GoAgent 是嵌入 Go 服务的 Agent 执行内核：原生工具循环、类型�
 - [扩展契约](guides/EXTENSION_CONTRACT.md)
 - [执行治理](guides/EXECUTION_GOVERNANCE.md)：预算、诊断与资源治理
 - [MCP 与可恢复步骤](guides/PRIORITY_CAPABILITIES.md)
-- [工具中间件](guides/TOOL_MIDDLEWARE.md)、[缓存](guides/CACHING_GUIDE.md)、[插件系统](guides/PLUGIN_SYSTEM_GUIDE.md)
+- [工具中间件](guides/TOOL_MIDDLEWARE.md)、[缓存](guides/CACHING_GUIDE.md)、[插件：Agent 能力包与 Runnable 注册表](guides/PLUGIN_SYSTEM_GUIDE.md)
 - [Option 模式](guides/OPTION_PATTERN_BEST_PRACTICES.md)
 
 ## LLM 提供商

@@ -89,7 +89,7 @@ graph TD
 |----|------|
 | `interfaces` | 共享接口与常量：`Tool`、`ToolInput/ToolOutput`、`MemoryManager`、`DocumentRetriever` 等 |
 | `errors` | 统一错误类型与构造函数（含 panic 错误） |
-| `core` | `Runnable[I,O]`、`StreamRunnable`、`RunnablePipe/Sequence`、`Callback`、panic 处理注册表、生命周期与插件注册 |
+| `core` | `Runnable[I,O]`、`StreamRunnable`、`RunnablePipe/Sequence`、`Callback`、panic 处理注册表、生命周期与 Runnable 注册表 |
 | `core/state`、`core/checkpoint`、`core/execution` | Agent 状态、检查点（`Checkpointer`、`InMemorySaver`）、`Runtime` 与旧流式类型 |
 | `core/durable` | 显式、带版本的持久操作：`Do`、`Runner`、`Store`（`FileStore`）、等待与审批 |
 | `core/session` | 追加写会话事件日志：`Store`（`MemoryStore`/`FileStore`）、`DeriveMessages`、`DurableStore` |
@@ -98,6 +98,7 @@ graph TD
 | `core/middleware` | Agent 级请求/响应中间件链（`Middleware`、`MiddlewareChain`） |
 | `core/flow` | 实验性的同步只读增量管道 |
 | `builder` | `AgentBuilder` / `ConfigurableAgent`：原生工具循环、循环钩子、会话日志、持久回合、`Handle` |
+| `plugin` | Agent 能力包：Host 启停、共享资源、Install 装进 Builder |
 | `builder/contextpolicy` | 超长工具结果卸载（`Offload`）与证据存储（`ResultStore`） |
 | `tools` | `Registry`、`Dispatcher`、`Pipeline`（Pre/审批/Guard/Around/Post）、`FunctionTool`、`NewRunnableTool` |
 | `tools/compute`、`tools/http`、`tools/search`、`tools/shell` | 内置工具 |

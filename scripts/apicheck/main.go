@@ -40,6 +40,13 @@ func forbidden(file, path string) bool {
 			return true
 		}
 	}
+	// plugin 在 builder 之上组合能力，执行机制不得反向依赖它。
+	if dest == "plugin" {
+		switch source {
+		case "interfaces", "errors", "utils", "cache", "core", "builder", "tools", "parsers", "llm", "workflow", "memory", "store", "middleware", "observability":
+			return true
+		}
+	}
 	if dest == "examples" && source != "examples" {
 		return true
 	}
