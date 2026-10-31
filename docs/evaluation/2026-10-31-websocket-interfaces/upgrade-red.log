@@ -1,0 +1,10 @@
+--- FAIL: TestInvalidUpgradeResultDoesNotLookLikeHTTP200 (0.00s)
+    websocket_transport_test.go:313: 
+        	Error Trace:	/Users/costalong/.codex/worktrees/goagent-contrib-httpagent/httpagent/websocket_transport_test.go:313
+        	Error:      	Not equal: 
+        	            	expected: 500
+        	            	actual  : 200
+        	Test:       	TestInvalidUpgradeResultDoesNotLookLikeHTTP200
+FAIL
+FAIL	github.com/kart-io/goagent-contrib/httpagent	0.477s
+FAIL

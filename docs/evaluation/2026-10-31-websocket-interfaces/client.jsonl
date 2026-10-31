@@ -1,0 +1,5 @@
+{"case":"invoke","run_id":"5a266371-f051-4487-a17b-06c15a4d0167","status":"completed","result":"执行结果：插件工具已处理：接口宿主案例 WS_ADAPTER_3107"}
+{"case":"sse","run_id":"13a868a5-34c9-4ce4-a7b6-e606a4ff899d","status":"completed","result":"执行结果：插件工具已处理：接口宿主案例 WS_ADAPTER_3107","tools":["echo_input"]}
+{"case":"ws","run_id":"8682d66d-786a-4235-86cd-7f1b5e39cfd0","status":"completed","result":"执行结果：插件工具已处理：接口宿主案例 WS_ADAPTER_3107","tools":["echo_input"]}
+{"case":"webhook","run_id":"2c5e3e98-546b-4e50-adf2-8f352721def9","status":"completed","result":"执行结果：插件工具已处理：接口宿主案例 WS_ADAPTER_3107"}
+{"case":"ws-cancel","run_id":"817c06a9-1b9e-4c7e-9a8c-9f1fee6d105c","status":"cancelled","tools":["wait_operation"]}

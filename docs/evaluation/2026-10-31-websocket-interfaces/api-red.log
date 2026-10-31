@@ -1,0 +1,14 @@
+# github.com/kart-io/goagent-contrib/httpagent [github.com/kart-io/goagent-contrib/httpagent.test]
+./websocket_transport_test.go:43:20: undefined: WebSocketUpgradeOptions
+./websocket_transport_test.go:44:42: unknown field WebSocketUpgrader in struct literal of type Config
+./websocket_transport_test.go:44:60: undefined: WebSocketUpgraderFunc
+./websocket_transport_test.go:44:127: undefined: WebSocketUpgradeOptions
+./websocket_transport_test.go:44:152: undefined: WebSocketConn
+./websocket_transport_test.go:71:21: h.ServeWebSocket undefined (type *Handler has no field or method ServeWebSocket)
+./websocket_transport_test.go:86:42: unknown field WebSocketUpgrader in struct literal of type Config
+./websocket_transport_test.go:86:60: undefined: WebSocketUpgraderFunc
+./websocket_transport_test.go:86:121: undefined: WebSocketUpgradeOptions
+./websocket_transport_test.go:86:146: undefined: WebSocketConn
+./websocket_transport_test.go:86:42: too many errors
+FAIL	github.com/kart-io/goagent-contrib/httpagent [build failed]
+FAIL

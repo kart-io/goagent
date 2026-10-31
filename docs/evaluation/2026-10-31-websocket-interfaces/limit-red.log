@@ -1,0 +1,5 @@
+--- FAIL: TestCustomTransportCannotRunOversizedMessage (1.00s)
+    websocket_transport_test.go:298: oversized message was not rejected
+FAIL
+FAIL	github.com/kart-io/goagent-contrib/httpagent	1.511s
+FAIL

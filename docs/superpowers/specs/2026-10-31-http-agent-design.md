@@ -1,12 +1,12 @@
 # GoAgent HTTP 服务适配设计
 
-日期：2026-10-31。状态：**审核后修订稿，待整体确认，产品功能尚未实现**。本轮复核基线为 `57c0f05`，发现、来源与实际探针见[审核报告](../../evaluation/2026-10-31-httpagent-design-audit/REPORT.md)。此前早期 Builder Check 不代表包含 WebSocket 的完整版本已通过审核。
+日期：2026-10-31。状态：**已按审核稿实施并完成本地验收，新增可注入 WebSocket 接口；尚未推送发布**。本轮复核基线为 `57c0f05`，发现、来源与实际探针见[审核报告](../../evaluation/2026-10-31-httpagent-design-audit/REPORT.md)。此前早期 Builder Check 不代表包含 WebSocket 的完整版本已通过审核。
 
 ## 1. 目标、位置与方案取舍
 
 用户已明确要求：外部系统通过 HTTP 调用 Agent；提供 Web 页面、WebSocket 入口、Hooks 及双向 Webhook。具体 API、默认值和交付保证由本设计提出。
 
-实现放在独立模块 `github.com/kart-io/goagent-contrib/httpagent`，使用 net/http，WebSocket 复用当前依赖基线 gorilla/websocket v1.5.3；不自行实现帧协议。案例位于 goagent-examples/orchestration/httpagent。主库继续提供执行内核；Plugin 贡献业务工具、提示词、钩子和共享资源，HTTP 适配器负责协议与生命周期。
+实现放在独立模块 `github.com/kart-io/goagent-contrib/httpagent`，使用 net/http，WebSocket 通过可替换接口接入，默认保留 gorilla/websocket v1.5.3；不自行实现帧协议。案例位于 goagent-examples/orchestration/httpagent。主库继续提供执行内核；Plugin 贡献业务工具、提示词、钩子和共享资源，HTTP 适配器负责协议与生命周期。
 
 | 方案 | 结论与理由 |
 | --- | --- |
@@ -227,3 +227,12 @@ queued 接纳与可靠 outbox 的后端由宿主注入；实际平台适配必�
 冻结时先创建不可变通知快照，worker 返回值为独立副本；通知和 cleanup 并行推进且都归所有者跟踪。JSON 在总通知预算内等待本次尝试，WS ready 等待必要 cleanup。超时诊断 Report 回调也必须退出后所有者才释放，Shutdown 不能遗漏仍活动的回调。
 
 queued 同事件/不同 payload 的接纳冲突使用409。不能提供写期限能力的中间件，在执行或持久接纳前返回501。跨实例共享会话的锁/租约仍为宿主契约，当前五入口集成证明按运行隔离的原生工具、持久预算/日志和 Hook，未声称验证宿主自定义锁。
+
+
+## 15. 可替换 WebSocket 传输接口
+
+根据用户对外部框架接入的要求，Config 新增可选 WebSocketUpgrader，空值继续使用 Gorilla 默认实现。升级器的输入是标准 http.ResponseWriter/http.Request 与 WebSocketUpgradeOptions{Subprotocol, HandshakeTimeout}，成功返回 WebSocketConn；所有公开接口不暴露 Gorilla 类型。运行逻辑只依赖 ReadText/WriteText/Ping、消息上限、读写期限、Pong回调及Close。标准入口在调用升级器前统一验证子协议和Origin并登记连接，保留升级中停服的资源责任。
+
+宿主自行完成升级时，使用 Handler.ServeWebSocket(ctx, conn)。宿主负责鉴权、Origin、goagent.v1协商及尚未交给Handler的握手；该入口接管成功或拒绝后的连接关闭，复用容量、执行、取消、心跳与停服所有者。已升级连接的容量拒绝通过返回错误并关闭连接表达，不再伪称可以返回升级前HTTP状态。适配器须实现真实期限/大小控制和可解除阻塞的并发安全Close，不能空实现。
+
+Gorilla依赖保留在默认适配文件，原Config零值行为不变。宿主升级可运行案例使用 GOAGENT_WS_HOST=1，示例的Gorilla包装仅通过公开接口接入；接口测试还使用不含Gorilla连接的内存传输。新旧路径真实TCP、Plugin工具、取消和浏览器验证证据见 [验收记录](../../evaluation/2026-10-31-websocket-interfaces/REPORT.md)。尚未对所有第三方框架分别联调。

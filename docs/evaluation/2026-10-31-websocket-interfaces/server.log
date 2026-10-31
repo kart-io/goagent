@@ -1,0 +1,32 @@
+2026/10/31 23:16:51 使用离线脚本模型；Plugin、工具、HTTP/SSE/WS 均真实执行
+2026/10/31 23:16:51 打开 http://127.0.0.1:19097
+2026/10/31 23:16:52 事件 run.started run_id=5a266371-f051-4487-a17b-06c15a4d0167
+2026/10/31 23:16:52 原生 Hook demo-input：模型请求前执行
+2026/10/31 23:16:52 原生 Hook demo-input：模型请求前执行
+2026/10/31 23:16:53 事件 run.completed run_id=5a266371-f051-4487-a17b-06c15a4d0167
+2026/10/31 23:16:53 事件 run.started run_id=13a868a5-34c9-4ce4-a7b6-e606a4ff899d
+2026/10/31 23:16:53 原生 Hook demo-input：模型请求前执行
+2026/10/31 23:16:53 原生 Hook demo-input：模型请求前执行
+2026/10/31 23:16:53 事件 run.completed run_id=13a868a5-34c9-4ce4-a7b6-e606a4ff899d
+2026/10/31 23:16:53 事件 run.started run_id=8682d66d-786a-4235-86cd-7f1b5e39cfd0
+2026/10/31 23:16:53 原生 Hook demo-input：模型请求前执行
+2026/10/31 23:16:53 原生 Hook demo-input：模型请求前执行
+2026/10/31 23:16:53 事件 run.completed run_id=8682d66d-786a-4235-86cd-7f1b5e39cfd0
+2026/10/31 23:16:53 宿主 WebSocket 连接结束: websocket: close 1006 (abnormal closure): unexpected EOF
+2026/10/31 23:16:53 事件 run.started run_id=2c5e3e98-546b-4e50-adf2-8f352721def9
+2026/10/31 23:16:53 原生 Hook demo-input：模型请求前执行
+2026/10/31 23:16:53 原生 Hook demo-input：模型请求前执行
+2026/10/31 23:16:53 事件 run.completed run_id=2c5e3e98-546b-4e50-adf2-8f352721def9
+2026/10/31 23:16:53 事件 run.started run_id=817c06a9-1b9e-4c7e-9a8c-9f1fee6d105c
+2026/10/31 23:16:53 原生 Hook demo-input：模型请求前执行
+2026/10/31 23:16:53 事件 run.cancelled run_id=817c06a9-1b9e-4c7e-9a8c-9f1fee6d105c
+2026/10/31 23:16:53 宿主 WebSocket 连接结束: websocket: close 1006 (abnormal closure): unexpected EOF
+2026/10/31 23:16:57 事件 run.started run_id=86defc88-71eb-46c7-bd26-7cf23f2d3b37
+2026/10/31 23:16:57 原生 Hook demo-input：模型请求前执行
+2026/10/31 23:16:57 原生 Hook demo-input：模型请求前执行
+2026/10/31 23:16:57 事件 run.completed run_id=86defc88-71eb-46c7-bd26-7cf23f2d3b37
+2026/10/31 23:16:57 宿主 WebSocket 连接结束: websocket: close 1005 (no status)
+2026/10/31 23:17:02 事件 run.started run_id=efa72b77-6e2b-4906-b7e8-b11a94936fd1
+2026/10/31 23:17:02 原生 Hook demo-input：模型请求前执行
+2026/10/31 23:17:02 事件 run.cancelled run_id=efa72b77-6e2b-4906-b7e8-b11a94936fd1
+2026/10/31 23:17:02 宿主 WebSocket 连接结束: websocket: close 1005 (no status)
