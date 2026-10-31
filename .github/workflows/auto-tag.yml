@@ -53,32 +53,34 @@ jobs:
 
           # Get commits since last tag
           if [ "$latest_tag" = "v0.0.0" ]; then
-            commits=$(git log --pretty=format:"%s" HEAD)
+            range="HEAD"
           else
-            commits=$(git log --pretty=format:"%s" ${latest_tag}..HEAD)
+            range="${latest_tag}..HEAD"
           fi
+          commits=$(git log --pretty=format:"%s" $range)
+          bodies=$(git log --pretty=format:"%b" $range)
 
           echo "Commits since $latest_tag:"
           echo "$commits"
           echo ""
 
           # Determine version bump type based on conventional commits
+          # 作用域可含任意字符（如 llm/common、a2）；BREAKING CHANGE 可写在提交正文中。
+          # 只有影响代码的类型发版：docs、test、chore、ci、style、build 不发版，累积到下一次发版。
+          scope='(\([^)]+\))?'
           bump_type="none"
 
-          # Check for breaking changes (BREAKING CHANGE or ! after type)
-          if echo "$commits" | grep -qE "^[a-z]+(\([a-z]+\))?!:|BREAKING CHANGE:"; then
+          if echo "$commits" | grep -qE "^[a-z]+${scope}!:" || echo "$bodies" | grep -qE "^BREAKING[ -]CHANGE:"; then
             bump_type="major"
             echo "Found breaking changes - will bump MAJOR version"
-          # Check for new features
-          elif echo "$commits" | grep -qE "^feat(\([a-z]+\))?:"; then
+          elif echo "$commits" | grep -qE "^feat${scope}:"; then
             bump_type="minor"
             echo "Found new features - will bump MINOR version"
-          # Check for fixes, docs, refactor, perf, test, etc.
-          elif echo "$commits" | grep -qE "^(fix|docs|refactor|perf|test|chore)(\([a-z]+\))?:"; then
+          elif echo "$commits" | grep -qE "^(fix|perf|refactor)${scope}:"; then
             bump_type="patch"
-            echo "Found fixes/improvements - will bump PATCH version"
+            echo "Found fixes/performance/refactoring - will bump PATCH version"
           else
-            echo "No conventional commits found - no version bump needed"
+            echo "Only docs/test/chore/ci/style/build or non-conventional commits - no version bump needed"
           fi
 
           echo "bump_type=$bump_type" >> $GITHUB_OUTPUT
@@ -245,9 +247,10 @@ jobs:
         run: |
           echo "## ℹ️ No Release Needed" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "No conventional commits found since last release." >> $GITHUB_STEP_SUMMARY
+          echo "No release-triggering commits since last release." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Commits must follow the conventional commit format:" >> $GITHUB_STEP_SUMMARY
           echo "- \`feat:\` for new features (minor version bump)" >> $GITHUB_STEP_SUMMARY
-          echo "- \`fix:\` for bug fixes (patch version bump)" >> $GITHUB_STEP_SUMMARY
-          echo "- \`BREAKING CHANGE:\` for breaking changes (major version bump)" >> $GITHUB_STEP_SUMMARY
+          echo "- \`fix:\`, \`perf:\`, \`refactor:\` for code changes (patch version bump)" >> $GITHUB_STEP_SUMMARY
+          echo "- \`docs:\`, \`test:\`, \`chore:\`, \`ci:\`, \`style:\`, \`build:\` do not trigger a release" >> $GITHUB_STEP_SUMMARY
+          echo "- \`type!:\` or \`BREAKING CHANGE:\` in the body for breaking changes (minor bump while 0.x)" >> $GITHUB_STEP_SUMMARY
