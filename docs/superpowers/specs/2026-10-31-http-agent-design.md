@@ -1,12 +1,12 @@
 # GoAgent HTTP 服务适配设计
 
-状态：HTTP 服务、Hooks 和双向 Webhook 范围已确认；具体接口与交付保证待最终设计确认。日期：2026-10-31。
+状态：HTTP 服务、Hooks、双向 Webhook 和 Web 页面范围已确认；新增 WebSocket 入口方案，具体接口与交付保证待最终设计确认。日期：2026-10-31。
 
 ## 目标与定位
 
 用户选择将 GoAgent/Plugin 的能力对外提供为 HTTP 服务。外部系统可以提交输入，获得完整 JSON 结果或 SSE 事件。复用现有 Agent 执行接口、Plugin 装配、工具管线与 context 取消。
 
-用户已选择对外提供 HTTP 服务，并明确要求 Hooks 和双向 Webhook。以下模块划分、具体 API 和默认值由代理提出，待整体设计确认。实现放在独立模块 `github.com/kart-io/goagent-contrib/httpagent`，基于标准库 net/http；主库不增加 HTTP 服务或路由依赖。案例放在 goagent-examples/orchestration/httpagent。
+用户已选择对外提供 HTTP 服务，并明确要求 Hooks 和双向 Webhook。以下模块划分、具体 API 和默认值由代理提出，待整体设计确认。实现放在独立模块 `github.com/kart-io/goagent-contrib/httpagent`，基于标准库 net/http；主库不增加 HTTP 服务或路由依赖。WebSocket 适配拟在同一 contrib 模块复用 gorilla/websocket v1.5.3，不自行实现握手或帧解析。案例放在 goagent-examples/orchestration/httpagent。
 
 ## 方案比较
 
@@ -24,12 +24,49 @@ Handler 实现 http.Handler，由宿主选择监听地址、路由前缀、HTTP 
 | --- | --- |
 | POST /invoke | 请求 JSON 为 `{"input": ...}`，调用 Execute，成功返回 `{"run_id": "...", "output": <Output>}` |
 | POST /stream | 相同请求结构，调用 ExecuteStream，以 text/event-stream 返回 AgentEvent 的稳定 JSON 表示 |
+| GET /ws | Upgrade 为 WebSocket，接收执行/取消消息并推送统一运行事件 |
+| POST /webhooks/{name} | 接收宿主预注册的外部事件并触发 Agent |
 
 `input` 必须提供且非 null，允许字符串、对象或数组等 JSON 值。顶层未知字段及多个 JSON 文档返回 400。JSON 数字解码保留 json.Number，避免大整数静默失真。请求体默认上限 1 MiB，支持配置；超限返回 413。方法不匹配返回 405，未知路径返回 404。
 
-SSE 帧采用 `event: <AgentEvent.Type>` 与 `data: <Event JSON>`，逐事件 flush。Event 保留 type、sources、step、tool、delta、usage、error 等已有可序列化字段，另带 run_id；output 使用下述 Output DTO。done.output 是最终结果，不能将 text 增量误当最终答案。error/done 为终态；底层流未产生终态就关闭时报告流异常。HTTP 响应提交前的启动错误使用 HTTP JSON 错误；提交后的运行错误使用 SSE error 帧，不能再改状态码。
+SSE 帧采用 `event: <AgentEvent.Type>` 与 `data: <Event JSON>`，逐事件 flush。Event 保留 type、sources、step、tool、delta、usage、error 等已有可序列化字段，另带 run_id；output 使用下述 Output DTO，error 统一使用含 code/message 的错误 DTO。done.output 是最终结果，不能将 text 增量误当最终答案。error/done 为终态；底层流未产生终态就关闭时报告流异常。HTTP 响应提交前的启动错误使用 HTTP JSON 错误；提交后的运行错误使用 SSE error 帧，不能再改状态码。
 
 未实现流式接口的 Runner 在 /stream 返回 501，不伪造流。/invoke 允许仅支持同步的客户端，不强制要求流式模型。
+
+## Web 页面与 WebSocket 入口
+
+用户已说明 Web 指浏览器页面，并询问 WebSocket 入口可行性。新增以下方案供整体确认。
+
+### Web 页面
+
+在 goagent-examples/orchestration/httpagent 提供可直接运行的浏览器页面，宿主使用标准静态文件 Handler 同源挂载。功能包括输入、发送、实时文本、工具状态、最终结果、错误与取消，以及 SSE/WebSocket 模式切换。HTTP 适配库不绑定前端框架或应用页面。
+
+SSE 模式通过 fetch POST /stream，按 SSE 帧解析增量响应，正确处理跨网络分块的 UTF-8、半帧、多帧及终态。停止使用 AbortController；页面不因网络错误自动重新提交业务请求。先验证 HTTP 状态与 Content-Type，再解析事件。
+
+同源演示不要求跨域；分离部署时由宿主中间件配置 CORS、OPTIONS 预检及暴露 X-GoAgent-Run-ID。SSE 请求必须逐事件 flush，部署示例明确代理缓冲及长连接超时配置对实时显示的影响。
+
+### WebSocket 应用消息
+
+本方案是 GoAgent HTTP 适配器自定义的 JSON 消息约定，不声明兼容 A2A、ACP 或其他 WebSocket 应用协议。连接升级后保持打开，允许连续执行多个请求，默认每条连接同时最多运行一个任务；执行期间额外的 run 返回 busy，不替换当前任务。不同连接独立执行。暂不增加 Steer、Inject 或实时音频语义。
+
+客户端发送：
+
+```json
+{"type":"run","request_id":"client-1","input":"查询订单"}
+{"type":"cancel","run_id":"服务端分配的运行ID"}
+```
+
+- run 必须带非空 request_id 和有效 input；服务端生成 run_id 后先发送 `{"type":"accepted","request_id":"client-1","run_id":"..."}`，再开始 Factory/Agent 及事件处理。
+- 运行事件帧为 `{"type":"event","run_id":"...","event":<与 SSE 相同的 Event DTO>}`。保留 done/error 终态，仅发送一次。仅支持同步的 Runner 可执行并发送 done，流式 Runner 使用 ExecuteStream；真实增量事件的可用性取决于 Runner，不伪造文本分片。
+- cancel 只能取消该连接当前运行的匹配 run_id。无法匹配返回结构化协议错误，不能取消其他连接或 HTTP/Webhook 请求。取消中的运行仍占用连接执行位置，直到生产者退出并完成必要清理。
+- 非法 JSON、未知消息类型、busy 等协议错误使用 `{"type":"error","request_id":"...","error":{"code":"...","message":"..."}}`；它们不是当前有效运行的终态。二进制业务消息不支持，输入消息大小沿用默认 1 MiB 上限并可配置。相同 request_id 的重复 run 不具有幂等或恢复含义，文档与页面不自动重发。
+- 浏览器断线、读取失败、写入超时或心跳超时，均显式取消该连接的活动运行并保留资源回收责任。连接保持在线时的用户取消返回 event.type=error 且 error.code=cancelled；HTTP/SSE 与 WebSocket 的取消均对应同一个 run.cancelled 生命周期事件。已经确认成功的运行在随后断线时不追发 cancelled。
+- 仅单一读取者处理输入，单一写入者串行输出；事件队列有界，默认 64 帧，写入超时默认 10 秒。慢客户端不能导致无限缓存，达到约束则断开并取消运行。ping 间隔默认 30 秒、pong 等待默认 60 秒，参数可配置且在构造时校验。升级请求的 Origin 策略由宿主配置，独立于 HTTP CORS。
+- WebSocket Upgrade 后的连接不由 http.Server.Shutdown 自动回收；Handler 显式登记连接、停止接收新任务，Shutdown 时关闭连接、取消运行并等待所有者完成 cleanup。不能仅依赖 HTTP 请求 context 检测已经 Upgrade 的连接断开。
+
+HTTP invoke、SSE、入站 Webhook 与 WebSocket 统一经过请求级 Factory、运行身份、生命周期观察者及出站通知；仅传输编码和取消来源不同。WebSocket RunRequest.Source 为 ws。一次 WebSocket 连接不是持久会话，重连不自动恢复运行或回放事件；业务会话继续由宿主通过现有会话配置维护。
+
+参考：[浏览器 WebSocket API](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket)、[Gorilla 并发约束](https://pkg.go.dev/github.com/gorilla/websocket@v1.5.3#hdr-Concurrency)、[Fetch 流式与取消](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch)、[HTTP Shutdown 对已接管连接的约定](https://pkg.go.dev/net/http#Server.Shutdown)。
 
 ## Go 接口与 HTTP 数据边界
 
@@ -45,7 +82,7 @@ type StreamRunner interface {
 type RunRequest struct {
     ID string
     Input any
-    Source string // invoke、stream 或 webhook
+    Source string // invoke、stream、webhook 或 ws
     Webhook string // 入站接收器名称，非入站请求为空
 }
 type Cleanup func(context.Context) error
@@ -112,7 +149,9 @@ Hook 注册在宿主代码中；HTTP 请求不能提交 Go 函数、Shell 命令
 - 覆盖同步执行、真实 Agent + Plugin 工具集成、无流式能力、部分构建失败、超大/非法输入、执行错误、异常结束、done 后生产者未关闭、客户端取消及并发请求隔离。
 - 独立模块执行 go test -race 与 lint；主库不修改行为时验证导入边界。示例先通过临时工作区验证；依赖未发布前如需推送示例，固定到可获取的提交，不提交本机 replace 路径。
 - Hook 测试覆盖调用顺序、拒绝/错误、并发隔离、同步/流式边界和取消；Webhook 覆盖真实 HTTP 接收/投递、业务 payload 映射、终态不重复、回调超时/失败、run_id/event_id 关联以及不重跑业务副作用。
-- 补齐包 README、curl 调用示例、Plugin 装配示例、Webhook 与 Hook 接入示例和可重复验证记录。HTTP 验证使用实际本地监听端口；离线模型须明确标识，不声称模型线上质量验收。
+- WebSocket 用真实升级连接验证握手、连续任务、busy、取消、断线、慢客户端、心跳与 Shutdown；HTTP/SSE/WebSocket 的终态与 Webhook 通知不得相互矛盾或重复。
+- Web 页面必须在真实浏览器验证 SSE 与 WebSocket 两条路径、UTF-8 增量、工具状态、停止与失败展示，不能仅用 curl 通过冒充页面验证。
+- 补齐包 README、curl 调用示例、Plugin 装配示例、Web 页面、Webhook 与 Hook 接入示例和可重复验证记录。HTTP 验证使用实际本地监听端口；离线模型须明确标识，不声称模型线上质量验收。
 
 ## 非目标与交付保证
 
@@ -126,3 +165,5 @@ Hook 注册在宿主代码中；HTTP 请求不能提交 Go 函数、Shell 命令
 ## 设计复核
 
 2026-10-31：按 brainstorming 的 Builder Check 流程进行独立只读审阅，结论为 `nothing important left`。HTTP/SSE、双向 Webhook、Hook 复用、取消清理、停服及通知失败不重跑业务的边界均可据此规划；其余内部实现选择由执行者决定。当前仍待用户确认完整设计后进入实施计划和产品代码阶段。
+
+本次增补：Web 页面与 WebSocket 部分加入后，上一轮独立审阅仅覆盖此前 HTTP/SSE/Hook/Webhook 设计，不作为本增补已经审阅或实现的证据。
