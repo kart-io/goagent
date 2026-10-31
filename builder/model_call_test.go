@@ -127,20 +127,6 @@ func TestUsageRegistrationFailureReplaysSavedModel(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 8, s.KnownTokens.TotalTokens)
 }
-func TestSummarySharesRootAdmission(t *testing.T) {
-	c, err := budget.New(budget.Config{RootKey: "root", Version: "v1", MaxModelRequests: 1})
-	require.NoError(t, err)
-	ctx := budget.WithController(context.Background(), c)
-	summary := &eventModel{MockLLMClient: NewMockLLMClient(), chunks: []*llm.StreamChunk{{Delta: "fact"}, {Done: true, Usage: &llm.Usage{TotalTokens: 9}}}}
-	policy := newToolContext(&ContextPolicy{HistorySummary: &HistorySummaryConfig{Client: summary, TriggerRunes: 1, KeepRecentMessages: 1, MaxTokens: 20}})
-	_, _, err = policy.prepare(ctx, []llm.Message{llm.UserMessage(strings.Repeat("history ", 80)), llm.UserMessage("recent"), llm.UserMessage("current")}, 2)
-	require.NoError(t, err)
-	model := nativeModel()
-	_, err = readJournaledTurn(ctx, 0, model, &llm.CompletionRequest{}, nil, false, func(AgentEvent) error { return nil })
-	require.ErrorIs(t, err, budget.ErrBudgetExceeded)
-	require.Empty(t, model.requests)
-}
-
 func TestMemoryBudgetDoesNotTreatHostKeyAsReplay(t *testing.T) {
 	c, err := budget.New(budget.Config{RootKey: "root", Version: "v1", MaxModelRequests: 2})
 	require.NoError(t, err)

@@ -45,10 +45,10 @@ func TestContextConfigFingerprint(t *testing.T) {
 	config.ReadPageRunes = 2
 	b, err := NewOffload(config)
 	require.NoError(t, err)
-	require.NotEqual(t, a.Descriptor().ConfigHash, b.Descriptor().ConfigHash)
+	require.NotEqual(t, a.Identity(), b.Identity())
 	config.ReadPageRunes = 0
 	config.ExcludeTools = []string{"secret"}
 	b, err = NewOffload(config)
 	require.NoError(t, err)
-	require.NotEqual(t, a.Descriptor().ConfigHash, b.Descriptor().ConfigHash)
+	require.NotEqual(t, a.Identity(), b.Identity())
 }

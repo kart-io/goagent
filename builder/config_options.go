@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/kart-io/goagent/builder/contextpolicy"
 	"github.com/kart-io/goagent/core/session"
-	"github.com/kart-io/goagent/interfaces"
 	"time"
 
 	"github.com/kart-io/goagent/core"
@@ -56,10 +55,8 @@ type AgentConfig struct {
 	// It must be unique among siblings and stable across restarts.
 	DurableScope string
 
-	// ContextPolicy is opt-in governance for the native tool execution path.
-	ContextPolicy     *ContextPolicy
-	ContextPolicies   []contextpolicy.Factory                            `json:"-"`
-	PolicyToolAdapter func([]interfaces.Tool) ([]interfaces.Tool, error) `json:"-"`
+	// Offloads 是 WithOffload 装入的结果卸载；仅作用于原生工具流。
+	Offloads []*contextpolicy.Offload `json:"-"`
 
 	// ReturnDirectTools 允许单个工具调用直接提供最终答案；仅作用于原生工具流。
 	ReturnDirectTools []string
@@ -76,7 +73,7 @@ type AgentConfig struct {
 	ParallelToolCalls int
 
 	// 循环扩展点与提示词组装，见 loop_hooks.go；仅作用于原生工具流。
-	PreStep              []PreStepHook      `json:"-"`
+	PreStep              []preStep          `json:"-"`
 	RequestHooks         []RequestHook      `json:"-"`
 	RequestErrorHooks    []RequestErrorHook `json:"-"`
 	MaxRequestRecoveries int

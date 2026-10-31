@@ -652,7 +652,7 @@ A0（`2fc040b`）：Pipeline 裁决聚合与按钩子记录授权；`tools/polic
 | 核心类型含 `step/*`、`assistant/attempt`、`inbox/spliced`、`approval/*`、`todo/write` | 未实现；另有 `system/message`、`tool/definitions` 供导出 | 当前的验收与导出不依赖它们；运行中追加的输入作为普通 user 消息记录 |
 | 中断的轮次 | 持久运行以同一执行键恢复时续写该轮；其他情况在下一轮开始时记为中止，其消息不进入历史 | 中断的非持久轮次可能停在工具调用与结果之间，交给模型会被提供方拒绝 |
 
-未实现：`contextpolicy.BeforeTurn` 并入 PreStep、`WithModelRetry` 并入 RequestError（第二阶段留下的归并）；非原生工具流的会话日志；持久运行中 Fork 出的会话从分叉点继续执行（未验证）。
+未实现：`WithModelRetry` 并入 RequestError（第二阶段留下的归并）；非原生工具流的会话日志；持久运行中 Fork 出的会话从分叉点继续执行（未验证）。
 
 已知开销：每次同步重新推导对话并按 JSON 比较消息，单轮为 O(消息数)；`FileStore` 在一轮开始时读取整个会话文件（含 durable 快照）。一轮结束前崩溃的非持久运行，其最后一批工具结果不会进入日志（该轮会被记为中止）。
 
@@ -690,3 +690,21 @@ A0（`2fc040b`）：Pipeline 裁决聚合与按钩子记录授权；`tools/polic
 测试：`sessiontest` 全部用例与 durable 的租约用例（崩溃接管、旧持有者写入被拒、同进程旧持有者、过期未接管）在 Postgres 上通过；去掉租约校验后旧持有者的两个用例失败。Agent 在一个实例的工具执行中中断、另一个实例以同一执行键恢复，日志中只有一轮、消息不重复。
 
 限制：快照只能在持锁时追加，直接向会话写入 `boundary/snapshot` 的工具须先 `Lock`；`Read` 每次查询数据库，`OpenRecorder` 读取整个会话。
+
+## 19. contextpolicy 并入 PreStep 实施记录（2026-10-31）
+
+`contextpolicy.Policy`（`WithContextPolicies`、`WithPolicyToolAdapter`）与旧 `WithContextPolicy`（`ContextPolicy` 结构体：内存卸载与 `HistorySummary`）删除，上下文改写只剩 PreStep。结果卸载为 `contextpolicy.Offload`，经 `WithOffload` 装为 PreStep；历史压缩由 `compaction` 组件承担（已随 `harness/preset` 移到独立项目 goagent-harness）。
+
+| 问题 | 实施 | 原因 |
+|---|---|---|
+| 两种持久语义 | 只保留 PreStep 的：每步结果记入日志，恢复时回放 | Policy 每步重新计算、以描述符进入模型意图，PreStep 记录结果；两套并存时组件作者须理解两种恢复方式 |
+| 配置改变 | `WithIdentifiedPreStep(identity, hook)`：存在带身份的钩子时，`loop/pre/N` 的意图包含按注册顺序的全部身份，改变后恢复以 intent changed 失败 | 回放语义下钩子不再执行，改了配置会静默沿用旧结果（localize 案例的术语表）；不带身份的钩子意图不变，已有日志兼容 |
+| Offload 的引用表 | 引用中带证据的键与摘要；Builder 每步在 PreStep 之后用对话调用 `Track` 重建；实例按结果作用域分表，供多次执行共享 | 回放时 `Reduce` 不执行，进程内的引用表为空，恢复后读取会遇到未知键（测试中去掉 `Track` 即复现）；读取工具要在 Build 时经宿主 Dispatcher 注册，不能是每次执行新建的实例 |
+| 最后一次请求 | `Step.Final`；Offload 在其上还原原文 | 原 `FinalTurnRestorer` 的语义，改由 PreStep 读取 |
+| 改写范围 | 不再校验"只改非 system 正文、不增删消息" | PreStep 本就允许任意改写（压缩会增删消息）；保护工具配对与 ProviderState 的责任在组件 |
+| 策略工具 | 删除 `ToolProvider` 与 `PolicyToolAdapter`；Offload 即读取工具，宿主与业务工具一起注册 | 读取工具与其他工具没有区别，经同一 Dispatcher 记入日志即可 |
+| 统计 | 删除 `policy.<id>.*`、`context_offloaded_results`、`summary_calls` 元数据，改用 `Offload.Stats()` | 共享实例的计数属于实例 |
+
+迁移：用旧版本记录、尚未结束的持久运行须在升级前结束——模型请求的意图不再包含策略描述符，Offload 的引用格式也已改变。
+
+测试：`builder/offload_test.go` 覆盖原生循环中的卸载、分页读取与最后一次请求的还原，持久运行在换出引用后中断、新实例恢复后读取，配置改变后在请求模型前失败，证据先于引用写入，抄错键交还模型，临时作用域的释放，以及带身份 PreStep 的意图。

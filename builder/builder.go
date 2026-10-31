@@ -136,25 +136,12 @@ func (b *AgentBuilder[C, S]) BuildContext(ctx context.Context) (*ConfigurableAge
 		}
 	}
 
-	if len(b.config.ContextPolicies) > 0 {
-		if b.config.ContextPolicy != nil {
-			return nil, fmt.Errorf("ContextPolicy and ContextPolicies are mutually exclusive")
-		}
+	if len(b.config.Offloads) > 0 {
 		if _, ok := b.llmClient.(llm.ToolStreamClient); !ok || len(b.tools) == 0 {
-			return nil, fmt.Errorf("ContextPolicies requires tools and llm.ToolStreamClient")
+			return nil, fmt.Errorf("WithOffload requires tools and llm.ToolStreamClient")
 		}
-	}
-	if err := validateContextPolicy(b.config.ContextPolicy); err != nil {
-		return nil, err
-	}
-	if b.config.ContextPolicy != nil {
-		if _, ok := b.llmClient.(llm.ToolStreamClient); !ok || len(b.tools) == 0 {
-			return nil, fmt.Errorf("ContextPolicy requires tools and llm.ToolStreamClient")
-		}
-		for _, tool := range b.tools {
-			if tool != nil && tool.Name() == contextReadTool {
-				return nil, fmt.Errorf("tool name %q is reserved by ContextPolicy", contextReadTool)
-			}
+		if err := b.validateOffloads(); err != nil {
+			return nil, err
 		}
 	}
 

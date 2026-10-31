@@ -1,4 +1,4 @@
-// Package contextpolicy defines execution-local context transforms and immutable evidence references.
+// Package contextpolicy 提供上下文治理的组件：Offload 把超长的工具结果换成引用并按需读回，ResultStore 保存不可变的证据。
 package contextpolicy
 
 import (

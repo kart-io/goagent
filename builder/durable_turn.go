@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/google/jsonschema-go/jsonschema"
-	"github.com/kart-io/goagent/builder/contextpolicy"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
@@ -46,15 +45,6 @@ func readJournaledTurn(ctx context.Context, round int, client llm.StreamClient, 
 	}{string(client.Provider()), req, definitions})
 	if err != nil {
 		return nil, err
-	}
-	if descriptors, ok := ctx.Value(policyDescriptorsKey{}).([]contextpolicy.Descriptor); ok {
-		intent, err = json.Marshal(struct {
-			Original json.RawMessage
-			Policies []contextpolicy.Descriptor
-		}{intent, descriptors})
-		if err != nil {
-			return nil, err
-		}
 	}
 	return modelOperation(ctx, fmt.Sprintf("model/turn/%d", round), intent, invoke, func(turn *llm.StreamChunk) error { return validateDurableTurn(turn, tools, allowEmpty) }, emit)
 }
@@ -117,9 +107,6 @@ func validateDurableTurn(turn *llm.StreamChunk, tools []interfaces.Tool, allowEm
 func (a *ConfigurableAgent[C, S]) scopeDurableExecution(ctx context.Context) (context.Context, error) {
 	if !durable.HasJournal(ctx) {
 		return ctx, nil
-	}
-	if a.config.ContextPolicy != nil {
-		return nil, fmt.Errorf("durable execution requires a fixed context; ContextPolicy is not checkpointed")
 	}
 	if len(a.tools) > 0 {
 		if _, ok := a.llmClient.(llm.ToolStreamClient); !ok {

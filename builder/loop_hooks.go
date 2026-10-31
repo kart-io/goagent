@@ -28,6 +28,8 @@ type Step struct {
 	// Inputs 是 Messages 末尾本步新收到的用户输入条数：轮次输入、Steer、Inject 与 Redirect 的纠正，
 	// 不含 TurnStopping 的续跑消息。
 	Inputs int
+	// Final 表示这是本轮最后一次模型请求：不再提供工具（ReturnDirectTools 除外），模型须直接作答。
+	Final bool
 }
 
 // PreStepResult 是 PreStep 的结果。Halt 为真时不再请求模型，以 Answer 作为本轮最终答复结束。
@@ -38,6 +40,12 @@ type PreStepResult struct {
 
 // PreStepHook 在领取收件箱输入之后、组装请求之前执行；返回 error 中止运行。
 type PreStepHook func(ctx context.Context, step *Step) (PreStepResult, error)
+
+// preStep 是注册的 PreStep 钩子与其身份。
+type preStep struct {
+	identity string
+	hook     PreStepHook
+}
 
 // ModelRequest 是即将发送的模型请求。Request 钩子可替换 Client（路由、换模型）或修改 Request 的参数；
 // Tools 只读。
@@ -117,7 +125,16 @@ type PromptContext struct {
 
 // WithPreStep 追加 PreStep 钩子。
 func (b *AgentBuilder[C, S]) WithPreStep(hooks ...PreStepHook) *AgentBuilder[C, S] {
-	b.config.PreStep = append(b.config.PreStep, hooks...)
+	for _, hook := range hooks {
+		b.config.PreStep = append(b.config.PreStep, preStep{hook: hook})
+	}
+	return b
+}
+
+// WithIdentifiedPreStep 追加带身份的 PreStep 钩子。identity 标识钩子的配置（如版本与配置摘要），进入持久日志中 PreStep
+// 记录的意图：配置改变后恢复旧运行时以 intent changed 失败，而不是回放按旧配置算出的结果。
+func (b *AgentBuilder[C, S]) WithIdentifiedPreStep(identity string, hook PreStepHook) *AgentBuilder[C, S] {
+	b.config.PreStep = append(b.config.PreStep, preStep{identity: identity, hook: hook})
 	return b
 }
 
@@ -155,13 +172,21 @@ func (b *AgentBuilder[C, S]) WithPromptContexts(contexts ...PromptContext) *Agen
 	return b
 }
 
+// loopIntent 是循环扩展点记录的意图。
+var loopIntent = json.RawMessage(`"goagent-loop-v1"`)
+
 // journaled 在持久运行中把 compute 的结果记入日志，恢复时回放记录而不重新计算；非持久运行直接计算。
 func journaled[T any](ctx context.Context, id string, compute func(context.Context) (T, error)) (T, error) {
+	return journaledIntent(ctx, id, loopIntent, compute)
+}
+
+// journaledIntent 与 journaled 相同，记录的意图为 intent：恢复时意图不同即失败。
+func journaledIntent[T any](ctx context.Context, id string, intent json.RawMessage, compute func(context.Context) (T, error)) (T, error) {
 	var zero T
 	if !durable.HasJournal(ctx) {
 		return compute(ctx)
 	}
-	record, err := durable.Do(ctx, id, json.RawMessage(`"goagent-loop-v1"`), durable.OperationPolicy{MaxAttempts: 3, RetryFailed: true},
+	record, err := durable.Do(ctx, id, intent, durable.OperationPolicy{MaxAttempts: 3, RetryFailed: true},
 		func(c context.Context) (json.RawMessage, error) {
 			v, err := compute(c)
 			if err != nil {
@@ -236,7 +261,24 @@ func withSections(messages []llm.Message, text string) []llm.Message {
 	return append([]llm.Message{llm.SystemMessage(text)}, messages...)
 }
 
-func (a *ConfigurableAgent[C, S]) runPreStep(ctx context.Context, round, inputs int, messages []llm.Message) ([]llm.Message, PreStepResult, error) {
+// preStepIntent 是 PreStep 记录的意图：没有带身份的钩子时同其他扩展点，否则包含按注册顺序的全部身份。
+func (a *ConfigurableAgent[C, S]) preStepIntent() (json.RawMessage, error) {
+	identities := make([]string, len(a.config.PreStep))
+	named := false
+	for i, p := range a.config.PreStep {
+		identities[i] = p.identity
+		named = named || p.identity != ""
+	}
+	if !named {
+		return loopIntent, nil
+	}
+	return json.Marshal(struct {
+		Version string   `json:"version"`
+		PreStep []string `json:"pre_step"`
+	}{"goagent-loop-v1", identities})
+}
+
+func (a *ConfigurableAgent[C, S]) runPreStep(ctx context.Context, round, inputs int, final bool, messages []llm.Message) ([]llm.Message, PreStepResult, error) {
 	if len(a.config.PreStep) == 0 {
 		return messages, PreStepResult{}, nil
 	}
@@ -244,9 +286,14 @@ func (a *ConfigurableAgent[C, S]) runPreStep(ctx context.Context, round, inputs 
 		Messages []llm.Message `json:"messages"`
 		Result   PreStepResult `json:"result"`
 	}
-	o, err := journaled(ctx, fmt.Sprintf("loop/pre/%d", round), func(ctx context.Context) (outcome, error) {
-		step := &Step{Index: round, Messages: messages, Inputs: inputs}
-		for _, hook := range a.config.PreStep {
+	intent, err := a.preStepIntent()
+	if err != nil {
+		return nil, PreStepResult{}, err
+	}
+	o, err := journaledIntent(ctx, fmt.Sprintf("loop/pre/%d", round), intent, func(ctx context.Context) (outcome, error) {
+		step := &Step{Index: round, Messages: messages, Inputs: inputs, Final: final}
+		for _, p := range a.config.PreStep {
+			hook := p.hook
 			var r PreStepResult
 			if err := callHook("PreStep", func() (e error) { r, e = hook(ctx, step); return }); err != nil {
 				return outcome{}, err
