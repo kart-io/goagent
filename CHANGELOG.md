@@ -5,6 +5,14 @@ All notable changes to GoAgent will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- 自动发版规则：推送到 master 时只有 `fix`、`perf`、`refactor` 发补丁版本，`feat` 发 minor；`docs`、`test`、`chore`、`ci`、`style`、`build` 不再单独发版，随下一次发版一起发布。需要单独发版时，手动运行 Auto Tag and Release 并指定版本类型。
+- 提交作用域可以含任意字符（如 `fix(llm/common):`），此前只识别小写字母，带斜杠、数字或连字符的提交被漏判。
+- 破坏性变更除标题中的 `type!:` 外，也识别正文中以 `BREAKING CHANGE:` 开头的行；0.x 阶段仍只升 minor。
+
 ## [0.23.1] - 2026-10-31
 
 库代码与 0.23.0 相同。
