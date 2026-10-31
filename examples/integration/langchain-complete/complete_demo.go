@@ -192,9 +192,7 @@ func main() {
 		).
 		WithMaxIterations(10).
 		WithTimeout(30*time.Second).
-		WithStreamingEnabled(false).
 		WithAutoSaveEnabled(true).
-		WithSaveInterval(10*time.Second).
 		WithMaxTokens(2000).
 		WithTemperature(0.7).
 		WithSessionID(fmt.Sprintf("session-%s-%d", appContext.UserID, time.Now().Unix())).

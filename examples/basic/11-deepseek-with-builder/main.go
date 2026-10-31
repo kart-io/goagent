@@ -247,13 +247,12 @@ func runAgentBuilderWithConfig(apiKey string) error {
 	// 自定义配置
 	fmt.Println("⚙️  配置自定义选项...")
 	customConfig := &builder.AgentConfig{
-		MaxIterations:   5,
-		Timeout:         60 * time.Second,
-		EnableStreaming: false,
-		EnableAutoSave:  false,
-		MaxTokens:       1000,
-		Temperature:     0.3,
-		Verbose:         false,
+		MaxIterations:  5,
+		Timeout:        60 * time.Second,
+		EnableAutoSave: false,
+		MaxTokens:      1000,
+		Temperature:    0.3,
+		Verbose:        false,
 	}
 
 	// 使用 AgentBuilder 创建 Agent
@@ -264,7 +263,6 @@ func runAgentBuilderWithConfig(apiKey string) error {
 		WithState(agentstate.NewAgentState()).
 		WithMaxIterations(customConfig.MaxIterations).
 		WithTimeout(customConfig.Timeout).
-		WithStreamingEnabled(customConfig.EnableStreaming).
 		WithAutoSaveEnabled(customConfig.EnableAutoSave).
 		WithMaxTokens(customConfig.MaxTokens).
 		WithTemperature(customConfig.Temperature).
@@ -531,12 +529,11 @@ llmClient, err := providers.NewDeepSeekWithOptions(
     llm.WithTemperature(0.7),
 )
 
-// 使用 AgentBuilder 构建 Agent
-	//nolint:staticcheck // Example demonstrates old API for backward compatibility
+// 使用 AgentBuilder 构建 Agent（agentstate = "github.com/kart-io/goagent/core/state"）
 agent, err := builder.NewAgentBuilder[any, core.State](llmClient).
     WithSystemPrompt("你是一个友好的 AI 助手").
     WithTools(calculatorTool, weatherTool).
-    WithState(state.NewMemoryState()).
+    WithState(agentstate.NewAgentState()).
     WithMaxIterations(10).
     WithTimeout(30 * time.Second).
     WithVerbose(true).
@@ -544,11 +541,8 @@ agent, err := builder.NewAgentBuilder[any, core.State](llmClient).
 
 // 运行 Agent
 ctx := context.Background()
-input := &core.AgentInput{
-    Task:      "请帮我计算 15 * 8",
-    Timestamp: time.Now(),
-}
-output, err := agent.Invoke(ctx, input)
+output, err := agent.Execute(ctx, "请帮我计算 15 * 8")
+fmt.Println(output.Result)
 `
 	fmt.Println(exampleCode)
 	fmt.Println()

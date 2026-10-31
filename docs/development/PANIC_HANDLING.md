@@ -2,728 +2,178 @@
 
 ## 概述
 
-GoAgent 使用基于接口的 panic 处理系统，支持：
+GoAgent 在调用宿主代码的边界恢复 panic，把它变成错误返回，而不是让进程崩溃。有两条路径：
 
-- ✅ **完全可定制** - 自定义错误转换、指标收集、日志记录
-- ✅ **热插拔** - 运行时无缝切换实现
-- ✅ **线程安全** - 原子操作保证并发安全
-- ✅ **零侵入** - 现有代码无需修改
+| 路径 | 使用位置 | 结果 |
+|------|----------|------|
+| 全局 `core.PanicHandlerRegistry` | `core` 中的 Runnable（`RunnableFunc` 组件名 `runnable`，`StreamRunnable` 组件名 `stream_runnable`）、回调通知、生命周期管理器、`core.CallSafely` / `RecoverPanic` / `ReportPanic` 的调用点（链、生成器、中断、`memory`、`tools.ToolExecutor`、`tools/search`、`mcp/toolbox`、`devtools` 等） | 经可替换的 `PanicHandler` 转换，并调用 `PanicMetricsCollector`、`PanicLogger` |
+| 直接构造 `*agentErrors.PanicError` | Builder 执行入口与宿主回调（`builder/panic.go` 的 `recoverPanic`）、`tools.Dispatcher` | 不经全局 registry，不触发自定义 handler、指标与日志 |
 
-## 核心接口
+两条路径的错误链中都能用 `errors.As` 取到 `*agentErrors.PanicError`（字段 `Op`、`Value`、`Stack`）。`PanicError.Error()` 只含位置，不含 panic 值与调用栈：错误文本可能进入日志、事件甚至交给模型。
 
-### PanicHandler - 错误转换
+## 接口
 
-处理 panic 恢复并转换为错误：
+定义见 `core/panic_handler.go`：
 
 ```go
 type PanicHandler interface {
-    HandlePanic(
-        ctx context.Context,
-        component string,      // 发生 panic 的组件（如 "runnable", "lifecycle_manager"）
-        operation string,      // 正在执行的操作（如 "invoke", "init", "start"）
-        panicValue interface{}, // panic 的值
-        stackTrace string,     // 完整堆栈追踪
-    ) error
+	HandlePanic(ctx context.Context, component, operation string, panicValue interface{}, stackTrace string) error
 }
-```
 
-**使用场景**：
-- 转换为领域特定的错误类型
-- 添加业务上下文信息
-- 实现重试逻辑
-- 优雅降级策略
-
-**约定**：返回错误的文本（包括 `AgentError` 的 Message 与 Context）不应包含 `panicValue` 与 `stackTrace`。错误文本会进入流错误、日志甚至交给模型；registry 不改写 handler 返回的文本，panic 值与调用栈应交给 `PanicLogger`、`PanicMetricsCollector`，调用方需要时用 `errors.As` 取 `*agentErrors.PanicError` 读取。
-
-### PanicMetricsCollector - 指标收集
-
-收集 panic 统计信息用于监控：
-
-```go
 type PanicMetricsCollector interface {
-    RecordPanic(
-        ctx context.Context,
-        component string,
-        operation string,
-        panicValue interface{},
-    )
+	RecordPanic(ctx context.Context, component, operation string, panicValue interface{})
 }
-```
 
-**使用场景**：
-- Prometheus counters/histograms
-- StatsD metrics
-- DataDog APM
-- 自定义遥测系统
-
-### PanicLogger - 日志记录
-
-记录 panic 事件到日志系统：
-
-```go
 type PanicLogger interface {
-    LogPanic(
-        ctx context.Context,
-        component string,
-        operation string,
-        panicValue interface{},
-        stackTrace string,
-        recoveredError error,  // HandlePanic 返回的错误
-    )
+	LogPanic(ctx context.Context, component, operation string, panicValue interface{}, stackTrace string, recoveredError error)
 }
 ```
 
-**使用场景**：
-- 结构化日志（JSON、logfmt）
-- 不同级别的日志记录
-- 集中式日志聚合
-- 告警触发
+约定：`HandlePanic` 返回的错误文本（包括 `AgentError` 的 Message 与 Context）不应包含 `panicValue` 与 `stackTrace`；registry 不改写 handler 的文本，handler 结果中没有 `*PanicError` 时由 registry 补到错误链上，handler 返回 nil 时直接返回 `*PanicError`。
 
-## 默认实现
+默认实现：`DefaultPanicHandler` 返回错误码 `CodeInternal`、Message 为 `panic 已恢复` 的 `AgentError`，cause 为 `*PanicError`；`NoOpMetricsCollector`、`NoOpPanicLogger` 不做任何事。
 
-系统提供开箱即用的默认实现，与原有行为完全兼容：
+registry 用原子指针保存三个实现，`core.SetGlobalPanicHandler`、`SetGlobalMetricsCollector`、`SetGlobalPanicLogger` 可在运行时替换，`GlobalPanicHandlerRegistry().GetHandler()` 等读取当前实现。
 
-```go
-// DefaultPanicHandler - 转换 panic 为 AgentError
-&DefaultPanicHandler{}
+## 使用
 
-// NoOpMetricsCollector - 不执行任何操作（占位符）
-&NoOpMetricsCollector{}
-
-// NoOpPanicLogger - 不执行任何操作（占位符）
-&NoOpPanicLogger{}
-```
-
-**默认行为**：
-- 将所有 panic 转换为 `AgentError`，错误码为 `CodeInternal`，Message 固定为 `panic 已恢复`
-- Cause 为 `*agentErrors.PanicError`，文本以 `<component>.<operation> 发生 panic` 结尾；panic 值与调用栈只保存在它的 `Value`、`Stack` 字段中，不出现在错误文本里
-- 不记录指标
-- 不输出日志
-
-无论使用哪个 handler，registry 返回的错误链中都能用 `errors.As` 取到 `*agentErrors.PanicError`：handler 的结果不含它时由 registry 补上（不改变 handler 错误的文本），handler 返回 nil 时直接返回它。
-
-## 使用方式
-
-### 基础使用
-
-使用默认实现，无需任何配置：
+### 默认行为
 
 ```go
-package main
+r := core.NewRunnableFunc(func(ctx context.Context, input string) (string, error) {
+	var ptr *string
+	return *ptr, nil // nil 指针解引用，panic
+})
 
-import (
-    "context"
-    "errors"
-    "fmt"
-    "log"
+_, err := r.Invoke(context.Background(), "test")
+if err != nil {
+	fmt.Printf("Error: %v\n", err) // 只含位置，不含 panic 值与调用栈
 
-    "github.com/kart-io/goagent/core"
-    agentErrors "github.com/kart-io/goagent/errors"
-)
-
-func main() {
-    // 使用默认实现，无需配置
-    agent := core.NewRunnableFunc(func(ctx context.Context, input string) (string, error) {
-        // 即使这里 panic，系统也会自动恢复
-        var ptr *string
-        return *ptr, nil  // panic: nil pointer dereference
-    })
-
-    result, err := agent.Invoke(context.Background(), "test")
-    if err != nil {
-        // 错误文本只说明在哪里发生了 panic，不含 panic 值与调用栈
-        fmt.Printf("Error: %v\n", err)
-
-        var p *agentErrors.PanicError
-        if errors.As(err, &p) {
-            // 仅在受控位置（如内部日志）读取 panic 值与调用栈
-            log.Printf("panic 位置=%s 值=%v\n%s", p.Op, p.Value, p.Stack)
-        }
-    }
+	var p *agentErrors.PanicError
+	if errors.As(err, &p) {
+		log.Printf("panic 位置=%s 值=%v\n%s", p.Op, p.Value, p.Stack)
+	}
 }
 ```
 
-### 自定义实现
-
-#### 1. Prometheus 指标集成
+### Prometheus 指标
 
 ```go
-package monitoring
-
-import (
-    "context"
-    "fmt"
-    "github.com/prometheus/client_golang/prometheus"
-    "github.com/prometheus/client_golang/prometheus/promauto"
-    "github.com/kart-io/goagent/core"
-)
-
 type PrometheusMetricsCollector struct {
-    panicCounter *prometheus.CounterVec
+	panicCounter *prometheus.CounterVec
 }
 
 func NewPrometheusMetricsCollector(reg prometheus.Registerer) *PrometheusMetricsCollector {
-    return &PrometheusMetricsCollector{
-        panicCounter: promauto.With(reg).NewCounterVec(
-            prometheus.CounterOpts{
-                Name: "goagent_panic_total",
-                Help: "Total number of panics recovered",
-            },
-            []string{"component", "operation"},
-        ),
-    }
+	return &PrometheusMetricsCollector{
+		panicCounter: promauto.With(reg).NewCounterVec(
+			prometheus.CounterOpts{Name: "goagent_panic_total", Help: "Total number of panics recovered"},
+			[]string{"component", "operation"},
+		),
+	}
 }
 
-func (c *PrometheusMetricsCollector) RecordPanic(
-    ctx context.Context,
-    component, operation string,
-    panicValue interface{},
-) {
-    c.panicCounter.WithLabelValues(component, operation).Inc()
+func (c *PrometheusMetricsCollector) RecordPanic(ctx context.Context, component, operation string, panicValue interface{}) {
+	c.panicCounter.WithLabelValues(component, operation).Inc()
 }
 
-// 在 main() 中注册
-func main() {
-    registry := prometheus.NewRegistry()
-    collector := NewPrometheusMetricsCollector(registry)
-
-    core.SetGlobalMetricsCollector(collector)
-
-    // 现在所有 panic 都会记录到 Prometheus
+func setupMetrics() {
+	core.SetGlobalMetricsCollector(NewPrometheusMetricsCollector(prometheus.NewRegistry()))
 }
 ```
 
-#### 2. 结构化日志
+### 结构化日志
 
 ```go
-package logging
-
-import (
-    "context"
-    "fmt"
-    "log/slog"
-    "os"
-    "github.com/kart-io/goagent/core"
-)
-
 type StructuredPanicLogger struct {
-    logger *slog.Logger
+	logger *slog.Logger
 }
 
 func NewStructuredPanicLogger() *StructuredPanicLogger {
-    return &StructuredPanicLogger{
-        logger: slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{
-            Level: slog.LevelError,
-        })),
-    }
+	return &StructuredPanicLogger{logger: slog.New(slog.NewJSONHandler(os.Stderr, nil))}
 }
 
-func (l *StructuredPanicLogger) LogPanic(
-    ctx context.Context,
-    component, operation string,
-    panicValue interface{},
-    stackTrace string,
-    recoveredError error,
-) {
-    l.logger.LogAttrs(
-        ctx,
-        slog.LevelError,
-        "Panic recovered",
-        slog.String("component", component),
-        slog.String("operation", operation),
-        slog.Any("panic_value", panicValue),
-        slog.String("error", recoveredError.Error()),
-        slog.String("stack_trace", stackTrace),
-    )
+func (l *StructuredPanicLogger) LogPanic(ctx context.Context, component, operation string, panicValue interface{}, stackTrace string, recoveredError error) {
+	l.logger.LogAttrs(ctx, slog.LevelError, "panic recovered",
+		slog.String("component", component),
+		slog.String("operation", operation),
+		slog.Any("panic_value", panicValue),
+		slog.String("error", recoveredError.Error()),
+		slog.String("stack_trace", stackTrace),
+	)
 }
 
-// 在 main() 中注册
-func main() {
-    logger := NewStructuredPanicLogger()
-    core.SetGlobalPanicLogger(logger)
-
-    // 所有 panic 现在以 JSON 格式记录
-}
+func setupLogger() { core.SetGlobalPanicLogger(NewStructuredPanicLogger()) }
 ```
 
-#### 3. 自定义错误转换
+### 自定义错误转换
 
 ```go
-package errors
-
-import (
-    "context"
-
-    agentErrors "github.com/kart-io/goagent/errors"
-    "github.com/kart-io/goagent/core"
-)
-
 type CustomPanicHandler struct {
-    serviceName string
+	serviceName string
 }
 
-func NewCustomPanicHandler(serviceName string) *CustomPanicHandler {
-    return &CustomPanicHandler{serviceName: serviceName}
+func (h *CustomPanicHandler) HandlePanic(ctx context.Context, component, operation string, panicValue interface{}, stackTrace string) error {
+	code := agentErrors.CodeInternal
+	if component == "runnable" {
+		code = agentErrors.CodeAgentExecution
+	}
+	// Message 与 Context 会出现在 Error() 文本中，不写入 panicValue、stackTrace。
+	return agentErrors.New(code, "panic 已恢复").
+		WithComponent(component).
+		WithOperation(operation).
+		WithContext("service", h.serviceName)
 }
 
-func (h *CustomPanicHandler) HandlePanic(
-    ctx context.Context,
-    component, operation string,
-    panicValue interface{},
-    stackTrace string,
-) error {
-    // 自定义错误码选择
-    errorCode := h.selectErrorCode(component)
-
-    // Message 与 Context 都会出现在 Error() 文本中：不写入 panicValue、stackTrace 或其他敏感数据。
-    // registry 会在返回的错误链中补上 *agentErrors.PanicError，调用方可用 errors.As 读取 panic 值与调用栈；
-    // 需要记录二者时实现 PanicLogger。
-    return agentErrors.New(errorCode, "panic 已恢复").
-        WithComponent(component).
-        WithOperation(operation).
-        WithContext("service", h.serviceName).
-        WithContext("request_id", ctx.Value("request_id"))
-}
-
-func (h *CustomPanicHandler) selectErrorCode(component string) agentErrors.ErrorCode {
-    switch component {
-    case "lifecycle_manager":
-        return agentErrors.CodeAgentInitialization
-    case "runnable":
-        return agentErrors.CodeAgentExecution
-    default:
-        return agentErrors.CodeInternal
-    }
-}
-
-// 在 main() 中注册
-func main() {
-    handler := NewCustomPanicHandler("my-service")
-    core.SetGlobalPanicHandler(handler)
-
-    // panic 错误现在带有错误码与业务上下文，panic 值与调用栈仍只能经 errors.As 取得
-}
+func setupHandler() { core.SetGlobalPanicHandler(&CustomPanicHandler{serviceName: "my-service"}) }
 ```
 
-### 运行时热插拔
+### 在新代码中恢复 panic
 
-最强大的特性：无需重启即可切换实现。
+- 有错误出口的 goroutine：`defer core.RecoverPanic(ctx, "my_component", "run", &err)`。
+- 没有调用方接收错误的 goroutine：`defer core.ReportPanic(ctx, "my_component", "loop")`，只记录指标与日志。
+- 单次调用宿主代码：`panicked, err := core.CallSafely(ctx, "my_component", "callback", fn)`。
+
+`RecoverPanic` 与 `ReportPanic` 必须直接 `defer`，`recover` 才生效、调用栈才指向 panic 发生处。
+
+## 实现要求
+
+- 实现必须并发安全：panic 可能在多个 goroutine 同时发生。
+- `RecordPanic`、`LogPanic` 应尽快返回，需要远程发送时自行缓冲并在满时丢弃。
+- `HandlePanic` 自身不应 panic；需要时在内部 `recover` 并返回不含 panic 值的错误。
+
+## 测试
+
+替换全局 handler 后用 `t.Cleanup` 恢复，避免影响其他测试：
 
 ```go
-package main
+type recordingHandler struct{ components []string }
 
-import (
-    "time"
-    "github.com/kart-io/goagent/core"
-)
+func (h *recordingHandler) HandlePanic(ctx context.Context, component, operation string, panicValue interface{}, stackTrace string) error {
+	h.components = append(h.components, component)
+	return errors.New("mock panic")
+}
 
-func main() {
-    // 启动时使用默认实现
-    go runApplication()
+func TestRunnablePanicUsesHandler(t *testing.T) {
+	registry := core.GlobalPanicHandlerRegistry()
+	original := registry.GetHandler()
+	t.Cleanup(func() { registry.SetHandler(original) })
 
-    // 5 分钟后切换到 Prometheus
-    time.Sleep(5 * time.Minute)
-    core.SetGlobalMetricsCollector(NewPrometheusCollector(registry))
+	h := &recordingHandler{}
+	core.SetGlobalPanicHandler(h)
 
-    // 10 分钟后切换到结构化日志
-    time.Sleep(5 * time.Minute)
-    core.SetGlobalPanicLogger(NewStructuredLogger())
+	r := core.NewRunnableFunc(func(context.Context, string) (string, error) { panic("boom") })
+	_, err := r.Invoke(context.Background(), "x")
 
-    // 应用持续运行，无需重启
+	require.Error(t, err)
+	var p *agentErrors.PanicError
+	require.ErrorAs(t, err, &p) // registry 在 handler 的错误之外补上 *PanicError
+	require.Equal(t, []string{"runnable"}, h.components)
 }
 ```
 
-## 开发最佳实践
-
-### 1. 实现接口时的注意事项
-
-#### 线程安全
-
-所有接口实现必须是线程安全的：
-
-```go
-// ✅ 正确：使用锁保护
-type SafeCollector struct {
-    mu     sync.Mutex
-    counts map[string]int64
-}
-
-func (c *SafeCollector) RecordPanic(ctx context.Context, component, operation string, panicValue interface{}) {
-    c.mu.Lock()
-    defer c.mu.Unlock()
-    c.counts[component]++
-}
-
-// ✅ 正确：使用原子操作
-type AtomicCollector struct {
-    count atomic.Int64
-}
-
-func (c *AtomicCollector) RecordPanic(ctx context.Context, component, operation string, panicValue interface{}) {
-    c.count.Add(1)
-}
-```
-
-#### 避免阻塞
-
-RecordPanic 和 LogPanic 应该尽快返回：
-
-```go
-// ✅ 正确：异步处理
-type AsyncLogger struct {
-    logChan chan LogEntry
-}
-
-func (l *AsyncLogger) LogPanic(ctx context.Context, component, operation string, panicValue interface{}, stackTrace string, err error) {
-    entry := LogEntry{Component: component, Operation: operation}
-
-    select {
-    case l.logChan <- entry:
-    case <-ctx.Done():
-        // 超时，丢弃
-    default:
-        // Channel 满，丢弃
-    }
-}
-
-// ❌ 错误：阻塞调用
-func (l *BadLogger) LogPanic(...) {
-    l.remoteAPI.SendLog(...)  // 可能阻塞很久
-}
-```
-
-#### 错误处理
-
-HandlePanic 不应该再次 panic：
-
-```go
-// ✅ 正确：捕获所有错误
-func (h *SafeHandler) HandlePanic(ctx context.Context, component, operation string, panicValue interface{}, stackTrace string) (err error) {
-    defer func() {
-        if r := recover(); r != nil {
-            // Handler 自身 panic，返回不含 panic 值的基本错误；registry 仍会补上原 panic 的 *PanicError
-            err = errors.New("panic handler 自身发生 panic")
-        }
-    }()
-
-    // 处理逻辑
-    return h.process(panicValue)
-}
-
-// ❌ 错误：可能再次 panic
-func (h *BadHandler) HandlePanic(...) error {
-    return h.riskyOperation()  // 可能 panic
-}
-```
-
-### 2. 组合多个实现
-
-使用装饰器模式组合多个实现：
-
-```go
-// CompositeMetricsCollector 组合多个 collector
-type CompositeMetricsCollector struct {
-    collectors []core.PanicMetricsCollector
-}
-
-func NewCompositeMetricsCollector(collectors ...core.PanicMetricsCollector) *CompositeMetricsCollector {
-    return &CompositeMetricsCollector{collectors: collectors}
-}
-
-func (c *CompositeMetricsCollector) RecordPanic(ctx context.Context, component, operation string, panicValue interface{}) {
-    for _, collector := range c.collectors {
-        collector.RecordPanic(ctx, component, operation, panicValue)
-    }
-}
-
-// 使用
-composite := NewCompositeMetricsCollector(
-    NewPrometheusCollector(registry),
-    NewStatsDCollector("localhost:8125"),
-    NewDataDogCollector(apiKey),
-)
-core.SetGlobalMetricsCollector(composite)
-```
-
-### 3. 环境区分
-
-根据不同环境使用不同配置：
-
-```go
-func setupPanicHandling() {
-    env := os.Getenv("ENVIRONMENT")
-
-    switch env {
-    case "production":
-        // 生产：Prometheus + 告警
-        core.SetGlobalMetricsCollector(NewPrometheusCollector(registry))
-        core.SetGlobalPanicLogger(NewAlertingLogger(pagerDuty))
-
-    case "staging":
-        // 预发：Prometheus + 结构化日志
-        core.SetGlobalMetricsCollector(NewPrometheusCollector(registry))
-        core.SetGlobalPanicLogger(NewStructuredLogger())
-
-    case "development":
-        // 开发：使用默认（或添加调试日志）
-        core.SetGlobalPanicLogger(NewDebugLogger())
-
-    default:
-        // 测试：使用默认 NoOp
-    }
-}
-
-func main() {
-    setupPanicHandling()
-    runApplication()
-}
-```
-
-## 测试指南
-
-### 单元测试
-
-使用 Mock 实现进行测试：
-
-```go
-package mypackage_test
-
-import (
-    "context"
-    "errors"
-    "testing"
-    "github.com/kart-io/goagent/core"
-    "github.com/stretchr/testify/assert"
-)
-
-// MockPanicHandler 用于测试
-type MockPanicHandler struct {
-    calls []PanicCall
-}
-
-type PanicCall struct {
-    Component  string
-    Operation  string
-    PanicValue interface{}
-}
-
-func (m *MockPanicHandler) HandlePanic(
-    ctx context.Context,
-    component, operation string,
-    panicValue interface{},
-    stackTrace string,
-) error {
-    m.calls = append(m.calls, PanicCall{
-        Component:  component,
-        Operation:  operation,
-        PanicValue: panicValue,
-    })
-    // panic 值记在 calls 中供断言，不写进错误文本
-    return errors.New("mock panic")
-}
-
-func TestMyComponent_PanicHandling(t *testing.T) {
-    // 保存原始 handler
-    originalHandler := core.GlobalPanicHandlerRegistry().GetHandler()
-    defer core.GlobalPanicHandlerRegistry().SetHandler(originalHandler)
-
-    // 使用 mock handler
-    mockHandler := &MockPanicHandler{}
-    core.SetGlobalPanicHandler(mockHandler)
-
-    // 执行会 panic 的代码
-    component := NewMyComponent()
-    _, err := component.Execute(context.Background())
-
-    // 验证
-    assert.Error(t, err)
-    assert.Len(t, mockHandler.calls, 1)
-    assert.Equal(t, "my_component", mockHandler.calls[0].Component)
-}
-```
-
-### 集成测试
-
-测试自定义实现：
-
-```go
-func TestPrometheusCollector_Integration(t *testing.T) {
-    registry := prometheus.NewRegistry()
-    collector := NewPrometheusMetricsCollector(registry)
-
-    // 记录几个 panic
-    ctx := context.Background()
-    collector.RecordPanic(ctx, "comp1", "op1", "panic1")
-    collector.RecordPanic(ctx, "comp1", "op1", "panic2")
-    collector.RecordPanic(ctx, "comp2", "op2", "panic3")
-
-    // 验证 Prometheus 指标
-    metrics, err := registry.Gather()
-    require.NoError(t, err)
-
-    // 查找我们的 counter
-    var panicTotal *dto.MetricFamily
-    for _, mf := range metrics {
-        if mf.GetName() == "goagent_panic_total" {
-            panicTotal = mf
-            break
-        }
-    }
-
-    require.NotNil(t, panicTotal)
-    assert.Equal(t, 3, int(getTotalCount(panicTotal)))
-}
-```
-
-## 性能考虑
-
-### 基准测试结果
-
-```
-无 panic 时（最常见路径）：
-BenchmarkPanicHandlerRegistry_Read-8     1000000000    0.5 ns/op
-
-热插拔写入（罕见操作）：
-BenchmarkPanicHandlerRegistry_Write-8      50000000   30 ns/op
-
-HandlePanic 调用（panic 发生时）：
-BenchmarkPanicHandlerRegistry_HandlePanic-8  5000000  250 ns/op
-```
-
-### 优化建议
-
-1. **轻量级 RecordPanic**
-   ```go
-   // ✅ 快速返回
-   func (c *Collector) RecordPanic(...) {
-       c.counter.Add(1)  // 原子操作，极快
-   }
-
-   // ❌ 避免阻塞
-   func (c *BadCollector) RecordPanic(...) {
-       c.sendToRemoteServer(...)  // 可能很慢
-   }
-   ```
-
-2. **异步日志**
-   ```go
-   // ✅ 使用 buffered channel
-   type AsyncLogger struct {
-       logChan chan LogEntry  // buffered
-   }
-
-   func (l *AsyncLogger) LogPanic(...) {
-       select {
-       case l.logChan <- entry:
-       default:
-           // Channel 满，丢弃（不阻塞）
-       }
-   }
-   ```
-
-3. **批量处理**
-   ```go
-   // ✅ 批量发送指标
-   type BatchCollector struct {
-       events []Event
-       mu     sync.Mutex
-   }
-
-   func (c *BatchCollector) RecordPanic(...) {
-       c.mu.Lock()
-       c.events = append(c.events, event)
-       if len(c.events) >= batchSize {
-           go c.flush()
-           c.events = nil
-       }
-       c.mu.Unlock()
-   }
-   ```
-
-## 常见问题
-
-### Q1: 如何查看当前使用的实现？
-
-```go
-handler := core.GlobalPanicHandlerRegistry().GetHandler()
-fmt.Printf("Current handler: %T\n", handler)
-
-collector := core.GlobalPanicHandlerRegistry().GetMetricsCollector()
-fmt.Printf("Current collector: %T\n", collector)
-
-logger := core.GlobalPanicHandlerRegistry().GetLogger()
-fmt.Printf("Current logger: %T\n", logger)
-```
-
-### Q2: 可以在运行时多次切换吗？
-
-可以！这就是热插拔的意义：
-
-```go
-// 可以随时切换，立即生效
-core.SetGlobalPanicHandler(handler1)
-// ... 运行一段时间 ...
-core.SetGlobalPanicHandler(handler2)
-// ... 再运行一段时间 ...
-core.SetGlobalPanicHandler(handler3)
-```
-
-### Q3: 会影响性能吗？
-
-几乎不会。无 panic 时额外开销 < 1ns。
-
-### Q4: 如何调试自定义实现？
-
-使用包装器添加日志：
-
-```go
-type DebugHandler struct {
-    inner core.PanicHandler
-}
-
-func (h *DebugHandler) HandlePanic(ctx context.Context, component, operation string, panicValue interface{}, stackTrace string) error {
-    fmt.Printf("DEBUG: HandlePanic: component=%s, op=%s, panic=%v\n",
-        component, operation, panicValue)
-
-    err := h.inner.HandlePanic(ctx, component, operation, panicValue, stackTrace)
-
-    fmt.Printf("DEBUG: Returned error: %v\n", err)
-    return err
-}
-
-core.SetGlobalPanicHandler(&DebugHandler{inner: NewMyHandler()})
-```
-
-### Q5: 接口实现需要处理 context 取消吗？
-
-建议处理，尤其是在可能阻塞的操作中：
-
-```go
-func (l *Logger) LogPanic(ctx context.Context, ...) {
-    select {
-    case l.logChan <- entry:
-    case <-ctx.Done():
-        // Context 已取消，放弃记录
-        return
-    }
-}
-```
+可能让进程直接退出的场景（如未恢复的 goroutine panic）用 `testing/panictest` 在子进程中运行。参考测试：`core/panic_handler_test.go`、`core/runnable_panic_test.go`、`core/stream_runnable_panic_test.go`、`core/callback_panic_test.go`、`core/goroutine_panic_test.go`。
 
 ## 相关文档
 
-- **接口定义**: `core/panic_handler.go`
-- **默认实现**: `core/panic_handler.go:DefaultPanicHandler`
-- **测试示例**: `core/panic_handler_test.go`
-
-## 总结
-
-接口化的 panic 处理系统提供了：
-
-✅ **灵活性** - 完全可定制的行为
-✅ **可扩展性** - 通过接口添加新功能
-✅ **热插拔** - 运行时无缝切换
-✅ **高性能** - < 1ns 额外开销
-✅ **线程安全** - 原子操作保证
-✅ **易测试** - 易于 mock 和验证
-
-这使得 GoAgent 能够适应从简单的开发环境到复杂的企业级生产环境的各种需求。
+- [开发指南](DEVELOPMENT_GUIDE.md)
+- [测试最佳实践](TESTING_BEST_PRACTICES.md)

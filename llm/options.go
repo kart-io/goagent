@@ -90,62 +90,10 @@ func WithTopP(topP float64) ClientOption {
 	}
 }
 
-// WithOrganizationID 设置组织 ID（用于 OpenAI）
-func WithOrganizationID(orgID string) ClientOption {
-	return func(c *LLMOptions) {
-		c.OrganizationID = orgID
-	}
-}
-
-// WithRetryCount 设置重试次数
-func WithRetryCount(retryCount int) ClientOption {
-	return func(c *LLMOptions) {
-		if retryCount >= 0 {
-			c.RetryCount = retryCount
-		}
-	}
-}
-
-// WithRetryDelay 设置重试延迟
-func WithRetryDelay(delay time.Duration) ClientOption {
-	return func(c *LLMOptions) {
-		c.RetryDelay = delay
-	}
-}
-
-// WithRateLimiting 配置速率限制
-func WithRateLimiting(requestsPerMinute int) ClientOption {
-	return func(c *LLMOptions) {
-		c.RateLimitRPM = requestsPerMinute
-	}
-}
-
-// WithProxy 设置代理 URL
-func WithProxy(proxyURL string) ClientOption {
-	return func(c *LLMOptions) {
-		c.ProxyURL = proxyURL
-	}
-}
-
 // WithSystemPrompt 设置默认系统提示
 func WithSystemPrompt(prompt string) ClientOption {
 	return func(c *LLMOptions) {
 		c.SystemPrompt = prompt
-	}
-}
-
-// WithCache 启用响应缓存
-func WithCache(enabled bool, ttl time.Duration) ClientOption {
-	return func(c *LLMOptions) {
-		c.CacheEnabled = enabled
-		c.CacheTTL = ttl
-	}
-}
-
-// WithStreamingEnabled 启用流式响应
-func WithStreamingEnabled(enabled bool) ClientOption {
-	return func(c *LLMOptions) {
-		c.StreamingEnabled = enabled
 	}
 }
 

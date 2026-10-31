@@ -1,48 +1,67 @@
 # GoAgent 设计概述
 
-当前公共架构见 [架构概述](../architecture/ARCHITECTURE.md)。本页说明已有机制的设计选择，不把研究计划描述为已实现 API。
+本文概括当前执行内核的设计取舍。包结构见 [架构概述](../architecture/ARCHITECTURE.md)，演进过程见 [Harness 核心化设计记录](HARNESS_CORE_DESIGN.md) 第 16–21 节。
 
 ## 组合是基础
 
-以 `core.Runnable[I,O]` 统一函数、Agent 与工作流的执行。Builder 的 `AsRunnable()` 返回 `Runnable[any,*builder.AgentOutput]`；`core.Agent` 则使用 `*core.AgentInput/*core.AgentOutput`，两套输出不是同一个类型。异构组合应显式转换。
+1. **单一执行源**：`ConfigurableAgent.AsRunnable()` 的 `Invoke`/`Stream` 与 `ExecuteStream` 共享同一执行源；`core.StreamRunnable` 只在执行源和完成回调都成功后发出最终块，错误之后不会再出现成功终态。
+2. **循环只定义扩展点**：原生工具循环本身固定，新行为挂到 `WithPreStep`、`WithRequestHook`、`WithRequestError`、`WithTurnStopping`、`WithPromptSections`/`WithPromptContexts` 以及工具管线 `tools.Pipeline` 上。上下文改写只剩 PreStep（`WithOffload` 也装为 PreStep），模型请求失败的处置只剩 RequestError（重试用 `builder.RetryTransient`）。
+3. **显式持久**：`core/durable` 不序列化 Go 闭包、不恢复任意栈帧，只记录有名字的子操作（模型回合、工具调用、循环扩展点）的结果与输入摘要。恢复即以相同执行键重新执行并回放已完成的操作；意图或尝试策略改变时以错误结束而不是静默沿用旧结果。
+4. **模型可见即已记录**：配置 `WithSessionLog` 后，每次模型请求都能由 `system + session.DeriveMessages + 运行上下文` 重建；对历史的任何改写记为 `history/rewrite`。
+5. **观察与拦截分离**：`core/observe.Observer` 只读，事件不是检查点或账本；中间件、循环钩子与 Pipeline 可改变行为，错误按各自契约中止或交还模型。
+6. **宿主拥有资源**：`execution.Scope`、`budget.Controller`、`durable.Store`、`session.Store` 都由宿主创建；框架不创建默认存储，也不关闭宿主资源。
+7. **处处有界**：`WithMaxIterations` 限制模型请求次数；根预算限制请求数、预留 Token、工具次数与期限；`DispatchConfig` 限制执行/准入并发、排队数与单次超时；`workflow` 图有最大步数（`ErrMaxSteps`）。
 
-旧 `interfaces.Agent/Runnable` 保留兼容，不再作为新编排入口。Builder 的旧 Execute 保留同步、不隐式调工具的语义，不能替代统一执行路径。
+## 分层
 
-## 模型循环与状态图并存
+```text
+宿主（服务 / CLI / 评测）
+  │  execution.Scope：RunID、会话、日志、预算、期限、观察者
+  ▼
+builder.ConfigurableAgent  ←  Handle：Steer / Inject / Followup / Redirect / Interrupt
+  每轮：[PreStep] → 组装请求（PromptSections/Contexts）→ [RequestHook]
+        → ToolStreamClient.CompleteToolsStream → 失败时 [RequestError]
+        → 工具批次 ─► tools.Dispatcher：校验 → Authorize → Pipeline 准入 → durable.Do → OnResult
+        → 无工具调用时 [TurnStopping] 决定结束或续跑
+  │
+  ├─ core/durable：模型回合、工具调用、循环扩展点的持久记录
+  ├─ core/session：会话事件日志（DurableStore 让 durable 快照写入同一份日志）
+  ├─ core/budget：根预算
+  └─ core/observe：只读事件
+workflow.Graph / DurableGraph：把 Agent、Dispatcher 或普通函数作为节点编排
+harness/env：工具使用的文件系统与命令执行能力接口
+```
 
-Agent 循环适合动态选择工具与专业探索。Graph 适合固定步骤、条件路由、有限循环、并行汇合与审批。两者可以互相组合：Agent 成为图节点，Workflow 或子 Agent 适配成工具。
+## 关键机制
 
-本项目支持状态图思想，但不声称 LangGraph API 或调度语义兼容。Graph 当前是单一控制路径加显式并行节点，没有通用字段级 reducer、运行时 Send 或任意位置 interrupt 的等价公共 API。
+| 机制 | 实现位置 | 说明 |
+|------|----------|------|
+| 原生工具循环 | `builder/tool_events.go` `runToolEvents` | 每轮一次模型请求；最后一轮只提供 `WithReturnDirectTools` 声明的工具；模型请求未提供的工具即报错 |
+| 旧工具选择路径 | `builder/events.go` `runEvents` | 客户端只实现 `ToolCallingClient` 时使用；不支持会话日志、持久日志与根预算 |
+| 持久回合 | `builder/durable_turn.go`、`builder/model_call.go` | 操作 ID `model/turn/N`；RequestError 的原样重试留在同一条回合记录内 |
+| 工具执行 | `tools/dispatcher.go`、`tools/pipeline.go` | 准入阶段（Pre、审批、Guard）在操作日志之外；Around、工具与 Post 在超时之内 |
+| 结果卸载 | `builder/contextpolicy` `Offload` | 超长工具结果换成引用，读取工具 `read_context_result` 经 Dispatcher 注册 |
+| 运行中输入 | `builder/handle.go` | `Start` 返回 `Handle`；插话按步领取，持久运行中也记入日志（`loop/inbox/N`） |
 
-## 显式状态与身份
+## 并发
 
-- 泛型状态由业务定义，普通节点返回整个状态；并行 Clone/Merge 由宿主实现。
-- SessionID 标识对话；RunID/稳定作用域/CallID 标识可恢复执行，不能混作可任意复用的用户输入字段。
-- 图拓扑自动形成指纹，闭包代码与外部配置不能自动求完整身份，宿主须维护 DurableConfig.Version。
-- 宿主 Scope 管理派生上下文，不关闭借用的 Store、Observer 或 Tracer。
+- 同一个 `ConfigurableAgent` 同一时间只执行一次，后到的调用排队，排队时间计入 `WithTimeout`。不同实例互不影响。
+- Builder 是可变对象，不要并发配置。
+- `WithParallelToolCalls(n)`：同一轮多个调用且每个工具实现 `interfaces.ConcurrentCallTool`（如 `Dispatcher.Tools()`）时并发执行；结果、`tool_end` 事件与 `OnResult` 仍按模型给出的顺序。
+- `Dispatcher` 的工具须支持并发调用，否则设 `MaxConcurrency=1`；审批等待不占执行槽位。
+- 编译后的 `workflow` 图可并发运行，前提是节点与调用方状态支持并发。
 
-## 执行成功不等于已回滚或永不重跑
+## 状态与检查点
 
-持久模型与工具回放避免再次请求已保存的完成记录；结果未知时需要核对。外部系统的幂等、协调和补偿仍由业务负责。任意节点函数、回调或中间件不因处于图内就自动获得 exactly-once 效果。
+`core/state.AgentState` 是默认状态类型；`WithCheckpointer` 配置的 `core/checkpoint.Checkpointer`（如 `InMemorySaver`）以 SessionID 为键，在 `Initialize` 时恢复状态，`WithAutoSaveEnabled`（默认开启）时每次成功结束后保存。它与 `core/durable` 无关：检查点保存状态，持久日志保存操作结果。
 
-审批是可恢复等待，Stream Done 只结束本次调用。中间文本和 Preview 不表示业务完成。提前停止消费流必须取消 context，忽略 context 的第三方实现不能被强制终止。
+## 扩展点
 
-## 扩展点有明确职责
+各扩展点是否改变执行、错误与超时语义、恢复语义见 [扩展契约](../guides/EXTENSION_CONTRACT.md)；工具管线见 [工具中间件](../guides/TOOL_MIDDLEWARE.md) 与 [执行治理](../guides/EXECUTION_GOVERNANCE.md)；上下文治理见 [上下文策略](../guides/CONTEXT_POLICY.md)。
 
-| 扩展点 | 作用 |
-| --- | --- |
-| `PreStep` / `WithIdentifiedPreStep` | 请求前改写消息或结束本步；持久模式记录结果，身份变化拒绝旧意图 |
-| `RequestHook` | 调整请求/客户端；持久模式要求确定性 |
-| `RequestError` / `RetryTransient` | 有界恢复请求错误；持久运行只允许原样重试，各尝试分别占预算 |
-| `TurnStopping` | 在轮次结束前提供续跑输入，仍受步骤预算限制 |
-| `tools.Pipeline` | 工具准入、审批、守卫、Around/Post 等执行包装 |
-| `core/middleware` | 请求处理链，可改输入输出或短路；其效果不是自动持久事务 |
-| `core/observe` | 只读观察；不是恢复账本或业务决策源 |
+## 相关文档
 
-`WithCommunicator` 当前仅保存 metadata，不提供内置 Agent 消息总线。角色、能力路由和待澄清任务由宿主/Harness 定义。
-
-## 依据与验收
-
-实现依据：[Runnable](../../core/runnable.go)、[Builder](../../builder/builder.go)、[循环钩子](../../builder/loop_hooks.go)、[Graph](../../workflow/graph.go)、[持久图](../../workflow/durable.go)、[Dispatcher](../../tools/dispatcher.go)。
-
-现有历史设计与评测保留当时的版本、术语和路径。当前签名以源码与 [API 参考](../api/CORE_API.md) 为准，迁移见 [上下文策略](../guides/CONTEXT_POLICY.md) 和 [Harness 迁移](../guides/HARNESS_MIGRATION.md)。
+- [流程图](FLOW_DIAGRAMS.md)
+- [时序图](SEQUENCE_DIAGRAMS.md)
+- [组件关系图](../architecture/COMPONENT_DIAGRAM.md)
+- [执行契约](../guides/EXECUTION_CONTRACT.md)

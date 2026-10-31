@@ -60,7 +60,7 @@ graph TB
 ```mermaid
 sequenceDiagram
     participant Agent as Agent
-    participant Mgr as MemoryManager
+    participant Mgr as HierarchicalMemory
     participant Short as 短期记忆
     participant Long as 长期记忆
     participant Vec as 向量存储
@@ -143,14 +143,18 @@ type VectorStore interface {
 
 ```go
 type EnhancedMemory interface {
-    StoreTyped(ctx, key, value, memType, opts) error
-    GetByType(ctx, memType, limit) ([]*MemoryEntry, error)
-    VectorSearch(ctx, embedding, limit, threshold) ([]*MemoryEntry, error)
-    Consolidate(ctx) error  // 短期 -> 长期巩固
-    Forget(ctx, threshold) error  // 遗忘不重要的记忆
-    Associate(ctx, id1, id2, strength) error  // 创建关联
+    StoreTyped(ctx context.Context, key string, value interface{}, memType MemoryType, opts StoreOptions) error
+    GetByType(ctx context.Context, memType MemoryType, limit int) ([]*MemoryEntry, error)
+    VectorSearch(ctx context.Context, embedding []float32, limit int, threshold float64) ([]*MemoryEntry, error)
+    Consolidate(ctx context.Context) error                  // 短期 -> 长期巩固
+    Forget(ctx context.Context, threshold float64) error    // 遗忘不重要的记忆
+    GetStats() *MemoryStats
+    Associate(ctx context.Context, id1, id2 string, strength float64) error
+    GetAssociated(ctx context.Context, id string, limit int) ([]*MemoryEntry, error)
 }
 ```
+
+`HierarchicalMemory` 实现该接口。
 
 ## 记忆类型
 
@@ -158,11 +162,11 @@ type EnhancedMemory interface {
 
 | 类型 | 说明 | 适用场景 |
 |------|------|---------|
-| `ShortTerm` | 工作记忆，容量有限 | 当前对话上下文 |
-| `LongTerm` | 持久记忆 | 重要信息长期保存 |
-| `Episodic` | 事件性记忆 | "发生了什么" |
-| `Semantic` | 知识型记忆 | 事实和知识 |
-| `Procedural` | 程序化记忆 | "如何做" |
+| `MemoryTypeShortTerm` | 工作记忆，容量有限 | 当前对话上下文 |
+| `MemoryTypeLongTerm` | 持久记忆 | 重要信息长期保存 |
+| `MemoryTypeEpisodic` | 事件性记忆 | "发生了什么" |
+| `MemoryTypeSemantic` | 知识型记忆 | 事实和知识 |
+| `MemoryTypeProcedural` | 程序化记忆 | "如何做" |
 
 ### MemoryEntry 结构
 
@@ -178,6 +182,7 @@ type MemoryEntry struct {
     Importance  float64                 // 重要程度 (0.0-1.0)
     Decay       float64                 // 衰减系数
     Tags        []string                // 标签
+    Metadata    map[string]interface{}  // 元数据
     Related     []string                // 关联的其他记忆ID
 }
 ```
@@ -219,8 +224,8 @@ caseMemory := &interfaces.Case{
 }
 manager.AddCase(ctx, caseMemory)
 
-// 搜索相似案例
-similar, err := manager.SearchSimilarCases(ctx, "数据库查询很慢", 5)
+// 搜索案例：query 作为子串匹配 Title、Problem、Description，命中项的 Similarity 固定为 0.8
+similar, err := manager.SearchSimilarCases(ctx, "数据库查询", 5)
 for _, c := range similar {
     fmt.Printf("相似案例: %s (相似度: %.2f)\n", c.Title, c.Similarity)
 }
@@ -355,6 +360,12 @@ Forget(ctx, threshold float64) error
 Associate(ctx, id1, id2 string, strength float64) error
 GetAssociated(ctx, id string, limit int) ([]*MemoryEntry, error)
 
+// 通用存取
+Store(ctx, key, value, opts StoreOptions) error
+Get(ctx, key) (interface{}, error)
+Search(ctx, query string, limit int) ([]interface{}, error)
+Clear(ctx) error
+
 // 生命周期
 Shutdown(ctx) error
 GetStats() *MemoryStats
@@ -375,10 +386,11 @@ NewChromaVectorStore(client ChromaClient, collection string, dimension int) *Chr
 // 适配为分层记忆使用的 VectorStore（元数据不随向量保存）
 AsVectorStore(store SimpleVectorStore) VectorStore
 
-// 通用操作
+// SimpleVectorStore 接口
 Store(ctx, id string, vector []float32) error
-Search(ctx, query []float32, k int, threshold float64) (ids []string, scores []float64, error)
+Search(ctx, query []float32, k int, threshold float64) (ids []string, scores []float64, err error)
 Delete(ctx, id string) error
+GenerateEmbedding(ctx, content interface{}) ([]float32, error)
 Clear(ctx) error
 Size() int
 ```
@@ -391,19 +403,23 @@ memory/
 ├── inmemory.go             # 基础内存实现
 ├── enhanced.go             # 分层记忆系统
 ├── shortterm_longterm.go   # 短期/长期记忆
-├── memory_vector_store.go  # 向量存储实现
-├── simple_cache_test.go
-└── memory_test.go
+└── memory_vector_store.go  # 向量存储实现
 ```
 
 ## 配置选项
 
 ```go
 type Config struct {
-    MaxConversationLength int           // 最大对话长度
-    VectorStoreType       string        // 向量存储类型
-    EmbeddingModel        string        // 嵌入模型
-    SimilarityThreshold   float64       // 相似度阈值
+    EnableConversation    bool    // 是否启用对话记忆
+    MaxConversationLength int     // 最大对话长度
+    EnableVectorStore     bool    // 是否启用向量存储
+    VectorStoreType       string  // 向量存储类型
+    VectorStorePath       string  // 向量存储路径
+    EmbeddingDimension    int     // 嵌入维度
+    EmbeddingModel        string  // 嵌入模型
+    EmbeddingProvider     string  // 嵌入提供商
+    DefaultSearchLimit    int     // 默认搜索结果数量
+    SimilarityThreshold   float64 // 相似度阈值
 }
 
 // 默认配置

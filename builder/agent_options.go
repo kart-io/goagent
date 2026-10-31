@@ -72,19 +72,3 @@ func (b *AgentBuilder[C, S]) WithMetadata(key string, value interface{}) *AgentB
 	b.metadata[key] = value
 	return b
 }
-
-// WithTelemetry 添加 OpenTelemetry 支持
-//
-// [Advanced] 高级配置，用于集成 OpenTelemetry 分布式追踪。
-func (b *AgentBuilder[C, S]) WithTelemetry(provider interface{}) *AgentBuilder[C, S] {
-	b.metadata["telemetry_provider"] = provider
-	return b
-}
-
-// WithCommunicator 添加通信器
-//
-// [Advanced] 高级配置，用于 Agent 间通信（多 Agent 系统）。
-func (b *AgentBuilder[C, S]) WithCommunicator(communicator interface{}) *AgentBuilder[C, S] {
-	b.metadata["communicator"] = communicator
-	return b
-}

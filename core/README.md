@@ -1,156 +1,27 @@
 # core 核心执行引擎
 
-本模块是 goagent 框架的核心执行引擎，提供统一的可执行接口、智能体执行框架、链式处理和工作流编排能力。
+提供统一的可执行接口 `Runnable[I, O]`、Agent/Chain/Orchestrator 基础类型、回调、Generator 流处理和 panic 隔离等基础设施。
 
-新的通用图编排位于 [workflow](../workflow/README.md)：支持条件分支、并行 Clone/Merge、有界循环和 Runnable/Agent 适配，编译结果复用 core.StreamRunnable。
-
-新调用方统一使用 `core.Runnable[I, O]`。图编排与 `core/durable` 的顺序步骤恢复是独立能力，目前不会自动组合为图检查点恢复；入口、流式和持久化边界以[执行契约](../docs/guides/EXECUTION_CONTRACT.md)为准。
-
-## 目录
-
-- [架构设计](#架构设计)
-- [核心组件](#核心组件)
-- [执行流程](#执行流程)
-- [使用方法](#使用方法)
-- [API 参考](#api-参考)
-- [代码结构](#代码结构)
-
-## 架构设计
-
-### 系统架构图
-
-```mermaid
-graph TB
-    subgraph "Core Execution Framework"
-        Runnable["<b>Runnable[I,O]</b><br/>Invoke|Stream|Batch<br/>Pipe|WithCallbacks<br/>WithConfig"]
-        BaseRunnable["BaseRunnable<br/>Batch实现<br/>对象池管理"]
-        RunnableFunc["RunnableFunc<br/>函数包装"]
-        RunnablePipe["RunnablePipe<br/>管道连接"]
-        RunnableSeq["RunnableSequence<br/>多步骤"]
-    end
-
-    subgraph "Agent Framework"
-        Agent["<b>Agent</b><br/>Name|Description<br/>Capabilities"]
-        BaseAgent["BaseAgent<br/>Invoke/Stream<br/>Batch/Pipe<br/>+ InvokeFast<br/>+ RunGenerator"]
-        ChainableAgent["ChainableAgent<br/>多Agent链式调用<br/>对象池复用"]
-        AgentExecutor["AgentExecutor<br/>重试策略<br/>超时控制"]
-    end
-
-    subgraph "Chain Framework"
-        Chain["<b>Chain</b><br/>Name|Steps"]
-        BaseChain["BaseChain<br/>多步骤串行处理<br/>流式输出"]
-        Step["<b>Step</b><br/>Execute<br/>Name|Description"]
-    end
-
-    subgraph "Orchestrator Framework"
-        Orchestrator["<b>Orchestrator</b><br/>Execute<br/>RegisterAgent/Chain/Tool"]
-        BaseOrch["BaseOrchestrator<br/>Agent/Chain/Tool注册<br/>组件管理"]
-    end
-
-    subgraph "Support Systems"
-        Callback["<b>Callback</b><br/>OnStart|OnEnd<br/>OnLLM*/OnChain*<br/>OnTool*|OnAgent*"]
-        Middleware["<b>Middleware</b><br/>OnBefore|OnAfter<br/>OnError"]
-        State["<b>State</b><br/>Get|Set|Update<br/>Snapshot|Clone"]
-        Checkpoint["<b>Checkpointer</b><br/>Save|Load<br/>List|Delete"]
-        Generator["<b>Generator[T]</b><br/>基于iter.Seq2<br/>零分配流处理"]
-    end
-
-    Runnable -.基础实现.-> BaseRunnable
-    Agent -.继承Runnable.-> BaseAgent
-    Chain -.继承Runnable.-> BaseChain
-    Orchestrator -.基础实现.-> BaseOrch
-
-    style Runnable fill:#e1f5ff
-    style Agent fill:#e8f5e9
-    style Chain fill:#fff3e0
-    style Orchestrator fill:#f3e5f5
-```
-
-### 组件关系图
-
-```mermaid
-classDiagram
-    class Runnable~I,O~ {
-        <<interface>>
-        +Invoke(ctx, input I) (O, error)
-        +Stream(ctx, input I) (<-chan StreamChunk~O~, error)
-        +Batch(ctx, inputs []I) ([]O, error)
-        +Pipe(next Runnable~O,any~) Runnable~I,any~
-        +WithCallbacks(...Callback) Runnable~I,O~
-        +WithConfig(RunnableConfig) Runnable~I,O~
-    }
-
-    class Agent {
-        <<interface>>
-        +Name() string
-        +Description() string
-        +Capabilities() []string
-    }
-
-    class Chain {
-        <<interface>>
-        +Name() string
-        +Steps() int
-    }
-
-    class Orchestrator {
-        <<interface>>
-        +Execute(ctx, request) (*OrchestratorResponse, error)
-        +RegisterAgent(name, agent) error
-        +RegisterChain(name, chain) error
-        +RegisterTool(name, tool) error
-        +Name() string
-    }
-
-    class Callback {
-        <<interface>>
-        +OnStart(ctx, input) error
-        +OnEnd(ctx, output) error
-        +OnError(ctx, err) error
-    }
-
-    class State {
-        <<interface>>
-        +Get(key) (interface{}, bool)
-        +Set(key, value)
-        +Update(updates map)
-        +Snapshot() map
-        +Clone() State
-    }
-
-    class Checkpointer {
-        <<interface>>
-        +Save(ctx, threadID, state) error
-        +Load(ctx, threadID) (State, error)
-        +List(ctx) ([]CheckpointInfo, error)
-        +Delete(ctx, threadID) error
-    }
-
-    Runnable <|-- Agent : 继承
-    Runnable <|-- Chain : 继承
-    Agent --> Callback : 使用
-    Agent --> State : 访问
-    Agent --> Checkpointer : 保存
-```
+通用图编排位于 [workflow](../workflow/README.md)：条件分支、并行 Clone/Merge、有界循环和 Runnable/Agent 适配，编译结果复用 `core.StreamRunnable`。图编排与 `core/durable` 的顺序步骤恢复是独立能力；入口、流式和持久化边界以[执行契约](../docs/guides/EXECUTION_CONTRACT.md)为准。
 
 ## 核心组件
 
-### 1. Runnable 统一可执行接口
+### Runnable
 
-`Runnable[I, O]` 是核心抽象，所有可执行组件都实现此接口：
+所有可执行组件都实现 `Runnable[I, O]`：
 
 | 方法 | 说明 |
 |------|------|
 | `Invoke(ctx, input)` | 单次执行 |
-| `Stream(ctx, input)` | 流式执行 |
+| `Stream(ctx, input)` | 流式执行，返回 `<-chan StreamChunk[O]` |
 | `Batch(ctx, inputs)` | 批量执行 |
-| `Pipe(next)` | 管道连接 |
-| `WithCallbacks(...)` | 添加回调 |
-| `WithConfig(config)` | 配置设置 |
+| `Pipe(next)` | 管道连接，返回 `Runnable[I, any]` |
+| `WithCallbacks(...)` | 返回带回调的新 `Runnable[I, O]` |
+| `WithConfig(config)` | 返回带配置的新 `Runnable[I, O]` |
 
-### 2. Agent 智能体框架
+实现：`RunnableFunc`（包装函数）、`RunnablePipe`、`RunnableSequence`、`StreamRunnable`（以 `StreamSource` 为唯一执行源，`Invoke` 消费同一数据流；builder 的 `Agent.AsRunnable()` 与 workflow 编译结果均返回它）。`BaseRunnable` 提供回调、配置与 `Batch` 辅助，供具体类型嵌入。
 
-负责 LLM 推理、工具调用和记忆管理：
+### Agent、Chain、Orchestrator
 
 ```go
 type Agent interface {
@@ -159,392 +30,140 @@ type Agent interface {
     Description() string
     Capabilities() []string
 }
-```
 
-### 3. Chain 链式处理
-
-支持多步骤串行数据流处理：
-
-```go
 type Chain interface {
     Runnable[*ChainInput, *ChainOutput]
     Name() string
     Steps() int
 }
-```
 
-### 4. Orchestrator 工作流编排
-
-协调复杂多步骤工作流：
-
-```go
 type Orchestrator interface {
-    Execute(ctx, request *OrchestratorRequest) (*OrchestratorResponse, error)
+    Execute(ctx context.Context, request *OrchestratorRequest) (*OrchestratorResponse, error)
     RegisterAgent(name string, agent Agent) error
     RegisterChain(name string, chain Chain) error
-    RegisterTool(name string, tool Tool) error
+    RegisterTool(name string, tool interfaces.Tool) error
+    Name() string
 }
 ```
 
-### 5. Callback 回调系统
+- `BaseAgent`：嵌入用基础实现。默认 `Invoke` 返回 `Status: "failed"` 的输出；`Stream`、`Batch`、`RunGenerator` 调用的是 `BaseAgent.Invoke`，嵌入类型重写 `Invoke` 后需一并重写这些方法。
+- `ChainableAgent`：依次调用多个 Agent，前一个的输出作为下一个的输入。
+- `AgentExecutor`：包装 Agent，提供 `WithMaxRetries`、`WithTimeout`、`WithStopOnError` 选项。
+- `BaseChain`：按顺序执行 `Step`（`Execute(ctx, input) (interface{}, error)`、`Name()`、`Description()`）。
+- `BaseOrchestrator`：管理 Agent/Chain/Tool 注册；`Execute` 返回 `ErrNotImplemented`，需嵌入后实现。
 
-提供全方位的执行监控：
+完整的 LLM Agent 由 [builder](../builder/) 构建，不直接使用 `BaseAgent`。
 
-| 回调类型 | 说明 |
-|---------|------|
-| `OnStart/OnEnd/OnError` | 基础生命周期 |
-| `OnLLMStart/OnLLMEnd` | LLM 调用监控 |
-| `OnChainStart/OnChainEnd` | Chain 执行监控 |
-| `OnToolStart/OnToolEnd` | 工具调用监控 |
-| `OnAgentAction/OnAgentFinish` | Agent 行为监控 |
+### Callback
 
-### 6. State 状态管理
+`Callback` 接口包含 `OnStart/OnEnd/OnError`、`OnLLMStart/OnLLMEnd/OnLLMError`、`OnChainStart/OnChainEnd/OnChainError`、`OnToolStart/OnToolEnd/OnToolError`、`OnAgentAction/OnAgentFinish`。返回非 nil 错误会中止执行。嵌入 `BaseCallback` 只需实现关心的方法。
 
-线程安全的状态存储：
+内置：`NewLoggingCallback(logger Logger, verbose bool)`、`NewMetricsCallback(MetricsCollector)`、`NewTracingCallback(Tracer)`、`NewCostTrackingCallback(pricing)`、`NewStdoutCallback(color)`，以及组合多个回调的 `NewCallbackManager(...)`。
 
-```go
-type State interface {
-    Get(key string) (interface{}, bool)
-    Set(key string, value interface{})
-    Update(updates map[string]interface{})
-    Snapshot() map[string]interface{}
-    Clone() State
-}
-```
+### State 与 Checkpoint
 
-### 7. Checkpoint 持久化
+`core/state.State`（`core.State` 为别名）：`Get`、`Set`、`Update`、`Snapshot`、`Clone`、`Delete`、`Clear`、`Keys`、`Size`。`NewAgentState()` 返回线程安全实现，另有 `GetString`/`GetInt`/`GetBool`/`GetFloat64`/`GetMap`/`GetSlice`。`state` 包另提供带 schema 校验的 `TypedState`。
 
-会话状态保存与恢复：
-
-```go
-type Checkpointer interface {
-    Save(ctx, threadID string, state State) error
-    Load(ctx, threadID string) (State, error)
-    List(ctx) ([]CheckpointInfo, error)
-    Delete(ctx, threadID string) error
-}
-```
-
-## 执行流程
-
-### Agent 执行流程
-
-```mermaid
-sequenceDiagram
-    participant Client as 客户端
-    participant Agent as BaseAgent
-    participant Callback as CallbackManager
-    participant LLM as LLM Client
-
-    Client->>Agent: Invoke(ctx, input)
-    Agent->>Callback: OnStart(input)
-    Agent->>Callback: OnAgentAction(action)
-    Agent->>LLM: 调用 LLM
-    LLM-->>Agent: 返回响应
-    Agent->>Callback: OnAgentFinish(result)
-    Agent->>Callback: OnEnd(output)
-    Agent-->>Client: AgentOutput
-```
-
-### Chain 执行流程
-
-```mermaid
-sequenceDiagram
-    participant Client as 客户端
-    participant Chain as BaseChain
-    participant Step1 as Step 1
-    participant Step2 as Step 2
-    participant Step3 as Step 3
-
-    Client->>Chain: Invoke(ctx, input)
-    Chain->>Step1: Execute(input)
-    Step1-->>Chain: result1
-    Chain->>Step2: Execute(result1)
-    Step2-->>Chain: result2
-    Chain->>Step3: Execute(result2)
-    Step3-->>Chain: result3
-    Chain-->>Client: ChainOutput
-```
-
-### Generator 流式处理
-
-```mermaid
-graph LR
-    A[Generator] -->|yield| B[Filter]
-    B -->|yield| C[Map]
-    C -->|yield| D[Take]
-    D -->|yield| E[Collect]
-
-    style A fill:#e1f5ff
-    style E fill:#e8f5e9
-```
+`core/checkpoint.Checkpointer`：`Save`、`Load`、`List`、`Delete`、`Exists`。实现有 `NewInMemorySaver()`、`NewDistributedCheckpointer(config) (*DistributedCheckpointer, error)`，以及定期清理的 `NewCheckpointerWithAutoCleanup`。
 
 ## 使用方法
 
-### 创建和使用 Agent
+### 函数式 Runnable 与管道
 
 ```go
-// 创建 Agent
-agent := core.NewBaseAgent("assistant", "AI 助手", []string{"对话", "分析"})
-
-// 配置回调
-agent = agent.WithCallbacks(
-    core.NewLoggingCallback(logger, true),
-    core.NewMetricsCallback(metrics),
-)
-
-// 执行
-input := &core.AgentInput{
-    Task: "分析这段文本",
-    Context: map[string]interface{}{
-        "text": "需要分析的内容...",
-    },
-}
-
-output, err := agent.Invoke(ctx, input)
-if err != nil {
-    log.Fatal(err)
-}
-
-fmt.Printf("结果: %v\n", output.Result)
-fmt.Printf("耗时: %v\n", output.Latency)
-```
-
-### 创建和使用 Chain
-
-```go
-// 定义步骤
-steps := []core.Step{
-    &DataCollectorStep{},
-    &DataProcessorStep{},
-    &DataAnalyzerStep{},
-}
-
-// 创建 Chain
-chain := core.NewBaseChain("data-pipeline", steps)
-
-// 执行
-input := &core.ChainInput{
-    Data: rawData,
-    Vars: map[string]interface{}{
-        "format": "json",
-    },
-}
-
-output, err := chain.Invoke(ctx, input)
-if err != nil {
-    log.Fatal(err)
-}
-
-fmt.Printf("处理结果: %v\n", output.Data)
-fmt.Printf("执行步骤: %d\n", len(output.StepsExecuted))
-```
-
-### 使用 Orchestrator
-
-```go
-// 创建编排器
-orchestrator := core.NewBaseOrchestrator("workflow")
-
-// 注册组件
-orchestrator.RegisterAgent("analyzer", analyzerAgent)
-orchestrator.RegisterChain("pipeline", dataPipeline)
-orchestrator.RegisterTool("calculator", calcTool)
-
-// 执行请求
-request := &core.OrchestratorRequest{
-    TaskID:      "task-001",
-    TaskType:    "analysis",
-    Description: "执行数据分析流程",
-    Parameters: map[string]interface{}{
-        "source": "database",
-    },
-}
-
-response, err := orchestrator.Execute(ctx, request)
-```
-
-### 使用 Generator 流式处理
-
-```go
-// 创建 Generator
-gen := agent.RunGenerator(ctx, input)
-
-// 使用 Go 1.25 迭代器语法
-for item, err := range gen {
-    if err != nil {
-        log.Printf("错误: %v", err)
-        continue
-    }
-    fmt.Printf("收到: %v\n", item)
-}
-
-// 或使用工具函数
-results, err := core.Collect(gen)
-filtered := core.Filter(gen, func(item *AgentOutput) bool {
-    return item.Status == "success"
+upper := core.NewRunnableFunc(func(ctx context.Context, s string) (string, error) {
+    return strings.ToUpper(s), nil
 })
-first10 := core.Take(gen, 10)
+length := core.NewRunnableFunc(func(ctx context.Context, s string) (int, error) {
+    return len(s), nil
+})
+
+pipe := core.NewRunnablePipe[string, string, int](upper, length)
+n, err := pipe.Invoke(ctx, "hello") // 5
 ```
 
-### 状态管理和检查点
+### Chain
 
 ```go
-// 创建状态
-state := core.NewAgentState()
-state.Set("user_id", "12345")
-state.Set("session_data", sessionMap)
+chain := core.NewBaseChain("data-pipeline", []core.Step{collectStep, processStep})
 
-// 保存检查点
-checkpointer := checkpoint.NewInMemorySaver()
-err := checkpointer.Save(ctx, "session-001", state)
-
-// 恢复检查点
-restoredState, err := checkpointer.Load(ctx, "session-001")
+output, err := chain.Invoke(ctx, &core.ChainInput{
+    Data: rawData,
+    Vars: map[string]interface{}{"format": "json"},
+})
+if err != nil {
+    return err
+}
+fmt.Println(output.Data, len(output.StepsExecuted))
 ```
 
-## API 参考
+`GetChainInput`/`PutChainInput`、`GetChainOutput`/`PutChainOutput` 提供对象池复用。
 
-### Runnable API
+### Generator
+
+`Generator[T]` 即 `iter.Seq2[T, error]`，可直接 `range`，提前 `break` 即停止：
 
 ```go
-// 创建基础 Runnable
-NewBaseRunnable[I, O]() *BaseRunnable[I, O]
-NewRunnableFunc[I, O](fn func(ctx, I) (O, error)) *RunnableFunc[I, O]
-NewRunnablePipe[I, M, O](first, second) *RunnablePipe[I, M, O]
-NewRunnableSequence(...Runnable[any, any]) *RunnableSequence
+gen := agent.RunGenerator(ctx, input) // agent 为 *core.BaseAgent 或重写了 RunGenerator 的类型
+
+for out, err := range gen {
+    if err != nil {
+        return err
+    }
+    fmt.Println(out.Result)
+}
+
+ok := core.Filter(gen, func(o *core.AgentOutput) bool { return o.Status == "success" })
+results, err := core.Collect(core.Take(ok, 10))
 ```
 
-### Agent API
+另有 `Map`、`GeneratorFunc`、`FromChannel`、`ToChannel`。
+
+### 快速调用
+
+`FastInvoker.InvokeFast` 跳过回调与中间件，适合内部嵌套调用；外部入口应使用 `Invoke`。
 
 ```go
-// 创建 Agent
-NewBaseAgent(name, description string, capabilities []string) *BaseAgent
-NewChainableAgent(name, description string, agents ...Agent) *ChainableAgent
-NewAgentExecutor(agent Agent, opts ...ExecutorOption) *AgentExecutor
-
-// 执行方法
-agent.Invoke(ctx, input) (*AgentOutput, error)
-agent.InvokeFast(ctx, input) (*AgentOutput, error)  // 快速路径
-agent.Stream(ctx, input) (<-chan StreamChunk[*AgentOutput], error)
-agent.Batch(ctx, inputs) ([]*AgentOutput, error)
-agent.RunGenerator(ctx, input) Generator[*AgentOutput]
+output, err := core.TryInvokeFast(ctx, agent, input) // 不支持 FastInvoker 时回退到 Invoke
 ```
 
-### Chain API
+### 状态与检查点
 
 ```go
-// 创建 Chain
-NewBaseChain(name string, steps []Step) *BaseChain
+st := core.NewAgentState()
+st.Set("user_id", "12345")
 
-// 对象池优化
-GetChainInput() *ChainInput
-PutChainInput(input *ChainInput)
-GetChainOutput() *ChainOutput
-PutChainOutput(output *ChainOutput)
-```
-
-### Callback API
-
-```go
-// 创建回调
-NewBaseCallback() *BaseCallback
-NewCallbackManager(...Callback) *CallbackManager
-NewLoggingCallback(logger Logger, verbose bool) *LoggingCallback
-NewMetricsCallback(metrics MetricsCollector) *MetricsCallback
-NewTracingCallback(tracer Tracer) *TracingCallback
-```
-
-### State API
-
-```go
-// 创建状态
-state.NewAgentState() *AgentState
-state.NewAgentStateWithData(data map[string]interface{}) *AgentState
-
-// 类型安全访问
-state.GetString(key) (string, bool)
-state.GetInt(key) (int, bool)
-state.GetBool(key) (bool, bool)
-state.GetFloat64(key) (float64, bool)
-```
-
-### Checkpoint API
-
-```go
-// 创建 Checkpointer
-checkpoint.NewInMemorySaver() *InMemorySaver
-checkpoint.NewDistributedCheckpointer(config) *DistributedCheckpointer
+saver := checkpoint.NewInMemorySaver()
+err := saver.Save(ctx, "session-001", st)
+restored, err := saver.Load(ctx, "session-001")
 ```
 
 ## 代码结构
 
 ```text
 core/
-├── runnable.go              # 统一可执行接口
-├── agent.go                 # Agent 执行框架
-├── chain.go                 # 链式处理框架
-├── orchestrator.go          # 工作流编排
-├── callback.go              # 事件回调系统
-├── generator.go             # Go 1.25 迭代器支持
-├── fast_invoker.go          # 性能优化路径
-├── interrupt.go             # 人工介入支持
-├── lifecycle_manager.go     # 生命周期管理
-├── panic_handler.go         # panic 恢复隔离
-├── timeout.go               # 超时控制
-├── errors.go                # 错误定义
-├── state/                   # 状态管理
-│   └── state.go
-├── checkpoint/              # 会话持久化
-│   ├── checkpointer.go
-│   ├── memory_saver.go
-│   └── distributed.go
-├── middleware/              # 中间件系统
-│   ├── middleware.go
-│   └── chain.go
-└── execution/               # 执行运行时
-    └── runtime.go
-```
-
-## 性能优化
-
-### 对象池复用
-
-```go
-// 使用对象池减少 GC 压力
-input := core.GetChainInput()
-defer core.PutChainInput(input)
-
-input.Data = yourData
-output, err := chain.Invoke(ctx, input)
-```
-
-### 快速调用路径
-
-```go
-// 跳过回调，提升 4-6% 性能
-if fastAgent, ok := agent.(core.FastInvoker); ok {
-    output, err := fastAgent.InvokeFast(ctx, input)
-}
-
-// 或使用便捷函数
-output, err := core.TryInvokeFast(ctx, agent, input)
-```
-
-### Generator 零分配流处理
-
-```go
-// 基于 iter.Seq2，支持 early termination
-gen := agent.RunGenerator(ctx, input)
-for item, err := range gen {
-    if shouldStop(item) {
-        break  // 提前终止，不浪费资源
-    }
-    process(item)
-}
+├── runnable.go / stream_runnable.go  # Runnable 接口与实现
+├── agent.go / fast_invoker.go        # Agent 基础类型、FastInvoker
+├── chain.go / orchestrator.go        # Chain、Orchestrator
+├── callback.go                       # 回调
+├── generator.go                      # Generator[T]
+├── interrupt.go                      # 人工介入（InterruptManager、InterruptableExecutor）
+├── lifecycle_manager.go              # 生命周期管理
+├── plugin_bridge.go / plugin_registry_enhanced.go  # 插件注册与类型适配
+├── panic_handler.go / timeout.go / errors.go
+├── budget/       # 宿主级模型请求预算
+├── checkpoint/   # 会话状态持久化
+├── durable/      # 显式版本化步骤的持久运行与恢复
+├── execution/    # Runtime 与流式类型
+├── flow/         # 实验性同步只读增量管道
+├── middleware/   # 请求/响应中间件（OnBefore/OnAfter/OnError）
+├── observe/      # 可选执行事件
+├── session/      # 会话事件日志，见 session/README.md
+└── state/        # 状态管理
 ```
 
 ## 扩展阅读
 
 - [builder](../builder/) - Agent 构建器
-- [middleware](../middleware/) - 中间件系统
+- [workflow](../workflow/README.md) - 图编排
+- [core/session](session/README.md) - 会话事件日志

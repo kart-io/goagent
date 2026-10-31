@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -213,4 +214,14 @@ func TestOllama_Configuration(t *testing.T) {
 			assert.NotNil(t, client)
 		})
 	}
+}
+
+// 未设置超时时 Ollama 用 120 秒（本地推理较慢），显式设置时按设置。
+func TestOllamaDefaultTimeout(t *testing.T) {
+	c, err := NewOllamaWithOptions()
+	require.NoError(t, err)
+	assert.Equal(t, 120*time.Second, c.client.Config().Timeout)
+	c, err = NewOllamaWithOptions(agentllm.WithTimeout(10 * time.Second))
+	require.NoError(t, err)
+	assert.Equal(t, 10*time.Second, c.client.Config().Timeout)
 }

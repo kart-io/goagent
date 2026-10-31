@@ -1,6 +1,6 @@
 # GeminiProvider 原生 API 验证
 
-直接使用 `providers.NewGeminiWithOptions` 和 `GeminiStreamingProvider`，通过 Google GenAI SDK 调用 Gemini 原生 `generateContent` / `streamGenerateContent`。保留原有公开方法，不使用 OpenAI 兼容端点。
+直接使用 `providers.NewGeminiWithOptions` 和 `GeminiStreamingProvider`，通过 Google GenAI SDK 调用 Gemini 原生 `generateContent` / `streamGenerateContent`，不使用 OpenAI 兼容端点。
 
 从仓库根目录运行，先设置 `GEMINI_API_KEY`：
 
@@ -31,7 +31,7 @@ go run ./examples/llm/gemini-verify -live \
 
 工具是本地只读合成订单查询，不连接生产订单。`-suite legacy`（默认）只验证旧方法，不将工具结果送回模型。当前 Provider 已实现 `llm.StreamClient` / `ToolStreamClient` 与真实 Embedding；完整循环和向量验证使用下面的 `native` 套件。
 
-本轮[真实结果及修复说明](../../../docs/evaluation/2026-10-27-gemini-provider/REPORT.md)保留了修复前的 Vertex AI 认证失败和修复后 12/12 的完整记录。
+`legacy` 套件的实测记录见[评测报告](../../../docs/evaluation/2026-10-27-gemini-provider/REPORT.md)。
 
 ## 原生工具循环与 Embedding
 
@@ -65,4 +65,4 @@ vector, embedErr := client.Embed(ctx, "需要检索的文本")
 
 `Embed` 返回真实 `[]float64`，拒绝空文本、空向量、全零或非有限值。当前接口不暴露 Embedding 用量，报告的已知 Token 仅含文本生成，不能视为全程费用。不同向量和余弦值用于确认接入与非固定返回，不证明检索质量。
 
-最新[原生能力实测](../../../docs/evaluation/2026-10-27-gemini-native-support/REPORT.md)：12/12 通过。之前的旧方法报告保持历史记录，不再代表当前能力上限。
+`native` 套件的实测记录见[原生能力实测](../../../docs/evaluation/2026-10-27-gemini-native-support/REPORT.md)：12/12 通过。
