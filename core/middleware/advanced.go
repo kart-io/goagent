@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 	cryptorand "crypto/rand"
+	"errors"
 	"fmt"
 	"math/big"
 	"sync"
@@ -373,6 +374,9 @@ func (m *TransformMiddleware) OnAfter(ctx context.Context, response *MiddlewareR
 	return response, nil
 }
 
+// errCircuitOpen 标记熔断器自己的拒绝：链会把 OnBefore 的错误交给 OnError，它不应计为一次失败。
+var errCircuitOpen = errors.New("circuit breaker is open")
+
 // CircuitBreakerMiddleware implements circuit breaker pattern
 type CircuitBreakerMiddleware struct {
 	*BaseMiddleware
@@ -410,7 +414,7 @@ func (m *CircuitBreakerMiddleware) OnBefore(ctx context.Context, request *Middle
 			m.state = "half-open"
 			m.mu.Unlock()
 		} else {
-			return nil, agentErrors.New(agentErrors.CodeMiddlewareExecution, "circuit breaker is open").
+			return nil, agentErrors.Wrap(errCircuitOpen, agentErrors.CodeMiddlewareExecution, "circuit breaker is open").
 				WithComponent("circuit-breaker").
 				WithOperation("OnBefore").
 				WithContext("state", state).
@@ -428,7 +432,7 @@ func (m *CircuitBreakerMiddleware) OnBefore(ctx context.Context, request *Middle
 
 // OnError handles errors and updates circuit state
 func (m *CircuitBreakerMiddleware) OnError(ctx context.Context, err error) error {
-	if err != nil {
+	if err != nil && !errors.Is(err, errCircuitOpen) {
 		m.mu.Lock()
 		defer m.mu.Unlock()
 
@@ -451,12 +455,10 @@ func (m *CircuitBreakerMiddleware) OnError(ctx context.Context, err error) error
 // OnAfter handles successful responses
 func (m *CircuitBreakerMiddleware) OnAfter(ctx context.Context, response *MiddlewareResponse) (*MiddlewareResponse, error) {
 	if response.Error == nil {
+		// 成功关闭半开的熔断器，并清零连续失败计数
 		m.mu.Lock()
-		if m.state == "half-open" {
-			// Success in half-open state, close the circuit
-			m.state = "closed"
-			m.failureCount = 0
-		}
+		m.state = "closed"
+		m.failureCount = 0
 		m.mu.Unlock()
 	}
 

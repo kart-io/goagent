@@ -6,6 +6,7 @@ import (
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 
 	coremiddleware "github.com/kart-io/goagent/core/middleware"
 	"github.com/kart-io/goagent/observability"
@@ -69,14 +70,19 @@ func (m *ObservabilityMiddleware) OnAfter(ctx context.Context, response *coremid
 		}
 	}
 
-	// 记录成功
+	// 记录结果并结束 span
 	if span != nil && spanCtx != nil {
-		m.tracer.SetStatus(spanCtx, codes.Ok, "execution completed")
-
-		// 添加输出大小属性
+		if response.Error != nil {
+			m.tracer.RecordError(spanCtx, response.Error)
+		} else {
+			m.tracer.SetStatus(spanCtx, codes.Ok, "execution completed")
+		}
 		m.tracer.SetAttributes(spanCtx,
 			attribute.Float64("response.duration_seconds", response.Duration.Seconds()),
 		)
+	}
+	if s, ok := span.(trace.Span); ok {
+		s.End()
 	}
 
 	// 记录指标

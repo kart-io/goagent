@@ -19,6 +19,7 @@ import (
 
 	"github.com/kart-io/goagent/builder"
 	"github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/core/middleware"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/providers"
@@ -168,7 +169,7 @@ func example1AgentWithCustomState(apiKey, providerName string) {
 //
 // 使用的方法：
 // - Simple API: WithSystemPrompt, WithTools
-// - Advanced API: WithMiddleware (概念演示)
+// - Advanced API: WithMiddleware
 func example2AgentWithMiddleware(apiKey, providerName string) {
 	fmt.Println("--- 示例 2: 带中间件的 Agent ---")
 
@@ -181,16 +182,21 @@ func example2AgentWithMiddleware(apiKey, providerName string) {
 	// 创建工具
 	calculator := createCalculatorTool()
 
-	// 注意：中间件通常在工具级别应用，而非 Agent 级别
-	// 这里演示基本的 Agent 配置，实际的中间件应用需要包装工具
-	fmt.Println("中间件功能包括: 缓存、限流、日志记录等")
-	fmt.Println("中间件通常在工具级别应用，可提供横切关注点支持")
+	// 中间件包裹每次 Execute 调用，提供日志、限流、缓存等横切能力
+	fmt.Println("注册中间件: 日志、限流（每分钟 10 次）、缓存（TTL 5 分钟）")
 
 	// 配置 Agent
 	agent, err := builder.NewSimpleBuilder(llmClient).
 		// Simple API
 		WithSystemPrompt("你是一个高性能助手").
 		WithTools(calculator).
+
+		// Advanced API - 中间件
+		WithMiddleware(
+			middleware.NewLoggingMiddleware(func(msg string) { fmt.Println("  " + msg) }),
+			middleware.NewRateLimiterMiddleware(10, time.Minute),
+			middleware.NewCacheMiddleware(5*time.Minute),
+		).
 		Build()
 	if err != nil {
 		log.Fatalf("创建 Agent 失败: %v", err)
@@ -213,7 +219,7 @@ func example2AgentWithMiddleware(apiKey, providerName string) {
 // 使用的方法：
 // - Simple API: WithSystemPrompt, WithTools
 // - Core API: WithMemory, WithMaxConversationHistory
-// - Advanced API: WithSessionID, WithAutoSaveEnabled, WithSaveInterval
+// - Advanced API: WithSessionID, WithAutoSaveEnabled
 //
 // 本示例演示如何结合对话记忆和会话管理实现有状态的多轮对话。
 // Agent 会记住之前的对话内容，同时支持会话持久化和恢复。
@@ -246,9 +252,8 @@ func example3AgentWithSessionManagement(apiKey, providerName string) {
 		WithMaxConversationHistory(20). // 最多保留 20 轮历史对话
 
 		// Advanced API - 会话管理
-		WithSessionID(sessionID).           // 设置会话 ID
-		WithAutoSaveEnabled(true).          // 启用自动保存
-		WithSaveInterval(30 * time.Second). // 每 30 秒保存一次状态
+		WithSessionID(sessionID).  // 设置会话 ID
+		WithAutoSaveEnabled(true). // 启用自动保存
 
 		Build()
 	if err != nil {
@@ -350,7 +355,6 @@ func example4EnterpriseAgent(apiKey, providerName string) {
 		WithState(customState).                    // 自定义状态
 		WithSessionID("enterprise-session-001").   // 会话管理
 		WithAutoSaveEnabled(true).                 // 自动保存
-		WithSaveInterval(1*time.Minute).           // 每分钟保存
 		WithMetadata("tenant_id", "tenant-001").   // 租户信息
 		WithMetadata("region", "us-west-2").       // 区域信息
 		WithMetadata("environment", "production"). // 环境标识

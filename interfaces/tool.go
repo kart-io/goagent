@@ -12,7 +12,6 @@ import "context"
 //   - tools/http/* - HTTP 请求工具
 //   - tools/search/* - 搜索工具
 //   - tools/shell/* - Shell 执行工具
-//   - tools/practical/* - 实用工具
 //
 // 参见：tools/tool.go 的基础实现
 type Tool interface {
@@ -102,9 +101,7 @@ type ValidatableTool interface {
 // 此接口由需要运行工具的组件实现
 // 例如智能体和工作流引擎
 //
-// 实现位置：
-//   - agents/executor/executor_agent.go - 执行器智能体实现
-//   - tools/registry.go - 具有执行能力的工具注册表
+// 仓库内没有实现；工具调用经 tools.Dispatcher 执行。
 type ToolExecutor interface {
 	// ExecuteTool 按名称使用给定参数执行工具
 	//

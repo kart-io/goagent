@@ -57,7 +57,7 @@ func RunDemo() {
 	fmt.Println("To run with a real LLM:")
 	fmt.Println("  • Install Ollama: https://ollama.ai")
 	fmt.Println("  • Or set OPENAI_API_KEY or GEMINI_API_KEY")
-	fmt.Println("  • Then run: ./run.sh or go run main_simple.go")
+	fmt.Println("  • Then run: ./run.sh or go run .")
 	fmt.Println()
 	fmt.Println("✨ Demo completed successfully!")
 	fmt.Println()

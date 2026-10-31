@@ -1,39 +1,29 @@
 # All Providers Example - 所有 Provider 测试示例
 
-本示例展示如何使用所有支持的 LLM Providers。
+依次用 `llm/providers` 的构造函数创建 6 个 Provider 客户端，各发一条 `Chat` 请求并打印回复、Provider 与模型名。未设置对应 API Key 的 Provider 会被跳过；Ollama 需本地运行（`ollama serve`，模型 `llama2`）。
 
 ## 运行示例
 
 ```bash
-# 设置 API Keys
-export OPENAI_API_KEY="your-openai-key"
-export GEMINI_API_KEY="your-gemini-key"
-export DEEPSEEK_API_KEY="your-deepseek-key"
-export ANTHROPIC_API_KEY="your-anthropic-key"
-export COHERE_API_KEY="your-cohere-key"
-export HUGGINGFACE_API_KEY="your-huggingface-key"
+export OPENAI_API_KEY="..."       # gpt-3.5-turbo
+export GEMINI_API_KEY="..."       # gemini-pro
+export DEEPSEEK_API_KEY="..."     # deepseek-chat
+export SILICONFLOW_API_KEY="..."  # Qwen/Qwen2-7B-Instruct
+export KIMI_API_KEY="..."         # moonshot-v1-8k
 
-# 运行示例
-go run main.go
+go run ./examples/basic/06-all-providers
 ```
 
 ## 代码说明
 
-本示例直接使用 `llm/providers` 中各 Provider 的构造函数创建客户端：
-
 ```go
-import "github.com/kart-io/goagent/llm/providers"
-
-client, err := providers.NewOpenAIWithOptions(opts...)
+client, err := providers.NewOpenAIWithOptions(
+	llm.WithProvider(constants.ProviderOpenAI),
+	llm.WithAPIKey(apiKey),
+	llm.WithModel("gpt-3.5-turbo"),
+	llm.WithMaxTokens(100),
+	llm.WithTemperature(0.7),
+)
 ```
 
-## 支持的 Providers
-
-本示例测试以下 providers：
-
-1. **OpenAI** - GPT-3.5, GPT-4
-2. **Gemini** - Google Gemini Pro
-3. **DeepSeek** - DeepSeek Chat
-4. **Anthropic** - Claude 3
-5. **Cohere** - Command models
-6. **HuggingFace** - Open source models
+其余 Provider 分别使用 `NewGeminiWithOptions`、`NewDeepSeekWithOptions`、`NewSiliconFlowWithOptions`、`NewKimiWithOptions` 与 `NewOllamaClientSimple`。所有客户端都实现 `llm.Client`，测试函数 `testProvider` 先调用 `IsAvailable()`，再以 10 秒超时调用 `Chat`。

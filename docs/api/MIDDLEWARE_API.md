@@ -1,157 +1,136 @@
 <!-- generated-by: gsd-doc-writer -->
 # GoAgent Middleware API 参考
 
-Builder 的请求/响应中间件来自 `github.com/kart-io/goagent/core/middleware`，在一次 Agent 执行外围运行，不等同于每步模型钩子或每次工具管线。
+本文介绍 `core/middleware` 的请求/响应中间件。完整签名见 `go doc -all github.com/kart-io/goagent/core/middleware`。工具级中间件（`tools/middleware`）见 [Tool API](TOOL_API.md#工具中间件) 与 [工具中间件指南](../guides/TOOL_MIDDLEWARE.md)。
 
-源码：[核心接口与链](../../core/middleware/middleware.go)、[附加实现](../../core/middleware/advanced.go)、[Builder 挂载](../../builder/runtime_options.go)、[执行入口](../../builder/configurable_agent.go)。
+## 与 Builder 的关系
 
-## 选择扩展层
+`builder.WithMiddleware(...middleware.Middleware)` 注册的中间件包裹整次 Agent 执行（`Execute`、`ExecuteWithTools`、`ExecuteStream` 与 `AsRunnable` 都经过同一条链），不是每次模型调用都执行一次。请求中：
 
-| 处理范围 | 入口 |
-| --- | --- |
-| Agent 请求输入、最终输出与错误 | core/middleware.Middleware + WithMiddleware |
-| 每步模型前改写上下文 | WithPreStep / WithIdentifiedPreStep |
-| 调整请求、处理模型失败 | WithRequestHook / WithRequestError |
-| 每次工具调用 | tools.Pipeline |
-| 只读观察 | core/observe.Observer、Tracer |
+- `Input` 是调用方传入的输入；
+- `State` 是 Agent 状态，`Runtime` 是 `*core/execution.Runtime[C, S]`；
+- `Metadata` 预先填入 `WithMetadata` 设置的键值。
 
-新编排用 agent.AsRunnable().Invoke/Stream；它与 ExecuteStream 共用执行源，外围中间件仍生效。流式预览可能先输出，OnAfter 只处理最终结果，不能撤回已发送文本。见 [扩展契约](../guides/EXTENSION_CONTRACT.md)。
+处理器返回的 `Output` 是最终答案，`TokenUsage` 是本次执行的用量。`WithVerbose(true)` 会在用户中间件之前自动加入 `LoggingMiddleware` 与 `TimingMiddleware`。中间件副作用不会自动幂等，契约见 [扩展契约](../guides/EXTENSION_CONTRACT.md)。
 
-## 接口与数据
+## 接口与类型
 
 ```go
 type Middleware interface {
     Name() string
-    OnBefore(context.Context, *MiddlewareRequest) (*MiddlewareRequest, error)
-    OnAfter(context.Context, *MiddlewareResponse) (*MiddlewareResponse, error)
-    OnError(context.Context, error) error
+    OnBefore(ctx context.Context, request *MiddlewareRequest) (*MiddlewareRequest, error)
+    OnAfter(ctx context.Context, response *MiddlewareResponse) (*MiddlewareResponse, error)
+    OnError(ctx context.Context, err error) error
 }
 
-type Handler func(context.Context, *MiddlewareRequest) (*MiddlewareResponse, error)
+type Handler func(ctx context.Context, request *MiddlewareRequest) (*MiddlewareResponse, error)
+
+type MiddlewareRequest struct {
+    Input     interface{}
+    State     state.State
+    Runtime   interface{}
+    Metadata  map[string]interface{}
+    Headers   map[string]string
+    Timestamp time.Time
+}
+
+type MiddlewareResponse struct {
+    Output     interface{}
+    State      state.State
+    Metadata   map[string]interface{}
+    Headers    map[string]string
+    Duration   time.Duration
+    TokenUsage *interfaces.TokenUsage
+    Error      error
+}
 ```
 
-| 类型 | 字段 |
-| --- | --- |
-| MiddlewareRequest | Input interface{}、State state.State、Runtime interface{}、Metadata map[string]interface{}、Headers map[string]string、Timestamp time.Time |
-| MiddlewareResponse | Output interface{}、State state.State、Metadata map[string]interface{}、Headers map[string]string、Duration time.Duration、TokenUsage *interfaces.TokenUsage、Error error |
+`BaseMiddleware`（`NewBaseMiddleware(name)`）提供三个钩子的空实现，自定义中间件嵌入它后只覆盖需要的方法。`MiddlewareFunc`（`NewMiddlewareFunc(name, before, after, onError)`）用函数构造中间件，任一函数可为 nil。
 
-state.State 指 core/state.State，不能与任意 workflow.Graph[T] 的 T 混为一谈。Request.State、Request.Runtime、Response.State、Response.Error 的 JSON 标签为 json:"-"，不是自动序列化的快照。Headers 是库内字段，不表示框架提供 HTTP 服务。
+`GetMiddlewareRequest` / `PutMiddlewareRequest`、`GetMiddlewareResponse` / `PutMiddlewareResponse` 是对象池。
 
-## MiddlewareChain
+## 中间件链
 
 ```go
 func NewMiddlewareChain(handler Handler) *MiddlewareChain
 func (c *MiddlewareChain) Use(middleware ...Middleware) *MiddlewareChain
 func (c *MiddlewareChain) Execute(ctx context.Context, request *MiddlewareRequest) (*MiddlewareResponse, error)
-func (c *MiddlewareChain) WithHandler(handler Handler) *MiddlewareChain
+func (c *MiddlewareChain) WithHandler(handler Handler) *MiddlewareChain // 共享中间件、替换处理器
 func (c *MiddlewareChain) Size() int
 ```
 
-正常顺序：A.OnBefore → B.OnBefore → handler → B.OnAfter → A.OnAfter。
+`MiddlewareChain.Execute` 的顺序：
 
-- OnBefore 按注册顺序，OnAfter 按逆序。WithHandler 快照列表并更换本次 handler，中间件实例仍共享。
-- Use 写时复制列表，不保证实例字段、宿主 State 或复用请求对象可并发修改；自定义实例须自行处理并发。
-- OnBefore/OnAfter 出错时调用同一个中间件的 OnError，非 nil 中止，nil 则继续；不能因此返回 nil 对象又假定后续组件都接受。
-- handler 出错后，链按注册顺序通知各 OnError，非 nil 返回更新错误；不会仅因某个 OnError 返回 nil 就抹掉原 handler 错误，也不会自动重做 handler。
-- OnBefore 可在 Metadata 放入 cached_response（非 nil *MiddlewareResponse）跳过 handler，仍运行 OnAfter；缓存不是持久检查点。
-- Builder 的 Agent 执行边界把链内 panic 转为错误；裸 MiddlewareChain.Execute 本身不提供同样的 panic 隔离。
+1. 按添加顺序调用 `OnBefore`。某个 `OnBefore` 返回错误时只调用该中间件的 `OnError`：返回非 nil 则中止，返回 nil 则继续（此时请求可能是 nil）。
+2. 若 `request.Metadata["cached_response"]` 是 `*MiddlewareResponse`，跳过处理器直接使用它。
+3. 调用处理器。处理器出错时按添加顺序调用所有中间件的 `OnError`，非 nil 返回值替换当前错误；最终错误非 nil 则返回该错误，不再执行 `OnAfter`。
+4. 按添加顺序的逆序调用 `OnAfter`。某个 `OnAfter` 出错时调用该中间件的 `OnError`，非 nil 则中止。
 
-中间件错误不会回滚已发生的业务效果。
+`NewImmutableMiddlewareChain(handler, mws...)` 是构造后不可变的链；`NewFastMiddlewareChain(handler, mws...)` 只执行 `OnBefore`。
 
-## 无网络 Builder 示例
+## 内置中间件
 
-```go
-package main
+| 构造函数 | 行为 |
+|---|---|
+| `NewLoggingMiddleware(logger func(string))` | 记录请求、响应与错误；logger 为 nil 时用 `fmt.Println` |
+| `NewTimingMiddleware()` | 记录耗时；`GetTimings()`、`GetAverageLatency()` |
+| `NewCacheMiddleware(ttl)`、`NewCacheMiddlewareWithShards(ttl, n)` | 以 `fmt.Sprint(request.Input)` 为键，不区分会话或用户。未命中时 `OnBefore` 把输入写入请求 `Metadata["original_input"]`，处理器把请求元数据带入响应（Builder 即如此）时 `OnAfter` 缓存成功响应；命中时通过 `cached_response` 跳过处理器，命中不会延长 TTL。`Clear()`、`Size()` |
+| `NewRateLimiterMiddleware(maxRequests, window)` | 固定窗口计数，按 `State` 或 `Metadata` 中的 `user_id` 分组，超限时 `OnBefore` 返回错误；`Reset()` |
+| `NewCircuitBreakerMiddleware(maxFailures, resetTimeout)` | 连续失败达到阈值后打开并拒绝请求（成功清零计数，自身的拒绝不计为失败）；超过 resetTimeout 后半开，半开时成功则关闭、失败则重新打开 |
+| `NewValidationMiddleware(validators...)` | `OnBefore` 中依次执行校验函数 |
+| `NewTransformMiddleware(inputFn, outputFn)` | 转换 `Input` 与 `Output` |
+| `NewAuthenticationMiddleware(authFunc)` | `authFunc` 返回 false 或错误时拒绝请求 |
+| `NewDynamicPromptMiddleware(modifier)` | `Input` 为字符串时，用 modifier 的结果并附加 `State` 中的 `user_name`、`conversation_history` |
+| `NewToolSelectorMiddleware(tools, maxTools)` | 按输入选出工具名写入 `Metadata["selected_tools"]`；`WithSelector` 自定义选择函数。不改变 Builder 实际提供给模型的工具 |
+| `NewRandomDelayMiddleware(min, max)` | 随机延迟，用于测试 |
 
-import (
-    "context"
-    "fmt"
-
-    "github.com/kart-io/goagent/builder"
-    "github.com/kart-io/goagent/core/middleware"
-    "github.com/kart-io/goagent/llm"
-)
-
-func main() {
-    if err := run(); err != nil {
-        panic(err)
-    }
-}
-
-func run() error {
-    prefix := middleware.NewMiddlewareFunc("input-prefix",
-        func(ctx context.Context, req *middleware.MiddlewareRequest) (*middleware.MiddlewareRequest, error) {
-            if err := ctx.Err(); err != nil {
-                return nil, err
-            }
-            req.Input = "请简短回答：" + fmt.Sprint(req.Input)
-            return req, nil
-        }, nil, nil)
-    agent, err := builder.NewSimpleBuilder(llm.NewMockStreamClient()).
-        WithMiddleware(prefix).
-        BuildContext(context.Background())
-    if err != nil {
-        return err
-    }
-    out, err := agent.AsRunnable().Invoke(context.Background(), "演示中间件")
-    if err != nil {
-        return err
-    }
-    fmt.Println(out.Result)
-    return nil
-}
-```
-
-使用内置 mock 的固定流式答复，不发网络请求；示例只证明中间件挂载和执行路径，不证明真实模型对改写内容的理解。
-
-## 创建与复用
-
-```go
-func NewBaseMiddleware(name string) *BaseMiddleware
-func NewMiddlewareFunc(
-    name string,
-    before func(context.Context, *MiddlewareRequest) (*MiddlewareRequest, error),
-    after func(context.Context, *MiddlewareResponse) (*MiddlewareResponse, error),
-    onError func(context.Context, error) error,
-) *MiddlewareFunc
-```
-
-BaseMiddleware 的 Before/After 原样返回对象，OnError 原样返回错误。MiddlewareFunc 的 nil 函数字段沿用对应默认行为。
-
-| core/middleware 构造器 | 当前行为 |
-| --- | --- |
-| NewLoggingMiddleware(logger func(string)) | 记录输入、输出与错误；nil logger 使用标准输出 |
-| NewTimingMiddleware() | 计时，提供 GetTimings/GetAverageLatency |
-| NewCacheMiddleware(ttl time.Duration) | 进程内响应缓存 |
-| NewCacheMiddlewareWithShards(ttl time.Duration, numShards uint32) | 分片进程内缓存 |
-| NewDynamicPromptMiddleware(modifier func(*MiddlewareRequest) string) | 修改外围输入 |
-| NewValidationMiddleware(validators ...func(*MiddlewareRequest) error) | 验证外围请求 |
-| NewRateLimiterMiddleware(maxRequests int, windowSize time.Duration) | 进程内窗口计数，不是根模型预算 |
-
-其他组件和准确构造签名见 [advanced.go](../../core/middleware/advanced.go)。缓存、限流等中间件不自动提供分布式一致性或持久恢复。
+根包 `github.com/kart-io/goagent/middleware` 另有 `ObservabilityMiddleware`（实现上面的 `Middleware` 接口，基于 `observability.TelemetryProvider`），以及 `AdaptiveMiddleware`、`ContextEnrichmentMiddleware`、`DynamicPromptMiddleware`、`LLMToolSelectorMiddleware`、`LLMToolEmulatorMiddleware`。后五者提供 `Process(ctx, core.State) (core.State, error)`，不实现 `Middleware` 接口，不能传给 `WithMiddleware`。
 
 ### RetryMiddleware 不会自动重试
 
-NewRetryMiddleware(maxRetries int, backoff time.Duration) 和 WithRetryCondition 仍存在；当前 OnError 仅包装符合条件的错误，**不会重新调用 handler**。不能用它承诺模型或业务工具实际重试。
+```go
+type auditMiddleware struct {
+    *middleware.BaseMiddleware
+    record func(input, output interface{})
+}
 
-模型暂时失败使用 WithRequestError(n, builder.RetryTransient(n, backoff))；业务效果重试另按工具契约处理。参见 [Builder API](../guides/BUILDER_API_REFERENCE.md)。
+func newAuditMiddleware(record func(input, output interface{})) *auditMiddleware {
+    return &auditMiddleware{BaseMiddleware: middleware.NewBaseMiddleware("audit"), record: record}
+}
 
-### 链实现不能随意互换
+func (m *auditMiddleware) OnBefore(ctx context.Context, req *middleware.MiddlewareRequest) (*middleware.MiddlewareRequest, error) {
+    req.Metadata["audit_input"] = req.Input
+    return req, nil
+}
 
-[optimized_chain.go](../../core/middleware/optimized_chain.go) 另提供 NewImmutableMiddlewareChain(handler,middlewares...) 和 NewFastMiddlewareChain(handler,middlewares...)。FastMiddlewareChain 只运行 OnBefore 与 handler，不运行 OnAfter/OnError。Builder 当前用 MiddlewareChain，不能换成快速链后仍假定语义一致。
+func (m *auditMiddleware) OnAfter(ctx context.Context, resp *middleware.MiddlewareResponse) (*middleware.MiddlewareResponse, error) {
+    m.record(resp.Metadata["audit_input"], resp.Output)
+    return resp, nil
+}
+```
 
-## 同名包与 Process 组件
+`OnAfter` 只能看到响应；需要请求信息时在 `OnBefore` 写入 `Metadata`，并确认处理器会把请求元数据带到响应（Builder 的处理器会带上）。函数式写法：
 
-顶层 github.com/kart-io/goagent/middleware 与 core/middleware 不同：
+```go
+requireInput := middleware.NewMiddlewareFunc("require_input",
+    func(ctx context.Context, req *middleware.MiddlewareRequest) (*middleware.MiddlewareRequest, error) {
+        if s, ok := req.Input.(string); !ok || s == "" {
+            return nil, errors.New("输入不能为空")
+        }
+        return req, nil
+    },
+    nil, nil,
+)
 
-- [ObservabilityMiddleware](../../middleware/observability.go) 实现请求/响应钩子，接收已有 TelemetryProvider。
-- [tool_selector_advanced.go](../../middleware/tool_selector_advanced.go) 部分组件提供 Process(ctx, core.State) (core.State,error)。该方法不会因 WithMiddleware 自动被调用；即便嵌入 BaseMiddleware 满足接口，Process 也不是 OnBefore。
-- core/middleware.ToolSelectorMiddleware 将 selected_tools 写入 Metadata；不能据此推断它自动改变每次原生模型请求的工具清单。
+agent, err := builder.NewSimpleBuilder(client).
+    WithMiddleware(requireInput, newAuditMiddleware(record)).
+    Build()
+```
 
-接入时按具体扩展协议选择，而不是只看类名或包名。
+上例中 `requireInput` 的 `OnError` 为 nil，`OnBefore` 的错误原样中止执行。
 
-## 对象池与资源
+## 相关文档
 
-GetMiddlewareRequest/Response、PutMiddlewareRequest/Response 是可选对象池辅助函数；取出后初始化本次字段，归还后不得继续持有或并发使用。对象池不提供状态持久化。
-
-WithHandler 和不同 Execute 共享中间件实例，不自动关闭宿主模型、存储、观察者。取消依赖实际 handler/中间件响应 context，不强制终止不合作的同步实现。
+- [核心 API 参考](CORE_API.md)
+- [工具中间件指南](../guides/TOOL_MIDDLEWARE.md)
+- [设计概述](../design/DESIGN_OVERVIEW.md)

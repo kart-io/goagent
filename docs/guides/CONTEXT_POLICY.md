@@ -49,7 +49,8 @@ assistant 的工具调用、reasoning_content、结果角色和 tool_call_id 保
 其他改写直接写成 PreStep：
 
 ```go
-builder.WithIdentifiedPreStep("glossary/"+version+"/"+hash, func(ctx context.Context, step *builder.Step) (builder.PreStepResult, error) {
+b := builder.NewSimpleBuilder(client)
+b.WithIdentifiedPreStep("glossary/"+version+"/"+hash, func(ctx context.Context, step *builder.Step) (builder.PreStepResult, error) {
     step.Messages = withGlossary(step.Messages) // 改写后的消息成为之后的历史；须幂等
     return builder.PreStepResult{}, nil
 })

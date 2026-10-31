@@ -11,11 +11,7 @@ import "context"
 //   - 识别智能体（Name、Description、Capabilities）
 //   - 生成执行计划
 //
-// 实现：
-//   - core.BaseAgent - 基础实现，支持 Runnable
-//   - agents/executor.ExecutorAgent - 工具执行智能体
-//   - agents/react.ReactAgent - ReAct 推理智能体
-//   - agents/specialized.SpecializedAgent - 领域特定智能体
+// 实现：core.BaseAgent。
 type Agent interface {
 	Runnable
 

@@ -379,23 +379,6 @@ func TestCacheMiddleware_OnBefore_NilMetadata(t *testing.T) {
 
 // ===== Retry Middleware Edge Cases =====
 
-func TestRetryMiddleware_WithNilRetryCondition(t *testing.T) {
-	mw := NewRetryMiddleware(3, 100*time.Millisecond)
-
-	// Default retry condition should be used
-	err := errors.New("test error")
-	handledErr := mw.OnError(context.Background(), err)
-	assert.Contains(t, handledErr.Error(), "retry needed")
-}
-
-func TestRetryMiddleware_OnError_WithNilError(t *testing.T) {
-	mw := NewRetryMiddleware(3, 100*time.Millisecond)
-
-	// Nil error should not trigger retry
-	handledErr := mw.OnError(context.Background(), nil)
-	assert.Nil(t, handledErr)
-}
-
 // ===== MiddlewareRequest & Response Edge Cases =====
 
 func TestMiddlewareRequest_NilState(t *testing.T) {

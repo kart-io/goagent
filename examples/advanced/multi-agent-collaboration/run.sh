@@ -53,7 +53,7 @@ elif [ -n "$GEMINI_API_KEY" ]; then
     go run .
 else
     echo "ℹ️  No LLM provider configured"
-    echo "Running demonstration mode..."
+    echo "Running demonstration mode (go run . falls back to RunDemo without an LLM)..."
     echo ""
     go run .
 fi
@@ -74,5 +74,5 @@ echo "1. Set OPENAI_API_KEY or GEMINI_API_KEY environment variable"
 echo "2. Run: ./run.sh"
 echo ""
 echo "To run the demo without LLM:"
-echo "Run: go run demo.go"
+echo "Run: go run . (with OLLAMA_MODEL, OPENAI_API_KEY and GEMINI_API_KEY unset and no local Ollama)"
 echo ""

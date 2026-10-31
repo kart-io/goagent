@@ -72,29 +72,8 @@ func ConfigToOptions(config *agentllm.LLMOptions) []agentllm.ClientOption {
 	if config.TopP > 0 {
 		opts = append(opts, agentllm.WithTopP(config.TopP))
 	}
-	if config.ProxyURL != "" {
-		opts = append(opts, agentllm.WithProxy(config.ProxyURL))
-	}
-	if config.RetryCount > 0 {
-		opts = append(opts, agentllm.WithRetryCount(config.RetryCount))
-	}
-	if config.RetryDelay > 0 {
-		opts = append(opts, agentllm.WithRetryDelay(config.RetryDelay))
-	}
-	if config.RateLimitRPM > 0 {
-		opts = append(opts, agentllm.WithRateLimiting(config.RateLimitRPM))
-	}
 	if config.SystemPrompt != "" {
 		opts = append(opts, agentllm.WithSystemPrompt(config.SystemPrompt))
-	}
-	if config.CacheEnabled {
-		opts = append(opts, agentllm.WithCache(config.CacheEnabled, config.CacheTTL))
-	}
-	if config.StreamingEnabled {
-		opts = append(opts, agentllm.WithStreamingEnabled(config.StreamingEnabled))
-	}
-	if config.OrganizationID != "" {
-		opts = append(opts, agentllm.WithOrganizationID(config.OrganizationID))
 	}
 	if len(config.CustomHeaders) > 0 {
 		opts = append(opts, agentllm.WithCustomHeaders(config.CustomHeaders))
@@ -368,6 +347,10 @@ func (p *ProviderCapabilities) AddCapability(cap agentllm.Capability) {
 // MapHTTPError maps an HTTP error to an appropriate AgentError based on status code.
 // This provides consistent error handling across all providers.
 func MapHTTPError(err HTTPError, providerName, model string, parseError func(body string) string) error {
+	return WithHTTPStatus(mapHTTPError(err, providerName, model, parseError), err)
+}
+
+func mapHTTPError(err HTTPError, providerName, model string, parseError func(body string) string) *agentErrors.AgentError {
 	// Try to get error message from response body
 	errorMsg := ""
 	if parseError != nil {
@@ -406,6 +389,21 @@ func MapHTTPError(err HTTPError, providerName, model string, parseError func(bod
 	default:
 		return agentErrors.NewLLMRequestError(providerName, model, fmt.Errorf("unexpected status: %d", err.StatusCode))
 	}
+}
+
+// WithHTTPStatus 把非 2xx 响应的状态码与 Retry-After 作为 *llm.ProviderError 挂到 e 的原因上，
+// 使 llm.ClassifyError 能判定；错误码不变。e 须是刚构造、尚未共享的错误。
+func WithHTTPStatus(e *agentErrors.AgentError, resp HTTPError) *agentErrors.AgentError {
+	cause := e.Cause
+	if cause == nil {
+		cause = fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	e.Cause = &agentllm.ProviderError{
+		StatusCode: resp.StatusCode,
+		RetryAfter: RetryAfterDuration(resp.Headers["Retry-After"], time.Now()),
+		Err:        cause,
+	}
+	return e
 }
 
 // RestyResponseToHTTPError converts a resty.Response to an HTTPError.

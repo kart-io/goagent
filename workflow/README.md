@@ -139,7 +139,9 @@ if errors.Is(err, durable.ErrApprovalRequired) {
 
 执行前持久化意图，节点成功后保存输出，再单独保存下一条路由。因此路由失败不会重跑已保存的节点。Router 必须无副作用，其执行可能在崩溃后重放；Router 对输入的修改不保存。`MaxSteps` 跨重启累计。审批键绑定 run、版本计划和具体节点访问，循环每轮使用不同键；它不是身份认证凭证。
 
-宿主需要在批准生效前核对外部数据（例如 SQL 工单在审批暂停期间是否被改动）时，用 `g.CompileDurable(ctx, cfg, workflow.WithBeforeApprove(fn))` 注册前置校验。它在运行锁内、审批键匹配之后、批准写入之前调用，`snap` 是锁内最新检查点的独立副本，先 `Snapshot` 再 `Run` 之间的窗口由它覆盖。返回错误时批准被拒绝，检查点保持 Waiting、审批键不变，错误以 `批准前置校验拒绝: %w` 包装；panic 报告为 `批准前置校验 panic: ...`。`Run` 与 `AsRunnable` 两条入口都会调用，不带审批键的恢复不调用。钩子不参与计划指纹。钩子内不要再对同一 run 调用 `Snapshot`/`Run`，运行锁已被持有。`durable.Runner` 的 `BeforeApprove` 字段语义相同。
+宿主需要在批准生效前核对外部数据（例如 SQL 工单在审批暂停期间是否被改动）时，用 `g.CompileDurable(ctx, cfg, workflow.WithBeforeApprove(fn))` 注册前置校验。它在运行锁内、审批键匹配之后、批准写入之前调用，`snap` 是锁内最新检查点的独立副本，先 `Snapshot` 再 `Run` 之间的窗口由它覆盖。返回错误时批准被拒绝，检查点保持 Waiting、审批键不变，返回 `*workflow.ApprovalRejectedError`（文本为 `批准前置校验拒绝: ...`，`Unwrap` 得到原错误）；钩子 panic 时返回 `*errors.PanicError`，不属于拒绝。`Run` 与 `AsRunnable` 两条入口都会调用，不带审批键的恢复不调用。钩子不参与计划指纹。钩子内不要再对同一 run 调用 `Snapshot`/`Run`，运行锁已被持有。`durable.Runner` 的 `BeforeApprove` 字段语义相同。
+
+其他入口：`Graph.Describe()` 校验并返回确定排序的拓扑描述；`DurableGraph.Snapshot(ctx, id)` 读取最近提交的检查点；`Diagnose(ctx, id, refs...)` 只读诊断续跑元数据；`AsChildRunnable()` 让持久图作为子流程嵌套（如经 `tools.NewRunnableToolFactory` 包成可续跑工具），检查点写在父操作日志的 Store 中，审批暂停返回 `*durable.WaitError`，其中的 `ChildContinuation` 给出续跑所需的审批键，审批键不符时为 `ErrApprovalMismatch`。
 
 节点通过 `workflow.DurableKey(ctx)` 读取稳定执行键。效果提交后、检查点保存前发生崩溃时节点仍可能重跑，外部服务必须用该键或更强的业务请求 ID 去重。节点函数仍从入口重新执行；使用 Dispatcher.Tools 的 Builder 原生工具循环会按模型回合和工具调用恢复，详见下文。它不恢复任意 Go 调用栈。`AsRunnable` 为持久图提供 Invoke/Stream/Batch；审批暂停返回 Waiting=true、Done=false 的状态。兼容 `Run` 仍返回审批哨兵错误。实时事件不承诺持久化重放。FileStore 只提供本地锁与原子文件保存，不提供跨主机租约或接管。Merge 必须无副作用；效果完成后但分支检查点保存前仍可能重跑，业务服务须执行幂等。
 
