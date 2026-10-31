@@ -19,7 +19,7 @@
 ```go
 type Plugin interface {
     Name() string    // Host 内唯一；非空、无首尾空白、不含 "/" 与 "@"
-    Version() string // 非空；进入持久运行的身份
+    Version() string // 非空、无首尾空白、不含 "/"；进入持久运行的身份
     Contribute(ctx context.Context, env *Env) (Contribution, error)
 }
 
@@ -51,7 +51,7 @@ type Contribution struct {
 }
 ```
 
-`Env` 是插件可见的宿主环境：`Plugin()` 返回当前插件名，`Resources()` 返回 Host 共享的 `*Resources`。
+`Env` 是插件可见的宿主环境：`Plugin()` 返回当前插件名，`Provide(key, value)` 发布资源，`Resources()` 返回 Host 共享的 `*Resources`。
 
 插件配置由插件构造函数接收自己的类型化结构体（如 `NewOrders(OrdersConfig{...})`），Host 不传递无类型配置。
 
@@ -59,7 +59,7 @@ type Contribution struct {
 
 `Resources` 替代原 `Container`，只保存实例，不提供工厂：
 
-- `Provide(env, key, value) error`：只能在该插件的 `Start` 中调用；`key` 必须以 `"<插件名>."` 开头，防止插件冒用他人命名空间；重复 key 报错。
+- `Env.Provide(key, value) error`：只能在该插件的 `Start` 执行期间调用；`key` 必须以 `"<插件名>."` 开头，防止插件冒用他人命名空间；重复 key 或 nil 值报错。
 - `Resolve(key) (any, bool)` 与泛型 `Lookup[T](r, key) (T, error)`：未找到与类型不符分别报错。
 - 并发安全；`Stop` 之后清空。插件只应解析自己 `Requires` 中插件提供的资源，Host 不强制。
 
@@ -75,11 +75,14 @@ type Contribution struct {
 ## 安装与冲突规则
 
 ```go
-func Install[C any, S core.State](ctx context.Context, b *builder.AgentBuilder[C, S], h *Host, names ...string) error
+func Install[C any, S core.State](ctx context.Context, b *builder.AgentBuilder[C, S], h *Host, opts ...InstallOption) error
+func Only(names ...string) InstallOption          // 只安装列出的插件
+func Dispatch(cfg tools.DispatchConfig) InstallOption // 插件工具统一经一个 Dispatcher 包装，持久运行需要
 ```
 
 - Host 必须处于已启动状态（即使没有 Starter，也要求先 `Start`，保证资源在任何 Contribute 之前就绪）。
-- `names` 为空时安装全部插件，否则只安装列出的插件，未知名称报错；按 Host 拓扑顺序处理，与 `names` 的书写顺序无关。
+- 不带 `Only` 时安装全部插件；带 `Only` 时只安装列出的插件，未知名称报错；按 Host 拓扑顺序处理，与书写顺序无关。
+- 持久运行要求工具经 Dispatcher（否则执行时报 `requires a journaled adapter`）。带 `Dispatch` 时，所选插件的全部工具注册进一个 `tools.Registry` 并经 `tools.NewDispatcher(reg, cfg)` 包装后再 `WithTools`；宿主自己的工具仍由宿主自行包装。
 - 先对所有选中插件调用 `Contribute` 并完成全部校验，全部通过后才写入 Builder；任一失败时 Builder 不变。
 - 校验（跨所选插件）：工具名重复、PromptSection 名重复、PromptContext 名重复、中间件 `Name()` 重复、PreStep `Identity` 为空、贡献中的 nil 钩子或 nil 工具。错误指明冲突双方插件名。与宿主自己经 `WithTools` 加入的工具重名，由 Build 时 Dispatcher 的 `duplicate tool` 报告。
 - 写入顺序：插件按拓扑顺序，每个插件内按切片顺序，依次调用对应 `With*`。
