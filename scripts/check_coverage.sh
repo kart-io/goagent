@@ -34,8 +34,10 @@ echo "======================================"
 echo ""
 
 # 1. 检查整体覆盖率
-echo "📊 检查整体覆盖率..."
-OVERALL_COVERAGE=$(go tool cover -func=coverage.out | grep "^total:" | awk '{print $3}' | sed 's/%//')
+# examples/、example/ 下是无测试的示例 main 包，计入会使整体覆盖率失真，故从统计中排除
+echo "📊 检查整体覆盖率（不含示例程序）..."
+grep -vE '^github\.com/kart-io/goagent/(.*/)?examples?/' coverage.out > coverage.lib.out
+OVERALL_COVERAGE=$(go tool cover -func=coverage.lib.out | grep "^total:" | awk '{print $3}' | sed 's/%//')
 
 if [ -z "$OVERALL_COVERAGE" ]; then
     echo -e "${RED}❌ 无法获取整体覆盖率${NC}"

@@ -5,7 +5,36 @@ All notable changes to GoAgent will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.24.0] - 2026-10-31
+
+### Added
+
+- `core/session`：追加写的会话事件日志。`DeriveMessages` 从日志推导模型历史（`history/rewrite` 替换区间内的消息，`session/rewind` 与中止的轮次撤销区间内的事件）；`FileStore`（每个会话一个 JSONL 文件，按行原子追加，忽略写入中崩溃留下的不完整行）与 `MemoryStore`，`Append` 按期望序号做比较并交换；`Rewind`、`Fork`。
+- `session.DurableStore`：以会话日志实现 `durable.Store`，持久操作的快照作为 `boundary/snapshot` 事件写入同一份日志，通过 durable 的存储一致性测试。
+- 轨迹导出：`session.BuildTrajectory` 给出模型最终看到的对话、system 提示词、工具定义与工具调用统计，`WriteOpenAI`（OpenAI 微调格式）、`WriteShareGPT`（LLaMA-Factory 的 sharegpt 格式）。
+- `builder.WithSessionLog`：原生工具流的历史从会话日志推导，每次模型请求前记录与日志不同的对话；中断的轮次在持久运行以同一执行键恢复时续写，否则记为中止、不进入历史。
+
+### Changed
+
+- 自动发版规则：推送到 master 时只有 `fix`、`perf`、`refactor` 发补丁版本，`feat` 发 minor；`docs`、`test`、`chore`、`ci`、`style`、`build` 不再单独发版，随下一次发版一起发布。需要单独发版时，手动运行 Auto Tag and Release 并指定版本类型。
+- 提交作用域可以含任意字符（如 `fix(llm/common):`），此前只识别小写字母，带斜杠、数字或连字符的提交被漏判。
+- 破坏性变更除标题中的 `type!:` 外，也识别正文中以 `BREAKING CHANGE:` 开头的行；0.x 阶段仍只升 minor。
+
+## [0.23.1] - 2026-10-31
+
+库代码与 0.23.0 相同。
+
+### Fixed
+
+- PR 流水线的覆盖率评论步骤缺少 `pull-requests: write` 权限而报 403；来自 fork 的 PR 令牌只读，改为跳过评论，报告同时写入 job summary。
+
+### Changed
+
+- 整体覆盖率统计（`scripts/check_coverage.sh` 与 PR 评论）不再计入 `examples/` 下没有测试的示例程序。
+- 只测试 `llm/common` 的 6 个用例从 `llm/providers` 移回 `llm/common`。
+- CHANGELOG 中 0.23.0 的条目此前列在 Unreleased 下，已归入 0.23.0。
+
+## [0.23.0] - 2026-10-30
 
 ### 宿主接入与开销
 
