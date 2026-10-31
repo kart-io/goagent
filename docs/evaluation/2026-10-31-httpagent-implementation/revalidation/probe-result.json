@@ -1,0 +1,117 @@
+{
+  "checks": [
+    {
+      "path": "/api/invoke",
+      "status": 200,
+      "response": {
+        "output": {
+          "result": "执行结果：插件工具已处理：REVERIFY_JSON_3104",
+          "metadata": {
+            "answer_usage_reported": false,
+            "model_calls": 2,
+            "usage_complete": false,
+            "usage_reports": 0
+          },
+          "duration_ms": 138,
+          "timestamp": "2026-10-31T22:56:24.608613+08:00",
+          "token_usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0
+          }
+        },
+        "run_id": "9557db02-ec55-44a7-8089-98ac4ac69891",
+        "schema_version": 1
+      },
+      "outbound_callback": {
+        "schema_version": 1,
+        "event_id": "32285e94-2356-4634-a09a-023e0f3b14be",
+        "run_id": "9557db02-ec55-44a7-8089-98ac4ac69891",
+        "event_type": "run.completed",
+        "occurred_at": "2026-10-31T14:56:24.608674Z",
+        "data": {
+          "duration_ms": 138,
+          "metadata": {
+            "answer_usage_reported": false,
+            "model_calls": 2,
+            "usage_complete": false,
+            "usage_reports": 0
+          },
+          "result": "执行结果：插件工具已处理：REVERIFY_JSON_3104",
+          "timestamp": "2026-10-31T22:56:24.608613+08:00",
+          "token_usage": {
+            "completion_tokens": 0,
+            "prompt_tokens": 0,
+            "total_tokens": 0
+          }
+        }
+      }
+    },
+    {
+      "path": "/api/webhooks/demo",
+      "status": 200,
+      "response": {
+        "output": {
+          "result": "执行结果：插件工具已处理：REVERIFY_WEBHOOK_3105",
+          "metadata": {
+            "answer_usage_reported": false,
+            "model_calls": 2,
+            "usage_complete": false,
+            "usage_reports": 0
+          },
+          "duration_ms": 150,
+          "timestamp": "2026-10-31T22:56:24.760945+08:00",
+          "token_usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0
+          }
+        },
+        "run_id": "d53c2ebc-a2fc-438f-8193-67163b747694",
+        "schema_version": 1
+      },
+      "outbound_callback": {
+        "schema_version": 1,
+        "event_id": "a4dca848-de3b-447d-b5b1-b132937b36e7",
+        "run_id": "d53c2ebc-a2fc-438f-8193-67163b747694",
+        "event_type": "run.completed",
+        "occurred_at": "2026-10-31T14:56:24.761035Z",
+        "data": {
+          "duration_ms": 150,
+          "metadata": {
+            "answer_usage_reported": false,
+            "model_calls": 2,
+            "usage_complete": false,
+            "usage_reports": 0
+          },
+          "result": "执行结果：插件工具已处理：REVERIFY_WEBHOOK_3105",
+          "timestamp": "2026-10-31T22:56:24.760945+08:00",
+          "token_usage": {
+            "completion_tokens": 0,
+            "prompt_tokens": 0,
+            "total_tokens": 0
+          }
+        }
+      }
+    },
+    {
+      "path": "/api/invoke",
+      "method": "POST",
+      "status": 400,
+      "body": "{\"error\":{\"code\":\"invalid_request\",\"message\":\"input 必须存在且非 null\"},\"run_id\":\"\"}\n"
+    },
+    {
+      "path": "/api/invoke",
+      "method": "PUT",
+      "status": 405,
+      "body": "{\"error\":{\"code\":\"method_not_allowed\",\"message\":\"此入口要求 POST\"},\"run_id\":\"\"}\n"
+    },
+    {
+      "path": "/api/webhooks/missing",
+      "method": "POST",
+      "status": 404,
+      "body": "{\"error\":{\"code\":\"not_found\",\"message\":\"Webhook 接收器不存在\"},\"run_id\":\"\"}\n"
+    }
+  ],
+  "graceful_shutdown_exit": 0
+}

@@ -1,0 +1,30 @@
+## Latest page snapshot
+uid=31_0 RootWebArea "GoAgent Playground" url="http://127.0.0.1:8097/"
+  uid=31_1 main
+    uid=31_2 "GOAGENT · HTTP ADAPTER"
+    uid=31_3 heading "GoAgent Playground" level="1"
+    uid=31_4 "同一套 Agent 与 Plugin，通过 SSE 或 WebSocket 执行。"
+    uid=31_5 form
+      uid=31_6 "连接方式"
+      uid=31_7 combobox "连接方式" expandable haspopup="menu" value="WebSocket"
+        uid=31_8 option "HTTP / SSE"
+        uid=31_9 option "WebSocket" selected
+      uid=31_10 status atomic live="polite" relevant="additions text"
+        uid=34_0 "已取消"
+      uid=31_12 "输入任务"
+      uid=31_13 textbox "输入任务" multiline value="慢任务 WS 复验取消"
+      uid=31_14 button "发送任务"
+      uid=31_15 button "停止执行" disableable disabled
+    uid=31_16 "执行结果"
+    uid=31_17 generic live="polite" relevant="additions text"
+      uid=34_1 "正在调用插件工具…"
+    uid=31_19 heading "运行事件" level="2"
+    uid=34_2 "Run 3dbbd9fe-89d8-47fc-82db-04a900b845d4"
+    uid=34_3 "Agent · model_start"
+    uid=34_4 "wait_operation · tool_start"
+    uid=34_5 "执行已取消"
+    uid=31_21 "默认示例使用离线脚本模型。Plugin、工具调用、网络传输与取消均真实执行。"
+    uid=31_22 LineBreak "
+"
+    uid=31_23 "Webhook 演示入口：POST /api/webhooks/demo，JSON：{"message":"查询订单"}。"
+
