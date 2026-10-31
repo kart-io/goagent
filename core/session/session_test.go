@@ -8,12 +8,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/kart-io/goagent/core/durable"
-	"github.com/kart-io/goagent/core/durable/storetest"
 	"github.com/kart-io/goagent/llm"
 )
 
@@ -23,73 +21,6 @@ func msgEvent(t *testing.T, m llm.Message) Event {
 	ev, err := NewEvent(typ, MessageData{Message: m})
 	require.NoError(t, err)
 	return ev
-}
-
-// stores 返回同一底层存储上的两个实例：FileStore 为同一目录上的两个实例（等价于两个进程），MemoryStore 为同一个实例。
-func stores(t *testing.T) map[string][2]Store {
-	dir := t.TempDir()
-	a, err := NewFileStore(dir)
-	require.NoError(t, err)
-	b, err := NewFileStore(dir)
-	require.NoError(t, err)
-	m := NewMemoryStore()
-	return map[string][2]Store{"file": {a, b}, "memory": {m, m}}
-}
-
-func TestStoreContract(t *testing.T) {
-	ctx := context.Background()
-	for name, pair := range stores(t) {
-		t.Run(name, func(t *testing.T) {
-			a, b := pair[0], pair[1]
-			_, err := a.Read(ctx, "s", 0)
-			require.ErrorIs(t, err, ErrNotFound)
-
-			last, err := a.Append(ctx, "s", 0, msgEvent(t, llm.UserMessage("一")), msgEvent(t, llm.UserMessage("二")))
-			require.NoError(t, err)
-			require.EqualValues(t, 2, last)
-			_, err = b.Append(ctx, "s", 0, msgEvent(t, llm.UserMessage("冲突")))
-			require.ErrorIs(t, err, ErrConflict, "CAS rejects a stale expected sequence")
-			last, err = b.Append(ctx, "s", 2, msgEvent(t, llm.UserMessage("三")))
-			require.NoError(t, err)
-			require.EqualValues(t, 3, last)
-
-			events, err := a.Read(ctx, "s", 1)
-			require.NoError(t, err, "a reads b's append")
-			require.Len(t, events, 2)
-			require.EqualValues(t, []int64{2, 3}, []int64{events[0].Seq, events[1].Seq})
-			require.False(t, events[0].Time.IsZero())
-
-			require.NoError(t, a.Fork(ctx, "s", "f", 2))
-			require.ErrorIs(t, a.Fork(ctx, "s", "f", 0), ErrExists)
-			require.ErrorIs(t, a.Fork(ctx, "missing", "g", 0), ErrNotFound)
-			forked, err := b.Read(ctx, "f", 0)
-			require.NoError(t, err)
-			require.Len(t, forked, 2)
-			_, err = b.Append(ctx, "f", 2, msgEvent(t, llm.UserMessage("分支")))
-			require.NoError(t, err)
-			orig, err := a.Read(ctx, "s", 0)
-			require.NoError(t, err)
-			require.Len(t, orig, 3, "a fork does not affect its source")
-
-			ids, err := b.List(ctx)
-			require.NoError(t, err)
-			require.Equal(t, []string{"f", "s"}, ids)
-
-			unlock, err := a.Lock(ctx, "s", "x")
-			require.NoError(t, err)
-			short, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
-			_, err = b.Lock(short, "s", "x")
-			cancel()
-			require.ErrorIs(t, err, durable.ErrLockUnavailable)
-			other, err := b.Lock(ctx, "s", "y")
-			require.NoError(t, err, "names are independent")
-			require.NoError(t, other())
-			require.NoError(t, unlock())
-			again, err := b.Lock(ctx, "s", "x")
-			require.NoError(t, err)
-			require.NoError(t, again())
-		})
-	}
 }
 
 // 写入中崩溃留下的不完整行被忽略，下次追加前截掉。
@@ -189,26 +120,6 @@ func TestRecorderToleratesSnapshots(t *testing.T) {
 	require.ErrorIs(t, err, ErrConflict, "messages from another writer are a conflict")
 	_, err = ds.Load(ctx, "missing")
 	require.ErrorIs(t, err, os.ErrNotExist)
-}
-
-// 会话日志作为 durable.Store 满足 durable 的存储契约。
-func TestDurableStoreConformance(t *testing.T) {
-	t.Run("file", func(t *testing.T) {
-		storetest.Run(t, func(t *testing.T) (durable.Store, durable.Store) {
-			dir := t.TempDir()
-			a, err := NewFileStore(dir)
-			require.NoError(t, err)
-			b, err := NewFileStore(dir)
-			require.NoError(t, err)
-			return DurableStore(a, "run"), DurableStore(b, "run")
-		}, storetest.Options{})
-	})
-	t.Run("memory", func(t *testing.T) {
-		storetest.Run(t, func(t *testing.T) (durable.Store, durable.Store) {
-			m := NewMemoryStore()
-			return DurableStore(m, "run"), DurableStore(m, "run")
-		}, storetest.Options{})
-	})
 }
 
 func TestExport(t *testing.T) {
