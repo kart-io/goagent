@@ -1,18 +1,60 @@
-# 插件注册中心
+# 插件
 
-`core` 包提供进程内的插件注册中心：把泛型 `core.Runnable[I, O]` 包装为动态类型的 `core.DynamicRunnable`，按名称（和版本）注册、查找，并统一管理生命周期。它是独立的组件容器，**不与 Builder 或 Dispatcher 集成**：注册中心里的工具是 `DynamicRunnable`，不是模型可调用的 `interfaces.Tool`。给 Agent 提供工具用 `WithTools`（见下文 MCP 一节与[原生编排](NATIVE_ORCHESTRATION.md)）。
+Agent 能力包见第一节；`core` 的 Runnable 注册表见最后一节。
+
+## Agent 能力包
+
+插件把工具、提示词片段、循环钩子、中间件、回调与进程级资源打包，经 `plugin.Install` 装进 Agent。`builder` 不依赖 `plugin`；goagent-harness 的 preset 组件可以直接包装插件。
+
+```go
+type Orders struct{ cfg OrdersConfig }
+
+func (*Orders) Name() string    { return "orders" }
+func (*Orders) Version() string { return "1.0.0" }
+func (o *Orders) Contribute(ctx context.Context, env *plugin.Env) (plugin.Contribution, error) {
+    db, err := plugin.Lookup[*sql.DB](env.Resources(), "database.primary")
+    if err != nil { return plugin.Contribution{}, err }
+    return plugin.Contribution{
+        Tools:          []interfaces.Tool{newLookupOrder(db)},
+        PromptSections: []builder.PromptSection{{Name: "orders", Text: func(builder.PromptScope) string { return "退款前先查询订单" }}},
+    }, nil
+}
+func (*Orders) Requires() []string { return []string{"database"} }
+
+host, err := plugin.NewHost(database, &Orders{cfg: cfg}, redact)
+if err != nil { return err }
+if err := host.Start(ctx); err != nil { return err }
+defer host.Stop(context.Background())
+
+b := builder.NewSimpleBuilder(client).WithDurableScope("support")
+if err := plugin.Install(ctx, b, host, plugin.Dispatch(tools.DispatchConfig{MaxConcurrency: 4})); err != nil { return err }
+agent, err := b.Build()
+```
+
+规则（以代码为准）：
+
+- 插件名在 Host 内唯一：非空、无首尾空白、不含 `/` 与 `@`；版本非空、无首尾空白、不含 `/`。`NewHost` 一次报告全部问题，包括依赖未注册与循环依赖。
+- `Host.Start` 按依赖拓扑顺序（同层保持注册顺序）调用 `Starter.Start`；任一失败或 ctx 结束时逆序停止已启动的插件，失败的插件自身不调用 `Stop`。Host 不可重启，`Stop` 逆序停止并合并错误，重复调用返回 nil。
+- 资源只能在本插件 `Start` 中经 `env.Provide("<插件名>.<名称>", v)` 发布；其他插件用 `plugin.Lookup[T]` 取出。Host 停止后资源清空，须先停用 Agent 再停止 Host。
+- `Install` 要求 Host 已启动；先调用所选插件的 `Contribute` 并校验（工具、提示词片段、提示词上下文、中间件重名，PreStep 缺少 Identity，nil 钩子），全部通过后才写入 Builder。`Only(names...)` 选择插件；`Dispatch(cfg)` 把插件工具统一经一个 Dispatcher 包装，持久运行必须使用。
+- 插件 PreStep 以 `plugin/<名称>@<版本>/<Identity>` 进入持久日志，升级版本后恢复旧运行以 `operation intent or attempt policy changed` 失败。
+- 所有插件的 `RequestErrors` 合并后注册一次，恢复次数取各插件 `MaxRecoveries` 的最大值；宿主之后再调用 `WithRequestError` 会覆盖它。
+- 同一个 Builder 只应 Install 一次。
+
+案例见 goagent-examples 的 `orchestration/plugin/`。
+
+## Runnable 注册表
+
+`core` 另提供进程内的 Runnable 注册表：把泛型 `core.Runnable[I, O]` 包装为动态类型的 `core.DynamicRunnable`，按名称注册、查找。它是独立的组件容器，**不与 Builder 或 Dispatcher 集成**：注册表里的条目是 `DynamicRunnable`，不是模型可调用的 `interfaces.Tool`。给 Agent 提供工具用 `WithTools` 或上面的能力包（见下文 MCP 一节与[原生编排](NATIVE_ORCHESTRATION.md)）。
 
 | 类型 | 职责 |
 |---|---|
 | `TypedToDynamicAdapter[I, O]` / `DynamicToTypedAdapter[I, O]` | 泛型与动态调用互转；输入先直接断言，失败时按结构解码；`TypedToDynamicAdapter` 的调用带 panic 保护 |
 | `PluginRegistry` | 名称 → `DynamicRunnable` 与 `PluginMetadata`；`RegisterTyped`/`GetTyped` 免手写适配器 |
-| `EnhancedPluginRegistry` | 名称 → 版本 → `Plugin`，附带 `Container` 与 `DefaultLifecycleManager` |
-| `Plugin` / `BasePlugin` | `interfaces.Lifecycle` 加 `Name`、`Version`、`GetTools`、`GetAgents`、`GetMiddleware` |
-| `Container` | 按名称共享实例或延迟工厂 |
 
-两个注册中心各有进程级单例：`GlobalPluginRegistry()`、`GlobalEnhancedPluginRegistry()`。
+进程级单例：`GlobalPluginRegistry()`。
 
-## 简单注册中心
+### 使用
 
 ```go
 reg := core.NewPluginRegistry()
@@ -26,72 +68,6 @@ n, err := fn.Invoke(ctx, "hello")
 ```
 
 `Get` 返回 `DynamicRunnable`（`InvokeDynamic`/`StreamDynamic`/`BatchDynamic`/`TypeInfo`）；另有 `Unregister`、`List`、`GetMetadata`。
-
-## 带版本与生命周期的插件
-
-```go
-type SearchPlugin struct {
-    *core.BasePlugin
-    logger Logger
-    apiKey string
-}
-
-// 插件不会自动拿到 Container，由宿主在构造时传入。
-func NewSearchPlugin(container *core.Container) (*SearchPlugin, error) {
-    logger, err := core.ResolveTyped[Logger](container, "logger")
-    if err != nil { return nil, err }
-    p := &SearchPlugin{BasePlugin: core.NewBasePlugin("search", "1.0.0"), logger: logger}
-    search := core.NewRunnableFunc(func(ctx context.Context, query string) (string, error) {
-        return "results for " + query, nil
-    })
-    p.AddTool(core.NewTypedToDynamicAdapter[string, string](search, "search"))
-    return p, nil
-}
-
-// config 是 PluginConfig.Config。
-func (p *SearchPlugin) Init(ctx context.Context, config interface{}) error {
-    if err := p.BasePlugin.Init(ctx, config); err != nil { return err }
-    if cfg, ok := config.(map[string]interface{}); ok {
-        p.apiKey, _ = cfg["api_key"].(string)
-    }
-    return nil
-}
-```
-
-```go
-registry := core.NewEnhancedPluginRegistry()
-registry.Container().Register("logger", logger)
-
-plugin, err := NewSearchPlugin(registry.Container())
-if err != nil { return err }
-if err := registry.RegisterPlugin(plugin, &core.PluginConfig{
-    Config: map[string]interface{}{"api_key": "..."},
-}); err != nil {
-    return err
-}
-if err := registry.InitializeAll(ctx); err != nil { return err }
-if err := registry.StartAll(ctx); err != nil { return err }
-defer registry.StopAll(ctx)
-
-for key, tools := range registry.GetAllTools() { // key 形如 "search@1.0.0"
-    for _, tool := range tools {
-        out, err := tool.InvokeDynamic(ctx, "退款政策")
-        fmt.Println(key, tool.TypeInfo().Name, out, err)
-    }
-}
-for name, status := range registry.Lifecycle().HealthCheckAll(ctx) {
-    fmt.Println(name, status.State)
-}
-```
-
-行为要点（以代码为准）：
-
-- 插件以 `Name()`、`Version()` 为键；同名同版本重复注册返回错误，不同版本可共存。
-- 只有传入非 nil `PluginConfig` 时，插件才以 `name@version`、优先级 100 登记到生命周期管理器，`Init` 收到 `PluginConfig.Config`；传 nil 只登记到注册表，`InitializeAll`/`StartAll` 不会调用它。`PluginConfig` 只有 `Config` 一个字段。
-- `InitializeAll` 按优先级升序初始化；`StartAll` 另按组件实现的 `interfaces.DependencyAware.Dependencies()`（填写生命周期名，即 `name@version`）排序；`StopAll` 按优先级逆序停止。单个操作默认超时 30 秒，默认遇错即停。
-- `GetPlugin(name, version)` 取指定版本；`GetLatestPlugin(name)` 按版本**字符串**比较取最大值（`"1.10.0"` 小于 `"1.9.0"`），不是语义化版本比较。另有 `ListPlugins`、`ListVersions`、`GetAllAgents`。
-- `BasePlugin.GetMiddleware` 返回 nil；需要时在自定义插件中覆盖。
-- `Container.Resolve` 先查实例，再调用工厂并缓存成功的结果；`MustResolve` 失败时 panic。
 
 ## 接入 MCP 服务器
 

@@ -7,8 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `plugin` 包：Agent 能力包。插件返回工具、提示词片段、循环钩子、中间件与回调；`Host` 按依赖顺序启停持有资源的插件，启动失败时回滚，经 `Env.Provide`/`plugin.Lookup` 共享资源；`plugin.Install` 校验冲突后装进任意 `AgentBuilder`，支持 `Only` 与 `Dispatch`。插件 PreStep 的持久身份含插件名与版本。
+
 ### Removed
 
+- `core.Plugin`、`core.BasePlugin`、`core.EnhancedPluginRegistry`、`core.GlobalEnhancedPluginRegistry`、`core.PluginConfig`、`core.Container`、`core.ResolveTyped`：插件提供的 `DynamicRunnable` 无法被 Agent 使用。迁移：把插件改为实现 `plugin.Plugin`，`GetTools` 返回的能力改为 `Contribution.Tools` 中的 `interfaces.Tool`，`Init`/`Start`/`Stop` 改为 `plugin.Starter`，`Container.Register` 改为在 `Start` 中 `env.Provide`，`ResolveTyped` 改为 `plugin.Lookup`。`core.PluginRegistry` 等 Runnable 注册表不变。
 - `core.PluginConfig` 的 `Name`、`Version`、`Dependencies`、`Enabled` 字段与 `core.PluginDependency` 类型：注册中心从未读取它们。名称与版本取自 `Plugin.Name()`、`Plugin.Version()`，启动顺序依赖用 `interfaces.DependencyAware` 声明；迁移时删除这些字段的赋值即可。
 
 ## [0.30.1] - 2026-10-31
