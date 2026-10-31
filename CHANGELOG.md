@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 宿主接入与开销
+
+- 新增 BuildContext，向初始化存储与回调传递宿主上下文并检查取消；Build 保持原入口行为。
+- 新增顶层 execution.Scope 和 ConfigureBuilder，统一运行、会话、日志、预算、期限及观察装配，并检查上下文冲突；新增离线示例与接入指南。
+- 预算账本改为类型化深复制，持久读取前跳过无用内存复制；持久格式、锁及同步保存语义保持一致，新增隔离性与分配回归测试。
+- 新增离线执行探针与固定账本微基准，保存三模式实测原始数据及测量边界。
+
 ### 执行可靠性与治理
 
 - 初始化严格传播检查点Exists/Load及状态类型错误；新增 `WithMemoryFailurePolicy`，默认尽力、可选严格，所有入口共用记忆错误处理与结构化观察，取消直接stderr记忆错误输出。
