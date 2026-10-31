@@ -8,6 +8,9 @@ jobs:
   validate:
     name: Validate PR
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
 
     steps:
       - name: Checkout code
@@ -76,7 +79,7 @@ jobs:
             let coverage = '0';
             try {
               const coverageOutput = require('child_process')
-                .execSync('go tool cover -func=coverage.out | grep "^total:"')
+                .execSync('go tool cover -func=coverage.lib.out | grep "^total:"')
                 .toString();
               coverage = coverageOutput.match(/(\d+\.\d+)%/)[1];
             } catch (e) {
@@ -86,7 +89,7 @@ jobs:
             // Create comment body
             const body = `## 📊 Test Coverage Report
 
-            **Overall Coverage**: ${coverage}%
+            **Overall Coverage**（不含 examples）: ${coverage}%
             ${parseFloat(coverage) >= 45 ? '✅ Meets minimum threshold (45%)' : '❌ Below minimum threshold (45%)'}
 
             ### 关键文件覆盖率要求
@@ -106,6 +109,15 @@ jobs:
             - [ ] Test coverage meets requirements (see above)
             - [ ] All linter checks pass
             `;
+
+            await core.summary.addRaw(body).write();
+
+            // fork 发起的 PR 中 GITHUB_TOKEN 被强制只读，无法评论，报告仅输出到 job summary
+            const headRepo = context.payload.pull_request.head.repo?.full_name;
+            if (headRepo !== `${context.repo.owner}/${context.repo.repo}`) {
+              core.info(`来自 fork 的 PR (${headRepo})，跳过评论`);
+              return;
+            }
 
             // Find existing comment
             const { data: comments } = await github.rest.issues.listComments({

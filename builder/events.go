@@ -172,11 +172,21 @@ func (a *ConfigurableAgent[C, S]) runEvents(ctx context.Context, request *middle
 	}
 	var messages []llm.Message
 	if native, ok := client.(llm.ToolStreamClient); ok && len(a.tools) > 0 {
+		if a.config.SessionLog != nil {
+			turn, history, err := a.openSessionTurn(ctx, input)
+			if err != nil {
+				return nil, fmt.Errorf("会话日志: %w", err)
+			}
+			ctx = context.WithValue(context.WithValue(ctx, historyKey{}, history), sessionLogKey{}, turn)
+		}
 		messages, err := a.streamMessages(ctx, input, evidence)
 		if err != nil {
 			return nil, err
 		}
 		return a.runToolEvents(ctx, request, native, messages, metadata, emit)
+	}
+	if a.config.SessionLog != nil {
+		return nil, fmt.Errorf("会话日志只支持原生工具流：llm.ToolStreamClient 且配置了工具")
 	}
 	if _, metered := budget.FromContext(ctx); metered && caller != nil {
 		return nil, fmt.Errorf("root budgets require native ToolStreamClient for tool selection")
