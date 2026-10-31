@@ -70,7 +70,7 @@ if err := ctx.Err(); err != nil { return err }
 
 ## 可选上下文治理
 
-`WithContextPolicy` 为原生工具流增加执行内存中的大结果卸载、分页读取和显式历史摘要。默认关闭；摘要计入 MaxIterations、model_calls 和累计用量，未知用量不补零。最后一轮恢复已卸载原文，避免只剩无法读取的引用。它不限制进程内存、不恢复跨进程工具证据，也不应用于旧 Execute。详见[上下文策略](CONTEXT_POLICY.md)。
+`WithOffload` 为原生工具流增加大结果卸载与分页读取（PreStep 组件），历史压缩由 goagent-harness `preset` 的 `compaction` 组件提供。默认关闭；最后一次请求还原已卸载的原文，避免只剩无法读取的引用；不应用于旧 Execute。详见[工具上下文](CONTEXT_POLICY.md)。
 
 入门代码统一见[快速入门与迁移](QUICKSTART.md)。主模块复杂流程使用 [workflow.Graph[T]](../../workflow/README.md)。
 
@@ -167,7 +167,7 @@ agent, err := builder.NewSimpleBuilder(client).
 
 ## 可组合编排 R2
 
-新增根预算、受控 Runnable 工具、OTel 观察及不可变上下文结果引用；见 [可组合编排指南](COMPOSABLE_ORCHESTRATION.md)。旧 ContextPolicy 的持久限制继续保留；需要持久引用时使用每次执行独立的 WithContextPolicies 工厂和宿主 WithPolicyToolAdapter。流预览仍不代表业务终态，core/flow 仅为实验原型。
+新增根预算、受控 Runnable 工具、OTel 观察及不可变上下文结果引用；见 [可组合编排指南](COMPOSABLE_ORCHESTRATION.md)。上下文结果卸载使用 `WithOffload`，持久运行中读取工具与业务工具一起经宿主 Dispatcher。流预览仍不代表业务终态，core/flow 仅为实验原型。
 
 根预算只在统一入口执行；绑定 Controller 后，旧 Execute 与非流式 ExecuteWithTools 会在模型请求前明确报错。未绑定时保留同步兼容语义。
 

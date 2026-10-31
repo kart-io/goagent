@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/kart-io/goagent/builder/contextpolicy"
 	"io"
 	"slices"
 	"strings"
@@ -60,18 +59,14 @@ func (a *ConfigurableAgent[C, S]) streamMessages(ctx context.Context, input, evi
 
 // runToolEvents 每轮直接选择工具或输出答案，MaxIterations 包含最终答案请求。
 func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *middleware.MiddlewareRequest, client llm.ToolStreamClient, messages []llm.Message, metadata map[string]interface{}, emit func(AgentEvent) error) (response *middleware.MiddlewareResponse, err error) {
-	runtime, err := a.newPolicyRuntime(ctx)
-	if err != nil {
-		return nil, err
-	}
 	// 会话级审批授权按会话隔离；宿主已声明会话时沿用宿主的值。
 	if tools.SessionIDFrom(ctx) == "" && a.config.SessionID != "" {
 		ctx = tools.WithSessionID(ctx, a.config.SessionID)
 	}
-	ctx, ephemeral := policyContext(ctx, runtime)
-	if ephemeral {
+	ctx, release := a.offloadScope(ctx)
+	if release != nil {
 		defer func() {
-			if e := runtime.release(ctx); e != nil {
+			if e := release(ctx); e != nil {
 				response, err = nil, errors.Join(err, e)
 			}
 		}()
@@ -89,7 +84,7 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 		messages = withSections(messages, sections)
 	}
 	slog := sessionTurnFrom(ctx)
-	if err := slog.begin(ctx, messages, append(slices.Clone(a.tools), runtime.tools...)); err != nil {
+	if err := slog.begin(ctx, messages, a.tools); err != nil {
 		return nil, fmt.Errorf("会话日志: %w", err)
 	}
 	// finish 结束本轮：记下对话供 Handle 的 Followup 续接。
@@ -108,12 +103,6 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 		}
 		return a.finishEvents(ctx, request, fmt.Sprint(request.Input), answer, usage, metadata, emit)
 	}
-	policy := newToolContext(a.config.ContextPolicy)
-	var summary *llm.StreamChunk
-	messages, summary, err = policy.prepare(ctx, messages, a.config.MaxIterations)
-	if err != nil {
-		return nil, err
-	}
 	// 反复失败直至额度耗尽时，把最近一次工具失败带进报错，便于定位。
 	lastFailure := ""
 	exhausted := func() error {
@@ -125,16 +114,7 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 	emptyRetries := 0
 	// inputs 是尚未交给 PreStep 的用户输入条数，起始为轮次输入。
 	inputs := 1
-	callsUsed := 0
-	if summary != nil {
-		callsUsed = 1
-		metadata["summary_calls"] = 1
-		if summary.Usage != nil {
-			reports++
-			usage.Add(&interfaces.TokenUsage{PromptTokens: summary.Usage.PromptTokens, CompletionTokens: summary.Usage.CompletionTokens, TotalTokens: summary.Usage.TotalTokens})
-		}
-	}
-	for round := callsUsed; round < a.config.MaxIterations; round++ {
+	for round := 0; round < a.config.MaxIterations; round++ {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
@@ -152,32 +132,10 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 			return nil, err
 		}
 		tools := a.tools
-		if len(runtime.tools) > 0 {
-			tools = append(slices.Clone(tools), runtime.tools...)
-		}
-		if a.config.ContextPolicy != nil && a.config.ContextPolicy.MaxToolResultRunes > 0 {
-			tools = append(slices.Clone(tools), policy)
-		}
-		if round > 0 && round+1 == a.config.MaxIterations {
-			messages = policy.restore(messages)
-		} else {
-			messages, err = policy.reduce(ctx, messages)
-		}
-		if err != nil {
-			return nil, err
-		}
-		transformed, applyErr := runtime.apply(ctx, contextpolicy.Turn{Round: round, RemainingCalls: a.config.MaxIterations - round, Messages: messages}, round > 0 && round+1 == a.config.MaxIterations)
-		if applyErr != nil {
-			return nil, applyErr
-		}
-		messages = transformed.Messages
-		runtime.stats(metadata)
-		if a.config.ContextPolicy != nil {
-			metadata["context_offloaded_results"] = policy.offloaded
-		}
 		// 已有结果的最后一轮只能回答或使用显式配置的终态工具。
 		// 首轮及尚有更多额度时保留完整工具集，支持连续查询。
-		if round > 0 && round+1 == a.config.MaxIterations {
+		final := round > 0 && round+1 == a.config.MaxIterations
+		if final {
 			tools = nil
 			for _, tool := range a.tools {
 				if slices.Contains(a.config.ReturnDirectTools, tool.Name()) {
@@ -187,9 +145,10 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 			metadata["final_answer_only"] = len(tools) == 0
 		}
 		var pre PreStepResult
-		if messages, pre, err = a.runPreStep(ctx, round, inputs, messages); err != nil {
+		if messages, pre, err = a.runPreStep(ctx, round, inputs, final, messages); err != nil {
 			return nil, err
 		}
+		a.trackOffloads(ctx, messages)
 		inputs = 0
 		if pre.Halt {
 			metadata["answer_source"] = "pre_step"
@@ -302,17 +261,11 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 		}
 		messages = append(messages, llm.Message{Role: "assistant", Content: turn.Content, ReasoningContent: turn.ReasoningContent, ToolCalls: turn.ToolCalls, ProviderState: turn.ProviderState})
 		invoke := func(ctx context.Context, call ToolCall) (*interfaces.ToolOutput, error) {
-			if call.Name == contextReadTool && a.config.ContextPolicy != nil && a.config.ContextPolicy.MaxToolResultRunes > 0 {
-				return policy.Invoke(ctx, &interfaces.ToolInput{Args: call.Input})
-			}
-			if tool, ok := runtime.byName[call.Name]; ok {
-				return tool.Invoke(ctx, &interfaces.ToolInput{Args: call.Input, CallID: call.ID})
-			}
 			return a.invokeToolCall(ctx, call)
 		}
 		// 并发时 tool_start 在派发前按序发出，tool_end 在全部结束后按序发出，事件顺序与执行时序无关；
 		// Dispatcher 的结果回调同样推迟到全部结束后按序触发。
-		parallel := a.concurrentCalls(calls, runtime)
+		parallel := a.concurrentCalls(calls)
 		var results []toolCallResult
 		if parallel {
 			if err := ctx.Err(); err != nil {
@@ -419,18 +372,11 @@ type toolCallResult struct {
 }
 
 // concurrentCalls 判断本轮调用能否并发：显式开启并发、多个调用且每个工具都声明支持并发调用。
-// 上下文策略工具会读取本轮之前写入的状态，始终按顺序执行。
-func (a *ConfigurableAgent[C, S]) concurrentCalls(calls []ToolCall, runtime *policyRuntime) bool {
+func (a *ConfigurableAgent[C, S]) concurrentCalls(calls []ToolCall) bool {
 	if len(calls) < 2 || a.config.ParallelToolCalls < 2 {
 		return false
 	}
 	for _, call := range calls {
-		if call.Name == contextReadTool && a.config.ContextPolicy != nil && a.config.ContextPolicy.MaxToolResultRunes > 0 {
-			return false
-		}
-		if _, ok := runtime.byName[call.Name]; ok {
-			return false
-		}
 		i := slices.IndexFunc(a.tools, func(t interfaces.Tool) bool { return t.Name() == call.Name })
 		if i < 0 {
 			return false

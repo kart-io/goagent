@@ -194,7 +194,7 @@ DEEPSEEK_MODEL=deepseek-flash bash scripts/business_tool_loop_live.sh deepseek /
 
 ## 可组合编排 R2
 
-新增根预算、受控 Runnable 工具、OTel 观察及不可变上下文结果引用；见 [可组合编排指南](COMPOSABLE_ORCHESTRATION.md)。旧 ContextPolicy 的持久限制继续保留；需要持久引用时使用每次执行独立的 WithContextPolicies 工厂和宿主 WithPolicyToolAdapter。流预览仍不代表业务终态，core/flow 仅为实验原型。
+新增根预算、受控 Runnable 工具、OTel 观察及不可变上下文结果引用；见 [可组合编排指南](COMPOSABLE_ORCHESTRATION.md)。上下文结果卸载使用 `WithOffload`，持久运行中读取工具与业务工具一起经宿主 Dispatcher。流预览仍不代表业务终态，core/flow 仅为实验原型。
 
 
 ## 多 Agent 作用域与入口约束

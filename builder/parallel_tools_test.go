@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kart-io/goagent/builder/contextpolicy"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
@@ -164,33 +163,8 @@ func TestParallelToolCallsReplay(t *testing.T) {
 	require.Equal(t, 3, probe.peak)
 }
 
-type probePolicy struct{ tool interfaces.Tool }
-
-func (p *probePolicy) Descriptor() contextpolicy.Descriptor {
-	return contextpolicy.Descriptor{ID: "probe", Version: "v1", ConfigHash: "hash"}
-}
-func (p *probePolicy) BeforeTurn(_ context.Context, t contextpolicy.Turn) (contextpolicy.Turn, error) {
-	return t, nil
-}
-func (p *probePolicy) Tools() []interfaces.Tool { return []interfaces.Tool{p.tool} }
-
-// 含策略工具或未声明并发能力的工具时，整轮按顺序执行。
+// 含未声明并发能力的工具时，整轮按顺序执行。
 func TestParallelToolCallsFallBackToSequential(t *testing.T) {
-	t.Run("策略工具", func(t *testing.T) {
-		probe := &concurrencyProbe{}
-		calls := append(probeCalls("0", "1"), nativeCall("p", "policy_probe", "{}"))
-		model := nativeModel(
-			[]*llm.StreamChunk{{Done: true, FinishReason: "tool_calls", ToolCalls: calls}},
-			[]*llm.StreamChunk{{Delta: "汇总"}, {Done: true, FinishReason: "stop"}},
-		)
-		policyTool := NewMockTool("policy_probe", "策略结果")
-		agent, err := NewSimpleBuilder(model).WithTools(probeTools(t, probe, 4)...).
-			WithContextPolicies(func() contextpolicy.Policy { return &probePolicy{tool: policyTool} }).WithParallelToolCalls(4).WithMaxIterations(3).Build()
-		require.NoError(t, err)
-		_, err = agent.AsRunnable().Invoke(context.Background(), "并发")
-		require.NoError(t, err)
-		require.Equal(t, 1, probe.peak)
-	})
 	t.Run("普通工具", func(t *testing.T) {
 		probe := &concurrencyProbe{}
 		calls := append(probeCalls("0", "1"), nativeCall("p", "plain", "{}"))

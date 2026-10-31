@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kart-io/goagent/builder/contextpolicy"
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/middleware"
@@ -27,24 +26,6 @@ import (
 // 子进程执行：ExecuteStream 内部 goroutine 中宿主代码 panic 时进程不得退出，调用方拿到 *PanicError。
 // 用子进程是为了在回归时只让子进程崩溃，而不是整个测试二进制。
 const panicCaseEnv = "GOAGENT_PANIC_CASE"
-
-type panicPolicy struct{ where string }
-
-func (p *panicPolicy) Descriptor() contextpolicy.Descriptor {
-	return contextpolicy.Descriptor{ID: "panic", Version: "v1", ConfigHash: "h", Durable: true}
-}
-func (p *panicPolicy) BeforeTurn(_ context.Context, t contextpolicy.Turn) (contextpolicy.Turn, error) {
-	if p.where == "before_turn" {
-		panic("before_turn boom")
-	}
-	return t, nil
-}
-func (p *panicPolicy) Stats() map[string]int64 {
-	if p.where == "stats" {
-		panic("stats boom")
-	}
-	return nil
-}
 
 type panicMiddleware struct{}
 
@@ -106,15 +87,10 @@ func dispatcherTools(cfg tools.DispatchConfig, tool interfaces.Tool) ([]interfac
 func runPanicCase(name string) error {
 	ctx := observe.WithObserver(context.Background(), printObserver{})
 	lookup := NewMockTool("lookup", "x")
-	policy := func(where string) contextpolicy.Factory {
-		return func() contextpolicy.Policy { return &panicPolicy{where: where} }
-	}
 	var b *SimpleAgentBuilder
 	switch name {
-	case "factory":
-		b = NewSimpleBuilder(answerModel()).WithTools(lookup).WithContextPolicies(func() contextpolicy.Policy { panic("factory boom") })
-	case "before_turn", "stats":
-		b = NewSimpleBuilder(answerModel()).WithTools(lookup).WithContextPolicies(policy(name))
+	case "pre_step":
+		b = NewSimpleBuilder(answerModel()).WithTools(lookup).WithPreStep(func(context.Context, *Step) (PreStepResult, error) { panic("pre_step boom") })
 	case "raw_tool":
 		b = NewSimpleBuilder(answerModel(nativeCall("c1", "boom", "{}"))).WithTools(panicTool("boom")).WithMaxIterations(3)
 	case "concurrent_tool":
@@ -202,9 +178,7 @@ func TestStreamPanicDoesNotKillProcess(t *testing.T) {
 		// syncCaller 表示同步 Execute：不经 agent 观测，只断言 panic 已转为 *PanicError。
 		syncCaller bool
 	}{
-		{name: "factory", wantValue: "factory boom"},
-		{name: "before_turn", wantValue: "before_turn boom"},
-		{name: "stats", wantValue: "stats boom"},
+		{name: "pre_step", wantValue: "pre_step boom"},
 		{name: "raw_tool", wantValue: "boom boom"},
 		{name: "concurrent_tool", wantValue: "boom boom"},
 		{name: "model", wantValue: "model boom"},

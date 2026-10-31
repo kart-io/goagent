@@ -5,6 +5,24 @@ All notable changes to GoAgent will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `builder.WithOffload(offload)`：把 `contextpolicy.Offload` 装为带身份的 PreStep，超长的工具结果换成引用、经读取工具分页读回，最后一次请求前还原原文。持久运行恢复时 PreStep 的结果被回放，Builder 用回放的对话重建引用表，读取不受影响。
+- `builder.WithIdentifiedPreStep(identity, hook)`：身份进入 PreStep 记录的意图，配置改变后恢复旧的持久运行在请求模型前失败，而不是回放按旧配置算出的结果。
+- `builder.Step.Final`：本步是最后一次模型请求。
+- `contextpolicy.Offload` 的 `Reduce`、`Track`、`Identity`；实例按结果作用域区分引用表，可供多次执行共享。
+
+### Removed
+
+- **破坏性**：`contextpolicy.Policy`、`Descriptor`、`Turn`、`Factory`、`ToolProvider`、`FinalTurnRestorer`、`StatsProvider`、`Releaser`，`builder.WithContextPolicies`、`WithPolicyToolAdapter`，以及旧 `builder.WithContextPolicy`、`ContextPolicy`、`HistorySummaryConfig`。迁移见 `docs/guides/CONTEXT_POLICY.md`：结果卸载用 `WithOffload`（读取工具与业务工具一起注册），历史摘要用 goagent-harness `preset` 的 `compaction` 组件，自定义策略改写为 `WithIdentifiedPreStep`。
+- 元数据 `context_offloaded_results`、`policy.<id>.*`、`summary_calls`；改用 `Offload.Stats()`。
+
+### Changed
+
+- **破坏性**：Offload 的引用增加 `stored` 字段（证据的键与摘要），默认 Version 改为 `v3`；用旧版本记录、尚未结束的持久运行须在升级前结束。
+
 ## [0.26.0] - 2026-10-31
 
 ### Added

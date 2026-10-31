@@ -108,8 +108,8 @@ func (a *ConfigurableAgent[C, S]) Execute(ctx context.Context, input interface{}
 		return nil, fmt.Errorf("root budget requires the unified AsRunnable execution entry")
 	}
 
-	if a.config.ContextPolicy != nil || len(a.config.ContextPolicies) > 0 || len(a.config.ReturnDirectTools) > 0 {
-		return nil, fmt.Errorf("Execute does not apply ContextPolicy or ReturnDirectTools; use AsRunnable().Invoke")
+	if len(a.config.Offloads) > 0 || len(a.config.ReturnDirectTools) > 0 {
+		return nil, fmt.Errorf("Execute does not apply WithOffload or ReturnDirectTools; use AsRunnable().Invoke")
 	}
 	ctx, release, err := a.beginExecution(ctx)
 	if err != nil {
