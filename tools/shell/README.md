@@ -16,9 +16,9 @@
 | 参数 | 类型 | 说明 |
 |---|---|---|
 | `command` | string，必需 | 命令名 |
-| `args` | `[]interface{}`，可选 | 参数，逐个以 `fmt.Sprint` 转为字符串；其他切片类型（如 `[]string`）会被忽略 |
+| `args` | `[]string` 或 `[]interface{}`，可选 | 参数；`[]interface{}`（JSON 解码结果）的元素逐个以 `fmt.Sprint` 转为字符串，其他类型被忽略 |
 | `work_dir` | string，可选 | 工作目录 |
-| `timeout` | float64，可选 | 超时秒数；JSON 解码得到的数字即为 float64，Go 中直接传 `int` 会被忽略 |
+| `timeout` | float64 或 int，可选 | 超时秒数，float64 可含小数 |
 
 `output.Result` 是 `map[string]interface{}`：`command`、`args`（`[]string`）、`output`、`exit_code`、`duration`。成功时 `output.Metadata` 含 `work_dir` 与 `timeout`。
 
@@ -48,9 +48,7 @@ fmt.Println(result["output"], result["exit_code"])
 ## ExecuteScript 与 ExecutePipeline
 
 - `ExecuteScript(ctx, scriptPath, args)`：要求白名单含 `bash` 或 `sh`，以 `bash` 执行。
-- `ExecutePipeline(ctx, commands)`：检查每段命令的首个单词都在白名单中，再以 `bash -c "<cmd1> | <cmd2> ..."` 执行，因此白名单还需包含 `bash`。
-
-两者当前以 `[]string` 传递 `args`，而 `Invoke` 只解析 `[]interface{}`，参数被丢弃，实际运行的是不带参数的 `bash`（stdin 为空时立即以 0 退出、无输出）。在修复前不要依赖这两个方法。
+- `ExecutePipeline(ctx, commands)`：检查每段命令的首个单词都在白名单中，再以 `bash -c "<cmd1> | <cmd2> ..."` 执行，因此白名单还需包含 `bash`。由于经 shell 解析，任一段命令含 `;`、`|`、`&`、`` ` ``、`$`、`>`、`<` 时拒绝。
 
 ## 相关文档
 

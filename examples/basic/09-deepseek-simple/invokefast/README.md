@@ -16,8 +16,8 @@ go run ./examples/basic/09-deepseek-simple/invokefast
 1. **基础 Agent**：一句话回答"Go 语言的主要特点是什么？"。
 2. **两步任务**：`AnalyzeAgent` 分析一段求和代码，`OptimizeAgent` 基于分析结果给出优化建议，打印各步与总耗时。
 3. **结构化数据**：`UserDataGenerator` 与 `ProductDataGenerator` 生成 JSON 文本；随后 `CoordinatorAgent` 分析任务，再顺序调用两个生成 Agent。
-4. **说明文字**：打印一段关于 InvokeFast 的固定文本。
+4. **说明文字**：打印一段关于 InvokeFast 的说明，内容与下节一致。
 
 ## 关于 InvokeFast
 
-本示例的所有调用都是普通的 `agent.Execute`，没有使用 InvokeFast。`core.FastInvoker` 接口与 `core.TryInvokeFast` 定义在 [core/fast_invoker.go](../../../../core/fast_invoker.go)，实现者是 `core.BaseAgent` 与 `core.ChainableAgent`；`builder` 构建出的 `ConfigurableAgent` 不实现该接口。程序第 4 部分打印的文字（"AgentBuilder 创建的 Agent 自动享受优化"、基准数据与文档路径）与当前代码不符，以本节为准。
+本示例的所有调用都是普通的 `agent.Execute`，没有使用 InvokeFast。`core.FastInvoker` 接口与 `core.TryInvokeFast` 定义在 [core/fast_invoker.go](../../../../core/fast_invoker.go)，实现者是 `core.BaseAgent` 与 `core.ChainableAgent`（`BaseAgent` 的默认实现返回 `ErrNotImplemented`，需具体 Agent 重写）；`builder` 构建出的 `ConfigurableAgent` 不实现该接口。

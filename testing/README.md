@@ -75,6 +75,8 @@ sequenceDiagram
 
 ### 1. MockTool 工具 Mock
 
+实现 `interfaces.Tool`（`ArgsSchema` 返回 `{"type": "object"}`），可直接注册给 Builder 或 Dispatcher。
+
 **核心功能**：
 
 | 方法 | 说明 |

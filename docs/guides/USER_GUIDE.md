@@ -220,7 +220,6 @@ agent, err := builder.NewSimpleBuilder(client).
     WithCheckpointer(checkpoint.NewInMemorySaver()).
     WithSessionID("session-001").
     WithAutoSaveEnabled(true).
-    WithSaveInterval(5 * time.Second).
     Build()
 ```
 

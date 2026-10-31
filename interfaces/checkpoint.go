@@ -10,33 +10,7 @@ import (
 // This interface provides session state persistence for multi-turn conversations,
 // resuming interrupted workflows, and A/B testing different conversation paths.
 //
-// Implementations:
-//   - checkpoint.MemoryCheckpointer (core/checkpoint/memory.go)
-//   - checkpoint.RedisCheckpointer (core/checkpoint/redis.go)
-//   - checkpoint.DistributedCheckpointer (core/checkpoint/distributed.go)
-//
-// Inspired by LangChain's Checkpointer pattern, it enables:
-//   - Thread-based conversation continuity
-//   - Checkpoint history management
-//   - State persistence and recovery
-//
-// Example usage:
-//
-//	checkpointer := checkpoint.NewMemoryCheckpointer()
-//
-//	// Save agent state
-//	cp := &interfaces.Checkpoint{
-//	    ID:       "ckpt-001",
-//	    ThreadID: "thread-123",
-//	    State:    agentState,
-//	}
-//	err := checkpointer.SaveCheckpoint(ctx, cp)
-//
-//	// Load agent state
-//	loaded, err := checkpointer.LoadCheckpoint(ctx, "ckpt-001")
-//
-//	// List checkpoints for a thread
-//	metadata, err := checkpointer.ListCheckpoints(ctx, "thread-123", 10)
+// No implementation in this repository; Builder checkpoints use core/checkpoint.Checkpointer.
 type Checkpointer interface {
 	// SaveCheckpoint persists a checkpoint.
 	//

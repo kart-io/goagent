@@ -4,6 +4,8 @@ package shell
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -308,53 +310,6 @@ func TestShellTool_IsCommandAllowed(t *testing.T) {
 	}
 }
 
-// TestShellTool_ExecuteScript 测试执行脚本文件
-func TestShellTool_ExecuteScript(t *testing.T) {
-	// Skip on Windows
-	if runtime.GOOS == "windows" {
-		t.Skip("Skipping on Windows")
-	}
-
-	tool := NewShellTool([]string{"bash"}, 30*time.Second)
-	ctx := context.Background()
-
-	// Note: This would require an actual script file to exist
-	// For this test, we just verify the method behavior
-	_, err := tool.ExecuteScript(ctx, "/nonexistent/script.sh", []string{"arg1"})
-
-	// We expect an error since the script doesn't exist or bash is not allowed
-	// The test just verifies the method works as expected
-	_ = err // Either error or success is acceptable for this test
-}
-
-// TestShellTool_ExecutePipeline 测试执行命令管道
-func TestShellTool_ExecutePipeline(t *testing.T) {
-	// Skip on Windows
-	if runtime.GOOS == "windows" {
-		t.Skip("Skipping on Windows")
-	}
-
-	// Test with proper whitelisted commands
-	tool := NewShellTool([]string{"bash", "echo", "grep"}, 30*time.Second)
-	ctx := context.Background()
-
-	// This tests the pipeline method signature with allowed commands
-	_, err := tool.ExecutePipeline(ctx, []string{"echo hello", "grep hello"})
-	// This should work since bash, echo, and grep are all allowed
-	if err != nil {
-		t.Errorf("Expected no error for pipeline with whitelisted commands, got: %v", err)
-	}
-
-	// Test with disallowed command in pipeline
-	tool2 := NewShellTool([]string{"bash"}, 30*time.Second)
-	_, err2 := tool2.ExecutePipeline(ctx, []string{"echo hello", "grep hello"})
-
-	// This should fail because echo and grep are not in whitelist
-	if err2 == nil {
-		t.Error("Expected error for pipeline with non-whitelisted commands, got nil")
-	}
-}
-
 // TestShellToolBuilder_New 测试创建 ShellTool 构建器
 func TestShellToolBuilder_New(t *testing.T) {
 	builder := NewShellToolBuilder()
@@ -515,5 +470,57 @@ func TestShellTool_Metadata(t *testing.T) {
 
 	if output.Metadata["timeout"] == nil {
 		t.Error("Expected timeout in metadata")
+	}
+}
+
+func shellOutput(t *testing.T, out *interfaces.ToolOutput, err error) string {
+	t.Helper()
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+	result, ok := out.Result.(map[string]interface{})
+	if !ok {
+		t.Fatal("Expected result to be a map")
+	}
+	return result["output"].(string)
+}
+
+// TestShellTool_ExecuteScriptPassesArgs 测试脚本参数传给 bash
+func TestShellTool_ExecuteScriptPassesArgs(t *testing.T) {
+	script := filepath.Join(t.TempDir(), "args.sh")
+	if err := os.WriteFile(script, []byte("echo \"$1-$2\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	tool := NewShellTool([]string{"bash"}, 5*time.Second)
+	out, err := tool.ExecuteScript(context.Background(), script, []string{"a", "b"})
+	if got := shellOutput(t, out, err); !strings.Contains(got, "a-b") {
+		t.Errorf("Expected script output 'a-b', got: %q", got)
+	}
+}
+
+// TestShellTool_ExecutePipeline 测试管道执行，以及参数中的 shell 元字符被拒绝（否则经 bash -c 绕过白名单）
+func TestShellTool_ExecutePipeline(t *testing.T) {
+	tool := NewShellTool([]string{"bash", "echo", "tr"}, 5*time.Second)
+	out, err := tool.ExecutePipeline(context.Background(), []string{"echo hello", "tr a-z A-Z"})
+	if got := shellOutput(t, out, err); !strings.Contains(got, "HELLO") {
+		t.Errorf("Expected 'HELLO', got: %q", got)
+	}
+	if _, err := NewShellTool([]string{"bash"}, 5*time.Second).ExecutePipeline(context.Background(), []string{"echo hello"}); err == nil {
+		t.Error("Expected error for pipeline with non-whitelisted commands")
+	}
+	for _, cmd := range []string{"echo $(id)", "echo `id`", "echo a; id", "echo a && id", "echo a > /tmp/x"} {
+		if _, err := tool.ExecutePipeline(context.Background(), []string{cmd}); err == nil {
+			t.Errorf("Expected %q to be rejected", cmd)
+		}
+	}
+}
+
+// TestShellTool_TimeoutAcceptsInteger 测试整数超时（Go 调用方）同样生效
+func TestShellTool_TimeoutAcceptsInteger(t *testing.T) {
+	tool := NewShellTool([]string{"sleep"}, 10*time.Second)
+	started := time.Now()
+	output, _ := tool.Invoke(context.Background(), &interfaces.ToolInput{Args: map[string]interface{}{"command": "sleep", "args": []interface{}{"5"}, "timeout": 1}})
+	if output.Success || time.Since(started) > 4*time.Second {
+		t.Errorf("Expected timeout after 1s, took: %v", time.Since(started))
 	}
 }

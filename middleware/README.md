@@ -5,7 +5,7 @@
 - `ObservabilityMiddleware`：实现 `core/middleware.Middleware`（`OnBefore`/`OnAfter`/`OnError`），挂在 `coremiddleware.MiddlewareChain` 上记录 OpenTelemetry 追踪与指标。
 - 基于状态的处理器：`LLMToolSelectorMiddleware`、`DynamicPromptMiddleware`、`LLMToolEmulatorMiddleware`、`AdaptiveMiddleware`、`ContextEnrichmentMiddleware`。它们的逻辑在 `Process(ctx, state core.State) (core.State, error)` 中，读写约定的状态键；嵌入的 `BaseMiddleware` 的 `OnBefore`/`OnAfter` 原样透传，因此加入 `MiddlewareChain` 不会触发其逻辑，需由调用方显式调用 `Process`。
 
-`Middleware` 接口、`MiddlewareChain`、请求/响应对象池以及缓存、重试、限流、熔断等通用中间件位于 [core/middleware](../core/middleware/)。
+`Middleware` 接口、`MiddlewareChain`、请求/响应对象池以及缓存、限流、熔断等通用中间件位于 [core/middleware](../core/middleware/)。
 
 ## ObservabilityMiddleware
 
@@ -26,9 +26,9 @@ req.Metadata["agent.name"] = "assistant"
 resp, err := chain.Execute(ctx, req)
 ```
 
-- `OnBefore`：以 `Metadata["agent.name"]` 为名启动 Agent span，活跃计数加一。
-- `OnAfter`：记录执行耗时与成功与否（`Metadata["agent.name"]`、`["agent.type"]`），活跃计数减一。
-- `OnError`：把错误记入 span 与错误指标。
+- `OnBefore`：以 `Metadata["agent.name"]` 为名启动 Agent span 并存入请求元数据，活跃计数加一。
+- `OnAfter`：从响应元数据取回 span（处理器需把请求元数据带入响应，Builder 即如此），`response.Error` 非空时记为错误、否则记为成功，然后结束 span；记录执行耗时与成功与否（`Metadata["agent.name"]`、`["agent.type"]`），活跃计数减一。
+- `OnError`：把错误记入 `ctx` 中的 span 与错误指标，活跃计数减一。处理器返回错误时链只调用 `OnError`，它取不到 `OnBefore` 启动的 span，该 span 不会结束、不会导出。
 - `RecordToolCall(ctx, toolName, duration, err)`、`RecordLLMCall(...)`：供调用方手动记录工具与 LLM 调用。
 
 ## 基于状态的处理器

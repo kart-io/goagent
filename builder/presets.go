@@ -41,7 +41,6 @@ func (b *AgentBuilder[C, S]) ConfigureForChatbot() *AgentBuilder[C, S] {
 	)
 
 	// 启用流式响应以获得更好的用户体验
-	b.WithStreamingEnabled(true)
 	b.WithTemperature(0.8) // 更高温度用于创造性
 
 	return b

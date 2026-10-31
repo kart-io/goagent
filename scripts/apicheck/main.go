@@ -52,13 +52,9 @@ func forbidden(file, path string) bool {
 	case "cache":
 		return dest != "cache" && dep != "utils/json"
 	case "core":
-		return dest == "agents" || dest == "tools" || dest == "middleware" || dest == "parsers" || dest == "builder"
-	case "builder":
-		return dest == "middleware" || dest == "agents"
-	case "tools":
-		return dest == "agents"
-	case "parsers":
-		return dest == "agents" || dest == "middleware"
+		return dest == "tools" || dest == "middleware" || dest == "parsers" || dest == "builder"
+	case "builder", "parsers":
+		return dest == "middleware"
 	}
 	return false
 }

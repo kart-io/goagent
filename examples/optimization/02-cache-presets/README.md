@@ -19,14 +19,14 @@
 go run ./examples/optimization/02-cache-presets
 ```
 
-输出依次为两个缓存的 `GetStats()`（全新缓存，计数均为 0），以及从高性能缓存读回的值：
+输出依次为两个缓存的 `GetStatsValues()`（全新缓存，计数均为 0），以及从高性能缓存读回的值：
 
 ```text
 High Performance Cache created
-Stats: {Hits:... Misses:... Evicts:... Invalidations:...}
+Stats: hits=0 misses=0 evicts=0 invalidations=0
 Low Memory Cache created
-Stats: {Hits:... Misses:... Evicts:... Invalidations:...}
+Stats: hits=0 misses=0 evicts=0 invalidations=0
 HP Cache Get: value1
 ```
 
-`CacheStats` 的字段是原子计数器，直接 `%+v` 打印会带出内部结构；需要数值时用 `GetStatsValues()`。
+`GetStats()` 返回的 `CacheStats` 字段是原子计数器，直接 `%+v` 打印会带出内部结构，因此示例用 `GetStatsValues()` 取数值。

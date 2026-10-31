@@ -174,11 +174,8 @@ type ClassifiedError struct {
 | `WithTimeout(time.Duration)` | 按整秒保存，正数向上取整；语义见 [最佳实践](../guides/PROVIDER_BEST_PRACTICES.md#超时配置) |
 | `WithCustomHeaders` | 合并到基于 resty 的 HTTP Provider 及 DeepSeek 结构化流的请求头 |
 | `WithProvider` | 由构造函数自行设置，通常不需要 |
-| `WithProxy`、`WithRetryCount`、`WithRetryDelay`、`WithRateLimiting`、`WithCache`、`WithStreamingEnabled`、`WithOrganizationID` | 只写入 `LLMOptions`，内置 Provider 不读取 |
 
-模型调用的重试应在 Builder 层用 `WithRequestError` + `RetryTransient` 配置。Anthropic、Cohere、HuggingFace 与 DeepSeek 的非流式 HTTP 调用内置固定次数的重试，不受上述选项控制；OpenAI 与 Gemini 不做隐式重试。
-
-`llm.NewClientWithOptions` 已废弃，只校验选项、不创建客户端。
+模型调用的重试应在 Builder 层用 `WithRequestError` + `RetryTransient` 配置。Anthropic、Cohere、HuggingFace 与 DeepSeek 的非流式 HTTP 调用内置固定次数的重试，不可配置；OpenAI 与 Gemini 不做隐式重试。
 
 ## Provider 构造函数
 

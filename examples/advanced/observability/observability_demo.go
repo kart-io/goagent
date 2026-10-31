@@ -92,7 +92,6 @@ func main() {
 		WithMiddleware(obsMiddleware).
 		WithMetadata("agent.name", "observability-agent").
 		WithMetadata("agent.type", "demo").
-		WithTelemetry(provider).
 		Build()
 	if err != nil {
 		log.Fatalf("Failed to create agent: %v", err)

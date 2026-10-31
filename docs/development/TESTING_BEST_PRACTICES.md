@@ -29,8 +29,6 @@ bash scripts/provider_regression.sh         # 离线 Provider/Builder 契约与�
 | `testing/panictest` | 在子进程中运行可能让进程退出的测试 |
 | `core/durable/storetest`、`core/session/sessiontest` | `durable.Store` / `session.Store` 实现的一致性测试，自定义存储后端须通过 |
 
-`mocks.MockTool` 没有 `ArgsSchema` 方法，不满足 `interfaces.Tool`；给 Builder 或 Dispatcher 的测试工具用 `tools.NewFunctionTool` 构造。
-
 ## 原生工具循环的测试模型
 
 Builder 的原生工具循环要求 `llm.ToolStreamClient`。用一个按顺序回放预设回合的模型即可离线测试工具调用、事件与持久恢复（`builder/tool_events_test.go` 中的 `nativeEventModel` 是同样的做法）：

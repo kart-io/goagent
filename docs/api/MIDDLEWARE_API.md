@@ -73,10 +73,9 @@ func (c *MiddlewareChain) Size() int
 |---|---|
 | `NewLoggingMiddleware(logger func(string))` | 记录请求、响应与错误；logger 为 nil 时用 `fmt.Println` |
 | `NewTimingMiddleware()` | 记录耗时；`GetTimings()`、`GetAverageLatency()` |
-| `NewCacheMiddleware(ttl)`、`NewCacheMiddlewareWithShards(ttl, n)` | 以 `fmt.Sprint(request.Input)` 为键，命中时通过 `cached_response` 跳过处理器；只有响应 `Metadata["original_input"]` 存在时才写入缓存，Builder 的处理器不设置该键。`Clear()`、`Size()` |
+| `NewCacheMiddleware(ttl)`、`NewCacheMiddlewareWithShards(ttl, n)` | 以 `fmt.Sprint(request.Input)` 为键，不区分会话或用户。未命中时 `OnBefore` 把输入写入请求 `Metadata["original_input"]`，处理器把请求元数据带入响应（Builder 即如此）时 `OnAfter` 缓存成功响应；命中时通过 `cached_response` 跳过处理器，命中不会延长 TTL。`Clear()`、`Size()` |
 | `NewRateLimiterMiddleware(maxRequests, window)` | 固定窗口计数，按 `State` 或 `Metadata` 中的 `user_id` 分组，超限时 `OnBefore` 返回错误；`Reset()` |
-| `NewCircuitBreakerMiddleware(maxFailures, resetTimeout)` | 累计失败达到阈值后打开并拒绝请求；超过 resetTimeout 后半开，半开时成功则关闭、失败则重新打开 |
-| `NewRetryMiddleware(maxRetries, backoff)` | 不重新执行处理器，只在 `OnError` 中把满足条件的错误包装为 "retry needed"；`WithRetryCondition(func(error) bool)`。模型请求重试请用 Builder 的 `WithRequestError` |
+| `NewCircuitBreakerMiddleware(maxFailures, resetTimeout)` | 连续失败达到阈值后打开并拒绝请求（成功清零计数，自身的拒绝不计为失败）；超过 resetTimeout 后半开，半开时成功则关闭、失败则重新打开 |
 | `NewValidationMiddleware(validators...)` | `OnBefore` 中依次执行校验函数 |
 | `NewTransformMiddleware(inputFn, outputFn)` | 转换 `Input` 与 `Output` |
 | `NewAuthenticationMiddleware(authFunc)` | `authFunc` 返回 false 或错误时拒绝请求 |

@@ -23,7 +23,7 @@ if err != nil {
 
 可用的构造函数：`NewOpenAIWithOptions`、`NewAnthropicWithOptions`、`NewGeminiWithOptions`、`NewDeepSeekWithOptions`、`NewCohereWithOptions`、`NewHuggingFaceWithOptions`、`NewOllamaWithOptions`、`NewSiliconFlowWithOptions`、`NewKimiWithOptions`；只有 OpenAI、DeepSeek、Gemini 客户端实现 `llm.StreamClient`；`NewDeepSeekStreamingWithOptions`、`NewGeminiStreamingWithOptions` 是保留的流式包装。
 
-GoAgent 没有按名称查找 Provider 的注册表，`llm.NewClientWithOptions` 已废弃且不会创建客户端。
+GoAgent 没有按名称查找 Provider 的注册表，应直接调用对应构造函数。
 
 ## 使用场景
 
@@ -82,7 +82,7 @@ client.SetResponses(llm.CompletionResponse{Content: "预设回答"})
 
 ## 超时配置
 
-`llm.WithTimeout` 的参数是 `time.Duration`，按整秒保存，正数向上取整；未设置时为 60 秒：
+`llm.WithTimeout` 的参数是 `time.Duration`，按整秒保存，正数向上取整；未设置时为 60 秒，Ollama 为 120 秒（显式设为 60 秒也按 120 秒处理）：
 
 ```go
 llm.WithTimeout(30 * time.Second) // 30 秒

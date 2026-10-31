@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | [simple/](simple/main.go) | 最简 Agent、带工具、常用配置、`QuickAgent`/`ChatAgent`、输出格式 | `NewSimpleBuilder`、`WithSystemPrompt`、`WithTools`、`WithMaxIterations`、`WithTemperature`、`WithOutputFormat`、`WithCustomOutputFormat` |
 | [core/](core/main.go) | 回调监控、超时与 token 控制、对话记忆多轮对话、错误处理、输出格式 | 上表加 `WithCallbacks`、`WithVerbose`、`WithTimeout`、`WithMaxTokens`、`WithMemory`、`WithSessionID`、`WithMaxConversationHistory`、`WithErrorHandler` |
-| [advanced/](advanced/main.go) | 泛型自定义状态、带工具的 Agent、会话管理、企业级配置（回调 + 存储 + 元数据）、输出格式 | 上表加 `NewAgentBuilder[C, S]`、`WithState`、`WithStore`、`WithAutoSaveEnabled`、`WithSaveInterval`、`WithMetadata` |
+| [advanced/](advanced/main.go) | 泛型自定义状态、带中间件（日志、限流、缓存）的 Agent、会话管理、企业级配置（回调 + 存储 + 元数据）、输出格式 | 上表加 `NewAgentBuilder[C, S]`、`WithState`、`WithMiddleware`、`WithStore`、`WithAutoSaveEnabled`、`WithMetadata` |
 | [serialization/](serialization/) | 用 `WithInputSerializer` 在输入发给模型前脱敏 | `WithInputSerializer` |
 
 ## 运行

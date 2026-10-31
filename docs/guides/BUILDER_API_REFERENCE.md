@@ -112,8 +112,6 @@ return builder.NewSimpleBuilder(client).
 | `WithCallbacks(...core.Callback)` | 执行回调，如 `core.NewStdoutCallback`、`core.NewMetricsCallback` |
 | `WithErrorHandler(func(error) error)` | 包装或替换执行错误 |
 | `WithMetadata(key, value)` | 写入 Agent 元数据 |
-| `WithTelemetry(any)`、`WithCommunicator(any)` | 只写入元数据键 `telemetry_provider`、`communicator`，执行路径不读取 |
-| `WithStreamingEnabled(bool)`、`WithSaveInterval(time.Duration)` | 只记录在 `AgentConfig`，执行路径不读取 |
 
 ## 场景预设与快速函数
 

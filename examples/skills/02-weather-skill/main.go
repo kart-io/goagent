@@ -14,11 +14,13 @@
 //	# 或从示例目录运行
 //	cd examples/skills/02-weather-skill && go run main.go
 //
-// 使用 LLM 功能需要设置环境变量：
+// 使用 LLM 功能需要设置与配置中 LLM.Provider 对应的环境变量（从示例目录运行时读取
+// etc/config.yaml，否则使用内置默认配置，Provider 均为 deepseek）：
 //
 //	export DEEPSEEK_API_KEY=your-api-key
 //
-// 或者：
+// 只设置 OPENAI_API_KEY 不够，还需从示例目录运行并把 etc/config.yaml 的 LLM.Provider
+// 改为 openai（并相应修改 Model）：
 //
 //	export OPENAI_API_KEY=your-api-key
 package main
@@ -336,9 +338,9 @@ func demonstrateLLMToolCalling(ctx context.Context, cfg *config.Config) {
 	if llmSkill.GetLLMProvider() == "none" {
 		fmt.Println("\n⚠️ 未检测到 LLM API Key")
 		fmt.Println("请设置环境变量以启用 LLM 功能:")
-		fmt.Println("  export DEEPSEEK_API_KEY=your-api-key")
+		fmt.Println("  export DEEPSEEK_API_KEY=your-api-key   # LLM.Provider: deepseek")
 		fmt.Println("  或")
-		fmt.Println("  export OPENAI_API_KEY=your-api-key")
+		fmt.Println("  export OPENAI_API_KEY=your-api-key     # 需同时将 LLM.Provider 设为 openai")
 		fmt.Println("\n使用 Mock 模式演示工具调用:")
 		demonstrateMockToolCalling(ctx, cfg)
 		return

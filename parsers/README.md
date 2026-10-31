@@ -80,9 +80,6 @@ type OutputParser[T any] interface {
     // 解析文本输出
     Parse(ctx context.Context, text string) (T, error)
 
-    // 带提示的解析
-    ParseWithPrompt(ctx context.Context, text, prompt string) (T, error)
-
     // 获取格式化指令
     GetFormatInstructions() string
 
@@ -91,7 +88,7 @@ type OutputParser[T any] interface {
 }
 ```
 
-`BaseOutputParser[T]` 供嵌入：其 `ParseWithPrompt` 忽略 prompt 并调用 `BaseOutputParser.Parse`（返回 `CodeNotImplemented`）。内置解析器只重写了 `Parse`，因此对它们调用 `ParseWithPrompt` 会得到该错误，应使用 `Parse`。
+`BaseOutputParser[T]` 供嵌入：提供 `GetType`，其 `Parse` 返回 `CodeNotImplemented`、`GetFormatInstructions` 返回空串，需由嵌入方重写。
 
 ## 解析器类型
 
@@ -356,9 +353,6 @@ NewReActOutputParser() *ReActOutputParser
 ```go
 // 解析文本
 Parse(ctx context.Context, text string) (T, error)
-
-// 带提示解析（内置解析器见上文说明）
-ParseWithPrompt(ctx context.Context, text, prompt string) (T, error)
 
 // 获取格式指令
 GetFormatInstructions() string

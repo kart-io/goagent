@@ -26,12 +26,12 @@ Builder 是可变对象，不要并发配置。所有 `With*` 方法返回同一
 | 类别 | 方法 |
 |---|---|
 | 提示与输出 | `WithSystemPrompt`、`WithOutputFormat(OutputFormat)`、`WithCustomOutputFormat(prompt)`、`WithPromptSections`、`WithPromptContexts` |
-| 生成参数 | `WithMaxTokens`、`WithTemperature`、`WithMaxIterations`、`WithTimeout`、`WithStreamingEnabled` |
+| 生成参数 | `WithMaxTokens`、`WithTemperature`、`WithMaxIterations`、`WithTimeout` |
 | 工具 | `WithTools(...interfaces.Tool)`、`WithReturnDirectTools(names...)`、`WithParallelToolCalls(n)`、`WithEmptyAnswerRetries(n)` |
 | 循环钩子 | `WithPreStep`、`WithIdentifiedPreStep(identity, hook)`、`WithRequestHook`、`WithRequestError(maxRecoveries, hooks...)`、`WithTurnStopping`、`WithOffload(*contextpolicy.Offload)`、`WithTokenEstimator` |
-| 会话与持久化 | `WithSessionID`、`WithSessionLog(session.Store)`、`WithDurableScope`、`WithCheckpointer(checkpoint.Checkpointer)`、`WithStore(store.Store)`、`WithState(S)`、`WithAutoSaveEnabled`、`WithSaveInterval` |
+| 会话与持久化 | `WithSessionID`、`WithSessionLog(session.Store)`、`WithDurableScope`、`WithCheckpointer(checkpoint.Checkpointer)`、`WithStore(store.Store)`、`WithState(S)`、`WithAutoSaveEnabled` |
 | 记忆与检索 | `WithMemory(interfaces.MemoryManager)`、`WithMemoryFailurePolicy`、`WithMaxConversationHistory`、`WithRetriever(interfaces.DocumentRetriever, ...RetrievalConfig)` |
-| 横切 | `WithMiddleware(...middleware.Middleware)`、`WithCallbacks(...core.Callback)`、`WithErrorHandler`、`WithMetadata`、`WithInputSerializer`、`WithVerbose`、`WithContext(C)`、`WithTelemetry`、`WithCommunicator` |
+| 横切 | `WithMiddleware(...middleware.Middleware)`、`WithCallbacks(...core.Callback)`、`WithErrorHandler`、`WithMetadata`、`WithInputSerializer`、`WithVerbose`、`WithContext(C)` |
 | 预设 | `ConfigureForChatbot`、`ConfigureForRAG`、`ConfigureForAnalysis` |
 
 循环钩子、`WithReturnDirectTools`、`WithEmptyAnswerRetries`、`WithOffload` 只作用于原生工具流，要求客户端实现 `llm.ToolStreamClient`。`WithParallelToolCalls(n>=2)` 只对声明 `interfaces.ConcurrentCallTool` 的工具并发执行。`WithMiddleware` 的中间件见 [Middleware API](MIDDLEWARE_API.md)。
