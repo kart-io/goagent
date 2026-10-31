@@ -158,7 +158,7 @@ type ClassifiedError struct {
 }
 ```
 
-`ClassifyError` 先识别取消与上下文超长的错误文本，再用 `errors.As` 查找 `*ProviderError`。`ProviderError` 目前只由 OpenAI、DeepSeek、Gemini 的流式路径（含结构化流与原生工具流）构造；其他路径的错误通常只能分类为 `canceled`、`context_length` 或 `unknown`。Builder 的 `RetryTransient` 基于此分类，见 [核心 API](CORE_API.md#模型请求恢复)。
+`ClassifyError` 先识别取消与上下文超长的错误文本，再用 `errors.As` 查找 `*ProviderError`。各 Provider 的流式与非流式请求失败（HTTP 非 2xx 与连接错误）都构造 `ProviderError`；响应解码失败等错误只能分类为 `unknown`。Builder 的 `RetryTransient` 基于此分类，见 [核心 API](CORE_API.md#模型请求恢复)。
 
 ## 配置选项
 

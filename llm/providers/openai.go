@@ -147,6 +147,7 @@ func (p *OpenAIProvider) Complete(ctx context.Context, req *agentllm.CompletionR
 	maxTokens := p.GetMaxTokens(req.MaxTokens)
 	temperature := p.GetTemperature(req.Temperature)
 
+	ctx, retryAfter := withRetryAfterSlot(ctx)
 	resp, err := p.client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
 		Model:       model,
 		Messages:    messages,
@@ -156,7 +157,7 @@ func (p *OpenAIProvider) Complete(ctx context.Context, req *agentllm.CompletionR
 		TopP:        float32(req.TopP),
 	})
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError(p.ProviderName(), model, err)
+		return nil, agentErrors.NewLLMRequestError(p.ProviderName(), model, openAIProviderError(err, *retryAfter))
 	}
 
 	if len(resp.Choices) == 0 {
@@ -270,6 +271,7 @@ func (p *OpenAIProvider) GenerateWithTools(ctx context.Context, prompt string, t
 	maxTokens := p.GetMaxTokens(0)
 	temperature := p.GetTemperature(0)
 
+	ctx, retryAfter := withRetryAfterSlot(ctx)
 	resp, err := p.client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
 		Model:       model,
 		Messages:    messages,
@@ -278,7 +280,7 @@ func (p *OpenAIProvider) GenerateWithTools(ctx context.Context, prompt string, t
 		Tools:       toolDefinitions,
 	})
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError(p.ProviderName(), model, err).
+		return nil, agentErrors.NewLLMRequestError(p.ProviderName(), model, openAIProviderError(err, *retryAfter)).
 			WithContext("tool_calling", true)
 	}
 

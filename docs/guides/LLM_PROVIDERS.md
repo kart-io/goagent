@@ -122,7 +122,7 @@ if err != nil {
 }
 ```
 
-分类依赖 `*llm.ProviderError`，目前只有 OpenAI、DeepSeek、Gemini 的流式路径会构造它，其他路径多数归为 `unknown`。在 Builder 中重试模型请求用 `WithRequestError(n, builder.RetryTransient(n, nil))`，见 [核心 API](../api/CORE_API.md#模型请求恢复)。
+分类依赖 `*llm.ProviderError`，各 Provider 的流式与非流式请求失败都会构造它。在 Builder 中重试模型请求用 `WithRequestError(n, builder.RetryTransient(n, nil))`，见 [核心 API](../api/CORE_API.md#模型请求恢复)。
 
 ## 超时
 

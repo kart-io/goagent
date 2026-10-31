@@ -212,7 +212,7 @@ func (p *CohereProvider) execute(ctx context.Context, req *CohereRequest) (*Cohe
 
 	model := p.GetModel("")
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError(string(constants.ProviderCohere), model, err)
+		return nil, agentErrors.NewLLMRequestError(string(constants.ProviderCohere), model, &agentllm.ProviderError{Err: err})
 	}
 
 	// Check status code
@@ -231,6 +231,10 @@ func (p *CohereProvider) execute(ctx context.Context, req *CohereRequest) (*Cohe
 
 // handleHTTPError maps HTTP errors to AgentError
 func (p *CohereProvider) handleHTTPError(resp *resty.Response, model string) error {
+	return common.WithHTTPStatus(p.statusError(resp, model), common.RestyResponseToHTTPError(resp))
+}
+
+func (p *CohereProvider) statusError(resp *resty.Response, model string) *agentErrors.AgentError {
 	// Try to parse error response
 	var errResp CohereErrorResponse
 	if err := json.NewDecoder(strings.NewReader(resp.String())).Decode(&errResp); err == nil && errResp.Message != "" {
@@ -351,7 +355,7 @@ func (p *CohereProvider) Stream(ctx context.Context, prompt string) (<-chan stri
 	// Execute streaming request
 	resp, err := streamClient.Post(p.baseURL + constants.CohereChatPath)
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError(string(constants.ProviderCohere), model, err)
+		return nil, agentErrors.NewLLMRequestError(string(constants.ProviderCohere), model, &agentllm.ProviderError{Err: err})
 	}
 
 	if !resp.IsSuccess() {

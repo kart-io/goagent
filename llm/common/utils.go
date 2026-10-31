@@ -4,7 +4,10 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"math"
+	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	agentErrors "github.com/kart-io/goagent/errors"
@@ -27,6 +30,18 @@ func ParseRetryAfter(header string) int {
 	}
 
 	return 60 // Fallback
+}
+
+// RetryAfterDuration 解析秒数或 HTTP 日期；缺失、无法解析或已过期都返回 0，即视为没有给出。
+// 与 ParseRetryAfter 不同，它不对无法解析的值回退为 60 秒。
+func RetryAfterDuration(header string, now time.Time) time.Duration {
+	if seconds, err := strconv.ParseInt(strings.TrimSpace(header), 10, 64); err == nil {
+		return time.Duration(min(max(seconds, 0), math.MaxInt64/int64(time.Second))) * time.Second
+	}
+	if at, err := http.ParseTime(header); err == nil {
+		return max(at.Sub(now), 0)
+	}
+	return 0
 }
 
 // GenerateCallID generates a cryptographically secure unique ID for tool calls

@@ -189,7 +189,7 @@ func (p *HuggingFaceProvider) execute(ctx context.Context, req *HuggingFaceReque
 		SetBody(req).
 		Post(endpoint)
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError(string(constants.ProviderHuggingFace), model, err)
+		return nil, agentErrors.NewLLMRequestError(string(constants.ProviderHuggingFace), model, &agentllm.ProviderError{Err: err})
 	}
 
 	// Check status code
@@ -212,6 +212,10 @@ func (p *HuggingFaceProvider) execute(ctx context.Context, req *HuggingFaceReque
 
 // handleHTTPError maps HTTP errors to AgentError
 func (p *HuggingFaceProvider) handleHTTPError(resp *resty.Response, model string) error {
+	return common.WithHTTPStatus(p.statusError(resp, model), common.RestyResponseToHTTPError(resp))
+}
+
+func (p *HuggingFaceProvider) statusError(resp *resty.Response, model string) *agentErrors.AgentError {
 	// Try to parse error response
 	var errResp HuggingFaceErrorResponse
 	if err := json.NewDecoder(strings.NewReader(resp.String())).Decode(&errResp); err == nil && errResp.Error != "" {
@@ -368,7 +372,7 @@ func (p *HuggingFaceProvider) Stream(ctx context.Context, prompt string) (<-chan
 	// Execute streaming request
 	resp, err := streamClient.Post(endpoint)
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError(string(constants.ProviderHuggingFace), model, err)
+		return nil, agentErrors.NewLLMRequestError(string(constants.ProviderHuggingFace), model, &agentllm.ProviderError{Err: err})
 	}
 
 	if !resp.IsSuccess() {
