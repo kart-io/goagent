@@ -5,6 +5,17 @@ All notable changes to GoAgent will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- 会话日志：持久运行在工具结果记入日志之后中断，以同一执行键恢复时，回放的对话被当作截断，记为 `history/rewrite` 并重复追加已记录的消息。从 `Fork` 出的会话继续持久运行时同样出现。
+
+### Added
+
+- `session.Recorder.Replayed`：对话是否等于某个事件处日志推导的对话，供恢复时跳过回放到已记录位置的同步。
+- 从分叉点继续持久运行的用法与测试，见 `core/session/README.md`。
+
 ## [0.29.0] - 2026-10-31
 
 ### Added

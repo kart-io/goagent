@@ -178,3 +178,93 @@ func TestSessionLogDurableResume(t *testing.T) {
 	require.Len(t, derived, 4)
 	require.Equal(t, "found", derived[2].Content)
 }
+
+// 持久运行的会话在工具结果之后分叉：新会话以同一执行键恢复，之前的模型回合与工具回放，之后实跑；原会话不变。
+func TestSessionLogForkContinuesDurableRun(t *testing.T) {
+	store := session.NewMemoryStore()
+	var calls atomic.Int32
+	tool := tools.NewBaseTool("lookup", "test", `{"type":"object"}`, func(context.Context, *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+		calls.Add(1)
+		return &interfaces.ToolOutput{Success: true, Result: "found"}, nil
+	})
+	run := func(model *scriptModel, id string) (*AgentOutput, error) {
+		dispatched, err := dispatcherTools(tools.DispatchConfig{}, tool)
+		require.NoError(t, err)
+		agent, err := NewSimpleBuilder(model).WithSessionID(id).WithSessionLog(store).WithDurableScope("fork").
+			WithTools(dispatched...).WithMaxIterations(4).Build()
+		require.NoError(t, err)
+		ctx := durable.WithJournal(durable.WithExecutionKey(context.Background(), "run-1"), session.DurableStore(store, id))
+		return agent.AsRunnable().Invoke(ctx, "查")
+	}
+	out, err := run(newScriptModel(callTool("c1", "lookup"), answer("原答")), "s")
+	require.NoError(t, err)
+	require.Equal(t, "原答", out.Result)
+	original := sessionEvents(t, store, "s")
+
+	at := slices.IndexFunc(original, func(ev session.Event) bool { return ev.Type == session.TypeToolResult })
+	require.NoError(t, store.Fork(context.Background(), "s", "f", original[at].Seq))
+
+	model := newScriptModel(answer("新答"))
+	out, err = run(model, "f")
+	require.NoError(t, err)
+	require.Equal(t, "新答", out.Result)
+	require.Equal(t, 1, model.count(), "分叉点之前的模型回合回放")
+	require.EqualValues(t, 1, calls.Load(), "工具回放")
+	require.Len(t, model.request(0).Messages, 3)
+
+	forked := sessionEvents(t, store, "f")
+	require.Equal(t, []string{
+		session.TypeTurnStart, session.TypeToolDefinitions, session.TypeUserMessage, session.TypeAssistantMessage,
+		session.TypeToolResult, session.TypeAssistantMessage, session.TypeTurnEnd,
+	}, eventTypes(forked), "续写分叉出的那一轮")
+	derived, err := session.DeriveMessages(forked)
+	require.NoError(t, err)
+	require.Equal(t, "新答", derived[3].Content)
+	require.Equal(t, original, sessionEvents(t, store, "s"))
+}
+
+// crashAt 在开始第 n 个持久操作（首次保存它的快照）时失败一次，模拟进程在该操作开始前退出。
+type crashAt struct {
+	durable.Store
+	n    int
+	seen map[string]bool
+}
+
+func (s *crashAt) Save(ctx context.Context, name string, v *durable.Snapshot) error {
+	if !s.seen[name] {
+		s.seen[name] = true
+		if len(s.seen) == s.n {
+			return errors.New("crash")
+		}
+	}
+	return s.Store.Save(ctx, name, v)
+}
+
+// 在第二次模型请求开始前中断（工具结果已记入日志）：以同一执行键恢复时，回放的对话与已记录的一致，不重复记录。
+func TestSessionLogDurableResumeAfterRecordedToolResult(t *testing.T) {
+	store := session.NewMemoryStore()
+	crash := &crashAt{n: 3, seen: map[string]bool{}} // 模型回合 0、工具、模型回合 1
+	run := func(model *scriptModel) (*AgentOutput, error) {
+		dispatched, err := dispatcherTools(tools.DispatchConfig{}, plainTool())
+		require.NoError(t, err)
+		agent, err := NewSimpleBuilder(model).WithSessionID("s").WithSessionLog(store).WithDurableScope("resume").
+			WithTools(dispatched...).WithMaxIterations(4).Build()
+		require.NoError(t, err)
+		crash.Store = session.DurableStore(store, "s")
+		ctx := durable.WithJournal(durable.WithExecutionKey(context.Background(), "run-1"), crash)
+		return agent.AsRunnable().Invoke(ctx, "查")
+	}
+	_, err := run(newScriptModel(callTool("c1", "lookup")))
+	require.ErrorContains(t, err, "crash")
+	require.Contains(t, eventTypes(sessionEvents(t, store, "s")), session.TypeToolResult)
+
+	model := newScriptModel(answer("答"))
+	out, err := run(model)
+	require.NoError(t, err)
+	require.Equal(t, "答", out.Result)
+	require.Equal(t, 1, model.count())
+	require.Equal(t, []string{
+		session.TypeTurnStart, session.TypeToolDefinitions, session.TypeUserMessage, session.TypeAssistantMessage,
+		session.TypeToolResult, session.TypeAssistantMessage, session.TypeTurnEnd,
+	}, eventTypes(sessionEvents(t, store, "s")))
+}
