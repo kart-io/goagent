@@ -1,0 +1,18 @@
+--- FAIL: TestReviewWSFrameBoundary (0.00s)
+    review_regression_test.go:29: frames: first=map[request_id:boundary run_id:04569256-df74-4767-a017-4ab79fb9d764 schema_version:1 type:accepted] second=map[type:ready]
+    review_regression_test.go:31: terminal missing: received map[type:ready]
+--- FAIL: TestReviewWorkerOutputCannotMutateFrozenNotice (0.00s)
+    review_regression_test.go:57: {"schema_version":1,"event_id":"df1f60fe-e984-4647-b65e-c0abdb6ac74c","run_id":"a97c0fc8-0f7b-4eb1-95a9-dce8d7b09b98","event_type":"run.completed","occurred_at":"2026-10-31T14:40:51.65729Z","data":{"duration_ms":0,"result":{"value":"mutated after Run returned"},"timestamp":"0001-01-01T00:00:00Z"}}
+    review_regression_test.go:59: frozen notice was changed by caller
+--- FAIL: TestReviewNotificationBeforeCleanupExit (0.05s)
+    review_regression_test.go:85: client has result, but completed notice waits for uncooperative cleanup
+--- FAIL: TestReviewShutdownTracksTimeoutReporter (0.01s)
+    review_regression_test.go:113: Shutdown succeeded with timeout Report still running
+--- FAIL: TestReviewSSEHeartbeatBeforeFirstEvent (0.05s)
+    review_regression_test.go:144: no headers or heartbeat after five heartbeat periods
+--- FAIL: TestReviewSmallLimitProducesTerminal (0.00s)
+    review_regression_test.go:175: body="event: \ndata: \n\n"
+    review_regression_test.go:177: accepted configuration cannot encode even fallback terminal
+FAIL
+FAIL	github.com/kart-io/goagent-contrib/httpagent	0.766s
+FAIL

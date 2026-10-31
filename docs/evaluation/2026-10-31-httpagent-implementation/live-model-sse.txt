@@ -1,0 +1,57 @@
+event: step
+data: {"schema_version":1,"run_id":"f8097a7b-168c-4fa9-8838-f09fa74bc7dd","seq":1,"type":"step","step":"model_start"}
+
+event: step
+data: {"schema_version":1,"run_id":"f8097a7b-168c-4fa9-8838-f09fa74bc7dd","seq":2,"type":"step","step":"tool_start","tool":"echo_input"}
+
+event: step
+data: {"schema_version":1,"run_id":"f8097a7b-168c-4fa9-8838-f09fa74bc7dd","seq":3,"type":"step","step":"tool_end","tool":"echo_input"}
+
+event: step
+data: {"schema_version":1,"run_id":"f8097a7b-168c-4fa9-8838-f09fa74bc7dd","seq":4,"type":"step","step":"model_start"}
+
+event: text
+data: {"schema_version":1,"run_id":"f8097a7b-168c-4fa9-8838-f09fa74bc7dd","seq":5,"type":"text","delta":"插"}
+
+event: text
+data: {"schema_version":1,"run_id":"f8097a7b-168c-4fa9-8838-f09fa74bc7dd","seq":6,"type":"text","delta":"件"}
+
+event: text
+data: {"schema_version":1,"run_id":"f8097a7b-168c-4fa9-8838-f09fa74bc7dd","seq":7,"type":"text","delta":"工具"}
+
+event: text
+data: {"schema_version":1,"run_id":"f8097a7b-168c-4fa9-8838-f09fa74bc7dd","seq":8,"type":"text","delta":"已"}
+
+event: text
+data: {"schema_version":1,"run_id":"f8097a7b-168c-4fa9-8838-f09fa74bc7dd","seq":9,"type":"text","delta":"处理"}
+
+event: text
+data: {"schema_version":1,"run_id":"f8097a7b-168c-4fa9-8838-f09fa74bc7dd","seq":10,"type":"text","delta":"："}
+
+event: text
+data: {"schema_version":1,"run_id":"f8097a7b-168c-4fa9-8838-f09fa74bc7dd","seq":11,"type":"text","delta":"L"}
+
+event: text
+data: {"schema_version":1,"run_id":"f8097a7b-168c-4fa9-8838-f09fa74bc7dd","seq":12,"type":"text","delta":"IVE"}
+
+event: text
+data: {"schema_version":1,"run_id":"f8097a7b-168c-4fa9-8838-f09fa74bc7dd","seq":13,"type":"text","delta":"_S"}
+
+event: text
+data: {"schema_version":1,"run_id":"f8097a7b-168c-4fa9-8838-f09fa74bc7dd","seq":14,"type":"text","delta":"SE"}
+
+event: text
+data: {"schema_version":1,"run_id":"f8097a7b-168c-4fa9-8838-f09fa74bc7dd","seq":15,"type":"text","delta":"_"}
+
+event: text
+data: {"schema_version":1,"run_id":"f8097a7b-168c-4fa9-8838-f09fa74bc7dd","seq":16,"type":"text","delta":"731"}
+
+event: text
+data: {"schema_version":1,"run_id":"f8097a7b-168c-4fa9-8838-f09fa74bc7dd","seq":17,"type":"text","delta":"26"}
+
+event: usage
+data: {"schema_version":1,"run_id":"f8097a7b-168c-4fa9-8838-f09fa74bc7dd","seq":18,"type":"usage","usage":{"prompt_tokens":337,"completion_tokens":37,"total_tokens":374}}
+
+event: done
+data: {"schema_version":1,"run_id":"f8097a7b-168c-4fa9-8838-f09fa74bc7dd","seq":19,"type":"done","output":{"result":"插件工具已处理：LIVE_SSE_73126","metadata":{"answer_usage_reported":true,"model_calls":2,"usage_complete":true,"usage_reports":2},"duration_ms":5011,"timestamp":"2026-10-31T22:52:52.465828+08:00","token_usage":{"prompt_tokens":337,"completion_tokens":37,"total_tokens":374}}}
+

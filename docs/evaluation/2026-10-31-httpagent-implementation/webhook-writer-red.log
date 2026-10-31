@@ -1,0 +1,10 @@
+--- FAIL: TestWebhookUnsupportedWriterIsRejectedBeforeAdmission (0.00s)
+    webhook_test.go:281: 
+        	Error Trace:	/Users/costalong/.codex/worktrees/goagent-contrib-httpagent/httpagent/webhook_test.go:281
+        	Error:      	Not equal: 
+        	            	expected: 501
+        	            	actual  : 202
+        	Test:       	TestWebhookUnsupportedWriterIsRejectedBeforeAdmission
+FAIL
+FAIL	github.com/kart-io/goagent-contrib/httpagent	0.985s
+FAIL

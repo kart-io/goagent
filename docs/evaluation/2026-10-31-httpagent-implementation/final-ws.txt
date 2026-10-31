@@ -1,0 +1,32 @@
+## Latest page snapshot
+uid=22_0 RootWebArea "GoAgent Playground" url="http://127.0.0.1:8097/"
+  uid=22_1 main
+    uid=22_2 "GOAGENT · HTTP ADAPTER"
+    uid=22_3 heading "GoAgent Playground" level="1"
+    uid=22_4 "同一套 Agent 与 Plugin，通过 SSE 或 WebSocket 执行。"
+    uid=22_5 form
+      uid=22_6 "连接方式"
+      uid=22_7 combobox "连接方式" expandable haspopup="menu" value="WebSocket"
+        uid=22_8 option "HTTP / SSE"
+        uid=22_9 option "WebSocket" selected
+      uid=22_10 status atomic live="polite" relevant="additions text"
+        uid=25_0 "已完成"
+      uid=22_12 "输入任务"
+      uid=22_13 textbox "输入任务" multiline value="最终 WS 验证 D4"
+      uid=22_14 button "发送任务"
+      uid=22_15 button "停止执行" disableable disabled
+    uid=22_16 "执行结果"
+    uid=22_17 generic live="polite" relevant="additions text"
+      uid=25_1 "执行结果：插件工具已处理：最终 WS 验证 D4"
+    uid=22_19 heading "运行事件" level="2"
+    uid=25_2 "Run fb1022d6-473c-40b0-9118-62bfc6846cd1"
+    uid=25_3 "Agent · model_start"
+    uid=25_4 "echo_input · tool_start"
+    uid=25_5 "echo_input · tool_end"
+    uid=25_6 "Agent · model_start"
+    uid=25_7 "运行完成"
+    uid=22_21 "默认示例使用离线脚本模型。Plugin、工具调用、网络传输与取消均真实执行。"
+    uid=22_22 LineBreak "
+"
+    uid=22_23 "Webhook 演示入口：POST /api/webhooks/demo，JSON：{"message":"查询订单"}。"
+
