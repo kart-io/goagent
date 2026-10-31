@@ -94,6 +94,18 @@ func NewAgentBuilder[C any, S core.State](llmClient llm.Client) *AgentBuilder[C,
 
 // Build 构建最终的 Agent
 func (b *AgentBuilder[C, S]) Build() (*ConfigurableAgent[C, S], error) {
+	return b.BuildContext(context.Background())
+}
+
+// BuildContext 使用宿主上下文构建并初始化 Agent。
+// 取消会阻止后续初始化步骤；忽略上下文的宿主调用仍需自行返回。
+func (b *AgentBuilder[C, S]) BuildContext(ctx context.Context) (*ConfigurableAgent[C, S], error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("构建 Agent 的 context 不能为空")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("构建 Agent 已取消：%w", err)
+	}
 	// 验证必需组件
 	if b.llmClient == nil {
 		return nil, agentErrors.NewInvalidConfigError("builder", "llm_client", "LLM client is required")
@@ -205,10 +217,13 @@ func (b *AgentBuilder[C, S]) Build() (*ConfigurableAgent[C, S], error) {
 	}
 
 	// 如果需要则初始化
-	if err := agent.Initialize(context.Background()); err != nil {
+	if err := agent.Initialize(ctx); err != nil {
 		return nil, agentErrors.NewAgentInitializationError("configurable_agent", err)
 	}
 
+	if err := ctx.Err(); err != nil {
+		return nil, agentErrors.NewAgentInitializationError("configurable_agent", err)
+	}
 	return agent, nil
 }
 
