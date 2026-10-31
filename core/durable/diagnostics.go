@@ -133,13 +133,13 @@ func (r *Runner) Diagnose(ctx context.Context, id string, refs ...OperationRef) 
 		}
 		if len(report.Blockers) == 0 {
 			report.Position = cp.Next
-			valid := true
+			var valid bool
 			if cp.Next == len(r.Steps) {
 				valid = cp.Key == "" && !cp.Waiting && !cp.Approved
 			} else {
 				step := r.Steps[cp.Next]
 				expected := digest(id + "\x00" + cp.Plan + "\x00" + step.Name)
-				valid = (cp.Key == "" || cp.Key == expected) && !(cp.Waiting && cp.Approved) && (!(cp.Waiting || cp.Approved) || (step.RequireApproval && cp.Key == expected))
+				valid = (cp.Key == "" || cp.Key == expected) && (!cp.Waiting || !cp.Approved) && ((!cp.Waiting && !cp.Approved) || (step.RequireApproval && cp.Key == expected))
 			}
 			if !valid {
 				report.Blockers = append(report.Blockers, "invalid_checkpoint")
