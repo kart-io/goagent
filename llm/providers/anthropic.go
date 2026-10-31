@@ -33,7 +33,7 @@ type AnthropicRequest struct {
 	Model         string             `json:"model"`
 	Messages      []AnthropicMessage `json:"messages"`
 	MaxTokens     int                `json:"max_tokens"`
-	Temperature   float64            `json:"temperature,omitempty"`
+	Temperature   float64            `json:"temperature"`
 	TopP          float64            `json:"top_p,omitempty"`
 	TopK          int                `json:"top_k,omitempty"`
 	Stream        bool               `json:"stream,omitempty"`
@@ -192,7 +192,7 @@ func (p *AnthropicProvider) buildRequest(req *agentllm.CompletionRequest) *Anthr
 	// Use common.BaseProvider's unified parameter handling
 	model := p.GetModel(req.Model)
 	maxTokens := p.GetMaxTokens(req.MaxTokens)
-	temperature := p.GetTemperature(req.Temperature)
+	temperature := p.ResolveTemperature(req)
 
 	return &AnthropicRequest{
 		Model:         model,

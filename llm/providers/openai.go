@@ -49,7 +49,7 @@ func NewOpenAIWithOptions(opts ...agentllm.ClientOption) (*OpenAIProvider, error
 	if base.Config.BaseURL != "" {
 		clientConfig.BaseURL = base.Config.BaseURL
 	}
-	clientConfig.HTTPClient = retryAfterDoer{next: responseHeaderTimeoutClient(base.GetTimeout())}
+	clientConfig.HTTPClient = zeroTemperatureDoer{next: retryAfterDoer{next: responseHeaderTimeoutClient(base.GetTimeout())}}
 
 	provider := &OpenAIProvider{
 		BaseProvider: base,
@@ -145,7 +145,8 @@ func (p *OpenAIProvider) Complete(ctx context.Context, req *agentllm.CompletionR
 	// 使用 common.BaseProvider 的统一参数处理方法
 	model := p.GetModel(req.Model)
 	maxTokens := p.GetMaxTokens(req.MaxTokens)
-	temperature := p.GetTemperature(req.Temperature)
+	temperature := p.ResolveTemperature(req)
+	ctx = withOpenAITemperature(ctx, temperature)
 
 	ctx, retryAfter := withRetryAfterSlot(ctx)
 	resp, err := p.client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
@@ -193,6 +194,7 @@ func (p *OpenAIProvider) Stream(ctx context.Context, prompt string) (<-chan stri
 	model := p.GetModel("")
 	maxTokens := p.GetMaxTokens(0)
 	temperature := p.GetTemperature(0)
+	ctx = withOpenAITemperature(ctx, temperature)
 
 	messages := []openai.ChatCompletionMessage{}
 	if p.Config.SystemPrompt != "" {
@@ -270,6 +272,7 @@ func (p *OpenAIProvider) GenerateWithTools(ctx context.Context, prompt string, t
 	model := p.GetModel("")
 	maxTokens := p.GetMaxTokens(0)
 	temperature := p.GetTemperature(0)
+	ctx = withOpenAITemperature(ctx, temperature)
 
 	ctx, retryAfter := withRetryAfterSlot(ctx)
 	resp, err := p.client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
@@ -330,10 +333,12 @@ func (p *OpenAIProvider) StreamWithTools(ctx context.Context, prompt string, too
 		messages = append(messages, openai.ChatCompletionMessage{Role: "system", Content: p.Config.SystemPrompt})
 	}
 	messages = append(messages, openai.ChatCompletionMessage{Role: "user", Content: prompt})
+	temperature := p.GetTemperature(0)
+	ctx = withOpenAITemperature(ctx, temperature)
 	ctx, retryAfter := withRetryAfterSlot(ctx)
 	stream, err := p.client.CreateChatCompletionStream(ctx, openai.ChatCompletionRequest{
 		Model: p.GetModel(""), Messages: messages, Tools: p.convertTools(tools),
-		MaxTokens: p.GetMaxTokens(0), Temperature: float32(p.GetTemperature(0)), Stream: true,
+		MaxTokens: p.GetMaxTokens(0), Temperature: float32(temperature), Stream: true,
 	})
 	if err != nil {
 		return nil, openAIProviderError(err, *retryAfter)

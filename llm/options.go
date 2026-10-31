@@ -67,6 +67,7 @@ func WithTemperature(temperature float64) ClientOption {
 	return func(c *LLMOptions) {
 		if temperature >= 0 && temperature <= 2.0 {
 			c.Temperature = temperature
+			c.TemperatureSet = true
 		}
 	}
 }

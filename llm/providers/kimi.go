@@ -67,7 +67,7 @@ func NewKimiWithOptions(opts ...agentllm.ClientOption) (*KimiClient, error) {
 type kimiRequest struct {
 	Model       string        `json:"model"`
 	Messages    []kimiMessage `json:"messages"`
-	Temperature float64       `json:"temperature,omitempty"`
+	Temperature float64       `json:"temperature"`
 	MaxTokens   int           `json:"max_tokens,omitempty"`
 	TopP        float64       `json:"top_p,omitempty"`
 	N           int           `json:"n,omitempty"`
@@ -131,7 +131,7 @@ func (c *KimiClient) Complete(ctx context.Context, req *agentllm.CompletionReque
 	kimiReq := kimiRequest{
 		Model:       c.GetModel(req.Model),
 		Messages:    messages,
-		Temperature: c.GetTemperature(req.Temperature),
+		Temperature: c.ResolveTemperature(req),
 		MaxTokens:   c.GetMaxTokens(req.MaxTokens),
 		Stream:      false,
 		N:           1,

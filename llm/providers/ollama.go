@@ -150,7 +150,7 @@ func (c *OllamaClient) Complete(ctx context.Context, req *agentllm.CompletionReq
 		Prompt: prompt,
 		Stream: false,
 		Options: map[string]interface{}{
-			"temperature": c.GetTemperature(req.Temperature),
+			"temperature": c.ResolveTemperature(req),
 			"num_predict": c.GetMaxTokens(req.MaxTokens),
 		},
 	}

@@ -1,0 +1,15 @@
+{
+  "date": "2026-10-31",
+  "branch": "fix/explicit-zero-temperature-20261031",
+  "core_base": "2dfad53",
+  "contrib_base": "a21455c",
+  "go": "1.25.0",
+  "binary_sha256": "04639e2a5422a7d3f7858990f0904002fac8b49db5721868ca06183d3bfa118d",
+  "model": "llama3.1:8b",
+  "temperature": 0,
+  "max_tokens": 512,
+  "nvim": "0.12.6",
+  "codecompanion_commit": "142eadffdaa8dd06060646b6f8ef74e99c42ab06",
+  "plenary_commit": "74b06c6c75e4eeb3108ec01852001636d85a932b",
+  "tck_commit": "b7f40fb3c003c45926547be5a1f7e2b374035815"
+}

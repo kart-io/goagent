@@ -37,7 +37,7 @@ type HuggingFaceRequest struct {
 
 // HuggingFaceParameters represents request parameters
 type HuggingFaceParameters struct {
-	Temperature       float64  `json:"temperature,omitempty"`
+	Temperature       float64  `json:"temperature"`
 	MaxNewTokens      int      `json:"max_new_tokens,omitempty"`
 	TopP              float64  `json:"top_p,omitempty"`
 	TopK              int      `json:"top_k,omitempty"`
@@ -159,7 +159,7 @@ func (p *HuggingFaceProvider) buildRequest(req *agentllm.CompletionRequest) *Hug
 
 	// 使用 common.BaseProvider 的统一参数处理方法
 	maxTokens := p.GetMaxTokens(req.MaxTokens)
-	temperature := p.GetTemperature(req.Temperature)
+	temperature := p.ResolveTemperature(req)
 
 	return &HuggingFaceRequest{
 		Inputs: inputs,

@@ -64,7 +64,7 @@ func (p *GeminiProvider) request(req *agentllm.CompletionRequest, tools []interf
 		return nil, nil, err
 	}
 	maxTokens := min(p.GetMaxTokens(req.MaxTokens), 0x7fffffff)
-	temperature, topP := float32(p.GetTemperature(req.Temperature)), float32(p.GetTopP(req.TopP))
+	temperature, topP := float32(p.ResolveTemperature(req)), float32(p.GetTopP(req.TopP))
 	cfg := &genai.GenerateContentConfig{MaxOutputTokens: int32(maxTokens), Temperature: &temperature, TopP: &topP, StopSequences: append([]string(nil), req.Stop...)}
 	if len(system) > 0 {
 		cfg.SystemInstruction = &genai.Content{Parts: []*genai.Part{{Text: strings.Join(system, "\n\n")}}}

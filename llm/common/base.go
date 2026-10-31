@@ -63,7 +63,7 @@ func ConfigToOptions(config *agentllm.LLMOptions) []agentllm.ClientOption {
 	if config.MaxTokens > 0 {
 		opts = append(opts, agentllm.WithMaxTokens(config.MaxTokens))
 	}
-	if config.Temperature > 0 {
+	if config.TemperatureSet || config.Temperature > 0 {
 		opts = append(opts, agentllm.WithTemperature(config.Temperature))
 	}
 	if config.Timeout > 0 {
@@ -136,10 +136,21 @@ func (b *BaseProvider) GetTemperature(reqTemperature float64) float64 {
 	if reqTemperature > 0 {
 		return reqTemperature
 	}
-	if b.Config.Temperature > 0 {
+	if b.Config.TemperatureSet || b.Config.Temperature > 0 {
 		return b.Config.Temperature
 	}
 	return constants.DefaultTemperature
+}
+
+// ResolveTemperature 在请求显式设置（包括零）时优先使用请求，否则沿用客户端与默认值回落。
+func (b *BaseProvider) ResolveTemperature(req *agentllm.CompletionRequest) float64 {
+	if req == nil {
+		return b.GetTemperature(0)
+	}
+	if req.TemperatureSet {
+		return req.Temperature
+	}
+	return b.GetTemperature(req.Temperature)
 }
 
 // GetTimeout returns the timeout duration with fallback to default value.

@@ -44,12 +44,14 @@ type ProviderState struct {
 
 // CompletionRequest 定义补全请求
 type CompletionRequest struct {
-	Messages    []Message `json:"messages"`              // 消息列表
-	Temperature float64   `json:"temperature,omitempty"` // 温度参数 (0.0-2.0)
-	MaxTokens   int       `json:"max_tokens,omitempty"`  // 最大 token 数
-	Model       string    `json:"model,omitempty"`       // 模型名称
-	Stop        []string  `json:"stop,omitempty"`        // 停止序列
-	TopP        float64   `json:"top_p,omitempty"`       // Top-p 采样
+	// TemperatureSet 使 Temperature=0 显式覆盖客户端默认值；JSON 根据字段是否存在自动维护。
+	TemperatureSet bool      `json:"-"`
+	Messages       []Message `json:"messages"`              // 消息列表
+	Temperature    float64   `json:"temperature,omitempty"` // 温度参数 (0.0-2.0)
+	MaxTokens      int       `json:"max_tokens,omitempty"`  // 最大 token 数
+	Model          string    `json:"model,omitempty"`       // 模型名称
+	Stop           []string  `json:"stop,omitempty"`        // 停止序列
+	TopP           float64   `json:"top_p,omitempty"`       // Top-p 采样
 }
 
 // CompletionResponse 定义补全响应
@@ -78,6 +80,8 @@ var (
 
 // Config 定义 LLM 配置
 type LLMOptions struct {
+	// TemperatureSet 区分显式零与零值配置；WithTemperature 和 JSON 解码自动维护。
+	TemperatureSet bool `json:"-"`
 	// 基础配置
 	Provider       constants.Provider `json:"provider"`                  // 提供商
 	APIKey         string             `json:"api_key"`                   // API 密钥

@@ -300,9 +300,10 @@ func (b *AgentBuilder[C, S]) createHandler(runtime *execution.Runtime[C, S]) mid
 
 		// 创建 LLM 请求
 		llmReq := &llm.CompletionRequest{
-			Messages:    messages,
-			MaxTokens:   b.config.MaxTokens,
-			Temperature: b.config.Temperature,
+			Messages:       messages,
+			MaxTokens:      b.config.MaxTokens,
+			Temperature:    b.config.Temperature,
+			TemperatureSet: true,
 		}
 
 		// 调用 LLM

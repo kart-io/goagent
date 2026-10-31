@@ -54,10 +54,12 @@ func (p *OpenAIProvider) completeStream(ctx context.Context, req *agentllm.Compl
 		messages = append(messages, message)
 	}
 	model := p.GetModel(req.Model)
+	temperature := p.ResolveTemperature(req)
+	ctx = withOpenAITemperature(ctx, temperature)
 	ctx, retryAfter := withRetryAfterSlot(ctx)
 	stream, err := p.client.CreateChatCompletionStream(ctx, openai.ChatCompletionRequest{
 		Model: model, Messages: messages, Tools: p.convertTools(tools), MaxTokens: p.GetMaxTokens(req.MaxTokens),
-		Temperature: float32(p.GetTemperature(req.Temperature)), TopP: float32(req.TopP),
+		Temperature: float32(temperature), TopP: float32(req.TopP),
 		Stop: req.Stop, Stream: true, StreamOptions: &openai.StreamOptions{IncludeUsage: true},
 	})
 	if err != nil {

@@ -5,6 +5,12 @@ All notable changes to GoAgent will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- 修复显式 `temperature=0` 在配置复制、Builder、请求序列化和 Provider 发送时被默认温度覆盖或省略的问题。支持 `TemperatureSet` 区分显式零与缺省；内置 9 个 Provider 保留零值，未设置请求继续使用原有回落规则。
+
 ## [0.32.1] - 2026-10-31
 
 只改文档，代码与 v0.32.0 相同。

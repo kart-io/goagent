@@ -67,7 +67,7 @@ func NewSiliconFlowWithOptions(opts ...agentllm.ClientOption) (*SiliconFlowClien
 type siliconFlowRequest struct {
 	Model       string               `json:"model"`
 	Messages    []siliconFlowMessage `json:"messages"`
-	Temperature float64              `json:"temperature,omitempty"`
+	Temperature float64              `json:"temperature"`
 	MaxTokens   int                  `json:"max_tokens,omitempty"`
 	TopP        float64              `json:"top_p,omitempty"`
 	Stream      bool                 `json:"stream"`
@@ -119,7 +119,7 @@ func (c *SiliconFlowClient) Complete(ctx context.Context, req *agentllm.Completi
 	sfReq := siliconFlowRequest{
 		Model:       c.GetModel(req.Model),
 		Messages:    messages,
-		Temperature: c.GetTemperature(req.Temperature),
+		Temperature: c.ResolveTemperature(req),
 		MaxTokens:   c.GetMaxTokens(req.MaxTokens),
 		Stream:      false,
 	}
