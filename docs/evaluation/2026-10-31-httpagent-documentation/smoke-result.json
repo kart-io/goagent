@@ -1,0 +1,23 @@
+{
+  "source": "USER_GUIDE.md first complete Go program",
+  "model": "existing local Ollama llama3.1:8b",
+  "checks": [
+    {
+      "path": "/api/invoke",
+      "status": 200,
+      "marker": "DOC_JSON_3110"
+    },
+    {
+      "path": "/api/stream",
+      "status": 200,
+      "marker": "DOC_SSE_3111"
+    },
+    {
+      "path": "/api/webhooks/demo",
+      "status": 200,
+      "marker": "DOC_WEBHOOK_3112"
+    }
+  ],
+  "native_hook_calls": 6,
+  "shutdown_exit": 0
+}

@@ -21,6 +21,7 @@ GoAgent 是嵌入 Go 服务的 Agent 执行内核：原生工具循环、类型�
 ## 宿主接入与治理
 
 - [宿主标准接入](guides/HOST_INTEGRATION.md)：Scope、BuildContext、恢复身份与资源生命周期
+- [HTTP/SSE/WebSocket、Webhook与Hooks](guides/HTTP_AGENT.md)：安装、页面/客户端案例、宿主装配、可替换连接接口与正式文档入口
 - [扩展契约](guides/EXTENSION_CONTRACT.md)
 - [执行治理](guides/EXECUTION_GOVERNANCE.md)：预算、诊断与资源治理
 - [MCP 与可恢复步骤](guides/PRIORITY_CAPABILITIES.md)
@@ -51,6 +52,7 @@ GoAgent 是嵌入 Go 服务的 Agent 执行内核：原生工具循环、类型�
 - [架构概述](architecture/ARCHITECTURE.md)、[组件关系图](architecture/COMPONENT_DIAGRAM.md)、[导入层级](architecture/IMPORT_LAYERING.md)
 - [设计概述](design/DESIGN_OVERVIEW.md)、[时序图](design/SEQUENCE_DIAGRAMS.md)、[流程图](design/FLOW_DIAGRAMS.md)
 - [Harness 核心设计](design/HARNESS_CORE_DESIGN.md)
+- [HTTP Agent设计](design/HTTP_AGENT_DESIGN.md)：内核与网络模块边界、执行与接纳/通知的资源责任
 - [多框架调研与方案复审](research/2026-10-27-framework-orchestration-review.md)
 - [可组合编排需求](superpowers/specs/2026-10-27-composable-orchestration-requirements.md)与[实现方案](superpowers/plans/2026-10-27-composable-orchestration.md)
 

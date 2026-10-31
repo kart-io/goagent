@@ -207,7 +207,7 @@ type ClassifiedError struct {
 
 供 Provider 实现复用：`BaseProvider`（`NewBaseProvider`、`ApplyProviderDefaults`、`EnsureAPIKey`、`NewHTTPClient` 等）、`ProviderCapabilities`、`ExecuteWithRetry` / `RetryConfig`、`MapHTTPError`、`ConfigToOptions`，以及消息转换函数。自定义 Provider 可以参考 `llm/providers` 中任一实现。
 
-以下完整程序使用内置模拟客户端，无需密钥、不发真实模型请求。它检测终态，并在返回或异常时取消上游。
+以下完整程序使用OpenAI Provider，需要配置OPENAI_API_KEY，运行时会实际调用模型。文档校验脚本只编译该程序，不执行模型请求。
 
 ```go
 package main
@@ -220,6 +220,7 @@ import (
     "time"
 
     "github.com/kart-io/goagent/llm"
+    "github.com/kart-io/goagent/llm/providers"
 )
 
 func main() {

@@ -181,6 +181,7 @@ Other packages: `cache`, `errors`, `interfaces`, `parsers`, `store`, `middleware
 - [Quick Start](docs/guides/QUICKSTART.md)
 - [User Guide](docs/guides/USER_GUIDE.md)
 - [Builder API Reference](docs/guides/BUILDER_API_REFERENCE.md)
+- [HTTP / SSE / WebSocket, Webhooks and Hooks](docs/guides/HTTP_AGENT.md) · [Design](docs/design/HTTP_AGENT_DESIGN.md)
 - [LLM Providers](docs/guides/LLM_PROVIDERS.md)
 - [Execution overhead measurements](docs/evaluation/2026-10-31-execution-overhead/REPORT.md)
 

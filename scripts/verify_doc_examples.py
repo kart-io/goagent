@@ -25,6 +25,7 @@ DEFAULT_DOCS = [
     "docs/guides/USER_GUIDE.md", "docs/guides/EXECUTION_CONTRACT.md",
     "docs/guides/HARNESS_MIGRATION.md", "docs/guides/LLM_PROVIDERS.md",
     "docs/guides/COMPOSABLE_ORCHESTRATION.md", "docs/guides/HOST_INTEGRATION.md",
+    "docs/guides/HTTP_AGENT.md", "docs/design/HTTP_AGENT_DESIGN.md",
 ]
 
 
