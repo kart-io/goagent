@@ -48,6 +48,8 @@ Builder 在每次模型请求前把实际发送的对话（不含 system 与运�
 
 `Rewind(ctx, store, id, to, expected)` 以调用方看到的最后序号做比较并交换，其间有新写入时返回 `ErrConflict`。被撤销的事件仍保留在日志中；持久操作的快照不受影响。`Fork` 把会话的前缀复制为新会话。
 
+从持久运行的某一点分叉并继续：`store.Fork(ctx, src, dst, seq)` 之后，对 `dst` 以同一执行键恢复（`WithSessionID(dst)`、`session.DurableStore(store, dst)`）。分叉点之前完成的操作回放，之后的实跑，原会话不变。分叉点应选在消息事件上（如某条 `tool/result` 的序号）；落在某个操作的开始与完成之间时，恢复该操作返回需宿主处理的错误，与进程在该处崩溃相同。
+
 ## 轨迹导出
 
 ```go

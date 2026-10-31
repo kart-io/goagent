@@ -30,6 +30,8 @@ type sessionLogKey struct{}
 type sessionTurn struct {
 	rec   *session.Recorder
 	tools map[string]session.ToolMeta
+	// resumed 是续写的轮次的 turn/start 序号：回放到已记录位置的同步不再记录，直到对话超出日志。
+	resumed int64
 }
 
 func sessionTurnFrom(ctx context.Context) *sessionTurn {
@@ -74,6 +76,7 @@ func (a *ConfigurableAgent[C, S]) openSessionTurn(ctx context.Context, input str
 				}
 			}
 			history, err := session.DeriveMessages(before)
+			turn.resumed = open.Seq
 			return turn, history, err
 		}
 		end, err := session.NewEvent(session.TypeTurnEnd, session.TurnEnd{Aborted: true})
@@ -121,6 +124,13 @@ func (t *sessionTurn) sync(ctx context.Context, messages []llm.Message) error {
 	}
 	if len(messages) > 0 && messages[0].Role == "system" {
 		messages = messages[1:]
+	}
+	if t.resumed > 0 {
+		replayed, err := t.rec.Replayed(t.resumed, messages)
+		if err != nil || replayed {
+			return err
+		}
+		t.resumed = 0
 	}
 	return t.rec.Sync(ctx, messages, t.tools)
 }

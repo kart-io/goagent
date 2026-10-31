@@ -170,6 +170,33 @@ func (r *Recorder) Sync(ctx context.Context, messages []llm.Message, tools map[s
 	return err
 }
 
+// Replayed 报告 messages 是否等于序号不小于 from 的某个事件处日志推导出的对话：恢复中的持久运行回放到此前已记录的位置，
+// 不需要再记录。
+func (r *Recorder) Replayed(from int64, messages []llm.Message) (bool, error) {
+	for i, ev := range r.events {
+		if ev.Seq < from {
+			continue
+		}
+		derived, err := DeriveMessages(r.events[:i+1])
+		if err != nil {
+			return false, err
+		}
+		if len(derived) == len(messages) && sameMessages(derived, messages) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func sameMessages(a, b []llm.Message) bool {
+	for i := range a {
+		if !sameMessage(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
 // sameMessage 按 JSON 编码比较：日志中的消息经过编解码，空切片与 nil 等差异不算改写。
 func sameMessage(a, b llm.Message) bool {
 	x, err1 := json.Marshal(a)
