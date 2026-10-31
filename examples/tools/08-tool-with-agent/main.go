@@ -353,5 +353,5 @@ func printSummary() {
 	fmt.Println("  - 设置合理的 MaxIterations 防止无限循环")
 	fmt.Println("  - 处理工具执行失败的情况")
 	fmt.Println()
-	fmt.Println("更多示例请参考 examples/agents/ 目录")
+	fmt.Println("更多 Agent 示例请参考 examples/builder/ 与 examples/advanced/ 目录")
 }

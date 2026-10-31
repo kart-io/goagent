@@ -723,6 +723,49 @@ func TestCircuitBreakerMiddleware_HalfOpen_Failure(t *testing.T) {
 	assert.Equal(t, "open", state)
 }
 
+// 经 MiddlewareChain 驱动：成功清零连续失败计数。
+func TestCircuitBreakerMiddleware_SuccessResetsFailures(t *testing.T) {
+	mw := NewCircuitBreakerMiddleware(2, time.Minute)
+	results := []error{errors.New("boom"), nil, errors.New("boom"), nil}
+	calls := 0
+	chain := NewMiddlewareChain(func(context.Context, *MiddlewareRequest) (*MiddlewareResponse, error) {
+		err := results[calls]
+		calls++
+		if err != nil {
+			return nil, err
+		}
+		return &MiddlewareResponse{Output: "ok"}, nil
+	}).Use(mw)
+	for i := range results {
+		_, err := chain.Execute(context.Background(), &MiddlewareRequest{Input: "q"})
+		assert.Equal(t, results[i] != nil, err != nil, "call %d", i)
+	}
+	assert.Equal(t, 4, calls, "两次失败不连续，熔断器不应打开")
+}
+
+// 打开期间被拒绝的请求不算失败，不推迟半开。
+func TestCircuitBreakerMiddleware_RejectionsDoNotExtendOpen(t *testing.T) {
+	mw := NewCircuitBreakerMiddleware(1, 100*time.Millisecond)
+	fail := true
+	chain := NewMiddlewareChain(func(context.Context, *MiddlewareRequest) (*MiddlewareResponse, error) {
+		if fail {
+			return nil, errors.New("boom")
+		}
+		return &MiddlewareResponse{Output: "ok"}, nil
+	}).Use(mw)
+	_, err := chain.Execute(context.Background(), &MiddlewareRequest{Input: "q"})
+	require.Error(t, err)
+	fail = false
+	deadline := time.Now().Add(400 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		if _, err = chain.Execute(context.Background(), &MiddlewareRequest{Input: "q"}); err == nil {
+			return
+		}
+		time.Sleep(30 * time.Millisecond)
+	}
+	t.Fatalf("熔断器在 resetTimeout 之后仍拒绝请求: %v", err)
+}
+
 // ===== RandomDelayMiddleware Tests =====
 
 func TestNewRandomDelayMiddleware(t *testing.T) {

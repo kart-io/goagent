@@ -38,8 +38,9 @@ func NewOllamaWithOptions(opts ...agentllm.ClientOption) (*OllamaClient, error) 
 	)
 
 	// 设置超时时间，Ollama 默认需要更长的超时
+	// 与 LLMOptions 的默认超时比较：显式设置的值保持不变
 	timeout := base.GetTimeout()
-	if timeout == constants.DefaultTimeout {
+	if timeout == time.Duration(agentllm.DefaultLLMOptions().Timeout)*time.Second {
 		timeout = 120 * time.Second
 	}
 

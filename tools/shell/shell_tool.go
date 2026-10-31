@@ -73,6 +73,9 @@ func NewShellTool(allowedCommands []string, timeout time.Duration) *ShellTool {
 	return tool
 }
 
+// shellMetachars 是 shell 会解释的字符
+const shellMetachars = ";|&`$><"
+
 // run 执行 shell 命令
 func (s *ShellTool) run(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 	resp := tools.NewToolErrorResponse(s.Name()).WithOperation("run")
@@ -96,10 +99,14 @@ func (s *ShellTool) run(ctx context.Context, input *interfaces.ToolInput) (*inte
 	}
 
 	// 解析参数
+	// 模型经 JSON 传入 []interface{}，Go 调用方（ExecuteScript 等）传入 []string
 	var args []string
-	if argsInterface, ok := input.Args["args"].([]interface{}); ok {
-		args = make([]string, len(argsInterface))
-		for i, arg := range argsInterface {
+	switch v := input.Args["args"].(type) {
+	case []string:
+		args = v
+	case []interface{}:
+		args = make([]string, len(v))
+		for i, arg := range v {
 			args[i] = fmt.Sprint(arg)
 		}
 	}
@@ -108,8 +115,11 @@ func (s *ShellTool) run(ctx context.Context, input *interfaces.ToolInput) (*inte
 
 	// 解析超时
 	timeout := s.timeout
-	if timeoutSec, ok := input.Args["timeout"].(float64); ok {
-		timeout = time.Duration(timeoutSec) * time.Second
+	switch v := input.Args["timeout"].(type) {
+	case float64:
+		timeout = time.Duration(v * float64(time.Second))
+	case int:
+		timeout = time.Duration(v) * time.Second
 	}
 
 	// 应用超时
@@ -117,13 +127,10 @@ func (s *ShellTool) run(ctx context.Context, input *interfaces.ToolInput) (*inte
 	defer cancel()
 
 	// Validate command to prevent shell injection
-	if strings.Contains(command, ";") || strings.Contains(command, "|") ||
-		strings.Contains(command, "&") || strings.Contains(command, "`") ||
-		strings.Contains(command, "$") || strings.Contains(command, ">") ||
-		strings.Contains(command, "<") {
+	if strings.ContainsAny(command, shellMetachars) {
 		return resp.ValidationError("command contains potentially dangerous characters",
 			"command", command,
-			"dangerous_chars", []string{";", "|", "&", "`", "$", ">", "<"})
+			"dangerous_chars", strings.Split(shellMetachars, ""))
 	}
 
 	// 构建命令
@@ -221,6 +228,13 @@ func (s *ShellTool) ExecutePipeline(ctx context.Context, commands []string) (*in
 		fields := strings.Fields(strings.TrimSpace(cmd))
 		if len(fields) == 0 {
 			return resp.ValidationError("empty command in pipeline")
+		}
+
+		// 管道经 bash -c 执行，参数中的元字符会绕过白名单
+		if strings.ContainsAny(cmd, shellMetachars) {
+			return resp.ValidationError("command in pipeline contains potentially dangerous characters",
+				"command", cmd,
+				"dangerous_chars", strings.Split(shellMetachars, ""))
 		}
 
 		cmdName := fields[0]

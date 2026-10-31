@@ -12,7 +12,6 @@ llm/
 ├── tools.go          # ToolCall、ToolCallResponse、ToolChunk
 ├── provider_error.go # ProviderError、ClassifyError
 ├── options.go        # ClientOption（With*）
-├── factory.go        # ClientFactory、PrepareConfig 等
 ├── common/           # BaseProvider、重试、HTTP 错误映射、消息转换
 ├── constants/        # Provider 常量、环境变量名、默认值
 ├── providers/        # OpenAI、Anthropic、Gemini、DeepSeek、Cohere、HuggingFace、Ollama、Kimi、SiliconFlow

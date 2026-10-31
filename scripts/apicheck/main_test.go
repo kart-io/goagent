@@ -13,8 +13,10 @@ func TestImportRulesUseCurrentModuleAndLayeredExceptions(t *testing.T) {
 		file, dep string
 		bad       bool
 	}{
-		{"core/sub/x.go", "agents/react", true},
-		{"builder/new.go", "agents/react", true},
+		{"core/sub/x.go", "tools/compute", true},
+		{"builder/new.go", "middleware", true},
+		{"parsers/x.go", "middleware", true},
+		{"tools/x.go", "core", false},
 		{"interfaces/x.go", "utils/json", true},
 		{"cache/x.go", "utils/json", false},
 		{"cache/x.go", "utils/httpclient", true},
@@ -28,7 +30,7 @@ func TestImportRulesUseCurrentModuleAndLayeredExceptions(t *testing.T) {
 	} {
 		require.Equal(t, tc.bad, forbidden(tc.file, module+tc.dep), tc.file+" -> "+tc.dep)
 	}
-	require.False(t, forbidden("core/a.go", "example.com/agents"))
+	require.False(t, forbidden("core/a.go", "example.com/tools"))
 }
 
 func TestCoreDoesNotDependOnHarness(t *testing.T) {

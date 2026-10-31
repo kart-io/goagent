@@ -1,9 +1,9 @@
-// Package main demonstrates DeepSeek usage with GoAgent's InvokeFast optimization
+// Package main demonstrates serial calls of multiple DeepSeek agents built with AgentBuilder
 //
 // This example shows:
 // - Using DeepSeek with AgentBuilder (recommended approach)
-// - How InvokeFast optimization works automatically in nested scenarios
-// - Performance comparison of nested agent calls
+// - Chaining several agents with plain Execute calls and timing each step
+// - What core.FastInvoker / InvokeFast is, and why builder agents do not use it
 package main
 
 import (
@@ -20,7 +20,7 @@ import (
 )
 
 func main() {
-	fmt.Println("GoAgent + DeepSeek InvokeFast 优化示例")
+	fmt.Println("GoAgent + DeepSeek 多 Agent 串行调用示例")
 	fmt.Println("==========================================")
 	fmt.Println()
 
@@ -35,18 +35,18 @@ func main() {
 
 	fmt.Println()
 
-	// 示例 2: 多步骤任务处理（自动优化）
+	// 示例 2: 多步骤任务处理
 	runMultiStepExample(apiKey)
 
 	fmt.Println()
 
-	// 示例 3: 结构化数据生成（InvokeFast 优化）
+	// 示例 3: 结构化数据生成
 	runStructuredDataExample(apiKey)
 
 	fmt.Println()
 
-	// 示例 4: 性能说明
-	showOptimizationExplanation()
+	// 示例 4: InvokeFast 说明
+	showInvokeFastNote()
 }
 
 // runBasicExample 演示基础的 DeepSeek Agent 使用
@@ -97,7 +97,6 @@ func runBasicExample(apiKey string) {
 func runMultiStepExample(apiKey string) {
 	fmt.Println("示例 2: 多步骤任务处理")
 	fmt.Println("----------------------")
-	fmt.Println("（InvokeFast 优化在内部自动生效）")
 	fmt.Println()
 
 	// 创建 DeepSeek provider
@@ -174,10 +173,10 @@ func processData(data []int) int {
 	fmt.Printf("总耗时: %v\n", duration1+duration2)
 }
 
-// runStructuredDataExample 演示使用 InvokeFast 优化结构化数据生成
+// runStructuredDataExample 演示多个 Agent 生成结构化数据
 func runStructuredDataExample(apiKey string) {
-	fmt.Println("示例 3: 结构化数据生成（InvokeFast 优化）")
-	fmt.Println("------------------------------------------")
+	fmt.Println("示例 3: 结构化数据生成")
+	fmt.Println("----------------------")
 	fmt.Println("（使用多个专业 Agent 协同生成结构化数据）")
 	fmt.Println()
 
@@ -261,18 +260,8 @@ func runStructuredDataExample(apiKey string) {
 	fmt.Printf("总耗时: %v\n", totalDuration)
 	fmt.Println()
 
-	// 性能提示
-	fmt.Println("🚀 InvokeFast 优化效果:")
-	fmt.Println("--------------------------------------")
-	fmt.Println("• 当这些 Agent 被嵌套在父 Agent 中调用时，")
-	fmt.Println("  InvokeFast 会自动跳过不必要的回调和中间件")
-	fmt.Println("• 在多 Agent 协同场景中，累积性能提升可达 10-15%")
-	fmt.Println("• 使用 AgentBuilder 创建的 Agent 自动享受优化")
-	fmt.Println()
-
-	// 示例：展示嵌套场景的优化
-	fmt.Println("示例 3.2: 嵌套 Agent 场景（展示真正的 InvokeFast 优化）")
-	fmt.Println("----------------------------------------------------------")
+	fmt.Println("示例 3.2: 协调 Agent + 子 Agent 顺序调用")
+	fmt.Println("----------------------------------------")
 	fmt.Println()
 
 	// 创建一个协调 Agent，内部调用子 Agent
@@ -298,130 +287,41 @@ func runStructuredDataExample(apiKey string) {
 	fmt.Printf("耗时: %v\n", durationCoordinator)
 	fmt.Println()
 
-	fmt.Println("步骤 2: 基于协调结果，子 Agent 并行生成数据...")
-	fmt.Println("（在真实的嵌套场景中，子 Agent 的调用会通过 InvokeFast 优化）")
+	fmt.Println("步骤 2: 子 Agent 顺序生成数据（普通 Execute 调用）...")
 	fmt.Println()
 
-	// 模拟嵌套调用场景
 	startNested := time.Now()
 
-	// 在实际应用中，这些会在协调 Agent 内部通过 InvokeFast 调用
 	nestedUserOutput, err := userAgent.Execute(ctx, userTask)
 	if err != nil {
-		log.Fatalf("嵌套调用生成用户数据失败: %v", err)
+		log.Fatalf("子 Agent 生成用户数据失败: %v", err)
 	}
 
 	nestedProductOutput, err := productAgent.Execute(ctx, productTask)
 	if err != nil {
-		log.Fatalf("嵌套调用生成产品数据失败: %v", err)
+		log.Fatalf("子 Agent 生成产品数据失败: %v", err)
 	}
 
 	durationNested := time.Since(startNested)
 
-	fmt.Println("嵌套生成的用户数据:")
+	fmt.Println("子 Agent 生成的用户数据:")
 	fmt.Printf("%v\n", nestedUserOutput.Result)
 	fmt.Println()
 
-	fmt.Println("嵌套生成的产品数据:")
+	fmt.Println("子 Agent 生成的产品数据:")
 	fmt.Printf("%v\n", nestedProductOutput.Result)
 	fmt.Println()
 
-	fmt.Printf("嵌套场景总耗时: %v\n", durationNested)
-	fmt.Println()
-
-	// 性能对比说明
-	fmt.Println("💡 性能说明:")
-	fmt.Println("-------------")
-	fmt.Println("在真实的嵌套 Agent 架构中（例如使用 SupervisorAgent），")
-	fmt.Println("父 Agent 调用子 Agent 时会自动使用 InvokeFast 优化：")
-	fmt.Println()
-	fmt.Println("  • 跳过子 Agent 的回调函数")
-	fmt.Println("  • 减少不必要的中间件执行")
-	fmt.Println("  • 降低内存分配和延迟")
-	fmt.Println()
-	fmt.Println("这种优化对用户是透明的，只需使用 AgentBuilder 即可自动获得。")
+	fmt.Printf("子 Agent 总耗时: %v\n", durationNested)
 }
 
-// showOptimizationExplanation 说明 InvokeFast 优化原理
-func showOptimizationExplanation() {
-	fmt.Println("💡 InvokeFast 优化说明")
-	fmt.Println("=======================")
-	fmt.Println()
-
-	fmt.Println("什么是 InvokeFast？")
-	fmt.Println("-------------------")
-	fmt.Println("InvokeFast 是 GoAgent 框架的性能优化特性，通过跳过回调和")
-	fmt.Println("部分中间件来减少内部 Agent 调用的开销。")
-	fmt.Println()
-
-	fmt.Println("性能提升：")
-	fmt.Println("  • 延迟降低: 4-6%")
-	fmt.Println("  • 内存分配减少: 5-8%")
-	fmt.Println("  • 适用场景: 嵌套 Agent、链式调用、高频循环")
-	fmt.Println()
-
-	fmt.Println("如何生效？")
-	fmt.Println("----------")
-	fmt.Println("1. 自动优化: 在 GoAgent 框架内部，当一个 Agent 调用另一个")
-	fmt.Println("   Agent 时，会自动使用 InvokeFast 优化路径。")
-	fmt.Println()
-	fmt.Println("2. 对用户透明: 使用 AgentBuilder 创建的 Agent 会自动获得")
-	fmt.Println("   优化效果，无需任何额外代码。")
-	fmt.Println()
-	fmt.Println("3. 支持的 Agent 类型:")
-	fmt.Println("   • ReActAgent (推理和行动Agent)")
-	fmt.Println("   • ChainableAgent (可链式组合Agent)")
-	fmt.Println("   • ExecutorAgent (执行器Agent)")
-	fmt.Println("   • SupervisorAgent (监督者Agent)")
-	fmt.Println()
-
-	fmt.Println("实现原理：")
-	fmt.Println("----------")
-	fmt.Println("```go")
-	fmt.Println("// 标准调用路径（含回调）")
-	fmt.Println("func (a *Agent) Invoke(ctx, input) (output, error) {")
-	fmt.Println("    a.triggerOnStart(ctx, input)      // 回调")
-	fmt.Println("    output, err := a.executeCore(...)  // 核心逻辑")
-	fmt.Println("    a.triggerOnFinish(ctx, output)     // 回调")
-	fmt.Println("    return output, err")
-	fmt.Println("}")
-	fmt.Println()
-	fmt.Println("// 快速调用路径（无回调）")
-	fmt.Println("func (a *Agent) InvokeFast(ctx, input) (output, error) {")
-	fmt.Println("    return a.executeCore(...)  // 直接执行，跳过回调")
-	fmt.Println("}")
-	fmt.Println("```")
-	fmt.Println()
-
-	fmt.Println("使用建议：")
-	fmt.Println("----------")
-	fmt.Println("✅ 使用 AgentBuilder 创建 Agent（推荐）")
-	fmt.Println("   • 框架自动应用 InvokeFast 优化")
-	fmt.Println("   • 无需关心内部实现细节")
-	fmt.Println("   • 保持代码简洁")
-	fmt.Println()
-	fmt.Println("✅ 构建嵌套/链式 Agent 架构")
-	fmt.Println("   • InvokeFast 优化效果最明显")
-	fmt.Println("   • 自动传播性能提升")
-	fmt.Println()
-	fmt.Println("⚠️  高级用法：直接使用 core.TryInvokeFast()")
-	fmt.Println("   • 仅在自定义 Agent 实现时使用")
-	fmt.Println("   • 需要理解框架内部机制")
-	fmt.Println()
-
-	fmt.Println("性能对比（基准测试）：")
-	fmt.Println("---------------------")
-	fmt.Println("BenchmarkInvoke          750000    1494 ns/op    352 B/op")
-	fmt.Println("BenchmarkInvokeFast      800000    1399 ns/op    320 B/op")
-	fmt.Println("性能提升: 6.3%")
-	fmt.Println()
-
-	fmt.Println("总结：")
-	fmt.Println("------")
-	fmt.Println("使用 DeepSeek + AgentBuilder 构建的 Agent 会自动享受")
-	fmt.Println("InvokeFast 优化带来的性能提升，无需任何额外配置。")
-	fmt.Println()
-	fmt.Println("参考文档:")
-	fmt.Println("  • InvokeFast 完整指南: docs/guides/INVOKE_FAST_OPTIMIZATION.md")
-	fmt.Println("  • InvokeFast 快速入门: docs/guides/INVOKE_FAST_QUICKSTART.md")
+// showInvokeFastNote 说明 InvokeFast 与本示例的关系
+func showInvokeFastNote() {
+	fmt.Println("💡 关于 InvokeFast")
+	fmt.Println("==================")
+	fmt.Println("• core.FastInvoker 接口（core/fast_invoker.go）定义了跳过回调的 InvokeFast 路径；")
+	fmt.Println("  core.TryInvokeFast(ctx, agent, input) 在 agent 实现该接口时走快速路径，否则回退到 Invoke。")
+	fmt.Println("• 实现者是 core.BaseAgent（默认返回 ErrNotImplemented，需具体 Agent 重写）与 core.ChainableAgent。")
+	fmt.Println("• builder 构建出的 ConfigurableAgent 不实现 core.FastInvoker，")
+	fmt.Println("  本示例的所有调用都是普通的 agent.Execute，不经过 InvokeFast。")
 }

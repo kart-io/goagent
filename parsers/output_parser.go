@@ -27,9 +27,6 @@ type OutputParser[T any] interface {
 	// Parse 解析文本输出为结构化数据
 	Parse(ctx context.Context, text string) (T, error)
 
-	// ParseWithPrompt 带提示信息的解析（用于错误恢复）
-	ParseWithPrompt(ctx context.Context, text, prompt string) (T, error)
-
 	// GetFormatInstructions 获取格式化指令
 	// 这些指令会添加到 prompt 中，告诉 LLM 如何格式化输出
 	GetFormatInstructions() string
@@ -60,11 +57,6 @@ func NewBaseOutputParser[T any]() *BaseOutputParser[T] {
 // GetType 获取类型名称
 func (p *BaseOutputParser[T]) GetType() string {
 	return p.typeName
-}
-
-// ParseWithPrompt 默认实现：忽略 prompt，直接调用 Parse
-func (p *BaseOutputParser[T]) ParseWithPrompt(ctx context.Context, text, prompt string) (T, error) {
-	return p.Parse(ctx, text)
 }
 
 // Parse 需要由子类实现
@@ -594,28 +586,6 @@ func (p *ChainOutputParser[T]) Parse(ctx context.Context, text string) (T, error
 		WithComponent("chain_parser").
 		WithOperation("parse").
 		WithContext("parsers_count", len(p.parsers))
-}
-
-// ParseWithPrompt 带提示的解析
-func (p *ChainOutputParser[T]) ParseWithPrompt(ctx context.Context, text, prompt string) (T, error) {
-	var lastErr error
-	for _, parser := range p.parsers {
-		result, err := parser.ParseWithPrompt(ctx, text, prompt)
-		if err == nil {
-			return result, nil
-		}
-		lastErr = err
-	}
-
-	if lastErr == nil {
-		lastErr = errNoParsers
-	}
-	var zero T
-	return zero, agentErrors.Wrap(lastErr, agentErrors.CodeParserFailed, "all parsers in chain failed with prompt").
-		WithComponent("chain_parser").
-		WithOperation("parse_with_prompt").
-		WithContext("parsers_count", len(p.parsers)).
-		WithContext("prompt_length", len(prompt))
 }
 
 // GetFormatInstructions 获取格式化指令

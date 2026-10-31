@@ -83,14 +83,8 @@ type AgentConfig struct {
 	// Timeout 设置 Agent 执行超时时间
 	Timeout time.Duration
 
-	// EnableStreaming 启用流式响应
-	EnableStreaming bool
-
 	// EnableAutoSave 自动保存状态
 	EnableAutoSave bool
-
-	// SaveInterval 自动保存间隔
-	SaveInterval time.Duration
 
 	// MaxTokens 限制 LLM 响应的最大 token 数
 	MaxTokens int
@@ -152,7 +146,7 @@ func (b *AgentBuilder[C, S]) WithEmptyAnswerRetries(n int) *AgentBuilder[C, S] {
 // [Advanced] 仅作用于原生工具流。n>=2 时，一轮有多个调用、且每个调用的工具都实现
 // interfaces.ConcurrentCallTool（如 Dispatcher.Tools）时最多 n 个并发执行，实际峰值还受工具自身
 // 限流（Dispatcher.MaxConcurrency）约束；不另设上限时传 math.MaxInt。n<2 按顺序执行，负数视为 0；
-// 含上下文策略工具或任一工具未声明并发能力时整轮按顺序执行。
+// 任一工具未声明并发能力时整轮按顺序执行。
 //
 // 并发时执行先后不保证与模型给出的顺序一致，即使 Dispatcher.MaxConcurrency=1 也一样；工具内部不要
 // 按执行顺序分配编号或依赖同轮调用的先后。结果仍按模型给出的顺序交还模型，tool_start 在派发前、
@@ -168,9 +162,7 @@ func DefaultAgentConfig() *AgentConfig {
 	return &AgentConfig{
 		MaxIterations:          10,
 		Timeout:                core.DefaultAgentExecutionTimeout,
-		EnableStreaming:        false,
 		EnableAutoSave:         true,
-		SaveInterval:           30 * time.Second,
 		MaxTokens:              2000,
 		Temperature:            0.7,
 		SessionID:              fmt.Sprintf("session-%d", time.Now().UnixNano()),
@@ -200,29 +192,11 @@ func (b *AgentBuilder[C, S]) WithTimeout(timeout time.Duration) *AgentBuilder[C,
 	return b
 }
 
-// WithStreamingEnabled 设置是否启用流式响应
-//
-// [Advanced] 高级配置，用于实时流式输出 LLM 响应（需要 LLM 支持）。
-func (b *AgentBuilder[C, S]) WithStreamingEnabled(enabled bool) *AgentBuilder[C, S] {
-	b.config.EnableStreaming = enabled
-	return b
-}
-
 // WithAutoSaveEnabled 设置是否启用自动保存
 //
 // [Advanced] 高级配置，控制是否自动保存 Agent 状态（默认 true）。
 func (b *AgentBuilder[C, S]) WithAutoSaveEnabled(enabled bool) *AgentBuilder[C, S] {
 	b.config.EnableAutoSave = enabled
-	return b
-}
-
-// WithSaveInterval 设置自动保存间隔
-//
-// [Advanced] 高级配置，控制自动保存的时间间隔（默认 30 秒）。
-func (b *AgentBuilder[C, S]) WithSaveInterval(interval time.Duration) *AgentBuilder[C, S] {
-	if interval > 0 {
-		b.config.SaveInterval = interval
-	}
 	return b
 }
 

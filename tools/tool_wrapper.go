@@ -16,7 +16,7 @@ import (
 //
 //	tool := NewCalculatorTool()
 //	wrappedTool := tools.WithMiddleware(tool,
-//	    middleware.Logging(),
+//	    middleware.NewLoggingMiddleware(),
 //	    middleware.Caching(middleware.WithTTL(5*time.Minute)),
 //	    middleware.RateLimit(middleware.WithQPS(10)),
 //	)
@@ -42,8 +42,8 @@ type MiddlewareTool struct {
 //
 //	// 使用函数式中间件（推荐）
 //	wrappedTool := WithMiddleware(tool,
-//	    middleware.Logging(),
 //	    middleware.Caching(),
+//	    middleware.RateLimit(middleware.WithQPS(10)),
 //	)
 //
 //	// 使用接口式中间件（旧接口）

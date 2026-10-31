@@ -236,10 +236,11 @@ func main() {
 	fmt.Println("更多工具示例请参考其他目录")
 }
 
-// truncateString 截断字符串
+// truncateString 按字符（rune）截断字符串，避免截断多字节中文
 func truncateString(s string, maxLen int) string {
-	if len(s) <= maxLen {
+	r := []rune(s)
+	if len(r) <= maxLen {
 		return s
 	}
-	return s[:maxLen] + "..."
+	return string(r[:maxLen]) + "..."
 }

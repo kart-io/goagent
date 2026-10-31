@@ -3,7 +3,6 @@ package llm
 import (
 	"context"
 	"encoding/json"
-	"time"
 
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm/constants"
@@ -93,27 +92,11 @@ type LLMOptions struct {
 	ResponseFormat *ResponseFormat `json:"response_format,omitempty"` // 响应格式 (json_object 或 text)
 
 	// 网络配置
-	Timeout  int    `json:"timeout"`             // 请求超时（秒）
-	ProxyURL string `json:"proxy_url,omitempty"` // 代理 URL
-
-	// 重试配置
-	RetryCount int           `json:"retry_count,omitempty"` // 重试次数
-	RetryDelay time.Duration `json:"retry_delay,omitempty"` // 重试延迟
-
-	// 速率限制
-	RateLimitRPM int `json:"rate_limit_rpm,omitempty"` // 每分钟请求数限制
-
-	// 缓存配置
-	CacheEnabled bool          `json:"cache_enabled,omitempty"` // 是否启用缓存
-	CacheTTL     time.Duration `json:"cache_ttl,omitempty"`     // 缓存 TTL
-
-	// 流式响应
-	StreamingEnabled bool `json:"streaming_enabled,omitempty"` // 是否启用流式响应
+	Timeout int `json:"timeout"` // 请求超时（秒）
 
 	// 其他配置
-	OrganizationID string            `json:"organization_id,omitempty"` // 组织 ID (用于 OpenAI)
-	SystemPrompt   string            `json:"system_prompt,omitempty"`   // 默认系统提示
-	CustomHeaders  map[string]string `json:"custom_headers,omitempty"`  // 自定义 HTTP 头
+	SystemPrompt  string            `json:"system_prompt,omitempty"`  // 默认系统提示
+	CustomHeaders map[string]string `json:"custom_headers,omitempty"` // 自定义 HTTP 头
 }
 
 // DefaultConfig 返回默认配置

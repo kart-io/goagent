@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/kart-io/goagent/llm/constants"
 )
@@ -48,28 +47,13 @@ func TestAdvancedOptions(t *testing.T) {
 	}
 
 	config := NewLLMOptionsWithOptions(
-		WithRetryCount(5),
-		WithRetryDelay(3*time.Second),
-		WithRateLimiting(100),
-		WithCache(true, 15*time.Minute),
-		WithProxy("http://proxy.example.com:8080"),
 		WithSystemPrompt("You are helpful"),
-		WithStreamingEnabled(true),
 		WithCustomHeaders(headers),
-		WithOrganizationID("org-123"),
 		WithTopP(0.95),
 	)
 
-	assert.Equal(t, 5, config.RetryCount)
-	assert.Equal(t, 3*time.Second, config.RetryDelay)
-	assert.Equal(t, 100, config.RateLimitRPM)
-	assert.True(t, config.CacheEnabled)
-	assert.Equal(t, 15*time.Minute, config.CacheTTL)
-	assert.Equal(t, "http://proxy.example.com:8080", config.ProxyURL)
 	assert.Equal(t, "You are helpful", config.SystemPrompt)
-	assert.True(t, config.StreamingEnabled)
 	assert.Equal(t, headers, config.CustomHeaders)
-	assert.Equal(t, "org-123", config.OrganizationID)
 	assert.Equal(t, 0.95, config.TopP)
 }
 
@@ -108,16 +92,11 @@ func TestApplyOptionsToExistingConfig(t *testing.T) {
 		config,
 		WithModel("gpt-4"),
 		WithMaxTokens(2000),
-		WithCache(true, 10*time.Minute),
-		WithRetryCount(3),
 	)
 
 	// 验证更新的字段
 	assert.Equal(t, "gpt-4", updatedConfig.Model)
 	assert.Equal(t, 2000, updatedConfig.MaxTokens)
-	assert.True(t, updatedConfig.CacheEnabled)
-	assert.Equal(t, 10*time.Minute, updatedConfig.CacheTTL)
-	assert.Equal(t, 3, updatedConfig.RetryCount)
 
 	// 验证未更新的字段保持不变
 	assert.Equal(t, "original-key", updatedConfig.APIKey)
@@ -163,50 +142,6 @@ func TestValidation(t *testing.T) {
 		WithMaxTokens(5000), // 有效
 	)
 	assert.Equal(t, 5000, config7.MaxTokens)
-}
-
-// TestValidateConfig 测试配置验证函数
-func TestValidateConfig(t *testing.T) {
-	t.Run("NilConfig", func(t *testing.T) {
-		err := validateConfig(nil)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "config is nil")
-	})
-
-	t.Run("MissingProvider", func(t *testing.T) {
-		config := &LLMOptions{}
-		err := validateConfig(config)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "provider is required")
-	})
-
-	t.Run("MissingAPIKey", func(t *testing.T) {
-		config := &LLMOptions{
-			Provider: constants.ProviderOpenAI,
-		}
-		err := validateConfig(config)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "requires API key")
-	})
-
-	t.Run("OllamaNoAPIKey", func(t *testing.T) {
-		// Ollama 不需要 API key
-		config := &LLMOptions{
-			Provider: constants.ProviderOllama,
-			BaseURL:  "http://localhost:11434",
-		}
-		err := validateConfig(config)
-		require.NoError(t, err)
-	})
-
-	t.Run("ValidConfig", func(t *testing.T) {
-		config := &LLMOptions{
-			Provider: constants.ProviderOpenAI,
-			APIKey:   "test-key",
-		}
-		err := validateConfig(config)
-		require.NoError(t, err)
-	})
 }
 
 // TestWithTimeoutRoundsUp 正数时长向上取整到秒，不会被截断为 0（未设置）

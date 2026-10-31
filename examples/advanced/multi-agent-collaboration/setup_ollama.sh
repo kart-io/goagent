@@ -66,7 +66,7 @@ echo "Using model: $OLLAMA_MODEL"
 echo ""
 
 # Run the example
-go run main_simple.go
+go run .
 
 echo ""
 echo "========================================"

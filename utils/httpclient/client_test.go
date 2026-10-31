@@ -225,6 +225,8 @@ func TestDefault(t *testing.T) {
 }
 
 func TestSetDefault(t *testing.T) {
+	// 首次调用 Default() 之前设置也须生效
+	ResetDefault()
 	customClient := NewClient(&Config{
 		Timeout: 5 * time.Second,
 	})

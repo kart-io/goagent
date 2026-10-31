@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/core/state"
-	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 )
 
@@ -489,46 +488,6 @@ func (m *TimingMiddleware) GetAverageLatency() time.Duration {
 	return total / time.Duration(len(m.timings))
 }
 
-// RetryMiddleware implements retry logic
-type RetryMiddleware struct {
-	*BaseMiddleware
-	maxRetries int
-	backoff    time.Duration
-	retryOn    func(error) bool
-}
-
-// NewRetryMiddleware creates a retry middleware
-func NewRetryMiddleware(maxRetries int, backoff time.Duration) *RetryMiddleware {
-	return &RetryMiddleware{
-		BaseMiddleware: NewBaseMiddleware("retry"),
-		maxRetries:     maxRetries,
-		backoff:        backoff,
-		retryOn: func(err error) bool {
-			// Default: retry on all errors
-			return err != nil
-		},
-	}
-}
-
-// WithRetryCondition sets a custom retry condition
-func (m *RetryMiddleware) WithRetryCondition(condition func(error) bool) *RetryMiddleware {
-	m.retryOn = condition
-	return m
-}
-
-// OnError implements retry logic
-func (m *RetryMiddleware) OnError(ctx context.Context, err error) error {
-	if err == nil || !m.retryOn(err) {
-		return err
-	}
-
-	// Note: Actual retry logic would need to be implemented in the chain execution
-	// This is a simplified version showing the pattern
-	return agentErrors.Wrap(err, agentErrors.CodeMiddlewareExecution, "retry needed for error").
-		WithComponent("retry_middleware").
-		WithOperation("on_error")
-}
-
 // CacheMiddleware provides response caching with sharded locks for better concurrency
 type CacheMiddleware struct {
 	*BaseMiddleware
@@ -619,13 +578,15 @@ func (m *CacheMiddleware) OnBefore(ctx context.Context, request *MiddlewareReque
 	entry, ok := shard.cache[key]
 	shard.mu.RUnlock()
 
+	if request.Metadata == nil {
+		request.Metadata = make(map[string]interface{})
+	}
 	if ok && time.Now().Before(entry.ExpiresAt) {
-		// Cache hit - add flag to metadata
-		if request.Metadata == nil {
-			request.Metadata = make(map[string]interface{})
-		}
 		request.Metadata["cache_hit"] = true
 		request.Metadata["cached_response"] = entry.Response
+	} else {
+		// 未命中：处理器把请求元数据带入响应（Builder 即如此），OnAfter 据此写入缓存
+		request.Metadata["original_input"] = request.Input
 	}
 
 	return request, nil
@@ -644,8 +605,16 @@ func (m *CacheMiddleware) OnAfter(ctx context.Context, response *MiddlewareRespo
 	if response.Error == nil {
 		key := m.getCacheKeyFromResponse(response)
 		if key != "" {
+			// 缓存的副本不带键：命中时链直接返回它，不会再次写入而延长过期时间
+			cached := *response
+			cached.Metadata = make(map[string]interface{}, len(response.Metadata))
+			for k, v := range response.Metadata {
+				if k != "original_input" {
+					cached.Metadata[k] = v
+				}
+			}
 			entry := &CacheEntry{
-				Response:  response,
+				Response:  &cached,
 				ExpiresAt: time.Now().Add(m.ttl),
 			}
 

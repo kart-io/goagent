@@ -13,7 +13,7 @@ Three agents built with `builder.NewAgentBuilder[any, core.State]` run in sequen
 ## Files
 
 - `main_simple.go`: entry point and all agents/tools.
-- `demo_standalone.go`: `RunDemo()`, an LLM-free walkthrough of the same flow. `main` does not call it.
+- `demo_standalone.go`: `RunDemo()`, an LLM-free walkthrough of the same flow (it calls the tools directly). `main` runs it when no LLM provider is available.
 - `run.sh`, `setup_ollama.sh`: helper scripts that detect Ollama and run the example.
 
 ## LLM selection
@@ -25,7 +25,7 @@ Three agents built with `builder.NewAgentBuilder[any, core.State]` run in sequen
 3. `OPENAI_API_KEY`: OpenAI `gpt-3.5-turbo`.
 4. `GEMINI_API_KEY`: Gemini `gemini-pro`.
 
-Otherwise it exits with an error; there is no no-LLM mode.
+Otherwise `main` prints the error and runs `RunDemo()` instead. The demo still sends one real HTTP request (`http_request` to jsonplaceholder.typicode.com).
 
 ## Run
 
@@ -37,6 +37,6 @@ OLLAMA_MODEL=qwen2 go run .
 OPENAI_API_KEY=... go run .
 ```
 
-`run.sh` exports `OLLAMA_MODEL` (default `llama3`) when Ollama is running, then runs `go run .`. `setup_ollama.sh` pulls a model if none of `llama2`/`qwen2`/`deepseek-coder`/`mistral` is installed, then runs `go run main_simple.go`.
+`run.sh` exports `OLLAMA_MODEL` (default `llama3`) when Ollama is running, then runs `go run .`. `setup_ollama.sh` pulls a model if none of `llama2`/`qwen2`/`deepseek-coder`/`mistral` is installed, then runs `go run .`.
 
 The program prints each agent's result (structured results truncated to 20 lines) and a closing summary.

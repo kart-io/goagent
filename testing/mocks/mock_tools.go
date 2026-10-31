@@ -22,6 +22,8 @@ type MockTool struct {
 	delay        int // milliseconds to delay execution
 }
 
+var _ interfaces.Tool = (*MockTool)(nil)
+
 // NewMockTool creates a new mock tool
 func NewMockTool(name, description string) *MockTool {
 	return &MockTool{
@@ -47,8 +49,8 @@ func (m *MockTool) Description() string {
 	return m.description
 }
 
-// Schema returns the tool schema
-func (m *MockTool) Schema() string {
+// ArgsSchema returns the tool schema
+func (m *MockTool) ArgsSchema() string {
 	return m.schema
 }
 

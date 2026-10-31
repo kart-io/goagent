@@ -15,14 +15,14 @@ func main() {
 	defer hpCache.Close()
 
 	fmt.Println("High Performance Cache created")
-	fmt.Printf("Stats: %+v\n", hpCache.GetStats())
+	printStats(hpCache)
 
 	// 2. Low Memory Cache
 	lmCache := tools.NewLowMemoryCache()
 	defer lmCache.Close()
 
 	fmt.Println("Low Memory Cache created")
-	fmt.Printf("Stats: %+v\n", lmCache.GetStats())
+	printStats(lmCache)
 
 	// Simulate usage
 	ctx := context.Background() // Need to import context
@@ -31,4 +31,9 @@ func main() {
 	}
 	val, _ := hpCache.Get(ctx, "key1")
 	fmt.Printf("HP Cache Get: %v\n", val.Result)
+}
+
+func printStats(c *tools.ShardedToolCache) {
+	hits, misses, evicts, invalidations := c.GetStatsValues()
+	fmt.Printf("Stats: hits=%d misses=%d evicts=%d invalidations=%d\n", hits, misses, evicts, invalidations)
 }

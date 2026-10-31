@@ -27,7 +27,9 @@ func main() {
 	// Initialize LLM client
 	llmClient, err := initializeLLMClient()
 	if err != nil {
-		log.Fatalf("Failed to initialize LLM client: %v", err)
+		fmt.Printf("LLM unavailable (%v), falling back to demo mode\n\n", err)
+		RunDemo()
+		return
 	}
 
 	// Define the task

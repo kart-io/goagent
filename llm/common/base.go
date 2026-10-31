@@ -72,29 +72,8 @@ func ConfigToOptions(config *agentllm.LLMOptions) []agentllm.ClientOption {
 	if config.TopP > 0 {
 		opts = append(opts, agentllm.WithTopP(config.TopP))
 	}
-	if config.ProxyURL != "" {
-		opts = append(opts, agentllm.WithProxy(config.ProxyURL))
-	}
-	if config.RetryCount > 0 {
-		opts = append(opts, agentllm.WithRetryCount(config.RetryCount))
-	}
-	if config.RetryDelay > 0 {
-		opts = append(opts, agentllm.WithRetryDelay(config.RetryDelay))
-	}
-	if config.RateLimitRPM > 0 {
-		opts = append(opts, agentllm.WithRateLimiting(config.RateLimitRPM))
-	}
 	if config.SystemPrompt != "" {
 		opts = append(opts, agentllm.WithSystemPrompt(config.SystemPrompt))
-	}
-	if config.CacheEnabled {
-		opts = append(opts, agentllm.WithCache(config.CacheEnabled, config.CacheTTL))
-	}
-	if config.StreamingEnabled {
-		opts = append(opts, agentllm.WithStreamingEnabled(config.StreamingEnabled))
-	}
-	if config.OrganizationID != "" {
-		opts = append(opts, agentllm.WithOrganizationID(config.OrganizationID))
 	}
 	if len(config.CustomHeaders) > 0 {
 		opts = append(opts, agentllm.WithCustomHeaders(config.CustomHeaders))

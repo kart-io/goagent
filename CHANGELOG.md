@@ -9,6 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `tools/shell`：`ExecuteScript`、`ExecutePipeline` 传入的参数此前被丢弃，只执行了不带参数的 `bash`；`timeout` 只接受 float64，Go 调用方传 int 时被忽略。`ExecutePipeline` 经 `bash -c` 执行，现拒绝含 shell 元字符的命令，避免参数绕过白名单。
+- `core/middleware.CircuitBreakerMiddleware`：成功不清零失败计数；打开期间自身的拒绝被计为失败并推迟半开，持续有请求时熔断器不再恢复。
+- `core/middleware.CacheMiddleware`：挂在 Builder 上时从不写入缓存。
+- `middleware.ObservabilityMiddleware`：`OnAfter` 不结束 span，span 不会导出。处理器出错时链只调用 `OnError`，该次 span 仍无法结束。
+- `utils/httpclient.SetDefault` 在首次 `Default()` 之前调用时被覆盖；`Default`、`SetDefault`、`ResetDefault` 改为并发安全。
+- `testing/mocks.MockTool` 的 `Schema()` 改名为 `ArgsSchema()`，此前不满足 `interfaces.Tool`。
+- Ollama 未设置超时时应使用 120 秒，此前比较的默认值不对，实际为 60 秒。
+
+### Removed
+
+- **破坏性**：`parsers.OutputParser` 的 `ParseWithPrompt`（忽略 prompt，内置解析器上恒返回 NOT_IMPLEMENTED）。
+- **破坏性**：占位实现 `core/middleware.RetryMiddleware`（不重试，只包装错误）与 `llm.NewClientWithOptions`（恒返回错误）及 `llm/factory.go`、`llm/examples.go`；模型请求重试用 `WithRequestError(n, builder.RetryTransient(n, backoff))`，客户端用 `llm/providers` 的构造函数。
+- **破坏性**：不生效的选项：llm 的 `WithProxy`、`WithRetryCount`、`WithRetryDelay`、`WithRateLimiting`、`WithCache`、`WithStreamingEnabled`、`WithOrganizationID` 及 `LLMOptions` 对应字段；builder 的 `WithTelemetry`、`WithCommunicator`、`WithStreamingEnabled`、`WithSaveInterval` 及 `AgentConfig.EnableStreaming`、`SaveInterval`。
+- 过时的脚本 `check-release.sh`、`verify_option_pattern.sh`、`verify_error_refactoring.sh`；导入检查中针对已删除 `agents/` 目录的规则。
+
+### Changed
+
+- 按当前代码重写过时的文档与示例说明。
+
+## [0.29.1] - 2026-10-31
+
+### Fixed
+
 - 会话日志：持久运行在工具结果记入日志之后中断，以同一执行键恢复时，回放的对话被当作截断，记为 `history/rewrite` 并重复追加已记录的消息。从 `Fork` 出的会话继续持久运行时同样出现。
 
 ### Added

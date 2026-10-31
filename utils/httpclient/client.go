@@ -259,7 +259,7 @@ func (c *Client) Config() *Config {
 // 全局默认客户端
 var (
 	defaultClient *Client
-	once          sync.Once
+	defaultMu     sync.Mutex
 )
 
 // 全局客户端缓存：优化 LLM Provider HTTP 客户端复用
@@ -383,27 +383,24 @@ func boolToInt(b bool) int {
 
 // Default 获取默认的 HTTP 客户端（单例模式）
 //
-// 首次调用时会创建一个使用默认配置的客户端
-// 后续调用返回同一个实例
+// 首次调用时会创建一个使用默认配置的客户端，后续调用返回同一个实例
 func Default() *Client {
-	once.Do(func() {
+	defaultMu.Lock()
+	defer defaultMu.Unlock()
+	if defaultClient == nil {
 		defaultClient = NewClient(nil)
-	})
+	}
 	return defaultClient
 }
 
 // SetDefault 设置默认的 HTTP 客户端
-//
-// 注意：此函数不是线程安全的，应该在程序初始化阶段调用
 func SetDefault(client *Client) {
+	defaultMu.Lock()
 	defaultClient = client
+	defaultMu.Unlock()
 }
 
-// ResetDefault 重置默认客户端
-//
-// 下次调用 Default() 时会创建新的默认客户端
-// 注意：此函数不是线程安全的
+// ResetDefault 重置默认客户端，下次调用 Default() 时会创建新的默认客户端
 func ResetDefault() {
-	defaultClient = nil
-	once = sync.Once{}
+	SetDefault(nil)
 }

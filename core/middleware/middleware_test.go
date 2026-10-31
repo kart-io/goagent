@@ -267,29 +267,6 @@ func TestTimingMiddleware(t *testing.T) {
 	assert.Greater(t, avgLatency, time.Duration(0))
 }
 
-func TestRetryMiddleware(t *testing.T) {
-	mw := NewRetryMiddleware(3, 100*time.Millisecond)
-
-	// Test default retry condition (retry on all errors)
-	testErr := errors.New("test error")
-	handledErr := mw.OnError(context.Background(), testErr)
-	assert.Contains(t, handledErr.Error(), "retry needed")
-
-	// Test custom retry condition
-	mw.WithRetryCondition(func(err error) bool {
-		return errors.Is(err, context.DeadlineExceeded)
-	})
-
-	// Should not retry for non-deadline errors
-	handledErr = mw.OnError(context.Background(), testErr)
-	assert.Equal(t, testErr, handledErr)
-
-	// Should retry for deadline errors
-	deadlineErr := context.DeadlineExceeded
-	handledErr = mw.OnError(context.Background(), deadlineErr)
-	assert.Contains(t, handledErr.Error(), "retry needed")
-}
-
 func TestCacheMiddleware(t *testing.T) {
 	mw := NewCacheMiddleware(1 * time.Second)
 

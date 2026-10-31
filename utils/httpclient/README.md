@@ -61,7 +61,7 @@ cfg := client.Config() // 配置副本，修改它不影响客户端
 
 ## 默认客户端与缓存
 
-- `Default()`：首次调用时以默认配置创建，之后返回同一实例。`SetDefault(c)` 替换它，`ResetDefault()` 使下次 `Default()` 重新创建；二者都不是并发安全的，且 `SetDefault` 须在 `Default()` 首次调用之后执行，否则会在首次 `Default()` 时被覆盖。
+- `Default()`：首次调用时以默认配置创建，之后返回同一实例。`SetDefault(c)` 替换它（可在首次 `Default()` 之前调用），`ResetDefault()` 使下次 `Default()` 重新创建；三者均并发安全。
 - `GetOrCreateClient(cfg)`：按 `BaseURL`、`Headers`、超时、重试、`Debug`、`DisableKeepAlive`、`MaxIdleConnsPerHost` 的哈希复用客户端；`SetCachingEnabled(false)` 后每次新建。`ClearCache()` 清空缓存，`GetCacheStats()` 返回 `cached_clients` 与 `enabled`。
 
 ## 日志脱敏

@@ -150,9 +150,7 @@ func TestDefaultAgentConfig(t *testing.T) {
 	require.NotNil(t, config)
 	assert.Equal(t, 10, config.MaxIterations)
 	assert.Equal(t, 5*time.Minute, config.Timeout)
-	assert.False(t, config.EnableStreaming)
 	assert.True(t, config.EnableAutoSave)
-	assert.Equal(t, 30*time.Second, config.SaveInterval)
 	assert.Equal(t, 2000, config.MaxTokens)
 	assert.Equal(t, 0.7, config.Temperature)
 	assert.NotEmpty(t, config.SessionID)
@@ -287,7 +285,6 @@ func TestAgentBuilder_ConfigureForChatbot(t *testing.T) {
 
 	builder.ConfigureForChatbot()
 
-	assert.True(t, builder.config.EnableStreaming)
 	assert.Equal(t, 0.8, builder.config.Temperature)
 	assert.Greater(t, len(builder.middlewares), 0)
 }
@@ -469,7 +466,6 @@ func TestChatAgent(t *testing.T) {
 
 	assert.Contains(t, agent.systemPrompt, "Bob")
 	assert.Equal(t, "chatbot", agent.metadata["type"])
-	assert.True(t, agent.config.EnableStreaming)
 
 	// Check user name was set in state
 	userName, ok := agent.GetState().Get("user_name")
@@ -671,7 +667,6 @@ func TestAgentBuilder_CompleteFlow(t *testing.T) {
 		WithMetadata("test", "complete").
 		WithMaxIterations(5).
 		WithTimeout(1 * time.Minute).
-		WithStreamingEnabled(false).
 		WithAutoSaveEnabled(true).
 		WithTemperature(0.5).
 		WithVerbose(true).
@@ -780,34 +775,6 @@ func TestAgentBuilder_WithMetadata_Multiple(t *testing.T) {
 	assert.Equal(t, "value1", builder.metadata["key1"])
 	assert.Equal(t, 42, builder.metadata["key2"])
 	assert.Equal(t, map[string]interface{}{"nested": "value"}, builder.metadata["key3"])
-}
-
-// TestAgentBuilder_WithTelemetry tests telemetry provider configuration
-func TestAgentBuilder_WithTelemetry(t *testing.T) {
-	llmClient := NewMockLLMClient()
-	builder := NewAgentBuilder[any, *core.AgentState](llmClient)
-
-	provider := map[string]interface{}{"type": "otel"}
-	builder.WithTelemetry(provider)
-
-	agent, err := builder.Build()
-	require.NoError(t, err)
-
-	assert.Equal(t, provider, agent.metadata["telemetry_provider"])
-}
-
-// TestAgentBuilder_WithCommunicator tests communicator configuration
-func TestAgentBuilder_WithCommunicator(t *testing.T) {
-	llmClient := NewMockLLMClient()
-	builder := NewAgentBuilder[any, *core.AgentState](llmClient)
-
-	communicator := map[string]interface{}{"type": "grpc"}
-	builder.WithCommunicator(communicator)
-
-	agent, err := builder.Build()
-	require.NoError(t, err)
-
-	assert.Equal(t, communicator, agent.metadata["communicator"])
 }
 
 // TestAgentBuilder_ChainedConfiguration tests method chaining
@@ -1145,7 +1112,6 @@ func TestAgentBuilder_ConfigureForChatbot_Validation(t *testing.T) {
 	agent, err := builder.Build()
 
 	require.NoError(t, err)
-	assert.True(t, agent.config.EnableStreaming)
 	assert.Equal(t, 0.8, agent.config.Temperature)
 	assert.Greater(t, len(builder.middlewares), 0)
 }
@@ -1368,16 +1334,6 @@ func TestAgentBuilder_FineGrainedOptions(t *testing.T) {
 		assert.Equal(t, 5000, builder.config.MaxTokens) // Should remain unchanged
 	})
 
-	t.Run("WithStreamingEnabled", func(t *testing.T) {
-		builder := NewAgentBuilder[any, *core.AgentState](mockClient).
-			WithStreamingEnabled(true)
-
-		assert.True(t, builder.config.EnableStreaming)
-
-		builder.WithStreamingEnabled(false)
-		assert.False(t, builder.config.EnableStreaming)
-	})
-
 	t.Run("WithAutoSaveEnabled", func(t *testing.T) {
 		builder := NewAgentBuilder[any, *core.AgentState](mockClient).
 			WithAutoSaveEnabled(false)
@@ -1386,17 +1342,6 @@ func TestAgentBuilder_FineGrainedOptions(t *testing.T) {
 
 		builder.WithAutoSaveEnabled(true)
 		assert.True(t, builder.config.EnableAutoSave)
-	})
-
-	t.Run("WithSaveInterval", func(t *testing.T) {
-		builder := NewAgentBuilder[any, *core.AgentState](mockClient).
-			WithSaveInterval(1 * time.Minute)
-
-		assert.Equal(t, 1*time.Minute, builder.config.SaveInterval)
-
-		// Invalid value should be ignored
-		builder.WithSaveInterval(-1 * time.Second)
-		assert.Equal(t, 1*time.Minute, builder.config.SaveInterval) // Should remain unchanged
 	})
 
 	t.Run("WithSessionID", func(t *testing.T) {
@@ -1426,14 +1371,12 @@ func TestAgentBuilder_FineGrainedOptions(t *testing.T) {
 			WithTimeout(45 * time.Second).
 			WithTemperature(0.8).
 			WithMaxTokens(3000).
-			WithStreamingEnabled(true).
 			WithVerbose(true)
 
 		assert.Equal(t, 15, builder.config.MaxIterations)
 		assert.Equal(t, 45*time.Second, builder.config.Timeout)
 		assert.Equal(t, 0.8, builder.config.Temperature)
 		assert.Equal(t, 3000, builder.config.MaxTokens)
-		assert.True(t, builder.config.EnableStreaming)
 		assert.True(t, builder.config.Verbose)
 	})
 }
@@ -1444,23 +1387,19 @@ func TestAgentBuilder_FineGrainedMethods(t *testing.T) {
 
 	t.Run("fine-grained methods apply all fields", func(t *testing.T) {
 		customConfig := &AgentConfig{
-			MaxIterations:   25,
-			Timeout:         2 * time.Minute,
-			EnableStreaming: true,
-			EnableAutoSave:  false,
-			SaveInterval:    45 * time.Second,
-			MaxTokens:       4000,
-			Temperature:     0.6,
-			SessionID:       "test-session",
-			Verbose:         true,
+			MaxIterations:  25,
+			Timeout:        2 * time.Minute,
+			EnableAutoSave: false,
+			MaxTokens:      4000,
+			Temperature:    0.6,
+			SessionID:      "test-session",
+			Verbose:        true,
 		}
 
 		builder := NewAgentBuilder[any, *core.AgentState](mockClient).
 			WithMaxIterations(customConfig.MaxIterations).
 			WithTimeout(customConfig.Timeout).
-			WithStreamingEnabled(customConfig.EnableStreaming).
 			WithAutoSaveEnabled(customConfig.EnableAutoSave).
-			WithSaveInterval(customConfig.SaveInterval).
 			WithMaxTokens(customConfig.MaxTokens).
 			WithTemperature(customConfig.Temperature).
 			WithSessionID(customConfig.SessionID).
@@ -1468,9 +1407,7 @@ func TestAgentBuilder_FineGrainedMethods(t *testing.T) {
 
 		assert.Equal(t, 25, builder.config.MaxIterations)
 		assert.Equal(t, 2*time.Minute, builder.config.Timeout)
-		assert.True(t, builder.config.EnableStreaming)
 		assert.False(t, builder.config.EnableAutoSave)
-		assert.Equal(t, 45*time.Second, builder.config.SaveInterval)
 		assert.Equal(t, 4000, builder.config.MaxTokens)
 		assert.Equal(t, 0.6, builder.config.Temperature)
 		assert.Equal(t, "test-session", builder.config.SessionID)
@@ -1581,4 +1518,17 @@ func TestConfigurableAgent_BuildPromptWithSystemMessage(t *testing.T) {
 			}
 		})
 	}
+}
+
+// 挂在 Builder 上的 CacheMiddleware 对相同输入命中缓存，不再调用模型。
+func TestCacheMiddlewareOnBuilder(t *testing.T) {
+	llmClient := NewMockLLMClient("第一次", "第二次")
+	agent, err := NewSimpleBuilder(llmClient).WithMiddleware(middleware.NewCacheMiddleware(time.Minute)).Build()
+	require.NoError(t, err)
+	first, err := agent.Execute(context.Background(), "同一个问题")
+	require.NoError(t, err)
+	second, err := agent.Execute(context.Background(), "同一个问题")
+	require.NoError(t, err)
+	assert.Equal(t, first.Result, second.Result)
+	assert.Equal(t, 1, llmClient.index, "命中缓存时不调用模型")
 }

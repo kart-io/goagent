@@ -23,8 +23,6 @@ func TestChainOutputParserWithoutParsers(t *testing.T) {
 	p := NewChainOutputParser[string]()
 	_, err := p.Parse(context.Background(), "x")
 	requireRealAgentError(t, err)
-	_, err = p.ParseWithPrompt(context.Background(), "x", "prompt")
-	requireRealAgentError(t, err)
 }
 
 func TestReActParseWithRetryNonPositiveRetries(t *testing.T) {

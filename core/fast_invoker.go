@@ -30,8 +30,6 @@ import "context"
 //	} else {
 //	    output, err := agent.Invoke(ctx, input)
 //	}
-//
-// 参考文档：docs/guides/INVOKE_FAST_OPTIMIZATION.md
 type FastInvoker interface {
 	// InvokeFast 快速执行 Agent，跳过回调和中间件
 	//

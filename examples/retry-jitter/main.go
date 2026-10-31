@@ -92,7 +92,7 @@ func main() {
 	}
 
 	fmt.Println("\n说明:")
-	fmt.Println("- 由于 25% 抖动，每次重试的实际延迟在 [75ms, 125ms] 范围内随机")
+	fmt.Println("- 25% 抖动的理论范围是 [75ms, 125ms]，但延迟下限被限制为 InitialDelay，实际在 [100ms, 125ms] 范围内随机")
 	fmt.Println("- 这种随机性有助于避免高并发场景下的雷群效应")
 	fmt.Println("- 雷群效应: 大量客户端同时重试导致服务压力骤增")
 }
