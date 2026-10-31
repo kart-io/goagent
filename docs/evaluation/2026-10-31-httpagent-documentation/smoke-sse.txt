@@ -1,0 +1,48 @@
+event: step
+data: {"schema_version":1,"run_id":"379c1d82-1db4-47d7-b2ae-d7f863aa0a99","seq":1,"type":"step","step":"model_start"}
+
+event: step
+data: {"schema_version":1,"run_id":"379c1d82-1db4-47d7-b2ae-d7f863aa0a99","seq":2,"type":"step","step":"tool_start","tool":"echo_input"}
+
+event: step
+data: {"schema_version":1,"run_id":"379c1d82-1db4-47d7-b2ae-d7f863aa0a99","seq":3,"type":"step","step":"tool_end","tool":"echo_input"}
+
+event: step
+data: {"schema_version":1,"run_id":"379c1d82-1db4-47d7-b2ae-d7f863aa0a99","seq":4,"type":"step","step":"model_start"}
+
+event: text
+data: {"schema_version":1,"run_id":"379c1d82-1db4-47d7-b2ae-d7f863aa0a99","seq":5,"type":"text","delta":"工具"}
+
+event: text
+data: {"schema_version":1,"run_id":"379c1d82-1db4-47d7-b2ae-d7f863aa0a99","seq":6,"type":"text","delta":"结果"}
+
+event: text
+data: {"schema_version":1,"run_id":"379c1d82-1db4-47d7-b2ae-d7f863aa0a99","seq":7,"type":"text","delta":"为"}
+
+event: text
+data: {"schema_version":1,"run_id":"379c1d82-1db4-47d7-b2ae-d7f863aa0a99","seq":8,"type":"text","delta":"："}
+
+event: text
+data: {"schema_version":1,"run_id":"379c1d82-1db4-47d7-b2ae-d7f863aa0a99","seq":9,"type":"text","delta":"DOC"}
+
+event: text
+data: {"schema_version":1,"run_id":"379c1d82-1db4-47d7-b2ae-d7f863aa0a99","seq":10,"type":"text","delta":"_S"}
+
+event: text
+data: {"schema_version":1,"run_id":"379c1d82-1db4-47d7-b2ae-d7f863aa0a99","seq":11,"type":"text","delta":"SE"}
+
+event: text
+data: {"schema_version":1,"run_id":"379c1d82-1db4-47d7-b2ae-d7f863aa0a99","seq":12,"type":"text","delta":"_"}
+
+event: text
+data: {"schema_version":1,"run_id":"379c1d82-1db4-47d7-b2ae-d7f863aa0a99","seq":13,"type":"text","delta":"311"}
+
+event: text
+data: {"schema_version":1,"run_id":"379c1d82-1db4-47d7-b2ae-d7f863aa0a99","seq":14,"type":"text","delta":"1"}
+
+event: usage
+data: {"schema_version":1,"run_id":"379c1d82-1db4-47d7-b2ae-d7f863aa0a99","seq":15,"type":"usage","usage":{"prompt_tokens":288,"completion_tokens":33,"total_tokens":321}}
+
+event: done
+data: {"schema_version":1,"run_id":"379c1d82-1db4-47d7-b2ae-d7f863aa0a99","seq":16,"type":"done","output":{"result":"工具结果为：DOC_SSE_3111","metadata":{"answer_usage_reported":true,"model_calls":2,"usage_complete":true,"usage_reports":2},"duration_ms":1082,"timestamp":"2026-10-31T23:31:37.883103+08:00","token_usage":{"prompt_tokens":288,"completion_tokens":33,"total_tokens":321}}}
+

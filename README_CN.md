@@ -181,6 +181,7 @@ rag, err := builder.RAGAgent(client, retriever) // DocumentRetriever、带 Retri
 - [快速入门](docs/guides/QUICKSTART.md)
 - [使用指南](docs/guides/USER_GUIDE.md)
 - [Builder API 参考](docs/guides/BUILDER_API_REFERENCE.md)
+- [HTTP/SSE/WebSocket、双向Webhook与Hooks](docs/guides/HTTP_AGENT.md) · [设计](docs/design/HTTP_AGENT_DESIGN.md)
 - [LLM 提供商](docs/guides/LLM_PROVIDERS.md)
 - [执行开销实测](docs/evaluation/2026-10-31-execution-overhead/REPORT.md)
 

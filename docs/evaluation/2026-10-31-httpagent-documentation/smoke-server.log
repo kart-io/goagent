@@ -1,0 +1,12 @@
+2026/10/31 23:31:35 event=run.started run_id=b9047296-f86f-45c8-a81a-52622fe7d36e event_id=68248778-a0fb-4e05-beb2-bcf1715f785c
+2026/10/31 23:31:35 原生Hook：模型请求前
+2026/10/31 23:31:36 原生Hook：模型请求前
+2026/10/31 23:31:36 event=run.completed run_id=b9047296-f86f-45c8-a81a-52622fe7d36e event_id=cf044371-bc63-4dbc-8c1c-a112fda2ae24
+2026/10/31 23:31:36 event=run.started run_id=379c1d82-1db4-47d7-b2ae-d7f863aa0a99 event_id=13046967-e625-4829-8351-9222481a57ee
+2026/10/31 23:31:36 原生Hook：模型请求前
+2026/10/31 23:31:37 原生Hook：模型请求前
+2026/10/31 23:31:37 event=run.completed run_id=379c1d82-1db4-47d7-b2ae-d7f863aa0a99 event_id=c7ea6754-3822-4a1c-a704-d66335048935
+2026/10/31 23:31:37 event=run.started run_id=8e997b41-9b8a-4c39-8e7f-0ec74832ebac event_id=5795db29-86f0-4e30-8ad1-124fcfe1351b
+2026/10/31 23:31:37 原生Hook：模型请求前
+2026/10/31 23:31:38 原生Hook：模型请求前
+2026/10/31 23:31:38 event=run.completed run_id=8e997b41-9b8a-4c39-8e7f-0ec74832ebac event_id=400ec500-8bb0-4910-bc3e-102c2efd4ece
