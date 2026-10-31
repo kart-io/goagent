@@ -11,6 +11,7 @@ import (
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/tools"
 	"github.com/stretchr/testify/require"
 )
 
@@ -48,7 +49,7 @@ func TestModelRetryRecoversTransientFailure(t *testing.T) {
 	c, err := budget.New(budget.Config{RootKey: "root", Version: "v1", MaxModelRequests: 3})
 	require.NoError(t, err)
 	model := &flakyModel{nativeEventModel: nativeModel(answerTurn("好的", 5)), steps: []error{unavailable(503, 0)}}
-	agent, err := NewSimpleBuilder(model).WithModelRetry(2, noWait).Build()
+	agent, err := NewSimpleBuilder(model).WithRequestError(2, RetryTransient(2, noWait)).Build()
 	require.NoError(t, err)
 	out, err := agent.AsRunnable().Invoke(budget.WithController(context.Background(), c), "q")
 	require.NoError(t, err)
@@ -81,7 +82,7 @@ func TestModelRetryStopsWhenNotRetryable(t *testing.T) {
 				ctx, cancel = tc.ctx()
 			}
 			defer cancel()
-			agent, err := NewSimpleBuilder(tc.model).WithModelRetry(tc.retries, noWait).Build()
+			agent, err := NewSimpleBuilder(tc.model).WithRequestError(tc.retries, RetryTransient(tc.retries, noWait)).Build()
 			require.NoError(t, err)
 			started := time.Now()
 			_, err = agent.AsRunnable().Invoke(ctx, "q")
@@ -94,7 +95,7 @@ func TestModelRetryStopsWhenNotRetryable(t *testing.T) {
 
 func TestModelRetryDoesNotRepeatEmittedText(t *testing.T) {
 	model := &flakyModel{nativeEventModel: nativeModel([]*llm.StreamChunk{{Delta: "半句"}, {Done: true, Error: unavailable(0, 0)}}, answerTurn("完整", 1))}
-	agent, err := NewSimpleBuilder(model).WithModelRetry(2, noWait).Build()
+	agent, err := NewSimpleBuilder(model).WithRequestError(2, RetryTransient(2, noWait)).Build()
 	require.NoError(t, err)
 	_, err = agent.AsRunnable().Invoke(context.Background(), "q")
 	var pe *llm.ProviderError
@@ -104,7 +105,7 @@ func TestModelRetryDoesNotRepeatEmittedText(t *testing.T) {
 
 func TestModelRetryHonorsRetryAfter(t *testing.T) {
 	model := &flakyModel{nativeEventModel: nativeModel(answerTurn("ok", 1)), steps: []error{unavailable(429, 60*time.Millisecond)}}
-	agent, err := NewSimpleBuilder(model).WithModelRetry(1, func(int) time.Duration { return time.Hour }).Build()
+	agent, err := NewSimpleBuilder(model).WithRequestError(1, RetryTransient(1, func(int) time.Duration { return time.Hour })).Build()
 	require.NoError(t, err)
 	started := time.Now()
 	out, err := agent.AsRunnable().Invoke(context.Background(), "q")
@@ -114,8 +115,8 @@ func TestModelRetryHonorsRetryAfter(t *testing.T) {
 }
 
 func TestModelRetryDoesNotWaitBeyondRetryAfterCap(t *testing.T) {
-	model := &flakyModel{nativeEventModel: nativeModel(answerTurn("ok", 1)), steps: []error{unavailable(429, 2*maxModelRetryAfter)}}
-	agent, err := NewSimpleBuilder(model).WithModelRetry(1, noWait).WithTimeout(time.Hour).Build()
+	model := &flakyModel{nativeEventModel: nativeModel(answerTurn("ok", 1)), steps: []error{unavailable(429, 2*maxRetryAfter)}}
+	agent, err := NewSimpleBuilder(model).WithRequestError(1, RetryTransient(1, noWait)).WithTimeout(time.Hour).Build()
 	require.NoError(t, err)
 	started := time.Now()
 	_, err = agent.AsRunnable().Invoke(context.Background(), "q")
@@ -129,7 +130,7 @@ func TestModelRetryRejectedByBudgetBeforeSend(t *testing.T) {
 	c, err := budget.New(budget.Config{RootKey: "root", Version: "v1", MaxModelRequests: 1})
 	require.NoError(t, err)
 	model := &flakyModel{nativeEventModel: nativeModel(answerTurn("ok", 1)), steps: []error{unavailable(503, 0)}}
-	agent, err := NewSimpleBuilder(model).WithModelRetry(3, noWait).Build()
+	agent, err := NewSimpleBuilder(model).WithRequestError(3, RetryTransient(3, noWait)).Build()
 	require.NoError(t, err)
 	_, err = agent.AsRunnable().Invoke(budget.WithController(context.Background(), c), "q")
 	require.ErrorIs(t, err, budget.ErrBudgetExceeded)
@@ -142,7 +143,9 @@ func TestModelRetryIsNotInheritedByChildAgent(t *testing.T) {
 	model := &flakyModel{nativeEventModel: nativeModel(answerTurn("ok", 1)), steps: []error{unavailable(503, 0)}}
 	child, err := NewSimpleBuilder(model).Build()
 	require.NoError(t, err)
-	_, err = child.AsRunnable().Invoke(withModelRetry(context.Background(), 3, noWait), "q")
+	_, err = child.AsRunnable().Invoke(withRequestRecovery(context.Background(), func(context.Context, bool, error) (*RequestErrorDecision, error) {
+		return &RequestErrorDecision{Action: RequestRetry}, nil
+	}), "q")
 	require.Error(t, err)
 	require.Equal(t, 1, model.calls)
 }
@@ -155,13 +158,13 @@ func TestModelRetryDurableReplayUsesSuccessfulAttemptKey(t *testing.T) {
 	require.NoError(t, err)
 	ctx = budget.WithController(ctx, c)
 	model := &flakyModel{nativeEventModel: nativeModel(answerTurn("好的", 7)), steps: []error{unavailable(503, 0)}}
-	agent, err := NewSimpleBuilder(model).WithDurableScope("retry").WithModelRetry(2, noWait).Build()
+	agent, err := NewSimpleBuilder(model).WithDurableScope("retry").WithRequestError(2, RetryTransient(2, noWait)).Build()
 	require.NoError(t, err)
 	first, err := agent.AsRunnable().Invoke(ctx, "q")
 	require.NoError(t, err)
 
 	// 修改重试配置后恢复：不因意图变化被拒绝，也不发新请求。
-	resumed, err := NewSimpleBuilder(model).WithDurableScope("retry").WithModelRetry(5, noWait).Build()
+	resumed, err := NewSimpleBuilder(model).WithDurableScope("retry").WithRequestError(5, RetryTransient(5, noWait)).Build()
 	require.NoError(t, err)
 	model.turns = nil
 	second, err := resumed.AsRunnable().Invoke(ctx, "q")
@@ -198,7 +201,7 @@ func TestModelRetryCrashDuringRetryNeedsHostAttention(t *testing.T) {
 	require.NoError(t, err)
 	ctx = budget.WithController(ctx, c)
 	model := &flakyModel{nativeEventModel: nativeModel(answerTurn("好的", 7)), steps: []error{unavailable(503, 0)}}
-	agent, err := NewSimpleBuilder(model).WithDurableScope("retry").WithModelRetry(2, noWait).Build()
+	agent, err := NewSimpleBuilder(model).WithDurableScope("retry").WithRequestError(2, RetryTransient(2, noWait)).Build()
 	require.NoError(t, err)
 	_, err = agent.AsRunnable().Invoke(ctx, "q")
 	require.ErrorContains(t, err, "crash")
@@ -219,7 +222,7 @@ func TestModelRetryInToolLoop(t *testing.T) {
 		answerTurn("三十天", 1),
 	), steps: []error{nil, unavailable(502, 0)}}
 	lookup := &countingEventTool{MockTool: NewMockTool("lookup", "30")}
-	agent, err := NewSimpleBuilder(model).WithTools(lookup).WithMaxIterations(2).WithModelRetry(1, noWait).Build()
+	agent, err := NewSimpleBuilder(model).WithTools(lookup).WithMaxIterations(2).WithRequestError(1, RetryTransient(1, noWait)).Build()
 	require.NoError(t, err)
 	c, err := budget.New(budget.Config{RootKey: "root", Version: "v1", MaxModelRequests: 3})
 	require.NoError(t, err)
@@ -229,4 +232,38 @@ func TestModelRetryInToolLoop(t *testing.T) {
 	require.Equal(t, 1, lookup.calls)
 	require.Equal(t, 2, out.Metadata["model_calls"], "重试不占回合")
 	require.EqualValues(t, 3, out.Metadata["new_model_invocations"])
+}
+
+// 持久的原生工具流中，原样重试在同一条回合记录内进行；替换消息的决定被拒绝。
+func TestRequestErrorInDurableToolLoop(t *testing.T) {
+	run := func(hook RequestErrorHook) (*flakyModel, error) {
+		store, err := durable.NewFileStore(t.TempDir())
+		require.NoError(t, err)
+		ctx := durable.WithJournal(durable.WithExecutionKey(context.Background(), "node"), store)
+		model := &flakyModel{nativeEventModel: nativeModel(answerTurn("好的", 1)), steps: []error{unavailable(503, 0)}}
+		reg := tools.NewRegistry()
+		require.NoError(t, reg.Register(plainTool()))
+		dispatch, err := tools.NewDispatcher(reg, tools.DispatchConfig{})
+		require.NoError(t, err)
+		agent, err := NewSimpleBuilder(model).WithDurableScope("retry").WithTools(dispatch.Tools()...).WithRequestError(1, hook).Build()
+		require.NoError(t, err)
+		_, err = agent.AsRunnable().Invoke(ctx, "q")
+		return model, err
+	}
+	var emitted []bool
+	model, err := run(func(ctx context.Context, f *RequestFailure) (RequestErrorDecision, error) {
+		emitted = append(emitted, f.Emitted)
+		return RetryTransient(1, noWait)(ctx, f)
+	})
+	require.NoError(t, err)
+	require.Equal(t, 2, model.calls)
+	require.Equal(t, []bool{false}, emitted)
+
+	model, err = run(func(_ context.Context, f *RequestFailure) (RequestErrorDecision, error) {
+		return RequestErrorDecision{Action: RequestRetry, Messages: f.Messages[len(f.Messages)-1:]}, nil
+	})
+	require.ErrorContains(t, err, "只能原样重试")
+	var pe *llm.ProviderError
+	require.True(t, errors.As(err, &pe), "原始失败仍可识别")
+	require.Equal(t, 1, model.calls)
 }

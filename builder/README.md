@@ -395,12 +395,12 @@ out, err := h.Wait(ctx)     // h.Interrupt(cause) 中止运行
 |---|---|---|
 | `WithPreStep` | 领取收件箱输入之后、发送请求之前 | 改写消息（如压缩），或以 `Halt` 不请求模型直接结束 |
 | `WithRequestHook` | 发送模型请求前 | 替换客户端（路由、换模型）、调整参数 |
-| `WithRequestError` | 模型请求失败（`WithModelRetry` 的重试之后） | 依据 `llm.ClassifyError` 的分类决定重试、压缩（替换消息）或回退（替换客户端） |
+| `WithRequestError` | 模型请求失败 | 依据 `llm.ClassifyError` 的分类决定重试、压缩（替换消息）或回退（替换客户端）；`RetryTransient` 是原样重试暂时性失败的组件 |
 | `WithTurnStopping` | 模型给出最终答复、没有待处理的 Steer | 返回一条 user 消息续跑（目标驱动、Stop 钩子） |
 | `WithPromptSections` | 每轮开始时计算一次 | 追加到 system，同一轮内字节不变，保持提示词缓存前缀 |
 | `WithPromptContexts` | 每步重算 | 作为一条 user 消息附在本次请求末尾，不进入之后的历史 |
 
-持久运行中，PreStep、TurnStopping、提示词段落与上下文、收件箱的输入按步骤记入日志，恢复时回放而不重新计算；以 `Start` 开始的持久运行须同样以 `Start` 恢复。Request 钩子须是确定性的；RequestError 钩子与 Redirect 只在非持久运行中生效（持久运行中 Redirect 降级为 Steer）。
+持久运行中，PreStep、TurnStopping、提示词段落与上下文、收件箱的输入按步骤记入日志，恢复时回放而不重新计算；以 `Start` 开始的持久运行须同样以 `Start` 恢复。Request 钩子须是确定性的；RequestError 的原样重试在同一条回合记录内进行，持久运行中替换消息或客户端的决定以错误结束；Redirect 只在非持久运行中生效（持久运行中降级为 Steer）。
 
 ## 会话日志
 

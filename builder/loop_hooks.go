@@ -17,7 +17,8 @@ import (
 
 // 循环扩展点只作用于原生工具流（llm.ToolStreamClient 且配置了工具）。持久运行中，PreStep、TurnStopping、
 // 提示词段落与上下文、收件箱的输入按步骤记入日志，恢复时回放记录而不重新计算；Request 钩子须是确定性的；
-// RequestError 钩子只在非持久运行中生效，持久运行的模型失败仍交给宿主恢复。
+// RequestError 钩子在同一条回合记录内原样重试，替换消息或客户端只在非持久运行中生效。
+// 例外：RequestError 的原样重试也作用于没有工具的流式回答。
 
 // Step 是一次模型请求前的状态。
 type Step struct {
@@ -78,16 +79,54 @@ type RequestErrorDecision struct {
 	Delay    time.Duration
 }
 
-// RequestFailure 是一次失败的模型请求。
+// RequestFailure 是一次失败的模型请求。Attempt 是本步已按钩子决定恢复的次数。
 type RequestFailure struct {
 	Step, Attempt int
 	Err           error
 	Class         llm.ClassifiedError
 	Messages      []llm.Message
+	// Emitted 表示失败的这次请求已向消费者输出内容，原样重试会重复输出。
+	Emitted bool
 }
 
-// RequestErrorHook 在模型请求失败时执行（WithModelRetry 的重试之后），第一个返回 RequestRetry 的决定生效。
+// RequestErrorHook 在模型请求失败时执行，第一个返回 RequestRetry 的决定生效。
 type RequestErrorHook func(ctx context.Context, failure *RequestFailure) (RequestErrorDecision, error)
+
+// maxRetryAfter 是 RetryTransient 愿意按服务端 Retry-After 等待的上限：持久运行中等待期间持有回合的操作锁，
+// 更长的建议说明服务端短期内不会恢复，不如立即失败交给宿主。
+const maxRetryAfter = time.Minute
+
+func defaultRetryBackoff(retry int) time.Duration {
+	return min(500*time.Millisecond<<min(retry-1, 5), 8*time.Second)
+}
+
+// RetryTransient 返回原样重试暂时性失败的 RequestError 钩子：只重试 llm.ClassifyError 判定为可重试的失败
+// （429、5xx 与连接错误），失败的请求已输出内容后不重试，避免内容重复。服务端给出 Retry-After 时按它等待，
+// 否则用 backoff（nil 时 500ms 起指数增长、上限 8s）；等待会越过 ctx 截止时间，或 Retry-After 超过 1 分钟时放弃。
+// retries 是本步已恢复次数的上限，与其他钩子的恢复共用 WithRequestError 的 maxRecoveries。
+func RetryTransient(retries int, backoff func(retry int) time.Duration) RequestErrorHook {
+	if backoff == nil {
+		backoff = defaultRetryBackoff
+	}
+	return func(ctx context.Context, f *RequestFailure) (RequestErrorDecision, error) {
+		if f.Emitted || f.Attempt >= retries || !f.Class.Retryable {
+			return RequestErrorDecision{}, nil
+		}
+		var delay time.Duration
+		if pe := (*llm.ProviderError)(nil); errors.As(f.Err, &pe) && pe.RetryAfter > 0 {
+			if pe.RetryAfter > maxRetryAfter {
+				return RequestErrorDecision{}, nil
+			}
+			delay = pe.RetryAfter
+		} else {
+			delay = max(backoff(f.Attempt+1), 0)
+		}
+		if deadline, ok := ctx.Deadline(); ok && time.Until(deadline) <= delay {
+			return RequestErrorDecision{}, nil
+		}
+		return RequestErrorDecision{Action: RequestRetry, Delay: delay}, nil
+	}
+}
 
 // Stopping 是即将结束本轮时的状态。
 type Stopping struct {
@@ -328,18 +367,29 @@ func (a *ConfigurableAgent[C, S]) runTurnStopping(ctx context.Context, round, co
 	})
 }
 
-// recoverRequest 依次询问 RequestError 钩子，返回第一个重试决定；都放弃时返回 nil。
-func (a *ConfigurableAgent[C, S]) recoverRequest(ctx context.Context, failure *RequestFailure) (*RequestErrorDecision, error) {
-	for _, hook := range a.config.RequestErrorHooks {
-		var d RequestErrorDecision
-		if err := callHook("RequestError", func() (e error) { d, e = hook(ctx, failure); return }); err != nil {
-			return nil, err
-		}
-		if d.Action == RequestRetry {
-			return &d, nil
-		}
+// requestRecovery 返回本步模型请求失败时依次询问 RequestError 钩子的函数，取第一个重试决定；*attempt 累计本步的恢复次数，
+// 达到 MaxRequestRecoveries 后不再询问。messages 是钩子看到的本步对话。
+func (a *ConfigurableAgent[C, S]) requestRecovery(step int, messages *[]llm.Message, attempt *int) requestRecovery {
+	if len(a.config.RequestErrorHooks) == 0 {
+		return nil
 	}
-	return nil, nil
+	return func(ctx context.Context, emitted bool, err error) (*RequestErrorDecision, error) {
+		if *attempt >= a.config.MaxRequestRecoveries {
+			return nil, nil
+		}
+		failure := &RequestFailure{Step: step, Attempt: *attempt, Err: err, Class: llm.ClassifyError(err), Messages: *messages, Emitted: emitted}
+		for _, hook := range a.config.RequestErrorHooks {
+			var d RequestErrorDecision
+			if herr := callHook("RequestError", func() (e error) { d, e = hook(ctx, failure); return }); herr != nil {
+				return nil, herr
+			}
+			if d.Action == RequestRetry {
+				*attempt++
+				return &d, nil
+			}
+		}
+		return nil, nil
+	}
 }
 
 // callHook 把钩子的 panic 转为错误。
@@ -355,7 +405,7 @@ type redirection struct {
 }
 
 // requestTurn 组装并发送本步的模型请求：附加运行上下文、执行 Request 钩子；失败时按 RequestError 钩子恢复，
-// 恢复时替换的消息作为新的历史返回。被 Redirect 取消时返回 redirection。
+// 原样重试在模型操作内进行，替换消息或客户端时在这里重新组装，替换的消息作为新的历史返回。被 Redirect 取消时返回 redirection。
 func (a *ConfigurableAgent[C, S]) requestTurn(ctx context.Context, box *inbox, round int, client llm.ToolStreamClient, messages []llm.Message, tools []interfaces.Tool, allowEmpty bool, emit func(AgentEvent) error) (*llm.StreamChunk, *redirection, []llm.Message, error) {
 	withContext := func(msgs []llm.Message) ([]llm.Message, error) {
 		if len(a.config.PromptContexts) == 0 {
@@ -383,7 +433,8 @@ func (a *ConfigurableAgent[C, S]) requestTurn(ctx context.Context, box *inbox, r
 		return nil, nil, messages, fmt.Errorf("模型客户端或请求被 Request 钩子清空")
 	}
 	redirectable := box != nil && !durable.HasJournal(ctx)
-	for attempt := 0; ; attempt++ {
+	attempt := 0
+	for {
 		turnCtx, cancel := context.WithCancelCause(ctx)
 		var partial strings.Builder
 		stepEmit := func(e AgentEvent) error {
@@ -395,7 +446,7 @@ func (a *ConfigurableAgent[C, S]) requestTurn(ctx context.Context, box *inbox, r
 		if redirectable {
 			box.beginModel(cancel)
 		}
-		turn, err := readJournaledTurn(turnCtx, round, req.Client, req.Request, tools, allowEmpty, stepEmit)
+		turn, err := readJournaledTurn(withRequestRecovery(turnCtx, a.requestRecovery(round, &messages, &attempt)), round, req.Client, req.Request, tools, allowEmpty, stepEmit)
 		var redirects []string
 		if redirectable {
 			redirects = box.endModel()
@@ -412,16 +463,11 @@ func (a *ConfigurableAgent[C, S]) requestTurn(ctx context.Context, box *inbox, r
 		if err == nil {
 			return turn, nil, messages, nil
 		}
-		if durable.HasJournal(ctx) || len(a.config.RequestErrorHooks) == 0 || attempt >= a.config.MaxRequestRecoveries || ctx.Err() != nil {
+		var replan *replanRequest
+		if !errors.As(err, &replan) || ctx.Err() != nil {
 			return nil, nil, messages, err
 		}
-		decision, herr := a.recoverRequest(ctx, &RequestFailure{Step: round, Attempt: attempt, Err: err, Class: llm.ClassifyError(err), Messages: messages})
-		if herr != nil {
-			return nil, nil, messages, herr
-		}
-		if decision == nil {
-			return nil, nil, messages, err
-		}
+		decision := replan.decision
 		if decision.Messages != nil {
 			messages = decision.Messages
 			if req.Request.Messages, err = withContext(messages); err != nil {
