@@ -56,7 +56,7 @@ import (
 // 1. 创建 LLM 客户端
 client, err := providers.NewOpenAIWithOptions(
     llm.WithAPIKey(os.Getenv("OPENAI_API_KEY")),
-    llm.WithModel("gpt-4"),
+    llm.WithModel("gpt-4o-mini"),
 )
 if err != nil {
     return err
@@ -70,15 +70,15 @@ if err != nil {
     return err
 }
 
-// 3. 执行
-output, err := agent.Execute(ctx, "你好")
+// 3. 执行（需要支持流式的客户端）
+output, err := agent.AsRunnable().Invoke(ctx, "你好")
 if err != nil {
     return err
 }
 fmt.Println(output.Result)
 ```
 
-`Execute` 只调用一次模型，不执行工具；配置了工具时使用 `ExecuteWithTools` 或 `AsRunnable().Invoke`（见[工具使用](#工具使用)）。
+`AsRunnable().Invoke` 是统一入口，配置的工具、检索、中间件与回调走同一路径。旧的同步入口 `Execute` 不执行工具，供不支持流式的客户端使用；入口对照见[快速入门](QUICKSTART.md#旧接口迁移)。
 
 ### 配置选项
 
@@ -157,7 +157,7 @@ if err != nil {
     return err
 }
 
-output, err := agent.ExecuteWithTools(ctx, "北京天气怎么样？")
+output, err := agent.AsRunnable().Invoke(ctx, "北京天气怎么样？")
 ```
 
 ---
@@ -178,7 +178,7 @@ agent, err := builder.NewSimpleBuilder(client).
     Build()
 ```
 
-同一 `SessionID` 下的对话写入记忆，后续调用会带上历史上下文。
+同一 `SessionID` 下的对话写入记忆，后续调用会带上历史上下文。配置 `WithSessionLog(store)` 后，模型历史改由 [core/session](../../core/session/README.md) 的会话日志推导，不再读取记忆。
 
 ### 手动管理对话
 
@@ -271,7 +271,7 @@ func (m *TraceMiddleware) OnBefore(ctx context.Context, req *middleware.Middlewa
 
 ## 流式处理
 
-`ExecuteStream` 返回事件通道：`text` 事件携带增量文本，`done` 事件携带最终输出，`error` 事件携带错误。需要客户端支持结构化流式接口。
+推荐使用 `agent.AsRunnable().Stream`，见[快速入门](QUICKSTART.md#流式调用)。`ExecuteStream` 是同一事件源的通道形式：`text` 事件携带增量文本，`done` 事件携带最终输出，`error` 事件携带错误。需要客户端实现 `llm.StreamClient`。
 
 ```go
 events, err := agent.ExecuteStream(ctx, "请写一首诗")
@@ -304,7 +304,7 @@ for event := range events {
 ```go
 import agentErrors "github.com/kart-io/goagent/errors"
 
-output, err := agent.Execute(ctx, "你好")
+output, err := agent.AsRunnable().Invoke(ctx, "你好")
 if err != nil {
     switch {
     case agentErrors.IsCode(err, agentErrors.CodeInvalidInput):
@@ -353,7 +353,7 @@ agent, err := builder.NewSimpleBuilder(client).
 ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 defer cancel()
 
-output, err := agent.Execute(ctx, "你好")
+output, err := agent.AsRunnable().Invoke(ctx, "你好")
 ```
 
 ### 2. 关闭时释放资源
@@ -373,4 +373,5 @@ mockClient := mocks.NewMockLLMClient()
 mockClient.SetResponses(llm.CompletionResponse{Content: "预设回答"})
 
 agent, err := builder.NewSimpleBuilder(mockClient).Build()
+// MockLLMClient 不实现 llm.StreamClient，只能经 agent.Execute 调用；AsRunnable 会返回错误。
 ```

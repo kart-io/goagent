@@ -1,495 +1,176 @@
-# MCP (Model Context Protocol) 工具箱
+# MCP 工具
 
-完整的 MCP 工具箱实现，为 AI Agent 提供强大的工具调用能力。
+包含两部分：
 
-## 特性
+- `mcp/remote`：基于官方 SDK（`github.com/modelcontextprotocol/go-sdk/mcp`）连接远端 MCP 服务器，把其工具适配为 `interfaces.Tool`，可直接交给 builder。
+- `mcp/core`、`mcp/toolbox`、`mcp/tools`：进程内的工具箱，管理带分类与 Schema 的 `MCPTool`，提供注册、搜索、权限、调用历史和统计。
 
-- 符合 MCP 协议规范
-- 完整的工具生命周期管理
-- JSON Schema 参数验证
-- 权限和安全控制
-- 速率限制
-- 工具执行审计
-- 流式输出支持
-- 7+ 内置工具
+## 目录结构
 
-## 架构
-
-```
+```text
 mcp/
-├── core/                    # MCP 核心接口
-│   ├── tool.go             # 工具接口定义
-│   └── toolbox.go          # 工具箱接口定义
-├── toolbox/                # 工具箱实现
-│   ├── toolbox.go          # 标准工具箱
-│   ├── registry.go         # 工具注册表
-│   ├── executor.go         # 工具执行器
-│   ├── validator.go        # 参数验证器
-│   └── permission.go       # 权限管理器
-└── tools/                  # 内置工具集
-    ├── read_file.go        # 读取文件
-    ├── write_file.go       # 写入文件
-    ├── filesystem.go       # 文件系统工具
-    ├── network.go          # 网络工具
-    └── registry.go         # 工具注册表
+├── remote/     # 远端 MCP 服务器工具适配
+├── core/       # MCPTool、ToolBox 等接口与数据类型，BaseTool
+├── toolbox/    # StandardToolBox、MemoryRegistry、StandardExecutor、PermissionManager
+└── tools/      # 内置工具
 ```
 
-## 核心接口
-
-### Tool 接口
-
-每个工具都实现 `Tool` 接口：
+## 远端 MCP 服务器
 
 ```go
-type Tool interface {
-    Name() string                    // 工具名称
-    Description() string             // 工具描述
-    Category() string                // 工具分类
-    Schema() *ToolSchema             // 参数 Schema
-    Execute(ctx, input) (*ToolResult, error)  // 执行工具
-    Validate(input) error            // 验证参数
-    RequiresAuth() bool              // 是否需要认证
-    IsDangerous() bool               // 是否危险操作
-}
-```
-
-### ToolBox 接口
-
-工具箱管理所有工具：
-
-```go
-type ToolBox interface {
-    Register(tool Tool) error                    // 注册工具
-    Unregister(name string) error                // 注销工具
-    Get(name string) (Tool, error)               // 获取工具
-    List() []Tool                                // 列出所有工具
-    Execute(ctx, call) (*ToolCallResult, error)  // 执行工具
-    HasPermission(userID, toolName) (bool, error) // 检查权限
-    Statistics() *ToolBoxStatistics              // 统计信息
-}
-```
-
-## 内置工具
-
-### 文件系统工具
-
-| 工具名称         | 描述         | 危险 |
-| ---------------- | ------------ | ---- |
-| `read_file`      | 读取文件内容 | ✗    |
-| `write_file`     | 写入文件内容 | ✓    |
-| `list_directory` | 列出目录内容 | ✗    |
-| `search_files`   | 搜索文件     | ✗    |
-
-### 网络工具
-
-| 工具名称       | 描述           | 危险 |
-| -------------- | -------------- | ---- |
-| `http_request` | 发送 HTTP 请求 | ✗    |
-
-### 数据处理工具
-
-| 工具名称     | 描述           | 危险 |
-| ------------ | -------------- | ---- |
-| `json_parse` | 解析 JSON 数据 | ✗    |
-
-### 系统工具
-
-| 工具名称        | 描述            | 危险 |
-| --------------- | --------------- | ---- |
-| `shell_execute` | 执行 Shell 命令 | ✓    |
-
-## 快速开始
-
-### 1. 创建工具箱并注册工具
-
-```go
-import (
-    "github.com/kart-io/goagent/mcp/toolbox"
-    "github.com/kart-io/goagent/mcp/tools"
-)
-
-// 创建工具箱
-tb := toolbox.NewStandardToolBox()
-
-// 注册所有内置工具
-tools.RegisterBuiltinTools(tb)
-
-// 或手动注册单个工具
-tb.Register(tools.NewReadFileTool())
-```
-
-### 2. 执行工具
-
-```go
-import "github.com/kart-io/goagent/mcp/core"
-
-// 创建工具调用
-call := &core.ToolCall{
-    ID:       "call-1",
-    ToolName: "read_file",
-    Input: map[string]interface{}{
-        "path": "/tmp/test.txt",
-    },
-    Timestamp: time.Now(),
-}
-
-// 执行工具
-result, err := tb.Execute(context.Background(), call)
+session, err := remote.Connect(ctx, &mcp.CommandTransport{Command: exec.Command("my-mcp-server")})
 if err != nil {
-    log.Fatal(err)
+    return err
+}
+defer session.Close()
+
+mcpTools, err := remote.Tools(ctx, session,
+    remote.WithToolName(func(name string) (string, bool) { return "remote_" + name, true }),
+    remote.WithToolErrorsAsRejected(),
+)
+if err != nil {
+    return err
 }
 
-// 检查结果
-if result.Result.Success {
-    data := result.Result.Data.(map[string]interface{})
-    fmt.Println("文件内容:", data["content"])
+agent, err := builder.NewSimpleBuilder(client).WithTools(mcpTools...).Build()
+```
+
+- `Connect` 通过任意 SDK `mcp.Transport`（如 `StreamableClientTransport`、`CommandTransport`）协商会话，调用方负责 `Close`；会话须在工具使用期间保持打开。认证与传输限制在 SDK transport 上配置。
+- `Tools` 分页列出全部远端工具。工具结果以完整的 `*mcp.CallToolResult` 作为 `ToolOutput.Result` 返回。
+- 远端返回错误结果（`IsError`）时默认作为 Go error 中止运行；`WithToolErrorsAsRejected()` 改为以 `tools.Rejected` 交给模型。连接与协议错误始终是 Go error。
+- `WithToolName` 决定暴露给模型的名称，返回 false 时跳过该工具。
+- `WithDurablePolicy(p)` 为工具声明持久运行中的操作策略（`tools.DurablePolicyProvider`），如 `MaxAttempts: 1` 使中断的调用在恢复时不被重跑。
+- 需要客户端补充输入的结果（`NeedsInput`）返回错误，需直接通过 SDK 会话处理。
+
+## 进程内工具箱
+
+### 核心接口
+
+```go
+type MCPTool interface {
+    Name() string
+    Description() string
+    Category() string
+    Schema() *ToolSchema
+    Execute(ctx context.Context, input map[string]interface{}) (*ToolResult, error)
+    Validate(input map[string]interface{}) error
+    RequiresAuth() bool
+    IsDangerous() bool
 }
 ```
 
-### 3. 权限管理
+`MCPTool` 与 `interfaces.Tool` 不同，不能直接交给 builder。`ToolBox` 接口提供 `Register`、`Unregister`、`Get`、`List`、`ListByCategory`、`Search`、`Execute`、`ExecuteBatch`、`GetMetadata`、`ListMetadata`、`Validate`、`HasPermission`、`Statistics`；`toolbox.NewStandardToolBox()` 是其实现，另有 `GetCallHistory`、`ClearHistory`、`SetPermissionManager`、`SetMaxHistorySize`（默认 100 条）。
+
+### 内置工具
+
+| 工具名称 | 分类 | 说明 | `IsDangerous` / `RequiresAuth` |
+|---|---|---|---|
+| `read_file` | filesystem | 读取文件内容 | 否 / 否 |
+| `write_file` | filesystem | 写入文件内容 | 是 / 是 |
+| `list_directory` | filesystem | 列出目录内容 | 否 / 否 |
+| `search_files` | filesystem | 搜索文件 | 否 / 否 |
+| `http_request` | network | 发送 HTTP 请求 | 否 / 否 |
+| `json_parse` | data | 解析 JSON 数据 | 否 / 否 |
+| `shell_execute` | system | 执行 Shell 命令 | 是 / 是 |
+
+`tools.RegisterBuiltinTools(tb)` 注册 `tools.BuiltinTools` 中的全部实例，`tools.GetToolsByCategory(category)` 按分类筛选。
+
+### 注册与执行
 
 ```go
-// 获取权限管理器
+tb := toolbox.NewStandardToolBox()
+if err := tools.RegisterBuiltinTools(tb); err != nil {
+    return err
+}
+
+result, err := tb.Execute(ctx, &core.ToolCall{
+    ToolName: "read_file",
+    Input:    map[string]interface{}{"path": "/tmp/test.txt"},
+})
+if err != nil {
+    return err
+}
+if result.Result.Success {
+    fmt.Println(result.Result.Data)
+}
+```
+
+`Execute` 依次校验调用、在 `UserID` 非空时检查权限、由 `StandardExecutor` 先调用工具的 `Validate` 再 `Execute`、更新统计与调用历史；`ID` 为空时自动生成。
+
+### 权限与速率限制
+
+```go
 pm := toolbox.NewPermissionManager()
 tb.SetPermissionManager(pm)
 
-// 设置用户权限
 pm.SetPermission(&core.ToolPermission{
     UserID:            "user-1",
-    ToolName:          "read_file",
+    ToolName:          "http_request",
     Allowed:           true,
-    MaxCallsPerMinute: 100,
+    MaxCallsPerMinute: 60,
+})
+pm.SetPermission(&core.ToolPermission{
+    UserID:   "user-1",
+    ToolName: "shell_execute",
+    Allowed:  false,
+    Reason:   "需要管理员权限",
 })
 
-// 拒绝危险操作
-pm.SetPermission(&core.ToolPermission{
-    UserID:            "user-1",
-    ToolName:          "shell_execute",
-    Allowed:           false,
-    Reason:            "危险操作需要管理员权限",
-})
+allowed, err := tb.HasPermission("user-1", "shell_execute") // false，err 为 *core.ErrPermissionDenied
 ```
 
-## 自定义工具
+未设置权限的用户与工具按默认策略处理（默认允许，可用 `SetDefaultPolicy` 修改）。另有 `GrantAll`、`DenyAll`、`RevokePermission`、`ListUserPermissions`、`GetRateLimitStatus`。权限与限流状态只保存在内存中。
 
-### 1. 定义工具结构
+`IsDangerous`、`RequiresAuth` 与 `ToolPermission.AllowDangerousOps` 只作为元数据记录（出现在 `ToolMetadata` 中），工具箱执行时不据此拦截调用。
+
+### 自定义工具
+
+嵌入 `core.BaseTool` 并实现 `Execute` 与 `Validate`（`BaseTool` 的这两个方法返回 `core.ErrNotImplemented`）：
 
 ```go
-type MyCustomTool struct {
+type EchoTool struct {
     *core.BaseTool
 }
 
-func NewMyCustomTool() *MyCustomTool {
-    schema := &core.ToolSchema{
+func NewEchoTool() *EchoTool {
+    return &EchoTool{BaseTool: core.NewBaseTool("echo", "回显输入", "custom", &core.ToolSchema{
         Type: "object",
         Properties: map[string]core.PropertySchema{
-            "param1": {
-                Type:        "string",
-                Description: "第一个参数",
-            },
+            "text": {Type: "string", Description: "要回显的文本"},
         },
-        Required: []string{"param1"},
-    }
-
-    return &MyCustomTool{
-        BaseTool: core.NewBaseTool(
-            "my_tool",
-            "我的自定义工具",
-            "custom",
-            schema,
-        ),
-    }
+        Required: []string{"text"},
+    })}
 }
-```
 
-### 2. 实现 Execute 方法
+func (t *EchoTool) Validate(input map[string]interface{}) error {
+    if s, ok := input["text"].(string); !ok || s == "" {
+        return &core.ErrInvalidInput{Field: "text", Message: "必须是非空字符串"}
+    }
+    return nil
+}
 
-```go
-func (t *MyCustomTool) Execute(ctx context.Context, input map[string]interface{}) (*core.ToolResult, error) {
-    startTime := time.Now()
-
-    param1 := input["param1"].(string)
-
-    // 执行工具逻辑
-    result := doSomething(param1)
-
+func (t *EchoTool) Execute(ctx context.Context, input map[string]interface{}) (*core.ToolResult, error) {
     return &core.ToolResult{
-        Success: true,
-        Data: map[string]interface{}{
-            "result": result,
-        },
-        Duration:  time.Since(startTime),
+        Success:   true,
+        Data:      map[string]interface{}{"text": input["text"]},
         Timestamp: time.Now(),
     }, nil
 }
 ```
 
-### 3. 实现 Validate 方法
+`PropertySchema` 支持 `Type`、`Description`、`Default`、`Enum`、`Format`、`Pattern`、`Minimum`/`Maximum`、`MinLength`/`MaxLength` 与数组的 `Items`。`BaseTool` 的 `SetRequiresAuth`、`SetIsDangerous` 设置对应元数据。
 
-```go
-func (t *MyCustomTool) Validate(input map[string]interface{}) error {
-    param1, ok := input["param1"].(string)
-    if !ok || param1 == "" {
-        return &core.ErrInvalidInput{
-            Field:   "param1",
-            Message: "必须是非空字符串",
-        }
-    }
-    return nil
-}
-```
-
-### 4. 注册工具
-
-```go
-tb.Register(NewMyCustomTool())
-```
-
-## 工具 Schema 定义
-
-工具使用 JSON Schema 定义参数：
-
-```go
-schema := &core.ToolSchema{
-    Type: "object",
-    Properties: map[string]core.PropertySchema{
-        "name": {
-            Type:        "string",
-            Description: "名称",
-            MinLength:   intPtr(1),
-            MaxLength:   intPtr(100),
-        },
-        "age": {
-            Type:        "integer",
-            Description: "年龄",
-            Minimum:     float64Ptr(0),
-            Maximum:     float64Ptr(150),
-        },
-        "email": {
-            Type:        "string",
-            Description: "邮箱",
-            Format:      "email",
-        },
-        "tags": {
-            Type:        "array",
-            Description: "标签列表",
-            Items: &core.PropertySchema{
-                Type: "string",
-            },
-        },
-    },
-    Required: []string{"name", "age"},
-}
-```
-
-## 安全特性
-
-### 1. 工具认证
-
-```go
-tool.SetRequiresAuth(true)  // 需要认证
-```
-
-### 2. 危险操作标记
-
-```go
-tool.SetIsDangerous(true)  // 标记为危险操作
-```
-
-### 3. 权限控制
-
-```go
-// 检查用户是否有权限
-allowed, err := tb.HasPermission("user-1", "shell_execute")
-```
-
-### 4. 速率限制
-
-```go
-pm.SetPermission(&core.ToolPermission{
-    UserID:            "user-1",
-    ToolName:          "http_request",
-    MaxCallsPerMinute: 60,  // 每分钟最多 60 次
-})
-```
-
-### 5. 审计日志
-
-```go
-// 获取调用历史
-history := tb.GetCallHistory()
-
-for _, record := range history {
-    fmt.Printf("工具: %s, 用户: %s, 时间: %v\n",
-        record.Call.ToolName,
-        record.Call.UserID,
-        record.ExecutedAt,
-    )
-}
-```
-
-## 统计信息
+### 统计
 
 ```go
 stats := tb.Statistics()
-
-fmt.Printf("工具总数: %d\n", stats.TotalTools)
-fmt.Printf("总调用次数: %d\n", stats.TotalCalls)
-fmt.Printf("成功率: %.2f%%\n",
-    float64(stats.SuccessfulCalls)/float64(stats.TotalCalls)*100)
+fmt.Println(stats.TotalTools, stats.TotalCalls, stats.SuccessfulCalls, stats.FailedCalls)
 fmt.Printf("平均延迟: %.2f ms\n", stats.AverageLatency)
-
-// 工具使用排名
-for tool, count := range stats.ToolUsage {
-    fmt.Printf("%s: %d 次\n", tool, count)
+for name, count := range stats.ToolUsage {
+    fmt.Println(name, count)
 }
 ```
 
 ## 示例
 
-### 基础工具使用
-
-```bash
-cd examples/mcp/basic_tools
-go run main.go
-```
-
-演示：
-
-- 工具注册
-- 工具执行
-- 参数验证
-- 统计信息
-- 调用历史
-
-### 工具链编排
-
-```bash
-cd examples/mcp/tool_chain
-go run main.go
-```
-
-演示：
-
-- 顺序执行多个工具
-- 工具间数据传递
-- 条件分支
-- 错误处理
-
-### 自定义工具
-
-```bash
-cd examples/mcp/custom_tool
-go run main.go
-```
-
-演示：
-
-- 创建自定义工具
-- 实现复杂参数验证
-- 流式输出
-- 错误处理
-
-## 最佳实践
-
-### 1. 工具命名
-
-使用动词\_名词格式：
-
-- `read_file` ✓
-- `write_file` ✓
-- `list_directory` ✓
-
-### 2. 参数设计
-
-- 必需参数放在 `Required` 列表中
-- 提供合理的默认值
-- 添加详细的参数描述
-- 使用适当的验证规则
-
-### 3. 错误处理
-
-```go
-if err != nil {
-    return &core.ToolResult{
-        Success:   false,
-        Error:     fmt.Sprintf("操作失败: %v", err),
-        ErrorCode: "OPERATION_FAILED",
-        Timestamp: time.Now(),
-    }, err
-}
-```
-
-### 4. 性能优化
-
-- 使用上下文取消长时间运行的操作
-- 对大文件使用流式处理
-- 缓存重复的计算结果
-- 设置合理的超时时间
-
-### 5. 安全考虑
-
-- 验证所有输入参数
-- 限制文件访问路径
-- 清理 Shell 命令参数
-- 记录所有危险操作
-- 实施速率限制
-
-## 扩展
-
-### 添加新工具类别
-
-1. 在 `tools/` 下创建新文件
-2. 实现工具接口
-3. 注册到 `registry.go`
-
-### 调整工具箱
-
-`StandardToolBox` 可从包外设置权限管理器与调用历史长度：
-
-```go
-tb := toolbox.NewStandardToolBox()
-tb.SetPermissionManager(toolbox.NewPermissionManager())
-tb.SetMaxHistorySize(500)
-```
-
-执行器与输入校验目前不可从包外替换。
-
-## 性能指标
-
-- 工具注册: < 1ms
-- 参数验证: < 1ms
-- 工具执行: 取决于具体工具
-- 权限检查: < 0.1ms
-- 统计更新: < 0.1ms
-
-## 限制
-
-- 同步执行（异步执行可通过 goroutine 实现）
-- 内存中的权限存储（可扩展为持久化）
-- 简单的速率限制（可扩展为分布式限流）
-
-## 未来计划
-
-- [ ] 工具链编排 DSL
-- [ ] 异步工具执行
-- [ ] 分布式工具注册
-- [ ] 工具版本管理
-- [ ] 工具依赖管理
-- [ ] 更多内置工具（目标 30+）
-- [ ] MCP 协议服务器/客户端
-- [ ] 工具市场
-
-## 贡献
-
-欢迎贡献新工具！请遵循以下步骤：
-
-1. 在 `tools/` 下创建工具文件
-2. 实现 `Tool` 接口
-3. 添加完整的测试
-4. 更新文档
-5. 提交 PR
-
-## 许可证
-
-[项目许可证]
+见 [examples/mcp](../examples/mcp/README.md)：`basic_tools`（注册、执行、统计与历史）、`tool_chain`（多工具顺序调用）、`custom_tool`（自定义工具）。

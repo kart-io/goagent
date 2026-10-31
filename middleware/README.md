@@ -1,419 +1,119 @@
-# middleware 中间件系统
+# middleware 中间件
 
-本模块是 goagent 框架的中间件系统，提供请求/响应拦截、可观测性集成、工具选择和自适应执行等能力。
+本包提供两类组件：
 
-## 目录
+- `ObservabilityMiddleware`：实现 `core/middleware.Middleware`（`OnBefore`/`OnAfter`/`OnError`），挂在 `coremiddleware.MiddlewareChain` 上记录 OpenTelemetry 追踪与指标。
+- 基于状态的处理器：`LLMToolSelectorMiddleware`、`DynamicPromptMiddleware`、`LLMToolEmulatorMiddleware`、`AdaptiveMiddleware`、`ContextEnrichmentMiddleware`。它们的逻辑在 `Process(ctx, state core.State) (core.State, error)` 中，读写约定的状态键；嵌入的 `BaseMiddleware` 的 `OnBefore`/`OnAfter` 原样透传，因此加入 `MiddlewareChain` 不会触发其逻辑，需由调用方显式调用 `Process`。
 
-- [架构设计](#架构设计)
-- [核心组件](#核心组件)
-- [中间件实现](#中间件实现)
-- [使用方法](#使用方法)
-- [API 参考](#api-参考)
-- [代码结构](#代码结构)
+`Middleware` 接口、`MiddlewareChain`、请求/响应对象池以及缓存、重试、限流、熔断等通用中间件位于 [core/middleware](../core/middleware/)。
 
-## 架构设计
-
-### 系统架构图
-
-```mermaid
-graph TB
-    subgraph "请求流"
-        Request[请求] --> Chain[MiddlewareChain]
-    end
-
-    subgraph "中间件管道"
-        Chain --> M1[ObservabilityMiddleware]
-        M1 --> M2[LLMToolSelectorMiddleware]
-        M2 --> M3[DynamicPromptMiddleware]
-        M3 --> M4[AdaptiveMiddleware]
-        M4 --> M5[ContextEnrichmentMiddleware]
-    end
-
-    subgraph "执行层"
-        M5 --> Handler[主处理器]
-        Handler --> Response[响应]
-    end
-
-    Response --> M5
-    M5 --> M4
-    M4 --> M3
-    M3 --> M2
-    M2 --> M1
-    M1 --> Chain
-
-    style Chain fill:#e1f5ff
-    style Handler fill:#e8f5e9
-```
-
-### 执行流程
-
-```mermaid
-sequenceDiagram
-    participant Client as 客户端
-    participant Chain as 中间件链
-    participant MW as 中间件
-    participant Handler as 处理器
-
-    Client->>Chain: Execute(request)
-
-    loop OnBefore 钩子
-        Chain->>MW: OnBefore(request)
-        MW-->>Chain: modified request
-    end
-
-    Chain->>Handler: 执行主逻辑
-    Handler-->>Chain: response
-
-    loop OnAfter 钩子（逆序）
-        Chain->>MW: OnAfter(response)
-        MW-->>Chain: modified response
-    end
-
-    Chain-->>Client: final response
-```
-
-## 核心组件
-
-### 1. Middleware 接口
-
-所有中间件必须实现的核心接口：
+## ObservabilityMiddleware
 
 ```go
-type Middleware interface {
-    // 返回中间件名称
-    Name() string
-
-    // 在主执行前调用
-    OnBefore(ctx context.Context, request *MiddlewareRequest) (*MiddlewareRequest, error)
-
-    // 在主执行后调用
-    OnAfter(ctx context.Context, response *MiddlewareResponse) (*MiddlewareResponse, error)
-
-    // 错误处理
-    OnError(ctx context.Context, err error) error
+obs, err := middleware.NewObservabilityMiddleware(provider) // provider: *observability.TelemetryProvider
+if err != nil {
+    return err
 }
+
+chain := coremiddleware.NewMiddlewareChain(handler).Use(obs)
+
+req := coremiddleware.GetMiddlewareRequest()
+defer coremiddleware.PutMiddlewareRequest(req)
+req.Input = userInput
+req.Timestamp = time.Now()
+req.Metadata["agent.name"] = "assistant"
+
+resp, err := chain.Execute(ctx, req)
 ```
 
-### 2. MiddlewareChain 中间件链
+- `OnBefore`：以 `Metadata["agent.name"]` 为名启动 Agent span，活跃计数加一。
+- `OnAfter`：记录执行耗时与成功与否（`Metadata["agent.name"]`、`["agent.type"]`），活跃计数减一。
+- `OnError`：把错误记入 span 与错误指标。
+- `RecordToolCall(ctx, toolName, duration, err)`、`RecordLLMCall(...)`：供调用方手动记录工具与 LLM 调用。
 
-管理中间件序列的执行：
+## 基于状态的处理器
+
+| 类型 | 读取的状态键 | 写入的状态键 |
+|---|---|---|
+| `LLMToolSelectorMiddleware` | `tools`（`[]interfaces.Tool`）、`query`（string） | `tools`（筛选后）、`tool_selection_metadata` |
+| `DynamicPromptMiddleware` | 生成器自行读取 | `system_prompt`（追加）、`prompt_enhancements` |
+| `LLMToolEmulatorMiddleware` | `pending_tool_call`（含 `name`、`input` 的 map） | `tool_result`、`tool_emulated` |
+| `AdaptiveMiddleware` | `error` | `CurrentConfig` 中的全部键 |
+| `ContextEnrichmentMiddleware` | `context` | `context`（合并）、`context_enriched`、`enrichment_errors` |
+
+### LLMToolSelectorMiddleware
+
+用一个（通常较便宜的）模型从 `tools` 中挑选与 `query` 相关的最多 `maxTools` 个工具。`WithAlwaysInclude(...)` 指定始终保留的工具；选择结果按 `query` 与工具数量缓存 5 分钟（`CacheTTL`）；模型调用失败时保留全部工具。
 
 ```go
-type MiddlewareChain struct {
-    middlewares atomic.Pointer[middlewareSlice]
-    handler     Handler
-    mu          sync.Mutex
-}
+selector := middleware.NewLLMToolSelectorMiddleware(cheapModel, 5).
+    WithAlwaysInclude("help_tool")
+
+st := core.NewAgentState()
+st.Set("tools", allTools)
+st.Set("query", "查询北京天气")
+out, err := selector.Process(ctx, st) // out.Get("tools") 为筛选后的工具
 ```
 
-| 方法 | 说明 |
-|------|------|
-| `NewMiddlewareChain(handler)` | 创建中间件链 |
-| `Use(middleware...)` | 添加中间件 |
-| `Execute(ctx, request)` | 执行中间件链 |
-| `Size()` | 返回中间件数量 |
+### DynamicPromptMiddleware
 
-### 3. 请求/响应结构
+条件满足的 `PromptGenerator` 生成的文本追加到 `system_prompt`：
 
 ```go
-// MiddlewareRequest 请求结构
-type MiddlewareRequest struct {
-    Input     interface{}            // 原始输入
-    State     state.State            // 当前状态
-    Runtime   interface{}            // 运行时环境
-    Metadata  map[string]interface{} // 元数据
-    Headers   map[string]string      // 请求头
-    Timestamp time.Time              // 时间戳
-}
-
-// MiddlewareResponse 响应结构
-type MiddlewareResponse struct {
-    Output     interface{}            // 输出结果
-    State      state.State            // 更新后状态
-    Metadata   map[string]interface{} // 元数据
-    Headers    map[string]string      // 响应头
-    Duration   time.Duration          // 执行耗时
-    TokenUsage *interfaces.TokenUsage // Token 统计
-    Error      error                  // 错误信息
-}
-```
-
-## 中间件实现
-
-### 1. ObservabilityMiddleware 可观测性中间件
-
-集成 OpenTelemetry 进行追踪和指标记录：
-
-```go
-type ObservabilityMiddleware struct {
-    tracer  *observability.AgentTracer
-    metrics *observability.AgentMetrics
-}
-```
-
-**功能**：
-- 启动和管理执行 span
-- 记录性能指标
-- 追踪工具和 LLM 调用
-
-### 2. LLMToolSelectorMiddleware 工具选择器
-
-使用 LLM 智能选择与查询相关的工具：
-
-```go
-type LLMToolSelectorMiddleware struct {
-    Model          llm.Client
-    MaxTools       int
-    AlwaysInclude  []string
-    SelectionCache map[string][]string
-    CacheTTL       time.Duration
-}
-```
-
-**功能**：
-- 基于用户查询动态选择工具
-- 工具选择缓存（5分钟 TTL）
-- 支持强制包含特定工具
-- 备用机制（LLM 失败时使用所有工具）
-
-### 3. DynamicPromptMiddleware 动态提示生成器
-
-基于运行时上下文动态生成系统提示：
-
-```go
-type DynamicPromptMiddleware struct {
-    PromptGenerators []PromptGenerator
-}
-
-type PromptGenerator struct {
-    Name      string
-    Priority  int
-    Condition func(core.State) bool
-    Generate  func(core.State) string
-}
-```
-
-### 4. LLMToolEmulatorMiddleware 工具仿真器
-
-使用 LLM 仿真工具执行（用于测试）：
-
-```go
-type LLMToolEmulatorMiddleware struct {
-    Model         llm.Client
-    EmulatedTools map[string]bool
-    EmulateAll    bool
-}
-```
-
-### 5. AdaptiveMiddleware 自适应中间件
-
-基于运行时性能自动调整配置：
-
-```go
-type AdaptiveMiddleware struct {
-    Metrics       *PerformanceMetrics
-    Adaptations   []Adaptation
-    CurrentConfig map[string]interface{}
-}
-
-type PerformanceMetrics struct {
-    ResponseTimes  []time.Duration
-    ErrorRates     []float64
-    TokenUsage     []int
-    SuccessRate    float64
-    AverageLatency time.Duration
-}
-
-type Adaptation struct {
-    Name      string
-    Condition func(*PerformanceMetrics) bool
-    Apply     func(map[string]interface{})
-}
-```
-
-### 6. ContextEnrichmentMiddleware 上下文增强
-
-使用增强器为执行上下文添加额外信息：
-
-```go
-type ContextEnrichmentMiddleware struct {
-    Enrichers []ContextEnricher
-    Cache     map[string]interface{}
-    CacheTTL  time.Duration
-}
-
-type ContextEnricher struct {
-    Name    string
-    Enrich  func(context.Context, core.State) (map[string]interface{}, error)
-    Async   bool
-    Timeout time.Duration
-}
-```
-
-## 使用方法
-
-### 基础使用
-
-```go
-// 创建可观测性中间件
-obsMiddleware, err := NewObservabilityMiddleware(provider)
-
-// 创建工具选择器中间件
-selectorMiddleware := NewLLMToolSelectorMiddleware(llmClient, 5).
-    WithAlwaysInclude("safety_tool", "help_tool")
-
-// 创建中间件链
-chain := coremiddleware.NewMiddlewareChain(handler).
-    Use(obsMiddleware).
-    Use(selectorMiddleware)
-
-// 执行
-request := coremiddleware.GetMiddlewareRequest()
-request.Input = userInput
-request.Timestamp = time.Now()
-
-response, err := chain.Execute(ctx, request)
-
-// 清理资源
-coremiddleware.PutMiddlewareRequest(request)
-coremiddleware.PutMiddlewareResponse(response)
-```
-
-### 动态提示配置
-
-```go
-promptMiddleware := NewDynamicPromptMiddleware().
-    AddGenerator(PromptGenerator{
+prompts := middleware.NewDynamicPromptMiddleware().
+    AddGenerator(middleware.PromptGenerator{
         Name:     "expert_mode",
         Priority: 100,
-        Condition: func(state core.State) bool {
-            ctx, ok := state.Get("context")
-            if !ok { return false }
-            m := ctx.(map[string]interface{})
-            return m["user_expertise"] == "advanced"
+        Condition: func(s core.State) bool {
+            v, _ := s.Get("user_expertise")
+            return v == "advanced"
         },
-        Generate: func(state core.State) string {
-            return "你是专家助手，提供详细的技术回答。"
-        },
+        Generate: func(s core.State) string { return "你是专家助手，提供详细的技术回答。" },
     })
 ```
 
-### 自适应配置
+### LLMToolEmulatorMiddleware
+
+用模型模拟工具执行（测试用）。`SetEmulatedTools(names...)` 指定要模拟的工具，`SetEmulateAll(true)` 模拟全部。
+
+### AdaptiveMiddleware
+
+每次 `Process` 把 `CurrentConfig` 写入状态，记录本次耗时（保留最近 100 次计算 `AverageLatency`）与基于 `error` 键的成功率，再依次检查 `Adaptation`，条件成立时调用 `Apply(CurrentConfig)`：
 
 ```go
-adaptiveMiddleware := NewAdaptiveMiddleware().
-    AddAdaptation(Adaptation{
-        Name: "reduce_tokens_on_slow",
-        Condition: func(metrics *PerformanceMetrics) bool {
-            return metrics.AverageLatency > 2*time.Second
-        },
-        Apply: func(config map[string]interface{}) {
-            config["max_tokens"] = 100
-        },
-    }).
-    AddAdaptation(Adaptation{
-        Name: "increase_tokens_on_fast",
-        Condition: func(metrics *PerformanceMetrics) bool {
-            return metrics.AverageLatency < 500*time.Millisecond
-        },
-        Apply: func(config map[string]interface{}) {
-            config["max_tokens"] = 500
-        },
+adaptive := middleware.NewAdaptiveMiddleware().
+    AddAdaptation(middleware.Adaptation{
+        Name:      "reduce_tokens_on_slow",
+        Condition: func(m *middleware.PerformanceMetrics) bool { return m.AverageLatency > 2*time.Second },
+        Apply:     func(cfg map[string]interface{}) { cfg["max_tokens"] = 100 },
     })
 ```
 
-### 上下文增强
+### ContextEnrichmentMiddleware
+
+依次运行 `ContextEnricher`，把返回的数据合并进状态的 `context` map。`Async: true` 的增强器并发执行，`Timeout` 限制单个增强器；增强器的错误与（异步增强器的）panic 记入 `enrichment_errors`，不使 `Process` 失败。
 
 ```go
-enrichMiddleware := NewContextEnrichmentMiddleware().
-    AddEnricher(ContextEnricher{
+enrich := middleware.NewContextEnrichmentMiddleware().
+    AddEnricher(middleware.ContextEnricher{
         Name: "user_profile",
-        Enrich: func(ctx context.Context, state core.State) (map[string]interface{}, error) {
-            return map[string]interface{}{
-                "user_id": "12345",
-                "tier":    "premium",
-            }, nil
+        Enrich: func(ctx context.Context, s core.State) (map[string]interface{}, error) {
+            return map[string]interface{}{"tier": "premium"}, nil
         },
         Async:   true,
         Timeout: 500 * time.Millisecond,
     })
 ```
 
-## API 参考
-
-### 工厂函数
-
-```go
-// 可观测性中间件
-NewObservabilityMiddleware(provider *TelemetryProvider) (*ObservabilityMiddleware, error)
-
-// 工具选择器
-NewLLMToolSelectorMiddleware(model llm.Client, maxTools int) *LLMToolSelectorMiddleware
-
-// 动态提示
-NewDynamicPromptMiddleware() *DynamicPromptMiddleware
-
-// 工具仿真器
-NewLLMToolEmulatorMiddleware(model llm.Client) *LLMToolEmulatorMiddleware
-
-// 自适应中间件
-NewAdaptiveMiddleware() *AdaptiveMiddleware
-
-// 上下文增强
-NewContextEnrichmentMiddleware() *ContextEnrichmentMiddleware
-```
-
-### 对象池函数
-
-```go
-// 获取/归还请求对象
-GetMiddlewareRequest() *MiddlewareRequest
-PutMiddlewareRequest(req *MiddlewareRequest)
-
-// 获取/归还响应对象
-GetMiddlewareResponse() *MiddlewareResponse
-PutMiddlewareResponse(resp *MiddlewareResponse)
-```
-
 ## 代码结构
 
 ```text
 middleware/
-├── observability.go           # 可观测性中间件
-├── tool_selector_advanced.go  # 高级中间件集合
-│   ├── LLMToolSelectorMiddleware
-│   ├── DynamicPromptMiddleware
-│   ├── LLMToolEmulatorMiddleware
-│   ├── AdaptiveMiddleware
-│   └── ContextEnrichmentMiddleware
-└── tool_selector_test.go      # 测试文件
+├── observability.go           # ObservabilityMiddleware
+└── tool_selector_advanced.go  # 基于状态的处理器
 ```
-
-## 设计特点
-
-### 性能优化
-
-- **无锁读取**：热路径通过原子操作实现零锁
-- **Copy-On-Write**：中间件添加使用 COW 模式
-- **对象池**：减少内存分配
-
-### 错误恢复
-
-- LLM 失败时自动降级
-- 工具选择失败用全部工具
-
-### 缓存机制
-
-- 工具选择结果缓存
-- 上下文增强结果缓存
-
-### 可观测性
-
-- OpenTelemetry 深度集成
-- 详细的性能指标收集
 
 ## 扩展阅读
 
-- [core](../core/) - 核心执行引擎
-- [observability](../observability/) - 可观测性
-- [llm](../llm/) - LLM 集成
+- [core/middleware](../core/middleware/) - Middleware 接口与中间件链
+- [observability](../observability/README.md) - TelemetryProvider、AgentTracer、AgentMetrics

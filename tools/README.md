@@ -1,557 +1,138 @@
-# Tools System
+# tools 工具系统
 
-完整的工具系统实现，借鉴 LangChain 的 Tool 设计理念。
+`interfaces.Tool` 是 Agent 可调用的工具接口；本包提供工具的创建方式、注册表、Dispatcher 执行路径（校验、管线、日志、并发与超时）以及工具结果缓存。内置工具位于子包。
 
-## 概述
-
-Tools 系统提供了一个统一的接口来定义、管理和执行各种工具。每个工具都是一个 `Runnable`，支持同步/异步执行、流式处理、批量执行和回调集成。
-
-## 核心概念
-
-### Tool 接口
-
-所有工具都实现 `Tool` 接口：
+## Tool 接口
 
 ```go
 type Tool interface {
-    Runnable[*ToolInput, *ToolOutput]
-
     Name() string
     Description() string
-    ArgsSchema() string  // JSON Schema for arguments
+    Invoke(ctx context.Context, input *ToolInput) (*ToolOutput, error)
+    ArgsSchema() string // 参数 JSON Schema
 }
 ```
 
-### 工具输入输出
+`interfaces.ToolInput` 的主要字段为 `Args map[string]interface{}`、`CallerID`、`TraceID`、`CallID`、`ExecutionKey`；`interfaces.ToolOutput` 为 `Result`、`Success`、`Error`、`Metadata`、`AdditionalContext`、`Labels`。工具不是 `core.Runnable`；需要把 Runnable 暴露为工具时用 `NewRunnableTool`。
+
+## 子包
+
+| 子包 | 内容 |
+|---|---|
+| `tools/compute` | `CalculatorTool`（参数 `expression`，支持 `+ - * / ^` 与括号）、`AdvancedCalculatorTool`（参数 `operation`、`operands`，由 `CalculatorOperations` 选择开放的操作） |
+| `tools/search` | `SearchTool` 与 `SearchEngine` 接口；引擎有 `MockSearchEngine`、`GoogleSearchEngine`、`DuckDuckGoSearchEngine`、`AggregatedSearchEngine` |
+| `tools/shell` | 命令白名单 Shell 工具，见 [tools/shell](shell/README.md) |
+| `tools/http` | `APITool`：参数 `method`、`url`、`headers`、`body`、`timeout`；另有 `Get`/`Post`/`Put`/`Delete`/`Patch` 便捷方法与 `NewAPIToolBuilder` |
+| `tools/middleware` | 单个工具的包装中间件（日志、缓存、限流），见 [工具中间件](../docs/guides/TOOL_MIDDLEWARE.md) |
+| `tools/policy` | 按工具名与命令前缀裁决的权限规则，作为 `Pipeline` 的 PreHook |
+| `tools/spill` | 把超长结果写入宿主目录并以 `read_spill` 工具分段读取，作为 `Pipeline` 的 PostHook |
+
+编码 Agent 的工作区工具在独立模块 `github.com/kart-io/goagent-harness/tools/coding`，见 [迁移指南](../docs/guides/HARNESS_MIGRATION.md)。
+
+## 创建工具
 
 ```go
-type ToolInput struct {
-    Args     map[string]interface{} // 参数映射
-    Context  context.Context        // 上下文
-    CallerID string                 // 调用者 ID
-    TraceID  string                 // 追踪 ID
-}
-
-type ToolOutput struct {
-    Result   interface{}            // 结果数据
-    Success  bool                   // 是否成功
-    Error    string                 // 错误信息
-    Metadata map[string]interface{} // 元数据
-}
-```
-
-## 内置工具
-
-计算器、搜索、Shell、API 工具分别位于子包 `tools/compute`、`tools/search`、`tools/shell`、`tools/http`（导入路径 `github.com/kart-io/goagent/tools/<子包>`），编码 Agent 的工作区工具已迁至独立模块 `github.com/kart-io/goagent-harness/tools/coding`，见 [迁移指南](../docs/guides/HARNESS_MIGRATION.md)；`Tool`、`ToolInput`、`ToolOutput` 定义在 `interfaces` 包。
-
-### 1. BaseTool
-
-基础工具实现，可以包装任意函数：
-
-```go
-tool := tools.NewBaseTool(
-    "hello",
-    "Says hello to a name",
-    `{"type": "object", "properties": {"name": {"type": "string"}}}`,
+// 任意函数：直接处理 ToolInput/ToolOutput
+hello := tools.NewBaseTool("hello", "Says hello to a name",
+    `{"type":"object","properties":{"name":{"type":"string"}}}`,
     func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
         name, _ := input.Args["name"].(string)
-        return &interfaces.ToolOutput{
-            Result:  fmt.Sprintf("Hello, %s!", name),
-            Success: true,
-        }, nil
-    },
-)
-```
+        return &interfaces.ToolOutput{Result: "Hello, " + name, Success: true}, nil
+    })
 
-### 2. FunctionTool
-
-函数包装工具，提供更灵活的创建方式：
-
-```go
-// 基础用法
-tool := tools.NewFunctionTool(
-    "calculator",
-    "Performs calculations",
-    `{...}`,
-    func(ctx context.Context, args map[string]interface{}) (interface{}, error) {
-        // 实现逻辑
-        return result, nil
-    },
-)
-
-// 使用构建器
-tool, err := tools.NewFunctionToolBuilder("multiplier").
+// 参数 map → 结果，自动包装为 ToolOutput
+mul, err := tools.NewFunctionToolBuilder("multiplier").
     WithDescription("Multiplies two numbers").
-    WithArgsSchema(`{...}`).
+    WithArgsSchema(`{"type":"object","properties":{"a":{"type":"number"},"b":{"type":"number"}},"required":["a","b"]}`).
     WithFunction(func(ctx context.Context, args map[string]interface{}) (interface{}, error) {
-        a := args["a"].(float64)
-        b := args["b"].(float64)
-        return a * b, nil
+        return args["a"].(float64) * args["b"].(float64), nil
     }).
     Build()
 
-// 简单函数工具
-tool := tools.NewSimpleFunctionTool(
-    "get_time",
-    "Gets current time",
-    func(ctx context.Context) (interface{}, error) {
-        return time.Now().String(), nil
-    },
-)
+// 无参数
+now := tools.NewSimpleFunctionTool("get_time", "Gets current time",
+    func(ctx context.Context) (interface{}, error) { return time.Now().String(), nil })
 
-// 类型安全工具
-type CalculatorInput struct {
-    Operation string  `json:"operation"`
-    A         float64 `json:"a"`
-    B         float64 `json:"b"`
+// 类型化参数：Args 经 JSON 解码为 I
+type CalcInput struct {
+    A float64 `json:"a"`
+    B float64 `json:"b"`
 }
-
-tool := tools.NewTypedFunctionTool[CalculatorInput, float64](
-    "calculator",
-    "Performs calculations",
-    `{...}`,
-    func(ctx context.Context, input CalculatorInput) (float64, error) {
-        // 类型安全的实现
-        return result, nil
-    },
-)
+add := tools.NewTypedFunctionTool("add", "Adds two numbers",
+    `{"type":"object","properties":{"a":{"type":"number"},"b":{"type":"number"}}}`,
+    func(ctx context.Context, in CalcInput) (float64, error) { return in.A + in.B, nil })
 ```
 
-### 3. CalculatorTool
+另有 `NewFunctionTool(name, description, schema, fn)`，以及 `FunctionToolBuilder.WithArgsSchemaFromStruct`、`MustBuild`。
 
-数学计算工具：
+### 结果约定
 
-```go
-tool := compute.NewCalculatorTool()
+- `tools.Rejected(message, data)`：目标系统给出的业务结论（不存在、无权限、状态不允许等）。作为工具结果交给模型，经 Dispatcher 时记为已完成，恢复时只回放不重试；`message` 原样交给模型。`RejectedResult(out)` 识别该结果。
+- `*tools.ArgumentError`：模型生成的参数不合法，`Message` 原样交给模型改正，`Err` 只用于 `errors.Is/As`。`ArgumentErrorResult(out)` 识别交还模型的参数错误结果。
+- `error`：调用没有完成（网络中断、服务不可用、超时）。
 
-output, _ := tool.Invoke(ctx, &interfaces.ToolInput{
-    Args: map[string]interface{}{
-        "expression": "2 + 3 * 4",
-    },
-})
-
-// 支持的表达式：
-// - 基本运算: +, -, *, /
-// - 幂运算: ^
-// - 括号: ()
-// - 示例: "2 + 3", "(2 + 3) * 4", "2^8"
-```
-
-高级计算器工具：
-
-```go
-tool := compute.NewAdvancedCalculatorTool(compute.CalculatorOperations{
-    Add:      true,
-    Subtract: true,
-    Multiply: true,
-    Divide:   true,
-    Power:    true,
-    Sqrt:     true,
-    Abs:      true,
-})
-
-output, _ := tool.Invoke(ctx, &interfaces.ToolInput{
-    Args: map[string]interface{}{
-        "operation": "sqrt",
-        "operands":  []interface{}{16.0},
-    },
-})
-```
-
-### 4. SearchTool
-
-搜索工具，支持多种搜索引擎：
-
-```go
-// 使用模拟搜索引擎
-engine := search.NewMockSearchEngine()
-tool := search.NewSearchTool(engine)
-
-// 使用 Google 搜索
-engine := search.NewGoogleSearchEngine(apiKey, cx)
-tool := search.NewSearchTool(engine)
-
-// 使用聚合搜索引擎
-engine := search.NewAggregatedSearchEngine(
-    search.NewGoogleSearchEngine(apiKey, cx),
-    search.NewDuckDuckGoSearchEngine(),
-)
-tool := search.NewSearchTool(engine)
-
-// 执行搜索
-output, _ := tool.Invoke(ctx, &interfaces.ToolInput{
-    Args: map[string]interface{}{
-        "query":       "Go programming",
-        "max_results": 5.0,
-    },
-})
-```
-
-### 5. ShellTool
-
-安全的 Shell 命令执行工具：
-
-```go
-// 使用构建器
-tool := shell.NewShellToolBuilder().
-    WithAllowedCommands("ls", "pwd", "echo", "cat").
-    WithTimeout(30 * time.Second).
-    Build()
-
-// 执行命令
-output, _ := tool.Invoke(ctx, &interfaces.ToolInput{
-    Args: map[string]interface{}{
-        "command": "echo",
-        "args":    []interface{}{"Hello, World!"},
-        "work_dir": "/tmp",
-        "timeout": 10,
-    },
-})
-
-// 便捷方法
-output, _ := tool.ExecuteScript(ctx, "/path/to/script.sh", []string{"arg1", "arg2"})
-output, _ := tool.ExecutePipeline(ctx, []string{"ls -la", "grep test"})
-```
-
-### 6. APITool
-
-HTTP API 调用工具：
-
-```go
-// 使用构建器
-tool := http.NewAPIToolBuilder().
-    WithBaseURL("https://api.example.com").
-    WithTimeout(30 * time.Second).
-    WithHeader("Content-Type", "application/json").
-    WithAuth("your-token").
-    Build()
-
-// 执行请求
-output, _ := tool.Invoke(ctx, &interfaces.ToolInput{
-    Args: map[string]interface{}{
-        "method": "POST",
-        "url":    "/api/users",
-        "body": map[string]interface{}{
-            "name": "John Doe",
-            "email": "john@example.com",
-        },
-        "headers": map[string]string{
-            "X-Custom-Header": "value",
-        },
-    },
-})
-
-// 便捷方法
-output, _ := tool.Get(ctx, "/api/users", headers)
-output, _ := tool.Post(ctx, "/api/users", body, headers)
-output, _ := tool.Put(ctx, "/api/users/1", body, headers)
-output, _ := tool.Delete(ctx, "/api/users/1", headers)
-output, _ := tool.Patch(ctx, "/api/users/1", body, headers)
-```
-
-## 工具注册表
+## 注册表
 
 ```go
 registry := tools.NewRegistry()
-
-// 同名工具重复注册返回错误
-_ = registry.Register(compute.NewCalculatorTool())
-_ = registry.Register(customTool)
-
-tool := registry.Get("calculator") // 不存在时返回 nil
-allTools := registry.List()
-```
-
-原 `toolkits` 包（`NewStandardToolkit`、`NewToolkitBuilder`、`CreateToolkit` 等）已在 v0.17.0 删除，代码保留在 `v0.16.1`；需要一组工具时直接把工具切片传给 Builder 的 `WithTools`。
-
-## 工具执行器
-
-```go
-executor := tools.NewToolExecutor(
-    tools.WithMaxConcurrency(4),
-    tools.WithTimeout(10*time.Second),
-)
-
-calls := []*tools.ToolCallRequest{
-    {ID: "calc", Tool: calcTool, Input: calcInput},
-    {ID: "search", Tool: searchTool, Input: searchInput},
+if err := registry.Register(compute.NewCalculatorTool()); err != nil { // 同名重复注册返回错误
+    return err
 }
-
-// 并行执行
-results, err := executor.ExecuteParallel(ctx, calls)
-
-// 顺序执行
-results, err = executor.ExecuteSequential(ctx, calls)
+calc := registry.Get("calculator") // 不存在时返回 nil
+all := registry.List()
 ```
 
-## 回调集成
+另有 `Names`、`Size`、`Clear`。
 
-工具支持完整的回调系统：
+## Dispatcher
 
-```go
-// 创建回调
-callback := &MyCallback{
-    BaseCallback: agentcore.NewBaseCallback(),
-}
-
-func (c *MyCallback) OnToolStart(ctx context.Context, toolName string, input interface{}) error {
-    fmt.Printf("Tool '%s' started\n", toolName)
-    return nil
-}
-
-func (c *MyCallback) OnToolEnd(ctx context.Context, toolName string, output interface{}) error {
-    fmt.Printf("Tool '%s' completed\n", toolName)
-    return nil
-}
-
-// 为工具添加回调
-toolWithCallback := tool.WithCallbacks(callback).(interfaces.Tool)
-
-// 执行会触发回调
-output, _ := toolWithCallback.Invoke(ctx, input)
-```
-
-## Runnable 特性
-
-所有工具都是 Runnable，支持：
-
-### 1. 单个执行
+`Dispatcher` 对注册表做快照，为 Builder 工具调用与图节点提供同一执行路径：参数校验、宿主授权、调用管线、持久日志、并发与超时。
 
 ```go
-output, err := tool.Invoke(ctx, input)
-```
-
-### 2. 流式执行
-
-```go
-stream, err := tool.Stream(ctx, input)
-for chunk := range stream {
-    if chunk.Error != nil {
-        // 处理错误
-    }
-    // 处理数据
-}
-```
-
-### 3. 批量执行
-
-```go
-inputs := []*interfaces.ToolInput{input1, input2, input3}
-outputs, err := tool.Batch(ctx, inputs)
-```
-
-### 4. 管道连接
-
-```go
-// 连接工具形成管道
-pipeline := tool1.Pipe(tool2).Pipe(tool3)
-output, err := pipeline.Invoke(ctx, input)
-```
-
-### 5. 配置
-
-```go
-config := agentcore.RunnableConfig{
-    MaxConcurrency: 10,
-    RetryPolicy: &agentcore.RetryPolicy{
-        MaxRetries: 3,
+d, err := tools.NewDispatcher(registry, tools.DispatchConfig{
+    MaxConcurrency:       4,                // 默认 4
+    Timeout:              30 * time.Second, // 单次调用默认超时，默认 30 秒
+    ReturnArgumentErrors: true,             // 参数错误交还模型改正，而不是中止
+    Pipeline: &tools.Pipeline{
+        Pre:  []tools.PreHook{(&policy.Policy{Default: policy.Allow}).Hook()},
+        Post: []tools.PostHook{spillStore.Hook()},
     },
-}
-
-toolWithConfig := tool.WithConfig(config)
-```
-
-## 最佳实践
-
-### 1. 安全性
-
-- Shell 工具始终使用白名单
-- API 工具验证输入
-- 设置合理的超时时间
-
-```go
-// 好的做法
-tool := shell.NewShellTool([]string{"ls", "cat", "grep"}, 30*time.Second)
-
-// 不好的做法 - 不要允许所有命令
-tool := shell.NewShellTool([]string{"bash", "sh"}, 0)
-```
-
-### 2. 错误处理
-
-始终检查工具执行结果：
-
-```go
-output, err := tool.Invoke(ctx, input)
+})
 if err != nil {
-    // 处理执行错误
     return err
 }
 
-if !output.Success {
-    // 处理业务错误
-    log.Printf("Tool failed: %s", output.Error)
-}
-```
-
-### 3. 使用构建器
-
-使用构建器创建复杂工具：
-
-```go
-tool := http.NewAPIToolBuilder().
-    WithBaseURL("https://api.example.com").
-    WithTimeout(30 * time.Second).
-    WithAuth(token).
+agent, err := builder.NewSimpleBuilder(client).
+    WithTools(append(d.Tools(), spillStore.ReadTool())...).
     Build()
+
+// 宿主直接调用
+out, err := d.Invoke(ctx, tools.ToolRequest{Name: "calculator", Input: &interfaces.ToolInput{
+    Args: map[string]interface{}{"expression": "2 + 3 * 4"},
+}})
 ```
 
-### 4. 工具组合
+- `Tools()` 返回供 `WithTools` 使用的包装工具；`AsRunnable()` 返回 `*core.StreamRunnable[ToolRequest, *interfaces.ToolOutput]`；单次 `Invoke` 内不重试。
+- `DispatchConfig` 另有 `MaxAttempts`（持久日志中同一 CallID 的恢复尝试上限，默认 3）、`MaxAdmissionConcurrency`、`MaxQueued`（超出返回 `ErrDispatcherBusy`）、`Authorize`（宿主授权，拒绝即中止）、`OnResult`（每次得到结果后同步回调，回放也触发）。
+- `Pipeline` 依次执行 `Pre`（`PreHook` 裁决 `PreAllow`、`PreDeny`、`PreAsk`、`PreStop` 或 `PreSubstitute`）→ `Approver` 审批 → `Guards` → `Around`（计入超时）→ 工具 → `Post`（替换结果或追加上下文）。准入阶段（Pre、审批、Guard）在操作日志之外，不计入 `Timeout`。会话级批准用 `tools.WithSessionID(ctx, id)` 区分会话，`Grants`/`RevokeGrants`/`PruneGrants` 管理已授予的批准。
+- 工具可实现 `DispatchTimeoutProvider`（自定义超时）、`DurablePolicyProvider`（持久运行中的操作策略）、`DurableIntentVersioner` 等可选接口。
 
-用注册表管理多个工具，用执行器并行调用：
+扩展点的错误与恢复语义见 [扩展契约](../docs/guides/EXTENSION_CONTRACT.md)。
 
-```go
-registry := tools.NewRegistry()
-_ = registry.Register(calcTool)
-_ = registry.Register(searchTool)
+## 其他组件
 
-executor := tools.NewToolExecutor(tools.WithMaxConcurrency(4))
-results, err := executor.ExecuteParallel(ctx, calls)
-```
+- `ToolExecutor`（`NewToolExecutor(WithMaxConcurrency, WithTimeout, WithRetryPolicy, WithErrorHandler)`）：`ExecuteParallel`、`ExecuteSequential`、`ExecuteBatch`，以及按 `ToolGraph` 依赖执行的 `ExecuteWithDependencies`。不经过 Dispatcher 的日志与管线。
+- `NewRunnableTool` / `NewRunnableToolFactory`：把 `core.Runnable`（如子 Agent、workflow 图）适配为工具，`RunnableToolConfig` 声明编解码、版本、超时与是否可恢复。
+- `WithMiddleware(tool, middlewares...)`：用 `tools/middleware` 包装单个工具。
+- 结果缓存：`NewCachedTool(tool, ttl)`，以及实现 `ToolCache` 的 `SimpleToolCache`、`MemoryToolCache`、`ShardedToolCache`（`NewShardedToolCacheWithOptions`、`NewHighPerformanceCache`、`NewLowMemoryCache`）。
+- `InputValidator`、`ValidateAndInvoke`：按 Schema 校验参数。
+- `ToolRuntime` 与 `UserInfoTool`、`SavePreferenceTool`、`UpdateStateTool`：可访问状态与存储的运行时工具。
 
-### 5. 监控和日志
+## 示例与测试
 
-使用回调进行监控：
-
-```go
-metricsCallback := &MetricsCallback{}
-loggingCallback := &LoggingCallback{}
-
-tool := tool.WithCallbacks(metricsCallback, loggingCallback)
-```
-
-## 示例
-
-完整示例见 [examples/tools](../examples/tools/README.md)：
+示例见 [examples/tools](../examples/tools/README.md)：
 
 ```bash
 go run ./examples/tools/01-calculator
+go test ./tools/...
 ```
-
-## 测试
-
-运行测试：
-
-```bash
-# 运行所有测试
-go test -v ./tools/
-
-# 运行性能测试
-go test -bench=. ./tools/
-
-# 查看覆盖率
-go test -cover ./tools/
-```
-
-## 扩展
-
-### 创建自定义工具
-
-```go
-type MyCustomTool struct {
-    *tools.BaseTool
-    config MyConfig
-}
-
-func NewMyCustomTool(config MyConfig) *MyCustomTool {
-    tool := &MyCustomTool{
-        config: config,
-    }
-
-    tool.BaseTool = tools.NewBaseTool(
-        "my_tool",
-        "My custom tool description",
-        `{"type": "object", "properties": {...}}`,
-        tool.run,
-    )
-
-    return tool
-}
-
-func (m *MyCustomTool) run(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
-    // 实现工具逻辑
-    return &interfaces.ToolOutput{
-        Result:  result,
-        Success: true,
-    }, nil
-}
-```
-
-### 创建自定义搜索引擎
-
-```go
-type MySearchEngine struct{}
-
-func (m *MySearchEngine) Search(ctx context.Context, query string, maxResults int) ([]search.SearchResult, error) {
-    // 实现搜索逻辑
-    return results, nil
-}
-
-// 使用自定义搜索引擎
-engine := &MySearchEngine{}
-tool := search.NewSearchTool(engine)
-```
-
-## 架构设计
-
-```
-Tool (Interface)
-    ├── Runnable[*ToolInput, *ToolOutput]
-    ├── Name() string
-    ├── Description() string
-    └── ArgsSchema() string
-
-BaseTool
-    ├── BaseRunnable
-    ├── name, description, argsSchema
-    └── runFunc
-
-具体工具
-    ├── FunctionTool
-    ├── CalculatorTool
-    ├── SearchTool
-    ├── ShellTool
-    └── APITool
-
-工具集
-    ├── Toolkit (Interface)
-    ├── BaseToolkit
-    ├── StandardToolkit
-    └── DevelopmentToolkit
-
-工具注册表
-    └── ToolRegistry
-
-工具执行器
-    └── ToolExecutor
-```
-
-## 性能考虑
-
-1. **并发执行**: 使用 `ToolExecutor.ExecuteParallel` 并行执行多个工具，`WithMaxConcurrency` 限制并发数
-2. **批量处理**: 使用 `Batch()` 方法批量处理多个输入
-3. **资源池**: Shell 和 API 工具内部使用连接池
-4. **缓存**: 考虑为搜索结果等添加缓存层
-
-## 总结
-
-Tools 系统提供了：
-
-- 统一的工具接口和实现
-- 丰富的内置工具（计算器、搜索、Shell、API）
-- 灵活的工具组合和管理（Toolkit、Registry）
-- 完整的 Runnable 特性支持
-- 强大的回调和监控能力
-- 类型安全和易用的 API
-
-通过这个系统，你可以轻松创建、组合和执行各种工具，构建强大的 AI Agent 应用。

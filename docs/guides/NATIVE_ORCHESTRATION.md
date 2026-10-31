@@ -9,7 +9,7 @@
 | `CompileDurable` | 节点及并行分支检查点、审批、重启恢复 |
 | `DurableGraph.AsRunnable` | 持久流程的 Invoke/Stream/Batch，统一事件入口 |
 | `tools.Registry` | 工具注册与查找 |
-| `tools.Dispatcher` | Schema/自定义校验、授权钩子、超时、并发限制、失败传播 |
+| `tools.Dispatcher` | Schema/自定义校验、授权钩子、`Pipeline` 准入与审批、超时、并发限制、调用日志、失败传播 |
 | `workflow/refund.Service` | 业务幂等、审批时效、订单事实与累计金额保护 |
 
 ## 工具接入图与 Builder
@@ -64,7 +64,7 @@ Dispatcher 构造时冻结工具名、描述与 Schema，Registry 后续增删�
 
 参数错误结果与正常执行使用同一调用意图和日志记录，按已完成写入，恢复时回放原结果而不执行工具；开关不进入意图，切换后合法调用照常回放，但参数错误记录在未开启恢复的路径上回放会中止。开关关闭时已写入的失败记录，打开开关后只有允许重试失败的操作（默认工具策略）会重新判定；组合工具（`MaxAttempts=1`）与被拒绝的模型回合仍需宿主处理。Builder 持久模式下，实现 `interfaces.ArgumentErrorTool` 且返回 true 的工具，参数不合法时模型回合照常提交；包装器须显式转发该接口。直接返回工具遇到参数错误时，错误按普通工具结果交还模型改正并继续循环，不会把错误当作答案；最后一轮仍传错时按额度耗尽报错并附带该参数错误，直接返回工具的其他失败仍中止。反复传错由 `WithMaxIterations` 兜底，耗尽时报错附带最后一次工具失败信息（之后的调用成功则不附带，超过 500 字符截断）。
 
-旧 `ToolExecutor` 保留已有行为，包括原有重试配置。需要本文契约的调用方显式采用 Dispatcher；本轮未静默改变所有历史调用方。
+`tools.ToolExecutor` 是独立的旧执行器（含自身的重试配置），不提供本文契约；需要这些契约时使用 Dispatcher。
 
 ## 持久图的统一入口
 
@@ -99,7 +99,7 @@ if snapshot.Waiting {
 
 一个键对应一个逻辑效果。手写多工具节点为每个操作设置稳定 CallID，Dispatcher 自动派生子键；Builder 原生工具循环通过已持久化的模型回合和调用 ID 生成 CallID。裸 Tool 不承诺调用级恢复，持久 Builder 会在模型请求前拒绝它。详见下文。
 
-图中的状态和分支结果要求可 JSON 往返。串行 v1 检查点保持兼容；并行分支名称、顺序变化会改变计划指纹，拒绝旧检查点。函数、Merge、Clone 或状态结构发生语义变化时仍须提升 Version。FileStore 只提供单机可靠文件系统上的运行锁与原子保存，没有跨主机租约、接管或自动补偿。
+图中的状态和分支结果要求可 JSON 往返。串行 v1 检查点保持兼容；并行分支名称、顺序变化会改变计划指纹，拒绝旧检查点。函数、Merge、Clone 或状态结构发生语义变化时仍须提升 Version。FileStore 只提供单机可靠文件系统上的运行锁与原子保存，没有跨主机租约或接管；多实例共享运行用 goagent-contrib 的 `durable/pgstore`。框架不做自动补偿。
 
 ## 可运行退款案例
 
@@ -167,11 +167,11 @@ out, err := dispatcher.Invoke(ctx, tools.ToolRequest{
 
 Builder 要求显式配置 `WithDurableScope("assistant")`，先从节点键派生 Agent 调用键，再在其下用 `model/turn/N` 保存完整模型回合、用 `tool/turn/N/call/ID` 保存每个工具。因此 Gemini 的 ProviderState 与 DeepSeek/MiniMax 的 reasoning_content 可在重启后续接，已执行的调用 ID 不依赖重新生成。原生续接数据仅在本地检查点中使用，公开测试报告不包含这些内容。Store 可能包含业务数据和模型内容，宿主负责访问控制与保留期限。
 
-模型回合先验证所有工具名、ID、JSON 参数及 Schema；任一调用无效则整轮不执行工具。网络错误、截断、无效计划也保存已取得的用量。模型操作最多请求一次：请求后崩溃但结果未落盘会保留 pending/ambiguous，恢复返回 `ErrOperationAttention`，不会再次付费；此时尚未得到的用量无法重建。在对应 Agent 作用域 context 上调用 `InspectOperation(ctx, "model/turn/0")` 可读取详细状态；不能直接使用节点的父 context 查询子作用域。处理不确定效果后，由业务宿主决定补偿或启动新工作流；不直接删除日志强制重试。
+模型回合先验证所有工具名、ID、JSON 参数及 Schema；任一调用无效则整轮不执行工具。网络错误、截断、无效计划也保存已取得的用量。除 `WithRequestError` 钩子（如 `builder.RetryTransient`）在同一回合记录内的原样重试外，模型操作最多请求一次；替换消息或客户端的恢复决定在持久运行中以错误结束。请求后崩溃但结果未落盘会保留 pending/ambiguous，恢复返回 `ErrOperationAttention`，不会再次付费；此时尚未得到的用量无法重建。在对应 Agent 作用域 context 上调用 `InspectOperation(ctx, "model/turn/0")` 可读取详细状态；不能直接使用节点的父 context 查询子作用域。处理不确定效果后，由业务宿主决定补偿或启动新工作流；不直接删除日志强制重试。
 
 `durable.Do` 可供其他节点保存具名子操作，`WithJournal` 与 `WithExecutionKey` 可供宿主显式接入。其输入保存摘要，输出保存 JSON，错误仅保存类别。默认一次尝试；`RetryFailed: true` 配合 MaxAttempts 允许显式恢复。未绑定日志时直接执行，不提供持久性。
 
-模型、提示词、工具实现、策略或输入结构改变时，必须提升 `DurableConfig.Version`。模型请求中的 provider、消息与工具定义另有意图校验，但框架不能推断闭包配置的全部变化。恢复要求固定输入和上下文；当前不支持持久工具循环使用 ContextPolicy（在模型请求前拒绝）。外部记忆、检索、中间件、完成回调也不是任意调用栈检查点，需由宿主保证稳定或自行持久化。
+模型、提示词、工具实现、策略或输入结构改变时，必须提升 `DurableConfig.Version`。模型请求中的 provider、消息与工具定义另有意图校验，但框架不能推断闭包配置的全部变化。恢复要求固定输入和上下文；PreStep（含 `WithOffload`）的结果随日志回放，见[工具上下文](CONTEXT_POLICY.md)。外部记忆、检索、中间件、完成回调也不是任意调用栈检查点，需由宿主保证稳定或自行持久化。
 
 ## 类型化流适配与能力声明
 
@@ -213,7 +213,7 @@ reviewer, err := builder.NewSimpleBuilder(client).
 
 无工具的 `StreamClient` 也通过相同的模型操作日志执行，成功结果可重放，失败保留已知用量并停止重复请求。有工具的持久化 Agent 必须使用 `ToolStreamClient` 和 `Dispatcher.Tools()`（或等价 DurableCallTool）；旧 GenerateWithTools 协议在持久化模式下会提前拒绝，普通非持久执行保持兼容。同步 `Execute` 和不支持流的 `ExecuteWithTools` 在持久上下文中也会拒绝，避免绕过日志；使用 `AsRunnable().Invoke` / `ExecuteStream`。这些检查在中间件、检索及模型请求前完成，日志检查的锁等待计入 Agent 超时。
 
-同一轮的多个工具调用默认按顺序执行。`WithParallelToolCalls(n)` 设为 n>=2（不另设上限传 `math.MaxInt`）且每个工具都实现 `interfaces.ConcurrentCallTool`（`Dispatcher.Tools()` 已实现，包装器须显式转发）时并发执行，峰值为 `min(n, MaxConcurrency)`；含上下文策略工具时始终顺序执行。并发时执行先后不保证与模型给出的顺序一致，即使 `MaxConcurrency=1` 也一样。工具消息与 `tool_start`/`tool_end` 事件按模型给出的顺序，与完成顺序无关；`OnResult` 推迟到整轮结束后按同一顺序触发。某个调用失败不取消其他调用，全部结束后返回顺序最靠前的错误，避免兄弟调用被记为取消失败而在恢复时需要宿主处理。工具内部不要按执行顺序分配编号或依赖同轮调用的先后。直接返回工具只在本轮只有它一个调用时生效，因此不参与并发。
+同一轮的多个工具调用默认按顺序执行。`WithParallelToolCalls(n)` 设为 n>=2（不另设上限传 `math.MaxInt`）且每个工具都实现 `interfaces.ConcurrentCallTool`（`Dispatcher.Tools()` 已实现，包装器须显式转发）时并发执行，峰值为 `min(n, MaxConcurrency)`；任一工具未实现该接口时整轮顺序执行（直接注册、未经 Dispatcher 的 `contextpolicy.Offload` 读取工具即未实现）。并发时执行先后不保证与模型给出的顺序一致，即使 `MaxConcurrency=1` 也一样。工具消息与 `tool_start`/`tool_end` 事件按模型给出的顺序，与完成顺序无关；`OnResult` 推迟到整轮结束后按同一顺序触发。某个调用失败不取消其他调用，全部结束后返回顺序最靠前的错误，避免兄弟调用被记为取消失败而在恢复时需要宿主处理。工具内部不要按执行顺序分配编号或依赖同轮调用的先后。直接返回工具只在本轮只有它一个调用时生效，因此不参与并发。
 
 `WithEmptyAnswerRetries(n)` 默认关闭。开启后，模型以 stop 结束且既无正文也无工具调用的回合按已完成写入日志，不追加空 assistant 消息，而是追加一条固定 user 消息重问；重问计入 MaxIterations 并占用一次预算。超过 n 次或已是最后一轮时按原方式报错，持久回合记为失败。
 

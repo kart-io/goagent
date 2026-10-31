@@ -1,659 +1,175 @@
 # GoAgent 开发指南
 
-本文档为 GoAgent 框架的开发者提供完整的开发指南。
-
-## 目录
-
-- [开发环境设置](#开发环境设置)
-- [项目结构](#项目结构)
-- [代码规范](#代码规范)
-- [扩展开发](#扩展开发)
-- [测试指南](#测试指南)
-- [调试技巧](#调试技巧)
-- [性能优化](#性能优化)
-- [贡献指南](#贡献指南)
-
----
-
-## 开发环境设置
-
-### 前提条件
+## 环境
 
 ```bash
-# Go 版本要求
-go version  # 需要 Go 1.25.0+
-
-# 克隆项目
-git clone https://github.com/kart-io/goagent.git
-cd goagent
-
-# 安装依赖
+go version            # 需要 Go 1.25（go.mod: go 1.25.0）
+git clone https://github.com/kart-io/goagent.git && cd goagent
 go mod download
-
-# 验证安装
 go build ./...
 ```
 
-### 开发工具推荐
+`make lint` 需要 golangci-lint v2（`.golangci.yml` 为 `version: "2"`），未安装或版本不符时会自动安装 v2.6.2；`make fmt` 会按需安装 `gofumpt` 与 `gci`。
 
-```bash
-# golangci-lint - 代码检查
-go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+## 常用命令
 
-# mockgen - Mock 生成
-go install github.com/golang/mock/mockgen@latest
+| 命令 | 作用 |
+|------|------|
+| `make test` | `GO_TEST_MODE=true go test -v -race -timeout 120s ./...` |
+| `make test-short` | 带 `-short` 的测试 |
+| `make test-integration` | `-tags=integration` 的测试 |
+| `make coverage` | 生成 `coverage/coverage.out` 与 `coverage/coverage.html` |
+| `make bench` | `go test -bench=. -benchmem ./...` |
+| `make fmt` | `gofumpt -w .`，`gci` 按标准库 → 第三方 → `github.com/kart-io/goagent` 分组 |
+| `make vet` / `make lint` | `go vet ./...` / `golangci-lint run ./...` |
+| `bash scripts/verify_imports.sh` | 导入层级检查，见 [导入层级说明](../architecture/IMPORT_LAYERING.md) |
+| `./scripts/check_coverage.sh` | 读取已有的 `coverage.out`，整体覆盖率（不含示例）须 ≥ 45%，并检查少数关键文件 |
+| `bash scripts/provider_regression.sh [REPORT.jsonl]` | 离线 Provider/Builder 契约与竞态回归，见 [持续回归](../guides/PROVIDER_REGRESSION.md) |
 
-# gotestsum - 更好的测试输出
-go install gotest.tools/gotestsum@latest
-```
-
-### IDE 配置
-
-**VS Code 推荐扩展：**
-- Go (golang.go)
-- Go Test Explorer
-- Error Lens
-
-**.vscode/settings.json:**
-```json
-{
-    "go.useLanguageServer": true,
-    "go.lintTool": "golangci-lint",
-    "go.lintFlags": ["--fast"],
-    "go.testFlags": ["-v", "-race"],
-    "editor.formatOnSave": true
-}
-```
-
----
+CI（`.github/workflows/`）运行带 `-race` 的全量测试、导入检查与 golangci-lint；PR 流程另跑覆盖率门禁。
 
 ## 项目结构
 
-```
-goagent/
-├── agents/                 # Agent 推理实现
-│   ├── base/              # 基础推理 Agent
-│   ├── cot/               # Chain-of-Thought
-│   ├── executor/          # 工具执行 Agent
-│   ├── got/               # Graph-of-Thought
-│   ├── metacot/           # Meta-CoT
-│   ├── pot/               # Program-of-Thought
-│   ├── react/             # ReAct
-│   ├── sot/               # Skeleton-of-Thought
-│   ├── specialized/       # 领域特定 Agent
-│   └── tot/               # Tree-of-Thought
-├── builder/               # Builder 模式实现
-├── cache/                 # 缓存系统
-├── core/                  # 核心执行引擎
-│   ├── checkpoint/        # 检查点系统
-│   ├── execution/         # 执行运行时
-│   ├── middleware/        # 中间件框架
-│   └── state/             # 状态管理
-├── distributed/           # 分布式支持
-├── docs/                  # 文档
-├── errors/                # 错误定义
-├── examples/              # 示例代码
-├── interfaces/            # 核心接口定义
-├── llm/                   # LLM 抽象和实现
-│   ├── cache/             # LLM 缓存
-│   ├── common/            # 通用工具
-│   ├── constants/         # 常量
-│   └── providers/         # LLM 提供商
-├── mcp/                   # MCP 协议支持
-├── memory/                # 内存管理
-├── middleware/            # 全局中间件
-├── multiagent/            # 多 Agent 协作
-├── observability/         # 可观测性
-├── options/               # 配置选项
-├── parsers/               # 输出解析器
-├── performance/           # 性能工具
-├── planning/              # 规划系统
-├── prompt/                # 提示词工程
-├── reflection/            # 自反射
-├── retrieval/             # 检索系统
-├── store/                 # 存储实现
-├── stream/                # 流式处理
-├── testing/               # 测试工具
-├── toolkits/              # 工具包
-├── tools/                 # 工具系统
-└── utils/                 # 工具函数
-```
+包职责与依赖图见 [架构概述](../architecture/ARCHITECTURE.md)。Preset 与编码工具在 `github.com/kart-io/goagent-harness`，大部分业务示例在 `github.com/kart-io/goagent-examples`，不要在本仓库重新引入。
 
-### 分层架构
+## 代码约定
 
-```mermaid
-graph TD
-    L4["第4层: examples/, tests"]
-    L3["第3层: agents/, tools/, middleware/"]
-    L2["第2层: core/, builder/, llm/, memory/"]
-    L1["第1层: interfaces/, errors/, utils/"]
-
-    L4 --> L3
-    L4 --> L2
-    L4 --> L1
-    L3 --> L2
-    L3 --> L1
-    L2 --> L1
-```
-
-**导入规则：**
-- L1 不能导入任何 GoAgent 内部包
-- L2 只能导入 L1
-- L3 可以导入 L1 和 L2
-- L4 可以导入所有层
-
----
-
-## 代码规范
-
-### 命名规范
+- 注释、错误信息与文档使用简体中文，标识符用英文。
+- 错误使用 `github.com/kart-io/goagent/errors`：
 
 ```go
-// 包名：小写，单词
-package memory
-
-// 接口名：动词或名词
-type Reader interface {}
-type Tool interface {}
-
-// 结构体名：名词
-type AgentBuilder struct {}
-type ToolRegistry struct {}
-
-// 方法名：动词开头
-func (a *Agent) Invoke() {}
-func (r *Registry) Register() {}
-
-// 常量：大驼峰或全大写
-const MaxRetries = 3
-const DEFAULT_TIMEOUT = 30 * time.Second
-
-// 变量：小驼峰
-var defaultConfig = &Config{}
-```
-
-### 错误处理
-
-```go
-// 使用项目错误包
 import agentErrors "github.com/kart-io/goagent/errors"
 
-// 创建错误
-if input == nil {
-    return nil, agentErrors.NewInvalidInputError("my_component", "input", "input cannot be nil")
+func validate(input map[string]any) error {
+	if input == nil {
+		return agentErrors.NewInvalidInputError("my_component", "input", "input cannot be nil")
+	}
+	return nil
 }
 
-// 包装错误
-result, err := doSomething()
-if err != nil {
-    return nil, agentErrors.Wrap(err, agentErrors.CodeInternal, "failed to do something")
+func wrap(err error) error {
+	if err != nil {
+		return agentErrors.Wrap(err, agentErrors.CodeInternal, "failed to do something")
+	}
+	return nil
 }
 
-// 按错误码判断
-if agentErrors.IsCode(err, agentErrors.CodeInvalidInput) {
-    // 处理输入错误
-}
+func isInput(err error) bool { return agentErrors.IsCode(err, agentErrors.CodeInvalidInput) }
 ```
 
-### 文档注释
-
-```go
-// Tool 表示智能体可以调用的可执行工具
-//
-// 所有工具实现都应实现此接口
-//
-// 实现位置：
-//   - tools.BaseTool - 基础实现
-//   - tools/compute/* - 计算工具
-//
-// 示例：
-//
-//	tool := NewBaseTool("my_tool", "description", schema, runFunc)
-//	output, err := tool.Invoke(ctx, input)
-type Tool interface {
-    // Name 返回工具标识符
-    //
-    // 名称应在工具注册表中唯一
-    Name() string
-
-    // ... 其他方法
-}
-```
-
-### 并发安全
-
-```go
-type Registry struct {
-    tools map[string]Tool
-    mu    sync.RWMutex  // 保护 tools 映射
-}
-
-func (r *Registry) Get(name string) Tool {
-    r.mu.RLock()
-    defer r.mu.RUnlock()
-    return r.tools[name]
-}
-
-func (r *Registry) Register(tool Tool) error {
-    r.mu.Lock()
-    defer r.mu.Unlock()
-    r.tools[tool.Name()] = tool
-    return nil
-}
-```
-
----
+- 会调用宿主代码的同步入口用 `core.CallSafely` / `core.RecoverPanic` 把 panic 转为错误，见 [Panic 处理](PANIC_HANDLING.md)。
+- 所有阻塞操作接受并遵守 `context.Context`；工具须遵守 `ToolInput.Context` 的期限。
+- 不做向后兼容层：删除的 API 直接删除，迁移写进 CHANGELOG。
 
 ## 扩展开发
 
-### 添加新的 LLM Provider
+### 新工具
 
-1. **创建 Provider 文件**
-
-```go
-// llm/providers/myprovider.go
-package providers
-
-type MyProvider struct {
-    *BaseProvider
-    client *myclient.Client
-}
-
-func NewMyProviderWithOptions(opts ...ClientOption) (*MyProvider, error) {
-    options := DefaultLLMOptions()
-    for _, opt := range opts {
-        opt(options)
-    }
-
-    client := myclient.New(options.APIKey)
-
-    return &MyProvider{
-        BaseProvider: NewBaseProvider(options),
-        client:       client,
-    }, nil
-}
-
-func (p *MyProvider) Complete(ctx context.Context, req *CompletionRequest) (*CompletionResponse, error) {
-    // 实现补全逻辑
-}
-
-func (p *MyProvider) Provider() constants.Provider {
-    return "myprovider"
-}
-
-func (p *MyProvider) IsAvailable() bool {
-    return p.client != nil
-}
-```
-
-2. **添加常量**
+实现 `interfaces.Tool`，或用 `tools.NewFunctionTool` / `NewTypedFunctionTool`。工具注册到 `tools.Registry`，经 `tools.NewDispatcher` 交给 Builder（`WithTools(d.Tools()...)`）；Dispatcher 负责 Schema 校验、授权、管线与持久记录，工具本身不必处理这些。
 
 ```go
-// llm/constants/providers.go
-const ProviderMyProvider Provider = "myprovider"
+type WeatherArgs struct {
+	City string `json:"city"`
+}
+
+type Weather struct {
+	City  string  `json:"city"`
+	TempC float64 `json:"temp_c"`
+}
+
+func weatherDispatcher() (*tools.Dispatcher, error) {
+	weather := tools.NewTypedFunctionTool("get_weather", "查询城市天气",
+		`{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}`,
+		func(ctx context.Context, in WeatherArgs) (Weather, error) {
+			return Weather{City: in.City, TempC: 21}, nil
+		})
+	reg := tools.NewRegistry()
+	if err := reg.Register(weather); err != nil {
+		return nil, err
+	}
+	return tools.NewDispatcher(reg, tools.DispatchConfig{ReturnArgumentErrors: true})
+}
 ```
 
-3. **添加测试**
+可选能力接口：`interfaces.ValidatableTool`（自定义校验）、`tools.ReconcilableTool`（崩溃后查询效果是否已生效）、`tools.DispatchTimeoutProvider`（自定义超时）、`tools.DurablePolicyProvider` / `DurableIntentVersioner`（持久策略与意图版本）。工具的契约见 [工具 API](../api/TOOL_API.md)。
+
+### 新 LLM Provider
+
+在 `llm/providers` 中实现 `llm.Client`；要用于原生工具循环还须实现 `llm.StreamClient` 与 `llm.ToolStreamClient`（参考 `openai_stream.go`、`deepseek_stream.go`、`gemini_native.go`）。构造函数沿用 `NewXxxWithOptions(opts ...llm.ClientOption)` 并复用 `common.BaseProvider`：
 
 ```go
-// llm/providers/myprovider_test.go
-func TestMyProvider_Complete(t *testing.T) {
-    // 测试实现
+// 正式接入时把常量与环境变量名加到 llm/constants。
+const ProviderMy constants.Provider = "myprovider"
+
+type MyClient struct {
+	*common.BaseProvider
+	*common.ProviderCapabilities
 }
+
+func NewMyWithOptions(opts ...llm.ClientOption) (*MyClient, error) {
+	base := common.NewBaseProvider(opts...)
+	base.ApplyProviderDefaults(ProviderMy, "https://api.example.com/v1", "my-model", "MY_BASE_URL", "MY_MODEL")
+	if err := base.EnsureAPIKey("MY_API_KEY", ProviderMy); err != nil {
+		return nil, err
+	}
+	return &MyClient{
+		BaseProvider:         base,
+		ProviderCapabilities: common.NewProviderCapabilities(llm.CapabilityCompletion, llm.CapabilityChat),
+	}, nil
+}
+
+func (c *MyClient) Complete(ctx context.Context, req *llm.CompletionRequest) (*llm.CompletionResponse, error) {
+	// 用 c.NewHTTPClient(...) 发请求，模型、温度等取 c.GetModel(req.Model)、c.GetTemperature(req.Temperature)
+	return &llm.CompletionResponse{Content: "...", Model: c.GetModel(req.Model), Provider: string(ProviderMy)}, nil
+}
+
+func (c *MyClient) Chat(ctx context.Context, messages []llm.Message) (*llm.CompletionResponse, error) {
+	return c.Complete(ctx, &llm.CompletionRequest{Messages: messages})
+}
+
+func (c *MyClient) Provider() constants.Provider { return ProviderMy }
+
+func (c *MyClient) IsAvailable() bool { return c.Config.APIKey != "" }
 ```
 
-### 添加新的推理策略
+能力声明与契约测试见 [Provider 能力](../guides/PROVIDER_CAPABILITIES.md) 和 `llm/providers/capability_contract_test.go`。
 
-1. **创建 Agent 目录**
+### 新 Agent 中间件
+
+实现 `core/middleware.Middleware`（`Name`/`OnBefore`/`OnAfter`/`OnError`），通常嵌入 `BaseMiddleware` 只覆盖需要的方法，再用 `WithMiddleware` 注册：
 
 ```go
-// agents/mystrategy/mystrategy.go
-package mystrategy
-
-type MyStrategyAgent struct {
-    *core.BaseAgent
-    llm    llm.Client
-    config *Config
+type TenantMiddleware struct {
+	*middleware.BaseMiddleware
+	tenant string
 }
 
-func New(llm llm.Client, opts ...Option) *MyStrategyAgent {
-    // 实现
+func NewTenantMiddleware(tenant string) *TenantMiddleware {
+	return &TenantMiddleware{BaseMiddleware: middleware.NewBaseMiddleware("tenant"), tenant: tenant}
 }
 
-func (a *MyStrategyAgent) Invoke(ctx context.Context, input *interfaces.Input) (*interfaces.Output, error) {
-    // 实现推理逻辑
+func (m *TenantMiddleware) OnBefore(ctx context.Context, req *middleware.MiddlewareRequest) (*middleware.MiddlewareRequest, error) {
+	req.Metadata["tenant"] = m.tenant
+	return req, nil
 }
-```
 
-2. **集成到 Builder**
-
-```go
-// builder/reasoning_presets.go
-func (b *AgentBuilder[C, S]) WithMyStrategy(opts ...mystrategy.Option) *AgentBuilder[C, S] {
-    // 实现
-    return b
+func useMiddleware(client llm.Client) (*builder.SimpleAgent, error) {
+	return builder.NewSimpleBuilder(client).WithMiddleware(NewTenantMiddleware("acme")).Build()
 }
 ```
 
-### 添加新的中间件
+这里的 `middleware` 是 `github.com/kart-io/goagent/core/middleware`。改变模型请求、历史或工具调用的行为优先用循环钩子（`WithPreStep`、`WithRequestHook`、`WithRequestError`、`WithTurnStopping`）或 `tools.Pipeline`，它们的持久与恢复语义见 [扩展契约](../guides/EXTENSION_CONTRACT.md)。
 
-```go
-// middleware/my_middleware.go
-package middleware
+## 调试
 
-type MyMiddleware struct {
-    *BaseMiddleware
-    // 自定义字段
-}
+- `WithVerbose(true)` 打开 Builder 的详细输出。
+- 用 `core/observe.WithObserver` 接收 agent/model/tool 事件；`devtools.NewRecorder` 记录事件，`devtools.WriteReport` 生成图报告。
+- 持久运行可用 `durable.InspectOperation`、`durable.DiagnoseOperations`、`Runner.Diagnose` / `DurableGraph.Diagnose` 只读诊断；会话日志可用 `testing/replay` 回放。
 
-func NewMyMiddleware(opts ...Option) *MyMiddleware {
-    return &MyMiddleware{
-        BaseMiddleware: NewBaseMiddleware("my_middleware"),
-    }
-}
+## 提交
 
-func (m *MyMiddleware) OnBefore(ctx context.Context, req *MiddlewareRequest) (*MiddlewareRequest, error) {
-    // 前置处理
-    return req, nil
-}
-
-func (m *MyMiddleware) OnAfter(ctx context.Context, resp *MiddlewareResponse) (*MiddlewareResponse, error) {
-    // 后置处理
-    return resp, nil
-}
-```
-
----
-
-## 测试指南
-
-### 单元测试
-
-```go
-// tools/registry_test.go
-func TestRegistry_Register(t *testing.T) {
-    registry := NewRegistry()
-
-    tool := &MockTool{name: "test_tool"}
-    err := registry.Register(tool)
-
-    assert.NoError(t, err)
-    assert.Equal(t, 1, registry.Size())
-}
-
-func TestRegistry_Get(t *testing.T) {
-    registry := NewRegistry()
-    tool := &MockTool{name: "test_tool"}
-    registry.Register(tool)
-
-    got := registry.Get("test_tool")
-
-    assert.NotNil(t, got)
-    assert.Equal(t, "test_tool", got.Name())
-}
-```
-
-### 表驱动测试
-
-```go
-func TestTool_Invoke(t *testing.T) {
-    tests := []struct {
-        name    string
-        input   map[string]interface{}
-        want    interface{}
-        wantErr bool
-    }{
-        {
-            name:    "valid input",
-            input:   map[string]interface{}{"param": "value"},
-            want:    "result",
-            wantErr: false,
-        },
-        {
-            name:    "missing param",
-            input:   map[string]interface{}{},
-            want:    nil,
-            wantErr: true,
-        },
-    }
-
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            tool := NewMyTool()
-            got, err := tool.Invoke(context.Background(), &ToolInput{Args: tt.input})
-
-            if tt.wantErr {
-                assert.Error(t, err)
-            } else {
-                assert.NoError(t, err)
-                assert.Equal(t, tt.want, got.Result)
-            }
-        })
-    }
-}
-```
-
-### 使用 Mock
-
-```go
-// testing/mocks/llm_mock.go
-type MockLLMClient struct {
-    mock.Mock
-}
-
-func (m *MockLLMClient) Complete(ctx context.Context, req *CompletionRequest) (*CompletionResponse, error) {
-    args := m.Called(ctx, req)
-    return args.Get(0).(*CompletionResponse), args.Error(1)
-}
-
-// 使用
-func TestAgent_Invoke(t *testing.T) {
-    mockLLM := new(MockLLMClient)
-    mockLLM.On("Complete", mock.Anything, mock.Anything).Return(
-        &CompletionResponse{Content: "response"},
-        nil,
-    )
-
-    agent := NewAgent(mockLLM)
-    // ...
-}
-```
-
-### 基准测试
-
-```go
-func BenchmarkRegistry_Get(b *testing.B) {
-    registry := NewRegistry()
-    for i := 0; i < 100; i++ {
-        registry.Register(&MockTool{name: fmt.Sprintf("tool_%d", i)})
-    }
-
-    b.ResetTimer()
-    for i := 0; i < b.N; i++ {
-        registry.Get("tool_50")
-    }
-}
-```
-
-### 运行测试
-
-```bash
-# 运行所有测试
-go test ./...
-
-# 运行特定包测试
-go test ./tools/...
-
-# 运行带覆盖率
-go test -cover ./...
-
-# 生成覆盖率报告
-go test -coverprofile=coverage.out ./...
-go tool cover -html=coverage.out
-
-# 运行基准测试
-go test -bench=. ./tools/...
-
-# 运行带竞态检测
-go test -race ./...
-```
-
----
-
-## 调试技巧
-
-### 启用详细日志
-
-```go
-agent, _ := builder.NewSimpleBuilder(client).
-    WithConfig(&builder.AgentConfig{
-        Verbose: true,
-    }).
-    WithMiddleware(
-        middleware.NewLoggingMiddleware(nil),
-    ).
-    Build()
-```
-
-### 使用 Delve 调试
-
-```bash
-# 安装 delve
-go install github.com/go-delve/delve/cmd/dlv@latest
-
-# 调试测试
-dlv test ./tools/... -- -test.run TestMyFunction
-
-# 调试程序
-dlv debug ./cmd/main.go
-```
-
-### 追踪执行
-
-```go
-import "runtime/trace"
-
-f, _ := os.Create("trace.out")
-trace.Start(f)
-defer trace.Stop()
-
-// 执行代码
-agent.Invoke(ctx, input)
-
-// 分析
-// go tool trace trace.out
-```
-
----
-
-## 性能优化
-
-### 对象池
-
-```go
-var requestPool = sync.Pool{
-    New: func() interface{} {
-        return &MiddlewareRequest{}
-    },
-}
-
-func GetRequest() *MiddlewareRequest {
-    return requestPool.Get().(*MiddlewareRequest)
-}
-
-func PutRequest(req *MiddlewareRequest) {
-    req.Reset()
-    requestPool.Put(req)
-}
-```
-
-### 避免不必要的分配
-
-```go
-// 不好
-func process(items []string) []string {
-    result := []string{}
-    for _, item := range items {
-        result = append(result, transform(item))
-    }
-    return result
-}
-
-// 好
-func process(items []string) []string {
-    result := make([]string, len(items))
-    for i, item := range items {
-        result[i] = transform(item)
-    }
-    return result
-}
-```
-
-### 使用 pprof
-
-```go
-import _ "net/http/pprof"
-
-go func() {
-    http.ListenAndServe("localhost:6060", nil)
-}()
-
-// 分析
-// go tool pprof http://localhost:6060/debug/pprof/profile
-// go tool pprof http://localhost:6060/debug/pprof/heap
-```
-
----
-
-## 贡献指南
-
-### 提交流程
-
-1. Fork 项目
-2. 创建功能分支：`git checkout -b feature/my-feature`
-3. 提交更改：`git commit -m "feat: add my feature"`
-4. 推送分支：`git push origin feature/my-feature`
-5. 创建 Pull Request
-
-### 提交信息规范
-
-```
-<type>(<scope>): <subject>
-
-<body>
-
-<footer>
-```
-
-**类型：**
-- `feat`: 新功能
-- `fix`: 修复 bug
-- `docs`: 文档更新
-- `style`: 代码格式
-- `refactor`: 重构
-- `test`: 测试相关
-- `chore`: 构建/工具
-
-**示例：**
-```
-feat(tools): add new calculator tool
-
-- Add Calculator tool with basic math operations
-- Support +, -, *, / operators
-- Include comprehensive tests
-
-Closes #123
-```
-
-### PR 检查清单
-
-- [ ] 代码遵循项目规范
-- [ ] 添加了必要的测试
-- [ ] 所有测试通过
-- [ ] 更新了相关文档
-- [ ] 没有引入新的 lint 警告
-
----
+- 提交信息使用约定式格式（`feat`、`fix`、`docs`、`refactor`、`test`、`chore` 等），正文用中文说明原因。
+- 提交前运行 `make fmt`、`make vet`、`make lint`、`bash scripts/verify_imports.sh`、`make test`；破坏性变更在 CHANGELOG 中写明迁移方式。
 
 ## 相关文档
 

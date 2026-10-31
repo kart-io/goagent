@@ -1,392 +1,102 @@
-# 工具中间件（Tool Middleware）
+# 工具中间件
 
-工具中间件提供了一种强大而灵活的方式来为工具调用添加横切关注点（cross-cutting concerns），如日志记录、缓存、限流等。
+工具调用的横切逻辑有两层：
 
-## 核心概念
+| 层 | 入口 | 适用 |
+|---|---|---|
+| 单个工具的包装 | `tools.WithMiddleware` + `tools/middleware` | 日志、结果缓存、限流等与调用方无关的逻辑 |
+| Dispatcher 管线 | `tools.DispatchConfig.Pipeline`（`tools.Pipeline`） | 模型可见调用的准入、审批、硬性拒绝、执行包装与结果后处理；与调用日志、恢复、并发和超时一起工作 |
 
-### 中间件架构
+## tools.WithMiddleware
 
-GoAgent 的工具中间件采用**洋葱模型**（Onion Model）设计，允许多个中间件层层包装：
-
-```
-Logging (外层)
-  └─> Caching (中层)
-        └─> RateLimit (内层)
-              └─> 实际工具调用
-```
-
-执行流程：
-1. 请求从外向内穿过所有中间件
-2. 到达实际工具执行
-3. 响应从内向外返回，经过所有中间件
-
-### 两种实现方式
-
-#### 1. 函数式中间件（推荐）
-
-```go
-type ToolMiddlewareFunc func(interfaces.Tool, ToolInvoker) ToolInvoker
-```
-
-**优点**：
-- 简洁，易于组合
-- 可以直接在函数内短路执行（如缓存命中时）
-- 更容易实现复杂的控制流
-
-**示例**：
-```go
-cachingMW := middleware.Caching(
-    middleware.WithTTL(5 * time.Minute),
-)
-
-rateLimitMW := middleware.RateLimit(
-    middleware.WithQPS(10),
-    middleware.WithBurst(20),
-)
-```
-
-#### 2. 接口式中间件（旧接口）
-
-```go
-type ToolMiddleware interface {
-    OnBeforeInvoke(ctx, tool, input) (*ToolInput, error)
-    OnAfterInvoke(ctx, tool, output) (*ToolOutput, error)
-    OnError(ctx, tool, err) error
-}
-```
-
-**特点**：
-- 分离前置/后置处理逻辑
-- 适合简单的装饰器模式
-- 已被函数式中间件取代，但仍然支持
-
-## 内置中间件
-
-### 1. Logging（日志记录）
-
-记录工具调用的输入、输出和执行时间。
-
-**功能**：
-- 自动记录工具名称、参数、结果
-- 可配置是否记录敏感数据
-- 记录执行耗时
-- 区分成功/失败日志级别
-
-**使用示例**：
-```go
-loggingMW := middleware.NewLoggingMiddleware(
-    middleware.WithLogger(myLogger),
-    middleware.WithoutInputLogging(),  // 不记录输入参数
-    middleware.WithMaxArgBytes(512),   // 限制参数日志大小
-)
-```
-
-**输出示例**：
-```json
-{
-  "level": "INFO",
-  "message": "Tool invocation completed",
-  "tool": "calculator",
-  "success": true,
-  "duration_ms": 15,
-  "result": "{\"sum\": 42}"
-}
-```
-
-### 2. Caching（缓存）
-
-缓存成功的工具调用结果，避免重复计算。
-
-**功能**：
-- 基于工具名和参数生成缓存键
-- 只缓存成功的结果
-- 支持 TTL 过期
-- 可自定义缓存键生成函数
-- 缓存命中时**不调用实际工具**（性能优化）
-
-**使用示例**：
 ```go
 import (
     "github.com/kart-io/goagent/cache"
-    "github.com/kart-io/goagent/tools/middleware"
-)
-
-// 创建缓存实例（推荐使用 SimpleCache）
-cacheInstance := cache.NewSimpleCache(10 * time.Minute)
-
-// 配置缓存中间件
-cachingMW := middleware.Caching(
-    middleware.WithCache(cacheInstance),
-    middleware.WithTTL(10 * time.Minute),
-    middleware.WithCacheKeyFunc(customKeyFunc),  // 可选：自定义键函数
-)
-```
-
-> **💡 提示**：推荐使用 `cache.NewSimpleCache()` 作为默认缓存实现。
-> 详细的缓存使用指南请参考 [CACHING_GUIDE.md](./CACHING_GUIDE.md)。
-
-**元数据**：
-```go
-output.Metadata["cache_hit"]    // true/false
-output.Metadata["cache_stored"] // true (仅首次调用)
-```
-
-**注意事项**：
-- 缓存键默认为 `tool:<name>:<sha256(args)[:8]>`
-- 内部元数据（`__` 前缀）不影响缓存键
-- 完全并发安全（基于 sync.Map 或 sync.RWMutex）
-- 仅缓存成功结果（错误不会被缓存）
-
-### 3. RateLimit（限流）
-
-限制工具调用的速率，防止过载。
-
-**功能**：
-- 基于令牌桶算法
-- 支持全局限流或按工具限流
-- 可配置 QPS 和突发容量
-- 可选的等待超时
-
-**使用示例**：
-```go
-rateLimitMW := middleware.RateLimit(
-    middleware.WithQPS(10),           // 每秒 10 个请求
-    middleware.WithBurst(20),         // 允许突发 20 个
-    middleware.WithPerToolRateLimit(), // 每个工具独立限流
-    middleware.WithWaitTimeout(1 * time.Second), // 等待令牌
-)
-```
-
-**限流模式**：
-- **全局限流**：所有工具共享配额
-- **按工具限流**：每个工具独立配额
-
-**错误处理**：
-```go
-// 限流拒绝时返回错误
-err := errors.Wrap(
-    fmt.Errorf("rate limit exceeded"),
-    errors.CodeMiddlewareExecution,
-    "rate limit exceeded",
-)
-```
-
-## 使用方法
-
-### 基本用法
-
-```go
-import (
     "github.com/kart-io/goagent/tools"
     "github.com/kart-io/goagent/tools/middleware"
 )
 
-// 创建原始工具
-calculator := NewCalculatorTool()
-
-// 应用中间件
-wrappedTool := tools.WithMiddleware(calculator,
-    middleware.NewLoggingMiddleware(),     // 最外层
-    middleware.Caching(),                  // 中层
-    middleware.RateLimit(
-        middleware.WithQPS(10),
-        middleware.WithBurst(5),
+wrapped := tools.WithMiddleware(calculator,
+    middleware.NewLoggingMiddleware(),             // 最外层
+    middleware.Caching(
+        middleware.WithCache(cache.NewSimpleCache(10*time.Minute)),
+        middleware.WithTTL(10*time.Minute),
     ),
+    middleware.RateLimit(middleware.WithQPS(10), middleware.WithBurst(5)), // 最内层
 )
-
-// 调用工具
-output, err := wrappedTool.Invoke(ctx, &interfaces.ToolInput{
-    Args: map[string]interface{}{"a": 1, "b": 2},
-})
+output, err := wrapped.Invoke(ctx, &interfaces.ToolInput{Args: map[string]any{"a": 1, "b": 2}})
 ```
 
-### 中间件执行顺序
+`WithMiddleware(tool, middlewares ...interface{})` 按洋葱模型包装：第一个在最外层。接受两种形式，其他类型被**静默忽略**：
 
-**重要**：中间件按照传入顺序从外到内包装，但执行顺序遵循洋葱模型：
+- `middleware.ToolMiddlewareFunc`（`func(interfaces.Tool, ToolInvoker) ToolInvoker`），可短路，例如缓存命中时不调用内层；`Caching`、`RateLimit` 返回这种形式。
+- `middleware.ToolMiddleware` 接口（`Name`、`OnBeforeInvoke`、`OnAfterInvoke`、`OnError`），经 `middleware.Chain` 转换；`NewLoggingMiddleware` 返回这种形式，自定义时可嵌入 `middleware.NewBaseToolMiddleware(name)` 只覆盖需要的方法。
+
+不传中间件时返回原工具。包装结果是 `*tools.MiddlewareTool`，只实现 `interfaces.Tool` 与 `Unwrap()`，**不转发**原工具声明的可选接口（如 `DispatchTimeoutProvider`、`DurablePolicyProvider`、`interfaces.ArgumentErrorTool`），Dispatcher 也不会调用 `Unwrap`；依赖这些声明的工具不要先包装再注册。
+
+### 内置中间件
+
+**Logging**：`NewLoggingMiddleware(opts...)`，默认输出到 stdout 的 JSON slog，记录工具名、CallerID、TraceID、参数、结果与耗时。选项：`WithLogger`、`WithoutInputLogging`、`WithoutOutputLogging`、`WithMaxArgBytes`（默认 1024 字节，超出截断）。它把开始时间写入 `input.Args["__logging_start_time"]`，内层工具会收到这个参数。
+
+**Caching**：`Caching(opts...)`（或 `NewCachingMiddleware(opts...).Wrap`，后者的 `GetStats()` 返回命中/未命中次数）。
+
+- 默认缓存 `cache.NewSimpleCache(5*time.Minute)`、TTL 5 分钟；选项 `WithCache(cache.Cache)`、`WithTTL`、`WithCacheKeyFunc(func(toolName string, args map[string]any) string)`、`WithCacheLogger`。
+- 默认键 `tool:<name>:<sha256(参数JSON) 前 8 个十六进制字符>`，忽略 `__` 开头的参数；键中不含 CallerID 或会话，跨用户共享的缓存须自定义键函数。
+- 只缓存 `err == nil` 且 `Success=true` 的结果（不含 `__` 开头的元数据）。命中时不调用内层，返回副本并设置 `Metadata["cache_hit"]=true`、`Metadata["cached"]=true`；未命中且写入时设置 `cache_hit=false`、`cache_stored=true`。
+
+**RateLimit**：`RateLimit(opts...)`，基于 `golang.org/x/time/rate` 令牌桶。默认 10 QPS、突发 20、全局共享、不等待；选项 `WithQPS`、`WithBurst`、`WithPerToolRateLimit()`（按工具名独立限流）、`WithWaitTimeout`（大于 0 时最多等待这么久取令牌）、`WithRateLimitLogger`。拒绝时返回错误码 `errors.CodeMiddlewareExecution`，可用 `errors.IsCode(err, errors.CodeMiddlewareExecution)` 判断。
+
+缓存放在限流外层时，命中不消耗限流额度。
+
+### 自定义
 
 ```go
-tools.WithMiddleware(tool,
-    logging,  // 1. 最外层，最先执行前置逻辑，最后执行后置逻辑
-    caching,  // 2. 中层
-    rateLimit, // 3. 最内层，最后执行前置逻辑，最先执行后置逻辑
-)
-```
-
-**执行流程**：
-```
-Request:
-  logging.OnBeforeInvoke
-    → caching (检查缓存)
-      → rateLimit (检查限流)
-        → 实际工具调用
-
-Response:
-        ← rateLimit.OnAfterInvoke
-      ← caching (存储结果)
-    ← logging.OnAfterInvoke (记录耗时)
-```
-
-### 缓存 + 限流的最佳实践
-
-**推荐顺序**：缓存在外，限流在内
-
-```go
-wrappedTool := tools.WithMiddleware(tool,
-    middleware.Caching(),    // 外层：缓存命中时直接返回
-    middleware.RateLimit(),  // 内层：只对缓存未命中的请求限流
-)
-```
-
-**原理**：
-- 缓存命中时，不会执行内层的限流中间件
-- 节省限流配额，提高性能
-
-### 错误处理
-
-```go
-output, err := wrappedTool.Invoke(ctx, input)
-if err != nil {
-    // 检查错误类型
-    if errors.IsCode(err, errors.CodeMiddlewareExecution) {
-        // 可能是限流错误
-        log.Warn("Tool call rate limited", "error", err)
-    } else {
-        // 其他错误
-        log.Error("Tool call failed", "error", err)
-    }
-}
-```
-
-## 自定义中间件
-
-### 函数式中间件（推荐）
-
-```go
-func CustomMiddleware(config CustomConfig) middleware.ToolMiddlewareFunc {
+func Audit(log func(string, ...any)) middleware.ToolMiddlewareFunc {
     return func(tool interfaces.Tool, next middleware.ToolInvoker) middleware.ToolInvoker {
         return func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
-            // 前置处理
-            log.Info("Before tool call", "tool", tool.Name())
-
-            // 调用下一层
+            log("tool start", "tool", tool.Name())
             output, err := next(ctx, input)
-            if err != nil {
-                return nil, err
-            }
-
-            // 后置处理
-            log.Info("After tool call", "result", output.Result)
-
-            return output, nil
+            log("tool end", "tool", tool.Name(), "error", err)
+            return output, err
         }
     }
 }
 ```
 
-### 接口式中间件（旧接口）
+## Dispatcher 管线
+
+经 `Dispatcher.Tools()` 交给模型的调用与 `Dispatcher.Invoke`/`AsRunnable` 的宿主调用都按 PreHook → 审批 → Guard → Around（含超时）→ 工具 → PostHook 执行；参数不合法的调用不进入管线。
 
 ```go
-type CustomMiddleware struct {
-    *middleware.BaseToolMiddleware
-    config CustomConfig
-}
-
-func (m *CustomMiddleware) OnBeforeInvoke(
-    ctx context.Context,
-    tool interfaces.Tool,
-    input *interfaces.ToolInput,
-) (*interfaces.ToolInput, error) {
-    // 前置处理
-    log.Info("Before tool call", "tool", tool.Name())
-    return input, nil
-}
-
-func (m *CustomMiddleware) OnAfterInvoke(
-    ctx context.Context,
-    tool interfaces.Tool,
-    output *interfaces.ToolOutput,
-) (*interfaces.ToolOutput, error) {
-    // 后置处理
-    log.Info("After tool call", "result", output.Result)
-    return output, nil
-}
+dispatcher, err := tools.NewDispatcher(registry, tools.DispatchConfig{
+    Pipeline: &tools.Pipeline{
+        Guards: []tools.Guard{func(ctx context.Context, call *tools.Call) string {
+            if call.Tool == "delete_order" && call.CallerID == "" {
+                return "缺少调用身份"
+            }
+            return ""
+        }},
+        Around: []tools.Around{func(ctx context.Context, call *tools.Call, next func(context.Context) (*interfaces.ToolOutput, error)) (*interfaces.ToolOutput, error) {
+            start := time.Now()
+            out, err := next(ctx)
+            log.Printf("%s %s", call.Tool, time.Since(start))
+            return out, err
+        }},
+    },
+})
 ```
 
-## 性能考虑
+| 阶段 | 类型 | 作用 |
+|---|---|---|
+| `Pre` | `PreHook` → `PreDecision` | `PreAllow`/`PreDeny`（交还模型修订）/`PreAsk`（交给 `Approver`）/`PreStop`（终止运行）/`PreSubstitute`（改调另一个工具）；全部执行后按 Stop > Deny > Substitute > Ask > Allow 聚合 |
+| `Approver` | `Approver`/`ApproverFunc` | 宿主实现的人工审批；`ApprovalTimeout` 默认 10 分钟，`GrantTTL` 限制会话级授权有效期 |
+| `Guards` | `Guard` | 只能拒绝，返回非空原因即以 `tools.Rejected` 交给模型；审批也无法越过 |
+| `Around` | `Around` | 洋葱式包住工具执行，计入单次超时 |
+| `Post` | `PostHook` → `PostDecision` | 替换结果（`Replace`）或追加上下文（`AdditionalContext`）；也处理被拒绝的结果 |
 
-### 缓存性能
-
-- **缓存命中率**：通常 >90%
-- **性能提升**：缓存命中时避免实际工具调用，提升 10-100 倍
-- **内存占用**：LRU 缓存自动淘汰旧条目
-
-### 限流性能
-
-- **令牌桶算法**：O(1) 时间复杂度
-- **并发安全**：使用 `golang.org/x/time/rate`，性能优异
-- **开销**：<5% 额外开销
-
-### 日志性能
-
-- **序列化开销**：限制参数大小（默认 1KB）
-- **异步日志**：使用支持异步的 logger 减少延迟
-
-## 测试
-
-### 单元测试
-
-```go
-func TestToolWithMiddleware(t *testing.T) {
-    tool := NewMockTool()
-
-    middleware := middleware.Caching()
-    wrapped := tools.WithMiddleware(tool, middleware)
-
-    // 第一次调用
-    output1, _ := wrapped.Invoke(ctx, input)
-    assert.Equal(t, 1, tool.CallCount)
-
-    // 第二次调用（缓存命中）
-    output2, _ := wrapped.Invoke(ctx, input)
-    assert.Equal(t, 1, tool.CallCount) // 不应再次调用工具
-    assert.True(t, output2.Metadata["cache_hit"])
-}
-```
-
-### 集成测试
-
-参考 `examples/basic/middleware/` 中的完整示例。
-
-## 常见问题
-
-### Q1: 缓存未生效？
-
-**检查项**：
-1. 参数是否完全相同（包括顺序）
-2. 是否只缓存成功结果（`output.Success = true`）
-3. TTL 是否过期
-
-### Q2: 限流太严格？
-
-**调整方法**：
-- 增加 `Burst` 容量
-- 降低 `QPS` 限制
-- 使用 `WithWaitTimeout` 允许等待
-
-### Q3: 中间件顺序重要吗？
-
-**是的！** 缓存应该在限流外层，以避免浪费限流配额。
-
-### Q4: 如何禁用中间件？
-
-```go
-// 不传入中间件即可
-wrappedTool := tools.WithMiddleware(tool) // 返回原始工具
-```
+`Call.Args` 只读。准入阶段（Pre、审批、Guard）在操作日志之外执行，拒绝结果与执行结果一样写入日志；持久运行回放已完成的调用时直接返回日志中的结果，不再经过准入、Around 或包在 Dispatcher 内部的工具包装（含 `WithMiddleware`）。授权（`DispatchConfig.Authorize`）、并发、排队与超时见[执行治理](EXECUTION_GOVERNANCE.md#dispatcher-的两阶段准入)，日志与恢复见[原生编排](NATIVE_ORCHESTRATION.md#工具调用级日志与恢复)。
 
 ## 参考
 
-- [Middleware 接口定义](https://github.com/kart-io/goagent/blob/master/tools/middleware/middleware.go)
-- [Caching 实现](https://github.com/kart-io/goagent/blob/master/tools/middleware/caching.go)
-- [RateLimit 实现](https://github.com/kart-io/goagent/blob/master/tools/middleware/rate_limit.go)
-- [示例代码](https://github.com/kart-io/goagent/tree/master/examples/basic/middleware)
+- 源码：`tools/middleware/`、`tools/tool_wrapper.go`、`tools/pipeline.go`、`tools/dispatcher.go`
+- [缓存指南](CACHING_GUIDE.md)

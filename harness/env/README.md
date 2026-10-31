@@ -5,14 +5,15 @@ Agent 工具访问文件与执行命令的统一接口。工具只依赖接口�
 | 接口 | 作用 | 实现 |
 |---|---|---|
 | `FileSystem` | 工作区内的 `Resolve`/`Stat`/`ReadFile`/`WriteFile`/`Remove`/`Walk`，路径为相对工作区根目录、以 `/` 分隔 | `LocalFS` |
-| `Executor` | 在工作区内执行命令，声明 `Capabilities`（Remote、Container、Network） | `LocalExecutor`、`DockerExecutor` |
+| `Executor` | 在工作区内执行命令，声明 `Capabilities`（Remote、Container、Network、ReadOnlyRoot） | `LocalExecutor`、`DockerExecutor` |
 
-包装器（叠加在任意 `FileSystem` 上）：
+包装器（叠加在任意 `FileSystem` 上，`NewObserved`、`NewCheckpointed`、`ReadOnly` 构造）：
 
 | 包装器 | 作用 |
 |---|---|
-| `Observed` | 先读后改：修改已存在的文件前必须 `ReadFile` 过，写入以读到的版本为条件（`ErrNotObserved`、`ErrStale`）；`Peek` 读取但不记录 |
+| `Observed` | 先读后改：修改已存在的文件前必须 `ReadFile` 过，写入以读到的版本为条件（`ErrNotObserved`、`ErrStale`）；`Peek` 读取但不记录，`Forget` 清除读取记录 |
 | `Checkpointed` | 首次写入或删除前保存原状态，`Changes()` 列出改动，`Revert(ctx, paths...)` 回滚 |
+| `ReadOnly(fs)` | 写入与删除返回 `ErrReadOnly`，读取照常 |
 
 ## 约定
 

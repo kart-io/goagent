@@ -20,7 +20,7 @@ graph TB
     subgraph "错误创建层"
         New[New/Newf<br/>创建新错误]
         Wrap[Wrap/Wrapf<br/>包装现有错误]
-        Helpers[专用辅助函数<br/>30+ 个]
+        Helpers[专用辅助函数<br/>50+ 个]
     end
 
     subgraph "错误结构"
@@ -64,41 +64,26 @@ graph LR
 
 ## 错误代码
 
-### 错误代码分类
+`ErrorCode` 常量共 60 个，按分类列出（常量名为 `Code` + 驼峰形式，如 `CodeLLMRateLimit`）：
 
-| 分类 | 错误代码 | 说明 |
-|------|---------|------|
-| **Agent** | `AGENT_EXECUTION` | Agent 执行错误 |
-| | `AGENT_VALIDATION` | Agent 验证错误 |
-| | `AGENT_NOT_FOUND` | Agent 未找到 |
-| | `AGENT_INITIALIZATION` | Agent 初始化错误 |
-| **Tool** | `TOOL_EXECUTION` | 工具执行错误 |
-| | `TOOL_NOT_FOUND` | 工具未找到 |
-| | `TOOL_VALIDATION` | 工具验证错误 |
-| | `TOOL_TIMEOUT` | 工具超时 |
-| | `TOOL_RETRY_EXHAUSTED` | 重试次数耗尽 |
-| **LLM** | `LLM_REQUEST` | LLM 请求错误 |
-| | `LLM_RESPONSE` | LLM 响应错误 |
-| | `LLM_TIMEOUT` | LLM 超时 |
-| | `LLM_RATE_LIMIT` | LLM 速率限制 |
-| **Stream** | `STREAM_READ` | 流读取错误 |
-| | `STREAM_WRITE` | 流写入错误 |
-| | `STREAM_TIMEOUT` | 流超时 |
-| | `STREAM_CLOSED` | 流已关闭 |
-| **分布式** | `DISTRIBUTED_CONNECTION` | 连接错误 |
-| | `DISTRIBUTED_COORDINATION` | 协调错误 |
-| | `DISTRIBUTED_SERIALIZATION` | 序列化错误 |
-| **RAG** | `RETRIEVAL_SEARCH` | 检索搜索错误 |
-| | `RETRIEVAL_EMBEDDING` | 嵌入生成错误 |
-| | `DOCUMENT_NOT_FOUND` | 文档未找到 |
-| | `VECTOR_DIM_MISMATCH` | 向量维度不匹配 |
-| **规划** | `PLANNING_FAILED` | 规划失败 |
-| | `PLAN_VALIDATION` | 计划验证错误 |
-| | `PLAN_EXECUTION_FAILED` | 计划执行失败 |
-| **通用** | `INVALID_INPUT` | 无效输入 |
-| | `INVALID_CONFIG` | 无效配置 |
-| | `NOT_IMPLEMENTED` | 未实现 |
-| | `INTERNAL_ERROR` | 内部错误 |
+| 分类 | 错误代码 |
+|------|---------|
+| Agent | `AGENT_EXECUTION`、`AGENT_VALIDATION`、`AGENT_NOT_FOUND`、`AGENT_INITIALIZATION` |
+| Tool | `TOOL_EXECUTION`、`TOOL_NOT_FOUND`、`TOOL_VALIDATION`、`TOOL_TIMEOUT`、`TOOL_RETRY_EXHAUSTED` |
+| Middleware | `MIDDLEWARE_EXECUTION`、`MIDDLEWARE_CHAIN`、`MIDDLEWARE_VALIDATION` |
+| State | `STATE_LOAD`、`STATE_SAVE`、`STATE_VALIDATION`、`STATE_CHECKPOINT` |
+| Stream | `STREAM_READ`、`STREAM_WRITE`、`STREAM_TIMEOUT`、`STREAM_CLOSED` |
+| LLM | `LLM_REQUEST`、`LLM_RESPONSE`、`LLM_TIMEOUT`、`LLM_RATE_LIMIT` |
+| Context | `CONTEXT_CANCELED`、`CONTEXT_TIMEOUT` |
+| 通用 | `INVALID_INPUT`、`INVALID_CONFIG`、`NOT_IMPLEMENTED`、`INTERNAL_ERROR` |
+| 分布式 | `DISTRIBUTED_CONNECTION`、`DISTRIBUTED_SERIALIZATION`、`DISTRIBUTED_COORDINATION`、`DISTRIBUTED_SCHEDULING`、`DISTRIBUTED_HEARTBEAT`、`DISTRIBUTED_REGISTRY` |
+| RAG | `RETRIEVAL_SEARCH`、`RETRIEVAL_EMBEDDING`、`DOCUMENT_NOT_FOUND`、`VECTOR_DIM_MISMATCH` |
+| 规划 | `PLANNING_FAILED`、`PLAN_VALIDATION`、`PLAN_EXECUTION_FAILED`、`PLAN_NOT_FOUND` |
+| Parser | `PARSER_FAILED`、`PARSER_INVALID_JSON`、`PARSER_MISSING_FIELD` |
+| 多 Agent | `MULTIAGENT_REGISTRATION`、`MULTIAGENT_CONSENSUS`、`MULTIAGENT_MESSAGE` |
+| Store | `STORE_CONNECTION`、`STORE_SERIALIZATION`、`STORE_NOT_FOUND` |
+| Router | `ROUTER_NO_MATCH`、`ROUTER_FAILED`、`ROUTER_OVERLOAD` |
+| 插件/类型 | `TYPE_MISMATCH`、`ALREADY_EXISTS`、`NOT_FOUND`、`INVALID_OUTPUT` |
 
 ## 核心类型
 
@@ -266,6 +251,11 @@ if agentErr, ok := err.(*errors.AgentError); ok {
 }
 ```
 
+### 模型参数错误与 panic
+
+- `MarkModelArgument()` 标记错误由模型生成的参数不合法引起，`ModelArgumentMessage()` 返回可原样交还模型改正的 `Message`（未标记时第二个返回值为 false）。被标记错误的 `Message` 不得含内部细节；标记不改变 `Error()`、错误码与类型。
+- `PanicError`（`NewPanicError(op, value)`）是从 panic 恢复得到的错误，保留 `Op`、`Value` 与 `Stack`。`Error()` 只含位置，排查时用 `errors.As` 取值与调用栈。
+
 ## API 参考
 
 ### 构造函数
@@ -301,6 +291,8 @@ func (e *AgentError) MarshalLogObject(enc zapcore.ObjectEncoder) error
 func (e *AgentError) Format(s fmt.State, verb rune)
 func (e *AgentError) StackFrames() []StackFrame // 创建处的调用栈，调用时解析
 func (e *AgentError) FormatStack() string
+func (e *AgentError) MarkModelArgument() *AgentError
+func (e *AgentError) ModelArgumentMessage() (string, bool)
 
 // 写入 Context 前脱敏 URL
 RedactURL(raw string) string
@@ -368,6 +360,17 @@ NewPlanValidationError(planID, reason string) *AgentError
 NewPlanExecutionError(planID, stepID string, cause error) *AgentError
 NewPlanNotFoundError(planID string) *AgentError
 
+// 其余分类同样各有辅助函数：
+// Middleware: NewMiddlewareExecutionError / NewMiddlewareChainError / NewMiddlewareValidationError
+// State:      NewStateLoadError / NewStateSaveError / NewStateValidationError / NewStateCheckpointError
+// Context:    NewContextCanceledError / NewContextTimeoutError
+// 通用:       NewInvalidInputError / NewInvalidConfigError / NewNotImplementedError / NewInternalError
+// 分布式:     NewDistributedConnectionError / NewDistributedSerializationError / NewDistributedCoordinationError
+// Parser:     NewParserError / NewParserInvalidJSONError / NewParserMissingFieldError
+// 多 Agent:   NewMultiAgentRegistrationError / NewMultiAgentConsensusError / NewMultiAgentMessageError
+// Store:      NewStoreConnectionError / NewStoreSerializationError / NewStoreNotFoundError
+// Router:     NewRouterNoMatchError / NewRouterFailedError / NewRouterOverloadError
+
 // 通用工具：返回附带信息的新错误，不修改 err；err 链上已有 AgentError 时沿用其错误码
 ErrorWithRetry(err error, attempt, maxAttempts int) *AgentError
 ErrorWithDuration(err error, durationMs int64) *AgentError
@@ -381,19 +384,18 @@ errors/
 │                   # - ErrorCode 常量定义
 │                   # - AgentError 结构体
 │                   # - 构造函数和流式方法
-│                   # - 错误检查和提取函数
+│                   # - 错误检查和提取函数、URL 脱敏
 │
-├── helpers.go      # 30+ 个专用错误创建函数
-│                   # - Agent/Tool/LLM/Stream 等
+├── helpers.go      # 专用错误创建函数
 │
-└── errors_test.go  # 单元测试
+└── panic.go        # PanicError
 ```
 
 ## 设计特点
 
 ### 结构化错误
 
-- **错误代码分类**：43 种错误类型，覆盖全部业务场景
+- **错误代码分类**：60 个错误代码，按组件分类
 - **上下文信息**：灵活的 key-value 存储
 - **堆栈跟踪**：自动捕获调用栈
 

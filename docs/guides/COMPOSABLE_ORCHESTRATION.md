@@ -1,6 +1,6 @@
 # 可组合编排 R2
 
-本轮已实现根模型请求预算、受控 Runnable 工具、OTel 关联观察、不可变结果引用与窄上下文策略。`core/flow` 为实验性同步增量原型。现有 Runnable 接口、Pipe、Graph 和 Adapt 的必需契约保持不变。
+本轮已实现根模型请求预算、受控 Runnable 工具、OTel 关联观察、不可变结果引用与上下文结果卸载。`core/flow` 为实验性同步增量原型。现有 Runnable 接口、Pipe、Graph 和 Adapt 的必需契约保持不变。
 
 ## 离线运行
 
@@ -21,7 +21,7 @@ go run ./orchestration/composed-order /tmp/goagent-order-demo
 
 ## 根预算和用量
 
-宿主用 `budget.New(Config{RootKey, Version, MaxModelRequests})` 或 `budget.NewDurable(config, store)` 构造账本，以 `budget.WithController(ctx, controller)` 传入根调用。RootKey 是受信业务运行 ID，不能来自模型参数。父子调用继承同一 context，不能另建预算来重置额度。
+宿主用 `budget.New(Config{RootKey, Version, MaxModelRequests})` 或 `budget.NewDurable(config, store)` 构造账本，以 `budget.WithController(ctx, controller)` 或同时传播截止时间的 `budget.Bind` 传入根调用；Token、工具次数与截止时间限额见[执行治理](EXECUTION_GOVERNANCE.md#根预算)。RootKey 是受信业务运行 ID，不能来自模型参数。父子调用继承同一 context，不能另建预算来重置额度。
 
 显式绑定根预算时，旧 Execute 和不支持流的 ExecuteWithTools 在请求前报错；迁移到 AsRunnable 统一入口，避免静默忽略额度。未绑定预算的旧入口行为保留。
 

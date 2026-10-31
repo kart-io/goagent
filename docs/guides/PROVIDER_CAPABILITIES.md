@@ -16,13 +16,13 @@
 
 DeepSeekStreamingProvider 与 GeminiStreamingProvider 包装器继承对应基础接口；二者当前均支持结构化流和原生工具流。尚未实现的能力会在 Builder 原生入口或构建阶段拒绝，不通过模拟 Token 或占位结果冒充。
 
-## 本轮修复与兼容性
+## 实现说明
 
-- Kimi、SiliconFlow、Ollama 现在实现 CapabilityChecker，仅声明已有 Complete/Chat。
-- Gemini 的 Embed 已实现真实 API 请求，使用独立 `EmbeddingModel`（默认 `gemini-embedding-001`）；校验非空、非全零和有限向量。取消与上游错误正常传播，不再返回固定向量或不支持错误。
-- DeepSeek 的旧 Embed 方法仍发送兼容 `/embeddings` 请求，但硬编码的兼容模型不构成已验证的官方服务能力，因此不再默认声明 Embedding。官方当前模型目录参考 [Lists Models](https://api-docs.deepseek.com/api/list-models/)，自定义端点需另行验证。
-- `llm.HasEmbedding` / `AsEmbedder` 现在同时检查方法和显式能力声明；声明不支持时分别返回 false / nil。没有 CapabilityChecker 的自定义客户端保留接口检测行为。
-- 旧 `common.ToolCallResponse` 兼容路径与标准 `llm.ToolCallResponse` 不混为同一类型；内置 OpenAI、DeepSeek、Gemini 的旧工具方法实际采用标准 llm 类型。
+- 所有内置 Provider 都实现 `CapabilityChecker`；Kimi、SiliconFlow、Ollama 只声明 Complete/Chat。
+- Gemini 的 `Embed` 发送真实 API 请求，使用独立的 `EmbeddingModel`（默认 `gemini-embedding-001`），校验向量非空、非全零且有限；取消与上游错误原样返回。
+- DeepSeek 的 `Embed` 方法向 `/embeddings` 发送兼容请求，模型名硬编码，不构成已验证的官方能力，因此不声明 Embedding，`HasEmbedding` 返回 false。官方模型目录见 [Lists Models](https://api-docs.deepseek.com/api/list-models/)，自定义端点需另行验证。
+- `llm.HasEmbedding` / `AsEmbedder` 同时检查方法与能力声明；没有实现 `CapabilityChecker` 的自定义客户端只按接口判断。
+- OpenAI、DeepSeek、Gemini 的旧工具方法（`GenerateWithTools` / `StreamWithTools`）使用 `llm.ToolCallResponse` / `llm.ToolChunk`，与 `llm/common` 中同名的类型不是同一类型。
 
 ## 验证范围
 
@@ -30,7 +30,7 @@ DeepSeekStreamingProvider 与 GeminiStreamingProvider 包装器继承对应基�
 go test -race -count=1 ./llm/providers -run 'TestProviderCapabilityContractMatrix|TestGeminiEmbeddingCannotReturnMockSuccess|TestNativeProviders'
 ```
 
-能力矩阵覆盖 9 个基础 Provider 与 2 个包装器：声明与可执行接口一致、不支持的 Builder 入口在请求前拒绝、Gemini 在上游失败时不返回模拟向量。OpenAI/DeepSeek 另有本地 SSE 协议回归；真实模型验证已包括 DeepSeek、Gemini 官方兼容端点与[GeminiProvider 原生 API](../evaluation/2026-10-27-gemini-provider/REPORT.md)。GeminiProvider 保留旧公开方法，底层已改为 Google GenAI SDK，六个方法各实测两次全部通过，后续已补齐结构化流、原生工具循环、签名续接和真实 Embedding，新增[原生能力实测](../evaluation/2026-10-27-gemini-native-support/REPORT.md) 12/12 通过。此矩阵不证明其余供应商线上请求、认证、模型可用性或错误流处理已通过生产验收。
+能力矩阵覆盖 9 个基础 Provider 与 2 个包装器：声明与可执行接口一致、不支持的 Builder 入口在请求前拒绝、Gemini 在上游失败时不返回模拟向量。OpenAI、DeepSeek 另有本地 SSE 协议回归，Gemini 有本地 HTTP 协议回归（`gemini_protocol_test.go`）。真实模型验证包括 DeepSeek、Gemini 官方兼容端点、[GeminiProvider 旧公开方法](../evaluation/2026-10-27-gemini-provider/REPORT.md)（六个方法各两次全部通过）和[原生结构化流、工具循环与 Embedding](../evaluation/2026-10-27-gemini-native-support/REPORT.md)（12/12 通过）。这些结果不证明其余供应商的线上请求、认证、模型可用性或错误流处理已通过生产验收。
 
 Gemini 原生验证可运行 `go run ./examples/llm/gemini-verify -live -suite native`（需 `GEMINI_API_KEY`）。默认模型为 `gemini-2.5-flash`；`GEMINI_BASE_URL` 是原生根地址，与 agentbench 的 `gemini-openai` 所需兼容路径不同。配置、结果与限制见[案例说明](../../examples/llm/gemini-verify/README.md)。
 

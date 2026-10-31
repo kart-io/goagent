@@ -21,14 +21,14 @@ output, err := runnable.Invoke(ctx, "退款政策是什么？")
 
 以下对照用于选择入口；旧 API 示例不代表新能力在旧路径也生效。
 
-| Builder 入口 | 工具与上下文策略 | 同一 Builder 的并发保护 | 用途 |
+| Builder 入口 | 工具与上下文治理 | 同一 Builder 的并发保护 | 用途 |
 |---|---|---|---|
-| `AsRunnable().Invoke/Stream` | 自动执行已配置工具；原生 `ToolStreamClient` 路径支持 ContextPolicy 和 ReturnDirect | 所有入口共享串行执行门 | 新业务与 Runnable 编排的推荐入口 |
+| `AsRunnable().Invoke/Stream` | 自动执行已配置工具；原生 `ToolStreamClient` 路径支持 `WithOffload` 和 ReturnDirect | 所有入口共享串行执行门 | 新业务与 Runnable 编排的推荐入口 |
 | `ExecuteStream` | 与 AsRunnable 共用执行源及能力 | 获取同一串行执行门 | 直接消费 Builder 事件 |
-| `Execute` | 不自动调用工具；配置 ContextPolicy/ReturnDirect 时明确报错 | 获取同一串行执行门 | 保留已有同步调用语义 |
+| `Execute` | 不自动调用工具；配置 `WithOffload`/ReturnDirect、绑定持久日志或根预算时明确报错 | 获取同一串行执行门 | 保留已有同步调用语义 |
 | `ExecuteWithTools` | 支持 StreamClient 时委派 AsRunnable；否则保留旧工具循环 | 获取同一串行执行门 | 兼容存量工具调用 |
 
-仅实现 `StreamClient` 不等于支持原生工具流。配置 ContextPolicy 或 ReturnDirect 时还须满足 `ToolStreamClient` 等构建校验；不同 Provider 的能力不能由方法名称推断。
+仅实现 `StreamClient` 不等于支持原生工具流。配置 `WithOffload` 或 ReturnDirect 时还须满足 `ToolStreamClient` 等构建校验；不同 Provider 的能力不能由方法名称推断。
 
 ```go
 ctx, cancel := context.WithCancel(ctx)
@@ -63,10 +63,10 @@ if err := ctx.Err(); err != nil { return err }
 | 组件 | 已提供 | 不应据此推断 |
 |---|---|---|
 | `workflow.Graph[T].Compile` | 同一状态类型的分支、并行汇合、有界循环、节点事件转发 | 异构字段自动映射、跨节点流变换、自动持久化 |
-| `workflow.Graph[T].CompileDurable` | 节点及并行分支检查点、条件分支、循环预算、审批和单机重启恢复；AsRunnable 统一入口 | 节点内部调用栈恢复、持久化流事件重放、跨主机接管 |
+| `workflow.Graph[T].CompileDurable` | 节点及并行分支检查点、条件分支、循环预算、审批和重启恢复；AsRunnable 统一入口 | 节点内部调用栈恢复、持久化流事件重放、自动调度续跑 |
 | `core/durable` | 已注册顺序步骤的持久化、审批、进程重启恢复 | 自动保存任意 Agent 调用栈、自动恢复 workflow 图 |
 
-`core/durable` 当前使用本地文件存储，步骤按至少一次语义执行；外部写操作需要服务端幂等。`CompileDurable` 通过同一 Store 保存状态和节点位置；拓扑变化拒绝旧检查点，函数或状态结构变化须提升版本。业务写入须使用 `workflow.DurableKey(ctx)` 或业务请求 ID 去重，宿主负责审批授权。详见 [workflow 恢复契约](../../workflow/README.md#节点边界的持久化恢复)。
+`core/durable` 经 `durable.Store` 持久化：主模块的 `durable.FileStore` 面向单机本地文件系统，多实例共享运行用 goagent-contrib 的 [`durable/pgstore`](https://github.com/kart-io/goagent-contrib/tree/master/durable/pgstore)（租约锁，持有者崩溃后其他实例可接管）。步骤按至少一次语义执行；外部写操作需要服务端幂等。`CompileDurable` 通过同一 Store 保存状态和节点位置；拓扑变化拒绝旧检查点，函数或状态结构变化须提升版本。业务写入须使用 `workflow.DurableKey(ctx)` 或业务请求 ID 去重，宿主负责审批授权。详见 [workflow 恢复契约](../../workflow/README.md#节点边界的持久化恢复)。
 
 ## 可选上下文治理
 
@@ -84,7 +84,7 @@ OpenAI、DeepSeek 与 Gemini Provider 实现可选 `llm.ToolStreamClient`：模�
 
 已有工具结果且只剩最后一次模型请求时，Builder 不再提供普通工具，把剩余额度用于基于现有结果回答；未配置直返工具时标记 `final_answer_only=true`。显式配置的直返工具仍可供选择，因为它们无需额外请求收尾。首轮的单请求直返不受影响；有更多额度时仍可连续查询。如果最后回合返回无法在本轮结束的工具调用，明确失败且不执行。该策略不保证已有证据足以回答，业务提示仍须要求缺乏证据时如实说明。
 
-应用系统提示应区分“原样返回工具结果”和“根据证据推理”：前者的合法状态值不能仅因看起来像空值而改成拒答，后者不能因工具返回成功就认定证据充分。评测应用已修正这处提示冲突；框架不会覆盖调用方的 `WithSystemPrompt`。
+应用系统提示应区分“原样返回工具结果”和“根据证据推理”：前者的合法状态值不能仅因看起来像空值而改成拒答，后者不能因工具返回成功就认定证据充分。框架不会覆盖调用方的 `WithSystemPrompt`。
 
 原生流的 `model_start` 步骤标记新模型回合。模型可能在工具调用前输出说明文字，因此所有 text 增量都是暂态内容；最终答案必须读取 done.Output.Result。需要逐回合展示时在 model_start 重置当前文本面板。中断、输出截断、参数损坏或调用 ID 重复不会执行不完整的工具调用。
 
@@ -105,7 +105,7 @@ OpenAI 和 DeepSeek 专用 Provider 共用原生 SSE 解码与完成状态检查
 
 ReAct、ToT、自反思等已删除模块不再列入当前能力矩阵。Pipe/Sequence仍按阶段执行，最后阶段保留实际事件；没有跨节点逐Token转换。
 
-旧消息式接口的迁移从本次开始：不新增调用方；现有调用方迁移到泛型接口后，才在明确宣布的下一个主版本删除。当前没有发布删除日期或承诺所有旧接口已消失。
+`interfaces.Agent/Runnable` 已标记 Deprecated，不新增调用方。
 
 ## 能力状态
 
@@ -144,9 +144,7 @@ agent, err := builder.NewSimpleBuilder(client).
 
 [GoAgent 评测](../../evaluation/agentbench/README.md) 使用固定题集和请求预算验证 Builder 原生工具路径。评测已纳入主模块；它不代表所有推理策略的综合成绩，也不是纯框架开销测试。
 
-下一步用真实业务标注替换合成题，并对格式成功、工具正确性、引用蕴含和成本分别评分。业务数据尚未提供，不用合成三题代替业务验收。
-
-当前不新增分布式调度器。需要跨主机接管时，先明确最长任务时间、消息丢失容忍度、重复副作用要求和工作节点规模；再验证持久化队列确认、租约与 fencing、幂等记录、崩溃重投递和故障注入。FileStore 与 Core NATS 不满足这些验收条件，应复用成熟持久化消息/工作流系统，而非把本地锁包装成高可用承诺。
+框架不提供跨实例调度、任务分发或自动拉起续跑：多实例部署时共享 `pgstore` 等 Store，由宿主发现中断的运行并以同一执行键触发恢复。
 
 
 ## 通用图执行

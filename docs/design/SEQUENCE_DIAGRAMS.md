@@ -1,575 +1,157 @@
 # GoAgent 时序图
 
-本文档详细展示 GoAgent 框架中各组件交互的时序图。
+参与者均为当前源码中的类型；流程判定细节见 [流程图](FLOW_DIAGRAMS.md)。
 
-## 1. Agent 完整执行时序
-
-### 1.1 基本执行流程
+## 1. 原生工具循环中的一次工具调用
 
 ```mermaid
 sequenceDiagram
-    autonumber
-    participant User as 用户
-    participant Builder as AgentBuilder
-    participant Agent as ConfigurableAgent
-    participant Chain as MiddlewareChain
-    participant Handler as Handler
-    participant LLM as LLM Client
-    participant Memory as MemoryManager
+    participant Host as 宿主
+    participant R as core.StreamRunnable
+    participant A as builder.ConfigurableAgent
+    participant M as llm.ToolStreamClient
+    participant D as tools.Dispatcher
+    participant T as interfaces.Tool
 
-    User->>Builder: NewSimpleBuilder(llmClient)
-    User->>Builder: WithSystemPrompt("...")
-    User->>Builder: WithTools(tools...)
-    User->>Builder: WithMemoryManager(mm)
-    User->>Builder: Build()
-    Builder->>Agent: 创建 ConfigurableAgent
-    Builder-->>User: 返回 agent
-
-    User->>Agent: Invoke(ctx, input)
-    Agent->>Memory: GetConversationHistory(sessionID, limit)
-    Memory-->>Agent: 返回历史对话
-
-    Agent->>Chain: Execute(ctx, request)
-    Chain->>Chain: OnBefore (所有中间件)
-    Chain->>Handler: 执行 Handler
-    Handler->>LLM: Complete(ctx, req)
-    LLM-->>Handler: 返回响应
-    Handler-->>Chain: 返回响应
-    Chain->>Chain: OnAfter (所有中间件)
-    Chain-->>Agent: 返回最终响应
-
-    Agent->>Memory: AddConversation(userInput)
-    Agent->>Memory: AddConversation(assistantResponse)
-    Agent-->>User: 返回 Output
+    Host->>R: Invoke(ctx, input)
+    R->>A: ExecuteStream(ctx, input)
+    A->>A: beginExecution / scopeDurableExecution
+    A->>A: core/middleware 链 → runEvents → runToolEvents
+    A->>M: CompleteToolsStream(ctx, req, tools)  [model/turn/0]
+    M-->>A: StreamChunk（text 增量…，Done 块带 ToolCalls）
+    A-->>R: AgentEvent step/tool_start
+    A->>D: dispatchedTool.Invoke(ctx, ToolInput{CallID})
+    D->>D: Schema 校验 → Authorize → Pipeline 准入
+    D->>T: Invoke(ctx, input)  [durable.Do tool/turn/0/call/<id>]
+    T-->>D: ToolOutput
+    D->>D: OnResult
+    D-->>A: ToolOutput
+    A-->>R: AgentEvent step/tool_end
+    A->>M: CompleteToolsStream(ctx, req+tool 消息, tools)  [model/turn/1]
+    M-->>A: StreamChunk（最终文本，无工具调用）
+    A->>A: TurnStopping？ → finishEvents（usage、写记忆、保存检查点）
+    A-->>R: AgentEvent done(AgentOutput)
+    R-->>Host: *AgentOutput
 ```
 
-### 1.2 带工具调用的执行流程
+未绑定日志时 `durable.Do` 直接执行，工具调用的 `CallID` 为空。
+
+## 2. 持久运行的崩溃恢复
+
+宿主以相同执行键与日志重新执行；已完成的操作直接回放，不再调用模型或工具。
 
 ```mermaid
 sequenceDiagram
-    autonumber
-    participant User as 用户
-    participant Agent as Agent
-    participant LLM as LLM Client
-    participant Parser as OutputParser
-    participant Executor as ToolExecutor
-    participant Tool as Tool
+    participant Host as 宿主
+    participant A as ConfigurableAgent
+    participant J as durable.Store（如 session.DurableStore）
+    participant M as ToolStreamClient
+    participant T as 工具
 
-    User->>Agent: Invoke(ctx, input)
-    Agent->>LLM: Complete(ctx, messages)
-    LLM-->>Agent: 响应 (包含工具调用)
+    Note over Host,T: 第一次执行
+    Host->>A: Invoke(WithJournal(WithExecutionKey(ctx, key), store), input)
+    A->>J: model/turn/0 pending → 调用模型 → completed
+    A->>J: tool/turn/0/call/c1 pending
+    A->>T: Invoke
+    Note over A,T: 进程在工具返回前退出，记录停在 pending
 
-    Agent->>Parser: Parse(response)
-    Parser-->>Agent: ToolCall{name, args}
-
-    loop 工具调用循环
-        Agent->>Executor: ExecuteTool(ctx, name, args)
-        Executor->>Tool: Invoke(ctx, input)
-        Tool-->>Executor: ToolOutput
-        Executor-->>Agent: ToolResult
-
-        Agent->>LLM: Complete(ctx, messages + toolResult)
-        LLM-->>Agent: 响应
-
-        Agent->>Parser: Parse(response)
-        Parser-->>Agent: 解析结果
-
-        alt 需要更多工具调用
-            Note over Agent: 继续循环
-        else 完成
-            Note over Agent: 退出循环
-        end
+    Note over Host,T: 恢复
+    Host->>A: 以同一 key 与 store 重新 Invoke
+    A->>J: model/turn/0：completed，回放（不调用模型）
+    A->>J: tool/turn/0/call/c1：pending
+    alt 工具实现 ReconcilableTool 且查到已生效
+        A->>T: Reconcile → 补记 completed
+    else 在 MaxAttempts 内
+        A->>T: 再次 Invoke（目标端需按执行键幂等）
     end
-
-    Agent-->>User: 返回最终 Output
+    A->>J: model/turn/1 → 调用模型 → completed
+    A-->>Host: AgentOutput
 ```
 
-### 1.3 流式执行时序
+`WithSessionLog` 时会话日志续写同一轮，消息不重复；输入或尝试策略改变时以 `operation intent or attempt policy changed` 失败。
+
+## 3. Pipeline 审批
 
 ```mermaid
 sequenceDiagram
-    autonumber
-    participant User as 用户
-    participant Agent as Agent
-    participant LLM as LLM Client
-    participant Stream as StreamClient
+    participant D as Dispatcher
+    participant P as tools.Pipeline
+    participant Pre as PreHook
+    participant Ap as Approver（宿主实现）
+    participant G as Guard
+    participant T as 工具
 
-    User->>Agent: Stream(ctx, input)
-    Agent->>LLM: StreamComplete(ctx, req)
-    LLM->>Stream: 创建流
-
-    loop 流式传输
-        Stream-->>Agent: StreamChunk{content, done: false}
-        Agent-->>User: StreamChunk
+    D->>P: 准入（准入槽位，不计入 Timeout）
+    P->>Pre: PreHook(ctx, call)
+    Pre-->>P: PreDecision{Kind: PreAsk, Grant}
+    alt 会话已有匹配授权
+        P->>P: 直接放行
+    else
+        P->>Ap: Approve(ctx, ApprovalRequest)（受 ApprovalTimeout 约束）
+        Ap-->>P: ApprovalResult
     end
-
-    Stream-->>Agent: StreamChunk{content, done: true}
-    Agent-->>User: StreamChunk{done: true}
-    Agent->>Agent: 保存完整响应到 Memory
-```
-
-## 2. ReAct Agent 执行时序
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant User as 用户
-    participant ReAct as ReActAgent
-    participant LLM as LLM Client
-    participant Tool as Tool
-
-    User->>ReAct: Invoke(ctx, input)
-
-    loop ReAct 循环 (最多 maxIterations 次)
-        Note over ReAct: 思考阶段
-        ReAct->>LLM: Think(ctx, observation)
-        LLM-->>ReAct: Thought
-
-        alt Thought 表示完成
-            ReAct-->>User: 返回最终答案
-        else 需要行动
-            Note over ReAct: 行动阶段
-            ReAct->>LLM: SelectAction(ctx, thought)
-            LLM-->>ReAct: Action{tool, args}
-
-            Note over ReAct: 观察阶段
-            ReAct->>Tool: Invoke(ctx, args)
-            Tool-->>ReAct: Observation
-
-            Note over ReAct: 更新状态，继续循环
-        end
-    end
-
-    ReAct-->>User: 返回 Output
-```
-
-## 3. 中间件链执行时序
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant Caller as 调用者
-    participant Chain as MiddlewareChain
-    participant Log as LoggingMW
-    participant Time as TimingMW
-    participant Cache as CacheMW
-    participant Handler as Handler
-
-    Caller->>Chain: Execute(ctx, request)
-
-    Note over Chain,Handler: 前置处理 (OnBefore)
-    Chain->>Log: OnBefore(ctx, req)
-    Log->>Log: 记录请求日志
-    Log-->>Chain: req
-
-    Chain->>Time: OnBefore(ctx, req)
-    Time->>Time: 记录开始时间
-    Time-->>Chain: req
-
-    Chain->>Cache: OnBefore(ctx, req)
-    alt 缓存命中
-        Cache-->>Chain: 返回缓存响应
-        Chain-->>Caller: 返回响应
-    else 缓存未命中
-        Cache-->>Chain: req
-
-        Note over Chain,Handler: 执行处理器
-        Chain->>Handler: handle(ctx, req)
-        Handler-->>Chain: response
-
-        Note over Chain,Handler: 后置处理 (OnAfter)
-        Chain->>Cache: OnAfter(ctx, resp)
-        Cache->>Cache: 存储到缓存
-        Cache-->>Chain: resp
-
-        Chain->>Time: OnAfter(ctx, resp)
-        Time->>Time: 计算耗时
-        Time-->>Chain: resp
-
-        Chain->>Log: OnAfter(ctx, resp)
-        Log->>Log: 记录响应日志
-        Log-->>Chain: resp
-
-        Chain-->>Caller: 返回响应
+    alt AllowedOnce / AllowedSession
+        P->>G: Guard(ctx, call)
+        G-->>P: 空字符串（放行）
+        P-->>D: 允许
+        D->>T: Around → Invoke → PostHook（执行槽位，计入 Timeout）
+    else Rejected / Cancelled / Unavailable
+        P-->>D: Rejected 结果，交还模型修订
     end
 ```
 
-## 4. Tool 执行时序
+`PreDeny` 直接得到 Rejected 结果；`PreStop` 返回 `*tools.StopError` 终止运行；`PreSubstitute` 改为执行声明的替代工具。准入阶段不写日志，回放已完成调用时跳过。
 
-### 4.1 单工具执行
+## 4. 运行中插话（Handle）
 
 ```mermaid
 sequenceDiagram
-    autonumber
-    participant Caller as 调用者
-    participant Registry as ToolRegistry
-    participant Executor as ToolExecutor
-    participant Validator as Validator
-    participant MW as ToolMiddleware
-    participant Tool as Tool
+    participant Host as 宿主
+    participant H as builder.Handle
+    participant A as ConfigurableAgent
+    participant M as ToolStreamClient
 
-    Caller->>Executor: ExecuteTool(ctx, name, args)
-    Executor->>Registry: Get(name)
-
-    alt 工具不存在
-        Registry-->>Executor: nil
-        Executor-->>Caller: ToolNotFoundError
-    else 工具存在
-        Registry-->>Executor: tool
-
-        Executor->>Validator: ValidateArgs(tool, args)
-        alt 验证失败
-            Validator-->>Executor: ValidationError
-            Executor-->>Caller: ValidationError
-        else 验证成功
-            Validator-->>Executor: ok
-
-            Executor->>MW: OnBefore(ctx, input)
-            MW-->>Executor: input
-
-            Executor->>Tool: Invoke(ctx, input)
-            Tool-->>Executor: output
-
-            Executor->>MW: OnAfter(ctx, output)
-            MW-->>Executor: output
-
-            Executor-->>Caller: ToolResult
-        end
-    end
+    Host->>A: Start(ctx, input)
+    A-->>Host: *Handle
+    A->>M: model/turn/0
+    Host->>H: Steer("改查华东区")
+    Note over H: 进入收件箱，下一步开始时领取（loop/inbox/N）
+    M-->>A: 工具调用 → 执行工具
+    A->>A: 领取收件箱，追加 user 消息
+    A->>M: model/turn/1（含插话）
+    Host->>H: Redirect("停止，改用另一种方式")
+    H->>A: 取消正在进行的模型请求（非持久运行）
+    A->>M: 保留已输出文本 + 纠正后重新请求
+    M-->>A: 最终答案
+    Host->>H: Wait(ctx)
+    H-->>Host: *AgentOutput
 ```
 
-### 4.2 并行工具执行
+`Start` 只支持原生工具流。`Inject` 随下一次模型请求发送，但不唤醒即将结束的轮次；`Followup` 在本轮结束后作为新一轮输入续接对话；`Interrupt(cause)` 取消运行。没有进行中的模型请求或处于持久运行时，`Redirect` 降级为 Steer。
+
+## 5. 宿主装配
 
 ```mermaid
 sequenceDiagram
-    autonumber
-    participant Caller as 调用者
-    participant Executor as ToolExecutor
-    participant G1 as Goroutine 1
-    participant G2 as Goroutine 2
-    participant G3 as Goroutine 3
-    participant Tool1 as Tool A
-    participant Tool2 as Tool B
-    participant Tool3 as Tool C
-
-    Caller->>Executor: ExecuteParallel(ctx, calls)
-
-    par 并行执行
-        Executor->>G1: go execute(call1)
-        G1->>Tool1: Invoke(ctx, input)
-        Tool1-->>G1: output
-        G1-->>Executor: result1
-    and
-        Executor->>G2: go execute(call2)
-        G2->>Tool2: Invoke(ctx, input)
-        Tool2-->>G2: output
-        G2-->>Executor: result2
-    and
-        Executor->>G3: go execute(call3)
-        G3->>Tool3: Invoke(ctx, input)
-        Tool3-->>G3: output
-        G3-->>Executor: result3
-    end
-
-    Executor->>Executor: 收集所有结果
-    Executor-->>Caller: []ToolResult
-```
-
-## 5. Memory 操作时序
-
-### 5.1 对话存储
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant Agent as Agent
-    participant MM as MemoryManager
-    participant Conv as ConversationStore
-    participant KV as KVStore
-
-    Agent->>MM: AddConversation(ctx, conv)
-    MM->>Conv: Add(ctx, conv)
-    Conv->>KV: Set(key, conv)
-    KV-->>Conv: ok
-    Conv-->>MM: ok
-    MM-->>Agent: ok
-
-    Agent->>MM: GetConversationHistory(ctx, sessionID, limit)
-    MM->>Conv: Get(ctx, sessionID, limit)
-    Conv->>KV: Get(key)
-    KV-->>Conv: data
-    Conv-->>MM: []Conversation
-    MM-->>Agent: []Conversation
-```
-
-### 5.2 案例搜索
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant Agent as Agent
-    participant MM as MemoryManager
-    participant Case as CaseStore
-    participant Embed as Embedder
-    participant VS as VectorStore
-
-    Agent->>MM: SearchSimilarCases(ctx, query, limit)
-    MM->>Embed: Embed(query)
-    Embed-->>MM: queryVector
-
-    MM->>VS: SimilaritySearch(queryVector, limit)
-    VS->>VS: 计算余弦相似度
-    VS-->>MM: []Document
-
-    MM->>Case: 转换为 Case
-    Case-->>MM: []Case (带相似度分数)
-    MM-->>Agent: []Case
-```
-
-## 6. Checkpoint 操作时序
-
-### 6.1 保存检查点
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant Agent as Agent
-    participant Runtime as Runtime
-    participant CP as Checkpointer
-    participant Store as Storage
-
-    Agent->>Runtime: SaveState(ctx)
-    Runtime->>Runtime: 获取当前状态
-    Runtime->>CP: SaveCheckpoint(ctx, checkpoint)
-
-    CP->>CP: 生成检查点 ID
-    CP->>CP: 序列化状态
-    CP->>Store: 持久化数据
-    Store-->>CP: ok
-    CP-->>Runtime: checkpointID
-    Runtime-->>Agent: checkpointID
-```
-
-### 6.2 恢复检查点
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant User as 用户
-    participant Agent as Agent
-    participant CP as Checkpointer
-    participant Store as Storage
-    participant State as State
-
-    User->>Agent: LoadCheckpoint(ctx, checkpointID)
-    Agent->>CP: LoadCheckpoint(ctx, checkpointID)
-    CP->>Store: 读取数据
-    Store-->>CP: 原始数据
-    CP->>CP: 反序列化状态
-    CP-->>Agent: Checkpoint
-
-    Agent->>State: 恢复状态
-    State-->>Agent: ok
-    Agent-->>User: ok
-```
-
-## 7. LLM 调用时序
-
-### 7.1 基本调用
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant Caller as 调用者
-    participant Client as LLM Client
-    participant Retry as RetryHandler
-    participant HTTP as HTTPClient
-    participant API as LLM API
-
-    Caller->>Client: Complete(ctx, req)
-    Client->>Client: 构建请求
-    Client->>Retry: ExecuteWithRetry(fn)
-
-    loop 重试循环
-        Retry->>HTTP: POST /completions
-        HTTP->>API: HTTP 请求
-
-        alt 成功
-            API-->>HTTP: 200 OK
-            HTTP-->>Retry: response
-            Retry-->>Client: response
-        else 可重试错误
-            API-->>HTTP: 429/500/503
-            HTTP-->>Retry: error
-            Retry->>Retry: 等待 backoff
-            Note over Retry: 继续重试
-        else 不可重试错误
-            API-->>HTTP: 400/401/403
-            HTTP-->>Retry: error
-            Retry-->>Client: error
-        end
-    end
-
-    Client->>Client: 解析响应
-    Client-->>Caller: CompletionResponse
-```
-
-### 7.2 带工具调用的 LLM 请求
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant Agent as Agent
-    participant Client as LLM Client
-    participant API as LLM API
-    participant Tool as Tool
-
-    Agent->>Client: Complete(ctx, req with tools)
-    Note over Client: 请求包含工具定义
-
-    Client->>API: POST /chat/completions
-    API-->>Client: 响应 (tool_calls)
-
-    Client-->>Agent: CompletionResponse{ToolCalls}
-
-    Agent->>Agent: 解析 tool_calls
-    Agent->>Tool: Invoke(ctx, input)
-    Tool-->>Agent: output
-
-    Agent->>Client: Complete(ctx, req with tool_result)
-    Client->>API: POST /chat/completions
-    API-->>Client: 最终响应
-
-    Client-->>Agent: CompletionResponse
-```
-
-## 8. Builder 构建时序
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant User as 用户
-    participant B as AgentBuilder
-    participant R as Runtime
-    participant MW as MiddlewareChain
+    participant Host as 宿主
+    participant S as execution.Scope
+    participant B as builder.AgentBuilder
     participant A as ConfigurableAgent
 
-    User->>B: NewSimpleBuilder(llm)
-    Note over B: 初始化默认值
-
-    User->>B: WithSystemPrompt(prompt)
-    B->>B: 设置 systemPrompt
-
-    User->>B: WithTools(tools...)
-    B->>B: 设置 tools
-
-    User->>B: WithMiddleware(mw...)
-    B->>B: 添加中间件
-
-    User->>B: WithMemoryManager(mm)
-    B->>B: 设置 memoryManager
-
-    User->>B: WithConfig(config)
-    B->>B: 设置配置
-
-    User->>B: Build()
-
-    B->>B: 验证必需组件
-    alt LLM 未设置
-        B-->>User: InvalidConfigError
-    else 验证通过
-        B->>R: NewRuntime(ctx, state, store, cp)
-        R-->>B: runtime
-
-        B->>MW: NewMiddlewareChain(handler)
-        MW-->>B: chain
-
-        B->>MW: Use(middlewares...)
-
-        B->>A: 创建 ConfigurableAgent
-        A->>A: Initialize(ctx)
-        A-->>B: agent
-
-        B-->>User: 返回 agent
-    end
-```
-
-## 9. 多 Agent 协作时序
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant User as 用户
-    participant Router as Router
-    participant A1 as Agent 1 (分析)
-    participant A2 as Agent 2 (搜索)
-    participant A3 as Agent 3 (总结)
-    participant NATS as NATS
-
-    User->>Router: Process(ctx, task)
-
-    Router->>Router: 分析任务类型
-    Router->>A1: Invoke(ctx, analyzeTask)
-    A1-->>Router: 分析结果
-
-    par 并行执行
-        Router->>NATS: Publish(search_topic, query1)
-        NATS->>A2: 接收消息
-        A2->>A2: 执行搜索
-        A2->>NATS: Publish(result_topic, result1)
-        NATS-->>Router: 搜索结果 1
-    and
-        Router->>NATS: Publish(search_topic, query2)
-        NATS->>A2: 接收消息
-        A2->>A2: 执行搜索
-        A2->>NATS: Publish(result_topic, result2)
-        NATS-->>Router: 搜索结果 2
-    end
-
-    Router->>Router: 合并结果
-    Router->>A3: Invoke(ctx, summarizeTask)
-    A3-->>Router: 总结结果
-
-    Router-->>User: 最终输出
-```
-
-## 10. 可观测性时序
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant Agent as Agent
-    participant Tracer as Tracer
-    participant Span as Span
-    participant Exporter as OTLP Exporter
-    participant Backend as Observability Backend
-
-    Agent->>Tracer: StartSpan("agent.invoke")
-    Tracer->>Span: 创建 Span
-    Span-->>Agent: span
-
-    Agent->>Span: SetAttributes(attrs)
-    Agent->>Agent: 执行逻辑
-
-    Agent->>Tracer: StartSpan("llm.complete", child of span)
-    Tracer->>Span: 创建子 Span
-    Agent->>Agent: 调用 LLM
-    Agent->>Span: End()
-
-    Agent->>Tracer: StartSpan("tool.invoke", child of span)
-    Tracer->>Span: 创建子 Span
-    Agent->>Agent: 执行工具
-    Agent->>Span: End()
-
-    Agent->>Span: End()
-
-    Tracer->>Exporter: Export(spans)
-    Exporter->>Backend: OTLP/gRPC
-    Backend-->>Exporter: ok
+    Host->>S: NewScope(Config{RunID, SessionID, Journal, Budget, Timeout, Observer})
+    Host->>S: Bind(requestCtx)
+    S-->>Host: runCtx（执行键、日志、预算、观察者、期限）, cancel
+    Host->>S: ConfigureBuilder(b, scope, agentID)
+    S->>B: 设置会话 ID 与持久作用域
+    Host->>B: BuildContext(runCtx)
+    B-->>Host: *ConfigurableAgent
+    Host->>A: AsRunnable().Invoke(runCtx, input)
+    A-->>Host: *AgentOutput
+    Host->>S: cancel()
 ```
 
 ## 相关文档
 
-- [流程图详解](FLOW_DIAGRAMS.md)
+- [流程图](FLOW_DIAGRAMS.md)
 - [设计概述](DESIGN_OVERVIEW.md)
 - [架构概述](../architecture/ARCHITECTURE.md)

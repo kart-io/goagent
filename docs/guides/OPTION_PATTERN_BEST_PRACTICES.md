@@ -1,93 +1,69 @@
-# Option Pattern Best Practices
+# 选项模式最佳实践
 
-This guide outlines the best practices for using the Option pattern within the `goagent` framework. The Option pattern is the standard way to configure Agents, Tools, and other components in `goagent`.
+`goagent` 中可选配置较多的组件用函数式选项配置。Agent 例外：`builder.AgentBuilder` 使用链式 `With*` 方法（见 [Builder API 参考](BUILDER_API_REFERENCE.md)）。
 
-## Why Option Pattern?
+## 现有选项
 
-The Option pattern provides several benefits:
-1.  **Encapsulation**: It keeps configuration internal to the package while allowing external modification.
-2.  **Extensibility**: New options can be added without breaking existing APIs.
-3.  **Readability**: Configuration is explicit and self-documenting.
-4.  **Default Values**: It allows for sensible defaults while enabling customization.
-
-## Naming Conventions
-
-*   **Constructors**: Use `New<Component>WithOptions(...)` or `New<Component>(..., options ...<Component>Option)`.
-*   **Option Functions**: Prefix option functions with `With` (e.g., `WithModel`, `WithTemperature`).
-*   **Option Type**: Name the function type `<Component>Option` (e.g., `AgentOption`, `ToolOption`).
-*   **Config Struct**: Name the configuration struct `<Component>Config` or `<Component>Options`.
-
-## Implementation Guide
-
-### 1. Define the Options Struct
+| 选项类型 | 作用对象 | 构造函数 |
+|---|---|---|
+| `llm.ClientOption` | `*llm.LLMOptions` | `providers.NewOpenAIWithOptions`、`NewDeepSeekWithOptions`、`NewGeminiWithOptions` 等 |
+| `tools.ExecutorOption` | `*tools.ToolExecutor` | `tools.NewToolExecutor` |
+| `tools.ShardedCacheOption` | `*tools.ShardedCacheConfig` | `tools.NewShardedToolCacheWithOptions` |
+| `memory.MemoryOption` | `*memory.HierarchicalMemory` | `memory.NewHierarchicalMemoryWithContext` |
+| `remote.Option` | MCP 工具适配 | `remote.Tools`（`mcp/remote`） |
+| `LoggingOption`、`CachingOption`、`RateLimitOption`（`tools/middleware`） | 工具中间件 | `NewLoggingMiddleware`、`NewCachingMiddleware`、`NewRateLimitMiddleware` |
 
 ```go
-type MyComponentOptions struct {
+client, err := providers.NewOpenAIWithOptions(
+    llm.WithModel("gpt-4o-mini"),
+    llm.WithTemperature(0.2),
+    llm.WithTimeout(30*time.Second),
+)
+
+executor := tools.NewToolExecutor(
+    tools.WithMaxConcurrency(10),
+    tools.WithTimeout(30*time.Second),
+)
+```
+
+## 命名约定
+
+- **构造函数**：参数全部可选时用 `New<Component>WithOptions(opts ...)`，否则用 `New<Component>(必填参数..., opts ...<Component>Option)`。
+- **选项函数**：以 `With` 开头（`WithModel`、`WithMaxConcurrency`）。
+- **选项类型**：`<Component>Option`，即 `func(*<Config>)`。
+- **配置结构体**：`<Component>Config` 或 `<Component>Options`。
+
+## 实现
+
+```go
+type ComponentOptions struct {
     MaxRetries int
     Timeout    time.Duration
-    Logger     logger.Logger
 }
 
-func DefaultMyComponentOptions() MyComponentOptions {
-    return MyComponentOptions{
-        MaxRetries: 3,
-        Timeout:    30 * time.Second,
-        Logger:     logger.NoopLogger,
-    }
-}
-```
+type ComponentOption func(*ComponentOptions)
 
-### 2. Define the Option Function Type
-
-```go
-type MyComponentOption func(*MyComponentOptions)
-```
-
-### 3. Implement Option Functions
-
-```go
-func WithMaxRetries(retries int) MyComponentOption {
-    return func(o *MyComponentOptions) {
-        o.MaxRetries = retries
-    }
+func WithMaxRetries(n int) ComponentOption {
+    return func(o *ComponentOptions) { o.MaxRetries = n }
 }
 
-func WithTimeout(timeout time.Duration) MyComponentOption {
-    return func(o *MyComponentOptions) {
-        o.Timeout = timeout
-    }
+func WithTimeout(d time.Duration) ComponentOption {
+    return func(o *ComponentOptions) { o.Timeout = d }
 }
-```
 
-### 4. Implement the Constructor
-
-```go
-func NewMyComponent(opts ...MyComponentOption) *MyComponent {
-    // 1. Start with defaults
-    options := DefaultMyComponentOptions()
-
-    // 2. Apply options
+func NewComponent(opts ...ComponentOption) *Component {
+    options := ComponentOptions{MaxRetries: 3, Timeout: 30 * time.Second} // 先填默认值
     for _, opt := range opts {
         opt(&options)
     }
-
-    // 3. Use options to build component
-    return &MyComponent{
-        retries: options.MaxRetries,
-        timeout: options.Timeout,
-    }
+    return &Component{retries: options.MaxRetries, timeout: options.Timeout}
 }
 ```
 
-## Migration Guide
+- 先设默认值再应用选项，后传的选项生效。
+- 在构造函数中校验最终配置，出错时返回 error，不要 panic。
+- 把构造函数改为选项式时直接替换，项目不为兼容保留废弃的构造函数。
 
-If you are migrating from struct-based configuration or multiple constructor arguments, follow these steps:
-1.  Identify the parameters that are optional.
-2.  Create the Options struct and Option function type.
-3.  Rewrite the constructor to accept a variadic list of options.
-4.  Mark the old constructor as deprecated if you wish to keep it for backward compatibility.
+## 性能
 
-## Performance Considerations
-
-*   **Inlining**: Small option functions should be inlineable.
-*   **Allocation**: The Option pattern typically involves a small allocation for the closure, but this is negligible for initialization logic.
+选项闭包只在构造时分配一次；不要放在每次请求执行这样的热路径上。

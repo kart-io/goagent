@@ -1,6 +1,6 @@
 # 当前优化与验收清单
 
-基线：1cba257，Harness拆分后的GoAgent执行内核。本轮设计与计划见 docs/superpowers 下 execution-hardening 文档。
+基线：`1cba257`，Harness 拆分后的 GoAgent 执行内核。设计与计划见 [execution-hardening 设计](../superpowers/specs/2026-10-30-execution-hardening-design.md) 与 [计划](../superpowers/plans/2026-10-30-execution-hardening.md)。
 
 | 任务 | 交付 | 验收 |
 |---|---|---|
@@ -14,4 +14,4 @@
 
 执行入口见 [执行契约](../guides/EXECUTION_CONTRACT.md)，扩展行为见 [扩展契约](../guides/EXTENSION_CONTRACT.md)，运维接入见 [治理指南](../guides/EXECUTION_GOVERNANCE.md)。
 
-历史规划见 [2026-10-26清单](PRIORITY_IMPROVEMENTS_LEGACY_20261026.md)。不新增分布式调度器、默认Token估算或模型价格表；真实业务成功率和生产负载仍由宿主数据验证。
+不新增分布式调度器、默认Token估算或模型价格表；真实业务成功率和生产负载仍由宿主数据验证。

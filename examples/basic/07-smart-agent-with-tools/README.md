@@ -1,247 +1,42 @@
 # 智能 Agent 示例 - 时间获取与 API 调用
 
-这个示例演示如何创建一个智能 Agent，实现以下功能：
+演示三个工具的创建与直接调用，不调用 LLM：
 
-1. **获取当前时间** - 支持不同时区和格式
-2. **调用 API 接口** - 进行 HTTP 请求（GET/POST）
-3. **集成多个工具** - 将多个工具组合到一个 Agent 中
+| 工具 | 创建方式 | 说明 |
+| --- | --- | --- |
+| `get_current_time` | `tools.NewFunctionToolBuilder` | 按 `timezone`、`format` 返回时间、时间戳、星期等字段；无效时区回退 UTC |
+| `api` | `http.NewAPIToolBuilder()`（30 秒超时） | 通用 HTTP 工具，参数 `method`、`url`、`body`、`headers` |
+| `get_weather` | `tools.NewFunctionToolBuilder` | 按 `city` 返回固定的模拟天气数据 |
 
-## 功能特性
-
-### 1. 时间工具 (get_current_time)
-
-获取当前时间，支持：
-- 自定义时区（如 Asia/Shanghai、UTC、America/New_York）
-- 自定义时间格式
-- 返回详细的时间信息（年、月、日、时、分、秒、星期）
-
-### 2. API 调用工具 (api_tool)
-
-支持各种 HTTP 请求：
-- GET 请求获取数据
-- POST 请求提交数据
-- 自定义请求头
-- 超时控制
-
-### 3. 天气查询工具 (get_weather)
-
-查询城市天气信息：
-- 温度、湿度、风速
-- 天气状况描述
-- 更新时间
-
-## 使用方法
-
-### 运行示例
+## 运行
 
 ```bash
-cd examples/basic/07-smart-agent-with-tools
-go run main.go
+go run ./examples/basic/07-smart-agent-with-tools
 ```
 
-### 示例输出
+示例 2 会向 `https://jsonplaceholder.typicode.com` 发起真实的 GET/POST 请求，需要网络。
 
-```
-=== 智能 Agent 示例 - 时间获取与 API 调用 ===
+## 内容
 
---- 示例 1: 获取当前时间工具 ---
-当前时间: 2025-11-15 10:30:45
-时区: Asia/Shanghai
-Unix 时间戳: 1731636645
-
---- 示例 2: API 调用工具 ---
-2.1: GET 请求获取用户信息
-用户名: Leanne Graham
-邮箱: Sincere@april.biz
-城市: Gwenborough
-
-2.2: GET 请求获取文章列表
-获取到 3 篇文章:
-1. sunt aut facere repellat provident...
-2. qui est esse...
-3. ea molestias quasi...
-
-2.3: POST 请求创建新文章
-创建成功! ID: 101
-标题: 智能 Agent 测试文章
-
---- 示例 3: 集成智能 Agent ---
-可用工具:
-1. get_current_time - 获取当前时间，支持不同的时区和格式
-2. api_tool - Make HTTP API requests
-3. get_weather - 查询指定城市的天气信息
-
-演示场景：获取当前时间并查询天气信息
-
-步骤 1: 获取当前时间
-✓ 当前时间: 2025-11-15 10:30:45
-
-步骤 2: 查询天气信息
-✓ 城市: Beijing
-✓ 天气: 晴朗
-✓ 温度: 22°C
-✓ 湿度: 65%
-```
-
-## 代码结构
-
-```
-07-smart-agent-with-tools/
-├── main.go          # 主程序文件
-└── README.md        # 说明文档
-```
-
-## 核心代码示例
-
-### 创建时间工具
+1. **时间工具**：以 `Asia/Shanghai` 调用 `get_current_time`，打印时间、时区与 Unix 时间戳。
+2. **API 工具**：GET `/users/1`、GET `/posts?_limit=3`、POST `/posts`，打印响应 `body` 中的字段。
+3. **工具组合**：打印三个工具的名称与描述，依次调用时间工具与天气工具；最后打印一段把这些工具接入 Agent 的示例代码（只打印，不执行）：
 
 ```go
-timeTool := tools.NewFunctionToolBuilder("get_current_time").
-    WithDescription("获取当前时间，支持不同的时区和格式").
-    WithArgsSchema(`{
-        "type": "object",
-        "properties": {
-            "format": {"type": "string"},
-            "timezone": {"type": "string"}
-        }
-    }`).
-    WithFunction(func(ctx context.Context, args map[string]interface{}) (interface{}, error) {
-        // 实现时间获取逻辑
-        now := time.Now()
-        return map[string]interface{}{
-            "time": now.Format("2006-01-02 15:04:05"),
-            "timestamp": now.Unix(),
-        }, nil
-    }).
-    Build()
-```
-
-### 创建 API 工具
-
-```go
-apiTool := http.NewAPIToolBuilder().
-    WithBaseURL("https://api.example.com").
-    WithTimeout(30 * time.Second).
-    Build()
-
-// 使用工具
-output, err := apiTool.Invoke(ctx, &interfaces.ToolInput{
-    Args: map[string]interface{}{
-        "method": "GET",
-        "url": "/endpoint",
-    },
-})
-```
-
-### 集成到 Agent（需要 LLM 配置）
-
-```go
-llmClient, err := providers.NewOpenAIWithOptions(
-    llm.WithAPIKey(os.Getenv("OPENAI_API_KEY")),
-    llm.WithModel("gpt-4"),
-)
-if err != nil {
-    return err
-}
-
 agent, err := builder.NewSimpleBuilder(llmClient).
     WithSystemPrompt("你是智能助手，可以获取时间和查询天气").
-    WithTools(timeTool, apiTool, weatherTool).
+    WithTools(createTimeTool(), createWeatherAPITool(), createAPITool()).
     Build()
-if err != nil {
-    return err
-}
-
 output, err := agent.ExecuteWithTools(ctx, "现在几点了？北京的天气怎么样？")
 ```
 
-## 扩展建议
-
-### 1. 添加更多工具
+工具调用方式：
 
 ```go
-// 数据库查询工具
-dbTool := createDatabaseTool()
-
-// 文件操作工具
-fileTool := createFileOperationTool()
-
-// 邮件发送工具
-emailTool := createEmailTool()
-```
-
-### 2. 使用真实的天气 API
-
-```go
-// 集成 OpenWeatherMap API
-func createRealWeatherTool() interfaces.Tool {
-    return tools.NewFunctionToolBuilder("get_weather").
-        WithFunction(func(ctx context.Context, args map[string]interface{}) (interface{}, error) {
-            city := args["city"].(string)
-            apiKey := os.Getenv("OPENWEATHER_API_KEY")
-            url := fmt.Sprintf("https://api.openweathermap.org/data/2.5/weather?q=%s&appid=%s", city, apiKey)
-            // 发起实际的 HTTP 请求
-            // ...
-        }).
-        Build()
-}
-```
-
-### 3. 添加缓存机制
-
-工具结果缓存使用 `tools/middleware` 的 `Caching` 中间件，用法见[工具中间件](../../../docs/guides/TOOL_MIDDLEWARE.md)。
-
-## 常见问题
-
-### Q: 如何使用完整的 LLM Agent？
-
-A: 需要配置 LLM API Key：
-
-```bash
-export OPENAI_API_KEY=your_api_key
-# 或使用其他提供商
-export ANTHROPIC_API_KEY=your_api_key
-```
-
-### Q: 如何调用真实的 API？
-
-A: 修改 API 工具的 URL 和参数：
-
-```go
-output, err := apiTool.Invoke(ctx, &interfaces.ToolInput{
-    Args: map[string]interface{}{
-        "method": "GET",
-        "url": "https://your-api.com/endpoint",
-        "headers": map[string]interface{}{
-            "Authorization": "Bearer your_token",
-        },
-    },
+output, err := timeTool.Invoke(ctx, &interfaces.ToolInput{
+    Args:    map[string]interface{}{"timezone": "Asia/Shanghai"},
+    Context: ctx,
 })
 ```
 
-### Q: 如何添加自定义工具？
-
-A: 使用 `NewFunctionToolBuilder` 或 `NewBaseTool`：
-
-```go
-customTool := tools.NewFunctionToolBuilder("my_tool").
-    WithDescription("我的自定义工具").
-    WithArgsSchema(`{"type": "object", "properties": {...}}`).
-    WithFunction(func(ctx context.Context, args map[string]interface{}) (interface{}, error) {
-        // 你的实现逻辑
-        return result, nil
-    }).
-    Build()
-```
-
-## 相关资源
-
-- [GoAgent 文档](../../README.md)
-- [工具系统详解](../../tools/README.md)
-- [Agent 构建指南](../../../docs/guides/)
-- [API 参考](../../../docs/api/)
-
-## 许可证
-
-与 GoAgent 项目保持一致
-
+需要真正由 LLM 选择工具的示例见 [tools/08-tool-with-agent](../../tools/08-tool-with-agent/)。
