@@ -5,6 +5,20 @@ All notable changes to GoAgent will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.23.1] - 2026-10-31
+
+库代码与 0.23.0 相同。
+
+### Fixed
+
+- PR 流水线的覆盖率评论步骤缺少 `pull-requests: write` 权限而报 403；来自 fork 的 PR 令牌只读，改为跳过评论，报告同时写入 job summary。
+
+### Changed
+
+- 整体覆盖率统计（`scripts/check_coverage.sh` 与 PR 评论）不再计入 `examples/` 下没有测试的示例程序。
+- 只测试 `llm/common` 的 6 个用例从 `llm/providers` 移回 `llm/common`。
+- CHANGELOG 中 0.23.0 的条目此前列在 Unreleased 下，已归入 0.23.0。
+
 ## [0.23.0] - 2026-10-30
 
 ### Added
