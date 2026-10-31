@@ -4,20 +4,20 @@ GoAgent的网络入口由独立扩展 `github.com/kart-io/goagent-contrib/httpag
 
 ## 文档与版本
 
-当前接口基线为contrib提交cfb3e85，依赖GoAgent v0.32.2和Go 1.25。功能已推送到相关仓库的 `feat/httpagent-webhooks-20261031` 分支，尚未合并主分支或打模块tag。
+当前接口基线为contrib提交cfb3e85，依赖GoAgent v0.32.2和Go 1.25。功能已合并到GoAgent与contrib的master、examples的main；尚未打模块tag。
 
 | 需要了解 | 文档 |
 | --- | --- |
-| 从零运行、复制完整宿主程序 | [使用指南](https://github.com/kart-io/goagent-contrib/blob/feat/httpagent-webhooks-20261031/httpagent/docs/USER_GUIDE.md) |
-| 所有者、终态、取消、接纳与通知的实现取舍 | [扩展设计](https://github.com/kart-io/goagent-contrib/blob/feat/httpagent-webhooks-20261031/httpagent/docs/DESIGN.md) |
-| Config全部字段、默认值、公开接口、协议与错误 | [API参考](https://github.com/kart-io/goagent-contrib/blob/feat/httpagent-webhooks-20261031/httpagent/docs/API_REFERENCE.md) |
+| 从零运行、复制完整宿主程序 | [使用指南](https://github.com/kart-io/goagent-contrib/blob/master/httpagent/docs/USER_GUIDE.md) |
+| 所有者、终态、取消、接纳与通知的实现取舍 | [扩展设计](https://github.com/kart-io/goagent-contrib/blob/master/httpagent/docs/DESIGN.md) |
+| Config全部字段、默认值、公开接口、协议与错误 | [API参考](https://github.com/kart-io/goagent-contrib/blob/master/httpagent/docs/API_REFERENCE.md) |
 | GoAgent内核与扩展如何分工 | [本仓设计入口](../design/HTTP_AGENT_DESIGN.md) |
-| Web页面、CLI、双向回调与宿主WS案例 | [案例指南](https://github.com/kart-io/goagent-examples/blob/feat/httpagent-webhooks-20261031/orchestration/httpagent/SCENARIOS.md) |
+| Web页面、CLI、双向回调与宿主WS案例 | [案例指南](https://github.com/kart-io/goagent-examples/blob/main/orchestration/httpagent/SCENARIOS.md) |
 
 ## 运行现成案例
 
 ```sh
-git clone -b feat/httpagent-webhooks-20261031 https://github.com/kart-io/goagent-examples.git
+git clone -b main https://github.com/kart-io/goagent-examples.git
 cd goagent-examples/orchestration/httpagent
 GOWORK=off go run .
 ```
@@ -64,4 +64,6 @@ run_id为当前运行身份，不等于业务会话锁、事件去重键或已�
 
 网络断开或退出未确认不能证明工具副作用没发生。客户端没有收到业务终态时，应按run_id诊断，不能盲目换ID重试。停服先BeginShutdown取消，再等HTTP Shutdown与Handler.Shutdown，成功后关闭共享Host。具体超时与资源保留设计见扩展文档。
 
-文档代码块及源码对照范围见 [扩展文档验证](https://github.com/kart-io/goagent-contrib/blob/feat/httpagent-webhooks-20261031/httpagent/docs/VERIFICATION.md)。实测证据见 [完整实现验收](../evaluation/2026-10-31-httpagent-implementation/REPORT.md) 与 [可替换WS接口验收](../evaluation/2026-10-31-websocket-interfaces/REPORT.md)。
+文档代码块及源码对照范围见 [扩展文档验证](https://github.com/kart-io/goagent-contrib/blob/master/httpagent/docs/VERIFICATION.md)。实测证据见 [完整实现验收](../evaluation/2026-10-31-httpagent-implementation/REPORT.md) 与 [可替换WS接口验收](../evaluation/2026-10-31-websocket-interfaces/REPORT.md)。
+
+合并到主分支后的检查见 [合并验收](../evaluation/2026-10-31-httpagent-merge/REPORT.md)。
