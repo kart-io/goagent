@@ -149,7 +149,7 @@ core/
 ├── generator.go                      # Generator[T]
 ├── interrupt.go                      # 人工介入（InterruptManager、InterruptableExecutor）
 ├── lifecycle_manager.go              # 生命周期管理
-├── plugin_bridge.go / plugin_registry_enhanced.go  # 插件注册与类型适配
+├── plugin_bridge.go  # Runnable 注册表与类型适配
 ├── panic_handler.go / timeout.go / errors.go
 ├── budget/       # 宿主级模型请求预算
 ├── checkpoint/   # 会话状态持久化
