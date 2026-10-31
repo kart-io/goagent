@@ -139,12 +139,12 @@ func (c *SiliconFlowClient) Complete(ctx context.Context, req *agentllm.Completi
 		SetBody(sfReq).
 		Post(c.baseURL + "/chat/completions")
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError(c.ProviderName(), model, err)
+		return nil, agentErrors.NewLLMRequestError(c.ProviderName(), model, &agentllm.ProviderError{Err: err})
 	}
 
 	if !resp.IsSuccess() {
-		return nil, agentErrors.NewLLMResponseError(c.ProviderName(), model,
-			fmt.Sprintf("API error (status %d): %s", resp.StatusCode(), resp.String()))
+		return nil, common.WithHTTPStatus(agentErrors.NewLLMResponseError(c.ProviderName(), model,
+			fmt.Sprintf("API error (status %d): %s", resp.StatusCode(), resp.String())), common.RestyResponseToHTTPError(resp))
 	}
 
 	// 解析响应

@@ -3,9 +3,7 @@ package providers
 import (
 	"context"
 	"errors"
-	"math"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -13,6 +11,7 @@ import (
 	"google.golang.org/genai"
 
 	agentllm "github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/common"
 )
 
 type retryAfterKey struct{}
@@ -29,22 +28,10 @@ func (d retryAfterDoer) Do(req *http.Request) (*http.Response, error) {
 	resp, err := d.next.Do(req)
 	if err == nil && resp != nil && (resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == http.StatusServiceUnavailable) {
 		if slot, ok := req.Context().Value(retryAfterKey{}).(*time.Duration); ok {
-			*slot = parseRetryAfter(resp.Header.Get("Retry-After"), time.Now())
+			*slot = common.RetryAfterDuration(resp.Header.Get("Retry-After"), time.Now())
 		}
 	}
 	return resp, err
-}
-
-// parseRetryAfter 解析秒数或 HTTP 日期；缺失、无法解析或已过期都返回 0，即视为没有给出。
-// 不用 common.ParseRetryAfter：它对无法解析的值回退为 60 秒。
-func parseRetryAfter(header string, now time.Time) time.Duration {
-	if seconds, err := strconv.ParseInt(strings.TrimSpace(header), 10, 64); err == nil {
-		return time.Duration(min(max(seconds, 0), math.MaxInt64/int64(time.Second))) * time.Second
-	}
-	if at, err := http.ParseTime(header); err == nil {
-		return max(at.Sub(now), 0)
-	}
-	return 0
 }
 
 func openAIProviderError(err error, retryAfter time.Duration) *agentllm.ProviderError {

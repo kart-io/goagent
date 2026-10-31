@@ -118,7 +118,7 @@ Gemini 的向量模型通过 `llm.WithEmbeddingModel` 或 `GEMINI_EMBEDDING_MODE
 
 ## 错误分类
 
-`llm.ClassifyError(err)` 返回 `Reason`、`Retryable`、`ShouldCompress`、`ShouldFallback`，依据错误链中的 `*llm.ProviderError`（状态码与 `RetryAfter`）和上下文超长的错误文本。`ProviderError` 目前只由 OpenAI、DeepSeek、Gemini 的流式路径构造。Builder 中的模型重试用 `WithRequestError` 与 `builder.RetryTransient`。
+`llm.ClassifyError(err)` 返回 `Reason`、`Retryable`、`ShouldCompress`、`ShouldFallback`，依据错误链中的 `*llm.ProviderError`（状态码与 `RetryAfter`）和上下文超长的错误文本。各 Provider 的流式与非流式请求失败都会构造 `ProviderError`。Builder 中的模型重试用 `WithRequestError` 与 `builder.RetryTransient`。
 
 ## 语义缓存
 

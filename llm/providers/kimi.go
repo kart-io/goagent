@@ -153,7 +153,7 @@ func (c *KimiClient) Complete(ctx context.Context, req *agentllm.CompletionReque
 
 	model := c.GetModel(req.Model)
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError(c.ProviderName(), model, err)
+		return nil, agentErrors.NewLLMRequestError(c.ProviderName(), model, &agentllm.ProviderError{Err: err})
 	}
 
 	body := resp.Body()
@@ -161,12 +161,12 @@ func (c *KimiClient) Complete(ctx context.Context, req *agentllm.CompletionReque
 	if !resp.IsSuccess() {
 		var errResp kimiError
 		if err := json.Unmarshal(body, &errResp); err == nil && errResp.Error.Message != "" {
-			return nil, agentErrors.NewLLMResponseError(c.ProviderName(), model,
+			return nil, common.WithHTTPStatus(agentErrors.NewLLMResponseError(c.ProviderName(), model,
 				fmt.Sprintf("%s (type: %s, code: %s)",
-					errResp.Error.Message, errResp.Error.Type, errResp.Error.Code))
+					errResp.Error.Message, errResp.Error.Type, errResp.Error.Code)), common.RestyResponseToHTTPError(resp))
 		}
-		return nil, agentErrors.NewLLMResponseError(c.ProviderName(), model,
-			fmt.Sprintf("API error (status %d): %s", resp.StatusCode(), string(body)))
+		return nil, common.WithHTTPStatus(agentErrors.NewLLMResponseError(c.ProviderName(), model,
+			fmt.Sprintf("API error (status %d): %s", resp.StatusCode(), string(body))), common.RestyResponseToHTTPError(resp))
 	}
 
 	// 解析响应

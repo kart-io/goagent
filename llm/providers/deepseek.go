@@ -417,7 +417,7 @@ func (p *DeepSeekProvider) callAPI(ctx context.Context, endpoint string, payload
 			SetBody(payload).
 			Post(url)
 		if err != nil {
-			return nil, agentErrors.NewLLMRequestError(p.ProviderName(), model, err).
+			return nil, agentErrors.NewLLMRequestError(p.ProviderName(), model, &agentllm.ProviderError{Err: err}).
 				WithContext("endpoint", endpoint)
 		}
 

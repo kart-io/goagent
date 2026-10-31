@@ -169,12 +169,12 @@ func (c *OllamaClient) Complete(ctx context.Context, req *agentllm.CompletionReq
 		SetBody(ollamaReq).
 		Post(c.baseURL + "/api/generate")
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError(c.ProviderName(), c.GetModel(req.Model), err)
+		return nil, agentErrors.NewLLMRequestError(c.ProviderName(), c.GetModel(req.Model), &agentllm.ProviderError{Err: err})
 	}
 
 	if !resp.IsSuccess() {
-		return nil, agentErrors.NewLLMResponseError(c.ProviderName(), c.GetModel(req.Model),
-			fmt.Sprintf("API error (status %d): %s", resp.StatusCode(), resp.String()))
+		return nil, common.WithHTTPStatus(agentErrors.NewLLMResponseError(c.ProviderName(), c.GetModel(req.Model),
+			fmt.Sprintf("API error (status %d): %s", resp.StatusCode(), resp.String())), common.RestyResponseToHTTPError(resp))
 	}
 
 	// 解析响应
@@ -238,13 +238,13 @@ func (c *OllamaClient) Chat(ctx context.Context, messages []agentllm.Message) (*
 		SetBody(ollamaReq).
 		Post(c.baseURL + "/api/chat")
 	if err != nil {
-		return nil, agentErrors.NewLLMRequestError(c.ProviderName(), model, err).
+		return nil, agentErrors.NewLLMRequestError(c.ProviderName(), model, &agentllm.ProviderError{Err: err}).
 			WithContext("operation", "chat")
 	}
 
 	if !resp.IsSuccess() {
-		return nil, agentErrors.NewLLMResponseError(c.ProviderName(), model,
-			fmt.Sprintf("chat API error (status %d): %s", resp.StatusCode(), resp.String()))
+		return nil, common.WithHTTPStatus(agentErrors.NewLLMResponseError(c.ProviderName(), model,
+			fmt.Sprintf("chat API error (status %d): %s", resp.StatusCode(), resp.String())), common.RestyResponseToHTTPError(resp))
 	}
 
 	// 解析响应

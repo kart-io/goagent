@@ -5,6 +5,13 @@ All notable changes to GoAgent will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- 非流式请求（`Complete`、`Chat`、`GenerateWithTools`）的失败不带 `*llm.ProviderError`，`llm.ClassifyError` 对所有 Provider 都返回 `unknown`。OpenAI、DeepSeek、Anthropic、Cohere、HuggingFace、Ollama、Kimi、SiliconFlow 现在都给 HTTP 非 2xx 响应附上状态码与 `Retry-After`，连接错误也会附上。错误码不变，错误文本末尾多出原因（如 `HTTP 429`）。
+- 新增 `common.WithHTTPStatus` 与 `common.RetryAfterDuration`，`common.MapHTTPError` 返回的错误也带上 `ProviderError`。
+
 ## [0.30.0] - 2026-10-31
 
 ### Fixed
