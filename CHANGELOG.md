@@ -5,6 +5,12 @@ All notable changes to GoAgent will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Removed
+
+- `core.PluginConfig` 的 `Name`、`Version`、`Dependencies`、`Enabled` 字段与 `core.PluginDependency` 类型：注册中心从未读取它们。名称与版本取自 `Plugin.Name()`、`Plugin.Version()`，启动顺序依赖用 `interfaces.DependencyAware` 声明；迁移时删除这些字段的赋值即可。
+
 ## [0.30.1] - 2026-10-31
 
 ### Fixed
