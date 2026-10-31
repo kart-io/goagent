@@ -5,6 +5,12 @@ All notable changes to GoAgent will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- 设计文档与实施计划：ACP（Agent Client Protocol）Agent 端（`docs/superpowers/specs/2026-10-31-acp-agent-design.md`、`docs/superpowers/plans/2026-10-31-acp-agent.md`）。实现在 contrib 的 [`goagent-contrib/acp`](https://github.com/kart-io/goagent-contrib/tree/master/acp) 模块，当前版本 `acp/v0.1.1`，变更见其 [CHANGELOG](https://github.com/kart-io/goagent-contrib/blob/master/acp/CHANGELOG.md)。
+
 ## [0.32.0] - 2026-10-31
 
 ### Added
