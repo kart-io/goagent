@@ -29,6 +29,8 @@
 
 ## 初始化与记忆
 
+宿主推荐使用 `BuildContext(ctx)` 构建，初始化检查点与 OnStart 回调共享该上下文，操作与回调返回后检查取消；旧 `Build()` 使用 Background。取消不回滚外部效果，也无法强制终止忽略 ctx 的实现。标准身份、预算和观察装配见 [宿主接入指南](HOST_INTEGRATION.md)。
+
 初始化的Exists/Load失败明确返回错误，不再当成无历史；不存在才使用新状态。状态类型不匹配（含typed-nil）返回普通错误，失败不替换原状态也不触发初始化回调。
 
 `WithMemoryFailurePolicy(builder.MemoryFailureStrict)` 开启严格记忆模式。默认 `MemoryFailureBestEffort` 保持继续执行，但产生不含原始错误或对话的memory_read/write观察事件。严格读写错误保留errors.Is链，在最终成功终态前失败；流式文本可能已经输出。宿主自定义errorHandler仍可按原契约转换错误。

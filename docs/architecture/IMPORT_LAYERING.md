@@ -312,3 +312,7 @@ CI 会在以下情况失败：
 v0.17.0 删除推理策略及 `builder/reasoning_*.go` 后，检查器不再有兼容例外，Builder 导入 `agents` 或 `middleware` 一律拒绝。
 
 2026-10-27 修复了旧脚本把扫描根目录设为 scripts、匹配旧 pkg/agent 路径的问题。旧报告中的“导入检查通过”不能作为分层已验证证据。新入口 `bash scripts/verify_imports.sh` 委派 `scripts/apicheck`，有违规规则和精确例外的回归测试，当前真实扫描为 0 findings。
+
+## 宿主装配入口
+
+顶层 `execution/` 依赖 Builder 与核心公开接口，向宿主组合 Scope，不替代 `core/execution`。导入检查禁止 interfaces、errors、utils、cache、core、builder、tools、parsers、llm、workflow、memory、store、middleware、observability、devtools、harness 反向导入顶层 execution；examples、evaluation、cmd 可使用此入口。新增规则由 scripts/apicheck 的边界测试覆盖。

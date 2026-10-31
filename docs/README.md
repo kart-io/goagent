@@ -39,6 +39,9 @@ GoAgent 是一个全面的 Go AI Agent 框架，提供 Agent、工具、内存�
 
 ### 使用指南
 
+- **[宿主标准接入](guides/HOST_INTEGRATION.md)** - Scope、BuildContext、恢复身份与资源生命周期
+- **[执行开销实测](evaluation/2026-10-31-execution-overhead/REPORT.md)** - 三种预算模式与可复现原始结果
+
 - **[可组合编排 R2](guides/COMPOSABLE_ORCHESTRATION.md)** - 根预算、子 Agent 工具、持久上下文引用与只读观察
 
 - **[LLM 提供商指南](guides/LLM_PROVIDERS.md)** - 配置各种 LLM 提供商
