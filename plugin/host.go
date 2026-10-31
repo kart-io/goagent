@@ -17,6 +17,7 @@ const (
 )
 
 // Host 管理一组插件：注册时校验名称、版本与依赖，Start 按依赖顺序启动 Starter，Stop 逆序停止。
+// Host 不可重入：插件不得在 Start/Stop 中调用同一 Host 的 Start/Stop（会死锁）。
 // Host 不可重启；停止后应先停用由它安装的 Agent，因为插件贡献的工具可能持有已释放的资源。
 type Host struct {
 	order     []Plugin

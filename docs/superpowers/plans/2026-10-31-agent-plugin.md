@@ -14,7 +14,7 @@
 
 - 注释、错误信息、文档、提交信息一律简体中文；标识符沿用英文。
 - 依赖方向 `plugin → builder、core、interfaces、tools`；`builder`、`core`、`interfaces`、`llm`、`tools` 不得导入 `plugin`（由 apicheck 强制）。
-- 插件名非空、无首尾空白、不含 `/` 与 `@`；版本非空、无首尾空白、不含 `/`。
+- 插件名非空、无首尾空白、不含 `/`、`@` 与 `.`；版本非空、无首尾空白、不含 `/`。
 - 插件 PreStep 身份固定为 `plugin/<名称>@<版本>/<Identity>`。
 - 破坏式更改，不保留 `core.Plugin` 等旧接口；CHANGELOG 写迁移说明；提交类型 `feat!`。
 - 每个任务结束前运行该包 `go test -race`；全部完成后运行全仓测试、golangci-lint v2.6.2 与 `go run ./scripts/apicheck`。
