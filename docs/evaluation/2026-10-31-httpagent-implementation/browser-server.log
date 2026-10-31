@@ -1,0 +1,11 @@
+2026/10/31 22:52:42 使用离线脚本模型；Plugin、工具、HTTP/SSE/WS 均真实执行
+2026/10/31 22:52:42 打开 http://127.0.0.1:8097
+2026/10/31 22:52:47 事件 run.started run_id=addc021e-d6fe-4dd4-ab12-d15e5a7a6353
+2026/10/31 22:52:47 事件 run.completed run_id=addc021e-d6fe-4dd4-ab12-d15e5a7a6353
+2026/10/31 22:52:51 事件 run.started run_id=fb1022d6-473c-40b0-9118-62bfc6846cd1
+2026/10/31 22:52:51 事件 run.completed run_id=fb1022d6-473c-40b0-9118-62bfc6846cd1
+2026/10/31 22:52:54 事件 run.started run_id=5969e692-c905-4ff2-8a65-55a52184bbbe
+2026/10/31 22:52:54 事件 run.cancelled run_id=5969e692-c905-4ff2-8a65-55a52184bbbe
+2026/10/31 22:52:57 事件 run.started run_id=b0edc83f-6d70-4be2-a9f1-4deeb733efb0
+2026/10/31 22:52:58 运行报告 run_id=b0edc83f-6d70-4be2-a9f1-4deeb733efb0 stage=transport error=context canceled
+2026/10/31 22:52:58 事件 run.cancelled run_id=b0edc83f-6d70-4be2-a9f1-4deeb733efb0
