@@ -402,6 +402,10 @@ out, err := h.Wait(ctx)     // h.Interrupt(cause) 中止运行
 
 持久运行中，PreStep、TurnStopping、提示词段落与上下文、收件箱的输入按步骤记入日志，恢复时回放而不重新计算；以 `Start` 开始的持久运行须同样以 `Start` 恢复。Request 钩子须是确定性的；RequestError 钩子与 Redirect 只在非持久运行中生效（持久运行中 Redirect 降级为 Steer）。
 
+## 会话日志
+
+`WithSessionLog(store)` 把会话记入 [`core/session`](../core/session/README.md) 的事件日志：模型历史从日志推导（不再读取记忆），每次模型请求前记录与日志不同的对话，PreStep 等对历史的改写记为 `history/rewrite`，因此每次请求都能由日志重建。持久运行可用 `session.DurableStore(store, id)` 作为 durable 日志，操作快照与对话位于同一份日志；`session.BuildTrajectory` 把日志导出为训练轨迹。只支持原生工具流。
+
 ## 扩展阅读
 
 - [core](../core/) - 核心执行引擎

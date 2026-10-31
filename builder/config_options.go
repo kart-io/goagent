@@ -3,6 +3,7 @@ package builder
 import (
 	"fmt"
 	"github.com/kart-io/goagent/builder/contextpolicy"
+	"github.com/kart-io/goagent/core/session"
 	"github.com/kart-io/goagent/interfaces"
 	"time"
 
@@ -77,6 +78,7 @@ type AgentConfig struct {
 	TurnStopping         []TurnStoppingHook `json:"-"`
 	PromptSections       []PromptSection    `json:"-"`
 	PromptContexts       []PromptContext    `json:"-"`
+	SessionLog           session.Store      `json:"-"`
 
 	// MaxIterations 限制推理步骤的最大次数
 	MaxIterations int
