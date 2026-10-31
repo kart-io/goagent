@@ -1,6 +1,6 @@
 # 宿主标准接入
 
-`execution.Scope` 组合宿主已有的执行身份、会话、日志、预算、期限与观察者，不创建新的运行引擎。它与底层 `core/execution.Runtime` 职责不同：后者执行循环，前者负责装配。
+`execution.Scope` 组合宿主已有的执行身份、会话、日志、预算、期限与观察者，不创建新的运行引擎。它与 Builder 内部持有状态、存储和检查点的 `core/execution.Runtime` 无关，只负责装配。
 
 ## 构建与运行
 
@@ -27,7 +27,7 @@ go run ./examples/execution-scope
 
 `Config` 可选 Journal、Budget、Timeout、Observer、Tracer。绑定 Journal 时如同时使用预算，预算必须持久化；仅使用 Journal 不强制创建预算。Scope 不关闭 Store、Observer 或 Tracer，宿主负责这些资源的共享与关闭。未显式配置 Observer/Tracer 时继承父上下文。Scope 只取消派生上下文，实际期限取父上下文、Scope Timeout 与预算期限中最早者。
 
-Scope 不提供跨进程调度、分布式会话互斥或自动副作用补偿。持久审批与恢复由现有 Runner、工作流和 Dispatcher 负责；其行为见 [执行治理](EXECUTION_GOVERNANCE.md)。恢复集成测试见 [execution/integration_test.go](../../execution/integration_test.go)，覆盖审批暂停、执行后检查点失败、重建恢复与完成回放，并验证副作用和预算不重复。
+Scope 不提供跨进程调度、分布式会话互斥或自动副作用补偿；多实例共享持久运行需要支持租约的 Store（如 goagent-contrib 的 `durable/pgstore`）。持久审批与恢复由现有 Runner、工作流和 Dispatcher 负责；其行为见 [执行治理](EXECUTION_GOVERNANCE.md)。恢复集成测试见 [execution/integration_test.go](../../execution/integration_test.go)，覆盖审批暂停、执行后检查点失败、重建恢复与完成回放，并验证副作用和预算不重复。
 
 ## 开销与验收
 
@@ -37,4 +37,4 @@ Scope 不提供跨进程调度、分布式会话互斥或自动副作用补偿�
 go run ./evaluation/executionbench/cmd/run -operations=10,100,1000 -modes=none,memory,file -timeout=10m
 ```
 
-这是本机合成负载，文件模式只包含预算持久化，没有真实模型、工具日志或业务服务。接入真实服务后仍须验证典型任务的延迟、取消、恢复、预算和资源生命周期；本轮未获得宿主仓库与任务，尚未执行生产试运行。
+这是本机合成负载，文件模式只包含预算持久化，没有真实模型、工具日志或业务服务。接入真实服务后仍须验证典型任务的延迟、取消、恢复、预算和资源生命周期。

@@ -1,498 +1,141 @@
 # LLM 提供商指南
 
-## 概述
+`llm/providers` 为每个提供商提供一个 `NewXxxWithOptions(opts ...llm.ClientOption)` 构造函数，返回实现 `llm.Client` 的客户端。接口与选项见 [LLM API 参考](../api/LLM_API.md)；流式、工具和 Embedding 的实际支持见 [Provider 能力边界](PROVIDER_CAPABILITIES.md)。
 
-GoAgent 支持多种 LLM 提供商，提供统一的接口抽象。本指南详细说明各提供商的配置和使用方法。
+## 配置来源
 
-## 支持的提供商
+`APIKey`、`BaseURL`、`Model` 按以下顺序取第一个非空值：显式选项（`llm.WithAPIKey` / `WithBaseURL` / `WithModel`）→ 环境变量 → 内置默认值。API Key 没有默认值，除 Ollama 外缺失时构造函数返回错误。构造函数不发请求，构造成功不代表服务或模型可用。
 
-| 提供商 | 常量 | 特点 |
-|-------|------|------|
-| OpenAI | `ProviderOpenAI` | GPT 系列，广泛支持 |
-| Anthropic | `ProviderAnthropic` | Claude 系列，长上下文 |
-| Google Gemini | `ProviderGemini` | Gemini 系列 |
-| DeepSeek | `ProviderDeepSeek` | 高性价比 |
-| Cohere | `ProviderCohere` | 企业级 NLP |
-| HuggingFace | `ProviderHuggingFace` | 开源模型 |
-| Ollama | `ProviderOllama` | 本地部署 |
-| SiliconFlow | `ProviderSiliconFlow` | 国内服务 |
-| Kimi | `ProviderKimi` | 月之暗面 |
+| 提供商 | 构造函数 | API Key 环境变量 | BaseURL / Model 环境变量 | 默认 BaseURL | 默认模型 |
+|---|---|---|---|---|---|
+| OpenAI | `NewOpenAIWithOptions` | `OPENAI_API_KEY` | `OPENAI_BASE_URL` / `OPENAI_MODEL` | `https://api.openai.com/v1` | `gpt-4-turbo-preview` |
+| Anthropic | `NewAnthropicWithOptions` | `ANTHROPIC_API_KEY` | `ANTHROPIC_BASE_URL` / `ANTHROPIC_MODEL` | `https://api.anthropic.com` | `claude-3-5-sonnet-20241022` |
+| Gemini | `NewGeminiWithOptions` | `GEMINI_API_KEY` | `GEMINI_BASE_URL` / `GEMINI_MODEL` | `https://generativelanguage.googleapis.com` | `gemini-2.5-flash` |
+| DeepSeek | `NewDeepSeekWithOptions` | `DEEPSEEK_API_KEY` | `DEEPSEEK_BASE_URL` / `DEEPSEEK_MODEL` | `https://api.deepseek.com/v1` | `deepseek-chat` |
+| Cohere | `NewCohereWithOptions` | `COHERE_API_KEY` | `COHERE_BASE_URL` / `COHERE_MODEL` | `https://api.cohere.ai` | `command-r-plus` |
+| HuggingFace | `NewHuggingFaceWithOptions` | `HUGGINGFACE_API_KEY` | `HUGGINGFACE_BASE_URL` / `HUGGINGFACE_MODEL` | `https://api-inference.huggingface.co` | `meta-llama/Meta-Llama-3-8B-Instruct` |
+| Kimi | `NewKimiWithOptions` | `KIMI_API_KEY` | `KIMI_BASE_URL` / `KIMI_MODEL` | `https://api.moonshot.cn/v1` | `moonshot-v1-8k` |
+| SiliconFlow | `NewSiliconFlowWithOptions` | `SILICONFLOW_API_KEY` | `SILICONFLOW_BASE_URL` / `SILICONFLOW_MODEL` | `https://api.siliconflow.cn/v1` | `Qwen/Qwen2-7B-Instruct` |
+| Ollama | `NewOllamaWithOptions` | 不需要 | `OLLAMA_BASE_URL` / `OLLAMA_MODEL` | `http://localhost:11434` | `llama2` |
 
-## 统一接口
+环境变量名也以常量形式定义在 `llm/constants`（如 `constants.EnvOpenAIAPIKey`）。默认模型只是兜底值，生产环境应显式指定当前可用的模型。
 
-所有提供商都实现 `Client` 接口：
+### 提供商说明
 
-```go
-type Client interface {
-    // 文本补全
-    Complete(ctx context.Context, req *CompletionRequest) (*CompletionResponse, error)
+- **Gemini**：基于 Google GenAI SDK 调用原生 API，使用 API Key 认证。`GEMINI_BASE_URL` 填原生根地址，不要填 OpenAI 兼容的 `/v1beta/openai` 路径。向量模型通过 `llm.WithEmbeddingModel` 或 `GEMINI_EMBEDDING_MODEL` 指定，默认 `gemini-embedding-001`。原生工具循环在 `Message.ProviderState` 中保留签名，自管消息历史时须原样回传。验证案例见 [gemini-verify](../../examples/llm/gemini-verify/README.md)。
+- **DeepSeek**：`NewDeepSeekWithOptions` 直接实现结构化流与原生工具流；`NewDeepSeekStreamingWithOptions` 只是嵌入它的包装。旧 `Embed` 方法发送兼容请求，但不声明 Embedding 能力。
+- **OpenAI**：`WithBaseURL` 可指向 OpenAI 兼容端点，兼容程度需自行验证。
+- **Ollama**：`NewOllamaClientSimple(model)` 等价于只设置模型的 `NewOllamaWithOptions`。
 
-    // 对话
-    Chat(ctx context.Context, messages []Message) (*CompletionResponse, error)
-
-    // 返回提供商类型
-    Provider() Provider
-
-    // 检查可用性
-    IsAvailable() bool
-}
-```
-
-流式客户端额外实现 `StreamClient` 接口：
+## 基本对话
 
 ```go
-type StreamClient interface {
-    Client
-
-    // 流式补全
-    CompleteStream(ctx context.Context, req *CompletionRequest) (<-chan *StreamChunk, error)
-
-    // 流式对话
-    ChatStream(ctx context.Context, messages []Message) (<-chan *StreamChunk, error)
-}
-```
-
-## 提供商配置
-
-### OpenAI
-
-```go
-import (
-    "github.com/kart-io/goagent/llm"
-    "github.com/kart-io/goagent/llm/providers"
-)
-
-// 基本配置
-client, err := providers.NewOpenAIWithOptions(
-    llm.WithAPIKey(os.Getenv("OPENAI_API_KEY")),
-    llm.WithModel("gpt-4"),
-)
-
-// 高级配置
-client, err := providers.NewOpenAIWithOptions(
-    llm.WithAPIKey(os.Getenv("OPENAI_API_KEY")),
-    llm.WithModel("gpt-4-turbo"),
-    llm.WithBaseURL("https://api.openai.com/v1"),
-    llm.WithMaxTokens(4096),
-    llm.WithTemperature(0.7),
-    llm.WithTimeout(60 * time.Second), // 限制等待响应开始的时间，流式读取不受此限
-)
-```
-
-**支持的模型：**
-
-- `gpt-4`
-- `gpt-4-turbo`
-- `gpt-4o`
-- `gpt-3.5-turbo`
-
-### Anthropic
-
-```go
-import (
-    "github.com/kart-io/goagent/llm"
-    "github.com/kart-io/goagent/llm/providers"
-)
-
-// 基本配置
-client, err := providers.NewAnthropicWithOptions(
-    llm.WithAPIKey(os.Getenv("ANTHROPIC_API_KEY")),
-    llm.WithModel("claude-3-sonnet-20240229"),
-)
-
-// 高级配置
-client, err := providers.NewAnthropicWithOptions(
-    llm.WithAPIKey(os.Getenv("ANTHROPIC_API_KEY")),
-    llm.WithModel("claude-3-opus-20240229"),
-    llm.WithMaxTokens(4096),
-    llm.WithTemperature(0.7),
-)
-```
-
-**支持的模型：**
-
-- `claude-3-opus-20240229`
-- `claude-3-sonnet-20240229`
-- `claude-3-haiku-20240307`
-
-### Google Gemini
-
-```go
-import (
-    "github.com/kart-io/goagent/llm"
-    "github.com/kart-io/goagent/llm/providers"
-)
-
-// 基本配置
-client, err := providers.NewGeminiWithOptions(
-    llm.WithAPIKey(os.Getenv("GOOGLE_API_KEY")),
-    llm.WithModel("gemini-pro"),
-)
-
-// 高级配置
-client, err := providers.NewGeminiWithOptions(
-    llm.WithAPIKey(os.Getenv("GOOGLE_API_KEY")),
-    llm.WithModel("gemini-1.5-pro"),
-    llm.WithMaxTokens(4096),
-    llm.WithTemperature(0.7),
-)
-```
-
-**支持的模型：**
-
-- `gemini-pro`
-- `gemini-1.5-pro`
-- `gemini-1.5-flash`
-
-### DeepSeek
-
-```go
-import (
-    "github.com/kart-io/goagent/llm"
-    "github.com/kart-io/goagent/llm/providers"
-)
-
-// 基本配置
 client, err := providers.NewDeepSeekWithOptions(
     llm.WithAPIKey(os.Getenv("DEEPSEEK_API_KEY")),
     llm.WithModel("deepseek-chat"),
 )
-
-// 高级配置
-client, err := providers.NewDeepSeekWithOptions(
-    llm.WithAPIKey(os.Getenv("DEEPSEEK_API_KEY")),
-    llm.WithModel("deepseek-coder"),
-    llm.WithBaseURL("https://api.deepseek.com"),
-    llm.WithMaxTokens(4096),
-    llm.WithTemperature(0.7),
-)
-```
-
-**支持的模型：**
-
-- `deepseek-chat`
-- `deepseek-coder`
-
-### Cohere
-
-```go
-import (
-    "github.com/kart-io/goagent/llm"
-    "github.com/kart-io/goagent/llm/providers"
-)
-
-// 基本配置
-client, err := providers.NewCohereWithOptions(
-    llm.WithAPIKey(os.Getenv("COHERE_API_KEY")),
-    llm.WithModel("command"),
-)
-
-// 高级配置
-client, err := providers.NewCohereWithOptions(
-    llm.WithAPIKey(os.Getenv("COHERE_API_KEY")),
-    llm.WithModel("command-r-plus"),
-    llm.WithMaxTokens(4096),
-    llm.WithTemperature(0.7),
-)
-```
-
-**支持的模型：**
-
-- `command`
-- `command-r`
-- `command-r-plus`
-
-### HuggingFace
-
-```go
-import (
-    "github.com/kart-io/goagent/llm"
-    "github.com/kart-io/goagent/llm/providers"
-)
-
-// 基本配置
-client, err := providers.NewHuggingFaceWithOptions(
-    llm.WithAPIKey(os.Getenv("HUGGINGFACE_API_KEY")),
-    llm.WithModel("meta-llama/Llama-2-70b-chat-hf"),
-)
-
-// 高级配置
-client, err := providers.NewHuggingFaceWithOptions(
-    llm.WithAPIKey(os.Getenv("HUGGINGFACE_API_KEY")),
-    llm.WithModel("mistralai/Mixtral-8x7B-Instruct-v0.1"),
-    llm.WithMaxTokens(4096),
-    llm.WithTemperature(0.7),
-)
-```
-
-### Ollama（本地部署）
-
-```go
-import (
-    "github.com/kart-io/goagent/llm"
-    "github.com/kart-io/goagent/llm/providers"
-)
-
-// 基本配置
-client, err := providers.NewOllamaWithOptions(
-    llm.WithBaseURL("http://localhost:11434"),
-    llm.WithModel("llama2"),
-)
-
-// 高级配置
-client, err := providers.NewOllamaWithOptions(
-    llm.WithBaseURL("http://localhost:11434"),
-    llm.WithModel("codellama"),
-    llm.WithMaxTokens(4096),
-    llm.WithTemperature(0.7),
-)
-```
-
-**常用模型：**
-
-- `llama2`
-- `codellama`
-- `mistral`
-- `mixtral`
-
-### SiliconFlow
-
-```go
-import (
-    "github.com/kart-io/goagent/llm"
-    "github.com/kart-io/goagent/llm/providers"
-)
-
-// 基本配置
-client, err := providers.NewSiliconFlowWithOptions(
-    llm.WithAPIKey(os.Getenv("SILICONFLOW_API_KEY")),
-    llm.WithModel("Qwen/Qwen2-72B-Instruct"),
-)
-```
-
-### Kimi
-
-```go
-import (
-    "github.com/kart-io/goagent/llm"
-    "github.com/kart-io/goagent/llm/providers"
-)
-
-// 基本配置
-client, err := providers.NewKimiWithOptions(
-    llm.WithAPIKey(os.Getenv("KIMI_API_KEY")),
-    llm.WithModel("moonshot-v1-8k"),
-)
-```
-
-**支持的模型：**
-
-- `moonshot-v1-8k`
-- `moonshot-v1-32k`
-- `moonshot-v1-128k`
-
-## 使用示例
-
-### 基本对话
-
-```go
-client, err := providers.NewOpenAIWithOptions(llm.WithAPIKey(apiKey), llm.WithModel("gpt-4"))
 if err != nil {
-    log.Fatal(err)
+    return err
 }
 
-messages := []llm.Message{
+resp, err := client.Chat(ctx, []llm.Message{
     llm.SystemMessage("你是一个有帮助的助手。"),
     llm.UserMessage("你好！"),
-}
-
-resp, err := client.Chat(context.Background(), messages)
+})
 if err != nil {
-    log.Fatal(err)
+    return err
 }
-
 fmt.Println(resp.Content)
+if resp.Usage != nil {
+    fmt.Printf("输入 %d / 输出 %d / 合计 %d Token\n",
+        resp.Usage.PromptTokens, resp.Usage.CompletionTokens, resp.Usage.TotalTokens)
+}
 ```
 
-### 流式对话
+`CompletionRequest` 的 `Temperature`、`MaxTokens`、`TopP`、`Model` 为零值时使用客户端配置。
+
+## 流式对话
+
+只有实现 `llm.StreamClient` 的客户端（OpenAI、DeepSeek、Gemini）支持结构化流：
 
 ```go
-client, err := providers.NewOpenAIWithOptions(llm.WithAPIKey(apiKey), llm.WithModel("gpt-4"))
+sc := llm.AsStreamClient(client)
+if sc == nil {
+    return fmt.Errorf("%s 不支持结构化流", client.Provider())
+}
+ctx, cancel := context.WithCancel(ctx)
+defer cancel() // 提前退出时释放连接
+stream, err := sc.ChatStream(ctx, []llm.Message{llm.UserMessage("请写一首诗。")})
 if err != nil {
-    log.Fatal(err)
+    return err
 }
-
-messages := []llm.Message{
-    llm.UserMessage("请写一首诗。"),
-}
-
-stream, err := client.ChatStream(context.Background(), messages)
-if err != nil {
-    log.Fatal(err)
-}
-
 for chunk := range stream {
     if chunk.Error != nil {
-        log.Printf("错误: %v\n", chunk.Error)
-        break
+        return chunk.Error
     }
     fmt.Print(chunk.Delta)
-    if chunk.Done {
-        break
-    }
 }
 ```
 
-### 自定义参数
+## 切换提供商
+
+按配置选择构造函数，返回统一的 `llm.Client`，再交给 Builder：
 
 ```go
-client, err := providers.NewOpenAIWithOptions(llm.WithAPIKey(apiKey), llm.WithModel("gpt-4"))
-if err != nil {
-    log.Fatal(err)
-}
-
-req := &llm.CompletionRequest{
-    Messages: []llm.Message{
-        llm.UserMessage("生成一个创意故事开头。"),
-    },
-    Temperature: 0.9,  // 更高的创造性
-    MaxTokens:   500,
-    TopP:        0.95,
-}
-
-resp, err := client.Complete(context.Background(), req)
-if err != nil {
-    log.Fatal(err)
-}
-
-fmt.Println(resp.Content)
-```
-
-## 提供商切换
-
-GoAgent 的统一接口使得切换提供商非常简单：
-
-```go
-func createClient(provider string) (llm.Client, error) {
-    switch provider {
+func createClient(name string) (llm.Client, error) {
+    switch name {
     case "openai":
-        return providers.NewOpenAIWithOptions(
-            llm.WithAPIKey(os.Getenv("OPENAI_API_KEY")),
-            llm.WithModel("gpt-4"),
-        )
-    case "anthropic":
-        return providers.NewAnthropicWithOptions(
-            llm.WithAPIKey(os.Getenv("ANTHROPIC_API_KEY")),
-            llm.WithModel("claude-3-sonnet-20240229"),
-        )
+        return providers.NewOpenAIWithOptions(llm.WithModel("gpt-4o"))
+    case "gemini":
+        return providers.NewGeminiWithOptions(llm.WithModel("gemini-2.5-flash"))
     case "deepseek":
-        return providers.NewDeepSeekWithOptions(
-            llm.WithAPIKey(os.Getenv("DEEPSEEK_API_KEY")),
-            llm.WithModel("deepseek-chat"),
-        )
+        return providers.NewDeepSeekWithOptions(llm.WithModel("deepseek-chat"))
     default:
-        return providers.NewOllamaWithOptions(
-            llm.WithBaseURL("http://localhost:11434"),
-            llm.WithModel("llama2"),
-        )
+        return nil, fmt.Errorf("不支持的 provider：%s", name)
     }
 }
 
-// 使用
 client, err := createClient(os.Getenv("LLM_PROVIDER"))
 if err != nil {
-    log.Fatal(err)
+    return err
 }
 agent, err := builder.NewSimpleBuilder(client).Build()
 ```
 
-## Token 使用统计
+上例中 API Key 从各自的环境变量读取。`AsRunnable` 与原生工具循环要求客户端实现 `StreamClient` / `ToolStreamClient`，选择提供商时先查 [能力矩阵](PROVIDER_CAPABILITIES.md)。
 
-所有提供商响应都包含 Token 使用信息：
+## 错误处理与重试
 
-```go
-resp, err := client.Chat(ctx, messages)
-if err != nil {
-    log.Fatal(err)
-}
-
-if resp.Usage != nil {
-    fmt.Printf("输入 Token: %d\n", resp.Usage.PromptTokens)
-    fmt.Printf("输出 Token: %d\n", resp.Usage.CompletionTokens)
-    fmt.Printf("总 Token: %d\n", resp.Usage.TotalTokens)
-}
-```
-
-## 错误处理
+用 `llm.ClassifyError` 判断失败类型，不要匹配错误文本：
 
 ```go
 resp, err := client.Chat(ctx, messages)
 if err != nil {
-    // 检查错误类型
-    switch {
-    case strings.Contains(err.Error(), "rate limit"):
-        // 速率限制，等待重试
-        time.Sleep(time.Second * 5)
-    case strings.Contains(err.Error(), "invalid api key"):
-        // API 密钥错误
-        log.Fatal("请检查 API 密钥")
+    switch c := llm.ClassifyError(err); {
+    case c.ShouldCompress:
+        // 超出上下文窗口：缩短消息后再试
+    case c.Retryable:
+        // 限流、5xx 或暂时性连接错误
     default:
-        log.Printf("LLM 调用失败: %v\n", err)
+        return err
     }
 }
 ```
 
-## 最佳实践
+分类依赖 `*llm.ProviderError`，目前只有 OpenAI、DeepSeek、Gemini 的流式路径会构造它，其他路径多数归为 `unknown`。在 Builder 中重试模型请求用 `WithRequestError(n, builder.RetryTransient(n, nil))`，见 [核心 API](../api/CORE_API.md#模型请求恢复)。
 
-### 1. 使用环境变量
+## 超时
 
-```bash
-export OPENAI_API_KEY="sk-..."
-export ANTHROPIC_API_KEY="sk-ant-..."
-```
-
-### 2. 设置超时
+`llm.WithTimeout` 与请求 ctx 的关系见 [Provider 最佳实践](PROVIDER_BEST_PRACTICES.md#超时配置)。调用级期限用 ctx 控制：
 
 ```go
-ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 defer cancel()
-
 resp, err := client.Chat(ctx, messages)
 ```
-
-### 3. 重试机制
-
-```go
-func chatWithRetry(client llm.Client, messages []llm.Message, maxRetries int) (*llm.CompletionResponse, error) {
-    var lastErr error
-    for i := 0; i < maxRetries; i++ {
-        resp, err := client.Chat(context.Background(), messages)
-        if err == nil {
-            return resp, nil
-        }
-        lastErr = err
-        time.Sleep(time.Second * time.Duration(i+1))
-    }
-    return nil, lastErr
-}
-```
-
-### 4. 选择合适的模型
-
-根据任务选择合适的模型：
-
-- **简单对话**：GPT-3.5-Turbo、DeepSeek Chat
-- **复杂推理**：GPT-4、Claude-3-Opus
-- **代码生成**：DeepSeek Coder、CodeLlama
-- **长文本**：Claude-3（200K）、Kimi（128K）
-
-### 5. 成本优化
-
-- 使用较小的模型处理简单任务
-- 限制 MaxTokens
-- 缓存常见请求的响应
 
 ## 相关文档
 
 - [快速入门](QUICKSTART.md)
-- [架构概述](../architecture/ARCHITECTURE.md)
+- [Provider 最佳实践](PROVIDER_BEST_PRACTICES.md)
+- [Provider 能力边界](PROVIDER_CAPABILITIES.md)

@@ -75,19 +75,6 @@ sequenceDiagram
 
 ### 1. MockTool 工具 Mock
 
-```go
-type MockTool struct {
-    name         string
-    description  string
-    schema       string
-    invokeFunc   func(ctx, input) (*ToolOutput, error)
-    invokeCount  int
-    lastInput    *ToolInput
-    shouldError  bool
-    errorMessage string
-}
-```
-
 **核心功能**：
 
 | 方法 | 说明 |
@@ -100,18 +87,6 @@ type MockTool struct {
 | `Reset()` | 重置状态 |
 
 ### 2. MockLLMClient LLM Mock
-
-```go
-type MockLLMClient struct {
-    responses         []CompletionResponse
-    currentIndex      int
-    shouldError       bool
-    errorMessage      string
-    requestHistory    []CompletionRequest
-    functionCallsMode bool
-    functionResponses map[string]interface{}
-}
-```
 
 **核心功能**：
 
@@ -127,14 +102,6 @@ type MockLLMClient struct {
 
 ### 3. MockStreamingLLMClient 流式 Mock
 
-```go
-type MockStreamingLLMClient struct {
-    *MockLLMClient
-    streamChunks []string
-    streamDelay  int
-}
-```
-
 **核心功能**：
 
 | 方法 | 说明 |
@@ -145,16 +112,6 @@ type MockStreamingLLMClient struct {
 
 ### 4. MockState 状态 Mock
 
-```go
-type MockState struct {
-    data       map[string]interface{}
-    snapshots  []map[string]interface{}
-    getCount   int
-    setCount   int
-    updateFunc func(key, value) error
-}
-```
-
 **实现接口**：`state.State`
 
 **核心功能**：
@@ -163,22 +120,12 @@ type MockState struct {
 |------|------|
 | `Get/Set/Delete/Clear` | 基础 CRUD |
 | `Snapshot/Restore/Clone` | 快照管理 |
+| `Update/Keys/Size` | 批量更新与查询（`SetUpdateFunc` 的回调只在 `Update` 中触发） |
 | `GetString/Int/Bool/Float64/Time` | 类型化获取 |
 | `SetUpdateFunc(fn)` | 设置更新回调 |
 | `GetStats()` | 获取统计 (get/set 次数) |
 
 ### 5. MockStore 存储 Mock
-
-```go
-type MockStore struct {
-    data         map[string]map[string]*store.Value
-    namespaces   []string
-    putCount     int
-    getCount     int
-    shouldError  bool
-    errorMessage string
-}
-```
 
 **实现接口**：`store.Store`
 
@@ -196,12 +143,6 @@ type MockStore struct {
 
 ### 6. MockToolRegistry 工具注册表 Mock
 
-```go
-type MockToolRegistry struct {
-    tools map[string]interfaces.Tool
-}
-```
-
 **核心功能**：
 
 | 方法 | 说明 |
@@ -213,16 +154,6 @@ type MockToolRegistry struct {
 
 ### 7. MockToolExecutor 工具执行器 Mock
 
-```go
-type MockToolExecutor struct {
-    executeFunc     func(ctx, tools, inputs) ([]interface{}, error)
-    executeCalls    int
-    lastTools       []interfaces.Tool
-    lastInputs      []map[string]interface{}
-    parallelResults []interface{}
-}
-```
-
 **核心功能**：
 
 | 方法 | 说明 |
@@ -230,6 +161,7 @@ type MockToolExecutor struct {
 | `ExecuteParallel(ctx, tools, inputs)` | 并行执行 |
 | `SetExecuteFunc(fn)` | 设置自定义执行函数 |
 | `SetParallelResults(results...)` | 设置并行结果 |
+| `SetError(should, msg)` | 配置错误返回 |
 | `GetExecuteCalls()` | 获取执行次数 |
 | `Reset()` | 重置状态 |
 
@@ -608,11 +540,9 @@ testing/
 │       ├── MockState
 │       └── MockStore
 ├── testutil/
-│   └── helpers.go         # 测试辅助函数
-│       ├── TestContext
-│       ├── 断言函数
-│       └── 工具函数
-└── test_token_usage.go    # Token 使用测试示例
+│   └── helpers.go         # TestContext、断言与工具函数
+├── panictest/             # 在子进程中运行可能使进程退出的测试
+└── replay/                # 会话日志回放
 ```
 
 ## 最佳实践
@@ -639,7 +569,7 @@ testutil.AssertEqual(t, 3, count, "工具应该被调用 3 次")
 
 // 验证调用参数
 lastInput := mockTool.GetLastInput()
-testutil.AssertEqual(t, "expected_arg", lastInput.Arguments["arg1"])
+testutil.AssertEqual(t, "expected_arg", lastInput.Args["arg1"])
 ```
 
 ### 3. 测试后重置
@@ -672,7 +602,7 @@ t.Cleanup(func() {
 rp := &replay.Replayer{Source: store, SessionID: "s", Live: replay.Kind("tool")} // 工具用新代码实跑，其余回放
 turns, _ := rp.Turns(ctx)                                                         // 日志中已结束的持久运行
 ctx, log, report, _ := rp.Prepare(ctx, turns[0])
-agent := builder.NewSimpleBuilder(model).WithSessionID("s").WithSessionLog(log).
+agent, _ := builder.NewSimpleBuilder(model).WithSessionID("s").WithSessionLog(log).
     WithDurableScope(scope).WithTools(tools...).Build() // 与记录时相同的会话 ID 与 DurableScope
 out, _ := agent.AsRunnable().Invoke(ctx, turns[0].Input)
 if res, ok := report.Diverged(); ok {
@@ -684,6 +614,23 @@ if res, ok := report.Diverged(); ok {
 - `Live`：选中的边界单独实跑，结果与记录一致时之后继续回放，如 `replay.Kind("tool")` 检查改过的工具是否仍给出相同结果。
 - `Prepare` 返回的 `log` 是该轮开始前的会话副本，历史与记录时相同；重放产生的对话也记在其中，可与原日志比较。
 - 改动影响到被回放的边界的输入时（如改了提示词而没有从那里切开），durable 报告 `operation intent or attempt policy changed`；顺序执行时 `report.Results()` 的最后一项就是出错的边界（同一回合并行的工具调用除外），应从那里切开。
+
+## 子进程 panic 测试（testing/panictest）
+
+`panictest.Run(t, fn)` 在子进程中重新执行当前顶层测试并运行 `fn`，父进程断言子进程正常退出且没有未恢复的 panic，用于回归时可能让进程崩溃的场景。`Recorder` 实现全局 panic 指标收集器的 `RecordPanic`，传给 `core.SetGlobalMetricsCollector` 后可用 `Wait(n, timeout)` 取得收到的 panic。`CombinedOutput(cmd, timeout)` 与 `ChildTimeout(t, limit)` 用于自行管理带时限的子进程。
+
+```go
+func TestNoCrash(t *testing.T) {
+    panictest.Run(t, func(t *testing.T) {
+        rec := &panictest.Recorder{}
+        core.SetGlobalMetricsCollector(rec)
+        // 触发可能 panic 的代码……
+        if events := rec.Wait(1, time.Second); len(events) != 1 {
+            t.Fatalf("panic 未被恢复上报: %v", events)
+        }
+    })
+}
+```
 
 ## 扩展阅读
 

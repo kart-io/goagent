@@ -45,7 +45,7 @@ graph TB
     Base --> Bool
     Base --> Regex
     Base --> ReAct
-    Base --> Chain
+    Interface --> Chain
 
     style Interface fill:#e1f5ff
     style Chain fill:#e8f5e9
@@ -80,7 +80,7 @@ type OutputParser[T any] interface {
     // 解析文本输出
     Parse(ctx context.Context, text string) (T, error)
 
-    // 带提示的解析（用于错误恢复）
+    // 带提示的解析
     ParseWithPrompt(ctx context.Context, text, prompt string) (T, error)
 
     // 获取格式化指令
@@ -90,6 +90,8 @@ type OutputParser[T any] interface {
     GetType() string
 }
 ```
+
+`BaseOutputParser[T]` 供嵌入：其 `ParseWithPrompt` 忽略 prompt 并调用 `BaseOutputParser.Parse`（返回 `CodeNotImplemented`）。内置解析器只重写了 `Parse`，因此对它们调用 `ParseWithPrompt` 会得到该错误，应使用 `Parse`。
 
 ## 解析器类型
 
@@ -245,12 +247,14 @@ Final Answer: <最终答案>
 **特殊方法**：
 
 ```go
-// 带重试的解析
-output, err := parser.ParseWithRetry(ctx, text, 3)
-
-// 验证解析结果
+// 验证解析结果：有 FinalAnswer，或同时有 Action 与 ActionInput
 err := parser.Validate(output)
+
+// 对同一文本最多调用 maxRetries 次 Parse，返回第一次成功的结果
+output, err := parser.ParseWithRetry(ctx, text, 3)
 ```
+
+`ReActOutputParser` 只提供 `Parse`、`ParseWithRetry`、`Validate`、`GetFormatInstructions`。
 
 ## 使用方法
 
@@ -268,12 +272,7 @@ prompt := "请返回 JSON 格式的结果。\n" + formatInstructions
 output := callLLM(prompt)
 
 // 4. 解析输出
-ctx := context.Background()
 result, err := parser.Parse(ctx, output)
-if err != nil {
-    // 使用 ParseWithPrompt 重试
-    result, err = parser.ParseWithPrompt(ctx, output, prompt)
-}
 ```
 
 ### 链式降级
@@ -300,7 +299,7 @@ instructions := parser.GetFormatInstructions()
 // 解析输出
 output, err := parser.Parse(ctx, agentOutput)
 if err != nil {
-    output, err = parser.ParseWithRetry(ctx, agentOutput, 3)
+    // 处理解析错误
 }
 
 // 验证结果
@@ -358,7 +357,7 @@ NewReActOutputParser() *ReActOutputParser
 // 解析文本
 Parse(ctx context.Context, text string) (T, error)
 
-// 带提示解析
+// 带提示解析（内置解析器见上文说明）
 ParseWithPrompt(ctx context.Context, text, prompt string) (T, error)
 
 // 获取格式指令
@@ -405,8 +404,7 @@ parsers/
 │   └── ChainOutputParser[T]
 ├── parser_react.go        # ReAct 解析器
 ├── constants.go           # 常量定义
-├── output_parser_test.go  # 单元测试
-└── output_parser_bench_test.go # 性能测试
+└── *_test.go              # 测试
 ```
 
 ## 常量定义
@@ -420,6 +418,7 @@ const (
     FieldActionInput = "action_input"
     FieldObservation = "observation"
     FieldFinalAnswer = "final_answer"
+    FieldAnswer      = "answer"
 )
 ```
 
@@ -434,6 +433,8 @@ const (
     MarkerFinalAnswer = "Final Answer:"
 )
 ```
+
+另有 CoT/Plan（`MarkerQuestion`、`MarkerPlan`、`MarkerStep`、`MarkerReasoning`、`MarkerConclusion`，`FieldReasoning`、`FieldSteps`、`FieldConclusion`、`FieldConfidence`）、ToT（`FieldBranch`、`FieldScore`、`FieldPath`、`FieldEvaluation`）、自我反思（`FieldCritique`、`FieldImprovement`、`FieldRevision`、`FieldFeedback`）字段与标记，以及错误类型 `ErrTypeInvalidFormat`、`ErrTypeMissingField`、`ErrTypeInvalidJSON`、`ErrTypeUnexpectedStructure`。
 
 ### 输出格式类型
 

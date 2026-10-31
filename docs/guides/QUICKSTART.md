@@ -1,6 +1,6 @@
 # GoAgent 快速入门
 
-新应用统一使用 `agent.AsRunnable()`。同步和流式调用使用相同执行源，配置的工具、检索器、中间件及完成回调走同一路径。要求 Go 1.25+，以及支持流式补全的模型；使用工具时可使用 OpenAI、DeepSeek 或 Gemini Provider 的原生工具流。
+新应用统一使用 `agent.AsRunnable()`。同步和流式调用使用相同执行源，配置的工具、检索器、中间件及完成回调走同一路径。要求 Go 1.25+ 与实现 `llm.StreamClient` 的客户端；目前 OpenAI（含兼容端点）、DeepSeek、Gemini Provider 同时实现流式与原生工具流（`llm.ToolStreamClient`），其他 Provider 只能经旧的同步入口调用。
 
 ```sh
 go get github.com/kart-io/goagent
@@ -52,11 +52,11 @@ agent, err := builder.NewSimpleBuilder(client).
 // 检查 err 后，通过 agent.AsRunnable().Invoke(ctx, question) 调用。
 ```
 
-工具实现 `interfaces.Tool`，提供 Name、Description、ArgsSchema 和 Invoke。检索器实现 `interfaces.DocumentRetriever`，也可直接使用 retrieval 包的 BM25、向量、混合检索及重排序。
+工具实现 `interfaces.Tool`，提供 Name、Description、ArgsSchema 和 Invoke，函数可用 `tools.NewFunctionTool` 包装。检索器实现 `interfaces.DocumentRetriever`；BM25、向量、混合检索及重排序实现位于 goagent-contrib。
 
 - 结果已完整可展示的单个终态工具，可显式配置 `WithReturnDirectTools("lookup")`；不会再调用模型总结或补充引用。
 - `WithMemory(manager).WithSessionID(sessionID)` 启用会话记忆；`WithMaxConversationHistory` 限制加载历史数量。
-- 长任务可显式启用 [ContextPolicy](CONTEXT_POLICY.md)，卸载较早的大工具结果并选择历史摘要模型。默认关闭，摘要请求也消耗预算。
+- 长任务可用 `WithOffload` 把超长工具结果换成引用、经读取工具分页读回，见[上下文治理](CONTEXT_POLICY.md)；默认关闭。历史摘要由 goagent-harness 的 compaction 组件提供。
 - 检索器实现见 [goagent-contrib/retrieval](https://github.com/kart-io/goagent-contrib/tree/master/retrieval)；[MCP 与可恢复步骤](PRIORITY_CAPABILITIES.md)展示外部工具及审批恢复。
 
 ## 流式调用
@@ -88,7 +88,7 @@ if err := ctx.Err(); err != nil { return err }
 | `agent.ExecuteWithTools(ctx, input)` | `agent.AsRunnable().Invoke(ctx, input)` | 原生工具流与最终输出统一，预算包含最终回答 |
 | `agent.ExecuteStream(ctx, input)` | `agent.AsRunnable().Stream(ctx, input)` | 保留同一事件源，增加 Runnable 的组合能力 |
 
-旧 Execute 保留同步语义；配置 ContextPolicy/ReturnDirect 时会提示改用 AsRunnable。ExecuteWithTools 在支持 StreamClient 时已委派统一管线，非流式客户端仍保留旧循环。ReAct 的步骤流和其他推理策略不等同于 Builder 的 Token 流。`Pipe` 等待上游最终结果后再调用下游；复杂分支、并行汇合和有界循环使用 [workflow.Graph](../../workflow/README.md)，通过 Adapt 接入现有 Agent。详细边界见[执行契约](EXECUTION_CONTRACT.md)。
+旧 Execute 保留同步语义，不执行工具；配置 `WithOffload` 或 `WithReturnDirectTools` 时直接报错，持久执行与根预算也只支持 AsRunnable。ExecuteWithTools 在支持 StreamClient 时委派统一管线，非流式客户端仍保留旧循环。`Pipe` 等待上游最终结果后再调用下游；复杂分支、并行汇合和有界循环使用 [workflow.Graph](../../workflow/README.md)，通过 Adapt 接入现有 Agent。详细边界见[执行契约](EXECUTION_CONTRACT.md)。
 
 ## 迁移检查与持续验证
 
@@ -101,6 +101,6 @@ bash scripts/verify_imports.sh
 
 迁移检查基于 Go AST：识别旧 `interfaces.Agent/Runnable`（支持导入别名），并在导入 Builder 的文件中标记 `Execute/ExecuteWithTools` 选择器。它不做接收者类型推导、跨文件数据流或包装函数分析，因此是候选清单，可能误报或漏报。默认只报告；选定已迁移目录可加 `-strict` 作为门禁。不要据此批量替换：逐项确认 Provider 的 StreamClient/ToolStreamClient、自动工具执行、预算和回调语义。
 
-[Provider 持续回归](PROVIDER_REGRESSION.md)提供离线门禁与有界真实测试。退款应用可复用 [refund.Service](../../workflow/refund/README.md)；串行图恢复使用 [CompileDurable](../../workflow/README.md#节点边界的持久化恢复)。当前没有拆分主模块，新退款组件只依赖标准库，先保持现有导入兼容。
+[Provider 持续回归](PROVIDER_REGRESSION.md)提供离线门禁与有界真实测试。退款应用可复用 [refund.Service](../../workflow/refund/README.md)；串行图恢复使用 [CompileDurable](../../workflow/README.md#节点边界的持久化恢复)。
 
 复杂业务可以完全采用 [GoAgent 原生编排与工具体系](NATIVE_ORCHESTRATION.md)：Dispatcher 同时服务图节点与 Builder，持久图 AsRunnable 提供统一调用、步骤事件和审批恢复。无需引入其他编排框架。

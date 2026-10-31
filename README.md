@@ -11,450 +11,210 @@
 
 [English](README.md) | [中文](README_CN.md)
 
-GoAgent is a recoverable, budgeted and observable agent orchestration kernel for Go services: native tool loops, typed workflow graphs with durable checkpoints and approvals, request budgets, OpenTelemetry events and MCP. Retrieval, document loaders, practical tools and multi-instance durable storage live in [goagent-contrib](https://github.com/kart-io/goagent-contrib).
+GoAgent is a recoverable, budgeted and observable agent execution kernel for Go services: a native tool loop, typed workflow graphs with durable checkpoints and approvals, request budgets, session logs, OpenTelemetry events and MCP.
 
-新编排入口：`agent.AsRunnable()`。参见[执行契约与能力状态](docs/guides/EXECUTION_CONTRACT.md)和[GoAgent 评测](evaluation/agentbench/README.md)。
+Related repositories:
 
-原生编排与工具：`workflow.Graph`、持久图 `AsRunnable`、分支级恢复及 `tools.Dispatcher`，参见[接入与退款案例](docs/guides/NATIVE_ORCHESTRATION.md)。
-
-业务验证案例：[DevOps、文章审核、自动回复](https://github.com/kart-io/goagent-examples/blob/main/workflow/business-cases/README.md)，支持 Gemini / DeepSeek / MiniMax 真实模型调用，包含离线输入、审批恢复和跨进程崩溃测试。
-
-Workflow orchestration: [typed graphs, branches, parallel joins and bounded loops](workflow/README.md).
-
-Context governance: [tool-result offloading and history summaries](docs/guides/CONTEXT_POLICY.md).
-
-Harness 装配与编码工具已迁入独立项目 `github.com/kart-io/goagent-harness`：Preset、计划模式、技能、子 Agent 组件与编码工具由上层项目维护；GoAgent 保留执行循环、工作流、恢复、预算和环境接口。当前拆分尚未发布，接入方式与发布顺序见 [Harness 迁移指南](docs/guides/HARNESS_MIGRATION.md)。
-
-宿主接入：[标准执行装配与可取消构建](docs/guides/HOST_INTEGRATION.md)、[离线示例](examples/execution-scope/main.go)、[执行开销实测](docs/evaluation/2026-10-31-execution-overhead/REPORT.md)。
-
-执行可靠性、扩展点与资源治理：[扩展契约](docs/guides/EXTENSION_CONTRACT.md)、[预算、诊断与资源治理](docs/guides/EXECUTION_GOVERNANCE.md)。
+- [goagent-contrib](https://github.com/kart-io/goagent-contrib) - retrievers (BM25, hybrid, reranking, Qdrant), document loaders, practical tools and the multi-instance Postgres `durable.Store`.
+- [goagent-examples](https://github.com/kart-io/goagent-examples) - business cases (DevOps, content review, auto-reply, refund recovery, live-model orchestration).
+- `github.com/kart-io/goagent-harness` - presets, plan mode, compaction, skills, sub-agent components and coding tools. See the [Harness migration guide](docs/guides/HARNESS_MIGRATION.md).
 
 ## Features
 
-- **Native Tool Loop** - Model-driven tool calling with durable, replayable tool calls
-- **High Performance** - Hot path optimization with InvokeFast reducing latency by 4-6%
-- **Flexible Architecture** - 4-layer modular design with clear separation of concerns
-- **LLM Abstraction** - Support for multiple LLM providers (OpenAI, Anthropic Claude, Cohere, HuggingFace, Gemini, DeepSeek)
-- **Memory Management** - Conversation history and case-based memory
-- **Tool System** - Extensible tool registry with parallel execution and dependency management
-- **State Management** - Thread-safe state with checkpointing and persistence
-- **Observability** - OpenTelemetry integration with distributed tracing
-- **Durable Execution** - File-based `durable.Store` in core; multi-instance Postgres store in [goagent-contrib](https://github.com/kart-io/goagent-contrib/tree/master/durable/pgstore)
+- **One execution entry** - `agent.AsRunnable()` serves `Invoke`, `Stream`, `Batch` and `Pipe` from the same stream source, so tools, retrieval, middleware and callbacks run on one path.
+- **Native tool loop** - the model picks tools or answers in a single streaming request (OpenAI, DeepSeek and Gemini providers); optional parallel tool calls and direct-return tools.
+- **Loop extension points** - PreStep, Request, RequestError, TurnStopping hooks, prompt sections/contexts, and a running `Handle` that accepts Steer/Inject/Redirect/Followup.
+- **Durable execution** - `core/durable` journals model turns and tool calls; `workflow.Graph` compiles typed graphs with branches, parallel joins, bounded loops and approval resume.
+- **Governance** - root request budgets (`core/budget`), `tools.Dispatcher`/`Pipeline` with approvals, guards and admission limits, tool-result offloading, session logs (`core/session`).
+- **LLM providers** - OpenAI (and compatible endpoints), DeepSeek and Gemini support `AsRunnable` and the native tool loop; Anthropic, Kimi, SiliconFlow, Ollama, Cohere and Hugging Face are available through the synchronous `Execute` entry. See the [provider table](docs/README.md#llm-提供商).
+- **Observability** - read-only execution events (`core/observe`) and OpenTelemetry integration (`observability`).
+- **MCP** - official MCP client sessions adapted as tools (`mcp/remote`), plus a local toolbox.
 
 ## Quick Start
 
-### Installation
-
 ```bash
 go get github.com/kart-io/goagent
+export OPENAI_API_KEY=...
+export OPENAI_MODEL=...   # optional: OPENAI_BASE_URL for OpenAI-compatible endpoints
 ```
-
-### Basic Example
 
 ```go
 package main
 
 import (
     "context"
+    "fmt"
     "log"
     "time"
 
     "github.com/kart-io/goagent/builder"
-    "github.com/kart-io/goagent/llm"
     "github.com/kart-io/goagent/llm/providers"
 )
 
 func main() {
-    // Create LLM client
-    llmClient, err := providers.NewOpenAIWithOptions(llm.WithAPIKey("your-api-key"))
+    // Reads OPENAI_API_KEY / OPENAI_MODEL / OPENAI_BASE_URL unless set with llm.With* options.
+    client, err := providers.NewOpenAIWithOptions()
     if err != nil {
         log.Fatal(err)
     }
 
-    // Build agent with fluent API
-    agent, err := builder.NewSimpleBuilder(llmClient).
-        WithSystemPrompt("You are a helpful assistant").
-        WithMaxIterations(10).
+    agent, err := builder.NewSimpleBuilder(client).
+        WithSystemPrompt("You are a helpful assistant.").
+        WithMaxIterations(6).
         WithTimeout(30 * time.Second).
         Build()
-
     if err != nil {
         log.Fatal(err)
     }
 
-    // Execute agent
-    result, err := agent.AsRunnable().Invoke(context.Background(), "Analyze the latest sales data")
+    out, err := agent.AsRunnable().Invoke(context.Background(), "Introduce yourself in one sentence.")
     if err != nil {
         log.Fatal(err)
     }
-
-    log.Printf("Result: %v", result)
-}
-```
-
-### Using Pre-configured Agents
-
-```go
-// Create a RAG agent for document Q&A
-ragAgent, err := builder.RAGAgent(llmClient, vectorStore)
-
-// Create an analysis agent (low temperature, high precision)
-analysisAgent, err := builder.AnalysisAgent(llmClient, dataSource)
-
-// Create a monitoring agent (long-running, periodic checks)
-monitoringAgent, err := builder.MonitoringAgent(llmClient, 30*time.Second)
-```
-
-### Grounded RAG and incremental output
-
-- `RAGAgent(client, retriever)` retrieves evidence and returns reference provenance in `retrieval_sources`.
-- `WithRetriever(retriever, RetrievalConfig{...})` bounds document count and context size, and accepts hybrid or reranking retrievers.
-- The OpenAI provider supports `CompleteStream` / `ChatStream` with text deltas, token usage, and asynchronous errors.
-
-Retrievers (BM25, hybrid, reranking, Qdrant) are provided by [goagent-contrib/retrieval](https://github.com/kart-io/goagent-contrib/tree/master/retrieval) and satisfy `interfaces.DocumentRetriever`. See the [RAG and streaming guide](docs/guides/GROUNDED_RAG_AND_STREAMING.md).
-
-## Architecture
-
-GoAgent follows a 4-layer architecture for maintainability and scalability:
-
-```mermaid
-graph TB
-    subgraph "Layer 4: Application"
-        Examples["Examples"]
-        UserApps["User Applications"]
-    end
-
-    subgraph "Layer 3: Implementation"
-        Tools["tools<br/>Tool System"]
-        Middleware["middleware<br/>Request Pipeline"]
-        Parsers["parsers<br/>Output Parsing"]
-    end
-
-    subgraph "Layer 2: Business Logic"
-        Core["core<br/>Execution Engine"]
-        LLM["llm<br/>LLM Integration"]
-        Memory["memory<br/>Memory Management"]
-        Observability["observability<br/>Tracing & Metrics"]
-    end
-
-    subgraph "Layer 1: Foundation"
-        Interfaces["interfaces<br/>Core Interfaces"]
-        Errors["errors<br/>Error Types"]
-        Cache["cache<br/>Caching"]
-    end
-
-    Examples --> Builder
-    UserApps --> Builder
-
-    Tools --> Core
-    Middleware --> Core
-
-    Core --> LLM
-    Core --> Memory
-    Core --> Interfaces
-
-    LLM --> Interfaces
-    Memory --> Cache
-
-    style Core fill:#e8f5e9
-    style LLM fill:#e1f5ff
-    style Interfaces fill:#fff3e0
-
-    Builder["builder<br/>Fluent API"]
-    Builder --> Core
-    Builder --> LLM
-```
-
-### Request Flow
-
-```mermaid
-sequenceDiagram
-    participant App as Application
-    participant Builder as AgentBuilder
-    participant Agent as Agent
-    participant LLM as LLM Client
-    participant Tools as Tool System
-
-    App->>Builder: NewAgentBuilder(llm)
-    Builder->>Builder: Configure options
-    Builder->>Agent: Build()
-
-    App->>Agent: Execute(ctx, input)
-    Agent->>LLM: Generate(prompt)
-    LLM-->>Agent: Response
-
-    alt Tool Call Required
-        Agent->>Tools: Execute(toolCall)
-        Tools-->>Agent: Result
-        Agent->>LLM: Generate(with result)
-        LLM-->>Agent: Final Response
-    end
-
-    Agent-->>App: AgentOutput
-```
-
-See [Architecture Documentation](docs/architecture/) for details.
-
-## Module Reference
-
-| Module | Description | Documentation |
-|--------|-------------|---------------|
-| **[core](core/)** | Execution engine, state management, runtime | [README](core/README.md) |
-| **[workflow](workflow/)** | Typed graph compilation, branches, parallel joins and bounded loops | [README](workflow/README.md) |
-| **[llm](llm/)** | LLM provider integration (OpenAI, Anthropic, etc.) | [README](llm/README.md) |
-| **[builder](builder/)** | Fluent API for agent construction | [README](builder/README.md) |
-| **[tools](tools/)** | Tool system and registry | [README](tools/README.md) |
-| **[memory](memory/)** | Memory management and vector storage | [README](memory/README.md) |
-| **[middleware](middleware/)** | Request/response middleware | [README](middleware/README.md) |
-| **[observability](observability/)** | Tracing and metrics | [README](observability/README.md) |
-| **[cache](cache/)** | Caching system | [README](cache/README.md) |
-| **[interfaces](interfaces/)** | Core interface definitions | [README](interfaces/README.md) |
-| **[errors](errors/)** | Error types and handling | [README](errors/README.md) |
-| **[parsers](parsers/)** | Output parsing | [README](parsers/README.md) |
-| **[testing](testing/)** | Testing utilities and mocks | [README](testing/README.md) |
-
-Retrieval, document loaders, file/web/API tools, database tools and the multi-instance Postgres `durable.Store` are separate modules in [goagent-contrib](https://github.com/kart-io/goagent-contrib).
-
-## Core Components
-
-### Agents
-Autonomous entities that can reason, use tools, and make decisions.
-
-```go
-type Agent interface {
-    Execute(ctx context.Context, input *AgentInput) (*AgentOutput, error)
-    Name() string
-    Description() string
-    Capabilities() []string
+    fmt.Println(out.Result)
 }
 ```
 
 ### Tools
-Extensible functions that agents can call to interact with external systems.
+
+Tools implement `interfaces.Tool` (`Name`, `Description`, `ArgsSchema`, `Invoke`). `tools.NewFunctionTool` wraps a function:
 
 ```go
-type Tool interface {
-    Name() string
-    Description() string
-    Execute(ctx context.Context, input map[string]interface{}) (interface{}, error)
-}
-```
-
-### Memory
-Persistent storage for conversations, cases, and application state.
-
-```go
-type Manager interface {
-    AddConversation(ctx context.Context, conv *Conversation) error
-    GetConversationHistory(ctx context.Context, sessionID string, limit int) ([]*Conversation, error)
-    SearchSimilarCases(ctx context.Context, query string, limit int) ([]*Case, error)
-}
-```
-
-### Builder
-Fluent API for constructing agents with complex configurations.
-
-```go
-agent := builder.NewAgentBuilder(llmClient).
-    WithSystemPrompt("You are an expert analyst").
-    WithTools(searchTool, calcTool).
-    WithMemory(memoryManager).
-    WithMiddleware(loggingMW, cacheMW).
-    Build()
-```
-
-## Advanced Features
-
-### State Management & Checkpointing
-
-```go
-// Session checkpoints; implement checkpoint.Checkpointer for external storage
-checkpointer := checkpoint.NewInMemorySaver()
-
-agent := builder.NewAgentBuilder(llmClient).
-    WithCheckpointer(checkpointer).
-    WithConfig(&builder.AgentConfig{EnableAutoSave: true}).
-    Build()
-```
-
-### Distributed Tracing
-
-```go
-// Initialize OpenTelemetry
-provider := observability.NewTelemetryProvider(&observability.TelemetryConfig{
-    ServiceName: "my-agent",
-    OTLPEndpoint: "localhost:4317",
-})
-
-// Traces are automatically propagated across agent calls
-```
-
-### Sub-Agents and Sub-Workflows
-
-Wrap a child agent or a `workflow.DurableGraph` as a tool with `tools.NewRunnableToolFactory`. Child model turns, tool calls and checkpoints are journaled under the parent's execution key, so a child waiting for approval suspends the parent with `builder.ErrWaiting` and resumes with `durable.WithResume`. See [Composable Orchestration](docs/guides/COMPOSABLE_ORCHESTRATION.md).
-
-### Parallel Tool Execution
-
-```go
-// Execute multiple tools concurrently
-executor := tools.NewToolExecutor(
-    tools.WithMaxConcurrency(10),
-    tools.WithTimeout(30*time.Second),
+weather := tools.NewFunctionTool(
+    "get_weather",
+    "Look up the current weather for a city",
+    `{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}`,
+    func(ctx context.Context, args map[string]interface{}) (interface{}, error) {
+        city, _ := args["city"].(string)
+        return map[string]string{"city": city, "weather": "sunny"}, nil
+    },
 )
 
-results, err := executor.ExecuteParallel(ctx, []*tools.ToolCallRequest{
-    {ID: "search", Tool: searchTool, Input: &interfaces.ToolInput{Args: map[string]interface{}{"query": "Go"}}},
-    {ID: "calc", Tool: calcTool, Input: &interfaces.ToolInput{Args: map[string]interface{}{"expression": "2+2"}}},
-})
+agent, err := builder.NewSimpleBuilder(client).
+    WithSystemPrompt("You can look up the weather.").
+    WithTools(weather).
+    WithMaxIterations(6). // includes the final answer
+    WithRequestError(3, builder.RetryTransient(3, func(retry int) time.Duration {
+        return time.Duration(retry) * 200 * time.Millisecond
+    })).
+    Build()
+if err != nil {
+    return err
+}
+out, err := agent.AsRunnable().Invoke(ctx, "What's the weather in Paris?")
 ```
+
+### Streaming
+
+```go
+ctx, cancel := context.WithCancel(ctx)
+defer cancel() // cancel when you stop consuming early
+
+chunks, err := agent.AsRunnable().Stream(ctx, question)
+if err != nil {
+    return err
+}
+for chunk := range chunks {
+    if chunk.Error != nil {
+        return chunk.Error
+    }
+    if chunk.Event != nil && chunk.Event.Type == "text" {
+        fmt.Print(chunk.Event.Delta) // transient text; may precede a tool call
+    }
+    if chunk.Done {
+        fmt.Println(chunk.Data.Result) // final result after middleware and callbacks
+    }
+}
+return ctx.Err()
+```
+
+Other event types are `sources`, `step` (e.g. `tool_start`/`tool_end`) and `usage`; `usage` is a cumulative snapshot. See the [Quick Start guide](docs/guides/QUICKSTART.md) and the [execution contract](docs/guides/EXECUTION_CONTRACT.md).
+
+### Pre-configured Agents
+
+```go
+agent, err := builder.QuickAgent(client, "You are a helpful assistant.")
+chat, err := builder.ChatAgent(client, "Alice")
+rag, err := builder.RAGAgent(client, retriever) // DocumentRetriever, a Retrieve method, or VectorStore
+```
+
+`AnalysisAgent`, `WorkflowAgent`, `MonitoringAgent` and `ResearchAgent` preset prompts, state and middleware the same way.
+
+### Grounded RAG
+
+`WithRetriever(retriever, builder.RetrievalConfig{MaxDocuments: 4, MaxContextRunes: 12000})` retrieves evidence for every request and returns provenance in the output metadata key `retrieval_sources`. Retrievers satisfy `interfaces.DocumentRetriever`; implementations live in [goagent-contrib/retrieval](https://github.com/kart-io/goagent-contrib/tree/master/retrieval). See the [RAG and streaming guide](docs/guides/GROUNDED_RAG_AND_STREAMING.md).
+
+### Running Handle and Loop Hooks
+
+With a `llm.ToolStreamClient` and at least one tool, `agent.Start(ctx, input)` runs in the background and returns a `*builder.Handle` (`Steer`, `Inject`, `Redirect`, `Followup`, `Interrupt`, `Wait`). Hooks (`WithPreStep`, `WithIdentifiedPreStep`, `WithRequestHook`, `WithRequestError`, `WithTurnStopping`, `WithPromptSections`, `WithPromptContexts`), tool-result offloading (`WithOffload`) and session logs (`WithSessionLog`) are described in the [builder README](builder/README.md), the [context policy guide](docs/guides/CONTEXT_POLICY.md) and [core/session](core/session/README.md).
+
+### Durable Execution and Orchestration
+
+- [Native orchestration](docs/guides/NATIVE_ORCHESTRATION.md) - `workflow.Graph`, durable graphs via `AsRunnable`, branch-level resume and `tools.Dispatcher`.
+- [Workflow](workflow/README.md) - typed graphs, branches, parallel joins and bounded loops.
+- [Composable orchestration](docs/guides/COMPOSABLE_ORCHESTRATION.md) - wrap a child agent or `workflow.DurableGraph` as a tool with `tools.NewRunnableToolFactory`; a child waiting for approval suspends the parent with `builder.ErrWaiting`.
+- [Host integration](docs/guides/HOST_INTEGRATION.md) - `execution.NewScope` + `execution.ConfigureBuilder` + `BuildContext`; offline example: `go run ./examples/execution-scope`.
+- [Extension contract](docs/guides/EXTENSION_CONTRACT.md) and [execution governance](docs/guides/EXECUTION_GOVERNANCE.md) - budgets, diagnostics and resource limits.
+
+## Packages
+
+| Package | Description |
+|---------|-------------|
+| [builder](builder/) | Fluent agent construction, native tool loop, hooks, `Handle` |
+| [builder/contextpolicy](builder/contextpolicy/) | Tool-result offloading (`Offload`) |
+| [core](core/) | `Runnable`/`StreamRunnable`, callbacks, state; subpackages `durable`, `budget`, `session`, `observe`, `checkpoint`, `middleware` |
+| [execution](execution/) | Host scope: run/session identity, journal, budget, deadline, observer |
+| [workflow](workflow/) | Typed graph compilation and durable graphs |
+| [llm](llm/) | Client interfaces, options; `llm/providers` implementations |
+| [tools](tools/) | Tool registry, function tools, `Dispatcher`, `Pipeline`; `tools/policy`, `tools/spill` and built-in tools |
+| [mcp](mcp/) | MCP client adapter and toolbox |
+| [memory](memory/) | Conversation and case memory, vector stores |
+| [harness/env](harness/env/) | File system and command execution interfaces for tools |
+| [observability](observability/) | OpenTelemetry tracing and metrics |
+| [evaluation/agentbench](evaluation/agentbench/README.md) | Reproducible task evaluation |
+| [testing](testing/) | Mocks, test utilities and session-log replay |
+
+Other packages: `cache`, `errors`, `interfaces`, `parsers`, `store`, `middleware`, `devtools`, `utils`.
 
 ## Documentation
 
-- **[Quick Start Guide](docs/guides/QUICKSTART.md)** - Get started in 5 minutes
-- **[Architecture](docs/architecture/)** - System design and import layering
-- **[LLM Providers](docs/guides/LLM_PROVIDERS.md)** - Supported LLM integrations
-- **[Testing Best Practices](docs/development/TESTING_BEST_PRACTICES.md)** - Writing tests
-- **[API Reference](docs/api/)** - Complete API documentation
+- [Quick Start](docs/guides/QUICKSTART.md)
+- [User Guide](docs/guides/USER_GUIDE.md)
+- [Builder API Reference](docs/guides/BUILDER_API_REFERENCE.md)
+- [LLM Providers](docs/guides/LLM_PROVIDERS.md)
+- [Execution overhead measurements](docs/evaluation/2026-10-31-execution-overhead/REPORT.md)
 
-See [docs/README.md](docs/README.md) for a complete guide.
+See [docs/README.md](docs/README.md) for the full index and [CHANGELOG.md](CHANGELOG.md) for breaking changes.
 
 ## Examples
 
-Explore working examples in the [`examples/`](examples/) directory:
-
-- **Basic** - Simple agent creation and execution
-- **Advanced** - Complex workflows with state management
-- **Integration** - Multi-component systems
-- **Streaming** - Real-time streaming responses
-- **Observability** - Tracing and metrics
-
-Run an example:
+Runnable examples live in [`examples/`](examples/README.md); business cases live in [goagent-examples](https://github.com/kart-io/goagent-examples).
 
 ```bash
-go run examples/basic/01-simple-agent/main.go
+go run ./examples/basic/01-simple-agent
+go run ./examples/workflow
 ```
 
-## Performance
-
-### Core Performance Metrics
-- **Builder Construction**: ~100μs/op
-- **Agent Execution**: ~1ms/op (excluding LLM calls)
-- **Middleware Overhead**: <5%
-- **Parallel Tool Execution**: Linear scaling to 100+ concurrent calls
-- **Cache Hit Rate**: >90% with LRU caching
-- **OpenTelemetry Overhead**: <2% at 10% sampling
-
-### InvokeFast Optimization 🚀
-
-GoAgent provides **InvokeFast**, a hot path optimization that bypasses callbacks and middleware for internal calls:
-
-**Performance Gains** (agent benchmarks on Intel i7-14700KF):
-- **Latency**: 4-6% faster execution (1494ns → 1399ns per call)
-- **Memory**: 5-8% reduction in allocations
-- **Chain Calls (10x)**: 4.4% faster (15508ns → 14825ns)
-
-**Automatic Optimization**:
-- `ChainableAgent` automatically uses InvokeFast for internal calls
-- Zero code changes required for existing applications
-
-**Use Cases**:
-- Nested agent calls
-- Chain compositions with multiple agents
-- Performance-critical production workloads
-
-### Benchmarking Your Agents
-
-```go
-import "testing"
-
-func BenchmarkYourAgent(b *testing.B) {
-    agent := createYourAgent()
-    ctx := context.Background()
-    input := &core.AgentInput{Task: "test"}
-
-    b.Run("Standard", func(b *testing.B) {
-        for i := 0; i < b.N; i++ {
-            _, _ = agent.Invoke(ctx, input)
-        }
-    })
-
-    b.Run("Optimized", func(b *testing.B) {
-        for i := 0; i < b.N; i++ {
-            _, _ = agent.InvokeFast(ctx, input)
-        }
-    })
-}
-```
-
-## Contributing
-
-We welcome contributions!
-
-### Development Setup
+## Development
 
 ```bash
-# Clone repository
 git clone https://github.com/kart-io/goagent.git
 cd goagent
-
-# Install dependencies
-go mod download
-
-# Run tests
 go test ./...
-
-# Run linter
 golangci-lint run
-
-# Run examples
-go run examples/basic/01-simple-agent/main.go
+bash scripts/verify_imports.sh   # import layering
+bash scripts/check_coverage.sh   # coverage threshold
 ```
-
-### Code Quality
-
-- Minimum test coverage: 80%
-- All public APIs must have documentation
-- Follow [import layering rules](docs/architecture/IMPORT_LAYERING.md)
-- Run verification: `./scripts/verify_imports.sh`
-
-## Roadmap
-
-- [x] Additional LLM providers (Anthropic Claude, Cohere, Hugging Face)
-- [x] Production vector database integration (Qdrant, in goagent-contrib)
-- [ ] Graphical workflow designer
-- [ ] Enhanced monitoring dashboard
-- [ ] Agent versioning and A/B testing
-- [ ] Performance optimizations (connection pooling, batch processing)
-
-## Design Principles
-
-1. **Interface First** - Clear interfaces supporting multiple implementations
-2. **Composability** - Components can be flexibly combined and extended
-3. **Type Safety** - Strong typing to catch errors at compile time
-4. **Context Aware** - All operations support `context.Context`
-5. **Observability** - Built-in tracing, metrics, and logging
-6. **Ease of Use** - Sensible defaults and fluent APIs
 
 ## License
 
-This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
+Apache License 2.0 - see [LICENSE](LICENSE).
 
 ## Support
 
-- **Documentation**: [docs/](docs/)
 - **Issues**: [GitHub Issues](https://github.com/kart-io/goagent/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/kart-io/goagent/discussions)
 
 ## Acknowledgments
 
-GoAgent is inspired by:
-- [LangChain](https://github.com/langchain-ai/langchain) - Python AI framework
-- [LangGraph](https://github.com/langchain-ai/langgraph) - Graph-based agent workflows
-- [AutoGen](https://github.com/microsoft/autogen) - Multi-agent conversations
-
----
-
-**Status**: See capability boundaries and validation scope
-**Version**: 1.0
-**Go Version**: 1.25.0+
-**Last Updated**: 2026-10-26
+GoAgent is inspired by [LangChain](https://github.com/langchain-ai/langchain), [LangGraph](https://github.com/langchain-ai/langgraph) and [AutoGen](https://github.com/microsoft/autogen).

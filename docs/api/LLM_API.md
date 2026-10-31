@@ -1,483 +1,208 @@
 # GoAgent LLM API 参考
 
-本文档提供 GoAgent LLM 客户端的完整 API 参考。
+本文概述 `llm`、`llm/providers`、`llm/common`、`llm/constants` 的公开 API。完整签名以 Go 文档为准：
 
-## 目录
+```bash
+go doc -all github.com/kart-io/goagent/llm
+go doc -all github.com/kart-io/goagent/llm/providers
+```
 
-- [Client 接口](#client-接口)
-- [消息类型](#消息类型)
-- [请求和响应](#请求和响应)
-- [LLM 选项](#llm-选项)
-- [提供商实现](#提供商实现)
+各 Provider 实际实现的能力见 [Provider 能力边界](../guides/PROVIDER_CAPABILITIES.md)，配置与默认值见 [LLM 提供商指南](../guides/LLM_PROVIDERS.md)。
 
----
-
-## Client 接口
+## 接口
 
 ### llm.Client
 
+所有 Provider 都实现的基础接口：
+
 ```go
-package llm
-
-// Client 定义 LLM 客户端接口
 type Client interface {
-    // Complete 生成文本补全
     Complete(ctx context.Context, req *CompletionRequest) (*CompletionResponse, error)
-
-    // Chat 进行对话
     Chat(ctx context.Context, messages []Message) (*CompletionResponse, error)
-
-    // Provider 返回提供商类型
     Provider() constants.Provider
-
-    // IsAvailable 检查 LLM 是否可用
     IsAvailable() bool
 }
 ```
 
----
+内置 Provider 的 `IsAvailable` 会向服务端发真实请求（多数是一次最小补全，计费），不要放在热路径上。
 
-## 消息类型
+### 可选接口
 
-### llm.Message
+| 接口 | 方法 | 检测 / 转换 |
+|---|---|---|
+| `StreamClient` | `CompleteStream`、`ChatStream`，返回 `<-chan *StreamChunk` | `HasStreaming`、`AsStreamClient` |
+| `ToolStreamClient` | `StreamClient` + `CompleteToolsStream(ctx, req, tools)` | `HasToolStreaming`、`AsToolStreamClient` |
+| `TokenStreamingClient` | `Stream(ctx, prompt) (<-chan string, error)` | `HasTokenStreaming` |
+| `ToolCallingClient` | `GenerateWithTools`、`StreamWithTools`（基于单个 prompt 的旧签名） | `AsToolCaller` |
+| `EmbeddingClient` / `BatchEmbeddingClient` | `Embed` / `EmbedBatch` | `HasEmbedding`、`AsEmbedder` |
+| `CapabilityChecker` | `HasCapability`、`Capabilities` | 类型断言 |
+
+`FullClient` 组合 `Client`、`StreamClient`、`ToolCallingClient`、`EmbeddingClient`、`CapabilityChecker`。
+
+检测规则：
+
+- `HasStreaming` / `HasToolStreaming` 只检查接口实现，不看能力声明。Builder 的 `AsRunnable` 与 `ExecuteStream` 要求 `StreamClient`；原生工具循环与 `WithReturnDirectTools` 要求 `ToolStreamClient`，否则在构建或执行阶段、发出请求前报错。
+- `HasToolCalling` 在实现 `ToolStreamClient` 或 `ToolCallingClient` 时为 true；它为 true 不代表 `AsToolCaller` 能返回非 nil。
+- `HasEmbedding` / `AsEmbedder` 同时要求实现 `EmbeddingClient`，且（若实现了 `CapabilityChecker`）声明了 `CapabilityEmbedding`。
+- `ErrUnsupportedCapability` 表示 Provider 没有实现该操作。
+
+### 能力常量
+
+`Capability` 取值：`CapabilityCompletion`、`CapabilityChat`、`CapabilityStreaming`、`CapabilityStructuredStreaming`、`CapabilityToolStreaming`、`CapabilityToolCalling`、`CapabilityEmbedding`、`CapabilityBatchEmbedding`、`CapabilityVision`、`CapabilityJSON`。
+
+`CapabilityStreaming` 只表示有某种流式输出（可能仅是字符串流）；结构化流与原生工具流分别看 `CapabilityStructuredStreaming` 和 `CapabilityToolStreaming`。能力声明描述适配器实现，不保证任意模型或自定义端点可用。
+
+## 消息、请求与响应
 
 ```go
 type Message struct {
-    // Role 消息角色：system, user, assistant
-    Role string `json:"role"`
-
-    // Content 消息内容
-    Content string `json:"content"`
-
-    // Name 可选的消息名称
-    Name string `json:"name,omitempty"`
+    Role             string     // "system"、"user"、"assistant"、"tool"
+    Content          string
+    Name             string
+    ToolCalls        []ToolCall // assistant 发起的工具调用
+    ReasoningContent string     // 工具回合原生续接所需的推理内容
+    ToolCallID       string     // tool 消息对应的调用 ID
+    ProviderState    *ProviderState // 不透明的原生响应片段（如 Gemini 签名），须原样回放
 }
 
-// 便捷构造函数
 func NewMessage(role, content string) Message
 func SystemMessage(content string) Message
 func UserMessage(content string) Message
 func AssistantMessage(content string) Message
-```
 
-### 使用示例
-
-```go
-import "github.com/kart-io/goagent/llm"
-
-messages := []llm.Message{
-    llm.SystemMessage("你是一个有帮助的助手"),
-    llm.UserMessage("你好，请介绍一下自己"),
-}
-```
-
----
-
-## 请求和响应
-
-### llm.CompletionRequest
-
-```go
 type CompletionRequest struct {
-    // Messages 消息列表
-    Messages []Message `json:"messages"`
-
-    // Temperature 温度参数 (0.0-2.0)
-    Temperature float64 `json:"temperature,omitempty"`
-
-    // MaxTokens 最大 token 数
-    MaxTokens int `json:"max_tokens,omitempty"`
-
-    // Model 模型名称
-    Model string `json:"model,omitempty"`
-
-    // Stop 停止序列
-    Stop []string `json:"stop,omitempty"`
-
-    // TopP Top-p 采样
-    TopP float64 `json:"top_p,omitempty"`
+    Messages    []Message
+    Temperature float64
+    MaxTokens   int
+    Model       string   // 为空时使用客户端配置的模型
+    Stop        []string
+    TopP        float64
 }
-```
 
-### llm.CompletionResponse
-
-```go
 type CompletionResponse struct {
-    // Content 生成的内容
-    Content string `json:"content"`
-
-    // Model 使用的模型
-    Model string `json:"model"`
-
-    // TokensUsed 使用的 token 数
-    TokensUsed int `json:"tokens_used,omitempty"`
-
-    // FinishReason 结束原因
-    FinishReason string `json:"finish_reason,omitempty"`
-
-    // Provider 提供商
-    Provider string `json:"provider,omitempty"`
-
-    // Usage 详细的 Token 使用统计
-    Usage *interfaces.TokenUsage `json:"usage,omitempty"`
-}
-```
-
-### interfaces.TokenUsage
-
-```go
-type TokenUsage struct {
-    // PromptTokens 提示词 token 数
-    PromptTokens int `json:"prompt_tokens"`
-
-    // CompletionTokens 补全 token 数
-    CompletionTokens int `json:"completion_tokens"`
-
-    // TotalTokens 总 token 数
-    TotalTokens int `json:"total_tokens"`
-}
-```
-
----
-
-## LLM 选项
-
-### llm.LLMOptions
-
-```go
-type LLMOptions struct {
-    // 基础配置
-    Provider constants.Provider `json:"provider"`
-    APIKey   string             `json:"api_key"`
-    BaseURL  string             `json:"base_url,omitempty"`
-    Model    string             `json:"model"`
-
-    // 生成参数
-    MaxTokens      int             `json:"max_tokens"`
-    Temperature    float64         `json:"temperature"`
-    TopP           float64         `json:"top_p,omitempty"`
-    ResponseFormat *ResponseFormat `json:"response_format,omitempty"`
-
-    // 网络配置
-    Timeout  int    `json:"timeout"`
-    ProxyURL string `json:"proxy_url,omitempty"`
-
-    // 重试配置
-    RetryCount int           `json:"retry_count,omitempty"`
-    RetryDelay time.Duration `json:"retry_delay,omitempty"`
-
-    // 速率限制
-    RateLimitRPM int `json:"rate_limit_rpm,omitempty"`
-
-    // 缓存配置
-    CacheEnabled bool          `json:"cache_enabled,omitempty"`
-    CacheTTL     time.Duration `json:"cache_ttl,omitempty"`
-
-    // 流式响应
-    StreamingEnabled bool `json:"streaming_enabled,omitempty"`
-
-    // 其他配置
-    OrganizationID string            `json:"organization_id,omitempty"`
-    SystemPrompt   string            `json:"system_prompt,omitempty"`
-    CustomHeaders  map[string]string `json:"custom_headers,omitempty"`
-}
-
-// DefaultLLMOptions 返回默认配置
-func DefaultLLMOptions() *LLMOptions
-```
-
-### llm.ResponseFormat
-
-```go
-type ResponseFormat struct {
-    Type string `json:"type"` // "text" 或 "json_object"
-}
-
-// 预定义格式
-var (
-    ResponseFormatText = &ResponseFormat{Type: "text"}
-    ResponseFormatJSON = &ResponseFormat{Type: "json_object"}
-)
-```
-
-### ClientOption 函数
-
-```go
-type ClientOption func(*LLMOptions)
-
-// 基础配置
-func WithProvider(provider constants.Provider) ClientOption
-func WithAPIKey(apiKey string) ClientOption
-func WithBaseURL(baseURL string) ClientOption
-func WithModel(model string) ClientOption
-
-// 生成参数
-func WithMaxTokens(maxTokens int) ClientOption
-func WithTemperature(temperature float64) ClientOption
-func WithTopP(topP float64) ClientOption
-func WithResponseFormat(format *ResponseFormat) ClientOption
-
-// 网络配置
-func WithTimeout(timeout time.Duration) ClientOption
-func WithProxy(proxyURL string) ClientOption
-
-// 重试配置
-func WithRetryCount(count int) ClientOption
-func WithRetryDelay(delay time.Duration) ClientOption
-
-// 其他
-func WithOrganizationID(orgID string) ClientOption
-func WithSystemPrompt(prompt string) ClientOption
-func WithCustomHeaders(headers map[string]string) ClientOption
-```
-
----
-
-## 提供商实现
-
-### constants.Provider
-
-```go
-package constants
-
-type Provider string
-
-const (
-    ProviderOpenAI      Provider = "openai"
-    ProviderAnthropic   Provider = "anthropic"
-    ProviderGemini      Provider = "gemini"
-    ProviderOllama      Provider = "ollama"
-    ProviderCohere      Provider = "cohere"
-    ProviderHuggingFace Provider = "huggingface"
-    ProviderDeepSeek    Provider = "deepseek"
-    ProviderKimi        Provider = "kimi"
-    ProviderSiliconFlow Provider = "siliconflow"
-)
-```
-
-### OpenAI
-
-```go
-package providers
-
-// NewOpenAIWithOptions 创建 OpenAI 客户端
-func NewOpenAIWithOptions(opts ...ClientOption) (*OpenAIProvider, error)
-
-// 支持的模型
-// - gpt-4, gpt-4-turbo, gpt-4o
-// - gpt-3.5-turbo
-// - text-embedding-ada-002
-```
-
-**使用示例：**
-
-```go
-import (
-    "github.com/kart-io/goagent/llm"
-    "github.com/kart-io/goagent/llm/providers"
-)
-
-client, err := providers.NewOpenAIWithOptions(
-    llm.WithAPIKey(os.Getenv("OPENAI_API_KEY")),
-    llm.WithModel("gpt-4"),
-    llm.WithTemperature(0.7),
-    llm.WithMaxTokens(2000),
-)
-
-response, err := client.Complete(ctx, &llm.CompletionRequest{
-    Messages: []llm.Message{
-        llm.UserMessage("Hello!"),
-    },
-})
-```
-
-### Anthropic (Claude)
-
-```go
-// NewAnthropicWithOptions 创建 Anthropic 客户端
-func NewAnthropicWithOptions(opts ...ClientOption) (*AnthropicProvider, error)
-
-// 支持的模型
-// - claude-3-opus-20240229
-// - claude-3-sonnet-20240229
-// - claude-3-haiku-20240307
-```
-
-**使用示例：**
-
-```go
-client, err := providers.NewAnthropicWithOptions(
-    llm.WithAPIKey(os.Getenv("ANTHROPIC_API_KEY")),
-    llm.WithModel("claude-3-sonnet-20240229"),
-)
-```
-
-### Google Gemini
-
-```go
-// NewGeminiWithOptions 创建 Gemini 客户端
-func NewGeminiWithOptions(opts ...ClientOption) (*GeminiProvider, error)
-
-// 支持的模型
-// - gemini-pro
-// - gemini-pro-vision
-// - gemini-1.5-pro
-```
-
-**使用示例：**
-
-```go
-client, err := providers.NewGeminiWithOptions(
-    llm.WithAPIKey(os.Getenv("GOOGLE_API_KEY")),
-    llm.WithModel("gemini-pro"),
-)
-```
-
-### DeepSeek
-
-```go
-// NewDeepSeekWithOptions 创建 DeepSeek 客户端
-func NewDeepSeekWithOptions(opts ...ClientOption) (*DeepSeekProvider, error)
-
-// 支持的模型
-// - deepseek-chat
-// - deepseek-coder
-```
-
-**使用示例：**
-
-```go
-client, err := providers.NewDeepSeekWithOptions(
-    llm.WithAPIKey(os.Getenv("DEEPSEEK_API_KEY")),
-    llm.WithModel("deepseek-chat"),
-)
-```
-
-### Ollama (本地部署)
-
-```go
-// NewOllamaWithOptions 创建 Ollama 客户端
-func NewOllamaWithOptions(opts ...ClientOption) (*OllamaProvider, error)
-
-// 支持任何 Ollama 支持的模型
-// - llama2, llama3
-// - mistral, mixtral
-// - codellama
-// - 等等
-```
-
-**使用示例：**
-
-```go
-client, err := providers.NewOllamaWithOptions(
-    llm.WithBaseURL("http://localhost:11434"),
-    llm.WithModel("llama3"),
-)
-```
-
-### Cohere
-
-```go
-// NewCohereWithOptions 创建 Cohere 客户端
-func NewCohereWithOptions(opts ...ClientOption) (*CohereProvider, error)
-
-// 支持的模型
-// - command
-// - command-light
-// - command-nightly
-```
-
-### HuggingFace
-
-```go
-// NewHuggingFaceWithOptions 创建 HuggingFace 客户端
-func NewHuggingFaceWithOptions(opts ...ClientOption) (*HuggingFaceProvider, error)
-```
-
-### Kimi (月之暗面)
-
-```go
-// NewKimiWithOptions 创建 Kimi 客户端
-func NewKimiWithOptions(opts ...ClientOption) (*KimiProvider, error)
-
-// 支持的模型
-// - moonshot-v1-8k
-// - moonshot-v1-32k
-// - moonshot-v1-128k
-```
-
-**使用示例：**
-
-```go
-client, err := providers.NewKimiWithOptions(
-    llm.WithAPIKey(os.Getenv("KIMI_API_KEY")),
-    llm.WithModel("moonshot-v1-32k"),
-)
-```
-
-### SiliconFlow
-
-```go
-// NewSiliconFlowWithOptions 创建 SiliconFlow 客户端
-func NewSiliconFlowWithOptions(opts ...ClientOption) (*SiliconFlowProvider, error)
-```
-
----
-
-## 流式响应
-
-### StreamClient
-
-```go
-package llm
-
-type StreamClient interface {
-    Client
-
-    // CompleteStream 流式补全
-    CompleteStream(ctx context.Context, req *CompletionRequest) (<-chan *StreamChunk, error)
-
-    // ChatStream 流式对话
-    ChatStream(ctx context.Context, messages []Message) (<-chan *StreamChunk, error)
-}
-
-// StreamChunk 的主要字段
-type StreamChunk struct {
-    Content      string // 累积的完整内容
-    Delta        string // 本块的增量内容
+    Content      string
+    Model        string
+    TokensUsed   int
     FinishReason string
-    Usage        *Usage // 仅在最后一个块
-    Done         bool
-    Error        error  // 流中错误
+    Provider     string
+    Usage        *interfaces.TokenUsage // 可能为 nil，读取前判空
 }
 ```
 
-### 使用示例
+`ToolCall` 的结构为 `ID`、`Type`（`"function"`）和 `Function{Name, Arguments}`，`Arguments` 是 JSON 字符串。
+
+## 流式
 
 ```go
-import "github.com/kart-io/goagent/llm"
-
-// 假设 client 实现了 StreamClient 接口
-streamClient := client.(llm.StreamClient)
-
-chunks, err := streamClient.CompleteStream(ctx, &llm.CompletionRequest{
-    Messages: []llm.Message{
-        llm.UserMessage("写一首诗"),
-    },
-})
-
-if err != nil {
-    return err
-}
-for chunk := range chunks {
-    if chunk.Error != nil {
-        return chunk.Error
-    }
-    fmt.Print(chunk.Delta)
+type StreamChunk struct {
+    ProviderState    *ProviderState
+    ToolCalls        []ToolCall // 仅在成功的终止块中给出本轮完整工具调用
+    ReasoningContent string
+    Content          string     // 累积内容
+    Delta            string     // 本块增量
+    Role             string
+    FinishReason     string
+    Usage            *Usage     // 终止块上的用量
+    Index            int
+    Timestamp        time.Time
+    Done             bool
+    Error            error
 }
 ```
 
----
+- 内置结构化流的终止块 `FinishReason` 为 `stop` 或 `tool_calls`；流中错误放在 `Error` 中。
+- 不能执行尚未完成的工具参数分片，只使用无错误的 `Done` 块里的 `ToolCalls`。
+- 提前停止读取时必须取消 ctx，否则 goroutine 与连接不会释放。
+
+辅助类型：`StreamReader`（`NewStreamReader`，提供 `ReadAll`、`ReadChunks`、`CollectDeltas`）、`StreamWriter`（`NewStreamWriter`）、`StreamOptions` / `DefaultStreamOptions`，以及测试用的 `MockStreamClient`。
+
+```go
+func streamAnswer(ctx context.Context, client llm.Client, prompt string) error {
+    sc := llm.AsStreamClient(client)
+    if sc == nil {
+        return fmt.Errorf("%s 未实现 StreamClient", client.Provider())
+    }
+    ctx, cancel := context.WithCancel(ctx)
+    defer cancel() // 提前返回时释放流
+    chunks, err := sc.ChatStream(ctx, []llm.Message{llm.UserMessage("写一首诗")})
+    if err != nil {
+        return err
+    }
+    for chunk := range chunks {
+        if chunk.Error != nil {
+            return chunk.Error
+        }
+        fmt.Print(chunk.Delta)
+    }
+    return nil
+}
+```
+
+## 错误分类
+
+```go
+type ProviderError struct {
+    StatusCode int           // HTTP 状态码；0 表示没有响应或流在开始后中断
+    RetryAfter time.Duration // 服务端建议的等待时长，0 表示未给出
+    Err        error
+}
+func (e *ProviderError) Retryable() bool // 429、5xx 与暂时性连接错误
+
+func ClassifyError(err error) ClassifiedError
+
+type ClassifiedError struct {
+    Reason         ErrorReason // rate_limit、server、network、context_length、auth、not_found、bad_request、canceled、unknown
+    Retryable      bool        // 原样重试可能成功
+    ShouldCompress bool        // 超出上下文窗口，缩短消息后可能成功
+    ShouldFallback bool        // 换模型或提供方可能成功
+}
+```
+
+`ClassifyError` 先识别取消与上下文超长的错误文本，再用 `errors.As` 查找 `*ProviderError`。`ProviderError` 目前只由 OpenAI、DeepSeek、Gemini 的流式路径（含结构化流与原生工具流）构造；其他路径的错误通常只能分类为 `canceled`、`context_length` 或 `unknown`。Builder 的 `RetryTransient` 基于此分类，见 [核心 API](CORE_API.md#模型请求恢复)。
+
+## 配置选项
+
+`ClientOption` 修改 `LLMOptions`；`DefaultLLMOptions()` 默认 `MaxTokens` 2000、`Temperature` 0.7、`Timeout` 60 秒。
+
+| 选项 | 说明 |
+|---|---|
+| `WithAPIKey`、`WithBaseURL`、`WithModel` | 为空时依次回退到 Provider 的环境变量和默认值 |
+| `WithEmbeddingModel` | 独立的向量模型，目前 Gemini 使用 |
+| `WithMaxTokens`、`WithTemperature`、`WithTopP` | 请求未指定时使用的默认值 |
+| `WithResponseFormat`、`WithJSONResponse` | `ResponseFormatText` / `ResponseFormatJSON`；目前只有 DeepSeek 的非流式请求读取 |
+| `WithSystemPrompt` | 前置到每次请求的系统提示 |
+| `WithTimeout(time.Duration)` | 按整秒保存，正数向上取整；语义见 [最佳实践](../guides/PROVIDER_BEST_PRACTICES.md#超时配置) |
+| `WithCustomHeaders` | 合并到基于 resty 的 HTTP Provider 及 DeepSeek 结构化流的请求头 |
+| `WithProvider` | 由构造函数自行设置，通常不需要 |
+| `WithProxy`、`WithRetryCount`、`WithRetryDelay`、`WithRateLimiting`、`WithCache`、`WithStreamingEnabled`、`WithOrganizationID` | 只写入 `LLMOptions`，内置 Provider 不读取 |
+
+模型调用的重试应在 Builder 层用 `WithRequestError` + `RetryTransient` 配置。Anthropic、Cohere、HuggingFace 与 DeepSeek 的非流式 HTTP 调用内置固定次数的重试，不受上述选项控制；OpenAI 与 Gemini 不做隐式重试。
+
+`llm.NewClientWithOptions` 已废弃，只校验选项、不创建客户端。
+
+## Provider 构造函数
+
+`llm/providers` 中每个构造函数都只校验配置、不发请求：
+
+| 构造函数 | 返回类型 | `constants.Provider` |
+|---|---|---|
+| `NewOpenAIWithOptions` | `*OpenAIProvider` | `ProviderOpenAI` |
+| `NewAnthropicWithOptions` | `*AnthropicProvider` | `ProviderAnthropic` |
+| `NewGeminiWithOptions` | `*GeminiProvider` | `ProviderGemini` |
+| `NewDeepSeekWithOptions` | `*DeepSeekProvider` | `ProviderDeepSeek` |
+| `NewCohereWithOptions` | `*CohereProvider` | `ProviderCohere` |
+| `NewHuggingFaceWithOptions` | `*HuggingFaceProvider` | `ProviderHuggingFace` |
+| `NewOllamaWithOptions`、`NewOllamaClientSimple(model)` | `*OllamaClient` | `ProviderOllama` |
+| `NewKimiWithOptions` | `*KimiClient` | `ProviderKimi` |
+| `NewSiliconFlowWithOptions` | `*SiliconFlowClient` | `ProviderSiliconFlow` |
+
+`NewDeepSeekStreamingWithOptions` / `NewDeepSeekStreaming(*LLMOptions)` 与 `NewGeminiStreamingWithOptions` / `NewGeminiStreaming(*LLMOptions)` 返回嵌入基础 Provider 的包装类型，能力与基础 Provider 相同。
+
+`constants.ProviderCustom` 没有对应的构造函数。
+
+## llm/common
+
+供 Provider 实现复用：`BaseProvider`（`NewBaseProvider`、`ApplyProviderDefaults`、`EnsureAPIKey`、`NewHTTPClient` 等）、`ProviderCapabilities`、`ExecuteWithRetry` / `RetryConfig`、`MapHTTPError`、`ConfigToOptions`，以及消息转换函数。自定义 Provider 可以参考 `llm/providers` 中任一实现。
 
 ## 完整示例
 
@@ -487,54 +212,44 @@ package main
 import (
     "context"
     "fmt"
+    "log"
     "os"
+    "time"
 
     "github.com/kart-io/goagent/llm"
     "github.com/kart-io/goagent/llm/providers"
 )
 
 func main() {
-    ctx := context.Background()
-
-    // 创建 OpenAI 客户端
     client, err := providers.NewOpenAIWithOptions(
         llm.WithAPIKey(os.Getenv("OPENAI_API_KEY")),
-        llm.WithModel("gpt-4"),
-        llm.WithTemperature(0.7),
+        llm.WithModel("gpt-4o"),
         llm.WithMaxTokens(2000),
-        llm.WithTimeout(30 * time.Second),
-        llm.WithRetryCount(3),
+        llm.WithTimeout(30*time.Second),
     )
     if err != nil {
-        panic(err)
+        log.Fatal(err)
     }
 
-    // 检查可用性
-    if !client.IsAvailable() {
-        panic("LLM client not available")
-    }
-
-    // 发送请求
-    response, err := client.Complete(ctx, &llm.CompletionRequest{
+    resp, err := client.Complete(context.Background(), &llm.CompletionRequest{
         Messages: []llm.Message{
             llm.SystemMessage("你是一个有帮助的助手"),
             llm.UserMessage("请用一句话介绍 Go 语言"),
         },
     })
     if err != nil {
-        panic(err)
+        log.Fatal(err)
     }
-
-    fmt.Printf("Response: %s\n", response.Content)
-    fmt.Printf("Tokens used: %d\n", response.TokensUsed)
-    fmt.Printf("Provider: %s\n", response.Provider)
+    fmt.Println(resp.Content)
+    if resp.Usage != nil {
+        fmt.Println("总 Token:", resp.Usage.TotalTokens)
+    }
 }
 ```
-
----
 
 ## 相关文档
 
 - [核心 API 参考](CORE_API.md)
 - [LLM 提供商指南](../guides/LLM_PROVIDERS.md)
 - [Provider 最佳实践](../guides/PROVIDER_BEST_PRACTICES.md)
+- [Provider 能力边界](../guides/PROVIDER_CAPABILITIES.md)

@@ -1,362 +1,42 @@
 # Multi-Agent Collaboration Example
 
-This example demonstrates a sophisticated multi-agent system where three specialized agents work together to solve complex tasks. Each agent has a specific role and set of tools, showcasing the power of agent specialization and coordination.
+Three agents built with `builder.NewAgentBuilder[any, core.State]` run in sequence on one task ("Analyze website performance data and optimize loading times for an e-commerce platform"). Each agent's output is serialized to JSON and passed as the next agent's input.
 
-## 🎯 Overview
+| Agent | Tools (`tools.NewBaseTool`) |
+| --- | --- |
+| Analysis | `data_analysis` (`data`), `summarize` (`text`) |
+| Strategy | `formulate_strategy` (`analysis`), `prioritize_tasks` (`tasks`) |
+| Execution | `http_request` (`method`, `url`, optional `headers`, `body`), `execute_command` (`command`), `file_operations` (`operation`: read/write/list/delete, `path`, `content`) |
 
-The system consists of three specialized agents:
+`http_request` sends real HTTP requests through `utils/httpclient`. `execute_command` and `file_operations` only return simulated results and never touch the system.
 
-### 1. 🔍 Analysis Agent
-- **Role**: Analyzes data and identifies patterns
-- **Tools**:
-  - `data_analysis`: Analyze data and extract insights
-  - `summarize`: Create concise summaries
-- **Capabilities**: Pattern recognition, data interpretation, insight extraction
+## Files
 
-### 2. 📋 Strategy Agent
-- **Role**: Formulates optimal approaches based on analysis
-- **Tools**:
-  - `formulate_strategy`: Create strategic approaches
-  - `prioritize_tasks`: Prioritize tasks by impact and effort
-- **Capabilities**: Strategic planning, task prioritization, approach optimization
+- `main_simple.go`: entry point and all agents/tools.
+- `demo_standalone.go`: `RunDemo()`, an LLM-free walkthrough of the same flow. `main` does not call it.
+- `run.sh`, `setup_ollama.sh`: helper scripts that detect Ollama and run the example.
 
-### 3. ⚡ Execution Agent
-- **Role**: Executes strategies with tools and external APIs
-- **Tools**:
-  - `http_request`: Make HTTP API calls
-  - `execute_command`: Run system commands (simulated for safety)
-  - `file_operations`: Perform file operations
-- **Capabilities**: API integration, command execution, file management
+## LLM selection
 
-## 🚀 Features
+`initializeLLMClient` picks the first available provider:
 
-- **Sequential Workflow**: Agents work in sequence, each building on the previous agent's output
-- **Tool Integration**: Each agent has specialized tools for their domain
-- **HTTP Support**: Execution agent can interact with external APIs
-- **Error Handling**: Graceful error handling at each step
-- **Flexible LLM Support**: Works with OpenAI, Gemini, or Ollama
+1. `OLLAMA_MODEL` set: Ollama with that model.
+2. A local Ollama answering a test request within 2 seconds: Ollama with `llama2`.
+3. `OPENAI_API_KEY`: OpenAI `gpt-3.5-turbo`.
+4. `GEMINI_API_KEY`: Gemini `gemini-pro`.
 
-## 📦 Installation
+Otherwise it exits with an error; there is no no-LLM mode.
 
-Ensure you have the GoAgent framework installed:
-
-```bash
-go get github.com/kart-io/goagent
-```
-
-## 🔧 Configuration
-
-The example prioritizes local execution with Ollama, then falls back to cloud providers:
-
-### Option 1: Ollama (Recommended - Local, No API Key)
-
-```bash
-# 1. Install Ollama from https://ollama.ai
-
-# 2. Start Ollama service
-ollama serve
-
-# 3. Pull a model (choose one)
-ollama pull llama2          # Default, balanced
-ollama pull qwen2           # Good for Chinese and English
-ollama pull deepseek-coder  # Excellent for coding tasks
-ollama pull mistral         # Fast and efficient
-
-# 4. Run the example
-./run.sh
-
-# Optional: Specify a different model
-export OLLAMA_MODEL=qwen2
-./run.sh
-```
-
-### Option 2: Cloud Providers (OpenAI or Gemini)
-
-```bash
-# OpenAI
-export OPENAI_API_KEY="your-openai-api-key"
-./run.sh
-
-# OR Gemini
-export GEMINI_API_KEY="your-gemini-api-key"
-./run.sh
-```
-
-### Option 3: Demo Mode (No LLM)
-
-```bash
-# Run demonstration without any LLM
-go run demo.go
-```
-
-## 🎮 Usage
-
-Run the example:
+## Run
 
 ```bash
 cd examples/advanced/multi-agent-collaboration
-go run main.go
+
+OLLAMA_MODEL=qwen2 go run .
+# or
+OPENAI_API_KEY=... go run .
 ```
 
-## 📊 Example Workflow
+`run.sh` exports `OLLAMA_MODEL` (default `llama3`) when Ollama is running, then runs `go run .`. `setup_ollama.sh` pulls a model if none of `llama2`/`qwen2`/`deepseek-coder`/`mistral` is installed, then runs `go run main_simple.go`.
 
-Given a task like "Analyze website performance data and optimize loading times":
-
-1. **Analysis Agent** examines the task:
-   - Identifies data points and patterns
-   - Assesses complexity
-   - Extracts key themes and risks
-   - Highlights opportunities
-
-2. **Strategy Agent** formulates an approach:
-   - Creates phased implementation plan
-   - Prioritizes tasks by impact
-   - Defines success metrics
-   - Allocates resources
-
-3. **Execution Agent** implements the strategy:
-   - Makes API calls for data collection
-   - Processes files and data
-   - Executes optimization commands
-   - Reports results
-
-## 🛠️ Tools Reference
-
-### Analysis Tools
-
-```go
-// Data Analysis Tool
-{
-  "name": "data_analysis",
-  "input": {
-    "data": "string"  // Data to analyze
-  },
-  "output": {
-    "data_points": "number",
-    "complexity": "string",
-    "key_themes": ["string"],
-    "risks": ["string"],
-    "opportunities": ["string"]
-  }
-}
-
-// Summarize Tool
-{
-  "name": "summarize",
-  "input": {
-    "text": "string"  // Text to summarize
-  },
-  "output": {
-    "summary": "string",
-    "word_count": "string",
-    "key_points": "string"
-  }
-}
-```
-
-### Strategy Tools
-
-```go
-// Strategy Formulation Tool
-{
-  "name": "formulate_strategy",
-  "input": {
-    "analysis": "string"  // Analysis results
-  },
-  "output": {
-    "approach": "string",
-    "phases": [{"phase": "string", "action": "string"}],
-    "timeline": "string",
-    "resources": ["string"],
-    "success_metrics": ["string"]
-  }
-}
-
-// Prioritization Tool
-{
-  "name": "prioritize_tasks",
-  "input": {
-    "tasks": ["string"]  // Tasks to prioritize
-  },
-  "output": [
-    {
-      "priority": "string",
-      "task": "string",
-      "impact": "string",
-      "effort": "string"
-    }
-  ]
-}
-```
-
-### Execution Tools
-
-```go
-// HTTP Request Tool
-{
-  "name": "http_request",
-  "input": {
-    "method": "GET|POST|PUT|DELETE|PATCH",
-    "url": "string",
-    "headers": {"key": "value"},  // Optional
-    "body": {}  // Optional for POST/PUT/PATCH
-  },
-  "output": {
-    "status_code": "number",
-    "body": "string",
-    "headers": {}
-  }
-}
-
-// Command Executor Tool (Simulated)
-{
-  "name": "execute_command",
-  "input": {
-    "command": "string"
-  },
-  "output": {
-    "command": "string",
-    "status": "string",
-    "output": "string"
-  }
-}
-
-// File Operations Tool
-{
-  "name": "file_operations",
-  "input": {
-    "operation": "read|write|list|delete",
-    "path": "string",
-    "content": "string"  // For write operation
-  },
-  "output": {
-    // Varies by operation
-  }
-}
-```
-
-## 🎯 Use Cases
-
-This multi-agent system is perfect for:
-
-1. **Data Processing Pipelines**
-   - Analysis → Strategy → Execution flow
-   - Automated data processing and reporting
-
-2. **API Integration Tasks**
-   - Fetch data from multiple sources
-   - Process and analyze results
-   - Execute actions based on findings
-
-3. **System Automation**
-   - Analyze system metrics
-   - Plan optimization strategies
-   - Execute improvements
-
-4. **Business Process Automation**
-   - Analyze business data
-   - Formulate strategies
-   - Implement solutions
-
-## 🔄 Extending the System
-
-### Adding New Agents
-
-```go
-// Create a new specialized agent
-func createCustomAgent(llmClient llm.Client) (*builder.ConfigurableAgent[any, core.State], error) {
-    // Add custom tools
-    registry := tools.NewRegistry()
-    if err := registry.Register(&MyCustomTool{}); err != nil {
-        return nil, err
-    }
-
-    return builder.NewAgentBuilder[any, core.State](llmClient).
-        WithSystemPrompt("Your custom prompt").
-        WithTools(registry.List()...).
-        WithState(core.NewAgentState()).
-        Build()
-}
-```
-
-### Adding New Tools
-
-```go
-// Implement the Tool interface
-type MyCustomTool struct{}
-
-func (t *MyCustomTool) Name() string {
-    return "my_custom_tool"
-}
-
-func (t *MyCustomTool) Description() string {
-    return "Description of what this tool does"
-}
-
-func (t *MyCustomTool) Execute(ctx context.Context, input interface{}) (interface{}, error) {
-    // Tool implementation
-    return result, nil
-}
-
-func (t *MyCustomTool) GetSchema() interface{} {
-    // JSON Schema for input validation
-    return schema
-}
-```
-
-## 🔍 Debugging
-
-Enable debug output by setting environment variables:
-
-```bash
-export DEBUG=true
-export LOG_LEVEL=debug
-```
-
-## ⚠️ Safety Notes
-
-- Command execution is **simulated** by default for safety
-- File operations are **simulated** to prevent accidental modifications
-- To enable actual execution, modify the tool implementations with appropriate security checks
-
-## 📝 Output Example
-
-```
-=== Multi-Agent Collaboration Example ===
-
-Task: Analyze website performance data and optimize loading times
-========================================
-
-🔍 Analysis Agent: Analyzing the task...
-✓ Analysis completed: Identified 5 key performance metrics...
-
-📋 Strategy Agent: Formulating strategy...
-✓ Strategy formulated: 3-phase optimization plan created...
-
-⚡ Execution Agent: Executing the strategy...
-✓ Execution completed: Optimizations applied successfully...
-
-📊 Final Results:
-----------------------------------------
-Analysis:
-  {data_points: 15, complexity: medium, key_themes: [...]}
-Strategy:
-  {approach: phased_implementation, phases: [...]}
-Execution:
-  {status: success, optimizations_applied: 5}
-
-✨ Task completed successfully with 12 steps
-```
-
-## 🤝 Contributing
-
-Feel free to extend this example with:
-- Additional agent types
-- More sophisticated tools
-- Real API integrations
-- Database connections
-- Advanced coordination patterns
-
-## 📄 License
-
-This example is part of the GoAgent framework and follows the same license.
+The program prints each agent's result (structured results truncated to 20 lines) and a closing summary.

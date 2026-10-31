@@ -21,7 +21,7 @@ if err != nil {
 }
 ```
 
-可用的构造函数：`NewOpenAIWithOptions`、`NewAnthropicWithOptions`、`NewGeminiWithOptions`、`NewDeepSeekWithOptions`、`NewCohereWithOptions`、`NewHuggingFaceWithOptions`、`NewOllamaWithOptions`、`NewSiliconFlowWithOptions`、`NewKimiWithOptions`；OpenAI、DeepSeek、Gemini 等客户端本身实现 `llm.StreamClient`；`NewDeepSeekStreamingWithOptions`、`NewGeminiStreamingWithOptions` 是保留的流式包装。
+可用的构造函数：`NewOpenAIWithOptions`、`NewAnthropicWithOptions`、`NewGeminiWithOptions`、`NewDeepSeekWithOptions`、`NewCohereWithOptions`、`NewHuggingFaceWithOptions`、`NewOllamaWithOptions`、`NewSiliconFlowWithOptions`、`NewKimiWithOptions`；只有 OpenAI、DeepSeek、Gemini 客户端实现 `llm.StreamClient`；`NewDeepSeekStreamingWithOptions`、`NewGeminiStreamingWithOptions` 是保留的流式包装。
 
 GoAgent 没有按名称查找 Provider 的注册表，`llm.NewClientWithOptions` 已废弃且不会创建客户端。
 

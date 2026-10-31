@@ -1,356 +1,187 @@
 # GoAgent 架构概述
 
-## 简介
+## 定位
 
-GoAgent 是一个全面的、生产就绪的 Go AI Agent 框架，灵感来自 LangChain。它提供 Agent、工具、内存、LLM 抽象和编排能力，具备企业级特性。
+GoAgent（`github.com/kart-io/goagent`）是 Go 的 Agent 执行内核：Builder 装配的原生工具循环、统一的工具执行路径（`tools.Dispatcher`）、可恢复的持久执行（`core/durable`）、追加写会话日志（`core/session`）、根预算（`core/budget`）、可选观察（`core/observe`）和类型化图编排（`workflow`）。宿主装配入口是顶层 `execution`。
 
-## 核心技术栈
+不在本仓库的内容：
 
-- **Go 1.25.0+**
-- **OpenTelemetry** - 可观测性
-- **Redis、PostgreSQL、NATS** - 分布式系统支持
-- **多 LLM 提供商** - OpenAI、Gemini、DeepSeek、Anthropic、Cohere 等
+- Preset 与编码工具（原 `harness/preset`、`tools/coding`）在独立仓库 `github.com/kart-io/goagent-harness`，它依赖 GoAgent，见 [Harness 迁移指南](../guides/HARNESS_MIGRATION.md)。
+- 大部分可运行的业务示例在 `github.com/kart-io/goagent-examples`；本仓库 `examples/` 只保留少量示例。
 
-## 系统架构图
+## 技术栈
 
-### 整体架构
+- Go 1.25（`go.mod`：`go 1.25.0`）
+- 模型：`github.com/sashabaranov/go-openai`（OpenAI 兼容协议）、`google.golang.org/genai`（Gemini），其余提供方（Anthropic、Cohere、HuggingFace、Ollama、Kimi、SiliconFlow 等）见 `llm/providers`
+- MCP：官方 `github.com/modelcontextprotocol/go-sdk`
+- 观测：OpenTelemetry（trace/metric/OTLP gRPC 导出）、Prometheus client
+- 日志：`github.com/kart-io/logger`
+- JSON：`github.com/bytedance/sonic`（经 `utils/json` 封装）
 
-```mermaid
-graph TB
-    subgraph "用户应用"
-        APP[应用程序]
-    end
+## 包依赖
 
-    subgraph "GoAgent 框架"
-        subgraph "第4层 - 示例/测试"
-            EXAMPLES[examples/]
-            TESTS[*_test.go]
-        end
-
-        subgraph "第3层 - 实现层"
-            AGENTS[agents/]
-            TOOLS[tools/]
-            MW[middleware/]
-            STREAM[stream/]
-            MULTI[multiagent/]
-            DIST[distributed/]
-        end
-
-        subgraph "第2层 - 业务逻辑层"
-            CORE[core/]
-            BUILDER[builder/]
-            LLM[llm/]
-            MEMORY[memory/]
-            STORE[store/]
-            OBS[observability/]
-        end
-
-        subgraph "第1层 - 基础层"
-            INTERFACES[interfaces/]
-            ERRORS[errors/]
-            CACHE[cache/]
-            UTILS[utils/]
-        end
-    end
-
-    subgraph "外部服务"
-        OPENAI[OpenAI]
-        GEMINI[Gemini]
-        REDIS[(Redis)]
-        PG[(PostgreSQL)]
-        NATS[NATS]
-    end
-
-    APP --> BUILDER
-    APP --> AGENTS
-    AGENTS --> CORE
-    AGENTS --> TOOLS
-    AGENTS --> LLM
-    CORE --> INTERFACES
-    LLM --> OPENAI
-    LLM --> GEMINI
-    STORE --> REDIS
-    STORE --> PG
-    MULTI --> NATS
-```
-
-### 核心组件交互
-
-```mermaid
-sequenceDiagram
-    participant User as 用户
-    participant Builder as AgentBuilder
-    participant Agent as Agent
-    participant LLM as LLM Client
-    participant Tool as Tool
-    participant Memory as Memory
-
-    User->>Builder: 配置 Agent
-    Builder->>Agent: 创建 Agent
-    User->>Agent: Invoke(input)
-    Agent->>Memory: 加载上下文
-    Agent->>LLM: 发送请求
-    LLM-->>Agent: 返回响应
-    Agent->>Tool: 执行工具
-    Tool-->>Agent: 返回结果
-    Agent->>Memory: 保存结果
-    Agent-->>User: 返回输出
-```
-
-### 4层导入规则
+下图由 `go list -f '{{.ImportPath}} {{.Imports}}' ./...` 整理（不含 `examples/`、`cmd/`、测试；省略几乎所有包都依赖的 `errors`、`interfaces`、`utils/json`）。箭头表示“导入”。
 
 ```mermaid
 graph TD
-    L4[第4层: examples/, tests] --> L3
-    L4 --> L2
-    L4 --> L1
-    L3[第3层: agents/, tools/, middleware/] --> L2
-    L3 --> L1
-    L2[第2层: core/, builder/, llm/] --> L1
-    L1[第1层: interfaces/, errors/]
+    execution --> builder
+    execution --> tools
+    execution --> budget[core/budget]
+    execution --> durable[core/durable]
+    execution --> observe[core/observe]
 
-    style L1 fill:#e1f5fe
-    style L2 fill:#fff3e0
-    style L3 fill:#f3e5f5
-    style L4 fill:#e8f5e9
+    builder --> contextpolicy[builder/contextpolicy]
+    builder --> core
+    builder --> session[core/session]
+    builder --> budget
+    builder --> durable
+    builder --> observe
+    builder --> coremw[core/middleware]
+    builder --> llm
+    builder --> tools
+    builder --> store
+
+    contextpolicy --> durable
+    contextpolicy --> llm
+
+    tools --> core
+    tools --> budget
+    tools --> durable
+    tools --> observe
+    tools --> toolmw[tools/middleware]
+    tools --> mcpcore[mcp/core]
+    tools --> cache
+
+    workflow --> core
+    workflow --> durable
+    workflow --> observe
+
+    core --> exec[core/execution]
+    core --> checkpoint[core/checkpoint]
+    core --> state[core/state]
+    exec --> store
+
+    session --> durable
+    session --> llm
+    budget --> durable
+    observe --> durable
+
+    providers[llm/providers] --> llm
+    providers --> common[llm/common]
+    mcpremote[mcp/remote] --> tools
+    mcpremote --> durable
+    mcptoolbox[mcp/toolbox] --> tools
+    middleware --> coremw
+    middleware --> observability
+    observability --> observe
+    devtools --> workflow
+    devtools --> observe
+    replay[testing/replay] --> session
+    spill[tools/spill] --> tools
+    spill --> env[harness/env]
 ```
 
-## 架构层次
+`scripts/apicheck` 强制执行的导入边界见 [导入层级说明](IMPORT_LAYERING.md)。
 
-GoAgent 采用严格的 4 层架构，通过自动化验证确保导入规则的正确性。
+## 包职责
 
-### 第 1 层：基础层（无 GoAgent 内部导入）
+| 包 | 职责 |
+|----|------|
+| `interfaces` | 共享接口与常量：`Tool`、`ToolInput/ToolOutput`、`MemoryManager`、`DocumentRetriever` 等 |
+| `errors` | 统一错误类型与构造函数（含 panic 错误） |
+| `core` | `Runnable[I,O]`、`StreamRunnable`、`RunnablePipe/Sequence`、`Callback`、panic 处理注册表、生命周期与插件注册 |
+| `core/state`、`core/checkpoint`、`core/execution` | Agent 状态、检查点（`Checkpointer`、`InMemorySaver`）、`Runtime` 与旧流式类型 |
+| `core/durable` | 显式、带版本的持久操作：`Do`、`Runner`、`Store`（`FileStore`）、等待与审批 |
+| `core/session` | 追加写会话事件日志：`Store`（`MemoryStore`/`FileStore`）、`DeriveMessages`、`DurableStore` |
+| `core/budget` | 根执行的模型请求、预留 Token、工具次数与期限预算，`New` 与 `NewDurable` |
+| `core/observe` | 只读执行事件与 OTel 上下文传递，`Observer`、`AsyncObserver` |
+| `core/middleware` | Agent 级请求/响应中间件链（`Middleware`、`MiddlewareChain`） |
+| `core/flow` | 实验性的同步只读增量管道 |
+| `builder` | `AgentBuilder` / `ConfigurableAgent`：原生工具循环、循环钩子、会话日志、持久回合、`Handle` |
+| `builder/contextpolicy` | 超长工具结果卸载（`Offload`）与证据存储（`ResultStore`） |
+| `tools` | `Registry`、`Dispatcher`、`Pipeline`（Pre/审批/Guard/Around/Post）、`FunctionTool`、`NewRunnableTool` |
+| `tools/compute`、`tools/http`、`tools/search`、`tools/shell` | 内置工具 |
+| `tools/middleware` | 工具级中间件（日志、缓存、限流） |
+| `tools/policy`、`tools/spill` | 按工具名/命令前缀的权限规则；超长结果落盘与 `read_spill` |
+| `llm`、`llm/providers`、`llm/common`、`llm/cache`、`llm/constants` | 模型客户端接口与能力接口（`StreamClient`、`ToolStreamClient` 等）、各提供方实现、语义缓存 |
+| `workflow` | 类型化有界控制流图 `Graph[T]`，`Compile` / `CompileDurable` |
+| `workflow/refund` | 绑定事务的退款防护示范实现 |
+| `execution` | 宿主装配：`Scope` 组合 RunID、会话、日志、预算、期限与观察者 |
+| `memory`、`store`、`cache` | 对话/向量记忆、键值存储（`store/memory`）、通用缓存 |
+| `mcp/core`、`mcp/remote`、`mcp/toolbox`、`mcp/tools` | MCP 工具抽象、官方 SDK 客户端适配、本地工具箱 |
+| `middleware`、`observability` | Agent 中间件实现（LLM 工具选择、动态提示词、可观测性等）；OTel 遥测提供者、指标与跨服务追踪 |
+| `parsers` | 输出解析器（JSON、结构化、列表、枚举等） |
+| `harness/env` | 文件系统与命令执行的环境接口（本地、Docker、只读、检查点包装） |
+| `devtools` | 观察事件记录与图报告 |
+| `evaluation/...` | 离线评测：`agentbench`、`executionbench` |
+| `testing/...` | `mocks`、`testutil`、`replay`（会话日志回放回归）、`panictest` |
 
-```text
-interfaces/  - 所有公共接口定义
-errors/      - 错误类型和辅助函数
-cache/       - 基础缓存工具
-utils/       - 工具函数
-```
+## 核心概念
 
-**规则**：第 1 层不能导入任何其他 GoAgent 包（仅允许标准库和外部依赖）。
+### Agent 与 Runnable
 
-### 第 2 层：业务逻辑层（仅导入 L1）
+`builder.NewAgentBuilder[C, S](client)`（或 `NewSimpleBuilder`）配置后经 `Build()` / `BuildContext(ctx)` 得到 `*ConfigurableAgent`。推荐入口 `agent.AsRunnable()` 返回 `*core.StreamRunnable[any, *builder.AgentOutput]`，`Invoke` 与 `Stream` 共享 `ExecuteStream` 同一执行源。完整契约见 [执行契约](../guides/EXECUTION_CONTRACT.md) 与 [扩展契约](../guides/EXTENSION_CONTRACT.md)。
 
-```text
-core/          - 基础实现 (BaseAgent, BaseChain)
-core/execution/ - 执行引擎
-core/state/    - 状态管理
-core/checkpoint/ - 检查点逻辑
-core/middleware/ - 中间件框架
-builder/       - 流式 API 构建器 (AgentBuilder)
-llm/           - LLM 客户端实现
-memory/        - 内存管理
-store/         - 存储实现 (memory, redis, postgres)
-retrieval/     - 文档检索
-observability/ - 遥测和监控
-performance/   - 性能工具
-planning/      - 规划工具
-prompt/        - 提示工程
-reflection/    - 反射工具
-```
+客户端实现 `llm.ToolStreamClient` 且配置了工具时，走原生工具循环：每轮一次 `CompleteToolsStream`，模型返回工具调用则执行并追加 `tool` 消息，返回文本则结束；`WithMaxIterations` 限制模型请求次数。
 
-**规则**：第 2 层只能从第 1 层导入。
+### 工具执行
 
-### 第 3 层：实现层（导入 L1+L2）
+工具实现 `interfaces.Tool`（`Name`/`Description`/`ArgsSchema`/`Invoke`）。注册到 `tools.Registry` 后由 `tools.NewDispatcher` 快照，`Dispatcher.Tools()` 交给 `WithTools`，Builder 与 `workflow` 节点共用这一条路径：Schema 校验 → `Authorize` → `Pipeline` 准入 → 执行（`durable.Do` 记录）→ `OnResult`。持久运行要求每个工具都支持持久调用（如 `Dispatcher.Tools()`）。
 
-```text
-agents/       - Agent 实现 (executor, react, 特化)
-tools/        - 工具定义和实现
-middleware/   - 中间件实现
-parsers/      - 输出解析器
-stream/       - 流处理
-multiagent/   - 多 Agent 编排
-distributed/  - 分布式执行
-mcp/          - 模型上下文协议
-document/     - 文档处理
-toolkits/     - 工具集合
-```
+### 持久执行与会话日志
 
-**规则**：第 3 层可以从第 1 层和第 2 层导入。
+宿主在 ctx 上绑定执行键与日志：`durable.WithJournal(durable.WithExecutionKey(ctx, key), store)`，并用 `WithDurableScope` 给 Agent 稳定作用域。模型回合（`model/turn/N`）、工具调用（`tool/<CallID>`）和循环扩展点（`loop/pre/N`、`loop/stopping/N` 等）各为一条持久操作，相同执行键重新执行时回放已完成的操作。`session.DurableStore` 让这些快照与对话写进同一份会话日志，`WithSessionLog` 从日志推导历史。见 [core/session](../../core/session/README.md)。
 
-### 第 4 层：示例和测试（可导入所有层）
+### 预算、观察与宿主装配
 
-```text
-examples/     - 使用示例
-*_test.go     - 测试文件
-```
+`core/budget.Controller` 在根执行上限制模型请求与期限，经 ctx 传递；绑定日志时须用 `NewDurable`。`core/observe.Observer` 只读接收 agent/model/tool 事件。`execution.NewScope` → `Scope.Bind` → `execution.ConfigureBuilder` 把这些身份与资源一次装配好，见 [宿主接入](../guides/HOST_INTEGRATION.md)。
 
-## 核心架构概念
+### 编排
 
-### Agent 模式
+`workflow.NewGraph[T]` 用 `AddNode`/`AddRunnable`/`AddEdge`/`AddBranch`/`AddParallel` 定义有界图，`Compile` 得到 `*core.StreamRunnable[T, T]`，`CompileDurable` 得到可暂停、审批与恢复的 `DurableGraph`。见 [原生编排](../guides/NATIVE_ORCHESTRATION.md)。
 
-Agent 是能够推理、使用工具和做出决策的自主实体：
+## 示例
+
+以下代码以本仓库当前 API 编译通过：注册工具、经 Dispatcher 交给 Builder，并以持久模式运行。
 
 ```go
-type Agent interface {
-    Runnable
-    Name() string
-    Description() string
-    Plan(ctx context.Context, input *Input) (*Plan, error)
+func run(ctx context.Context, client llm.Client, store session.Store, sessionID, runKey string) (*builder.AgentOutput, error) {
+	reg := tools.NewRegistry()
+	if err := reg.Register(tools.NewFunctionTool("lookup_order", "按订单号查询订单",
+		`{"type":"object","properties":{"id":{"type":"string"}},"required":["id"]}`,
+		func(ctx context.Context, args map[string]any) (any, error) {
+			return map[string]any{"id": args["id"], "status": "shipped"}, nil
+		})); err != nil {
+		return nil, err
+	}
+	dispatcher, err := tools.NewDispatcher(reg, tools.DispatchConfig{ReturnArgumentErrors: true})
+	if err != nil {
+		return nil, err
+	}
+	// 持久运行：模型回合与工具调用记入会话日志，同一 runKey 重新执行时回放已完成的操作。
+	ctx = durable.WithJournal(durable.WithExecutionKey(ctx, runKey), session.DurableStore(store, sessionID))
+	agent, err := builder.NewSimpleBuilder(client).
+		WithSystemPrompt("你是订单助手").
+		WithTools(dispatcher.Tools()...).
+		WithMaxIterations(5).
+		WithSessionID(sessionID).
+		WithSessionLog(store).
+		WithDurableScope("order-assistant").
+		BuildContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return agent.AsRunnable().Invoke(ctx, "订单 A-1 到哪了？")
 }
 ```
 
-ExecutorAgent 与 ReAct、CoT、ToT 等推理 Agent（原 `agents/` 目录）已在 v0.17.0 删除，代码保留在 `v0.16.1`；当前由 Builder 构建的原生工具循环 Agent 执行，编排使用 `workflow` Graph。
-
-### Builder 模式
-
-流式 `AgentBuilder` 是构建 Agent 的主要方式：
-
-```go
-agent := builder.NewAgentBuilder(llmClient).
-    WithSystemPrompt("你是一个有帮助的助手").
-    WithTools(searchTool, calcTool).
-    WithMemory(memoryManager).
-    WithMiddleware(loggingMW, cacheMW).
-    WithTimeout(30 * time.Second).
-    Build()
-```
-
-### Runnable 模式
-
-灵感来自 LangChain，`Runnable` 为所有可执行组件提供可组合接口：
-
-```go
-type Runnable interface {
-    Invoke(ctx context.Context, input *Input) (*Output, error)
-    Stream(ctx context.Context, input *Input) (<-chan *StreamChunk, error)
-}
-```
-
-### 状态管理
-
-状态通过 `State` 接口管理，支持线程安全操作：
-
-- `core/state/` - 状态实现
-- `core/checkpoint/` - 持久化检查点
-- Redis 和 PostgreSQL 后端支持
-
-### 工具系统
-
-工具是 Agent 可以调用的可扩展函数：
-
-```go
-type Tool interface {
-    Name() string
-    Description() string
-    Invoke(ctx context.Context, input *ToolInput) (*ToolOutput, error)
-    ArgsSchema() string
-}
-```
-
-#### 工具分类
-
-| 分类 | 位置 | 说明 |
-|------|------|------|
-| Shell | `tools/shell/` | Shell 命令执行 |
-| HTTP | `tools/http/` | HTTP 请求 |
-| Search | `tools/search/` | 搜索操作 |
-| Compute | `tools/compute/` | 计算工具 |
-| Practical | `tools/practical/` | 文件操作、数据库查询、网页抓取 |
-
-### 中间件系统
-
-中间件包装 Agent 执行以添加横切关注点：
-
-```go
-type Middleware func(next Runnable) Runnable
-```
-
-常用中间件：可观测性、缓存、工具选择、速率限制。
-
-### 内存管理
-
-`MemoryManager` 接口提供统一的内存抽象：
-
-```go
-type MemoryManager interface {
-    AddConversation(ctx context.Context, conv *Conversation) error
-    GetConversationHistory(ctx context.Context, sessionID string, limit int) ([]*Conversation, error)
-    ClearConversation(ctx context.Context, sessionID string) error
-    AddCase(ctx context.Context, caseMemory *Case) error
-    SearchSimilarCases(ctx context.Context, query string, limit int) ([]*Case, error)
-    Store(ctx context.Context, key string, value interface{}) error
-    Retrieve(ctx context.Context, key string) (interface{}, error)
-    Delete(ctx context.Context, key string) error
-    Clear(ctx context.Context) error
-}
-```
-
-### 检查点系统
-
-`Checkpointer` 接口用于保存/加载 Agent 状态：
-
-```go
-type Checkpointer interface {
-    SaveCheckpoint(ctx context.Context, checkpoint *Checkpoint) error
-    LoadCheckpoint(ctx context.Context, checkpointID string) (*Checkpoint, error)
-    ListCheckpoints(ctx context.Context, threadID string, limit int) ([]*CheckpointMetadata, error)
-    DeleteCheckpoint(ctx context.Context, checkpointID string) error
-}
-```
-
-支持的实现：
-
-- `MemoryCheckpointer` - 内存存储
-- `RedisCheckpointer` - Redis 存储
-- `DistributedCheckpointer` - 分布式存储
-
-## 数据流
-
-```text
-用户输入 → Input → Agent → Middleware → LLM → Tool → Output → 用户输出
-              ↓                           ↓
-           State                       Memory
-              ↓                           ↓
-         Checkpoint                   Store
-```
-
-## 性能考虑
-
-根据基准测试：
-
-- Builder 构建：约 100μs/op
-- Agent 执行：约 1ms/op（不包括 LLM 调用）
-- 中间件开销：小于 5%
-- 并行工具执行：线性扩展至 100+ 并发调用
-- 缓存命中率：LRU 缓存超过 90%
-
-优化方向：
-
-- 尽可能并行执行工具
-- 正确的上下文取消
-- 高效的状态更新
-- 最小化中间件栈
-
-## 可观测性
-
-- **结构化日志**：生产环境使用 JSON 格式
-- **OpenTelemetry**：启用 OTLP 导出进行分布式追踪
-- **版本跟踪**：在指标和日志中嵌入版本信息
-- **健康检查**：在健康端点中包含版本信息
-
-## 分布式支持
-
-- **NATS 消息**：多 Agent 通信
-- **Redis 存储**：分布式状态和检查点
-- **PostgreSQL**：持久化存储
-- **分布式协调**：跨节点执行
-
-## 外部依赖
-
-主要外部包：
-
-- `github.com/sashabaranov/go-openai` - OpenAI 客户端
-- `cloud.google.com/go/vertexai` - Google Gemini
-- `github.com/redis/go-redis/v9` - Redis 客户端
-- `gorm.io/gorm` - 数据库 ORM
-- `github.com/nats-io/nats.go` - NATS 消息
-- `go.opentelemetry.io/otel` - 可观测性
+`client` 须实现 `llm.ToolStreamClient`；`llm/providers` 中 `OpenAIProvider`、`DeepSeekProvider`、`GeminiProvider` 实现了它。
 
 ## 相关文档
 
 - [导入层级说明](IMPORT_LAYERING.md)
+- [组件关系图](COMPONENT_DIAGRAM.md)
+- [设计概述](../design/DESIGN_OVERVIEW.md)
 - [快速入门](../guides/QUICKSTART.md)
 - [LLM 提供商指南](../guides/LLM_PROVIDERS.md)
 - [测试最佳实践](../development/TESTING_BEST_PRACTICES.md)

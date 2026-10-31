@@ -1,694 +1,257 @@
 # GoAgent 组件关系图
 
-本文档展示 GoAgent 框架中各组件之间的关系和依赖。
+图中的包、类型与方法均取自当前源码；只列出与组件关系有关的成员，完整签名以 `go doc` 为准。包级依赖图见 [架构概述](ARCHITECTURE.md#包依赖)。
 
-## 整体架构图
-
-```mermaid
-graph TB
-    subgraph "用户应用层"
-        APP[应用程序]
-        CLI[命令行工具]
-    end
-
-    subgraph "GoAgent 框架"
-        subgraph "第4层 - 应用层"
-            EXAMPLES[examples/]
-            TESTS[*_test.go]
-        end
-
-        subgraph "第3层 - 实现层"
-            AGENTS[agents/]
-            TOOLS[tools/]
-            MW[middleware/]
-            STREAM[stream/]
-            MULTI[multiagent/]
-            DIST[distributed/]
-            MCP[mcp/]
-            PARSERS[parsers/]
-        end
-
-        subgraph "第2层 - 业务逻辑层"
-            CORE[core/]
-            BUILDER[builder/]
-            LLM[llm/]
-            MEMORY[memory/]
-            STORE[store/]
-            OBS[observability/]
-            PLANNING[planning/]
-            RETRIEVAL[retrieval/]
-        end
-
-        subgraph "第1层 - 基础层"
-            INTERFACES[interfaces/]
-            ERRORS[errors/]
-            CACHE[cache/]
-            UTILS[utils/]
-            OPTIONS[options/]
-        end
-    end
-
-    subgraph "外部服务"
-        OPENAI[OpenAI API]
-        ANTHROPIC[Anthropic API]
-        GEMINI[Google Gemini]
-        DEEPSEEK[DeepSeek API]
-        OLLAMA[Ollama 本地]
-        REDIS[(Redis)]
-        PG[(PostgreSQL)]
-        MYSQL[(MySQL)]
-        NATS[NATS 消息]
-    end
-
-    APP --> BUILDER
-    APP --> AGENTS
-    CLI --> BUILDER
-
-    BUILDER --> CORE
-    BUILDER --> AGENTS
-    BUILDER --> LLM
-    BUILDER --> TOOLS
-    BUILDER --> MEMORY
-    BUILDER --> STORE
-
-    AGENTS --> CORE
-    AGENTS --> LLM
-    AGENTS --> TOOLS
-
-    TOOLS --> INTERFACES
-    TOOLS --> ERRORS
-
-    MULTI --> AGENTS
-    MULTI --> NATS
-
-    LLM --> OPENAI
-    LLM --> ANTHROPIC
-    LLM --> GEMINI
-    LLM --> DEEPSEEK
-    LLM --> OLLAMA
-
-    STORE --> REDIS
-    STORE --> PG
-    STORE --> MYSQL
-
-    CORE --> INTERFACES
-    CORE --> ERRORS
-    LLM --> INTERFACES
-    MEMORY --> INTERFACES
-    STORE --> INTERFACES
-```
-
-## 核心模块依赖图
-
-```mermaid
-graph LR
-    subgraph "基础层 (L1)"
-        I[interfaces]
-        E[errors]
-        U[utils]
-        C[cache]
-        O[options]
-    end
-
-    subgraph "业务层 (L2)"
-        CO[core]
-        B[builder]
-        L[llm]
-        M[memory]
-        S[store]
-        OB[observability]
-    end
-
-    subgraph "实现层 (L3)"
-        A[agents]
-        T[tools]
-        MW[middleware]
-        MA[multiagent]
-        P[parsers]
-        ST[stream]
-    end
-
-    CO --> I
-    CO --> E
-    CO --> C
-
-    B --> CO
-    B --> L
-    B --> T
-    B --> M
-    B --> S
-
-    L --> I
-    L --> E
-    L --> U
-
-    M --> I
-    M --> E
-    M --> C
-
-    S --> I
-    S --> E
-
-    A --> CO
-    A --> L
-    A --> T
-    A --> I
-
-    T --> I
-    T --> E
-
-    MW --> CO
-    MW --> I
-
-    MA --> A
-    MA --> CO
-    MA --> ST
-
-    P --> I
-    P --> U
-
-    ST --> I
-    ST --> E
-```
-
-## Agent 类型关系图
-
-```mermaid
-classDiagram
-    class Runnable {
-        <<interface>>
-        +Invoke(ctx, input) Output
-        +Stream(ctx, input) chan
-    }
-
-    class Agent {
-        <<interface>>
-        +Name() string
-        +Description() string
-        +Capabilities() []string
-        +Plan(ctx, input) Plan
-    }
-
-    class BaseAgent {
-        -name string
-        -description string
-        -capabilities []string
-        +Invoke(ctx, input) Output
-        +InvokeFast(ctx, input) Output
-        +Stream(ctx, input) chan
-        +Batch(ctx, inputs) []Output
-    }
-
-    class ChainableAgent {
-        -agents []Agent
-        +Invoke(ctx, input) Output
-    }
-
-    class ConfigurableAgent {
-        -llmClient Client
-        -tools []Tool
-        -middlewares []Middleware
-        -memoryManager MemoryManager
-        +Initialize(ctx) error
-        +Invoke(ctx, input) Output
-    }
-
-    class ReActAgent {
-        -llm Client
-        -tools []Tool
-        -maxIterations int
-        +Think(ctx, input) Thought
-        +Act(ctx, thought) Action
-        +Observe(ctx, action) Observation
-    }
-
-    class CoTAgent {
-        -llm Client
-        -chainLength int
-        +GenerateChain(ctx, input) []Thought
-    }
-
-    class ToTAgent {
-        -llm Client
-        -branchFactor int
-        -maxDepth int
-        +Explore(ctx, input) Tree
-    }
-
-    class ExecutorAgent {
-        -tools []Tool
-        -executor ToolExecutor
-        +ExecuteTool(ctx, name, args) Result
-    }
-
-    Runnable <|-- Agent
-    Agent <|.. BaseAgent
-    BaseAgent <|-- ChainableAgent
-    BaseAgent <|-- ConfigurableAgent
-    BaseAgent <|-- ReActAgent
-    BaseAgent <|-- CoTAgent
-    BaseAgent <|-- ToTAgent
-    BaseAgent <|-- ExecutorAgent
-```
-
-## Tool 系统类图
-
-```mermaid
-classDiagram
-    class Tool {
-        <<interface>>
-        +Name() string
-        +Description() string
-        +Invoke(ctx, input) ToolOutput
-        +ArgsSchema() string
-    }
-
-    class ValidatableTool {
-        <<interface>>
-        +Validate(ctx, input) error
-    }
-
-    class ToolExecutor {
-        <<interface>>
-        +ExecuteTool(ctx, name, args) ToolResult
-        +ListTools() []Tool
-    }
-
-    class BaseTool {
-        -name string
-        -description string
-        -argsSchema string
-        -runFunc func
-        +Name() string
-        +Description() string
-        +Invoke(ctx, input) ToolOutput
-        +ArgsSchema() string
-    }
-
-    class FunctionTool {
-        -fn func
-        +Invoke(ctx, input) ToolOutput
-    }
-
-    class Registry {
-        -tools map
-        -mu RWMutex
-        +Register(tool) error
-        +Get(name) Tool
-        +List() []Tool
-        +Names() []string
-    }
-
-    class ShellTool {
-        +Execute(ctx, cmd) Result
-    }
-
-    class Calculator {
-        +Calculate(ctx, expr) Result
-    }
-
-    class WebScraper {
-        +Scrape(ctx, url) Result
-    }
-
-    class APICaller {
-        +Call(ctx, request) Response
-    }
-
-    class DatabaseQuery {
-        +Query(ctx, sql) Result
-    }
-
-    Tool <|-- ValidatableTool
-    Tool <|.. BaseTool
-    BaseTool <|-- FunctionTool
-    BaseTool <|-- ShellTool
-    BaseTool <|-- Calculator
-    BaseTool <|-- WebScraper
-    BaseTool <|-- APICaller
-    BaseTool <|-- DatabaseQuery
-    ToolExecutor o-- Tool
-    Registry o-- Tool
-```
-
-## LLM Provider 类图
-
-```mermaid
-classDiagram
-    class Client {
-        <<interface>>
-        +Complete(ctx, req) Response
-        +Chat(ctx, messages) Response
-        +Provider() Provider
-        +IsAvailable() bool
-    }
-
-    class BaseProvider {
-        #apiKey string
-        #baseURL string
-        #model string
-        #httpClient *http.Client
-        +Complete(ctx, req) Response
-        +Chat(ctx, messages) Response
-    }
-
-    class OpenAIProvider {
-        -client *openai.Client
-        +Complete(ctx, req) Response
-        +Chat(ctx, messages) Response
-        +Provider() Provider
-    }
-
-    class AnthropicProvider {
-        -client *anthropic.Client
-        +Complete(ctx, req) Response
-        +Provider() Provider
-    }
-
-    class GeminiProvider {
-        -client *genai.Client
-        +Complete(ctx, req) Response
-        +Provider() Provider
-    }
-
-    class OllamaProvider {
-        -baseURL string
-        +Complete(ctx, req) Response
-        +Provider() Provider
-    }
-
-    class DeepSeekProvider {
-        +Complete(ctx, req) Response
-        +Provider() Provider
-    }
-
-    class CohereProvider {
-        +Complete(ctx, req) Response
-        +Provider() Provider
-    }
-
-    class KimiProvider {
-        +Complete(ctx, req) Response
-        +Provider() Provider
-    }
-
-    class SiliconFlowProvider {
-        +Complete(ctx, req) Response
-        +Provider() Provider
-    }
-
-    Client <|.. BaseProvider
-    BaseProvider <|-- OpenAIProvider
-    BaseProvider <|-- AnthropicProvider
-    BaseProvider <|-- GeminiProvider
-    BaseProvider <|-- OllamaProvider
-    BaseProvider <|-- DeepSeekProvider
-    BaseProvider <|-- CohereProvider
-    BaseProvider <|-- KimiProvider
-    BaseProvider <|-- SiliconFlowProvider
-```
-
-## 中间件系统类图
-
-```mermaid
-classDiagram
-    class Middleware {
-        <<interface>>
-        +Name() string
-        +OnBefore(ctx, req) req
-        +OnAfter(ctx, resp) resp
-        +OnError(ctx, err) error
-    }
-
-    class MiddlewareChain {
-        -middlewares []Middleware
-        -handler Handler
-        +Use(mw ...Middleware) Chain
-        +Execute(ctx, req) Response
-        +Size() int
-    }
-
-    class BaseMiddleware {
-        -name string
-        +Name() string
-        +OnBefore(ctx, req) req
-        +OnAfter(ctx, resp) resp
-        +OnError(ctx, err) error
-    }
-
-    class LoggingMiddleware {
-        -logger func
-        +OnBefore(ctx, req) req
-        +OnAfter(ctx, resp) resp
-    }
-
-    class TimingMiddleware {
-        -timings map
-        +OnBefore(ctx, req) req
-        +OnAfter(ctx, resp) resp
-        +GetTimings() map
-        +GetAverageLatency() Duration
-    }
-
-    class RetryMiddleware {
-        -maxRetries int
-        -backoff Duration
-        -condition func
-        +OnError(ctx, err) error
-    }
-
-    class CacheMiddleware {
-        -cache *ShardedCache
-        -ttl Duration
-        +OnBefore(ctx, req) req
-        +OnAfter(ctx, resp) resp
-        +Clear()
-        +Size() int
-    }
-
-    class RateLimitMiddleware {
-        -limiter *rate.Limiter
-        +OnBefore(ctx, req) req
-    }
-
-    Middleware <|.. BaseMiddleware
-    BaseMiddleware <|-- LoggingMiddleware
-    BaseMiddleware <|-- TimingMiddleware
-    BaseMiddleware <|-- RetryMiddleware
-    BaseMiddleware <|-- CacheMiddleware
-    BaseMiddleware <|-- RateLimitMiddleware
-    MiddlewareChain o-- Middleware
-```
-
-## Memory 和 Store 系统类图
-
-```mermaid
-classDiagram
-    class MemoryManager {
-        <<interface>>
-        +AddConversation(ctx, conv) error
-        +GetConversationHistory(ctx, sessionID, limit) []Conversation
-        +ClearConversation(ctx, sessionID) error
-        +AddCase(ctx, case) error
-        +SearchSimilarCases(ctx, query, limit) []Case
-        +Store(ctx, key, value) error
-        +Retrieve(ctx, key) interface
-        +Delete(ctx, key) error
-        +Clear(ctx) error
-    }
-
-    class Store {
-        <<interface>>
-        +Get(ctx, key) interface
-        +Set(ctx, key, value) error
-        +Delete(ctx, key) error
-        +Clear(ctx) error
-    }
-
-    class VectorStore {
-        <<interface>>
-        +SimilaritySearch(ctx, query, topK) []Document
-        +SimilaritySearchWithScore(ctx, query, topK) []Document
-        +AddDocuments(ctx, docs) error
-        +Delete(ctx, ids) error
-    }
-
-    class Checkpointer {
-        <<interface>>
-        +SaveCheckpoint(ctx, checkpoint) error
-        +LoadCheckpoint(ctx, checkpointID) Checkpoint
-        +ListCheckpoints(ctx, threadID, limit) []Metadata
-        +DeleteCheckpoint(ctx, checkpointID) error
-    }
-
-    class DefaultManager {
-        -conversationStore ConversationMemory
-        -caseStore CaseMemory
-        -kvStore Store
-    }
-
-    class MemoryStore {
-        -data map
-        -mu RWMutex
-    }
-
-    class RedisStore {
-        -client *redis.Client
-        -prefix string
-    }
-
-    class PostgresStore {
-        -db *gorm.DB
-    }
-
-    class MemoryCheckpointer {
-        -checkpoints map
-        -mu RWMutex
-    }
-
-    class RedisCheckpointer {
-        -client *redis.Client
-    }
-
-    MemoryManager <|.. DefaultManager
-    Store <|.. MemoryStore
-    Store <|.. RedisStore
-    Store <|.. PostgresStore
-    Checkpointer <|.. MemoryCheckpointer
-    Checkpointer <|.. RedisCheckpointer
-    DefaultManager o-- Store
-    DefaultManager o-- VectorStore
-```
-
-## Builder 模式类图
+## Builder 与宿主装配
 
 ```mermaid
 classDiagram
     class AgentBuilder~C,S~ {
-        -llmClient Client
-        -tools []Tool
-        -systemPrompt string
-        -state S
-        -store Store
-        -checkpointer Checkpointer
-        -middlewares []Middleware
-        -memoryManager MemoryManager
-        -config *AgentConfig
-        -callbacks []Callback
-        +WithTools(tools) Builder
-        +WithSystemPrompt(prompt) Builder
-        +WithMiddleware(mw) Builder
-        +WithMemoryManager(manager) Builder
-        +WithStore(store) Builder
-        +WithCheckpointer(cp) Builder
-        +WithConfig(config) Builder
-        +Build() ConfigurableAgent
+        <<builder>>
+        +WithSystemPrompt(string)
+        +WithTools(...interfaces.Tool)
+        +WithMaxIterations(int)
+        +WithMiddleware(...middleware.Middleware)
+        +WithMemory(interfaces.MemoryManager)
+        +WithRetriever(DocumentRetriever, ...RetrievalConfig)
+        +WithSessionID(string)
+        +WithSessionLog(session.Store)
+        +WithDurableScope(string)
+        +WithPreStep / WithIdentifiedPreStep
+        +WithRequestHook / WithRequestError / WithTurnStopping
+        +WithOffload(*contextpolicy.Offload)
+        +Build() (*ConfigurableAgent, error)
+        +BuildContext(ctx) (*ConfigurableAgent, error)
     }
-
-    class SimpleAgentBuilder {
-        <<type alias>>
-        AgentBuilder~any, *AgentState~
-    }
-
-    class AgentConfig {
-        +MaxIterations int
-        +Timeout Duration
-        +EnableStreaming bool
-        +EnableAutoSave bool
-        +SaveInterval Duration
-        +MaxTokens int
-        +Temperature float64
-        +SessionID string
-        +Verbose bool
-        +MaxConversationHistory int
-        +OutputFormat OutputFormat
-    }
-
     class ConfigurableAgent~C,S~ {
-        -llmClient Client
-        -tools []Tool
-        -systemPrompt string
-        -runtime *Runtime
-        -chain *MiddlewareChain
-        -config *AgentConfig
-        -memoryManager MemoryManager
-        +Initialize(ctx) error
-        +Invoke(ctx, input) Output
-        +Stream(ctx, input) chan
+        <<builder>>
+        +AsRunnable() *core.StreamRunnable[any, *AgentOutput]
+        +ExecuteStream(ctx, input) (<-chan AgentEvent, error)
+        +Execute(ctx, input) (*AgentOutput, error)
+        +ExecuteWithTools(ctx, input) (*AgentOutput, error)
+        +Start(ctx, input string) *Handle
+        +Initialize(ctx) / Shutdown(ctx)
     }
-
-    AgentBuilder --> ConfigurableAgent : creates
-    AgentBuilder --> AgentConfig : uses
-    SimpleAgentBuilder --|> AgentBuilder
+    class Handle {
+        <<builder>>
+        +Steer(string) error
+        +Inject(string) error
+        +Followup(string) error
+        +Redirect(string) error
+        +Interrupt(error)
+        +Wait(ctx) (*AgentOutput, error)
+    }
+    class Scope {
+        <<execution>>
+        +Bind(ctx) (context.Context, CancelFunc, error)
+        +RunID() string
+        +SessionID() string
+    }
+    class Config {
+        <<execution>>
+        RunID, SessionID string
+        Journal durable.Store
+        Budget *budget.Controller
+        Timeout time.Duration
+        Observer observe.Observer
+        Tracer trace.Tracer
+    }
+    AgentBuilder --> ConfigurableAgent : Build / BuildContext
+    ConfigurableAgent --> Handle : Start
+    Config --> Scope : NewScope
+    Scope ..> AgentBuilder : ConfigureBuilder(b, scope, agentID)
 ```
 
-## 数据流图
+`SimpleAgentBuilder` 与 `SimpleAgent` 是 `C=any, S=*core.AgentState` 的别名，`NewSimpleBuilder` 创建前者。
+
+## Runnable 组合
 
 ```mermaid
-flowchart LR
-    subgraph Input
-        UI[用户输入]
-        API[API 请求]
-    end
-
-    subgraph Processing
-        B[Builder]
-        A[Agent]
-        MW[Middleware]
-        LLM[LLM Client]
-        T[Tools]
-    end
-
-    subgraph Storage
-        M[Memory]
-        S[Store]
-        CP[Checkpoint]
-    end
-
-    subgraph Output
-        R[响应]
-        ST[流式输出]
-    end
-
-    UI --> B
-    API --> B
-    B --> A
-    A --> MW
-    MW --> LLM
-    MW --> T
-    LLM --> MW
-    T --> MW
-    MW --> A
-    A --> M
-    A --> S
-    A --> CP
-    M --> A
-    S --> A
-    CP --> A
-    A --> R
-    A --> ST
+classDiagram
+    class Runnable~I,O~ {
+        <<interface core>>
+        +Invoke(ctx, I) (O, error)
+        +Stream(ctx, I) (<-chan StreamChunk[O], error)
+        +Batch(ctx, []I) ([]O, error)
+        +Pipe(Runnable[O, any]) Runnable[I, any]
+        +WithCallbacks(...Callback) Runnable[I, O]
+        +WithConfig(RunnableConfig) Runnable[I, O]
+    }
+    class StreamRunnable~I,O~ {
+        <<core>>
+        NewStreamRunnable(mode, StreamSource)
+    }
+    class RunnableFunc~I,O~
+    class RunnablePipe~I,M,O~
+    class RunnableSequence
+    class Graph~T~ {
+        <<workflow>>
+        +AddNode / AddRunnable / AddEdge / AddBranch / AddParallel
+        +Compile(ctx) (*core.StreamRunnable[T, T], error)
+        +CompileDurable(ctx, DurableConfig, ...) (*DurableGraph[T], error)
+    }
+    class DurableGraph~T~ {
+        <<workflow>>
+        +AsRunnable() *core.StreamRunnable[RunRequest[T], *GraphSnapshot[T]]
+        +AsChildRunnable() *core.RunnableFunc[T, T]
+        +Run(ctx, id, initial, approvalKey)
+        +Snapshot(ctx, id) / Diagnose(ctx, id, ...)
+    }
+    Runnable <|.. StreamRunnable
+    Runnable <|.. RunnableFunc
+    Runnable <|.. RunnablePipe
+    Runnable <|.. RunnableSequence
+    Graph --> StreamRunnable : Compile
+    Graph --> DurableGraph : CompileDurable
 ```
 
-## 包导入层级图
+`workflow.Adapt` / `AdaptStream` 把任意 `core.Runnable[I, O]`（如 `agent.AsRunnable()`）适配为图节点；`tools.NewRunnableTool` 反向把 Runnable 包装为工具。
+
+## 工具系统
 
 ```mermaid
-graph TD
-    L4[第4层: examples/, tests] --> L3
-    L4 --> L2
-    L4 --> L1
-
-    L3[第3层: agents/, tools/, middleware/, multiagent/] --> L2
-    L3 --> L1
-
-    L2[第2层: core/, builder/, llm/, memory/, store/] --> L1
-
-    L1[第1层: interfaces/, errors/, utils/, cache/]
-
-    style L1 fill:#e1f5fe,stroke:#01579b
-    style L2 fill:#fff3e0,stroke:#e65100
-    style L3 fill:#f3e5f5,stroke:#4a148c
-    style L4 fill:#e8f5e9,stroke:#1b5e20
+classDiagram
+    class Tool {
+        <<interface interfaces>>
+        +Name() string
+        +Description() string
+        +ArgsSchema() string
+        +Invoke(ctx, *ToolInput) (*ToolOutput, error)
+    }
+    class ValidatableTool {
+        <<interface interfaces>>
+        +Validate(ctx, *ToolInput) error
+    }
+    class DurableCallTool {
+        <<interface interfaces>>
+        +SupportsDurableCalls() bool
+    }
+    class ConcurrentCallTool {
+        <<interface interfaces>>
+        +SupportsConcurrentCalls() bool
+    }
+    class Registry {
+        <<tools>>
+        +Register(Tool) error
+        +Get(name) Tool
+        +List() []Tool
+    }
+    class Dispatcher {
+        <<tools>>
+        +Invoke(ctx, ToolRequest) (*ToolOutput, error)
+        +AsRunnable() *core.StreamRunnable[ToolRequest, *ToolOutput]
+        +Tools() []Tool
+    }
+    class DispatchConfig {
+        <<tools>>
+        MaxAttempts, MaxConcurrency, MaxAdmissionConcurrency, MaxQueued int
+        Timeout time.Duration
+        Authorize func
+        OnResult func
+        ReturnArgumentErrors bool
+        Pipeline *Pipeline
+    }
+    class Pipeline {
+        <<tools>>
+        Pre []PreHook
+        Approver Approver
+        Guards []Guard
+        Around []Around
+        Post []PostHook
+    }
+    Tool <|-- ValidatableTool
+    Tool <|-- DurableCallTool
+    Tool <|-- ConcurrentCallTool
+    Registry o-- Tool
+    Dispatcher --> Registry : NewDispatcher 快照
+    Dispatcher --> DispatchConfig
+    DispatchConfig --> Pipeline
+    Dispatcher ..> DurableCallTool : Tools() 返回的工具实现
 ```
+
+内置实现：`tools.FunctionTool`（`NewFunctionTool` / `NewTypedFunctionTool` / `NewFunctionToolBuilder`）、`tools/compute`、`tools/http`、`tools/search`、`tools/shell`、`tools/spill`、`contextpolicy.Offload`（读取工具）、`mcp/remote.Tools`（MCP 远程工具）。`tools/policy.Policy` 作为 `Pipeline` 的调用前钩子使用；`tools/middleware` 提供日志、缓存、限流工具中间件。
+
+## LLM 客户端
+
+```mermaid
+classDiagram
+    class Client {
+        <<interface llm>>
+        +Complete(ctx, *CompletionRequest) (*CompletionResponse, error)
+        +Chat(ctx, []Message) (*CompletionResponse, error)
+        +Provider() constants.Provider
+        +IsAvailable() bool
+    }
+    class StreamClient {
+        <<interface llm>>
+        +CompleteStream(ctx, *CompletionRequest) (<-chan *StreamChunk, error)
+        +ChatStream(ctx, []Message) (<-chan *StreamChunk, error)
+    }
+    class ToolStreamClient {
+        <<interface llm>>
+        +CompleteToolsStream(ctx, *CompletionRequest, []Tool) (<-chan *StreamChunk, error)
+    }
+    class ToolCallingClient {
+        <<interface llm>>
+        +GenerateWithTools(...)
+    }
+    class OpenAIProvider
+    class DeepSeekProvider
+    class GeminiProvider
+    Client <|-- StreamClient
+    StreamClient <|-- ToolStreamClient
+    ToolStreamClient <|.. OpenAIProvider
+    ToolStreamClient <|.. DeepSeekProvider
+    ToolStreamClient <|.. GeminiProvider
+```
+
+能力探测用 `llm.HasStreaming`、`HasToolStreaming`、`HasToolCalling` 等函数。Builder 的原生工具循环要求 `ToolStreamClient`；只实现 `ToolCallingClient` 的客户端走旧的工具选择路径，不支持持久日志与根预算。
+
+## 持久执行、会话与预算
+
+```mermaid
+classDiagram
+    class DurableStore {
+        <<interface core/durable.Store>>
+        +Lock(ctx, id) (func() error, error)
+        +Load(ctx, id) (*Snapshot, error)
+        +Save(ctx, id, *Snapshot) error
+    }
+    class DurableFileStore {
+        <<core/durable.FileStore>>
+    }
+    class Runner {
+        <<core/durable>>
+        Store, Version, Steps
+        +Run(ctx, id, initial, approvalKey)
+        +Diagnose(ctx, id, ...)
+    }
+    class SessionStore {
+        <<interface core/session.Store>>
+        +Append(ctx, id, expected, ...Event) (int64, error)
+        +Read(ctx, id, after) ([]Event, error)
+        +List(ctx) / Fork(...) / Lock(ctx, id, name)
+    }
+    class MemoryStore {
+        <<core/session>>
+    }
+    class SessionFileStore {
+        <<core/session.FileStore>>
+    }
+    class Controller {
+        <<core/budget>>
+        New(Config) / NewDurable(Config, durable.Store)
+        +Snapshot(ctx)
+    }
+    DurableStore <|.. DurableFileStore
+    SessionStore <|.. MemoryStore
+    SessionStore <|.. SessionFileStore
+    Runner --> DurableStore
+    SessionStore ..> DurableStore : session.DurableStore(store, id)
+    Controller ..> DurableStore : NewDurable
+```
+
+`durable.Do(ctx, id, input, policy, run)` 是 Agent 持久子操作（模型回合、工具调用、循环扩展点）的共同入口，ctx 上须有 `WithJournal` 与 `WithExecutionKey`；`workflow.DurableGraph` 用 `DurableConfig` 中的 `durable.Store` 保存图快照。`testing/replay` 读取会话日志做回放回归。
 
 ## 相关文档
 
