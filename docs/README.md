@@ -1,6 +1,6 @@
 # GoAgent 文档
 
-当前入口：[扩展契约](guides/EXTENSION_CONTRACT.md)、[执行治理](guides/EXECUTION_GOVERNANCE.md)、[优化验收清单](development/PRIORITY_IMPROVEMENTS.md)。
+当前入口：[核心 API](api/CORE_API.md)、[Builder 参考](guides/BUILDER_API_REFERENCE.md)、[扩展契约](guides/EXTENSION_CONTRACT.md)、[执行治理](guides/EXECUTION_GOVERNANCE.md)、[优化验收清单](development/PRIORITY_IMPROVEMENTS.md)。
 
 Harness 装配、编码工具与相关示例已迁至独立项目，见 [迁移指南](guides/HARNESS_MIGRATION.md)。
 
@@ -54,38 +54,23 @@ GoAgent 是一个全面的 Go AI Agent 框架，提供 Agent、工具、内存�
 
 ### 开发规范
 
+- **[API 文档整理记录](development/API_DOCUMENTATION_AUDIT.md)** - 源码依据、已修正偏差与示例验证范围
+
 - **[开发指南](development/DEVELOPMENT_GUIDE.md)** - 开发环境和贡献指南
 - **[测试最佳实践](development/TESTING_BEST_PRACTICES.md)** - 测试编写规范
 - **[Panic 处理指南](development/PANIC_HANDLING.md)** - Panic 处理开发指南
 
-## 核心概念
+## 当前开发入口
 
-### Agent 类型
+| 入口 | 用途 |
+| --- | --- |
+| core.Runnable、Builder.AsRunnable | 新执行与组合协议 |
+| workflow.Graph | 代码控制的状态图，支持 Agent 节点 |
+| tools.Dispatcher / Pipeline | 工具执行、准入和结果交付 |
+| execution.Scope | 宿主身份、预算和观察装配 |
+| core/session、core/durable | 对话历史与运行恢复，职责分别说明 |
 
-| Agent 类型 | 描述 | 适用场景 |
-|-----------|------|----------|
-| **ExecutorAgent** | 工具执行 Agent | 需要调用工具完成任务 |
-| **ReActAgent** | ReAct 推理 Agent | 复杂推理 + 工具调用 |
-| **CoTAgent** | 思维链 Agent | 需要逐步推理 |
-| **ToTAgent** | 思维树 Agent | 需要探索多种方案 |
-| **GoTAgent** | 思维图 Agent | 复杂依赖关系 |
-| **PoTAgent** | 程序思维 Agent | 结构化问题 |
-| **SoTAgent** | 骨架思维 Agent | 需要先规划后执行 |
-| **MetaCoTAgent** | 元思维链 Agent | 需要自适应推理 |
-
-### LLM 提供商
-
-| 提供商 | 说明 | 模型示例 |
-|-------|------|----------|
-| OpenAI | GPT 系列 | gpt-4, gpt-4-turbo, gpt-3.5-turbo |
-| Anthropic | Claude 系列 | claude-3-opus, claude-3-sonnet |
-| Google Gemini | Gemini 系列 | gemini-pro, gemini-1.5-pro |
-| DeepSeek | 高性价比 | deepseek-chat, deepseek-coder |
-| Ollama | 本地部署 | llama3, mistral, codellama |
-| Kimi | 月之暗面 | moonshot-v1-8k, moonshot-v1-128k |
-| SiliconFlow | 国内服务 | 多种模型 |
-| Cohere | Cohere 系列 | command, command-light |
-| HuggingFace | HF 推理 | 多种开源模型 |
+旧 interfaces.Agent/Runnable 为兼容接口；不再以已移除的 agents/* 类型作为新开发分类。Provider 方法和原生工具流能力以 [LLM API](api/LLM_API.md) 与 [能力矩阵](guides/PROVIDER_CAPABILITIES.md) 为准。
 
 ## 快速示例
 

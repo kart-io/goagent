@@ -1,495 +1,201 @@
-# GoAgent Builder API 速查表
+<!-- generated-by: gsd-doc-writer -->
+# Builder API 参考
 
-本文档提供 GoAgent Builder API 的快速参考指南，帮助开发者快速找到所需的配置方法。
+Builder 创建可配置 Agent；新业务通过 `BuildContext(ctx)` 构建，再以 `agent.AsRunnable().Invoke/Stream` 执行。With 方法修改并返回同一个 Builder，不支持并发配置；不要在 Build 后继续修改并共享它来模拟独立会话。
 
----
-
-## 📋 目录
-
-- [API 分层概览](#api-分层概览)
-- [Simple API（日常使用）](#simple-api日常使用)
-- [Core API（标准功能）](#core-api标准功能)
-- [Advanced API（高级功能）](#advanced-api高级功能)
-- [快速构建函数](#快速构建函数)
-- [使用示例](#使用示例)
-
----
-
-## API 分层概览
-
-GoAgent Builder API 采用三层设计，帮助用户逐步学习：
-
-| 层级 | 方法数 | 覆盖场景 | 目标用户 | 学习时间 |
-|------|--------|----------|----------|----------|
-| **[Simple]** | 5-8 个 | 80% | 快速原型、简单应用 | 5 分钟 |
-| **[Core]** | 15-20 个 | 95% | 功能完整、生产应用 | 30 分钟 |
-| **[Advanced]** | 30+ 个 | 100% | 企业级、特殊需求 | 2 小时 |
-
-**设计原则**：
-- 简单场景使用简单 API（3-5 个方法调用）
-- 复杂场景逐步引入更多方法
-- 完全向后兼容（所有方法始终可用）
-
----
-
-## Simple API（日常使用）
-
-### 核心方法（必需）
-
-| 方法 | 参数 | 描述 | 默认值 | 使用频率 |
-|------|------|------|--------|----------|
-| **WithSystemPrompt** | `string` | 设置系统提示词（定义 Agent 角色） | "" | ⭐⭐⭐⭐⭐ |
-| **WithTools** | `...Tool` | 添加工具到 Agent | 无工具 | ⭐⭐⭐⭐⭐ |
-| **Build** | 无 | 构建 Agent 实例 | - | ⭐⭐⭐⭐⭐ |
-
-### 常用配置
-
-| 方法 | 参数 | 描述 | 默认值 | 推荐值 |
-|------|------|------|--------|--------|
-| **WithMaxIterations** | `int` | 最大推理步骤数 | 10 | 简单任务 5-10<br>复杂任务 15-30 |
-| **WithTemperature** | `float64` | 控制 LLM 创造性 | 0.7 | 精确 0.0-0.3<br>平衡 0.4-0.7<br>创造 0.8-1.0 |
-
-### 推理模式
-
-推理策略（CoT、ReAct、ToT、GoT、PoT、SoT、MetaCoT）及其 `With*` 配置方法、`Quick*Agent` 快速函数已在 v0.17.0 删除，代码保留在 `v0.16.1`。需要工具调用时用 `WithTools` 走原生工具循环，多步流程用 `workflow` Graph，见[原生编排与工具体系](NATIVE_ORCHESTRATION.md)。
-
-### Simple API 完整示例
+## 创建与构建
 
 ```go
-// 最简单的 Agent（3 行代码）
-agent, err := builder.NewSimpleBuilder(llmClient).
-    WithSystemPrompt("你是一个友好的助手").
-    Build()
+func NewAgentBuilder[C any, S core.State](client llm.Client) *AgentBuilder[C, S]
+func NewSimpleBuilder(client llm.Client) *SimpleAgentBuilder
 
-// 带工具的 Agent
-agent, err := builder.NewSimpleBuilder(llmClient).
-    WithSystemPrompt("你是一个数据分析助手").
-    WithTools(calculator, searchTool).
-    WithMaxIterations(15).
-    WithTemperature(0.3).
-    Build()
+type SimpleAgentBuilder = AgentBuilder[any, *core.AgentState]
+type SimpleAgent = ConfigurableAgent[any, *core.AgentState]
 ```
 
----
+| 方法 | 返回 | 行为 |
+|---|---|---|
+| `BuildContext(ctx context.Context)` | `(*ConfigurableAgent[C,S],error)` | 校验配置，将 ctx 传给检查点初始化和 OnStart，操作/回调返回后检查取消 |
+| `Build()` | 同上 | 委派 BuildContext(context.Background()) |
+| `WithState(state S)` | `*AgentBuilder[C,S]` | 指定状态；未提供时仅 *core.AgentState 自动创建，其余 S 必须提供 |
 
-## Core API（标准功能）
+默认创建内存命名空间 Store 和内存 Checkpointer。构建初始化会执行 Exists/Load 和 OnStart；检查点错误、类型错误及取消会失败，不能当成“无历史”。忽略 context 的宿主调用须自行返回，取消不回滚回调已发生的外部效果。
 
-Core API 在 Simple API 基础上增加以下方法：
+源码：[builder.go](../../builder/builder.go)、[configurable_agent.go](../../builder/configurable_agent.go)。
 
-### 性能和超时控制
+## 执行入口选择
 
-| 方法 | 参数 | 描述 | 默认值 | 使用场景 |
-|------|------|------|--------|----------|
-| **WithTimeout** | `time.Duration` | Agent 执行超时时间 | 5 分钟 | 防止长时间挂起 |
-| **WithMaxTokens** | `int` | LLM 响应最大 token 数 | 2000 | 控制成本和响应长度 |
+| 入口 | 签名概要 | 契约 |
+|---|---|---|
+| AsRunnable() | `*core.StreamRunnable[any,*builder.AgentOutput]` | 推荐；Invoke 与 Stream 使用 ExecuteStream 的同一源 |
+| ExecuteStream(ctx,input any) | `(<-chan builder.AgentEvent,error)` | 读取 sources/step/text/usage/error/done 事件 |
+| Execute(ctx,input any) | `(*builder.AgentOutput,error)` | 保留同步且不隐式调用工具的旧行为；绑定预算/持久日志或配置 Offload/ReturnDirectTools 时拒绝 |
+| ExecuteWithTools(ctx,input any) | 同上 | 支持流时委派 AsRunnable；否则保留旧工具循环，不能绑定根预算或持久日志 |
+| Start(ctx,input string) | `*builder.Handle` | 原生工具流交互句柄，可 Steer/Inject/Followup/Redirect/Interrupt，结果通过 Wait(ctx) 获取 |
 
-### 监控和调试
+AsRunnable 需要 llm.StreamClient。推荐的原生工具循环需要 llm.ToolStreamClient 与已注册工具；不能仅凭 StreamClient 推断支持所有扩展点。同一 Agent 实例共享串行执行门，排队受 context 约束；独立并行子 Agent 需要独立实例和会话。
 
-| 方法 | 参数 | 描述 | 默认值 | 使用场景 |
-|------|------|------|--------|----------|
-| **WithCallbacks** | `...Callback` | 添加回调函数 | 无 | 日志、指标、调试 |
-| **WithVerbose** | `bool` | 详细日志 | false | 开发和调试 |
-| **WithErrorHandler** | `func(error) error` | 自定义错误处理 | 默认处理 | 重试、降级逻辑 |
+builder.AgentOutput 含 Result、State、Metadata、Duration、Timestamp、TokenUsage，与 core.AgentOutput 不同。Stream 的中间文本不是业务成功证据；提前停止消费必须取消 context。
 
-### 存储和持久化
+## 常用选项与实际默认值
 
-| 方法 | 参数 | 描述 | 默认值 | 使用场景 |
-|------|------|------|--------|----------|
-| **WithStore** | `Store` | 长期存储 | 内存存储 | 持久化数据 |
-| **WithCheckpointer** | `Checkpointer` | 检查点器 | 无 | 状态恢复 |
+以下方法均返回 `*AgentBuilder[C,S]`。默认值来自 [DefaultAgentConfig](../../builder/config_options.go)，不是 Provider 的统一能力承诺。
 
-### Core API 完整示例
+| 方法与参数 | 默认值 | 说明 |
+|---|---|---|
+| WithSystemPrompt(string) | 空 | 设置系统提示词 |
+| WithTools(...interfaces.Tool) | 无工具 | 追加工具；持久调用使用 Dispatcher.Tools 返回的包装工具 |
+| WithMaxIterations(int) | 10 | 原生循环最大模型步骤，最后请求通常用于最终回答 |
+| WithTimeout(time.Duration) | 5 分钟 | 执行期限，与父 context、根预算期限取更早者 |
+| WithTemperature(float64) | 0.7 | 模型采样参数，具体支持取决于 Provider |
+| WithMaxTokens(int) | 2000 | 每次请求输出预算，不是跨 Agent 总限额 |
+| WithSessionID(string) | 自动生成 session-时间戳 | 会话检查点与历史身份；重建/恢复时宿主提供稳定值 |
+| WithMaxConversationHistory(int) | 20 | 加载的历史对话轮数；0 或负数不限制 |
+| WithMemoryFailurePolicy(MemoryFailurePolicy) | MemoryFailureBestEffort | 可设 MemoryFailureStrict，读写失败保留错误链并中止 |
+| WithParallelToolCalls(int) | 0，顺序执行 | 小于2不并行；同轮工具均声明并发能力才并行 |
+| WithEmptyAnswerRetries(int) | 0，不重问 | 空回答可追加重问，消耗步骤与预算，不是网络重试 |
+| WithReturnDirectTools(...string) | 无 | 替换名单；本轮单个匹配调用时直接返回结果，多个调用仍走模型循环 |
+| WithVerbose(bool) | false | 添加默认日志/计时中间件 |
+| WithStreamingEnabled(bool) | false | 保留配置标记；不代替 Stream 入口或赋予客户端流能力 |
+| WithAutoSaveEnabled(bool) | true | 控制会话状态自动保存，不等于工具效果幂等 |
+| WithSaveInterval(time.Duration) | 30 秒 | 仅设置配置值，不表示框架启动后台定时保存任务 |
+
+## 状态、记忆与装配
+
+| 方法 | 参数类型 | 责任 |
+|---|---|---|
+| WithContext | C | 运行时业务依赖，不替代每次调用的 context.Context |
+| WithStore | store.Store | 命名空间键值存储，不是 durable.Store |
+| WithCheckpointer | checkpoint.Checkpointer | 加载与保存 core.State，不提供工具调用回放 |
+| WithMemory | interfaces.MemoryManager | 读写对话记忆；与 Store 不是同一 API |
+| WithSessionLog | session.Store | 从追加写日志推导历史，取代此路径的记忆历史读取；只支持原生工具流 |
+| WithRetriever | interfaces.DocumentRetriever, ...RetrievalConfig | 默认最多4文档、正文12000 Unicode 字符；不缓存答案 |
+| WithDurableScope | string | 持久调用的稳定作用域；同节点兄弟逻辑调用必须不同 |
+| WithMiddleware | ...middleware.Middleware | 追加中间件 |
+| WithCallbacks | ...core.Callback | 追加生命周期回调；可嵌入 core.BaseCallback 只覆盖所需方法 |
+| WithErrorHandler | func(error)error | 转换执行错误，不代替 RequestError 或业务重试 |
+| WithInputSerializer | builder.InputSerializer | 输入序列化，默认 fmt.Sprintf |
+| WithMetadata | string, interface{} | 添加元数据 |
+| WithCommunicator | interface{} | 仅写 communicator 元数据，不自动实现 Agent 间通信 |
+| WithTelemetry | interface{} | 仅写 telemetry_provider 元数据；窄事件与 OTel 接入使用 core/observe |
+
+源码：[agent_options.go](../../builder/agent_options.go)、[runtime_options.go](../../builder/runtime_options.go)、[session_log.go](../../builder/session_log.go)、[retrieval.go](../../builder/retrieval.go)。会话日志与持久图/工具日志是不同契约；session.DurableStore 可把持久快照写入同一会话日志。
+
+宿主可用 execution.NewScope、Scope.Bind、execution.ConfigureBuilder 统一身份、预算与观察装配。Scope 不创建默认额度或关闭宿主资源，详见[宿主标准接入](HOST_INTEGRATION.md)。
+
+## 原生循环扩展点
+
+除 RequestError 原样重试也适用于无工具流式回答外，下列扩展点用于 ToolStreamClient 且配置工具的原生循环。签名与类型见 [loop_hooks.go](../../builder/loop_hooks.go)。
+
+| 方法 | 作用 | 持久运行约束 |
+|---|---|---|
+| WithPreStep(...PreStepHook) | 模型请求前改写 Step.Messages，或以 PreStepResult{Halt,Answer} 提前结束 | 结果记入日志并回放；不在此执行业务效果 |
+| WithIdentifiedPreStep(identity string,hook PreStepHook) | 为转换规则设置版本/配置身份 | 身份进入意图，变化后拒绝旧运行 |
+| WithRequestHook(...RequestHook) | 调整请求或客户端，工具列表只读 | 须保持确定性，宿主负责配置版本 |
+| WithRequestError(maxRecoveries int,...RequestErrorHook) | 请求失败时决定重试、消息调整或客户端替换 | 持久路径只允许原样重试，不能替换消息或客户端 |
+| WithTurnStopping(...TurnStoppingHook) | 返回非空 user 消息续跑 | 受步骤与预算上限约束，结果回放 |
+| WithPromptSections(...PromptSection) | 进入 system 的提示词段落，每轮固定 | 结果回放 |
+| WithPromptContexts(...PromptContext) | 每步附加上下文，不留在后续历史 | 结果回放 |
+| WithOffload(*contextpolicy.Offload) | 工具长结果换为引用，装为带身份 PreStep | 读取工具须显式注册；持久模式须有可恢复结果存储与 Dispatcher |
+
+Step 含 Index、Messages、Inputs、Final；PreStepHook 为 `func(context.Context,*Step)(PreStepResult,error)`。PreStep 不是动态业务路由或任意副作用的执行入口。
+
+### 请求重试与根预算
 
 ```go
-// 生产级 Agent 配置
-agent, err := builder.NewSimpleBuilder(llmClient).
-    // Simple API
-    WithSystemPrompt("你是一个客服助手").
-    WithTools(searchKB, createTicket).
-    WithMaxIterations(20).
-    WithTemperature(0.5).
-
-    // Core API
-    WithTimeout(3 * time.Minute).
-    WithMaxTokens(3000).
-    WithCallbacks(
-        core.NewStdoutCallback(true),
-        core.NewMetricsCallback(metrics), // metrics 为应用实现的 core.MetricsCollector
-    ).
-    WithStore(redisStore).
-    WithVerbose(false).
-
-    Build()
+configured := builder.NewSimpleBuilder(client).
+    WithRequestError(2, builder.RetryTransient(2, nil))
 ```
 
----
+RetryTransient 处理可重试的429、5xx与连接失败；已输出内容时不原样重试，遵守 Retry-After 与 context 期限。每次尝试独立占用根预算，恢复回放不再发请求；父 Agent 的重试配置不自动传给子 Agent。
 
-## Advanced API（高级功能）
+跨 Agent 的请求、工具、预留Token与期限由 core/budget.Controller 控制，不能用 MaxIterations/MaxTokens 代替。启用根预算 Token 上限时须通过 WithTokenEstimator(TokenEstimator) 提供保守估计，覆盖输入、工具定义与输出预算；策略版本放在 budget.Config.TokenPolicyVersion。
 
-Advanced API 在 Core API 基础上增加以下方法：
+## 输出格式
 
-### 高级状态管理
+WithOutputFormat(builder.OutputFormatJSON) 等选项把格式要求加入提示词，WithCustomOutputFormat(string) 设置自定义格式提示。它们不等于 JSON Schema 强制输出或宿主业务校验。ReturnDirectTools 直接返回工具结果，启用者负责最终格式与完整性。
 
-| 方法 | 参数 | 描述 | 使用场景 |
-|------|------|------|----------|
-| **WithState** | `S` | 自定义状态类型 | 需要泛型状态 |
-| **WithContext** | `C` | 自定义上下文类型 | 需要泛型上下文 |
-| **WithSessionID** | `string` | 会话标识符 | 会话管理 |
-| **WithAutoSaveEnabled** | `bool` | 自动保存开关 | 状态持久化 |
-| **WithSaveInterval** | `time.Duration` | 自动保存间隔 | 性能优化 |
+## 预配置与快捷构建
 
-### 中间件和扩展
+`ConfigureForRAG()`、`ConfigureForChatbot()`、`ConfigureForAnalysis()` 在同一个 Builder 上设置提示词、参数或中间件，见 [presets.go](../../builder/presets.go)。它们不是独立执行引擎。
 
-| 方法 | 参数 | 描述 | 使用场景 |
-|------|------|------|----------|
-| **WithMiddleware** | `...Middleware` | 添加中间件 | 功能扩展、拦截 |
-| **WithMetadata** | `string, interface{}` | 添加元数据 | 自定义键值对 |
+以下函数均返回 `(*builder.SimpleAgent,error)`，内部调用 Build，因此需要控制初始化上下文时优先显式使用 Builder + BuildContext：
 
-### 流式和性能
+| 函数 | 参数 |
+|---|---|
+| QuickAgent | llm.Client, systemPrompt string |
+| RAGAgent | llm.Client, retriever interface{} |
+| ChatAgent | llm.Client, userName string |
+| AnalysisAgent | llm.Client, dataSource interface{} |
+| WorkflowAgent | llm.Client, workflows map[string]interface{} |
+| MonitoringAgent | llm.Client, checkInterval time.Duration |
+| ResearchAgent | llm.Client, sources []string |
 
-| 方法 | 参数 | 描述 | 使用场景 |
-|------|------|------|----------|
-| **WithStreamingEnabled** | `bool` | 流式响应 | 实时输出 |
-| **WithTelemetry** | `interface{}` | OpenTelemetry 集成 | 分布式追踪 |
-| **WithCommunicator** | `interface{}` | Agent 间通信 | 多 Agent 系统 |
+这些是预配置助手：WorkflowAgent 不会把任意 map 编译成 workflow.Graph，MonitoringAgent 不会自动启动定时检查，ResearchAgent 不会因 sources 字段而自动安装搜索工具。RAGAgent 的非空 retriever 才接入 DocumentRetriever、Retrieve 方法或 VectorStore；nil 保留提示词预设。实现与实际装配见 [quick_builders.go](../../builder/quick_builders.go)。
 
-### Advanced API 完整示例
+## 无密钥的最小示例
 
 ```go
-// 企业级 Agent 配置
-type CustomState struct {
-    *core.AgentState
-    UserProfile map[string]interface{}
+package main
+
+import (
+    "context"
+    "fmt"
+    "time"
+
+    "github.com/kart-io/goagent/builder"
+    "github.com/kart-io/goagent/core/budget"
+    "github.com/kart-io/goagent/execution"
+    "github.com/kart-io/goagent/llm"
+)
+
+func main() {
+    if err := run(context.Background()); err != nil {
+        panic(err)
+    }
 }
 
-agent, err := builder.NewAgentBuilder[any, *CustomState](llmClient).
-    // Simple + Core API（省略...）
-    WithSystemPrompt("...").
-    WithTools(...).
-    WithStore(redisStore).
-    WithCallbacks(...).
-
-    // Advanced API
-    WithState(&CustomState{
-        AgentState: core.NewAgentState(),
-        UserProfile: make(map[string]interface{}),
-    }).
-    WithMiddleware(
-        middleware.NewLoggingMiddleware(nil),
-        middleware.NewCacheMiddleware(5*time.Minute),
-        middleware.NewRateLimiterMiddleware(10, time.Second),
-    ).
-    WithSessionID("user-123-session-456").
-    WithStreamingEnabled(true).
-    WithTelemetry(otelProvider).
-    WithAutoSaveEnabled(true).
-    WithSaveInterval(1 * time.Minute).
-
-    Build()
-```
-
----
-
-## 快速构建函数
-
-当你不需要精细控制时，使用快速函数一行创建 Agent：
-
-### 通用 Agent
-
-| 函数 | 参数 | 描述 | 使用场景 |
-|------|------|------|----------|
-| **QuickAgent** | `llm, prompt` | 最简单的 Agent | 快速原型 |
-| **ChatAgent** | `llm, userName` | 聊天机器人 | 对话应用 |
-| **RAGAgent** | `llm, retriever` | RAG 应用 | 知识问答 |
-| **AnalysisAgent** | `llm, dataSource` | 数据分析 | 数据洞察 |
-| **WorkflowAgent** | `llm, workflows` | 工作流编排 | 复杂流程 |
-| **MonitoringAgent** | `llm, interval` | 监控告警 | 系统监控 |
-| **ResearchAgent** | `llm, sources` | 研究助手 | 文献调研 |
-
-### 快速函数示例
-
-```go
-// 一行代码创建 Agent
-agent, err := builder.QuickAgent(llmClient, "你是一个助手")
-
-// 一行代码创建 RAG Agent
-agent, err := builder.RAGAgent(llmClient, vectorStoreRetriever)
-```
-
----
-
-## 使用示例
-
-### 场景 1：快速原型（Simple API）
-
-```go
-// 3 行代码创建一个简单 Agent
-agent, err := builder.NewSimpleBuilder(llmClient).
-    WithSystemPrompt("你是一个翻译助手").
-    Build()
-
-if err != nil {
-    log.Fatal(err)
-}
-
-result, _ := agent.Execute(context.Background(), "翻译: Hello World")
-fmt.Println(result)
-```
-
-**使用的 API**：
-- Simple: WithSystemPrompt, Build
-- 方法数：2 个
-
----
-
-### 场景 2：功能完整的生产 Agent（Core API）
-
-```go
-// 生产级配置（10 行代码）
-agent, err := builder.NewSimpleBuilder(llmClient).
-    // Simple API
-    WithSystemPrompt("你是一个客服助手").
-    WithTools(searchKB, createTicket, sendEmail).
-    WithMaxIterations(20).
-    WithTemperature(0.5).
-
-    // Core API
-    WithTimeout(3 * time.Minute).
-    WithMaxTokens(3000).
-    WithCallbacks(core.NewStdoutCallback(true)).
-    WithStore(redisStore).
-    WithVerbose(false).
-
-    Build()
-
-if err != nil {
-    log.Fatal(err)
-}
-
-// 带 RAG 的 Agent
-agent, err := builder.RAGAgent(llmClient, vectorStoreRetriever)
-```
-
-**使用的 API**：
-- Simple: WithSystemPrompt, WithTools, WithMaxIterations, WithTemperature
-- Core: WithTimeout, WithMaxTokens, WithCallbacks, WithStore, WithVerbose
-- 方法数：9 个
-
----
-
-### 场景 3：企业级自定义 Agent（Advanced API）
-
-```go
-// 自定义状态类型
-type CustomState struct {
-    *core.AgentState
-    UserProfile map[string]interface{}
-    BusinessContext map[string]string
-}
-
-// 企业级配置（20+ 行代码）
-agent, err := builder.NewAgentBuilder[any, *CustomState](llmClient).
-    // Simple + Core API
-    WithSystemPrompt("你是一个企业级助手").
-    WithTools(crmTool, erpTool, biTool).
-    WithMaxIterations(30).
-    WithStore(pgStore).
-    WithCallbacks(metricsCallback, auditCallback).
-    WithTimeout(10 * time.Minute).
-
-    // Advanced API
-    WithState(&CustomState{
-        AgentState: core.NewAgentState(),
-        UserProfile: loadUserProfile(),
-        BusinessContext: loadBusinessContext(),
-    }).
-    WithMiddleware(
-        middleware.NewAuthenticationMiddleware(authFunc),
-        middleware.NewRateLimiterMiddleware(100, time.Minute),
-    ).
-    WithSessionID(generateSessionID()).
-    WithStreamingEnabled(true).
-    WithTelemetry(otelProvider).
-    WithMetadata("tenant_id", tenantID).
-    WithMetadata("region", region).
-    WithAutoSaveEnabled(true).
-    WithSaveInterval(30 * time.Second).
-    WithErrorHandler(func(err error) error {
-        // 自定义错误处理：重试、降级、告警
-        return customErrorHandler(err)
-    }).
-
-    Build()
-
-if err != nil {
-    log.Fatal(err)
+func run(ctx context.Context) error {
+    const runID = "builder-reference-demo"
+    controller, err := budget.New(budget.Config{RootKey: runID, Version: "v1", MaxModelRequests: 2})
+    if err != nil {
+        return err
+    }
+    scope, err := execution.NewScope(execution.Config{RunID: runID, Budget: controller, Timeout: 10*time.Second})
+    if err != nil {
+        return err
+    }
+    runCtx, cancel, err := scope.Bind(ctx)
+    if err != nil {
+        return err
+    }
+    defer cancel()
+    configured, err := execution.ConfigureBuilder(builder.NewSimpleBuilder(llm.NewMockStreamClient()), scope, "assistant")
+    if err != nil {
+        return err
+    }
+    agent, err := configured.BuildContext(runCtx)
+    if err != nil {
+        return err
+    }
+    result, err := agent.AsRunnable().Invoke(runCtx, "演示 Builder 统一执行入口")
+    if err != nil {
+        return err
+    }
+    fmt.Println(result.Result)
+    return nil
 }
 ```
 
-**使用的 API**：
-- Simple: 4 个
-- Core: 5 个
-- Advanced: 10 个
-- 方法数：19 个
+## 旧接口迁移
 
----
+| 旧用法或旧说明 | 当前选择 |
+|---|---|
+| interfaces.Agent/Runnable 作为新编排协议 | core.Runnable；Builder 通过 AsRunnable 接入 |
+| WithModelRetry、ModelRetries、ModelRetryBackoff | WithRequestError + RetryTransient |
+| WithContextPolicy / WithContextPolicies / WithPolicyToolAdapter | WithOffload；自定义转换用 WithIdentifiedPreStep，见[迁移指南](CONTEXT_POLICY.md) |
+| WithCommunicator 自动实现多 Agent 通信 | 宿主显式编排，组合子 Agent 工具与 Workflow |
+| WithOutputFormatJSON 自动验证业务 DTO | 宿主或工具 Schema/结果校验器验证 |
+| 所有 Builder 方法永久向后兼容 | 按 CHANGELOG 和当前源码迁移；0.x 版本可有破坏性变更 |
 
-## 场景预设配置
-
-快速应用场景优化配置：
-
-```go
-// RAG 场景预设
-agent, _ := builder.NewSimpleBuilder(llm).
-    WithSystemPrompt("...").
-    WithTools(retriever).
-    ConfigureForRAG().  // 自动配置 RAG 最佳参数
-    Build()
-
-// 聊天机器人场景
-agent, _ := builder.NewSimpleBuilder(llm).
-    WithSystemPrompt("...").
-    ConfigureForChatbot().  // 自动配置聊天最佳参数
-    Build()
-
-// 数据分析场景
-agent, _ := builder.NewSimpleBuilder(llm).
-    WithSystemPrompt("...").
-    WithTools(calculator, plotter).
-    ConfigureForAnalysis().  // 自动配置分析最佳参数
-    Build()
-```
-
----
-
-## 方法速查索引
-
-### 按字母顺序
-
-| 方法名 | 层级 | 参数类型 | 描述 |
-|--------|------|----------|------|
-| Build | Simple | 无 | 构建 Agent |
-| ConfigureForAnalysis | Simple | 无 | 数据分析预设 |
-| ConfigureForChatbot | Simple | 无 | 聊天机器人预设 |
-| ConfigureForRAG | Simple | 无 | RAG 预设 |
-| WithAutoSaveEnabled | Advanced | bool | 自动保存开关 |
-| WithCallbacks | Core | ...Callback | 回调函数 |
-| WithCheckpointer | Core | Checkpointer | 检查点器 |
-| WithCommunicator | Advanced | interface{} | Agent 通信 |
-| WithContext | Advanced | C | 自定义上下文 |
-| WithErrorHandler | Core | func(error)error | 错误处理 |
-| WithMaxIterations | Simple | int | 最大步骤数 |
-| WithMaxTokens | Core | int | 最大 token 数 |
-| WithMetadata | Advanced | string, interface{} | 元数据 |
-| WithMiddleware | Advanced | ...Middleware | 中间件 |
-| WithSaveInterval | Advanced | time.Duration | 保存间隔 |
-| WithSessionID | Advanced | string | 会话 ID |
-| WithState | Advanced | S | 自定义状态 |
-| WithStore | Core | Store | 长期存储 |
-| WithStreamingEnabled | Advanced | bool | 流式响应 |
-| WithSystemPrompt | Simple | string | 系统提示词 |
-| WithTelemetry | Advanced | interface{} | OpenTelemetry |
-| WithTemperature | Simple | float64 | 温度参数 |
-| WithTimeout | Core | time.Duration | 超时时间 |
-| WithTools | Simple | ...Tool | 添加工具 |
-| WithVerbose | Core | bool | 详细日志 |
-
-### 按使用频率
-
-| 频率 | 方法名 | 使用率 |
-|------|--------|--------|
-| ⭐⭐⭐⭐⭐ | WithSystemPrompt | 99% |
-| ⭐⭐⭐⭐⭐ | Build | 100% |
-| ⭐⭐⭐⭐ | WithTools | 80% |
-| ⭐⭐⭐⭐ | WithMaxIterations | 70% |
-| ⭐⭐⭐ | WithTemperature | 60% |
-| ⭐⭐⭐ | WithCallbacks | 50% |
-| ⭐⭐ | WithTimeout | 40% |
-| ⭐⭐ | WithMaxTokens | 40% |
-| ⭐⭐ | WithStore | 30% |
-| ⭐ | WithVerbose | 20% |
-
----
-
-## 学习路径建议
-
-### 第 1 天：Simple API（5 分钟）
-
-1. 学习 `NewSimpleBuilder` 函数
-2. 掌握 `WithSystemPrompt` 和 `Build`
-3. 尝试添加 `WithTools`
-4. 运行第一个 Agent
-
-```go
-agent, _ := builder.NewSimpleBuilder(llm).
-    WithSystemPrompt("你是一个助手").
-    Build()
-```
-
-### 第 2 天：Core API（30 分钟）
-
-1. 学习配置参数：`WithMaxIterations`, `WithTemperature`
-2. 添加监控：`WithCallbacks`, `WithVerbose`
-3. 配置存储：`WithStore`
-
-### 第 3 天：Advanced API（2 小时）
-
-1. 理解泛型：`AgentBuilder[C, S]`
-2. 自定义状态：`WithState`, `WithContext`
-3. 添加中间件：`WithMiddleware`
-4. 集成监控：`WithTelemetry`
-
----
-
-## 常见问题 FAQ
-
-### Q1: Simple/Core/Advanced 层级是强制的吗？
-
-**A**: 不是！所有方法始终可用，层级仅作为学习指引。你可以在任何时候使用任何方法。
-
-### Q2: 我应该从哪个层级开始？
-
-**A**: 建议从 Simple API 开始（3-5 个方法），根据需要逐步添加更多配置。80% 的场景只需要 Simple API。
-
-### Q3: 泛型 `AgentBuilder[C, S]` 是什么？
-
-**A**: 这是高级特性，允许自定义上下文和状态类型。大多数情况下使用 `NewSimpleBuilder(llm)` 即可，它使用默认类型 `any` 和 `*core.AgentState`。
-
-### Q4: 快速函数 vs Builder 模式，哪个更好？
-
-**A**:
-- **快速函数**：适合原型和简单场景（1 行代码）
-- **Builder 模式**：适合需要精细控制的生产场景（可配置性强）
-
-根据项目阶段选择：原型阶段用快速函数，生产阶段用 Builder。
-
-### Q5: 为什么有些方法标记为 [Advanced]？
-
-**A**: [Advanced] 方法通常有以下特征：
-- 需要深入理解 GoAgent 架构
-- 需要额外的依赖或配置
-- 仅在特殊场景下需要
-- 可能增加系统复杂度
-
-新手建议先掌握 [Simple] 和 [Core] 方法。
-
----
-
-## 相关资源
-
-- **完整文档**: [GoAgent 官方文档](../README.md)
-- **示例代码**: [examples/](../../examples/)
-  - `simple/` - Simple API 示例
-  - `core/` - Core API 示例
-  - `advanced/` - Advanced API 示例
-- **详细指南**:
-  - [快速开始](./QUICKSTART.md)
-  - [工具中间件](./TOOL_MIDDLEWARE.md)
-  - [缓存指南](./CACHING_GUIDE.md)
-  - [架构文档](../architecture/ARCHITECTURE.md)
-
----
-
-**最后更新时间**: 2025-12-04
-**适用版本**: GoAgent v1.x
-**维护者**: GoAgent Team
+更多输出、工作流与等待语义见[核心 API](../api/CORE_API.md)、[扩展契约](EXTENSION_CONTRACT.md)、[执行治理](EXECUTION_GOVERNANCE.md)。

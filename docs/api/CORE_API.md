@@ -1,451 +1,196 @@
+<!-- generated-by: gsd-doc-writer -->
 # GoAgent 核心 API 参考
 
-本文档提供 GoAgent 框架核心 API 的完整参考。
+新编排以 `core.Runnable[I, O]` 为统一入口。Builder Agent 通过 `AsRunnable()` 接入，工作流用 `workflow.Graph[T]` 组合普通代码、工具与 Agent。本文依据当前源码；旧 `interfaces.Agent/Runnable` 仅供存量兼容，不作为新开发入口。
 
-## 目录
+## 统一执行接口
 
-- [Agent 接口](#agent-接口)
-- [Runnable 接口](#runnable-接口)
-- [Builder API](#builder-api)
-- [State 管理](#state-管理)
-- [Checkpoint API](#checkpoint-api)
-
----
-
-## Agent 接口
-
-### interfaces.Agent
-
-Agent 是能够处理输入并产生输出的自主智能体核心接口。
+签名见 [core/runnable.go](../../core/runnable.go)：
 
 ```go
-package interfaces
+type Runnable[I, O any] interface {
+    Invoke(ctx context.Context, input I) (O, error)
+    Stream(ctx context.Context, input I) (<-chan StreamChunk[O], error)
+    Batch(ctx context.Context, inputs []I) ([]O, error)
+    Pipe(next Runnable[O, any]) Runnable[I, any]
+    WithCallbacks(callbacks ...Callback) Runnable[I, O]
+    WithConfig(config RunnableConfig) Runnable[I, O]
+}
 
-type Agent interface {
-    Runnable
-
-    // Name 返回智能体的标识符
-    Name() string
-
-    // Description 返回智能体的功能描述
-    Description() string
-
-    // Capabilities 返回智能体的能力列表
-    Capabilities() []string
-
-    // Plan 为给定输入生成执行计划
-    Plan(ctx context.Context, input *Input) (*Plan, error)
+type StreamChunk[T any] struct {
+    Data  T
+    Error error
+    Done  bool
+    Event *StreamEvent
 }
 ```
 
-**实现位置：**
-- `core.BaseAgent` - 基础实现
+`Invoke` 返回最终输出；`Stream` 提供中间事件及终态；`Batch` 按输入索引返回结果，错误与部分结果均须检查。`MaxConcurrency` 控制 Batch 并发，不是进程全局执行额度。
 
-### interfaces.Input
+`Pipe` 接口中的下游输出为 `any`；保留中间与最终类型时可用 `core.NewRunnablePipe[I, M, O](first, second)`。`core.NewRunnableSequence` 则组合 `Runnable[any, any]`。不同输入输出类型不会自动做字段映射。
+
+`core.NewStreamRunnable[I,O](mode, source)` 从同一执行源提供 Invoke/Stream/Batch；源码见 [stream_runnable.go](../../core/stream_runnable.go)。可选的 `core.StreamCapability` 以 `StreamMode()` 声明 `StreamModeFinal`、`StreamModeSteps` 或 `StreamModeTokens`；有 Stream 方法不表示模型能逐 Token 输出。
+
+### 流与取消契约
+
+- 普通 StreamRunnable 的最终结果来自 `Done=true` 且 `Error=nil` 的块，中间 Data/Event 不能当作成功完成。
+- 消费方检查启动错误、块错误与最终 `ctx.Err()`；提前停止读取时必须取消上下文。
+- 组合器验证终态和通道关闭，缺失/重复终态、终态后的数据或错误都会失败，不进入下游。
+- 忽略 context 的第三方调用不能被强制终止。最终块的业务含义仍由输出类型决定，持久工作流的审批等待见下文。
+
+`RunnableConfig` 有 Callbacks、Tags、Metadata、MaxConcurrency、RetryPolicy 字段，但不能据 RetryPolicy 字段存在就认为所有 Runnable 自动重试。Builder 模型请求的恢复使用 `WithRequestError`，入口约束见[执行契约](../guides/EXECUTION_CONTRACT.md)。
+
+## Agent 与 Builder 输出的区别
+
+| 类型 | 输入/输出 | 用途 |
+|---|---|---|
+| `core.Agent` | 嵌入 `Runnable[*core.AgentInput,*core.AgentOutput]`，另有 Name/Description/Capabilities | 核心 Agent 接口 |
+| `builder.ConfigurableAgent[C,S]` | AsRunnable 返回 `*core.StreamRunnable[any,*builder.AgentOutput]` | 可配置 Builder Agent |
+| `interfaces.Agent/Runnable` | 旧 interfaces.Input/Output 消息协议 | 已弃用的兼容接口 |
+
+`core.AgentInput` 含 Task、Instruction、Context、Options、SessionID、Timestamp。`core.AgentOutput` 含 Result、Status、步骤、工具调用与用量，见 [core/agent.go](../../core/agent.go)。
+
+Builder 的输出是另一种类型，不能与 core.AgentOutput 混用：
 
 ```go
-type Input struct {
-    // Messages 是对话历史或输入消息
-    Messages []Message `json:"messages"`
-
-    // State 是持久状态数据
-    State State `json:"state"`
-
-    // Config 包含运行时配置选项
-    Config map[string]interface{} `json:"config,omitempty"`
+type AgentOutput struct { // 位于 builder 包
+    Result     interface{}
+    State      core.State
+    Metadata   map[string]interface{}
+    Duration   time.Duration
+    Timestamp  time.Time
+    TokenUsage *interfaces.TokenUsage
 }
 ```
 
-### interfaces.Output
+Builder 没有在此输出中定义 Status、Steps 或 ToolCalls 字段。通过 error、终态和业务结果判断完成；工具轨迹使用事件或观察器。源码见 [configurable_agent.go](../../builder/configurable_agent.go)、[runnable.go](../../builder/runnable.go)。
+
+### 可独立运行的离线例子
+
+保存为 main.go，在依赖当前 GoAgent 的模块中运行 `go run .`；使用模拟模型，无需密钥。
 
 ```go
-type Output struct {
-    // Messages 是生成或修改的消息
-    Messages []Message `json:"messages"`
+package main
 
-    // State 是更新的状态数据
-    State State `json:"state"`
-
-    // Metadata 包含关于执行的额外信息
-    Metadata map[string]interface{} `json:"metadata,omitempty"`
-}
-```
-
-### interfaces.Message
-
-```go
-type Message struct {
-    // Role 标识消息发送者（user、assistant、system、function）
-    Role string `json:"role"`
-
-    // Content 是消息的文本内容
-    Content string `json:"content"`
-
-    // Name 是发送者的可选名称
-    Name string `json:"name,omitempty"`
-}
-```
-
-### interfaces.Plan
-
-```go
-type Plan struct {
-    // Steps 是要执行的有序动作列表
-    Steps []Step `json:"steps"`
-
-    // Metadata 包含规划元数据
-    Metadata map[string]interface{} `json:"metadata,omitempty"`
-}
-
-type Step struct {
-    // Action 是要执行的动作
-    Action string `json:"action"`
-
-    // Input 包含动作的参数
-    Input map[string]interface{} `json:"input"`
-
-    // ToolName 是要调用的工具名称
-    ToolName string `json:"tool_name,omitempty"`
-}
-```
-
----
-
-## Runnable 接口
-
-### interfaces.Runnable
-
-Runnable 是所有可执行组件的基础接口。
-
-```go
-type Runnable interface {
-    // Invoke 同步执行
-    Invoke(ctx context.Context, input *Input) (*Output, error)
-
-    // Stream 流式执行
-    Stream(ctx context.Context, input *Input) (<-chan *StreamChunk, error)
-}
-```
-
-### interfaces.StreamChunk
-
-```go
-type StreamChunk struct {
-    // Content 是数据块内容
-    Content string `json:"content"`
-
-    // Metadata 包含上下文信息
-    Metadata map[string]interface{} `json:"metadata,omitempty"`
-
-    // Done 指示是否是最后一个数据块
-    Done bool `json:"done"`
-}
-```
-
----
-
-## Builder API
-
-### builder.AgentBuilder
-
-AgentBuilder 提供流畅的 API 来构建 Agent。
-
-```go
-package builder
-
-// AgentBuilder 泛型构建器
-type AgentBuilder[C any, S core.State] struct {
-    // 内部字段省略
-}
-
-// NewAgentBuilder 创建新的构建器
-func NewAgentBuilder[C any, S core.State](llmClient llm.Client) *AgentBuilder[C, S]
-
-// NewSimpleBuilder 创建简化的构建器（推荐）
-func NewSimpleBuilder(llmClient llm.Client) *SimpleAgentBuilder
-```
-
-### 构建器方法
-
-```go
-// WithSystemPrompt 设置系统提示词
-func (b *AgentBuilder[C, S]) WithSystemPrompt(prompt string) *AgentBuilder[C, S]
-
-// WithTools 设置工具列表
-func (b *AgentBuilder[C, S]) WithTools(tools ...interfaces.Tool) *AgentBuilder[C, S]
-
-// WithMiddleware 添加中间件
-func (b *AgentBuilder[C, S]) WithMiddleware(mw ...middleware.Middleware) *AgentBuilder[C, S]
-
-// WithMemory 设置内存管理器
-func (b *AgentBuilder[C, S]) WithMemory(memMgr interfaces.MemoryManager) *AgentBuilder[C, S]
-
-// WithStore 设置存储后端
-func (b *AgentBuilder[C, S]) WithStore(store store.Store) *AgentBuilder[C, S]
-
-// WithCheckpointer 设置检查点管理器
-func (b *AgentBuilder[C, S]) WithCheckpointer(cp checkpoint.Checkpointer) *AgentBuilder[C, S]
-
-// WithState 设置初始状态
-func (b *AgentBuilder[C, S]) WithState(state S) *AgentBuilder[C, S]
-
-// WithContext 设置上下文
-func (b *AgentBuilder[C, S]) WithContext(ctx C) *AgentBuilder[C, S]
-
-// WithCallbacks 设置回调函数
-func (b *AgentBuilder[C, S]) WithCallbacks(callbacks ...core.Callback) *AgentBuilder[C, S]
-
-// WithErrorHandler 设置错误处理器
-func (b *AgentBuilder[C, S]) WithErrorHandler(handler func(error) error) *AgentBuilder[C, S]
-
-// WithMetadata 设置元数据
-func (b *AgentBuilder[C, S]) WithMetadata(key string, value interface{}) *AgentBuilder[C, S]
-
-// Build 构建 Agent
-func (b *AgentBuilder[C, S]) Build() (*ConfigurableAgent[C, S], error)
-```
-
-### builder.AgentConfig
-
-```go
-type AgentConfig struct {
-    // MaxIterations 最大迭代次数
-    MaxIterations int
-
-    // Timeout 超时时间
-    Timeout time.Duration
-
-    // EnableStreaming 启用流式响应
-    EnableStreaming bool
-
-    // EnableAutoSave 启用自动保存
-    EnableAutoSave bool
-
-    // SaveInterval 保存间隔
-    SaveInterval time.Duration
-
-    // MaxTokens 最大 Token 数
-    MaxTokens int
-
-    // Temperature 温度参数
-    Temperature float64
-
-    // SessionID 会话 ID
-    SessionID string
-
-    // Verbose 详细模式
-    Verbose bool
-
-    // MaxConversationHistory 最大对话历史数
-    MaxConversationHistory int
-
-    // OutputFormat 输出格式
-    OutputFormat OutputFormat
-
-    // CustomOutputPrompt 自定义输出提示
-    CustomOutputPrompt string
-}
-
-// DefaultAgentConfig 返回默认配置
-func DefaultAgentConfig() *AgentConfig
-```
-
-### builder.OutputFormat
-
-```go
-type OutputFormat string
-
-const (
-    OutputFormatDefault   OutputFormat = ""
-    OutputFormatPlainText OutputFormat = "plain_text"
-    OutputFormatMarkdown  OutputFormat = "markdown"
-    OutputFormatJSON      OutputFormat = "json"
-    OutputFormatCustom    OutputFormat = "custom"
-)
-```
-
-### 使用示例
-
-```go
 import (
+    "context"
+    "fmt"
+    "time"
+
     "github.com/kart-io/goagent/builder"
     "github.com/kart-io/goagent/llm"
-    "github.com/kart-io/goagent/llm/providers"
+    "github.com/kart-io/goagent/workflow"
 )
 
-// 创建 LLM 客户端
-llmClient, err := providers.NewOpenAIWithOptions(
-    llm.WithAPIKey("your-api-key"),
-    llm.WithModel("gpt-4"),
-)
-if err != nil {
-    log.Fatal(err)
+type State struct {
+    Question string
+    Answer   string
 }
 
-// 使用 Builder 创建 Agent
-agent, err := builder.NewSimpleBuilder(llmClient).
-    WithSystemPrompt("你是一个有帮助的助手").
-    WithTools(calculatorTool, searchTool).
-    WithMiddleware(loggingMW).
-    WithMaxTokens(2000).
-    WithTemperature(0.7).
-    WithSessionID("session-123").
-    Build()
-if err != nil {
-    log.Fatal(err)
+func main() {
+    if err := run(); err != nil {
+        panic(err)
+    }
 }
 
-// 使用 Agent（配置了工具时用 ExecuteWithTools）
-output, err := agent.ExecuteWithTools(ctx, "你好")
-```
-
----
-
-## State 管理
-
-### interfaces.State
-
-```go
-type State map[string]interface{}
-```
-
-### core.AgentState
-
-```go
-package core
-
-type AgentState struct {
-    data map[string]interface{}
-    mu   sync.RWMutex
-}
-
-// NewAgentState 创建新的状态
-func NewAgentState() *AgentState
-
-// Get 获取值
-func (s *AgentState) Get(key string) (interface{}, bool)
-
-// Set 设置值
-func (s *AgentState) Set(key string, value interface{})
-
-// Delete 删除值
-func (s *AgentState) Delete(key string)
-
-// Keys 返回所有键
-func (s *AgentState) Keys() []string
-
-// Snapshot 返回当前状态的 map 副本
-func (s *AgentState) Snapshot() map[string]interface{}
-
-// Update 批量写入
-func (s *AgentState) Update(updates map[string]interface{})
-```
-
----
-
-## Checkpoint API
-
-### interfaces.Checkpointer
-
-```go
-type Checkpointer interface {
-    // SaveCheckpoint 保存检查点
-    SaveCheckpoint(ctx context.Context, checkpoint *Checkpoint) error
-
-    // LoadCheckpoint 加载检查点
-    LoadCheckpoint(ctx context.Context, checkpointID string) (*Checkpoint, error)
-
-    // ListCheckpoints 列出检查点
-    ListCheckpoints(ctx context.Context, threadID string, limit int) ([]*CheckpointMetadata, error)
-
-    // DeleteCheckpoint 删除检查点
-    DeleteCheckpoint(ctx context.Context, checkpointID string) error
+func run() error {
+    ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+    defer cancel()
+    agent, err := builder.NewSimpleBuilder(llm.NewMockStreamClient()).BuildContext(ctx)
+    if err != nil {
+        return err
+    }
+    node, err := workflow.Adapt(agent.AsRunnable(),
+        func(s State) (any, error) { return s.Question, nil },
+        func(s State, out *builder.AgentOutput) (State, error) {
+            s.Answer = fmt.Sprint(out.Result)
+            return s, nil
+        },
+    )
+    if err != nil {
+        return err
+    }
+    graph := workflow.NewGraph[State]()
+    if err := graph.AddRunnable("answer", node); err != nil {
+        return err
+    }
+    if err := graph.AddEdge(workflow.START, "answer"); err != nil {
+        return err
+    }
+    if err := graph.AddEdge("answer", workflow.END); err != nil {
+        return err
+    }
+    compiled, err := graph.Compile(ctx)
+    if err != nil {
+        return err
+    }
+    out, err := compiled.Invoke(ctx, State{Question: "演示 Agent 作为图节点"})
+    if err != nil {
+        return err
+    }
+    fmt.Println(out.Answer)
+    return nil
 }
 ```
 
-### interfaces.Checkpoint
+## 类型化工作流
+
+接口见 [graph.go](../../workflow/graph.go)、[adapter.go](../../workflow/adapter.go)、[parallel.go](../../workflow/parallel.go)。
+
+| API | 作用与边界 |
+|---|---|
+| `workflow.NewGraph[T](configs ...workflow.Config)` | 创建可变构图器；T 可以是任意业务状态，不要求实现 core.State |
+| `AddNode(name, Node[T])` | 普通节点签名为 `func(context.Context,T)(T,error)` |
+| `AddRunnable(name, core.Runnable[T,T])` | 接入已有 Runnable |
+| `workflow.Adapt[S,I,O](runnable, input, output)` | 显式映射 Runnable 输入与最终输出 |
+| `AddEdge(from, to)` | 配置唯一普通后继 |
+| `AddBranch(from, router, targets...)` | Router 从已完成状态选择一个预先声明的目标 |
+| `AddParallel(name, ParallelConfig[T])` | 显式 fork/join，宿主提供 Clone 和 Merge |
+| `Compile(ctx)` | 校验并生成 `*core.StreamRunnable[T,T]` |
+| `CompileDurable(ctx, DurableConfig, opts...)` | 生成可恢复的 `*workflow.DurableGraph[T]` |
+
+图允许有退出路径的循环，以 Config.MaxSteps 限制执行；不能证明路由一定选择退出。普通多入边不构成等待所有分支的 AND 汇合，须用 AddParallel。并行分支的可变状态由宿主深复制，合并顺序为注册顺序；没有自动字段 reducer 或任意动态 Send 调度协议。
+
+持久图的 Router 须为纯函数；模型请求放在 Agent 节点，路由仅检查已保存决策。路由保存前崩溃可能再次调用 Router。完整约束见 [workflow 指南](../../workflow/README.md)。
+
+## 持久执行与业务等待
+
+`workflow.DurableConfig` 指定 `Store durable.Store`、`Version string`、`ApprovalNodes []string`。WithBeforeApprove 可以在运行锁内重新检查批准条件。
 
 ```go
-type Checkpoint struct {
-    // ID 检查点唯一标识符
-    ID string `json:"id"`
-
-    // ThreadID 线程/会话标识符
-    ThreadID string `json:"thread_id"`
-
-    // State 检查点时的状态
-    State State `json:"state"`
-
-    // Metadata 额外信息
-    Metadata map[string]interface{} `json:"metadata,omitempty"`
-
-    // CreatedAt 创建时间
-    CreatedAt time.Time `json:"created_at"`
+type RunRequest[T any] struct {
+    RunID       string
+    Initial     T
+    ApprovalKey string
 }
 ```
 
-### interfaces.CheckpointMetadata
+DurableGraph.AsRunnable 的输入为 `workflow.RunRequest[T]`，输出为 `*workflow.GraphSnapshot[T]`。Snapshot 含 State、Node、Steps、Routing、Key、Waiting、Done、Preview。恢复时 Initial 被忽略；同一 RunID 不能当作新任务复用。
 
-```go
-type CheckpointMetadata struct {
-    ID        string                 `json:"id"`
-    ThreadID  string                 `json:"thread_id"`
-    CreatedAt time.Time              `json:"created_at"`
-    UpdatedAt time.Time              `json:"updated_at"`
-    Metadata  map[string]interface{} `json:"metadata,omitempty"`
-    Size      int64                  `json:"size"`
-}
-```
+- AsRunnable 的一次成功 Invoke 或流 Done，不一定代表业务完成：Waiting=true、Done=false 表示保存了审批等待。
+- `Run(ctx,id,initial,approvalKey)` 在审批等待时保留 `durable.ErrApprovalRequired` 错误契约。
+- AsChildRunnable 用于可续跑持久子图，要求在带日志的 Resumable 操作内运行，等待通过 `*durable.WaitError` 传播。普通工具适配不会自动获得此能力。
+- Snapshot 读取运行状态，Diagnose 只读诊断。节点检查点不替代外部业务幂等，未能确认的副作用不能盲目重做。
 
-### 检查点实现
+源码：[durable.go](../../workflow/durable.go)、[durable_runnable.go](../../workflow/durable_runnable.go)、[操作日志](../../core/durable/operation.go)。
 
-`core/checkpoint` 提供按线程（会话）ID 保存状态的 `Checkpointer`，Builder 的 `WithCheckpointer` 接收的就是它：
+## 状态、会话与存储边界
 
-```go
-package checkpoint
+| 组件 | 负责什么 | 不等于什么 |
+|---|---|---|
+| core.State、core.AgentState | Builder 状态的 Get/Set/Update/Snapshot/Clone 等操作 | 不等于任意 Graph[T]，也不自动深复制所有调用方引用 |
+| core/checkpoint.Checkpointer | 按 thread/session 保存及读取 core.State | 不等于工具调用日志或持久图检查点 |
+| store.Store | 命名空间键值存储；Builder.WithStore 接收此接口 | 不等于 core/durable.Store |
+| interfaces.MemoryManager | 对话与记忆读写 | 不等于业务运行恢复 |
+| core/session.Store | 追加写会话事件，推导对话历史 | 不自动维护待澄清任务状态 |
+| core/durable.Store | 运行快照、操作日志及锁 | 不自动提供任意外部效果的 exactly-once |
 
-type Checkpointer interface {
-    Save(ctx context.Context, threadID string, state state.State) error
-    Load(ctx context.Context, threadID string) (state.State, error)
-    List(ctx context.Context) ([]CheckpointInfo, error)
-    Delete(ctx context.Context, threadID string) error
-    Exists(ctx context.Context, threadID string) (bool, error)
-}
+源码：[State](../../core/state/state.go)、[Checkpointer](../../core/checkpoint/checkpointer.go)、[命名空间 Store](../../store/store.go)、[会话 Store](../../core/session/store.go)。
 
-// NewInMemorySaver 创建内存检查点
-func NewInMemorySaver() *InMemorySaver
+## 宿主执行装配
 
-// NewDistributedCheckpointer 创建分布式检查点
-func NewDistributedCheckpointer(config *DistributedCheckpointerConfig) (*DistributedCheckpointer, error)
-```
+`execution.NewScope(execution.Config{RunID, SessionID, Journal, Budget, Timeout, Observer, Tracer})` 校验宿主配置；scope.Bind(ctx) 返回派生 context、取消函数和 error；execution.ConfigureBuilder(b,scope,agentID) 设置会话和稳定 Agent scope。
 
-### 使用示例
+Budget.RootKey 必须等于 RunID；同时提供 Journal 和 Budget 时预算必须持久化。Bind 拒绝预绑定 Journal、已绑定 Scope 与冲突的身份/控制器。Scope 不关闭宿主存储或观察资源。详见[宿主接入指南](../guides/HOST_INTEGRATION.md)、[execution/scope.go](../../execution/scope.go)。
 
-```go
-import (
-    "github.com/kart-io/goagent/core"
-    "github.com/kart-io/goagent/core/checkpoint"
-)
-
-cp := checkpoint.NewInMemorySaver()
-
-// 保存线程状态
-st := core.NewAgentState()
-st.Set("step", 5)
-err := cp.Save(ctx, "thread-123", st)
-
-// 加载
-loaded, err := cp.Load(ctx, "thread-123")
-
-// 列出所有检查点
-list, err := cp.List(ctx)
-```
-
----
-
-## 相关文档
-
-- [Tool API 参考](TOOL_API.md)
-- [LLM API 参考](LLM_API.md)
-- [Middleware API 参考](MIDDLEWARE_API.md)
-- [使用指南](../guides/QUICKSTART.md)
+Builder 方法、默认值和迁移见 [Builder API](../guides/BUILDER_API_REFERENCE.md)；工具调用见 [Tool API](TOOL_API.md)。

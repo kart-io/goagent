@@ -1,6 +1,6 @@
 # 宿主标准接入
 
-`execution.Scope` 组合宿主已有的执行身份、会话、日志、预算、期限与观察者，不创建新的运行引擎。它与底层 `core/execution.Runtime` 职责不同：后者执行循环，前者负责装配。
+`execution.Scope` 组合宿主已有的执行身份、会话、日志、预算、期限与观察者，不创建新的运行引擎。它与底层 `core/execution.Runtime` 职责不同：后者承载自定义上下文、状态、Store 与 Checkpointer，前者负责宿主装配；模型工具循环由 Builder 实现。
 
 ## 构建与运行
 

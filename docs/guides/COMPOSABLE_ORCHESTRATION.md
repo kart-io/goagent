@@ -41,7 +41,7 @@ go run ./orchestration/composed-order /tmp/goagent-order-demo
 
 默认最大嵌套深度 8，祖先更小的限制继续生效。同一执行链重入同一 Dispatcher 在并发槽排队前拒绝；独立子 Dispatcher 允许嵌套。deadline 逐层继承；长工具需宿主显式配置 Dispatcher Timeout。
 
-复合工具为不透明、一次尝试模式：相同版本 completed 可回放；pending/failed 返回 attention，不自动进入子检查点。Encode 必须拒绝等待或未完成的业务输出。此模式不提供嵌套审批、handoff 或 exactly-once 外部副作用保证。
+默认复合工具为不透明、一次尝试模式：相同版本 completed 可回放；pending/failed 返回 attention，不自动进入子检查点。Encode 必须拒绝等待或未完成的业务输出。需要嵌套审批时，显式使用 `RunnableToolConfig.Resumable` 与 `DurableGraph.AsChildRunnable()`，经带日志的 Dispatcher 运行，同一 Store 和稳定执行键承载等待及续跑；普通适配不会自动获得该能力。handoff 与任意外部副作用的 exactly-once 保证不在此契约内。详见 [Tool API](../api/TOOL_API.md) 和 [子图适配源码](../../workflow/durable_runnable.go)。
 
 ## 上下文结果卸载
 

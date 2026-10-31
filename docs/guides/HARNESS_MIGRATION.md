@@ -13,7 +13,7 @@ GoAgent 专注执行机制：Runnable、Builder 原生循环、Graph、durable�
 | `examples/tools/10-plan-agent` | `goagent-harness/examples/plan-agent` |
 
 新项目建立在本仓库同级的 `goagent-harness` 目录，具有独立 Git 仓库、Go module、许可证、文档、测试与提交历史；原始实现来源记录在新项目 NOTICE 中。
-新模块依赖已发布的 GoAgent **v0.23.0**。迁移只改 import，原有配置文件路径、格式与装配 API 不变；不保留旧包的兼容转发。
+拆分时新模块以已发布的 GoAgent **v0.23.0** 为依赖基线；当前依赖版本以目标仓库 go.mod 为准。迁移只改 import，原有配置文件路径、格式与装配 API 不变；不保留旧包的兼容转发。
 仅使用 Builder 或工作流的业务无需引入新项目。
 
 ## 保留在核心
@@ -32,9 +32,10 @@ cd ../goagent-harness
 脚本先以 `GOWORK=off` 验证已发布依赖，再临时创建 workspace 测试本地两个模块，不写入本地 replace 或修改现有 go.work。
 新项目的 `integration` 测试通过公开 API 验证 Preset 装配、工具审批、持久图等待、重建宿主后的批准续跑和完成后回放；迁出的原有测试覆盖技能、子 Agent、计划模式、压缩与交互。
 
-## 发布顺序
+## 版本与接入
 
-Harness源码已推送到 `kart-io/goagent-harness` 的 `main` 分支，尚未发布版本标签。发布包含本次删除的 GoAgent 版本前，必须先发布 GoAgent Harness 的远程仓库与版本，验证外部下载后再发布核心破坏性版本。
-在此之前，外部使用者继续使用 GoAgent v0.23.0；本地使用者通过新仓库或临时 workspace 验证。两个模块各自的 go.mod 均不依赖本地路径。
+旧包从 GoAgent v0.27.0 起移除，不能继续导入当前模块的 harness/preset 或 tools/coding。上层项目位于 [kart-io/goagent-harness](https://github.com/kart-io/goagent-harness)，其依赖和可用发布版本由该仓库独立维护；不要将拆分时的版本基线当作永久兼容保证。
+
+现有业务升级前先修改 import、检查目标模块依赖，再运行两仓验证。没有使用 Preset 或编码工具的业务无需引入 Harness。两个模块不需要在提交的 go.mod 中保留本地 replace。
 
 新项目中的历史设计文档保留来源；本仓库的 Harness 历史设计不再代表上层组件的维护位置。

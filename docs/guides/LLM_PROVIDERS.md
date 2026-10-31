@@ -1,8 +1,9 @@
+<!-- generated-by: gsd-doc-writer -->
 # LLM 提供商指南
 
 ## 概述
 
-GoAgent 支持多种 LLM 提供商，提供统一的接口抽象。本指南详细说明各提供商的配置和使用方法。
+GoAgent 为不同 Provider 提供基础请求接口，但结构化流、原生工具流和 Embedding 支持各不相同。准确签名见 [LLM API 参考](../api/LLM_API.md)，适配器边界见 [Provider 能力表](PROVIDER_CAPABILITIES.md)。下面的模型名称是配置示例，不是当前服务端支持目录；运行前由宿主选择可用模型。
 
 ## 支持的提供商
 
@@ -31,7 +32,7 @@ type Client interface {
     Chat(ctx context.Context, messages []Message) (*CompletionResponse, error)
 
     // 返回提供商类型
-    Provider() Provider
+    Provider() constants.Provider
 
     // 检查可用性
     IsAvailable() bool
@@ -51,6 +52,8 @@ type StreamClient interface {
     ChatStream(ctx context.Context, messages []Message) (<-chan *StreamChunk, error)
 }
 ```
+
+原生 Agent 工具循环还要求 `llm.ToolStreamClient`，其 `CompleteToolsStream(context.Context, *llm.CompletionRequest, []interfaces.Tool)` 返回 `(<-chan *llm.StreamChunk, error)`。检查 `llm.HasToolStreaming(client)`，不能根据字符串流、包装器名称或旧工具接口推断支持。未实现结构化流的 Provider 不能直接用于 Builder 的 `AsRunnable` 入口。上面的接口定义片段使用 `llm` 包内类型名，`constants` 来自 `llm/constants`。
 
 ## 提供商配置
 
@@ -79,7 +82,7 @@ client, err := providers.NewOpenAIWithOptions(
 )
 ```
 
-**支持的模型：**
+**模型配置示例（非当前支持清单）：**
 
 - `gpt-4`
 - `gpt-4-turbo`
@@ -109,7 +112,7 @@ client, err := providers.NewAnthropicWithOptions(
 )
 ```
 
-**支持的模型：**
+**模型配置示例（非当前支持清单）：**
 
 - `claude-3-opus-20240229`
 - `claude-3-sonnet-20240229`
@@ -125,20 +128,20 @@ import (
 
 // 基本配置
 client, err := providers.NewGeminiWithOptions(
-    llm.WithAPIKey(os.Getenv("GOOGLE_API_KEY")),
+    llm.WithAPIKey(os.Getenv("GEMINI_API_KEY")),
     llm.WithModel("gemini-pro"),
 )
 
 // 高级配置
 client, err := providers.NewGeminiWithOptions(
-    llm.WithAPIKey(os.Getenv("GOOGLE_API_KEY")),
+    llm.WithAPIKey(os.Getenv("GEMINI_API_KEY")),
     llm.WithModel("gemini-1.5-pro"),
     llm.WithMaxTokens(4096),
     llm.WithTemperature(0.7),
 )
 ```
 
-**支持的模型：**
+**模型配置示例（非当前支持清单）：**
 
 - `gemini-pro`
 - `gemini-1.5-pro`
@@ -168,7 +171,7 @@ client, err := providers.NewDeepSeekWithOptions(
 )
 ```
 
-**支持的模型：**
+**模型配置示例（非当前支持清单）：**
 
 - `deepseek-chat`
 - `deepseek-coder`
@@ -196,7 +199,7 @@ client, err := providers.NewCohereWithOptions(
 )
 ```
 
-**支持的模型：**
+**模型配置示例（非当前支持清单）：**
 
 - `command`
 - `command-r`
@@ -285,7 +288,7 @@ client, err := providers.NewKimiWithOptions(
 )
 ```
 
-**支持的模型：**
+**模型配置示例（非当前支持清单）：**
 
 - `moonshot-v1-8k`
 - `moonshot-v1-32k`
@@ -326,22 +329,25 @@ messages := []llm.Message{
     llm.UserMessage("请写一首诗。"),
 }
 
-stream, err := client.ChatStream(context.Background(), messages)
+ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+defer cancel() // 包含提前返回和停止消费的路径
+stream, err := client.ChatStream(ctx, messages)
 if err != nil {
     log.Fatal(err)
 }
 
 for chunk := range stream {
+    if chunk == nil {
+        return fmt.Errorf("收到空响应块")
+    }
     if chunk.Error != nil {
-        log.Printf("错误: %v\n", chunk.Error)
-        break
+        return chunk.Error
     }
     fmt.Print(chunk.Delta)
-    if chunk.Done {
-        break
-    }
 }
 ```
+
+该片段应放在返回 error 的函数内。完整的终态检查及可运行离线示例见 [LLM API](../api/LLM_API.md#离线流式示例)。直接请求、结构化流与 Agent Runnable 的终态是不同层次，不能只因已经输出文本就报告成功。
 
 ### 自定义参数
 
@@ -403,12 +409,16 @@ client, err := createClient(os.Getenv("LLM_PROVIDER"))
 if err != nil {
     log.Fatal(err)
 }
-agent, err := builder.NewSimpleBuilder(client).Build()
+// 使用统一执行入口前验证具体 Provider 的结构化流能力。
+if !llm.HasStreaming(client) {
+    return fmt.Errorf("该 Provider 未实现结构化流")
+}
+agent, err := builder.NewSimpleBuilder(client).BuildContext(ctx)
 ```
 
 ## Token 使用统计
 
-所有提供商响应都包含 Token 使用信息：
+用量证据可能缺失，必须检查 `Usage != nil`。nil 表示未知，不能当作零成本；流中的 `llm.Usage` 与同步响应的 `interfaces.TokenUsage` 也不是同一结构体。
 
 ```go
 resp, err := client.Chat(ctx, messages)
@@ -428,17 +438,9 @@ if resp.Usage != nil {
 ```go
 resp, err := client.Chat(ctx, messages)
 if err != nil {
-    // 检查错误类型
-    switch {
-    case strings.Contains(err.Error(), "rate limit"):
-        // 速率限制，等待重试
-        time.Sleep(time.Second * 5)
-    case strings.Contains(err.Error(), "invalid api key"):
-        // API 密钥错误
-        log.Fatal("请检查 API 密钥")
-    default:
-        log.Printf("LLM 调用失败: %v\n", err)
-    }
+    classified := llm.ClassifyError(err)
+    log.Printf("模型请求失败: reason=%s retryable=%t", classified.Reason, classified.Retryable)
+    return err
 }
 ```
 
@@ -463,34 +465,22 @@ resp, err := client.Chat(ctx, messages)
 ### 3. 重试机制
 
 ```go
-func chatWithRetry(client llm.Client, messages []llm.Message, maxRetries int) (*llm.CompletionResponse, error) {
-    var lastErr error
-    for i := 0; i < maxRetries; i++ {
-        resp, err := client.Chat(context.Background(), messages)
-        if err == nil {
-            return resp, nil
-        }
-        lastErr = err
-        time.Sleep(time.Second * time.Duration(i+1))
-    }
-    return nil, lastErr
-}
+agent, err := builder.NewSimpleBuilder(client).
+    WithRequestError(2, builder.RetryTransient(2, nil)).
+    BuildContext(ctx)
 ```
+
+这里使用 Builder 请求恢复组件，调用 `agent.AsRunnable()` 时生效；它不修改宿主直接调用 `client.Chat` 的行为。每次重试计入根请求预算，已输出文本后不重试；子 Agent 不继承父 Agent 的重试配置。旧 `WithModelRetry` 已删除。Provider/SDK 内部重试需单独核对，避免叠加放大请求。不要通过忽略宿主 context 的循环重试所有错误。
 
 ### 4. 选择合适的模型
 
-根据任务选择合适的模型：
-
-- **简单对话**：GPT-3.5-Turbo、DeepSeek Chat
-- **复杂推理**：GPT-4、Claude-3-Opus
-- **代码生成**：DeepSeek Coder、CodeLlama
-- **长文本**：Claude-3（200K）、Kimi（128K）
+按任务样本验证模型的工具选择、输出质量、上下文、延迟和费用；不能从构造函数或文档中的历史名称推导当前可用性。更换 Provider 后重新检查需要的可执行接口，不能只确认 Complete/Chat 可以调用。
 
 ### 5. 成本优化
 
 - 使用较小的模型处理简单任务
 - 限制 MaxTokens
-- 缓存常见请求的响应
+- 需要缓存时核实所用 Provider/中间件的具体实现和回放语义，不把配置字段当成通用缓存保证
 
 ## 相关文档
 

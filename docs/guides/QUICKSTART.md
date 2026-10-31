@@ -52,11 +52,11 @@ agent, err := builder.NewSimpleBuilder(client).
 // 检查 err 后，通过 agent.AsRunnable().Invoke(ctx, question) 调用。
 ```
 
-工具实现 `interfaces.Tool`，提供 Name、Description、ArgsSchema 和 Invoke。检索器实现 `interfaces.DocumentRetriever`，也可直接使用 retrieval 包的 BM25、向量、混合检索及重排序。
+工具实现 `interfaces.Tool`，提供 Name、Description、ArgsSchema 和 Invoke。检索器实现 `interfaces.DocumentRetriever`，也可使用独立 goagent-contrib/retrieval 模块的 BM25、向量、混合检索及重排序。
 
 - 结果已完整可展示的单个终态工具，可显式配置 `WithReturnDirectTools("lookup")`；不会再调用模型总结或补充引用。
 - `WithMemory(manager).WithSessionID(sessionID)` 启用会话记忆；`WithMaxConversationHistory` 限制加载历史数量。
-- 长任务可显式启用 [ContextPolicy](CONTEXT_POLICY.md)，卸载较早的大工具结果并选择历史摘要模型。默认关闭，摘要请求也消耗预算。
+- 长工具结果使用 [WithOffload](CONTEXT_POLICY.md)，读取工具与业务工具一起注册；历史摘要由独立 Harness 的 compaction 组件提供，不再使用旧 ContextPolicy。
 - 检索器实现见 [goagent-contrib/retrieval](https://github.com/kart-io/goagent-contrib/tree/master/retrieval)；[MCP 与可恢复步骤](PRIORITY_CAPABILITIES.md)展示外部工具及审批恢复。
 
 ## 流式调用
@@ -88,7 +88,7 @@ if err := ctx.Err(); err != nil { return err }
 | `agent.ExecuteWithTools(ctx, input)` | `agent.AsRunnable().Invoke(ctx, input)` | 原生工具流与最终输出统一，预算包含最终回答 |
 | `agent.ExecuteStream(ctx, input)` | `agent.AsRunnable().Stream(ctx, input)` | 保留同一事件源，增加 Runnable 的组合能力 |
 
-旧 Execute 保留同步语义；配置 ContextPolicy/ReturnDirect 时会提示改用 AsRunnable。ExecuteWithTools 在支持 StreamClient 时已委派统一管线，非流式客户端仍保留旧循环。ReAct 的步骤流和其他推理策略不等同于 Builder 的 Token 流。`Pipe` 等待上游最终结果后再调用下游；复杂分支、并行汇合和有界循环使用 [workflow.Graph](../../workflow/README.md)，通过 Adapt 接入现有 Agent。详细边界见[执行契约](EXECUTION_CONTRACT.md)。
+旧 Execute 保留同步语义；配置 WithOffload/ReturnDirect 时会提示改用 AsRunnable。ExecuteWithTools 在支持 StreamClient 时已委派统一管线，非流式客户端仍保留旧循环。ReAct 的步骤流和其他推理策略不等同于 Builder 的 Token 流。`Pipe` 等待上游最终结果后再调用下游；复杂分支、并行汇合和有界循环使用 [workflow.Graph](../../workflow/README.md)，通过 Adapt 接入现有 Agent。详细边界见[执行契约](EXECUTION_CONTRACT.md)。
 
 ## 迁移检查与持续验证
 
