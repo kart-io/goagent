@@ -51,45 +51,23 @@ func recordTurnUsage(ctx context.Context, key string, turn *llm.StreamChunk) err
 	return c.RecordUsage(saveCtx, key, usage)
 }
 
-type modelRetryKey struct{}
+type requestRecoveryKey struct{}
 
-type modelRetry struct {
-	max     int
-	backoff func(retry int) time.Duration
+// requestRecovery 在模型请求失败时询问 RequestError 钩子，返回 nil 表示放弃。每条请求路径各自安装，子 Agent 不继承父 Agent 的钩子。
+type requestRecovery func(ctx context.Context, emitted bool, err error) (*RequestErrorDecision, error)
+
+func withRequestRecovery(ctx context.Context, r requestRecovery) context.Context {
+	return context.WithValue(ctx, requestRecoveryKey{}, r)
 }
 
-// withModelRetry 总是覆盖外层设置：子 Agent 不继承父 Agent 的重试配置。
-func withModelRetry(ctx context.Context, max int, backoff func(int) time.Duration) context.Context {
-	return context.WithValue(ctx, modelRetryKey{}, modelRetry{max: max, backoff: backoff})
+// replanRequest 是要求替换消息或客户端的恢复决定：须在模型操作之外重新组装请求。
+type replanRequest struct {
+	decision *RequestErrorDecision
+	err      error
 }
 
-func defaultModelRetryBackoff(retry int) time.Duration {
-	return min(500*time.Millisecond<<min(retry-1, 5), 8*time.Second)
-}
-
-// maxModelRetryAfter 是愿意按服务端 Retry-After 等待的上限：等待期间持有回合的操作锁，
-// 更长的建议说明服务端短期内不会恢复，不如立即失败交给宿主。
-const maxModelRetryAfter = time.Minute
-
-// delay 只重试尚未向消费者输出任何内容、且 Provider 判定为暂时性的失败；等待不能越过截止时间与 Retry-After 上限。
-func (r modelRetry) delay(ctx context.Context, retry int, emitted bool, err error) (time.Duration, bool) {
-	var pe *llm.ProviderError
-	if err == nil || emitted || retry > r.max || !errors.As(err, &pe) || !pe.Retryable() || pe.RetryAfter > maxModelRetryAfter {
-		return 0, false
-	}
-	delay := pe.RetryAfter
-	if delay <= 0 {
-		backoff := r.backoff
-		if backoff == nil {
-			backoff = defaultModelRetryBackoff
-		}
-		delay = max(backoff(retry), 0)
-	}
-	if deadline, ok := ctx.Deadline(); ok && time.Until(deadline) <= delay {
-		return 0, false
-	}
-	return delay, true
-}
+func (r *replanRequest) Error() string { return r.err.Error() }
+func (r *replanRequest) Unwrap() error { return r.err }
 
 // savedTurn 是持久日志中的模型回合；Attempt 记下成功或最终失败的是第几次尝试，
 // 恢复时用它找回该次尝试的预算键。旧记录没有该字段，即第 0 次。
@@ -135,27 +113,40 @@ func modelOperation(ctx context.Context, id string, intent json.RawMessage, invo
 		})
 		return turn, emitted, err
 	}
-	retry, _ := ctx.Value(modelRetryKey{}).(modelRetry)
-	// call 在同一次模型回合操作内重试，持久日志仍只有一条回合记录；返回最后一次发出请求的尝试序号。
+	recovery, _ := ctx.Value(requestRecoveryKey{}).(requestRecovery)
+	// call 按 RequestError 钩子的决定在同一次模型回合操作内原样重试，持久日志仍只有一条回合记录；返回最后一次发出请求的尝试序号。
 	call := func(callCtx context.Context) (*llm.StreamChunk, int, error) {
 		if err := reserve(callCtx, 0); err != nil {
 			return nil, 0, err
 		}
 		turn, emitted, err := send(callCtx)
 		for n := 1; ; n++ {
-			delay, ok := retry.delay(callCtx, n, emitted, err)
-			if !ok {
+			if err == nil || recovery == nil || callCtx.Err() != nil {
 				return turn, n - 1, err
+			}
+			decision, herr := recovery(callCtx, emitted, err)
+			switch {
+			case herr != nil:
+				return turn, n - 1, errors.Join(err, herr)
+			case decision == nil:
+				return turn, n - 1, err
+			case decision.Messages != nil || decision.Client != nil:
+				if durable.HasJournal(ctx) {
+					return turn, n - 1, errors.Join(err, errors.New("持久运行中 RequestError 只能原样重试，不能替换消息或客户端"))
+				}
+				return turn, n - 1, &replanRequest{decision: decision, err: err}
 			}
 			if e := recordTurnUsage(ctx, attemptKey(n-1), turn); e != nil {
 				return turn, n - 1, errors.Join(err, e)
 			}
-			timer := time.NewTimer(delay)
-			select {
-			case <-callCtx.Done():
-				timer.Stop()
-				return turn, n - 1, errors.Join(err, callCtx.Err())
-			case <-timer.C:
+			if decision.Delay > 0 {
+				timer := time.NewTimer(decision.Delay)
+				select {
+				case <-callCtx.Done():
+					timer.Stop()
+					return turn, n - 1, errors.Join(err, callCtx.Err())
+				case <-timer.C:
+				}
 			}
 			// 额度不足时在发送前停止，保留上一次尝试的结果作为证据。
 			if e := reserve(callCtx, n); e != nil {

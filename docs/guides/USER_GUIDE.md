@@ -335,11 +335,13 @@ agent, err := builder.NewSimpleBuilder(client).
 
 ```go
 agent, err := builder.NewSimpleBuilder(client).
-    WithModelRetry(3, func(retry int) time.Duration {
+    WithRequestError(3, builder.RetryTransient(3, func(retry int) time.Duration {
         return time.Duration(retry) * 100 * time.Millisecond
-    }).
+    })).
     Build()
 ```
+
+`RetryTransient` 只原样重试 429、5xx 与连接错误，已输出文本后不重试；持久运行中重试发生在同一条回合记录内。
 
 ---
 

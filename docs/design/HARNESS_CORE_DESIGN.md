@@ -652,7 +652,7 @@ A0（`2fc040b`）：Pipeline 裁决聚合与按钩子记录授权；`tools/polic
 | 核心类型含 `step/*`、`assistant/attempt`、`inbox/spliced`、`approval/*`、`todo/write` | 未实现；另有 `system/message`、`tool/definitions` 供导出 | 当前的验收与导出不依赖它们；运行中追加的输入作为普通 user 消息记录 |
 | 中断的轮次 | 持久运行以同一执行键恢复时续写该轮；其他情况在下一轮开始时记为中止，其消息不进入历史 | 中断的非持久轮次可能停在工具调用与结果之间，交给模型会被提供方拒绝 |
 
-未实现：`WithModelRetry` 并入 RequestError（第二阶段留下的归并）；非原生工具流的会话日志；持久运行中 Fork 出的会话从分叉点继续执行（未验证）。
+未实现：非原生工具流的会话日志；持久运行中 Fork 出的会话从分叉点继续执行（未验证）。
 
 已知开销：每次同步重新推导对话并按 JSON 比较消息，单轮为 O(消息数)；`FileStore` 在一轮开始时读取整个会话文件（含 durable 快照）。一轮结束前崩溃的非持久运行，其最后一批工具结果不会进入日志（该轮会被记为中止）。
 
@@ -708,3 +708,18 @@ A0（`2fc040b`）：Pipeline 裁决聚合与按钩子记录授权；`tools/polic
 迁移：用旧版本记录、尚未结束的持久运行须在升级前结束——模型请求的意图不再包含策略描述符，Offload 的引用格式也已改变。
 
 测试：`builder/offload_test.go` 覆盖原生循环中的卸载、分页读取与最后一次请求的还原，持久运行在换出引用后中断、新实例恢复后读取，配置改变后在请求模型前失败，证据先于引用写入，抄错键交还模型，临时作用域的释放，以及带身份 PreStep 的意图。
+
+## 20. WithModelRetry 并入 RequestError 实施记录（2026-10-31）
+
+`WithModelRetry`（`ModelRetries`、`ModelRetryBackoff`）删除，模型请求失败的处置只剩 RequestError 钩子；原有的重试改为组件 `builder.RetryTransient(retries, backoff)`。
+
+| 问题 | 实施 | 原因 |
+|---|---|---|
+| 两套重试的持久语义 | 钩子在模型回合操作内询问：原样重试（不替换消息与客户端）在同一条回合记录内进行，持久与非持久相同 | `WithModelRetry` 在持久运行中可用，RequestError 不可用；同一条记录内的原样重试不改变意图，恢复语义与原先一致（重试中途崩溃仍交给宿主） |
+| 替换消息或客户端 | 非持久运行中由 `requestTurn` 重新组装请求；持久运行中以错误结束 | 替换后的请求与回合记录的意图不同，失败的操作也不能在同一记录上重试 |
+| 已输出内容 | `RequestFailure.Emitted`；`RetryTransient` 遇到它不重试 | 原样重试会重复已流出的文本；是否接受由钩子决定 |
+| 次数 | `RequestFailure.Attempt` 是本步已恢复的次数，所有钩子共用 `WithRequestError` 的上限；`RetryTransient` 另有自己的上限 | 原样重试与压缩、回退在同一步内交替时须有一个总上限 |
+| 没有工具的流式回答 | 同样询问钩子，只支持原样重试 | 保持 `WithModelRetry` 原有的适用范围；替换消息与客户端只作用于原生工具流 |
+| 预算与观测 | 不变：每次尝试先占根预算（键为回合键派生的 `retry/N`），观测事件 `model_retry` | 恢复时按成功那次尝试的键登记用量 |
+
+测试：`builder/model_retry_test.go` 原有用例改用 `RetryTransient`，新增持久原生工具流中的原样重试（只有一条回合记录）与替换消息被拒；去掉持久运行中的钩子后新用例失败。

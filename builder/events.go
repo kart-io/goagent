@@ -3,6 +3,7 @@ package builder
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"sync"
@@ -42,7 +43,7 @@ func (a *ConfigurableAgent[C, S]) ExecuteStream(ctx context.Context, input inter
 	// 同步阶段也会调用宿主代码（如 scopeDurableExecution 中的工具与持久存储），panic 时转为错误返回。
 	defer recoverPanic("Agent 流式执行启动", &err)
 	ctx = withTokenEstimator(ctx, a.config.TokenEstimator)
-	ctx = withModelRetry(ensureModelScope(ctx), a.config.ModelRetries, a.config.ModelRetryBackoff)
+	ctx = ensureModelScope(ctx)
 	if err := validateModelBudget(ctx); err != nil {
 		return nil, err
 	}
@@ -272,7 +273,12 @@ func (a *ConfigurableAgent[C, S]) runEvents(ctx context.Context, request *middle
 		}
 		messages = []llm.Message{{Role: "system", Content: system}, {Role: "user", Content: prompt}}
 	}
+	attempt := 0
+	ctx = withRequestRecovery(ctx, a.requestRecovery(0, &messages, &attempt))
 	turn, err := readPlainModelTurn(ctx, "model/answer/0", client, &llm.CompletionRequest{Messages: messages, MaxTokens: a.config.MaxTokens, Temperature: a.config.Temperature}, emit)
+	if replan := (*replanRequest)(nil); errors.As(err, &replan) {
+		return nil, fmt.Errorf("RequestError 替换消息或客户端只作用于原生工具流：%w", replan.err)
+	}
 	if err != nil {
 		return nil, err
 	}

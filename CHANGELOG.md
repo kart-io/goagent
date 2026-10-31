@@ -5,6 +5,21 @@ All notable changes to GoAgent will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `builder.RetryTransient(retries, backoff)`：原样重试暂时性失败（429、5xx、连接错误）的 RequestError 组件，行为同原 `WithModelRetry`：已输出文本后不重试，优先按 `Retry-After` 等待，不越过截止时间。
+- `RequestFailure.Emitted`：失败的请求已向消费者输出内容。
+
+### Changed
+
+- RequestError 钩子在模型回合操作内询问：原样重试在同一条回合记录内进行，持久运行中也生效；替换消息或客户端仍只在非持久运行中生效，持久运行中以错误结束（此前持久运行不询问钩子）。没有工具的流式回答同样询问钩子，只支持原样重试。
+
+### Removed
+
+- **破坏性**：`builder.WithModelRetry` 与 `AgentConfig.ModelRetries`、`ModelRetryBackoff`。迁移：`WithModelRetry(n, backoff)` 改为 `WithRequestError(n, builder.RetryTransient(n, backoff))`。
+
 ## [0.28.0] - 2026-10-31
 
 ### Added
