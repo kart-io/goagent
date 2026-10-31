@@ -653,3 +653,22 @@ A0（`2fc040b`）：Pipeline 裁决聚合与按钩子记录授权；`tools/polic
 未实现：PostgreSQL 存储（`contrib/pgstore`，需要引入驱动依赖与测试数据库）；`testing` 包中的 cut-point replay；`contextpolicy.BeforeTurn` 并入 PreStep、`WithModelRetry` 并入 RequestError（第二阶段留下的归并）；非原生工具流的会话日志；持久运行中 Fork 出的会话从分叉点继续执行（未验证）。
 
 已知开销：每次同步重新推导对话并按 JSON 比较消息，单轮为 O(消息数)；`FileStore` 在一轮开始时读取整个会话文件（含 durable 快照）。一轮结束前崩溃的非持久运行，其最后一批工具结果不会进入日志（该轮会被记为中止）。
+
+## 17. cut-point replay 实施记录（2026-10-31）
+
+新包 `testing/replay`，实现 10.3 中的 cut-point replay：把会话日志中的持久运行转为回归测试。
+
+- 边界即 durable 操作，按操作 ID（`model/turn/N`、`tool/turn/N/call/<id>`、`loop/...`）与执行键寻址，种类由 ID 推断。
+- 重放用的 durable 存储是原日志之上的覆盖层：未被选中实跑的边界读到记录；选中的边界读到"不存在"，于是 durable 用当前代码实跑；全部写入只进内存，原日志不变。
+- 实跑的操作结束时与记录比较，结果不同或记录中没有该边界即为分歧，之后的边界一律实跑，因为它们的输入（如模型回合的消息）已经改变。
+- `Prepare` 把该轮之前的会话复制到内存，交给 `WithSessionLog`，使历史与记录时相同。
+
+测试（`testing/replay/replay_test.go`）：全部回放时模型与工具都不被调用，对话与记录一致，原日志不变；工具实跑且结果不变时模型继续回放；工具结果变了时，分歧处给出记录值与实跑值，之后的模型回合实跑；从第二次模型请求切开时，之前的工具调用回放，之后用新模型实跑；改了提示词而没有切开时重放失败并指出出错的边界。
+
+实现中发现并修正：`turn/start` 记录的是 DurableScope 派生后的内部执行键，按它重放会再派生一次。现在记录宿主传入的键。
+
+限制：
+
+- 只覆盖持久操作。`durable.Runner` 的工作流快照会被覆盖写，重放读到的是最终状态。
+- 被回放边界的输入变了时（如改了提示词而没有从那里切开），durable 以 `operation intent or attempt policy changed` 失败。覆盖层看不到新的输入摘要，无法自动转为实跑；顺序执行时 `Report` 的最后一项是出错的边界（`TestChangedInputWithoutCut`），并行的工具调用除外。
+- 带时间戳等不确定内容的工具结果在实跑时总会被判为分歧，应只回放这类边界。

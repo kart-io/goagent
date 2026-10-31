@@ -664,6 +664,27 @@ t.Cleanup(func() {
 })
 ```
 
+## 回放会话日志（testing/replay）
+
+把 [`core/session`](../core/session/README.md) 中记录的持久运行转为回归测试（cut-point replay）。重放一轮时，模型回合、工具调用、循环扩展点等持久操作按边界逐个决定：返回记录的结果，或用当前代码实跑。实跑结果与记录不同（分歧）之后的边界一律实跑，因为它们的输入已经改变。重放只读原日志，写入留在内存中。
+
+```go
+rp := &replay.Replayer{Source: store, SessionID: "s", Live: replay.Kind("tool")} // 工具用新代码实跑，其余回放
+turns, _ := rp.Turns(ctx)                                                         // 日志中已结束的持久运行
+ctx, log, report, _ := rp.Prepare(ctx, turns[0])
+agent := builder.NewSimpleBuilder(model).WithSessionID("s").WithSessionLog(log).
+    WithDurableScope(scope).WithTools(tools...).Build() // 与记录时相同的会话 ID 与 DurableScope
+out, _ := agent.AsRunnable().Invoke(ctx, turns[0].Input)
+if res, ok := report.Diverged(); ok {
+    t.Errorf("%s 的结果变了：记录 %s，现在 %s", res.ID, res.Recorded, res.Value)
+}
+```
+
+- `Cut`：选中的第一个边界及其之后全部实跑，如 `replay.ModelTurn(1)` 用新模型或新提示词重跑第二次请求之后的部分。
+- `Live`：选中的边界单独实跑，结果与记录一致时之后继续回放，如 `replay.Kind("tool")` 检查改过的工具是否仍给出相同结果。
+- `Prepare` 返回的 `log` 是该轮开始前的会话副本，历史与记录时相同；重放产生的对话也记在其中，可与原日志比较。
+- 改动影响到被回放的边界的输入时（如改了提示词而没有从那里切开），durable 报告 `operation intent or attempt policy changed`；顺序执行时 `report.Results()` 的最后一项就是出错的边界（同一回合并行的工具调用除外），应从那里切开。
+
 ## 扩展阅读
 
 - [core](../core/) - 核心执行引擎
