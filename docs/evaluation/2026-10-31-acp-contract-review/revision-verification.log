@@ -1,0 +1,15 @@
+=== RUN   TestMetadataPersistsWithoutChangingHistory
+    metadata_probe_test.go:39: 私有元数据跨 FileStore 重开保留，DeriveMessages 不向模型暴露元数据事件
+--- PASS: TestMetadataPersistsWithoutChangingHistory (0.01s)
+=== RUN   TestObserveReplacementPromptLosesCancellation
+    sdk_probe_test.go:91: 已重现：前一 prompt 返回删除了新 prompt 的取消登记；Cancel 到达后新 prompt 未取消
+--- PASS: TestObserveReplacementPromptLosesCancellation (0.15s)
+=== RUN   TestObserveCloseDoesNotCancelPrompt
+2026/10/31 20:47:23 INFO connection closed cause="io: read/write on closed pipe"
+2026/10/31 20:47:23 INFO connection closed cause="io: read/write on closed pipe"
+    sdk_probe_test.go:109: 已重现：CloseSession 不会由 SDK 自动取消 prompt，适配层必须负责
+--- PASS: TestObserveCloseDoesNotCancelPrompt (0.15s)
+2026/10/31 20:47:23 INFO connection closed cause="io: read/write on closed pipe"
+PASS
+2026/10/31 20:47:23 INFO connection closed cause="io: read/write on closed pipe"
+ok  	acp-contract-review	1.887s
