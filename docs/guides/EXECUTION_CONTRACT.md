@@ -23,12 +23,12 @@ output, err := runnable.Invoke(ctx, "退款政策是什么？")
 
 | Builder 入口 | 工具与上下文策略 | 同一 Builder 的并发保护 | 用途 |
 |---|---|---|---|
-| `AsRunnable().Invoke/Stream` | 自动执行已配置工具；原生 `ToolStreamClient` 路径支持 ContextPolicy 和 ReturnDirect | 所有入口共享串行执行门 | 新业务与 Runnable 编排的推荐入口 |
+| `AsRunnable().Invoke/Stream` | 自动执行已配置工具；原生 `ToolStreamClient` 路径支持 WithOffload、PreStep 和 ReturnDirect | 所有入口共享串行执行门 | 新业务与 Runnable 编排的推荐入口 |
 | `ExecuteStream` | 与 AsRunnable 共用执行源及能力 | 获取同一串行执行门 | 直接消费 Builder 事件 |
-| `Execute` | 不自动调用工具；配置 ContextPolicy/ReturnDirect 时明确报错 | 获取同一串行执行门 | 保留已有同步调用语义 |
+| `Execute` | 不自动调用工具；配置 WithOffload/ReturnDirect 时明确报错 | 获取同一串行执行门 | 保留已有同步调用语义 |
 | `ExecuteWithTools` | 支持 StreamClient 时委派 AsRunnable；否则保留旧工具循环 | 获取同一串行执行门 | 兼容存量工具调用 |
 
-仅实现 `StreamClient` 不等于支持原生工具流。配置 ContextPolicy 或 ReturnDirect 时还须满足 `ToolStreamClient` 等构建校验；不同 Provider 的能力不能由方法名称推断。
+仅实现 `StreamClient` 不等于支持原生工具流。配置 WithOffload 或 ReturnDirect 时还须满足 `ToolStreamClient` 等构建校验；不同 Provider 的能力不能由方法名称推断。
 
 ```go
 ctx, cancel := context.WithCancel(ctx)

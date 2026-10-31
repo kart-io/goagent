@@ -23,7 +23,7 @@ Workflow orchestration: [typed graphs, branches, parallel joins and bounded loop
 
 Context governance: [tool-result offloading and history summaries](docs/guides/CONTEXT_POLICY.md).
 
-Harness 装配与编码工具已迁入独立项目 `github.com/kart-io/goagent-harness`：Preset、计划模式、技能、子 Agent 组件与编码工具由上层项目维护；GoAgent 保留执行循环、工作流、恢复、预算和环境接口。当前拆分尚未发布，接入方式与发布顺序见 [Harness 迁移指南](docs/guides/HARNESS_MIGRATION.md)。
+Harness 装配与编码工具已迁入独立项目 `github.com/kart-io/goagent-harness`：Preset、计划模式、技能、子 Agent 组件与编码工具由上层项目维护；GoAgent 保留执行循环、工作流、恢复、预算和环境接口。旧包已从核心移除，依赖与接入方式见 [Harness 迁移指南](docs/guides/HARNESS_MIGRATION.md)。
 
 宿主接入：[标准执行装配与可取消构建](docs/guides/HOST_INTEGRATION.md)、[离线示例](examples/execution-scope/main.go)、[执行开销实测](docs/evaluation/2026-10-31-execution-overhead/REPORT.md)。
 
@@ -32,7 +32,7 @@ Harness 装配与编码工具已迁入独立项目 `github.com/kart-io/goagent-h
 ## Features
 
 - **Native Tool Loop** - Model-driven tool calling with durable, replayable tool calls
-- **High Performance** - Hot path optimization with InvokeFast reducing latency by 4-6%
+- **执行验证** - 提供可复现测试与性能报告，结论以对应版本和负载为准
 - **Flexible Architecture** - 4-layer modular design with clear separation of concerns
 - **LLM Abstraction** - Support for multiple LLM providers (OpenAI, Anthropic Claude, Cohere, HuggingFace, Gemini, DeepSeek)
 - **Memory Management** - Conversation history and case-based memory
@@ -101,7 +101,7 @@ ragAgent, err := builder.RAGAgent(llmClient, vectorStore)
 // Create an analysis agent (low temperature, high precision)
 analysisAgent, err := builder.AnalysisAgent(llmClient, dataSource)
 
-// Create a monitoring agent (long-running, periodic checks)
+// 构造监控提示词 Agent；不会启动后台定时检查
 monitoringAgent, err := builder.MonitoringAgent(llmClient, 30*time.Second)
 ```
 
@@ -175,7 +175,7 @@ sequenceDiagram
     participant LLM as LLM Client
     participant Tools as Tool System
 
-    App->>Builder: NewAgentBuilder(llm)
+    App->>Builder: NewSimpleBuilder(llm)
     Builder->>Builder: Configure options
     Builder->>Agent: Build()
 
@@ -213,100 +213,25 @@ See [Architecture Documentation](docs/architecture/) for details.
 | **[parsers](parsers/)** | Output parsing | [README](parsers/README.md) |
 | **[testing](testing/)** | Testing utilities and mocks | [README](testing/README.md) |
 
-Retrieval, document loaders, file/web/API tools, database tools and the multi-instance Postgres `durable.Store` are separate modules in [goagent-contrib](https://github.com/kart-io/goagent-contrib).
+Retrieval, document loaders, database integrations and the multi-instance Postgres `durable.Store` are separate modules in [goagent-contrib](https://github.com/kart-io/goagent-contrib).
 
-## Core Components
+## 核心组件与调用契约
 
-### Agents
-Autonomous entities that can reason, use tools, and make decisions.
+- `core.Runnable[I,O]` 是新编排协议，支持 Invoke、Stream、Batch 和组合。
+- Builder 使用 `agent.AsRunnable()`，输入为 any，输出为 `*builder.AgentOutput`。它与 `core.Agent` 的输入输出类型不同。
+- 工具实现 `interfaces.Tool`：Name、Description、ArgsSchema 与 `Invoke(ctx, *interfaces.ToolInput)`；经 Dispatcher 获得统一校验和持久调用路径。
+- 记忆实现 `interfaces.MemoryManager`；会话历史、Agent 检查点与工作流操作日志不是同一种状态。
+- `WithMiddleware` 消费 `core/middleware.Middleware`，不代表任意顶层 middleware 组件都能直接挂载。
 
-```go
-type Agent interface {
-    Execute(ctx context.Context, input *AgentInput) (*AgentOutput, error)
-    Name() string
-    Description() string
-    Capabilities() []string
-}
-```
+完整签名见 [核心 API](docs/api/CORE_API.md)、[工具 API](docs/api/TOOL_API.md)、[LLM API](docs/api/LLM_API.md)、[中间件 API](docs/api/MIDDLEWARE_API.md) 与 [Builder 参考](docs/guides/BUILDER_API_REFERENCE.md)。
 
-### Tools
-Extensible functions that agents can call to interact with external systems.
+## 编排与恢复
 
-```go
-type Tool interface {
-    Name() string
-    Description() string
-    Execute(ctx context.Context, input map[string]interface{}) (interface{}, error)
-}
-```
+普通步骤用 `workflow.Graph[T]`；Agent 通过 `workflow.Adapt` 成为节点。条件边只根据节点状态选择目标，模型调用和业务效果放在节点中。并行分支显式提供 Clone/Merge。
 
-### Memory
-Persistent storage for conversations, cases, and application state.
+`CompileDurable` 提供节点/分支边界恢复；模型和工具的操作日志避免重复调用已保存的完成记录。外部效果仍需业务幂等，不承诺任意副作用 exactly-once。审批等待不等于业务完成，Stream Done 也不能替代 GraphSnapshot 的状态检查。
 
-```go
-type Manager interface {
-    AddConversation(ctx context.Context, conv *Conversation) error
-    GetConversationHistory(ctx context.Context, sessionID string, limit int) ([]*Conversation, error)
-    SearchSimilarCases(ctx context.Context, query string, limit int) ([]*Case, error)
-}
-```
-
-### Builder
-Fluent API for constructing agents with complex configurations.
-
-```go
-agent := builder.NewAgentBuilder(llmClient).
-    WithSystemPrompt("You are an expert analyst").
-    WithTools(searchTool, calcTool).
-    WithMemory(memoryManager).
-    WithMiddleware(loggingMW, cacheMW).
-    Build()
-```
-
-## Advanced Features
-
-### State Management & Checkpointing
-
-```go
-// Session checkpoints; implement checkpoint.Checkpointer for external storage
-checkpointer := checkpoint.NewInMemorySaver()
-
-agent := builder.NewAgentBuilder(llmClient).
-    WithCheckpointer(checkpointer).
-    WithConfig(&builder.AgentConfig{EnableAutoSave: true}).
-    Build()
-```
-
-### Distributed Tracing
-
-```go
-// Initialize OpenTelemetry
-provider := observability.NewTelemetryProvider(&observability.TelemetryConfig{
-    ServiceName: "my-agent",
-    OTLPEndpoint: "localhost:4317",
-})
-
-// Traces are automatically propagated across agent calls
-```
-
-### Sub-Agents and Sub-Workflows
-
-Wrap a child agent or a `workflow.DurableGraph` as a tool with `tools.NewRunnableToolFactory`. Child model turns, tool calls and checkpoints are journaled under the parent's execution key, so a child waiting for approval suspends the parent with `builder.ErrWaiting` and resumes with `durable.WithResume`. See [Composable Orchestration](docs/guides/COMPOSABLE_ORCHESTRATION.md).
-
-### Parallel Tool Execution
-
-```go
-// Execute multiple tools concurrently
-executor := tools.NewToolExecutor(
-    tools.WithMaxConcurrency(10),
-    tools.WithTimeout(30*time.Second),
-)
-
-results, err := executor.ExecuteParallel(ctx, []*tools.ToolCallRequest{
-    {ID: "search", Tool: searchTool, Input: &interfaces.ToolInput{Args: map[string]interface{}{"query": "Go"}}},
-    {ID: "calc", Tool: calcTool, Input: &interfaces.ToolInput{Args: map[string]interface{}{"expression": "2+2"}}},
-})
-```
+子 Agent 使用 `tools.NewRunnableToolFactory` 管理独立会话和资源。可续跑子图使用 `AsChildRunnable` 与 `Resumable` 协议，不是所有 Runnable 工具都自动获得嵌套审批恢复能力。见 [执行契约](docs/guides/EXECUTION_CONTRACT.md) 和 [可组合编排](docs/guides/COMPOSABLE_ORCHESTRATION.md)。
 
 ## Documentation
 
@@ -334,57 +259,13 @@ Run an example:
 go run examples/basic/01-simple-agent/main.go
 ```
 
-## Performance
+## 性能与验证
 
-### Core Performance Metrics
-- **Builder Construction**: ~100μs/op
-- **Agent Execution**: ~1ms/op (excluding LLM calls)
-- **Middleware Overhead**: <5%
-- **Parallel Tool Execution**: Linear scaling to 100+ concurrent calls
-- **Cache Hit Rate**: >90% with LRU caching
-- **OpenTelemetry Overhead**: <2% at 10% sampling
+性能结论必须带上版本、负载和环境，不能把历史微基准当作所有业务的延迟、缓存命中率或并发扩展保证。
 
-### InvokeFast Optimization 🚀
-
-GoAgent provides **InvokeFast**, a hot path optimization that bypasses callbacks and middleware for internal calls:
-
-**Performance Gains** (agent benchmarks on Intel i7-14700KF):
-- **Latency**: 4-6% faster execution (1494ns → 1399ns per call)
-- **Memory**: 5-8% reduction in allocations
-- **Chain Calls (10x)**: 4.4% faster (15508ns → 14825ns)
-
-**Automatic Optimization**:
-- `ChainableAgent` automatically uses InvokeFast for internal calls
-- Zero code changes required for existing applications
-
-**Use Cases**:
-- Nested agent calls
-- Chain compositions with multiple agents
-- Performance-critical production workloads
-
-### Benchmarking Your Agents
-
-```go
-import "testing"
-
-func BenchmarkYourAgent(b *testing.B) {
-    agent := createYourAgent()
-    ctx := context.Background()
-    input := &core.AgentInput{Task: "test"}
-
-    b.Run("Standard", func(b *testing.B) {
-        for i := 0; i < b.N; i++ {
-            _, _ = agent.Invoke(ctx, input)
-        }
-    })
-
-    b.Run("Optimized", func(b *testing.B) {
-        for i := 0; i < b.N; i++ {
-            _, _ = agent.InvokeFast(ctx, input)
-        }
-    })
-}
-```
+- [执行开销实测](docs/evaluation/2026-10-31-execution-overhead/REPORT.md)：离线预算模式和账本复制前后对比，含原始数据与限制。
+- [框架性能对测](docs/evaluation/2026-10-27-framework-performance-v2/REPORT.md)：指定版本与合成负载下的对照。
+- `InvokeFast` 是已有基础 Agent 的专用路径，不是 Builder 工具循环的通用优化开关。新业务优先遵循 AsRunnable 的执行契约。
 
 ## Contributing
 

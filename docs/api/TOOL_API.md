@@ -1,576 +1,224 @@
+<!-- generated-by: gsd-doc-writer -->
 # GoAgent Tool API 参考
 
-本文档提供 GoAgent 工具系统的完整 API 参考。
+模型可见工具和持久调用推荐通过 `tools.Dispatcher`。普通 `Tool.Invoke` 只是一次函数调用，不自动提供校验、超时、审批、预算或恢复。
 
-## 目录
+源码：[接口](../../interfaces/tool.go)、[基础工具](../../tools/tool.go)、[函数工具](../../tools/function_tool.go)、[Registry](../../tools/registry.go)、[Dispatcher](../../tools/dispatcher.go)、[Pipeline](../../tools/pipeline.go)、[Runnable 工具](../../tools/runnable_tool.go)。
 
-- [Tool 接口](#tool-接口)
-- [BaseTool](#basetool)
-- [FunctionTool](#functiontool)
-- [Tool Registry](#tool-registry)
-- [Tool Executor](#tool-executor)
-- [内置工具](#内置工具)
-
----
-
-## Tool 接口
-
-### interfaces.Tool
+## 接口与数据
 
 ```go
-package interfaces
-
-// Tool 表示智能体可以调用的可执行工具
 type Tool interface {
-    // Name 返回工具标识符（唯一）
     Name() string
-
-    // Description 返回工具的功能描述（供 LLM 理解）
     Description() string
-
-    // Invoke 执行工具
-    Invoke(ctx context.Context, input *ToolInput) (*ToolOutput, error)
-
-    // ArgsSchema 返回参数 JSON Schema
+    Invoke(context.Context, *ToolInput) (*ToolOutput, error)
     ArgsSchema() string
 }
 ```
 
-### interfaces.ValidatableTool
+名称在注册表中唯一且不能有首尾空白。ArgsSchema 是 JSON Schema 字符串；Dispatcher 构造时解析并固定工具定义。
+
+| ToolInput 字段 | 类型 | 含义 |
+| --- | --- | --- |
+| CallID | string | 当前父执行下稳定的子操作 ID；同一节点多个效果须不同 |
+| ExecutionKey | string | 宿主执行身份，不能从模型 Args 取值 |
+| Args | map[string]interface{} | JSON 对象参数 |
+| Context | context.Context | 不序列化的调用上下文 |
+| CallerID、TraceID | string | 可选调用者与追踪标识 |
+
+Dispatcher 从宿主 context 绑定执行键，并在提供 CallID 时派生工具子键。外部服务须按该键或更强业务 ID 去重，字段本身不保证幂等。
+
+| ToolOutput 字段 | 类型 | 含义 |
+| --- | --- | --- |
+| Result | interface{} | 业务结果；持久调用须可 JSON 编码 |
+| Success | bool | 是否成功 |
+| Error | string | 工具错误文本 |
+| Metadata | map[string]interface{} | 结果元数据 |
+| AdditionalContext | []string | Builder 在本批工具结果后作为 user 消息追加的上下文 |
+| Labels | map[string]string | 预留标签，目前不会自动传播 |
+
+`ToolResult` 是旧 ToolExecutor 接口结果信封（ToolName、Output、ExecutionTime），不同于 Dispatcher 的 DispatchResult。
+
+可选接口位于 [interfaces/tool.go](../../interfaces/tool.go)：
+
+- `ValidatableTool.Validate(ctx, input) error`：自定义参数验证；Dispatcher 先验证 Schema，再调用它，并在成功后重新检查 Schema。
+- `DurableCallTool.SupportsDurableCalls() bool`：声明保留 CallID、宿主日志和派生执行键。
+- `ArgumentErrorTool.ReturnsArgumentErrors() bool`：声明参数错误可以结果形式交还模型。
+- `ConcurrentCallTool.SupportsConcurrentCalls() bool`：声明同轮可并发且自行限流；Builder 仍须配置 WithParallelToolCalls(n>=2)。
+
+Dispatcher.Tools 返回的包装工具实现后三项契约。自行包装时须显式保留需要的能力声明。
+
+## 创建工具
 
 ```go
-// ValidatableTool 支持自定义验证的工具
-type ValidatableTool interface {
-    Tool
-
-    // Validate 在执行前验证输入
-    Validate(ctx context.Context, input *ToolInput) error
-}
-```
-
-### interfaces.ToolInput
-
-```go
-type ToolInput struct {
-    // Args 包含工具的输入参数
-    Args map[string]interface{} `json:"args"`
-
-    // Context 是执行上下文
-    Context context.Context `json:"-"`
-
-    // CallerID 调用者标识
-    CallerID string `json:"caller_id,omitempty"`
-
-    // TraceID 追踪 ID
-    TraceID string `json:"trace_id,omitempty"`
-}
-```
-
-### interfaces.ToolOutput
-
-```go
-type ToolOutput struct {
-    // Result 工具输出数据
-    Result interface{} `json:"result"`
-
-    // Success 执行是否成功
-    Success bool `json:"success"`
-
-    // Error 错误消息
-    Error string `json:"error,omitempty"`
-
-    // Metadata 额外信息
-    Metadata map[string]interface{} `json:"metadata,omitempty"`
-}
-```
-
-### interfaces.ToolResult
-
-```go
-type ToolResult struct {
-    // ToolName 执行的工具名称
-    ToolName string `json:"tool_name"`
-
-    // Output 工具输出
-    Output *ToolOutput `json:"output"`
-
-    // ExecutionTime 执行时长（毫秒）
-    ExecutionTime int64 `json:"execution_time,omitempty"`
-}
-```
-
-### interfaces.ToolCall
-
-```go
-type ToolCall struct {
-    // ID 工具调用唯一标识符
-    ID string `json:"id"`
-
-    // ToolName 工具名称
-    ToolName string `json:"tool_name"`
-
-    // Args 参数
-    Args map[string]interface{} `json:"args"`
-
-    // Result 输出结果
-    Result *ToolOutput `json:"result,omitempty"`
-
-    // Error 错误信息
-    Error string `json:"error,omitempty"`
-
-    // StartTime 开始时间
-    StartTime int64 `json:"start_time"`
-
-    // EndTime 结束时间
-    EndTime int64 `json:"end_time,omitempty"`
-
-    // Metadata 元数据
-    Metadata map[string]interface{} `json:"metadata,omitempty"`
-}
-```
-
----
-
-## BaseTool
-
-### tools.BaseTool
-
-```go
-package tools
-
-type BaseTool struct {
-    name        string
-    description string
-    argsSchema  string
-    runFunc     func(context.Context, *ToolInput) (*ToolOutput, error)
-}
-
-// NewBaseTool 创建基础工具
 func NewBaseTool(
-    name string,
-    description string,
-    argsSchema string,
-    runFunc func(context.Context, *ToolInput) (*ToolOutput, error),
+    name, description, argsSchema string,
+    runFunc func(context.Context, *interfaces.ToolInput) (*interfaces.ToolOutput, error),
 ) *BaseTool
 
-// Name 返回工具名称
-func (t *BaseTool) Name() string
-
-// Description 返回工具描述
-func (t *BaseTool) Description() string
-
-// ArgsSchema 返回参数 Schema
-func (t *BaseTool) ArgsSchema() string
-
-// Invoke 执行工具
-func (t *BaseTool) Invoke(ctx context.Context, input *ToolInput) (*ToolOutput, error)
-```
-
-### 使用示例
-
-```go
-import "github.com/kart-io/goagent/tools"
-
-// 创建自定义工具
-myTool := tools.NewBaseTool(
-    "my_tool",
-    "执行自定义操作",
-    `{
-        "type": "object",
-        "properties": {
-            "input": {"type": "string", "description": "输入参数"}
-        },
-        "required": ["input"]
-    }`,
-    func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
-        inputStr := input.Args["input"].(string)
-        result := processInput(inputStr)
-        return &interfaces.ToolOutput{
-            Result:  result,
-            Success: true,
-        }, nil
-    },
-)
-```
-
----
-
-## FunctionTool
-
-### tools.FunctionTool
-
-```go
-package tools
-
-type FunctionTool struct {
-    *BaseTool
-    fn func(context.Context, map[string]interface{}) (interface{}, error)
-}
-
-// NewFunctionTool 创建函数工具
 func NewFunctionTool(
-    name string,
-    description string,
-    argsSchema string,
+    name, description, argsSchema string,
     fn func(context.Context, map[string]interface{}) (interface{}, error),
 ) *FunctionTool
-
-// NewSimpleFunctionTool 创建简单函数工具
-func NewSimpleFunctionTool(name string, description string, fn SimpleFunction) *FunctionTool
-
-// NewTypedFunctionTool 创建类型安全的函数工具（泛型）
-func NewTypedFunctionTool[I, O any](
-    name string,
-    description string,
-    argsSchema string,
-    fn TypedFunction[I, O],
-) *FunctionTool
 ```
 
-### tools.FunctionToolBuilder
+两种基础构造不会自动执行 Schema 校验。`NewFunctionToolBuilder(name)` 支持 WithDescription、WithArgsSchema、WithArgsSchemaFromStruct、WithFunction；Build 返回 (*FunctionTool,error)，MustBuild 失败则 panic。需要严格参数边界时，显式提供 Schema。
+
+### 无网络完整示例
 
 ```go
-type FunctionToolBuilder struct {
-    name        string
-    description string
-    argsSchema  string
-    fn          func(context.Context, map[string]interface{}) (interface{}, error)
-}
+package main
 
-// NewFunctionToolBuilder 创建函数工具构建器
-func NewFunctionToolBuilder(name string) *FunctionToolBuilder
-
-// WithDescription 设置描述
-func (b *FunctionToolBuilder) WithDescription(description string) *FunctionToolBuilder
-
-// WithArgsSchema 设置参数 Schema
-func (b *FunctionToolBuilder) WithArgsSchema(schema string) *FunctionToolBuilder
-
-// WithFunction 设置执行函数
-func (b *FunctionToolBuilder) WithFunction(fn func(context.Context, map[string]interface{}) (interface{}, error)) *FunctionToolBuilder
-
-// Build 构建工具
-func (b *FunctionToolBuilder) Build() (*FunctionTool, error)
-
-// MustBuild 构建工具（失败时 panic）
-func (b *FunctionToolBuilder) MustBuild() *FunctionTool
-```
-
-### 使用示例
-
-```go
-import "github.com/kart-io/goagent/tools"
-
-// 方式 1: 使用 NewFunctionTool
-addTool := tools.NewFunctionTool(
-    "add",
-    "加法计算",
-    `{"type": "object", "properties": {"a": {"type": "number"}, "b": {"type": "number"}}, "required": ["a", "b"]}`,
-    func(ctx context.Context, args map[string]interface{}) (interface{}, error) {
-        a := args["a"].(float64)
-        b := args["b"].(float64)
-        return a + b, nil
-    },
-)
-
-// 方式 2: 使用 Builder
-searchTool := tools.NewFunctionToolBuilder("search").
-    WithDescription("搜索信息").
-    WithArgsSchema(`{"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}`).
-    WithFunction(func(ctx context.Context, args map[string]interface{}) (interface{}, error) {
-        query := args["query"].(string)
-        return search(query), nil
-    }).
-    MustBuild()
-
-// 方式 3: 使用泛型（类型安全）
-type AddInput struct {
-    A float64 `json:"a"`
-    B float64 `json:"b"`
-}
-
-typedAddTool := tools.NewTypedFunctionTool[AddInput, float64](
-    "typed_add",
-    "类型安全的加法",
-    `{"type": "object", "properties": {"a": {"type": "number"}, "b": {"type": "number"}}, "required": ["a", "b"]}`,
-    func(ctx context.Context, input AddInput) (float64, error) {
-        return input.A + input.B, nil
-    },
-)
-```
-
----
-
-## Tool Registry
-
-### tools.Registry
-
-```go
-package tools
-
-type Registry struct {
-    tools map[string]Tool
-    mu    sync.RWMutex
-}
-
-// NewRegistry 创建工具注册表
-func NewRegistry() *Registry
-
-// Register 注册工具
-func (r *Registry) Register(tool Tool) error
-
-// Get 获取工具
-func (r *Registry) Get(name string) Tool
-
-// List 列出所有工具
-func (r *Registry) List() []Tool
-
-// Names 返回所有工具名称
-func (r *Registry) Names() []string
-
-// Clear 清空注册表
-func (r *Registry) Clear()
-
-// Size 返回工具数量
-func (r *Registry) Size() int
-```
-
-### 使用示例
-
-```go
-import "github.com/kart-io/goagent/tools"
-
-// 创建注册表
-registry := tools.NewRegistry()
-
-// 注册工具
-registry.Register(calculatorTool)
-registry.Register(searchTool)
-registry.Register(shellTool)
-
-// 获取工具
-tool := registry.Get("calculator")
-
-// 列出所有工具
-allTools := registry.List()
-
-// 获取工具名称
-names := registry.Names() // ["calculator", "search", "shell"]
-```
-
----
-
-## Tool Executor
-
-### interfaces.ToolExecutor
-
-```go
-type ToolExecutor interface {
-    // ExecuteTool 执行指定工具
-    ExecuteTool(ctx context.Context, toolName string, args map[string]interface{}) (*ToolResult, error)
-
-    // ListTools 列出可用工具
-    ListTools() []Tool
-}
-```
-
-### tools.ToolExecutor
-
-```go
-package tools
-
-type ToolExecutor struct {
-    maxConcurrency int
-    timeout        time.Duration
-    retryPolicy    *RetryPolicy
-    errorHandler   ErrorHandler
-}
-
-// NewToolExecutor 创建工具执行器
-func NewToolExecutor(opts ...ExecutorOption) *ToolExecutor
-
-// ExecutorOption 执行器选项
-type ExecutorOption func(*ToolExecutor)
-
-// WithMaxConcurrency 设置最大并发数
-func WithMaxConcurrency(max int) ExecutorOption
-
-// WithTimeout 设置超时时间
-func WithTimeout(timeout time.Duration) ExecutorOption
-
-// WithRetryPolicy 设置重试策略
-func WithRetryPolicy(policy *RetryPolicy) ExecutorOption
-
-// WithErrorHandler 设置错误处理器
-func WithErrorHandler(handler ErrorHandler) ExecutorOption
-```
-
-### tools.RetryPolicy
-
-```go
-type RetryPolicy struct {
-    // MaxRetries 最大重试次数
-    MaxRetries int
-
-    // InitialDelay 初始延迟
-    InitialDelay time.Duration
-
-    // MaxDelay 最大延迟
-    MaxDelay time.Duration
-
-    // Multiplier 延迟倍数
-    Multiplier float64
-
-    // RetryableErrors 可重试的错误类型
-    RetryableErrors []string
-}
-```
-
-### 使用示例
-
-```go
-import "github.com/kart-io/goagent/tools"
-
-// 创建执行器
-executor := tools.NewToolExecutor(
-    tools.WithMaxConcurrency(10),
-    tools.WithTimeout(30 * time.Second),
-    tools.WithRetryPolicy(&tools.RetryPolicy{
-        MaxRetries:   3,
-        InitialDelay: 100 * time.Millisecond,
-        MaxDelay:     5 * time.Second,
-        Multiplier:   2.0,
-    }),
-)
-
-// 执行工具
-result, err := executor.ExecuteTool(ctx, "calculator", map[string]interface{}{
-    "expression": "2 + 2",
-})
-```
-
----
-
-## 内置工具
-
-### Shell 工具
-
-```go
-package shell
-
-// NewShellTool 创建 Shell 工具，只允许执行 allowedCommands 中的命令
-func NewShellTool(allowedCommands []string, timeout time.Duration) *ShellTool
-
-// NewShellToolBuilder 以构建器方式创建
-func NewShellToolBuilder() *ShellToolBuilder
-func (b *ShellToolBuilder) WithAllowedCommands(commands ...string) *ShellToolBuilder
-func (b *ShellToolBuilder) WithTimeout(timeout time.Duration) *ShellToolBuilder
-func (b *ShellToolBuilder) Build() *ShellTool
-```
-
-### Calculator 工具
-
-```go
-package compute
-
-type Calculator struct {
-    precision int
-}
-
-// NewCalculator 创建计算器工具
-func NewCalculator(opts ...CalculatorOption) *Calculator
-```
-
-### HTTP/API 工具
-
-```go
-package http
-
-type APITool struct {
-    baseURL string
-    headers map[string]string
-    timeout time.Duration
-}
-
-// NewAPITool 创建 API 工具
-func NewAPITool(opts ...APIOption) *APITool
-```
-
-### Search 工具
-
-```go
-package search
-
-type SearchTool struct {
-    provider SearchProvider
-    maxResults int
-}
-
-// NewSearchTool 创建搜索工具
-func NewSearchTool(provider SearchProvider, opts ...SearchOption) *SearchTool
-```
-
-### Web Scraper、File Operations 与 Database Query 工具
-
-`tools/practical` 已在 v0.17.0 迁到 goagent-contrib：网页爬取与文件操作工具在 [`github.com/kart-io/goagent-contrib/tools/practical`](https://github.com/kart-io/goagent-contrib/tree/master/tools/practical)，数据库查询工具在子模块 [`github.com/kart-io/goagent-contrib/tools/database`](https://github.com/kart-io/goagent-contrib/tree/master/tools/database)。
-
-```go
-// github.com/kart-io/goagent-contrib/tools/practical
-func NewWebScraperTool() *WebScraperTool
-func NewFileOperationsTool(basePath string) *FileOperationsTool
-
-// github.com/kart-io/goagent-contrib/tools/database
-func NewDatabaseQueryTool() *DatabaseQueryTool
-```
-
-### 使用示例
-
-```go
 import (
-    "github.com/kart-io/goagent/tools/shell"
-    "github.com/kart-io/goagent/tools/compute"
-    "github.com/kart-io/goagent/tools/http"
+    "context"
+    "fmt"
+    "time"
+
+    "github.com/kart-io/goagent/interfaces"
+    "github.com/kart-io/goagent/tools"
 )
 
-// 创建各种内置工具
-shellTool := shell.NewShellTool([]string{"ls", "cat", "grep"}, 10*time.Second)
-
-calculator := compute.NewCalculatorTool()
-
-apiTool := http.NewAPITool("https://api.example.com", 30*time.Second,
-    map[string]string{"Authorization": "Bearer token"})
-```
-
----
-
-## 工具中间件
-
-### tools/middleware
-
-```go
-package middleware
-
-// ToolMiddleware 工具中间件接口
-type ToolMiddleware interface {
-    Before(ctx context.Context, input *ToolInput) (*ToolInput, error)
-    After(ctx context.Context, output *ToolOutput) (*ToolOutput, error)
-    OnError(ctx context.Context, err error) error
+func main() {
+    if err := run(); err != nil {
+        panic(err)
+    }
 }
 
-// NewLoggingMiddleware 日志中间件
-func NewLoggingMiddleware() ToolMiddleware
-
-// NewRateLimitMiddleware 速率限制中间件
-func NewRateLimitMiddleware(rps float64) *RateLimitMiddleware
-
-// NewCachingMiddleware 缓存中间件
-func NewCachingMiddleware(ttl time.Duration) *CachingMiddleware
+func run() error {
+    tool := tools.NewBaseTool("echo", "返回输入文本",
+        `{"type":"object","properties":{"text":{"type":"string"}},"required":["text"],"additionalProperties":false}`,
+        func(ctx context.Context, in *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+            if err := ctx.Err(); err != nil {
+                return nil, err
+            }
+            return &interfaces.ToolOutput{Success: true, Result: in.Args["text"]}, nil
+        })
+    registry := tools.NewRegistry()
+    if err := registry.Register(tool); err != nil {
+        return err
+    }
+    dispatcher, err := tools.NewDispatcher(registry, tools.DispatchConfig{
+        MaxConcurrency: 1,
+        Timeout: 2 * time.Second,
+    })
+    if err != nil {
+        return err
+    }
+    out, err := dispatcher.Invoke(context.Background(), tools.ToolRequest{
+        Name: "echo",
+        Input: &interfaces.ToolInput{Args: map[string]interface{}{"text": "你好"}},
+    })
+    if err != nil {
+        return err
+    }
+    fmt.Println(out.Result)
+    return nil
+}
 ```
 
----
+预期输出：你好。Builder 使用 `WithTools(dispatcher.Tools()...)`，而不是注册表中的裸工具。
 
-## 相关文档
+## 注册与执行
 
-- [核心 API 参考](CORE_API.md)
-- [LLM API 参考](LLM_API.md)
-- [工具中间件指南](../guides/TOOL_MIDDLEWARE.md)
+```go
+func NewRegistry() *Registry
+func (r *Registry) Register(tool interfaces.Tool) error
+func (r *Registry) Get(name string) interfaces.Tool
+func (r *Registry) List() []interfaces.Tool
+func (r *Registry) Names() []string
+func (r *Registry) Clear()
+func (r *Registry) Size() int
+
+func NewDispatcher(registry *Registry, cfg DispatchConfig) (*Dispatcher, error)
+func (d *Dispatcher) Invoke(ctx context.Context, req ToolRequest) (*interfaces.ToolOutput, error)
+func (d *Dispatcher) Tools() []interfaces.Tool
+func (d *Dispatcher) AsRunnable() *core.StreamRunnable[ToolRequest, *interfaces.ToolOutput]
+```
+
+Get 未找到返回 nil；List/Names 不保证顺序。Dispatcher 快照 Registry；后续注册变更不影响既有 Dispatcher。底层工具须能承受配置并发，否则设 MaxConcurrency=1。ToolRequest 包含 Name 和 Input。
+
+| DispatchConfig | 默认值与作用 |
+| --- | --- |
+| MaxConcurrency | 4；执行并发，审批等待不占此槽 |
+| MaxAdmissionConcurrency | 0；零值不限准入并发，正值单独限制校验和管线准入 |
+| MaxQueued | 0；零值不限排队，正值限制两阶段合计等待，超限返回 ErrDispatcherBusy |
+| Timeout | 30秒；校验、宿主检查、日志与执行累计计时，准入/审批和排队暂停单次计时 |
+| MaxAttempts | 3；持久操作的显式恢复上限，不是一次 Invoke 中自动重试 |
+| ReturnArgumentErrors | false；只影响 Tools() 模型调用路径 |
+| Authorize | 宿主检查，可能收到不合 Schema 的参数；error 中止 |
+| OnResult | 首次与完成回放均调用，宿主应据稳定 ExecutionKey 幂等重建状态 |
+| Pipeline | 可选调用管线 |
+
+实现 DispatchTimeoutProvider 的工具可用正值覆盖默认单次超时，零值沿用默认；直接 Tool.Invoke 仍只受宿主 context 约束。宿主及根预算期限始终有效。OnResult 不受工具单次 Timeout 限制，应合作处理宿主 context。框架不能强杀忽略 context 的同步工具。
+
+## 参数错误、拒绝与恢复
+
+- error 非 nil 表示调用未正常完成，例如网络中断、取消或内部失败。
+- `tools.Rejected(message, data)` 是明确业务拒绝，作为结果交给模型；持久日志记为 completed，恢复只回放。用 RejectedResult 判断，自行构造同形状 map 不会被识别为拒绝。
+- ReturnArgumentErrors=true 时，Tools() 把 Schema 错误或本层 *tools.ArgumentError 转为 Success=false、Error为空的结果，让模型修正；不转换授权、超时、取消和子流程执行错误。
+- 直接 Dispatcher.Invoke/AsRunnable 不启用上述参数结果恢复，仍返回 error。参数修复不等于向用户自动澄清。
+
+持久调用要求宿主日志、执行键、稳定 CallID 和支持持久调用的入口。completed 回放不重新调用工具，也跳过 Pipeline 准入；Schema/宿主检查与 OnResult 有各自调用契约。首次与回放均经过 JSON 边界，数字解码为 json.Number，不能依赖原 Go 指针类型。
+
+pending/failed 不证明外部效果未发生。服务须实现幂等，或由 ReconcilableTool.Reconcile 核对效果；框架不承诺任意工具 exactly-once。见 [执行治理](../guides/EXECUTION_GOVERNANCE.md)和[拒绝/核对源码](../../tools/rejected.go)。
+
+## Pipeline
+
+Pipeline 是工具调用扩展点，不是 Agent 外围中间件：
+
+```text
+Schema/自定义验证与宿主检查 → PreHook → 审批 → Guard → Around → 工具 → PostHook
+```
+
+- Pre：[]PreHook，返回 PreDecision；优先级 Stop > Deny > Substitute > Ask > Allow。
+- Approver：Approve(ctx, ApprovalRequest) (ApprovalResult,error)；ApprovalTimeout 默认10分钟。
+- Guards：[]Guard，非空原因即拒绝；人的批准不能覆盖 Guard。
+- Around：[]Around，包装执行；Post：[]PostHook，处理成功及 Rejected，可替换输出、追加上下文。
+- GrantTTL：会话批准有效期，非正值不设过期；Grants、RevokeGrants、PruneGrants 查询和回收范围。
+
+参数非法不进入 Pipeline。Pre/审批/Guard 在操作日志之外；准入错误不留下 pending，明确拒绝结果会写日志。completed 回放跳过准入。Pipeline 审批不等价于可恢复工作流暂停。
+
+## Runnable、Workflow 与子 Agent
+
+```go
+func NewRunnableTool[I, O any](
+    run core.Runnable[I, O], cfg RunnableToolConfig[I, O],
+) (interfaces.Tool, error)
+
+type OwnedRunnable[I, O any] struct {
+    Runnable core.Runnable[I, O]
+    Close func(context.Context) error
+}
+
+func NewRunnableToolFactory[I, O any](
+    factory func(context.Context) (OwnedRunnable[I, O], error),
+    cfg RunnableToolConfig[I, O],
+) (interfaces.Tool, error)
+```
+
+Config 必填 Name、Version、对象 ArgsSchema、Decode、Encode，Description 描述业务用途。共享无状态 Runnable 用 NewRunnableTool；有状态子 Agent 用工厂，宿主分配独立会话、记忆命名空间及 Dispatcher。
+
+| Config 字段 | 契约 |
+| --- | --- |
+| ModelInvoking | 模型型工具设 true；缺根预算时在工厂前拒绝，不自动检测隐藏模型请求 |
+| MaxDepth | 默认8，祖先更小限制继续生效 |
+| CleanupTimeout | 默认5秒，Close 必填（可为 no-op），成功、失败和取消均清理 |
+| Timeout | 经 Dispatcher 的单次超时声明；直接调用受宿主 context 约束 |
+| Resumable | 默认 false；开启须经带日志 Dispatcher，子步骤在同一 Store 和稳定派生键下记录 |
+
+默认不透明复合工具只尝试一次：completed 可回放，未完成不能假定自动进入子检查点。嵌套审批/恢复显式使用 Resumable 与 DurableGraph.AsChildRunnable；等待经 WaitError 传播，不能 Encode 为成功。
+
+工厂部分失败仍应提供已取得资源的 Close。清理 context 不继承父取消，受 CleanupTimeout 约束；不合作的清理不能强制终止，清理失败阻止工具完成。见 [编排指南](../guides/COMPOSABLE_ORCHESTRATION.md)。
+
+## 其他入口与工具位置
+
+`NewToolExecutor(opts ...ExecutorOption) *ToolExecutor` 仍提供 ExecuteParallel、ExecuteSequential、ExecuteWithDependencies 和 ExecuteBatch，见 [executor_tool.go](../../tools/executor_tool.go)。批量/依赖执行不自动获得 Dispatcher.Tools 的持久模型调用契约。
+
+| 核心子包 | 当前构造器 |
+| --- | --- |
+| tools/compute | NewCalculatorTool() *CalculatorTool |
+| tools/http | NewAPITool(baseURL string, timeout time.Duration, headers map[string]string) *APITool |
+| tools/search | NewSearchTool(engine SearchEngine) *SearchTool |
+| tools/shell | NewShellTool(allowedCommands []string, timeout time.Duration) *ShellTool |
+
+编码工具已移至 github.com/kart-io/goagent-harness/tools/coding，不再从核心导入。参见 [Harness 迁移](../guides/HARNESS_MIGRATION.md)。外部模块、示例层业务集成与核心工具应分别说明。

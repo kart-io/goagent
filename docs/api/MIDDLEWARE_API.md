@@ -1,347 +1,113 @@
+<!-- generated-by: gsd-doc-writer -->
 # GoAgent Middleware API 参考
 
-本文档提供 GoAgent 中间件系统的完整 API 参考。
+Builder 的请求/响应中间件来自 `github.com/kart-io/goagent/core/middleware`，在一次 Agent 执行外围运行，不等同于每步模型钩子或每次工具管线。
 
-## 目录
+源码：[核心接口与链](../../core/middleware/middleware.go)、[附加实现](../../core/middleware/advanced.go)、[Builder 挂载](../../builder/runtime_options.go)、[执行入口](../../builder/configurable_agent.go)。
 
-- [Middleware 接口](#middleware-接口)
-- [MiddlewareChain](#middlewarechain)
-- [内置中间件](#内置中间件)
-- [自定义中间件](#自定义中间件)
+## 选择扩展层
 
----
+| 处理范围 | 入口 |
+| --- | --- |
+| Agent 请求输入、最终输出与错误 | core/middleware.Middleware + WithMiddleware |
+| 每步模型前改写上下文 | WithPreStep / WithIdentifiedPreStep |
+| 调整请求、处理模型失败 | WithRequestHook / WithRequestError |
+| 每次工具调用 | tools.Pipeline |
+| 只读观察 | core/observe.Observer、Tracer |
 
-## Middleware 接口
+新编排用 agent.AsRunnable().Invoke/Stream；它与 ExecuteStream 共用执行源，外围中间件仍生效。流式预览可能先输出，OnAfter 只处理最终结果，不能撤回已发送文本。见 [扩展契约](../guides/EXTENSION_CONTRACT.md)。
 
-### core/middleware.Middleware
+## 接口与数据
 
 ```go
-package middleware
-
-// Middleware 中间件接口
 type Middleware interface {
-    // Name 返回中间件名称
     Name() string
-
-    // OnBefore 请求前处理
-    OnBefore(ctx context.Context, request *MiddlewareRequest) (*MiddlewareRequest, error)
-
-    // OnAfter 响应后处理
-    OnAfter(ctx context.Context, response *MiddlewareResponse) (*MiddlewareResponse, error)
-
-    // OnError 错误处理
-    OnError(ctx context.Context, err error) error
+    OnBefore(context.Context, *MiddlewareRequest) (*MiddlewareRequest, error)
+    OnAfter(context.Context, *MiddlewareResponse) (*MiddlewareResponse, error)
+    OnError(context.Context, error) error
 }
+
+type Handler func(context.Context, *MiddlewareRequest) (*MiddlewareResponse, error)
 ```
 
-### MiddlewareRequest
+| 类型 | 字段 |
+| --- | --- |
+| MiddlewareRequest | Input interface{}、State state.State、Runtime interface{}、Metadata map[string]interface{}、Headers map[string]string、Timestamp time.Time |
+| MiddlewareResponse | Output interface{}、State state.State、Metadata map[string]interface{}、Headers map[string]string、Duration time.Duration、TokenUsage *interfaces.TokenUsage、Error error |
 
-```go
-type MiddlewareRequest struct {
-    // Input 输入数据
-    Input interface{} `json:"input"`
-
-    // State 状态
-    State state.State `json:"state"`
-
-    // Runtime 运行时引用
-    Runtime interface{} `json:"-"`
-
-    // Metadata 元数据
-    Metadata map[string]interface{} `json:"metadata"`
-
-    // Headers 请求头
-    Headers map[string]string `json:"headers"`
-
-    // Timestamp 时间戳
-    Timestamp time.Time `json:"timestamp"`
-}
-```
-
-### MiddlewareResponse
-
-```go
-type MiddlewareResponse struct {
-    // Output 输出数据
-    Output interface{} `json:"output"`
-
-    // State 状态
-    State state.State `json:"state"`
-
-    // Metadata 元数据
-    Metadata map[string]interface{} `json:"metadata"`
-
-    // Headers 响应头
-    Headers map[string]string `json:"headers"`
-
-    // Duration 执行时长
-    Duration time.Duration `json:"duration"`
-
-    // TokenUsage Token 使用统计
-    TokenUsage *interfaces.TokenUsage `json:"token_usage,omitempty"`
-
-    // Error 错误
-    Error error `json:"error,omitempty"`
-}
-```
-
-### Handler
-
-```go
-// Handler 处理器函数类型
-type Handler func(ctx context.Context, request *MiddlewareRequest) (*MiddlewareResponse, error)
-```
-
----
+state.State 指 core/state.State，不能与任意 workflow.Graph[T] 的 T 混为一谈。Request.State、Request.Runtime、Response.State、Response.Error 的 JSON 标签为 json:"-"，不是自动序列化的快照。Headers 是库内字段，不表示框架提供 HTTP 服务。
 
 ## MiddlewareChain
 
-### middleware.MiddlewareChain
-
 ```go
-type MiddlewareChain struct {
-    middlewares []Middleware
-    handler     Handler
-}
-
-// NewMiddlewareChain 创建中间件链
 func NewMiddlewareChain(handler Handler) *MiddlewareChain
-
-// Use 添加中间件
 func (c *MiddlewareChain) Use(middleware ...Middleware) *MiddlewareChain
-
-// Execute 执行中间件链
 func (c *MiddlewareChain) Execute(ctx context.Context, request *MiddlewareRequest) (*MiddlewareResponse, error)
-
-// Size 返回中间件数量
+func (c *MiddlewareChain) WithHandler(handler Handler) *MiddlewareChain
 func (c *MiddlewareChain) Size() int
 ```
 
-### 执行流程
+正常顺序：A.OnBefore → B.OnBefore → handler → B.OnAfter → A.OnAfter。
 
-```
-Request → MW1.OnBefore → MW2.OnBefore → ... → Handler → ... → MW2.OnAfter → MW1.OnAfter → Response
-```
+- OnBefore 按注册顺序，OnAfter 按逆序。WithHandler 快照列表并更换本次 handler，中间件实例仍共享。
+- Use 写时复制列表，不保证实例字段、宿主 State 或复用请求对象可并发修改；自定义实例须自行处理并发。
+- OnBefore/OnAfter 出错时调用同一个中间件的 OnError，非 nil 中止，nil 则继续；不能因此返回 nil 对象又假定后续组件都接受。
+- handler 出错后，链按注册顺序通知各 OnError，非 nil 返回更新错误；不会仅因某个 OnError 返回 nil 就抹掉原 handler 错误，也不会自动重做 handler。
+- OnBefore 可在 Metadata 放入 cached_response（非 nil *MiddlewareResponse）跳过 handler，仍运行 OnAfter；缓存不是持久检查点。
+- Builder 的 Agent 执行边界把链内 panic 转为错误；裸 MiddlewareChain.Execute 本身不提供同样的 panic 隔离。
 
-### 使用示例
+中间件错误不会回滚已发生的业务效果。
 
-```go
-import "github.com/kart-io/goagent/core/middleware"
-
-// 创建处理器
-handler := func(ctx context.Context, req *middleware.MiddlewareRequest) (*middleware.MiddlewareResponse, error) {
-    // 处理逻辑
-    return &middleware.MiddlewareResponse{
-        Output: "result",
-    }, nil
-}
-
-// 创建中间件链
-chain := middleware.NewMiddlewareChain(handler).
-    Use(middleware.NewLoggingMiddleware(nil)).
-    Use(middleware.NewTimingMiddleware()).
-    Use(middleware.NewCacheMiddleware(5 * time.Minute))
-
-// 执行
-response, err := chain.Execute(ctx, &middleware.MiddlewareRequest{
-    Input: "input data",
-})
-```
-
----
-
-## 内置中间件
-
-### BaseMiddleware
+## 无网络 Builder 示例
 
 ```go
-type BaseMiddleware struct {
-    name string
+package main
+
+import (
+    "context"
+    "fmt"
+
+    "github.com/kart-io/goagent/builder"
+    "github.com/kart-io/goagent/core/middleware"
+    "github.com/kart-io/goagent/llm"
+)
+
+func main() {
+    if err := run(); err != nil {
+        panic(err)
+    }
 }
 
-// NewBaseMiddleware 创建基础中间件
+func run() error {
+    prefix := middleware.NewMiddlewareFunc("input-prefix",
+        func(ctx context.Context, req *middleware.MiddlewareRequest) (*middleware.MiddlewareRequest, error) {
+            if err := ctx.Err(); err != nil {
+                return nil, err
+            }
+            req.Input = "请简短回答：" + fmt.Sprint(req.Input)
+            return req, nil
+        }, nil, nil)
+    agent, err := builder.NewSimpleBuilder(llm.NewMockStreamClient()).
+        WithMiddleware(prefix).
+        BuildContext(context.Background())
+    if err != nil {
+        return err
+    }
+    out, err := agent.AsRunnable().Invoke(context.Background(), "演示中间件")
+    if err != nil {
+        return err
+    }
+    fmt.Println(out.Result)
+    return nil
+}
+```
+
+使用内置 mock 的固定流式答复，不发网络请求；示例只证明中间件挂载和执行路径，不证明真实模型对改写内容的理解。
+
+## 创建与复用
+
+```go
 func NewBaseMiddleware(name string) *BaseMiddleware
-
-// Name 返回名称
-func (m *BaseMiddleware) Name() string
-
-// OnBefore 默认实现（直接返回）
-func (m *BaseMiddleware) OnBefore(ctx context.Context, req *MiddlewareRequest) (*MiddlewareRequest, error)
-
-// OnAfter 默认实现（直接返回）
-func (m *BaseMiddleware) OnAfter(ctx context.Context, resp *MiddlewareResponse) (*MiddlewareResponse, error)
-
-// OnError 默认实现（直接返回错误）
-func (m *BaseMiddleware) OnError(ctx context.Context, err error) error
-```
-
-### LoggingMiddleware
-
-日志记录中间件，记录请求和响应信息。
-
-```go
-type LoggingMiddleware struct {
-    *BaseMiddleware
-    logger func(string)
-}
-
-// NewLoggingMiddleware 创建日志中间件
-// logger 为 nil 时使用默认 log.Printf
-func NewLoggingMiddleware(logger func(string)) *LoggingMiddleware
-```
-
-**功能：**
-- 记录请求时间和输入
-- 记录响应时间和输出
-- 记录错误信息
-
-**使用示例：**
-
-```go
-// 使用默认 logger
-loggingMW := middleware.NewLoggingMiddleware(nil)
-
-// 使用自定义 logger
-customLoggingMW := middleware.NewLoggingMiddleware(func(msg string) {
-    zap.L().Info(msg)
-})
-```
-
-### TimingMiddleware
-
-计时中间件，记录执行耗时。
-
-```go
-type TimingMiddleware struct {
-    *BaseMiddleware
-    timings map[string]time.Duration
-    mu      sync.RWMutex
-}
-
-// NewTimingMiddleware 创建计时中间件
-func NewTimingMiddleware() *TimingMiddleware
-
-// GetTimings 获取所有计时记录
-func (m *TimingMiddleware) GetTimings() map[string]time.Duration
-
-// GetAverageLatency 获取平均延迟
-func (m *TimingMiddleware) GetAverageLatency() time.Duration
-```
-
-**使用示例：**
-
-```go
-timingMW := middleware.NewTimingMiddleware()
-
-// 执行一些操作后...
-
-// 获取平均延迟
-avgLatency := timingMW.GetAverageLatency()
-fmt.Printf("Average latency: %v\n", avgLatency)
-
-// 获取所有计时
-timings := timingMW.GetTimings()
-for id, duration := range timings {
-    fmt.Printf("%s: %v\n", id, duration)
-}
-```
-
-### RetryMiddleware
-
-重试中间件，在错误时自动重试。
-
-```go
-type RetryMiddleware struct {
-    *BaseMiddleware
-    maxRetries int
-    backoff    time.Duration
-    condition  func(error) bool
-}
-
-// NewRetryMiddleware 创建重试中间件
-func NewRetryMiddleware(maxRetries int, backoff time.Duration) *RetryMiddleware
-
-// WithRetryCondition 设置重试条件
-func (m *RetryMiddleware) WithRetryCondition(condition func(error) bool) *RetryMiddleware
-```
-
-**使用示例：**
-
-```go
-retryMW := middleware.NewRetryMiddleware(3, 100*time.Millisecond).
-    WithRetryCondition(func(err error) bool {
-        // 只重试超时错误
-        return errors.Is(err, context.DeadlineExceeded)
-    })
-```
-
-### CacheMiddleware
-
-缓存中间件，缓存请求结果。
-
-```go
-type CacheMiddleware struct {
-    *BaseMiddleware
-    shards    []*cacheShard
-    numShards uint32
-    ttl       time.Duration
-}
-
-// NewCacheMiddleware 创建缓存中间件
-func NewCacheMiddleware(ttl time.Duration) *CacheMiddleware
-
-// NewCacheMiddlewareWithShards 创建带分片的缓存中间件
-func NewCacheMiddlewareWithShards(ttl time.Duration, numShards uint32) *CacheMiddleware
-
-// Clear 清空缓存
-func (m *CacheMiddleware) Clear()
-
-// Size 返回缓存大小
-func (m *CacheMiddleware) Size() int
-```
-
-**使用示例：**
-
-```go
-// 基础用法
-cacheMW := middleware.NewCacheMiddleware(5 * time.Minute)
-
-// 带分片（高并发场景）
-shardedCacheMW := middleware.NewCacheMiddlewareWithShards(5*time.Minute, 32)
-```
-
-### RateLimiterMiddleware
-
-固定窗口速率限制中间件，按请求中的用户 ID 分别计数，超过上限时返回错误。
-
-```go
-// NewRateLimiterMiddleware 创建速率限制中间件：每个 windowSize 窗口内最多 maxRequests 次
-func NewRateLimiterMiddleware(maxRequests int, windowSize time.Duration) *RateLimiterMiddleware
-
-// Reset 清空所有计数窗口
-func (m *RateLimiterMiddleware) Reset()
-```
-
-**使用示例：**
-
-```go
-// 每分钟 100 个请求
-rateLimitMW := middleware.NewRateLimiterMiddleware(100, time.Minute)
-```
-
-### MiddlewareFunc
-
-函数式中间件，快速创建简单中间件。
-
-```go
-type MiddlewareFunc struct {
-    name    string
-    before  func(context.Context, *MiddlewareRequest) (*MiddlewareRequest, error)
-    after   func(context.Context, *MiddlewareResponse) (*MiddlewareResponse, error)
-    onError func(context.Context, error) error
-}
-
-// NewMiddlewareFunc 创建函数式中间件
 func NewMiddlewareFunc(
     name string,
     before func(context.Context, *MiddlewareRequest) (*MiddlewareRequest, error),
@@ -350,256 +116,42 @@ func NewMiddlewareFunc(
 ) *MiddlewareFunc
 ```
 
-**使用示例：**
+BaseMiddleware 的 Before/After 原样返回对象，OnError 原样返回错误。MiddlewareFunc 的 nil 函数字段沿用对应默认行为。
 
-```go
-// 创建简单的前置处理中间件
-addHeaderMW := middleware.NewMiddlewareFunc(
-    "add_header",
-    func(ctx context.Context, req *MiddlewareRequest) (*MiddlewareRequest, error) {
-        if req.Headers == nil {
-            req.Headers = make(map[string]string)
-        }
-        req.Headers["X-Request-ID"] = uuid.New().String()
-        return req, nil
-    },
-    nil, // 无后置处理
-    nil, // 无错误处理
-)
-```
+| core/middleware 构造器 | 当前行为 |
+| --- | --- |
+| NewLoggingMiddleware(logger func(string)) | 记录输入、输出与错误；nil logger 使用标准输出 |
+| NewTimingMiddleware() | 计时，提供 GetTimings/GetAverageLatency |
+| NewCacheMiddleware(ttl time.Duration) | 进程内响应缓存 |
+| NewCacheMiddlewareWithShards(ttl time.Duration, numShards uint32) | 分片进程内缓存 |
+| NewDynamicPromptMiddleware(modifier func(*MiddlewareRequest) string) | 修改外围输入 |
+| NewValidationMiddleware(validators ...func(*MiddlewareRequest) error) | 验证外围请求 |
+| NewRateLimiterMiddleware(maxRequests int, windowSize time.Duration) | 进程内窗口计数，不是根模型预算 |
 
----
+其他组件和准确构造签名见 [advanced.go](../../core/middleware/advanced.go)。缓存、限流等中间件不自动提供分布式一致性或持久恢复。
 
-## 自定义中间件
+### RetryMiddleware 不会自动重试
 
-### 实现步骤
+NewRetryMiddleware(maxRetries int, backoff time.Duration) 和 WithRetryCondition 仍存在；当前 OnError 仅包装符合条件的错误，**不会重新调用 handler**。不能用它承诺模型或业务工具实际重试。
 
-1. 嵌入 `BaseMiddleware` 或实现完整接口
-2. 实现所需的方法
-3. 注册到中间件链
+模型暂时失败使用 WithRequestError(n, builder.RetryTransient(n, backoff))；业务效果重试另按工具契约处理。参见 [Builder API](../guides/BUILDER_API_REFERENCE.md)。
 
-### 示例：认证中间件
+### 链实现不能随意互换
 
-```go
-package mymiddleware
+[optimized_chain.go](../../core/middleware/optimized_chain.go) 另提供 NewImmutableMiddlewareChain(handler,middlewares...) 和 NewFastMiddlewareChain(handler,middlewares...)。FastMiddlewareChain 只运行 OnBefore 与 handler，不运行 OnAfter/OnError。Builder 当前用 MiddlewareChain，不能换成快速链后仍假定语义一致。
 
-import (
-    "context"
-    "errors"
-    "github.com/kart-io/goagent/core/middleware"
-)
+## 同名包与 Process 组件
 
-type AuthMiddleware struct {
-    *middleware.BaseMiddleware
-    validateToken func(string) bool
-}
+顶层 github.com/kart-io/goagent/middleware 与 core/middleware 不同：
 
-func NewAuthMiddleware(validator func(string) bool) *AuthMiddleware {
-    return &AuthMiddleware{
-        BaseMiddleware: middleware.NewBaseMiddleware("auth"),
-        validateToken:  validator,
-    }
-}
+- [ObservabilityMiddleware](../../middleware/observability.go) 实现请求/响应钩子，接收已有 TelemetryProvider。
+- [tool_selector_advanced.go](../../middleware/tool_selector_advanced.go) 部分组件提供 Process(ctx, core.State) (core.State,error)。该方法不会因 WithMiddleware 自动被调用；即便嵌入 BaseMiddleware 满足接口，Process 也不是 OnBefore。
+- core/middleware.ToolSelectorMiddleware 将 selected_tools 写入 Metadata；不能据此推断它自动改变每次原生模型请求的工具清单。
 
-func (m *AuthMiddleware) OnBefore(ctx context.Context, req *middleware.MiddlewareRequest) (*middleware.MiddlewareRequest, error) {
-    token, ok := req.Headers["Authorization"]
-    if !ok {
-        return nil, errors.New("missing authorization header")
-    }
+接入时按具体扩展协议选择，而不是只看类名或包名。
 
-    if !m.validateToken(token) {
-        return nil, errors.New("invalid token")
-    }
+## 对象池与资源
 
-    // 添加用户信息到元数据
-    req.Metadata["authenticated"] = true
-    return req, nil
-}
+GetMiddlewareRequest/Response、PutMiddlewareRequest/Response 是可选对象池辅助函数；取出后初始化本次字段，归还后不得继续持有或并发使用。对象池不提供状态持久化。
 
-func (m *AuthMiddleware) OnError(ctx context.Context, err error) error {
-    // 记录认证失败
-    log.Printf("Auth error: %v", err)
-    return err
-}
-```
-
-### 示例：监控中间件
-
-```go
-package mymiddleware
-
-import (
-    "context"
-    "time"
-    "github.com/kart-io/goagent/core/middleware"
-    "github.com/prometheus/client_golang/prometheus"
-)
-
-type MetricsMiddleware struct {
-    *middleware.BaseMiddleware
-    requestCounter  prometheus.Counter
-    latencyHistogram prometheus.Histogram
-}
-
-func NewMetricsMiddleware() *MetricsMiddleware {
-    return &MetricsMiddleware{
-        BaseMiddleware: middleware.NewBaseMiddleware("metrics"),
-        requestCounter: prometheus.NewCounter(prometheus.CounterOpts{
-            Name: "goagent_requests_total",
-        }),
-        latencyHistogram: prometheus.NewHistogram(prometheus.HistogramOpts{
-            Name:    "goagent_request_duration_seconds",
-            Buckets: prometheus.DefBuckets,
-        }),
-    }
-}
-
-func (m *MetricsMiddleware) OnBefore(ctx context.Context, req *middleware.MiddlewareRequest) (*middleware.MiddlewareRequest, error) {
-    m.requestCounter.Inc()
-    req.Metadata["start_time"] = time.Now()
-    return req, nil
-}
-
-func (m *MetricsMiddleware) OnAfter(ctx context.Context, resp *middleware.MiddlewareResponse) (*middleware.MiddlewareResponse, error) {
-    if startTime, ok := resp.Metadata["start_time"].(time.Time); ok {
-        duration := time.Since(startTime).Seconds()
-        m.latencyHistogram.Observe(duration)
-    }
-    return resp, nil
-}
-```
-
-### 示例：熔断中间件
-
-```go
-package mymiddleware
-
-import (
-    "context"
-    "errors"
-    "sync"
-    "time"
-    "github.com/kart-io/goagent/core/middleware"
-)
-
-type CircuitBreakerMiddleware struct {
-    *middleware.BaseMiddleware
-    mu              sync.RWMutex
-    failures        int
-    threshold       int
-    resetTimeout    time.Duration
-    lastFailureTime time.Time
-    isOpen          bool
-}
-
-func NewCircuitBreakerMiddleware(threshold int, resetTimeout time.Duration) *CircuitBreakerMiddleware {
-    return &CircuitBreakerMiddleware{
-        BaseMiddleware: middleware.NewBaseMiddleware("circuit_breaker"),
-        threshold:      threshold,
-        resetTimeout:   resetTimeout,
-    }
-}
-
-func (m *CircuitBreakerMiddleware) OnBefore(ctx context.Context, req *middleware.MiddlewareRequest) (*middleware.MiddlewareRequest, error) {
-    m.mu.RLock()
-    defer m.mu.RUnlock()
-
-    if m.isOpen {
-        if time.Since(m.lastFailureTime) > m.resetTimeout {
-            // 半开状态，允许尝试
-            return req, nil
-        }
-        return nil, errors.New("circuit breaker is open")
-    }
-    return req, nil
-}
-
-func (m *CircuitBreakerMiddleware) OnError(ctx context.Context, err error) error {
-    m.mu.Lock()
-    defer m.mu.Unlock()
-
-    m.failures++
-    m.lastFailureTime = time.Now()
-
-    if m.failures >= m.threshold {
-        m.isOpen = true
-    }
-
-    return err
-}
-
-func (m *CircuitBreakerMiddleware) OnAfter(ctx context.Context, resp *middleware.MiddlewareResponse) (*middleware.MiddlewareResponse, error) {
-    m.mu.Lock()
-    defer m.mu.Unlock()
-
-    // 成功请求，重置计数
-    m.failures = 0
-    m.isOpen = false
-
-    return resp, nil
-}
-```
-
----
-
-## 对象池
-
-为了减少 GC 压力，中间件系统提供对象池。
-
-```go
-// 获取请求对象
-func GetMiddlewareRequest() *MiddlewareRequest
-
-// 归还请求对象
-func PutMiddlewareRequest(req *MiddlewareRequest)
-
-// 获取响应对象
-func GetMiddlewareResponse() *MiddlewareResponse
-
-// 归还响应对象
-func PutMiddlewareResponse(resp *MiddlewareResponse)
-```
-
-**使用示例：**
-
-```go
-// 从池中获取
-req := middleware.GetMiddlewareRequest()
-defer middleware.PutMiddlewareRequest(req)
-
-// 设置字段
-req.Input = input
-req.Timestamp = time.Now()
-
-// 执行
-resp, err := chain.Execute(ctx, req)
-```
-
----
-
-## 中间件执行顺序
-
-中间件按添加顺序执行：
-
-1. **请求阶段（OnBefore）**：按添加顺序执行
-2. **响应阶段（OnAfter）**：按添加顺序的逆序执行
-3. **错误阶段（OnError）**：按添加顺序的逆序执行
-
-```go
-chain := middleware.NewMiddlewareChain(handler).
-    Use(mw1).  // 第一个
-    Use(mw2).  // 第二个
-    Use(mw3)   // 第三个
-
-// 执行顺序：
-// Request  → mw1.OnBefore → mw2.OnBefore → mw3.OnBefore → Handler
-// Response ← mw1.OnAfter  ← mw2.OnAfter  ← mw3.OnAfter  ← Handler
-```
-
----
-
-## 相关文档
-
-- [核心 API 参考](CORE_API.md)
-- [工具中间件指南](../guides/TOOL_MIDDLEWARE.md)
-- [设计概述](../design/DESIGN_OVERVIEW.md)
+WithHandler 和不同 Execute 共享中间件实例，不自动关闭宿主模型、存储、观察者。取消依赖实际 handler/中间件响应 context，不强制终止不合作的同步实现。
