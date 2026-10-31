@@ -43,14 +43,29 @@ type ConfigurableAgent[C any, S core.State] struct {
 // Initialize 准备 Agent 执行
 func (a *ConfigurableAgent[C, S]) Initialize(ctx context.Context) (err error) {
 	defer recoverPanic("Agent 初始化", &err)
+	if ctx == nil {
+		return fmt.Errorf("初始化 Agent 的 context 不能为空")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	// 如果存在则加载先前状态
 	if a.runtime.Checkpointer != nil {
 		exists, err := a.runtime.Checkpointer.Exists(ctx, a.config.SessionID)
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return ctxErr
+		}
 		if err != nil {
 			return fmt.Errorf("checkpoint exists: %w", err)
 		}
 		if exists {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			state, err := a.runtime.Checkpointer.Load(ctx, a.config.SessionID)
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return ctxErr
+			}
 			if err != nil {
 				return fmt.Errorf("checkpoint load: %w", err)
 			}
@@ -64,8 +79,15 @@ func (a *ConfigurableAgent[C, S]) Initialize(ctx context.Context) (err error) {
 
 	// 通知回调
 	for _, cb := range a.callbacks {
-		if err := cb.OnStart(ctx, a.metadata); err != nil {
+		if err := ctx.Err(); err != nil {
 			return err
+		}
+		callbackErr := cb.OnStart(ctx, a.metadata)
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if callbackErr != nil {
+			return callbackErr
 		}
 	}
 
