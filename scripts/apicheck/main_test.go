@@ -39,6 +39,15 @@ func TestCoreDoesNotDependOnHarness(t *testing.T) {
 	}
 	require.False(t, forbidden("core/x.go", "github.com/kart-io/goagent-harness-extra/client"))
 }
+
+func TestExecutionFacadeCannotBeImportedByLowerLayers(t *testing.T) {
+	for _, file := range []string{"core/x.go", "builder/x.go", "tools/x.go", "workflow/x.go", "interfaces/x.go", "llm/x.go", "memory/x.go", "store/x.go", "cache/x.go", "utils/x.go", "parsers/x.go", "middleware/x.go", "observability/x.go", "devtools/x.go", "harness/env/x.go"} {
+		require.True(t, forbidden(file, module+"execution"), file)
+	}
+	for _, file := range []string{"execution/scope.go", "examples/host/main.go", "evaluation/executionbench/probe.go", "cmd/host/main.go"} {
+		require.False(t, forbidden(file, module+"execution"), file)
+	}
+}
 func TestMigrationCandidatesIgnoreCommentsAndStrings(t *testing.T) {
 	source := `package demo
 import (

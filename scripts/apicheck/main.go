@@ -33,6 +33,13 @@ func forbidden(file, path string) bool {
 	dep := strings.TrimPrefix(path, module)
 	dest := strings.Split(dep, "/")[0]
 	source := strings.Split(filepath.ToSlash(file), "/")[0]
+	// execution 是宿主装配薄层，基础和执行机制不得反向依赖它。
+	if dest == "execution" {
+		switch source {
+		case "interfaces", "errors", "utils", "cache", "core", "builder", "tools", "parsers", "llm", "workflow", "memory", "store", "middleware", "observability", "devtools", "harness":
+			return true
+		}
+	}
 	if dest == "examples" && source != "examples" {
 		return true
 	}
