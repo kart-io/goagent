@@ -154,7 +154,7 @@ func (c *Controller) transaction(ctx context.Context, write bool, fn func(*ledge
 	}
 	for key, u := range l.Entries {
 		if c.config.MaxReservedTokens > 0 && l.Estimates[key] <= 0 {
-			return fmt.Errorf("Token 限额记录缺少正数预留")
+			return fmt.Errorf("token 限额记录缺少正数预留")
 		}
 		if key == "" || !validUsage(u) {
 			return fmt.Errorf("invalid budget usage record")
