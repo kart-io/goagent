@@ -1,0 +1,9 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/kart-io/goagent/core/budget
+cpu: Apple M4 Pro
+BenchmarkRecordUsageFixedLedger/entries_10-14         	   42464	      5649 ns/op	    2591 B/op	      34 allocs/op
+BenchmarkRecordUsageFixedLedger/entries_100-14        	    4498	     50376 ns/op	   20669 B/op	     220 allocs/op
+BenchmarkRecordUsageFixedLedger/entries_1000-14       	     423	    515962 ns/op	  268576 B/op	    2034 allocs/op
+PASS
+ok  	github.com/kart-io/goagent/core/budget	2.543s
