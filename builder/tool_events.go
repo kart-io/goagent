@@ -87,8 +87,15 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 		}
 		messages = withSections(messages, sections)
 	}
+	slog := sessionTurnFrom(ctx)
+	if err := slog.begin(ctx, messages, append(slices.Clone(a.tools), runtime.tools...)); err != nil {
+		return nil, fmt.Errorf("会话日志: %w", err)
+	}
 	// finish 结束本轮：记下对话供 Handle 的 Followup 续接。
 	finish := func(answer string, final llm.Message) (*middleware.MiddlewareResponse, error) {
+		if err := slog.end(ctx, append(slices.Clone(messages), final), answer, usage); err != nil {
+			return nil, fmt.Errorf("会话日志: %w", err)
+		}
 		if box != nil {
 			transcript := slices.Clone(messages)
 			if len(transcript) > 0 && transcript[0].Role == "system" {
@@ -186,6 +193,9 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 		if pre.Halt {
 			metadata["answer_source"] = "pre_step"
 			return finish(pre.Answer, llm.Message{Role: "assistant", Content: pre.Answer})
+		}
+		if err := slog.sync(ctx, messages); err != nil {
+			return nil, fmt.Errorf("会话日志: %w", err)
 		}
 		// 重问需要下一轮额度，最后一轮的空回答按原方式报错。
 		allowEmpty := emptyRetries < a.config.EmptyAnswerRetries && round+1 < a.config.MaxIterations
@@ -369,6 +379,7 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 			}
 			// 字符串已是工具正文，不再包一层 JSON 引号或转义。
 			messages = append(messages, llm.Message{Role: "tool", Content: text, ToolCallID: turn.ToolCalls[i].ID})
+			slog.toolResult(turn.ToolCalls[i].ID, call.Name, output.Success)
 			additional = append(additional, output.AdditionalContext...)
 			if err := emit(AgentEvent{Type: "step", Step: "tool_end", Tool: call.Name}); err != nil {
 				return nil, err

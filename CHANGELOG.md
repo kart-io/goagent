@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `core/session`：追加写的会话事件日志。`DeriveMessages` 从日志推导模型历史（`history/rewrite` 替换区间内的消息，`session/rewind` 与中止的轮次撤销区间内的事件）；`FileStore`（每个会话一个 JSONL 文件，按行原子追加，忽略写入中崩溃留下的不完整行）与 `MemoryStore`，`Append` 按期望序号做比较并交换；`Rewind`、`Fork`。
+- `session.DurableStore`：以会话日志实现 `durable.Store`，持久操作的快照作为 `boundary/snapshot` 事件写入同一份日志，通过 durable 的存储一致性测试。
+- 轨迹导出：`session.BuildTrajectory` 给出模型最终看到的对话、system 提示词、工具定义与工具调用统计，`WriteOpenAI`（OpenAI 微调格式）、`WriteShareGPT`（LLaMA-Factory 的 sharegpt 格式）。
+- `builder.WithSessionLog`：原生工具流的历史从会话日志推导，每次模型请求前记录与日志不同的对话；中断的轮次在持久运行以同一执行键恢复时续写，否则记为中止、不进入历史。
+
 ### Changed
 
 - 自动发版规则：推送到 master 时只有 `fix`、`perf`、`refactor` 发补丁版本，`feat` 发 minor；`docs`、`test`、`chore`、`ci`、`style`、`build` 不再单独发版，随下一次发版一起发布。需要单独发版时，手动运行 Auto Tag and Release 并指定版本类型。

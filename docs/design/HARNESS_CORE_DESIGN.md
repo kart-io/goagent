@@ -630,3 +630,26 @@ A0（`2fc040b`）：Pipeline 裁决聚合与按钩子记录授权；`tools/polic
 | `contextpolicy.BeforeTurn` 并入 PreStep、`WithModelRetry` 并入 RequestError | 保持现有机制，新扩展点与之并存 | 二者已有持久化与预算语义，迁移是独立的破坏性变更，留待第三阶段统一会话日志时进行 |
 
 未实现：Handle 与 Builder 的事件流（`Stream`）结合；`Followup` 续接对话时不读取记忆，只使用上一轮的对话。
+
+## 16. 第三阶段实施记录（2026-10-31）
+
+新包 `core/session`：追加写的会话事件日志、`DeriveMessages`、`FileStore`（JSONL）与 `MemoryStore`、`Rewind` 与 `Fork`、`DurableStore`（durable 快照写入同一份日志）、轨迹导出（OpenAI 微调格式与 ShareGPT）。Builder 新增 `WithSessionLog`。第 9 节的验收：
+
+- 由日志重建每次请求：`TestSessionLogRebuildsRequests` 在每次请求时断言请求消息等于 `system + DeriveMessages + 运行上下文`，过程中含一次 PreStep 压缩。
+- 崩溃恢复与回放一致：`TestSessionLogDurableResume` 在工具执行中取消运行，新建存储实例以同一执行键恢复，日志只有一轮、消息不重复，durable 快照位于同一份日志。
+- 导出的轨迹可被训练脚本读取：`TestExport` 校验两种格式；实测中把 DeepSeek 两轮对话的导出交给独立的 Python 脚本校验了角色、工具调用配对与 ShareGPT 的交替要求。
+
+与设计的差异：
+
+| 设计 | 实施 | 原因 |
+|---|---|---|
+| `Store{Create, Open, Append, List, Fork}` | `Append`（按期望序号做比较并交换，期望为 0 时创建）、`Read`、`List`、`Fork`、`Lock` | 创建并入首次追加，避免"已创建但为空"的中间状态；`Lock` 供 `DurableStore` 实现 durable 的锁 |
+| durable 的操作日志成为会话日志的投影 | durable 代码不变；`session.DurableStore` 实现 `durable.Store`，每次 Save 追加一条 `boundary/snapshot`，Load 取该 ID 最近的快照 | 一份存储、两种视图的目标由存储适配达成，durable 的语义与一致性测试（`storetest`）原样适用；改写 durable 为事件模型是更大的破坏性变更且没有额外收益 |
+| 压缩记为 `compaction/summary` | 任何对历史的改写都记为 `history/rewrite` | 记录方式是在每次请求前比较实际发送的对话与日志推导的结果，与改写来源无关；PreStep、压缩组件、UserPromptSubmit 钩子的补充统一处理 |
+| `Surface: Replace{Start, End}` | 两种语义：`history/rewrite` 在其余事件上替换区间内的消息；`session/rewind` 与中止的轮次撤销区间内的全部事件 | 退回须同时撤销区间内的改写，否则无法恢复被后来的改写替换掉的消息（测试发现） |
+| 核心类型含 `step/*`、`assistant/attempt`、`inbox/spliced`、`approval/*`、`todo/write` | 未实现；另有 `system/message`、`tool/definitions` 供导出 | 当前的验收与导出不依赖它们；运行中追加的输入作为普通 user 消息记录 |
+| 中断的轮次 | 持久运行以同一执行键恢复时续写该轮；其他情况在下一轮开始时记为中止，其消息不进入历史 | 中断的非持久轮次可能停在工具调用与结果之间，交给模型会被提供方拒绝 |
+
+未实现：PostgreSQL 存储（`contrib/pgstore`，需要引入驱动依赖与测试数据库）；`testing` 包中的 cut-point replay；`contextpolicy.BeforeTurn` 并入 PreStep、`WithModelRetry` 并入 RequestError（第二阶段留下的归并）；非原生工具流的会话日志；持久运行中 Fork 出的会话从分叉点继续执行（未验证）。
+
+已知开销：每次同步重新推导对话并按 JSON 比较消息，单轮为 O(消息数)；`FileStore` 在一轮开始时读取整个会话文件（含 durable 快照）。一轮结束前崩溃的非持久运行，其最后一批工具结果不会进入日志（该轮会被记为中止）。
