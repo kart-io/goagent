@@ -50,6 +50,16 @@ func TestExecutionFacadeCannotBeImportedByLowerLayers(t *testing.T) {
 		require.False(t, forbidden(file, module+"execution"), file)
 	}
 }
+
+func TestPluginIsTopLevel(t *testing.T) {
+	for _, file := range []string{"builder/a.go", "core/a.go", "interfaces/a.go", "llm/a.go", "tools/a.go"} {
+		require.True(t, forbidden(file, module+"plugin"), file)
+	}
+	for _, file := range []string{"plugin/install.go", "execution/scope.go", "cmd/host/main.go"} {
+		require.False(t, forbidden(file, module+"plugin"), file)
+	}
+}
+
 func TestMigrationCandidatesIgnoreCommentsAndStrings(t *testing.T) {
 	source := `package demo
 import (

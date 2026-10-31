@@ -36,7 +36,7 @@ type Dependent interface {
 }
 
 // PreStep 是带身份的 PreStep 钩子；持久运行中以 "plugin/<名称>@<版本>/<Identity>" 进入日志，
-// 插件升级版本或改变 Identity 后，恢复旧运行以 intent changed 失败。
+// 插件升级版本或改变 Identity 后，恢复旧运行以 operation intent or attempt policy changed 失败。
 type PreStep struct {
 	Identity string
 	Hook     builder.PreStepHook
