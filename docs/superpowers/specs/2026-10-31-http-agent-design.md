@@ -1,6 +1,6 @@
 # GoAgent HTTP 服务适配设计
 
-日期：2026-10-31。状态：**已实施并推送功能分支，新增可注入 WebSocket 接口；尚未合并或打tag**。本轮复核基线为 `57c0f05`，发现、来源与实际探针见[审核报告](../../evaluation/2026-10-31-httpagent-design-audit/REPORT.md)。此前早期 Builder Check 不代表包含 WebSocket 的完整版本已通过审核。
+日期：2026-10-31。状态：**已实施并合并主分支，包含可注入 WebSocket 接口；尚未打模块tag**。本轮复核基线为 `57c0f05`，发现、来源与实际探针见[审核报告](../../evaluation/2026-10-31-httpagent-design-audit/REPORT.md)。此前早期 Builder Check 不代表包含 WebSocket 的完整版本已通过审核。
 
 ## 1. 目标、位置与方案取舍
 

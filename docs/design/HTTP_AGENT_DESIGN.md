@@ -1,6 +1,6 @@
 # HTTP Agent：内核与网络扩展的设计边界
 
-本页是GoAgent仓库的正式设计入口。网络模块的完整已实现设计位于goagent-contrib的 [httpagent/docs/DESIGN.md](https://github.com/kart-io/goagent-contrib/blob/feat/httpagent-webhooks-20261031/httpagent/docs/DESIGN.md)，公开接口基线为cfb3e85。使用与版本信息见 [接入指南](../guides/HTTP_AGENT.md)。
+本页是GoAgent仓库的正式设计入口。网络模块的完整已实现设计位于goagent-contrib的 [httpagent/docs/DESIGN.md](https://github.com/kart-io/goagent-contrib/blob/master/httpagent/docs/DESIGN.md)，公开接口基线为cfb3e85。使用与版本信息见 [接入指南](../guides/HTTP_AGENT.md)。
 
 ## 组件与定位
 
@@ -32,7 +32,7 @@ GoAgent不因新增HTTP或Web页面变成特定业务平台。主库保留通用
 | queued先持久接纳，独立worker调用同一Run | 快速ACK与业务执行分离，不以goroutine冒充队列 |
 | WS读写依赖接口，Gorilla是默认具体实现 | 外部框架可适配连接，原接入方式不变 |
 
-详细状态示意、HTTP/SSE提交时机、WS时序、队列背压与接纳/通知流程在扩展设计中维护。Config、协议字段和错误码以 [扩展API参考](https://github.com/kart-io/goagent-contrib/blob/feat/httpagent-webhooks-20261031/httpagent/docs/API_REFERENCE.md) 为准，避免在主库重复维护签名表。
+详细状态示意、HTTP/SSE提交时机、WS时序、队列背压与接纳/通知流程在扩展设计中维护。Config、协议字段和错误码以 [扩展API参考](https://github.com/kart-io/goagent-contrib/blob/master/httpagent/docs/API_REFERENCE.md) 为准，避免在主库重复维护签名表。
 
 ## 持久与并发责任
 
