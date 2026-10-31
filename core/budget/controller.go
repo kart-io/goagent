@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"os"
 	"sync"
@@ -104,9 +105,18 @@ func (c *Controller) storageID() string {
 	return "goagent/budget/" + hex.EncodeToString(d[:])
 }
 func clone(l ledger) ledger {
-	b, _ := json.Marshal(l)
-	var out ledger
-	_ = json.Unmarshal(b, &out)
+	out := ledger{Config: l.Config, Estimates: maps.Clone(l.Estimates), Tools: maps.Clone(l.Tools)}
+	if l.Entries != nil {
+		out.Entries = make(map[string]*interfaces.TokenUsage, len(l.Entries))
+		for key, usage := range l.Entries {
+			if usage == nil {
+				out.Entries[key] = nil
+				continue
+			}
+			copied := *usage
+			out.Entries[key] = &copied
+		}
+	}
 	return out
 }
 func (c *Controller) transaction(ctx context.Context, write bool, fn func(*ledger) error) (err error) {
@@ -115,7 +125,10 @@ func (c *Controller) transaction(ctx context.Context, write bool, fn func(*ledge
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	l := clone(c.memory)
+	var l ledger
+	if c.store == nil {
+		l = clone(c.memory)
+	}
 	if c.store != nil {
 		id := c.storageID()
 		unlock, e := c.store.Lock(ctx, id)
