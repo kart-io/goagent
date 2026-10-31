@@ -1,0 +1,40 @@
+package review
+
+import (
+    "context"
+    "reflect"
+    "testing"
+
+    "github.com/kart-io/goagent/core/session"
+    "github.com/kart-io/goagent/llm"
+)
+
+// 核验修订规格的架构前提，不把它当成尚未实现的 ACP 列表功能测试。
+func TestMetadataPersistsWithoutChangingHistory(t *testing.T) {
+    ctx := context.Background()
+    dir := t.TempDir()
+    store, err := session.NewFileStore(dir)
+    if err != nil { t.Fatal(err) }
+    metadata, err := session.NewEvent("acp/session_metadata", map[string]any{
+        "schema": 1, "cwd": "/workspace", "updatedAt": "2026-10-31T00:00:00Z",
+    })
+    if err != nil { t.Fatal(err) }
+    message, err := session.NewEvent(session.TypeUserMessage, session.MessageData{
+        Message: llm.Message{Role: "user", Content: "你好"},
+    })
+    if err != nil { t.Fatal(err) }
+    if _, err := store.Append(ctx, "s1", 0, metadata, message); err != nil { t.Fatal(err) }
+    reopened, err := session.NewFileStore(dir)
+    if err != nil { t.Fatal(err) }
+    ids, err := reopened.List(ctx)
+    if err != nil { t.Fatal(err) }
+    if !reflect.DeepEqual(ids, []string{"s1"}) { t.Fatalf("会话列表错误：%v", ids) }
+    events, err := reopened.Read(ctx, "s1", 0)
+    if err != nil { t.Fatal(err) }
+    if len(events) != 2 || events[0].Type != "acp/session_metadata" { t.Fatal("元数据未保留") }
+    messages, err := session.DeriveMessages(events)
+    if err != nil { t.Fatal(err) }
+    want := []llm.Message{{Role: "user", Content: "你好"}}
+    if !reflect.DeepEqual(messages, want) { t.Fatalf("元数据改变了对话：%+v", messages) }
+    t.Log("私有元数据跨 FileStore 重开保留，DeriveMessages 不向模型暴露元数据事件")
+}

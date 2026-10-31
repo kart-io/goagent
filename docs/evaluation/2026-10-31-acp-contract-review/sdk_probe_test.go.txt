@@ -1,0 +1,113 @@
+package review
+
+import (
+    "context"
+    "io"
+    "testing"
+    "time"
+
+    acp "github.com/coder/acp-go-sdk"
+)
+
+// 仅实现本次探针调用的方法，其他方法通过嵌入接口满足类型约束。
+type probeAgent struct {
+    acp.Agent
+    entered chan context.Context
+    firstReturn chan struct{}
+    secondReturn chan struct{}
+    cancelSeen chan struct{}
+}
+
+func (a *probeAgent) Prompt(ctx context.Context, p acp.PromptRequest) (acp.PromptResponse, error) {
+    a.entered <- ctx
+    if p.Prompt[0].Text.Text == "first" {
+        <-ctx.Done()
+        <-a.firstReturn
+    } else {
+        <-a.secondReturn
+    }
+    return acp.PromptResponse{StopReason: acp.StopReasonCancelled}, nil
+}
+
+func (a *probeAgent) Cancel(context.Context, acp.CancelNotification) error {
+    close(a.cancelSeen)
+    return nil
+}
+
+// 与实施计划一样不主动取消：用来核实 SDK 是否隐含提供该行为。
+func (a *probeAgent) CloseSession(context.Context, acp.CloseSessionRequest) (acp.CloseSessionResponse, error) {
+    return acp.CloseSessionResponse{}, nil
+}
+
+func connect(t *testing.T, a *probeAgent) *acp.ClientSideConnection {
+    t.Helper()
+    ar, cw := io.Pipe()
+    cr, aw := io.Pipe()
+    _ = acp.NewAgentSideConnection(a, aw, ar)
+    client := acp.NewClientSideConnection(nil, cw, cr)
+    t.Cleanup(func() { ar.Close(); cw.Close(); cr.Close(); aw.Close() })
+    return client
+}
+
+func wait[T any](t *testing.T, ch <-chan T) T {
+    t.Helper()
+    select {
+    case value := <-ch:
+        return value
+    case <-time.After(3*time.Second):
+        t.Fatal("等待探针事件超时")
+        var zero T
+        return zero
+    }
+}
+
+func prompt(c *acp.ClientSideConnection, text string) <-chan error {
+    done := make(chan error, 1)
+    go func() {
+        ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+        defer cancel()
+        _, err := c.Prompt(ctx, acp.PromptRequest{SessionId: "s1", Prompt: []acp.ContentBlock{acp.TextBlock(text)}})
+        done <- err
+    }()
+    return done
+}
+
+// 这是缺陷观察探针：通过表示重现了当前 SDK 的异常行为，而非取消契约正确。
+func TestObserveReplacementPromptLosesCancellation(t *testing.T) {
+    a := &probeAgent{entered: make(chan context.Context, 2), firstReturn: make(chan struct{}), secondReturn: make(chan struct{}), cancelSeen: make(chan struct{})}
+    c := connect(t, a)
+    first := prompt(c, "first")
+    _ = wait(t, a.entered)
+    second := prompt(c, "second")
+    secondCtx := wait(t, a.entered)
+    close(a.firstReturn)
+    if err := wait(t, first); err != nil { t.Fatal(err) }
+    if err := c.Cancel(context.Background(), acp.CancelNotification{SessionId: "s1"}); err != nil { t.Fatal(err) }
+    _ = wait(t, a.cancelSeen)
+    select {
+    case <-secondCtx.Done():
+        t.Fatal("未重现缺陷：第二个 prompt 被正确取消")
+    case <-time.After(150*time.Millisecond):
+        t.Log("已重现：前一 prompt 返回删除了新 prompt 的取消登记；Cancel 到达后新 prompt 未取消")
+    }
+    close(a.secondReturn)
+    if err := wait(t, second); err != nil { t.Fatal(err) }
+}
+
+func TestObserveCloseDoesNotCancelPrompt(t *testing.T) {
+    a := &probeAgent{entered: make(chan context.Context, 1), secondReturn: make(chan struct{})}
+    c := connect(t, a)
+    done := prompt(c, "second")
+    runCtx := wait(t, a.entered)
+    ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+    defer cancel()
+    if _, err := c.CloseSession(ctx, acp.CloseSessionRequest{SessionId: "s1"}); err != nil { t.Fatal(err) }
+    select {
+    case <-runCtx.Done():
+        t.Fatal("未重现：SDK 已自动取消 prompt")
+    case <-time.After(150*time.Millisecond):
+        t.Log("已重现：CloseSession 不会由 SDK 自动取消 prompt，适配层必须负责")
+    }
+    close(a.secondReturn)
+    if err := wait(t, done); err != nil { t.Fatal(err) }
+}
