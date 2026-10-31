@@ -56,7 +56,7 @@ func (s *Surface) covers(seq int64) bool { return s != nil && seq >= s.Start && 
 // TurnStart 是 turn/start 的数据。
 type TurnStart struct {
 	Input string `json:"input"`
-	// ExecutionKey 是持久运行的执行键：以同一执行键恢复时续写该轮。
+	// ExecutionKey 是宿主传给持久运行的执行键（DurableScope 派生之前）：以同一执行键恢复时续写该轮。
 	ExecutionKey string `json:"execution_key,omitempty"`
 }
 

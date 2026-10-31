@@ -56,7 +56,7 @@ func (a *ConfigurableAgent[C, S]) openSessionTurn(ctx context.Context, input str
 	}
 	key := ""
 	if durable.HasJournal(ctx) {
-		key = durable.ExecutionKey(ctx)
+		key, _ = ctx.Value(hostExecutionKey{}).(string)
 	}
 	turn := &sessionTurn{rec: rec, tools: map[string]session.ToolMeta{}}
 	events := rec.Events()

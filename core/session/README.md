@@ -42,6 +42,9 @@ Builder 在每次模型请求前把实际发送的对话（不含 system 与运�
 
 - `FileStore`：每个会话一个 JSONL 文件，每行是一次 `Append` 的全部事件，写入中崩溃留下的不完整行在读取时忽略、下次追加前截掉；追加在会话级 flock 内完成并 fsync。
 - `MemoryStore`：进程内实现，用于测试。
+- PostgreSQL：[goagent-contrib 的 `durable/pgstore`](https://github.com/kart-io/goagent-contrib/tree/master/durable/pgstore) 提供 `SessionStore`，锁为租约，追加快照时校验持有者。
+
+自行实现 `Store` 时用 `sessiontest.Run` 验证契约，传入同一后端上的两个实例模拟两个进程；以租约实现 `Lock` 的后端经 `Options.Leases` 另跑接管与写入隔离用例。
 
 `Rewind(ctx, store, id, to, expected)` 以调用方看到的最后序号做比较并交换，其间有新写入时返回 `ErrConflict`。被撤销的事件仍保留在日志中；持久操作的快照不受影响。`Fork` 把会话的前缀复制为新会话。
 
@@ -59,5 +62,5 @@ traj.Stats            // 每个工具的调用次数与失败次数
 ## 测试
 
 ```bash
-go test ./core/session/ ./builder/ -run 'Session|Store|Derive|Export|Recorder'
+go test ./core/session/... ./builder/ -run 'Session|Store|Derive|Export|Recorder|Conformance'
 ```
