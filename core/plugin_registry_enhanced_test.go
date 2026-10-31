@@ -262,10 +262,7 @@ func TestEnhancedPluginRegistry_Lifecycle(t *testing.T) {
 	plugin := newMockPlugin("test-plugin", "1.0.0")
 
 	config := &PluginConfig{
-		Name:    "test-plugin",
-		Version: "1.0.0",
-		Config:  map[string]interface{}{"key": "value"},
-		Enabled: true,
+		Config: map[string]interface{}{"key": "value"},
 	}
 
 	err := registry.RegisterPlugin(plugin, config)
