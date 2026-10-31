@@ -15,7 +15,7 @@ import (
 
 // Plugin 是一个 Agent 能力包。
 type Plugin interface {
-	// Name 在一个 Host 内唯一：非空、无首尾空白、不含 "/" 与 "@"。
+	// Name 在一个 Host 内唯一：非空、无首尾空白、不含 "/"、"@" 与 "."（"." 是资源命名空间的分隔符）。
 	Name() string
 	// Version 进入持久运行中 PreStep 的身份：非空、无首尾空白、不含 "/"。
 	Version() string
@@ -37,6 +37,9 @@ type Dependent interface {
 
 // PreStep 是带身份的 PreStep 钩子；持久运行中以 "plugin/<名称>@<版本>/<Identity>" 进入日志，
 // 插件升级版本或改变 Identity 后，恢复旧运行以 operation intent or attempt policy changed 失败。
+// 持久意图由 Agent 上全部 PreStep 身份按注册顺序合并而成（宿主未带身份的 PreStep 计为空串），
+// 因此增删或调整含 PreStep 的插件、改变 Only 选择或注册顺序、升级任一含 PreStep 插件的版本（含补丁版本）、
+// 宿主增删 PreStep，都会使在途持久运行无法恢复；须先排空在途运行再做这些变更。
 type PreStep struct {
 	Identity string
 	Hook     builder.PreStepHook
@@ -50,7 +53,8 @@ type Contribution struct {
 	PreSteps       []PreStep
 	RequestHooks   []builder.RequestHook
 	RequestErrors  []builder.RequestErrorHook
-	// MaxRecoveries 只对 RequestErrors 生效；所选插件取最大值，全为 0 时用 Builder 的默认值。
+	// MaxRecoveries 只对 RequestErrors 生效；所选插件取最大值，全为 0 时用 Builder 的默认值 3。
+	// Install 会覆盖此前 WithRequestError 设置的上限；宿主要自定义上限，须在 Install 之后调用 WithRequestError。
 	MaxRecoveries int
 	TurnStopping  []builder.TurnStoppingHook
 	Middleware    []middleware.Middleware
@@ -63,6 +67,9 @@ func validateName(name string) error {
 	}
 	if strings.Contains(name, "@") {
 		return fmt.Errorf("插件名 %q 不能包含 @", name)
+	}
+	if strings.Contains(name, ".") {
+		return fmt.Errorf("插件名 %q 不能包含点号", name)
 	}
 	return nil
 }

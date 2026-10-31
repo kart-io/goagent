@@ -9,11 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `plugin` 包：Agent 能力包。插件返回工具、提示词片段、循环钩子、中间件与回调；`Host` 按依赖顺序启停持有资源的插件，启动失败时回滚，经 `Env.Provide`/`plugin.Lookup` 共享资源；`plugin.Install` 校验冲突后装进任意 `AgentBuilder`，支持 `Only` 与 `Dispatch`。插件 PreStep 的持久身份含插件名与版本。
+- `plugin` 包：Agent 能力包。插件返回工具、提示词片段、循环钩子、中间件与回调；`Host` 按依赖顺序启停持有资源的插件，启动失败时回滚，经 `Env.Provide`/`plugin.Lookup` 共享资源；`plugin.Install` 校验冲突后装进任意 `AgentBuilder`，支持 `Only` 与 `Dispatch`。插件 PreStep 的持久身份含插件名与版本。插件名不得含 `/`、`@` 或 `.`。
 
 ### Removed
 
-- `core.Plugin`、`core.BasePlugin`、`core.EnhancedPluginRegistry`、`core.GlobalEnhancedPluginRegistry`、`core.PluginConfig`、`core.Container`、`core.ResolveTyped`：插件提供的 `DynamicRunnable` 无法被 Agent 使用。迁移：把插件改为实现 `plugin.Plugin`，`GetTools` 返回的能力改为 `Contribution.Tools` 中的 `interfaces.Tool`，`Init`/`Start`/`Stop` 改为 `plugin.Starter`，`Container.Register` 改为在 `Start` 中 `env.Provide`，`ResolveTyped` 改为 `plugin.Lookup`。`core.PluginRegistry` 等 Runnable 注册表不变。
+- `core.Plugin`、`core.BasePlugin`、`core.EnhancedPluginRegistry`、`core.GlobalEnhancedPluginRegistry`、`core.PluginConfig`、`core.Container`、`core.ResolveTyped`：插件提供的 `DynamicRunnable` 无法被 Agent 使用。迁移：把插件改为实现 `plugin.Plugin`，`GetTools` 返回的能力改为 `Contribution.Tools` 中的 `interfaces.Tool`，`Init`/`Start`/`Stop` 改为 `plugin.Starter`，`Container.Register` 改为在 `Start` 中 `env.Provide`，`ResolveTyped` 改为 `plugin.Lookup`，`GetMiddleware` 改为 `Contribution.Middleware`；`GetAgents` 无对应项（需要时用 `tools.NewRunnableTool` 包装为工具）；`interfaces.DependencyAware` 声明的依赖改为 `plugin.Dependent.Requires`；`PluginConfig.Config` 改为由插件构造函数接收类型化配置；不再支持同名多版本注册（`GetPlugin(name, version)`、`GetLatestPlugin`），Host 内插件名唯一。`core.PluginRegistry` 等 Runnable 注册表不变。
 
 ## [0.31.0] - 2026-10-31
 

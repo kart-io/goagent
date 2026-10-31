@@ -38,7 +38,10 @@ func Dispatch(cfg tools.DispatchConfig) InstallOption {
 
 // Install 把 Host 中插件的贡献装进 b。先调用所选插件的 Contribute 并完成全部校验，
 // 全部通过后才写入 b，任一失败时 b 不变。同一个 Builder 只应 Install 一次：重复安装时
-// 重名工具会在 Build 时报错，钩子则会重复执行。之后再调用 b.WithRequestError 会覆盖插件合并出的恢复次数上限。
+// 重名工具会在 Build 时报错，钩子则会重复执行。
+// Install 会覆盖此前 WithRequestError 设置的恢复次数上限（所选插件全为 0 时为 Builder 默认值 3）；
+// 宿主要自定义上限，须在 Install 之后调用 WithRequestError。
+// 多个 goroutine 可同时 Install 同一 Host，插件的 Contribute 须并发安全；Install 不得与 Host.Stop 并发。
 func Install[C any, S core.State](ctx context.Context, b *builder.AgentBuilder[C, S], h *Host, opts ...InstallOption) error {
 	if b == nil || h == nil {
 		return errors.New("plugin.Install 需要非 nil 的 Builder 与 Host")
@@ -127,12 +130,20 @@ func validate(selected []Plugin, cs []Contribution) error {
 			claim("工具", t.Name(), name)
 		}
 		for j, s := range c.PromptSections {
+			if s.Name == "" {
+				bad("提示词片段（第 %d 个）缺少 Name", j)
+				continue
+			}
 			if s.Text == nil {
 				bad("提示词片段 %q（第 %d 个）的 Text 为 nil", s.Name, j)
 			}
 			claim("提示词片段", s.Name, name)
 		}
 		for j, s := range c.PromptContexts {
+			if s.Name == "" {
+				bad("提示词上下文（第 %d 个）缺少 Name", j)
+				continue
+			}
 			if s.Text == nil {
 				bad("提示词上下文 %q（第 %d 个）的 Text 为 nil", s.Name, j)
 			}

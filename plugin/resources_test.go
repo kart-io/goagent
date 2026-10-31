@@ -8,7 +8,7 @@ import (
 )
 
 func TestValidateNameAndVersion(t *testing.T) {
-	for _, bad := range []string{"", " a", "a ", "a/b", "a@b"} {
+	for _, bad := range []string{"", " a", "a ", "a/b", "a@b", "a.b"} {
 		require.Error(t, validateName(bad), bad)
 	}
 	require.NoError(t, validateName("orders"))

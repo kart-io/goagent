@@ -18,7 +18,7 @@
 
 ```go
 type Plugin interface {
-    Name() string    // Host 内唯一；非空、无首尾空白、不含 "/" 与 "@"
+    Name() string    // Host 内唯一；非空、无首尾空白、不含 "/"、"@" 与 "."
     Version() string // 非空、无首尾空白、不含 "/"；进入持久运行的身份
     Contribute(ctx context.Context, env *Env) (Contribution, error)
 }
@@ -84,14 +84,16 @@ func Dispatch(cfg tools.DispatchConfig) InstallOption // 插件工具统一经�
 - 不带 `Only` 时安装全部插件；带 `Only` 时只安装列出的插件，未知名称报错；按 Host 拓扑顺序处理，与书写顺序无关。
 - 持久运行要求工具经 Dispatcher（否则执行时报 `requires a journaled adapter`）。带 `Dispatch` 时，所选插件的全部工具注册进一个 `tools.Registry` 并经 `tools.NewDispatcher(reg, cfg)` 包装后再 `WithTools`；宿主自己的工具仍由宿主自行包装。
 - 先对所有选中插件调用 `Contribute` 并完成全部校验，全部通过后才写入 Builder；任一失败时 Builder 不变。
-- 校验（跨所选插件）：工具名重复、PromptSection 名重复、PromptContext 名重复、中间件 `Name()` 重复、PreStep `Identity` 为空、贡献中的 nil 钩子或 nil 工具。错误指明冲突双方插件名。与宿主自己经 `WithTools` 加入的工具重名，由 Build 时 Dispatcher 的 `duplicate tool` 报告。
+- 校验（跨所选插件）：工具名重复、PromptSection 名重复、PromptContext 名重复、中间件 `Name()` 重复、PreStep `Identity` 为空、PromptSection/PromptContext 的 `Name` 为空、贡献中的 nil 钩子或 nil 工具。错误指明冲突双方插件名。与宿主自己经 `WithTools` 加入的工具重名，由 Build 时 Dispatcher 的 `duplicate tool` 报告。
 - 写入顺序：插件按拓扑顺序，每个插件内按切片顺序，依次调用对应 `With*`。
-- `RequestErrors`：所有插件的钩子合并后只调用一次 `WithRequestError`，`maxRecoveries` 取各插件 `MaxRecoveries` 的最大值（全为 0 时用 Builder 默认的 3）。宿主之后再调用 `WithRequestError` 会覆盖该上限，文档写明。
+- `RequestErrors`：所有插件的钩子合并后只调用一次 `WithRequestError`，`maxRecoveries` 取各插件 `MaxRecoveries` 的最大值（全为 0 时用 Builder 默认的 3）。`Install` 会覆盖此前 `WithRequestError` 设置的恢复次数上限（所选插件全为 0 时为 Builder 默认值 3）；宿主要自定义上限，须在 `Install` 之后调用 `WithRequestError`，文档写明。
 - 同一个 Builder 只应 Install 一次。Builder 没有可供外部读取的状态，`plugin` 不做检测；重复安装时重名工具会在 Build 时由 Dispatcher 报错，钩子则会重复执行，文档写明。
 
 ## 持久运行身份
 
-插件 PreStep 以 `plugin/<名称>@<版本>/<Identity>` 调用 `WithIdentifiedPreStep`。插件升级版本后，恢复旧运行在请求模型前以 `intent changed` 失败，与现有 PreStep 身份规则一致。其他钩子不进入日志，行为与宿主直接调用 `With*` 相同。
+插件 PreStep 以 `plugin/<名称>@<版本>/<Identity>` 调用 `WithIdentifiedPreStep`。插件升级版本后，恢复旧运行在请求模型前以 `intent changed` 失败，与现有 PreStep 身份规则一致。
+
+持久意图由 Agent 上全部 PreStep 身份按注册顺序合并而成（宿主未带身份的 PreStep 计为空串）。因此增删或调整含 PreStep 的插件、改变 `Only` 选择、改变 `NewHost` 注册导致顺序变化、升级任一含 PreStep 插件的版本（含补丁版本）、宿主增删 PreStep，都会使在途持久运行以同样的错误无法恢复；须先排空在途运行再做这些变更。其他钩子不进入日志，行为与宿主直接调用 `With*` 相同。
 
 ## 错误处理
 

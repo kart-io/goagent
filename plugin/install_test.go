@@ -70,6 +70,7 @@ func TestInstallRejectsConflictsWithoutChangingBuilder(t *testing.T) {
 		{"片段重名", Contribution{PromptSections: []builder.PromptSection{section("rules", "x")}}, "同名提示词片段"},
 		{"上下文重名", Contribution{PromptContexts: []builder.PromptContext{{Name: "ctx", Text: func(builder.PromptScope) string { return "" }}}}, "同名提示词上下文"},
 		{"中间件重名", Contribution{Middleware: []middleware.Middleware{middleware.NewBaseMiddleware("audit")}}, "同名中间件"},
+		{"片段缺少名称", Contribution{PromptSections: []builder.PromptSection{section("", "x")}}, "缺少 Name"},
 		{"缺少身份", Contribution{PreSteps: []PreStep{{Hook: noop}}}, "缺少 Identity"},
 		{"nil 钩子", Contribution{TurnStopping: []builder.TurnStoppingHook{nil}}, "为 nil"},
 		{"nil 工具", Contribution{Tools: []interfaces.Tool{nil}}, "为 nil"},
