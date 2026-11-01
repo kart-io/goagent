@@ -11,7 +11,6 @@ import (
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/observe"
 	"github.com/kart-io/goagent/core/usage"
-	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 )
 
@@ -24,8 +23,7 @@ func (b *AgentBuilder[C, S]) WithAgentID(id string) *AgentBuilder[C, S] {
 
 func (a *ConfigurableAgent[C, S]) prepareAgentUsage(ctx context.Context) (context.Context, error) {
 	c, metered := budget.FromContext(ctx)
-	attributed := metered && c.AttributionEnabled()
-	if a.config.AgentID == "" && !attributed && !observe.Enabled(ctx) {
+	if a.config.AgentID == "" && !metered && !observe.Enabled(ctx) {
 		return ctx, nil
 	}
 	id := a.config.AgentID
@@ -35,9 +33,6 @@ func (a *ConfigurableAgent[C, S]) prepareAgentUsage(ctx context.Context) (contex
 		}
 	}
 	if id == "" {
-		if attributed {
-			return nil, fmt.Errorf("attribution requires WithAgentID")
-		}
 		id = "anonymous"
 	}
 	if strings.TrimSpace(id) != id || len(id) > 256 {
@@ -73,7 +68,7 @@ func (a *ConfigurableAgent[C, S]) prepareAgentUsage(ctx context.Context) (contex
 		in.ParentAgentCallKey, in.ParentVisitID = parent.AgentCallKey, parent.VisitID
 	}
 	ctx = usage.WithInvocation(ctx, in)
-	if attributed {
+	if metered {
 		if err := c.RegisterAgent(ctx, usage.Lineage(ctx)); err != nil {
 			return nil, err
 		}
@@ -86,7 +81,7 @@ type modelMetadata struct{ Provider, Model string }
 
 func withModelMetadata(ctx context.Context, client llm.Client, req *llm.CompletionRequest) context.Context {
 	c, _ := budget.FromContext(ctx)
-	if !observe.Enabled(ctx) && !c.AttributionEnabled() {
+	if !observe.Enabled(ctx) && c == nil {
 		return ctx
 	}
 	m := modelMetadata{Provider: string(client.Provider()), Model: "unknown"}
@@ -124,17 +119,8 @@ func publishModelUsage(ctx context.Context, operation, key string, attempt int, 
 	if c, ok := budget.FromContext(ctx); ok {
 		saveCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
-		if c.AttributionEnabled() {
-			notification.Evidence, err = c.RecordEvidence(saveCtx, key, usage.Lineage(ctx), e)
-		} else {
-			var tokens *interfaces.TokenUsage
-			if turn != nil && turn.Usage != nil && e.KnownFields&usage.BasicFields == usage.BasicFields {
-				copy := e.Tokens
-				tokens = &copy
-			}
-			err = c.RecordUsage(saveCtx, key, tokens)
-		}
-		notification.AccountingCommitted = err == nil && (c.AttributionEnabled() || e.KnownFields == 0 || e.KnownFields == usage.BasicFields)
+		notification.Evidence, err = c.RecordEvidence(saveCtx, key, usage.Lineage(ctx), e)
+		notification.AccountingCommitted = err == nil
 	}
 	if observe.Enabled(ctx) {
 		observe.Emit(ctx, observe.Event{Type: "model_usage", Path: "usage", OperationKey: key, Replayed: replayed, Usage: &notification})

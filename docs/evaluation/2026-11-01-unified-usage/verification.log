@@ -1,0 +1,4 @@
+PASS: 129 local documentation links.
+PASS: changed Go formatting and git diff --check.
+PASS: root suite, scoped race, five-round usage stress and offline example.
+REVIEW: independent read-only review found no unresolved material issue.

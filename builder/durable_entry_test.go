@@ -113,7 +113,7 @@ func TestDurableScopesIsolateAgentResultsToolsAndRecovery(t *testing.T) {
 		require.NoError(t, graph.AddEdge("both", workflow.END))
 		run, err := graph.CompileDurable(ctx, workflow.DurableConfig{Store: store, Version: "v1"})
 		require.NoError(t, err)
-		snapshot, err := run.Run(ctx, "run", "same question", "")
+		snapshot, err := run.Run(ctx, controller.Configuration().RootKey, "same question", "")
 		ledger, ledgerErr := controller.Snapshot(ctx)
 		require.NoError(t, ledgerErr)
 		require.Equal(t, 2, ledger.ReservedRequests, "scope isolation and replay must preserve the shared budget")

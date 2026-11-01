@@ -37,7 +37,7 @@ func (m *panicRetryUsageModel) CompleteToolsStream(ctx context.Context, req *llm
 	return m.nativeEventModel.CompleteToolsStream(ctx, req, ts)
 }
 func TestAgentUsagePanicRetryDoesNotReusePreviousEvidence(t *testing.T) {
-	c, err := budget.New(budget.Config{RootKey: "panic-retry", Version: "v1", MaxModelRequests: 2, AttributionVersion: "v1", MaxAgentCalls: 2})
+	c, err := budget.New(budget.Config{RootKey: "panic-retry", Version: "v1", MaxModelRequests: 2, MaxAgentCalls: 2})
 	require.NoError(t, err)
 	m := &panicRetryUsageModel{nativeEventModel: nativeModel([]*llm.StreamChunk{{Usage: &llm.Usage{TotalTokens: 3}, Error: unavailable(503, 0)}})}
 	a, err := NewSimpleBuilder(m).WithAgentID("root").WithTools(plainTool()).WithRequestError(1, RetryTransient(1, noWait)).Build()
@@ -52,7 +52,7 @@ func TestAgentUsagePanicRetryDoesNotReusePreviousEvidence(t *testing.T) {
 }
 
 func TestAgentUsageRetryUnknownAndBudgetRejection(t *testing.T) {
-	c, err := budget.New(budget.Config{RootKey: "retry", Version: "v1", MaxModelRequests: 2, AttributionVersion: "v1", MaxAgentCalls: 4})
+	c, err := budget.New(budget.Config{RootKey: "retry", Version: "v1", MaxModelRequests: 2, MaxAgentCalls: 4})
 	require.NoError(t, err)
 	sink := &agentUsageSink{}
 	ctx := observe.WithObserver(budget.WithController(context.Background(), c), sink)
@@ -98,7 +98,7 @@ func TestAgentUsageRetryUnknownAndBudgetRejection(t *testing.T) {
 }
 
 func TestAgentUsageCachedTokensAndFailureEvidence(t *testing.T) {
-	c, err := budget.New(budget.Config{RootKey: "cached", Version: "v1", MaxModelRequests: 1, AttributionVersion: "v1", MaxAgentCalls: 2})
+	c, err := budget.New(budget.Config{RootKey: "cached", Version: "v1", MaxModelRequests: 1, MaxAgentCalls: 2})
 	require.NoError(t, err)
 	fields := usage.AllFields
 	model := nativeModel([]*llm.StreamChunk{{Usage: &llm.Usage{PromptTokens: 8, CompletionTokens: 2, TotalTokens: 10, CachedTokens: 4, KnownFields: &fields}}, {Error: errors.New("stream failed")}})
@@ -113,7 +113,7 @@ func TestAgentUsageCachedTokensAndFailureEvidence(t *testing.T) {
 }
 
 func TestAgentUsageMergesPartialUsageFrames(t *testing.T) {
-	c, err := budget.New(budget.Config{RootKey: "frames", Version: "v1", MaxModelRequests: 1, AttributionVersion: "v1", MaxAgentCalls: 2})
+	c, err := budget.New(budget.Config{RootKey: "frames", Version: "v1", MaxModelRequests: 1, MaxAgentCalls: 2})
 	require.NoError(t, err)
 	cached, total := usage.Cached, usage.Total
 	m := nativeModel([]*llm.StreamChunk{{Usage: &llm.Usage{CachedTokens: 4, KnownFields: &cached}}, {Delta: "ok", Done: true, FinishReason: "stop", Usage: &llm.Usage{TotalTokens: 19, KnownFields: &total}}})
@@ -134,10 +134,24 @@ type evidenceFailureStore struct {
 	failed bool
 }
 
+func hasBudgetEvidence(data json.RawMessage) bool {
+	var ledger struct {
+		Entries map[string]struct{ Evidence usage.Evidence }
+	}
+	if json.Unmarshal(data, &ledger) != nil {
+		return false
+	}
+	for _, entry := range ledger.Entries {
+		if entry.Evidence.KnownFields != 0 {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *evidenceFailureStore) Save(ctx context.Context, id string, snapshot *durable.Snapshot) error {
 	if strings.HasPrefix(id, "goagent/budget/") && !s.failed {
-		var data struct{ Evidence map[string]json.RawMessage }
-		if json.Unmarshal(snapshot.Data, &data) == nil && len(data.Evidence) > 0 {
+		if hasBudgetEvidence(snapshot.Data) {
 			s.failed = true
 			return errors.New("evidence save failed")
 		}
@@ -148,7 +162,7 @@ func TestAgentUsageKnownModelReplayAfterEvidenceSaveFailure(t *testing.T) {
 	file, err := durable.NewFileStore(t.TempDir())
 	require.NoError(t, err)
 	store := &evidenceFailureStore{Store: file}
-	c, err := budget.NewDurable(budget.Config{RootKey: "saved", Version: "v1", MaxModelRequests: 1, AttributionVersion: "v1", MaxAgentCalls: 2}, store)
+	c, err := budget.NewDurable(budget.Config{RootKey: "saved", Version: "v1", MaxModelRequests: 1, MaxAgentCalls: 2}, store)
 	require.NoError(t, err)
 	ctx := budget.WithController(durable.WithJournal(durable.WithExecutionKey(context.Background(), "saved"), store), c)
 	model := nativeModel(answerTurn("ok", 8))
@@ -190,7 +204,7 @@ func (s *agentUsageSink) snapshot() []observe.Event {
 func TestAgentUsageParentChildAttributionAndHooks(t *testing.T) {
 	store, err := durable.NewFileStore(t.TempDir())
 	require.NoError(t, err)
-	c, err := budget.NewDurable(budget.Config{RootKey: "accounting", Version: "v1", MaxModelRequests: 3, AttributionVersion: "v1", MaxAgentCalls: 4}, store)
+	c, err := budget.NewDurable(budget.Config{RootKey: "accounting", Version: "v1", MaxModelRequests: 3, MaxAgentCalls: 4}, store)
 	require.NoError(t, err)
 	sink := &agentUsageSink{}
 	ctx := observe.WithObserver(budget.WithController(durable.WithJournal(durable.WithExecutionKey(context.Background(), "accounting"), store), c), sink)
@@ -270,7 +284,7 @@ func TestAgentUsageRejectsConflictingRootBeforeModel(t *testing.T) {
 }
 
 func TestAgentUsageSameRoleConcurrentCallsHaveDistinctOwners(t *testing.T) {
-	c, err := budget.New(budget.Config{RootKey: "same-role", Version: "v1", MaxModelRequests: 2, AttributionVersion: "v1", MaxAgentCalls: 2})
+	c, err := budget.New(budget.Config{RootKey: "same-role", Version: "v1", MaxModelRequests: 2, MaxAgentCalls: 2})
 	require.NoError(t, err)
 	sink := &agentUsageSink{}
 	ctx := observe.WithObserver(budget.WithController(context.Background(), c), sink)
@@ -299,8 +313,8 @@ func TestAgentUsageSameRoleConcurrentCallsHaveDistinctOwners(t *testing.T) {
 	require.Len(t, visits, 2)
 }
 
-func TestAgentUsageV1DoesNotClaimPartialEvidenceCommitted(t *testing.T) {
-	c, err := budget.New(budget.Config{RootKey: "legacy-partial", Version: "v1", MaxModelRequests: 1})
+func TestAgentUsageDefaultBudgetPersistsPartialEvidence(t *testing.T) {
+	c, err := budget.New(budget.Config{RootKey: "default-partial", Version: "v1", MaxModelRequests: 1})
 	require.NoError(t, err)
 	sink := &agentUsageSink{}
 	fields := usage.Prompt
@@ -311,18 +325,18 @@ func TestAgentUsageV1DoesNotClaimPartialEvidenceCommitted(t *testing.T) {
 	require.NoError(t, err)
 	snapshot, err := c.Snapshot(context.Background())
 	require.NoError(t, err)
-	require.Equal(t, 1, snapshot.UnknownUsageEntries)
-	require.Zero(t, snapshot.KnownUsageEntries)
+	require.Zero(t, snapshot.UnknownUsageEntries)
+	require.Equal(t, 1, snapshot.KnownUsageEntries)
 	for _, e := range sink.snapshot() {
 		if e.Type == "model_usage" {
-			require.False(t, e.Usage.AccountingCommitted)
+			require.True(t, e.Usage.AccountingCommitted)
 			require.Equal(t, usage.Prompt, e.Usage.KnownFields)
 		}
 	}
 }
 
 func TestAgentUsageInvalidEvidenceStillClosesAttemptObservation(t *testing.T) {
-	c, err := budget.New(budget.Config{RootKey: "invalid", Version: "v1", MaxModelRequests: 1, AttributionVersion: "v1", MaxAgentCalls: 2})
+	c, err := budget.New(budget.Config{RootKey: "invalid", Version: "v1", MaxModelRequests: 1, MaxAgentCalls: 2})
 	require.NoError(t, err)
 	sink := &agentUsageSink{}
 	m := nativeModel(answerTurn("answer", -1))

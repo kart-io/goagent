@@ -1,65 +1,76 @@
-# Optional attribution implementation validation
+# Unified budget evidence validation
 
-Date: 2026-11-01. Scope: `core/usage` and `core/budget`.
+Date: 2026-11-01. Scope: `core/budget`.
 
-The usage package supplies owner/invocation values, private context lineage copies,
-field masks, and monotonic evidence merging. The budget controller retains its
-single ledger, with an explicit v2 snapshot version when AttributionVersion is
-nonempty. Config additions use omitempty; v1 config JSON and old ledger records
-retain their shape and semantics. Reopening a ledger with a different attribution
-policy or ledger version fails rather than migrating it.
+Budget now has one implementation and one storage marker,
+`goagent-model-budget`. Config.Version remains the host policy fingerprint;
+AttributionVersion, AttributionEnabled, and format selection were removed.
+Previous `goagent-model-budget-v1` and `goagent-model-budget-v2` records are
+rejected without rewriting or migrating them. MaxAgentCalls defaults to 1000
+when zero, accepts positive host limits, and rejects negatives.
 
-Attributed reservation registers the complete owner chain and attempt owner in
-the same transaction. RegisterAgent preserves nodes that have no model requests.
-RecordEvidence verifies the chain even during replay, merges only new known
-fields, preserves the initial evidence source, and reports committed revision.
-KnownTokens includes reported fields only; cached tokens are never added to total.
-Attribution returns sorted, independent call and role summaries. BasicFields
-availability determines partial entries and Complete; cache availability is optional
-for Complete. Each summary independently counts UnknownPromptEntries,
-UnknownCompletionEntries, UnknownTotalEntries, and UnknownCachedEntries, including
-whole unknown requests. Missing cache evidence therefore remains explicit even
-when BasicFields are complete. Evidence rejects nonzero tokens outside its mask.
-An explicit source may accompany unknown evidence; saved delivery never fills an
-absent original source, and an established source remains unchanged on replay.
+The single ledger stores Config, Entries, AgentCalls, and Tools. Each Entries
+value contains Estimate, Evidence, and AgentCallKey. This removes independent
+estimates, evidence, and owner maps and their consistency branches. Map values
+contain only copied scalar values. Reservations and topology changes share the
+same Store lock and Save operation.
 
-Validation commands (Go 1.25.0, unset GOROOT):
+Reserve and ReserveEstimated forward context lineage to ReserveAttributed;
+RecordUsage forwards context lineage to RecordEvidence. Empty lineage is allowed
+for reservation/evidence and produces explicit Unattributed summaries. It cannot
+change ownership of an existing attempt. RegisterAgent requires a nonempty,
+complete root-to-leaf chain. RecordUsage declares BasicFields, plus Cached when
+positive; nil remains unknown. RecordEvidence always uses its explicit mask and
+monotonic evidence revisions, including when called without an owner.
 
-- `go test -race ./core/usage ./core/budget` — passed.
-- `go test ./core/budget -run '^$' -bench 'Benchmark(RecordUsageFixedLedger|AttributionEvidenceFixedLedger)' -benchtime=100ms -count=1` — passed.
+Snapshot and Attribution.Root share rootSnapshot. KnownTokenDelta includes an
+attempt only when its Total field is reported. Prompt-only usage against a
+100-token estimate leaves the known delta unchanged; later Total=25 contributes
+-75. This behavior has one implementation for every caller.
 
-Tests cover parent self=9/root=18/children=4+5, zero-request ancestors,
-unknown/partial evidence upgrades and conflict rejection, source/revision replay,
-field-level missing evidence (including cache), original-source handling,
-Owner conflicts, concurrent admission, sorted copy isolation, v1/v2 isolation,
-FileStore reopening, failed Save atomicity, aggregate token overflow, and real
-subprocess exits immediately after reservation or evidence commit.
+Attribution returns sorted, independent call and role summaries. Each summary
+retains field-level missing evidence counts. Complete requires attribution and
+all BasicFields for every request; cache remains optional for Complete but its
+unknown count is explicit. Cached tokens are never added to TotalTokens.
 
-Apple M4 Pro, darwin/arm64, sample results:
+Validation (Go 1.25.0, unset GOROOT):
+
+- `go test ./core/budget` — passed.
+- `go test -race ./core/budget ./core/usage` — passed.
+- Ledger benchmarks — passed.
+
+Raw logs:
+
+- `/tmp/goagent-budget-unified-red.log`: default configuration regression RED.
+- `/tmp/goagent-budget-unified-context-red.log`: context-lineage forwarding RED.
+- `/tmp/goagent-budget-unified-green.log`: complete budget tests GREEN.
+- `/tmp/goagent-budget-unified-race.log`: related package race tests.
+- `/tmp/goagent-budget-unified-benchmark.log`: fixed-ledger benchmark output.
+
+Tests cover default limits and evidence, both attributed and unowned partial
+usage, convenience API lineage, immutable attempt ownership, rejection of both old
+storage markers, policy mismatch, root=18/parent self=9/children=4+5, zero-request
+ancestors, field upgrades, query copy isolation, concurrent admission, FileStore
+reopen, failed Save atomicity, token overflow, and subprocess exits after
+reservation or evidence commit.
+
+Apple M4 Pro, darwin/arm64, 100 ms sample:
 
 | Path | Entries | ns/op | B/op | allocs/op |
 | --- | ---: | ---: | ---: | ---: |
-| v1 RecordUsage | 10 | 539 | 984 | 15 |
-| v1 RecordUsage | 100 | 3198 | 6904 | 105 |
-| v1 RecordUsage | 1000 | 36139 | 86816 | 1007 |
-| v2 RecordEvidence | 10 | 1415 | 3928 | 26 |
-| v2 RecordEvidence | 1000 | 96847 | 350005 | 1022 |
-| v2 RecordEvidence | 10000 | 1138870 | 2856558 | 10106 |
+| RecordUsage | 10 | 639 | 1992 | 5 |
+| RecordUsage | 100 | 3403 | 13768 | 5 |
+| RecordUsage | 1000 | 50727 | 229616 | 7 |
+| RecordEvidence | 10 | 879 | 2744 | 7 |
+| RecordEvidence | 1000 | 51960 | 230371 | 9 |
+| RecordEvidence | 10000 | 522253 | 1836583 | 37 |
 
-The existing transaction clones and validates the ledger. v2 adds owner/evidence
-maps and their validation to that same mechanism; it does not introduce a second
-accounting store. Large ledgers therefore retain linear transaction cost and
-additional memory overhead. No performance threshold is asserted from this single
-machine sample.
+The existing transaction still clones and validates the ledger, so transaction
+cost remains linear in ledger size. The value-entry structure avoids per-entry
+pointer copies and separate evidence/owner map copies. Benchmark samples are not
+performance thresholds.
 
-The budget layer has no model result journal or observer delivery. The window
-between saving a model result and recording evidence, and actual request resend
-counts, must additionally be verified by builder integration tests. The subprocess
-tests here demonstrate durable unknown reservation recovery and post-commit
-query/replay behavior. Overflow is rejected when summing a report or Snapshot;
-individual nonnegative evidence can exceed the representable aggregate.
-
-KnownTokenDelta retains v1 legacy behavior. In v2 it includes an attempt only
-when its evidence mask includes Total: a prompt-only result with a reservation
-of 100 leaves the known delta unchanged, and later Total=25 establishes -75.
-Both Snapshot and Attribution.Root are covered by the regression test.
+The budget package does not own model result journals or observer delivery.
+Builder integration must additionally verify saved-result recovery without
+request resends. Aggregate overflow is rejected by queries; individual valid
+nonnegative evidence can exceed the representable aggregate.

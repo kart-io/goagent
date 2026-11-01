@@ -1,30 +1,26 @@
 package budget
 
 import (
-	"testing"
-
+	"github.com/kart-io/goagent/core/usage"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/stretchr/testify/require"
+	"testing"
 )
 
 func TestLedgerCloneIsolatesAllMutableEvidence(t *testing.T) {
-	original := ledger{Config: Config{RootKey: "root", Version: "v1", MaxModelRequests: 3}, Entries: map[string]*interfaces.TokenUsage{"known": {TotalTokens: 3, CachedTokens: 1}, "unknown": nil}, Estimates: map[string]int{"known": 5}, Tools: map[string]bool{"tool": true}}
+	original := ledger{Config: Config{RootKey: "root"}, Entries: map[string]entry{"known": {Estimate: 5, Evidence: usage.Evidence{KnownFields: usage.Total | usage.Cached, Tokens: interfaces.TokenUsage{TotalTokens: 3, CachedTokens: 1}}}, "unknown": {}}, AgentCalls: map[string]usage.Owner{"r": {AgentID: "root"}}, Tools: map[string]bool{"tool": true}}
 	copied := clone(original)
-	copied.Config.RootKey = "other"
-	copied.Entries["known"].TotalTokens = 100
-	copied.Entries["known"].CachedTokens = 99
+	item := copied.Entries["known"]
+	item.Evidence.Tokens.TotalTokens = 100
+	item.Estimate = 1
+	copied.Entries["known"] = item
 	delete(copied.Entries, "unknown")
-	copied.Estimates["known"] = 1
 	delete(copied.Tools, "tool")
-	require.Equal(t, "root", original.Config.RootKey)
-	require.Equal(t, 3, original.Entries["known"].TotalTokens)
-	require.Equal(t, 1, original.Entries["known"].CachedTokens)
+	delete(copied.AgentCalls, "r")
+	require.Equal(t, 3, original.Entries["known"].Evidence.Tokens.TotalTokens)
+	require.Equal(t, 5, original.Entries["known"].Estimate)
 	require.Contains(t, original.Entries, "unknown")
-	require.Nil(t, original.Entries["unknown"])
-	require.Equal(t, 5, original.Estimates["known"])
+	require.Contains(t, original.AgentCalls, "r")
 	require.True(t, original.Tools["tool"])
-	empty := clone(ledger{})
-	require.Nil(t, empty.Entries)
-	require.Nil(t, empty.Estimates)
-	require.Nil(t, empty.Tools)
+	require.Nil(t, clone(ledger{}).Entries)
 }

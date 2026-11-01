@@ -12,7 +12,7 @@ func BenchmarkAttributionEvidenceFixedLedger(b *testing.B) {
 	for _, size := range []int{10, 1000, 10000} {
 		b.Run(fmt.Sprint(size), func(b *testing.B) {
 			ctx := context.Background()
-			c, e := New(Config{RootKey: "r", Version: "v1", MaxModelRequests: size, AttributionVersion: "v1", MaxAgentCalls: 1})
+			c, e := New(Config{RootKey: "r", Version: "v1", MaxModelRequests: size, MaxAgentCalls: 1})
 			if e != nil {
 				b.Fatal(e)
 			}
@@ -20,14 +20,9 @@ func BenchmarkAttributionEvidenceFixedLedger(b *testing.B) {
 			chain := []usage.Owner{owner}
 			evidence := usage.Evidence{KnownFields: usage.BasicFields, Tokens: interfaces.TokenUsage{TotalTokens: 3}, Source: "provider", Revision: 1}
 			c.memory.AgentCalls = map[string]usage.Owner{"r": owner}
-			c.memory.AttemptOwners = map[string]string{}
-			c.memory.Evidence = map[string]usage.Evidence{}
 			for i := range size {
 				key := fmt.Sprint(i)
-				u := evidence.Tokens
-				c.memory.Entries[key] = &u
-				c.memory.AttemptOwners[key] = "r"
-				c.memory.Evidence[key] = evidence
+				c.memory.Entries[key] = entry{Evidence: evidence, AgentCallKey: "r"}
 			}
 			b.ReportAllocs()
 			b.ResetTimer()
