@@ -40,6 +40,18 @@ type AgentEvent struct {
 // cancellation an error event is best-effort, and ctx.Err() is authoritative.
 // A cached middleware response may produce only done, with no model deltas.
 func (a *ConfigurableAgent[C, S]) ExecuteStream(ctx context.Context, input interface{}) (_ <-chan AgentEvent, err error) {
+	return a.executeStream(ctx, input, nil)
+}
+
+// streamResult carries a turn's authoritative outcome to its owning Handle.
+// The producer writes it before closing events; readers must drain events to
+// closure before reading it. Public cancellation events remain best-effort.
+type streamResult struct {
+	output *AgentOutput
+	err    error
+}
+
+func (a *ConfigurableAgent[C, S]) executeStream(ctx context.Context, input interface{}, result *streamResult) (_ <-chan AgentEvent, err error) {
 	// 同步阶段也会调用宿主代码（如 scopeDurableExecution 中的工具与持久存储），panic 时转为错误返回。
 	defer recoverPanic("Agent 流式执行启动", &err)
 	ctx = withTokenEstimator(ctx, a.config.TokenEstimator)
@@ -135,6 +147,9 @@ func (a *ConfigurableAgent[C, S]) ExecuteStream(ctx context.Context, input inter
 		err = tools.Settle(ctx, err)
 		// 先结束观测再发终态：调用方收到 done/error 即可能返回并关闭记录器。
 		endAgent(err, false)
+		if result != nil {
+			result.output, result.err = output, err
+		}
 		if err != nil {
 			failed := AgentEvent{Type: "error", Error: err, Message: err.Error()}
 			mu.Lock()

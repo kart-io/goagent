@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"sync"
 
@@ -117,7 +118,8 @@ type Handle struct {
 }
 
 // Start 在后台运行 Agent 并返回句柄，宿主可在运行中追加输入。只支持原生工具流（llm.ToolStreamClient 且配置了工具）。
-// 持久运行中收件箱的输入按步骤记入日志；Followup 的每一轮使用由执行键派生的独立子键。
+// 持久运行中按步领取的 Steer/Inject 记入日志；Followup 轮次使用派生执行键，但调度批次不由 Handle 持久化。
+// 恢复 Followup 链时宿主须保存并重建原轮次和合并批次，仅重建 Start 不会自动进入后续轮次。
 func (a *ConfigurableAgent[C, S]) Start(ctx context.Context, input string) *Handle {
 	ctx, cancel := context.WithCancelCause(ctx)
 	h := &Handle{inbox: &inbox{}, cancel: cancel, done: make(chan struct{})}
@@ -128,8 +130,34 @@ func (a *ConfigurableAgent[C, S]) Start(ctx context.Context, input string) *Hand
 		cancel(nil)
 		return h
 	}
-	go h.run(ctx, func(c context.Context, in string) (*AgentOutput, error) { return a.AsRunnable().Invoke(c, in) }, input)
+	go h.run(ctx, a.invokeHandleTurn, input)
 	return h
+}
+
+// invokeHandleTurn consumes the same ExecuteStream source as AsRunnable, but
+// waits for its producer to close even on cancellation. Handle owns this turn:
+// reporting completion while its tools/cleanup still use the inbox or execution
+// scope would make Wait and a terminal PendingInputs snapshot premature.
+func (a *ConfigurableAgent[C, S]) invokeHandleTurn(ctx context.Context, input string) (*AgentOutput, error) {
+	var result streamResult
+	events, err := a.executeStream(ctx, input, &result)
+	if err != nil {
+		return nil, err
+	}
+	for range events {
+	}
+	// Closing events synchronizes result publication, including errors which
+	// could not be sent as public events after ctx was canceled.
+	if result.err != nil {
+		return nil, result.err
+	}
+	if cause := context.Cause(ctx); cause != nil {
+		return nil, cause
+	}
+	if result.output == nil {
+		return nil, io.ErrUnexpectedEOF
+	}
+	return result.output, nil
 }
 
 func (h *Handle) run(ctx context.Context, invoke func(context.Context, string) (*AgentOutput, error), input string) {
@@ -146,10 +174,14 @@ func (h *Handle) run(ctx context.Context, invoke func(context.Context, string) (
 			turnCtx = durable.WithExecutionKey(turnCtx, durable.ChildKey(parentKey, fmt.Sprintf("followup/%d", turn)))
 		}
 		out, err := invoke(turnCtx, input)
-		if err != nil && ctx.Err() != nil {
-			err = context.Cause(ctx)
-		}
 		h.inbox.mu.Lock()
+		if cause := context.Cause(ctx); cause != nil {
+			if err == nil {
+				err = cause
+			} else if !errors.Is(err, cause) {
+				err = errors.Join(err, cause)
+			}
+		}
 		h.out, h.err = out, err
 		next := h.inbox.followups
 		if err != nil || len(next) == 0 {
@@ -240,6 +272,7 @@ func (h *Handle) Interrupt(cause error) { h.cancel(cause) }
 
 // Wait 等待全部轮次结束，返回最后一轮的结果。
 // ctx 只控制等待，不取消 Handle。返回运行结果后可用 PendingInputs 查询未领取输入。
+// Interrupt 后仍等待本轮 ExecuteStream 退出，包括工具和清理；宿主扩展必须合作返回。
 func (h *Handle) Wait(ctx context.Context) (*AgentOutput, error) {
 	select {
 	case <-h.done:

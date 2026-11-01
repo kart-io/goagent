@@ -18,6 +18,10 @@ Steer 到达过晚、Inject 不唤醒、MaxIterations 耗尽、调用失败或�
 
 Handle 是进程内控制对象，入队成功不表示输入已经持久保存。持久操作只保护已提交的执行决定；要求跨进程可靠接收的服务必须先写宿主收件箱，再提交执行，并维护自己的接收 ID/投递确认。PendingInputs 不是消息账本或 exactly-once 承诺。
 
+审核补充：Interrupt 后 Handle 等待本轮 ExecuteStream 退出，不因消费端取消而提前声明工具清理完成。等待本身可独立超时；错误链保留取消原因和已收到的执行失败。Followup 的调度不持久化，恢复须由宿主重建原轮次与合并批次；派生执行键和 WithResume 不替代调度恢复。行为与反例见[生命周期回归](../../builder/handle_lifecycle_test.go)。
+
+实现上公开流与 Handle 共用私有 executeStream 执行源；生产者在关闭事件通道前写入私有终态，Handle 读到通道关闭后才读取该结果。通道关闭提供同步，取消导致公开 error 事件未发送时也不会丢失执行源已返回的清理错误。一般 AsRunnable 和公开流的取消消费行为保持原契约。
+
 ## 现有能力优先复用
 
 - `NewRunnableTool` / Factory：Agent、Graph 与普通函数共享工具适配，不新增独立 Agent 继承体系。
@@ -36,3 +40,5 @@ Handle 是进程内控制对象，入队成功不表示输入已经持久保存�
 针对实际 Builder/Handle 执行链验证：失败与取消保留 Followup；成功后待处理输入为空；结束边界与额度耗尽留下输入；查询快照不影响队列且支持并发访问。受控模型仅替代外部供应商，使用真实工具循环。现有嵌套审批、预算与工具并发测试一并回归。
 
 本轮已完成上述范围，相关包 race、根模块测试、离线 Example 与独立代码审查通过，见[验证报告](../evaluation/2026-11-01-pi-core/REPORT.md)。独立持久后台子任务与其他外围事项仍为后续评估，不列入已交付能力。
+
+继续审核修复了取消时的提前终态、错误传递和 Followup 领取问题，并补充恢复边界，见[审核修订报告](../evaluation/2026-11-01-pi-core-review/REPORT.md)。

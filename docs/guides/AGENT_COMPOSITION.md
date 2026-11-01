@@ -56,9 +56,13 @@ pending := handle.PendingInputs()
 // 宿主决定展示或安排新执行，不能据此自动重试已发生的业务效果。
 ```
 
-PendingInputs 是独立只读快照，调用不消费输入；同一队列有序，跨队列没有全局到达顺序。运行中也可查询，但后续会变化。Wait 的 context 只控制等待，超时不取消 Handle；只有实际运行结束后的快照才稳定。需要中止时显式 Interrupt，并继续等待工具与清理收敛。
+PendingInputs 是独立只读快照，调用不消费输入；同一队列有序，跨队列没有全局到达顺序。运行中也可查询，但后续会变化。Wait 的 context 只控制等待，超时不取消 Handle；只有实际运行结束后的快照才稳定。需要中止时显式 Interrupt，Handle 会等本轮 ExecuteStream 退出，包括其同步执行的工具与清理。工具和钩子必须合作返回，Wait 可用独立的有界 context；等待超时不能视为清理完成。执行源返回的错误与取消原因均保留在错误链中；Handle 在生产端关闭后读取私有终态，不依赖可能被取消丢弃的公开 error 事件。公开 ExecuteStream 的取消事件仍为 best-effort。
 
 Handle 收件箱是进程内对象。要求跨重启可靠接收输入时，宿主先持久化收件箱及接收 ID，再管理投递与确认。已领取输入即使请求失败也不再出现在 PendingInputs；该接口不提供“未成功处理的全部消息”或 exactly-once。
+
+Followup 的派生执行键只标识轮次内的持久操作，不会持久保存轮次调度。若第 1 个 Followup 在审批处等待，重启后仅 `Start(ctxWithResume, 原输入)` 会回放第 0 轮并结束，不会自动进入该 Followup。宿主必须按原轮次与原合并批次重建 Followup 链，并在对应前一轮结束前入队；不同批次划分可能导致恢复意图不匹配。`WithResume` 提供审批凭据，不重建调度。完整验证见[Handle 生命周期回归](../../builder/handle_lifecycle_test.go)。
+
+回放可能立即完成，不能假设在 Start 返回后紧接着调用 Followup 一定赶得上。宿主需要显式同步边界（回归中用 RequestHook 协调）保证批次重建；固定多轮任务更适合用持久 Graph 显式编排，避免依赖 goroutine 调度。Handle 的成功返回只描述本次实际重建的轮次，不证明宿主持久收件箱中的全部工作已完成。
 
 ## 区分三种终态
 

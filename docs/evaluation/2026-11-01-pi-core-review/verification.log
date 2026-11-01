@@ -1,0 +1,4 @@
+PASS: 45 local documentation links.
+PASS: changed Go sources formatted.
+PASS: git diff --check.
+PASS: review findings addressed with RED->GREEN regressions; stress, scoped race and root suite passed.

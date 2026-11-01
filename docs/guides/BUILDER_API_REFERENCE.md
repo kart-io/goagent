@@ -146,6 +146,8 @@ return builder.NewSimpleBuilder(client).
 
 `Handle.PendingInputs() []builder.PendingInput` 返回未被循环领取的队列快照；每项有 `Kind`（steer/inject/redirect/followup）与 `Text`。同队列有序，跨队列不承诺全局顺序。查询不消费，已领取不代表处理成功。入队与快照不持久化；运行收敛后的剩余输入由宿主处置，见[组合指南](AGENT_COMPOSITION.md)。
 
+`Interrupt` 请求合作式取消；`Wait` 仍等待本轮执行源退出及同步工具清理，等待 context 超时只结束等待。持久 Followup 链必须由宿主按原批次重建，Start/WithResume 不自动恢复其调度。
+
 ## 自定义状态
 
 ```go
