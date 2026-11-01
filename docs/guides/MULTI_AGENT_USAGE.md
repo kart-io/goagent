@@ -24,6 +24,30 @@ MaxAgentCalls 约束保存的调用节点数量，包括零模型调用的中间
 
 ## 观察钩子
 
+直接获取 Token 与累计统计可使用专用钩子，无需实现 Observer 或筛选事件：
+
+```go
+agent, err := builder.NewSimpleBuilder(client).
+    WithUsageHook(func(ctx context.Context, e budget.UsageEvent) {
+        // e.Model.Tokens：本次尝试；KnownFields 标明哪些字段已报告。
+        // e.Model.AgentID / AgentCallKey：Agent 归属。
+        if e.HasStatistics {
+            total := e.Statistics.Root.KnownTokens.TotalTokens
+            _ = total // 时点累计；不要将多个回调的累计值相加。
+            // e.Statistics.Calls 中按 AgentCallKey 查 Self / Inclusive。
+        }
+        // 回放标识 e.Model.Replayed；尝试键与 Revision 可用于投影去重。
+    }).Build()
+```
+
+也可通过 `budget.WithUsageHook(ctx, hook)` 统一绑定父子调用。父钩子默认向子 Agent 继承；子 Builder 设置非 nil 钩子会替换继承项，nil 配置保留继承。直接 WithUsageHook(ctx,nil) 清除。Observer 可以同时工作；需要多个目标时在一个钩子中分发。
+
+没有预算时仍通知单次用量，HasStatistics=false；不会隐式创建账本。查询失败时 StatisticsError 非 nil，单次 Model 证据仍保留；记账失败时 AccountingCommitted=false，不能将其当作已可靠登记。回调及查询异常不改变业务结果。
+
+钩子同步执行、必须支持并发并及时返回；不要在钩子内同步等待或重新执行当前 Agent。框架提供脱离执行取消信号的有界 context，以便取消后仍交付已知用量，但无法强制终止忽略 context 的宿主代码。开启累计钩子会在每次通知时查询账本，有实际开销；未配置时没有这次额外查询。详细契约见[设计](../design/TOKEN_USAGE_HOOK.md)。
+
+通用观察仍可使用 Observer：
+
 实现 `observe.Observer`，通过 `observe.WithObserver(ctx, sink)` 或 execution.Scope 注入。后代继承该 sink；不要在每层重复注册同一累加器。父层 PreStep/RequestError 等控制钩子仍与子层独立。在这些钩子或工具 Pipeline 中可用 usage.FromContext(ctx) 读取当前调用身份；身份标签不替代授权。
 
 ```go
@@ -94,5 +118,7 @@ go run ./examples/agent-usage
 ```
 
 例子包含两个并行子 Agent、一次失败重试和持久回放。两次输出均为 Root=18、父 Self=9、父 Inclusive=18；请求5次，其中一次缺少 usage，unknown=1。临时目录由示例自己创建并清理，不需要模型凭据。
+
+示例通过父 Builder.WithUsageHook 取得所有后代通知，打印 hook: live=5 replay=2；通知次数不等于新增费用，回放后的根累计仍为18。
 
 实现依据见[设计](../design/MULTI_AGENT_HOOKS_AND_USAGE.md)，验证见[交付报告](../evaluation/2026-11-01-multi-agent-usage-implementation/REPORT.md)。

@@ -68,7 +68,7 @@ type savedTurn struct {
 func modelOperation(ctx context.Context, id string, intent json.RawMessage, invoke func(context.Context, func(AgentEvent) error) (*llm.StreamChunk, error), validate func(*llm.StreamChunk) error, emit func(AgentEvent) error) (result *llm.StreamChunk, resultErr error) {
 	c, metered := budget.FromContext(ctx)
 	key := durable.ChildKey(durable.ExecutionKey(ctx), id)
-	if (metered || observe.Enabled(ctx)) && (!durable.HasJournal(ctx) || key == "") {
+	if (metered || observe.Enabled(ctx) || budget.HasUsageHook(ctx)) && (!durable.HasJournal(ctx) || key == "") {
 		key = uuid.NewString()
 	}
 	ctx, endModel := observe.Start(ctx, observe.Event{Type: "model", Path: id, OperationKey: key})
@@ -87,7 +87,7 @@ func modelOperation(ctx context.Context, id string, intent json.RawMessage, invo
 	lastAttempted, recordedAttempt := -1, -1
 	var lastTurn *llm.StreamChunk
 	recordUsage := func(n int, turn *llm.StreamChunk, replay bool) error {
-		if !metered && !observe.Enabled(ctx) {
+		if !metered && !observe.Enabled(ctx) && !budget.HasUsageHook(ctx) {
 			return nil
 		}
 		if !replay && (lastAttempted < 0 || n <= recordedAttempt) {

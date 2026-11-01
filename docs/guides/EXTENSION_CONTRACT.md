@@ -7,6 +7,7 @@
 | 扩展点 | 是否改变执行 | 错误与超时 | 恢复语义 |
 |---|---|---|---|
 | `core/observe.Observer` | 只读观察，不是检查点 | 同步sink须及时返回；panic隔离；可显式包装AsyncObserver | 事件不是持久账本，回放有Replayed标识 |
+| `WithUsageHook` / `budget.WithUsageHook` | 只读Token统计通知，不改变执行 | 同步且支持并发；query/回调panic不改变业务；未绑定预算仅单次证据 | 父子继承，子非nil替换；回放标识保留，累计不能相加；见[用量指南](MULTI_AGENT_USAGE.md) |
 | `core.Callback` | 生命周期通知 | StreamRunnable的OnStart/OnEnd错误使调用失败；OnError返回值忽略，panic按错误处理；旧RunnableFunc的OnEnd返回值仍忽略 | 父子回调独立，宿主避免重复注册副作用 |
 | `core/middleware` | 可改请求与结果 | 返回错误中止，受调用context约束 | 中间件副作用不自动幂等，需宿主版本与执行键 |
 | `PreStep`、`TurnStopping` | 可改历史、阻止请求或续跑 | 错误中止，续跑受请求预算限制 | 持久执行记录结果，恢复回放 |

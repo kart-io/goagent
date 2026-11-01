@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/core/budget"
 )
 
 // Runtime 配置方法
@@ -46,7 +47,8 @@ var outputFormatPrompts = map[OutputFormat]string{
 
 // AgentConfig 保存 Agent 配置选项
 type AgentConfig struct {
-	AgentID string `json:",omitempty"`
+	UsageHook budget.UsageHook `json:"-"`
+	AgentID   string           `json:",omitempty"`
 	// TokenEstimator 是宿主的保守 Token 估计函数，不写入持久配置。
 	TokenEstimator TokenEstimator `json:"-"`
 	// MemoryFailurePolicy 控制对话记忆读写失败时是否中断执行。

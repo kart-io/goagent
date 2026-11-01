@@ -21,13 +21,21 @@ func (b *AgentBuilder[C, S]) WithAgentID(id string) *AgentBuilder[C, S] {
 	return b
 }
 
+// WithUsageHook binds a read-only token hook for this Agent and descendants.
+// A child's nonnil hook replaces the inherited hook; nil retains inheritance.
+// All evidence and totals come from the same accounting path as Observer.
+func (b *AgentBuilder[C, S]) WithUsageHook(hook budget.UsageHook) *AgentBuilder[C, S] {
+	b.config.UsageHook = hook
+	return b
+}
+
 func (a *ConfigurableAgent[C, S]) prepareAgentUsage(ctx context.Context) (context.Context, error) {
 	c, metered := budget.FromContext(ctx)
-	if a.config.AgentID == "" && !metered && !observe.Enabled(ctx) {
+	if a.config.AgentID == "" && !metered && !observe.Enabled(ctx) && !budget.HasUsageHook(ctx) {
 		return ctx, nil
 	}
 	id := a.config.AgentID
-	if id != "" && len(a.tools) > 0 {
+	if (id != "" || budget.HasUsageHook(ctx)) && len(a.tools) > 0 {
 		if _, ok := a.llmClient.(llm.ToolStreamClient); !ok {
 			return nil, fmt.Errorf("Agent usage requires native ToolStreamClient for tool selection")
 		}
@@ -81,7 +89,7 @@ type modelMetadata struct{ Provider, Model string }
 
 func withModelMetadata(ctx context.Context, client llm.Client, req *llm.CompletionRequest) context.Context {
 	c, _ := budget.FromContext(ctx)
-	if !observe.Enabled(ctx) && c == nil {
+	if !observe.Enabled(ctx) && c == nil && !budget.HasUsageHook(ctx) {
 		return ctx
 	}
 	m := modelMetadata{Provider: string(client.Provider()), Model: "unknown"}
@@ -111,6 +119,7 @@ func publishModelUsage(ctx context.Context, operation, key string, attempt int, 
 	var err error
 	if err = e.Validate(); err != nil {
 		notification.Evidence = usage.Evidence{}
+		budget.NotifyUsage(ctx, notification, "usage_invalid")
 		if observe.Enabled(ctx) {
 			observe.Emit(ctx, observe.Event{Type: "model_usage", Path: "usage", OperationKey: key, Replayed: replayed, ErrorKind: "usage_invalid", Usage: &notification})
 		}
@@ -119,9 +128,14 @@ func publishModelUsage(ctx context.Context, operation, key string, attempt int, 
 	if c, ok := budget.FromContext(ctx); ok {
 		saveCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
-		notification.Evidence, err = c.RecordEvidence(saveCtx, key, usage.Lineage(ctx), e)
+		var committed usage.Evidence
+		committed, err = c.RecordEvidence(saveCtx, key, usage.Lineage(ctx), e)
+		if err == nil {
+			notification.Evidence = committed
+		}
 		notification.AccountingCommitted = err == nil
 	}
+	budget.NotifyUsage(ctx, notification, "")
 	if observe.Enabled(ctx) {
 		observe.Emit(ctx, observe.Event{Type: "model_usage", Path: "usage", OperationKey: key, Replayed: replayed, Usage: &notification})
 	}

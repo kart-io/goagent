@@ -1,0 +1,4 @@
+ok  	github.com/kart-io/goagent/builder	25.036s
+ok  	github.com/kart-io/goagent/core/budget	(cached)
+ok  	github.com/kart-io/goagent/core/observe	(cached)
+ok  	github.com/kart-io/goagent/execution	2.679s

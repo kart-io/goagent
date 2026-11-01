@@ -1,0 +1,11 @@
+# github.com/kart-io/goagent/core/budget [github.com/kart-io/goagent/core/budget.test]
+core/budget/usage_hook_test.go:21:8: undefined: WithUsageHook
+core/budget/usage_hook_test.go:21:63: undefined: UsageEvent
+core/budget/usage_hook_test.go:33:2: undefined: NotifyUsage
+core/budget/usage_hook_test.go:45:8: undefined: WithUsageHook
+core/budget/usage_hook_test.go:45:63: undefined: UsageEvent
+core/budget/usage_hook_test.go:52:32: undefined: NotifyUsage
+core/budget/usage_hook_test.go:54:8: undefined: WithUsageHook
+core/budget/usage_hook_test.go:55:19: undefined: HasUsageHook
+FAIL    github.com/kart-io/goagent/core/budget [build failed]
+FAIL
