@@ -23,6 +23,10 @@ import (
 // Unlimited 是未绑定预算（nil *Controller）时 Remaining 返回的余量，可直接参与大小比较。
 const Unlimited = math.MaxInt
 
+// DefaultMaxAgentCalls bounds topology when the host does not configure a limit.
+const DefaultMaxAgentCalls = 1000
+const ledgerFormat = "goagent-model-budget"
+
 var (
 	ErrBudgetExceeded        = errors.New("root model request budget exceeded")
 	ErrReservationExists     = errors.New("model request reservation already exists")
@@ -37,7 +41,6 @@ type Config struct {
 	MaxToolCalls       int    `json:",omitempty"`
 	DeadlineUnixMilli  int64  `json:",omitempty"`
 	TokenPolicyVersion string `json:",omitempty"`
-	AttributionVersion string `json:",omitempty"`
 	MaxAgentCalls      int    `json:",omitempty"`
 }
 
@@ -47,14 +50,16 @@ type Snapshot struct {
 	KnownTokens                                              interfaces.TokenUsage
 	ReservedTokens, ReservedToolCalls, KnownTokenDelta       int
 }
+type entry struct {
+	Estimate     int `json:",omitempty"`
+	Evidence     usage.Evidence
+	AgentCallKey string `json:",omitempty"`
+}
 type ledger struct {
-	AgentCalls    map[string]usage.Owner    `json:",omitempty"`
-	AttemptOwners map[string]string         `json:",omitempty"`
-	Evidence      map[string]usage.Evidence `json:",omitempty"`
-	Config        Config
-	Entries       map[string]*interfaces.TokenUsage
-	Estimates     map[string]int  `json:",omitempty"`
-	Tools         map[string]bool `json:",omitempty"`
+	Config     Config
+	Entries    map[string]entry
+	AgentCalls map[string]usage.Owner `json:",omitempty"`
+	Tools      map[string]bool        `json:",omitempty"`
 }
 
 // Controller is safe for concurrent use. Durable controllers coordinate via Store locks.
@@ -70,10 +75,13 @@ func New(config Config) (*Controller, error) {
 	if config.RootKey == "" || config.Version == "" || config.MaxModelRequests < 1 || config.MaxReservedTokens < 0 || config.MaxToolCalls < 0 || config.DeadlineUnixMilli < 0 || (config.MaxReservedTokens > 0 && config.TokenPolicyVersion == "") {
 		return nil, fmt.Errorf("budget requires root key, version and positive request limit")
 	}
-	if config.MaxAgentCalls < 0 || (config.AttributionVersion != "" && config.MaxAgentCalls < 1) || (config.AttributionVersion == "" && config.MaxAgentCalls != 0) {
-		return nil, fmt.Errorf("attribution requires version and positive call limit")
+	if config.MaxAgentCalls < 0 {
+		return nil, fmt.Errorf("negative agent call limit")
 	}
-	return &Controller{config: config, memory: ledger{Config: config, Entries: map[string]*interfaces.TokenUsage{}}}, nil
+	if config.MaxAgentCalls == 0 {
+		config.MaxAgentCalls = DefaultMaxAgentCalls
+	}
+	return &Controller{config: config, memory: ledger{Config: config, Entries: map[string]entry{}}}, nil
 }
 
 // NewDurable binds an immutable budget policy to a stable root record.
@@ -114,19 +122,7 @@ func (c *Controller) storageID() string {
 	return "goagent/budget/" + hex.EncodeToString(d[:])
 }
 func clone(l ledger) ledger {
-	out := ledger{AgentCalls: maps.Clone(l.AgentCalls), AttemptOwners: maps.Clone(l.AttemptOwners), Evidence: maps.Clone(l.Evidence), Config: l.Config, Estimates: maps.Clone(l.Estimates), Tools: maps.Clone(l.Tools)}
-	if l.Entries != nil {
-		out.Entries = make(map[string]*interfaces.TokenUsage, len(l.Entries))
-		for key, usage := range l.Entries {
-			if usage == nil {
-				out.Entries[key] = nil
-				continue
-			}
-			copied := *usage
-			out.Entries[key] = &copied
-		}
-	}
-	return out
+	return ledger{Config: l.Config, Entries: maps.Clone(l.Entries), AgentCalls: maps.Clone(l.AgentCalls), Tools: maps.Clone(l.Tools)}
 }
 func (c *Controller) transaction(ctx context.Context, write bool, fn func(*ledger) error) (err error) {
 	if err = ctx.Err(); err != nil {
@@ -147,13 +143,16 @@ func (c *Controller) transaction(ctx context.Context, write bool, fn func(*ledge
 		defer func() { err = errors.Join(err, unlock()) }()
 		s, e := c.store.Load(ctx, id)
 		if errors.Is(e, os.ErrNotExist) {
-			l = ledger{Config: c.config, Entries: map[string]*interfaces.TokenUsage{}}
+			l = ledger{Config: c.config, Entries: map[string]entry{}}
 		} else if e != nil {
 			return e
 		} else {
 			// 从零值解码，避免JSON缺省字段继承当前配置或上次内存快照。
 			l = ledger{}
-			if s == nil || s.Version != c.ledgerVersion() || s.RunID != id || json.Unmarshal(s.Data, &l) != nil {
+			if s != nil && s.Version != ledgerFormat {
+				return fmt.Errorf("unsupported budget record format %q; expected %q", s.Version, ledgerFormat)
+			}
+			if s == nil || s.RunID != id || json.Unmarshal(s.Data, &l) != nil {
 				return fmt.Errorf("invalid budget record")
 			}
 		}
@@ -161,14 +160,15 @@ func (c *Controller) transaction(ctx context.Context, write bool, fn func(*ledge
 	if l.Config != c.config || l.Entries == nil || len(l.Entries) > c.config.MaxModelRequests {
 		return fmt.Errorf("budget configuration or record changed")
 	}
-	for key, u := range l.Entries {
-		if c.config.MaxReservedTokens > 0 && l.Estimates[key] <= 0 {
-			return fmt.Errorf("token 限额记录缺少正数预留")
+	for key, item := range l.Entries {
+		if key == "" || item.Estimate < 0 || (c.config.MaxReservedTokens > 0 && item.Estimate == 0) {
+			return fmt.Errorf("invalid reservation record")
 		}
-		if key == "" || !validUsage(u) {
-			return fmt.Errorf("invalid budget usage record")
+		if err := item.Evidence.Validate(); err != nil {
+			return err
 		}
 	}
+
 	if reserved, e := reservedTokens(&l); e != nil || (c.config.MaxReservedTokens > 0 && reserved > c.config.MaxReservedTokens) {
 		return fmt.Errorf("无效的 Token 预算记录")
 	}
@@ -195,7 +195,7 @@ func (c *Controller) transaction(ctx context.Context, write bool, fn func(*ledge
 			return e
 		}
 		id := c.storageID()
-		if e = c.store.Save(ctx, id, &durable.Snapshot{RunID: id, Version: c.ledgerVersion(), Data: data}); e != nil {
+		if e = c.store.Save(ctx, id, &durable.Snapshot{RunID: id, Version: ledgerFormat, Data: data}); e != nil {
 			return e
 		}
 	}
@@ -229,105 +229,31 @@ func (c *Controller) Remaining(ctx context.Context) (remaining int, err error) {
 	})
 	return
 }
-func validUsage(u *interfaces.TokenUsage) bool {
-	return u == nil || (u.PromptTokens >= 0 && u.CompletionTokens >= 0 && u.TotalTokens >= 0 && u.CachedTokens >= 0)
-}
 
-// RecordUsage attaches immutable known evidence, or records unknown usage as nil.
-// A later saved model record may upgrade unknown usage to known without another call.
+// RecordUsage records complete basic usage through the same evidence path.
+// nil records unknown usage. Source remains unspecified unless the caller uses RecordEvidence.
 func (c *Controller) RecordUsage(ctx context.Context, key string, u *interfaces.TokenUsage) error {
-	if c.AttributionEnabled() {
-		return fmt.Errorf("attributed budget requires RecordEvidence")
+	e := usage.Evidence{}
+	if u != nil {
+		e.Tokens = *u
+		e.KnownFields = usage.BasicFields
+		if u.CachedTokens > 0 {
+			e.KnownFields |= usage.Cached
+		}
 	}
-	if !validUsage(u) {
-		return fmt.Errorf("negative model usage")
-	}
-	return c.transaction(ctx, true, func(l *ledger) error {
-		old, ok := l.Entries[key]
-		if !ok {
-			return fmt.Errorf("usage has no reservation")
-		}
-		if old != nil && u != nil && *old != *u {
-			return fmt.Errorf("model usage evidence changed")
-		}
-		if old == nil && u != nil {
-			copy := *u
-			l.Entries[key] = &copy
-		}
-		return nil
-	})
+	_, err := c.RecordEvidence(ctx, key, usage.Lineage(ctx), e)
+	return err
 }
 
-// Snapshot returns cumulative evidence; unknown entries are not estimated as zero usage.
+// Snapshot returns the same root aggregation as Attribution.
 func (c *Controller) Snapshot(ctx context.Context) (out Snapshot, err error) {
-	err = c.transaction(ctx, false, func(l *ledger) error {
-		out.ReservedRequests = len(l.Entries)
-		out.ReservedToolCalls = len(l.Tools)
-		var err error
-		out.ReservedTokens, err = reservedTokens(l)
-		if err != nil {
-			return err
-		}
-		for key, u := range l.Entries {
-			if u == nil {
-				out.UnknownUsageEntries++
-			} else {
-				out.KnownUsageEntries++
-				if err := addTokens(&out.KnownTokens, *u); err != nil {
-					return err
-				}
-				if c.knownTotal(l, key) {
-					delta := u.TotalTokens - l.Estimates[key]
-					if (delta > 0 && out.KnownTokenDelta > math.MaxInt-delta) || (delta < 0 && out.KnownTokenDelta < math.MinInt-delta) {
-						return fmt.Errorf("token delta overflow")
-					}
-					out.KnownTokenDelta += delta
-				}
-			}
-		}
-		return nil
-	})
+	err = c.transaction(ctx, false, func(l *ledger) error { var e error; out, e = rootSnapshot(l); return e })
 	return
 }
 
-// ReserveEstimated 预留一次请求与宿主估计的总 Token；取消、失败和实际用量较少均不退款。
-// 估计须覆盖输入、工具定义与输出预算；实际用量仍可能超过估计，因此不是提供商费用硬上限。
+// ReserveEstimated conservatively reserves one request and its host token estimate.
 func (c *Controller) ReserveEstimated(ctx context.Context, key string, tokens int) error {
-	if c.AttributionEnabled() {
-		return fmt.Errorf("attributed budget requires ReserveAttributed")
-	}
-	if key == "" || tokens < 0 {
-		return fmt.Errorf("请求键和非负 Token 估计必填")
-	}
-	if c.config.MaxReservedTokens > 0 && tokens == 0 {
-		return ErrTokenEstimateRequired
-	}
-	return c.transaction(ctx, true, func(l *ledger) error {
-		if err := c.checkDeadline(ctx); err != nil {
-			return err
-		}
-		if _, ok := l.Entries[key]; ok {
-			return ErrReservationExists
-		}
-		if len(l.Entries) >= c.config.MaxModelRequests {
-			return ErrBudgetExceeded
-		}
-		reserved, err := reservedTokens(l)
-		if err != nil {
-			return err
-		}
-		if tokens > math.MaxInt-reserved || (c.config.MaxReservedTokens > 0 && tokens > c.config.MaxReservedTokens-reserved) {
-			return ErrBudgetExceeded
-		}
-		l.Entries[key] = nil
-		if tokens > 0 {
-			if l.Estimates == nil {
-				l.Estimates = map[string]int{}
-			}
-			l.Estimates[key] = tokens
-		}
-		return nil
-	})
+	return c.ReserveAttributed(ctx, key, tokens, usage.Lineage(ctx))
 }
 
 // ReserveTool 预留一次实际工具执行；日志回放不应调用它。重试属于新的实际执行，应使用新键。
@@ -377,11 +303,11 @@ func (c *Controller) checkDeadline(ctx context.Context) error {
 
 func reservedTokens(l *ledger) (int, error) {
 	total := 0
-	for key, amount := range l.Estimates {
-		if _, ok := l.Entries[key]; !ok || amount < 0 || amount > math.MaxInt-total {
-			return 0, fmt.Errorf("无效的 Token 预留记录")
+	for _, item := range l.Entries {
+		if item.Estimate < 0 || item.Estimate > math.MaxInt-total {
+			return 0, fmt.Errorf("invalid token reservation")
 		}
-		total += amount
+		total += item.Estimate
 	}
 	return total, nil
 }

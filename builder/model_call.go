@@ -182,18 +182,9 @@ func modelOperation(ctx context.Context, id string, intent json.RawMessage, invo
 		intent, err = json.Marshal(struct {
 			Original json.RawMessage
 			Budget   budget.Config
-		}{intent, c.Configuration()})
-		if err != nil {
-			return nil, err
-		}
-	}
-	if metered && c.AttributionEnabled() {
-		var err error
-		intent, err = json.Marshal(struct {
-			Original json.RawMessage
 			Owners   []usage.Owner
 			Model    modelMetadata
-		}{intent, usage.Lineage(ctx), func() modelMetadata { m, _ := ctx.Value(modelMetadataKey{}).(modelMetadata); return m }()})
+		}{intent, c.Configuration(), usage.Lineage(ctx), func() modelMetadata { m, _ := ctx.Value(modelMetadataKey{}).(modelMetadata); return m }()})
 		if err != nil {
 			return nil, err
 		}

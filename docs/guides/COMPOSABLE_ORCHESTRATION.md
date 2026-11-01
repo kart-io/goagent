@@ -29,7 +29,7 @@ go run ./orchestration/composed-order /tmp/goagent-order-demo
 
 `Snapshot` 分开报告 ReservedRequests、KnownUsageEntries、UnknownUsageEntries、KnownTokens。未知包含预留后没有证据的条目，不能当作零费用；子输出的 TokenUsage 不再作为另一笔请求加入根账本。输出 `root_budget` 是根快照，`new_model_invocations` 是本次执行范围新增实际调用数，`model_calls` 是本层逻辑回合数。父子并行时以根账本及 transport 计数为准。Provider 内部重试、宿主自定义客户端或隐藏模型调用需宿主另行管控；这个预算限制统一入口的请求次数。
 
-根账本支持可选 v2 归属查询：WithAgentID 标识角色，Attribution 按调用/角色给出 Self、Inclusive 与未知字段；Observer 的 model_attempt_start/model_usage 提供逐尝试元数据。v1 默认口径保留，接入与迁移见[多 Agent 用量](MULTI_AGENT_USAGE.md)。[原审核](../research/2026-11-01-agent-hooks-usage-audit.md)记录实施前状态。
+根账本统一支持归属查询：WithAgentID 标识角色，Attribution 按调用/角色给出 Self、Inclusive 与未知字段；Observer 的 model_attempt_start/model_usage 提供逐尝试元数据。没有格式切换或降级模式，接入见[多 Agent 用量](MULTI_AGENT_USAGE.md)。[原审核](../research/2026-11-01-agent-hooks-usage-audit.md)记录实施前状态。
 
 `Remaining(ctx)` 返回尚可预留的模型请求次数（`MaxModelRequests` 减已预留条目）。持久预算在 Store 锁内读取，能看到其他进程的预留。结果只是时点快照，准入仍以 `Reserve` 为准。未绑定预算时 `budget.FromContext` 返回 nil 控制器，对它调用 `Remaining` 返回 `budget.Unlimited`。子预算暂不提供。
 

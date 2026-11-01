@@ -89,7 +89,7 @@ func main() {
 	dir := must(os.MkdirTemp("", "goagent-usage-demo-"))
 	defer os.RemoveAll(dir)
 	store := must(durable.NewFileStore(dir))
-	controller := must(budget.NewDurable(budget.Config{RootKey: "demo", Version: "v1", MaxModelRequests: 5, AttributionVersion: "v1", MaxAgentCalls: 8}, store))
+	controller := must(budget.NewDurable(budget.Config{RootKey: "demo", Version: "v1", MaxModelRequests: 5, MaxAgentCalls: 8}, store))
 	ctx := observe.WithObserver(budget.WithController(durable.WithJournal(durable.WithExecutionKey(context.Background(), "demo"), store), controller), hook{})
 	var children []interfaces.Tool
 	for i, n := range []int{4, 5} {

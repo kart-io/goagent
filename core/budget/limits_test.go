@@ -12,11 +12,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestExtendedLimitsPreserveLegacyConfigIntent(t *testing.T) {
-	data, err := json.Marshal(Config{RootKey: "root", Version: "v1", MaxModelRequests: 3})
-	require.NoError(t, err)
-	require.JSONEq(t, `{"RootKey":"root","Version":"v1","MaxModelRequests":3}`, string(data))
-	require.Equal(t, `{"RootKey":"root","Version":"v1","MaxModelRequests":3}`, string(data))
+func TestConfigurationNormalizesDefaultCallLimit(t *testing.T) {
+	c, e := New(Config{RootKey: "root", Version: "policy", MaxModelRequests: 3})
+	require.NoError(t, e)
+	data, e := json.Marshal(c.Configuration())
+	require.NoError(t, e)
+	require.JSONEq(t, `{"RootKey":"root","Version":"policy","MaxModelRequests":3,"MaxAgentCalls":1000}`, string(data))
 }
 
 func TestTokenAndToolLimitsRemainConservativeAcrossRestart(t *testing.T) {
@@ -56,22 +57,26 @@ func TestBudgetDeadlineBindsExecutionAndStopsAdmission(t *testing.T) {
 	require.ErrorIs(t, c.ReserveTool(context.Background(), "tool"), context.DeadlineExceeded)
 }
 
-func TestLegacyLedgerWithoutNewFieldsRemainsUsable(t *testing.T) {
-	ctx := context.Background()
-	store, err := durable.NewFileStore(t.TempDir())
-	require.NoError(t, err)
-	cfg := Config{RootKey: "root", Version: "v1", MaxModelRequests: 3}
-	c, err := New(cfg)
-	require.NoError(t, err)
-	id := c.storageID()
-	require.NoError(t, store.Save(ctx, id, &durable.Snapshot{RunID: id, Version: "goagent-model-budget-v1", Data: json.RawMessage(`{"Config":{"RootKey":"root","Version":"v1","MaxModelRequests":3},"Entries":{"old":null}}`)}))
-	resumed, err := NewDurable(cfg, store)
-	require.NoError(t, err)
-	require.NoError(t, resumed.Reserve(ctx, "new"))
-	snap, err := resumed.Snapshot(ctx)
-	require.NoError(t, err)
-	require.Equal(t, 2, snap.ReservedRequests)
-	require.Equal(t, 2, snap.UnknownUsageEntries)
+func TestBudgetRejectsOldStorageFormats(t *testing.T) {
+	for _, version := range []string{"goagent-model-budget-v1", "goagent-model-budget-v2"} {
+		t.Run(version, func(t *testing.T) {
+			ctx := context.Background()
+			store, e := durable.NewFileStore(t.TempDir())
+			require.NoError(t, e)
+			cfg := Config{RootKey: "root", Version: "policy", MaxModelRequests: 3}
+			c, e := New(cfg)
+			require.NoError(t, e)
+			id := c.storageID()
+			data, e := json.Marshal(c.memory)
+			require.NoError(t, e)
+			require.NoError(t, store.Save(ctx, id, &durable.Snapshot{RunID: id, Version: version, Data: data}))
+			_, e = NewDurable(cfg, store)
+			require.Error(t, e)
+			unchanged, e := store.Load(ctx, id)
+			require.NoError(t, e)
+			require.Equal(t, version, unchanged.Version)
+		})
+	}
 }
 
 func TestExtendedLimitsAreAtomicAcrossControllers(t *testing.T) {
@@ -123,7 +128,7 @@ func TestJournaledToolAdmissionRejectsVolatileBudget(t *testing.T) {
 	require.Zero(t, snap.ReservedToolCalls)
 }
 
-func TestLegacyLedgerRejectsNewLimitConfiguration(t *testing.T) {
+func TestLedgerRejectsChangedLimitConfiguration(t *testing.T) {
 	for _, change := range []struct {
 		name  string
 		apply func(*Config)
@@ -161,9 +166,9 @@ func TestTokenLimitedLedgerRejectsMissingOrZeroEstimate(t *testing.T) {
 			var data map[string]json.RawMessage
 			require.NoError(t, json.Unmarshal(snap.Data, &data))
 			if zero {
-				data["Estimates"] = json.RawMessage(`{"one":0}`)
+				data["Entries"] = json.RawMessage(`{"one":{"Estimate":0,"Evidence":{}}}`)
 			} else {
-				delete(data, "Estimates")
+				data["Entries"] = json.RawMessage(`{"one":{"Evidence":{}}}`)
 			}
 			snap.Data, err = json.Marshal(data)
 			require.NoError(t, err)

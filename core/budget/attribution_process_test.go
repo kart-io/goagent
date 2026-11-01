@@ -14,7 +14,7 @@ import (
 )
 
 func TestAttributionProcessRecovery(t *testing.T) {
-	cfg := Config{RootKey: "r", Version: "v1", MaxModelRequests: 2, AttributionVersion: "v1", MaxAgentCalls: 2}
+	cfg := Config{RootKey: "r", Version: "v1", MaxModelRequests: 2, MaxAgentCalls: 2}
 	chain := []usage.Owner{{RunID: "r", AgentID: "root", AgentCallKey: "r"}}
 	ctx := context.Background()
 	if dir := os.Getenv("GOAGENT_ATTRIBUTION_CHILD"); dir != "" {

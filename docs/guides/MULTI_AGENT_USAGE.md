@@ -1,14 +1,14 @@
 # 多 Agent 钩子与 Token 统计
 
-GoAgent 以同一根预算账本统计父 Agent、子 Agent 和汇总请求，Observer 提供只读通知。按 Agent 归属是显式可选功能，不创建默认存储，不改变业务路由或权限。
+GoAgent 以同一根预算账本统计父 Agent、子 Agent 和汇总请求，Observer 提供只读通知。所有预算使用同一套字段证据与归属模型，不创建默认存储，不改变业务路由或权限。
 
 ## 开启身份与归属
 
 ```go
 controller, err := budget.New(budget.Config{
-    RootKey: "business-run-123", Version: "policy-v1",
+    RootKey: "business-run-123", Version: "policy-20261101",
     MaxModelRequests: 100,
-    AttributionVersion: "ownership-v1", MaxAgentCalls: 50,
+    MaxAgentCalls: 50,
 })
 // 检查 err；需要跨进程恢复时使用 NewDurable(config, hostStore)。
 ctx := budget.WithController(hostCtx, controller)
@@ -16,9 +16,9 @@ agent, err := builder.NewSimpleBuilder(client).
     WithAgentID("coordinator").BuildContext(ctx)
 ```
 
-每个 Agent 显式配置角色 AgentID；子 Agent 使用独立实例/会话和传入 context，继承根预算及 Observer。持久调用仍需 WithDurableScope；AgentID 不替代它。`execution.ConfigureBuilder` 会设置 SessionID、DurableScope 和 AgentID。
+每个 Agent 自动建立调用身份；WithAgentID 显式命名角色，未设置时为 anonymous。子 Agent 使用独立实例/会话和传入 context，继承根预算及 Observer。持久调用仍需 WithDurableScope；AgentID 不替代它。`execution.ConfigureBuilder` 会设置 SessionID、DurableScope 和 AgentID。
 
-启用归属要求正数 MaxAgentCalls，约束保存的调用节点数量，包括零模型调用的中间 Agent。同一逻辑调用恢复不重复占槽。同名角色可以有多个不同调用键。根 RunID 由 Scope 或 Controller.RootKey 确定，已有父身份/观察根不一致时在发请求前拒绝。
+MaxAgentCalls 约束保存的调用节点数量，包括零模型调用的中间 Agent；为0时使用 DefaultMaxAgentCalls=1000，负值拒绝。同一逻辑调用恢复不重复占槽。同名角色可以有多个不同调用键。根 RunID 由 Scope 或 Controller.RootKey 确定，已有父身份/观察根不一致时在发请求前拒绝。
 
 不经统一入口的隐藏 SDK 请求不会自动计量。ModelInvoking=true 是可信宿主声明，不是模型调用探测器。完整钩子覆盖 ExecuteStream、AsRunnable 和 Start；旧同步 Execute 不提供该计量路径，显式 AgentID 的旧工具选择路径会拒绝，避免漏记选择请求。
 
@@ -53,7 +53,7 @@ report, err := controller.Attribution(reportCtx)
 // report.Root：根累计
 // report.Calls：按逻辑 Agent 调用，Owner + Self + Inclusive
 // report.Agents：按 AgentID 的 Self 汇总
-// report.Unattributed：旧账本无法归属的条目
+// report.Unattributed：没有 Agent 上下文的直接预算调用
 ```
 
 失败或审批暂停后也可以查询。若 Wait 自身超时，执行可能仍在收敛，查询只是时点快照。子 Agent 结束不代表外层 OwnedRunnable.Close 已完成；工具及 Handle 的终态按各自生命周期处理。
@@ -71,17 +71,17 @@ fields := usage.Total | usage.Cached
 u := &llm.Usage{TotalTokens: 19, CachedTokens: 4, KnownFields: &fields}
 ```
 
-v2 保留字段证据，允许未知字段后续补齐；相同证据幂等、已知字段改变报错。跨流帧只更新后来已知的字段，不累加累计帧，也不让缺失字段覆盖前帧证据。回放通知不改变原始来源或增加证据 Revision。
+统一账本保留字段证据，允许未知字段后续补齐；相同证据幂等、已知字段改变报错。跨流帧只更新后来已知的字段，不累加累计帧，也不让缺失字段覆盖前帧证据。回放通知不改变原始来源或增加证据 Revision。
 
 报表提供 UnknownUsageEntries、PartialUsageEntries，以及每个汇总中的 UnknownPromptEntries/UnknownCompletionEntries/UnknownTotalEntries/UnknownCachedEntries。Complete 只表示基本三字段完整，不承诺缓存已知、供应商账单完整或外部隐藏调用都已捕获。Total 未知时不计算 KnownTokenDelta，不把预估当作实际节省。
 
-旧 v1 预算不保存字段 mask：完整旧三字段继续按原方式登记；显式 partial 在账本中保留为 unknown，钩子仍可报告部分数值，但 AccountingCommitted=false。需要可靠字段级统计请对新运行启用 v2。已知基本三字段加缓存值可被 v1 保存，但缓存的可用性 mask 不会因此完整持久化。
+所有预算默认保留部分字段，不再存在降级为旧格式 unknown 的模式；成功提交的 model_usage 通知设置 AccountingCommitted=true。Reserve/ReserveEstimated/RecordUsage 是同一证据实现的便利入口；需要字段 mask 时使用 RecordEvidence。直接调用没有 Agent 上下文时明确记入 Unattributed，不猜测归属。
 
 当前 OpenAI/DeepSeek 标准流、Gemini 传递 SDK 可用的缓存与字段信息。SDK 将缺失和显式零都解码为 scalar 时，保守标未知；DeepSeek 私有缓存字段未被 SDK 暴露的部分不伪造。货币定价、生效时间与账单核对由宿主提供。
 
 ## 恢复与迁移
 
-v2 使用现有预算 Store 的版本化记录，旧 v1 代码拒绝读取。不得就地升级活跃 Run 或换执行键重跑业务；旧运行由旧配置处理，新运行显式启用 AttributionVersion。
+只有一种账本结构和格式标记 goagent-model-budget，不提供格式选择开关。Config.Version 仅作为宿主预算策略指纹，不选择实现版本。旧格式明确拒绝读取，不自动迁移；已有持久运行需由原实现或宿主明确处置，不能换执行键重跑已有业务。
 
 模型结果保存后、用量登记前中断时，恢复读取已保存结果补登记，不再次发请求。账本提交后、通知前中断可能漏事件，查询仍正确。Owner/祖先链在预留、证据登记和回放时都校验；改 AgentID/父关系会拒绝。同一工具整体回放不重新进入子 Builder，采用历史归属；改变闭包中的子配置需提升工具 Version。
 

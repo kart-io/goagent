@@ -1,0 +1,9 @@
+--- FAIL: TestConvenienceAPIsForwardContextLineage (0.00s)
+    unified_test.go:92:
+            Error Trace:    /Users/costalong/code/go/src/github.com/kart/goagent/core/budget/unified_test.go:92
+            Error:          Received unexpected error:
+                            attempt owner changed
+            Test:           TestConvenienceAPIsForwardContextLineage
+FAIL
+FAIL    github.com/kart-io/goagent/core/budget  0.156s
+FAIL

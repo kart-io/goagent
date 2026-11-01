@@ -1,5 +1,7 @@
 # 多 Agent 身份、用量钩子与归属交付
 
+本报告记录首次实现快照；用户后续要求统一处理，当前实现不再维护双格式或 AttributionVersion。最新验证见[统一计量报告](../2026-11-01-unified-usage/REPORT.md)。
+
 日期：2026-11-01。基线 `3621579`。分支 `codex/pi-core-contracts-20261101`。Go 1.25.0，darwin/arm64。
 
 ## 已实现

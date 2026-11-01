@@ -32,20 +32,10 @@ type AttributionReport struct {
 	Complete bool
 }
 
-func (c *Controller) AttributionEnabled() bool { return c != nil && c.config.AttributionVersion != "" }
-func (c *Controller) ledgerVersion() string {
-	if c.AttributionEnabled() {
-		return "goagent-model-budget-v2"
-	}
-	return "goagent-model-budget-v1"
-}
 func validOwner(o usage.Owner) bool {
 	return o.RunID != "" && o.AgentID != "" && o.AgentCallKey != "" && len(o.RunID) <= 1024 && len(o.AgentID) <= 256 && len(o.AgentCallKey) <= 1024 && len(o.ParentAgentCallKey) <= 1024
 }
 func (c *Controller) register(l *ledger, chain []usage.Owner) error {
-	if !c.AttributionEnabled() {
-		return fmt.Errorf("attribution disabled")
-	}
 	if len(chain) == 0 || len(chain) > c.config.MaxAgentCalls {
 		return fmt.Errorf("invalid attribution lineage")
 	}
@@ -89,8 +79,10 @@ func (c *Controller) ReserveAttributed(ctx context.Context, key string, tokens i
 		if err := c.checkDeadline(ctx); err != nil {
 			return err
 		}
-		if err := c.register(l, lineage); err != nil {
-			return err
+		if len(lineage) > 0 {
+			if err := c.register(l, lineage); err != nil {
+				return err
+			}
 		}
 		if _, ok := l.Entries[key]; ok {
 			return ErrReservationExists
@@ -105,17 +97,11 @@ func (c *Controller) ReserveAttributed(ctx context.Context, key string, tokens i
 		if tokens > math.MaxInt-n || (c.config.MaxReservedTokens > 0 && tokens > c.config.MaxReservedTokens-n) {
 			return ErrBudgetExceeded
 		}
-		l.Entries[key] = nil
-		if tokens > 0 {
-			if l.Estimates == nil {
-				l.Estimates = map[string]int{}
-			}
-			l.Estimates[key] = tokens
+		item := entry{Estimate: tokens}
+		if len(lineage) > 0 {
+			item.AgentCallKey = lineage[len(lineage)-1].AgentCallKey
 		}
-		if l.AttemptOwners == nil {
-			l.AttemptOwners = map[string]string{}
-		}
-		l.AttemptOwners[key] = lineage[len(lineage)-1].AgentCallKey
+		l.Entries[key] = item
 		return nil
 	})
 }
@@ -124,40 +110,34 @@ func (c *Controller) RecordEvidence(ctx context.Context, key string, lineage []u
 		return
 	}
 	err = c.transaction(ctx, true, func(l *ledger) error {
-		if err := c.register(l, lineage); err != nil {
-			return err
+		if len(lineage) > 0 {
+			if err := c.register(l, lineage); err != nil {
+				return err
+			}
 		}
-		if _, ok := l.Entries[key]; !ok {
+		item, ok := l.Entries[key]
+		if !ok {
 			return fmt.Errorf("usage has no reservation")
 		}
-		if l.AttemptOwners[key] != lineage[len(lineage)-1].AgentCallKey {
+		owner := ""
+		if len(lineage) > 0 {
+			owner = lineage[len(lineage)-1].AgentCallKey
+		}
+		if owner != item.AgentCallKey {
 			return fmt.Errorf("attempt owner changed")
 		}
-		old := l.Evidence[key]
 		var err error
-		out, err = usage.Merge(old, e)
+		out, err = usage.Merge(item.Evidence, e)
 		if err != nil {
 			return err
 		}
-		if l.Evidence == nil {
-			l.Evidence = map[string]usage.Evidence{}
-		}
-		l.Evidence[key] = out
-		if out.KnownFields != 0 {
-			u := out.Tokens
-			l.Entries[key] = &u
-		}
+		item.Evidence = out
+		l.Entries[key] = item
 		return nil
 	})
 	return
 }
 func (c *Controller) validateAttribution(l *ledger) error {
-	if !c.AttributionEnabled() {
-		if len(l.AgentCalls)+len(l.AttemptOwners)+len(l.Evidence) > 0 {
-			return fmt.Errorf("v1 ledger contains attribution")
-		}
-		return nil
-	}
 	if len(l.AgentCalls) > c.config.MaxAgentCalls {
 		return fmt.Errorf("agent call limit exceeded")
 	}
@@ -178,37 +158,44 @@ func (c *Controller) validateAttribution(l *ledger) error {
 			}
 		}
 	}
-	for key, u := range l.Entries {
-		if l.AttemptOwners[key] == "" {
-			return fmt.Errorf("missing attempt owner")
-		}
-		if u != nil {
-			if _, ok := l.Evidence[key]; !ok {
-				return fmt.Errorf("missing usage evidence")
+	for _, item := range l.Entries {
+		if item.AgentCallKey != "" {
+			if _, ok := l.AgentCalls[item.AgentCallKey]; !ok {
+				return fmt.Errorf("unknown attempt owner")
 			}
 		}
 	}
-	for key, owner := range l.AttemptOwners {
-		if _, ok := l.Entries[key]; !ok {
-			return fmt.Errorf("orphan attempt owner")
-		}
-		if _, ok := l.AgentCalls[owner]; !ok {
-			return fmt.Errorf("unknown attempt owner")
-		}
-	}
-	for key, e := range l.Evidence {
-		u, ok := l.Entries[key]
-		if !ok {
-			return fmt.Errorf("orphan evidence")
-		}
-		if err := e.Validate(); err != nil {
-			return err
-		}
-		if (e.KnownFields == 0 && u != nil) || (e.KnownFields != 0 && (u == nil || *u != e.Tokens)) {
-			return fmt.Errorf("inconsistent evidence")
-		}
-	}
 	return nil
+}
+
+// rootSnapshot is the sole cumulative root accounting implementation.
+func rootSnapshot(l *ledger) (out Snapshot, err error) {
+	out.ReservedRequests = len(l.Entries)
+	out.ReservedToolCalls = len(l.Tools)
+	out.ReservedTokens, err = reservedTokens(l)
+	if err != nil {
+		return
+	}
+	for _, item := range l.Entries {
+		e := item.Evidence
+		if e.KnownFields == 0 {
+			out.UnknownUsageEntries++
+		} else {
+			out.KnownUsageEntries++
+			if err = addTokens(&out.KnownTokens, e.Tokens); err != nil {
+				return
+			}
+		}
+		if e.KnownFields&usage.Total != 0 {
+			delta := e.Tokens.TotalTokens - item.Estimate
+			if (delta > 0 && out.KnownTokenDelta > math.MaxInt-delta) || (delta < 0 && out.KnownTokenDelta < math.MinInt-delta) {
+				err = fmt.Errorf("token delta overflow")
+				return
+			}
+			out.KnownTokenDelta += delta
+		}
+	}
+	return
 }
 func addTokens(dst *interfaces.TokenUsage, src interfaces.TokenUsage) error {
 	d := []*int{&dst.PromptTokens, &dst.CompletionTokens, &dst.TotalTokens, &dst.CachedTokens}
@@ -241,44 +228,26 @@ func (c *Controller) Attribution(ctx context.Context) (out AttributionReport, er
 	err = c.transaction(ctx, false, func(l *ledger) error {
 		calls := map[string]*CallAttribution{}
 		roles := map[string]*AgentAttribution{}
-		out.Complete = c.AttributionEnabled()
+		out.Complete = true
 		for k, o := range l.AgentCalls {
 			calls[k] = &CallAttribution{Owner: o}
 			if roles[o.AgentID] == nil {
 				roles[o.AgentID] = &AgentAttribution{AgentID: o.AgentID}
 			}
 		}
-		out.Root.ReservedRequests = len(l.Entries)
-		out.Root.ReservedToolCalls = len(l.Tools)
 		var e error
-		out.Root.ReservedTokens, e = reservedTokens(l)
+		out.Root, e = rootSnapshot(l)
 		if e != nil {
 			return e
 		}
-		for key, u := range l.Entries {
-			s := UsageSummary{ReservedRequests: 1}
-			fields := usage.Fields(0)
-			if u == nil {
+		for _, item := range l.Entries {
+			evidence := item.Evidence
+			fields := evidence.KnownFields
+			s := UsageSummary{ReservedRequests: 1, KnownTokens: evidence.Tokens}
+			if fields == 0 {
 				s.UnknownUsageEntries = 1
-				out.Root.UnknownUsageEntries++
 			} else {
 				s.KnownUsageEntries = 1
-				s.KnownTokens = *u
-				out.Root.KnownUsageEntries++
-				if err := addTokens(&out.Root.KnownTokens, *u); err != nil {
-					return err
-				}
-				if c.knownTotal(l, key) {
-					delta := u.TotalTokens - l.Estimates[key]
-					if (delta > 0 && out.Root.KnownTokenDelta > math.MaxInt-delta) || (delta < 0 && out.Root.KnownTokenDelta < math.MinInt-delta) {
-						return fmt.Errorf("token delta overflow")
-					}
-					out.Root.KnownTokenDelta += delta
-				}
-				fields = usage.BasicFields
-				if evidence, ok := l.Evidence[key]; ok {
-					fields = evidence.KnownFields
-				}
 				if fields&usage.BasicFields != usage.BasicFields {
 					s.PartialUsageEntries = 1
 				}
@@ -295,12 +264,13 @@ func (c *Controller) Attribution(ctx context.Context) (out AttributionReport, er
 			if fields&usage.Cached == 0 {
 				s.UnknownCachedEntries = 1
 			}
+
 			out.UnknownUsageEntries += s.UnknownUsageEntries
 			out.PartialUsageEntries += s.PartialUsageEntries
 			if s.UnknownUsageEntries+s.PartialUsageEntries > 0 {
 				out.Complete = false
 			}
-			call := calls[l.AttemptOwners[key]]
+			call := calls[item.AgentCallKey]
 			if call == nil {
 				out.Complete = false
 				if err := addSummary(&out.Unattributed, s); err != nil {
@@ -331,9 +301,4 @@ func (c *Controller) Attribution(ctx context.Context) (out AttributionReport, er
 		return nil
 	})
 	return
-}
-
-// knownTotal retains legacy total semantics and gates v2 deltas on reported evidence.
-func (c *Controller) knownTotal(l *ledger, key string) bool {
-	return !c.AttributionEnabled() || l.Evidence[key].KnownFields&usage.Total != 0
 }

@@ -1,0 +1,10 @@
+--- FAIL: TestUnifiedDefaultEvidenceAndUnattributed (0.00s)
+    unified_test.go:4:
+            Error Trace:    /Users/costalong/code/go/src/github.com/kart/goagent/core/budget/unified_test.go:4
+            Error:          Not equal:
+                            expected: 1000
+                            actual  : 0
+            Test:           TestUnifiedDefaultEvidenceAndUnattributed
+FAIL
+FAIL    github.com/kart-io/goagent/core/budget  0.535s
+FAIL

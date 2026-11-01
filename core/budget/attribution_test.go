@@ -14,7 +14,7 @@ import (
 
 func TestAttributionTree(t *testing.T) {
 	ctx := context.Background()
-	c, e := New(Config{RootKey: "r", Version: "v1", MaxModelRequests: 5, AttributionVersion: "v1", MaxAgentCalls: 3})
+	c, e := New(Config{RootKey: "r", Version: "v1", MaxModelRequests: 5, MaxAgentCalls: 3})
 	require.NoError(t, e)
 	root := usage.Owner{RunID: "r", AgentID: "parent", AgentCallKey: "r"}
 	for i, x := range []struct {
@@ -39,7 +39,7 @@ func TestAttributionTree(t *testing.T) {
 
 func TestAttributionZeroModelAncestorAndOwnerConflicts(t *testing.T) {
 	ctx := context.Background()
-	c, e := New(Config{RootKey: "r", Version: "v1", MaxModelRequests: 4, AttributionVersion: "roles-v1", MaxAgentCalls: 3})
+	c, e := New(Config{RootKey: "r", Version: "v1", MaxModelRequests: 4, MaxAgentCalls: 3})
 	require.NoError(t, e)
 	chain := []usage.Owner{{RunID: "r", AgentID: "root", AgentCallKey: "root"}, {RunID: "r", AgentID: "middle", AgentCallKey: "middle", ParentAgentCallKey: "root"}, {RunID: "r", AgentID: "leaf", AgentCallKey: "leaf", ParentAgentCallKey: "middle"}}
 	require.NoError(t, c.RegisterAgent(ctx, chain))
@@ -83,7 +83,6 @@ func TestAttributionConfigAndDurableVersionIsolation(t *testing.T) {
 	cfg := Config{RootKey: "r", Version: "v1", MaxModelRequests: 3}
 	_, e = NewDurable(cfg, store)
 	require.NoError(t, e)
-	cfg.AttributionVersion = "v1"
 	cfg.MaxAgentCalls = 3
 	_, e = NewDurable(cfg, store)
 	require.Error(t, e)
@@ -101,7 +100,6 @@ func TestAttributionConfigAndDurableVersionIsolation(t *testing.T) {
 	require.NoError(t, e)
 	require.Equal(t, 7, report.Root.KnownTokens.TotalTokens)
 	require.Equal(t, "root", report.Calls[0].AgentID)
-	cfg.AttributionVersion = ""
 	cfg.MaxAgentCalls = 0
 	_, e = NewDurable(cfg, store)
 	require.Error(t, e)
@@ -109,7 +107,7 @@ func TestAttributionConfigAndDurableVersionIsolation(t *testing.T) {
 
 func TestAttributionConcurrentAdmissionAndOverflow(t *testing.T) {
 	ctx := context.Background()
-	c, e := New(Config{RootKey: "r", Version: "v1", MaxModelRequests: 2, AttributionVersion: "v1", MaxAgentCalls: 1})
+	c, e := New(Config{RootKey: "r", Version: "v1", MaxModelRequests: 2, MaxAgentCalls: 1})
 	require.NoError(t, e)
 	chain := []usage.Owner{{RunID: "r", AgentID: "root", AgentCallKey: "r"}}
 	ch := make(chan error, 8)
@@ -140,7 +138,7 @@ func TestAttributedSaveFailureIsAtomic(t *testing.T) {
 	ctx := context.Background()
 	store, e := durable.NewFileStore(t.TempDir())
 	require.NoError(t, e)
-	cfg := Config{RootKey: "r", Version: "v1", MaxModelRequests: 2, AttributionVersion: "v1", MaxAgentCalls: 2}
+	cfg := Config{RootKey: "r", Version: "v1", MaxModelRequests: 2, MaxAgentCalls: 2}
 	c, e := NewDurable(cfg, store)
 	require.NoError(t, e)
 	chain := []usage.Owner{{RunID: "r", AgentID: "root", AgentCallKey: "r"}}
@@ -164,7 +162,7 @@ func TestAttributedSaveFailureIsAtomic(t *testing.T) {
 
 func TestAttributionFieldUnknownCounts(t *testing.T) {
 	ctx := context.Background()
-	c, e := New(Config{RootKey: "r", Version: "v1", MaxModelRequests: 3, AttributionVersion: "v1", MaxAgentCalls: 1})
+	c, e := New(Config{RootKey: "r", Version: "v1", MaxModelRequests: 3, MaxAgentCalls: 1})
 	require.NoError(t, e)
 	chain := []usage.Owner{{RunID: "r", AgentID: "root", AgentCallKey: "r"}}
 	for _, key := range []string{"unknown", "total", "basic"} {
@@ -195,7 +193,7 @@ func TestAttributionFieldUnknownCounts(t *testing.T) {
 	require.Zero(t, r.Calls[0].Self.UnknownPromptEntries)
 }
 
-func TestLegacyAttributionRetainsUnattributedFieldCounts(t *testing.T) {
+func TestUnattributedCompleteUsageFieldCounts(t *testing.T) {
 	ctx := context.Background()
 	c, e := New(Config{RootKey: "legacy", Version: "v1", MaxModelRequests: 2})
 	require.NoError(t, e)
@@ -216,7 +214,7 @@ func TestLegacyAttributionRetainsUnattributedFieldCounts(t *testing.T) {
 
 func TestPartialUnknownTotalDoesNotClaimKnownDelta(t *testing.T) {
 	ctx := context.Background()
-	c, e := New(Config{RootKey: "r", Version: "v1", MaxModelRequests: 2, MaxReservedTokens: 200, TokenPolicyVersion: "est-v1", AttributionVersion: "v1", MaxAgentCalls: 1})
+	c, e := New(Config{RootKey: "r", Version: "v1", MaxModelRequests: 2, MaxReservedTokens: 200, TokenPolicyVersion: "est-v1", MaxAgentCalls: 1})
 	require.NoError(t, e)
 	chain := []usage.Owner{{RunID: "r", AgentID: "root", AgentCallKey: "r"}}
 	require.NoError(t, c.ReserveAttributed(ctx, "a", 100, chain))

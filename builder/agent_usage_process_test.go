@@ -2,7 +2,6 @@ package builder
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"os/exec"
 	"strings"
@@ -19,8 +18,7 @@ type exitBeforeEvidenceStore struct{ durable.Store }
 
 func (s exitBeforeEvidenceStore) Save(ctx context.Context, id string, snapshot *durable.Snapshot) error {
 	if strings.HasPrefix(id, "goagent/budget/") {
-		var data struct{ Evidence map[string]json.RawMessage }
-		if json.Unmarshal(snapshot.Data, &data) == nil && len(data.Evidence) > 0 {
+		if hasBudgetEvidence(snapshot.Data) {
 			os.Exit(86)
 		}
 	}
@@ -45,7 +43,7 @@ func TestAgentUsageProcessExitAfterModelBeforeEvidence(t *testing.T) {
 	if child {
 		store = exitBeforeEvidenceStore{store}
 	}
-	c, err := budget.NewDurable(budget.Config{RootKey: "process-usage", Version: "v1", MaxModelRequests: 1, AttributionVersion: "v1", MaxAgentCalls: 2}, store)
+	c, err := budget.NewDurable(budget.Config{RootKey: "process-usage", Version: "v1", MaxModelRequests: 1, MaxAgentCalls: 2}, store)
 	require.NoError(t, err)
 	ctx := budget.WithController(durable.WithJournal(durable.WithExecutionKey(context.Background(), "process-usage"), store), c)
 	model := nativeModel()

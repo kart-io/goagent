@@ -40,7 +40,7 @@ func TestHostTokenEstimatorControlsNativeRequests(t *testing.T) {
 	}
 }
 
-func TestLegacyBudgetCompletedModelIntentStillReplays(t *testing.T) {
+func TestBudgetRejectsObsoleteModelIntentBeforeSending(t *testing.T) {
 	ctx := context.Background()
 	store, err := durable.NewFileStore(t.TempDir())
 	require.NoError(t, err)
@@ -67,9 +67,12 @@ func TestLegacyBudgetCompletedModelIntentStillReplays(t *testing.T) {
 		return json.RawMessage(`{"content":"旧答案","done":true,"finish_reason":"stop"}`), nil
 	})
 	require.NoError(t, err)
+	called := false
 	turn, err := modelOperation(ctx, "model", intent, func(context.Context, func(AgentEvent) error) (*llm.StreamChunk, error) {
+		called = true
 		return nil, errors.New("不应重新请求模型")
 	}, nil, func(AgentEvent) error { return nil })
-	require.NoError(t, err)
-	require.Equal(t, "旧答案", turn.Content)
+	require.Error(t, err)
+	require.Nil(t, turn)
+	require.False(t, called, "obsolete intent must not cause another model request")
 }
