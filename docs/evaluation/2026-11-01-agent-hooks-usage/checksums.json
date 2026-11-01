@@ -1,0 +1,17 @@
+{
+  "baseline": "de6c61a",
+  "go": "go1.25.0 darwin/arm64",
+  "implementation_status": "design and existing-capability tests only",
+  "files": {
+    "builder/multi_agent_usage_audit_test.go": "8b8defcfaa22a63f08b275ddbd3081cd309c8810187f528205db15a7dcb34a7b",
+    "docs/design/MULTI_AGENT_HOOKS_AND_USAGE.md": "2fc4c4d80c15eb07f9d7d8bba866938c064c96a86fd96ceb7be551e303a808dc",
+    "docs/research/2026-11-01-agent-hooks-usage-audit.md": "3f47370fae7e1872df7a01185ce90ea11a17c3365786db36bc34e61997ed3a93",
+    "docs/superpowers/plans/2026-11-01-multi-agent-hooks-usage.md": "58060fe874718e2dd1b7bed6af1d10030a45c6cbe2361ab11e59658e4d1a9b53",
+    "docs/design/DESIGN_OVERVIEW.md": "e23a6049ba19fba2e6681338fd3d612fd15a97e3db8d7e19bbb8f96bcb31c0cf",
+    "docs/guides/COMPOSABLE_ORCHESTRATION.md": "e3c934622b844d05271f1c6a058140c7beda5e8a968e6f787306854350568d6c",
+    "docs/evaluation/2026-11-01-agent-hooks-usage/REPORT.md": "b3909b8a527228733b05d03c9976743e06417441be2004fb637c0fe70bc9539c",
+    "docs/evaluation/2026-11-01-agent-hooks-usage/multi-agent.log": "269f45af41f43a79672a65e76d8666aae2cff6849c50fec13587e57cca97f8ea",
+    "docs/evaluation/2026-11-01-agent-hooks-usage/race.log": "c0e48494e83595935de8b9a49b98503cdb3dab0cc7871f0ce65bafe5fc093996",
+    "docs/evaluation/2026-11-01-agent-hooks-usage/verification.log": "9d97f5433e13ca1f6f45cb7d2cd03069461efe1f6391d98fa28cc4895a51027b"
+  }
+}
