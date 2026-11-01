@@ -54,6 +54,9 @@ type streamResult struct {
 func (a *ConfigurableAgent[C, S]) executeStream(ctx context.Context, input interface{}, result *streamResult) (_ <-chan AgentEvent, err error) {
 	// 同步阶段也会调用宿主代码（如 scopeDurableExecution 中的工具与持久存储），panic 时转为错误返回。
 	defer recoverPanic("Agent 流式执行启动", &err)
+	if a.config.UsageHook != nil {
+		ctx = budget.WithUsageHook(ctx, a.config.UsageHook)
+	}
 	ctx = withTokenEstimator(ctx, a.config.TokenEstimator)
 	ctx = ensureModelScope(ctx)
 	if err := validateModelBudget(ctx); err != nil {

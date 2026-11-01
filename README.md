@@ -152,7 +152,7 @@ With a `llm.ToolStreamClient` and at least one tool, `agent.Start(ctx, input)` r
 
 - [Native orchestration](docs/guides/NATIVE_ORCHESTRATION.md) - `workflow.Graph`, durable graphs via `AsRunnable`, branch-level resume and `tools.Dispatcher`.
 - [Workflow](workflow/README.md) - typed graphs, branches, parallel joins and bounded loops.
-- [Multi-agent usage](docs/guides/MULTI_AGENT_USAGE.md) - agent identity, per-attempt observer hooks and unified attributed token accounting; offline demo: `go run ./examples/agent-usage`.
+- [Multi-agent usage](docs/guides/MULTI_AGENT_USAGE.md) - `WithUsageHook` for per-attempt tokens and cumulative statistics, agent identity and unified accounting; offline demo: `go run ./examples/agent-usage`.
 - [Composable orchestration](docs/guides/COMPOSABLE_ORCHESTRATION.md) - wrap a child agent or `workflow.DurableGraph` as a tool with `tools.NewRunnableToolFactory`; a child waiting for approval suspends the parent with `builder.ErrWaiting`.
 - [Agent composition and input boundaries](docs/guides/AGENT_COMPOSITION.md) - direct workflows, child-agent tools, pending input and completion scopes; [Pi design comparison](docs/research/2026-11-01-pi-core-gap-analysis.md).
 - [Host integration](docs/guides/HOST_INTEGRATION.md) - `execution.NewScope` + `execution.ConfigureBuilder` + `BuildContext`; offline example: `go run ./examples/execution-scope`.

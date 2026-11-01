@@ -1,0 +1,38 @@
+{
+  "baseline": "af0ce6a",
+  "go": "go1.25.0 darwin/arm64",
+  "raw_logs_sha256": {
+    "suite": "ba00a38646d29de2c68575dc8d0e186020400c3ecd9bb9ef67ad6e8dcb86f8cc",
+    "race": "75fd50c11ab6a90493fbe99b89cbd6f3a3797675513399abff8ea4a01667fb76",
+    "stress": "ce0c74159fb5b2b682b0f77083e42cd5b056a3506ecfdba3ee4804677301efe6",
+    "example": "65a9a9412182a4046d52ceb2c77f5b68386524749bfe8c7224ba68bbba5c8f42",
+    "red-api": "a3b0631017d2730671d24bb4ab1cdc50a9c0365125f8df59fde8fb1338820a9f",
+    "red-query": "6f4f29d34abfac6a5a02a59d2732238d4872a5904ccf847b841e33ec0bb717b3",
+    "red-review": "bfd23b984b65859dd928327d369c1831d704e1193662abb7cf9d0b67520bd25d"
+  },
+  "files": {
+    "builder/agent_usage.go": "3b66377a9dafc5b8b7c426fae91df592f82e08cd9c8b16de5fe91174dab485e2",
+    "builder/config_options.go": "76a3b0fea9459b70ea79fcc6de8003ba359759df8a0965f38b022404b4481289",
+    "builder/events.go": "6b04e7116fdd12a14d4783069fbfa84238ec6027489fcdfcd9c9faed61f62e03",
+    "builder/model_call.go": "1e35c0e8643b55256a557ed0baafadd6227bf792b5adfc341cb2ac6813798b77",
+    "examples/agent-usage/main.go": "45597494d802e4fbb1bcdc391d3ba6fee9c39e248250ad08fac31dbbab044e05",
+    "builder/usage_hook_test.go": "0fcde506951f32b4f1a56f8236774f3dc5c621d555ae2c22c36e3be81a79e0d1",
+    "core/budget/usage_hook.go": "6a9334c0e4112bf9a6412ffaeffd427f768f98733bf3b34b91c07a2d4e30af95",
+    "core/budget/usage_hook_test.go": "a03ea88a618c5d4f84a59d26b44c1ecd67176e7a3fa22fe028c6f9ebae2753a7",
+    "builder/README.md": "a99bba71e777b08bfe1ce00b737c3ebb08456ffb1b0e634e8cf802edd95ded4d",
+    "docs/guides/BUILDER_API_REFERENCE.md": "08d902ac23d5020b0995238bbcff028b59283b61604325f6c4e23d2c51fa7d2c",
+    "docs/guides/MULTI_AGENT_USAGE.md": "7c81d5b67a7cc621ecaaefe5214d033f5dfed654f365ca524370f8f2c8ebd8c3",
+    "docs/design/TOKEN_USAGE_HOOK.md": "adc99536bc74aae29696f3b81d84e1410e82ea25d33e48d56a6e7507f4cc1e72",
+    "docs/evaluation/2026-11-01-token-usage-hook/REPORT.md": "ff0b96050bdaa6a547c413f79ce5e2eff26ad8f4f294d78eef2f58d80ab21273",
+    "docs/evaluation/2026-11-01-token-usage-hook/red-api.log": "3b162c0c40ac5049b11610367525b60c7f10de162ebee02e94e25f44972e41f7",
+    "docs/evaluation/2026-11-01-token-usage-hook/stress.log": "ce0c74159fb5b2b682b0f77083e42cd5b056a3506ecfdba3ee4804677301efe6",
+    "docs/evaluation/2026-11-01-token-usage-hook/suite.log": "ba00a38646d29de2c68575dc8d0e186020400c3ecd9bb9ef67ad6e8dcb86f8cc",
+    "docs/evaluation/2026-11-01-token-usage-hook/example.log": "65a9a9412182a4046d52ceb2c77f5b68386524749bfe8c7224ba68bbba5c8f42",
+    "docs/evaluation/2026-11-01-token-usage-hook/red-query.log": "2836dfb681a5bd86b46b75f4439c83daa98195a33be2e6d4c8b22e4505bfd777",
+    "docs/evaluation/2026-11-01-token-usage-hook/race.log": "75fd50c11ab6a90493fbe99b89cbd6f3a3797675513399abff8ea4a01667fb76",
+    "docs/evaluation/2026-11-01-token-usage-hook/red-review.log": "ae7a460e645ef108d68a32b961fcd561dda6a83e7aca4478d18529dba5e68d1d",
+    "docs/evaluation/2026-11-01-token-usage-hook/verification.log": "e0ff336e0927b4914f55e42afd4536dcb050ca51f87334e5f7f4784d434b1f75",
+    "README.md": "5c1a8ff7a752ec927b8d4a9cd633007d3a6ded2cece042b50a9c4bfdc8707a52",
+    "docs/guides/EXTENSION_CONTRACT.md": "8c7c68628533abbe838509a8f854cd539c1774321deb85af9ffbaea13ad790be"
+  }
+}

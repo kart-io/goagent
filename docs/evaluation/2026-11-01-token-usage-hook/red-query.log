@@ -1,0 +1,8 @@
+--- FAIL: TestUsageHookStillReceivesEvidenceWhenStatisticsFail (0.00s)
+    usage_hook_test.go:70:
+            Error Trace:    /Users/costalong/code/go/src/github.com/kart/goagent/core/budget/usage_hook_test.go:70
+            Error:          Should be true
+            Test:           TestUsageHookStillReceivesEvidenceWhenStatisticsFail
+FAIL
+FAIL    github.com/kart-io/goagent/core/budget  0.433s
+FAIL
