@@ -2,6 +2,8 @@
 
 日期：2026-11-01。基线：GoAgent `fcff360`。分支：`codex/pi-core-contracts-20261101`。Go：1.25.0，darwin/arm64。
 
+本文及 checksums.json 记录首次交付 `4b2d643` 的快照，不代表后续修改后的文件 checksum。继续审核发现的取消生命周期与错误传递问题及其修复，见[审核修订报告](../2026-11-01-pi-core-review/REPORT.md)。
+
 ## 交付范围
 
 - 新增 `builder.Handle.PendingInputs` 和 `PendingInput`，快照查询仍在队列的输入，不改变领取或执行策略。

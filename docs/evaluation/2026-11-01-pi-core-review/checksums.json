@@ -1,0 +1,22 @@
+{
+  "baseline": "4b2d643",
+  "go": "go1.25.0 darwin/arm64",
+  "raw_logs_sha256": {
+    "red-lifecycle.log": "1ef3fa7aaec0f729d9cacc316f4244d246148e7ca1e5b8b5a1267cc756203174",
+    "red-cleanup.log": "72f0579d8ab0a295f73ec86cce18ba26651ad119c6b709a7f41776f4b40f5bec",
+    "stress.log": "c614d80ca31d36eb68f5e761ac88a54c35856ff8942ceec667b9c8b0e0c00cdc",
+    "race.log": "fe6874e8e9ddd3971fb05871be877bae173f6cb94c9c3d7fd38c97298fb9e508",
+    "suite.log": "68d95d47d33e22a2b786fd9fbb51d247a8c5223faaa186fcefc29614f73ced52"
+  },
+  "files": {
+    "builder/handle.go": "ef12a460ea5285615f9019332c4a68d79643f1563a20e2cda604f010d428f60f",
+    "builder/events.go": "02305dc4a450ce3bcbe395e417030d9183d3fcc500e8b79d9183ff03346a04a7",
+    "builder/handle_lifecycle_test.go": "ac4a9f21690fdcd794da5df75b279dcef98a504685ba5aa3c72056ab5a7bdfef",
+    "docs/evaluation/2026-11-01-pi-core-review/stress.log": "c614d80ca31d36eb68f5e761ac88a54c35856ff8942ceec667b9c8b0e0c00cdc",
+    "docs/evaluation/2026-11-01-pi-core-review/suite.log": "68d95d47d33e22a2b786fd9fbb51d247a8c5223faaa186fcefc29614f73ced52",
+    "docs/evaluation/2026-11-01-pi-core-review/red-cleanup.log": "c271f4f5dad2e6f3d46a252b583a073c4e72c65f99be5d90ae70382218594fdf",
+    "docs/evaluation/2026-11-01-pi-core-review/race.log": "fe6874e8e9ddd3971fb05871be877bae173f6cb94c9c3d7fd38c97298fb9e508",
+    "docs/evaluation/2026-11-01-pi-core-review/verification.log": "e8aedd6c686d879394b28b9b29ff4127233e2e4271d4b14a92e3372ad2c1d424",
+    "docs/evaluation/2026-11-01-pi-core-review/red-lifecycle.log": "339aa584fca7388ecbce5cd42c69e75293cd2cfc73f6398bcf81506203728889"
+  }
+}

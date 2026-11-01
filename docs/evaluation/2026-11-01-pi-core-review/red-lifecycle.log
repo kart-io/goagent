@@ -1,0 +1,22 @@
+--- FAIL: TestHandleCancellationBetweenTurnsRetainsFollowup (0.00s)
+    handle_lifecycle_test.go:29:
+            Error Trace:    /Users/costalong/code/go/src/github.com/kart/goagent/builder/handle_lifecycle_test.go:29
+            Error:          Expected error with "canceled between turns" in chain but got nil.
+            Test:           TestHandleCancellationBetweenTurnsRetainsFollowup
+--- FAIL: TestHandleCancellationPreservesExecutionError (0.00s)
+    handle_lifecycle_test.go:45:
+            Error Trace:    /Users/costalong/code/go/src/github.com/kart/goagent/builder/handle_lifecycle_test.go:45
+            Error:          Target error should be in err chain:
+                            expected: "cleanup failed"
+                            in chain: "canceled"
+            Test:           TestHandleCancellationPreservesExecutionError
+--- FAIL: TestHandleInterruptWaitsForOwnedCleanup (0.00s)
+    handle_lifecycle_test.go:92:
+            Error Trace:    /Users/costalong/code/go/src/github.com/kart/goagent/builder/handle_lifecycle_test.go:92
+            Error:          Target error should be in err chain:
+                            expected: "context deadline exceeded"
+                            in chain: "user canceled"
+            Test:           TestHandleInterruptWaitsForOwnedCleanup
+FAIL
+FAIL    github.com/kart-io/goagent/builder  0.458s
+FAIL

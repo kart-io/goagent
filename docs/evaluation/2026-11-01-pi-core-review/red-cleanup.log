@@ -1,0 +1,94 @@
+--- FAIL: TestHandleInterruptWaitsForOwnedCleanup (0.05s)
+    handle_lifecycle_test.go:158:
+            Error Trace:    /Users/costalong/code/go/src/github.com/kart/goagent/builder/handle_lifecycle_test.go:158
+            Error:          Target error should be in err chain:
+                            expected: "owned cleanup failed"
+                            in chain: "user canceled"
+            Test:           TestHandleInterruptWaitsForOwnedCleanup
+--- FAIL: TestHandleInterruptWaitsForOwnedCleanup (0.05s)
+    handle_lifecycle_test.go:158:
+            Error Trace:    /Users/costalong/code/go/src/github.com/kart/goagent/builder/handle_lifecycle_test.go:158
+            Error:          Target error should be in err chain:
+                            expected: "owned cleanup failed"
+                            in chain: "user canceled"
+            Test:           TestHandleInterruptWaitsForOwnedCleanup
+--- FAIL: TestHandleInterruptWaitsForOwnedCleanup (0.05s)
+    handle_lifecycle_test.go:158:
+            Error Trace:    /Users/costalong/code/go/src/github.com/kart/goagent/builder/handle_lifecycle_test.go:158
+            Error:          Target error should be in err chain:
+                            expected: "owned cleanup failed"
+                            in chain: "user canceled"
+            Test:           TestHandleInterruptWaitsForOwnedCleanup
+--- FAIL: TestHandleInterruptWaitsForOwnedCleanup (0.05s)
+    handle_lifecycle_test.go:158:
+            Error Trace:    /Users/costalong/code/go/src/github.com/kart/goagent/builder/handle_lifecycle_test.go:158
+            Error:          Target error should be in err chain:
+                            expected: "owned cleanup failed"
+                            in chain: "user canceled"
+            Test:           TestHandleInterruptWaitsForOwnedCleanup
+--- FAIL: TestHandleInterruptWaitsForOwnedCleanup (0.05s)
+    handle_lifecycle_test.go:158:
+            Error Trace:    /Users/costalong/code/go/src/github.com/kart/goagent/builder/handle_lifecycle_test.go:158
+            Error:          Target error should be in err chain:
+                            expected: "owned cleanup failed"
+                            in chain: "user canceled"
+            Test:           TestHandleInterruptWaitsForOwnedCleanup
+--- FAIL: TestHandleInterruptWaitsForOwnedCleanup (0.05s)
+    handle_lifecycle_test.go:158:
+            Error Trace:    /Users/costalong/code/go/src/github.com/kart/goagent/builder/handle_lifecycle_test.go:158
+            Error:          Target error should be in err chain:
+                            expected: "owned cleanup failed"
+                            in chain: "user canceled"
+            Test:           TestHandleInterruptWaitsForOwnedCleanup
+--- FAIL: TestHandleInterruptWaitsForOwnedCleanup (0.05s)
+    handle_lifecycle_test.go:158:
+            Error Trace:    /Users/costalong/code/go/src/github.com/kart/goagent/builder/handle_lifecycle_test.go:158
+            Error:          Target error should be in err chain:
+                            expected: "owned cleanup failed"
+                            in chain: "user canceled"
+            Test:           TestHandleInterruptWaitsForOwnedCleanup
+--- FAIL: TestHandleInterruptWaitsForOwnedCleanup (0.05s)
+    handle_lifecycle_test.go:158:
+            Error Trace:    /Users/costalong/code/go/src/github.com/kart/goagent/builder/handle_lifecycle_test.go:158
+            Error:          Target error should be in err chain:
+                            expected: "owned cleanup failed"
+                            in chain: "user canceled"
+            Test:           TestHandleInterruptWaitsForOwnedCleanup
+--- FAIL: TestHandleInterruptWaitsForOwnedCleanup (0.05s)
+    handle_lifecycle_test.go:158:
+            Error Trace:    /Users/costalong/code/go/src/github.com/kart/goagent/builder/handle_lifecycle_test.go:158
+            Error:          Target error should be in err chain:
+                            expected: "owned cleanup failed"
+                            in chain: "user canceled"
+            Test:           TestHandleInterruptWaitsForOwnedCleanup
+--- FAIL: TestHandleInterruptWaitsForOwnedCleanup (0.05s)
+    handle_lifecycle_test.go:158:
+            Error Trace:    /Users/costalong/code/go/src/github.com/kart/goagent/builder/handle_lifecycle_test.go:158
+            Error:          Target error should be in err chain:
+                            expected: "owned cleanup failed"
+                            in chain: "user canceled"
+            Test:           TestHandleInterruptWaitsForOwnedCleanup
+--- FAIL: TestHandleInterruptWaitsForOwnedCleanup (0.05s)
+    handle_lifecycle_test.go:158:
+            Error Trace:    /Users/costalong/code/go/src/github.com/kart/goagent/builder/handle_lifecycle_test.go:158
+            Error:          Target error should be in err chain:
+                            expected: "owned cleanup failed"
+                            in chain: "user canceled"
+            Test:           TestHandleInterruptWaitsForOwnedCleanup
+--- FAIL: TestHandleInterruptWaitsForOwnedCleanup (0.05s)
+    handle_lifecycle_test.go:158:
+            Error Trace:    /Users/costalong/code/go/src/github.com/kart/goagent/builder/handle_lifecycle_test.go:158
+            Error:          Target error should be in err chain:
+                            expected: "owned cleanup failed"
+                            in chain: "user canceled"
+            Test:           TestHandleInterruptWaitsForOwnedCleanup
+--- FAIL: TestHandleInterruptWaitsForOwnedCleanup (0.05s)
+    handle_lifecycle_test.go:158:
+            Error Trace:    /Users/costalong/code/go/src/github.com/kart/goagent/builder/handle_lifecycle_test.go:158
+            Error:          Target error should be in err chain:
+                            expected: "owned cleanup failed"
+                            in chain: "user canceled"
+            Test:           TestHandleInterruptWaitsForOwnedCleanup
+FAIL
+FAIL    github.com/kart-io/goagent/builder  1.488s
+FAIL

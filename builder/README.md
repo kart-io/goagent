@@ -60,6 +60,8 @@ pending := h.PendingInputs()   // 独立快照：仍在队列、尚未被执行�
 
 入队成功不代表处理完成。Inject 不唤醒、Steer 到达过晚或额度耗尽时可能留下输入；失败时未领取的 Followup 也会保留。`PendingInputs` 不消费、不自动续跑，已领取但处理失败的输入不在其中。`Wait` 的 context 只控制等待；等待超时不代表 Handle 结束。收件箱是进程内对象，不提供跨重启可靠接收，详见[组合与输入契约](../docs/guides/AGENT_COMPOSITION.md)。
 
+`Interrupt` 后，Handle 等待本轮 ExecuteStream 退出（包括其同步执行的工具与清理），再完成 Wait。宿主工具和钩子必须合作返回；需要限制等待时间时给 Wait 单独设置 context。取消原因与已收到的执行错误通过错误链保留，不把取消解释成业务效果已撤销。
+
 | 选项 | 时机 | 能力 |
 |---|---|---|
 | `WithPreStep` / `WithIdentifiedPreStep` | 领取收件箱输入之后、发送请求之前 | 改写消息（如压缩），或以 `Halt` 不请求模型直接结束；带身份的版本在配置改变后拒绝恢复旧的持久运行 |
@@ -70,7 +72,7 @@ pending := h.PendingInputs()   // 独立快照：仍在队列、尚未被执行�
 | `WithPromptSections` | 每轮开始时计算一次 | 追加到 system，同一轮内字节不变，保持提示词缓存前缀 |
 | `WithPromptContexts` | 每步重算 | 作为一条 user 消息附在本次请求末尾，不进入之后的历史 |
 
-持久运行中，PreStep、TurnStopping、提示词段落与上下文、收件箱的输入按步骤记入日志，恢复时回放而不重新计算；以 `Start` 开始的持久运行须同样以 `Start` 恢复。Request 钩子须是确定性的；RequestError 的原样重试在同一条回合记录内进行，持久运行中替换消息或客户端的决定以错误结束；Redirect 只在非持久运行中生效（持久运行中降级为 Steer）。子流程等待宿主续跑时，执行以 `ErrWaiting`（`*WaitingError`）暂停，见[可组合编排](../docs/guides/COMPOSABLE_ORCHESTRATION.md)。
+持久运行中，PreStep、TurnStopping、提示词段落与上下文、按步领取的 Steer/Inject 和唤醒决定记入日志，恢复时回放而不重新计算；以 `Start` 开始的持久运行须同样以 `Start` 恢复。Followup 的轮次调度不持久化，宿主须保存并按原顺序、原合并批次重建 Followup 链；单独重建 Start 或提供 WithResume 不会自动进入先前等待的后续轮次。Request 钩子须是确定性的；RequestError 的原样重试在同一条回合记录内进行，持久运行中替换消息或客户端的决定以错误结束；Redirect 只在非持久运行中生效（持久运行中降级为 Steer）。子流程等待宿主续跑时，执行以 `ErrWaiting`（`*WaitingError`）暂停，见[可组合编排](../docs/guides/COMPOSABLE_ORCHESTRATION.md)。
 
 ## 会话日志
 
