@@ -1,0 +1,4 @@
+PASS: 53 local documentation links.
+PASS: changed Go test formatting and git diff --check.
+PASS: real parent/child usage audit and scoped race suite.
+DESIGN REVIEW: four identified boundaries incorporated; proposed APIs remain unimplemented.
