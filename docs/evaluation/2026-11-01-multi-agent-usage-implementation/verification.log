@@ -1,0 +1,4 @@
+PASS: 143 local documentation links.
+PASS: 30 changed Go files formatted; git diff --check.
+PASS: final root suite and scoped race; five-round usage stress, subprocess recovery and offline example.
+REVIEW: four Important findings addressed with RED->GREEN; partial-frame and invalid-evidence regressions added.

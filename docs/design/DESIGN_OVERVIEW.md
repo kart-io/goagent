@@ -14,7 +14,7 @@
 
 Pi 设计的采纳继续遵守这些边界：复用现有可恢复子流程，补输入与完成契约；产品会话树、Sandbox 和后台调度留在 Harness/宿主。见[采纳设计](PI_CORE_ADOPTION.md)与[代码能力对照](../research/2026-11-01-pi-core-gap-analysis.md)。
 
-Agent/子 Agent 的共享根用量已经由 budget.Controller 统计；按角色/调用归属和逐尝试用量钩子的补充仍是[待实施设计](MULTI_AGENT_HOOKS_AND_USAGE.md)，不是现有 API。
+Agent/子 Agent 的共享根用量已经由 budget.Controller 统计；可通过 WithAgentID、Observer 用量事件和可选 v2 账本查询角色/调用归属，见[设计](MULTI_AGENT_HOOKS_AND_USAGE.md)与[使用指南](../guides/MULTI_AGENT_USAGE.md)。
 
 ## 分层
 

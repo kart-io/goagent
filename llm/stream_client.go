@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/kart-io/goagent/core/usage"
 	"github.com/kart-io/goagent/interfaces"
 
 	"github.com/kart-io/goagent/llm/constants"
@@ -69,6 +70,28 @@ type Usage struct {
 	PromptTokens     int `json:"prompt_tokens"`
 	CompletionTokens int `json:"completion_tokens"`
 	TotalTokens      int `json:"total_tokens"`
+	CachedTokens     int `json:"cached_tokens,omitempty"`
+	// KnownFields nil preserves legacy three-field semantics. An explicit zero mask means unknown.
+	KnownFields *usage.Fields `json:"known_fields,omitempty"`
+}
+
+// Tokens returns an independent token value without deriving or adding totals.
+func (u *Usage) Tokens() interfaces.TokenUsage {
+	if u == nil {
+		return interfaces.TokenUsage{}
+	}
+	return interfaces.TokenUsage{PromptTokens: u.PromptTokens, CompletionTokens: u.CompletionTokens, TotalTokens: u.TotalTokens, CachedTokens: u.CachedTokens}
+}
+
+// Fields reports available fields; legacy usage values report the basic fields.
+func (u *Usage) Fields() usage.Fields {
+	if u == nil {
+		return 0
+	}
+	if u.KnownFields == nil {
+		return usage.BasicFields
+	}
+	return *u.KnownFields
 }
 
 // StreamOptions 流式选项

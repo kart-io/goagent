@@ -123,7 +123,8 @@ func geminiUsage(usage *agentllm.Usage) *interfaces.TokenUsage {
 	if usage == nil {
 		return nil
 	}
-	return &interfaces.TokenUsage{PromptTokens: usage.PromptTokens, CompletionTokens: usage.CompletionTokens, TotalTokens: usage.TotalTokens}
+	tokens := usage.Tokens()
+	return &tokens
 }
 
 // decodeGeminiResponse does not assume candidates, content or usage are present.
@@ -135,21 +136,21 @@ func decodeGeminiResponse(resp *genai.GenerateContentResponse) (*agentllm.Stream
 	}
 	chunk := &agentllm.StreamChunk{}
 	if u := resp.UsageMetadata; u != nil {
-		chunk.Usage = &agentllm.Usage{PromptTokens: int(u.PromptTokenCount), CompletionTokens: int(u.CandidatesTokenCount), TotalTokens: int(u.TotalTokenCount)}
+		chunk.Usage = sdkUsage(int(u.PromptTokenCount), int(u.CandidatesTokenCount), int(u.TotalTokenCount), int(u.CachedContentTokenCount))
 	}
 	if resp.PromptFeedback != nil && resp.PromptFeedback.BlockReason != "" {
-		return nil, fmt.Errorf("gemini: prompt blocked (%s)", resp.PromptFeedback.BlockReason)
+		return chunk, fmt.Errorf("gemini: prompt blocked (%s)", resp.PromptFeedback.BlockReason)
 	}
 	if len(resp.Candidates) == 0 {
 		return chunk, nil
 	} // A stream may have a usage-only frame.
 	candidate := resp.Candidates[0]
 	if candidate == nil {
-		return nil, fmt.Errorf("gemini: nil candidate")
+		return chunk, fmt.Errorf("gemini: nil candidate")
 	}
 	chunk.FinishReason = string(candidate.FinishReason)
 	if chunk.FinishReason != "" && chunk.FinishReason != "STOP" {
-		return nil, fmt.Errorf("gemini: incomplete or blocked response (finish=%q)", chunk.FinishReason)
+		return chunk, fmt.Errorf("gemini: incomplete or blocked response (finish=%q)", chunk.FinishReason)
 	}
 	if chunk.FinishReason == "STOP" {
 		chunk.FinishReason = "stop"
@@ -161,7 +162,7 @@ func decodeGeminiResponse(resp *genai.GenerateContentResponse) (*agentllm.Stream
 	nativeContent.Role = "model"
 	data, err := json.Marshal(&nativeContent)
 	if err != nil {
-		return nil, err
+		return chunk, err
 	}
 	chunk.ProviderState = &agentllm.ProviderState{Provider: constants.ProviderGemini, Data: data}
 	for _, part := range candidate.Content.Parts {
@@ -171,10 +172,10 @@ func decodeGeminiResponse(resp *genai.GenerateContentResponse) (*agentllm.Stream
 		chunk.Content += part.Text
 		if f := part.FunctionCall; f != nil {
 			if len(f.PartialArgs) > 0 || (f.WillContinue != nil && *f.WillContinue) {
-				return nil, fmt.Errorf("gemini: incomplete function arguments")
+				return chunk, fmt.Errorf("gemini: incomplete function arguments")
 			}
 			if f.Name == "" {
-				return nil, fmt.Errorf("gemini: function call without a name")
+				return chunk, fmt.Errorf("gemini: function call without a name")
 			}
 			args := f.Args
 			if args == nil {
@@ -182,7 +183,7 @@ func decodeGeminiResponse(resp *genai.GenerateContentResponse) (*agentllm.Stream
 			}
 			data, err := json.Marshal(args)
 			if err != nil {
-				return nil, err
+				return chunk, err
 			}
 			call := agentllm.ToolCall{ID: f.ID, Type: "function"}
 			if call.ID == "" {
@@ -217,7 +218,9 @@ func (p *GeminiProvider) stream(ctx context.Context, req *agentllm.CompletionReq
 		}
 		return nil, geminiProviderError(err)
 	}
-	out := make(chan *agentllm.StreamChunk)
+	// One terminal slot retains evidence even when the caller cancels before
+	// reading the failure. Cancellation may discard a pending text delta.
+	out := make(chan *agentllm.StreamChunk, 1)
 	go func() {
 		defer close(out)
 		defer cancel()
@@ -232,40 +235,57 @@ func (p *GeminiProvider) stream(ctx context.Context, req *agentllm.CompletionReq
 			case out <- c:
 				return true
 			case <-ctx.Done():
+				if c.Done {
+					// This goroutine is the only producer. Make room without
+					// waiting for a caller that may already have stopped.
+					select {
+					case <-out:
+					default:
+					}
+					out <- c
+					return true
+				}
 				return false
 			}
 		}
 		total := &agentllm.StreamChunk{Done: true}
+		fail := func(err error) {
+			total.Error = err
+			total.ToolCalls = nil
+			total.ProviderState = nil
+			send(total)
+		}
 		resp := first
 		nativeContent := &genai.Content{Role: "model"}
 		for {
 			chunk, decodeErr := decodeGeminiResponse(resp)
+			if chunk != nil && chunk.Usage != nil {
+				total.Usage = mergeSDKUsage(total.Usage, chunk.Usage)
+			}
 			if decodeErr != nil {
-				send(&agentllm.StreamChunk{Done: true, Error: decodeErr})
+				fail(decodeErr)
 				return
 			}
 			if chunk.ProviderState != nil {
 				var content genai.Content
 				if err := json.Unmarshal(chunk.ProviderState.Data, &content); err != nil {
-					send(&agentllm.StreamChunk{Done: true, Error: err})
+					fail(err)
 					return
 				}
 				nativeContent.Parts = append(nativeContent.Parts, content.Parts...)
 			}
 			total.Content += chunk.Content
-			if chunk.Usage != nil {
-				total.Usage = chunk.Usage
-			}
 			if chunk.FinishReason != "" {
 				total.FinishReason = chunk.FinishReason
 			}
 			total.ToolCalls = append(total.ToolCalls, chunk.ToolCalls...)
 			if chunk.Delta != "" && !send(&agentllm.StreamChunk{Delta: chunk.Delta, Content: total.Content}) {
+				fail(ctx.Err())
 				return
 			}
 			resp, err, ok = geminiSDKNext(next)
 			if err != nil {
-				send(&agentllm.StreamChunk{Done: true, Error: geminiProviderError(err)})
+				fail(geminiProviderError(err))
 				return
 			}
 			if !ok {

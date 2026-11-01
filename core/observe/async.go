@@ -53,7 +53,7 @@ func (a *AsyncObserver) Observe(ctx context.Context, event Event) {
 		return
 	}
 	select {
-	case a.queue <- queuedEvent{ctx: context.WithoutCancel(ctx), event: event}:
+	case a.queue <- queuedEvent{ctx: context.WithoutCancel(ctx), event: cloneEvent(event)}:
 	default:
 		a.dropped.Add(1)
 	}

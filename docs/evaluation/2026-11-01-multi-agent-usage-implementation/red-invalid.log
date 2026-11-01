@@ -1,0 +1,10 @@
+--- FAIL: TestAgentUsageInvalidEvidenceStillClosesAttemptObservation (0.00s)
+    agent_usage_test.go:343:
+            Error Trace:    /Users/costalong/code/go/src/github.com/kart/goagent/builder/agent_usage_test.go:343
+            Error:          Not equal:
+                            expected: 1
+                            actual  : 0
+            Test:           TestAgentUsageInvalidEvidenceStillClosesAttemptObservation
+FAIL
+FAIL    github.com/kart-io/goagent/builder  0.457s
+FAIL

@@ -161,5 +161,5 @@ func ConfigureBuilder[C any, S core.State](b *builder.AgentBuilder[C, S], s *Sco
 	if !validID(agentID) {
 		return nil, fmt.Errorf("execution: agentID 必须非空且无首尾空白")
 	}
-	return b.WithSessionID(s.config.SessionID).WithDurableScope(agentID), nil
+	return b.WithSessionID(s.config.SessionID).WithDurableScope(agentID).WithAgentID(agentID), nil
 }

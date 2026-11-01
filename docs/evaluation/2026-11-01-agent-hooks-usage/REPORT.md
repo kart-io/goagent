@@ -1,6 +1,6 @@
 # Agent 钩子与 Token 计量审核验证
 
-日期：2026-11-01。代码基线 `de6c61a`。环境 Go 1.25.0，darwin/arm64。
+日期：2026-11-01。代码基线 `de6c61a`。这是实施前审核记录；后续实现见[交付报告](../2026-11-01-multi-agent-usage-implementation/REPORT.md)。环境 Go 1.25.0，darwin/arm64。
 
 ## 本轮完成
 
