@@ -1,0 +1,246 @@
+[
+  {
+    "Provider": "minimax",
+    "Scenario": "single",
+    "BodyBytes": 245,
+    "System": "Reply with exactly OK. Do not explain.",
+    "User": "Reply with OK.",
+    "Body": {
+      "max_tokens": 2048,
+      "messages": [
+        {
+          "content": "Reply with exactly OK. Do not explain.",
+          "role": "system"
+        },
+        {
+          "content": "Reply with OK.",
+          "role": "user"
+        }
+      ],
+      "model": "payload-diagnostic",
+      "stream": true,
+      "stream_options": {
+        "include_usage": true
+      },
+      "temperature": 0.7
+    }
+  },
+  {
+    "Provider": "deepseek",
+    "Scenario": "single",
+    "BodyBytes": 245,
+    "System": "Reply with exactly OK. Do not explain.",
+    "User": "Reply with OK.",
+    "Body": {
+      "max_tokens": 2048,
+      "messages": [
+        {
+          "content": "Reply with exactly OK. Do not explain.",
+          "role": "system"
+        },
+        {
+          "content": "Reply with OK.",
+          "role": "user"
+        }
+      ],
+      "model": "payload-diagnostic",
+      "stream": true,
+      "stream_options": {
+        "include_usage": true
+      },
+      "temperature": 0.7
+    }
+  },
+  {
+    "Provider": "gemini",
+    "Scenario": "single",
+    "BodyBytes": 234,
+    "System": "Reply with exactly OK. Do not explain.",
+    "User": "Reply with OK.",
+    "Body": {
+      "contents": [
+        {
+          "parts": [
+            {
+              "text": "Reply with OK."
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "generationConfig": {
+        "maxOutputTokens": 2048,
+        "temperature": 0.7,
+        "topP": 1
+      },
+      "systemInstruction": {
+        "parts": [
+          {
+            "text": "Reply with exactly OK. Do not explain."
+          }
+        ],
+        "role": "user"
+      }
+    }
+  },
+  {
+    "Provider": "minimax",
+    "Scenario": "task",
+    "BodyBytes": 836,
+    "System": "Call research and review each exactly once with {}. You must receive both results before answering. Then reply with a brief summary in at most 10 words. Do not repeat tool calls.",
+    "User": "Analyze synthetic-order with research and review, then summarize.",
+    "Body": {
+      "max_tokens": 2048,
+      "messages": [
+        {
+          "content": "Call research and review each exactly once with {}. You must receive both results before answering. Then reply with a brief summary in at most 10 words. Do not repeat tool calls.",
+          "role": "system"
+        },
+        {
+          "content": "Analyze synthetic-order with research and review, then summarize.",
+          "role": "user"
+        }
+      ],
+      "model": "payload-diagnostic",
+      "stream": true,
+      "stream_options": {
+        "include_usage": true
+      },
+      "temperature": 0.7,
+      "tools": [
+        {
+          "function": {
+            "description": "Delegate the synthetic order task; call once with {}",
+            "name": "research",
+            "parameters": {
+              "additionalProperties": false,
+              "properties": {},
+              "type": "object"
+            }
+          },
+          "type": "function"
+        },
+        {
+          "function": {
+            "description": "Delegate the synthetic order task; call once with {}",
+            "name": "review",
+            "parameters": {
+              "additionalProperties": false,
+              "properties": {},
+              "type": "object"
+            }
+          },
+          "type": "function"
+        }
+      ]
+    }
+  },
+  {
+    "Provider": "deepseek",
+    "Scenario": "task",
+    "BodyBytes": 836,
+    "System": "Call research and review each exactly once with {}. You must receive both results before answering. Then reply with a brief summary in at most 10 words. Do not repeat tool calls.",
+    "User": "Analyze synthetic-order with research and review, then summarize.",
+    "Body": {
+      "max_tokens": 2048,
+      "messages": [
+        {
+          "content": "Call research and review each exactly once with {}. You must receive both results before answering. Then reply with a brief summary in at most 10 words. Do not repeat tool calls.",
+          "role": "system"
+        },
+        {
+          "content": "Analyze synthetic-order with research and review, then summarize.",
+          "role": "user"
+        }
+      ],
+      "model": "payload-diagnostic",
+      "stream": true,
+      "stream_options": {
+        "include_usage": true
+      },
+      "temperature": 0.7,
+      "tools": [
+        {
+          "function": {
+            "description": "Delegate the synthetic order task; call once with {}",
+            "name": "research",
+            "parameters": {
+              "additionalProperties": false,
+              "properties": {},
+              "type": "object"
+            }
+          },
+          "type": "function"
+        },
+        {
+          "function": {
+            "description": "Delegate the synthetic order task; call once with {}",
+            "name": "review",
+            "parameters": {
+              "additionalProperties": false,
+              "properties": {},
+              "type": "object"
+            }
+          },
+          "type": "function"
+        }
+      ]
+    }
+  },
+  {
+    "Provider": "gemini",
+    "Scenario": "task",
+    "BodyBytes": 810,
+    "System": "Call research and review each exactly once with {}. You must receive both results before answering. Then reply with a brief summary in at most 10 words. Do not repeat tool calls.",
+    "User": "Analyze synthetic-order with research and review, then summarize.",
+    "Body": {
+      "contents": [
+        {
+          "parts": [
+            {
+              "text": "Analyze synthetic-order with research and review, then summarize."
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "generationConfig": {
+        "maxOutputTokens": 2048,
+        "temperature": 0.7,
+        "topP": 1
+      },
+      "systemInstruction": {
+        "parts": [
+          {
+            "text": "Call research and review each exactly once with {}. You must receive both results before answering. Then reply with a brief summary in at most 10 words. Do not repeat tool calls."
+          }
+        ],
+        "role": "user"
+      },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "description": "Delegate the synthetic order task; call once with {}",
+              "name": "research",
+              "parametersJsonSchema": {
+                "additionalProperties": false,
+                "properties": {},
+                "type": "object"
+              }
+            },
+            {
+              "description": "Delegate the synthetic order task; call once with {}",
+              "name": "review",
+              "parametersJsonSchema": {
+                "additionalProperties": false,
+                "properties": {},
+                "type": "object"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+]

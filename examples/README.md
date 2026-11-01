@@ -20,6 +20,7 @@ Examples that call a real LLM read the provider's API key from the environment (
 | [advanced/](advanced/) | Multi-agent collaboration, observability, parallel tool execution, tool runtime, tool selector |
 | [integration/](integration/) | Human-in-the-loop, LangChain-style runnables/middleware/checkpoints, preconfigured agents |
 | [llm/](llm/) | Provider examples: Anthropic, Cohere, Hugging Face, Kimi, and the Gemini native API verifier ([gemini-verify](llm/gemini-verify/README.md)) |
+| [Token 统计案例](https://github.com/kart-io/goagent-examples/tree/main/agent-usage) | 已迁至 goagent-examples：任务、单 Agent／子 Agent、多平台及错误边界 |
 | [workflow/](workflow/) | `workflow` graph with branching and streaming events, offline (`go run ./examples/workflow [-stream]`) |
 | [execution-scope/](execution-scope/) | `execution.NewScope` + `execution.ConfigureBuilder`: shared run/session ID, request budget and timeout, with a built-in mock model, offline |
 | [generator/](generator/) | Iterating a `core.BaseAgent` stream as a generator vs. a channel (`basic`); Take/Filter and other helpers (`advanced`) |

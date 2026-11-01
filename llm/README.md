@@ -152,3 +152,5 @@ fmt.Printf("命中率: %.2f%%\n", cached.Stats().HitRate*100)
 ## 显式零温
 
 `llm.WithTemperature(0)` 设置客户端零温；使用 Builder 时同时设置 `builder.WithTemperature(0)`（Builder 默认值为 `0.7`，优先于客户端）。直接构造请求使用 `llm.CompletionRequest{Temperature: 0, TemperatureSet: true}`。JSON 的 `"temperature":0` 会自动保留显式设置，未设置的旧请求仍沿用默认回落。自定义 Provider 应使用 `BaseProvider.ResolveTemperature(req)`，详见 [LLM API](../docs/api/LLM_API.md)。
+
+`llm.WithReasoning(usage.ReasoningConfig{Effort: "low"})` 设置支持客户端的显式推理默认值；Gemini 可设置 `BudgetSet: true, BudgetTokens: 128`。单次 `CompletionRequest.Reasoning` 可覆盖默认值。结构化流的 `ResponseModel` 保留供应商实际模型名，`Usage` 提供有字段证据的推理和工具输入分项；不要把它们再次计入总量。实现及未知语义见[设计契约](../docs/design/TOKEN_USAGE_EXPLAINABILITY.md)。

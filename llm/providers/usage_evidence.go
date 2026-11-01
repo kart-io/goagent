@@ -2,7 +2,9 @@ package providers
 
 import (
 	"github.com/kart-io/goagent/core/usage"
+	"github.com/kart-io/goagent/interfaces"
 	agentllm "github.com/kart-io/goagent/llm"
+	"github.com/sashabaranov/go-openai"
 )
 
 // sdkUsage preserves the reported total, including provider-specific reasoning
@@ -43,6 +45,12 @@ func mergeSDKUsage(previous, next *agentllm.Usage) *agentllm.Usage {
 	}
 	result := *previous
 	fields := previous.Fields() | next.Fields()
+	if next.Fields()&usage.Reasoning != 0 {
+		result.ReasoningTokens = next.ReasoningTokens
+	}
+	if next.Fields()&usage.ToolUsePrompt != 0 {
+		result.ToolUsePromptTokens = next.ToolUsePromptTokens
+	}
 	if next.Fields()&usage.Prompt != 0 {
 		result.PromptTokens = next.PromptTokens
 	}
@@ -60,4 +68,43 @@ func mergeSDKUsage(previous, next *agentllm.Usage) *agentllm.Usage {
 		result.KnownFields = &fields
 	}
 	return &result
+}
+
+// sdkUsageDetails retains only nonzero scalar evidence: SDK scalar fields do
+// not distinguish omitted fields from an explicitly reported zero.
+func sdkUsageDetails(u *agentllm.Usage, reasoning, toolInput int) *agentllm.Usage {
+	fields := u.Fields()
+	u.ReasoningTokens, u.ToolUsePromptTokens = reasoning, toolInput
+	if reasoning != 0 {
+		fields |= usage.Reasoning
+	}
+	if toolInput != 0 {
+		fields |= usage.ToolUsePrompt
+	}
+	if fields != usage.BasicFields {
+		u.KnownFields = &fields
+	}
+	return u
+}
+
+func openAIUsage(u *openai.Usage) *agentllm.Usage {
+	if u == nil {
+		return nil
+	}
+	cached, reasoning := 0, 0
+	if u.PromptTokensDetails != nil {
+		cached = u.PromptTokensDetails.CachedTokens
+	}
+	if u.CompletionTokensDetails != nil {
+		reasoning = u.CompletionTokensDetails.ReasoningTokens
+	}
+	return sdkUsageDetails(sdkUsage(u.PromptTokens, u.CompletionTokens, u.TotalTokens, cached), reasoning, 0)
+}
+
+func tokenValue(u *agentllm.Usage) *interfaces.TokenUsage {
+	if u == nil {
+		return nil
+	}
+	v := u.Tokens()
+	return &v
 }

@@ -1,0 +1,9 @@
+{
+  "docs/evaluation/2026-11-01-gemini-token-usage-retest/REPORT.md": "312a31d3008e1fc5d8a2a3592cf8869f5f51ec443a3bbfc60d041fabde1033d7",
+  "docs/evaluation/2026-11-01-gemini-token-usage-retest/results.json": "6a016999fd877143a2aca1be2697afecc7dcbb1ef98ac923f77127bc84bfdd01",
+  "docs/evaluation/2026-11-01-gemini-token-usage-retest/execution.log": "a2871f5a4aa6489e4ada7586a604182422fdcfc49e9b4f497720b5c174f94210",
+  "examples/agent-usage/live/README.md": "5d1f2ccfb0c2dd8d03298a09e687efc663b073b630e8656b6a759626e7cc95b7",
+  "examples/agent-usage/live/main.go": "26a0fd5614532912359a4d6d0a661a0dc5099daa1576180396759ec14b9269dd",
+  "examples/agent-usage/live/main_test.go": "d393ba8c98581231739f3edd1b234a9f6bbac7fcf8aa395c70a804dfce94c245",
+  "examples/agent-usage/internal/demo/demo.go": "729ab88f45f43698f377a0794feda03b7ca335864f797ba887d736d6c47adaae"
+}

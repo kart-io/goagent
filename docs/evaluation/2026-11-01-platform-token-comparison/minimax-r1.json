@@ -1,0 +1,132 @@
+{
+  "Provider": "minimax",
+  "Model": "MiniMax-M3.1-Flash",
+  "Results": [
+    {
+      "Scenario": "single",
+      "Started": "2026-11-01T05:24:15.148115Z",
+      "Finished": "2026-11-01T05:24:15.774898Z",
+      "Passed": false,
+      "Failure": "agent execution failed (*errors.joinError, reason=auth, http=401); usage preserved",
+      "Report": {
+        "Root": {
+          "ReservedRequests": 1,
+          "KnownUsageEntries": 0,
+          "UnknownUsageEntries": 1,
+          "KnownTokens": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0
+          },
+          "ReservedTokens": 0,
+          "ReservedToolCalls": 0,
+          "KnownTokenDelta": 0
+        },
+        "Calls": [
+          {
+            "RunID": "live-single",
+            "AgentID": "writer",
+            "AgentCallKey": "9103be99-99f2-4ff9-aa0c-72a8af35461b",
+            "ParentAgentCallKey": "",
+            "Self": {
+              "UnknownPromptEntries": 1,
+              "UnknownCompletionEntries": 1,
+              "UnknownTotalEntries": 1,
+              "UnknownCachedEntries": 1,
+              "KnownTokens": {
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0
+              },
+              "ReservedRequests": 1,
+              "KnownUsageEntries": 0,
+              "UnknownUsageEntries": 1,
+              "PartialUsageEntries": 0
+            },
+            "Inclusive": {
+              "UnknownPromptEntries": 1,
+              "UnknownCompletionEntries": 1,
+              "UnknownTotalEntries": 1,
+              "UnknownCachedEntries": 1,
+              "KnownTokens": {
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0
+              },
+              "ReservedRequests": 1,
+              "KnownUsageEntries": 0,
+              "UnknownUsageEntries": 1,
+              "PartialUsageEntries": 0
+            }
+          }
+        ],
+        "Agents": [
+          {
+            "AgentID": "writer",
+            "Self": {
+              "UnknownPromptEntries": 1,
+              "UnknownCompletionEntries": 1,
+              "UnknownTotalEntries": 1,
+              "UnknownCachedEntries": 1,
+              "KnownTokens": {
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0
+              },
+              "ReservedRequests": 1,
+              "KnownUsageEntries": 0,
+              "UnknownUsageEntries": 1,
+              "PartialUsageEntries": 0
+            }
+          }
+        ],
+        "Unattributed": {
+          "UnknownPromptEntries": 0,
+          "UnknownCompletionEntries": 0,
+          "UnknownTotalEntries": 0,
+          "UnknownCachedEntries": 0,
+          "KnownTokens": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0
+          },
+          "ReservedRequests": 0,
+          "KnownUsageEntries": 0,
+          "UnknownUsageEntries": 0,
+          "PartialUsageEntries": 0
+        },
+        "UnknownUsageEntries": 1,
+        "PartialUsageEntries": 0,
+        "Complete": false
+      },
+      "Attempts": [
+        {
+          "RunID": "live-single",
+          "AgentID": "writer",
+          "AgentCallKey": "9103be99-99f2-4ff9-aa0c-72a8af35461b",
+          "ParentAgentCallKey": "",
+          "OperationKey": "a6b9b838-4f6b-4eb5-a88f-2bca7b81619b",
+          "AttemptKey": "a6b9b838-4f6b-4eb5-a88f-2bca7b81619b",
+          "Provider": "openai",
+          "Model": "MiniMax-M3.1-Flash",
+          "Attempt": 0,
+          "Tokens": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0
+          },
+          "KnownFields": 0,
+          "Source": "",
+          "Revision": 0,
+          "Replayed": false,
+          "AccountingCommitted": true
+        }
+      ],
+      "ToolRuns": {
+        "lookup_order": 0,
+        "research": 0,
+        "review": 0
+      }
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "docs/evaluation/2026-11-01-token-difference-analysis/request-payloads.json": "ceae782d3c6bba3e8d0d28106acb2222e80b2b31ffde519aeb6e63720cbb5b78",
+  "docs/evaluation/2026-11-01-token-difference-analysis/REPORT.md": "6c6b4742902897fc88cb774e3b35bebe0d77a552d68da48f18e227bfb8e73b9e",
+  "docs/evaluation/2026-11-01-token-difference-analysis/tests.log": "2a04cf4e062574682c93c96e8c66630337ccbe125a16da3e05de26b024e9dee9",
+  "examples/agent-usage/live/request_analysis_test.go": "2c14641feb126690b4fca0ce1a4599b46ca3ebba185c8ed69549bb5a993f232c",
+  "llm/providers/gemini.go": "b6a3269e17852ad0a4530a3de3c279230173424342bb8061ead669fbc8a6d626",
+  "llm/providers/openai_stream.go": "9d38a4bc29077fe400beedf8cba194f33f8fb4f161f951f3d02f330187e4a26e",
+  "llm/providers/usage_evidence.go": "5057891571eb74c57591e10717ea519db32ef7399308772bb3269c7a07e41363"
+}

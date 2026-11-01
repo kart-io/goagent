@@ -11,6 +11,7 @@ import (
 
 type UsageSummary struct {
 	UnknownPromptEntries, UnknownCompletionEntries, UnknownTotalEntries, UnknownCachedEntries int
+	UnknownReasoningEntries, UnknownToolUsePromptEntries                                      int
 	KnownTokens                                                                               interfaces.TokenUsage
 	ReservedRequests, KnownUsageEntries, UnknownUsageEntries, PartialUsageEntries             int
 }
@@ -198,8 +199,8 @@ func rootSnapshot(l *ledger) (out Snapshot, err error) {
 	return
 }
 func addTokens(dst *interfaces.TokenUsage, src interfaces.TokenUsage) error {
-	d := []*int{&dst.PromptTokens, &dst.CompletionTokens, &dst.TotalTokens, &dst.CachedTokens}
-	s := []int{src.PromptTokens, src.CompletionTokens, src.TotalTokens, src.CachedTokens}
+	d := []*int{&dst.PromptTokens, &dst.CompletionTokens, &dst.TotalTokens, &dst.CachedTokens, &dst.ReasoningTokens, &dst.ToolUsePromptTokens}
+	s := []int{src.PromptTokens, src.CompletionTokens, src.TotalTokens, src.CachedTokens, src.ReasoningTokens, src.ToolUsePromptTokens}
 	for i, p := range d {
 		if s[i] < 0 || *p > math.MaxInt-s[i] {
 			return fmt.Errorf("token sum overflow")
@@ -222,6 +223,8 @@ func addSummary(dst *UsageSummary, src UsageSummary) error {
 	dst.UnknownCompletionEntries += src.UnknownCompletionEntries
 	dst.UnknownTotalEntries += src.UnknownTotalEntries
 	dst.UnknownCachedEntries += src.UnknownCachedEntries
+	dst.UnknownReasoningEntries += src.UnknownReasoningEntries
+	dst.UnknownToolUsePromptEntries += src.UnknownToolUsePromptEntries
 	return nil
 }
 func (c *Controller) Attribution(ctx context.Context) (out AttributionReport, err error) {
@@ -265,6 +268,12 @@ func (c *Controller) Attribution(ctx context.Context) (out AttributionReport, er
 				s.UnknownCachedEntries = 1
 			}
 
+			if fields&usage.Reasoning == 0 {
+				s.UnknownReasoningEntries = 1
+			}
+			if fields&usage.ToolUsePrompt == 0 {
+				s.UnknownToolUsePromptEntries = 1
+			}
 			out.UnknownUsageEntries += s.UnknownUsageEntries
 			out.PartialUsageEntries += s.PartialUsageEntries
 			if s.UnknownUsageEntries+s.PartialUsageEntries > 0 {

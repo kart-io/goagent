@@ -65,7 +65,11 @@ func (p *GeminiProvider) request(req *agentllm.CompletionRequest, tools []interf
 	}
 	maxTokens := min(p.GetMaxTokens(req.MaxTokens), 0x7fffffff)
 	temperature, topP := float32(p.ResolveTemperature(req)), float32(p.GetTopP(req.TopP))
-	cfg := &genai.GenerateContentConfig{MaxOutputTokens: int32(maxTokens), Temperature: &temperature, TopP: &topP, StopSequences: append([]string(nil), req.Stop...)}
+	thinking, err := p.thinkingConfig(req)
+	if err != nil {
+		return nil, nil, err
+	}
+	cfg := &genai.GenerateContentConfig{ThinkingConfig: thinking, MaxOutputTokens: int32(maxTokens), Temperature: &temperature, TopP: &topP, StopSequences: append([]string(nil), req.Stop...)}
 	if len(system) > 0 {
 		cfg.SystemInstruction = &genai.Content{Parts: []*genai.Part{{Text: strings.Join(system, "\n\n")}}}
 	}
@@ -107,7 +111,7 @@ func (p *GeminiProvider) Complete(ctx context.Context, req *agentllm.CompletionR
 	if err != nil {
 		return nil, err
 	}
-	result := &agentllm.CompletionResponse{Content: chunk.Content, Model: p.GetModel(req.Model), Provider: p.ProviderName(), FinishReason: chunk.FinishReason}
+	result := &agentllm.CompletionResponse{Content: chunk.Content, Model: p.GetModel(req.Model), ResponseModel: chunk.ResponseModel, Provider: p.ProviderName(), FinishReason: chunk.FinishReason}
 	if chunk.Usage != nil {
 		result.Usage = geminiUsage(chunk.Usage)
 		result.TokensUsed = chunk.Usage.TotalTokens
@@ -134,9 +138,9 @@ func decodeGeminiResponse(resp *genai.GenerateContentResponse) (*agentllm.Stream
 	if resp == nil {
 		return nil, io.ErrUnexpectedEOF
 	}
-	chunk := &agentllm.StreamChunk{}
+	chunk := &agentllm.StreamChunk{ResponseModel: resp.ModelVersion}
 	if u := resp.UsageMetadata; u != nil {
-		chunk.Usage = sdkUsage(int(u.PromptTokenCount), int(u.CandidatesTokenCount), int(u.TotalTokenCount), int(u.CachedContentTokenCount))
+		chunk.Usage = sdkUsageDetails(sdkUsage(int(u.PromptTokenCount), int(u.CandidatesTokenCount), int(u.TotalTokenCount), int(u.CachedContentTokenCount)), int(u.ThoughtsTokenCount), int(u.ToolUsePromptTokenCount))
 	}
 	if resp.PromptFeedback != nil && resp.PromptFeedback.BlockReason != "" {
 		return chunk, fmt.Errorf("gemini: prompt blocked (%s)", resp.PromptFeedback.BlockReason)
@@ -259,6 +263,9 @@ func (p *GeminiProvider) stream(ctx context.Context, req *agentllm.CompletionReq
 		nativeContent := &genai.Content{Role: "model"}
 		for {
 			chunk, decodeErr := decodeGeminiResponse(resp)
+			if chunk != nil && chunk.ResponseModel != "" {
+				total.ResponseModel = chunk.ResponseModel
+			}
 			if chunk != nil && chunk.Usage != nil {
 				total.Usage = mergeSDKUsage(total.Usage, chunk.Usage)
 			}

@@ -9,6 +9,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 )
 
@@ -68,11 +69,7 @@ type TurnEnd struct {
 }
 
 // TokenUsage 是一轮的用量。
-type TokenUsage struct {
-	PromptTokens     int `json:"prompt_tokens"`
-	CompletionTokens int `json:"completion_tokens"`
-	TotalTokens      int `json:"total_tokens"`
-}
+type TokenUsage = interfaces.TokenUsage
 
 // MessageData 是消息事件的数据。Tool 只在 tool/result 中出现。
 type MessageData struct {

@@ -1,0 +1,10 @@
+--- FAIL: TestScenarioAccountingChecks (0.00s)
+    --- FAIL: TestScenarioAccountingChecks/single (0.00s)
+        main_test.go:36: mismatched reasoning detail must fail validation
+    --- FAIL: TestScenarioAccountingChecks/child (0.00s)
+        main_test.go:36: mismatched reasoning detail must fail validation
+    --- FAIL: TestScenarioAccountingChecks/task (0.00s)
+        main_test.go:36: mismatched reasoning detail must fail validation
+FAIL
+FAIL	github.com/kart-io/goagent/examples/agent-usage/live	0.499s
+FAIL

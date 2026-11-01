@@ -12,8 +12,10 @@ const (
 	Completion
 	Total
 	Cached
+	Reasoning
+	ToolUsePrompt
 	BasicFields = Prompt | Completion | Total
-	AllFields   = BasicFields | Cached
+	AllFields   = BasicFields | Cached | Reasoning | ToolUsePrompt
 )
 
 type Evidence struct {
@@ -23,6 +25,9 @@ type Evidence struct {
 	Revision    uint64
 }
 type ModelEvidence struct {
+	ResponseModel       string          `json:",omitempty"`
+	Reasoning           ReasoningConfig `json:",omitzero"`
+	ReasoningConfigured bool            `json:",omitempty"`
 	Owner
 	OperationKey, AttemptKey, Provider, Model string
 	Attempt                                   int
@@ -32,10 +37,10 @@ type ModelEvidence struct {
 
 // Validate rejects invalid masks, negative tokens, and nonzero unreported fields.
 func (e Evidence) Validate() error {
-	if e.KnownFields & ^AllFields != 0 || e.Tokens.PromptTokens < 0 || e.Tokens.CompletionTokens < 0 || e.Tokens.TotalTokens < 0 || e.Tokens.CachedTokens < 0 {
+	if e.KnownFields & ^AllFields != 0 || e.Tokens.PromptTokens < 0 || e.Tokens.CompletionTokens < 0 || e.Tokens.TotalTokens < 0 || e.Tokens.CachedTokens < 0 || e.Tokens.ReasoningTokens < 0 || e.Tokens.ToolUsePromptTokens < 0 {
 		return fmt.Errorf("invalid usage evidence")
 	}
-	for i, n := range []int{e.Tokens.PromptTokens, e.Tokens.CompletionTokens, e.Tokens.TotalTokens, e.Tokens.CachedTokens} {
+	for i, n := range []int{e.Tokens.PromptTokens, e.Tokens.CompletionTokens, e.Tokens.TotalTokens, e.Tokens.CachedTokens, e.Tokens.ReasoningTokens, e.Tokens.ToolUsePromptTokens} {
 		if e.KnownFields&Fields(1<<i) == 0 && n != 0 {
 			return fmt.Errorf("nonzero unreported usage field")
 		}
@@ -59,8 +64,8 @@ func Merge(old, next Evidence) (Evidence, error) {
 	if out.Source == "" && next.Source != "saved" {
 		out.Source = next.Source
 	}
-	dst := []*int{&out.Tokens.PromptTokens, &out.Tokens.CompletionTokens, &out.Tokens.TotalTokens, &out.Tokens.CachedTokens}
-	src := []int{next.Tokens.PromptTokens, next.Tokens.CompletionTokens, next.Tokens.TotalTokens, next.Tokens.CachedTokens}
+	dst := []*int{&out.Tokens.PromptTokens, &out.Tokens.CompletionTokens, &out.Tokens.TotalTokens, &out.Tokens.CachedTokens, &out.Tokens.ReasoningTokens, &out.Tokens.ToolUsePromptTokens}
+	src := []int{next.Tokens.PromptTokens, next.Tokens.CompletionTokens, next.Tokens.TotalTokens, next.Tokens.CachedTokens, next.Tokens.ReasoningTokens, next.Tokens.ToolUsePromptTokens}
 	for i, p := range dst {
 		f := Fields(1 << i)
 		if next.KnownFields&f == 0 {

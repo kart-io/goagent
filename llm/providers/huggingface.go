@@ -138,6 +138,9 @@ func NewHuggingFaceWithOptions(opts ...agentllm.ClientOption) (*HuggingFaceProvi
 
 // Complete implements basic text completion
 func (p *HuggingFaceProvider) Complete(ctx context.Context, req *agentllm.CompletionRequest) (*agentllm.CompletionResponse, error) {
+	if err := p.RejectReasoning(req); err != nil {
+		return nil, err
+	}
 	// Build Hugging Face request
 	hfReq := p.buildRequest(req)
 

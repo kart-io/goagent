@@ -1,0 +1,10 @@
+ok  	github.com/kart-io/goagent/builder	23.407s
+ok  	github.com/kart-io/goagent/core/session	4.919s
+ok  	github.com/kart-io/goagent/core/usage	(cached)
+ok  	github.com/kart-io/goagent/core/budget	(cached)
+ok  	github.com/kart-io/goagent/llm/providers	40.106s
+?   	github.com/kart-io/goagent/examples/agent-usage	[no test files]
+ok  	github.com/kart-io/goagent/examples/agent-usage/agent	2.860s
+?   	github.com/kart-io/goagent/examples/agent-usage/internal/demo	[no test files]
+ok  	github.com/kart-io/goagent/examples/agent-usage/live	2.036s
+ok  	github.com/kart-io/goagent/examples/agent-usage/task	3.864s

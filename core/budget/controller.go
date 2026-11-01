@@ -237,6 +237,12 @@ func (c *Controller) RecordUsage(ctx context.Context, key string, u *interfaces.
 	if u != nil {
 		e.Tokens = *u
 		e.KnownFields = usage.BasicFields
+		if u.ReasoningTokens > 0 {
+			e.KnownFields |= usage.Reasoning
+		}
+		if u.ToolUsePromptTokens > 0 {
+			e.KnownFields |= usage.ToolUsePrompt
+		}
 		if u.CachedTokens > 0 {
 			e.KnownFields |= usage.Cached
 		}

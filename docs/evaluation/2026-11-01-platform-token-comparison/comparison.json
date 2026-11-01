@@ -1,0 +1,141 @@
+{
+  "selected_scenarios": [
+    {
+      "provider": "gemini",
+      "model": "gemini-2.5-flash",
+      "scenario": "single",
+      "tokens": {
+        "prompt_tokens": 15,
+        "completion_tokens": 1,
+        "total_tokens": 41
+      },
+      "model_requests": 1,
+      "tool_calls": 0,
+      "passed": true,
+      "evidence": "gemini-r1.json"
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-2.5-flash",
+      "scenario": "child",
+      "tokens": {
+        "prompt_tokens": 185,
+        "completion_tokens": 10,
+        "total_tokens": 252
+      },
+      "model_requests": 3,
+      "tool_calls": 1,
+      "passed": true,
+      "evidence": "gemini-r1.json"
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-2.5-flash",
+      "scenario": "task",
+      "tokens": {
+        "prompt_tokens": 683,
+        "completion_tokens": 49,
+        "total_tokens": 1020
+      },
+      "model_requests": 5,
+      "tool_calls": 3,
+      "passed": true,
+      "evidence": "gemini-named-task.json"
+    },
+    {
+      "provider": "deepseek",
+      "model": "deepseek-chat",
+      "scenario": "single",
+      "tokens": {
+        "prompt_tokens": 18,
+        "completion_tokens": 1,
+        "total_tokens": 19
+      },
+      "model_requests": 1,
+      "tool_calls": 0,
+      "passed": true,
+      "evidence": "deepseek-r1.json"
+    },
+    {
+      "provider": "deepseek",
+      "model": "deepseek-chat",
+      "scenario": "child",
+      "tokens": {
+        "prompt_tokens": 616,
+        "completion_tokens": 37,
+        "total_tokens": 653,
+        "cached_tokens": 128
+      },
+      "model_requests": 3,
+      "tool_calls": 1,
+      "passed": true,
+      "evidence": "deepseek-r1.json"
+    },
+    {
+      "provider": "deepseek",
+      "model": "deepseek-chat",
+      "scenario": "task",
+      "tokens": {
+        "prompt_tokens": 1485,
+        "completion_tokens": 84,
+        "total_tokens": 1569,
+        "cached_tokens": 640
+      },
+      "model_requests": 5,
+      "tool_calls": 3,
+      "passed": true,
+      "evidence": "deepseek-named-task.json"
+    },
+    {
+      "provider": "minimax",
+      "model": "MiniMax-M3.1-Flash",
+      "scenario": "single",
+      "tokens": {
+        "prompt_tokens": 209,
+        "completion_tokens": 3,
+        "total_tokens": 212,
+        "cached_tokens": 128
+      },
+      "model_requests": 1,
+      "tool_calls": 0,
+      "passed": true,
+      "evidence": "minimax-cn-r1.json"
+    },
+    {
+      "provider": "minimax",
+      "model": "MiniMax-M3.1-Flash",
+      "scenario": "child",
+      "tokens": {
+        "prompt_tokens": 1111,
+        "completion_tokens": 47,
+        "total_tokens": 1158,
+        "cached_tokens": 749
+      },
+      "model_requests": 3,
+      "tool_calls": 1,
+      "passed": true,
+      "evidence": "minimax-cn-r1.json"
+    },
+    {
+      "provider": "minimax",
+      "model": "MiniMax-M3.1-Flash",
+      "scenario": "task",
+      "tokens": {
+        "prompt_tokens": 2384,
+        "completion_tokens": 186,
+        "total_tokens": 2570,
+        "cached_tokens": 1870
+      },
+      "model_requests": 5,
+      "tool_calls": 3,
+      "passed": true,
+      "evidence": "minimax-named-task.json"
+    }
+  ],
+  "all_archived_attempts": {
+    "known_total_tokens": 12871,
+    "unknown_usage_entries": 1,
+    "model_request_reservations": 43
+  },
+  "comparison_total_tokens": 7494
+}

@@ -1,0 +1,2 @@
+case=cancel passed=true tokens=189 calls_before=1 calls_after=1 tools=1 replay_notifications=0 expected_error=true
+  platform=gemini requests=1 tokens=189 reasoning_known_sum=97

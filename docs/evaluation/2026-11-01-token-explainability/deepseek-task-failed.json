@@ -1,0 +1,153 @@
+{
+  "Provider": "deepseek",
+  "Model": "deepseek-chat",
+  "RequestedReasoning": {
+    "effort": "low"
+  },
+  "Results": [
+    {
+      "Scenario": "task",
+      "Started": "2026-11-01T05:37:08.237168Z",
+      "Finished": "2026-11-01T05:37:09.214203Z",
+      "Passed": false,
+      "Failure": "agent execution failed (*tools.ArgumentError, reason=unknown, http=0); usage preserved; argument validation: tool \"research\" arguments: validating root: unexpected additional properties [\"parameter\"]",
+      "Report": {
+        "Root": {
+          "ReservedRequests": 1,
+          "KnownUsageEntries": 1,
+          "UnknownUsageEntries": 0,
+          "KnownTokens": {
+            "prompt_tokens": 370,
+            "completion_tokens": 88,
+            "total_tokens": 458,
+            "reasoning_tokens": 20
+          },
+          "ReservedTokens": 0,
+          "ReservedToolCalls": 0,
+          "KnownTokenDelta": 458
+        },
+        "Calls": [
+          {
+            "RunID": "live-task",
+            "AgentID": "coordinator",
+            "AgentCallKey": "6750559f-8b40-4043-b386-1bd929baa7e4",
+            "ParentAgentCallKey": "",
+            "Self": {
+              "UnknownPromptEntries": 0,
+              "UnknownCompletionEntries": 0,
+              "UnknownTotalEntries": 0,
+              "UnknownCachedEntries": 1,
+              "UnknownReasoningEntries": 0,
+              "UnknownToolUsePromptEntries": 1,
+              "KnownTokens": {
+                "prompt_tokens": 370,
+                "completion_tokens": 88,
+                "total_tokens": 458,
+                "reasoning_tokens": 20
+              },
+              "ReservedRequests": 1,
+              "KnownUsageEntries": 1,
+              "UnknownUsageEntries": 0,
+              "PartialUsageEntries": 0
+            },
+            "Inclusive": {
+              "UnknownPromptEntries": 0,
+              "UnknownCompletionEntries": 0,
+              "UnknownTotalEntries": 0,
+              "UnknownCachedEntries": 1,
+              "UnknownReasoningEntries": 0,
+              "UnknownToolUsePromptEntries": 1,
+              "KnownTokens": {
+                "prompt_tokens": 370,
+                "completion_tokens": 88,
+                "total_tokens": 458,
+                "reasoning_tokens": 20
+              },
+              "ReservedRequests": 1,
+              "KnownUsageEntries": 1,
+              "UnknownUsageEntries": 0,
+              "PartialUsageEntries": 0
+            }
+          }
+        ],
+        "Agents": [
+          {
+            "AgentID": "coordinator",
+            "Self": {
+              "UnknownPromptEntries": 0,
+              "UnknownCompletionEntries": 0,
+              "UnknownTotalEntries": 0,
+              "UnknownCachedEntries": 1,
+              "UnknownReasoningEntries": 0,
+              "UnknownToolUsePromptEntries": 1,
+              "KnownTokens": {
+                "prompt_tokens": 370,
+                "completion_tokens": 88,
+                "total_tokens": 458,
+                "reasoning_tokens": 20
+              },
+              "ReservedRequests": 1,
+              "KnownUsageEntries": 1,
+              "UnknownUsageEntries": 0,
+              "PartialUsageEntries": 0
+            }
+          }
+        ],
+        "Unattributed": {
+          "UnknownPromptEntries": 0,
+          "UnknownCompletionEntries": 0,
+          "UnknownTotalEntries": 0,
+          "UnknownCachedEntries": 0,
+          "UnknownReasoningEntries": 0,
+          "UnknownToolUsePromptEntries": 0,
+          "KnownTokens": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0
+          },
+          "ReservedRequests": 0,
+          "KnownUsageEntries": 0,
+          "UnknownUsageEntries": 0,
+          "PartialUsageEntries": 0
+        },
+        "UnknownUsageEntries": 0,
+        "PartialUsageEntries": 0,
+        "Complete": true
+      },
+      "Attempts": [
+        {
+          "ResponseModel": "deepseek-flash",
+          "Reasoning": {
+            "effort": "low"
+          },
+          "ReasoningConfigured": true,
+          "RunID": "live-task",
+          "AgentID": "coordinator",
+          "AgentCallKey": "6750559f-8b40-4043-b386-1bd929baa7e4",
+          "ParentAgentCallKey": "",
+          "OperationKey": "ba81382e-8c7c-43a1-b916-15535532903e",
+          "AttemptKey": "ba81382e-8c7c-43a1-b916-15535532903e",
+          "Provider": "deepseek",
+          "Model": "deepseek-chat",
+          "Attempt": 0,
+          "Tokens": {
+            "prompt_tokens": 370,
+            "completion_tokens": 88,
+            "total_tokens": 458,
+            "reasoning_tokens": 20
+          },
+          "KnownFields": 23,
+          "Source": "provider",
+          "Revision": 1,
+          "Replayed": false,
+          "AccountingCommitted": true
+        }
+      ],
+      "ToolRuns": {
+        "lookup_order": 0,
+        "research": 0,
+        "review": 0
+      }
+    }
+  ]
+}

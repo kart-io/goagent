@@ -1,0 +1,8 @@
+--- FAIL: TestMalformedToolRetainsKnownExplainability (0.00s)
+    explainability_test.go:96:
+            Error Trace:	/Users/costalong/code/go/src/github.com/kart/goagent/llm/providers/explainability_test.go:96
+            Error:      	Expected value not to be nil.
+            Test:       	TestMalformedToolRetainsKnownExplainability
+FAIL
+FAIL	github.com/kart-io/goagent/llm/providers	0.265s
+FAIL

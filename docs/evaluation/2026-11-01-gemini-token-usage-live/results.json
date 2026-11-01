@@ -1,0 +1,132 @@
+{
+  "Provider": "gemini",
+  "Model": "gemini-2.5-flash",
+  "Results": [
+    {
+      "Scenario": "single",
+      "Started": "2026-11-01T05:13:15.62178Z",
+      "Finished": "2026-11-01T05:13:17.142319Z",
+      "Passed": false,
+      "Failure": "agent execution failed (*errors.joinError); usage preserved",
+      "Report": {
+        "Root": {
+          "ReservedRequests": 1,
+          "KnownUsageEntries": 0,
+          "UnknownUsageEntries": 1,
+          "KnownTokens": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0
+          },
+          "ReservedTokens": 0,
+          "ReservedToolCalls": 0,
+          "KnownTokenDelta": 0
+        },
+        "Calls": [
+          {
+            "RunID": "live-single",
+            "AgentID": "writer",
+            "AgentCallKey": "a1e56162-a634-4dc9-b891-a5c3a893eba5",
+            "ParentAgentCallKey": "",
+            "Self": {
+              "UnknownPromptEntries": 1,
+              "UnknownCompletionEntries": 1,
+              "UnknownTotalEntries": 1,
+              "UnknownCachedEntries": 1,
+              "KnownTokens": {
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0
+              },
+              "ReservedRequests": 1,
+              "KnownUsageEntries": 0,
+              "UnknownUsageEntries": 1,
+              "PartialUsageEntries": 0
+            },
+            "Inclusive": {
+              "UnknownPromptEntries": 1,
+              "UnknownCompletionEntries": 1,
+              "UnknownTotalEntries": 1,
+              "UnknownCachedEntries": 1,
+              "KnownTokens": {
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0
+              },
+              "ReservedRequests": 1,
+              "KnownUsageEntries": 0,
+              "UnknownUsageEntries": 1,
+              "PartialUsageEntries": 0
+            }
+          }
+        ],
+        "Agents": [
+          {
+            "AgentID": "writer",
+            "Self": {
+              "UnknownPromptEntries": 1,
+              "UnknownCompletionEntries": 1,
+              "UnknownTotalEntries": 1,
+              "UnknownCachedEntries": 1,
+              "KnownTokens": {
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0
+              },
+              "ReservedRequests": 1,
+              "KnownUsageEntries": 0,
+              "UnknownUsageEntries": 1,
+              "PartialUsageEntries": 0
+            }
+          }
+        ],
+        "Unattributed": {
+          "UnknownPromptEntries": 0,
+          "UnknownCompletionEntries": 0,
+          "UnknownTotalEntries": 0,
+          "UnknownCachedEntries": 0,
+          "KnownTokens": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0
+          },
+          "ReservedRequests": 0,
+          "KnownUsageEntries": 0,
+          "UnknownUsageEntries": 0,
+          "PartialUsageEntries": 0
+        },
+        "UnknownUsageEntries": 1,
+        "PartialUsageEntries": 0,
+        "Complete": false
+      },
+      "Attempts": [
+        {
+          "RunID": "live-single",
+          "AgentID": "writer",
+          "AgentCallKey": "a1e56162-a634-4dc9-b891-a5c3a893eba5",
+          "ParentAgentCallKey": "",
+          "OperationKey": "578dbb9c-f929-4001-a67f-be3b9e0e64f3",
+          "AttemptKey": "578dbb9c-f929-4001-a67f-be3b9e0e64f3",
+          "Provider": "gemini",
+          "Model": "gemini-2.5-flash",
+          "Attempt": 0,
+          "Tokens": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0
+          },
+          "KnownFields": 0,
+          "Source": "",
+          "Revision": 0,
+          "Replayed": false,
+          "AccountingCommitted": true
+        }
+      ],
+      "ToolRuns": {
+        "lookup_order": 0,
+        "research": 0,
+        "review": 0
+      }
+    }
+  ]
+}

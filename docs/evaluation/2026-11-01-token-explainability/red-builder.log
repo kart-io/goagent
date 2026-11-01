@@ -1,0 +1,7 @@
+# github.com/kart-io/goagent/builder [github.com/kart-io/goagent/builder.test]
+builder/explainability_test.go:10:101: NewSimpleBuilder(m).WithAgentID("writer").WithDurableScope("writer").WithTools(plainTool()).WithReasoning undefined (type *AgentBuilder[any, *"github.com/kart-io/goagent/core".AgentState] has no field or method WithReasoning)
+builder/explainability_test.go:14:42: e.Model.ResponseModel undefined (type usage.ModelEvidence has no field or method ResponseModel)
+builder/explainability_test.go:14:80: e.Model.ReasoningConfigured undefined (type usage.ModelEvidence has no field or method ReasoningConfigured)
+builder/explainability_test.go:14:131: e.Model.Reasoning undefined (type usage.ModelEvidence has no field or method Reasoning)
+FAIL	github.com/kart-io/goagent/builder [build failed]
+FAIL

@@ -1,0 +1,23 @@
+{
+  "command": "env -u GOROOT GOTOOLCHAIN=go1.25.0 go test -race -count=1 ./examples/agent-usage/...",
+  "exit_code": 0,
+  "packages_passed": [
+    "agent",
+    "live",
+    "task"
+  ],
+  "packages_without_tests": [
+    "agent-usage",
+    "internal/demo"
+  ],
+  "live_exit_codes": {
+    "gemini_r1": 0,
+    "deepseek_r1": 1,
+    "minimax_international_r1": 1,
+    "minimax_cn_r1": 0,
+    "deepseek_task_diagnostic": 1,
+    "gemini_named_task": 0,
+    "deepseek_named_task": 0,
+    "minimax_named_task": 0
+  }
+}

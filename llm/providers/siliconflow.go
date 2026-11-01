@@ -106,6 +106,9 @@ type siliconFlowUsage struct {
 
 // Complete 实现 llm.Client 接口的 Complete 方法
 func (c *SiliconFlowClient) Complete(ctx context.Context, req *agentllm.CompletionRequest) (*agentllm.CompletionResponse, error) {
+	if err := c.RejectReasoning(req); err != nil {
+		return nil, err
+	}
 	// 转换消息格式
 	messages := make([]siliconFlowMessage, len(req.Messages))
 	for i, msg := range req.Messages {

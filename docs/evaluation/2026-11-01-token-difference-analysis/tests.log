@@ -1,0 +1,5 @@
+?   	github.com/kart-io/goagent/examples/agent-usage	[no test files]
+ok  	github.com/kart-io/goagent/examples/agent-usage/agent	1.469s
+?   	github.com/kart-io/goagent/examples/agent-usage/internal/demo	[no test files]
+ok  	github.com/kart-io/goagent/examples/agent-usage/live	2.033s
+ok  	github.com/kart-io/goagent/examples/agent-usage/task	1.508s

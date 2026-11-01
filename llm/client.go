@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/kart-io/goagent/core/usage"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm/constants"
 )
@@ -44,6 +45,7 @@ type ProviderState struct {
 
 // CompletionRequest 定义补全请求
 type CompletionRequest struct {
+	Reasoning *usage.ReasoningConfig `json:"reasoning,omitempty"`
 	// TemperatureSet 使 Temperature=0 显式覆盖客户端默认值；JSON 根据字段是否存在自动维护。
 	TemperatureSet bool      `json:"-"`
 	Messages       []Message `json:"messages"`              // 消息列表
@@ -56,8 +58,9 @@ type CompletionRequest struct {
 
 // CompletionResponse 定义补全响应
 type CompletionResponse struct {
-	Content string `json:"content"` // 生成的内容
-	Model   string `json:"model"`   // 使用的模型
+	ResponseModel string `json:"response_model,omitempty"`
+	Content       string `json:"content"` // 生成的内容
+	Model         string `json:"model"`   // 使用的模型
 
 	TokensUsed   int                    `json:"tokens_used,omitempty"`   // 使用的 token 数
 	FinishReason string                 `json:"finish_reason,omitempty"` // 结束原因
@@ -80,6 +83,7 @@ var (
 
 // Config 定义 LLM 配置
 type LLMOptions struct {
+	Reasoning *usage.ReasoningConfig `json:"reasoning,omitempty"`
 	// TemperatureSet 区分显式零与零值配置；WithTemperature 和 JSON 解码自动维护。
 	TemperatureSet bool `json:"-"`
 	// 基础配置

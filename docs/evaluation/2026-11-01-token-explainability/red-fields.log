@@ -1,0 +1,19 @@
+# github.com/kart-io/goagent/core/usage [github.com/kart-io/goagent/core/usage.test]
+core/usage/detail_test.go:9:58: unknown field ReasoningTokens in struct literal of type interfaces.TokenUsage
+core/usage/detail_test.go:9:76: unknown field ToolUsePromptTokens in struct literal of type interfaces.TokenUsage
+core/usage/detail_test.go:9:117: undefined: Reasoning
+core/usage/detail_test.go:9:127: undefined: ToolUsePrompt
+core/usage/detail_test.go:13:29: changed.Tokens.ReasoningTokens undefined (type interfaces.TokenUsage has no field or method ReasoningTokens)
+core/usage/detail_test.go:17:27: invalid.Tokens.ToolUsePromptTokens undefined (type interfaces.TokenUsage has no field or method ToolUsePromptTokens)
+FAIL	github.com/kart-io/goagent/core/usage [build failed]
+# github.com/kart-io/goagent/core/budget [github.com/kart-io/goagent/core/budget.test]
+core/budget/detail_test.go:7:82: undefined: usage.Reasoning
+core/budget/detail_test.go:7:98: undefined: usage.ToolUsePrompt
+core/budget/detail_test.go:7:156: unknown field ReasoningTokens in struct literal of type interfaces.TokenUsage
+core/budget/detail_test.go:7:174: unknown field ToolUsePromptTokens in struct literal of type interfaces.TokenUsage
+core/budget/detail_test.go:9:62: r.Root.KnownTokens.ReasoningTokens undefined (type interfaces.TokenUsage has no field or method ReasoningTokens)
+core/budget/detail_test.go:9:103: r.Root.KnownTokens.ToolUsePromptTokens undefined (type interfaces.TokenUsage has no field or method ToolUsePromptTokens)
+core/budget/detail_test.go:10:20: r.Unattributed.UnknownReasoningEntries undefined (type UsageSummary has no field or method UnknownReasoningEntries)
+core/budget/detail_test.go:10:65: r.Unattributed.UnknownToolUsePromptEntries undefined (type UsageSummary has no field or method UnknownToolUsePromptEntries)
+FAIL	github.com/kart-io/goagent/core/budget [build failed]
+FAIL

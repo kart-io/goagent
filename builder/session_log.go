@@ -151,7 +151,8 @@ func (t *sessionTurn) end(ctx context.Context, messages []llm.Message, answer st
 	}
 	d := session.TurnEnd{Answer: answer}
 	if usage != nil {
-		d.Usage = &session.TokenUsage{PromptTokens: usage.PromptTokens, CompletionTokens: usage.CompletionTokens, TotalTokens: usage.TotalTokens}
+		copy := *usage
+		d.Usage = &copy
 	}
 	ev, err := session.NewEvent(session.TypeTurnEnd, d)
 	if err != nil {

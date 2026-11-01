@@ -1,0 +1,9 @@
+provider=gemini scenario=task passed=true tokens=862 requests=5 tools=3 unknown=0 partial=0
+  agent=coordinator self=407
+  agent=researcher self=388
+  agent=reviewer self=67
+  attempt agent=coordinator requested_model=gemini-2.5-flash response_model="gemini-2.5-flash" reasoning=59 reasoning_known=true tool_input=0 tool_input_known=false reasoning_configured=true
+  attempt agent=researcher requested_model=gemini-2.5-flash response_model="gemini-2.5-flash" reasoning=61 reasoning_known=true tool_input=0 tool_input_known=false reasoning_configured=true
+  attempt agent=researcher requested_model=gemini-2.5-flash response_model="gemini-2.5-flash" reasoning=0 reasoning_known=false tool_input=0 tool_input_known=false reasoning_configured=true
+  attempt agent=reviewer requested_model=gemini-2.5-flash response_model="gemini-2.5-flash" reasoning=44 reasoning_known=true tool_input=0 tool_input_known=false reasoning_configured=true
+  attempt agent=coordinator requested_model=gemini-2.5-flash response_model="gemini-2.5-flash" reasoning=0 reasoning_known=false tool_input=0 tool_input_known=false reasoning_configured=true

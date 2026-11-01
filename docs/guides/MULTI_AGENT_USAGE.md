@@ -113,8 +113,21 @@ u := &llm.Usage{TotalTokens: 19, CachedTokens: 4, KnownFields: &fields}
 
 ## 离线运行与证据
 
+所有案例代码已迁至 kart-io/goagent-examples，以下命令在该仓库根目录执行（当前新 API 需先 make work 联调本地 GoAgent）。按两种业务口径统计的完整案例见 [Token 统计案例](https://github.com/kart-io/goagent-examples/tree/main/agent-usage)：
+
 ```sh
-go run ./examples/agent-usage
+# 完整任务：父 Agent + 两个并行子 Agent + 普通工具，总量 18
+go run ./agent-usage/task
+# 单 Agent：writer 总量 10
+go run ./agent-usage/agent -mode single
+# 子 Agent：writer 为 10，包含父分析与汇总的任务总量 17
+go run ./agent-usage/agent -mode child
+```
+
+案例同时演示逐尝试钩子、角色 Self、调用 Self/Inclusive 和完成后的 Root 查询，不需要模型凭据。模型 usage 为预设值，实际接入时替换模型客户端。
+
+```sh
+go run ./agent-usage
 ```
 
 例子包含两个并行子 Agent、一次失败重试和持久回放。两次输出均为 Root=18、父 Self=9、父 Inclusive=18；请求5次，其中一次缺少 usage，unknown=1。临时目录由示例自己创建并清理，不需要模型凭据。
@@ -122,3 +135,26 @@ go run ./examples/agent-usage
 示例通过父 Builder.WithUsageHook 取得所有后代通知，打印 hook: live=5 replay=2；通知次数不等于新增费用，回放后的根累计仍为18。
 
 实现依据见[设计](../design/MULTI_AGENT_HOOKS_AND_USAGE.md)，验证见[交付报告](../evaluation/2026-11-01-multi-agent-usage-implementation/REPORT.md)。
+
+## 推理明细、实际模型与配置
+
+```go
+agent, err := builder.NewSimpleBuilder(client).
+    WithReasoning(usage.ReasoningConfig{Effort: "low"}). // OpenAI 兼容/DeepSeek；模型需支持
+    WithUsageHook(func(ctx context.Context, e budget.UsageEvent) {
+        fmt.Println(e.Model.Model, e.Model.ResponseModel) // 请求名与响应实际名
+        if e.Model.KnownFields&usage.Reasoning != 0 {
+            fmt.Println("已知推理 Token", e.Model.Tokens.ReasoningTokens)
+        }
+        if e.Model.KnownFields&usage.ToolUsePrompt != 0 {
+            fmt.Println("工具相关输入", e.Model.Tokens.ToolUsePromptTokens)
+        }
+        // ReasoningConfigured/Reasoning 记录显式请求设置，不推断上游默认。
+    }).Build()
+```
+
+Gemini 2.5 可用 `usage.ReasoningConfig{BudgetSet: true, BudgetTokens: 128}` 请求单次思考预算；模型支持零预算时，显式 0 与未设置仍可区分。客户端默认值通过 `llm.WithReasoning(config)` 设置。无实现的 Provider 明确拒绝；自定义客户端实现 `llm.ReasoningRequestValidator` 后才接受 Builder 的显式设置。
+
+推理与工具输入分项不能再加到供应商 TotalTokens。未报告的字段仍为未知，不用总量减法推算。UsageSummary 提供 `UnknownReasoningEntries`、`UnknownToolUsePromptEntries`；基本用量 Complete 不代表所有可选细项已知。实际响应模型未提供时 ResponseModel 为空。
+
+[设计契约](../design/TOKEN_USAGE_EXPLAINABILITY.md)记录字段、配置和回放规则。

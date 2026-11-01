@@ -116,7 +116,7 @@ func modelOperation(ctx context.Context, id string, intent json.RawMessage, invo
 		if observe.Enabled(callCtx) {
 			in, _ := usage.FromContext(callCtx)
 			meta, _ := callCtx.Value(modelMetadataKey{}).(modelMetadata)
-			observe.Emit(callCtx, observe.Event{Type: "model_attempt_start", Path: "attempt", OperationKey: attemptKey(n), Usage: &usage.ModelEvidence{Owner: in.Owner, OperationKey: key, AttemptKey: attemptKey(n), Attempt: n, Provider: meta.Provider, Model: meta.Model}})
+			observe.Emit(callCtx, observe.Event{Type: "model_attempt_start", Path: "attempt", OperationKey: attemptKey(n), Usage: &usage.ModelEvidence{Owner: in.Owner, OperationKey: key, AttemptKey: attemptKey(n), Attempt: n, Provider: meta.Provider, Model: meta.Model, Reasoning: meta.Reasoning, ReasoningConfigured: meta.ReasoningConfigured}})
 		}
 		if counter, ok := ctx.Value(modelScopeKey{}).(*atomic.Int64); ok {
 			counter.Add(1)
@@ -253,6 +253,10 @@ func modelOperation(ctx context.Context, id string, intent json.RawMessage, invo
 	return turn, nil
 }
 func readPlainModelTurn(ctx context.Context, id string, client llm.StreamClient, req *llm.CompletionRequest, emit func(AgentEvent) error) (*llm.StreamChunk, error) {
+	if err := llm.ValidateReasoningRequest(client, req); err != nil {
+		return nil, err
+	}
+
 	ctx = withModelMetadata(ctx, client, req)
 	ctx = withTokenRequest(ctx, req, nil)
 	var intent json.RawMessage

@@ -125,6 +125,11 @@ func (responseHeaderTimeoutError) Temporary() bool { return true }
 // Complete implements basic text completion
 // 优化：使用 sync.Pool 复用消息切片以减少内存分配
 func (p *OpenAIProvider) Complete(ctx context.Context, req *agentllm.CompletionRequest) (*agentllm.CompletionResponse, error) {
+	effort, reasoningErr := p.reasoningEffort(req)
+	if reasoningErr != nil {
+		return nil, reasoningErr
+	}
+
 	// Convert messages
 	var messages []openai.ChatCompletionMessage
 	if p.Config.SystemPrompt != "" {
@@ -149,7 +154,7 @@ func (p *OpenAIProvider) Complete(ctx context.Context, req *agentllm.CompletionR
 	ctx = withOpenAITemperature(ctx, temperature)
 
 	ctx, retryAfter := withRetryAfterSlot(ctx)
-	resp, err := p.client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
+	resp, err := p.client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{ReasoningEffort: effort,
 		Model:       model,
 		Messages:    messages,
 		MaxTokens:   maxTokens,
@@ -166,16 +171,13 @@ func (p *OpenAIProvider) Complete(ctx context.Context, req *agentllm.CompletionR
 	}
 
 	return &agentllm.CompletionResponse{
-		Content:      resp.Choices[0].Message.Content,
-		Model:        resp.Model,
-		TokensUsed:   resp.Usage.TotalTokens,
-		FinishReason: string(resp.Choices[0].FinishReason),
-		Provider:     p.ProviderName(),
-		Usage: &interfaces.TokenUsage{
-			PromptTokens:     resp.Usage.PromptTokens,
-			CompletionTokens: resp.Usage.CompletionTokens,
-			TotalTokens:      resp.Usage.TotalTokens,
-		},
+		Content:       resp.Choices[0].Message.Content,
+		Model:         resp.Model,
+		ResponseModel: resp.Model,
+		TokensUsed:    resp.Usage.TotalTokens,
+		FinishReason:  string(resp.Choices[0].FinishReason),
+		Provider:      p.ProviderName(),
+		Usage:         tokenValue(openAIUsage(&resp.Usage)),
 	}, nil
 }
 
@@ -189,6 +191,11 @@ func (p *OpenAIProvider) Chat(ctx context.Context, messages []agentllm.Message) 
 // Stream implements streaming generation
 // 超时只约束拿到响应头，流开始后不再计时；消费者不再读取时必须取消 ctx，否则 goroutine 与连接不会释放。
 func (p *OpenAIProvider) Stream(ctx context.Context, prompt string) (<-chan string, error) {
+	effort, reasoningErr := p.reasoningEffort(nil)
+	if reasoningErr != nil {
+		return nil, reasoningErr
+	}
+
 	tokens := make(chan string, 100)
 
 	model := p.GetModel("")
@@ -209,7 +216,7 @@ func (p *OpenAIProvider) Stream(ctx context.Context, prompt string) (<-chan stri
 	})
 
 	ctx, retryAfter := withRetryAfterSlot(ctx)
-	stream, err := p.client.CreateChatCompletionStream(ctx, openai.ChatCompletionRequest{
+	stream, err := p.client.CreateChatCompletionStream(ctx, openai.ChatCompletionRequest{ReasoningEffort: effort,
 		Model:       model,
 		Messages:    messages,
 		MaxTokens:   maxTokens,
@@ -254,6 +261,11 @@ func (p *OpenAIProvider) Stream(ctx context.Context, prompt string) (<-chan stri
 // GenerateWithTools implements tool calling
 // 返回 *agentllm.ToolCallResponse 以符合 llm.ToolCallingClient 接口
 func (p *OpenAIProvider) GenerateWithTools(ctx context.Context, prompt string, tools []interfaces.Tool) (*agentllm.ToolCallResponse, error) {
+	effort, reasoningErr := p.reasoningEffort(nil)
+	if reasoningErr != nil {
+		return nil, reasoningErr
+	}
+
 	// 使用当前工具协议；响应仍兼容旧 function_call。
 	toolDefinitions := p.convertTools(tools)
 
@@ -275,7 +287,7 @@ func (p *OpenAIProvider) GenerateWithTools(ctx context.Context, prompt string, t
 	ctx = withOpenAITemperature(ctx, temperature)
 
 	ctx, retryAfter := withRetryAfterSlot(ctx)
-	resp, err := p.client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
+	resp, err := p.client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{ReasoningEffort: effort,
 		Model:       model,
 		Messages:    messages,
 		MaxTokens:   maxTokens,
@@ -295,9 +307,7 @@ func (p *OpenAIProvider) GenerateWithTools(ctx context.Context, prompt string, t
 	result := &agentllm.ToolCallResponse{Content: choice.Message.Content}
 	// SDK 将缺失 usage 解码为零值；不把无法确认的零值声明为已报告用量。
 	if resp.Usage.TotalTokens > 0 || resp.Usage.PromptTokens > 0 || resp.Usage.CompletionTokens > 0 {
-		result.Usage = &interfaces.TokenUsage{
-			PromptTokens: resp.Usage.PromptTokens, CompletionTokens: resp.Usage.CompletionTokens, TotalTokens: resp.Usage.TotalTokens,
-		}
+		result.Usage = tokenValue(openAIUsage(&resp.Usage))
 	}
 
 	for _, call := range choice.Message.ToolCalls {
@@ -328,6 +338,11 @@ func (p *OpenAIProvider) GenerateWithTools(ctx context.Context, prompt string, t
 // 返回 <-chan agentllm.ToolChunk 以符合 llm.ToolCallingClient 接口
 // 超时只约束拿到响应头，流开始后不再计时；消费者不再读取时必须取消 ctx，否则 goroutine 与连接不会释放。
 func (p *OpenAIProvider) StreamWithTools(ctx context.Context, prompt string, tools []interfaces.Tool) (<-chan agentllm.ToolChunk, error) {
+	effort, reasoningErr := p.reasoningEffort(nil)
+	if reasoningErr != nil {
+		return nil, reasoningErr
+	}
+
 	messages := []openai.ChatCompletionMessage{}
 	if p.Config.SystemPrompt != "" {
 		messages = append(messages, openai.ChatCompletionMessage{Role: "system", Content: p.Config.SystemPrompt})
@@ -336,7 +351,7 @@ func (p *OpenAIProvider) StreamWithTools(ctx context.Context, prompt string, too
 	temperature := p.GetTemperature(0)
 	ctx = withOpenAITemperature(ctx, temperature)
 	ctx, retryAfter := withRetryAfterSlot(ctx)
-	stream, err := p.client.CreateChatCompletionStream(ctx, openai.ChatCompletionRequest{
+	stream, err := p.client.CreateChatCompletionStream(ctx, openai.ChatCompletionRequest{ReasoningEffort: effort,
 		Model: p.GetModel(""), Messages: messages, Tools: p.convertTools(tools),
 		MaxTokens: p.GetMaxTokens(0), Temperature: float32(temperature), Stream: true,
 	})

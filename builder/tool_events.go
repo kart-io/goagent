@@ -477,7 +477,11 @@ func readToolTurn(ctx context.Context, stream <-chan *llm.StreamChunk, emit func
 				continue
 			}
 			usage := result.Usage
+			responseModel := result.ResponseModel
 			result = *chunk
+			if result.ResponseModel == "" {
+				result.ResponseModel = responseModel
+			}
 			if chunk.Usage != nil {
 				usage = mergeTurnUsage(usage, chunk.Usage)
 			}
@@ -518,6 +522,12 @@ func mergeTurnUsage(previous, next *llm.Usage) *llm.Usage {
 		}
 		if fields&usage.Cached == 0 {
 			copy.CachedTokens = previous.CachedTokens
+		}
+		if fields&usage.Reasoning == 0 {
+			copy.ReasoningTokens = previous.ReasoningTokens
+		}
+		if fields&usage.ToolUsePrompt == 0 {
+			copy.ToolUsePromptTokens = previous.ToolUsePromptTokens
 		}
 		fields |= previous.Fields()
 	}

@@ -110,4 +110,6 @@ builder/
 
 `WithUsageHook(func(ctx context.Context, e budget.UsageEvent))` 直接获取逐尝试 Token 和可用的累计统计，父钩子向子 Agent 继承。无需自行筛选 Observer 事件；查询错误与回调 panic 不改变业务结果。未绑定预算时仍提供单次用量，详见下述指南。
 
-`WithAgentID` 标识角色；子 Agent 使用父 context 共享预算与 Observer。model_attempt_start/model_usage 提供尝试键、父子身份和字段证据，可靠累计通过统一预算的 Attribution 查询。Self、Inclusive、Root 不可重复相加，见[指南](../docs/guides/MULTI_AGENT_USAGE.md)与[离线示例](../examples/agent-usage/main.go)。
+`WithAgentID` 标识角色；子 Agent 使用父 context 共享预算与 Observer。model_attempt_start/model_usage 提供尝试键、父子身份和字段证据，可靠累计通过统一预算的 Attribution 查询。Self、Inclusive、Root 不可重复相加，见[指南](../docs/guides/MULTI_AGENT_USAGE.md)与[离线示例](https://github.com/kart-io/goagent-examples/tree/main/agent-usage)。
+
+Token 统计钩子还可读取供应商报告的 `ReasoningTokens`、`ToolUsePromptTokens` 和 `ResponseModel`；先检查对应 `KnownFields`。通过 `WithReasoning(usage.ReasoningConfig{Effort: "low"})` 设置本 Agent 的显式推理控制，Gemini 思考预算使用 `BudgetSet: true` 与 `BudgetTokens`。不支持的客户端明确报错。见[用量指南](../docs/guides/MULTI_AGENT_USAGE.md)。

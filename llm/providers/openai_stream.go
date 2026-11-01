@@ -42,6 +42,10 @@ func (p *OpenAIProvider) completeStream(ctx context.Context, req *agentllm.Compl
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	effort, err := p.reasoningEffort(req)
+	if err != nil {
+		return nil, err
+	}
 	messages := make([]openai.ChatCompletionMessage, 0, len(req.Messages)+1)
 	if p.Config.SystemPrompt != "" {
 		messages = append(messages, openai.ChatCompletionMessage{Role: openai.ChatMessageRoleSystem, Content: p.Config.SystemPrompt})
@@ -58,7 +62,7 @@ func (p *OpenAIProvider) completeStream(ctx context.Context, req *agentllm.Compl
 	ctx = withOpenAITemperature(ctx, temperature)
 	ctx, retryAfter := withRetryAfterSlot(ctx)
 	stream, err := p.client.CreateChatCompletionStream(ctx, openai.ChatCompletionRequest{
-		Model: model, Messages: messages, Tools: p.convertTools(tools), MaxTokens: p.GetMaxTokens(req.MaxTokens),
+		ReasoningEffort: effort, Model: model, Messages: messages, Tools: p.convertTools(tools), MaxTokens: p.GetMaxTokens(req.MaxTokens),
 		Temperature: float32(temperature), TopP: float32(req.TopP),
 		Stop: req.Stop, Stream: true, StreamOptions: &openai.StreamOptions{IncludeUsage: true},
 	})
@@ -73,6 +77,7 @@ func (p *OpenAIProvider) completeStream(ctx context.Context, req *agentllm.Compl
 		var reasoning strings.Builder
 		var usage *agentllm.Usage
 		var finishReason string
+		var responseModel string
 		calls := map[int]*agentllm.ToolCall{}
 		completeBatchSeen := false
 		order := []int{}
@@ -88,10 +93,14 @@ func (p *OpenAIProvider) completeStream(ctx context.Context, req *agentllm.Compl
 				return false
 			}
 		}
+		fail := func(err error) {
+			send(&agentllm.StreamChunk{Done: true, Error: err, Usage: usage, ResponseModel: responseModel,
+				Content: content.String(), ReasoningContent: reasoning.String(), FinishReason: finishReason})
+		}
 		for {
 			response, err := stream.Recv()
 			if err != nil {
-				terminal := &agentllm.StreamChunk{Content: content.String(), ReasoningContent: reasoning.String(), FinishReason: finishReason, Usage: usage, Done: true}
+				terminal := &agentllm.StreamChunk{ResponseModel: responseModel, Content: content.String(), ReasoningContent: reasoning.String(), FinishReason: finishReason, Usage: usage, Done: true}
 				if !errors.Is(err, io.EOF) {
 					terminal.Error = agentErrors.NewLLMRequestError(p.ProviderName(), model, openAIProviderError(err, 0))
 				} else if finishReason == "" {
@@ -110,37 +119,37 @@ func (p *OpenAIProvider) completeStream(ctx context.Context, req *agentllm.Compl
 				send(terminal)
 				return
 			}
-			if response.Usage != nil {
-				cached := 0
-				if response.Usage.PromptTokensDetails != nil {
-					cached = response.Usage.PromptTokensDetails.CachedTokens
-				}
-				usage = sdkUsage(response.Usage.PromptTokens, response.Usage.CompletionTokens, response.Usage.TotalTokens, cached)
+			if response.Model != "" {
+				responseModel = response.Model
 			}
+			if response.Usage != nil {
+				usage = mergeSDKUsage(usage, openAIUsage(response.Usage))
+			}
+
 			if len(response.Choices) == 0 {
 				continue
 			}
 			choice := response.Choices[0]
 			reasoning.WriteString(choice.Delta.ReasoningContent)
 			if choice.Delta.FunctionCall != nil {
-				send(&agentllm.StreamChunk{Done: true, Error: fmt.Errorf("原生工具流需要 tool_calls 响应，服务返回了旧 function_call 协议")})
+				fail(fmt.Errorf("原生工具流需要 tool_calls 响应，服务返回了旧 function_call 协议"))
 				return
 			}
 			if len(choice.Delta.ToolCalls) > 0 {
 				if completeBatchSeen {
-					send(&agentllm.StreamChunk{Done: true, Error: fmt.Errorf("完整工具调用结束帧后仍收到工具分片")})
+					fail(fmt.Errorf("完整工具调用结束帧后仍收到工具分片"))
 					return
 				}
 				completeBatch, err := indexCompleteToolBatch(choice.Delta.ToolCalls, string(choice.FinishReason), len(calls) > 0)
 				if err != nil {
-					send(&agentllm.StreamChunk{Done: true, Error: err})
+					fail(err)
 					return
 				}
 				completeBatchSeen = completeBatch
 			}
 			for _, delta := range choice.Delta.ToolCalls {
 				if delta.Index == nil || *delta.Index < 0 {
-					send(&agentllm.StreamChunk{Done: true, Error: fmt.Errorf("工具分片缺少有效索引")})
+					fail(fmt.Errorf("工具分片缺少有效索引"))
 					return
 				}
 				i := *delta.Index
