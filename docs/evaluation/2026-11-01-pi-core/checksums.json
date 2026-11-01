@@ -1,0 +1,17 @@
+{
+  "baseline": "fcff360abf5ce6f4e000f236a20f6c619d021bb2",
+  "go": "go1.25.0 darwin/arm64",
+  "files": {
+    "builder/handle.go": "3449eaf9fc513107c1ffa3e95a8a735fc94eacabc82a6e5bbefd2abe5e212037",
+    "builder/handle_pending_test.go": "fc3bbaaef37329ac21b3339ac618def9affd4099105d90bedfb11f152b076d4e",
+    "tools/runnable_tool_example_test.go": "9d74c28ec5cfe7d65731b6421192ac2d13264721fabddef49a2b7c8375994d9b",
+    "docs/evaluation/2026-11-01-pi-core/red-api.log": "500fe850723a126f2f6ea5c35a5e3797e1451a598390f55c3e1a77a3881e308e",
+    "docs/evaluation/2026-11-01-pi-core/suite.log": "254f23c09421cafc387ef87961f700ab1a5d4e8e7fb3cce87e0e6764e6f5004b",
+    "docs/evaluation/2026-11-01-pi-core/example.log": "346ce9b29486bf63d72b763e04ff1bd265096da111815d8895ea5f02021a9493",
+    "docs/evaluation/2026-11-01-pi-core/handle.log": "66fd526313419eeb5b6674a5cc28f825ee724b61a878e1e6f21ee73516a971cd",
+    "docs/evaluation/2026-11-01-pi-core/red-followup.log": "daac79e2b1a3d21b3c85fd74a0f0a0019ac454673eaa7838a1b6d84dc00f9196",
+    "docs/evaluation/2026-11-01-pi-core/race.log": "c18356ec52d410a574e7cc428d8ea0cef9080cd525d61ba3b03384174e4b7b73",
+    "docs/evaluation/2026-11-01-pi-core/verification.log": "4835af22df4e6b11951d409e7d9d26d493c1be1aa65d152c6d4b4f8cadab1340"
+  },
+  "raw_red_followup_sha256": "d3302a4476769d84600f0a64116b6f9d9548ea3c4654f00bc18551bdd78b0765"
+}

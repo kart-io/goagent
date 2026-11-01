@@ -65,7 +65,7 @@ Graph.Describe 或编译产物可选 Description 返回排序、独立的 `goage
 
 `core/flow.Source` 串行同步 yield，Map 不启动 goroutine；Fold.Init 每次执行独立创建 accumulator。默认最多 1024 项，可显式限制字节并提供 Size。任何 Source、Map、Add、preview 或 Finish 错误均阻止最终 Done，即使 Source 吞掉 yield 错误也不能假成功。preview 只能发事件，不能推进图。合作式源须响应 context 和 yield 错误，并在返回前停止生产者。
 
-采用结论：保留实验包用于只读增量演示，不作为完整四范式稳定 API。反射 Mapping、嵌套可恢复工作流、持久摘要和通用 Debugger.Run 继续推迟，需独立需求与恢复协议。类型化映射优先使用已有 Adapt/Clone/Merge。
+采用结论：保留实验包用于只读增量演示，不作为完整四范式稳定 API。反射 Mapping、持久摘要和通用 Debugger.Run 继续推迟，需独立需求与恢复协议。嵌套可恢复工作流已通过 AsChildRunnable 与 Resumable 工具支持，见[组合指南](AGENT_COMPOSITION.md)；独立后台子任务调度不在此能力范围。类型化映射优先使用已有 Adapt/Clone/Merge。
 
 ## 迁移、验证和回退
 

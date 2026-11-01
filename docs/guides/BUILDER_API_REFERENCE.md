@@ -136,13 +136,15 @@ return builder.NewSimpleBuilder(client).
 |---|---|
 | `AsRunnable() *core.StreamRunnable[any, *AgentOutput]` | 推荐入口：`Invoke`、`Stream`、`Batch`、`Pipe`；需要 `llm.StreamClient` |
 | `ExecuteStream(ctx, input) (<-chan AgentEvent, error)` | 同一事件源的通道形式 |
-| `Start(ctx, input) *Handle` | 后台运行；`Handle` 提供 `Steer`、`Inject`、`Redirect`、`Followup`、`Interrupt`、`Wait`。只支持原生工具流 |
+| `Start(ctx, input) *Handle` | 进程内后台运行；`Handle` 提供 `Steer`、`Inject`、`Redirect`、`Followup`、`Interrupt`、`Wait`、`PendingInputs`。只支持原生工具流，不是持久后台调度服务 |
 | `Execute(ctx, input)` | 同步、不执行工具；配置 `WithOffload`/`WithReturnDirectTools`、持久执行或根预算时报错 |
 | `ExecuteWithTools(ctx, input)` | 流式客户端委派 `AsRunnable().Invoke`，其他客户端保留旧工具循环 |
 | `Initialize(ctx)`、`Shutdown(ctx)` | 生命周期；Build 已调用 Initialize |
 | `GetState()`、`GetMetrics()` | 当前状态与指标 |
 
 同一 Agent 的所有执行入口按会话串行；跨会话并发应创建独立 Agent。入口行为对照见[执行契约](EXECUTION_CONTRACT.md)。
+
+`Handle.PendingInputs() []builder.PendingInput` 返回未被循环领取的队列快照；每项有 `Kind`（steer/inject/redirect/followup）与 `Text`。同队列有序，跨队列不承诺全局顺序。查询不消费，已领取不代表处理成功。入队与快照不持久化；运行收敛后的剩余输入由宿主处置，见[组合指南](AGENT_COMPOSITION.md)。
 
 ## 自定义状态
 

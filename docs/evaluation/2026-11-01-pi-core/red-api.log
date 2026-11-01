@@ -1,0 +1,14 @@
+# github.com/kart-io/goagent/builder [github.com/kart-io/goagent/builder.test]
+builder/handle_pending_test.go:30:21: undefined: PendingInput
+builder/handle_pending_test.go:30:73: h.PendingInputs undefined (type *Handle has no field or method PendingInputs)
+builder/handle_pending_test.go:51:21: undefined: PendingInput
+builder/handle_pending_test.go:55:7: h.PendingInputs undefined (type *Handle has no field or method PendingInputs)
+builder/handle_pending_test.go:70:21: undefined: PendingInput
+builder/handle_pending_test.go:70:74: h.PendingInputs undefined (type *Handle has no field or method PendingInputs)
+builder/handle_pending_test.go:93:21: undefined: PendingInput
+builder/handle_pending_test.go:97:7: h.PendingInputs undefined (type *Handle has no field or method PendingInputs)
+builder/handle_pending_test.go:108:16: h.PendingInputs undefined (type *Handle has no field or method PendingInputs)
+builder/handle_pending_test.go:109:21: undefined: PendingInput
+builder/handle_pending_test.go:109:21: too many errors
+FAIL	github.com/kart-io/goagent/builder [build failed]
+FAIL
