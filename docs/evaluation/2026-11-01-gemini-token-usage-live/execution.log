@@ -1,0 +1,4 @@
+provider=gemini scenario=single passed=false tokens=0 requests=1 tools=0 unknown=1 partial=0
+  agent=writer self=0
+single failed: agent execution failed (*errors.joinError); usage preserved; evidence saved, no retry
+exit status 1

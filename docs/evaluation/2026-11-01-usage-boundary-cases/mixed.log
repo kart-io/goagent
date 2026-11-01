@@ -1,0 +1,4 @@
+case=mixed-replay passed=true tokens=1826 calls_before=6 calls_after=6 tools=1 replay_notifications=3 expected_error=false
+  platform=gemini requests=3 tokens=755 reasoning_known_sum=95
+  platform=deepseek requests=2 tokens=840 reasoning_known_sum=33
+  platform=minimax requests=1 tokens=231 reasoning_known_sum=15

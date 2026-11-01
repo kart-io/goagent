@@ -144,6 +144,9 @@ func NewAnthropicWithOptions(opts ...agentllm.ClientOption) (*AnthropicProvider,
 
 // Complete implements basic text completion.
 func (p *AnthropicProvider) Complete(ctx context.Context, req *agentllm.CompletionRequest) (*agentllm.CompletionResponse, error) {
+	if err := p.RejectReasoning(req); err != nil {
+		return nil, err
+	}
 	// Build Anthropic request
 	anthropicReq := p.buildRequest(req)
 

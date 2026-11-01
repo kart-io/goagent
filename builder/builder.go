@@ -299,13 +299,16 @@ func (b *AgentBuilder[C, S]) createHandler(runtime *execution.Runtime[C, S]) mid
 		})
 
 		// 创建 LLM 请求
-		llmReq := &llm.CompletionRequest{
+		llmReq := &llm.CompletionRequest{Reasoning: b.config.Reasoning.Clone(),
 			Messages:       messages,
 			MaxTokens:      b.config.MaxTokens,
 			Temperature:    b.config.Temperature,
 			TemperatureSet: true,
 		}
 
+		if err := llm.ValidateReasoningRequest(b.llmClient, llmReq); err != nil {
+			return nil, err
+		}
 		// 调用 LLM
 		response, err := b.llmClient.Complete(ctx, llmReq)
 		if err != nil {

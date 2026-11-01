@@ -126,6 +126,9 @@ func NewCohereWithOptions(opts ...agentllm.ClientOption) (*CohereProvider, error
 
 // Complete implements basic text completion
 func (p *CohereProvider) Complete(ctx context.Context, req *agentllm.CompletionRequest) (*agentllm.CompletionResponse, error) {
+	if err := p.RejectReasoning(req); err != nil {
+		return nil, err
+	}
 	// Build Cohere request
 	cohereReq := p.buildRequest(req)
 

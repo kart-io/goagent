@@ -1,0 +1,14 @@
+# github.com/kart-io/goagent/llm/providers [github.com/kart-io/goagent/llm/providers.test]
+llm/providers/explainability_test.go:21:85: undefined: llm.WithReasoning
+llm/providers/explainability_test.go:21:105: undefined: usage.ReasoningConfig
+llm/providers/explainability_test.go:22:124: unknown field Reasoning in struct literal of type llm.CompletionRequest
+llm/providers/explainability_test.go:22:141: undefined: usage.ReasoningConfig
+llm/providers/explainability_test.go:24:70: last.ResponseModel undefined (type *llm.StreamChunk has no field or method ResponseModel)
+llm/providers/explainability_test.go:36:85: undefined: llm.WithReasoning
+llm/providers/explainability_test.go:36:105: undefined: usage.ReasoningConfig
+llm/providers/explainability_test.go:39:71: last.ResponseModel undefined (type *llm.StreamChunk has no field or method ResponseModel)
+llm/providers/explainability_test.go:44:122: unknown field Reasoning in struct literal of type llm.CompletionRequest
+llm/providers/explainability_test.go:44:139: undefined: usage.ReasoningConfig
+llm/providers/explainability_test.go:44:122: too many errors
+FAIL	github.com/kart-io/goagent/llm/providers [build failed]
+FAIL

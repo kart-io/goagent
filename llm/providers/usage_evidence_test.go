@@ -60,7 +60,7 @@ func TestStreamUsageEvidenceProtocol(t *testing.T) {
 				if partial {
 					require.Equal(t, usage.Total, last.Usage.Fields())
 				} else {
-					require.Equal(t, usage.AllFields, last.Usage.Fields())
+					require.Equal(t, usage.BasicFields|usage.Cached, last.Usage.Fields())
 					require.Equal(t, 4, last.Usage.CachedTokens)
 				}
 			})

@@ -1,0 +1,9 @@
+provider=minimax scenario=task passed=true tokens=2426 requests=5 tools=3 unknown=0 partial=0
+  agent=coordinator self=1125
+  agent=researcher self=1064
+  agent=reviewer self=237
+  attempt agent=coordinator requested_model=MiniMax-M3.1-Flash response_model="MiniMax-M3.1-Flash" reasoning=0 reasoning_known=false tool_input=0 tool_input_known=false reasoning_configured=true
+  attempt agent=researcher requested_model=MiniMax-M3.1-Flash response_model="MiniMax-M3.1-Flash" reasoning=1 reasoning_known=true tool_input=0 tool_input_known=false reasoning_configured=true
+  attempt agent=researcher requested_model=MiniMax-M3.1-Flash response_model="MiniMax-M3.1-Flash" reasoning=1 reasoning_known=true tool_input=0 tool_input_known=false reasoning_configured=true
+  attempt agent=reviewer requested_model=MiniMax-M3.1-Flash response_model="MiniMax-M3.1-Flash" reasoning=17 reasoning_known=true tool_input=0 tool_input_known=false reasoning_configured=true
+  attempt agent=coordinator requested_model=MiniMax-M3.1-Flash response_model="MiniMax-M3.1-Flash" reasoning=0 reasoning_known=false tool_input=0 tool_input_known=false reasoning_configured=true

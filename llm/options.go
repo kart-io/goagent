@@ -1,6 +1,7 @@
 package llm
 
 import (
+	"github.com/kart-io/goagent/core/usage"
 	"time"
 
 	"github.com/kart-io/goagent/llm/constants"
@@ -155,4 +156,10 @@ func ApplyOptions(config *LLMOptions, opts ...ClientOption) *LLMOptions {
 func NewLLMOptionsWithOptions(opts ...ClientOption) *LLMOptions {
 	config := DefaultLLMOptions()
 	return ApplyOptions(config, opts...)
+}
+
+// WithReasoning sets explicit reasoning controls. Providers reject unsupported
+// controls before sending; service/model-specific restrictions may return API errors.
+func WithReasoning(config usage.ReasoningConfig) ClientOption {
+	return func(c *LLMOptions) { copy := config; c.Reasoning = &copy }
 }

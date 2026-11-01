@@ -171,3 +171,9 @@ fmt.Println(agent.GetState().Tenant)
 `WithUsageHook(budget.UsageHook)` 接收单次模型证据和可用的 Attribution 累计报告；只读、支持并发、向子 Agent 继承，子非 nil 钩子替换继承项。也可用 `budget.WithUsageHook` 绑定 context，不替换 Observer。详见[专用钩子契约](../design/TOKEN_USAGE_HOOK.md)。
 
 `WithAgentID(id)` 设置逻辑角色，独立于 DurableScope；绑定预算会自动建立调用身份，未命名角色为 anonymous。`observe.Event.Agent/Usage` 与 model_attempt_start/model_usage 提供只读元数据；`budget.Config.MaxAgentCalls` 限制调用节点数，所有预算统一保存字段证据，`Controller.Attribution` 返回 Self/Inclusive/Root 及未知字段统计。旧同步入口不提供完整计量。见[多 Agent 用量指南](MULTI_AGENT_USAGE.md)。
+
+### 显式推理配置
+
+`WithReasoning(usage.ReasoningConfig)` 覆盖当前 Agent 的请求配置。OpenAI 兼容/DeepSeek 使用 `Effort`；Gemini 使用受支持的 level，或 `BudgetSet: true` 与 `BudgetTokens`。不支持的客户端明确拒绝。每请求复制配置，RequestHook 修改本次设置不会污染默认值。
+
+UsageHook 可读取 `Model.ResponseModel`、`Model.ReasoningConfigured`、`Model.Reasoning`、`Model.Tokens.ReasoningTokens`、`Model.Tokens.ToolUsePromptTokens`。先检查 `KnownFields`，不将可选细项重复加进 TotalTokens。详情见[可解释性契约](../design/TOKEN_USAGE_EXPLAINABILITY.md)。

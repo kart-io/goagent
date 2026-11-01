@@ -1,0 +1,5 @@
+provider=deepseek scenario=task passed=false tokens=713 requests=2 tools=1 unknown=0 partial=0
+  agent=coordinator self=382
+  agent=researcher self=331
+task failed: agent execution failed (*tools.ArgumentError, reason=unknown, http=0); usage preserved; argument validation: tool "lookup_order" arguments: validating root: unexpected additional properties ["{}"]; evidence saved, no retry
+exit status 1

@@ -5,7 +5,7 @@ package interfaces
 // TokenUsage tracks the number of tokens consumed by LLM API calls:
 //   - PromptTokens: Tokens in the input/prompt
 //   - CompletionTokens: Tokens in the generated output
-//   - TotalTokens: Total tokens used (PromptTokens + CompletionTokens)
+//   - TotalTokens: Supplier-reported total (may include reasoning and tool input)
 //   - CachedTokens: Tokens served from cache (if applicable)
 //
 // This information is useful for:
@@ -21,12 +21,16 @@ type TokenUsage struct {
 	CompletionTokens int `json:"completion_tokens"`
 
 	// TotalTokens is the total number of tokens used.
-	// Usually equals PromptTokens + CompletionTokens.
+	// Preserve the supplier total; never recompute it by adding subcategories.
 	TotalTokens int `json:"total_tokens"`
 
 	// CachedTokens is the number of tokens served from cache (if applicable).
 	// Not all LLM providers support this field.
 	CachedTokens int `json:"cached_tokens,omitempty"`
+	// Provider-reported reasoning subset; not additive to TotalTokens.
+	ReasoningTokens int `json:"reasoning_tokens,omitempty"`
+	// Provider-reported tool-use input; inclusion in other fields is provider-specific.
+	ToolUsePromptTokens int `json:"tool_use_prompt_tokens,omitempty"`
 }
 
 // Add adds another TokenUsage to this one, summing all fields.
@@ -39,9 +43,11 @@ func (t *TokenUsage) Add(other *TokenUsage) {
 	t.CompletionTokens += other.CompletionTokens
 	t.TotalTokens += other.TotalTokens
 	t.CachedTokens += other.CachedTokens
+	t.ReasoningTokens += other.ReasoningTokens
+	t.ToolUsePromptTokens += other.ToolUsePromptTokens
 }
 
 // IsEmpty returns true if no tokens were used.
 func (t *TokenUsage) IsEmpty() bool {
-	return t.TotalTokens == 0 && t.PromptTokens == 0 && t.CompletionTokens == 0
+	return t.TotalTokens == 0 && t.PromptTokens == 0 && t.CompletionTokens == 0 && t.CachedTokens == 0 && t.ReasoningTokens == 0 && t.ToolUsePromptTokens == 0
 }

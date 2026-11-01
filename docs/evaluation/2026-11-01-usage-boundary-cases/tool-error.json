@@ -1,0 +1,263 @@
+[
+  {
+    "Case": "tool-error",
+    "Passed": true,
+    "ExpectedErrorObserved": true,
+    "Before": {
+      "Root": {
+        "ReservedRequests": 1,
+        "KnownUsageEntries": 1,
+        "UnknownUsageEntries": 0,
+        "KnownTokens": {
+          "prompt_tokens": 73,
+          "completion_tokens": 19,
+          "total_tokens": 173,
+          "reasoning_tokens": 81
+        },
+        "ReservedTokens": 0,
+        "ReservedToolCalls": 1,
+        "KnownTokenDelta": 173
+      },
+      "Calls": [
+        {
+          "RunID": "tool-error",
+          "AgentID": "coordinator",
+          "AgentCallKey": "d5747e99d742052e4a5e473d00fb7eb3fd8b87466954ce96681befa566ddd867",
+          "ParentAgentCallKey": "",
+          "Self": {
+            "UnknownPromptEntries": 0,
+            "UnknownCompletionEntries": 0,
+            "UnknownTotalEntries": 0,
+            "UnknownCachedEntries": 1,
+            "UnknownReasoningEntries": 0,
+            "UnknownToolUsePromptEntries": 1,
+            "KnownTokens": {
+              "prompt_tokens": 73,
+              "completion_tokens": 19,
+              "total_tokens": 173,
+              "reasoning_tokens": 81
+            },
+            "ReservedRequests": 1,
+            "KnownUsageEntries": 1,
+            "UnknownUsageEntries": 0,
+            "PartialUsageEntries": 0
+          },
+          "Inclusive": {
+            "UnknownPromptEntries": 0,
+            "UnknownCompletionEntries": 0,
+            "UnknownTotalEntries": 0,
+            "UnknownCachedEntries": 1,
+            "UnknownReasoningEntries": 0,
+            "UnknownToolUsePromptEntries": 1,
+            "KnownTokens": {
+              "prompt_tokens": 73,
+              "completion_tokens": 19,
+              "total_tokens": 173,
+              "reasoning_tokens": 81
+            },
+            "ReservedRequests": 1,
+            "KnownUsageEntries": 1,
+            "UnknownUsageEntries": 0,
+            "PartialUsageEntries": 0
+          }
+        }
+      ],
+      "Agents": [
+        {
+          "AgentID": "coordinator",
+          "Self": {
+            "UnknownPromptEntries": 0,
+            "UnknownCompletionEntries": 0,
+            "UnknownTotalEntries": 0,
+            "UnknownCachedEntries": 1,
+            "UnknownReasoningEntries": 0,
+            "UnknownToolUsePromptEntries": 1,
+            "KnownTokens": {
+              "prompt_tokens": 73,
+              "completion_tokens": 19,
+              "total_tokens": 173,
+              "reasoning_tokens": 81
+            },
+            "ReservedRequests": 1,
+            "KnownUsageEntries": 1,
+            "UnknownUsageEntries": 0,
+            "PartialUsageEntries": 0
+          }
+        }
+      ],
+      "Unattributed": {
+        "UnknownPromptEntries": 0,
+        "UnknownCompletionEntries": 0,
+        "UnknownTotalEntries": 0,
+        "UnknownCachedEntries": 0,
+        "UnknownReasoningEntries": 0,
+        "UnknownToolUsePromptEntries": 0,
+        "KnownTokens": {
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "total_tokens": 0
+        },
+        "ReservedRequests": 0,
+        "KnownUsageEntries": 0,
+        "UnknownUsageEntries": 0,
+        "PartialUsageEntries": 0
+      },
+      "UnknownUsageEntries": 0,
+      "PartialUsageEntries": 0,
+      "Complete": true
+    },
+    "After": {
+      "Root": {
+        "ReservedRequests": 1,
+        "KnownUsageEntries": 1,
+        "UnknownUsageEntries": 0,
+        "KnownTokens": {
+          "prompt_tokens": 73,
+          "completion_tokens": 19,
+          "total_tokens": 173,
+          "reasoning_tokens": 81
+        },
+        "ReservedTokens": 0,
+        "ReservedToolCalls": 1,
+        "KnownTokenDelta": 173
+      },
+      "Calls": [
+        {
+          "RunID": "tool-error",
+          "AgentID": "coordinator",
+          "AgentCallKey": "d5747e99d742052e4a5e473d00fb7eb3fd8b87466954ce96681befa566ddd867",
+          "ParentAgentCallKey": "",
+          "Self": {
+            "UnknownPromptEntries": 0,
+            "UnknownCompletionEntries": 0,
+            "UnknownTotalEntries": 0,
+            "UnknownCachedEntries": 1,
+            "UnknownReasoningEntries": 0,
+            "UnknownToolUsePromptEntries": 1,
+            "KnownTokens": {
+              "prompt_tokens": 73,
+              "completion_tokens": 19,
+              "total_tokens": 173,
+              "reasoning_tokens": 81
+            },
+            "ReservedRequests": 1,
+            "KnownUsageEntries": 1,
+            "UnknownUsageEntries": 0,
+            "PartialUsageEntries": 0
+          },
+          "Inclusive": {
+            "UnknownPromptEntries": 0,
+            "UnknownCompletionEntries": 0,
+            "UnknownTotalEntries": 0,
+            "UnknownCachedEntries": 1,
+            "UnknownReasoningEntries": 0,
+            "UnknownToolUsePromptEntries": 1,
+            "KnownTokens": {
+              "prompt_tokens": 73,
+              "completion_tokens": 19,
+              "total_tokens": 173,
+              "reasoning_tokens": 81
+            },
+            "ReservedRequests": 1,
+            "KnownUsageEntries": 1,
+            "UnknownUsageEntries": 0,
+            "PartialUsageEntries": 0
+          }
+        }
+      ],
+      "Agents": [
+        {
+          "AgentID": "coordinator",
+          "Self": {
+            "UnknownPromptEntries": 0,
+            "UnknownCompletionEntries": 0,
+            "UnknownTotalEntries": 0,
+            "UnknownCachedEntries": 1,
+            "UnknownReasoningEntries": 0,
+            "UnknownToolUsePromptEntries": 1,
+            "KnownTokens": {
+              "prompt_tokens": 73,
+              "completion_tokens": 19,
+              "total_tokens": 173,
+              "reasoning_tokens": 81
+            },
+            "ReservedRequests": 1,
+            "KnownUsageEntries": 1,
+            "UnknownUsageEntries": 0,
+            "PartialUsageEntries": 0
+          }
+        }
+      ],
+      "Unattributed": {
+        "UnknownPromptEntries": 0,
+        "UnknownCompletionEntries": 0,
+        "UnknownTotalEntries": 0,
+        "UnknownCachedEntries": 0,
+        "UnknownReasoningEntries": 0,
+        "UnknownToolUsePromptEntries": 0,
+        "KnownTokens": {
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "total_tokens": 0
+        },
+        "ReservedRequests": 0,
+        "KnownUsageEntries": 0,
+        "UnknownUsageEntries": 0,
+        "PartialUsageEntries": 0
+      },
+      "UnknownUsageEntries": 0,
+      "PartialUsageEntries": 0,
+      "Complete": true
+    },
+    "Attempts": [
+      {
+        "ResponseModel": "gemini-2.5-flash",
+        "Reasoning": {
+          "budget_tokens": 128,
+          "budget_set": true
+        },
+        "ReasoningConfigured": true,
+        "RunID": "tool-error",
+        "AgentID": "coordinator",
+        "AgentCallKey": "d5747e99d742052e4a5e473d00fb7eb3fd8b87466954ce96681befa566ddd867",
+        "ParentAgentCallKey": "",
+        "OperationKey": "645e0cd6eec21e2f470205d577d476421965908f58a31b00921c6329a9029803",
+        "AttemptKey": "645e0cd6eec21e2f470205d577d476421965908f58a31b00921c6329a9029803",
+        "Provider": "gemini",
+        "Model": "gemini-2.5-flash",
+        "Attempt": 0,
+        "Tokens": {
+          "prompt_tokens": 73,
+          "completion_tokens": 19,
+          "total_tokens": 173,
+          "reasoning_tokens": 81
+        },
+        "KnownFields": 23,
+        "Source": "provider",
+        "Revision": 1,
+        "Replayed": false,
+        "AccountingCommitted": true
+      }
+    ],
+    "Platforms": {
+      "gemini": {
+        "prompt_tokens": 73,
+        "completion_tokens": 19,
+        "total_tokens": 173,
+        "reasoning_tokens": 81
+      }
+    },
+    "PlatformRequests": {
+      "gemini": 1
+    },
+    "AgentPlatforms": {
+      "coordinator": "gemini",
+      "researcher": "deepseek",
+      "reviewer": "minimax"
+    },
+    "NetworkCallsBefore": 1,
+    "NetworkCallsAfter": 1,
+    "ToolRuns": 1,
+    "ReplayNotifications": 0
+  }
+]

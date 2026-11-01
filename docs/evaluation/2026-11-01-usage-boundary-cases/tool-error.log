@@ -1,0 +1,2 @@
+case=tool-error passed=true tokens=173 calls_before=1 calls_after=1 tools=1 replay_notifications=0 expected_error=true
+  platform=gemini requests=1 tokens=173 reasoning_known_sum=81

@@ -1,0 +1,333 @@
+{
+  "Provider": "deepseek",
+  "Model": "deepseek-chat",
+  "Results": [
+    {
+      "Scenario": "task",
+      "Started": "2026-11-01T05:25:37.463429Z",
+      "Finished": "2026-11-01T05:25:40.800734Z",
+      "Passed": true,
+      "Report": {
+        "Root": {
+          "ReservedRequests": 5,
+          "KnownUsageEntries": 5,
+          "UnknownUsageEntries": 0,
+          "KnownTokens": {
+            "prompt_tokens": 1485,
+            "completion_tokens": 84,
+            "total_tokens": 1569,
+            "cached_tokens": 640
+          },
+          "ReservedTokens": 0,
+          "ReservedToolCalls": 3,
+          "KnownTokenDelta": 1569
+        },
+        "Calls": [
+          {
+            "RunID": "live-task",
+            "AgentID": "coordinator",
+            "AgentCallKey": "6c2f0621-d254-41a4-83cd-8da41f27a2a9",
+            "ParentAgentCallKey": "",
+            "Self": {
+              "UnknownPromptEntries": 0,
+              "UnknownCompletionEntries": 0,
+              "UnknownTotalEntries": 0,
+              "UnknownCachedEntries": 0,
+              "KnownTokens": {
+                "prompt_tokens": 743,
+                "completion_tokens": 41,
+                "total_tokens": 784,
+                "cached_tokens": 384
+              },
+              "ReservedRequests": 2,
+              "KnownUsageEntries": 2,
+              "UnknownUsageEntries": 0,
+              "PartialUsageEntries": 0
+            },
+            "Inclusive": {
+              "UnknownPromptEntries": 0,
+              "UnknownCompletionEntries": 0,
+              "UnknownTotalEntries": 0,
+              "UnknownCachedEntries": 2,
+              "KnownTokens": {
+                "prompt_tokens": 1485,
+                "completion_tokens": 84,
+                "total_tokens": 1569,
+                "cached_tokens": 640
+              },
+              "ReservedRequests": 5,
+              "KnownUsageEntries": 5,
+              "UnknownUsageEntries": 0,
+              "PartialUsageEntries": 0
+            }
+          },
+          {
+            "RunID": "live-task",
+            "AgentID": "researcher",
+            "AgentCallKey": "a2407156-fc24-4f3b-ac55-a8860cc13fad",
+            "ParentAgentCallKey": "6c2f0621-d254-41a4-83cd-8da41f27a2a9",
+            "Self": {
+              "UnknownPromptEntries": 0,
+              "UnknownCompletionEntries": 0,
+              "UnknownTotalEntries": 0,
+              "UnknownCachedEntries": 1,
+              "KnownTokens": {
+                "prompt_tokens": 717,
+                "completion_tokens": 42,
+                "total_tokens": 759,
+                "cached_tokens": 256
+              },
+              "ReservedRequests": 2,
+              "KnownUsageEntries": 2,
+              "UnknownUsageEntries": 0,
+              "PartialUsageEntries": 0
+            },
+            "Inclusive": {
+              "UnknownPromptEntries": 0,
+              "UnknownCompletionEntries": 0,
+              "UnknownTotalEntries": 0,
+              "UnknownCachedEntries": 1,
+              "KnownTokens": {
+                "prompt_tokens": 717,
+                "completion_tokens": 42,
+                "total_tokens": 759,
+                "cached_tokens": 256
+              },
+              "ReservedRequests": 2,
+              "KnownUsageEntries": 2,
+              "UnknownUsageEntries": 0,
+              "PartialUsageEntries": 0
+            }
+          },
+          {
+            "RunID": "live-task",
+            "AgentID": "reviewer",
+            "AgentCallKey": "a8b8e420-2039-4dfa-8215-0da5952bb83a",
+            "ParentAgentCallKey": "6c2f0621-d254-41a4-83cd-8da41f27a2a9",
+            "Self": {
+              "UnknownPromptEntries": 0,
+              "UnknownCompletionEntries": 0,
+              "UnknownTotalEntries": 0,
+              "UnknownCachedEntries": 1,
+              "KnownTokens": {
+                "prompt_tokens": 25,
+                "completion_tokens": 1,
+                "total_tokens": 26
+              },
+              "ReservedRequests": 1,
+              "KnownUsageEntries": 1,
+              "UnknownUsageEntries": 0,
+              "PartialUsageEntries": 0
+            },
+            "Inclusive": {
+              "UnknownPromptEntries": 0,
+              "UnknownCompletionEntries": 0,
+              "UnknownTotalEntries": 0,
+              "UnknownCachedEntries": 1,
+              "KnownTokens": {
+                "prompt_tokens": 25,
+                "completion_tokens": 1,
+                "total_tokens": 26
+              },
+              "ReservedRequests": 1,
+              "KnownUsageEntries": 1,
+              "UnknownUsageEntries": 0,
+              "PartialUsageEntries": 0
+            }
+          }
+        ],
+        "Agents": [
+          {
+            "AgentID": "coordinator",
+            "Self": {
+              "UnknownPromptEntries": 0,
+              "UnknownCompletionEntries": 0,
+              "UnknownTotalEntries": 0,
+              "UnknownCachedEntries": 0,
+              "KnownTokens": {
+                "prompt_tokens": 743,
+                "completion_tokens": 41,
+                "total_tokens": 784,
+                "cached_tokens": 384
+              },
+              "ReservedRequests": 2,
+              "KnownUsageEntries": 2,
+              "UnknownUsageEntries": 0,
+              "PartialUsageEntries": 0
+            }
+          },
+          {
+            "AgentID": "researcher",
+            "Self": {
+              "UnknownPromptEntries": 0,
+              "UnknownCompletionEntries": 0,
+              "UnknownTotalEntries": 0,
+              "UnknownCachedEntries": 1,
+              "KnownTokens": {
+                "prompt_tokens": 717,
+                "completion_tokens": 42,
+                "total_tokens": 759,
+                "cached_tokens": 256
+              },
+              "ReservedRequests": 2,
+              "KnownUsageEntries": 2,
+              "UnknownUsageEntries": 0,
+              "PartialUsageEntries": 0
+            }
+          },
+          {
+            "AgentID": "reviewer",
+            "Self": {
+              "UnknownPromptEntries": 0,
+              "UnknownCompletionEntries": 0,
+              "UnknownTotalEntries": 0,
+              "UnknownCachedEntries": 1,
+              "KnownTokens": {
+                "prompt_tokens": 25,
+                "completion_tokens": 1,
+                "total_tokens": 26
+              },
+              "ReservedRequests": 1,
+              "KnownUsageEntries": 1,
+              "UnknownUsageEntries": 0,
+              "PartialUsageEntries": 0
+            }
+          }
+        ],
+        "Unattributed": {
+          "UnknownPromptEntries": 0,
+          "UnknownCompletionEntries": 0,
+          "UnknownTotalEntries": 0,
+          "UnknownCachedEntries": 0,
+          "KnownTokens": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0
+          },
+          "ReservedRequests": 0,
+          "KnownUsageEntries": 0,
+          "UnknownUsageEntries": 0,
+          "PartialUsageEntries": 0
+        },
+        "UnknownUsageEntries": 0,
+        "PartialUsageEntries": 0,
+        "Complete": true
+      },
+      "Attempts": [
+        {
+          "RunID": "live-task",
+          "AgentID": "coordinator",
+          "AgentCallKey": "6c2f0621-d254-41a4-83cd-8da41f27a2a9",
+          "ParentAgentCallKey": "",
+          "OperationKey": "9ce0b2a5-376c-4722-bce0-61ff4dfab932",
+          "AttemptKey": "9ce0b2a5-376c-4722-bce0-61ff4dfab932",
+          "Provider": "deepseek",
+          "Model": "deepseek-chat",
+          "Attempt": 0,
+          "Tokens": {
+            "prompt_tokens": 345,
+            "completion_tokens": 31,
+            "total_tokens": 376,
+            "cached_tokens": 128
+          },
+          "KnownFields": 15,
+          "Source": "provider",
+          "Revision": 1,
+          "Replayed": false,
+          "AccountingCommitted": true
+        },
+        {
+          "RunID": "live-task",
+          "AgentID": "researcher",
+          "AgentCallKey": "a2407156-fc24-4f3b-ac55-a8860cc13fad",
+          "ParentAgentCallKey": "6c2f0621-d254-41a4-83cd-8da41f27a2a9",
+          "OperationKey": "a8ce6b70-e79c-4dc0-8a17-37ff75cb7791",
+          "AttemptKey": "a8ce6b70-e79c-4dc0-8a17-37ff75cb7791",
+          "Provider": "deepseek",
+          "Model": "deepseek-chat",
+          "Attempt": 0,
+          "Tokens": {
+            "prompt_tokens": 326,
+            "completion_tokens": 41,
+            "total_tokens": 367
+          },
+          "KnownFields": 7,
+          "Source": "provider",
+          "Revision": 1,
+          "Replayed": false,
+          "AccountingCommitted": true
+        },
+        {
+          "RunID": "live-task",
+          "AgentID": "researcher",
+          "AgentCallKey": "a2407156-fc24-4f3b-ac55-a8860cc13fad",
+          "ParentAgentCallKey": "6c2f0621-d254-41a4-83cd-8da41f27a2a9",
+          "OperationKey": "6fa8401f-9349-4692-a4b5-d363aba5bf63",
+          "AttemptKey": "6fa8401f-9349-4692-a4b5-d363aba5bf63",
+          "Provider": "deepseek",
+          "Model": "deepseek-chat",
+          "Attempt": 0,
+          "Tokens": {
+            "prompt_tokens": 391,
+            "completion_tokens": 1,
+            "total_tokens": 392,
+            "cached_tokens": 256
+          },
+          "KnownFields": 15,
+          "Source": "provider",
+          "Revision": 1,
+          "Replayed": false,
+          "AccountingCommitted": true
+        },
+        {
+          "RunID": "live-task",
+          "AgentID": "reviewer",
+          "AgentCallKey": "a8b8e420-2039-4dfa-8215-0da5952bb83a",
+          "ParentAgentCallKey": "6c2f0621-d254-41a4-83cd-8da41f27a2a9",
+          "OperationKey": "975cc23b-e555-49b4-8e90-481efc20cb30",
+          "AttemptKey": "975cc23b-e555-49b4-8e90-481efc20cb30",
+          "Provider": "deepseek",
+          "Model": "deepseek-chat",
+          "Attempt": 0,
+          "Tokens": {
+            "prompt_tokens": 25,
+            "completion_tokens": 1,
+            "total_tokens": 26
+          },
+          "KnownFields": 7,
+          "Source": "provider",
+          "Revision": 1,
+          "Replayed": false,
+          "AccountingCommitted": true
+        },
+        {
+          "RunID": "live-task",
+          "AgentID": "coordinator",
+          "AgentCallKey": "6c2f0621-d254-41a4-83cd-8da41f27a2a9",
+          "ParentAgentCallKey": "",
+          "OperationKey": "397c9cad-e2b3-4329-9d8c-ba2eeee32aa4",
+          "AttemptKey": "397c9cad-e2b3-4329-9d8c-ba2eeee32aa4",
+          "Provider": "deepseek",
+          "Model": "deepseek-chat",
+          "Attempt": 0,
+          "Tokens": {
+            "prompt_tokens": 398,
+            "completion_tokens": 10,
+            "total_tokens": 408,
+            "cached_tokens": 256
+          },
+          "KnownFields": 15,
+          "Source": "provider",
+          "Revision": 1,
+          "Replayed": false,
+          "AccountingCommitted": true
+        }
+      ],
+      "ToolRuns": {
+        "lookup_order": 1,
+        "research": 1,
+        "review": 1
+      }
+    }
+  ]
+}

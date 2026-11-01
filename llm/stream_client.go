@@ -32,6 +32,8 @@ type ToolStreamClient interface {
 
 // StreamChunk LLM 流式响应块
 type StreamChunk struct {
+	// ResponseModel is the supplier-reported model/version; empty means unreported.
+	ResponseModel string         `json:"response_model,omitempty"`
 	ProviderState *ProviderState `json:"provider_state,omitempty"`
 	// ToolCalls 仅在成功终止块中包含本轮完整的工具调用。
 	ToolCalls []ToolCall `json:"tool_calls,omitempty"`
@@ -67,10 +69,12 @@ type StreamChunk struct {
 
 // Usage 使用情况
 type Usage struct {
-	PromptTokens     int `json:"prompt_tokens"`
-	CompletionTokens int `json:"completion_tokens"`
-	TotalTokens      int `json:"total_tokens"`
-	CachedTokens     int `json:"cached_tokens,omitempty"`
+	PromptTokens        int `json:"prompt_tokens"`
+	CompletionTokens    int `json:"completion_tokens"`
+	TotalTokens         int `json:"total_tokens"`
+	CachedTokens        int `json:"cached_tokens,omitempty"`
+	ReasoningTokens     int `json:"reasoning_tokens,omitempty"`
+	ToolUsePromptTokens int `json:"tool_use_prompt_tokens,omitempty"`
 	// KnownFields nil preserves legacy three-field semantics. An explicit zero mask means unknown.
 	KnownFields *usage.Fields `json:"known_fields,omitempty"`
 }
@@ -80,7 +84,7 @@ func (u *Usage) Tokens() interfaces.TokenUsage {
 	if u == nil {
 		return interfaces.TokenUsage{}
 	}
-	return interfaces.TokenUsage{PromptTokens: u.PromptTokens, CompletionTokens: u.CompletionTokens, TotalTokens: u.TotalTokens, CachedTokens: u.CachedTokens}
+	return interfaces.TokenUsage{PromptTokens: u.PromptTokens, CompletionTokens: u.CompletionTokens, TotalTokens: u.TotalTokens, CachedTokens: u.CachedTokens, ReasoningTokens: u.ReasoningTokens, ToolUsePromptTokens: u.ToolUsePromptTokens}
 }
 
 // Fields reports available fields; legacy usage values report the basic fields.

@@ -37,6 +37,9 @@ func NewOllamaWithOptions(opts ...agentllm.ClientOption) (*OllamaClient, error) 
 		constants.EnvOllamaModel,
 	)
 
+	if err := base.RejectReasoning(nil); err != nil {
+		return nil, err
+	}
 	// 设置超时时间，Ollama 默认需要更长的超时
 	// 与 LLMOptions 的默认超时比较：显式设置的值保持不变
 	timeout := base.GetTimeout()
@@ -122,6 +125,9 @@ type ollamaGenerateResponse struct {
 
 // Complete 实现 llm.Client 接口的 Complete 方法
 func (c *OllamaClient) Complete(ctx context.Context, req *agentllm.CompletionRequest) (*agentllm.CompletionResponse, error) {
+	if err := c.RejectReasoning(req); err != nil {
+		return nil, err
+	}
 	// 构建 prompt
 	var prompt string
 	if c.Config.SystemPrompt != "" {

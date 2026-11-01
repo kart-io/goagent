@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/go-resty/resty/v2"
+	"github.com/sashabaranov/go-openai"
 
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
@@ -27,16 +28,17 @@ type DeepSeekProvider struct {
 
 // DeepSeekRequest represents a request to DeepSeek API
 type DeepSeekRequest struct {
-	Model          string                  `json:"model"`
-	Messages       []DeepSeekMessage       `json:"messages"`
-	Temperature    float64                 `json:"temperature"`
-	MaxTokens      int                     `json:"max_tokens,omitempty"`
-	TopP           float64                 `json:"top_p,omitempty"`
-	Stream         bool                    `json:"stream,omitempty"`
-	Tools          []DeepSeekTool          `json:"tools,omitempty"`
-	ToolChoice     interface{}             `json:"tool_choice,omitempty"`
-	Stop           []string                `json:"stop,omitempty"`
-	ResponseFormat *DeepSeekResponseFormat `json:"response_format,omitempty"`
+	ReasoningEffort string                  `json:"reasoning_effort,omitempty"`
+	Model           string                  `json:"model"`
+	Messages        []DeepSeekMessage       `json:"messages"`
+	Temperature     float64                 `json:"temperature"`
+	MaxTokens       int                     `json:"max_tokens,omitempty"`
+	TopP            float64                 `json:"top_p,omitempty"`
+	Stream          bool                    `json:"stream,omitempty"`
+	Tools           []DeepSeekTool          `json:"tools,omitempty"`
+	ToolChoice      interface{}             `json:"tool_choice,omitempty"`
+	Stop            []string                `json:"stop,omitempty"`
+	ResponseFormat  *DeepSeekResponseFormat `json:"response_format,omitempty"`
 }
 
 // DeepSeekResponseFormat 定义响应格式
@@ -99,9 +101,11 @@ type DeepSeekChoice struct {
 
 // DeepSeekUsage represents token usage
 type DeepSeekUsage struct {
-	PromptTokens     int `json:"prompt_tokens"`
-	CompletionTokens int `json:"completion_tokens"`
-	TotalTokens      int `json:"total_tokens"`
+	PromptTokensDetails     *openai.PromptTokensDetails     `json:"prompt_tokens_details,omitempty"`
+	CompletionTokensDetails *openai.CompletionTokensDetails `json:"completion_tokens_details,omitempty"`
+	PromptTokens            int                             `json:"prompt_tokens"`
+	CompletionTokens        int                             `json:"completion_tokens"`
+	TotalTokens             int                             `json:"total_tokens"`
 }
 
 // DeepSeekStreamResponse represents a streaming response
@@ -163,6 +167,11 @@ func NewDeepSeekWithOptions(opts ...agentllm.ClientOption) (*DeepSeekProvider, e
 
 // Complete implements basic text completion
 func (p *DeepSeekProvider) Complete(ctx context.Context, req *agentllm.CompletionRequest) (*agentllm.CompletionResponse, error) {
+	effort, reasoningErr := p.nativeStreamProvider().reasoningEffort(req)
+	if reasoningErr != nil {
+		return nil, reasoningErr
+	}
+
 	// Prepare messages
 	inputMessages := req.Messages
 	if p.Config.SystemPrompt != "" {
@@ -183,7 +192,7 @@ func (p *DeepSeekProvider) Complete(ctx context.Context, req *agentllm.Completio
 
 	// Prepare request
 	model := p.GetModel(req.Model)
-	dsReq := DeepSeekRequest{
+	dsReq := DeepSeekRequest{ReasoningEffort: effort,
 		Model:       model,
 		Messages:    messages,
 		Temperature: p.ResolveTemperature(req),
@@ -218,16 +227,13 @@ func (p *DeepSeekProvider) Complete(ctx context.Context, req *agentllm.Completio
 	}
 
 	return &agentllm.CompletionResponse{
-		Content:      dsResp.Choices[0].Message.Content,
-		Model:        dsResp.Model,
-		TokensUsed:   dsResp.Usage.TotalTokens,
-		FinishReason: dsResp.Choices[0].FinishReason,
-		Provider:     p.ProviderName(),
-		Usage: &interfaces.TokenUsage{
-			PromptTokens:     dsResp.Usage.PromptTokens,
-			CompletionTokens: dsResp.Usage.CompletionTokens,
-			TotalTokens:      dsResp.Usage.TotalTokens,
-		},
+		Content:       dsResp.Choices[0].Message.Content,
+		Model:         dsResp.Model,
+		ResponseModel: dsResp.Model,
+		TokensUsed:    dsResp.Usage.TotalTokens,
+		FinishReason:  dsResp.Choices[0].FinishReason,
+		Provider:      p.ProviderName(),
+		Usage:         deepSeekTokenValue(dsResp.Usage),
 	}, nil
 }
 
@@ -247,6 +253,11 @@ func (p *DeepSeekProvider) Stream(ctx context.Context, prompt string) (<-chan st
 // GenerateWithTools implements tool calling
 // 返回 *agentllm.ToolCallResponse 以符合 llm.ToolCallingClient 接口
 func (p *DeepSeekProvider) GenerateWithTools(ctx context.Context, prompt string, tools []interfaces.Tool) (*agentllm.ToolCallResponse, error) {
+	effort, reasoningErr := p.nativeStreamProvider().reasoningEffort(nil)
+	if reasoningErr != nil {
+		return nil, reasoningErr
+	}
+
 	// Convert tools to DeepSeek format
 	dsTools := p.convertToolsToDeepSeek(tools)
 
@@ -262,7 +273,7 @@ func (p *DeepSeekProvider) GenerateWithTools(ctx context.Context, prompt string,
 	messages = append(messages, DeepSeekMessage{Role: "user", Content: prompt})
 
 	// Prepare request
-	dsReq := DeepSeekRequest{
+	dsReq := DeepSeekRequest{ReasoningEffort: effort,
 		Model:       model,
 		Messages:    messages,
 		Temperature: temperature,
@@ -292,6 +303,7 @@ func (p *DeepSeekProvider) GenerateWithTools(ctx context.Context, prompt string,
 	// Convert to llm.ToolCallResponse format (符合接口定义)
 	result := &agentllm.ToolCallResponse{
 		Content: dsResp.Choices[0].Message.Content,
+		Usage:   deepSeekTokenValue(dsResp.Usage),
 	}
 
 	// Parse tool calls - 转换为 llm.ToolCall 格式
@@ -564,4 +576,8 @@ func (p *DeepSeekStreamingProvider) StreamWithMetadata(ctx context.Context, prom
 	}()
 
 	return tokens, nil
+}
+
+func deepSeekTokenValue(u DeepSeekUsage) *interfaces.TokenUsage {
+	return tokenValue(openAIUsage(&openai.Usage{PromptTokens: u.PromptTokens, CompletionTokens: u.CompletionTokens, TotalTokens: u.TotalTokens, PromptTokensDetails: u.PromptTokensDetails, CompletionTokensDetails: u.CompletionTokensDetails}))
 }

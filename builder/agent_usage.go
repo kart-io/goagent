@@ -85,7 +85,11 @@ func (a *ConfigurableAgent[C, S]) prepareAgentUsage(ctx context.Context) (contex
 }
 
 type modelMetadataKey struct{}
-type modelMetadata struct{ Provider, Model string }
+type modelMetadata struct {
+	Provider, Model     string
+	Reasoning           usage.ReasoningConfig `json:",omitzero"`
+	ReasoningConfigured bool                  `json:",omitempty"`
+}
 
 func withModelMetadata(ctx context.Context, client llm.Client, req *llm.CompletionRequest) context.Context {
 	c, _ := budget.FromContext(ctx)
@@ -97,6 +101,15 @@ func withModelMetadata(ctx context.Context, client llm.Client, req *llm.Completi
 		m.Model = req.Model
 	} else if named, ok := client.(interface{ ModelName() string }); ok && named.ModelName() != "" {
 		m.Model = named.ModelName()
+	}
+	reasoning := req.Reasoning
+	if resolver, ok := client.(interface {
+		ResolveReasoning(*llm.CompletionRequest) *usage.ReasoningConfig
+	}); ok {
+		reasoning = resolver.ResolveReasoning(req)
+	}
+	if reasoning != nil {
+		m.Reasoning, m.ReasoningConfigured = *reasoning, true
 	}
 	return context.WithValue(ctx, modelMetadataKey{}, m)
 }
@@ -116,6 +129,10 @@ func publishModelUsage(ctx context.Context, operation, key string, attempt int, 
 	meta, _ := ctx.Value(modelMetadataKey{}).(modelMetadata)
 	in, _ := usage.FromContext(ctx)
 	notification := usage.ModelEvidence{Owner: in.Owner, OperationKey: operation, AttemptKey: key, Attempt: attempt, Provider: meta.Provider, Model: meta.Model, Evidence: e, Replayed: replayed}
+	notification.Reasoning, notification.ReasoningConfigured = meta.Reasoning, meta.ReasoningConfigured
+	if turn != nil {
+		notification.ResponseModel = turn.ResponseModel
+	}
 	var err error
 	if err = e.Validate(); err != nil {
 		notification.Evidence = usage.Evidence{}
@@ -140,4 +157,12 @@ func publishModelUsage(ctx context.Context, operation, key string, attempt int, 
 		observe.Emit(ctx, observe.Event{Type: "model_usage", Path: "usage", OperationKey: key, Replayed: replayed, Usage: &notification})
 	}
 	return err
+}
+
+// WithReasoning overrides the client's reasoning settings for this Agent's
+// requests. It does not change children using their own Builder/client settings.
+func (b *AgentBuilder[C, S]) WithReasoning(config usage.ReasoningConfig) *AgentBuilder[C, S] {
+	copy := config
+	b.config.Reasoning = &copy
+	return b
 }

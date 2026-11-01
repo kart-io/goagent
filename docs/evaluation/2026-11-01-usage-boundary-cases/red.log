@@ -1,0 +1,5 @@
+# github.com/kart-io/goagent/examples/agent-usage/cases [github.com/kart-io/goagent/examples/agent-usage/cases.test]
+examples/agent-usage/cases/main_test.go:10:5: undefined: runCase
+examples/agent-usage/cases/main_test.go:20:7: undefined: runCase
+FAIL	github.com/kart-io/goagent/examples/agent-usage/cases [build failed]
+FAIL

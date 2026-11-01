@@ -1,0 +1,17 @@
+{
+  "docs/evaluation/2026-11-01-usage-boundary-cases/red.log": "5c7cc08ef57bb92b4aa73b343d52206a73a68537fdd21cc0aba0696ef0a29260",
+  "docs/evaluation/2026-11-01-usage-boundary-cases/REPORT.md": "f72bdf51028ff0280f8ef374a6b696e176d99364f22e4da9d5979c9badff1186",
+  "docs/evaluation/2026-11-01-usage-boundary-cases/mixed.json": "6974fea06fbf9e043b8368939fc803a230753a74dc4f50157c0bab3e2ee73527",
+  "docs/evaluation/2026-11-01-usage-boundary-cases/mixed.log": "2852bea935571e178ff205f64db37766e5db2925604e1f712797c441fca1a0ed",
+  "docs/evaluation/2026-11-01-usage-boundary-cases/cancel.log": "2a23f18191e4fa0673e06a600ffd658ac0b516c4f6520c06b82dcae33f50cc44",
+  "docs/evaluation/2026-11-01-usage-boundary-cases/tests.log": "059bfbe429bc509637c2121aa9dc7246e1b1661f8444107c7c8a025e998db2f6",
+  "docs/evaluation/2026-11-01-usage-boundary-cases/tool-error.log": "543772e92b9091e0ec15d78847f7a4e4ec86b4ff8e8e6ffe0134848862f5d8f3",
+  "docs/evaluation/2026-11-01-usage-boundary-cases/tool-error.json": "2399ba3e10afac2312b4bb7e766c12bd3ff0ef8f65e1c44a19e1e30617e64f89",
+  "docs/evaluation/2026-11-01-usage-boundary-cases/cancel.json": "528433cc995695f216e928b53e77968882f7e5b0c8d13474c4f2700372c16ef3",
+  "examples/agent-usage/cases/README.md": "d50d4143e33318f7dbe43dad3283938b5a3b85fa10d609cad66a2190431f15c7",
+  "examples/agent-usage/cases/main.go": "47585a55469241e588332967d7d0afbca9af3c2c54dc04967c16eab239a62b67",
+  "examples/agent-usage/cases/main_test.go": "062687b953c0fc91a4e8a099fe3b1f4cf44124bb4178b56194266f8b36ab31c3",
+  "examples/agent-usage/internal/demo/live.go": "76753bf61e85dc78dc3f91b747277c4771225279081d5928c19a027589721667",
+  "examples/agent-usage/internal/demo/demo.go": "4be9d347e5502c89ad78d97dca34ffadf687f81588d630e9d36ba5e19de0b12e",
+  "examples/agent-usage/live/main.go": "36922fd81d80944fa77e2a1815b9cb70c8736a3d0f643334fcf409d7ca2edfec"
+}

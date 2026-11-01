@@ -1,0 +1,3 @@
+provider=deepseek scenario=single passed=true tokens=59 requests=1 tools=0 unknown=0 partial=0
+  agent=writer self=59
+  attempt agent=writer requested_model=deepseek-chat response_model="deepseek-flash" reasoning=14 reasoning_known=true tool_input=0 tool_input_known=false reasoning_configured=true

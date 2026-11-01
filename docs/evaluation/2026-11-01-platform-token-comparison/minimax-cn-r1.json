@@ -1,0 +1,699 @@
+{
+  "Provider": "minimax",
+  "Model": "MiniMax-M3.1-Flash",
+  "Results": [
+    {
+      "Scenario": "single",
+      "Started": "2026-11-01T05:25:02.468812Z",
+      "Finished": "2026-11-01T05:25:03.875538Z",
+      "Passed": true,
+      "Report": {
+        "Root": {
+          "ReservedRequests": 1,
+          "KnownUsageEntries": 1,
+          "UnknownUsageEntries": 0,
+          "KnownTokens": {
+            "prompt_tokens": 209,
+            "completion_tokens": 3,
+            "total_tokens": 212,
+            "cached_tokens": 128
+          },
+          "ReservedTokens": 0,
+          "ReservedToolCalls": 0,
+          "KnownTokenDelta": 212
+        },
+        "Calls": [
+          {
+            "RunID": "live-single",
+            "AgentID": "writer",
+            "AgentCallKey": "e4631235-648c-4593-9780-349df1b859e4",
+            "ParentAgentCallKey": "",
+            "Self": {
+              "UnknownPromptEntries": 0,
+              "UnknownCompletionEntries": 0,
+              "UnknownTotalEntries": 0,
+              "UnknownCachedEntries": 0,
+              "KnownTokens": {
+                "prompt_tokens": 209,
+                "completion_tokens": 3,
+                "total_tokens": 212,
+                "cached_tokens": 128
+              },
+              "ReservedRequests": 1,
+              "KnownUsageEntries": 1,
+              "UnknownUsageEntries": 0,
+              "PartialUsageEntries": 0
+            },
+            "Inclusive": {
+              "UnknownPromptEntries": 0,
+              "UnknownCompletionEntries": 0,
+              "UnknownTotalEntries": 0,
+              "UnknownCachedEntries": 0,
+              "KnownTokens": {
+                "prompt_tokens": 209,
+                "completion_tokens": 3,
+                "total_tokens": 212,
+                "cached_tokens": 128
+              },
+              "ReservedRequests": 1,
+              "KnownUsageEntries": 1,
+              "UnknownUsageEntries": 0,
+              "PartialUsageEntries": 0
+            }
+          }
+        ],
+        "Agents": [
+          {
+            "AgentID": "writer",
+            "Self": {
+              "UnknownPromptEntries": 0,
+              "UnknownCompletionEntries": 0,
+              "UnknownTotalEntries": 0,
+              "UnknownCachedEntries": 0,
+              "KnownTokens": {
+                "prompt_tokens": 209,
+                "completion_tokens": 3,
+                "total_tokens": 212,
+                "cached_tokens": 128
+              },
+              "ReservedRequests": 1,
+              "KnownUsageEntries": 1,
+              "UnknownUsageEntries": 0,
+              "PartialUsageEntries": 0
+            }
+          }
+        ],
+        "Unattributed": {
+          "UnknownPromptEntries": 0,
+          "UnknownCompletionEntries": 0,
+          "UnknownTotalEntries": 0,
+          "UnknownCachedEntries": 0,
+          "KnownTokens": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0
+          },
+          "ReservedRequests": 0,
+          "KnownUsageEntries": 0,
+          "UnknownUsageEntries": 0,
+          "PartialUsageEntries": 0
+        },
+        "UnknownUsageEntries": 0,
+        "PartialUsageEntries": 0,
+        "Complete": true
+      },
+      "Attempts": [
+        {
+          "RunID": "live-single",
+          "AgentID": "writer",
+          "AgentCallKey": "e4631235-648c-4593-9780-349df1b859e4",
+          "ParentAgentCallKey": "",
+          "OperationKey": "e202b084-1168-48cf-a416-47514bad57b4",
+          "AttemptKey": "e202b084-1168-48cf-a416-47514bad57b4",
+          "Provider": "openai",
+          "Model": "MiniMax-M3.1-Flash",
+          "Attempt": 0,
+          "Tokens": {
+            "prompt_tokens": 209,
+            "completion_tokens": 3,
+            "total_tokens": 212,
+            "cached_tokens": 128
+          },
+          "KnownFields": 15,
+          "Source": "provider",
+          "Revision": 1,
+          "Replayed": false,
+          "AccountingCommitted": true
+        }
+      ],
+      "ToolRuns": {
+        "lookup_order": 0,
+        "research": 0,
+        "review": 0
+      }
+    },
+    {
+      "Scenario": "child",
+      "Started": "2026-11-01T05:25:03.875821Z",
+      "Finished": "2026-11-01T05:25:06.55873Z",
+      "Passed": true,
+      "Report": {
+        "Root": {
+          "ReservedRequests": 3,
+          "KnownUsageEntries": 3,
+          "UnknownUsageEntries": 0,
+          "KnownTokens": {
+            "prompt_tokens": 1111,
+            "completion_tokens": 47,
+            "total_tokens": 1158,
+            "cached_tokens": 749
+          },
+          "ReservedTokens": 0,
+          "ReservedToolCalls": 1,
+          "KnownTokenDelta": 1158
+        },
+        "Calls": [
+          {
+            "RunID": "live-child",
+            "AgentID": "writer",
+            "AgentCallKey": "86aec8ed-54c1-4b22-af06-6a319296af66",
+            "ParentAgentCallKey": "a2a8abf6-c0e2-4523-ad5b-a8bdc73bcc7c",
+            "Self": {
+              "UnknownPromptEntries": 0,
+              "UnknownCompletionEntries": 0,
+              "UnknownTotalEntries": 0,
+              "UnknownCachedEntries": 0,
+              "KnownTokens": {
+                "prompt_tokens": 209,
+                "completion_tokens": 26,
+                "total_tokens": 235,
+                "cached_tokens": 128
+              },
+              "ReservedRequests": 1,
+              "KnownUsageEntries": 1,
+              "UnknownUsageEntries": 0,
+              "PartialUsageEntries": 0
+            },
+            "Inclusive": {
+              "UnknownPromptEntries": 0,
+              "UnknownCompletionEntries": 0,
+              "UnknownTotalEntries": 0,
+              "UnknownCachedEntries": 0,
+              "KnownTokens": {
+                "prompt_tokens": 209,
+                "completion_tokens": 26,
+                "total_tokens": 235,
+                "cached_tokens": 128
+              },
+              "ReservedRequests": 1,
+              "KnownUsageEntries": 1,
+              "UnknownUsageEntries": 0,
+              "PartialUsageEntries": 0
+            }
+          },
+          {
+            "RunID": "live-child",
+            "AgentID": "coordinator",
+            "AgentCallKey": "a2a8abf6-c0e2-4523-ad5b-a8bdc73bcc7c",
+            "ParentAgentCallKey": "",
+            "Self": {
+              "UnknownPromptEntries": 0,
+              "UnknownCompletionEntries": 0,
+              "UnknownTotalEntries": 0,
+              "UnknownCachedEntries": 0,
+              "KnownTokens": {
+                "prompt_tokens": 902,
+                "completion_tokens": 21,
+                "total_tokens": 923,
+                "cached_tokens": 621
+              },
+              "ReservedRequests": 2,
+              "KnownUsageEntries": 2,
+              "UnknownUsageEntries": 0,
+              "PartialUsageEntries": 0
+            },
+            "Inclusive": {
+              "UnknownPromptEntries": 0,
+              "UnknownCompletionEntries": 0,
+              "UnknownTotalEntries": 0,
+              "UnknownCachedEntries": 0,
+              "KnownTokens": {
+                "prompt_tokens": 1111,
+                "completion_tokens": 47,
+                "total_tokens": 1158,
+                "cached_tokens": 749
+              },
+              "ReservedRequests": 3,
+              "KnownUsageEntries": 3,
+              "UnknownUsageEntries": 0,
+              "PartialUsageEntries": 0
+            }
+          }
+        ],
+        "Agents": [
+          {
+            "AgentID": "coordinator",
+            "Self": {
+              "UnknownPromptEntries": 0,
+              "UnknownCompletionEntries": 0,
+              "UnknownTotalEntries": 0,
+              "UnknownCachedEntries": 0,
+              "KnownTokens": {
+                "prompt_tokens": 902,
+                "completion_tokens": 21,
+                "total_tokens": 923,
+                "cached_tokens": 621
+              },
+              "ReservedRequests": 2,
+              "KnownUsageEntries": 2,
+              "UnknownUsageEntries": 0,
+              "PartialUsageEntries": 0
+            }
+          },
+          {
+            "AgentID": "writer",
+            "Self": {
+              "UnknownPromptEntries": 0,
+              "UnknownCompletionEntries": 0,
+              "UnknownTotalEntries": 0,
+              "UnknownCachedEntries": 0,
+              "KnownTokens": {
+                "prompt_tokens": 209,
+                "completion_tokens": 26,
+                "total_tokens": 235,
+                "cached_tokens": 128
+              },
+              "ReservedRequests": 1,
+              "KnownUsageEntries": 1,
+              "UnknownUsageEntries": 0,
+              "PartialUsageEntries": 0
+            }
+          }
+        ],
+        "Unattributed": {
+          "UnknownPromptEntries": 0,
+          "UnknownCompletionEntries": 0,
+          "UnknownTotalEntries": 0,
+          "UnknownCachedEntries": 0,
+          "KnownTokens": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0
+          },
+          "ReservedRequests": 0,
+          "KnownUsageEntries": 0,
+          "UnknownUsageEntries": 0,
+          "PartialUsageEntries": 0
+        },
+        "UnknownUsageEntries": 0,
+        "PartialUsageEntries": 0,
+        "Complete": true
+      },
+      "Attempts": [
+        {
+          "RunID": "live-child",
+          "AgentID": "coordinator",
+          "AgentCallKey": "a2a8abf6-c0e2-4523-ad5b-a8bdc73bcc7c",
+          "ParentAgentCallKey": "",
+          "OperationKey": "9f57f080-8e1a-41ce-b19d-c4628ef26679",
+          "AttemptKey": "9f57f080-8e1a-41ce-b19d-c4628ef26679",
+          "Provider": "openai",
+          "Model": "MiniMax-M3.1-Flash",
+          "Attempt": 0,
+          "Tokens": {
+            "prompt_tokens": 434,
+            "completion_tokens": 18,
+            "total_tokens": 452,
+            "cached_tokens": 187
+          },
+          "KnownFields": 15,
+          "Source": "provider",
+          "Revision": 1,
+          "Replayed": false,
+          "AccountingCommitted": true
+        },
+        {
+          "RunID": "live-child",
+          "AgentID": "writer",
+          "AgentCallKey": "86aec8ed-54c1-4b22-af06-6a319296af66",
+          "ParentAgentCallKey": "a2a8abf6-c0e2-4523-ad5b-a8bdc73bcc7c",
+          "OperationKey": "041e7f72-4db4-4db1-a5fa-072149589ecf",
+          "AttemptKey": "041e7f72-4db4-4db1-a5fa-072149589ecf",
+          "Provider": "openai",
+          "Model": "MiniMax-M3.1-Flash",
+          "Attempt": 0,
+          "Tokens": {
+            "prompt_tokens": 209,
+            "completion_tokens": 26,
+            "total_tokens": 235,
+            "cached_tokens": 128
+          },
+          "KnownFields": 15,
+          "Source": "provider",
+          "Revision": 1,
+          "Replayed": false,
+          "AccountingCommitted": true
+        },
+        {
+          "RunID": "live-child",
+          "AgentID": "coordinator",
+          "AgentCallKey": "a2a8abf6-c0e2-4523-ad5b-a8bdc73bcc7c",
+          "ParentAgentCallKey": "",
+          "OperationKey": "f26f8de1-aabe-440f-845c-b2a98eec5ece",
+          "AttemptKey": "f26f8de1-aabe-440f-845c-b2a98eec5ece",
+          "Provider": "openai",
+          "Model": "MiniMax-M3.1-Flash",
+          "Attempt": 0,
+          "Tokens": {
+            "prompt_tokens": 468,
+            "completion_tokens": 3,
+            "total_tokens": 471,
+            "cached_tokens": 434
+          },
+          "KnownFields": 15,
+          "Source": "provider",
+          "Revision": 1,
+          "Replayed": false,
+          "AccountingCommitted": true
+        }
+      ],
+      "ToolRuns": {
+        "lookup_order": 0,
+        "research": 0,
+        "review": 0
+      }
+    },
+    {
+      "Scenario": "task",
+      "Started": "2026-11-01T05:25:06.558987Z",
+      "Finished": "2026-11-01T05:25:11.860115Z",
+      "Passed": true,
+      "Report": {
+        "Root": {
+          "ReservedRequests": 5,
+          "KnownUsageEntries": 5,
+          "UnknownUsageEntries": 0,
+          "KnownTokens": {
+            "prompt_tokens": 2255,
+            "completion_tokens": 131,
+            "total_tokens": 2386,
+            "cached_tokens": 1459
+          },
+          "ReservedTokens": 0,
+          "ReservedToolCalls": 3,
+          "KnownTokenDelta": 2386
+        },
+        "Calls": [
+          {
+            "RunID": "live-task",
+            "AgentID": "researcher",
+            "AgentCallKey": "4fe1b246-dda5-46e9-b5fa-fc2a6b28c6b9",
+            "ParentAgentCallKey": "97c25b4a-8572-47c8-9dc6-3e4d43aa63ac",
+            "Self": {
+              "UnknownPromptEntries": 0,
+              "UnknownCompletionEntries": 0,
+              "UnknownTotalEntries": 0,
+              "UnknownCachedEntries": 0,
+              "KnownTokens": {
+                "prompt_tokens": 959,
+                "completion_tokens": 49,
+                "total_tokens": 1008,
+                "cached_tokens": 637
+              },
+              "ReservedRequests": 2,
+              "KnownUsageEntries": 2,
+              "UnknownUsageEntries": 0,
+              "PartialUsageEntries": 0
+            },
+            "Inclusive": {
+              "UnknownPromptEntries": 0,
+              "UnknownCompletionEntries": 0,
+              "UnknownTotalEntries": 0,
+              "UnknownCachedEntries": 0,
+              "KnownTokens": {
+                "prompt_tokens": 959,
+                "completion_tokens": 49,
+                "total_tokens": 1008,
+                "cached_tokens": 637
+              },
+              "ReservedRequests": 2,
+              "KnownUsageEntries": 2,
+              "UnknownUsageEntries": 0,
+              "PartialUsageEntries": 0
+            }
+          },
+          {
+            "RunID": "live-task",
+            "AgentID": "coordinator",
+            "AgentCallKey": "97c25b4a-8572-47c8-9dc6-3e4d43aa63ac",
+            "ParentAgentCallKey": "",
+            "Self": {
+              "UnknownPromptEntries": 0,
+              "UnknownCompletionEntries": 0,
+              "UnknownTotalEntries": 0,
+              "UnknownCachedEntries": 0,
+              "KnownTokens": {
+                "prompt_tokens": 1080,
+                "completion_tokens": 64,
+                "total_tokens": 1144,
+                "cached_tokens": 636
+              },
+              "ReservedRequests": 2,
+              "KnownUsageEntries": 2,
+              "UnknownUsageEntries": 0,
+              "PartialUsageEntries": 0
+            },
+            "Inclusive": {
+              "UnknownPromptEntries": 0,
+              "UnknownCompletionEntries": 0,
+              "UnknownTotalEntries": 0,
+              "UnknownCachedEntries": 0,
+              "KnownTokens": {
+                "prompt_tokens": 2255,
+                "completion_tokens": 131,
+                "total_tokens": 2386,
+                "cached_tokens": 1459
+              },
+              "ReservedRequests": 5,
+              "KnownUsageEntries": 5,
+              "UnknownUsageEntries": 0,
+              "PartialUsageEntries": 0
+            }
+          },
+          {
+            "RunID": "live-task",
+            "AgentID": "reviewer",
+            "AgentCallKey": "e8897d69-6990-45e7-ae87-a8b379e1bb40",
+            "ParentAgentCallKey": "97c25b4a-8572-47c8-9dc6-3e4d43aa63ac",
+            "Self": {
+              "UnknownPromptEntries": 0,
+              "UnknownCompletionEntries": 0,
+              "UnknownTotalEntries": 0,
+              "UnknownCachedEntries": 0,
+              "KnownTokens": {
+                "prompt_tokens": 216,
+                "completion_tokens": 18,
+                "total_tokens": 234,
+                "cached_tokens": 186
+              },
+              "ReservedRequests": 1,
+              "KnownUsageEntries": 1,
+              "UnknownUsageEntries": 0,
+              "PartialUsageEntries": 0
+            },
+            "Inclusive": {
+              "UnknownPromptEntries": 0,
+              "UnknownCompletionEntries": 0,
+              "UnknownTotalEntries": 0,
+              "UnknownCachedEntries": 0,
+              "KnownTokens": {
+                "prompt_tokens": 216,
+                "completion_tokens": 18,
+                "total_tokens": 234,
+                "cached_tokens": 186
+              },
+              "ReservedRequests": 1,
+              "KnownUsageEntries": 1,
+              "UnknownUsageEntries": 0,
+              "PartialUsageEntries": 0
+            }
+          }
+        ],
+        "Agents": [
+          {
+            "AgentID": "coordinator",
+            "Self": {
+              "UnknownPromptEntries": 0,
+              "UnknownCompletionEntries": 0,
+              "UnknownTotalEntries": 0,
+              "UnknownCachedEntries": 0,
+              "KnownTokens": {
+                "prompt_tokens": 1080,
+                "completion_tokens": 64,
+                "total_tokens": 1144,
+                "cached_tokens": 636
+              },
+              "ReservedRequests": 2,
+              "KnownUsageEntries": 2,
+              "UnknownUsageEntries": 0,
+              "PartialUsageEntries": 0
+            }
+          },
+          {
+            "AgentID": "researcher",
+            "Self": {
+              "UnknownPromptEntries": 0,
+              "UnknownCompletionEntries": 0,
+              "UnknownTotalEntries": 0,
+              "UnknownCachedEntries": 0,
+              "KnownTokens": {
+                "prompt_tokens": 959,
+                "completion_tokens": 49,
+                "total_tokens": 1008,
+                "cached_tokens": 637
+              },
+              "ReservedRequests": 2,
+              "KnownUsageEntries": 2,
+              "UnknownUsageEntries": 0,
+              "PartialUsageEntries": 0
+            }
+          },
+          {
+            "AgentID": "reviewer",
+            "Self": {
+              "UnknownPromptEntries": 0,
+              "UnknownCompletionEntries": 0,
+              "UnknownTotalEntries": 0,
+              "UnknownCachedEntries": 0,
+              "KnownTokens": {
+                "prompt_tokens": 216,
+                "completion_tokens": 18,
+                "total_tokens": 234,
+                "cached_tokens": 186
+              },
+              "ReservedRequests": 1,
+              "KnownUsageEntries": 1,
+              "UnknownUsageEntries": 0,
+              "PartialUsageEntries": 0
+            }
+          }
+        ],
+        "Unattributed": {
+          "UnknownPromptEntries": 0,
+          "UnknownCompletionEntries": 0,
+          "UnknownTotalEntries": 0,
+          "UnknownCachedEntries": 0,
+          "KnownTokens": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0
+          },
+          "ReservedRequests": 0,
+          "KnownUsageEntries": 0,
+          "UnknownUsageEntries": 0,
+          "PartialUsageEntries": 0
+        },
+        "UnknownUsageEntries": 0,
+        "PartialUsageEntries": 0,
+        "Complete": true
+      },
+      "Attempts": [
+        {
+          "RunID": "live-task",
+          "AgentID": "coordinator",
+          "AgentCallKey": "97c25b4a-8572-47c8-9dc6-3e4d43aa63ac",
+          "ParentAgentCallKey": "",
+          "OperationKey": "059eef11-d5f2-4cac-820d-d0c7218f181c",
+          "AttemptKey": "059eef11-d5f2-4cac-820d-d0c7218f181c",
+          "Provider": "openai",
+          "Model": "MiniMax-M3.1-Flash",
+          "Attempt": 0,
+          "Tokens": {
+            "prompt_tokens": 508,
+            "completion_tokens": 38,
+            "total_tokens": 546,
+            "cached_tokens": 128
+          },
+          "KnownFields": 15,
+          "Source": "provider",
+          "Revision": 1,
+          "Replayed": false,
+          "AccountingCommitted": true
+        },
+        {
+          "RunID": "live-task",
+          "AgentID": "researcher",
+          "AgentCallKey": "4fe1b246-dda5-46e9-b5fa-fc2a6b28c6b9",
+          "ParentAgentCallKey": "97c25b4a-8572-47c8-9dc6-3e4d43aa63ac",
+          "OperationKey": "af6fabc3-7b73-4f98-9432-9eec5f460016",
+          "AttemptKey": "af6fabc3-7b73-4f98-9432-9eec5f460016",
+          "Provider": "openai",
+          "Model": "MiniMax-M3.1-Flash",
+          "Attempt": 0,
+          "Tokens": {
+            "prompt_tokens": 452,
+            "completion_tokens": 28,
+            "total_tokens": 480,
+            "cached_tokens": 186
+          },
+          "KnownFields": 15,
+          "Source": "provider",
+          "Revision": 1,
+          "Replayed": false,
+          "AccountingCommitted": true
+        },
+        {
+          "RunID": "live-task",
+          "AgentID": "researcher",
+          "AgentCallKey": "4fe1b246-dda5-46e9-b5fa-fc2a6b28c6b9",
+          "ParentAgentCallKey": "97c25b4a-8572-47c8-9dc6-3e4d43aa63ac",
+          "OperationKey": "81ca9102-d333-4fd0-bec9-2a14d9b481f5",
+          "AttemptKey": "81ca9102-d333-4fd0-bec9-2a14d9b481f5",
+          "Provider": "openai",
+          "Model": "MiniMax-M3.1-Flash",
+          "Attempt": 0,
+          "Tokens": {
+            "prompt_tokens": 507,
+            "completion_tokens": 21,
+            "total_tokens": 528,
+            "cached_tokens": 451
+          },
+          "KnownFields": 15,
+          "Source": "provider",
+          "Revision": 1,
+          "Replayed": false,
+          "AccountingCommitted": true
+        },
+        {
+          "RunID": "live-task",
+          "AgentID": "reviewer",
+          "AgentCallKey": "e8897d69-6990-45e7-ae87-a8b379e1bb40",
+          "ParentAgentCallKey": "97c25b4a-8572-47c8-9dc6-3e4d43aa63ac",
+          "OperationKey": "0ad6db1e-6f59-4208-8c9f-1865a1460e1d",
+          "AttemptKey": "0ad6db1e-6f59-4208-8c9f-1865a1460e1d",
+          "Provider": "openai",
+          "Model": "MiniMax-M3.1-Flash",
+          "Attempt": 0,
+          "Tokens": {
+            "prompt_tokens": 216,
+            "completion_tokens": 18,
+            "total_tokens": 234,
+            "cached_tokens": 186
+          },
+          "KnownFields": 15,
+          "Source": "provider",
+          "Revision": 1,
+          "Replayed": false,
+          "AccountingCommitted": true
+        },
+        {
+          "RunID": "live-task",
+          "AgentID": "coordinator",
+          "AgentCallKey": "97c25b4a-8572-47c8-9dc6-3e4d43aa63ac",
+          "ParentAgentCallKey": "",
+          "OperationKey": "e568d609-55e4-4662-8fac-67507bd565b4",
+          "AttemptKey": "e568d609-55e4-4662-8fac-67507bd565b4",
+          "Provider": "openai",
+          "Model": "MiniMax-M3.1-Flash",
+          "Attempt": 0,
+          "Tokens": {
+            "prompt_tokens": 572,
+            "completion_tokens": 26,
+            "total_tokens": 598,
+            "cached_tokens": 508
+          },
+          "KnownFields": 15,
+          "Source": "provider",
+          "Revision": 1,
+          "Replayed": false,
+          "AccountingCommitted": true
+        }
+      ],
+      "ToolRuns": {
+        "lookup_order": 1,
+        "research": 1,
+        "review": 1
+      }
+    }
+  ]
+}

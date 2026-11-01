@@ -1,0 +1,4 @@
+provider=minimax scenario=task passed=true tokens=2570 requests=5 tools=3 unknown=0 partial=0
+  agent=coordinator self=1247
+  agent=researcher self=1078
+  agent=reviewer self=245

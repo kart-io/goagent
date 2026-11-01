@@ -69,6 +69,9 @@ func ConfigToOptions(config *agentllm.LLMOptions) []agentllm.ClientOption {
 	if config.Timeout > 0 {
 		opts = append(opts, agentllm.WithTimeout(time.Duration(config.Timeout)*time.Second))
 	}
+	if config.Reasoning != nil {
+		opts = append(opts, agentllm.WithReasoning(*config.Reasoning))
+	}
 	if config.TopP > 0 {
 		opts = append(opts, agentllm.WithTopP(config.TopP))
 	}
@@ -83,6 +86,9 @@ func ConfigToOptions(config *agentllm.LLMOptions) []agentllm.ClientOption {
 
 // EnsureAPIKey validates and sets the API key, supporting environment variable fallback.
 func (b *BaseProvider) EnsureAPIKey(envVar string, providerName constants.Provider) error {
+	if b.Config.Reasoning != nil && providerName != constants.ProviderOpenAI && providerName != constants.ProviderDeepSeek && providerName != constants.ProviderGemini {
+		return b.RejectReasoning(nil)
+	}
 	if b.Config.APIKey == "" {
 		b.Config.APIKey = os.Getenv(envVar)
 	}

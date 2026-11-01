@@ -1,0 +1,5 @@
+# github.com/kart-io/goagent/builder [github.com/kart-io/goagent/builder.test]
+builder/explainability_test.go:81:33: end.Usage.ReasoningTokens undefined (type *session.TokenUsage has no field or method ReasoningTokens)
+builder/explainability_test.go:82:33: end.Usage.ToolUsePromptTokens undefined (type *session.TokenUsage has no field or method ToolUsePromptTokens)
+FAIL	github.com/kart-io/goagent/builder [build failed]
+FAIL
