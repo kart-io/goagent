@@ -111,11 +111,11 @@ func (p *OpenAIProvider) completeStream(ctx context.Context, req *agentllm.Compl
 				return
 			}
 			if response.Usage != nil {
-				usage = &agentllm.Usage{
-					PromptTokens:     response.Usage.PromptTokens,
-					CompletionTokens: response.Usage.CompletionTokens,
-					TotalTokens:      response.Usage.TotalTokens,
+				cached := 0
+				if response.Usage.PromptTokensDetails != nil {
+					cached = response.Usage.PromptTokensDetails.CachedTokens
 				}
+				usage = sdkUsage(response.Usage.PromptTokens, response.Usage.CompletionTokens, response.Usage.TotalTokens, cached)
 			}
 			if len(response.Choices) == 0 {
 				continue

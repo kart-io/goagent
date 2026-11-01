@@ -1,0 +1,11 @@
+--- FAIL: TestAgentUsagePanicRetryDoesNotReusePreviousEvidence (0.00s)
+    agent_usage_test.go:49:
+            Error Trace:    /Users/costalong/code/go/src/github.com/kart/goagent/builder/agent_usage_test.go:49
+            Error:          Not equal:
+                            expected: 3
+                            actual  : 6
+            Test:           TestAgentUsagePanicRetryDoesNotReusePreviousEvidence
+            Messages:       panic attempt has no evidence, not the prior attempt's usage
+FAIL
+FAIL    github.com/kart-io/goagent/builder  0.460s
+FAIL

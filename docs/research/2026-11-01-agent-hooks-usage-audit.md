@@ -1,6 +1,6 @@
 # Agent / 子 Agent 钩子与 Token 计量审核
 
-日期：2026-11-01。基线：`de6c61a`。范围：GoAgent 核心；没有把 Harness preset 的装配限制等同于核心能力。
+日期：2026-11-01。基线：`de6c61a`。本文是实施前审核快照；后续已落地能力见[指南](../guides/MULTI_AGENT_USAGE.md)。范围：GoAgent 核心；没有把 Harness preset 的装配限制等同于核心能力。
 
 ## 1. 当前结论
 

@@ -1,6 +1,6 @@
 # Agent / 子 Agent 钩子与 Token 归属设计
 
-日期：2026-11-01。基线：`de6c61a`。状态：**待实施设计**；现有能力审核与验证已完成，本文的新 API 均未实现。定位：GoAgent 继续是可嵌入、可恢复、可计量的通用编排内核。
+日期：2026-11-01。基线：`de6c61a`。状态：**核心功能已实施**；实现覆盖身份、观察钩子、字段证据与可选 v2 归属账本。接入见[指南](../guides/MULTI_AGENT_USAGE.md)，验证见[交付报告](../evaluation/2026-11-01-multi-agent-usage-implementation/REPORT.md)。定位：GoAgent 继续是可嵌入、可恢复、可计量的通用编排内核。
 
 ## 1. 结论与方案
 
@@ -24,10 +24,10 @@
 
 ## 3. 身份：业务运行、逻辑调用与本次访问分开
 
-拟新增窄数据包 `core/usage`，仅放值类型和 context 身份传播，不拥有存储、供应商客户端或调度循环；budget 与 observe 均可依赖它，不互相依赖。
+新增窄数据包 `core/usage`，仅放值类型和 context 身份传播，不拥有存储、供应商客户端或调度循环；budget 与 observe 均可依赖它，不互相依赖。
 
 ```go
-// 提案，不是当前 API。
+// core/usage 中的公开值类型。
 type Owner struct {
     RunID              string // 根业务运行
     AgentID            string // 宿主配置的逻辑角色
@@ -41,7 +41,7 @@ type Invocation struct {
 }
 ```
 
-- 拟新增 `AgentBuilder.WithAgentID(string)`。`execution.ConfigureBuilder` 同时设置 AgentID 与既有 DurableScope；DurableScope 仍只负责持久命名空间，不因仅统计 Token 强制开启日志。
+- 新增 `AgentBuilder.WithAgentID(string)`。`execution.ConfigureBuilder` 同时设置 AgentID 与既有 DurableScope；DurableScope 仍只负责持久命名空间，不因仅统计 Token 强制开启日志。
 - 持久 AgentCallKey 从已派生的 Agent 执行键取得；非持久调用生成独立键。相同 AgentID 并发两次有不同 CallKey。同一逻辑调用恢复沿用 CallKey，但生成新 VisitID。
 - Builder 进入时从 context 读取父调用，再装入自身身份；子 Agent 自动继承同一根预算、观察者与根 RunID。不能在 Factory 中 Bind 一个新根 Scope 或换根预算来伪造独立统计。
 - 宿主需可靠归属时显式配置 AgentID。只有观察时可使用匿名显示标签；不得把匿名标签当稳定的角色账单维度。开启账本归属但缺少身份，应在发模型请求前报错。
@@ -59,7 +59,7 @@ type Invocation struct {
 
 不增加与现有机制重复的 PreAgent/PreTool 控制总线。行为控制继续使用 Builder 钩子、Pipeline/Authorize 与宿主编排；只读统计通过现有 `observe.WithObserver` 接收扩展事件。
 
-拟为 `observe.Event` 增加可选 `Agent`、`Model`、`Usage` 值元数据。嵌套数据只包含可复制的标量/值类型；若采用指针封装，发送和异步入队必须深复制，接收者不能修改后影响后续事件或账本。
+为 `observe.Event` 增加可选 `Agent`、`Model`、`Usage` 值元数据。嵌套数据只包含可复制的标量/值类型；若采用指针封装，发送和异步入队必须深复制，接收者不能修改后影响后续事件或账本。
 
 | 事件/钩子 | 时机 | 用途与限制 |
 | --- | --- | --- |
@@ -78,7 +78,7 @@ Observer 的 panic 仍隔离，同步钩子须及时返回，AsyncObserver 仍�
 
 ## 5. Token 证据与每次尝试
 
-拟定义 `core/usage.ModelEvidence`：Owner、逻辑操作键、AttemptKey、Attempt、Provider、Model、状态、字段可用性、TokenUsage、来源和证据修订。Provider/Model 为实际发送时的有效配置；不支持读取有效配置的客户端标 unknown，不用初始 Builder 配置冒充回退后的模型。
+定义 `core/usage.ModelEvidence`：Owner、逻辑操作键、AttemptKey、Attempt、Provider、Model、状态、字段可用性、TokenUsage、来源和证据修订。Provider/Model 为实际发送时的有效配置；不支持读取有效配置的客户端标 unknown，不用初始 Builder 配置冒充回退后的模型。
 
 原始证据来源与交付来源分开：供应商报告保留 provider 原来源，恢复读取用 delivery=saved 标记，不改写原来源；缺少原来源的旧记录标 legacy_unknown。宿主准入 estimated 放在预留元数据，不能写成真实消耗。无 usage 为 unknown；非 nil 但只报告部分字段时为 partial；报告零与未报告是两种状态。
 
@@ -100,13 +100,13 @@ Observer 的 panic 仍隔离，同步钩子须及时返回，AsyncObserver 仍�
 
 ## 6. 账本归属：扩展现有预算，不增加第二个总账
 
-拟新增显式归属配置 `AttributionVersion` 及正数 `MaxAgentCalls`。关闭时保留现有 v1 账本与序列化意图；开启时使用 v2 记录，增加 `AgentCalls[AgentCallKey]Owner`、`AttemptOwners[AttemptKey]AgentCallKey` 和字段可用性证据。Agent 进入时幂等登记调用节点与完整祖先链；模型预留时同一次 Store 锁/提交校验/补齐该链并绑定尝试，避免出现只保存叶节点而无法重建祖先。
+新增显式归属配置 `AttributionVersion` 及正数 `MaxAgentCalls`。关闭时保留现有 v1 账本与序列化意图；开启时使用 v2 记录，增加 `AgentCalls[AgentCallKey]Owner`、`AttemptOwners[AttemptKey]AgentCallKey` 和字段可用性证据。Agent 进入时幂等登记调用节点与完整祖先链；模型预留时同一次 Store 锁/提交校验/补齐该链并绑定尝试，避免出现只保存叶节点而无法重建祖先。
 
 身份 context 内保留不可变祖先链，查询返回副本。完全没有模型尝试的 Agent 也登记调用节点，但不据此证明外部 SDK 没有费用；它不消耗模型请求额度。`MaxAgentCalls` 限制节点数量，已登记节点恢复不重复占槽。登记只保存拓扑，不保存任务调度状态，不构成另一套子任务运行时。
 
 旧 v1 代码必须拒绝 v2 记录，不能因忽略新字段而写丢归属。不要就地切换活跃 Run 的策略或为了统计换执行键重跑业务；旧运行留在旧版本完成，新运行显式启用。存量不具备归属的证据标 unattributed，不从 hash 反推 AgentID。
 
-拟提供 `Controller.Attribution(ctx) (AttributionReport, error)`：根 Snapshot、按 AgentCallKey 的 Self 汇总、按 AgentID 的角色汇总、unknown/partial 数量、unattributed 与完整性。报表输出确定排序、独立副本；不包含模型正文。v2 同一 AttemptKey 改 Owner、父关系冲突、跨 Root 关联均报错。校验总量时保留无法归属桶，不默默丢记录。
+提供 `Controller.Attribution(ctx) (AttributionReport, error)`：根 Snapshot、按 AgentCallKey 的 Self 汇总、按 AgentID 的角色汇总、unknown/partial 数量、unattributed 与完整性。报表输出确定排序、独立副本；不包含模型正文。v2 同一 AttemptKey 改 Owner、父关系冲突、跨 Root 关联均报错。校验总量时保留无法归属桶，不默默丢记录。
 
 既有 Snapshot.KnownUsageEntries 表示存在 usage 对象，不升级为“每个字段都已报告”的承诺。新增报表提供字段级 unknown/partial 计数及完整性；只报告 TotalTokens 时不把输入、输出或缓存的零值当成已知事实。U2 可以先发布观察元数据，完整 partial 持久口径及可靠归属需 U3 的 v2 支撑，不能对未存储的字段标 AccountingCommitted=true。
 
@@ -148,4 +148,4 @@ Token 数不等于货币费用。宿主维护生效时间、供应商、模型�
 3. **U3 可选持久归属**：版本化现有预算账本、原子预留/归属、查询与兼容；重启和真实故障窗口验证不重复发送/计费。
 4. **U4 宿主案例**：父 Agent + 两个并行子 Agent + 汇总；输出 Self/Inclusive/Root 和未知状态，接入 OTel 或宿主计价器。业务案例放 goagent-examples。
 
-每阶段可独立审核。现有 API 不因文档提案自动可用。实施任务见[计划](../superpowers/plans/2026-11-01-multi-agent-hooks-usage.md)。
+实现采用 Event.Agent 和 Event.Usage（模型元数据包含在 Usage 中），不增加重复的 Model 字段；证据状态由 KnownFields 推导，Replayed 表示恢复交付。Complete 只针对基本三字段，缓存未知另行统计。v1 不保存 partial mask：不足三字段时保留 unknown 且不承诺部分证据已提交；可靠字段归属使用 v2。实施与验收任务见[计划](../superpowers/plans/2026-11-01-multi-agent-hooks-usage.md)。

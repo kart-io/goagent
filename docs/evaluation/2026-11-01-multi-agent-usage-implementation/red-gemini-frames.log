@@ -1,0 +1,11 @@
+--- FAIL: TestGeminiStreamFailurePreservesUsage (0.00s)
+    --- FAIL: TestGeminiStreamFailurePreservesUsage/partial_frames_failure (0.00s)
+        gemini_failure_usage_test.go:69:
+                Error Trace:    /Users/costalong/code/go/src/github.com/kart/goagent/llm/providers/gemini_failure_usage_test.go:69
+                Error:          Not equal:
+                                expected: 4
+                                actual  : 0
+                Test:           TestGeminiStreamFailurePreservesUsage/partial_frames_failure
+FAIL
+FAIL    github.com/kart-io/goagent/llm/providers    0.502s
+FAIL

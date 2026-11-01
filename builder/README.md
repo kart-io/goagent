@@ -105,3 +105,7 @@ builder/
 ├── quick_builders.go       # 快速创建函数
 └── contextpolicy/          # Offload 与结果存储
 ```
+
+## 多 Agent 用量钩子
+
+`WithAgentID` 标识角色；子 Agent 使用父 context 共享预算与 Observer。model_attempt_start/model_usage 提供尝试键、父子身份和字段证据，可靠累计通过可选 v2 预算的 Attribution 查询。Self、Inclusive、Root 不可重复相加，见[指南](../docs/guides/MULTI_AGENT_USAGE.md)与[离线示例](../examples/agent-usage/main.go)。

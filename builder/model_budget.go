@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/kart-io/goagent/core/budget"
+	"github.com/kart-io/goagent/core/usage"
 
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
@@ -36,6 +37,9 @@ func withTokenRequest(ctx context.Context, req *llm.CompletionRequest, tools []i
 
 func reserveModelBudget(ctx context.Context, controller *budget.Controller, key string) error {
 	if controller.Configuration().MaxReservedTokens == 0 {
+		if controller.AttributionEnabled() {
+			return controller.ReserveAttributed(ctx, key, 0, usage.Lineage(ctx))
+		}
 		return controller.Reserve(ctx, key)
 	}
 	estimator, _ := ctx.Value(tokenEstimatorKey{}).(TokenEstimator)
@@ -46,6 +50,9 @@ func reserveModelBudget(ctx context.Context, controller *budget.Controller, key 
 	estimate, err := estimator(ctx, req.request, req.tools)
 	if err != nil {
 		return fmt.Errorf("估计模型 Token: %w", err)
+	}
+	if controller.AttributionEnabled() {
+		return controller.ReserveAttributed(ctx, key, estimate, usage.Lineage(ctx))
 	}
 	return controller.ReserveEstimated(ctx, key, estimate)
 }

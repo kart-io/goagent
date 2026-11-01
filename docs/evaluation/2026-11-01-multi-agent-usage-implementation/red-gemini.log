@@ -1,0 +1,30 @@
+2026/11/01 12:34:59 Error context canceled
+--- FAIL: TestGeminiStreamFailurePreservesUsage (0.01s)
+    --- FAIL: TestGeminiStreamFailurePreservesUsage/max_tokens (0.00s)
+        gemini_failure_usage_test.go:64:
+                Error Trace:    /Users/costalong/code/go/src/github.com/kart/goagent/llm/providers/gemini_failure_usage_test.go:64
+                Error:          Expected value not to be nil.
+                Test:           TestGeminiStreamFailurePreservesUsage/max_tokens
+    --- FAIL: TestGeminiStreamFailurePreservesUsage/safety (0.00s)
+        gemini_failure_usage_test.go:64:
+                Error Trace:    /Users/costalong/code/go/src/github.com/kart/goagent/llm/providers/gemini_failure_usage_test.go:64
+                Error:          Expected value not to be nil.
+                Test:           TestGeminiStreamFailurePreservesUsage/safety
+    --- FAIL: TestGeminiStreamFailurePreservesUsage/blocked (0.00s)
+        gemini_failure_usage_test.go:64:
+                Error Trace:    /Users/costalong/code/go/src/github.com/kart/goagent/llm/providers/gemini_failure_usage_test.go:64
+                Error:          Expected value not to be nil.
+                Test:           TestGeminiStreamFailurePreservesUsage/blocked
+    --- FAIL: TestGeminiStreamFailurePreservesUsage/broken_after_usage (0.00s)
+        gemini_failure_usage_test.go:64:
+                Error Trace:    /Users/costalong/code/go/src/github.com/kart/goagent/llm/providers/gemini_failure_usage_test.go:64
+                Error:          Expected value not to be nil.
+                Test:           TestGeminiStreamFailurePreservesUsage/broken_after_usage
+    --- FAIL: TestGeminiStreamFailurePreservesUsage/cancel_after_usage (0.00s)
+        gemini_failure_usage_test.go:64:
+                Error Trace:    /Users/costalong/code/go/src/github.com/kart/goagent/llm/providers/gemini_failure_usage_test.go:64
+                Error:          Expected value not to be nil.
+                Test:           TestGeminiStreamFailurePreservesUsage/cancel_after_usage
+FAIL
+FAIL    github.com/kart-io/goagent/llm/providers    0.499s
+FAIL

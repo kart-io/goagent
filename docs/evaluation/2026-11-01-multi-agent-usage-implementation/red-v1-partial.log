@@ -1,0 +1,10 @@
+--- FAIL: TestAgentUsageV1DoesNotClaimPartialEvidenceCommitted (0.00s)
+    agent_usage_test.go:267:
+            Error Trace:    /Users/costalong/code/go/src/github.com/kart/goagent/builder/agent_usage_test.go:267
+            Error:          Not equal:
+                            expected: 1
+                            actual  : 0
+            Test:           TestAgentUsageV1DoesNotClaimPartialEvidenceCommitted
+FAIL
+FAIL    github.com/kart-io/goagent/builder  0.864s
+FAIL

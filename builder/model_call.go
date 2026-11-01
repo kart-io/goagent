@@ -12,7 +12,7 @@ import (
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/observe"
-	"github.com/kart-io/goagent/interfaces"
+	"github.com/kart-io/goagent/core/usage"
 	"github.com/kart-io/goagent/llm"
 )
 
@@ -37,19 +37,6 @@ func validateModelBudget(ctx context.Context) error {
 	}
 	return nil
 }
-func recordTurnUsage(ctx context.Context, key string, turn *llm.StreamChunk) error {
-	c, ok := budget.FromContext(ctx)
-	if !ok || turn == nil {
-		return nil
-	}
-	var usage *interfaces.TokenUsage
-	if turn.Usage != nil {
-		usage = &interfaces.TokenUsage{PromptTokens: turn.Usage.PromptTokens, CompletionTokens: turn.Usage.CompletionTokens, TotalTokens: turn.Usage.TotalTokens}
-	}
-	saveCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-	defer cancel()
-	return c.RecordUsage(saveCtx, key, usage)
-}
 
 type requestRecoveryKey struct{}
 
@@ -73,7 +60,9 @@ func (r *replanRequest) Unwrap() error { return r.err }
 // 恢复时用它找回该次尝试的预算键。旧记录没有该字段，即第 0 次。
 type savedTurn struct {
 	llm.StreamChunk
-	Attempt int `json:"model_attempt,omitempty"`
+	Attempt        int            `json:"model_attempt,omitempty"`
+	Metadata       *modelMetadata `json:"model_metadata,omitempty"`
+	EvidenceSource string         `json:"evidence_source,omitempty"`
 }
 
 func modelOperation(ctx context.Context, id string, intent json.RawMessage, invoke func(context.Context, func(AgentEvent) error) (*llm.StreamChunk, error), validate func(*llm.StreamChunk) error, emit func(AgentEvent) error) (result *llm.StreamChunk, resultErr error) {
@@ -85,7 +74,6 @@ func modelOperation(ctx context.Context, id string, intent json.RawMessage, invo
 	ctx, endModel := observe.Start(ctx, observe.Event{Type: "model", Path: id, OperationKey: key})
 	replayed := false
 	defer func() { endModel(resultErr, replayed) }()
-	defer recoverPanic("模型调用", &resultErr)
 	if err := validateModelBudget(ctx); err != nil {
 		return nil, err
 	}
@@ -96,13 +84,40 @@ func modelOperation(ctx context.Context, id string, intent json.RawMessage, invo
 		}
 		return durable.ChildKey(key, fmt.Sprintf("retry/%d", n))
 	}
+	lastAttempted, recordedAttempt := -1, -1
+	var lastTurn *llm.StreamChunk
+	recordUsage := func(n int, turn *llm.StreamChunk, replay bool) error {
+		if !metered && !observe.Enabled(ctx) {
+			return nil
+		}
+		if !replay && (lastAttempted < 0 || n <= recordedAttempt) {
+			return nil
+		}
+		if !replay {
+			recordedAttempt = n
+		}
+		return publishModelUsage(ctx, key, attemptKey(n), n, turn, replay)
+	}
+	defer func() {
+		if lastAttempted > recordedAttempt {
+			resultErr = errors.Join(resultErr, recordUsage(lastAttempted, lastTurn, false))
+		}
+	}()
+	defer recoverPanic("模型调用", &resultErr)
 	reserve := func(callCtx context.Context, n int) error {
 		if metered {
 			return reserveModelBudget(callCtx, c, attemptKey(n))
 		}
 		return nil
 	}
-	send := func(callCtx context.Context) (*llm.StreamChunk, bool, error) {
+	send := func(callCtx context.Context, n int) (*llm.StreamChunk, bool, error) {
+		lastTurn = nil
+		lastAttempted = n
+		if observe.Enabled(callCtx) {
+			in, _ := usage.FromContext(callCtx)
+			meta, _ := callCtx.Value(modelMetadataKey{}).(modelMetadata)
+			observe.Emit(callCtx, observe.Event{Type: "model_attempt_start", Path: "attempt", OperationKey: attemptKey(n), Usage: &usage.ModelEvidence{Owner: in.Owner, OperationKey: key, AttemptKey: attemptKey(n), Attempt: n, Provider: meta.Provider, Model: meta.Model}})
+		}
 		if counter, ok := ctx.Value(modelScopeKey{}).(*atomic.Int64); ok {
 			counter.Add(1)
 		}
@@ -111,6 +126,7 @@ func modelOperation(ctx context.Context, id string, intent json.RawMessage, invo
 			emitted = true
 			return emit(event)
 		})
+		lastTurn = turn
 		return turn, emitted, err
 	}
 	recovery, _ := ctx.Value(requestRecoveryKey{}).(requestRecovery)
@@ -119,7 +135,7 @@ func modelOperation(ctx context.Context, id string, intent json.RawMessage, invo
 		if err := reserve(callCtx, 0); err != nil {
 			return nil, 0, err
 		}
-		turn, emitted, err := send(callCtx)
+		turn, emitted, err := send(callCtx, 0)
 		for n := 1; ; n++ {
 			if err == nil || recovery == nil || callCtx.Err() != nil {
 				return turn, n - 1, err
@@ -136,7 +152,7 @@ func modelOperation(ctx context.Context, id string, intent json.RawMessage, invo
 				}
 				return turn, n - 1, &replanRequest{decision: decision, err: err}
 			}
-			if e := recordTurnUsage(ctx, attemptKey(n-1), turn); e != nil {
+			if e := recordUsage(n-1, turn, false); e != nil {
 				return turn, n - 1, errors.Join(err, e)
 			}
 			if decision.Delay > 0 {
@@ -153,13 +169,13 @@ func modelOperation(ctx context.Context, id string, intent json.RawMessage, invo
 				return turn, n - 1, errors.Join(err, e)
 			}
 			retryCtx, endRetry := observe.Start(callCtx, observe.Event{Type: "model_retry", Path: fmt.Sprintf("retry/%d", n), OperationKey: attemptKey(n)})
-			turn, emitted, err = send(retryCtx)
+			turn, emitted, err = send(retryCtx, n)
 			endRetry(err, false)
 		}
 	}
 	if !durable.HasJournal(ctx) {
 		turn, n, err := call(ctx)
-		return turn, errors.Join(err, recordTurnUsage(ctx, attemptKey(n), turn))
+		return turn, errors.Join(err, recordUsage(n, turn, false))
 	}
 	if metered {
 		var err error
@@ -167,6 +183,17 @@ func modelOperation(ctx context.Context, id string, intent json.RawMessage, invo
 			Original json.RawMessage
 			Budget   budget.Config
 		}{intent, c.Configuration()})
+		if err != nil {
+			return nil, err
+		}
+	}
+	if metered && c.AttributionEnabled() {
+		var err error
+		intent, err = json.Marshal(struct {
+			Original json.RawMessage
+			Owners   []usage.Owner
+			Model    modelMetadata
+		}{intent, usage.Lineage(ctx), func() modelMetadata { m, _ := ctx.Value(modelMetadataKey{}).(modelMetadata); return m }()})
 		if err != nil {
 			return nil, err
 		}
@@ -179,6 +206,10 @@ func modelOperation(ctx context.Context, id string, intent json.RawMessage, invo
 			return nil, err
 		}
 		saved := savedTurn{StreamChunk: *turn, Attempt: n}
+		if meta, ok := ctx.Value(modelMetadataKey{}).(modelMetadata); ok {
+			saved.Metadata = &meta
+			saved.EvidenceSource = "provider"
+		}
 		saved.Error = nil
 		if err == nil && validate != nil {
 			err = validate(&saved.StreamChunk)
@@ -190,17 +221,27 @@ func modelOperation(ctx context.Context, id string, intent json.RawMessage, invo
 		replayed = record.Replayed
 	}
 	var turn *llm.StreamChunk
-	usageKey := key
+	usageAttempt := 0
 	// Failed operations retain known usage. An intent mismatch is not a replay.
 	if record != nil && (opErr == nil || record.Replayed || attempted) && len(record.Value) > 0 && string(record.Value) != "null" {
 		var saved savedTurn
 		if err := json.Unmarshal(record.Value, &saved); err != nil {
 			return nil, errors.Join(opErr, err)
 		}
-		turn, usageKey = &saved.StreamChunk, attemptKey(saved.Attempt)
+		turn, usageAttempt = &saved.StreamChunk, saved.Attempt
+		if saved.Metadata != nil {
+			ctx = context.WithValue(ctx, modelMetadataKey{}, *saved.Metadata)
+		}
+		if record.Replayed {
+			source := saved.EvidenceSource
+			if source == "" {
+				source = "legacy_unknown"
+			}
+			ctx = context.WithValue(ctx, evidenceSourceKey{}, source)
+		}
 	}
 	if turn != nil {
-		opErr = errors.Join(opErr, recordTurnUsage(ctx, usageKey, turn))
+		opErr = errors.Join(opErr, recordUsage(usageAttempt, turn, record.Replayed))
 	}
 	if opErr != nil {
 		return turn, opErr
@@ -221,6 +262,7 @@ func modelOperation(ctx context.Context, id string, intent json.RawMessage, invo
 	return turn, nil
 }
 func readPlainModelTurn(ctx context.Context, id string, client llm.StreamClient, req *llm.CompletionRequest, emit func(AgentEvent) error) (*llm.StreamChunk, error) {
+	ctx = withModelMetadata(ctx, client, req)
 	ctx = withTokenRequest(ctx, req, nil)
 	var intent json.RawMessage
 	var err error

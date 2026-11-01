@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/core/durable"
+	"github.com/kart-io/goagent/core/usage"
 	"github.com/kart-io/goagent/interfaces"
 )
 
@@ -36,6 +37,8 @@ type Config struct {
 	MaxToolCalls       int    `json:",omitempty"`
 	DeadlineUnixMilli  int64  `json:",omitempty"`
 	TokenPolicyVersion string `json:",omitempty"`
+	AttributionVersion string `json:",omitempty"`
+	MaxAgentCalls      int    `json:",omitempty"`
 }
 
 // Snapshot distinguishes conservative reservations from known token evidence.
@@ -45,10 +48,13 @@ type Snapshot struct {
 	ReservedTokens, ReservedToolCalls, KnownTokenDelta       int
 }
 type ledger struct {
-	Config    Config
-	Entries   map[string]*interfaces.TokenUsage
-	Estimates map[string]int  `json:",omitempty"`
-	Tools     map[string]bool `json:",omitempty"`
+	AgentCalls    map[string]usage.Owner    `json:",omitempty"`
+	AttemptOwners map[string]string         `json:",omitempty"`
+	Evidence      map[string]usage.Evidence `json:",omitempty"`
+	Config        Config
+	Entries       map[string]*interfaces.TokenUsage
+	Estimates     map[string]int  `json:",omitempty"`
+	Tools         map[string]bool `json:",omitempty"`
 }
 
 // Controller is safe for concurrent use. Durable controllers coordinate via Store locks.
@@ -63,6 +69,9 @@ type Controller struct {
 func New(config Config) (*Controller, error) {
 	if config.RootKey == "" || config.Version == "" || config.MaxModelRequests < 1 || config.MaxReservedTokens < 0 || config.MaxToolCalls < 0 || config.DeadlineUnixMilli < 0 || (config.MaxReservedTokens > 0 && config.TokenPolicyVersion == "") {
 		return nil, fmt.Errorf("budget requires root key, version and positive request limit")
+	}
+	if config.MaxAgentCalls < 0 || (config.AttributionVersion != "" && config.MaxAgentCalls < 1) || (config.AttributionVersion == "" && config.MaxAgentCalls != 0) {
+		return nil, fmt.Errorf("attribution requires version and positive call limit")
 	}
 	return &Controller{config: config, memory: ledger{Config: config, Entries: map[string]*interfaces.TokenUsage{}}}, nil
 }
@@ -105,7 +114,7 @@ func (c *Controller) storageID() string {
 	return "goagent/budget/" + hex.EncodeToString(d[:])
 }
 func clone(l ledger) ledger {
-	out := ledger{Config: l.Config, Estimates: maps.Clone(l.Estimates), Tools: maps.Clone(l.Tools)}
+	out := ledger{AgentCalls: maps.Clone(l.AgentCalls), AttemptOwners: maps.Clone(l.AttemptOwners), Evidence: maps.Clone(l.Evidence), Config: l.Config, Estimates: maps.Clone(l.Estimates), Tools: maps.Clone(l.Tools)}
 	if l.Entries != nil {
 		out.Entries = make(map[string]*interfaces.TokenUsage, len(l.Entries))
 		for key, usage := range l.Entries {
@@ -144,7 +153,7 @@ func (c *Controller) transaction(ctx context.Context, write bool, fn func(*ledge
 		} else {
 			// 从零值解码，避免JSON缺省字段继承当前配置或上次内存快照。
 			l = ledger{}
-			if s == nil || s.Version != "goagent-model-budget-v1" || s.RunID != id || json.Unmarshal(s.Data, &l) != nil {
+			if s == nil || s.Version != c.ledgerVersion() || s.RunID != id || json.Unmarshal(s.Data, &l) != nil {
 				return fmt.Errorf("invalid budget record")
 			}
 		}
@@ -171,6 +180,9 @@ func (c *Controller) transaction(ctx context.Context, write bool, fn func(*ledge
 			return fmt.Errorf("无效的工具执行记录")
 		}
 	}
+	if err = c.validateAttribution(&l); err != nil {
+		return err
+	}
 	if err = fn(&l); err != nil {
 		return err
 	}
@@ -183,7 +195,7 @@ func (c *Controller) transaction(ctx context.Context, write bool, fn func(*ledge
 			return e
 		}
 		id := c.storageID()
-		if e = c.store.Save(ctx, id, &durable.Snapshot{RunID: id, Version: "goagent-model-budget-v1", Data: data}); e != nil {
+		if e = c.store.Save(ctx, id, &durable.Snapshot{RunID: id, Version: c.ledgerVersion(), Data: data}); e != nil {
 			return e
 		}
 	}
@@ -224,6 +236,9 @@ func validUsage(u *interfaces.TokenUsage) bool {
 // RecordUsage attaches immutable known evidence, or records unknown usage as nil.
 // A later saved model record may upgrade unknown usage to known without another call.
 func (c *Controller) RecordUsage(ctx context.Context, key string, u *interfaces.TokenUsage) error {
+	if c.AttributionEnabled() {
+		return fmt.Errorf("attributed budget requires RecordEvidence")
+	}
 	if !validUsage(u) {
 		return fmt.Errorf("negative model usage")
 	}
@@ -258,8 +273,16 @@ func (c *Controller) Snapshot(ctx context.Context) (out Snapshot, err error) {
 				out.UnknownUsageEntries++
 			} else {
 				out.KnownUsageEntries++
-				out.KnownTokens.Add(u)
-				out.KnownTokenDelta += u.TotalTokens - l.Estimates[key]
+				if err := addTokens(&out.KnownTokens, *u); err != nil {
+					return err
+				}
+				if c.knownTotal(l, key) {
+					delta := u.TotalTokens - l.Estimates[key]
+					if (delta > 0 && out.KnownTokenDelta > math.MaxInt-delta) || (delta < 0 && out.KnownTokenDelta < math.MinInt-delta) {
+						return fmt.Errorf("token delta overflow")
+					}
+					out.KnownTokenDelta += delta
+				}
 			}
 		}
 		return nil
@@ -270,6 +293,9 @@ func (c *Controller) Snapshot(ctx context.Context) (out Snapshot, err error) {
 // ReserveEstimated 预留一次请求与宿主估计的总 Token；取消、失败和实际用量较少均不退款。
 // 估计须覆盖输入、工具定义与输出预算；实际用量仍可能超过估计，因此不是提供商费用硬上限。
 func (c *Controller) ReserveEstimated(ctx context.Context, key string, tokens int) error {
+	if c.AttributionEnabled() {
+		return fmt.Errorf("attributed budget requires ReserveAttributed")
+	}
 	if key == "" || tokens < 0 {
 		return fmt.Errorf("请求键和非负 Token 估计必填")
 	}

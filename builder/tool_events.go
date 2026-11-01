@@ -13,6 +13,7 @@ import (
 
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/middleware"
+	"github.com/kart-io/goagent/core/usage"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/tools"
@@ -179,7 +180,8 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 			continue
 		}
 		if turn.Usage != nil {
-			usage.Add(&interfaces.TokenUsage{PromptTokens: turn.Usage.PromptTokens, CompletionTokens: turn.Usage.CompletionTokens, TotalTokens: turn.Usage.TotalTokens})
+			copy := turn.Usage.Tokens()
+			usage.Add(&copy)
 			reports++
 		}
 		metadata["model_calls"] = round + 1
@@ -477,8 +479,7 @@ func readToolTurn(ctx context.Context, stream <-chan *llm.StreamChunk, emit func
 			usage := result.Usage
 			result = *chunk
 			if chunk.Usage != nil {
-				copy := *chunk.Usage
-				usage = &copy
+				usage = mergeTurnUsage(usage, chunk.Usage)
 			}
 			result.Usage = usage
 			if chunk.Delta != "" {
@@ -498,6 +499,32 @@ func readToolTurn(ctx context.Context, stream <-chan *llm.StreamChunk, emit func
 			}
 		}
 	}
+}
+
+// Usage frames are cumulative evidence, not deltas. Later known fields replace
+// prior values; missing fields must not erase already received evidence.
+func mergeTurnUsage(previous, next *llm.Usage) *llm.Usage {
+	copy := *next
+	fields := next.Fields()
+	if previous != nil {
+		if fields&usage.Prompt == 0 {
+			copy.PromptTokens = previous.PromptTokens
+		}
+		if fields&usage.Completion == 0 {
+			copy.CompletionTokens = previous.CompletionTokens
+		}
+		if fields&usage.Total == 0 {
+			copy.TotalTokens = previous.TotalTokens
+		}
+		if fields&usage.Cached == 0 {
+			copy.CachedTokens = previous.CachedTokens
+		}
+		fields |= previous.Fields()
+	}
+	if next.KnownFields != nil || (previous != nil && previous.KnownFields != nil) || fields != usage.BasicFields {
+		copy.KnownFields = &fields
+	}
+	return &copy
 }
 
 func additionalContextMessage(items []string) string {

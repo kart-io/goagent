@@ -93,6 +93,10 @@ func (a *ConfigurableAgent[C, S]) executeStream(ctx context.Context, input inter
 	if err != nil {
 		return nil, err
 	}
+	ctx, err = a.prepareAgentUsage(ctx)
+	if err != nil {
+		return nil, err
+	}
 	events := make(chan AgentEvent, 1)
 	started = true
 	go func() {
@@ -299,7 +303,8 @@ func (a *ConfigurableAgent[C, S]) runEvents(ctx context.Context, request *middle
 	}
 
 	if turn.Usage != nil {
-		usage.Add(&interfaces.TokenUsage{PromptTokens: turn.Usage.PromptTokens, CompletionTokens: turn.Usage.CompletionTokens, TotalTokens: turn.Usage.TotalTokens})
+		copy := turn.Usage.Tokens()
+		usage.Add(&copy)
 	}
 	metadata["answer_usage_reported"] = turn.Usage != nil
 

@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/kart-io/goagent/core/durable"
+	"github.com/kart-io/goagent/core/usage"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -21,6 +22,8 @@ import (
 
 // Event deliberately excludes raw inputs, outputs and provider error messages.
 type Event struct {
+	Agent                                       *usage.Invocation    `json:",omitempty"`
+	Usage                                       *usage.ModelEvidence `json:",omitempty"`
 	RunID, OperationKey, VisitID, EventID, Type string
 	TraceID, SpanID, ParentSpanID               string
 	Path, ErrorKind                             string
@@ -78,8 +81,56 @@ func Enabled(ctx context.Context) bool {
 func send(ctx context.Context, e Event) {
 	defer func() { _ = recover() }()
 	if o, ok := ctx.Value(observerKey{}).(Observer); ok && o != nil {
-		o.Observe(ctx, e)
+		o.Observe(ctx, cloneEvent(e))
 	}
+}
+
+// cloneEvent isolates all mutable metadata pointers from sinks and producers.
+func cloneEvent(e Event) Event {
+	if e.Agent != nil {
+		v := *e.Agent
+		e.Agent = &v
+	}
+	if e.Usage != nil {
+		v := *e.Usage
+		e.Usage = &v
+	}
+	return e
+}
+
+// Emit delivers a standalone read-only event without creating a lifecycle span.
+// Disabled observation performs no allocation. Delivery is best effort.
+func Emit(ctx context.Context, e Event) {
+	if !Enabled(ctx) {
+		return
+	}
+	sc, _ := ctx.Value(scopeKey{}).(*scope)
+	if sc == nil {
+		in, _ := usage.FromContext(ctx)
+		ctx = WithRunID(ctx, in.RunID)
+		sc = ctx.Value(scopeKey{}).(*scope)
+	}
+	e.RunID = sc.id
+	if in, ok := usage.FromContext(ctx); ok {
+		e.Agent = &in
+	}
+	if prefix, _ := ctx.Value(pathKey{}).(string); prefix != "" {
+		if e.Path == "" {
+			e.Path = prefix
+		} else {
+			e.Path = prefix + "/" + e.Path
+		}
+	}
+	if e.OperationKey == "" {
+		e.OperationKey = durable.ExecutionKey(ctx)
+	}
+	id := sc.invocation + "/" + strconv.FormatUint(sc.seq.Add(1), 10)
+	e.VisitID, e.EventID, e.At = id, id, time.Now()
+	if current := trace.SpanContextFromContext(ctx); current.IsValid() {
+		e.TraceID = current.TraceID().String()
+		e.SpanID = current.SpanID().String()
+	}
+	send(ctx, e)
 }
 
 // ErrorKind returns a bounded category, never the original error text.
@@ -113,9 +164,14 @@ func Start(ctx context.Context, e Event) (context.Context, func(error, bool)) {
 	return startEnabled(ctx, e)
 }
 func startEnabled(ctx context.Context, e Event) (context.Context, func(error, bool)) {
+	e = cloneEvent(e)
+	if in, ok := usage.FromContext(ctx); ok {
+		e.Agent = &in
+	}
 	sc, _ := ctx.Value(scopeKey{}).(*scope)
 	if sc == nil {
-		ctx = WithRunID(ctx, "")
+		in, _ := usage.FromContext(ctx)
+		ctx = WithRunID(ctx, in.RunID)
 		sc = ctx.Value(scopeKey{}).(*scope)
 	}
 	e.RunID = sc.id

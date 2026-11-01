@@ -1,0 +1,10 @@
+--- FAIL: TestAgentUsageMergesPartialUsageFrames (0.00s)
+    agent_usage_test.go:124:
+            Error Trace:    /Users/costalong/code/go/src/github.com/kart/goagent/builder/agent_usage_test.go:124
+            Error:          Not equal:
+                            expected: 4
+                            actual  : 0
+            Test:           TestAgentUsageMergesPartialUsageFrames
+FAIL
+FAIL    github.com/kart-io/goagent/builder  0.474s
+FAIL
