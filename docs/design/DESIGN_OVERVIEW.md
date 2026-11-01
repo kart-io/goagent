@@ -12,6 +12,8 @@
 6. **宿主拥有资源**：`execution.Scope`、`budget.Controller`、`durable.Store`、`session.Store` 都由宿主创建；框架不创建默认存储，也不关闭宿主资源。
 7. **处处有界**：`WithMaxIterations` 限制模型请求次数；根预算限制请求数、预留 Token、工具次数与期限；`DispatchConfig` 限制执行/准入并发、排队数与单次超时；`workflow` 图有最大步数（`ErrMaxSteps`）。
 
+Pi 设计的采纳继续遵守这些边界：复用现有可恢复子流程，补输入与完成契约；产品会话树、Sandbox 和后台调度留在 Harness/宿主。见[采纳设计](PI_CORE_ADOPTION.md)与[代码能力对照](../research/2026-11-01-pi-core-gap-analysis.md)。
+
 ## 分层
 
 ```text

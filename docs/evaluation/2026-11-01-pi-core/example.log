@@ -1,0 +1,4 @@
+=== RUN   ExampleNewRunnableTool_workflow
+--- PASS: ExampleNewRunnableTool_workflow (0.00s)
+PASS
+ok  	github.com/kart-io/goagent/tools	0.594s

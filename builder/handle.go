@@ -152,19 +152,54 @@ func (h *Handle) run(ctx context.Context, invoke func(context.Context, string) (
 		h.inbox.mu.Lock()
 		h.out, h.err = out, err
 		next := h.inbox.followups
-		h.inbox.followups = nil
 		if err != nil || len(next) == 0 {
 			h.inbox.done = true
 			h.inbox.mu.Unlock()
 			return
 		}
+		h.inbox.followups = nil
 		history = h.inbox.transcript
 		h.inbox.mu.Unlock()
 		input = strings.Join(next, "\n\n")
 	}
 }
 
+// PendingInput is one input still queued in a Handle. Kind is "steer", "inject",
+// "redirect", or "followup". A Redirect falling back to Steer is reported as steer.
+type PendingInput struct {
+	Kind string `json:"kind"`
+	Text string `json:"text"`
+}
+
+// PendingInputs returns an independent, non-consuming snapshot of inputs the
+// execution loop has not claimed. It is safe during execution and after Wait.
+// Order is preserved within each queue, not across queues. Claimed inputs are
+// absent even if a later model request fails: absence is not delivery or effect
+// confirmation. Admission and this snapshot are in-memory, not a durable inbox.
+// After the Handle ends, the host decides what to do with remaining inputs;
+// this method does not start new turns or bypass iteration/budget limits.
+func (h *Handle) PendingInputs() []PendingInput {
+	h.inbox.mu.Lock()
+	defer h.inbox.mu.Unlock()
+	var pending []PendingInput
+	for _, item := range h.inbox.items {
+		kind := "inject"
+		if item.Kind == inboxSteer {
+			kind = "steer"
+		}
+		pending = append(pending, PendingInput{Kind: kind, Text: item.Text})
+	}
+	for _, text := range h.inbox.redirects {
+		pending = append(pending, PendingInput{Kind: "redirect", Text: text})
+	}
+	for _, text := range h.inbox.followups {
+		pending = append(pending, PendingInput{Kind: "followup", Text: text})
+	}
+	return pending
+}
+
 // Steer 排到下一步：当前工具批次结束后作为 user 消息追加；模型即将结束本轮时唤醒续跑。
+// 入队成功不保证已处理；结束时未领取的输入可通过 PendingInputs 查询。
 func (h *Handle) Steer(msg string) error { return h.inbox.push(inboxSteer, msg) }
 
 // Inject 排到下一步，随下一次模型请求发送，但不唤醒即将结束的轮次。
@@ -204,6 +239,7 @@ func (h *Handle) Redirect(msg string) error {
 func (h *Handle) Interrupt(cause error) { h.cancel(cause) }
 
 // Wait 等待全部轮次结束，返回最后一轮的结果。
+// ctx 只控制等待，不取消 Handle。返回运行结果后可用 PendingInputs 查询未领取输入。
 func (h *Handle) Wait(ctx context.Context) (*AgentOutput, error) {
 	select {
 	case <-h.done:

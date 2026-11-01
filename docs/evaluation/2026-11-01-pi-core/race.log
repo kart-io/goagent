@@ -1,0 +1,5 @@
+ok  	github.com/kart-io/goagent/builder	20.385s
+ok  	github.com/kart-io/goagent/tools	31.688s
+ok  	github.com/kart-io/goagent/core/durable	(cached)
+ok  	github.com/kart-io/goagent/core/session	(cached)
+ok  	github.com/kart-io/goagent/workflow	10.333s

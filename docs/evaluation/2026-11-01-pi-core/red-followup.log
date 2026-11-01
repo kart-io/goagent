@@ -1,0 +1,20 @@
+--- FAIL: TestHandleFailedTurnRetainsFollowup (0.00s)
+    handle_pending_test.go:29:
+            Error Trace:    /Users/costalong/code/go/src/github.com/kart/goagent/builder/handle_pending_test.go:29
+            Error:          Not equal:
+                            expected: []string{"second"}
+                            actual  : []string(nil)
+
+                            Diff:
+                            --- Expected
+                            +++ Actual
+                            @@ -1,4 +1,2 @@
+                            -([]string) (len=1) {
+                            - (string) (len=6) "second"
+                            -}
+                            +([]string) <nil>
+
+            Test:           TestHandleFailedTurnRetainsFollowup
+FAIL
+FAIL    github.com/kart-io/goagent/builder  0.517s
+FAIL

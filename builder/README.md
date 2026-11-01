@@ -55,7 +55,10 @@ _ = h.Inject("用户偏好深色主题") // 随下一次请求发送，不唤醒
 _ = h.Redirect("先别改 CSS")     // 取消进行中的模型请求，保留已流出的文本后重新请求；工具执行中降级为 Steer
 _ = h.Followup("再写个测试")     // 本轮结束后作为新一轮输入，续接对话
 out, err := h.Wait(ctx)         // h.Interrupt(cause) 中止运行
+pending := h.PendingInputs()   // 独立快照：仍在队列、尚未被执行循环领取的输入
 ```
+
+入队成功不代表处理完成。Inject 不唤醒、Steer 到达过晚或额度耗尽时可能留下输入；失败时未领取的 Followup 也会保留。`PendingInputs` 不消费、不自动续跑，已领取但处理失败的输入不在其中。`Wait` 的 context 只控制等待；等待超时不代表 Handle 结束。收件箱是进程内对象，不提供跨重启可靠接收，详见[组合与输入契约](../docs/guides/AGENT_COMPOSITION.md)。
 
 | 选项 | 时机 | 能力 |
 |---|---|---|
