@@ -77,26 +77,44 @@ func (s *durableStore) Load(ctx context.Context, name string) (*durable.Snapshot
 	return &snap, nil
 }
 
-// Save 追加快照。其他写入者（对话记录、其他持久操作）造成的序号冲突按最新序号重试：调用方持有该 ID 的锁，冲突不涉及同一 ID。
+// Save 追加快照。
 func (s *durableStore) Save(ctx context.Context, name string, snap *durable.Snapshot) error {
+	return s.SaveAll(ctx, durable.Write{ID: name, Snapshot: snap})
+}
+
+// SaveAll 实现 durable.Store：全部快照位于同一会话，作为一次 Append 写入。
+// 其他写入者（对话记录、其他持久操作）造成的序号冲突按最新序号重试：调用方持有这些 ID 的锁，冲突不涉及它们。
+func (s *durableStore) SaveAll(ctx context.Context, writes ...durable.Write) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	raw, err := json.Marshal(snap)
-	if err != nil {
+	if err := durable.ValidateWrites(writes); err != nil {
 		return err
 	}
-	ev, err := NewEvent(TypeBoundarySnapshot, BoundaryData{ID: name, Snapshot: raw})
-	if err != nil {
-		return err
+	if len(writes) == 0 {
+		return nil
+	}
+	events := make([]Event, len(writes))
+	raws := make([]json.RawMessage, len(writes))
+	for i, write := range writes {
+		raw, err := json.Marshal(write.Snapshot)
+		if err != nil {
+			return err
+		}
+		raws[i] = raw
+		if events[i], err = NewEvent(TypeBoundarySnapshot, BoundaryData{ID: write.ID, Snapshot: raw}); err != nil {
+			return err
+		}
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for {
-		last, err := s.store.Append(ctx, s.id, s.seq, ev)
+		last, err := s.store.Append(ctx, s.id, s.seq, events...)
 		if err == nil {
 			s.seq = last
-			s.snaps[name] = raw
+			for i, write := range writes {
+				s.snaps[write.ID] = raws[i]
+			}
 			return nil
 		}
 		if !errors.Is(err, ErrConflict) {

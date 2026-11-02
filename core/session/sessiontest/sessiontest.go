@@ -46,6 +46,9 @@ func Run(t *testing.T, newPair func(t *testing.T) (a, b session.Store), opts Opt
 	}{
 		{"不存在返回ErrNotFound", testNotFound},
 		{"追加按期望序号比较并交换", testAppendCAS},
+		{"批量追加跨实例可见", testAppendAll},
+		{"批量追加任一冲突时不写入", testAppendAllConflict},
+		{"批量追加拒绝时不写入", testAppendAllRejected},
 		{"并发追加只有一个成功", testConcurrentAppend},
 		{"事件原样往返", testRoundTrip},
 		{"按序号读取", testReadAfter},
@@ -306,4 +309,63 @@ func testLock(t *testing.T, a, b session.Store) {
 	lock(t, b, "t", "x")()
 	unlock()
 	lock(t, b, "s", "x")()
+}
+
+func testAppendAll(t *testing.T, a, b session.Store) {
+	ctx := context.Background()
+	lasts, err := a.AppendAll(ctx)
+	require.NoError(t, err)
+	require.Empty(t, lasts)
+	_, err = a.Append(ctx, "s1", 0, user(t, "existing"))
+	require.NoError(t, err)
+	lasts, err = a.AppendAll(ctx,
+		session.AppendBatch{ID: "s2", Events: []session.Event{user(t, "two-a"), user(t, "two-b")}},
+		session.AppendBatch{ID: "s1", Expected: 1, Events: []session.Event{user(t, "one")}},
+		session.AppendBatch{ID: "s3"},
+	)
+	require.NoError(t, err)
+	require.Equal(t, []int64{2, 2, 0}, lasts)
+	require.Len(t, read(t, b, "s1", 0), 2)
+	s2 := read(t, b, "s2", 0)
+	require.Len(t, s2, 2)
+	require.Equal(t, int64(2), s2[1].Seq)
+	// 之后的单独追加接在批量追加之后。
+	last, err := b.Append(ctx, "s2", 2, user(t, "two-c"))
+	require.NoError(t, err)
+	require.Equal(t, int64(3), last)
+}
+
+func testAppendAllConflict(t *testing.T, a, b session.Store) {
+	ctx := context.Background()
+	_, err := a.Append(ctx, "s1", 0, user(t, "existing"))
+	require.NoError(t, err)
+	_, err = a.AppendAll(ctx,
+		session.AppendBatch{ID: "s2", Events: []session.Event{user(t, "new")}},
+		session.AppendBatch{ID: "s1", Events: []session.Event{user(t, "stale")}},
+	)
+	require.ErrorIs(t, err, session.ErrConflict)
+	_, err = b.Read(ctx, "s2", 0)
+	require.ErrorIs(t, err, session.ErrNotFound)
+	require.Len(t, read(t, b, "s1", 0), 1)
+	// 只比较的空批次同样参与判定。
+	_, err = a.AppendAll(ctx,
+		session.AppendBatch{ID: "s2", Events: []session.Event{user(t, "new")}},
+		session.AppendBatch{ID: "s1", Expected: 9},
+	)
+	require.ErrorIs(t, err, session.ErrConflict)
+	_, err = b.Read(ctx, "s2", 0)
+	require.ErrorIs(t, err, session.ErrNotFound)
+}
+
+func testAppendAllRejected(t *testing.T, a, b session.Store) {
+	ctx := context.Background()
+	_, err := a.AppendAll(ctx,
+		session.AppendBatch{ID: "s1", Events: []session.Event{user(t, "x")}},
+		session.AppendBatch{ID: "s1", Expected: 1, Events: []session.Event{user(t, "y")}},
+	)
+	require.Error(t, err)
+	_, err = a.AppendAll(ctx, session.AppendBatch{ID: "s1", Events: []session.Event{user(t, "x")}}, session.AppendBatch{})
+	require.Error(t, err)
+	_, err = b.Read(ctx, "s1", 0)
+	require.ErrorIs(t, err, session.ErrNotFound)
 }

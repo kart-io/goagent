@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/gofrs/flock"
+
+	"github.com/kart-io/goagent/core/internal/txnlog"
 )
 
 // FileStore uses OS-backed per-run locks, fsync and same-directory atomic rename.
@@ -44,6 +46,9 @@ func (s *FileStore) Load(ctx context.Context, id string) (*Snapshot, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	if err := s.recover(ctx); err != nil {
+		return nil, err
+	}
 	data, err := os.ReadFile(s.path(id))
 	if err != nil {
 		return nil, err
@@ -58,10 +63,18 @@ func (s *FileStore) Save(ctx context.Context, id string, snapshot *Snapshot) err
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	if err := s.recover(ctx); err != nil {
+		return err
+	}
 	data, err := json.Marshal(snapshot)
 	if err != nil {
 		return err
 	}
+	return s.replace(ctx, id, data)
+}
+
+// replace 把 id 的快照原子替换为 data。
+func (s *FileStore) replace(ctx context.Context, id string, data []byte) error {
 	file, err := os.CreateTemp(s.dir, ".checkpoint-*")
 	if err != nil {
 		return err
@@ -91,6 +104,57 @@ func (s *FileStore) Save(ctx context.Context, id string, snapshot *Snapshot) err
 	}
 	defer func() { _ = dir.Close() }()
 	return dir.Sync()
+}
+
+// txnWrite 是提交日志中的一项写入。
+type txnWrite struct {
+	ID   string          `json:"id"`
+	Data json.RawMessage `json:"data"`
+}
+
+// recover 前滚崩溃留下的批量写入。Load 和 Save 都先调用它，提交点之后不会读到旧值，也不会被迟到的前滚覆盖新值。
+func (s *FileStore) recover(ctx context.Context) error {
+	return txnlog.New(s.dir).Recover(ctx, s.applyTxn)
+}
+
+func (s *FileStore) applyTxn(payload []byte) error {
+	var writes []txnWrite
+	if err := json.Unmarshal(payload, &writes); err != nil {
+		return fmt.Errorf("批量写入记录损坏: %w", err)
+	}
+	for _, write := range writes {
+		// 提交点已过，应用不再受调用方取消影响。
+		if err := s.replace(context.Background(), write.ID, write.Data); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// SaveAll 实现 Store：提交文件 rename 到位即提交，应用中途崩溃时由下一次 Load 或 Save 前滚。
+func (s *FileStore) SaveAll(ctx context.Context, writes ...Write) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := ValidateWrites(writes); err != nil {
+		return err
+	}
+	if len(writes) == 0 {
+		return nil
+	}
+	txn := make([]txnWrite, len(writes))
+	for i, write := range writes {
+		data, err := json.Marshal(write.Snapshot)
+		if err != nil {
+			return err
+		}
+		txn[i] = txnWrite{ID: write.ID, Data: data}
+	}
+	payload, err := json.Marshal(txn)
+	if err != nil {
+		return err
+	}
+	return txnlog.New(s.dir).Commit(ctx, payload, s.applyTxn)
 }
 
 // fileScope 是 FileStore 的作用域：数据位于 scopes/<摘要>/，闸门文件 scopes/<摘要>.gate 位于目录之外。
@@ -351,4 +415,13 @@ func (s *fileScope) Save(ctx context.Context, id string, snapshot *Snapshot) (er
 	}
 	defer func() { err = errors.Join(err, leave()) }()
 	return s.files.Save(ctx, id, snapshot)
+}
+
+func (s *fileScope) SaveAll(ctx context.Context, writes ...Write) (err error) {
+	leave, err := s.enter(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { err = errors.Join(err, leave()) }()
+	return s.files.SaveAll(ctx, writes...)
 }
