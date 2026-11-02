@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.34.0] - 2026-11-02
+
 ### Changed
 
 - **破坏性变更**：最低 Go 版本升至 1.26.0，CI 同步使用 Go 1.26。修复 `golang.org/x/net` 漏洞所需的版本要求 Go 1.26；构建时请使用 Go 1.26.10 或更高版本，以包含标准库的安全修复。
