@@ -140,6 +140,71 @@ func TestHandleClaimedInputIsNotDuplicatedAfterCrashBeforeAck(t *testing.T) {
 	require.Empty(t, h.PendingInputs())
 }
 
+// 通知方在写入后、标记完成前崩溃，重投时输入可能已被领取：同一键不会第二次进入对话。
+func TestHandleSteerOnceDeduplicatesAfterRestartAndClaim(t *testing.T) {
+	dir := t.TempDir()
+	const env = "GOAGENT_HANDLE_STEER_ONCE_DIR"
+	if child := os.Getenv(env); child != "" {
+		started := make(chan struct{})
+		agent, err := NewSimpleBuilder(newScriptModel(answer("unreachable"))).WithDurableScope("handle").WithMaxIterations(5).
+			WithTools(dispatcherFor(t, plainTool()).Tools()...).
+			WithRequestHook(func(context.Context, *ModelRequest) error {
+				close(started)
+				select {}
+			}).Build()
+		require.NoError(t, err)
+		h := agent.Start(durableHandleContext(t, newHandleStore(t, child)), "task")
+		<-started
+		require.NoError(t, h.SteerOnce("notice-1", "only-once"))
+		os.Exit(handleCrashExit)
+	}
+	runHandleChild(t, "TestHandleSteerOnceDeduplicatesAfterRestartAndClaim", env, dir)
+
+	model := newScriptModel(callTool("call-1", "lookup"), callTool("call-2", "lookup"), answer("done"))
+	var h *Handle
+	started := make(chan struct{})
+	turns := 0
+	agent, err := NewSimpleBuilder(model).WithDurableScope("handle").WithMaxIterations(5).
+		WithTools(dispatcherFor(t, plainTool()).Tools()...).
+		WithRequestHook(func(context.Context, *ModelRequest) error {
+			<-started
+			if turns++; turns == 2 {
+				require.Empty(t, h.PendingInputs(), "第二次请求之前输入已被领取")
+				require.NoError(t, h.SteerOnce("notice-1", "only-once"))
+			}
+			return nil
+		}).Build()
+	require.NoError(t, err)
+	h = agent.Start(durableHandleContext(t, newHandleStore(t, dir)), "task")
+	close(started)
+	require.Equal(t, "done", waitAnswer(t, h).Result)
+	require.Equal(t, 1, strings.Count(requestText(model.request(2)), "only-once"))
+}
+
+// 非持久运行在 Handle 内去重；已结束的 Handle 不接受输入，由调用方另行投递。
+func TestHandleSteerOnceWithoutJournal(t *testing.T) {
+	started, release := make(chan struct{}), make(chan struct{})
+	model := newScriptModel(answer("draft"), answer("done"))
+	turns := 0
+	agent, err := NewSimpleBuilder(model).WithMaxIterations(5).WithTools(dispatcherFor(t, plainTool()).Tools()...).
+		WithRequestHook(func(context.Context, *ModelRequest) error {
+			if turns++; turns == 1 {
+				close(started)
+				<-release
+			}
+			return nil
+		}).Build()
+	require.NoError(t, err)
+	h := agent.Start(context.Background(), "task")
+	<-started
+	require.NoError(t, h.SteerOnce("k", "only-once"))
+	require.NoError(t, h.SteerOnce("k", "only-once"))
+	require.Len(t, h.PendingInputs(), 1)
+	close(release)
+	require.Equal(t, "done", waitAnswer(t, h).Result)
+	require.ErrorIs(t, h.SteerOnce("k2", "late"), ErrHandleDone)
+}
+
 // failInboxSave 使收件箱的写入失败。
 type failInboxSave struct {
 	durable.Store

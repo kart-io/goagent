@@ -9,7 +9,11 @@ import (
 	"slices"
 )
 
-const inboxVersion = "goagent-inbox-v1"
+const (
+	inboxVersion = "goagent-inbox-v1"
+	// inboxSeenLimit 限制记住的去重键数量。键只需覆盖投递方崩溃重投的窗口，不随运行时长增长。
+	inboxSeenLimit = 256
+)
 
 // InboxEntry 是持久收件箱中尚未确认的一条输入。Seq 在同一收件箱内递增且不复用。
 type InboxEntry struct {
@@ -21,6 +25,7 @@ type InboxEntry struct {
 type inboxState struct {
 	Next    uint64       `json:"next"`
 	Entries []InboxEntry `json:"entries"`
+	Seen    []string     `json:"seen,omitempty"`
 }
 
 // Inbox 把运行中收到的输入保存在日志 Store 中，Append 返回即已落盘，Ack 之前重启不会丢失。
@@ -91,6 +96,29 @@ func (b *Inbox) Append(ctx context.Context, kind, text string) (seq uint64, err 
 		return 0, err
 	}
 	return seq, nil
+}
+
+// AppendOnce 与 Append 相同，但同一 key 只追加一次：键与条目在同一次写入中提交，条目被确认之后再次写入也不产生第二条。
+// 只记住最近的 inboxSeenLimit 个键。duplicate 为真时没有写入。
+func (b *Inbox) AppendOnce(ctx context.Context, key, kind, text string) (seq uint64, duplicate bool, err error) {
+	err = b.update(ctx, func(state *inboxState) bool {
+		if slices.Contains(state.Seen, key) {
+			duplicate = true
+			return false
+		}
+		state.Next++
+		seq = state.Next
+		state.Entries = append(state.Entries, InboxEntry{Seq: seq, Kind: kind, Text: text})
+		state.Seen = append(state.Seen, key)
+		if over := len(state.Seen) - inboxSeenLimit; over > 0 {
+			state.Seen = state.Seen[over:]
+		}
+		return true
+	})
+	if err != nil {
+		return 0, false, err
+	}
+	return seq, duplicate, nil
 }
 
 // Ack 确认条目已被领取。可重复调用，已确认的序号被忽略。

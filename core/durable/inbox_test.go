@@ -3,6 +3,7 @@ package durable
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -52,4 +53,52 @@ func TestInboxRejectsCorruptRecord(t *testing.T) {
 	require.NoError(t, store.Save(ctx, id, &Snapshot{Version: "other", RunID: id, Data: json.RawMessage(`{}`)}))
 	_, _, err := OpenInbox(ctx)
 	require.Error(t, err)
+}
+
+// 投递方崩溃后重投：键与条目一起落盘，确认之后再次写入也不产生第二条。
+func TestInboxAppendOnceDeduplicatesAcrossAckAndRestart(t *testing.T) {
+	store := mustNewFileStore(t, t.TempDir())
+	ctx := WithJournal(WithExecutionKey(context.Background(), "run"), store)
+	box, _, err := OpenInbox(ctx)
+	require.NoError(t, err)
+
+	seq, duplicate, err := box.AppendOnce(ctx, "notice-1", "steer", "a")
+	require.NoError(t, err)
+	require.False(t, duplicate)
+	_, duplicate, err = box.AppendOnce(ctx, "notice-1", "steer", "a")
+	require.NoError(t, err)
+	require.True(t, duplicate)
+
+	require.NoError(t, box.Ack(ctx, seq))
+	reopened, entries, err := OpenInbox(ctx)
+	require.NoError(t, err)
+	require.Empty(t, entries)
+	_, duplicate, err = reopened.AppendOnce(ctx, "notice-1", "steer", "a")
+	require.NoError(t, err)
+	require.True(t, duplicate, "确认和重启之后仍然去重")
+
+	_, duplicate, err = reopened.AppendOnce(ctx, "notice-2", "steer", "b")
+	require.NoError(t, err)
+	require.False(t, duplicate)
+	_, entries, err = OpenInbox(ctx)
+	require.NoError(t, err)
+	require.Len(t, entries, 1)
+}
+
+func TestInboxAppendOnceBoundsRememberedKeys(t *testing.T) {
+	store := mustNewFileStore(t, t.TempDir())
+	ctx := WithJournal(WithExecutionKey(context.Background(), "run"), store)
+	box, _, err := OpenInbox(ctx)
+	require.NoError(t, err)
+	for i := range inboxSeenLimit + 1 {
+		_, duplicate, err := box.AppendOnce(ctx, fmt.Sprintf("k%d", i), "steer", "x")
+		require.NoError(t, err)
+		require.False(t, duplicate)
+	}
+	state, err := box.load(ctx)
+	require.NoError(t, err)
+	require.Len(t, state.Seen, inboxSeenLimit)
+	_, duplicate, err := box.AppendOnce(ctx, fmt.Sprintf("k%d", inboxSeenLimit), "steer", "x")
+	require.NoError(t, err)
+	require.True(t, duplicate, "最近的键仍然记得")
 }

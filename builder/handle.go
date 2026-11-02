@@ -66,6 +66,8 @@ type inbox struct {
 	followups []followupItem
 	// durable 非 nil 时，输入写入持久收件箱后才算接受。
 	durable *durable.Inbox
+	// seen 是非持久运行的 SteerOnce 去重键；持久运行的键随收件箱落盘。
+	seen map[string]struct{}
 	// cancelModel 只在模型请求进行中且允许重定向时非空。
 	cancelModel context.CancelCauseFunc
 	done        bool
@@ -374,6 +376,37 @@ func (h *Handle) PendingInputs() []PendingInput {
 // Steer 排到下一步：当前工具批次结束后作为 user 消息追加；模型即将结束本轮时唤醒续跑。
 // 入队成功不保证已处理；结束时未领取的输入可通过 PendingInputs 查询。持久运行中入队成功表示已落盘。
 func (h *Handle) Steer(msg string) error { return h.inbox.push(inboxSteer, msg) }
+
+// SteerOnce 与 Steer 相同，但同一 key 只接受一次，重复调用返回 nil。持久运行中键与输入原子落盘，投递方崩溃后重投、
+// 输入已被领取或进程已重启都不会产生第二条（同一执行键内，记住最近 256 个键）；非持久运行只在本 Handle 内去重。
+func (h *Handle) SteerOnce(key, msg string) error {
+	b := h.inbox
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.done {
+		return ErrHandleDone
+	}
+	var seq uint64
+	if b.durable != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), inboxWriteTimeout)
+		defer cancel()
+		var duplicate bool
+		var err error
+		if seq, duplicate, err = b.durable.AppendOnce(ctx, key, inboxKindSteer, msg); err != nil || duplicate {
+			return err
+		}
+	} else {
+		if _, duplicate := b.seen[key]; duplicate {
+			return nil
+		}
+		if b.seen == nil {
+			b.seen = map[string]struct{}{}
+		}
+		b.seen[key] = struct{}{}
+	}
+	b.items = append(b.items, inboxItem{Kind: inboxSteer, Text: msg, Seq: seq})
+	return nil
+}
 
 // Inject 排到下一步，随下一次模型请求发送，但不唤醒即将结束的轮次。
 func (h *Handle) Inject(msg string) error { return h.inbox.push(inboxInject, msg) }
