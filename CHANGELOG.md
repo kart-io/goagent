@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.37.0] - 2026-11-02
+
+### Added
+
+- `builder`：`Handle.SteerOnce` 按键去重。持久运行中键与输入原子落盘，投递方崩溃后重投、输入已被领取或进程已重启都不会产生第二条。
+- `core/durable`：`Inbox.AppendOnce`。
+- `builder`：`WithInterruptedModelResend` 让持久运行恢复时重发被进程停止或崩溃打断的模型请求，同一回合最多 3 次。默认不开启，因为可能重复计费；每次重发各占一份预算，额度不足时不发送。
+- `core/durable`：`OperationPolicy.RetryInterrupted` 和 `OperationAttempt`。
+
+### Changed
+
+- `core/durable`：操作执行中 ctx 被取消时，失败分类一律记为 `canceled`，不再取决于函数返回的错误是否包含 `context.Canceled`。
+
 ## [0.36.1] - 2026-11-02
 
 ### Fixed
