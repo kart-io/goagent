@@ -6,7 +6,10 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
+	"slices"
+	"strconv"
 	"strings"
+	"unicode"
 
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/utils/json"
@@ -155,9 +158,25 @@ func (p *JSONOutputParser[T]) extractJSON(text string) string {
 	}
 
 	depth := 0
+	inString := false
+	escaped := false
 	for i := startIdx; i < len(text); i++ {
 		ch := text[i]
+		// 字符串内的括号不参与配对
+		if inString {
+			switch {
+			case escaped:
+				escaped = false
+			case ch == '\\':
+				escaped = true
+			case ch == '"':
+				inString = false
+			}
+			continue
+		}
 		switch ch {
+		case '"':
+			inString = true
 		case startChar:
 			depth++
 		case endChar:
@@ -201,7 +220,7 @@ func (p *JSONOutputParser[T]) GetFormatInstructions() string {
 	builder.WriteString("You must format your response as a JSON object")
 
 	// 如果是结构体，生成字段说明
-	if t.Kind() == reflect.Struct {
+	if t != nil && t.Kind() == reflect.Struct {
 		builder.WriteString(" with the following fields:\n\n")
 		for i := 0; i < t.NumField(); i++ {
 			field := t.Field(i)
@@ -283,8 +302,21 @@ func (p *StructuredOutputParser[T]) Parse(ctx context.Context, text string) (T, 
 		}
 	}
 
+	typed := make(map[string]any, len(fields))
+	for fieldName, value := range fields {
+		converted, err := convertFieldValue(value, p.schema[fieldName].Type)
+		if err != nil {
+			return result, agentErrors.Wrap(ErrTypeConversion, agentErrors.CodeParserFailed, "field value does not match schema type").
+				WithComponent("structured_parser").
+				WithOperation("parse").
+				WithContext("field", fieldName).
+				WithContext("field_type", p.schema[fieldName].Type)
+		}
+		typed[fieldName] = converted
+	}
+
 	// 构造 JSON 并解析
-	jsonData, err := json.Marshal(fields)
+	jsonData, err := json.Marshal(typed)
 	if err != nil {
 		return result, agentErrors.Wrap(err, agentErrors.CodeParserFailed, "failed to marshal fields to JSON").
 			WithComponent("structured_parser").
@@ -300,6 +332,19 @@ func (p *StructuredOutputParser[T]) Parse(ctx context.Context, text string) (T, 
 	}
 
 	return result, nil
+}
+
+// convertFieldValue 按 Schema 声明的类型转换文本值，使其能解码到非字符串字段。
+func convertFieldValue(value, fieldType string) (any, error) {
+	switch strings.ToLower(fieldType) {
+	case "int", "int64", "integer":
+		return strconv.ParseInt(value, 10, 64)
+	case "float", "float64", "number":
+		return strconv.ParseFloat(value, 64)
+	case "bool", "boolean":
+		return strconv.ParseBool(value)
+	}
+	return value, nil
 }
 
 // extractField 从文本中提取字段值
@@ -382,8 +427,7 @@ func (p *ListOutputParser) Parse(ctx context.Context, text string) ([]string, er
 			continue
 		}
 
-		// 移除列表标记（1., -, *, 等）
-		line = strings.TrimLeft(line, "0123456789.-*• ")
+		line = stripListMarker(line)
 		if line != "" {
 			result = append(result, line)
 		}
@@ -398,6 +442,27 @@ func (p *ListOutputParser) Parse(ctx context.Context, text string) ([]string, er
 	}
 
 	return result, nil
+}
+
+var (
+	numberedListMarker = regexp.MustCompile(`^\d+[.)、]`)
+	bulletListMarker   = regexp.MustCompile(`^[-*•][\t ]+`)
+)
+
+// stripListMarker 只移除真正的列表标记，保留 "3D printing"、"1.5 apples"、"-1 degrees" 这类内容。
+func stripListMarker(line string) string {
+	if marker := bulletListMarker.FindString(line); marker != "" {
+		return line[len(marker):]
+	}
+	marker := numberedListMarker.FindString(line)
+	if marker == "" {
+		return line
+	}
+	rest := line[len(marker):]
+	if rest != "" && rest[0] >= '0' && rest[0] <= '9' {
+		return line // 点后紧跟数字是小数
+	}
+	return strings.TrimLeft(rest, "\t ")
 }
 
 // GetFormatInstructions 获取格式化指令
@@ -477,15 +542,12 @@ func NewBooleanOutputParser() *BooleanOutputParser {
 func (p *BooleanOutputParser) Parse(ctx context.Context, text string) (bool, error) {
 	text = strings.ToLower(strings.TrimSpace(text))
 
-	for _, trueVal := range p.trueValues {
-		if text == trueVal || strings.Contains(text, trueVal) {
-			return true, nil
-		}
+	if value, ok := p.matchWords(text); ok {
+		return value, nil
 	}
-
-	for _, falseVal := range p.falseValues {
-		if text == falseVal || strings.Contains(text, falseVal) {
-			return false, nil
+	for _, rule := range chineseBooleanPhrases {
+		if strings.Contains(text, rule.phrase) {
+			return rule.value, nil
 		}
 	}
 
@@ -495,6 +557,40 @@ func (p *BooleanOutputParser) Parse(ctx context.Context, text string) (bool, err
 		WithContext("text", text).
 		WithContext("true_values", p.trueValues).
 		WithContext("false_values", p.falseValues)
+}
+
+// chineseBooleanPhrases 按顺序匹配：中文没有词边界，否定和固定搭配须先于单字判断。
+var chineseBooleanPhrases = []struct {
+	phrase string
+	value  bool
+}{
+	{"不是", false},
+	{"不对", false},
+	{"不正确", false},
+	{"不错", true},
+	{"没错", true},
+	{"正确", true},
+	{"错", false},
+	{"否", false},
+	{"是", true},
+	{"对", true},
+}
+
+// matchWords 按整词匹配，第一个可判定的词决定结果，避免 "incorrect" 命中 "correct"、"sorry" 命中 "y"。
+func (p *BooleanOutputParser) matchWords(text string) (value, ok bool) {
+	words := strings.FieldsFunc(text, func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '\''
+	})
+	for i, word := range words {
+		if slices.Contains(p.trueValues, word) {
+			negated := i > 0 && slices.Contains([]string{"not", "isn't", "never"}, words[i-1])
+			return !negated, true
+		}
+		if slices.Contains(p.falseValues, word) {
+			return false, true
+		}
+	}
+	return false, false
 }
 
 // GetFormatInstructions 获取格式化指令
