@@ -304,8 +304,11 @@ func (m *DynamicPromptMiddleware) Process(ctx context.Context, state core.State)
 	if len(prompts) > 0 {
 		promptVal, _ := state.Get("system_prompt")
 		currentPrompt, _ := promptVal.(string)
-		enhancedPrompt := strings.Join(append([]string{currentPrompt}, prompts...), "\n\n")
-		state.Set("system_prompt", enhancedPrompt)
+		parts := prompts
+		if currentPrompt != "" {
+			parts = append([]string{currentPrompt}, prompts...)
+		}
+		state.Set("system_prompt", strings.Join(parts, "\n\n"))
 		state.Set("prompt_enhancements", prompts)
 	}
 
@@ -344,6 +347,9 @@ func (m *LLMToolEmulatorMiddleware) SetEmulatedTools(tools ...string) *LLMToolEm
 
 // SetEmulateAll sets whether to emulate all tools
 func (m *LLMToolEmulatorMiddleware) SetEmulateAll(emulateAll bool) *LLMToolEmulatorMiddleware {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.EmulateAll = emulateAll
 	return m
 }
@@ -360,7 +366,10 @@ func (m *LLMToolEmulatorMiddleware) Process(ctx context.Context, state core.Stat
 		return state, nil
 	}
 
-	toolName := toolCall["name"].(string)
+	toolName, ok := toolCall["name"].(string)
+	if !ok {
+		return state, nil
+	}
 
 	// Check if we should emulate this tool
 	if !m.shouldEmulate(toolName) {
@@ -532,13 +541,16 @@ func (m *AdaptiveMiddleware) recordMetrics(startTime time.Time, state core.State
 	}
 
 	// Update success rate based on state
+	sample := 1.0
 	errVal, _ := state.Get("error")
 	if err, ok := errVal.(error); ok && err != nil {
-		// Error occurred
-		m.Metrics.SuccessRate = m.Metrics.SuccessRate*0.95 + 0.0*0.05 // Exponential moving average
+		sample = 0.0
+	}
+	// 第一个样本没有历史可平滑，否则成功率会从 0 缓慢爬升并误触发规则
+	if len(m.Metrics.ResponseTimes) == 1 {
+		m.Metrics.SuccessRate = sample
 	} else {
-		// Success
-		m.Metrics.SuccessRate = m.Metrics.SuccessRate*0.95 + 1.0*0.05
+		m.Metrics.SuccessRate = m.Metrics.SuccessRate*0.95 + sample*0.05 // Exponential moving average
 	}
 }
 
@@ -546,6 +558,10 @@ func (m *AdaptiveMiddleware) recordMetrics(startTime time.Time, state core.State
 func (m *AdaptiveMiddleware) checkAdaptations() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	// Condition 读取 Metrics，须与 recordMetrics 互斥
+	m.Metrics.mu.RLock()
+	defer m.Metrics.mu.RUnlock()
 
 	for _, adaptation := range m.Adaptations {
 		if adaptation.Condition(m.Metrics) {
@@ -590,6 +606,22 @@ func (m *ContextEnrichmentMiddleware) AddEnricher(enricher ContextEnricher) *Con
 	return m
 }
 
+// runEnricher 应用超时并执行富化器。Enrich 是宿主代码，panic 与它返回的错误一样记为失败。
+func runEnricher(ctx context.Context, e ContextEnricher, state core.State) (map[string]interface{}, error) {
+	if e.Timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, e.Timeout)
+		defer cancel()
+	}
+
+	var data map[string]interface{}
+	_, err := core.CallSafely(ctx, "context_enrichment", "enrich", func() (err error) {
+		data, err = e.Enrich(ctx, state)
+		return err
+	})
+	return data, err
+}
+
 // Process enriches the context with additional data
 func (m *ContextEnrichmentMiddleware) Process(ctx context.Context, state core.State) (core.State, error) {
 	enrichedData := make(map[string]interface{})
@@ -599,54 +631,33 @@ func (m *ContextEnrichmentMiddleware) Process(ctx context.Context, state core.St
 	var mu sync.Mutex
 	errors := []error{}
 
+	record := func(e ContextEnricher, data map[string]interface{}, err error) {
+		mu.Lock()
+		defer mu.Unlock()
+
+		if err != nil {
+			errors = append(errors, agentErrors.Wrap(err, agentErrors.CodeMiddlewareExecution, "enricher failed").
+				WithComponent("context_enrichment").
+				WithOperation("enrich").
+				WithContext("enricher_name", e.Name))
+			return
+		}
+		for k, v := range data {
+			enrichedData[k] = v
+		}
+	}
+
 	for _, enricher := range m.Enrichers {
 		if enricher.Async {
-			// Run asynchronously
 			wg.Add(1)
 			go func(e ContextEnricher) {
 				defer wg.Done()
-
-				enrichCtx := ctx
-				if e.Timeout > 0 {
-					var cancel context.CancelFunc
-					enrichCtx, cancel = context.WithTimeout(ctx, e.Timeout)
-					defer cancel()
-				}
-
-				// Enrich 是宿主代码，panic 与它返回的错误一样记为该 enricher 的失败
-				var data map[string]interface{}
-				_, err := core.CallSafely(enrichCtx, "context_enrichment", "enrich", func() (err error) {
-					data, err = e.Enrich(enrichCtx, state)
-					return err
-				})
-
-				mu.Lock()
-				defer mu.Unlock()
-
-				if err != nil {
-					errors = append(errors, agentErrors.Wrap(err, agentErrors.CodeMiddlewareExecution, "enricher failed").
-						WithComponent("context_enrichment").
-						WithOperation("enrich").
-						WithContext("enricher_name", e.Name))
-				} else {
-					for k, v := range data {
-						enrichedData[k] = v
-					}
-				}
+				data, err := runEnricher(ctx, e, state)
+				record(e, data, err)
 			}(enricher)
 		} else {
-			// Run synchronously
-			data, err := enricher.Enrich(ctx, state)
-			if err != nil {
-				errors = append(errors, agentErrors.Wrap(err, agentErrors.CodeMiddlewareExecution, "enricher failed").
-					WithComponent("context_enrichment").
-					WithOperation("enrich").
-					WithContext("enricher_name", enricher.Name))
-			} else {
-				for k, v := range data {
-					enrichedData[k] = v
-				}
-			}
+			data, err := runEnricher(ctx, enricher, state)
+			record(enricher, data, err)
 		}
 	}
 
