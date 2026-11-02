@@ -13,7 +13,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **破坏性变更**：最低 Go 版本升至 1.26.0，CI 同步使用 Go 1.26。修复 `golang.org/x/net` 漏洞所需的版本要求 Go 1.26；构建时请使用 Go 1.26.10 或更高版本，以包含标准库的安全修复。
 - 升级依赖以修复 `govulncheck` 报告的漏洞：OpenTelemetry 1.38 → 1.47、`google.golang.org/grpc` 1.76 → 1.85、`golang.org/x/net` 0.47 → 0.62、`golang.org/x/text` 0.31 → 0.43、`golang.org/x/crypto` 0.44 → 0.58、`golang.org/x/sys` 0.41 → 0.49。
-||||||| e0c99f4
 - **破坏性变更**：`mcp/tools.ShellExecuteTool` 不再返回 `Success: true` 的占位结果，改为返回 `NOT_SUPPORTED` 错误。它从未执行过命令；需要执行命令请使用带白名单的 `tools/shell`。
 - **破坏性变更**：`BooleanOutputParser` 改为按整词匹配，无法判定的文本返回错误，而不再因子串命中给出结果。例如 `nothing` 原来返回 `false`，现在报错。
 - `mcp/tools.WriteFileTool` 拒绝未知的 `mode`，原来会按覆盖写处理。
