@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"time"
+	"unicode/utf8"
 
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/mcp/core"
@@ -67,6 +68,17 @@ func (t *ReadFileTool) Execute(ctx context.Context, input map[string]interface{}
 			WithContext("field", "path")
 	}
 
+	encoding, err := readEncoding(input)
+	if err != nil {
+		return &core.ToolResult{
+			Success:   false,
+			Error:     err.Error(),
+			ErrorCode: "INVALID_INPUT",
+			Duration:  time.Since(startTime),
+			Timestamp: time.Now(),
+		}, err
+	}
+
 	// 读取文件
 	content, err := os.ReadFile(path)
 	if err != nil {
@@ -74,6 +86,17 @@ func (t *ReadFileTool) Execute(ctx context.Context, input map[string]interface{}
 			Success:   false,
 			Error:     fmt.Sprintf("failed to read file: %v", err),
 			ErrorCode: "FILE_READ_ERROR",
+			Duration:  time.Since(startTime),
+			Timestamp: time.Now(),
+		}, err
+	}
+
+	if !validEncoding(content, encoding) {
+		err := fmt.Errorf("file is not valid %s: %s", encoding, path)
+		return &core.ToolResult{
+			Success:   false,
+			Error:     err.Error(),
+			ErrorCode: "ENCODING_ERROR",
 			Duration:  time.Since(startTime),
 			Timestamp: time.Now(),
 		}, err
@@ -111,5 +134,31 @@ func (t *ReadFileTool) Validate(input map[string]interface{}) error {
 		return &core.ErrInvalidInput{Field: "path", Message: "cannot be empty"}
 	}
 
-	return nil
+	_, err := readEncoding(input)
+	return err
+}
+
+// readEncoding 解析 encoding 参数，缺省为 utf-8。
+func readEncoding(input map[string]interface{}) (string, error) {
+	value, exists := input["encoding"]
+	if !exists || value == nil || value == "" {
+		return "utf-8", nil
+	}
+	if encoding, _ := value.(string); encoding == "utf-8" || encoding == "ascii" {
+		return encoding, nil
+	}
+	return "", &core.ErrInvalidInput{Field: "encoding", Message: "must be utf-8 or ascii"}
+}
+
+// validEncoding 校验内容。非法字节不能原样返回，转成字符串后会在 JSON 序列化时被静默替换。
+func validEncoding(content []byte, encoding string) bool {
+	if encoding == "ascii" {
+		for _, b := range content {
+			if b >= utf8.RuneSelf {
+				return false
+			}
+		}
+		return true
+	}
+	return utf8.Valid(content)
 }

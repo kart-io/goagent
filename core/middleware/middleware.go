@@ -199,7 +199,7 @@ func (c *MiddlewareChain) Use(middleware ...Middleware) *MiddlewareChain {
 
 type requestContextKey struct{}
 
-// RequestFromContext returns the request whose handler failed. OnError has no
+// RequestFromContext returns the request whose execution failed. OnError has no
 // request parameter, so middleware keeping per-request state in Metadata reads it here.
 func RequestFromContext(ctx context.Context) (*MiddlewareRequest, bool) {
 	request, ok := ctx.Value(requestContextKey{}).(*MiddlewareRequest)
@@ -213,12 +213,18 @@ func (c *MiddlewareChain) Execute(ctx context.Context, request *MiddlewareReques
 	middlewares := c.middlewares.Load().items
 
 	// Run OnBefore hooks in order
-	for _, mw := range middlewares {
+	for i, mw := range middlewares {
 		var err error
+		entered := request
 		request, err = mw.OnBefore(ctx, request)
 		if err != nil {
 			// Allow middleware to handle the error
 			if handledErr := mw.OnError(ctx, err); handledErr != nil {
+				// 链到此终止，已进入的中间件不会再收到 OnAfter，须在这里收尾
+				errCtx := context.WithValue(ctx, requestContextKey{}, entered)
+				for _, previous := range middlewares[:i] {
+					_ = previous.OnError(errCtx, handledErr)
+				}
 				return nil, handledErr
 			}
 			// Error was suppressed, continue

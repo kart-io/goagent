@@ -185,3 +185,37 @@ func TestObservabilityMiddleware_RecordHelpersUseOwnSpan(t *testing.T) {
 	mw.RecordLLMCall(ctx, "model", "provider", 1, 0, callErr)
 	assert.Equal(t, codes.Unset, readable.Status().Code)
 }
+
+type failingBeforeMiddleware struct {
+	*coremiddleware.BaseMiddleware
+	err  error
+	read func(sdktrace.ReadOnlySpan)
+}
+
+func (m *failingBeforeMiddleware) OnBefore(_ context.Context, r *coremiddleware.MiddlewareRequest) (*coremiddleware.MiddlewareRequest, error) {
+	span, _ := r.Metadata["_otel_span"].(sdktrace.ReadOnlySpan)
+	m.read(span)
+	return nil, m.err
+}
+
+func (m *failingBeforeMiddleware) OnError(_ context.Context, err error) error { return err }
+
+// 靠后的中间件在 OnBefore 失败时，已进入的中间件也要有机会收尾。
+func TestObservabilityMiddleware_LaterOnBeforeFailureEndsSpan(t *testing.T) {
+	mw := newObservabilityForTest(t)
+	cause := errors.New("拒绝请求")
+
+	var span sdktrace.ReadOnlySpan
+	chain := coremiddleware.NewMiddlewareChain(func(context.Context, *coremiddleware.MiddlewareRequest) (*coremiddleware.MiddlewareResponse, error) {
+		t.Error("OnBefore 失败后不应执行 handler")
+		return nil, nil
+	})
+	chain.Use(mw, &failingBeforeMiddleware{BaseMiddleware: coremiddleware.NewBaseMiddleware("failing"), err: cause, read: func(s sdktrace.ReadOnlySpan) { span = s }})
+
+	metadata := map[string]interface{}{}
+	_, err := chain.Execute(context.Background(), &coremiddleware.MiddlewareRequest{Metadata: metadata})
+	require.ErrorIs(t, err, cause)
+	require.NotNil(t, span)
+	assert.False(t, span.EndTime().IsZero(), "span 未结束")
+	assert.Equal(t, codes.Error, span.Status().Code)
+}

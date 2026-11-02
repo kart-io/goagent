@@ -111,3 +111,44 @@ func TestJSONParseTool_Path(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotContains(t, resultData(t, res), "value", "未传 path 时只返回 parsed")
 }
+
+func TestReadFileTool_Encoding(t *testing.T) {
+	tool := NewReadFileTool()
+	dir := t.TempDir()
+	ascii := filepath.Join(dir, "ascii.txt")
+	utf8Text := filepath.Join(dir, "utf8.txt")
+	binary := filepath.Join(dir, "binary.bin")
+	writeTestFile(t, ascii, "plain")
+	writeTestFile(t, utf8Text, "中文")
+	require.NoError(t, os.WriteFile(binary, []byte{0xff, 0xfe}, 0o644))
+
+	for _, tt := range []struct {
+		name, path, encoding, wantCode string
+	}{
+		{"默认 utf-8", utf8Text, "", ""},
+		{"显式 utf-8", utf8Text, "utf-8", ""},
+		{"ascii 文本", ascii, "ascii", ""},
+		{"ascii 遇到多字节字符", utf8Text, "ascii", "ENCODING_ERROR"},
+		{"utf-8 遇到非法字节", binary, "utf-8", "ENCODING_ERROR"},
+		{"默认编码遇到非法字节", binary, "", "ENCODING_ERROR"},
+		{"未知编码", ascii, "gbk", "INVALID_INPUT"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			input := toolInput{"path": tt.path}
+			if tt.encoding != "" {
+				input["encoding"] = tt.encoding
+			}
+			res, err := tool.Execute(context.Background(), input)
+			if tt.wantCode == "" {
+				require.NoError(t, err)
+				assert.True(t, res.Success)
+				return
+			}
+			require.Error(t, err)
+			assert.Equal(t, tt.wantCode, res.ErrorCode)
+		})
+	}
+
+	assert.Error(t, tool.Validate(toolInput{"path": ascii, "encoding": "gbk"}))
+	assert.NoError(t, tool.Validate(toolInput{"path": ascii, "encoding": "ascii"}))
+}
