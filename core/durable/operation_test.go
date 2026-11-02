@@ -140,3 +140,70 @@ func TestOperationSaveFailureDoesNotDuplicatePaidRequest(t *testing.T) {
 		require.Equal(t, 1, calls)
 	}
 }
+
+func TestRetryInterruptedOnlyRerunsInterruptedRecords(t *testing.T) {
+	policy := OperationPolicy{MaxAttempts: 2, RetryInterrupted: true}
+	for _, test := range []struct {
+		name         string
+		status, kind string
+		attempts     int
+		rerun        bool
+	}{
+		{"崩溃后停在 pending", "pending", "ambiguous", 1, true},
+		{"进程停止时被取消", "failed", "canceled", 1, true},
+		{"普通失败", "failed", "execution", 1, false},
+		{"超时", "failed", "deadline", 1, false},
+		{"尝试次数已用完", "pending", "ambiguous", 2, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := operationContext(t)
+			input := json.RawMessage(`{}`)
+			key := ChildKey(ExecutionKey(ctx), "effect")
+			store := ctx.Value(journalContext{}).(Store)
+			require.NoError(t, saveOperation(ctx, store, operationStorageID(key), &OperationRecord{
+				ID: "effect", Key: key, InputHash: digest(string(input)), Status: test.status, FailureKind: test.kind,
+				Attempts: test.attempts, MaxAttempts: policy.MaxAttempts, Value: json.RawMessage(`null`),
+			}))
+			attempt := 0
+			_, err := Do(ctx, "effect", input, policy, func(ctx context.Context) (json.RawMessage, error) {
+				attempt = OperationAttempt(ctx)
+				return json.RawMessage(`1`), nil
+			})
+			if test.rerun {
+				require.NoError(t, err)
+				require.Equal(t, test.attempts+1, attempt, "run 能看到这是第几次尝试")
+				return
+			}
+			require.ErrorIs(t, err, ErrOperationAttention)
+			require.Zero(t, attempt)
+		})
+	}
+}
+
+// 没有声明时行为不变：中断的操作不重跑。
+func TestInterruptedOperationStaysStoppedByDefault(t *testing.T) {
+	ctx := operationContext(t)
+	stopping, stop := context.WithCancel(ctx)
+	_, err := Do(stopping, "effect", json.RawMessage(`{}`), OperationPolicy{MaxAttempts: 2}, func(context.Context) (json.RawMessage, error) {
+		stop()
+		return nil, context.Canceled
+	})
+	require.ErrorIs(t, err, context.Canceled)
+	_, err = Do(ctx, "effect", json.RawMessage(`{}`), OperationPolicy{MaxAttempts: 2}, func(context.Context) (json.RawMessage, error) {
+		t.Fatal("不应重跑")
+		return nil, nil
+	})
+	require.ErrorIs(t, err, ErrOperationAttention)
+}
+
+// 取消后供应方可能返回不带 context.Canceled 的错误（如连接被关闭），仍然算中断。
+func TestCancelledOperationIsRecordedAsCanceledWhateverItReturned(t *testing.T) {
+	ctx := operationContext(t)
+	stopping, stop := context.WithCancel(ctx)
+	record, err := Do(stopping, "effect", json.RawMessage(`{}`), OperationPolicy{}, func(context.Context) (json.RawMessage, error) {
+		stop()
+		return nil, errors.New("connection closed")
+	})
+	require.Error(t, err)
+	require.Equal(t, "canceled", record.FailureKind)
+}

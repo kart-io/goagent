@@ -298,7 +298,7 @@ func (a *ConfigurableAgent[C, S]) runEvents(ctx context.Context, request *middle
 		messages = []llm.Message{{Role: "system", Content: system}, {Role: "user", Content: prompt}}
 	}
 	attempt := 0
-	ctx = withRequestRecovery(ctx, a.requestRecovery(0, &messages, &attempt))
+	ctx = withInterruptedModelResend(withRequestRecovery(ctx, a.requestRecovery(0, &messages, &attempt)), a.config.ResendInterruptedModel)
 	turn, err := readPlainModelTurn(ctx, "model/answer/0", client, &llm.CompletionRequest{Reasoning: a.config.Reasoning.Clone(), Messages: messages, MaxTokens: a.config.MaxTokens, Temperature: a.config.Temperature, TemperatureSet: true}, emit)
 	if replan := (*replanRequest)(nil); errors.As(err, &replan) {
 		return nil, fmt.Errorf("RequestError 替换消息或客户端只作用于原生工具流：%w", replan.err)

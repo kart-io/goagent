@@ -54,6 +54,9 @@ type OperationPolicy struct {
 	// waiting 记录总是重新进入且不计尝试次数，pending 记录在 MaxAttempts 内重新进入。
 	// 只有声明它的操作能把 *WaitError 记为等待。
 	Resumable bool
+	// RetryInterrupted 允许在 MaxAttempts 内重跑被中断的操作：记录停在 pending（进程崩溃）或因取消而失败（进程停止）。
+	// 上次执行可能已经生效，调用方须接受重复的效果；普通失败和超时不算中断。
+	RetryInterrupted bool
 }
 
 type OperationRecord struct {
@@ -282,6 +285,8 @@ func Do(ctx context.Context, id string, input json.RawMessage, policy OperationP
 			record.Replayed = true
 			return record, &OperationError{ID: id, Kind: "not_resumable"}
 		}
+		interrupted := record.Status == "pending" || (record.Status == "failed" && record.FailureKind == "canceled")
+		resume = resume || (policy.RetryInterrupted && interrupted && record.Attempts < policy.MaxAttempts)
 		if !resume && (!policy.RetryFailed || record.Attempts >= policy.MaxAttempts) {
 			record.Replayed = true
 			return record, &OperationError{ID: id, Kind: record.FailureKind}
@@ -298,7 +303,7 @@ func Do(ctx context.Context, id string, input json.RawMessage, policy OperationP
 	if err = save(ctx); err != nil {
 		return record, err
 	}
-	value, callErr := invokeOperation(childCtx, run)
+	value, callErr := invokeOperation(context.WithValue(childCtx, attemptContext{}, record.Attempts), run)
 	if callErr == nil {
 		callErr = ctx.Err()
 	}
@@ -323,7 +328,8 @@ func Do(ctx context.Context, id string, input json.RawMessage, policy OperationP
 		}
 	} else if callErr != nil {
 		record.Status, record.FailureKind = "failed", "execution"
-		if errors.Is(callErr, context.Canceled) {
+		// 取消后供应方可能只返回“连接已关闭”，错误链里没有 context.Canceled。
+		if errors.Is(callErr, context.Canceled) || errors.Is(ctx.Err(), context.Canceled) {
 			record.FailureKind = "canceled"
 		}
 		if errors.Is(callErr, context.DeadlineExceeded) {
@@ -334,6 +340,14 @@ func Do(ctx context.Context, id string, input json.RawMessage, policy OperationP
 	saveCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
 	return record, errors.Join(callErr, save(saveCtx))
+}
+
+type attemptContext struct{}
+
+// OperationAttempt 返回 ctx 所在持久操作当前是第几次尝试（从 1 起）；不在带日志的操作内时返回 0。
+func OperationAttempt(ctx context.Context) int {
+	n, _ := ctx.Value(attemptContext{}).(int)
+	return n
 }
 
 func saveOperation(ctx context.Context, store Store, storageID string, record *OperationRecord) error {

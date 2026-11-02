@@ -47,6 +47,16 @@ func withRequestRecovery(ctx context.Context, r requestRecovery) context.Context
 	return context.WithValue(ctx, requestRecoveryKey{}, r)
 }
 
+type modelResendKey struct{}
+
+// modelResendAttempts 是开启 WithInterruptedModelResend 时同一回合操作的尝试上限。记录校验它，改动会让进行中的运行报策略变更。
+const modelResendAttempts = 3
+
+// withInterruptedModelResend 与 withRequestRecovery 一样由每条请求路径安装，子 Agent 不继承。
+func withInterruptedModelResend(ctx context.Context, on bool) context.Context {
+	return context.WithValue(ctx, modelResendKey{}, on)
+}
+
 // replanRequest 是要求替换消息或客户端的恢复决定：须在模型操作之外重新组装请求。
 type replanRequest struct {
 	decision *RequestErrorDecision
@@ -56,11 +66,12 @@ type replanRequest struct {
 func (r *replanRequest) Error() string { return r.err.Error() }
 func (r *replanRequest) Unwrap() error { return r.err }
 
-// savedTurn 是持久日志中的模型回合；Attempt 记下成功或最终失败的是第几次尝试，
-// 恢复时用它找回该次尝试的预算键。旧记录没有该字段，即第 0 次。
+// savedTurn 是持久日志中的模型回合；Attempt 记下成功或最终失败的是第几次尝试，Resend 记下是第几次中断后重发，
+// 恢复时用它们找回该次尝试的预算键。旧记录没有这些字段，即第 0 次。
 type savedTurn struct {
 	llm.StreamChunk
 	Attempt        int            `json:"model_attempt,omitempty"`
+	Resend         int            `json:"model_resend,omitempty"`
 	Metadata       *modelMetadata `json:"model_metadata,omitempty"`
 	EvidenceSource string         `json:"evidence_source,omitempty"`
 }
@@ -78,11 +89,16 @@ func modelOperation(ctx context.Context, id string, intent json.RawMessage, invo
 		return nil, err
 	}
 	// 每次尝试各占一份预算：同一键不能重复预留，且已登记的用量不可改写。
+	resend := 0
 	attemptKey := func(n int) string {
-		if n == 0 || key == "" {
-			return key
+		base := key
+		if resend > 0 && key != "" {
+			base = durable.ChildKey(key, fmt.Sprintf("resend/%d", resend))
 		}
-		return durable.ChildKey(key, fmt.Sprintf("retry/%d", n))
+		if n == 0 || key == "" {
+			return base
+		}
+		return durable.ChildKey(base, fmt.Sprintf("retry/%d", n))
 	}
 	lastAttempted, recordedAttempt := -1, -1
 	var lastTurn *llm.StreamChunk
@@ -190,13 +206,18 @@ func modelOperation(ctx context.Context, id string, intent json.RawMessage, invo
 		}
 	}
 	attempted := false
-	record, opErr := durable.Do(ctx, id, intent, durable.OperationPolicy{}, func(callCtx context.Context) (json.RawMessage, error) {
+	policy := durable.OperationPolicy{}
+	if on, _ := ctx.Value(modelResendKey{}).(bool); on {
+		policy = durable.OperationPolicy{MaxAttempts: modelResendAttempts, RetryInterrupted: true}
+	}
+	record, opErr := durable.Do(ctx, id, intent, policy, func(callCtx context.Context) (json.RawMessage, error) {
 		attempted = true
+		resend = durable.OperationAttempt(callCtx) - 1
 		turn, n, err := call(callCtx)
 		if turn == nil {
 			return nil, err
 		}
-		saved := savedTurn{StreamChunk: *turn, Attempt: n}
+		saved := savedTurn{StreamChunk: *turn, Attempt: n, Resend: resend}
 		if meta, ok := ctx.Value(modelMetadataKey{}).(modelMetadata); ok {
 			saved.Metadata = &meta
 			saved.EvidenceSource = "provider"
@@ -219,7 +240,7 @@ func modelOperation(ctx context.Context, id string, intent json.RawMessage, invo
 		if err := json.Unmarshal(record.Value, &saved); err != nil {
 			return nil, errors.Join(opErr, err)
 		}
-		turn, usageAttempt = &saved.StreamChunk, saved.Attempt
+		turn, usageAttempt, resend = &saved.StreamChunk, saved.Attempt, saved.Resend
 		if saved.Metadata != nil {
 			ctx = context.WithValue(ctx, modelMetadataKey{}, *saved.Metadata)
 		}
