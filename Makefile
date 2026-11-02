@@ -122,7 +122,7 @@ lint:
 	@if [ ! -f "$(GOLINT)" ] || [ "$$($(GOLINT) version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 | cut -d. -f1)" != "2" ]; then \
 		echo "$(RED)golangci-lint v2.x not found. Installing...$(NC)"; \
 		rm -f $(GOLINT); \
-		curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOPATH)/bin v2.6.2; \
+		curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOPATH)/bin v2.15.0; \
 	fi
 	@echo "$(GREEN)Using golangci-lint from: $(GOLINT)$(NC)"
 	$(GOLINT) run ./...
@@ -133,7 +133,7 @@ lint-fix:
 	@if [ ! -f "$(GOLINT)" ] || [ "$$($(GOLINT) version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 | cut -d. -f1)" != "2" ]; then \
 		echo "$(RED)golangci-lint v2.x not found. Installing...$(NC)"; \
 		rm -f $(GOLINT); \
-		curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOPATH)/bin v2.6.2; \
+		curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOPATH)/bin v2.15.0; \
 	fi
 	$(GOLINT) run --fix ./...
 
@@ -143,7 +143,7 @@ lint-basic:
 	@if [ ! -f "$(GOLINT)" ] || [ "$$($(GOLINT) version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 | cut -d. -f1)" != "2" ]; then \
 		echo "$(RED)golangci-lint v2.x not found. Installing...$(NC)"; \
 		rm -f $(GOLINT); \
-		curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOPATH)/bin v2.6.2; \
+		curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOPATH)/bin v2.15.0; \
 	fi
 	@echo "$(GREEN)Checking code formatting and basic issues...$(NC)"
 	-$(GOLINT) run --disable-all --enable=gofmt --enable=goimports --enable=misspell --enable=whitespace --enable=unconvert --enable=predeclared --enable=nakedret --enable=prealloc --enable=nilerr ./... 2>/dev/null || echo "$(YELLOW)Some linting issues found (non-critical)$(NC)"
