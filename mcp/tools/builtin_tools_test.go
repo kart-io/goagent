@@ -309,13 +309,13 @@ func TestJSONParseTool(t *testing.T) {
 	assert.Error(t, tool.Validate(toolInput{"json": ""}))
 }
 
-// 该工具当前不执行命令；此测试防止命令被意外执行，不约定 Success 的取值。
+// 防止该工具意外执行命令。
 func TestShellExecuteTool_DoesNotRunCommand(t *testing.T) {
 	tool := NewShellExecuteTool()
 	marker := filepath.Join(t.TempDir(), "marker")
 
 	res, err := tool.Execute(context.Background(), toolInput{"command": "touch " + marker})
-	require.NoError(t, err)
+	require.Error(t, err)
 	assert.Equal(t, "touch "+marker, resultData(t, res)["command"])
 	assert.NoFileExists(t, marker)
 

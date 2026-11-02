@@ -137,7 +137,8 @@ func (t *ListDirectoryTool) listRecursive(path string, includeHidden bool) ([]ma
 		name := filepath.Base(filePath)
 
 		// 跳过隐藏文件和目录
-		if !includeHidden && len(name) > 0 && name[0] == '.' {
+		// 起始目录由调用方指定（可能是 "."），不算隐藏项
+		if filePath != path && !includeHidden && len(name) > 0 && name[0] == '.' {
 			if info.IsDir() {
 				return filepath.SkipDir
 			}
@@ -222,8 +223,8 @@ func (t *SearchFilesTool) Execute(ctx context.Context, input map[string]interfac
 	pattern, _ := input["pattern"].(string)
 	contentSearch, _ := input["content"].(string)
 	maxResults := 100
-	if mr, ok := input["max_results"].(float64); ok {
-		maxResults = int(mr)
+	if mr, ok := intInput(input, "max_results"); ok {
+		maxResults = mr
 	}
 
 	matches := make([]map[string]interface{}, 0)
