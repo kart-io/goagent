@@ -232,11 +232,10 @@ func (p *JSONOutputParser[T]) GetFormatInstructions() string {
 				jsonTag = strings.Split(jsonTag, ",")[0]
 			}
 
-			builder.WriteString(fmt.Sprintf("- `%s`: (%s) %s\n",
+			fmt.Fprintf(&builder, "- `%s`: (%s) %s\n",
 				jsonTag,
 				field.Type.String(),
-				field.Tag.Get("description"),
-			))
+				field.Tag.Get("description"))
 		}
 	}
 
@@ -382,12 +381,12 @@ func (p *StructuredOutputParser[T]) GetFormatInstructions() string {
 		if schema.Required {
 			required = " (REQUIRED)"
 		}
-		builder.WriteString(fmt.Sprintf("**%s**%s: %s\n", fieldName, required, schema.Description))
+		fmt.Fprintf(&builder, "**%s**%s: %s\n", fieldName, required, schema.Description)
 	}
 
 	builder.WriteString("\nExample format:\n")
 	for fieldName := range p.schema {
-		builder.WriteString(fmt.Sprintf("%s: <value>\n", fieldName))
+		fmt.Fprintf(&builder, "%s: <value>\n", fieldName)
 	}
 
 	return builder.String()

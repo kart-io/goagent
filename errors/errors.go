@@ -654,7 +654,7 @@ func (e *AgentError) FormatStack() string {
 	var sb strings.Builder
 	sb.WriteString("Stack trace:\n")
 	for _, frame := range frames {
-		sb.WriteString(fmt.Sprintf("  %s:%d %s\n", frame.File, frame.Line, frame.Function))
+		fmt.Fprintf(&sb, "  %s:%d %s\n", frame.File, frame.Line, frame.Function)
 	}
 	return sb.String()
 }

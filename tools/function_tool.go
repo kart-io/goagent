@@ -143,7 +143,7 @@ func generateJSONSchemaFromStruct(v interface{}) string {
 	t := reflect.TypeOf(v)
 
 	// 处理指针类型
-	if t.Kind() == reflect.Ptr {
+	if t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 
@@ -188,7 +188,7 @@ func generateJSONSchemaFromStruct(v interface{}) string {
 		// 2. 非指针类型且没有 omitempty 标记
 		if isRequired := field.Tag.Get("required"); isRequired == "true" {
 			required = append(required, jsonName)
-		} else if field.Type.Kind() != reflect.Ptr && !hasOmitEmpty(field) {
+		} else if field.Type.Kind() != reflect.Pointer && !hasOmitEmpty(field) {
 			required = append(required, jsonName)
 		}
 	}
@@ -230,7 +230,7 @@ func hasOmitEmpty(field reflect.StructField) bool {
 // getTypeString 将 Go 类型映射为 JSON Schema 类型
 func getTypeString(t reflect.Type) string {
 	// 处理指针类型
-	if t.Kind() == reflect.Ptr {
+	if t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 

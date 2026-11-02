@@ -174,7 +174,7 @@ func (d *Document) SetMetadata(key string, value interface{}) {
 // String returns a string representation of the document.
 func (d *Document) String() string {
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("Document(ID=%s, Score=%.4f", d.ID, d.Score))
+	fmt.Fprintf(&sb, "Document(ID=%s, Score=%.4f", d.ID, d.Score)
 	if len(d.Metadata) > 0 {
 		sb.WriteString(", Metadata={")
 		keys := make([]string, 0, len(d.Metadata))
@@ -186,7 +186,7 @@ func (d *Document) String() string {
 			if i > 0 {
 				sb.WriteString(", ")
 			}
-			sb.WriteString(fmt.Sprintf("%s: %v", k, d.Metadata[k]))
+			fmt.Fprintf(&sb, "%s: %v", k, d.Metadata[k])
 		}
 		sb.WriteString("}")
 	}
@@ -194,6 +194,6 @@ func (d *Document) String() string {
 	if len(contentPreview) > 50 {
 		contentPreview = contentPreview[:50] + "..."
 	}
-	sb.WriteString(fmt.Sprintf(", Content='%s')", contentPreview))
+	fmt.Fprintf(&sb, ", Content='%s')", contentPreview)
 	return sb.String()
 }
