@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.36.1] - 2026-11-02
+
+### Fixed
+
+- `builder`：在工具里运行的子 Agent 继承父 Agent 的 ctx，会领取父 `Handle` 的 `Steer`、`Inject` 输入并被唤醒多跑一轮，父 Agent 收不到这些输入。
+- `builder`：父 `Handle` 的 Followup 轮次中，工具里运行的子 Agent 会继承父 Agent 上一轮的对话。权限更窄的子 Agent 因此能看到父 Agent 的内容。
+
 ## [0.36.0] - 2026-11-02
 
 ### Added
