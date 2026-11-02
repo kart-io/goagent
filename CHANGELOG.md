@@ -11,7 +11,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **破坏性变更**：最低 Go 版本升至 1.26.0，CI 同步使用 Go 1.26。修复 `golang.org/x/net` 漏洞所需的版本要求 Go 1.26；构建时请使用 Go 1.26.10 或更高版本，以包含标准库的安全修复。
 - 升级依赖以修复 `govulncheck` 报告的漏洞：OpenTelemetry 1.38 → 1.47、`google.golang.org/grpc` 1.76 → 1.85、`golang.org/x/net` 0.47 → 0.62、`golang.org/x/text` 0.31 → 0.43、`golang.org/x/crypto` 0.44 → 0.58、`golang.org/x/sys` 0.41 → 0.49。
+||||||| e0c99f4
+- **破坏性变更**：`mcp/tools.ShellExecuteTool` 不再返回 `Success: true` 的占位结果，改为返回 `NOT_SUPPORTED` 错误。它从未执行过命令；需要执行命令请使用带白名单的 `tools/shell`。
+- **破坏性变更**：`BooleanOutputParser` 改为按整词匹配，无法判定的文本返回错误，而不再因子串命中给出结果。例如 `nothing` 原来返回 `false`，现在报错。
+- `mcp/tools.WriteFileTool` 拒绝未知的 `mode`，原来会按覆盖写处理。
+- `middleware.ObservabilityMiddleware` 的 `error.type` 指标标签改用错误码或错误类型，不再使用错误消息，依赖原标签值的看板需要调整。
 - `builder` 与 `llm/providers` 的两条错误信息改为小写开头（`agent usage requires ...`、`gemini does not support reasoning effort ...`），以符合 staticcheck ST1005。按完整文本匹配这两条错误的调用方需同步调整。
+
+### Added
+
+- `core/middleware.RequestFromContext`：`OnError` 可取得当前请求，用于收尾保存在 `Metadata` 中的状态。
+- `mcp/tools.JSONParseTool` 实现了 Schema 中已声明的 `path` 参数，支持 `$.a.b[0]`，结果写入 `value`。
+
+### Fixed
+
+- `ObservabilityMiddleware`：handler 失败时 span 不结束、活跃计数不归还；`RecordToolCall`、`RecordLLMCall` 把错误记到调用方的父 span 上。
+- `BooleanOutputParser`：`incorrect`、`不是` 被判为 `true`。
+- `JSONOutputParser`：字符串值中的括号导致提取错误；`T` 为接口类型时 `GetFormatInstructions` panic。
+- `ListOutputParser`：吃掉 `3D printing`、`1.5 apples` 开头的内容；逗号分隔的 `1, 2, 3` 丢失首项。
+- `StructuredOutputParser`：无法解析到非字符串字段，现在按 `FieldSchema.Type` 转换，失败返回 `ErrTypeConversion`。
+- `mcp/tools`：`list_directory` 对 `.` 或隐藏目录递归时返回空结果；`search_files` 的 `max_results` 与 `http_request` 的 `timeout` 忽略 Go 整数。
+- `LLMToolEmulatorMiddleware`：工具名缺失时 panic；`SetEmulateAll` 存在数据竞争。
+- `ContextEnrichmentMiddleware`：同步富化器的 panic 未被捕获、`Timeout` 未生效，且结果写入与异步富化器存在数据竞争。
+- `AdaptiveMiddleware`：`Metrics` 读写存在数据竞争；成功率从 0 起步导致规则在启动时误触发。
+- `DynamicPromptMiddleware`：没有基础提示词时结果带前导空行。
 
 ## [0.33.0] - 2026-11-01
 

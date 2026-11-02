@@ -65,9 +65,15 @@ func (t *WriteFileTool) Execute(ctx context.Context, input map[string]interface{
 
 	path, _ := input["path"].(string)
 	content, _ := input["content"].(string)
-	mode, _ := input["mode"].(string)
-	if mode == "" {
-		mode = "overwrite"
+	mode, err := writeMode(input)
+	if err != nil {
+		return &core.ToolResult{
+			Success:   false,
+			Error:     err.Error(),
+			ErrorCode: "INVALID_INPUT",
+			Duration:  time.Since(startTime),
+			Timestamp: time.Now(),
+		}, err
 	}
 	createDirs, _ := input["create_dirs"].(bool)
 
@@ -86,7 +92,6 @@ func (t *WriteFileTool) Execute(ctx context.Context, input map[string]interface{
 	}
 
 	// 写入文件
-	var err error
 	if mode == "append" {
 		// 追加模式
 		var f *os.File
@@ -165,5 +170,22 @@ func (t *WriteFileTool) Validate(input map[string]interface{}) error {
 		}
 	}
 
-	return nil
+	_, err := writeMode(input)
+	return err
+}
+
+// writeMode 解析写入模式。未知模式必须报错，否则拼写错误会变成覆盖写并丢失原内容。
+func writeMode(input map[string]interface{}) (string, error) {
+	value, exists := input["mode"]
+	if !exists || value == nil {
+		return "overwrite", nil
+	}
+	mode, _ := value.(string)
+	switch {
+	case value == "" || mode == "overwrite":
+		return "overwrite", nil
+	case mode == "append":
+		return mode, nil
+	}
+	return "", &core.ErrInvalidInput{Field: "mode", Message: "must be overwrite or append"}
 }
