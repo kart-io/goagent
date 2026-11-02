@@ -124,10 +124,18 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 			if err != nil {
 				return nil, err
 			}
+			var seqs []uint64
 			for _, item := range items {
 				messages = append(messages, llm.UserMessage(item.Text))
+				if item.Seq != 0 {
+					seqs = append(seqs, item.Seq)
+				}
 			}
 			inputs += len(items)
+			// 领取记录落盘后才确认；回放时同样确认，崩溃在两者之间的输入不会被再次领取。
+			if err := box.ack(seqs); err != nil {
+				return nil, fmt.Errorf("确认收件箱输入: %w", err)
+			}
 		}
 		if err := emit(AgentEvent{Type: "step", Step: "model_start"}); err != nil {
 			return nil, err

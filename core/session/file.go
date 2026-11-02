@@ -21,6 +21,7 @@ import (
 	"github.com/gofrs/flock"
 
 	"github.com/kart-io/goagent/core/durable"
+	"github.com/kart-io/goagent/core/internal/txnlog"
 )
 
 const fileVersion = "goagent-session-v1"
@@ -172,6 +173,9 @@ func (s *FileStore) Read(ctx context.Context, id string, after int64) ([]Event, 
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	if err := s.recover(ctx); err != nil {
+		return nil, err
+	}
 	events, _, _, err := s.load(id, after)
 	return events, err
 }
@@ -186,6 +190,14 @@ func (s *FileStore) Append(ctx context.Context, id string, expected int64, event
 		return 0, err
 	}
 	defer func() { err = errors.Join(err, unlock()) }()
+	if err := s.recover(ctx); err != nil {
+		return 0, err
+	}
+	return s.appendLocked(id, expected, events)
+}
+
+// appendLocked 比较序号并追加；调用方持有 id 的会话锁。
+func (s *FileStore) appendLocked(id string, expected int64, events []Event) (last int64, err error) {
 	_, cur, end, err := s.load(id, 1<<62)
 	created := errors.Is(err, ErrNotFound)
 	if err != nil && !created {
@@ -236,6 +248,82 @@ func (s *FileStore) Append(ctx context.Context, id string, expected int64, event
 	return last, nil
 }
 
+// recover 前滚崩溃留下的批量追加。读写前都先调用，提交点之后不会读到缺少事件的会话。
+func (s *FileStore) recover(ctx context.Context) error {
+	return txnlog.New(s.dir).Recover(ctx, s.applyTxn)
+}
+
+// applyTxn 应用提交的批次。提交可能已部分应用，序号已到达的会话跳过。
+// 前滚时不取会话锁：提交存在期间，其他写入者都会先在 recover 中等待提交日志锁。
+func (s *FileStore) applyTxn(payload []byte) error {
+	var batches []AppendBatch
+	if err := json.Unmarshal(payload, &batches); err != nil {
+		return fmt.Errorf("批量追加记录损坏: %w", err)
+	}
+	for _, batch := range batches {
+		if len(batch.Events) == 0 {
+			continue
+		}
+		_, cur, _, err := s.load(batch.ID, 1<<62)
+		if err != nil && !errors.Is(err, ErrNotFound) {
+			return err
+		}
+		if cur >= batch.Expected+int64(len(batch.Events)) {
+			continue
+		}
+		if _, err := s.appendLocked(batch.ID, batch.Expected, batch.Events); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// AppendAll 实现 Store：按字节序取会话锁后比较全部序号，提交文件 rename 到位即提交。
+func (s *FileStore) AppendAll(ctx context.Context, batches ...AppendBatch) (lasts []int64, err error) {
+	if err := ValidateBatches(batches); err != nil {
+		return nil, err
+	}
+	if len(batches) == 0 {
+		return nil, nil
+	}
+	ids := make([]string, len(batches))
+	for i, batch := range batches {
+		ids[i] = batch.ID
+	}
+	sort.Strings(ids)
+	for _, id := range ids {
+		unlock, lockErr := lockFile(ctx, s.path(id)+".lock")
+		if lockErr != nil {
+			return nil, lockErr
+		}
+		defer func() { err = errors.Join(err, unlock()) }()
+	}
+	if err = s.recover(ctx); err != nil {
+		return nil, err
+	}
+	lasts = make([]int64, len(batches))
+	txn := make([]AppendBatch, len(batches))
+	for i, batch := range batches {
+		_, cur, _, loadErr := s.load(batch.ID, 1<<62)
+		if loadErr != nil && !errors.Is(loadErr, ErrNotFound) {
+			return nil, loadErr
+		}
+		if cur != batch.Expected {
+			return nil, fmt.Errorf("%w：会话 %q 期望序号 %d，当前 %d", ErrConflict, batch.ID, batch.Expected, cur)
+		}
+		txn[i] = AppendBatch{ID: batch.ID, Expected: batch.Expected, Events: assign(batch.Events, batch.Expected)}
+		lasts[i] = batch.Expected + int64(len(batch.Events))
+	}
+	payload, err := json.Marshal(txn)
+	if err != nil {
+		return nil, err
+	}
+	if err = txnlog.New(s.dir).Commit(ctx, payload, s.applyTxn); err != nil {
+		return nil, err
+	}
+	return lasts, nil
+}
+
 func syncDir(dir string) error {
 	d, err := os.Open(dir)
 	if err != nil {
@@ -247,6 +335,9 @@ func syncDir(dir string) error {
 
 // List 实现 Store。
 func (s *FileStore) List(ctx context.Context) ([]string, error) {
+	if err := s.recover(ctx); err != nil {
+		return nil, err
+	}
 	entries, err := os.ReadDir(s.dir)
 	if err != nil {
 		return nil, err
@@ -285,6 +376,9 @@ func (s *FileStore) Fork(ctx context.Context, src, dst string, upTo int64) (err 
 		return err
 	}
 	defer func() { err = errors.Join(err, unlock()) }()
+	if err := s.recover(ctx); err != nil {
+		return err
+	}
 	if _, err := os.Stat(s.path(dst)); err == nil {
 		return ErrExists
 	} else if !errors.Is(err, fs.ErrNotExist) {

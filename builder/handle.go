@@ -2,11 +2,15 @@ package builder
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/llm"
@@ -18,6 +22,16 @@ var ErrHandleDone = errors.New("agent handle is done")
 // errRedirected 是 Redirect 取消进行中的模型请求时的原因。
 var errRedirected = errors.New("model request redirected")
 
+// inboxWriteTimeout 限制一次收件箱写入；写入不跟随运行的取消，取消后的确认仍要落盘。
+const inboxWriteTimeout = 5 * time.Second
+
+// 持久收件箱记录的输入种类。
+const (
+	inboxKindSteer    = "steer"
+	inboxKindInject   = "inject"
+	inboxKindFollowup = "followup"
+)
+
 type inboxKind int
 
 const (
@@ -28,6 +42,19 @@ const (
 type inboxItem struct {
 	Kind inboxKind `json:"kind"`
 	Text string    `json:"text"`
+	// Seq 是持久收件箱中的序号，非持久运行为 0。领取记录带上它，恢复时才能确认同一条输入。
+	Seq uint64 `json:"seq,omitempty"`
+}
+
+type followupItem struct {
+	Text string
+	Seq  uint64
+}
+
+// followupBatch 是一轮 Followup 的领取记录。
+type followupBatch struct {
+	Texts []string `json:"texts"`
+	Seqs  []uint64 `json:"seqs,omitempty"`
 }
 
 // inbox 是运行中的 Agent 收到的输入。Steer 与 Inject 在下一步作为 user 消息追加（Steer 在即将结束时唤醒续跑，
@@ -36,7 +63,11 @@ type inbox struct {
 	mu        sync.Mutex
 	items     []inboxItem
 	redirects []string
-	followups []string
+	followups []followupItem
+	// durable 非 nil 时，输入写入持久收件箱后才算接受。
+	durable *durable.Inbox
+	// seen 是非持久运行的 SteerOnce 去重键；持久运行的键随收件箱落盘。
+	seen map[string]struct{}
 	// cancelModel 只在模型请求进行中且允许重定向时非空。
 	cancelModel context.CancelCauseFunc
 	done        bool
@@ -52,14 +83,101 @@ func inboxFrom(ctx context.Context) *inbox {
 	return b
 }
 
+// persist 把输入写入持久收件箱，返回序号；非持久运行为 0。调用方持有 b.mu：
+// 写入期间不能结束收件箱，否则已落盘的输入会同时收到 ErrHandleDone。
+func (b *inbox) persist(kind, text string) (uint64, error) {
+	if b.durable == nil {
+		return 0, nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), inboxWriteTimeout)
+	defer cancel()
+	return b.durable.Append(ctx, kind, text)
+}
+
 func (b *inbox) push(kind inboxKind, text string) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.done {
 		return ErrHandleDone
 	}
-	b.items = append(b.items, inboxItem{Kind: kind, Text: text})
+	name := inboxKindInject
+	if kind == inboxSteer {
+		name = inboxKindSteer
+	}
+	seq, err := b.persist(name, text)
+	if err != nil {
+		return err
+	}
+	b.items = append(b.items, inboxItem{Kind: kind, Text: text, Seq: seq})
 	return nil
+}
+
+// ack 确认输入已领取：从持久收件箱和内存中移除。恢复时领取记录会重放，内存中可能还有这些输入，所以两边都按序号移除。
+func (b *inbox) ack(seqs []uint64) error {
+	if b == nil || b.durable == nil || len(seqs) == 0 {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), inboxWriteTimeout)
+	defer cancel()
+	if err := b.durable.Ack(ctx, seqs...); err != nil {
+		return err
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.items = slices.DeleteFunc(b.items, func(item inboxItem) bool { return slices.Contains(seqs, item.Seq) })
+	b.followups = slices.DeleteFunc(b.followups, func(item followupItem) bool { return slices.Contains(seqs, item.Seq) })
+	return nil
+}
+
+// restore 载入上次运行留下的未确认输入。
+func (b *inbox) restore(entries []durable.InboxEntry) {
+	for _, entry := range entries {
+		switch entry.Kind {
+		case inboxKindSteer:
+			b.items = append(b.items, inboxItem{Kind: inboxSteer, Text: entry.Text, Seq: entry.Seq})
+		case inboxKindInject:
+			b.items = append(b.items, inboxItem{Kind: inboxInject, Text: entry.Text, Seq: entry.Seq})
+		case inboxKindFollowup:
+			b.followups = append(b.followups, followupItem{Text: entry.Text, Seq: entry.Seq})
+		}
+	}
+}
+
+// claimFollowups 领取下一轮的 Followup 批次，返回输入文本；没有批次时 ok 为假。调用方持有 b.mu。
+// 持久运行中批次先记入日志，恢复时按记录继续同一轮；已有记录时优先使用记录。
+func (b *inbox) claimFollowups(ctx context.Context, turn int) (batch followupBatch, ok bool, err error) {
+	take := func() followupBatch {
+		var claimed followupBatch
+		for _, item := range b.followups {
+			claimed.Texts = append(claimed.Texts, item.Text)
+			if item.Seq != 0 {
+				claimed.Seqs = append(claimed.Seqs, item.Seq)
+			}
+		}
+		return claimed
+	}
+	if !durable.HasJournal(ctx) {
+		batch = take()
+		b.followups = nil
+		return batch, len(batch.Texts) > 0, nil
+	}
+	id := fmt.Sprintf("followup-batch/%d", turn)
+	record, err := durable.InspectOperation(ctx, id)
+	if errors.Is(err, os.ErrNotExist) {
+		if len(b.followups) == 0 {
+			return batch, false, nil
+		}
+	} else if err != nil {
+		return batch, false, err
+	} else if record.Status == "completed" {
+		if err = json.Unmarshal(record.Value, &batch); err != nil {
+			return batch, false, fmt.Errorf("%s: %w", id, err)
+		}
+		return batch, true, nil
+	}
+	// 记录停在 pending 时重新领取：确认在记录完成之后才发生，这些输入还在收件箱里。
+	batch, err = journaled(ctx, id, func(context.Context) (followupBatch, error) { return take(), nil })
+	return batch, err == nil, err
 }
 
 // drain 取出全部 Steer 与 Inject，按到达顺序。
@@ -118,18 +236,27 @@ type Handle struct {
 }
 
 // Start 在后台运行 Agent 并返回句柄，宿主可在运行中追加输入。只支持原生工具流（llm.ToolStreamClient 且配置了工具）。
-// 持久运行中按步领取的 Steer/Inject 记入日志；Followup 轮次使用派生执行键，但调度批次不由 Handle 持久化。
-// 恢复 Followup 链时宿主须保存并重建原轮次和合并批次，仅重建 Start 不会自动进入后续轮次。
+// 持久运行中输入写入持久收件箱后才算接受，写入失败时输入方法返回错误。用同一执行键再次 Start 时恢复未领取的输入，
+// 并按记录的批次继续 Followup 轮次，宿主不需要重建也不应重复提交。
 func (a *ConfigurableAgent[C, S]) Start(ctx context.Context, input string) *Handle {
 	ctx, cancel := context.WithCancelCause(ctx)
 	h := &Handle{inbox: &inbox{}, cancel: cancel, done: make(chan struct{})}
-	if _, ok := a.llmClient.(llm.ToolStreamClient); !ok || len(a.tools) == 0 {
-		h.err = errors.New("Handle 需要原生工具流：llm.ToolStreamClient 且配置了工具")
+	fail := func(err error) *Handle {
+		h.err = err
 		h.inbox.done = true
 		close(h.done)
 		cancel(nil)
 		return h
 	}
+	if _, ok := a.llmClient.(llm.ToolStreamClient); !ok || len(a.tools) == 0 {
+		return fail(errors.New("Handle 需要原生工具流：llm.ToolStreamClient 且配置了工具"))
+	}
+	box, entries, err := durable.OpenInbox(ctx)
+	if err != nil {
+		return fail(fmt.Errorf("打开持久收件箱: %w", err))
+	}
+	h.inbox.durable = box
+	h.inbox.restore(entries)
 	go h.run(ctx, a.invokeHandleTurn, input)
 	return h
 }
@@ -183,16 +310,31 @@ func (h *Handle) run(ctx context.Context, invoke func(context.Context, string) (
 			}
 		}
 		h.out, h.err = out, err
-		next := h.inbox.followups
-		if err != nil || len(next) == 0 {
+		if err != nil {
 			h.inbox.done = true
 			h.inbox.mu.Unlock()
 			return
 		}
-		h.inbox.followups = nil
+		batch, ok, err := h.inbox.claimFollowups(ctx, turn+1)
+		if err != nil || !ok {
+			h.err = err
+			if err != nil {
+				h.out = nil
+			}
+			h.inbox.done = true
+			h.inbox.mu.Unlock()
+			return
+		}
 		history = h.inbox.transcript
 		h.inbox.mu.Unlock()
-		input = strings.Join(next, "\n\n")
+		if err := h.inbox.ack(batch.Seqs); err != nil {
+			h.inbox.mu.Lock()
+			h.out, h.err = nil, fmt.Errorf("确认 Followup: %w", err)
+			h.inbox.done = true
+			h.inbox.mu.Unlock()
+			return
+		}
+		input = strings.Join(batch.Texts, "\n\n")
 	}
 }
 
@@ -207,7 +349,8 @@ type PendingInput struct {
 // execution loop has not claimed. It is safe during execution and after Wait.
 // Order is preserved within each queue, not across queues. Claimed inputs are
 // absent even if a later model request fails: absence is not delivery or effect
-// confirmation. Admission and this snapshot are in-memory, not a durable inbox.
+// confirmation. In a durable run an accepted input is also on disk until claimed,
+// so a later Start with the same execution key restores it.
 // After the Handle ends, the host decides what to do with remaining inputs;
 // this method does not start new turns or bypass iteration/budget limits.
 func (h *Handle) PendingInputs() []PendingInput {
@@ -224,15 +367,46 @@ func (h *Handle) PendingInputs() []PendingInput {
 	for _, text := range h.inbox.redirects {
 		pending = append(pending, PendingInput{Kind: "redirect", Text: text})
 	}
-	for _, text := range h.inbox.followups {
-		pending = append(pending, PendingInput{Kind: "followup", Text: text})
+	for _, item := range h.inbox.followups {
+		pending = append(pending, PendingInput{Kind: "followup", Text: item.Text})
 	}
 	return pending
 }
 
 // Steer 排到下一步：当前工具批次结束后作为 user 消息追加；模型即将结束本轮时唤醒续跑。
-// 入队成功不保证已处理；结束时未领取的输入可通过 PendingInputs 查询。
+// 入队成功不保证已处理；结束时未领取的输入可通过 PendingInputs 查询。持久运行中入队成功表示已落盘。
 func (h *Handle) Steer(msg string) error { return h.inbox.push(inboxSteer, msg) }
+
+// SteerOnce 与 Steer 相同，但同一 key 只接受一次，重复调用返回 nil。持久运行中键与输入原子落盘，投递方崩溃后重投、
+// 输入已被领取或进程已重启都不会产生第二条（同一执行键内，记住最近 256 个键）；非持久运行只在本 Handle 内去重。
+func (h *Handle) SteerOnce(key, msg string) error {
+	b := h.inbox
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.done {
+		return ErrHandleDone
+	}
+	var seq uint64
+	if b.durable != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), inboxWriteTimeout)
+		defer cancel()
+		var duplicate bool
+		var err error
+		if seq, duplicate, err = b.durable.AppendOnce(ctx, key, inboxKindSteer, msg); err != nil || duplicate {
+			return err
+		}
+	} else {
+		if _, duplicate := b.seen[key]; duplicate {
+			return nil
+		}
+		if b.seen == nil {
+			b.seen = map[string]struct{}{}
+		}
+		b.seen[key] = struct{}{}
+	}
+	b.items = append(b.items, inboxItem{Kind: inboxSteer, Text: msg, Seq: seq})
+	return nil
+}
 
 // Inject 排到下一步，随下一次模型请求发送，但不唤醒即将结束的轮次。
 func (h *Handle) Inject(msg string) error { return h.inbox.push(inboxInject, msg) }
@@ -244,7 +418,11 @@ func (h *Handle) Followup(msg string) error {
 	if h.inbox.done {
 		return ErrHandleDone
 	}
-	h.inbox.followups = append(h.inbox.followups, msg)
+	seq, err := h.inbox.persist(inboxKindFollowup, msg)
+	if err != nil {
+		return err
+	}
+	h.inbox.followups = append(h.inbox.followups, followupItem{Text: msg, Seq: seq})
 	return nil
 }
 
@@ -262,9 +440,12 @@ func (h *Handle) Redirect(msg string) error {
 		cancel(errRedirected)
 		return nil
 	}
-	h.inbox.items = append(h.inbox.items, inboxItem{Kind: inboxSteer, Text: msg})
+	seq, err := h.inbox.persist(inboxKindSteer, msg)
+	if err == nil {
+		h.inbox.items = append(h.inbox.items, inboxItem{Kind: inboxSteer, Text: msg, Seq: seq})
+	}
 	h.inbox.mu.Unlock()
-	return nil
+	return err
 }
 
 // Interrupt 中止运行，Wait 返回 cause（为 nil 时为 context.Canceled）。

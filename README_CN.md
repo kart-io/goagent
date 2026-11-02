@@ -1,6 +1,6 @@
 # GoAgent - Go 语言 AI Agent 框架
 
-[![Go Version](https://img.shields.io/badge/go-1.25.0-blue?style=flat-square&logo=go)](https://go.dev/)
+[![Go Version](https://img.shields.io/badge/go-1.26.0-blue?style=flat-square&logo=go)](https://go.dev/)
 [![Build](https://img.shields.io/github/actions/workflow/status/kart-io/goagent/ci.yml?branch=master&style=flat-square&logo=github)](https://github.com/kart-io/goagent/actions/workflows/ci.yml)
 [![License](https://img.shields.io/github/license/kart-io/goagent?style=flat-square)](LICENSE)
 [![Documentation](https://img.shields.io/badge/docs-latest-brightgreen?style=flat-square&logo=readthedocs)](docs/)

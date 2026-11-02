@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -53,6 +54,9 @@ func Run(t *testing.T, newPair func(t *testing.T) (a, b durable.Store), opts Opt
 		{"不存在返回ErrNotExist", testNotExist},
 		{"取消后仍可写入", testSaveAfterCancel},
 		{"写入原子", testAtomicSave},
+		{"批量写入跨实例可见", testSaveAll},
+		{"批量写入拒绝时不写入", testSaveAllRejected},
+		{"批量写入对并发读者原子", testSaveAllVisibility},
 		{"审批跨实例续跑", testRunnerResume},
 		{"操作跨实例回放", testOperationReplay},
 	}
@@ -89,6 +93,7 @@ func Run(t *testing.T, newPair func(t *testing.T) (a, b durable.Store), opts Opt
 			{"接管后旧持有者写入被拒", testFencing},
 			{"同进程旧持有者不放行新持有者", testSameProcessFencing},
 			{"过期未接管时仍可写入", testExpiredNotTaken},
+			{"批量写入按租约全部拒绝", testSaveAllFencing},
 		}
 		for _, c := range leaseCases {
 			t.Run(c.name, func(t *testing.T) {
@@ -496,4 +501,106 @@ func testExpiredNotTaken(t *testing.T, l *Leases, a, b durable.Store) {
 	require.NoError(t, a.Save(context.Background(), "run", snapshot("v1")))
 	unlock()
 	requireVersion(t, b, "run", "v1")
+}
+
+// versioned 构造 requireVersion 能识别的快照。
+func versioned(id, version string) *durable.Snapshot {
+	return &durable.Snapshot{Version: version, RunID: id, Data: json.RawMessage(`{"v":"` + version + `"}`)}
+}
+
+func testSaveAll(t *testing.T, a, b durable.Store) {
+	unlockX, unlockY := lock(t, a, "x"), lock(t, a, "y")
+	ctx := context.Background()
+	require.NoError(t, a.SaveAll(ctx))
+	require.NoError(t, a.SaveAll(ctx,
+		durable.Write{ID: "x", Snapshot: versioned("x", "x1")},
+		durable.Write{ID: "y", Snapshot: versioned("y", "y1")},
+	))
+	requireVersion(t, b, "x", "x1")
+	requireVersion(t, b, "y", "y1")
+	unlockX()
+	unlockY()
+	// 批量写入之后的单独写入不会被覆盖回去。
+	save(t, a, "x", "x2")
+	requireVersion(t, b, "x", "x2")
+	requireVersion(t, a, "y", "y1")
+}
+
+func testSaveAllRejected(t *testing.T, a, b durable.Store) {
+	unlockX, unlockY := lock(t, a, "x"), lock(t, a, "y")
+	defer unlockX()
+	defer unlockY()
+	ctx := context.Background()
+	good := versioned("x", "v")
+	require.Error(t, a.SaveAll(ctx, durable.Write{ID: "x", Snapshot: good}, durable.Write{ID: "x", Snapshot: good}), "ID 重复")
+	require.Error(t, a.SaveAll(ctx, durable.Write{ID: "x", Snapshot: good}, durable.Write{ID: "y"}), "快照为空")
+	require.Error(t, a.SaveAll(ctx, durable.Write{ID: "x", Snapshot: good},
+		durable.Write{ID: "y", Snapshot: &durable.Snapshot{Data: json.RawMessage(`{`)}}), "无法序列化")
+	for _, id := range []string{"x", "y"} {
+		_, err := b.Load(ctx, id)
+		require.ErrorIs(t, err, os.ErrNotExist)
+	}
+}
+
+func testSaveAllVisibility(t *testing.T, a, b durable.Store) {
+	unlockX, unlockY := lock(t, a, "x"), lock(t, a, "y")
+	defer unlockX()
+	defer unlockY()
+	ctx := context.Background()
+	commit := func(n int) error {
+		version := strconv.Itoa(n)
+		return a.SaveAll(ctx,
+			durable.Write{ID: "x", Snapshot: &durable.Snapshot{Version: version, RunID: "x", Data: json.RawMessage(`{}`)}},
+			durable.Write{ID: "y", Snapshot: &durable.Snapshot{Version: version, RunID: "y", Data: json.RawMessage(`{}`)}},
+		)
+	}
+	require.NoError(t, commit(0))
+	const rounds = 40
+	done := make(chan error, 1)
+	go func() {
+		for n := 1; n <= rounds; n++ {
+			if err := commit(n); err != nil {
+				done <- err
+				return
+			}
+		}
+		done <- nil
+	}()
+	for finished := false; !finished; {
+		select {
+		case err := <-done:
+			require.NoError(t, err)
+			finished = true
+		default:
+		}
+		x, err := b.Load(ctx, "x")
+		require.NoError(t, err)
+		y, err := b.Load(ctx, "y")
+		require.NoError(t, err)
+		seenX, err := strconv.Atoi(x.Version)
+		require.NoError(t, err)
+		seenY, err := strconv.Atoi(y.Version)
+		require.NoError(t, err)
+		// 先读 x 后读 y：读到 x 的第 n 次提交后，y 不能早于第 n 次。
+		require.GreaterOrEqual(t, seenY, seenX)
+	}
+}
+
+func testSaveAllFencing(t *testing.T, l *Leases, a, b durable.Store) {
+	save(t, a, "x", "old")
+	save(t, a, "y", "old")
+	unlockX := lock(t, a, "x")
+	defer unlockX()
+	unlockY := lock(t, a, "y")
+	defer unlockY()
+	l.Expire(t, a, "y")
+	takeover := lock(t, b, "y")
+	defer takeover()
+	err := a.SaveAll(context.Background(),
+		durable.Write{ID: "x", Snapshot: versioned("x", "new")},
+		durable.Write{ID: "y", Snapshot: versioned("y", "new")},
+	)
+	require.ErrorIs(t, err, durable.ErrLeaseLost)
+	requireVersion(t, b, "x", "old")
+	requireVersion(t, b, "y", "old")
 }

@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -9,6 +10,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	coremiddleware "github.com/kart-io/goagent/core/middleware"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/observability"
 )
 
@@ -113,26 +115,39 @@ func (m *ObservabilityMiddleware) OnAfter(ctx context.Context, response *coremid
 
 // OnError 错误处理 - 记录错误到 span 和指标
 func (m *ObservabilityMiddleware) OnError(ctx context.Context, err error) error {
-	// 记录错误到 tracer
-	m.tracer.RecordError(ctx, err)
+	m.metrics.RecordError(ctx, errorTypeLabel(err))
 
-	// 记录错误指标
-	errorType := "UnknownError"
-	if err != nil {
-		errorType = err.Error()
+	// handler 失败时链不会调用 OnAfter，span 和活跃计数必须在这里收尾
+	if request, ok := coremiddleware.RequestFromContext(ctx); ok && request != nil {
+		if span, ok := request.Metadata["_otel_span"].(trace.Span); ok {
+			if err != nil {
+				m.tracer.RecordError(trace.ContextWithSpan(ctx, span), err)
+			}
+			span.End()
+			m.metrics.IncrementActiveAgents(ctx, -1)
+			delete(request.Metadata, "_otel_span")
+			delete(request.Metadata, "_otel_ctx")
+		}
 	}
-	m.metrics.RecordError(ctx, errorType)
-
-	// 减少活跃计数
-	m.metrics.IncrementActiveAgents(ctx, -1)
 
 	return err
+}
+
+// errorTypeLabel 返回基数有界的错误分类；错误消息含动态内容，不能作为指标标签。
+func errorTypeLabel(err error) string {
+	if err == nil {
+		return "UnknownError"
+	}
+	if code := agentErrors.GetCode(err); code != agentErrors.CodeInternal {
+		return string(code)
+	}
+	return fmt.Sprintf("%T", err)
 }
 
 // RecordToolCall 记录工具调用 (辅助方法)
 func (m *ObservabilityMiddleware) RecordToolCall(ctx context.Context, toolName string, duration time.Duration, err error) {
 	// 启动工具 span
-	_, span := m.tracer.StartToolSpan(ctx, toolName)
+	ctx, span := m.tracer.StartToolSpan(ctx, toolName)
 	defer span.End()
 
 	if err != nil {
@@ -147,7 +162,7 @@ func (m *ObservabilityMiddleware) RecordToolCall(ctx context.Context, toolName s
 // RecordLLMCall 记录 LLM 调用 (辅助方法)
 func (m *ObservabilityMiddleware) RecordLLMCall(ctx context.Context, model, provider string, tokens int, duration time.Duration, err error) {
 	// 启动 LLM span
-	_, span := m.tracer.StartLLMSpan(ctx, model,
+	ctx, span := m.tracer.StartLLMSpan(ctx, model,
 		attribute.String("llm.provider", provider),
 		attribute.Int("llm.tokens", tokens),
 	)

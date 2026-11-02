@@ -179,7 +179,7 @@ func nilTool(tool interfaces.Tool) bool {
 	}
 	v := reflect.ValueOf(tool)
 	switch v.Kind() {
-	case reflect.Ptr, reflect.Map, reflect.Func, reflect.Slice, reflect.Interface, reflect.Chan:
+	case reflect.Pointer, reflect.Map, reflect.Func, reflect.Slice, reflect.Interface, reflect.Chan:
 		return v.IsNil()
 	}
 	return false

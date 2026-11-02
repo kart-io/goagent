@@ -49,12 +49,37 @@ type Snapshot struct {
 //     Save 原子且持久，Snapshot 的全部字段原样保存。持有者已失去锁时，实现可以拒绝写入并返回 ErrLeaseLost。
 //   - Load 不需要持锁，读到的是最近一次成功 Save 的完整快照（不能来自滞后的副本），成功时快照非 nil；
 //     记录不存在时返回可用 errors.Is(err, os.ErrNotExist) 识别的错误。
+//   - SaveAll 把多个 ID 的快照作为一次原子写入：要么全部可见，要么都不可见，崩溃后同样如此。调用方须持有每个 ID 的锁，
+//     多把锁的获取顺序由调用方保证一致。ID 重复或快照为空时拒绝且不写入；writes 为空时不做任何事。
+//     提交结果未知的错误（如连接中断）下调用方须重新 Load 判断。作用域视图的 SaveAll 只覆盖该作用域内的 ID。
 //
 // core/durable/storetest 验证其中可在通用环境检验的部分，不覆盖长时间持锁、进程退出后释放与 ErrLeaseLost。
 type Store interface {
 	Lock(context.Context, string) (func() error, error)
 	Load(context.Context, string) (*Snapshot, error)
 	Save(context.Context, string, *Snapshot) error
+	SaveAll(context.Context, ...Write) error
+}
+
+// Write 是 Store.SaveAll 的一项写入。
+type Write struct {
+	ID       string
+	Snapshot *Snapshot
+}
+
+// ValidateWrites 检查 SaveAll 的参数，供 Store 实现在写入前调用。
+func ValidateWrites(writes []Write) error {
+	seen := make(map[string]bool, len(writes))
+	for _, write := range writes {
+		if write.ID == "" || write.Snapshot == nil {
+			return fmt.Errorf("批量写入需要 ID 和快照")
+		}
+		if seen[write.ID] {
+			return fmt.Errorf("批量写入的 ID 重复：%q", write.ID)
+		}
+		seen[write.ID] = true
+	}
+	return nil
 }
 
 // ErrLockUnavailable 表示 ctx 结束前未能获得锁：运行锁通常是其他持有者正在执行同一运行，

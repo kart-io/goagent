@@ -118,7 +118,7 @@ func isNil(value any) bool {
 	}
 	v := reflect.ValueOf(value)
 	switch v.Kind() {
-	case reflect.Ptr, reflect.Interface, reflect.Func, reflect.Map, reflect.Slice, reflect.Chan:
+	case reflect.Pointer, reflect.Interface, reflect.Func, reflect.Map, reflect.Slice, reflect.Chan:
 		return v.IsNil()
 	}
 	return false

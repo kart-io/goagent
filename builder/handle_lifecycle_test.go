@@ -33,9 +33,8 @@ func TestHandleCancellationBetweenTurnsRetainsFollowup(t *testing.T) {
 	require.Equal(t, []PendingInput{{Kind: "followup", Text: "second"}}, h.PendingInputs())
 }
 
-// A reconstructed Start has no durable Followup scheduler. The host must
-// reconstruct the original batch before the replayed parent turn finishes.
-func TestHandleFollowupApprovalRecoveryRequiresHostBatch(t *testing.T) {
+// 恢复时按记录的批次继续 Followup 轮次：宿主只需重建 Start，子流程从已保存的审批续跑，不重复之前的模型请求。
+func TestHandleFollowupApprovalRecoveryUsesRecordedBatch(t *testing.T) {
 	store, err := durable.NewFileStore(t.TempDir())
 	require.NoError(t, err)
 	ctx := durable.WithJournal(durable.WithExecutionKey(context.Background(), "followup-run"), store)
@@ -67,22 +66,8 @@ func TestHandleFollowupApprovalRecoveryRequiresHostBatch(t *testing.T) {
 	require.Empty(t, effects)
 	resumeCtx := durable.WithResume(ctx, wait.Path[len(wait.Path)-1].Key, continuation.ApprovalKey)
 
-	// Resume credentials do not recreate the earlier Followup schedule.
-	replayed := newScriptModel()
-	out := waitAnswer(t, build(replayed, nil).Start(resumeCtx, "first"))
-	require.Equal(t, "first answer", out.Result)
-	require.Zero(t, replayed.count())
-	require.Empty(t, effects)
-
-	// Reconstruct the same batch at the same turn: the child resumes from its
-	// saved approval, without repeating the first two model requests.
-	started, release = make(chan struct{}), make(chan struct{})
 	resumed := newScriptModel(answer("refund completed"))
-	h = build(resumed, func() { close(started); <-release }).Start(resumeCtx, "first")
-	<-started
-	require.NoError(t, h.Followup("second"))
-	close(release)
-	require.Equal(t, "refund completed", waitAnswer(t, h).Result)
+	require.Equal(t, "refund completed", waitAnswer(t, build(resumed, nil).Start(resumeCtx, "first")).Result)
 	require.Equal(t, 1, resumed.count())
 	require.Len(t, effects, 1)
 	for _, count := range effects {

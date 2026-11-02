@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -96,7 +97,7 @@ func (t *HTTPRequestTool) Execute(ctx context.Context, input map[string]interfac
 	}
 
 	// 设置超时
-	if timeout, ok := input["timeout"].(float64); ok {
+	if timeout, ok := intInput(input, "timeout"); ok {
 		client := httpclient.NewClient(&httpclient.Config{
 			Timeout: time.Duration(timeout) * time.Second,
 		})
@@ -237,16 +238,82 @@ func (t *JSONParseTool) Execute(ctx context.Context, input map[string]interface{
 		}, err
 	}
 
+	resultData := map[string]interface{}{"parsed": data}
+	if path, _ := input["path"].(string); path != "" {
+		value, err := lookupJSONPath(data, path)
+		if err != nil {
+			return &core.ToolResult{
+				Success:   false,
+				Error:     err.Error(),
+				ErrorCode: "PATH_ERROR",
+				Duration:  time.Since(startTime),
+				Timestamp: time.Now(),
+			}, err
+		}
+		resultData["value"] = value
+	}
+
 	result := &core.ToolResult{
-		Success: true,
-		Data: map[string]interface{}{
-			"parsed": data,
-		},
+		Success:   true,
+		Data:      resultData,
 		Duration:  time.Since(startTime),
 		Timestamp: time.Now(),
 	}
 
 	return result, nil
+}
+
+// lookupJSONPath 支持 $.a.b[0] 形式的路径；不支持通配符和过滤表达式。
+func lookupJSONPath(data interface{}, path string) (interface{}, error) {
+	rest, ok := strings.CutPrefix(path, "$")
+	if !ok {
+		return nil, fmt.Errorf("JSON path must start with $: %s", path)
+	}
+
+	current := data
+	for rest != "" {
+		switch rest[0] {
+		case '.':
+			rest = rest[1:]
+			end := strings.IndexAny(rest, ".[")
+			if end < 0 {
+				end = len(rest)
+			}
+			object, isObject := current.(map[string]interface{})
+			value, exists := object[rest[:end]]
+			if !isObject || !exists {
+				return nil, fmt.Errorf("JSON path %s: key %q not found", path, rest[:end])
+			}
+			current, rest = value, rest[end:]
+		case '[':
+			end := strings.IndexByte(rest, ']')
+			if end < 0 {
+				return nil, fmt.Errorf("JSON path %s: unterminated index", path)
+			}
+			index, err := strconv.Atoi(rest[1:end])
+			array, isArray := current.([]interface{})
+			if err != nil || !isArray || index < 0 || index >= len(array) {
+				return nil, fmt.Errorf("JSON path %s: invalid index %q", path, rest[1:end])
+			}
+			current, rest = array[index], rest[end+1:]
+		default:
+			return nil, fmt.Errorf("JSON path %s: unexpected %q", path, rest[0])
+		}
+	}
+	return current, nil
+}
+
+// intInput 读取整数参数：JSON 解码得到 float64，Go 调用方可能直接传整数。
+func intInput(input map[string]interface{}, key string) (int, bool) {
+	switch v := input[key].(type) {
+	case int:
+		return v, true
+	case int64:
+		return int(v), true
+	case float64:
+		return int(v), true
+	}
+	return 0, false
 }
 
 // Validate 验证输入
@@ -310,20 +377,18 @@ func (t *ShellExecuteTool) Execute(ctx context.Context, input map[string]interfa
 
 	command, _ := input["command"].(string)
 
-	// 注意：实际生产环境中应该使用 os/exec 包并进行严格的安全检查
-	// 这里仅作示例
-
-	result := &core.ToolResult{
-		Success: true,
-		Data: map[string]interface{}{
-			"command": command,
-			"output":  "Command execution is disabled for security reasons in this example",
-		},
+	// 本工具不执行命令，必须明确失败；需要执行命令请使用带白名单的 tools/shell。
+	const message = "shell execution is not supported by this tool; use tools/shell"
+	return &core.ToolResult{
+		Success:   false,
+		Data:      map[string]interface{}{"command": command},
+		Error:     message,
+		ErrorCode: "NOT_SUPPORTED",
 		Duration:  time.Since(startTime),
 		Timestamp: time.Now(),
-	}
-
-	return result, nil
+	}, agentErrors.New(agentErrors.CodeNotImplemented, message).
+		WithComponent("shell_execute_tool").
+		WithOperation("execute")
 }
 
 // Validate 验证输入

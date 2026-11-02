@@ -7,6 +7,112 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.37.0] - 2026-11-02
+
+### Added
+
+- `builder`：`Handle.SteerOnce` 按键去重。持久运行中键与输入原子落盘，投递方崩溃后重投、输入已被领取或进程已重启都不会产生第二条。
+- `core/durable`：`Inbox.AppendOnce`。
+- `builder`：`WithInterruptedModelResend` 让持久运行恢复时重发被进程停止或崩溃打断的模型请求，同一回合最多 3 次。默认不开启，因为可能重复计费；每次重发各占一份预算，额度不足时不发送。
+- `core/durable`：`OperationPolicy.RetryInterrupted` 和 `OperationAttempt`。
+
+### Changed
+
+- `core/durable`：操作执行中 ctx 被取消时，失败分类一律记为 `canceled`，不再取决于函数返回的错误是否包含 `context.Canceled`。
+
+## [0.36.1] - 2026-11-02
+
+### Fixed
+
+- `builder`：在工具里运行的子 Agent 继承父 Agent 的 ctx，会领取父 `Handle` 的 `Steer`、`Inject` 输入并被唤醒多跑一轮，父 Agent 收不到这些输入。
+- `builder`：父 `Handle` 的 Followup 轮次中，工具里运行的子 Agent 会继承父 Agent 上一轮的对话。权限更窄的子 Agent 因此能看到父 Agent 的内容。
+
+## [0.36.0] - 2026-11-02
+
+### Added
+
+- `durable.Store.SaveAll`：把多个 ID 的快照作为一次原子写入。`durable.FileStore` 用提交日志实现，提交点之后崩溃也会前滚。
+- `session.Store.AppendAll`：把多个会话的追加作为一次原子提交，任一序号不匹配时都不写入。
+- `durable.OpenInbox`：保存运行中输入的持久收件箱。
+- `core/durable/storetest` 与 `core/session/sessiontest` 增加批量写入的一致性用例。
+
+### Changed
+
+- **破坏性变更**：`durable.Store` 和 `session.Store` 接口各增加一个方法，自定义实现须提供 `SaveAll` 或 `AppendAll`。写入前可用 `durable.ValidateWrites`、`session.ValidateBatches` 检查参数，再用上述一致性用例验证。
+- **破坏性变更**：持久运行中的 `Handle` 输入方法在写入持久收件箱后才返回，写入失败时返回错误，宿主要处理这个错误。
+- **破坏性变更**：用同一执行键再次 `Start` 时，`Handle` 会恢复未领取的输入，并按记录的批次继续 Followup 轮次。原来由宿主重建 Followup 的代码要删除重复提交，否则同一批输入会多处理一次。
+
+### Fixed
+
+- `builder.Handle`：持久运行中，入队成功的输入在被领取前随进程退出而丢失；已领取的 Followup 批次在下一轮完成前崩溃也会丢失。
+
+## [0.35.0] - 2026-11-02
+
+### Changed
+
+- **破坏性变更**：`mcp/tools.ReadFileTool` 实现了 Schema 中已声明的 `encoding` 参数：未知编码返回 `INVALID_INPUT`，内容不符合编码（含默认的 `utf-8`）返回 `ENCODING_ERROR`。原来读取二进制文件会成功，但内容在 JSON 序列化时被静默损坏。读取二进制文件请不要使用此工具。
+- **破坏性变更**：图的节点取消后，`workflow` 会等节点结束才返回，因此节点必须响应取消并关闭流；忽略取消的节点会阻塞图，直到它自行结束。
+- `core/middleware`：某个中间件的 `OnBefore` 失败且链终止时，已进入的中间件会收到 `OnError`，可经 `RequestFromContext` 收尾。原来它们得不到任何通知。
+
+### Fixed
+
+- `workflow`：经 `Adapt` 的节点被取消后，图不等节点结束就返回，`AddParallel` 失败时兄弟分支的清理和副作用会发生在图返回之后。
+- `ObservabilityMiddleware`：靠后的中间件 `OnBefore` 失败时，span 不结束、活跃计数不归还。
+
+## [0.34.0] - 2026-11-02
+
+### Changed
+
+- **破坏性变更**：最低 Go 版本升至 1.26.0，CI 同步使用 Go 1.26。修复 `golang.org/x/net` 漏洞所需的版本要求 Go 1.26；构建时请使用 Go 1.26.10 或更高版本，以包含标准库的安全修复。
+- 升级依赖以修复 `govulncheck` 报告的漏洞：OpenTelemetry 1.38 → 1.47、`google.golang.org/grpc` 1.76 → 1.85、`golang.org/x/net` 0.47 → 0.62、`golang.org/x/text` 0.31 → 0.43、`golang.org/x/crypto` 0.44 → 0.58、`golang.org/x/sys` 0.41 → 0.49。
+- **破坏性变更**：`mcp/tools.ShellExecuteTool` 不再返回 `Success: true` 的占位结果，改为返回 `NOT_SUPPORTED` 错误。它从未执行过命令；需要执行命令请使用带白名单的 `tools/shell`。
+- **破坏性变更**：`BooleanOutputParser` 改为按整词匹配，无法判定的文本返回错误，而不再因子串命中给出结果。例如 `nothing` 原来返回 `false`，现在报错。
+- `mcp/tools.WriteFileTool` 拒绝未知的 `mode`，原来会按覆盖写处理。
+- `middleware.ObservabilityMiddleware` 的 `error.type` 指标标签改用错误码或错误类型，不再使用错误消息，依赖原标签值的看板需要调整。
+- `builder` 与 `llm/providers` 的两条错误信息改为小写开头（`agent usage requires ...`、`gemini does not support reasoning effort ...`），以符合 staticcheck ST1005。按完整文本匹配这两条错误的调用方需同步调整。
+
+### Added
+
+- `core/middleware.RequestFromContext`：`OnError` 可取得当前请求，用于收尾保存在 `Metadata` 中的状态。
+- `mcp/tools.JSONParseTool` 实现了 Schema 中已声明的 `path` 参数，支持 `$.a.b[0]`，结果写入 `value`。
+
+### Fixed
+
+- `ObservabilityMiddleware`：handler 失败时 span 不结束、活跃计数不归还；`RecordToolCall`、`RecordLLMCall` 把错误记到调用方的父 span 上。
+- `BooleanOutputParser`：`incorrect`、`不是` 被判为 `true`。
+- `JSONOutputParser`：字符串值中的括号导致提取错误；`T` 为接口类型时 `GetFormatInstructions` panic。
+- `ListOutputParser`：吃掉 `3D printing`、`1.5 apples` 开头的内容；逗号分隔的 `1, 2, 3` 丢失首项。
+- `StructuredOutputParser`：无法解析到非字符串字段，现在按 `FieldSchema.Type` 转换，失败返回 `ErrTypeConversion`。
+- `mcp/tools`：`list_directory` 对 `.` 或隐藏目录递归时返回空结果；`search_files` 的 `max_results` 与 `http_request` 的 `timeout` 忽略 Go 整数。
+- `LLMToolEmulatorMiddleware`：工具名缺失时 panic；`SetEmulateAll` 存在数据竞争。
+- `ContextEnrichmentMiddleware`：同步富化器的 panic 未被捕获、`Timeout` 未生效，且结果写入与异步富化器存在数据竞争。
+- `AdaptiveMiddleware`：`Metrics` 读写存在数据竞争；成功率从 0 起步导致规则在启动时误触发。
+- `DynamicPromptMiddleware`：没有基础提示词时结果带前导空行。
+
+## [0.33.0] - 2026-11-01
+
+### Added
+
+- 多 Agent 身份与 Token 归属：`AgentBuilder.WithAgentID` 标识角色；`budget.Controller` 新增 `RegisterAgent`、`ReserveAttributed`、`RecordEvidence`、`Attribution`，可按调用查询 Self、Inclusive 与 Root 用量。三者不可重复相加，见[多 Agent 指南](docs/guides/MULTI_AGENT_USAGE.md)。
+- `budget.Config.MaxAgentCalls`：限制保存的调用节点数量。为 0 时取 `DefaultMaxAgentCalls`（1000），负值拒绝。
+- Token 用量钩子：`AgentBuilder.WithUsageHook` 与 `budget.WithUsageHook`，无需实现 Observer 即可获取单次用量和累计统计。
+- `core/usage` 包：`Evidence`、`ModelEvidence`、`Fields` 标明 Provider 实际报告了哪些字段，`Owner`、`Invocation` 表示调用归属。
+- `interfaces.TokenUsage` 新增 `ReasoningTokens`、`ToolUsePromptTokens`；`TotalTokens` 保留 Provider 上报值，不再由子类相加推算。
+- 推理配置：`usage.ReasoningConfig`、`llm.WithReasoning`、`AgentBuilder.WithReasoning`，由 `llm.ValidateReasoningRequest` 校验。OpenAI、DeepSeek、Gemini 实现了校验，其余 Provider 拒绝该配置。
+- `Handle.PendingInputs`：返回尚未被执行循环领取的输入快照，不消费输入。
+
+### Changed
+
+- **破坏性变更**：预算持久记录格式由 `goagent-model-budget-v1` 改为 `goagent-model-budget`，加载旧记录会返回 `unsupported budget record format`，不提供自动转换。迁移：让使用 `budget.NewDurable` 的进行中运行在升级前结束，或继续用原版本恢复它们；不要靠清理日志或更换键绕过，否则已发生的用量和副作用会丢失。
+- 绑定预算的 Builder 会自动建立调用身份，未设置 `WithAgentID` 时为 `anonymous`。
+- 设置了 `AgentID` 或用量钩子且带工具的 Agent，如果客户端未实现 `llm.ToolStreamClient` 会直接报错，避免漏记工具选择请求。完整计量请使用 `ExecuteStream`、`AsRunnable` 或 `Start`。
+
+### Fixed
+
+- `Handle` 在取消时会等待本轮执行真正结束后才报告完成，`Wait` 与结束后的 `PendingInputs` 不再早于工具和清理逻辑返回。
+
+## [0.32.2] - 2026-10-31
+
 ### Fixed
 
 - 修复显式 `temperature=0` 在配置复制、Builder、请求序列化和 Provider 发送时被默认温度覆盖或省略的问题。支持 `TemperatureSet` 区分显式零与缺省；内置 9 个 Provider 保留零值，未设置请求继续使用原有回落规则。

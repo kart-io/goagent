@@ -24,16 +24,43 @@ var ErrExists = errors.New("会话已存在")
 // Store 保存会话日志。实现须满足：
 //   - Append 原子地追加全部事件或都不追加，按 expected 做比较并交换（CAS）：expected 为 0 时会话须不存在或为空，
 //     会话不存在时创建；成功时为事件分配从 expected+1 起的连续序号并持久化后返回最后序号。
+//   - AppendAll 把多个会话的追加作为一次原子提交：全部 Expected 都匹配才写入，要么全部可见，要么都不可见，崩溃后同样如此。
+//     返回值与 batches 一一对应，是各会话追加后的最后序号。任一 Expected 不匹配时返回 ErrConflict 且不写入。
+//     ID 重复时拒绝且不写入；batches 为空时不做任何事；Events 为空的批次只参与比较。
+//     提交结果未知的错误（如连接中断）下调用方须重新 Read 判断。
 //   - Read 返回序号大于 after 的事件，读到的是已成功 Append 的完整事件；会话不存在时返回 ErrNotFound。
 //   - Fork 把 src 中序号不大于 upTo 的事件原样复制为新会话 dst（upTo 为 0 时复制全部）；dst 已存在时返回 ErrExists。
 //   - Lock 为会话中的一个名称加锁，语义同 durable.Store.Lock（等待到获得为止、不可重入、持有者退出后有界时间内释放，
 //     ctx 结束时返回包装 durable.ErrLockUnavailable 的错误）；DurableStore 用它实现 durable.Store 的锁。
 type Store interface {
 	Append(ctx context.Context, id string, expected int64, events ...Event) (last int64, err error)
+	AppendAll(ctx context.Context, batches ...AppendBatch) (lasts []int64, err error)
 	Read(ctx context.Context, id string, after int64) ([]Event, error)
 	List(ctx context.Context) ([]string, error)
 	Fork(ctx context.Context, src, dst string, upTo int64) error
 	Lock(ctx context.Context, id, name string) (unlock func() error, err error)
+}
+
+// AppendBatch 是 Store.AppendAll 对一个会话的追加。
+type AppendBatch struct {
+	ID       string
+	Expected int64
+	Events   []Event
+}
+
+// ValidateBatches 检查 AppendAll 的参数，供 Store 实现在写入前调用。
+func ValidateBatches(batches []AppendBatch) error {
+	seen := make(map[string]bool, len(batches))
+	for _, batch := range batches {
+		if err := validID(batch.ID); err != nil {
+			return err
+		}
+		if seen[batch.ID] {
+			return fmt.Errorf("批量追加的会话重复：%q", batch.ID)
+		}
+		seen[batch.ID] = true
+	}
+	return nil
 }
 
 func validID(id string) error {
@@ -91,6 +118,31 @@ func (s *MemoryStore) Append(ctx context.Context, id string, expected int64, eve
 	}
 	s.sessions[id] = append(cur, assign(events, expected)...)
 	return expected + int64(len(events)), nil
+}
+
+// AppendAll 实现 Store。
+func (s *MemoryStore) AppendAll(ctx context.Context, batches ...AppendBatch) ([]int64, error) {
+	if err := ValidateBatches(batches); err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, batch := range batches {
+		if cur := LastSeq(s.sessions[batch.ID]); cur != batch.Expected {
+			return nil, fmt.Errorf("%w：会话 %q 期望序号 %d，当前 %d", ErrConflict, batch.ID, batch.Expected, cur)
+		}
+	}
+	lasts := make([]int64, len(batches))
+	for i, batch := range batches {
+		lasts[i] = batch.Expected + int64(len(batch.Events))
+		if len(batch.Events) > 0 {
+			s.sessions[batch.ID] = append(s.sessions[batch.ID], assign(batch.Events, batch.Expected)...)
+		}
+	}
+	return lasts, nil
 }
 
 func (s *MemoryStore) Read(ctx context.Context, id string, after int64) ([]Event, error) {

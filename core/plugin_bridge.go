@@ -539,7 +539,7 @@ func convertToType[T any](value any) (T, error) {
 	}
 
 	// 策略 2: 指针解引用
-	if reflect.TypeOf(value).Kind() == reflect.Ptr {
+	if reflect.TypeOf(value).Kind() == reflect.Pointer {
 		elem := reflect.ValueOf(value).Elem()
 		if typed, ok := elem.Interface().(T); ok {
 			return typed, nil

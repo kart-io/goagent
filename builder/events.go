@@ -40,6 +40,8 @@ type AgentEvent struct {
 // cancellation an error event is best-effort, and ctx.Err() is authoritative.
 // A cached middleware response may produce only done, with no model deltas.
 func (a *ConfigurableAgent[C, S]) ExecuteStream(ctx context.Context, input interface{}) (_ <-chan AgentEvent, err error) {
+	// 工具里运行的子 Agent 继承父 Agent 的 ctx，但父 Handle 的输入和对话不属于它；Handle 自己的轮次走 executeStream。
+	ctx = context.WithValue(context.WithValue(ctx, inboxKey{}, (*inbox)(nil)), historyKey{}, nil)
 	return a.executeStream(ctx, input, nil)
 }
 
@@ -296,7 +298,7 @@ func (a *ConfigurableAgent[C, S]) runEvents(ctx context.Context, request *middle
 		messages = []llm.Message{{Role: "system", Content: system}, {Role: "user", Content: prompt}}
 	}
 	attempt := 0
-	ctx = withRequestRecovery(ctx, a.requestRecovery(0, &messages, &attempt))
+	ctx = withInterruptedModelResend(withRequestRecovery(ctx, a.requestRecovery(0, &messages, &attempt)), a.config.ResendInterruptedModel)
 	turn, err := readPlainModelTurn(ctx, "model/answer/0", client, &llm.CompletionRequest{Reasoning: a.config.Reasoning.Clone(), Messages: messages, MaxTokens: a.config.MaxTokens, Temperature: a.config.Temperature, TemperatureSet: true}, emit)
 	if replan := (*replanRequest)(nil); errors.As(err, &replan) {
 		return nil, fmt.Errorf("RequestError 替换消息或客户端只作用于原生工具流：%w", replan.err)

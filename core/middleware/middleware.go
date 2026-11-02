@@ -197,6 +197,15 @@ func (c *MiddlewareChain) Use(middleware ...Middleware) *MiddlewareChain {
 	return c
 }
 
+type requestContextKey struct{}
+
+// RequestFromContext returns the request whose execution failed. OnError has no
+// request parameter, so middleware keeping per-request state in Metadata reads it here.
+func RequestFromContext(ctx context.Context) (*MiddlewareRequest, bool) {
+	request, ok := ctx.Value(requestContextKey{}).(*MiddlewareRequest)
+	return request, ok
+}
+
 // Execute runs the request through the middleware chain
 // 热路径零拷贝：直接读取不可变 slice，无需加锁或复制
 func (c *MiddlewareChain) Execute(ctx context.Context, request *MiddlewareRequest) (*MiddlewareResponse, error) {
@@ -204,12 +213,18 @@ func (c *MiddlewareChain) Execute(ctx context.Context, request *MiddlewareReques
 	middlewares := c.middlewares.Load().items
 
 	// Run OnBefore hooks in order
-	for _, mw := range middlewares {
+	for i, mw := range middlewares {
 		var err error
+		entered := request
 		request, err = mw.OnBefore(ctx, request)
 		if err != nil {
 			// Allow middleware to handle the error
 			if handledErr := mw.OnError(ctx, err); handledErr != nil {
+				// 链到此终止，已进入的中间件不会再收到 OnAfter，须在这里收尾
+				errCtx := context.WithValue(ctx, requestContextKey{}, entered)
+				for _, previous := range middlewares[:i] {
+					_ = previous.OnError(errCtx, handledErr)
+				}
 				return nil, handledErr
 			}
 			// Error was suppressed, continue
@@ -234,8 +249,9 @@ func (c *MiddlewareChain) Execute(ctx context.Context, request *MiddlewareReques
 		response, err = c.handler(ctx, request)
 		if err != nil {
 			// Let middleware handle the error
+			errCtx := context.WithValue(ctx, requestContextKey{}, request)
 			for _, mw := range middlewares {
-				if handledErr := mw.OnError(ctx, err); handledErr != nil {
+				if handledErr := mw.OnError(errCtx, err); handledErr != nil {
 					err = handledErr
 				}
 			}

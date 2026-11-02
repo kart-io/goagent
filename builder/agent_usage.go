@@ -37,7 +37,7 @@ func (a *ConfigurableAgent[C, S]) prepareAgentUsage(ctx context.Context) (contex
 	id := a.config.AgentID
 	if (id != "" || budget.HasUsageHook(ctx)) && len(a.tools) > 0 {
 		if _, ok := a.llmClient.(llm.ToolStreamClient); !ok {
-			return nil, fmt.Errorf("Agent usage requires native ToolStreamClient for tool selection")
+			return nil, fmt.Errorf("agent usage requires native ToolStreamClient for tool selection")
 		}
 	}
 	if id == "" {

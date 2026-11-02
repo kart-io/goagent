@@ -247,6 +247,34 @@ func (o *overlay) Load(ctx context.Context, id string) (*durable.Snapshot, error
 	return snap, nil
 }
 
+// SaveAll 依次记下写入；重放只在内存中进行，失败时恢复已记下的快照。
+func (o *overlay) SaveAll(ctx context.Context, writes ...durable.Write) error {
+	if err := durable.ValidateWrites(writes); err != nil {
+		return err
+	}
+	o.mu.Lock()
+	previous := make(map[string]*durable.Snapshot, len(writes))
+	for _, write := range writes {
+		previous[write.ID] = o.saved[write.ID]
+	}
+	o.mu.Unlock()
+	for _, write := range writes {
+		if err := o.Save(ctx, write.ID, write.Snapshot); err != nil {
+			o.mu.Lock()
+			defer o.mu.Unlock()
+			for id, snap := range previous {
+				if snap == nil {
+					delete(o.saved, id)
+				} else {
+					o.saved[id] = snap
+				}
+			}
+			return err
+		}
+	}
+	return nil
+}
+
 // Save 记下写入；实跑的持久操作结束时与记录比较，不同或没有记录即为分歧，之后的边界一律实跑。
 func (o *overlay) Save(ctx context.Context, id string, snap *durable.Snapshot) error {
 	o.mu.Lock()
