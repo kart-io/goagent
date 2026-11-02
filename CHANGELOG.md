@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.36.0] - 2026-11-02
+
+### Added
+
+- `durable.Store.SaveAll`：把多个 ID 的快照作为一次原子写入。`durable.FileStore` 用提交日志实现，提交点之后崩溃也会前滚。
+- `session.Store.AppendAll`：把多个会话的追加作为一次原子提交，任一序号不匹配时都不写入。
+- `durable.OpenInbox`：保存运行中输入的持久收件箱。
+- `core/durable/storetest` 与 `core/session/sessiontest` 增加批量写入的一致性用例。
+
+### Changed
+
+- **破坏性变更**：`durable.Store` 和 `session.Store` 接口各增加一个方法，自定义实现须提供 `SaveAll` 或 `AppendAll`。写入前可用 `durable.ValidateWrites`、`session.ValidateBatches` 检查参数，再用上述一致性用例验证。
+- **破坏性变更**：持久运行中的 `Handle` 输入方法在写入持久收件箱后才返回，写入失败时返回错误，宿主要处理这个错误。
+- **破坏性变更**：用同一执行键再次 `Start` 时，`Handle` 会恢复未领取的输入，并按记录的批次继续 Followup 轮次。原来由宿主重建 Followup 的代码要删除重复提交，否则同一批输入会多处理一次。
+
+### Fixed
+
+- `builder.Handle`：持久运行中，入队成功的输入在被领取前随进程退出而丢失；已领取的 Followup 批次在下一轮完成前崩溃也会丢失。
+
 ## [0.35.0] - 2026-11-02
 
 ### Changed
