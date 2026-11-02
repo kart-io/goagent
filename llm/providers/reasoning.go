@@ -38,7 +38,7 @@ func (p *GeminiProvider) thinkingConfig(req *llm.CompletionRequest) (*genai.Thin
 		case "minimal", "low", "medium", "high":
 			cfg.ThinkingLevel = genai.ThinkingLevel(strings.ToUpper(c.Effort))
 		default:
-			return nil, fmt.Errorf("Gemini does not support reasoning effort %q; use a supported level or thinking budget", c.Effort)
+			return nil, fmt.Errorf("gemini does not support reasoning effort %q; use a supported level or thinking budget", c.Effort)
 		}
 	}
 	return cfg, nil

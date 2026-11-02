@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `builder` 与 `llm/providers` 的两条错误信息改为小写开头（`agent usage requires ...`、`gemini does not support reasoning effort ...`），以符合 staticcheck ST1005。按完整文本匹配这两条错误的调用方需同步调整。
+
+## [0.33.0] - 2026-11-01
+
+### Added
+
+- 多 Agent 身份与 Token 归属：`AgentBuilder.WithAgentID` 标识角色；`budget.Controller` 新增 `RegisterAgent`、`ReserveAttributed`、`RecordEvidence`、`Attribution`，可按调用查询 Self、Inclusive 与 Root 用量。三者不可重复相加，见[多 Agent 指南](docs/guides/MULTI_AGENT_USAGE.md)。
+- `budget.Config.MaxAgentCalls`：限制保存的调用节点数量。为 0 时取 `DefaultMaxAgentCalls`（1000），负值拒绝。
+- Token 用量钩子：`AgentBuilder.WithUsageHook` 与 `budget.WithUsageHook`，无需实现 Observer 即可获取单次用量和累计统计。
+- `core/usage` 包：`Evidence`、`ModelEvidence`、`Fields` 标明 Provider 实际报告了哪些字段，`Owner`、`Invocation` 表示调用归属。
+- `interfaces.TokenUsage` 新增 `ReasoningTokens`、`ToolUsePromptTokens`；`TotalTokens` 保留 Provider 上报值，不再由子类相加推算。
+- 推理配置：`usage.ReasoningConfig`、`llm.WithReasoning`、`AgentBuilder.WithReasoning`，由 `llm.ValidateReasoningRequest` 校验。OpenAI、DeepSeek、Gemini 实现了校验，其余 Provider 拒绝该配置。
+- `Handle.PendingInputs`：返回尚未被执行循环领取的输入快照，不消费输入。
+
+### Changed
+
+- **破坏性变更**：预算持久记录格式由 `goagent-model-budget-v1` 改为 `goagent-model-budget`，加载旧记录会返回 `unsupported budget record format`，不提供自动转换。迁移：让使用 `budget.NewDurable` 的进行中运行在升级前结束，或继续用原版本恢复它们；不要靠清理日志或更换键绕过，否则已发生的用量和副作用会丢失。
+- 绑定预算的 Builder 会自动建立调用身份，未设置 `WithAgentID` 时为 `anonymous`。
+- 设置了 `AgentID` 或用量钩子且带工具的 Agent，如果客户端未实现 `llm.ToolStreamClient` 会直接报错，避免漏记工具选择请求。完整计量请使用 `ExecuteStream`、`AsRunnable` 或 `Start`。
+
+### Fixed
+
+- `Handle` 在取消时会等待本轮执行真正结束后才报告完成，`Wait` 与结束后的 `PendingInputs` 不再早于工具和清理逻辑返回。
+
+## [0.32.2] - 2026-10-31
+
 ### Fixed
 
 - 修复显式 `temperature=0` 在配置复制、Builder、请求序列化和 Provider 发送时被默认温度覆盖或省略的问题。支持 `TemperatureSet` 区分显式零与缺省；内置 9 个 Provider 保留零值，未设置请求继续使用原有回落规则。
