@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **破坏性变更**：最低 Go 版本升至 1.26.0，CI 同步使用 Go 1.26。修复 `golang.org/x/net` 漏洞所需的版本要求 Go 1.26；构建时请使用 Go 1.26.10 或更高版本，以包含标准库的安全修复。
+- 升级依赖以修复 `govulncheck` 报告的漏洞：OpenTelemetry 1.38 → 1.47、`google.golang.org/grpc` 1.76 → 1.85、`golang.org/x/net` 0.47 → 0.62、`golang.org/x/text` 0.31 → 0.43、`golang.org/x/crypto` 0.44 → 0.58、`golang.org/x/sys` 0.41 → 0.49。
 - `builder` 与 `llm/providers` 的两条错误信息改为小写开头（`agent usage requires ...`、`gemini does not support reasoning effort ...`），以符合 staticcheck ST1005。按完整文本匹配这两条错误的调用方需同步调整。
 
 ## [0.33.0] - 2026-11-01
