@@ -72,7 +72,7 @@ pending := h.PendingInputs()   // 独立快照：仍在队列、尚未被执行�
 | `WithPromptSections` | 每轮开始时计算一次 | 追加到 system，同一轮内字节不变，保持提示词缓存前缀 |
 | `WithPromptContexts` | 每步重算 | 作为一条 user 消息附在本次请求末尾，不进入之后的历史 |
 
-持久运行中，PreStep、TurnStopping、提示词段落与上下文、按步领取的 Steer/Inject 和唤醒决定记入日志，恢复时回放而不重新计算；以 `Start` 开始的持久运行须同样以 `Start` 恢复。Followup 的轮次调度不持久化，宿主须保存并按原顺序、原合并批次重建 Followup 链；单独重建 Start 或提供 WithResume 不会自动进入先前等待的后续轮次。Request 钩子须是确定性的；RequestError 的原样重试在同一条回合记录内进行，持久运行中替换消息或客户端的决定以错误结束；Redirect 只在非持久运行中生效（持久运行中降级为 Steer）。子流程等待宿主续跑时，执行以 `ErrWaiting`（`*WaitingError`）暂停，见[可组合编排](../docs/guides/COMPOSABLE_ORCHESTRATION.md)。
+持久运行中，PreStep、TurnStopping、提示词段落与上下文、按步领取的 Steer/Inject 和唤醒决定记入日志，恢复时回放而不重新计算；以 `Start` 开始的持久运行须同样以 `Start` 恢复。持久运行中，`Steer`、`Inject`、`Redirect`、`Followup` 写入持久收件箱后才返回成功，写入失败时返回错误；用同一执行键再次 `Start` 会恢复未领取的输入，并按记录的批次继续 Followup 轮次，宿主不需要重建，也不应重复提交。Request 钩子须是确定性的；RequestError 的原样重试在同一条回合记录内进行，持久运行中替换消息或客户端的决定以错误结束；Redirect 只在非持久运行中生效（持久运行中降级为 Steer）。子流程等待宿主续跑时，执行以 `ErrWaiting`（`*WaitingError`）暂停，见[可组合编排](../docs/guides/COMPOSABLE_ORCHESTRATION.md)。
 
 ## 会话日志
 
