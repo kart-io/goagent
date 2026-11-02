@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/core"
 )
 
 func TestParallelOverlapsBoundsConcurrencyAndMergesInOrder(t *testing.T) {
@@ -212,4 +214,64 @@ func TestParallelRejectsInvalidConfiguration(t *testing.T) {
 	} {
 		require.Error(t, NewGraph[int]().AddParallel("parallel", cfg))
 	}
+}
+
+// 经 Adapt 的节点在独立 goroutine 中运行，取消后仍在收尾时图不能先返回，
+// 否则节点的清理和副作用会发生在图结束之后。
+func TestParallelWaitsForAdaptedNodeToSettle(t *testing.T) {
+	failure := errors.New("branch failed")
+	started := make(chan struct{})
+	var settled atomic.Bool
+
+	node := func(run func(context.Context) (int, error)) func(context.Context, int) (int, error) {
+		adapted, err := Adapt(core.NewRunnableFunc(func(ctx context.Context, _ int) (int, error) { return run(ctx) }),
+			func(in int) (int, error) { return in, nil },
+			func(_ int, out int) (int, error) { return out, nil })
+		require.NoError(t, err)
+		return adapted.Invoke
+	}
+
+	g := NewGraph[int](Config{MaxConcurrency: 2})
+	require.NoError(t, g.AddParallel("parallel", ParallelConfig[int]{
+		Branches: []Branch[int]{
+			{Name: "failure", Run: node(func(ctx context.Context) (int, error) {
+				<-started
+				return 0, failure
+			})},
+			{Name: "slow-cleanup", Run: node(func(ctx context.Context) (int, error) {
+				close(started)
+				<-ctx.Done()
+				time.Sleep(50 * time.Millisecond)
+				settled.Store(true)
+				return 0, ctx.Err()
+			})},
+		},
+		Clone: func(in int) int { return in },
+		Merge: func(_ context.Context, in int, _ []int) (int, error) { return in, nil },
+	}))
+	require.NoError(t, g.AddEdge(START, "parallel"))
+	require.NoError(t, g.AddEdge("parallel", END))
+	r, err := g.Compile(context.Background())
+	require.NoError(t, err)
+
+	_, err = r.Invoke(context.Background(), 0)
+	require.ErrorIs(t, err, failure)
+	require.True(t, settled.Load(), "图在节点收尾前就返回了")
+}
+
+// 节点报错后可能还有收尾工作，单节点路径同样要等它结束。
+func TestConsumeNodeWaitsForStreamCloseAfterCancellation(t *testing.T) {
+	var settled atomic.Bool
+	node := core.NewRunnableFunc(func(ctx context.Context, _ int) (int, error) {
+		<-ctx.Done()
+		time.Sleep(50 * time.Millisecond)
+		settled.Store(true)
+		return 0, ctx.Err()
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+	_, err := consumeNode[int, int](ctx, node, 0, func(core.StreamChunk[int]) error { return nil })
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+	require.True(t, settled.Load(), "consumeNode 在节点结束前就返回了")
 }

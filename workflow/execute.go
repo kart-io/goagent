@@ -93,6 +93,13 @@ func consumeNode[I, O any](ctx context.Context, node core.Runnable[I, O], state 
 	if chunks == nil {
 		return result, fmt.Errorf("node returned a nil stream")
 	}
+	// 节点在独立 goroutine 中运行，退出前必须等它结束，否则清理和副作用会发生在图返回之后。
+	// 因此节点须响应取消并关闭流；忽略取消的节点会阻塞图，直到它自行结束。
+	defer func() {
+		cancel()
+		for range chunks { // 丢弃取消后的剩余数据块
+		}
+	}()
 	finished := false
 	for {
 		select {
