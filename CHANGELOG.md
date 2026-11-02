@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.35.0] - 2026-11-02
+
+### Changed
+
+- **破坏性变更**：`mcp/tools.ReadFileTool` 实现了 Schema 中已声明的 `encoding` 参数：未知编码返回 `INVALID_INPUT`，内容不符合编码（含默认的 `utf-8`）返回 `ENCODING_ERROR`。原来读取二进制文件会成功，但内容在 JSON 序列化时被静默损坏。读取二进制文件请不要使用此工具。
+- **破坏性变更**：图的节点取消后，`workflow` 会等节点结束才返回，因此节点必须响应取消并关闭流；忽略取消的节点会阻塞图，直到它自行结束。
+- `core/middleware`：某个中间件的 `OnBefore` 失败且链终止时，已进入的中间件会收到 `OnError`，可经 `RequestFromContext` 收尾。原来它们得不到任何通知。
+
+### Fixed
+
+- `workflow`：经 `Adapt` 的节点被取消后，图不等节点结束就返回，`AddParallel` 失败时兄弟分支的清理和副作用会发生在图返回之后。
+- `ObservabilityMiddleware`：靠后的中间件 `OnBefore` 失败时，span 不结束、活跃计数不归还。
+
 ## [0.34.0] - 2026-11-02
 
 ### Changed
