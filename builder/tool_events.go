@@ -524,6 +524,10 @@ func readToolTurn(ctx context.Context, stream <-chan *llm.StreamChunk, emit func
 			return partial(), ctx.Err()
 		case chunk, ok := <-stream:
 			if !ok {
+				// ctx 结束后提供方可以不发终态直接关闭流，这时报告 ctx 的错误而不是连接中断。
+				if err := ctx.Err(); err != nil {
+					return partial(), err
+				}
 				return partial(), io.ErrUnexpectedEOF
 			}
 			if chunk == nil {

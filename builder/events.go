@@ -83,6 +83,9 @@ func (a *ConfigurableAgent[C, S]) executeStream(ctx context.Context, input inter
 			return nil, fmt.Errorf("configured tools require tool-calling support")
 		}
 	}
+	// 终态事件按调用方的 ctx 投递：执行 ctx 可能因 WithTimeout 已结束，与仍在接收的调用方同时就绪时 select 会随机丢掉终态，
+	// 调用方只看到流被关闭。
+	callerCtx := ctx
 	ctx, release, err := a.beginExecution(ctx)
 	if err != nil {
 		return nil, err
@@ -112,8 +115,8 @@ func (a *ConfigurableAgent[C, S]) executeStream(ctx context.Context, input inter
 			select {
 			case events <- e:
 				return nil
-			case <-ctx.Done():
-				return ctx.Err()
+			case <-callerCtx.Done():
+				return callerCtx.Err()
 			}
 		}
 		// 链内与回调的 panic 已由 execute 转为错误；这里兜底其余代码：本 goroutine 的 panic 调用方无法 recover，
