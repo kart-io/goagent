@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `tools/policy`：带 Command 的拒绝与询问规则不再能被绕过。原先命令含 `;&|$` 或引号时一律不匹配带 Command 的规则，与整工具放行规则同时存在时 `git push && true` 会被放行；`/usr/bin/git push` 也不匹配 `git push`。现在拒绝与询问规则按首词文件名比较，命令无法判断时至少裁决为 Ask。放行规则仍精确匹配。
+
 ## [0.38.1] - 2026-11-03
 
 ### Fixed
