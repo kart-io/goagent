@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `llm/providers`：OpenAI 兼容的原生工具流（含 DeepSeek）在结束帧前断开时，返回的 `io.ErrUnexpectedEOF` 现在包成 `ProviderError`，`ClassifyError` 判为可重试，`RetryTransient` 会重发尚未输出文本的请求。原先它被归为未知错误，直接中止运行。`errors.Is(err, io.ErrUnexpectedEOF)` 仍成立。
+- `builder`：`WithTimeout`（默认 5 分钟）到期时，`AsRunnable().Invoke` 与 `ExecuteStream` 有时报告 `io.ErrUnexpectedEOF` 而不是超时，调用方无法判断该调大超时。原因有两处：终态事件与已结束的执行 ctx 竞争而被随机丢弃；提供方在 ctx 结束后不发终态直接关闭流时，被当成连接中断。现在终态事件按调用方的 ctx 投递，流在 ctx 结束后关闭时返回 ctx 的错误。
+
 ## [0.39.0] - 2026-11-03
 
 ### Added

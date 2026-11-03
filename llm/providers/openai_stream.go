@@ -104,7 +104,8 @@ func (p *OpenAIProvider) completeStream(ctx context.Context, req *agentllm.Compl
 				if !errors.Is(err, io.EOF) {
 					terminal.Error = agentErrors.NewLLMRequestError(p.ProviderName(), model, openAIProviderError(err, 0))
 				} else if finishReason == "" {
-					terminal.Error = io.ErrUnexpectedEOF
+					// 连接在结束帧前关闭：包成 ProviderError，ClassifyError 才能判为可重试。
+					terminal.Error = agentErrors.NewLLMRequestError(p.ProviderName(), model, openAIProviderError(io.ErrUnexpectedEOF, 0))
 				} else {
 					for _, index := range order {
 						call := calls[index]

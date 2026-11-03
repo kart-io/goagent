@@ -279,3 +279,53 @@ func TestDeepSeekStreamMethodsExposeProviderError(t *testing.T) {
 		})
 	}
 }
+
+// 连接在 finish_reason 之前关闭是暂时性故障：原生工具流的错误须可被 ClassifyError 判为可重试，
+// 否则 RetryTransient 不会重发尚未产出内容的请求。
+func TestDeepSeekNativeToolStreamTruncationIsRetryable(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeDeepSeekSSE(w, false, json.RawMessage(`{"choices":[{"delta":{"content":""}}]}`))
+	}))
+	defer server.Close()
+	client, err := NewDeepSeekWithOptions(agentllm.WithAPIKey("test"), agentllm.WithBaseURL(server.URL), agentllm.WithTimeout(time.Second))
+	require.NoError(t, err)
+	chunks, err := client.CompleteToolsStream(context.Background(), &agentllm.CompletionRequest{Messages: []agentllm.Message{agentllm.UserMessage("q")}}, []interfaces.Tool{&MockTool{}})
+	require.NoError(t, err)
+	var last *agentllm.StreamChunk
+	for chunk := range chunks {
+		last = chunk
+	}
+	require.NotNil(t, last)
+	require.ErrorIs(t, last.Error, io.ErrUnexpectedEOF)
+	require.True(t, agentllm.ClassifyError(last.Error).Retryable)
+}
+
+// 调用方超时打断流时，若发出终态，须报告超时而不是可重试的 unexpected EOF。调用方可能已不再接收，终态可以不发。
+func TestDeepSeekNativeToolStreamDeadlineIsNotEOF(t *testing.T) {
+	release := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"思考\"}}]}\n\n"))
+		w.(http.Flusher).Flush()
+		select {
+		case <-r.Context().Done():
+		case <-release:
+		}
+	}))
+	defer server.Close()
+	defer close(release)
+	client, err := NewDeepSeekWithOptions(agentllm.WithAPIKey("test"), agentllm.WithBaseURL(server.URL), agentllm.WithTimeout(time.Minute))
+	require.NoError(t, err)
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	chunks, err := client.CompleteToolsStream(ctx, &agentllm.CompletionRequest{Messages: []agentllm.Message{agentllm.UserMessage("q")}}, []interfaces.Tool{&MockTool{}})
+	require.NoError(t, err)
+	var last *agentllm.StreamChunk
+	for chunk := range chunks {
+		last = chunk
+	}
+	if last != nil && last.Error != nil {
+		require.ErrorIs(t, last.Error, context.DeadlineExceeded)
+		require.False(t, agentllm.ClassifyError(last.Error).Retryable)
+	}
+}
