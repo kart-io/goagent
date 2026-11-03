@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.38.1] - 2026-11-03
+
+### Fixed
+
+- `harness/env`：`DockerExecutor` 超时或取消落在容器创建期间时不再留下容器。原先 `docker run` 被中断后守护进程仍会建好容器，随后的删除找不到它。现在先创建再启动，创建不随 ctx 取消（上限 1 分钟），镜像不在本地时先拉取；容器没能启动时退出码仍与 `docker run` 一致（127、126）。
+
 ## [0.37.0] - 2026-11-02
 
 ### Added
