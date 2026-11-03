@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.40.0] - 2026-11-03
+
 ### Added
 
 - `builder`：`PromptScope` 增加 `Final` 与 `Deadline`，`ModelRequest` 增加 `Final`。最后一次请求不再提供工具，`PromptContext` 现在可以据此告诉模型直接作答、说明未完成的部分，也能按剩余时间提示收尾；Request 钩子可以按步骤调整推理强度。`PromptSection` 计算时二者为零值。
@@ -935,7 +937,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/kart-io/goagent/compare/v0.39.1...HEAD
+[Unreleased]: https://github.com/kart-io/goagent/compare/v0.40.0...HEAD
+[0.40.0]: https://github.com/kart-io/goagent/compare/v0.39.1...v0.40.0
 [0.39.1]: https://github.com/kart-io/goagent/compare/v0.39.0...v0.39.1
 [0.39.0]: https://github.com/kart-io/goagent/compare/v0.38.1...v0.39.0
 [0.38.1]: https://github.com/kart-io/goagent/compare/v0.37.0...v0.38.1
