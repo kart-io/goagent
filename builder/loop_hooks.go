@@ -87,7 +87,7 @@ type RequestFailure struct {
 	Err           error
 	Class         llm.ClassifiedError
 	Messages      []llm.Message
-	// Emitted 表示失败的这次请求已向消费者输出内容，原样重试会重复输出。
+	// Emitted 表示失败的这次请求已向消费者输出内容，原样重试会重复输出；WithReplayablePartialOutput 开启时恒为 false。
 	Emitted bool
 }
 
@@ -383,7 +383,7 @@ func (a *ConfigurableAgent[C, S]) requestRecovery(step int, messages *[]llm.Mess
 		if *attempt >= a.config.MaxRequestRecoveries {
 			return nil, nil
 		}
-		failure := &RequestFailure{Step: step, Attempt: *attempt, Err: err, Class: llm.ClassifyError(err), Messages: *messages, Emitted: emitted}
+		failure := &RequestFailure{Step: step, Attempt: *attempt, Err: err, Class: llm.ClassifyError(err), Messages: *messages, Emitted: emitted && !a.config.ReplayablePartialOutput}
 		for _, hook := range a.config.RequestErrorHooks {
 			var d RequestErrorDecision
 			if herr := callHook("RequestError", func() (e error) { d, e = hook(ctx, failure); return }); herr != nil {

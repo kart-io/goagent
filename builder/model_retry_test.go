@@ -94,13 +94,24 @@ func TestModelRetryStopsWhenNotRetryable(t *testing.T) {
 }
 
 func TestModelRetryDoesNotRepeatEmittedText(t *testing.T) {
-	model := &flakyModel{nativeEventModel: nativeModel([]*llm.StreamChunk{{Delta: "半句"}, {Done: true, Error: unavailable(0, 0)}}, answerTurn("完整", 1))}
+	model := &flakyModel{nativeEventModel: nativeModel([]*llm.StreamChunk{{Delta: "半句"}, {Done: true, Error: unavailable(503, 0)}}, answerTurn("完整", 1))}
 	agent, err := NewSimpleBuilder(model).WithRequestError(2, RetryTransient(2, noWait)).Build()
 	require.NoError(t, err)
 	_, err = agent.AsRunnable().Invoke(context.Background(), "q")
 	var pe *llm.ProviderError
 	require.True(t, errors.As(err, &pe))
 	require.Equal(t, 1, model.calls)
+}
+
+// 调用方声明能丢弃中途输出后，已输出片段的失败请求照常重试，最终答复只来自重试成功的那次。
+func TestModelRetryReplaysPartialOutputWhenAllowed(t *testing.T) {
+	model := &flakyModel{nativeEventModel: nativeModel([]*llm.StreamChunk{{Delta: "半句"}, {Done: true, Error: unavailable(503, 0)}}, answerTurn("完整", 1))}
+	agent, err := NewSimpleBuilder(model).WithRequestError(2, RetryTransient(2, noWait)).WithReplayablePartialOutput().Build()
+	require.NoError(t, err)
+	out, err := agent.AsRunnable().Invoke(context.Background(), "q")
+	require.NoError(t, err)
+	require.Equal(t, "完整", out.Result)
+	require.Equal(t, 2, model.calls)
 }
 
 func TestModelRetryHonorsRetryAfter(t *testing.T) {

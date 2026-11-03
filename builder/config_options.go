@@ -74,6 +74,8 @@ type AgentConfig struct {
 
 	// ToolErrorFeedback 把可恢复的工具失败作为工具结果交给模型，仅作用于原生工具流；见 WithToolErrorFeedback。
 	ToolErrorFeedback bool
+	// ReplayablePartialOutput 声明调用方能丢弃失败请求已输出的增量；见 WithReplayablePartialOutput。
+	ReplayablePartialOutput bool
 
 	// 循环扩展点与提示词组装，见 loop_hooks.go；仅作用于原生工具流。
 	PreStep              []preStep          `json:"-"`
@@ -185,6 +187,15 @@ func (b *AgentBuilder[C, S]) WithParallelToolCalls(n int) *AgentBuilder[C, S] {
 // 运行 ctx 已结束、预算耗尽、panic 与持久等待始终中止运行。
 func (b *AgentBuilder[C, S]) WithToolErrorFeedback() *AgentBuilder[C, S] {
 	b.config.ToolErrorFeedback = true
+	return b
+}
+
+// WithReplayablePartialOutput 声明调用方只使用最终结果，或能丢弃失败请求已输出的增量（默认关闭）。
+// 开启后模型请求中途失败时，RequestError 钩子看到的 Emitted 恒为 false，RetryTransient 会照常重发。
+// 适合 AsRunnable().Invoke 等只取最终答复的调用：服务端过载时流常先输出几个字节再停住，默认规则下这次失败不会重试。
+// 通过 ExecuteStream 或 Stream 逐段展示输出的调用方开启后，重试会让已展示的片段再出现一次。
+func (b *AgentBuilder[C, S]) WithReplayablePartialOutput() *AgentBuilder[C, S] {
+	b.config.ReplayablePartialOutput = true
 	return b
 }
 
