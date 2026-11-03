@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.42.0] - 2026-11-03
+
 ### Added
 
 - `builder`：`WithReplayablePartialOutput` 声明调用方只使用最终结果或能丢弃中途输出。开启后模型请求输出了部分内容再失败时，`RetryTransient` 照常重发。DeepSeek 过载时常先输出几个字节再停住，原先这类失败一律不重试，`Invoke` 调用也是如此。
@@ -951,7 +953,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/kart-io/goagent/compare/v0.41.0...HEAD
+[Unreleased]: https://github.com/kart-io/goagent/compare/v0.42.0...HEAD
+[0.42.0]: https://github.com/kart-io/goagent/compare/v0.41.0...v0.42.0
 [0.41.0]: https://github.com/kart-io/goagent/compare/v0.40.0...v0.41.0
 [0.40.0]: https://github.com/kart-io/goagent/compare/v0.39.1...v0.40.0
 [0.39.1]: https://github.com/kart-io/goagent/compare/v0.39.0...v0.39.1
