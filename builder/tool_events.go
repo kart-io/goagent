@@ -216,28 +216,31 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 			}
 			metadata["answer_usage_reported"] = turn.Usage != nil
 			final := llm.Message{Role: "assistant", Content: turn.Content, ReasoningContent: turn.ReasoningContent, ProviderState: turn.ProviderState}
-			// 收件箱中的 Steer 唤醒续跑，下一步领取；否则询问 TurnStopping。没有剩余额度时按原答复结束。
-			if round+1 < a.config.MaxIterations {
-				wake := false
-				if box != nil {
-					if wake, err = journaled(ctx, fmt.Sprintf("loop/wake/%d", round), func(context.Context) (bool, error) { return box.wakes(), nil }); err != nil {
-						return nil, err
-					}
+			// 收件箱中的 Steer 唤醒续跑，下一步领取；否则询问 TurnStopping。TurnStopping 续跑后至少还要有一步带工具，
+			// 模型才能按反馈修改；额度不足时不询问，按原答复结束并标记 turn_stopping_skipped。
+			wake := false
+			if box != nil && round+1 < a.config.MaxIterations {
+				if wake, err = journaled(ctx, fmt.Sprintf("loop/wake/%d", round), func(context.Context) (bool, error) { return box.wakes(), nil }); err != nil {
+					return nil, err
 				}
-				next := ""
-				if !wake {
-					if next, err = a.runTurnStopping(ctx, round, metadataInt(metadata, "continued_turns"), turn.Content); err != nil {
-						return nil, err
-					}
+			}
+			next := ""
+			if !wake && len(a.config.TurnStopping) > 0 {
+				if round+2 >= a.config.MaxIterations {
+					metadata["turn_stopping_skipped"] = true
+				} else if next, err = a.runTurnStopping(ctx, &Stopping{Step: round, Answer: turn.Content,
+					Continued: metadataInt(metadata, "continued_turns"), Blocked: metadataInt(metadata, "stopping_continued")}); err != nil {
+					return nil, err
 				}
-				if wake || next != "" {
-					messages = append(messages, final)
-					if next != "" {
-						messages = append(messages, llm.UserMessage(next))
-					}
-					metadata["continued_turns"] = metadataInt(metadata, "continued_turns") + 1
-					continue
+			}
+			if wake || next != "" {
+				messages = append(messages, final)
+				if next != "" {
+					messages = append(messages, llm.UserMessage(next))
+					metadata["stopping_continued"] = metadataInt(metadata, "stopping_continued") + 1
 				}
+				metadata["continued_turns"] = metadataInt(metadata, "continued_turns") + 1
+				continue
 			}
 			return finish(turn.Content, final)
 		}

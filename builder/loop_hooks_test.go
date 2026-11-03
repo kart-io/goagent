@@ -261,6 +261,8 @@ func TestTurnStopping(t *testing.T) {
 	require.Equal(t, []int{0, 1}, continued)
 	require.Equal(t, []llm.Message{{Role: "assistant", Content: "草稿"}, llm.UserMessage("检查是否满足要求")}, lastMessages(model.request(1), 2))
 
+	require.Nil(t, out.Metadata["turn_stopping_skipped"])
+
 	// 没有剩余额度时不再续跑。
 	model = newScriptModel(answer("唯一"))
 	agent, err = NewSimpleBuilder(model).WithTools(plainTool()).WithMaxIterations(1).WithTurnStopping(func(context.Context, *Stopping) (string, error) { return "继续", nil }).Build()
@@ -268,6 +270,58 @@ func TestTurnStopping(t *testing.T) {
 	out, err = agent.AsRunnable().Invoke(context.Background(), "写")
 	require.NoError(t, err)
 	require.Equal(t, "唯一", out.Result)
+	require.Equal(t, true, out.Metadata["turn_stopping_skipped"])
+}
+
+// 续跑后只剩不带工具的最后一步时不询问 TurnStopping：模型无法按反馈修改，答复标记为未经钩子确认。
+func TestTurnStoppingReservesToolStep(t *testing.T) {
+	model := newScriptModel(answer("草稿"))
+	called := false
+	agent, err := NewSimpleBuilder(model).WithTools(plainTool()).WithMaxIterations(2).
+		WithTurnStopping(func(context.Context, *Stopping) (string, error) { called = true; return "去跑测试", nil }).Build()
+	require.NoError(t, err)
+	out, err := agent.AsRunnable().Invoke(context.Background(), "写")
+	require.NoError(t, err)
+	require.False(t, called)
+	require.Equal(t, "草稿", out.Result)
+	require.Equal(t, true, out.Metadata["turn_stopping_skipped"])
+	require.Equal(t, 1, model.count())
+
+	// 续跑后的下一步仍提供工具，模型可以调用。
+	model = newScriptModel(answer("草稿"), callTool("c1", "lookup"), answer("定稿"))
+	agent, err = NewSimpleBuilder(model).WithTools(plainTool()).WithMaxIterations(4).
+		WithTurnStopping(func(_ context.Context, s *Stopping) (string, error) {
+			if s.Blocked == 0 {
+				return "去跑测试", nil
+			}
+			return "", nil
+		}).Build()
+	require.NoError(t, err)
+	out, err = agent.AsRunnable().Invoke(context.Background(), "写")
+	require.NoError(t, err)
+	require.Equal(t, "定稿", out.Result)
+}
+
+// Steer 唤醒计入 Continued，不计入 Blocked：遵守 Blocked 的验证钩子在用户 Steer 后仍会执行。
+func TestTurnStoppingBlockedExcludesSteer(t *testing.T) {
+	started, release := make(chan struct{}), make(chan struct{})
+	model := newScriptModel(gated(started, release, answer("初稿")), answer("改稿"), answer("终稿"))
+	var seen []Stopping
+	agent, err := NewSimpleBuilder(model).WithTools(plainTool()).WithMaxIterations(5).
+		WithTurnStopping(func(_ context.Context, s *Stopping) (string, error) {
+			seen = append(seen, *s)
+			if s.Blocked == 0 {
+				return "先验证", nil
+			}
+			return "", nil
+		}).Build()
+	require.NoError(t, err)
+	h := agent.Start(context.Background(), "写")
+	<-started
+	require.NoError(t, h.Steer("要更短"))
+	close(release)
+	require.Equal(t, "终稿", waitAnswer(t, h).Result)
+	require.Equal(t, []Stopping{{Step: 1, Answer: "改稿", Continued: 1, Blocked: 0}, {Step: 2, Answer: "终稿", Continued: 2, Blocked: 1}}, seen)
 }
 
 func TestPreStep(t *testing.T) {
