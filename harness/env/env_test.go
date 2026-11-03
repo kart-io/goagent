@@ -319,13 +319,21 @@ func TestDockerExecutor(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, uint32(os.Getuid()), fileUID(info))
 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	_, err = e.Run(ctx, Command{Argv: []string{"sleep", "60"}})
-	require.ErrorIs(t, err, context.DeadlineExceeded)
+	// 超时可能落在容器创建期间，守护进程会在客户端退出后才建好容器，所以稍等再检查残留。
+	for _, timeout := range []time.Duration{100 * time.Millisecond, 500 * time.Millisecond, time.Second, 3 * time.Second} {
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		_, err = e.Run(ctx, Command{Argv: []string{"sleep", "60"}})
+		cancel()
+		require.ErrorIs(t, err, context.DeadlineExceeded, timeout)
+	}
+	time.Sleep(3 * time.Second)
 	left, err := exec.Command("docker", "ps", "-aq", "--filter", "name=goagent-env-", "--filter", "volume="+root).Output()
 	require.NoError(t, err)
 	require.Empty(t, strings.TrimSpace(string(left)), "timed out container must be removed")
+
+	res, err = e.Run(context.Background(), Command{Argv: []string{"definitely-not-a-command-xyz"}})
+	require.NoError(t, err)
+	require.Equal(t, 127, res.ExitCode, string(res.Output))
 
 	ro := DockerExecutor{Root: root, Image: image, ReadOnly: true}
 	require.True(t, ro.Capabilities().ReadOnlyRoot)

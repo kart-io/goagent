@@ -10,6 +10,7 @@ import (
 	"path"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -58,7 +59,7 @@ func (e DockerExecutor) Capabilities() Capabilities {
 	return Capabilities{Container: true, Network: e.Network != "" && e.Network != "none", ReadOnlyRoot: e.ReadOnly}
 }
 
-// Run 实现 Executor。ctx 结束时强制删除容器，避免 docker 客户端退出后容器仍在运行。
+// Run 实现 Executor。先创建再启动容器，结束时强制删除，ctx 何时结束都不会留下容器。
 func (e DockerExecutor) Run(ctx context.Context, cmd Command) (Result, error) {
 	if len(cmd.Argv) == 0 {
 		return Result{}, errors.New("empty command")
@@ -82,7 +83,7 @@ func (e DockerExecutor) Run(ctx context.Context, cmd Command) (Result, error) {
 	if e.ReadOnly {
 		mount += ":ro"
 	}
-	args := []string{"run", "--rm", "--name", name, "--network", network,
+	args := []string{"--rm", "--name", name, "--network", network,
 		"-v", mount, "-w", path.Join("/workspace", cmd.Dir),
 		// 以宿主机 uid 运行时镜像里没有对应用户，HOME 默认为不可写的 /，工具链缓存会写失败。
 		"-e", "HOME=/tmp"}
@@ -92,15 +93,72 @@ func (e DockerExecutor) Run(ctx context.Context, cmd Command) (Result, error) {
 	args = append(args, e.Image)
 	args = append(args, cmd.Argv...)
 
-	c := exec.CommandContext(ctx, docker, args...)
-	c.WaitDelay = time.Second
-	res, err := runExec(ctx, c)
-	if ctx.Err() != nil {
+	defer func() {
 		rmCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		_ = exec.CommandContext(rmCtx, docker, "rm", "-f", name).Run()
+	}()
+	if res, err := createContainer(ctx, docker, e.Image, args); err != nil || res.ExitCode != 0 {
+		return res, err
+	}
+	c := exec.CommandContext(ctx, docker, "start", "-a", name)
+	c.WaitDelay = time.Second
+	res, err := runExec(ctx, c)
+	if err == nil && res.ExitCode != 0 {
+		if code, ok := startFailureCode(res.Output); ok {
+			res.ExitCode = code
+		}
 	}
 	return res, err
+}
+
+// createTimeout 限制不随 ctx 取消的 docker create。镜像已在本地，创建通常一两秒内完成。
+const createTimeout = time.Minute
+
+// createContainer 创建容器但不启动。docker run 被中断时守护进程可能仍在创建容器，之后的 rm 删不到它，
+// 所以创建不随 ctx 取消，等容器确实存在后再由调用方删除。镜像不在本地时先拉取，拉取可以随 ctx 取消。
+func createContainer(ctx context.Context, docker, image string, args []string) (Result, error) {
+	for pulled := false; ; pulled = true {
+		createCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), createTimeout)
+		c := exec.CommandContext(createCtx, docker, append([]string{"create", "--pull", "never"}, args...)...)
+		c.WaitDelay = time.Second
+		res, err := runExec(createCtx, c)
+		cancel()
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return res, ctxErr
+		}
+		if err != nil || res.ExitCode == 0 || pulled {
+			return res, err
+		}
+		inspect := exec.CommandContext(ctx, docker, "image", "inspect", image)
+		inspect.WaitDelay = time.Second
+		if inspect.Run() == nil {
+			return res, nil
+		}
+		pull := exec.CommandContext(ctx, docker, "pull", "-q", image)
+		pull.WaitDelay = time.Second
+		pullRes, pullErr := runExec(ctx, pull)
+		if pullErr != nil || pullRes.ExitCode != 0 {
+			pullRes.Output = append(res.Output, pullRes.Output...)
+			return pullRes, pullErr
+		}
+	}
+}
+
+// startFailureCode 还原容器没能启动时的退出码。docker start 此时一律返回 1，
+// docker run 则按同样的报错返回 127（找不到命令）或 126（不可执行）。
+func startFailureCode(output []byte) (int, bool) {
+	text := string(output)
+	if !strings.Contains(text, "Error response from daemon: failed to create task for container") {
+		return 0, false
+	}
+	switch {
+	case strings.Contains(text, "executable file not found"), strings.Contains(text, "no such file or directory"):
+		return 127, true
+	case strings.Contains(text, "permission denied"):
+		return 126, true
+	}
+	return 125, true
 }
 
 func containerName() (string, error) {
