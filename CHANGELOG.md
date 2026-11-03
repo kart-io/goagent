@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `llm`：`WithStreamIdleTimeout` 与 `WithStreamTimeout` 限制流式响应的空闲间隔与总时长，超过时中断并报告可重试的超时，`RetryTransient` 会重发尚未输出文本的请求。服务端过载时流常在首包后停住或一点点地发，原先只有等响应头的超时（`WithTimeout`），之后可以无限期等待；DeepSeek 实测单次请求被拖到 3～5 分钟，正常为数秒。默认不限制，目前作用于 OpenAI 兼容的工具流（含 DeepSeek）。
+
 ## [0.40.0] - 2026-11-03
 
 ### Added

@@ -329,3 +329,89 @@ func TestDeepSeekNativeToolStreamDeadlineIsNotEOF(t *testing.T) {
 		require.False(t, agentllm.ClassifyError(last.Error).Retryable)
 	}
 }
+
+// 首包之后服务端不再发数据：空闲时限到期中断，报告可重试的超时，交给 RetryTransient 重发。
+func TestDeepSeekNativeToolStreamIdleTimeoutIsRetryable(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"\"}}]}\n\n"))
+		w.(http.Flusher).Flush()
+		<-r.Context().Done()
+	}))
+	defer server.Close()
+	client, err := NewDeepSeekWithOptions(agentllm.WithAPIKey("test"), agentllm.WithBaseURL(server.URL), agentllm.WithTimeout(time.Minute),
+		agentllm.WithStreamIdleTimeout(100*time.Millisecond))
+	require.NoError(t, err)
+	start := time.Now()
+	chunks, err := client.CompleteToolsStream(context.Background(), &agentllm.CompletionRequest{Messages: []agentllm.Message{agentllm.UserMessage("q")}}, []interfaces.Tool{&MockTool{}})
+	require.NoError(t, err)
+	var last *agentllm.StreamChunk
+	for chunk := range chunks {
+		last = chunk
+	}
+	require.Less(t, time.Since(start), 5*time.Second)
+	require.NotNil(t, last)
+	require.ErrorContains(t, last.Error, "没有新数据")
+	require.True(t, agentllm.ClassifyError(last.Error).Retryable)
+}
+
+// 数据一点点地来，空闲时限触发不了，总时限到期中断。
+func TestDeepSeekNativeToolStreamTotalTimeoutIsRetryable(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		for {
+			_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"\"}}]}\n\n"))
+			w.(http.Flusher).Flush()
+			select {
+			case <-r.Context().Done():
+				return
+			case <-time.After(20 * time.Millisecond):
+			}
+		}
+	}))
+	defer server.Close()
+	client, err := NewDeepSeekWithOptions(agentllm.WithAPIKey("test"), agentllm.WithBaseURL(server.URL), agentllm.WithTimeout(time.Minute),
+		agentllm.WithStreamIdleTimeout(time.Second), agentllm.WithStreamTimeout(300*time.Millisecond))
+	require.NoError(t, err)
+	chunks, err := client.CompleteToolsStream(context.Background(), &agentllm.CompletionRequest{Messages: []agentllm.Message{agentllm.UserMessage("q")}}, []interfaces.Tool{&MockTool{}})
+	require.NoError(t, err)
+	var last *agentllm.StreamChunk
+	for chunk := range chunks {
+		last = chunk
+	}
+	require.NotNil(t, last)
+	require.ErrorContains(t, last.Error, "仍未结束")
+	require.True(t, agentllm.ClassifyError(last.Error).Retryable)
+}
+
+// 首包前停住同样由空闲时限中断；时限内正常结束的流不受影响。
+func TestDeepSeekNativeToolStreamTimeoutsBeforeHeadersAndOnSuccess(t *testing.T) {
+	// 读完请求体，服务端才会察觉客户端断开并结束处理，Close 不会一直等。
+	hang := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.Copy(io.Discard, r.Body)
+		<-r.Context().Done()
+	}))
+	defer hang.Close()
+	client, err := NewDeepSeekWithOptions(agentllm.WithAPIKey("test"), agentllm.WithBaseURL(hang.URL), agentllm.WithTimeout(time.Minute),
+		agentllm.WithStreamIdleTimeout(100*time.Millisecond))
+	require.NoError(t, err)
+	_, err = client.CompleteToolsStream(context.Background(), &agentllm.CompletionRequest{Messages: []agentllm.Message{agentllm.UserMessage("q")}}, []interfaces.Tool{&MockTool{}})
+	require.ErrorContains(t, err, "没有新数据")
+	require.True(t, agentllm.ClassifyError(err).Retryable)
+
+	ok := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeDeepSeekSSE(w, true, json.RawMessage(`{"choices":[{"delta":{"content":"好"},"finish_reason":"stop"}]}`))
+	}))
+	defer ok.Close()
+	client, err = NewDeepSeekWithOptions(agentllm.WithAPIKey("test"), agentllm.WithBaseURL(ok.URL), agentllm.WithTimeout(time.Minute),
+		agentllm.WithStreamIdleTimeout(time.Second), agentllm.WithStreamTimeout(time.Second))
+	require.NoError(t, err)
+	chunks, err := client.CompleteToolsStream(context.Background(), &agentllm.CompletionRequest{Messages: []agentllm.Message{agentllm.UserMessage("q")}}, []interfaces.Tool{&MockTool{}})
+	require.NoError(t, err)
+	var last *agentllm.StreamChunk
+	for chunk := range chunks {
+		last = chunk
+	}
+	require.NoError(t, last.Error)
+	require.Equal(t, "stop", last.FinishReason)
+}

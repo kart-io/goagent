@@ -3,6 +3,7 @@ package llm
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"github.com/kart-io/goagent/core/usage"
 	"github.com/kart-io/goagent/interfaces"
@@ -101,6 +102,10 @@ type LLMOptions struct {
 
 	// 网络配置
 	Timeout int `json:"timeout"` // 请求超时（秒）
+	// StreamIdleTimeout 是流式响应两次收到数据之间的最长间隔，StreamTimeout 是一次流式请求的总时长上限；
+	// 超过时中断并报告可重试的超时错误。0 表示不限制。目前作用于 OpenAI 兼容的工具流（含 DeepSeek）。
+	StreamIdleTimeout time.Duration `json:"stream_idle_timeout,omitempty"`
+	StreamTimeout     time.Duration `json:"stream_timeout,omitempty"`
 
 	// 其他配置
 	SystemPrompt  string            `json:"system_prompt,omitempty"`  // 默认系统提示
