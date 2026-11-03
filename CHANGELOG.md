@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.39.0] - 2026-11-03
+
 ### Added
 
 - `builder`：`WithToolErrorFeedback` 把可恢复的工具失败作为业务拒绝交给模型，不再中止运行，默认关闭。覆盖本轮未提供的工具、参数不是 JSON 对象（持久运行中同样生效），以及工具返回 error（仅非持久运行：失败结果不入日志，恢复时会重新执行）。运行 ctx 已结束、预算耗尽、panic 与持久等待仍中止。
