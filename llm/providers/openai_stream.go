@@ -61,17 +61,23 @@ func (p *OpenAIProvider) completeStream(ctx context.Context, req *agentllm.Compl
 	temperature := p.ResolveTemperature(req)
 	ctx = withOpenAITemperature(ctx, temperature)
 	ctx, retryAfter := withRetryAfterSlot(ctx)
-	stream, err := p.client.CreateChatCompletionStream(ctx, openai.ChatCompletionRequest{
+	watch := newStreamWatchdog(ctx, p.Config.StreamIdleTimeout, p.Config.StreamTimeout)
+	stream, err := p.client.CreateChatCompletionStream(watch.ctx, openai.ChatCompletionRequest{
 		ReasoningEffort: effort, Model: model, Messages: messages, Tools: p.convertTools(tools), MaxTokens: p.GetMaxTokens(req.MaxTokens),
 		Temperature: float32(temperature), TopP: float32(req.TopP),
 		Stop: req.Stop, Stream: true, StreamOptions: &openai.StreamOptions{IncludeUsage: true},
 	})
 	if err != nil {
+		if stall := watch.stalled(); stall != nil {
+			err = stall
+		}
+		watch.stop()
 		return nil, agentErrors.NewLLMRequestError(p.ProviderName(), model, openAIProviderError(err, *retryAfter)).WithContext("stream", true)
 	}
 	out := make(chan *agentllm.StreamChunk)
 	go func() {
 		defer close(out)
+		defer watch.stop()
 		defer func() { _ = stream.Close() }()
 		var content strings.Builder
 		var reasoning strings.Builder
@@ -101,7 +107,10 @@ func (p *OpenAIProvider) completeStream(ctx context.Context, req *agentllm.Compl
 			response, err := stream.Recv()
 			if err != nil {
 				terminal := &agentllm.StreamChunk{ResponseModel: responseModel, Content: content.String(), ReasoningContent: reasoning.String(), FinishReason: finishReason, Usage: usage, Done: true}
-				if !errors.Is(err, io.EOF) {
+				// 正常结束恰好碰上时限时仍按正常结束处理。
+				if stall := watch.stalled(); stall != nil && (!errors.Is(err, io.EOF) || finishReason == "") {
+					terminal.Error = agentErrors.NewLLMRequestError(p.ProviderName(), model, openAIProviderError(stall, 0))
+				} else if !errors.Is(err, io.EOF) {
 					terminal.Error = agentErrors.NewLLMRequestError(p.ProviderName(), model, openAIProviderError(err, 0))
 				} else if finishReason == "" {
 					// 连接在结束帧前关闭：包成 ProviderError，ClassifyError 才能判为可重试。
@@ -120,6 +129,7 @@ func (p *OpenAIProvider) completeStream(ctx context.Context, req *agentllm.Compl
 				send(terminal)
 				return
 			}
+			watch.touch()
 			if response.Model != "" {
 				responseModel = response.Model
 			}

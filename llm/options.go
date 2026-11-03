@@ -83,6 +83,18 @@ func WithTimeout(timeout time.Duration) ClientOption {
 	}
 }
 
+// WithStreamIdleTimeout 设置流式响应两次收到数据之间的最长间隔，超过时中断并报告可重试的超时。
+// 服务端过载时流可能只发出首包就停住，响应头超时（WithTimeout）管不到。0 表示不限制。
+func WithStreamIdleTimeout(d time.Duration) ClientOption {
+	return func(c *LLMOptions) { c.StreamIdleTimeout = max(d, 0) }
+}
+
+// WithStreamTimeout 设置一次流式请求的总时长上限，超过时中断并报告可重试的超时。
+// 服务端过载时数据可能一点点地来，空闲时限触发不了；上限应大于正常最长回答所需的时间。0 表示不限制。
+func WithStreamTimeout(d time.Duration) ClientOption {
+	return func(c *LLMOptions) { c.StreamTimeout = max(d, 0) }
+}
+
 // WithTopP 设置 Top-P 采样参数
 func WithTopP(topP float64) ClientOption {
 	return func(c *LLMOptions) {
