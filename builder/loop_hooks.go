@@ -51,7 +51,9 @@ type preStep struct {
 // ModelRequest 是即将发送的模型请求。Request 钩子可替换 Client（路由、换模型）或修改 Request 的参数；
 // Tools 只读。
 type ModelRequest struct {
-	Step    int
+	Step int
+	// Final 同 Step.Final：本轮最后一次请求，Tools 只剩 ReturnDirectTools。
+	Final   bool
 	Client  llm.ToolStreamClient
 	Request *llm.CompletionRequest
 	Tools   []interfaces.Tool
@@ -148,6 +150,10 @@ type PromptScope struct {
 	// SessionID 与工具调用看到的会话 ID 相同：宿主在 ctx 中声明的会话优先，否则为 WithSessionID 的值。
 	SessionID string
 	Step      int
+	// Final 同 Step.Final。Final 与 Deadline 只提供给 PromptContext；段落须在一轮内不变，计算时二者为零值。
+	Final bool
+	// Deadline 是运行的截止时间（WithTimeout 或调用方 ctx），没有截止时间时为零值。持久运行中随上下文记入日志。
+	Deadline time.Time
 }
 
 // PromptSection 进入 system 消息，每轮运行开始时计算一次，同一轮内字节不变，保持提示词缓存前缀稳定。
@@ -406,13 +412,14 @@ type redirection struct {
 
 // requestTurn 组装并发送本步的模型请求：附加运行上下文、执行 Request 钩子；失败时按 RequestError 钩子恢复，
 // 原样重试在模型操作内进行，替换消息或客户端时在这里重新组装，替换的消息作为新的历史返回。被 Redirect 取消时返回 redirection。
-func (a *ConfigurableAgent[C, S]) requestTurn(ctx context.Context, box *inbox, round int, client llm.ToolStreamClient, messages []llm.Message, tools []interfaces.Tool, allowEmpty bool, emit func(AgentEvent) error) (*llm.StreamChunk, *redirection, []llm.Message, error) {
+func (a *ConfigurableAgent[C, S]) requestTurn(ctx context.Context, box *inbox, round int, client llm.ToolStreamClient, messages []llm.Message, tools []interfaces.Tool, final, allowEmpty bool, emit func(AgentEvent) error) (*llm.StreamChunk, *redirection, []llm.Message, error) {
 	withContext := func(msgs []llm.Message) ([]llm.Message, error) {
 		if len(a.config.PromptContexts) == 0 {
 			return msgs, nil
 		}
 		text, err := journaled(ctx, fmt.Sprintf("loop/context/%d", round), func(context.Context) (string, error) {
-			return a.contextText(PromptScope{SessionID: toolspkg.SessionIDFrom(ctx), Step: round}), nil
+			deadline, _ := ctx.Deadline()
+			return a.contextText(PromptScope{SessionID: toolspkg.SessionIDFrom(ctx), Step: round, Final: final, Deadline: deadline}), nil
 		})
 		if err != nil || text == "" {
 			return msgs, err
@@ -423,7 +430,7 @@ func (a *ConfigurableAgent[C, S]) requestTurn(ctx context.Context, box *inbox, r
 	if err != nil {
 		return nil, nil, messages, err
 	}
-	req := &ModelRequest{Step: round, Client: client, Request: &llm.CompletionRequest{Reasoning: a.config.Reasoning.Clone(), Messages: reqMessages, MaxTokens: a.config.MaxTokens, Temperature: a.config.Temperature, TemperatureSet: true}, Tools: tools}
+	req := &ModelRequest{Step: round, Final: final, Client: client, Request: &llm.CompletionRequest{Reasoning: a.config.Reasoning.Clone(), Messages: reqMessages, MaxTokens: a.config.MaxTokens, Temperature: a.config.Temperature, TemperatureSet: true}, Tools: tools}
 	for _, hook := range a.config.RequestHooks {
 		if err := callHook("Request", func() error { return hook(ctx, req) }); err != nil {
 			return nil, nil, messages, err

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `builder`：`PromptScope` 增加 `Final` 与 `Deadline`，`ModelRequest` 增加 `Final`。最后一次请求不再提供工具，`PromptContext` 现在可以据此告诉模型直接作答、说明未完成的部分，也能按剩余时间提示收尾；Request 钩子可以按步骤调整推理强度。`PromptSection` 计算时二者为零值。
+
 ## [0.39.1] - 2026-11-03
 
 ### Fixed

@@ -170,7 +170,7 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 		}
 		// 重问需要下一轮额度，最后一轮的空回答按原方式报错。
 		allowEmpty := emptyRetries < a.config.EmptyAnswerRetries && round+1 < a.config.MaxIterations
-		turn, redirected, recovered, err := a.requestTurn(ctx, box, round, client, messages, tools, allowEmpty, emit)
+		turn, redirected, recovered, err := a.requestTurn(ctx, box, round, client, messages, tools, final, allowEmpty, emit)
 		if err != nil {
 			return nil, err
 		}
