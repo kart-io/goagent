@@ -446,7 +446,7 @@ func (a *ConfigurableAgent[C, S]) requestTurn(ctx context.Context, box *inbox, r
 		if redirectable {
 			box.beginModel(cancel)
 		}
-		turn, err := readJournaledTurn(withInterruptedModelResend(withRequestRecovery(turnCtx, a.requestRecovery(round, &messages, &attempt)), a.config.ResendInterruptedModel), round, req.Client, req.Request, tools, allowEmpty, stepEmit)
+		turn, err := readJournaledTurn(withInterruptedModelResend(withRequestRecovery(turnCtx, a.requestRecovery(round, &messages, &attempt)), a.config.ResendInterruptedModel), round, req.Client, req.Request, tools, allowEmpty, a.config.ToolErrorFeedback, stepEmit)
 		var redirects []string
 		if redirectable {
 			redirects = box.endModel()

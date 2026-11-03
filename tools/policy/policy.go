@@ -5,6 +5,7 @@ package policy
 import (
 	"context"
 	"fmt"
+	"path"
 	"slices"
 	"strings"
 	"unicode"
@@ -29,9 +30,11 @@ type Rule struct {
 	// Tool 是工具名，"*" 匹配所有工具，空串不匹配任何工具。
 	Tool string
 	// Command 只对带命令参数（Policy.CommandArg）的调用生效：命令按空白分词后以这些词开头才匹配，如 "go test"。
-	// 含 shell 控制符、引号或反斜杠的命令不匹配任何带 Command 的规则，按后续规则或 Default 裁决。
+	// 放行规则要求首词完全相同，含 shell 控制符、引号或反斜杠的命令不匹配放行规则。
+	// 拒绝与询问规则比较首词的文件名，/usr/bin/git push 匹配 "git push"；命令含上述字符而无法判断时，
+	// 该规则至少裁决为 Ask，交给审批人。
 	// 放行规则等于放行该命令的全部参数（go test -exec 可执行任意程序，测试代码本身也由模型编写）；
-	// 拒绝规则可被 /bin/rm、env rm、sh -c 等写法绕过，不能依赖。需要隔离时配合容器执行器。
+	// 拒绝规则仍可被 env rm、sh -c、脚本文件等写法绕过，不能依赖。需要隔离时配合容器执行器。
 	Command  string
 	Decision Decision
 }
@@ -63,11 +66,23 @@ func (p *Policy) Decide(call *tools.Call) Decision {
 		if r.Tool != "*" && r.Tool != call.Tool {
 			continue
 		}
-		if r.Command != "" && (!hasCommand || !commandHasPrefix(command, r.Command)) {
-			continue
+		d := r.Decision
+		if r.Command != "" {
+			switch {
+			case !hasCommand:
+				continue
+			case d == Allow:
+				if !commandHasPrefix(command, r.Command) {
+					continue
+				}
+			case unsafeCommand(command):
+				d = Ask
+			case !restrictedPrefix(command, r.Command):
+				continue
+			}
 		}
-		if !matched || strictness(r.Decision) > strictness(decision) {
-			decision, matched = r.Decision, true
+		if !matched || strictness(d) > strictness(decision) {
+			decision, matched = d, true
 		}
 	}
 	if !matched {
@@ -171,10 +186,20 @@ func unsafeCommand(command string) bool {
 }
 
 func commandHasPrefix(command, prefix string) bool {
-	if unsafeCommand(command) {
-		return false
+	return !unsafeCommand(command) && wordsHavePrefix(strings.Fields(command), prefix)
+}
+
+// restrictedPrefix 供拒绝与询问规则使用：首词取文件名，带路径调用同一程序也算匹配。
+func restrictedPrefix(command, prefix string) bool {
+	words := strings.Fields(command)
+	if len(words) > 0 {
+		words[0] = path.Base(words[0])
 	}
-	words, want := strings.Fields(command), strings.Fields(prefix)
+	return wordsHavePrefix(words, prefix)
+}
+
+func wordsHavePrefix(words []string, prefix string) bool {
+	want := strings.Fields(prefix)
 	if len(want) == 0 || len(words) < len(want) {
 		return false
 	}

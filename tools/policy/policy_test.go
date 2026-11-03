@@ -96,3 +96,42 @@ func TestHookAndGrants(t *testing.T) {
 	d, _ = hook(ctx, call("mcp_send_mail", ""))
 	require.Nil(t, d.Grant, "tools not listed in SessionTools can only be approved once")
 }
+
+// 无法可靠解析的命令不能绕过带 Command 的拒绝或询问规则。
+func TestDecideRestrictiveRulesFailClosed(t *testing.T) {
+	p := &Policy{
+		Rules: []Rule{
+			{Tool: "run_command", Decision: Allow},
+			{Tool: "run_command", Command: "git push", Decision: Deny},
+			{Tool: "run_command", Command: "npm publish", Decision: Ask},
+		},
+		Default: Allow,
+	}
+	cases := []struct {
+		command string
+		want    Decision
+	}{
+		{"git push origin main", Deny},
+		{"/usr/bin/git push", Deny},
+		{"./bin/git push --force", Deny},
+		{"git push && true", Ask},
+		{"true; git push", Ask},
+		{"npm publish", Ask},
+		{"/usr/local/bin/npm publish", Ask},
+		{"go test ./... | tee out", Ask},
+		{"git status", Allow},
+		{"echo hi", Allow},
+	}
+	for _, c := range cases {
+		require.Equal(t, c.want, p.Decide(call("run_command", c.command)), c.command)
+	}
+	// 其他工具的限制规则不影响本工具。
+	require.Equal(t, Allow, p.Decide(call("other", "a; b")))
+}
+
+// 放行规则仍按原样精确匹配首词，带路径的命令不会因此被放行。
+func TestDecideAllowRulesStayExact(t *testing.T) {
+	p := &Policy{Rules: []Rule{{Tool: "run_command", Command: "go test", Decision: Allow}}, Default: Ask}
+	require.Equal(t, Ask, p.Decide(call("run_command", "/tmp/evil/go test")))
+	require.Equal(t, Allow, p.Decide(call("run_command", "go test ./...")))
+}

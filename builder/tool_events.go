@@ -11,9 +11,11 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/middleware"
 	"github.com/kart-io/goagent/core/usage"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/tools"
@@ -246,27 +248,29 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 		}
 		calls := make([]ToolCall, len(turn.ToolCalls))
 		ids := map[string]bool{}
+		// invalid 记录交还模型的无效调用，这些调用不执行。
+		invalid := map[int]string{}
 		for i, tc := range turn.ToolCalls {
 			if tc.ID == "" || ids[tc.ID] || tc.Function.Name == "" {
 				return nil, fmt.Errorf("工具调用 ID 或名称无效")
 			}
-			known := false
-			for _, offered := range tools {
-				if offered.Name() == tc.Function.Name {
-					known = true
-					break
-				}
-			}
-			if !known {
-				return nil, fmt.Errorf("model requested unoffered tool %q", tc.Function.Name)
-			}
 			ids[tc.ID] = true
 			calls[i] = ToolCall{Name: tc.Function.Name}
+			if !slices.ContainsFunc(tools, func(t interfaces.Tool) bool { return t.Name() == tc.Function.Name }) {
+				if !a.config.ToolErrorFeedback {
+					return nil, fmt.Errorf("model requested unoffered tool %q", tc.Function.Name)
+				}
+				invalid[i] = unofferedToolMessage(tc.Function.Name, tools)
+				continue
+			}
 			if durable.HasJournal(ctx) {
 				calls[i].ID = fmt.Sprintf("turn/%d/call/%s", round, tc.ID)
 			}
 			if err := json.Unmarshal([]byte(tc.Function.Arguments), &calls[i].Input); err != nil || calls[i].Input == nil {
-				return nil, fmt.Errorf("工具 %s 的参数必须为 JSON 对象", tc.Function.Name)
+				if !a.config.ToolErrorFeedback {
+					return nil, fmt.Errorf("工具 %s 的参数必须为 JSON 对象", tc.Function.Name)
+				}
+				invalid[i] = fmt.Sprintf("工具 %s 的参数必须为 JSON 对象，请修正后重新调用", tc.Function.Name)
 			}
 		}
 		messages = append(messages, llm.Message{Role: "assistant", Content: turn.Content, ReasoningContent: turn.ReasoningContent, ToolCalls: turn.ToolCalls, ProviderState: turn.ProviderState})
@@ -275,7 +279,7 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 		}
 		// 并发时 tool_start 在派发前按序发出，tool_end 在全部结束后按序发出，事件顺序与执行时序无关；
 		// Dispatcher 的结果回调同样推迟到全部结束后按序触发。
-		parallel := a.concurrentCalls(calls)
+		parallel := len(invalid) == 0 && a.concurrentCalls(calls)
 		var results []toolCallResult
 		if parallel {
 			if err := ctx.Err(); err != nil {
@@ -287,6 +291,11 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 				}
 			}
 			results = invokeConcurrently(ctx, calls, a.config.ParallelToolCalls, invoke)
+			for i := range results {
+				if out, ok := a.errorFeedback(ctx, results[i].err); ok {
+					results[i] = toolCallResult{output: out}
+				}
+			}
 			if err := parallelFailure(results); err != nil {
 				return nil, err
 			}
@@ -304,7 +313,13 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 				if err := emit(AgentEvent{Type: "step", Step: "tool_start", Tool: call.Name}); err != nil {
 					return nil, err
 				}
-				output, err = invoke(ctx, call)
+				if message, bad := invalid[i]; bad {
+					output = rejectedOutput(message)
+				} else if output, err = invoke(ctx, call); err != nil {
+					if out, ok := a.errorFeedback(ctx, err); ok {
+						output, err = out, nil
+					}
+				}
 			}
 			if waits := durable.Waits(err); waits != nil {
 				return nil, &WaitingError{Waits: waits}
@@ -436,6 +451,31 @@ func invokeConcurrently(ctx context.Context, calls []ToolCall, limit int, invoke
 }
 
 // isArgumentErrorResult 位于包级，避免被循环内的 tools 变量遮蔽。
+// errorFeedback 在开启 ToolErrorFeedback 时把可恢复的工具 error 转为交给模型的结果。
+// 持久运行不转换：失败结果不入日志，恢复时工具会重新执行，模型看到的历史将与日志不一致。
+func (a *ConfigurableAgent[C, S]) errorFeedback(ctx context.Context, err error) (*interfaces.ToolOutput, bool) {
+	if err == nil || !a.config.ToolErrorFeedback || durable.HasJournal(ctx) || ctx.Err() != nil {
+		return nil, false
+	}
+	var panicErr *agentErrors.PanicError
+	if durable.Waits(err) != nil || errors.Is(err, budget.ErrBudgetExceeded) || errors.As(err, &panicErr) {
+		return nil, false
+	}
+	return tools.Rejected("工具执行失败："+err.Error(), nil), true
+}
+
+// unofferedToolMessage 告诉模型本轮可用的工具，便于它改用正确的名称。
+func unofferedToolMessage(name string, offered []interfaces.Tool) string {
+	names := make([]string, len(offered))
+	for i, t := range offered {
+		names[i] = t.Name()
+	}
+	if len(names) == 0 {
+		return fmt.Sprintf("工具 %q 不存在，本轮不能调用工具，请直接回答", name)
+	}
+	return fmt.Sprintf("工具 %q 不存在，可用工具：%s", name, strings.Join(names, ", "))
+}
+
 func isArgumentErrorResult(out *interfaces.ToolOutput) bool {
 	_, ok := tools.ArgumentErrorResult(out)
 	return ok
@@ -445,6 +485,8 @@ func isRejectedResult(out *interfaces.ToolOutput) bool {
 	_, ok := tools.RejectedResult(out)
 	return ok
 }
+
+func rejectedOutput(message string) *interfaces.ToolOutput { return tools.Rejected(message, nil) }
 
 // rejectedMessage 同样位于包级，避免被循环内的 tools 变量遮蔽。
 func rejectedMessage(out *interfaces.ToolOutput) (string, bool) { return tools.RejectedResult(out) }

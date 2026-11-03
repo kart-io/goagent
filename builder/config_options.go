@@ -72,6 +72,9 @@ type AgentConfig struct {
 	// ParallelToolCalls 是同一轮可并发执行的工具调用数上限；小于 2（默认 0）时按顺序执行。
 	ParallelToolCalls int
 
+	// ToolErrorFeedback 把可恢复的工具失败作为工具结果交给模型，仅作用于原生工具流；见 WithToolErrorFeedback。
+	ToolErrorFeedback bool
+
 	// 循环扩展点与提示词组装，见 loop_hooks.go；仅作用于原生工具流。
 	PreStep              []preStep          `json:"-"`
 	RequestHooks         []RequestHook      `json:"-"`
@@ -170,6 +173,18 @@ func (b *AgentBuilder[C, S]) WithEmptyAnswerRetries(n int) *AgentBuilder[C, S] {
 // 某个调用失败不取消其他调用，全部结束后返回顺序最靠前的错误。
 func (b *AgentBuilder[C, S]) WithParallelToolCalls(n int) *AgentBuilder[C, S] {
 	b.config.ParallelToolCalls = max(n, 0)
+	return b
+}
+
+// WithToolErrorFeedback 让模型看到可恢复的工具失败并自行纠正，而不是中止运行（默认关闭）。
+//
+// [Advanced] 仅作用于原生工具流。开启后以下情况按业务拒绝（tools.Rejected）交给模型，占用正常的迭代额度：
+//   - 调用了本轮未提供的工具、参数不是 JSON 对象：由模型输出决定，持久运行中同样生效；
+//   - 工具返回 error：仅限非持久运行。持久运行无法记录失败结果，恢复时会重新执行，仍按原方式中止。
+//
+// 运行 ctx 已结束、预算耗尽、panic 与持久等待始终中止运行。
+func (b *AgentBuilder[C, S]) WithToolErrorFeedback() *AgentBuilder[C, S] {
+	b.config.ToolErrorFeedback = true
 	return b
 }
 

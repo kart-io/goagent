@@ -15,7 +15,7 @@ import (
 )
 
 // allowEmpty 为真时，正常结束的空回答按已完成记录，由调用方重问。
-func readJournaledTurn(ctx context.Context, round int, client llm.StreamClient, req *llm.CompletionRequest, tools []interfaces.Tool, allowEmpty bool, emit func(AgentEvent) error) (*llm.StreamChunk, error) {
+func readJournaledTurn(ctx context.Context, round int, client llm.StreamClient, req *llm.CompletionRequest, tools []interfaces.Tool, allowEmpty, feedback bool, emit func(AgentEvent) error) (*llm.StreamChunk, error) {
 	if err := llm.ValidateReasoningRequest(client, req); err != nil {
 		return nil, err
 	}
@@ -51,10 +51,11 @@ func readJournaledTurn(ctx context.Context, round int, client llm.StreamClient, 
 	if err != nil {
 		return nil, err
 	}
-	return modelOperation(ctx, fmt.Sprintf("model/turn/%d", round), intent, invoke, func(turn *llm.StreamChunk) error { return validateDurableTurn(turn, tools, allowEmpty) }, emit)
+	return modelOperation(ctx, fmt.Sprintf("model/turn/%d", round), intent, invoke, func(turn *llm.StreamChunk) error { return validateDurableTurn(turn, tools, allowEmpty, feedback) }, emit)
 }
 
-func validateDurableTurn(turn *llm.StreamChunk, tools []interfaces.Tool, allowEmpty bool) error {
+// feedback 为真时未提供的工具与非 JSON 参数照常提交，由工具循环交还模型。
+func validateDurableTurn(turn *llm.StreamChunk, tools []interfaces.Tool, allowEmpty, feedback bool) error {
 	if turn.FinishReason != "stop" && turn.FinishReason != "tool_calls" {
 		return fmt.Errorf("incomplete model turn")
 	}
@@ -89,10 +90,18 @@ func validateDurableTurn(turn *llm.StreamChunk, tools []interfaces.Tool, allowEm
 		case ids[call.ID]:
 			return fmt.Errorf("模型返回的工具 %q 调用 ID 重复", name)
 		case known[name] == nil:
+			if feedback {
+				ids[call.ID] = true
+				continue
+			}
 			return fmt.Errorf("模型请求了未提供的工具 %q", name)
 		}
 		var args map[string]any
 		if json.Unmarshal([]byte(call.Function.Arguments), &args) != nil || args == nil {
+			if feedback {
+				ids[call.ID] = true
+				continue
+			}
 			return fmt.Errorf("模型返回的工具 %q 参数不是 JSON 对象", name)
 		}
 		// 工具会把参数错误作为结果交还模型时，回合照常提交。
