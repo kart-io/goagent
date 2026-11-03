@@ -28,9 +28,9 @@ func TestJournaledTurnRetainsFailedUsageAndDoesNotRetry(t *testing.T) {
 			}
 			model := nativeModel([]*llm.StreamChunk{chunk})
 			emit := func(AgentEvent) error { return nil }
-			_, err = readJournaledTurn(ctx, 0, model, &llm.CompletionRequest{}, nil, false, emit)
+			_, err = readJournaledTurn(ctx, 0, model, &llm.CompletionRequest{}, nil, false, false, emit)
 			require.Error(t, err)
-			_, err = readJournaledTurn(ctx, 0, model, &llm.CompletionRequest{}, nil, false, emit)
+			_, err = readJournaledTurn(ctx, 0, model, &llm.CompletionRequest{}, nil, false, false, emit)
 			require.ErrorIs(t, err, durable.ErrOperationAttention)
 			require.Len(t, model.requests, 1)
 			record, err := durable.InspectOperation(ctx, "model/turn/0")
@@ -96,7 +96,7 @@ func TestInvalidToolPlanReportsReason(t *testing.T) {
 			require.NoError(t, err)
 			ctx := durable.WithJournal(durable.WithExecutionKey(context.Background(), "node"), store)
 			model := nativeModel([]*llm.StreamChunk{{Done: true, FinishReason: "tool_calls", ToolCalls: tc.calls}})
-			_, err = readJournaledTurn(ctx, 0, model, &llm.CompletionRequest{}, []interfaces.Tool{NewMockTool("lookup", "结果")}, false, func(AgentEvent) error { return nil })
+			_, err = readJournaledTurn(ctx, 0, model, &llm.CompletionRequest{}, []interfaces.Tool{NewMockTool("lookup", "结果")}, false, false, func(AgentEvent) error { return nil })
 			require.EqualError(t, err, tc.want)
 			record, err := durable.InspectOperation(ctx, "model/turn/0")
 			require.NoError(t, err)
