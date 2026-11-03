@@ -463,3 +463,34 @@ func TestLoopHooksDurableReplay(t *testing.T) {
 	require.EqualValues(t, 2, stops.Load(), "the journaled decision is replayed")
 	require.EqualValues(t, 2, contexts.Load())
 }
+
+// 最后一步的上下文与 Request 钩子能看到 Final，上下文能看到运行的截止时间。
+func TestPromptScopeFinalAndDeadline(t *testing.T) {
+	model := newScriptModel(callTool("c1", "lookup"), answer("答"))
+	var scopes []PromptScope
+	var finals []bool
+	agent, err := NewSimpleBuilder(model).WithTools(plainTool()).WithMaxIterations(2).WithTimeout(time.Minute).
+		WithPromptContexts(PromptContext{Name: "budget", Text: func(s PromptScope) string {
+			scopes = append(scopes, s)
+			if s.Final {
+				return "最后一步"
+			}
+			return ""
+		}}).
+		WithRequestHook(func(_ context.Context, r *ModelRequest) error {
+			finals = append(finals, r.Final)
+			return nil
+		}).Build()
+	require.NoError(t, err)
+	before := time.Now()
+	_, err = agent.AsRunnable().Invoke(context.Background(), "问")
+	require.NoError(t, err)
+	require.Equal(t, []bool{false, true}, finals)
+	require.Len(t, scopes, 2)
+	require.False(t, scopes[0].Final)
+	require.True(t, scopes[1].Final)
+	for _, s := range scopes {
+		require.WithinDuration(t, before.Add(time.Minute), s.Deadline, 5*time.Second)
+	}
+	require.Equal(t, stepContextMessage("最后一步"), lastMessages(model.request(1), 1)[0])
+}
