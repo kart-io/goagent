@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.39.1] - 2026-11-03
+
 ### Fixed
 
 - `llm/providers`：OpenAI 兼容的原生工具流（含 DeepSeek）在结束帧前断开时，返回的 `io.ErrUnexpectedEOF` 现在包成 `ProviderError`，`ClassifyError` 判为可重试，`RetryTransient` 会重发尚未输出文本的请求。原先它被归为未知错误，直接中止运行。`errors.Is(err, io.ErrUnexpectedEOF)` 仍成立。
