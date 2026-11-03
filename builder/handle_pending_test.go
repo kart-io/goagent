@@ -14,7 +14,7 @@ func TestHandleFailedTurnRetainsFollowup(t *testing.T) {
 	started, release := make(chan struct{}), make(chan struct{})
 	boom := errors.New("provider unavailable")
 	model := newScriptModel(answer("draft"))
-	agent, err := NewSimpleBuilder(model).WithTools(plainTool()).WithMaxIterations(2).
+	agent, err := NewSimpleBuilder(model).WithTools(plainTool()).WithMaxIterations(3).
 		WithTurnStopping(func(context.Context, *Stopping) (string, error) {
 			close(started)
 			<-release
@@ -34,7 +34,7 @@ func TestHandleFailedTurnRetainsFollowup(t *testing.T) {
 func TestHandlePendingInputsAtStoppingBoundary(t *testing.T) {
 	started, release := make(chan struct{}), make(chan struct{})
 	model := newScriptModel(answer("finished"))
-	agent, err := NewSimpleBuilder(model).WithTools(plainTool()).WithMaxIterations(2).
+	agent, err := NewSimpleBuilder(model).WithTools(plainTool()).WithMaxIterations(3).
 		WithTurnStopping(func(context.Context, *Stopping) (string, error) {
 			close(started) // The loop has already checked whether Steer should wake it.
 			<-release

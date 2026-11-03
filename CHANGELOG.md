@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `builder`：`Stopping.Blocked`，本轮由 TurnStopping 发起的续跑次数，不含 Steer 唤醒。验证类钩子据此限制重试，用户 Steer 后仍会执行。
+
+### Changed
+
+- `builder`：TurnStopping 只在续跑后还剩至少一步带工具的请求时执行。原先倒数第二步也会续跑，但下一步不提供工具，模型无法按反馈修改。额度不足、没有询问钩子就结束时，结果元数据记 `turn_stopping_skipped: true`，宿主可据此识别未经确认的答复。
+
 ## [0.38.1] - 2026-11-03
 
 ### Fixed

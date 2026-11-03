@@ -132,12 +132,15 @@ func RetryTransient(retries int, backoff func(retry int) time.Duration) RequestE
 type Stopping struct {
 	Step   int
 	Answer string
-	// Continued 是本轮已经续跑的次数（Steer 唤醒与 TurnStopping），钩子可据此避免无限续跑。
+	// Continued 是本轮已经续跑的次数（Steer 唤醒与 TurnStopping）。
 	Continued int
+	// Blocked 是本轮由 TurnStopping 发起的续跑次数，不含 Steer 唤醒；钩子据此限制重试，避免无限续跑。
+	Blocked int
 }
 
 // TurnStoppingHook 在模型给出最终答复、收件箱没有待处理的 Steer 时执行；返回非空字符串时把它作为 user 消息追加并续跑
-// （目标驱动、Claude Code Stop 钩子）。没有剩余额度时不再续跑，按原答复结束。
+// （目标驱动、Claude Code Stop 钩子）。续跑后须至少还有一步带工具的请求，否则不执行，按原答复结束，
+// 并在结果元数据中记 turn_stopping_skipped。
 type TurnStoppingHook func(ctx context.Context, stopping *Stopping) (continueWith string, err error)
 
 // PromptScope 是计算提示词段落与上下文时可用的信息。
@@ -346,15 +349,12 @@ func (a *ConfigurableAgent[C, S]) runPreStep(ctx context.Context, round, inputs 
 	return o.Messages, o.Result, err
 }
 
-func (a *ConfigurableAgent[C, S]) runTurnStopping(ctx context.Context, round, continued int, answer string) (string, error) {
-	if len(a.config.TurnStopping) == 0 {
-		return "", nil
-	}
-	return journaled(ctx, fmt.Sprintf("loop/stopping/%d", round), func(ctx context.Context) (string, error) {
+func (a *ConfigurableAgent[C, S]) runTurnStopping(ctx context.Context, stopping *Stopping) (string, error) {
+	return journaled(ctx, fmt.Sprintf("loop/stopping/%d", stopping.Step), func(ctx context.Context) (string, error) {
 		for _, hook := range a.config.TurnStopping {
 			var next string
 			if err := callHook("TurnStopping", func() (e error) {
-				next, e = hook(ctx, &Stopping{Step: round, Answer: answer, Continued: continued})
+				next, e = hook(ctx, stopping)
 				return
 			}); err != nil {
 				return "", err
