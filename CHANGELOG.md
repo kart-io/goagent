@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `builder`：`WithReplayablePartialOutput` 声明调用方只使用最终结果或能丢弃中途输出。开启后模型请求输出了部分内容再失败时，`RetryTransient` 照常重发。DeepSeek 过载时常先输出几个字节再停住，原先这类失败一律不重试，`Invoke` 调用也是如此。
+
+### Fixed
+
+- `builder` 测试：已输出内容后不重试的用例原先用了不可重试的错误，没有真正覆盖这条规则，改用 503。
+
 ## [0.41.0] - 2026-11-03
 
 ### Added
