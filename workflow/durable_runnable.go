@@ -49,8 +49,9 @@ func (d *DurableGraph[T]) AsRunnable() *core.StreamRunnable[RunRequest[T], *Grap
 	}).WithDescription(func() any { return describe(d.graph) })
 }
 
-// ChildContinuation 是嵌套运行的图在审批暂停时放进 durable.WaitError 的定位信息。
-// 宿主续跑时用 durable.WithResume(ctx, 等待处的执行键, ApprovalKey) 提供批准。
+// ChildContinuation 是嵌套运行的图在审批暂停或中断等待时放进 durable.WaitError 的定位信息。
+// 审批暂停时用 durable.WithResume(ctx, 等待处的执行键, ApprovalKey) 提供批准；中断等待时 ApprovalKey 为空，
+// 须用 Interrupts[i].Key（最内层中断键）回应。
 type ChildContinuation struct {
 	RunID       string `json:"run_id"`
 	Node        string `json:"node"`
@@ -113,8 +114,10 @@ func (d *DurableGraph[T]) AsChildRunnable() *core.RunnableFunc[T, T] {
 		store := durable.JournalStore(ctx)
 		// 续跑输入只用于仍在等待的图；已越过审批后中断再进入时，宿主多半还带着同一输入。
 		approvalKey, ok := durable.ResumeInput(ctx)
+		var current *GraphSnapshot[T]
 		if ok {
-			current, err := d.snapshot(ctx, store, id)
+			var err error
+			current, err = d.snapshot(ctx, store, id)
 			switch {
 			case errors.Is(err, os.ErrNotExist):
 				approvalKey = ""
@@ -139,6 +142,10 @@ func (d *DurableGraph[T]) AsChildRunnable() *core.RunnableFunc[T, T] {
 			}
 			approvalKey, input = req.Key, req.Input
 		}
+		// 审批后节点进入中断等待时 Key 不变；带着已消费的审批键再来不是审批不符，叶子中断输入照常生效。
+		if approvalKey != "" && current != nil && len(current.Interrupts) > 0 && approvalKey == current.Key {
+			approvalKey, input = "", nil
+		}
 		snapshot, err := d.run(ctx, store, id, initial, approvalKey, input, func(core.StreamChunk[*GraphSnapshot[T]]) error { return nil })
 		// 审批暂停与未被采纳的审批报告为等待，避免上层把这次续跑记成失败而无法再续；其他错误照常失败。
 		reason, waiting := approvalWait(err)
@@ -156,7 +163,12 @@ func (d *DurableGraph[T]) AsChildRunnable() *core.RunnableFunc[T, T] {
 }
 
 func childWait[T any](id string, snapshot *GraphSnapshot[T], reason string) error {
-	continuation, err := json.Marshal(ChildContinuation{RunID: id, Node: snapshot.Node, ApprovalKey: snapshot.Key, Rejected: reason != "", Reason: reason, Interrupts: snapshot.Interrupts})
+	approvalKey := snapshot.Key
+	if len(snapshot.Interrupts) > 0 {
+		// 中断等待时 Key 是节点意图键，不能用来回应，避免宿主误当作审批键。
+		approvalKey = ""
+	}
+	continuation, err := json.Marshal(ChildContinuation{RunID: id, Node: snapshot.Node, ApprovalKey: approvalKey, Rejected: reason != "", Reason: reason, Interrupts: snapshot.Interrupts})
 	if err != nil {
 		return err
 	}

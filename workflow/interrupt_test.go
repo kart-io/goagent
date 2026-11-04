@@ -418,6 +418,7 @@ func TestChildRunnableReportsInterruptsAndAcceptsWrappedResume(t *testing.T) {
 	_, err := durable.Do(ctx, "tool/c1", json.RawMessage(`{}`), policy, run)
 	c := childContinuation(t, err)
 	require.Len(t, c.Interrupts, 1)
+	require.Empty(t, c.ApprovalKey, "中断等待时不暴露节点意图键")
 	waits := durable.Waits(err)
 	opKey := waits[0].Path[len(waits[0].Path)-1].Key
 
@@ -432,6 +433,79 @@ func TestChildRunnableReportsInterruptsAndAcceptsWrappedResume(t *testing.T) {
 	wrapped, err = workflow.WithResume(ctx, opKey, workflow.ResumeRequest{Key: c.Interrupts[0].Key, Input: json.RawMessage(`5`)})
 	require.NoError(t, err)
 	rec, err := durable.Do(wrapped, "tool/c1", json.RawMessage(`{}`), policy, run)
+	require.NoError(t, err)
+	require.JSONEq(t, `15`, string(rec.Value))
+}
+
+func TestNodeInterruptEmptyValidateErrorIsRejection(t *testing.T) {
+	ctx := context.Background()
+	store := newStore(t)
+	run, err := oneNode(t, func(ctx context.Context, n int) (int, error) {
+		_, err := durable.AwaitInput(ctx, "amount", json.RawMessage(`{}`), func(json.RawMessage) error { return errors.New("") })
+		return n, err
+	}).CompileDurable(ctx, workflow.DurableConfig{Store: store, Version: "empty-v1"})
+	require.NoError(t, err)
+	snap, err := run.Run(ctx, "ask", 1, "")
+	require.ErrorIs(t, err, durable.ErrApprovalRequired)
+
+	var rejected *workflow.ResumeRejectedError
+	snap, err = run.Resume(ctx, "ask", workflow.ResumeRequest{Key: snap.Interrupts[0].Key, Input: json.RawMessage(`1`)})
+	require.ErrorAs(t, err, &rejected)
+	require.True(t, snap.Interrupts[0].Rejected)
+	require.Equal(t, durable.ReasonRejected, snap.Interrupts[0].Reason)
+}
+
+func TestParallelFailureWinsOverInterrupt(t *testing.T) {
+	ctx := context.Background()
+	store := newStore(t)
+	var a atomic.Int32
+	failing := workflow.Branch[int]{Name: "f", Run: func(context.Context, int) (int, error) { return 0, errDisk }}
+	run, err := parallelGraph(t, 2, []workflow.Branch[int]{askBranch("a", &a), failing}, sumBranches).
+		CompileDurable(ctx, workflow.DurableConfig{Store: store, Version: "par-v1"})
+	require.NoError(t, err)
+	_, err = run.Run(ctx, "par", 1, "")
+	require.ErrorIs(t, err, errDisk)
+	require.NotErrorIs(t, err, durable.ErrApprovalRequired)
+}
+
+// approvedChild 是先审批再向人要输入的子图，以及在可续跑父操作内运行它的函数。
+func approvedChild(t *testing.T, store durable.Store, prepared *atomic.Int32) func(context.Context) (json.RawMessage, error) {
+	t.Helper()
+	cfg := workflow.DurableConfig{Store: store, Version: "ask-v1", ApprovalNodes: []string{"effect"}}
+	child, err := oneNode(t, askNode(prepared)).CompileDurable(context.Background(), cfg)
+	require.NoError(t, err)
+	return func(ctx context.Context) (json.RawMessage, error) {
+		out, err := child.AsChildRunnable().Invoke(ctx, 10)
+		if err != nil {
+			return nil, err
+		}
+		return json.Marshal(out)
+	}
+}
+
+func TestChildInterruptAfterApprovalIgnoresUsedApprovalKey(t *testing.T) {
+	base := newStore(t)
+	ctx := durable.WithJournal(durable.WithExecutionKey(context.Background(), "parent"), base)
+	var prepared atomic.Int32
+	run := approvedChild(t, base, &prepared)
+	policy := durable.OperationPolicy{MaxAttempts: 3, Resumable: true}
+	_, err := durable.Do(ctx, "tool/c1", json.RawMessage(`{}`), policy, run)
+	approval := childContinuation(t, err)
+	require.NotEmpty(t, approval.ApprovalKey)
+	require.Empty(t, approval.Interrupts)
+	waits := durable.Waits(err)
+	opKey := waits[0].Path[len(waits[0].Path)-1].Key
+
+	approved := durable.WithResume(ctx, opKey, approval.ApprovalKey)
+	_, err = durable.Do(approved, "tool/c1", json.RawMessage(`{}`), policy, run)
+	interrupted := childContinuation(t, err)
+	require.False(t, interrupted.Rejected, "已用过的审批键不是审批不符")
+	require.Len(t, interrupted.Interrupts, 1)
+	require.Empty(t, interrupted.ApprovalKey, "中断等待时不暴露节点意图键")
+
+	// 宿主沿用带旧审批键的 ctx，再叠加叶子中断输入。
+	both := durable.WithResume(approved, interrupted.Interrupts[0].Key, `5`)
+	rec, err := durable.Do(both, "tool/c1", json.RawMessage(`{}`), policy, run)
 	require.NoError(t, err)
 	require.JSONEq(t, `15`, string(rec.Value))
 }

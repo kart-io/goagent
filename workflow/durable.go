@@ -68,6 +68,7 @@ type GraphSnapshot[T any] struct {
 	Node    string
 	Steps   int
 	Routing bool
+	// Key 是审批等待时 Resume 要用的键；Interrupts 非空时它只是节点意图键，不能用来回应，须用 Interrupts[i].Key。
 	Key     string
 	Waiting bool
 	Done    bool
