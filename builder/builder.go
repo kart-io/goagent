@@ -120,6 +120,11 @@ func (b *AgentBuilder[C, S]) BuildContext(ctx context.Context) (*ConfigurableAge
 	if b.retriever != nil && isNilRetriever(b.retriever) {
 		return nil, agentErrors.NewInvalidConfigError("builder", "retriever", "retriever must not be a typed nil")
 	}
+	if b.retrievalConfig.Filter != nil {
+		if _, ok := b.retriever.(interfaces.RequestRetriever); !ok {
+			return nil, agentErrors.NewInvalidConfigError("builder", "retrieval", "retrieval filter requires an interfaces.RequestRetriever")
+		}
+	}
 	if b.retrievalConfig.MaxDocuments < 0 || b.retrievalConfig.MaxContextRunes < 0 {
 		return nil, agentErrors.NewInvalidConfigError("builder", "retrieval", "retrieval limits must not be negative")
 	}

@@ -91,7 +91,7 @@ return builder.NewSimpleBuilder(client).
 
 | 方法 | 默认值 | 说明 |
 |---|---|---|
-| `WithRetriever(interfaces.DocumentRetriever, ...RetrievalConfig)` | 4 篇、12000 字符 | 每次请求检索证据，来源写入输出元数据 `retrieval_sources` |
+| `WithRetriever(interfaces.DocumentRetriever, ...RetrievalConfig)` | 4 篇、12000 字符 | 每次请求检索证据，来源写入输出元数据 `retrieval_sources`；`RetrievalConfig.Filter` 按请求生成元数据过滤条件，需检索器实现 `interfaces.RequestRetriever` |
 | `WithMemory(interfaces.MemoryManager)` | 无 | 对话记忆；配置 `WithSessionLog` 时不再读取记忆 |
 | `WithMemoryFailurePolicy(MemoryFailurePolicy)` | `MemoryFailureBestEffort` | `MemoryFailureStrict` 在记忆读写失败时返回错误 |
 | `WithMaxConversationHistory(int)` | 20 | 加载的历史轮数，0 或负数不限制 |
