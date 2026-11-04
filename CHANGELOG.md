@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- 持久图节点返回中断等待时记为暂停而非失败；并行节点中分支等待不再取消兄弟分支。迁移：依赖“节点返回 `*durable.WaitError` 即失败”的宿主需改为处理 `ErrApprovalRequired` 与 `Snapshot.Interrupts`；已有工具开启中断时须提升版本，并等进行中的运行结束后再切换。
+- 持久图节点返回中断等待时记为暂停而非失败；并行节点中分支等待不再取消兄弟分支。迁移：依赖“节点返回 `*durable.WaitError` 即失败”的宿主需改为处理 `ErrApprovalRequired` 与 `Snapshot.Interrupts`；已有工具开启中断时须提升版本，并等进行中的运行结束后再切换。`Interrupts` 非空时须用 `Interrupts[i].Key` 回应，不要用 `Key` 或 `ChildContinuation.ApprovalKey`（此时为空）。
 
 ### Fixed
 

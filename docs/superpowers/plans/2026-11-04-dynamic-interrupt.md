@@ -26,6 +26,7 @@
 - 工具开关是 `FunctionToolBuilder.WithInterruptible(version string)`，不是 `WithInterruptible()`。原因：Dispatcher 对实现了 `DurableIntentVersioner` 却返回空版本的工具直接报错（`tools/dispatcher.go:156-158`），FunctionTool 不能无条件实现它。开启中断必须声明版本，这也让 FunctionTool 的策略迁移可以被检测：版本变化会改变 intent 哈希，旧记录报 "operation intent or attempt policy changed"。“只改 Resumable 不报错”的现状只对自行实现 `DurablePolicyProvider` 的工具成立，用 durable 层的测试固定。
 - 离线示例用工作流节点中断演示，不用工具中断：工具中断需要模型的原生工具调用，离线示例无法提供。工具中断由 builder 测试覆盖。
 - 恢复期间检查点保持中断等待，不在重新执行节点前清除。节点完成后正常推进时自然清除；重新执行中途崩溃，检查点仍是等待状态，可以按“已回应”规则恢复。
+- 只有中断等待（来自 `AwaitInput`，可经子图逐层上报）会让节点暂停；节点内的其他等待（如子图的审批等待）仍按节点失败处理，因为节点重入无法替其提供审批键。
 
 ## 文件结构
 

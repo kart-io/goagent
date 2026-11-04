@@ -19,11 +19,8 @@ type ResumeRequest struct {
 	Input json.RawMessage `json:"input,omitempty"`
 }
 
-// ResumeRejectedError means human input was not accepted and the node did not
-// advance. The host may correct the input and retry the same waiting key. When a
-// dynamic interrupt's validator rejects the input, only that interrupt's
-// Rejected/Reason in the checkpoint are updated.
-// Storage errors, cancellation and panics are not input rejection.
+// ResumeRejectedError 表示人工输入未被采纳，节点没有推进；宿主可以改正输入后用同一等待键重试。
+// 中断的 validate 拒绝时，检查点里只更新该中断的 Rejected/Reason。存储失败、取消和 panic 不属于输入拒绝。
 type ResumeRejectedError struct{ Err error }
 
 func (e *ResumeRejectedError) Error() string { return "resume input rejected: " + e.Err.Error() }

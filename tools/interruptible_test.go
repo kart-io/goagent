@@ -83,7 +83,7 @@ func TestInterruptibleToolRequiresVersion(t *testing.T) {
 	reg := NewRegistry()
 	require.NoError(t, reg.Register(tool))
 	_, err := NewDispatcher(reg, DispatchConfig{})
-	require.ErrorContains(t, err, "version")
+	require.ErrorContains(t, err, "必须声明版本")
 }
 
 // FunctionTool 开启中断必须声明版本，intent 哈希随之变化，旧记录会被检测到，不会悄悄按新策略处理。

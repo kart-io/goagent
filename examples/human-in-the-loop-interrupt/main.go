@@ -37,7 +37,7 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 		return err
 	}
 	if *dir == "" || flags.NArg() > 0 {
-		return errors.New("provide -dir and no positional arguments")
+		return errors.New("需要提供 -dir，且不接受位置参数")
 	}
 	store, err := durable.NewFileStore(*dir)
 	if err != nil {
