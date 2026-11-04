@@ -3,6 +3,7 @@ package workflow
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"sync"
@@ -122,6 +123,7 @@ func runDurableParallel[T any](ctx context.Context, input T, cfg ParallelConfig[
 	// Dispatch on the coordinator so event delivery and snapshot writes are serial.
 	sent, received := 0, 0
 	var firstErr error
+	var waits []error
 	for received < len(pending) {
 		var dispatch chan int
 		index := 0
@@ -143,6 +145,11 @@ func runDurableParallel[T any](ctx context.Context, input T, cfg ParallelConfig[
 			received++
 			name := cfg.Branches[done.index].Name
 			if done.err != nil {
+				// 等待不是失败：不取消兄弟分支，等全部结束后汇总。
+				if durable.Waits(done.err) != nil {
+					waits = append(waits, fmt.Errorf("parallel branch %q: %w", name, done.err))
+					continue
+				}
 				if firstErr == nil {
 					firstErr = fmt.Errorf("parallel branch %q: %w", name, done.err)
 					cancel()
@@ -184,6 +191,10 @@ func runDurableParallel[T any](ctx context.Context, input T, cfg ParallelConfig[
 		received++
 		name := cfg.Branches[done.index].Name
 		if done.err != nil {
+			if durable.Waits(done.err) != nil {
+				waits = append(waits, fmt.Errorf("parallel branch %q: %w", name, done.err))
+				continue
+			}
 			if firstErr == nil {
 				firstErr = fmt.Errorf("parallel branch %q: %w", name, done.err)
 			}
@@ -202,6 +213,9 @@ func runDurableParallel[T any](ctx context.Context, input T, cfg ParallelConfig[
 	workers.Wait()
 	if firstErr != nil {
 		return result, firstErr
+	}
+	if len(waits) > 0 {
+		return result, errors.Join(waits...)
 	}
 	if err = ctx.Err(); err != nil {
 		return result, err

@@ -272,3 +272,81 @@ func TestInterruptThroughRunnableEmitsEvent(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 14, out.State)
 }
+
+func askBranch(name string, calls *atomic.Int32) workflow.Branch[int] {
+	return workflow.Branch[int]{Name: name, Run: func(ctx context.Context, n int) (int, error) {
+		calls.Add(1)
+		raw, err := durable.AwaitInput(ctx, "value", json.RawMessage(`{"branch":"`+name+`"}`), positiveInt)
+		if err != nil {
+			return 0, err
+		}
+		var v int
+		if err := json.Unmarshal(raw, &v); err != nil {
+			return 0, err
+		}
+		return n + v, nil
+	}}
+}
+
+func interruptFor(t *testing.T, snap *workflow.GraphSnapshot[int], branch string) workflow.InterruptPoint {
+	t.Helper()
+	for _, p := range snap.Interrupts {
+		if strings.Contains(string(p.Info), `"`+branch+`"`) {
+			return p
+		}
+	}
+	t.Fatalf("没有分支 %s 的中断：%+v", branch, snap.Interrupts)
+	return workflow.InterruptPoint{}
+}
+
+func TestParallelInterruptsDoNotCancelSiblings(t *testing.T) {
+	ctx := context.Background()
+	store := newStore(t)
+	var a, b, c atomic.Int32
+	plain := workflow.Branch[int]{Name: "c", Run: func(_ context.Context, n int) (int, error) { c.Add(1); return n * 10, nil }}
+	run, err := parallelGraph(t, 3, []workflow.Branch[int]{askBranch("a", &a), askBranch("b", &b), plain}, sumBranches).
+		CompileDurable(ctx, workflow.DurableConfig{Store: store, Version: "par-v1"})
+	require.NoError(t, err)
+
+	snap, err := run.Run(ctx, "par", 1, "")
+	require.ErrorIs(t, err, durable.ErrApprovalRequired)
+	require.Len(t, snap.Interrupts, 2)
+	require.EqualValues(t, 1, c.Load())
+
+	snap, err = run.Resume(ctx, "par", workflow.ResumeRequest{Key: interruptFor(t, snap, "a").Key, Input: json.RawMessage(`2`)})
+	require.ErrorIs(t, err, durable.ErrApprovalRequired)
+	require.Len(t, snap.Interrupts, 1)
+	interruptFor(t, snap, "b")
+	require.EqualValues(t, 1, c.Load(), "已完成的兄弟分支不重跑")
+
+	out, err := run.Resume(ctx, "par", workflow.ResumeRequest{Key: interruptFor(t, snap, "b").Key, Input: json.RawMessage(`3`)})
+	require.NoError(t, err)
+	require.Equal(t, 3+4+10, out.State)
+}
+
+func TestParallelPartialAnswerSurvivesCrash(t *testing.T) {
+	ctx := context.Background()
+	base := newStore(t)
+	store := &filterFailStore{Store: base}
+	var a, b atomic.Int32
+	run, err := parallelGraph(t, 2, []workflow.Branch[int]{askBranch("a", &a), askBranch("b", &b)}, sumBranches).
+		CompileDurable(ctx, workflow.DurableConfig{Store: store, Version: "par-v1"})
+	require.NoError(t, err)
+	snap, err := run.Run(ctx, "par", 1, "")
+	require.ErrorIs(t, err, durable.ErrApprovalRequired)
+
+	// A 的输入写入日志后，保存 A 的分支输出失败：检查点仍等待 A 与 B。
+	store.fail = func(v *durable.Snapshot) bool { return !bytes.Contains(v.Data, []byte(`"outputs":{}`)) }
+	_, err = run.Resume(ctx, "par", workflow.ResumeRequest{Key: interruptFor(t, snap, "a").Key, Input: json.RawMessage(`2`)})
+	require.ErrorIs(t, err, errDisk)
+	store.fail = nil
+
+	snap, err = run.Run(ctx, "par", 0, "")
+	require.ErrorIs(t, err, durable.ErrApprovalRequired)
+	require.Len(t, snap.Interrupts, 1, "只剩 B")
+	interruptFor(t, snap, "b")
+
+	out, err := run.Resume(ctx, "par", workflow.ResumeRequest{Key: snap.Interrupts[0].Key, Input: json.RawMessage(`3`)})
+	require.NoError(t, err)
+	require.Equal(t, 3+4, out.State)
+}
