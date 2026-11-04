@@ -13,9 +13,7 @@ const (
 	ProviderCustom      Provider = "custom"
 
 	// New providers
-	ProviderAnthropic   Provider = "anthropic"
-	ProviderCohere      Provider = "cohere"
-	ProviderHuggingFace Provider = "huggingface"
+	ProviderAnthropic Provider = "anthropic"
 )
 
 // Environment variable names for API keys and configuration
@@ -29,16 +27,6 @@ const (
 	EnvAnthropicAPIKey  = "ANTHROPIC_API_KEY"
 	EnvAnthropicBaseURL = "ANTHROPIC_BASE_URL"
 	EnvAnthropicModel   = "ANTHROPIC_MODEL"
-
-	// Cohere
-	EnvCohereAPIKey  = "COHERE_API_KEY"
-	EnvCohereBaseURL = "COHERE_BASE_URL"
-	EnvCohereModel   = "COHERE_MODEL"
-
-	// Hugging Face
-	EnvHuggingFaceAPIKey  = "HUGGINGFACE_API_KEY"
-	EnvHuggingFaceBaseURL = "HUGGINGFACE_BASE_URL"
-	EnvHuggingFaceModel   = "HUGGINGFACE_MODEL"
 
 	// Kimi (Moonshot)
 	EnvKimiAPIKey  = "KIMI_API_KEY"

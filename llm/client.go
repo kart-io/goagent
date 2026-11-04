@@ -10,19 +10,11 @@ import (
 	"github.com/kart-io/goagent/llm/constants"
 )
 
-// Client 定义 LLM 客户端接口
+// Client 是 LLM 客户端的唯一必需接口：流式补全加提供商标识。
+// 需要完整响应时用 Complete 收集流；调用方停止读取时必须取消 ctx。
 type Client interface {
-	// Complete 生成文本补全
-	Complete(ctx context.Context, req *CompletionRequest) (*CompletionResponse, error)
-
-	// Chat 进行对话
-	Chat(ctx context.Context, messages []Message) (*CompletionResponse, error)
-
-	// Provider 返回提供商类型
+	CompleteStream(ctx context.Context, req *CompletionRequest) (<-chan *StreamChunk, error)
 	Provider() constants.Provider
-
-	// IsAvailable 检查 LLM 是否可用
-	IsAvailable() bool
 }
 
 // Message 定义聊天消息

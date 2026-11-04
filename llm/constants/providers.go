@@ -17,31 +17,7 @@ const (
 const (
 	// Anthropic
 	AnthropicBaseURL      = "https://api.anthropic.com"
-	AnthropicDefaultModel = "claude-3-5-sonnet-20241022"
-	AnthropicAPIVersion   = "2023-06-01"
-	AnthropicMaxAttempts  = 3
-	AnthropicBaseDelay    = 1 * time.Second
-	AnthropicMaxDelay     = 30 * time.Second
-	AnthropicMessagesPath = "/v1/messages"
-
-	// Cohere
-	CohereBaseURL      = "https://api.cohere.ai"
-	CohereDefaultModel = "command-r-plus"
-	CohereChatEndpoint = "/v1/chat"
-	CohereChatPath     = "/v1/chat"
-	CohereMaxAttempts  = 3
-	CohereBaseDelay    = 1 * time.Second
-	CohereMaxDelay     = 30 * time.Second
-
-	// Hugging Face
-	HuggingFaceBaseURL              = "https://api-inference.huggingface.co"
-	HuggingFaceDefaultModel         = "meta-llama/Meta-Llama-3-8B-Instruct"
-	HuggingFaceDefaultMaxTokens     = 2000
-	HuggingFaceTimeout              = 120 * time.Second
-	HuggingFaceMaxAttempts          = 5
-	HuggingFaceBaseDelay            = 3 * time.Second
-	HuggingFaceMaxDelay             = 60 * time.Second
-	HuggingFaceDefaultEstimatedTime = 20
+	AnthropicDefaultModel = "claude-opus-5-5"
 
 	// Kimi (Moonshot AI)
 	KimiBaseURL = "https://api.moonshot.cn/v1"
@@ -61,20 +37,17 @@ const (
 
 // HTTP Headers
 const (
-	HeaderContentType      = "Content-Type"
-	HeaderAuthorization    = "Authorization"
-	HeaderAPIKey           = "x-api-key"
-	HeaderXAPIKey          = "x-api-key"
-	HeaderAccept           = "Accept"
-	HeaderRetryAfter       = "Retry-After"
-	HeaderAnthropicVersion = "anthropic-version"
+	HeaderContentType   = "Content-Type"
+	HeaderAuthorization = "Authorization"
+	HeaderAPIKey        = "x-api-key"
+	HeaderAccept        = "Accept"
+	HeaderRetryAfter    = "Retry-After"
 )
 
 // Content Types
 const (
 	ContentTypeJSON        = "application/json"
 	ContentTypeEventStream = "text/event-stream"
-	AcceptEventStream      = "text/event-stream"
 )
 
 // Authorization prefixes
@@ -88,11 +61,6 @@ const (
 	RoleSystem    = "system"
 	RoleUser      = "user"
 	RoleAssistant = "assistant"
-
-	// Cohere specific roles
-	CohereRoleUser    = "USER"
-	CohereRoleChatbot = "CHATBOT"
-	CohereRoleSystem  = "SYSTEM"
 )
 
 // HTTP connection pooling
@@ -143,21 +111,10 @@ const (
 	StreamEventError   = "error"
 )
 
-// SSE (Server-Sent Events) constants
-const (
-	SSEDataPrefix  = "data: "
-	SSEDoneMessage = "[DONE]"
-)
-
 // Stream event type constants
 const (
 	// Anthropic events
-	EventContentBlockDelta = "content_block_delta"
-	EventMessageStart      = "message_start"
-	EventMessageDelta      = "message_delta"
-	EventMessageStop       = "message_stop"
-
-	// Cohere events
-	EventTextGeneration = "text-generation"
-	EventStreamEnd      = "stream-end"
+	EventMessageStart = "message_start"
+	EventMessageDelta = "message_delta"
+	EventMessageStop  = "message_stop"
 )

@@ -1,34 +1,35 @@
 # llm LLM 集成层
 
-`llm` 定义模型客户端接口、消息与流式类型、配置选项和错误分类；`llm/providers` 提供各提供商的实现。接口与选项的完整说明见 [LLM API 参考](../docs/api/LLM_API.md)，每个 Provider 的配置与默认值见 [LLM 提供商指南](../docs/guides/LLM_PROVIDERS.md)，实际支持的字符串流、结构化流、工具与 Embedding 以 [能力矩阵](../docs/guides/PROVIDER_CAPABILITIES.md) 为准。
+`llm` 定义模型客户端接口、消息与流式类型、配置选项和错误分类；`llm/providers` 提供各提供商的实现。接口与选项的完整说明见 [LLM API 参考](../docs/api/LLM_API.md)，每个 Provider 的配置与默认值见 [LLM 提供商指南](../docs/guides/LLM_PROVIDERS.md)，实际支持的原生工具流与 Embedding 以 [能力矩阵](../docs/guides/PROVIDER_CAPABILITIES.md) 为准。
 
 ## 包结构
 
 ```text
 llm/
 ├── client.go         # Client、Message、CompletionRequest/Response、LLMOptions
-├── stream_client.go  # StreamClient、StreamChunk、StreamReader/Writer
+├── complete.go       # Complete、Chat：把流收集为完整响应
+├── stream_client.go  # ToolStreamClient、StreamChunk、StreamReader/Writer
 ├── capabilities.go   # Capability、CapabilityChecker、可选接口与 Has*/As* 检测函数
-├── tools.go          # ToolCall、ToolCallResponse、ToolChunk
+├── tools.go          # ToolCall 与默认参数
 ├── provider_error.go # ProviderError、ClassifyError
 ├── options.go        # ClientOption（With*）
 ├── common/           # BaseProvider、重试、HTTP 错误映射、消息转换
 ├── constants/        # Provider 常量、环境变量名、默认值
-├── providers/        # OpenAI、Anthropic、Gemini、DeepSeek、Cohere、HuggingFace、Ollama、Kimi、SiliconFlow
+├── providers/        # OpenAI、Anthropic、Gemini、DeepSeek、Ollama、Kimi、SiliconFlow
 └── cache/            # 基于向量相似度的语义缓存
 ```
 
 ## 能力概览
 
-| Provider | 结构化流 `StreamClient` | 原生工具流 `ToolStreamClient` | 字符串流 | 声明 Embedding |
-|---|:---:|:---:|:---:|:---:|
-| OpenAI | ✓ | ✓ | ✓ | ✓ |
-| DeepSeek | ✓ | ✓ | ✓ | - |
-| Gemini | ✓ | ✓ | ✓ | ✓ |
-| Anthropic、Cohere、HuggingFace | - | - | ✓ | - |
-| Kimi、SiliconFlow、Ollama | - | - | - | - |
+| Provider | 原生工具流 `ToolStreamClient` | 声明 Embedding |
+|---|:---:|:---:|
+| OpenAI | ✓ | ✓ |
+| DeepSeek | ✓ | - |
+| Gemini | ✓ | ✓ |
+| Anthropic（官方 SDK） | ✓ | - |
+| Kimi、SiliconFlow、Ollama（OpenAI 兼容预设） | ✓ | - |
 
-所有 Provider 都实现 `Complete` / `Chat` 与 `CapabilityChecker`。Builder 的 `AsRunnable` / `ExecuteStream` 需要结构化流，原生工具循环需要 `ToolStreamClient`。用 `llm.HasStreaming`、`llm.HasToolStreaming` 检查接口；`CapabilityStreaming` 不能证明支持结构化流。
+`llm.Client` 只有 `CompleteStream` 与 `Provider`，所有 Provider 都实现它与 `CapabilityChecker`；需要完整响应时用 `llm.Complete` / `llm.Chat` 收集流。原生工具循环需要 `ToolStreamClient`，用 `llm.HasToolStreaming` 检查接口。
 
 ## 创建客户端与对话
 
@@ -42,7 +43,7 @@ if err != nil {
     return err
 }
 
-resp, err := client.Chat(ctx, []llm.Message{
+resp, err := llm.Chat(ctx, client, []llm.Message{
     llm.SystemMessage("你是一个有帮助的助手"),
     llm.UserMessage("你好！"),
 })
@@ -57,13 +58,9 @@ fmt.Println(resp.Content)
 ## 流式响应
 
 ```go
-sc := llm.AsStreamClient(client)
-if sc == nil {
-    return errors.New("该 Provider 不支持结构化流")
-}
 ctx, cancel := context.WithCancel(ctx)
 defer cancel() // 提前退出时释放连接
-chunks, err := sc.ChatStream(ctx, messages)
+chunks, err := client.CompleteStream(ctx, &llm.CompletionRequest{Messages: messages})
 if err != nil {
     return err
 }
@@ -122,7 +119,7 @@ Gemini 的向量模型通过 `llm.WithEmbeddingModel` 或 `GEMINI_EMBEDDING_MODE
 
 ## 语义缓存
 
-`llm/cache` 用向量相似度复用 `Complete` / `Chat` 的响应：
+`llm/cache` 用向量相似度复用已成功完成的响应：
 
 ```go
 cached, err := cache.NewCachedLLMClient(&cache.CachedLLMClientConfig{
@@ -137,11 +134,11 @@ if err != nil {
 }
 defer cached.Close()
 
-resp, err := cached.Chat(ctx, messages)
+resp, err := llm.Chat(ctx, cached, messages)
 fmt.Printf("命中率: %.2f%%\n", cached.Stats().HitRate*100)
 ```
 
-`cache.EmbeddingProvider` 使用 `[]float32` 向量，与 `llm.EmbeddingClient` 不是同一接口。`CachedLLMClient` 只实现 `llm.Client`，不提供流式接口。
+`cache.EmbeddingProvider` 使用 `[]float32` 向量，与 `llm.EmbeddingClient` 不是同一接口。`CachedLLMClient` 只实现 `llm.Client`：命中时直接返回缓存答案，终止块的 `FinishReason` 为 `cache_hit`；未命中时转发上游流，只缓存成功的终止答案。它不实现 `ToolStreamClient`。
 
 ## 相关包
 

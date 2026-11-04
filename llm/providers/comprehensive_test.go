@@ -1,9 +1,7 @@
 package providers
 
 import (
-	"bytes"
 	"context"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -155,361 +153,6 @@ func TestDeepSeekProvider_MaxTokens(t *testing.T) {
 	assert.Equal(t, 3000, provider.MaxTokens())
 }
 
-// TestDeepSeekProvider_Complete tests text completion with HTTP mock
-func TestDeepSeekProvider_Complete(t *testing.T) {
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Verify request headers
-		assert.Equal(t, "POST", r.Method)
-		assert.Equal(t, "Bearer test-key", r.Header.Get("Authorization"))
-		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
-
-		// Verify endpoint
-		assert.True(t, strings.HasSuffix(r.URL.Path, "/chat/completions"))
-
-		// Parse request body
-		var req DeepSeekRequest
-		err := json.NewDecoder(r.Body).Decode(&req)
-		require.NoError(t, err)
-		assert.NotEmpty(t, req.Messages)
-
-		// Send response
-		resp := DeepSeekResponse{
-			ID:      "chatcmpl-123",
-			Object:  "chat.completion",
-			Created: time.Now().Unix(),
-			Model:   req.Model,
-			Choices: []DeepSeekChoice{
-				{
-					Index: 0,
-					Message: DeepSeekMessage{
-						Role:    "assistant",
-						Content: "This is a test response.",
-					},
-					FinishReason: "stop",
-				},
-			},
-			Usage: DeepSeekUsage{
-				PromptTokens:     10,
-				CompletionTokens: 10,
-				TotalTokens:      20,
-			},
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
-	}))
-	defer mockServer.Close()
-
-	config := &llm.LLMOptions{
-		Provider: constants.ProviderDeepSeek,
-		APIKey:   "test-key",
-		BaseURL:  mockServer.URL,
-		Model:    "deepseek-chat",
-		Timeout:  5,
-	}
-
-	provider, err := NewDeepSeekWithOptions(common.ConfigToOptions(config)...)
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	req := &llm.CompletionRequest{
-		Messages: []llm.Message{
-			llm.UserMessage("Hello, how are you?"),
-		},
-		MaxTokens: 100,
-	}
-
-	resp, err := provider.Complete(ctx, req)
-	require.NoError(t, err)
-	assert.NotNil(t, resp)
-	assert.Equal(t, "This is a test response.", resp.Content)
-	assert.Equal(t, 20, resp.TokensUsed)
-	assert.Equal(t, "deepseek-chat", resp.Model)
-}
-
-// TestDeepSeekProvider_Complete_OverrideRequestParams tests parameter override
-func TestDeepSeekProvider_Complete_OverrideRequestParams(t *testing.T) {
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var req DeepSeekRequest
-		json.NewDecoder(r.Body).Decode(&req)
-
-		// Verify request overrides
-		assert.Equal(t, "custom-model", req.Model)
-		assert.Equal(t, 5000, req.MaxTokens)
-		assert.Equal(t, 0.9, req.Temperature)
-
-		resp := DeepSeekResponse{
-			ID:      "chatcmpl-456",
-			Object:  "chat.completion",
-			Created: time.Now().Unix(),
-			Model:   req.Model,
-			Choices: []DeepSeekChoice{
-				{
-					Index:        0,
-					Message:      DeepSeekMessage{Role: "assistant", Content: "Response"},
-					FinishReason: "stop",
-				},
-			},
-			Usage: DeepSeekUsage{TotalTokens: 50},
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
-	}))
-	defer mockServer.Close()
-
-	provider, err := NewDeepSeekWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(mockServer.URL), agentllm.WithTimeout(5*time.Second))
-	require.NoError(t, err)
-
-	resp, err := provider.Complete(context.Background(), &llm.CompletionRequest{
-		Messages:    []llm.Message{llm.UserMessage("Test")},
-		Model:       "custom-model",
-		MaxTokens:   5000,
-		Temperature: 0.9,
-	})
-
-	assert.NoError(t, err)
-	assert.NotNil(t, resp)
-}
-
-// TestDeepSeekProvider_Complete_EmptyResponse tests handling of empty responses
-func TestDeepSeekProvider_Complete_EmptyResponse(t *testing.T) {
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		resp := DeepSeekResponse{
-			ID:      "chatcmpl-789",
-			Object:  "chat.completion",
-			Choices: []DeepSeekChoice{}, // Empty choices
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
-	}))
-	defer mockServer.Close()
-
-	provider, err := NewDeepSeekWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(mockServer.URL), agentllm.WithTimeout(5*time.Second))
-	require.NoError(t, err)
-
-	_, err = provider.Complete(context.Background(), &llm.CompletionRequest{
-		Messages: []llm.Message{llm.UserMessage("Test")},
-	})
-
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "no choices")
-}
-
-// TestDeepSeekProvider_Chat tests chat conversation
-func TestDeepSeekProvider_Chat(t *testing.T) {
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		resp := DeepSeekResponse{
-			ID:      "chatcmpl-chat",
-			Object:  "chat.completion",
-			Created: time.Now().Unix(),
-			Model:   "deepseek-chat",
-			Choices: []DeepSeekChoice{
-				{
-					Index: 0,
-					Message: DeepSeekMessage{
-						Role:    "assistant",
-						Content: "Chat response",
-					},
-					FinishReason: "stop",
-				},
-			},
-			Usage: DeepSeekUsage{TotalTokens: 20},
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
-	}))
-	defer mockServer.Close()
-
-	provider, err := NewDeepSeekWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(mockServer.URL), agentllm.WithTimeout(5*time.Second))
-	require.NoError(t, err)
-
-	messages := []llm.Message{
-		llm.SystemMessage("You are a helpful assistant"),
-		llm.UserMessage("What is 2+2?"),
-	}
-
-	resp, err := provider.Chat(context.Background(), messages)
-	assert.NoError(t, err)
-	assert.NotNil(t, resp)
-	assert.Equal(t, "Chat response", resp.Content)
-}
-
-// TestDeepSeekProvider_Stream tests streaming responses
-func TestDeepSeekProvider_Stream(t *testing.T) {
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
-		// Send streaming responses
-		streamResponses := []DeepSeekStreamResponse{
-			{
-				ID:      "chatcmpl-stream-1",
-				Object:  "chat.completion.chunk",
-				Created: time.Now().Unix(),
-				Model:   "deepseek-chat",
-				Choices: []DeepSeekChoice{
-					{
-						Index: 0,
-						Delta: DeepSeekMessage{Content: "Hello "},
-					},
-				},
-			},
-			{
-				ID:      "chatcmpl-stream-2",
-				Object:  "chat.completion.chunk",
-				Created: time.Now().Unix(),
-				Model:   "deepseek-chat",
-				Choices: []DeepSeekChoice{
-					{
-						Index: 0,
-						Delta: DeepSeekMessage{Content: "world"},
-					},
-				},
-			},
-			{
-				ID:      "chatcmpl-stream-3",
-				Object:  "chat.completion.chunk",
-				Created: time.Now().Unix(),
-				Model:   "deepseek-chat",
-				Choices: []DeepSeekChoice{
-					{
-						Index:        0,
-						Delta:        DeepSeekMessage{},
-						FinishReason: "stop",
-					},
-				},
-			},
-		}
-
-		writeDeepSeekSSE(w, true, streamResponses...)
-	}))
-	defer mockServer.Close()
-
-	provider, err := NewDeepSeekWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(mockServer.URL), agentllm.WithTimeout(5*time.Second))
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	tokens, err := provider.Stream(ctx, "Hello")
-	require.NoError(t, err)
-
-	var result []string
-	for token := range tokens {
-		result = append(result, token)
-	}
-
-	assert.Len(t, result, 2)
-	assert.Equal(t, "Hello ", result[0])
-	assert.Equal(t, "world", result[1])
-}
-
-// TestDeepSeekProvider_GenerateWithTools tests tool calling
-func TestDeepSeekProvider_GenerateWithTools(t *testing.T) {
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var req DeepSeekRequest
-		json.NewDecoder(r.Body).Decode(&req)
-
-		// Verify tools are included
-		assert.Len(t, req.Tools, 1)
-		assert.Equal(t, "mock_tool", req.Tools[0].Function.Name)
-
-		resp := DeepSeekResponse{
-			ID:      "chatcmpl-tools",
-			Object:  "chat.completion",
-			Created: time.Now().Unix(),
-			Model:   "deepseek-chat",
-			Choices: []DeepSeekChoice{
-				{
-					Index: 0,
-					Message: DeepSeekMessage{
-						Role:    "assistant",
-						Content: "Getting weather...",
-						ToolCalls: []DeepSeekToolCall{
-							{
-								ID:   "call_001",
-								Type: "function",
-								Function: DeepSeekFunctionCall{
-									Name:      "mock_tool",
-									Arguments: `{"location":"New York"}`,
-								},
-							},
-						},
-					},
-					FinishReason: "tool_calls",
-				},
-			},
-			Usage: DeepSeekUsage{TotalTokens: 50},
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
-	}))
-	defer mockServer.Close()
-
-	provider, err := NewDeepSeekWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(mockServer.URL), agentllm.WithTimeout(5*time.Second), agentllm.WithModel("deepseek-chat"), agentllm.WithTemperature(0.7), agentllm.WithMaxTokens(500))
-	require.NoError(t, err)
-
-	mockTool := &MockTool{}
-	toolsList := []interfaces.Tool{mockTool}
-
-	resp, err := provider.GenerateWithTools(context.Background(), "What's the weather?", toolsList)
-	assert.NoError(t, err)
-	assert.NotNil(t, resp)
-	assert.Equal(t, "Getting weather...", resp.Content)
-	assert.Len(t, resp.ToolCalls, 1)
-	assert.Equal(t, "mock_tool", resp.ToolCalls[0].Function.Name)
-	// 解析 Arguments JSON 字符串
-	var args map[string]interface{}
-	json.Unmarshal([]byte(resp.ToolCalls[0].Function.Arguments), &args)
-	assert.Equal(t, "New York", args["location"])
-}
-
-// TestDeepSeekProvider_StreamWithTools tests streaming tool calls
-func TestDeepSeekProvider_StreamWithTools(t *testing.T) {
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// 与 DeepSeek 真实帧一致：首个分片带 index/id/name，后续分片只带 index 与参数片段
-		writeDeepSeekSSE(w, true,
-			json.RawMessage(`{"id":"chatcmpl-tool-stream","object":"chat.completion.chunk","model":"deepseek-chat","choices":[{"index":0,"delta":{"role":"assistant","content":"Processing..."}}]}`),
-			json.RawMessage(`{"id":"chatcmpl-tool-stream","object":"chat.completion.chunk","model":"deepseek-chat","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_002","type":"function","function":{"name":"tool_name","arguments":""}}]}}]}`),
-			json.RawMessage(`{"id":"chatcmpl-tool-stream","object":"chat.completion.chunk","model":"deepseek-chat","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"param\":"}}]}}]}`),
-			json.RawMessage(`{"id":"chatcmpl-tool-stream","object":"chat.completion.chunk","model":"deepseek-chat","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\"value\"}"}}]}}]}`),
-			json.RawMessage(`{"id":"chatcmpl-tool-stream","object":"chat.completion.chunk","model":"deepseek-chat","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}`),
-		)
-	}))
-	defer mockServer.Close()
-
-	provider, err := NewDeepSeekWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(mockServer.URL), agentllm.WithTimeout(5*time.Second))
-	require.NoError(t, err)
-
-	mockTool := &MockTool{}
-	chunks, err := provider.StreamWithTools(context.Background(), "Test", []interfaces.Tool{mockTool})
-	require.NoError(t, err)
-
-	var types []string
-	var args []string
-	var call *llm.ToolCall
-	for chunk := range chunks {
-		types = append(types, chunk.Type)
-		switch chunk.Type {
-		case "content":
-			assert.Equal(t, "Processing...", chunk.Value)
-		case "tool_name":
-			assert.Equal(t, "tool_name", chunk.Value)
-		case "tool_args":
-			args = append(args, chunk.Value.(string))
-		case "tool_call":
-			call = chunk.Value.(*llm.ToolCall)
-		case "error":
-			t.Fatalf("unexpected error chunk: %v", chunk.Value)
-		}
-	}
-
-	assert.Equal(t, []string{"content", "tool_name", "tool_args", "tool_args", "tool_call"}, types)
-	assert.Equal(t, []string{`{"param":`, `"value"}`}, args)
-	require.NotNil(t, call)
-	assert.Equal(t, "call_002", call.ID)
-	assert.Equal(t, "function", call.Type)
-	assert.Equal(t, "tool_name", call.Function.Name)
-	assert.Equal(t, `{"param":"value"}`, call.Function.Arguments)
-}
-
 // TestDeepSeekProvider_Embed tests embedding generation
 func TestDeepSeekProvider_Embed(t *testing.T) {
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -564,7 +207,7 @@ func TestDeepSeekProvider_CallAPI_HTTPError(t *testing.T) {
 	provider, err := NewDeepSeekWithOptions(agentllm.WithAPIKey("invalid-key"), agentllm.WithBaseURL(mockServer.URL), agentllm.WithTimeout(5*time.Second))
 	require.NoError(t, err)
 
-	_, err = provider.Complete(context.Background(), &llm.CompletionRequest{
+	_, err = llm.Complete(context.Background(), provider, &llm.CompletionRequest{
 		Messages: []llm.Message{llm.UserMessage("Test")},
 	})
 
@@ -579,28 +222,11 @@ func TestDeepSeekProvider_CallAPI_NetworkError(t *testing.T) {
 	provider, err := NewDeepSeekWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL("http://invalid-hostname-that-does-not-exist.test"), agentllm.WithTimeout(1*time.Second))
 	require.NoError(t, err)
 
-	_, err = provider.Complete(context.Background(), &llm.CompletionRequest{
+	_, err = llm.Complete(context.Background(), provider, &llm.CompletionRequest{
 		Messages: []llm.Message{llm.UserMessage("Test")},
 	})
 
 	assert.Error(t, err)
-}
-
-// TestDeepSeekProvider_ConvertToolsToDeepSeek tests tool conversion
-func TestDeepSeekProvider_ConvertToolsToDeepSeek(t *testing.T) {
-	provider, err := NewDeepSeekWithOptions(agentllm.WithAPIKey("test-key"))
-	require.NoError(t, err)
-
-	mockTool := &MockTool{}
-	tools := []interfaces.Tool{mockTool}
-
-	dsTools := provider.convertToolsToDeepSeek(tools)
-
-	assert.Len(t, dsTools, 1)
-	assert.Equal(t, "function", dsTools[0].Type)
-	assert.Equal(t, "mock_tool", dsTools[0].Function.Name)
-	assert.Equal(t, "A mock tool for testing", dsTools[0].Function.Description)
-	assert.NotNil(t, dsTools[0].Function.Parameters)
 }
 
 // TestDeepSeekStreamingProvider_Creation tests streaming provider creation
@@ -620,37 +246,10 @@ func TestDeepSeekStreamingProvider_Creation(t *testing.T) {
 func TestDeepSeekStreamingProvider_StreamWithMetadata(t *testing.T) {
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
-		streamResponses := []DeepSeekStreamResponse{
-			{
-				ID:    "stream-1",
-				Model: "deepseek-chat",
-				Choices: []DeepSeekChoice{
-					{
-						Index: 0,
-						Delta: DeepSeekMessage{Content: "Token1 "},
-					},
-				},
-			},
-			{
-				ID:    "stream-2",
-				Model: "deepseek-chat",
-				Choices: []DeepSeekChoice{
-					{
-						Index: 0,
-						Delta: DeepSeekMessage{Content: "Token2"},
-					},
-				},
-			},
-			{
-				ID:    "stream-3",
-				Model: "deepseek-chat",
-				Choices: []DeepSeekChoice{
-					{
-						Index:        0,
-						FinishReason: "stop",
-					},
-				},
-			},
+		streamResponses := []json.RawMessage{
+			json.RawMessage(`{"id":"stream-1","model":"deepseek-chat","choices":[{"index":0,"delta":{"content":"Token1 "}}]}`),
+			json.RawMessage(`{"id":"stream-2","model":"deepseek-chat","choices":[{"index":0,"delta":{"content":"Token2"}}]}`),
+			json.RawMessage(`{"id":"stream-3","model":"deepseek-chat","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}`),
 		}
 
 		writeDeepSeekSSE(w, true, streamResponses...)
@@ -923,76 +522,6 @@ func TestGenerateCallID(t *testing.T) {
 	assert.True(t, strings.HasPrefix(id2, "call_"))
 }
 
-// TestToolCallResponse_Structure tests common.ToolCallResponse structure
-func TestToolCallResponse_Structure(t *testing.T) {
-	response := &common.ToolCallResponse{
-		Content: "Response content",
-		ToolCalls: []common.ToolCall{
-			{
-				ID:   "call_123",
-				Name: "test_tool",
-				Arguments: map[string]interface{}{
-					"param1": "value1",
-					"param2": 42,
-				},
-			},
-		},
-	}
-
-	assert.Equal(t, "Response content", response.Content)
-	assert.Len(t, response.ToolCalls, 1)
-	assert.Equal(t, "test_tool", response.ToolCalls[0].Name)
-	assert.Equal(t, "value1", response.ToolCalls[0].Arguments["param1"])
-	assert.Equal(t, 42, response.ToolCalls[0].Arguments["param2"])
-}
-
-// TestToolChunk_Types tests different common.ToolChunk types
-func TestToolChunk_Types(t *testing.T) {
-	tests := []struct {
-		name  string
-		chunk common.ToolChunk
-	}{
-		{
-			name: "content chunk",
-			chunk: common.ToolChunk{
-				Type:  "content",
-				Value: "Some content",
-			},
-		},
-		{
-			name: "tool_name chunk",
-			chunk: common.ToolChunk{
-				Type:  "tool_name",
-				Value: "get_weather",
-			},
-		},
-		{
-			name: "tool_args chunk",
-			chunk: common.ToolChunk{
-				Type:  "tool_args",
-				Value: `{"location":"NYC"}`,
-			},
-		},
-		{
-			name: "tool_call chunk",
-			chunk: common.ToolChunk{
-				Type: "tool_call",
-				Value: common.ToolCall{
-					ID:   "call_456",
-					Name: "calculator",
-				},
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.NotEmpty(t, tt.chunk.Type)
-			assert.NotNil(t, tt.chunk.Value)
-		})
-	}
-}
-
 // TestTokenWithMetadata_Structure tests TokenWithMetadata structure
 func TestTokenWithMetadata_Structure(t *testing.T) {
 	metadata := map[string]interface{}{
@@ -1045,7 +574,7 @@ func TestDeepSeekProvider_MalformedJSON(t *testing.T) {
 	provider, err := NewDeepSeekWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(mockServer.URL), agentllm.WithTimeout(5*time.Second))
 	require.NoError(t, err)
 
-	_, err = provider.Complete(context.Background(), &llm.CompletionRequest{
+	_, err = llm.Complete(context.Background(), provider, &llm.CompletionRequest{
 		Messages: []llm.Message{llm.UserMessage("Test")},
 	})
 
@@ -1056,12 +585,7 @@ func TestDeepSeekProvider_MalformedJSON(t *testing.T) {
 func TestDeepSeekProvider_ContextCancellation(t *testing.T) {
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(1 * time.Second) // Simulate slow response
-		w.Header().Set("Content-Type", "application/json")
-		resp := DeepSeekResponse{
-			ID:      "chatcmpl-cancel",
-			Choices: []DeepSeekChoice{{Index: 0, Message: DeepSeekMessage{Content: "test"}}},
-		}
-		json.NewEncoder(w).Encode(resp)
+		writeDeepSeekSSE(w, true, json.RawMessage(`{"choices":[{"index":0,"delta":{"content":"test"},"finish_reason":"stop"}]}`))
 	}))
 	defer mockServer.Close()
 
@@ -1071,116 +595,11 @@ func TestDeepSeekProvider_ContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	_, err = provider.Complete(ctx, &llm.CompletionRequest{
+	_, err = llm.Complete(ctx, provider, &llm.CompletionRequest{
 		Messages: []llm.Message{llm.UserMessage("Test")},
 	})
 
 	assert.Error(t, err)
-}
-
-// TestDeepSeekProvider_LargeResponse tests handling of large responses
-func TestDeepSeekProvider_LargeResponse(t *testing.T) {
-	largeContent := strings.Repeat("A", 50000) // 50KB content
-
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		resp := DeepSeekResponse{
-			ID:      "chatcmpl-large",
-			Object:  "chat.completion",
-			Created: time.Now().Unix(),
-			Model:   "deepseek-chat",
-			Choices: []DeepSeekChoice{
-				{
-					Index: 0,
-					Message: DeepSeekMessage{
-						Role:    "assistant",
-						Content: largeContent,
-					},
-					FinishReason: "length",
-				},
-			},
-			Usage: DeepSeekUsage{TotalTokens: 50000},
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
-	}))
-	defer mockServer.Close()
-
-	provider, err := NewDeepSeekWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(mockServer.URL), agentllm.WithTimeout(5*time.Second))
-	require.NoError(t, err)
-
-	resp, err := provider.Complete(context.Background(), &llm.CompletionRequest{
-		Messages: []llm.Message{llm.UserMessage("Test")},
-	})
-
-	assert.NoError(t, err)
-	assert.Equal(t, largeContent, resp.Content)
-	assert.Equal(t, 50000, resp.TokensUsed)
-}
-
-// TestDeepSeekProvider_ToolCallArgumentsParsing tests tool arguments parsing edge cases
-func TestDeepSeekProvider_ToolCallArgumentsParsing(t *testing.T) {
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		resp := DeepSeekResponse{
-			ID:      "chatcmpl-tool-parse",
-			Object:  "chat.completion",
-			Created: time.Now().Unix(),
-			Model:   "deepseek-chat",
-			Choices: []DeepSeekChoice{
-				{
-					Index: 0,
-					Message: DeepSeekMessage{
-						Role:    "assistant",
-						Content: "Calling tool...",
-						ToolCalls: []DeepSeekToolCall{
-							{
-								ID:   "call_123",
-								Type: "function",
-								Function: DeepSeekFunctionCall{
-									Name:      "calculator",
-									Arguments: `{"operation":"add","a":5,"b":3,"nested":{"key":"value"}}`,
-								},
-							},
-							{
-								ID:   "call_124",
-								Type: "function",
-								Function: DeepSeekFunctionCall{
-									Name:      "invalid_json",
-									Arguments: `{invalid json}`, // Invalid JSON - should be skipped
-								},
-							},
-						},
-					},
-					FinishReason: "tool_calls",
-				},
-			},
-			Usage: DeepSeekUsage{TotalTokens: 50},
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
-	}))
-	defer mockServer.Close()
-
-	provider, err := NewDeepSeekWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(mockServer.URL), agentllm.WithTimeout(5*time.Second), agentllm.WithModel("deepseek-chat"), agentllm.WithTemperature(0.7))
-	require.NoError(t, err)
-
-	resp, err := provider.GenerateWithTools(context.Background(), "Calculate", []interfaces.Tool{&MockTool{}})
-	assert.NoError(t, err)
-	assert.NotNil(t, resp)
-
-	// 新设计：保留所有 tool calls，Arguments 作为原始 JSON 字符串传递
-	// 调用方负责解析和验证 JSON
-	assert.Len(t, resp.ToolCalls, 2)
-	assert.Equal(t, "calculator", resp.ToolCalls[0].Function.Name)
-	// 解析第一个有效的 Arguments JSON 字符串
-	var args map[string]interface{}
-	err = json.Unmarshal([]byte(resp.ToolCalls[0].Function.Arguments), &args)
-	assert.NoError(t, err)
-	assert.Equal(t, "add", args["operation"])
-	assert.Equal(t, float64(5), args["a"])
-
-	// 第二个 tool call 有无效 JSON，但仍然保留原始字符串
-	assert.Equal(t, "invalid_json", resp.ToolCalls[1].Function.Name)
-	assert.Equal(t, "{invalid json}", resp.ToolCalls[1].Function.Arguments)
 }
 
 // TestDeepSeekProvider_GetterMethods tests getter utility methods
@@ -1199,169 +618,6 @@ func TestDeepSeekProvider_GetterMethods(t *testing.T) {
 	// Test GetMaxTokens
 	assert.Equal(t, 5000, provider.GetMaxTokens(5000))
 	assert.Equal(t, 3000, provider.GetMaxTokens(0))
-}
-
-// TestDeepSeekProvider_InvalidRequestPayload tests invalid request handling
-func TestDeepSeekProvider_InvalidRequestPayload(t *testing.T) {
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Verify proper request format
-		var req DeepSeekRequest
-		err := json.NewDecoder(r.Body).Decode(&req)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Invalid request"))
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		resp := DeepSeekResponse{
-			ID:      "chatcmpl-ok",
-			Choices: []DeepSeekChoice{{Index: 0, Message: DeepSeekMessage{Content: "OK"}}},
-		}
-		json.NewEncoder(w).Encode(resp)
-	}))
-	defer mockServer.Close()
-
-	provider, err := NewDeepSeekWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(mockServer.URL), agentllm.WithTimeout(5*time.Second), agentllm.WithModel("deepseek-chat"), agentllm.WithTemperature(0.7))
-	require.NoError(t, err)
-
-	// Valid request should succeed
-	resp, err := provider.Complete(context.Background(), &llm.CompletionRequest{
-		Messages: []llm.Message{llm.UserMessage("Test")},
-	})
-	assert.NoError(t, err)
-	assert.NotNil(t, resp)
-}
-
-// TestDeepSeekProvider_StreamReadError tests stream read error handling
-func TestDeepSeekProvider_StreamReadError(t *testing.T) {
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/event-stream")
-		w.Write([]byte("data: {\"id\":\"test\"}\n\n"))
-		w.Write([]byte("data: {invalid json\n\n"))
-	}))
-	defer mockServer.Close()
-
-	provider, err := NewDeepSeekWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(mockServer.URL), agentllm.WithTimeout(5*time.Second), agentllm.WithModel("deepseek-chat"), agentllm.WithTemperature(0.7))
-	require.NoError(t, err)
-
-	tokens, err := provider.Stream(context.Background(), "Test")
-	require.NoError(t, err)
-
-	// 首帧没有 choices，次帧解码失败：通道应关闭且不产出 token
-	tokenCount := 0
-	for range tokens {
-		tokenCount++
-	}
-	assert.Zero(t, tokenCount)
-}
-
-// TestMultipleToolCalls tests multiple tool calls in one response
-func TestMultipleToolCalls(t *testing.T) {
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		resp := DeepSeekResponse{
-			ID:      "chatcmpl-multi-tools",
-			Object:  "chat.completion",
-			Created: time.Now().Unix(),
-			Model:   "deepseek-chat",
-			Choices: []DeepSeekChoice{
-				{
-					Index: 0,
-					Message: DeepSeekMessage{
-						Role:    "assistant",
-						Content: "Calling multiple tools...",
-						ToolCalls: []DeepSeekToolCall{
-							{
-								ID:   "call_001",
-								Type: "function",
-								Function: DeepSeekFunctionCall{
-									Name:      "tool1",
-									Arguments: `{"param":"value1"}`,
-								},
-							},
-							{
-								ID:   "call_002",
-								Type: "function",
-								Function: DeepSeekFunctionCall{
-									Name:      "tool2",
-									Arguments: `{"param":"value2"}`,
-								},
-							},
-							{
-								ID:   "call_003",
-								Type: "function",
-								Function: DeepSeekFunctionCall{
-									Name:      "tool3",
-									Arguments: `{"param":"value3"}`,
-								},
-							},
-						},
-					},
-					FinishReason: "tool_calls",
-				},
-			},
-			Usage: DeepSeekUsage{TotalTokens: 75},
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
-	}))
-	defer mockServer.Close()
-
-	provider, err := NewDeepSeekWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(mockServer.URL), agentllm.WithTimeout(5*time.Second), agentllm.WithModel("deepseek-chat"), agentllm.WithTemperature(0.7))
-	require.NoError(t, err)
-
-	resp, err := provider.GenerateWithTools(context.Background(), "Call tools", []interfaces.Tool{&MockTool{}})
-	assert.NoError(t, err)
-	assert.NotNil(t, resp)
-	assert.Len(t, resp.ToolCalls, 3)
-
-	for i, tc := range resp.ToolCalls {
-		assert.NotEmpty(t, tc.ID)
-		assert.NotEmpty(t, tc.Function.Name)
-		assert.NotEmpty(t, tc.Function.Arguments)
-		// 解析 Arguments JSON 字符串
-		var args map[string]interface{}
-		json.Unmarshal([]byte(tc.Function.Arguments), &args)
-		assert.Equal(t, "value"+string(rune(49+i)), args["param"])
-	}
-}
-
-// TestStreamingProviderInheritance tests streaming provider inheritance
-func TestStreamingProviderInheritance(t *testing.T) {
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		resp := DeepSeekResponse{
-			ID:      "chatcmpl-123",
-			Object:  "chat.completion",
-			Created: time.Now().Unix(),
-			Model:   "deepseek-chat",
-			Choices: []DeepSeekChoice{
-				{
-					Index: 0,
-					Message: DeepSeekMessage{
-						Role:    "assistant",
-						Content: "Test response",
-					},
-					FinishReason: "stop",
-				},
-			},
-			Usage: DeepSeekUsage{TotalTokens: 20},
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
-	}))
-	defer mockServer.Close()
-
-	provider, err := NewDeepSeekStreamingWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(mockServer.URL), agentllm.WithTimeout(5*time.Second), agentllm.WithModel("deepseek-chat"), agentllm.WithTemperature(0.7))
-	require.NoError(t, err)
-
-	// Verify base provider methods are inherited
-	resp, err := provider.Complete(context.Background(), &llm.CompletionRequest{
-		Messages: []llm.Message{llm.UserMessage("Test")},
-	})
-
-	assert.NoError(t, err)
-	assert.NotNil(t, resp)
-	assert.Equal(t, constants.ProviderDeepSeek, provider.Provider())
 }
 
 // TestEmbeddingEmptyResponse tests embedding with no embeddings in response
@@ -1392,49 +648,4 @@ func TestEmbeddingEmptyResponse(t *testing.T) {
 	_, err = provider.Embed(context.Background(), "test")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "no embeddings")
-}
-
-// TestRequestBodyClose ensures request body is properly closed
-func TestRequestBodyClose(t *testing.T) {
-	closed := false
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Wrap body to track closing
-		originalBody := r.Body
-		r.Body = io.NopCloser(bytes.NewReader(func() []byte {
-			buf := bytes.NewBuffer(nil)
-			io.Copy(buf, originalBody)
-			return buf.Bytes()
-		}()))
-
-		resp := DeepSeekResponse{
-			ID:      "chatcmpl-123",
-			Choices: []DeepSeekChoice{{Index: 0, Message: DeepSeekMessage{Content: "test"}}},
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
-	}))
-	defer mockServer.Close()
-
-	provider, err := NewDeepSeekWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(mockServer.URL), agentllm.WithTimeout(5*time.Second), agentllm.WithModel("deepseek-chat"), agentllm.WithTemperature(0.7))
-	require.NoError(t, err)
-
-	_, err = provider.Complete(context.Background(), &llm.CompletionRequest{
-		Messages: []llm.Message{llm.UserMessage("Test")},
-	})
-
-	assert.NoError(t, err)
-	_ = closed // Suppress unused variable warning
-}
-
-// TestToolSchemaConversion tests tool schema conversion
-func TestToolSchemaConversion(t *testing.T) {
-	provider, err := NewDeepSeekWithOptions(agentllm.WithAPIKey("test-key"))
-	require.NoError(t, err)
-
-	schema := provider.toolSchemaToJSON(nil)
-	assert.NotNil(t, schema)
-
-	// Verify structure - 默认 schema 只包含 type 和 properties
-	assert.Equal(t, "object", schema["type"])
-	assert.NotNil(t, schema["properties"])
 }

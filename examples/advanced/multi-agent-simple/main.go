@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -40,7 +41,7 @@ Please provide:
 3. Risks and opportunities
 4. Recommended approach`, task)
 
-	analysisResp, err := mas.llmClient.Chat(ctx, []llm.Message{
+	analysisResp, err := llm.Chat(ctx, mas.llmClient, []llm.Message{
 		llm.UserMessage(analysisPrompt),
 	})
 	if err != nil {
@@ -61,7 +62,7 @@ Please provide:
 3. Resource requirements
 4. Success metrics`, analysisResp.Content)
 
-	strategyResp, err := mas.llmClient.Chat(ctx, []llm.Message{
+	strategyResp, err := llm.Chat(ctx, mas.llmClient, []llm.Message{
 		llm.UserMessage(strategyPrompt),
 	})
 	if err != nil {
@@ -82,7 +83,7 @@ Please provide:
 3. Execution order
 4. Expected outcomes`, strategyResp.Content)
 
-	executionResp, err := mas.llmClient.Chat(ctx, []llm.Message{
+	executionResp, err := llm.Chat(ctx, mas.llmClient, []llm.Message{
 		llm.UserMessage(executionPrompt),
 	})
 	if err != nil {
@@ -248,7 +249,7 @@ func main() {
 	ollamaClient, err := providers.NewOllamaClientSimple(ollamaModel)
 	if err != nil {
 		fmt.Printf("⚠️  Error creating Ollama client: %v\n", err)
-	} else if ollamaClient.IsAvailable() {
+	} else if ollamaHasModel(ollamaClient, ollamaModel) {
 		fmt.Printf("✓ Using Ollama provider with model: %s\n", ollamaModel)
 		fmt.Println("  Tip: You can change the model by setting OLLAMA_MODEL environment variable")
 		fmt.Println("  Example: export OLLAMA_MODEL=qwen2 or export OLLAMA_MODEL=deepseek-coder")
@@ -264,7 +265,7 @@ func main() {
 				llm.WithMaxTokens(500),
 				llm.WithTemperature(0.7),
 			)
-			if err == nil && client.IsAvailable() {
+			if err == nil {
 				fmt.Println("✓ Using OpenAI provider")
 				llmClient = client
 			}
@@ -279,7 +280,7 @@ func main() {
 					llm.WithMaxTokens(500),
 					llm.WithTemperature(0.7),
 				)
-				if err == nil && client.IsAvailable() {
+				if err == nil {
 					fmt.Println("✓ Using Gemini provider")
 					llmClient = client
 				}
@@ -345,29 +346,7 @@ func main() {
 type MockLLMClient struct{}
 
 func (m *MockLLMClient) Complete(ctx context.Context, req *llm.CompletionRequest) (*llm.CompletionResponse, error) {
-	// Generate mock responses based on the messages
-	content := "Mock response: Processing request..."
-
-	// Check the messages for content hints
-	if len(req.Messages) > 0 {
-		lastMessage := req.Messages[len(req.Messages)-1].Content
-		if strings.Contains(lastMessage, "Analysis Agent") {
-			content = "Analysis complete: Identified 5 key patterns in the data. Complexity: Medium. Main risks: scalability, data quality. Opportunities: caching, parallel processing."
-		} else if strings.Contains(lastMessage, "Strategy Agent") {
-			content = "Strategy formulated: Phase 1 - Data preparation (Week 1), Phase 2 - Core implementation (Week 2-3), Phase 3 - Optimization (Week 4). Priority: Performance > Reliability > UX."
-		} else if strings.Contains(lastMessage, "Execution Agent") {
-			content = "Execution plan: 1) Call API endpoints for data collection, 2) Process data with parallel workers, 3) Store results in cache, 4) Update monitoring dashboard."
-		}
-	}
-
-	return &llm.CompletionResponse{
-		Content:  content,
-		Provider: "mock",
-		Model:    "mock-model",
-	}, nil
-}
-
-func (m *MockLLMClient) Chat(ctx context.Context, messages []llm.Message) (*llm.CompletionResponse, error) {
+	messages := req.Messages
 	if len(messages) == 0 {
 		return nil, fmt.Errorf("no messages provided")
 	}
@@ -417,10 +396,27 @@ func (m *MockLLMClient) Chat(ctx context.Context, messages []llm.Message) (*llm.
 	}, nil
 }
 
+// CompleteStream 把 Complete 的结果作为一个完整块返回
+func (m *MockLLMClient) CompleteStream(ctx context.Context, req *llm.CompletionRequest) (<-chan *llm.StreamChunk, error) {
+	resp, err := m.Complete(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	stream := make(chan *llm.StreamChunk, 1)
+	stream <- &llm.StreamChunk{Delta: resp.Content, Content: resp.Content, FinishReason: "stop", Done: true, Usage: &llm.Usage{TotalTokens: resp.TokensUsed}}
+	close(stream)
+	return stream, nil
+}
+
 func (m *MockLLMClient) Provider() constants.Provider {
 	return constants.ProviderCustom
 }
 
-func (m *MockLLMClient) IsAvailable() bool {
-	return true
+// ollamaHasModel 确认本地 Ollama 可达且已拉取所需模型；ListModels 读取 /models，不产生生成请求。
+func ollamaHasModel(client *providers.OpenAIProvider, model string) bool {
+	models, err := client.ListModels(context.Background())
+	if err != nil {
+		return false
+	}
+	return slices.ContainsFunc(models, func(m string) bool { return m == model || strings.HasPrefix(m, model+":") })
 }

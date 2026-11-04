@@ -8,6 +8,9 @@ import (
 )
 
 func (p *OpenAIProvider) reasoningEffort(req *llm.CompletionRequest) (string, error) {
+	if !p.reasoning {
+		return "", p.RejectReasoning(req)
+	}
 	c := p.ResolveReasoning(req)
 	if c == nil {
 		return "", nil

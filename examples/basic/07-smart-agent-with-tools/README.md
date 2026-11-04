@@ -27,7 +27,7 @@ agent, err := builder.NewSimpleBuilder(llmClient).
     WithSystemPrompt("你是智能助手，可以获取时间和查询天气").
     WithTools(createTimeTool(), createWeatherAPITool(), createAPITool()).
     Build()
-output, err := agent.ExecuteWithTools(ctx, "现在几点了？北京的天气怎么样？")
+output, err := agent.AsRunnable().Invoke(ctx, "现在几点了？北京的天气怎么样？")
 ```
 
 工具调用方式：

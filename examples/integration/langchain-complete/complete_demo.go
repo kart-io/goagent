@@ -222,7 +222,7 @@ func main() {
 	// Task 1: Simple query (tests basic execution)
 	fmt.Println("Task 1: Simple Query")
 	fmt.Println("--------------------")
-	result1, err := agent.Execute(ctx, "What is the capital of France?")
+	result1, err := agent.AsRunnable().Invoke(ctx, "What is the capital of France?")
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
 	} else {
@@ -236,7 +236,7 @@ func main() {
 	// Task 2: Tool usage (tests tool selection and execution)
 	fmt.Println("Task 2: Tool Usage - Calculation")
 	fmt.Println("---------------------------------")
-	result2, err := agent.ExecuteWithTools(ctx, "Calculate the compound interest on $10000 at 5% for 3 years")
+	result2, err := agent.AsRunnable().Invoke(ctx, "Calculate the compound interest on $10000 at 5% for 3 years")
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
 	} else {
@@ -247,7 +247,7 @@ func main() {
 	// Task 3: Database query (tests store integration)
 	fmt.Println("Task 3: Database Query")
 	fmt.Println("-----------------------")
-	result3, err := agent.ExecuteWithTools(ctx, "Get my user profile from the database")
+	result3, err := agent.AsRunnable().Invoke(ctx, "Get my user profile from the database")
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
 	} else {
@@ -258,7 +258,7 @@ func main() {
 	// Task 4: Multiple tool usage (tests tool chaining)
 	fmt.Println("Task 4: Multiple Tools")
 	fmt.Println("-----------------------")
-	result4, err := agent.ExecuteWithTools(ctx, "Search for Python tutorials, then calculate how many hours it takes to watch 10 tutorials of 45 minutes each")
+	result4, err := agent.AsRunnable().Invoke(ctx, "Search for Python tutorials, then calculate how many hours it takes to watch 10 tutorials of 45 minutes each")
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
 	} else {
@@ -270,7 +270,7 @@ func main() {
 	fmt.Println("Task 5: Cached Request (repeating Task 1)")
 	fmt.Println("------------------------------------------")
 	start := time.Now()
-	result5, err := agent.Execute(ctx, "What is the capital of France?")
+	result5, err := agent.AsRunnable().Invoke(ctx, "What is the capital of France?")
 	duration := time.Since(start)
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
@@ -530,14 +530,24 @@ func (c *DemoLLMClient) Complete(ctx context.Context, req *llm.CompletionRequest
 	}, nil
 }
 
-func (c *DemoLLMClient) Chat(ctx context.Context, messages []llm.Message) (*llm.CompletionResponse, error) {
-	return c.Complete(ctx, &llm.CompletionRequest{Messages: messages})
+// CompleteStream 把 Complete 的结果作为一个增量块返回，满足 Builder 对流式客户端的要求
+func (c *DemoLLMClient) CompleteStream(ctx context.Context, req *llm.CompletionRequest) (<-chan *llm.StreamChunk, error) {
+	resp, err := c.Complete(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	stream := make(chan *llm.StreamChunk, 2)
+	stream <- &llm.StreamChunk{Delta: resp.Content, Content: resp.Content}
+	stream <- &llm.StreamChunk{Content: resp.Content, FinishReason: "stop", Done: true, Usage: &llm.Usage{TotalTokens: resp.TokensUsed}}
+	close(stream)
+	return stream, nil
+}
+
+// CompleteToolsStream 不发起工具调用，直接回答
+func (c *DemoLLMClient) CompleteToolsStream(ctx context.Context, req *llm.CompletionRequest, _ []interfaces.Tool) (<-chan *llm.StreamChunk, error) {
+	return c.CompleteStream(ctx, req)
 }
 
 func (c *DemoLLMClient) Provider() constants.Provider {
 	return constants.ProviderCustom
-}
-
-func (c *DemoLLMClient) IsAvailable() bool {
-	return true
 }

@@ -19,13 +19,12 @@ import (
 
 // 固定离线响应；重建后的多余请求直接失败，证明恢复使用日志。
 type scopeModel struct {
-	llm.StreamClient
+	llm.Client
 	requests int
 	allow    bool
 }
 
 func (m *scopeModel) Provider() constants.Provider { return constants.ProviderOpenAI }
-func (m *scopeModel) IsAvailable() bool            { return true }
 func (m *scopeModel) CompleteToolsStream(context.Context, *llm.CompletionRequest, []interfaces.Tool) (<-chan *llm.StreamChunk, error) {
 	m.requests++
 	if !m.allow {

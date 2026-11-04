@@ -2,7 +2,6 @@ package providers
 
 import (
 	"github.com/kart-io/goagent/core/usage"
-	"github.com/kart-io/goagent/interfaces"
 	agentllm "github.com/kart-io/goagent/llm"
 	"github.com/sashabaranov/go-openai"
 )
@@ -99,12 +98,4 @@ func openAIUsage(u *openai.Usage) *agentllm.Usage {
 		reasoning = u.CompletionTokensDetails.ReasoningTokens
 	}
 	return sdkUsageDetails(sdkUsage(u.PromptTokens, u.CompletionTokens, u.TotalTokens, cached), reasoning, 0)
-}
-
-func tokenValue(u *agentllm.Usage) *interfaces.TokenUsage {
-	if u == nil {
-		return nil
-	}
-	v := u.Tokens()
-	return &v
 }

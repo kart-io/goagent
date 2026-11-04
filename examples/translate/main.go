@@ -249,7 +249,7 @@ func (t *MultiAgentTranslator) Translate(ctx context.Context, text string) (*Tra
 // detectLanguage 使用语言检测代理识别语言
 func (t *MultiAgentTranslator) detectLanguage(ctx context.Context, text string) (string, error) {
 	// 执行语言检测
-	output, err := t.detectionAgent.Execute(ctx, text)
+	output, err := t.detectionAgent.AsRunnable().Invoke(ctx, text)
 	if err != nil {
 		return "", err
 	}
@@ -279,7 +279,7 @@ func (t *MultiAgentTranslator) translateText(ctx context.Context, text string, l
 	prompt := fmt.Sprintf("请将以下%s文本翻译成中文：\n\n%s", language, text)
 
 	// 执行翻译
-	output, err := t.translationAgent.Execute(ctx, prompt)
+	output, err := t.translationAgent.AsRunnable().Invoke(ctx, prompt)
 	if err != nil {
 		return "", err
 	}

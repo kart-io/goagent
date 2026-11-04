@@ -10,7 +10,6 @@
 | 固定步骤、分支、循环与并行 | `workflow.Graph[T]` → Compile |
 | 节点/分支级恢复、审批 | CompileDurable 与持久模型/工具记录 |
 | 子 Agent 或子图作为能力 | NewRunnableTool / NewRunnableToolFactory，经 Dispatcher 调用 |
-| 已有同步无流客户端 | 旧 Execute 路径；不能假设预算、持久和原生循环扩展点都生效 |
 
 不要把 Builder 的输出与 core.AgentOutput 混用。
 
@@ -23,7 +22,7 @@ go run ./examples/execution-scope
 go run ./examples/workflow
 ```
 
-接入真实模型见 [快速入门](QUICKSTART.md)、[LLM API](../api/LLM_API.md) 和 [Provider 能力](PROVIDER_CAPABILITIES.md)。支持 StreamClient 不等于支持 ToolStreamClient；工具场景先检查具体 Provider 的原生能力。
+接入真实模型见 [快速入门](QUICKSTART.md)、[LLM API](../api/LLM_API.md) 和 [Provider 能力](PROVIDER_CAPABILITIES.md)。实现 `llm.Client` 不等于支持 ToolStreamClient；工具场景先检查具体 Provider 的原生能力。
 
 ## 工具与业务效果
 
@@ -56,7 +55,7 @@ if err != nil {
 fmt.Println(output.Result)
 ```
 
-`AsRunnable().Invoke` 是统一入口，配置的工具、检索、中间件与回调走同一路径。旧的同步入口 `Execute` 不执行工具，供不支持流式的客户端使用；入口对照见[快速入门](QUICKSTART.md#旧接口迁移)。
+`AsRunnable().Invoke` 是统一入口，配置的工具、检索、中间件与回调走同一路径；Builder 接受任意 `llm.Client`，配置工具时要求 `llm.ToolStreamClient`。入口对照见[快速入门](QUICKSTART.md#旧接口迁移)。
 
 ## 上下文、重试与观察
 
@@ -240,7 +239,7 @@ func (m *TraceMiddleware) OnBefore(ctx context.Context, req *middleware.Middlewa
 
 ## 流式处理
 
-推荐使用 `agent.AsRunnable().Stream`，见[快速入门](QUICKSTART.md#流式调用)。`ExecuteStream` 是同一事件源的通道形式：`text` 事件携带增量文本，`done` 事件携带最终输出，`error` 事件携带错误。需要客户端实现 `llm.StreamClient`。
+推荐使用 `agent.AsRunnable().Stream`，见[快速入门](QUICKSTART.md#流式调用)。`ExecuteStream` 是同一事件源的通道形式：`text` 事件携带增量文本，`done` 事件携带最终输出，`error` 事件携带错误。
 
 ```go
 events, err := agent.ExecuteStream(ctx, "请写一首诗")
@@ -342,5 +341,5 @@ mockClient := mocks.NewMockLLMClient()
 mockClient.SetResponses(llm.CompletionResponse{Content: "预设回答"})
 
 agent, err := builder.NewSimpleBuilder(mockClient).Build()
-// MockLLMClient 不实现 llm.StreamClient，只能经 agent.Execute 调用；AsRunnable 会返回错误。
+// MockLLMClient 实现 llm.ToolStreamClient，可直接经 AsRunnable 调用。
 ```

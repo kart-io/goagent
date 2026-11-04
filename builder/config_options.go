@@ -142,8 +142,7 @@ func (b *AgentBuilder[C, S]) WithInterruptedModelResend() *AgentBuilder[C, S] {
 }
 
 // WithReturnDirectTools 指定结果已可直接展示的终态工具，省去模型总结请求。
-// 在 ExecuteStream/AsRunnable 及其 ExecuteWithTools 委派中生效，要求 ToolStreamClient。
-// 旧 Execute 会报错而非忽略此配置。每次调用替换名单。
+// 在 ExecuteStream/AsRunnable 中生效，要求 ToolStreamClient。每次调用替换名单。
 // 本轮多个工具调用时仍走完整模型循环；字符串原样输出，其他结果编码为 JSON。
 // 启用者负责工具结果的格式、完整性与适用场景，模型输出格式指令不会再被执行。
 func (b *AgentBuilder[C, S]) WithReturnDirectTools(names ...string) *AgentBuilder[C, S] {
@@ -236,7 +235,7 @@ func (b *AgentBuilder[C, S]) WithTimeout(timeout time.Duration) *AgentBuilder[C,
 
 // WithAutoSaveEnabled 设置是否启用自动保存
 //
-// [Advanced] 高级配置，控制是否自动保存 Agent 状态（默认 true）。
+// [Advanced] 高级配置，控制是否自动保存 Agent 状态（默认 true）；仅在配置 WithCheckpointer 时生效。
 func (b *AgentBuilder[C, S]) WithAutoSaveEnabled(enabled bool) *AgentBuilder[C, S] {
 	b.config.EnableAutoSave = enabled
 	return b

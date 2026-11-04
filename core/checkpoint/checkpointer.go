@@ -91,6 +91,8 @@ func (s *InMemorySaver) Save(ctx context.Context, threadID string, state agentst
 	defer s.mu.Unlock()
 
 	now := time.Now()
+	// Callers keep mutating the state they pass in; store a snapshot.
+	state = state.Clone()
 	cp, exists := s.checkpoints[threadID]
 
 	if exists {

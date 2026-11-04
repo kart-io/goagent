@@ -23,7 +23,7 @@ client, err := providers.NewDeepSeekWithOptions(
     llm.WithMaxTokens(1000),
     llm.WithTimeout(30*time.Second),
 )
-response, err := client.Chat(ctx, []llm.Message{
+response, err := llm.Chat(ctx, client, []llm.Message{
     llm.SystemMessage("你是一个友好的 AI 助手，擅长用简洁的语言回答问题。"),
     llm.UserMessage("请用一句话解释什么是 AI Agent。"),
 })
@@ -38,7 +38,7 @@ agent, err := builder.NewAgentBuilder[any, *agentcore.AgentState](client).
     WithSystemPrompt("你是一个专业的 Go 语言顾问，擅长解答 Go 编程相关的问题。").
     WithMetadata("name", "Go-Advisor").
     Build()
-output, err := agent.Execute(ctx, "请列举 Go 语言的三个主要特点。")
+output, err := agent.AsRunnable().Invoke(ctx, "请列举 Go 语言的三个主要特点。")
 ```
 
 打印 `output.Result` 与 `output.Duration`。

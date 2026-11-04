@@ -45,7 +45,7 @@ func main() {
 	fmt.Println("--- Default Serializer ---")
 	agent1, _ := builder.NewSimpleBuilder(client).Build()
 	// We expect the LLM to receive the raw email
-	res1, err := agent1.Execute(context.Background(), "user@example.com")
+	res1, err := agent1.AsRunnable().Invoke(context.Background(), "user@example.com")
 	if err != nil {
 		log.Printf("Agent1 execution failed: %v", err)
 	} else {
@@ -60,7 +60,7 @@ func main() {
 		Build()
 
 	// We expect the LLM to receive "MASKED_EMAIL"
-	res2, err := agent2.Execute(context.Background(), "user@example.com")
+	res2, err := agent2.AsRunnable().Invoke(context.Background(), "user@example.com")
 	if err != nil {
 		log.Printf("Agent2 execution failed: %v", err)
 	} else {

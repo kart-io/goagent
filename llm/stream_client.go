@@ -10,23 +10,10 @@ import (
 	"github.com/kart-io/goagent/llm/constants"
 )
 
-// StreamClient 流式 LLM 客户端接口
-//
-// 扩展 Client 接口，提供流式补全能力
-type StreamClient interface {
-	Client // 继承基础接口
-
-	// CompleteStream 流式补全
-	CompleteStream(ctx context.Context, req *CompletionRequest) (<-chan *StreamChunk, error)
-
-	// ChatStream 流式对话
-	ChatStream(ctx context.Context, messages []Message) (<-chan *StreamChunk, error)
-}
-
 // ToolStreamClient 在一次请求内选择工具或直接流式回答，保留原生消息和用量。
 // 工具列表只在无错误的 Done 块中返回完整值；不能执行未完成的参数分片。
 type ToolStreamClient interface {
-	StreamClient
+	Client
 	CompleteToolsStream(context.Context, *CompletionRequest, []interfaces.Tool) (<-chan *StreamChunk, error)
 }
 
@@ -129,35 +116,12 @@ func DefaultStreamOptions() *StreamOptions {
 
 // MockStreamClient 模拟流式客户端（用于测试）
 type MockStreamClient struct {
-	provider    constants.Provider
-	isAvailable bool
+	provider constants.Provider
 }
 
 // NewMockStreamClient 创建模拟流式客户端
 func NewMockStreamClient() *MockStreamClient {
-	return &MockStreamClient{
-		provider:    constants.ProviderCustom,
-		isAvailable: true,
-	}
-}
-
-// Complete 生成文本补全
-func (m *MockStreamClient) Complete(ctx context.Context, req *CompletionRequest) (*CompletionResponse, error) {
-	// 简化实现
-	return &CompletionResponse{
-		Content:      "Mock response",
-		Model:        req.Model,
-		TokensUsed:   10,
-		FinishReason: "stop",
-		Provider:     string(m.provider),
-	}, nil
-}
-
-// Chat 进行对话
-func (m *MockStreamClient) Chat(ctx context.Context, messages []Message) (*CompletionResponse, error) {
-	return m.Complete(ctx, &CompletionRequest{
-		Messages: messages,
-	})
+	return &MockStreamClient{provider: constants.ProviderCustom}
 }
 
 // CompleteStream 流式补全
@@ -270,21 +234,9 @@ func (m *MockStreamClient) CompleteStream(ctx context.Context, req *CompletionRe
 	return out, nil
 }
 
-// ChatStream 流式对话
-func (m *MockStreamClient) ChatStream(ctx context.Context, messages []Message) (<-chan *StreamChunk, error) {
-	return m.CompleteStream(ctx, &CompletionRequest{
-		Messages: messages,
-	})
-}
-
 // Provider 返回提供商类型
 func (m *MockStreamClient) Provider() constants.Provider {
 	return m.provider
-}
-
-// IsAvailable 检查 LLM 是否可用
-func (m *MockStreamClient) IsAvailable() bool {
-	return m.isAvailable
 }
 
 // StreamReader 流式读取器

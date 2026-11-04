@@ -10,11 +10,6 @@ package providers
 //   - common.DefaultFrequencyPenalty (原 providers.DefaultFrequencyPenalty)
 //   - common.DefaultPresencePenalty (原 providers.DefaultPresencePenalty)
 //
-// 类型:
-//   - common.ToolCall (原 providers.ToolCall)
-//   - common.ToolCallResponse (原 providers.ToolCallResponse)
-//   - common.ToolChunk (原 providers.ToolChunk)
-//
 // 迁移示例:
 //
 //   // 旧代码

@@ -32,5 +32,5 @@ agent, err := builder.NewSimpleBuilder(client).
     WithVerbose(true).
     Build()
 
-output, err := agent.ExecuteWithTools(ctx, "计算 (25 + 17) * 3 的结果")
+output, err := agent.AsRunnable().Invoke(ctx, "计算 (25 + 17) * 3 的结果")
 ```

@@ -29,6 +29,19 @@ go run ./examples/execution-scope
 
 Scope 不提供跨进程调度、分布式会话互斥或自动副作用补偿；多实例共享持久运行需要支持租约的 Store（如 goagent-contrib 的 `durable/pgstore`）。持久审批与恢复由现有 Runner、工作流和 Dispatcher 负责；其行为见 [执行治理](EXECUTION_GOVERNANCE.md)。恢复集成测试见 [execution/integration_test.go](../../execution/integration_test.go)，覆盖审批暂停、执行后检查点失败、重建恢复与完成回放，并验证副作用和预算不重复。
 
+## 持久化分工
+
+Builder 的持久化入口各管一件事，不能相互替代：
+
+| 关注点 | 入口 | 行为 |
+|---|---|---|
+| 运行中途崩溃恢复 | Scope 的 Journal 与 `WithDurableScope` | 记录模型与工具调用，以同一执行键恢复时回放已完成操作 |
+| 对话历史 | `WithMemory` 或 `WithSessionLog` | 配置 SessionLog 后历史从日志推导，不再读取记忆；SessionLog 可同时作为 durable 日志（`session.DurableStore`） |
+| 轮次之间的业务状态 | `WithCheckpointer` + `WithAutoSaveEnabled` | `Initialize` 按 SessionID 加载状态，每轮成功后与 `Shutdown` 时保存，保存失败则本次执行返回错误；未配置时不加载也不保存 |
+| 工具读写的键值数据 | `WithStore` | 经 `tools.ToolRuntime` 交给工具；未配置时使用进程内存储 |
+
+检查点只保存状态快照，不能恢复中断的运行；持久日志只回放操作结果，不保存 `WithState` 的状态。需要两者时分别配置，并使用同一 SessionID。
+
 ## 开销与验收
 
 [实测报告](../evaluation/2026-10-31-execution-overhead/REPORT.md) 保存三种预算模式、10/100/1000 操作矩阵、固定账本微基准与原始数据。探针可独立运行：

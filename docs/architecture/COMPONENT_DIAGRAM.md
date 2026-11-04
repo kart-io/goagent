@@ -27,8 +27,6 @@ classDiagram
         <<builder>>
         +AsRunnable() *core.StreamRunnable[any, *AgentOutput]
         +ExecuteStream(ctx, input) (<-chan AgentEvent, error)
-        +Execute(ctx, input) (*AgentOutput, error)
-        +ExecuteWithTools(ctx, input) (*AgentOutput, error)
         +Start(ctx, input string) *Handle
         +Initialize(ctx) / Shutdown(ctx)
     }
@@ -177,35 +175,23 @@ classDiagram
 classDiagram
     class Client {
         <<interface llm>>
-        +Complete(ctx, *CompletionRequest) (*CompletionResponse, error)
-        +Chat(ctx, []Message) (*CompletionResponse, error)
-        +Provider() constants.Provider
-        +IsAvailable() bool
-    }
-    class StreamClient {
-        <<interface llm>>
         +CompleteStream(ctx, *CompletionRequest) (<-chan *StreamChunk, error)
-        +ChatStream(ctx, []Message) (<-chan *StreamChunk, error)
+        +Provider() constants.Provider
     }
     class ToolStreamClient {
         <<interface llm>>
         +CompleteToolsStream(ctx, *CompletionRequest, []Tool) (<-chan *StreamChunk, error)
     }
-    class ToolCallingClient {
-        <<interface llm>>
-        +GenerateWithTools(...)
-    }
     class OpenAIProvider
     class DeepSeekProvider
     class GeminiProvider
-    Client <|-- StreamClient
-    StreamClient <|-- ToolStreamClient
+    Client <|-- ToolStreamClient
     ToolStreamClient <|.. OpenAIProvider
     ToolStreamClient <|.. DeepSeekProvider
     ToolStreamClient <|.. GeminiProvider
 ```
 
-能力探测用 `llm.HasStreaming`、`HasToolStreaming`、`HasToolCalling` 等函数。Builder 的原生工具循环要求 `ToolStreamClient`；只实现 `ToolCallingClient` 的客户端走旧的工具选择路径，不支持持久日志与根预算。
+完整响应用 `llm.Complete` / `llm.Chat` 收集流；能力探测用 `llm.HasToolStreaming` 等函数。Builder 接受任意 `llm.Client`，配置工具时要求 `ToolStreamClient`。
 
 ## 持久执行、会话与预算
 

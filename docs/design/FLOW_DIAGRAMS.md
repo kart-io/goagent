@@ -10,10 +10,8 @@
 flowchart TB
     IN([ExecuteStream ctx, input]) --> BUDGET{validateModelBudget}
     BUDGET -->|预算已耗尽| ERR([返回错误])
-    BUDGET --> SC{客户端实现 llm.StreamClient?}
-    SC -->|否| ERR
-    SC -->|是| TC{配置了工具?}
-    TC -->|是，且既不是 ToolStreamClient<br/>也不支持 GenerateWithTools| ERR
+    BUDGET --> TC{配置了工具?}
+    TC -->|是，且不是 ToolStreamClient| ERR
     TC --> GATE[beginExecution：WithTimeout、budget.Bind、<br/>等待本实例执行权]
     TC -->|否| GATE
     GATE --> DUR[scopeDurableExecution：<br/>有日志时检查工具支持持久调用、DurableScope 非空，<br/>执行键派生为 key/agent/scope]
@@ -24,10 +22,8 @@ flowchart TB
     RET -->|否| PATH
     SRC --> PATH{ToolStreamClient 且有工具?}
     PATH -->|是| LOOP[原生工具循环 runToolEvents]
-    PATH -->|否，有 GenerateWithTools| LEGACY[旧工具选择循环 + model/answer/0]
     PATH -->|否，无工具| PLAIN[readPlainModelTurn model/answer/0]
     LOOP --> FIN[finishEvents：usage 事件、写记忆、<br/>自动保存检查点]
-    LEGACY --> FIN
     PLAIN --> FIN
     FIN --> DONE([done 事件])
     CHAIN -->|错误| ERRE([error 事件，带出错工具名])

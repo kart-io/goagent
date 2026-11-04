@@ -55,9 +55,9 @@ LLM 客户端由配置中的 `LLM.Provider` 决定：`deepseek`（默认）读�
 
 `LLMWeatherSkill.processWithLLM`：
 
-1. `llm.AsToolCaller(client)` 获取工具调用能力，取不到时退回 `Chat`；
-2. `GenerateWithTools(ctx, prompt, tools)` 发送带工具定义的请求，失败时同样退回 `Chat`；
-3. 模型返回 `ToolCalls` 时，按名称找到工具并 `Invoke`，结果作为技能输出；否则直接返回模型文本。
+1. `llm.AsToolStreamClient(client)` 获取原生工具流，取不到时退回 `llm.Chat`；
+2. `CompleteToolsStream(ctx, req, tools)` 发送带工具定义的请求，只采用成功终止块，失败时同样退回 `llm.Chat`；
+3. 终止块返回 `ToolCalls` 时，按名称找到工具并 `Invoke`，结果作为技能输出；否则直接返回模型文本。
 
 ## 配置
 

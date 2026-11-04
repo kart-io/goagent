@@ -1,6 +1,6 @@
 # All Providers Example - 所有 Provider 测试示例
 
-依次用 `llm/providers` 的构造函数创建 6 个 Provider 客户端，各发一条 `Chat` 请求并打印回复、Provider 与模型名。未设置对应 API Key 的 Provider 会被跳过；Ollama 需本地运行（`ollama serve`，模型 `llama2`）。
+依次用 `llm/providers` 的构造函数创建 6 个 Provider 客户端，各用 `llm.Chat` 发一条请求并打印回复、Provider 与模型名。未设置对应 API Key 的 Provider 会被跳过；Ollama 需本地运行（`ollama serve`，模型 `llama2`），示例先用 `ListModels` 确认模型已拉取（不产生生成请求），否则跳过。
 
 ## 运行示例
 
@@ -26,4 +26,4 @@ client, err := providers.NewOpenAIWithOptions(
 )
 ```
 
-其余 Provider 分别使用 `NewGeminiWithOptions`、`NewDeepSeekWithOptions`、`NewSiliconFlowWithOptions`、`NewKimiWithOptions` 与 `NewOllamaClientSimple`。所有客户端都实现 `llm.Client`，测试函数 `testProvider` 先调用 `IsAvailable()`，再以 10 秒超时调用 `Chat`。
+其余 Provider 分别使用 `NewGeminiWithOptions`、`NewDeepSeekWithOptions`、`NewSiliconFlowWithOptions`、`NewKimiWithOptions` 与 `NewOllamaClientSimple`。所有客户端都实现 `llm.Client`，测试函数 `testProvider` 以 10 秒超时调用 `llm.Chat`。

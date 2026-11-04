@@ -36,7 +36,7 @@ func TestStreamUsageEvidenceProtocol(t *testing.T) {
 				}))
 				defer server.Close()
 				opts := []agentllm.ClientOption{agentllm.WithAPIKey("test"), agentllm.WithBaseURL(server.URL)}
-				var client agentllm.StreamClient
+				var client agentllm.Client
 				var err error
 				switch provider {
 				case "openai":
@@ -47,7 +47,7 @@ func TestStreamUsageEvidenceProtocol(t *testing.T) {
 					client, err = NewGeminiWithOptions(opts...)
 				}
 				require.NoError(t, err)
-				chunks, err := client.ChatStream(context.Background(), []agentllm.Message{agentllm.UserMessage("question")})
+				chunks, err := client.CompleteStream(context.Background(), &agentllm.CompletionRequest{Messages: []agentllm.Message{agentllm.UserMessage("question")}})
 				require.NoError(t, err)
 				var last *agentllm.StreamChunk
 				for c := range chunks {

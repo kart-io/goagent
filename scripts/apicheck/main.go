@@ -1,4 +1,4 @@
-// apicheck performs syntax-based import enforcement and migration inventory.
+// apicheck performs syntax-based import enforcement.
 package main
 
 import (
@@ -66,47 +66,18 @@ func forbidden(file, path string) bool {
 	return false
 }
 
-func inspect(fset *token.FileSet, file string, node *ast.File, mode string) []finding {
+func inspect(fset *token.FileSet, file string, node *ast.File) []finding {
 	var out []finding
-	aliases := map[string]string{}
-	hasBuilder := false
 	for _, imp := range node.Imports {
 		path, _ := strconv.Unquote(imp.Path.Value)
-		alias := filepath.Base(path)
-		if imp.Name != nil {
-			alias = imp.Name.Name
-		}
-		aliases[alias] = path
-		if path == module+"builder" {
-			hasBuilder = true
-		}
-		if mode == "imports" && forbidden(file, path) {
+		if forbidden(file, path) {
 			out = append(out, finding{fset.Position(imp.Pos()).Line, "disallowed import " + path})
 		}
-		if mode == "migration" && alias == "." && (path == module+"builder" || path == module+"interfaces") {
-			out = append(out, finding{fset.Position(imp.Pos()).Line, "dot import needs manual migration review"})
-		}
 	}
-	if mode != "migration" {
-		return out
-	}
-	ast.Inspect(node, func(n ast.Node) bool {
-		sel, ok := n.(*ast.SelectorExpr)
-		if !ok {
-			return true
-		}
-		if pkg, ok := sel.X.(*ast.Ident); ok && aliases[pkg.Name] == module+"interfaces" && (sel.Sel.Name == "Agent" || sel.Sel.Name == "Runnable") {
-			out = append(out, finding{fset.Position(sel.Pos()).Line, "legacy interfaces." + sel.Sel.Name + ": review migration to core.Runnable"})
-		}
-		if hasBuilder && (sel.Sel.Name == "Execute" || sel.Sel.Name == "ExecuteWithTools") {
-			out = append(out, finding{fset.Position(sel.Pos()).Line, "candidate " + sel.Sel.Name + ": review receiver and migrate Builder calls to AsRunnable().Invoke; check streaming, tools and budget semantics"})
-		}
-		return true
-	})
 	return out
 }
 
-func scan(root, mode string) (int, error) {
+func scan(root string) (int, error) {
 	fset := token.NewFileSet()
 	count := 0
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
@@ -130,7 +101,7 @@ func scan(root, mode string) (int, error) {
 		if err != nil {
 			return err
 		}
-		for _, f := range inspect(fset, rel, node, mode) {
+		for _, f := range inspect(fset, rel, node) {
 			fmt.Printf("%s:%d: %s\n", path, f.line, f.message)
 			count++
 		}
@@ -140,15 +111,14 @@ func scan(root, mode string) (int, error) {
 }
 func main() {
 	root := flag.String("root", ".", "source root")
-	mode := flag.String("mode", "imports", "imports or migration")
-	strict := flag.Bool("strict", false, "fail on migration candidates (imports always fail on violations)")
+	mode := flag.String("mode", "imports", "imports")
 	verbose := flag.Bool("verbose", false, "print checked root")
 	flag.Parse()
-	if (*mode != "imports" && *mode != "migration") || flag.NArg() != 0 {
-		fmt.Fprintln(os.Stderr, "expected -mode imports|migration -root directory")
+	if *mode != "imports" || flag.NArg() != 0 {
+		fmt.Fprintln(os.Stderr, "expected -mode imports -root directory")
 		os.Exit(2)
 	}
-	count, err := scan(*root, *mode)
+	count, err := scan(*root)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -157,7 +127,7 @@ func main() {
 		fmt.Println("checked", *root)
 	}
 	fmt.Printf("%s: %d findings\n", *mode, count)
-	if count > 0 && (*strict || *mode == "imports") {
+	if count > 0 {
 		os.Exit(1)
 	}
 }

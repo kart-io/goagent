@@ -2,7 +2,7 @@
 
 ## 检查器
 
-`scripts/verify_imports.sh` 调用 `go run ./scripts/apicheck -mode imports -root .`：用 Go AST 读取仓库内全部非测试 `.go` 文件（跳过 `_test.go`、隐藏目录、`vendor`、`node_modules`，包含 `examples/`）的 import，任一违规即以非零码退出。规则在 `scripts/apicheck/main.go` 的 `forbidden` 中，回归测试在 `scripts/apicheck/main_test.go`。CI（`ci.yml`、`pr.yml`、`release.yml`）都会运行该脚本；`--strict` 只影响 `-mode migration`，导入模式始终在违规时失败。
+`scripts/verify_imports.sh` 调用 `go run ./scripts/apicheck -mode imports -root .`：用 Go AST 读取仓库内全部非测试 `.go` 文件（跳过 `_test.go`、隐藏目录、`vendor`、`node_modules`，包含 `examples/`）的 import，任一违规即以非零码退出。规则在 `scripts/apicheck/main.go` 的 `forbidden` 中，回归测试在 `scripts/apicheck/main_test.go`。CI（`ci.yml`、`pr.yml`、`release.yml`）都会运行该脚本，任一违规即失败。
 
 规则按“源文件所在的顶层目录”与“被导入的 GoAgent 包”判断。下表是检查器**实际执行**的全部规则，表外的组合不检查，循环依赖由 Go 编译器拒绝。
 

@@ -48,7 +48,7 @@ Format your response with clear sections and actionable items.`, analysis)
 		llm.UserMessage(prompt),
 	}
 
-	response, err := s.llmClient.Chat(ctx, messages)
+	response, err := llm.Chat(ctx, s.llmClient, messages)
 	if err != nil {
 		return "", fmt.Errorf("strategy formulation failed: %w", err)
 	}
@@ -85,7 +85,7 @@ Consider:
 		llm.UserMessage(prompt),
 	}
 
-	response, err := s.llmClient.Chat(ctx, messages)
+	response, err := llm.Chat(ctx, s.llmClient, messages)
 	if err != nil {
 		return nil, fmt.Errorf("task prioritization failed: %w", err)
 	}
@@ -129,7 +129,7 @@ Make it practical and immediately actionable.`, strategy, constraints)
 		llm.UserMessage(prompt),
 	}
 
-	response, err := s.llmClient.Chat(ctx, messages)
+	response, err := llm.Chat(ctx, s.llmClient, messages)
 	if err != nil {
 		return "", fmt.Errorf("action plan creation failed: %w", err)
 	}
@@ -159,7 +159,7 @@ Explain what changed and why.`, currentStrategy, feedback)
 		llm.UserMessage(prompt),
 	}
 
-	response, err := s.llmClient.Chat(ctx, messages)
+	response, err := llm.Chat(ctx, s.llmClient, messages)
 	if err != nil {
 		return "", fmt.Errorf("strategy optimization failed: %w", err)
 	}
@@ -193,7 +193,7 @@ Provide a recommendation with justification.`, optionsList)
 		llm.UserMessage(prompt),
 	}
 
-	response, err := s.llmClient.Chat(ctx, messages)
+	response, err := llm.Chat(ctx, s.llmClient, messages)
 	if err != nil {
 		return "", fmt.Errorf("option evaluation failed: %w", err)
 	}

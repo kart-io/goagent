@@ -134,7 +134,7 @@ func example1AgentWithMonitoring(apiKey, providerName string) {
 
 	// 执行 Agent（会打印详细的执行日志）
 	fmt.Println("\n开始执行 Agent（观察详细日志）：")
-	result, err := agent.Execute(context.Background(), "计算 (10 + 20) * 3")
+	result, err := agent.AsRunnable().Invoke(context.Background(), "计算 (10 + 20) * 3")
 	if err != nil {
 		log.Printf("执行失败: %v", err)
 	} else {
@@ -178,7 +178,7 @@ func example2AgentWithPerformanceControl(apiKey, providerName string) {
 
 	// 执行 Agent
 	ctx := context.Background()
-	result, err := agent.Execute(ctx, "快速计算 100 + 200 + 300")
+	result, err := agent.AsRunnable().Invoke(ctx, "快速计算 100 + 200 + 300")
 	if err != nil {
 		log.Printf("执行失败（可能超时）: %v", err)
 	} else {
@@ -236,7 +236,7 @@ func example3AgentWithMemory(apiKey, providerName string) {
 	// 第一轮对话：告诉 Agent 一些信息
 	fmt.Println("\n=== 第一轮对话 ===")
 	fmt.Println("用户: 我的名字叫小明，我今年 25 岁")
-	result1, err := agent.Execute(ctx, "我的名字叫小明，我今年 25 岁")
+	result1, err := agent.AsRunnable().Invoke(ctx, "我的名字叫小明，我今年 25 岁")
 	if err != nil {
 		log.Printf("第一轮对话失败: %v", err)
 	} else {
@@ -246,7 +246,7 @@ func example3AgentWithMemory(apiKey, providerName string) {
 	// 第二轮对话：测试 Agent 是否记住了用户信息
 	fmt.Println("\n=== 第二轮对话 ===")
 	fmt.Println("用户: 你还记得我叫什么名字吗？我多大了？")
-	result2, err := agent.Execute(ctx, "你还记得我叫什么名字吗？我多大了？")
+	result2, err := agent.AsRunnable().Invoke(ctx, "你还记得我叫什么名字吗？我多大了？")
 	if err != nil {
 		log.Printf("第二轮对话失败: %v", err)
 	} else {
@@ -256,7 +256,7 @@ func example3AgentWithMemory(apiKey, providerName string) {
 	// 第三轮对话：进行计算并关联之前的信息
 	fmt.Println("\n=== 第三轮对话 ===")
 	fmt.Println("用户: 请帮我计算 5 年后我多大")
-	result3, err := agent.Execute(ctx, "请帮我计算 5 年后我多大")
+	result3, err := agent.AsRunnable().Invoke(ctx, "请帮我计算 5 年后我多大")
 	if err != nil {
 		log.Printf("第三轮对话失败: %v", err)
 	} else {
@@ -328,7 +328,7 @@ func example4AgentWithErrorHandling(apiKey, providerName string) {
 	}
 
 	// 执行 Agent（模拟可能出错的场景）
-	result, err := agent.Execute(context.Background(), "执行一个计算任务：计算 50 乘以 2")
+	result, err := agent.AsRunnable().Invoke(context.Background(), "执行一个计算任务：计算 50 乘以 2")
 	if err != nil {
 		fmt.Printf("最终错误: %v\n", err)
 	} else {
@@ -433,7 +433,7 @@ func example5OutputFormatWithPerformance(apiKey, providerName string) {
 	if err != nil {
 		log.Printf("创建 Agent 失败: %v", err)
 	} else {
-		result, _ := agent1.Execute(ctx, "返回一个包含 id, name, status 字段的订单信息")
+		result, _ := agent1.AsRunnable().Invoke(ctx, "返回一个包含 id, name, status 字段的订单信息")
 		fmt.Printf("输出: %v\n", result.Result)
 	}
 
@@ -449,7 +449,7 @@ func example5OutputFormatWithPerformance(apiKey, providerName string) {
 	if err != nil {
 		log.Printf("创建 Agent 失败: %v", err)
 	} else {
-		result, _ := agent2.Execute(ctx, "审查这段代码：for i := 0; i < len(arr); i++ { fmt.Println(arr[i]) }")
+		result, _ := agent2.AsRunnable().Invoke(ctx, "审查这段代码：for i := 0; i < len(arr); i++ { fmt.Println(arr[i]) }")
 		fmt.Printf("输出:\n%v\n", result.Result)
 	}
 
@@ -470,11 +470,11 @@ func example5OutputFormatWithPerformance(apiKey, providerName string) {
 		log.Printf("创建 Agent 失败: %v", err)
 	} else {
 		// 第一轮对话
-		result1, _ := agent3.Execute(ctx, "我叫小明，今年 25 岁")
+		result1, _ := agent3.AsRunnable().Invoke(ctx, "我叫小明，今年 25 岁")
 		fmt.Printf("第一轮: %v\n", result1.Result)
 
 		// 第二轮对话（测试记忆）
-		result2, _ := agent3.Execute(ctx, "你还记得我的名字和年龄吗？")
+		result2, _ := agent3.AsRunnable().Invoke(ctx, "你还记得我的名字和年龄吗？")
 		fmt.Printf("第二轮: %v\n", result2.Result)
 	}
 

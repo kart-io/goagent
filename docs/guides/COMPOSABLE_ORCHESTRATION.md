@@ -23,7 +23,7 @@ go run ./orchestration/composed-order /tmp/goagent-order-demo
 
 宿主用 `budget.New(Config{RootKey, Version, MaxModelRequests})` 或 `budget.NewDurable(config, store)` 构造账本，以 `budget.WithController(ctx, controller)` 或同时传播截止时间的 `budget.Bind` 传入根调用；Token、工具次数与截止时间限额见[执行治理](EXECUTION_GOVERNANCE.md#根预算)。RootKey 是受信业务运行 ID，不能来自模型参数。父子调用继承同一 context，不能另建预算来重置额度。
 
-显式绑定根预算时，旧 Execute 和不支持流的 ExecuteWithTools 在请求前报错；迁移到 AsRunnable 统一入口，避免静默忽略额度。未绑定预算的旧入口行为保留。
+根预算在 Builder 的统一入口上生效，所有模型请求都计入额度。
 
 统一模型入口在实际请求前预留；成功回放跳过预留。预留不退款，崩溃时可能无法判断请求是否发送。持久日志配内存预算会在请求前拒绝。同一 RootKey 改版本或上限会报错。账本和模型操作不是跨文件事务；结果已保存而用量登记失败时返回错误，后续读取已有记录修复用量，不重新付费取证。
 
@@ -77,6 +77,6 @@ Graph.Describe 或编译产物可选 Description 返回排序、独立的 `goage
 
 ## 持久 Agent 作用域与升级
 
-所有在持久 context 中执行的 Builder Agent 必须配置 `WithDurableScope("stable-name")`；同一父节点中的逻辑调用名称必须不同且跨重启稳定。`composed-order` 分别使用 `order-review` 和 `policy`，模型日志、工具日志和默认上下文结果引用位于对应 Agent 子作用域；根预算与 OTel context 继续共享。无工具 StreamClient 保留 R2 的 `model/answer/0` 日志和预算统计，原生工具循环使用 `model/turn/N`。
+所有在持久 context 中执行的 Builder Agent 必须配置 `WithDurableScope("stable-name")`；同一父节点中的逻辑调用名称必须不同且跨重启稳定。`composed-order` 分别使用 `order-review` 和 `policy`，模型日志、工具日志和默认上下文结果引用位于对应 Agent 子作用域；根预算与 OTel context 继续共享。无工具 `llm.Client` 保留 R2 的 `model/answer/0` 日志和预算统计，原生工具循环使用 `model/turn/N`。
 
 检测到旧的无作用域 `model/turn/0` 或 `model/answer/0` 记录时提前拒绝，避免换键重跑。已有目录不能直接当作新运行；先核对业务效果，再制定版本迁移。演示新运行可使用新的空目录，不能通过删除旧评测或检查点来掩盖迁移问题。详细契约见[多 Agent 作用域与入口约束](NATIVE_ORCHESTRATION.md#多-agent-作用域与入口约束)。

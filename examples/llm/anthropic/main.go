@@ -45,7 +45,7 @@ func basicExample() {
 	provider, err := providers.NewAnthropicWithOptions(
 		llm.WithBaseURL(os.Getenv("ANTHROPIC_API_BASE_URL")), // Optional: for custom endpoints
 		llm.WithAPIKey(os.Getenv("ANTHROPIC_API_KEY")),       // or set directly: APIKey: "your-api-key"
-		llm.WithModel("claude-3-sonnet-20240229"),            // Optional: defaults to claude-3-sonnet-20240229
+		llm.WithModel("claude-opus-5-5"),                     // Optional: defaults to claude-opus-5-5
 	)
 	if err != nil {
 		log.Fatalf("Failed to create Anthropic provider: %v", err)
@@ -53,7 +53,7 @@ func basicExample() {
 
 	// Create a simple completion request
 	ctx := context.Background()
-	resp, err := provider.Complete(ctx, &llm.CompletionRequest{
+	resp, err := llm.Complete(ctx, provider, &llm.CompletionRequest{
 		Messages: []llm.Message{
 			{Role: "user", Content: "What is the capital of France?"},
 		},
@@ -71,9 +71,9 @@ func basicExample() {
 // Example 2: Using Different Models
 func modelExample() {
 	models := []string{
-		"claude-3-opus-20240229",   // Most capable
-		"claude-3-sonnet-20240229", // Balanced
-		"claude-3-haiku-20240307",  // Fastest
+		"claude-opus-5-5",   // Most capable Opus
+		"claude-sonnet-5-5", // Balanced
+		"claude-haiku-5-5",  // Fastest
 	}
 
 	for _, model := range models {
@@ -89,7 +89,7 @@ func modelExample() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		resp, err := provider.Complete(ctx, &llm.CompletionRequest{
+		resp, err := llm.Complete(ctx, provider, &llm.CompletionRequest{
 			Messages: []llm.Message{
 				{Role: "user", Content: "Say hello in one word."},
 			},
@@ -114,22 +114,26 @@ func streamingExample() {
 	}
 
 	ctx := context.Background()
-	tokenChan, err := provider.Stream(ctx, "Write a haiku about programming.")
+	stream, err := provider.CompleteStream(ctx, &llm.CompletionRequest{Messages: []llm.Message{llm.UserMessage("Write a haiku about programming.")}})
 	if err != nil {
 		log.Printf("Streaming error: %v\n", err)
 		return
 	}
 
 	fmt.Print("Streaming response: ")
-	for token := range tokenChan {
-		fmt.Print(token)
+	for chunk := range stream {
+		if chunk.Error != nil {
+			log.Printf("\nStreaming error: %v\n", chunk.Error)
+			return
+		}
+		fmt.Print(chunk.Delta)
 	}
 	fmt.Println()
 }
 
 // Example 4: Multi-turn Conversation
 func conversationExample() {
-	provider, err := providers.NewAnthropicWithOptions(llm.WithAPIKey(os.Getenv("ANTHROPIC_API_KEY")), llm.WithTemperature(0.7), llm.WithMaxTokens(1000))
+	provider, err := providers.NewAnthropicWithOptions(llm.WithAPIKey(os.Getenv("ANTHROPIC_API_KEY")), llm.WithMaxTokens(1000))
 	if err != nil {
 		log.Fatalf("Failed to create provider: %v", err)
 	}
@@ -142,7 +146,7 @@ func conversationExample() {
 	ctx := context.Background()
 
 	// First turn
-	resp1, err := provider.Complete(ctx, &llm.CompletionRequest{
+	resp1, err := llm.Complete(ctx, provider, &llm.CompletionRequest{
 		Messages: messages,
 	})
 	if err != nil {
@@ -163,7 +167,7 @@ func conversationExample() {
 		Content: "Do you remember my name?",
 	})
 
-	resp2, err := provider.Complete(ctx, &llm.CompletionRequest{
+	resp2, err := llm.Complete(ctx, provider, &llm.CompletionRequest{
 		Messages: messages,
 	})
 	if err != nil {
@@ -181,7 +185,7 @@ func tokenUsageExample() {
 	}
 
 	ctx := context.Background()
-	resp, err := provider.Complete(ctx, &llm.CompletionRequest{
+	resp, err := llm.Complete(ctx, provider, &llm.CompletionRequest{
 		Messages: []llm.Message{
 			{Role: "user", Content: "Explain quantum computing in 50 words."},
 		},
@@ -214,7 +218,7 @@ func errorHandlingExample() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	_, err = provider.Complete(ctx, &llm.CompletionRequest{
+	_, err = llm.Complete(ctx, provider, &llm.CompletionRequest{
 		Messages: []llm.Message{
 			{Role: "user", Content: "Test"},
 		},

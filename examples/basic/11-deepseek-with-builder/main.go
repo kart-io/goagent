@@ -109,7 +109,7 @@ func runBasicAgentBuilder(apiKey string) error {
 	ctx := context.Background()
 	input := "请用一句话介绍 Go 语言的主要特点"
 
-	output, err := agent.Execute(ctx, input)
+	output, err := agent.AsRunnable().Invoke(ctx, input)
 	if err != nil {
 		return fmt.Errorf("agent 执行失败: %w", err)
 	}
@@ -163,7 +163,7 @@ func runAgentBuilderWithTools(apiKey string) error {
 	ctx := context.Background()
 	input := "请帮我计算 15 * 8，然后告诉我现在的时间"
 
-	output, err := agent.ExecuteWithTools(ctx, input)
+	output, err := agent.AsRunnable().Invoke(ctx, input)
 	if err != nil {
 		return fmt.Errorf("agent 执行失败: %w", err)
 	}
@@ -213,7 +213,7 @@ func runAgentBuilderWithMiddleware(apiKey string) error {
 	ctx := context.Background()
 	input := "请简要解释什么是机器学习"
 
-	output, err := agent.Execute(ctx, input)
+	output, err := agent.AsRunnable().Invoke(ctx, input)
 	if err != nil {
 		return fmt.Errorf("agent 执行失败: %w", err)
 	}
@@ -279,7 +279,7 @@ func runAgentBuilderWithConfig(apiKey string) error {
 	ctx := context.Background()
 	input := "请用一段话解释什么是 RESTful API"
 
-	output, err := agent.Execute(ctx, input)
+	output, err := agent.AsRunnable().Invoke(ctx, input)
 	if err != nil {
 		return fmt.Errorf("agent 执行失败: %w", err)
 	}
@@ -328,7 +328,7 @@ func runChatbotAgent(apiKey string) error {
 	for i, userMsg := range conversations {
 		fmt.Printf("\n👤 用户: %s\n", userMsg)
 
-		output, err := agent.Execute(ctx, userMsg)
+		output, err := agent.AsRunnable().Invoke(ctx, userMsg)
 		if err != nil {
 			return fmt.Errorf("对话 %d 失败: %w", i+1, err)
 		}

@@ -3,10 +3,8 @@ package builder
 import (
 	"context"
 	"fmt"
-	"os"
 	"reflect"
 	"strings"
-	"time"
 
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/checkpoint"
@@ -110,6 +108,12 @@ func (b *AgentBuilder[C, S]) BuildContext(ctx context.Context) (*ConfigurableAge
 	if b.llmClient == nil {
 		return nil, agentErrors.NewInvalidConfigError("builder", "llm_client", "LLM client is required")
 	}
+	if _, ok := b.llmClient.(llm.ToolStreamClient); !ok && len(b.tools) > 0 {
+		return nil, agentErrors.NewInvalidConfigError("builder", "llm_client", "configured tools require llm.ToolStreamClient")
+	}
+	if b.inputSerializer == nil {
+		return nil, agentErrors.NewInvalidConfigError("builder", "input_serializer", "input serializer must not be nil")
+	}
 	if b.config.MemoryFailurePolicy != MemoryFailureBestEffort && b.config.MemoryFailurePolicy != MemoryFailureStrict {
 		return nil, agentErrors.NewInvalidConfigError("builder", "memory_failure_policy", "unknown memory failure policy")
 	}
@@ -160,10 +164,6 @@ func (b *AgentBuilder[C, S]) BuildContext(ctx context.Context) (*ConfigurableAge
 		b.store = memory.New()
 	}
 
-	if b.checkpointer == nil {
-		b.checkpointer = checkpoint.NewInMemorySaver()
-	}
-
 	// 创建运行时
 	runtime := execution.NewRuntime(
 		b.context,
@@ -173,9 +173,8 @@ func (b *AgentBuilder[C, S]) BuildContext(ctx context.Context) (*ConfigurableAge
 		b.config.SessionID,
 	)
 
-	// 构建中间件链
-	handler := b.createHandler(runtime)
-	chain := middleware.NewMiddlewareChain(handler)
+	// 每轮执行通过 WithHandler 替换处理器，这里只承载中间件。
+	chain := middleware.NewMiddlewareChain(nil)
 
 	// 如果 verbose,添加默认中间件
 	if b.config.Verbose {
@@ -199,6 +198,7 @@ func (b *AgentBuilder[C, S]) BuildContext(ctx context.Context) (*ConfigurableAge
 		errorHandler:    b.errorHandler,
 		metadata:        b.metadata,
 		memoryManager:   b.memoryManager,
+		inputSerializer: b.inputSerializer,
 		retriever:       b.retriever,
 		retrievalConfig: b.retrievalConfig,
 	}
@@ -214,144 +214,10 @@ func (b *AgentBuilder[C, S]) BuildContext(ctx context.Context) (*ConfigurableAge
 	return agent, nil
 }
 
-// buildSystemPrompt 构建完整的系统提示内容（包含输出格式指示）
-func (b *AgentBuilder[C, S]) buildSystemPrompt() string {
-	if b.systemPrompt == "" && b.config.OutputFormat == OutputFormatDefault {
-		return ""
-	}
-
-	var sb strings.Builder
-	if b.systemPrompt != "" {
-		sb.WriteString(b.systemPrompt)
-	}
-
-	// 追加输出格式指示
-	var formatPrompt string
-	if b.config.OutputFormat == OutputFormatCustom {
-		formatPrompt = b.config.CustomOutputPrompt
-	} else {
-		formatPrompt = GetOutputFormatPrompt(b.config.OutputFormat)
-	}
-
-	if formatPrompt != "" {
-		if sb.Len() > 0 {
-			sb.WriteString(" ")
-		}
-		sb.WriteString(formatPrompt)
-	}
-
-	return sb.String()
-}
-
 // WithInputSerializer 设置输入序列化器
 func (b *AgentBuilder[C, S]) WithInputSerializer(serializer InputSerializer) *AgentBuilder[C, S] {
 	b.inputSerializer = serializer
 	return b
-}
-
-// createHandler 创建主执行处理器
-func (b *AgentBuilder[C, S]) createHandler(runtime *execution.Runtime[C, S]) middleware.Handler {
-	return func(ctx context.Context, request *middleware.MiddlewareRequest) (*middleware.MiddlewareResponse, error) {
-		// 提取输入
-		inputStr, err := b.inputSerializer.Serialize(request.Input)
-		if err != nil {
-			return nil, agentErrors.Wrap(err, agentErrors.CodeInvalidInput, "failed to serialize input")
-		}
-
-		// 构建消息列表
-		messages := make([]llm.Message, 0)
-
-		// 构建系统提示（包含输出格式指示）
-		systemContent := b.buildSystemPrompt()
-		if systemContent != "" {
-			messages = append(messages, llm.Message{
-				Role:    "system",
-				Content: systemContent,
-			})
-		}
-
-		history, err := readMemory(ctx, b.memoryManager, b.config)
-		if err != nil {
-			return nil, err
-		}
-		for _, conv := range history {
-			messages = append(messages, llm.Message{Role: conv.Role, Content: conv.Content})
-		}
-
-		if b.retriever != nil {
-			evidence, metadata, err := retrieveContext(ctx, b.retriever, b.retrievalConfig, inputStr)
-			if err != nil {
-				return nil, err
-			}
-			messages = append(messages, llm.SystemMessage(retrievalInstruction), llm.UserMessage(evidence))
-			if request.Metadata == nil {
-				request.Metadata = make(map[string]interface{})
-			}
-			for key, value := range metadata {
-				request.Metadata[key] = value
-			}
-		}
-
-		// 添加当前用户输入
-		messages = append(messages, llm.Message{
-			Role:    "user",
-			Content: inputStr,
-		})
-
-		// 创建 LLM 请求
-		llmReq := &llm.CompletionRequest{Reasoning: b.config.Reasoning.Clone(),
-			Messages:       messages,
-			MaxTokens:      b.config.MaxTokens,
-			Temperature:    b.config.Temperature,
-			TemperatureSet: true,
-		}
-
-		if err := llm.ValidateReasoningRequest(b.llmClient, llmReq); err != nil {
-			return nil, err
-		}
-		// 调用 LLM
-		response, err := b.llmClient.Complete(ctx, llmReq)
-		if err != nil {
-			return nil, agentErrors.Wrap(err, agentErrors.CodeLLMRequest, "LLM completion error")
-		}
-
-		if err := writeMemory(ctx, b.memoryManager, b.config, inputStr, response.Content); err != nil {
-			return nil, err
-		}
-
-		// 触发 OnLLMEnd 回调
-		if len(b.callbacks) > 0 {
-			for _, cb := range b.callbacks {
-				if err := cb.OnLLMEnd(ctx, response.Content, response.TokensUsed); err != nil {
-					// 记录错误但不失败请求
-					fmt.Fprintf(os.Stderr, "Callback OnLLMEnd error: %v\n", err)
-				}
-			}
-		}
-
-		// 如果需要则更新状态
-		if request.State != nil {
-			request.State.Set("last_response", response.Content)
-			request.State.Set("last_timestamp", time.Now())
-		}
-
-		// 如果启用自动保存则保存检查点
-		if b.config.EnableAutoSave && runtime.Checkpointer != nil {
-			if err := runtime.SaveState(ctx); err != nil {
-				// 记录错误但不失败请求
-				// 状态保存很重要但对响应不是关键的
-				fmt.Fprintf(os.Stderr, "Failed to auto-save state: %v\n", err)
-			}
-		}
-
-		// 创建响应
-		return &middleware.MiddlewareResponse{
-			Output:     response.Content,
-			State:      request.State,
-			Metadata:   request.Metadata,
-			TokenUsage: response.Usage,
-		}, nil
-	}
 }
 
 // ==============================

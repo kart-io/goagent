@@ -101,7 +101,6 @@ func TestMalformedToolRetainsKnownExplainability(t *testing.T) {
 
 func TestOtherProvidersRejectExplicitReasoning(t *testing.T) {
 	constructors := []func(...llm.ClientOption) (llm.Client, error){
-		func(o ...llm.ClientOption) (llm.Client, error) { return NewCohereWithOptions(o...) },
 		func(o ...llm.ClientOption) (llm.Client, error) { return NewOllamaWithOptions(o...) },
 	}
 	for _, newClient := range constructors {
@@ -109,7 +108,7 @@ func TestOtherProvidersRejectExplicitReasoning(t *testing.T) {
 		require.ErrorContains(t, err, "does not support")
 		p, err := newClient(llm.WithAPIKey("test"))
 		require.NoError(t, err)
-		_, err = p.Complete(context.Background(), &llm.CompletionRequest{Reasoning: &usage.ReasoningConfig{Effort: "low"}})
+		_, err = llm.Complete(context.Background(), p, &llm.CompletionRequest{Reasoning: &usage.ReasoningConfig{Effort: "low"}})
 		require.ErrorContains(t, err, "does not support")
 	}
 }

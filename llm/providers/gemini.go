@@ -83,46 +83,6 @@ func (p *GeminiProvider) request(req *agentllm.CompletionRequest, tools []interf
 	return contents, cfg, nil
 }
 
-func (p *GeminiProvider) generate(ctx context.Context, req *agentllm.CompletionRequest, tools []interfaces.Tool) (*agentllm.StreamChunk, error) {
-	contents, cfg, err := p.request(req, tools)
-	if err != nil {
-		return nil, err
-	}
-	ctx, cancel := context.WithTimeout(ctx, p.GetTimeout())
-	defer cancel()
-	resp, err := geminiSDKGenerate(func() (*genai.GenerateContentResponse, error) {
-		return p.client.Models.GenerateContent(ctx, p.GetModel(req.Model), contents, cfg)
-	})
-	if err != nil {
-		return nil, agentErrors.NewLLMRequestError("gemini", p.GetModel(req.Model), err)
-	}
-	chunk, err := decodeGeminiResponse(resp)
-	if err != nil {
-		return nil, err
-	}
-	if chunk.FinishReason != "stop" && chunk.FinishReason != "tool_calls" {
-		return nil, fmt.Errorf("gemini: incomplete or blocked response (finish=%q)", chunk.FinishReason)
-	}
-	return chunk, nil
-}
-
-func (p *GeminiProvider) Complete(ctx context.Context, req *agentllm.CompletionRequest) (*agentllm.CompletionResponse, error) {
-	chunk, err := p.generate(ctx, req, nil)
-	if err != nil {
-		return nil, err
-	}
-	result := &agentllm.CompletionResponse{Content: chunk.Content, Model: p.GetModel(req.Model), ResponseModel: chunk.ResponseModel, Provider: p.ProviderName(), FinishReason: chunk.FinishReason}
-	if chunk.Usage != nil {
-		result.Usage = geminiUsage(chunk.Usage)
-		result.TokensUsed = chunk.Usage.TotalTokens
-	}
-	return result, nil
-}
-
-func (p *GeminiProvider) Chat(ctx context.Context, messages []agentllm.Message) (*agentllm.CompletionResponse, error) {
-	return p.Complete(ctx, &agentllm.CompletionRequest{Messages: messages})
-}
-
 func geminiUsage(usage *agentllm.Usage) *interfaces.TokenUsage {
 	if usage == nil {
 		return nil
@@ -320,18 +280,6 @@ func (p *GeminiProvider) stream(ctx context.Context, req *agentllm.CompletionReq
 	return out, nil
 }
 
-// The SDK response converter currently panics on malformed nested data (e.g.
-// candidates:[null]). Keep that external parsing failure inside the SDK boundary
-// and never expose a panic value that could contain upstream request details.
-func geminiSDKGenerate(call func() (*genai.GenerateContentResponse, error)) (response *genai.GenerateContentResponse, err error) {
-	defer func() {
-		if recover() != nil {
-			response, err = nil, fmt.Errorf("gemini: SDK failed to decode response")
-		}
-	}()
-	return call()
-}
-
 func geminiSDKNext(next func() (*genai.GenerateContentResponse, error, bool)) (response *genai.GenerateContentResponse, err error, ok bool) {
 	defer func() {
 		if recover() != nil {
@@ -339,73 +287,6 @@ func geminiSDKNext(next func() (*genai.GenerateContentResponse, error, bool)) (r
 		}
 	}()
 	return next()
-}
-
-// Stream preserves the legacy string-channel contract. For mid-stream error
-// reporting use GeminiStreamingProvider.StreamWithContext instead.
-func (p *GeminiProvider) Stream(ctx context.Context, prompt string) (<-chan string, error) {
-	chunks, err := p.stream(ctx, &agentllm.CompletionRequest{Messages: []agentllm.Message{agentllm.UserMessage(prompt)}}, nil)
-	if err != nil {
-		return nil, err
-	}
-	out := make(chan string)
-	go func() {
-		defer close(out)
-		for c := range chunks {
-			if c.Delta != "" {
-				select {
-				case out <- c.Delta:
-				case <-ctx.Done():
-					return
-				}
-			}
-		}
-	}()
-	return out, nil
-}
-
-func (p *GeminiProvider) GenerateWithTools(ctx context.Context, prompt string, tools []interfaces.Tool) (*agentllm.ToolCallResponse, error) {
-	c, err := p.generate(ctx, &agentllm.CompletionRequest{Messages: []agentllm.Message{agentllm.UserMessage(prompt)}}, tools)
-	if err != nil {
-		return nil, err
-	}
-	return &agentllm.ToolCallResponse{Content: c.Content, ToolCalls: c.ToolCalls, Usage: geminiUsage(c.Usage)}, nil
-}
-
-func (p *GeminiProvider) StreamWithTools(ctx context.Context, prompt string, tools []interfaces.Tool) (<-chan agentllm.ToolChunk, error) {
-	chunks, err := p.stream(ctx, &agentllm.CompletionRequest{Messages: []agentllm.Message{agentllm.UserMessage(prompt)}}, tools)
-	if err != nil {
-		return nil, err
-	}
-	out := make(chan agentllm.ToolChunk)
-	go func() {
-		defer close(out)
-		send := func(c agentllm.ToolChunk) bool {
-			select {
-			case out <- c:
-				return true
-			case <-ctx.Done():
-				return false
-			}
-		}
-		for c := range chunks {
-			if c.Error != nil {
-				send(agentllm.ToolChunk{Type: "error", Value: c.Error})
-				return
-			}
-			if c.Delta != "" && !send(agentllm.ToolChunk{Type: "content", Value: c.Delta}) {
-				return
-			}
-			for _, call := range c.ToolCalls {
-				for _, event := range []agentllm.ToolChunk{{Type: "tool_name", Value: call.Function.Name}, {Type: "tool_args", Value: call.Function.Arguments}, {Type: "tool_call", Value: &call}} {
-					if !send(event) {
-						return
-					}
-				}
-			}
-		}
-	}()
-	return out, nil
 }
 
 func (p *GeminiProvider) convertToolsToFunctions(tools []interfaces.Tool) ([]*genai.FunctionDeclaration, error) {
@@ -460,12 +341,6 @@ func (p *GeminiProvider) Provider() constants.Provider { return constants.Provid
 func (p *GeminiProvider) ProviderName() string         { return string(constants.ProviderGemini) }
 func (p *GeminiProvider) ModelName() string            { return p.GetModel("") }
 func (p *GeminiProvider) MaxTokens() int               { return p.GetMaxTokens(0) }
-func (p *GeminiProvider) IsAvailable() bool {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	_, err := p.Chat(ctx, []agentllm.Message{agentllm.UserMessage("Reply OK")})
-	return err == nil
-}
 
 type GeminiStreamingProvider struct{ *GeminiProvider }
 

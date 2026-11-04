@@ -54,13 +54,13 @@ func TestGeminiNativeRequestAndConcurrentIsolation(t *testing.T) {
 			return
 		}
 		prompt := body.Contents[2].Parts[0].Text
-		if r.Header.Get("x-goog-api-key") != "native-key" || r.URL.RawQuery != "" || r.URL.Path != "/v1beta/models/"+prompt+":generateContent" || body.Contents[1].Role != "model" || body.System.Parts[0].Text != "configured\n\nrequest-system" || body.Config.Max != 123 || body.Config.Temperature != 0.2 || body.Config.TopP != 0.8 || len(body.Config.Stop) != 1 || body.Config.Stop[0] != "end" {
+		if r.Header.Get("x-goog-api-key") != "native-key" || r.URL.RawQuery != "alt=sse" || r.URL.Path != "/v1beta/models/"+prompt+":streamGenerateContent" || body.Contents[1].Role != "model" || body.System.Parts[0].Text != "configured\n\nrequest-system" || body.Config.Max != 123 || body.Config.Temperature != 0.2 || body.Config.TopP != 0.8 || len(body.Config.Stop) != 1 || body.Config.Stop[0] != "end" {
 			requestErrors.Add(1)
 			http.Error(w, "request mismatch", 400)
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, geminiTextResponse)
+		w.Header().Set("Content-Type", "text/event-stream")
+		fmt.Fprintf(w, "data: %s\n\n", geminiTextResponse)
 	}))
 	defer server.Close()
 	p, err := NewGeminiWithOptions(llm.WithAPIKey("native-key"), llm.WithBaseURL(server.URL), llm.WithModel("default-model"), llm.WithSystemPrompt("configured"))
@@ -71,7 +71,7 @@ func TestGeminiNativeRequestAndConcurrentIsolation(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			model := fmt.Sprintf("model-%d", i)
-			r, err := p.Complete(context.Background(), &llm.CompletionRequest{Model: model, MaxTokens: 123, Temperature: 0.2, TopP: 0.8, Stop: []string{"end"}, Messages: []llm.Message{llm.SystemMessage("request-system"), llm.UserMessage("first"), llm.AssistantMessage("history"), llm.UserMessage(model)}})
+			r, err := llm.Complete(context.Background(), p, &llm.CompletionRequest{Model: model, MaxTokens: 123, Temperature: 0.2, TopP: 0.8, Stop: []string{"end"}, Messages: []llm.Message{llm.SystemMessage("request-system"), llm.UserMessage("first"), llm.AssistantMessage("history"), llm.UserMessage(model)}})
 			if err != nil {
 				t.Error(err)
 				return
@@ -128,31 +128,19 @@ func TestGeminiNativeToolsAndStreams(t *testing.T) {
 		require.Equal(t, "lookup", call.Function.Name)
 		require.JSONEq(t, `{"order_id":"SHARED-1"}`, call.Function.Arguments)
 	}
-	r, err := p.GenerateWithTools(context.Background(), "query", []interfaces.Tool{tool})
+	stream, err := p.CompleteToolsStream(context.Background(), &llm.CompletionRequest{Messages: []llm.Message{llm.UserMessage("query")}}, []interfaces.Tool{tool})
 	require.NoError(t, err)
-	require.Len(t, r.ToolCalls, 1)
-	check(r.ToolCalls[0])
-	require.Equal(t, 35, r.Usage.TotalTokens)
-	stream, err := p.StreamWithTools(context.Background(), "query", []interfaces.Tool{tool})
-	require.NoError(t, err)
-	calls := 0
+	var done *llm.StreamChunk
 	for c := range stream {
-		require.NotEqual(t, "error", c.Type)
-		if c.Type == "tool_call" {
-			call, ok := c.Value.(*llm.ToolCall)
-			require.True(t, ok)
-			check(*call)
-			calls++
+		require.NoError(t, c.Error)
+		if c.Done {
+			done = c
 		}
 	}
-	require.Equal(t, 1, calls)
-	tokens, err := p.Stream(context.Background(), "query")
-	require.NoError(t, err)
-	var text strings.Builder
-	for c := range tokens {
-		text.WriteString(c)
-	}
-	require.Equal(t, "42", text.String())
+	require.NotNil(t, done)
+	require.Len(t, done.ToolCalls, 1)
+	check(done.ToolCalls[0])
+	require.Equal(t, 35, done.Usage.TotalTokens)
 	events, err := p.StreamWithContext(context.Background(), "query")
 	require.NoError(t, err)
 	completed := false
@@ -164,8 +152,8 @@ func TestGeminiNativeToolsAndStreams(t *testing.T) {
 		}
 	}
 	require.True(t, completed)
-	require.EqualValues(t, 4, requests.Load())
-	require.EqualValues(t, 2, schemas.Load())
+	require.EqualValues(t, 2, requests.Load())
+	require.EqualValues(t, 1, schemas.Load())
 }
 
 func TestGeminiNativeErrorsAndMissingFields(t *testing.T) {
@@ -186,14 +174,19 @@ func TestGeminiNativeErrorsAndMissingFields(t *testing.T) {
 			var requests atomic.Int32
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				requests.Add(1)
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(tc.status)
-				fmt.Fprint(w, tc.body)
+				if tc.status != http.StatusOK {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(tc.status)
+					fmt.Fprint(w, tc.body)
+					return
+				}
+				w.Header().Set("Content-Type", "text/event-stream")
+				fmt.Fprintf(w, "data: %s\n\n", tc.body)
 			}))
 			defer server.Close()
 			p, err := NewGeminiWithOptions(llm.WithAPIKey("test"), llm.WithBaseURL(server.URL))
 			require.NoError(t, err)
-			r, err := p.Chat(context.Background(), []llm.Message{llm.UserMessage("query")})
+			r, err := llm.Chat(context.Background(), p, []llm.Message{llm.UserMessage("query")})
 			if tc.wantError {
 				require.Error(t, err)
 				require.Nil(t, r)
@@ -255,14 +248,14 @@ func TestGeminiRejectsInvalidInputBeforeRequest(t *testing.T) {
 	p, err := NewGeminiWithOptions(llm.WithAPIKey("test"), llm.WithBaseURL(server.URL))
 	require.NoError(t, err)
 	for _, req := range []*llm.CompletionRequest{nil, {}, {Messages: []llm.Message{llm.SystemMessage("system")}}, {Messages: []llm.Message{{Role: "tool", Content: "result"}}}, {Messages: []llm.Message{{Role: "assistant", ToolCalls: []llm.ToolCall{{ID: "call"}}}, llm.UserMessage("next")}}} {
-		_, err := p.Complete(context.Background(), req)
+		_, err := llm.Complete(context.Background(), p, req)
 		require.Error(t, err)
 	}
-	_, err = p.GenerateWithTools(context.Background(), "query", []interfaces.Tool{tools.NewBaseTool("lookup", "lookup", `{broken`, nil)})
+	_, err = p.CompleteToolsStream(context.Background(), &llm.CompletionRequest{Messages: []llm.Message{llm.UserMessage("query")}}, []interfaces.Tool{tools.NewBaseTool("lookup", "lookup", `{broken`, nil)})
 	require.Error(t, err)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	_, err = p.Chat(ctx, []llm.Message{llm.UserMessage("query")})
+	_, err = llm.Chat(ctx, p, []llm.Message{llm.UserMessage("query")})
 	require.Error(t, err)
 	require.Zero(t, calls.Load())
 }

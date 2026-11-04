@@ -15,8 +15,8 @@ go run ./examples/basic/11-deepseek-with-builder
 
 | 示例 | 函数 | 要点 |
 | --- | --- | --- |
-| 1 基础 | `runBasicAgentBuilder` | `WithSystemPrompt`、`WithState(agentstate.NewAgentState())`，`Execute` |
-| 2 工具 | `runAgentBuilderWithTools` | `WithTools(calculator, weather, time)`、`WithMaxIterations(10)`、`WithTimeout(30s)`、`WithVerbose(true)`，`ExecuteWithTools("请帮我计算 15 * 8，然后告诉我现在的时间")` |
+| 1 基础 | `runBasicAgentBuilder` | `WithSystemPrompt`、`WithState(agentstate.NewAgentState())`，`AsRunnable().Invoke` |
+| 2 工具 | `runAgentBuilderWithTools` | `WithTools(calculator, weather, time)`、`WithMaxIterations(10)`、`WithTimeout(30s)`、`WithVerbose(true)`，`AsRunnable().Invoke(ctx, "请帮我计算 15 * 8，然后告诉我现在的时间")` |
 | 3 回调 | `runAgentBuilderWithMiddleware` | `core.NewCostTrackingCallback(pricing)` 经 `WithCallbacks` 接入，结束后打印 `GetTotalTokens()` 与 `GetTotalCost()` |
 | 4 配置 | `runAgentBuilderWithConfig` | 用 `builder.AgentConfig` 的字段调用 `WithMaxIterations`、`WithTimeout`、`WithAutoSaveEnabled`、`WithMaxTokens`、`WithTemperature`、`WithMetadata` 等 |
 | 5 预设 | `runChatbotAgent` | `ConfigureForChatbot()`（限流、输入长度校验、开启流式、温度 0.8）后进行三轮对话 |
@@ -31,7 +31,7 @@ agent, err := builder.NewAgentBuilder[any, core.State](llmClient).
     WithMaxIterations(10).
     WithTimeout(30 * time.Second).
     Build()
-output, err := agent.ExecuteWithTools(ctx, input)
+output, err := agent.AsRunnable().Invoke(ctx, input)
 ```
 
 其余预设 `ConfigureForRAG()`、`ConfigureForAnalysis()` 见 [builder/presets.go](../../../builder/presets.go)。

@@ -14,7 +14,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/kart-io/goagent/interfaces"
 	agentllm "github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/utils/json"
 )
@@ -80,7 +79,7 @@ func TestOpenAICompleteStreamPropagatesReadError(t *testing.T) {
 	require.NoError(t, err)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	chunks, err := client.ChatStream(ctx, []agentllm.Message{agentllm.UserMessage("question")})
+	chunks, err := client.CompleteStream(ctx, &agentllm.CompletionRequest{Messages: []agentllm.Message{agentllm.UserMessage("question")}})
 	require.NoError(t, err)
 	var last *agentllm.StreamChunk
 	for chunk := range chunks {
@@ -106,7 +105,7 @@ func TestOpenAICompleteStreamCancellationClosesRequest(t *testing.T) {
 	require.NoError(t, err)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	chunks, err := client.ChatStream(ctx, []agentllm.Message{agentllm.UserMessage("question")})
+	chunks, err := client.CompleteStream(ctx, &agentllm.CompletionRequest{Messages: []agentllm.Message{agentllm.UserMessage("question")}})
 	require.NoError(t, err)
 	select {
 	case <-chunks:
@@ -160,7 +159,7 @@ func TestOpenAIStreamCompleteUnindexedTools(t *testing.T) {
 			require.NoError(t, err)
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			defer cancel()
-			chunks, err := client.ChatStream(ctx, []agentllm.Message{agentllm.UserMessage("query")})
+			chunks, err := client.CompleteStream(ctx, &agentllm.CompletionRequest{Messages: []agentllm.Message{agentllm.UserMessage("query")}})
 			require.NoError(t, err)
 			var last *agentllm.StreamChunk
 			for chunk := range chunks {
@@ -200,7 +199,7 @@ func TestOpenAITimeoutBoundsResponseWait(t *testing.T) {
 	client, err := NewOpenAIWithOptions(agentllm.WithAPIKey("test"), agentllm.WithBaseURL(server.URL+"/v1"), agentllm.WithTimeout(time.Second))
 	require.NoError(t, err)
 	start := time.Now()
-	_, err = client.Chat(context.Background(), []agentllm.Message{agentllm.UserMessage("question")})
+	_, err = agentllm.Chat(context.Background(), client, []agentllm.Message{agentllm.UserMessage("question")})
 	require.Error(t, err)
 	require.Less(t, time.Since(start), 5*time.Second)
 	var netErr net.Error
@@ -220,7 +219,7 @@ func TestOpenAITimeoutDoesNotCutStream(t *testing.T) {
 	defer server.Close()
 	client, err := NewOpenAIWithOptions(agentllm.WithAPIKey("test"), agentllm.WithBaseURL(server.URL+"/v1"), agentllm.WithTimeout(time.Second))
 	require.NoError(t, err)
-	chunks, err := client.ChatStream(context.Background(), []agentllm.Message{agentllm.UserMessage("question")})
+	chunks, err := client.CompleteStream(context.Background(), &agentllm.CompletionRequest{Messages: []agentllm.Message{agentllm.UserMessage("question")}})
 	require.NoError(t, err)
 	var last *agentllm.StreamChunk
 	for chunk := range chunks {
@@ -257,8 +256,8 @@ func TestHeaderTimeoutUsesCurrentDefaultTransport(t *testing.T) {
 	require.NoError(t, err)
 	deepSeekClient, err := NewDeepSeekWithOptions(append(opts, agentllm.WithBaseURL(server.URL))...)
 	require.NoError(t, err)
-	for _, client := range []agentllm.StreamClient{openAIClient, deepSeekClient} {
-		chunks, err := client.ChatStream(context.Background(), []agentllm.Message{agentllm.UserMessage("question")})
+	for _, client := range []agentllm.Client{openAIClient, deepSeekClient} {
+		chunks, err := client.CompleteStream(context.Background(), &agentllm.CompletionRequest{Messages: []agentllm.Message{agentllm.UserMessage("question")}})
 		require.NoError(t, err)
 		var last *agentllm.StreamChunk
 		for chunk := range chunks {
@@ -269,24 +268,4 @@ func TestHeaderTimeoutUsesCurrentDefaultTransport(t *testing.T) {
 		require.Equal(t, "ok", last.Content)
 	}
 	require.EqualValues(t, 2, atomic.LoadInt32(&calls))
-}
-
-// Stream / StreamWithTools 请求阶段的 429 也要带上状态码与 Retry-After
-func TestOpenAILegacyStreamsExposeProviderError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Retry-After", "7")
-		w.WriteHeader(http.StatusTooManyRequests)
-		fmt.Fprint(w, `{"error":{"message":"slow down","type":"rate_limit"}}`)
-	}))
-	defer server.Close()
-	client, err := NewOpenAIWithOptions(agentllm.WithAPIKey("test"), agentllm.WithBaseURL(server.URL+"/v1"), agentllm.WithTimeout(time.Second))
-	require.NoError(t, err)
-	_, streamErr := client.Stream(context.Background(), "q")
-	_, toolsErr := client.StreamWithTools(context.Background(), "q", []interfaces.Tool{&MockTool{}})
-	for name, err := range map[string]error{"Stream": streamErr, "StreamWithTools": toolsErr} {
-		var providerErr *agentllm.ProviderError
-		require.True(t, errors.As(err, &providerErr), "%s: got %T: %v", name, err, err)
-		require.Equal(t, http.StatusTooManyRequests, providerErr.StatusCode, name)
-		require.Equal(t, 7*time.Second, providerErr.RetryAfter, name)
-	}
 }

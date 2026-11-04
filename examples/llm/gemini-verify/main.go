@@ -40,16 +40,16 @@ func run(args []string) error {
 	live := flags.Bool("live", false, "调用真实 Gemini；默认仅显示计划")
 	model := flags.String("model", "gemini-2.5-flash", "Gemini 模型")
 	repeats := flags.Int("repeats", 2, "每个方法重复次数（1 到 5）")
-	suite := flags.String("suite", "legacy", "legacy 或 native（AsRunnable 与 Embedding）")
+	suite := flags.String("suite", "provider", "provider（直接调用 Provider 方法）或 native（AsRunnable 与 Embedding）")
 	embeddingModel := flags.String("embedding-model", "", "独立 Embedding 模型，默认读取 GEMINI_EMBEDDING_MODEL")
 	out := flags.String("out", "gemini-provider-results.json", "新建 JSON 文件，不覆盖")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
-	if flags.NArg() != 0 || *repeats < 1 || *repeats > 5 || *model == "" || (*suite != "legacy" && *suite != "native") {
+	if flags.NArg() != 0 || *repeats < 1 || *repeats > 5 || *model == "" || (*suite != "provider" && *suite != "native") {
 		return fmt.Errorf("invalid arguments")
 	}
-	methods := []string{"Complete", "Chat", "Stream", "GenerateWithTools", "StreamWithTools", "StreamWithContext"}
+	methods := []string{"Complete", "Chat", "CompleteStream", "CompleteToolsStream", "StreamWithContext"}
 	if *suite == "native" {
 		methods = []string{"RunnableInvoke", "RunnableStream", "RunnableToolLoop", "RunnableDirectTool", "RunnableSequentialTools", "Embedding"}
 	}
@@ -103,7 +103,7 @@ func run(args []string) error {
 			usage.Add(r.Usage)
 		}
 	}
-	report := map[string]any{"provider": "GeminiProvider", "backend": "Gemini native API (Google GenAI SDK)", "model": *model, "timestamp": time.Now().UTC(), "suite": *suite, "embedding_model": p.Config.EmbeddingModel, "maximum_upstream_requests": plannedRequests, "completed": len(results), "passed": passed, "max_output_tokens": 2048, "temperature": 0.2, "timeout_seconds": 90, "sdk_retries": 0, "usage_reported_cases": known, "known_usage_only": usage, "limitations": "Legacy string/tool streams and Embed do not expose token usage; known usage excludes those requests. Native suite exercises bounded tool loops on synthetic read-only tools; no production backend or broad retrieval quality validation.", "results": results}
+	report := map[string]any{"provider": "GeminiProvider", "backend": "Gemini native API (Google GenAI SDK)", "model": *model, "timestamp": time.Now().UTC(), "suite": *suite, "embedding_model": p.Config.EmbeddingModel, "maximum_upstream_requests": plannedRequests, "completed": len(results), "passed": passed, "max_output_tokens": 2048, "temperature": 0.2, "timeout_seconds": 90, "sdk_retries": 0, "usage_reported_cases": known, "known_usage_only": usage, "limitations": "Embed does not expose token usage; known usage excludes those requests. Native suite exercises bounded tool loops on synthetic read-only tools; no production backend or broad retrieval quality validation.", "results": results}
 	data, err := json.MarshalIndent(report, "", "  ")
 	if err != nil {
 		return err
@@ -139,47 +139,36 @@ func check(ctx context.Context, p *providers.GeminiProvider, method string) (r r
 	switch method {
 	case "Complete":
 		var response *llm.CompletionResponse
-		response, err = p.Complete(ctx, &llm.CompletionRequest{Messages: []llm.Message{llm.SystemMessage("只输出数字，不加标点。"), llm.UserMessage(prompt)}})
+		response, err = llm.Complete(ctx, p, &llm.CompletionRequest{Messages: []llm.Message{llm.SystemMessage("只输出数字，不加标点。"), llm.UserMessage(prompt)}})
 		if response != nil {
 			r.Answer = response.Content
 			r.Usage = response.Usage
 		}
 	case "Chat":
 		var response *llm.CompletionResponse
-		response, err = p.Chat(ctx, []llm.Message{llm.UserMessage("记住数字 17。"), llm.AssistantMessage("17"), llm.UserMessage("把刚才的数字加上 25，只输出整数。")})
+		response, err = llm.Chat(ctx, p, []llm.Message{llm.UserMessage("记住数字 17。"), llm.AssistantMessage("17"), llm.UserMessage("把刚才的数字加上 25，只输出整数。")})
 		if response != nil {
 			r.Answer = response.Content
 			r.Usage = response.Usage
 		}
-	case "Stream":
-		var stream <-chan string
-		stream, err = p.Stream(ctx, prompt)
-		if err == nil {
-			for token := range stream {
-				r.Answer += token
-			}
+	case "CompleteStream", "CompleteToolsStream":
+		var stream <-chan *llm.StreamChunk
+		if method == "CompleteStream" {
+			stream, err = p.CompleteStream(ctx, &llm.CompletionRequest{Messages: []llm.Message{llm.UserMessage(prompt)}})
+		} else {
+			stream, err = p.CompleteToolsStream(ctx, &llm.CompletionRequest{Messages: []llm.Message{llm.UserMessage(toolPrompt)}}, []interfaces.Tool{lookup})
 		}
-	case "GenerateWithTools":
-		var response *llm.ToolCallResponse
-		response, err = p.GenerateWithTools(ctx, toolPrompt, []interfaces.Tool{lookup})
-		if response != nil {
-			r.ToolCalls = response.ToolCalls
-			r.Usage = response.Usage
-		}
-	case "StreamWithTools":
-		var stream <-chan llm.ToolChunk
-		stream, err = p.StreamWithTools(ctx, toolPrompt, []interfaces.Tool{lookup})
 		if err == nil {
 			for chunk := range stream {
-				switch chunk.Type {
-				case "error":
-					err = fmt.Errorf("%v", chunk.Value)
-				case "tool_call":
-					call, ok := chunk.Value.(*llm.ToolCall)
-					if !ok {
-						err = fmt.Errorf("unexpected tool value %T", chunk.Value)
-					} else {
-						r.ToolCalls = append(r.ToolCalls, *call)
+				if chunk.Error != nil {
+					err = chunk.Error
+				}
+				r.Answer += chunk.Delta
+				if chunk.Done {
+					r.ToolCalls = chunk.ToolCalls
+					if chunk.Usage != nil {
+						tokens := chunk.Usage.Tokens()
+						r.Usage = &tokens
 					}
 				}
 			}
@@ -213,7 +202,7 @@ func check(ctx context.Context, p *providers.GeminiProvider, method string) (r r
 		r.Error = err.Error()
 		return r
 	}
-	if method == "GenerateWithTools" || method == "StreamWithTools" {
+	if method == "CompleteToolsStream" {
 		if len(r.ToolCalls) != 1 || r.ToolCalls[0].Function.Name != "lookup" || r.ToolCalls[0].ID == "" {
 			r.Error = "expected one lookup call with an ID"
 			return r

@@ -2,7 +2,6 @@ package builder
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -12,6 +11,7 @@ import (
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/middleware"
 	"github.com/kart-io/goagent/core/observe"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/tools"
@@ -34,8 +34,8 @@ type AgentEvent struct {
 	Message string                 `json:"error,omitempty"`
 }
 
-// ExecuteStream combines retrieval, bounded tool selection/execution and native
-// answer streaming. It retains Execute's middleware and completion callbacks.
+// ExecuteStream combines retrieval, native tool execution and answer streaming,
+// running the configured middleware and completion callbacks.
 // Cancel ctx when abandoning the stream; cancellation closes it promptly. On
 // cancellation an error event is best-effort, and ctx.Err() is authoritative.
 // A cached middleware response may produce only done, with no model deltas.
@@ -67,21 +67,9 @@ func (a *ConfigurableAgent[C, S]) executeStream(ctx context.Context, input inter
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	client, ok := a.llmClient.(llm.StreamClient)
-	if !ok {
-		return nil, fmt.Errorf("ExecuteStream requires llm.StreamClient")
-	}
-	var caller commonToolCallingClient
-	if len(a.tools) > 0 {
-		caller, _ = a.llmClient.(commonToolCallingClient)
-		if caller == nil {
-			if c, ok := a.llmClient.(llm.ToolCallingClient); ok {
-				caller = &stdToolCallerWrapper{client: c}
-			}
-		}
-		if _, native := a.llmClient.(llm.ToolStreamClient); caller == nil && !native {
-			return nil, fmt.Errorf("configured tools require tool-calling support")
-		}
+	client := a.llmClient
+	if _, native := a.llmClient.(llm.ToolStreamClient); len(a.tools) > 0 && !native {
+		return nil, fmt.Errorf("configured tools require llm.ToolStreamClient")
 	}
 	// 终态事件按调用方的 ctx 投递：执行 ctx 可能因 WithTimeout 已结束，与仍在接收的调用方同时就绪时 select 会随机丢掉终态，
 	// 调用方只看到流被关闭。
@@ -131,7 +119,7 @@ func (a *ConfigurableAgent[C, S]) executeStream(ctx context.Context, input inter
 				mu.Lock()
 				running = nil
 				mu.Unlock()
-				// Respect Execute's configured timeout for sends as well as upstream calls.
+				// Respect the configured timeout for sends as well as upstream calls.
 				send := func(e AgentEvent) error {
 					select {
 					case events <- e:
@@ -152,7 +140,7 @@ func (a *ConfigurableAgent[C, S]) executeStream(ctx context.Context, input inter
 					}
 					return nil
 				}
-				return a.runEvents(runCtx, request, client, caller, send)
+				return a.runEvents(runCtx, request, client, send)
 			})
 			return a.execute(ctx, input, chain)
 		}()
@@ -177,10 +165,12 @@ func (a *ConfigurableAgent[C, S]) executeStream(ctx context.Context, input inter
 	return events, nil
 }
 
-func (a *ConfigurableAgent[C, S]) runEvents(ctx context.Context, request *middleware.MiddlewareRequest, client llm.StreamClient, caller commonToolCallingClient, emit func(AgentEvent) error) (*middleware.MiddlewareResponse, error) {
-	input := fmt.Sprint(request.Input)
+func (a *ConfigurableAgent[C, S]) runEvents(ctx context.Context, request *middleware.MiddlewareRequest, client llm.Client, emit func(AgentEvent) error) (*middleware.MiddlewareResponse, error) {
+	input, err := a.inputSerializer.Serialize(request.Input)
+	if err != nil {
+		return nil, agentErrors.Wrap(err, agentErrors.CodeInvalidInput, "failed to serialize input")
+	}
 	evidence := ""
-	var prompt string
 	metadata := make(map[string]interface{}, len(request.Metadata))
 	for k, v := range request.Metadata {
 		metadata[k] = v
@@ -198,7 +188,6 @@ func (a *ConfigurableAgent[C, S]) runEvents(ctx context.Context, request *middle
 			return nil, err
 		}
 	}
-	var messages []llm.Message
 	if native, ok := client.(llm.ToolStreamClient); ok && len(a.tools) > 0 {
 		if a.config.SessionLog != nil {
 			turn, history, err := a.openSessionTurn(ctx, input)
@@ -211,94 +200,14 @@ func (a *ConfigurableAgent[C, S]) runEvents(ctx context.Context, request *middle
 		if err != nil {
 			return nil, err
 		}
-		return a.runToolEvents(ctx, request, native, messages, metadata, emit)
+		return a.runToolEvents(ctx, request, input, native, messages, metadata, emit)
 	}
 	if a.config.SessionLog != nil {
 		return nil, fmt.Errorf("会话日志只支持原生工具流：llm.ToolStreamClient 且配置了工具")
 	}
-	if _, metered := budget.FromContext(ctx); metered && caller != nil {
-		return nil, fmt.Errorf("root budgets require native ToolStreamClient for tool selection")
-	}
-	if caller == nil {
-		var err error
-		messages, err = a.streamMessages(ctx, input, evidence)
-		if err != nil {
-			return nil, err
-		}
-	}
-	if caller != nil {
-		var err error
-		prompt, err = a.buildPromptWithHistory(ctx, request.Input)
-		if err != nil {
-			return nil, err
-		}
-		if evidence != "" {
-			prompt = retrievalInstruction + "\n\n" + evidence + "\n" + prompt
-		}
-	}
-	usage := &interfaces.TokenUsage{}
-	if caller != nil {
-		ready := false
-		for round := 0; round < a.config.MaxIterations; round++ {
-			if err := ctx.Err(); err != nil {
-				return nil, err
-			}
-			if err := emit(AgentEvent{Type: "step", Step: "select_tools"}); err != nil {
-				return nil, err
-			}
-			response, err := caller.GenerateWithTools(ctx, prompt+"\nSelect tools needed to answer. When no further tools are needed, return READY without an answer.", a.tools)
-			if err != nil {
-				return nil, err
-			}
-			if response == nil {
-				return nil, fmt.Errorf("nil tool selection response")
-			}
-			usage.Add(response.Usage)
-			if len(response.ToolCalls) == 0 {
-				ready = true
-				break
-			}
-			for _, tc := range response.ToolCalls {
-				call := ToolCall{Name: tc.Name, Input: tc.Arguments}
-				if call.Name == "" && tc.Function != nil {
-					call.Name = tc.Function.Name
-					if err := json.Unmarshal([]byte(tc.Function.Arguments), &call.Input); err != nil {
-						return nil, fmt.Errorf("invalid arguments for %s: %w", call.Name, err)
-					}
-				}
-				if call.Name == "" {
-					return nil, fmt.Errorf("tool call has no name")
-				}
-				if err := ctx.Err(); err != nil {
-					return nil, err
-				}
-				if err := emit(AgentEvent{Type: "step", Step: "tool_start", Tool: call.Name}); err != nil {
-					return nil, err
-				}
-				result, err := a.executeToolCall(ctx, call)
-				if err != nil {
-					return nil, err
-				}
-				data, err := toolResultText(result)
-				if err != nil {
-					return nil, err
-				}
-				prompt += fmt.Sprintf("\nUntrusted tool result from %s:\n%s\n", call.Name, data)
-				if err := emit(AgentEvent{Type: "step", Step: "tool_end", Tool: call.Name}); err != nil {
-					return nil, err
-				}
-			}
-		}
-		if !ready {
-			return nil, fmt.Errorf("maximum tool selection iterations reached")
-		}
-	}
-	if caller != nil {
-		system := a.buildSystemPromptContent()
-		if a.retriever != nil {
-			system += "\n" + retrievalInstruction
-		}
-		messages = []llm.Message{{Role: "system", Content: system}, {Role: "user", Content: prompt}}
+	messages, err := a.streamMessages(ctx, input, evidence)
+	if err != nil {
+		return nil, err
 	}
 	attempt := 0
 	ctx = withInterruptedModelResend(withRequestRecovery(ctx, a.requestRecovery(0, &messages, &attempt)), a.config.ResendInterruptedModel)
@@ -310,6 +219,7 @@ func (a *ConfigurableAgent[C, S]) runEvents(ctx context.Context, request *middle
 		return nil, err
 	}
 
+	usage := &interfaces.TokenUsage{}
 	if turn.Usage != nil {
 		copy := turn.Usage.Tokens()
 		usage.Add(&copy)

@@ -15,7 +15,7 @@ import (
 )
 
 // allowEmpty 为真时，正常结束的空回答按已完成记录，由调用方重问。
-func readJournaledTurn(ctx context.Context, round int, client llm.StreamClient, req *llm.CompletionRequest, tools []interfaces.Tool, allowEmpty, feedback bool, emit func(AgentEvent) error) (*llm.StreamChunk, error) {
+func readJournaledTurn(ctx context.Context, round int, client llm.Client, req *llm.CompletionRequest, tools []interfaces.Tool, allowEmpty, feedback bool, emit func(AgentEvent) error) (*llm.StreamChunk, error) {
 	if err := llm.ValidateReasoningRequest(client, req); err != nil {
 		return nil, err
 	}

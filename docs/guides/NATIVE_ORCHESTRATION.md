@@ -211,7 +211,7 @@ reviewer, err := builder.NewSimpleBuilder(client).
 
 调用键派生为 `durable.ChildKey(nodeKey, "agent/" + scope)`，模型和工具日志均在此键下。重用同一个 scope 表示恢复**同一次逻辑调用**，不是启动新工作；同一 Agent 在一个节点内处理多个业务项时，宿主应使用稳定业务 ID 派生不同父键，或使用不同作用域/图节点。不要使用随机 ID、进程指针或并发完成顺序。没有作用域、空白作用域或旧的无作用域日志都会在模型请求前报错。
 
-无工具的 `StreamClient` 也通过相同的模型操作日志执行，成功结果可重放，失败保留已知用量并停止重复请求。有工具的持久化 Agent 必须使用 `ToolStreamClient` 和 `Dispatcher.Tools()`（或等价 DurableCallTool）；旧 GenerateWithTools 协议在持久化模式下会提前拒绝，普通非持久执行保持兼容。同步 `Execute` 和不支持流的 `ExecuteWithTools` 在持久上下文中也会拒绝，避免绕过日志；使用 `AsRunnable().Invoke` / `ExecuteStream`。这些检查在中间件、检索及模型请求前完成，日志检查的锁等待计入 Agent 超时。
+无工具的 `llm.Client` 也通过相同的模型操作日志执行，成功结果可重放，失败保留已知用量并停止重复请求。有工具的持久化 Agent 必须使用 `ToolStreamClient` 和 `Dispatcher.Tools()`（或等价 DurableCallTool）；这些检查在中间件、检索及模型请求前完成，日志检查的锁等待计入 Agent 超时。
 
 同一轮的多个工具调用默认按顺序执行。`WithParallelToolCalls(n)` 设为 n>=2（不另设上限传 `math.MaxInt`）且每个工具都实现 `interfaces.ConcurrentCallTool`（`Dispatcher.Tools()` 已实现，包装器须显式转发）时并发执行，峰值为 `min(n, MaxConcurrency)`；任一工具未实现该接口时整轮顺序执行（直接注册、未经 Dispatcher 的 `contextpolicy.Offload` 读取工具即未实现）。并发时执行先后不保证与模型给出的顺序一致，即使 `MaxConcurrency=1` 也一样。工具消息与 `tool_start`/`tool_end` 事件按模型给出的顺序，与完成顺序无关；`OnResult` 推迟到整轮结束后按同一顺序触发。某个调用失败不取消其他调用，全部结束后返回顺序最靠前的错误，避免兄弟调用被记为取消失败而在恢复时需要宿主处理。工具内部不要按执行顺序分配编号或依赖同轮调用的先后。直接返回工具只在本轮只有它一个调用时生效，因此不参与并发。
 

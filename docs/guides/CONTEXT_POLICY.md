@@ -1,6 +1,6 @@
 # 工具上下文：结果卸载与历史压缩
 
-上下文治理只有一种机制：PreStep 钩子在每次模型请求前改写对话，改写后的对话成为之后的历史；持久运行中每步的结果记入日志，恢复时回放。结果卸载（`contextpolicy.Offload`）与历史压缩（[goagent-harness](https://github.com/kart-io/goagent-harness) 的 `preset` 中的 `compaction` 组件）都是 PreStep 组件。要求原生工具流：配置工具并使用 `llm.ToolStreamClient`；旧 `Execute` 遇到 `WithOffload` 报错。
+上下文治理只有一种机制：PreStep 钩子在每次模型请求前改写对话，改写后的对话成为之后的历史；持久运行中每步的结果记入日志，恢复时回放。结果卸载（`contextpolicy.Offload`）与历史压缩（[goagent-harness](https://github.com/kart-io/goagent-harness) 的 `preset` 中的 `compaction` 组件）都是 PreStep 组件。要求原生工具流：配置工具并使用 `llm.ToolStreamClient`。
 
 ## 大结果卸载
 

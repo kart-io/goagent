@@ -26,7 +26,7 @@ Related repositories:
 - **Loop extension points** - PreStep, Request, RequestError, TurnStopping hooks, prompt sections/contexts, and a running `Handle` that accepts Steer/Inject/Redirect/Followup.
 - **Durable execution** - `core/durable` journals model turns and tool calls; `workflow.Graph` compiles typed graphs with branches, parallel joins, bounded loops and approval resume.
 - **Governance** - root request budgets (`core/budget`), `tools.Dispatcher`/`Pipeline` with approvals, guards and admission limits, tool-result offloading, session logs (`core/session`).
-- **LLM providers** - OpenAI (and compatible endpoints), DeepSeek and Gemini support `AsRunnable` and the native tool loop; Anthropic, Kimi, SiliconFlow, Ollama, Cohere and Hugging Face are available through the synchronous `Execute` entry. See the [provider table](docs/README.md#llm-提供商).
+- **LLM providers** - OpenAI (and compatible endpoints), DeepSeek and Gemini support `AsRunnable` and the native tool loop; Kimi, SiliconFlow and Ollama are OpenAI-compatible presets with the same support, and Anthropic uses the official SDK with the same support. See the [provider table](docs/README.md#llm-提供商).
 - **Observability** - read-only execution events (`core/observe`) and OpenTelemetry integration (`observability`).
 - **MCP** - official MCP client sessions adapted as tools (`mcp/remote`), plus a local toolbox.
 

@@ -38,14 +38,12 @@ GoAgent 是嵌入 Go 服务的 Agent 执行内核：原生工具循环、类型�
 | OpenAI 及兼容端点 | `NewOpenAIWithOptions` | 支持 |
 | DeepSeek | `NewDeepSeekWithOptions` | 支持 |
 | Gemini | `NewGeminiWithOptions` | 支持 |
-| Anthropic | `NewAnthropicWithOptions` | 不支持，经 `Execute` / `ExecuteWithTools` 调用 |
-| Kimi | `NewKimiWithOptions` | 不支持，经 `Execute` / `ExecuteWithTools` 调用 |
-| SiliconFlow | `NewSiliconFlowWithOptions` | 不支持，经 `Execute` / `ExecuteWithTools` 调用 |
-| Ollama | `NewOllamaWithOptions` | 不支持，经 `Execute` / `ExecuteWithTools` 调用 |
-| Cohere | `NewCohereWithOptions` | 不支持，经 `Execute` / `ExecuteWithTools` 调用 |
-| Hugging Face | `NewHuggingFaceWithOptions` | 不支持，经 `Execute` / `ExecuteWithTools` 调用 |
+| Anthropic | `NewAnthropicWithOptions` | 支持（官方 SDK） |
+| Kimi | `NewKimiWithOptions` | 支持（OpenAI 兼容预设） |
+| SiliconFlow | `NewSiliconFlowWithOptions` | 支持（OpenAI 兼容预设） |
+| Ollama | `NewOllamaWithOptions` | 支持（OpenAI 兼容预设） |
 
-`AsRunnable`、`ExecuteStream` 需要 `llm.StreamClient`；原生工具循环、`Start` 句柄与循环扩展点需要 `llm.ToolStreamClient`。表中“支持”的三个 Provider 同时实现两者。
+`AsRunnable`、`ExecuteStream` 接受任意 `llm.Client`；原生工具循环、`Start` 句柄与循环扩展点需要 `llm.ToolStreamClient`。表中“支持”的 Provider 同时实现两者。
 
 ## 架构与设计
 

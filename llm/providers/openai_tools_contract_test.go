@@ -8,31 +8,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
-	"github.com/kart-io/goagent/utils/json"
 	"github.com/stretchr/testify/require"
 )
-
-func TestOpenAIToolsModernProtocol(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var request map[string]any
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&request))
-		require.Contains(t, request, "tools")
-		require.NotContains(t, request, "functions")
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = fmt.Fprint(w, `{"choices":[{"message":{"role":"assistant","tool_calls":[{"id":"a","type":"function","function":{"name":"lookup","arguments":"{}"}},{"id":"b","type":"function","function":{"name":"lookup","arguments":"{\"q\":2}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}}`)
-	}))
-	defer server.Close()
-	p, err := NewOpenAIWithOptions(llm.WithAPIKey("test"), llm.WithBaseURL(server.URL))
-	require.NoError(t, err)
-	result, err := p.GenerateWithTools(context.Background(), "查询", []interfaces.Tool{&mockTool{name: "lookup", schema: map[string]any{"type": "object"}}})
-	require.NoError(t, err)
-	require.Len(t, result.ToolCalls, 2)
-	require.Equal(t, "a", result.ToolCalls[0].ID)
-	require.Equal(t, `{"q":2}`, result.ToolCalls[1].Function.Arguments)
-	require.Equal(t, 15, result.Usage.TotalTokens)
-}
 
 func TestOpenAIToolStreamInterleavingAndFailure(t *testing.T) {
 	for _, scenario := range []string{"完整", "截断", "上游错误"} {
@@ -59,16 +37,16 @@ func TestOpenAIToolStreamInterleavingAndFailure(t *testing.T) {
 			defer server.Close()
 			p, err := NewOpenAIWithOptions(llm.WithAPIKey("test"), llm.WithBaseURL(server.URL))
 			require.NoError(t, err)
-			stream, err := p.StreamWithTools(context.Background(), "查询", nil)
+			stream, err := p.CompleteToolsStream(context.Background(), &llm.CompletionRequest{Messages: []llm.Message{llm.UserMessage("查询")}}, nil)
 			require.NoError(t, err)
-			var calls []*llm.ToolCall
+			var calls []llm.ToolCall
 			var streamErr error
 			for chunk := range stream {
-				if chunk.Type == "tool_call" {
-					calls = append(calls, chunk.Value.(*llm.ToolCall))
+				if chunk.Error != nil {
+					streamErr = chunk.Error
 				}
-				if chunk.Type == "error" {
-					streamErr = chunk.Value.(error)
+				if chunk.Done {
+					calls = chunk.ToolCalls
 				}
 			}
 			if scenario == "完整" {

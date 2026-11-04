@@ -1,8 +1,6 @@
 package main
 
 import (
-	"go/parser"
-	"go/token"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -58,24 +56,4 @@ func TestPluginIsTopLevel(t *testing.T) {
 	for _, file := range []string{"plugin/install.go", "execution/scope.go", "cmd/host/main.go"} {
 		require.False(t, forbidden(file, module+"plugin"), file)
 	}
-}
-
-func TestMigrationCandidatesIgnoreCommentsAndStrings(t *testing.T) {
-	source := `package demo
-import (
- b "github.com/kart-io/goagent/builder"
- old "github.com/kart-io/goagent/interfaces"
-)
-// a.Execute(ctx,input)
-const hint="a.ExecuteWithTools(ctx,input)"
-var legacy old.Agent
-func run(){a:=b.NewSimpleBuilder(nil); a.Execute(nil,nil); a.AsRunnable().Invoke(nil,nil)}
-`
-	set := token.NewFileSet()
-	node, err := parser.ParseFile(set, "demo.go", source, 0)
-	require.NoError(t, err)
-	findings := inspect(set, "demo.go", node, "migration")
-	require.Len(t, findings, 2)
-	require.Contains(t, findings[0].message, "interfaces.Agent")
-	require.Contains(t, findings[1].message, "candidate Execute")
 }

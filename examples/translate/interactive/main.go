@@ -158,7 +158,7 @@ func (t *SimpleTranslator) Translate(ctx context.Context, text string) (*Transla
 
 	// 步骤 1: 语言检测
 	fmt.Println("🔍 正在检测语言...")
-	output, err := t.detectionAgent.Execute(ctx, text)
+	output, err := t.detectionAgent.AsRunnable().Invoke(ctx, text)
 	if err != nil {
 		return nil, err
 	}
@@ -177,7 +177,7 @@ func (t *SimpleTranslator) Translate(ctx context.Context, text string) (*Transla
 	if result.DetectedLanguage != "中文" {
 		fmt.Println("🌐 正在翻译...")
 		prompt := fmt.Sprintf("请将以下%s文本翻译成中文：\n\n%s", result.DetectedLanguage, text)
-		output, err := t.translationAgent.Execute(ctx, prompt)
+		output, err := t.translationAgent.AsRunnable().Invoke(ctx, prompt)
 		if err != nil {
 			return nil, err
 		}

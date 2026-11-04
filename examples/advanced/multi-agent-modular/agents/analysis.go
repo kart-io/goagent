@@ -46,7 +46,7 @@ Format your response in a structured way with clear sections.`, task)
 		llm.UserMessage(prompt),
 	}
 
-	response, err := a.llmClient.Chat(ctx, messages)
+	response, err := llm.Chat(ctx, a.llmClient, messages)
 	if err != nil {
 		return "", fmt.Errorf("analysis failed: %w", err)
 	}
@@ -77,7 +77,7 @@ Format your response in a structured way with clear sections.`, context, task)
 		llm.UserMessage(prompt),
 	}
 
-	response, err := a.llmClient.Chat(ctx, messages)
+	response, err := llm.Chat(ctx, a.llmClient, messages)
 	if err != nil {
 		return "", fmt.Errorf("contextual analysis failed: %w", err)
 	}
@@ -103,7 +103,7 @@ Respond in JSON format.`, data)
 		llm.UserMessage(prompt),
 	}
 
-	response, err := a.llmClient.Chat(ctx, messages)
+	response, err := llm.Chat(ctx, a.llmClient, messages)
 	if err != nil {
 		return nil, fmt.Errorf("insight extraction failed: %w", err)
 	}
@@ -137,7 +137,7 @@ Be thorough but concise.`, task)
 		llm.UserMessage(prompt),
 	}
 
-	response, err := a.llmClient.Chat(ctx, messages)
+	response, err := llm.Chat(ctx, a.llmClient, messages)
 	if err != nil {
 		return "", fmt.Errorf("risk assessment failed: %w", err)
 	}

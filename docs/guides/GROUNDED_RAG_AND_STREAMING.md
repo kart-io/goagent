@@ -30,7 +30,7 @@ output, err := agent.AsRunnable().Invoke(ctx, "退款政策是什么？")
 - 空结果明确告诉模型证据不足。nil 文档和空文本被跳过。
 - `MaxContextRunes` 限制文档正文的 Unicode 字符数，不包括固定提示词与引用编号，也不是 Token 数。超限截断不会破坏中文 UTF-8；原文档保持不变。
 - 检索内容和原始问题分开传给模型；对话记忆保存原问题，不保存扩充后的参考材料。
-- 所有执行入口（`AsRunnable`、`ExecuteStream`、`Execute`、`ExecuteWithTools`）都先检索；`Execute()` 不自动执行已注册工具。
+- 所有执行入口（`AsRunnable`、`ExecuteStream`、`Start`）都先检索。
 - `ConfigureForRAG()` 只设置计时中间件、`MaxTokens=3000` 与 `Temperature=0.3`，不缓存答案，以免相同问题命中已过期证据。需要缓存时，显式配置能区分用户、会话和知识版本的缓存策略。
 
 输出元数据：
@@ -46,7 +46,7 @@ output, err := agent.AsRunnable().Invoke(ctx, "退款政策是什么？")
 
 ## 真实模型 Token 流
 
-实现 `llm.StreamClient` 的 Provider（如 OpenAI、DeepSeek、Gemini）可直接调用：
+所有 `llm.Client`（如 OpenAI、DeepSeek、Gemini Provider）都可直接调用：
 
 ```go
 ctx, cancel := context.WithCancel(ctx)

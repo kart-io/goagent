@@ -138,7 +138,7 @@ func runPanicCase(name string) error {
 					e = fmt.Errorf("CALLER_RECOVERED: %v", v)
 				}
 			}()
-			return agent.Execute(ctx, "hi")
+			return agent.AsRunnable().Invoke(ctx, "hi")
 		}()
 		return err
 	default:
@@ -221,7 +221,7 @@ func TestStreamPanicDoesNotKillProcess(t *testing.T) {
 
 type panicCompleteModel struct{ *MockLLMClient }
 
-func (panicCompleteModel) Complete(context.Context, *llm.CompletionRequest) (*llm.CompletionResponse, error) {
+func (panicCompleteModel) CompleteStream(context.Context, *llm.CompletionRequest) (<-chan *llm.StreamChunk, error) {
 	panic("complete boom")
 }
 
@@ -273,7 +273,7 @@ func TestExecutePanicReachesErrorHandlerAndOnError(t *testing.T) {
 				if tc.stream {
 					_, e = agent.AsRunnable().Invoke(context.Background(), "hi")
 				} else {
-					_, e = agent.Execute(context.Background(), "hi")
+					_, e = agent.AsRunnable().Invoke(context.Background(), "hi")
 				}
 				return e
 			}()
@@ -316,30 +316,8 @@ func (c *panicCallback) OnShutdown(context.Context) error           { c.hit("OnS
 
 type failingCompleteModel struct{ *MockLLMClient }
 
-func (failingCompleteModel) Complete(context.Context, *llm.CompletionRequest) (*llm.CompletionResponse, error) {
+func (failingCompleteModel) CompleteStream(context.Context, *llm.CompletionRequest) (<-chan *llm.StreamChunk, error) {
 	return nil, errors.New("complete failed")
-}
-
-// legacyToolModel 只实现非流式工具调用，ExecuteWithTools 因此走旧工具循环：首轮请求工具 boom，之后直接回答。
-type legacyToolModel struct {
-	*MockLLMClient
-	panicGenerate bool
-	rounds        int
-}
-
-func (m *legacyToolModel) GenerateWithTools(context.Context, string, []interfaces.Tool) (*llm.ToolCallResponse, error) {
-	if m.panicGenerate {
-		panic("generate boom")
-	}
-	m.rounds++
-	if m.rounds == 1 {
-		return &llm.ToolCallResponse{ToolCalls: []llm.ToolCall{nativeCall("c1", "boom", "{}")}}, nil
-	}
-	return &llm.ToolCallResponse{Content: "答"}, nil
-}
-
-func (m *legacyToolModel) StreamWithTools(context.Context, string, []interfaces.Tool) (<-chan llm.ToolChunk, error) {
-	return nil, errors.New("未实现")
 }
 
 // durablePanicTool 在 ExecuteStream 启动 goroutine 前的持久能力检查中 panic。
@@ -352,11 +330,7 @@ func (durablePanicTool) SupportsDurableCalls() bool { panic("durable check boom"
 func TestSyncEntryPanicReturnsPanicError(t *testing.T) {
 	type agentT = ConfigurableAgent[any, *core.AgentState]
 	execute := func(ctx context.Context, agent *agentT, _ *panicCallback) error {
-		_, err := agent.Execute(ctx, "hi")
-		return err
-	}
-	executeWithTools := func(ctx context.Context, agent *agentT, _ *panicCallback) error {
-		_, err := agent.ExecuteWithTools(ctx, "hi")
+		_, err := agent.AsRunnable().Invoke(ctx, "hi")
 		return err
 	}
 	for _, tc := range []struct {
@@ -401,18 +375,6 @@ func TestSyncEntryPanicReturnsPanicError(t *testing.T) {
 			},
 			run:       func(ctx context.Context, agent *agentT, _ *panicCallback) error { return agent.Shutdown(ctx) },
 			wantCalls: map[string]int{"OnShutdown": 1}},
-		// panicTool 返回闭包，被内联时帧名为 Test….funcN.panicTool.1，不内联时为 builder.panicTool.func1。
-		{name: "legacy_tool", wantValue: "boom boom", frame: "panicTool.",
-			build: func(cb *panicCallback) *SimpleAgentBuilder {
-				return NewSimpleBuilder(&legacyToolModel{MockLLMClient: NewMockLLMClient()}).WithTools(panicTool("boom")).WithCallbacks(cb)
-			},
-			run: executeWithTools, wantCalls: map[string]int{}},
-		{name: "legacy_model", wantValue: "generate boom", frame: "(*legacyToolModel).GenerateWithTools",
-			build: func(cb *panicCallback) *SimpleAgentBuilder {
-				return NewSimpleBuilder(&legacyToolModel{MockLLMClient: NewMockLLMClient(), panicGenerate: true}).
-					WithTools(NewMockTool("boom", "x")).WithCallbacks(cb)
-			},
-			run: executeWithTools, wantCalls: map[string]int{}},
 		{name: "stream_start", wantValue: "durable check boom", frame: "durablePanicTool.SupportsDurableCalls",
 			build: func(cb *panicCallback) *SimpleAgentBuilder {
 				return NewSimpleBuilder(answerModel()).WithTools(durablePanicTool{NewMockTool("boom", "x")}).

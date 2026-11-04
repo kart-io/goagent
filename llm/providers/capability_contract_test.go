@@ -30,12 +30,10 @@ func TestProviderCapabilityContractMatrix(t *testing.T) {
 		{"deepseek-wrapper", contractFactory(NewDeepSeekStreamingWithOptions), true, true, true, true, false},
 		{"gemini", contractFactory(NewGeminiWithOptions), true, true, true, true, true},
 		{"gemini-wrapper", contractFactory(NewGeminiStreamingWithOptions), true, true, true, true, true},
-		{"anthropic", contractFactory(NewAnthropicWithOptions), true, false, false, false, false},
-		{"cohere", contractFactory(NewCohereWithOptions), true, false, false, false, false},
-		{"huggingface", contractFactory(NewHuggingFaceWithOptions), true, false, false, false, false},
-		{"kimi", contractFactory(NewKimiWithOptions), false, false, false, false, false},
-		{"siliconflow", contractFactory(NewSiliconFlowWithOptions), false, false, false, false, false},
-		{"ollama", contractFactory(NewOllamaWithOptions), false, false, false, false, false},
+		{"anthropic", contractFactory(NewAnthropicWithOptions), true, true, true, true, false},
+		{"kimi", contractFactory(NewKimiWithOptions), true, true, true, true, false},
+		{"siliconflow", contractFactory(NewSiliconFlowWithOptions), true, true, true, true, false},
+		{"ollama", contractFactory(NewOllamaWithOptions), true, true, true, true, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var calls atomic.Int32
@@ -56,16 +54,11 @@ func TestProviderCapabilityContractMatrix(t *testing.T) {
 			} {
 				require.Equal(t, want, checker.HasCapability(capability), string(capability))
 			}
-			require.Equal(t, tc.tokens, llm.HasTokenStreaming(client))
-			require.Equal(t, tc.structured, llm.HasStreaming(client))
-			require.Equal(t, tc.tools, llm.HasToolCalling(client))
 			require.Equal(t, tc.native, llm.HasToolStreaming(client))
 			require.Equal(t, tc.embed, llm.HasEmbedding(client))
 			require.Equal(t, tc.embed, llm.AsEmbedder(client) != nil)
 			if !tc.structured {
-				agent, err := builder.NewSimpleBuilder(client).Build()
-				require.NoError(t, err)
-				_, err = agent.AsRunnable().Invoke(context.Background(), "must reject unsupported structured streaming")
+				_, err := builder.NewSimpleBuilder(client).Build()
 				require.ErrorContains(t, err, "StreamClient")
 			}
 			if !tc.native {

@@ -46,7 +46,7 @@ func TestGeminiStreamFailurePreservesUsage(t *testing.T) {
 			require.NoError(t, err)
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			defer cancel()
-			chunks, err := p.ChatStream(ctx, []agentllm.Message{agentllm.UserMessage("question")})
+			chunks, err := p.CompleteStream(ctx, &agentllm.CompletionRequest{Messages: []agentllm.Message{agentllm.UserMessage("question")}})
 			require.NoError(t, err)
 			var terminal *agentllm.StreamChunk
 			for c := range chunks {

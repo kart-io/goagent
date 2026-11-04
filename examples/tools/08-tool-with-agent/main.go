@@ -120,7 +120,7 @@ func main() {
 		fmt.Printf("\n查询 %d: %s\n", i+1, query)
 		fmt.Println("─────────────────────────────")
 
-		output, err := agent.ExecuteWithTools(ctx, query)
+		output, err := agent.AsRunnable().Invoke(ctx, query)
 		if err != nil {
 			fmt.Printf("✗ 执行失败: %v\n", err)
 			continue

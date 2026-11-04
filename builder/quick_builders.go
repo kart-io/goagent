@@ -101,11 +101,10 @@ func AnalysisAgent(llmClient llm.Client, dataSource interface{}) (*SimpleAgent, 
 //   - 多步骤工作流执行
 //   - 任务编排和协调
 //   - 错误处理和验证
-//   - 跨步骤的状态持久化
 //
 // 配置:
 //   - MaxIterations: 15 (平衡的工作流步骤)
-//   - EnableAutoSave: true (跨步骤持久化状态)
+//   - EnableAutoSave: true（需跨会话保存状态时，自行构建并配置 WithCheckpointer）
 //   - Middleware: Logging, CircuitBreaker, Validation
 func WorkflowAgent(llmClient llm.Client, workflows map[string]interface{}) (*SimpleAgent, error) {
 	state := core.NewAgentState()

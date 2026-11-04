@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/builder"
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/constants"
 )
@@ -40,16 +41,26 @@ func (m *MockLLMClient) Complete(ctx context.Context, req *llm.CompletionRequest
 	}, nil
 }
 
-func (m *MockLLMClient) Chat(ctx context.Context, messages []llm.Message) (*llm.CompletionResponse, error) {
-	return m.Complete(ctx, &llm.CompletionRequest{Messages: messages})
+// CompleteStream 把 Complete 的结果作为一个增量块返回，满足 Builder 对流式客户端的要求
+func (m *MockLLMClient) CompleteStream(ctx context.Context, req *llm.CompletionRequest) (<-chan *llm.StreamChunk, error) {
+	resp, err := m.Complete(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	stream := make(chan *llm.StreamChunk, 2)
+	stream <- &llm.StreamChunk{Delta: resp.Content, Content: resp.Content}
+	stream <- &llm.StreamChunk{Content: resp.Content, FinishReason: "stop", Done: true, Usage: &llm.Usage{TotalTokens: resp.TokensUsed}}
+	close(stream)
+	return stream, nil
+}
+
+// CompleteToolsStream 不发起工具调用，直接回答
+func (m *MockLLMClient) CompleteToolsStream(ctx context.Context, req *llm.CompletionRequest, _ []interfaces.Tool) (<-chan *llm.StreamChunk, error) {
+	return m.CompleteStream(ctx, req)
 }
 
 func (m *MockLLMClient) Provider() constants.Provider {
 	return constants.ProviderCustom
-}
-
-func (m *MockLLMClient) IsAvailable() bool {
-	return true
 }
 
 func main() {
@@ -114,7 +125,7 @@ func demoAnalysisAgent(ctx context.Context, llmClient llm.Client) {
 	}
 
 	// Execute analysis
-	output, err := agent.Execute(ctx, "Analyze Q4 2024 sales trends and identify key insights")
+	output, err := agent.AsRunnable().Invoke(ctx, "Analyze Q4 2024 sales trends and identify key insights")
 	if err != nil {
 		log.Printf("   Error executing analysis: %v\n", err)
 		return
@@ -159,7 +170,7 @@ func demoWorkflowAgent(ctx context.Context, llmClient llm.Client) {
 		"version":  "v2.3.0",
 	}
 
-	output, err := agent.Execute(ctx, input)
+	output, err := agent.AsRunnable().Invoke(ctx, input)
 	if err != nil {
 		log.Printf("   Error executing workflow: %v\n", err)
 		return
@@ -198,7 +209,7 @@ func demoMonitoringAgent(ctx context.Context, llmClient llm.Client) {
 		"threshold": "check for anomalies",
 	}
 
-	output, err := agent.Execute(ctx, input)
+	output, err := agent.AsRunnable().Invoke(ctx, input)
 	if err != nil {
 		log.Printf("   Error executing monitoring: %v\n", err)
 		return
@@ -234,7 +245,7 @@ func demoResearchAgent(ctx context.Context, llmClient llm.Client) {
 
 	// Execute research
 	query := "Latest developments in Large Language Models for 2024"
-	output, err := agent.Execute(ctx, query)
+	output, err := agent.AsRunnable().Invoke(ctx, query)
 	if err != nil {
 		log.Printf("   Error executing research: %v\n", err)
 		return
@@ -257,7 +268,7 @@ func demoExistingAgents(ctx context.Context, llmClient llm.Client) {
 	// QuickAgent
 	fmt.Println("\n   a) QuickAgent - Simple agent with minimal config")
 	quickAgent, _ := builder.QuickAgent(llmClient, "You are a helpful assistant")
-	quickOutput, _ := quickAgent.Execute(ctx, "Hello!")
+	quickOutput, _ := quickAgent.AsRunnable().Invoke(ctx, "Hello!")
 	fmt.Printf("      Output: %s\n", quickOutput.Result)
 
 	// RAGAgent

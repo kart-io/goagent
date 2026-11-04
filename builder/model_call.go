@@ -273,7 +273,7 @@ func modelOperation(ctx context.Context, id string, intent json.RawMessage, invo
 	}
 	return turn, nil
 }
-func readPlainModelTurn(ctx context.Context, id string, client llm.StreamClient, req *llm.CompletionRequest, emit func(AgentEvent) error) (*llm.StreamChunk, error) {
+func readPlainModelTurn(ctx context.Context, id string, client llm.Client, req *llm.CompletionRequest, emit func(AgentEvent) error) (*llm.StreamChunk, error) {
 	if err := llm.ValidateReasoningRequest(client, req); err != nil {
 		return nil, err
 	}

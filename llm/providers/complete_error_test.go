@@ -13,15 +13,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type completer interface {
-	Complete(context.Context, *llm.CompletionRequest) (*llm.CompletionResponse, error)
-}
-
-func completeProviders(t *testing.T, endpoint string) map[string]completer {
+func completeProviders(t *testing.T, endpoint string) map[string]llm.Client {
 	t.Helper()
 	opts := []llm.ClientOption{llm.WithAPIKey("test"), llm.WithBaseURL(endpoint), llm.WithModel("m"), llm.WithTimeout(3 * time.Second)}
-	clients := map[string]completer{}
-	add := func(name string, c completer, err error) {
+	clients := map[string]llm.Client{}
+	add := func(name string, c llm.Client, err error) {
 		require.NoError(t, err, name)
 		clients[name] = c
 	}
@@ -31,10 +27,6 @@ func completeProviders(t *testing.T, endpoint string) map[string]completer {
 	add("deepseek", deepseek, err)
 	anthropic, err := providers.NewAnthropicWithOptions(opts...)
 	add("anthropic", anthropic, err)
-	cohere, err := providers.NewCohereWithOptions(opts...)
-	add("cohere", cohere, err)
-	huggingface, err := providers.NewHuggingFaceWithOptions(opts...)
-	add("huggingface", huggingface, err)
 	ollama, err := providers.NewOllamaWithOptions(opts...)
 	add("ollama", ollama, err)
 	kimi, err := providers.NewKimiWithOptions(opts...)
@@ -67,7 +59,7 @@ func TestCompleteErrorsAreClassified(t *testing.T) {
 		}))
 		for name, client := range completeProviders(t, server.URL) {
 			t.Run(fmt.Sprintf("%s/%d", name, tc.status), func(t *testing.T) {
-				_, err := client.Complete(context.Background(), &llm.CompletionRequest{Messages: []llm.Message{llm.UserMessage("q")}})
+				_, err := llm.Complete(context.Background(), client, &llm.CompletionRequest{Messages: []llm.Message{llm.UserMessage("q")}})
 				require.Error(t, err)
 				class := llm.ClassifyError(err)
 				require.Equal(t, tc.reason, class.Reason, "%v", err)
@@ -86,7 +78,7 @@ func TestCompleteConnectionRefusedIsRetryable(t *testing.T) {
 	server.Close()
 	for name, client := range completeProviders(t, endpoint) {
 		t.Run(name, func(t *testing.T) {
-			_, err := client.Complete(context.Background(), &llm.CompletionRequest{Messages: []llm.Message{llm.UserMessage("q")}})
+			_, err := llm.Complete(context.Background(), client, &llm.CompletionRequest{Messages: []llm.Message{llm.UserMessage("q")}})
 			require.Error(t, err)
 			class := llm.ClassifyError(err)
 			require.Equal(t, llm.ReasonNetwork, class.Reason, "%v", err)

@@ -19,7 +19,7 @@ go run ./examples/basic/12-deepseek-simple
 | `quickAgent` | 系统提示 + `WithState(agentstate.NewAgentState())` |
 | `quickAgentWithTools` | 在 `quickAgent` 基础上加 `WithTools` 与 `WithVerbose(true)` |
 | `chatbot` | 使用 `ConfigureForChatbot()` 预设 |
-| `run` / `runWithTools` | 分别调用 `Execute` / `ExecuteWithTools`，返回 `output.Result`，出错时 panic |
+| `run` / `runWithTools` | 都调用 `AsRunnable().Invoke`，返回 `output.Result`，出错时 panic |
 | `simpleTool` | 用 `tools.NewFunctionToolBuilder` 创建只有一个 `input` 字符串参数的工具 |
 
 ## 内容

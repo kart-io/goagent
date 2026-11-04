@@ -5,7 +5,7 @@
 
 ## 与 Builder 的关系
 
-`builder.WithMiddleware(...middleware.Middleware)` 注册的中间件包裹整次 Agent 执行（`Execute`、`ExecuteWithTools`、`ExecuteStream` 与 `AsRunnable` 都经过同一条链），不是每次模型调用都执行一次。请求中：
+`builder.WithMiddleware(...middleware.Middleware)` 注册的中间件包裹整次 Agent 执行（`ExecuteStream`、`AsRunnable` 与 `Start` 都经过同一条链），不是每次模型调用都执行一次。请求中：
 
 - `Input` 是调用方传入的输入；
 - `State` 是 Agent 状态，`Runtime` 是 `*core/execution.Runtime[C, S]`；

@@ -106,7 +106,7 @@ func runSimpleBuilderBasic(apiKey string) error {
 	ctx := context.Background()
 	input := "请用一句话介绍 Go 语言的主要特点"
 
-	output, err := agent.Execute(ctx, input)
+	output, err := agent.AsRunnable().Invoke(ctx, input)
 	if err != nil {
 		return fmt.Errorf("agent 执行失败: %w", err)
 	}
@@ -149,7 +149,7 @@ func runQuickAgent(apiKey string) error {
 
 	// 运行 Agent
 	ctx := context.Background()
-	output, err := agent.Execute(ctx, "什么是微服务架构？请简要说明。")
+	output, err := agent.AsRunnable().Invoke(ctx, "什么是微服务架构？请简要说明。")
 	if err != nil {
 		return fmt.Errorf("agent 执行失败: %w", err)
 	}
@@ -202,7 +202,7 @@ func runSimpleBuilderWithTools(apiKey string) error {
 	ctx := context.Background()
 	input := "请帮我计算 25 * 4，然后告诉我现在的时间"
 
-	output, err := agent.ExecuteWithTools(ctx, input)
+	output, err := agent.AsRunnable().Invoke(ctx, input)
 	if err != nil {
 		return fmt.Errorf("agent 执行失败: %w", err)
 	}
@@ -244,7 +244,7 @@ func runPresetAgents(apiKey string) error {
 	}
 
 	ctx := context.Background()
-	output, err := chatAgent.Execute(ctx, "你好！")
+	output, err := chatAgent.AsRunnable().Invoke(ctx, "你好！")
 	if err != nil {
 		return fmt.Errorf("ChatAgent 执行失败: %w", err)
 	}
@@ -262,7 +262,7 @@ func runPresetAgents(apiKey string) error {
 		return fmt.Errorf("创建 AnalysisAgent 失败: %w", err)
 	}
 
-	output, err = analysisAgent.Execute(ctx, "分析一下：数字 1,2,3,4,5 的平均值和总和是多少？")
+	output, err = analysisAgent.AsRunnable().Invoke(ctx, "分析一下：数字 1,2,3,4,5 的平均值和总和是多少？")
 	if err != nil {
 		return fmt.Errorf("AnalysisAgent 执行失败: %w", err)
 	}
@@ -280,7 +280,7 @@ func runPresetAgents(apiKey string) error {
 		return fmt.Errorf("创建 RAGAgent 失败: %w", err)
 	}
 
-	output, err = ragAgent.Execute(ctx, "请总结一下 Go 语言的并发特性。")
+	output, err = ragAgent.AsRunnable().Invoke(ctx, "请总结一下 Go 语言的并发特性。")
 	if err != nil {
 		return fmt.Errorf("RAGAgent 执行失败: %w", err)
 	}
@@ -507,7 +507,7 @@ func runJSONFormatExample(apiKey string) error {
 	ctx := context.Background()
 	input := "分析数字序列 2, 4, 6, 8, 10 的规律"
 
-	output, err := agent.Execute(ctx, input)
+	output, err := agent.AsRunnable().Invoke(ctx, input)
 	if err != nil {
 		return fmt.Errorf("agent 执行失败: %w", err)
 	}

@@ -10,7 +10,7 @@ import (
 
 // AsRunnable 将 Builder 接入标准泛型执行契约。
 // Invoke 收集 ExecuteStream 的最终结果，因此工具、检索、中间件及用量路径相同。
-// 需要 StreamClient；缓冲模型可声明实际流能力。原有 Execute 语义保持不变。
+// 需要 StreamClient；缓冲模型可声明实际流能力。
 // 同一 Builder 的状态与记忆属于一个会话，适配器串行执行，等待可被取消。
 func (a *ConfigurableAgent[C, S]) AsRunnable() *core.StreamRunnable[any, *AgentOutput] {
 	mode := core.StreamModeTokens

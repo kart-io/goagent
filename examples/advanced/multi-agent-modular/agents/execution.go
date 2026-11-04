@@ -73,7 +73,7 @@ Be specific and actionable.`, strategy)
 		llm.UserMessage(prompt),
 	}
 
-	response, err := e.llmClient.Chat(ctx, messages)
+	response, err := llm.Chat(ctx, e.llmClient, messages)
 	if err != nil {
 		return "", fmt.Errorf("execution planning failed: %w", err)
 	}
@@ -126,7 +126,7 @@ Provide:
 		llm.UserMessage(resultsPrompt),
 	}
 
-	response, err := e.llmClient.Chat(ctx, messages)
+	response, err := llm.Chat(ctx, e.llmClient, messages)
 	if err != nil {
 		results["summary"] = "Failed to generate summary"
 	} else {
@@ -156,7 +156,7 @@ Be concise but informative.`, executionID)
 		llm.UserMessage(prompt),
 	}
 
-	response, err := e.llmClient.Chat(ctx, messages)
+	response, err := llm.Chat(ctx, e.llmClient, messages)
 	if err != nil {
 		return "", fmt.Errorf("execution monitoring failed: %w", err)
 	}
@@ -186,7 +186,7 @@ Focus on practical solutions.`, failure, context)
 		llm.UserMessage(prompt),
 	}
 
-	response, err := e.llmClient.Chat(ctx, messages)
+	response, err := llm.Chat(ctx, e.llmClient, messages)
 	if err != nil {
 		return "", fmt.Errorf("failure handling failed: %w", err)
 	}
@@ -215,7 +215,7 @@ Be objective and thorough.`, expectedOutcome, actualResult)
 		llm.UserMessage(prompt),
 	}
 
-	response, err := e.llmClient.Chat(ctx, messages)
+	response, err := llm.Chat(ctx, e.llmClient, messages)
 	if err != nil {
 		return false, "", fmt.Errorf("result validation failed: %w", err)
 	}

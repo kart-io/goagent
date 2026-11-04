@@ -172,7 +172,7 @@ func chatbot(apiKey string) *builder.ConfigurableAgent[any, core.State] {
 // run 运行 Agent（简化）
 func run(agent *builder.ConfigurableAgent[any, core.State], input string) interface{} {
 	ctx := context.Background()
-	output, err := agent.Execute(ctx, input)
+	output, err := agent.AsRunnable().Invoke(ctx, input)
 	if err != nil {
 		panic(fmt.Sprintf("执行失败: %v", err))
 	}
@@ -182,7 +182,7 @@ func run(agent *builder.ConfigurableAgent[any, core.State], input string) interf
 // runWithTools 运行带工具的 Agent（简化）
 func runWithTools(agent *builder.ConfigurableAgent[any, core.State], input string) interface{} {
 	ctx := context.Background()
-	output, err := agent.ExecuteWithTools(ctx, input)
+	output, err := agent.AsRunnable().Invoke(ctx, input)
 	if err != nil {
 		panic(fmt.Sprintf("执行失败: %v", err))
 	}

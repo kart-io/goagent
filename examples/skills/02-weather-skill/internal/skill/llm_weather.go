@@ -205,7 +205,7 @@ func (s *LLMWeatherSkill) processWithLLM(ctx context.Context, query string) (int
 	}
 
 	// 尝试使用工具调用
-	toolCaller := llm.AsToolCaller(s.svcCtx.LLMClient)
+	toolCaller := llm.AsToolStreamClient(s.svcCtx.LLMClient)
 	if toolCaller == nil {
 		// 降级到普通聊天
 		return s.processWithChat(ctx, query)
@@ -214,10 +214,22 @@ func (s *LLMWeatherSkill) processWithLLM(ctx context.Context, query string) (int
 	// 构建提示词
 	prompt := s.buildPrompt(query)
 
-	// 使用带工具的生成
-	result, err := toolCaller.GenerateWithTools(ctx, prompt, s.weatherTools.GetTools())
+	// 使用原生工具流，只采用成功终止块中的完整结果
+	stream, err := toolCaller.CompleteToolsStream(ctx, &llm.CompletionRequest{Messages: []llm.Message{llm.UserMessage(prompt)}}, s.weatherTools.GetTools())
 	if err != nil {
 		// 降级到普通聊天
+		return s.processWithChat(ctx, query)
+	}
+	var result *llm.StreamChunk
+	for chunk := range stream {
+		if chunk.Error != nil {
+			return s.processWithChat(ctx, query)
+		}
+		if chunk.Done {
+			result = chunk
+		}
+	}
+	if result == nil {
 		return s.processWithChat(ctx, query)
 	}
 
@@ -235,7 +247,7 @@ func (s *LLMWeatherSkill) processWithLLM(ctx context.Context, query string) (int
 
 // processWithChat 使用普通聊天处理
 func (s *LLMWeatherSkill) processWithChat(ctx context.Context, query string) (interface{}, []string, error) {
-	resp, err := s.svcCtx.LLMClient.Chat(ctx, []llm.Message{
+	resp, err := llm.Chat(ctx, s.svcCtx.LLMClient, []llm.Message{
 		llm.SystemMessage(s.systemPrompt),
 		llm.UserMessage(query),
 	})

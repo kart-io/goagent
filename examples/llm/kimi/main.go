@@ -17,7 +17,7 @@ func main() {
 	}
 
 	ctx := context.Background()
-	resp, err := provider.Complete(ctx, &llm.CompletionRequest{
+	resp, err := llm.Complete(ctx, provider, &llm.CompletionRequest{
 		Messages: []llm.Message{
 			{Role: "user", Content: "What is deep learning?"},
 			{Role: "assistant", Content: "Deep learning is a subset of machine learning that is concerned with algorithms and models that learn from data that is unstructured or unlabeled. It is a type of machine learning that is used to find patterns in data."},
@@ -38,7 +38,7 @@ func chatExample() {
 	}
 
 	ctx := context.Background()
-	resp, err := provider.Chat(ctx, []llm.Message{
+	resp, err := llm.Chat(ctx, provider, []llm.Message{
 		{Role: "system", Content: "You are a helpful assistant. please answer the question in the chinese as the question"},
 		{Role: "user", Content: "What is the capital of France?"},
 	})

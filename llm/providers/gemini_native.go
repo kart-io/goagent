@@ -21,9 +21,6 @@ var _ llm.EmbeddingClient = (*GeminiProvider)(nil)
 func (p *GeminiProvider) CompleteStream(ctx context.Context, req *llm.CompletionRequest) (<-chan *llm.StreamChunk, error) {
 	return p.stream(ctx, req, nil)
 }
-func (p *GeminiProvider) ChatStream(ctx context.Context, messages []llm.Message) (<-chan *llm.StreamChunk, error) {
-	return p.CompleteStream(ctx, &llm.CompletionRequest{Messages: messages})
-}
 func (p *GeminiProvider) CompleteToolsStream(ctx context.Context, req *llm.CompletionRequest, tools []interfaces.Tool) (<-chan *llm.StreamChunk, error) {
 	return p.stream(ctx, req, tools)
 }

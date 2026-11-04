@@ -12,6 +12,6 @@ UsageEvent 包含 Model（逐尝试证据）、Statistics（同一账本累计�
 
 回放同样通知但标 Replayed，不能按投递次数计费。Statistics 是时点累计，可能包含并发任务；不能相加多个快照，也不能通过根快照差值推算子 Agent 消耗。根据 Model.AgentCallKey 查 Calls 取得 Self/Inclusive。可靠累计始终查同一账本。
 
-启用钩子但使用未计量的旧工具选择客户端时，在模型请求前拒绝；纯 StreamClient 无工具路径仍支持。控制钩子、业务路由与后台调度语义不变。
+启用钩子但使用未计量的旧工具选择客户端时，在模型请求前拒绝；无工具的 `llm.Client` 路径仍支持。控制钩子、业务路由与后台调度语义不变。
 
 使用见[指南](../guides/MULTI_AGENT_USAGE.md)，回归与审核见[交付报告](../evaluation/2026-11-01-token-usage-hook/REPORT.md)。

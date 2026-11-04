@@ -50,7 +50,7 @@ key := keyGen.GenerateKey(prompt, map[string]interface{}{
 if cached, err := llmCache.Get(ctx, key); err == nil {
     return cached.(*llm.CompletionResponse), nil
 }
-resp, err := client.Complete(ctx, req)
+resp, err := llm.Complete(ctx, client, req)
 if err != nil {
     return nil, err
 }

@@ -19,7 +19,7 @@ type RetrievalConfig struct {
 // RetrievalSource identifies a numbered reference included in the model input.
 type RetrievalSource = interfaces.RetrievalSource
 
-// WithRetriever adds retrieval to both Execute and ExecuteWithTools.
+// WithRetriever adds retrieval to every execution entry.
 // It accepts hybrid, reranking, vector, or custom document retrievers.
 // It does not cache answers; applications may add their own cache policy.
 func (b *AgentBuilder[C, S]) WithRetriever(retriever interfaces.DocumentRetriever, config ...RetrievalConfig) *AgentBuilder[C, S] {

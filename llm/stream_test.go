@@ -12,13 +12,9 @@ import (
 func TestMockStreamClient(t *testing.T) {
 	client := NewMockStreamClient()
 
-	t.Run("Provider and IsAvailable", func(t *testing.T) {
+	t.Run("Provider", func(t *testing.T) {
 		if client.Provider() != constants.ProviderCustom {
 			t.Errorf("Expected provider %s, got %s", constants.ProviderCustom, client.Provider())
-		}
-
-		if !client.IsAvailable() {
-			t.Error("Expected client to be available")
 		}
 	})
 
@@ -30,7 +26,7 @@ func TestMockStreamClient(t *testing.T) {
 			},
 		}
 
-		resp, err := client.Complete(ctx, req)
+		resp, err := Complete(ctx, client, req)
 		if err != nil {
 			t.Fatalf("Complete failed: %v", err)
 		}
@@ -47,7 +43,7 @@ func TestMockStreamClient(t *testing.T) {
 			UserMessage("Hello"),
 		}
 
-		resp, err := client.Chat(ctx, messages)
+		resp, err := Chat(ctx, client, messages)
 		if err != nil {
 			t.Fatalf("Chat failed: %v", err)
 		}

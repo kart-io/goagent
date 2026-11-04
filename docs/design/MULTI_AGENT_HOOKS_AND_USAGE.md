@@ -53,7 +53,7 @@ type Invocation struct {
 
 `Invocation.VisitID` 是 Agent 一次访问的身份，`observe.Event.VisitID` 保持现有的某次 agent/model/tool 观察操作身份；二者不强行相等。每个后代事件携带所属 Agent.VisitID，ParentVisitID 指父 Agent 的 VisitID，不是父模型事件 ID。Trace/Span 继续用 OTel 原生关系。
 
-入口范围：完整逐尝试钩子覆盖 ExecuteStream、AsRunnable 及 Start 共用的流式执行源。旧同步 Execute 不经过 modelOperation，且目前拒绝根预算；本设计不声称它也有完整计量，不扩大其功能。旧非原生工具选择路径在显式启用完整计量时先拒绝或要求宿主适配，不能静默漏记工具选择请求。
+入口范围：完整逐尝试钩子覆盖 ExecuteStream、AsRunnable 及 Start 共用的流式执行源。旧同步入口与非原生工具选择路径已删除，Builder 的全部模型请求都经过 modelOperation。
 
 ## 4. 钩子：控制与观察分离
 
@@ -142,7 +142,7 @@ Token 数不等于货币费用。宿主维护生效时间、供应商、模型�
 ## 8. 实施顺序与验收
 
 1. **U1 身份与生命周期**：值类型、WithAgentID、context 传播、Observer 元数据；验证同名并发、嵌套、拒绝/Factory 失败、清理边界和 observer 丢弃。
-2. **U2 尝试用量钩子**：统一 modelOperation 接入逐尝试事件、unknown/partial、失败/取消、重试、回放与证据修订；覆盖无工具 StreamClient 与原生工具流。
+2. **U2 尝试用量钩子**：统一 modelOperation 接入逐尝试事件、unknown/partial、失败/取消、重试、回放与证据修订；覆盖无工具 `llm.Client` 与原生工具流。
 3. **U3 统一归属**：统一预算账本、原子预留/归属、查询与严格格式边界；重启和真实故障窗口验证不重复发送/计费。
 4. **U4 宿主案例**：父 Agent + 两个并行子 Agent + 汇总；输出 Self/Inclusive/Root 和未知状态，接入 OTel 或宿主计价器。业务案例放 goagent-examples。
 

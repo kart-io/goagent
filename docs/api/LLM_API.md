@@ -14,36 +14,39 @@ go doc -all github.com/kart-io/goagent/llm/providers
 
 ### llm.Client
 
-所有 Provider 都实现的基础接口：
+所有 Provider 都实现的基础接口，只有流式补全和提供商标识：
 
 ```go
 type Client interface {
-    Complete(ctx context.Context, req *CompletionRequest) (*CompletionResponse, error)
-    Chat(ctx context.Context, messages []Message) (*CompletionResponse, error)
+    CompleteStream(ctx context.Context, req *CompletionRequest) (<-chan *StreamChunk, error)
     Provider() constants.Provider
-    IsAvailable() bool
 }
 ```
 
-内置 Provider 的 `IsAvailable` 会向服务端发真实请求（多数是一次最小补全，计费），不要放在热路径上。
+需要完整响应时用包级函数收集流：
+
+```go
+func Complete(ctx context.Context, client Client, req *CompletionRequest) (*CompletionResponse, error)
+func Chat(ctx context.Context, client Client, messages []Message) (*CompletionResponse, error)
+```
+
+`llm.Complete` 只把无错误的 `Done` 块视为完成：块上的 `Error` 原样返回，流在终止块前关闭返回 `io.ErrUnexpectedEOF`；返回前取消内部 ctx。`llm.Chat` 等价于以 `Messages` 调用 `llm.Complete`。
+
+自定义客户端只需实现 `CompleteStream`；仅有同步实现时，可把结果作为一个块返回（`Delta`、`Content`、`FinishReason: "stop"`、`Done: true`）。接口不再提供 `IsAvailable`；检查 Ollama 等 OpenAI 兼容端点是否可达用 `OpenAIProvider.ListModels(ctx)`（读取 `/models`，不计费）。
 
 ### 可选接口
 
 | 接口 | 方法 | 检测 / 转换 |
 |---|---|---|
-| `StreamClient` | `CompleteStream`、`ChatStream`，返回 `<-chan *StreamChunk` | `HasStreaming`、`AsStreamClient` |
-| `ToolStreamClient` | `StreamClient` + `CompleteToolsStream(ctx, req, tools)` | `HasToolStreaming`、`AsToolStreamClient` |
-| `TokenStreamingClient` | `Stream(ctx, prompt) (<-chan string, error)` | `HasTokenStreaming` |
-| `ToolCallingClient` | `GenerateWithTools`、`StreamWithTools`（基于单个 prompt 的旧签名） | `AsToolCaller` |
+| `ToolStreamClient` | `Client` + `CompleteToolsStream(ctx, req, tools)` | `HasToolStreaming`、`AsToolStreamClient` |
 | `EmbeddingClient` | `Embed` | `HasEmbedding`、`AsEmbedder` |
 | `CapabilityChecker` | `HasCapability`、`Capabilities` | 类型断言 |
 
-`FullClient` 组合 `Client`、`StreamClient`、`ToolCallingClient`、`EmbeddingClient`、`CapabilityChecker`。
+`FullClient` 组合 `ToolStreamClient`、`EmbeddingClient`、`CapabilityChecker`。
 
 检测规则：
 
-- `HasStreaming` / `HasToolStreaming` 只检查接口实现，不看能力声明。Builder 的 `AsRunnable` 与 `ExecuteStream` 要求 `StreamClient`；原生工具循环与 `WithReturnDirectTools` 要求 `ToolStreamClient`，否则在构建或执行阶段、发出请求前报错。
-- `HasToolCalling` 在实现 `ToolStreamClient` 或 `ToolCallingClient` 时为 true；它为 true 不代表 `AsToolCaller` 能返回非 nil。
+- `HasToolStreaming` 只检查接口实现，不看能力声明。Builder 接受任意 `llm.Client`；配置工具或 `WithReturnDirectTools` 时要求 `ToolStreamClient`，否则 Build 报错。
 - `HasEmbedding` / `AsEmbedder` 同时要求实现 `EmbeddingClient`，且（若实现了 `CapabilityChecker`）声明了 `CapabilityEmbedding`。
 - `ErrUnsupportedCapability` 表示 Provider 没有实现该操作。
 
@@ -124,13 +127,11 @@ type StreamChunk struct {
 
 ```go
 func streamAnswer(ctx context.Context, client llm.Client, prompt string) error {
-    sc := llm.AsStreamClient(client)
-    if sc == nil {
-        return fmt.Errorf("%s 未实现 StreamClient", client.Provider())
-    }
     ctx, cancel := context.WithCancel(ctx)
     defer cancel() // 提前返回时释放流
-    chunks, err := sc.ChatStream(ctx, []llm.Message{llm.UserMessage("写一首诗")})
+    chunks, err := client.CompleteStream(ctx, &llm.CompletionRequest{
+        Messages: []llm.Message{llm.UserMessage("写一首诗")},
+    })
     if err != nil {
         return err
     }
@@ -181,7 +182,7 @@ type ClassifiedError struct {
 | `WithCustomHeaders` | 合并到基于 resty 的 HTTP Provider 及 DeepSeek 结构化流的请求头 |
 | `WithProvider` | 由构造函数自行设置，通常不需要 |
 
-模型调用的重试应在 Builder 层用 `WithRequestError` + `RetryTransient` 配置。Anthropic、Cohere、HuggingFace 与 DeepSeek 的非流式 HTTP 调用内置固定次数的重试，不可配置；OpenAI 与 Gemini 不做隐式重试。
+模型调用的重试应在 Builder 层用 `WithRequestError` + `RetryTransient` 配置。DeepSeek 的非流式 HTTP 调用内置固定次数的重试，不可配置；OpenAI、Gemini 与 Anthropic 不做隐式重试。
 
 ## Provider 构造函数
 
@@ -193,11 +194,9 @@ type ClassifiedError struct {
 | `NewAnthropicWithOptions` | `*AnthropicProvider` | `ProviderAnthropic` |
 | `NewGeminiWithOptions` | `*GeminiProvider` | `ProviderGemini` |
 | `NewDeepSeekWithOptions` | `*DeepSeekProvider` | `ProviderDeepSeek` |
-| `NewCohereWithOptions` | `*CohereProvider` | `ProviderCohere` |
-| `NewHuggingFaceWithOptions` | `*HuggingFaceProvider` | `ProviderHuggingFace` |
-| `NewOllamaWithOptions`、`NewOllamaClientSimple(model)` | `*OllamaClient` | `ProviderOllama` |
-| `NewKimiWithOptions` | `*KimiClient` | `ProviderKimi` |
-| `NewSiliconFlowWithOptions` | `*SiliconFlowClient` | `ProviderSiliconFlow` |
+| `NewOllamaWithOptions`、`NewOllamaClientSimple(model)` | `*OpenAIProvider` | `ProviderOllama` |
+| `NewKimiWithOptions` | `*OpenAIProvider` | `ProviderKimi` |
+| `NewSiliconFlowWithOptions` | `*OpenAIProvider` | `ProviderSiliconFlow` |
 
 `NewDeepSeekStreamingWithOptions` / `NewDeepSeekStreaming(*LLMOptions)` 与 `NewGeminiStreamingWithOptions` / `NewGeminiStreaming(*LLMOptions)` 返回嵌入基础 Provider 的包装类型，能力与基础 Provider 相同。
 
@@ -234,7 +233,7 @@ func main() {
         log.Fatal(err)
     }
 
-    resp, err := client.Complete(context.Background(), &llm.CompletionRequest{
+    resp, err := llm.Complete(context.Background(), client, &llm.CompletionRequest{
         Messages: []llm.Message{
             llm.SystemMessage("你是一个有帮助的助手"),
             llm.UserMessage("请用一句话介绍 Go 语言"),

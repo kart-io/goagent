@@ -12,7 +12,7 @@ GoAgent（`github.com/kart-io/goagent`）是 Go 的 Agent 执行内核：Builder
 ## 技术栈
 
 - Go 1.25（`go.mod`：`go 1.25.0`）
-- 模型：`github.com/sashabaranov/go-openai`（OpenAI 兼容协议）、`google.golang.org/genai`（Gemini），其余提供方（Anthropic、Cohere、HuggingFace、Ollama、Kimi、SiliconFlow 等）见 `llm/providers`
+- 模型：`github.com/sashabaranov/go-openai`（OpenAI 兼容协议）、`google.golang.org/genai`（Gemini）、`github.com/anthropics/anthropic-sdk-go/v2`（Anthropic）；Ollama、Kimi、SiliconFlow 是 OpenAI 兼容预设，见 `llm/providers`
 - MCP：官方 `github.com/modelcontextprotocol/go-sdk`
 - 观测：OpenTelemetry（trace/metric/OTLP gRPC 导出）、Prometheus client
 - 日志：`github.com/kart-io/logger`
@@ -102,7 +102,7 @@ graph TD
 | `tools/compute`、`tools/http`、`tools/search`、`tools/shell` | 内置工具 |
 | `tools/middleware` | 工具级中间件（日志、缓存、限流） |
 | `tools/policy`、`tools/spill` | 按工具名/命令前缀的权限规则；超长结果落盘与 `read_spill` |
-| `llm`、`llm/providers`、`llm/common`、`llm/cache`、`llm/constants` | 模型客户端接口与能力接口（`StreamClient`、`ToolStreamClient` 等）、各提供方实现、语义缓存 |
+| `llm`、`llm/providers`、`llm/common`、`llm/cache`、`llm/constants` | 模型客户端接口与能力接口（`Client`、`ToolStreamClient` 等）、各提供方实现、语义缓存 |
 | `workflow` | 类型化有界控制流图 `Graph[T]`，`Compile` / `CompileDurable` |
 | `workflow/refund` | 绑定事务的退款防护示范实现 |
 | `execution` | 宿主装配：`Scope` 组合 RunID、会话、日志、预算、期限与观察者 |

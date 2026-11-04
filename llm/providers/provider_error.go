@@ -38,7 +38,10 @@ func openAIProviderError(err error, retryAfter time.Duration) *agentllm.Provider
 	e := &agentllm.ProviderError{RetryAfter: retryAfter, Err: err}
 	var apiErr *openai.APIError
 	var reqErr *openai.RequestError
-	if errors.As(err, &apiErr) {
+	if errors.As(err, &apiErr) && apiErr == nil {
+		// 上游对流式请求回了非 SSE 内容时，go-openai 包装的是空 *APIError，其 Error() 不可调用。
+		e.Err = errors.New("上游返回的不是 SSE 事件流")
+	} else if errors.As(err, &apiErr) {
 		e.StatusCode = apiErr.HTTPStatusCode
 		e.QuotaExhausted = quotaExhausted(apiErr)
 	} else if errors.As(err, &reqErr) {
