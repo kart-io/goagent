@@ -258,3 +258,29 @@ func TestOpenAI_Embed(t *testing.T) {
 		assert.InDelta(t, []float64{0.1, 0.2, 0.3, 0.4, 0.5}[i], val, 0.01, "embedding 值应该接近预期")
 	}
 }
+
+func TestOpenAI_EmbedUsesEmbeddingModel(t *testing.T) {
+	var model string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var reqBody map[string]interface{}
+		_ = json.NewDecoder(r.Body).Decode(&reqBody)
+		model, _ = reqBody["model"].(string)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"object": "list",
+			"data":   []map[string]interface{}{{"object": "embedding", "index": 0, "embedding": []float64{0.1}}},
+		})
+	}))
+	defer server.Close()
+
+	provider, err := NewOpenAIWithOptions(
+		agentllm.WithAPIKey("test-api-key"),
+		agentllm.WithBaseURL(server.URL+"/v1"),
+		agentllm.WithEmbeddingModel("text-embedding-3-small"),
+	)
+	require.NoError(t, err)
+
+	_, err = provider.Embed(context.Background(), "text")
+	require.NoError(t, err)
+	assert.Equal(t, "text-embedding-3-small", model)
+}

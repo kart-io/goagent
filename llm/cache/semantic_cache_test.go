@@ -9,6 +9,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/llm"
 )
 
 func TestCosineSimilarity(t *testing.T) {
@@ -114,12 +116,10 @@ func TestMockEmbeddingProvider(t *testing.T) {
 	embedding3, err := provider.Embed(ctx, "different prompt")
 	require.NoError(t, err)
 	assert.NotEqual(t, embedding, embedding3)
-
-	// Test batch
-	embeddings, err := provider.EmbedBatch(ctx, []string{"a", "b", "c"})
-	require.NoError(t, err)
-	assert.Len(t, embeddings, 3)
 }
+
+// Provider 客户端经 llm.EmbeddingClient 暴露 Embed，须能直接用于语义缓存。
+var _ EmbeddingProvider = llm.EmbeddingClient(nil)
 
 func TestMemorySemanticCache_SetAndGet(t *testing.T) {
 	provider := NewMockEmbeddingProvider(128)

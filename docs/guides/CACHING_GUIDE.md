@@ -53,7 +53,7 @@ cachedTool := tools.WithMiddleware(originalTool, middleware.Caching(
 ```go
 client, err := llmcache.NewCachedLLMClient(&llmcache.CachedLLMClientConfig{
     Client:            baseClient,
-    EmbeddingProvider: embedder, // Embed、EmbedBatch、Dimension；llmcache.NewOpenAIEmbeddingProvider 是一个实现
+    EmbeddingProvider: embedder, // 只需 Embed；任意 llm.EmbeddingClient，如 providers.OpenAIProvider
     CacheConfig:       llmcache.DefaultSemanticCacheConfig(),
 })
 if err != nil { return err }

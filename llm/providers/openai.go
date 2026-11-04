@@ -188,24 +188,28 @@ func (p *OpenAIProvider) convertTools(tools []interfaces.Tool) []openai.Tool {
 	return result
 }
 
-// Embed generates embeddings for text
+// Embed 使用 llm.WithEmbeddingModel 指定的模型，未指定时为 text-embedding-ada-002。
 func (p *OpenAIProvider) Embed(ctx context.Context, text string) ([]float32, error) {
 	textPreview := text
 	if len(text) > 100 {
 		textPreview = text[:100] + "..."
 	}
+	model := openai.EmbeddingModel(p.Config.EmbeddingModel)
+	if model == "" {
+		model = openai.AdaEmbeddingV2
+	}
 
 	resp, err := p.client.CreateEmbeddings(ctx, openai.EmbeddingRequest{
 		Input: []string{text},
-		Model: openai.AdaEmbeddingV2,
+		Model: model,
 	})
 	if err != nil {
 		return nil, agentErrors.NewRetrievalEmbeddingError(textPreview, err).
-			WithContext("model", string(openai.AdaEmbeddingV2))
+			WithContext("model", string(model))
 	}
 
 	if len(resp.Data) == 0 {
-		return nil, agentErrors.NewLLMResponseError(p.ProviderName(), string(openai.AdaEmbeddingV2), "no embeddings in response")
+		return nil, agentErrors.NewLLMResponseError(p.ProviderName(), string(model), "no embeddings in response")
 	}
 
 	return resp.Data[0].Embedding, nil

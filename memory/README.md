@@ -258,7 +258,7 @@ manager.Delete(ctx, "user:preferences")
 vecStore := memory.AsVectorStore(memory.NewInMemoryVectorStore(1536))
 
 // embedder 是实现 Embed(ctx, text) ([]float32, error) 的任意类型，如 llm.EmbeddingClient
-// （OpenAIProvider 固定使用 text-embedding-ada-002，1536 维）或包内 SimpleEmbeddingModel；
+// （OpenAIProvider 默认 text-embedding-ada-002，1536 维，可用 llm.WithEmbeddingModel 更换）或包内 SimpleEmbeddingModel；
 // 向量维度须与向量存储一致。
 hierMem := memory.NewHierarchicalMemoryWithContext(ctx, vecStore,
     memory.WithShortTermCapacity(100),

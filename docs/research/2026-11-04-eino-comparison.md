@@ -82,7 +82,7 @@ Eino 是组件、编排、ADK 与扩展生态齐全的 LLM 应用框架；GoAgen
 | `memory.Embedder` | 主模块、goagent-examples、contrib 均无引用 | 删除 |
 | `llm.BatchEmbeddingClient` | 无使用方；`llm/providers` 无实现（现有 `EmbedBatch` 均返回 float32，不满足该接口） | 删除 |
 | `memory.EmbeddingModel`（float32） | `EmbeddingVectorStore` 使用 | 已统一：核心向量改为 float32（见 CHANGELOG Unreleased），`SimpleEmbeddingModel` 可直接用于 `WithEmbedder` |
-| `llm/cache.EmbeddingProvider`（float32） | 语义缓存内部使用，自带 `OpenAIEmbeddingProvider` 与 Mock 实现，与 `llm/providers` 的 OpenAI Embedding 并存 | 精度已一致；重复的 OpenAI 实现未处理 |
+| `llm/cache.EmbeddingProvider`（float32） | 语义缓存内部使用，自带 `OpenAIEmbeddingProvider` 与 Mock 实现，与 `llm/providers` 的 OpenAI Embedding 并存 | 已收敛：接口只保留 `Embed`，删除重复的 OpenAI 实现，改用 `llm.EmbeddingClient` |
 | contrib `retrieval.Embedder`（float32） | contrib 检索链路 | 层次不同，不与核心统一 |
 
 删除属于破坏性变更，需在 CHANGELOG 说明；作为独立代码改动执行，不随本文提交。
