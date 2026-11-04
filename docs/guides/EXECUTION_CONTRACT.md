@@ -169,4 +169,4 @@ agent, err := builder.NewSimpleBuilder(client).
 
 初始化不再忽略检查点读取失败；记忆可选择严格模式。Pipe/Sequence复用共同流终态与取消规则，显式父回调和父Batch并发配置生效。新增预算限制、只读运行诊断、两阶段工具准入及有界异步观察。
 
-接口与迁移细节见 [扩展契约](EXTENSION_CONTRACT.md) 和 [执行治理指南](EXECUTION_GOVERNANCE.md)。旧同步入口仍保留既有能力边界。
+接口与迁移细节见 [扩展契约](EXTENSION_CONTRACT.md) 和 [执行治理指南](EXECUTION_GOVERNANCE.md)。旧同步入口已删除，完整结果统一通过 `AsRunnable().Invoke` 收集，迁移见[快速入门](QUICKSTART.md#旧接口迁移)。

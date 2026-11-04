@@ -1,0 +1,289 @@
+{
+  "timestamp": "2026-11-04T10:18:11.132432301Z",
+  "hostname": "<host>",
+  "goos": "linux",
+  "goarch": "amd64",
+  "goVersion": "go1.27.3",
+  "cpus": 28,
+  "gomaxprocs": 28,
+  "timeout": "5m0s",
+  "limitations": "离线无副作用工具与固定合成usage；未调用模型，不代表真实模型效果、费用或生产试运行；堆和goroutine为进程采样，不证明无泄漏",
+  "reports": [
+    {
+      "config": {
+        "mode": "none",
+        "operations": 10
+      },
+      "operations": 10,
+      "successes": 10,
+      "totalDurationNS": 214949,
+      "p50NS": 11202,
+      "p95NS": 109957,
+      "totalAllocBytes": 58808,
+      "liveHeapBytes": 1391680,
+      "goroutineDelta": 0,
+      "fileCount": 0,
+      "fileBytes": 0,
+      "syntheticUsagePerOperation": {
+        "prompt_tokens": 2,
+        "completion_tokens": 1,
+        "total_tokens": 3
+      },
+      "measurementScope": "操作循环：合成usage预留、Dispatcher工具调用及usage记账；不含初始化、统计和清理；无模型请求；TotalAlloc为循环期间进程级差值，GC后堆和goroutine为进程采样，不证明无泄漏"
+    },
+    {
+      "config": {
+        "mode": "memory",
+        "operations": 10
+      },
+      "operations": 10,
+      "successes": 10,
+      "totalDurationNS": 111009,
+      "p50NS": 6670,
+      "p95NS": 42008,
+      "totalAllocBytes": 99776,
+      "liveHeapBytes": 1401416,
+      "goroutineDelta": 0,
+      "fileCount": 0,
+      "fileBytes": 0,
+      "budgetSnapshot": {
+        "ReservedRequests": 10,
+        "KnownUsageEntries": 10,
+        "UnknownUsageEntries": 0,
+        "KnownTokens": {
+          "prompt_tokens": 20,
+          "completion_tokens": 10,
+          "total_tokens": 30
+        },
+        "ReservedTokens": 0,
+        "ReservedToolCalls": 10,
+        "KnownTokenDelta": 30
+      },
+      "syntheticUsagePerOperation": {
+        "prompt_tokens": 2,
+        "completion_tokens": 1,
+        "total_tokens": 3
+      },
+      "measurementScope": "操作循环：合成usage预留、Dispatcher工具调用及usage记账；不含初始化、统计和清理；无模型请求；TotalAlloc为循环期间进程级差值，GC后堆和goroutine为进程采样，不证明无泄漏"
+    },
+    {
+      "config": {
+        "mode": "file",
+        "operations": 10
+      },
+      "operations": 10,
+      "successes": 10,
+      "totalDurationNS": 2525820,
+      "p50NS": 241134,
+      "p95NS": 284510,
+      "totalAllocBytes": 452144,
+      "liveHeapBytes": 1430320,
+      "goroutineDelta": 0,
+      "fileCount": 2,
+      "fileBytes": 2152,
+      "budgetSnapshot": {
+        "ReservedRequests": 10,
+        "KnownUsageEntries": 10,
+        "UnknownUsageEntries": 0,
+        "KnownTokens": {
+          "prompt_tokens": 20,
+          "completion_tokens": 10,
+          "total_tokens": 30
+        },
+        "ReservedTokens": 0,
+        "ReservedToolCalls": 10,
+        "KnownTokenDelta": 30
+      },
+      "syntheticUsagePerOperation": {
+        "prompt_tokens": 2,
+        "completion_tokens": 1,
+        "total_tokens": 3
+      },
+      "measurementScope": "操作循环：合成usage预留、Dispatcher工具调用及usage记账；不含初始化、统计和清理；无模型请求；TotalAlloc为循环期间进程级差值，GC后堆和goroutine为进程采样，不证明无泄漏"
+    },
+    {
+      "config": {
+        "mode": "none",
+        "operations": 100
+      },
+      "operations": 100,
+      "successes": 100,
+      "totalDurationNS": 615301,
+      "p50NS": 3427,
+      "p95NS": 13453,
+      "totalAllocBytes": 348776,
+      "liveHeapBytes": 1420624,
+      "goroutineDelta": 0,
+      "fileCount": 0,
+      "fileBytes": 0,
+      "syntheticUsagePerOperation": {
+        "prompt_tokens": 2,
+        "completion_tokens": 1,
+        "total_tokens": 3
+      },
+      "measurementScope": "操作循环：合成usage预留、Dispatcher工具调用及usage记账；不含初始化、统计和清理；无模型请求；TotalAlloc为循环期间进程级差值，GC后堆和goroutine为进程采样，不证明无泄漏"
+    },
+    {
+      "config": {
+        "mode": "memory",
+        "operations": 100
+      },
+      "operations": 100,
+      "successes": 100,
+      "totalDurationNS": 3504197,
+      "p50NS": 29895,
+      "p95NS": 48628,
+      "totalAllocBytes": 4220168,
+      "liveHeapBytes": 1447872,
+      "goroutineDelta": 0,
+      "fileCount": 0,
+      "fileBytes": 0,
+      "budgetSnapshot": {
+        "ReservedRequests": 100,
+        "KnownUsageEntries": 100,
+        "UnknownUsageEntries": 0,
+        "KnownTokens": {
+          "prompt_tokens": 200,
+          "completion_tokens": 100,
+          "total_tokens": 300
+        },
+        "ReservedTokens": 0,
+        "ReservedToolCalls": 100,
+        "KnownTokenDelta": 300
+      },
+      "syntheticUsagePerOperation": {
+        "prompt_tokens": 2,
+        "completion_tokens": 1,
+        "total_tokens": 3
+      },
+      "measurementScope": "操作循环：合成usage预留、Dispatcher工具调用及usage记账；不含初始化、统计和清理；无模型请求；TotalAlloc为循环期间进程级差值，GC后堆和goroutine为进程采样，不证明无泄漏"
+    },
+    {
+      "config": {
+        "mode": "file",
+        "operations": 100
+      },
+      "operations": 100,
+      "successes": 100,
+      "totalDurationNS": 41526809,
+      "p50NS": 435025,
+      "p95NS": 796385,
+      "totalAllocBytes": 24202688,
+      "liveHeapBytes": 1526840,
+      "goroutineDelta": 0,
+      "fileCount": 2,
+      "fileBytes": 18624,
+      "budgetSnapshot": {
+        "ReservedRequests": 100,
+        "KnownUsageEntries": 100,
+        "UnknownUsageEntries": 0,
+        "KnownTokens": {
+          "prompt_tokens": 200,
+          "completion_tokens": 100,
+          "total_tokens": 300
+        },
+        "ReservedTokens": 0,
+        "ReservedToolCalls": 100,
+        "KnownTokenDelta": 300
+      },
+      "syntheticUsagePerOperation": {
+        "prompt_tokens": 2,
+        "completion_tokens": 1,
+        "total_tokens": 3
+      },
+      "measurementScope": "操作循环：合成usage预留、Dispatcher工具调用及usage记账；不含初始化、统计和清理；无模型请求；TotalAlloc为循环期间进程级差值，GC后堆和goroutine为进程采样，不证明无泄漏"
+    },
+    {
+      "config": {
+        "mode": "none",
+        "operations": 1000
+      },
+      "operations": 1000,
+      "successes": 1000,
+      "totalDurationNS": 8180695,
+      "p50NS": 7081,
+      "p95NS": 12398,
+      "totalAllocBytes": 3408560,
+      "liveHeapBytes": 1435848,
+      "goroutineDelta": 0,
+      "fileCount": 0,
+      "fileBytes": 0,
+      "syntheticUsagePerOperation": {
+        "prompt_tokens": 2,
+        "completion_tokens": 1,
+        "total_tokens": 3
+      },
+      "measurementScope": "操作循环：合成usage预留、Dispatcher工具调用及usage记账；不含初始化、统计和清理；无模型请求；TotalAlloc为循环期间进程级差值，GC后堆和goroutine为进程采样，不证明无泄漏"
+    },
+    {
+      "config": {
+        "mode": "memory",
+        "operations": 1000
+      },
+      "operations": 1000,
+      "successes": 1000,
+      "totalDurationNS": 129589396,
+      "p50NS": 91152,
+      "p95NS": 367988,
+      "totalAllocBytes": 390301216,
+      "liveHeapBytes": 1818872,
+      "goroutineDelta": 0,
+      "fileCount": 0,
+      "fileBytes": 0,
+      "budgetSnapshot": {
+        "ReservedRequests": 1000,
+        "KnownUsageEntries": 1000,
+        "UnknownUsageEntries": 0,
+        "KnownTokens": {
+          "prompt_tokens": 2000,
+          "completion_tokens": 1000,
+          "total_tokens": 3000
+        },
+        "ReservedTokens": 0,
+        "ReservedToolCalls": 1000,
+        "KnownTokenDelta": 3000
+      },
+      "syntheticUsagePerOperation": {
+        "prompt_tokens": 2,
+        "completion_tokens": 1,
+        "total_tokens": 3
+      },
+      "measurementScope": "操作循环：合成usage预留、Dispatcher工具调用及usage记账；不含初始化、统计和清理；无模型请求；TotalAlloc为循环期间进程级差值，GC后堆和goroutine为进程采样，不证明无泄漏"
+    },
+    {
+      "config": {
+        "mode": "file",
+        "operations": 1000
+      },
+      "operations": 1000,
+      "successes": 1000,
+      "totalDurationNS": 3492857206,
+      "p50NS": 3462503,
+      "p95NS": 6716362,
+      "totalAllocBytes": 2711392536,
+      "liveHeapBytes": 2071320,
+      "goroutineDelta": 0,
+      "fileCount": 2,
+      "fileBytes": 184226,
+      "budgetSnapshot": {
+        "ReservedRequests": 1000,
+        "KnownUsageEntries": 1000,
+        "UnknownUsageEntries": 0,
+        "KnownTokens": {
+          "prompt_tokens": 2000,
+          "completion_tokens": 1000,
+          "total_tokens": 3000
+        },
+        "ReservedTokens": 0,
+        "ReservedToolCalls": 1000,
+        "KnownTokenDelta": 3000
+      },
+      "syntheticUsagePerOperation": {
+        "prompt_tokens": 2,
+        "completion_tokens": 1,
+        "total_tokens": 3
+      },
+      "measurementScope": "操作循环：合成usage预留、Dispatcher工具调用及usage记账；不含初始化、统计和清理；无模型请求；TotalAlloc为循环期间进程级差值，GC后堆和goroutine为进程采样，不证明无泄漏"
+    }
+  ]
+}

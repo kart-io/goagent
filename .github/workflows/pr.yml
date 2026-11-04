@@ -47,7 +47,7 @@ jobs:
       - name: Verify import layering
         run: |
           chmod +x ./scripts/verify_imports.sh
-          ./scripts/verify_imports.sh --strict
+          ./scripts/verify_imports.sh
 
       - name: Run go vet
         run: go vet ./...

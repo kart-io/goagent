@@ -92,5 +92,7 @@ jobs:
           go-version: '1.26'
 
       - name: Build
-        run: |
-          go build -v ./...
+        run: make build
+
+      - name: Run offline host example
+        run: make run

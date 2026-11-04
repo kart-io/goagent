@@ -3,18 +3,22 @@
 ## 环境
 
 ```bash
-go version            # 需要 Go 1.25（go.mod: go 1.25.0）
+go version            # go.mod 最低 Go 1.26.0；构建建议使用 1.26.10 或更高版本
 git clone https://github.com/kart-io/goagent.git && cd goagent
 go mod download
 go build ./...
 ```
 
-`make lint` 需要 golangci-lint v2（`.golangci.yml` 为 `version: "2"`），未安装或版本不符时会自动安装 v2.6.2；`make fmt` 会按需安装 `gofumpt` 与 `gci`。
+`make lint` 需要 golangci-lint v2（`.golangci.yml` 为 `version: "2"`），未安装或主版本不符时会自动安装 v2.15.0；`make fmt` 会按需安装 `gofumpt` 与 `gci`。
 
 ## 常用命令
 
 | 命令 | 作用 |
 |------|------|
+| `make build` | 编译检查主模块全部库和示例包，不生成统一应用二进制 |
+| `make build-all` | 关闭 CGO，检查 Linux amd64/arm64、Windows amd64、macOS amd64/arm64 的编译；不代表目标平台运行验证 |
+| `make run` | 运行无需密钥的 `examples/execution-scope` 离线宿主示例 |
+| `make run EXAMPLE=./examples/workflow` | 运行指定示例；需要模型的示例须另行配置密钥 |
 | `make test` | `GO_TEST_MODE=true go test -v -race -timeout 120s ./...` |
 | `make test-short` | 带 `-short` 的测试 |
 | `make test-integration` | `-tags=integration` 的测试 |
@@ -27,6 +31,8 @@ go build ./...
 | `bash scripts/provider_regression.sh [REPORT.jsonl]` | 离线 Provider/Builder 契约与竞态回归，见 [持续回归](../guides/PROVIDER_REGRESSION.md) |
 
 CI（`.github/workflows/`）运行带 `-race` 的全量测试、导入检查与 golangci-lint；PR 流程另跑覆盖率门禁。
+
+本仓库作为 Go 库交付，应用通过 `go get github.com/kart-io/goagent@<version>` 引入。旧 Makefile 中假设统一应用二进制的 `install`、`uninstall`、`docker-*`、`init` 目标已移除；`make version` 使用 `git describe --tags --always --dirty` 显示库版本。需要分发某个示例时，显式指定包与产物路径，例如 `go build -o /tmp/execution-scope ./examples/execution-scope`。
 
 ## 项目结构
 

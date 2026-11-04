@@ -1,0 +1,15 @@
+goos: linux
+goarch: amd64
+pkg: github.com/kart-io/goagent/core/budget
+cpu: Intel(R) Core(TM) i7-14700KF
+BenchmarkRecordUsageFixedLedger/entries_10-28         	  244394	       819.1 ns/op	    2248 B/op	       5 allocs/op
+BenchmarkRecordUsageFixedLedger/entries_10-28         	  284544	       843.5 ns/op	    2248 B/op	       5 allocs/op
+BenchmarkRecordUsageFixedLedger/entries_10-28         	  289434	       814.4 ns/op	    2248 B/op	       5 allocs/op
+BenchmarkRecordUsageFixedLedger/entries_100-28        	   54096	      4551 ns/op	   16584 B/op	       5 allocs/op
+BenchmarkRecordUsageFixedLedger/entries_100-28        	   54506	      4350 ns/op	   16584 B/op	       5 allocs/op
+BenchmarkRecordUsageFixedLedger/entries_100-28        	   54856	      4372 ns/op	   16584 B/op	       5 allocs/op
+BenchmarkRecordUsageFixedLedger/entries_1000-28       	    4179	     52745 ns/op	  262384 B/op	       7 allocs/op
+BenchmarkRecordUsageFixedLedger/entries_1000-28       	    4748	     55225 ns/op	  262384 B/op	       7 allocs/op
+BenchmarkRecordUsageFixedLedger/entries_1000-28       	    4190	     53123 ns/op	  262384 B/op	       7 allocs/op
+PASS
+ok  	github.com/kart-io/goagent/core/budget	2.736s

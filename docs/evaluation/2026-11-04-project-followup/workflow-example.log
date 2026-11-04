@@ -1,0 +1,3 @@
+go run "./examples/workflow"
+退款规则 -> 退款期限为 30 天；退款需提供订单号。请先准备订单号。 (attempts=2 sources=2)
+quick:问候 -> 快速处理：问候 (attempts=0 sources=0)

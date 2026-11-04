@@ -28,7 +28,7 @@ Related repositories:
 - **Governance** - root request budgets (`core/budget`), `tools.Dispatcher`/`Pipeline` with approvals, guards and admission limits, tool-result offloading, session logs (`core/session`).
 - **LLM providers** - OpenAI (and compatible endpoints), DeepSeek and Gemini support `AsRunnable` and the native tool loop; Kimi, SiliconFlow and Ollama are OpenAI-compatible presets with the same support, and Anthropic uses the official SDK with the same support. See the [provider table](docs/README.md#llm-提供商).
 - **Observability** - read-only execution events (`core/observe`) and OpenTelemetry integration (`observability`).
-- **MCP** - official MCP client sessions adapted as tools (`mcp/remote`), plus a local toolbox.
+- **MCP** - official MCP client sessions adapted as Agent tools (`mcp/remote`).
 
 ## Quick Start
 

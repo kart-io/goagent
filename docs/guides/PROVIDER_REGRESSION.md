@@ -6,7 +6,7 @@
 bash scripts/provider_regression.sh /tmp/provider-contracts.jsonl
 ```
 
-向 master、develop 推送或发起 PR 时运行 `.github/workflows/provider-contracts.yml`（也可手动触发）；Go 1.25、race、short、count=1，失败不重试。原生 OpenAI/DeepSeek、Gemini 协议用独立 HTTP 测试服务覆盖工具结果续接、签名保留、截断与缺失终态、取消、用量和能力降级；脚本同时运行 `./builder` 与 `./evaluation/agentbench/...` 的契约测试；工作流另用 `scripts/apicheck` 检查推荐示例中的旧 API 候选。JSONL 在失败时仍上传。此步骤不使用真实 API 密钥。
+向 master、develop 推送或发起 PR 时运行 `.github/workflows/provider-contracts.yml`（也可手动触发）；Go 1.26、race、short、count=1，失败不重试。原生 OpenAI/DeepSeek、Gemini 协议用独立 HTTP 测试服务覆盖工具结果续接、签名保留、截断与缺失终态、取消、用量和能力降级；脚本同时运行 `./builder` 与 `./evaluation/agentbench/...` 的契约测试。导入分层检查由 CI/PR 工作流执行，已删除 API 的残留调用由编译检查发现。JSONL 在失败时仍上传。此步骤不使用真实 API 密钥。
 
 真实入口明确指定供应商、模型及新输出目录：
 

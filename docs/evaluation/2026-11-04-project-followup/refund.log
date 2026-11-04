@@ -1,0 +1,38 @@
+=== RUN   TestRefundGraphRecoveryAcrossProcesses
+--- PASS: TestRefundGraphRecoveryAcrossProcesses (3.26s)
+=== RUN   TestRefundGraphRechecksReviewedOrder
+--- PASS: TestRefundGraphRechecksReviewedOrder (0.01s)
+=== RUN   TestRefundBusinessGuards
+=== RUN   TestRefundBusinessGuards/missing-approval
+=== RUN   TestRefundBusinessGuards/expired-approval
+=== RUN   TestRefundBusinessGuards/changed-order
+=== RUN   TestRefundBusinessGuards/business-dedup
+=== RUN   TestRefundBusinessGuards/changed-payload
+--- PASS: TestRefundBusinessGuards (0.01s)
+    --- PASS: TestRefundBusinessGuards/missing-approval (0.00s)
+    --- PASS: TestRefundBusinessGuards/expired-approval (0.00s)
+    --- PASS: TestRefundBusinessGuards/changed-order (0.00s)
+    --- PASS: TestRefundBusinessGuards/business-dedup (0.00s)
+    --- PASS: TestRefundBusinessGuards/changed-payload (0.00s)
+=== RUN   TestConcurrentRequestsCannotOverRefund
+--- PASS: TestConcurrentRequestsCannotOverRefund (0.01s)
+=== RUN   TestApprovalRejectsExpiredChangedAndUnauthorizedRequests
+--- PASS: TestApprovalRejectsExpiredChangedAndUnauthorizedRequests (0.00s)
+=== RUN   TestLegacyLedgerIsNotSilentlyReinitialized
+--- PASS: TestLegacyLedgerIsNotSilentlyReinitialized (0.00s)
+=== RUN   TestRefundRecoveryAcrossProcesses
+--- PASS: TestRefundRecoveryAcrossProcesses (6.24s)
+=== RUN   TestRefundChildProcess
+--- PASS: TestRefundChildProcess (0.00s)
+=== RUN   TestRejectedRefundHasNoEffect
+=== RUN   TestRejectedRefundHasNoEffect/DEMO-EXPIRED
+=== RUN   TestRejectedRefundHasNoEffect/missing
+=== RUN   TestRejectedRefundHasNoEffect/10000
+--- PASS: TestRejectedRefundHasNoEffect (0.00s)
+    --- PASS: TestRejectedRefundHasNoEffect/DEMO-EXPIRED (0.00s)
+    --- PASS: TestRejectedRefundHasNoEffect/missing (0.00s)
+    --- PASS: TestRejectedRefundHasNoEffect/10000 (0.00s)
+=== RUN   TestLedgerDeduplicatesAndRejectsChangedPayload
+--- PASS: TestLedgerDeduplicatesAndRejectsChangedPayload (0.00s)
+PASS
+ok  	github.com/kart-io/goagent-examples/workflow/refund-recovery	10.563s

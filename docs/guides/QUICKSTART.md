@@ -1,6 +1,6 @@
 # GoAgent 快速入门
 
-新应用统一使用 `agent.AsRunnable()`。同步和流式调用使用相同执行源，配置的工具、检索器、中间件及完成回调走同一路径。要求 Go 1.25+ 与实现 `llm.Client`（`CompleteStream`）的客户端；内置 Provider（OpenAI 及其兼容预设、DeepSeek、Gemini、Anthropic）都同时实现原生工具流（`llm.ToolStreamClient`）。
+新应用统一使用 `agent.AsRunnable()`。同步和流式调用使用相同执行源，配置的工具、检索器、中间件及完成回调走同一路径。要求 Go 1.26+ 与实现 `llm.Client`（`CompleteStream`）的客户端；内置 Provider（OpenAI 及其兼容预设、DeepSeek、Gemini、Anthropic）都同时实现原生工具流（`llm.ToolStreamClient`）。
 
 ```sh
 go get github.com/kart-io/goagent
@@ -91,6 +91,16 @@ if err := ctx.Err(); err != nil { return err }
 Builder 接受任意 `llm.Client`，配置工具时还要求 `llm.ToolStreamClient`，Build 阶段校验。旧 `Execute` 不执行工具，迁移后已配置的工具会被调用，需要确认工具副作用与预算。`Pipe` 等待上游最终结果后再调用下游；复杂分支、并行汇合和有界循环使用 [workflow.Graph](../../workflow/README.md)，通过 Adapt 接入现有 Agent。详细边界见[执行契约](EXECUTION_CONTRACT.md)。
 
 ## 迁移检查与持续验证
+
+从 v0.42 或更早版本升级到 v0.46 时，还需处理以下变化；完整签名与删除列表见 [CHANGELOG](../../CHANGELOG.md)。
+
+| 版本 | 接入方需要处理的变化 |
+|---|---|
+| v0.43 | `llm.Client` 统一为流式接口，`llm.StreamClient` 并入其中；同步收集使用 `llm.Complete` / `llm.Chat`。工具调用实现 `llm.ToolStreamClient`。自定义客户端、缓存包装器和测试 Mock 需同步迁移。 |
+| v0.43 | 旧 `interfaces.Agent/Runnable` 改用 `core.Runnable`；本地 `mcp/core`、`mcp/toolbox`、`mcp/tools` 已删除，本地工具用 `interfaces.Tool` 与 `tools.Pipeline`，远程 MCP 用 `mcp/remote`。 |
+| v0.44 | Embedding、Document/Case 向量与相关存储接口统一为 `[]float32`；修改自定义 embedder、向量存储签名和向量字面量。 |
+| v0.45 | 语义缓存删除独立 OpenAI Embedding 实现，改传 `providers.NewOpenAIWithOptions` 创建的客户端；用 `llm.WithEmbeddingModel` 显式保留已有缓存模型。原默认 `text-embedding-3-small` 与新默认 `text-embedding-ada-002` 的向量不兼容，切换模型时须重建缓存。 |
+| v0.46 | 可选 `RetrievalConfig.Filter` 按请求生成过滤条件；检索器须同时实现 `interfaces.RequestRetriever`。过滤函数返回错误或空条件时执行失败，不会退回无过滤检索；租户与授权条件由可信宿主提供。 |
 
 ```sh
 # 检查真实 Go import 的层级约束。

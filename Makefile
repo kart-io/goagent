@@ -13,26 +13,8 @@ GOVET=$(GOCMD) vet
 # module name
 GO_MOD_NAME := github.com/kart-io/goagent
 
-
-
-# Binary name
-BINARY_NAME=goagent
-BINARY_UNIX=$(BINARY_NAME)_unix
-BINARY_WINDOWS=$(BINARY_NAME).exe
-
-# Build variables
-VERSION?=dev
-COMMIT=$(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-BUILD_TIME=$(shell date -u '+%Y-%m-%d_%H:%M:%S')
-LDFLAGS=-ldflags "-X main.Version=$(VERSION) -X main.Commit=$(COMMIT) -X main.BuildTime=$(BUILD_TIME)"
-
-# PluginGen build variables
-
-# Directories
-CMD_DIR=./cmd
-PKG_DIR=./pkg
-INTERNAL_DIR=./internal
-DIST_DIR=./dist
+# Library checks compile packages; run selects one example main package.
+EXAMPLE ?= ./examples/execution-scope
 COVERAGE_DIR=./coverage
 
 # Colors for output
@@ -41,47 +23,42 @@ GREEN=\033[0;32m
 YELLOW=\033[1;33m
 NC=\033[0m # No Color
 
-.PHONY: all build clean test coverage deps help
+.PHONY: all build build-all build-linux build-windows build-darwin run clean test coverage deps help version
 
 ## help: Display this help message
 help:
 	@echo "Usage: make [target]"
 	@echo ""
 	@echo "Available targets:"
-	@grep -E '^##' $(MAKEFILE_LIST) | sed -e 's/## /  /' | column -t -s ':'
+	@sed -n 's/^## /  /p' $(MAKEFILE_LIST)
 
 ## all: Build and test
 all: test build
 
-## build: Build the binary for current OS
+## build: Compile all library and example packages
 build:
-	@echo "$(GREEN)Building $(BINARY_NAME)...$(NC)"
-	$(GOBUILD) $(LDFLAGS) -o $(BINARY_NAME) -v ./...
+	$(GOBUILD) ./...
 
-## build-all: Build for multiple platforms
+## build-all: Check compilation for Linux, Windows and macOS
 build-all: build-linux build-windows build-darwin
 
-## build-linux: Build for Linux
+## build-linux: Check compilation for Linux (amd64, arm64)
 build-linux:
-	@echo "$(GREEN)Building for Linux...$(NC)"
-	GOOS=linux GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(DIST_DIR)/$(BINARY_NAME)-linux-amd64 -v ./...
-	GOOS=linux GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o $(DIST_DIR)/$(BINARY_NAME)-linux-arm64 -v ./...
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GOBUILD) ./...
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GOBUILD) ./...
 
-## build-windows: Build for Windows
+## build-windows: Check compilation for Windows (amd64)
 build-windows:
-	@echo "$(GREEN)Building for Windows...$(NC)"
-	GOOS=windows GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(DIST_DIR)/$(BINARY_WINDOWS) -v ./...
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 $(GOBUILD) ./...
 
-## build-darwin: Build for macOS
+## build-darwin: Check compilation for macOS (amd64, arm64)
 build-darwin:
-	@echo "$(GREEN·)Building for macOS...$(NC)"
-	GOOS=darwin GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(DIST_DIR)/$(BINARY_NAME)-darwin-amd64 -v ./...
-	GOOS=darwin GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o $(DIST_DIR)/$(BINARY_NAME)-darwin-arm64 -v ./...
+	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 $(GOBUILD) ./...
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 $(GOBUILD) ./...
 
-## run: Run the application
-run: build
-	@echo "$(GREEN)Running $(BINARY_NAME)...$(NC)"
-	./$(BINARY_NAME)
+## run: Run the offline host example (override with EXAMPLE=./examples/...)
+run:
+	$(GOCMD) run "$(EXAMPLE)"
 
 ## test: Run all tests
 test:
@@ -203,36 +180,7 @@ mod-download:
 clean:
 	@echo "$(RED)Cleaning...$(NC)"
 	$(GOCLEAN)
-	rm -f $(BINARY_NAME)
-	rm -f $(BINARY_UNIX)
-	rm -f $(BINARY_WINDOWS)
-	rm -rf $(DIST_DIR)
 	rm -rf $(COVERAGE_DIR)
-
-## install: Install the binary
-install: build
-	@echo "$(GREEN)Installing $(BINARY_NAME)...$(NC)"
-	$(GOCMD) install $(LDFLAGS) ./...
-
-## uninstall: Uninstall the binary
-uninstall:
-	@echo "$(RED)Uninstalling $(BINARY_NAME)...$(NC)"
-	rm -f $(GOPATH)/bin/$(BINARY_NAME)
-
-## docker-build: Build Docker image
-docker-build:
-	@echo "$(GREEN)Building Docker image...$(NC)"
-	docker build -t $(BINARY_NAME):$(VERSION) .
-
-## docker-run: Run Docker container
-docker-run:
-	@echo "$(GREEN)Running Docker container...$(NC)"
-	docker run -it --rm $(BINARY_NAME):$(VERSION)
-
-## docker-push: Push Docker image to registry
-docker-push:
-	@echo "$(GREEN)Pushing Docker image...$(NC)"
-	docker push $(BINARY_NAME):$(VERSION)
 
 ## proto: Generate protobuf files
 proto:
@@ -263,20 +211,8 @@ security:
 	fi
 	gosec ./...
 
-## init: Initialize project structure
-init:
-	@echo "$(GREEN)Initializing project structure...$(NC)"
-	@mkdir -p cmd/$(BINARY_NAME)
-	@mkdir -p $(PKG_DIR)
-	@mkdir -p $(INTERNAL_DIR)
-	@mkdir -p test
-	@echo "package main\n\nimport \"fmt\"\n\nfunc main() {\n\tfmt.Println(\"Hello, goagent!\")\n}" > cmd/$(BINARY_NAME)/main.go
-	@echo "$(GREEN)Project structure created!$(NC)"
-
-## version: Display version information
+## version: Display the library revision
 version:
-	@echo "Version: $(VERSION)"
-	@echo "Commit: $(COMMIT)"
-	@echo "Build Time: $(BUILD_TIME)"
+	@git describe --tags --always --dirty
 
 .DEFAULT_GOAL := help

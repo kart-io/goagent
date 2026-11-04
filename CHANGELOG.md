@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- PR 导入分层检查移除已删除的 `--strict` 参数，避免在运行测试前失败。
+- Makefile 按库项目执行 `go build ./...`，跨平台目标仅检查编译；`make run` 默认运行离线宿主示例，可通过 `EXAMPLE` 指定示例，CI 同时验证这两个入口。删除依赖不存在的统一应用二进制的安装、容器和初始化目标，迁移见开发指南。
+- 中英文 README、Builder 与执行契约文档移除旧同步入口和本地 MCP 工具箱的过期能力描述；快速入门补齐 v0.43–v0.46 的迁移清单，开发指南同步 Go 与 lint 工具版本。
+
 ## [0.46.0] - 2026-11-04
 
 ### Added

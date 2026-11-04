@@ -4,7 +4,7 @@ GoAgent的网络入口由独立扩展 `github.com/kart-io/goagent-contrib/httpag
 
 ## 文档与版本
 
-当前接口基线为contrib提交cfb3e85，依赖GoAgent v0.32.2和Go 1.25。功能已合并到GoAgent与contrib的master、examples的main；尚未打模块tag。
+本文最初按 contrib 提交 `cfb3e85`、GoAgent v0.32.2 和 Go 1.25 编写。接入当前 GoAgent 时要求 Go 1.26+；扩展与示例的具体依赖版本以各自 `go.mod` 为准，接口以对应版本的下列文档为准。
 
 | 需要了解 | 文档 |
 | --- | --- |
