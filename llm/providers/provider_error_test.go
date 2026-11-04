@@ -58,6 +58,32 @@ func TestOpenAICompatibleStreamsExposeProviderError(t *testing.T) {
 	}
 }
 
+// 额度耗尽虽以 429 返回，重试不会成功；普通限流仍可重试，包括 Gemini 式的 "exceeded your current quota" 消息。
+func TestOpenAICompatibleQuotaExhaustedIsNotRetryable(t *testing.T) {
+	for _, tc := range []struct {
+		name, body string
+		quota      bool
+	}{
+		{"openai", `{"error":{"message":"You exceeded your current quota, please check your plan and billing details.","type":"insufficient_quota","code":"insufficient_quota"}}`, true},
+		{"minimax", `{"type":"error","error":{"type":"rate_limit_error","message":"已达到 Token Plan 用量上限：请升级 Token Plan 套餐或购买积分补充用量。 (2056)","http_code":"429"}}`, true},
+		{"rate_limit", `{"error":{"message":"You exceeded your current quota, please retry in 3s.","type":"rate_limit_error"}}`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusTooManyRequests)
+				fmt.Fprint(w, tc.body)
+			}))
+			defer server.Close()
+			_, err := contractProvider(t, "openai", server.URL).CompleteToolsStream(context.Background(), &llm.CompletionRequest{Messages: []llm.Message{llm.UserMessage("q")}}, nil)
+			requireProviderError(t, err, 429, 0, !tc.quota)
+			var pe *llm.ProviderError
+			require.True(t, errors.As(err, &pe))
+			require.Equal(t, tc.quota, pe.QuotaExhausted)
+		})
+	}
+}
+
 func TestOpenAIStreamBrokenMidwayIsUnstatusedProviderError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")

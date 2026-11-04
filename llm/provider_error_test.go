@@ -23,6 +23,7 @@ func TestProviderErrorRetryable(t *testing.T) {
 	}{
 		{&ProviderError{StatusCode: 429, Err: errors.New("x")}, true},
 		{&ProviderError{StatusCode: 503, Err: errors.New("x")}, true},
+		{&ProviderError{StatusCode: 429, QuotaExhausted: true, Err: errors.New("x")}, false},
 		{&ProviderError{StatusCode: 400, Err: errors.New("x")}, false},
 		{&ProviderError{StatusCode: 401, Err: errors.New("x")}, false},
 		{&ProviderError{StatusCode: 404, Err: errors.New("x")}, false},
@@ -67,6 +68,7 @@ func TestClassifyError(t *testing.T) {
 	}{
 		{&ProviderError{StatusCode: 429, Err: errors.New("slow down")}, ClassifiedError{Reason: ReasonRateLimit, Retryable: true, ShouldFallback: true}},
 		{&ProviderError{StatusCode: 503, Err: errors.New("unavailable")}, ClassifiedError{Reason: ReasonServer, Retryable: true, ShouldFallback: true}},
+		{&ProviderError{StatusCode: 429, QuotaExhausted: true, Err: errors.New("quota")}, ClassifiedError{Reason: ReasonQuota, ShouldFallback: true}},
 		{&ProviderError{StatusCode: 401, Err: errors.New("bad key")}, ClassifiedError{Reason: ReasonAuth, ShouldFallback: true}},
 		{&ProviderError{StatusCode: 404, Err: errors.New("no such model")}, ClassifiedError{Reason: ReasonNotFound, ShouldFallback: true}},
 		{&ProviderError{StatusCode: 400, Err: errors.New("This model's maximum context length is 128000 tokens")}, ClassifiedError{Reason: ReasonContextLength, ShouldCompress: true}},

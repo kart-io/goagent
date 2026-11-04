@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `llm`：额度耗尽不再按限流重试。服务端常以 429 报告额度或套餐用量耗尽，原先 `RetryTransient` 照常退避重发，直到用尽重试次数；MiniMax 实测每次请求为此白等数分钟。`ProviderError` 增加 `QuotaExhausted`，此时 `Retryable` 为 false，`ClassifyError` 归为新的 `ReasonQuota`（`ShouldFallback` 为 true）。OpenAI 兼容服务按 `insufficient_quota` 与 MiniMax 的用量上限（错误码 2056）识别。
+
 ## [0.42.0] - 2026-11-03
 
 ### Added
