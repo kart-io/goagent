@@ -12,9 +12,6 @@
 | `Lifecycle` 及 `LifecycleAware`、`Reloadable`、`DependencyAware`、`LifecycleManager` | 组件生命周期 | `core.BaseLifecycle`、`core.DefaultLifecycleManager` |
 | `ToolExecutor` | 按名称执行工具 | 仅定义，仓库内无实现 |
 | `VectorStore`、`Store`、`ConversationMemory` | 向量检索、键值存储、对话存储 | 仅定义；`memory` 与 `store` 包使用各自的接口 |
-| `Checkpointer` | 按检查点 ID 保存状态 | 仅定义；Builder 使用 `core/checkpoint.Checkpointer` |
-| `ReasoningPattern` | 推理策略 | 仅定义 |
-| `Agent`、`Runnable` | 旧的消息式执行协议 | 已 Deprecated，新代码使用 `core.Runnable[I, O]` 或 Builder 的 `AsRunnable` |
 
 ## Tool
 
@@ -101,10 +98,6 @@ type Lifecycle interface {
 ## 其他类型
 
 - `TokenUsage`：`PromptTokens`、`CompletionTokens`、`TotalTokens`、`CachedTokens`，方法 `Add`、`IsEmpty`。`llm.CompletionResponse.Usage` 与 Builder 的 `AgentOutput.TokenUsage` 使用此类型。
-- `State`：`map[string]interface{}`，用于旧消息式协议；Builder 与 `core` 使用 `core/state.State` 接口。
-- 旧协议类型：`Input`、`Output`、`Message`、`StreamChunk`、`Plan`、`Step`。
-- 推理类型：`ReasoningInput`、`ReasoningOutput`、`ReasoningStep`、`ReasoningChunk`、`ReasoningToolCall`、`ThoughtNode`、`ProgramCode`、`SkeletonPoint`，策略常量 `StrategyDepthFirst`、`StrategyBreadthFirst`、`StrategyBeamSearch`、`StrategyMonteCarlo`、`StrategyGreedy`。
-- 检查点类型：`Checkpoint`、`CheckpointMetadata`。
 
 ## 常量
 
@@ -116,15 +109,12 @@ type Lifecycle interface {
 ```text
 interfaces/
 ├── doc.go               # 包文档
-├── agent.go             # Agent、Runnable 与旧消息式类型
 ├── tool.go              # Tool 及可选接口、ToolInput/ToolOutput/ToolCall/ToolResult、ToolExecutor
 ├── memory.go            # MemoryManager、ConversationMemory、Conversation、Case
 ├── store.go             # VectorStore、Store、Document
 ├── retrieval.go         # DocumentRetriever
 ├── retrieval_source.go  # RetrievalSource
-├── checkpoint.go        # Checkpointer、Checkpoint、CheckpointMetadata
 ├── lifecycle.go         # Lifecycle 与健康状态
-├── reasoning.go         # ReasoningPattern 与推理类型
 ├── token.go             # TokenUsage
 └── *_constants.go       # 字符串常量
 ```

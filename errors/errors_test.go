@@ -607,57 +607,6 @@ func TestHelpers_RetrievalErrors(t *testing.T) {
 	})
 }
 
-func TestHelpers_PlanningErrors(t *testing.T) {
-	t.Run("NewPlanningError", func(t *testing.T) {
-		cause := fmt.Errorf("planning failed")
-		err := NewPlanningError("solve complex problem", cause)
-
-		if err.Code != CodePlanningFailed {
-			t.Errorf("Code = %v, want %v", err.Code, CodePlanningFailed)
-		}
-		if err.Context["goal"] != "solve complex problem" {
-			t.Errorf("Context[goal] = %v, want solve complex problem", err.Context["goal"])
-		}
-	})
-
-	t.Run("NewPlanValidationError", func(t *testing.T) {
-		err := NewPlanValidationError("plan-123", "missing required step")
-
-		if err.Code != CodePlanValidation {
-			t.Errorf("Code = %v, want %v", err.Code, CodePlanValidation)
-		}
-		if err.Context["plan_id"] != "plan-123" {
-			t.Errorf("Context[plan_id] = %v, want plan-123", err.Context["plan_id"])
-		}
-	})
-
-	t.Run("NewPlanExecutionError", func(t *testing.T) {
-		cause := fmt.Errorf("step failed")
-		err := NewPlanExecutionError("plan-123", "step-5", cause)
-
-		if err.Code != CodePlanExecutionFailed {
-			t.Errorf("Code = %v, want %v", err.Code, CodePlanExecutionFailed)
-		}
-		if err.Context["plan_id"] != "plan-123" {
-			t.Errorf("Context[plan_id] = %v, want plan-123", err.Context["plan_id"])
-		}
-		if err.Context["step_id"] != "step-5" {
-			t.Errorf("Context[step_id] = %v, want step-5", err.Context["step_id"])
-		}
-	})
-
-	t.Run("NewPlanNotFoundError", func(t *testing.T) {
-		err := NewPlanNotFoundError("plan-123")
-
-		if err.Code != CodePlanNotFound {
-			t.Errorf("Code = %v, want %v", err.Code, CodePlanNotFound)
-		}
-		if err.Context["plan_id"] != "plan-123" {
-			t.Errorf("Context[plan_id] = %v, want plan-123", err.Context["plan_id"])
-		}
-	})
-}
-
 func TestHelpers_ParserErrors(t *testing.T) {
 	t.Run("NewParserError", func(t *testing.T) {
 		cause := fmt.Errorf("parse failed")
@@ -693,54 +642,6 @@ func TestHelpers_ParserErrors(t *testing.T) {
 		}
 		if err.Context["missing_field"] != "action" {
 			t.Errorf("Context[missing_field] = %v, want action", err.Context["missing_field"])
-		}
-	})
-}
-
-func TestHelpers_MultiAgentErrors(t *testing.T) {
-	t.Run("NewMultiAgentRegistrationError", func(t *testing.T) {
-		cause := fmt.Errorf("registration failed")
-		err := NewMultiAgentRegistrationError("agent-123", cause)
-
-		if err.Code != CodeMultiAgentRegistration {
-			t.Errorf("Code = %v, want %v", err.Code, CodeMultiAgentRegistration)
-		}
-		if err.Context["agent_id"] != "agent-123" {
-			t.Errorf("Context[agent_id] = %v, want agent-123", err.Context["agent_id"])
-		}
-	})
-
-	t.Run("NewMultiAgentConsensusError", func(t *testing.T) {
-		votes := map[string]bool{
-			"agent-1": true,
-			"agent-2": false,
-			"agent-3": true,
-		}
-		err := NewMultiAgentConsensusError(votes)
-
-		if err.Code != CodeMultiAgentConsensus {
-			t.Errorf("Code = %v, want %v", err.Code, CodeMultiAgentConsensus)
-		}
-		if err.Context["yes_votes"] != 2 {
-			t.Errorf("Context[yes_votes] = %v, want 2", err.Context["yes_votes"])
-		}
-		if err.Context["no_votes"] != 1 {
-			t.Errorf("Context[no_votes] = %v, want 1", err.Context["no_votes"])
-		}
-		if err.Context["total_votes"] != 3 {
-			t.Errorf("Context[total_votes] = %v, want 3", err.Context["total_votes"])
-		}
-	})
-
-	t.Run("NewMultiAgentMessageError", func(t *testing.T) {
-		cause := fmt.Errorf("message send failed")
-		err := NewMultiAgentMessageError("agent.task", cause)
-
-		if err.Code != CodeMultiAgentMessage {
-			t.Errorf("Code = %v, want %v", err.Code, CodeMultiAgentMessage)
-		}
-		if err.Context["topic"] != "agent.task" {
-			t.Errorf("Context[topic] = %v, want agent.task", err.Context["topic"])
 		}
 	})
 }

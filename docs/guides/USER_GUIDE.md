@@ -12,7 +12,7 @@
 | 子 Agent 或子图作为能力 | NewRunnableTool / NewRunnableToolFactory，经 Dispatcher 调用 |
 | 已有同步无流客户端 | 旧 Execute 路径；不能假设预算、持久和原生循环扩展点都生效 |
 
-不要把 Builder 的输出与 core.AgentOutput 混用，不通过 interfaces.Agent/Runnable 开始新编排。
+不要把 Builder 的输出与 core.AgentOutput 混用。
 
 ## 运行第一个案例
 

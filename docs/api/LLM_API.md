@@ -35,7 +35,7 @@ type Client interface {
 | `ToolStreamClient` | `StreamClient` + `CompleteToolsStream(ctx, req, tools)` | `HasToolStreaming`、`AsToolStreamClient` |
 | `TokenStreamingClient` | `Stream(ctx, prompt) (<-chan string, error)` | `HasTokenStreaming` |
 | `ToolCallingClient` | `GenerateWithTools`、`StreamWithTools`（基于单个 prompt 的旧签名） | `AsToolCaller` |
-| `EmbeddingClient` / `BatchEmbeddingClient` | `Embed` / `EmbedBatch` | `HasEmbedding`、`AsEmbedder` |
+| `EmbeddingClient` | `Embed` | `HasEmbedding`、`AsEmbedder` |
 | `CapabilityChecker` | `HasCapability`、`Capabilities` | 类型断言 |
 
 `FullClient` 组合 `Client`、`StreamClient`、`ToolCallingClient`、`EmbeddingClient`、`CapabilityChecker`。
@@ -49,7 +49,7 @@ type Client interface {
 
 ### 能力常量
 
-`Capability` 取值：`CapabilityCompletion`、`CapabilityChat`、`CapabilityStreaming`、`CapabilityStructuredStreaming`、`CapabilityToolStreaming`、`CapabilityToolCalling`、`CapabilityEmbedding`、`CapabilityBatchEmbedding`、`CapabilityVision`、`CapabilityJSON`。
+`Capability` 取值：`CapabilityCompletion`、`CapabilityChat`、`CapabilityStreaming`、`CapabilityStructuredStreaming`、`CapabilityToolStreaming`、`CapabilityToolCalling`、`CapabilityEmbedding`、`CapabilityVision`、`CapabilityJSON`。
 
 `CapabilityStreaming` 只表示有某种流式输出（可能仅是字符串流）；结构化流与原生工具流分别看 `CapabilityStructuredStreaming` 和 `CapabilityToolStreaming`。能力声明描述适配器实现，不保证任意模型或自定义端点可用。
 

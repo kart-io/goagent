@@ -143,8 +143,6 @@ type StreamChunk[T any] struct {
 - `core.Agent` 是 `Runnable[*AgentInput, *AgentOutput]` 加 `Name`、`Description`、`Capabilities`；`BaseAgent`（`NewBaseAgent`）是基础实现。
 - `Callback` / `BaseCallback`、`CallbackManager` 以及 `LoggingCallback`、`MetricsCallback`、`CostTrackingCallback` 提供生命周期通知。
 
-`interfaces.Agent` 与 `interfaces.Runnable` 是旧的消息式协议，已标记 Deprecated；新代码使用 `core.Runnable[I, O]` 或 Builder 的 `AsRunnable`。
-
 ## State
 
 `core.State` 是 `core/state.State` 的别名：
@@ -191,7 +189,7 @@ if err := cp.Save(ctx, "thread-123", st); err != nil {
 loaded, err := cp.Load(ctx, "thread-123")
 ```
 
-`interfaces.Checkpointer`（`SaveCheckpoint` / `LoadCheckpoint` / `ListCheckpoints` / `DeleteCheckpoint`）是另一套按检查点 ID 存取的接口，仓库内没有实现，Builder 也不使用它。持久执行（`core/durable`、`core/session`）的接入见 [宿主接入指南](../guides/HOST_INTEGRATION.md)。
+持久执行（`core/durable`、`core/session`）的接入见 [宿主接入指南](../guides/HOST_INTEGRATION.md)。
 
 ## 相关文档
 
