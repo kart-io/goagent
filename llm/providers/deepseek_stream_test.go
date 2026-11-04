@@ -66,7 +66,7 @@ func TestDeepSeekTimeoutDoesNotCutStream(t *testing.T) {
 	client, err := NewDeepSeekWithOptions(agentllm.WithAPIKey("test"), agentllm.WithBaseURL(server.URL), agentllm.WithTimeout(time.Second),
 		agentllm.WithCustomHeaders(map[string]string{"X-Custom": "kept"}))
 	require.NoError(t, err)
-	chunks, err := client.ChatStream(context.Background(), []agentllm.Message{agentllm.UserMessage("question")})
+	chunks, err := client.CompleteStream(context.Background(), &agentllm.CompletionRequest{Messages: []agentllm.Message{agentllm.UserMessage("question")}})
 	require.NoError(t, err)
 	var last *agentllm.StreamChunk
 	for chunk := range chunks {

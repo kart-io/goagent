@@ -175,15 +175,8 @@ classDiagram
 classDiagram
     class Client {
         <<interface llm>>
-        +Complete(ctx, *CompletionRequest) (*CompletionResponse, error)
-        +Chat(ctx, []Message) (*CompletionResponse, error)
-        +Provider() constants.Provider
-        +IsAvailable() bool
-    }
-    class StreamClient {
-        <<interface llm>>
         +CompleteStream(ctx, *CompletionRequest) (<-chan *StreamChunk, error)
-        +ChatStream(ctx, []Message) (<-chan *StreamChunk, error)
+        +Provider() constants.Provider
     }
     class ToolStreamClient {
         <<interface llm>>
@@ -192,14 +185,13 @@ classDiagram
     class OpenAIProvider
     class DeepSeekProvider
     class GeminiProvider
-    Client <|-- StreamClient
-    StreamClient <|-- ToolStreamClient
+    Client <|-- ToolStreamClient
     ToolStreamClient <|.. OpenAIProvider
     ToolStreamClient <|.. DeepSeekProvider
     ToolStreamClient <|.. GeminiProvider
 ```
 
-能力探测用 `llm.HasStreaming`、`HasToolStreaming` 等函数。Builder 要求 `StreamClient`，配置工具时要求 `ToolStreamClient`。
+完整响应用 `llm.Complete` / `llm.Chat` 收集流；能力探测用 `llm.HasToolStreaming` 等函数。Builder 接受任意 `llm.Client`，配置工具时要求 `ToolStreamClient`。
 
 ## 持久执行、会话与预算
 

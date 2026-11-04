@@ -142,7 +142,7 @@ Token 数不等于货币费用。宿主维护生效时间、供应商、模型�
 ## 8. 实施顺序与验收
 
 1. **U1 身份与生命周期**：值类型、WithAgentID、context 传播、Observer 元数据；验证同名并发、嵌套、拒绝/Factory 失败、清理边界和 observer 丢弃。
-2. **U2 尝试用量钩子**：统一 modelOperation 接入逐尝试事件、unknown/partial、失败/取消、重试、回放与证据修订；覆盖无工具 StreamClient 与原生工具流。
+2. **U2 尝试用量钩子**：统一 modelOperation 接入逐尝试事件、unknown/partial、失败/取消、重试、回放与证据修订；覆盖无工具 `llm.Client` 与原生工具流。
 3. **U3 统一归属**：统一预算账本、原子预留/归属、查询与严格格式边界；重启和真实故障窗口验证不重复发送/计费。
 4. **U4 宿主案例**：父 Agent + 两个并行子 Agent + 汇总；输出 Self/Inclusive/Root 和未知状态，接入 OTel 或宿主计价器。业务案例放 goagent-examples。
 

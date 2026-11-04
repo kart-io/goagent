@@ -2,8 +2,6 @@ package providers
 
 import (
 	"context"
-	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -168,15 +166,6 @@ func TestGemini_MaxTokens(t *testing.T) {
 	}
 }
 
-// TestGemini_IsAvailable 测试 IsAvailable 方法（不需要真实 API 调用）
-func TestGemini_IsAvailable(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.Error(w, "unavailable", 503) }))
-	defer server.Close()
-	provider, err := NewGeminiWithOptions(agentllm.WithAPIKey("test-api-key"), agentllm.WithBaseURL(server.URL))
-	require.NoError(t, err)
-	assert.False(t, provider.IsAvailable())
-}
-
 // TestGemini_ConvertToolsToFunctions 测试工具转换功能
 func TestGemini_ConvertToolsToFunctions(t *testing.T) {
 	provider, err := NewGeminiWithOptions(
@@ -304,7 +293,7 @@ func TestGemini_Complete_EmptyMessages(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	result, err := provider.Complete(ctx, &agentllm.CompletionRequest{
+	result, err := agentllm.Complete(ctx, provider, &agentllm.CompletionRequest{
 		Messages: []agentllm.Message{},
 	})
 
@@ -323,7 +312,7 @@ func TestGemini_Chat_EmptyMessages(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	result, err := provider.Chat(ctx, []agentllm.Message{})
+	result, err := agentllm.Chat(ctx, provider, []agentllm.Message{})
 
 	// 应该返回错误或空结果
 	require.Error(t, err)

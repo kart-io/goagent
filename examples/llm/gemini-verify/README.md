@@ -18,15 +18,15 @@ go run ./examples/llm/gemini-verify -live \
 
 验证项：
 
-- `Complete`：系统提示与数值答案。
-- `Chat`：多轮历史与最终答案。
+- `Complete`：经 `llm.Complete` 收集流，验证系统提示与数值答案。
+- `Chat`：经 `llm.Chat` 收集流，验证多轮历史与最终答案。
 - `CompleteStream`：结构化流的输出内容与用量。
 - `CompleteToolsStream`：终止块中的工具名、调用 ID、订单参数，以及宿主执行合成查询。
 - `StreamWithContext`：文本、完成事件与供应商用量。
 
 每个方法独立评分，失败也写入 JSON，任一失败使程序以非零状态退出。输出文件权限为 0600，不记录 Key。
 
-工具是本地只读合成订单查询，不连接生产订单。`-suite provider`（默认）直接调用 Provider 方法，不将工具结果送回模型。当前 Provider 已实现 `llm.StreamClient` / `ToolStreamClient` 与真实 Embedding；完整循环和向量验证使用下面的 `native` 套件。
+工具是本地只读合成订单查询，不连接生产订单。`-suite provider`（默认）直接调用 Provider 方法，不将工具结果送回模型。当前 Provider 已实现 `llm.ToolStreamClient` 与真实 Embedding；完整循环和向量验证使用下面的 `native` 套件。
 
 改名前的 `legacy` 套件（含已删除的 `Stream`、`GenerateWithTools`、`StreamWithTools`）实测记录见[评测报告](../../../docs/evaluation/2026-10-27-gemini-provider/REPORT.md)。
 

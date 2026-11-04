@@ -203,7 +203,7 @@ func TestAnthropicProviderErrorWithoutSDKRetry(t *testing.T) {
 	p := newTestAnthropic(t, server.URL)
 	req := &agentllm.CompletionRequest{Messages: []agentllm.Message{{Role: "user", Content: "q"}}}
 	_, streamErr := p.CompleteStream(context.Background(), req)
-	_, completeErr := p.Complete(context.Background(), req)
+	_, completeErr := agentllm.Complete(context.Background(), p, req)
 	for name, err := range map[string]error{"stream": streamErr, "complete": completeErr} {
 		var providerErr *agentllm.ProviderError
 		require.True(t, errors.As(err, &providerErr), "%s: %v", name, err)
@@ -211,20 +211,6 @@ func TestAnthropicProviderErrorWithoutSDKRetry(t *testing.T) {
 		require.Equal(t, 7*time.Second, providerErr.RetryAfter, name)
 	}
 	require.Equal(t, int32(2), calls.Load())
-}
-
-func TestAnthropicComplete(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = fmt.Fprint(w, `{"id":"msg_3","type":"message","role":"assistant","model":"m","content":[{"type":"text","text":"好"}],"stop_reason":"end_turn","usage":{"input_tokens":3,"output_tokens":2}}`)
-	}))
-	defer server.Close()
-	resp, err := newTestAnthropic(t, server.URL).Chat(context.Background(), []agentllm.Message{{Role: "user", Content: "q"}})
-	require.NoError(t, err)
-	require.Equal(t, "好", resp.Content)
-	require.Equal(t, "stop", resp.FinishReason)
-	require.Equal(t, 5, resp.TokensUsed)
-	require.Equal(t, "anthropic", resp.Provider)
 }
 
 func TestAnthropicRejectsReasoning(t *testing.T) {

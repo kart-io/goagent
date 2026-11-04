@@ -106,12 +106,6 @@ func HasEmbedding(client Client) bool {
 	return ok
 }
 
-// HasStreaming checks if a client supports streaming.
-func HasStreaming(client Client) bool {
-	_, ok := client.(StreamClient)
-	return ok
-}
-
 // HasToolStreaming checks the executable interface, not a provider's advertised
 // feature list. Server/model support must still be validated by the application.
 func HasToolStreaming(client Client) bool {
@@ -135,15 +129,6 @@ func AsEmbedder(client Client) EmbeddingClient {
 	}
 	if ec, ok := client.(EmbeddingClient); ok {
 		return ec
-	}
-	return nil
-}
-
-// AsStreamClient safely casts a client to StreamClient.
-// Returns nil if the client doesn't support streaming.
-func AsStreamClient(client Client) StreamClient {
-	if sc, ok := client.(StreamClient); ok {
-		return sc
 	}
 	return nil
 }

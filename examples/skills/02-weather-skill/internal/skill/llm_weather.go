@@ -247,7 +247,7 @@ func (s *LLMWeatherSkill) processWithLLM(ctx context.Context, query string) (int
 
 // processWithChat 使用普通聊天处理
 func (s *LLMWeatherSkill) processWithChat(ctx context.Context, query string) (interface{}, []string, error) {
-	resp, err := s.svcCtx.LLMClient.Chat(ctx, []llm.Message{
+	resp, err := llm.Chat(ctx, s.svcCtx.LLMClient, []llm.Message{
 		llm.SystemMessage(s.systemPrompt),
 		llm.UserMessage(query),
 	})

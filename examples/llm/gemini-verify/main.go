@@ -139,14 +139,14 @@ func check(ctx context.Context, p *providers.GeminiProvider, method string) (r r
 	switch method {
 	case "Complete":
 		var response *llm.CompletionResponse
-		response, err = p.Complete(ctx, &llm.CompletionRequest{Messages: []llm.Message{llm.SystemMessage("只输出数字，不加标点。"), llm.UserMessage(prompt)}})
+		response, err = llm.Complete(ctx, p, &llm.CompletionRequest{Messages: []llm.Message{llm.SystemMessage("只输出数字，不加标点。"), llm.UserMessage(prompt)}})
 		if response != nil {
 			r.Answer = response.Content
 			r.Usage = response.Usage
 		}
 	case "Chat":
 		var response *llm.CompletionResponse
-		response, err = p.Chat(ctx, []llm.Message{llm.UserMessage("记住数字 17。"), llm.AssistantMessage("17"), llm.UserMessage("把刚才的数字加上 25，只输出整数。")})
+		response, err = llm.Chat(ctx, p, []llm.Message{llm.UserMessage("记住数字 17。"), llm.AssistantMessage("17"), llm.UserMessage("把刚才的数字加上 25，只输出整数。")})
 		if response != nil {
 			r.Answer = response.Content
 			r.Usage = response.Usage

@@ -29,10 +29,6 @@ func (s *SimpleLLMClient) Complete(ctx context.Context, req *llm.CompletionReque
 	}, nil
 }
 
-func (s *SimpleLLMClient) Chat(ctx context.Context, messages []llm.Message) (*llm.CompletionResponse, error) {
-	return s.Complete(ctx, &llm.CompletionRequest{Messages: messages})
-}
-
 // CompleteStream 把 Complete 的结果作为一个增量块返回，满足 Builder 对流式客户端的要求
 func (s *SimpleLLMClient) CompleteStream(ctx context.Context, req *llm.CompletionRequest) (<-chan *llm.StreamChunk, error) {
 	resp, err := s.Complete(ctx, req)
@@ -46,10 +42,6 @@ func (s *SimpleLLMClient) CompleteStream(ctx context.Context, req *llm.Completio
 	return stream, nil
 }
 
-func (s *SimpleLLMClient) ChatStream(ctx context.Context, messages []llm.Message) (<-chan *llm.StreamChunk, error) {
-	return s.CompleteStream(ctx, &llm.CompletionRequest{Messages: messages})
-}
-
 // CompleteToolsStream 不发起工具调用，直接回答
 func (s *SimpleLLMClient) CompleteToolsStream(ctx context.Context, req *llm.CompletionRequest, _ []interfaces.Tool) (<-chan *llm.StreamChunk, error) {
 	return s.CompleteStream(ctx, req)
@@ -57,10 +49,6 @@ func (s *SimpleLLMClient) CompleteToolsStream(ctx context.Context, req *llm.Comp
 
 func (s *SimpleLLMClient) Provider() constants.Provider {
 	return constants.ProviderCustom
-}
-
-func (s *SimpleLLMClient) IsAvailable() bool {
-	return true
 }
 
 func main() {

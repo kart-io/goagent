@@ -24,12 +24,6 @@ func (c *MockLLMClient) Complete(ctx context.Context, req *llm.CompletionRequest
 	}, nil
 }
 
-func (c *MockLLMClient) Chat(ctx context.Context, messages []llm.Message) (*llm.CompletionResponse, error) {
-	return &llm.CompletionResponse{
-		Content: "This is a mock chat response",
-	}, nil
-}
-
 func (c *MockLLMClient) Stream(ctx context.Context, req *llm.CompletionRequest) (<-chan *llm.StreamChunk, error) {
 	ch := make(chan *llm.StreamChunk)
 	return ch, nil
@@ -48,10 +42,6 @@ func (c *MockLLMClient) CompleteStream(ctx context.Context, req *llm.CompletionR
 	return stream, nil
 }
 
-func (c *MockLLMClient) ChatStream(ctx context.Context, messages []llm.Message) (<-chan *llm.StreamChunk, error) {
-	return c.CompleteStream(ctx, &llm.CompletionRequest{Messages: messages})
-}
-
 // CompleteToolsStream 不发起工具调用，直接回答
 func (c *MockLLMClient) CompleteToolsStream(ctx context.Context, req *llm.CompletionRequest, _ []interfaces.Tool) (<-chan *llm.StreamChunk, error) {
 	return c.CompleteStream(ctx, req)
@@ -59,10 +49,6 @@ func (c *MockLLMClient) CompleteToolsStream(ctx context.Context, req *llm.Comple
 
 func (c *MockLLMClient) Provider() constants.Provider {
 	return constants.ProviderOpenAI
-}
-
-func (c *MockLLMClient) IsAvailable() bool {
-	return true
 }
 
 func main() {

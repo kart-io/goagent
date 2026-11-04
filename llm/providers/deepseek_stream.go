@@ -43,11 +43,6 @@ func (p *DeepSeekProvider) CompleteStream(ctx context.Context, request *agentllm
 	return p.nativeStreamProvider().CompleteStream(ctx, request)
 }
 
-// ChatStream preserves role messages through the structured streaming path.
-func (p *DeepSeekProvider) ChatStream(ctx context.Context, messages []agentllm.Message) (<-chan *agentllm.StreamChunk, error) {
-	return p.CompleteStream(ctx, &agentllm.CompletionRequest{Messages: messages})
-}
-
 // CompleteToolsStream preserves native tool IDs, reasoning content and usage.
 func (p *DeepSeekProvider) CompleteToolsStream(ctx context.Context, request *agentllm.CompletionRequest, tools []interfaces.Tool) (<-chan *agentllm.StreamChunk, error) {
 	return p.nativeStreamProvider().CompleteToolsStream(ctx, request, tools)

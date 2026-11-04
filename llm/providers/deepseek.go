@@ -6,10 +6,8 @@ import (
 	"time"
 
 	"github.com/go-resty/resty/v2"
-	"github.com/sashabaranov/go-openai"
 
 	agentErrors "github.com/kart-io/goagent/errors"
-	"github.com/kart-io/goagent/interfaces"
 	agentllm "github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/common"
 	"github.com/kart-io/goagent/llm/constants"
@@ -24,97 +22,6 @@ type DeepSeekProvider struct {
 	client  *httpclient.Client
 	apiKey  string
 	baseURL string
-}
-
-// DeepSeekRequest represents a request to DeepSeek API
-type DeepSeekRequest struct {
-	ReasoningEffort string                  `json:"reasoning_effort,omitempty"`
-	Model           string                  `json:"model"`
-	Messages        []DeepSeekMessage       `json:"messages"`
-	Temperature     float64                 `json:"temperature"`
-	MaxTokens       int                     `json:"max_tokens,omitempty"`
-	TopP            float64                 `json:"top_p,omitempty"`
-	Stream          bool                    `json:"stream,omitempty"`
-	Tools           []DeepSeekTool          `json:"tools,omitempty"`
-	ToolChoice      interface{}             `json:"tool_choice,omitempty"`
-	Stop            []string                `json:"stop,omitempty"`
-	ResponseFormat  *DeepSeekResponseFormat `json:"response_format,omitempty"`
-}
-
-// DeepSeekResponseFormat 定义响应格式
-type DeepSeekResponseFormat struct {
-	Type string `json:"type"` // "text" 或 "json_object"
-}
-
-// DeepSeekMessage represents a message in DeepSeek format
-type DeepSeekMessage struct {
-	Role       string             `json:"role"`
-	Content    string             `json:"content"`
-	Name       string             `json:"name,omitempty"`
-	ToolCalls  []DeepSeekToolCall `json:"tool_calls,omitempty"`
-	ToolCallID string             `json:"tool_call_id,omitempty"`
-}
-
-// DeepSeekTool represents a tool in DeepSeek format
-type DeepSeekTool struct {
-	Type     string           `json:"type"`
-	Function DeepSeekFunction `json:"function"`
-}
-
-// DeepSeekFunction represents a function definition
-type DeepSeekFunction struct {
-	Name        string                 `json:"name"`
-	Description string                 `json:"description"`
-	Parameters  map[string]interface{} `json:"parameters"`
-}
-
-// DeepSeekToolCall represents a tool call
-type DeepSeekToolCall struct {
-	ID       string               `json:"id"`
-	Type     string               `json:"type"`
-	Function DeepSeekFunctionCall `json:"function"`
-}
-
-// DeepSeekFunctionCall represents a function call
-type DeepSeekFunctionCall struct {
-	Name      string `json:"name"`
-	Arguments string `json:"arguments"`
-}
-
-// DeepSeekResponse represents a response from DeepSeek API
-type DeepSeekResponse struct {
-	ID      string           `json:"id"`
-	Object  string           `json:"object"`
-	Created int64            `json:"created"`
-	Model   string           `json:"model"`
-	Choices []DeepSeekChoice `json:"choices"`
-	Usage   DeepSeekUsage    `json:"usage"`
-}
-
-// DeepSeekChoice represents a choice in the response
-type DeepSeekChoice struct {
-	Index        int             `json:"index"`
-	Message      DeepSeekMessage `json:"message"`
-	Delta        DeepSeekMessage `json:"delta,omitempty"`
-	FinishReason string          `json:"finish_reason"`
-}
-
-// DeepSeekUsage represents token usage
-type DeepSeekUsage struct {
-	PromptTokensDetails     *openai.PromptTokensDetails     `json:"prompt_tokens_details,omitempty"`
-	CompletionTokensDetails *openai.CompletionTokensDetails `json:"completion_tokens_details,omitempty"`
-	PromptTokens            int                             `json:"prompt_tokens"`
-	CompletionTokens        int                             `json:"completion_tokens"`
-	TotalTokens             int                             `json:"total_tokens"`
-}
-
-// DeepSeekStreamResponse represents a streaming response
-type DeepSeekStreamResponse struct {
-	ID      string           `json:"id"`
-	Object  string           `json:"object"`
-	Created int64            `json:"created"`
-	Model   string           `json:"model"`
-	Choices []DeepSeekChoice `json:"choices"`
 }
 
 // NewDeepSeekWithOptions creates a new DeepSeek provider using options pattern
@@ -163,85 +70,6 @@ func NewDeepSeekWithOptions(opts ...agentllm.ClientOption) (*DeepSeekProvider, e
 	}
 
 	return provider, nil
-}
-
-// Complete implements basic text completion
-func (p *DeepSeekProvider) Complete(ctx context.Context, req *agentllm.CompletionRequest) (*agentllm.CompletionResponse, error) {
-	effort, reasoningErr := p.nativeStreamProvider().reasoningEffort(req)
-	if reasoningErr != nil {
-		return nil, reasoningErr
-	}
-
-	// Prepare messages
-	inputMessages := req.Messages
-	if p.Config.SystemPrompt != "" {
-		newMessages := make([]agentllm.Message, 0, len(inputMessages)+1)
-		newMessages = append(newMessages, agentllm.SystemMessage(p.Config.SystemPrompt))
-		newMessages = append(newMessages, inputMessages...)
-		inputMessages = newMessages
-	}
-
-	// Convert messages to DeepSeek format using shared utility
-	messages := common.ConvertMessages(inputMessages, func(msg agentllm.Message) DeepSeekMessage {
-		return DeepSeekMessage{
-			Role:    msg.Role,
-			Content: msg.Content,
-			Name:    msg.Name,
-		}
-	})
-
-	// Prepare request
-	model := p.GetModel(req.Model)
-	dsReq := DeepSeekRequest{ReasoningEffort: effort,
-		Model:       model,
-		Messages:    messages,
-		Temperature: p.ResolveTemperature(req),
-		MaxTokens:   p.GetMaxTokens(req.MaxTokens),
-		TopP:        req.TopP,
-		Stop:        req.Stop,
-		Stream:      false,
-	}
-
-	// 添加 ResponseFormat 支持（从配置中获取）
-	if p.Config.ResponseFormat != nil {
-		dsReq.ResponseFormat = &DeepSeekResponseFormat{
-			Type: p.Config.ResponseFormat.Type,
-		}
-	}
-
-	// Make API call
-	resp, err := p.callAPI(ctx, "/chat/completions", dsReq)
-	if err != nil {
-		return nil, agentErrors.NewLLMRequestError(p.ProviderName(), model, err)
-	}
-
-	// Parse response
-	var dsResp DeepSeekResponse
-	if err := json.NewDecoder(strings.NewReader(resp.String())).Decode(&dsResp); err != nil {
-		return nil, agentErrors.NewParserInvalidJSONError("response body", err).
-			WithContext("provider", p.ProviderName())
-	}
-
-	if len(dsResp.Choices) == 0 {
-		return nil, agentErrors.NewLLMResponseError(p.ProviderName(), model, "no choices in response")
-	}
-
-	return &agentllm.CompletionResponse{
-		Content:       dsResp.Choices[0].Message.Content,
-		Model:         dsResp.Model,
-		ResponseModel: dsResp.Model,
-		TokensUsed:    dsResp.Usage.TotalTokens,
-		FinishReason:  dsResp.Choices[0].FinishReason,
-		Provider:      p.ProviderName(),
-		Usage:         deepSeekTokenValue(dsResp.Usage),
-	}, nil
-}
-
-// Chat implements chat conversation
-func (p *DeepSeekProvider) Chat(ctx context.Context, messages []agentllm.Message) (*agentllm.CompletionResponse, error) {
-	return p.Complete(ctx, &agentllm.CompletionRequest{
-		Messages: messages,
-	})
 }
 
 // Embed retains a legacy OpenAI-compatible embedding request for custom
@@ -296,22 +124,6 @@ func (p *DeepSeekProvider) Provider() constants.Provider {
 	return constants.ProviderDeepSeek
 }
 
-// IsAvailable checks if the provider is available
-func (p *DeepSeekProvider) IsAvailable() bool {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	// Try a simple completion
-	_, err := p.Complete(ctx, &agentllm.CompletionRequest{
-		Messages: []agentllm.Message{
-			agentllm.UserMessage("test"),
-		},
-		MaxTokens: 1,
-	})
-
-	return err == nil
-}
-
 // MaxTokens returns the max tokens setting
 func (p *DeepSeekProvider) MaxTokens() int {
 	return p.MaxTokensValue()
@@ -361,48 +173,6 @@ func (p *DeepSeekProvider) callAPI(ctx context.Context, endpoint string, payload
 
 		return resp, nil
 	})
-}
-
-// convertToolsToDeepSeek converts our tools to DeepSeek format
-func (p *DeepSeekProvider) convertToolsToDeepSeek(tools []interfaces.Tool) []DeepSeekTool {
-	dsTools := make([]DeepSeekTool, len(tools))
-
-	for i, tool := range tools {
-		dsTools[i] = DeepSeekTool{
-			Type: "function",
-			Function: DeepSeekFunction{
-				Name:        tool.Name(),
-				Description: tool.Description(),
-				Parameters:  p.toolSchemaToJSON(tool.ArgsSchema()),
-			},
-		}
-	}
-
-	return dsTools
-}
-
-// toolSchemaToJSON converts tool schema to JSON schema
-func (p *DeepSeekProvider) toolSchemaToJSON(schema interface{}) map[string]interface{} {
-	// 处理不同类型的 schema 输入
-	switch s := schema.(type) {
-	case string:
-		// JSON 字符串格式的 schema
-		if s != "" {
-			var result map[string]interface{}
-			if err := json.Unmarshal([]byte(s), &result); err == nil {
-				return result
-			}
-		}
-	case map[string]interface{}:
-		// 已经是 map 格式
-		return s
-	}
-
-	// 默认返回空 schema
-	return map[string]interface{}{
-		"type":       "object",
-		"properties": map[string]interface{}{},
-	}
 }
 
 // DeepSeekStreamingProvider extends DeepSeekProvider with advanced streaming
@@ -484,8 +254,4 @@ func (p *DeepSeekStreamingProvider) StreamWithMetadata(ctx context.Context, prom
 	}()
 
 	return tokens, nil
-}
-
-func deepSeekTokenValue(u DeepSeekUsage) *interfaces.TokenUsage {
-	return tokenValue(openAIUsage(&openai.Usage{PromptTokens: u.PromptTokens, CompletionTokens: u.CompletionTokens, TotalTokens: u.TotalTokens, PromptTokensDetails: u.PromptTokensDetails, CompletionTokensDetails: u.CompletionTokensDetails}))
 }

@@ -108,7 +108,7 @@ func TestOtherProvidersRejectExplicitReasoning(t *testing.T) {
 		require.ErrorContains(t, err, "does not support")
 		p, err := newClient(llm.WithAPIKey("test"))
 		require.NoError(t, err)
-		_, err = p.Complete(context.Background(), &llm.CompletionRequest{Reasoning: &usage.ReasoningConfig{Effort: "low"}})
+		_, err = llm.Complete(context.Background(), p, &llm.CompletionRequest{Reasoning: &usage.ReasoningConfig{Effort: "low"}})
 		require.ErrorContains(t, err, "does not support")
 	}
 }

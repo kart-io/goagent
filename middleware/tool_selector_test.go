@@ -32,16 +32,19 @@ func (m *MockLLMClient) Complete(ctx context.Context, req *llm.CompletionRequest
 	}, nil
 }
 
-func (m *MockLLMClient) Chat(ctx context.Context, messages []llm.Message) (*llm.CompletionResponse, error) {
-	return m.Complete(ctx, &llm.CompletionRequest{Messages: messages})
+func (m *MockLLMClient) CompleteStream(ctx context.Context, req *llm.CompletionRequest) (<-chan *llm.StreamChunk, error) {
+	response, err := m.Complete(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	stream := make(chan *llm.StreamChunk, 1)
+	stream <- &llm.StreamChunk{Delta: response.Content, Content: response.Content, FinishReason: "stop", Done: true}
+	close(stream)
+	return stream, nil
 }
 
 func (m *MockLLMClient) Provider() constants.Provider {
 	return constants.ProviderCustom
-}
-
-func (m *MockLLMClient) IsAvailable() bool {
-	return true
 }
 
 // MockTool for testing

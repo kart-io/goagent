@@ -58,14 +58,14 @@ client, err := llmcache.NewCachedLLMClient(&llmcache.CachedLLMClientConfig{
 })
 if err != nil { return err }
 defer client.Close()
-resp, err := client.Complete(ctx, req)
+resp, err := llm.Complete(ctx, client, req)
 ```
 
 `llmcache` 指 `github.com/kart-io/goagent/llm/cache`。把消息按 `role: content` 拼接后求向量，相似度达到 `SimilarityThreshold`（默认 0.95）且模型相同时（`ModelSpecific`，默认开启）返回缓存；默认最多 10000 条、TTL 24 小时。`WithSemanticCache(embedder, cfg)` 返回 `func(llm.Client) llm.Client`，创建失败时原样返回原客户端。
 
 限制：
 
-- 包装后的客户端只实现 `llm.Client`（`Complete`、`Chat`），不实现 `StreamClient`/`ToolStreamClient`，因此不能用于 Builder 的 `AsRunnable`、`ExecuteStream`、原生工具循环或持久运行。
+- 包装后的客户端只实现 `llm.Client`（`CompleteStream`）：未命中时转发上游流，只缓存成功终止的答案。它不实现 `ToolStreamClient`，因此不能用于配置了工具的 Builder 或原生工具循环。
 - 键不含工具、温度等请求参数；命中只返回文本（`FinishReason="cache_hit"`、`TokensUsed=0`），不含工具调用与用量。
 - 缓存在进程内存中，`Stats()` 返回命中统计，`ClearCache` 清空。
 

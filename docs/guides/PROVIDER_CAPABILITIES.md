@@ -1,16 +1,16 @@
 # Provider 能力边界与回归
 
-本表描述仓库当前适配器实现，不代表同名供应商所有模型的服务端能力。`Stream` 字符串流不能代替携带结束状态和用量的 `llm.StreamClient`；`AsRunnable` 要求后者。
+本表描述仓库当前适配器实现，不代表同名供应商所有模型的服务端能力。所有 Provider 都实现 `llm.Client.CompleteStream`（携带结束状态和用量），需要完整响应时用 `llm.Complete` / `llm.Chat` 收集。
 
-| Provider | Complete / Chat | 字符串流 | 结构化流 | 原生工具流 | 旧工具接口 | 默认声明 Embedding |
-|---|---|---|---|---|---|---|
-| OpenAI | 有 | 有 | 有 | 有 | 有 | 有，仍须选用可用端点/模型 |
-| DeepSeek | 有 | 有 | 有 | 有 | 有 | 无；旧兼容 HTTP 方法保留 |
-| Gemini | 有 | 有 | 有 | 有 | 有 | 有，独立 Embedding 模型 |
-| Anthropic | 有 | 有 | 有 | 有 | 无 | 无 |
-| Kimi | 有 | 有 | 有 | 有 | 有 | 无 |
-| SiliconFlow | 有 | 有 | 有 | 有 | 有 | 无 |
-| Ollama | 有 | 有 | 有 | 有 | 有 | 无 |
+| Provider | 原生工具流 | 默认声明 Embedding |
+|---|---|---|
+| OpenAI | 有 | 有，仍须选用可用端点/模型 |
+| DeepSeek | 有 | 无；旧兼容 HTTP 方法保留 |
+| Gemini | 有 | 有，独立 Embedding 模型 |
+| Anthropic | 有 | 无 |
+| Kimi | 有 | 无 |
+| SiliconFlow | 有 | 无 |
+| Ollama | 有 | 无 |
 
 DeepSeekStreamingProvider 与 GeminiStreamingProvider 包装器继承对应基础接口；二者当前均支持结构化流和原生工具流。尚未实现的能力会在 Builder 原生入口或构建阶段拒绝，不通过模拟 Token 或占位结果冒充。
 
@@ -31,4 +31,4 @@ go test -race -count=1 ./llm/providers -run 'TestProviderCapabilityContractMatri
 
 Gemini 原生验证可运行 `go run ./examples/llm/gemini-verify -live -suite native`（需 `GEMINI_API_KEY`）。默认模型为 `gemini-2.5-flash`；`GEMINI_BASE_URL` 是原生根地址，与 agentbench 的 `gemini-openai` 所需兼容路径不同。配置、结果与限制见[案例说明](../../examples/llm/gemini-verify/README.md)。
 
-`CompleteStream` / `ChatStream` / `CompleteToolsStream` 返回统一的 `stop` / `tool_calls` 结束原因。`llm.Message.ProviderState` 和终态 `StreamChunk.ProviderState` 用于保留原生签名；Builder 自动续接，不将其作为答案文本展示。一次响应多个工具时按 ID 匹配并在同一 user 内容中回传结果；工具实际并发执行策略由 Builder 决定。
+`CompleteStream` / `CompleteToolsStream` 返回统一的 `stop` / `tool_calls` 结束原因。`llm.Message.ProviderState` 和终态 `StreamChunk.ProviderState` 用于保留原生签名；Builder 自动续接，不将其作为答案文本展示。一次响应多个工具时按 ID 匹配并在同一 user 内容中回传结果；工具实际并发执行策略由 Builder 决定。

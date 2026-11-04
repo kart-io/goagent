@@ -18,11 +18,6 @@ import (
 
 var _ agentllm.ToolStreamClient = (*OpenAIProvider)(nil)
 
-// ChatStream streams a conversation, preserving deltas, usage, and errors.
-func (p *OpenAIProvider) ChatStream(ctx context.Context, messages []agentllm.Message) (<-chan *agentllm.StreamChunk, error) {
-	return p.CompleteStream(ctx, &agentllm.CompletionRequest{Messages: messages})
-}
-
 // CompleteStream implements the structured streaming contract. FinishReason
 // does not terminate the stream: a subsequent usage-only frame may still arrive.
 // Callers must cancel ctx when they stop consuming the returned channel.

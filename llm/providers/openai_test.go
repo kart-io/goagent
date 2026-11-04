@@ -2,6 +2,7 @@ package providers
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -14,119 +15,6 @@ import (
 	agentllm "github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/utils/json"
 )
-
-// TestOpenAI_Complete_Success 测试成功的 Complete 调用
-func TestOpenAI_Complete_Success(t *testing.T) {
-	// 创建 Mock Server
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// 验证请求
-		assert.Equal(t, "POST", r.Method)
-		assert.Equal(t, "/v1/chat/completions", r.URL.Path)
-		assert.Contains(t, r.Header.Get("Authorization"), "Bearer")
-
-		// 读取并验证请求体
-		var reqBody map[string]interface{}
-		err := json.NewDecoder(r.Body).Decode(&reqBody)
-		assert.NoError(t, err)
-		assert.Equal(t, "gpt-4", reqBody["model"])
-		assert.NotEmpty(t, reqBody["messages"])
-
-		// 返回模拟响应
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		response := map[string]interface{}{
-			"id":      "chatcmpl-123",
-			"object":  "chat.completion",
-			"created": time.Now().Unix(),
-			"model":   "gpt-4",
-			"choices": []map[string]interface{}{
-				{
-					"index": 0,
-					"message": map[string]interface{}{
-						"role":    "assistant",
-						"content": "Hello! This is a test response from OpenAI.",
-					},
-					"finish_reason": "stop",
-				},
-			},
-			"usage": map[string]interface{}{
-				"prompt_tokens":     10,
-				"completion_tokens": 20,
-				"total_tokens":      30,
-			},
-		}
-		json.NewEncoder(w).Encode(response)
-	}))
-	defer server.Close()
-
-	// 创建 Provider
-	provider, err := NewOpenAIWithOptions(
-		agentllm.WithAPIKey("test-api-key"),
-		agentllm.WithBaseURL(server.URL+"/v1"),
-		agentllm.WithModel("gpt-4"),
-	)
-	require.NoError(t, err)
-	require.NotNil(t, provider)
-
-	// 执行测试
-	ctx := context.Background()
-	result, err := provider.Complete(ctx, &agentllm.CompletionRequest{
-		Messages: []agentllm.Message{
-			{Role: "user", Content: "Hello, GPT!"},
-		},
-	})
-
-	// 验证结果
-	require.NoError(t, err)
-	assert.NotNil(t, result)
-	assert.Equal(t, "Hello! This is a test response from OpenAI.", result.Content)
-	assert.Equal(t, "gpt-4", result.Model)
-	assert.Equal(t, 30, result.TokensUsed)
-	assert.Equal(t, "stop", result.FinishReason)
-	assert.NotNil(t, result.Usage)
-	assert.Equal(t, 10, result.Usage.PromptTokens)
-	assert.Equal(t, 20, result.Usage.CompletionTokens)
-	assert.Equal(t, 30, result.Usage.TotalTokens)
-}
-
-// TestOpenAI_Complete_EmptyResponse 测试空响应情况
-func TestOpenAI_Complete_EmptyResponse(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		// 返回没有 choices 的响应
-		response := map[string]interface{}{
-			"id":      "chatcmpl-123",
-			"object":  "chat.completion",
-			"created": time.Now().Unix(),
-			"model":   "gpt-4",
-			"choices": []map[string]interface{}{},
-			"usage": map[string]interface{}{
-				"total_tokens": 0,
-			},
-		}
-		json.NewEncoder(w).Encode(response)
-	}))
-	defer server.Close()
-
-	provider, err := NewOpenAIWithOptions(
-		agentllm.WithAPIKey("test-api-key"),
-		agentllm.WithBaseURL(server.URL+"/v1"),
-	)
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	result, err := provider.Complete(ctx, &agentllm.CompletionRequest{
-		Messages: []agentllm.Message{
-			{Role: "user", Content: "Test"},
-		},
-	})
-
-	// 应该返回错误
-	assert.Error(t, err)
-	assert.Nil(t, result)
-	assert.Contains(t, err.Error(), "no choices")
-}
 
 // TestOpenAI_Complete_HTTPErrors 测试各种 HTTP 错误
 func TestOpenAI_Complete_HTTPErrors(t *testing.T) {
@@ -178,7 +66,7 @@ func TestOpenAI_Complete_HTTPErrors(t *testing.T) {
 			require.NoError(t, err)
 
 			ctx := context.Background()
-			result, err := provider.Complete(ctx, &agentllm.CompletionRequest{
+			result, err := agentllm.Complete(ctx, provider, &agentllm.CompletionRequest{
 				Messages: []agentllm.Message{
 					{Role: "user", Content: "Test"},
 				},
@@ -210,7 +98,7 @@ func TestOpenAI_Complete_Timeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 
-	result, err := provider.Complete(ctx, &agentllm.CompletionRequest{
+	result, err := agentllm.Complete(ctx, provider, &agentllm.CompletionRequest{
 		Messages: []agentllm.Message{
 			{Role: "user", Content: "Test"},
 		},
@@ -218,54 +106,6 @@ func TestOpenAI_Complete_Timeout(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.Nil(t, result)
-}
-
-// TestOpenAI_Chat 测试 Chat 方法
-func TestOpenAI_Chat(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		response := map[string]interface{}{
-			"id":      "chatcmpl-456",
-			"object":  "chat.completion",
-			"created": time.Now().Unix(),
-			"model":   "gpt-4",
-			"choices": []map[string]interface{}{
-				{
-					"message": map[string]interface{}{
-						"role":    "assistant",
-						"content": "Chat response",
-					},
-					"finish_reason": "stop",
-				},
-			},
-			"usage": map[string]interface{}{
-				"total_tokens": 25,
-			},
-		}
-		json.NewEncoder(w).Encode(response)
-	}))
-	defer server.Close()
-
-	provider, err := NewOpenAIWithOptions(
-		agentllm.WithAPIKey("test-api-key"),
-		agentllm.WithBaseURL(server.URL+"/v1"),
-	)
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	messages := []agentllm.Message{
-		{Role: "system", Content: "You are a helpful assistant."},
-		{Role: "user", Content: "Hello!"},
-	}
-
-	result, err := provider.Chat(ctx, messages)
-
-	require.NoError(t, err)
-	assert.NotNil(t, result)
-	assert.Equal(t, "Chat response", result.Content)
-	assert.Equal(t, "gpt-4", result.Model)
-	assert.Equal(t, 25, result.TokensUsed)
 }
 
 // TestOpenAI_ProviderInfo 测试 Provider 信息方法
@@ -279,18 +119,6 @@ func TestOpenAI_ProviderInfo(t *testing.T) {
 	assert.Equal(t, "openai", string(provider.Provider()))
 	assert.Equal(t, "gpt-4-turbo", provider.ModelName())
 	assert.Greater(t, provider.MaxTokens(), 0)
-}
-
-// TestOpenAI_IsAvailable 测试 IsAvailable 方法
-func TestOpenAI_IsAvailable(t *testing.T) {
-	provider, err := NewOpenAIWithOptions(
-		agentllm.WithAPIKey("test-api-key"),
-	)
-	require.NoError(t, err)
-
-	// 应该返回 false，因为没有真实的 API 连接
-	available := provider.IsAvailable()
-	assert.False(t, available)
 }
 
 // mockTool 是用于测试的 mock tool
@@ -358,23 +186,8 @@ func TestOpenAI_Complete_WithParameters(t *testing.T) {
 			receivedMaxTokens = int(maxTokens)
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		response := map[string]interface{}{
-			"id":     "chatcmpl-123",
-			"object": "chat.completion",
-			"model":  "gpt-4",
-			"choices": []map[string]interface{}{
-				{
-					"message": map[string]interface{}{
-						"role":    "assistant",
-						"content": "Response",
-					},
-					"finish_reason": "stop",
-				},
-			},
-			"usage": map[string]interface{}{"total_tokens": 10},
-		}
-		json.NewEncoder(w).Encode(response)
+		w.Header().Set("Content-Type", "text/event-stream")
+		fmt.Fprint(w, "data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Response\"},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n")
 	}))
 	defer server.Close()
 
@@ -387,7 +200,7 @@ func TestOpenAI_Complete_WithParameters(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	_, err = provider.Complete(ctx, &agentllm.CompletionRequest{
+	_, err = agentllm.Complete(ctx, provider, &agentllm.CompletionRequest{
 		Messages: []agentllm.Message{{Role: "user", Content: "Test"}},
 	})
 

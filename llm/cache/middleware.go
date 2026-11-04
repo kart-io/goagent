@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/constants"
@@ -50,69 +49,67 @@ func NewCachedLLMClient(config *CachedLLMClientConfig) (*CachedLLMClient, error)
 	}, nil
 }
 
-// Complete sends a completion request with semantic caching
-func (c *CachedLLMClient) Complete(ctx context.Context, req *llm.CompletionRequest) (*llm.CompletionResponse, error) {
-	// Extract prompt from request
+// CompleteStream 命中缓存时返回一个完整块；未命中时转发上游流，
+// 只有成功终止的回答才写入缓存。
+func (c *CachedLLMClient) CompleteStream(ctx context.Context, req *llm.CompletionRequest) (<-chan *llm.StreamChunk, error) {
 	prompt := extractPromptFromRequest(req)
-	model := req.Model
+	model := ""
+	if req != nil {
+		model = req.Model
+	}
 
-	// Try to get from cache
 	entry, _, err := c.cache.Get(ctx, prompt, model)
 	if err != nil {
 		// Log error but continue with actual request
 		fmt.Printf("cache get error: %v\n", err)
 	}
-
 	if entry != nil {
-		// Cache hit - return cached response
-		return &llm.CompletionResponse{
-			Content:      entry.Response,
-			Model:        entry.Model,
-			TokensUsed:   0, // No tokens used for cached response
-			FinishReason: "cache_hit",
-		}, nil
+		out := make(chan *llm.StreamChunk, 2)
+		out <- &llm.StreamChunk{Delta: entry.Response, Content: entry.Response, ResponseModel: entry.Model}
+		out <- &llm.StreamChunk{Content: entry.Response, ResponseModel: entry.Model, FinishReason: "cache_hit", Done: true}
+		close(out)
+		return out, nil
 	}
 
-	// Cache miss - call actual LLM
-	startTime := time.Now()
-	resp, err := c.client.Complete(ctx, req)
-	latency := time.Since(startTime)
-
+	upstream, err := c.client.CompleteStream(ctx, req)
 	if err != nil {
 		return nil, err
 	}
-
-	// Store in cache
-	cacheErr := c.cache.Set(ctx, prompt, resp.Content, model, resp.TokensUsed)
-	if cacheErr != nil {
-		// Log error but don't fail the request
-		fmt.Printf("cache set error: %v\n", cacheErr)
-	}
-
-	// Note: FinishReason already set by LLM, we don't modify it for cache miss
-	_ = latency // latency captured for potential logging/metrics
-
-	return resp, nil
-}
-
-// Chat sends a chat request with semantic caching
-func (c *CachedLLMClient) Chat(ctx context.Context, messages []llm.Message) (*llm.CompletionResponse, error) {
-	// Convert messages to completion request
-	req := &llm.CompletionRequest{
-		Messages: messages,
-	}
-
-	return c.Complete(ctx, req)
+	out := make(chan *llm.StreamChunk)
+	go func() {
+		defer close(out)
+		var content strings.Builder
+		for chunk := range upstream {
+			if chunk != nil {
+				content.WriteString(chunk.Delta)
+				if chunk.Done && chunk.Error == nil {
+					answer := chunk.Content
+					if answer == "" {
+						answer = content.String()
+					}
+					tokens := 0
+					if chunk.Usage != nil {
+						tokens = chunk.Usage.TotalTokens
+					}
+					if cacheErr := c.cache.Set(ctx, prompt, answer, model, tokens); cacheErr != nil {
+						// Log error but don't fail the request
+						fmt.Printf("cache set error: %v\n", cacheErr)
+					}
+				}
+			}
+			select {
+			case out <- chunk:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	return out, nil
 }
 
 // Provider returns the underlying provider type
 func (c *CachedLLMClient) Provider() constants.Provider {
 	return c.provider
-}
-
-// IsAvailable checks if the client is available
-func (c *CachedLLMClient) IsAvailable() bool {
-	return c.client.IsAvailable()
 }
 
 // Stats returns cache statistics

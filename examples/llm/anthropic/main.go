@@ -53,7 +53,7 @@ func basicExample() {
 
 	// Create a simple completion request
 	ctx := context.Background()
-	resp, err := provider.Complete(ctx, &llm.CompletionRequest{
+	resp, err := llm.Complete(ctx, provider, &llm.CompletionRequest{
 		Messages: []llm.Message{
 			{Role: "user", Content: "What is the capital of France?"},
 		},
@@ -89,7 +89,7 @@ func modelExample() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		resp, err := provider.Complete(ctx, &llm.CompletionRequest{
+		resp, err := llm.Complete(ctx, provider, &llm.CompletionRequest{
 			Messages: []llm.Message{
 				{Role: "user", Content: "Say hello in one word."},
 			},
@@ -146,7 +146,7 @@ func conversationExample() {
 	ctx := context.Background()
 
 	// First turn
-	resp1, err := provider.Complete(ctx, &llm.CompletionRequest{
+	resp1, err := llm.Complete(ctx, provider, &llm.CompletionRequest{
 		Messages: messages,
 	})
 	if err != nil {
@@ -167,7 +167,7 @@ func conversationExample() {
 		Content: "Do you remember my name?",
 	})
 
-	resp2, err := provider.Complete(ctx, &llm.CompletionRequest{
+	resp2, err := llm.Complete(ctx, provider, &llm.CompletionRequest{
 		Messages: messages,
 	})
 	if err != nil {
@@ -185,7 +185,7 @@ func tokenUsageExample() {
 	}
 
 	ctx := context.Background()
-	resp, err := provider.Complete(ctx, &llm.CompletionRequest{
+	resp, err := llm.Complete(ctx, provider, &llm.CompletionRequest{
 		Messages: []llm.Message{
 			{Role: "user", Content: "Explain quantum computing in 50 words."},
 		},
@@ -218,7 +218,7 @@ func errorHandlingExample() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	_, err = provider.Complete(ctx, &llm.CompletionRequest{
+	_, err = llm.Complete(ctx, provider, &llm.CompletionRequest{
 		Messages: []llm.Message{
 			{Role: "user", Content: "Test"},
 		},

@@ -134,7 +134,7 @@ return builder.NewSimpleBuilder(client).
 
 | 方法 | 说明 |
 |---|---|
-| `AsRunnable() *core.StreamRunnable[any, *AgentOutput]` | 推荐入口：`Invoke`、`Stream`、`Batch`、`Pipe`；需要 `llm.StreamClient` |
+| `AsRunnable() *core.StreamRunnable[any, *AgentOutput]` | 推荐入口：`Invoke`、`Stream`、`Batch`、`Pipe`；接受任意 `llm.Client` |
 | `ExecuteStream(ctx, input) (<-chan AgentEvent, error)` | 同一事件源的通道形式 |
 | `Start(ctx, input) *Handle` | 进程内后台运行；`Handle` 提供 `Steer`、`Inject`、`Redirect`、`Followup`、`Interrupt`、`Wait`、`PendingInputs`。只支持原生工具流，不是持久后台调度服务 |
 | `Initialize(ctx)`、`Shutdown(ctx)` | 生命周期；Build 已调用 Initialize |

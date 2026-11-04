@@ -67,10 +67,7 @@ func (a *ConfigurableAgent[C, S]) executeStream(ctx context.Context, input inter
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	client, ok := a.llmClient.(llm.StreamClient)
-	if !ok {
-		return nil, fmt.Errorf("ExecuteStream requires llm.StreamClient")
-	}
+	client := a.llmClient
 	if _, native := a.llmClient.(llm.ToolStreamClient); len(a.tools) > 0 && !native {
 		return nil, fmt.Errorf("configured tools require llm.ToolStreamClient")
 	}
@@ -168,7 +165,7 @@ func (a *ConfigurableAgent[C, S]) executeStream(ctx context.Context, input inter
 	return events, nil
 }
 
-func (a *ConfigurableAgent[C, S]) runEvents(ctx context.Context, request *middleware.MiddlewareRequest, client llm.StreamClient, emit func(AgentEvent) error) (*middleware.MiddlewareResponse, error) {
+func (a *ConfigurableAgent[C, S]) runEvents(ctx context.Context, request *middleware.MiddlewareRequest, client llm.Client, emit func(AgentEvent) error) (*middleware.MiddlewareResponse, error) {
 	input, err := a.inputSerializer.Serialize(request.Input)
 	if err != nil {
 		return nil, agentErrors.Wrap(err, agentErrors.CodeInvalidInput, "failed to serialize input")

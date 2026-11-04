@@ -116,13 +116,6 @@ func (m *MockLLMClient) Complete(ctx context.Context, req *llm.CompletionRequest
 	}, nil
 }
 
-// Chat implements the chat method
-func (m *MockLLMClient) Chat(ctx context.Context, messages []llm.Message) (*llm.CompletionResponse, error) {
-	return m.Complete(ctx, &llm.CompletionRequest{
-		Messages: messages,
-	})
-}
-
 // CompleteStream 把 Complete 的结果作为一个增量块和一个终止块返回，供 Builder 等流式入口使用。
 func (m *MockLLMClient) CompleteStream(ctx context.Context, req *llm.CompletionRequest) (<-chan *llm.StreamChunk, error) {
 	response, err := m.Complete(ctx, req)
@@ -130,11 +123,6 @@ func (m *MockLLMClient) CompleteStream(ctx context.Context, req *llm.CompletionR
 		return nil, err
 	}
 	return streamChunks(ctx, []string{response.Content}, response.TokensUsed), nil
-}
-
-// ChatStream implements the streaming chat method
-func (m *MockLLMClient) ChatStream(ctx context.Context, messages []llm.Message) (<-chan *llm.StreamChunk, error) {
-	return m.CompleteStream(ctx, &llm.CompletionRequest{Messages: messages})
 }
 
 // CompleteToolsStream 不发起工具调用，直接给出回答。
@@ -145,11 +133,6 @@ func (m *MockLLMClient) CompleteToolsStream(ctx context.Context, req *llm.Comple
 // Provider returns the provider type
 func (m *MockLLMClient) Provider() constants.Provider {
 	return constants.ProviderCustom
-}
-
-// IsAvailable returns whether the client is available
-func (m *MockLLMClient) IsAvailable() bool {
-	return !m.shouldError
 }
 
 // GetRequestHistory returns the history of requests made
@@ -202,11 +185,6 @@ func (m *MockStreamingLLMClient) CompleteStream(ctx context.Context, req *llm.Co
 		return nil, fmt.Errorf("%s", message)
 	}
 	return streamChunks(ctx, m.streamChunks, 0), nil
-}
-
-// ChatStream implements the streaming chat method
-func (m *MockStreamingLLMClient) ChatStream(ctx context.Context, messages []llm.Message) (<-chan *llm.StreamChunk, error) {
-	return m.CompleteStream(ctx, &llm.CompletionRequest{Messages: messages})
 }
 
 // CompleteToolsStream 不发起工具调用，直接流式回答。

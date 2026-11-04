@@ -38,16 +38,19 @@ type BudgetClient struct {
 	metrics Measurements
 }
 
-func (c *BudgetClient) Complete(ctx context.Context, req *llm.CompletionRequest) (*llm.CompletionResponse, error) {
+// CompleteStream 在整条流结束前持有锁，按终止块的用量计账；调用方放弃读取时必须取消 ctx。
+func (c *BudgetClient) CompleteStream(ctx context.Context, req *llm.CompletionRequest) (<-chan *llm.StreamChunk, error) {
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	if err := ctx.Err(); err != nil {
+		c.mu.Unlock()
 		return nil, err
 	}
 	if req == nil || c.Client == nil || c.Budget.MaxCalls <= 0 || c.Budget.MaxOutputTokens <= 0 {
+		c.mu.Unlock()
 		return nil, fmt.Errorf("client, request and positive call/output budgets required")
 	}
 	if c.metrics.Calls >= c.Budget.MaxCalls || (c.Budget.ObservedTokens > 0 && c.metrics.Usage.TotalTokens >= c.Budget.ObservedTokens) {
+		c.mu.Unlock()
 		return nil, ErrBudgetExceeded
 	}
 	request := *req
@@ -55,19 +58,29 @@ func (c *BudgetClient) Complete(ctx context.Context, req *llm.CompletionRequest)
 	request.Temperature = c.Budget.Temperature
 	request.MaxTokens = c.Budget.MaxOutputTokens
 	c.metrics.Calls++
-	response, err := c.Client.Complete(ctx, &request)
-	if response != nil {
-		if response.Usage != nil {
-			c.metrics.Usage.Add(response.Usage)
-			c.metrics.UsageReports++
-		} else {
-			c.metrics.Usage.TotalTokens += response.TokensUsed
-		}
+	upstream, err := c.Client.CompleteStream(ctx, &request)
+	if err != nil {
+		c.mu.Unlock()
+		return nil, err
 	}
-	return response, err
-}
-func (c *BudgetClient) Chat(ctx context.Context, messages []llm.Message) (*llm.CompletionResponse, error) {
-	return c.Complete(ctx, &llm.CompletionRequest{Messages: messages})
+	out := make(chan *llm.StreamChunk)
+	go func() {
+		defer c.mu.Unlock()
+		defer close(out)
+		for chunk := range upstream {
+			if chunk != nil && chunk.Done && chunk.Usage != nil {
+				tokens := chunk.Usage.Tokens()
+				c.metrics.Usage.Add(&tokens)
+				c.metrics.UsageReports++
+			}
+			select {
+			case out <- chunk:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	return out, nil
 }
 func (c *BudgetClient) Measurements() Measurements {
 	c.mu.Lock()

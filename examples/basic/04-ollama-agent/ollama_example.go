@@ -47,7 +47,7 @@ func basicOllamaExample() {
 	}
 
 	// 检查 Ollama 是否可用
-	if !client.IsAvailable() {
+	if _, err := client.ListModels(context.Background()); err != nil {
 		fmt.Println("❌ Ollama is not available. Please ensure Ollama is running on http://localhost:11434")
 		fmt.Println("   Install Ollama: https://ollama.ai/")
 		fmt.Println("   Start Ollama: ollama serve")
@@ -64,7 +64,7 @@ func basicOllamaExample() {
 		llm.UserMessage("What is Go programming language in one sentence?"),
 	}
 
-	response, err := client.Chat(ctx, messages)
+	response, err := llm.Chat(ctx, client, messages)
 	if err != nil {
 		log.Printf("Error: %v\n", err)
 		return
@@ -93,7 +93,7 @@ func ollamaAgentExample() {
 	}
 
 	// 检查可用性
-	if !ollamaClient.IsAvailable() {
+	if _, err := ollamaClient.ListModels(context.Background()); err != nil {
 		fmt.Println("❌ Ollama not available. Skipping this example.")
 		return
 	}
@@ -105,7 +105,7 @@ func ollamaAgentExample() {
 		llm.UserMessage("Explain Docker in 2 sentences."),
 	}
 
-	response, err := ollamaClient.Chat(ctx, messages)
+	response, err := llm.Chat(ctx, ollamaClient, messages)
 	if err != nil {
 		log.Printf("Chat failed: %v\n", err)
 		return
@@ -128,7 +128,7 @@ func ollamaWithCompletionExample() {
 		return
 	}
 
-	if !ollamaClient.IsAvailable() {
+	if _, err := ollamaClient.ListModels(context.Background()); err != nil {
 		fmt.Println("❌ Ollama not available. Skipping this example.")
 		return
 	}
@@ -144,7 +144,7 @@ func ollamaWithCompletionExample() {
 		MaxTokens:   50,
 	}
 
-	response, err := ollamaClient.Complete(ctx, req)
+	response, err := llm.Complete(ctx, ollamaClient, req)
 	if err != nil {
 		log.Printf("Completion failed: %v\n", err)
 		return
@@ -165,7 +165,7 @@ func listOllamaModels() {
 		return
 	}
 
-	if !client.IsAvailable() {
+	if _, err := client.ListModels(context.Background()); err != nil {
 		fmt.Println("❌ Ollama not available")
 		return
 	}
@@ -211,7 +211,7 @@ func listOllamaModels() {
 			}
 			ctx := context.Background()
 
-			resp, err := client.Chat(ctx, []llm.Message{
+			resp, err := llm.Chat(ctx, client, []llm.Message{
 				llm.UserMessage("Say hello in one word"),
 			})
 
@@ -279,7 +279,7 @@ func ollamaWithToolsExample() {
 		return
 	}
 
-	if !ollamaClient.IsAvailable() {
+	if _, err := ollamaClient.ListModels(context.Background()); err != nil {
 		fmt.Println("❌ Ollama not available. Skipping this example.")
 		return
 	}
@@ -380,7 +380,7 @@ After receiving the tool result, provide a natural language response to the user
 	}
 
 	// 调用 LLM
-	response, err := ollamaClient.Chat(ctx, messages)
+	response, err := llm.Chat(ctx, ollamaClient, messages)
 	if err != nil {
 		log.Printf("Error calling LLM: %v\n", err)
 		return
@@ -430,7 +430,7 @@ After receiving the tool result, provide a natural language response to the user
 				llm.UserMessage(fmt.Sprintf("Tool Result: %v\n\nNow provide a natural language response to the user.", toolResult)),
 			)
 
-			finalResponse, finalErr := ollamaClient.Chat(ctx, messages)
+			finalResponse, finalErr := llm.Chat(ctx, ollamaClient, messages)
 			if finalErr != nil {
 				log.Printf("Error getting final response: %v\n", finalErr)
 				return
@@ -455,7 +455,7 @@ Input: <tool_input_as_json>`, toolDescriptions)),
 		llm.UserMessage(userQuery2),
 	}
 
-	response2, err := ollamaClient.Chat(ctx, messages2)
+	response2, err := llm.Chat(ctx, ollamaClient, messages2)
 	if err != nil {
 		log.Printf("Error calling LLM: %v\n", err)
 		return

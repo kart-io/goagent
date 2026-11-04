@@ -50,16 +50,20 @@ func (s *SimpleLLMClient) Complete(ctx context.Context, req *llm.CompletionReque
 	}, nil
 }
 
-func (s *SimpleLLMClient) Chat(ctx context.Context, messages []llm.Message) (*llm.CompletionResponse, error) {
-	return s.Complete(ctx, &llm.CompletionRequest{Messages: messages})
+// CompleteStream 把 Complete 的结果作为一个完整块返回
+func (s *SimpleLLMClient) CompleteStream(ctx context.Context, req *llm.CompletionRequest) (<-chan *llm.StreamChunk, error) {
+	resp, err := s.Complete(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	stream := make(chan *llm.StreamChunk, 1)
+	stream <- &llm.StreamChunk{Delta: resp.Content, Content: resp.Content, FinishReason: "stop", Done: true, Usage: &llm.Usage{TotalTokens: resp.TokensUsed}}
+	close(stream)
+	return stream, nil
 }
 
 func (s *SimpleLLMClient) Provider() constants.Provider {
 	return constants.ProviderCustom
-}
-
-func (s *SimpleLLMClient) IsAvailable() bool {
-	return true
 }
 
 // createSampleTools 创建示例工具集

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/kart-io/goagent/examples/advanced/multi-agent-modular/agents"
@@ -110,7 +111,7 @@ func initializeLLM() llm.Client {
 		fmt.Printf("⚠️  Error creating Ollama client: %v\n", err)
 		return nil
 	}
-	if ollamaClient.IsAvailable() {
+	if ollamaHasModel(ollamaClient, ollamaModel) {
 		fmt.Printf("✓ Using Ollama provider with model: %s\n\n", ollamaModel)
 		return ollamaClient
 	}
@@ -125,7 +126,7 @@ func initializeLLM() llm.Client {
 			llm.WithMaxTokens(1000),
 			llm.WithTemperature(0.7),
 		)
-		if err == nil && client.IsAvailable() {
+		if err == nil {
 			fmt.Println("✓ Using OpenAI provider")
 			return client
 		}
@@ -139,7 +140,7 @@ func initializeLLM() llm.Client {
 			llm.WithMaxTokens(1000),
 			llm.WithTemperature(0.7),
 		)
-		if err == nil && client.IsAvailable() {
+		if err == nil {
 			fmt.Println("✓ Using Gemini provider")
 			return client
 		}
@@ -192,14 +193,7 @@ func truncate(s string, maxLen int) string {
 type MockLLMClient struct{}
 
 func (m *MockLLMClient) Complete(ctx context.Context, req *llm.CompletionRequest) (*llm.CompletionResponse, error) {
-	return &llm.CompletionResponse{
-		Content:  "Mock response for demonstration",
-		Provider: "mock",
-		Model:    "mock-model",
-	}, nil
-}
-
-func (m *MockLLMClient) Chat(ctx context.Context, messages []llm.Message) (*llm.CompletionResponse, error) {
+	messages := req.Messages
 	if len(messages) == 0 {
 		return nil, fmt.Errorf("no messages provided")
 	}
@@ -238,12 +232,20 @@ func (m *MockLLMClient) Chat(ctx context.Context, messages []llm.Message) (*llm.
 	}, nil
 }
 
-func (m *MockLLMClient) Provider() constants.Provider {
-	return constants.ProviderCustom
+// CompleteStream 把 Complete 的结果作为一个完整块返回
+func (m *MockLLMClient) CompleteStream(ctx context.Context, req *llm.CompletionRequest) (<-chan *llm.StreamChunk, error) {
+	resp, err := m.Complete(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	stream := make(chan *llm.StreamChunk, 1)
+	stream <- &llm.StreamChunk{Delta: resp.Content, Content: resp.Content, FinishReason: "stop", Done: true, Usage: &llm.Usage{TotalTokens: resp.TokensUsed}}
+	close(stream)
+	return stream, nil
 }
 
-func (m *MockLLMClient) IsAvailable() bool {
-	return true
+func (m *MockLLMClient) Provider() constants.Provider {
+	return constants.ProviderCustom
 }
 
 // contains checks if a string contains a substring (case-insensitive)
@@ -262,4 +264,13 @@ func findSubstring(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+// ollamaHasModel 确认本地 Ollama 可达且已拉取所需模型；ListModels 读取 /models，不产生生成请求。
+func ollamaHasModel(client *providers.OpenAIProvider, model string) bool {
+	models, err := client.ListModels(context.Background())
+	if err != nil {
+		return false
+	}
+	return slices.ContainsFunc(models, func(m string) bool { return m == model || strings.HasPrefix(m, model+":") })
 }

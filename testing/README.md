@@ -90,7 +90,7 @@ sequenceDiagram
 
 ### 2. MockLLMClient LLM Mock
 
-实现 `llm.ToolStreamClient`，可直接传给 Builder；流式与工具流方法把 `Complete` 的结果作为一个增量块返回，不发起工具调用。
+实现 `llm.ToolStreamClient`，可直接传给 Builder；`Complete` 是脚本化响应的来源，`CompleteStream` / `CompleteToolsStream` 把它的结果作为一个增量块返回，不发起工具调用；需要完整响应时用 `llm.Complete` 收集流。
 
 **核心功能**：
 

@@ -46,7 +46,7 @@ output, err := agent.AsRunnable().Invoke(ctx, "退款政策是什么？")
 
 ## 真实模型 Token 流
 
-实现 `llm.StreamClient` 的 Provider（如 OpenAI、DeepSeek、Gemini）可直接调用：
+所有 `llm.Client`（如 OpenAI、DeepSeek、Gemini Provider）都可直接调用：
 
 ```go
 ctx, cancel := context.WithCancel(ctx)

@@ -81,10 +81,9 @@ func main() {
 	fmt.Println()
 	fmt.Println("=== 结论 ===")
 	fmt.Println("✅ 所有 LLM Provider 都实现了相同的 llm.Client 接口:")
-	fmt.Println("   - Complete(ctx, req) - 文本补全")
-	fmt.Println("   - Chat(ctx, messages) - 对话")
+	fmt.Println("   - CompleteStream(ctx, req) - 流式补全")
 	fmt.Println("   - Provider() - 返回提供商类型")
-	fmt.Println("   - IsAvailable() - 检查可用性")
+	fmt.Println("   需要完整响应时用 llm.Complete(ctx, client, req) 收集流")
 	fmt.Println()
 	fmt.Println("这意味着你可以轻松切换不同的 LLM Provider，")
 	fmt.Println("而不需要修改任何业务代码！")
@@ -97,15 +96,6 @@ func testProviderInterface(client llm.Client) {
 	fmt.Printf("\n测试 %s Provider:\n", provider)
 	fmt.Println("--------------------")
 
-	// 2. 测试 IsAvailable() 方法
-	available := client.IsAvailable()
-	fmt.Printf("  IsAvailable(): %v\n", available)
-
-	if !available {
-		fmt.Printf("  ⚠️  %s 不可用，跳过其他测试\n", provider)
-		return
-	}
-
 	ctx := context.Background()
 
 	// 3. 测试 Chat() 方法
@@ -114,7 +104,7 @@ func testProviderInterface(client llm.Client) {
 		llm.UserMessage("What is 2+2?"),
 	}
 
-	chatResp, err := client.Chat(ctx, messages)
+	chatResp, err := llm.Chat(ctx, client, messages)
 	if err != nil {
 		fmt.Printf("  Chat() 错误: %v\n", err)
 	} else {
@@ -133,7 +123,7 @@ func testProviderInterface(client llm.Client) {
 		MaxTokens:   10,
 	}
 
-	completeResp, err := client.Complete(ctx, req)
+	completeResp, err := llm.Complete(ctx, client, req)
 	if err != nil {
 		fmt.Printf("  Complete() 错误: %v\n", err)
 	} else {
@@ -168,7 +158,14 @@ func demonstrateProviderSwitching() {
 	default:
 		// 默认使用 Ollama（本地）
 		client = createOllamaClient()
-		if !client.IsAvailable() {
+		if lister, ok := client.(interface {
+			ListModels(context.Context) ([]string, error)
+		}); ok {
+			if _, err := lister.ListModels(context.Background()); err != nil {
+				client = nil
+			}
+		}
+		if client == nil {
 			// 如果 Ollama 不可用，尝试 OpenAI
 			client = createOpenAIClient()
 		}
@@ -176,7 +173,7 @@ func demonstrateProviderSwitching() {
 
 	// 使用统一的接口，无论底层是哪个 provider
 	ctx := context.Background()
-	response, err := client.Chat(ctx, []llm.Message{
+	response, err := llm.Chat(ctx, client, []llm.Message{
 		llm.UserMessage("Hello!"),
 	})
 

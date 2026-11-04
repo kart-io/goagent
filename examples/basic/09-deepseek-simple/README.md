@@ -23,7 +23,7 @@ client, err := providers.NewDeepSeekWithOptions(
     llm.WithMaxTokens(1000),
     llm.WithTimeout(30*time.Second),
 )
-response, err := client.Chat(ctx, []llm.Message{
+response, err := llm.Chat(ctx, client, []llm.Message{
     llm.SystemMessage("你是一个友好的 AI 助手，擅长用简洁的语言回答问题。"),
     llm.UserMessage("请用一句话解释什么是 AI Agent。"),
 })

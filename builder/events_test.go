@@ -21,7 +21,7 @@ type eventModel struct {
 	started chan struct{}
 }
 
-func (m *eventModel) ChatStream(ctx context.Context, msg []llm.Message) (<-chan *llm.StreamChunk, error) {
+func (m *eventModel) stream(ctx context.Context, msg []llm.Message) (<-chan *llm.StreamChunk, error) {
 	m.prompt = ""
 	for _, message := range msg {
 		m.prompt += message.Content
@@ -48,7 +48,7 @@ func (m *eventModel) ChatStream(ctx context.Context, msg []llm.Message) (<-chan 
 }
 func (m *eventModel) CompleteStream(ctx context.Context, r *llm.CompletionRequest) (<-chan *llm.StreamChunk, error) {
 	m.request = r
-	return m.ChatStream(ctx, r.Messages)
+	return m.stream(ctx, r.Messages)
 }
 
 type endingMiddleware struct{ *middleware.BaseMiddleware }

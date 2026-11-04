@@ -54,7 +54,6 @@ func TestProviderCapabilityContractMatrix(t *testing.T) {
 			} {
 				require.Equal(t, want, checker.HasCapability(capability), string(capability))
 			}
-			require.Equal(t, tc.structured, llm.HasStreaming(client))
 			require.Equal(t, tc.native, llm.HasToolStreaming(client))
 			require.Equal(t, tc.embed, llm.HasEmbedding(client))
 			require.Equal(t, tc.embed, llm.AsEmbedder(client) != nil)

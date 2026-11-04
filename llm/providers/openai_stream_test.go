@@ -79,7 +79,7 @@ func TestOpenAICompleteStreamPropagatesReadError(t *testing.T) {
 	require.NoError(t, err)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	chunks, err := client.ChatStream(ctx, []agentllm.Message{agentllm.UserMessage("question")})
+	chunks, err := client.CompleteStream(ctx, &agentllm.CompletionRequest{Messages: []agentllm.Message{agentllm.UserMessage("question")}})
 	require.NoError(t, err)
 	var last *agentllm.StreamChunk
 	for chunk := range chunks {
@@ -105,7 +105,7 @@ func TestOpenAICompleteStreamCancellationClosesRequest(t *testing.T) {
 	require.NoError(t, err)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	chunks, err := client.ChatStream(ctx, []agentllm.Message{agentllm.UserMessage("question")})
+	chunks, err := client.CompleteStream(ctx, &agentllm.CompletionRequest{Messages: []agentllm.Message{agentllm.UserMessage("question")}})
 	require.NoError(t, err)
 	select {
 	case <-chunks:
@@ -159,7 +159,7 @@ func TestOpenAIStreamCompleteUnindexedTools(t *testing.T) {
 			require.NoError(t, err)
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			defer cancel()
-			chunks, err := client.ChatStream(ctx, []agentllm.Message{agentllm.UserMessage("query")})
+			chunks, err := client.CompleteStream(ctx, &agentllm.CompletionRequest{Messages: []agentllm.Message{agentllm.UserMessage("query")}})
 			require.NoError(t, err)
 			var last *agentllm.StreamChunk
 			for chunk := range chunks {
@@ -199,7 +199,7 @@ func TestOpenAITimeoutBoundsResponseWait(t *testing.T) {
 	client, err := NewOpenAIWithOptions(agentllm.WithAPIKey("test"), agentllm.WithBaseURL(server.URL+"/v1"), agentllm.WithTimeout(time.Second))
 	require.NoError(t, err)
 	start := time.Now()
-	_, err = client.Chat(context.Background(), []agentllm.Message{agentllm.UserMessage("question")})
+	_, err = agentllm.Chat(context.Background(), client, []agentllm.Message{agentllm.UserMessage("question")})
 	require.Error(t, err)
 	require.Less(t, time.Since(start), 5*time.Second)
 	var netErr net.Error
@@ -219,7 +219,7 @@ func TestOpenAITimeoutDoesNotCutStream(t *testing.T) {
 	defer server.Close()
 	client, err := NewOpenAIWithOptions(agentllm.WithAPIKey("test"), agentllm.WithBaseURL(server.URL+"/v1"), agentllm.WithTimeout(time.Second))
 	require.NoError(t, err)
-	chunks, err := client.ChatStream(context.Background(), []agentllm.Message{agentllm.UserMessage("question")})
+	chunks, err := client.CompleteStream(context.Background(), &agentllm.CompletionRequest{Messages: []agentllm.Message{agentllm.UserMessage("question")}})
 	require.NoError(t, err)
 	var last *agentllm.StreamChunk
 	for chunk := range chunks {
@@ -256,8 +256,8 @@ func TestHeaderTimeoutUsesCurrentDefaultTransport(t *testing.T) {
 	require.NoError(t, err)
 	deepSeekClient, err := NewDeepSeekWithOptions(append(opts, agentllm.WithBaseURL(server.URL))...)
 	require.NoError(t, err)
-	for _, client := range []agentllm.StreamClient{openAIClient, deepSeekClient} {
-		chunks, err := client.ChatStream(context.Background(), []agentllm.Message{agentllm.UserMessage("question")})
+	for _, client := range []agentllm.Client{openAIClient, deepSeekClient} {
+		chunks, err := client.CompleteStream(context.Background(), &agentllm.CompletionRequest{Messages: []agentllm.Message{agentllm.UserMessage("question")}})
 		require.NoError(t, err)
 		var last *agentllm.StreamChunk
 		for chunk := range chunks {

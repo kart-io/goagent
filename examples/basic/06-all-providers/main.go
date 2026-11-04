@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/kart-io/goagent/llm"
@@ -97,7 +99,7 @@ func main() {
 	ollamaClient, err := providers.NewOllamaClientSimple("llama2")
 	if err != nil {
 		fmt.Printf("   ❌ Error creating Ollama client: %v\n", err)
-	} else if ollamaClient.IsAvailable() {
+	} else if ollamaHasModel(ollamaClient, "llama2") {
 		testProvider(ctx, ollamaClient, "Ollama")
 	} else {
 		fmt.Println("   ⚠️  Ollama not running locally, skipping")
@@ -186,15 +188,6 @@ func main() {
 
 // testProvider tests a single provider
 func testProvider(ctx context.Context, client llm.Client, name string) {
-	// Test IsAvailable
-	available := client.IsAvailable()
-	fmt.Printf("   IsAvailable: %v\n", available)
-
-	if !available {
-		fmt.Printf("   ⚠️  %s is not available\n", name)
-		return
-	}
-
 	// Test Chat
 	testMessages := []llm.Message{
 		llm.UserMessage("Say 'Hello from " + name + "!' exactly"),
@@ -204,7 +197,7 @@ func testProvider(ctx context.Context, client llm.Client, name string) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	response, err := client.Chat(ctx, testMessages)
+	response, err := llm.Chat(ctx, client, testMessages)
 	if err != nil {
 		fmt.Printf("   ❌ Chat error: %v\n", err)
 		return
@@ -278,3 +271,12 @@ func selectProviderByRequirement(requirement string) llm.Client {
 	}
 }
 */
+
+// ollamaHasModel 确认本地 Ollama 可达且已拉取所需模型；ListModels 读取 /models，不产生生成请求。
+func ollamaHasModel(client *providers.OpenAIProvider, model string) bool {
+	models, err := client.ListModels(context.Background())
+	if err != nil {
+		return false
+	}
+	return slices.ContainsFunc(models, func(m string) bool { return m == model || strings.HasPrefix(m, model+":") })
+}

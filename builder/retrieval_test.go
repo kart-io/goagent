@@ -18,11 +18,6 @@ type evidenceLLM struct {
 	requests []*llm.CompletionRequest
 }
 
-func (m *evidenceLLM) Complete(ctx context.Context, req *llm.CompletionRequest) (*llm.CompletionResponse, error) {
-	m.requests = append(m.requests, req)
-	return m.MockLLMClient.Complete(ctx, req)
-}
-
 func (m *evidenceLLM) CompleteStream(ctx context.Context, req *llm.CompletionRequest) (<-chan *llm.StreamChunk, error) {
 	m.requests = append(m.requests, req)
 	return m.MockLLMClient.CompleteStream(ctx, req)

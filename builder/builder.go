@@ -108,9 +108,6 @@ func (b *AgentBuilder[C, S]) BuildContext(ctx context.Context) (*ConfigurableAge
 	if b.llmClient == nil {
 		return nil, agentErrors.NewInvalidConfigError("builder", "llm_client", "LLM client is required")
 	}
-	if _, ok := b.llmClient.(llm.StreamClient); !ok {
-		return nil, agentErrors.NewInvalidConfigError("builder", "llm_client", "LLM client must implement llm.StreamClient")
-	}
 	if _, ok := b.llmClient.(llm.ToolStreamClient); !ok && len(b.tools) > 0 {
 		return nil, agentErrors.NewInvalidConfigError("builder", "llm_client", "configured tools require llm.ToolStreamClient")
 	}

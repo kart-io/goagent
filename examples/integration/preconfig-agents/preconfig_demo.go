@@ -41,10 +41,6 @@ func (m *MockLLMClient) Complete(ctx context.Context, req *llm.CompletionRequest
 	}, nil
 }
 
-func (m *MockLLMClient) Chat(ctx context.Context, messages []llm.Message) (*llm.CompletionResponse, error) {
-	return m.Complete(ctx, &llm.CompletionRequest{Messages: messages})
-}
-
 // CompleteStream 把 Complete 的结果作为一个增量块返回，满足 Builder 对流式客户端的要求
 func (m *MockLLMClient) CompleteStream(ctx context.Context, req *llm.CompletionRequest) (<-chan *llm.StreamChunk, error) {
 	resp, err := m.Complete(ctx, req)
@@ -58,10 +54,6 @@ func (m *MockLLMClient) CompleteStream(ctx context.Context, req *llm.CompletionR
 	return stream, nil
 }
 
-func (m *MockLLMClient) ChatStream(ctx context.Context, messages []llm.Message) (<-chan *llm.StreamChunk, error) {
-	return m.CompleteStream(ctx, &llm.CompletionRequest{Messages: messages})
-}
-
 // CompleteToolsStream 不发起工具调用，直接回答
 func (m *MockLLMClient) CompleteToolsStream(ctx context.Context, req *llm.CompletionRequest, _ []interfaces.Tool) (<-chan *llm.StreamChunk, error) {
 	return m.CompleteStream(ctx, req)
@@ -69,10 +61,6 @@ func (m *MockLLMClient) CompleteToolsStream(ctx context.Context, req *llm.Comple
 
 func (m *MockLLMClient) Provider() constants.Provider {
 	return constants.ProviderCustom
-}
-
-func (m *MockLLMClient) IsAvailable() bool {
-	return true
 }
 
 func main() {

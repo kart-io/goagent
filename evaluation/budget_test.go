@@ -2,8 +2,8 @@ package evaluation
 
 import (
 	"context"
-	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/constants"
 	"github.com/stretchr/testify/require"
 	"testing"
 )
@@ -13,16 +13,21 @@ type budgetMock struct {
 	requests []*llm.CompletionRequest
 }
 
-func (m *budgetMock) Complete(ctx context.Context, r *llm.CompletionRequest) (*llm.CompletionResponse, error) {
+func (m *budgetMock) CompleteStream(ctx context.Context, r *llm.CompletionRequest) (<-chan *llm.StreamChunk, error) {
 	m.requests = append(m.requests, r)
-	return &llm.CompletionResponse{Usage: &interfaces.TokenUsage{PromptTokens: 8, CompletionTokens: 2, TotalTokens: 10}}, nil
+	ch := make(chan *llm.StreamChunk, 1)
+	ch <- &llm.StreamChunk{Done: true, FinishReason: "stop", Usage: &llm.Usage{PromptTokens: 8, CompletionTokens: 2, TotalTokens: 10}}
+	close(ch)
+	return ch, nil
 }
+func (m *budgetMock) Provider() constants.Provider { return constants.ProviderCustom }
+
 func TestBudgetStopsCallsAndMeasuresActualUsage(t *testing.T) {
 	m := &budgetMock{}
 	c := &BudgetClient{Client: m, Budget: Budget{Model: "same-model", MaxCalls: 2, MaxOutputTokens: 50, ObservedTokens: 10}}
-	_, err := c.Chat(context.Background(), nil)
+	_, err := llm.Chat(context.Background(), c, nil)
 	require.NoError(t, err)
-	_, err = c.Chat(context.Background(), nil)
+	_, err = llm.Chat(context.Background(), c, nil)
 	require.ErrorIs(t, err, ErrBudgetExceeded)
 	require.Len(t, m.requests, 1)
 	require.Equal(t, 50, m.requests[0].MaxTokens)

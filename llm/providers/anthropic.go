@@ -267,39 +267,8 @@ func anthropicProviderError(err error) *agentllm.ProviderError {
 	return e
 }
 
-// Complete implements basic text completion.
-func (p *AnthropicProvider) Complete(ctx context.Context, req *agentllm.CompletionRequest) (*agentllm.CompletionResponse, error) {
-	params, err := p.params(req, nil)
-	if err != nil {
-		return nil, err
-	}
-	message, err := p.client.Messages.New(ctx, params)
-	if err != nil {
-		return nil, agentErrors.NewLLMRequestError(p.ProviderName(), params.Model, anthropicProviderError(err))
-	}
-	chunk, err := anthropicResult(message)
-	if err != nil {
-		return nil, err
-	}
-	result := &agentllm.CompletionResponse{Content: chunk.Content, Model: params.Model, ResponseModel: chunk.ResponseModel, Provider: p.ProviderName(), FinishReason: chunk.FinishReason}
-	if chunk.Usage != nil {
-		tokens := chunk.Usage.Tokens()
-		result.Usage, result.TokensUsed = &tokens, chunk.Usage.TotalTokens
-	}
-	return result, nil
-}
-
-// Chat implements chat conversation.
-func (p *AnthropicProvider) Chat(ctx context.Context, messages []agentllm.Message) (*agentllm.CompletionResponse, error) {
-	return p.Complete(ctx, &agentllm.CompletionRequest{Messages: messages})
-}
-
 func (p *AnthropicProvider) CompleteStream(ctx context.Context, req *agentllm.CompletionRequest) (<-chan *agentllm.StreamChunk, error) {
 	return p.stream(ctx, req, nil)
-}
-
-func (p *AnthropicProvider) ChatStream(ctx context.Context, messages []agentllm.Message) (<-chan *agentllm.StreamChunk, error) {
-	return p.CompleteStream(ctx, &agentllm.CompletionRequest{Messages: messages})
 }
 
 func (p *AnthropicProvider) CompleteToolsStream(ctx context.Context, req *agentllm.CompletionRequest, tools []interfaces.Tool) (<-chan *agentllm.StreamChunk, error) {
@@ -387,12 +356,4 @@ func (p *AnthropicProvider) Provider() constants.Provider {
 // ProviderName returns the provider name as a string
 func (p *AnthropicProvider) ProviderName() string {
 	return string(constants.ProviderAnthropic)
-}
-
-// IsAvailable checks if the provider is available.
-func (p *AnthropicProvider) IsAvailable() bool {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	_, err := p.Complete(ctx, &agentllm.CompletionRequest{Messages: []agentllm.Message{{Role: constants.RoleUser, Content: "test"}}})
-	return err == nil
 }

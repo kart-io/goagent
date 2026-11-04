@@ -10,9 +10,7 @@
 flowchart TB
     IN([ExecuteStream ctx, input]) --> BUDGET{validateModelBudget}
     BUDGET -->|预算已耗尽| ERR([返回错误])
-    BUDGET --> SC{客户端实现 llm.StreamClient?}
-    SC -->|否| ERR
-    SC -->|是| TC{配置了工具?}
+    BUDGET --> TC{配置了工具?}
     TC -->|是，且不是 ToolStreamClient| ERR
     TC --> GATE[beginExecution：WithTimeout、budget.Bind、<br/>等待本实例执行权]
     TC -->|否| GATE

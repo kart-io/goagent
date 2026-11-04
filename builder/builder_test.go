@@ -44,10 +44,6 @@ func (m *MockLLMClient) Complete(ctx context.Context, req *llm.CompletionRequest
 	}, nil
 }
 
-func (m *MockLLMClient) Chat(ctx context.Context, messages []llm.Message) (*llm.CompletionResponse, error) {
-	return m.Complete(ctx, &llm.CompletionRequest{Messages: messages})
-}
-
 func (m *MockLLMClient) CompleteStream(ctx context.Context, req *llm.CompletionRequest) (<-chan *llm.StreamChunk, error) {
 	response, err := m.Complete(ctx, req)
 	if err != nil {
@@ -60,16 +56,8 @@ func (m *MockLLMClient) CompleteStream(ctx context.Context, req *llm.CompletionR
 	return stream, nil
 }
 
-func (m *MockLLMClient) ChatStream(ctx context.Context, messages []llm.Message) (<-chan *llm.StreamChunk, error) {
-	return m.CompleteStream(ctx, &llm.CompletionRequest{Messages: messages})
-}
-
 func (m *MockLLMClient) Provider() constants.Provider {
 	return constants.ProviderCustom
-}
-
-func (m *MockLLMClient) IsAvailable() bool {
-	return true
 }
 
 // MockToolLLMClient 在 MockLLMClient 之上提供原生工具流，始终直接回答、不调用工具。

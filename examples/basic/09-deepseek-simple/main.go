@@ -72,7 +72,7 @@ func runProviderExample(apiKey string) {
 	ctx := context.Background()
 	fmt.Println("发送请求到 DeepSeek...")
 
-	response, err := client.Chat(ctx, messages)
+	response, err := llm.Chat(ctx, client, messages)
 	if err != nil {
 		log.Fatalf("对话失败: %v", err)
 	}

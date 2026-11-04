@@ -149,7 +149,7 @@ func testOllamaConnection(client llm.Client) bool {
 	defer cancel()
 
 	// Try a simple request
-	_, err := client.Chat(ctx, []llm.Message{
+	_, err := llm.Chat(ctx, client, []llm.Message{
 		{Role: "user", Content: "test"},
 	})
 

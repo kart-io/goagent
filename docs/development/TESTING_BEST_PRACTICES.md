@@ -22,7 +22,7 @@ bash scripts/provider_regression.sh         # 离线 Provider/Builder 契约与�
 
 | 位置 | 内容 |
 |------|------|
-| `llm.NewMockStreamClient()` | 实现 `llm.StreamClient` 的离线客户端，适合不带工具的 Agent |
+| `llm.NewMockStreamClient()` | 实现 `llm.Client` 的离线客户端，适合不带工具的 Agent |
 | `testing/mocks` | `MockLLMClient`（`SetResponses`、`SetError`、`GetRequestHistory`）、`MockStreamingLLMClient`、`MockState`、`MockStore`、`MockTool` 等 |
 | `testing/testutil` | `TestContext`、断言与等待辅助函数 |
 | `testing/replay` | 把会话日志中的持久运行转为回归测试，按边界选择回放或实跑 |

@@ -1,6 +1,6 @@
 # GoAgent 快速入门
 
-新应用统一使用 `agent.AsRunnable()`。同步和流式调用使用相同执行源，配置的工具、检索器、中间件及完成回调走同一路径。要求 Go 1.25+ 与实现 `llm.StreamClient` 的客户端；目前 OpenAI（含兼容端点）、DeepSeek、Gemini Provider 同时实现流式与原生工具流（`llm.ToolStreamClient`），其他 Provider 只能经旧的同步入口调用。
+新应用统一使用 `agent.AsRunnable()`。同步和流式调用使用相同执行源，配置的工具、检索器、中间件及完成回调走同一路径。要求 Go 1.25+ 与实现 `llm.Client`（`CompleteStream`）的客户端；内置 Provider（OpenAI 及其兼容预设、DeepSeek、Gemini、Anthropic）都同时实现原生工具流（`llm.ToolStreamClient`）。
 
 ```sh
 go get github.com/kart-io/goagent
@@ -88,7 +88,7 @@ if err := ctx.Err(); err != nil { return err }
 | `agent.ExecuteWithTools(ctx, input)`（已删除） | `agent.AsRunnable().Invoke(ctx, input)` | 需要 `llm.ToolStreamClient`，预算包含最终回答 |
 | `agent.ExecuteStream(ctx, input)` | `agent.AsRunnable().Stream(ctx, input)` | 保留同一事件源，增加 Runnable 的组合能力 |
 
-Builder 只接受 `llm.StreamClient`，配置工具时还要求 `llm.ToolStreamClient`，Build 阶段校验。旧 `Execute` 不执行工具，迁移后已配置的工具会被调用，需要确认工具副作用与预算。`Pipe` 等待上游最终结果后再调用下游；复杂分支、并行汇合和有界循环使用 [workflow.Graph](../../workflow/README.md)，通过 Adapt 接入现有 Agent。详细边界见[执行契约](EXECUTION_CONTRACT.md)。
+Builder 接受任意 `llm.Client`，配置工具时还要求 `llm.ToolStreamClient`，Build 阶段校验。旧 `Execute` 不执行工具，迁移后已配置的工具会被调用，需要确认工具副作用与预算。`Pipe` 等待上游最终结果后再调用下游；复杂分支、并行汇合和有界循环使用 [workflow.Graph](../../workflow/README.md)，通过 Adapt 接入现有 Agent。详细边界见[执行契约](EXECUTION_CONTRACT.md)。
 
 ## 迁移检查与持续验证
 
@@ -97,7 +97,7 @@ Builder 只接受 `llm.StreamClient`，配置工具时还要求 `llm.ToolStreamC
 bash scripts/verify_imports.sh
 ```
 
-旧入口与旧接口已经删除，残留调用会直接编译失败。逐项迁移时确认 Provider 的 StreamClient/ToolStreamClient、自动工具执行、预算和回调语义，不要批量替换。
+旧入口与旧接口已经删除，残留调用会直接编译失败。逐项迁移时确认 Provider 的 ToolStreamClient、自动工具执行、预算和回调语义，不要批量替换。
 
 [Provider 持续回归](PROVIDER_REGRESSION.md)提供离线门禁与有界真实测试。退款应用可复用 [refund.Service](../../workflow/refund/README.md)；串行图恢复使用 [CompileDurable](../../workflow/README.md#节点边界的持久化恢复)。
 

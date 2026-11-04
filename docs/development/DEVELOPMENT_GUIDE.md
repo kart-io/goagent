@@ -95,7 +95,7 @@ func weatherDispatcher() (*tools.Dispatcher, error) {
 
 ### 新 LLM Provider
 
-在 `llm/providers` 中实现 `llm.Client`；要用于原生工具循环还须实现 `llm.StreamClient` 与 `llm.ToolStreamClient`（参考 `openai_stream.go`、`deepseek_stream.go`、`gemini_native.go`）。构造函数沿用 `NewXxxWithOptions(opts ...llm.ClientOption)` 并复用 `common.BaseProvider`：
+在 `llm/providers` 中实现 `llm.Client`（`CompleteStream` 与 `Provider`）；要用于原生工具循环还须实现 `llm.ToolStreamClient`（参考 `openai_stream.go`、`deepseek_stream.go`、`gemini_native.go`）。构造函数沿用 `NewXxxWithOptions(opts ...llm.ClientOption)` 并复用 `common.BaseProvider`：
 
 ```go
 // 正式接入时把常量与环境变量名加到 llm/constants。
@@ -118,19 +118,20 @@ func NewMyWithOptions(opts ...llm.ClientOption) (*MyClient, error) {
 	}, nil
 }
 
-func (c *MyClient) Complete(ctx context.Context, req *llm.CompletionRequest) (*llm.CompletionResponse, error) {
+func (c *MyClient) CompleteStream(ctx context.Context, req *llm.CompletionRequest) (<-chan *llm.StreamChunk, error) {
 	// 用 c.NewHTTPClient(...) 发请求，模型、温度等取 c.GetModel(req.Model)、c.GetTemperature(req.Temperature)
-	return &llm.CompletionResponse{Content: "...", Model: c.GetModel(req.Model), Provider: string(ProviderMy)}, nil
-}
-
-func (c *MyClient) Chat(ctx context.Context, messages []llm.Message) (*llm.CompletionResponse, error) {
-	return c.Complete(ctx, &llm.CompletionRequest{Messages: messages})
+	// 只有同步接口时，把完整结果作为一个终止块返回。
+	content := "..."
+	out := make(chan *llm.StreamChunk, 1)
+	out <- &llm.StreamChunk{Delta: content, Content: content, FinishReason: "stop", Done: true}
+	close(out)
+	return out, nil
 }
 
 func (c *MyClient) Provider() constants.Provider { return ProviderMy }
-
-func (c *MyClient) IsAvailable() bool { return c.Config.APIKey != "" }
 ```
+
+调用方用 `llm.Complete(ctx, client, req)` / `llm.Chat(ctx, client, messages)` 获取完整响应。
 
 能力声明与契约测试见 [Provider 能力](../guides/PROVIDER_CAPABILITIES.md) 和 `llm/providers/capability_contract_test.go`。
 

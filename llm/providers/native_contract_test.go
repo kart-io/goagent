@@ -96,7 +96,6 @@ func TestNativeProvidersShareToolCompletionContract(t *testing.T) {
 				}))
 				defer server.Close()
 				client := contractProvider(t, name, server.URL)
-				require.True(t, llm.HasStreaming(client))
 				require.True(t, llm.HasToolStreaming(client))
 				require.NotNil(t, llm.AsToolStreamClient(client))
 				checker := client.(llm.CapabilityChecker)
@@ -146,7 +145,7 @@ func TestNativeProvidersCancelStructuredStream(t *testing.T) {
 			defer server.Close()
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			defer cancel()
-			stream, err := contractProvider(t, name, server.URL).ChatStream(ctx, []llm.Message{llm.UserMessage("question")})
+			stream, err := contractProvider(t, name, server.URL).CompleteStream(ctx, &llm.CompletionRequest{Messages: []llm.Message{llm.UserMessage("question")}})
 			require.NoError(t, err)
 			select {
 			case chunk := <-stream:

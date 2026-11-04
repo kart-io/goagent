@@ -49,18 +49,14 @@ func TestDurableTextOnlyReplaysWithoutModelRequest(t *testing.T) {
 	require.Equal(t, 11, second.TokenUsage.TotalTokens)
 }
 
-// Builder 只接受流式客户端；配置工具时还要求原生工具流，在构建期拒绝而不是执行时才失败。
+// 配置工具时要求原生工具流，在构建期拒绝而不是执行时才失败。
 func TestBuildRejectsClientsWithoutRequiredStreaming(t *testing.T) {
-	_, err := NewSimpleBuilder(syncOnlyClient{}).Build()
-	require.ErrorContains(t, err, "llm.StreamClient")
 	model := &eventModel{MockLLMClient: NewMockLLMClient()}
-	_, err = NewSimpleBuilder(model).WithTools(NewMockTool("lookup", "value")).Build()
+	_, err := NewSimpleBuilder(model).WithTools(NewMockTool("lookup", "value")).Build()
 	require.ErrorContains(t, err, "llm.ToolStreamClient")
 	_, err = NewSimpleBuilder(model).WithInputSerializer(nil).Build()
 	require.ErrorContains(t, err, "input serializer")
 }
-
-type syncOnlyClient struct{ llm.Client }
 
 func TestDurableScopesIsolateAgentResultsToolsAndRecovery(t *testing.T) {
 	ctx := context.Background()

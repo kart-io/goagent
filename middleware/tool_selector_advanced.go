@@ -116,7 +116,7 @@ func (m *LLMToolSelectorMiddleware) selectTools(ctx context.Context, query strin
 	`, query, toolDescriptions, m.MaxTools)
 
 	// Call LLM
-	response, err := m.Model.Complete(ctx, &llm.CompletionRequest{
+	response, err := llm.Complete(ctx, m.Model, &llm.CompletionRequest{
 		Messages: []llm.Message{
 			llm.SystemMessage("You are an expert at selecting the most relevant tools for a given task."),
 			llm.UserMessage(prompt),
@@ -414,7 +414,7 @@ func (m *LLMToolEmulatorMiddleware) emulateTool(ctx context.Context, toolName st
 		Output:
 	`, toolName, input)
 
-	response, err := m.Model.Complete(ctx, &llm.CompletionRequest{
+	response, err := llm.Complete(ctx, m.Model, &llm.CompletionRequest{
 		Messages: []llm.Message{
 			llm.SystemMessage("You are emulating tool execution for testing purposes."),
 			llm.UserMessage(prompt),

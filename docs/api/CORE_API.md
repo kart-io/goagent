@@ -64,7 +64,7 @@ agent, err := builder.NewSimpleBuilder(client).
 
 | 方法 | 说明 |
 |---|---|
-| `AsRunnable() *core.StreamRunnable[any, *AgentOutput]` | 推荐入口；`Invoke` / `Stream` / `Batch` 共享执行源，要求 `llm.StreamClient` |
+| `AsRunnable() *core.StreamRunnable[any, *AgentOutput]` | 推荐入口；`Invoke` / `Stream` / `Batch` 共享执行源，接受任意 `llm.Client` |
 | `ExecuteStream(ctx, input) (<-chan AgentEvent, error)` | 事件流；只有 `done` 事件的 `Output` 是最终结果 |
 | `Start(ctx, input string) *Handle` | 后台运行；`Handle` 提供 `Steer`、`Inject`、`Redirect`、`Followup`、`Interrupt`、`Wait`，只支持原生工具流 |
 | `Initialize`、`Shutdown`、`GetState`、`GetMetrics` | 生命周期与诊断 |

@@ -39,7 +39,7 @@ if err != nil {
     return err
 }
 
-resp, err := client.Chat(ctx, []llm.Message{
+resp, err := llm.Chat(ctx, client, []llm.Message{
     llm.SystemMessage("你是一个有帮助的助手。"),
     llm.UserMessage("你好！"),
 })
@@ -53,20 +53,18 @@ if resp.Usage != nil {
 }
 ```
 
-`CompletionRequest` 的 `Temperature`、`MaxTokens`、`TopP`、`Model` 为零值时使用客户端配置。
+`llm.Chat` / `llm.Complete` 收集 `CompleteStream` 的流，只有成功终止块才返回响应。`CompletionRequest` 的 `Temperature`、`MaxTokens`、`TopP`、`Model` 为零值时使用客户端配置。
 
 ## 流式对话
 
-只有实现 `llm.StreamClient` 的客户端（OpenAI、DeepSeek、Gemini）支持结构化流：
+所有 `llm.Client` 都通过 `CompleteStream` 提供结构化流：
 
 ```go
-sc := llm.AsStreamClient(client)
-if sc == nil {
-    return fmt.Errorf("%s 不支持结构化流", client.Provider())
-}
 ctx, cancel := context.WithCancel(ctx)
 defer cancel() // 提前退出时释放连接
-stream, err := sc.ChatStream(ctx, []llm.Message{llm.UserMessage("请写一首诗。")})
+stream, err := client.CompleteStream(ctx, &llm.CompletionRequest{
+    Messages: []llm.Message{llm.UserMessage("请写一首诗。")},
+})
 if err != nil {
     return err
 }
@@ -103,21 +101,17 @@ client, err := createClient(os.Getenv("LLM_PROVIDER"))
 if err != nil {
     return err
 }
-// 使用统一执行入口前验证具体 Provider 的结构化流能力。
-if !llm.HasStreaming(client) {
-    return fmt.Errorf("该 Provider 未实现结构化流")
-}
 agent, err := builder.NewSimpleBuilder(client).BuildContext(ctx)
 ```
 
-上例中 API Key 从各自的环境变量读取。`AsRunnable` 与原生工具循环要求客户端实现 `StreamClient` / `ToolStreamClient`，选择提供商时先查 [能力矩阵](PROVIDER_CAPABILITIES.md)。
+上例中 API Key 从各自的环境变量读取。原生工具循环要求客户端实现 `ToolStreamClient`，选择提供商时先查 [能力矩阵](PROVIDER_CAPABILITIES.md)。
 
 ## 错误处理与重试
 
 用 `llm.ClassifyError` 判断失败类型，不要匹配错误文本：
 
 ```go
-resp, err := client.Chat(ctx, messages)
+resp, err := llm.Chat(ctx, client, messages)
 if err != nil {
     switch c := llm.ClassifyError(err); {
     case c.ShouldCompress:
@@ -139,7 +133,7 @@ if err != nil {
 ```go
 ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 defer cancel()
-resp, err := client.Chat(ctx, messages)
+resp, err := llm.Chat(ctx, client, messages)
 ```
 
 ## 相关文档

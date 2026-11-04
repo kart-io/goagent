@@ -36,8 +36,8 @@ output, err := agent.AsRunnable().Invoke(ctx, "分析这些数据……")
 
 | 入口 | 客户端要求 | 行为 |
 |---|---|---|
-| `AsRunnable().Invoke/Stream/Batch/Pipe` | `llm.StreamClient` | 推荐入口；配置了工具且实现 `llm.ToolStreamClient` 时走原生工具循环 |
-| `ExecuteStream` | `llm.StreamClient` | 同一事件源的通道形式（`sources`、`step`、`text`、`usage`、`error`、`done`） |
+| `AsRunnable().Invoke/Stream/Batch/Pipe` | `llm.Client` | 推荐入口；配置了工具且实现 `llm.ToolStreamClient` 时走原生工具循环 |
+| `ExecuteStream` | `llm.Client` | 同一事件源的通道形式（`sources`、`step`、`text`、`usage`、`error`、`done`） |
 | `Start` | `llm.ToolStreamClient` 且配置了工具 | 后台运行，返回 `*Handle` |
 
 所有入口按会话串行执行，排队等待计入 Timeout；跨会话并发应创建独立 Agent。

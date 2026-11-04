@@ -168,72 +168,6 @@ func (responseHeaderTimeoutError) Error() string   { return "等待响应头超�
 func (responseHeaderTimeoutError) Timeout() bool   { return true }
 func (responseHeaderTimeoutError) Temporary() bool { return true }
 
-// Complete implements basic text completion
-// 优化：使用 sync.Pool 复用消息切片以减少内存分配
-func (p *OpenAIProvider) Complete(ctx context.Context, req *agentllm.CompletionRequest) (*agentllm.CompletionResponse, error) {
-	effort, reasoningErr := p.reasoningEffort(req)
-	if reasoningErr != nil {
-		return nil, reasoningErr
-	}
-
-	// Convert messages
-	var messages []openai.ChatCompletionMessage
-	if p.Config.SystemPrompt != "" {
-		messages = append(messages, openai.ChatCompletionMessage{
-			Role:    openai.ChatMessageRoleSystem,
-			Content: p.Config.SystemPrompt,
-		})
-	}
-
-	for _, msg := range req.Messages {
-		messages = append(messages, openai.ChatCompletionMessage{
-			Role:    msg.Role,
-			Content: msg.Content,
-			Name:    msg.Name,
-		})
-	}
-
-	// 使用 common.BaseProvider 的统一参数处理方法
-	model := p.GetModel(req.Model)
-	maxTokens := p.GetMaxTokens(req.MaxTokens)
-	temperature := p.ResolveTemperature(req)
-	ctx = withOpenAITemperature(ctx, temperature)
-
-	ctx, retryAfter := withRetryAfterSlot(ctx)
-	resp, err := p.client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{ReasoningEffort: effort,
-		Model:       model,
-		Messages:    messages,
-		MaxTokens:   maxTokens,
-		Temperature: float32(temperature),
-		Stop:        req.Stop,
-		TopP:        float32(req.TopP),
-	})
-	if err != nil {
-		return nil, agentErrors.NewLLMRequestError(p.ProviderName(), model, openAIProviderError(err, *retryAfter))
-	}
-
-	if len(resp.Choices) == 0 {
-		return nil, agentErrors.NewLLMResponseError(p.ProviderName(), model, "no choices in response")
-	}
-
-	return &agentllm.CompletionResponse{
-		Content:       resp.Choices[0].Message.Content,
-		Model:         resp.Model,
-		ResponseModel: resp.Model,
-		TokensUsed:    resp.Usage.TotalTokens,
-		FinishReason:  string(resp.Choices[0].FinishReason),
-		Provider:      p.ProviderName(),
-		Usage:         tokenValue(openAIUsage(&resp.Usage)),
-	}, nil
-}
-
-// Chat implements chat conversation
-func (p *OpenAIProvider) Chat(ctx context.Context, messages []agentllm.Message) (*agentllm.CompletionResponse, error) {
-	return p.Complete(ctx, &agentllm.CompletionRequest{
-		Messages: messages,
-	})
-}
-
 // convertTools 复用现有 JSON Schema 转换，并采用现代工具协议。
 func (p *OpenAIProvider) convertTools(tools []interfaces.Tool) []openai.Tool {
 	functions := p.convertToolsToFunctions(tools)
@@ -277,26 +211,6 @@ func (p *OpenAIProvider) Embed(ctx context.Context, text string) ([]float64, err
 // Provider returns the provider type
 func (p *OpenAIProvider) Provider() constants.Provider {
 	return p.Config.Provider
-}
-
-// IsAvailable checks if the provider is available
-func (p *OpenAIProvider) IsAvailable() bool {
-	// NOTE: Using background context with timeout for availability check is acceptable
-	// as this is a non-critical health check operation that should be independent
-	// of any specific request context
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	// Try a simple completion to check availability
-	_, err := p.client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
-		Model: openai.GPT3Dot5Turbo,
-		Messages: []openai.ChatCompletionMessage{
-			{Role: openai.ChatMessageRoleUser, Content: "test"},
-		},
-		MaxTokens: 1,
-	})
-
-	return err == nil
 }
 
 // ModelName returns the model name

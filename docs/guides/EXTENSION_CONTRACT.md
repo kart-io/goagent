@@ -1,6 +1,6 @@
 # 执行入口与扩展契约
 
-推荐通过 `agent.AsRunnable().Invoke/Stream` 接入。`ExecuteStream` 与它共享执行源；Builder 要求 `llm.StreamClient`，配置工具时需要 `llm.ToolStreamClient`。
+推荐通过 `agent.AsRunnable().Invoke/Stream` 接入。`ExecuteStream` 与它共享执行源；Builder 接受任意 `llm.Client`，配置工具时需要 `llm.ToolStreamClient`。
 
 ## 扩展点
 

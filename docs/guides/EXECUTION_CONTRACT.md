@@ -17,7 +17,7 @@ output, err := runnable.Invoke(ctx, "退款政策是什么？")
 // output 是经过检索、工具执行、中间件和完成回调后的 *builder.AgentOutput。
 ```
 
-`Invoke` 和 `Stream` 共用 `ExecuteStream` 执行源；Invoke 只收集最终输出，**不会再额外调用一次同步模型**。Builder 只接受实现 `llm.StreamClient` 的模型，配置工具时还要求 `llm.ToolStreamClient`，不满足时 Build 直接报错。
+`Invoke` 和 `Stream` 共用 `ExecuteStream` 执行源；Invoke 只收集最终输出，**不会再额外调用一次同步模型**。Builder 接受任意 `llm.Client`（它只有流式接口），配置工具时还要求 `llm.ToolStreamClient`，不满足时 Build 直接报错。
 
 以下对照用于选择入口；旧 API 示例不代表新能力在旧路径也生效。
 
@@ -26,7 +26,7 @@ output, err := runnable.Invoke(ctx, "退款政策是什么？")
 | `AsRunnable().Invoke/Stream` | 自动执行已配置工具；原生 `ToolStreamClient` 路径支持 `WithOffload` 和 ReturnDirect | 所有入口共享串行执行门 | 新业务与 Runnable 编排的推荐入口 |
 | `ExecuteStream` | 与 AsRunnable 共用执行源及能力 | 获取同一串行执行门 | 直接消费 Builder 事件 |
 
-仅实现 `StreamClient` 不等于支持原生工具流。配置 `WithOffload` 或 ReturnDirect 时还须满足 `ToolStreamClient` 等构建校验；不同 Provider 的能力不能由方法名称推断。
+仅实现 `llm.Client` 不等于支持原生工具流。配置 `WithOffload` 或 ReturnDirect 时还须满足 `ToolStreamClient` 等构建校验；不同 Provider 的能力不能由方法名称推断。
 
 ```go
 ctx, cancel := context.WithCancel(ctx)
@@ -88,7 +88,7 @@ OpenAI、DeepSeek 与 Gemini Provider 实现可选 `llm.ToolStreamClient`：模�
 
 OpenAI 和 DeepSeek 专用 Provider 共用原生 SSE 解码与完成状态检查。DeepSeek 可直接通过 `providers.NewDeepSeekWithOptions` 接入，无需借用 OpenAI 构造器；新流式路径不执行隐式重试。其他 Provider 若未实现 ToolStreamClient，仍保留已有兼容能力，不因为声明 streaming 就假定支持原生工具循环。
 
-运行时用 `llm.HasStreaming(client)` / `llm.HasToolStreaming(client)` 检查实际接口。声明中的 `structured_streaming` 与 `tool_streaming` 分别对应 StreamClient 和 ToolStreamClient；旧的 `streaming` 也可能仅表示字符串流。接口可用不保证所选模型或自定义端点支持相同协议，仍需业务端点测试。
+运行时用 `llm.HasToolStreaming(client)` 检查实际接口。声明中的 `structured_streaming` 与 `tool_streaming` 分别对应 `llm.Client` 的 `CompleteStream` 和 ToolStreamClient；旧的 `streaming` 也可能仅表示字符串流。接口可用不保证所选模型或自定义端点支持相同协议，仍需业务端点测试。
 
 ## 流式能力声明
 

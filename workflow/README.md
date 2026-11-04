@@ -169,4 +169,4 @@ go test -race ./workflow -run DurableGraph
 
 持久图的 `AsRunnable().Stream` 同样保留 `AdaptStream` 的类型化预览：中间块 `Data.Preview=true`，预览值在 `Data.State`。即使没有 Event 或数据为零值也不丢弃。预览不写入检查点；失败或取消后 `Snapshot` 仍返回上次提交状态，Preview=false。最终成功块也为 Preview=false，业务完成须继续检查 Data.Done。
 
-持久化入口现支持无工具 StreamClient 的模型日志与恢复。旧无作用域模型日志不会自动迁移为新键；补充 scope、核对已有业务效果并提升 Version，详见[接入约束](../docs/guides/NATIVE_ORCHESTRATION.md#多-agent-作用域与入口约束)。
+持久化入口现支持无工具 `llm.Client` 的模型日志与恢复。旧无作用域模型日志不会自动迁移为新键；补充 scope、核对已有业务效果并提升 Version，详见[接入约束](../docs/guides/NATIVE_ORCHESTRATION.md#多-agent-作用域与入口约束)。
