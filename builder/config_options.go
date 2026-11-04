@@ -236,7 +236,7 @@ func (b *AgentBuilder[C, S]) WithTimeout(timeout time.Duration) *AgentBuilder[C,
 
 // WithAutoSaveEnabled 设置是否启用自动保存
 //
-// [Advanced] 高级配置，控制是否自动保存 Agent 状态（默认 true）。
+// [Advanced] 高级配置，控制是否自动保存 Agent 状态（默认 true）；仅在配置 WithCheckpointer 时生效。
 func (b *AgentBuilder[C, S]) WithAutoSaveEnabled(enabled bool) *AgentBuilder[C, S] {
 	b.config.EnableAutoSave = enabled
 	return b

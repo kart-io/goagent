@@ -342,7 +342,8 @@ func TestAgentBuilder_BuildWithDefaults(t *testing.T) {
 	// Check defaults were set
 	assert.NotNil(t, agent.runtime.State)
 	assert.NotNil(t, agent.runtime.Store)
-	assert.NotNil(t, agent.runtime.Checkpointer)
+	// 未配置时不创建检查点器，避免每轮无意义地快照状态
+	assert.Nil(t, agent.runtime.Checkpointer)
 }
 
 func TestAgentBuilder_BuildWithoutLLMClient(t *testing.T) {

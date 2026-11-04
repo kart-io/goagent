@@ -42,6 +42,37 @@ func (c *failingCheckpoint) Load(context.Context, string) (core.State, error) {
 
 type otherState struct{ *core.AgentState }
 
+type saveFailCheckpoint struct {
+	checkpoint.Checkpointer
+	err error
+}
+
+func (c *saveFailCheckpoint) Exists(context.Context, string) (bool, error)   { return false, nil }
+func (c *saveFailCheckpoint) Save(context.Context, string, core.State) error { return c.err }
+
+// 同步与流式入口在自动保存失败时都必须返回错误，不能只写 stderr 后报告成功。
+func TestCheckpointSaveFailureAcrossEntries(t *testing.T) {
+	for _, entry := range []string{"execute", "runnable"} {
+		t.Run(entry, func(t *testing.T) {
+			sentinel := errors.New("checkpoint storage unavailable")
+			var client llm.Client = NewMockLLMClient("answer")
+			if entry == "runnable" {
+				client = &eventModel{MockLLMClient: NewMockLLMClient(), chunks: []*llm.StreamChunk{{Delta: "answer"}, {Done: true, FinishReason: "stop"}}}
+			}
+			a, err := NewSimpleBuilder(client).WithCheckpointer(&saveFailCheckpoint{err: sentinel}).Build()
+			require.NoError(t, err)
+			var output *AgentOutput
+			if entry == "execute" {
+				output, err = a.Execute(context.Background(), "input")
+			} else {
+				output, err = a.AsRunnable().Invoke(context.Background(), "input")
+			}
+			require.ErrorIs(t, err, sentinel)
+			require.Nil(t, output)
+		})
+	}
+}
+
 func TestInitializeRejectsCheckpointFailureWithoutMutation(t *testing.T) {
 	sentinel := errors.New("storage unavailable")
 	for _, tc := range []struct {

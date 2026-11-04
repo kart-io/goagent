@@ -160,10 +160,6 @@ func (b *AgentBuilder[C, S]) BuildContext(ctx context.Context) (*ConfigurableAge
 		b.store = memory.New()
 	}
 
-	if b.checkpointer == nil {
-		b.checkpointer = checkpoint.NewInMemorySaver()
-	}
-
 	// 创建运行时
 	runtime := execution.NewRuntime(
 		b.context,
@@ -338,9 +334,7 @@ func (b *AgentBuilder[C, S]) createHandler(runtime *execution.Runtime[C, S]) mid
 		// 如果启用自动保存则保存检查点
 		if b.config.EnableAutoSave && runtime.Checkpointer != nil {
 			if err := runtime.SaveState(ctx); err != nil {
-				// 记录错误但不失败请求
-				// 状态保存很重要但对响应不是关键的
-				fmt.Fprintf(os.Stderr, "Failed to auto-save state: %v\n", err)
+				return nil, fmt.Errorf("checkpoint save: %w", err)
 			}
 		}
 

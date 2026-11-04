@@ -11,7 +11,7 @@
 | `Build() (*ConfigurableAgent[C, S], error)` | 等价于 `BuildContext(context.Background())` |
 | `BuildContext(ctx) (*ConfigurableAgent[C, S], error)` | 把宿主上下文传给检查点初始化与回调，拒绝 nil 或已取消的上下文，见[宿主接入](HOST_INTEGRATION.md) |
 
-未设置存储与检查点时，Build 使用内存存储与 `checkpoint.NewInMemorySaver()`。
+未设置存储时，Build 使用内存存储；未设置检查点器时不加载也不保存状态。
 
 ## 基础配置
 
@@ -98,7 +98,7 @@ return builder.NewSimpleBuilder(client).
 | `WithSessionID(string)` | `session-<纳秒时间戳>` | 会话 ID，用于检查点与记忆 |
 | `WithStore(store.Store)` | 内存存储 | 长期键值存储 |
 | `WithCheckpointer(checkpoint.Checkpointer)` | `InMemorySaver` | 会话检查点 |
-| `WithAutoSaveEnabled(bool)` | true | 执行后保存检查点 |
+| `WithAutoSaveEnabled(bool)` | true | 执行后保存检查点；仅在配置 `WithCheckpointer` 时生效，保存失败时本次执行返回错误 |
 | `WithState(S)` | `core.NewAgentState()` | 初始状态 |
 | `WithContext(C)` | 零值 | 应用上下文 |
 

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `core/checkpoint`：`InMemorySaver.Save` 保存的是调用方对象的引用。Builder 每轮传入同一个运行时状态，之后的修改会改写已保存的检查点，历史中各版本也都指向同一对象。现在保存时复制一份。
+
+### Changed
+
+- **破坏性**：`builder` 未配置 `WithCheckpointer` 时不再创建 `checkpoint.NewInMemorySaver()`。该实例为每个 Agent 私有，`Initialize` 时必然为空，却在每轮自动保存时快照全部状态并无上限地追加历史。依赖默认检查点器的代码改为显式 `WithCheckpointer(checkpoint.NewInMemorySaver())`；`runtime.State` 本身在进程内跨轮保留，不受影响。
+- **破坏性**：同步 `Execute` 路径自动保存检查点失败时返回错误，与流式入口一致；原先只向标准错误输出一行并报告成功。
+
 ## [0.42.1] - 2026-11-04
 
 ### Fixed
