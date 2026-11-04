@@ -40,10 +40,28 @@ func openAIProviderError(err error, retryAfter time.Duration) *agentllm.Provider
 	var reqErr *openai.RequestError
 	if errors.As(err, &apiErr) {
 		e.StatusCode = apiErr.HTTPStatusCode
+		e.QuotaExhausted = quotaExhausted(apiErr)
 	} else if errors.As(err, &reqErr) {
 		e.StatusCode = reqErr.HTTPStatusCode
 	}
 	return e
+}
+
+// quotaMarkers 是 OpenAI 兼容服务表示额度耗尽的错误消息片段：MiniMax 的套餐用量上限（错误码 2056）。
+var quotaMarkers = []string{"用量上限", "(2056)"}
+
+// quotaExhausted 识别 OpenAI 兼容服务的额度耗尽。OpenAI 以 insufficient_quota 标在 code 或 type 上；
+// 消息里的 "exceeded your current quota" 不能作依据，Gemini 的按分钟限流也这样写。
+func quotaExhausted(e *openai.APIError) bool {
+	if code, _ := e.Code.(string); code == "insufficient_quota" || e.Type == "insufficient_quota" {
+		return true
+	}
+	for _, m := range quotaMarkers {
+		if strings.Contains(e.Message, m) {
+			return true
+		}
+	}
+	return false
 }
 
 func geminiProviderError(err error) *agentllm.ProviderError {

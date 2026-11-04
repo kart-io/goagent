@@ -17,16 +17,21 @@ type ProviderError struct {
 	StatusCode int
 	// RetryAfter 是服务端建议的等待时长，0 表示未给出。
 	RetryAfter time.Duration
-	Err        error
+	// QuotaExhausted 表示账户额度或套餐用量已耗尽（如 OpenAI 的 insufficient_quota）。服务端常以 429 返回，
+	// 但须充值或等额度恢复，短时间内重试不会成功。
+	QuotaExhausted bool
+	Err            error
 }
 
 func (e *ProviderError) Error() string { return e.Err.Error() }
 func (e *ProviderError) Unwrap() error { return e.Err }
 
 // Retryable 报告失败是否可能因重试而消失：429、5xx，以及暂时性的连接错误（网络超时、连接被拒绝或重置、
-// 连接意外关闭、DNS 暂时失败）。其他 4xx、取消与上下文超时、证书与 TLS 错误、域名不存在、协议或解码错误都不可重试。
+// 连接意外关闭、DNS 暂时失败）。额度耗尽、其他 4xx、取消与上下文超时、证书与 TLS 错误、域名不存在、协议或解码错误都不可重试。
 func (e *ProviderError) Retryable() bool {
 	switch {
+	case e.QuotaExhausted:
+		return false
 	case e.StatusCode == 429 || (e.StatusCode >= 500 && e.StatusCode <= 599):
 		return true
 	case e.StatusCode != 0 || errors.Is(e.Err, context.Canceled) || errors.Is(e.Err, context.DeadlineExceeded):
@@ -54,6 +59,7 @@ type ErrorReason string
 
 const (
 	ReasonRateLimit     ErrorReason = "rate_limit"
+	ReasonQuota         ErrorReason = "quota"
 	ReasonServer        ErrorReason = "server"
 	ReasonNetwork       ErrorReason = "network"
 	ReasonContextLength ErrorReason = "context_length"
@@ -71,7 +77,7 @@ type ClassifiedError struct {
 	Retryable bool
 	// ShouldCompress 表示请求超出上下文窗口，缩短消息后重试可能成功。
 	ShouldCompress bool
-	// ShouldFallback 表示换一个模型或提供方可能成功（限流、服务端错误、鉴权失败、模型不存在）。
+	// ShouldFallback 表示换一个模型或提供方可能成功（限流、额度耗尽、服务端错误、鉴权失败、模型不存在）。
 	ShouldFallback bool
 }
 
@@ -101,6 +107,8 @@ func ClassifyError(err error) ClassifiedError {
 	}
 	c := ClassifiedError{Retryable: pe.Retryable()}
 	switch {
+	case pe.QuotaExhausted:
+		c.Reason, c.ShouldFallback = ReasonQuota, true
 	case pe.StatusCode == 429:
 		c.Reason, c.ShouldFallback = ReasonRateLimit, true
 	case pe.StatusCode >= 500 && pe.StatusCode <= 599:
