@@ -165,3 +165,42 @@ func TestDoDoesNotDetectResumableChange(t *testing.T) {
 	require.True(t, record.Replayed)
 	require.Equal(t, 1, calls)
 }
+
+func TestAwaitInputValidatePanicStaysWaiting(t *testing.T) {
+	ctx := interruptContext(t)
+	validate := func(raw json.RawMessage) error {
+		if string(raw) == "null" {
+			panic("validate 未处理 null")
+		}
+		return positive(raw)
+	}
+	_, err := AwaitInput(WithResume(ctx, interruptKey("amount"), `null`), "amount", amountInfo, validate)
+	c := requireInterruptWait(t, err)
+	require.True(t, c.Rejected)
+	require.Equal(t, ReasonValidatePanic, c.Reason)
+
+	got, err := AwaitInput(WithResume(ctx, interruptKey("amount"), `4`), "amount", amountInfo, validate)
+	require.NoError(t, err)
+	require.JSONEq(t, `4`, string(got))
+}
+
+func TestAwaitInputEmptyValidateErrorIsRejection(t *testing.T) {
+	ctx := interruptContext(t)
+	validate := func(json.RawMessage) error { return errors.New("") }
+	_, err := AwaitInput(WithResume(ctx, interruptKey("amount"), `1`), "amount", amountInfo, validate)
+	c := requireInterruptWait(t, err)
+	require.True(t, c.Rejected)
+	require.Equal(t, ReasonRejected, c.Reason)
+}
+
+func TestAwaitInputAcceptsAfterManyRejections(t *testing.T) {
+	ctx := interruptContext(t)
+	for i := 0; i < interruptAttempts+2; i++ {
+		_, err := AwaitInput(WithResume(ctx, interruptKey("amount"), `-1`), "amount", amountInfo, positive)
+		c := requireInterruptWait(t, err)
+		require.True(t, c.Rejected, "第 %d 次", i)
+	}
+	got, err := AwaitInput(WithResume(ctx, interruptKey("amount"), `7`), "amount", amountInfo, positive)
+	require.NoError(t, err)
+	require.JSONEq(t, `7`, string(got))
+}

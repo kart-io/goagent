@@ -14,6 +14,12 @@ const ContinuationKindInterrupt = "interrupt"
 // ReasonInvalidJSON 是输入不是合法 JSON 时的拒绝原因。
 const ReasonInvalidJSON = "invalid_json"
 
+// ReasonValidatePanic 是 validate 发生 panic 时的拒绝原因。
+const ReasonValidatePanic = "validate_panic"
+
+// ReasonRejected 是 validate 返回空错误文本时的拒绝原因。
+const ReasonRejected = "rejected"
+
 const (
 	interruptPrefix = "interrupt/"
 	// interruptAttempts 允许在写 pending 与写 waiting 之间崩溃后重入；中断本身没有副作用。
@@ -50,7 +56,8 @@ func interruptHost(ctx context.Context) bool {
 // AwaitInput 在当前持久操作中暂停，等待宿主回应。首次成功持久化的输入就此固定，之后的重放都返回它；
 // 这不保证调用前的业务副作用只执行一次。id 在同一父执行键下必须唯一，循环中须带序号。
 // 输入不是合法 JSON 或 validate 失败时保持等待，并在 Continuation 中标记 Rejected。
-// JSON null 是合法的显式输入；需要非空输入时由 validate 拒绝。
+// JSON null 是合法的显式输入；需要非空输入时由 validate 拒绝。validate 的 panic 按拒绝处理（原因 validate_panic）。
+// validate 的错误文本会持久化并经 Snapshot 与 ResumeRejectedError 暴露，不得包含凭证等敏感信息。
 func AwaitInput(ctx context.Context, id string, info json.RawMessage, validate func(json.RawMessage) error) (json.RawMessage, error) {
 	if id == "" || !json.Valid(info) {
 		return nil, fmt.Errorf("中断需要 ID 与 JSON 格式的 info")
@@ -63,8 +70,8 @@ func AwaitInput(ctx context.Context, id string, info json.RawMessage, validate f
 	}
 	policy := OperationPolicy{Resumable: true, MaxAttempts: interruptAttempts}
 	record, err := Do(ctx, interruptPrefix+id, info, policy, func(ctx context.Context) (json.RawMessage, error) {
-		wait := func(reason string) error {
-			data, e := json.Marshal(InterruptContinuation{Kind: ContinuationKindInterrupt, ID: id, Info: info, Rejected: reason != "", Reason: reason})
+		wait := func(rejected bool, reason string) error {
+			data, e := json.Marshal(InterruptContinuation{Kind: ContinuationKindInterrupt, ID: id, Info: info, Rejected: rejected, Reason: reason})
 			if e != nil {
 				return e
 			}
@@ -72,15 +79,15 @@ func AwaitInput(ctx context.Context, id string, info json.RawMessage, validate f
 		}
 		raw, ok := ResumeInput(ctx)
 		if !ok {
-			return nil, wait("")
+			return nil, wait(false, "")
 		}
 		input := json.RawMessage(raw)
 		if !json.Valid(input) {
-			return nil, wait(ReasonInvalidJSON)
+			return nil, wait(true, ReasonInvalidJSON)
 		}
 		if validate != nil {
-			if e := validate(input); e != nil {
-				return nil, wait(rejectReason(e))
+			if reason, rejected := checkInput(validate, input); rejected {
+				return nil, wait(true, reason)
 			}
 		}
 		return append(json.RawMessage(nil), input...), nil
@@ -91,9 +98,25 @@ func AwaitInput(ctx context.Context, id string, info json.RawMessage, validate f
 	return record.Value, nil
 }
 
-// rejectReason 截断校验错误；validate 由宿主提供，不含第三方错误原文。
+// checkInput 调用 validate；panic 也算拒绝，否则 Do 会把中断记成失败，再也无法恢复。
+func checkInput(validate func(json.RawMessage) error, input json.RawMessage) (reason string, rejected bool) {
+	defer func() {
+		if recover() != nil {
+			reason, rejected = ReasonValidatePanic, true
+		}
+	}()
+	if err := validate(input); err != nil {
+		return rejectReason(err), true
+	}
+	return "", false
+}
+
+// rejectReason 截断校验错误文本；它会被持久化并对外暴露，内容由 validate 的实现者负责。
 func rejectReason(err error) string {
 	r := []rune(err.Error())
+	if len(r) == 0 {
+		return ReasonRejected
+	}
 	if len(r) > maxReasonRunes {
 		r = r[:maxReasonRunes]
 	}
