@@ -115,6 +115,8 @@ type WaitStep struct {
 type WaitError struct {
 	Path         []WaitStep      `json:"path,omitempty"`
 	Continuation json.RawMessage `json:"continuation,omitempty"`
+	// Cause 是本次等待的进程内诊断，如 validate 的 panic；不持久化，也不经 Unwrap 暴露，以免等待被当作失败。
+	Cause error `json:"-"`
 }
 
 func (e *WaitError) Error() string {
@@ -326,6 +328,12 @@ func Do(ctx context.Context, id string, input json.RawMessage, policy OperationP
 			callErr = errors.Join(callErr, err)
 		} else {
 			callErr = storedWaits(record)
+			// Cause 不持久化，重建的等待与 waits 同序，从本次执行带回。
+			for i, w := range Waits(callErr) {
+				if i < len(waits) {
+					w.Cause = waits[i].Cause
+				}
+			}
 		}
 	} else if callErr != nil {
 		record.Status, record.FailureKind = "failed", "execution"

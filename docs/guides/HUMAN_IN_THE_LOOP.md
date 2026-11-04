@@ -84,11 +84,11 @@ if err != nil {
 ```
 
 - 图暂停时 `Run` 返回 `durable.ErrApprovalRequired`，`Snapshot.Interrupts` 列出 `Key`、`ID`、`Info`。用 `graph.Resume(ctx, runID, workflow.ResumeRequest{Key: point.Key, Input: ...})` 回应；也可以用 `durable.WithResume(ctx, point.Key, input)` 加上不带键的 `Run`。
-- 中断等待时 `Snapshot.Key` 与 `ChildContinuation.ApprovalKey` 不是回应键（前者是节点意图键，后者为空），回应须用 `Interrupts[i].Key`。
+- 中断等待时 `Snapshot.Key` 与 `ChildContinuation.ApprovalKey` 不是回应键（前者是节点意图键，后者为空），回应须用 `Interrupts[i].Key`。把意图键连同输入经 `workflow.WithResume` 交给子图时，输入不被采纳，返回 `Rejected=true, Reason=approval_mismatch` 的等待。
 - 不带键的 `Run` 恢复没有冲突或拒绝信号：已回应的中断再交不同输入会被忽略（回放已固定的输入），`validate` 拒绝只体现在 `Snapshot.Interrupts[i].Rejected`。需要 `ResumeRejectedError` 时用带键的 `Resume`。
 - 恢复会从头重新执行节点或工具。`AwaitInput` 之前的外部写入必须经 `durable.Do` 记录，或者按 `workflow.DurableKey(ctx)` 自行幂等，否则会重复执行。
 - 首次成功持久化的输入就此固定，之后的重放都返回它。用同一个键再交不同输入时返回 `ResumeRejectedError`（`workflow.ErrInterruptAnswered`），节点不执行；输入是否相同按 `json.Compact` 后的字节比较。
-- 输入不是合法 JSON 或 `validate` 失败时保持等待，`Interrupts[i].Rejected` 和 `Reason` 说明原因，修正后可以重交。`null` 是合法的显式输入。`validate` panic 时原因为 `validate_panic`，错误文本为空时为 `rejected`。`validate` 的错误文本会持久化并经 `Snapshot`、`ResumeRejectedError` 暴露，不得包含凭证等敏感信息。
+- 输入不是合法 JSON 或 `validate` 失败时保持等待，`Interrupts[i].Rejected` 和 `Reason` 说明原因，修正后可以重交。`null` 是合法的显式输入。`validate` panic 时原因为 `validate_panic`，panic 值与调用栈不持久化，只在本次返回的错误中：`Resume` 的 `ResumeRejectedError` 或 `WaitError.Cause` 里可用 `errors.As` 取出 `*errors.PanicError`；错误文本为空时为 `rejected`。`validate` 的错误文本会持久化并经 `Snapshot`、`ResumeRejectedError` 暴露，不得包含凭证等敏感信息。
 - `id` 在同一节点或工具内必须唯一，循环中须带序号，否则会回放上一次的答案。`info` 必须是确定性的 JSON，不得包含凭证。
 - 并行节点中一个分支暂停时，兄弟分支照常完成，中断逐个回应。嵌套子图的 `ChildContinuation.Interrupts` 给出最内层中断键。
 - 只有中断等待（来自 `AwaitInput`，可经子图逐层上报）会让节点暂停；节点内的其他等待，例如子图的审批等待，仍按节点失败处理。

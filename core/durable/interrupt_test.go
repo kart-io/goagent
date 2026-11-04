@@ -7,6 +7,7 @@ import (
 	"os"
 	"testing"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -178,6 +179,12 @@ func TestAwaitInputValidatePanicStaysWaiting(t *testing.T) {
 	c := requireInterruptWait(t, err)
 	require.True(t, c.Rejected)
 	require.Equal(t, ReasonValidatePanic, c.Reason)
+	waits := Waits(err)
+	require.Len(t, waits, 1)
+	var panicErr *agentErrors.PanicError
+	require.ErrorAs(t, waits[0].Cause, &panicErr, "panic 值留在进程内供诊断")
+	require.Equal(t, "validate 未处理 null", panicErr.Value)
+	require.NotContains(t, string(waits[0].Continuation), "未处理", "panic 值不进检查点")
 
 	got, err := AwaitInput(WithResume(ctx, interruptKey("amount"), `4`), "amount", amountInfo, validate)
 	require.NoError(t, err)

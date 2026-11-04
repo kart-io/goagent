@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `workflow.ResumeRequest`、`DurableGraph.Resume` 与 `WithResumeHandler`：在已保存的审批暂停处接收人工输入，由宿主校验并更新业务状态；修改与放行原子落盘后继续执行。`RunRequest.Resume` 与 `workflow.WithResume` 分别支持 Runnable 入口和嵌套子图；无效输入保持等待，已消费的恢复键不能重复应用修改。新增 HITL 指南及离线通过/拒绝/编辑示例。
-- `durable.AwaitInput`：工作流节点、并行分支与声明可中断的工具可以在执行中途等待人工输入，从检查点恢复；首次持久化的输入固定，非法 JSON 或校验失败时保持等待。`GraphSnapshot.Interrupts`、`ChildContinuation.Interrupts` 给出中断键，`Resume` 同时接受审批键与中断键。工具经 `FunctionToolBuilder.WithInterruptible(version)` 或 `tools.InterruptibleTool` 显式开启。
+- `durable.AwaitInput`：工作流节点、并行分支与声明可中断的工具可以在执行中途等待人工输入，从检查点恢复；首次持久化的输入固定，非法 JSON 或校验失败时保持等待。`GraphSnapshot.Interrupts`、`ChildContinuation.Interrupts` 给出中断键，`Resume` 同时接受审批键与中断键。工具经 `FunctionToolBuilder.WithInterruptible(version)` 或 `tools.InterruptibleTool` 显式开启。`validate` panic 时按拒绝处理，panic 值不持久化，经新增的 `WaitError.Cause` 或 `ResumeRejectedError` 链可取得 `*errors.PanicError`。
 
 ### Changed
 

@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/workflow"
 	"github.com/stretchr/testify/require"
 )
@@ -505,6 +506,59 @@ func TestChildInterruptAfterApprovalIgnoresUsedApprovalKey(t *testing.T) {
 
 	// 宿主沿用带旧审批键的 ctx，再叠加叶子中断输入。
 	both := durable.WithResume(approved, interrupted.Interrupts[0].Key, `5`)
+	rec, err := durable.Do(both, "tool/c1", json.RawMessage(`{}`), policy, run)
+	require.NoError(t, err)
+	require.JSONEq(t, `15`, string(rec.Value))
+}
+
+func TestNodeInterruptValidatePanicIsDiagnosable(t *testing.T) {
+	ctx := context.Background()
+	node := func(ctx context.Context, n int) (int, error) {
+		_, err := durable.AwaitInput(ctx, "amount", json.RawMessage(`{}`), func(json.RawMessage) error { panic("校验未处理") })
+		return n, err
+	}
+	run, err := oneNode(t, node).CompileDurable(ctx, workflow.DurableConfig{Store: newStore(t), Version: "panic-v1"})
+	require.NoError(t, err)
+	snap, err := run.Run(ctx, "panic", 1, "")
+	require.ErrorIs(t, err, durable.ErrApprovalRequired)
+
+	_, err = run.Resume(ctx, "panic", workflow.ResumeRequest{Key: snap.Interrupts[0].Key, Input: json.RawMessage(`1`)})
+	var rejected *workflow.ResumeRejectedError
+	require.ErrorAs(t, err, &rejected)
+	var panicErr *agentErrors.PanicError
+	require.ErrorAs(t, err, &panicErr, "validate 的 panic 值随本次拒绝返回")
+	require.Equal(t, "校验未处理", panicErr.Value)
+
+	after, err := run.Snapshot(ctx, "panic")
+	require.NoError(t, err)
+	require.Equal(t, durable.ReasonValidatePanic, after.Interrupts[0].Reason)
+}
+
+func TestChildInterruptRejectsInputSentWithIntentKey(t *testing.T) {
+	base := newStore(t)
+	ctx := durable.WithJournal(durable.WithExecutionKey(context.Background(), "parent"), base)
+	var prepared atomic.Int32
+	run := approvedChild(t, base, &prepared)
+	policy := durable.OperationPolicy{MaxAttempts: 3, Resumable: true}
+	_, err := durable.Do(ctx, "tool/c1", json.RawMessage(`{}`), policy, run)
+	approval := childContinuation(t, err)
+	waits := durable.Waits(err)
+	opKey := waits[0].Path[len(waits[0].Path)-1].Key
+	_, err = durable.Do(durable.WithResume(ctx, opKey, approval.ApprovalKey), "tool/c1", json.RawMessage(`{}`), policy, run)
+	interrupted := childContinuation(t, err)
+	require.Len(t, interrupted.Interrupts, 1)
+
+	// 节点意图键（即用过的审批键）不能回应中断，输入不能被静默丢弃。
+	misused, err := workflow.WithResume(ctx, opKey, workflow.ResumeRequest{Key: approval.ApprovalKey, Input: json.RawMessage(`5`)})
+	require.NoError(t, err)
+	_, err = durable.Do(misused, "tool/c1", json.RawMessage(`{}`), policy, run)
+	rejected := childContinuation(t, err)
+	require.True(t, rejected.Rejected)
+	require.Equal(t, workflow.RejectApprovalMismatch, rejected.Reason)
+	require.Equal(t, interrupted.Interrupts, rejected.Interrupts)
+
+	// 带着同一请求再叠加叶子中断输入时照常推进。
+	both := durable.WithResume(misused, interrupted.Interrupts[0].Key, `5`)
 	rec, err := durable.Do(both, "tool/c1", json.RawMessage(`{}`), policy, run)
 	require.NoError(t, err)
 	require.JSONEq(t, `15`, string(rec.Value))
