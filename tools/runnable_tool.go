@@ -22,6 +22,12 @@ var ErrToolWorkflowWaiting = errors.New("tool workflow requires host continuatio
 // DurableIntentVersioner versions otherwise opaque tool implementation semantics.
 type DurableIntentVersioner interface{ DurableIntentVersion() string }
 
+// InterruptibleTool 声明工具可以在执行中途调用 durable.AwaitInput；ok 为 false 时视为未声明。
+// version 是持久 intent 版本，开启时必填。
+type InterruptibleTool interface {
+	InterruptibleVersion() (version string, ok bool)
+}
+
 // DurablePolicyProvider specifies an explicit journal policy for composite calls.
 type DurablePolicyProvider interface {
 	DurableOperationPolicy() durable.OperationPolicy

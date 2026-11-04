@@ -17,7 +17,13 @@ import (
 type FunctionTool struct {
 	*BaseTool
 	fn func(context.Context, map[string]interface{}) (interface{}, error)
+
+	interruptible bool
+	version       string
 }
+
+// InterruptibleVersion 报告工具是否声明可以在执行中途调用 durable.AwaitInput，以及对应的持久 intent 版本。
+func (f *FunctionTool) InterruptibleVersion() (string, bool) { return f.version, f.interruptible }
 
 // NewFunctionTool 创建函数工具
 //
@@ -60,6 +66,9 @@ type FunctionToolBuilder struct {
 	description string
 	argsSchema  string
 	fn          func(context.Context, map[string]interface{}) (interface{}, error)
+
+	interruptible bool
+	version       string
 }
 
 // NewFunctionToolBuilder 创建函数工具构建器
@@ -98,6 +107,14 @@ func (b *FunctionToolBuilder) WithFunction(
 	return b
 }
 
+// WithInterruptible 声明工具可以在执行中途调用 durable.AwaitInput 暂停。续跑会重新执行整个工具，
+// AwaitInput 之前未经 durable.Do 记录的副作用会重复，开启前须确认可以接受。
+// version 是持久 intent 版本，改变工具语义时须提升。
+func (b *FunctionToolBuilder) WithInterruptible(version string) *FunctionToolBuilder {
+	b.interruptible, b.version = true, version
+	return b
+}
+
 // Build 构建工具
 //
 // Returns an error if the function is not set.
@@ -111,7 +128,9 @@ func (b *FunctionToolBuilder) Build() (*FunctionTool, error) {
 	if b.argsSchema == "" {
 		b.argsSchema = "{}"
 	}
-	return NewFunctionTool(b.name, b.description, b.argsSchema, b.fn), nil
+	tool := NewFunctionTool(b.name, b.description, b.argsSchema, b.fn)
+	tool.interruptible, tool.version = b.interruptible, b.version
+	return tool, nil
 }
 
 // MustBuild 构建工具，如果失败则 panic
