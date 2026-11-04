@@ -132,16 +132,11 @@ type SemanticCache interface {
 	Close() error
 }
 
-// EmbeddingProvider generates vector embeddings for text
+// EmbeddingProvider generates vector embeddings for text.
+// llm.EmbeddingClient（如 providers.OpenAIProvider、GeminiProvider）可直接传入。
 type EmbeddingProvider interface {
 	// Embed generates an embedding vector for the given text
 	Embed(ctx context.Context, text string) ([]float32, error)
-
-	// EmbedBatch generates embeddings for multiple texts
-	EmbedBatch(ctx context.Context, texts []string) ([][]float32, error)
-
-	// Dimension returns the embedding dimension
-	Dimension() int
 }
 
 // CacheStorage defines the storage backend for cache entries

@@ -84,7 +84,7 @@ type LLMOptions struct {
 	APIKey         string             `json:"api_key"`                   // API 密钥
 	BaseURL        string             `json:"base_url,omitempty"`        // 自定义 API 端点
 	Model          string             `json:"model"`                     // 默认模型
-	EmbeddingModel string             `json:"embedding_model,omitempty"` // Separate embedding model, currently used by Gemini.
+	EmbeddingModel string             `json:"embedding_model,omitempty"` // Separate embedding model, used by OpenAI and Gemini.
 
 	// 生成参数
 	MaxTokens      int             `json:"max_tokens"`                // 默认最大 token 数

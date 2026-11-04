@@ -122,11 +122,13 @@ Gemini 的向量模型通过 `llm.WithEmbeddingModel` 或 `GEMINI_EMBEDDING_MODE
 `llm/cache` 用向量相似度复用已成功完成的响应：
 
 ```go
+embedder, err := providers.NewOpenAIWithOptions(llm.WithEmbeddingModel("text-embedding-3-small"))
+if err != nil {
+    return err
+}
 cached, err := cache.NewCachedLLMClient(&cache.CachedLLMClientConfig{
-    Client: client,
-    EmbeddingProvider: cache.NewOpenAIEmbeddingProvider(&cache.OpenAIEmbeddingConfig{
-        APIKey: os.Getenv("OPENAI_API_KEY"),
-    }),
+    Client:            client,
+    EmbeddingProvider: embedder, // 任意 llm.EmbeddingClient
     CacheConfig: cache.DefaultSemanticCacheConfig(), // 阈值 0.95、10000 条、24 小时
 })
 if err != nil {
@@ -138,7 +140,7 @@ resp, err := llm.Chat(ctx, cached, messages)
 fmt.Printf("命中率: %.2f%%\n", cached.Stats().HitRate*100)
 ```
 
-`cache.EmbeddingProvider` 与 `llm.EmbeddingClient` 同为 `[]float32` 向量，但多了 `EmbedBatch` 与 `Dimension`，不是同一接口。`CachedLLMClient` 只实现 `llm.Client`：命中时直接返回缓存答案，终止块的 `FinishReason` 为 `cache_hit`；未命中时转发上游流，只缓存成功的终止答案。它不实现 `ToolStreamClient`。
+`cache.EmbeddingProvider` 只有 `Embed`，`llm.EmbeddingClient`（OpenAI、Gemini Provider）可直接传入；OpenAI 的向量模型由 `llm.WithEmbeddingModel` 指定，默认 `text-embedding-ada-002`。`CachedLLMClient` 只实现 `llm.Client`：命中时直接返回缓存答案，终止块的 `FinishReason` 为 `cache_hit`；未命中时转发上游流，只缓存成功的终止答案。它不实现 `ToolStreamClient`。
 
 ## 相关包
 
