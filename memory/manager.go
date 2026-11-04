@@ -44,15 +44,6 @@ type SearchResult struct {
 	Metadata  map[string]interface{} `json:"metadata"`  // 元数据
 }
 
-// Embedder 嵌入生成器接口
-type Embedder interface {
-	// Embed 生成文本嵌入
-	Embed(ctx context.Context, text string) ([]float64, error)
-
-	// EmbedBatch 批量生成嵌入
-	EmbedBatch(ctx context.Context, texts []string) ([][]float64, error)
-}
-
 // Config 记忆管理器配置
 type Config struct {
 	// 对话记忆配置

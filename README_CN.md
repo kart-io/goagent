@@ -167,7 +167,7 @@ rag, err := builder.RAGAgent(client, retriever) // DocumentRetriever、带 Retri
 | [workflow](workflow/) | 类型化图编译与持久图 |
 | [llm](llm/) | 客户端接口与选项；`llm/providers` 为各提供商实现 |
 | [tools](tools/) | 工具注册表、函数工具、`Dispatcher`、`Pipeline`；`tools/policy`、`tools/spill` 与内置工具 |
-| [mcp](mcp/) | MCP 客户端适配与工具箱 |
+| [mcp](mcp/) | 基于官方 SDK 的 MCP 客户端适配 |
 | [memory](memory/) | 对话与案例记忆、向量存储 |
 | [harness/env](harness/env/) | 供工具使用的文件系统与命令执行接口 |
 | [observability](observability/) | OpenTelemetry 追踪与指标 |

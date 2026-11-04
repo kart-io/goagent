@@ -29,10 +29,10 @@ func example1CreateErrors() {
 	fmt.Printf("Document Error: %v\n", docErr)
 	fmt.Printf("Error Code: %s\n\n", docErr.Code)
 
-	// 计划执行错误
-	planErr := errors.NewPlanExecutionError("plan-456", "step-3", fmt.Errorf("prerequisite failed"))
-	fmt.Printf("Planning Error: %v\n", planErr)
-	fmt.Printf("Context: %+v\n\n", planErr.Context)
+	// 解析错误
+	parseErr := errors.NewParserMissingFieldError("answer")
+	fmt.Printf("Parser Error: %v\n", parseErr)
+	fmt.Printf("Context: %+v\n\n", parseErr.Context)
 }
 
 // 示例 2: 链式添加上下文

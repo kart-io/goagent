@@ -78,9 +78,7 @@ graph LR
 | 通用 | `INVALID_INPUT`、`INVALID_CONFIG`、`NOT_IMPLEMENTED`、`INTERNAL_ERROR` |
 | 分布式 | `DISTRIBUTED_CONNECTION`、`DISTRIBUTED_SERIALIZATION`、`DISTRIBUTED_COORDINATION`、`DISTRIBUTED_SCHEDULING`、`DISTRIBUTED_HEARTBEAT`、`DISTRIBUTED_REGISTRY` |
 | RAG | `RETRIEVAL_SEARCH`、`RETRIEVAL_EMBEDDING`、`DOCUMENT_NOT_FOUND`、`VECTOR_DIM_MISMATCH` |
-| 规划 | `PLANNING_FAILED`、`PLAN_VALIDATION`、`PLAN_EXECUTION_FAILED`、`PLAN_NOT_FOUND` |
 | Parser | `PARSER_FAILED`、`PARSER_INVALID_JSON`、`PARSER_MISSING_FIELD` |
-| 多 Agent | `MULTIAGENT_REGISTRATION`、`MULTIAGENT_CONSENSUS`、`MULTIAGENT_MESSAGE` |
 | Store | `STORE_CONNECTION`、`STORE_SERIALIZATION`、`STORE_NOT_FOUND` |
 | Router | `ROUTER_NO_MATCH`、`ROUTER_FAILED`、`ROUTER_OVERLOAD` |
 | 插件/类型 | `TYPE_MISMATCH`、`ALREADY_EXISTS`、`NOT_FOUND`、`INVALID_OUTPUT` |
@@ -354,12 +352,6 @@ NewRetrievalEmbeddingError(text string, cause error) *AgentError
 NewDocumentNotFoundError(docID string) *AgentError
 NewVectorDimMismatchError(expected, actual int) *AgentError
 
-// Planning 相关
-NewPlanningError(goal string, cause error) *AgentError
-NewPlanValidationError(planID, reason string) *AgentError
-NewPlanExecutionError(planID, stepID string, cause error) *AgentError
-NewPlanNotFoundError(planID string) *AgentError
-
 // 其余分类同样各有辅助函数：
 // Middleware: NewMiddlewareExecutionError / NewMiddlewareChainError / NewMiddlewareValidationError
 // State:      NewStateLoadError / NewStateSaveError / NewStateValidationError / NewStateCheckpointError
@@ -367,7 +359,6 @@ NewPlanNotFoundError(planID string) *AgentError
 // 通用:       NewInvalidInputError / NewInvalidConfigError / NewNotImplementedError / NewInternalError
 // 分布式:     NewDistributedConnectionError / NewDistributedSerializationError / NewDistributedCoordinationError
 // Parser:     NewParserError / NewParserInvalidJSONError / NewParserMissingFieldError
-// 多 Agent:   NewMultiAgentRegistrationError / NewMultiAgentConsensusError / NewMultiAgentMessageError
 // Store:      NewStoreConnectionError / NewStoreSerializationError / NewStoreNotFoundError
 // Router:     NewRouterNoMatchError / NewRouterFailedError / NewRouterOverloadError
 

@@ -357,41 +357,6 @@ func NewVectorDimMismatchError(expected, actual int) *AgentError {
 		WithContext("actual_dim", actual)
 }
 
-// Planning Errors
-
-// NewPlanningError creates an error for planning failures
-func NewPlanningError(goal string, cause error) *AgentError {
-	return Wrap(cause, CodePlanningFailed, "planning failed").
-		WithComponent("planning").
-		WithOperation("create_plan").
-		WithContext("goal", goal)
-}
-
-// NewPlanValidationError creates an error for plan validation failures
-func NewPlanValidationError(planID, reason string) *AgentError {
-	return New(CodePlanValidation, fmt.Sprintf("plan validation failed: %s", reason)).
-		WithComponent("planning").
-		WithOperation("validate_plan").
-		WithContext("plan_id", planID)
-}
-
-// NewPlanExecutionError creates an error for plan execution failures
-func NewPlanExecutionError(planID, stepID string, cause error) *AgentError {
-	return Wrap(cause, CodePlanExecutionFailed, "plan execution failed").
-		WithComponent("planning").
-		WithOperation("execute_plan").
-		WithContext("plan_id", planID).
-		WithContext("step_id", stepID)
-}
-
-// NewPlanNotFoundError creates an error when a plan is not found
-func NewPlanNotFoundError(planID string) *AgentError {
-	return New(CodePlanNotFound, fmt.Sprintf("plan not found: %s", planID)).
-		WithComponent("planning").
-		WithOperation("get_plan").
-		WithContext("plan_id", planID)
-}
-
 // Parser Errors
 
 // NewParserError creates an error for parser failures
@@ -417,43 +382,6 @@ func NewParserMissingFieldError(field string) *AgentError {
 		WithComponent("parser").
 		WithOperation("validate_fields").
 		WithContext("missing_field", field)
-}
-
-// MultiAgent Errors
-
-// NewMultiAgentRegistrationError creates an error for agent registration failures
-func NewMultiAgentRegistrationError(agentID string, cause error) *AgentError {
-	return Wrap(cause, CodeMultiAgentRegistration, "agent registration failed").
-		WithComponent("multiagent").
-		WithOperation("register").
-		WithContext("agent_id", agentID)
-}
-
-// NewMultiAgentConsensusError creates an error for consensus failures
-func NewMultiAgentConsensusError(votes map[string]bool) *AgentError {
-	yesVotes := 0
-	noVotes := 0
-	for _, vote := range votes {
-		if vote {
-			yesVotes++
-		} else {
-			noVotes++
-		}
-	}
-	return New(CodeMultiAgentConsensus, fmt.Sprintf("consensus not reached: %d yes, %d no", yesVotes, noVotes)).
-		WithComponent("multiagent").
-		WithOperation("consensus").
-		WithContext("yes_votes", yesVotes).
-		WithContext("no_votes", noVotes).
-		WithContext("total_votes", len(votes))
-}
-
-// NewMultiAgentMessageError creates an error for message passing failures
-func NewMultiAgentMessageError(topic string, cause error) *AgentError {
-	return Wrap(cause, CodeMultiAgentMessage, "message passing failed").
-		WithComponent("multiagent").
-		WithOperation("send_message").
-		WithContext("topic", topic)
 }
 
 // Store Errors

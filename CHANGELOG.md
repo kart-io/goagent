@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- **破坏性**：`interfaces` 中无使用方的旧协议与推理类型：`Agent`、`Runnable`、`Input`、`Output`、`Message`、`StreamChunk`、`Plan`、`Step`、`State`，`Checkpointer`、`Checkpoint`、`CheckpointMetadata`，`ReasoningPattern` 及 `Reasoning*`、`ThoughtNode`、`ProgramCode`、`SkeletonPoint`、`ReasoningStrategy` 与 `Strategy*` 常量。迁移：`interfaces.Agent/Runnable` 改用 `core.Runnable[I, O]` 或 Builder 的 `AsRunnable`（`go run ./scripts/apicheck -mode migration` 仍能找出残留用法）；检查点改用 `core/checkpoint.Checkpointer`，持久执行用 `core/durable`；推理策略已在 v0.17.0 删除，无替代。
+- **破坏性**：`memory.Embedder` 与 `llm.BatchEmbeddingClient`、`llm.CapabilityBatchEmbedding`：没有使用方，也没有 Provider 实现批量接口。迁移：单条向量用 `llm.EmbeddingClient`，`memory.WithEmbedder` 接收 `memory.TextEmbedder`。
+- **破坏性**：`errors` 中随 `planning`、`multiagent` 包遗留的错误码 `PLANNING_FAILED`、`PLAN_VALIDATION`、`PLAN_EXECUTION_FAILED`、`PLAN_NOT_FOUND`、`MULTIAGENT_REGISTRATION`、`MULTIAGENT_CONSENSUS`、`MULTIAGENT_MESSAGE` 及对应的 `NewPlan*Error`、`NewPlanningError`、`NewMultiAgent*Error`。迁移：宿主需要时在自身包内定义错误码，用 `errors.New(code, msg)` 构造。
+- **破坏性**：进程内工具箱 `mcp/core`、`mcp/toolbox`、`mcp/tools` 及 `examples/mcp`，连同 `tools.ValidateToolSchema`、`tools.ValidateInputWithSchema`。它不经 MCP 协议，`MCPTool` 也无法转换为 `interfaces.Tool` 交给 Agent，注册、权限与调用历史与 `tools.Registry`、`tools.Dispatcher`/`Pipeline` 重复。迁移：工具实现 `interfaces.Tool`（或用 `tools.NewFunctionTool`）经 `builder.WithTools` 注册，权限与审批用 `tools.Pipeline` 与 `tools/policy`；HTTP 请求用 `tools/http`；连接 MCP 服务器用 `mcp/remote`。
+
 ## [0.42.1] - 2026-11-04
 
 ### Fixed

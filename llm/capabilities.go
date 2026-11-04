@@ -69,24 +69,6 @@ type EmbeddingClient interface {
 	Embed(ctx context.Context, text string) ([]float64, error)
 }
 
-// BatchEmbeddingClient extends EmbeddingClient with batch embedding support.
-// This is more efficient than calling Embed multiple times.
-type BatchEmbeddingClient interface {
-	EmbeddingClient
-
-	// EmbedBatch generates embeddings for multiple texts in a single request.
-	// This is more efficient than calling Embed in a loop.
-	//
-	// Parameters:
-	//   - ctx: Context for cancellation and timeout
-	//   - texts: The texts to embed
-	//
-	// Returns:
-	//   - [][]float64: The embedding vectors, one per input text
-	//   - error if batch embedding fails
-	EmbedBatch(ctx context.Context, texts []string) ([][]float64, error)
-}
-
 // TokenStreamingClient defines the interface for simple token-based streaming.
 // This is a simpler alternative to StreamClient's chunk-based streaming.
 //
@@ -135,9 +117,6 @@ const (
 
 	// CapabilityEmbedding indicates text embedding support
 	CapabilityEmbedding Capability = "embedding"
-
-	// CapabilityBatchEmbedding indicates batch embedding support
-	CapabilityBatchEmbedding Capability = "batch_embedding"
 
 	// CapabilityVision indicates vision/image understanding support
 	CapabilityVision Capability = "vision"

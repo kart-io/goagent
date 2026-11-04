@@ -5,11 +5,12 @@
 // source of truth for all shared interfaces.
 //
 // Key Interfaces:
-//   - Agent: Autonomous agent interface
-//   - Runnable: Base execution interface
 //   - Tool: Tool execution interface
+//   - DocumentRetriever: Evidence retrieval
 //   - VectorStore: Vector storage and search
 //   - MemoryManager: Memory management
-//   - Checkpointer: State checkpointing
 //   - Store: Key-value storage
+//
+// Agent execution contracts live in core (core.Agent, core.Runnable) and
+// state checkpointing in core/checkpoint.
 package interfaces

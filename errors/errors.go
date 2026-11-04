@@ -79,21 +79,10 @@ const (
 	CodeDocumentNotFound   ErrorCode = "DOCUMENT_NOT_FOUND"
 	CodeVectorDimMismatch  ErrorCode = "VECTOR_DIM_MISMATCH"
 
-	// Planning errors
-	CodePlanningFailed      ErrorCode = "PLANNING_FAILED"
-	CodePlanValidation      ErrorCode = "PLAN_VALIDATION"
-	CodePlanExecutionFailed ErrorCode = "PLAN_EXECUTION_FAILED"
-	CodePlanNotFound        ErrorCode = "PLAN_NOT_FOUND"
-
 	// Parser errors
 	CodeParserFailed       ErrorCode = "PARSER_FAILED"
 	CodeParserInvalidJSON  ErrorCode = "PARSER_INVALID_JSON"
 	CodeParserMissingField ErrorCode = "PARSER_MISSING_FIELD"
-
-	// MultiAgent errors
-	CodeMultiAgentRegistration ErrorCode = "MULTIAGENT_REGISTRATION"
-	CodeMultiAgentConsensus    ErrorCode = "MULTIAGENT_CONSENSUS"
-	CodeMultiAgentMessage      ErrorCode = "MULTIAGENT_MESSAGE"
 
 	// Store errors (supplemental)
 	CodeStoreConnection    ErrorCode = "STORE_CONNECTION"

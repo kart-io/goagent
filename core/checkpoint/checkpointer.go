@@ -39,9 +39,6 @@ type Checkpointer interface {
 }
 
 // CheckpointInfo contains metadata about a checkpoint.
-//
-// Note: This struct is aligned with interfaces.CheckpointMetadata to ensure consistency.
-// Fields match exactly for seamless integration.
 type CheckpointInfo struct {
 	// ID is the unique checkpoint identifier.
 	ID string `json:"id"`

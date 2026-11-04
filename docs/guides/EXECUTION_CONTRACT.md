@@ -2,7 +2,7 @@
 
 ## 推荐入口
 
-新编排统一使用 `core.Runnable[I, O]`。现有 `core.Agent` 是该泛型接口在 `AgentInput/AgentOutput` 上的专用接口；旧 `interfaces.Agent/Runnable` 已标记弃用，不再扩展。类型不同的 Runnable 需要显式转换输入输出，不进行隐式消息丢弃。
+新编排统一使用 `core.Runnable[I, O]`。现有 `core.Agent` 是该泛型接口在 `AgentInput/AgentOutput` 上的专用接口；旧 `interfaces.Agent/Runnable` 已删除。类型不同的 Runnable 需要显式转换输入输出，不进行隐式消息丢弃。
 
 Builder 通过 `AsRunnable()` 接入相同契约：
 
@@ -105,8 +105,6 @@ OpenAI 和 DeepSeek 专用 Provider 共用原生 SSE 解码与完成状态检查
 
 ReAct、ToT、自反思等已删除模块不再列入当前能力矩阵。Pipe/Sequence仍按阶段执行，最后阶段保留实际事件；没有跨节点逐Token转换。
 
-`interfaces.Agent/Runnable` 已标记 Deprecated，不新增调用方。
-
 ## 能力状态
 
 这里的“已验证”表示存在本地回归测试，不表示已经完成生产负载验证。
@@ -117,7 +115,7 @@ ReAct、ToT、自反思等已删除模块不再列入当前能力矩阵。Pipe/S
 | 已验证入口 | 官方 MCP 客户端适配 | HTTP/stdio 工具互操作；交互授权仍由应用处理 |
 | 已验证入口 | core/durable | 显式顺序步骤、审批和真实进程重启；至少一次执行，外部服务按幂等键去重 |
 | 词汇基线 | LexicalOverlapReranker（goagent-contrib/retrieval） | 词汇重合打分，无交叉编码器推理 |
-| 弃用 | CrossEncoderReranker（goagent-contrib/retrieval）、interfaces.Agent/Runnable | 保留迁移入口，不再作为新开发推荐 |
+| 弃用 | CrossEncoderReranker（goagent-contrib/retrieval） | 保留迁移入口，不再作为新开发推荐 |
 
 自反思 Agent 所在的 `reflection` 包已在 v0.17.0 删除，无替代，代码保留在 `v0.16.1`。
 

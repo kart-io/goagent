@@ -1,3 +1,5 @@
+> 2026-11-04 更新：§4.1 中 `mcp/core`、`mcp/toolbox`、`mcp/tools` 实为不经 MCP 协议、无法交给 Agent 的进程内工具箱，已删除；MCP 只保留基于官方 SDK 的 `mcp/remote`。
+>
 > 2026-10-30 更新：Harness 装配与编码工具已提取为基于 GoAgent 的独立本地项目；核心执行机制与通用能力保留。本文其余内容为原定位决策记录，当前模块边界与发布约束见 [Harness 迁移指南](../guides/HARNESS_MIGRATION.md)。
 
 # GoAgent 定位决策与模块去留清单
