@@ -59,7 +59,7 @@ git pull origin main
 # Create and push the tag
 git tag -a v1.2.3 -m "Release v1.2.3
 
-- Feature: Add new reasoning patterns
+- Feature: Add approval resume for durable graphs
 - Fix: Improve error handling
 - Docs: Update API documentation"
 
@@ -189,15 +189,15 @@ Update `CHANGELOG.md` before each release following [Keep a Changelog](https://k
 ## [1.2.3] - 2024-01-15
 
 ### Added
-- New Graph-of-Thought (GoT) reasoning pattern
-- Support for parallel thought execution
+- Durable checkpoints for parallel graph branches
+- Shared request budget between parent and child agents
 
 ### Changed
 - Improved error messages in agent execution
 - Updated dependencies
 
 ### Fixed
-- Fixed race condition in ToT agent
+- Fixed race condition in tool dispatcher
 - Corrected import layering violations
 
 ### Deprecated
