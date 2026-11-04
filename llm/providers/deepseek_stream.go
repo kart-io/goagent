@@ -2,7 +2,6 @@ package providers
 
 import (
 	"context"
-	"net/http"
 	"strings"
 
 	"github.com/sashabaranov/go-openai"
@@ -21,21 +20,8 @@ var _ agentllm.ToolStreamClient = (*DeepSeekProvider)(nil)
 func (p *DeepSeekProvider) nativeStreamProvider() *OpenAIProvider {
 	config := openai.DefaultConfig(p.Config.APIKey)
 	config.BaseURL = strings.TrimRight(p.Config.BaseURL, "/")
-	config.HTTPClient = zeroTemperatureDoer{next: retryAfterDoer{next: &deepSeekStreamHTTPClient{client: responseHeaderTimeoutClient(p.GetTimeout()), headers: p.Config.CustomHeaders}}}
+	config.HTTPClient = zeroTemperatureDoer{next: retryAfterDoer{next: responseHeaderTimeoutClient(p.GetTimeout(), p.Config.CustomHeaders)}}
 	return &OpenAIProvider{BaseProvider: p.BaseProvider, client: openai.NewClientWithConfig(config)}
-}
-
-type deepSeekStreamHTTPClient struct {
-	client  *http.Client
-	headers map[string]string
-}
-
-func (c *deepSeekStreamHTTPClient) Do(request *http.Request) (*http.Response, error) {
-	request = request.Clone(request.Context())
-	for key, value := range c.headers {
-		request.Header.Set(key, value)
-	}
-	return c.client.Do(request)
 }
 
 // CompleteStream implements structured streaming with terminal status and usage.

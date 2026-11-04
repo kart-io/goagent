@@ -98,7 +98,7 @@ func newOpenAICompatible(spec openAICompatibleSpec, opts ...agentllm.ClientOptio
 	if base.Config.BaseURL != "" {
 		clientConfig.BaseURL = base.Config.BaseURL
 	}
-	clientConfig.HTTPClient = zeroTemperatureDoer{next: retryAfterDoer{next: responseHeaderTimeoutClient(timeout)}}
+	clientConfig.HTTPClient = zeroTemperatureDoer{next: retryAfterDoer{next: responseHeaderTimeoutClient(timeout, base.Config.CustomHeaders)}}
 
 	return &OpenAIProvider{
 		BaseProvider:         base,
@@ -118,15 +118,25 @@ func compatibleTimeout(configured, serviceDefault time.Duration) time.Duration {
 
 // responseHeaderTimeoutClient 把超时用作拿到响应头的时限：非流式请求在生成完毕后才返回响应头，因而整体受限；
 // 流式请求的响应头随首块到达，之后的读取只受 ctx 控制，长回复不会被截断。
-func responseHeaderTimeoutClient(timeout time.Duration) *http.Client {
-	return &http.Client{Transport: headerTimeoutTransport{timeout: timeout}}
+// headers 来自 WithCustomHeaders，覆盖 SDK 设置的同名头。
+func responseHeaderTimeoutClient(timeout time.Duration, headers map[string]string) *http.Client {
+	return &http.Client{Transport: headerTimeoutTransport{timeout: timeout, headers: headers}}
 }
 
 // headerTimeoutTransport 每次请求都使用当时的 http.DefaultTransport（宿主可能替换为 otelhttp、httpmock 等任意实现），
 // 连接池也由它统一持有。计时从发起请求开始，覆盖建连与写请求。
-type headerTimeoutTransport struct{ timeout time.Duration }
+type headerTimeoutTransport struct {
+	timeout time.Duration
+	headers map[string]string
+}
 
 func (t headerTimeoutTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if len(t.headers) > 0 {
+		req = req.Clone(req.Context())
+		for key, value := range t.headers {
+			req.Header.Set(key, value)
+		}
+	}
 	if t.timeout <= 0 {
 		return http.DefaultTransport.RoundTrip(req)
 	}
