@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `interfaces.RetrievalRequest`（`Query`、`TopK`、`Filter`）与可选接口 `interfaces.RequestRetriever`，用于按租户、权限等元数据过滤检索结果。`builder.RetrievalConfig.Filter` 按请求（通常从 ctx）生成过滤条件：检索器未实现 `RequestRetriever` 时 `Build` 返回配置错误，`Filter` 返回错误或空条件时本次执行失败且不调用模型，不会退回无过滤检索。
+
 ## [0.45.0] - 2026-11-04
 
 ### Changed

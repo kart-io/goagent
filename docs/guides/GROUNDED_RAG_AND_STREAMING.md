@@ -33,6 +33,27 @@ output, err := agent.AsRunnable().Invoke(ctx, "退款政策是什么？")
 - 所有执行入口（`AsRunnable`、`ExecuteStream`、`Start`）都先检索。
 - `ConfigureForRAG()` 只设置计时中间件、`MaxTokens=3000` 与 `Temperature=0.3`，不缓存答案，以免相同问题命中已过期证据。需要缓存时，显式配置能区分用户、会话和知识版本的缓存策略。
 
+### 按租户或权限过滤
+
+`RetrievalConfig.Filter` 为每次请求生成元数据过滤条件，检索器按 `interfaces.RetrievalRequest` 执行：
+
+```go
+WithRetriever(retriever, builder.RetrievalConfig{
+    Filter: func(ctx context.Context, query string) (map[string]any, error) {
+        tenant, ok := tenantFrom(ctx)
+        if !ok {
+            return nil, errors.New("missing tenant")
+        }
+        return map[string]any{"tenant_id": tenant}, nil
+    },
+})
+```
+
+- 条件的每个键都须与文档元数据同名字段相等，多个键同时满足。
+- 检索器必须实现 `interfaces.RequestRetriever`，否则 `Build` 返回配置错误；不会退回无过滤检索。
+- `Filter` 返回错误或空条件时本次执行失败，不调用模型，避免漏设租户时检索到全部数据。
+- goagent-contrib 的 `VectorStoreRetriever`（底层为内存向量库或 Qdrant）支持过滤；关键词、混合、多查询与重排检索器暂不支持。
+
 输出元数据：
 
 | 字段 | 含义 |
