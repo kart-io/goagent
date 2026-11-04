@@ -42,13 +42,13 @@ type simpleVectorStoreAdapter struct {
 	store SimpleVectorStore
 }
 
-func (a simpleVectorStoreAdapter) Add(ctx context.Context, id string, embedding []float64, _ map[string]interface{}) error {
-	return a.store.Store(ctx, id, toFloat32(embedding))
+func (a simpleVectorStoreAdapter) Add(ctx context.Context, id string, embedding []float32, _ map[string]interface{}) error {
+	return a.store.Store(ctx, id, embedding)
 }
 
 // Search 以余弦相似度下限 -1 为阈值，不过滤任何结果，与 VectorStore 的语义一致。
-func (a simpleVectorStoreAdapter) Search(ctx context.Context, embedding []float64, limit int) ([]*SearchResult, error) {
-	ids, scores, err := a.store.Search(ctx, toFloat32(embedding), limit, -1)
+func (a simpleVectorStoreAdapter) Search(ctx context.Context, embedding []float32, limit int) ([]*SearchResult, error) {
+	ids, scores, err := a.store.Search(ctx, embedding, limit, -1)
 	if err != nil {
 		return nil, err
 	}
@@ -65,14 +65,6 @@ func (a simpleVectorStoreAdapter) Delete(ctx context.Context, id string) error {
 
 func (a simpleVectorStoreAdapter) Clear(ctx context.Context) error {
 	return a.store.Clear(ctx)
-}
-
-func toFloat32(v []float64) []float32 {
-	out := make([]float32, len(v))
-	for i, x := range v {
-		out[i] = float32(x)
-	}
-	return out
 }
 
 // InMemoryVectorStore is a simple in-memory vector store implementation

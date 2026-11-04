@@ -138,7 +138,7 @@ resp, err := llm.Chat(ctx, cached, messages)
 fmt.Printf("命中率: %.2f%%\n", cached.Stats().HitRate*100)
 ```
 
-`cache.EmbeddingProvider` 使用 `[]float32` 向量，与 `llm.EmbeddingClient` 不是同一接口。`CachedLLMClient` 只实现 `llm.Client`：命中时直接返回缓存答案，终止块的 `FinishReason` 为 `cache_hit`；未命中时转发上游流，只缓存成功的终止答案。它不实现 `ToolStreamClient`。
+`cache.EmbeddingProvider` 与 `llm.EmbeddingClient` 同为 `[]float32` 向量，但多了 `EmbedBatch` 与 `Dimension`，不是同一接口。`CachedLLMClient` 只实现 `llm.Client`：命中时直接返回缓存答案，终止块的 `FinishReason` 为 `cache_hit`；未命中时转发上游流，只缓存成功的终止答案。它不实现 `ToolStreamClient`。
 
 ## 相关包
 

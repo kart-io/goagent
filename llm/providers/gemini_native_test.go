@@ -185,7 +185,7 @@ func TestGeminiEmbeddingRealProtocol(t *testing.T) {
 	require.NotNil(t, llm.AsEmbedder(p))
 	vector, err := p.Embed(context.Background(), "sample input")
 	require.NoError(t, err)
-	require.Equal(t, []float64{.25, -.5, .75}, vector)
+	require.Equal(t, []float32{.25, -.5, .75}, vector)
 	_, err = p.Embed(context.Background(), " ")
 	require.Error(t, err)
 	ctx, cancel := context.WithCancel(context.Background())

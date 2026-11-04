@@ -407,23 +407,23 @@ func TestAsVectorStore(t *testing.T) {
 	ctx := context.Background()
 	store := AsVectorStore(NewInMemoryVectorStore(3))
 
-	require.NoError(t, store.Add(ctx, "x", []float64{1, 0, 0}, nil))
-	require.NoError(t, store.Add(ctx, "y", []float64{0, 1, 0}, nil))
-	require.NoError(t, store.Add(ctx, "neg", []float64{-1, 0, 0}, nil))
+	require.NoError(t, store.Add(ctx, "x", []float32{1, 0, 0}, nil))
+	require.NoError(t, store.Add(ctx, "y", []float32{0, 1, 0}, nil))
+	require.NoError(t, store.Add(ctx, "neg", []float32{-1, 0, 0}, nil))
 
-	results, err := store.Search(ctx, []float64{1, 0.1, 0}, 3)
+	results, err := store.Search(ctx, []float32{1, 0.1, 0}, 3)
 	require.NoError(t, err)
 	require.Len(t, results, 3, "相似度为负的结果也不应被过滤")
 	assert.Equal(t, "x", results[0].ID)
 	assert.Greater(t, results[0].Score, results[1].Score)
 
 	require.NoError(t, store.Delete(ctx, "x"))
-	results, err = store.Search(ctx, []float64{1, 0, 0}, 3)
+	results, err = store.Search(ctx, []float32{1, 0, 0}, 3)
 	require.NoError(t, err)
 	assert.Len(t, results, 2)
 
 	require.NoError(t, store.Clear(ctx))
-	results, err = store.Search(ctx, []float64{1, 0, 0}, 3)
+	results, err = store.Search(ctx, []float32{1, 0, 0}, 3)
 	require.NoError(t, err)
 	assert.Empty(t, results)
 }

@@ -193,7 +193,7 @@ func TestDeepSeekProvider_Embed(t *testing.T) {
 	embedding, err := provider.Embed(context.Background(), "test text")
 	assert.NoError(t, err)
 	assert.Len(t, embedding, 3)
-	assert.Equal(t, 0.1, embedding[0])
+	assert.Equal(t, float32(0.1), embedding[0])
 }
 
 // TestDeepSeekProvider_CallAPI_HTTPError tests HTTP error handling

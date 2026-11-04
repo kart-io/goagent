@@ -365,7 +365,7 @@ func TestLongTermMemory_Store(t *testing.T) {
 
 	t.Run("store with vector", func(t *testing.T) {
 		// Create mock VectorStore that matches the manager.go interface
-		mockStore := &mockLTMVectorStore{vectors: make(map[string][]float64)}
+		mockStore := &mockLTMVectorStore{vectors: make(map[string][]float32)}
 		ltm := NewLongTermMemory(mockStore)
 
 		embedding := make([]float32, 128)
@@ -387,15 +387,15 @@ func TestLongTermMemory_Store(t *testing.T) {
 
 // mockLTMVectorStore implements VectorStore interface for LongTermMemory testing
 type mockLTMVectorStore struct {
-	vectors map[string][]float64
+	vectors map[string][]float32
 }
 
-func (m *mockLTMVectorStore) Add(ctx context.Context, id string, embedding []float64, metadata map[string]interface{}) error {
+func (m *mockLTMVectorStore) Add(ctx context.Context, id string, embedding []float32, metadata map[string]interface{}) error {
 	m.vectors[id] = embedding
 	return nil
 }
 
-func (m *mockLTMVectorStore) Search(ctx context.Context, embedding []float64, limit int) ([]*SearchResult, error) {
+func (m *mockLTMVectorStore) Search(ctx context.Context, embedding []float32, limit int) ([]*SearchResult, error) {
 	results := make([]*SearchResult, 0)
 	return results, nil
 }
@@ -406,7 +406,7 @@ func (m *mockLTMVectorStore) Delete(ctx context.Context, id string) error {
 }
 
 func (m *mockLTMVectorStore) Clear(ctx context.Context) error {
-	m.vectors = make(map[string][]float64)
+	m.vectors = make(map[string][]float32)
 	return nil
 }
 

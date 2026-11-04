@@ -12,21 +12,21 @@ import (
 
 // mockVectorStore implements VectorStore interface for testing
 type mockVectorStore struct {
-	vectors map[string][]float64
+	vectors map[string][]float32
 }
 
 func newMockVectorStore() *mockVectorStore {
 	return &mockVectorStore{
-		vectors: make(map[string][]float64),
+		vectors: make(map[string][]float32),
 	}
 }
 
-func (m *mockVectorStore) Add(ctx context.Context, id string, embedding []float64, metadata map[string]interface{}) error {
+func (m *mockVectorStore) Add(ctx context.Context, id string, embedding []float32, metadata map[string]interface{}) error {
 	m.vectors[id] = embedding
 	return nil
 }
 
-func (m *mockVectorStore) Search(ctx context.Context, embedding []float64, limit int) ([]*SearchResult, error) {
+func (m *mockVectorStore) Search(ctx context.Context, embedding []float32, limit int) ([]*SearchResult, error) {
 	results := make([]*SearchResult, 0)
 	count := 0
 	for id, vec := range m.vectors {
@@ -50,7 +50,7 @@ func (m *mockVectorStore) Delete(ctx context.Context, id string) error {
 }
 
 func (m *mockVectorStore) Clear(ctx context.Context) error {
-	m.vectors = make(map[string][]float64)
+	m.vectors = make(map[string][]float32)
 	return nil
 }
 

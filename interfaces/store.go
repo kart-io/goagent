@@ -122,7 +122,7 @@ type Document struct {
 	//
 	// This field may be nil if embeddings haven't been generated yet.
 	// VectorStore implementations should generate embeddings if missing.
-	Embedding []float64 `json:"embedding,omitempty"`
+	Embedding []float32 `json:"embedding,omitempty"`
 
 	// Score represents the similarity or relevance score.
 	//
@@ -142,7 +142,7 @@ func (d *Document) Clone() *Document {
 		metadata[k] = v
 	}
 
-	embedding := make([]float64, len(d.Embedding))
+	embedding := make([]float32, len(d.Embedding))
 	copy(embedding, d.Embedding)
 
 	return &Document{

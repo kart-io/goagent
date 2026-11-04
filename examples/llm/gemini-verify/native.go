@@ -132,7 +132,7 @@ func checkNative(ctx context.Context, p *providers.GeminiProvider, method string
 
 func checkEmbedding(ctx context.Context, p *providers.GeminiProvider, r result) result {
 	texts := []string{"订单已发货，预计明天送达。", "The galaxy contains billions of stars and distant planets."}
-	vectors := make([][]float64, 0, 2)
+	vectors := make([][]float32, 0, 2)
 	var hashes []string
 	for i, text := range texts {
 		r.Details["embedding_requests"] = i + 1
@@ -141,15 +141,16 @@ func checkEmbedding(ctx context.Context, p *providers.GeminiProvider, r result) 
 			r.Error = err.Error()
 			return r
 		}
-		data := make([]byte, 8*len(v))
+		data := make([]byte, 4*len(v))
 		var norm float64
 		for j, x := range v {
-			if math.IsNaN(x) || math.IsInf(x, 0) {
+			f := float64(x)
+			if math.IsNaN(f) || math.IsInf(f, 0) {
 				r.Error = "non-finite vector"
 				return r
 			}
-			binary.LittleEndian.PutUint64(data[j*8:], math.Float64bits(x))
-			norm += x * x
+			binary.LittleEndian.PutUint32(data[j*4:], math.Float32bits(x))
+			norm += f * f
 		}
 		if len(v) == 0 || norm == 0 {
 			r.Error = "invalid vector"
@@ -164,8 +165,8 @@ func checkEmbedding(ctx context.Context, p *providers.GeminiProvider, r result) 
 		return r
 	}
 	var dot, normA, normB float64
-	for i, a := range vectors[0] {
-		b := vectors[1][i]
+	for i, x := range vectors[0] {
+		a, b := float64(x), float64(vectors[1][i])
 		dot += a * b
 		normA += a * a
 		normB += b * b

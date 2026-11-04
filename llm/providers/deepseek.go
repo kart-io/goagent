@@ -74,7 +74,7 @@ func NewDeepSeekWithOptions(opts ...agentllm.ClientOption) (*DeepSeekProvider, e
 
 // Embed retains a legacy OpenAI-compatible embedding request for custom
 // endpoints. It is not advertised as a verified DeepSeek embedding capability.
-func (p *DeepSeekProvider) Embed(ctx context.Context, text string) ([]float64, error) {
+func (p *DeepSeekProvider) Embed(ctx context.Context, text string) ([]float32, error) {
 	// DeepSeek embeddings API
 	type EmbedRequest struct {
 		Model string   `json:"model"`
@@ -85,7 +85,7 @@ func (p *DeepSeekProvider) Embed(ctx context.Context, text string) ([]float64, e
 		Object string `json:"object"`
 		Data   []struct {
 			Object    string    `json:"object"`
-			Embedding []float64 `json:"embedding"`
+			Embedding []float32 `json:"embedding"`
 			Index     int       `json:"index"`
 		} `json:"data"`
 		Model string `json:"model"`
