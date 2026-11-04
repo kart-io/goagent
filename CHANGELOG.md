@@ -7,7 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `workflow.ResumeRequest`、`DurableGraph.Resume` 与 `WithResumeHandler`：在已保存的审批暂停处接收人工输入，由宿主校验并更新业务状态；修改与放行原子落盘后继续执行。`RunRequest.Resume` 与 `workflow.WithResume` 分别支持 Runnable 入口和嵌套子图；无效输入保持等待，已消费的恢复键不能重复应用修改。新增 HITL 指南及离线通过/拒绝/编辑示例。
+
 ### Fixed
+
+- `core.InterruptManager` 不再忽略检查点保存错误：保存失败时释放中断 ID，不发布中断、不等待人工响应，也不执行后续业务。该管理器的等待状态仍限于进程内，跨进程恢复使用持久图。
 
 - PR 导入分层检查移除已删除的 `--strict` 参数，避免在运行测试前失败。
 - Makefile 按库项目执行 `go build ./...`，跨平台目标仅检查编译；`make run` 默认运行离线宿主示例，可通过 `EXAMPLE` 指定示例，CI 同时验证这两个入口。删除依赖不存在的统一应用二进制的安装、容器和初始化目标，迁移见开发指南。
