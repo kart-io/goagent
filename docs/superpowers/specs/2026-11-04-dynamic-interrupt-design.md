@@ -49,10 +49,18 @@ var ErrInterruptNotDurable = errors.New("暂停需要持久日志")
 实现要点：
 
 - 内部调用 `Do(ctx, "interrupt/"+id, info, OperationPolicy{Resumable: true, MaxAttempts: interruptAttempts}, run)`。`interruptAttempts` 是不小于 2 的常量：在写 pending 与写 waiting 之间崩溃时可以重入，中断本身没有副作用。
-- `run` 的逻辑：
-  - `ResumeInput` 有输入且 `validate` 通过 → 返回输入，记录变为 completed；
-  - 没有输入 → 返回 `&WaitError{Continuation: {ID, Info}}`，记录变为 waiting；
-  - `validate` 失败 → 返回 `&WaitError{Continuation: {ID, Info, Rejected: true, Reason}}`，记录保持 waiting。不能返回普通错误：普通错误会把记录写成 failed，Resumable 不会重入 failed 记录。
+- `run` 的逻辑。原语先自行检查 JSON 合法性，再调用 `validate`；任何拒绝都返回带 `Rejected` 的 `WaitError`，绝不返回普通错误。普通错误会把记录写成 failed，Resumable 不会重入 failed 记录；不合法的 JSON 输出也会被 `Do` 记为 failed（`operation.go:312`）。
+
+  | `ResumeInput` 的结果 | 处理 | 记录 |
+  |---|---|---|
+  | 没有输入（`ok=false`） | 返回 `&WaitError{Continuation: {ID, Info}}` | waiting |
+  | 空字符串 | 拒绝，`Reason="invalid_json"` | waiting |
+  | 不合法的 JSON | 拒绝，`Reason="invalid_json"` | waiting |
+  | 合法 JSON（包括 `null`），`validate == nil` | 接受，原样返回 | completed |
+  | 合法 JSON（包括 `null`），`validate` 通过 | 接受，原样返回 | completed |
+  | 合法 JSON，`validate` 失败 | 拒绝，`Reason` 取校验结果 | waiting |
+
+  `null` 是合法的显式输入，与“没有输入”不同。需要非空输入的调用方要在 `validate` 中拒绝 `null`。
 - 没有日志时（`HasJournal(ctx)` 为假），返回 `ErrInterruptNotDurable`。
 - ctx 不允许等待时（不在 Resumable 操作内，也不在 workflow 节点内），在写记录前返回 `ErrWaitNotResumable`。为此导出一个窄接口，供 workflow 把节点 ctx 标记为可等待；具体形式在实现计划中确定。
 - `Reason` 只写校验错误的类别或宿主提供的简短文本，不写入第三方错误原文，与 Do 保存错误时的约定一致。
@@ -110,15 +118,20 @@ type InterruptPoint struct {
 - 其他键 → 返回 `ErrApprovalMismatch`。
 - 一次回应一个中断。节点重新执行后，如果仍有中断没回应，就再次暂停并返回剩余的中断。
 - `RunRequest.Resume`（AsRunnable）接受同样的中断键。
-- 处于中断等待时调用不带键的 `Run(ctx, runID, zero, "")`：如果 ctx 里有任一待回应中断键对应的 `durable.ResumeInput`，或者所有待回应中断在日志中都已 completed，就重新执行节点；否则不执行节点，原样返回等待。
+- 处于中断等待时调用不带键的 `Run(ctx, runID, zero, "")`：只要满足以下**任一**条件，就重新执行节点：
+  - ctx 里有某个待回应中断键对应的 `durable.ResumeInput`；
+  - 某个待回应中断在日志中已经 completed。
+
+  重新执行后，已回应的中断回放已固定的输入，其余中断再次暂停。图检查点的 `Interrupts` 更新为剩余的中断。两个条件都不满足时，不执行节点，原样返回等待。
 
 ### 输入入日志后、图检查点更新前崩溃
 
 `AwaitInput` 的记录和图检查点是两条独立的记录。如果崩溃发生在输入已写入日志（中断记录 completed）、图检查点仍为中断等待之后：
 
 - 恢复（`Resume` 或不带键的 `Run`）时，按中断键查日志，发现已经 completed，就视为已回应：重新执行节点，`AwaitInput` 回放已固定的输入，不会再次询问。
-- 用同一个键再次提交**相同**输入：与正常恢复相同，幂等。
-- 用同一个键再次提交**不同**输入：不改变已固定的输入，返回 `ResumeRejectedError`，原因写明“该中断已回应”。节点照常用已固定的输入继续，宿主可以从 `Snapshot` 看到结果。
+- 并行分支部分回应：例如 A 的输入已写入日志、B 仍在等待时崩溃。新进程恢复时按上一节的“任一条件”规则重新执行节点：A 回放已固定的输入，B 再次暂停，检查点的 `Interrupts` 只剩 B。
+- 用同一个键再次提交**相同**输入：与正常恢复相同，幂等。“相同”的判定：两份输入各自经 `json.Compact` 压缩后逐字节相等。空白差异不算不同；键顺序或数字写法不同，算不同。
+- 用同一个键再次提交**不同**输入：直接拒绝，返回 `ResumeRejectedError`，原因为 `already_answered`。本次**不执行**节点，检查点不变，与 `ResumeRejectedError` 现有的“拒绝且检查点不变”契约一致。嵌套子图中同样返回拒绝等待（`ChildContinuation.Rejected`），父操作不会因此失败。宿主之后用不带输入的 `Run` 恢复，节点使用已固定的输入继续。
 - 判断是否已回应需要按键读取中断记录。`core/durable` 导出一个只读查询，具体形式在实现计划中确定，不暴露 `OperationRecord` 的写入能力。
 
 ### 嵌套子图的键传递
@@ -139,6 +152,13 @@ type InterruptPoint struct {
 ### 嵌套子图
 
 `AsChildRunnable` 在子图因节点内中断而暂停时，返回的 `ChildContinuation` 带上中断列表。外层 Agent 收到 `builder.ErrWaiting` 后，按上一节的两种方式之一回应。
+
+## 授权边界
+
+- 动态中断的回应不经过 `WithResumeHandler`、`WithBeforeApprove`，框架不做任何授权判断。
+- 中断键只用于定位这一次暂停，不是授权凭证，任何拿到键的人都能构造回应。宿主在调用 `Resume`、`durable.WithResume`、`workflow.WithResume` 之前，必须先认证回应者，并确认其有权回应这个中断（例如按 `InterruptPoint.ID` 和业务归属判断）。
+- `info` 会通过 `Snapshot` 和 `ChildContinuation` 暴露给宿主，不得放入凭证或宿主不该展示的数据。
+- 输入的业务合法性由 `validate` 负责，调用方不能只依赖界面上的必填校验。
 
 ## 工具
 
@@ -172,6 +192,7 @@ type InterruptPoint struct {
 - 首次调用进入等待，Continuation 带有 ID 与 Info。
 - 有输入时返回输入；之后再进入只回放，不再询问。
 - 校验失败时保持等待，并标记 `Rejected`；修正输入后可以通过。
+- 按输入表逐项覆盖：没有输入、空字符串、不合法的 JSON、`null`（`validate` 为 nil 和不为 nil 两种情况）、`validate` 失败。拒绝的情况下记录都保持 waiting，并且之后能用合法输入续跑。
 - 没有日志时返回 `ErrInterruptNotDurable`；不可等待的 ctx 返回 `ErrWaitNotResumable`，且不写记录。
 - 在写 pending 与写 waiting 之间模拟崩溃，之后能重入。
 - id 重复会回放上一次的输入（测试固定这一行为）。
@@ -184,7 +205,9 @@ type InterruptPoint struct {
 - 损坏检测：`Waiting && Approved` 且 `Interrupts` 为空、`Routing` 或 `END` 位置带 `Interrupts`、并行检查点处于审批等待，都判为损坏。
 - 两个并行分支各自暂停，兄弟分支不被取消，可以逐个回应恢复。
 - 嵌套子图节点内暂停，外层 Agent 以 `ErrWaiting` 暂停；分别用“直接传最内层中断键”和“`workflow.WithResume` 封装”两种方式恢复，覆盖两层嵌套。
-- 输入已写入日志、图检查点仍为中断等待时模拟崩溃：恢复后不再询问，用的是已固定的输入；再次提交相同输入时幂等；提交不同输入时返回 `ResumeRejectedError`，已固定的输入不变。
+- 输入已写入日志、图检查点仍为中断等待时模拟崩溃：恢复后不再询问，用的是已固定的输入。
+- 再次提交相同输入（含空白差异）时幂等。提交不同输入时返回 `ResumeRejectedError(already_answered)`，节点不执行，检查点不变；之后用不带输入的 `Run` 能恢复。嵌套子图中同样如此，父操作保持等待，不失败。
+- 并行分支部分回应后崩溃：A 已写入日志、B 仍在等待；不带输入的 `Run` 恢复后，A 继续执行，`Interrupts` 只剩 B，回应 B 后节点完成。
 - 同一图中既有审批等待也有中断等待。
 - 错误的键返回 `ErrApprovalMismatch`。
 - AsRunnable 入口：暂停时返回 `Waiting=true`，并发出 `interrupt_required` 事件。
