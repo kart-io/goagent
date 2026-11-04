@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **破坏性**：`builder` 未配置 `WithCheckpointer` 时不再创建 `checkpoint.NewInMemorySaver()`。该实例为每个 Agent 私有，`Initialize` 时必然为空，却在每轮自动保存时快照全部状态并无上限地追加历史。依赖默认检查点器的代码改为显式 `WithCheckpointer(checkpoint.NewInMemorySaver())`；`runtime.State` 本身在进程内跨轮保留，不受影响。
 - **破坏性**：同步 `Execute` 路径自动保存检查点失败时返回错误，与流式入口一致；原先只向标准错误输出一行并报告成功。
+- **破坏性**：Kimi、SiliconFlow、Ollama 改为 `OpenAIProvider` 的预设，删除各自手写的 HTTP 客户端，从而支持结构化流、原生工具流与 `AsRunnable`。`NewKimiWithOptions`、`NewSiliconFlowWithOptions`、`NewOllamaWithOptions`、`NewOllamaClientSimple` 改为返回 `*OpenAIProvider`（`KimiClient`、`SiliconFlowClient`、`OllamaClient` 删除），`Provider()` 仍返回各自身份；预设不声明 Embedding、视觉与 JSON 模式，不接受显式推理配置。迁移：Ollama 改走 `/v1` 兼容端点，默认地址变为 `http://localhost:11434/v1`，自定义 `OLLAMA_BASE_URL` 须补上 `/v1`；`ListModels()` 改为 `ListModels(ctx)`，读取 `/models`。
 
 ### Removed
 

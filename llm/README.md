@@ -26,7 +26,7 @@ llm/
 | DeepSeek | ✓ | ✓ | ✓ | - |
 | Gemini | ✓ | ✓ | ✓ | ✓ |
 | Anthropic、Cohere、HuggingFace | - | - | ✓ | - |
-| Kimi、SiliconFlow、Ollama | - | - | - | - |
+| Kimi、SiliconFlow、Ollama（OpenAI 兼容预设） | ✓ | ✓ | ✓ | - |
 
 所有 Provider 都实现 `Complete` / `Chat` 与 `CapabilityChecker`。Builder 的 `AsRunnable` / `ExecuteStream` 需要结构化流，原生工具循环需要 `ToolStreamClient`。用 `llm.HasStreaming`、`llm.HasToolStreaming` 检查接口；`CapabilityStreaming` 不能证明支持结构化流。
 

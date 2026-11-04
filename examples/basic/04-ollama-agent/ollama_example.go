@@ -170,7 +170,7 @@ func listOllamaModels() {
 		return
 	}
 
-	models, err := client.ListModels()
+	models, err := client.ListModels(context.Background())
 	if err != nil {
 		log.Printf("Failed to list models: %v\n", err)
 		return

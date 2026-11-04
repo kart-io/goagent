@@ -10,15 +10,15 @@
 | Anthropic | 有 | 有 | 无 | 无 | 无 | 无 |
 | Cohere | 有 | 有 | 无 | 无 | 无 | 无 |
 | HuggingFace | 有 | 有 | 无 | 无 | 无 | 无 |
-| Kimi | 有 | 无 | 无 | 无 | 无 | 无 |
-| SiliconFlow | 有 | 无 | 无 | 无 | 无 | 无 |
-| Ollama | 有 | 无 | 无 | 无 | 无 | 无 |
+| Kimi | 有 | 有 | 有 | 有 | 有 | 无 |
+| SiliconFlow | 有 | 有 | 有 | 有 | 有 | 无 |
+| Ollama | 有 | 有 | 有 | 有 | 有 | 无 |
 
 DeepSeekStreamingProvider 与 GeminiStreamingProvider 包装器继承对应基础接口；二者当前均支持结构化流和原生工具流。尚未实现的能力会在 Builder 原生入口或构建阶段拒绝，不通过模拟 Token 或占位结果冒充。
 
 ## 实现说明
 
-- 所有内置 Provider 都实现 `CapabilityChecker`；Kimi、SiliconFlow、Ollama 只声明 Complete/Chat。
+- 所有内置 Provider 都实现 `CapabilityChecker`。Kimi、SiliconFlow、Ollama 是 `OpenAIProvider` 的预设，`Provider()` 返回各自身份；不声明 Embedding（`Embed` 固定使用 OpenAI 向量模型）、视觉与 JSON 模式，也不接受显式推理配置。工具调用与流式是否可用取决于所选模型。
 - Gemini 的 `Embed` 发送真实 API 请求，使用独立的 `EmbeddingModel`（默认 `gemini-embedding-001`），校验向量非空、非全零且有限；取消与上游错误原样返回。
 - DeepSeek 的 `Embed` 方法向 `/embeddings` 发送兼容请求，模型名硬编码，不构成已验证的官方能力，因此不声明 Embedding，`HasEmbedding` 返回 false。官方模型目录见 [Lists Models](https://api-docs.deepseek.com/api/list-models/)，自定义端点需另行验证。
 - `llm.HasEmbedding` / `AsEmbedder` 同时检查方法与能力声明；没有实现 `CapabilityChecker` 的自定义客户端只按接口判断。

@@ -26,7 +26,7 @@ GoAgent 是嵌入 Go 业务服务的可恢复、可计量、可观测 Agent 执�
 - **循环扩展点**：PreStep、Request、RequestError、TurnStopping 钩子，提示词段落与上下文，以及接受 Steer/Inject/Redirect/Followup 的运行句柄 `Handle`。
 - **持久执行**：`core/durable` 记录模型回合与工具调用；`workflow.Graph` 编译带分支、并行汇合、有界循环与审批恢复的类型化图。
 - **执行治理**：根预算（`core/budget`）、带审批、守卫与准入限制的 `tools.Dispatcher`/`Pipeline`、工具结果卸载、会话日志（`core/session`）。
-- **LLM 提供商**：OpenAI（及兼容端点）、DeepSeek、Gemini 支持 `AsRunnable` 与原生工具循环；Anthropic、Kimi、SiliconFlow、Ollama、Cohere、Hugging Face 经同步入口 `Execute` 使用。见[提供商对照](docs/README.md#llm-提供商)。
+- **LLM 提供商**：OpenAI（及兼容端点）、DeepSeek、Gemini 支持 `AsRunnable` 与原生工具循环；Kimi、SiliconFlow、Ollama 是 OpenAI 兼容预设，支持相同；Anthropic、Cohere、Hugging Face 经同步入口 `Execute` 使用。见[提供商对照](docs/README.md#llm-提供商)。
 - **可观测性**：只读执行事件（`core/observe`）与 OpenTelemetry 集成（`observability`）。
 - **MCP**：把官方 MCP 客户端会话适配为工具（`mcp/remote`），以及本地工具箱。
 

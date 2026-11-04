@@ -195,9 +195,9 @@ type ClassifiedError struct {
 | `NewDeepSeekWithOptions` | `*DeepSeekProvider` | `ProviderDeepSeek` |
 | `NewCohereWithOptions` | `*CohereProvider` | `ProviderCohere` |
 | `NewHuggingFaceWithOptions` | `*HuggingFaceProvider` | `ProviderHuggingFace` |
-| `NewOllamaWithOptions`、`NewOllamaClientSimple(model)` | `*OllamaClient` | `ProviderOllama` |
-| `NewKimiWithOptions` | `*KimiClient` | `ProviderKimi` |
-| `NewSiliconFlowWithOptions` | `*SiliconFlowClient` | `ProviderSiliconFlow` |
+| `NewOllamaWithOptions`、`NewOllamaClientSimple(model)` | `*OpenAIProvider` | `ProviderOllama` |
+| `NewKimiWithOptions` | `*OpenAIProvider` | `ProviderKimi` |
+| `NewSiliconFlowWithOptions` | `*OpenAIProvider` | `ProviderSiliconFlow` |
 
 `NewDeepSeekStreamingWithOptions` / `NewDeepSeekStreaming(*LLMOptions)` 与 `NewGeminiStreamingWithOptions` / `NewGeminiStreaming(*LLMOptions)` 返回嵌入基础 Provider 的包装类型，能力与基础 Provider 相同。
 

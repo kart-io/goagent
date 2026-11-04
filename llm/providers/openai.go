@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/sashabaranov/go-openai"
@@ -23,37 +24,21 @@ type OpenAIProvider struct {
 	*common.BaseProvider
 	*common.ProviderCapabilities
 	client *openai.Client
+	// reasoning 表示服务接受 reasoning_effort；不接受时显式推理配置在请求前报错。
+	reasoning bool
 }
 
 // NewOpenAIWithOptions creates a new OpenAI provider using options pattern
 func NewOpenAIWithOptions(opts ...agentllm.ClientOption) (*OpenAIProvider, error) {
-	// 创建 common.BaseProvider，统一处理 Options
-	base := common.NewBaseProvider(opts...)
-
-	// 应用 Provider 特定的默认值
-	base.ApplyProviderDefaults(
-		constants.ProviderOpenAI,
-		"https://api.openai.com/v1",
-		openai.GPT4TurboPreview,
-		constants.EnvOpenAIBaseURL,
-		constants.EnvOpenAIModel,
-	)
-
-	// 统一处理 API Key
-	if err := base.EnsureAPIKey(constants.EnvOpenAIAPIKey, constants.ProviderOpenAI); err != nil {
-		return nil, err
-	}
-
-	// 创建 OpenAI 客户端配置
-	clientConfig := openai.DefaultConfig(base.Config.APIKey)
-	if base.Config.BaseURL != "" {
-		clientConfig.BaseURL = base.Config.BaseURL
-	}
-	clientConfig.HTTPClient = zeroTemperatureDoer{next: retryAfterDoer{next: responseHeaderTimeoutClient(base.GetTimeout())}}
-
-	provider := &OpenAIProvider{
-		BaseProvider: base,
-		ProviderCapabilities: common.NewProviderCapabilities(
+	return newOpenAICompatible(openAICompatibleSpec{
+		provider:       constants.ProviderOpenAI,
+		defaultBaseURL: "https://api.openai.com/v1",
+		defaultModel:   openai.GPT4TurboPreview,
+		envAPIKey:      constants.EnvOpenAIAPIKey,
+		envBaseURL:     constants.EnvOpenAIBaseURL,
+		envModel:       constants.EnvOpenAIModel,
+		reasoning:      true,
+		capabilities: []agentllm.Capability{
 			agentllm.CapabilityCompletion,
 			agentllm.CapabilityChat,
 			agentllm.CapabilityStreaming,
@@ -63,11 +48,74 @@ func NewOpenAIWithOptions(opts ...agentllm.ClientOption) (*OpenAIProvider, error
 			agentllm.CapabilityEmbedding,
 			agentllm.CapabilityVision,
 			agentllm.CapabilityJSON,
-		),
-		client: openai.NewClientWithConfig(clientConfig),
+		},
+	}, opts...)
+}
+
+// openAICompatibleSpec 描述走 OpenAI Chat Completions 协议的服务：身份、默认值与声明的能力。
+type openAICompatibleSpec struct {
+	provider                        constants.Provider
+	defaultBaseURL, defaultModel    string
+	envAPIKey, envBaseURL, envModel string
+	// apiKeyOptional 用于本地服务：未提供密钥时发送占位值，SDK 要求非空。
+	apiKeyOptional bool
+	// defaultTimeout 仅在调用方未改动默认超时时生效。
+	defaultTimeout time.Duration
+	reasoning      bool
+	capabilities   []agentllm.Capability
+}
+
+// openAICompatibleCapabilities 是兼容服务的保守能力集：Embed 固定使用 OpenAI 的向量模型，
+// 视觉与 JSON 模式依赖具体模型，因此不声明。
+var openAICompatibleCapabilities = []agentllm.Capability{
+	agentllm.CapabilityCompletion,
+	agentllm.CapabilityChat,
+	agentllm.CapabilityStreaming,
+	agentllm.CapabilityStructuredStreaming,
+	agentllm.CapabilityToolStreaming,
+	agentllm.CapabilityToolCalling,
+}
+
+func newOpenAICompatible(spec openAICompatibleSpec, opts ...agentllm.ClientOption) (*OpenAIProvider, error) {
+	base := common.NewBaseProvider(opts...)
+	base.ApplyProviderDefaults(spec.provider, spec.defaultBaseURL, spec.defaultModel, spec.envBaseURL, spec.envModel)
+
+	if spec.apiKeyOptional {
+		if err := base.RejectReasoning(nil); err != nil {
+			return nil, err
+		}
+		if base.Config.APIKey == "" && spec.envAPIKey != "" {
+			base.Config.APIKey = os.Getenv(spec.envAPIKey)
+		}
+		if base.Config.APIKey == "" {
+			base.Config.APIKey = string(spec.provider)
+		}
+	} else if err := base.EnsureAPIKey(spec.envAPIKey, spec.provider); err != nil {
+		return nil, err
 	}
 
-	return provider, nil
+	timeout := compatibleTimeout(base.GetTimeout(), spec.defaultTimeout)
+
+	clientConfig := openai.DefaultConfig(base.Config.APIKey)
+	if base.Config.BaseURL != "" {
+		clientConfig.BaseURL = base.Config.BaseURL
+	}
+	clientConfig.HTTPClient = zeroTemperatureDoer{next: retryAfterDoer{next: responseHeaderTimeoutClient(timeout)}}
+
+	return &OpenAIProvider{
+		BaseProvider:         base,
+		ProviderCapabilities: common.NewProviderCapabilities(spec.capabilities...),
+		client:               openai.NewClientWithConfig(clientConfig),
+		reasoning:            spec.reasoning,
+	}, nil
+}
+
+// compatibleTimeout 在调用方保留默认超时时改用服务自身的默认值，显式设置的超时不变。
+func compatibleTimeout(configured, serviceDefault time.Duration) time.Duration {
+	if serviceDefault > 0 && configured == time.Duration(agentllm.DefaultLLMOptions().Timeout)*time.Second {
+		return serviceDefault
+	}
+	return configured
 }
 
 // responseHeaderTimeoutClient 把超时用作拿到响应头的时限：非流式请求在生成完毕后才返回响应头，因而整体受限；
@@ -496,7 +544,7 @@ func (p *OpenAIProvider) Embed(ctx context.Context, text string) ([]float64, err
 
 // Provider returns the provider type
 func (p *OpenAIProvider) Provider() constants.Provider {
-	return constants.ProviderOpenAI
+	return p.Config.Provider
 }
 
 // IsAvailable checks if the provider is available

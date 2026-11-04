@@ -33,9 +33,9 @@ func TestProviderCapabilityContractMatrix(t *testing.T) {
 		{"anthropic", contractFactory(NewAnthropicWithOptions), true, false, false, false, false},
 		{"cohere", contractFactory(NewCohereWithOptions), true, false, false, false, false},
 		{"huggingface", contractFactory(NewHuggingFaceWithOptions), true, false, false, false, false},
-		{"kimi", contractFactory(NewKimiWithOptions), false, false, false, false, false},
-		{"siliconflow", contractFactory(NewSiliconFlowWithOptions), false, false, false, false, false},
-		{"ollama", contractFactory(NewOllamaWithOptions), false, false, false, false, false},
+		{"kimi", contractFactory(NewKimiWithOptions), true, true, true, true, false},
+		{"siliconflow", contractFactory(NewSiliconFlowWithOptions), true, true, true, true, false},
+		{"ollama", contractFactory(NewOllamaWithOptions), true, true, true, true, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var calls atomic.Int32

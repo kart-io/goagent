@@ -150,7 +150,7 @@ func TestProviderWireExplicitZero(t *testing.T) {
 		"HuggingFace": {func(o ...llm.ClientOption) (llm.Client, error) { return providers.NewHuggingFaceWithOptions(o...) }, `[{"generated_text":"好"}]`, "parameters"},
 		"Kimi":        {func(o ...llm.ClientOption) (llm.Client, error) { return providers.NewKimiWithOptions(o...) }, `{"choices":[{"message":{"role":"assistant","content":"好"},"finish_reason":"stop"}]}`, ""},
 		"SiliconFlow": {func(o ...llm.ClientOption) (llm.Client, error) { return providers.NewSiliconFlowWithOptions(o...) }, `{"choices":[{"message":{"role":"assistant","content":"好"},"finish_reason":"stop"}]}`, ""},
-		"Ollama":      {func(o ...llm.ClientOption) (llm.Client, error) { return providers.NewOllamaWithOptions(o...) }, `{"model":"test","message":{"role":"assistant","content":"好"},"done":true}`, "options"},
+		"Ollama":      {func(o ...llm.ClientOption) (llm.Client, error) { return providers.NewOllamaWithOptions(o...) }, `{"choices":[{"message":{"role":"assistant","content":"好"},"finish_reason":"stop"}]}`, ""},
 		"Gemini":      {func(o ...llm.ClientOption) (llm.Client, error) { return providers.NewGeminiWithOptions(o...) }, `{"candidates":[{"content":{"role":"model","parts":[{"text":"好"}]},"finishReason":"STOP"}]}`, "generationConfig"},
 	}
 	for name, tc := range providersToTest {
