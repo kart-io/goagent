@@ -19,8 +19,10 @@ type ResumeRequest struct {
 	Input json.RawMessage `json:"input,omitempty"`
 }
 
-// ResumeRejectedError means human input was rejected without changing the
-// checkpoint. The host may correct the input and retry the same waiting key.
+// ResumeRejectedError means human input was not accepted and the node did not
+// advance. The host may correct the input and retry the same waiting key. When a
+// dynamic interrupt's validator rejects the input, only that interrupt's
+// Rejected/Reason in the checkpoint are updated.
 // Storage errors, cancellation and panics are not input rejection.
 type ResumeRejectedError struct{ Err error }
 

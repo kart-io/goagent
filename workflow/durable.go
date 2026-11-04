@@ -353,11 +353,11 @@ func (d *DurableGraph[T]) run(ctx context.Context, store durable.Store, id strin
 				if err = save(waiting, paused); err != nil {
 					return result, err
 				}
-				if err = emit(&core.StreamEvent{Type: "interrupt_required", Step: nodeName}); err != nil {
-					return result, err
-				}
 				if i := slices.IndexFunc(points, func(p InterruptPoint) bool { return p.Key == answered && p.Rejected }); answered != "" && i >= 0 {
 					return result, &ResumeRejectedError{Err: fmt.Errorf("中断输入被拒绝：%s", points[i].Reason)}
+				}
+				if err = emit(&core.StreamEvent{Type: "interrupt_required", Step: nodeName}); err != nil {
+					return result, err
 				}
 				return result, durable.ErrApprovalRequired
 			}

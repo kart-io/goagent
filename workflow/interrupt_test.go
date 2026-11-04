@@ -123,6 +123,18 @@ func TestNodeInterruptRejectsInvalidInput(t *testing.T) {
 	require.True(t, snap.Interrupts[0].Rejected)
 	require.Equal(t, "需要正整数", snap.Interrupts[0].Reason)
 
+	stream, err := run.AsRunnable().Stream(ctx, workflow.RunRequest[int]{RunID: "ask",
+		Resume: &workflow.ResumeRequest{Key: point.Key, Input: json.RawMessage(`-2`)}})
+	require.NoError(t, err)
+	var streamErr error
+	for chunk := range stream {
+		require.False(t, chunk.Event != nil && chunk.Event.Type == "interrupt_required", "拒绝路径不发中断事件")
+		if chunk.Error != nil {
+			streamErr = chunk.Error
+		}
+	}
+	require.ErrorAs(t, streamErr, &rejected)
+
 	out, err := run.Resume(ctx, "ask", workflow.ResumeRequest{Key: point.Key, Input: json.RawMessage(`2`)})
 	require.NoError(t, err)
 	require.Equal(t, 12, out.State)
