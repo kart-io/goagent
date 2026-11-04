@@ -41,7 +41,7 @@ func NewAnthropicWithOptions(opts ...agentllm.ClientOption) (*AnthropicProvider,
 		option.WithAPIKey(base.Config.APIKey),
 		option.WithBaseURL(base.Config.BaseURL),
 		option.WithMaxRetries(0),
-		option.WithHTTPClient(responseHeaderTimeoutClient(base.GetTimeout())),
+		option.WithHTTPClient(responseHeaderTimeoutClient(base.GetTimeout(), base.Config.CustomHeaders)),
 	)
 	return &AnthropicProvider{
 		BaseProvider: base,

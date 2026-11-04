@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `llm/providers`：`WithCustomHeaders` 对 OpenAI、Kimi、SiliconFlow、Ollama、Anthropic 与 Gemini 不生效，只有 DeepSeek 带上了自定义请求头；其中 Kimi、SiliconFlow、Ollama 与 Anthropic 是 0.43.0 改用 SDK 时丢失的。现在所有内置 Provider 都会发送，并覆盖 SDK 设置的同名头。只认 `x-api-key` 的 Anthropic 网关可用它补发该头。
+
 ## [0.43.0] - 2026-11-04
 
 ### Fixed

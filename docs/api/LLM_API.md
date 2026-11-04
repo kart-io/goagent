@@ -179,7 +179,7 @@ type ClassifiedError struct {
 | `WithResponseFormat`、`WithJSONResponse` | `ResponseFormatText` / `ResponseFormatJSON`；目前只有 DeepSeek 的非流式请求读取 |
 | `WithSystemPrompt` | 前置到每次请求的系统提示 |
 | `WithTimeout(time.Duration)` | 按整秒保存，正数向上取整；语义见 [最佳实践](../guides/PROVIDER_BEST_PRACTICES.md#超时配置) |
-| `WithCustomHeaders` | 合并到基于 resty 的 HTTP Provider 及 DeepSeek 结构化流的请求头 |
+| `WithCustomHeaders` | 附加到所有内置 Provider 的请求，覆盖 SDK 设置的同名头 |
 | `WithProvider` | 由构造函数自行设置，通常不需要 |
 
 模型调用的重试应在 Builder 层用 `WithRequestError` + `RetryTransient` 配置。DeepSeek 的非流式 HTTP 调用内置固定次数的重试，不可配置；OpenAI、Gemini 与 Anthropic 不做隐式重试。

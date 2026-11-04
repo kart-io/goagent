@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"iter"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -37,9 +38,13 @@ func NewGeminiWithOptions(opts ...agentllm.ClientOption) (*GeminiProvider, error
 	// No implicit SDK retries: one provider invocation is one upstream request.
 	attempts := int32(1)
 	timeout := base.GetTimeout()
+	headers := http.Header{}
+	for key, value := range base.Config.CustomHeaders {
+		headers.Set(key, value)
+	}
 	client, err := genai.NewClient(context.Background(), &genai.ClientConfig{
 		APIKey: base.Config.APIKey, Backend: genai.BackendGeminiAPI,
-		HTTPOptions: genai.HTTPOptions{BaseURL: base.Config.BaseURL, APIVersion: "v1beta", Timeout: &timeout, RetryOptions: &genai.HTTPRetryOptions{Attempts: &attempts}},
+		HTTPOptions: genai.HTTPOptions{BaseURL: base.Config.BaseURL, APIVersion: "v1beta", Timeout: &timeout, RetryOptions: &genai.HTTPRetryOptions{Attempts: &attempts}, Headers: headers},
 	})
 	if err != nil {
 		return nil, agentErrors.NewAgentInitializationError("gemini_provider", err)

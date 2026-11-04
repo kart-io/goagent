@@ -24,7 +24,7 @@
 - **Gemini**：基于 Google GenAI SDK 调用原生 API，使用 API Key 认证。`GEMINI_BASE_URL` 填原生根地址，不要填 OpenAI 兼容的 `/v1beta/openai` 路径。向量模型通过 `llm.WithEmbeddingModel` 或 `GEMINI_EMBEDDING_MODEL` 指定，默认 `gemini-embedding-001`。原生工具循环在 `Message.ProviderState` 中保留签名，自管消息历史时须原样回传。验证案例见 [gemini-verify](../../examples/llm/gemini-verify/README.md)。
 - **DeepSeek**：`NewDeepSeekWithOptions` 直接实现结构化流与原生工具流；`NewDeepSeekStreamingWithOptions` 只是嵌入它的包装。旧 `Embed` 方法发送兼容请求，但不声明 Embedding 能力。
 - **OpenAI**：`WithBaseURL` 可指向 OpenAI 兼容端点，兼容程度需自行验证。
-- **Anthropic**：基于官方 `anthropic-sdk-go/v2`，支持结构化流与原生工具流，SDK 不做隐式重试。SDK 发送的 API 版本 `2026-10-21` 拒绝采样参数，因此 `WithTemperature`、`TopP` 对 Anthropic 不生效。思考块随原生工具循环保存在 `Message.ProviderState` 中，自管消息历史时须原样回传。SDK 以 `Authorization: Bearer` 发送 API Key，经只认 `x-api-key` 的代理或网关接入时需调整其配置。
+- **Anthropic**：基于官方 `anthropic-sdk-go/v2`，支持结构化流与原生工具流，SDK 不做隐式重试。SDK 发送的 API 版本 `2026-10-21` 拒绝采样参数，因此 `WithTemperature`、`TopP` 对 Anthropic 不生效。思考块随原生工具循环保存在 `Message.ProviderState` 中，自管消息历史时须原样回传。SDK 以 `Authorization: Bearer` 发送 API Key，经只认 `x-api-key` 的代理或网关接入时，用 `WithCustomHeaders(map[string]string{"X-Api-Key": key})` 同时发送该头。
 - **Kimi、SiliconFlow、Ollama**：返回 `*OpenAIProvider`，经 OpenAI 兼容协议支持结构化流与原生工具流；`ListModels(ctx)` 读取 `/models`。
 - **Ollama**：使用 `/v1` 兼容端点，自定义 `OLLAMA_BASE_URL` 须带 `/v1`。`NewOllamaClientSimple(model)` 等价于只设置模型的 `NewOllamaWithOptions`；未设置超时时使用 120 秒。
 
