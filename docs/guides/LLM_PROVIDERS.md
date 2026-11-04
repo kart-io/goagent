@@ -10,7 +10,7 @@
 | 提供商 | 构造函数 | API Key 环境变量 | BaseURL / Model 环境变量 | 默认 BaseURL | 默认模型 |
 |---|---|---|---|---|---|
 | OpenAI | `NewOpenAIWithOptions` | `OPENAI_API_KEY` | `OPENAI_BASE_URL` / `OPENAI_MODEL` | `https://api.openai.com/v1` | `gpt-4-turbo-preview` |
-| Anthropic | `NewAnthropicWithOptions` | `ANTHROPIC_API_KEY` | `ANTHROPIC_BASE_URL` / `ANTHROPIC_MODEL` | `https://api.anthropic.com` | `claude-3-5-sonnet-20241022` |
+| Anthropic | `NewAnthropicWithOptions` | `ANTHROPIC_API_KEY` | `ANTHROPIC_BASE_URL` / `ANTHROPIC_MODEL` | `https://api.anthropic.com` | `claude-opus-5-5` |
 | Gemini | `NewGeminiWithOptions` | `GEMINI_API_KEY` | `GEMINI_BASE_URL` / `GEMINI_MODEL` | `https://generativelanguage.googleapis.com` | `gemini-2.5-flash` |
 | DeepSeek | `NewDeepSeekWithOptions` | `DEEPSEEK_API_KEY` | `DEEPSEEK_BASE_URL` / `DEEPSEEK_MODEL` | `https://api.deepseek.com/v1` | `deepseek-chat` |
 | Kimi | `NewKimiWithOptions` | `KIMI_API_KEY` | `KIMI_BASE_URL` / `KIMI_MODEL` | `https://api.moonshot.cn/v1` | `moonshot-v1-8k` |
@@ -24,6 +24,7 @@
 - **Gemini**：基于 Google GenAI SDK 调用原生 API，使用 API Key 认证。`GEMINI_BASE_URL` 填原生根地址，不要填 OpenAI 兼容的 `/v1beta/openai` 路径。向量模型通过 `llm.WithEmbeddingModel` 或 `GEMINI_EMBEDDING_MODEL` 指定，默认 `gemini-embedding-001`。原生工具循环在 `Message.ProviderState` 中保留签名，自管消息历史时须原样回传。验证案例见 [gemini-verify](../../examples/llm/gemini-verify/README.md)。
 - **DeepSeek**：`NewDeepSeekWithOptions` 直接实现结构化流与原生工具流；`NewDeepSeekStreamingWithOptions` 只是嵌入它的包装。旧 `Embed` 方法发送兼容请求，但不声明 Embedding 能力。
 - **OpenAI**：`WithBaseURL` 可指向 OpenAI 兼容端点，兼容程度需自行验证。
+- **Anthropic**：基于官方 `anthropic-sdk-go/v2`，支持结构化流与原生工具流，SDK 不做隐式重试。SDK 发送的 API 版本 `2026-10-21` 拒绝采样参数，因此 `WithTemperature`、`TopP` 对 Anthropic 不生效。思考块随原生工具循环保存在 `Message.ProviderState` 中，自管消息历史时须原样回传。SDK 以 `Authorization: Bearer` 发送 API Key，经只认 `x-api-key` 的代理或网关接入时需调整其配置。
 - **Kimi、SiliconFlow、Ollama**：返回 `*OpenAIProvider`，经 OpenAI 兼容协议支持结构化流与原生工具流；`ListModels(ctx)` 读取 `/models`。
 - **Ollama**：使用 `/v1` 兼容端点，自定义 `OLLAMA_BASE_URL` 须带 `/v1`。`NewOllamaClientSimple(model)` 等价于只设置模型的 `NewOllamaWithOptions`；未设置超时时使用 120 秒。
 

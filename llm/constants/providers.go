@@ -17,12 +17,7 @@ const (
 const (
 	// Anthropic
 	AnthropicBaseURL      = "https://api.anthropic.com"
-	AnthropicDefaultModel = "claude-3-5-sonnet-20241022"
-	AnthropicAPIVersion   = "2023-06-01"
-	AnthropicMaxAttempts  = 3
-	AnthropicBaseDelay    = 1 * time.Second
-	AnthropicMaxDelay     = 30 * time.Second
-	AnthropicMessagesPath = "/v1/messages"
+	AnthropicDefaultModel = "claude-opus-5-5"
 
 	// Kimi (Moonshot AI)
 	KimiBaseURL = "https://api.moonshot.cn/v1"
@@ -42,20 +37,17 @@ const (
 
 // HTTP Headers
 const (
-	HeaderContentType      = "Content-Type"
-	HeaderAuthorization    = "Authorization"
-	HeaderAPIKey           = "x-api-key"
-	HeaderXAPIKey          = "x-api-key"
-	HeaderAccept           = "Accept"
-	HeaderRetryAfter       = "Retry-After"
-	HeaderAnthropicVersion = "anthropic-version"
+	HeaderContentType   = "Content-Type"
+	HeaderAuthorization = "Authorization"
+	HeaderAPIKey        = "x-api-key"
+	HeaderAccept        = "Accept"
+	HeaderRetryAfter    = "Retry-After"
 )
 
 // Content Types
 const (
 	ContentTypeJSON        = "application/json"
 	ContentTypeEventStream = "text/event-stream"
-	AcceptEventStream      = "text/event-stream"
 )
 
 // Authorization prefixes
@@ -119,17 +111,10 @@ const (
 	StreamEventError   = "error"
 )
 
-// SSE (Server-Sent Events) constants
-const (
-	SSEDataPrefix  = "data: "
-	SSEDoneMessage = "[DONE]"
-)
-
 // Stream event type constants
 const (
 	// Anthropic events
-	EventContentBlockDelta = "content_block_delta"
-	EventMessageStart      = "message_start"
-	EventMessageDelta      = "message_delta"
-	EventMessageStop       = "message_stop"
+	EventMessageStart = "message_start"
+	EventMessageDelta = "message_delta"
+	EventMessageStop  = "message_stop"
 )

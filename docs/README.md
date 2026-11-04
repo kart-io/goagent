@@ -38,7 +38,7 @@ GoAgent 是嵌入 Go 服务的 Agent 执行内核：原生工具循环、类型�
 | OpenAI 及兼容端点 | `NewOpenAIWithOptions` | 支持 |
 | DeepSeek | `NewDeepSeekWithOptions` | 支持 |
 | Gemini | `NewGeminiWithOptions` | 支持 |
-| Anthropic | `NewAnthropicWithOptions` | 不支持，经 `Execute` / `ExecuteWithTools` 调用 |
+| Anthropic | `NewAnthropicWithOptions` | 支持（官方 SDK） |
 | Kimi | `NewKimiWithOptions` | 支持（OpenAI 兼容预设） |
 | SiliconFlow | `NewSiliconFlowWithOptions` | 支持（OpenAI 兼容预设） |
 | Ollama | `NewOllamaWithOptions` | 支持（OpenAI 兼容预设） |

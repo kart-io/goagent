@@ -21,7 +21,7 @@ if err != nil {
 }
 ```
 
-可用的构造函数：`NewOpenAIWithOptions`、`NewAnthropicWithOptions`、`NewGeminiWithOptions`、`NewDeepSeekWithOptions`、`NewOllamaWithOptions`、`NewSiliconFlowWithOptions`、`NewKimiWithOptions`；除 Anthropic 外均实现 `llm.StreamClient`（Kimi、SiliconFlow、Ollama 为 OpenAI 兼容预设）；`NewDeepSeekStreamingWithOptions`、`NewGeminiStreamingWithOptions` 是保留的流式包装。
+可用的构造函数：`NewOpenAIWithOptions`、`NewAnthropicWithOptions`、`NewGeminiWithOptions`、`NewDeepSeekWithOptions`、`NewOllamaWithOptions`、`NewSiliconFlowWithOptions`、`NewKimiWithOptions`；全部实现 `llm.StreamClient` 与 `llm.ToolStreamClient`（Kimi、SiliconFlow、Ollama 为 OpenAI 兼容预设，Anthropic 基于官方 SDK）；`NewDeepSeekStreamingWithOptions`、`NewGeminiStreamingWithOptions` 是保留的流式包装。
 
 GoAgent 没有按名称查找 Provider 的注册表，应直接调用对应构造函数。
 

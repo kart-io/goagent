@@ -181,7 +181,7 @@ type ClassifiedError struct {
 | `WithCustomHeaders` | 合并到基于 resty 的 HTTP Provider 及 DeepSeek 结构化流的请求头 |
 | `WithProvider` | 由构造函数自行设置，通常不需要 |
 
-模型调用的重试应在 Builder 层用 `WithRequestError` + `RetryTransient` 配置。Anthropic 与 DeepSeek 的非流式 HTTP 调用内置固定次数的重试，不可配置；OpenAI 与 Gemini 不做隐式重试。
+模型调用的重试应在 Builder 层用 `WithRequestError` + `RetryTransient` 配置。DeepSeek 的非流式 HTTP 调用内置固定次数的重试，不可配置；OpenAI、Gemini 与 Anthropic 不做隐式重试。
 
 ## Provider 构造函数
 

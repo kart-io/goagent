@@ -7,7 +7,7 @@
 | OpenAI | 有 | 有 | 有 | 有 | 有 | 有，仍须选用可用端点/模型 |
 | DeepSeek | 有 | 有 | 有 | 有 | 有 | 无；旧兼容 HTTP 方法保留 |
 | Gemini | 有 | 有 | 有 | 有 | 有 | 有，独立 Embedding 模型 |
-| Anthropic | 有 | 有 | 无 | 无 | 无 | 无 |
+| Anthropic | 有 | 有 | 有 | 有 | 无 | 无 |
 | Kimi | 有 | 有 | 有 | 有 | 有 | 无 |
 | SiliconFlow | 有 | 有 | 有 | 有 | 有 | 无 |
 | Ollama | 有 | 有 | 有 | 有 | 有 | 无 |

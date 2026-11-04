@@ -45,7 +45,7 @@ func basicExample() {
 	provider, err := providers.NewAnthropicWithOptions(
 		llm.WithBaseURL(os.Getenv("ANTHROPIC_API_BASE_URL")), // Optional: for custom endpoints
 		llm.WithAPIKey(os.Getenv("ANTHROPIC_API_KEY")),       // or set directly: APIKey: "your-api-key"
-		llm.WithModel("claude-3-sonnet-20240229"),            // Optional: defaults to claude-3-sonnet-20240229
+		llm.WithModel("claude-opus-5-5"),                     // Optional: defaults to claude-opus-5-5
 	)
 	if err != nil {
 		log.Fatalf("Failed to create Anthropic provider: %v", err)
@@ -71,9 +71,9 @@ func basicExample() {
 // Example 2: Using Different Models
 func modelExample() {
 	models := []string{
-		"claude-3-opus-20240229",   // Most capable
-		"claude-3-sonnet-20240229", // Balanced
-		"claude-3-haiku-20240307",  // Fastest
+		"claude-opus-5-5",   // Most capable Opus
+		"claude-sonnet-5-5", // Balanced
+		"claude-haiku-5-5",  // Fastest
 	}
 
 	for _, model := range models {
@@ -129,7 +129,7 @@ func streamingExample() {
 
 // Example 4: Multi-turn Conversation
 func conversationExample() {
-	provider, err := providers.NewAnthropicWithOptions(llm.WithAPIKey(os.Getenv("ANTHROPIC_API_KEY")), llm.WithTemperature(0.7), llm.WithMaxTokens(1000))
+	provider, err := providers.NewAnthropicWithOptions(llm.WithAPIKey(os.Getenv("ANTHROPIC_API_KEY")), llm.WithMaxTokens(1000))
 	if err != nil {
 		log.Fatalf("Failed to create provider: %v", err)
 	}

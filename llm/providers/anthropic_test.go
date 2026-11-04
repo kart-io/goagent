@@ -2,631 +2,254 @@ package providers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	agentErrors "github.com/kart-io/goagent/errors"
-	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/core/usage"
+	"github.com/kart-io/goagent/interfaces"
 	agentllm "github.com/kart-io/goagent/llm"
-	"github.com/kart-io/goagent/llm/common"
 	"github.com/kart-io/goagent/llm/constants"
 	"github.com/kart-io/goagent/utils/json"
 )
 
-// TestNewAnthropic tests the constructor
-func TestNewAnthropic(t *testing.T) {
-	tests := []struct {
-		name        string
-		config      *llm.LLMOptions
-		envAPIKey   string
-		envBaseURL  string
-		envModel    string
-		wantErr     bool
-		errCode     agentErrors.ErrorCode
-		checkResult func(*testing.T, *AnthropicProvider)
-	}{
-		{
-			name: "valid config with all parameters",
-			config: &llm.LLMOptions{
-				APIKey:      "test-key",
-				BaseURL:     "https://custom.api.com",
-				Model:       "claude-3-opus-20240229",
-				MaxTokens:   4000,
-				Temperature: 0.8,
-				Timeout:     120,
-			},
-			wantErr: false,
-			checkResult: func(t *testing.T, p *AnthropicProvider) {
-				assert.Equal(t, "test-key", p.apiKey)
-				assert.Equal(t, "https://custom.api.com", p.baseURL)
-				assert.Equal(t, "claude-3-opus-20240229", p.GetModel(""))
-				assert.Equal(t, 4000, p.GetMaxTokens(0))
-				assert.Equal(t, 0.8, p.GetTemperature(0))
-			},
-		},
-		{
-			name: "minimal config with defaults",
-			config: &llm.LLMOptions{
-				APIKey: "test-key",
-			},
-			wantErr: false,
-			checkResult: func(t *testing.T, p *AnthropicProvider) {
-				assert.Equal(t, "test-key", p.apiKey)
-				assert.Equal(t, "https://api.anthropic.com", p.baseURL)
-				assert.Equal(t, "claude-3-5-sonnet-20241022", p.GetModel(""))
-				assert.Equal(t, 2000, p.GetMaxTokens(0)) // Default from DefaultLLMOptions()
-				assert.Equal(t, 0.7, p.GetTemperature(0))
-			},
-		},
-		{
-			name: "config with env var API key",
-			config: &llm.LLMOptions{
-				Model: "claude-3-haiku-20240307",
-			},
-			envAPIKey: "env-api-key",
-			wantErr:   false,
-			checkResult: func(t *testing.T, p *AnthropicProvider) {
-				assert.Equal(t, "env-api-key", p.apiKey)
-				assert.Equal(t, "claude-3-haiku-20240307", p.GetModel(""))
-			},
-		},
-		{
-			name: "config with env var base URL",
-			config: &llm.LLMOptions{
-				APIKey: "test-key",
-			},
-			envBaseURL: "https://env.api.com",
-			wantErr:    false,
-			checkResult: func(t *testing.T, p *AnthropicProvider) {
-				assert.Equal(t, "https://env.api.com", p.baseURL)
-			},
-		},
-		{
-			name: "config with env var model",
-			config: &llm.LLMOptions{
-				APIKey: "test-key",
-			},
-			envModel: "claude-3-opus-20240229",
-			wantErr:  false,
-			checkResult: func(t *testing.T, p *AnthropicProvider) {
-				assert.Equal(t, "claude-3-opus-20240229", p.GetModel(""))
-			},
-		},
-		{
-			name:    "missing API key",
-			config:  &llm.LLMOptions{},
-			wantErr: true,
-			errCode: agentErrors.CodeInvalidConfig,
-		},
-	}
+type anthropicEvent struct{ name, data string }
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Clean up any existing env vars first
-			os.Unsetenv("ANTHROPIC_API_KEY")
-			os.Unsetenv("ANTHROPIC_BASE_URL")
-			os.Unsetenv("ANTHROPIC_MODEL")
-
-			// Set env vars if provided
-			if tt.envAPIKey != "" {
-				os.Setenv("ANTHROPIC_API_KEY", tt.envAPIKey)
-				defer os.Unsetenv("ANTHROPIC_API_KEY")
-			}
-			if tt.envBaseURL != "" {
-				os.Setenv("ANTHROPIC_BASE_URL", tt.envBaseURL)
-				defer os.Unsetenv("ANTHROPIC_BASE_URL")
-			}
-			if tt.envModel != "" {
-				os.Setenv("ANTHROPIC_MODEL", tt.envModel)
-				defer os.Unsetenv("ANTHROPIC_MODEL")
-			}
-
-			provider, err := NewAnthropicWithOptions(common.ConfigToOptions(tt.config)...)
-
-			if tt.wantErr {
-				require.Error(t, err)
-				assert.True(t, agentErrors.IsCode(err, tt.errCode))
-			} else {
-				require.NoError(t, err)
-				require.NotNil(t, provider)
-				if tt.checkResult != nil {
-					tt.checkResult(t, provider)
-				}
-			}
-		})
-	}
+// schemaTool 返回真实的 JSON Schema；mockTool 的 ArgsSchema 恒为空。
+type schemaTool struct {
+	*mockTool
+	schema string
 }
 
-// TestAnthropicComplete tests the Complete method
-func TestAnthropicComplete(t *testing.T) {
-	tests := []struct {
-		name           string
-		request        *llm.CompletionRequest
-		mockResponse   interface{}
-		mockStatusCode int
-		wantErr        bool
-		errCode        agentErrors.ErrorCode
-		checkResult    func(*testing.T, *llm.CompletionResponse)
-	}{
-		{
-			name: "successful completion",
-			request: &llm.CompletionRequest{
-				Messages: []llm.Message{
-					{Role: "user", Content: "Hello"},
-				},
-			},
-			mockResponse: AnthropicResponse{
-				ID:   "msg_123",
-				Type: "message",
-				Role: "assistant",
-				Content: []AnthropicContent{
-					{Type: "text", Text: "Hello! How can I help you?"},
-				},
-				Model:      "claude-3-sonnet-20240229",
-				StopReason: "end_turn",
-				Usage: AnthropicUsage{
-					InputTokens:  10,
-					OutputTokens: 15,
-				},
-			},
-			mockStatusCode: http.StatusOK,
-			wantErr:        false,
-			checkResult: func(t *testing.T, resp *llm.CompletionResponse) {
-				assert.Equal(t, "Hello! How can I help you?", resp.Content)
-				assert.Equal(t, "claude-3-sonnet-20240229", resp.Model)
-				assert.Equal(t, 25, resp.TokensUsed)
-				assert.Equal(t, "end_turn", resp.FinishReason)
-				assert.Equal(t, "anthropic", resp.Provider)
-				require.NotNil(t, resp.Usage)
-				assert.Equal(t, 10, resp.Usage.PromptTokens)
-				assert.Equal(t, 15, resp.Usage.CompletionTokens)
-				assert.Equal(t, 25, resp.Usage.TotalTokens)
-			},
-		},
-		{
-			name: "completion with system message",
-			request: &llm.CompletionRequest{
-				Messages: []llm.Message{
-					{Role: "system", Content: "You are a helpful assistant"},
-					{Role: "user", Content: "Hi"},
-				},
-			},
-			mockResponse: AnthropicResponse{
-				ID:   "msg_456",
-				Type: "message",
-				Role: "assistant",
-				Content: []AnthropicContent{
-					{Type: "text", Text: "Hi there!"},
-				},
-				Model:      "claude-3-sonnet-20240229",
-				StopReason: "end_turn",
-				Usage: AnthropicUsage{
-					InputTokens:  20,
-					OutputTokens: 5,
-				},
-			},
-			mockStatusCode: http.StatusOK,
-			wantErr:        false,
-			checkResult: func(t *testing.T, resp *llm.CompletionResponse) {
-				assert.Equal(t, "Hi there!", resp.Content)
-			},
-		},
-		{
-			name: "completion with custom parameters",
-			request: &llm.CompletionRequest{
-				Messages:    []llm.Message{{Role: "user", Content: "Test"}},
-				Model:       "claude-3-opus-20240229",
-				MaxTokens:   1000,
-				Temperature: 0.5,
-				TopP:        0.9,
-				Stop:        []string{"END"},
-			},
-			mockResponse: AnthropicResponse{
-				ID:   "msg_789",
-				Type: "message",
-				Role: "assistant",
-				Content: []AnthropicContent{
-					{Type: "text", Text: "Response"},
-				},
-				Model:      "claude-3-opus-20240229",
-				StopReason: "end_turn",
-				Usage: AnthropicUsage{
-					InputTokens:  5,
-					OutputTokens: 10,
-				},
-			},
-			mockStatusCode: http.StatusOK,
-			wantErr:        false,
-		},
-	}
+func (s schemaTool) ArgsSchema() string { return s.schema }
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Create mock server
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				// Verify headers
-				assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
-				assert.NotEmpty(t, r.Header.Get("x-api-key"))
-				assert.Equal(t, "2023-06-01", r.Header.Get("anthropic-version"))
-
-				// Verify request body
-				var req AnthropicRequest
-				err := json.NewDecoder(r.Body).Decode(&req)
-				require.NoError(t, err)
-
-				// Return mock response
-				w.WriteHeader(tt.mockStatusCode)
-				if tt.mockResponse != nil {
-					json.NewEncoder(w).Encode(tt.mockResponse)
-				}
-			}))
-			defer server.Close()
-
-			// Create provider
-			provider, err := NewAnthropicWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(server.URL))
-			require.NoError(t, err)
-
-			// Test Complete
-			resp, err := provider.Complete(context.Background(), tt.request)
-
-			if tt.wantErr {
-				require.Error(t, err)
-				assert.True(t, agentErrors.IsCode(err, tt.errCode))
-			} else {
-				require.NoError(t, err)
-				require.NotNil(t, resp)
-				if tt.checkResult != nil {
-					tt.checkResult(t, resp)
-				}
-			}
-		})
-	}
-}
-
-// TestAnthropicChat tests the Chat method
-func TestAnthropicChat(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(AnthropicResponse{
-			ID:   "msg_chat",
-			Type: "message",
-			Role: "assistant",
-			Content: []AnthropicContent{
-				{Type: "text", Text: "Chat response"},
-			},
-			Model:      "claude-3-sonnet-20240229",
-			StopReason: "end_turn",
-			Usage: AnthropicUsage{
-				InputTokens:  10,
-				OutputTokens: 5,
-			},
-		})
-	}))
-	defer server.Close()
-
-	provider, err := NewAnthropicWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(server.URL))
-	require.NoError(t, err)
-
-	resp, err := provider.Chat(context.Background(), []llm.Message{
-		{Role: "user", Content: "Hello"},
-	})
-
-	require.NoError(t, err)
-	assert.Equal(t, "Chat response", resp.Content)
-}
-
-// TestAnthropicErrorHandling tests error scenarios
-func TestAnthropicErrorHandling(t *testing.T) {
-	tests := []struct {
-		name            string
-		statusCode      int
-		responseBody    interface{}
-		expectedErrCode agentErrors.ErrorCode
-	}{
-		{
-			name:       "400 bad request",
-			statusCode: 400,
-			responseBody: AnthropicErrorResponse{
-				Type: "error",
-				Error: AnthropicErrorDetails{
-					Type:    "invalid_request_error",
-					Message: "Invalid request",
-				},
-			},
-			expectedErrCode: agentErrors.CodeInvalidInput,
-		},
-		{
-			name:       "401 unauthorized",
-			statusCode: 401,
-			responseBody: AnthropicErrorResponse{
-				Type: "error",
-				Error: AnthropicErrorDetails{
-					Type:    "authentication_error",
-					Message: "Invalid API key",
-				},
-			},
-			expectedErrCode: agentErrors.CodeInvalidConfig,
-		},
-		{
-			name:       "403 forbidden",
-			statusCode: 403,
-			responseBody: AnthropicErrorResponse{
-				Type: "error",
-				Error: AnthropicErrorDetails{
-					Type:    "permission_error",
-					Message: "Permission denied",
-				},
-			},
-			expectedErrCode: agentErrors.CodeInvalidConfig,
-		},
-		{
-			name:       "404 not found",
-			statusCode: 404,
-			responseBody: AnthropicErrorResponse{
-				Type: "error",
-				Error: AnthropicErrorDetails{
-					Type:    "not_found_error",
-					Message: "Model not found",
-				},
-			},
-			expectedErrCode: agentErrors.CodeLLMResponse,
-		},
-		{
-			name:            "429 rate limit",
-			statusCode:      429,
-			expectedErrCode: agentErrors.CodeLLMRateLimit,
-		},
-		{
-			name:            "500 server error",
-			statusCode:      500,
-			expectedErrCode: agentErrors.CodeLLMRequest,
-		},
-		{
-			name:            "503 service unavailable",
-			statusCode:      503,
-			expectedErrCode: agentErrors.CodeLLMRequest,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if tt.statusCode == 429 {
-					w.Header().Set("Retry-After", "60")
-				}
-				w.WriteHeader(tt.statusCode)
-				if tt.responseBody != nil {
-					json.NewEncoder(w).Encode(tt.responseBody)
-				}
-			}))
-			defer server.Close()
-
-			provider, err := NewAnthropicWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(server.URL))
-			require.NoError(t, err)
-
-			// Use context with shorter retry delays for tests
-			ctx := context.WithValue(context.Background(), "test_retry_delay", 10*time.Millisecond)
-			_, err = provider.Complete(ctx, &llm.CompletionRequest{
-				Messages: []llm.Message{{Role: "user", Content: "test"}},
-			})
-
-			require.Error(t, err)
-			assert.True(t, agentErrors.IsCode(err, tt.expectedErrCode),
-				"Expected error code %s but got %s", tt.expectedErrCode, agentErrors.GetCode(err))
-		})
-	}
-}
-
-// TestAnthropicRetry tests retry logic
-func TestAnthropicRetry(t *testing.T) {
-	// 设置测试模式以使用更短的重试延迟
-	os.Setenv("GO_TEST_MODE", "true")
-	defer os.Unsetenv("GO_TEST_MODE")
-
-	attempts := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		attempts++
-		if attempts < 3 {
-			// Return 503 for first 2 attempts
-			w.WriteHeader(http.StatusServiceUnavailable)
+// anthropicServer 按顺序输出 SSE 事件，并记录每次请求的 JSON 体。
+func anthropicServer(t *testing.T, events []anthropicEvent, bodies chan<- map[string]any) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Error(err)
 			return
 		}
-		// Succeed on 3rd attempt
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(AnthropicResponse{
-			ID:   "msg_retry",
-			Type: "message",
-			Role: "assistant",
-			Content: []AnthropicContent{
-				{Type: "text", Text: "Success after retry"},
-			},
-			Model:      "claude-3-sonnet-20240229",
-			StopReason: "end_turn",
-			Usage: AnthropicUsage{
-				InputTokens:  5,
-				OutputTokens: 10,
-			},
-		})
-	}))
-	defer server.Close()
-
-	provider, err := NewAnthropicWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(server.URL))
-	require.NoError(t, err)
-
-	resp, err := provider.Complete(context.Background(), &llm.CompletionRequest{
-		Messages: []llm.Message{{Role: "user", Content: "test"}},
-	})
-
-	require.NoError(t, err)
-	assert.Equal(t, "Success after retry", resp.Content)
-	assert.Equal(t, 3, attempts, "Should have made 3 attempts")
-}
-
-// TestAnthropicRetryExhausted tests when retries are exhausted
-func TestAnthropicRetryExhausted(t *testing.T) {
-	// 设置测试模式以使用更短的重试延迟
-	os.Setenv("GO_TEST_MODE", "true")
-	defer os.Unsetenv("GO_TEST_MODE")
-
-	attempts := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		attempts++
-		w.WriteHeader(http.StatusServiceUnavailable)
-	}))
-	defer server.Close()
-
-	provider, err := NewAnthropicWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(server.URL))
-	require.NoError(t, err)
-
-	_, err = provider.Complete(context.Background(), &llm.CompletionRequest{
-		Messages: []llm.Message{{Role: "user", Content: "test"}},
-	})
-
-	require.Error(t, err)
-	assert.Equal(t, 3, attempts, "Should have made 3 attempts")
-}
-
-// TestAnthropicContextCancellation tests context cancellation
-func TestAnthropicContextCancellation(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Delay to allow context cancellation
-		time.Sleep(100 * time.Millisecond)
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer server.Close()
-
-	provider, err := NewAnthropicWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(server.URL))
-	require.NoError(t, err)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // Cancel immediately
-
-	_, err = provider.Complete(ctx, &llm.CompletionRequest{
-		Messages: []llm.Message{{Role: "user", Content: "test"}},
-	})
-
-	require.Error(t, err)
-	assert.True(t, agentErrors.IsCode(err, agentErrors.CodeLLMRequest) ||
-		agentErrors.IsCode(err, agentErrors.CodeContextCanceled))
-}
-
-// TestAnthropicStream tests streaming
-func TestAnthropicStream(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if bodies != nil {
+			bodies <- body
+		}
 		w.Header().Set("Content-Type", "text/event-stream")
-		w.WriteHeader(http.StatusOK)
-
-		flusher := w.(http.Flusher)
-
-		// Send stream events
-		events := []string{
-			`data: {"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant"}}`,
-			`data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`,
-			`data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hello"}}`,
-			`data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" world"}}`,
-			`data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"!"}}`,
-			`data: {"type":"content_block_stop","index":0}`,
-			`data: {"type":"message_delta","delta":{"stop_reason":"end_turn"}}`,
-			`data: {"type":"message_stop"}`,
-		}
-
-		for _, event := range events {
-			fmt.Fprintf(w, "%s\n\n", event)
-			flusher.Flush()
-			time.Sleep(10 * time.Millisecond)
+		for _, e := range events {
+			_, _ = fmt.Fprintf(w, "event: %s\ndata: %s\n\n", e.name, e.data)
 		}
 	}))
-	defer server.Close()
+}
 
-	provider, err := NewAnthropicWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(server.URL))
+func newTestAnthropic(t *testing.T, url string, opts ...agentllm.ClientOption) *AnthropicProvider {
+	t.Helper()
+	p, err := NewAnthropicWithOptions(append([]agentllm.ClientOption{agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(url)}, opts...)...)
 	require.NoError(t, err)
+	return p
+}
 
-	tokens, err := provider.Stream(context.Background(), "test")
-	require.NoError(t, err)
-
-	var result []string
-	for token := range tokens {
-		result = append(result, token)
+func drain(t *testing.T, stream <-chan *agentllm.StreamChunk) (deltas []string, final *agentllm.StreamChunk) {
+	t.Helper()
+	for chunk := range stream {
+		if chunk.Done {
+			final = chunk
+			continue
+		}
+		deltas = append(deltas, chunk.Delta)
 	}
-
-	assert.Equal(t, []string{"Hello", " world", "!"}, result)
+	require.NotNil(t, final)
+	return deltas, final
 }
 
-// TestAnthropicStreamError tests streaming with error
-func TestAnthropicStreamError(t *testing.T) {
+var textEvents = []anthropicEvent{
+	{"message_start", `{"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","model":"claude-opus-5-5-actual","content":[],"stop_reason":null,"usage":{"input_tokens":10,"cache_read_input_tokens":4,"cache_creation_input_tokens":0,"output_tokens":1}}}`},
+	{"content_block_start", `{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`},
+	{"content_block_delta", `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"你"}}`},
+	{"content_block_delta", `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"好"}}`},
+	{"content_block_stop", `{"type":"content_block_stop","index":0}`},
+	{"message_delta", `{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":6}}`},
+	{"message_stop", `{"type":"message_stop"}`},
+}
+
+func TestAnthropicStreamText(t *testing.T) {
+	bodies := make(chan map[string]any, 1)
+	server := anthropicServer(t, textEvents, bodies)
+	defer server.Close()
+	p := newTestAnthropic(t, server.URL, agentllm.WithSystemPrompt("配置规则"), agentllm.WithTemperature(0.3))
+	stream, err := p.CompleteStream(context.Background(), &agentllm.CompletionRequest{Messages: []agentllm.Message{{Role: "system", Content: "附加规则"}, {Role: "user", Content: "问候"}}, Temperature: 0.2, TemperatureSet: true, TopP: 0.9})
+	require.NoError(t, err)
+	deltas, final := drain(t, stream)
+	require.NoError(t, final.Error)
+	require.Equal(t, []string{"你", "好"}, deltas)
+	require.Equal(t, "你好", final.Content)
+	require.Equal(t, "stop", final.FinishReason)
+	require.Equal(t, "claude-opus-5-5-actual", final.ResponseModel)
+	require.NotNil(t, final.ProviderState)
+	// 缓存读取计入输入总数并单独标出。
+	require.Equal(t, 14, final.Usage.PromptTokens)
+	require.Equal(t, 4, final.Usage.CachedTokens)
+	require.Equal(t, 6, final.Usage.CompletionTokens)
+
+	body := <-bodies
+	require.Equal(t, constants.AnthropicDefaultModel, body["model"])
+	require.Equal(t, true, body["stream"])
+	// SDK 发送的 API 版本拒绝采样参数，显式设置也不得出现在请求中。
+	require.NotContains(t, body, "temperature")
+	require.NotContains(t, body, "top_p")
+	system := body["system"].([]any)
+	require.Equal(t, "配置规则\n\n附加规则", system[0].(map[string]any)["text"])
+}
+
+func TestAnthropicNativeToolLoopReplaysState(t *testing.T) {
+	toolEvents := []anthropicEvent{
+		{"message_start", `{"type":"message_start","message":{"id":"msg_2","type":"message","role":"assistant","model":"m","content":[],"stop_reason":null,"usage":{"input_tokens":20,"output_tokens":1}}}`},
+		{"content_block_start", `{"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":"","signature":""}}`},
+		{"content_block_delta", `{"type":"content_block_delta","index":0,"delta":{"type":"signature_delta","signature":"sig-1"}}`},
+		{"content_block_stop", `{"type":"content_block_stop","index":0}`},
+		{"content_block_start", `{"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"toolu_a","name":"lookup","input":{}}}`},
+		{"content_block_delta", `{"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\"q\":"}}`},
+		{"content_block_delta", `{"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"1}"}}`},
+		{"content_block_stop", `{"type":"content_block_stop","index":1}`},
+		{"content_block_start", `{"type":"content_block_start","index":2,"content_block":{"type":"tool_use","id":"toolu_b","name":"lookup","input":{}}}`},
+		{"content_block_delta", `{"type":"content_block_delta","index":2,"delta":{"type":"input_json_delta","partial_json":"{\"q\":2}"}}`},
+		{"content_block_stop", `{"type":"content_block_stop","index":2}`},
+		{"message_delta", `{"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"output_tokens":9}}`},
+		{"message_stop", `{"type":"message_stop"}`},
+	}
+	bodies := make(chan map[string]any, 2)
+	server := anthropicServer(t, toolEvents, bodies)
+	defer server.Close()
+	p := newTestAnthropic(t, server.URL)
+	tools := []interfaces.Tool{schemaTool{mockTool: &mockTool{name: "lookup"}, schema: `{"type":"object","properties":{"q":{"type":"integer"}},"required":["q"],"additionalProperties":false}`}}
+	user := agentllm.Message{Role: "user", Content: "查两次"}
+	stream, err := p.CompleteToolsStream(context.Background(), &agentllm.CompletionRequest{Messages: []agentllm.Message{user}}, tools)
+	require.NoError(t, err)
+	_, final := drain(t, stream)
+	require.NoError(t, final.Error)
+	require.Equal(t, "tool_calls", final.FinishReason)
+	require.Len(t, final.ToolCalls, 2)
+	require.Equal(t, "toolu_a", final.ToolCalls[0].ID)
+	require.JSONEq(t, `{"q":1}`, final.ToolCalls[0].Function.Arguments)
+	require.JSONEq(t, `{"q":2}`, final.ToolCalls[1].Function.Arguments)
+
+	first := <-bodies
+	tool := first["tools"].([]any)[0].(map[string]any)
+	schema := tool["input_schema"].(map[string]any)
+	require.Equal(t, false, schema["additionalProperties"])
+	require.Equal(t, []any{"q"}, schema["required"])
+
+	// 续接：原生内容（含思考签名）原样回放，两个工具结果合并为一条 user 消息。
+	assistant := agentllm.Message{Role: "assistant", ToolCalls: final.ToolCalls, ProviderState: final.ProviderState}
+	next := []agentllm.Message{user, assistant, {Role: "tool", ToolCallID: "toolu_a", Content: "一"}, {Role: "tool", ToolCallID: "toolu_b", Content: "二"}}
+	stream, err = p.CompleteToolsStream(context.Background(), &agentllm.CompletionRequest{Messages: next}, tools)
+	require.NoError(t, err)
+	drain(t, stream)
+	second := <-bodies
+	messages := second["messages"].([]any)
+	require.Len(t, messages, 3)
+	replayed := messages[1].(map[string]any)["content"].([]any)
+	require.Equal(t, "thinking", replayed[0].(map[string]any)["type"])
+	require.Equal(t, "sig-1", replayed[0].(map[string]any)["signature"])
+	results := messages[2].(map[string]any)["content"].([]any)
+	require.Len(t, results, 2)
+	require.Equal(t, "toolu_a", results[0].(map[string]any)["tool_use_id"])
+	require.Equal(t, "toolu_b", results[1].(map[string]any)["tool_use_id"])
+}
+
+func TestAnthropicRejectsUnmatchedToolHistory(t *testing.T) {
+	p := newTestAnthropic(t, "http://127.0.0.1:1")
+	call := agentllm.ToolCall{ID: "a", Type: "function"}
+	call.Function.Name, call.Function.Arguments = "lookup", "{}"
+	for name, messages := range map[string][]agentllm.Message{
+		"缺少工具结果": {{Role: "user", Content: "q"}, {Role: "assistant", ToolCalls: []agentllm.ToolCall{call}}, {Role: "user", Content: "again"}},
+		"多余工具结果": {{Role: "user", Content: "q"}, {Role: "tool", ToolCallID: "x", Content: "r"}},
+	} {
+		_, err := p.CompleteStream(context.Background(), &agentllm.CompletionRequest{Messages: messages})
+		require.Error(t, err, name)
+	}
+}
+
+func TestAnthropicIncompleteResponseIsError(t *testing.T) {
+	events := append([]anthropicEvent{}, textEvents...)
+	events[5] = anthropicEvent{"message_delta", `{"type":"message_delta","delta":{"stop_reason":"max_tokens"},"usage":{"output_tokens":6}}`}
+	server := anthropicServer(t, events, nil)
+	defer server.Close()
+	stream, err := newTestAnthropic(t, server.URL).CompleteStream(context.Background(), &agentllm.CompletionRequest{Messages: []agentllm.Message{{Role: "user", Content: "q"}}})
+	require.NoError(t, err)
+	_, final := drain(t, stream)
+	require.ErrorContains(t, final.Error, "max_tokens")
+	require.Nil(t, final.ProviderState)
+	require.Empty(t, final.ToolCalls)
+}
+
+// 限流错误同步返回，保留状态码与 Retry-After，且 SDK 不做隐式重试。
+func TestAnthropicProviderErrorWithoutSDKRetry(t *testing.T) {
+	var calls atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusUnauthorized)
+		calls.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Retry-After", "7")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = fmt.Fprint(w, `{"type":"error","error":{"type":"rate_limit_error","message":"slow down"}}`)
 	}))
 	defer server.Close()
+	p := newTestAnthropic(t, server.URL)
+	req := &agentllm.CompletionRequest{Messages: []agentllm.Message{{Role: "user", Content: "q"}}}
+	_, streamErr := p.CompleteStream(context.Background(), req)
+	_, completeErr := p.Complete(context.Background(), req)
+	for name, err := range map[string]error{"stream": streamErr, "complete": completeErr} {
+		var providerErr *agentllm.ProviderError
+		require.True(t, errors.As(err, &providerErr), "%s: %v", name, err)
+		require.Equal(t, http.StatusTooManyRequests, providerErr.StatusCode, name)
+		require.Equal(t, 7*time.Second, providerErr.RetryAfter, name)
+	}
+	require.Equal(t, int32(2), calls.Load())
+}
 
-	provider, err := NewAnthropicWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(server.URL))
+func TestAnthropicComplete(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprint(w, `{"id":"msg_3","type":"message","role":"assistant","model":"m","content":[{"type":"text","text":"好"}],"stop_reason":"end_turn","usage":{"input_tokens":3,"output_tokens":2}}`)
+	}))
+	defer server.Close()
+	resp, err := newTestAnthropic(t, server.URL).Chat(context.Background(), []agentllm.Message{{Role: "user", Content: "q"}})
 	require.NoError(t, err)
+	require.Equal(t, "好", resp.Content)
+	require.Equal(t, "stop", resp.FinishReason)
+	require.Equal(t, 5, resp.TokensUsed)
+	require.Equal(t, "anthropic", resp.Provider)
+}
 
-	_, err = provider.Stream(context.Background(), "test")
+func TestAnthropicLegacyStringStream(t *testing.T) {
+	server := anthropicServer(t, textEvents, nil)
+	defer server.Close()
+	tokens, err := newTestAnthropic(t, server.URL).Stream(context.Background(), "q")
+	require.NoError(t, err)
+	var got strings.Builder
+	for token := range tokens {
+		got.WriteString(token)
+	}
+	require.Equal(t, "你好", got.String())
+}
+
+func TestAnthropicRejectsReasoning(t *testing.T) {
+	_, err := NewAnthropicWithOptions(agentllm.WithAPIKey("k"), agentllm.WithReasoning(usage.ReasoningConfig{Effort: "low"}))
+	require.ErrorContains(t, err, "does not support")
+	p := newTestAnthropic(t, "http://127.0.0.1:1")
+	_, err = p.CompleteToolsStream(context.Background(), &agentllm.CompletionRequest{Messages: []agentllm.Message{{Role: "user", Content: "q"}}, Reasoning: &usage.ReasoningConfig{Effort: "low"}}, nil)
+	require.ErrorContains(t, err, "does not support")
+}
+
+func TestAnthropicRequiresAPIKey(t *testing.T) {
+	t.Setenv(constants.EnvAnthropicAPIKey, "")
+	_, err := NewAnthropicWithOptions()
 	require.Error(t, err)
-	assert.True(t, agentErrors.IsCode(err, agentErrors.CodeInvalidConfig))
-}
-
-// TestAnthropicProvider tests Provider method
-func TestAnthropicProvider(t *testing.T) {
-	provider, err := NewAnthropicWithOptions(agentllm.WithAPIKey("test-key"))
-	require.NoError(t, err)
-
-	assert.Equal(t, constants.ProviderAnthropic, provider.Provider())
-}
-
-// TestAnthropicModelName tests ModelName method
-func TestAnthropicModelName(t *testing.T) {
-	provider, err := NewAnthropicWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithModel("claude-3-opus-20240229"))
-	require.NoError(t, err)
-
-	assert.Equal(t, "claude-3-opus-20240229", provider.ModelName())
-}
-
-// TestAnthropicIsAvailable tests IsAvailable method
-func TestAnthropicIsAvailable(t *testing.T) {
-	t.Run("available", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(AnthropicResponse{
-				ID:   "msg_test",
-				Type: "message",
-				Role: "assistant",
-				Content: []AnthropicContent{
-					{Type: "text", Text: "test"},
-				},
-				Model:      "claude-3-sonnet-20240229",
-				StopReason: "end_turn",
-				Usage: AnthropicUsage{
-					InputTokens:  5,
-					OutputTokens: 5,
-				},
-			})
-		}))
-		defer server.Close()
-
-		provider, err := NewAnthropicWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(server.URL))
-		require.NoError(t, err)
-
-		assert.True(t, provider.IsAvailable())
-	})
-
-	t.Run("not available", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusUnauthorized)
-		}))
-		defer server.Close()
-
-		provider, err := NewAnthropicWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(server.URL))
-		require.NoError(t, err)
-
-		assert.False(t, provider.IsAvailable())
-	})
 }
