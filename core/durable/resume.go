@@ -18,11 +18,15 @@ func WithResume(ctx context.Context, key, input string) context.Context {
 
 // ResumeInput 返回宿主为当前执行键提供的续跑输入。
 func ResumeInput(ctx context.Context) (string, bool) {
-	inputs, _ := ctx.Value(resumeContext{}).(map[string]string)
-	key := ExecutionKey(ctx)
+	return ResumeInputFor(ctx, ExecutionKey(ctx))
+}
+
+// ResumeInputFor 返回宿主为 key 提供的续跑输入，供承载等待的上层判断是否需要重新进入。
+func ResumeInputFor(ctx context.Context, key string) (string, bool) {
 	if key == "" {
 		return "", false
 	}
+	inputs, _ := ctx.Value(resumeContext{}).(map[string]string)
 	input, ok := inputs[key]
 	return input, ok
 }

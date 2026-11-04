@@ -247,6 +247,7 @@ func Do(ctx context.Context, id string, input json.RawMessage, policy OperationP
 	}
 	store, _ := ctx.Value(journalContext{}).(Store)
 	childCtx = context.WithValue(childCtx, waitableContext{}, policy.Resumable && store != nil && key != "")
+	childCtx = context.WithValue(childCtx, interruptHostContext{}, false)
 	if store == nil || key == "" {
 		value, e := run(childCtx)
 		return &OperationRecord{ID: id, Key: key, Value: value, Attempts: 1}, e
