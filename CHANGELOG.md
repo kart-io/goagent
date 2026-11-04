@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **破坏性**：核心向量统一为 `[]float32`，涉及 `llm.EmbeddingClient.Embed`（OpenAI、Gemini、DeepSeek 实现）、`memory.TextEmbedder`、`memory.VectorStore.Add/Search`、`memory.SearchResult.Embedding`、`interfaces.Document.Embedding` 与 `interfaces.Case.Embedding`。上游 SDK、`memory.MemoryEntry`、`SimpleVectorStore`、语义缓存与 contrib `retrieval.Embedder` 本就是 float32，原先 `StoreTyped` 一次写入要在 float32 与 float64 间转换四次；现在去掉了这些转换，`memory.SimpleEmbeddingModel` 等 `EmbeddingModel` 也能直接传给 `WithEmbedder`。迁移：自定义 embedder 与 `memory.VectorStore` 实现把签名中的 `[]float64` 改为 `[]float32`；构造 `Document`/`Case` 时向量字面量改为 `[]float32{...}`；需要 float64 计算的调用方自行逐元素转换。JSON 序列化格式不变。
+
 ## [0.43.1] - 2026-11-04
 
 ### Fixed

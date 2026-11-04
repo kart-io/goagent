@@ -17,7 +17,7 @@ func TestDocumentStructure(t *testing.T) {
 			"created_at": "2024-01-15",
 			"tags":       []string{"ai", "agents", "guide"},
 		},
-		Embedding: []float64{0.1, 0.2, 0.3, 0.4, 0.5},
+		Embedding: []float32{0.1, 0.2, 0.3, 0.4, 0.5},
 		Score:     0.95,
 	}
 
@@ -128,19 +128,19 @@ func TestVectorStoreInterface(t *testing.T) {
 			ID:          "doc-1",
 			PageContent: "First document about AI",
 			Metadata:    map[string]interface{}{"category": "ai"},
-			Embedding:   []float64{0.1, 0.2, 0.3},
+			Embedding:   []float32{0.1, 0.2, 0.3},
 		},
 		{
 			ID:          "doc-2",
 			PageContent: "Second document about ML",
 			Metadata:    map[string]interface{}{"category": "ml"},
-			Embedding:   []float64{0.2, 0.3, 0.4},
+			Embedding:   []float32{0.2, 0.3, 0.4},
 		},
 		{
 			ID:          "doc-3",
 			PageContent: "Third document about agents",
 			Metadata:    map[string]interface{}{"category": "agents"},
-			Embedding:   []float64{0.3, 0.4, 0.5},
+			Embedding:   []float32{0.3, 0.4, 0.5},
 		},
 	}
 

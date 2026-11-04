@@ -24,10 +24,10 @@ type ConversationStore interface {
 // VectorStore 向量存储接口
 type VectorStore interface {
 	// Add 添加向量
-	Add(ctx context.Context, id string, embedding []float64, metadata map[string]interface{}) error
+	Add(ctx context.Context, id string, embedding []float32, metadata map[string]interface{}) error
 
 	// Search 搜索相似向量
-	Search(ctx context.Context, embedding []float64, limit int) ([]*SearchResult, error)
+	Search(ctx context.Context, embedding []float32, limit int) ([]*SearchResult, error)
 
 	// Delete 删除向量
 	Delete(ctx context.Context, id string) error
@@ -40,7 +40,7 @@ type VectorStore interface {
 type SearchResult struct {
 	ID        string                 `json:"id"`        // ID
 	Score     float64                `json:"score"`     // 相似度分数
-	Embedding []float64              `json:"embedding"` // 向量
+	Embedding []float32              `json:"embedding"` // 向量
 	Metadata  map[string]interface{} `json:"metadata"`  // 元数据
 }
 

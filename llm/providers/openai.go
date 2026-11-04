@@ -189,7 +189,7 @@ func (p *OpenAIProvider) convertTools(tools []interfaces.Tool) []openai.Tool {
 }
 
 // Embed generates embeddings for text
-func (p *OpenAIProvider) Embed(ctx context.Context, text string) ([]float64, error) {
+func (p *OpenAIProvider) Embed(ctx context.Context, text string) ([]float32, error) {
 	textPreview := text
 	if len(text) > 100 {
 		textPreview = text[:100] + "..."
@@ -208,14 +208,7 @@ func (p *OpenAIProvider) Embed(ctx context.Context, text string) ([]float64, err
 		return nil, agentErrors.NewLLMResponseError(p.ProviderName(), string(openai.AdaEmbeddingV2), "no embeddings in response")
 	}
 
-	// Convert float32 to float64
-	embedding := resp.Data[0].Embedding
-	result := make([]float64, len(embedding))
-	for i, v := range embedding {
-		result[i] = float64(v)
-	}
-
-	return result, nil
+	return resp.Data[0].Embedding, nil
 }
 
 // Provider returns the provider type

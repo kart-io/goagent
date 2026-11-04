@@ -274,12 +274,7 @@ func (m *LongTermMemory) Store(ctx context.Context, entry *MemoryEntry) error {
 
 	// 先写向量：失败时不留下无法被向量检索的条目
 	if m.vectorStore != nil && len(entry.Embedding) > 0 {
-		// Convert float32 to float64 for VectorStore interface
-		embedding64 := make([]float64, len(entry.Embedding))
-		for i, v := range entry.Embedding {
-			embedding64[i] = float64(v)
-		}
-		if err := m.vectorStore.Add(ctx, entry.ID, embedding64, entry.Metadata); err != nil {
+		if err := m.vectorStore.Add(ctx, entry.ID, entry.Embedding, entry.Metadata); err != nil {
 			return err
 		}
 	}

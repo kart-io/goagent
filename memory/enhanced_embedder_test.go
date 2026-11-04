@@ -23,7 +23,7 @@ type keywordEmbedder struct {
 	onCall func()
 }
 
-func (e *keywordEmbedder) Embed(_ context.Context, text string) ([]float64, error) {
+func (e *keywordEmbedder) Embed(_ context.Context, text string) ([]float32, error) {
 	if e.onCall != nil {
 		e.onCall()
 	}
@@ -35,11 +35,11 @@ func (e *keywordEmbedder) Embed(_ context.Context, text string) ([]float64, erro
 	}
 	switch {
 	case strings.Contains(text, "数据库"):
-		return []float64{1, 0, 0}, nil
+		return []float32{1, 0, 0}, nil
 	case strings.Contains(text, "天气"):
-		return []float64{0, 1, 0}, nil
+		return []float32{0, 1, 0}, nil
 	default:
-		return []float64{0, 0, 1}, nil
+		return []float32{0, 0, 1}, nil
 	}
 }
 
@@ -227,6 +227,22 @@ func TestStoreTypedWithoutEmbedder_Unchanged(t *testing.T) {
 
 // provider 客户端经 llm.EmbeddingClient 暴露 Embed，须能直接作为 TextEmbedder 传入。
 var _ TextEmbedder = llm.EmbeddingClient(nil)
+
+func TestWithEmbedder_AcceptsEmbeddingModel(t *testing.T) {
+	ctx := context.Background()
+	model := NewSimpleEmbeddingModel(3)
+	hm, _ := newEmbedderMemory(t, model)
+
+	require.NoError(t, hm.StoreTyped(ctx, "k", "abc", MemoryTypeSemantic, StoreOptions{}))
+
+	query, err := model.Embed(ctx, "abc")
+	require.NoError(t, err)
+	entries, err := hm.VectorSearch(ctx, query, 1, 0.99)
+	require.NoError(t, err)
+	require.Len(t, entries, 1)
+	assert.Equal(t, "k", entries[0].ID)
+	assert.Equal(t, query, entries[0].Embedding, "向量从 embedder 到存储不应经过精度转换")
+}
 
 type ptrStringer struct{ topic string }
 

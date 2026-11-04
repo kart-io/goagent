@@ -60,6 +60,6 @@ output, err := agent.AsRunnable().Invoke(ctx, "查询订单的退款期限")
 vector, embedErr := client.Embed(ctx, "需要检索的文本")
 ```
 
-`Embed` 返回真实 `[]float64`，拒绝空文本、空向量、全零或非有限值。当前接口不暴露 Embedding 用量，报告的已知 Token 仅含文本生成，不能视为全程费用。不同向量和余弦值用于确认接入与非固定返回，不证明检索质量。
+`Embed` 返回真实 `[]float32`，拒绝空文本、空向量、全零或非有限值。当前接口不暴露 Embedding 用量，报告的已知 Token 仅含文本生成，不能视为全程费用。不同向量和余弦值用于确认接入与非固定返回，不证明检索质量。
 
 `native` 套件的实测记录见[原生能力实测](../../../docs/evaluation/2026-10-27-gemini-native-support/REPORT.md)：12/12 通过。

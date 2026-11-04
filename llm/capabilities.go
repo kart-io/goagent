@@ -17,6 +17,7 @@ var ErrUnsupportedCapability = errors.New("provider capability is not supported"
 //
 // Implementations:
 //   - providers.OpenAIProvider
+//   - providers.GeminiProvider
 //
 // Legacy Embed methods on other providers do not imply advertised support.
 type EmbeddingClient interface {
@@ -28,9 +29,9 @@ type EmbeddingClient interface {
 	//   - text: The text to embed
 	//
 	// Returns:
-	//   - []float64: The embedding vector
+	//   - []float32: The embedding vector
 	//   - error if embedding generation fails
-	Embed(ctx context.Context, text string) ([]float64, error)
+	Embed(ctx context.Context, text string) ([]float32, error)
 }
 
 // Capability represents a provider capability that can be checked at runtime.

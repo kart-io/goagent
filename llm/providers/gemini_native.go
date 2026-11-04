@@ -145,7 +145,7 @@ func geminiAssistant(msg llm.Message) (*genai.Content, []*genai.FunctionCall, er
 }
 
 // Embed uses a separate embedding model; chat model settings never select it.
-func (p *GeminiProvider) Embed(ctx context.Context, text string) ([]float64, error) {
+func (p *GeminiProvider) Embed(ctx context.Context, text string) ([]float32, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -164,11 +164,10 @@ func (p *GeminiProvider) Embed(ctx context.Context, text string) ([]float64, err
 		return nil, fmt.Errorf("gemini: missing embedding vector")
 	}
 	values := response.Embeddings[0].Values
-	vector := make([]float64, len(values))
 	nonzero := false
-	for i, value := range values {
-		vector[i] = float64(value)
-		if math.IsNaN(vector[i]) || math.IsInf(vector[i], 0) {
+	for _, value := range values {
+		v := float64(value)
+		if math.IsNaN(v) || math.IsInf(v, 0) {
 			return nil, fmt.Errorf("gemini: non-finite embedding value")
 		}
 		nonzero = nonzero || value != 0
@@ -176,7 +175,7 @@ func (p *GeminiProvider) Embed(ctx context.Context, text string) ([]float64, err
 	if !nonzero {
 		return nil, fmt.Errorf("gemini: zero embedding vector")
 	}
-	return vector, nil
+	return values, nil
 }
 
 func geminiSDKEmbed(call func() (*genai.EmbedContentResponse, error)) (response *genai.EmbedContentResponse, err error) {

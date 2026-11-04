@@ -280,7 +280,7 @@ type Case struct {
 	//
 	// The dimension should match the embedding model being used
 	// (e.g., 1536 for OpenAI text-embedding-ada-002).
-	Embedding []float64 `json:"embedding,omitempty"`
+	Embedding []float32 `json:"embedding,omitempty"`
 
 	// Similarity is the similarity score (0.0-1.0) when this case
 	// is returned from a search.

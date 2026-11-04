@@ -23,7 +23,7 @@ Eino 是组件、编排、ADK 与扩展生态齐全的 LLM 应用框架；GoAgen
 | ChatModel | `BaseChatModel{Generate, Stream}`；`ToolCallingChatModel.WithTools()` 返回新实例；另有 `AgenticMessage` 路径。eino-ext：OpenAI、Claude、Gemini、Ark、Ollama、DeepSeek、Qwen 等 | `llm.Client{Complete, Chat, Provider, IsAvailable}` 加能力接口与 `CapabilityChecker`；`llm.Message` 含 `ToolCalls`、`ReasoningContent`、`ProviderState`。OpenAI 兼容、DeepSeek、Gemini 支持原生工具流，其余 Provider 仅同步入口 |
 | Tool | `BaseTool.Info()`；`InvokableTool.InvokableRun(argsJSON) string`；`StreamableTool`。eino-ext：MCP、Google 搜索、DuckDuckGo、Bing 等 | `interfaces.Tool{Name, Description, Invoke, ArgsSchema}`，可选 `DurableCallTool`、`ArgumentErrorTool`、`ConcurrentCallTool`、`ValidatableTool`、`ReconcilableTool`；`tools.Dispatcher`/`Pipeline` 负责审批、守卫、准入、预算、持久日志。核心 compute/http/search/shell、`mcp/remote`；contrib database、文件、API 调用 |
 | Retriever | `Retrieve(ctx, query, opts...)`。Redis、Milvus2、ES8、Qdrant、VikingDB 等 | 核心 `DocumentRetriever.GetRelevantDocuments`，经 `builder.WithRetriever` 每次请求检索并写出 `retrieval_sources`；contrib keyword/BM25、hybrid、multi-query、Qdrant、Reranker |
-| Embedding | `Embedder.EmbedStrings(texts, opts...) [][]float64`。OpenAI、Ark、Ollama 等 | `llm.EmbeddingClient.Embed`（仅 OpenAI Provider 声明）；`memory.TextEmbedder` 由使用方定义；contrib `retrieval.Embedder`（float32），OpenAI、HuggingFace、Cohere、VertexAI |
+| Embedding | `Embedder.EmbedStrings(texts, opts...) [][]float64`。OpenAI、Ark、Ollama 等 | `llm.EmbeddingClient.Embed`（OpenAI、Gemini Provider 声明）；`memory.TextEmbedder` 由使用方定义；核心与 contrib `retrieval.Embedder` 均为 float32，OpenAI、HuggingFace、Cohere、VertexAI |
 | Indexer | 独立 `Indexer.Store(docs, opts...) ids`，读写分离 | 无独立接口，写入为 `interfaces.VectorStore.AddDocuments` |
 | Loader/Transformer | `Loader.Load(ctx, Source)`；`Transformer.Transform(docs)`（切分、重排）。WebURL、S3、File、HTMLSplitter 等 | contrib `DocumentLoader{Load(ctx), LoadAndSplit, GetMetadata}`、`TextSplitter`；text/json/markdown/web/pdf，字符/代码/token 切分 |
 | Prompt | `ChatTemplate.Format(ctx, vars) []*schema.Message`；FString/GoTemplate/Jinja2（未核实） | 无模板组件；`WithSystemPrompt`、`WithPromptSections`、`WithPromptContexts` |
@@ -81,8 +81,8 @@ Eino 是组件、编排、ADK 与扩展生态齐全的 LLM 应用框架；GoAgen
 | `memory.TextEmbedder` | `WithEmbedder` 使用；单方法设计使 `llm.EmbeddingClient` 直接满足（`memory/enhanced.go:160-163`） | 保留，属于使用方定义接口 |
 | `memory.Embedder` | 主模块、goagent-examples、contrib 均无引用 | 删除 |
 | `llm.BatchEmbeddingClient` | 无使用方；`llm/providers` 无实现（现有 `EmbedBatch` 均返回 float32，不满足该接口） | 删除 |
-| `memory.EmbeddingModel`（float32） | `EmbeddingVectorStore` 使用，与 `TextEmbedder`（float64）精度不一致，`SimpleEmbeddingModel` 无法用于 `WithEmbedder` | 单独评估是否统一精度 |
-| `llm/cache.EmbeddingProvider`（float32） | 语义缓存内部使用，自带 `OpenAIEmbeddingProvider` 与 Mock 实现，与 `llm/providers` 的 OpenAI Embedding 并存 | 与上一项一并评估 |
+| `memory.EmbeddingModel`（float32） | `EmbeddingVectorStore` 使用 | 已统一：核心向量改为 float32（见 CHANGELOG Unreleased），`SimpleEmbeddingModel` 可直接用于 `WithEmbedder` |
+| `llm/cache.EmbeddingProvider`（float32） | 语义缓存内部使用，自带 `OpenAIEmbeddingProvider` 与 Mock 实现，与 `llm/providers` 的 OpenAI Embedding 并存 | 精度已一致；重复的 OpenAI 实现未处理 |
 | contrib `retrieval.Embedder`（float32） | contrib 检索链路 | 层次不同，不与核心统一 |
 
 删除属于破坏性变更，需在 CHANGELOG 说明；作为独立代码改动执行，不随本文提交。

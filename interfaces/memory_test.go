@@ -45,7 +45,7 @@ func TestCaseStructure(t *testing.T) {
 		Solution:    "Increase connection timeout to 30s",
 		Category:    "infrastructure",
 		Tags:        []string{"database", "timeout", "postgres"},
-		Embedding:   []float64{0.1, 0.2, 0.3},
+		Embedding:   []float32{0.1, 0.2, 0.3},
 		Similarity:  0.85,
 		CreatedAt:   now,
 		UpdatedAt:   now,

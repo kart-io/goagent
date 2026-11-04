@@ -130,8 +130,8 @@ type ConversationStore interface {
 
 ```go
 type VectorStore interface {
-    Add(ctx context.Context, id string, embedding []float64, metadata map[string]interface{}) error
-    Search(ctx context.Context, embedding []float64, limit int) ([]*SearchResult, error)
+    Add(ctx context.Context, id string, embedding []float32, metadata map[string]interface{}) error
+    Search(ctx context.Context, embedding []float32, limit int) ([]*SearchResult, error)
     Delete(ctx context.Context, id string) error
     Clear(ctx context.Context) error
 }
@@ -257,9 +257,9 @@ manager.Delete(ctx, "user:preferences")
 // 内置向量存储经 AsVectorStore 适配为分层记忆需要的 memory.VectorStore
 vecStore := memory.AsVectorStore(memory.NewInMemoryVectorStore(1536))
 
-// embedder 是实现 Embed(ctx, text) ([]float64, error) 的任意类型，如 llm.EmbeddingClient（目前为 OpenAIProvider，
-// 固定使用 text-embedding-ada-002，1536 维）；向量维度须与向量存储一致。
-// 包内 SimpleEmbeddingModel 返回 []float32，不能直接传入
+// embedder 是实现 Embed(ctx, text) ([]float32, error) 的任意类型，如 llm.EmbeddingClient
+// （OpenAIProvider 固定使用 text-embedding-ada-002，1536 维）或包内 SimpleEmbeddingModel；
+// 向量维度须与向量存储一致。
 hierMem := memory.NewHierarchicalMemoryWithContext(ctx, vecStore,
     memory.WithShortTermCapacity(100),
     memory.WithEmbedder(embedder),
@@ -349,7 +349,7 @@ NewHierarchicalMemoryWithContext(ctx, vectorStore, opts ...MemoryOption) *Hierar
 // 选项
 WithShortTermCapacity(capacity int) MemoryOption
 WithDecayRate(rate float64) MemoryOption
-WithEmbedder(e TextEmbedder) MemoryOption // TextEmbedder: Embed(ctx, text string) ([]float64, error)
+WithEmbedder(e TextEmbedder) MemoryOption // TextEmbedder: Embed(ctx, text string) ([]float32, error)
 
 // 类型化存储
 StoreTyped(ctx, key, value, memType, opts) error

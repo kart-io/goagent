@@ -157,12 +157,10 @@ func WithDecayRate(rate float64) MemoryOption {
 	}
 }
 
-// TextEmbedder 把文本转换为向量，如 llm.EmbeddingClient（目前只有 providers.OpenAIProvider 声明支持，
-// 固定使用 text-embedding-ada-002，1536 维）；向量维度须与向量存储一致。
-// 比 Embedder 少了 EmbedBatch，因为 provider 客户端不实现批量接口；包内 SimpleEmbeddingModel
-// 返回 []float32，不满足本接口。
+// TextEmbedder 把文本转换为向量，llm.EmbeddingClient 与 EmbeddingModel（如 SimpleEmbeddingModel）均满足；
+// 向量维度须与向量存储一致。
 type TextEmbedder interface {
-	Embed(ctx context.Context, text string) ([]float64, error)
+	Embed(ctx context.Context, text string) ([]float32, error)
 }
 
 // WithEmbedder 让 StoreTyped 为可提取文本的内容生成向量并写入向量存储，使其能被 VectorSearch 检索。
@@ -247,7 +245,7 @@ func (m *HierarchicalMemory) StoreTyped(ctx context.Context, key string, value i
 // storeShortTerm 让短期条目也立即可被 VectorSearch 检索，并同步被容量淘汰条目的向量。
 func (m *HierarchicalMemory) storeShortTerm(ctx context.Context, entry *MemoryEntry) error {
 	if m.vectorStore != nil && len(entry.Embedding) > 0 {
-		if err := m.vectorStore.Add(ctx, entry.ID, toFloat64(entry.Embedding), entry.Metadata); err != nil {
+		if err := m.vectorStore.Add(ctx, entry.ID, entry.Embedding, entry.Metadata); err != nil {
 			return agentErrors.Wrap(err, agentErrors.CodeStateSave, "failed to index short-term memory").
 				WithComponent("hierarchical_memory").
 				WithOperation("store_typed").
@@ -273,7 +271,7 @@ func (m *HierarchicalMemory) syncVector(ctx context.Context, id string) {
 		return
 	}
 	if holder := m.vectorHolder(ctx, id); holder != nil {
-		if err := m.vectorStore.Add(ctx, id, toFloat64(holder.Embedding), holder.Metadata); err != nil {
+		if err := m.vectorStore.Add(ctx, id, holder.Embedding, holder.Metadata); err != nil {
 			// 向量数据库写入失败，记录但继续
 			fmt.Fprintf(os.Stderr, "vector store restore failed (id=%s): %v\n", id, err)
 		}
@@ -305,11 +303,7 @@ func (m *HierarchicalMemory) embed(ctx context.Context, value interface{}) ([]fl
 	if !ok {
 		return nil, nil
 	}
-	vec, err := m.embedder.Embed(ctx, text)
-	if err != nil {
-		return nil, err
-	}
-	return toFloat32(vec), nil
+	return m.embedder.Embed(ctx, text)
 }
 
 // embeddingText 依次支持 string、[]byte、fmt.Stringer，其余类型取 JSON 序列化结果；
@@ -346,14 +340,6 @@ func isNil(value interface{}) bool {
 		return rv.IsNil()
 	}
 	return false
-}
-
-func toFloat64(v []float32) []float64 {
-	out := make([]float64, len(v))
-	for i, x := range v {
-		out[i] = float64(x)
-	}
-	return out
 }
 
 // Get retrieves a value from memory
@@ -420,14 +406,7 @@ func (m *HierarchicalMemory) VectorSearch(ctx context.Context, embedding []float
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	// Search in vector store
-	// Convert float32 to float64
-	embedding64 := make([]float64, len(embedding))
-	for i, v := range embedding {
-		embedding64[i] = float64(v)
-	}
-
-	results, err := m.vectorStore.Search(ctx, embedding64, limit*2)
+	results, err := m.vectorStore.Search(ctx, embedding, limit*2)
 	if err != nil {
 		return nil, agentErrors.Wrap(err, agentErrors.CodeRetrievalSearch, "vector search failed").
 			WithComponent("hierarchical_memory").
@@ -521,12 +500,7 @@ func (m *HierarchicalMemory) Consolidate(ctx context.Context) error {
 
 		// Store in vector database if available
 		if m.vectorStore != nil && len(entry.Embedding) > 0 {
-			// Convert float32 to float64
-			embedding64 := make([]float64, len(entry.Embedding))
-			for i, v := range entry.Embedding {
-				embedding64[i] = float64(v)
-			}
-			if err := m.vectorStore.Add(ctx, entry.ID, embedding64, entry.Metadata); err != nil {
+			if err := m.vectorStore.Add(ctx, entry.ID, entry.Embedding, entry.Metadata); err != nil {
 				// 向量数据库添加失败，记录但继续
 				fmt.Fprintf(os.Stderr, "vector store add failed during consolidation (entry_id=%s): %v\n", entry.ID, err)
 			}
