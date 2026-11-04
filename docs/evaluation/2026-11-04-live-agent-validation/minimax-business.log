@@ -1,0 +1,23 @@
+=== RUN   TestLiveBusinessCases
+=== RUN   TestLiveBusinessCases/devops-outage
+    live_test.go:224: node "diagnose": model request failed: MiniMax HTTP status 401
+=== RUN   TestLiveBusinessCases/devops-conflicting-signals
+    live_test.go:224: node "diagnose": model request failed: MiniMax HTTP status 401
+=== RUN   TestLiveBusinessCases/article-educational
+    live_test.go:224: node "review": parallel branch "content_rules": model request failed: MiniMax HTTP status 401
+=== RUN   TestLiveBusinessCases/article-medical-misinformation
+    live_test.go:224: node "review": parallel branch "content_rules": model request failed: MiniMax HTTP status 401
+=== RUN   TestLiveBusinessCases/reply-paraphrased-hours
+    live_test.go:224: node "retrieve": model request failed: MiniMax HTTP status 401
+=== RUN   TestLiveBusinessCases/reply-unsupported-injection
+    live_test.go:224: node "retrieve": model request failed: MiniMax HTTP status 401
+--- FAIL: TestLiveBusinessCases (2.78s)
+    --- FAIL: TestLiveBusinessCases/devops-outage (0.86s)
+    --- FAIL: TestLiveBusinessCases/devops-conflicting-signals (0.42s)
+    --- FAIL: TestLiveBusinessCases/article-educational (0.38s)
+    --- FAIL: TestLiveBusinessCases/article-medical-misinformation (0.38s)
+    --- FAIL: TestLiveBusinessCases/reply-paraphrased-hours (0.37s)
+    --- FAIL: TestLiveBusinessCases/reply-unsupported-injection (0.37s)
+FAIL
+FAIL	github.com/kart-io/goagent-examples/workflow/business-cases	3.781s
+FAIL

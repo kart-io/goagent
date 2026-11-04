@@ -1,0 +1,4 @@
+durable_snapshot_rows=3
+session_rows=3
+event_rows=6
+lease_rows=0

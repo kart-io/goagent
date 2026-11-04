@@ -50,6 +50,9 @@ jobs:
         env:
           GO_TEST_MODE: "true"
 
+      - name: Check coverage gates
+        run: bash scripts/check_coverage.sh coverage.out
+
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         with:

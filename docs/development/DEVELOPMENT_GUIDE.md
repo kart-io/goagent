@@ -22,12 +22,12 @@ go build ./...
 | `make test` | `GO_TEST_MODE=true go test -v -race -timeout 120s ./...` |
 | `make test-short` | 带 `-short` 的测试 |
 | `make test-integration` | `-tags=integration` 的测试 |
-| `make coverage` | 生成 `coverage/coverage.out` 与 `coverage/coverage.html` |
+| `make coverage` | 生成 `coverage/coverage.out`、执行覆盖率门禁并生成 `coverage/coverage.html` |
 | `make bench` | `go test -bench=. -benchmem ./...` |
 | `make fmt` | `gofumpt -w .`，`gci` 按标准库 → 第三方 → `github.com/kart-io/goagent` 分组 |
 | `make vet` / `make lint` | `go vet ./...` / `golangci-lint run ./...` |
 | `bash scripts/verify_imports.sh` | 导入层级检查，见 [导入层级说明](../architecture/IMPORT_LAYERING.md) |
-| `./scripts/check_coverage.sh` | 读取已有的 `coverage.out`，整体覆盖率（不含示例）须 ≥ 45%，并检查少数关键文件 |
+| `./scripts/check_coverage.sh` | 默认读取 `coverage/coverage.out`，可传入文件路径；按语句数检查整体、执行核心模块及关键文件，详见[测试规范](TESTING_BEST_PRACTICES.md) |
 | `bash scripts/provider_regression.sh [REPORT.jsonl]` | 离线 Provider/Builder 契约与竞态回归，见 [持续回归](../guides/PROVIDER_REGRESSION.md) |
 
 CI（`.github/workflows/`）运行带 `-race` 的全量测试、导入检查与 golangci-lint；PR 流程另跑覆盖率门禁。

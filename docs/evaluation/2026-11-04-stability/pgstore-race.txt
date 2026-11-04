@@ -1,0 +1,156 @@
+=== RUN   TestSaveAllDatabaseRollback
+--- PASS: TestSaveAllDatabaseRollback (0.13s)
+=== RUN   TestScopedSaveAllFencingAndIsolation
+--- PASS: TestScopedSaveAllFencingAndIsolation (0.12s)
+=== RUN   TestAppendAllDatabaseRollback
+--- PASS: TestAppendAllDatabaseRollback (0.07s)
+=== RUN   TestAppendAllCompareOnlyAndEncoding
+--- PASS: TestAppendAllCompareOnlyAndEncoding (0.06s)
+=== RUN   TestAppendAllConcurrentReverseOrder
+--- PASS: TestAppendAllConcurrentReverseOrder (0.08s)
+=== RUN   TestAppendAllSnapshotLeaseFencing
+--- PASS: TestAppendAllSnapshotLeaseFencing (0.10s)
+=== RUN   TestImportFileStore
+--- PASS: TestImportFileStore (0.16s)
+=== RUN   TestConformance
+=== RUN   TestConformance/互斥
+=== RUN   TestConformance/不可重入
+=== RUN   TestConformance/不同ID互不阻塞
+=== RUN   TestConformance/同实例同时持有多个ID
+=== RUN   TestConformance/跨实例读写
+=== RUN   TestConformance/不存在返回ErrNotExist
+=== RUN   TestConformance/取消后仍可写入
+=== RUN   TestConformance/写入原子
+=== RUN   TestConformance/批量写入跨实例可见
+=== RUN   TestConformance/批量写入拒绝时不写入
+=== RUN   TestConformance/批量写入对并发读者原子
+=== RUN   TestConformance/审批跨实例续跑
+=== RUN   TestConformance/操作跨实例回放
+=== RUN   TestConformance/作用域隔离
+=== RUN   TestConformance/作用域与根同名ID互不阻塞
+=== RUN   TestConformance/作用域删除
+=== RUN   TestConformance/持锁期间删除作用域
+=== RUN   TestConformance/墓碑回收
+=== RUN   TestConformance/崩溃后接管
+=== RUN   TestConformance/续约维持长时间持锁
+=== RUN   TestConformance/接管后旧持有者写入被拒
+=== RUN   TestConformance/同进程旧持有者不放行新持有者
+=== RUN   TestConformance/过期未接管时仍可写入
+=== RUN   TestConformance/批量写入按租约全部拒绝
+--- PASS: TestConformance (8.89s)
+    --- PASS: TestConformance/互斥 (0.32s)
+    --- PASS: TestConformance/不可重入 (0.30s)
+    --- PASS: TestConformance/不同ID互不阻塞 (0.09s)
+    --- PASS: TestConformance/同实例同时持有多个ID (0.11s)
+    --- PASS: TestConformance/跨实例读写 (0.14s)
+    --- PASS: TestConformance/不存在返回ErrNotExist (0.08s)
+    --- PASS: TestConformance/取消后仍可写入 (0.08s)
+    --- PASS: TestConformance/写入原子 (0.19s)
+    --- PASS: TestConformance/批量写入跨实例可见 (0.08s)
+    --- PASS: TestConformance/批量写入拒绝时不写入 (0.07s)
+    --- PASS: TestConformance/批量写入对并发读者原子 (0.36s)
+    --- PASS: TestConformance/审批跨实例续跑 (0.12s)
+    --- PASS: TestConformance/操作跨实例回放 (0.10s)
+    --- PASS: TestConformance/作用域隔离 (0.09s)
+    --- PASS: TestConformance/作用域与根同名ID互不阻塞 (0.08s)
+    --- PASS: TestConformance/作用域删除 (0.10s)
+    --- PASS: TestConformance/持锁期间删除作用域 (0.08s)
+    --- PASS: TestConformance/墓碑回收 (0.69s)
+    --- PASS: TestConformance/崩溃后接管 (3.09s)
+    --- PASS: TestConformance/续约维持长时间持锁 (2.24s)
+    --- PASS: TestConformance/接管后旧持有者写入被拒 (0.08s)
+    --- PASS: TestConformance/同进程旧持有者不放行新持有者 (0.24s)
+    --- PASS: TestConformance/过期未接管时仍可写入 (0.07s)
+    --- PASS: TestConformance/批量写入按租约全部拒绝 (0.09s)
+=== RUN   TestSchemaVersionMismatch
+--- PASS: TestSchemaVersionMismatch (0.06s)
+=== RUN   TestClosedRejectsLock
+--- PASS: TestClosedRejectsLock (0.06s)
+=== RUN   TestCloseReleasesAfterTimeout
+--- PASS: TestCloseReleasesAfterTimeout (0.13s)
+=== RUN   TestExpiredLeaseCleanup
+--- PASS: TestExpiredLeaseCleanup (0.21s)
+=== RUN   TestProcessCrashTakeover
+--- PASS: TestProcessCrashTakeover (1.11s)
+=== RUN   TestPrimaryRestart
+    pgstore_test.go:79: pgstore renew: FATAL: terminating connection due to administrator command (SQLSTATE 57P01)
+    pgstore_test.go:239: 重启期间写入：failed to connect to `user=postgres database=postgres`: 127.0.0.1:32771 (127.0.0.1): failed to receive message: unexpected EOF
+--- PASS: TestPrimaryRestart (0.54s)
+=== RUN   TestAcquireUncertainCommitCleanup
+--- PASS: TestAcquireUncertainCommitCleanup (0.08s)
+=== RUN   TestSyncCommit
+--- PASS: TestSyncCommit (1.00s)
+=== RUN   TestSessionConformance
+=== RUN   TestSessionConformance/不存在返回ErrNotFound
+=== RUN   TestSessionConformance/追加按期望序号比较并交换
+=== RUN   TestSessionConformance/批量追加跨实例可见
+=== RUN   TestSessionConformance/批量追加任一冲突时不写入
+=== RUN   TestSessionConformance/批量追加拒绝时不写入
+=== RUN   TestSessionConformance/并发追加只有一个成功
+=== RUN   TestSessionConformance/事件原样往返
+=== RUN   TestSessionConformance/按序号读取
+=== RUN   TestSessionConformance/分叉
+=== RUN   TestSessionConformance/按字节序列出
+=== RUN   TestSessionConformance/拒绝空会话ID
+=== RUN   TestSessionConformance/锁
+=== RUN   TestSessionConformance/DurableStore
+=== RUN   TestSessionConformance/DurableStore/互斥
+=== RUN   TestSessionConformance/DurableStore/不可重入
+=== RUN   TestSessionConformance/DurableStore/不同ID互不阻塞
+=== RUN   TestSessionConformance/DurableStore/同实例同时持有多个ID
+=== RUN   TestSessionConformance/DurableStore/跨实例读写
+=== RUN   TestSessionConformance/DurableStore/不存在返回ErrNotExist
+=== RUN   TestSessionConformance/DurableStore/取消后仍可写入
+=== RUN   TestSessionConformance/DurableStore/写入原子
+=== RUN   TestSessionConformance/DurableStore/批量写入跨实例可见
+=== RUN   TestSessionConformance/DurableStore/批量写入拒绝时不写入
+=== RUN   TestSessionConformance/DurableStore/批量写入对并发读者原子
+=== RUN   TestSessionConformance/DurableStore/审批跨实例续跑
+=== RUN   TestSessionConformance/DurableStore/操作跨实例回放
+=== RUN   TestSessionConformance/DurableStore/崩溃后接管
+=== RUN   TestSessionConformance/DurableStore/续约维持长时间持锁
+=== RUN   TestSessionConformance/DurableStore/接管后旧持有者写入被拒
+=== RUN   TestSessionConformance/DurableStore/同进程旧持有者不放行新持有者
+=== RUN   TestSessionConformance/DurableStore/过期未接管时仍可写入
+=== RUN   TestSessionConformance/DurableStore/批量写入按租约全部拒绝
+--- PASS: TestSessionConformance (12.28s)
+    --- PASS: TestSessionConformance/不存在返回ErrNotFound (0.07s)
+    --- PASS: TestSessionConformance/追加按期望序号比较并交换 (0.08s)
+    --- PASS: TestSessionConformance/批量追加跨实例可见 (0.09s)
+    --- PASS: TestSessionConformance/批量追加任一冲突时不写入 (0.08s)
+    --- PASS: TestSessionConformance/批量追加拒绝时不写入 (0.07s)
+    --- PASS: TestSessionConformance/并发追加只有一个成功 (0.12s)
+    --- PASS: TestSessionConformance/事件原样往返 (0.08s)
+    --- PASS: TestSessionConformance/按序号读取 (0.10s)
+    --- PASS: TestSessionConformance/分叉 (0.10s)
+    --- PASS: TestSessionConformance/按字节序列出 (0.10s)
+    --- PASS: TestSessionConformance/拒绝空会话ID (0.08s)
+    --- PASS: TestSessionConformance/锁 (0.29s)
+    --- PASS: TestSessionConformance/DurableStore (11.01s)
+        --- PASS: TestSessionConformance/DurableStore/互斥 (0.29s)
+        --- PASS: TestSessionConformance/DurableStore/不可重入 (0.24s)
+        --- PASS: TestSessionConformance/DurableStore/不同ID互不阻塞 (0.21s)
+        --- PASS: TestSessionConformance/DurableStore/同实例同时持有多个ID (0.21s)
+        --- PASS: TestSessionConformance/DurableStore/跨实例读写 (0.29s)
+        --- PASS: TestSessionConformance/DurableStore/不存在返回ErrNotExist (0.22s)
+        --- PASS: TestSessionConformance/DurableStore/取消后仍可写入 (0.30s)
+        --- PASS: TestSessionConformance/DurableStore/写入原子 (0.71s)
+        --- PASS: TestSessionConformance/DurableStore/批量写入跨实例可见 (0.26s)
+        --- PASS: TestSessionConformance/DurableStore/批量写入拒绝时不写入 (0.22s)
+        --- PASS: TestSessionConformance/DurableStore/批量写入对并发读者原子 (0.48s)
+        --- PASS: TestSessionConformance/DurableStore/审批跨实例续跑 (0.28s)
+        --- PASS: TestSessionConformance/DurableStore/操作跨实例回放 (0.28s)
+        --- PASS: TestSessionConformance/DurableStore/崩溃后接管 (3.28s)
+        --- PASS: TestSessionConformance/DurableStore/续约维持长时间持锁 (2.42s)
+        --- PASS: TestSessionConformance/DurableStore/接管后旧持有者写入被拒 (0.31s)
+        --- PASS: TestSessionConformance/DurableStore/同进程旧持有者不放行新持有者 (0.44s)
+        --- PASS: TestSessionConformance/DurableStore/过期未接管时仍可写入 (0.26s)
+        --- PASS: TestSessionConformance/DurableStore/批量写入按租约全部拒绝 (0.32s)
+=== RUN   TestSessionSchemaVersion
+--- PASS: TestSessionSchemaVersion (0.19s)
+=== RUN   TestSessionSnapshotRequiresLock
+--- PASS: TestSessionSnapshotRequiresLock (0.25s)
+=== RUN   TestSessionLogResumeAcrossInstances
+--- PASS: TestSessionLogResumeAcrossInstances (0.41s)
+PASS
+ok  	github.com/kart-io/goagent-contrib/durable/pgstore	27.489s

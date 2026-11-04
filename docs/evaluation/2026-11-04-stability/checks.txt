@@ -1,0 +1,64 @@
+本轮命令: env -u GOROOT ANTHROPIC_MODEL=host-override make coverage
+环境: Go 1.27.2 darwin/arm64；使用已有测试缓存的包在下方标为 cached。
+ok  	github.com/kart-io/goagent/builder	(cached)	coverage: 90.7% of statements
+ok  	github.com/kart-io/goagent/builder/contextpolicy	(cached)	coverage: 89.1% of statements
+ok  	github.com/kart-io/goagent/cache	(cached)	coverage: 89.6% of statements
+ok  	github.com/kart-io/goagent/core	(cached)	coverage: 77.8% of statements
+ok  	github.com/kart-io/goagent/core/budget	(cached)	coverage: 88.4% of statements
+ok  	github.com/kart-io/goagent/core/checkpoint	(cached)	coverage: 91.9% of statements
+ok  	github.com/kart-io/goagent/core/durable	(cached)	coverage: 84.4% of statements
+ok  	github.com/kart-io/goagent/core/execution	(cached)	coverage: 88.0% of statements
+ok  	github.com/kart-io/goagent/core/flow	(cached)	coverage: 77.5% of statements
+ok  	github.com/kart-io/goagent/core/middleware	(cached)	coverage: 87.8% of statements
+ok  	github.com/kart-io/goagent/core/observe	(cached)	coverage: 97.3% of statements
+ok  	github.com/kart-io/goagent/core/session	(cached)	coverage: 83.1% of statements
+ok  	github.com/kart-io/goagent/core/state	(cached)	coverage: 87.1% of statements
+ok  	github.com/kart-io/goagent/core/usage	(cached)	coverage: 82.0% of statements
+ok  	github.com/kart-io/goagent/devtools	(cached)	coverage: 76.5% of statements
+ok  	github.com/kart-io/goagent/errors	(cached)	coverage: 85.1% of statements
+ok  	github.com/kart-io/goagent/evaluation	(cached)	coverage: 87.2% of statements
+ok  	github.com/kart-io/goagent/evaluation/agentbench	(cached)	coverage: 90.2% of statements
+ok  	github.com/kart-io/goagent/evaluation/agentbench/cmd/stress	(cached)	coverage: 81.0% of statements
+ok  	github.com/kart-io/goagent/evaluation/executionbench	(cached)	coverage: 85.0% of statements
+ok  	github.com/kart-io/goagent/examples/integration/human-in-loop	(cached)	coverage: 93.6% of statements
+ok  	github.com/kart-io/goagent/execution	(cached)	coverage: 97.3% of statements
+ok  	github.com/kart-io/goagent/harness/env	(cached)	coverage: 85.1% of statements
+ok  	github.com/kart-io/goagent/interfaces	(cached)	coverage: 0.0% of statements
+ok  	github.com/kart-io/goagent/llm	(cached)	coverage: 74.0% of statements
+ok  	github.com/kart-io/goagent/llm/cache	(cached)	coverage: 73.0% of statements
+ok  	github.com/kart-io/goagent/llm/common	(cached)	coverage: 86.1% of statements
+ok  	github.com/kart-io/goagent/llm/providers	(cached)	coverage: 88.6% of statements
+ok  	github.com/kart-io/goagent/mcp/remote	(cached)	coverage: 84.2% of statements
+ok  	github.com/kart-io/goagent/memory	(cached)	coverage: 89.5% of statements
+ok  	github.com/kart-io/goagent/middleware	(cached)	coverage: 98.3% of statements
+ok  	github.com/kart-io/goagent/observability	(cached)	coverage: 92.8% of statements
+ok  	github.com/kart-io/goagent/parsers	(cached)	coverage: 98.9% of statements
+ok  	github.com/kart-io/goagent/plugin	(cached)	coverage: 95.1% of statements
+ok  	github.com/kart-io/goagent/scripts/apicheck	(cached)	coverage: 34.3% of statements
+ok  	github.com/kart-io/goagent/scripts/coveragecheck	1.557s	coverage: 82.9% of statements
+ok  	github.com/kart-io/goagent/store	(cached)	coverage: 82.6% of statements
+ok  	github.com/kart-io/goagent/store/memory	(cached)	coverage: 89.0% of statements
+ok  	github.com/kart-io/goagent/testing/mocks	(cached)	coverage: 13.0% of statements
+ok  	github.com/kart-io/goagent/testing/panictest	(cached)	coverage: 63.6% of statements
+ok  	github.com/kart-io/goagent/testing/replay	(cached)	coverage: 76.7% of statements
+ok  	github.com/kart-io/goagent/tools	(cached)	coverage: 79.9% of statements
+ok  	github.com/kart-io/goagent/tools/compute	(cached)	coverage: 86.7% of statements
+ok  	github.com/kart-io/goagent/tools/http	(cached)	coverage: 98.6% of statements
+ok  	github.com/kart-io/goagent/tools/middleware	(cached)	coverage: 86.8% of statements
+ok  	github.com/kart-io/goagent/tools/policy	(cached)	coverage: 92.6% of statements
+ok  	github.com/kart-io/goagent/tools/search	(cached)	coverage: 89.9% of statements
+ok  	github.com/kart-io/goagent/tools/shell	(cached)	coverage: 95.2% of statements
+ok  	github.com/kart-io/goagent/tools/spill	(cached)	coverage: 81.0% of statements
+ok  	github.com/kart-io/goagent/utils	(cached)	coverage: 97.7% of statements
+ok  	github.com/kart-io/goagent/utils/httpclient	(cached)	coverage: 95.6% of statements
+ok  	github.com/kart-io/goagent/utils/json	(cached)	coverage: 59.2% of statements
+ok  	github.com/kart-io/goagent/workflow	(cached)	coverage: 84.4% of statements
+ok  	github.com/kart-io/goagent/workflow/refund	(cached)	coverage: 64.8% of statements
+整体覆盖率: 79.3% (14826/18706)，要求 ≥ 45%，通过
+core/durable: 84.4% (591/700)，要求 ≥ 70%，通过
+core/budget: 88.4% (305/345)，要求 ≥ 75%，通过
+workflow: 84.4% (826/979)，要求 ≥ 75%，通过
+builder: 90.7% (1632/1800)，要求 ≥ 75%，通过
+llm/providers/openai.go: 88.3% (68/77)，要求 ≥ 70%，通过
+llm/providers/gemini.go: 89.4% (211/236)，要求 ≥ 65%，通过
+llm/common/base.go: 90.1% (155/172)，要求 ≥ 50%，通过

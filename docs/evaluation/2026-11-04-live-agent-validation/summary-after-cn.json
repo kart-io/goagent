@@ -1,0 +1,20 @@
+{
+  "basis": "保留首次国际端点401记录；仅将最新三模型矩阵中的MiniMax组替换为国内端点本次实测，不改原始报告。",
+  "latest_cases_passed": 24,
+  "latest_cases_total": 24,
+  "latest_authentication_blocked_cases": 0,
+  "historical_provider_request_attempts": 37,
+  "historical_successful_model_calls": 31,
+  "historical_unknown_usage_requests": 6,
+  "historical_known_tokens": 13956,
+  "minimax_cn": {
+    "endpoint": "https://api.minimax.cn/v1",
+    "model": "MiniMax-M3.1-Flash",
+    "passed_cases": 6,
+    "total_cases": 6,
+    "requests": 6,
+    "known_tokens": 2571,
+    "automatic_retries": 0,
+    "duration_seconds": 23.593
+  }
+}

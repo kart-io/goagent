@@ -1,0 +1,21 @@
+{
+  "actual_model_requests": 0,
+  "client_attempts": 0,
+  "error": "DEEPSEEK_API_KEY absent",
+  "failed_stage": "not_started",
+  "finished_utc": "2026-11-04T14:44:55Z",
+  "http_attempts": 0,
+  "limitations": [
+    "One actual provider request maximum; no retry or model fallback",
+    "One model/tool path and replay only; not a load, crash, HA or multi-process test",
+    "SaveAll and AppendAll are separately atomic operations, not one transaction across both APIs"
+  ],
+  "max_actual_requests": 1,
+  "provider": "deepseek",
+  "provider_response_model": "",
+  "provider_stream_usage": null,
+  "requested_model": "deepseek-flash",
+  "started_utc": "2026-11-04T14:44:55Z",
+  "status": "failed",
+  "tool_calls": 0
+}

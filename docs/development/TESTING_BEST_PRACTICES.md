@@ -2,7 +2,7 @@
 
 ## 覆盖率与门禁
 
-- PR 流程运行 `./scripts/check_coverage.sh`：整体覆盖率（排除 `examples/`）不低于 45%，`llm/providers/openai.go`、`llm/providers/gemini.go`、`llm/common/base.go` 另有单文件阈值。
+- `make coverage` 和 CI 执行相同门禁：整体（排除示例）≥45%，`core/durable` ≥70%，`core/budget`、`workflow`、`builder` 各 ≥75%；`llm/providers/openai.go` ≥70%，`llm/providers/gemini.go` ≥65%，`llm/common/base.go` ≥50%。模块阈值针对精确包路径，不混入子包；全部按语句数加权，缺失关键数据会失败。
 - 新行为必须带测试，覆盖正常流程、边界与错误恢复；修 bug 先写能复现的测试。
 - 默认测试不访问外部服务；真实模型测试见 [Provider 持续回归](../guides/PROVIDER_REGRESSION.md)。
 
@@ -13,8 +13,8 @@ make test                                   # GO_TEST_MODE=true go test -v -race
 make test-short                             # -short
 make test-integration                       # -tags=integration
 go test -race -run TestName ./builder/      # 单个包或用例
-make coverage                               # coverage/coverage.out 与 coverage.html
-go test -coverprofile=coverage.out ./... && ./scripts/check_coverage.sh
+make coverage                               # 生成 coverage/coverage.out，执行门禁并生成 HTML
+go test -coverprofile=coverage.out ./... && bash scripts/check_coverage.sh coverage.out
 bash scripts/provider_regression.sh         # 离线 Provider/Builder 契约与竞态回归
 ```
 
@@ -153,3 +153,5 @@ func TestDurableRunReplays(t *testing.T) {
 - [开发指南](DEVELOPMENT_GUIDE.md)
 - [Panic 处理指南](PANIC_HANDLING.md)
 - [架构概述](../architecture/ARCHITECTURE.md)
+
+测试依赖默认配置时，使用 `t.Setenv` 隔离相应环境变量；配置透传测试则显式设置变量。Unix 测试须同时兼容 Linux 和 macOS，不假定系统提供 `setsid` 等外部工具。覆盖率检查器的输入与失败语义回归运行 `go test ./scripts/coveragecheck`。

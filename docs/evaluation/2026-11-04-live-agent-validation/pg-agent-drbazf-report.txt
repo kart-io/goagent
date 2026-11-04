@@ -1,0 +1,24 @@
+PG live Agent verification — 2026-11-04
+
+PASS. Real configured DeepSeek provider, explicitly deepseek-flash. Model itself selected persist_receipt exactly once with empty arguments. ReturnDirectTools returned the complete tool confirmation without a summary request.
+
+Actual provider requests: 1. Client attempts: 1. HTTP transport attempts: 1. Tool executions: 1. Provider-reported model: deepseek-flash. Known usage: 358 prompt + 25 completion = 383 total tokens. Durable budget reserved one model request and one tool call; known usage remained 383 after replay.
+
+The real tool acquired receipt/a and receipt/b leases and called the latest pgstore.SaveAll to save two complete snapshots. It called SessionStore.AppendAll to write receipt/committed to receipt-session/a and receipt-session/b, both starting at expected sequence 0 and returning last sequences [1,1]. Reads verified both snapshots, both event payloads, and event sequence 1. Values were verified again after rebuilding.
+
+The Agent used session.DurableStore backed by PostgreSQL as its durable journal, and pgstore as its durable request/tool budget store. Four boundary/snapshot events persisted the started/completed model and tool operation records. A new pool, Store lease owner, SessionStore adapter, provider, budget controller and Agent were created. Invoke used the same execution key, configuration and input. It returned the identical persisted confirmation. Requests added: 0. Tool effects added: 0. Business events added: 0. Journal events stayed 4. Budget usage was unchanged. Both client and actual HTTP transport checked the upper bound before delegation, and rejected any second send. The provider's native streaming path has no implicit retry; a fresh-connection transport was used to avoid retry on stale keepalive connections.
+
+Environment: a new isolated postgres:16-alpine Docker container, goagent-pg-live-drbazf, was created using the already-local image and a localhost-only ephemeral port. No existing/user/production database or container was used. The container was removed after evidence capture. Real core and pgstore source were loaded through a temporary standalone Go module with local replaces; no production source or original module files were modified.
+
+Two credential-visibility startup checks exited before creating any provider/model request (client attempts=0, actual requests=0); their result/log files are retained. The shell environment differed when the tool working directory was /tmp. The one successful model invocation was launched from the repository working directory via Python with an explicit inherited environment; no credential was printed. There was no retry of a model request and no alternate model.
+
+Artifacts:
+- pg-agent-drbazf-source.txt — exact compiled Go source (no credentials)
+- pg-agent-drbazf-module.txt — standalone module configuration
+- pg-agent-drbazf-executed-result.json — successful structured assertions and usage
+- pg-agent-drbazf-executed-log.txt — successful run log
+- pg-agent-drbazf-database-evidence.txt — SQL row counts after pool/Store close
+- pg-agent-drbazf-result.json and pg-agent-drbazf-log.txt — first zero-request startup check
+- pg-agent-drbazf-live-result.json and pg-agent-drbazf-live-log.txt — second zero-request startup check
+
+Limits: this is one live Agent/provider/tool path and same-process object reconstruction, not an OS-process restart, crash-recovery, load or HA proof. SaveAll and AppendAll are independently atomic; the probe does not claim a transaction spanning both APIs. SQL-failure rollback, fencing takeover, sequence conflict, concurrency and database restart were separately covered by the completed pgstore real-database compatibility suite. No additional actual model request was used for this probe.

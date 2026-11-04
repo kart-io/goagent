@@ -32,7 +32,7 @@ for a in "$@"; do [ "$prev" = --name ] && name=$a; prev=$a; done
 case "$1" in
 run|create)
   [ -n "$FAKE_IMAGE_MISSING" ] && [ ! -e ` + dir + `/pulled ] && { echo "Error response from daemon: No such image: x" >&2; exit 1; }
-  setsid bash -c "sleep ` + createDelay + `; touch $state/$name" </dev/null >/dev/null 2>&1 &
+  bash -c "sleep ` + createDelay + `; touch $state/$name" </dev/null >/dev/null 2>&1 &
   while [ ! -e "$state/$name" ]; do sleep 0.02; done
   [ "$1" = create ] && { echo id-$name; exit 0; }
   sleep 30 ;;

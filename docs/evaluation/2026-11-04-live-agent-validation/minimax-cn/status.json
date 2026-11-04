@@ -1,0 +1,9 @@
+{
+  "endpoint": "https://api.minimax.cn/v1",
+  "model": "MiniMax-M3.1-Flash",
+  "exit_code": 0,
+  "duration_seconds": 23.593,
+  "max_requests": 6,
+  "automatic_retries": 0,
+  "credential_source": "既有MiniMax凭据，仅在子进程映射到MINIMAX_CN_API_KEY；未输出凭据"
+}

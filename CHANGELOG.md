@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- 覆盖率门禁增加 `core/durable`、`core/budget`、`workflow`、`builder` 模块阈值，按语句数加权统计；`make coverage` 与 CI 使用相同检查器，缺少关键数据时失败。检查脚本兼容 macOS 系统 Bash，可显式传入 profile 路径。
+
 - `workflow.ResumeRequest`、`DurableGraph.Resume` 与 `WithResumeHandler`：在已保存的审批暂停处接收人工输入，由宿主校验并更新业务状态；修改与放行原子落盘后继续执行。`RunRequest.Resume` 与 `workflow.WithResume` 分别支持 Runnable 入口和嵌套子图；无效输入保持等待，已消费的恢复键不能重复应用修改。新增 HITL 指南及离线通过/拒绝/编辑示例。
 - `durable.AwaitInput`：工作流节点、并行分支与声明可中断的工具可以在执行中途等待人工输入，从检查点恢复；首次持久化的输入固定，非法 JSON 或校验失败时保持等待。`GraphSnapshot.Interrupts`、`ChildContinuation.Interrupts` 给出中断键，`Resume` 同时接受审批键与中断键。工具经 `FunctionToolBuilder.WithInterruptible(version)` 或 `tools.InterruptibleTool` 显式开启。`validate` panic 时按拒绝处理，panic 值不持久化，经新增的 `WaitError.Cause` 或 `ResumeRejectedError` 链可取得 `*errors.PanicError`。
 
@@ -17,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 持久图节点返回中断等待时记为暂停而非失败；并行节点中分支等待不再取消兄弟分支。迁移：依赖“节点返回 `*durable.WaitError` 即失败”的宿主需改为处理 `ErrApprovalRequired` 与 `Snapshot.Interrupts`；已有工具开启中断时须提升版本，并等进行中的运行结束后再切换。`Interrupts` 非空时须用 `Interrupts[i].Key` 回应，不要用 `Key` 或 `ChildContinuation.ApprovalKey`（此时为空）。
 
 ### Fixed
+
+- 默认模型断言隔离 `ANTHROPIC_MODEL`，避免宿主模型配置使离线测试失败；模拟 Docker 的 Unix 测试不再依赖 macOS 缺少的 `setsid` 命令。
 
 - `core.InterruptManager` 不再忽略检查点保存错误：保存失败时释放中断 ID，不发布中断、不等待人工响应，也不执行后续业务。该管理器的等待状态仍限于进程内，跨进程恢复使用持久图。
 

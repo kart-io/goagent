@@ -1,0 +1,231 @@
+{
+  "basis": "本机关联模块当前工作树，全部本地模块以临时 modfile replace；GOWORK=off，go test -short -count=1 -timeout=120s ./...；未修改关联仓库。",
+  "results": [
+    {
+      "module": "goagent-harness",
+      "exit_code": 1,
+      "diagnostics": [
+        "preset/compaction.go:128:24: cp.model.Chat undefined (type llm.Client has no field or method Chat)",
+        "--- FAIL: TestTurnStartedClearsWaitLimit (0.75s)",
+        "--- FAIL: TestTargetOrderHoldsUntilRepeatedFailure (1.32s)"
+      ],
+      "passed_packages": [
+        "ok  \tgithub.com/kart-io/goagent-harness/permissions\t1.073s",
+        "ok  \tgithub.com/kart-io/goagent-harness/sandbox\t5.316s",
+        "ok  \tgithub.com/kart-io/goagent-harness/tools/coding\t7.284s"
+      ],
+      "failed_packages": [
+        "FAIL\tgithub.com/kart-io/goagent-harness/background\t10.304s",
+        "FAIL\tgithub.com/kart-io/goagent-harness/effects\t8.748s",
+        "FAIL\tgithub.com/kart-io/goagent-harness/examples/coding-agent [build failed]",
+        "FAIL\tgithub.com/kart-io/goagent-harness/examples/plan-agent [build failed]",
+        "FAIL\tgithub.com/kart-io/goagent-harness/examples/sandbox-permissions [build failed]",
+        "FAIL\tgithub.com/kart-io/goagent-harness/integration [build failed]",
+        "FAIL\tgithub.com/kart-io/goagent-harness/preset [build failed]"
+      ]
+    },
+    {
+      "module": "goagent-examples",
+      "exit_code": 1,
+      "diagnostics": [
+        "workflow/business-cases/model.go:78:17: cannot use 1st function result (value of type *providers.GeminiProvider) as completionClient value in multiple assignment: *providers.GeminiProvider does not implement completionClient (missing method Complete)",
+        "workflow/business-cases/model.go:80:17: cannot use 1st function result (value of type *providers.DeepSeekProvider) as completionClient value in multiple assignment: *providers.DeepSeekProvider does not implement completionClient (missing method Complete)"
+      ],
+      "passed_packages": [
+        "ok  \tgithub.com/kart-io/goagent-examples/agent-usage/agent\t0.303s",
+        "ok  \tgithub.com/kart-io/goagent-examples/agent-usage/cases\t1.342s",
+        "ok  \tgithub.com/kart-io/goagent-examples/agent-usage/live\t0.994s",
+        "ok  \tgithub.com/kart-io/goagent-examples/agent-usage/task\t0.880s",
+        "ok  \tgithub.com/kart-io/goagent-examples/internal/livemodel\t0.800s",
+        "ok  \tgithub.com/kart-io/goagent-examples/internal/livemodel/livemodeltest\t1.182s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/acp\t1.329s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/agent-context\t6.473s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/agent-tool\t1.642s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/composed-order\t4.647s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/context-recovery\t2.017s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/field-adapter\t2.115s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/flight-booking\t31.350s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/internal/livecase\t2.668s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/live/approval\t4.924s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/live/delegation\t5.532s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/live/localize\t5.172s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/live/log-triage\t3.730s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/live/parallel-diagnostics\t4.554s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/live/review-loop\t5.989s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/live/session-replay\t5.292s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/live/stream-budget\t4.711s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/live/ticket-triage\t4.472s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/ops/alert-rca\t11.973s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/ops/capacity-review\t19.420s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/ops/cost-attribution\t11.369s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/ops/internal/opscase\t5.213s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/ops/scoped-lookup\t19.907s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/ops/sql-review\t23.424s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/parallel-diagnostics\t2.859s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/plugin/basic\t2.576s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/plugin/hooks\t2.357s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/plugin/resources\t2.518s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/plugin/support-desk\t3.745s",
+        "ok  \tgithub.com/kart-io/goagent-examples/workflow/refund-recovery\t7.300s"
+      ],
+      "failed_packages": [
+        "FAIL\tgithub.com/kart-io/goagent-examples/workflow/business-cases [build failed]"
+      ]
+    },
+    {
+      "module": "goagent-examples/orchestration/httpagent",
+      "exit_code": 0,
+      "diagnostics": [],
+      "passed_packages": [
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/httpagent\t1.685s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/httpagent/cmd/webhook-receiver\t0.441s"
+      ],
+      "failed_packages": []
+    },
+    {
+      "module": "goagent-contrib/acp",
+      "exit_code": 0,
+      "diagnostics": [],
+      "passed_packages": [
+        "ok  \tgithub.com/kart-io/goagent-contrib/acp\t11.728s"
+      ],
+      "failed_packages": []
+    },
+    {
+      "module": "goagent-contrib/document",
+      "exit_code": 1,
+      "diagnostics": [
+        "../retrieval/llm_reranker.go:56:28: l.Client.Chat undefined (type llm.Client has no field or method Chat)",
+        "../retrieval/multi_query.go:130:31: m.LLMClient.Complete undefined (type llm.Client has no field or method Complete)",
+        "../retrieval/rag.go:281:31: c.llmClient.Complete undefined (type llm.Client has no field or method Complete)",
+        "../retrieval/rag.go:402:31: m.LLMClient.Complete undefined (type llm.Client has no field or method Complete)"
+      ],
+      "passed_packages": [],
+      "failed_packages": [
+        "FAIL\tgithub.com/kart-io/goagent-contrib/document [build failed]"
+      ]
+    },
+    {
+      "module": "goagent-contrib/document/pdf",
+      "exit_code": 1,
+      "diagnostics": [
+        "../../retrieval/llm_reranker.go:56:28: l.Client.Chat undefined (type llm.Client has no field or method Chat)",
+        "../../retrieval/multi_query.go:130:31: m.LLMClient.Complete undefined (type llm.Client has no field or method Complete)",
+        "../../retrieval/rag.go:281:31: c.llmClient.Complete undefined (type llm.Client has no field or method Complete)",
+        "../../retrieval/rag.go:402:31: m.LLMClient.Complete undefined (type llm.Client has no field or method Complete)"
+      ],
+      "passed_packages": [],
+      "failed_packages": [
+        "FAIL\tgithub.com/kart-io/goagent-contrib/document/pdf [build failed]"
+      ]
+    },
+    {
+      "module": "goagent-contrib/durable/pgstore",
+      "exit_code": 1,
+      "diagnostics": [
+        "./pgstore.go:84:21: cannot use (*Store)(nil) (value of type *Store) as durable.Store value in variable declaration: *Store does not implement durable.Store (missing method SaveAll)",
+        "./session.go:26:23: cannot use (*SessionStore)(nil) (value of type *SessionStore) as session.Store value in variable declaration: *SessionStore does not implement session.Store (missing method AppendAll)",
+        "./scope.go:23:59: cannot use &scope{…} (value of type *scope) as durable.Store value in return statement: *scope does not implement durable.Store (missing method SaveAll)",
+        "./import_test.go:57:38: cannot use s (variable of type *Store) as durable.Store value in struct literal: *Store does not implement durable.Store (missing method SaveAll)",
+        "./import_test.go:70:71: cannot use s (variable of type *Store) as durable.Store value in argument to durable.WithJournal: *Store does not implement durable.Store (missing method SaveAll)",
+        "./pgstore_test.go:110:10: cannot use newStore(t, dsn, schema) (value of type *Store) as durable.Store value in return statement: *Store does not implement durable.Store (missing method SaveAll)",
+        "\t*Store does not implement durable.Store (missing method SaveAll)",
+        "\t*Store does not implement durable.Store (missing method SaveAll)",
+        "./pgstore_test.go:177:36: cannot use s (variable of type *Store) as durable.Store value in struct literal: *Store does not implement durable.Store (missing method SaveAll)",
+        "./pgstore_test.go:200:35: cannot use b (variable of type *Store) as durable.Store value in struct literal: *Store does not implement durable.Store (missing method SaveAll)"
+      ],
+      "passed_packages": [],
+      "failed_packages": [
+        "FAIL\tgithub.com/kart-io/goagent-contrib/durable/pgstore [build failed]"
+      ]
+    },
+    {
+      "module": "goagent-contrib/httpagent",
+      "exit_code": 1,
+      "diagnostics": [
+        "./binding_test.go:156:20: agent.Execute undefined (type *builder.ConfigurableAgent[any, *\"github.com/kart-io/goagent/core\".AgentState] has no field or method Execute, but does have unexported method execute)"
+      ],
+      "passed_packages": [],
+      "failed_packages": [
+        "FAIL\tgithub.com/kart-io/goagent-contrib/httpagent [build failed]"
+      ]
+    },
+    {
+      "module": "goagent-contrib/retrieval/cohere",
+      "exit_code": 1,
+      "diagnostics": [
+        "../llm_reranker.go:56:28: l.Client.Chat undefined (type llm.Client has no field or method Chat)",
+        "../multi_query.go:130:31: m.LLMClient.Complete undefined (type llm.Client has no field or method Complete)",
+        "../rag.go:281:31: c.llmClient.Complete undefined (type llm.Client has no field or method Complete)",
+        "../rag.go:402:31: m.LLMClient.Complete undefined (type llm.Client has no field or method Complete)"
+      ],
+      "passed_packages": [],
+      "failed_packages": [
+        "FAIL\tgithub.com/kart-io/goagent-contrib/retrieval/cohere [build failed]"
+      ]
+    },
+    {
+      "module": "goagent-contrib/retrieval",
+      "exit_code": 1,
+      "diagnostics": [
+        "./llm_reranker.go:56:28: l.Client.Chat undefined (type llm.Client has no field or method Chat)",
+        "./multi_query.go:130:31: m.LLMClient.Complete undefined (type llm.Client has no field or method Complete)",
+        "./rag.go:281:31: c.llmClient.Complete undefined (type llm.Client has no field or method Complete)",
+        "./rag.go:402:31: m.LLMClient.Complete undefined (type llm.Client has no field or method Complete)",
+        "./llm_reranker_test.go:29:32: cannot use m (variable of type *scoringModel) as llm.Client value in argument to NewLLMRerankerWithClient: *scoringModel does not implement llm.Client (missing method CompleteStream)",
+        "./runnable_contract_test.go:45:50: cannot use &contractModel{} (value of type *contractModel) as llm.Client value in argument to NewMultiQueryRetriever: *contractModel does not implement llm.Client (missing method CompleteStream)",
+        "./runnable_contract_test.go:122:143: cannot use &contractModel{} (value of type *contractModel) as llm.Client value in argument to NewMultiQueryRetriever: *contractModel does not implement llm.Client (missing method CompleteStream)"
+      ],
+      "passed_packages": [],
+      "failed_packages": [
+        "FAIL\tgithub.com/kart-io/goagent-contrib/retrieval [build failed]"
+      ]
+    },
+    {
+      "module": "goagent-contrib/retrieval/qdrant",
+      "exit_code": 1,
+      "diagnostics": [
+        "../llm_reranker.go:56:28: l.Client.Chat undefined (type llm.Client has no field or method Chat)",
+        "../multi_query.go:130:31: m.LLMClient.Complete undefined (type llm.Client has no field or method Complete)",
+        "../rag.go:281:31: c.llmClient.Complete undefined (type llm.Client has no field or method Complete)",
+        "../rag.go:402:31: m.LLMClient.Complete undefined (type llm.Client has no field or method Complete)"
+      ],
+      "passed_packages": [],
+      "failed_packages": [
+        "FAIL\tgithub.com/kart-io/goagent-contrib/retrieval/qdrant [build failed]"
+      ]
+    },
+    {
+      "module": "goagent-contrib/retrieval/vertexai",
+      "exit_code": 1,
+      "diagnostics": [
+        "../llm_reranker.go:56:28: l.Client.Chat undefined (type llm.Client has no field or method Chat)",
+        "../multi_query.go:130:31: m.LLMClient.Complete undefined (type llm.Client has no field or method Complete)",
+        "../rag.go:281:31: c.llmClient.Complete undefined (type llm.Client has no field or method Complete)",
+        "../rag.go:402:31: m.LLMClient.Complete undefined (type llm.Client has no field or method Complete)"
+      ],
+      "passed_packages": [],
+      "failed_packages": [
+        "FAIL\tgithub.com/kart-io/goagent-contrib/retrieval/vertexai [build failed]"
+      ]
+    },
+    {
+      "module": "goagent-contrib/tools/database",
+      "exit_code": 0,
+      "diagnostics": [],
+      "passed_packages": [
+        "ok  \tgithub.com/kart-io/goagent-contrib/tools/database\t0.251s"
+      ],
+      "failed_packages": []
+    },
+    {
+      "module": "goagent-contrib/tools/practical",
+      "exit_code": 0,
+      "diagnostics": [],
+      "passed_packages": [
+        "ok  \tgithub.com/kart-io/goagent-contrib/tools/practical\t12.367s"
+      ],
+      "failed_packages": []
+    }
+  ]
+}

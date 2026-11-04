@@ -1,0 +1,10 @@
+{
+  "endpoint": "https://api.minimax.cn/v1",
+  "model": "MiniMax-M3.1-Flash",
+  "passed_cases": 6,
+  "total_cases": 6,
+  "requests": 6,
+  "known_tokens": 2571,
+  "automatic_retries": 0,
+  "duration_seconds": 23.593
+}

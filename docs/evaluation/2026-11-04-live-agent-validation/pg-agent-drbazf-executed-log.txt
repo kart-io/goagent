@@ -1,0 +1,91 @@
+{
+  "actual_model_requests": 1,
+  "batch_after_rebuild": {
+    "all_visible": true,
+    "session_last_sequences": {
+      "receipt-session/a": 1,
+      "receipt-session/b": 1
+    },
+    "snapshots": {
+      "receipt/a": "live-v1",
+      "receipt/b": "live-v1"
+    }
+  },
+  "batch_result": {
+    "all_visible": true,
+    "session_last_sequences": {
+      "receipt-session/a": 1,
+      "receipt-session/b": 1
+    },
+    "snapshots": {
+      "receipt/a": "live-v1",
+      "receipt/b": "live-v1"
+    }
+  },
+  "client_attempts": 1,
+  "finished_utc": "2026-11-04T14:45:44Z",
+  "first_budget": {
+    "ReservedRequests": 1,
+    "KnownUsageEntries": 1,
+    "UnknownUsageEntries": 0,
+    "KnownTokens": {
+      "prompt_tokens": 358,
+      "completion_tokens": 25,
+      "total_tokens": 383
+    },
+    "ReservedTokens": 0,
+    "ReservedToolCalls": 1,
+    "KnownTokenDelta": 383
+  },
+  "first_output": "PG_RECEIPT_PERSISTED: 2 snapshots and 2 session events committed",
+  "http_attempts": 1,
+  "journal_before_rebuild": {
+    "events": 4,
+    "snapshot_ids": [
+      "goagent/operation/688d60a4503f81d5521414b381ea9dc9ba51788325ebae72def8c94da623f4fb",
+      "goagent/operation/688d60a4503f81d5521414b381ea9dc9ba51788325ebae72def8c94da623f4fb",
+      "goagent/operation/16aba89cb5b654331d4379feb5bfe7594ce0dc0bfa7e3b484a8643d5d4e92dd5",
+      "goagent/operation/16aba89cb5b654331d4379feb5bfe7594ce0dc0bfa7e3b484a8643d5d4e92dd5"
+    ]
+  },
+  "limitations": [
+    "One actual provider request maximum; no retry or model fallback",
+    "One model/tool path and replay only; not a load, crash, HA or multi-process test",
+    "SaveAll and AppendAll are separately atomic operations, not one transaction across both APIs"
+  ],
+  "max_actual_requests": 1,
+  "provider": "deepseek",
+  "provider_response_model": "deepseek-flash",
+  "provider_stream_usage": {
+    "prompt_tokens": 358,
+    "completion_tokens": 25,
+    "total_tokens": 383
+  },
+  "replay_budget": {
+    "ReservedRequests": 1,
+    "KnownUsageEntries": 1,
+    "UnknownUsageEntries": 0,
+    "KnownTokens": {
+      "prompt_tokens": 358,
+      "completion_tokens": 25,
+      "total_tokens": 383
+    },
+    "ReservedTokens": 0,
+    "ReservedToolCalls": 1,
+    "KnownTokenDelta": 383
+  },
+  "replay_output": "PG_RECEIPT_PERSISTED: 2 snapshots and 2 session events committed",
+  "replay_result": {
+    "budget_usage_unchanged": true,
+    "business_events_added": 0,
+    "equal_output": true,
+    "journal_events_after": 4,
+    "journal_events_before": 4,
+    "model_requests_added": 0,
+    "tool_effects_added": 0
+  },
+  "requested_model": "deepseek-flash",
+  "started_utc": "2026-11-04T14:45:43Z",
+  "status": "passed",
+  "tool_calls": 1
+}

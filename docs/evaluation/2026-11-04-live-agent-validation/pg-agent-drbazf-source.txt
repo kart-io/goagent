@@ -1,0 +1,147 @@
+package main
+
+import (
+ "context"
+ "encoding/json"
+ "errors"
+ "fmt"
+ "net/http"
+ "os"
+ "strings"
+ "sync"
+ "sync/atomic"
+ "time"
+
+ "github.com/jackc/pgx/v5/pgxpool"
+ "github.com/kart-io/goagent/builder"
+ "github.com/kart-io/goagent/core/budget"
+ "github.com/kart-io/goagent/core/durable"
+ "github.com/kart-io/goagent/core/session"
+ "github.com/kart-io/goagent/interfaces"
+ "github.com/kart-io/goagent/llm"
+ "github.com/kart-io/goagent/llm/providers"
+ "github.com/kart-io/goagent/tools"
+ pg "github.com/kart-io/goagent-contrib/durable/pgstore"
+)
+
+const input = "Call persist_receipt exactly once with empty object arguments {}. Do not answer in text. The tool is the complete final response."
+var attempts, sends, sendAttempts, toolCalls atomic.Int64
+var usageMu sync.Mutex
+var streamUsage *llm.Usage
+var responseModel string
+var result = map[string]any{"provider":"deepseek", "requested_model":"deepseek-flash", "max_actual_requests":1, "status":"not_started", "limitations":[]string{"One actual provider request maximum; no retry or model fallback", "One model/tool path and replay only; not a load, crash, HA or multi-process test", "SaveAll and AppendAll are separately atomic operations, not one transaction across both APIs"}}
+
+// This wrapper admits at most one model API invocation, before calling the real provider.
+type guardedClient struct { *providers.DeepSeekProvider }
+func (g *guardedClient) admit() error {
+ attempts.Add(1)
+ if attempts.Load() != 1 { return errors.New("probe model client request cap reached before send") }
+ return nil
+}
+func (g *guardedClient) observe(in <-chan *llm.StreamChunk) <-chan *llm.StreamChunk {
+ out:=make(chan *llm.StreamChunk)
+ go func(){ defer close(out); for chunk:=range in {
+  usageMu.Lock(); if chunk.Usage!=nil { copy:=*chunk.Usage; streamUsage=&copy }; if chunk.ResponseModel!="" {responseModel=chunk.ResponseModel}; usageMu.Unlock()
+  out<-chunk
+ }}()
+ return out
+}
+func(g *guardedClient) CompleteStream(ctx context.Context, req *llm.CompletionRequest)(<-chan *llm.StreamChunk,error){
+ if err:=g.admit();err!=nil{return nil,err}; ch,err:=g.DeepSeekProvider.CompleteStream(ctx,req);if err!=nil{return nil,err};return g.observe(ch),nil
+}
+func(g *guardedClient) CompleteToolsStream(ctx context.Context, req *llm.CompletionRequest, ts []interfaces.Tool)(<-chan *llm.StreamChunk,error){
+ if err:=g.admit();err!=nil{return nil,err}; ch,err:=g.DeepSeekProvider.CompleteToolsStream(ctx,req,ts);if err!=nil{return nil,err};return g.observe(ch),nil
+}
+
+// This second independent guard runs immediately before the real network RoundTrip.
+// Fresh connections avoid net/http's retry of a request on a stale reused connection.
+type cappedTransport struct { next http.RoundTripper }
+func(t cappedTransport) RoundTrip(r *http.Request)(*http.Response,error){
+ sendAttempts.Add(1)
+ if r.URL.Hostname()!="api.deepseek.com" {return nil,errors.New("probe refuses unexpected model endpoint")}
+ if !sends.CompareAndSwap(0,1){return nil,errors.New("probe HTTP request cap reached before network send")}
+ return t.next.RoundTrip(r)
+}
+
+func must(ok bool, msg string) error { if !ok{return errors.New(msg)};return nil }
+func open(ctx context.Context, dsn string)(*pgxpool.Pool,*pg.Store,*pg.SessionStore,error){
+ pool,err:=pgxpool.New(ctx,dsn);if err!=nil{return nil,nil,nil,err}
+ store,err:=pg.New(ctx,pg.Config{Pool:pool});if err!=nil{pool.Close();return nil,nil,nil,err}
+ sess,err:=pg.NewSessionStore(ctx,store);if err!=nil{store.Close(ctx);pool.Close();return nil,nil,nil,err}
+ return pool,store,sess,nil
+}
+func verify(ctx context.Context,s *pg.Store,ss *pg.SessionStore)(map[string]any,error){
+ saved:=map[string]any{}
+ for _,id:=range []string{"receipt/a","receipt/b"}{
+  snap,err:=s.Load(ctx,id);if err!=nil{return nil,err};if err=must(snap.Version=="live-v1"&&snap.RunID==id&&string(snap.Data)==`{"receipt":"pg-live"}`,"snapshot fields mismatch");err!=nil{return nil,err};saved[id]=snap.Version
+ }
+ seqs:=map[string]int64{}
+ for _,id:=range []string{"receipt-session/a","receipt-session/b"}{
+  events,err:=ss.Read(ctx,id,0);if err!=nil{return nil,err};if err=must(len(events)==1&&events[0].Seq==1&&events[0].Type=="receipt/committed"&&string(events[0].Data)==`{"receipt":"pg-live"}`,"business event fields or sequence mismatch");err!=nil{return nil,err};seqs[id]=events[0].Seq
+ }
+ return map[string]any{"snapshots":saved,"session_last_sequences":seqs,"all_visible":true},nil
+}
+func invoke(ctx context.Context, store *pg.Store, ss *pg.SessionStore)(string,*budget.Snapshot,error){
+ provider,err:=providers.NewDeepSeekWithOptions(llm.WithAPIKey(os.Getenv("DEEPSEEK_API_KEY")),llm.WithBaseURL("https://api.deepseek.com/v1"),llm.WithModel("deepseek-flash"),llm.WithMaxTokens(512),llm.WithTemperature(0),llm.WithTimeout(90*time.Second),llm.WithStreamTimeout(90*time.Second));if err!=nil{return "",nil,err}
+ model:=&guardedClient{DeepSeekProvider:provider}
+ tool:=tools.NewBaseTool("persist_receipt","Atomically persist a fixed receipt in PostgreSQL snapshots and business sessions, and return the complete final confirmation. No arguments.",`{"type":"object","properties":{},"additionalProperties":false}`,func(ctx context.Context,in *interfaces.ToolInput)(*interfaces.ToolOutput,error){
+  if toolCalls.Add(1)!=1{return nil,errors.New("tool was invoked more than once")}
+  unlockA,err:=store.Lock(ctx,"receipt/a");if err!=nil{return nil,err};defer unlockA()
+  unlockB,err:=store.Lock(ctx,"receipt/b");if err!=nil{return nil,err};defer unlockB()
+  err=store.SaveAll(ctx,durable.Write{ID:"receipt/a",Snapshot:&durable.Snapshot{Version:"live-v1",RunID:"receipt/a",Data:json.RawMessage(`{"receipt":"pg-live"}`)}},durable.Write{ID:"receipt/b",Snapshot:&durable.Snapshot{Version:"live-v1",RunID:"receipt/b",Data:json.RawMessage(`{"receipt":"pg-live"}`)}});if err!=nil{return nil,err}
+  event:=session.Event{Type:"receipt/committed",Data:json.RawMessage(`{"receipt":"pg-live"}`)}
+  lasts,err:=ss.AppendAll(ctx,session.AppendBatch{ID:"receipt-session/a",Events:[]session.Event{event}},session.AppendBatch{ID:"receipt-session/b",Events:[]session.Event{event}});if err!=nil{return nil,err}
+  if err=must(len(lasts)==2&&lasts[0]==1&&lasts[1]==1,"AppendAll returned incorrect sequences");err!=nil{return nil,err}
+  batch,err:=verify(ctx,store,ss);if err!=nil{return nil,err};result["batch_result"]=batch
+  return &interfaces.ToolOutput{Success:true,Result:"PG_RECEIPT_PERSISTED: 2 snapshots and 2 session events committed"},nil
+ })
+ reg:=tools.NewRegistry();if err=reg.Register(tool);err!=nil{return "",nil,err};dispatcher,err:=tools.NewDispatcher(reg,tools.DispatchConfig{});if err!=nil{return "",nil,err}
+ agent,err:=builder.NewSimpleBuilder(model).WithDurableScope("pg-live-agent-v1").WithTools(dispatcher.Tools()...).WithReturnDirectTools("persist_receipt").WithMaxIterations(1).WithMaxTokens(512).WithTemperature(0).WithTimeout(110*time.Second).WithSystemPrompt("You are executing an integration verification. You MUST invoke the persist_receipt tool exactly once with {}. Do not produce a text response or another tool call.").Build();if err!=nil{return "",nil,err}
+ controller,err:=budget.NewDurable(budget.Config{RootKey:"pg-live-root-v1",Version:"v1",MaxModelRequests:1,MaxToolCalls:1},store);if err!=nil{return "",nil,err}
+ ctx=budget.WithController(durable.WithJournal(durable.WithExecutionKey(ctx,"pg-live-same-execution-key"),session.DurableStore(ss,"pg-live-journal")),controller)
+ output,err:=agent.AsRunnable().Invoke(ctx,input)
+ ledger,ledgerErr:=controller.Snapshot(ctx);if ledgerErr!=nil{return "",nil,ledgerErr}
+ if err!=nil{return "",&ledger,err}
+ return fmt.Sprint(output.Result),&ledger,nil
+}
+func run() error {
+ if os.Getenv("DEEPSEEK_API_KEY")==""{return errors.New("DEEPSEEK_API_KEY absent")}
+ ctx,cancel:=context.WithTimeout(context.Background(),150*time.Second);defer cancel()
+ dsn:=os.Getenv("PG_PROBE_DSN");if dsn==""{return errors.New("PG_PROBE_DSN absent")}
+ admin,err:=pgxpool.New(ctx,dsn);if err!=nil{return err}
+ for _,stmt:=range strings.Split(pg.Schema+pg.SessionSchema,";"){if strings.TrimSpace(stmt)!=""{if _,err=admin.Exec(ctx,stmt);err!=nil{admin.Close();return err}}};admin.Close()
+ original:=http.DefaultTransport
+ transport:=original.(*http.Transport).Clone();transport.DisableKeepAlives=true
+ http.DefaultTransport=cappedTransport{next:transport};defer func(){http.DefaultTransport=original;transport.CloseIdleConnections()}()
+ pool,store,ss,err:=open(ctx,dsn);if err!=nil{return err}
+ result["status"]="first_invoke"
+ first,ledger,err:=invoke(ctx,store,ss);result["first_budget"]=ledger;result["first_output"]=first
+ if err!=nil{store.Close(context.Background());pool.Close();return err}
+ if err=must(sends.Load()==1&&toolCalls.Load()==1,"expected exactly one real request and one tool effect");err!=nil{store.Close(context.Background());pool.Close();return err}
+ journal,err:=ss.Read(ctx,"pg-live-journal",0);if err!=nil{store.Close(ctx);pool.Close();return err}
+ ids:=[]string{};for _,ev:=range journal{if ev.Type==session.TypeBoundarySnapshot{var d session.BoundaryData;if err=json.Unmarshal(ev.Data,&d);err!=nil{return err};ids=append(ids,d.ID)}}
+ result["journal_before_rebuild"]=map[string]any{"events":len(journal),"snapshot_ids":ids}
+ if err=must(len(ids)>0,"no durable model/tool records persisted");err!=nil{return err}
+ if err=store.Close(ctx);err!=nil{return err};pool.Close()
+ // Recreate pool, lease owner, session adapter, provider, budget controller and Agent.
+ pool,store,ss,err=open(ctx,dsn);if err!=nil{return err};defer pool.Close();defer store.Close(context.Background())
+ result["status"]="rebuild_replay"
+ second,replayLedger,err:=invoke(ctx,store,ss);result["replay_budget"]=replayLedger;result["replay_output"]=second;if err!=nil{return err}
+ after,err:=verify(ctx,store,ss);if err!=nil{return err};result["batch_after_rebuild"]=after
+ afterJournal,err:=ss.Read(ctx,"pg-live-journal",0);if err!=nil{return err}
+ if err=must(first==second&&sends.Load()==1&&attempts.Load()==1&&toolCalls.Load()==1,"replay changed output or repeated model/tool work");err!=nil{return err}
+ if err=must(ledger.ReservedRequests==1&&replayLedger.ReservedRequests==1&&ledger.KnownTokens==replayLedger.KnownTokens,"replay changed budget or token totals");err!=nil{return err}
+ result["replay_result"]=map[string]any{"equal_output":true,"model_requests_added":0,"tool_effects_added":0,"business_events_added":0,"journal_events_before":len(journal),"journal_events_after":len(afterJournal),"budget_usage_unchanged":true}
+ result["status"]="passed"
+ return nil
+}
+func main(){
+ result["started_utc"]=time.Now().UTC().Format(time.RFC3339)
+ err:=run()
+ result["actual_model_requests"]=sends.Load();result["client_attempts"]=attempts.Load();result["http_attempts"]=sendAttempts.Load();result["tool_calls"]=toolCalls.Load()
+ usageMu.Lock();result["provider_stream_usage"]=streamUsage;result["provider_response_model"]=responseModel;usageMu.Unlock()
+ if err!=nil{result["failed_stage"]=result["status"];result["status"]="failed";result["error"]=err.Error()}
+ result["finished_utc"]=time.Now().UTC().Format(time.RFC3339)
+ b,_:=json.MarshalIndent(result,"","  ");if path:=os.Getenv("PG_PROBE_RESULT");path!=""{if e:=os.WriteFile(path,append(b,'\n'),0600);e!=nil{fmt.Fprintln(os.Stderr,"result write failure:",e)}}
+ fmt.Println(string(b));if err!=nil{os.Exit(1)}
+}

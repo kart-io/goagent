@@ -18,6 +18,7 @@
 | `builder/` | `middleware` |
 | `parsers/` | `middleware` |
 | `interfaces`、`errors`、`utils`、`cache`、`core`、`builder`、`tools`、`parsers`、`llm`、`workflow`、`memory`、`store`、`middleware`、`observability`、`devtools`、`harness` | 顶层 `execution` |
+| `interfaces`、`errors`、`utils`、`cache`、`core`、`builder`、`tools`、`parsers`、`llm`、`workflow`、`memory`、`store`、`middleware`、`observability` | 顶层 `plugin`（能力装配层） |
 | 非 `examples/` | `examples/...` |
 
 说明：

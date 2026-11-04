@@ -80,6 +80,7 @@ coverage:
 	@echo "$(YELLOW)Generating coverage report...$(NC)"
 	@mkdir -p $(COVERAGE_DIR)
 	GO_TEST_MODE=true $(GOTEST) -v -race -coverprofile=$(COVERAGE_DIR)/coverage.out -covermode=atomic ./...
+	bash scripts/check_coverage.sh $(COVERAGE_DIR)/coverage.out
 	$(GOCMD) tool cover -html=$(COVERAGE_DIR)/coverage.out -o $(COVERAGE_DIR)/coverage.html
 	@echo "$(GREEN)Coverage report generated at $(COVERAGE_DIR)/coverage.html$(NC)"
 

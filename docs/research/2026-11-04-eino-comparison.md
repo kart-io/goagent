@@ -1,6 +1,6 @@
 # Eino 对照：组件、编排、ADK 与扩展生态
 
-日期：2026-11-04。GoAgent 基线 `bf8c7ef3`，goagent-contrib 基线 `f0e6bce`。Eino 一侧依据 cloudwego.io 官方文档与 eino-ext README（2026-11-04 经 context7 读取），未锁定发行版本；标注“未核实”的条目来自既有认知，选型前需按选定版本核验。
+日期：2026-11-04。GoAgent 接口列已按本轮稳定化工作树更新；Eino 对照仍保留原调研范围。GoAgent 基线 `bf8c7ef3`，goagent-contrib 基线 `f0e6bce`。Eino 一侧依据 cloudwego.io 官方文档与 eino-ext README（2026-11-04 经 context7 读取），未锁定发行版本；标注“未核实”的条目来自既有认知，选型前需按选定版本核验。
 
 ## 先明确比较对象
 
@@ -12,7 +12,7 @@ Eino 是组件、编排、ADK 与扩展生态齐全的 LLM 应用框架；GoAgen
 |---|---|---|
 | 抽象方式 | 每类能力一个接口（`components/*`），统一 `schema.Message`/`schema.Document` | 核心只保留执行所需接口（`llm.Client`、`interfaces.Tool`、`DocumentRetriever`、`VectorStore`），RAG 接口在 contrib |
 | 调用选项 | 所有组件接受 `opts ...Option`，可单次覆盖 | 在构造或 builder 上配置 |
-| 流式 | 组件层原生，`Stream()` 返回 `*schema.StreamReader[T]` | Provider 按能力接口拆分（`StreamClient`、`ToolStreamClient`） |
+| 流式 | 组件层原生，`Stream()` 返回 `*schema.StreamReader[T]` | `llm.Client` 必须实现结构化流，原生工具流使用可选 `ToolStreamClient` |
 | 作为编排节点 | 任意组件可直接作 Graph 节点 | 包装为 `core.Runnable` 或 `workflow.Node`；contrib `Retriever` 内嵌 `core.Runnable` |
 | 回调/观测 | 组件统一接 `callbacks.Handler` | 集中在执行层：`core/observe` + OTel + Dispatcher 管道 |
 
@@ -20,7 +20,7 @@ Eino 是组件、编排、ADK 与扩展生态齐全的 LLM 应用框架；GoAgen
 
 | 组件 | Eino 接口与实现 | GoAgent 接口与实现 |
 |---|---|---|
-| ChatModel | `BaseChatModel{Generate, Stream}`；`ToolCallingChatModel.WithTools()` 返回新实例；另有 `AgenticMessage` 路径。eino-ext：OpenAI、Claude、Gemini、Ark、Ollama、DeepSeek、Qwen 等 | `llm.Client{Complete, Chat, Provider, IsAvailable}` 加能力接口与 `CapabilityChecker`；`llm.Message` 含 `ToolCalls`、`ReasoningContent`、`ProviderState`。OpenAI 兼容、DeepSeek、Gemini 支持原生工具流，其余 Provider 仅同步入口 |
+| ChatModel | `BaseChatModel{Generate, Stream}`；`ToolCallingChatModel.WithTools()` 返回新实例；另有 `AgenticMessage` 路径。eino-ext：OpenAI、Claude、Gemini、Ark、Ollama、DeepSeek、Qwen 等 | `llm.Client{CompleteStream, Provider}` 加可选能力接口与 `CapabilityChecker`；同步收集使用 `llm.Complete` / `llm.Chat`；`llm.Message` 含 `ToolCalls`、`ReasoningContent`、`ProviderState`。OpenAI 兼容、DeepSeek、Gemini、Anthropic 均支持原生工具流；Kimi、SiliconFlow、Ollama 复用 OpenAI 兼容实现 |
 | Tool | `BaseTool.Info()`；`InvokableTool.InvokableRun(argsJSON) string`；`StreamableTool`。eino-ext：MCP、Google 搜索、DuckDuckGo、Bing 等 | `interfaces.Tool{Name, Description, Invoke, ArgsSchema}`，可选 `DurableCallTool`、`ArgumentErrorTool`、`ConcurrentCallTool`、`ValidatableTool`、`ReconcilableTool`；`tools.Dispatcher`/`Pipeline` 负责审批、守卫、准入、预算、持久日志。核心 compute/http/search/shell、`mcp/remote`；contrib database、文件、API 调用 |
 | Retriever | `Retrieve(ctx, query, opts...)`。Redis、Milvus2、ES8、Qdrant、VikingDB 等 | 核心 `DocumentRetriever.GetRelevantDocuments`，经 `builder.WithRetriever` 每次请求检索并写出 `retrieval_sources`；contrib keyword/BM25、hybrid、multi-query、Qdrant、Reranker |
 | Embedding | `Embedder.EmbedStrings(texts, opts...) [][]float64`。OpenAI、Ark、Ollama 等 | `llm.EmbeddingClient.Embed`（OpenAI、Gemini Provider 声明）；`memory.TextEmbedder` 由使用方定义；核心与 contrib `retrieval.Embedder` 均为 float32，OpenAI、HuggingFace、Cohere、VertexAI |
@@ -28,7 +28,7 @@ Eino 是组件、编排、ADK 与扩展生态齐全的 LLM 应用框架；GoAgen
 | Loader/Transformer | `Loader.Load(ctx, Source)`；`Transformer.Transform(docs)`（切分、重排）。WebURL、S3、File、HTMLSplitter 等 | contrib `DocumentLoader{Load(ctx), LoadAndSplit, GetMetadata}`、`TextSplitter`；text/json/markdown/web/pdf，字符/代码/token 切分 |
 | Prompt | `ChatTemplate.Format(ctx, vars) []*schema.Message`；FString/GoTemplate/Jinja2（未核实） | 无模板组件；`WithSystemPrompt`、`WithPromptSections`、`WithPromptContexts` |
 | 自定义节点/解析 | `compose.InvokableLambda`；eino-ext JSONMessageParser | `workflow.Node[T]`、`core.Runnable`；`parsers.OutputParser[T]` |
-| 记忆/检查点 | 会话在 ADK 内管理；`CheckPointStore` | `memory` 对话与分层记忆；`interfaces.Checkpointer`、`core/durable`；contrib `pgstore` |
+| 记忆/检查点 | 会话在 ADK 内管理；`CheckPointStore` | `memory` 对话与分层记忆；`core/checkpoint.Checkpointer`、`core/durable`；contrib `pgstore` |
 
 ## 编排
 

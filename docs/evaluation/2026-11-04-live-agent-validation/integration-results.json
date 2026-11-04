@@ -1,0 +1,138 @@
+{
+  "max_output_tokens_per_request": 1024,
+  "max_requests": 8,
+  "model": "deepseek-flash",
+  "provider": "deepseek",
+  "real_model": true,
+  "results": [
+    {
+      "name": "harness_compaction_real_agent",
+      "passed": true,
+      "evidence": {
+        "agent_requests": [
+          {
+            "kind": "agent",
+            "finish": "tool_calls",
+            "usage": {
+              "prompt_tokens": 321,
+              "completion_tokens": 23,
+              "total_tokens": 344
+            },
+            "has_summary": false
+          },
+          {
+            "kind": "agent",
+            "finish": "stop",
+            "usage": {
+              "prompt_tokens": 1438,
+              "completion_tokens": 14,
+              "total_tokens": 1452,
+              "reasoning_tokens": 5,
+              "known_fields": 23
+            },
+            "has_summary": true
+          }
+        ],
+        "answer": "LIVE-COMPACT-7419",
+        "summary_requests": [
+          {
+            "kind": "summary_or_rerank",
+            "finish": "stop",
+            "usage": {
+              "prompt_tokens": 110,
+              "completion_tokens": 248,
+              "total_tokens": 358,
+              "reasoning_tokens": 117,
+              "known_fields": 23
+            },
+            "has_summary": false
+          }
+        ],
+        "tool_calls": 1
+      }
+    },
+    {
+      "name": "invoke_with_live_reranker",
+      "passed": true,
+      "evidence": {
+        "agent_requests": [
+          {
+            "kind": "agent",
+            "finish": "tool_calls",
+            "usage": {
+              "prompt_tokens": 322,
+              "completion_tokens": 52,
+              "total_tokens": 374,
+              "reasoning_tokens": 28,
+              "known_fields": 23
+            },
+            "has_summary": false
+          },
+          {
+            "kind": "agent",
+            "finish": "stop",
+            "usage": {
+              "prompt_tokens": 125,
+              "completion_tokens": 117,
+              "total_tokens": 242,
+              "reasoning_tokens": 109,
+              "known_fields": 23
+            },
+            "has_summary": false
+          }
+        ],
+        "answer": "LIVE-HTTP-7391",
+        "rerank_requests": [
+          {
+            "kind": "summary_or_rerank",
+            "finish": "stop",
+            "usage": {
+              "prompt_tokens": 141,
+              "completion_tokens": 133,
+              "total_tokens": 274,
+              "reasoning_tokens": 106,
+              "known_fields": 23
+            },
+            "has_summary": false
+          }
+        ],
+        "rerank_score": 1,
+        "selected_document": "refund",
+        "tool_calls": 1
+      }
+    },
+    {
+      "name": "http_native_binding_real_agent",
+      "passed": true,
+      "evidence": {
+        "agent_requests": [
+          {
+            "kind": "agent",
+            "finish": "tool_calls",
+            "usage": {
+              "prompt_tokens": 322,
+              "completion_tokens": 42,
+              "total_tokens": 364,
+              "cached_tokens": 128,
+              "reasoning_tokens": 18,
+              "known_fields": 31
+            },
+            "has_summary": false
+          },
+          {
+            "kind": "agent",
+            "finish": "stop",
+            "usage": {
+              "prompt_tokens": 125,
+              "completion_tokens": 8,
+              "total_tokens": 133
+            },
+            "has_summary": false
+          }
+        ],
+        "answer": "LIVE-HTTP-7391",
+        "tool_calls": 1
+      }
+    }
+  ]
+}

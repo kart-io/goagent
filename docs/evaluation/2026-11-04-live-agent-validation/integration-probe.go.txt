@@ -1,0 +1,343 @@
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"github.com/kart-io/goagent-contrib/httpagent"
+	"github.com/kart-io/goagent-contrib/retrieval"
+	"github.com/kart-io/goagent-harness/preset"
+	"github.com/kart-io/goagent/builder"
+	"github.com/kart-io/goagent/core/budget"
+	"github.com/kart-io/goagent/interfaces"
+	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/providers"
+	"github.com/kart-io/goagent/plugin"
+	"github.com/kart-io/goagent/tools"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+)
+
+type call struct {
+	Kind       string     `json:"kind"`
+	Finish     string     `json:"finish,omitempty"`
+	Usage      *llm.Usage `json:"usage,omitempty"`
+	HasSummary bool       `json:"has_summary"`
+	Error      string     `json:"error,omitempty"`
+}
+type bounded struct {
+	llm.ToolStreamClient
+	mu    sync.Mutex
+	Limit int
+	Calls []*call
+}
+
+func (b *bounded) start(req *llm.CompletionRequest, kind string) (*llm.CompletionRequest, *call, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if len(b.Calls) >= b.Limit {
+		return nil, nil, errors.New("真实请求上限已到，未发送")
+	}
+	copy := *req
+	copy.MaxTokens = 1024
+	c := &call{Kind: kind}
+	for _, m := range copy.Messages {
+		if strings.HasPrefix(m.Content, "[此前对话的摘要]") {
+			c.HasSummary = true
+		}
+	}
+	b.Calls = append(b.Calls, c)
+	return &copy, c, nil
+}
+func (b *bounded) forward(ctx context.Context, c *call, ch <-chan *llm.StreamChunk, err error) (<-chan *llm.StreamChunk, error) {
+	if err != nil {
+		b.mu.Lock()
+		c.Error = redact(err.Error())
+		b.mu.Unlock()
+		return nil, err
+	}
+	out := make(chan *llm.StreamChunk)
+	go func() {
+		defer close(out)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case chunk, open := <-ch:
+				if !open {
+					return
+				}
+				if chunk != nil && (chunk.Done || chunk.Error != nil) {
+					b.mu.Lock()
+					c.Finish = chunk.FinishReason
+					c.Usage = chunk.Usage
+					if chunk.Error != nil {
+						c.Error = redact(chunk.Error.Error())
+					}
+					b.mu.Unlock()
+				}
+				select {
+				case <-ctx.Done():
+					return
+				case out <- chunk:
+				}
+			}
+		}
+	}()
+	return out, nil
+}
+func (b *bounded) CompleteStream(ctx context.Context, req *llm.CompletionRequest) (<-chan *llm.StreamChunk, error) {
+	req, c, e := b.start(req, "summary_or_rerank")
+	if e != nil {
+		return nil, e
+	}
+	ch, e := b.ToolStreamClient.CompleteStream(ctx, req)
+	return b.forward(ctx, c, ch, e)
+}
+func (b *bounded) CompleteToolsStream(ctx context.Context, req *llm.CompletionRequest, ts []interfaces.Tool) (<-chan *llm.StreamChunk, error) {
+	req, c, e := b.start(req, "agent")
+	if e != nil {
+		return nil, e
+	}
+	ch, e := b.ToolStreamClient.CompleteToolsStream(ctx, req, ts)
+	return b.forward(ctx, c, ch, e)
+}
+func (b *bounded) snapshot() []call {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	out := make([]call, len(b.Calls))
+	for i, c := range b.Calls {
+		out[i] = *c
+	}
+	return out
+}
+func client(limit int) (*bounded, error) {
+	p, e := providers.NewDeepSeekWithOptions(llm.WithModel("deepseek-flash"), llm.WithMaxTokens(1024), llm.WithTemperature(0), llm.WithTimeout(60*time.Second))
+	return &bounded{ToolStreamClient: p, Limit: limit}, e
+}
+func redact(s string) string {
+	for _, n := range []string{"DEEPSEEK_API_KEY", "GEMINI_API_KEY", "MINIMAX_API_KEY"} {
+		if k := os.Getenv(n); k != "" {
+			s = strings.ReplaceAll(s, k, "[REDACTED]")
+		}
+	}
+	return s
+}
+func need(ok bool, msg string) error {
+	if !ok {
+		return errors.New(msg)
+	}
+	return nil
+}
+
+type result struct {
+	Name     string         `json:"name"`
+	Passed   bool           `json:"passed"`
+	Error    string         `json:"error,omitempty"`
+	Evidence map[string]any `json:"evidence"`
+}
+
+func harness(ctx context.Context, dir string) (r result) {
+	r = result{Name: "harness_compaction_real_agent", Evidence: map[string]any{}}
+	model, e := client(2)
+	if e != nil {
+		r.Error = redact(e.Error())
+		return
+	}
+	summary, e := client(1)
+	if e != nil {
+		r.Error = redact(e.Error())
+		return
+	}
+	defer func() {
+		r.Evidence["agent_requests"] = model.snapshot()
+		r.Evidence["summary_requests"] = summary.snapshot()
+	}()
+	e = func() error {
+		set, e := preset.Load(preset.Source{Layer: preset.LayerHost, Path: "live-probe", Trusted: true, Data: []byte(`presets:
+ - id: compact
+   components:
+    - {id: compact, use: compaction, config: {maxTokens: 120, keepTokens: 40}}
+`)})
+		if e != nil {
+			return e
+		}
+		resolved, ok := set.Get("compact")
+		if !ok {
+			return errors.New("缺少preset")
+		}
+		asm, e := preset.Build(ctx, resolved, preset.Host{ArtifactDir: filepath.Join(dir, "artifacts"), CompactionModel: summary})
+		if e != nil {
+			return e
+		}
+		defer asm.Close()
+		var calls atomic.Int32
+		tool := tools.NewFunctionTool("load_evidence", "读取合成报告，报告含唯一编号", `{"type":"object","properties":{},"additionalProperties":false}`, func(context.Context, map[string]any) (any, error) {
+			calls.Add(1)
+			return "报告编号 LIVE-COMPACT-7419。\n" + strings.Repeat("这是用于验证上下文压缩的合成报告背景。", 120), nil
+		})
+		b := builder.NewSimpleBuilder(model).WithSystemPrompt("你是报告核对助手。必须调用 load_evidence 一次，随后只返回报告编号，不得猜测。整个任务无外部业务动作。").WithTools(tool).WithPreStep(asm.Loop.PreStep...).WithMaxIterations(2)
+		a, e := b.Build()
+		if e != nil {
+			return e
+		}
+		ctrl, e := budget.New(budget.Config{RootKey: "live-compaction", Version: "v1", MaxModelRequests: 2})
+		if e != nil {
+			return e
+		}
+		out, e := a.AsRunnable().Invoke(budget.WithController(ctx, ctrl), "请读取合成报告并只回复报告编号。")
+		if e != nil {
+			return e
+		}
+		r.Evidence["answer"] = out.Result
+		r.Evidence["tool_calls"] = calls.Load()
+		if e = need(calls.Load() == 1, "报告工具不是恰好一次"); e != nil {
+			return e
+		}
+		if e = need(strings.Contains(fmt.Sprint(out.Result), "LIVE-COMPACT-7419"), "报告编号不匹配"); e != nil {
+			return e
+		}
+		reqs := model.snapshot()
+		if e = need(len(reqs) == 2 && reqs[1].HasSummary, "真实后续请求未观察到压缩摘要"); e != nil {
+			return e
+		}
+		return need(len(summary.snapshot()) == 1, "摘要请求不等于1")
+	}()
+	if e != nil {
+		r.Error = redact(e.Error())
+	} else {
+		r.Passed = true
+	}
+	return
+}
+
+type toolPlugin struct{ Tool interfaces.Tool }
+
+func (toolPlugin) Name() string    { return "live-tool" }
+func (toolPlugin) Version() string { return "1" }
+func (p toolPlugin) Contribute(context.Context, *plugin.Env) (plugin.Contribution, error) {
+	return plugin.Contribution{Tools: []interfaces.Tool{p.Tool}}, nil
+}
+func httpProbe(ctx context.Context, native bool, rerank *bounded) (r result) {
+	name := "invoke_with_live_reranker"
+	if native {
+		name = "http_native_binding_real_agent"
+	}
+	r = result{Name: name, Evidence: map[string]any{}}
+	model, e := client(2)
+	if e != nil {
+		r.Error = redact(e.Error())
+		return
+	}
+	defer func() {
+		r.Evidence["agent_requests"] = model.snapshot()
+		if !native {
+			r.Evidence["rerank_requests"] = rerank.snapshot()
+		}
+	}()
+	e = func() error {
+		var calls atomic.Int32
+		tool := tools.NewFunctionTool("lookup_policy", "查询合成业务政策和回执", `{"type":"object","properties":{},"additionalProperties":false}`, func(ctx context.Context, _ map[string]any) (any, error) {
+			calls.Add(1)
+			if !native {
+				docs, e := retrieval.NewLLMRerankerWithClient(rerank, 1).Rerank(ctx, "签收后7天内的退款申请政策", []*interfaces.Document{{ID: "shipping", PageContent: "配送政策：普通包裹预计3至5天送达。"}, {ID: "refund", PageContent: "退款政策：订单签收后7天内可以申请退款。"}})
+				if e != nil {
+					return nil, e
+				}
+				if len(docs) != 1 || docs[0].ID != "refund" {
+					return nil, errors.New("真实重排未选中退款政策")
+				}
+				r.Evidence["selected_document"] = docs[0].ID
+				r.Evidence["rerank_score"] = docs[0].Score
+			}
+			return map[string]string{"receipt": "LIVE-HTTP-7391", "selected_document": "refund"}, nil
+		})
+		host, e := plugin.NewHost(toolPlugin{tool})
+		if e != nil {
+			return e
+		}
+		if e = host.Start(ctx); e != nil {
+			return e
+		}
+		defer host.Stop(context.Background())
+		b := builder.NewSimpleBuilder(model).WithSystemPrompt("必须调用 lookup_policy 一次获得数据。最终只输出返回数据中 receipt 字段原文，不得编造或从描述猜测。禁止其他动作。").WithMaxIterations(2)
+		if e = plugin.Install(ctx, b, host); e != nil {
+			return e
+		}
+		a, e := b.Build()
+		if e != nil {
+			return e
+		}
+		var out *builder.AgentOutput
+		if native {
+			out, e = httpagent.Native(a.ExecuteStream).Run(ctx, "请查询政策并返回回执。", func(builder.AgentEvent) error { return nil })
+		} else {
+			out, e = a.AsRunnable().Invoke(ctx, "请查询政策并返回回执。")
+		}
+		if e != nil {
+			return e
+		}
+		r.Evidence["answer"] = out.Result
+		r.Evidence["tool_calls"] = calls.Load()
+		if e = need(calls.Load() == 1, "插件工具不是恰好一次"); e != nil {
+			return e
+		}
+		if e = need(strings.Contains(fmt.Sprint(out.Result), "LIVE-HTTP-7391"), "回执不匹配"); e != nil {
+			return e
+		}
+		return need(len(model.snapshot()) == 2, "Agent请求不等于2")
+	}()
+	if e != nil {
+		r.Error = redact(e.Error())
+	} else {
+		r.Passed = true
+	}
+	return
+}
+func main() {
+	path := os.Args[1]
+	if _, e := os.Stat(path); !os.IsNotExist(e) {
+		fmt.Fprintln(os.Stderr, "结果文件已存在或不可检查")
+		os.Exit(2)
+	}
+	dir, e := os.MkdirTemp("", "goagent-live-harness-")
+	if e != nil {
+		panic(e)
+	}
+	defer os.RemoveAll(dir)
+	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Minute)
+	defer cancel()
+	rerank, e := client(1)
+	if e != nil {
+		panic(e)
+	}
+	rs := []result{harness(ctx, dir), httpProbe(ctx, false, rerank), httpProbe(ctx, true, rerank)}
+	data, e := json.MarshalIndent(map[string]any{"provider": "deepseek", "model": "deepseek-flash", "real_model": true, "max_requests": 8, "max_output_tokens_per_request": 1024, "results": rs}, "", "  ")
+	if e != nil {
+		panic(e)
+	}
+	f, e := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	if e != nil {
+		panic(e)
+	}
+	_, e = f.Write(append(data, '\n'))
+	if e != nil {
+		panic(e)
+	}
+	if e = f.Close(); e != nil {
+		panic(e)
+	}
+	ok := true
+	for _, r := range rs {
+		fmt.Println(r.Name, r.Passed, r.Error)
+		ok = ok && r.Passed
+	}
+	if !ok {
+		os.Exit(1)
+	}
+}

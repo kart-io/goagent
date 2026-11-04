@@ -79,6 +79,8 @@ var textEvents = []anthropicEvent{
 }
 
 func TestAnthropicStreamText(t *testing.T) {
+	// 默认值断言不应读取开发者或宿主进程选择的模型。
+	t.Setenv(constants.EnvAnthropicModel, "")
 	bodies := make(chan map[string]any, 1)
 	server := anthropicServer(t, textEvents, bodies)
 	defer server.Close()
