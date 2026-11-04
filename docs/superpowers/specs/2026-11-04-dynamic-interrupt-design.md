@@ -19,7 +19,7 @@
 
 ## 选型
 
-在 `durable.Do` 上实现原语。人工输入作为操作的 completed 值写入日志，之后再进入只回放，同一份输入只消费一次。
+在 `durable.Do` 上实现原语。人工输入作为操作的 completed 值写入日志：首次成功持久化的输入就此固定，之后的重放都返回同一个值。这只保证输入不变，不保证业务副作用只执行一次。
 
 | 方案 | 结论 |
 |---|---|
@@ -69,7 +69,24 @@ var ErrInterruptNotDurable = errors.New("暂停需要持久日志")
   - 设置 `Waiting=true`，并把待回应的中断写入 `graphState.Interrupts`；
   - 发出 `interrupt_required` 事件（对应现有的 `approval_required`）；
   - 返回 `durable.ErrApprovalRequired`，宿主现有的分支不用改。
-- `validateContinuation` 放开校验：`Waiting` 可以出现在非审批节点上，前提是 `Interrupts` 非空。审批等待与中断等待互斥。
+### 检查点状态规则
+
+“审批等待”和“中断等待”是两种互斥的等待，用 `Interrupts` 是否为空来区分：
+
+| 状态 | 条件 | 含义 |
+|---|---|---|
+| 审批等待 | `Waiting && !Approved && len(Interrupts)==0`，节点在 `ApprovalNodes` 中 | 节点执行前等审批（现有语义） |
+| 中断等待 | `Waiting && len(Interrupts)>0` | 节点执行中途等输入 |
+| 已审批节点内的中断等待 | `Waiting && Approved && len(Interrupts)>0` | 审批已通过，节点执行中又暂停 |
+
+`validateContinuation` 按上表修改：
+
+- `Waiting && Approved` 只在 `Interrupts` 非空时合法；`Interrupts` 为空时仍判为损坏。
+- 中断等待不要求节点在 `ApprovalNodes` 中，但 `Key` 必须等于当前节点 intent 的 `graphDigest`。
+- 并行检查点（`state.Parallel != nil`）允许中断等待，但不允许审批等待。
+- `Routing`、`END` 位置上不允许出现 `Interrupts`。
+
+恢复时保留 `Approved=true`：已审批的节点因中断重新执行时，不再走审批，也不再调用 `WithResumeHandler` 和 `WithBeforeApprove`。
 
 ### 快照
 
@@ -92,7 +109,28 @@ type InterruptPoint struct {
 - `Key` 属于 `Interrupts` → 内部调用 `durable.WithResume(ctx, key, input)`，从头重新执行该节点。节点里已完成的 `durable.Do` 步骤会回放，`AwaitInput` 返回输入。宿主不需要分别处理两种键。
 - 其他键 → 返回 `ErrApprovalMismatch`。
 - 一次回应一个中断。节点重新执行后，如果仍有中断没回应，就再次暂停并返回剩余的中断。
-- `RunRequest.Resume`（AsRunnable）与 `workflow.WithResume`（嵌套子图）接受同样的中断键。
+- `RunRequest.Resume`（AsRunnable）接受同样的中断键。
+- 处于中断等待时调用不带键的 `Run(ctx, runID, zero, "")`：如果 ctx 里有任一待回应中断键对应的 `durable.ResumeInput`，或者所有待回应中断在日志中都已 completed，就重新执行节点；否则不执行节点，原样返回等待。
+
+### 输入入日志后、图检查点更新前崩溃
+
+`AwaitInput` 的记录和图检查点是两条独立的记录。如果崩溃发生在输入已写入日志（中断记录 completed）、图检查点仍为中断等待之后：
+
+- 恢复（`Resume` 或不带键的 `Run`）时，按中断键查日志，发现已经 completed，就视为已回应：重新执行节点，`AwaitInput` 回放已固定的输入，不会再次询问。
+- 用同一个键再次提交**相同**输入：与正常恢复相同，幂等。
+- 用同一个键再次提交**不同**输入：不改变已固定的输入，返回 `ResumeRejectedError`，原因写明“该中断已回应”。节点照常用已固定的输入继续，宿主可以从 `Snapshot` 看到结果。
+- 判断是否已回应需要按键读取中断记录。`core/durable` 导出一个只读查询，具体形式在实现计划中确定，不暴露 `OperationRecord` 的写入能力。
+
+### 嵌套子图的键传递
+
+日志里的输入按执行键查找（`durable.ResumeInput` 取的是 `ExecutionKey(ctx)`），ctx 里的恢复输入会一路传到最内层，因此规定两种传入方式：
+
+1. **直接传最内层的中断键**（推荐，任意层级都可用）：宿主调用 `durable.WithResume(ctx, 中断键, input)`，中断键取 `WaitError.Path` 的最后一项。中间每一层子图在重新执行时，都按“中断等待 + ctx 中有该键的输入”的规则重新执行等待的节点，最内层的 `AwaitInput` 读到输入。
+2. **经 `workflow.WithResume` 封装**：宿主调用 `workflow.WithResume(ctx, 父操作执行键, ResumeRequest{Key: 中断键, Input})`。`AsChildRunnable` 从父操作执行键读到封装的请求后：
+   - `Key` 是本子图的审批键 → 沿用现有审批流程；
+   - `Key` 属于本子图的 `Interrupts`，或者属于更深层的等待 → 转换为 `durable.WithResume(ctx, 中断键, Input)`，再执行本子图。
+
+`ChildContinuation` 新增 `Interrupts []InterruptPoint`，包含所有层级的待回应中断，每一项的 `Key` 都是最内层的中断键，宿主不需要自己拼路径。
 
 ### 并行分支
 
@@ -100,7 +138,7 @@ type InterruptPoint struct {
 
 ### 嵌套子图
 
-`AsChildRunnable` 在子图因节点内中断而暂停时，返回的 `ChildContinuation` 也要带上中断列表。外层 Agent 收到 `builder.ErrWaiting` 后，用最内层的中断键回应。
+`AsChildRunnable` 在子图因节点内中断而暂停时，返回的 `ChildContinuation` 带上中断列表。外层 Agent 收到 `builder.ErrWaiting` 后，按上一节的两种方式之一回应。
 
 ## 工具
 
@@ -111,7 +149,10 @@ type InterruptPoint struct {
 
 ## 破坏性变更与迁移
 
-- 已有工具改为 `WithInterruptible()` 后，持久策略随之改变，旧日志记录会报 "attempt policy changed"。宿主需要提升 `DurableConfig.Version` 或工具版本，等进行中的运行结束后再切换。
+- 已有工具改为 `WithInterruptible()` 后，持久策略会从 `{MaxAttempts: DispatchConfig.MaxAttempts, RetryFailed: true}` 变为 `{Resumable: true, MaxAttempts: 1}`。框架**不能可靠检测**这一变化：`Do` 只比较输入哈希和 `MaxAttempts`，不比较 `Resumable`、`RetryFailed`（`core/durable/operation.go:266`）。`DispatchConfig.MaxAttempts` 恰好为 1 时不会报错，旧记录会按新策略处理。迁移要求：
+  - 提升工具的 intent 版本，使输入哈希变化，旧记录不再被复用；
+  - 或者等使用该工具的进行中运行（包括 waiting 和 pending）全部结束后再切换。
+  - 文档中写明这一要求，并用测试固定“只改 Resumable 不报错”的现状，避免有人误以为框架会检测。
 - 节点返回 `*WaitError` 以前按失败处理，现在按暂停处理。依赖旧行为的宿主需要调整，CHANGELOG 中写明。
 - 检查点新增的 `Interrupts` 是可选字段，旧检查点可以正常读取。
 
@@ -139,8 +180,11 @@ type InterruptPoint struct {
 **workflow**
 
 - 节点中途暂停，进程重启后恢复，中断前的 `durable.Do` 步骤只执行一次。
+- 审批节点通过后在节点内中断：检查点为 `Waiting && Approved`，恢复时不重复审批，不再调用 `WithResumeHandler`、`WithBeforeApprove`。
+- 损坏检测：`Waiting && Approved` 且 `Interrupts` 为空、`Routing` 或 `END` 位置带 `Interrupts`、并行检查点处于审批等待，都判为损坏。
 - 两个并行分支各自暂停，兄弟分支不被取消，可以逐个回应恢复。
-- 嵌套子图节点内暂停，外层 Agent 以 `ErrWaiting` 暂停，用中断键恢复。
+- 嵌套子图节点内暂停，外层 Agent 以 `ErrWaiting` 暂停；分别用“直接传最内层中断键”和“`workflow.WithResume` 封装”两种方式恢复，覆盖两层嵌套。
+- 输入已写入日志、图检查点仍为中断等待时模拟崩溃：恢复后不再询问，用的是已固定的输入；再次提交相同输入时幂等；提交不同输入时返回 `ResumeRejectedError`，已固定的输入不变。
 - 同一图中既有审批等待也有中断等待。
 - 错误的键返回 `ErrApprovalMismatch`。
 - AsRunnable 入口：暂停时返回 `Waiting=true`，并发出 `interrupt_required` 事件。
@@ -150,6 +194,7 @@ type InterruptPoint struct {
 
 - `WithInterruptible()` 的函数工具在 Agent 原生工具循环中暂停，并以 `ErrWaiting` 上报；用 Invoke 与 Start 两种入口都能恢复。
 - 没有开启时报 `ErrWaitNotResumable`。
+- `DispatchConfig.MaxAttempts=1` 时，只把工具从默认策略改为 `WithInterruptible()` 不会报错（固定现状）；提升 intent 版本后，旧记录不会被复用。
 - 并发工具调用中一个暂停，其余调用正常完成。
 
 **全量验证**
@@ -164,7 +209,8 @@ type InterruptPoint struct {
 
 - 重新执行节点或工具时，没有记日志的副作用会重复执行。这一点通过文档和默认关闭来约束，框架无法检测。
 - id 冲突会悄悄回放旧输入，只能靠文档和测试约束。
-- 放开 `validateContinuation` 会削弱现有的检查点一致性校验。新的约束（Interrupts 非空，且与审批等待互斥）要有对应的损坏检测测试。
+- 放开 `validateContinuation` 会削弱现有的检查点一致性校验。新的约束（见“检查点状态规则”）要有对应的损坏检测测试。
+- 工具策略变化不能被框架检测，只能靠版本迁移要求约束。
 - 实现依赖尚未合入的人工审批改动，合入前不能开始编码。
 
 ## 回滚
