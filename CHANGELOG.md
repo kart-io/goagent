@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.45.0] - 2026-11-04
+
 ### Changed
 
 - **破坏性**：`llm/cache.EmbeddingProvider` 只保留 `Embed`，删除 `cache.OpenAIEmbeddingProvider`、`cache.OpenAIEmbeddingConfig` 以及 `MockEmbeddingProvider` 的 `EmbedBatch`、`Dimension`。语义缓存只调用 `Embed`，自带的 OpenAI 实现与 `providers.OpenAIProvider.Embed` 重复。`OpenAIProvider.Embed` 改为使用 `llm.WithEmbeddingModel` 指定的模型，未指定时仍为 `text-embedding-ada-002`。迁移：`cache.NewOpenAIEmbeddingProvider(&cache.OpenAIEmbeddingConfig{APIKey: k, BaseURL: u, Model: m})` 改为 `providers.NewOpenAIWithOptions(llm.WithAPIKey(k), llm.WithBaseURL(u), llm.WithEmbeddingModel(m))`；注意原实现默认 `text-embedding-3-small`，新默认为 `text-embedding-ada-002`，两者向量不兼容，已有缓存需按原模型显式指定或清空重建。
@@ -1005,7 +1007,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/kart-io/goagent/compare/v0.44.0...HEAD
+[Unreleased]: https://github.com/kart-io/goagent/compare/v0.45.0...HEAD
+[0.45.0]: https://github.com/kart-io/goagent/compare/v0.44.0...v0.45.0
 [0.44.0]: https://github.com/kart-io/goagent/compare/v0.43.1...v0.44.0
 [0.43.1]: https://github.com/kart-io/goagent/compare/v0.43.0...v0.43.1
 [0.43.0]: https://github.com/kart-io/goagent/compare/v0.42.1...v0.43.0
