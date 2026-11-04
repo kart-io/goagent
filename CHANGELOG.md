@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `core/checkpoint`：`InMemorySaver.Save` 保存的是调用方对象的引用。Builder 每轮传入同一个运行时状态，之后的修改会改写已保存的检查点，历史中各版本也都指向同一对象。现在保存时复制一份。
+
+### Changed
+
+- **破坏性**：`builder` 未配置 `WithCheckpointer` 时不再创建 `checkpoint.NewInMemorySaver()`。该实例为每个 Agent 私有，`Initialize` 时必然为空，却在每轮自动保存时快照全部状态并无上限地追加历史。依赖默认检查点器的代码改为显式 `WithCheckpointer(checkpoint.NewInMemorySaver())`；`runtime.State` 本身在进程内跨轮保留，不受影响。
+- **破坏性**：同步 `Execute` 路径自动保存检查点失败时返回错误，与流式入口一致；原先只向标准错误输出一行并报告成功。
+
 ### Removed
 
 - **破坏性**：`interfaces` 中无使用方的旧协议与推理类型：`Agent`、`Runnable`、`Input`、`Output`、`Message`、`StreamChunk`、`Plan`、`Step`、`State`，`Checkpointer`、`Checkpoint`、`CheckpointMetadata`，`ReasoningPattern` 及 `Reasoning*`、`ThoughtNode`、`ProgramCode`、`SkeletonPoint`、`ReasoningStrategy` 与 `Strategy*` 常量。迁移：`interfaces.Agent/Runnable` 改用 `core.Runnable[I, O]` 或 Builder 的 `AsRunnable`（`go run ./scripts/apicheck -mode migration` 仍能找出残留用法）；检查点改用 `core/checkpoint.Checkpointer`，持久执行用 `core/durable`；推理策略已在 v0.17.0 删除，无替代。

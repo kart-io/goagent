@@ -57,7 +57,7 @@ harness/env：工具使用的文件系统与命令执行能力接口
 
 ## 状态与检查点
 
-`core/state.AgentState` 是默认状态类型；`WithCheckpointer` 配置的 `core/checkpoint.Checkpointer`（如 `InMemorySaver`）以 SessionID 为键，在 `Initialize` 时恢复状态，`WithAutoSaveEnabled`（默认开启）时每次成功结束后保存。它与 `core/durable` 无关：检查点保存状态，持久日志保存操作结果。
+`core/state.AgentState` 是默认状态类型；`WithCheckpointer` 配置的 `core/checkpoint.Checkpointer`（如 `InMemorySaver`）以 SessionID 为键，在 `Initialize` 时恢复状态，`WithAutoSaveEnabled`（默认开启）时每次成功结束后保存，保存失败则本次执行返回错误；未配置时不创建检查点器。它与 `core/durable` 无关：检查点保存状态，持久日志保存操作结果。
 
 ## 扩展点
 

@@ -297,6 +297,31 @@ func TestInMemorySaver_StateIsolation(t *testing.T) {
 	assert.False(t, ok) // Should not have new key
 }
 
+// Builder saves the same runtime state object every turn, so Save must snapshot it.
+func TestInMemorySaver_SaveSnapshotsSameObject(t *testing.T) {
+	saver := NewInMemorySaver()
+	ctx := context.Background()
+	threadID := "thread123"
+
+	state := agentstate.NewAgentState()
+	state.Set("version", 1)
+	require.NoError(t, saver.Save(ctx, threadID, state))
+	state.Set("version", 2)
+	require.NoError(t, saver.Save(ctx, threadID, state))
+	state.Set("version", 3) // modified after the last save
+
+	current, err := saver.Load(ctx, threadID)
+	require.NoError(t, err)
+	val, _ := current.Get("version")
+	assert.Equal(t, 2, val)
+
+	history, err := saver.GetHistory(ctx, threadID)
+	require.NoError(t, err)
+	require.Len(t, history, 1)
+	val, _ = history[0].Get("version")
+	assert.Equal(t, 1, val)
+}
+
 func TestDefaultCheckpointerConfig(t *testing.T) {
 	config := DefaultCheckpointerConfig()
 
