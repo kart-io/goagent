@@ -285,7 +285,7 @@ parser := NewChainOutputParser[MyStruct](
 result, err := parser.Parse(ctx, llmOutput)
 ```
 
-### ReAct Agent 使用
+### 解析 ReAct 格式输出
 
 ```go
 parser := NewReActOutputParser()

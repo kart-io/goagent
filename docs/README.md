@@ -54,6 +54,7 @@ GoAgent 是嵌入 Go 服务的 Agent 执行内核：原生工具循环、类型�
 - [Harness 核心设计](design/HARNESS_CORE_DESIGN.md)
 - [HTTP Agent设计](design/HTTP_AGENT_DESIGN.md)：内核与网络模块边界、执行与接纳/通知的资源责任
 - [多框架调研与方案复审](research/2026-10-27-framework-orchestration-review.md)
+- [Eino 对照：组件、编排、ADK 与扩展生态](research/2026-11-04-eino-comparison.md)
 - [可组合编排需求](superpowers/specs/2026-10-27-composable-orchestration-requirements.md)与[实现方案](superpowers/plans/2026-10-27-composable-orchestration.md)
 
 ## API 参考
