@@ -137,6 +137,10 @@ type VectorStore interface {
 }
 ```
 
+这是 `HierarchicalMemory` 与 `LongTermMemory` 按需定义的接口，调用方传入向量，存储只负责按向量存取。包内的 `InMemoryVectorStore`、`ChromaVectorStore` 经 `AsVectorStore` 适配后可直接使用。
+
+外部向量库实现已迁至 [goagent-contrib/retrieval](https://github.com/kart-io/goagent-contrib/tree/master/retrieval)（如 `QdrantVectorStore`），它们实现的是 `interfaces.VectorStore`：按文本查询（`SimilaritySearch(query, topK)`）、由存储内部生成向量，不满足本接口，不能直接传给 `NewHierarchicalMemoryWithContext` 或 `NewLongTermMemory`。接入外部向量库时由宿主实现 `memory.VectorStore`，向量维度须与 `WithEmbedder` 的输出一致。
+
 ### 3. EnhancedMemory 增强记忆
 
 支持分层记忆和高级操作：
@@ -444,7 +448,7 @@ config := memory.DefaultConfig()
 
 - 基于余弦相似度计算
 - 支持设置相似度阈值
-- 可集成外部向量数据库
+- 可集成外部向量数据库：由宿主实现 `memory.VectorStore`，contrib 的实现不能直接使用（见[VectorStore 向量存储](#2-vectorstore-向量存储)）
 - `VectorSearch(ctx, embedding, limit, threshold)` 的 `threshold` 是相似度下限（内置存储为余弦相似度，越大越相似），相似度低于它的结果被丢弃；返回的是条目副本，相似度写在副本的 `Metadata["similarity_score"]`，修改返回值不影响已存储的记忆
 - 分层记忆通过 `WithEmbedder` 配置嵌入生成后，`Store`/`StoreTyped` 写入的短期与长期记忆都会立即建立向量索引；未配置时只有自带 `Embedding` 的条目可被 `VectorSearch` 检索
 - 用于生成向量的文本：`string` 原样使用，`[]byte` 转为字符串，实现 `fmt.Stringer` 的取 `String()`，其余类型取 JSON 序列化结果；`nil`（含 nil 指针）、空文本或无法序列化的内容不生成向量，条目照常写入，同一 key 的旧向量随之删除
