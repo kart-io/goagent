@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/durable"
@@ -17,6 +18,8 @@ type RunRequest[T any] struct {
 	RunID       string
 	Initial     T
 	ApprovalKey string
+	// Resume supplies human input and is mutually exclusive with ApprovalKey.
+	Resume *ResumeRequest
 }
 
 // AsRunnable exposes Invoke/Stream/Batch through the same durable execution
@@ -28,7 +31,15 @@ type RunRequest[T any] struct {
 // Only a non-preview final snapshot represents the saved continuation.
 func (d *DurableGraph[T]) AsRunnable() *core.StreamRunnable[RunRequest[T], *GraphSnapshot[T]] {
 	return core.NewStreamRunnable(core.StreamModeSteps, func(ctx context.Context, req RunRequest[T], emit func(core.StreamChunk[*GraphSnapshot[T]]) error) error {
-		snapshot, err := d.run(ctx, d.store, req.RunID, req.Initial, req.ApprovalKey, emit)
+		key := req.ApprovalKey
+		var input json.RawMessage
+		if req.Resume != nil {
+			if key != "" || req.Resume.Key == "" {
+				return &ResumeRejectedError{Err: fmt.Errorf("provide only Resume with a waiting checkpoint key, or ApprovalKey")}
+			}
+			key, input = req.Resume.Key, req.Resume.Input
+		}
+		snapshot, err := d.run(ctx, d.store, req.RunID, req.Initial, key, input, emit)
 		// Only the actual durable wait is a normal pause. Joined unlock errors or
 		// observer errors must not be converted to a successful invocation.
 		if err != nil && (err != durable.ErrApprovalRequired || snapshot == nil || !snapshot.Waiting) {
@@ -45,7 +56,7 @@ type ChildContinuation struct {
 	Node        string `json:"node"`
 	ApprovalKey string `json:"approval_key"`
 	// Rejected 表示本次提供的审批未被采纳，图的状态未改变，仍在等待；Reason 为原因类别
-	// RejectApprovalMismatch 或 RejectBeforeApprove。存储失败、panic 等不属于拒绝，照常作为失败返回。
+	// RejectApprovalMismatch、RejectBeforeApprove 或 RejectResumeInput。存储失败、panic 等不属于拒绝，照常作为失败返回。
 	Rejected bool   `json:"rejected,omitempty"`
 	Reason   string `json:"reason,omitempty"`
 }
@@ -54,6 +65,7 @@ type ChildContinuation struct {
 const (
 	RejectApprovalMismatch = "approval_mismatch" // 审批键与等待的节点不符
 	RejectBeforeApprove    = "before_approve"    // WithBeforeApprove 的钩子拒绝
+	RejectResumeInput      = "resume_input"      // 人工输入无效或未配置处理器
 )
 
 // approvalWait 判断 err 是否为审批暂停或未被采纳的审批，并返回拒绝原因类别（审批暂停时为空）。
@@ -63,6 +75,7 @@ func approvalWait(err error) (reason string, ok bool) {
 		return "", false
 	}
 	var rejected *ApprovalRejectedError
+	var inputRejected *ResumeRejectedError
 	switch {
 	case errors.Is(err, durable.ErrApprovalRequired):
 		return "", true
@@ -70,6 +83,8 @@ func approvalWait(err error) (reason string, ok bool) {
 		return RejectApprovalMismatch, true
 	case errors.As(err, &rejected):
 		return RejectBeforeApprove, true
+	case errors.As(err, &inputRejected):
+		return RejectResumeInput, true
 	}
 	return "", false
 }
@@ -79,7 +94,7 @@ func approvalWait(err error) (reason string, ok bool) {
 // 同一 Store，否则崩溃后子图从头重跑、已执行的节点再执行一次。读取子图状态时以该 Store 编译图后调用 Snapshot。
 // 运行 ID 取当前执行键，须在声明 Resumable 的持久操作内调用（见 durable.CanWait），否则在执行任何节点前
 // 返回 durable.ErrWaitNotResumable：其他操作不会重新进入，审批之后无法续跑。审批暂停返回 *durable.WaitError 而不是成功，
-// 等待不会被当作结果交给上层。续跑时从 durable.ResumeInput 读取审批键，首次运行时它被忽略。
+// 等待不会被当作结果交给上层。续跑时从 durable.ResumeInput 读取审批键或 WithResume 编码的人工输入，首次运行时它被忽略。
 // 完成时返回最终状态。
 func (d *DurableGraph[T]) AsChildRunnable() *core.RunnableFunc[T, T] {
 	return core.NewRunnableFunc(func(ctx context.Context, initial T) (T, error) {
@@ -106,15 +121,26 @@ func (d *DurableGraph[T]) AsChildRunnable() *core.RunnableFunc[T, T] {
 				approvalKey = ""
 			}
 		}
-		snapshot, err := d.run(ctx, store, id, initial, approvalKey, func(core.StreamChunk[*GraphSnapshot[T]]) error { return nil })
+		var input json.RawMessage
+		if strings.HasPrefix(approvalKey, "{") {
+			var req ResumeRequest
+			if err := json.Unmarshal([]byte(approvalKey), &req); err != nil || req.Key == "" {
+				current, e := d.snapshot(ctx, store, id)
+				if e != nil {
+					return zero, e
+				}
+				if current.Waiting && ctx.Err() == nil {
+					return zero, childWait(id, current, RejectResumeInput)
+				}
+				return zero, &ResumeRejectedError{Err: fmt.Errorf("invalid human resume request")}
+			}
+			approvalKey, input = req.Key, req.Input
+		}
+		snapshot, err := d.run(ctx, store, id, initial, approvalKey, input, func(core.StreamChunk[*GraphSnapshot[T]]) error { return nil })
 		// 审批暂停与未被采纳的审批报告为等待，避免上层把这次续跑记成失败而无法再续；其他错误照常失败。
 		reason, waiting := approvalWait(err)
 		if waiting && snapshot != nil && snapshot.Waiting && ctx.Err() == nil {
-			continuation, e := json.Marshal(ChildContinuation{RunID: id, Node: snapshot.Node, ApprovalKey: snapshot.Key, Rejected: reason != "", Reason: reason})
-			if e != nil {
-				return zero, e
-			}
-			return zero, &durable.WaitError{Continuation: continuation}
+			return zero, childWait(id, snapshot, reason)
 		}
 		if err != nil {
 			return zero, err
@@ -124,4 +150,12 @@ func (d *DurableGraph[T]) AsChildRunnable() *core.RunnableFunc[T, T] {
 		}
 		return snapshot.State, nil
 	})
+}
+
+func childWait[T any](id string, snapshot *GraphSnapshot[T], reason string) error {
+	continuation, err := json.Marshal(ChildContinuation{RunID: id, Node: snapshot.Node, ApprovalKey: snapshot.Key, Rejected: reason != "", Reason: reason})
+	if err != nil {
+		return err
+	}
+	return &durable.WaitError{Continuation: continuation}
 }

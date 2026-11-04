@@ -35,6 +35,7 @@ type DurableGraph[T any] struct {
 	version, plan string
 	approvals     map[string]bool
 	beforeApprove func(context.Context, string, *GraphSnapshot[T]) error
+	resumeHandler func(context.Context, string, *GraphSnapshot[T], json.RawMessage) (T, error)
 }
 
 // DurableOption 配置与状态类型 T 相关的持久图行为。
@@ -43,6 +44,7 @@ type DurableOption[T any] func(*DurableGraph[T])
 // WithBeforeApprove 在运行锁内、批准生效前调用 fn，用于核对暂停期间外部数据是否被改动
 // （先 Snapshot 再 Run 的两次加锁之间存在窗口）。fn 返回错误或 panic 时拒绝本次批准且不改动状态，
 // 之后仍可再次以正确条件批准。fn 拿到的是锁内最新检查点的独立副本，修改它不影响运行。
+// 配置 WithResumeHandler 时，先处理人工输入，再用包含拟保存状态的副本执行此校验。
 func WithBeforeApprove[T any](fn func(ctx context.Context, id string, snap *GraphSnapshot[T]) error) DurableOption[T] {
 	return func(d *DurableGraph[T]) { d.beforeApprove = fn }
 }
@@ -139,11 +141,11 @@ func publicGraphSnapshot[T any](s *durable.Snapshot, state graphState[T]) *Graph
 // Effects are at least once if a process dies after the effect but before Save.
 // Routers must be pure; they may repeat after a crash before routing is saved.
 func (d *DurableGraph[T]) Run(ctx context.Context, id string, initial T, approvalKey string) (*GraphSnapshot[T], error) {
-	return d.run(ctx, d.store, id, initial, approvalKey, func(core.StreamChunk[*GraphSnapshot[T]]) error { return nil })
+	return d.run(ctx, d.store, id, initial, approvalKey, nil, func(core.StreamChunk[*GraphSnapshot[T]]) error { return nil })
 }
 
 // run 把检查点与节点内持久操作都记在 store 中：独立运行时是 DurableConfig.Store，嵌套运行时是父操作日志的 Store。
-func (d *DurableGraph[T]) run(ctx context.Context, store durable.Store, id string, initial T, approvalKey string, emitChunk func(core.StreamChunk[*GraphSnapshot[T]]) error) (result *GraphSnapshot[T], err error) {
+func (d *DurableGraph[T]) run(ctx context.Context, store durable.Store, id string, initial T, approvalKey string, resumeInput json.RawMessage, emitChunk func(core.StreamChunk[*GraphSnapshot[T]]) error) (result *GraphSnapshot[T], err error) {
 	ctx = observe.WithRunID(ctx, id)
 	ctx, endGraph := observe.Start(ctx, observe.Event{Type: "graph", Path: "graph"})
 	defer func() { endGraph(err, false) }()
@@ -194,11 +196,6 @@ func (d *DurableGraph[T]) run(ctx context.Context, store durable.Store, id strin
 	if approvalKey != "" && (!checkpoint.Waiting || checkpoint.Key != approvalKey) {
 		return result, ErrApprovalMismatch
 	}
-	if approvalKey != "" && d.beforeApprove != nil {
-		if err = d.checkBeforeApprove(ctx, id, checkpoint); err != nil {
-			return result, err
-		}
-	}
 	// Save using fresh snapshots; failed writes leave the last acknowledged state.
 	save := func(next durable.Snapshot, nextState graphState[T]) error {
 		data, e := json.Marshal(nextState)
@@ -213,6 +210,32 @@ func (d *DurableGraph[T]) run(ctx context.Context, store durable.Store, id strin
 		state = nextState
 		result = publicGraphSnapshot(checkpoint, state)
 		return nil
+	}
+	if resumeInput != nil || (approvalKey != "" && d.resumeHandler != nil) {
+		if approvalKey == "" || (resumeInput != nil && !json.Valid(resumeInput)) {
+			return result, &ResumeRejectedError{Err: fmt.Errorf("human input requires a waiting key and valid JSON")}
+		}
+		next, updated, e := d.applyResume(ctx, id, checkpoint, resumeInput)
+		if e != nil {
+			return result, e
+		}
+		if d.beforeApprove != nil {
+			if err = d.checkBeforeApprove(ctx, id, &next); err != nil {
+				return result, err
+			}
+		}
+		if err = ctx.Err(); err != nil {
+			return result, err
+		}
+		next.Approved, next.Waiting = true, false
+		if err = save(next, updated); err != nil {
+			return result, err
+		}
+		approvalKey = ""
+	} else if approvalKey != "" && d.beforeApprove != nil {
+		if err = d.checkBeforeApprove(ctx, id, checkpoint); err != nil {
+			return result, err
+		}
 	}
 	for state.Node != END {
 		if err = ctx.Err(); err != nil {
