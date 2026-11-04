@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.43.1] - 2026-11-04
+
 ### Fixed
 
 - `llm/providers`：`WithCustomHeaders` 对 OpenAI、Kimi、SiliconFlow、Ollama、Anthropic 与 Gemini 不生效，只有 DeepSeek 带上了自定义请求头；其中 Kimi、SiliconFlow、Ollama 与 Anthropic 是 0.43.0 改用 SDK 时丢失的。现在所有内置 Provider 都会发送，并覆盖 SDK 设置的同名头。只认 `x-api-key` 的 Anthropic 网关可用它补发该头。
@@ -993,7 +995,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/kart-io/goagent/compare/v0.43.0...HEAD
+[Unreleased]: https://github.com/kart-io/goagent/compare/v0.43.1...HEAD
+[0.43.1]: https://github.com/kart-io/goagent/compare/v0.43.0...v0.43.1
 [0.43.0]: https://github.com/kart-io/goagent/compare/v0.42.1...v0.43.0
 [0.42.1]: https://github.com/kart-io/goagent/compare/v0.42.0...v0.42.1
 [0.42.0]: https://github.com/kart-io/goagent/compare/v0.41.0...v0.42.0
