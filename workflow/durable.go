@@ -355,7 +355,11 @@ func (d *DurableGraph[T]) run(ctx context.Context, store durable.Store, id strin
 					return result, err
 				}
 				if i := slices.IndexFunc(points, func(p InterruptPoint) bool { return p.Key == answered && p.Rejected }); answered != "" && i >= 0 {
-					return result, &ResumeRejectedError{Err: fmt.Errorf("中断输入被拒绝：%s", points[i].Reason)}
+					rejected := fmt.Errorf("中断输入被拒绝：%s", points[i].Reason)
+					if cause := waitCause(durable.Waits(e)); cause != nil {
+						rejected = fmt.Errorf("%w: %w", rejected, cause)
+					}
+					return result, &ResumeRejectedError{Err: rejected}
 				}
 				if err = emit(&core.StreamEvent{Type: "interrupt_required", Step: nodeName}); err != nil {
 					return result, err

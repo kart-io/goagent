@@ -57,7 +57,8 @@ type ChildContinuation struct {
 	Node        string `json:"node"`
 	ApprovalKey string `json:"approval_key"`
 	// Rejected 表示本次提供的审批未被采纳，图的状态未改变，仍在等待；Reason 为原因类别
-	// RejectApprovalMismatch、RejectBeforeApprove 或 RejectResumeInput。存储失败、panic 等不属于拒绝，照常作为失败返回。
+	// RejectApprovalMismatch（含中断等待时用意图键交输入）、RejectBeforeApprove 或 RejectResumeInput。
+	// 存储失败、panic 等不属于拒绝，照常作为失败返回。
 	Rejected bool   `json:"rejected,omitempty"`
 	Reason   string `json:"reason,omitempty"`
 	// Interrupts 是子图（含更深层）待回应的中断，Key 为最内层中断键。可以直接用
@@ -136,7 +137,7 @@ func (d *DurableGraph[T]) AsChildRunnable() *core.RunnableFunc[T, T] {
 					return zero, e
 				}
 				if current.Waiting && ctx.Err() == nil {
-					return zero, childWait(id, current, RejectResumeInput)
+					return zero, childWait(id, current, RejectResumeInput, nil)
 				}
 				return zero, &ResumeRejectedError{Err: fmt.Errorf("invalid human resume request")}
 			}
@@ -144,13 +145,23 @@ func (d *DurableGraph[T]) AsChildRunnable() *core.RunnableFunc[T, T] {
 		}
 		// 审批后节点进入中断等待时 Key 不变；带着已消费的审批键再来不是审批不符，叶子中断输入照常生效。
 		if approvalKey != "" && current != nil && len(current.Interrupts) > 0 && approvalKey == current.Key {
+			if input != nil {
+				// 该键是节点意图键，不能回应中断；没有中断能推进时告知宿主改用 Interrupts[i].Key，而不是静默丢弃输入。
+				ready, err := interruptReady(ctx, store, current.Interrupts)
+				if err != nil {
+					return zero, err
+				}
+				if !ready && ctx.Err() == nil {
+					return zero, childWait(id, current, RejectApprovalMismatch, nil)
+				}
+			}
 			approvalKey, input = "", nil
 		}
 		snapshot, err := d.run(ctx, store, id, initial, approvalKey, input, func(core.StreamChunk[*GraphSnapshot[T]]) error { return nil })
 		// 审批暂停与未被采纳的审批报告为等待，避免上层把这次续跑记成失败而无法再续；其他错误照常失败。
 		reason, waiting := approvalWait(err)
 		if waiting && snapshot != nil && snapshot.Waiting && ctx.Err() == nil {
-			return zero, childWait(id, snapshot, reason)
+			return zero, childWait(id, snapshot, reason, err)
 		}
 		if err != nil {
 			return zero, err
@@ -162,7 +173,8 @@ func (d *DurableGraph[T]) AsChildRunnable() *core.RunnableFunc[T, T] {
 	})
 }
 
-func childWait[T any](id string, snapshot *GraphSnapshot[T], reason string) error {
+// childWait 报告子图等待；拒绝时 cause 作为进程内诊断随等待上传，暂停时不携带。
+func childWait[T any](id string, snapshot *GraphSnapshot[T], reason string, cause error) error {
 	approvalKey := snapshot.Key
 	if len(snapshot.Interrupts) > 0 {
 		// 中断等待时 Key 是节点意图键，不能用来回应，避免宿主误当作审批键。
@@ -172,5 +184,8 @@ func childWait[T any](id string, snapshot *GraphSnapshot[T], reason string) erro
 	if err != nil {
 		return err
 	}
-	return &durable.WaitError{Continuation: continuation}
+	if reason == "" {
+		cause = nil
+	}
+	return &durable.WaitError{Continuation: continuation, Cause: cause}
 }

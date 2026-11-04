@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // ContinuationKindInterrupt 标识 WaitError.Continuation 是 InterruptContinuation。
@@ -56,7 +58,8 @@ func interruptHost(ctx context.Context) bool {
 // AwaitInput 在当前持久操作中暂停，等待宿主回应。首次成功持久化的输入就此固定，之后的重放都返回它；
 // 这不保证调用前的业务副作用只执行一次。id 在同一父执行键下必须唯一，循环中须带序号。
 // 输入不是合法 JSON 或 validate 失败时保持等待，并在 Continuation 中标记 Rejected。
-// JSON null 是合法的显式输入；需要非空输入时由 validate 拒绝。validate 的 panic 按拒绝处理（原因 validate_panic）。
+// JSON null 是合法的显式输入；需要非空输入时由 validate 拒绝。validate 的 panic 按拒绝处理（原因 validate_panic），
+// panic 值与调用栈在 WaitError.Cause 中。
 // validate 的错误文本会持久化并经 Snapshot 与 ResumeRejectedError 暴露，不得包含凭证等敏感信息。
 func AwaitInput(ctx context.Context, id string, info json.RawMessage, validate func(json.RawMessage) error) (json.RawMessage, error) {
 	if id == "" || !json.Valid(info) {
@@ -70,24 +73,24 @@ func AwaitInput(ctx context.Context, id string, info json.RawMessage, validate f
 	}
 	policy := OperationPolicy{Resumable: true, MaxAttempts: interruptAttempts}
 	record, err := Do(ctx, interruptPrefix+id, info, policy, func(ctx context.Context) (json.RawMessage, error) {
-		wait := func(rejected bool, reason string) error {
+		wait := func(rejected bool, reason string, cause error) error {
 			data, e := json.Marshal(InterruptContinuation{Kind: ContinuationKindInterrupt, ID: id, Info: info, Rejected: rejected, Reason: reason})
 			if e != nil {
 				return e
 			}
-			return &WaitError{Continuation: data}
+			return &WaitError{Continuation: data, Cause: cause}
 		}
 		raw, ok := ResumeInput(ctx)
 		if !ok {
-			return nil, wait(false, "")
+			return nil, wait(false, "", nil)
 		}
 		input := json.RawMessage(raw)
 		if !json.Valid(input) {
-			return nil, wait(true, ReasonInvalidJSON)
+			return nil, wait(true, ReasonInvalidJSON, nil)
 		}
 		if validate != nil {
-			if reason, rejected := checkInput(validate, input); rejected {
-				return nil, wait(true, reason)
+			if reason, rejected, cause := checkInput(validate, input); rejected {
+				return nil, wait(true, reason, cause)
 			}
 		}
 		return append(json.RawMessage(nil), input...), nil
@@ -99,16 +102,17 @@ func AwaitInput(ctx context.Context, id string, info json.RawMessage, validate f
 }
 
 // checkInput 调用 validate；panic 也算拒绝，否则 Do 会把中断记成失败，再也无法恢复。
-func checkInput(validate func(json.RawMessage) error, input json.RawMessage) (reason string, rejected bool) {
+// panic 的值与调用栈只作为 cause 留在进程内，不进检查点。
+func checkInput(validate func(json.RawMessage) error, input json.RawMessage) (reason string, rejected bool, cause error) {
 	defer func() {
-		if recover() != nil {
-			reason, rejected = ReasonValidatePanic, true
+		if v := recover(); v != nil {
+			reason, rejected, cause = ReasonValidatePanic, true, agentErrors.NewPanicError("中断输入校验", v)
 		}
 	}()
 	if err := validate(input); err != nil {
-		return rejectReason(err), true
+		return rejectReason(err), true, nil
 	}
-	return "", false
+	return "", false, nil
 }
 
 // rejectReason 截断校验错误文本；它会被持久化并对外暴露，内容由 validate 的实现者负责。

@@ -20,7 +20,7 @@ type ResumeRequest struct {
 }
 
 // ResumeRejectedError 表示人工输入未被采纳，节点没有推进；宿主可以改正输入后用同一等待键重试。
-// 中断的 validate 拒绝时，检查点里只更新该中断的 Rejected/Reason。存储失败、取消和 panic 不属于输入拒绝。
+// 中断的 validate 拒绝时，检查点里只更新该中断的 Rejected/Reason。validate 的 panic 按拒绝处理，panic 值经 Unwrap 可取；存储失败、取消和其他 panic 不属于输入拒绝。
 type ResumeRejectedError struct{ Err error }
 
 func (e *ResumeRejectedError) Error() string { return "resume input rejected: " + e.Err.Error() }

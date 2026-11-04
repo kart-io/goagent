@@ -60,17 +60,9 @@ func (d *DurableGraph[T]) prepareInterruptResume(ctx context.Context, store dura
 		if input != nil {
 			return ctx, "", &ResumeRejectedError{Err: fmt.Errorf("人工输入需要中断键")}
 		}
-		for _, p := range points {
-			if _, ok := durable.ResumeInputFor(ctx, p.Key); ok {
-				return ctx, "", nil
-			}
-			_, answered, err := durable.InterruptAnswer(ctx, store, p.Key, p.ID)
-			if err != nil {
-				return ctx, "", err
-			}
-			if answered {
-				return ctx, "", nil
-			}
+		ready, err := interruptReady(ctx, store, points)
+		if err != nil || ready {
+			return ctx, "", err
 		}
 		return ctx, "", durable.ErrApprovalRequired
 	}
@@ -95,6 +87,31 @@ func (d *DurableGraph[T]) prepareInterruptResume(ctx context.Context, store dura
 		return ctx, "", &ResumeRejectedError{Err: fmt.Errorf("中断输入必须是合法 JSON")}
 	}
 	return durable.WithResume(ctx, key, string(input)), key, nil
+}
+
+// interruptReady 判断不带回应键时节点能否推进：ctx 中带有某处中断的输入，或某处中断已回应。
+func interruptReady(ctx context.Context, store durable.Store, points []InterruptPoint) (bool, error) {
+	for _, p := range points {
+		if _, ok := durable.ResumeInputFor(ctx, p.Key); ok {
+			return true, nil
+		}
+		_, answered, err := durable.InterruptAnswer(ctx, store, p.Key, p.ID)
+		if err != nil || answered {
+			return answered, err
+		}
+	}
+	return false, nil
+}
+
+// waitCause 汇总等待携带的进程内诊断（如 validate 的 panic），没有时返回 nil。
+func waitCause(waits []*durable.WaitError) error {
+	var causes []error
+	for _, w := range waits {
+		if w.Cause != nil {
+			causes = append(causes, w.Cause)
+		}
+	}
+	return errors.Join(causes...)
 }
 
 // sameJSON 按 json.Compact 后的字节比较：空白差异相同，键顺序或数字写法不同算不同。
