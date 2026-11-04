@@ -17,7 +17,7 @@ output, err := runnable.Invoke(ctx, "退款政策是什么？")
 // output 是经过检索、工具执行、中间件和完成回调后的 *builder.AgentOutput。
 ```
 
-`Invoke` 和 `Stream` 共用 `ExecuteStream` 执行源；Invoke 只收集最终输出，**不会再额外调用一次同步模型**。这条入口要求模型实现 `llm.StreamClient`，配置工具时还要求工具调用能力。旧 `Execute()` 不自动调用工具的语义仍保留，因此迁移到 AsRunnable 后会执行已配置工具。
+`Invoke` 和 `Stream` 共用 `ExecuteStream` 执行源；Invoke 只收集最终输出，**不会再额外调用一次同步模型**。Builder 只接受实现 `llm.StreamClient` 的模型，配置工具时还要求 `llm.ToolStreamClient`，不满足时 Build 直接报错。
 
 以下对照用于选择入口；旧 API 示例不代表新能力在旧路径也生效。
 
@@ -25,8 +25,6 @@ output, err := runnable.Invoke(ctx, "退款政策是什么？")
 |---|---|---|---|
 | `AsRunnable().Invoke/Stream` | 自动执行已配置工具；原生 `ToolStreamClient` 路径支持 `WithOffload` 和 ReturnDirect | 所有入口共享串行执行门 | 新业务与 Runnable 编排的推荐入口 |
 | `ExecuteStream` | 与 AsRunnable 共用执行源及能力 | 获取同一串行执行门 | 直接消费 Builder 事件 |
-| `Execute` | 不自动调用工具；配置 `WithOffload`/ReturnDirect、绑定持久日志或根预算时明确报错 | 获取同一串行执行门 | 保留已有同步调用语义 |
-| `ExecuteWithTools` | 支持 StreamClient 时委派 AsRunnable；否则保留旧工具循环 | 获取同一串行执行门 | 兼容存量工具调用 |
 
 仅实现 `StreamClient` 不等于支持原生工具流。配置 `WithOffload` 或 ReturnDirect 时还须满足 `ToolStreamClient` 等构建校验；不同 Provider 的能力不能由方法名称推断。
 
@@ -54,7 +52,7 @@ if err := ctx.Err(); err != nil { return err }
 
 `NewStreamRunnable` 显式绑定执行源，统一支持 Batch、Pipe、WithConfig、WithCallbacks。执行源必须串行发送，恰好提交一个最终块，并传播 emit 错误；缺少最终块、重复终止、终止后出错和回调失败都不会产生成功块。
 
-同一 Builder 的状态和记忆属于一个会话。Execute、ExecuteWithTools、ExecuteStream 及所有 AsRunnable 适配器共享可取消的串行执行门，配置的 Timeout 包含排队时间，Batch 保持输入顺序。跨会话并发应创建独立 Builder。工具或 Builder 回调不能重入调用同一个会话；尚未消费完事件时应先取消原调用再发起新调用。Initialize、Shutdown 及配置变更仍应由调用方安排在执行前后。Runnable 回调是额外的编排层回调，Builder 已配置的回调仍独立执行，不要把同一个副作用回调注册两次。
+同一 Builder 的状态和记忆属于一个会话。ExecuteStream、Start 及所有 AsRunnable 适配器共享可取消的串行执行门，配置的 Timeout 包含排队时间，Batch 保持输入顺序。跨会话并发应创建独立 Builder。工具或 Builder 回调不能重入调用同一个会话；尚未消费完事件时应先取消原调用再发起新调用。Initialize、Shutdown 及配置变更仍应由调用方安排在执行前后。Runnable 回调是额外的编排层回调，Builder 已配置的回调仍独立执行，不要把同一个副作用回调注册两次。
 
 `Pipe` 的现有语义是等待上游最终输出，再执行下游；不会逐 Token 变换上游流。通用编排使用新的 [workflow.Graph[T]](../../workflow/README.md)，支持条件分支、显式并行 Clone/Merge 和有界循环；仍不提供跨节点逐块 Transform。
 
@@ -70,13 +68,13 @@ if err := ctx.Err(); err != nil { return err }
 
 ## 可选上下文治理
 
-`WithOffload` 为原生工具流增加大结果卸载与分页读取（PreStep 组件），历史压缩由 goagent-harness `preset` 的 `compaction` 组件提供。默认关闭；最后一次请求还原已卸载的原文，避免只剩无法读取的引用；不应用于旧 Execute。详见[工具上下文](CONTEXT_POLICY.md)。
+`WithOffload` 为原生工具流增加大结果卸载与分页读取（PreStep 组件），历史压缩由 goagent-harness `preset` 的 `compaction` 组件提供。默认关闭；最后一次请求还原已卸载的原文，避免只剩无法读取的引用。详见[工具上下文](CONTEXT_POLICY.md)。
 
 入门代码统一见[快速入门与迁移](QUICKSTART.md)。主模块复杂流程使用 [workflow.Graph[T]](../../workflow/README.md)。
 
 ## 减少模型请求与 Token
 
-OpenAI、DeepSeek 与 Gemini Provider 实现可选 `llm.ToolStreamClient`：模型每轮可以选择工具或直接流式回答。典型一次工具任务从三次请求（调用工具、确认 READY、生成答案）减少到两次；不需要工具时只请求一次。Builder 自动优先使用该能力，`AsRunnable().Invoke` 与 `ExecuteStream` 共用优化路径。旧 Execute 保留同步语义；ExecuteWithTools 对支持 StreamClient 的 Provider 委派统一入口，对非流式 Provider 保留兼容循环。该迁移会统一完成回调和原生模型调用预算，已有调用方应检查预算配置。
+OpenAI、DeepSeek 与 Gemini Provider 实现可选 `llm.ToolStreamClient`：模型每轮可以选择工具或直接流式回答。典型一次工具任务从三次请求（调用工具、确认 READY、生成答案）减少到两次；不需要工具时只请求一次。Builder 配置工具时只走该能力，`AsRunnable().Invoke` 与 `ExecuteStream` 共用同一路径。
 
 新路径将系统指令只放在 system 消息中，将历史保留为原生角色消息，工具结果通过 tool_call_id 关联到 assistant.tool_calls。检索指令和参考资料各发送一次。保留模型要求的 reasoning_content 用于工具续接，但不会作为答案文本展示。未静默截断历史或工具结果，也没有引入答案缓存。
 
@@ -136,7 +134,7 @@ agent, err := builder.NewSimpleBuilder(client).
 // 检查 err 后，通过 agent.AsRunnable().Invoke(ctx, question) 执行。
 ```
 
-仅 `ExecuteStream/AsRunnable` 原生工具路径生效，Build 会验证 Provider 支持 `ToolStreamClient` 且名称唯一注册。本轮只有一个工具且命中名单时，成功工具的字符串直接输出，其他结果 JSON 编码；工具失败、空结果与取消不会转成成功。最终答案必须已经满足业务展示要求，模型不会再总结、补引用或执行输出格式指令。多工具调用继续模型循环，所以需要更大的 MaxIterations。`ExecuteWithTools` 在流式 Provider 上也应用此设置；旧 `Execute` 会明确报错并提示迁移，避免静默忽略。
+仅 `ExecuteStream/AsRunnable` 原生工具路径生效，Build 会验证 Provider 支持 `ToolStreamClient` 且名称唯一注册。本轮只有一个工具且命中名单时，成功工具的字符串直接输出，其他结果 JSON 编码；工具失败、空结果与取消不会转成成功。最终答案必须已经满足业务展示要求，模型不会再总结、补引用或执行输出格式指令。多工具调用继续模型循环，所以需要更大的 MaxIterations。
 
 直接返回仍经过记忆、状态、检查点、中间件和回调，元数据标明 `answer_source=tool`、`return_direct_tool`。工具前模型说明仍属临时文本，最终以 `done.Output` 为准。[其他框架成本控制调研](../evaluation/2026-10-26-framework-cost-research.md) 解释了选择依据与后续工作。
 
@@ -165,7 +163,7 @@ agent, err := builder.NewSimpleBuilder(client).
 
 新增根预算、受控 Runnable 工具、OTel 观察及不可变上下文结果引用；见 [可组合编排指南](COMPOSABLE_ORCHESTRATION.md)。上下文结果卸载使用 `WithOffload`，持久运行中读取工具与业务工具一起经宿主 Dispatcher。流预览仍不代表业务终态，core/flow 仅为实验原型。
 
-根预算只在统一入口执行；绑定 Controller 后，旧 Execute 与非流式 ExecuteWithTools 会在模型请求前明确报错。未绑定时保留同步兼容语义。
+根预算在 Builder 的所有执行入口生效。
 
 ## 执行可靠性与治理更新
 

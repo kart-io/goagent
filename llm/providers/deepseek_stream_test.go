@@ -14,7 +14,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	agentllm "github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/utils/json"
@@ -108,51 +107,6 @@ func TestDeepSeekTimeoutBoundsStreamResponseWait(t *testing.T) {
 	require.True(t, errors.As(err, &netErr) && netErr.Timeout(), "超时错误应可识别为 net.Error.Timeout()，实际 %T: %v", err, err)
 }
 
-func TestDeepSeekStreamNotCutByTimeout(t *testing.T) {
-	server, requests := slowDeepSeekServer(t,
-		`{"choices":[{"delta":{"content":"first "}}]}`,
-		`{"choices":[{"delta":{"content":"second"},"finish_reason":"stop"}]}`)
-	client, err := NewDeepSeekWithOptions(agentllm.WithAPIKey("test"), agentllm.WithBaseURL(server.URL), agentllm.WithTimeout(time.Second))
-	require.NoError(t, err)
-	tokens, err := client.Stream(context.Background(), "question")
-	require.NoError(t, err)
-	var got []string
-	for token := range tokens {
-		got = append(got, token)
-	}
-	require.Equal(t, []string{"first ", "second"}, got)
-	require.EqualValues(t, 1, atomic.LoadInt32(requests))
-}
-
-func TestDeepSeekStreamWithToolsNotCutByTimeout(t *testing.T) {
-	server, requests := slowDeepSeekServer(t,
-		`{"choices":[{"delta":{"content":"thinking "}}]}`,
-		`{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"lookup","arguments":"{\"q\":1}"}}]},"finish_reason":"tool_calls"}]}`)
-	client, err := NewDeepSeekWithOptions(agentllm.WithAPIKey("test"), agentllm.WithBaseURL(server.URL), agentllm.WithTimeout(time.Second))
-	require.NoError(t, err)
-	chunks, err := client.StreamWithTools(context.Background(), "question", []interfaces.Tool{&MockTool{}})
-	require.NoError(t, err)
-	var types []string
-	var call *agentllm.ToolCall
-	for chunk := range chunks {
-		types = append(types, chunk.Type)
-		switch chunk.Type {
-		case "content":
-			require.Equal(t, "thinking ", chunk.Value)
-		case "tool_call":
-			call = chunk.Value.(*agentllm.ToolCall)
-		case "error":
-			t.Fatalf("unexpected error chunk: %v", chunk.Value)
-		}
-	}
-	require.Equal(t, []string{"content", "tool_name", "tool_args", "tool_call"}, types)
-	require.NotNil(t, call)
-	require.Equal(t, "call_1", call.ID)
-	require.Equal(t, "lookup", call.Function.Name)
-	require.Equal(t, `{"q":1}`, call.Function.Arguments)
-	require.EqualValues(t, 1, atomic.LoadInt32(requests))
-}
-
 func TestDeepSeekStreamWithMetadataNotCutByTimeout(t *testing.T) {
 	server, requests := slowDeepSeekServer(t,
 		`{"choices":[{"delta":{"content":"first "}}]}`,
@@ -172,35 +126,9 @@ func TestDeepSeekStreamWithMetadataNotCutByTimeout(t *testing.T) {
 	require.EqualValues(t, 1, atomic.LoadInt32(requests))
 }
 
-// 请求阶段失败时保持旧实现的错误类型：*AgentError，错误码 LLM_REQUEST
-func TestDeepSeekStreamWithToolsRequestErrorIsLLMRequestError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprint(w, `{"error":{"message":"bad request","type":"invalid_request_error"}}`)
-	}))
-	defer server.Close()
-	client, err := NewDeepSeekWithOptions(agentllm.WithAPIKey("test"), agentllm.WithBaseURL(server.URL), agentllm.WithTimeout(time.Second))
-	require.NoError(t, err)
-	_, err = client.StreamWithTools(context.Background(), "question", []interfaces.Tool{&MockTool{}})
-	require.Error(t, err)
-	require.True(t, agentErrors.IsCode(err, agentErrors.CodeLLMRequest), "got %T: %v", err, err)
-}
-
 // Stream 系列都必须把 WithSystemPrompt 作为首条 system 消息发送
 func TestDeepSeekStreamMethodsSendSystemPrompt(t *testing.T) {
 	cases := map[string]func(t *testing.T, p *DeepSeekStreamingProvider){
-		"Stream": func(t *testing.T, p *DeepSeekStreamingProvider) {
-			tokens, err := p.Stream(context.Background(), "question")
-			require.NoError(t, err)
-			for range tokens {
-			}
-		},
-		"StreamWithTools": func(t *testing.T, p *DeepSeekStreamingProvider) {
-			chunks, err := p.StreamWithTools(context.Background(), "question", []interfaces.Tool{&MockTool{}})
-			require.NoError(t, err)
-			for range chunks {
-			}
-		},
 		"StreamWithMetadata": func(t *testing.T, p *DeepSeekStreamingProvider) {
 			tokens, err := p.StreamWithMetadata(context.Background(), "question")
 			require.NoError(t, err)
@@ -229,27 +157,6 @@ func TestDeepSeekStreamMethodsSendSystemPrompt(t *testing.T) {
 	}
 }
 
-// 工具流在 finish_reason 之前被截断时必须以 error 结束，且不产出不完整的 tool_call
-func TestDeepSeekStreamWithToolsTruncatedEndsWithError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		writeDeepSeekSSE(w, false,
-			json.RawMessage(`{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"lookup","arguments":"{\"q\":"}}]}}]}`))
-	}))
-	defer server.Close()
-	client, err := NewDeepSeekWithOptions(agentllm.WithAPIKey("test"), agentllm.WithBaseURL(server.URL), agentllm.WithTimeout(time.Second))
-	require.NoError(t, err)
-	chunks, err := client.StreamWithTools(context.Background(), "question", []interfaces.Tool{&MockTool{}})
-	require.NoError(t, err)
-	var types []string
-	var last agentllm.ToolChunk
-	for chunk := range chunks {
-		types = append(types, chunk.Type)
-		last = chunk
-	}
-	require.Equal(t, []string{"tool_name", "tool_args", "error"}, types)
-	require.ErrorIs(t, last.Value.(error), io.ErrUnexpectedEOF)
-}
-
 // 请求阶段 429 的状态码与 Retry-After 须能通过 *agentllm.ProviderError 取得
 func TestDeepSeekStreamMethodsExposeProviderError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -261,12 +168,6 @@ func TestDeepSeekStreamMethodsExposeProviderError(t *testing.T) {
 	p, err := NewDeepSeekStreamingWithOptions(agentllm.WithAPIKey("test"), agentllm.WithBaseURL(server.URL), agentllm.WithTimeout(time.Second))
 	require.NoError(t, err)
 	calls := map[string]func() error{
-		"Stream": func() error { _, err := p.Stream(context.Background(), "q"); return err },
-		"StreamWithTools": func() error {
-			_, err := p.StreamWithTools(context.Background(), "q", []interfaces.Tool{&MockTool{}})
-			require.True(t, agentErrors.IsCode(err, agentErrors.CodeLLMRequest), "got %T: %v", err, err)
-			return err
-		},
 		"StreamWithMetadata": func() error { _, err := p.StreamWithMetadata(context.Background(), "q"); return err },
 	}
 	for name, call := range calls {

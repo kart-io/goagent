@@ -78,7 +78,6 @@ func TestNativeToolLoopUsesTwoRequests(t *testing.T) {
 	require.Len(t, model.toolSets[0], 1)
 	require.Empty(t, model.toolSets[1])
 	require.Equal(t, true, output.Metadata["final_answer_only"])
-	require.Zero(t, model.selections)
 	require.Nil(t, model.request, "不得调用单独的答案接口")
 	require.Equal(t, 5, output.TokenUsage.TotalTokens)
 	require.Equal(t, 2, output.Metadata["model_calls"])

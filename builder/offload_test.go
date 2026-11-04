@@ -268,11 +268,6 @@ func TestOffloadConfiguration(t *testing.T) {
 	_, err = NewSimpleBuilder(NewMockLLMClient()).WithTools(lookup, offload).WithOffload(offload).Build()
 	require.Error(t, err, "需要原生工具流")
 
-	agent, err := NewSimpleBuilder(nativeModel()).WithTools(lookup, offload).WithOffload(offload).Build()
-	require.NoError(t, err)
-	_, err = agent.Execute(context.Background(), "question")
-	require.ErrorContains(t, err, "WithOffload")
-
 	// 非持久的结果存储不能用于持久运行：恢复后证据已不存在。
 	ctx, _ := durableOffloadContext(t, "memory")
 	durableAgent, err := NewSimpleBuilder(nativeModel(toolCalls(nativeCall("a", "lookup", "{}")), finalAnswer("answer"))).WithDurableScope("offload").

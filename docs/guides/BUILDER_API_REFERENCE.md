@@ -137,8 +137,6 @@ return builder.NewSimpleBuilder(client).
 | `AsRunnable() *core.StreamRunnable[any, *AgentOutput]` | 推荐入口：`Invoke`、`Stream`、`Batch`、`Pipe`；需要 `llm.StreamClient` |
 | `ExecuteStream(ctx, input) (<-chan AgentEvent, error)` | 同一事件源的通道形式 |
 | `Start(ctx, input) *Handle` | 进程内后台运行；`Handle` 提供 `Steer`、`Inject`、`Redirect`、`Followup`、`Interrupt`、`Wait`、`PendingInputs`。只支持原生工具流，不是持久后台调度服务 |
-| `Execute(ctx, input)` | 同步、不执行工具；配置 `WithOffload`/`WithReturnDirectTools`、持久执行或根预算时报错 |
-| `ExecuteWithTools(ctx, input)` | 流式客户端委派 `AsRunnable().Invoke`，其他客户端保留旧工具循环 |
 | `Initialize(ctx)`、`Shutdown(ctx)` | 生命周期；Build 已调用 Initialize |
 | `GetState()`、`GetMetrics()` | 当前状态与指标 |
 

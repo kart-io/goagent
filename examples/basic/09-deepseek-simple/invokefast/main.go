@@ -82,7 +82,7 @@ func runBasicExample(apiKey string) {
 	fmt.Println()
 
 	start := time.Now()
-	output, err := agent.Execute(ctx, question)
+	output, err := agent.AsRunnable().Invoke(ctx, question)
 	duration := time.Since(start)
 
 	if err != nil {
@@ -147,7 +147,7 @@ func processData(data []int) int {
 	// 步骤 1: 分析代码
 	fmt.Println("步骤 1: 分析代码特点...")
 	start1 := time.Now()
-	analyzeOutput, err := analyzeAgent.Execute(ctx, fmt.Sprintf("分析这段 Go 代码的特点：%s", code))
+	analyzeOutput, err := analyzeAgent.AsRunnable().Invoke(ctx, fmt.Sprintf("分析这段 Go 代码的特点：%s", code))
 	duration1 := time.Since(start1)
 	if err != nil {
 		log.Fatalf("分析失败: %v", err)
@@ -160,7 +160,7 @@ func processData(data []int) int {
 	// 步骤 2: 提供优化建议
 	fmt.Println("步骤 2: 提供优化建议...")
 	start2 := time.Now()
-	optimizeOutput, err := optimizeAgent.Execute(ctx, fmt.Sprintf("基于以下分析，提供优化建议：%v", analyzeOutput.Result))
+	optimizeOutput, err := optimizeAgent.AsRunnable().Invoke(ctx, fmt.Sprintf("基于以下分析，提供优化建议：%v", analyzeOutput.Result))
 	duration2 := time.Since(start2)
 	if err != nil {
 		log.Fatalf("优化建议失败: %v", err)
@@ -222,7 +222,7 @@ func runStructuredDataExample(apiKey string) {
 仅输出 JSON 数组，不要其他文字。`
 
 	start1 := time.Now()
-	userOutput, err := userAgent.Execute(ctx, userTask)
+	userOutput, err := userAgent.AsRunnable().Invoke(ctx, userTask)
 	duration1 := time.Since(start1)
 	if err != nil {
 		log.Fatalf("生成用户数据失败: %v", err)
@@ -244,7 +244,7 @@ func runStructuredDataExample(apiKey string) {
 仅输出 JSON 对象，不要其他文字。`
 
 	start2 := time.Now()
-	productOutput, err := productAgent.Execute(ctx, productTask)
+	productOutput, err := productAgent.AsRunnable().Invoke(ctx, productTask)
 	duration2 := time.Since(start2)
 	if err != nil {
 		log.Fatalf("生成产品数据失败: %v", err)
@@ -277,7 +277,7 @@ func runStructuredDataExample(apiKey string) {
 	coordinatorTask := "我们需要生成用户和产品的测试数据，用于电商系统测试。"
 
 	startCoordinator := time.Now()
-	coordinatorOutput, err := coordinatorAgent.Execute(ctx, coordinatorTask)
+	coordinatorOutput, err := coordinatorAgent.AsRunnable().Invoke(ctx, coordinatorTask)
 	durationCoordinator := time.Since(startCoordinator)
 	if err != nil {
 		log.Fatalf("协调 Agent 执行失败: %v", err)
@@ -292,12 +292,12 @@ func runStructuredDataExample(apiKey string) {
 
 	startNested := time.Now()
 
-	nestedUserOutput, err := userAgent.Execute(ctx, userTask)
+	nestedUserOutput, err := userAgent.AsRunnable().Invoke(ctx, userTask)
 	if err != nil {
 		log.Fatalf("子 Agent 生成用户数据失败: %v", err)
 	}
 
-	nestedProductOutput, err := productAgent.Execute(ctx, productTask)
+	nestedProductOutput, err := productAgent.AsRunnable().Invoke(ctx, productTask)
 	if err != nil {
 		log.Fatalf("子 Agent 生成产品数据失败: %v", err)
 	}

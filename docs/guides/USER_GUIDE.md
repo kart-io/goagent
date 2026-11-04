@@ -10,7 +10,6 @@
 | 固定步骤、分支、循环与并行 | `workflow.Graph[T]` → Compile |
 | 节点/分支级恢复、审批 | CompileDurable 与持久模型/工具记录 |
 | 子 Agent 或子图作为能力 | NewRunnableTool / NewRunnableToolFactory，经 Dispatcher 调用 |
-| 已有同步无流客户端 | 旧 Execute 路径；不能假设预算、持久和原生循环扩展点都生效 |
 
 不要把 Builder 的输出与 core.AgentOutput 混用。
 
@@ -56,7 +55,7 @@ if err != nil {
 fmt.Println(output.Result)
 ```
 
-`AsRunnable().Invoke` 是统一入口，配置的工具、检索、中间件与回调走同一路径。旧的同步入口 `Execute` 不执行工具，供不支持流式的客户端使用；入口对照见[快速入门](QUICKSTART.md#旧接口迁移)。
+`AsRunnable().Invoke` 是统一入口，配置的工具、检索、中间件与回调走同一路径；Builder 要求客户端实现 `llm.StreamClient`。入口对照见[快速入门](QUICKSTART.md#旧接口迁移)。
 
 ## 上下文、重试与观察
 
@@ -342,5 +341,5 @@ mockClient := mocks.NewMockLLMClient()
 mockClient.SetResponses(llm.CompletionResponse{Content: "预设回答"})
 
 agent, err := builder.NewSimpleBuilder(mockClient).Build()
-// MockLLMClient 不实现 llm.StreamClient，只能经 agent.Execute 调用；AsRunnable 会返回错误。
+// MockLLMClient 实现 llm.ToolStreamClient，可直接经 AsRunnable 调用。
 ```

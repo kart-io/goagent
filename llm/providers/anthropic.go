@@ -396,26 +396,3 @@ func (p *AnthropicProvider) IsAvailable() bool {
 	_, err := p.Complete(ctx, &agentllm.CompletionRequest{Messages: []agentllm.Message{{Role: constants.RoleUser, Content: "test"}}})
 	return err == nil
 }
-
-// Stream 保留字符串流接口：只输出文本增量，中途错误不可见；需要错误与用量时使用 CompleteStream。
-func (p *AnthropicProvider) Stream(ctx context.Context, prompt string) (<-chan string, error) {
-	chunks, err := p.CompleteStream(ctx, &agentllm.CompletionRequest{Messages: []agentllm.Message{{Role: constants.RoleUser, Content: prompt}}})
-	if err != nil {
-		return nil, err
-	}
-	tokens := make(chan string)
-	go func() {
-		defer close(tokens)
-		for chunk := range chunks {
-			if chunk.Delta == "" {
-				continue
-			}
-			select {
-			case tokens <- chunk.Delta:
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
-	return tokens, nil
-}

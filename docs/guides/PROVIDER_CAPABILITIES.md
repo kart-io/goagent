@@ -20,7 +20,6 @@ DeepSeekStreamingProvider 与 GeminiStreamingProvider 包装器继承对应基�
 - Gemini 的 `Embed` 发送真实 API 请求，使用独立的 `EmbeddingModel`（默认 `gemini-embedding-001`），校验向量非空、非全零且有限；取消与上游错误原样返回。
 - DeepSeek 的 `Embed` 方法向 `/embeddings` 发送兼容请求，模型名硬编码，不构成已验证的官方能力，因此不声明 Embedding，`HasEmbedding` 返回 false。官方模型目录见 [Lists Models](https://api-docs.deepseek.com/api/list-models/)，自定义端点需另行验证。
 - `llm.HasEmbedding` / `AsEmbedder` 同时检查方法与能力声明；没有实现 `CapabilityChecker` 的自定义客户端只按接口判断。
-- OpenAI、DeepSeek、Gemini 的旧工具方法（`GenerateWithTools` / `StreamWithTools`）使用 `llm.ToolCallResponse` / `llm.ToolChunk`，与 `llm/common` 中同名的类型不是同一类型。
 
 ## 验证范围
 

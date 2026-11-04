@@ -84,22 +84,20 @@ if err := ctx.Err(); err != nil { return err }
 
 | 原调用 | 新应用推荐 | 行为变化 |
 |---|---|---|
-| `agent.Execute(ctx, input)` | `agent.AsRunnable().Invoke(ctx, input)` | 新入口需要流式模型，并执行已配置工具 |
-| `agent.ExecuteWithTools(ctx, input)` | `agent.AsRunnable().Invoke(ctx, input)` | 原生工具流与最终输出统一，预算包含最终回答 |
+| `agent.Execute(ctx, input)`（已删除） | `agent.AsRunnable().Invoke(ctx, input)` | 需要流式模型，并执行已配置工具 |
+| `agent.ExecuteWithTools(ctx, input)`（已删除） | `agent.AsRunnable().Invoke(ctx, input)` | 需要 `llm.ToolStreamClient`，预算包含最终回答 |
 | `agent.ExecuteStream(ctx, input)` | `agent.AsRunnable().Stream(ctx, input)` | 保留同一事件源，增加 Runnable 的组合能力 |
 
-旧 Execute 保留同步语义，不执行工具；配置 `WithOffload` 或 `WithReturnDirectTools` 时直接报错，持久执行与根预算也只支持 AsRunnable。ExecuteWithTools 在支持 StreamClient 时委派统一管线，非流式客户端仍保留旧循环。`Pipe` 等待上游最终结果后再调用下游；复杂分支、并行汇合和有界循环使用 [workflow.Graph](../../workflow/README.md)，通过 Adapt 接入现有 Agent。详细边界见[执行契约](EXECUTION_CONTRACT.md)。
+Builder 只接受 `llm.StreamClient`，配置工具时还要求 `llm.ToolStreamClient`，Build 阶段校验。旧 `Execute` 不执行工具，迁移后已配置的工具会被调用，需要确认工具副作用与预算。`Pipe` 等待上游最终结果后再调用下游；复杂分支、并行汇合和有界循环使用 [workflow.Graph](../../workflow/README.md)，通过 Adapt 接入现有 Agent。详细边界见[执行契约](EXECUTION_CONTRACT.md)。
 
 ## 迁移检查与持续验证
 
 ```sh
-# 列出指定目录里的迁移候选，不自动改代码。
-go run ./scripts/apicheck -mode migration -root ./examples/my-app
 # 检查真实 Go import 的层级约束。
 bash scripts/verify_imports.sh
 ```
 
-迁移检查基于 Go AST：识别已删除的 `interfaces.Agent/Runnable`（支持导入别名），并在导入 Builder 的文件中标记 `Execute/ExecuteWithTools` 选择器。它不做接收者类型推导、跨文件数据流或包装函数分析，因此是候选清单，可能误报或漏报。默认只报告；选定已迁移目录可加 `-strict` 作为门禁。不要据此批量替换：逐项确认 Provider 的 StreamClient/ToolStreamClient、自动工具执行、预算和回调语义。
+旧入口与旧接口已经删除，残留调用会直接编译失败。逐项迁移时确认 Provider 的 StreamClient/ToolStreamClient、自动工具执行、预算和回调语义，不要批量替换。
 
 [Provider 持续回归](PROVIDER_REGRESSION.md)提供离线门禁与有界真实测试。退款应用可复用 [refund.Service](../../workflow/refund/README.md)；串行图恢复使用 [CompileDurable](../../workflow/README.md#节点边界的持久化恢复)。
 

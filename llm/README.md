@@ -9,7 +9,7 @@ llm/
 ├── client.go         # Client、Message、CompletionRequest/Response、LLMOptions
 ├── stream_client.go  # StreamClient、StreamChunk、StreamReader/Writer
 ├── capabilities.go   # Capability、CapabilityChecker、可选接口与 Has*/As* 检测函数
-├── tools.go          # ToolCall、ToolCallResponse、ToolChunk
+├── tools.go          # ToolCall 与默认参数
 ├── provider_error.go # ProviderError、ClassifyError
 ├── options.go        # ClientOption（With*）
 ├── common/           # BaseProvider、重试、HTTP 错误映射、消息转换

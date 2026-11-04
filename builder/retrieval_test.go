@@ -11,13 +11,11 @@ import (
 
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
-	"github.com/kart-io/goagent/llm/common"
 )
 
 type evidenceLLM struct {
 	*MockLLMClient
 	requests []*llm.CompletionRequest
-	prompts  []string
 }
 
 func (m *evidenceLLM) Complete(ctx context.Context, req *llm.CompletionRequest) (*llm.CompletionResponse, error) {
@@ -25,9 +23,13 @@ func (m *evidenceLLM) Complete(ctx context.Context, req *llm.CompletionRequest) 
 	return m.MockLLMClient.Complete(ctx, req)
 }
 
-func (m *evidenceLLM) GenerateWithTools(_ context.Context, prompt string, _ []interfaces.Tool) (*common.ToolCallResponse, error) {
-	m.prompts = append(m.prompts, prompt)
-	return &common.ToolCallResponse{Content: "Supported answer [1]"}, nil
+func (m *evidenceLLM) CompleteStream(ctx context.Context, req *llm.CompletionRequest) (<-chan *llm.StreamChunk, error) {
+	m.requests = append(m.requests, req)
+	return m.MockLLMClient.CompleteStream(ctx, req)
+}
+
+func (m *evidenceLLM) CompleteToolsStream(ctx context.Context, req *llm.CompletionRequest, _ []interfaces.Tool) (<-chan *llm.StreamChunk, error) {
+	return m.CompleteStream(ctx, req)
 }
 
 func TestRAGAgentRetrievesFreshEvidence(t *testing.T) {
@@ -40,18 +42,18 @@ func TestRAGAgentRetrievesFreshEvidence(t *testing.T) {
 	})
 	agent, err := RAGAgent(client, retriever)
 	require.NoError(t, err)
-	first, err := agent.Execute(context.Background(), "What is the policy?")
+	first, err := agent.AsRunnable().Invoke(context.Background(), "What is the policy?")
 	require.NoError(t, err)
 	text = "Updated evidence"
-	second, err := agent.Execute(context.Background(), "What is the policy?")
+	second, err := agent.AsRunnable().Invoke(context.Background(), "What is the policy?")
 	require.NoError(t, err)
 	require.Equal(t, []string{"What is the policy?", "What is the policy?"}, queries)
 	require.Len(t, client.requests, 2, "RAG must not return a stale answer for an unchanged query")
 	for i, expected := range []string{"Original evidence", "Updated evidence"} {
-		messages := client.requests[i].Messages
-		require.Equal(t, "What is the policy?", messages[len(messages)-1].Content)
-		require.Contains(t, messages[len(messages)-2].Content, expected)
-		require.Equal(t, "user", messages[len(messages)-2].Role)
+		last := client.requests[i].Messages[len(client.requests[i].Messages)-1]
+		require.Equal(t, "user", last.Role)
+		require.Contains(t, last.Content, expected)
+		require.True(t, strings.HasSuffix(last.Content, "用户请求：What is the policy?"))
 	}
 	wantSources := []RetrievalSource{{Reference: 1, ID: "doc-1", Source: "handbook", Score: 0.9}}
 	require.Equal(t, wantSources, first.Metadata["retrieval_sources"])
@@ -66,7 +68,7 @@ func TestRetrievalLimitsAndSourceAlignment(t *testing.T) {
 	})
 	agent, err := NewSimpleBuilder(client).WithRetriever(retriever, RetrievalConfig{MaxDocuments: 1, MaxContextRunes: 3}).Build()
 	require.NoError(t, err)
-	out, err := agent.Execute(context.Background(), "question")
+	out, err := agent.AsRunnable().Invoke(context.Background(), "question")
 	require.NoError(t, err)
 	evidence := client.requests[0].Messages[1].Content
 	require.True(t, utf8.ValidString(evidence))
@@ -93,7 +95,7 @@ func TestRetrievalFailureAndCancellationDoNotCallModel(t *testing.T) {
 		if canceled {
 			cancel()
 		}
-		_, err = agent.Execute(ctx, "question")
+		_, err = agent.AsRunnable().Invoke(ctx, "question")
 		cancel()
 		if canceled {
 			require.ErrorIs(t, err, context.Canceled)
@@ -111,20 +113,16 @@ func TestRetrievalEmptyEvidenceAndTools(t *testing.T) {
 		b := NewSimpleBuilder(client).WithRetriever(documentRetrieverFunc(func(context.Context, string) ([]*interfaces.Document, error) {
 			return nil, nil
 		}))
-		b.WithTools(NewMockTool("lookup", "result"))
+		if withTools {
+			b.WithTools(NewMockTool("lookup", "result"))
+		}
 		agent, err := b.Build()
 		require.NoError(t, err)
 		var out *AgentOutput
 		var prompt string
-		if withTools {
-			out, err = agent.ExecuteWithTools(context.Background(), "question")
-			require.Len(t, client.prompts, 1)
-			prompt = client.prompts[0]
-		} else {
-			out, err = agent.Execute(context.Background(), "question")
-			for _, message := range client.requests[0].Messages {
-				prompt += message.Content
-			}
+		out, err = agent.AsRunnable().Invoke(context.Background(), "question")
+		for _, message := range client.requests[0].Messages {
+			prompt += message.Content
 		}
 		require.NoError(t, err)
 		require.Contains(t, prompt, "No relevant documents were found")
@@ -154,7 +152,7 @@ func TestRAGAgentAdaptersAndValidation(t *testing.T) {
 		client := &evidenceLLM{MockLLMClient: NewMockLLMClient()}
 		agent, err := RAGAgent(client, backend)
 		require.NoError(t, err)
-		out, err := agent.Execute(context.Background(), "question")
+		out, err := agent.AsRunnable().Invoke(context.Background(), "question")
 		require.NoError(t, err)
 		require.Equal(t, 1, out.Metadata["retrieval_document_count"])
 	}

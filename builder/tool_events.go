@@ -61,7 +61,7 @@ func (a *ConfigurableAgent[C, S]) streamMessages(ctx context.Context, input, evi
 }
 
 // runToolEvents 每轮直接选择工具或输出答案，MaxIterations 包含最终答案请求。
-func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *middleware.MiddlewareRequest, client llm.ToolStreamClient, messages []llm.Message, metadata map[string]interface{}, emit func(AgentEvent) error) (response *middleware.MiddlewareResponse, err error) {
+func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *middleware.MiddlewareRequest, input string, client llm.ToolStreamClient, messages []llm.Message, metadata map[string]interface{}, emit func(AgentEvent) error) (response *middleware.MiddlewareResponse, err error) {
 	// 会话级审批授权按会话隔离；宿主已声明会话时沿用宿主的值。
 	if tools.SessionIDFrom(ctx) == "" && a.config.SessionID != "" {
 		ctx = tools.WithSessionID(ctx, a.config.SessionID)
@@ -104,7 +104,7 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 			box.transcript = append(transcript, final)
 			box.mu.Unlock()
 		}
-		return a.finishEvents(ctx, request, fmt.Sprint(request.Input), answer, usage, metadata, emit)
+		return a.finishEvents(ctx, request, input, answer, usage, metadata, emit)
 	}
 	// 反复失败直至额度耗尽时，把最近一次工具失败带进报错，便于定位。
 	lastFailure := ""

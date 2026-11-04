@@ -63,7 +63,7 @@ func TestCheckpointSaveFailureAcrossEntries(t *testing.T) {
 			require.NoError(t, err)
 			var output *AgentOutput
 			if entry == "execute" {
-				output, err = a.Execute(context.Background(), "input")
+				output, err = a.AsRunnable().Invoke(context.Background(), "input")
 			} else {
 				output, err = a.AsRunnable().Invoke(context.Background(), "input")
 			}
@@ -112,7 +112,7 @@ func (s *memoryEvents) Observe(_ context.Context, e observe.Event) { s.events = 
 
 // 各入口必须在严格模式下拒绝成功终态，并保留存储错误链。
 func TestMemoryFailurePoliciesAcrossEntries(t *testing.T) {
-	for _, entry := range []string{"execute", "legacy", "plain_stream", "native_stream", "runnable"} {
+	for _, entry := range []string{"execute", "plain_stream", "native_stream", "runnable"} {
 		for _, operation := range []string{"read", "write"} {
 			for _, strict := range []bool{false, true} {
 				t.Run(entry+"/"+operation+"/strict="+map[bool]string{true: "true", false: "false"}[strict], func(t *testing.T) {
@@ -124,9 +124,6 @@ func TestMemoryFailurePoliciesAcrossEntries(t *testing.T) {
 						mem.writeErr = sentinel
 					}
 					var client llm.Client = NewMockLLMClient("answer")
-					if entry == "legacy" {
-						client = &evidenceLLM{MockLLMClient: NewMockLLMClient()}
-					}
 					if entry == "plain_stream" || entry == "runnable" {
 						client = &eventModel{MockLLMClient: NewMockLLMClient(), chunks: []*llm.StreamChunk{{Delta: "answer"}, {Done: true, FinishReason: "stop"}}}
 					}
@@ -137,7 +134,7 @@ func TestMemoryFailurePoliciesAcrossEntries(t *testing.T) {
 					if strict {
 						b.WithMemoryFailurePolicy(MemoryFailureStrict)
 					}
-					if entry == "legacy" || entry == "native_stream" {
+					if entry == "native_stream" {
 						b.WithTools(NewMockTool("lookup", "found"))
 					}
 					a, err := b.Build()
@@ -147,9 +144,7 @@ func TestMemoryFailurePoliciesAcrossEntries(t *testing.T) {
 					var output *AgentOutput
 					switch entry {
 					case "execute":
-						output, err = a.Execute(ctx, "private input")
-					case "legacy":
-						output, err = a.ExecuteWithTools(ctx, "private input")
+						output, err = a.AsRunnable().Invoke(ctx, "private input")
 					case "runnable":
 						output, err = a.AsRunnable().Invoke(ctx, "private input")
 					default:
@@ -210,7 +205,7 @@ func TestBestEffortMemoryDoesNotPrintPrivateError(t *testing.T) {
 	defer func() { os.Stderr = previous; _ = r.Close(); _ = w.Close() }()
 	a, err := NewSimpleBuilder(NewMockLLMClient()).WithMemory(&failingMemory{readErr: errors.New("private read"), writeErr: errors.New("private write")}).Build()
 	require.NoError(t, err)
-	_, err = a.Execute(context.Background(), "private input")
+	_, err = a.AsRunnable().Invoke(context.Background(), "private input")
 	require.NoError(t, err)
 	require.NoError(t, w.Close())
 	captured, err := io.ReadAll(r)

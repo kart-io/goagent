@@ -90,6 +90,8 @@ sequenceDiagram
 
 ### 2. MockLLMClient LLM Mock
 
+实现 `llm.ToolStreamClient`，可直接传给 Builder；流式与工具流方法把 `Complete` 的结果作为一个增量块返回，不发起工具调用。
+
 **核心功能**：
 
 | 方法 | 说明 |
@@ -110,7 +112,7 @@ sequenceDiagram
 |------|------|
 | `NewMockStreamingLLMClient()` | 创建流式 Mock |
 | `SetStreamChunks(chunks...)` | 设置流式分块 |
-| `Stream(ctx, req)` | 返回流式 channel |
+| `CompleteStream(ctx, req)` | 依次返回各分块增量，最后是终止块 |
 
 ### 4. MockState 状态 Mock
 
@@ -340,16 +342,13 @@ func TestStreamingResponse(t *testing.T) {
     )
 
     // 获取流
-    ch, err := streamClient.Stream(ctx, req)
+    ch, err := streamClient.CompleteStream(ctx, req)
     testutil.AssertNoError(t, err)
 
     // 消费流
     var content strings.Builder
     for chunk := range ch {
-        content.WriteString(chunk.Content)
-        if chunk.Done {
-            break
-        }
+        content.WriteString(chunk.Delta)
     }
 
     testutil.AssertEqual(t, "这是流式响应", content.String())
@@ -432,7 +431,7 @@ func TestErrorHandling(t *testing.T) {
     tc.MockLLM.SetError(true, "API 调用失败")
 
     // 执行并验证错误处理
-    _, err := agent.Execute(tc.Ctx, input)
+    _, err := agent.AsRunnable().Invoke(tc.Ctx, input)
     testutil.AssertError(t, err)
     testutil.AssertContains(t, err.Error(), "API 调用失败")
 

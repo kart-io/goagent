@@ -261,7 +261,7 @@ Always call the appropriate tools and return their results.`
 // runAgent executes an agent with a given task
 func runAgent(ctx context.Context, agent *builder.ConfigurableAgent[any, core.State], task string) (map[string]interface{}, error) {
 	// Run the agent with text input
-	output, err := agent.Execute(ctx, task)
+	output, err := agent.AsRunnable().Invoke(ctx, task)
 	if err != nil {
 		return nil, err
 	}

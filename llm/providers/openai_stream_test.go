@@ -14,7 +14,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/kart-io/goagent/interfaces"
 	agentllm "github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/utils/json"
 )
@@ -269,24 +268,4 @@ func TestHeaderTimeoutUsesCurrentDefaultTransport(t *testing.T) {
 		require.Equal(t, "ok", last.Content)
 	}
 	require.EqualValues(t, 2, atomic.LoadInt32(&calls))
-}
-
-// Stream / StreamWithTools 请求阶段的 429 也要带上状态码与 Retry-After
-func TestOpenAILegacyStreamsExposeProviderError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Retry-After", "7")
-		w.WriteHeader(http.StatusTooManyRequests)
-		fmt.Fprint(w, `{"error":{"message":"slow down","type":"rate_limit"}}`)
-	}))
-	defer server.Close()
-	client, err := NewOpenAIWithOptions(agentllm.WithAPIKey("test"), agentllm.WithBaseURL(server.URL+"/v1"), agentllm.WithTimeout(time.Second))
-	require.NoError(t, err)
-	_, streamErr := client.Stream(context.Background(), "q")
-	_, toolsErr := client.StreamWithTools(context.Background(), "q", []interfaces.Tool{&MockTool{}})
-	for name, err := range map[string]error{"Stream": streamErr, "StreamWithTools": toolsErr} {
-		var providerErr *agentllm.ProviderError
-		require.True(t, errors.As(err, &providerErr), "%s: got %T: %v", name, err, err)
-		require.Equal(t, http.StatusTooManyRequests, providerErr.StatusCode, name)
-		require.Equal(t, 7*time.Second, providerErr.RetryAfter, name)
-	}
 }

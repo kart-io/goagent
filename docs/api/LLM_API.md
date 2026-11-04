@@ -33,17 +33,14 @@ type Client interface {
 |---|---|---|
 | `StreamClient` | `CompleteStream`、`ChatStream`，返回 `<-chan *StreamChunk` | `HasStreaming`、`AsStreamClient` |
 | `ToolStreamClient` | `StreamClient` + `CompleteToolsStream(ctx, req, tools)` | `HasToolStreaming`、`AsToolStreamClient` |
-| `TokenStreamingClient` | `Stream(ctx, prompt) (<-chan string, error)` | `HasTokenStreaming` |
-| `ToolCallingClient` | `GenerateWithTools`、`StreamWithTools`（基于单个 prompt 的旧签名） | `AsToolCaller` |
 | `EmbeddingClient` | `Embed` | `HasEmbedding`、`AsEmbedder` |
 | `CapabilityChecker` | `HasCapability`、`Capabilities` | 类型断言 |
 
-`FullClient` 组合 `Client`、`StreamClient`、`ToolCallingClient`、`EmbeddingClient`、`CapabilityChecker`。
+`FullClient` 组合 `ToolStreamClient`、`EmbeddingClient`、`CapabilityChecker`。
 
 检测规则：
 
-- `HasStreaming` / `HasToolStreaming` 只检查接口实现，不看能力声明。Builder 的 `AsRunnable` 与 `ExecuteStream` 要求 `StreamClient`；原生工具循环与 `WithReturnDirectTools` 要求 `ToolStreamClient`，否则在构建或执行阶段、发出请求前报错。
-- `HasToolCalling` 在实现 `ToolStreamClient` 或 `ToolCallingClient` 时为 true；它为 true 不代表 `AsToolCaller` 能返回非 nil。
+- `HasStreaming` / `HasToolStreaming` 只检查接口实现，不看能力声明。Builder 要求 `StreamClient`；配置工具或 `WithReturnDirectTools` 时要求 `ToolStreamClient`，否则 Build 报错。
 - `HasEmbedding` / `AsEmbedder` 同时要求实现 `EmbeddingClient`，且（若实现了 `CapabilityChecker`）声明了 `CapabilityEmbedding`。
 - `ErrUnsupportedCapability` 表示 Provider 没有实现该操作。
 

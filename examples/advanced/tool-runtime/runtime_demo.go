@@ -33,6 +33,28 @@ func (s *SimpleLLMClient) Chat(ctx context.Context, messages []llm.Message) (*ll
 	return s.Complete(ctx, &llm.CompletionRequest{Messages: messages})
 }
 
+// CompleteStream 把 Complete 的结果作为一个增量块返回，满足 Builder 对流式客户端的要求
+func (s *SimpleLLMClient) CompleteStream(ctx context.Context, req *llm.CompletionRequest) (<-chan *llm.StreamChunk, error) {
+	resp, err := s.Complete(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	stream := make(chan *llm.StreamChunk, 2)
+	stream <- &llm.StreamChunk{Delta: resp.Content, Content: resp.Content}
+	stream <- &llm.StreamChunk{Content: resp.Content, FinishReason: "stop", Done: true, Usage: &llm.Usage{TotalTokens: resp.TokensUsed}}
+	close(stream)
+	return stream, nil
+}
+
+func (s *SimpleLLMClient) ChatStream(ctx context.Context, messages []llm.Message) (<-chan *llm.StreamChunk, error) {
+	return s.CompleteStream(ctx, &llm.CompletionRequest{Messages: messages})
+}
+
+// CompleteToolsStream 不发起工具调用，直接回答
+func (s *SimpleLLMClient) CompleteToolsStream(ctx context.Context, req *llm.CompletionRequest, _ []interfaces.Tool) (<-chan *llm.StreamChunk, error) {
+	return s.CompleteStream(ctx, req)
+}
+
 func (s *SimpleLLMClient) Provider() constants.Provider {
 	return constants.ProviderCustom
 }

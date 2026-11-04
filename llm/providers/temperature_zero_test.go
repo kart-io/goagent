@@ -48,7 +48,7 @@ func checkWireTemperature(t *testing.T, received <-chan map[string]any, want flo
 	}
 }
 func TestOpenAIWireTemperatureSelection(t *testing.T) {
-	for _, method := range []string{"Complete", "CompleteStream", "CompleteToolsStream", "Stream", "GenerateWithTools", "StreamWithTools"} {
+	for _, method := range []string{"Complete", "CompleteStream", "CompleteToolsStream"} {
 		t.Run(method, func(t *testing.T) {
 			server, received := temperatureServer(t)
 			p, err := providers.NewOpenAIWithOptions(llm.WithAPIKey("test"), llm.WithBaseURL(server.URL), llm.WithTemperature(0))
@@ -71,23 +71,6 @@ func TestOpenAIWireTemperatureSelection(t *testing.T) {
 						require.NoError(t, chunk.Error)
 					}
 				}
-			case "Stream":
-				var stream <-chan string
-				stream, err = p.Stream(ctx, "你好")
-				if err == nil {
-					for range stream {
-					}
-				}
-			case "GenerateWithTools":
-				_, err = p.GenerateWithTools(ctx, "你好", nil)
-			case "StreamWithTools":
-				var stream <-chan llm.ToolChunk
-				stream, err = p.StreamWithTools(ctx, "你好", nil)
-				if err == nil {
-					for chunk := range stream {
-						require.NotEqual(t, "error", chunk.Type)
-					}
-				}
 			}
 			require.NoError(t, err)
 			checkWireTemperature(t, received, 0)
@@ -95,7 +78,7 @@ func TestOpenAIWireTemperatureSelection(t *testing.T) {
 	}
 }
 func TestBuilderExplicitZeroOverridesProvider(t *testing.T) {
-	for _, mode := range []string{"同步", "流式", "原生工具流"} {
+	for _, mode := range []string{"Invoke", "流式", "原生工具流"} {
 		t.Run(mode, func(t *testing.T) {
 			server, received := temperatureServer(t)
 			p, err := providers.NewOpenAIWithOptions(llm.WithAPIKey("test"), llm.WithBaseURL(server.URL), llm.WithTemperature(0.8))
@@ -110,7 +93,7 @@ func TestBuilderExplicitZeroOverridesProvider(t *testing.T) {
 			require.NoError(t, err)
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			if mode == "同步" {
+			if mode == "Invoke" {
 				_, err = agent.AsRunnable().Invoke(ctx, "你好")
 			} else {
 				var stream <-chan builder.AgentEvent

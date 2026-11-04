@@ -63,39 +63,6 @@ func TestDeepSeekProvider_IsAvailable_Unavailable(t *testing.T) {
 	assert.False(t, isAvailable)
 }
 
-// TestDeepSeekProvider_Stream_WithContext tests streaming with context cancellation
-func TestDeepSeekProvider_Stream_WithContext(t *testing.T) {
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		resp := DeepSeekStreamResponse{
-			ID:    "stream-test",
-			Model: "deepseek-chat",
-			Choices: []DeepSeekChoice{
-				{
-					Index: 0,
-					Delta: DeepSeekMessage{Content: "test"},
-				},
-			},
-		}
-		writeDeepSeekSSE(w, true, resp)
-	}))
-	defer mockServer.Close()
-
-	provider, err := NewDeepSeekWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(mockServer.URL), agentllm.WithTimeout(5*time.Second))
-	require.NoError(t, err)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	tokens, err := provider.Stream(ctx, "test")
-	require.NoError(t, err)
-
-	var count int
-	for range tokens {
-		count++
-	}
-	assert.Greater(t, count, 0)
-}
-
 // TestDeepSeekProvider_CompleteWithAllFields tests complete with all fields
 func TestDeepSeekProvider_CompleteWithAllFields(t *testing.T) {
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -155,40 +122,6 @@ func TestDeepSeekProvider_CompleteWithAllFields(t *testing.T) {
 	assert.Equal(t, "Complete response", resp.Content)
 	assert.Equal(t, 35, resp.TokensUsed)
 	assert.Equal(t, "stop", resp.FinishReason)
-}
-
-// TestDeepSeekProvider_StreamWithTools_InvalidJSON tests streaming with invalid JSON args
-func TestDeepSeekProvider_StreamWithTools_InvalidJSON(t *testing.T) {
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Stream with invalid JSON in arguments
-		writeDeepSeekSSE(w, true,
-			json.RawMessage(`{"id":"tool-stream-1","model":"deepseek-chat","choices":[{"index":0,"delta":{"content":"Calling tool..."}}]}`),
-			json.RawMessage(`{"id":"tool-stream-2","model":"deepseek-chat","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_123","type":"function","function":{"name":"test","arguments":"{invalid"}}]}}]}`),
-			json.RawMessage(`{"id":"tool-stream-3","model":"deepseek-chat","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}`),
-		)
-	}))
-	defer mockServer.Close()
-
-	provider, err := NewDeepSeekWithOptions(agentllm.WithAPIKey("test-key"), agentllm.WithBaseURL(mockServer.URL), agentllm.WithTimeout(5*time.Second))
-	require.NoError(t, err)
-
-	chunks, err := provider.StreamWithTools(context.Background(), "test", []interfaces.Tool{&MockTool{}})
-	require.NoError(t, err)
-
-	// 参数不做 JSON 校验，原样交给调用方
-	var types []string
-	var call *agentllm.ToolCall
-	for chunk := range chunks {
-		types = append(types, chunk.Type)
-		if chunk.Type == "tool_call" {
-			call = chunk.Value.(*agentllm.ToolCall)
-		}
-	}
-	assert.Equal(t, []string{"content", "tool_name", "tool_args", "tool_call"}, types)
-	require.NotNil(t, call)
-	assert.Equal(t, "call_123", call.ID)
-	assert.Equal(t, "test", call.Function.Name)
-	assert.Equal(t, `{invalid`, call.Function.Arguments)
 }
 
 // TestDeepSeekProvider_ChatWithMultipleMessages tests chat with many messages

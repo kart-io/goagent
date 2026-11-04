@@ -153,7 +153,7 @@ func example1AgentWithCustomState(apiKey, providerName string) {
 	}
 
 	// 执行 Agent
-	result, err := agent.Execute(context.Background(), "帮我处理 VIP 用户请求：计算 100 + 200")
+	result, err := agent.AsRunnable().Invoke(context.Background(), "帮我处理 VIP 用户请求：计算 100 + 200")
 	if err != nil {
 		log.Printf("执行失败: %v", err)
 	} else {
@@ -203,7 +203,7 @@ func example2AgentWithMiddleware(apiKey, providerName string) {
 	}
 
 	// 使用 Agent 执行任务
-	result, err := agent.Execute(context.Background(), "计算 10 + 20")
+	result, err := agent.AsRunnable().Invoke(context.Background(), "计算 10 + 20")
 
 	if err != nil {
 		log.Printf("执行失败: %v", err)
@@ -267,19 +267,19 @@ func example3AgentWithSessionManagement(apiKey, providerName string) {
 	// 第一次交互：告诉 Agent 用户信息
 	fmt.Println("\n第一次交互:")
 	fmt.Println("用户: 我的用户 ID 是 12345，我是一名软件工程师")
-	result1, _ := agent.Execute(ctx, "我的用户 ID 是 12345，我是一名软件工程师")
+	result1, _ := agent.AsRunnable().Invoke(ctx, "我的用户 ID 是 12345，我是一名软件工程师")
 	fmt.Printf("Agent: %v\n", result1.Result)
 
 	// 第二次交互：测试 Agent 是否记住了用户信息
 	fmt.Println("\n第二次交互:")
 	fmt.Println("用户: 你还记得我的用户 ID 吗？我的职业是什么？")
-	result2, _ := agent.Execute(ctx, "你还记得我的用户 ID 吗？我的职业是什么？")
+	result2, _ := agent.AsRunnable().Invoke(ctx, "你还记得我的用户 ID 吗？我的职业是什么？")
 	fmt.Printf("Agent: %v\n", result2.Result)
 
 	// 第三次交互：进行计算任务
 	fmt.Println("\n第三次交互:")
 	fmt.Println("用户: 帮我计算 100 + 200")
-	result3, _ := agent.Execute(ctx, "帮我计算 100 + 200")
+	result3, _ := agent.AsRunnable().Invoke(ctx, "帮我计算 100 + 200")
 	fmt.Printf("Agent: %v\n", result3.Result)
 
 	// 查看保存的对话历史
@@ -368,7 +368,7 @@ func example4EnterpriseAgent(apiKey, providerName string) {
 	ctx := context.Background()
 	fmt.Println("执行企业级任务...")
 
-	result, err := agent.Execute(ctx, "分析销售数据：计算 1000 乘以 1.2")
+	result, err := agent.AsRunnable().Invoke(ctx, "分析销售数据：计算 1000 乘以 1.2")
 	if err != nil {
 		log.Printf("执行失败: %v", err)
 	} else {
@@ -523,7 +523,7 @@ func example5OutputFormatEnterprise(apiKey, providerName string) {
 	if err != nil {
 		log.Printf("创建 Agent 失败: %v", err)
 	} else {
-		result, _ := agent1.Execute(ctx, "从以下文本提取订单信息：客户张三在2024年1月15日下单购买了iPhone 15，数量2台，总价15999元")
+		result, _ := agent1.AsRunnable().Invoke(ctx, "从以下文本提取订单信息：客户张三在2024年1月15日下单购买了iPhone 15，数量2台，总价15999元")
 		fmt.Printf("输出: %v\n", result.Result)
 		fmt.Printf("状态元数据: %v\n", customState.BusinessContext)
 	}
@@ -550,7 +550,7 @@ func example5OutputFormatEnterprise(apiKey, providerName string) {
 	if err != nil {
 		log.Printf("创建 Agent 失败: %v", err)
 	} else {
-		result, _ := agent2.Execute(ctx, "分析 Go 语言在微服务架构中的应用现状")
+		result, _ := agent2.AsRunnable().Invoke(ctx, "分析 Go 语言在微服务架构中的应用现状")
 		fmt.Printf("输出:\n%v\n", result.Result)
 		fmt.Printf("监控指标 - 请求数: %d, 平均延迟: %v\n", monitorCallback.requestCount, monitorCallback.avgLatency)
 	}
@@ -577,7 +577,7 @@ func example5OutputFormatEnterprise(apiKey, providerName string) {
 	if err != nil {
 		log.Printf("创建 Agent 失败: %v", err)
 	} else {
-		result, _ := agent3.Execute(ctx, "写一个简短的 Go HTTP 服务器示例，包含路由和错误处理")
+		result, _ := agent3.AsRunnable().Invoke(ctx, "写一个简短的 Go HTTP 服务器示例，包含路由和错误处理")
 		fmt.Printf("输出:\n%v\n", result.Result)
 	}
 

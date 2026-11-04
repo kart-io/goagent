@@ -1,7 +1,5 @@
 package llm
 
-import "github.com/kart-io/goagent/interfaces"
-
 // Default Values
 const (
 	// DefaultTemperature is the default temperature value
@@ -24,17 +22,4 @@ type ToolCall struct {
 		Name      string `json:"name"`
 		Arguments string `json:"arguments"` // JSON string
 	} `json:"function"`
-}
-
-// ToolCallResponse represents the response from tool-enabled completion
-type ToolCallResponse struct {
-	Content   string                 `json:"content"`
-	ToolCalls []ToolCall             `json:"tool_calls,omitempty"`
-	Usage     *interfaces.TokenUsage `json:"usage,omitempty"`
-}
-
-// ToolChunk represents a streaming chunk from tool-enabled completion
-type ToolChunk struct {
-	Type  string      `json:"type"`  // "content", "tool_call", "tool_name", "tool_args", "error"
-	Value interface{} `json:"value"` // Content string, ToolCall, or error
 }

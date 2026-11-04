@@ -8,6 +8,7 @@ import (
 
 	"github.com/kart-io/goagent/builder"
 	"github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/constants"
 	"github.com/kart-io/goagent/middleware"
@@ -32,6 +33,28 @@ func (c *MockLLMClient) Chat(ctx context.Context, messages []llm.Message) (*llm.
 func (c *MockLLMClient) Stream(ctx context.Context, req *llm.CompletionRequest) (<-chan *llm.StreamChunk, error) {
 	ch := make(chan *llm.StreamChunk)
 	return ch, nil
+}
+
+// CompleteStream 把 Complete 的结果作为一个增量块返回，满足 Builder 对流式客户端的要求
+func (c *MockLLMClient) CompleteStream(ctx context.Context, req *llm.CompletionRequest) (<-chan *llm.StreamChunk, error) {
+	resp, err := c.Complete(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	stream := make(chan *llm.StreamChunk, 2)
+	stream <- &llm.StreamChunk{Delta: resp.Content, Content: resp.Content}
+	stream <- &llm.StreamChunk{Content: resp.Content, FinishReason: "stop", Done: true, Usage: &llm.Usage{TotalTokens: resp.TokensUsed}}
+	close(stream)
+	return stream, nil
+}
+
+func (c *MockLLMClient) ChatStream(ctx context.Context, messages []llm.Message) (<-chan *llm.StreamChunk, error) {
+	return c.CompleteStream(ctx, &llm.CompletionRequest{Messages: messages})
+}
+
+// CompleteToolsStream 不发起工具调用，直接回答
+func (c *MockLLMClient) CompleteToolsStream(ctx context.Context, req *llm.CompletionRequest, _ []interfaces.Tool) (<-chan *llm.StreamChunk, error) {
+	return c.CompleteStream(ctx, req)
 }
 
 func (c *MockLLMClient) Provider() constants.Provider {
@@ -154,7 +177,7 @@ func main() {
 	// 6. 执行 Agent（带完整可观测性）
 	fmt.Println("6. Executing Agent with Full Observability...")
 
-	output, err := agent.Execute(ctx, "What is the meaning of observability in AI systems?")
+	output, err := agent.AsRunnable().Invoke(ctx, "What is the meaning of observability in AI systems?")
 	if err != nil {
 		log.Fatalf("Failed to execute agent: %v", err)
 	}

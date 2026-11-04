@@ -6,8 +6,14 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/constants"
+)
+
+var (
+	_ llm.ToolStreamClient = (*MockLLMClient)(nil)
+	_ llm.ToolStreamClient = (*MockStreamingLLMClient)(nil)
 )
 
 // MockLLMClient provides a mock implementation of the LLM client for testing
@@ -117,6 +123,25 @@ func (m *MockLLMClient) Chat(ctx context.Context, messages []llm.Message) (*llm.
 	})
 }
 
+// CompleteStream 把 Complete 的结果作为一个增量块和一个终止块返回，供 Builder 等流式入口使用。
+func (m *MockLLMClient) CompleteStream(ctx context.Context, req *llm.CompletionRequest) (<-chan *llm.StreamChunk, error) {
+	response, err := m.Complete(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return streamChunks(ctx, []string{response.Content}, response.TokensUsed), nil
+}
+
+// ChatStream implements the streaming chat method
+func (m *MockLLMClient) ChatStream(ctx context.Context, messages []llm.Message) (<-chan *llm.StreamChunk, error) {
+	return m.CompleteStream(ctx, &llm.CompletionRequest{Messages: messages})
+}
+
+// CompleteToolsStream 不发起工具调用，直接给出回答。
+func (m *MockLLMClient) CompleteToolsStream(ctx context.Context, req *llm.CompletionRequest, _ []interfaces.Tool) (<-chan *llm.StreamChunk, error) {
+	return m.CompleteStream(ctx, req)
+}
+
 // Provider returns the provider type
 func (m *MockLLMClient) Provider() constants.Provider {
 	return constants.ProviderCustom
@@ -167,28 +192,46 @@ func (m *MockStreamingLLMClient) SetStreamChunks(chunks ...string) {
 	m.streamChunks = chunks
 }
 
-// Stream implements streaming completion
-func (m *MockStreamingLLMClient) Stream(ctx context.Context, req *llm.CompletionRequest) (<-chan llm.StreamChunk, error) {
-	if m.shouldError {
-		return nil, fmt.Errorf("%s", m.errorMessage)
+// CompleteStream 依次返回 SetStreamChunks 设置的增量，最后一个块为终止块。
+func (m *MockStreamingLLMClient) CompleteStream(ctx context.Context, req *llm.CompletionRequest) (<-chan *llm.StreamChunk, error) {
+	m.mu.Lock()
+	m.requestHistory = append(m.requestHistory, *req)
+	shouldError, message := m.shouldError, m.errorMessage
+	m.mu.Unlock()
+	if shouldError {
+		return nil, fmt.Errorf("%s", message)
 	}
+	return streamChunks(ctx, m.streamChunks, 0), nil
+}
 
-	ch := make(chan llm.StreamChunk)
+// ChatStream implements the streaming chat method
+func (m *MockStreamingLLMClient) ChatStream(ctx context.Context, messages []llm.Message) (<-chan *llm.StreamChunk, error) {
+	return m.CompleteStream(ctx, &llm.CompletionRequest{Messages: messages})
+}
+
+// CompleteToolsStream 不发起工具调用，直接流式回答。
+func (m *MockStreamingLLMClient) CompleteToolsStream(ctx context.Context, req *llm.CompletionRequest, _ []interfaces.Tool) (<-chan *llm.StreamChunk, error) {
+	return m.CompleteStream(ctx, req)
+}
+
+// streamChunks 逐个发送增量，最后发送带完整内容的成功终止块。
+func streamChunks(ctx context.Context, deltas []string, totalTokens int) <-chan *llm.StreamChunk {
+	ch := make(chan *llm.StreamChunk)
 	go func() {
 		defer close(ch)
-
-		for i, chunk := range m.streamChunks {
+		var content strings.Builder
+		for i, delta := range deltas {
+			content.WriteString(delta)
 			select {
 			case <-ctx.Done():
 				return
-			case ch <- llm.StreamChunk{
-				Content: chunk,
-				Index:   i,
-				Done:    i == len(m.streamChunks)-1,
-			}:
+			case ch <- &llm.StreamChunk{Delta: delta, Content: content.String(), Index: i}:
 			}
 		}
+		select {
+		case <-ctx.Done():
+		case ch <- &llm.StreamChunk{Content: content.String(), Index: len(deltas), FinishReason: "stop", Done: true, Usage: &llm.Usage{TotalTokens: totalTokens}}:
+		}
 	}()
-
-	return ch, nil
+	return ch
 }

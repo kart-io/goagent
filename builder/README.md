@@ -39,8 +39,6 @@ output, err := agent.AsRunnable().Invoke(ctx, "分析这些数据……")
 | `AsRunnable().Invoke/Stream/Batch/Pipe` | `llm.StreamClient` | 推荐入口；配置了工具且实现 `llm.ToolStreamClient` 时走原生工具循环 |
 | `ExecuteStream` | `llm.StreamClient` | 同一事件源的通道形式（`sources`、`step`、`text`、`usage`、`error`、`done`） |
 | `Start` | `llm.ToolStreamClient` 且配置了工具 | 后台运行，返回 `*Handle` |
-| `Execute` | 任意 `llm.Client` | 同步、不执行工具；配置 `WithOffload`/`WithReturnDirectTools`、持久执行或根预算时报错 |
-| `ExecuteWithTools` | 任意 `llm.Client` | 流式客户端委派 `AsRunnable().Invoke`，其他客户端保留旧工具循环 |
 
 所有入口按会话串行执行，排队等待计入 Timeout；跨会话并发应创建独立 Agent。
 
@@ -87,7 +85,7 @@ builder/
 ├── config_options.go       # AgentConfig 与运行配置
 ├── runtime_options.go      # 存储、记忆、检查点、中间件
 ├── tool_options.go         # WithTools
-├── configurable_agent.go   # Execute、ExecuteWithTools 与生命周期
+├── configurable_agent.go   # 中间件链执行与生命周期
 ├── runnable.go             # AsRunnable
 ├── events.go               # ExecuteStream 与事件
 ├── tool_events.go          # 原生工具循环

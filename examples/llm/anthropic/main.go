@@ -114,15 +114,19 @@ func streamingExample() {
 	}
 
 	ctx := context.Background()
-	tokenChan, err := provider.Stream(ctx, "Write a haiku about programming.")
+	stream, err := provider.CompleteStream(ctx, &llm.CompletionRequest{Messages: []llm.Message{llm.UserMessage("Write a haiku about programming.")}})
 	if err != nil {
 		log.Printf("Streaming error: %v\n", err)
 		return
 	}
 
 	fmt.Print("Streaming response: ")
-	for token := range tokenChan {
-		fmt.Print(token)
+	for chunk := range stream {
+		if chunk.Error != nil {
+			log.Printf("\nStreaming error: %v\n", chunk.Error)
+			return
+		}
+		fmt.Print(chunk.Delta)
 	}
 	fmt.Println()
 }

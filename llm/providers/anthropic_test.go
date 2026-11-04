@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -226,18 +225,6 @@ func TestAnthropicComplete(t *testing.T) {
 	require.Equal(t, "stop", resp.FinishReason)
 	require.Equal(t, 5, resp.TokensUsed)
 	require.Equal(t, "anthropic", resp.Provider)
-}
-
-func TestAnthropicLegacyStringStream(t *testing.T) {
-	server := anthropicServer(t, textEvents, nil)
-	defer server.Close()
-	tokens, err := newTestAnthropic(t, server.URL).Stream(context.Background(), "q")
-	require.NoError(t, err)
-	var got strings.Builder
-	for token := range tokens {
-		got.WriteString(token)
-	}
-	require.Equal(t, "你好", got.String())
 }
 
 func TestAnthropicRejectsReasoning(t *testing.T) {

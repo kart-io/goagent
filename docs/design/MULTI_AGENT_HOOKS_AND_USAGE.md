@@ -53,7 +53,7 @@ type Invocation struct {
 
 `Invocation.VisitID` 是 Agent 一次访问的身份，`observe.Event.VisitID` 保持现有的某次 agent/model/tool 观察操作身份；二者不强行相等。每个后代事件携带所属 Agent.VisitID，ParentVisitID 指父 Agent 的 VisitID，不是父模型事件 ID。Trace/Span 继续用 OTel 原生关系。
 
-入口范围：完整逐尝试钩子覆盖 ExecuteStream、AsRunnable 及 Start 共用的流式执行源。旧同步 Execute 不经过 modelOperation，且目前拒绝根预算；本设计不声称它也有完整计量，不扩大其功能。旧非原生工具选择路径在显式启用完整计量时先拒绝或要求宿主适配，不能静默漏记工具选择请求。
+入口范围：完整逐尝试钩子覆盖 ExecuteStream、AsRunnable 及 Start 共用的流式执行源。旧同步入口与非原生工具选择路径已删除，Builder 的全部模型请求都经过 modelOperation。
 
 ## 4. 钩子：控制与观察分离
 

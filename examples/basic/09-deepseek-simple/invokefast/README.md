@@ -1,6 +1,6 @@
 # DeepSeek 多 Agent 串行调用示例
 
-用 `builder.NewAgentBuilder` 创建多个 DeepSeek Agent，依次调用 `Execute` 并打印每步耗时。
+用 `builder.NewAgentBuilder` 创建多个 DeepSeek Agent，依次调用 `AsRunnable().Invoke` 并打印每步耗时。
 
 ## 运行
 
@@ -20,4 +20,4 @@ go run ./examples/basic/09-deepseek-simple/invokefast
 
 ## 关于 InvokeFast
 
-本示例的所有调用都是普通的 `agent.Execute`，没有使用 InvokeFast。`core.FastInvoker` 接口与 `core.TryInvokeFast` 定义在 [core/fast_invoker.go](../../../../core/fast_invoker.go)，实现者是 `core.BaseAgent` 与 `core.ChainableAgent`（`BaseAgent` 的默认实现返回 `ErrNotImplemented`，需具体 Agent 重写）；`builder` 构建出的 `ConfigurableAgent` 不实现该接口。
+本示例的所有调用都是普通的 `agent.AsRunnable().Invoke`，没有使用 InvokeFast。`core.FastInvoker` 接口与 `core.TryInvokeFast` 定义在 [core/fast_invoker.go](../../../../core/fast_invoker.go)，实现者是 `core.BaseAgent` 与 `core.ChainableAgent`（`BaseAgent` 的默认实现返回 `ErrNotImplemented`，需具体 Agent 重写）；`builder` 构建出的 `ConfigurableAgent` 不实现该接口。

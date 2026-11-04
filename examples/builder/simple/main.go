@@ -118,7 +118,7 @@ func example1SimpleAgent(apiKey, providerName string) {
 	}
 
 	// 执行 Agent
-	result, err := agent.Execute(context.Background(), "你好世界")
+	result, err := agent.AsRunnable().Invoke(context.Background(), "你好世界")
 	if err != nil {
 		log.Printf("执行失败: %v", err)
 	} else {
@@ -158,7 +158,7 @@ func example2AgentWithTools(apiKey, providerName string) {
 	}
 
 	// 执行 Agent
-	result, err := agent.Execute(context.Background(), "计算 123 加 456")
+	result, err := agent.AsRunnable().Invoke(context.Background(), "计算 123 加 456")
 	if err != nil {
 		log.Printf("执行失败: %v", err)
 	} else {
@@ -203,7 +203,7 @@ func example3ConfiguredAgent(apiKey, providerName string) {
 	}
 
 	// 执行 Agent
-	result, err := agent.Execute(context.Background(), "现在几点了？")
+	result, err := agent.AsRunnable().Invoke(context.Background(), "现在几点了？")
 	if err != nil {
 		log.Printf("执行失败: %v", err)
 	} else {
@@ -231,7 +231,7 @@ func example4QuickAgent(apiKey, providerName string) {
 	if err != nil {
 		log.Printf("QuickAgent 创建失败: %v", err)
 	} else {
-		result, _ := agent1.Execute(context.Background(), "什么是 Go 语言？")
+		result, _ := agent1.AsRunnable().Invoke(context.Background(), "什么是 Go 语言？")
 		fmt.Printf("QuickAgent 输出: %v\n", result.Result)
 	}
 
@@ -240,7 +240,7 @@ func example4QuickAgent(apiKey, providerName string) {
 	if err != nil {
 		log.Printf("ChatAgent 创建失败: %v", err)
 	} else {
-		result, _ := agent2.Execute(context.Background(), "你好！")
+		result, _ := agent2.AsRunnable().Invoke(context.Background(), "你好！")
 		fmt.Printf("ChatAgent 输出: %v\n", result.Result)
 	}
 
@@ -387,7 +387,7 @@ func example5OutputFormat(apiKey, providerName string) {
 	if err != nil {
 		log.Printf("创建 Agent 失败: %v", err)
 	} else {
-		result, _ := agent1.Execute(ctx, "列出 Go 语言的三个主要特点")
+		result, _ := agent1.AsRunnable().Invoke(ctx, "列出 Go 语言的三个主要特点")
 		fmt.Printf("输出: %v\n", result.Result)
 	}
 
@@ -400,7 +400,7 @@ func example5OutputFormat(apiKey, providerName string) {
 	if err != nil {
 		log.Printf("创建 Agent 失败: %v", err)
 	} else {
-		result, _ := agent2.Execute(ctx, "返回一个包含 name 和 age 字段的用户信息示例")
+		result, _ := agent2.AsRunnable().Invoke(ctx, "返回一个包含 name 和 age 字段的用户信息示例")
 		fmt.Printf("输出: %v\n", result.Result)
 	}
 
@@ -413,7 +413,7 @@ func example5OutputFormat(apiKey, providerName string) {
 	if err != nil {
 		log.Printf("创建 Agent 失败: %v", err)
 	} else {
-		result, _ := agent3.Execute(ctx, "介绍一下 Go 的并发模型")
+		result, _ := agent3.AsRunnable().Invoke(ctx, "介绍一下 Go 的并发模型")
 		fmt.Printf("输出:\n%v\n", result.Result)
 	}
 
@@ -426,7 +426,7 @@ func example5OutputFormat(apiKey, providerName string) {
 	if err != nil {
 		log.Printf("创建 Agent 失败: %v", err)
 	} else {
-		result, _ := agent4.Execute(ctx, "写一个简单的 Hello World 代码示例")
+		result, _ := agent4.AsRunnable().Invoke(ctx, "写一个简单的 Hello World 代码示例")
 		fmt.Printf("输出:\n%v\n", result.Result)
 	}
 

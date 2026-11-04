@@ -48,12 +48,35 @@ func (m *MockLLMClient) Chat(ctx context.Context, messages []llm.Message) (*llm.
 	return m.Complete(ctx, &llm.CompletionRequest{Messages: messages})
 }
 
+func (m *MockLLMClient) CompleteStream(ctx context.Context, req *llm.CompletionRequest) (<-chan *llm.StreamChunk, error) {
+	response, err := m.Complete(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	stream := make(chan *llm.StreamChunk, 2)
+	stream <- &llm.StreamChunk{Delta: response.Content, Content: response.Content}
+	stream <- &llm.StreamChunk{Content: response.Content, FinishReason: "stop", Done: true, Usage: &llm.Usage{TotalTokens: response.TokensUsed}}
+	close(stream)
+	return stream, nil
+}
+
+func (m *MockLLMClient) ChatStream(ctx context.Context, messages []llm.Message) (<-chan *llm.StreamChunk, error) {
+	return m.CompleteStream(ctx, &llm.CompletionRequest{Messages: messages})
+}
+
 func (m *MockLLMClient) Provider() constants.Provider {
 	return constants.ProviderCustom
 }
 
 func (m *MockLLMClient) IsAvailable() bool {
 	return true
+}
+
+// MockToolLLMClient 在 MockLLMClient 之上提供原生工具流，始终直接回答、不调用工具。
+type MockToolLLMClient struct{ *MockLLMClient }
+
+func (m MockToolLLMClient) CompleteToolsStream(ctx context.Context, req *llm.CompletionRequest, _ []interfaces.Tool) (<-chan *llm.StreamChunk, error) {
+	return m.CompleteStream(ctx, req)
 }
 
 // MockTool implements tools.Tool for testing
@@ -367,7 +390,7 @@ func TestConfigurableAgent_Execute(t *testing.T) {
 		Build()
 	require.NoError(t, err)
 
-	output, err := agent.Execute(context.Background(), "Test input")
+	output, err := agent.AsRunnable().Invoke(context.Background(), "Test input")
 	require.NoError(t, err)
 	require.NotNil(t, output)
 
@@ -394,7 +417,7 @@ func TestConfigurableAgent_GetState(t *testing.T) {
 }
 
 func TestConfigurableAgent_GetMetrics(t *testing.T) {
-	llmClient := NewMockLLMClient()
+	llmClient := MockToolLLMClient{NewMockLLMClient()}
 	tool := NewMockTool("test-tool", "result")
 
 	agent, err := NewAgentBuilder[any, *core.AgentState](llmClient).
@@ -423,7 +446,7 @@ func TestConfigurableAgent_Shutdown(t *testing.T) {
 	require.NoError(t, err)
 
 	// Execute to create some state
-	agent.Execute(context.Background(), "test")
+	agent.AsRunnable().Invoke(context.Background(), "test")
 
 	// Shutdown should save state
 	err = agent.Shutdown(context.Background())
@@ -632,7 +655,7 @@ func TestAgentBuilder_ErrorHandling(t *testing.T) {
 
 func TestAgentBuilder_CompleteFlow(t *testing.T) {
 	// This test demonstrates a complete agent building flow
-	llmClient := NewMockLLMClient("Complete flow response")
+	llmClient := MockToolLLMClient{NewMockLLMClient("Complete flow response")}
 
 	// Create components
 	state := core.NewAgentState()
@@ -677,7 +700,7 @@ func TestAgentBuilder_CompleteFlow(t *testing.T) {
 	require.NotNil(t, agent)
 
 	// Execute
-	output, err := agent.Execute(context.Background(), "Test complete flow")
+	output, err := agent.AsRunnable().Invoke(context.Background(), "Test complete flow")
 	require.NoError(t, err)
 	require.NotNil(t, output)
 
@@ -715,7 +738,7 @@ func BenchmarkConfigurableAgent_Execute(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		output, _ := agent.Execute(ctx, "Benchmark input")
+		output, _ := agent.AsRunnable().Invoke(ctx, "Benchmark input")
 		_ = output
 	}
 }
@@ -780,7 +803,7 @@ func TestAgentBuilder_WithMetadata_Multiple(t *testing.T) {
 
 // TestAgentBuilder_ChainedConfiguration tests method chaining
 func TestAgentBuilder_ChainedConfiguration(t *testing.T) {
-	llmClient := NewMockLLMClient("response")
+	llmClient := MockToolLLMClient{NewMockLLMClient("response")}
 	state := core.NewAgentState()
 
 	agent, err := NewAgentBuilder[any, *core.AgentState](llmClient).
@@ -820,7 +843,7 @@ func TestConfigurableAgent_Execute_WithTimeout(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	output, err := agent.Execute(ctx, "test")
+	output, err := agent.AsRunnable().Invoke(ctx, "test")
 	require.NoError(t, err)
 	assert.NotNil(t, output)
 }
@@ -841,7 +864,7 @@ func TestConfigurableAgent_Initialize_WithCheckpoint(t *testing.T) {
 	require.NoError(t, err)
 
 	sessionID := agent1.config.SessionID
-	agent1.Execute(context.Background(), "test input")
+	agent1.AsRunnable().Invoke(context.Background(), "test input")
 	agent1.Shutdown(context.Background())
 
 	// Create new agent with same checkpointer and session ID
@@ -914,7 +937,7 @@ func TestConfigurableAgent_Execute_WithCallbacks(t *testing.T) {
 
 	// Reset for execution test
 	callback.onEndCalled = false
-	output, err := agent.Execute(context.Background(), "test")
+	output, err := agent.AsRunnable().Invoke(context.Background(), "test")
 
 	require.NoError(t, err)
 	assert.True(t, callback.onEndCalled)
@@ -934,7 +957,7 @@ func TestConfigurableAgent_Shutdown_WithSaveError(t *testing.T) {
 	require.NoError(t, err)
 
 	// Execute to populate state
-	agent.Execute(context.Background(), "test")
+	agent.AsRunnable().Invoke(context.Background(), "test")
 
 	// Shutdown should succeed even with nil checkpointer
 	err = agent.Shutdown(context.Background())
@@ -957,54 +980,6 @@ func TestConfigurableAgent_Shutdown_WithCallback(t *testing.T) {
 
 	err = agent.Shutdown(context.Background())
 	assert.NoError(t, err)
-}
-
-// TestConfigurableAgent_ExecuteWithTools tests tool execution flow
-func TestConfigurableAgent_ExecuteWithTools(t *testing.T) {
-	llmClient := NewMockLLMClient("response")
-	state := core.NewAgentState()
-	tool := NewMockTool("test-tool", "tool-result")
-
-	agent, err := NewAgentBuilder[any, *core.AgentState](llmClient).
-		WithSystemPrompt("Test").
-		WithState(state).
-		WithTools(tool).
-		Build()
-
-	require.NoError(t, err)
-
-	output, err := agent.ExecuteWithTools(context.Background(), "test")
-	assert.NoError(t, err)
-	assert.NotNil(t, output)
-}
-
-// TestConfigurableAgent_ExecuteWithTools_MaxIterations tests max iterations limit
-func TestConfigurableAgent_ExecuteWithTools_MaxIterations(t *testing.T) {
-	llmClient := NewMockLLMClient("response")
-	state := core.NewAgentState()
-
-	config := &AgentConfig{
-		MaxIterations: 2,
-		Timeout:       30 * time.Second,
-		Temperature:   0.7,
-		MaxTokens:     2000,
-	}
-
-	agent, err := NewAgentBuilder[any, *core.AgentState](llmClient).
-		WithSystemPrompt("Test").
-		WithState(state).
-		WithMaxIterations(config.MaxIterations).
-		WithTimeout(config.Timeout).
-		WithTemperature(config.Temperature).
-		WithMaxTokens(config.MaxTokens).
-		Build()
-
-	require.NoError(t, err)
-
-	output, err := agent.ExecuteWithTools(context.Background(), "test")
-	// Should succeed even if max iterations exceeded (no tool calls)
-	assert.NoError(t, err)
-	assert.NotNil(t, output)
 }
 
 // TestConfigurableAgent_Execute_WithErrorHandler tests error handler invocation
@@ -1045,43 +1020,6 @@ func TestConfigurableAgent_GetMetrics_WithAgentState(t *testing.T) {
 	assert.Equal(t, 0, metrics["tools_count"]) // No tools added
 	assert.NotEmpty(t, metrics["session_id"])
 	assert.NotNil(t, metrics["state_size"])
-}
-
-// TestConfigurableAgent_ExecuteWithTools_ToolNotFound tests error when tool not found
-func TestConfigurableAgent_ExecuteWithTools_ToolNotFound(t *testing.T) {
-	llmClient := NewMockLLMClient("response")
-	state := core.NewAgentState()
-
-	agent, err := NewAgentBuilder[any, *core.AgentState](llmClient).
-		WithSystemPrompt("Test").
-		WithState(state).
-		Build()
-
-	require.NoError(t, err)
-
-	// executeToolCall should return error for non-existent tool
-	call := ToolCall{Name: "non-existent", Input: map[string]interface{}{}}
-	result, err := agent.executeToolCall(context.Background(), call)
-	assert.Error(t, err)
-	assert.Nil(t, result)
-	assert.Contains(t, err.Error(), "tool not found")
-}
-
-// TestConfigurableAgent_ExtractToolCalls tests tool call extraction
-func TestConfigurableAgent_ExtractToolCalls(t *testing.T) {
-	llmClient := NewMockLLMClient("response")
-	state := core.NewAgentState()
-
-	agent, err := NewAgentBuilder[any, *core.AgentState](llmClient).
-		WithSystemPrompt("Test").
-		WithState(state).
-		Build()
-
-	require.NoError(t, err)
-
-	// extractToolCalls should return empty slice for current implementation
-	calls := agent.extractToolCalls("test output")
-	assert.Empty(t, calls)
 }
 
 // TestAgentBuilder_BuildWithStateRequired tests build fails without required state
@@ -1257,7 +1195,7 @@ func TestConfigurableAgent_Execute_UpdatesState(t *testing.T) {
 
 	require.NoError(t, err)
 
-	output, err := agent.Execute(context.Background(), "test input")
+	output, err := agent.AsRunnable().Invoke(context.Background(), "test input")
 	require.NoError(t, err)
 	assert.NotNil(t, output)
 	assert.NotNil(t, output.State)
@@ -1277,7 +1215,7 @@ func TestConfigurableAgent_Execute_WithMetadata(t *testing.T) {
 
 	require.NoError(t, err)
 
-	output, err := agent.Execute(context.Background(), "test")
+	output, err := agent.AsRunnable().Invoke(context.Background(), "test")
 	require.NoError(t, err)
 	assert.NotNil(t, output)
 	// Metadata should be available in output
@@ -1469,56 +1407,10 @@ func TestAgentBuilder_FineGrainedOptions_Integration(t *testing.T) {
 
 	// Test execution
 	ctx := context.Background()
-	output, err := agent.Execute(ctx, "test input")
+	output, err := agent.AsRunnable().Invoke(ctx, "test input")
 	require.NoError(t, err)
 	assert.NotNil(t, output)
 	assert.Equal(t, "Test response", output.Result)
-}
-
-// TestConfigurableAgent_BuildPromptWithSystemMessage 测试 buildPromptWithSystemMessage 方法
-func TestConfigurableAgent_BuildPromptWithSystemMessage(t *testing.T) {
-	mockClient := NewMockLLMClient("response")
-
-	tests := []struct {
-		name         string
-		systemPrompt string
-		input        interface{}
-		wantContains []string
-	}{
-		{
-			name:         "带系统提示",
-			systemPrompt: "你是一个助手",
-			input:        "测试输入",
-			wantContains: []string{"系统指令:", "你是一个助手", "用户请求:", "测试输入"},
-		},
-		{
-			name:         "无系统提示",
-			systemPrompt: "",
-			input:        "测试输入",
-			wantContains: []string{"测试输入"},
-		},
-		{
-			name:         "复杂输入",
-			systemPrompt: "助手提示",
-			input:        map[string]string{"key": "value"},
-			wantContains: []string{"系统指令:", "助手提示", "用户请求:"},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			agent, err := NewAgentBuilder[any, *core.AgentState](mockClient).
-				WithSystemPrompt(tt.systemPrompt).
-				Build()
-			require.NoError(t, err)
-
-			result := agent.buildPromptWithSystemMessage(tt.input)
-
-			for _, want := range tt.wantContains {
-				assert.Contains(t, result, want)
-			}
-		})
-	}
 }
 
 // 挂在 Builder 上的 CacheMiddleware 对相同输入命中缓存，不再调用模型。
@@ -1526,9 +1418,9 @@ func TestCacheMiddlewareOnBuilder(t *testing.T) {
 	llmClient := NewMockLLMClient("第一次", "第二次")
 	agent, err := NewSimpleBuilder(llmClient).WithMiddleware(middleware.NewCacheMiddleware(time.Minute)).Build()
 	require.NoError(t, err)
-	first, err := agent.Execute(context.Background(), "同一个问题")
+	first, err := agent.AsRunnable().Invoke(context.Background(), "同一个问题")
 	require.NoError(t, err)
-	second, err := agent.Execute(context.Background(), "同一个问题")
+	second, err := agent.AsRunnable().Invoke(context.Background(), "同一个问题")
 	require.NoError(t, err)
 	assert.Equal(t, first.Result, second.Result)
 	assert.Equal(t, 1, llmClient.index, "命中缓存时不调用模型")

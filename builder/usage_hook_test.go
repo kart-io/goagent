@@ -33,18 +33,6 @@ func TestUsageHookWithoutObserverOrBudget(t *testing.T) {
 	require.False(t, events[0].Model.AccountingCommitted)
 }
 
-func TestUsageHookRejectsLegacySelectionWithoutAgentIDOrBudget(t *testing.T) {
-	m := &eventModel{MockLLMClient: NewMockLLMClient()}
-	called := false
-	a, err := NewSimpleBuilder(m).WithTools(NewMockTool("lookup", "value")).WithUsageHook(func(context.Context, budget.UsageEvent) { called = true }).Build()
-	require.NoError(t, err)
-	_, err = a.AsRunnable().Invoke(context.Background(), "task")
-	require.ErrorContains(t, err, "ToolStreamClient")
-	require.Zero(t, m.selections)
-	require.Nil(t, m.request)
-	require.False(t, called)
-}
-
 type hookEvidenceLoadFailure struct {
 	durable.Store
 	fail bool

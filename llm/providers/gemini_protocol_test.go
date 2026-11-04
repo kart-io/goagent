@@ -128,31 +128,19 @@ func TestGeminiNativeToolsAndStreams(t *testing.T) {
 		require.Equal(t, "lookup", call.Function.Name)
 		require.JSONEq(t, `{"order_id":"SHARED-1"}`, call.Function.Arguments)
 	}
-	r, err := p.GenerateWithTools(context.Background(), "query", []interfaces.Tool{tool})
+	stream, err := p.CompleteToolsStream(context.Background(), &llm.CompletionRequest{Messages: []llm.Message{llm.UserMessage("query")}}, []interfaces.Tool{tool})
 	require.NoError(t, err)
-	require.Len(t, r.ToolCalls, 1)
-	check(r.ToolCalls[0])
-	require.Equal(t, 35, r.Usage.TotalTokens)
-	stream, err := p.StreamWithTools(context.Background(), "query", []interfaces.Tool{tool})
-	require.NoError(t, err)
-	calls := 0
+	var done *llm.StreamChunk
 	for c := range stream {
-		require.NotEqual(t, "error", c.Type)
-		if c.Type == "tool_call" {
-			call, ok := c.Value.(*llm.ToolCall)
-			require.True(t, ok)
-			check(*call)
-			calls++
+		require.NoError(t, c.Error)
+		if c.Done {
+			done = c
 		}
 	}
-	require.Equal(t, 1, calls)
-	tokens, err := p.Stream(context.Background(), "query")
-	require.NoError(t, err)
-	var text strings.Builder
-	for c := range tokens {
-		text.WriteString(c)
-	}
-	require.Equal(t, "42", text.String())
+	require.NotNil(t, done)
+	require.Len(t, done.ToolCalls, 1)
+	check(done.ToolCalls[0])
+	require.Equal(t, 35, done.Usage.TotalTokens)
 	events, err := p.StreamWithContext(context.Background(), "query")
 	require.NoError(t, err)
 	completed := false
@@ -164,8 +152,8 @@ func TestGeminiNativeToolsAndStreams(t *testing.T) {
 		}
 	}
 	require.True(t, completed)
-	require.EqualValues(t, 4, requests.Load())
-	require.EqualValues(t, 2, schemas.Load())
+	require.EqualValues(t, 2, requests.Load())
+	require.EqualValues(t, 1, schemas.Load())
 }
 
 func TestGeminiNativeErrorsAndMissingFields(t *testing.T) {
@@ -258,7 +246,7 @@ func TestGeminiRejectsInvalidInputBeforeRequest(t *testing.T) {
 		_, err := p.Complete(context.Background(), req)
 		require.Error(t, err)
 	}
-	_, err = p.GenerateWithTools(context.Background(), "query", []interfaces.Tool{tools.NewBaseTool("lookup", "lookup", `{broken`, nil)})
+	_, err = p.CompleteToolsStream(context.Background(), &llm.CompletionRequest{Messages: []llm.Message{llm.UserMessage("query")}}, []interfaces.Tool{tools.NewBaseTool("lookup", "lookup", `{broken`, nil)})
 	require.Error(t, err)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()

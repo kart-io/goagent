@@ -123,7 +123,7 @@ func runBuilderExample(apiKey string) {
 	fmt.Println("\nAgent 正在思考...")
 	fmt.Println()
 
-	output, err := agent.Execute(ctx, task)
+	output, err := agent.AsRunnable().Invoke(ctx, task)
 	if err != nil {
 		log.Fatalf("Agent 执行失败: %v", err)
 	}
@@ -178,7 +178,7 @@ func runStructuredOutputExample(apiKey string) {
 	fmt.Println("\nAgent 正在生成数据...")
 	fmt.Println()
 
-	output, err := agent.Execute(ctx, task)
+	output, err := agent.AsRunnable().Invoke(ctx, task)
 	if err != nil {
 		log.Fatalf("Agent 执行失败: %v", err)
 	}
@@ -209,7 +209,7 @@ func runStructuredOutputExample(apiKey string) {
 	fmt.Println("Agent 正在生成产品数据...")
 	fmt.Println()
 
-	productOutput, err := agent.Execute(ctx, productTask)
+	productOutput, err := agent.AsRunnable().Invoke(ctx, productTask)
 	if err != nil {
 		log.Fatalf("Agent 执行失败: %v", err)
 	}

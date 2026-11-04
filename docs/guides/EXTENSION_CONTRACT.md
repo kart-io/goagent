@@ -1,6 +1,6 @@
 # 执行入口与扩展契约
 
-推荐通过 `agent.AsRunnable().Invoke/Stream` 接入。`ExecuteStream` 与它共享执行源；配置原生工具循环时需要 `llm.ToolStreamClient`。旧 `Execute` 保留同步且不隐式调用工具的语义，绑定持久日志或根预算时拒绝执行；非流式 `ExecuteWithTools` 保留已声明的兼容路径。
+推荐通过 `agent.AsRunnable().Invoke/Stream` 接入。`ExecuteStream` 与它共享执行源；Builder 要求 `llm.StreamClient`，配置工具时需要 `llm.ToolStreamClient`。
 
 ## 扩展点
 

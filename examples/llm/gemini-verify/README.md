@@ -8,30 +8,27 @@
 # 默认仅打印计划，不调用模型。
 go run ./examples/llm/gemini-verify
 
-# 六个方法各运行两次；结果文件必须不存在。
+# 五个方法各运行两次；结果文件必须不存在。
 go run ./examples/llm/gemini-verify -live \
   -model gemini-2.5-flash -repeats 2 \
   -out /tmp/gemini-provider-results.json
 ```
 
-每次最多 2,048 输出 Token、90 秒超时，无自动重试；合计 12 个生成请求。可通过 `GEMINI_BASE_URL` 指定原生 API 的根地址，默认为 `https://generativelanguage.googleapis.com`；**不要填写 `/v1beta/openai`**。SDK 自动追加 `/v1beta/models/...`。生成请求数量不等于金额上限。
+每次最多 2,048 输出 Token、90 秒超时，无自动重试；合计 10 个生成请求。可通过 `GEMINI_BASE_URL` 指定原生 API 的根地址，默认为 `https://generativelanguage.googleapis.com`；**不要填写 `/v1beta/openai`**。SDK 自动追加 `/v1beta/models/...`。生成请求数量不等于金额上限。
 
 验证项：
 
 - `Complete`：系统提示与数值答案。
 - `Chat`：多轮历史与最终答案。
-- `Stream`：字符串流的输出内容。
-- `GenerateWithTools`：工具名、调用 ID、订单参数，以及宿主执行合成查询。
-- `StreamWithTools`：流式工具调用及同样的参数/执行检查。
+- `CompleteStream`：结构化流的输出内容与用量。
+- `CompleteToolsStream`：终止块中的工具名、调用 ID、订单参数，以及宿主执行合成查询。
 - `StreamWithContext`：文本、完成事件与供应商用量。
 
 每个方法独立评分，失败也写入 JSON，任一失败使程序以非零状态退出。输出文件权限为 0600，不记录 Key。
 
-`Stream`、`StreamWithTools` 的旧返回类型没有用量字段，报告只累计其他八次调用的已知用量，不能当作总用量。字符串 `Stream` 不能传递中途错误；需要结束状态与错误时使用包装器的 `StreamWithContext`，取消通过调用方 context 观察。
+工具是本地只读合成订单查询，不连接生产订单。`-suite provider`（默认）直接调用 Provider 方法，不将工具结果送回模型。当前 Provider 已实现 `llm.StreamClient` / `ToolStreamClient` 与真实 Embedding；完整循环和向量验证使用下面的 `native` 套件。
 
-工具是本地只读合成订单查询，不连接生产订单。`-suite legacy`（默认）只验证旧方法，不将工具结果送回模型。当前 Provider 已实现 `llm.StreamClient` / `ToolStreamClient` 与真实 Embedding；完整循环和向量验证使用下面的 `native` 套件。
-
-`legacy` 套件的实测记录见[评测报告](../../../docs/evaluation/2026-10-27-gemini-provider/REPORT.md)。
+改名前的 `legacy` 套件（含已删除的 `Stream`、`GenerateWithTools`、`StreamWithTools`）实测记录见[评测报告](../../../docs/evaluation/2026-10-27-gemini-provider/REPORT.md)。
 
 ## 原生工具循环与 Embedding
 

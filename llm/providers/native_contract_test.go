@@ -98,7 +98,6 @@ func TestNativeProvidersShareToolCompletionContract(t *testing.T) {
 				client := contractProvider(t, name, server.URL)
 				require.True(t, llm.HasStreaming(client))
 				require.True(t, llm.HasToolStreaming(client))
-				require.True(t, llm.HasToolCalling(client))
 				require.NotNil(t, llm.AsToolStreamClient(client))
 				checker := client.(llm.CapabilityChecker)
 				require.True(t, checker.HasCapability(llm.CapabilityStructuredStreaming))
@@ -110,7 +109,7 @@ func TestNativeProvidersShareToolCompletionContract(t *testing.T) {
 				}
 				agent, err := b.Build()
 				require.NoError(t, err)
-				out, err := agent.ExecuteWithTools(context.Background(), "question")
+				out, err := agent.AsRunnable().Invoke(context.Background(), "question")
 				if mode == "incomplete" || mode == "truncated" {
 					require.Error(t, err)
 					require.Zero(t, tool.calls.Load())

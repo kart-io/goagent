@@ -20,7 +20,7 @@ agent, err := builder.NewSimpleBuilder(client).
 
 MaxAgentCalls 约束保存的调用节点数量，包括零模型调用的中间 Agent；为0时使用 DefaultMaxAgentCalls=1000，负值拒绝。同一逻辑调用恢复不重复占槽。同名角色可以有多个不同调用键。根 RunID 由 Scope 或 Controller.RootKey 确定，已有父身份/观察根不一致时在发请求前拒绝。
 
-不经统一入口的隐藏 SDK 请求不会自动计量。ModelInvoking=true 是可信宿主声明，不是模型调用探测器。完整钩子覆盖 ExecuteStream、AsRunnable 和 Start；旧同步 Execute 不提供该计量路径，显式 AgentID 的旧工具选择路径会拒绝，避免漏记选择请求。
+不经统一入口的隐藏 SDK 请求不会自动计量。ModelInvoking=true 是可信宿主声明，不是模型调用探测器。完整钩子覆盖 ExecuteStream、AsRunnable 和 Start，即 Builder 的全部执行入口。
 
 ## 观察钩子
 

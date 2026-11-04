@@ -41,7 +41,6 @@ harness/env：工具使用的文件系统与命令执行能力接口
 | 机制 | 实现位置 | 说明 |
 |------|----------|------|
 | 原生工具循环 | `builder/tool_events.go` `runToolEvents` | 每轮一次模型请求；最后一轮只提供 `WithReturnDirectTools` 声明的工具；模型请求未提供的工具即报错 |
-| 旧工具选择路径 | `builder/events.go` `runEvents` | 客户端只实现 `ToolCallingClient` 时使用；不支持会话日志、持久日志与根预算 |
 | 持久回合 | `builder/durable_turn.go`、`builder/model_call.go` | 操作 ID `model/turn/N`；RequestError 的原样重试留在同一条回合记录内 |
 | 工具执行 | `tools/dispatcher.go`、`tools/pipeline.go` | 准入阶段（Pre、审批、Guard）在操作日志之外；Around、工具与 Post 在超时之内 |
 | 结果卸载 | `builder/contextpolicy` `Offload` | 超长工具结果换成引用，读取工具 `read_context_result` 经 Dispatcher 注册 |

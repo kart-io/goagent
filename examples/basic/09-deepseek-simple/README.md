@@ -38,7 +38,7 @@ agent, err := builder.NewAgentBuilder[any, *agentcore.AgentState](client).
     WithSystemPrompt("你是一个专业的 Go 语言顾问，擅长解答 Go 编程相关的问题。").
     WithMetadata("name", "Go-Advisor").
     Build()
-output, err := agent.Execute(ctx, "请列举 Go 语言的三个主要特点。")
+output, err := agent.AsRunnable().Invoke(ctx, "请列举 Go 语言的三个主要特点。")
 ```
 
 打印 `output.Result` 与 `output.Duration`。

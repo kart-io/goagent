@@ -49,15 +49,18 @@ func TestDurableTextOnlyReplaysWithoutModelRequest(t *testing.T) {
 	require.Equal(t, 11, second.TokenUsage.TotalTokens)
 }
 
-func TestDurableLegacyToolsRejectedBeforeModel(t *testing.T) {
-	model := &eventModel{MockLLMClient: NewMockLLMClient(), chunks: []*llm.StreamChunk{{Delta: "answer"}, {Done: true, FinishReason: "stop"}}}
-	agent, err := NewSimpleBuilder(model).WithDurableScope("legacy").WithTools(NewMockTool("lookup", "value")).Build()
-	require.NoError(t, err)
-	_, err = agent.AsRunnable().Invoke(journalContextForTest(t), "question")
-	require.ErrorContains(t, err, "ToolStreamClient")
-	require.Zero(t, model.selections)
-	require.Nil(t, model.request)
+// Builder 只接受流式客户端；配置工具时还要求原生工具流，在构建期拒绝而不是执行时才失败。
+func TestBuildRejectsClientsWithoutRequiredStreaming(t *testing.T) {
+	_, err := NewSimpleBuilder(syncOnlyClient{}).Build()
+	require.ErrorContains(t, err, "llm.StreamClient")
+	model := &eventModel{MockLLMClient: NewMockLLMClient()}
+	_, err = NewSimpleBuilder(model).WithTools(NewMockTool("lookup", "value")).Build()
+	require.ErrorContains(t, err, "llm.ToolStreamClient")
+	_, err = NewSimpleBuilder(model).WithInputSerializer(nil).Build()
+	require.ErrorContains(t, err, "input serializer")
 }
+
+type syncOnlyClient struct{ llm.Client }
 
 func TestDurableScopesIsolateAgentResultsToolsAndRecovery(t *testing.T) {
 	ctx := context.Background()
@@ -154,17 +157,6 @@ func TestDurableTextFailureRetainsUsageAndStopsRetry(t *testing.T) {
 	var saved llm.StreamChunk
 	require.NoError(t, json.Unmarshal(record.Value, &saved))
 	require.Equal(t, 17, saved.Usage.TotalTokens)
-}
-
-func TestDurableSynchronousEntrypointsRejectBeforeRequest(t *testing.T) {
-	model := NewMockLLMClient()
-	agent, err := NewSimpleBuilder(model).WithDurableScope("answer").Build()
-	require.NoError(t, err)
-	ctx := journalContextForTest(t)
-	_, err = agent.Execute(ctx, "question")
-	require.ErrorContains(t, err, "AsRunnable")
-	_, err = agent.ExecuteWithTools(ctx, "question")
-	require.ErrorContains(t, err, "AsRunnable")
 }
 
 func TestDurableScopeRejectsLegacyUnscopedCheckpoint(t *testing.T) {
