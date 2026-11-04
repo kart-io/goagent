@@ -1,0 +1,171 @@
+{
+  "basis": "合并后15模块当前源码，以临时modfile选全部本地模块；go test -race -count=1 -timeout=180s ./...；PG真实数据库另行验证。",
+  "results": [
+    {
+      "module": "goagent-harness",
+      "exit_code": 0,
+      "passed_packages": [
+        "ok  \tgithub.com/kart-io/goagent-harness/background\t34.696s",
+        "ok  \tgithub.com/kart-io/goagent-harness/effects\t7.929s",
+        "ok  \tgithub.com/kart-io/goagent-harness/eval/swebench\t1.384s",
+        "ok  \tgithub.com/kart-io/goagent-harness/examples/plan-agent\t1.637s",
+        "ok  \tgithub.com/kart-io/goagent-harness/integration\t2.360s",
+        "ok  \tgithub.com/kart-io/goagent-harness/permissions\t1.402s",
+        "ok  \tgithub.com/kart-io/goagent-harness/preset\t28.098s",
+        "ok  \tgithub.com/kart-io/goagent-harness/sandbox\t3.608s",
+        "ok  \tgithub.com/kart-io/goagent-harness/sandbox/sandboxtest\t1.602s",
+        "ok  \tgithub.com/kart-io/goagent-harness/sandbox/sshsandbox\t2.514s",
+        "ok  \tgithub.com/kart-io/goagent-harness/tools/coding\t7.641s"
+      ],
+      "failed_packages": []
+    },
+    {
+      "module": "goagent-harness/integration/postgres",
+      "exit_code": 0,
+      "passed_packages": [
+        "ok  \tgithub.com/kart-io/goagent-harness/integration/postgres\t1.294s"
+      ],
+      "failed_packages": []
+    },
+    {
+      "module": "goagent-examples",
+      "exit_code": 0,
+      "passed_packages": [
+        "ok  \tgithub.com/kart-io/goagent-examples/agent-usage/agent\t1.347s",
+        "ok  \tgithub.com/kart-io/goagent-examples/agent-usage/cases\t2.243s",
+        "ok  \tgithub.com/kart-io/goagent-examples/agent-usage/live\t1.839s",
+        "ok  \tgithub.com/kart-io/goagent-examples/agent-usage/task\t2.072s",
+        "ok  \tgithub.com/kart-io/goagent-examples/internal/livemodel\t2.338s",
+        "ok  \tgithub.com/kart-io/goagent-examples/internal/livemodel/livemodeltest\t2.536s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/acp\t2.771s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/agent-context\t9.309s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/agent-tool\t2.306s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/composed-order\t5.192s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/context-recovery\t2.642s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/field-adapter\t2.584s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/flight-booking\t33.278s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/internal/livecase\t2.824s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/live/approval\t4.924s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/live/delegation\t5.841s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/live/localize\t5.214s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/live/log-triage\t3.583s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/live/parallel-diagnostics\t4.568s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/live/review-loop\t4.986s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/live/session-replay\t4.323s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/live/stream-budget\t2.944s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/live/ticket-triage\t2.635s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/ops/alert-rca\t8.431s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/ops/capacity-review\t16.349s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/ops/cost-attribution\t8.474s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/ops/internal/opscase\t4.069s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/ops/scoped-lookup\t17.686s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/ops/sql-review\t21.359s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/parallel-diagnostics\t1.180s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/plugin/basic\t1.506s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/plugin/hooks\t1.783s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/plugin/resources\t2.906s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/plugin/support-desk\t3.318s",
+        "ok  \tgithub.com/kart-io/goagent-examples/workflow/business-cases\t25.793s",
+        "ok  \tgithub.com/kart-io/goagent-examples/workflow/refund-recovery\t16.667s"
+      ],
+      "failed_packages": []
+    },
+    {
+      "module": "goagent-examples/orchestration/httpagent",
+      "exit_code": 0,
+      "passed_packages": [
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/httpagent\t2.311s",
+        "ok  \tgithub.com/kart-io/goagent-examples/orchestration/httpagent/cmd/webhook-receiver\t1.228s"
+      ],
+      "failed_packages": []
+    },
+    {
+      "module": "goagent-contrib/acp",
+      "exit_code": 0,
+      "passed_packages": [
+        "ok  \tgithub.com/kart-io/goagent-contrib/acp\t12.845s"
+      ],
+      "failed_packages": []
+    },
+    {
+      "module": "goagent-contrib/document",
+      "exit_code": 0,
+      "passed_packages": [
+        "ok  \tgithub.com/kart-io/goagent-contrib/document\t3.223s"
+      ],
+      "failed_packages": []
+    },
+    {
+      "module": "goagent-contrib/document/pdf",
+      "exit_code": 0,
+      "passed_packages": [
+        "ok  \tgithub.com/kart-io/goagent-contrib/document/pdf\t1.481s"
+      ],
+      "failed_packages": []
+    },
+    {
+      "module": "goagent-contrib/durable/pgstore",
+      "exit_code": 0,
+      "passed_packages": [
+        "ok  \tgithub.com/kart-io/goagent-contrib/durable/pgstore\t1.281s"
+      ],
+      "failed_packages": []
+    },
+    {
+      "module": "goagent-contrib/httpagent",
+      "exit_code": 0,
+      "passed_packages": [
+        "ok  \tgithub.com/kart-io/goagent-contrib/httpagent\t3.739s"
+      ],
+      "failed_packages": []
+    },
+    {
+      "module": "goagent-contrib/retrieval/cohere",
+      "exit_code": 0,
+      "passed_packages": [
+        "ok  \tgithub.com/kart-io/goagent-contrib/retrieval/cohere\t1.190s"
+      ],
+      "failed_packages": []
+    },
+    {
+      "module": "goagent-contrib/retrieval",
+      "exit_code": 0,
+      "passed_packages": [
+        "ok  \tgithub.com/kart-io/goagent-contrib/retrieval\t2.221s"
+      ],
+      "failed_packages": []
+    },
+    {
+      "module": "goagent-contrib/retrieval/qdrant",
+      "exit_code": 0,
+      "passed_packages": [
+        "ok  \tgithub.com/kart-io/goagent-contrib/retrieval/qdrant\t1.267s"
+      ],
+      "failed_packages": []
+    },
+    {
+      "module": "goagent-contrib/retrieval/vertexai",
+      "exit_code": 0,
+      "passed_packages": [
+        "ok  \tgithub.com/kart-io/goagent-contrib/retrieval/vertexai\t1.308s"
+      ],
+      "failed_packages": []
+    },
+    {
+      "module": "goagent-contrib/tools/database",
+      "exit_code": 0,
+      "passed_packages": [
+        "ok  \tgithub.com/kart-io/goagent-contrib/tools/database\t1.276s"
+      ],
+      "failed_packages": []
+    },
+    {
+      "module": "goagent-contrib/tools/practical",
+      "exit_code": 0,
+      "passed_packages": [
+        "ok  \tgithub.com/kart-io/goagent-contrib/tools/practical\t14.244s"
+      ],
+      "failed_packages": []
+    }
+  ]
+}

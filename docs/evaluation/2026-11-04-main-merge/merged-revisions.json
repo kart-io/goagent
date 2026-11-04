@@ -1,0 +1,26 @@
+[
+  {
+    "repo": "goagent-contrib",
+    "branch": "master",
+    "base": "56c362bc3af307364d52f4cf1098d5eb58f0dc4b",
+    "feature": "15b6e2cac7e26f9504e61f4e53f70ce8a19ee4e5",
+    "tree": "dd76aa2c4be094a410821a2968890fb2cfd78d31",
+    "merged_commit": "e0c75339183908b57118594776da781a398e7b5b"
+  },
+  {
+    "repo": "goagent-harness",
+    "branch": "main",
+    "base": "b1072de853fe25a934d56080634317d3ef48b1cd",
+    "feature": "f08d851c47f0f728f88cd0923b2251db7178392f",
+    "tree": "d640a77ea5de381b4c6cd9557e2c45c1e2a9202f",
+    "merged_commit": "2368ac069cd49c0e865b27864fe2dee6cb202492"
+  },
+  {
+    "repo": "goagent-examples",
+    "branch": "main",
+    "base": "560770079dcab005ca6b59ff452a8ab93c6a1be5",
+    "feature": "080b6cdedef1c25aee7adbb415aeaa39e4374e1c",
+    "tree": "7e133d26bb23c410e52a445b260725613dc0074e",
+    "merged_commit": "b900dfee8e1ca78666e38c25a85ce20b66d7fed7"
+  }
+]

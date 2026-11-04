@@ -1,0 +1,8 @@
+=== RUN   TestWaitRestartResumeRelease
+--- PASS: TestWaitRestartResumeRelease (0.38s)
+=== RUN   TestTakeoverFencesOldHolder
+--- PASS: TestTakeoverFencesOldHolder (0.14s)
+=== RUN   TestInboxAppendOnceAcrossConnections
+--- PASS: TestInboxAppendOnceAcrossConnections (0.08s)
+PASS
+ok  	github.com/kart-io/goagent-harness/integration/postgres	4.894s
