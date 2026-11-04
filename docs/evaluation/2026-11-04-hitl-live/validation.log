@@ -1,0 +1,17 @@
+Offline validation after live run; no additional model calls.
+
+$ go test ./evaluation/hitlbench/...
+? github.com/kart-io/goagent/evaluation/hitlbench/cmd/run [no test files]
+exit=0
+
+$ go vet ./evaluation/hitlbench/...
+exit=0
+
+$ golangci-lint run ./evaluation/hitlbench/...
+0 issues.
+exit=0
+
+Python syntax, four offline review fixtures, saved-result exit code 1, explicit live opt-in guard: PASS
+
+$ git diff --check
+exit=0

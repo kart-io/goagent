@@ -11,6 +11,8 @@ GoAgent 是嵌入 Go 服务的 Agent 执行内核：原生工具循环、类型�
 
 ## 编排与持久执行
 
+- [人工介入：暂停、恢复与检查点](guides/HUMAN_IN_THE_LOOP.md)：人工输入、状态修改、审批分支与跨进程恢复
+
 - [原生编排与工具体系](guides/NATIVE_ORCHESTRATION.md)：`workflow.Graph`、持久图、Dispatcher 与审批恢复
 - [通用流程编排](../workflow/README.md)：图编译、分支、并行汇合、有界循环与 Agent 适配
 - [可组合编排](guides/COMPOSABLE_ORCHESTRATION.md)：根预算、子 Agent 工具、持久上下文引用与只读观察

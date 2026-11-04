@@ -2,6 +2,8 @@
 
 `workflow.Graph[T]` 将串行节点、条件分支、显式并行汇合与有界循环编译为 `core.StreamRunnable[T,T]`。节点共享同一状态类型 T；不同输入/输出的 Agent 使用 Adapt 显式转换。
 
+人工介入使用持久图的 `ApprovalNodes`、`Snapshot` 与 `Resume`；通过 `WithResumeHandler` 校验人工输入并修改业务状态，状态与放行一次性落盘后再执行节点。详见 [暂停、恢复与检查点](../docs/guides/HUMAN_IN_THE_LOOP.md) 和 [离线示例](../examples/human-in-the-loop/README.md)。
+
 ```go
 graph := workflow.NewGraph[int](workflow.Config{MaxSteps: 20, MaxConcurrency: 4})
 err := graph.AddNode("increment", func(ctx context.Context, value int) (int, error) {

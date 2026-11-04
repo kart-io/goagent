@@ -1,0 +1,5 @@
+evaluation/hitlbench/cmd/run/main.go:1: : # github.com/kart-io/goagent/evaluation/hitlbench/cmd/run
+evaluation/hitlbench/cmd/run/main.go:105:71: builder.NewSimpleBuilder(client).WithDurableScope(stage).WithModel undefined (type *builder.AgentBuilder[any, *"github.com/kart-io/goagent/core".AgentState] has no field or method WithModel) (typecheck)
+// run advances one bounded live-model HITL phase. Each invocation is a new process.
+1 issues:
+* typecheck: 1

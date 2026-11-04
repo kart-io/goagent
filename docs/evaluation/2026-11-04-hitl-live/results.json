@@ -1,0 +1,1281 @@
+{
+  "started_at": "2026-11-04T10:47:10Z",
+  "max_model_calls": 6,
+  "max_output_tokens_per_call": 512,
+  "automatic_retries": 0,
+  "providers": [
+    {
+      "provider": "gemini",
+      "model": "gemini-2.5-flash",
+      "passed": true,
+      "approved_budget": {
+        "ReservedRequests": 2,
+        "KnownUsageEntries": 2,
+        "UnknownUsageEntries": 0,
+        "KnownTokens": {
+          "prompt_tokens": 224,
+          "completion_tokens": 73,
+          "total_tokens": 297
+        },
+        "ReservedTokens": 0,
+        "ReservedToolCalls": 0,
+        "KnownTokenDelta": 297
+      },
+      "rejected_budget": {
+        "ReservedRequests": 1,
+        "KnownUsageEntries": 1,
+        "UnknownUsageEntries": 0,
+        "KnownTokens": {
+          "prompt_tokens": 64,
+          "completion_tokens": 24,
+          "total_tokens": 88
+        },
+        "ReservedTokens": 0,
+        "ReservedToolCalls": 0,
+        "KnownTokenDelta": 88
+      },
+      "final_notice": {
+        "order_id": "DEMO-HITL-01",
+        "amount_yuan": 66,
+        "notice": "您的订单 DEMO-HITL-01 已完成退款，退款金额为 66 元。"
+      }
+    },
+    {
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "passed": true,
+      "approved_budget": {
+        "ReservedRequests": 2,
+        "KnownUsageEntries": 2,
+        "UnknownUsageEntries": 0,
+        "KnownTokens": {
+          "prompt_tokens": 275,
+          "completion_tokens": 378,
+          "total_tokens": 653,
+          "reasoning_tokens": 299
+        },
+        "ReservedTokens": 0,
+        "ReservedToolCalls": 0,
+        "KnownTokenDelta": 653
+      },
+      "rejected_budget": {
+        "ReservedRequests": 1,
+        "KnownUsageEntries": 1,
+        "UnknownUsageEntries": 0,
+        "KnownTokens": {
+          "prompt_tokens": 86,
+          "completion_tokens": 92,
+          "total_tokens": 178,
+          "reasoning_tokens": 73
+        },
+        "ReservedTokens": 0,
+        "ReservedToolCalls": 0,
+        "KnownTokenDelta": 178
+      },
+      "final_notice": {
+        "order_id": "DEMO-HITL-01",
+        "amount_yuan": 66,
+        "notice": "您的订单 DEMO-HITL-01 经人工审核，退款金额确定为 66 元，我们将按流程处理。"
+      }
+    }
+  ],
+  "phases": [
+    {
+      "provider": "gemini",
+      "scenario": "approve",
+      "phase": "01-draft",
+      "exit_code": 0,
+      "result": {
+        "provider": "gemini",
+        "model": "gemini-2.5-flash",
+        "run_id": "gemini/approve",
+        "phase": "run",
+        "started_at": "2026-11-04T10:47:11.669327603Z",
+        "duration_ms": 1341,
+        "new_model_calls": 1,
+        "snapshot": {
+          "Preview": false,
+          "State": {
+            "order_id": "DEMO-HITL-01",
+            "original_amount": 88,
+            "draft": "您的订单 DEMO-HITL-01，金额 88 元的退款申请仍在人工审核中。",
+            "status": "draft"
+          },
+          "Node": "review",
+          "Steps": 1,
+          "Routing": false,
+          "Key": "fb09258c704e7b0a6ccb937ca16911488de5850ddaf7da92da3020cd2339f58c",
+          "Waiting": true,
+          "Done": false
+        },
+        "budget": {
+          "ReservedRequests": 1,
+          "KnownUsageEntries": 1,
+          "UnknownUsageEntries": 0,
+          "KnownTokens": {
+            "prompt_tokens": 64,
+            "completion_tokens": 25,
+            "total_tokens": 89
+          },
+          "ReservedTokens": 0,
+          "ReservedToolCalls": 0,
+          "KnownTokenDelta": 89
+        }
+      }
+    },
+    {
+      "provider": "gemini",
+      "scenario": "approve",
+      "phase": "02-wait-replay",
+      "exit_code": 0,
+      "result": {
+        "provider": "gemini",
+        "model": "gemini-2.5-flash",
+        "run_id": "gemini/approve",
+        "phase": "run",
+        "started_at": "2026-11-04T10:47:13.021646719Z",
+        "duration_ms": 31,
+        "new_model_calls": 0,
+        "snapshot": {
+          "Preview": false,
+          "State": {
+            "order_id": "DEMO-HITL-01",
+            "original_amount": 88,
+            "draft": "您的订单 DEMO-HITL-01，金额 88 元的退款申请仍在人工审核中。",
+            "status": "draft"
+          },
+          "Node": "review",
+          "Steps": 1,
+          "Routing": false,
+          "Key": "fb09258c704e7b0a6ccb937ca16911488de5850ddaf7da92da3020cd2339f58c",
+          "Waiting": true,
+          "Done": false
+        },
+        "budget": {
+          "ReservedRequests": 1,
+          "KnownUsageEntries": 1,
+          "UnknownUsageEntries": 0,
+          "KnownTokens": {
+            "prompt_tokens": 64,
+            "completion_tokens": 25,
+            "total_tokens": 89
+          },
+          "ReservedTokens": 0,
+          "ReservedToolCalls": 0,
+          "KnownTokenDelta": 89
+        }
+      }
+    },
+    {
+      "provider": "gemini",
+      "scenario": "approve",
+      "phase": "03-status",
+      "exit_code": 0,
+      "result": {
+        "provider": "gemini",
+        "model": "gemini-2.5-flash",
+        "run_id": "gemini/approve",
+        "phase": "status",
+        "started_at": "2026-11-04T10:47:13.062573221Z",
+        "duration_ms": 15,
+        "new_model_calls": 0,
+        "snapshot": {
+          "Preview": false,
+          "State": {
+            "order_id": "DEMO-HITL-01",
+            "original_amount": 88,
+            "draft": "您的订单 DEMO-HITL-01，金额 88 元的退款申请仍在人工审核中。",
+            "status": "draft"
+          },
+          "Node": "review",
+          "Steps": 1,
+          "Routing": false,
+          "Key": "fb09258c704e7b0a6ccb937ca16911488de5850ddaf7da92da3020cd2339f58c",
+          "Waiting": true,
+          "Done": false
+        },
+        "budget": {
+          "ReservedRequests": 1,
+          "KnownUsageEntries": 1,
+          "UnknownUsageEntries": 0,
+          "KnownTokens": {
+            "prompt_tokens": 64,
+            "completion_tokens": 25,
+            "total_tokens": 89
+          },
+          "ReservedTokens": 0,
+          "ReservedToolCalls": 0,
+          "KnownTokenDelta": 89
+        }
+      }
+    },
+    {
+      "provider": "gemini",
+      "scenario": "approve",
+      "phase": "04-wrong-key",
+      "exit_code": 1,
+      "result": {
+        "provider": "gemini",
+        "model": "gemini-2.5-flash",
+        "run_id": "gemini/approve",
+        "phase": "resume",
+        "started_at": "2026-11-04T10:47:13.084933861Z",
+        "duration_ms": 15,
+        "new_model_calls": 0,
+        "snapshot": {
+          "Preview": false,
+          "State": {
+            "order_id": "DEMO-HITL-01",
+            "original_amount": 88,
+            "draft": "您的订单 DEMO-HITL-01，金额 88 元的退款申请仍在人工审核中。",
+            "status": "draft"
+          },
+          "Node": "review",
+          "Steps": 1,
+          "Routing": false,
+          "Key": "fb09258c704e7b0a6ccb937ca16911488de5850ddaf7da92da3020cd2339f58c",
+          "Waiting": true,
+          "Done": false
+        },
+        "budget": {
+          "ReservedRequests": 1,
+          "KnownUsageEntries": 1,
+          "UnknownUsageEntries": 0,
+          "KnownTokens": {
+            "prompt_tokens": 64,
+            "completion_tokens": 25,
+            "total_tokens": 89
+          },
+          "ReservedTokens": 0,
+          "ReservedToolCalls": 0,
+          "KnownTokenDelta": 89
+        },
+        "error": "approval does not match waiting node"
+      }
+    },
+    {
+      "provider": "gemini",
+      "scenario": "approve",
+      "phase": "05-wrong-actor",
+      "exit_code": 1,
+      "result": {
+        "provider": "gemini",
+        "model": "gemini-2.5-flash",
+        "run_id": "gemini/approve",
+        "phase": "resume",
+        "started_at": "2026-11-04T10:47:13.108610763Z",
+        "duration_ms": 15,
+        "new_model_calls": 0,
+        "snapshot": {
+          "Preview": false,
+          "State": {
+            "order_id": "DEMO-HITL-01",
+            "original_amount": 88,
+            "draft": "您的订单 DEMO-HITL-01，金额 88 元的退款申请仍在人工审核中。",
+            "status": "draft"
+          },
+          "Node": "review",
+          "Steps": 1,
+          "Routing": false,
+          "Key": "fb09258c704e7b0a6ccb937ca16911488de5850ddaf7da92da3020cd2339f58c",
+          "Waiting": true,
+          "Done": false
+        },
+        "budget": {
+          "ReservedRequests": 1,
+          "KnownUsageEntries": 1,
+          "UnknownUsageEntries": 0,
+          "KnownTokens": {
+            "prompt_tokens": 64,
+            "completion_tokens": 25,
+            "total_tokens": 89
+          },
+          "ReservedTokens": 0,
+          "ReservedToolCalls": 0,
+          "KnownTokenDelta": 89
+        },
+        "error": "批准前置校验拒绝: reviewer not authorized"
+      }
+    },
+    {
+      "provider": "gemini",
+      "scenario": "approve",
+      "phase": "06-invalid-input",
+      "exit_code": 1,
+      "result": {
+        "provider": "gemini",
+        "model": "gemini-2.5-flash",
+        "run_id": "gemini/approve",
+        "phase": "resume",
+        "started_at": "2026-11-04T10:47:13.131769895Z",
+        "duration_ms": 15,
+        "new_model_calls": 0,
+        "snapshot": {
+          "Preview": false,
+          "State": {
+            "order_id": "DEMO-HITL-01",
+            "original_amount": 88,
+            "draft": "您的订单 DEMO-HITL-01，金额 88 元的退款申请仍在人工审核中。",
+            "status": "draft"
+          },
+          "Node": "review",
+          "Steps": 1,
+          "Routing": false,
+          "Key": "fb09258c704e7b0a6ccb937ca16911488de5850ddaf7da92da3020cd2339f58c",
+          "Waiting": true,
+          "Done": false
+        },
+        "budget": {
+          "ReservedRequests": 1,
+          "KnownUsageEntries": 1,
+          "UnknownUsageEntries": 0,
+          "KnownTokens": {
+            "prompt_tokens": 64,
+            "completion_tokens": 25,
+            "total_tokens": 89
+          },
+          "ReservedTokens": 0,
+          "ReservedToolCalls": 0,
+          "KnownTokenDelta": 89
+        },
+        "error": "resume input rejected: invalid approved amount"
+      }
+    },
+    {
+      "provider": "gemini",
+      "scenario": "approve",
+      "phase": "07-accept-and-crash",
+      "exit_code": 86,
+      "intentional_crash": true
+    },
+    {
+      "provider": "gemini",
+      "scenario": "approve",
+      "phase": "08-status-after-crash",
+      "exit_code": 0,
+      "result": {
+        "provider": "gemini",
+        "model": "gemini-2.5-flash",
+        "run_id": "gemini/approve",
+        "phase": "status",
+        "started_at": "2026-11-04T10:47:13.196133177Z",
+        "duration_ms": 15,
+        "new_model_calls": 0,
+        "snapshot": {
+          "Preview": false,
+          "State": {
+            "order_id": "DEMO-HITL-01",
+            "original_amount": 88,
+            "approved_amount": 66,
+            "draft": "您的订单 DEMO-HITL-01，金额 88 元的退款申请仍在人工审核中。",
+            "decision": "approve",
+            "reviewer": "synthetic-reviewer",
+            "status": "draft"
+          },
+          "Node": "review",
+          "Steps": 1,
+          "Routing": false,
+          "Key": "fb09258c704e7b0a6ccb937ca16911488de5850ddaf7da92da3020cd2339f58c",
+          "Waiting": false,
+          "Done": false
+        },
+        "budget": {
+          "ReservedRequests": 1,
+          "KnownUsageEntries": 1,
+          "UnknownUsageEntries": 0,
+          "KnownTokens": {
+            "prompt_tokens": 64,
+            "completion_tokens": 25,
+            "total_tokens": 89
+          },
+          "ReservedTokens": 0,
+          "ReservedToolCalls": 0,
+          "KnownTokenDelta": 89
+        }
+      }
+    },
+    {
+      "provider": "gemini",
+      "scenario": "approve",
+      "phase": "09-recover-and-generate",
+      "exit_code": 0,
+      "result": {
+        "provider": "gemini",
+        "model": "gemini-2.5-flash",
+        "run_id": "gemini/approve",
+        "phase": "run",
+        "started_at": "2026-11-04T10:47:13.219084224Z",
+        "duration_ms": 1329,
+        "new_model_calls": 1,
+        "snapshot": {
+          "Preview": false,
+          "State": {
+            "order_id": "DEMO-HITL-01",
+            "original_amount": 88,
+            "approved_amount": 66,
+            "draft": "您的订单 DEMO-HITL-01，金额 88 元的退款申请仍在人工审核中。",
+            "decision": "approve",
+            "reviewer": "synthetic-reviewer",
+            "final": "{\"order_id\":\"DEMO-HITL-01\",\"amount_yuan\":66,\"notice\":\"您的订单 DEMO-HITL-01 已完成退款，退款金额为 66 元。\"}",
+            "status": "accepted"
+          },
+          "Node": "__end__",
+          "Steps": 3,
+          "Routing": false,
+          "Key": "",
+          "Waiting": false,
+          "Done": true
+        },
+        "budget": {
+          "ReservedRequests": 2,
+          "KnownUsageEntries": 2,
+          "UnknownUsageEntries": 0,
+          "KnownTokens": {
+            "prompt_tokens": 224,
+            "completion_tokens": 73,
+            "total_tokens": 297
+          },
+          "ReservedTokens": 0,
+          "ReservedToolCalls": 0,
+          "KnownTokenDelta": 297
+        }
+      }
+    },
+    {
+      "provider": "gemini",
+      "scenario": "approve",
+      "phase": "10-completed-replay",
+      "exit_code": 0,
+      "result": {
+        "provider": "gemini",
+        "model": "gemini-2.5-flash",
+        "run_id": "gemini/approve",
+        "phase": "run",
+        "started_at": "2026-11-04T10:47:14.55621343Z",
+        "duration_ms": 15,
+        "new_model_calls": 0,
+        "snapshot": {
+          "Preview": false,
+          "State": {
+            "order_id": "DEMO-HITL-01",
+            "original_amount": 88,
+            "approved_amount": 66,
+            "draft": "您的订单 DEMO-HITL-01，金额 88 元的退款申请仍在人工审核中。",
+            "decision": "approve",
+            "reviewer": "synthetic-reviewer",
+            "final": "{\"order_id\":\"DEMO-HITL-01\",\"amount_yuan\":66,\"notice\":\"您的订单 DEMO-HITL-01 已完成退款，退款金额为 66 元。\"}",
+            "status": "accepted"
+          },
+          "Node": "__end__",
+          "Steps": 3,
+          "Routing": false,
+          "Key": "",
+          "Waiting": false,
+          "Done": true
+        },
+        "budget": {
+          "ReservedRequests": 2,
+          "KnownUsageEntries": 2,
+          "UnknownUsageEntries": 0,
+          "KnownTokens": {
+            "prompt_tokens": 224,
+            "completion_tokens": 73,
+            "total_tokens": 297
+          },
+          "ReservedTokens": 0,
+          "ReservedToolCalls": 0,
+          "KnownTokenDelta": 297
+        }
+      }
+    },
+    {
+      "provider": "gemini",
+      "scenario": "approve",
+      "phase": "11-stale-response",
+      "exit_code": 1,
+      "result": {
+        "provider": "gemini",
+        "model": "gemini-2.5-flash",
+        "run_id": "gemini/approve",
+        "phase": "resume",
+        "started_at": "2026-11-04T10:47:14.579086698Z",
+        "duration_ms": 15,
+        "new_model_calls": 0,
+        "snapshot": {
+          "Preview": false,
+          "State": {
+            "order_id": "DEMO-HITL-01",
+            "original_amount": 88,
+            "approved_amount": 66,
+            "draft": "您的订单 DEMO-HITL-01，金额 88 元的退款申请仍在人工审核中。",
+            "decision": "approve",
+            "reviewer": "synthetic-reviewer",
+            "final": "{\"order_id\":\"DEMO-HITL-01\",\"amount_yuan\":66,\"notice\":\"您的订单 DEMO-HITL-01 已完成退款，退款金额为 66 元。\"}",
+            "status": "accepted"
+          },
+          "Node": "__end__",
+          "Steps": 3,
+          "Routing": false,
+          "Key": "",
+          "Waiting": false,
+          "Done": true
+        },
+        "budget": {
+          "ReservedRequests": 2,
+          "KnownUsageEntries": 2,
+          "UnknownUsageEntries": 0,
+          "KnownTokens": {
+            "prompt_tokens": 224,
+            "completion_tokens": 73,
+            "total_tokens": 297
+          },
+          "ReservedTokens": 0,
+          "ReservedToolCalls": 0,
+          "KnownTokenDelta": 297
+        },
+        "error": "approval does not match waiting node"
+      }
+    },
+    {
+      "provider": "gemini",
+      "scenario": "reject",
+      "phase": "12-reject-draft",
+      "exit_code": 0,
+      "result": {
+        "provider": "gemini",
+        "model": "gemini-2.5-flash",
+        "run_id": "gemini/reject",
+        "phase": "run",
+        "started_at": "2026-11-04T10:47:14.602933941Z",
+        "duration_ms": 3187,
+        "new_model_calls": 1,
+        "snapshot": {
+          "Preview": false,
+          "State": {
+            "order_id": "DEMO-HITL-01",
+            "original_amount": 88,
+            "draft": "您的订单 DEMO-HITL-01，金额 88 元的退款仍在等待人工审核。",
+            "status": "draft"
+          },
+          "Node": "review",
+          "Steps": 1,
+          "Routing": false,
+          "Key": "0097109fd083ec04af332e899e86d90b7765393b6e80808dfe0cb1a5d327c386",
+          "Waiting": true,
+          "Done": false
+        },
+        "budget": {
+          "ReservedRequests": 1,
+          "KnownUsageEntries": 1,
+          "UnknownUsageEntries": 0,
+          "KnownTokens": {
+            "prompt_tokens": 64,
+            "completion_tokens": 24,
+            "total_tokens": 88
+          },
+          "ReservedTokens": 0,
+          "ReservedToolCalls": 0,
+          "KnownTokenDelta": 88
+        }
+      }
+    },
+    {
+      "provider": "gemini",
+      "scenario": "reject",
+      "phase": "13-human-reject",
+      "exit_code": 0,
+      "result": {
+        "provider": "gemini",
+        "model": "gemini-2.5-flash",
+        "run_id": "gemini/reject",
+        "phase": "resume",
+        "started_at": "2026-11-04T10:47:17.800180782Z",
+        "duration_ms": 123,
+        "new_model_calls": 0,
+        "snapshot": {
+          "Preview": false,
+          "State": {
+            "order_id": "DEMO-HITL-01",
+            "original_amount": 88,
+            "approved_amount": 66,
+            "draft": "您的订单 DEMO-HITL-01，金额 88 元的退款仍在等待人工审核。",
+            "decision": "reject",
+            "reviewer": "synthetic-reviewer",
+            "status": "rejected"
+          },
+          "Node": "__end__",
+          "Steps": 3,
+          "Routing": false,
+          "Key": "",
+          "Waiting": false,
+          "Done": true
+        },
+        "budget": {
+          "ReservedRequests": 1,
+          "KnownUsageEntries": 1,
+          "UnknownUsageEntries": 0,
+          "KnownTokens": {
+            "prompt_tokens": 64,
+            "completion_tokens": 24,
+            "total_tokens": 88
+          },
+          "ReservedTokens": 0,
+          "ReservedToolCalls": 0,
+          "KnownTokenDelta": 88
+        }
+      }
+    },
+    {
+      "provider": "gemini",
+      "scenario": "reject",
+      "phase": "14-rejected-replay",
+      "exit_code": 0,
+      "result": {
+        "provider": "gemini",
+        "model": "gemini-2.5-flash",
+        "run_id": "gemini/reject",
+        "phase": "run",
+        "started_at": "2026-11-04T10:47:17.933934258Z",
+        "duration_ms": 15,
+        "new_model_calls": 0,
+        "snapshot": {
+          "Preview": false,
+          "State": {
+            "order_id": "DEMO-HITL-01",
+            "original_amount": 88,
+            "approved_amount": 66,
+            "draft": "您的订单 DEMO-HITL-01，金额 88 元的退款仍在等待人工审核。",
+            "decision": "reject",
+            "reviewer": "synthetic-reviewer",
+            "status": "rejected"
+          },
+          "Node": "__end__",
+          "Steps": 3,
+          "Routing": false,
+          "Key": "",
+          "Waiting": false,
+          "Done": true
+        },
+        "budget": {
+          "ReservedRequests": 1,
+          "KnownUsageEntries": 1,
+          "UnknownUsageEntries": 0,
+          "KnownTokens": {
+            "prompt_tokens": 64,
+            "completion_tokens": 24,
+            "total_tokens": 88
+          },
+          "ReservedTokens": 0,
+          "ReservedToolCalls": 0,
+          "KnownTokenDelta": 88
+        }
+      }
+    },
+    {
+      "provider": "deepseek",
+      "scenario": "approve",
+      "phase": "01-draft",
+      "exit_code": 0,
+      "result": {
+        "provider": "deepseek",
+        "model": "deepseek-flash",
+        "run_id": "deepseek/approve",
+        "phase": "run",
+        "started_at": "2026-11-04T10:47:17.956262738Z",
+        "duration_ms": 1931,
+        "new_model_calls": 1,
+        "snapshot": {
+          "Preview": false,
+          "State": {
+            "order_id": "DEMO-HITL-01",
+            "original_amount": 88,
+            "draft": "您的订单 DEMO-HITL-01 的退款金额为 88 元，目前仍待人工审核，请耐心等待。",
+            "status": "draft"
+          },
+          "Node": "review",
+          "Steps": 1,
+          "Routing": false,
+          "Key": "50c19c790fae553de10088623d20663c531a3e2b5eaceb68721941e347d1459d",
+          "Waiting": true,
+          "Done": false
+        },
+        "budget": {
+          "ReservedRequests": 1,
+          "KnownUsageEntries": 1,
+          "UnknownUsageEntries": 0,
+          "KnownTokens": {
+            "prompt_tokens": 86,
+            "completion_tokens": 236,
+            "total_tokens": 322,
+            "reasoning_tokens": 206
+          },
+          "ReservedTokens": 0,
+          "ReservedToolCalls": 0,
+          "KnownTokenDelta": 322
+        }
+      }
+    },
+    {
+      "provider": "deepseek",
+      "scenario": "approve",
+      "phase": "02-wait-replay",
+      "exit_code": 0,
+      "result": {
+        "provider": "deepseek",
+        "model": "deepseek-flash",
+        "run_id": "deepseek/approve",
+        "phase": "run",
+        "started_at": "2026-11-04T10:47:19.895267182Z",
+        "duration_ms": 32,
+        "new_model_calls": 0,
+        "snapshot": {
+          "Preview": false,
+          "State": {
+            "order_id": "DEMO-HITL-01",
+            "original_amount": 88,
+            "draft": "您的订单 DEMO-HITL-01 的退款金额为 88 元，目前仍待人工审核，请耐心等待。",
+            "status": "draft"
+          },
+          "Node": "review",
+          "Steps": 1,
+          "Routing": false,
+          "Key": "50c19c790fae553de10088623d20663c531a3e2b5eaceb68721941e347d1459d",
+          "Waiting": true,
+          "Done": false
+        },
+        "budget": {
+          "ReservedRequests": 1,
+          "KnownUsageEntries": 1,
+          "UnknownUsageEntries": 0,
+          "KnownTokens": {
+            "prompt_tokens": 86,
+            "completion_tokens": 236,
+            "total_tokens": 322,
+            "reasoning_tokens": 206
+          },
+          "ReservedTokens": 0,
+          "ReservedToolCalls": 0,
+          "KnownTokenDelta": 322
+        }
+      }
+    },
+    {
+      "provider": "deepseek",
+      "scenario": "approve",
+      "phase": "03-status",
+      "exit_code": 0,
+      "result": {
+        "provider": "deepseek",
+        "model": "deepseek-flash",
+        "run_id": "deepseek/approve",
+        "phase": "status",
+        "started_at": "2026-11-04T10:47:19.93881944Z",
+        "duration_ms": 17,
+        "new_model_calls": 0,
+        "snapshot": {
+          "Preview": false,
+          "State": {
+            "order_id": "DEMO-HITL-01",
+            "original_amount": 88,
+            "draft": "您的订单 DEMO-HITL-01 的退款金额为 88 元，目前仍待人工审核，请耐心等待。",
+            "status": "draft"
+          },
+          "Node": "review",
+          "Steps": 1,
+          "Routing": false,
+          "Key": "50c19c790fae553de10088623d20663c531a3e2b5eaceb68721941e347d1459d",
+          "Waiting": true,
+          "Done": false
+        },
+        "budget": {
+          "ReservedRequests": 1,
+          "KnownUsageEntries": 1,
+          "UnknownUsageEntries": 0,
+          "KnownTokens": {
+            "prompt_tokens": 86,
+            "completion_tokens": 236,
+            "total_tokens": 322,
+            "reasoning_tokens": 206
+          },
+          "ReservedTokens": 0,
+          "ReservedToolCalls": 0,
+          "KnownTokenDelta": 322
+        }
+      }
+    },
+    {
+      "provider": "deepseek",
+      "scenario": "approve",
+      "phase": "04-wrong-key",
+      "exit_code": 1,
+      "result": {
+        "provider": "deepseek",
+        "model": "deepseek-flash",
+        "run_id": "deepseek/approve",
+        "phase": "resume",
+        "started_at": "2026-11-04T10:47:19.966720568Z",
+        "duration_ms": 17,
+        "new_model_calls": 0,
+        "snapshot": {
+          "Preview": false,
+          "State": {
+            "order_id": "DEMO-HITL-01",
+            "original_amount": 88,
+            "draft": "您的订单 DEMO-HITL-01 的退款金额为 88 元，目前仍待人工审核，请耐心等待。",
+            "status": "draft"
+          },
+          "Node": "review",
+          "Steps": 1,
+          "Routing": false,
+          "Key": "50c19c790fae553de10088623d20663c531a3e2b5eaceb68721941e347d1459d",
+          "Waiting": true,
+          "Done": false
+        },
+        "budget": {
+          "ReservedRequests": 1,
+          "KnownUsageEntries": 1,
+          "UnknownUsageEntries": 0,
+          "KnownTokens": {
+            "prompt_tokens": 86,
+            "completion_tokens": 236,
+            "total_tokens": 322,
+            "reasoning_tokens": 206
+          },
+          "ReservedTokens": 0,
+          "ReservedToolCalls": 0,
+          "KnownTokenDelta": 322
+        },
+        "error": "approval does not match waiting node"
+      }
+    },
+    {
+      "provider": "deepseek",
+      "scenario": "approve",
+      "phase": "05-wrong-actor",
+      "exit_code": 1,
+      "result": {
+        "provider": "deepseek",
+        "model": "deepseek-flash",
+        "run_id": "deepseek/approve",
+        "phase": "resume",
+        "started_at": "2026-11-04T10:47:19.995284218Z",
+        "duration_ms": 16,
+        "new_model_calls": 0,
+        "snapshot": {
+          "Preview": false,
+          "State": {
+            "order_id": "DEMO-HITL-01",
+            "original_amount": 88,
+            "draft": "您的订单 DEMO-HITL-01 的退款金额为 88 元，目前仍待人工审核，请耐心等待。",
+            "status": "draft"
+          },
+          "Node": "review",
+          "Steps": 1,
+          "Routing": false,
+          "Key": "50c19c790fae553de10088623d20663c531a3e2b5eaceb68721941e347d1459d",
+          "Waiting": true,
+          "Done": false
+        },
+        "budget": {
+          "ReservedRequests": 1,
+          "KnownUsageEntries": 1,
+          "UnknownUsageEntries": 0,
+          "KnownTokens": {
+            "prompt_tokens": 86,
+            "completion_tokens": 236,
+            "total_tokens": 322,
+            "reasoning_tokens": 206
+          },
+          "ReservedTokens": 0,
+          "ReservedToolCalls": 0,
+          "KnownTokenDelta": 322
+        },
+        "error": "批准前置校验拒绝: reviewer not authorized"
+      }
+    },
+    {
+      "provider": "deepseek",
+      "scenario": "approve",
+      "phase": "06-invalid-input",
+      "exit_code": 1,
+      "result": {
+        "provider": "deepseek",
+        "model": "deepseek-flash",
+        "run_id": "deepseek/approve",
+        "phase": "resume",
+        "started_at": "2026-11-04T10:47:20.020957121Z",
+        "duration_ms": 16,
+        "new_model_calls": 0,
+        "snapshot": {
+          "Preview": false,
+          "State": {
+            "order_id": "DEMO-HITL-01",
+            "original_amount": 88,
+            "draft": "您的订单 DEMO-HITL-01 的退款金额为 88 元，目前仍待人工审核，请耐心等待。",
+            "status": "draft"
+          },
+          "Node": "review",
+          "Steps": 1,
+          "Routing": false,
+          "Key": "50c19c790fae553de10088623d20663c531a3e2b5eaceb68721941e347d1459d",
+          "Waiting": true,
+          "Done": false
+        },
+        "budget": {
+          "ReservedRequests": 1,
+          "KnownUsageEntries": 1,
+          "UnknownUsageEntries": 0,
+          "KnownTokens": {
+            "prompt_tokens": 86,
+            "completion_tokens": 236,
+            "total_tokens": 322,
+            "reasoning_tokens": 206
+          },
+          "ReservedTokens": 0,
+          "ReservedToolCalls": 0,
+          "KnownTokenDelta": 322
+        },
+        "error": "resume input rejected: invalid approved amount"
+      }
+    },
+    {
+      "provider": "deepseek",
+      "scenario": "approve",
+      "phase": "07-accept-and-crash",
+      "exit_code": 86,
+      "intentional_crash": true
+    },
+    {
+      "provider": "deepseek",
+      "scenario": "approve",
+      "phase": "08-status-after-crash",
+      "exit_code": 0,
+      "result": {
+        "provider": "deepseek",
+        "model": "deepseek-flash",
+        "run_id": "deepseek/approve",
+        "phase": "status",
+        "started_at": "2026-11-04T10:47:20.106136806Z",
+        "duration_ms": 15,
+        "new_model_calls": 0,
+        "snapshot": {
+          "Preview": false,
+          "State": {
+            "order_id": "DEMO-HITL-01",
+            "original_amount": 88,
+            "approved_amount": 66,
+            "draft": "您的订单 DEMO-HITL-01 的退款金额为 88 元，目前仍待人工审核，请耐心等待。",
+            "decision": "approve",
+            "reviewer": "synthetic-reviewer",
+            "status": "draft"
+          },
+          "Node": "review",
+          "Steps": 1,
+          "Routing": false,
+          "Key": "50c19c790fae553de10088623d20663c531a3e2b5eaceb68721941e347d1459d",
+          "Waiting": false,
+          "Done": false
+        },
+        "budget": {
+          "ReservedRequests": 1,
+          "KnownUsageEntries": 1,
+          "UnknownUsageEntries": 0,
+          "KnownTokens": {
+            "prompt_tokens": 86,
+            "completion_tokens": 236,
+            "total_tokens": 322,
+            "reasoning_tokens": 206
+          },
+          "ReservedTokens": 0,
+          "ReservedToolCalls": 0,
+          "KnownTokenDelta": 322
+        }
+      }
+    },
+    {
+      "provider": "deepseek",
+      "scenario": "approve",
+      "phase": "09-recover-and-generate",
+      "exit_code": 0,
+      "result": {
+        "provider": "deepseek",
+        "model": "deepseek-flash",
+        "run_id": "deepseek/approve",
+        "phase": "run",
+        "started_at": "2026-11-04T10:47:20.128403092Z",
+        "duration_ms": 1836,
+        "new_model_calls": 1,
+        "snapshot": {
+          "Preview": false,
+          "State": {
+            "order_id": "DEMO-HITL-01",
+            "original_amount": 88,
+            "approved_amount": 66,
+            "draft": "您的订单 DEMO-HITL-01 的退款金额为 88 元，目前仍待人工审核，请耐心等待。",
+            "decision": "approve",
+            "reviewer": "synthetic-reviewer",
+            "final": "{\"order_id\":\"DEMO-HITL-01\",\"amount_yuan\":66,\"notice\":\"您的订单 DEMO-HITL-01 经人工审核，退款金额确定为 66 元，我们将按流程处理。\"}",
+            "status": "accepted"
+          },
+          "Node": "__end__",
+          "Steps": 3,
+          "Routing": false,
+          "Key": "",
+          "Waiting": false,
+          "Done": true
+        },
+        "budget": {
+          "ReservedRequests": 2,
+          "KnownUsageEntries": 2,
+          "UnknownUsageEntries": 0,
+          "KnownTokens": {
+            "prompt_tokens": 275,
+            "completion_tokens": 378,
+            "total_tokens": 653,
+            "reasoning_tokens": 299
+          },
+          "ReservedTokens": 0,
+          "ReservedToolCalls": 0,
+          "KnownTokenDelta": 653
+        }
+      }
+    },
+    {
+      "provider": "deepseek",
+      "scenario": "approve",
+      "phase": "10-completed-replay",
+      "exit_code": 0,
+      "result": {
+        "provider": "deepseek",
+        "model": "deepseek-flash",
+        "run_id": "deepseek/approve",
+        "phase": "run",
+        "started_at": "2026-11-04T10:47:21.972881537Z",
+        "duration_ms": 15,
+        "new_model_calls": 0,
+        "snapshot": {
+          "Preview": false,
+          "State": {
+            "order_id": "DEMO-HITL-01",
+            "original_amount": 88,
+            "approved_amount": 66,
+            "draft": "您的订单 DEMO-HITL-01 的退款金额为 88 元，目前仍待人工审核，请耐心等待。",
+            "decision": "approve",
+            "reviewer": "synthetic-reviewer",
+            "final": "{\"order_id\":\"DEMO-HITL-01\",\"amount_yuan\":66,\"notice\":\"您的订单 DEMO-HITL-01 经人工审核，退款金额确定为 66 元，我们将按流程处理。\"}",
+            "status": "accepted"
+          },
+          "Node": "__end__",
+          "Steps": 3,
+          "Routing": false,
+          "Key": "",
+          "Waiting": false,
+          "Done": true
+        },
+        "budget": {
+          "ReservedRequests": 2,
+          "KnownUsageEntries": 2,
+          "UnknownUsageEntries": 0,
+          "KnownTokens": {
+            "prompt_tokens": 275,
+            "completion_tokens": 378,
+            "total_tokens": 653,
+            "reasoning_tokens": 299
+          },
+          "ReservedTokens": 0,
+          "ReservedToolCalls": 0,
+          "KnownTokenDelta": 653
+        }
+      }
+    },
+    {
+      "provider": "deepseek",
+      "scenario": "approve",
+      "phase": "11-stale-response",
+      "exit_code": 1,
+      "result": {
+        "provider": "deepseek",
+        "model": "deepseek-flash",
+        "run_id": "deepseek/approve",
+        "phase": "resume",
+        "started_at": "2026-11-04T10:47:21.996207295Z",
+        "duration_ms": 15,
+        "new_model_calls": 0,
+        "snapshot": {
+          "Preview": false,
+          "State": {
+            "order_id": "DEMO-HITL-01",
+            "original_amount": 88,
+            "approved_amount": 66,
+            "draft": "您的订单 DEMO-HITL-01 的退款金额为 88 元，目前仍待人工审核，请耐心等待。",
+            "decision": "approve",
+            "reviewer": "synthetic-reviewer",
+            "final": "{\"order_id\":\"DEMO-HITL-01\",\"amount_yuan\":66,\"notice\":\"您的订单 DEMO-HITL-01 经人工审核，退款金额确定为 66 元，我们将按流程处理。\"}",
+            "status": "accepted"
+          },
+          "Node": "__end__",
+          "Steps": 3,
+          "Routing": false,
+          "Key": "",
+          "Waiting": false,
+          "Done": true
+        },
+        "budget": {
+          "ReservedRequests": 2,
+          "KnownUsageEntries": 2,
+          "UnknownUsageEntries": 0,
+          "KnownTokens": {
+            "prompt_tokens": 275,
+            "completion_tokens": 378,
+            "total_tokens": 653,
+            "reasoning_tokens": 299
+          },
+          "ReservedTokens": 0,
+          "ReservedToolCalls": 0,
+          "KnownTokenDelta": 653
+        },
+        "error": "approval does not match waiting node"
+      }
+    },
+    {
+      "provider": "deepseek",
+      "scenario": "reject",
+      "phase": "12-reject-draft",
+      "exit_code": 0,
+      "result": {
+        "provider": "deepseek",
+        "model": "deepseek-flash",
+        "run_id": "deepseek/reject",
+        "phase": "run",
+        "started_at": "2026-11-04T10:47:22.020141604Z",
+        "duration_ms": 1587,
+        "new_model_calls": 1,
+        "snapshot": {
+          "Preview": false,
+          "State": {
+            "order_id": "DEMO-HITL-01",
+            "original_amount": 88,
+            "draft": "您的订单DEMO-HITL-01的88元退款仍待人工审核。",
+            "status": "draft"
+          },
+          "Node": "review",
+          "Steps": 1,
+          "Routing": false,
+          "Key": "6d5bc0ce600f71200bfbda534bdeb652ea4ef4e0e3765048c93b193a1100425d",
+          "Waiting": true,
+          "Done": false
+        },
+        "budget": {
+          "ReservedRequests": 1,
+          "KnownUsageEntries": 1,
+          "UnknownUsageEntries": 0,
+          "KnownTokens": {
+            "prompt_tokens": 86,
+            "completion_tokens": 92,
+            "total_tokens": 178,
+            "reasoning_tokens": 73
+          },
+          "ReservedTokens": 0,
+          "ReservedToolCalls": 0,
+          "KnownTokenDelta": 178
+        }
+      }
+    },
+    {
+      "provider": "deepseek",
+      "scenario": "reject",
+      "phase": "13-human-reject",
+      "exit_code": 0,
+      "result": {
+        "provider": "deepseek",
+        "model": "deepseek-flash",
+        "run_id": "deepseek/reject",
+        "phase": "resume",
+        "started_at": "2026-11-04T10:47:23.617837204Z",
+        "duration_ms": 127,
+        "new_model_calls": 0,
+        "snapshot": {
+          "Preview": false,
+          "State": {
+            "order_id": "DEMO-HITL-01",
+            "original_amount": 88,
+            "approved_amount": 66,
+            "draft": "您的订单DEMO-HITL-01的88元退款仍待人工审核。",
+            "decision": "reject",
+            "reviewer": "synthetic-reviewer",
+            "status": "rejected"
+          },
+          "Node": "__end__",
+          "Steps": 3,
+          "Routing": false,
+          "Key": "",
+          "Waiting": false,
+          "Done": true
+        },
+        "budget": {
+          "ReservedRequests": 1,
+          "KnownUsageEntries": 1,
+          "UnknownUsageEntries": 0,
+          "KnownTokens": {
+            "prompt_tokens": 86,
+            "completion_tokens": 92,
+            "total_tokens": 178,
+            "reasoning_tokens": 73
+          },
+          "ReservedTokens": 0,
+          "ReservedToolCalls": 0,
+          "KnownTokenDelta": 178
+        }
+      }
+    },
+    {
+      "provider": "deepseek",
+      "scenario": "reject",
+      "phase": "14-rejected-replay",
+      "exit_code": 0,
+      "result": {
+        "provider": "deepseek",
+        "model": "deepseek-flash",
+        "run_id": "deepseek/reject",
+        "phase": "run",
+        "started_at": "2026-11-04T10:47:23.752987954Z",
+        "duration_ms": 15,
+        "new_model_calls": 0,
+        "snapshot": {
+          "Preview": false,
+          "State": {
+            "order_id": "DEMO-HITL-01",
+            "original_amount": 88,
+            "approved_amount": 66,
+            "draft": "您的订单DEMO-HITL-01的88元退款仍待人工审核。",
+            "decision": "reject",
+            "reviewer": "synthetic-reviewer",
+            "status": "rejected"
+          },
+          "Node": "__end__",
+          "Steps": 3,
+          "Routing": false,
+          "Key": "",
+          "Waiting": false,
+          "Done": true
+        },
+        "budget": {
+          "ReservedRequests": 1,
+          "KnownUsageEntries": 1,
+          "UnknownUsageEntries": 0,
+          "KnownTokens": {
+            "prompt_tokens": 86,
+            "completion_tokens": 92,
+            "total_tokens": 178,
+            "reasoning_tokens": 73
+          },
+          "ReservedTokens": 0,
+          "ReservedToolCalls": 0,
+          "KnownTokenDelta": 178
+        }
+      }
+    }
+  ],
+  "finished_at": "2026-11-04T10:47:23Z",
+  "passed": true
+}

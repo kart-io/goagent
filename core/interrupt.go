@@ -101,7 +101,9 @@ type InterruptResponse struct {
 	RespondedBy string
 }
 
-// InterruptManager manages interrupts and their lifecycle.
+// InterruptManager manages in-process waits. Its Checkpointer saves business
+// state only; pending interrupts and response channels do not survive restart.
+// Use workflow.CompileDurable for persistent human-in-the-loop execution.
 type InterruptManager struct {
 	// entries 以 ID 为键，记录每次 CreateInterrupt 从占用 ID 到等待方退出的全部状态；条目删除前该 ID 不可复用
 	entries map[string]*interruptEntry
@@ -161,7 +163,7 @@ func NewInterruptManager(checkpointer checkpoint.Checkpointer) *InterruptManager
 //
 // 返回时（收到响应、被 CancelInterrupt 取消、超时或 ctx 结束）都会清理该中断的内部状态，之后的 RespondToInterrupt
 // 返回 not found；被取消时返回 CodeContextCanceled 错误，响应为 nil 时错误必不为 nil。保存状态快照期间被取消时
-// 不再登记、不调用 onCreated。超时或 ctx 结束时若响应已被 RespondToInterrupt 接受，以该响应为准。onCreated
+// 不再登记、不调用 onCreated。检查点保存失败时返回错误，不公开中断或等待响应。超时或 ctx 结束时若响应已被 RespondToInterrupt 接受，以该响应为准。onCreated
 // 执行期间到达的响应等它执行完后才调用 onResolved 并返回。
 // ID 与尚未清理完的中断（包括已被响应或取消、等待方尚未退出的）重复时立即返回 CodeAlreadyExists 错误，
 // 不保存快照、不登记、不调用 onCreated；已结束并清理的中断的 ID 可以复用。interrupt 为 nil 时返回 CodeInvalidInput 错误。
@@ -190,11 +192,11 @@ func (m *InterruptManager) CreateInterrupt(ctx context.Context, interrupt *Inter
 	}
 
 	// 先保存状态再登记：中断一旦可见就可能被响应，快照必须已经写入
-	// 保存失败照旧忽略；checkpointer panic 时释放占用的 ID 并返回错误，否则该 ID 会永久被判为占用
+	// 保存失败或 panic 时释放占用的 ID 并返回错误，不能公开未保存的中断。
 	if m.checkpointer != nil && interruptCopy.State != nil {
-		if panicked, err := CallSafely(ctx, "interrupt_manager", "save_state", func() error {
+		if _, err := CallSafely(ctx, "interrupt_manager", "save_state", func() error {
 			return m.checkpointer.Save(ctx, fmt.Sprintf("interrupt_%s", interruptCopy.ID), interruptCopy.State)
-		}); panicked {
+		}); err != nil {
 			m.remove(entry)
 			return &interruptCopy, nil, err
 		}

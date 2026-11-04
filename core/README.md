@@ -68,6 +68,8 @@ type Orchestrator interface {
 
 ## 使用方法
 
+人工介入的跨进程暂停和恢复使用 `workflow.CompileDurable` 的检查点与 `Resume`，见 [HITL 指南](../docs/guides/HUMAN_IN_THE_LOOP.md)。`InterruptManager` 的响应等待仅存在于内存；其 Checkpointer 保存业务状态，不能重建等待通道，保存失败会返回错误。
+
 ### 函数式 Runnable 与管道
 
 ```go
