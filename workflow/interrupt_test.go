@@ -350,3 +350,88 @@ func TestParallelPartialAnswerSurvivesCrash(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 3+4, out.State)
 }
+
+// nestedGraphs 返回外层图：其节点在可续跑的操作内运行内层子图，内层节点向人要输入。
+func nestedGraphs(t *testing.T, store durable.Store, prepared *atomic.Int32) *workflow.DurableGraph[int] {
+	t.Helper()
+	ctx := context.Background()
+	inner := compileAsk(t, store, prepared)
+	outer, err := oneNode(t, func(ctx context.Context, n int) (int, error) {
+		rec, err := durable.Do(ctx, "inner", json.RawMessage(`{}`), durable.OperationPolicy{MaxAttempts: 3, Resumable: true}, func(ctx context.Context) (json.RawMessage, error) {
+			out, err := inner.AsChildRunnable().Invoke(ctx, n)
+			if err != nil {
+				return nil, err
+			}
+			return json.Marshal(out)
+		})
+		if err != nil {
+			return 0, err
+		}
+		var out int
+		err = json.Unmarshal(rec.Value, &out)
+		return out * 2, err
+	}).CompileDurable(ctx, workflow.DurableConfig{Store: store, Version: "outer-v1"})
+	require.NoError(t, err)
+	return outer
+}
+
+func TestNestedInterruptResumesWithLeafKey(t *testing.T) {
+	ctx := context.Background()
+	store := newStore(t)
+	var prepared atomic.Int32
+	outer := nestedGraphs(t, store, &prepared)
+	snap, err := outer.Run(ctx, "outer", 10, "")
+	point := requireInterrupted(t, snap, err)
+
+	out, err := outer.Resume(ctx, "outer", workflow.ResumeRequest{Key: point.Key, Input: json.RawMessage(`5`)})
+	require.NoError(t, err)
+	require.Equal(t, 30, out.State)
+	require.EqualValues(t, 1, prepared.Load())
+}
+
+func TestNestedInterruptResumesWithDirectResumeContext(t *testing.T) {
+	ctx := context.Background()
+	store := newStore(t)
+	var prepared atomic.Int32
+	outer := nestedGraphs(t, store, &prepared)
+	snap, err := outer.Run(ctx, "outer", 10, "")
+	point := requireInterrupted(t, snap, err)
+
+	out, err := outer.Run(durable.WithResume(ctx, point.Key, `5`), "outer", 0, "")
+	require.NoError(t, err)
+	require.Equal(t, 30, out.State)
+}
+
+func TestChildRunnableReportsInterruptsAndAcceptsWrappedResume(t *testing.T) {
+	base := newStore(t)
+	ctx := durable.WithJournal(durable.WithExecutionKey(context.Background(), "parent"), base)
+	var prepared atomic.Int32
+	child := compileAsk(t, base, &prepared)
+	run := func(ctx context.Context) (json.RawMessage, error) {
+		out, err := child.AsChildRunnable().Invoke(ctx, 10)
+		if err != nil {
+			return nil, err
+		}
+		return json.Marshal(out)
+	}
+	policy := durable.OperationPolicy{MaxAttempts: 3, Resumable: true}
+	_, err := durable.Do(ctx, "tool/c1", json.RawMessage(`{}`), policy, run)
+	c := childContinuation(t, err)
+	require.Len(t, c.Interrupts, 1)
+	waits := durable.Waits(err)
+	opKey := waits[0].Path[len(waits[0].Path)-1].Key
+
+	// 冲突与非法输入走拒绝等待，父操作不失败。
+	wrapped, err := workflow.WithResume(ctx, opKey, workflow.ResumeRequest{Key: c.Interrupts[0].Key, Input: json.RawMessage(`-1`)})
+	require.NoError(t, err)
+	_, err = durable.Do(wrapped, "tool/c1", json.RawMessage(`{}`), policy, run)
+	rejected := childContinuation(t, err)
+	require.True(t, rejected.Rejected)
+	require.Equal(t, workflow.RejectResumeInput, rejected.Reason)
+
+	wrapped, err = workflow.WithResume(ctx, opKey, workflow.ResumeRequest{Key: c.Interrupts[0].Key, Input: json.RawMessage(`5`)})
+	require.NoError(t, err)
+	rec, err := durable.Do(wrapped, "tool/c1", json.RawMessage(`{}`), policy, run)
+	require.NoError(t, err)
+	require.JSONEq(t, `15`, string(rec.Value))
+}

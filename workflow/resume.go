@@ -61,6 +61,7 @@ func (d *DurableGraph[T]) Resume(ctx context.Context, id string, req ResumeReque
 // WithResume supplies structured human input to an AsChildRunnable wait inside
 // a resumable tool/operation. operationKey is the last WaitError.Path key;
 // req.Key is ChildContinuation.ApprovalKey. They identify different boundaries.
+// req.Key 也可以是 ChildContinuation.Interrupts 中的中断键。
 // Legacy approval-only durable.WithResume calls remain supported.
 func WithResume(ctx context.Context, operationKey string, req ResumeRequest) (context.Context, error) {
 	if operationKey == "" || req.Key == "" {

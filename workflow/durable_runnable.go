@@ -59,6 +59,9 @@ type ChildContinuation struct {
 	// RejectApprovalMismatch、RejectBeforeApprove 或 RejectResumeInput。存储失败、panic 等不属于拒绝，照常作为失败返回。
 	Rejected bool   `json:"rejected,omitempty"`
 	Reason   string `json:"reason,omitempty"`
+	// Interrupts 是子图（含更深层）待回应的中断，Key 为最内层中断键。可以直接用
+	// durable.WithResume(ctx, Key, input) 回应，也可以经 WithResume 封装给本子图。
+	Interrupts []InterruptPoint `json:"interrupts,omitempty"`
 }
 
 // ChildContinuation.Reason 的取值。
@@ -153,7 +156,7 @@ func (d *DurableGraph[T]) AsChildRunnable() *core.RunnableFunc[T, T] {
 }
 
 func childWait[T any](id string, snapshot *GraphSnapshot[T], reason string) error {
-	continuation, err := json.Marshal(ChildContinuation{RunID: id, Node: snapshot.Node, ApprovalKey: snapshot.Key, Rejected: reason != "", Reason: reason})
+	continuation, err := json.Marshal(ChildContinuation{RunID: id, Node: snapshot.Node, ApprovalKey: snapshot.Key, Rejected: reason != "", Reason: reason, Interrupts: snapshot.Interrupts})
 	if err != nil {
 		return err
 	}
