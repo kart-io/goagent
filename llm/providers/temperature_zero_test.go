@@ -146,8 +146,6 @@ func TestProviderWireExplicitZero(t *testing.T) {
 	}{
 		"DeepSeek":    {func(o ...llm.ClientOption) (llm.Client, error) { return providers.NewDeepSeekWithOptions(o...) }, `{"choices":[{"message":{"role":"assistant","content":"好"},"finish_reason":"stop"}]}`, ""},
 		"Anthropic":   {func(o ...llm.ClientOption) (llm.Client, error) { return providers.NewAnthropicWithOptions(o...) }, `{"content":[{"type":"text","text":"好"}]}`, ""},
-		"Cohere":      {func(o ...llm.ClientOption) (llm.Client, error) { return providers.NewCohereWithOptions(o...) }, `{"text":"好"}`, ""},
-		"HuggingFace": {func(o ...llm.ClientOption) (llm.Client, error) { return providers.NewHuggingFaceWithOptions(o...) }, `[{"generated_text":"好"}]`, "parameters"},
 		"Kimi":        {func(o ...llm.ClientOption) (llm.Client, error) { return providers.NewKimiWithOptions(o...) }, `{"choices":[{"message":{"role":"assistant","content":"好"},"finish_reason":"stop"}]}`, ""},
 		"SiliconFlow": {func(o ...llm.ClientOption) (llm.Client, error) { return providers.NewSiliconFlowWithOptions(o...) }, `{"choices":[{"message":{"role":"assistant","content":"好"},"finish_reason":"stop"}]}`, ""},
 		"Ollama":      {func(o ...llm.ClientOption) (llm.Client, error) { return providers.NewOllamaWithOptions(o...) }, `{"choices":[{"message":{"role":"assistant","content":"好"},"finish_reason":"stop"}]}`, ""},

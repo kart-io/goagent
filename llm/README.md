@@ -14,7 +14,7 @@ llm/
 ├── options.go        # ClientOption（With*）
 ├── common/           # BaseProvider、重试、HTTP 错误映射、消息转换
 ├── constants/        # Provider 常量、环境变量名、默认值
-├── providers/        # OpenAI、Anthropic、Gemini、DeepSeek、Cohere、HuggingFace、Ollama、Kimi、SiliconFlow
+├── providers/        # OpenAI、Anthropic、Gemini、DeepSeek、Ollama、Kimi、SiliconFlow
 └── cache/            # 基于向量相似度的语义缓存
 ```
 
@@ -25,7 +25,7 @@ llm/
 | OpenAI | ✓ | ✓ | ✓ | ✓ |
 | DeepSeek | ✓ | ✓ | ✓ | - |
 | Gemini | ✓ | ✓ | ✓ | ✓ |
-| Anthropic、Cohere、HuggingFace | - | - | ✓ | - |
+| Anthropic | - | - | ✓ | - |
 | Kimi、SiliconFlow、Ollama（OpenAI 兼容预设） | ✓ | ✓ | ✓ | - |
 
 所有 Provider 都实现 `Complete` / `Chat` 与 `CapabilityChecker`。Builder 的 `AsRunnable` / `ExecuteStream` 需要结构化流，原生工具循环需要 `ToolStreamClient`。用 `llm.HasStreaming`、`llm.HasToolStreaming` 检查接口；`CapabilityStreaming` 不能证明支持结构化流。

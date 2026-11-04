@@ -24,25 +24,6 @@ const (
 	AnthropicMaxDelay     = 30 * time.Second
 	AnthropicMessagesPath = "/v1/messages"
 
-	// Cohere
-	CohereBaseURL      = "https://api.cohere.ai"
-	CohereDefaultModel = "command-r-plus"
-	CohereChatEndpoint = "/v1/chat"
-	CohereChatPath     = "/v1/chat"
-	CohereMaxAttempts  = 3
-	CohereBaseDelay    = 1 * time.Second
-	CohereMaxDelay     = 30 * time.Second
-
-	// Hugging Face
-	HuggingFaceBaseURL              = "https://api-inference.huggingface.co"
-	HuggingFaceDefaultModel         = "meta-llama/Meta-Llama-3-8B-Instruct"
-	HuggingFaceDefaultMaxTokens     = 2000
-	HuggingFaceTimeout              = 120 * time.Second
-	HuggingFaceMaxAttempts          = 5
-	HuggingFaceBaseDelay            = 3 * time.Second
-	HuggingFaceMaxDelay             = 60 * time.Second
-	HuggingFaceDefaultEstimatedTime = 20
-
 	// Kimi (Moonshot AI)
 	KimiBaseURL = "https://api.moonshot.cn/v1"
 
@@ -88,11 +69,6 @@ const (
 	RoleSystem    = "system"
 	RoleUser      = "user"
 	RoleAssistant = "assistant"
-
-	// Cohere specific roles
-	CohereRoleUser    = "USER"
-	CohereRoleChatbot = "CHATBOT"
-	CohereRoleSystem  = "SYSTEM"
 )
 
 // HTTP connection pooling
@@ -156,8 +132,4 @@ const (
 	EventMessageStart      = "message_start"
 	EventMessageDelta      = "message_delta"
 	EventMessageStop       = "message_stop"
-
-	// Cohere events
-	EventTextGeneration = "text-generation"
-	EventStreamEnd      = "stream-end"
 )

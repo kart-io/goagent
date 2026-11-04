@@ -13,8 +13,6 @@
 | Anthropic | `NewAnthropicWithOptions` | `ANTHROPIC_API_KEY` | `ANTHROPIC_BASE_URL` / `ANTHROPIC_MODEL` | `https://api.anthropic.com` | `claude-3-5-sonnet-20241022` |
 | Gemini | `NewGeminiWithOptions` | `GEMINI_API_KEY` | `GEMINI_BASE_URL` / `GEMINI_MODEL` | `https://generativelanguage.googleapis.com` | `gemini-2.5-flash` |
 | DeepSeek | `NewDeepSeekWithOptions` | `DEEPSEEK_API_KEY` | `DEEPSEEK_BASE_URL` / `DEEPSEEK_MODEL` | `https://api.deepseek.com/v1` | `deepseek-chat` |
-| Cohere | `NewCohereWithOptions` | `COHERE_API_KEY` | `COHERE_BASE_URL` / `COHERE_MODEL` | `https://api.cohere.ai` | `command-r-plus` |
-| HuggingFace | `NewHuggingFaceWithOptions` | `HUGGINGFACE_API_KEY` | `HUGGINGFACE_BASE_URL` / `HUGGINGFACE_MODEL` | `https://api-inference.huggingface.co` | `meta-llama/Meta-Llama-3-8B-Instruct` |
 | Kimi | `NewKimiWithOptions` | `KIMI_API_KEY` | `KIMI_BASE_URL` / `KIMI_MODEL` | `https://api.moonshot.cn/v1` | `moonshot-v1-8k` |
 | SiliconFlow | `NewSiliconFlowWithOptions` | `SILICONFLOW_API_KEY` | `SILICONFLOW_BASE_URL` / `SILICONFLOW_MODEL` | `https://api.siliconflow.cn/v1` | `Qwen/Qwen2-7B-Instruct` |
 | Ollama | `NewOllamaWithOptions` | 不需要 | `OLLAMA_BASE_URL` / `OLLAMA_MODEL` | `http://localhost:11434/v1` | `llama2` |

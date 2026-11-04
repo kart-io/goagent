@@ -42,8 +42,6 @@ GoAgent 是嵌入 Go 服务的 Agent 执行内核：原生工具循环、类型�
 | Kimi | `NewKimiWithOptions` | 支持（OpenAI 兼容预设） |
 | SiliconFlow | `NewSiliconFlowWithOptions` | 支持（OpenAI 兼容预设） |
 | Ollama | `NewOllamaWithOptions` | 支持（OpenAI 兼容预设） |
-| Cohere | `NewCohereWithOptions` | 不支持，经 `Execute` / `ExecuteWithTools` 调用 |
-| Hugging Face | `NewHuggingFaceWithOptions` | 不支持，经 `Execute` / `ExecuteWithTools` 调用 |
 
 `AsRunnable`、`ExecuteStream` 需要 `llm.StreamClient`；原生工具循环、`Start` 句柄与循环扩展点需要 `llm.ToolStreamClient`。表中“支持”的 Provider 同时实现两者。
 

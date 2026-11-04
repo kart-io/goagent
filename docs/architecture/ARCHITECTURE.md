@@ -12,7 +12,7 @@ GoAgent（`github.com/kart-io/goagent`）是 Go 的 Agent 执行内核：Builder
 ## 技术栈
 
 - Go 1.25（`go.mod`：`go 1.25.0`）
-- 模型：`github.com/sashabaranov/go-openai`（OpenAI 兼容协议）、`google.golang.org/genai`（Gemini），其余提供方（Anthropic、Cohere、HuggingFace、Ollama、Kimi、SiliconFlow 等）见 `llm/providers`
+- 模型：`github.com/sashabaranov/go-openai`（OpenAI 兼容协议）、`google.golang.org/genai`（Gemini），其余提供方（Anthropic，以及 OpenAI 兼容预设 Ollama、Kimi、SiliconFlow）见 `llm/providers`
 - MCP：官方 `github.com/modelcontextprotocol/go-sdk`
 - 观测：OpenTelemetry（trace/metric/OTLP gRPC 导出）、Prometheus client
 - 日志：`github.com/kart-io/logger`

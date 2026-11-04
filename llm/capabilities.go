@@ -74,8 +74,6 @@ type EmbeddingClient interface {
 //
 // Implementations:
 //   - providers.DeepSeekProvider
-//   - providers.CohereProvider
-//   - providers.HuggingFaceProvider
 //   - providers.AnthropicProvider
 type TokenStreamingClient interface {
 	// Stream generates tokens for the given prompt and streams them as strings.

@@ -31,8 +31,6 @@ func TestProviderCapabilityContractMatrix(t *testing.T) {
 		{"gemini", contractFactory(NewGeminiWithOptions), true, true, true, true, true},
 		{"gemini-wrapper", contractFactory(NewGeminiStreamingWithOptions), true, true, true, true, true},
 		{"anthropic", contractFactory(NewAnthropicWithOptions), true, false, false, false, false},
-		{"cohere", contractFactory(NewCohereWithOptions), true, false, false, false, false},
-		{"huggingface", contractFactory(NewHuggingFaceWithOptions), true, false, false, false, false},
 		{"kimi", contractFactory(NewKimiWithOptions), true, true, true, true, false},
 		{"siliconflow", contractFactory(NewSiliconFlowWithOptions), true, true, true, true, false},
 		{"ollama", contractFactory(NewOllamaWithOptions), true, true, true, true, false},

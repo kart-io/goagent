@@ -521,34 +521,3 @@ func ConvertMessagesWithRoleMapping[T any](
 	}
 	return result
 }
-
-// MessagesToPrompt concatenates messages into a single prompt string.
-// This is useful for providers like HuggingFace that expect a single input string.
-// The format function determines how each message is formatted.
-//
-// Example usage:
-//
-//	prompt := MessagesToPrompt(messages, func(msg agentllm.Message) string {
-//	    return fmt.Sprintf("%s: %s\n", strings.Title(msg.Role), msg.Content)
-//	})
-func MessagesToPrompt(messages []agentllm.Message, format func(msg agentllm.Message) string) string {
-	var result string
-	for _, msg := range messages {
-		result += format(msg)
-	}
-	return result
-}
-
-// DefaultPromptFormatter formats a message in the standard "Role: Content" format.
-func DefaultPromptFormatter(msg agentllm.Message) string {
-	roleNames := map[string]string{
-		"system":    "System",
-		"user":      "User",
-		"assistant": "Assistant",
-	}
-	roleName := roleNames[msg.Role]
-	if roleName == "" {
-		roleName = msg.Role
-	}
-	return fmt.Sprintf("%s: %s\n", roleName, msg.Content)
-}

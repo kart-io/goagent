@@ -101,7 +101,6 @@ func TestMalformedToolRetainsKnownExplainability(t *testing.T) {
 
 func TestOtherProvidersRejectExplicitReasoning(t *testing.T) {
 	constructors := []func(...llm.ClientOption) (llm.Client, error){
-		func(o ...llm.ClientOption) (llm.Client, error) { return NewCohereWithOptions(o...) },
 		func(o ...llm.ClientOption) (llm.Client, error) { return NewOllamaWithOptions(o...) },
 	}
 	for _, newClient := range constructors {
