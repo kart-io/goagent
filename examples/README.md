@@ -15,7 +15,6 @@ Examples that call a real LLM read the provider's API key from the environment (
 | [basic/](basic/) | Single-feature examples: simple agent, memory, Ollama, providers, DeepSeek/Kimi with the builder |
 | [builder/](builder/) | `builder` API layers (simple, core, advanced) and configuration serialization |
 | [tools/](tools/) | Built-in tools (calculator, HTTP API, shell, search), function tools, tools with an agent |
-| [mcp/](mcp/) | MCP toolbox: basic tools, custom tools, tool chains |
 | [skills/](skills/) | Skill registration, routing and a layered weather skill |
 | [advanced/](advanced/) | Multi-agent collaboration, observability, parallel tool execution, tool runtime, tool selector |
 | [integration/](integration/) | Human-in-the-loop, LangChain-style runnables/middleware/checkpoints, preconfigured agents |

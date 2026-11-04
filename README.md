@@ -169,7 +169,7 @@ With a `llm.ToolStreamClient` and at least one tool, `agent.Start(ctx, input)` r
 | [workflow](workflow/) | Typed graph compilation and durable graphs |
 | [llm](llm/) | Client interfaces, options; `llm/providers` implementations |
 | [tools](tools/) | Tool registry, function tools, `Dispatcher`, `Pipeline`; `tools/policy`, `tools/spill` and built-in tools |
-| [mcp](mcp/) | MCP client adapter and toolbox |
+| [mcp](mcp/) | MCP client adapter on the official SDK |
 | [memory](memory/) | Conversation and case memory, vector stores |
 | [harness/env](harness/env/) | File system and command execution interfaces for tools |
 | [observability](observability/) | OpenTelemetry tracing and metrics |

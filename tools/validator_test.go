@@ -11,7 +11,6 @@ import (
 
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
-	"github.com/kart-io/goagent/mcp/core"
 )
 
 // mockValidatableTool 实现 ValidatableTool 接口的 mock 工具
@@ -1195,48 +1194,6 @@ func TestInputValidator_CustomValidationErrorHidesValue(t *testing.T) {
 			if tt.wantCtx != "" {
 				assert.Equal(t, tt.wantCtx, agentErrors.GetContext(err)["validation_error"])
 			}
-		})
-	}
-}
-
-// ValidateInputWithSchema 的 Error() 应带字段名，不带参数值。
-func TestValidateInputWithSchema_ErrorHasFieldWithoutValue(t *testing.T) {
-	minLen := 3
-	schema := &core.ToolSchema{
-		Type: "object",
-		Properties: map[string]core.PropertySchema{
-			"name":  {Type: "string", MinLength: &minLen},
-			"mode":  {Type: "string", Enum: []interface{}{"fast", "slow"}},
-			"email": {Type: "string", Format: "email"},
-			"age":   {Type: "integer"},
-			"tags":  {Type: "array", Items: &core.PropertySchema{Type: "string"}},
-		},
-		Required: []string{"name"},
-	}
-
-	tests := []struct {
-		name   string
-		input  map[string]interface{}
-		strict bool
-		want   string
-	}{
-		{"缺少必填字段", map[string]interface{}{}, false, "required field is missing: name"},
-		{"类型错误", map[string]interface{}{"name": 12345}, false, "expected string: name"},
-		{"长度不足", map[string]interface{}{"name": "se"}, false, "length must be at least minimum: name"},
-		{"枚举不匹配", map[string]interface{}{"name": "abc", "mode": "secret-mode"}, false, "value must be one of enum: mode"},
-		{"格式不合法", map[string]interface{}{"name": "abc", "email": "secret-email"}, false, "format validation failed: email"},
-		{"整数不合法", map[string]interface{}{"name": "abc", "age": 1.5}, false, "expected integer value: age"},
-		{"数组元素类型错误", map[string]interface{}{"name": "abc", "tags": []interface{}{"ok", 7}}, false, "expected string: tags[1]"},
-		{"未定义字段", map[string]interface{}{"name": "abc", "secret-key": 1}, true, "field not defined in schema"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateInputWithSchema(schema, tt.input, tt.strict)
-			assert.Error(t, err)
-			assert.Contains(t, err.Error(), tt.want)
-			assert.NotContains(t, err.Error(), "secret-mode")
-			assert.NotContains(t, err.Error(), "secret-email")
-			assert.NotContains(t, err.Error(), "12345")
 		})
 	}
 }

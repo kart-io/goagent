@@ -6,7 +6,7 @@ GoAgent 在调用宿主代码的边界恢复 panic，把它变成错误返回，
 
 | 路径 | 使用位置 | 结果 |
 |------|----------|------|
-| 全局 `core.PanicHandlerRegistry` | `core` 中的 Runnable（`RunnableFunc` 组件名 `runnable`，`StreamRunnable` 组件名 `stream_runnable`）、回调通知、生命周期管理器、`core.CallSafely` / `RecoverPanic` / `ReportPanic` 的调用点（链、生成器、中断、`memory`、`tools.ToolExecutor`、`tools/search`、`mcp/toolbox`、`devtools` 等） | 经可替换的 `PanicHandler` 转换，并调用 `PanicMetricsCollector`、`PanicLogger` |
+| 全局 `core.PanicHandlerRegistry` | `core` 中的 Runnable（`RunnableFunc` 组件名 `runnable`，`StreamRunnable` 组件名 `stream_runnable`）、回调通知、生命周期管理器、`core.CallSafely` / `RecoverPanic` / `ReportPanic` 的调用点（链、生成器、中断、`memory`、`tools.ToolExecutor`、`tools/search`、`devtools` 等） | 经可替换的 `PanicHandler` 转换，并调用 `PanicMetricsCollector`、`PanicLogger` |
 | 直接构造 `*agentErrors.PanicError` | Builder 执行入口与宿主回调（`builder/panic.go` 的 `recoverPanic`）、`tools.Dispatcher` | 不经全局 registry，不触发自定义 handler、指标与日志 |
 
 两条路径的错误链中都能用 `errors.As` 取到 `*agentErrors.PanicError`（字段 `Op`、`Value`、`Stack`）。`PanicError.Error()` 只含位置，不含 panic 值与调用栈：错误文本可能进入日志、事件甚至交给模型。

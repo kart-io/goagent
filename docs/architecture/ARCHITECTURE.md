@@ -49,7 +49,6 @@ graph TD
     tools --> durable
     tools --> observe
     tools --> toolmw[tools/middleware]
-    tools --> mcpcore[mcp/core]
     tools --> cache
 
     workflow --> core
@@ -70,7 +69,6 @@ graph TD
     providers --> common[llm/common]
     mcpremote[mcp/remote] --> tools
     mcpremote --> durable
-    mcptoolbox[mcp/toolbox] --> tools
     middleware --> coremw
     middleware --> observability
     observability --> observe
@@ -109,7 +107,7 @@ graph TD
 | `workflow/refund` | 绑定事务的退款防护示范实现 |
 | `execution` | 宿主装配：`Scope` 组合 RunID、会话、日志、预算、期限与观察者 |
 | `memory`、`store`、`cache` | 对话/向量记忆、键值存储（`store/memory`）、通用缓存 |
-| `mcp/core`、`mcp/remote`、`mcp/toolbox`、`mcp/tools` | MCP 工具抽象、官方 SDK 客户端适配、本地工具箱 |
+| `mcp/remote` | 基于官方 SDK 的 MCP 客户端适配 |
 | `middleware`、`observability` | Agent 中间件实现（LLM 工具选择、动态提示词、可观测性等）；OTel 遥测提供者、指标与跨服务追踪 |
 | `parsers` | 输出解析器（JSON、结构化、列表、枚举等） |
 | `harness/env` | 文件系统与命令执行的环境接口（本地、Docker、只读、检查点包装） |
