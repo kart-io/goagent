@@ -68,16 +68,20 @@ type GraphSnapshot[T any] struct {
 	Node    string
 	Steps   int
 	Routing bool
+	// Key 是审批等待时 Resume 要用的键；Interrupts 非空时它只是节点意图键，不能用来回应，须用 Interrupts[i].Key。
 	Key     string
 	Waiting bool
 	Done    bool
+	// Interrupts 是节点执行中途等待人工输入的中断，按 Key 排序；审批等待时为空。
+	Interrupts []InterruptPoint
 }
 
 type graphState[T any] struct {
-	Parallel *parallelCheckpoint `json:"parallel,omitempty"`
-	Node     string              `json:"node"`
-	Routing  bool                `json:"routing"`
-	State    T                   `json:"state"`
+	Parallel   *parallelCheckpoint `json:"parallel,omitempty"`
+	Node       string              `json:"node"`
+	Routing    bool                `json:"routing"`
+	State      T                   `json:"state"`
+	Interrupts []InterruptPoint    `json:"interrupts,omitempty"`
 }
 
 // DurableKey identifies this node/branch visit across retries. External effect
@@ -132,7 +136,7 @@ func (g *Graph[T]) CompileDurable(ctx context.Context, cfg DurableConfig, opts .
 }
 
 func publicGraphSnapshot[T any](s *durable.Snapshot, state graphState[T]) *GraphSnapshot[T] {
-	return &GraphSnapshot[T]{State: state.State, Node: state.Node, Steps: s.Next, Routing: state.Routing, Key: s.Key, Waiting: s.Waiting, Done: state.Node == END}
+	return &GraphSnapshot[T]{State: state.State, Node: state.Node, Steps: s.Next, Routing: state.Routing, Key: s.Key, Waiting: s.Waiting, Done: state.Node == END, Interrupts: slices.Clone(state.Interrupts)}
 }
 
 // Run holds the Store's run lock until completion, failure or approval wait.
@@ -193,9 +197,6 @@ func (d *DurableGraph[T]) run(ctx context.Context, store durable.Store, id strin
 		return nil, err
 	}
 	result = publicGraphSnapshot(checkpoint, state)
-	if approvalKey != "" && (!checkpoint.Waiting || checkpoint.Key != approvalKey) {
-		return result, ErrApprovalMismatch
-	}
 	// Save using fresh snapshots; failed writes leave the last acknowledged state.
 	save := func(next durable.Snapshot, nextState graphState[T]) error {
 		data, e := json.Marshal(nextState)
@@ -211,30 +212,42 @@ func (d *DurableGraph[T]) run(ctx context.Context, store durable.Store, id strin
 		result = publicGraphSnapshot(checkpoint, state)
 		return nil
 	}
-	if resumeInput != nil || (approvalKey != "" && d.resumeHandler != nil) {
-		if approvalKey == "" || (resumeInput != nil && !json.Valid(resumeInput)) {
-			return result, &ResumeRejectedError{Err: fmt.Errorf("human input requires a waiting key and valid JSON")}
-		}
-		next, updated, e := d.applyResume(ctx, id, checkpoint, resumeInput)
-		if e != nil {
-			return result, e
-		}
-		if d.beforeApprove != nil {
-			if err = d.checkBeforeApprove(ctx, id, &next); err != nil {
-				return result, err
-			}
-		}
-		if err = ctx.Err(); err != nil {
-			return result, err
-		}
-		next.Approved, next.Waiting = true, false
-		if err = save(next, updated); err != nil {
+	// 中断等待恢复期间检查点保持等待：重新执行中途崩溃时仍可按“已回应”规则恢复。
+	answered := ""
+	if len(state.Interrupts) > 0 {
+		if ctx, answered, err = d.prepareInterruptResume(ctx, store, state.Interrupts, approvalKey, resumeInput); err != nil {
 			return result, err
 		}
 		approvalKey = ""
-	} else if approvalKey != "" && d.beforeApprove != nil {
-		if err = d.checkBeforeApprove(ctx, id, checkpoint); err != nil {
-			return result, err
+	} else {
+		if approvalKey != "" && (!checkpoint.Waiting || checkpoint.Key != approvalKey) {
+			return result, ErrApprovalMismatch
+		}
+		if resumeInput != nil || (approvalKey != "" && d.resumeHandler != nil) {
+			if approvalKey == "" || (resumeInput != nil && !json.Valid(resumeInput)) {
+				return result, &ResumeRejectedError{Err: fmt.Errorf("human input requires a waiting key and valid JSON")}
+			}
+			next, updated, e := d.applyResume(ctx, id, checkpoint, resumeInput)
+			if e != nil {
+				return result, e
+			}
+			if d.beforeApprove != nil {
+				if err = d.checkBeforeApprove(ctx, id, &next); err != nil {
+					return result, err
+				}
+			}
+			if err = ctx.Err(); err != nil {
+				return result, err
+			}
+			next.Approved, next.Waiting = true, false
+			if err = save(next, updated); err != nil {
+				return result, err
+			}
+			approvalKey = ""
+		} else if approvalKey != "" && d.beforeApprove != nil {
+			if err = d.checkBeforeApprove(ctx, id, checkpoint); err != nil {
+				return result, err
+			}
 		}
 	}
 	for state.Node != END {
@@ -329,10 +342,26 @@ func (d *DurableGraph[T]) run(ctx context.Context, store durable.Store, id strin
 			}
 			return done(core.StreamChunk[T]{Done: true, Data: out})
 		})
-		nodeCtx, endNode := observe.Start(durable.WithJournal(durable.WithExecutionKey(ctx, intent.Key), store), observe.Event{Type: "node", Path: nodeName, OperationKey: intent.Key})
+		nodeCtx, endNode := observe.Start(durable.AllowInterrupt(durable.WithJournal(durable.WithExecutionKey(ctx, intent.Key), store)), observe.Event{Type: "node", Path: nodeName, OperationKey: intent.Key})
 		output, e := runner.Invoke(nodeCtx, input.State)
 		endNode(e, false)
 		if e != nil {
+			if points, ok := interruptPoints(durable.Waits(e)); ok && ctx.Err() == nil {
+				waiting := *checkpoint
+				waiting.Waiting = true
+				paused := state
+				paused.Interrupts = points
+				if err = save(waiting, paused); err != nil {
+					return result, err
+				}
+				if i := slices.IndexFunc(points, func(p InterruptPoint) bool { return p.Key == answered && p.Rejected }); answered != "" && i >= 0 {
+					return result, &ResumeRejectedError{Err: fmt.Errorf("中断输入被拒绝：%s", points[i].Reason)}
+				}
+				if err = emit(&core.StreamEvent{Type: "interrupt_required", Step: nodeName}); err != nil {
+					return result, err
+				}
+				return result, durable.ErrApprovalRequired
+			}
 			return result, fmt.Errorf("node %q: %w", state.Node, e)
 		}
 		next := *checkpoint
@@ -419,9 +448,10 @@ func (d *DurableGraph[T]) snapshot(ctx context.Context, store durable.Store, id 
 }
 
 func (d *DurableGraph[T]) validateContinuation(id string, cp *durable.Snapshot, state graphState[T]) error {
+	interrupted := len(state.Interrupts) > 0
 	if state.Parallel != nil {
 		cfg, ok := d.graph.parallel[state.Node]
-		if !ok || state.Routing || cp.Key == "" || cp.Waiting || (d.approvals[state.Node] && !cp.Approved) {
+		if !ok || state.Routing || cp.Key == "" || (cp.Waiting && !interrupted) || (d.approvals[state.Node] && !cp.Approved) {
 			return fmt.Errorf("corrupt parallel continuation")
 		}
 		if err := validateParallel[T](cfg, state.Parallel); err != nil {
@@ -435,17 +465,29 @@ func (d *DurableGraph[T]) validateContinuation(id string, cp *durable.Snapshot, 
 		return fmt.Errorf("corrupt graph completion position")
 	}
 	if state.Routing || state.Node == END {
-		if cp.Key != "" || cp.Waiting || cp.Approved {
+		if cp.Key != "" || cp.Waiting || cp.Approved || interrupted {
 			return fmt.Errorf("corrupt completed node intent")
 		}
 		return nil
 	}
-	if cp.Waiting && cp.Approved {
-		return fmt.Errorf("corrupt graph approval state")
-	}
-	if cp.Waiting || cp.Approved {
-		if !d.approvals[state.Node] || cp.Key == "" {
-			return fmt.Errorf("corrupt graph approval binding")
+	if interrupted {
+		// 中断等待：节点已开始执行；审批节点必须已获批准。
+		if !cp.Waiting || cp.Key == "" || (d.approvals[state.Node] && !cp.Approved) {
+			return fmt.Errorf("corrupt graph interrupt state")
+		}
+		for _, p := range state.Interrupts {
+			if p.Key == "" || p.ID == "" || !json.Valid(p.Info) {
+				return fmt.Errorf("corrupt graph interrupt state")
+			}
+		}
+	} else {
+		if cp.Waiting && cp.Approved {
+			return fmt.Errorf("corrupt graph approval state")
+		}
+		if cp.Waiting || cp.Approved {
+			if !d.approvals[state.Node] || cp.Key == "" {
+				return fmt.Errorf("corrupt graph approval binding")
+			}
 		}
 	}
 	expected := graphDigest([]any{id, d.plan, state.Node, cp.Next})

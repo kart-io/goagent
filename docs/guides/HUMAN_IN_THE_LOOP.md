@@ -72,6 +72,36 @@ workflow.WithResumeHandler(func(
 
 真实模型验证见 [Gemini / DeepSeek HITL 报告](../evaluation/2026-11-04-hitl-live/REPORT.md)及[可复现脚本](../../evaluation/hitlbench/README.md)。两者的检查点恢复通过；Gemini 的最终通知含有未经执行的退款完成声明，不能将执行成功等同于模型内容正确。
 
+## 节点或工具执行中途暂停
+
+`durable.AwaitInput(ctx, id, info, validate)` 在工作流节点、并行分支或声明可中断的工具里暂停，等人提供输入：
+
+```go
+raw, err := durable.AwaitInput(ctx, "amount", json.RawMessage(`{"question":"退款金额"}`), validateAmount)
+if err != nil {
+    return state, err // 等待原样返回，由框架记为暂停
+}
+```
+
+- 图暂停时 `Run` 返回 `durable.ErrApprovalRequired`，`Snapshot.Interrupts` 列出 `Key`、`ID`、`Info`。用 `graph.Resume(ctx, runID, workflow.ResumeRequest{Key: point.Key, Input: ...})` 回应；也可以用 `durable.WithResume(ctx, point.Key, input)` 加上不带键的 `Run`。
+- 中断等待时 `Snapshot.Key` 与 `ChildContinuation.ApprovalKey` 不是回应键（前者是节点意图键，后者为空），回应须用 `Interrupts[i].Key`。
+- 不带键的 `Run` 恢复没有冲突或拒绝信号：已回应的中断再交不同输入会被忽略（回放已固定的输入），`validate` 拒绝只体现在 `Snapshot.Interrupts[i].Rejected`。需要 `ResumeRejectedError` 时用带键的 `Resume`。
+- 恢复会从头重新执行节点或工具。`AwaitInput` 之前的外部写入必须经 `durable.Do` 记录，或者按 `workflow.DurableKey(ctx)` 自行幂等，否则会重复执行。
+- 首次成功持久化的输入就此固定，之后的重放都返回它。用同一个键再交不同输入时返回 `ResumeRejectedError`（`workflow.ErrInterruptAnswered`），节点不执行；输入是否相同按 `json.Compact` 后的字节比较。
+- 输入不是合法 JSON 或 `validate` 失败时保持等待，`Interrupts[i].Rejected` 和 `Reason` 说明原因，修正后可以重交。`null` 是合法的显式输入。`validate` panic 时原因为 `validate_panic`，错误文本为空时为 `rejected`。`validate` 的错误文本会持久化并经 `Snapshot`、`ResumeRejectedError` 暴露，不得包含凭证等敏感信息。
+- `id` 在同一节点或工具内必须唯一，循环中须带序号，否则会回放上一次的答案。`info` 必须是确定性的 JSON，不得包含凭证。
+- 并行节点中一个分支暂停时，兄弟分支照常完成，中断逐个回应。嵌套子图的 `ChildContinuation.Interrupts` 给出最内层中断键。
+- 只有中断等待（来自 `AwaitInput`，可经子图逐层上报）会让节点暂停；节点内的其他等待，例如子图的审批等待，仍按节点失败处理。
+- 工具须用 `tools.NewFunctionToolBuilder(...).WithInterruptible(version)` 显式开启；自定义工具实现 `tools.InterruptibleTool`。开启或改变语义时提升版本。等使用该工具的进行中运行结束后再切换；自行实现 `DurablePolicyProvider` 的工具，只改 `Resumable` 不会被框架检测到。
+- 动态中断的回应不经过 `WithResumeHandler`、`WithBeforeApprove`。中断键不是授权凭证：宿主必须先认证回应者，并确认其有权回应该中断。
+
+| 机制 | 适用 |
+|---|---|
+| `ApprovalNodes` + `WithResumeHandler` | 节点执行前审批，人工修改业务状态 |
+| `durable.AwaitInput` | 节点或工具执行中途要一个输入 |
+| `core.InterruptManager` | 进程内阻塞等待，不能跨进程恢复 |
+| `Handle.Interrupt` | 取消正在运行的 Agent，不是暂停 |
+
 ## 嵌套在 Agent 工具中
 
 将持久图的 `AsChildRunnable()` 通过 `tools.NewRunnableToolFactory` 包装，并设置 `RunnableToolConfig.Resumable=true`。宿主收到 `builder.ErrWaiting` 后，解析 `durable.Waits(err)` 和其中的 `workflow.ChildContinuation`。

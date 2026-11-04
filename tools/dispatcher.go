@@ -166,6 +166,19 @@ func NewDispatcher(registry *Registry, cfg DispatchConfig) (dispatcher *Dispatch
 			}
 			entry.policy = &policy
 		}
+		if v, ok := tool.(InterruptibleTool); ok {
+			if version, on := v.InterruptibleVersion(); on {
+				if entry.policy != nil {
+					return nil, fmt.Errorf("工具 %q 不能同时声明持久策略与可中断", name)
+				}
+				if version == "" {
+					return nil, fmt.Errorf("可中断工具 %q 必须声明版本", name)
+				}
+				// MaxAttempts 为 1：只允许从等待中重入，崩溃留下的 pending 仍交给宿主处理。
+				policy := durable.OperationPolicy{Resumable: true, MaxAttempts: 1}
+				entry.policy, entry.version = &policy, version
+			}
+		}
 		d.entries[name] = entry
 		d.names = append(d.names, name)
 	}

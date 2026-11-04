@@ -19,9 +19,8 @@ type ResumeRequest struct {
 	Input json.RawMessage `json:"input,omitempty"`
 }
 
-// ResumeRejectedError means human input was rejected without changing the
-// checkpoint. The host may correct the input and retry the same waiting key.
-// Storage errors, cancellation and panics are not input rejection.
+// ResumeRejectedError 表示人工输入未被采纳，节点没有推进；宿主可以改正输入后用同一等待键重试。
+// 中断的 validate 拒绝时，检查点里只更新该中断的 Rejected/Reason。存储失败、取消和 panic 不属于输入拒绝。
 type ResumeRejectedError struct{ Err error }
 
 func (e *ResumeRejectedError) Error() string { return "resume input rejected: " + e.Err.Error() }
@@ -59,6 +58,7 @@ func (d *DurableGraph[T]) Resume(ctx context.Context, id string, req ResumeReque
 // WithResume supplies structured human input to an AsChildRunnable wait inside
 // a resumable tool/operation. operationKey is the last WaitError.Path key;
 // req.Key is ChildContinuation.ApprovalKey. They identify different boundaries.
+// req.Key 也可以是 ChildContinuation.Interrupts 中的中断键。
 // Legacy approval-only durable.WithResume calls remain supported.
 func WithResume(ctx context.Context, operationKey string, req ResumeRequest) (context.Context, error) {
 	if operationKey == "" || req.Key == "" {
