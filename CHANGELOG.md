@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.43.0] - 2026-11-04
+
 ### Fixed
 
 - `llm/providers`：OpenAI 兼容服务（含 DeepSeek、Kimi、SiliconFlow、Ollama）的上游对流式请求回了以换行结尾的普通 JSON（如代理不支持 SSE）时，go-openai 返回内含空 `*openai.APIError` 的错误，构造 `ProviderError` 时解引用导致读流 goroutine panic、进程退出。现在报告"上游返回的不是 SSE 事件流"。
@@ -987,7 +989,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/kart-io/goagent/compare/v0.42.1...HEAD
+[Unreleased]: https://github.com/kart-io/goagent/compare/v0.43.0...HEAD
+[0.43.0]: https://github.com/kart-io/goagent/compare/v0.42.1...v0.43.0
 [0.42.1]: https://github.com/kart-io/goagent/compare/v0.42.0...v0.42.1
 [0.42.0]: https://github.com/kart-io/goagent/compare/v0.41.0...v0.42.0
 [0.41.0]: https://github.com/kart-io/goagent/compare/v0.40.0...v0.41.0
