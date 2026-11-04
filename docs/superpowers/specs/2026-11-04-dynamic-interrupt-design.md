@@ -122,6 +122,8 @@ type InterruptPoint struct {
   - ctx 里有某个待回应中断键对应的 `durable.ResumeInput`；
   - 某个待回应中断在日志中已经 completed。
 
+  恢复期间检查点保持中断等待，直到节点完成才更新，不在重新执行前清除。
+
   重新执行后，已回应的中断回放已固定的输入，其余中断再次暂停。图检查点的 `Interrupts` 更新为剩余的中断。两个条件都不满足时，不执行节点，原样返回等待。
 
 ### 输入入日志后、图检查点更新前崩溃
@@ -162,14 +164,14 @@ type InterruptPoint struct {
 
 ## 工具
 
-- `FunctionToolBuilder.WithInterruptible()`：工具实现 `DurablePolicyProvider`，策略为 `{Resumable: true, MaxAttempts: 1}`。
+- `FunctionToolBuilder.WithInterruptible(version)`：经可选接口 `tools.InterruptibleTool` 声明，工具实现 `DurablePolicyProvider`，策略为 `{Resumable: true, MaxAttempts: 1}`。开启必须带版本，版本进入 intent 哈希。
   - `MaxAttempts: 1` 只允许从等待中重入（续跑不计尝试次数），崩溃后的 pending 记录仍交给宿主处理。
 - 默认不开启。理由：续跑会从头重新执行工具，`AwaitInput` 之前没有用 `durable.Do` 记录的副作用会重复执行，必须由工具作者声明可以接受。
 - 等待经 Dispatcher 与 `builder.ErrWaiting` 上报（`builder/tool_events.go:302`、`:327`），这条链路已经存在。宿主用 `durable.WithResume(ctx, 中断键, input)` 加原输入调用 `Invoke` 恢复；由 `Start` 开始的运行用 `Start` 恢复。
 
 ## 破坏性变更与迁移
 
-- 已有工具改为 `WithInterruptible()` 后，持久策略会从 `{MaxAttempts: DispatchConfig.MaxAttempts, RetryFailed: true}` 变为 `{Resumable: true, MaxAttempts: 1}`。框架**不能可靠检测**这一变化：`Do` 只比较输入哈希和 `MaxAttempts`，不比较 `Resumable`、`RetryFailed`（`core/durable/operation.go:266`）。`DispatchConfig.MaxAttempts` 恰好为 1 时不会报错，旧记录会按新策略处理。迁移要求：
+- 已有 FunctionTool 改为 `WithInterruptible(version)` 后，版本变化会改变 intent 哈希，旧记录报 intent 变更，须等旧运行结束或换新运行。“只改 `Resumable` 不报错”只适用于自行实现 `DurablePolicyProvider` 的工具：持久策略从 `{MaxAttempts: DispatchConfig.MaxAttempts, RetryFailed: true}` 变为 `{Resumable: true, MaxAttempts: 1}`，框架**不能可靠检测**这一变化，`Do` 只比较输入哈希和 `MaxAttempts`，不比较 `Resumable`、`RetryFailed`（`core/durable/operation.go:266`）。`DispatchConfig.MaxAttempts` 恰好为 1 时不会报错，旧记录会按新策略处理。迁移要求：
   - 提升工具的 intent 版本，使输入哈希变化，旧记录不再被复用；
   - 或者等使用该工具的进行中运行（包括 waiting 和 pending）全部结束后再切换。
   - 文档中写明这一要求，并用测试固定“只改 Resumable 不报错”的现状，避免有人误以为框架会检测。
@@ -183,7 +185,7 @@ type InterruptPoint struct {
   - id 必须唯一；
   - info 必须是确定性的。
 - 在同一文档中写明 `AwaitInput`、`ApprovalNodes`、`core.InterruptManager`、`Handle.Interrupt` 四者的适用边界。
-- `examples/human-in-the-loop` 新增“工具执行中途询问用户”的离线场景。
+- 新增离线示例 `examples/human-in-the-loop-interrupt`，演示工作流节点中途中断与跨进程恢复；工具中断由 builder 测试覆盖。
 
 ## 验收（本地执行）
 
