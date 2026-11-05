@@ -2,6 +2,20 @@
 
 推荐通过 `agent.AsRunnable().Invoke/Stream` 接入。`ExecuteStream` 与它共享执行源；Builder 接受任意 `llm.Client`，配置工具时需要 `llm.ToolStreamClient`。
 
+## 公共契约与变更验证
+
+当前 0.x 版本以以下行为作为公共契约；版本号并不承诺所有接口永久不变。修改签名或恢复行为须在 CHANGELOG 中提供迁移说明，并验证所有关联模块，不增加只为掩盖破坏的兼容别名。
+
+| 边界 | 必须保持的行为 | 回归位置 |
+|---|---|---|
+| `Runnable` / `StreamRunnable` | Invoke 与 Stream 共用执行源；成功只有一个终态；缺失/重复终态、迟到错误和取消不发布成功结果 | `core/stream_runnable_test.go`、`core/composition_stream_test.go`、`builder/runnable_test.go` |
+| `llm.Client` / `ToolStreamClient` | 完整工具调用只来自成功终止块；保留工具 ID、原生续接状态、错误和已知用量，未知值不伪造为零 | `llm/providers/native_contract_test.go`、`structured_hardening_contract_test.go`、`builder/agent_usage_test.go` |
+| `durable.Store` / 持久操作 | Lock、原子 Save/SaveAll 与读取语义遵循接口注释；已完成操作回放；未知效果先核对或显式允许重试 | `core/durable/storetest`、`operation_wait_test.go`、`save_all_test.go` |
+| 审批与中断恢复 | 错误输入保持等待；已消费恢复键不再次应用状态修改；宿主授权不能由审批键替代 | `workflow/resume_test.go`、`resume_process_test.go`、`core/durable/interrupt_test.go` |
+| 根预算 | 父子调用共用额度；持久运行恢复不清零；未知用量、配置漂移与并发请求按账本规则处理 | `core/budget/unified_test.go`、`limits_test.go`、`builder/model_budget_test.go` |
+
+执行 `make test-contracts` 验证这些边界，`make test-frameworkbench` 验证独立模块，`make compatibility` 验证本地 Harness、Contrib 和 Examples 的实际调用方。跨仓报告记录当前核心依赖目录、源码提交、完整测试日志与跳过项。函数或状态结构变化须主动提升宿主流程版本，不能仅以 Go 编译通过断言旧检查点可恢复。带数据库、真实模型或业务授权的部分，还需相应环境的验收证据。
+
 ## 扩展点
 
 | 扩展点 | 是否改变执行 | 错误与超时 | 恢复语义 |

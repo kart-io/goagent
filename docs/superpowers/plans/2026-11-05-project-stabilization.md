@@ -42,10 +42,10 @@
 
 **接口：** go run ./scripts/compatcheck -root PATH -out NEW_DIRECTORY；发现 goagent-harness、goagent-examples、goagent-contrib 内全部模块；使用临时 modfile 和全部本地 replace，GOWORK=off；逐模块 go test -json -race -count=1，保存输出、依赖定位和状态摘要。
 
-- [ ] 用临时小模块测试缺失仓库、嵌套模块发现、路径含空格、本地 replace、失败传播和下游文件不变，先观察失败。
-- [ ] 实现命令与 Makefile 入口，补充公共行为和变更验证约定。
-- [ ] 执行命令覆盖真实本地关联仓库，阅读结构化报告和跳过项。
-- [ ] 独立提交本项。
+- [x] 用临时小模块测试缺失仓库、嵌套模块发现、路径含空格、本地 replace、失败传播和下游文件不变，先观察失败。
+- [x] 实现命令与 Makefile 入口，补充公共行为和变更验证约定。
+- [x] 执行命令覆盖真实本地关联仓库，阅读结构化报告和跳过项。
+- [x] 独立提交本项。
 
 ## Task 3: 业务恢复闭环验收
 

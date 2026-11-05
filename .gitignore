@@ -17,6 +17,7 @@ coverage.*
 *.coverprofile
 profile.cov
 /provider-contracts.jsonl
+/coverage/compatibility-*/
 
 # Dependency directories (remove the comment below to include it)
 # vendor/

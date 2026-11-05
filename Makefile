@@ -19,6 +19,8 @@ GO_MOD_NAME := github.com/kart-io/goagent
 # Library checks compile packages; run selects one example main package.
 EXAMPLE ?= ./examples/execution-scope
 COVERAGE_DIR=./coverage
+COMPAT_ROOT ?= ..
+COMPAT_OUT ?= $(COVERAGE_DIR)/compatibility-$(shell date -u +%Y%m%dT%H%M%SZ)
 
 # Colors for output
 RED=\033[0;31m
@@ -26,7 +28,7 @@ GREEN=\033[0;32m
 YELLOW=\033[1;33m
 NC=\033[0m # No Color
 
-.PHONY: all build build-all build-linux build-windows build-darwin run clean test test-frameworkbench coverage deps help version
+.PHONY: all build build-all build-linux build-windows build-darwin run clean test test-frameworkbench test-contracts compatibility coverage deps help version
 
 ## help: Display this help message
 help:
@@ -76,6 +78,14 @@ test-short:
 ## test-frameworkbench: 验证独立评测模块的依赖与执行契约（不运行计时基准）
 test-frameworkbench:
 	cd evaluation/frameworkbench && GOWORK=off GO_TEST_MODE=true $(GOTEST) -mod=readonly -race -count=1 -timeout 120s ./...
+
+## test-contracts: 验证执行、模型流、恢复、审批、预算与工具公共契约
+test-contracts:
+	GO_TEST_MODE=true $(GOTEST) -race -count=1 -timeout 120s ./core/... ./llm/... ./builder/... ./workflow/... ./multiagent/... ./tools/... ./execution/...
+
+## compatibility: 使用当前源码验证本地关联仓库（COMPAT_ROOT、COMPAT_OUT 可覆盖）
+compatibility:
+	$(GOCMD) run ./scripts/compatcheck -root "$(COMPAT_ROOT)" -out "$(COMPAT_OUT)"
 
 ## test-integration: Run integration tests
 test-integration:

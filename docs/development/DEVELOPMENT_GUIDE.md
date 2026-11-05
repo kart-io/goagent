@@ -24,6 +24,8 @@ Makefile 从 `go.mod` 的 `toolchain` 声明选择开发工具链，并清除传
 | `make test` | `GO_TEST_MODE=true go test -v -race -timeout 120s ./...` |
 | `make test-short` | 带 `-short` 的测试 |
 | `make test-frameworkbench` | 使用只读依赖运行独立性能评测模块的竞态契约测试；不执行计时基准 |
+| `make test-contracts` | 执行、模型流、持久恢复、审批、预算与工具的完整竞态契约测试 |
+| `make compatibility` | 用当前源码验证相邻关联仓库；可设置 `COMPAT_ROOT` 与新的 `COMPAT_OUT` |
 | `make test-integration` | `-tags=integration` 的测试 |
 | `make coverage` | 生成 `coverage/coverage.out`、执行覆盖率门禁并生成 `coverage/coverage.html` |
 | `make bench` | `go test -bench=. -benchmem ./...` |
@@ -34,6 +36,8 @@ Makefile 从 `go.mod` 的 `toolchain` 声明选择开发工具链，并清除传
 | `bash scripts/provider_regression.sh [REPORT.jsonl]` | 离线 Provider/Builder 契约与竞态回归，见 [持续回归](../guides/PROVIDER_REGRESSION.md) |
 
 CI（`.github/workflows/`）运行带 `-race` 的全量测试、导入检查与 golangci-lint；PR 流程另跑覆盖率门禁。
+
+公共契约改动还须执行 `make test-frameworkbench` 与 `make compatibility`。后者要求三个关联仓库位于同一个父目录，自动包含嵌套模块；使用临时 modfile，不修改关联仓库的 `go.mod`、`go.sum` 或 `go.work`。报告中必须核对 `core_directory` 指向本次源码，并逐项检查 `skipped_tests`：没有配置 Postgres 等测试服务时，编译和离线测试通过不能代替实库验收。报告目录必须新建，避免覆盖历史证据。
 
 本仓库作为 Go 库交付，应用通过 `go get github.com/kart-io/goagent@<version>` 引入。旧 Makefile 中假设统一应用二进制的 `install`、`uninstall`、`docker-*`、`init` 目标已移除；`make version` 使用 `git describe --tags --always --dirty` 显示库版本。需要分发某个示例时，显式指定包与产物路径，例如 `go build -o /tmp/execution-scope ./examples/execution-scope`。
 
