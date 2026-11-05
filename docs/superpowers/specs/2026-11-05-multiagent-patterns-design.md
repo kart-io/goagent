@@ -1,6 +1,6 @@
 # 多 Agent 预置模式设计
 
-日期：2026-11-05。基线 `f2e242b5`。2026-11-05 按 Codex 审阅（14 项）修订。
+日期：2026-11-05。基线 `f2e242b5`。2026-11-05 按 Codex 审阅（14 项）与独立架构复审（6 项重要、12 项次要）修订。
 
 ## 目标
 
@@ -12,7 +12,16 @@
 
 ## 与既有决策的关系
 
-[定位决策](../../research/2026-10-29-goagent-positioning.md) §4.2 删除的是依赖 Core NATS、无持久消费的旧 `multiagent`；“预置模式不进核心、需要时归 harness”的结论记在 [Eino 对照](../../research/2026-11-04-eino-comparison.md)的“差距与采纳范围”。本设计推翻后者：新包只组合已有基础件，不引入外部依赖，不恢复旧包的分布式投递语义。实现时同步修改 Eino 对照该行，并在定位文档 §5 记录这次能力补充。
+[定位决策](../../research/2026-10-29-goagent-positioning.md) §4.2 删除的是依赖 Core NATS、无持久消费的旧 `multiagent`；“预置模式不进核心、需要时归 harness”的结论记在 [Eino 对照](../../research/2026-11-04-eino-comparison.md)的“差距与采纳范围”。本设计推翻后者：新包只组合已有基础件，不引入外部依赖，不恢复旧包的分布式投递语义。实现时同步修改 Eino 对照第 49 行（ADK 能力表）与第 73 行（差距表），并在定位文档 §5 记录这次能力补充。
+
+**准入依据**（定位文档 §5 要求业务证据）：内部客服服务计划接入 GoAgent，有两条流程：
+
+| 流程 | 需要的模式 |
+|---|---|
+| 先分流，再交给专业 Agent 处理 | RouterSupervisor（分流可审计、可在成员前审批）或 SupervisorTools（由模型自行委派） |
+| 写作与评审循环，直到评审通过 | Loop（写作者、评审者两步，`Until` 读评审结论） |
+
+Sequential 与 `ParallelStep` 没有单独的业务场景，作为上述流程内部的组合件保留（例如专业 Agent 处理前后的固定步骤、分流后并行查询多个知识源）；文本接力层服务于这两条流程中按文本交接的 Agent。
 
 ## 方案选择
 
@@ -24,8 +33,11 @@
 
 ## 包与依赖
 
-- 路径 `github.com/kart-io/goagent/multiagent`，只依赖 `core`、`core/budget`（仅文档示例与测试）、`builder`、`tools`、`workflow`、`interfaces`。
-- `scripts/apicheck` 新增反向依赖规则：`interfaces`、`errors`、`utils`、`cache`、`core`、`builder`、`tools`、`parsers`、`llm`、`workflow`、`memory`、`store`、`middleware`、`observability`、`devtools`、`harness`、`execution`、`plugin` 禁止导入 `multiagent`；同步 `main_test.go` 与 `docs/architecture/IMPORT_LAYERING.md`。检查器不约束新包自身的依赖，由代码审查把关。
+- 路径 `github.com/kart-io/goagent/multiagent`，属于机制层，只依赖 `core`、`builder`、`tools`、`workflow`、`interfaces`（测试另用 `core/budget`、`core/durable`）。
+- `scripts/apicheck` 两处改动：
+  - 新增反向依赖规则：`interfaces`、`errors`、`utils`、`cache`、`core`、`builder`、`tools`、`parsers`、`llm`、`workflow`、`memory`、`store`、`middleware`、`observability`、`devtools`、`harness` 禁止导入 `multiagent`；
+  - 把 `multiagent` 加入现有 `execution` 规则与 `plugin` 规则的源目录列表，禁止它上行导入宿主装配层与能力装配层。
+  - 同步 `main_test.go` 与 `docs/architecture/IMPORT_LAYERING.md` 规则表。
 - 包文档注释与 CHANGELOG 都写明：与 v0.17 删除的旧 `multiagent` 同名，但 API 与语义不兼容，旧代码不能直接迁移。
 
 ## 底层 API：类型化状态
@@ -37,6 +49,7 @@ type Step[T any] struct {
 }
 
 // AgentFactory 为每次节点执行新建一个 Agent 会话，避免循环与重复调用共享可变记忆。
+// 并行分支与并发运行会同时调用它，实现必须并发安全。
 type AgentFactory func(context.Context) (tools.OwnedRunnable[any, *builder.AgentOutput], error)
 
 // AgentStep 把 Agent 接成一步：in 从状态取任务输入，out 把输出写回状态。
@@ -44,6 +57,10 @@ func AgentStep[T any](name string, agent AgentFactory,
     in func(T) any, out func(T, *builder.AgentOutput) (T, error)) (Step[T], error)
 
 func Sequential[T any](cfg workflow.Config, steps ...Step[T]) (*workflow.Graph[T], error)
+
+// ParallelStep 把一组并行分支包装成一步：Sequential、Loop、RouterSupervisor 遇到它时
+// 改用 AddParallel 注册为一个节点（计 1 步），所有组合都落在同一张平面图里。
+func ParallelStep[T any](p ParallelConfig[T]) (Step[T], error)
 
 type ParallelConfig[T any] struct {
     Name  string // 并行节点名，也是审批时唯一可用的名字
@@ -55,8 +72,8 @@ func Parallel[T any](cfg workflow.Config, p ParallelConfig[T]) (*workflow.Graph[
 
 type LoopConfig[T any] struct {
     Steps         []Step[T]
-    Until         func(context.Context, T) (bool, error) // 每轮结束后判断；nil 表示不提前退出
-    MaxIterations int                                    // 必填，> 0
+    Until         func(context.Context, T) (bool, error) // 必填；每轮结束后判断是否结束
+    MaxIterations int                                    // 必填，> 0；防失控的硬上限，达到后返回 ErrMaxSteps
 }
 func Loop[T any](cfg workflow.Config, l LoopConfig[T]) (*workflow.Graph[T], error)
 
@@ -79,7 +96,9 @@ type Member struct {
 func SupervisorTools(members ...Member) ([]interfaces.Tool, error)
 ```
 
-`AgentStep` 每次执行先调用 Factory，执行后调用 `Close`；Factory 返回错误、`Close` 为 nil 或 Runnable 为 nil 时该步失败。`Close` 的错误与执行错误合并返回。
+`AgentStep` 的生命周期与 `tools/runnable_tool.go:173-191` 一致：每次执行先调用 Factory；只要返回的 `Close` 非 nil 就在结束时调用，即使 Factory 同时返回了错误；`Close` 使用 `context.WithoutCancel` 加 5s 超时。Factory 返回错误、`Close` 为 nil 或 Runnable 为 nil 时该步失败。`Close` 的错误与执行错误合并返回。
+
+`Parallel` 等价于只含一个 `ParallelStep` 的 Sequential。并行分支以节点函数形式调用 `Run.Invoke`，分支内 Agent 的流事件不会转发。`multiagent.ParallelConfig` 与 `workflow.ParallelConfig` 同名但字段不同（`Name`/`Steps` 对 `Branches`），包文档注明。
 
 ### 图拓扑
 
@@ -87,18 +106,24 @@ func SupervisorTools(members ...Member) ([]interfaces.Tool, error)
 |---|---|---|
 | Sequential | `START → s1 → … → sn → END` | `n` |
 | Parallel | `START → p → END`，`p` 为 `AddParallel` 节点，分支即各 Step | `1` |
-| Loop | `START → s1 → … → sn`，`sn` 上的分支目标为 `s1` 与 `END`：`Until` 为真到 `END`，否则回 `s1` | `MaxIterations × n` |
+| Loop | `START → s1 → … → sn`，`sn` 上的分支目标为 `s1` 与 `END`：`Until` 为真到 `END`，否则回 `s1`；n=1 时为自环 | `MaxIterations × n` |
 | RouterSupervisor | `START → sup`，`sup` 上的分支目标为全部成员与 `END`（`Next` 返回 `Finish` 时映射为 `END`）；每个成员回 `sup` | `2 × MaxRounds + 1` |
 
-`Until` 为 nil 时分支仍声明 `END` 出口，以通过 `Compile` 的出口校验。`MaxSteps` 由构造函数计算，先检查乘法与加法溢出（超出 `int` 范围构造报错）；宿主在 `cfg.MaxSteps` 设了非零值时构造报错。`cfg.MaxConcurrency` 照常传给并行节点。
+每个 `ParallelStep` 计为 1 步。`MaxSteps` 由构造函数计算，先检查乘法与加法溢出（超出 `int` 范围构造报错）；宿主在 `cfg.MaxSteps` 设了非零值时构造报错。`cfg.MaxConcurrency` 照常传给并行节点。
 
 ### 轮数上限语义
 
 两种执行器（`Compile` 与 `CompileDurable`）只为节点执行计步，路由不计步，并行节点整体计一步；最后一个允许的节点执行后仍会执行路由，路由到 `END` 即成功。因此：
 
-- Loop 第 `MaxIterations` 轮结束时 `Until` 为真，正常结束；为假（或 `Until` 为 nil）时尝试执行下一轮第一步，返回 `workflow.ErrMaxSteps`。
+- Loop 第 `MaxIterations` 轮结束时 `Until` 为真，正常结束；为假时尝试执行下一轮第一步，返回 `workflow.ErrMaxSteps`。
 - Router 第 `MaxRounds` 次成员执行后，Supervisor 还会再执行一次：返回 `Finish` 时正常结束；选择任一成员时返回 `workflow.ErrMaxSteps`。
 - 计数存放在检查点中，重启后仍准确。需要“固定跑 N 轮后正常结束”的宿主在 T 中记录轮数，由 `Until` 判断。
+- 持久运行返回 `ErrMaxSteps` 后，检查点停在 `Next == MaxSteps`（`workflow/durable.go:274`），同一运行 ID 再 `Run` 仍然报错，宿主需换运行 ID 处理。
+- `MaxSteps` 写入持久图的计划摘要（`workflow/durable.go:121-131`）：修改 `MaxIterations` 或 `MaxRounds` 等同于换版本，进行中的运行会报检查点不匹配，须同时提升 `DurableConfig.Version` 并等旧运行结束。
+
+### 返回的图只用于编译
+
+构造器返回的 `*workflow.Graph[T]` 只应直接 `Compile` 或 `CompileDurable`。继续 `AddNode` 不会更新已算好的 `MaxSteps`；需要组合时用 `ParallelStep` 或在 Step 内完成。
 
 ### 路由与合并必须是纯函数
 
@@ -117,12 +142,14 @@ type Conversation struct {
 }
 
 func TextStep(name string, agent AgentFactory) (Step[Conversation], error)
+func TextStepWith(name string, agent AgentFactory, render func(Conversation) any) (Step[Conversation], error)
 func CloneConversation(c Conversation) Conversation // 复制 Turns，供 ParallelConfig.Clone 使用
 func MergeTurns(ctx context.Context, base Conversation, branches []Conversation) (Conversation, error)
 func TextNext(members ...string) func(context.Context, Conversation) (string, error)
 ```
 
-- `TextStep` 的输入：有 Turns 时取最后一项的 Output，否则取 Input。输出取 `AgentOutput.Result`：字符串原样使用，其他类型按 JSON 编码；追加一轮 `Turn{Agent: name}`，空回答也记录。
+- `TextStep` 的输入默认是完整记录：Input 加上每一轮的 `[Agent]: Output`，按顺序拼接，不截断；Router 的 Supervisor 因此能看到原始任务，Loop 的写作者能看到自己的上一稿与评审意见。宿主可用 `TextStepWith(name, agent, render)` 自定义输入，`render` 为 nil 时用默认格式。完整记录随轮数增长，Token 成本写进指南。
+- 输出取 `AgentOutput.Result`：字符串原样使用，其他类型按 JSON 编码；追加一轮 `Turn{Agent: name}`，空回答也记录。
 - `Conversation` 的 `Turns` 是切片，浅拷贝会让并行分支写同一底层数组，`ParallelConfig.Clone` 必须用 `CloneConversation`。
 - `MergeTurns` 按分支登记顺序，追加各分支在 base 之后新增的 Turns；分支的 Turns 长度小于 base 或前缀不同时返回错误。
 - `TextNext` 取最后一轮输出的第一行，去掉首尾空白后必须恰好等于某个成员名或 `Finish`，否则返回错误，不做模糊匹配。
@@ -134,14 +161,14 @@ func TextNext(members ...string) func(context.Context, Conversation) (string, er
 | 项 | 取值 |
 |---|---|
 | ArgsSchema | `{"type":"object","properties":{"task":{"type":"string"}},"required":["task"],"additionalProperties":false}` |
-| Decode | 取 `task` 字符串作为 Agent 输入；缺失或非字符串时返回参数错误 |
+| Decode | Schema 已保证 `task` 存在且为字符串（`tools/runnable_tool.go:164-166` 在 Decode 前校验）；Decode 只做类型断言，失败时返回 `*tools.ArgumentError` |
 | Encode | 返回 `AgentOutput.Result`：字符串原样，其他类型按 JSON 编码 |
 | Version | `Member.Version`，必填 |
 | ModelInvoking | 固定 `true` |
 | Resumable | `Member.Resumable`；前提与 `RunnableToolConfig.Resumable` 相同：成员内所有效果都记在派生键下 |
 | Factory | 每次调用新建会话，`Close` 必须非 nil |
 
-宿主把返回的工具交给 Supervisor Agent 的 Dispatcher，再经 `Dispatcher.Tools()` 注册到 Agent。
+宿主把返回的工具交给 Supervisor Agent 的 Dispatcher，再经 `Dispatcher.Tools()` 注册到 Agent。参数不合法时，持久运行默认拒绝整个模型回合（`builder/durable_turn.go:107-113`）；要把参数错误交还模型改正，须在 Supervisor 的 Dispatcher 上开启 `ReturnArgumentErrors`，指南说明这一点。
 
 ## 持久接入契约
 
@@ -151,12 +178,12 @@ func TextNext(members ...string) func(context.Context, Conversation) (string, er
 
 - 每个 Agent 用 `WithDurableScope` 设置稳定的非空 scope。日志键为“节点执行键 → `agent/<scope>` → 模型或工具操作键”；每个 Step 是独立节点，同一 scope 在不同节点、不同轮次下互不冲突。
 - 带工具时，模型客户端必须实现 `llm.ToolStreamClient`，工具必须经 `Dispatcher.Tools()` 包装（实现 `interfaces.DurableCallTool`）。
-- 会话由 `AgentFactory` 每次新建。记忆与检索的读取结果参与模型请求的意图哈希：恢复时读到的内容变化，会使已完成请求的意图不一致而报错，不会静默重放。需要可靠恢复的 Agent 应避免在节点内读取会变化的外部记忆。
+- 会话由 `AgentFactory` 每次新建。模型请求的全部内容参与意图哈希：记忆与检索结果、当前时间、随机示例等任何非确定性内容在恢复时变化，都会使已完成请求的意图不一致而报错（`core/durable/operation.go:269-271`），不会静默重放。需要可靠恢复的 Agent 应保证请求内容在重跑时确定。
 
 **预算与 Dispatcher**（`tools/call_scope.go:33-51`）：
 
 - `SupervisorTools` 的成员是模型工具，调用时 ctx 必须带根预算（`budget.WithController`）；持久运行必须是 `budget.NewDurable` 创建的持久预算。
-- Supervisor 与每个成员 Agent 使用各自独立的 Dispatcher，复用会触发 `ErrDispatcherReentry`。
+- 成员 Agent 不得使用 Supervisor 或任何祖先调用的 Dispatcher，否则触发 `ErrDispatcherReentry`（`tools/call_scope.go:47-56`）；成员之间互不嵌套时可以共用一个。
 
 **状态 T**：
 
@@ -169,22 +196,24 @@ func TextNext(members ...string) func(context.Context, Conversation) (string, er
 |---|---|
 | 普通 `Compile` 的图，用 `AddRunnable` 嵌进另一个普通图 | 支持 |
 | 持久图通过 `AsChildRunnable` 包装成 `Resumable` 工具，交给 Agent 或 `SupervisorTools` 成员 | 支持（已有路径） |
+| `ParallelStep` 作为 Sequential、Loop、RouterSupervisor 的一步 | 支持：同一张平面图，沿用分支检查点 |
 | 把已编译的图（普通或 `AsChildRunnable`）作为节点放进持久图 | **不支持**：节点 ctx 只有 `AllowInterrupt`，没有 `CanWait`，`AsChildRunnable` 会拒绝；普通图在持久节点内不派生访问键，同一 Agent 重入会复用操作键 |
 
 **审批与中断**：
 
-- `DurableConfig.ApprovalNodes` 可填 Sequential、Loop 的 Step 名与 Router 的 Supervisor、成员名；Parallel 只能填整体并行节点 `Name`，分支没有独立的审批点。
-- 节点内直接调用 `durable.AwaitInput` 可以暂停。Agent 工具内的中断需要工具显式声明可中断（`WithInterruptible`）。Agent 调用的子图如果是纯审批等待，在外层持久图里按节点失败处理（`workflow/durable.go:348-369`），这一限制写进指南。
+- `DurableConfig.ApprovalNodes` 可填 Sequential、Loop 的 Step 名与 Router 的 Supervisor、成员名；Parallel 与 `ParallelStep` 只能填整体并行节点 `Name`，分支没有独立的审批点。
+- 循环中列入审批的节点每次访问都要审批：意图键包含步数 `Next`（`workflow/durable.go:278`），上一轮的审批不覆盖下一轮。
+- 节点内直接调用 `durable.AwaitInput` 可以暂停。Agent 工具内的中断需要工具声明可中断（`tools.InterruptibleTool` / `WithInterruptible`），或是声明 `Resumable` 的 Runnable 工具。Agent 调用的子图如果是纯审批等待，在外层持久图里按节点失败处理（`workflow/durable.go:348-369`），这一限制写进指南。
 - 回放只覆盖已提交为 completed 的操作；外部请求已完成但日志未提交时为 pending，恢复按 `durable` 既有规则处理，可能需要宿主核对。
 
 ## 校验规则
 
 | 位置 | 规则 |
 |---|---|
-| 通用 | 至少一个 Step；名称合法且唯一（沿用 `workflow` 校验）；`Run` 非 nil，typed nil 按 nil 处理（与 `tools` 的 `nilRunnable` 一致） |
-| AgentStep / TextStep | agent、in、out 非 nil（含 typed nil），否则返回错误 |
-| Parallel | `Name`、`Clone`、`Merge` 必填；Step 名不得与 `Name` 相同 |
-| Loop | `MaxIterations > 0`；`MaxIterations × n` 不溢出 |
+| 通用 | 至少一个 Step；名称合法且唯一（沿用 `workflow` 校验）；接口字段 `Step.Run` 非 nil，typed nil 按 nil 处理（与 `tools` 的 `nilRunnable` 一致） |
+| AgentStep / TextStep | agent、in、out 等函数参数非 nil，否则返回错误 |
+| Parallel / ParallelStep | `Name`、`Clone`、`Merge` 必填，至少一个分支 |
+| Loop | `Until` 非 nil；`MaxIterations > 0`；`MaxIterations × n` 不溢出 |
 | RouterSupervisor | `MaxRounds > 0`；`2 × MaxRounds + 1` 不溢出；`Next` 非 nil；至少一个成员；成员名不得为 `Finish` 或与 Supervisor 同名；`Next` 返回未声明的名字时运行失败 |
 | SupervisorTools | `Name`、`Description`、`Version`、`Factory` 必填，名称唯一 |
 | 配置 | `cfg.MaxSteps` 必须为 0 |
@@ -197,7 +226,8 @@ func TextNext(members ...string) func(context.Context, Conversation) (string, er
 
 - 四种图模式的正常流程与校验表每条规则，包括 typed nil、溢出、`cfg.MaxSteps` 非零。
 - 轮数边界：Loop 第 N 轮 `Until` 为真时正常结束、为假时返回 `ErrMaxSteps`；Router 第 R 次成员后 Finish 正常结束、再选成员返回 `ErrMaxSteps`；未知成员名失败。
-- 文本层：`TextStep` 输入取值、非字符串 Result 编码、`CloneConversation` 后并行追加互不影响（`Turns` 预留容量，`-race` 运行）、`MergeTurns` 顺序与前缀校验、`TextNext` 去空白与拒绝模糊匹配。
+- 组合：Sequential 中含 `ParallelStep`、Router 成员为 `ParallelStep`，两种编译方式结果一致且计步正确。
+- 文本层：`TextStep` 默认输入含 Input 与全部轮次（Router 第二次执行 Supervisor 时输入包含原始 Input）、`TextStepWith` 自定义 render、非字符串 Result 编码、`CloneConversation` 后在预留容量内追加并断言原值不变（确定性断言，不依赖 `-race`）、`MergeTurns` 顺序与前缀校验、`TextNext` 去空白与拒绝模糊匹配。
 
 **持久测试**（`durable.FileStore`，真实 Builder 与离线模拟模型，装配持久根预算与独立 Dispatcher）：
 
@@ -209,14 +239,17 @@ func TextNext(members ...string) func(context.Context, Conversation) (string, er
 - Parallel 分支内 `AwaitInput` 等待时，兄弟分支照常完成；
 - Agent 未设置 `WithDurableScope`、工具未经 `Dispatcher.Tools()` 包装时，在模型调用前失败。
 
-**SupervisorTools**：离线模拟模型驱动 Supervisor 调用成员工具；确认每次调用新建会话并调用 Close；参数缺 `task` 时返回参数错误；没有根预算时失败。
+**SupervisorTools**：离线模拟模型驱动 Supervisor 调用成员工具；确认每次调用新建会话并调用 Close（Factory 出错但返回 Close 时也调用）；直接调用工具 `Invoke` 缺 `task` 时得到 `*tools.ArgumentError`；Supervisor 的 Dispatcher 开启 `ReturnArgumentErrors` 时参数错误交还模型；没有根预算时失败。
 
-**其他**：`scripts/apicheck` 新规则的回归测试；离线示例 `examples/multi-agent-patterns` 演示四种模式与两种 Supervisor，不需要 API 密钥，纳入 `scripts/verify_all_examples.sh`。
+**其他**：`scripts/apicheck` 新规则的回归测试；离线示例 `examples/multi-agent-patterns` 演示客服分流（Router 与工具型 Supervisor）和写作评审循环，以及 `ParallelStep` 组合，不需要 API 密钥；`scripts/verify_all_examples.sh` 自动发现示例，示例须在 5s 内离线完成。
 
 ## 文档
 
 - 新增 `docs/guides/MULTI_AGENT_PATTERNS.md`：选择模式、状态设计、持久接入契约、轮数上限语义、支持的组合、两种 Supervisor 的取舍。
-- README 中英文文档索引各加一行；`docs/guides/AGENT_COMPOSITION.md` 的选择表链接到新指南。
+- 指南链接 `MULTI_AGENT_USAGE.md`（身份与用量归属）与 `NATIVE_ORCHESTRATION.md` 的“多 Agent 作用域与入口约束”一节。
+- README 中英文文档索引各加一行；`docs/guides/AGENT_COMPOSITION.md` 的选择表链接到新指南；`examples/README.md` 加一行。
+- `docs/architecture/ARCHITECTURE.md` 的“包依赖”图与包表加入 `multiagent`。
+- 现有 `examples/advanced/multi-agent-*` 四个手写示例保留，指南说明它们演示手写拓扑，新示例演示预置模式。
 - 修改 Eino 对照与定位文档 §5（见上文）；CHANGELOG Added。
 
 ## 不做
