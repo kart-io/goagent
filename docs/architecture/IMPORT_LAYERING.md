@@ -17,8 +17,9 @@
 | `core/` | `tools`、`middleware`、`parsers`、`builder`（顶层目录，`core/middleware` 不受影响） |
 | `builder/` | `middleware` |
 | `parsers/` | `middleware` |
-| `interfaces`、`errors`、`utils`、`cache`、`core`、`builder`、`tools`、`parsers`、`llm`、`workflow`、`memory`、`store`、`middleware`、`observability`、`devtools`、`harness` | 顶层 `execution` |
-| `interfaces`、`errors`、`utils`、`cache`、`core`、`builder`、`tools`、`parsers`、`llm`、`workflow`、`memory`、`store`、`middleware`、`observability` | 顶层 `plugin`（能力装配层） |
+| `interfaces`、`errors`、`utils`、`cache`、`core`、`builder`、`tools`、`parsers`、`llm`、`workflow`、`memory`、`store`、`middleware`、`observability`、`devtools`、`harness`、`multiagent` | 顶层 `execution` |
+| `interfaces`、`errors`、`utils`、`cache`、`core`、`builder`、`tools`、`parsers`、`llm`、`workflow`、`memory`、`store`、`middleware`、`observability`、`multiagent` | 顶层 `plugin`（能力装配层） |
+| `interfaces`、`errors`、`utils`、`cache`、`core`、`builder`、`tools`、`parsers`、`llm`、`workflow`、`memory`、`store`、`middleware`、`observability`、`devtools`、`harness` | 顶层 `multiagent`（多 Agent 预置模式） |
 | 非 `examples/` | `examples/...` |
 
 说明：
