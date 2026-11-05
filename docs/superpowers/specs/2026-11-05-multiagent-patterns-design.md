@@ -14,14 +14,20 @@
 
 [定位决策](../../research/2026-10-29-goagent-positioning.md) §4.2 删除的是依赖 Core NATS、无持久消费的旧 `multiagent`；“预置模式不进核心、需要时归 harness”的结论记在 [Eino 对照](../../research/2026-11-04-eino-comparison.md)的“差距与采纳范围”。本设计推翻后者：新包只组合已有基础件，不引入外部依赖，不恢复旧包的分布式投递语义。实现时同步修改 Eino 对照第 49 行（ADK 能力表）与第 73 行（差距表），并在定位文档 §5 记录这次能力补充。
 
-**准入依据**（定位文档 §5 要求业务证据）：内部客服服务计划接入 GoAgent，有两条流程：
+**准入依据**（定位文档 §5 要求业务证据）：内部客服服务计划接入 GoAgent。S1、S2 为业务方提出的流程，S3–S8 按业务方要求补充，覆盖客服服务中的其余典型流程：
 
-| 流程 | 需要的模式 |
-|---|---|
-| 先分流，再交给专业 Agent 处理 | RouterSupervisor（分流可审计、可在成员前审批）或 SupervisorTools（由模型自行委派） |
-| 写作与评审循环，直到评审通过 | Loop（写作者、评审者两步，`Until` 读评审结论） |
+| # | 场景 | 流程 | 使用的模式与能力 |
+|---|---|---|---|
+| S1 | 工单分流 | 分流 Agent 判断意图（退款、物流、技术、账单），交给对应的专业 Agent；专业 Agent 处理后回到分流 Agent，直到 FINISH | RouterSupervisor、`TextNext`、`MaxRounds` |
+| S2 | 回复写作与评审 | 写作 Agent 起草回复，评审 Agent 检查语气、准确性与合规，不通过则带意见重写，直到通过 | Loop、`Until` 读评审结论、文本层完整记录 |
+| S3 | 多源并行查询 | 回答前并行查询知识库、订单与物流信息，汇总后交给回答 Agent | Sequential 中嵌入 `ParallelStep`、`Clone`/`Merge` |
+| S4 | 固定处理流水线 | 信息抽取（订单号、问题类型）→ 生成回答 → 合规检查，三步顺序执行 | Sequential、`AgentStep` 的类型化状态 |
+| S5 | 高风险操作审批 | 分流到退款 Agent 前停下，由人工审批，批准后续跑 | RouterSupervisor + `ApprovalNodes`、持久续跑 |
+| S6 | 向客户追问缺失信息 | 信息抽取发现缺订单号时暂停，等客户补充后从检查点继续 | 节点内 `durable.AwaitInput`、动态中断 |
+| S7 | 复杂咨询由模型委派 | 一次咨询同时涉及账单与技术问题，主 Agent 自行调用多个专家工具并综合回答 | `SupervisorTools`、独立 Dispatcher、根预算 |
+| S8 | 超限转人工 | 分流或写作评审在上限内没有结束，返回 `ErrMaxSteps`，宿主换运行 ID 转人工处理 | `MaxRounds`/`MaxIterations` 硬上限、轮数上限语义 |
 
-Sequential 与 `ParallelStep` 没有单独的业务场景，作为上述流程内部的组合件保留（例如专业 Agent 处理前后的固定步骤、分流后并行查询多个知识源）；文本接力层服务于这两条流程中按文本交接的 Agent。
+每种模式至少由一个场景使用：Sequential（S3、S4）、`ParallelStep`（S3）、Loop（S2、S8）、RouterSupervisor（S1、S5、S8）、`SupervisorTools`（S7）、文本接力层（S1、S2）。各场景的测试与示例见“场景覆盖”。
 
 ## 方案选择
 
@@ -241,11 +247,26 @@ func TextNext(members ...string) func(context.Context, Conversation) (string, er
 
 **SupervisorTools**：离线模拟模型驱动 Supervisor 调用成员工具；确认每次调用新建会话并调用 Close（Factory 出错但返回 Close 时也调用）；直接调用工具 `Invoke` 缺 `task` 时得到 `*tools.ArgumentError`；Supervisor 的 Dispatcher 开启 `ReturnArgumentErrors` 时参数错误交还模型；没有根预算时失败。
 
-**其他**：`scripts/apicheck` 新规则的回归测试；离线示例 `examples/multi-agent-patterns` 演示客服分流（Router 与工具型 Supervisor）和写作评审循环，以及 `ParallelStep` 组合，不需要 API 密钥；`scripts/verify_all_examples.sh` 自动发现示例，示例须在 5s 内离线完成。
+**场景覆盖**：每个场景一个端到端测试，放在 `multiagent/scenario_test.go`，用真实 Builder 与 `testing/mocks.MockLLMClient`（实现 `llm.ToolStreamClient`）离线运行，普通与持久两种编译方式各跑一遍（S7 只经 Agent 运行）。
+
+| # | 测试 | 断言 | 示例 |
+|---|---|---|---|
+| S1 | `TestScenarioTicketRouting` | 分流依次选中退款、物流两个专业 Agent 后 FINISH；每次 Supervisor 的输入包含原始工单 | 是 |
+| S2 | `TestScenarioReplyReview` | 第一轮评审不通过、第二轮通过即结束；写作者第二轮输入包含上一稿与评审意见 | 是 |
+| S3 | `TestScenarioParallelLookup` | 三个查询分支的结果按登记顺序合并，回答 Agent 收到合并结果；整组计 1 步 | 是 |
+| S4 | `TestScenarioPipeline` | 抽取出的订单号写入状态，后两步读到；合规检查失败时报错带节点名 | 否（由 S3 覆盖 Sequential） |
+| S5 | `TestScenarioRefundApproval` | 到退款成员前返回 `ErrApprovalRequired`；新进程审批后续跑，分流 Agent 的已完成请求从日志回放 | 是 |
+| S6 | `TestScenarioAskCustomer` | 抽取节点暂停并给出中断键；补充订单号后续跑，已完成的模型请求不重放 | 否（与 `examples/human-in-the-loop-interrupt` 重复） |
+| S7 | `TestScenarioDelegation` | 主 Agent 调用账单、技术两个专家工具；每次调用新建会话并调用 Close；缺根预算时失败 | 是 |
+| S8 | `TestScenarioEscalation` | 评审始终不通过时第 `MaxIterations` 轮后返回 `ErrMaxSteps`；同一运行 ID 再 `Run` 仍报错，换运行 ID 可重新处理 | 否（指南中说明） |
+
+离线示例 `examples/multi-agent-patterns` 演示 S1、S2、S3、S5、S7 五个场景，不需要 API 密钥，须在 5s 内完成。
+
+**其他**：`scripts/apicheck` 新规则的回归测试；`scripts/verify_all_examples.sh` 自动发现离线示例，无需修改脚本。
 
 ## 文档
 
-- 新增 `docs/guides/MULTI_AGENT_PATTERNS.md`：选择模式、状态设计、持久接入契约、轮数上限语义、支持的组合、两种 Supervisor 的取舍。
+- 新增 `docs/guides/MULTI_AGENT_PATTERNS.md`：以 S1–S8 为线索讲选择模式、状态设计、持久接入契约、轮数上限语义与超限转人工、支持的组合、两种 Supervisor 的取舍。
 - 指南链接 `MULTI_AGENT_USAGE.md`（身份与用量归属）与 `NATIVE_ORCHESTRATION.md` 的“多 Agent 作用域与入口约束”一节。
 - README 中英文文档索引各加一行；`docs/guides/AGENT_COMPOSITION.md` 的选择表链接到新指南；`examples/README.md` 加一行。
 - `docs/architecture/ARCHITECTURE.md` 的“包依赖”图与包表加入 `multiagent`。
