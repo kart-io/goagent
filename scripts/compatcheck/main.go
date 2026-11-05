@@ -54,7 +54,19 @@ type summary struct {
 	Modules      []moduleResult `json:"modules"`
 }
 
-func goCommand(ctx context.Context, dir string, args ...string) *exec.Cmd {
+type goProcess struct{ *exec.Cmd }
+
+func (c *goProcess) Run() error {
+	defer cleanupProcess(c.Cmd)
+	return c.Cmd.Run()
+}
+
+func (c *goProcess) Output() ([]byte, error) {
+	defer cleanupProcess(c.Cmd)
+	return c.Cmd.Output()
+}
+
+func goCommand(ctx context.Context, dir string, args ...string) *goProcess {
 	cmd := exec.CommandContext(ctx, "go", args...)
 	cmd.Dir = dir
 	// 清除旧标准库路径和外部 workspace/GOFLAGS，保留代理、工具链及显式测试服务配置。
@@ -65,7 +77,23 @@ func goCommand(ctx context.Context, dir string, args ...string) *exec.Cmd {
 	}
 	cmd.Env = append(cmd.Env, "GOWORK=off", "GOFLAGS=", "GO_TEST_MODE=true")
 	cmd.WaitDelay = 2 * time.Second
-	return cmd
+	configureProcess(cmd)
+	return &goProcess{cmd}
+}
+
+func inheritedGoFlags(modfile string) (string, error) {
+	arg := "-modfile=" + modfile
+	// Go 的 GOFLAGS 按 cmd/internal/quoted 解析，引用内不处理反斜线转义。
+	if !strings.ContainsAny(arg, " \t\r\n") {
+		return "-mod=mod " + arg, nil
+	}
+	if !strings.Contains(arg, "'") {
+		return "-mod=mod '" + arg + "'", nil
+	}
+	if !strings.Contains(arg, `"`) {
+		return `-mod=mod "` + arg + `"`, nil
+	}
+	return "", fmt.Errorf("临时依赖路径同时包含空白和两种引号，无法传入 GOFLAGS")
 }
 
 func discover(ctx context.Context, root string) ([]module, error) {
@@ -257,6 +285,12 @@ func verifyModule(ctx context.Context, m module, modules []module, coreDir, out 
 		return err
 	}
 	cmd = goCommand(ctx, m.Dir, "test", "-json", "-mod=mod", "-modfile="+modfile, "-race", "-count=1", "-timeout="+timeout.String(), "./...")
+	flags, err := inheritedGoFlags(modfile)
+	if err != nil {
+		return err
+	}
+	// 测试内的 go build/run 同样绑定当前源码，不能退回下游原始依赖。
+	cmd.Env = append(cmd.Env, "GOFLAGS="+flags)
 	cmd.Stdout, cmd.Stderr = log, log
 	testErr := cmd.Run()
 	if err := log.Close(); err != nil {
@@ -306,7 +340,7 @@ func main() {
 	out := flag.String("out", "", "必须不存在的报告目录")
 	timeout := flag.Duration("timeout", 5*time.Minute, "每个模块的总时限")
 	flag.Parse()
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	ctx, cancel := signal.NotifyContext(context.Background(), stopSignals()...)
 	defer cancel()
 	if err := verify(ctx, *root, *out, *timeout); err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, err)

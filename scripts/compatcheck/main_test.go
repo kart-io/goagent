@@ -39,7 +39,29 @@ func TestCurrentSource(t *testing.T) {
 func TestUnavailableService(t *testing.T) { t.Skip("没有配置测试服务") }
 `)
 	}
-	// 这个路径不存在；覆盖时须删除带版本的替换，不能让它优先于当前源码。
+	writeFixture(t, root, "stale-core/go.mod", "module github.com/kart-io/goagent\n\ngo 1.26.0\n")
+	writeFixture(t, root, "stale-core/value.go", "package goagent\nconst Value = 7\n")
+	writeFixture(t, root, "goagent-harness/cmd/helper/main.go", `package main
+import (
+ "fmt"
+ current "github.com/kart-io/goagent"
+)
+func main() { fmt.Print(current.Value) }
+`)
+	writeFixture(t, root, "goagent-harness/child_test.go", `package consumer
+import (
+ "os/exec"
+ "strings"
+ "testing"
+)
+func TestNestedBuildUsesCurrentCore(t *testing.T) {
+ output, err := exec.Command("go", "run", "./cmd/helper").CombinedOutput()
+ if err != nil || strings.TrimSpace(string(output)) != "42" {
+  t.Fatalf("子构建没有使用当前源码: %s, %v", output, err)
+ }
+}
+`)
+	// 覆盖时须删除带版本的替换，不能让旧核心优先于当前源码。
 	f, err := os.OpenFile(filepath.Join(root, "goagent-harness/go.mod"), os.O_APPEND|os.O_WRONLY, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -73,6 +95,11 @@ func TestVerifyUsesCurrentSourceKeepsEvidenceAndDoesNotEditConsumers(t *testing.
 	t.Setenv("GOROOT", filepath.Join(root, "旧标准库"))
 	t.Setenv("GOWORK", filepath.Join(root, "不存在的工作区"))
 	t.Setenv("GOFLAGS", "-不存在的选项")
+	tmp := filepath.Join(t.TempDir(), "临时依赖 包含空格")
+	if err := os.Mkdir(tmp, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TMPDIR", tmp)
 	before := map[string]string{}
 	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
 		if err != nil {
@@ -106,7 +133,11 @@ func TestVerifyUsesCurrentSourceKeepsEvidenceAndDoesNotEditConsumers(t *testing.
 		t.Fatalf("需要执行四个下游模块: %s", data)
 	}
 	for _, result := range report.Modules {
-		if result.Status != "passed" || result.PassedTests != 1 || len(result.SkippedTests) != 1 || result.CoreDir != filepath.Join(root, "goagent") {
+		wantTests := 1
+		if result.Path == "github.com/kart-io/goagent-harness" {
+			wantTests = 2
+		}
+		if result.Status != "passed" || result.PassedTests != wantTests || len(result.SkippedTests) != 1 || result.CoreDir != filepath.Join(root, "goagent") {
 			t.Fatalf("源码定位、通过与跳过证据不完整: %+v", result)
 		}
 		if _, err := os.Stat(filepath.Join(out, result.Log)); err != nil {
