@@ -1,6 +1,6 @@
 # 多 Agent 预置模式设计
 
-日期：2026-11-05。基线 `f2e242b5`。修订记录：Codex 首轮审阅（14 项）、独立架构复审（6 项重要、12 项次要）、Codex 复审（15 项，HEAD `6fdc234a`）、第四轮架构复审（7 项重要、12 项次要，HEAD `d1a8f79c`）、Codex 第五轮（7 项，HEAD `0c7be5c6`，解决方案经独立架构分析）。
+日期：2026-11-05。基线 `f2e242b5`。修订记录：Codex 首轮审阅（14 项）、独立架构复审（6 项重要、12 项次要）、Codex 复审（15 项，HEAD `6fdc234a`）、第四轮架构复审（7 项重要、12 项次要，HEAD `d1a8f79c`）、Codex 第五轮（7 项，HEAD `0c7be5c6`，解决方案经独立架构分析）、Codex 第六轮（5 项，HEAD `52b64d95`）。
 
 ## 目标
 
@@ -123,7 +123,7 @@ func SupervisorTools(members ...Member) ([]interfaces.Tool, error)
 
 - 订单号的格式校验必须放进 validate。validate 拒绝时中断保持等待，`Resume` 返回 `*workflow.ResumeRejectedError`，快照中该中断 `Rejected` 为真，宿主用同一中断键提交修正值。validate 接受的输入会固定下来（`core/durable/interrupt.go:58-59`），之后再提交不同的值会因 `ErrInterruptAnswered` 被拒（`workflow/interrupt.go:73-80`），所以不能在 `AwaitInput` 返回后才校验格式，否则运行会卡在无效值上。
 - validate 必须是输入的纯函数（重入时可能再次执行）；它的错误文本会持久化并对外暴露，不得包含敏感信息。
-- 依赖外部数据、结果可能变化的核对（如订单是否存在）放在 `AwaitInput` 返回之后；核对失败时用带序号的新中断 ID（如 `order-id/2`）再问一次，而不是让节点失败。
+- 依赖外部数据、结果可能变化的核对（如订单是否存在）不能与 `AwaitInput` 放在同一节点：节点重入时会重新核对，外部数据若已变化，就会走另一条分支，可能跳过后续追问、丢掉客户的新输入。核对做成独立的下一个节点，结果写进状态，由节点检查点固定；核对不通过时由路由回到追问节点。每次访问追问节点都是一次新的节点执行（执行键包含步数），中断互不冲突。这需要手写图（追问 → 核对 → 回到追问或继续），S6 场景测试只演示格式校验，指南给出该回路的写法。
 - 恢复时节点从头重入，Agent 的模型请求从日志回放。补充信息后如需在同一节点再调用一次 Agent，第二次调用必须用不同的 `WithDurableScope`（`builder/config_options.go:128-130`），否则与第一次调用的意图冲突。
 
 ### ParallelStep 的表示
@@ -152,7 +152,7 @@ func SupervisorTools(members ...Member) ([]interfaces.Tool, error)
 - Loop 第 `MaxIterations` 轮结束时 `Until` 为真，正常结束；为假时尝试执行下一轮第一步，返回 `workflow.ErrMaxSteps`。
 - Router 第 `MaxRounds` 次成员执行后，Supervisor 还会再执行一次（会再发一次模型请求）：返回 `Finish` 时正常结束；选择任一成员时返回 `workflow.ErrMaxSteps`。
 - 计数存放在检查点中，重启后仍准确。需要“固定跑 N 轮后正常结束”的宿主在 T 中记录轮数，由 `Until` 判断。
-- 持久运行返回 `ErrMaxSteps` 后，检查点停在 `Next == MaxSteps`（`workflow/durable.go:274`），同一运行 ID 再 `Run` 仍然报错。宿主转人工或重新处理时使用新运行 ID，并为它创建新的根预算（新的 `budget.Config.RootKey`）；原根预算的用量不会因换运行 ID 而重置。
+- 三个构造器的 `ErrMaxSteps` 由执行器的步数检查产生，持久运行返回后检查点停在 `Next == MaxSteps`（`workflow/durable.go:274`），同一运行 ID 再 `Run` 仍然报错。宿主路由主动返回的 `ErrMaxSteps`（如“组合流程”）不满足这一条件：检查点停在该节点的路由位置，`Next == MaxSteps - 1`，再 `Run` 时重新路由并得到同样的错误。宿主转人工或重新处理时使用新运行 ID，并为它创建新的根预算（新的 `budget.Config.RootKey`）；原根预算的用量不会因换运行 ID 而重置。
 
 ### 版本与迁移
 
@@ -279,7 +279,7 @@ func TextNext(members ...string) (func(context.Context, Conversation) (string, e
   | 错误链含 `context.DeadlineExceeded`（超时） | failed（`deadline`） | 拒绝 | 拒绝 |
   | 模型返回其他错误 | failed（`execution`） | 拒绝 | 拒绝 |
 
-  “拒绝”指节点以 `*durable.OperationError` 失败（`errors.Is(err, durable.ErrOperationAttention)`，`Kind` 为上表括号中的值），同一运行 ID 无法继续，宿主换运行 ID 与新根预算重新处理。分类看错误链与父 ctx：父 ctx 已取消时一律记为 canceled；模型客户端把超时包装成取消时（如 `llm/common/base.go` 的重试在退避中遇到 ctx 结束，返回包装 `context.Canceled` 的错误，`errors/helpers.go:222-225`），超时也会记为 canceled 并可能被重发。
+  “拒绝”指节点以 `*durable.OperationError` 失败（`errors.Is(err, durable.ErrOperationAttention)`，`Kind` 为上表括号中的值），同一运行 ID 无法继续，宿主换运行 ID 与新根预算重新处理。分类按优先级（`core/durable/operation.go:338-347`）：错误链含 `context.DeadlineExceeded` 时为 deadline；否则错误链含 `context.Canceled` 或父 ctx 已取消时为 canceled；其余为 execution。模型客户端把超时包装成取消时（如 `llm/common/base.go` 的重试在退避中遇到 ctx 结束，返回包装 `context.Canceled` 的错误，`errors/helpers.go:222-225`），超时也会记为 canceled 并可能被重发。
 - 重发的 3 次是持久操作的尝试次数，不是请求次数。每次尝试内，`WithRequestError` 的钩子还可原样重试最多 `maxRecoveries` 次，计数在每次尝试时重新开始（`builder/loop_hooks.go:195-203,442,456`），所以同一回合最多发出 `3 × (1 + maxRecoveries)` 个请求。每个请求发送前在根预算预留一次（`builder/model_call.go:151,184`），真实请求总量由 `budget.Config.MaxModelRequests` 限制；模型客户端自身的重试（如 `llm/providers/deepseek.go:139-146`）不经过预算，接入持久运行时应关闭或计入估算。重发可能重复计费；开关在运行的整个生命周期内必须一致，否则恢复时报策略变更。
 
 **预算与 Dispatcher**（`tools/call_scope.go:33-56`、`builder/model_call.go:196-201`）：
@@ -366,8 +366,10 @@ func TextNext(members ...string) (func(context.Context, Conversation) (string, e
 - **工具 completed 回放**：工具操作 completed 后，让下一条 pending 记录（下一个模型回合）的保存失败；恢复后工具不再执行。
 - **工具 pending**：默认（非 Resumable）工具在 pending 状态下恢复被拒绝；Resumable 工具 pending 时重入，第 4 次尝试时报尝试耗尽。
 - **模型请求中断**：multiagent 只证明“图节点 → Agent → 模型操作”这条链路正确传递日志与取消，测两种状态；deadline 与 execution 两种由下层测试覆盖（`core/durable/operation_test.go:144-180`、`builder/model_resend_test.go:151`），重发与 RequestError 重试的叠加由 `builder/model_resend_test.go:164-186` 覆盖，均在指南中引用。
-  - pending：包装 Store 只让 `model/turn/0`（`builder/durable_turn.go:39,54`）的终态保存失败，pending 照常写入。首次 `Run` 报错后先断言落盘记录为 pending/`ambiguous`、`Attempts == 1`、`Calls() == 1`；重建后默认配置报 `OperationError{Kind: "ambiguous"}` 且 `Calls()` 不变；开启重发后完成，`Calls() == 2`，记录 `Attempts == 2`。
-  - canceled：`ScriptedClient` 的一条规则阻塞到 `ctx.Done()` 并在进入时通知测试，测试随即取消运行；断言 `errors.Is(err, context.Canceled)`、落盘记录为 failed/`canceled`；默认恢复报 `Kind == "canceled"`，开启重发后恢复完成，`Calls()` 加 1。
+  - 前提：Agent 必须配置一个经 `Dispatcher.Tools()` 包装的工具，才会走工具回合路径，操作 ID 为 `model/turn/0`（`builder/durable_turn.go:39,54`）；没有工具时走 `model/answer/0`（`builder/events.go:191,214`），只拦截 `model/turn/0` 会打不中故障点。注入器记录命中次数，断言恰好命中一次。
+  - 开关不能中途切换：重发开关改变 `MaxAttempts`，同一运行先用默认配置、再开启重发恢复会报策略变更（`core/durable/operation.go:269`、`builder/model_call.go:209`）。因此拆成四个独立子测试：pending、canceled 各自在“默认”和“开启重发”下，从首次执行起固定开关。
+  - pending：包装 Store 只让 `model/turn/0` 的终态保存失败一次，pending 照常写入，恢复前解除故障。此时 `Do` 返回的内存记录已是 completed 并同时返回保存错误（`core/durable/operation.go:320,351`），所以必须重新读取存储断言落盘记录为 pending/`ambiguous`、`Attempts == 1`，并断言 `Calls() == 1`。重建后：默认配置报 `OperationError{Kind: "ambiguous"}` 且 `Calls()` 不变；开启重发的子测试恢复后完成，`Calls() == 2`，记录 `Attempts == 2`。
+  - canceled：`ScriptedClient` 的一条规则阻塞到 `ctx.Done()` 并在进入时通知测试，测试随即取消运行；断言 `errors.Is(err, context.Canceled)`、重新读取存储得到 failed/`canceled`。重建后：默认配置报 `Kind == "canceled"`；开启重发的子测试恢复后完成，`Calls()` 加 1。
 - **跨轮隔离**：Loop 不同轮次的操作键不同，日志互不覆盖。
 - **预算**：恢复后根预算不重复扣减。另分两个子测试：(a) 复用预算存储并改变 `budget.Config`（例如重新计算 `DeadlineUnixMilli`），`budget.NewDurable` 报配置变化；(b) 换用新的空预算存储（`RootKey` 相同、配置不同），恢复时已完成的模型请求报意图不一致。
 - **兜底**：Router 分流首行无效时，持久运行转入 Fallback 并完成；无 Fallback 时同一运行 ID 再 `Run` 仍报 `ErrInvalidRoute`。
@@ -405,7 +407,7 @@ func TextNext(members ...string) (func(context.Context, Conversation) (string, e
 ### 离线示例与其他
 
 - `examples/multi-agent-patterns` 演示 S1、S2、S3、S5、S7、S9 与组合流程，用 `ScriptedClient`，不需要 API 密钥；各场景共用一个装配辅助函数。
-- 示例验收固化为测试：示例逻辑放在 `run(ctx context.Context, w io.Writer) error`，`main` 以 `os.Stdout` 调用；每个场景结束时向 w 写一行完成标记（如 `S1 完成`）。同目录 `main_test.go` 在 goroutine 中调用 `run`，用独立的 30s 计时器等待（不只依赖 ctx 超时：图会等节点关闭流，不响应取消的节点会让同步调用挂住，见 `workflow/execute.go:96-102`；`-race` 下 5s 偏紧），超时即 `t.Fatalf`；返回后断言错误为 nil，并逐一断言 S1、S2、S3、S5、S7、S9 与组合流程的完成标记都出现。w 用带锁的 Writer，避免超时分支读取输出时触发 `-race`。随 `go test ./...` 执行，先例为 `examples/integration/human-in-loop/hitl_demo_test.go:28-38`。现有 `scripts/verify_all_examples.sh` 用 `go run` 计时且把超时记为通过、失败不返回非零（`scripts/verify_all_examples.sh:60,75,102`），不能作为这一验收；本次不修改该脚本。
+- 示例验收固化为测试：示例逻辑放在 `run(ctx context.Context, w io.Writer) error`，`main` 以 `os.Stdout` 调用；每个场景结束时向 w 写一行完成标记（如 `S1 完成`）。同目录 `main_test.go` 在 goroutine 中调用 `run`，用独立的 30s 计时器等待（不只依赖 ctx 超时：图会等节点关闭流，不响应取消的节点会让同步调用挂住，见 `workflow/execute.go:96-102`；`-race` 下 5s 偏紧），超时即 `t.Fatalf`；返回后断言错误为 nil，并逐一断言 S1、S2、S3、S5、S7、S9 与组合流程的完成标记都出现。w 用带锁的 Writer，测试读取输出时也持同一把锁，避免超时分支读取输出时触发 `-race`。随 `go test ./...` 执行，先例为 `examples/integration/human-in-loop/hitl_demo_test.go:28-38`。现有 `scripts/verify_all_examples.sh` 用 `go run` 计时且把超时记为通过、失败不返回非零（`scripts/verify_all_examples.sh:60,75,102`），不能作为这一验收；本次不修改该脚本。
 - `scripts/apicheck` 新规则的回归测试。
 
 ## 文档
