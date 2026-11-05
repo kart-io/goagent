@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `workflow/refund.Service` 新增可选 `OnRegister` 钩子：`Register` 新插入申请后在同一事务内调用，可写入争议判定等与申请同生共灭的记录；返回错误时整个事务回滚，重复登记不调用，为 nil 时行为不变。
+
 ## [0.47.1] - 2026-11-04
 
 ### Added
