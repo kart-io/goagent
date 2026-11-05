@@ -25,6 +25,7 @@ Related repositories:
 - **Native tool loop** - the model picks tools or answers in a single streaming request (OpenAI, DeepSeek and Gemini providers); optional parallel tool calls and direct-return tools.
 - **Loop extension points** - PreStep, Request, RequestError, TurnStopping hooks, prompt sections/contexts, and a running `Handle` that accepts Steer/Inject/Redirect/Followup.
 - **Durable execution** - `core/durable` journals model turns and tool calls; `workflow.Graph` compiles typed graphs with branches, parallel joins, bounded loops and approval resume.
+- **Human in the loop** - approval gates accept validated human input via `DurableGraph.Resume`; nodes, parallel branches, interruptible tools and nested graphs pause mid-execution with `durable.AwaitInput` and resume from the checkpoint. See the [HITL guide](docs/guides/HUMAN_IN_THE_LOOP.md).
 - **Governance** - root request budgets (`core/budget`), `tools.Dispatcher`/`Pipeline` with approvals, guards and admission limits, tool-result offloading, session logs (`core/session`).
 - **LLM providers** - OpenAI (and compatible endpoints), DeepSeek and Gemini support `AsRunnable` and the native tool loop; Kimi, SiliconFlow and Ollama are OpenAI-compatible presets with the same support, and Anthropic uses the official SDK with the same support. See the [provider table](docs/README.md#llm-提供商).
 - **Observability** - read-only execution events (`core/observe`) and OpenTelemetry integration (`observability`).
@@ -151,6 +152,7 @@ With a `llm.ToolStreamClient` and at least one tool, `agent.Start(ctx, input)` r
 ### Durable Execution and Orchestration
 
 - [Native orchestration](docs/guides/NATIVE_ORCHESTRATION.md) - `workflow.Graph`, durable graphs via `AsRunnable`, branch-level resume and `tools.Dispatcher`.
+- [Human in the loop](docs/guides/HUMAN_IN_THE_LOOP.md) - approval with human input, mid-execution interrupts, checkpoint and failure semantics; offline examples: `examples/human-in-the-loop`, `examples/human-in-the-loop-interrupt`.
 - [Workflow](workflow/README.md) - typed graphs, branches, parallel joins and bounded loops.
 - [Multi-agent usage](docs/guides/MULTI_AGENT_USAGE.md) - `WithUsageHook` for per-attempt tokens and cumulative statistics, agent identity and unified accounting; examples: [goagent-examples/agent-usage](https://github.com/kart-io/goagent-examples/tree/main/agent-usage).
 - [Composable orchestration](docs/guides/COMPOSABLE_ORCHESTRATION.md) - wrap a child agent or `workflow.DurableGraph` as a tool with `tools.NewRunnableToolFactory`; a child waiting for approval suspends the parent with `builder.ErrWaiting`.

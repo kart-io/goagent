@@ -109,9 +109,9 @@ GoAgent 定位为**嵌入 Go 业务服务的可恢复、可计量、可观测 Ag
 
 按与定位的契合度排序，均沿用 R2 的准入原则（需业务证据或故障专项方案）。第 1、2 项的具体需求见[嵌套恢复与失败处理](../superpowers/specs/2026-10-29-nested-resume-and-failure-handling.md)；两者共用操作记录格式升级，实施顺序为记录格式、第 2 项、第 1 项。
 
-1. **嵌套恢复与审批续跑**：补上“不透明复合调用”pending 时不能续跑的缺口，需要独立 continuation 契约。
-2. **失败处理**：业务结论作为工具结果交还模型；崩溃后按执行键核对结果再决定是否重跑；临时故障在最内层模型调用上受预算约束地重试。
-3. **离线只读运行报告**：基于已有 JSONL 事件，HTML 必须转义不可信内容。
+1. **嵌套恢复与审批续跑**（已完成）：补上“不透明复合调用”pending 时不能续跑的缺口，需要独立 continuation 契约。实现：`RunnableToolConfig.Resumable`、`DurableGraph.AsChildRunnable` 与 `workflow.ChildContinuation`；v0.47.0 起审批处可带人工输入，节点与工具可经 `durable.AwaitInput` 中途中断。
+2. **失败处理**（已完成）：业务结论作为工具结果交还模型；崩溃后按执行键核对结果再决定是否重跑；临时故障在最内层模型调用上受预算约束地重试。实现：`builder.WithToolErrorFeedback`、`tools.ReconcilableTool`、`builder.RetryTransient`（经 `WithRequestError`）。
+3. **离线只读运行报告**（已完成）：基于已有 JSONL 事件，HTML 必须转义不可信内容。实现：`devtools.WriteReport`，经 `html/template` 转义。
 4. **流 API 稳定化**：仅在有业务证明首帧收益后推进。
 5. **持久摘要**：后置。
 
@@ -122,7 +122,7 @@ GoAgent 定位为**嵌入 Go 业务服务的可恢复、可计量、可观测 Ag
 1. R2 的 Breaking 变更作为 v0.16.0 合入 master，CHANGELOG 已有迁移说明。
 2. 修复 GitHub Release 流程，使 Release 与 tag 一致。
 3. 外围模块删除单独作为 v0.17.0，CHANGELOG 列出删除的包与替代方式（推理策略改用原生工具循环、存储后端由宿主实现 `store.Store`），并注明可从 `v0.16.0` 恢复。
-4. 主模块进入 v1 前，至少完成第 5 节第 1、2 项，并有一个内部宿主在生产使用。
+4. 主模块进入 v1 前，至少完成第 5 节第 1、2 项，并有一个内部宿主在生产使用。截至 v0.47.1，第 5 节第 1、2 项已完成，剩余条件是生产宿主（见第 7 节）。
 
 ## 7. 风险与待确认
 

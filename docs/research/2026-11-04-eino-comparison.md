@@ -77,21 +77,21 @@ Eino 是组件、编排、ADK 与扩展生态齐全的 LLM 应用框架；GoAgen
 
 本轮对照没有发现需要进入核心的能力缺口。上一版差距中的“任意节点与工具中途中断、恢复时带数据”已由动态中断（`durable.AwaitInput`）补齐。
 
-## 后续事项：Embedding 接口清理
+## Embedding 接口清理（已完成）
 
-核对使用方后，真实问题小于“多处重复定义”：
+核对使用方后，真实问题小于“多处重复定义”。下表结论已在 v0.43.0–v0.45.0 落地：
 
 | 定义 | 使用情况 | 结论 |
 |---|---|---|
 | `llm.EmbeddingClient` | Provider 能力声明，OpenAI 实现 | 保留 |
 | `memory.TextEmbedder` | `WithEmbedder` 使用；单方法设计使 `llm.EmbeddingClient` 直接满足（`memory/enhanced.go:160-163`） | 保留，属于使用方定义接口 |
-| `memory.Embedder` | 主模块、goagent-examples、contrib 均无引用 | 删除 |
-| `llm.BatchEmbeddingClient` | 无使用方；`llm/providers` 无实现（现有 `EmbedBatch` 均返回 float32，不满足该接口） | 删除 |
-| `memory.EmbeddingModel`（float32） | `EmbeddingVectorStore` 使用 | 已统一：核心向量改为 float32（见 CHANGELOG Unreleased），`SimpleEmbeddingModel` 可直接用于 `WithEmbedder` |
-| `llm/cache.EmbeddingProvider`（float32） | 语义缓存内部使用，自带 `OpenAIEmbeddingProvider` 与 Mock 实现，与 `llm/providers` 的 OpenAI Embedding 并存 | 已收敛：接口只保留 `Embed`，删除重复的 OpenAI 实现，改用 `llm.EmbeddingClient` |
+| `memory.Embedder` | 主模块、goagent-examples、contrib 均无引用 | 已删除（v0.43.0） |
+| `llm.BatchEmbeddingClient` | 无使用方；`llm/providers` 无实现（现有 `EmbedBatch` 均返回 float32，不满足该接口） | 已删除（v0.43.0） |
+| `memory.EmbeddingModel`（float32） | `EmbeddingVectorStore` 使用 | 已统一：核心向量改为 float32（v0.44.0），`SimpleEmbeddingModel` 可直接用于 `WithEmbedder` |
+| `llm/cache.EmbeddingProvider`（float32） | 语义缓存内部使用，自带 `OpenAIEmbeddingProvider` 与 Mock 实现，与 `llm/providers` 的 OpenAI Embedding 并存 | 已收敛：接口只保留 `Embed`，删除重复的 OpenAI 实现，改用 `llm.EmbeddingClient`（v0.45.0） |
 | contrib `retrieval.Embedder`（float32） | contrib 检索链路 | 层次不同，不与核心统一 |
 
-删除属于破坏性变更，需在 CHANGELOG 说明；作为独立代码改动执行，不随本文提交。
+删除与签名变更均为破坏性改动，迁移步骤见 CHANGELOG 对应版本。
 
 ## 复核方式
 
