@@ -258,10 +258,12 @@ func (b *refundBook) member(agent multiagent.AgentFactory) multiagent.Step[multi
 			return c, nil
 		}
 		owned, err := agent(ctx)
+		if owned.Close != nil {
+			defer func() { _ = owned.Close(context.WithoutCancel(ctx)) }()
+		}
 		if err != nil {
 			return c, err
 		}
-		defer func() { _ = owned.Close(context.WithoutCancel(ctx)) }()
 		out, err := owned.Runnable.Invoke(ctx, c.Input)
 		if err != nil {
 			return c, err
@@ -270,9 +272,14 @@ func (b *refundBook) member(agent multiagent.AgentFactory) multiagent.Step[multi
 			OrderID     string `json:"order_id"`
 			AmountCents int64  `json:"amount_cents"`
 		}
-		if err := json.Unmarshal([]byte(out.Result.(string)), &p); err != nil {
+		text, ok := out.Result.(string)
+		if !ok {
+			return c, fmt.Errorf("退款提议应为文本，实际为 %T", out.Result)
+		}
+		if err := json.Unmarshal([]byte(text), &p); err != nil {
 			return c, err
 		}
+		// 演示用订单号派生申请 ID；真实业务的申请 ID 应取自工单，否则同一订单的第二笔合法退款会被 Register 拒绝。
 		id := "refund-" + p.OrderID
 		intent, _ := json.Marshal(map[string]any{"request_id": id, "proposal": p})
 		// 登记按申请 ID 幂等，中断后可安全重跑；已有判定保持不变。
@@ -303,7 +310,10 @@ func (b *refundBook) member(agent multiagent.AgentFactory) multiagent.Step[multi
 			}
 			var in reviewInput
 			_ = json.Unmarshal(raw, &in)
-			if !in.Approved {
+			switch {
+			case !in.Approved && in.Reason == "timeout":
+				return answer("审核超时，按拒绝处理")
+			case !in.Approved:
 				return answer("人工拒绝：" + in.Note)
 			}
 			approver = in.Approver

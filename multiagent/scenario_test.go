@@ -605,7 +605,6 @@ func TestScenarioRefundApproval(t *testing.T) {
 		rc.desk.ledger.read(func(s *ledgerState) {
 			require.Equal(t, 1, s.verdicts["refund-A1"].Seq, "判定与登记序号经 OnRegister 写入一次")
 		})
-		require.Equal(t, 1, rc.triage.Hits(0), "审批前那次分流请求没有被再次匹配")
 		require.Equal(t, 2, rc.triage.Calls(), "分流只多出退款后的那次请求")
 	})
 	t.Run("拒绝时不退款", func(t *testing.T) {

@@ -17,4 +17,4 @@ go run ./examples/multi-agent-patterns
 go test ./examples/multi-agent-patterns
 ```
 
-S5 的账本只为演示；真实业务使用 `workflow/refund.Service` 与带事务的存储。各模式的取舍与持久接入契约见 [多 Agent 预置模式指南](../../docs/guides/MULTI_AGENT_PATTERNS.md)。
+S5 的账本只为演示；真实业务使用 `workflow/refund.Service` 与带事务的存储。示例以 `"refund-"+订单号` 作申请 ID，真实业务的申请 ID 应取自工单，否则同一订单的第二笔合法退款会被 `Register` 拒绝。各模式的取舍与持久接入契约见 [多 Agent 预置模式指南](../../docs/guides/MULTI_AGENT_PATTERNS.md)。

@@ -65,7 +65,7 @@ func TestGuardRouteOrder(t *testing.T) {
 		{"未知名无兜底", fixed("x", nil), "", "", ErrInvalidRoute},
 		{"END 字面值按无效", fixed(workflow.END, nil), "", "", ErrInvalidRoute},
 		{"Supervisor 名按无效", fixed("sup", nil), "", "", ErrInvalidRoute},
-		{"兜底名按无效", fixed("human", nil), "human", "human", nil},
+		{"兜底名按无效路由转兜底", fixed("human", nil), "human", "human", nil},
 	} {
 		route, _, err := GuardRoute(tc.next, []string{"a", "b"}, tc.fallback)
 		require.NoError(t, err)

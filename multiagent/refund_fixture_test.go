@@ -306,8 +306,12 @@ func refundMember(desk *refundDesk, agent AgentFactory) Step[Conversation] {
 		if err != nil {
 			return c, err
 		}
+		text, ok := out.Result.(string)
+		if !ok {
+			return c, fmt.Errorf("退款提议应为文本，实际为 %T", out.Result)
+		}
 		var p proposal
-		if err := json.Unmarshal([]byte(out.Result.(string)), &p); err != nil {
+		if err := json.Unmarshal([]byte(text), &p); err != nil {
 			return c, fmt.Errorf("退款提议无法解析: %w", err)
 		}
 		id := "refund-" + p.OrderID
