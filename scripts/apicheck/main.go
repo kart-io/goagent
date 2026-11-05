@@ -36,6 +36,13 @@ func forbidden(file, path string) bool {
 	// execution 是宿主装配薄层，基础和执行机制不得反向依赖它。
 	if dest == "execution" {
 		switch source {
+		case "interfaces", "errors", "utils", "cache", "core", "builder", "tools", "parsers", "llm", "workflow", "memory", "store", "middleware", "observability", "devtools", "harness", "multiagent":
+			return true
+		}
+	}
+	// multiagent 组合 workflow、builder 与 tools 的预置模式，基础与执行机制不得反向依赖它。
+	if dest == "multiagent" {
+		switch source {
 		case "interfaces", "errors", "utils", "cache", "core", "builder", "tools", "parsers", "llm", "workflow", "memory", "store", "middleware", "observability", "devtools", "harness":
 			return true
 		}
@@ -43,7 +50,7 @@ func forbidden(file, path string) bool {
 	// plugin 在 builder 之上组合能力，执行机制不得反向依赖它。
 	if dest == "plugin" {
 		switch source {
-		case "interfaces", "errors", "utils", "cache", "core", "builder", "tools", "parsers", "llm", "workflow", "memory", "store", "middleware", "observability":
+		case "interfaces", "errors", "utils", "cache", "core", "builder", "tools", "parsers", "llm", "workflow", "memory", "store", "middleware", "observability", "multiagent":
 			return true
 		}
 	}

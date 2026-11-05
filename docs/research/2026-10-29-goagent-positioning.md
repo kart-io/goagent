@@ -114,6 +114,7 @@ GoAgent 定位为**嵌入 Go 业务服务的可恢复、可计量、可观测 Ag
 3. **离线只读运行报告**（已完成）：基于已有 JSONL 事件，HTML 必须转义不可信内容。实现：`devtools.WriteReport`，经 `html/template` 转义。
 4. **流 API 稳定化**：仅在有业务证明首帧收益后推进。
 5. **持久摘要**：后置。
+6. **多 Agent 预置模式**（已完成）：内部客服服务计划接入，业务方提出工单分流与回复评审两个流程，并按其要求补充其余客服流程（[设计](../superpowers/specs/2026-11-05-multiagent-patterns-design.md)）。实现：新 `multiagent` 包只组合 `workflow`、`builder`、`tools`，与 §4.2 删除的旧包同名但不兼容，不恢复 Core NATS 投递。
 
 不做：自建分布式调度（需要时适配 Temporal 等）、完整四范式流运行时、反射字段映射、继续扩充推理策略种类。
 

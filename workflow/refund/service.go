@@ -82,6 +82,9 @@ type Service struct {
 	Authorizer Authorizer
 	Policy     Policy
 	Now        func() time.Time // nil uses time.Now; do not mutate configuration during use.
+	// OnRegister 可选：Register 新插入申请后、在同一事务内调用，用于写入与申请同生共灭的业务记录（如争议判定）。
+	// 返回错误时整个事务回滚、Register 返回该错误；同一申请 ID 重复登记时不调用。
+	OnRegister func(ctx context.Context, tx Transaction, req Request) error
 }
 
 func (s *Service) now() time.Time {
@@ -174,6 +177,11 @@ func (s *Service) Register(ctx context.Context, req Request) (out Request, err e
 		}
 		if e = tx.InsertRequest(ctx, req); e != nil {
 			return e
+		}
+		if s.OnRegister != nil {
+			if e = s.OnRegister(ctx, tx, req); e != nil {
+				return e
+			}
 		}
 		out = req
 		return nil

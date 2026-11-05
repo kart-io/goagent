@@ -22,6 +22,7 @@ Examples that call a real LLM read the provider's API key from the environment (
 | [Token 统计案例](https://github.com/kart-io/goagent-examples/tree/main/agent-usage) | 已迁至 goagent-examples：任务、单 Agent／子 Agent、多平台及错误边界 |
 | [workflow/](workflow/) | `workflow` graph with branching and streaming events, offline (`go run ./examples/workflow [-stream]`) |
 | [human-in-the-loop/](human-in-the-loop/) | Persisted review gates: inspect checkpoints, approve/reject, edit state and resume in another process, offline |
+| [multi-agent-patterns/](multi-agent-patterns/) | `multiagent` presets (router, loop, parallel lookup, refund review, supervisor tools, fallback, composed graph) driven by `mocks.ScriptedClient`, offline |
 | [human-in-the-loop-interrupt/](human-in-the-loop-interrupt/) | Node pauses mid-execution for human input and resumes across processes, offline |
 | [execution-scope/](execution-scope/) | `execution.NewScope` + `execution.ConfigureBuilder`: shared run/session ID, request budget and timeout, with a built-in mock model, offline |
 | [generator/](generator/) | Iterating a `core.BaseAgent` stream as a generator vs. a channel (`basic`); Take/Filter and other helpers (`advanced`) |

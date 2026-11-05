@@ -120,3 +120,53 @@ func TestServiceFailsClosed(t *testing.T) {
 	_, _, err = svc.Existing(canceled, refund.Request{RequestID: "r", OrderID: "o", AmountCents: 1})
 	require.ErrorIs(t, err, context.Canceled)
 }
+
+func hookFixture(hook func(context.Context, refund.Transaction, refund.Request) error) (*memoryStore, *refund.Service, refund.Request) {
+	now := time.Now().UTC()
+	db := &memoryStore{tx: memoryTx{order: refund.Order{PaidCents: 1000, Currency: "CNY", Version: 1, DeliveryDays: 2}}}
+	svc := &refund.Service{
+		Store: db, Now: func() time.Time { return now }, OnRegister: hook,
+		Authorizer: refund.AuthorizeFunc(func(context.Context, string, refund.Request) error { return nil }),
+		Policy:     func(context.Context, refund.Request, refund.Order) error { return nil },
+	}
+	req := refund.Request{RequestID: "tenant-A/refund-1", OrderID: "tenant-A/order-1", AmountCents: 500, PaidCents: 1000, Currency: "CNY", OrderVersion: 1, DeliveryDays: 2, ValidUntil: now.Add(time.Minute).Format(time.RFC3339Nano)}
+	return db, svc, req
+}
+
+func TestServiceOnRegisterRunsOnceInsideTransaction(t *testing.T) {
+	ctx := context.Background()
+	var seen []refund.Request
+	db, svc, req := hookFixture(func(ctx context.Context, tx refund.Transaction, r refund.Request) error {
+		stored, _, err := tx.Request(ctx, r.RequestID)
+		require.NoError(t, err, "钩子在 InsertRequest 之后、同一事务内调用")
+		require.Equal(t, r, stored)
+		seen = append(seen, r)
+		return nil
+	})
+	_, err := svc.Register(ctx, req)
+	require.NoError(t, err)
+	_, err = svc.Register(ctx, req)
+	require.NoError(t, err)
+	require.Equal(t, []refund.Request{req}, seen, "新插入调用一次，重复登记不调用")
+	require.Equal(t, req, db.tx.req)
+}
+
+func TestServiceOnRegisterErrorRollsBack(t *testing.T) {
+	ctx := context.Background()
+	hookErr := errors.New("判定写入失败")
+	db, svc, req := hookFixture(func(context.Context, refund.Transaction, refund.Request) error { return hookErr })
+	_, err := svc.Register(ctx, req)
+	require.ErrorIs(t, err, hookErr)
+	require.Empty(t, db.tx.req.RequestID, "钩子出错时整个事务回滚，没有申请记录")
+	_, found, err := svc.Existing(ctx, req)
+	require.NoError(t, err)
+	require.False(t, found)
+}
+
+func TestServiceWithoutOnRegisterUnchanged(t *testing.T) {
+	db, svc, req := hookFixture(nil)
+	registered, err := svc.Register(context.Background(), req)
+	require.NoError(t, err)
+	require.Equal(t, req, registered)
+	require.Equal(t, req, db.tx.req)
+}

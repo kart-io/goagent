@@ -57,3 +57,17 @@ func TestPluginIsTopLevel(t *testing.T) {
 		require.False(t, forbidden(file, module+"plugin"), file)
 	}
 }
+
+func TestMultiagentIsAboveMechanismLayers(t *testing.T) {
+	for _, file := range []string{"interfaces/x.go", "errors/x.go", "utils/x.go", "cache/x.go", "core/x.go", "builder/x.go", "tools/x.go", "parsers/x.go", "llm/x.go", "workflow/x.go", "memory/x.go", "store/x.go", "middleware/x.go", "observability/x.go", "devtools/x.go", "harness/env/x.go"} {
+		require.True(t, forbidden(file, module+"multiagent"), file)
+	}
+	for _, file := range []string{"examples/multi-agent-patterns/main.go", "execution/scope.go", "plugin/install.go", "evaluation/bench/x.go", "testing/mocks/x.go"} {
+		require.False(t, forbidden(file, module+"multiagent"), file)
+	}
+	for _, dep := range []string{"core", "builder", "tools", "workflow", "interfaces"} {
+		require.False(t, forbidden("multiagent/x.go", module+dep), dep)
+	}
+	require.True(t, forbidden("multiagent/x.go", module+"execution"), "不得上行导入宿主装配层")
+	require.True(t, forbidden("multiagent/x.go", module+"plugin"), "不得上行导入能力装配层")
+}
