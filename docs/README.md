@@ -71,6 +71,7 @@ GoAgent 是嵌入 Go 服务的 Agent 执行内核：原生工具循环、类型�
 ## 开发
 
 - [开发指南](development/DEVELOPMENT_GUIDE.md)、[测试最佳实践](development/TESTING_BEST_PRACTICES.md)、[Panic 处理](development/PANIC_HANDLING.md)
+- [业务接入与故障恢复验收](development/BUSINESS_ACCEPTANCE.md)：授权、业务幂等、崩溃恢复、数据库接管与验收证据
 - [优化验收清单](development/PRIORITY_IMPROVEMENTS.md)
 
 ## 相关链接

@@ -1,0 +1,790 @@
+[
+  {
+    "log": "04-tests.jsonl",
+    "sha256": "4d03bb61dc15a8cfd9bc150a629d344dc05fe091a5d4fa01af6e701d15b1303b",
+    "events": [
+      {
+        "Time": "2026-11-05T21:33:35.048325+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestSaveAllDatabaseRollback",
+        "Elapsed": 0.07
+      },
+      {
+        "Time": "2026-11-05T21:33:35.128186+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestScopedSaveAllFencingAndIsolation",
+        "Elapsed": 0.08
+      },
+      {
+        "Time": "2026-11-05T21:33:35.188548+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestAppendAllDatabaseRollback",
+        "Elapsed": 0.06
+      },
+      {
+        "Time": "2026-11-05T21:33:35.244217+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestAppendAllCompareOnlyAndEncoding",
+        "Elapsed": 0.06
+      },
+      {
+        "Time": "2026-11-05T21:33:35.315325+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestAppendAllConcurrentReverseOrder",
+        "Elapsed": 0.07
+      },
+      {
+        "Time": "2026-11-05T21:33:35.39231+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestAppendAllSnapshotLeaseFencing",
+        "Elapsed": 0.08
+      },
+      {
+        "Time": "2026-11-05T21:33:35.695504+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestAppendAllCompareOnlyHoldsUntilCommit/missing",
+        "Elapsed": 0.3
+      },
+      {
+        "Time": "2026-11-05T21:33:35.999787+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestAppendAllCompareOnlyHoldsUntilCommit/existing",
+        "Elapsed": 0.3
+      },
+      {
+        "Time": "2026-11-05T21:33:35.999805+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestAppendAllCompareOnlyHoldsUntilCommit",
+        "Elapsed": 0.61
+      },
+      {
+        "Time": "2026-11-05T21:33:36.163779+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestImportFileStore",
+        "Elapsed": 0.16
+      },
+      {
+        "Time": "2026-11-05T21:33:36.451703+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestConformance/互斥",
+        "Elapsed": 0.29
+      },
+      {
+        "Time": "2026-11-05T21:33:36.670137+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestConformance/不可重入",
+        "Elapsed": 0.22
+      },
+      {
+        "Time": "2026-11-05T21:33:36.749792+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestConformance/不同ID互不阻塞",
+        "Elapsed": 0.08
+      },
+      {
+        "Time": "2026-11-05T21:33:36.81974+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestConformance/同实例同时持有多个ID",
+        "Elapsed": 0.07
+      },
+      {
+        "Time": "2026-11-05T21:33:36.894923+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestConformance/跨实例读写",
+        "Elapsed": 0.08
+      },
+      {
+        "Time": "2026-11-05T21:33:36.962842+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestConformance/不存在返回ErrNotExist",
+        "Elapsed": 0.07
+      },
+      {
+        "Time": "2026-11-05T21:33:37.034916+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestConformance/取消后仍可写入",
+        "Elapsed": 0.07
+      },
+      {
+        "Time": "2026-11-05T21:33:37.218658+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestConformance/写入原子",
+        "Elapsed": 0.18
+      },
+      {
+        "Time": "2026-11-05T21:33:37.294283+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestConformance/批量写入跨实例可见",
+        "Elapsed": 0.08
+      },
+      {
+        "Time": "2026-11-05T21:33:37.360665+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestConformance/批量写入拒绝时不写入",
+        "Elapsed": 0.07
+      },
+      {
+        "Time": "2026-11-05T21:33:37.602168+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestConformance/批量写入对并发读者原子",
+        "Elapsed": 0.24
+      },
+      {
+        "Time": "2026-11-05T21:33:37.744014+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestConformance/审批跨实例续跑",
+        "Elapsed": 0.14
+      },
+      {
+        "Time": "2026-11-05T21:33:37.84521+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestConformance/操作跨实例回放",
+        "Elapsed": 0.1
+      },
+      {
+        "Time": "2026-11-05T21:33:37.91499+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestConformance/作用域隔离",
+        "Elapsed": 0.07
+      },
+      {
+        "Time": "2026-11-05T21:33:37.984972+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestConformance/作用域与根同名ID互不阻塞",
+        "Elapsed": 0.07
+      },
+      {
+        "Time": "2026-11-05T21:33:38.072839+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestConformance/作用域删除",
+        "Elapsed": 0.09
+      },
+      {
+        "Time": "2026-11-05T21:33:38.145539+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestConformance/持锁期间删除作用域",
+        "Elapsed": 0.07
+      },
+      {
+        "Time": "2026-11-05T21:33:38.837413+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestConformance/墓碑回收",
+        "Elapsed": 0.69
+      },
+      {
+        "Time": "2026-11-05T21:33:41.922758+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestConformance/崩溃后接管",
+        "Elapsed": 3.09
+      },
+      {
+        "Time": "2026-11-05T21:33:44.145183+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestConformance/续约维持长时间持锁",
+        "Elapsed": 2.22
+      },
+      {
+        "Time": "2026-11-05T21:33:44.227581+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestConformance/接管后旧持有者写入被拒",
+        "Elapsed": 0.08
+      },
+      {
+        "Time": "2026-11-05T21:33:44.464526+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestConformance/同进程旧持有者不放行新持有者",
+        "Elapsed": 0.24
+      },
+      {
+        "Time": "2026-11-05T21:33:44.535965+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestConformance/过期未接管时仍可写入",
+        "Elapsed": 0.07
+      },
+      {
+        "Time": "2026-11-05T21:33:44.615831+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestConformance/批量写入按租约全部拒绝",
+        "Elapsed": 0.08
+      },
+      {
+        "Time": "2026-11-05T21:33:44.615854+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestConformance",
+        "Elapsed": 8.45
+      },
+      {
+        "Time": "2026-11-05T21:33:44.665802+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestSchemaVersionMismatch",
+        "Elapsed": 0.05
+      },
+      {
+        "Time": "2026-11-05T21:33:44.714175+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestClosedRejectsLock",
+        "Elapsed": 0.05
+      },
+      {
+        "Time": "2026-11-05T21:33:44.833734+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestCloseReleasesAfterTimeout",
+        "Elapsed": 0.12
+      },
+      {
+        "Time": "2026-11-05T21:33:45.003066+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestExpiredLeaseCleanup",
+        "Elapsed": 0.17
+      },
+      {
+        "Time": "2026-11-05T21:33:46.114905+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestProcessCrashTakeover",
+        "Elapsed": 1.11
+      },
+      {
+        "Time": "2026-11-05T21:33:46.114999+08:00",
+        "Action": "skip",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestPrimaryRestart",
+        "Elapsed": 0
+      },
+      {
+        "Time": "2026-11-05T21:33:46.19979+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestAcquireUncertainCommitCleanup",
+        "Elapsed": 0.08
+      },
+      {
+        "Time": "2026-11-05T21:33:46.199828+08:00",
+        "Action": "skip",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestSyncCommit",
+        "Elapsed": 0
+      },
+      {
+        "Time": "2026-11-05T21:33:46.268971+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestSessionConformance/不存在返回ErrNotFound",
+        "Elapsed": 0.07
+      },
+      {
+        "Time": "2026-11-05T21:33:46.352602+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestSessionConformance/追加按期望序号比较并交换",
+        "Elapsed": 0.08
+      },
+      {
+        "Time": "2026-11-05T21:33:46.428999+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestSessionConformance/批量追加跨实例可见",
+        "Elapsed": 0.08
+      },
+      {
+        "Time": "2026-11-05T21:33:46.508125+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestSessionConformance/批量追加任一冲突时不写入",
+        "Elapsed": 0.08
+      },
+      {
+        "Time": "2026-11-05T21:33:46.576604+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestSessionConformance/批量追加拒绝时不写入",
+        "Elapsed": 0.07
+      },
+      {
+        "Time": "2026-11-05T21:33:46.713507+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestSessionConformance/并发追加只有一个成功",
+        "Elapsed": 0.14
+      },
+      {
+        "Time": "2026-11-05T21:33:46.792356+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestSessionConformance/事件原样往返",
+        "Elapsed": 0.08
+      },
+      {
+        "Time": "2026-11-05T21:33:46.878725+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestSessionConformance/按序号读取",
+        "Elapsed": 0.09
+      },
+      {
+        "Time": "2026-11-05T21:33:46.999664+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestSessionConformance/分叉",
+        "Elapsed": 0.12
+      },
+      {
+        "Time": "2026-11-05T21:33:47.079899+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestSessionConformance/按字节序列出",
+        "Elapsed": 0.08
+      },
+      {
+        "Time": "2026-11-05T21:33:47.146998+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestSessionConformance/拒绝空会话ID",
+        "Elapsed": 0.07
+      },
+      {
+        "Time": "2026-11-05T21:33:47.429569+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestSessionConformance/锁",
+        "Elapsed": 0.28
+      },
+      {
+        "Time": "2026-11-05T21:33:47.720397+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestSessionConformance/DurableStore/互斥",
+        "Elapsed": 0.29
+      },
+      {
+        "Time": "2026-11-05T21:33:47.945424+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestSessionConformance/DurableStore/不可重入",
+        "Elapsed": 0.22
+      },
+      {
+        "Time": "2026-11-05T21:33:48.022055+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestSessionConformance/DurableStore/不同ID互不阻塞",
+        "Elapsed": 0.08
+      },
+      {
+        "Time": "2026-11-05T21:33:48.123797+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestSessionConformance/DurableStore/同实例同时持有多个ID",
+        "Elapsed": 0.1
+      },
+      {
+        "Time": "2026-11-05T21:33:48.280515+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestSessionConformance/DurableStore/跨实例读写",
+        "Elapsed": 0.16
+      },
+      {
+        "Time": "2026-11-05T21:33:48.379234+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestSessionConformance/DurableStore/不存在返回ErrNotExist",
+        "Elapsed": 0.1
+      },
+      {
+        "Time": "2026-11-05T21:33:48.492279+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestSessionConformance/DurableStore/取消后仍可写入",
+        "Elapsed": 0.11
+      },
+      {
+        "Time": "2026-11-05T21:33:48.77045+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestSessionConformance/DurableStore/写入原子",
+        "Elapsed": 0.28
+      },
+      {
+        "Time": "2026-11-05T21:33:48.857394+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestSessionConformance/DurableStore/批量写入跨实例可见",
+        "Elapsed": 0.09
+      },
+      {
+        "Time": "2026-11-05T21:33:48.938654+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestSessionConformance/DurableStore/批量写入拒绝时不写入",
+        "Elapsed": 0.08
+      },
+      {
+        "Time": "2026-11-05T21:33:49.095988+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestSessionConformance/DurableStore/批量写入对并发读者原子",
+        "Elapsed": 0.16
+      },
+      {
+        "Time": "2026-11-05T21:33:49.179549+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestSessionConformance/DurableStore/审批跨实例续跑",
+        "Elapsed": 0.08
+      },
+      {
+        "Time": "2026-11-05T21:33:49.255218+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestSessionConformance/DurableStore/操作跨实例回放",
+        "Elapsed": 0.08
+      },
+      {
+        "Time": "2026-11-05T21:33:52.339482+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestSessionConformance/DurableStore/崩溃后接管",
+        "Elapsed": 3.08
+      },
+      {
+        "Time": "2026-11-05T21:33:54.578245+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestSessionConformance/DurableStore/续约维持长时间持锁",
+        "Elapsed": 2.24
+      },
+      {
+        "Time": "2026-11-05T21:33:54.665924+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestSessionConformance/DurableStore/接管后旧持有者写入被拒",
+        "Elapsed": 0.09
+      },
+      {
+        "Time": "2026-11-05T21:33:54.910246+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestSessionConformance/DurableStore/同进程旧持有者不放行新持有者",
+        "Elapsed": 0.24
+      },
+      {
+        "Time": "2026-11-05T21:33:54.98936+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestSessionConformance/DurableStore/过期未接管时仍可写入",
+        "Elapsed": 0.08
+      },
+      {
+        "Time": "2026-11-05T21:33:55.079147+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestSessionConformance/DurableStore/批量写入按租约全部拒绝",
+        "Elapsed": 0.09
+      },
+      {
+        "Time": "2026-11-05T21:33:55.079161+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestSessionConformance/DurableStore",
+        "Elapsed": 7.65
+      },
+      {
+        "Time": "2026-11-05T21:33:55.079192+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestSessionConformance",
+        "Elapsed": 8.88
+      },
+      {
+        "Time": "2026-11-05T21:33:55.131139+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestSessionSchemaVersion",
+        "Elapsed": 0.05
+      },
+      {
+        "Time": "2026-11-05T21:33:55.193652+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestSessionSnapshotRequiresLock",
+        "Elapsed": 0.06
+      },
+      {
+        "Time": "2026-11-05T21:33:55.351313+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestSessionLogResumeAcrossInstances",
+        "Elapsed": 0.16
+      },
+      {
+        "Time": "2026-11-05T21:33:56.354919+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Elapsed": 21.704
+      }
+    ]
+  },
+  {
+    "log": "12-tests.jsonl",
+    "sha256": "8e4abb56d778eac71e1c5048c638bdeb76d569f821d53aa6e1f7fec6eb55eb91",
+    "events": [
+      {
+        "Time": "2026-11-05T21:34:43.773586+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-examples/workflow/refund-recovery",
+        "Test": "TestRefundGraphRecoveryAcrossProcesses",
+        "Elapsed": 4.29
+      },
+      {
+        "Time": "2026-11-05T21:34:44.401323+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-examples/workflow/refund-recovery",
+        "Test": "TestRefundGraphRechecksReviewedOrder",
+        "Elapsed": 0.63
+      },
+      {
+        "Time": "2026-11-05T21:34:44.522265+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-examples/workflow/refund-recovery",
+        "Test": "TestRefundBusinessGuards/missing-approval",
+        "Elapsed": 0.12
+      },
+      {
+        "Time": "2026-11-05T21:34:44.654327+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-examples/workflow/refund-recovery",
+        "Test": "TestRefundBusinessGuards/expired-approval",
+        "Elapsed": 0.13
+      },
+      {
+        "Time": "2026-11-05T21:34:44.791073+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-examples/workflow/refund-recovery",
+        "Test": "TestRefundBusinessGuards/changed-order",
+        "Elapsed": 0.14
+      },
+      {
+        "Time": "2026-11-05T21:34:44.968475+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-examples/workflow/refund-recovery",
+        "Test": "TestRefundBusinessGuards/business-dedup",
+        "Elapsed": 0.18
+      },
+      {
+        "Time": "2026-11-05T21:34:45.118473+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-examples/workflow/refund-recovery",
+        "Test": "TestRefundBusinessGuards/changed-payload",
+        "Elapsed": 0.15
+      },
+      {
+        "Time": "2026-11-05T21:34:45.12778+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-examples/workflow/refund-recovery",
+        "Test": "TestRefundBusinessGuards",
+        "Elapsed": 0.72
+      },
+      {
+        "Time": "2026-11-05T21:34:45.279874+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-examples/workflow/refund-recovery",
+        "Test": "TestConcurrentRequestsCannotOverRefund",
+        "Elapsed": 0.16
+      },
+      {
+        "Time": "2026-11-05T21:34:45.412873+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-examples/workflow/refund-recovery",
+        "Test": "TestApprovalRejectsExpiredChangedAndUnauthorizedRequests",
+        "Elapsed": 0.13
+      },
+      {
+        "Time": "2026-11-05T21:34:45.535593+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-examples/workflow/refund-recovery",
+        "Test": "TestLegacyLedgerIsNotSilentlyReinitialized",
+        "Elapsed": 0.12
+      },
+      {
+        "Time": "2026-11-05T21:34:52.52192+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-examples/workflow/refund-recovery",
+        "Test": "TestRefundRecoveryAcrossProcesses",
+        "Elapsed": 6.98
+      },
+      {
+        "Time": "2026-11-05T21:34:52.521947+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-examples/workflow/refund-recovery",
+        "Test": "TestRefundChildProcess",
+        "Elapsed": 0
+      },
+      {
+        "Time": "2026-11-05T21:34:52.70956+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-examples/workflow/refund-recovery",
+        "Test": "TestRejectedRefundHasNoEffect/DEMO-EXPIRED",
+        "Elapsed": 0.19
+      },
+      {
+        "Time": "2026-11-05T21:34:52.881735+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-examples/workflow/refund-recovery",
+        "Test": "TestRejectedRefundHasNoEffect/missing",
+        "Elapsed": 0.17
+      },
+      {
+        "Time": "2026-11-05T21:34:53.02566+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-examples/workflow/refund-recovery",
+        "Test": "TestRejectedRefundHasNoEffect/10000",
+        "Elapsed": 0.14
+      },
+      {
+        "Time": "2026-11-05T21:34:53.034448+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-examples/workflow/refund-recovery",
+        "Test": "TestRejectedRefundHasNoEffect",
+        "Elapsed": 0.5
+      },
+      {
+        "Time": "2026-11-05T21:34:53.147425+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-examples/workflow/refund-recovery",
+        "Test": "TestLedgerDeduplicatesAndRejectsChangedPayload",
+        "Elapsed": 0.13
+      },
+      {
+        "Time": "2026-11-05T21:34:54.157492+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-examples/workflow/refund-recovery",
+        "Elapsed": 17.09
+      }
+    ]
+  },
+  {
+    "log": "15-tests.jsonl",
+    "sha256": "5f75d65d070ae36d2a67d4ca282a8b121c4318cc8e67f1dcf8b7477579518f64",
+    "events": [
+      {
+        "Time": "2026-11-05T21:35:42.852174+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-harness/integration/postgres",
+        "Test": "TestWaitRestartResumeRelease",
+        "Elapsed": 0.41
+      },
+      {
+        "Time": "2026-11-05T21:35:43.103224+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-harness/integration/postgres",
+        "Test": "TestTakeoverFencesOldHolder",
+        "Elapsed": 0.25
+      },
+      {
+        "Time": "2026-11-05T21:35:43.180629+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-harness/integration/postgres",
+        "Test": "TestInboxAppendOnceAcrossConnections",
+        "Elapsed": 0.08
+      },
+      {
+        "Time": "2026-11-05T21:35:44.185277+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-harness/integration/postgres",
+        "Elapsed": 2.031
+      }
+    ]
+  },
+  {
+    "log": "postgres-fault-initial-tests.jsonl",
+    "sha256": "6d8e40af1ffbd92017f8ba672127699704241025d69b96246f52a0d4371c3e4f",
+    "events": [
+      {
+        "Time": "2026-11-05T21:36:35.412982+08:00",
+        "Action": "fail",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestPrimaryRestart",
+        "Elapsed": 32.39
+      },
+      {
+        "Time": "2026-11-05T21:36:35.413665+08:00",
+        "Action": "fail",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestSyncCommit",
+        "Elapsed": 0
+      },
+      {
+        "Time": "2026-11-05T21:36:35.415373+08:00",
+        "Action": "fail",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Elapsed": 32.909
+      }
+    ]
+  },
+  {
+    "log": "postgres-fault-tests.jsonl",
+    "sha256": "bf29cb03a7ce88844e5dc16eedbe2564535e252c441201e2d0ebba23a3f3da04",
+    "events": [
+      {
+        "Time": "2026-11-05T21:37:22.153184+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestPrimaryRestart",
+        "Elapsed": 0.53
+      },
+      {
+        "Time": "2026-11-05T21:37:23.204107+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Test": "TestSyncCommit",
+        "Elapsed": 1.05
+      },
+      {
+        "Time": "2026-11-05T21:37:24.215822+08:00",
+        "Action": "pass",
+        "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+        "Elapsed": 3.107
+      }
+    ]
+  }
+]
