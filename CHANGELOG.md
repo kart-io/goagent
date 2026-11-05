@@ -7,9 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.47.1] - 2026-11-04
+
 ### Added
 
 - 覆盖率门禁增加 `core/durable`、`core/budget`、`workflow`、`builder` 模块阈值，按语句数加权统计；`make coverage` 与 CI 使用相同检查器，缺少关键数据时失败。检查脚本兼容 macOS 系统 Bash，可显式传入 profile 路径。
+
+### Fixed
+
+- 默认模型断言隔离 `ANTHROPIC_MODEL`，避免宿主模型配置使离线测试失败；模拟 Docker 的 Unix 测试不再依赖 macOS 缺少的 `setsid` 命令。
+
+## [0.47.0] - 2026-11-04
+
+### Added
 
 - `workflow.ResumeRequest`、`DurableGraph.Resume` 与 `WithResumeHandler`：在已保存的审批暂停处接收人工输入，由宿主校验并更新业务状态；修改与放行原子落盘后继续执行。`RunRequest.Resume` 与 `workflow.WithResume` 分别支持 Runnable 入口和嵌套子图；无效输入保持等待，已消费的恢复键不能重复应用修改。新增 HITL 指南及离线通过/拒绝/编辑示例。
 - `durable.AwaitInput`：工作流节点、并行分支与声明可中断的工具可以在执行中途等待人工输入，从检查点恢复；首次持久化的输入固定，非法 JSON 或校验失败时保持等待。`GraphSnapshot.Interrupts`、`ChildContinuation.Interrupts` 给出中断键，`Resume` 同时接受审批键与中断键。工具经 `FunctionToolBuilder.WithInterruptible(version)` 或 `tools.InterruptibleTool` 显式开启。`validate` panic 时按拒绝处理，panic 值不持久化，经新增的 `WaitError.Cause` 或 `ResumeRejectedError` 链可取得 `*errors.PanicError`。
@@ -20,10 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- 默认模型断言隔离 `ANTHROPIC_MODEL`，避免宿主模型配置使离线测试失败；模拟 Docker 的 Unix 测试不再依赖 macOS 缺少的 `setsid` 命令。
-
 - `core.InterruptManager` 不再忽略检查点保存错误：保存失败时释放中断 ID，不发布中断、不等待人工响应，也不执行后续业务。该管理器的等待状态仍限于进程内，跨进程恢复使用持久图。
-
 - PR 导入分层检查移除已删除的 `--strict` 参数，避免在运行测试前失败。
 - Makefile 按库项目执行 `go build ./...`，跨平台目标仅检查编译；`make run` 默认运行离线宿主示例，可通过 `EXAMPLE` 指定示例，CI 同时验证这两个入口。删除依赖不存在的统一应用二进制的安装、容器和初始化目标，迁移见开发指南。
 - 中英文 README、Builder 与执行契约文档移除旧同步入口和本地 MCP 工具箱的过期能力描述；快速入门补齐 v0.43–v0.46 的迁移清单，开发指南同步 Go 与 lint 工具版本。
@@ -1034,7 +1041,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/kart-io/goagent/compare/v0.46.0...HEAD
+[Unreleased]: https://github.com/kart-io/goagent/compare/v0.47.1...HEAD
+[0.47.1]: https://github.com/kart-io/goagent/compare/v0.47.0...v0.47.1
+[0.47.0]: https://github.com/kart-io/goagent/compare/v0.46.0...v0.47.0
 [0.46.0]: https://github.com/kart-io/goagent/compare/v0.45.0...v0.46.0
 [0.45.0]: https://github.com/kart-io/goagent/compare/v0.44.0...v0.45.0
 [0.44.0]: https://github.com/kart-io/goagent/compare/v0.43.1...v0.44.0

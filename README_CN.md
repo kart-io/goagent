@@ -25,6 +25,7 @@ GoAgent 是嵌入 Go 业务服务的可恢复、可计量、可观测 Agent 执�
 - **原生工具循环**：模型在一次流式请求中选择工具或直接回答（OpenAI、DeepSeek、Gemini Provider）；可选并发工具调用与直接返回工具。
 - **循环扩展点**：PreStep、Request、RequestError、TurnStopping 钩子，提示词段落与上下文，以及接受 Steer/Inject/Redirect/Followup 的运行句柄 `Handle`。
 - **持久执行**：`core/durable` 记录模型回合与工具调用；`workflow.Graph` 编译带分支、并行汇合、有界循环与审批恢复的类型化图。
+- **人工介入**：审批暂停处经 `DurableGraph.Resume` 接收校验后的人工输入；节点、并行分支、可中断工具与嵌套子图可用 `durable.AwaitInput` 在执行中途暂停，从检查点恢复。见 [HITL 指南](docs/guides/HUMAN_IN_THE_LOOP.md)。
 - **执行治理**：根预算（`core/budget`）、带审批、守卫与准入限制的 `tools.Dispatcher`/`Pipeline`、工具结果卸载、会话日志（`core/session`）。
 - **LLM 提供商**：OpenAI（及兼容端点）、DeepSeek、Gemini 支持 `AsRunnable` 与原生工具循环；Kimi、SiliconFlow、Ollama 是 OpenAI 兼容预设，Anthropic 基于官方 SDK，支持相同。见[提供商对照](docs/README.md#llm-提供商)。
 - **可观测性**：只读执行事件（`core/observe`）与 OpenTelemetry 集成（`observability`）。
@@ -150,6 +151,7 @@ rag, err := builder.RAGAgent(client, retriever) // DocumentRetriever、带 Retri
 
 ### 持久执行与编排
 
+- [人工介入](docs/guides/HUMAN_IN_THE_LOOP.md)：审批时接收人工输入、执行中途中断、检查点与故障语义；离线示例：`examples/human-in-the-loop`、`examples/human-in-the-loop-interrupt`。
 - [原生编排](docs/guides/NATIVE_ORCHESTRATION.md)：`workflow.Graph`、持久图 `AsRunnable`、分支级恢复与 `tools.Dispatcher`。
 - [工作流](workflow/README.md)：类型化图、分支、并行汇合与有界循环。
 - [可组合编排](docs/guides/COMPOSABLE_ORCHESTRATION.md)：用 `tools.NewRunnableToolFactory` 把子 Agent 或 `workflow.DurableGraph` 包装为工具；子流程等待审批时，父流程以 `builder.ErrWaiting` 挂起。
