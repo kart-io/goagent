@@ -14,9 +14,6 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        go-version: ['1.26']
 
     steps:
       - name: Checkout code
@@ -25,7 +22,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: ${{ matrix.go-version }}
+          go-version-file: go.mod
 
       - name: Cache Go modules
         uses: actions/cache@v4
@@ -33,9 +30,9 @@ jobs:
           path: |
             ~/go/pkg/mod
             ~/.cache/go-build
-          key: ${{ runner.os }}-go-${{ matrix.go-version }}-${{ hashFiles('**/go.sum') }}
+          key: ${{ runner.os }}-go-${{ hashFiles('go.mod') }}-${{ hashFiles('**/go.sum') }}
           restore-keys: |
-            ${{ runner.os }}-go-${{ matrix.go-version }}-
+            ${{ runner.os }}-go-${{ hashFiles('go.mod') }}-
 
       - name: Download dependencies
         run: go mod download
@@ -49,6 +46,9 @@ jobs:
         run: go test -v -race -timeout 10m -coverprofile=coverage.out ./...
         env:
           GO_TEST_MODE: "true"
+
+      - name: Verify isolated benchmark contracts
+        run: make test-frameworkbench
 
       - name: Check coverage gates
         run: bash scripts/check_coverage.sh coverage.out
@@ -73,7 +73,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.26'
+          go-version-file: go.mod
 
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v7
@@ -92,7 +92,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.26'
+          go-version-file: go.mod
 
       - name: Build
         run: make build

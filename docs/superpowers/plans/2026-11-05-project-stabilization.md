@@ -31,10 +31,10 @@
 
 **输入/输出：** 从现有版本声明产生一致工具链与 make test-frameworkbench 入口。
 
-- [ ] 重现 frameworkbench 在 -mod=readonly 下失败。
-- [ ] 声明推荐工具链，更新独立模块依赖，统一 Makefile/CI 和文档。
-- [ ] 在陈旧 GOROOT 下运行 make build；运行 make test-frameworkbench、vet 和 v2 lint。
-- [ ] 独立提交本项。
+- [x] 重现 frameworkbench 在 -mod=readonly 下失败。
+- [x] 声明推荐工具链，更新独立模块依赖，统一 Makefile/CI 和文档。
+- [x] 在陈旧 GOROOT 下运行 make build；运行 make test-frameworkbench、vet 和 v2 lint。
+- [x] 独立提交本项。
 
 ## Task 2: 公共契约与跨仓验证
 

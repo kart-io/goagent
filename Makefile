@@ -1,4 +1,7 @@
 # Go parameters
+# 项目命令使用 go.mod 声明的开发工具链，避免启动器与陈旧 GOROOT 混用。
+unexport GOROOT
+export GOTOOLCHAIN ?= $(shell sed -n 's/^toolchain //p' go.mod)
 GOCMD=go
 GOBUILD=$(GOCMD) build
 GOCLEAN=$(GOCMD) clean
@@ -23,7 +26,7 @@ GREEN=\033[0;32m
 YELLOW=\033[1;33m
 NC=\033[0m # No Color
 
-.PHONY: all build build-all build-linux build-windows build-darwin run clean test coverage deps help version
+.PHONY: all build build-all build-linux build-windows build-darwin run clean test test-frameworkbench coverage deps help version
 
 ## help: Display this help message
 help:
@@ -69,6 +72,10 @@ test:
 test-short:
 	@echo "$(YELLOW)Running short tests...$(NC)"
 	GO_TEST_MODE=true $(GOTEST) -v -short ./...
+
+## test-frameworkbench: 验证独立评测模块的依赖与执行契约（不运行计时基准）
+test-frameworkbench:
+	cd evaluation/frameworkbench && GOWORK=off GO_TEST_MODE=true $(GOTEST) -mod=readonly -race -count=1 -timeout 120s ./...
 
 ## test-integration: Run integration tests
 test-integration:

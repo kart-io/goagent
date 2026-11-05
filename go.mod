@@ -2,6 +2,8 @@ module github.com/kart-io/goagent
 
 go 1.26.0
 
+toolchain go1.26.10
+
 require (
 	github.com/anthropics/anthropic-sdk-go/v2 v2.5.0
 	github.com/bytedance/sonic v1.15.4

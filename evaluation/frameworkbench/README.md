@@ -4,6 +4,8 @@
 
 This is an isolated benchmark module. Its dependencies do not change the main GoAgent module.
 
+Run `make test-frameworkbench` from the repository root to verify this module's contracts with the declared Go toolchain and read-only dependencies. Root `go test ./...` does not include this nested module. Dependency updates must keep this module's `go.mod` and `go.sum` in sync with the local GoAgent replacement.
+
 The benchmark runs real public framework entry points against deterministic local models. No credentials or paid APIs are used. Python network connections are rejected and external tracing is disabled. This measures warm framework execution plus native model/tool protocol object handling, not model quality, HTTP/SSE parsing, provider inference, distributed durability, or production throughput.
 
 ## Compared entry points

@@ -3,13 +3,15 @@
 ## 环境
 
 ```bash
-go version            # go.mod 最低 Go 1.26.0；构建建议使用 1.26.10 或更高版本
+go version            # go.mod 最低 Go 1.26.0，开发工具链 Go 1.26.10
 git clone https://github.com/kart-io/goagent.git && cd goagent
 go mod download
 go build ./...
 ```
 
 `make lint` 需要 golangci-lint v2（`.golangci.yml` 为 `version: "2"`），未安装或主版本不符时会自动安装 v2.15.0；`make fmt` 会按需安装 `gofumpt` 与 `gci`。
+
+Makefile 从 `go.mod` 的 `toolchain` 声明选择开发工具链，并清除传给子命令的 `GOROOT`，避免 Homebrew 的 `go` 与旧 GVM 标准库混用。首次运行可能下载工具链；不改 shell 配置。直接运行 Go 命令时，若遇到 `compile: version ... does not match go tool version ...`，使用 `env -u GOROOT GOTOOLCHAIN=go1.26.10 go ...`，或修正自己的 Go 环境。可通过显式设置 `GOTOOLCHAIN` 验证其他受支持版本。
 
 ## 常用命令
 
@@ -21,6 +23,7 @@ go build ./...
 | `make run EXAMPLE=./examples/workflow` | 运行指定示例；需要模型的示例须另行配置密钥 |
 | `make test` | `GO_TEST_MODE=true go test -v -race -timeout 120s ./...` |
 | `make test-short` | 带 `-short` 的测试 |
+| `make test-frameworkbench` | 使用只读依赖运行独立性能评测模块的竞态契约测试；不执行计时基准 |
 | `make test-integration` | `-tags=integration` 的测试 |
 | `make coverage` | 生成 `coverage/coverage.out`、执行覆盖率门禁并生成 `coverage/coverage.html` |
 | `make bench` | `go test -bench=. -benchmem ./...` |
