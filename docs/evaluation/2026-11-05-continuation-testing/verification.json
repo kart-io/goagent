@@ -1,0 +1,245 @@
+{
+  "date": "2026-11-05",
+  "source_revisions": {
+    "core": "42ef4513b50357172d7af119ae57f4f2bf81a0e6",
+    "harness": "78a18bc98788d33b0a416d787e3bd719e0906bbc",
+    "examples": "f69bbb74f509d8857068ed84deefc9985ce5d157",
+    "contrib": "e0c75339183908b57118594776da781a398e7b5b"
+  },
+  "baseline": {
+    "core": "b220340",
+    "harness": "2368ac0",
+    "examples": "45d0db0",
+    "contrib": "e0c7533"
+  },
+  "environments": {
+    "host": "darwin/arm64 Go 1.26.10 race",
+    "linux": "golang:1.26.6-alpine linux/arm64 CGO_ENABLED=0 --init; apk add curl python3 bash",
+    "docker_context": "colima",
+    "external_services": [
+      "本轮专用 PostgreSQL 16",
+      "本轮专用 Qdrant v1.16.2",
+      "Alpine 3.20 Docker",
+      "测试构建的 Linux SSH 容器",
+      "公开 PDF 测试样例"
+    ]
+  },
+  "core": {
+    "status": "passed",
+    "test_events": {
+      "PASS": 3887,
+      "SKIP": 9
+    },
+    "skipped_tests": [
+      "TestPanicChild",
+      "TestResultStoreChildProcess",
+      "TestHungChildHelper",
+      "TestToolExecutor_Timeout",
+      "TestInvalidateByPattern",
+      "TestInvalidateByTool",
+      "TestDependencyTracking",
+      "TestVersioning",
+      "TestInvalidationStatistics"
+    ],
+    "coverage_percent": 79.5,
+    "multiagent_coverage_percent": 93.3
+  },
+  "compatibility": {
+    "status": "passed",
+    "modules": 15,
+    "test_events": {
+      "pass": 1813,
+      "skip": 50
+    }
+  },
+  "linux_sandbox": {
+    "status": "passed",
+    "test_events": {
+      "pass": 82,
+      "skip": 4
+    },
+    "skipped_tests": [
+      "github.com/kart-io/goagent-harness/sandbox/TestDockerReal",
+      "github.com/kart-io/goagent-harness/sandbox/TestDockerUnixSocketReal",
+      "github.com/kart-io/goagent-harness/sandbox/TestLandlockBelowMinimumABIIsUnavailable",
+      "github.com/kart-io/goagent-harness/sandbox/TestNativeDefaultOrderPrefersBubblewrap"
+    ]
+  },
+  "linux_core": {
+    "status": "passed",
+    "packages": [
+      "core/durable",
+      "core/budget",
+      "workflow",
+      "llm",
+      "tools/shell",
+      "harness/env"
+    ],
+    "test_events": {
+      "pass": 351,
+      "skip": 1
+    },
+    "skipped_tests": [
+      "github.com/kart-io/goagent/harness/env/TestDockerExecutor"
+    ]
+  },
+  "harness_coding_docker": {
+    "status": "passed",
+    "test_events": {
+      "pass": 2
+    }
+  },
+  "old_skip_audit": {
+    "baseline_skips": 99,
+    "passed_in_final_matrix": [
+      "github.com/kart-io/goagent-contrib/document/pdf/TestPDFLoader_LoadAndSplit",
+      "github.com/kart-io/goagent-contrib/document/pdf/TestPDFLoader_LoadByPage",
+      "github.com/kart-io/goagent-contrib/document/pdf/TestPDFLoader_LoadRealPDF",
+      "github.com/kart-io/goagent-contrib/retrieval/qdrant/TestQdrantVectorStore_AddDocuments",
+      "github.com/kart-io/goagent-contrib/retrieval/qdrant/TestQdrantVectorStore_BatchOperations",
+      "github.com/kart-io/goagent-contrib/retrieval/qdrant/TestQdrantVectorStore_Close",
+      "github.com/kart-io/goagent-contrib/retrieval/qdrant/TestQdrantVectorStore_DocumentOperations",
+      "github.com/kart-io/goagent-contrib/retrieval/qdrant/TestQdrantVectorStore_EmptyOperations",
+      "github.com/kart-io/goagent-contrib/retrieval/qdrant/TestQdrantVectorStore_ErrorCases",
+      "github.com/kart-io/goagent-contrib/retrieval/qdrant/TestQdrantVectorStore_Search",
+      "github.com/kart-io/goagent-contrib/retrieval/qdrant/TestRealQdrantBusinessIDsAndMetadataRoundTrip",
+      "github.com/kart-io/goagent-contrib/retrieval/qdrant/TestRealQdrantRetrieveFilter",
+      "github.com/kart-io/goagent-harness/integration/TestDockerApprovalBlocksCommandUntilResumed",
+      "github.com/kart-io/goagent-harness/integration/TestDockerChildSurvivesRestartThenContainerRemoved",
+      "github.com/kart-io/goagent-harness/integration/TestDockerChildrenAreIsolated",
+      "github.com/kart-io/goagent-harness/integration/TestDockerCommandFinishedWhileStoppedIsNotRerun",
+      "github.com/kart-io/goagent-harness/integration/TestDockerConnectFailureAfterRestartDoesNotLeak",
+      "github.com/kart-io/goagent-harness/integration/TestDockerCrashAfterAllocationRecoversContainer",
+      "github.com/kart-io/goagent-harness/integration/TestDockerCrashBeforeAllocationCreatesContainer",
+      "github.com/kart-io/goagent-harness/integration/TestDockerCrashDuringCommandAttaches",
+      "github.com/kart-io/goagent-harness/integration/TestDockerCrashDuringModelRequestContinues",
+      "github.com/kart-io/goagent-harness/integration/TestDockerCrashWithoutFinderIsReportedToHost",
+      "github.com/kart-io/goagent-harness/integration/TestDockerDeletedCommandStateIsNotRerun",
+      "github.com/kart-io/goagent-harness/integration/TestDockerDenyOnRestartStopsCommand",
+      "github.com/kart-io/goagent-harness/integration/TestDockerDestroyHandlesStoppedAndMissingContainers",
+      "github.com/kart-io/goagent-harness/integration/TestDockerHostManagedContainersSurvive",
+      "github.com/kart-io/goagent-harness/integration/TestDockerKillDuringCommandRemovesContainer",
+      "github.com/kart-io/goagent-harness/integration/TestDockerLostCreateResponseDoesNotLeak",
+      "github.com/kart-io/goagent-harness/integration/TestDockerPlainBackendNeedsAttention",
+      "github.com/kart-io/goagent-harness/integration/TestDockerProviderContract",
+      "github.com/kart-io/goagent-harness/integration/TestDockerRemovedContainerFailsChild",
+      "github.com/kart-io/goagent-harness/integration/TestDockerRestartedContainerCommandIsLost",
+      "github.com/kart-io/goagent-harness/integration/TestDockerStopDuringCommandAttaches",
+      "github.com/kart-io/goagent-harness/integration/TestDockerStopDuringModelRequestContinues",
+      "github.com/kart-io/goagent-harness/integration/TestDockerTimeoutEnforcedWhileHostStopped",
+      "github.com/kart-io/goagent-harness/integration/TestSSHCancelStopsCommandAndDescendants",
+      "github.com/kart-io/goagent-harness/integration/TestSSHConnectionDrop",
+      "github.com/kart-io/goagent-harness/integration/TestSSHDestroyStopsKeyedCommands",
+      "github.com/kart-io/goagent-harness/integration/TestSSHFileSystemBoundary",
+      "github.com/kart-io/goagent-harness/integration/TestSSHInvalidIDsCannotReachOutside",
+      "github.com/kart-io/goagent-harness/integration/TestSSHKeyedTimeoutKeepsOutputAndKillsDescendants",
+      "github.com/kart-io/goagent-harness/integration/TestSSHLostCreateResponseDoesNotLeak",
+      "github.com/kart-io/goagent-harness/integration/TestSSHNetworkPolicy",
+      "github.com/kart-io/goagent-harness/integration/TestSSHProviderContract",
+      "github.com/kart-io/goagent-harness/integration/TestSSHRejectsWrongHostAndRunner",
+      "github.com/kart-io/goagent-harness/integration/TestSSHReportsRunnerAndConfinesCommands",
+      "github.com/kart-io/goagent-harness/integration/TestSSHRunnerKilled",
+      "github.com/kart-io/goagent-harness/integration/TestSSHStopDuringCommandAttaches",
+      "github.com/kart-io/goagent-harness/sandbox/TestDockerReal",
+      "github.com/kart-io/goagent-harness/sandbox/TestDockerUnixSocketReal"
+    ],
+    "passed_in_supplements": [
+      "github.com/kart-io/goagent-harness/preset/TestEnvContextProbesInsideDocker",
+      "github.com/kart-io/goagent-harness/sandbox/TestLinuxProcRootCannotEscape",
+      "github.com/kart-io/goagent-harness/sandbox/TestNativeCommandOutputIsNotMistakenForMountRace",
+      "github.com/kart-io/goagent-harness/sandbox/TestNativeMountRaceRetriesAreBounded",
+      "github.com/kart-io/goagent-harness/sandbox/TestNativeOtherStartupFailureIsNotRetried",
+      "github.com/kart-io/goagent-harness/sandbox/TestNativeRetriesMountRace",
+      "github.com/kart-io/goagent-harness/sandbox/TestRunReusesProbe",
+      "github.com/kart-io/goagent-harness/sandbox/TestSupervisorAttachOnlyNeverStarts",
+      "github.com/kart-io/goagent-harness/sandbox/TestSupervisorCancel",
+      "github.com/kart-io/goagent-harness/sandbox/TestSupervisorCapsOutputWithoutKillingCommand",
+      "github.com/kart-io/goagent-harness/sandbox/TestSupervisorCommandSurvivesDisconnectAndReattaches",
+      "github.com/kart-io/goagent-harness/sandbox/TestSupervisorDeadCommandIsLost",
+      "github.com/kart-io/goagent-harness/sandbox/TestSupervisorEnforcesTimeoutInSandbox",
+      "github.com/kart-io/goagent-harness/sandbox/TestSupervisorPollingFailures",
+      "github.com/kart-io/goagent-harness/sandbox/TestSupervisorRequiresTools",
+      "github.com/kart-io/goagent-harness/sandbox/TestSupervisorReturnsOutputAndExitCode",
+      "github.com/kart-io/goagent-harness/sandbox/TestSupervisorRunsInCommandDirectory",
+      "github.com/kart-io/goagent-harness/sandbox/TestSupervisorSameKeyStartsOnce",
+      "github.com/kart-io/goagent-harness/sandbox/TestSupervisorStartRetryDoesNotRepeatCommand",
+      "github.com/kart-io/goagent-harness/tools/coding/TestDockerExecutorWorkspace"
+    ],
+    "remaining": [
+      "github.com/kart-io/goagent-examples/internal/livemodel/livemodeltest/TestRequireSkipsWithoutOptIn/skip",
+      "github.com/kart-io/goagent-examples/orchestration/agent-context/TestLiveAgentContext",
+      "github.com/kart-io/goagent-examples/orchestration/flight-booking/TestLiveExtractionAndComparison",
+      "github.com/kart-io/goagent-examples/orchestration/live/approval/TestLiveApprovalFlows",
+      "github.com/kart-io/goagent-examples/orchestration/live/delegation/TestLiveDelegation",
+      "github.com/kart-io/goagent-examples/orchestration/live/localize/TestLiveLocalizeRecovery",
+      "github.com/kart-io/goagent-examples/orchestration/live/log-triage/TestLiveLogTriageCrashRecovery",
+      "github.com/kart-io/goagent-examples/orchestration/live/parallel-diagnostics/TestLiveParallelDiagnostics",
+      "github.com/kart-io/goagent-examples/orchestration/live/review-loop/TestLiveReviewLoopRecovery",
+      "github.com/kart-io/goagent-examples/orchestration/live/session-replay/TestLiveSessionReplay",
+      "github.com/kart-io/goagent-examples/orchestration/live/stream-budget/TestLiveContend",
+      "github.com/kart-io/goagent-examples/orchestration/live/stream-budget/TestLiveSummarize",
+      "github.com/kart-io/goagent-examples/orchestration/live/ticket-triage/TestLiveTicketTriage",
+      "github.com/kart-io/goagent-examples/orchestration/ops/alert-rca/TestLiveAlertRCA",
+      "github.com/kart-io/goagent-examples/orchestration/ops/capacity-review/TestLiveCapacityReview",
+      "github.com/kart-io/goagent-examples/orchestration/ops/cost-attribution/TestLiveCostAttribution",
+      "github.com/kart-io/goagent-examples/orchestration/ops/scoped-lookup/TestLiveScopedLookup",
+      "github.com/kart-io/goagent-examples/orchestration/ops/sql-review/TestLiveSQLReview",
+      "github.com/kart-io/goagent-examples/orchestration/plugin/basic/TestBasicLive",
+      "github.com/kart-io/goagent-examples/workflow/business-cases/TestLiveBusinessCases",
+      "github.com/kart-io/goagent-examples/workflow/business-cases/TestLiveNativeToolLoop",
+      "github.com/kart-io/goagent-examples/workflow/business-cases/TestNativeToolLoopChild",
+      "github.com/kart-io/goagent-harness/integration/TestOpenSandboxLostCreateResponseDoesNotLeak",
+      "github.com/kart-io/goagent-harness/integration/TestOpenSandboxProviderContract",
+      "github.com/kart-io/goagent-harness/integration/TestOpenSandboxStopDuringCommandAttaches",
+      "github.com/kart-io/goagent-harness/integration/TestSSHRefusesWithoutIsolation",
+      "github.com/kart-io/goagent-harness/preset/TestNativeFallbackRecordedInContract",
+      "github.com/kart-io/goagent-harness/sandbox/sandboxtest/TestContractCatchesBrokenProviders",
+      "github.com/kart-io/goagent-harness/sandbox/sandboxtest/TestContractPassesForCorrectProvider"
+    ],
+    "new_skips_since_previous_report": [
+      "github.com/kart-io/goagent-examples/orchestration/customer-service/TestLiveRefundTriage"
+    ]
+  },
+  "checks": {
+    "build": "passed",
+    "vet": "passed",
+    "lint": "passed: 0 issues",
+    "import_layers": "passed: 0 findings",
+    "frameworkbench_race": "passed",
+    "windows_amd64_build": "passed; 未执行运行时验证"
+  },
+  "repetitions": {
+    "critical_recovery_race": 10,
+    "protocol_shuffle_race": 5,
+    "verifier_shuffle_race": 3,
+    "complete_cancel_race": 20,
+    "process_cleanup_race": 3,
+    "shell_readiness_race": 3,
+    "example_retry_race": 20
+  },
+  "commands": [
+    "GOAGENT_ENV_DOCKER_IMAGE=alpine:3.20 make coverage COVERAGE_DIR=/tmp/goagent-continuation-verified-coverage GOTEST=\"go test -count=1 -timeout=180s\"",
+    "make build vet lint test-frameworkbench GOLINT=/tmp/goagent-stabilization-bin/golangci-lint",
+    "env -u GOROOT GOTOOLCHAIN=go1.26.10 go run ./scripts/apicheck",
+    "env -u GOROOT GOTOOLCHAIN=go1.26.10 CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build ./...",
+    "GOAGENT_DOCKER_TESTS=1 HARNESS_SANDBOX_DOCKER_IMAGE=alpine:3.20 <PG/Qdrant/PDF env> env -u GOROOT GOTOOLCHAIN=go1.26.10 go run ./scripts/compatcheck -root .. -out /tmp/goagent-continuation-verified-services -timeout 15m",
+    "Linux: docker run --rm --init -v <core>:/workspace/goagent:ro -v <harness>:/workspace/goagent-harness:ro -v <go-module-cache>:/gomodcache:ro -v <results>:/results -e GOMODCACHE=/gomodcache -e GOCACHE=/tmp/go-build -e GOTOOLCHAIN=local -e GOWORK=off -e GO_TEST_MODE=true -e CGO_ENABLED=0 golang:1.26.6-alpine sh -c <安装依赖、临时 modfile、运行以下两项测试>",
+    "Linux Harness: go test -json -mod=mod -modfile=/tmp/harness.mod -count=1 -timeout=180s ./sandbox",
+    "Linux Core: go test -json -mod=readonly -count=1 -timeout=180s ./core/durable ./core/budget ./workflow ./llm ./tools/shell ./harness/env",
+    "Harness 补测: TMPDIR=<用户目录下专用临时目录> GOAGENT_CODING_DOCKER_IMAGE=alpine:3.20 go test -json -race -count=1 -timeout=180s -modfile=<临时绑定核心的 modfile> ./tools/coding ./preset -run \"^Test(DockerExecutorWorkspace|EnvContextProbesInsideDocker)$\""
+  ],
+  "failures_preserved": [
+    "首次实服务矩阵：Harness 19 个失败事件",
+    "SSH 修复后矩阵：Examples 2 个失败事件",
+    "首次扩大主模块覆盖率：Docker 挂载夹具失败",
+    "Linux 首次完整 sandbox：缺 curl",
+    "Linux 补 curl/python3：缺 bash",
+    "Complete 与 Shell 旧实现回归失败"
+  ],
+  "scope_limits": [
+    "真实模型、身份、订单、支付和生产升级未运行",
+    "非 Unix 后代树清理未实现",
+    "异构 SSH 目标架构未运行",
+    "既有通用工具超时 flaky 跳过、删除缓存功能旧测试保留"
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "time": "2026-11-05T14:44:28.287746+00:00",
+  "resources": [
+    {
+      "container": "goagent-continuation-pg-9af1b380",
+      "task_label": "continuation-testing",
+      "status": "removed"
+    },
+    {
+      "container": "goagent-continuation-qdrant-101fd0df",
+      "task_label": "continuation-testing",
+      "status": "removed"
+    }
+  ],
+  "scope": "只移除本轮 services.json 指定且任务标签匹配的两个容器及其匿名卷；不清理其他资源"
+}

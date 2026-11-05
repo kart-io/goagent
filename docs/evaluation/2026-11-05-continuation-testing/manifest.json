@@ -1,0 +1,984 @@
+{
+  "format": "gzip(JSON: 日志路径 -> 脱敏后原始文本)",
+  "redaction": [
+    "服务 DSN 与密码替换为 <redacted>",
+    "核心仓根目录替换为 <repo>，父目录替换为 <workspace>，用户目录替换为 <home>",
+    "其余日志内容不变，保留成功和失败"
+  ],
+  "archive_sha256": "62693ac353fe6b00278107b03024169c8939807b5ff485ece781a7c3b712c528",
+  "files": [
+    {
+      "path": "<repo>/.claude/continuation-testing-b220340/archive.py",
+      "original_sha256": "16d571d2c5eef91c4bf98fd3489b1304b01a967df3079b6ae5f732580d2751cf",
+      "sanitized_sha256": "16d571d2c5eef91c4bf98fd3489b1304b01a967df3079b6ae5f732580d2751cf",
+      "original_bytes": 9604,
+      "sanitized_bytes": 9604
+    },
+    {
+      "path": "<repo>/.claude/continuation-testing-b220340/complete_before.go",
+      "original_sha256": "3981ca59b2c4ab8fe2c61895ea1ce487b70ea6dbdab61c58fd1e23b79a7e3246",
+      "sanitized_sha256": "3981ca59b2c4ab8fe2c61895ea1ce487b70ea6dbdab61c58fd1e23b79a7e3246",
+      "original_bytes": 1693,
+      "sanitized_bytes": 1693
+    },
+    {
+      "path": "<repo>/.claude/continuation-testing-b220340/complete_overlay.json",
+      "original_sha256": "21ba8a9925fd7180f1a6644f7afcaf06d2db57acf42752d8a113f1c56c65ff58",
+      "sanitized_sha256": "24dc54ec0e475f43096660ae2479a2d89eaccc9d552cf9d1c2edd0e253224a99",
+      "original_bytes": 197,
+      "sanitized_bytes": 105
+    },
+    {
+      "path": "<repo>/.claude/continuation-testing-b220340/linux-core.jsonl",
+      "original_sha256": "82690725df479e888665b6640bdafabf190551279fb7fa7bccaab680bfb23111",
+      "sanitized_sha256": "82690725df479e888665b6640bdafabf190551279fb7fa7bccaab680bfb23111",
+      "original_bytes": 195586,
+      "sanitized_bytes": 195586
+    },
+    {
+      "path": "<repo>/.claude/continuation-testing-b220340/linux-final/sandbox.jsonl",
+      "original_sha256": "f9b2f9035f2bebfeb591427cb924afbd288bd28081349b792ad3cd87b8f9cf98",
+      "sanitized_sha256": "f9b2f9035f2bebfeb591427cb924afbd288bd28081349b792ad3cd87b8f9cf98",
+      "original_bytes": 74966,
+      "sanitized_bytes": 74966
+    },
+    {
+      "path": "<repo>/.claude/continuation-testing-b220340/linux-supervisor.jsonl",
+      "original_sha256": "d906efa4b208a5317a6c4be8eb6bea22fa29c99611f41679f568818fd63615ff",
+      "sanitized_sha256": "d906efa4b208a5317a6c4be8eb6bea22fa29c99611f41679f568818fd63615ff",
+      "original_bytes": 9899,
+      "sanitized_bytes": 9899
+    },
+    {
+      "path": "<repo>/.claude/continuation-testing-b220340/linux-verified/core.jsonl",
+      "original_sha256": "a9b0d7107c074e8567eaf89fc51ce2a263b9fb50abf72a914da4586a7eaa2f11",
+      "sanitized_sha256": "a9b0d7107c074e8567eaf89fc51ce2a263b9fb50abf72a914da4586a7eaa2f11",
+      "original_bytes": 283751,
+      "sanitized_bytes": 283751
+    },
+    {
+      "path": "<repo>/.claude/continuation-testing-b220340/linux-verified/sandbox.jsonl",
+      "original_sha256": "bc94662dd817f7fcbfc37ae63208f365a87a5bb646c485792625d5b815ad6ab4",
+      "sanitized_sha256": "bc94662dd817f7fcbfc37ae63208f365a87a5bb646c485792625d5b815ad6ab4",
+      "original_bytes": 68921,
+      "sanitized_bytes": 68921
+    },
+    {
+      "path": "<repo>/.claude/continuation-testing-b220340/linux-verified/setup.log",
+      "original_sha256": "1c3c4b136487eef98e51f6a140e40fcd7c1e96dc85679c53c869233cd594c59f",
+      "sanitized_sha256": "1c3c4b136487eef98e51f6a140e40fcd7c1e96dc85679c53c869233cd594c59f",
+      "original_bytes": 1215,
+      "sanitized_bytes": 1215
+    },
+    {
+      "path": "<repo>/.claude/continuation-testing-b220340/linux-verified/status.txt",
+      "original_sha256": "0ccdb5a77ba5bf7687f2565a8ed97dfb9c1af45503c496fb646312239fab5101",
+      "sanitized_sha256": "0ccdb5a77ba5bf7687f2565a8ed97dfb9c1af45503c496fb646312239fab5101",
+      "original_bytes": 4,
+      "sanitized_bytes": 4
+    },
+    {
+      "path": "<repo>/.claude/continuation-testing-b220340/linux-with-tools/core.jsonl",
+      "original_sha256": "065b67d7736d198348ad37e6ae7521aef5a36fbc71abab3f1de40f7a55d7911d",
+      "sanitized_sha256": "065b67d7736d198348ad37e6ae7521aef5a36fbc71abab3f1de40f7a55d7911d",
+      "original_bytes": 293149,
+      "sanitized_bytes": 293149
+    },
+    {
+      "path": "<repo>/.claude/continuation-testing-b220340/linux-with-tools/sandbox.jsonl",
+      "original_sha256": "baaab4e9c66b3ca90125c1f8be24bc2a909266bf31a7ef6b36f0b9921a2d6eea",
+      "sanitized_sha256": "baaab4e9c66b3ca90125c1f8be24bc2a909266bf31a7ef6b36f0b9921a2d6eea",
+      "original_bytes": 68939,
+      "sanitized_bytes": 68939
+    },
+    {
+      "path": "<repo>/.claude/continuation-testing-b220340/linux-with-tools/setup.log",
+      "original_sha256": "445864565d1eb235bb9984e71dfd0311d686ebd06d151d25cbaf3c870d457b71",
+      "sanitized_sha256": "445864565d1eb235bb9984e71dfd0311d686ebd06d151d25cbaf3c870d457b71",
+      "original_bytes": 1141,
+      "sanitized_bytes": 1141
+    },
+    {
+      "path": "<repo>/.claude/continuation-testing-b220340/linux-with-tools/status.txt",
+      "original_sha256": "a79122992d53d358e6bbbbb98883d64fa0c15df3bcb08ff7b65a0580870af424",
+      "sanitized_sha256": "a79122992d53d358e6bbbbb98883d64fa0c15df3bcb08ff7b65a0580870af424",
+      "original_bytes": 4,
+      "sanitized_bytes": 4
+    },
+    {
+      "path": "<repo>/.claude/continuation-testing-b220340/shell_before.go",
+      "original_sha256": "4d40863ec79d06837f90d2577ca31cf1e4150a97db4d8f3ff02a1e4b826c1c20",
+      "sanitized_sha256": "4d40863ec79d06837f90d2577ca31cf1e4150a97db4d8f3ff02a1e4b826c1c20",
+      "original_bytes": 8509,
+      "sanitized_bytes": 8509
+    },
+    {
+      "path": "<repo>/.claude/continuation-testing-b220340/shell_overlay.json",
+      "original_sha256": "c8cedb4ac229a35230c5d8fabfaa3c8e1ded783305e2729e58ba1f2298bcfc1f",
+      "sanitized_sha256": "37c7fa2a045547e1f0f761ed07339e12cb5d5ca98fd8f54dd358d8e3435b6f50",
+      "original_bytes": 204,
+      "sanitized_bytes": 112
+    },
+    {
+      "path": "/tmp/goagent-continuation-complete-final.log",
+      "original_sha256": "7375fb87f0913680cbe181459dddf08ed03c47512ab6803be98848d4dc9c0665",
+      "sanitized_sha256": "7375fb87f0913680cbe181459dddf08ed03c47512ab6803be98848d4dc9c0665",
+      "original_bytes": 43,
+      "sanitized_bytes": 43
+    },
+    {
+      "path": "/tmp/goagent-continuation-critical.log",
+      "original_sha256": "f8a35591c05043f4209b0d7ea6292b71c4c589e88dfe94807adbad5a914ab93d",
+      "sanitized_sha256": "f8a35591c05043f4209b0d7ea6292b71c4c589e88dfe94807adbad5a914ab93d",
+      "original_bytes": 154,
+      "sanitized_bytes": 154
+    },
+    {
+      "path": "/tmp/goagent-continuation-env-docker-green.log",
+      "original_sha256": "2d08068cb2e1e7304c9070821efd812152fef99d18345caf517cff4b94a8e6e6",
+      "sanitized_sha256": "2d08068cb2e1e7304c9070821efd812152fef99d18345caf517cff4b94a8e6e6",
+      "original_bytes": 51,
+      "sanitized_bytes": 51
+    },
+    {
+      "path": "/tmp/goagent-continuation-examples-retry-green.log",
+      "original_sha256": "77039cd4ccdf4032829587702e6f4eaefd08544280acf42027e691791059e54e",
+      "sanitized_sha256": "77039cd4ccdf4032829587702e6f4eaefd08544280acf42027e691791059e54e",
+      "original_bytes": 79,
+      "sanitized_bytes": 79
+    },
+    {
+      "path": "/tmp/goagent-continuation-final-checks.log",
+      "original_sha256": "a21f94b650c51721377ebf7b0849e0920004403b9169ac958db0ea828213e787",
+      "sanitized_sha256": "a21f94b650c51721377ebf7b0849e0920004403b9169ac958db0ea828213e787",
+      "original_bytes": 482,
+      "sanitized_bytes": 482
+    },
+    {
+      "path": "/tmp/goagent-continuation-final-core.log",
+      "original_sha256": "614efb8fa380dfa13ff025bed55a7fa5b44707dcbd092c7bfef39d39b26831e1",
+      "sanitized_sha256": "baaa0b962110250c9f210c6cc766e76a5941a623fcd58168c13d0595cdbe9a02",
+      "original_bytes": 460049,
+      "sanitized_bytes": 460003
+    },
+    {
+      "path": "/tmp/goagent-continuation-final-imports.log",
+      "original_sha256": "8d6ba6df29b2831c5156989aadbb697325bb6d188e96fefc6f19d139c944a420",
+      "sanitized_sha256": "8d6ba6df29b2831c5156989aadbb697325bb6d188e96fefc6f19d139c944a420",
+      "original_bytes": 20,
+      "sanitized_bytes": 20
+    },
+    {
+      "path": "/tmp/goagent-continuation-final-services/01-core.json",
+      "original_sha256": "10fa8a8175ccb6544506ad9f1e90b68136be949a11182352b60ae956e79bccf3",
+      "sanitized_sha256": "deb08c94ed723206dcb8fd4e966ca975307895be21124571a943ae7c86118ca8",
+      "original_bytes": 473,
+      "sanitized_bytes": 243
+    },
+    {
+      "path": "/tmp/goagent-continuation-final-services/01-tests.jsonl",
+      "original_sha256": "c7be70a8ef7c9e9576c220b2914389912e14bf59cf620f04e50ae4d54474c2fb",
+      "sanitized_sha256": "c7be70a8ef7c9e9576c220b2914389912e14bf59cf620f04e50ae4d54474c2fb",
+      "original_bytes": 98552,
+      "sanitized_bytes": 98552
+    },
+    {
+      "path": "/tmp/goagent-continuation-final-services/02-core.json",
+      "original_sha256": "10fa8a8175ccb6544506ad9f1e90b68136be949a11182352b60ae956e79bccf3",
+      "sanitized_sha256": "deb08c94ed723206dcb8fd4e966ca975307895be21124571a943ae7c86118ca8",
+      "original_bytes": 473,
+      "sanitized_bytes": 243
+    },
+    {
+      "path": "/tmp/goagent-continuation-final-services/02-tests.jsonl",
+      "original_sha256": "b17bde30c848af2a9e11aa6a0bb0196962522dbf1fda5e92cbe1fee4faeaf01c",
+      "sanitized_sha256": "b17bde30c848af2a9e11aa6a0bb0196962522dbf1fda5e92cbe1fee4faeaf01c",
+      "original_bytes": 67253,
+      "sanitized_bytes": 67253
+    },
+    {
+      "path": "/tmp/goagent-continuation-final-services/03-core.json",
+      "original_sha256": "10fa8a8175ccb6544506ad9f1e90b68136be949a11182352b60ae956e79bccf3",
+      "sanitized_sha256": "deb08c94ed723206dcb8fd4e966ca975307895be21124571a943ae7c86118ca8",
+      "original_bytes": 473,
+      "sanitized_bytes": 243
+    },
+    {
+      "path": "/tmp/goagent-continuation-final-services/03-tests.jsonl",
+      "original_sha256": "bdab4c4fc7fd7752fb49b32d801c67da552d9272bfa6438c47f5641c358a77e7",
+      "sanitized_sha256": "bdab4c4fc7fd7752fb49b32d801c67da552d9272bfa6438c47f5641c358a77e7",
+      "original_bytes": 23972,
+      "sanitized_bytes": 23972
+    },
+    {
+      "path": "/tmp/goagent-continuation-final-services/04-core.json",
+      "original_sha256": "10fa8a8175ccb6544506ad9f1e90b68136be949a11182352b60ae956e79bccf3",
+      "sanitized_sha256": "deb08c94ed723206dcb8fd4e966ca975307895be21124571a943ae7c86118ca8",
+      "original_bytes": 473,
+      "sanitized_bytes": 243
+    },
+    {
+      "path": "/tmp/goagent-continuation-final-services/04-tests.jsonl",
+      "original_sha256": "1b1a0a6326edb4a9b155e9a61e5cd384bcc8a27146407fe6e932e8fd44c4cdf5",
+      "sanitized_sha256": "1b1a0a6326edb4a9b155e9a61e5cd384bcc8a27146407fe6e932e8fd44c4cdf5",
+      "original_bytes": 69330,
+      "sanitized_bytes": 69330
+    },
+    {
+      "path": "/tmp/goagent-continuation-final-services/05-core.json",
+      "original_sha256": "10fa8a8175ccb6544506ad9f1e90b68136be949a11182352b60ae956e79bccf3",
+      "sanitized_sha256": "deb08c94ed723206dcb8fd4e966ca975307895be21124571a943ae7c86118ca8",
+      "original_bytes": 473,
+      "sanitized_bytes": 243
+    },
+    {
+      "path": "/tmp/goagent-continuation-final-services/05-tests.jsonl",
+      "original_sha256": "680826b9efb79649e00087b23ae789d0a128dafcc1d706fa5bc7af98cecd746e",
+      "sanitized_sha256": "680826b9efb79649e00087b23ae789d0a128dafcc1d706fa5bc7af98cecd746e",
+      "original_bytes": 44041,
+      "sanitized_bytes": 44041
+    },
+    {
+      "path": "/tmp/goagent-continuation-final-services/06-core.json",
+      "original_sha256": "10fa8a8175ccb6544506ad9f1e90b68136be949a11182352b60ae956e79bccf3",
+      "sanitized_sha256": "deb08c94ed723206dcb8fd4e966ca975307895be21124571a943ae7c86118ca8",
+      "original_bytes": 473,
+      "sanitized_bytes": 243
+    },
+    {
+      "path": "/tmp/goagent-continuation-final-services/06-tests.jsonl",
+      "original_sha256": "0e37166e48646bc47939d0ec3d37db71fae50f0b40a217bb31dad26fac18fcf2",
+      "sanitized_sha256": "0e37166e48646bc47939d0ec3d37db71fae50f0b40a217bb31dad26fac18fcf2",
+      "original_bytes": 240880,
+      "sanitized_bytes": 240880
+    },
+    {
+      "path": "/tmp/goagent-continuation-final-services/07-core.json",
+      "original_sha256": "10fa8a8175ccb6544506ad9f1e90b68136be949a11182352b60ae956e79bccf3",
+      "sanitized_sha256": "deb08c94ed723206dcb8fd4e966ca975307895be21124571a943ae7c86118ca8",
+      "original_bytes": 473,
+      "sanitized_bytes": 243
+    },
+    {
+      "path": "/tmp/goagent-continuation-final-services/07-tests.jsonl",
+      "original_sha256": "a5bf08ee144d066fd6ccc7e4846137843a3c803eff763ec9618af5fbbab496d5",
+      "sanitized_sha256": "a5bf08ee144d066fd6ccc7e4846137843a3c803eff763ec9618af5fbbab496d5",
+      "original_bytes": 13212,
+      "sanitized_bytes": 13212
+    },
+    {
+      "path": "/tmp/goagent-continuation-final-services/08-core.json",
+      "original_sha256": "10fa8a8175ccb6544506ad9f1e90b68136be949a11182352b60ae956e79bccf3",
+      "sanitized_sha256": "deb08c94ed723206dcb8fd4e966ca975307895be21124571a943ae7c86118ca8",
+      "original_bytes": 473,
+      "sanitized_bytes": 243
+    },
+    {
+      "path": "/tmp/goagent-continuation-final-services/08-tests.jsonl",
+      "original_sha256": "5a7f1d325e15e6f8f4259bd20bb9ce3ce9802d6de7488d8b82cde5d410232b27",
+      "sanitized_sha256": "5a7f1d325e15e6f8f4259bd20bb9ce3ce9802d6de7488d8b82cde5d410232b27",
+      "original_bytes": 38261,
+      "sanitized_bytes": 38261
+    },
+    {
+      "path": "/tmp/goagent-continuation-final-services/09-core.json",
+      "original_sha256": "10fa8a8175ccb6544506ad9f1e90b68136be949a11182352b60ae956e79bccf3",
+      "sanitized_sha256": "deb08c94ed723206dcb8fd4e966ca975307895be21124571a943ae7c86118ca8",
+      "original_bytes": 473,
+      "sanitized_bytes": 243
+    },
+    {
+      "path": "/tmp/goagent-continuation-final-services/09-tests.jsonl",
+      "original_sha256": "0e84a3945bfb8c5e0df38373e2b07ddf0e401721eeb4d8cf70892c2365fdb196",
+      "sanitized_sha256": "0e84a3945bfb8c5e0df38373e2b07ddf0e401721eeb4d8cf70892c2365fdb196",
+      "original_bytes": 2231,
+      "sanitized_bytes": 2231
+    },
+    {
+      "path": "/tmp/goagent-continuation-final-services/10-core.json",
+      "original_sha256": "10fa8a8175ccb6544506ad9f1e90b68136be949a11182352b60ae956e79bccf3",
+      "sanitized_sha256": "deb08c94ed723206dcb8fd4e966ca975307895be21124571a943ae7c86118ca8",
+      "original_bytes": 473,
+      "sanitized_bytes": 243
+    },
+    {
+      "path": "/tmp/goagent-continuation-final-services/10-tests.jsonl",
+      "original_sha256": "ec958c504863c6eca6742abcb4b0695034801fb0fcd08706ae193b0cd3799701",
+      "sanitized_sha256": "ec958c504863c6eca6742abcb4b0695034801fb0fcd08706ae193b0cd3799701",
+      "original_bytes": 132380,
+      "sanitized_bytes": 132380
+    },
+    {
+      "path": "/tmp/goagent-continuation-final-services/11-core.json",
+      "original_sha256": "10fa8a8175ccb6544506ad9f1e90b68136be949a11182352b60ae956e79bccf3",
+      "sanitized_sha256": "deb08c94ed723206dcb8fd4e966ca975307895be21124571a943ae7c86118ca8",
+      "original_bytes": 473,
+      "sanitized_bytes": 243
+    },
+    {
+      "path": "/tmp/goagent-continuation-final-services/11-tests.jsonl",
+      "original_sha256": "498ab514eafb496f8646bcb12773442e37ff1dc84f82e994e23bb063cebb4e7c",
+      "sanitized_sha256": "498ab514eafb496f8646bcb12773442e37ff1dc84f82e994e23bb063cebb4e7c",
+      "original_bytes": 91188,
+      "sanitized_bytes": 91188
+    },
+    {
+      "path": "/tmp/goagent-continuation-final-services/12-core.json",
+      "original_sha256": "3dda0c1be08e847e99342161543dda1e38a89449a6132197c9680885cb22511e",
+      "sanitized_sha256": "4d7226d6075d49161c8687fbf535488eda90ddc8a4a2f6bf0ab1ea4fc641275a",
+      "original_bytes": 473,
+      "sanitized_bytes": 243
+    },
+    {
+      "path": "/tmp/goagent-continuation-final-services/12-tests.jsonl",
+      "original_sha256": "dbf964b62ee23dddbff0e9d483ca4c3482f10b0d0d50eabd485f8c870f35f7ca",
+      "sanitized_sha256": "b3b6e84d00d46fab661ec28d2e33d6b7772555e8ef29595de9c7327a5d9a8eeb",
+      "original_bytes": 599543,
+      "sanitized_bytes": 599451
+    },
+    {
+      "path": "/tmp/goagent-continuation-final-services/13-core.json",
+      "original_sha256": "10fa8a8175ccb6544506ad9f1e90b68136be949a11182352b60ae956e79bccf3",
+      "sanitized_sha256": "deb08c94ed723206dcb8fd4e966ca975307895be21124571a943ae7c86118ca8",
+      "original_bytes": 473,
+      "sanitized_bytes": 243
+    },
+    {
+      "path": "/tmp/goagent-continuation-final-services/13-tests.jsonl",
+      "original_sha256": "199e010158672fa659372f2cec4d1017b861bbff1b8e68e1ed9f4595c95ed524",
+      "sanitized_sha256": "199e010158672fa659372f2cec4d1017b861bbff1b8e68e1ed9f4595c95ed524",
+      "original_bytes": 28732,
+      "sanitized_bytes": 28732
+    },
+    {
+      "path": "/tmp/goagent-continuation-final-services/14-core.json",
+      "original_sha256": "10fa8a8175ccb6544506ad9f1e90b68136be949a11182352b60ae956e79bccf3",
+      "sanitized_sha256": "deb08c94ed723206dcb8fd4e966ca975307895be21124571a943ae7c86118ca8",
+      "original_bytes": 473,
+      "sanitized_bytes": 243
+    },
+    {
+      "path": "/tmp/goagent-continuation-final-services/14-tests.jsonl",
+      "original_sha256": "dbc426771cf9d0f93ab038a11dc9f0b75772c9183b9b6c3a67256f89581668a5",
+      "sanitized_sha256": "dbc426771cf9d0f93ab038a11dc9f0b75772c9183b9b6c3a67256f89581668a5",
+      "original_bytes": 357638,
+      "sanitized_bytes": 357638
+    },
+    {
+      "path": "/tmp/goagent-continuation-final-services/15-core.json",
+      "original_sha256": "10fa8a8175ccb6544506ad9f1e90b68136be949a11182352b60ae956e79bccf3",
+      "sanitized_sha256": "deb08c94ed723206dcb8fd4e966ca975307895be21124571a943ae7c86118ca8",
+      "original_bytes": 473,
+      "sanitized_bytes": 243
+    },
+    {
+      "path": "/tmp/goagent-continuation-final-services/15-tests.jsonl",
+      "original_sha256": "ef789d9907f78ada12064f83921290e853a13d8e9ff1d4d1958a70dd255e4847",
+      "sanitized_sha256": "ef789d9907f78ada12064f83921290e853a13d8e9ff1d4d1958a70dd255e4847",
+      "original_bytes": 3054,
+      "sanitized_bytes": 3054
+    },
+    {
+      "path": "/tmp/goagent-continuation-final-services/summary.json",
+      "original_sha256": "61cb6b0ae9d7e3704a26b185cdcde5acc77ee0b1d05e84f645c6886c0f341cba",
+      "sanitized_sha256": "25521325377437a84c5c41982e8dce9d648319f761e12b1a8132b27d4d6fa162",
+      "original_bytes": 11893,
+      "sanitized_bytes": 10467
+    },
+    {
+      "path": "/tmp/goagent-continuation-final-services.log",
+      "original_sha256": "6ff45148a36ffb1087590bacb1f46fcda9b6f5cb313a89258a06599f55b29a3b",
+      "sanitized_sha256": "6ff45148a36ffb1087590bacb1f46fcda9b6f5cb313a89258a06599f55b29a3b",
+      "original_bytes": 65,
+      "sanitized_bytes": 65
+    },
+    {
+      "path": "/tmp/goagent-continuation-harness-coding.jsonl",
+      "original_sha256": "975316d5d0b2a29a922d127ea09721d54d69324965f2f31d3c7f77001a1c8b6e",
+      "sanitized_sha256": "975316d5d0b2a29a922d127ea09721d54d69324965f2f31d3c7f77001a1c8b6e",
+      "original_bytes": 2676,
+      "sanitized_bytes": 2676
+    },
+    {
+      "path": "/tmp/goagent-continuation-image.log",
+      "original_sha256": "85113eaeedd492c9e203d81b43d90270e832c82efedde81013412210c73a551c",
+      "sanitized_sha256": "85113eaeedd492c9e203d81b43d90270e832c82efedde81013412210c73a551c",
+      "original_bytes": 191,
+      "sanitized_bytes": 191
+    },
+    {
+      "path": "/tmp/goagent-continuation-linux-final.log",
+      "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sanitized_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "original_bytes": 0,
+      "sanitized_bytes": 0
+    },
+    {
+      "path": "/tmp/goagent-continuation-linux.log",
+      "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sanitized_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "original_bytes": 0,
+      "sanitized_bytes": 0
+    },
+    {
+      "path": "/tmp/goagent-continuation-llm-all.log",
+      "original_sha256": "246f43794510bc2cf047d6558497741522fd18597988ba6f3dcd7453c83d3460",
+      "sanitized_sha256": "246f43794510bc2cf047d6558497741522fd18597988ba6f3dcd7453c83d3460",
+      "original_bytes": 259,
+      "sanitized_bytes": 259
+    },
+    {
+      "path": "/tmp/goagent-continuation-llm-green.log",
+      "original_sha256": "73edaf6f5d7c113ef56207f82e84413b4c6014a37fe2b30efb022e0ed3a720c8",
+      "sanitized_sha256": "73edaf6f5d7c113ef56207f82e84413b4c6014a37fe2b30efb022e0ed3a720c8",
+      "original_bytes": 43,
+      "sanitized_bytes": 43
+    },
+    {
+      "path": "/tmp/goagent-continuation-llm-nil-baseline-red.log",
+      "original_sha256": "10735974c985fe8e8b0a2724c3c56c2abb96653646fe41e64a526d65ec85d623",
+      "sanitized_sha256": "10735974c985fe8e8b0a2724c3c56c2abb96653646fe41e64a526d65ec85d623",
+      "original_bytes": 265,
+      "sanitized_bytes": 265
+    },
+    {
+      "path": "/tmp/goagent-continuation-llm-red.log",
+      "original_sha256": "640de42d6594f14c23580eb4a61bc55632d78e8f03ea513396cec28df032ee19",
+      "sanitized_sha256": "640de42d6594f14c23580eb4a61bc55632d78e8f03ea513396cec28df032ee19",
+      "original_bytes": 879,
+      "sanitized_bytes": 879
+    },
+    {
+      "path": "/tmp/goagent-continuation-process-green.log",
+      "original_sha256": "a5d8fd29c8b20fddca95d3c7b4a5ce319f83ec3f0d8d0bf7b2e302142ff70092",
+      "sanitized_sha256": "a5d8fd29c8b20fddca95d3c7b4a5ce319f83ec3f0d8d0bf7b2e302142ff70092",
+      "original_bytes": 164,
+      "sanitized_bytes": 164
+    },
+    {
+      "path": "/tmp/goagent-continuation-protocol.log",
+      "original_sha256": "d798e3d2fe9b22ef3a7c3d7487422ae31ad88b17fd595902f25fb7552ae1247b",
+      "sanitized_sha256": "d798e3d2fe9b22ef3a7c3d7487422ae31ad88b17fd595902f25fb7552ae1247b",
+      "original_bytes": 199,
+      "sanitized_bytes": 199
+    },
+    {
+      "path": "/tmp/goagent-continuation-services/01-core.json",
+      "original_sha256": "10fa8a8175ccb6544506ad9f1e90b68136be949a11182352b60ae956e79bccf3",
+      "sanitized_sha256": "deb08c94ed723206dcb8fd4e966ca975307895be21124571a943ae7c86118ca8",
+      "original_bytes": 473,
+      "sanitized_bytes": 243
+    },
+    {
+      "path": "/tmp/goagent-continuation-services/01-tests.jsonl",
+      "original_sha256": "188e242ce926668f16dd12478c5aaf561be7baa4b9e857a2bc8df00a109099cf",
+      "sanitized_sha256": "188e242ce926668f16dd12478c5aaf561be7baa4b9e857a2bc8df00a109099cf",
+      "original_bytes": 98435,
+      "sanitized_bytes": 98435
+    },
+    {
+      "path": "/tmp/goagent-continuation-services/02-core.json",
+      "original_sha256": "10fa8a8175ccb6544506ad9f1e90b68136be949a11182352b60ae956e79bccf3",
+      "sanitized_sha256": "deb08c94ed723206dcb8fd4e966ca975307895be21124571a943ae7c86118ca8",
+      "original_bytes": 473,
+      "sanitized_bytes": 243
+    },
+    {
+      "path": "/tmp/goagent-continuation-services/02-tests.jsonl",
+      "original_sha256": "93f703724fcc72f39a84dcc6ccd039bced95a46c628aa38d7cc860929d0a12db",
+      "sanitized_sha256": "93f703724fcc72f39a84dcc6ccd039bced95a46c628aa38d7cc860929d0a12db",
+      "original_bytes": 67145,
+      "sanitized_bytes": 67145
+    },
+    {
+      "path": "/tmp/goagent-continuation-services/03-core.json",
+      "original_sha256": "10fa8a8175ccb6544506ad9f1e90b68136be949a11182352b60ae956e79bccf3",
+      "sanitized_sha256": "deb08c94ed723206dcb8fd4e966ca975307895be21124571a943ae7c86118ca8",
+      "original_bytes": 473,
+      "sanitized_bytes": 243
+    },
+    {
+      "path": "/tmp/goagent-continuation-services/03-tests.jsonl",
+      "original_sha256": "d9760aa9d28739c021fee43d92dd5855f7dccd3870a9a45551c28665adfc36e9",
+      "sanitized_sha256": "d9760aa9d28739c021fee43d92dd5855f7dccd3870a9a45551c28665adfc36e9",
+      "original_bytes": 23963,
+      "sanitized_bytes": 23963
+    },
+    {
+      "path": "/tmp/goagent-continuation-services/04-core.json",
+      "original_sha256": "10fa8a8175ccb6544506ad9f1e90b68136be949a11182352b60ae956e79bccf3",
+      "sanitized_sha256": "deb08c94ed723206dcb8fd4e966ca975307895be21124571a943ae7c86118ca8",
+      "original_bytes": 473,
+      "sanitized_bytes": 243
+    },
+    {
+      "path": "/tmp/goagent-continuation-services/04-tests.jsonl",
+      "original_sha256": "838d5ccd116ba0e588fdaadd8da513543a1cb81f252cbcb451eb2ee9c22247a0",
+      "sanitized_sha256": "838d5ccd116ba0e588fdaadd8da513543a1cb81f252cbcb451eb2ee9c22247a0",
+      "original_bytes": 68955,
+      "sanitized_bytes": 68955
+    },
+    {
+      "path": "/tmp/goagent-continuation-services/05-core.json",
+      "original_sha256": "10fa8a8175ccb6544506ad9f1e90b68136be949a11182352b60ae956e79bccf3",
+      "sanitized_sha256": "deb08c94ed723206dcb8fd4e966ca975307895be21124571a943ae7c86118ca8",
+      "original_bytes": 473,
+      "sanitized_bytes": 243
+    },
+    {
+      "path": "/tmp/goagent-continuation-services/05-tests.jsonl",
+      "original_sha256": "f6c01bd4939bffd362774b9e8f3f78706110bb4822793dd75abfcdca47cbf380",
+      "sanitized_sha256": "f6c01bd4939bffd362774b9e8f3f78706110bb4822793dd75abfcdca47cbf380",
+      "original_bytes": 44052,
+      "sanitized_bytes": 44052
+    },
+    {
+      "path": "/tmp/goagent-continuation-services/06-core.json",
+      "original_sha256": "10fa8a8175ccb6544506ad9f1e90b68136be949a11182352b60ae956e79bccf3",
+      "sanitized_sha256": "deb08c94ed723206dcb8fd4e966ca975307895be21124571a943ae7c86118ca8",
+      "original_bytes": 473,
+      "sanitized_bytes": 243
+    },
+    {
+      "path": "/tmp/goagent-continuation-services/06-tests.jsonl",
+      "original_sha256": "41dedba1a1a463fb7e0e58bf78a1922f9511043c0fffa5e47bd7679d3bc26fe7",
+      "sanitized_sha256": "41dedba1a1a463fb7e0e58bf78a1922f9511043c0fffa5e47bd7679d3bc26fe7",
+      "original_bytes": 240869,
+      "sanitized_bytes": 240869
+    },
+    {
+      "path": "/tmp/goagent-continuation-services/07-core.json",
+      "original_sha256": "10fa8a8175ccb6544506ad9f1e90b68136be949a11182352b60ae956e79bccf3",
+      "sanitized_sha256": "deb08c94ed723206dcb8fd4e966ca975307895be21124571a943ae7c86118ca8",
+      "original_bytes": 473,
+      "sanitized_bytes": 243
+    },
+    {
+      "path": "/tmp/goagent-continuation-services/07-tests.jsonl",
+      "original_sha256": "ce48b42319fc1019d7cec951fd0defd53257c75667a15c871c31193378822fec",
+      "sanitized_sha256": "ce48b42319fc1019d7cec951fd0defd53257c75667a15c871c31193378822fec",
+      "original_bytes": 13212,
+      "sanitized_bytes": 13212
+    },
+    {
+      "path": "/tmp/goagent-continuation-services/08-core.json",
+      "original_sha256": "10fa8a8175ccb6544506ad9f1e90b68136be949a11182352b60ae956e79bccf3",
+      "sanitized_sha256": "deb08c94ed723206dcb8fd4e966ca975307895be21124571a943ae7c86118ca8",
+      "original_bytes": 473,
+      "sanitized_bytes": 243
+    },
+    {
+      "path": "/tmp/goagent-continuation-services/08-tests.jsonl",
+      "original_sha256": "f883abc91359ca3c355e910f24d6f90635f0dd97de2534557f472c333e019e32",
+      "sanitized_sha256": "f883abc91359ca3c355e910f24d6f90635f0dd97de2534557f472c333e019e32",
+      "original_bytes": 38273,
+      "sanitized_bytes": 38273
+    },
+    {
+      "path": "/tmp/goagent-continuation-services/09-core.json",
+      "original_sha256": "10fa8a8175ccb6544506ad9f1e90b68136be949a11182352b60ae956e79bccf3",
+      "sanitized_sha256": "deb08c94ed723206dcb8fd4e966ca975307895be21124571a943ae7c86118ca8",
+      "original_bytes": 473,
+      "sanitized_bytes": 243
+    },
+    {
+      "path": "/tmp/goagent-continuation-services/09-tests.jsonl",
+      "original_sha256": "8418d3591b8b4b1c37850cf9157b3449d8b36c400e86d5cefacc25cb71e235eb",
+      "sanitized_sha256": "8418d3591b8b4b1c37850cf9157b3449d8b36c400e86d5cefacc25cb71e235eb",
+      "original_bytes": 2231,
+      "sanitized_bytes": 2231
+    },
+    {
+      "path": "/tmp/goagent-continuation-services/10-core.json",
+      "original_sha256": "10fa8a8175ccb6544506ad9f1e90b68136be949a11182352b60ae956e79bccf3",
+      "sanitized_sha256": "deb08c94ed723206dcb8fd4e966ca975307895be21124571a943ae7c86118ca8",
+      "original_bytes": 473,
+      "sanitized_bytes": 243
+    },
+    {
+      "path": "/tmp/goagent-continuation-services/10-tests.jsonl",
+      "original_sha256": "2dfe83cefefd9092c0edf64269e7027bc421cbc5667808cde2fb6198a838901e",
+      "sanitized_sha256": "2dfe83cefefd9092c0edf64269e7027bc421cbc5667808cde2fb6198a838901e",
+      "original_bytes": 132368,
+      "sanitized_bytes": 132368
+    },
+    {
+      "path": "/tmp/goagent-continuation-services/11-core.json",
+      "original_sha256": "10fa8a8175ccb6544506ad9f1e90b68136be949a11182352b60ae956e79bccf3",
+      "sanitized_sha256": "deb08c94ed723206dcb8fd4e966ca975307895be21124571a943ae7c86118ca8",
+      "original_bytes": 473,
+      "sanitized_bytes": 243
+    },
+    {
+      "path": "/tmp/goagent-continuation-services/11-tests.jsonl",
+      "original_sha256": "982efe274fbc77bef10077fd09c7f6ecb72ac45e79912f70e7d6a040142fd4ca",
+      "sanitized_sha256": "982efe274fbc77bef10077fd09c7f6ecb72ac45e79912f70e7d6a040142fd4ca",
+      "original_bytes": 91169,
+      "sanitized_bytes": 91169
+    },
+    {
+      "path": "/tmp/goagent-continuation-services/12-core.json",
+      "original_sha256": "3dda0c1be08e847e99342161543dda1e38a89449a6132197c9680885cb22511e",
+      "sanitized_sha256": "4d7226d6075d49161c8687fbf535488eda90ddc8a4a2f6bf0ab1ea4fc641275a",
+      "original_bytes": 473,
+      "sanitized_bytes": 243
+    },
+    {
+      "path": "/tmp/goagent-continuation-services/12-tests.jsonl",
+      "original_sha256": "2d40df43b94cc167c41cac23dcde7897434de4c5a79518316c1c96b41adcd6cc",
+      "sanitized_sha256": "2d40df43b94cc167c41cac23dcde7897434de4c5a79518316c1c96b41adcd6cc",
+      "original_bytes": 597689,
+      "sanitized_bytes": 597689
+    },
+    {
+      "path": "/tmp/goagent-continuation-services/13-core.json",
+      "original_sha256": "10fa8a8175ccb6544506ad9f1e90b68136be949a11182352b60ae956e79bccf3",
+      "sanitized_sha256": "deb08c94ed723206dcb8fd4e966ca975307895be21124571a943ae7c86118ca8",
+      "original_bytes": 473,
+      "sanitized_bytes": 243
+    },
+    {
+      "path": "/tmp/goagent-continuation-services/13-tests.jsonl",
+      "original_sha256": "51d10943c7f3cbf7a374d29b946d03b9e44377fa1f3407189434ea865ecc6699",
+      "sanitized_sha256": "51d10943c7f3cbf7a374d29b946d03b9e44377fa1f3407189434ea865ecc6699",
+      "original_bytes": 28718,
+      "sanitized_bytes": 28718
+    },
+    {
+      "path": "/tmp/goagent-continuation-services/14-core.json",
+      "original_sha256": "10fa8a8175ccb6544506ad9f1e90b68136be949a11182352b60ae956e79bccf3",
+      "sanitized_sha256": "deb08c94ed723206dcb8fd4e966ca975307895be21124571a943ae7c86118ca8",
+      "original_bytes": 473,
+      "sanitized_bytes": 243
+    },
+    {
+      "path": "/tmp/goagent-continuation-services/14-tests.jsonl",
+      "original_sha256": "1eebd6c5ede197bff392122180858a235a8e789be598498ecc58c8be51d372ce",
+      "sanitized_sha256": "75448b808c8342963128a32026a1ab6ba16d244efe7a51f03754270c151ef937",
+      "original_bytes": 378971,
+      "sanitized_bytes": 378189
+    },
+    {
+      "path": "/tmp/goagent-continuation-services/15-core.json",
+      "original_sha256": "10fa8a8175ccb6544506ad9f1e90b68136be949a11182352b60ae956e79bccf3",
+      "sanitized_sha256": "deb08c94ed723206dcb8fd4e966ca975307895be21124571a943ae7c86118ca8",
+      "original_bytes": 473,
+      "sanitized_bytes": 243
+    },
+    {
+      "path": "/tmp/goagent-continuation-services/15-tests.jsonl",
+      "original_sha256": "9f517ce339678b9cb7c1a6b7daf37c9071fb390390488b7ca18d8f7ab56f82bb",
+      "sanitized_sha256": "9f517ce339678b9cb7c1a6b7daf37c9071fb390390488b7ca18d8f7ab56f82bb",
+      "original_bytes": 3058,
+      "sanitized_bytes": 3058
+    },
+    {
+      "path": "/tmp/goagent-continuation-services/summary.json",
+      "original_sha256": "d9d340dac8d1d784909dd66f27c50b3adae02a362be5e2e28b5861e1fdedc18c",
+      "sanitized_sha256": "9a199f2a1f4c0353faa76c8599b57a52a799ae099440cebbfc146ee34b390a83",
+      "original_bytes": 13371,
+      "sanitized_bytes": 11945
+    },
+    {
+      "path": "/tmp/goagent-continuation-services.log",
+      "original_sha256": "198f6ff8e817eae6b1e74b8569f223f404639d25da6d71196b48283c658786be",
+      "sanitized_sha256": "198f6ff8e817eae6b1e74b8569f223f404639d25da6d71196b48283c658786be",
+      "original_bytes": 64,
+      "sanitized_bytes": 64
+    },
+    {
+      "path": "/tmp/goagent-continuation-shell-parent-red.log",
+      "original_sha256": "b0bc991e049a331992a81564af4f1feaf4bfaea55b88c63b1b79c86d063186f0",
+      "sanitized_sha256": "b0bc991e049a331992a81564af4f1feaf4bfaea55b88c63b1b79c86d063186f0",
+      "original_bytes": 659,
+      "sanitized_bytes": 659
+    },
+    {
+      "path": "/tmp/goagent-continuation-shell-ready.log",
+      "original_sha256": "e3b1985cc6c3722ba2a7546156deeb1e680291e9bacbb697db31d08f92723e33",
+      "sanitized_sha256": "e3b1985cc6c3722ba2a7546156deeb1e680291e9bacbb697db31d08f92723e33",
+      "original_bytes": 52,
+      "sanitized_bytes": 52
+    },
+    {
+      "path": "/tmp/goagent-continuation-shell-red.log",
+      "original_sha256": "54754480ddbe56b241c7f0111b95790740db26259fa8e5b9f737cb9bde3d6828",
+      "sanitized_sha256": "54754480ddbe56b241c7f0111b95790740db26259fa8e5b9f737cb9bde3d6828",
+      "original_bytes": 1812,
+      "sanitized_bytes": 1812
+    },
+    {
+      "path": "/tmp/goagent-continuation-small-final.log",
+      "original_sha256": "f4d0ccd2cbf324dd952dc252e349b44ad0b9375a556e6ea05a6e8d6dbd203360",
+      "sanitized_sha256": "f4d0ccd2cbf324dd952dc252e349b44ad0b9375a556e6ea05a6e8d6dbd203360",
+      "original_bytes": 96,
+      "sanitized_bytes": 96
+    },
+    {
+      "path": "/tmp/goagent-continuation-ssh-red.log",
+      "original_sha256": "b116c77ca51cd562b8a55ad249a40bea95c7e151588f1a1d78adf0a5a0543e99",
+      "sanitized_sha256": "10cd0b22ad4d123d2f3da5b4dea15d5f1e8ce0698fb7478f467b7eda8c3a4f4b",
+      "original_bytes": 474,
+      "sanitized_bytes": 428
+    },
+    {
+      "path": "/tmp/goagent-continuation-ssh-smoke.log",
+      "original_sha256": "3ed44cef05224261944f803ef55890017d79f850fb5f35c06a4247f2ef0d283a",
+      "sanitized_sha256": "3ed44cef05224261944f803ef55890017d79f850fb5f35c06a4247f2ef0d283a",
+      "original_bytes": 9277,
+      "sanitized_bytes": 9277
+    },
+    {
+      "path": "/tmp/goagent-continuation-verified-core.log",
+      "original_sha256": "15bf373bb4671716ac4350d2a687d0e8189695dad76ddef72337a72de5127c12",
+      "sanitized_sha256": "15bf373bb4671716ac4350d2a687d0e8189695dad76ddef72337a72de5127c12",
+      "original_bytes": 460239,
+      "sanitized_bytes": 460239
+    },
+    {
+      "path": "/tmp/goagent-continuation-verified-coverage/coverage.out",
+      "original_sha256": "dbbb5413514811e0f7b39f56d5bd1e57e6431e8255837f942d3db0e958c0c2f4",
+      "sanitized_sha256": "dbbb5413514811e0f7b39f56d5bd1e57e6431e8255837f942d3db0e958c0c2f4",
+      "original_bytes": 1207365,
+      "sanitized_bytes": 1207365
+    },
+    {
+      "path": "/tmp/goagent-continuation-verified-services/01-core.json",
+      "original_sha256": "10fa8a8175ccb6544506ad9f1e90b68136be949a11182352b60ae956e79bccf3",
+      "sanitized_sha256": "deb08c94ed723206dcb8fd4e966ca975307895be21124571a943ae7c86118ca8",
+      "original_bytes": 473,
+      "sanitized_bytes": 243
+    },
+    {
+      "path": "/tmp/goagent-continuation-verified-services/01-tests.jsonl",
+      "original_sha256": "d49a124effba3c963a43ce60b0def00d3f3386838868a7673fb5c971e30d4c7c",
+      "sanitized_sha256": "d49a124effba3c963a43ce60b0def00d3f3386838868a7673fb5c971e30d4c7c",
+      "original_bytes": 98477,
+      "sanitized_bytes": 98477
+    },
+    {
+      "path": "/tmp/goagent-continuation-verified-services/02-core.json",
+      "original_sha256": "10fa8a8175ccb6544506ad9f1e90b68136be949a11182352b60ae956e79bccf3",
+      "sanitized_sha256": "deb08c94ed723206dcb8fd4e966ca975307895be21124571a943ae7c86118ca8",
+      "original_bytes": 473,
+      "sanitized_bytes": 243
+    },
+    {
+      "path": "/tmp/goagent-continuation-verified-services/02-tests.jsonl",
+      "original_sha256": "19fbfa0d41ab9001c8acaa29c3b26bc103bb83d54c7ef45d82108e6179e1ad4b",
+      "sanitized_sha256": "19fbfa0d41ab9001c8acaa29c3b26bc103bb83d54c7ef45d82108e6179e1ad4b",
+      "original_bytes": 67231,
+      "sanitized_bytes": 67231
+    },
+    {
+      "path": "/tmp/goagent-continuation-verified-services/03-core.json",
+      "original_sha256": "10fa8a8175ccb6544506ad9f1e90b68136be949a11182352b60ae956e79bccf3",
+      "sanitized_sha256": "deb08c94ed723206dcb8fd4e966ca975307895be21124571a943ae7c86118ca8",
+      "original_bytes": 473,
+      "sanitized_bytes": 243
+    },
+    {
+      "path": "/tmp/goagent-continuation-verified-services/03-tests.jsonl",
+      "original_sha256": "bc7090c8876ff133115fa89405d91b547b61033c686ebc91bf3043a07c7122fc",
+      "sanitized_sha256": "bc7090c8876ff133115fa89405d91b547b61033c686ebc91bf3043a07c7122fc",
+      "original_bytes": 23971,
+      "sanitized_bytes": 23971
+    },
+    {
+      "path": "/tmp/goagent-continuation-verified-services/04-core.json",
+      "original_sha256": "10fa8a8175ccb6544506ad9f1e90b68136be949a11182352b60ae956e79bccf3",
+      "sanitized_sha256": "deb08c94ed723206dcb8fd4e966ca975307895be21124571a943ae7c86118ca8",
+      "original_bytes": 473,
+      "sanitized_bytes": 243
+    },
+    {
+      "path": "/tmp/goagent-continuation-verified-services/04-tests.jsonl",
+      "original_sha256": "2b05076f63c5e1ac5c865231632f89d23833d5d93ed8d7de328588e2925511bc",
+      "sanitized_sha256": "2b05076f63c5e1ac5c865231632f89d23833d5d93ed8d7de328588e2925511bc",
+      "original_bytes": 68958,
+      "sanitized_bytes": 68958
+    },
+    {
+      "path": "/tmp/goagent-continuation-verified-services/05-core.json",
+      "original_sha256": "10fa8a8175ccb6544506ad9f1e90b68136be949a11182352b60ae956e79bccf3",
+      "sanitized_sha256": "deb08c94ed723206dcb8fd4e966ca975307895be21124571a943ae7c86118ca8",
+      "original_bytes": 473,
+      "sanitized_bytes": 243
+    },
+    {
+      "path": "/tmp/goagent-continuation-verified-services/05-tests.jsonl",
+      "original_sha256": "56d032ca1edc56e6671c2a6792f5dcb69ba8379559a95da05542a1e4e3cbfa3b",
+      "sanitized_sha256": "56d032ca1edc56e6671c2a6792f5dcb69ba8379559a95da05542a1e4e3cbfa3b",
+      "original_bytes": 44041,
+      "sanitized_bytes": 44041
+    },
+    {
+      "path": "/tmp/goagent-continuation-verified-services/06-core.json",
+      "original_sha256": "10fa8a8175ccb6544506ad9f1e90b68136be949a11182352b60ae956e79bccf3",
+      "sanitized_sha256": "deb08c94ed723206dcb8fd4e966ca975307895be21124571a943ae7c86118ca8",
+      "original_bytes": 473,
+      "sanitized_bytes": 243
+    },
+    {
+      "path": "/tmp/goagent-continuation-verified-services/06-tests.jsonl",
+      "original_sha256": "cf63ed6094ebeda64d58af18d3e603a9894bd98a13c32ac56c0f756c246d786e",
+      "sanitized_sha256": "cf63ed6094ebeda64d58af18d3e603a9894bd98a13c32ac56c0f756c246d786e",
+      "original_bytes": 240881,
+      "sanitized_bytes": 240881
+    },
+    {
+      "path": "/tmp/goagent-continuation-verified-services/07-core.json",
+      "original_sha256": "10fa8a8175ccb6544506ad9f1e90b68136be949a11182352b60ae956e79bccf3",
+      "sanitized_sha256": "deb08c94ed723206dcb8fd4e966ca975307895be21124571a943ae7c86118ca8",
+      "original_bytes": 473,
+      "sanitized_bytes": 243
+    },
+    {
+      "path": "/tmp/goagent-continuation-verified-services/07-tests.jsonl",
+      "original_sha256": "f1ae487f8c625691be4773ae083bf7e0017bed56c8bf30165d693d7a3eae851e",
+      "sanitized_sha256": "f1ae487f8c625691be4773ae083bf7e0017bed56c8bf30165d693d7a3eae851e",
+      "original_bytes": 13207,
+      "sanitized_bytes": 13207
+    },
+    {
+      "path": "/tmp/goagent-continuation-verified-services/08-core.json",
+      "original_sha256": "10fa8a8175ccb6544506ad9f1e90b68136be949a11182352b60ae956e79bccf3",
+      "sanitized_sha256": "deb08c94ed723206dcb8fd4e966ca975307895be21124571a943ae7c86118ca8",
+      "original_bytes": 473,
+      "sanitized_bytes": 243
+    },
+    {
+      "path": "/tmp/goagent-continuation-verified-services/08-tests.jsonl",
+      "original_sha256": "c68eddd6c4683e0fd18a9241e26d8d98856a80e9fa546ff8a04a8fcfd56daf70",
+      "sanitized_sha256": "c68eddd6c4683e0fd18a9241e26d8d98856a80e9fa546ff8a04a8fcfd56daf70",
+      "original_bytes": 38271,
+      "sanitized_bytes": 38271
+    },
+    {
+      "path": "/tmp/goagent-continuation-verified-services/09-core.json",
+      "original_sha256": "10fa8a8175ccb6544506ad9f1e90b68136be949a11182352b60ae956e79bccf3",
+      "sanitized_sha256": "deb08c94ed723206dcb8fd4e966ca975307895be21124571a943ae7c86118ca8",
+      "original_bytes": 473,
+      "sanitized_bytes": 243
+    },
+    {
+      "path": "/tmp/goagent-continuation-verified-services/09-tests.jsonl",
+      "original_sha256": "750bbde30c3929229ee0da25689c80fc7a744aa053b1a0c8e52581e1bb36956c",
+      "sanitized_sha256": "750bbde30c3929229ee0da25689c80fc7a744aa053b1a0c8e52581e1bb36956c",
+      "original_bytes": 2230,
+      "sanitized_bytes": 2230
+    },
+    {
+      "path": "/tmp/goagent-continuation-verified-services/10-core.json",
+      "original_sha256": "10fa8a8175ccb6544506ad9f1e90b68136be949a11182352b60ae956e79bccf3",
+      "sanitized_sha256": "deb08c94ed723206dcb8fd4e966ca975307895be21124571a943ae7c86118ca8",
+      "original_bytes": 473,
+      "sanitized_bytes": 243
+    },
+    {
+      "path": "/tmp/goagent-continuation-verified-services/10-tests.jsonl",
+      "original_sha256": "f098d9af4a400ab0f537d32cf3c52e188c49e24869d7e2eb15b21703d58ae782",
+      "sanitized_sha256": "f098d9af4a400ab0f537d32cf3c52e188c49e24869d7e2eb15b21703d58ae782",
+      "original_bytes": 132364,
+      "sanitized_bytes": 132364
+    },
+    {
+      "path": "/tmp/goagent-continuation-verified-services/11-core.json",
+      "original_sha256": "10fa8a8175ccb6544506ad9f1e90b68136be949a11182352b60ae956e79bccf3",
+      "sanitized_sha256": "deb08c94ed723206dcb8fd4e966ca975307895be21124571a943ae7c86118ca8",
+      "original_bytes": 473,
+      "sanitized_bytes": 243
+    },
+    {
+      "path": "/tmp/goagent-continuation-verified-services/11-tests.jsonl",
+      "original_sha256": "72404d32d98c8b18c6d8cfdd6b0a5c0402d1af1dd77afdfde1d33dc9f14e6bab",
+      "sanitized_sha256": "72404d32d98c8b18c6d8cfdd6b0a5c0402d1af1dd77afdfde1d33dc9f14e6bab",
+      "original_bytes": 91188,
+      "sanitized_bytes": 91188
+    },
+    {
+      "path": "/tmp/goagent-continuation-verified-services/12-core.json",
+      "original_sha256": "3dda0c1be08e847e99342161543dda1e38a89449a6132197c9680885cb22511e",
+      "sanitized_sha256": "4d7226d6075d49161c8687fbf535488eda90ddc8a4a2f6bf0ab1ea4fc641275a",
+      "original_bytes": 473,
+      "sanitized_bytes": 243
+    },
+    {
+      "path": "/tmp/goagent-continuation-verified-services/12-tests.jsonl",
+      "original_sha256": "3c1f36a6ecc71fde8c5d95c51502c083ade2b2371473e21a648b3de7e88b4065",
+      "sanitized_sha256": "3c1f36a6ecc71fde8c5d95c51502c083ade2b2371473e21a648b3de7e88b4065",
+      "original_bytes": 597743,
+      "sanitized_bytes": 597743
+    },
+    {
+      "path": "/tmp/goagent-continuation-verified-services/13-core.json",
+      "original_sha256": "10fa8a8175ccb6544506ad9f1e90b68136be949a11182352b60ae956e79bccf3",
+      "sanitized_sha256": "deb08c94ed723206dcb8fd4e966ca975307895be21124571a943ae7c86118ca8",
+      "original_bytes": 473,
+      "sanitized_bytes": 243
+    },
+    {
+      "path": "/tmp/goagent-continuation-verified-services/13-tests.jsonl",
+      "original_sha256": "8e3f1b1fedfb16e699430078090aa6092bb888a203aa177fab791f55d3792cf7",
+      "sanitized_sha256": "8e3f1b1fedfb16e699430078090aa6092bb888a203aa177fab791f55d3792cf7",
+      "original_bytes": 28722,
+      "sanitized_bytes": 28722
+    },
+    {
+      "path": "/tmp/goagent-continuation-verified-services/14-core.json",
+      "original_sha256": "10fa8a8175ccb6544506ad9f1e90b68136be949a11182352b60ae956e79bccf3",
+      "sanitized_sha256": "deb08c94ed723206dcb8fd4e966ca975307895be21124571a943ae7c86118ca8",
+      "original_bytes": 473,
+      "sanitized_bytes": 243
+    },
+    {
+      "path": "/tmp/goagent-continuation-verified-services/14-tests.jsonl",
+      "original_sha256": "b21783062a2cb272c8c55298a0f205eb74a2e18e86abb962d47e40edbf670cef",
+      "sanitized_sha256": "b21783062a2cb272c8c55298a0f205eb74a2e18e86abb962d47e40edbf670cef",
+      "original_bytes": 357565,
+      "sanitized_bytes": 357565
+    },
+    {
+      "path": "/tmp/goagent-continuation-verified-services/15-core.json",
+      "original_sha256": "10fa8a8175ccb6544506ad9f1e90b68136be949a11182352b60ae956e79bccf3",
+      "sanitized_sha256": "deb08c94ed723206dcb8fd4e966ca975307895be21124571a943ae7c86118ca8",
+      "original_bytes": 473,
+      "sanitized_bytes": 243
+    },
+    {
+      "path": "/tmp/goagent-continuation-verified-services/15-tests.jsonl",
+      "original_sha256": "9bcb3d4e83d8bd513bfd2e7fee2c759f5808113c0b658d135943d8afdbffb948",
+      "sanitized_sha256": "9bcb3d4e83d8bd513bfd2e7fee2c759f5808113c0b658d135943d8afdbffb948",
+      "original_bytes": 3057,
+      "sanitized_bytes": 3057
+    },
+    {
+      "path": "/tmp/goagent-continuation-verified-services/summary.json",
+      "original_sha256": "13ea315d69a4aac5b3ba15c5fb49fe39c2120eaac2c5e5a08ba90c7be40ca17e",
+      "sanitized_sha256": "54be74bb8fcb73b9a1ca57f7eb2ca1b55ca7bb8fe9e934d62dda9aab692a5974",
+      "original_bytes": 11568,
+      "sanitized_bytes": 10142
+    },
+    {
+      "path": "/tmp/goagent-continuation-verified-services.log",
+      "original_sha256": "eb813cc666c26546f283c8ce9b186dd1e9bce7c8d7db476f57f98557200af604",
+      "sanitized_sha256": "eb813cc666c26546f283c8ce9b186dd1e9bce7c8d7db476f57f98557200af604",
+      "original_bytes": 100,
+      "sanitized_bytes": 100
+    },
+    {
+      "path": "/tmp/goagent-continuation-verifier.log",
+      "original_sha256": "28f8503d4f417ce71a060adbed4893849d7339c5f48053a97a43c91d01aca657",
+      "sanitized_sha256": "28f8503d4f417ce71a060adbed4893849d7339c5f48053a97a43c91d01aca657",
+      "original_bytes": 61,
+      "sanitized_bytes": 61
+    },
+    {
+      "path": "/tmp/goagent-continuation-windows-build.log",
+      "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sanitized_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "original_bytes": 0,
+      "sanitized_bytes": 0
+    }
+  ]
+}
