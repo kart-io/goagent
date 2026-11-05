@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `scripts/apicheck` 新增规则：基础与执行机制包禁止导入 `multiagent`，`multiagent` 禁止导入 `execution` 与 `plugin`。
 - `workflow/refund.Service` 新增可选 `OnRegister` 钩子：`Register` 新插入申请后在同一事务内调用，可写入争议判定等与申请同生共灭的记录；返回错误时整个事务回滚，重复登记不调用，为 nil 时行为不变。
 
+### Fixed
+
+- Gemini 流式响应中不含任何字段的 part（如 Gemini 3 收尾帧的空文本）不再写入原生状态；此前带工具调用的下一轮回放会被 API 以 `required oneof field 'data' must have one initialized field` 拒绝。只带 `thoughtSignature` 的 part 仍原样保留。
+
 ## [0.47.1] - 2026-11-04
 
 ### Added
