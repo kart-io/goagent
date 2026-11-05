@@ -275,9 +275,13 @@ func (b *refundBook) member(agent multiagent.AgentFactory) multiagent.Step[multi
 		}
 		id := "refund-" + p.OrderID
 		intent, _ := json.Marshal(map[string]any{"request_id": id, "proposal": p})
-		reg, err := durable.Do(ctx, "refund/register", intent, durable.OperationPolicy{Reconcile: b.lookupVerdict(id)}, func(context.Context) (json.RawMessage, error) {
+		// 登记按申请 ID 幂等，中断后可安全重跑；已有判定保持不变。
+		reg, err := durable.Do(ctx, "refund/register", intent, durable.OperationPolicy{MaxAttempts: 3, RetryInterrupted: true, Reconcile: b.lookupVerdict(id)}, func(context.Context) (json.RawMessage, error) {
 			b.mu.Lock()
 			defer b.mu.Unlock()
+			if v, ok := b.verdicts[id]; ok {
+				return json.Marshal(v)
+			}
 			b.verdicts[id] = p.AmountCents > 50000 // 规则：超过 500 元有争议
 			return json.Marshal(b.verdicts[id])
 		})
@@ -305,7 +309,8 @@ func (b *refundBook) member(agent multiagent.AgentFactory) multiagent.Step[multi
 			approver = in.Approver
 		}
 		intent, _ = json.Marshal(map[string]string{"request_id": id, "approver": approver})
-		exec, err := durable.Do(ctx, "refund/execute", intent, durable.OperationPolicy{Reconcile: b.lookupReceipt(id)}, func(context.Context) (json.RawMessage, error) {
+		// 退款可能已生效而调用返回错误（记录为 failed），RetryFailed 让续跑重跑 run，由 run 先查回执确认。
+		exec, err := durable.Do(ctx, "refund/execute", intent, durable.OperationPolicy{MaxAttempts: 3, RetryFailed: true, Reconcile: b.lookupReceipt(id)}, func(context.Context) (json.RawMessage, error) {
 			b.mu.Lock()
 			defer b.mu.Unlock()
 			if receipt, ok := b.receipts[id]; ok { // 先查回执，已退款的申请不再批准或退款

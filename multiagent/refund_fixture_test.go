@@ -83,11 +83,15 @@ func (s ledgerState) clone() ledgerState {
 	return s
 }
 
+// errRefundAckLost 模拟退款事务已提交、调用方却收到错误（如提交确认在网络上丢失）。
+var errRefundAckLost = errors.New("退款事务已提交但确认丢失")
+
 // ledger 是内存退款账本：事务复制状态、成功才提交，回调出错整体回滚。
 type ledger struct {
 	mu        sync.Mutex
 	state     ledgerState
 	threshold int64 // 金额超过它即有争议（分）
+	ackLost   bool  // 为真时下一笔退款事务提交后返回 errRefundAckLost
 }
 
 func newLedger(paidCents, threshold int64) *ledger {
@@ -104,7 +108,12 @@ func (l *ledger) Transaction(_ context.Context, f func(refund.Transaction) error
 	if err := f(&ledgerTx{s: &next}); err != nil {
 		return err
 	}
+	committedRefund := next.refunds > l.state.refunds
 	l.state = next
+	if committedRefund && l.ackLost {
+		l.ackLost = false
+		return errRefundAckLost
+	}
 	return nil
 }
 
@@ -114,6 +123,9 @@ func (l *ledger) read(fn func(*ledgerState)) { l.mu.Lock(); defer l.mu.Unlock();
 func (l *ledger) changeOrder() {
 	l.read(func(s *ledgerState) { s.order.Version++; s.order.DeliveryDays++ })
 }
+
+// loseNextRefundAck 让下一笔退款事务提交后向调用方返回错误。
+func (l *ledger) loseNextRefundAck() { l.read(func(*ledgerState) { l.ackLost = true }) }
 
 func (l *ledger) refunds() (n int) { l.read(func(s *ledgerState) { n = s.refunds }); return }
 
@@ -158,6 +170,7 @@ type refundDesk struct {
 	ledger                *ledger
 	service               *refund.Service
 	registers, executions atomic.Int32
+	nodeKey               atomic.Value // 退款节点的执行键，供测试读取操作记录
 }
 
 func newRefundDesk(paidCents, threshold int64) *refundDesk {
@@ -207,7 +220,12 @@ func (d *refundDesk) register(ctx context.Context, id string, p proposal) (json.
 	if err != nil {
 		return nil, err
 	}
-	d.ledger.read(func(s *ledgerState) { v = s.verdicts[id] })
+	// 重跑时 Register 返回已有申请且不调用钩子，判定只能从账本读取；缺失时报错，不以零值“无争议”放行。
+	var found bool
+	d.ledger.read(func(s *ledgerState) { v, found = s.verdicts[id] })
+	if !found {
+		return nil, fmt.Errorf("申请 %s 已登记但缺少争议判定", id)
+	}
 	return json.Marshal(registration{Request: registered, Verdict: v})
 }
 
@@ -276,6 +294,7 @@ func refundMember(desk *refundDesk, agent AgentFactory) Step[Conversation] {
 			c.Turns = append(c.Turns, Turn{Agent: "refund", Output: text})
 			return c, nil
 		}
+		desk.nodeKey.Store(workflow.DurableKey(ctx))
 		owned, err := agent(ctx)
 		if owned.Close != nil {
 			defer func() { _ = owned.Close(context.WithoutCancel(ctx)) }()
@@ -299,7 +318,8 @@ func refundMember(desk *refundDesk, agent AgentFactory) Step[Conversation] {
 		if err != nil {
 			return c, err
 		}
-		record, err := durable.Do(ctx, "refund/register", intent, durable.OperationPolicy{Reconcile: desk.reconcileRegister(id)},
+		// 登记按申请 ID 幂等，中断（pending 未核对到、或被取消）后可安全重跑。
+		record, err := durable.Do(ctx, "refund/register", intent, durable.OperationPolicy{MaxAttempts: 3, RetryInterrupted: true, Reconcile: desk.reconcileRegister(id)},
 			func(ctx context.Context) (json.RawMessage, error) { return desk.register(ctx, id, p) })
 		if err != nil {
 			return c, err
@@ -337,7 +357,8 @@ func refundMember(desk *refundDesk, agent AgentFactory) Step[Conversation] {
 		if err != nil {
 			return c, err
 		}
-		record, err = durable.Do(ctx, "refund/execute", intent, durable.OperationPolicy{Reconcile: desk.reconcileExecute(id)},
+		// 退款可能已提交而调用返回错误（记录为 failed），RetryFailed 让续跑重跑 run，由 run 先查回执确认。
+		record, err = durable.Do(ctx, "refund/execute", intent, durable.OperationPolicy{MaxAttempts: 3, RetryFailed: true, Reconcile: desk.reconcileExecute(id)},
 			func(ctx context.Context) (json.RawMessage, error) { return desk.execute(ctx, reg.Request, approver) })
 		if err != nil {
 			return c, err

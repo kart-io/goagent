@@ -133,7 +133,13 @@ func compile[T any](t *testing.T, e *env, g *workflow.Graph[T], version string, 
 // inspect 读取节点 nodeKey 下 Agent scope 的持久操作记录；先取操作锁，会等仍在运行的 Do 释放。
 func inspect(t *testing.T, e *env, nodeKey, scope, id string) *durable.OperationRecord {
 	t.Helper()
-	ctx := durable.WithJournal(durable.WithExecutionKey(context.Background(), durable.ChildKey(nodeKey, "agent/"+scope)), e.store)
+	return inspectAt(t, e, durable.ChildKey(nodeKey, "agent/"+scope), id)
+}
+
+// inspectAt 读取执行键 key 下直接调用 durable.Do 的操作记录。
+func inspectAt(t *testing.T, e *env, key, id string) *durable.OperationRecord {
+	t.Helper()
+	ctx := durable.WithJournal(durable.WithExecutionKey(context.Background(), key), e.store)
 	r, err := durable.InspectOperation(ctx, id)
 	require.NoError(t, err)
 	return r
