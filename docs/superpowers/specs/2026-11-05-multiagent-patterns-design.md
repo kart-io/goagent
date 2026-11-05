@@ -208,7 +208,7 @@ func SupervisorTools(members ...Member) ([]interfaces.Tool, error)
 
 - **状态类型**：一张图只有一个 T。复用 `TextStep`（`Step[Conversation]`）时整张图都用 `Conversation`，抽取与合规也写成 `AgentStep[Conversation]`，抽取出的订单号放在 Turn 里；需要类型化字段时，全部用 `AgentStep` 加自定义 T。
 - **循环上限由路由负责**：总步数只约束整张图，不约束中间的循环。普通执行器每轮先执行节点再路由（`workflow/execute.go:24,66-81`），持久执行器先路由再检查步数（`workflow/durable.go:257-276`）；循环后面还有节点时，第 N 轮评审不通过后，留给合规的那一步会被第 N+1 次写作用掉。因此评审后的出口路由从状态推出轮数：以 `Conversation` 为状态时数评审成员的 Turn 个数，自定义 T 时由评审 Step 的 `out` 给计数字段加 1。判断顺序：先看解析错误（包装 `ErrInvalidRoute`），再看是否通过（通过到合规），最后看轮数；第 N 轮仍不通过时返回包装 `workflow.ErrMaxSteps` 的错误，与 Loop 构造器的超限语义相同（S8），持久运行停在该路由位置，同一运行 ID 再 `Run` 仍报错。
-- **步数兜底与版本**：`MaxSteps` 设为 `1 + 2N + 1`，作为防失控的兜底，也正好够用。路由闭包里的 N 不进计划摘要，只有由 N 算出的 `MaxSteps` 进入（`workflow/durable.go:121-131`），所以示例用同一个常量计算两者，修改 N 后旧运行才会被拒绝恢复，按“版本与迁移”处理。
+- **步数兜底与版本**：`MaxSteps` 设为 `1 + 2N + 1`（抽取、N 轮写作与评审、合规），作为防失控的兜底，也正好够用；拓扑中每多一个节点（含整组计 1 步的 `ParallelStep`）就加 1，例如抽取后再接一个并行查询时为 `3 + 2N`。路由闭包里的 N 不进计划摘要，只有由 N 算出的 `MaxSteps` 进入（`workflow/durable.go:121-131`），所以示例用同一个常量计算两者，修改 N 后旧运行才会被拒绝恢复，按“版本与迁移”处理。
 - 出口路由经 `GuardRoute(reviewExit, []string{"write", "compliance"}, fallback)` 包装后交给 `AddBranch`：`ErrInvalidRoute` 转兜底，`ErrMaxSteps` 属于其他错误，原样返回。因为合规节点留有一步，第 N 轮判断无效时 Fallback 能执行，这与 Loop 构造器“末轮无效返回 `ErrMaxSteps`”不同，指南说明这一点。
 
 ```go
@@ -310,6 +310,7 @@ func TextNext(members ...Step[Conversation]) (func(context.Context, Conversation
 **预算与 Dispatcher**（`tools/call_scope.go:33-56`、`builder/model_call.go:196-201`）：
 
 - `SupervisorTools` 的成员是模型工具，调用时 ctx 必须带根预算（`budget.WithController`）；持久运行必须是 `budget.NewDurable` 创建的持久预算。
+- 持久运行中，根预算的 `budget.Config.RootKey` 必须等于持久图的运行 ID，否则 Agent 报 `agent budget root conflict`（`builder/agent_usage.go:57-61`）；换运行 ID 时一并换 RootKey。
 - 持久模型请求的意图包含预算配置（`budget.Config`，含 `RootKey`、`Version`、各项上限与 `DeadlineUnixMilli`）与用量归属。恢复时必须复用原来的预算存储与完全相同的配置：不得在重启时重新计算截止时间、调整上限或改变归属。能拦截的违规与拦不住的情况：
   - 复用预算存储但配置变化：`budget.NewDurable` 在构造时就报配置变化（`core/budget/controller.go:88-99,160-161`）。
   - 换用新的预算存储且配置也变：已完成的模型请求因意图不一致无法回放（意图含 `c.Configuration()`，`builder/model_call.go:198-203`）。
@@ -343,7 +344,7 @@ func TextNext(members ...Step[Conversation]) (func(context.Context, Conversation
   - 执行操作的 run 必须先按业务申请 ID 查回执，已有回执直接返回：`Approve` 在查回执之前就校验有效期与订单事实（`workflow/refund/service.go:184-205`），而 `Reconcile` 只在记录为 pending 时调用（`core/durable/operation.go:276`），记录为 failed/canceled 后重跑时若先 `Approve`，退款已生效的运行会卡在批准失败上。审核等待期间订单事实变化导致批准失败时，作为业务结果（“订单已变化，需重新申请”）写回状态，而不是节点错误。
   - 登记操作的意图只含申请 ID 与提议，不含规则阈值或时间；登记与判定在同一事务内写入，`Reconcile` 只有在申请与判定都存在时才补记完成，否则不补记（避免以零值“无争议”补记而绕过审核）。
   - 登记与执行的 `OperationPolicy` 都提供 `Reconcile`（`core/durable/operation.go` 中 `OperationPolicy.Reconcile`）：记录停在 pending 时，按业务申请 ID 查询登记或回执是否已生效，生效则补记 completed、不重跑。业务侧复用 `workflow/refund.Service`：`Register` 按业务申请 ID 去重并固定订单事实，`Refund` 先返回已提交回执，再在同一事务内检查累计额度。
-  - 争议判定在登记操作内计算一次，结果随操作记录固定；节点重入时回放，不随订单事实或规则变化而翻转。`info` 含订单号、金额与判定理由；输入为 `{"approved": bool, "note": string, "approver": string}`（`approver` 由宿主认证后填入），validate 校验格式，批准时要求 `approver` 非空；拒绝时不执行退款，把“人工拒绝”写回状态交 Agent 回复客户。
+  - 争议判定在登记操作内计算一次，结果随操作记录固定；节点重入时回放，不随订单事实或规则变化而翻转。`info` 含订单号、金额与判定理由；输入为 `{"approved": bool, "note": string, "approver": string, "reason": string}`（`approver` 由宿主认证后填入；`reason` 可选，超时输入为 `{"approved": false, "reason": "timeout"}`），validate 校验格式，批准时要求 `approver` 非空；拒绝时不执行退款，把“人工拒绝”写回状态交 Agent 回复客户。
 - 节点内调用 `durable.AwaitInput` 可以暂停（S6 的写法见“AgentStep 的执行”）。Agent 工具内的中断需要工具声明可中断（`tools.InterruptibleTool` / `WithInterruptible`），或是声明 `Resumable` 的 Runnable 工具。Agent 调用的子图如果是纯审批等待，在外层持久图里按节点失败处理（`workflow/durable.go:348-369`），这一限制写进指南。
 - 回放只覆盖已提交为 completed 的操作。pending 操作是否重入取决于策略：默认非 Resumable 的 Runnable 工具与默认模型请求都只允许一次尝试，pending 与 failed 时恢复被拒绝，需要宿主核对（模型请求开启重发时 pending 与 canceled 除外，见“Agent 侧”）。
 
