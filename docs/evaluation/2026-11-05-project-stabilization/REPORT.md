@@ -16,6 +16,7 @@
 | 原冲突 GOROOT 下构建与 vet | 通过 | `make build vet` 使用 go.mod 工具链 |
 | 独立 frameworkbench 只读依赖与竞态契约 | 通过 | `make test-frameworkbench` |
 | v2 lint、导入分层 | 通过 | 0 issues、0 findings |
+| 最终主模块全量竞态与覆盖率 | 通过，整体 79.5%，multiagent 93.3% | Go 1.26.10，`-count=1 -race -timeout=120s`；[门禁结果](coverage-gates.txt) |
 | 默认环境跨仓完整竞态测试 | 15/15 模块命令通过，1541 个测试事件通过，124 个跳过 | 新 `compatcheck` 入口的首次实际运行 |
 | 配置 PostgreSQL 后跨仓完整竞态测试 | 15/15 模块命令通过，1620 个测试事件通过，101 个跳过 | [compatibility.json](compatibility.json) |
 | PostgreSQL 重启、同步提交专项首次执行 | 2 个测试失败 | 随机端口在容器重启后由 32774 变为 32775，旧 DSN 连接拒绝；保留失败事件 |
@@ -38,6 +39,8 @@
 | 数据库重启、同步提交 | 固定宿主端口后 `TestPrimaryRestart`、`TestSyncCommit` 均通过 |
 
 退款中的审核人仍是演示授权规则，回执仍是本地效果账本记录；Postgres 实库测试验证存储与执行恢复。它们都不能代替真实业务的身份认证、租户授权或支付方回执对账。
+
+整体覆盖率门槛已从 45% 提高到 75%，新增 multiagent ≥85% 门槛，既有核心模块与 Provider 阈值保持不变。回归已证明整体 74%、缺失 multiagent 数据、multiagent 84% 会失败，而 75% 与 85% 的相应临界值可通过。
 
 ## 复现与证据处理
 

@@ -2,7 +2,7 @@
 
 ## 覆盖率与门禁
 
-- `make coverage` 和 CI 执行相同门禁：整体（排除示例）≥45%，`core/durable` ≥70%，`core/budget`、`workflow`、`builder` 各 ≥75%；`llm/providers/openai.go` ≥70%，`llm/providers/gemini.go` ≥65%，`llm/common/base.go` ≥50%。模块阈值针对精确包路径，不混入子包；全部按语句数加权，缺失关键数据会失败。
+- `make coverage` 和 CI 执行相同门禁：整体（排除示例）≥75%，`core/durable` ≥70%，`core/budget`、`workflow`、`builder` 各 ≥75%，`multiagent` ≥85%；`llm/providers/openai.go` ≥70%，`llm/providers/gemini.go` ≥65%，`llm/common/base.go` ≥50%。模块阈值针对精确包路径，不混入子包；全部按语句数加权，缺失关键数据会失败。
 - 新行为必须带测试，覆盖正常流程、边界与错误恢复；修 bug 先写能复现的测试。
 - 默认测试不访问外部服务；真实模型测试见 [Provider 持续回归](../guides/PROVIDER_REGRESSION.md)。
 

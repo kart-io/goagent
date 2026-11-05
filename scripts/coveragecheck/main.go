@@ -26,17 +26,20 @@ type gate struct {
 	minimum    float64
 }
 
-var profileLine = regexp.MustCompile(`^(.+):[0-9]+\.[0-9]+,[0-9]+\.[0-9]+ ([0-9]+) ([0-9]+)$`)
-var gates = []gate{
-	{"整体覆盖率", "", 45},
-	{"core/durable", "core/durable/", 70},
-	{"core/budget", "core/budget/", 75},
-	{"workflow", "workflow/", 75},
-	{"builder", "builder/", 75},
-	{"llm/providers/openai.go", "llm/providers/openai.go", 70},
-	{"llm/providers/gemini.go", "llm/providers/gemini.go", 65},
-	{"llm/common/base.go", "llm/common/base.go", 50},
-}
+var (
+	profileLine = regexp.MustCompile(`^(.+):[0-9]+\.[0-9]+,[0-9]+\.[0-9]+ ([0-9]+) ([0-9]+)$`)
+	gates       = []gate{
+		{"整体覆盖率", "", 75},
+		{"core/durable", "core/durable/", 70},
+		{"core/budget", "core/budget/", 75},
+		{"workflow", "workflow/", 75},
+		{"builder", "builder/", 75},
+		{"multiagent", "multiagent/", 85},
+		{"llm/providers/openai.go", "llm/providers/openai.go", 70},
+		{"llm/providers/gemini.go", "llm/providers/gemini.go", 65},
+		{"llm/common/base.go", "llm/common/base.go", 50},
+	}
+)
 
 func parseProfile(r io.Reader) (map[string]block, error) {
 	scanner := bufio.NewScanner(r)

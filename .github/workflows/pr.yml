@@ -90,11 +90,12 @@ jobs:
             const body = `## 📊 Test Coverage Report
 
             **Overall Coverage**（不含 examples）: ${coverage}%
-            ${parseFloat(coverage) >= 45 ? '✅ Meets minimum threshold (45%)' : '❌ Below minimum threshold (45%)'}
+            ${parseFloat(coverage) >= 75 ? '✅ Meets minimum threshold (75%)' : '❌ Below minimum threshold (75%)'}
 
             ### 执行核心与关键文件覆盖率要求
             - core/durable ≥ 70%
             - core/budget、workflow、builder ≥ 75%
+            - multiagent ≥ 85%
             - llm/providers/openai.go ≥ 70%
             - llm/providers/gemini.go ≥ 65%
             - llm/common/base.go ≥ 50%

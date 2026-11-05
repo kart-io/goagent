@@ -10,6 +10,6 @@
 
 其他脚本：
 
-- `check_coverage.sh [PROFILE]`：默认读取 `coverage/coverage.out`；CI 或自定义文件可显式传入路径。由 `scripts/coveragecheck` 按语句数加权检查：整体 45%，`core/durable` 70%，`core/budget`、`workflow`、`builder` 各 75%（精确包路径，不混入子包），以及既有 Provider 单文件阈值；缺少关键数据即失败。`make coverage` 生成报告并执行门禁，不依赖 Bash 关联数组或 bc。
+- `check_coverage.sh [PROFILE]`：默认读取 `coverage/coverage.out`；CI 或自定义文件可显式传入路径。由 `scripts/coveragecheck` 按语句数加权检查：整体 75%，`core/durable` 70%，`core/budget`、`workflow`、`builder` 各 75%，`multiagent` 85%（精确包路径，不混入子包），以及既有 Provider 单文件阈值；缺少关键数据即失败。`make coverage` 生成报告并执行门禁，不依赖 Bash 关联数组或 bc。
 - `create_release.sh <version> [alpha|beta|rc]`：创建并推送发布 tag。
 - `verify_all_examples.sh`：以 5 秒超时逐个运行 `examples/` 下的 `package main` 程序并写出结果日志。

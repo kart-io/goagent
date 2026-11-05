@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -24,7 +25,7 @@ func TestGatePropagatesReportWriteFailure(t *testing.T) {
 
 // 每个关键包或文件必须有独立门禁，不能被其他包的高覆盖率掩盖。
 func TestRunEnforcesEveryCriticalCoverageGate(t *testing.T) {
-	files := []string{"core/durable/a.go", "core/budget/a.go", "workflow/a.go", "builder/a.go", "llm/providers/openai.go", "llm/providers/gemini.go", "llm/common/base.go"}
+	files := []string{"core/durable/a.go", "core/budget/a.go", "workflow/a.go", "builder/a.go", "multiagent/a.go", "llm/providers/openai.go", "llm/providers/gemini.go", "llm/common/base.go"}
 	profile := filepath.Join(t.TempDir(), "coverage.out")
 	write := func(target, mode string) {
 		t.Helper()
@@ -134,5 +135,52 @@ func TestDuplicateBlocksDoNotInflateStatementCounts(t *testing.T) {
 	_, err = parseProfile(strings.NewReader("mode: count\ngithub.com/kart-io/goagent/a.go:1.1,2.2 4 1\ngithub.com/kart-io/goagent/a.go:1.1,2.2 5 1\n"))
 	if err == nil {
 		t.Fatal("冲突的语句数必须失败")
+	}
+}
+
+func TestRunEnforcesOverall75PercentBoundary(t *testing.T) {
+	files := []string{"core/durable/a.go", "core/budget/a.go", "workflow/a.go", "builder/a.go", "multiagent/a.go", "llm/providers/openai.go", "llm/providers/gemini.go", "llm/common/base.go"}
+	for _, covered := range []int{74, 75} {
+		t.Run(fmt.Sprint(covered), func(t *testing.T) {
+			var profile strings.Builder
+			profile.WriteString("mode: atomic\n")
+			for _, file := range files {
+				fmt.Fprintf(&profile, "%s%s:1.1,2.2 1 1\n", module, file)
+			}
+			fmt.Fprintf(&profile, "%sapplication.go:1.1,2.2 %d 1\n", module, covered-8)
+			fmt.Fprintf(&profile, "%sapplication.go:3.1,4.2 %d 0\n", module, 100-covered)
+			path := filepath.Join(t.TempDir(), "coverage.out")
+			if err := os.WriteFile(path, []byte(profile.String()), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			err := run(path, &bytes.Buffer{})
+			if (err != nil) != (covered < 75) {
+				t.Fatalf("整体 %d%% 的门禁结果错误: %v", covered, err)
+			}
+		})
+	}
+}
+
+func TestRunRequiresMultiagentCoverageIndependently(t *testing.T) {
+	for _, covered := range []int{-1, 84, 85} {
+		t.Run(fmt.Sprint(covered), func(t *testing.T) {
+			var profile strings.Builder
+			profile.WriteString("mode: atomic\n")
+			for _, file := range []string{"core/durable/a.go", "core/budget/a.go", "workflow/a.go", "builder/a.go", "llm/providers/openai.go", "llm/providers/gemini.go", "llm/common/base.go"} {
+				fmt.Fprintf(&profile, "%s%s:1.1,2.2 100 1\n", module, file)
+			}
+			if covered >= 0 {
+				fmt.Fprintf(&profile, "%smultiagent/a.go:1.1,2.2 %d 1\n", module, covered)
+				fmt.Fprintf(&profile, "%smultiagent/a.go:3.1,4.2 %d 0\n", module, 100-covered)
+			}
+			path := filepath.Join(t.TempDir(), "coverage.out")
+			if err := os.WriteFile(path, []byte(profile.String()), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			err := run(path, &bytes.Buffer{})
+			if (err != nil) != (covered < 85) {
+				t.Fatalf("其他模块高覆盖率不能掩盖 multiagent %d%%: %v", covered, err)
+			}
+		})
 	}
 }
