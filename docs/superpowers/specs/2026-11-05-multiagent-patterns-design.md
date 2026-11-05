@@ -1,6 +1,6 @@
 # 多 Agent 预置模式设计
 
-日期：2026-11-05。基线 `f2e242b5`。修订记录：Codex 首轮审阅（14 项）、独立架构复审（6 项重要、12 项次要）、Codex 复审（15 项，HEAD `6fdc234a`）、第四轮架构复审（7 项重要、12 项次要，HEAD `d1a8f79c`）。
+日期：2026-11-05。基线 `f2e242b5`。修订记录：Codex 首轮审阅（14 项）、独立架构复审（6 项重要、12 项次要）、Codex 复审（15 项，HEAD `6fdc234a`）、第四轮架构复审（7 项重要、12 项次要，HEAD `d1a8f79c`）、Codex 第五轮（7 项，HEAD `0c7be5c6`，解决方案经独立架构分析）。
 
 ## 目标
 
@@ -65,9 +65,10 @@ type Step[T any] struct {
 type AgentFactory func(context.Context) (tools.OwnedRunnable[any, *builder.AgentOutput], error)
 
 // AgentStep 把 Agent 接成一步：in 从状态取任务输入，out 把输出写回状态。
+// in 返回 error 时在发出模型请求前失败，可用于拒绝不完整的状态；
 // out 返回 error 时该步失败，可用于把“合规检查不通过”变成节点错误。
 func AgentStep[T any](name string, agent AgentFactory,
-    in func(T) any, out func(T, *builder.AgentOutput) (T, error)) (Step[T], error)
+    in func(T) (any, error), out func(T, *builder.AgentOutput) (T, error)) (Step[T], error)
 
 type ParallelConfig[T any] struct {
     Steps []Step[T]
@@ -116,9 +117,14 @@ func SupervisorTools(members ...Member) ([]interfaces.Tool, error)
 
 生命周期与 `tools/runnable_tool.go:173-191` 一致：每次执行先调用 Factory；只要返回的 `Close` 非 nil 就在结束时调用，即使 Factory 同时返回了错误；`Close` 使用 `context.WithoutCancel` 加 5s 超时。以下情况该步失败：Factory 返回错误；`Close` 为 nil；Runnable 为 nil（含 typed nil）；Agent 返回 `(nil, nil)`。`Close` 的错误与执行错误合并返回。
 
-输入输出映射与中间事件转发复用 `workflow.Adapt`（`workflow/adapter.go:13`）：每次执行拿到新会话后，用 `Adapt(session, in, out)` 包装再运行。`Adapt` 接收固定的 Runnable，不负责每次新建会话与 `Close`，所以 AgentStep 只补这一层生命周期。
+输入输出映射与中间事件转发复用 `workflow.Adapt`（`workflow/adapter.go:13`）。`Adapt` 接收固定的 `core.Runnable[I, O]`，而 Factory 每次返回新的 `tools.OwnedRunnable`，所以 AgentStep 在构造时把 Factory 包装成一个固定的会话 Runnable：每次调用新建会话，取 `owned.Runnable` 执行并转发中间事件，排空流后调用 `Close`，Agent 返回 nil 输出或流未正常结束时报错。然后只调用一次 `workflow.Adapt(session, in, out)`，其构造错误由 `AgentStep` 返回；`out` 不会收到 nil 输出。转发循环实现时以 `consumeNode`（`workflow/execute.go:86-134`）为准核对取消后排空、重复 Done 等边界。
 
-`in`、`out` 不接收 `context.Context`，不能在其中暂停。需要在 Agent 输出后向人要输入（S6）时，宿主写自定义 `Step.Run`：调用 Agent → 解析缺失字段 → `durable.AwaitInput` → 校验并更新状态。恢复时节点从头重入，Agent 的模型请求从日志回放。补充信息后如需在同一节点再调用一次 Agent，第二次调用必须用不同的 `WithDurableScope`（`builder/config_options.go:128-130`），否则与第一次调用的意图冲突。
+`in`、`out` 不接收 `context.Context`，不能在其中暂停。需要在 Agent 输出后向人要输入（S6）时，宿主写自定义 `Step.Run`：调用抽取 Agent → 解析缺失字段 → `durable.AwaitInput(ctx, "order-id", info, validate)` → 用返回值更新状态。
+
+- 订单号的格式校验必须放进 validate。validate 拒绝时中断保持等待，`Resume` 返回 `*workflow.ResumeRejectedError`，快照中该中断 `Rejected` 为真，宿主用同一中断键提交修正值。validate 接受的输入会固定下来（`core/durable/interrupt.go:58-59`），之后再提交不同的值会因 `ErrInterruptAnswered` 被拒（`workflow/interrupt.go:73-80`），所以不能在 `AwaitInput` 返回后才校验格式，否则运行会卡在无效值上。
+- validate 必须是输入的纯函数（重入时可能再次执行）；它的错误文本会持久化并对外暴露，不得包含敏感信息。
+- 依赖外部数据、结果可能变化的核对（如订单是否存在）放在 `AwaitInput` 返回之后；核对失败时用带序号的新中断 ID（如 `order-id/2`）再问一次，而不是让节点失败。
+- 恢复时节点从头重入，Agent 的模型请求从日志回放。补充信息后如需在同一节点再调用一次 Agent，第二次调用必须用不同的 `WithDurableScope`（`builder/config_options.go:128-130`），否则与第一次调用的意图冲突。
 
 ### ParallelStep 的表示
 
@@ -137,7 +143,7 @@ func SupervisorTools(members ...Member) ([]interfaces.Tool, error)
 | Loop | `START → s1 → … → sn`，`sn` 上的分支目标为 `s1` 与 `END`：`Until` 为真到 `END`，否则回 `s1`；n=1 时为自环。有 Fallback 时分支目标再加 `fb`，`fb → END` | `MaxIterations × n` |
 | RouterSupervisor | `START → sup`，`sup` 上的分支目标为全部成员与 `END`（`Next` 返回 `Finish` 时映射为 `END`）；每个成员回 `sup`。有 Fallback 时分支目标再加 `fb`，`fb → END` | `2 × MaxRounds + 1` |
 
-每个 `ParallelStep` 计为 1 步。Fallback 不增加 `MaxSteps`：Router 的 Fallback 占用一次成员轮数，Loop 的 Fallback 占用下一轮第一步的位置，因此最后一次判断无效时返回 `ErrMaxSteps`，与超限同样处理（S8），不会让成员多执行一次。`MaxSteps` 由构造函数计算，先检查乘法与加法溢出（超出 `int` 范围构造报错）；宿主在 `cfg.MaxSteps` 设了非零值时构造报错。`cfg.MaxConcurrency` 照常传给并行节点。
+每个 `ParallelStep` 计为 1 步。Fallback 不增加 `MaxSteps`：Router 的 Fallback 占用一次成员轮数，Loop 的 Fallback 占用下一轮第一步的位置，因此配置了 Fallback 时，最后一次判断无效返回 `ErrMaxSteps`，与超限同样处理（S8），不会让成员多执行一次；没有配置 Fallback 时路由先报错，返回 `ErrInvalidRoute`。`MaxSteps` 由构造函数计算，先检查乘法与加法溢出（超出 `int` 范围构造报错）；宿主在 `cfg.MaxSteps` 设了非零值时构造报错。`cfg.MaxConcurrency` 照常传给并行节点。
 
 ### 轮数上限语义
 
@@ -160,8 +166,15 @@ func SupervisorTools(members ...Member) ([]interfaces.Tool, error)
 
 持久图提交节点输出后，恢复时用同一份已提交状态重新执行路由（`workflow/durable.go:257-265`）。`Next`、`Until` 是纯函数，无效输入每次恢复都得到同样的错误，运行只能换 ID 重来。因此：
 
-- `TextNext` 在记录为空、首行为空或不匹配时返回包装 `ErrInvalidRoute` 的错误；自定义 `Next`、`Until` 判定输入无效时也应包装它。`Next` 返回未声明的成员名或 `workflow.END` 字面值（`"__end__"`）时，按 `ErrInvalidRoute` 处理（`AddBranch` 允许 END 作为目标，见 `workflow/graph.go:161-166`，不能放行）。
-- 配置了 `Fallback` 时，`ErrInvalidRoute` 路由到兜底 Step，执行后结束；兜底 Step 收到的状态里有无效的那次输出，可据此转人工。其他错误照常使运行失败。
+- `TextNext` 在记录为空、首行为空或不匹配时返回包装 `ErrInvalidRoute` 的错误；自定义 `Next`、`Until` 判定输入无效时也应包装它。
+- workflow 把路由错误直接作为运行错误，不会转成目标（`workflow/execute.go:68-71`、`workflow/durable.go:512-515`），所以兜底由构造器注册的包装路由完成。持久恢复调用的是同一个包装函数（`workflow/durable.go:262`），恢复时结果相同。
+- RouterSupervisor 在 Supervisor 上注册的包装路由按以下顺序处理：
+  1. 调用 `Next`。返回错误时，错误满足 `errors.Is(err, ErrInvalidRoute)` 且配置了 Fallback 则返回 Fallback 名，否则原样返回错误，忽略同时返回的名字。
+  2. 名字等于 `Finish` 时返回 `workflow.END`。
+  3. 名字不在**成员集合**中时按无效处理：有 Fallback 返回 Fallback 名，否则返回包装 `ErrInvalidRoute` 的错误。成员集合只含成员，不含 Supervisor 名、Fallback 名和 `workflow.END` 字面值 `"__end__"`，不能用分支目标列表代替：Fallback 名与 END 都是合法分支目标（`workflow/graph.go:161-166`），workflow 会放行；Supervisor 名不是分支目标，workflow 报的错也不是 `ErrInvalidRoute`。
+  4. 否则返回该成员名。
+- Loop 在最后一步上注册的包装路由：调用 `Until`，返回错误时按上面第 1 条处理；为真返回 `workflow.END`，为假返回第一步名。
+- 兜底 Step 执行后结束；它收到的状态里有无效的那次输出，可据此转人工。
 - 没有配置 `Fallback` 时，`ErrInvalidRoute` 使运行失败，并且对该运行 ID 是终态，宿主换运行 ID 与新根预算重新处理。
 - 不做“重问一次”的自动修复：重问需要再加一个节点、再请求模型，并改变步数公式，宿主需要时可以把它写进 Supervisor Step 自身。
 
@@ -171,7 +184,36 @@ func SupervisorTools(members ...Member) ([]interfaces.Tool, error)
 
 ### 组合流程
 
-构造器之间不能嵌套：持久节点内不能运行已编译的图（见“支持的组合”）。需要“抽取 → 写作⇄评审循环 → 合规”这类组合时，宿主用 `workflow.NewGraph` 手写拓扑，节点直接使用 `AgentStep`、`TextStep` 返回的 `Step.Run`，并自行设置 `MaxSteps`。指南与示例给出 S4+S2 组合的完整代码与步数计算（抽取 1 步 + 循环 `MaxIterations × 2` 步 + 合规 1 步）。第一版不提供可摊平的 `LoopStep`，等出现第二个需要组合的业务流程再评估。
+构造器之间不能嵌套：持久节点内不能运行已编译的图（见“支持的组合”）。需要“抽取 → 写作⇄评审循环 → 合规”这类组合时，宿主用 `workflow.NewGraph` 手写拓扑，节点直接使用 `AgentStep`、`TextStep` 返回的 `Step.Run`。第一版不提供可摊平的 `LoopStep` 或轮数路由辅助函数：路由是纯函数，拿不到运行步数，它们同样只能从状态读轮数，只是多一层封装；等出现第二个需要组合的业务流程再评估。
+
+- **状态类型**：一张图只有一个 T。复用 `TextStep`（`Step[Conversation]`）时整张图都用 `Conversation`，抽取与合规也写成 `AgentStep[Conversation]`，抽取出的订单号放在 Turn 里；需要类型化字段时，全部用 `AgentStep` 加自定义 T。
+- **循环上限由路由负责**：总步数只约束整张图，不约束中间的循环。普通执行器每轮先执行节点再路由（`workflow/execute.go:24,66-81`），持久执行器先路由再检查步数（`workflow/durable.go:257-276`）；循环后面还有节点时，第 N 轮评审不通过后，留给合规的那一步会被第 N+1 次写作用掉。因此评审后的出口路由从状态推出轮数：以 `Conversation` 为状态时数评审成员的 Turn 个数，自定义 T 时由评审 Step 的 `out` 给计数字段加 1。判断顺序：先看解析错误（包装 `ErrInvalidRoute`），再看是否通过（通过到合规），最后看轮数；第 N 轮仍不通过时返回包装 `workflow.ErrMaxSteps` 的错误，与 Loop 构造器的超限语义相同（S8），持久运行停在该路由位置，同一运行 ID 再 `Run` 仍报错。
+- **步数兜底与版本**：`MaxSteps` 设为 `1 + 2N + 1`，作为防失控的兜底，也正好够用。路由闭包里的 N 不进计划摘要，只有由 N 算出的 `MaxSteps` 进入（`workflow/durable.go:121-131`），所以示例用同一个常量计算两者，修改 N 后旧运行才会被拒绝恢复，按“版本与迁移”处理。
+- 宿主若给组合流程加 Fallback，因为合规节点留有一步，第 N 轮判断无效时 Fallback 能执行，这与 Loop 构造器“末轮无效返回 `ErrMaxSteps`”不同，指南说明这一点。
+
+```go
+const reviewRounds = 3 // MaxSteps = 1 + 2*reviewRounds + 1
+
+reviewExit := func(ctx context.Context, c multiagent.Conversation) (string, error) {
+    passed, err := parseVerdict(c) // 无法解析时返回包装 multiagent.ErrInvalidRoute 的错误
+    if err != nil {
+        return "", err
+    }
+    if passed {
+        return "compliance", nil
+    }
+    rounds := 0
+    for _, t := range c.Turns {
+        if t.Agent == "review" {
+            rounds++
+        }
+    }
+    if rounds >= reviewRounds {
+        return "", fmt.Errorf("%w: review loop limit %d", workflow.ErrMaxSteps, reviewRounds)
+    }
+    return "write", nil
+}
+```
 
 ## 便捷层：文本接力
 
@@ -228,7 +270,17 @@ func TextNext(members ...string) (func(context.Context, Conversation) (string, e
 - 每个 Agent 用 `WithDurableScope` 设置稳定的非空 scope。日志键为“节点执行键 → `agent/<scope>` → 模型或工具操作键”；每个 Step 是独立节点，同一 scope 在不同节点、不同轮次下互不冲突。
 - 带工具时，模型客户端必须实现 `llm.ToolStreamClient`，工具必须经 `Dispatcher.Tools()` 包装（实现 `interfaces.DurableCallTool`）。
 - 会话由 `AgentFactory` 每次新建。模型请求的全部内容参与意图哈希：记忆与检索结果、当前时间、随机示例、文本层 render 等任何非确定性内容在同一次节点访问恢复时变化，都会使已完成请求的意图不一致而报错（`core/durable/operation.go:269-271`），不会静默回放。
-- 模型请求默认只允许一次尝试（`builder/model_call.go:209-213`）。请求进行中进程崩溃或被停止，记录停在 pending，恢复时同一节点访问被拒绝（`core/durable/operation.go:291-296`），需要宿主处理。对重发可接受的 Agent，开启 `WithInterruptedModelResend` 后恢复时重发，同一回合最多 3 次，代价是可能重复计费；开关在运行的整个生命周期内必须一致。模型明确返回错误后记录为 failed，开启重发也不会重试，只能换运行 ID 重新处理。
+- 模型请求默认只允许一次尝试（`builder/model_call.go:209-212`）。每次尝试先写 pending，执行后用 `context.WithoutCancel` 保存终态；恢复时按日志记录的状态处理（`core/durable/operation.go:286-296,338-351`）：
+
+  | 发生了什么 | 记录 | 默认 | 开启 `WithInterruptedModelResend` |
+  |---|---|---|---|
+  | 请求发出后、终态落盘前进程崩溃（或终态保存本身失败） | pending（`ambiguous`） | 拒绝 | 尝试次数 < 3 时重发 |
+  | 运行 ctx 被取消（宿主停止运行） | failed（`canceled`） | 拒绝 | 尝试次数 < 3 时重发 |
+  | 错误链含 `context.DeadlineExceeded`（超时） | failed（`deadline`） | 拒绝 | 拒绝 |
+  | 模型返回其他错误 | failed（`execution`） | 拒绝 | 拒绝 |
+
+  “拒绝”指节点以 `*durable.OperationError` 失败（`errors.Is(err, durable.ErrOperationAttention)`，`Kind` 为上表括号中的值），同一运行 ID 无法继续，宿主换运行 ID 与新根预算重新处理。分类看错误链与父 ctx：父 ctx 已取消时一律记为 canceled；模型客户端把超时包装成取消时（如 `llm/common/base.go` 的重试在退避中遇到 ctx 结束，返回包装 `context.Canceled` 的错误，`errors/helpers.go:222-225`），超时也会记为 canceled 并可能被重发。
+- 重发的 3 次是持久操作的尝试次数，不是请求次数。每次尝试内，`WithRequestError` 的钩子还可原样重试最多 `maxRecoveries` 次，计数在每次尝试时重新开始（`builder/loop_hooks.go:195-203,442,456`），所以同一回合最多发出 `3 × (1 + maxRecoveries)` 个请求。每个请求发送前在根预算预留一次（`builder/model_call.go:151,184`），真实请求总量由 `budget.Config.MaxModelRequests` 限制；模型客户端自身的重试（如 `llm/providers/deepseek.go:139-146`）不经过预算，接入持久运行时应关闭或计入估算。重发可能重复计费；开关在运行的整个生命周期内必须一致，否则恢复时报策略变更。
 
 **预算与 Dispatcher**（`tools/call_scope.go:33-56`、`builder/model_call.go:196-201`）：
 
@@ -257,7 +309,7 @@ func TextNext(members ...string) (func(context.Context, Conversation) (string, e
 - 循环中列入审批的节点每次访问都要审批：意图键包含步数 `Next`（`workflow/durable.go:278`），上一轮的审批不覆盖下一轮。
 - 审批后续跑从被审批的节点开始，之前已完成的节点不会重新执行，也不会读取它们的模型日志。
 - 节点内调用 `durable.AwaitInput` 可以暂停（S6 的写法见“AgentStep 的执行”）。Agent 工具内的中断需要工具声明可中断（`tools.InterruptibleTool` / `WithInterruptible`），或是声明 `Resumable` 的 Runnable 工具。Agent 调用的子图如果是纯审批等待，在外层持久图里按节点失败处理（`workflow/durable.go:348-369`），这一限制写进指南。
-- 回放只覆盖已提交为 completed 的操作。pending 操作是否重入取决于策略：默认非 Resumable 的 Runnable 工具与默认模型请求都只允许一次尝试，pending 时恢复被拒绝，需要宿主核对（模型请求见“Agent 侧”）。
+- 回放只覆盖已提交为 completed 的操作。pending 操作是否重入取决于策略：默认非 Resumable 的 Runnable 工具与默认模型请求都只允许一次尝试，pending 与 failed 时恢复被拒绝，需要宿主核对（模型请求开启重发时 pending 与 canceled 除外，见“Agent 侧”）。
 
 ## 校验规则
 
@@ -294,7 +346,9 @@ func TextNext(members ...string) (func(context.Context, Conversation) (string, e
 - 三个图构造器与 `ParallelStep` 的正常流程，以及校验表每条规则，包括 typed nil、溢出、`cfg.MaxSteps` 非零、嵌套 `ParallelStep` 被拒绝、构造后修改调用方 `Steps` 切片不影响图。
 - 普通与持久两种编译方式结果一致：每种图构造器各一例。
 - 轮数边界：Loop 第 N 轮 `Until` 为真时正常结束、为假时返回 `ErrMaxSteps`；Router 第 R 次成员后 Finish 正常结束、再选成员返回 `ErrMaxSteps`。
-- 兜底：Router 的 `Next` 返回 `ErrInvalidRoute`、未知成员名、`"__end__"` 时，有 Fallback 则执行兜底后结束，无 Fallback 则运行失败且错误满足 `errors.Is(err, ErrInvalidRoute)`；`Next` 返回其他错误时即使有 Fallback 也失败；Loop 的 `Until` 同理；最后一轮判断无效时返回 `ErrMaxSteps`，成员不会多执行一次；Fallback 可列入 `ApprovalNodes`。- 组合：Sequential、Loop 中含 `ParallelStep`；Router 成员为 `ParallelStep`，以外层名审批，分支名填入 `ApprovalNodes` 被拒绝；`ParallelStep` 的 `Run` 被直接调用时返回错误。
+- 兜底：Router 的 `Next` 返回 `ErrInvalidRoute`、未知成员名、`"__end__"` 时，有 Fallback 则执行兜底后结束，无 Fallback 则运行失败且错误满足 `errors.Is(err, ErrInvalidRoute)`；`Next` 返回其他错误时即使有 Fallback 也失败；`Next` 返回 Supervisor 名或 Fallback 名时按无效路由处理；Loop 的 `Until` 同理；最后一轮判断无效时，配置了 Fallback 返回 `ErrMaxSteps`（成员不会多执行一次），未配置返回 `ErrInvalidRoute`，两种各测一例；Fallback 可列入 `ApprovalNodes`。
+- AgentStep 的 `in` 返回错误时不发出模型请求，`ScriptedClient.Calls()` 为 0。
+- 组合：Sequential、Loop 中含 `ParallelStep`；Router 成员为 `ParallelStep`，以外层名审批，分支名填入 `ApprovalNodes` 被拒绝；`ParallelStep` 的 `Run` 被直接调用时返回错误。
 - 并行失败路径：`Merge` 返回错误；`Clone` panic 时沿用既有 panic 边界（workflow 节点层记录后重新抛出，`core.StreamRunnable` 转为 `*errors.PanicError`），`Invoke` 返回该错误而不使进程崩溃；分支失败时取消兄弟分支且错误归属到正确分支；持久模式下分支输出已保存后重启，已完成的分支不重跑；分支输出 JSON 往返失败时报错。
 - AgentStep：Factory 返回错误（且返回 Close 时仍调用 Close）、Runnable 为 typed nil、Agent 返回 `(nil, nil)`、执行错误与 Close 错误合并、`out` 返回错误时报错带节点名。
 - 文本层：
@@ -311,10 +365,13 @@ func TextNext(members ...string) (func(context.Context, Conversation) (string, e
 - **模型回放**：模型操作 completed 后、节点输出保存前让图检查点保存失败；恢复后节点重新进入，`ScriptedClient.Calls()` 不增加。
 - **工具 completed 回放**：工具操作 completed 后，让下一条 pending 记录（下一个模型回合）的保存失败；恢复后工具不再执行。
 - **工具 pending**：默认（非 Resumable）工具在 pending 状态下恢复被拒绝；Resumable 工具 pending 时重入，第 4 次尝试时报尝试耗尽。
-- **模型 pending**：模型请求进行中取消 ctx，留下 pending 记录；默认配置恢复时报需要宿主处理；开启 `WithInterruptedModelResend` 后恢复重发，`Calls()` 加 1。
+- **模型请求中断**：multiagent 只证明“图节点 → Agent → 模型操作”这条链路正确传递日志与取消，测两种状态；deadline 与 execution 两种由下层测试覆盖（`core/durable/operation_test.go:144-180`、`builder/model_resend_test.go:151`），重发与 RequestError 重试的叠加由 `builder/model_resend_test.go:164-186` 覆盖，均在指南中引用。
+  - pending：包装 Store 只让 `model/turn/0`（`builder/durable_turn.go:39,54`）的终态保存失败，pending 照常写入。首次 `Run` 报错后先断言落盘记录为 pending/`ambiguous`、`Attempts == 1`、`Calls() == 1`；重建后默认配置报 `OperationError{Kind: "ambiguous"}` 且 `Calls()` 不变；开启重发后完成，`Calls() == 2`，记录 `Attempts == 2`。
+  - canceled：`ScriptedClient` 的一条规则阻塞到 `ctx.Done()` 并在进入时通知测试，测试随即取消运行；断言 `errors.Is(err, context.Canceled)`、落盘记录为 failed/`canceled`；默认恢复报 `Kind == "canceled"`，开启重发后恢复完成，`Calls()` 加 1。
 - **跨轮隔离**：Loop 不同轮次的操作键不同，日志互不覆盖。
 - **预算**：恢复后根预算不重复扣减。另分两个子测试：(a) 复用预算存储并改变 `budget.Config`（例如重新计算 `DeadlineUnixMilli`），`budget.NewDurable` 报配置变化；(b) 换用新的空预算存储（`RootKey` 相同、配置不同），恢复时已完成的模型请求报意图不一致。
 - **兜底**：Router 分流首行无效时，持久运行转入 Fallback 并完成；无 Fallback 时同一运行 ID 再 `Run` 仍报 `ErrInvalidRoute`。
+- **兜底的重新路由窗口**：包装 Store 只让“路由到 Fallback”的那次检查点保存失败一次（判断条件：非操作记录、`Key` 为空、`Next > 0`、状态 `Routing` 为假且 `Node` 为 Fallback 名；节点意图保存的 Key 非空，首次保存 `Next == 0`，节点输出提交时 `Routing` 为真，只有路由结果保存满足该条件，见 `workflow/durable.go:188,266-295,376`）。首次 `Run` 返回保存错误，快照停在 Supervisor 且 `Routing` 为真；重建后同一运行 ID 完成，分流 `Calls()` 不增加，Fallback 执行一次且收到无效输出。Loop 的 `Until` 无效同样一例。
 - **render**：同一次节点访问恢复时 render 输出相同则回放；替换 render 后恢复报意图不一致。
 - **契约前提**：Agent 未设置 `WithDurableScope`、工具未经 `Dispatcher.Tools()` 包装时，在模型调用前失败。
 - **版本**：修改 `MaxIterations` 后用新图恢复旧运行报检查点不匹配；用旧版本构造参数编译的图可以继续旧运行。
@@ -339,16 +396,16 @@ func TextNext(members ...string) (func(context.Context, Conversation) (string, e
 | S3 | `TestScenarioParallelLookup` | 普通与持久 | 三个查询分支各用独立脚本，结果按登记顺序合并，回答 Agent 收到合并结果；整组计 1 步 | 是 |
 | S4 | `TestScenarioPipeline` | 普通与持久 | 抽取出的订单号写入状态，后两步读到；合规不通过由 `out` 返回错误，报错带节点名 | 否（S3 已演示 Sequential） |
 | S5 | `TestScenarioRefundApproval` | 仅持久 | 到退款成员前返回 `ErrApprovalRequired`；重启后审批续跑，审批前那次分流请求的规则没有被再次匹配；续跑期间分流脚本 `Calls()` 恰好增加 1（退款后 Supervisor 再请求一次得到 FINISH）；退款成员执行一次 | 是 |
-| S6 | `TestScenarioAskCustomer` | 仅持久 | 自定义 Step 暂停并给出中断键；补充订单号后续跑，节点重入但抽取 Agent 不重新请求模型；补充后再次抽取使用另一个 scope | 否（与 `examples/human-in-the-loop-interrupt` 重复） |
+| S6 | `TestScenarioAskCustomer` | 仅持久 | 自定义 Step 暂停并给出中断键；先提交格式无效的订单号，`Resume` 返回 `*workflow.ResumeRejectedError`，快照仍等待且该中断 `Rejected` 为真；再用同一中断键提交有效值后续跑完成；两次续跑中抽取 Agent 都不重新请求模型；补充后再次抽取使用另一个 scope | 否（与 `examples/human-in-the-loop-interrupt` 重复） |
 | S7 | `TestScenarioDelegation` | 普通成员经 Agent 运行；Resumable 成员放进 `CompileDurable` 单节点图 | 主 Agent 发出账单、技术两个结构化工具调用，再给出汇总回答；每次调用新建会话并调用 Close；Resumable 子测试中成员经可中断工具等待，续跑后完成 | 是 |
 | S8 | `TestScenarioEscalation` | 普通：步数边界；持久：恢复断言 | 评审始终不通过时第 `MaxIterations` 轮后返回 `ErrMaxSteps`；持久模式下同一运行 ID 再 `Run` 仍报错，换运行 ID 与新根预算后可重新处理 | 否（指南中说明） |
 | S9 | `TestScenarioInvalidDecision` | 普通与持久 | 分流首行为“退款（原因…）”时转入转人工 Fallback 后结束，Fallback 收到的状态含该输出；评审结论无法解析时 Loop 同样转入 Fallback | 是 |
-| 组合 | `TestScenarioComposedPipeline` | 持久 | 手写图：抽取 → 写作⇄评审循环 → 合规，节点复用 `AgentStep`、`TextStep` 的 `Run`；按文档公式设置的 `MaxSteps` 恰好够用 | 是 |
+| 组合 | `TestScenarioComposedPipeline` | 普通与持久 | 手写图（状态为 `Conversation`）：抽取 → 写作⇄评审循环 → 合规，节点复用 `AgentStep`、`TextStep` 的 `Run`。第 N 轮通过时 `MaxSteps` 恰好够用；子测试“始终不通过”：返回 `ErrMaxSteps`，写作与评审 `Calls()` 都等于 N，合规为 0；持久模式下快照停在评审节点、`Routing` 为真、步数 `1+2N`，同一运行 ID 再 `Run` 仍报 `ErrMaxSteps` 且各脚本 `Calls()` 不增加 | 是 |
 
 ### 离线示例与其他
 
 - `examples/multi-agent-patterns` 演示 S1、S2、S3、S5、S7、S9 与组合流程，用 `ScriptedClient`，不需要 API 密钥；各场景共用一个装配辅助函数。
-- 示例验收固化为测试：示例逻辑放在 `run(ctx context.Context) error`，`main` 只调用它；同目录 `main_test.go` 以 5s 超时的 ctx 调用 `run` 并要求返回 nil，随 `go test ./...` 执行（仓库已有先例 `examples/integration/human-in-loop/hitl_demo_test.go`）。现有 `scripts/verify_all_examples.sh` 用 `go run` 计时且把超时记为通过、失败不返回非零（`scripts/verify_all_examples.sh:60,75,102`），不能作为这一验收；本次不修改该脚本。
+- 示例验收固化为测试：示例逻辑放在 `run(ctx context.Context, w io.Writer) error`，`main` 以 `os.Stdout` 调用；每个场景结束时向 w 写一行完成标记（如 `S1 完成`）。同目录 `main_test.go` 在 goroutine 中调用 `run`，用独立的 30s 计时器等待（不只依赖 ctx 超时：图会等节点关闭流，不响应取消的节点会让同步调用挂住，见 `workflow/execute.go:96-102`；`-race` 下 5s 偏紧），超时即 `t.Fatalf`；返回后断言错误为 nil，并逐一断言 S1、S2、S3、S5、S7、S9 与组合流程的完成标记都出现。w 用带锁的 Writer，避免超时分支读取输出时触发 `-race`。随 `go test ./...` 执行，先例为 `examples/integration/human-in-loop/hitl_demo_test.go:28-38`。现有 `scripts/verify_all_examples.sh` 用 `go run` 计时且把超时记为通过、失败不返回非零（`scripts/verify_all_examples.sh:60,75,102`），不能作为这一验收；本次不修改该脚本。
 - `scripts/apicheck` 新规则的回归测试。
 
 ## 文档
@@ -370,3 +427,9 @@ func TextNext(members ...string) (func(context.Context, Conversation) (string, e
 - 文本记录的模型摘要运行时（摘要做成普通 Step）；
 - 路由决策的模糊匹配、模型输出自动修复或自动重问（无效时走 Fallback）；
 - 修改 `scripts/verify_all_examples.sh`。
+
+## 相关问题（不在本设计范围，另开小改动）
+
+- `builder/config_options.go:136-138` 的 `WithInterruptedModelResend` 注释写“同一回合最多发出 3 次”“模型明确失败的请求不受影响”，与“Agent 侧”的契约表不符：3 次是持久尝试次数，取消也记为 failed 且会被重发。
+- 模型客户端的退避重试在 ctx 结束时返回包装 `context.Canceled` 的错误（`errors/helpers.go:222-225`），超时因此可能被记为 canceled 并被重发。
+- provider 内部重试（如 `llm/providers/deepseek.go:139-146`）不经过根预算的预留。
