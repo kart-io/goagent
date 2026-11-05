@@ -1,6 +1,6 @@
 # 多 Agent 预置模式设计
 
-日期：2026-11-05。基线 `f2e242b5`。修订记录：Codex 首轮审阅（14 项）、独立架构复审（6 项重要、12 项次要）、Codex 复审（15 项，HEAD `6fdc234a`）、第四轮架构复审（7 项重要、12 项次要，HEAD `d1a8f79c`）、Codex 第五轮（7 项，HEAD `0c7be5c6`，解决方案经独立架构分析）、Codex 第六轮（5 项，HEAD `52b64d95`）、第七轮架构复审（4 项重要、10 项次要，HEAD `1cd75eb6`）。
+日期：2026-11-05。基线 `f2e242b5`。修订记录：Codex 首轮审阅（14 项）、独立架构复审（6 项重要、12 项次要）、Codex 复审（15 项，HEAD `6fdc234a`）、第四轮架构复审（7 项重要、12 项次要，HEAD `d1a8f79c`）、Codex 第五轮（7 项，HEAD `0c7be5c6`，解决方案经独立架构分析）、Codex 第六轮（5 项，HEAD `52b64d95`）、第七轮架构复审（4 项重要、10 项次要，HEAD `1cd75eb6`）、客服案例复审引出的 S5 退款结构修正（HEAD `5bbcc83e`）。
 
 ## 目标
 
@@ -22,7 +22,7 @@
 | S2 | 回复写作与评审 | 写作 Agent 起草回复，评审 Agent 检查语气、准确性与合规，不通过则带意见重写，直到通过 | Loop、`Until` 读评审结论、文本层记录 |
 | S3 | 多源并行查询 | 回答前并行查询知识库、订单与物流信息，汇总后交给回答 Agent | Sequential 中嵌入 `ParallelStep`、`Clone`/`Merge` |
 | S4 | 固定处理流水线 | 信息抽取（订单号、问题类型）→ 生成回答 → 合规检查，三步顺序执行 | Sequential、`AgentStep` 的类型化状态 |
-| S5 | 高风险操作审批 | 退款 Agent 拟定退款金额与订单后，按业务规则判定是否有争议：无争议直接退款；有争议时退款工具在执行前停下，把具体参数交审核人确认，批准后才执行，超时按拒绝处理 | RouterSupervisor、可中断工具内的 `durable.AwaitInput`、持久续跑 |
+| S5 | 高风险操作审批 | 退款 Agent 拟定退款金额与订单后，按业务规则判定是否有争议：无争议直接退款；有争议时退款工具在执行前停下，把具体参数交审核人确认，批准后才执行，超时按拒绝处理 | RouterSupervisor、自定义 Step 内的 `durable.Do`（带 `Reconcile`）与 `durable.AwaitInput`、持久续跑 |
 | S6 | 向客户追问缺失信息 | 信息抽取发现缺订单号时暂停，等客户补充后从检查点继续 | 自定义 `Step.Run` 内调用 `durable.AwaitInput` |
 | S7 | 复杂咨询由模型委派 | 一次咨询同时涉及账单与技术问题，主 Agent 自行调用多个专家工具并综合回答 | `SupervisorTools`、独立 Dispatcher、根预算 |
 | S8 | 超限转人工 | 分流或写作评审在上限内没有结束，返回 `ErrMaxSteps`，宿主换运行 ID 与新根预算转人工处理 | `MaxRounds`/`MaxIterations` 硬上限、轮数上限语义 |
@@ -32,7 +32,7 @@
 
 | 事项 | 决定 | 本设计中的落点 |
 |---|---|---|
-| 退款审批 | 分两种：无争议直接退；有争议由人工审核决定是否退。争议由业务配置的确定性规则判定，Agent 只能把“无争议”升级为“有争议”，不能降级 | S5：规则与升级逻辑在退款工具内，只有有争议时才调用 `AwaitInput` |
+| 退款审批 | 分两种：无争议直接退；有争议由人工审核决定是否退。争议由业务配置的确定性规则判定，Agent 只能把“无争议”升级为“有争议”，不能降级 | S5：退款成员在登记操作内按规则计算判定并固定，只有有争议时才调用 `AwaitInput`；退款在带 `Reconcile` 的持久操作内执行 |
 | 审核人 | 可配置，按组织架构解析（如提交人的上级、财务人员）；参考飞书通讯录接口，但必须是抽象接口，不能写死 | 不进入本包：由客服编排案例定义解析接口与飞书实现；本包只要求等待的 Info 携带解析所需的提交人与金额 |
 | 等待时限 | 由业务配置，默认 48 小时；超时即结束，按拒绝处理并告知客户，追问超时则按现有信息结束 | 宿主按时限以 `{"approved": false, "reason": "timeout"}` 回应中断，流程按拒绝分支结束；根预算截止时间设为“等待时限 + 余量”，见“人工等待与截止时间” |
 | 临近超时提醒 | 等待临近超时时提醒审核人 | 宿主调度，不进入本包 |
@@ -263,7 +263,7 @@ func TextNext(members ...Step[Conversation]) (func(context.Context, Conversation
 - **默认输入**：`TextStep` 把 Input 加上每一轮的 `[Agent]: Output` 按顺序拼接，不截断；Router 的 Supervisor 因此能看到原始任务，Loop 的写作者能看到上一稿与评审意见。
 - **增长与上限**：每轮输出长度近似固定时，单次请求随轮数线性增长，累计输入随轮数平方增长，检查点也反复序列化完整状态；固定轮数不能保证单次请求适配模型上下文。轮数较多的流程用 `WithLastTurns(k)` 或 `WithRender`；需要摘要时，把摘要做成单独的 Step，结果写回状态后由检查点保存，不新增摘要运行时。
 - **render 的确定性契约**：render 必须是 `Conversation` 的纯函数，相同输入得到相同输出。模型请求意图包含完整请求，同一次节点访问恢复时 render 输出不同会使意图不一致而报错（`core/durable/operation.go:269-271`）。修改 render 或窗口大小等同于修改 Agent 行为，须按“版本与迁移”处理。不给选项时用默认格式。
-- **内容隔离**：默认格式把客户输入与成员输出直接拼成 `[Agent]: Output`，外部文本可以伪造轮次或诱导分流。指南说明：高风险动作（如退款）必须在执行前由人确认具体参数（S5 的工具内确认），不能只靠分流判断；对外部输入敏感的流程用结构化 render（如 JSON 编码各轮）。
+- **内容隔离**：默认格式把客户输入与成员输出直接拼成 `[Agent]: Output`，外部文本可以伪造轮次或诱导分流。指南说明：高风险动作（如退款）必须在执行前由人确认具体参数（S5 的登记后审核），不能只靠分流判断；对外部输入敏感的流程用结构化 render（如 JSON 编码各轮）。
 - **输出**：取 `AgentOutput.Result`，字符串原样使用，其他类型按 JSON 编码；追加一轮 `Turn{Agent: name}`，空回答也记录。
 - **并行**：`Turns` 是切片，浅拷贝会让并行分支写同一底层数组，`ParallelConfig.Clone` 必须用 `CloneConversation`。`MergeTurns` 按分支登记顺序，追加各分支在 base 之后新增的 Turns；分支的 Turns 长度小于 base 或前缀不同时返回错误。
 - **路由**：`TextNext` 取各成员 Step 的 `Name`，与传给 `RouterConfig.Members` 的是同一组 Step，名字不会拼写不一致。构造时校验成员名：非空、单行（不含 `\n`、`\r`）、互不重复、不等于 `Finish`，否则返回错误。运行时取最后一轮输出的第一行并去掉首尾空白，必须恰好等于某个成员名或 `Finish`；记录为空、首行为空或不匹配时返回包装 `ErrInvalidRoute` 的错误（见“路由失败与兜底”），不做模糊匹配。
@@ -337,10 +337,11 @@ func TextNext(members ...Step[Conversation]) (func(context.Context, Conversation
 - `DurableConfig.ApprovalNodes` 可填 Sequential、Loop 的 Step 名，Router 的 Supervisor、成员名，以及 Fallback 名；`ParallelStep` 只能填它的 `Step.Name`，分支名不是图节点，填入会被 `CompileDurable` 拒绝。
 - 循环中列入审批的节点每次访问都要审批：意图键包含步数 `Next`（`workflow/durable.go:278`），上一轮的审批不覆盖下一轮。
 - 审批后续跑从被审批的节点开始，之前已完成的节点不会重新执行，也不会读取它们的模型日志。
-- `ApprovalNodes` 的审批发生在节点执行之前（`workflow/durable.go:279-293`），审批人只能看到进入节点前的状态，适合“是否进入某流程”这类粗粒度门禁；要审批 Agent 决定的具体动作（S5 的退款金额与订单），在执行该动作的工具里确认参数：
-  - 退款工具用 `FunctionToolBuilder.WithInterruptible(version)` 声明可中断（`tools/function_tool.go:110-113`），经 Dispatcher 注册给退款 Agent。
-  - 工具在产生副作用之前调用 `durable.AwaitInput(ctx, "refund-confirm", info, validate)`，`info` 含订单号与金额，宿主据此展示给审批人；输入为 `{"approved": bool, "note": string}`，validate 校验格式。
-  - 续跑时工具整体重新执行，`AwaitInput` 直接返回已确认的输入，此后才执行退款，所以退款恰好执行一次；拒绝时工具不执行退款，把“人工拒绝”作为工具结果交还 Agent。
+- `ApprovalNodes` 的审批发生在节点执行之前（`workflow/durable.go:279-293`），审批人只能看到进入节点前的状态，适合“是否进入某流程”这类粗粒度门禁；要审批 Agent 决定的具体动作（S5 的退款金额与订单），在节点内按“提议 → 登记 → 审核 → 执行”分段，每段的效果都由持久操作固定：
+  - 不把退款放进可中断工具：可中断工具只允许一次尝试且没有对账钩子（`tools/dispatcher.go:176-178`），“退款已生效、工具记录未落盘”时崩溃会留下 pending，恢复被拒；续跑还会整体重跑工具（`tools/function_tool.go:110-111`），AwaitInput 之前的判定会按变化后的事实重算，审核人已拒绝的申请可能被判为无争议直接退款。
+  - S5 的退款成员是自定义 `Step.Run`：调用退款 Agent 得到结构化提议（Agent 的工具只读，不产生副作用）→ `durable.Do(ctx, "refund/register", ...)` 登记申请并计算争议判定 → 有争议时 `durable.AwaitInput(ctx, "refund-review", info, validate)` → `durable.Do(ctx, "refund/execute", ...)` 批准并退款。
+  - 登记与执行的 `OperationPolicy` 都提供 `Reconcile`（`core/durable/operation.go` 中 `OperationPolicy.Reconcile`）：记录停在 pending 时，按业务申请 ID 查询登记或回执是否已生效，生效则补记 completed、不重跑。业务侧复用 `workflow/refund.Service`：`Register` 按业务申请 ID 去重并固定订单事实，`Refund` 先返回已提交回执，再在同一事务内检查累计额度。
+  - 争议判定在登记操作内计算一次，结果随操作记录固定；节点重入时回放，不随订单事实或规则变化而翻转。`info` 含订单号、金额与判定理由；输入为 `{"approved": bool, "note": string}`，validate 校验格式；拒绝时不执行退款，把“人工拒绝”写回状态交 Agent 回复客户。
 - 节点内调用 `durable.AwaitInput` 可以暂停（S6 的写法见“AgentStep 的执行”）。Agent 工具内的中断需要工具声明可中断（`tools.InterruptibleTool` / `WithInterruptible`），或是声明 `Resumable` 的 Runnable 工具。Agent 调用的子图如果是纯审批等待，在外层持久图里按节点失败处理（`workflow/durable.go:348-369`），这一限制写进指南。
 - 回放只覆盖已提交为 completed 的操作。pending 操作是否重入取决于策略：默认非 Resumable 的 Runnable 工具与默认模型请求都只允许一次尝试，pending 与 failed 时恢复被拒绝，需要宿主核对（模型请求开启重发时 pending 与 canceled 除外，见“Agent 侧”）。
 
@@ -433,7 +434,7 @@ func TextNext(members ...Step[Conversation]) (func(context.Context, Conversation
 | S2 | `TestScenarioReplyReview` | 普通与持久 | `Until` 解析评审结论；第一轮不通过、第二轮通过即结束；写作者第二轮请求包含上一稿与评审意见 | 是 |
 | S3 | `TestScenarioParallelLookup` | 普通与持久 | 三个查询分支各用独立脚本，结果按登记顺序合并，回答 Agent 收到合并结果；整组计 1 步 | 是 |
 | S4 | `TestScenarioPipeline` | 普通与持久 | 抽取出的订单号写入状态，后两步读到；合规不通过由 `out` 返回错误，报错带节点名 | 否（S3 已演示 Sequential） |
-| S5 | `TestScenarioRefundApproval` | 仅持久 | 退款 Agent 发出带订单号与金额的退款工具调用，工具在执行前以中断等待，`Run` 返回 `ErrApprovalRequired`，中断的 Info 含该订单号与金额，退款尚未执行；重启后以批准输入续跑：退款恰好执行一次，审批前那次分流请求的规则没有被再次匹配，分流脚本 `Calls()` 恰好加 1（退款后 Supervisor 再请求一次得到 FINISH）；拒绝子测试中退款不执行，Agent 收到“人工拒绝”的工具结果；无争议子测试：规则判为无争议时不等待、直接退款一次；升级子测试：规则判为无争议但 Agent 标记有争议时进入等待；超时子测试：宿主以超时输入回应，按拒绝分支结束且退款不执行 | 是 |
+| S5 | `TestScenarioRefundApproval` | 仅持久 | 有争议时退款成员登记申请后以 `refund-review` 中断等待，`Run` 返回 `ErrApprovalRequired`，Info 含订单号、金额与判定理由，账本尚无退款；重启后以批准输入续跑：退款 Agent 的模型请求与登记操作都从日志回放，退款恰好执行一次，审批前那次分流请求的规则没有被再次匹配，分流脚本 `Calls()` 恰好加 1；子测试：拒绝时退款不执行；无争议时不等待、直接退款一次；规则无争议但 Agent 标记有争议时进入等待；等待期间修改订单事实或规则阈值后续跑，判定不变；宿主以超时输入回应时按拒绝结束；“回执已写入、执行操作记录仍为 pending”时崩溃，恢复经 `Reconcile` 补记完成，不重复退款 | 是 |
 | S6 | `TestScenarioAskCustomer` | 仅持久 | 自定义 Step 暂停并给出中断键；先提交格式无效的订单号，`Resume` 返回 `*workflow.ResumeRejectedError`，快照仍等待且该中断 `Rejected` 为真；再用同一中断键提交有效值后续跑完成；两次续跑中抽取 Agent 都不重新请求模型；补充后再次抽取使用另一个 scope；子测试“截止时间已过”：根预算截止时间早于续跑时间，续跑以 `errors.Is(err, context.DeadlineExceeded)` 失败，另一子测试截止时间覆盖等待窗口时正常完成 | 否（与 `examples/human-in-the-loop-interrupt` 重复） |
 | S7 | `TestScenarioDelegation` | 普通成员经 Agent 运行；Resumable 成员放进 `CompileDurable` 单节点图 | 主 Agent 发出账单、技术两个结构化工具调用，再给出汇总回答；每次调用新建会话并调用 Close；Resumable 子测试中成员经可中断工具等待，续跑后完成 | 是 |
 | S8 | `TestScenarioEscalation` | 普通：步数边界；持久：恢复断言 | 评审始终不通过时第 `MaxIterations` 轮后返回 `ErrMaxSteps`；Router 子测试：分流始终选成员，第 `MaxRounds` 次成员后返回 `ErrMaxSteps`；持久模式下同一运行 ID 再 `Run` 仍报错，换运行 ID 与新根预算后可重新处理 | 否（指南中说明） |
@@ -448,7 +449,7 @@ func TextNext(members ...Step[Conversation]) (func(context.Context, Conversation
 
 ## 文档
 
-- 新增 `docs/guides/MULTI_AGENT_PATTERNS.md`：以 S1–S9 为线索讲选择模式、状态设计、持久接入契约（含预算配置不可变、模型 pending 与 `WithInterruptedModelResend` 的取舍）、轮数上限与超限转人工、路由失败与兜底、版本分流示例、文本层的窗口与 render 确定性、内容隔离与工具内确认（S5，含规则优先的争议判定与超时按拒绝处理）、人工等待与预算截止时间及运行 TTL、并行分支的事件、支持的组合与手写组合流程（`AddStep`、`GuardRoute`）、两种 Supervisor 的取舍、运营监控（Fallback 执行率、`ErrMaxSteps` 与 `ErrInvalidRoute` 发生率，可从节点事件统计）。
+- 新增 `docs/guides/MULTI_AGENT_PATTERNS.md`：以 S1–S9 为线索讲选择模式、状态设计、持久接入契约（含预算配置不可变、模型 pending 与 `WithInterruptedModelResend` 的取舍）、轮数上限与超限转人工、路由失败与兜底、版本分流示例、文本层的窗口与 render 确定性、内容隔离与登记后审核（S5，含规则优先且登记时固定的争议判定、带 Reconcile 的退款执行、超时按拒绝处理）、人工等待与预算截止时间及运行 TTL、并行分支的事件、支持的组合与手写组合流程（`AddStep`、`GuardRoute`）、两种 Supervisor 的取舍、运营监控（Fallback 执行率、`ErrMaxSteps` 与 `ErrInvalidRoute` 发生率，可从节点事件统计）。
 - 指南链接 `MULTI_AGENT_USAGE.md`（身份与用量归属）与 `NATIVE_ORCHESTRATION.md` 的“多 Agent 作用域与入口约束”一节。
 - README 中英文文档索引各加一行；`docs/guides/AGENT_COMPOSITION.md` 的选择表链接到新指南；`examples/README.md` 加一行。
 - `docs/architecture/ARCHITECTURE.md` 的“包依赖”图与包表加入 `multiagent`。
