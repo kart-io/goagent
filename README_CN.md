@@ -154,6 +154,7 @@ rag, err := builder.RAGAgent(client, retriever) // DocumentRetriever、带 Retri
 - [人工介入](docs/guides/HUMAN_IN_THE_LOOP.md)：审批时接收人工输入、执行中途中断、检查点与故障语义；离线示例：`examples/human-in-the-loop`、`examples/human-in-the-loop-interrupt`。
 - [原生编排](docs/guides/NATIVE_ORCHESTRATION.md)：`workflow.Graph`、持久图 `AsRunnable`、分支级恢复与 `tools.Dispatcher`。
 - [工作流](workflow/README.md)：类型化图、分支、并行汇合与有界循环。
+- [多 Agent 预置模式](docs/guides/MULTI_AGENT_PATTERNS.md)：`multiagent` 包在 `workflow` 之上提供 Sequential、Loop、RouterSupervisor、`ParallelStep`、`SupervisorTools` 与文本接力层；离线示例：`go run ./examples/multi-agent-patterns`。
 - [可组合编排](docs/guides/COMPOSABLE_ORCHESTRATION.md)：用 `tools.NewRunnableToolFactory` 把子 Agent 或 `workflow.DurableGraph` 包装为工具；子流程等待审批时，父流程以 `builder.ErrWaiting` 挂起。
 - [宿主接入](docs/guides/HOST_INTEGRATION.md)：`execution.NewScope` + `execution.ConfigureBuilder` + `BuildContext`；离线示例：`go run ./examples/execution-scope`。
 - [扩展契约](docs/guides/EXTENSION_CONTRACT.md)与[执行治理](docs/guides/EXECUTION_GOVERNANCE.md)：预算、诊断与资源限制。

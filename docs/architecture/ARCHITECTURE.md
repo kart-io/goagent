@@ -55,6 +55,11 @@ graph TD
     workflow --> durable
     workflow --> observe
 
+    multiagent --> workflow
+    multiagent --> builder
+    multiagent --> tools
+    multiagent --> core
+
     core --> exec[core/execution]
     core --> checkpoint[core/checkpoint]
     core --> state[core/state]
@@ -104,6 +109,7 @@ graph TD
 | `tools/policy`、`tools/spill` | 按工具名/命令前缀的权限规则；超长结果落盘与 `read_spill` |
 | `llm`、`llm/providers`、`llm/common`、`llm/cache`、`llm/constants` | 模型客户端接口与能力接口（`Client`、`ToolStreamClient` 等）、各提供方实现、语义缓存 |
 | `workflow` | 类型化有界控制流图 `Graph[T]`，`Compile` / `CompileDurable` |
+| `multiagent` | 多 Agent 预置模式：`Sequential`、`Loop`、`RouterSupervisor` 构造器，`ParallelStep`、`AddStep`、`GuardRoute`，`SupervisorTools` 与文本接力层（`Conversation`、`TextStep`、`TextNext`） |
 | `workflow/refund` | 绑定事务的退款防护示范实现 |
 | `execution` | 宿主装配：`Scope` 组合 RunID、会话、日志、预算、期限与观察者 |
 | `memory`、`store`、`cache` | 对话/向量记忆、键值存储（`store/memory`）、通用缓存 |

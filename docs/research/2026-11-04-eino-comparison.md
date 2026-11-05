@@ -46,7 +46,7 @@ Eino 是组件、编排、ADK 与扩展生态齐全的 LLM 应用框架；GoAgen
 | 能力 | Eino ADK | GoAgent |
 |---|---|---|
 | 单 Agent | `ChatModelAgent` + `Runner.Query`，`AsyncIterator` 事件 | `builder.AgentBuilder` 构建后 `AsRunnable()`；`ConfigurableAgent.Start()` 返回 `Handle`（Steer/Inject/Redirect/Followup/Interrupt） |
-| 多 Agent | `NewSequentialAgent`、`NewParallelAgent`、`NewLoopAgent`；预置 `supervisor.New`、`deep.New`、`planexecute.New`（规划、执行、再规划）；`NewTransferToAgentAction`、`AgentWithDeterministicTransferTo` 转交，`NewAgentTool` 把 Agent 包成工具 | 无预置；`tools.NewRunnableToolFactory` 把子 Agent/持久图包装成工具，或用 `workflow.Graph` |
+| 多 Agent | `NewSequentialAgent`、`NewParallelAgent`、`NewLoopAgent`；预置 `supervisor.New`、`deep.New`、`planexecute.New`（规划、执行、再规划）；`NewTransferToAgentAction`、`AgentWithDeterministicTransferTo` 转交，`NewAgentTool` 把 Agent 包成工具 | `multiagent` 预置 `Sequential`、`Loop`、`RouterSupervisor` 图构造器与 `ParallelStep`，`SupervisorTools` 把成员 Agent 包成工具；构造器返回 `workflow.Graph`，持久语义随 `CompileDurable` 继承。无 Deep、PlanExecute 与转交（transfer） |
 | 中断恢复 | `RunnerConfig.CheckPointStore` + `Runner.Resume(checkPointID)`，`ResumeWithParams` 恢复时带数据；Agent 内 `adk.Interrupt`/`StatefulInterrupt`/`CompositeInterrupt`，并行 Agent 汇总各分支中断 | 子 Agent 待审批或工具中断时父 Agent 挂起（`builder.ErrWaiting`），持久日志续跑；首次持久化的输入固定，非法或被校验拒绝的输入保持等待，已执行的副作用不重放 |
 | 多轮循环 | `adk.TurnLoop`：按轮生成输入，可在 `SafePoint` 中断与恢复 | `ConfigurableAgent.Start()` 的 `Handle` 支持 Steer/Inject/Redirect/Followup 与 Interrupt；持久回合续跑 |
 | 模型重试与回退 | `adk` 内置 retry 与 failover ChatModel 包装 | `WithRequestError` 钩子：`RetryTransient` 重试暂时性失败；`RequestErrorDecision.Client` 回退到其他客户端、`Messages` 压缩后重试（持久运行中只允许原样重试） |
@@ -70,12 +70,13 @@ Eino 是组件、编排、ADK 与扩展生态齐全的 LLM 应用框架；GoAgen
 | ChatTemplate | 不做 | 定位 §4.2：`prompt` 包无导入方已删除；提示词由 `WithPromptSections`/`WithPromptContexts` 承担 |
 | 异构 DAG、字段映射 | 不做 | 定位 §5“不做”：反射字段映射 |
 | 四种流范式自动适配 | 不做完整运行时，仅作参照 | 定位 §5 第 4 项与“不做：完整四范式流运行时”；[编排复审](2026-10-27-framework-orchestration-review.md) S14 |
-| Sequential/Parallel/Loop/Supervisor/Deep/PlanExecute 预置模式 | 不进核心；如需要归 goagent-harness | 定位 §4.2 删除 `multiagent`；[Harness 迁移指南](../guides/HARNESS_MIGRATION.md) |
+| Sequential/Parallel/Loop/Supervisor 预置模式 | 已进核心：新 `multiagent` 包只组合 `workflow`、`builder`、`tools`，不恢复旧包的分布式投递；Parallel 由只含一个 `ParallelStep` 的 Sequential 表达 | [多 Agent 预置模式设计](../superpowers/specs/2026-11-05-multiagent-patterns-design.md)（内部客服服务的业务证据）；定位 §5 第 6 项 |
+| Deep/PlanExecute 预置与 Agent 转交 | 不做 | 无业务证据（定位 §5） |
 | 观测平台专用回调适配 | 不做 | 定位 §2.1：复用 OTel，不自建 trace 体系 |
 | 组件级单次调用 `opts` | 不做 | 无业务证据，不满足 R2 准入原则（定位 §5） |
 | ADK 中间件集（skill、summarization、plantask、toolsearch 等） | 不进核心；按需在 harness 实现 | 核心只保留 `WithMiddleware`、`WithOffload` 等扩展点，具体策略不属于执行内核（定位 §4.2） |
 
-本轮对照没有发现需要进入核心的能力缺口。上一版差距中的“任意节点与工具中途中断、恢复时带数据”已由动态中断（`durable.AwaitInput`）补齐。
+本轮对照中唯一进入核心的是多 Agent 预置模式，依据是内部客服服务的接入需求，由 `multiagent` 包补齐；其余差距没有业务证据，不进核心。上一版差距中的“任意节点与工具中途中断、恢复时带数据”已由动态中断（`durable.AwaitInput`）补齐。
 
 ## Embedding 接口清理（已完成）
 

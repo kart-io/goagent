@@ -11,6 +11,7 @@ GoAgent 提供通用执行基础。宿主决定任务路由，Runnable 统一承
 | 工具选择需要运行时探索 | 调用 Agent，由模型在本次允许的工具中选择 |
 | 主任务需要专业子 Agent | 将子 Agent 的 Runnable 适配为工具，经 Dispatcher 暴露给父 Agent |
 | 多个独立工作可并行 | 使用有界 Graph.AddParallel；显式 Clone/Merge，明确分支失败规则 |
+| 多个 Agent 按顺序、循环或分流协作 | 使用 `multiagent` 的 Sequential、Loop、RouterSupervisor，见[多 Agent 预置模式](MULTI_AGENT_PATTERNS.md) |
 | 需要人工审批与恢复 | 使用 DurableGraph/AsChildRunnable、Resumable 工具及宿主提供的日志和恢复输入 |
 
 路由规则与置信阈值属于业务。不要把路由结果直接当成工具授权；真正执行仍需校验与准入。`workflow.Graph.AddBranch` 可用于类型化的分流，未知意图应有显式澄清或拒绝路径。
