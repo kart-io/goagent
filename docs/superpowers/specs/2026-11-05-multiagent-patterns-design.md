@@ -22,11 +22,22 @@
 | S2 | 回复写作与评审 | 写作 Agent 起草回复，评审 Agent 检查语气、准确性与合规，不通过则带意见重写，直到通过 | Loop、`Until` 读评审结论、文本层记录 |
 | S3 | 多源并行查询 | 回答前并行查询知识库、订单与物流信息，汇总后交给回答 Agent | Sequential 中嵌入 `ParallelStep`、`Clone`/`Merge` |
 | S4 | 固定处理流水线 | 信息抽取（订单号、问题类型）→ 生成回答 → 合规检查，三步顺序执行 | Sequential、`AgentStep` 的类型化状态 |
-| S5 | 高风险操作审批 | 退款 Agent 决定退款金额与订单后，退款工具在执行前停下，把具体参数交人工确认，批准后才执行 | RouterSupervisor、可中断工具内的 `durable.AwaitInput`、持久续跑 |
+| S5 | 高风险操作审批 | 退款 Agent 拟定退款金额与订单后，按业务规则判定是否有争议：无争议直接退款；有争议时退款工具在执行前停下，把具体参数交审核人确认，批准后才执行，超时按拒绝处理 | RouterSupervisor、可中断工具内的 `durable.AwaitInput`、持久续跑 |
 | S6 | 向客户追问缺失信息 | 信息抽取发现缺订单号时暂停，等客户补充后从检查点继续 | 自定义 `Step.Run` 内调用 `durable.AwaitInput` |
 | S7 | 复杂咨询由模型委派 | 一次咨询同时涉及账单与技术问题，主 Agent 自行调用多个专家工具并综合回答 | `SupervisorTools`、独立 Dispatcher、根预算 |
 | S8 | 超限转人工 | 分流或写作评审在上限内没有结束，返回 `ErrMaxSteps`，宿主换运行 ID 与新根预算转人工处理 | `MaxRounds`/`MaxIterations` 硬上限、轮数上限语义 |
 | S9 | 判断无效转人工 | 分流模型给出无法识别的选择，或评审结论无法解析时，路由到兜底 Step（转人工）后结束，而不是让持久运行卡在同一处 | `RouterConfig.Fallback`、`LoopConfig.Fallback`、`ErrInvalidRoute` |
+
+**业务方确认（2026-11-05）**：以下决定来自业务方，约束本设计的场景与指南；其中的业务能力不进入 `multiagent`，由单独的[客服编排设计](2026-11-05-customer-service-orchestration-design.md)承接（待写）。
+
+| 事项 | 决定 | 本设计中的落点 |
+|---|---|---|
+| 退款审批 | 分两种：无争议直接退；有争议由人工审核决定是否退。争议由业务配置的确定性规则判定，Agent 只能把“无争议”升级为“有争议”，不能降级 | S5：规则与升级逻辑在退款工具内，只有有争议时才调用 `AwaitInput` |
+| 审核人 | 可配置，按组织架构解析（如提交人的上级、财务人员）；参考飞书通讯录接口，但必须是抽象接口，不能写死 | 不进入本包：由客服编排定义解析接口与飞书实现；本包只要求等待的 Info 携带解析所需的提交人与金额 |
+| 等待时限 | 由业务配置，默认 48 小时；超时即结束，按拒绝处理并告知客户，追问超时则按现有信息结束 | 宿主按时限以 `{"approved": false, "reason": "timeout"}` 回应中断，流程按拒绝分支结束；根预算截止时间设为“等待时限 + 余量”，见“人工等待与截止时间” |
+| 临近超时提醒 | 等待临近超时时提醒审核人 | 宿主调度，不进入本包 |
+| 转人工 | 渠道取决于 IM 系统；交接上下文必须包含客户意图与解决方案（可以多个） | 交接接口由客服编排定义；本包的 Fallback 与超限分支负责产出这份上下文 |
+| 成本 | 不设业务硬上限，但必须有处理；用量超过阈值提示运营，轮数超限提示客户并转人工 | 用量提示用现有 `budget.WithUsageHook`（事件含累计统计）；`MaxModelRequests` 必须 ≥ 1（`core/budget/controller.go:75`），设为宽松的防失控上限，触达时与轮数超限一样转人工 |
 
 每种能力至少由一个场景使用：Sequential（S3、S4）、`ParallelStep`（S3）、Loop（S2、S8、S9）、RouterSupervisor（S1、S5、S8、S9）、`SupervisorTools`（S7）、文本接力层（S1、S2、S9）、兜底（S9）。各场景的测试与示例见“场景覆盖”。
 
@@ -303,7 +314,7 @@ func TextNext(members ...Step[Conversation]) (func(context.Context, Conversation
   - 复用预算存储但配置变化：`budget.NewDurable` 在构造时就报配置变化（`core/budget/controller.go:88-99,160-161`）。
   - 换用新的预算存储且配置也变：已完成的模型请求因意图不一致无法回放（意图含 `c.Configuration()`，`builder/model_call.go:198-203`）。
   - 换用新的预算存储、配置相同：意图一致，回放已完成请求时因找不到预留报“usage has no reservation”（`core/budget/attribution.go:119-121`）；续跑时没有需要回放的请求则**完全拦不住**，用量从零重新计数，`MaxModelRequests` 可能被突破。这一条只能由宿主保证：预算存储与图存储一起持久化，恢复时总是复用。
-- **人工等待与截止时间**：每次预留都会检查截止时间（`core/budget/controller.go:300-306`），而配置在运行生命周期内不能改。有人工等待（S5 的退款确认、S6 的追问）的流程，`DeadlineUnixMilli` 必须覆盖最长等待窗口，或者不设，改用 `MaxModelRequests` 控制花费、由宿主按等待时长实现运行 TTL（快照 `Waiting` 为真且超过时限即放弃，换运行 ID 转人工）。按单次请求时长设截止时间时，客户隔几小时回复，续跑中的模型请求必然以 `context.DeadlineExceeded` 失败，而且无法挽回。
+- **人工等待与截止时间**：每次预留都会检查截止时间（`core/budget/controller.go:300-306`），而配置在运行生命周期内不能改。有人工等待（S5 的退款确认、S6 的追问）的流程，`DeadlineUnixMilli` 必须覆盖最长等待窗口（业务默认等待 48 小时，截止时间设为等待时限加余量），或者不设，改用 `MaxModelRequests` 控制花费、由宿主按等待时长实现运行 TTL（快照 `Waiting` 为真且超过时限即放弃，换运行 ID 转人工）。按单次请求时长设截止时间时，客户隔几小时回复，续跑中的模型请求必然以 `context.DeadlineExceeded` 失败，而且无法挽回。
 - 成员 Agent 不得使用 Supervisor 或任何祖先调用的 Dispatcher，否则触发 `ErrDispatcherReentry`；成员之间互不嵌套时可以共用一个。
 
 **状态 T**：
@@ -422,7 +433,7 @@ func TextNext(members ...Step[Conversation]) (func(context.Context, Conversation
 | S2 | `TestScenarioReplyReview` | 普通与持久 | `Until` 解析评审结论；第一轮不通过、第二轮通过即结束；写作者第二轮请求包含上一稿与评审意见 | 是 |
 | S3 | `TestScenarioParallelLookup` | 普通与持久 | 三个查询分支各用独立脚本，结果按登记顺序合并，回答 Agent 收到合并结果；整组计 1 步 | 是 |
 | S4 | `TestScenarioPipeline` | 普通与持久 | 抽取出的订单号写入状态，后两步读到；合规不通过由 `out` 返回错误，报错带节点名 | 否（S3 已演示 Sequential） |
-| S5 | `TestScenarioRefundApproval` | 仅持久 | 退款 Agent 发出带订单号与金额的退款工具调用，工具在执行前以中断等待，`Run` 返回 `ErrApprovalRequired`，中断的 Info 含该订单号与金额，退款尚未执行；重启后以批准输入续跑：退款恰好执行一次，审批前那次分流请求的规则没有被再次匹配，分流脚本 `Calls()` 恰好加 1（退款后 Supervisor 再请求一次得到 FINISH）；拒绝子测试中退款不执行，Agent 收到“人工拒绝”的工具结果 | 是 |
+| S5 | `TestScenarioRefundApproval` | 仅持久 | 退款 Agent 发出带订单号与金额的退款工具调用，工具在执行前以中断等待，`Run` 返回 `ErrApprovalRequired`，中断的 Info 含该订单号与金额，退款尚未执行；重启后以批准输入续跑：退款恰好执行一次，审批前那次分流请求的规则没有被再次匹配，分流脚本 `Calls()` 恰好加 1（退款后 Supervisor 再请求一次得到 FINISH）；拒绝子测试中退款不执行，Agent 收到“人工拒绝”的工具结果；无争议子测试：规则判为无争议时不等待、直接退款一次；升级子测试：规则判为无争议但 Agent 标记有争议时进入等待；超时子测试：宿主以超时输入回应，按拒绝分支结束且退款不执行 | 是 |
 | S6 | `TestScenarioAskCustomer` | 仅持久 | 自定义 Step 暂停并给出中断键；先提交格式无效的订单号，`Resume` 返回 `*workflow.ResumeRejectedError`，快照仍等待且该中断 `Rejected` 为真；再用同一中断键提交有效值后续跑完成；两次续跑中抽取 Agent 都不重新请求模型；补充后再次抽取使用另一个 scope；子测试“截止时间已过”：根预算截止时间早于续跑时间，续跑以 `errors.Is(err, context.DeadlineExceeded)` 失败，另一子测试截止时间覆盖等待窗口时正常完成 | 否（与 `examples/human-in-the-loop-interrupt` 重复） |
 | S7 | `TestScenarioDelegation` | 普通成员经 Agent 运行；Resumable 成员放进 `CompileDurable` 单节点图 | 主 Agent 发出账单、技术两个结构化工具调用，再给出汇总回答；每次调用新建会话并调用 Close；Resumable 子测试中成员经可中断工具等待，续跑后完成 | 是 |
 | S8 | `TestScenarioEscalation` | 普通：步数边界；持久：恢复断言 | 评审始终不通过时第 `MaxIterations` 轮后返回 `ErrMaxSteps`；Router 子测试：分流始终选成员，第 `MaxRounds` 次成员后返回 `ErrMaxSteps`；持久模式下同一运行 ID 再 `Run` 仍报错，换运行 ID 与新根预算后可重新处理 | 否（指南中说明） |
@@ -437,7 +448,7 @@ func TextNext(members ...Step[Conversation]) (func(context.Context, Conversation
 
 ## 文档
 
-- 新增 `docs/guides/MULTI_AGENT_PATTERNS.md`：以 S1–S9 为线索讲选择模式、状态设计、持久接入契约（含预算配置不可变、模型 pending 与 `WithInterruptedModelResend` 的取舍）、轮数上限与超限转人工、路由失败与兜底、版本分流示例、文本层的窗口与 render 确定性、内容隔离与工具内确认（S5）、人工等待与预算截止时间及运行 TTL、并行分支的事件、支持的组合与手写组合流程（`AddStep`、`GuardRoute`）、两种 Supervisor 的取舍、运营监控（Fallback 执行率、`ErrMaxSteps` 与 `ErrInvalidRoute` 发生率，可从节点事件统计）。
+- 新增 `docs/guides/MULTI_AGENT_PATTERNS.md`：以 S1–S9 为线索讲选择模式、状态设计、持久接入契约（含预算配置不可变、模型 pending 与 `WithInterruptedModelResend` 的取舍）、轮数上限与超限转人工、路由失败与兜底、版本分流示例、文本层的窗口与 render 确定性、内容隔离与工具内确认（S5，含规则优先的争议判定与超时按拒绝处理）、人工等待与预算截止时间及运行 TTL、并行分支的事件、支持的组合与手写组合流程（`AddStep`、`GuardRoute`）、两种 Supervisor 的取舍、运营监控（Fallback 执行率、`ErrMaxSteps` 与 `ErrInvalidRoute` 发生率，可从节点事件统计）。
 - 指南链接 `MULTI_AGENT_USAGE.md`（身份与用量归属）与 `NATIVE_ORCHESTRATION.md` 的“多 Agent 作用域与入口约束”一节。
 - README 中英文文档索引各加一行；`docs/guides/AGENT_COMPOSITION.md` 的选择表链接到新指南；`examples/README.md` 加一行。
 - `docs/architecture/ARCHITECTURE.md` 的“包依赖”图与包表加入 `multiagent`。
