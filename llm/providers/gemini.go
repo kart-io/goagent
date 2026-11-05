@@ -96,6 +96,21 @@ func geminiUsage(usage *agentllm.Usage) *interfaces.TokenUsage {
 	return &tokens
 }
 
+// geminiReplayableParts 去掉不含任何字段的 part（如流收尾帧的空文本）：回放时 API 要求每个 part
+// 都有数据字段。只带 thoughtSignature 的 part 不为空，原样保留。
+func geminiReplayableParts(parts []*genai.Part) []*genai.Part {
+	kept := parts[:0:0]
+	for _, part := range parts {
+		if part != nil {
+			if data, err := json.Marshal(part); err == nil && string(data) == "{}" {
+				continue
+			}
+		}
+		kept = append(kept, part)
+	}
+	return kept
+}
+
 // decodeGeminiResponse does not assume candidates, content or usage are present.
 // Thought parts are not exposed as answer text. FunctionCall is a field of Part
 // in the Google GenAI SDK, rather than a pointer type assertion on a legacy Part.
@@ -129,6 +144,7 @@ func decodeGeminiResponse(resp *genai.GenerateContentResponse) (*agentllm.Stream
 	}
 	nativeContent := *candidate.Content
 	nativeContent.Role = "model"
+	nativeContent.Parts = geminiReplayableParts(nativeContent.Parts)
 	data, err := json.Marshal(&nativeContent)
 	if err != nil {
 		return chunk, err
@@ -244,7 +260,7 @@ func (p *GeminiProvider) stream(ctx context.Context, req *agentllm.CompletionReq
 					fail(err)
 					return
 				}
-				nativeContent.Parts = append(nativeContent.Parts, content.Parts...)
+				nativeContent.Parts = append(nativeContent.Parts, geminiReplayableParts(content.Parts)...)
 			}
 			total.Content += chunk.Content
 			if chunk.FinishReason != "" {

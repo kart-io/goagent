@@ -217,3 +217,62 @@ func TestGeminiEmbeddingInvalidResponses(t *testing.T) {
 	_, err := geminiSDKEmbed(func() (*genai.EmbedContentResponse, error) { panic(math.Inf(1)) })
 	require.Error(t, err)
 }
+
+// Gemini 3 的流可能带一个不含任何字段的 part（如空文本的收尾帧）；回放时 API 以
+// "required oneof field 'data' must have one initialized field" 拒绝，因此不得写入原生状态。
+func TestGeminiStreamDropsEmptyPartsFromNativeState(t *testing.T) {
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := requests.Add(1)
+		var req struct {
+			Contents []json.RawMessage `json:"contents"`
+		}
+		if json.NewDecoder(r.Body).Decode(&req) != nil {
+			http.Error(w, "invalid", 400)
+			return
+		}
+		for _, raw := range req.Contents {
+			var content struct {
+				Role  string            `json:"role"`
+				Parts []json.RawMessage `json:"parts"`
+			}
+			_ = json.Unmarshal(raw, &content)
+			for _, part := range content.Parts {
+				if string(part) == "{}" {
+					http.Error(w, "required oneof field 'data' must have one initialized field", 400)
+					return
+				}
+			}
+			if content.Role == "model" && len(content.Parts) != 1 {
+				http.Error(w, "signed call part lost", 400)
+				return
+			}
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		frames := []*genai.GenerateContentResponse{{Candidates: []*genai.Candidate{{Content: &genai.Content{Role: "model", Parts: []*genai.Part{{Text: "42"}}}, FinishReason: genai.FinishReasonStop}}}}
+		if n == 1 {
+			frames = []*genai.GenerateContentResponse{
+				{Candidates: []*genai.Candidate{{Content: &genai.Content{Role: "model", Parts: []*genai.Part{{FunctionCall: &genai.FunctionCall{ID: "c1", Name: "lookup", Args: map[string]any{"order_id": "A"}}, ThoughtSignature: []byte("call-signed")}}}}}},
+				{Candidates: []*genai.Candidate{{Content: &genai.Content{Role: "model", Parts: []*genai.Part{{Text: ""}}}, FinishReason: genai.FinishReasonStop}}},
+			}
+		}
+		for _, f := range frames {
+			data, _ := json.Marshal(f)
+			fmt.Fprintf(w, "data: %s\n\n", data)
+		}
+	}))
+	defer server.Close()
+	p, err := NewGeminiWithOptions(llm.WithAPIKey("test"), llm.WithBaseURL(server.URL))
+	require.NoError(t, err)
+	tool := tools.NewBaseTool("lookup", "lookup", `{"type":"object","properties":{"order_id":{"type":"string"}},"required":["order_id"]}`, func(context.Context, *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+		return &interfaces.ToolOutput{Success: true, Result: "42"}, nil
+	})
+	a, err := builder.NewSimpleBuilder(p).WithTools(tool).WithMaxIterations(3).Build()
+	require.NoError(t, err)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	out, err := a.AsRunnable().Invoke(ctx, "query")
+	require.NoError(t, err)
+	require.Equal(t, "42", out.Result)
+	require.Equal(t, int32(2), requests.Load())
+}
