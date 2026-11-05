@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/interfaces"
+	"github.com/kart-io/goagent/internal/processgroup"
 	"github.com/kart-io/goagent/tools"
 )
 
@@ -135,6 +136,9 @@ func (s *ShellTool) run(ctx context.Context, input *interfaces.ToolInput) (*inte
 
 	// 构建命令
 	cmd := exec.CommandContext(cmdCtx, command, args...)
+	processgroup.Configure(cmd)
+	cmd.WaitDelay = time.Second
+	defer func() { _ = processgroup.Kill(cmd) }()
 	if workDir != "" {
 		cmd.Dir = workDir
 	}
@@ -145,11 +149,18 @@ func (s *ShellTool) run(ctx context.Context, input *interfaces.ToolInput) (*inte
 	duration := time.Since(startTime)
 
 	exitCode := 0
-	if err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
-			exitCode = exitErr.ExitCode()
+	if cmd.ProcessState != nil {
+		exitCode = cmd.ProcessState.ExitCode()
+	}
+	// 父命令已退出但后台进程仍持有输出管道时，按父命令退出码处理，再清理后代。
+	if errors.Is(err, exec.ErrWaitDelay) && cmd.ProcessState != nil {
+		err = nil
+		if exitCode != 0 {
+			err = &exec.ExitError{ProcessState: cmd.ProcessState}
 		}
+	}
+	if ctxErr := cmdCtx.Err(); ctxErr != nil && !errors.Is(err, ctxErr) {
+		err = errors.Join(err, ctxErr)
 	}
 
 	outputStr := string(output)

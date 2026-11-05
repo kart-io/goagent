@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `make test-frameworkbench`、`make test-contracts`、`make compatibility`：独立评测只读依赖、公共执行契约和本地关联仓库验证入口。跨仓验证包含嵌套模块，使用临时 modfile 及受控 GOFLAGS 覆盖测试和子构建的依赖，保留通过、失败及跳过证据；Unix 上取消、SIGTERM 和超时会清理同进程组后代。
 - 业务接入与故障恢复验收指南，记录本地退款及 PostgreSQL 接管、重启与同步提交的验证结果，明确真实业务接口仍需测试环境验收。
 
+### Fixed
+
+- `llm.Complete`（及 `llm.Chat`）：请求已取消或超时时不再调用提供方；取消与读流关闭/终态同时就绪时返回上下文错误，不再随机报告 `io.ErrUnexpectedEOF` 或成功；提供方返回 nil 流时直接失败，不再挂起到调用方超时。
+- `tools/shell`：Unix 上超时或取消时结束同进程组后代，修复子进程持有输出管道使超时失效、并在超时后继续产生效果的问题；父命令结束后的输出等待有界，保留退出码、部分输出、`ExitError` 和上下文错误链。Shell、执行环境与跨仓验证器复用内部进程组机制。
+
 ### Changed
 
 - 开发工具链统一为 `go.mod` 声明的 Go 1.26.10，最低版本仍为 Go 1.26.0；Makefile 清除陈旧 GOROOT，CI 按模块声明选择工具链。独立 frameworkbench 同步依赖并纳入 CI 契约检查。

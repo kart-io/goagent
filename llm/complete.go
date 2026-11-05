@@ -2,19 +2,30 @@ package llm
 
 import (
 	"context"
+	"errors"
 	"io"
 	"strings"
 )
 
 // Complete 发起流式请求并收集为完整响应。
 // 只有成功终止块才算完成：块上的错误原样返回，流在终止块前关闭视为 io.ErrUnexpectedEOF。
+// 请求已取消或超时时不调用提供方；读流与取消同时就绪时返回 ctx 的错误。
 // 返回前取消内部 ctx，提供方的读取 goroutine 与连接随之释放。
 func Complete(ctx context.Context, client Client, req *CompletionRequest) (*CompletionResponse, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	stream, err := client.CompleteStream(ctx, req)
 	if err != nil {
 		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if stream == nil {
+		return nil, errors.New("模型返回空流")
 	}
 	var deltas strings.Builder
 	for {
@@ -22,6 +33,9 @@ func Complete(ctx context.Context, client Client, req *CompletionRequest) (*Comp
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		case chunk, ok := <-stream:
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
 			if !ok {
 				return nil, io.ErrUnexpectedEOF
 			}
@@ -52,6 +66,9 @@ func Complete(ctx context.Context, client Client, req *CompletionRequest) (*Comp
 				tokens := chunk.Usage.Tokens()
 				response.Usage = &tokens
 				response.TokensUsed = tokens.TotalTokens
+			}
+			if err := ctx.Err(); err != nil {
+				return nil, err
 			}
 			return response, nil
 		}

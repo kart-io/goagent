@@ -17,6 +17,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/kart-io/goagent/internal/processgroup"
 )
 
 const coreModule = "github.com/kart-io/goagent"
@@ -66,6 +68,8 @@ func (c *goProcess) Output() ([]byte, error) {
 	return c.Cmd.Output()
 }
 
+func cleanupProcess(cmd *exec.Cmd) { _ = processgroup.Kill(cmd) }
+
 func goCommand(ctx context.Context, dir string, args ...string) *goProcess {
 	cmd := exec.CommandContext(ctx, "go", args...)
 	cmd.Dir = dir
@@ -77,7 +81,7 @@ func goCommand(ctx context.Context, dir string, args ...string) *goProcess {
 	}
 	cmd.Env = append(cmd.Env, "GOWORK=off", "GOFLAGS=", "GO_TEST_MODE=true")
 	cmd.WaitDelay = 2 * time.Second
-	configureProcess(cmd)
+	processgroup.Configure(cmd)
 	return &goProcess{cmd}
 }
 
