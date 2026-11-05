@@ -520,3 +520,154 @@ func TestScenarioAskCustomer(t *testing.T) {
 		})
 	}
 }
+
+// refundCase 装配 S5：分流 → 退款成员（登记、审核、执行）→ 分流 FINISH。
+type refundCase struct {
+	e              *env
+	desk           *refundDesk
+	triage, refund *mocks.ScriptedClient
+}
+
+func newRefundCase(t *testing.T, root string, amount, threshold int64, agentDisputed bool) *refundCase {
+	t.Helper()
+	p, err := json.Marshal(proposal{OrderID: "A1", AmountCents: amount, Disputed: agentDisputed, Reason: "客户情绪激动"})
+	require.NoError(t, err)
+	return &refundCase{
+		e: newEnv(t, root), desk: newRefundDesk(100000, threshold),
+		triage: mocks.NewScriptedClient(mocks.TextReply("选退款", "refund"),
+			mocks.ScriptedRule{Name: "结束", Match: mocks.RequestContains("[refund]: "), Reply: mocks.ScriptedReply{Text: "FINISH"}}),
+		refund: mocks.NewScriptedClient(mocks.TextReply("提议", string(p))),
+	}
+}
+
+func (rc *refundCase) graph(t *testing.T) *workflow.DurableGraph[Conversation] {
+	t.Helper()
+	var s sessions
+	member := refundMember(rc.desk, s.scripted(rc.refund, "refund", nil))
+	next, err := TextNext(member)
+	require.NoError(t, err)
+	g, err := RouterSupervisor(workflow.Config{}, RouterConfig[Conversation]{
+		Supervisor: textAgent(t, "triage", rc.triage),
+		Members:    []Step[Conversation]{member}, Next: next, MaxRounds: 2,
+	})
+	require.NoError(t, err)
+	return compile(t, rc.e, g, "v1")
+}
+
+// start 运行到审核等待，返回中断。
+func (rc *refundCase) start(t *testing.T) workflow.InterruptPoint {
+	t.Helper()
+	snap, err := rc.graph(t).Run(rc.e.ctx(), rc.e.id, Conversation{Input: "订单 A1 重复扣款，申请退款"}, "")
+	require.ErrorIs(t, err, durable.ErrApprovalRequired)
+	require.Len(t, snap.Interrupts, 1)
+	require.Equal(t, "refund-review", snap.Interrupts[0].ID)
+	require.Zero(t, rc.desk.ledger.refunds(), "等待期间账本没有退款")
+	return snap.Interrupts[0]
+}
+
+func (rc *refundCase) answer(t *testing.T, key, input string) (*workflow.GraphSnapshot[Conversation], error) {
+	t.Helper()
+	rc.e.restart()
+	return rc.graph(t).Resume(rc.e.ctx(), rc.e.id, workflow.ResumeRequest{Key: key, Input: json.RawMessage(input)})
+}
+
+func lastOutput(c Conversation, agent string) string {
+	for i := len(c.Turns) - 1; i >= 0; i-- {
+		if c.Turns[i].Agent == agent {
+			return c.Turns[i].Output
+		}
+	}
+	return ""
+}
+
+func TestScenarioRefundApproval(t *testing.T) {
+	const approve = `{"approved":true,"note":"核实无误","approver":"finance:li"}`
+	t.Run("有争议时等待审核后退款一次", func(t *testing.T) {
+		rc := newRefundCase(t, "refund-approve", 80000, 50000, false)
+		point := rc.start(t)
+		var info map[string]any
+		require.NoError(t, json.Unmarshal(point.Info, &info))
+		require.Equal(t, "A1", info["order_id"])
+		require.EqualValues(t, 80000, info["amount_cents"])
+		require.Contains(t, info["reason"], "金额超过")
+
+		_, err := rc.answer(t, point.Key, `{"approved":true,"note":"x","approver":""}`)
+		var rejected *workflow.ResumeRejectedError
+		require.ErrorAs(t, err, &rejected, "批准时必须有审核人")
+
+		snap, err := rc.answer(t, point.Key, approve)
+		require.NoError(t, err)
+		require.True(t, snap.Done)
+		require.Contains(t, lastOutput(snap.State, "refund"), "已退款：")
+		require.Equal(t, 1, rc.desk.ledger.refunds(), "退款恰好执行一次")
+		require.Equal(t, 1, rc.refund.Calls(), "退款 Agent 的模型请求从日志回放")
+		require.EqualValues(t, 1, rc.desk.registers.Load(), "登记操作从日志回放")
+		rc.desk.ledger.read(func(s *ledgerState) {
+			require.Equal(t, 1, s.verdicts["refund-A1"].Seq, "判定与登记序号经 OnRegister 写入一次")
+		})
+		require.Equal(t, 1, rc.triage.Hits(0), "审批前那次分流请求没有被再次匹配")
+		require.Equal(t, 2, rc.triage.Calls(), "分流只多出退款后的那次请求")
+	})
+	t.Run("拒绝时不退款", func(t *testing.T) {
+		rc := newRefundCase(t, "refund-reject", 80000, 50000, false)
+		snap, err := rc.answer(t, rc.start(t).Key, `{"approved":false,"note":"重复申请","approver":"finance:li"}`)
+		require.NoError(t, err)
+		require.Equal(t, "人工拒绝：重复申请", lastOutput(snap.State, "refund"))
+		require.Zero(t, rc.desk.ledger.refunds())
+	})
+	t.Run("无争议时直接退款", func(t *testing.T) {
+		rc := newRefundCase(t, "refund-direct", 3000, 50000, false)
+		snap, err := rc.graph(t).Run(rc.e.ctx(), rc.e.id, Conversation{Input: "订单 A1 申请退款"}, "")
+		require.NoError(t, err)
+		require.Contains(t, lastOutput(snap.State, "refund"), "已退款：")
+		require.Equal(t, 1, rc.desk.ledger.refunds())
+	})
+	t.Run("Agent 标记有争议时进入等待", func(t *testing.T) {
+		rc := newRefundCase(t, "refund-agent-flag", 3000, 50000, true)
+		var info map[string]any
+		require.NoError(t, json.Unmarshal(rc.start(t).Info, &info))
+		require.Contains(t, info["reason"], "Agent 标记")
+	})
+	t.Run("等待期间规则或订单变化不改变判定", func(t *testing.T) {
+		rc := newRefundCase(t, "refund-rule-change", 80000, 50000, false)
+		point := rc.start(t)
+		rc.desk.ledger.read(func(*ledgerState) { rc.desk.ledger.threshold = 1000000 }) // 新阈值下本应无争议
+		rc.desk.ledger.changeOrder()
+		snap, err := rc.answer(t, point.Key, `{"approved":false,"note":"不同意","approver":"finance:li"}`)
+		require.NoError(t, err)
+		require.Equal(t, "人工拒绝：不同意", lastOutput(snap.State, "refund"), "判定已固定，审核结果仍然生效")
+		require.Zero(t, rc.desk.ledger.refunds())
+		require.EqualValues(t, 1, rc.desk.registers.Load())
+	})
+	t.Run("订单变化导致批准失败写回状态", func(t *testing.T) {
+		rc := newRefundCase(t, "refund-order-change", 80000, 50000, false)
+		point := rc.start(t)
+		rc.desk.ledger.changeOrder()
+		snap, err := rc.answer(t, point.Key, approve)
+		require.NoError(t, err, "业务结果不是节点错误")
+		require.Equal(t, "订单已变化，需重新申请", lastOutput(snap.State, "refund"))
+		require.Zero(t, rc.desk.ledger.refunds())
+	})
+	t.Run("等待超时按拒绝处理", func(t *testing.T) {
+		rc := newRefundCase(t, "refund-timeout", 80000, 50000, false)
+		snap, err := rc.answer(t, rc.start(t).Key, `{"approved":false,"reason":"timeout"}`)
+		require.NoError(t, err)
+		require.Equal(t, "审核超时，按拒绝处理", lastOutput(snap.State, "refund"))
+		require.Zero(t, rc.desk.ledger.refunds())
+	})
+	t.Run("回执已写入而执行记录停在 pending", func(t *testing.T) {
+		rc := newRefundCase(t, "refund-reconcile", 80000, 50000, false)
+		point := rc.start(t)
+		rc.e.fault.arm(false, operationFails("refund/execute", "completed"))
+		_, err := rc.answer(t, point.Key, approve)
+		require.ErrorIs(t, err, errInjected)
+		require.Equal(t, 1, rc.desk.ledger.refunds())
+
+		rc.e.restart()
+		snap, err := rc.graph(t).Run(rc.e.ctx(), rc.e.id, Conversation{}, "")
+		require.NoError(t, err, "已回应的中断无需再次提交，用 Run 续跑")
+		require.Contains(t, lastOutput(snap.State, "refund"), "已退款：")
+		require.Equal(t, 1, rc.desk.ledger.refunds(), "Reconcile 补记完成，不重复退款")
+		require.EqualValues(t, 1, rc.desk.executions.Load(), "执行操作没有重跑")
+	})
+}
