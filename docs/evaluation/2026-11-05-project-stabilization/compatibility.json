@@ -1,6 +1,6 @@
 {
   "core_directory": "${WORKSPACE_ROOT}/goagent",
-  "core_revision": "bd6e6a0741c8af4a3ab8724da8fdfe1df7ee6f9d",
+  "core_revision": "baeb4eabc63ec02293258b7f1059641b6f5a3394",
   "go_version": "go version go1.26.10 darwin/arm64",
   "modules": [
     {
@@ -41,12 +41,8 @@
       "status": "passed",
       "core_directory": "${WORKSPACE_ROOT}/goagent",
       "log": "04-tests.jsonl",
-      "passed_tests": 77,
-      "passed_packages": 1,
-      "skipped_tests": [
-        "github.com/kart-io/goagent-contrib/durable/pgstore/TestPrimaryRestart",
-        "github.com/kart-io/goagent-contrib/durable/pgstore/TestSyncCommit"
-      ]
+      "passed_tests": 79,
+      "passed_packages": 1
     },
     {
       "module": "github.com/kart-io/goagent-contrib/httpagent",
@@ -133,25 +129,25 @@
       "skipped_tests": [
         "github.com/kart-io/goagent-examples/internal/livemodel/livemodeltest/TestRequireSkipsWithoutOptIn/skip",
         "github.com/kart-io/goagent-examples/orchestration/agent-context/TestLiveAgentContext",
-        "github.com/kart-io/goagent-examples/orchestration/live/log-triage/TestLiveLogTriageCrashRecovery",
-        "github.com/kart-io/goagent-examples/orchestration/live/parallel-diagnostics/TestLiveParallelDiagnostics",
         "github.com/kart-io/goagent-examples/orchestration/live/approval/TestLiveApprovalFlows",
-        "github.com/kart-io/goagent-examples/orchestration/live/review-loop/TestLiveReviewLoopRecovery",
+        "github.com/kart-io/goagent-examples/orchestration/live/log-triage/TestLiveLogTriageCrashRecovery",
+        "github.com/kart-io/goagent-examples/orchestration/live/delegation/TestLiveDelegation",
         "github.com/kart-io/goagent-examples/orchestration/live/localize/TestLiveLocalizeRecovery",
+        "github.com/kart-io/goagent-examples/orchestration/live/parallel-diagnostics/TestLiveParallelDiagnostics",
+        "github.com/kart-io/goagent-examples/orchestration/live/review-loop/TestLiveReviewLoopRecovery",
+        "github.com/kart-io/goagent-examples/orchestration/live/session-replay/TestLiveSessionReplay",
         "github.com/kart-io/goagent-examples/orchestration/live/stream-budget/TestLiveSummarize",
         "github.com/kart-io/goagent-examples/orchestration/live/stream-budget/TestLiveContend",
-        "github.com/kart-io/goagent-examples/orchestration/live/delegation/TestLiveDelegation",
-        "github.com/kart-io/goagent-examples/orchestration/live/session-replay/TestLiveSessionReplay",
         "github.com/kart-io/goagent-examples/orchestration/live/ticket-triage/TestLiveTicketTriage",
+        "github.com/kart-io/goagent-examples/orchestration/ops/alert-rca/TestLiveAlertRCA",
         "github.com/kart-io/goagent-examples/orchestration/plugin/basic/TestBasicLive",
         "github.com/kart-io/goagent-examples/workflow/business-cases/TestLiveBusinessCases",
-        "github.com/kart-io/goagent-examples/orchestration/ops/alert-rca/TestLiveAlertRCA",
         "github.com/kart-io/goagent-examples/orchestration/ops/cost-attribution/TestLiveCostAttribution",
+        "github.com/kart-io/goagent-examples/orchestration/flight-booking/TestLiveExtractionAndComparison",
         "github.com/kart-io/goagent-examples/orchestration/ops/capacity-review/TestLiveCapacityReview",
         "github.com/kart-io/goagent-examples/orchestration/ops/scoped-lookup/TestLiveScopedLookup",
         "github.com/kart-io/goagent-examples/orchestration/ops/sql-review/TestLiveSQLReview",
         "github.com/kart-io/goagent-examples/workflow/business-cases/TestNativeToolLoopChild",
-        "github.com/kart-io/goagent-examples/orchestration/flight-booking/TestLiveExtractionAndComparison",
         "github.com/kart-io/goagent-examples/workflow/business-cases/TestLiveNativeToolLoop"
       ],
       "skipped_packages": [
@@ -187,6 +183,10 @@
       "passed_tests": 342,
       "passed_packages": 11,
       "skipped_tests": [
+        "github.com/kart-io/goagent-harness/sandbox/TestNativeRetriesMountRace",
+        "github.com/kart-io/goagent-harness/sandbox/TestNativeMountRaceRetriesAreBounded",
+        "github.com/kart-io/goagent-harness/sandbox/TestNativeOtherStartupFailureIsNotRetried",
+        "github.com/kart-io/goagent-harness/sandbox/TestNativeCommandOutputIsNotMistakenForMountRace",
         "github.com/kart-io/goagent-harness/integration/TestDockerChildSurvivesRestartThenContainerRemoved",
         "github.com/kart-io/goagent-harness/integration/TestDockerStopDuringModelRequestContinues",
         "github.com/kart-io/goagent-harness/integration/TestDockerCrashDuringModelRequestContinues",
@@ -213,6 +213,8 @@
         "github.com/kart-io/goagent-harness/integration/TestOpenSandboxProviderContract",
         "github.com/kart-io/goagent-harness/integration/TestOpenSandboxStopDuringCommandAttaches",
         "github.com/kart-io/goagent-harness/integration/TestOpenSandboxLostCreateResponseDoesNotLeak",
+        "github.com/kart-io/goagent-harness/sandbox/sandboxtest/TestContractPassesForCorrectProvider",
+        "github.com/kart-io/goagent-harness/sandbox/sandboxtest/TestContractCatchesBrokenProviders",
         "github.com/kart-io/goagent-harness/integration/TestSSHProviderContract",
         "github.com/kart-io/goagent-harness/integration/TestSSHReportsRunnerAndConfinesCommands",
         "github.com/kart-io/goagent-harness/integration/TestSSHNetworkPolicy",
@@ -227,16 +229,11 @@
         "github.com/kart-io/goagent-harness/integration/TestSSHRefusesWithoutIsolation",
         "github.com/kart-io/goagent-harness/integration/TestSSHRunnerKilled",
         "github.com/kart-io/goagent-harness/integration/TestSSHLostCreateResponseDoesNotLeak",
-        "github.com/kart-io/goagent-harness/sandbox/sandboxtest/TestContractPassesForCorrectProvider",
-        "github.com/kart-io/goagent-harness/sandbox/sandboxtest/TestContractCatchesBrokenProviders",
-        "github.com/kart-io/goagent-harness/sandbox/TestNativeRetriesMountRace",
-        "github.com/kart-io/goagent-harness/sandbox/TestNativeMountRaceRetriesAreBounded",
-        "github.com/kart-io/goagent-harness/sandbox/TestNativeOtherStartupFailureIsNotRetried",
-        "github.com/kart-io/goagent-harness/sandbox/TestNativeCommandOutputIsNotMistakenForMountRace",
         "github.com/kart-io/goagent-harness/sandbox/TestLinuxProcRootCannotEscape",
         "github.com/kart-io/goagent-harness/sandbox/TestDockerReal",
         "github.com/kart-io/goagent-harness/sandbox/TestDockerUnixSocketReal",
         "github.com/kart-io/goagent-harness/sandbox/TestRunReusesProbe",
+        "github.com/kart-io/goagent-harness/tools/coding/TestDockerExecutorWorkspace",
         "github.com/kart-io/goagent-harness/sandbox/TestSupervisorReturnsOutputAndExitCode",
         "github.com/kart-io/goagent-harness/sandbox/TestSupervisorRunsInCommandDirectory",
         "github.com/kart-io/goagent-harness/sandbox/TestSupervisorSameKeyStartsOnce",
@@ -249,7 +246,6 @@
         "github.com/kart-io/goagent-harness/sandbox/TestSupervisorCancel",
         "github.com/kart-io/goagent-harness/sandbox/TestSupervisorPollingFailures",
         "github.com/kart-io/goagent-harness/sandbox/TestSupervisorRequiresTools",
-        "github.com/kart-io/goagent-harness/tools/coding/TestDockerExecutorWorkspace",
         "github.com/kart-io/goagent-harness/preset/TestEnvContextProbesInsideDocker",
         "github.com/kart-io/goagent-harness/preset/TestNativeFallbackRecordedInContract"
       ],

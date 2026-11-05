@@ -1,0 +1,16 @@
+{
+  "core_revision": "baeb4eabc63ec02293258b7f1059641b6f5a3394",
+  "root_test_command": "make coverage COVERAGE_DIR=/tmp/goagent-stabilization-final-coverage GOTEST='go test -count=1 -timeout=120s'",
+  "root_test_exit_code": 0,
+  "root_test_log_sha256": "bfb6ba3d7ccb5dc8cd1f1eac4f946308bc979b35f0b7db2c51304dbc10ab2b54",
+  "other_checks": [
+    "build",
+    "vet",
+    "golangci-lint v2.15.0: 0 issues",
+    "imports: 0 findings",
+    "frameworkbench: -mod=readonly -race",
+    "Linux amd64 / Windows amd64 验证器编译"
+  ],
+  "review_important_findings_fixed": 2,
+  "real_business_environment_verified": false
+}

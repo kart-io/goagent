@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `make test-frameworkbench`、`make test-contracts`、`make compatibility`：独立评测只读依赖、公共执行契约和本地关联仓库验证入口。跨仓验证包含嵌套模块，使用临时 modfile 及受控 GOFLAGS 覆盖测试和子构建的依赖，保留通过、失败及跳过证据；Unix 上取消、SIGTERM 和超时会清理同进程组后代。
+- 业务接入与故障恢复验收指南，记录本地退款及 PostgreSQL 接管、重启与同步提交的验证结果，明确真实业务接口仍需测试环境验收。
+
+### Changed
+
+- 开发工具链统一为 `go.mod` 声明的 Go 1.26.10，最低版本仍为 Go 1.26.0；Makefile 清除陈旧 GOROOT，CI 按模块声明选择工具链。独立 frameworkbench 同步依赖并纳入 CI 契约检查。
+- 整体覆盖率门槛由 45% 提高为 75%，新增 `multiagent` ≥85% 门槛；既有核心和 Provider 阈值不变。
+
 ## [0.48.1] - 2026-11-05
 
 ### Fixed

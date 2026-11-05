@@ -3,7 +3,7 @@
 ## 范围与环境
 
 - Go 1.26.10，darwin/arm64，race 检测开启；golangci-lint v2.15.0。
-- 跨仓核心基线 `bd6e6a0741c8af4a3ab8724da8fdfe1df7ee6f9d`，通过临时 modfile 绑定当前源码，`GOWORK=off`；不改下游依赖文件。
+- 初次含 PostgreSQL 的跨仓核心基线为 `bd6e6a0741c8af4a3ab8724da8fdfe1df7ee6f9d`；审查修复后最终基线为 `baeb4ea`。通过临时 modfile 绑定当前源码，`GOWORK=off`；最终验证覆盖测试及其 Go 子构建，不改下游依赖文件。
 - Contrib：`e0c75339183908b57118594776da781a398e7b5b`。
 - Examples：`b900dfee8e1ca78666e38c25a85ce20b66d7fed7`。
 - Harness：`2368ac069cd49c0e865b27864fe2dee6cb202492`。
@@ -16,13 +16,14 @@
 | 原冲突 GOROOT 下构建与 vet | 通过 | `make build vet` 使用 go.mod 工具链 |
 | 独立 frameworkbench 只读依赖与竞态契约 | 通过 | `make test-frameworkbench` |
 | v2 lint、导入分层 | 通过 | 0 issues、0 findings |
-| 最终主模块全量竞态与覆盖率 | 通过，整体 79.5%，multiagent 93.3% | Go 1.26.10，`-count=1 -race -timeout=120s`；[门禁结果](coverage-gates.txt) |
+| 最终主模块全量竞态与覆盖率 | 通过，整体 79.6%，multiagent 93.3% | Go 1.26.10，`-count=1 -race -timeout=120s`；[门禁结果](coverage-gates.txt)、[验证摘要](verification.json) |
 | 默认环境跨仓完整竞态测试 | 15/15 模块命令通过，1541 个测试事件通过，124 个跳过 | 新 `compatcheck` 入口的首次实际运行 |
-| 配置 PostgreSQL 后跨仓完整竞态测试 | 15/15 模块命令通过，1620 个测试事件通过，101 个跳过 | [compatibility.json](compatibility.json) |
+| 初次配置 PostgreSQL 后跨仓完整竞态测试 | 15/15 模块命令通过，1620 个测试事件通过，101 个跳过 | [审查前摘要](pre-review-compatibility.json) |
 | PostgreSQL 重启、同步提交专项首次执行 | 2 个测试失败 | 随机端口在容器重启后由 32774 变为 32775，旧 DSN 连接拒绝；保留失败事件 |
 | 固定端口后专项重新执行 | 2 个测试通过 | `TestPrimaryRestart`、`TestSyncCommit`；覆盖上一轮 101 个跳过中的 2 项 |
+| 审查修复后最终跨仓完整竞态测试 | 15/15 模块通过，1622 个测试事件通过，99 个跳过；包含 PostgreSQL 重启及同步提交 | [compatibility.json](compatibility.json) |
 
-测试事件数包含子测试和测试入口，不能解释为独立业务样本数或模型成功率。专项复测是独立运行，不覆盖初次失败记录。其余 99 个跳过事件主要属于未配置的外部服务、真实模型及辅助子进程入口；不能据此宣称所有外部集成都通过。
+测试事件数包含子测试和测试入口，不能解释为独立业务样本数或模型成功率。专项复测与最终重跑均是独立运行，不覆盖初次失败记录。最终 99 个跳过事件主要属于未配置的外部服务、真实模型及辅助子进程入口；不能据此宣称所有外部集成都通过。
 
 ## 业务恢复场景
 
@@ -34,7 +35,7 @@
 | 无授权、无效订单、过期或事实变更 | `TestRefundBusinessGuards`、`TestApprovalRejectsExpiredChangedAndUnauthorizedRequests`、`TestRefundGraphRechecksReviewedOrder`、`TestRejectedRefundHasNoEffect` 通过 |
 | 重复业务 ID、改参数、并发累计额度 | `TestLedgerDeduplicatesAndRejectsChangedPayload`、`TestConcurrentRequestsCannotOverRefund` 通过 |
 | 旧持久格式 | `TestLegacyLedgerIsNotSilentlyReinitialized` 通过，旧账本被明确拒绝 |
-| 真实 Postgres 存储契约与崩溃接管 | `TestConformance`、`TestProcessCrashTakeover` 等通过；该模块主矩阵有 77 个通过事件、2 个待专项验证的跳过事件 |
+| 真实 Postgres 存储契约与崩溃接管 | `TestConformance`、`TestProcessCrashTakeover` 等通过；最终该模块有 79 个通过事件，无跳过 |
 | 跨连接等待恢复、旧持有者失效与 Inbox 去重 | Harness Postgres 的 `TestWaitRestartResumeRelease`、`TestTakeoverFencesOldHolder`、`TestInboxAppendOnceAcrossConnections` 均通过，无跳过 |
 | 数据库重启、同步提交 | 固定宿主端口后 `TestPrimaryRestart`、`TestSyncCommit` 均通过 |
 
@@ -53,7 +54,7 @@ make compatibility COMPAT_OUT=/tmp/goagent-business-new
 
 重启验证须固定端口。首次失败是测试容器部署配置问题，修正端口后复用相同测试与源码验证，没有修改生产实现。
 
-原始日志位于本次运行的 `/tmp/goagent-stabilization-compatibility` 和 `/tmp/goagent-stabilization-business`。仓库中保存结构化摘要、关键场景的原始事件字段及日志 SHA-256；本机父目录归一化为 `${WORKSPACE_ROOT}`，不保存 DSN、密码或完整测试输出。临时数据库验证完毕后删除。复现要求、外部业务输入和逐场景验收见 [业务接入与故障恢复验收](../../development/BUSINESS_ACCEPTANCE.md)。
+初次原始日志位于 `/tmp/goagent-stabilization-compatibility` 和 `/tmp/goagent-stabilization-business`，最终重跑位于 `/tmp/goagent-stabilization-postreview-compatibility`。仓库中保存结构化摘要、关键场景的原始事件字段及日志 SHA-256；本机父目录归一化为 `${WORKSPACE_ROOT}`，不保存 DSN、密码或完整测试输出。临时数据库验证完毕后删除。复现要求、外部业务输入和逐场景验收见 [业务接入与故障恢复验收](../../development/BUSINESS_ACCEPTANCE.md)。
 
 ## 尚未验证
 
@@ -64,3 +65,5 @@ make compatibility COMPAT_OUT=/tmp/goagent-business-new
 独立整分支审查发现并复现两项验证器问题：取消只停止 Go 父进程（SIGTERM 还可能丢失摘要），以及测试内的 Go 子构建没有继承临时 modfile。修复增加 Unix 进程组生命周期管理、SIGTERM 处理，以及通过受控 GOFLAGS 传递临时依赖。新增回归先观察到旧实现遗留副作用、丢失摘要/临时目录和子构建读取旧核心，再验证修复后通过；同时覆盖独立于测试自身超时的命令期限与路径含空格。
 
 初次跨仓结果只证明顶层测试绑定了当前核心，无法据此断言子构建也一致。修复后的完整重跑结果单独保存，原始结果保留用于追溯。
+
+修复后 `scripts/compatcheck` 在完整主模块竞态覆盖率运行中通过（45.157 秒，覆盖率 81.6%）；build、vet、lint、导入分层及独立评测复验均通过，关联仓库完整矩阵也已重跑通过。运行中取消与信号回归在 Unix 上执行；Linux/Windows amd64 的验证器编译检查通过，非 Unix 不声明进程树清理保证。两项 Important 已完成复现、修复和回归，没有遗留 Minor；未派发第二次审查。
