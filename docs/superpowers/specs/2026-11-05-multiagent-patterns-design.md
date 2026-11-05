@@ -339,9 +339,11 @@ func TextNext(members ...Step[Conversation]) (func(context.Context, Conversation
 - 审批后续跑从被审批的节点开始，之前已完成的节点不会重新执行，也不会读取它们的模型日志。
 - `ApprovalNodes` 的审批发生在节点执行之前（`workflow/durable.go:279-293`），审批人只能看到进入节点前的状态，适合“是否进入某流程”这类粗粒度门禁；要审批 Agent 决定的具体动作（S5 的退款金额与订单），在节点内按“提议 → 登记 → 审核 → 执行”分段，每段的效果都由持久操作固定：
   - 不把退款放进可中断工具：可中断工具只允许一次尝试且没有对账钩子（`tools/dispatcher.go:176-178`），“退款已生效、工具记录未落盘”时崩溃会留下 pending，恢复被拒；续跑还会整体重跑工具（`tools/function_tool.go:110-111`），AwaitInput 之前的判定会按变化后的事实重算，审核人已拒绝的申请可能被判为无争议直接退款。
-  - S5 的退款成员是自定义 `Step.Run`：调用退款 Agent 得到结构化提议（Agent 的工具只读，不产生副作用）→ `durable.Do(ctx, "refund/register", ...)` 登记申请并计算争议判定 → 有争议时 `durable.AwaitInput(ctx, "refund-review", info, validate)` → `durable.Do(ctx, "refund/execute", ...)` 批准并退款。
+  - S5 的退款成员是自定义 `Step.Run`：调用退款 Agent 得到结构化提议（Agent 的工具只读，不产生副作用）→ `durable.Do(ctx, "refund/register", ...)` 登记申请并计算争议判定 → 有争议时 `durable.AwaitInput(ctx, "refund-review", info, validate)` → `durable.Do(ctx, "refund/execute", ...)` 先查回执、再批准并退款。
+  - 执行操作的 run 必须先按业务申请 ID 查回执，已有回执直接返回：`Approve` 在查回执之前就校验有效期与订单事实（`workflow/refund/service.go:184-205`），而 `Reconcile` 只在记录为 pending 时调用（`core/durable/operation.go:276`），记录为 failed/canceled 后重跑时若先 `Approve`，退款已生效的运行会卡在批准失败上。审核等待期间订单事实变化导致批准失败时，作为业务结果（“订单已变化，需重新申请”）写回状态，而不是节点错误。
+  - 登记操作的意图只含申请 ID 与提议，不含规则阈值或时间；登记与判定在同一事务内写入，`Reconcile` 只有在申请与判定都存在时才补记完成，否则不补记（避免以零值“无争议”补记而绕过审核）。
   - 登记与执行的 `OperationPolicy` 都提供 `Reconcile`（`core/durable/operation.go` 中 `OperationPolicy.Reconcile`）：记录停在 pending 时，按业务申请 ID 查询登记或回执是否已生效，生效则补记 completed、不重跑。业务侧复用 `workflow/refund.Service`：`Register` 按业务申请 ID 去重并固定订单事实，`Refund` 先返回已提交回执，再在同一事务内检查累计额度。
-  - 争议判定在登记操作内计算一次，结果随操作记录固定；节点重入时回放，不随订单事实或规则变化而翻转。`info` 含订单号、金额与判定理由；输入为 `{"approved": bool, "note": string}`，validate 校验格式；拒绝时不执行退款，把“人工拒绝”写回状态交 Agent 回复客户。
+  - 争议判定在登记操作内计算一次，结果随操作记录固定；节点重入时回放，不随订单事实或规则变化而翻转。`info` 含订单号、金额与判定理由；输入为 `{"approved": bool, "note": string, "approver": string}`（`approver` 由宿主认证后填入），validate 校验格式，批准时要求 `approver` 非空；拒绝时不执行退款，把“人工拒绝”写回状态交 Agent 回复客户。
 - 节点内调用 `durable.AwaitInput` 可以暂停（S6 的写法见“AgentStep 的执行”）。Agent 工具内的中断需要工具声明可中断（`tools.InterruptibleTool` / `WithInterruptible`），或是声明 `Resumable` 的 Runnable 工具。Agent 调用的子图如果是纯审批等待，在外层持久图里按节点失败处理（`workflow/durable.go:348-369`），这一限制写进指南。
 - 回放只覆盖已提交为 completed 的操作。pending 操作是否重入取决于策略：默认非 Resumable 的 Runnable 工具与默认模型请求都只允许一次尝试，pending 与 failed 时恢复被拒绝，需要宿主核对（模型请求开启重发时 pending 与 canceled 除外，见“Agent 侧”）。
 
