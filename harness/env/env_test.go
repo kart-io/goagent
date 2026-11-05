@@ -301,7 +301,12 @@ func TestDockerExecutor(t *testing.T) {
 	if image == "" {
 		t.Skip("GOAGENT_ENV_DOCKER_IMAGE not set")
 	}
-	root := t.TempDir()
+	// Docker Desktop 与 Colima 通常共享用户目录，不共享系统临时目录。
+	home, err := os.UserHomeDir()
+	require.NoError(t, err)
+	root, err := os.MkdirTemp(home, ".goagent-env-docker-test-")
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, os.RemoveAll(root)) })
 	require.NoError(t, os.Mkdir(filepath.Join(root, "sub"), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(root, "sub/in.txt"), []byte("from host"), 0o644))
 	e := DockerExecutor{Root: root, Image: image}
