@@ -5,13 +5,15 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/kart-io/goagent/codec/json"
+
 	"github.com/go-resty/resty/v2"
 
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/tools"
+	"github.com/kart-io/goagent/tools/toolargs"
 	"github.com/kart-io/goagent/utils/httpclient"
-	"github.com/kart-io/goagent/utils/json"
 )
 
 // APITool HTTP API 调用工具
@@ -121,7 +123,7 @@ func (a *APITool) run(ctx context.Context, input *interfaces.ToolInput) (*interf
 	}
 
 	// 解析超时并应用到 context
-	if timeoutSec, ok := input.Args[interfaces.FieldTimeout].(float64); ok && timeoutSec > 0 {
+	if timeoutSec, ok := toolargs.Float64(input.Args[interfaces.FieldTimeout]); ok && timeoutSec > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, time.Duration(timeoutSec)*time.Second)
 		defer cancel()

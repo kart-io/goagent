@@ -3,7 +3,6 @@ package devtools
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -12,15 +11,18 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/kart-io/goagent/codec/json"
+
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/observe"
 )
 
 // RecorderConfig sets bounded asynchronous recording. Supply Writer or Path.
 type RecorderConfig struct {
-	Writer                   io.Writer
-	Path                     string
-	QueueCapacity, MaxEvents int
+	Writer        io.Writer `json:"-"`
+	Path          string    `json:"path"`
+	QueueCapacity int       `json:"queue_capacity"`
+	MaxEvents     int       `json:"max_events"`
 }
 
 // RecorderStats reports accepted and dropped events independently of business output.
@@ -91,10 +93,9 @@ func (r *Recorder) write() {
 	defer close(r.done)
 	// 宿主提供的 Writer 在本 goroutine 中 panic 时，经全局 PanicHandler 转换后由 Close 返回；之后的事件不再写出。
 	defer core.RecoverPanic(context.Background(), "devtools_recorder", "write", &r.err)
-	encoder := json.NewEncoder(r.writer)
 	for e := range r.queue {
 		if r.err == nil {
-			if err := encoder.Encode(e); err != nil {
+			if err := json.Encode(r.writer, e); err != nil {
 				r.err = err
 			} else {
 				r.written.Add(1)
@@ -102,7 +103,7 @@ func (r *Recorder) write() {
 		}
 	}
 	if n := r.dropped.Load(); n > 0 && r.err == nil {
-		r.err = encoder.Encode(observe.Event{Type: "events_dropped", Dropped: n})
+		r.err = json.Encode(r.writer, observe.Event{Type: "events_dropped", Dropped: n})
 	}
 	if r.owned != nil {
 		r.err = errors.Join(r.err, r.owned.Close())

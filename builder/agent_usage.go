@@ -88,7 +88,7 @@ type modelMetadataKey struct{}
 type modelMetadata struct {
 	Provider, Model     string
 	Reasoning           usage.ReasoningConfig `json:",omitzero"`
-	ReasoningConfigured bool                  `json:",omitempty"`
+	ReasoningConfigured bool                  `json:",omitzero"`
 }
 
 func withModelMetadata(ctx context.Context, client llm.Client, req *llm.CompletionRequest) context.Context {

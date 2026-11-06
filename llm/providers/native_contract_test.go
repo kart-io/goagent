@@ -2,13 +2,14 @@ package providers_test
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/builder"
 	"github.com/kart-io/goagent/interfaces"
@@ -51,7 +52,7 @@ func TestNativeProvidersShareToolCompletionContract(t *testing.T) {
 						Model    string        `json:"model"`
 						Messages []llm.Message `json:"messages"`
 					}
-					if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+					if err := json.Decode(r.Body, &req); err != nil {
 						http.Error(w, err.Error(), 400)
 						return
 					}

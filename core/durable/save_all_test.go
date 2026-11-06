@@ -2,12 +2,13 @@ package durable
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/core/internal/txnlog"
 	"github.com/stretchr/testify/require"

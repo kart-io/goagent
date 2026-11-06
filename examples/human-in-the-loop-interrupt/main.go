@@ -3,12 +3,13 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"os"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/workflow"
@@ -57,9 +58,7 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 	if err != nil && !errors.Is(err, durable.ErrApprovalRequired) {
 		return err
 	}
-	enc := json.NewEncoder(out)
-	enc.SetIndent("", "  ")
-	return enc.Encode(snap)
+	return json.Encode(out, snap, json.Pretty)
 }
 
 func build(ctx context.Context, store durable.Store) (*workflow.DurableGraph[refund], error) {

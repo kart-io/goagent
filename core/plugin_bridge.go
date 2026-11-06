@@ -16,8 +16,8 @@ import (
 	"reflect"
 	"sync"
 
+	"github.com/kart-io/goagent/codec"
 	agentErrors "github.com/kart-io/goagent/errors"
-	"github.com/kart-io/goagent/utils/json"
 )
 
 // =============================================================================
@@ -51,7 +51,7 @@ type DynamicRunnable interface {
 
 // DynamicStreamChunk 动态流式输出块
 type DynamicStreamChunk struct {
-	Data  any   `json:"data,omitempty"`
+	Data  any   `json:"data,omitzero"`
 	Error error `json:"-"`
 	Done  bool  `json:"done"`
 }
@@ -546,9 +546,8 @@ func convertToType[T any](value any) (T, error) {
 		}
 	}
 
-	// 策略 3: 使用 mapstructure 进行转换 (比 JSON 快)
-	// 使用 utils/json 提供的统一 Decode 方法
-	if err := json.Decode(value, &zero); err != nil {
+	// 策略 3: 按 json 标签弱类型转换 (比 JSON 往返快)
+	if err := codec.Convert(value, &zero); err != nil {
 		return zero, fmt.Errorf("failed to decode to target type: %w", err)
 	}
 

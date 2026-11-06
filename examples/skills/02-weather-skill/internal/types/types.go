@@ -12,7 +12,7 @@ import "time"
 // WeatherRequest 天气查询请求
 type WeatherRequest struct {
 	City string `json:"city" validate:"required,min=1,max=50"`
-	Days int    `json:"days,omitempty" validate:"omitempty,min=1,max=7"`
+	Days int    `json:"days,omitzero" validate:"omitempty,min=1,max=7"`
 }
 
 // ForecastRequest 天气预报请求

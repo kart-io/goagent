@@ -50,19 +50,19 @@ type DefaultLifecycleManager struct {
 // LifecycleManagerConfig configures the lifecycle manager.
 type LifecycleManagerConfig struct {
 	// DefaultInitTimeout is the default timeout for Init operations
-	DefaultInitTimeout time.Duration
+	DefaultInitTimeout time.Duration `json:"default_init_timeout"`
 
 	// DefaultStartTimeout is the default timeout for Start operations
-	DefaultStartTimeout time.Duration
+	DefaultStartTimeout time.Duration `json:"default_start_timeout"`
 
 	// DefaultStopTimeout is the default timeout for Stop operations
-	DefaultStopTimeout time.Duration
+	DefaultStopTimeout time.Duration `json:"default_stop_timeout"`
 
 	// HealthCheckInterval is the interval between automatic health checks
-	HealthCheckInterval time.Duration
+	HealthCheckInterval time.Duration `json:"health_check_interval"`
 
 	// ContinueOnError determines whether to continue if a component fails
-	ContinueOnError bool
+	ContinueOnError bool `json:"continue_on_error"`
 }
 
 // DefaultLifecycleManagerConfig returns sensible defaults.

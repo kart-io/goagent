@@ -7,11 +7,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kart-io/goagent/codec/json"
+
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/providers"
 	"github.com/kart-io/goagent/tools"
-	"github.com/kart-io/goagent/utils/json"
 )
 
 func main() {
@@ -354,7 +355,7 @@ func ollamaWithToolsExample() {
 	if err != nil {
 		log.Printf("Error invoking weather tool: %v\n", err)
 	} else {
-		weatherJSON, _ := json.MarshalIndent(weatherOutput.Result, "", "  ")
+		weatherJSON, _ := json.Marshal(weatherOutput.Result, json.Pretty)
 		fmt.Printf("✅ Weather Data:\n%s\n", string(weatherJSON))
 	}
 
@@ -481,7 +482,7 @@ Input: <tool_input_as_json>`, toolDescriptions)),
 				Context: ctx,
 			})
 			if err == nil {
-				weatherJSON, _ := json.MarshalIndent(output.Result, "", "  ")
+				weatherJSON, _ := json.Marshal(output.Result, json.Pretty)
 				fmt.Printf("🎯 Tool Result:\n%s\n", string(weatherJSON))
 			}
 		}

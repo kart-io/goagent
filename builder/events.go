@@ -28,8 +28,8 @@ type AgentEvent struct {
 	Step    string                 `json:"step,omitempty"`
 	Tool    string                 `json:"tool,omitempty"`
 	Delta   string                 `json:"delta,omitempty"`
-	Usage   *interfaces.TokenUsage `json:"usage,omitempty"`
-	Output  *AgentOutput           `json:"output,omitempty"`
+	Usage   *interfaces.TokenUsage `json:"usage,omitzero"`
+	Output  *AgentOutput           `json:"output,omitzero"`
 	Error   error                  `json:"-"`
 	Message string                 `json:"error,omitempty"`
 }

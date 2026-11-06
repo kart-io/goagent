@@ -2,11 +2,12 @@ package durable
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"slices"
+
+	"github.com/kart-io/goagent/codec/json"
 )
 
 const (

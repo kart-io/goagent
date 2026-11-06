@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/interfaces"
 )
 
@@ -522,5 +523,18 @@ func TestShellTool_TimeoutAcceptsInteger(t *testing.T) {
 	output, _ := tool.Invoke(context.Background(), &interfaces.ToolInput{Args: map[string]interface{}{"command": "sleep", "args": []interface{}{"5"}, "timeout": 1}})
 	if output.Success || time.Since(started) > 4*time.Second {
 		t.Errorf("Expected timeout after 1s, took: %v", time.Since(started))
+	}
+}
+
+// 命令输出可能含二进制或 GBK 字节，工具事件与持久记录编码时不能因此失败。
+func TestShellToolNonUTF8OutputEncodes(t *testing.T) {
+	out, err := NewShellTool([]string{"printf"}, 0).Invoke(context.Background(), &interfaces.ToolInput{
+		Args: map[string]interface{}{"command": "printf", "args": []interface{}{`\377\376`}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := json.Marshal(out); err != nil {
+		t.Fatalf("编码含非法 UTF-8 的输出失败: %v", err)
 	}
 }

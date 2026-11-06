@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kart-io/goagent/codec/json"
+
 	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/anthropics/anthropic-sdk-go/v2/option"
 
@@ -16,7 +18,6 @@ import (
 	agentllm "github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/common"
 	"github.com/kart-io/goagent/llm/constants"
-	"github.com/kart-io/goagent/utils/json"
 )
 
 var _ agentllm.ToolStreamClient = (*AnthropicProvider)(nil)
@@ -201,11 +202,15 @@ func anthropicAssistant(msg agentllm.Message) (anthropic.MessageParam, error) {
 		blocks = append(blocks, anthropic.NewTextBlock(msg.Content))
 	}
 	for _, call := range msg.ToolCalls {
-		var input map[string]any
-		if json.Unmarshal([]byte(call.Function.Arguments), &input) != nil || input == nil || call.Function.Name == "" {
+		if _, ok := call.ArgumentsObject(); !ok || call.Function.Name == "" {
 			return anthropic.MessageParam{}, fmt.Errorf("anthropic: tool arguments must be an object with a function name")
 		}
-		blocks = append(blocks, anthropic.NewToolUseBlock(call.ID, input, call.Function.Name))
+		// 发送参数原文：解到 map 会把大整数与高精度小数改写为 float64，SDK 又会把 json.Number 编码成字符串。
+		raw, err := json.Compact([]byte(call.Function.Arguments))
+		if err != nil {
+			return anthropic.MessageParam{}, err
+		}
+		blocks = append(blocks, anthropic.NewToolUseBlock(call.ID, raw, call.Function.Name))
 	}
 	return anthropic.NewAssistantMessage(blocks...), nil
 }

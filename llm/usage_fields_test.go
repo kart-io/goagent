@@ -1,10 +1,12 @@
 package llm
 
 import (
-	"encoding/json"
+	"testing"
+
+	"github.com/kart-io/goagent/codec/json"
+
 	"github.com/kart-io/goagent/core/usage"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestUsageFieldCompatibility(t *testing.T) {

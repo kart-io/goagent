@@ -32,29 +32,29 @@ type TelemetryProvider struct {
 
 // TelemetryConfig 配置
 type TelemetryConfig struct {
-	ServiceName    string
-	ServiceVersion string
-	Environment    string
+	ServiceName    string `json:"service_name"`
+	ServiceVersion string `json:"service_version"`
+	Environment    string `json:"environment"`
 
 	// Trace
-	TraceEnabled    bool
-	TraceExporter   string  // "otlp", "stdout", "noop"
-	TraceEndpoint   string  // OTLP endpoint
-	TraceSampleRate float64 // 0.0 to 1.0
+	TraceEnabled    bool    `json:"trace_enabled"`
+	TraceExporter   string  `json:"trace_exporter"`    // "otlp", "stdout", "noop"
+	TraceEndpoint   string  `json:"trace_endpoint"`    // OTLP endpoint
+	TraceSampleRate float64 `json:"trace_sample_rate"` // 0.0 to 1.0
 
 	// Metrics
-	MetricsEnabled  bool
-	MetricsExporter string // "prometheus", "otlp", "noop"
-	MetricsEndpoint string
-	MetricsInterval time.Duration
+	MetricsEnabled  bool          `json:"metrics_enabled"`
+	MetricsExporter string        `json:"metrics_exporter"` // "prometheus", "otlp", "noop"
+	MetricsEndpoint string        `json:"metrics_endpoint"`
+	MetricsInterval time.Duration `json:"metrics_interval"`
 
 	// Logs (optional)
-	LogsEnabled  bool
-	LogsExporter string
-	LogsEndpoint string
+	LogsEnabled  bool   `json:"logs_enabled"`
+	LogsExporter string `json:"logs_exporter"`
+	LogsEndpoint string `json:"logs_endpoint"`
 
 	// Resource attributes
-	ResourceAttributes map[string]string
+	ResourceAttributes map[string]string `json:"resource_attributes"`
 }
 
 // DefaultTelemetryConfig 返回默认配置

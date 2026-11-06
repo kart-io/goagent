@@ -7,33 +7,33 @@ import "time"
 type TimeoutConfig struct {
 	// LLM 相关超时
 	// LLMTimeout LLM 调用超时时间（包括推理、生成等）
-	LLMTimeout time.Duration
+	LLMTimeout time.Duration `json:"llm_timeout"`
 
 	// 工具执行超时
 	// ToolTimeout 工具执行超时时间
-	ToolTimeout time.Duration
+	ToolTimeout time.Duration `json:"tool_timeout"`
 
 	// 数据库相关超时
 	// DBConnectionTimeout 数据库连接建立超时时间
-	DBConnectionTimeout time.Duration
+	DBConnectionTimeout time.Duration `json:"db_connection_timeout"`
 	// DBOperationTimeout 数据库操作（读写查询）超时时间
-	DBOperationTimeout time.Duration
+	DBOperationTimeout time.Duration `json:"db_operation_timeout"`
 
 	// HTTP 相关超时
 	// HTTPTimeout HTTP 请求超时时间
-	HTTPTimeout time.Duration
+	HTTPTimeout time.Duration `json:"http_timeout"`
 
 	// 资源池相关超时
 	// PoolAcquireTimeout 从池中获取资源的超时时间
-	PoolAcquireTimeout time.Duration
+	PoolAcquireTimeout time.Duration `json:"pool_acquire_timeout"`
 
 	// 批量执行超时
 	// BatchTimeout 批量执行操作的超时时间
-	BatchTimeout time.Duration
+	BatchTimeout time.Duration `json:"batch_timeout"`
 
 	// Agent 执行超时
 	// AgentExecutionTimeout Agent 执行超时时间（包括完整推理循环）
-	AgentExecutionTimeout time.Duration
+	AgentExecutionTimeout time.Duration `json:"agent_execution_timeout"`
 }
 
 // DefaultTimeoutConfig 返回默认超时配置

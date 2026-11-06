@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kart-io/goagent/codec/json"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -17,7 +19,6 @@ import (
 	agentllm "github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/common"
 	"github.com/kart-io/goagent/llm/constants"
-	"github.com/kart-io/goagent/utils/json"
 )
 
 // ==============================================================================
@@ -157,7 +158,7 @@ func TestDeepSeekProvider_MaxTokens(t *testing.T) {
 func TestDeepSeekProvider_Embed(t *testing.T) {
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req interface{}
-		json.NewDecoder(r.Body).Decode(&req)
+		json.Decode(r.Body, &req)
 
 		type EmbedResponse struct {
 			Object string `json:"object"`
@@ -183,7 +184,7 @@ func TestDeepSeekProvider_Embed(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		json.Encode(w, resp)
 	}))
 	defer mockServer.Close()
 
@@ -638,7 +639,7 @@ func TestEmbeddingEmptyResponse(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		json.Encode(w, resp)
 	}))
 	defer mockServer.Close()
 

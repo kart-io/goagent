@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kart-io/goagent/codec/json"
+
 	"google.golang.org/genai"
 
 	agentErrors "github.com/kart-io/goagent/errors"
@@ -17,7 +19,6 @@ import (
 	agentllm "github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/common"
 	"github.com/kart-io/goagent/llm/constants"
-	"github.com/kart-io/goagent/utils/json"
 )
 
 // GeminiProvider retains the legacy public API and uses Google's native Gemini API.
@@ -101,6 +102,7 @@ func geminiUsage(usage *agentllm.Usage) *interfaces.TokenUsage {
 func geminiReplayableParts(parts []*genai.Part) []*genai.Part {
 	kept := parts[:0:0]
 	for _, part := range parts {
+		// 按编码结果判断：解码 "thoughtSignature":"" 得到的空切片字段非零，但按 omitempty 仍编码为 {}。
 		if part != nil {
 			if data, err := json.Marshal(part); err == nil && string(data) == "{}" {
 				continue

@@ -9,9 +9,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kart-io/goagent/codec/json"
+
 	"github.com/kart-io/goagent/core"
 	agentErrors "github.com/kart-io/goagent/errors"
-	"github.com/kart-io/goagent/utils/json"
 )
 
 // MemoryType represents the type of memory
@@ -43,10 +44,10 @@ type MemoryEntry struct {
 
 // StoreOptions provides options for storing memory
 type StoreOptions struct {
-	TTL      time.Duration          // Time to live
-	Priority float64                // Priority for retrieval
-	Tags     []string               // Tags for categorization
-	Metadata map[string]interface{} // Additional metadata
+	TTL      time.Duration          `json:"ttl"`      // Time to live
+	Priority float64                `json:"priority"` // Priority for retrieval
+	Tags     []string               `json:"tags"`     // Tags for categorization
+	Metadata map[string]interface{} `json:"metadata"` // Additional metadata
 }
 
 // EnhancedMemory provides advanced memory capabilities

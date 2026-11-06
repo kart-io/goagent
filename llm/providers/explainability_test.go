@@ -2,10 +2,11 @@ package providers
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/core/usage"
 	"github.com/kart-io/goagent/llm"
@@ -15,7 +16,7 @@ import (
 func TestOpenAIExplainability(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req map[string]any
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		require.NoError(t, json.Decode(r.Body, &req))
 		require.Equal(t, "low", req["reasoning_effort"])
 		w.Header().Set("Content-Type", "text/event-stream")
 		_, _ = w.Write([]byte("data: {\"model\":\"resolved-model\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\"},\"finish_reason\":\"stop\"}]}\n\ndata: {\"choices\":[],\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":8,\"total_tokens\":18,\"completion_tokens_details\":{\"reasoning_tokens\":6}}}\n\ndata: [DONE]\n\n"))
@@ -38,7 +39,7 @@ func TestOpenAIExplainability(t *testing.T) {
 func TestGeminiExplainability(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req map[string]any
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		require.NoError(t, json.Decode(r.Body, &req))
 		cfg := req["generationConfig"].(map[string]any)["thinkingConfig"].(map[string]any)
 		require.Equal(t, float64(0), cfg["thinkingBudget"])
 		w.Header().Set("Content-Type", "text/event-stream")

@@ -86,7 +86,7 @@ type AgentOutput struct {
 	ToolCalls []AgentToolCall `json:"tool_calls"` // 工具调用记录
 
 	// Token 使用统计
-	TokenUsage *interfaces.TokenUsage `json:"token_usage,omitempty"` // LLM Token 使用统计
+	TokenUsage *interfaces.TokenUsage `json:"token_usage,omitzero"` // LLM Token 使用统计
 
 	// 元数据
 	Latency   time.Duration          `json:"latency"`   // 执行延迟
@@ -97,23 +97,23 @@ type AgentOutput struct {
 // AgentOptions Agent 执行选项
 type AgentOptions struct {
 	// LLM 配置
-	Temperature float64 `json:"temperature,omitempty"` // LLM 温度参数
-	MaxTokens   int     `json:"max_tokens,omitempty"`  // 最大 token 数
-	Model       string  `json:"model,omitempty"`       // LLM 模型
+	Temperature float64 `json:"temperature,omitzero"` // LLM 温度参数
+	MaxTokens   int     `json:"max_tokens,omitzero"`  // 最大 token 数
+	Model       string  `json:"model,omitempty"`      // LLM 模型
 
 	// 工具配置
-	EnableTools  bool     `json:"enable_tools,omitempty"`   // 是否启用工具
-	AllowedTools []string `json:"allowed_tools,omitempty"`  // 允许的工具列表
-	MaxToolCalls int      `json:"max_tool_calls,omitempty"` // 最大工具调用次数
+	EnableTools  bool     `json:"enable_tools,omitzero"`   // 是否启用工具
+	AllowedTools []string `json:"allowed_tools,omitempty"` // 允许的工具列表
+	MaxToolCalls int      `json:"max_tool_calls,omitzero"` // 最大工具调用次数
 
 	// 记忆配置
-	EnableMemory     bool `json:"enable_memory,omitempty"`      // 是否启用记忆
-	LoadHistory      bool `json:"load_history,omitempty"`       // 是否加载历史
-	SaveToMemory     bool `json:"save_to_memory,omitempty"`     // 是否保存到记忆
-	MaxHistoryLength int  `json:"max_history_length,omitempty"` // 最大历史长度
+	EnableMemory     bool `json:"enable_memory,omitzero"`      // 是否启用记忆
+	LoadHistory      bool `json:"load_history,omitzero"`       // 是否加载历史
+	SaveToMemory     bool `json:"save_to_memory,omitzero"`     // 是否保存到记忆
+	MaxHistoryLength int  `json:"max_history_length,omitzero"` // 最大历史长度
 
 	// 超时配置
-	Timeout time.Duration `json:"timeout,omitempty"` // 超时时间
+	Timeout time.Duration `json:"timeout,omitzero"` // 超时时间
 }
 
 // AgentStep Agent执行步骤（简化版本）

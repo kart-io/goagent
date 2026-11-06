@@ -7,11 +7,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kart-io/goagent/codec/json"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/kart-io/goagent/interfaces"
-	"github.com/kart-io/goagent/utils/json"
 )
 
 // TestNewAPITool tests API tool creation
@@ -119,7 +120,7 @@ func TestAPITool_POST(t *testing.T) {
 		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 
 		var body map[string]interface{}
-		err := json.NewDecoder(r.Body).Decode(&body)
+		err := json.Decode(r.Body, &body)
 		require.NoError(t, err)
 		assert.Equal(t, "test data", body["data"])
 

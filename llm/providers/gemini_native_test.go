@@ -11,13 +11,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kart-io/goagent/codec/json"
+
 	"github.com/kart-io/goagent/builder"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/common"
 	"github.com/kart-io/goagent/llm/constants"
 	"github.com/kart-io/goagent/tools"
-	"github.com/kart-io/goagent/utils/json"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/genai"
 )
@@ -31,7 +32,7 @@ func TestGeminiAsRunnableToolContract(t *testing.T) {
 				var req struct {
 					Contents []*genai.Content `json:"contents"`
 				}
-				if json.NewDecoder(r.Body).Decode(&req) != nil {
+				if json.Decode(r.Body, &req) != nil {
 					http.Error(w, "invalid", 400)
 					return
 				}
@@ -165,7 +166,7 @@ func TestGeminiEmbeddingRealProtocol(t *testing.T) {
 			return
 		}
 		var body map[string]any
-		if json.NewDecoder(r.Body).Decode(&body) != nil {
+		if json.Decode(r.Body, &body) != nil {
 			http.Error(w, "bad json", 400)
 			return
 		}
@@ -227,7 +228,7 @@ func TestGeminiStreamDropsEmptyPartsFromNativeState(t *testing.T) {
 		var req struct {
 			Contents []json.RawMessage `json:"contents"`
 		}
-		if json.NewDecoder(r.Body).Decode(&req) != nil {
+		if json.Decode(r.Body, &req) != nil {
 			http.Error(w, "invalid", 400)
 			return
 		}
@@ -275,4 +276,12 @@ func TestGeminiStreamDropsEmptyPartsFromNativeState(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "42", out.Result)
 	require.Equal(t, int32(2), requests.Load())
+}
+
+func TestGeminiReplayablePartsDropsEmptyCollections(t *testing.T) {
+	var decoded genai.Part
+	require.NoError(t, json.Unmarshal([]byte(`{"thoughtSignature":"","partMetadata":{}}`), &decoded))
+	signed := &genai.Part{ThoughtSignature: []byte("sig")}
+	parts := []*genai.Part{{}, {Text: ""}, {ThoughtSignature: []byte{}}, {PartMetadata: map[string]any{}}, &decoded, signed}
+	require.Equal(t, []*genai.Part{signed}, geminiReplayableParts(parts), "编码为 {} 的 part 回放会被 API 拒绝")
 }

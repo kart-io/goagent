@@ -3,7 +3,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -11,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/evaluation/executionbench"
 )
@@ -83,9 +84,7 @@ func run() int {
 	if runErr != nil {
 		out.Error = runErr.Error()
 	}
-	encoder := json.NewEncoder(os.Stdout)
-	encoder.SetIndent("", "  ")
-	if err := encoder.Encode(out); err != nil {
+	if err := json.Encode(os.Stdout, out, json.Pretty); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}

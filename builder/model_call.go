@@ -2,11 +2,12 @@ package builder
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"sync/atomic"
 	"time"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/google/uuid"
 	"github.com/kart-io/goagent/core/budget"
@@ -70,9 +71,9 @@ func (r *replanRequest) Unwrap() error { return r.err }
 // 恢复时用它们找回该次尝试的预算键。旧记录没有这些字段，即第 0 次。
 type savedTurn struct {
 	llm.StreamChunk
-	Attempt        int            `json:"model_attempt,omitempty"`
-	Resend         int            `json:"model_resend,omitempty"`
-	Metadata       *modelMetadata `json:"model_metadata,omitempty"`
+	Attempt        int            `json:"model_attempt,omitzero"`
+	Resend         int            `json:"model_resend,omitzero"`
+	Metadata       *modelMetadata `json:"model_metadata,omitzero"`
 	EvidenceSource string         `json:"evidence_source,omitempty"`
 }
 

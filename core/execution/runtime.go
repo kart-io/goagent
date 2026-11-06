@@ -171,16 +171,16 @@ func (t *ToolWithRuntime[I, O, C, S]) WithRuntime(runtime *Runtime[C, S]) *ToolW
 // RuntimeConfig configures runtime behavior.
 type RuntimeConfig struct {
 	// EnableAutoSave automatically saves state after tool execution
-	EnableAutoSave bool
+	EnableAutoSave bool `json:"enable_auto_save"`
 
 	// SaveInterval specifies how often to auto-save state (if enabled)
-	SaveInterval time.Duration
+	SaveInterval time.Duration `json:"save_interval"`
 
 	// MaxStateSize limits the maximum state size in bytes
-	MaxStateSize int64
+	MaxStateSize int64 `json:"max_state_size"`
 
 	// EnableMetrics enables runtime metrics collection
-	EnableMetrics bool
+	EnableMetrics bool `json:"enable_metrics"`
 }
 
 // DefaultRuntimeConfig returns the default runtime configuration.

@@ -2,10 +2,11 @@ package durable
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
+
+	"github.com/kart-io/goagent/codec/json"
 )
 
 // OperationRef 定位宿主已知的操作日志，不要求 Store 支持列举。
@@ -21,7 +22,7 @@ type OperationRef struct {
 type DiagnosticReport struct {
 	RunID      string                `json:"run_id"`
 	Status     string                `json:"status"`
-	Position   int                   `json:"position,omitempty"`
+	Position   int                   `json:"position,omitzero"`
 	Blockers   []string              `json:"blockers,omitempty"`
 	Actions    []string              `json:"actions,omitempty"`
 	Operations []OperationDiagnostic `json:"operations,omitempty"`
@@ -30,8 +31,8 @@ type DiagnosticReport struct {
 type OperationDiagnostic struct {
 	ID          string   `json:"id"`
 	Status      string   `json:"status"`
-	Attempts    int      `json:"attempts,omitempty"`
-	MaxAttempts int      `json:"max_attempts,omitempty"`
+	Attempts    int      `json:"attempts,omitzero"`
+	MaxAttempts int      `json:"max_attempts,omitzero"`
 	FailureKind string   `json:"failure_kind,omitempty"`
 	Actions     []string `json:"actions,omitempty"`
 }

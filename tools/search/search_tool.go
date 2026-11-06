@@ -12,6 +12,7 @@ import (
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/tools"
+	"github.com/kart-io/goagent/tools/toolargs"
 )
 
 // SearchTool 搜索工具
@@ -33,8 +34,8 @@ type SearchResult struct {
 	URL         string    `json:"url"`
 	Snippet     string    `json:"snippet"`
 	Source      string    `json:"source"`
-	PublishDate time.Time `json:"publish_date,omitempty"`
-	Score       float64   `json:"score,omitempty"`
+	PublishDate time.Time `json:"publish_date"`
+	Score       float64   `json:"score,omitzero"`
 }
 
 // NewSearchTool 创建搜索工具
@@ -76,7 +77,7 @@ func (s *SearchTool) run(ctx context.Context, input *interfaces.ToolInput) (*int
 	}
 
 	maxResults := 5
-	if mr, ok := input.Args["max_results"].(float64); ok {
+	if mr, ok := toolargs.Float64(input.Args["max_results"]); ok {
 		maxResults = int(mr)
 	}
 

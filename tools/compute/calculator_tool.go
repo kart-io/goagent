@@ -7,9 +7,11 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/kart-io/goagent/codec/json"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/tools"
+	"github.com/kart-io/goagent/tools/toolargs"
 )
 
 // CalculatorTool 计算器工具
@@ -233,6 +235,12 @@ func (a *AdvancedCalculatorTool) run(ctx context.Context, input *interfaces.Tool
 		switch v := op.(type) {
 		case float64:
 			nums[i] = v
+		case json.Number:
+			f, ok := toolargs.Float64(v)
+			if !ok {
+				return resp.ValidationError(fmt.Sprintf("invalid operand: %v", v), "operand", v, "index", i)
+			}
+			nums[i] = f
 		case int:
 			nums[i] = float64(v)
 		case string:

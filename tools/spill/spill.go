@@ -6,7 +6,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -16,6 +15,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/harness/env"
 	"github.com/kart-io/goagent/interfaces"
@@ -211,7 +212,7 @@ func spillText(result any) ([]byte, error) {
 			if s, ok := v[k].(string); ok {
 				sb.WriteString(s)
 			} else {
-				data, err := json.MarshalIndent(v[k], "", "  ")
+				data, err := json.Marshal(v[k], json.Pretty)
 				if err != nil {
 					return nil, err
 				}
@@ -221,5 +222,5 @@ func spillText(result any) ([]byte, error) {
 		}
 		return []byte(sb.String()), nil
 	}
-	return json.MarshalIndent(result, "", "  ")
+	return json.Marshal(result, json.Pretty)
 }

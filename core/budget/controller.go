@@ -6,7 +6,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
@@ -14,6 +13,8 @@ import (
 	"os"
 	"sync"
 	"time"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/usage"
@@ -37,11 +38,11 @@ var (
 type Config struct {
 	RootKey, Version   string
 	MaxModelRequests   int
-	MaxReservedTokens  int    `json:",omitempty"`
-	MaxToolCalls       int    `json:",omitempty"`
-	DeadlineUnixMilli  int64  `json:",omitempty"`
+	MaxReservedTokens  int    `json:",omitzero"`
+	MaxToolCalls       int    `json:",omitzero"`
+	DeadlineUnixMilli  int64  `json:",omitzero"`
 	TokenPolicyVersion string `json:",omitempty"`
-	MaxAgentCalls      int    `json:",omitempty"`
+	MaxAgentCalls      int    `json:",omitzero"`
 }
 
 // Snapshot distinguishes conservative reservations from known token evidence.
@@ -51,7 +52,7 @@ type Snapshot struct {
 	ReservedTokens, ReservedToolCalls, KnownTokenDelta       int
 }
 type entry struct {
-	Estimate     int `json:",omitempty"`
+	Estimate     int `json:",omitzero"`
 	Evidence     usage.Evidence
 	AgentCallKey string `json:",omitempty"`
 }

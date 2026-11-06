@@ -4,12 +4,13 @@ package agentbench
 import (
 	"bufio"
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"sync"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/evaluation"
 	"github.com/kart-io/goagent/interfaces"

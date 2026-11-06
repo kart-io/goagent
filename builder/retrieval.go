@@ -12,11 +12,11 @@ import (
 
 // RetrievalConfig limits the evidence sent to the model. Zero values use defaults.
 type RetrievalConfig struct {
-	MaxDocuments    int // Default: 4 documents.
-	MaxContextRunes int // Default: 12000 Unicode code points of document text.
+	MaxDocuments    int `json:"max_documents"`     // Default: 4 documents.
+	MaxContextRunes int `json:"max_context_runes"` // Default: 12000 Unicode code points of document text.
 	// Filter 为每次请求生成元数据过滤条件（如从 ctx 取租户）。设置后检索器必须实现
 	// interfaces.RequestRetriever；返回空条件视为错误，避免漏设租户时检索到全部数据。
-	Filter func(ctx context.Context, query string) (map[string]any, error)
+	Filter func(ctx context.Context, query string) (map[string]any, error) `json:"-"`
 }
 
 // RetrievalSource identifies a numbered reference included in the model input.

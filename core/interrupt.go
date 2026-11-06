@@ -587,16 +587,16 @@ func getTimeoutForInterrupt(interrupt *Interrupt) time.Duration {
 // InterruptConfig configures interrupt behavior.
 type InterruptConfig struct {
 	// EnableAutoSave saves state before each interrupt
-	EnableAutoSave bool
+	EnableAutoSave bool `json:"enable_auto_save"`
 
 	// DefaultTimeout is the default timeout for interrupts
-	DefaultTimeout time.Duration
+	DefaultTimeout time.Duration `json:"default_timeout"`
 
 	// RequireReason requires a reason for all responses
-	RequireReason bool
+	RequireReason bool `json:"require_reason"`
 
 	// EnableHistory keeps history of all interrupts
-	EnableHistory bool
+	EnableHistory bool `json:"enable_history"`
 }
 
 // DefaultInterruptConfig returns default interrupt configuration.

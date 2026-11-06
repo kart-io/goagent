@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/memory"
@@ -267,4 +268,27 @@ func TestToolResultTextKeepsHTMLCharacters(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, want, out.Result)
 	})
+}
+
+// 模型给出的大整数参数按原文传给工具，不经 float64 舍入。
+func TestNativeToolLoopPassesRawArguments(t *testing.T) {
+	raw := `{"id":1234567890123456789}`
+	model := nativeModel([]*llm.StreamChunk{{Done: true, FinishReason: "tool_calls", ToolCalls: []llm.ToolCall{nativeCall("id-1", "lookup", raw)}}}, []*llm.StreamChunk{{Delta: "ok"}, {Done: true, FinishReason: "stop"}})
+	var got map[string]any
+	lookup := &argsEventTool{MockTool: NewMockTool("lookup", "done"), seen: &got}
+	agent, err := NewSimpleBuilder(model).WithTools(lookup).WithMaxIterations(2).Build()
+	require.NoError(t, err)
+	_, err = agent.AsRunnable().Invoke(context.Background(), "q")
+	require.NoError(t, err)
+	require.Equal(t, map[string]any{"id": json.Number("1234567890123456789")}, got)
+}
+
+type argsEventTool struct {
+	*MockTool
+	seen *map[string]any
+}
+
+func (t *argsEventTool) Invoke(ctx context.Context, in *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+	*t.seen = in.Args
+	return t.MockTool.Invoke(ctx, in)
 }

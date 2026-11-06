@@ -11,6 +11,7 @@ import (
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/internal/processgroup"
 	"github.com/kart-io/goagent/tools"
+	"github.com/kart-io/goagent/tools/toolargs"
 )
 
 // ShellTool Shell 命令执行工具
@@ -116,10 +117,9 @@ func (s *ShellTool) run(ctx context.Context, input *interfaces.ToolInput) (*inte
 
 	// 解析超时
 	timeout := s.timeout
-	switch v := input.Args["timeout"].(type) {
-	case float64:
+	if v, ok := toolargs.Float64(input.Args["timeout"]); ok {
 		timeout = time.Duration(v * float64(time.Second))
-	case int:
+	} else if v, ok := input.Args["timeout"].(int); ok {
 		timeout = time.Duration(v) * time.Second
 	}
 

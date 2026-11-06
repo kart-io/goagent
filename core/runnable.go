@@ -53,25 +53,25 @@ type StreamChunk[T any] struct {
 // RunnableConfig Runnable 配置
 type RunnableConfig struct {
 	// Callbacks 回调处理器列表
-	Callbacks []Callback
+	Callbacks []Callback `json:"-"`
 
 	// Tags 标签，用于标识和分类
-	Tags []string
+	Tags []string `json:"tags"`
 
 	// Metadata 元数据
-	Metadata map[string]interface{}
+	Metadata map[string]interface{} `json:"metadata"`
 
 	// MaxConcurrency 最大并发数（用于 Batch）
-	MaxConcurrency int
+	MaxConcurrency int `json:"max_concurrency"`
 
 	// RetryPolicy 重试策略
-	RetryPolicy *RetryPolicy
+	RetryPolicy *RetryPolicy `json:"retry_policy"`
 }
 
 // RetryPolicy 重试策略
 type RetryPolicy struct {
-	MaxRetries int           // 最大重试次数
-	Backoff    BackoffPolicy // 退避策略
+	MaxRetries int           `json:"max_retries"` // 最大重试次数
+	Backoff    BackoffPolicy `json:"-"`           // 退避策略
 }
 
 // BackoffPolicy 退避策略

@@ -2,8 +2,9 @@ package workflow
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/durable"

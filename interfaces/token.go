@@ -26,11 +26,11 @@ type TokenUsage struct {
 
 	// CachedTokens is the number of tokens served from cache (if applicable).
 	// Not all LLM providers support this field.
-	CachedTokens int `json:"cached_tokens,omitempty"`
+	CachedTokens int `json:"cached_tokens,omitzero"`
 	// Provider-reported reasoning subset; not additive to TotalTokens.
-	ReasoningTokens int `json:"reasoning_tokens,omitempty"`
+	ReasoningTokens int `json:"reasoning_tokens,omitzero"`
 	// Provider-reported tool-use input; inclusion in other fields is provider-specific.
-	ToolUsePromptTokens int `json:"tool_use_prompt_tokens,omitempty"`
+	ToolUsePromptTokens int `json:"tool_use_prompt_tokens,omitzero"`
 }
 
 // Add adds another TokenUsage to this one, summing all fields.

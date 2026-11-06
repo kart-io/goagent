@@ -2,12 +2,14 @@ package builder
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	agentErrors "github.com/kart-io/goagent/errors"
 	"io"
 	"os"
 	"testing"
+
+	"github.com/kart-io/goagent/codec/json"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/checkpoint"

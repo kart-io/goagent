@@ -2,7 +2,6 @@ package agentbench
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http/httptest"
@@ -10,6 +9,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/builder"
 	"github.com/kart-io/goagent/evaluation"
@@ -24,7 +25,7 @@ type Case struct {
 	Question string      `json:"question"`
 	Answer   string      `json:"answer"`
 	Evidence string      `json:"evidence,omitempty"`
-	Lookup   *LookupCase `json:"lookup,omitempty"`
+	Lookup   *LookupCase `json:"lookup,omitzero"`
 }
 
 type Config struct {
@@ -40,8 +41,8 @@ type Config struct {
 
 type Result struct {
 	LookupBackend       string                  `json:"lookup_backend,omitempty"`
-	LookupMisses        int32                   `json:"lookup_misses,omitempty"`
-	ToolArgumentsPassed *bool                   `json:"tool_arguments_passed,omitempty"`
+	LookupMisses        int32                   `json:"lookup_misses,omitzero"`
+	ToolArgumentsPassed *bool                   `json:"tool_arguments_passed,omitzero"`
 	ActualToolArguments []json.RawMessage       `json:"actual_tool_arguments,omitempty"`
 	Framework           string                  `json:"framework"`
 	CaseID              string                  `json:"case_id"`
@@ -49,7 +50,7 @@ type Result struct {
 	Success             bool                    `json:"success"`
 	Error               string                  `json:"error,omitempty"`
 	DurationMS          float64                 `json:"duration_ms"`
-	FirstTextMS         *float64                `json:"first_text_ms,omitempty"`
+	FirstTextMS         *float64                `json:"first_text_ms,omitzero"`
 	ToolCalls           int32                   `json:"tool_calls"`
 	Measurements        evaluation.Measurements `json:"measurements"`
 	UsageComplete       bool                    `json:"usage_complete"`

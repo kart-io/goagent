@@ -44,19 +44,19 @@ type ToolRuntime struct {
 // RuntimeConfig configures the tool runtime
 type RuntimeConfig struct {
 	// EnableStateAccess allows tools to read/write agent state
-	EnableStateAccess bool
+	EnableStateAccess bool `json:"enable_state_access"`
 
 	// EnableStoreAccess allows tools to access long-term store
-	EnableStoreAccess bool
+	EnableStoreAccess bool `json:"enable_store_access"`
 
 	// EnableStreaming allows tools to stream data
-	EnableStreaming bool
+	EnableStreaming bool `json:"enable_streaming"`
 
 	// MaxExecutionTime limits tool execution time
-	MaxExecutionTime int // seconds
+	MaxExecutionTime int `json:"max_execution_time"` // seconds
 
 	// AllowedNamespaces restricts store access to specific namespaces
-	AllowedNamespaces []string
+	AllowedNamespaces []string `json:"allowed_namespaces"`
 }
 
 // DefaultRuntimeConfig returns default configuration

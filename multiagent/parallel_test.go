@@ -2,12 +2,13 @@ package multiagent
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"math"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/stretchr/testify/require"
 

@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/kart-io/goagent/codec/json"
+
 	"github.com/kart-io/goagent/interfaces"
-	"github.com/kart-io/goagent/utils/json"
 )
 
 // RunDemo demonstrates the multi-agent workflow without requiring an LLM
@@ -276,7 +277,7 @@ func runExecutionDemo(ctx context.Context, strategyResult map[string]interface{}
 
 // Helper functions
 func printJSON(data interface{}) {
-	jsonBytes, err := json.MarshalIndent(data, "", "  ")
+	jsonBytes, err := json.Marshal(data, json.Pretty)
 	if err != nil {
 		fmt.Printf("%v\n", data)
 		return
@@ -285,7 +286,7 @@ func printJSON(data interface{}) {
 }
 
 func printJSONLimited(data interface{}, maxLines int) {
-	jsonBytes, err := json.MarshalIndent(data, "", "  ")
+	jsonBytes, err := json.Marshal(data, json.Pretty)
 	if err != nil {
 		fmt.Printf("%v\n", data)
 		return

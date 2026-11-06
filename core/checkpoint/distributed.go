@@ -18,30 +18,30 @@ const (
 // DistributedCheckpointerConfig holds configuration for distributed checkpointer
 type DistributedCheckpointerConfig struct {
 	// PrimaryBackend is the primary checkpointer (e.g., Redis)
-	PrimaryBackend Checkpointer
+	PrimaryBackend Checkpointer `json:"-"`
 
 	// SecondaryBackend is the backup checkpointer (e.g., PostgreSQL, optional)
-	SecondaryBackend Checkpointer
+	SecondaryBackend Checkpointer `json:"-"`
 
 	// EnableReplication enables automatic replication to secondary backend
-	EnableReplication bool
+	EnableReplication bool `json:"enable_replication"`
 
 	// ReplicationMode determines how replication works
 	// - "sync": Write to both backends synchronously
 	// - "async": Write to primary, then replicate to secondary asynchronously
-	ReplicationMode string
+	ReplicationMode string `json:"replication_mode"`
 
 	// HealthCheckInterval is how often to check backend health
-	HealthCheckInterval time.Duration
+	HealthCheckInterval time.Duration `json:"health_check_interval"`
 
 	// EnableAutoFailover enables automatic failover to secondary on primary failure
-	EnableAutoFailover bool
+	EnableAutoFailover bool `json:"enable_auto_failover"`
 
 	// MaxFailoverAttempts limits the number of failover attempts
-	MaxFailoverAttempts int
+	MaxFailoverAttempts int `json:"max_failover_attempts"`
 
 	// FailbackDelay is the delay before attempting to fail back to primary
-	FailbackDelay time.Duration
+	FailbackDelay time.Duration `json:"failback_delay"`
 }
 
 // DefaultDistributedCheckpointerConfig returns default configuration

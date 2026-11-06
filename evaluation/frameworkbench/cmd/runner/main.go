@@ -2,13 +2,15 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
-	bench "github.com/kart-io/goagent-frameworkbench"
 	"os"
 	"runtime"
 	"time"
+
+	"github.com/kart-io/goagent/codec/json"
+
+	bench "github.com/kart-io/goagent-frameworkbench"
 )
 
 func main() {
@@ -44,7 +46,7 @@ func main() {
 			}
 		}
 	}
-	if err = json.NewEncoder(os.Stdout).Encode(map[string]any{"framework": *framework, "scenario": *scenario, "runtime": runtime.Version(), "durations_ns": durations, "first_ns": firsts, "contract": result}); err != nil {
+	if err = json.Encode(os.Stdout, map[string]any{"framework": *framework, "scenario": *scenario, "runtime": runtime.Version(), "durations_ns": durations, "first_ns": firsts, "contract": result}); err != nil {
 		fail(err)
 	}
 }

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/kart-io/goagent/utils/json"
+	"github.com/kart-io/goagent/codec/json"
 )
 
 // 预编译的正则表达式，避免重复编译带来的性能开销

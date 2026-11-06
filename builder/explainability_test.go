@@ -2,14 +2,16 @@ package builder
 
 import (
 	"context"
-	"encoding/json"
+	"testing"
+
+	"github.com/kart-io/goagent/codec/json"
+
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/session"
 	"github.com/kart-io/goagent/core/usage"
 	"github.com/kart-io/goagent/llm"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestExplainabilitySurvivesJournalAndHooks(t *testing.T) {

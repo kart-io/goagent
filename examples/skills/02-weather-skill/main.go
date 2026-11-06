@@ -31,8 +31,8 @@ import (
 	"os"
 	"time"
 
-	"gopkg.in/yaml.v3"
-
+	"github.com/kart-io/goagent/codec"
+	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/examples/skills/02-weather-skill/internal/config"
 	"github.com/kart-io/goagent/examples/skills/02-weather-skill/internal/handler"
 	"github.com/kart-io/goagent/examples/skills/02-weather-skill/internal/llmtools"
@@ -99,13 +99,8 @@ func loadConfig() (*config.Config, error) {
 	// 尝试从文件加载
 	configFile := "etc/config.yaml"
 	if _, err := os.Stat(configFile); err == nil {
-		data, err := os.ReadFile(configFile)
-		if err != nil {
-			return nil, err
-		}
-
 		var cfg config.Config
-		if err := yaml.Unmarshal(data, &cfg); err != nil {
+		if err := codec.ReadFile(configFile, &cfg, json.Strict); err != nil {
 			return nil, err
 		}
 

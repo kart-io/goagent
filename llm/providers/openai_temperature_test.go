@@ -3,11 +3,12 @@ package providers
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/stretchr/testify/require"
 )
@@ -16,7 +17,7 @@ func TestZeroTemperatureRedirectPreservesPayload(t *testing.T) {
 	received := make(chan map[string]json.RawMessage, 2)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var payload map[string]json.RawMessage
-		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		if err := json.Decode(r.Body, &payload); err != nil {
 			http.Error(w, err.Error(), 400)
 			return
 		}
@@ -44,7 +45,7 @@ func TestZeroTemperatureDoesNotChangeOtherEndpoints(t *testing.T) {
 	received := make(chan map[string]any, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var payload map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		if err := json.Decode(r.Body, &payload); err != nil {
 			http.Error(w, err.Error(), 400)
 			return
 		}

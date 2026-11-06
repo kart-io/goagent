@@ -2,7 +2,6 @@ package agentbench
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -10,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/evaluation"
 	"github.com/stretchr/testify/require"
@@ -102,7 +103,7 @@ func fakeModel(t *testing.T) *httptest.Server {
 				message["function_call"] = map[string]any{"name": "lookup", "arguments": "{}"}
 			}
 			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(map[string]any{"id": "response", "model": "test-model", "choices": []any{map[string]any{"index": 0, "message": message, "finish_reason": "stop"}}, "usage": map[string]int{"prompt_tokens": 3, "completion_tokens": 2, "total_tokens": 5}})
+			_ = json.Encode(w, map[string]any{"id": "response", "model": "test-model", "choices": []any{map[string]any{"index": 0, "message": message, "finish_reason": "stop"}}, "usage": map[string]int{"prompt_tokens": 3, "completion_tokens": 2, "total_tokens": 5}})
 			return
 		}
 		w.Header().Set("Content-Type", "text/event-stream")

@@ -12,11 +12,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kart-io/goagent/codec/json"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/kart-io/goagent/interfaces"
 	agentllm "github.com/kart-io/goagent/llm"
-	"github.com/kart-io/goagent/utils/json"
 )
 
 // writeDeepSeekSSE 按真实 SSE 格式输出帧；done 为 false 时模拟缺少 [DONE] 的截断流。
@@ -141,7 +142,7 @@ func TestDeepSeekStreamMethodsSendSystemPrompt(t *testing.T) {
 			bodies := make(chan map[string]interface{}, 1)
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				var body map[string]interface{}
-				_ = json.NewDecoder(r.Body).Decode(&body)
+				_ = json.Decode(r.Body, &body)
 				bodies <- body
 				writeDeepSeekSSE(w, true, json.RawMessage(`{"choices":[{"delta":{"content":"ok"},"finish_reason":"stop"}]}`))
 			}))

@@ -8,9 +8,11 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/kart-io/goagent/codec/json"
+
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
-	"github.com/kart-io/goagent/utils/json"
+	"github.com/kart-io/goagent/tools/toolargs"
 )
 
 // InputValidator 提供工具输入验证功能
@@ -304,6 +306,15 @@ func (v *InputValidator) validateType(key string, value interface{}, prop proper
 			num = float64(val)
 		case int32:
 			num = float64(val)
+		case json.Number:
+			var ok bool
+			if num, ok = toolargs.Float64(val); !ok {
+				return agentErrors.New(agentErrors.CodeToolValidation, "parameter must be number").
+					WithComponent("input_validator").
+					WithOperation("validate_type").
+					WithContext("parameter", key).
+					WithContext("got_value", val)
+			}
 		default:
 			return agentErrors.New(agentErrors.CodeToolValidation, "parameter must be number").
 				WithComponent("input_validator").
@@ -312,8 +323,15 @@ func (v *InputValidator) validateType(key string, value interface{}, prop proper
 				WithContext("got_type", fmt.Sprintf("%T", value))
 		}
 
-		// 验证数值范围
-		if prop.Minimum != nil && num < *prop.Minimum {
+		// 验证数值范围；json.Number 按原文比较，避免舍入成 float64 后绕过界限
+		exact, isExact := value.(json.Number)
+		cmp := func(f float64) int {
+			if isExact {
+				return toolargs.Compare(exact, f)
+			}
+			return cmpFloat(num, f)
+		}
+		if prop.Minimum != nil && cmp(*prop.Minimum) < 0 {
 			return agentErrors.New(agentErrors.CodeToolValidation, "parameter must be >= minimum").
 				WithComponent("input_validator").
 				WithOperation("validate_type").
@@ -321,7 +339,7 @@ func (v *InputValidator) validateType(key string, value interface{}, prop proper
 				WithContext("minimum", *prop.Minimum).
 				WithContext("got_value", num)
 		}
-		if prop.Maximum != nil && num > *prop.Maximum {
+		if prop.Maximum != nil && cmp(*prop.Maximum) > 0 {
 			return agentErrors.New(agentErrors.CodeToolValidation, "parameter must be <= maximum").
 				WithComponent("input_validator").
 				WithOperation("validate_type").
@@ -331,7 +349,7 @@ func (v *InputValidator) validateType(key string, value interface{}, prop proper
 		}
 
 		// 对于 integer 类型，验证是否为整数
-		if prop.Type == "integer" && num != float64(int(num)) {
+		if prop.Type == "integer" && ((isExact && !toolargs.IsInteger(exact)) || (!isExact && num != float64(int(num)))) {
 			return agentErrors.New(agentErrors.CodeToolValidation, "parameter must be integer").
 				WithComponent("input_validator").
 				WithOperation("validate_type").
@@ -447,4 +465,14 @@ func validateFormat(value, format string) error {
 		}
 	}
 	return nil
+}
+
+func cmpFloat(a, b float64) int {
+	switch {
+	case a < b:
+		return -1
+	case a > b:
+		return 1
+	}
+	return 0
 }

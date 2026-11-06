@@ -2,12 +2,13 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/kart-io/goagent/codec/json"
 )
 
 func writeFixture(t *testing.T, root, name, contents string) {

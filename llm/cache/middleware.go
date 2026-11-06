@@ -19,13 +19,13 @@ type CachedLLMClient struct {
 // CachedLLMClientConfig configures the cached LLM client
 type CachedLLMClientConfig struct {
 	// Client is the underlying LLM client
-	Client llm.Client
+	Client llm.Client `json:"-"`
 
 	// EmbeddingProvider generates embeddings for semantic matching
-	EmbeddingProvider EmbeddingProvider
+	EmbeddingProvider EmbeddingProvider `json:"-"`
 
 	// CacheConfig configures the semantic cache
-	CacheConfig *SemanticCacheConfig
+	CacheConfig *SemanticCacheConfig `json:"cache_config"`
 }
 
 // NewCachedLLMClient creates a new cached LLM client

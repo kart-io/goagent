@@ -17,15 +17,15 @@ import (
 // RateLimitConfig 限流中间件配置
 type RateLimitConfig struct {
 	// QPS 每秒请求数限制
-	QPS float64
+	QPS float64 `json:"qps"`
 	// Burst 突发请求数（令牌桶容量）
-	Burst int
+	Burst int `json:"burst"`
 	// PerTool 是否按工具名限流（false=全局限流）
-	PerTool bool
+	PerTool bool `json:"per_tool"`
 	// Logger 日志记录器
-	Logger loggercore.Logger
+	Logger loggercore.Logger `json:"-"`
 	// WaitTimeout 等待令牌的超时时间（0表示不等待，直接拒绝）
-	WaitTimeout time.Duration
+	WaitTimeout time.Duration `json:"wait_timeout"`
 }
 
 // RateLimitOption 限流中间件选项

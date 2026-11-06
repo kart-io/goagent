@@ -1,15 +1,15 @@
 package builder
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"slices"
 	"strings"
 	"sync"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
@@ -19,6 +19,7 @@ import (
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/tools"
+	"github.com/kart-io/goagent/tools/toolargs"
 )
 
 // maxFailureRunes 限制 MaxIterations 报错附带的工具失败文本长度。
@@ -269,7 +270,10 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 			if durable.HasJournal(ctx) {
 				calls[i].ID = fmt.Sprintf("turn/%d/call/%s", round, tc.ID)
 			}
-			if err := json.Unmarshal([]byte(tc.Function.Arguments), &calls[i].Input); err != nil || calls[i].Input == nil {
+			// 从解析起只有一份参数：校验、授权、审批与执行看到同一个值，大整数不经 float64 舍入。
+			args, ok := toolargs.Parse(tc.Function.Arguments)
+			calls[i].Input = args
+			if !ok {
 				if !a.config.ToolErrorFeedback {
 					return nil, fmt.Errorf("工具 %s 的参数必须为 JSON 对象", tc.Function.Name)
 				}
@@ -494,15 +498,11 @@ func rejectedOutput(message string) *interfaces.ToolOutput { return tools.Reject
 // rejectedMessage 同样位于包级，避免被循环内的 tools 变量遮蔽。
 func rejectedMessage(out *interfaces.ToolOutput) (string, bool) { return tools.RejectedResult(out) }
 
-// toolResultText 不做 HTML 转义，模型与直接答案看到的是原始 <>&。
+// toolResultText 不做 HTML 转义，模型与直接答案看到的是原始 <>&；键按序输出，回放时文本一致。
+// 类型化 nil 的 map、切片编码为 null（v2 默认为 {}、[]），据此识别空结果。
 func toolResultText(result any) (string, error) {
-	var buf bytes.Buffer
-	encoder := json.NewEncoder(&buf)
-	encoder.SetEscapeHTML(false)
-	if err := encoder.Encode(result); err != nil {
-		return "", err
-	}
-	return strings.TrimSuffix(buf.String(), "\n"), nil
+	b, err := json.Marshal(result, json.NoEscapeHTML)
+	return string(b), err
 }
 
 func readToolTurn(ctx context.Context, stream <-chan *llm.StreamChunk, emit func(AgentEvent) error) (*llm.StreamChunk, error) {

@@ -2,8 +2,9 @@ package llm
 
 import (
 	"context"
-	"encoding/json"
 	"time"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/core/usage"
 	"github.com/kart-io/goagent/interfaces"
@@ -28,7 +29,7 @@ type Message struct {
 	ToolCallID       string     `json:"tool_call_id,omitempty"`
 	// ProviderState preserves opaque response parts (e.g. Gemini signatures).
 	// Replay unchanged with the matching assistant content and tool calls.
-	ProviderState *ProviderState `json:"provider_state,omitempty"`
+	ProviderState *ProviderState `json:"provider_state,omitzero"`
 }
 
 type ProviderState struct {
@@ -38,15 +39,15 @@ type ProviderState struct {
 
 // CompletionRequest 定义补全请求
 type CompletionRequest struct {
-	Reasoning *usage.ReasoningConfig `json:"reasoning,omitempty"`
+	Reasoning *usage.ReasoningConfig `json:"reasoning,omitzero"`
 	// TemperatureSet 使 Temperature=0 显式覆盖客户端默认值；JSON 根据字段是否存在自动维护。
 	TemperatureSet bool      `json:"-"`
-	Messages       []Message `json:"messages"`              // 消息列表
-	Temperature    float64   `json:"temperature,omitempty"` // 温度参数 (0.0-2.0)
-	MaxTokens      int       `json:"max_tokens,omitempty"`  // 最大 token 数
-	Model          string    `json:"model,omitempty"`       // 模型名称
-	Stop           []string  `json:"stop,omitempty"`        // 停止序列
-	TopP           float64   `json:"top_p,omitempty"`       // Top-p 采样
+	Messages       []Message `json:"messages"`             // 消息列表
+	Temperature    float64   `json:"temperature,omitzero"` // 温度参数 (0.0-2.0)
+	MaxTokens      int       `json:"max_tokens,omitzero"`  // 最大 token 数
+	Model          string    `json:"model,omitempty"`      // 模型名称
+	Stop           []string  `json:"stop,omitempty"`       // 停止序列
+	TopP           float64   `json:"top_p,omitzero"`       // Top-p 采样
 }
 
 // CompletionResponse 定义补全响应
@@ -55,10 +56,10 @@ type CompletionResponse struct {
 	Content       string `json:"content"` // 生成的内容
 	Model         string `json:"model"`   // 使用的模型
 
-	TokensUsed   int                    `json:"tokens_used,omitempty"`   // 使用的 token 数
+	TokensUsed   int                    `json:"tokens_used,omitzero"`    // 使用的 token 数
 	FinishReason string                 `json:"finish_reason,omitempty"` // 结束原因
 	Provider     string                 `json:"provider,omitempty"`      // 提供商
-	Usage        *interfaces.TokenUsage `json:"usage,omitempty"`         // 详细的 Token 使用统计
+	Usage        *interfaces.TokenUsage `json:"usage,omitzero"`          // 详细的 Token 使用统计
 }
 
 // ResponseFormat 定义响应格式类型
@@ -76,7 +77,7 @@ var (
 
 // Config 定义 LLM 配置
 type LLMOptions struct {
-	Reasoning *usage.ReasoningConfig `json:"reasoning,omitempty"`
+	Reasoning *usage.ReasoningConfig `json:"reasoning,omitzero"`
 	// TemperatureSet 区分显式零与零值配置；WithTemperature 和 JSON 解码自动维护。
 	TemperatureSet bool `json:"-"`
 	// 基础配置
@@ -87,17 +88,17 @@ type LLMOptions struct {
 	EmbeddingModel string             `json:"embedding_model,omitempty"` // Separate embedding model, used by OpenAI and Gemini.
 
 	// 生成参数
-	MaxTokens      int             `json:"max_tokens"`                // 默认最大 token 数
-	Temperature    float64         `json:"temperature"`               // 默认温度 (0.0-2.0)
-	TopP           float64         `json:"top_p,omitempty"`           // Top-P 采样参数 (0.0-1.0)
-	ResponseFormat *ResponseFormat `json:"response_format,omitempty"` // 响应格式 (json_object 或 text)
+	MaxTokens      int             `json:"max_tokens"`               // 默认最大 token 数
+	Temperature    float64         `json:"temperature"`              // 默认温度 (0.0-2.0)
+	TopP           float64         `json:"top_p,omitzero"`           // Top-P 采样参数 (0.0-1.0)
+	ResponseFormat *ResponseFormat `json:"response_format,omitzero"` // 响应格式 (json_object 或 text)
 
 	// 网络配置
 	Timeout int `json:"timeout"` // 请求超时（秒）
 	// StreamIdleTimeout 是流式响应两次收到数据之间的最长间隔，StreamTimeout 是一次流式请求的总时长上限；
 	// 超过时中断并报告可重试的超时错误。0 表示不限制。目前作用于 OpenAI 兼容的工具流（含 DeepSeek）。
-	StreamIdleTimeout time.Duration `json:"stream_idle_timeout,omitempty"`
-	StreamTimeout     time.Duration `json:"stream_timeout,omitempty"`
+	StreamIdleTimeout time.Duration `json:"stream_idle_timeout,omitzero"`
+	StreamTimeout     time.Duration `json:"stream_timeout,omitzero"`
 
 	// 其他配置
 	SystemPrompt  string            `json:"system_prompt,omitempty"`  // 默认系统提示

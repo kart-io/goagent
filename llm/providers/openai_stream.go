@@ -8,12 +8,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kart-io/goagent/codec/json"
+
 	"github.com/sashabaranov/go-openai"
 
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	agentllm "github.com/kart-io/goagent/llm"
-	"github.com/kart-io/goagent/utils/json"
 )
 
 var _ agentllm.ToolStreamClient = (*OpenAIProvider)(nil)

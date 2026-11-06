@@ -1,10 +1,11 @@
 package session
 
 import (
-	"encoding/json"
 	"errors"
 	"io"
 	"sort"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/llm"
 )

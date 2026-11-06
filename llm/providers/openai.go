@@ -7,6 +7,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/kart-io/goagent/codec/json"
+
 	"github.com/sashabaranov/go-openai"
 
 	agentErrors "github.com/kart-io/goagent/errors"
@@ -14,7 +16,6 @@ import (
 	agentllm "github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/common"
 	"github.com/kart-io/goagent/llm/constants"
-	"github.com/kart-io/goagent/utils/json"
 )
 
 // OpenAIProvider implements LLM interface for OpenAI

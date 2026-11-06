@@ -2,7 +2,6 @@ package agentbench_test
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +10,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/evaluation"
 	bench "github.com/kart-io/goagent/evaluation/agentbench"
@@ -92,7 +93,7 @@ func serveRefundModel(w http.ResponseWriter, r *http.Request, incomplete bool) {
 			Function struct{ Name string }
 		}
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := json.Decode(r.Body, &body); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}

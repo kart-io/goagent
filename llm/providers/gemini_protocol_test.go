@@ -11,10 +11,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kart-io/goagent/codec/json"
+
 	"github.com/kart-io/goagent/interfaces"
 	llm "github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/tools"
-	"github.com/kart-io/goagent/utils/json"
 	"github.com/stretchr/testify/require"
 )
 
@@ -48,7 +49,7 @@ func TestGeminiNativeRequestAndConcurrentIsolation(t *testing.T) {
 				Stop        []string `json:"stopSequences"`
 			} `json:"generationConfig"`
 		}
-		if json.NewDecoder(r.Body).Decode(&body) != nil || len(body.Contents) != 3 || len(body.System.Parts) != 1 {
+		if json.Decode(r.Body, &body) != nil || len(body.Contents) != 3 || len(body.System.Parts) != 1 {
 			requestErrors.Add(1)
 			http.Error(w, "invalid body", 400)
 			return
@@ -93,7 +94,7 @@ func TestGeminiNativeToolsAndStreams(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests.Add(1)
 		var body map[string]any
-		if json.NewDecoder(r.Body).Decode(&body) != nil {
+		if json.Decode(r.Body, &body) != nil {
 			http.Error(w, "bad request", 400)
 			return
 		}

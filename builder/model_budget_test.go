@@ -2,9 +2,10 @@ package builder
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"testing"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"

@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -12,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kart-io/goagent/codec/json"
+
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/google/uuid"
 	"github.com/kart-io/goagent/core"
@@ -20,6 +21,7 @@ import (
 	"github.com/kart-io/goagent/core/observe"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
+	"github.com/kart-io/goagent/tools/toolargs"
 )
 
 // DispatchConfig is immutable after construction. Tools must honor context.
@@ -27,19 +29,19 @@ import (
 type DispatchConfig struct {
 	// MaxAttempts bounds explicit resume attempts for a journaled CallID.
 	// Default 3. No retries occur inside a single Invoke.
-	MaxAttempts    int
-	MaxConcurrency int // 默认 4，限制执行并发，审批等待不占执行槽位
+	MaxAttempts    int `json:"max_attempts"`
+	MaxConcurrency int `json:"max_concurrency"` // 默认 4，限制执行并发，审批等待不占执行槽位
 	// MaxAdmissionConcurrency 独立限制校验与管线准入并发。
 	// 零值不限准入；审批等待不占执行槽位。
-	MaxAdmissionConcurrency int
+	MaxAdmissionConcurrency int `json:"max_admission_concurrency"`
 	// MaxQueued 限制两个阶段合计阻塞等待的调用数，零值不限。
 	// 立即取得空闲槽位的调用不消耗排队额度。
-	MaxQueued int
+	MaxQueued int `json:"max_queued"`
 	// Timeout 是单次调用的默认超时，默认 30 秒；实现 DispatchTimeoutProvider 的工具以自己声明的值替代它，可长可短。
 	// 校验、授权、日志和执行累计计时；准入与两段排队暂停计时，等待只受宿主及根预算 ctx 约束。
-	Timeout time.Duration
+	Timeout time.Duration `json:"timeout"`
 	// Authorize 在开启 ReturnArgumentErrors 时也会对参数不合法的模型调用执行，可能收到不满足 Schema 的参数。
-	Authorize func(context.Context, string, *interfaces.ToolInput) error
+	Authorize func(context.Context, string, *interfaces.ToolInput) error `json:"-"`
 	// OnResult 在每次得到结果后、tool_end 之前同步调用：首次执行、日志回放和交还模型的参数错误结果都会触发，
 	// 宿主据此在崩溃恢复后重建自身状态（如证据编号）。返回错误或 panic 时本次调用失败，
 	// 但已写入的日志不变，恢复时回放会再次触发。回调不受 Timeout 约束。
@@ -47,14 +49,14 @@ type DispatchConfig struct {
 	// 顺序：顺序执行的调用按调用顺序触发。Builder 同一轮并发执行的调用经 DeferResults 推迟到整轮结束后，
 	// 按模型给出的顺序逐个触发，首次执行与恢复回放顺序一致。宿主自行并发调用 Invoke 时触发顺序不确定，
 	// 且会并发触发，需自行加锁；此时按到达顺序编号不可重建，应从 ExecutionKey 派生编号。
-	OnResult func(context.Context, DispatchResult) error
+	OnResult func(context.Context, DispatchResult) error `json:"-"`
 	// ReturnArgumentErrors 只作用于 Tools() 返回的模型调用路径：参数校验失败和工具返回的 *ArgumentError
 	// 不再中止，而是返回 Success=false、Error 为空的结果交给模型改正，并按已完成写入日志。
 	// Invoke 与 AsRunnable 不受影响，仍以 error 报告参数错误。授权、超时、深度和重入错误仍然中止。
-	ReturnArgumentErrors bool
+	ReturnArgumentErrors bool `json:"return_argument_errors"`
 	// Pipeline 对参数合法的调用执行调用前钩子、审批、守卫、执行包装与调用后钩子，nil 表示直接执行。
 	// 它面向模型行为（拒绝时交还模型修订）；Authorize 面向宿主授权（拒绝即中止），两者互补。
-	Pipeline *Pipeline
+	Pipeline *Pipeline `json:"-"`
 }
 
 // DispatchResult 是交给 OnResult 的一次调用结果。Args 与 Output 归调用方所有，回调不得修改。
@@ -295,11 +297,11 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 	}
 	// 参数错误结果与正常执行走同一授权、事件和日志路径，只是不调用工具。
 	var argResult *interfaces.ToolOutput
-	if err = entry.resolved.Validate(input.Args); err != nil {
+	if err = toolargs.Validate(entry.resolved, input.Args); err != nil {
 		err = &ArgumentError{Message: fmt.Sprintf("tool %q arguments: %v", req.Name, err), Err: err}
 	} else if custom, ok := entry.tool.(interfaces.ValidatableTool); ok {
 		if err = custom.Validate(vctx, &input); err == nil {
-			if err = entry.resolved.Validate(input.Args); err != nil {
+			if err = toolargs.Validate(entry.resolved, input.Args); err != nil {
 				return nil, err
 			}
 		}
@@ -509,14 +511,14 @@ func (d *Dispatcher) checkSubstitute(ctx context.Context, target dispatchEntry, 
 	vctx, cancel := context.WithTimeout(ctx, target.timeout)
 	defer cancel()
 	input.Context = vctx
-	if err := target.resolved.Validate(input.Args); err != nil {
+	if err := toolargs.Validate(target.resolved, input.Args); err != nil {
 		return err
 	}
 	if custom, ok := target.tool.(interfaces.ValidatableTool); ok {
 		if err := custom.Validate(vctx, input); err != nil {
 			return err
 		}
-		if err := target.resolved.Validate(input.Args); err != nil {
+		if err := toolargs.Validate(target.resolved, input.Args); err != nil {
 			return err
 		}
 	}

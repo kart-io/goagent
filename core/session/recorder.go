@@ -2,9 +2,10 @@ package session
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/llm"
 )

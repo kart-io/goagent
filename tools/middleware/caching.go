@@ -8,19 +8,20 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/kart-io/goagent/codec/json"
+
 	loggercore "github.com/kart-io/logger/core"
 
 	"github.com/kart-io/goagent/cache"
 	"github.com/kart-io/goagent/interfaces"
-	"github.com/kart-io/goagent/utils/json"
 )
 
 // CachingConfig 缓存中间件配置
 type CachingConfig struct {
-	Cache   cache.Cache
-	TTL     time.Duration
-	KeyFunc func(string, map[string]interface{}) string
-	Logger  loggercore.Logger
+	Cache   cache.Cache                                 `json:"-"`
+	TTL     time.Duration                               `json:"ttl"`
+	KeyFunc func(string, map[string]interface{}) string `json:"-"`
+	Logger  loggercore.Logger                           `json:"-"`
 }
 
 // CachingOption 缓存中间件选项

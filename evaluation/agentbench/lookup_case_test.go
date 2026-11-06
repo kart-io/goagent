@@ -2,11 +2,12 @@ package agentbench
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -31,7 +32,7 @@ func TestLookupArgumentScoringDoesNotAcceptCorrectAnswerWithWrongArguments(t *te
 							Function struct{ Parameters json.RawMessage }
 						}
 					}
-					if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					if err := json.Decode(r.Body, &body); err != nil {
 						t.Error(err)
 						http.Error(w, "decode", 400)
 						return

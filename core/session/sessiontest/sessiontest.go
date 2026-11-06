@@ -3,13 +3,13 @@
 package sessiontest
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/stretchr/testify/require"
 
@@ -214,9 +214,9 @@ func testRoundTrip(t *testing.T, a, b session.Store) {
 
 func compact(t *testing.T, raw json.RawMessage) string {
 	t.Helper()
-	var buf bytes.Buffer
-	require.NoError(t, json.Compact(&buf, raw))
-	return buf.String()
+	v, err := json.Compact(raw)
+	require.NoError(t, err)
+	return string(v)
 }
 
 func testReadAfter(t *testing.T, a, b session.Store) {

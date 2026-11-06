@@ -63,8 +63,8 @@ type LegacyStreamChunk struct {
 	Metadata ChunkMetadata `json:"metadata"` // 元数据
 
 	// 控制信息
-	IsLast bool  `json:"is_last"`         // 是否是最后一个块
-	Error  error `json:"error,omitempty"` // 错误信息（如果有）
+	IsLast bool  `json:"is_last"`        // 是否是最后一个块
+	Error  error `json:"error,omitzero"` // 错误信息（如果有）
 }
 
 // ChunkType 数据块类型
@@ -89,18 +89,18 @@ type ChunkMetadata struct {
 	Source    string    `json:"source"`    // 数据源
 
 	// 进度信息
-	Progress float64       `json:"progress,omitempty"` // 进度百分比 (0-100)
-	Current  int64         `json:"current,omitempty"`  // 当前处理项
-	Total    int64         `json:"total,omitempty"`    // 总项数
-	ETA      time.Duration `json:"eta,omitempty"`      // 预计剩余时间
+	Progress float64       `json:"progress,omitzero"` // 进度百分比 (0-100)
+	Current  int64         `json:"current,omitzero"`  // 当前处理项
+	Total    int64         `json:"total,omitzero"`    // 总项数
+	ETA      time.Duration `json:"eta,omitzero"`      // 预计剩余时间
 
 	// 状态信息
 	Status string `json:"status,omitempty"` // 状态描述
 	Phase  string `json:"phase,omitempty"`  // 处理阶段
 
 	// 性能信息
-	Latency    time.Duration `json:"latency,omitempty"`    // 延迟
-	Throughput float64       `json:"throughput,omitempty"` // 吞吐量
+	Latency    time.Duration `json:"latency,omitzero"`    // 延迟
+	Throughput float64       `json:"throughput,omitzero"` // 吞吐量
 
 	// 扩展信息
 	Extra map[string]interface{} `json:"extra,omitempty"` // 额外元数据
@@ -114,42 +114,42 @@ type ChunkMetadata struct {
 // - 背压和流控制
 type StreamOptions struct {
 	// 缓冲配置
-	BufferSize   int  `json:"buffer_size,omitempty"`   // 缓冲区大小（块数）
-	EnableBuffer bool `json:"enable_buffer,omitempty"` // 是否启用缓冲
+	BufferSize   int  `json:"buffer_size,omitzero"`   // 缓冲区大小（块数）
+	EnableBuffer bool `json:"enable_buffer,omitzero"` // 是否启用缓冲
 
 	// 超时配置
-	ChunkTimeout  time.Duration `json:"chunk_timeout,omitempty"`  // 单个块的超时
-	StreamTimeout time.Duration `json:"stream_timeout,omitempty"` // 整个流的超时
+	ChunkTimeout  time.Duration `json:"chunk_timeout,omitzero"`  // 单个块的超时
+	StreamTimeout time.Duration `json:"stream_timeout,omitzero"` // 整个流的超时
 
 	// 重试配置
-	MaxRetries   int           `json:"max_retries,omitempty"`    // 最大重试次数
-	RetryDelay   time.Duration `json:"retry_delay,omitempty"`    // 重试延迟
-	RetryOnError bool          `json:"retry_on_error,omitempty"` // 错误时是否重试
+	MaxRetries   int           `json:"max_retries,omitzero"`    // 最大重试次数
+	RetryDelay   time.Duration `json:"retry_delay,omitzero"`    // 重试延迟
+	RetryOnError bool          `json:"retry_on_error,omitzero"` // 错误时是否重试
 
 	// 背压控制
-	EnableBackpressure bool `json:"enable_backpressure,omitempty"` // 是否启用背压
-	BackpressureWindow int  `json:"backpressure_window,omitempty"` // 背压窗口大小
-	MaxPendingChunks   int  `json:"max_pending_chunks,omitempty"`  // 最大待处理块数
+	EnableBackpressure bool `json:"enable_backpressure,omitzero"` // 是否启用背压
+	BackpressureWindow int  `json:"backpressure_window,omitzero"` // 背压窗口大小
+	MaxPendingChunks   int  `json:"max_pending_chunks,omitzero"`  // 最大待处理块数
 
 	// 流控制
-	EnableThrottle  bool          `json:"enable_throttle,omitempty"`    // 是否启用限流
-	MaxChunksPerSec float64       `json:"max_chunks_per_sec,omitempty"` // 最大块速率
-	MinChunkDelay   time.Duration `json:"min_chunk_delay,omitempty"`    // 最小块间隔
+	EnableThrottle  bool          `json:"enable_throttle,omitzero"`    // 是否启用限流
+	MaxChunksPerSec float64       `json:"max_chunks_per_sec,omitzero"` // 最大块速率
+	MinChunkDelay   time.Duration `json:"min_chunk_delay,omitzero"`    // 最小块间隔
 
 	// 监控配置
-	EnableProgress   bool          `json:"enable_progress,omitempty"`   // 是否发送进度更新
-	ProgressInterval time.Duration `json:"progress_interval,omitempty"` // 进度更新间隔
+	EnableProgress   bool          `json:"enable_progress,omitzero"`   // 是否发送进度更新
+	ProgressInterval time.Duration `json:"progress_interval,omitzero"` // 进度更新间隔
 
 	// 转换配置
-	EnableTransform bool               `json:"enable_transform,omitempty"` // 是否启用数据转换
-	TransformFunc   ChunkTransformFunc `json:"-"`                          // 数据转换函数
+	EnableTransform bool               `json:"enable_transform,omitzero"` // 是否启用数据转换
+	TransformFunc   ChunkTransformFunc `json:"-"`                         // 数据转换函数
 
 	// 多路复用
-	EnableMultiplex bool `json:"enable_multiplex,omitempty"` // 是否支持多个消费者
-	MaxConsumers    int  `json:"max_consumers,omitempty"`    // 最大消费者数
+	EnableMultiplex bool `json:"enable_multiplex,omitzero"` // 是否支持多个消费者
+	MaxConsumers    int  `json:"max_consumers,omitzero"`    // 最大消费者数
 
 	// 内存保护
-	MaxCollectSize int64 `json:"max_collect_size,omitempty"` // Collect/CollectText 最大字节数限制（默认 100MB），防止 OOM
+	MaxCollectSize int64 `json:"max_collect_size,omitzero"` // Collect/CollectText 最大字节数限制（默认 100MB），防止 OOM
 }
 
 // ChunkTransformFunc 数据块转换函数
@@ -179,14 +179,14 @@ func DefaultStreamOptions() *StreamOptions {
 
 // StreamStatus 流状态
 type StreamStatus struct {
-	State       StreamState   `json:"state"`                // 流状态
-	ChunksRead  int64         `json:"chunks_read"`          // 已读取块数
-	BytesRead   int64         `json:"bytes_read"`           // 已读取字节数
-	StartTime   time.Time     `json:"start_time"`           // 开始时间
-	ElapsedTime time.Duration `json:"elapsed_time"`         // 已用时间
-	Progress    float64       `json:"progress"`             // 进度百分比
-	ErrorCount  int           `json:"error_count"`          // 错误计数
-	LastError   error         `json:"last_error,omitempty"` // 最后的错误
+	State       StreamState   `json:"state"`               // 流状态
+	ChunksRead  int64         `json:"chunks_read"`         // 已读取块数
+	BytesRead   int64         `json:"bytes_read"`          // 已读取字节数
+	StartTime   time.Time     `json:"start_time"`          // 开始时间
+	ElapsedTime time.Duration `json:"elapsed_time"`        // 已用时间
+	Progress    float64       `json:"progress"`            // 进度百分比
+	ErrorCount  int           `json:"error_count"`         // 错误计数
+	LastError   error         `json:"last_error,omitzero"` // 最后的错误
 }
 
 // StreamState 流状态枚举
