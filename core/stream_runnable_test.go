@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -166,3 +167,27 @@ func TestFinalValidatorSurvivesConfigurationAndCallbackMutation(t *testing.T) {
 type finalMutation struct{ *BaseCallback }
 
 func (finalMutation) OnEnd(_ context.Context, out any) error { *out.(*int) = 2; return nil }
+
+func TestFinalValidatorErrorSurvivesErrorCallbackPanic(t *testing.T) {
+	rejection := errors.New("必须保留的验收错误")
+	r := NewStreamRunnable(StreamModeFinal, func(_ context.Context, in int, emit func(StreamChunk[int]) error) error {
+		return emit(StreamChunk[int]{Done: true, Data: in})
+	}).WithFinalValidator(func(context.Context, int) error { return rejection }).WithCallbacks(finalErrorPanic{BaseCallback: NewBaseCallback()})
+	_, err := r.Invoke(context.Background(), 1)
+	require.ErrorIs(t, err, rejection)
+	var pe *agentErrors.PanicError
+	require.ErrorAs(t, err, &pe)
+	stream, err := r.Stream(context.Background(), 1)
+	require.NoError(t, err)
+	for chunk := range stream {
+		require.False(t, chunk.Done && chunk.Error == nil)
+		if chunk.Error != nil {
+			require.ErrorIs(t, chunk.Error, rejection)
+			require.ErrorAs(t, chunk.Error, &pe)
+		}
+	}
+}
+
+type finalErrorPanic struct{ *BaseCallback }
+
+func (finalErrorPanic) OnError(context.Context, error) error { panic("外层错误回调异常") }

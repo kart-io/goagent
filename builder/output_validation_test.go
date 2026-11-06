@@ -150,3 +150,17 @@ func TestOutputValidatorRechecksDurableReplay(t *testing.T) {
 	require.Equal(t, 1, effects)
 	require.Len(t, model.requests, 2)
 }
+
+func TestOutputValidatorErrorSurvivesOuterErrorCallbackPanic(t *testing.T) {
+	rejection := errors.New("必须保留的业务验收错误")
+	a, err := NewSimpleBuilder(&eventModel{MockLLMClient: NewMockLLMClient(), chunks: []*llm.StreamChunk{{Done: true, Content: "回答"}}}).WithOutputValidator(func(context.Context, *AgentOutput) error { return rejection }).Build()
+	require.NoError(t, err)
+	_, err = a.AsRunnable().WithCallbacks(outputErrorPanic{core.NewBaseCallback()}).Invoke(context.Background(), "核验")
+	require.ErrorIs(t, err, rejection)
+	var pe *agentErrors.PanicError
+	require.ErrorAs(t, err, &pe)
+}
+
+type outputErrorPanic struct{ *core.BaseCallback }
+
+func (outputErrorPanic) OnError(context.Context, error) error { panic("外层错误回调异常") }

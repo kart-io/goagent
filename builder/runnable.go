@@ -20,7 +20,7 @@ func (a *ConfigurableAgent[C, S]) AsRunnable() *core.StreamRunnable[any, *AgentO
 			mode = core.StreamModeSteps
 		}
 	}
-	return core.NewStreamRunnable(mode, func(ctx context.Context, input any, emit func(core.StreamChunk[*AgentOutput]) error) error {
+	r := core.NewStreamRunnable(mode, func(ctx context.Context, input any, emit func(core.StreamChunk[*AgentOutput]) error) error {
 		events, err := a.ExecuteStream(ctx, input)
 		if err != nil {
 			return err
@@ -54,5 +54,9 @@ func (a *ConfigurableAgent[C, S]) AsRunnable() *core.StreamRunnable[any, *AgentO
 				}
 			}
 		}
-	}).WithFinalValidator(a.validateOutput)
+	})
+	if len(a.config.OutputValidators) > 0 {
+		return r.WithFinalValidator(a.validateOutput)
+	}
+	return r
 }

@@ -71,7 +71,11 @@ func (r *StreamRunnable[I, O]) run(ctx context.Context, input I, send func(Strea
 				_ = cb.OnError(ctx, failure)
 				return nil
 			}); panicked {
+				// 配置验收时保留原错误；无验收时沿用回调异常优先的既有契约。
 				err = panicErr
+				if len(r.finalValidators) > 0 {
+					err = errors.Join(failure, panicErr)
+				}
 			}
 		}
 	}()
