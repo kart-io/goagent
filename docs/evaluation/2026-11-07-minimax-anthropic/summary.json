@@ -1,0 +1,47 @@
+{
+  "source_revision": "bc23061791b4a546099752e0c5ebea5d43f2a521",
+  "protocol": "Anthropic Messages SSE",
+  "endpoint": "https://api.minimax.cn/anthropic/v1/messages",
+  "model_requested": "MiniMax-M3.1-Flash",
+  "model_reported": "MiniMax-M3.1-Flash",
+  "generation_http_requests": 5,
+  "http_status_counts": {
+    "200": 5
+  },
+  "automatic_retries": 0,
+  "known_total_tokens": 3245,
+  "known_usage_entries": 5,
+  "unknown_usage_entries": 0,
+  "verdicts": {
+    "text_json_codec_roundtrip": "passed",
+    "numeric_precision": "failed_upstream_decimal_shortening",
+    "string_model_answer": "failed_answer_format",
+    "direct_string_crash_resume_replay": "passed"
+  },
+  "protocol_checks": {
+    "streaming": true,
+    "full_native_content_replayed": true,
+    "thinking_signature_replayed": true,
+    "actual_endpoint_verified": true
+  },
+  "numeric_input_audit": {
+    "expected_id": "9007199254740993",
+    "upstream_id": "9007199254740993",
+    "expected_rate": "0.1234567890123456789",
+    "upstream_rate": "0.12345678901234568",
+    "upstream_delta_text": "{\"id\": 9007199254740993, \"label\": \"<测试&>\", \"rate\": 0.12345678901234568}",
+    "rejected_before_effect": true
+  },
+  "direct_recovery": {
+    "process_exit": 86,
+    "effects": 1,
+    "resume_new_requests": 0,
+    "replay_new_requests": 0
+  },
+  "limits": [
+    "显式直返是独立配置，未替代或修正原模型答案格式失败",
+    "只能证明上游响应中数字已缩短，不能区分服务内部处理与模型生成过程",
+    "本轮只改接入文档和探针，未新增 MiniMax Provider 或修改其他仓库适配器",
+    "没有修改全局配置或连接真实订单、支付、身份服务"
+  ]
+}

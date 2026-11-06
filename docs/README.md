@@ -33,6 +33,7 @@ GoAgent 是嵌入 Go 服务的 Agent 执行内核：原生工具循环、类型�
 ## LLM 提供商
 
 - [LLM 提供商指南](guides/LLM_PROVIDERS.md)、[能力对照](guides/PROVIDER_CAPABILITIES.md)、[最佳实践](guides/PROVIDER_BEST_PRACTICES.md)、[持续回归](guides/PROVIDER_REGRESSION.md)
+- [MiniMax Anthropic 协议接入](guides/MINIMAX_ANTHROPIC.md)：国内端点、显式凭据配置、原生工具续接与真实验证边界
 - [Embedder 提供商](https://github.com/kart-io/goagent-contrib/blob/master/retrieval/EMBEDDER_PROVIDERS.md)（goagent-contrib）
 
 | 提供商 | 构造函数（`llm/providers`） | `AsRunnable` 与原生工具流 |
