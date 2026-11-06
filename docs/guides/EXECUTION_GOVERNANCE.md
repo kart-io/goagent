@@ -67,3 +67,7 @@ agent, err := builder.NewSimpleBuilder(client).
 仅显式操作记录提供pending/failed证据：pending表示结果未知，failed也须核对外部效果与重试策略。建议动作不是执行授权，诊断不修改状态、不批准、不调用节点/路由/协调器、不取执行锁。跨多条Load不是一致性事务，实际恢复前须协调在途执行。图报告不调用宿主状态反序列化函数，也不验证业务状态类型兼容性。
 
 版本迁移必须由宿主明确执行；诊断本身不迁移或修复存储数据。
+
+## 升级兼容核对
+
+持久图可声明StateVersion/Components，导出Manifest并对指定运行调用CheckCompatibility。该检查复用只读Diagnose，不执行、加锁、写入或迁移任务；Compatible不证明效果可安全重跑。见[版本清单与排空流程](EXECUTION_ACCEPTANCE.md#恢复清单和升级前检查)。

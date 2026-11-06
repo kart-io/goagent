@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `builder.WithOutputValidator`：不可被纠正额度跳过的最终输出验收，覆盖中间件、完成回调、工具直返、纯文本与持久回放；`core.StreamRunnable.WithFinalValidator`在外层完成回调后验收。
+- `builder.WithDispatcher`、`execution.NewGovernedBuilder`及治理配置报告：统一工具集合，显式预算/期限/授权/有限准入与排队，并检查运行使用创建时的Scope.Bind。
+- `workflow.DurableConfig.StateVersion/Components`、`DurableGraph.Manifest/CheckCompatibility`：恢复版本声明与只读批量升级检查，空声明保留旧计划摘要；不自动迁移或授权恢复。
+- 长会话、大工具结果、共享/独立会话Go基准及离线治理恢复示例。兼容检查增加`-core-dir`，Makefile默认验证当前工作树。
+- **迁移要求**：PreStep、RequestHook、TurnStopping、PromptSections/Contexts、SessionLog缺少原生工具流时，现在在BuildContext期拒绝，不能依赖静默忽略或运行期才报错。纯文本最终验收改用OutputValidator；WithDispatcher不能混用WithTools。详见[验收与治理指南](docs/guides/EXECUTION_ACCEPTANCE.md)。
+
 - `codec` 包及子包 `codec/json`、`codec/yaml`：goagent 统一的数据格式编解码入口，所有 JSON、YAML 转换都经由它们，规则只在此定义一次；结构与 Kubernetes 一致（`k8s.io/apimachinery/pkg/util/json`、`sigs.k8s.io/yaml` 一种格式一个包，`runtime.Serializer` 按格式选择）。`json.Marshal`、`json.Unmarshal`、`yaml.Marshal`、`yaml.Unmarshal` 用于格式确定的场景，JSON 另有 `json.Encode`（每值一行）、`json.Decode`、`json.DecodeNext`、`json.NewDecoder`、`json.Valid`、`json.Compact`（与 v1 `json.Compact` 一样不改写字符串原文）；格式在运行时才确定时用 `codec.ByName`、`codec.ByExt` 取得 `Codec` 接口（`Name`、`Marshal`、`Unmarshal`），`codec.ReadFile(path, v, opts...)` 按扩展名读取文件；`codec.Convert(in, out)` 按 json 标签把 map 等通用值弱类型转换为结构体（原 `core` 插件桥直接使用 mapstructure），与 JSON 一致跳过 `json:"-"` 字段（mapstructure 原先会把输入中的键 `-` 赋给它）。
   - `codec/json` 的默认规则就是 v1 的全部默认选项（`encoding/json.DefaultOptionsV1()`，`GOEXPERIMENT=jsonv2` 下 v1 本身即 v2 加这组选项），编码字节、解码结果与错误都与 v1 相同：map 键排序，nil 切片与 map 编码为 `null`，转义 `<`、`>`、`&` 与 U+2028/U+2029，非法 UTF-8 替换为 U+FFFD；数字、布尔的 `omitempty` 仍省略零值，无导出字段的结构体（如 `errors.New` 的返回值）编码为 `{}`，`,string` 也作用于布尔与字符串字段，指针接收者的 `MarshalJSON` 只在值可寻址时调用，map 键不调用 `MarshalJSON`；解码到已有值时 `null` 保留原值，类型错误跳过该字段继续解码、返回第一个错误，语法错误不修改目标；解码容忍重复键，字段名按 `strings.EqualFold` 匹配，Go 数组接受任意长度的 JSON 数组，base64 忽略换行，时间按宽松 RFC 3339 解析；`time.Duration` 为整数纳秒。错误类型与 v1 相同：编码为 `UnsupportedValueError`、`UnsupportedTypeError`、`MarshalerError`，解码为 `SyntaxError`、`UnmarshalTypeError`、`InvalidUnmarshalError`。
   - `codec/yaml` 与 `sigs.k8s.io/yaml` 相同：解码先转为 JSON 再按 json 标签解码，编码先得到 JSON 再转为块风格 YAML，结构体无需 yaml 标签，`llm.LLMOptions` 的显式 `temperature: 0` 等自定义解码照常生效。按 YAML 1.2 解析，`y`、`no`、`on` 仍是字符串，形如日期的值保持原文，标量键转为字符串；只接受一个文档。编码按 JSON 词法单元构造 YAML 节点，不把 JSON 当 YAML 重新解析，含 DEL、C1 控制字符的字符串也能编码；`y`、`no`、`on` 等 YAML 1.1 布尔词、`<<` 与含制表符的字符串加双引号，PyYAML、`yaml.v2` 等 YAML 1.1 读取方不会误读。

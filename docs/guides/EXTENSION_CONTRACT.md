@@ -24,6 +24,7 @@
 | `WithUsageHook` / `budget.WithUsageHook` | 只读Token统计通知，不改变执行 | 同步且支持并发；query/回调panic不改变业务；未绑定预算仅单次证据 | 父子继承，子非nil替换；回放标识保留，累计不能相加；见[用量指南](MULTI_AGENT_USAGE.md) |
 | `core.Callback` | 生命周期通知 | StreamRunnable的OnStart/OnEnd错误使调用失败；OnError返回值忽略，panic按错误处理；旧RunnableFunc的OnEnd返回值仍忽略 | 父子回调独立，宿主避免重复注册副作用 |
 | `core/middleware` | 可改请求与结果 | 返回错误中止，受调用context约束 | 中间件副作用不自动幂等，需宿主版本与执行键 |
+| `WithOutputValidator` / `StreamRunnable.WithFinalValidator` | 只读最终验收，不能追加模型请求 | 错误/取消/panic阻止成功终态，验收器可能多次调用 | 回放重新验收，不回滚已保存历史或外部效果 |
 | `PreStep`、`TurnStopping` | 可改历史、阻止请求或续跑 | 错误中止，续跑受请求预算限制 | 持久执行记录结果，恢复回放 |
 | `RequestHook` | 可调整模型请求或客户端 | 错误中止 | 持久模式须确定，变化须提升宿主版本 |
 | `RequestErrorHook`（`WithRequestError`；暂时性失败的原样重试用 `builder.RetryTransient`） | 可压缩、回退或重试 | 原生工具流，恢复次数有界；没有工具的流式回答只支持原样重试 | 原样重试在同一条回合记录内，每次尝试各占预算；持久运行中替换消息或客户端以错误结束 |
@@ -53,3 +54,5 @@
 两条对话写入不是事务：用户消息成功、助手消息失败时可能留下部分记录，失败不回滚模型调用或业务副作用。需要事务语义的宿主应由MemoryManager自身提供幂等/事务能力。
 
 治理与诊断接入见 [执行治理指南](EXECUTION_GOVERNANCE.md)。
+
+纯文本执行不支持的循环钩子、提示词扩展和SessionLog现在在BuildContext期报错；RequestError原样重试与OutputValidator仍可使用。详见[能力迁移说明](EXECUTION_ACCEPTANCE.md#构建期能力检查与迁移)。

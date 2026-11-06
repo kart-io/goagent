@@ -101,16 +101,29 @@ func inheritedGoFlags(modfile string) (string, error) {
 	return "", fmt.Errorf("临时依赖路径同时包含空白和两种引号，无法传入 GOFLAGS")
 }
 
-func discover(ctx context.Context, root string) ([]module, error) {
+func discover(ctx context.Context, root string, coreDir ...string) ([]module, error) {
 	root, err := filepath.Abs(root)
 	if err != nil {
 		return nil, err
+	}
+	if len(coreDir) > 1 {
+		return nil, fmt.Errorf("最多指定一个核心工作树")
+	}
+	selected := ""
+	if len(coreDir) == 1 && coreDir[0] != "" {
+		selected, err = filepath.Abs(coreDir[0])
+		if err != nil {
+			return nil, err
+		}
 	}
 	var modules []module
 	seen := map[string]bool{}
 	for _, repo := range []string{"goagent", "goagent-harness", "goagent-examples", "goagent-contrib"} {
 		count := len(modules)
 		dir := filepath.Join(root, repo)
+		if repo == "goagent" && selected != "" {
+			dir = selected
+		}
 		err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return err
@@ -133,6 +146,9 @@ func discover(ctx context.Context, root string) ([]module, error) {
 				return err
 			}
 			m.Path = m.mods.Module.Path
+			if repo == "goagent" && m.Path != coreModule {
+				return fmt.Errorf("核心工作树模块身份不符: %s", m.Path)
+			}
 			if m.Path == "" || seen[m.Path] {
 				return fmt.Errorf("模块路径为空或重复: %s (%s)", m.Path, path)
 			}
@@ -162,14 +178,14 @@ func writeJSON(path string, value any) error {
 	return os.WriteFile(path, append(data, '\n'), 0o600)
 }
 
-func verify(ctx context.Context, root, out string, timeout time.Duration) error {
+func verify(ctx context.Context, root, out string, timeout time.Duration, coreDir ...string) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	if timeout <= 0 || out == "" {
 		return fmt.Errorf("必须指定新报告目录和正数超时")
 	}
-	modules, err := discover(ctx, root)
+	modules, err := discover(ctx, root, coreDir...)
 	if err != nil {
 		return err
 	}
@@ -342,12 +358,13 @@ func readTestResults(path string, result *moduleResult) error {
 
 func main() {
 	root := flag.String("root", "..", "包含 goagent 及三个关联仓库的目录")
+	coreDir := flag.String("core-dir", "", "显式选择核心工作树，空值使用root/goagent")
 	out := flag.String("out", "", "必须不存在的报告目录")
 	timeout := flag.Duration("timeout", 5*time.Minute, "每个模块的总时限")
 	flag.Parse()
 	ctx, cancel := signal.NotifyContext(context.Background(), stopSignals()...)
 	defer cancel()
-	if err := verify(ctx, *root, *out, *timeout); err != nil {
+	if err := verify(ctx, *root, *out, *timeout, *coreDir); err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

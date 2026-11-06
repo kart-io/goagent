@@ -170,3 +170,7 @@ agent, err := builder.NewSimpleBuilder(client).
 初始化不再忽略检查点读取失败；记忆可选择严格模式。Pipe/Sequence复用共同流终态与取消规则，显式父回调和父Batch并发配置生效。新增预算限制、只读运行诊断、两阶段工具准入及有界异步观察。
 
 接口与迁移细节见 [扩展契约](EXTENSION_CONTRACT.md) 和 [执行治理指南](EXECUTION_GOVERNANCE.md)。旧同步入口已删除，完整结果统一通过 `AsRunnable().Invoke` 收集，迁移见[快速入门](QUICKSTART.md#旧接口迁移)。
+
+## 最终结果验收
+
+`WithOutputValidator` 在中间件与完成回调边界检查最终输出，覆盖纯文本、工具直返、提前结束和回放；不受TurnStopping的纠正额度影响。回调可改写输出，因此最终投递前再次验收，失败不发布成功终态；不会回滚已发生的效果。签名、纯文本能力迁移与恢复清单见[验收与治理指南](EXECUTION_ACCEPTANCE.md)。

@@ -204,3 +204,30 @@ func TestVerifyRejectsCanceledContext(t *testing.T) {
 		t.Fatal("取消后不能继续启动验证")
 	}
 }
+
+func TestVerifyExplicitWorktreeUsesSelectedCore(t *testing.T) {
+	root := compatibilityFixture(t)
+	writeFixture(t, root, "goagent/value.go", "package goagent\nconst Value = 7\n")
+	selected := filepath.Join(t.TempDir(), "当前工作树")
+	writeFixture(t, selected, "go.mod", "module github.com/kart-io/goagent\n\ngo 1.26.0\n")
+	writeFixture(t, selected, "value.go", "package goagent\nconst Value = 42\n")
+	out := filepath.Join(t.TempDir(), "report")
+	if err := verify(context.Background(), root, out, 30*time.Second, selected); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(out, "summary.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var report summary
+	if err = json.Unmarshal(data, &report); err != nil {
+		t.Fatal(err)
+	}
+	if report.CoreDir != selected {
+		t.Fatalf("误用核心目录: %s", report.CoreDir)
+	}
+	original, err := os.ReadFile(filepath.Join(root, "goagent/value.go"))
+	if err != nil || !strings.Contains(string(original), "7") {
+		t.Fatal("改写了原主工作区", err)
+	}
+}

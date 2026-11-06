@@ -51,3 +51,7 @@ go run ./evaluation/executionbench/cmd/run -operations=10,100,1000 -modes=none,m
 ```
 
 这是本机合成负载，文件模式只包含预算持久化，没有真实模型、工具日志或业务服务。接入真实服务后仍须验证典型任务的延迟、取消、恢复、预算和资源生命周期。
+
+## 受治理工具流
+
+需要显式授权和有限根预算、准入与排队时，使用 `execution.NewGovernedBuilder`，并以同一个Scope.Bind执行；工具通过WithDispatcher统一提供，禁止混入WithTools。它返回常规Builder和静态治理报告，不建立新运行引擎或接管资源。见[完整指南](EXECUTION_ACCEPTANCE.md#标准治理装配)与[离线示例](../../examples/execution-governed/main.go)。

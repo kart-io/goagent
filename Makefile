@@ -20,6 +20,7 @@ GO_MOD_NAME := github.com/kart-io/goagent
 EXAMPLE ?= ./examples/execution-scope
 COVERAGE_DIR=./coverage
 COMPAT_ROOT ?= ..
+COMPAT_CORE ?= $(CURDIR)
 COMPAT_OUT ?= $(COVERAGE_DIR)/compatibility-$(shell date -u +%Y%m%dT%H%M%SZ)
 
 # Colors for output
@@ -83,9 +84,9 @@ test-frameworkbench:
 test-contracts:
 	GO_TEST_MODE=true $(GOTEST) -race -count=1 -timeout 120s ./core/... ./llm/... ./builder/... ./workflow/... ./multiagent/... ./tools/... ./execution/...
 
-## compatibility: 使用当前源码验证本地关联仓库（COMPAT_ROOT、COMPAT_OUT 可覆盖）
+## compatibility: 使用当前源码验证本地关联仓库（COMPAT_ROOT、COMPAT_CORE、COMPAT_OUT 可覆盖）
 compatibility:
-	$(GOCMD) run ./scripts/compatcheck -root "$(COMPAT_ROOT)" -out "$(COMPAT_OUT)"
+	$(GOCMD) run ./scripts/compatcheck -root "$(COMPAT_ROOT)" -core-dir "$(COMPAT_CORE)" -out "$(COMPAT_OUT)"
 
 ## test-integration: Run integration tests
 test-integration:

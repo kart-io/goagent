@@ -159,6 +159,7 @@ With a `llm.ToolStreamClient` and at least one tool, `agent.Start(ctx, input)` r
 - [Composable orchestration](docs/guides/COMPOSABLE_ORCHESTRATION.md) - wrap a child agent or `workflow.DurableGraph` as a tool with `tools.NewRunnableToolFactory`; a child waiting for approval suspends the parent with `builder.ErrWaiting`.
 - [Agent composition and input boundaries](docs/guides/AGENT_COMPOSITION.md) - direct workflows, child-agent tools, pending input and completion scopes; [Pi design comparison](docs/research/2026-11-01-pi-core-gap-analysis.md).
 - [Host integration](docs/guides/HOST_INTEGRATION.md) - `execution.NewScope` + `execution.ConfigureBuilder` + `BuildContext`; offline example: `go run ./examples/execution-scope`.
+- [最终验收、治理装配与升级检查](docs/guides/EXECUTION_ACCEPTANCE.md) - 最终结果校验、受治理Builder、恢复版本清单与规模基准。
 - [Extension contract](docs/guides/EXTENSION_CONTRACT.md) and [execution governance](docs/guides/EXECUTION_GOVERNANCE.md) - budgets, diagnostics and resource limits.
 
 ## Packages
