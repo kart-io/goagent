@@ -2,6 +2,7 @@ package state
 
 import (
 	"fmt"
+	"reflect"
 	"sync"
 
 	"github.com/kart-io/goagent/codec/json"
@@ -164,18 +165,19 @@ func deepCopyValue(v interface{}) interface{} {
 		// 基本类型直接返回（值类型，自动复制）
 		return v
 	default:
-		// 对于其他复杂类型，尝试使用 JSON 深拷贝
+		// 对于其他复杂类型，用 JSON 往返深拷贝并解码回原类型：解到 interface{} 会把结构体变成 map、
+		// 时间变成字符串、大整数变成 float64
 		data, err := json.Marshal(v)
 		if err != nil {
 			// JSON 序列化失败，返回原值（浅拷贝）
 			return v
 		}
-		var copied interface{}
-		if err := json.Unmarshal(data, &copied); err != nil {
+		copied := reflect.New(reflect.TypeOf(v))
+		if err := json.Unmarshal(data, copied.Interface()); err != nil {
 			// JSON 反序列化失败，返回原值
 			return v
 		}
-		return copied
+		return copied.Elem().Interface()
 	}
 }
 

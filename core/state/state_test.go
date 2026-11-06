@@ -3,6 +3,9 @@ package state
 import (
 	"sync"
 	"testing"
+	"time"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -449,4 +452,34 @@ func BenchmarkAgentState_ConcurrentReadWrite(b *testing.B) {
 			i++
 		}
 	})
+}
+
+// 深拷贝保留原值的类型：结构体不变成 map，时间、大整数与 json.Number 不被改写，指针指向新对象。
+func TestAgentState_ClonePreservesTypes(t *testing.T) {
+	type order struct {
+		ID      uint64            `json:"id"`
+		Created time.Time         `json:"created"`
+		Tags    map[string]string `json:"tags"`
+	}
+	created := time.Date(2026, 11, 6, 8, 0, 0, 0, time.UTC)
+	ptr := &order{ID: 18446744073709551615, Created: created, Tags: map[string]string{"a": "1"}}
+	original := NewAgentState()
+	original.Set("order", order{ID: 18446744073709551615, Created: created})
+	original.Set("ptr", ptr)
+	original.Set("when", created)
+	original.Set("big", uint64(18446744073709551615))
+	original.Set("num", json.Number("12345678901234567890123"))
+
+	cloned := original.Clone()
+	for _, key := range []string{"order", "when", "big", "num"} {
+		want, _ := original.Get(key)
+		got, _ := cloned.Get(key)
+		require.Equal(t, want, got, key)
+	}
+	got, _ := cloned.Get("ptr")
+	copied, ok := got.(*order)
+	require.True(t, ok)
+	require.Equal(t, ptr, copied)
+	copied.Tags["a"] = "2"
+	require.Equal(t, "1", ptr.Tags["a"], "指针值须深拷贝")
 }
