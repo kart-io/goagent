@@ -8,12 +8,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kart-io/goagent/codec/json"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/kart-io/goagent/interfaces"
 	agentllm "github.com/kart-io/goagent/llm"
-	"github.com/kart-io/goagent/utils/json"
 )
 
 // TestOpenAI_Complete_HTTPErrors 测试各种 HTTP 错误
@@ -176,7 +177,7 @@ func TestOpenAI_Complete_WithParameters(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var reqBody map[string]interface{}
-		json.NewDecoder(r.Body).Decode(&reqBody)
+		json.Decode(r.Body, &reqBody)
 
 		// 提取参数
 		if temp, ok := reqBody["temperature"].(float64); ok {
@@ -214,7 +215,7 @@ func TestOpenAI_Embed(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// 验证请求
 		var reqBody map[string]interface{}
-		json.NewDecoder(r.Body).Decode(&reqBody)
+		json.Decode(r.Body, &reqBody)
 		assert.Equal(t, "text-embedding-ada-002", reqBody["model"])
 		assert.NotEmpty(t, reqBody["input"])
 
@@ -237,7 +238,7 @@ func TestOpenAI_Embed(t *testing.T) {
 				"total_tokens":  8,
 			},
 		}
-		json.NewEncoder(w).Encode(response)
+		json.Encode(w, response)
 	}))
 	defer server.Close()
 
@@ -263,10 +264,10 @@ func TestOpenAI_EmbedUsesEmbeddingModel(t *testing.T) {
 	var model string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var reqBody map[string]interface{}
-		_ = json.NewDecoder(r.Body).Decode(&reqBody)
+		_ = json.Decode(r.Body, &reqBody)
 		model, _ = reqBody["model"].(string)
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.Encode(w, map[string]interface{}{
 			"object": "list",
 			"data":   []map[string]interface{}{{"object": "embedding", "index": 0, "embedding": []float64{0.1}}},
 		})

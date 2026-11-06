@@ -2,7 +2,6 @@ package workflow_test
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"os"
 	"os/exec"
@@ -10,6 +9,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/workflow"

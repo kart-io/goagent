@@ -2,10 +2,11 @@ package agentbench
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"math/big"
 	"reflect"
+
+	"github.com/kart-io/goagent/codec/json"
 )
 
 // LookupCase adds argument extraction to a read-only task.
@@ -13,7 +14,7 @@ import (
 type LookupCase struct {
 	Parameters        json.RawMessage     `json:"parameters"`
 	ExpectedArguments json.RawMessage     `json:"expected_arguments"`
-	Orders            *OrderLookupBackend `json:"orders,omitempty"`
+	Orders            *OrderLookupBackend `json:"orders,omitzero"`
 }
 
 // ValidateLookupCase rejects incomplete labels before any model requests.
@@ -63,10 +64,8 @@ func equalArguments(expected, actual json.RawMessage) bool {
 		if !json.Valid(raw) {
 			return nil, fmt.Errorf("invalid JSON")
 		}
-		decoder := json.NewDecoder(bytes.NewReader(raw))
-		decoder.UseNumber()
 		var value any
-		err := decoder.Decode(&value)
+		err := json.Unmarshal(raw, &value, json.UseNumber)
 		return value, err
 	}
 	want, err := decode(expected)

@@ -148,7 +148,7 @@ type MiddlewareResponse struct {
 	Duration time.Duration `json:"duration"`
 
 	// TokenUsage holds LLM token usage statistics
-	TokenUsage *interfaces.TokenUsage `json:"token_usage,omitempty"`
+	TokenUsage *interfaces.TokenUsage `json:"token_usage,omitzero"`
 
 	// Error holds any error that occurred
 	Error error `json:"-"`

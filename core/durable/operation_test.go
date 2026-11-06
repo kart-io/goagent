@@ -2,11 +2,12 @@ package durable
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"sync"
 	"sync/atomic"
 	"testing"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/stretchr/testify/require"
 )
@@ -90,7 +91,10 @@ func TestOperationConcurrentDuplicateOnlyRunsOnce(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, err := Do(ctx, "same", json.RawMessage(`{}`), OperationPolicy{}, func(context.Context) (json.RawMessage, error) { calls.Add(1); return json.RawMessage(`"result"`), nil })
+			_, err := Do(ctx, "same", json.RawMessage(`{}`), OperationPolicy{}, func(context.Context) (json.RawMessage, error) {
+				calls.Add(1)
+				return json.RawMessage(`"result"`), nil
+			})
 			errs <- err
 		}()
 	}

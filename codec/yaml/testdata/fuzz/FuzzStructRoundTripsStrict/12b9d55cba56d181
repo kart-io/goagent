@@ -1,0 +1,8 @@
+go test fuzz v1
+string("0")
+string("\t\n")
+string("0")
+int(-113)
+float64(60)
+bool(true)
+int64(9223372036854775807)

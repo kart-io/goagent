@@ -6,10 +6,11 @@ package skill
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/examples/skills/02-weather-skill/internal/config"
 	"github.com/kart-io/goagent/examples/skills/02-weather-skill/internal/llmtools"

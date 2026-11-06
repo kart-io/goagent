@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -15,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/evaluation"
 	bench "github.com/kart-io/goagent/evaluation/agentbench"
@@ -104,7 +105,7 @@ func run(args []string) error {
 	if err := os.Mkdir(*out, 0700); err != nil {
 		return err
 	}
-	data, err := json.MarshalIndent(cases, "", "  ")
+	data, err := json.Marshal(cases, json.Indent("  "))
 	if err != nil {
 		return err
 	}
@@ -182,7 +183,6 @@ func run(args []string) error {
 		}
 	}()
 	go func() { wg.Wait(); close(completed) }()
-	encoder := json.NewEncoder(file)
 	var results []bench.SuiteOutcome
 	var writeErr error
 	failed := 0
@@ -191,7 +191,7 @@ func run(args []string) error {
 		if !result.ContractPassed {
 			failed++
 		}
-		if err = encoder.Encode(result); err != nil && writeErr == nil {
+		if err = json.Encode(file, result); err != nil && writeErr == nil {
 			writeErr = err
 			cancel()
 		}
@@ -220,7 +220,7 @@ func run(args []string) error {
 }
 
 func writeJSON(path string, value any) error {
-	data, err := json.MarshalIndent(value, "", "  ")
+	data, err := json.Marshal(value, json.Indent("  "))
 	if err != nil {
 		return err
 	}

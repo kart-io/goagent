@@ -2,6 +2,7 @@ package usage
 
 import (
 	"fmt"
+
 	"github.com/kart-io/goagent/interfaces"
 )
 
@@ -27,7 +28,7 @@ type Evidence struct {
 type ModelEvidence struct {
 	ResponseModel       string          `json:",omitempty"`
 	Reasoning           ReasoningConfig `json:",omitzero"`
-	ReasoningConfigured bool            `json:",omitempty"`
+	ReasoningConfigured bool            `json:",omitzero"`
 	Owner
 	OperationKey, AttemptKey, Provider, Model string
 	Attempt                                   int

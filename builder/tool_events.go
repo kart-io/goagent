@@ -1,15 +1,15 @@
 package builder
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"slices"
 	"strings"
 	"sync"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
@@ -494,15 +494,11 @@ func rejectedOutput(message string) *interfaces.ToolOutput { return tools.Reject
 // rejectedMessage 同样位于包级，避免被循环内的 tools 变量遮蔽。
 func rejectedMessage(out *interfaces.ToolOutput) (string, bool) { return tools.RejectedResult(out) }
 
-// toolResultText 不做 HTML 转义，模型与直接答案看到的是原始 <>&。
+// toolResultText 不做 HTML 转义，模型与直接答案看到的是原始 <>&；键按序输出，回放时文本一致。
+// 类型化 nil 的 map、切片编码为 null（v2 默认为 {}、[]），据此识别空结果。
 func toolResultText(result any) (string, error) {
-	var buf bytes.Buffer
-	encoder := json.NewEncoder(&buf)
-	encoder.SetEscapeHTML(false)
-	if err := encoder.Encode(result); err != nil {
-		return "", err
-	}
-	return strings.TrimSuffix(buf.String(), "\n"), nil
+	b, err := json.Marshal(result, json.NoEscapeHTML)
+	return string(b), err
 }
 
 func readToolTurn(ctx context.Context, stream <-chan *llm.StreamChunk, emit func(AgentEvent) error) (*llm.StreamChunk, error) {

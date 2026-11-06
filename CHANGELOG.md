@@ -9,6 +9,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `codec` 包及子包 `codec/json`、`codec/yaml`：goagent 统一的数据格式编解码入口，所有 JSON、YAML 转换都经由它们，规则只在此定义一次；结构与 Kubernetes 一致（`k8s.io/apimachinery/pkg/util/json`、`sigs.k8s.io/yaml` 一种格式一个包，`runtime.Serializer` 按格式选择）。`json.Marshal`、`json.Unmarshal`、`yaml.Marshal`、`yaml.Unmarshal` 用于格式确定的场景，JSON 另有 `json.Encode`（每值一行）、`json.Decode`、`json.DecodeNext`、`json.NewDecoder`、`json.Valid`、`json.Compact`（与 v1 `json.Compact` 一样不改写字符串原文）；格式在运行时才确定时用 `codec.ByName`、`codec.ByExt` 取得 `Codec` 接口（`Name`、`Marshal`、`Unmarshal`），`codec.ReadFile(path, v, opts...)` 按扩展名读取文件；`codec.Convert(in, out)` 按 json 标签把 map 等通用值弱类型转换为结构体（原 `core` 插件桥直接使用 mapstructure），与 JSON 一致跳过 `json:"-"` 字段（mapstructure 原先会把输入中的键 `-` 赋给它）。
+  - `codec/json` 的默认规则就是 v1 的全部默认选项（`encoding/json.DefaultOptionsV1()`，`GOEXPERIMENT=jsonv2` 下 v1 本身即 v2 加这组选项），编码字节、解码结果与错误都与 v1 相同：map 键排序，nil 切片与 map 编码为 `null`，转义 `<`、`>`、`&` 与 U+2028/U+2029，非法 UTF-8 替换为 U+FFFD；数字、布尔的 `omitempty` 仍省略零值，无导出字段的结构体（如 `errors.New` 的返回值）编码为 `{}`，`,string` 也作用于布尔与字符串字段，指针接收者的 `MarshalJSON` 只在值可寻址时调用，map 键不调用 `MarshalJSON`；解码到已有值时 `null` 保留原值，类型错误跳过该字段继续解码、返回第一个错误，语法错误不修改目标；解码容忍重复键，字段名按 `strings.EqualFold` 匹配，Go 数组接受任意长度的 JSON 数组，base64 忽略换行，时间按宽松 RFC 3339 解析；`time.Duration` 为整数纳秒。错误类型与 v1 相同：编码为 `UnsupportedValueError`、`UnsupportedTypeError`、`MarshalerError`，解码为 `SyntaxError`、`UnmarshalTypeError`、`InvalidUnmarshalError`。
+  - `codec/yaml` 与 `sigs.k8s.io/yaml` 相同：解码先转为 JSON 再按 json 标签解码，编码先得到 JSON 再转为块风格 YAML，结构体无需 yaml 标签，`llm.LLMOptions` 的显式 `temperature: 0` 等自定义解码照常生效。按 YAML 1.2 解析，`y`、`no`、`on` 仍是字符串，形如日期的值保持原文，标量键转为字符串；只接受一个文档。编码按 JSON 词法单元构造 YAML 节点，不把 JSON 当 YAML 重新解析，含 DEL、C1 控制字符的字符串也能编码；`y`、`no`、`on` 等 YAML 1.1 布尔词、`<<` 与含制表符的字符串加双引号，PyYAML、`yaml.v2` 等 YAML 1.1 读取方不会误读。
+  - `json.Strict` 用于配置文件：未知字段、重复键、非法 UTF-8 报错，字段名区分大小写，遇到第一个错误即停止并返回带 JSON 路径的 `SemanticError`，`time.Duration` 另接受 `30s`、`1m30s` 等字符串。
+  - 其余代码只经 `codec` 及其子包拿结果：`codec/json` 提供类型 `RawMessage`（JSON 原文，公开 API 中原 `jsontext.Value` 均改为它，二者为同一类型）、`Number`、`Decoder`、v1 错误类型 `UnsupportedValueError`、`UnsupportedTypeError`、`MarshalerError`、`SyntaxError`、`UnmarshalTypeError`、`InvalidUnmarshalError`、`Strict` 的错误类型 `SemanticError`、`Option`，选项 `Strict`、`UseNumber`、`NoEscapeHTML`、`Indent`、`IndentPrefix`，YAML 函数也接受这些选项。`json.Encode` 复用编码器，逐行写事件的分配与复用单个编码器相同。
+  - `scripts/apicheck` 检查除 `codec` 及其子包外的全部代码（含测试与 `examples/`）不导入 `encoding/json`、`encoding/json/v2`、`encoding/json/jsontext`、`encoding/xml`、YAML 库、mapstructure 及 sonic、json-iterator、go-json、easyjson、gjson、sjson、jsonparser、go-toml、BurntSushi/toml 等第三方格式库；`utils`、`cache` 可导入 `codec` 及其子包，`codec` 及其子包只相互依赖，不依赖 goagent 其他包。
+- `llm.LLMOptions` 实现 `UnmarshalJSONFrom`，自定义解码沿用调用方的解码选项（如 `json.Strict` 的未知字段报错与时长字符串）。
+- 可从配置文件加载的配置类型补齐 json 标签，字段名为 snake_case（如 `cache.CacheConfig` 的 `default_ttl`、`observability.TelemetryConfig` 的 `trace_endpoint`），函数、接口、Logger、Store 等不可加载的字段为 `json:"-"`；涉及 `cache`、`core`（`TimeoutConfig`、`InterruptConfig`、`LifecycleManagerConfig`、`RunnableConfig`、`RetryPolicy`）、`core/checkpoint`、`core/durable.OperationPolicy`、`core/execution`、`builder`（`RetrievalConfig`、`contextpolicy.OffloadConfig`）、`devtools`、`llm`、`llm/cache`、`llm/common`、`memory`、`observability`、`tools`、`tools/middleware`、`utils/httpclient`、`workflow.DurableConfig`。这些类型原先按 Go 字段名编码，自行用 JSON 编码过它们的调用方需改用新字段名；goagent 不持久化这些类型，意图指纹与持久记录不受影响。`builder.AgentConfig` 保持既有的 Go 字段名格式。
+- `examples/skills/02-weather-skill` 改用 `codec.ReadFile`，主模块不再依赖 `gopkg.in/yaml.v3`。
+
+### Changed
+
+- JSON 编解码全部改用标准库 `encoding/json/v2` 与 `encoding/json/jsontext`，最低 Go 版本升为 1.27.0，开发工具链为 Go 1.27.3。迁移保持既有编码结果：数字、布尔、指针、接口字段的 `omitempty` 改为 `omitzero`，结构体字段去掉 v1 中本就不生效的 `omitempty`；持久意图、事件、会话、工具结果等可能含 map 的编码按键排序；`time.Duration` 仍编码为整数纳秒；Dispatcher 日志回放的工具结果中数字仍为 `json.Number`。工具参数 Schema 把 `omitzero` 字段视为可选。
+- `workflow.DurableGraph` 每个节点执行前保存的意图快照只更新位置与键，状态沿用上一次提交的原文，不再重新编码：每个节点少一次状态编码，8 节点图在内存存储上耗时与内存各降约 9%，`FileStore` 上内存降约 8%。从旧版本写入的检查点恢复时，意图快照保留原文，不再改写为当前版本的编码。
+- 调用方自己直接调用 `encoding/json/v2` 时默认行为与 `codec/json` 不同：nil 切片与 map 编码为 `[]`、`{}`，不做 HTML 转义，拒绝非法 UTF-8 与重复键，字段名精确匹配，数字、布尔的 `omitempty` 不省略零值，拒绝编码无导出字段的结构体（含非 nil 的 `error` 字段），`,string` 不作用于布尔与字符串，遇到类型错误立即停止解码，错误为 `SemanticError`；编码含 `time.Duration` 字段的类型（如 `observe.Event`）会报 `no default representation`。与 goagent 交换数据时使用 `codec/json`；`json.RawMessage` 与 `jsontext.Value` 是同一类型，已有代码无需改动即可传入。
+
+### Removed
+
+- `utils/json` 包与 `github.com/bytedance/sonic` 依赖：改用 `codec/json`；`Marshal`、`Unmarshal`、`RawMessage`、`Number` 改用 `codec/json` 中的同名函数与类型，`MarshalIndent` 改用 `json.Marshal(v, json.Indent(...))`（缩进与前缀只能含空格与制表符），`Decode` 改用 `codec.Convert`，`Get`、`GetString` 等路径查询没有替代。
+
+### 升级须知
+
+- goagent 经 `codec/json` 编码持久数据，与 v1 逐字节一致，调用方放入持久状态的自定义类型（含带 `omitempty` 的数字、布尔字段）编码结果也不变，在途持久运行升级后可直接恢复；回归测试覆盖 HTML 转义、非法 UTF-8、`omitempty` 与 nil 的编码。
+
+## [0.49.0] - 2026-11-05
+
+### Added
+
 - `make test-frameworkbench`、`make test-contracts`、`make compatibility`：独立评测只读依赖、公共执行契约和本地关联仓库验证入口。跨仓验证包含嵌套模块，使用临时 modfile 及受控 GOFLAGS 覆盖测试和子构建的依赖，保留通过、失败及跳过证据；Unix 上取消、SIGTERM 和超时会清理同进程组后代。
 - 业务接入与故障恢复验收指南，记录本地退款及 PostgreSQL 接管、重启与同步提交的验证结果，明确真实业务接口仍需测试环境验收。
 
@@ -1071,7 +1099,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/kart-io/goagent/compare/v0.48.1...HEAD
+[Unreleased]: https://github.com/kart-io/goagent/compare/v0.49.0...HEAD
+[0.49.0]: https://github.com/kart-io/goagent/compare/v0.48.1...v0.49.0
 [0.48.1]: https://github.com/kart-io/goagent/compare/v0.48.0...v0.48.1
 [0.48.0]: https://github.com/kart-io/goagent/compare/v0.47.1...v0.48.0
 [0.47.1]: https://github.com/kart-io/goagent/compare/v0.47.0...v0.47.1

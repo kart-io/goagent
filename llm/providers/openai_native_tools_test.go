@@ -7,9 +7,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/kart-io/goagent/codec/json"
+
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
-	"github.com/kart-io/goagent/utils/json"
 	"github.com/stretchr/testify/require"
 )
 
@@ -17,7 +18,7 @@ func TestNativeToolStreamPreservesMessagesAndUsage(t *testing.T) {
 	requests := make(chan map[string]any, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var request map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		if err := json.Decode(r.Body, &request); err != nil {
 			t.Error(err)
 			return
 		}
@@ -75,7 +76,7 @@ func TestNativeFinalAnswerRequestOmitsTools(t *testing.T) {
 	requests := make(chan map[string]any, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if err := json.Decode(r.Body, &req); err != nil {
 			t.Error(err)
 			return
 		}

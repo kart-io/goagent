@@ -2,7 +2,6 @@ package builder
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -11,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/llm"
@@ -43,7 +44,7 @@ type inboxItem struct {
 	Kind inboxKind `json:"kind"`
 	Text string    `json:"text"`
 	// Seq 是持久收件箱中的序号，非持久运行为 0。领取记录带上它，恢复时才能确认同一条输入。
-	Seq uint64 `json:"seq,omitempty"`
+	Seq uint64 `json:"seq,omitzero"`
 }
 
 type followupItem struct {

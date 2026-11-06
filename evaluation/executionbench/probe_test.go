@@ -2,12 +2,13 @@ package executionbench_test
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/core/durable"
 

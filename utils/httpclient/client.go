@@ -275,8 +275,8 @@ var (
 
 // CachingConfig 控制客户端缓存行为
 type CachingConfig struct {
-	Enabled   bool     // 是否启用缓存
-	KeyFields []string // 用于生成缓存 key 的字段
+	Enabled   bool     `json:"enabled"`    // 是否启用缓存
+	KeyFields []string `json:"key_fields"` // 用于生成缓存 key 的字段
 }
 
 // generateCacheKey 根据配置生成缓存 key

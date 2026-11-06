@@ -7,8 +7,11 @@ import (
 	"iter"
 	"net/http"
 	"os"
+	"reflect"
 	"strings"
 	"time"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"google.golang.org/genai"
 
@@ -17,7 +20,6 @@ import (
 	agentllm "github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/common"
 	"github.com/kart-io/goagent/llm/constants"
-	"github.com/kart-io/goagent/utils/json"
 )
 
 // GeminiProvider retains the legacy public API and uses Google's native Gemini API.
@@ -101,10 +103,9 @@ func geminiUsage(usage *agentllm.Usage) *interfaces.TokenUsage {
 func geminiReplayableParts(parts []*genai.Part) []*genai.Part {
 	kept := parts[:0:0]
 	for _, part := range parts {
-		if part != nil {
-			if data, err := json.Marshal(part); err == nil && string(data) == "{}" {
-				continue
-			}
+		// 按字段判断而非编码结果：SDK 标签按 v1 语义书写，v2 编码会输出 thought:false 等零值。
+		if part != nil && reflect.ValueOf(part).Elem().IsZero() {
+			continue
 		}
 		kept = append(kept, part)
 	}

@@ -198,11 +198,11 @@ func (b *BaseProvider) ProviderName() string {
 // HTTPClientConfig holds configuration for creating HTTP clients.
 type HTTPClientConfig struct {
 	// Timeout is the request timeout duration
-	Timeout time.Duration
+	Timeout time.Duration `json:"timeout"`
 	// Headers contains default HTTP headers to include in requests
-	Headers map[string]string
+	Headers map[string]string `json:"headers"`
 	// BaseURL is the base URL for API requests
-	BaseURL string
+	BaseURL string `json:"base_url"`
 }
 
 // NewHTTPClient creates a configured HTTP client using the provider's settings.
@@ -238,11 +238,11 @@ func (b *BaseProvider) NewHTTPClient(cfg HTTPClientConfig) *httpclient.Client {
 // RetryConfig holds configuration for retry behavior.
 type RetryConfig struct {
 	// MaxAttempts is the maximum number of retry attempts
-	MaxAttempts int
+	MaxAttempts int `json:"max_attempts"`
 	// BaseDelay is the initial delay between retries
-	BaseDelay time.Duration
+	BaseDelay time.Duration `json:"base_delay"`
 	// MaxDelay is the maximum delay between retries
-	MaxDelay time.Duration
+	MaxDelay time.Duration `json:"max_delay"`
 }
 
 // DefaultRetryConfig returns the default retry configuration.

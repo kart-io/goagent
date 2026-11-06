@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -9,6 +8,8 @@ import (
 	"path/filepath"
 	"sync/atomic"
 	"testing"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	bench "github.com/kart-io/goagent/evaluation/agentbench"
 	"github.com/stretchr/testify/require"
@@ -74,7 +75,7 @@ func TestProviderCLIReportsParameterFailures(t *testing.T) {
 							Model     string `json:"model"`
 							MaxTokens int    `json:"max_tokens"`
 						}
-						if json.NewDecoder(r.Body).Decode(&body) != nil || body.Model != "native-model" || body.MaxTokens != 1024 || r.Header.Get("Authorization") != "Bearer provider-test" {
+						if json.Decode(r.Body, &body) != nil || body.Model != "native-model" || body.MaxTokens != 1024 || r.Header.Get("Authorization") != "Bearer provider-test" {
 							http.Error(w, "wrong provider configuration", 400)
 							return
 						}

@@ -235,19 +235,19 @@ func estimateStateSize(state agentstate.State) int64 {
 // CheckpointerConfig configures checkpointer behavior.
 type CheckpointerConfig struct {
 	// MaxHistorySize limits the number of historical states to keep
-	MaxHistorySize int
+	MaxHistorySize int `json:"max_history_size"`
 
 	// MaxCheckpointAge is the maximum age before a checkpoint is considered stale
-	MaxCheckpointAge time.Duration
+	MaxCheckpointAge time.Duration `json:"max_checkpoint_age"`
 
 	// EnableCompression enables state compression (for future implementation)
-	EnableCompression bool
+	EnableCompression bool `json:"enable_compression"`
 
 	// AutoCleanup enables automatic cleanup of old checkpoints
-	AutoCleanup bool
+	AutoCleanup bool `json:"auto_cleanup"`
 
 	// CleanupInterval specifies how often to run cleanup
-	CleanupInterval time.Duration
+	CleanupInterval time.Duration `json:"cleanup_interval"`
 }
 
 // DefaultCheckpointerConfig returns the default checkpointer configuration.

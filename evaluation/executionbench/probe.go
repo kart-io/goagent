@@ -40,7 +40,7 @@ type Report struct {
 	GoroutineDelta   int                   `json:"goroutineDelta"`
 	FileCount        int                   `json:"fileCount"`
 	FileBytes        int64                 `json:"fileBytes"`
-	BudgetSnapshot   *budget.Snapshot      `json:"budgetSnapshot,omitempty"`
+	BudgetSnapshot   *budget.Snapshot      `json:"budgetSnapshot,omitzero"`
 	SyntheticUsage   interfaces.TokenUsage `json:"syntheticUsagePerOperation"`
 	MeasurementScope string                `json:"measurementScope"`
 }

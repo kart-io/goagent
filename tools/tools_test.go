@@ -4,9 +4,10 @@ import (
 	"context"
 	"testing"
 
+	"github.com/kart-io/goagent/codec/json"
+
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
-	"github.com/kart-io/goagent/utils/json"
 )
 
 // TestBaseTool 测试基础工具
@@ -295,7 +296,7 @@ func TestGenerateJSONSchemaFromStruct(t *testing.T) {
 	t.Run("struct with optional fields", func(t *testing.T) {
 		type TestStruct struct {
 			Name     string  `json:"name"`
-			Age      int     `json:"age,omitempty"`
+			Age      int     `json:"age,omitzero"`
 			Email    *string `json:"email"`
 			Optional string  `json:"optional,omitempty"`
 		}

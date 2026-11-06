@@ -4,10 +4,11 @@
 package session
 
 import (
-	"encoding/json"
 	"fmt"
 	"slices"
 	"time"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
@@ -43,7 +44,7 @@ type Event struct {
 	Time time.Time       `json:"time"`
 	Data json.RawMessage `json:"data,omitempty"`
 	// Surface 非空时遮蔽序号在 [Start, End] 内的消息事件；事件自带的替代消息出现在被遮蔽的位置。
-	Surface *Surface `json:"surface,omitempty"`
+	Surface *Surface `json:"surface,omitzero"`
 }
 
 // Surface 是被遮蔽的事件序号区间（闭区间）。
@@ -64,8 +65,8 @@ type TurnStart struct {
 // TurnEnd 是 turn/end 的数据。
 type TurnEnd struct {
 	Answer  string      `json:"answer,omitempty"`
-	Aborted bool        `json:"aborted,omitempty"`
-	Usage   *TokenUsage `json:"usage,omitempty"`
+	Aborted bool        `json:"aborted,omitzero"`
+	Usage   *TokenUsage `json:"usage,omitzero"`
 }
 
 // TokenUsage 是一轮的用量。
@@ -74,7 +75,7 @@ type TokenUsage = interfaces.TokenUsage
 // MessageData 是消息事件的数据。Tool 只在 tool/result 中出现。
 type MessageData struct {
 	Message llm.Message `json:"message"`
-	Tool    *ToolMeta   `json:"tool,omitempty"`
+	Tool    *ToolMeta   `json:"tool,omitzero"`
 }
 
 // ToolMeta 是一次工具调用的结果信息，供导出统计。

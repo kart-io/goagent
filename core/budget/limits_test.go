@@ -2,10 +2,11 @@ package budget
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/interfaces"

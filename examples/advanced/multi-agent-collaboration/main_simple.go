@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kart-io/goagent/codec/json"
+
 	"github.com/kart-io/goagent/builder"
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/interfaces"
@@ -15,7 +17,6 @@ import (
 	"github.com/kart-io/goagent/llm/providers"
 	"github.com/kart-io/goagent/tools"
 	"github.com/kart-io/goagent/utils/httpclient"
-	"github.com/kart-io/goagent/utils/json"
 )
 
 func main() {
@@ -299,7 +300,7 @@ func runAgent(ctx context.Context, agent *builder.ConfigurableAgent[any, core.St
 
 // formatResult converts a result map to a readable string
 func formatResult(result map[string]interface{}) string {
-	jsonBytes, err := json.MarshalIndent(result, "", "  ")
+	jsonBytes, err := json.Marshal(result, json.Indent("  "))
 	if err != nil {
 		return fmt.Sprintf("%v", result)
 	}

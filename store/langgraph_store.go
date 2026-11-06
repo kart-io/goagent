@@ -14,7 +14,7 @@ type StoreValue struct {
 	Value     interface{}            `json:"value"`
 	Metadata  map[string]interface{} `json:"metadata,omitempty"`
 	Timestamp time.Time              `json:"timestamp"`
-	TTL       *time.Duration         `json:"ttl,omitempty"`
+	TTL       *time.Duration         `json:"ttl,omitzero"`
 	Version   int                    `json:"version"`
 }
 
@@ -64,7 +64,7 @@ type StoreEvent struct {
 	Type      EventType              `json:"type"`
 	Namespace []string               `json:"namespace"`
 	Key       string                 `json:"key"`
-	Value     *StoreValue            `json:"value,omitempty"`
+	Value     *StoreValue            `json:"value,omitzero"`
 	Timestamp time.Time              `json:"timestamp"`
 	Metadata  map[string]interface{} `json:"metadata,omitempty"`
 }

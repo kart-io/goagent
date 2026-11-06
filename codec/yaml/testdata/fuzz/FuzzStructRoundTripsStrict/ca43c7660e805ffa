@@ -1,0 +1,8 @@
+go test fuzz v1
+string("\t\n")
+string("0")
+string("0")
+int(2)
+float64(1e+300)
+bool(true)
+int64(-71)

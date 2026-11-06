@@ -1,4 +1,4 @@
-// apicheck performs syntax-based import enforcement.
+// apicheck performs syntax-based import enforcement, including that format conversion goes through codec.
 package main
 
 import (
@@ -60,17 +60,31 @@ func forbidden(file, path string) bool {
 	switch source {
 	case "interfaces", "errors":
 		return true
+	case "codec":
+		// codec 及其子包是统一的格式转换入口，只依赖标准库、格式库与彼此，任何包都能导入它而不成环。
+		return dest != "codec"
 	case "utils":
 		// errors 已被上面的规则限定为不导入任何内部包的叶子包，utils 依赖它不会成环。
-		return dest != "utils" && dep != "errors"
+		return dest != "utils" && dep != "errors" && dest != "codec"
 	case "cache":
-		return dest != "cache" && dep != "utils/json"
+		return dest != "cache" && dest != "codec"
 	case "core":
 		return dest == "tools" || dest == "middleware" || dest == "parsers" || dest == "builder"
 	case "builder", "parsers":
 		return dest == "middleware"
 	}
 	return false
+}
+
+// formatLibs 是只允许 codec 及其子包导入的格式库（含测试，含 JSON/YAML/TOML/XML 的常见第三方实现与 mapstructure）：
+// 数据格式转换统一经 codec/json、codec/yaml 与 codec，其余代码通过它们的类型、选项与函数拿到结果。
+var formatLibs = []string{
+	"encoding/json", "encoding/xml",
+	"go.yaml.in/yaml/", "gopkg.in/yaml.", "sigs.k8s.io/yaml", "github.com/goccy/go-yaml",
+	"github.com/go-viper/mapstructure", "github.com/mitchellh/mapstructure",
+	"github.com/bytedance/sonic", "github.com/json-iterator/go", "github.com/goccy/go-json", "github.com/mailru/easyjson",
+	"github.com/tidwall/gjson", "github.com/tidwall/sjson", "github.com/buger/jsonparser",
+	"github.com/pelletier/go-toml", "github.com/BurntSushi/toml",
 }
 
 func inspect(fset *token.FileSet, file string, node *ast.File) []finding {
@@ -81,7 +95,30 @@ func inspect(fset *token.FileSet, file string, node *ast.File) []finding {
 			out = append(out, finding{fset.Position(imp.Pos()).Line, "disallowed import " + path})
 		}
 	}
+	return append(out, formatFindings(fset, file, node)...)
+}
+
+func formatFindings(fset *token.FileSet, file string, node *ast.File) []finding {
+	if strings.Split(filepath.ToSlash(file), "/")[0] == "codec" {
+		return nil
+	}
+	var out []finding
+	for _, imp := range node.Imports {
+		path, _ := strconv.Unquote(imp.Path.Value)
+		if formatLib(path) {
+			out = append(out, finding{fset.Position(imp.Pos()).Line, "数据格式转换须经 github.com/kart-io/goagent/codec 及其子包，不得直接导入 " + path})
+		}
+	}
 	return out
+}
+
+func formatLib(path string) bool {
+	for _, lib := range formatLibs {
+		if path == lib || strings.HasPrefix(path, strings.TrimSuffix(lib, "/")+"/") || strings.HasSuffix(lib, ".") && strings.HasPrefix(path, lib) {
+			return true
+		}
+	}
+	return false
 }
 
 func scan(root string) (int, error) {
@@ -97,7 +134,7 @@ func scan(root string) (int, error) {
 			}
 			return nil
 		}
-		if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+		if !strings.HasSuffix(path, ".go") {
 			return nil
 		}
 		rel, err := filepath.Rel(root, path)
@@ -108,7 +145,11 @@ func scan(root string) (int, error) {
 		if err != nil {
 			return err
 		}
-		for _, f := range inspect(fset, rel, node) {
+		check := inspect
+		if strings.HasSuffix(path, "_test.go") {
+			check = formatFindings
+		}
+		for _, f := range check(fset, rel, node) {
 			fmt.Printf("%s:%d: %s\n", path, f.line, f.message)
 			count++
 		}

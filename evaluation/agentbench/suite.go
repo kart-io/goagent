@@ -1,11 +1,12 @@
 package agentbench
 
 import (
-	"encoding/json"
 	"fmt"
 	"math/rand"
 	"sort"
 	"strings"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/interfaces"
 )
@@ -71,7 +72,12 @@ func GenerateSuite(seed int64, count int) []SuiteCase {
 			c.Evidence = fmt.Sprintf("工单：%s\n状态：处理中\n负责人：支持组 %d", id, n)
 		case 3:
 			c.Category = "JSON文本"
-			c.Evidence = fmt.Sprintf(`{"id":"%s","status":"ready","count":%d}`, id, n)
+			evidence, _ := json.Marshal(struct {
+				ID     string `json:"id"`
+				Status string `json:"status"`
+				Count  int    `json:"count"`
+			}{id, "ready", n})
+			c.Evidence = string(evidence)
 		case 4:
 			c.Category = "Unicode"
 			c.Evidence = fmt.Sprintf("✅ %s：東京 / München / café / مرحبا；余额 %d 元。", id, n)
@@ -179,7 +185,7 @@ func ScoreSuiteJob(job SuiteJob, result Result) SuiteOutcome {
 
 type SuiteSummary struct {
 	LookupBackend          string                `json:"lookup_backend,omitempty"`
-	LookupMisses           int32                 `json:"lookup_misses,omitempty"`
+	LookupMisses           int32                 `json:"lookup_misses,omitzero"`
 	ToolArgumentsEvaluated int                   `json:"tool_arguments_evaluated"`
 	ToolArgumentsPassed    int                   `json:"tool_arguments_passed"`
 	Framework              string                `json:"framework"`

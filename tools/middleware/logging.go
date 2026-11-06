@@ -4,12 +4,13 @@ import (
 	"context"
 	"time"
 
+	"github.com/kart-io/goagent/codec/json"
+
 	loggerCore "github.com/kart-io/logger/core"
 	"github.com/kart-io/logger/engines/slog"
 	"github.com/kart-io/logger/option"
 
 	"github.com/kart-io/goagent/interfaces"
-	"github.com/kart-io/goagent/utils/json"
 )
 
 // LoggingMiddleware 提供工具调用的日志记录功能。

@@ -21,7 +21,7 @@ type ToolStreamClient interface {
 type StreamChunk struct {
 	// ResponseModel is the supplier-reported model/version; empty means unreported.
 	ResponseModel string         `json:"response_model,omitempty"`
-	ProviderState *ProviderState `json:"provider_state,omitempty"`
+	ProviderState *ProviderState `json:"provider_state,omitzero"`
 	// ToolCalls 仅在成功终止块中包含本轮完整的工具调用。
 	ToolCalls []ToolCall `json:"tool_calls,omitempty"`
 	// ReasoningContent 仅用于工具回合的原生续接，不作为答案文本增量展示。
@@ -39,7 +39,7 @@ type StreamChunk struct {
 	FinishReason string `json:"finish_reason,omitempty"`
 
 	// Usage 使用情况（仅在最后一个块）
-	Usage *Usage `json:"usage,omitempty"`
+	Usage *Usage `json:"usage,omitzero"`
 
 	// Index 块序号
 	Index int `json:"index"`
@@ -51,7 +51,7 @@ type StreamChunk struct {
 	Done bool `json:"done"`
 
 	// Error 错误信息
-	Error error `json:"error,omitempty"`
+	Error error `json:"error,omitzero"`
 }
 
 // Usage 使用情况
@@ -59,11 +59,11 @@ type Usage struct {
 	PromptTokens        int `json:"prompt_tokens"`
 	CompletionTokens    int `json:"completion_tokens"`
 	TotalTokens         int `json:"total_tokens"`
-	CachedTokens        int `json:"cached_tokens,omitempty"`
-	ReasoningTokens     int `json:"reasoning_tokens,omitempty"`
-	ToolUsePromptTokens int `json:"tool_use_prompt_tokens,omitempty"`
+	CachedTokens        int `json:"cached_tokens,omitzero"`
+	ReasoningTokens     int `json:"reasoning_tokens,omitzero"`
+	ToolUsePromptTokens int `json:"tool_use_prompt_tokens,omitzero"`
 	// KnownFields nil preserves legacy three-field semantics. An explicit zero mask means unknown.
-	KnownFields *usage.Fields `json:"known_fields,omitempty"`
+	KnownFields *usage.Fields `json:"known_fields,omitzero"`
 }
 
 // Tokens returns an independent token value without deriving or adding totals.
@@ -88,19 +88,19 @@ func (u *Usage) Fields() usage.Fields {
 // StreamOptions 流式选项
 type StreamOptions struct {
 	// BufferSize 缓冲区大小
-	BufferSize int
+	BufferSize int `json:"buffer_size"`
 
 	// IncludeUsage 是否包含使用情况
-	IncludeUsage bool
+	IncludeUsage bool `json:"include_usage"`
 
 	// OnChunk 块处理回调
-	OnChunk func(*StreamChunk) error
+	OnChunk func(*StreamChunk) error `json:"-"`
 
 	// OnComplete 完成回调
-	OnComplete func(string) error
+	OnComplete func(string) error `json:"-"`
 
 	// OnError 错误回调
-	OnError func(error) error
+	OnError func(error) error `json:"-"`
 }
 
 // DefaultStreamOptions 返回默认流式选项

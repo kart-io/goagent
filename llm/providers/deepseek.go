@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kart-io/goagent/codec/json"
+
 	"github.com/go-resty/resty/v2"
 
 	agentErrors "github.com/kart-io/goagent/errors"
@@ -12,7 +14,6 @@ import (
 	"github.com/kart-io/goagent/llm/common"
 	"github.com/kart-io/goagent/llm/constants"
 	"github.com/kart-io/goagent/utils/httpclient"
-	"github.com/kart-io/goagent/utils/json"
 )
 
 // DeepSeekProvider implements LLM interface for DeepSeek
@@ -107,7 +108,7 @@ func (p *DeepSeekProvider) Embed(ctx context.Context, text string) ([]float32, e
 	}
 
 	var embedResp EmbedResponse
-	if err := json.NewDecoder(strings.NewReader(resp.String())).Decode(&embedResp); err != nil {
+	if err := json.Decode(strings.NewReader(resp.String()), &embedResp); err != nil {
 		return nil, agentErrors.NewParserInvalidJSONError("embeddings response", err).
 			WithContext("provider", p.ProviderName())
 	}

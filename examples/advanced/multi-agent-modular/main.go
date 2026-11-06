@@ -7,11 +7,12 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/kart-io/goagent/codec/json"
+
 	"github.com/kart-io/goagent/examples/advanced/multi-agent-modular/agents"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/constants"
 	"github.com/kart-io/goagent/llm/providers"
-	"github.com/kart-io/goagent/utils/json"
 )
 
 func main() {
@@ -173,7 +174,7 @@ func displayResults(result *agents.WorkflowResult) {
 	if len(result.ToolResults) > 0 {
 		fmt.Println("\n🛠️  Tool Results:")
 		for tool, res := range result.ToolResults {
-			jsonData, _ := json.MarshalIndent(res, "  ", "  ")
+			jsonData, _ := json.Marshal(res, json.IndentPrefix("  "), json.Indent("  "))
 			fmt.Printf("  %s:\n  %s\n", tool, truncate(string(jsonData), 150))
 		}
 	}

@@ -204,7 +204,7 @@ type ToolResult struct {
 	// ExecutionTime 是工具执行时长（毫秒）
 	//
 	// 可选，用于性能监控
-	ExecutionTime int64 `json:"execution_time,omitempty"`
+	ExecutionTime int64 `json:"execution_time,omitzero"`
 }
 
 // ToolCall 表示工具调用的记录
@@ -226,7 +226,7 @@ type ToolCall struct {
 	// Result 是工具的输出
 	//
 	// 如果调用仍在进行中可能为 nil
-	Result *ToolOutput `json:"result,omitempty"`
+	Result *ToolOutput `json:"result,omitzero"`
 
 	// Error 包含调用失败时的错误信息
 	//
@@ -239,7 +239,7 @@ type ToolCall struct {
 	// EndTime 是工具调用完成的时间（Unix 时间戳）
 	//
 	// 如果调用仍在进行中则为零
-	EndTime int64 `json:"end_time,omitempty"`
+	EndTime int64 `json:"end_time,omitzero"`
 
 	// Metadata 包含关于调用的额外上下文
 	//

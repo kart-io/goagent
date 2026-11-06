@@ -2,10 +2,11 @@ package durable
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"os"
 	"testing"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/stretchr/testify/require"

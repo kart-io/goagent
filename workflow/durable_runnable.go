@@ -2,11 +2,12 @@ package workflow
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/durable"
@@ -59,7 +60,7 @@ type ChildContinuation struct {
 	// Rejected 表示本次提供的审批未被采纳，图的状态未改变，仍在等待；Reason 为原因类别
 	// RejectApprovalMismatch（含中断等待时用意图键交输入）、RejectBeforeApprove 或 RejectResumeInput。
 	// 存储失败、panic 等不属于拒绝，照常作为失败返回。
-	Rejected bool   `json:"rejected,omitempty"`
+	Rejected bool   `json:"rejected,omitzero"`
 	Reason   string `json:"reason,omitempty"`
 	// Interrupts 是子图（含更深层）待回应的中断，Key 为最内层中断键。可以直接用
 	// durable.WithResume(ctx, Key, input) 回应，也可以经 WithResume 封装给本子图。

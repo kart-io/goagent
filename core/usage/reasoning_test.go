@@ -1,8 +1,9 @@
 package usage
 
 import (
-	"encoding/json"
 	"testing"
+
+	"github.com/kart-io/goagent/codec/json"
 )
 
 func TestReasoningConfigValidationAndZero(t *testing.T) {

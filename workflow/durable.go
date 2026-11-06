@@ -4,12 +4,13 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
 	"os"
 	"slices"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/durable"
@@ -21,9 +22,9 @@ import (
 // Bump Version when functions, state schemas, policies or nested runnables change;
 // topology is fingerprinted automatically, Go closures cannot be fingerprinted.
 type DurableConfig struct {
-	Store         durable.Store
-	Version       string
-	ApprovalNodes []string
+	Store         durable.Store `json:"-"`
+	Version       string        `json:"version"`
+	ApprovalNodes []string      `json:"approval_nodes"`
 }
 
 // DurableGraph resumes at node boundaries. Branch routing is checkpointed
@@ -77,7 +78,7 @@ type GraphSnapshot[T any] struct {
 }
 
 type graphState[T any] struct {
-	Parallel   *parallelCheckpoint `json:"parallel,omitempty"`
+	Parallel   *parallelCheckpoint `json:"parallel,omitzero"`
 	Node       string              `json:"node"`
 	Routing    bool                `json:"routing"`
 	State      T                   `json:"state"`
@@ -198,19 +199,23 @@ func (d *DurableGraph[T]) run(ctx context.Context, store durable.Store, id strin
 	}
 	result = publicGraphSnapshot(checkpoint, state)
 	// Save using fresh snapshots; failed writes leave the last acknowledged state.
-	save := func(next durable.Snapshot, nextState graphState[T]) error {
-		data, e := json.Marshal(nextState)
-		if e != nil {
-			return e
-		}
-		next.Data = data
-		if e = store.Save(ctx, id, &next); e != nil {
+	// commit 保存快照，调用方保证 next.Data 是 nextState 的编码；save 用于状态变化后，先编码 nextState。
+	commit := func(next durable.Snapshot, nextState graphState[T]) error {
+		if e := store.Save(ctx, id, &next); e != nil {
 			return e
 		}
 		checkpoint = &next
 		state = nextState
 		result = publicGraphSnapshot(checkpoint, state)
 		return nil
+	}
+	save := func(next durable.Snapshot, nextState graphState[T]) error {
+		data, e := json.Marshal(nextState)
+		if e != nil {
+			return e
+		}
+		next.Data = data
+		return commit(next, nextState)
 	}
 	// 中断等待恢复期间检查点保持等待：重新执行中途崩溃时仍可按“已回应”规则恢复。
 	answered := ""
@@ -274,6 +279,7 @@ func (d *DurableGraph[T]) run(ctx context.Context, store durable.Store, id strin
 		if checkpoint.Next >= d.graph.config.MaxSteps {
 			return result, fmt.Errorf("%w: limit %d", ErrMaxSteps, d.graph.config.MaxSteps)
 		}
+		// 意图快照只改位置与键，状态沿用 checkpoint.Data，不重新编码。
 		intent := *checkpoint
 		intent.Key = graphDigest([]any{id, d.plan, state.Node, checkpoint.Next})
 		if d.approvals[state.Node] && !intent.Approved {
@@ -283,7 +289,7 @@ func (d *DurableGraph[T]) run(ctx context.Context, store durable.Store, id strin
 				approvalKey = ""
 			} else {
 				intent.Waiting = true
-				if err = save(intent, state); err != nil {
+				if err = commit(intent, state); err != nil {
 					return result, err
 				}
 				if err = emit(&core.StreamEvent{Type: "approval_required", Step: state.Node}); err != nil {
@@ -292,7 +298,7 @@ func (d *DurableGraph[T]) run(ctx context.Context, store durable.Store, id strin
 				return result, durable.ErrApprovalRequired
 			}
 		}
-		if err = save(intent, state); err != nil {
+		if err = commit(intent, state); err != nil {
 			return result, err
 		}
 		// Decode afresh to prevent mutable node inputs from modifying checkpoint data

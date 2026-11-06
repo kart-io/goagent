@@ -2,10 +2,11 @@ package session
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"os/exec"
 	"testing"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/internal/txnlog"

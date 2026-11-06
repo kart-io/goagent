@@ -7,12 +7,13 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/kart-io/goagent/codec/json"
+
 	"google.golang.org/genai"
 
 	"github.com/kart-io/goagent/interfaces"
 	llm "github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/constants"
-	"github.com/kart-io/goagent/utils/json"
 )
 
 var _ llm.ToolStreamClient = (*GeminiProvider)(nil)

@@ -22,15 +22,15 @@ import (
 
 // Event deliberately excludes raw inputs, outputs and provider error messages.
 type Event struct {
-	Agent                                       *usage.Invocation    `json:",omitempty"`
-	Usage                                       *usage.ModelEvidence `json:",omitempty"`
+	Agent                                       *usage.Invocation    `json:",omitzero"`
+	Usage                                       *usage.ModelEvidence `json:",omitzero"`
 	RunID, OperationKey, VisitID, EventID, Type string
 	TraceID, SpanID, ParentSpanID               string
 	Path, ErrorKind                             string
 	At                                          time.Time
 	Duration                                    time.Duration
 	Replayed                                    bool
-	Dropped                                     uint64 `json:",omitempty"`
+	Dropped                                     uint64 `json:",omitzero"`
 }
 
 // Observer must support concurrent calls. Custom callbacks must return promptly.

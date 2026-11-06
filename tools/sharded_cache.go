@@ -56,49 +56,49 @@ type cacheShard struct {
 // ShardedCacheConfig 分片缓存配置
 type ShardedCacheConfig struct {
 	// ShardCount 分片数量（建议为 2 的幂，默认 32）
-	ShardCount uint32
+	ShardCount uint32 `json:"shard_count"`
 
 	// Capacity 总容量（每个分片的容量 = Capacity / ShardCount）
-	Capacity int
+	Capacity int `json:"capacity"`
 
 	// DefaultTTL 默认 TTL
-	DefaultTTL time.Duration
+	DefaultTTL time.Duration `json:"default_ttl"`
 
 	// CleanupInterval 清理间隔
-	CleanupInterval time.Duration
+	CleanupInterval time.Duration `json:"cleanup_interval"`
 
 	// EvictionPolicy 淘汰策略
-	EvictionPolicy EvictionPolicy
+	EvictionPolicy EvictionPolicy `json:"eviction_policy"`
 
 	// CleanupStrategy 清理策略
-	CleanupStrategy CleanupStrategy
+	CleanupStrategy CleanupStrategy `json:"cleanup_strategy"`
 
 	// LoadBalancing 负载均衡策略
-	LoadBalancing LoadBalancingStrategy
+	LoadBalancing LoadBalancingStrategy `json:"load_balancing"`
 
 	// AutoTuning 自动调优
-	AutoTuning bool
+	AutoTuning bool `json:"auto_tuning"`
 
 	// MetricsEnabled 是否启用指标收集
-	MetricsEnabled bool
+	MetricsEnabled bool `json:"metrics_enabled"`
 
 	// MaxConcurrency 每个分片的最大并发数
-	MaxConcurrency int
+	MaxConcurrency int `json:"max_concurrency"`
 
 	// WarmupEntries 预热条目
-	WarmupEntries map[string]*interfaces.ToolOutput
+	WarmupEntries map[string]*interfaces.ToolOutput `json:"warmup_entries"`
 
 	// CompressionThreshold 压缩阈值（字节）
-	CompressionThreshold int
+	CompressionThreshold int `json:"compression_threshold"`
 
 	// MaxEntrySize 单个条目最大大小（字节）
-	MaxEntrySize int
+	MaxEntrySize int `json:"max_entry_size"`
 
 	// MemoryLimit 内存限制（字节）
-	MemoryLimit int64
+	MemoryLimit int64 `json:"memory_limit"`
 
 	// WorkloadType 工作负载类型
-	WorkloadType WorkloadType
+	WorkloadType WorkloadType `json:"workload_type"`
 }
 
 // NewShardedToolCache 创建分片工具缓存（使用配置结构体）

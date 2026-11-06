@@ -8,9 +8,10 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/kart-io/goagent/codec/json"
+
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
-	"github.com/kart-io/goagent/utils/json"
 )
 
 // InputValidator 提供工具输入验证功能

@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kart-io/goagent/codec/json"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -14,7 +16,6 @@ import (
 	agentllm "github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/common"
 	"github.com/kart-io/goagent/llm/constants"
-	"github.com/kart-io/goagent/utils/json"
 )
 
 // ==============================================================================
@@ -48,7 +49,7 @@ func TestDeepSeekProvider_EmbedMultipleChunks(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		json.Encode(w, resp)
 	}))
 	defer mockServer.Close()
 

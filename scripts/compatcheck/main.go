@@ -4,7 +4,6 @@ package main
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -17,6 +16,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/internal/processgroup"
 )
@@ -154,7 +155,7 @@ func discover(ctx context.Context, root string) ([]module, error) {
 }
 
 func writeJSON(path string, value any) error {
-	data, err := json.MarshalIndent(value, "", "  ")
+	data, err := json.Marshal(value, json.Indent("  "))
 	if err != nil {
 		return err
 	}

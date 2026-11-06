@@ -3,11 +3,12 @@ package workflow
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
 	"strings"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/core/durable"
 )
@@ -21,7 +22,7 @@ type InterruptPoint struct {
 	Key      string          `json:"key"`
 	ID       string          `json:"id"`
 	Info     json.RawMessage `json:"info"`
-	Rejected bool            `json:"rejected,omitempty"`
+	Rejected bool            `json:"rejected,omitzero"`
 	Reason   string          `json:"reason,omitempty"`
 }
 
@@ -114,11 +115,9 @@ func waitCause(waits []*durable.WaitError) error {
 	return errors.Join(causes...)
 }
 
-// sameJSON 按 json.Compact 后的字节比较：空白差异相同，键顺序或数字写法不同算不同。
+// sameJSON 按压缩后的字节比较：空白差异相同，键顺序或数字写法不同算不同。
 func sameJSON(a, b json.RawMessage) bool {
-	var x, y bytes.Buffer
-	if json.Compact(&x, a) != nil || json.Compact(&y, b) != nil {
-		return false
-	}
-	return bytes.Equal(x.Bytes(), y.Bytes())
+	x, errX := json.Compact(a)
+	y, errY := json.Compact(b)
+	return errX == nil && errY == nil && bytes.Equal(x, y)
 }

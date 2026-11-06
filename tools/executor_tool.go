@@ -66,23 +66,23 @@ type ToolResult struct {
 // RetryPolicy 重试策略
 type RetryPolicy struct {
 	// MaxRetries 最大重试次数
-	MaxRetries int
+	MaxRetries int `json:"max_retries"`
 
 	// InitialDelay 初始延迟
-	InitialDelay time.Duration
+	InitialDelay time.Duration `json:"initial_delay"`
 
 	// MaxDelay 最大延迟
-	MaxDelay time.Duration
+	MaxDelay time.Duration `json:"max_delay"`
 
 	// Multiplier 延迟倍数
-	Multiplier float64
+	Multiplier float64 `json:"multiplier"`
 
 	// Jitter 随机抖动比例 (0.0 - 1.0)，默认 0.25
 	// 用于避免高并发场景下的雷群效应
-	Jitter float64
+	Jitter float64 `json:"jitter"`
 
 	// RetryableErrors 可重试的错误类型
-	RetryableErrors []string
+	RetryableErrors []string `json:"retryable_errors"`
 }
 
 // ErrorHandler 错误处理器

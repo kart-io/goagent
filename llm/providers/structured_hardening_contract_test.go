@@ -2,12 +2,13 @@ package providers_test
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/providers"

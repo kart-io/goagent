@@ -3,13 +3,14 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"os"
 	"strings"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/workflow"
@@ -131,7 +132,5 @@ func run(ctx context.Context, args []string, output io.Writer) error {
 	if snapshot == nil {
 		return errors.New("missing checkpoint")
 	}
-	encoder := json.NewEncoder(output)
-	encoder.SetIndent("", "  ")
-	return encoder.Encode(snapshot)
+	return json.Encode(output, snapshot, json.Indent("  "))
 }

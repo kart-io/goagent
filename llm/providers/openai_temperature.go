@@ -3,11 +3,12 @@ package providers
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/sashabaranov/go-openai"
 )

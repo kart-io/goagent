@@ -5,9 +5,10 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/kart-io/goagent/codec/json"
+
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
-	"github.com/kart-io/goagent/utils/json"
 )
 
 // FunctionTool 函数包装工具
@@ -240,10 +241,15 @@ func getJSONFieldName(field reflect.StructField) string {
 	return parts[0]
 }
 
-// hasOmitEmpty 检查字段是否有 omitempty 标记
+// hasOmitEmpty 检查字段是否有 omitempty 或 omitzero 标记（v2 中数字、布尔用 omitzero 表示可省略）
 func hasOmitEmpty(field reflect.StructField) bool {
-	jsonTag := field.Tag.Get("json")
-	return strings.Contains(jsonTag, "omitempty")
+	_, opts, _ := strings.Cut(field.Tag.Get("json"), ",")
+	for opt := range strings.SplitSeq(opts, ",") {
+		if opt == "omitempty" || opt == "omitzero" {
+			return true
+		}
+	}
+	return false
 }
 
 // getTypeString 将 Go 类型映射为 JSON Schema 类型

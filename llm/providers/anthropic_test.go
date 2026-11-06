@@ -10,13 +10,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kart-io/goagent/codec/json"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/kart-io/goagent/core/usage"
 	"github.com/kart-io/goagent/interfaces"
 	agentllm "github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/constants"
-	"github.com/kart-io/goagent/utils/json"
 )
 
 type anthropicEvent struct{ name, data string }
@@ -34,7 +35,7 @@ func anthropicServer(t *testing.T, events []anthropicEvent, bodies chan<- map[st
 	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if err := json.Decode(r.Body, &body); err != nil {
 			t.Error(err)
 			return
 		}

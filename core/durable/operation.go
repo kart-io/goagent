@@ -2,13 +2,14 @@ package durable
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	agentErrors "github.com/kart-io/goagent/errors"
 )
@@ -43,20 +44,20 @@ func ChildKey(parent, id string) string {
 }
 
 type OperationPolicy struct {
-	MaxAttempts int
+	MaxAttempts int `json:"max_attempts"`
 	// RetryFailed permits another attempt on a subsequent explicit invocation.
 	// Do never loops or retries within a single invocation.
-	RetryFailed bool
+	RetryFailed bool `json:"retry_failed"`
 	// Reconcile 在记录停在 pending（上次执行中断、结果未知）时先于重跑调用，按派生执行键查询效果是否已生效：
 	// found 为真时用 value 补记为 completed，不执行 run、不计尝试次数；返回错误时记录不变。
-	Reconcile func(ctx context.Context) (value json.RawMessage, found bool, err error)
+	Reconcile func(ctx context.Context) (value json.RawMessage, found bool, err error) `json:"-"`
 	// Resumable 声明 run 的全部效果都记在派生执行键下，重新进入只会回放已完成的步骤：
 	// waiting 记录总是重新进入且不计尝试次数，pending 记录在 MaxAttempts 内重新进入。
 	// 只有声明它的操作能把 *WaitError 记为等待。
-	Resumable bool
+	Resumable bool `json:"resumable"`
 	// RetryInterrupted 允许在 MaxAttempts 内重跑被中断的操作：记录停在 pending（进程崩溃）或因取消而失败（进程停止）。
 	// 上次执行可能已经生效，调用方须接受重复的效果；普通失败和超时不算中断。
-	RetryInterrupted bool
+	RetryInterrupted bool `json:"retry_interrupted"`
 }
 
 type OperationRecord struct {
@@ -71,7 +72,7 @@ type OperationRecord struct {
 	// Continuation 是 waiting 记录保存的等待项（[]*WaitError 的 JSON），只含定位信息。
 	Continuation json.RawMessage `json:"continuation,omitempty"`
 	// Reconciled 表示 completed 结果来自 Reconcile 核对，而非本次执行。
-	Reconciled bool `json:"reconciled,omitempty"`
+	Reconciled bool `json:"reconciled,omitzero"`
 	Replayed   bool `json:"-"`
 }
 

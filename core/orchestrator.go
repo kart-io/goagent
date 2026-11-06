@@ -127,7 +127,7 @@ type ExecutionStep struct {
 
 	// 错误信息
 	Error        string `json:"error,omitempty"`         // 错误信息
-	RetryCount   int    `json:"retry_count,omitempty"`   // 重试次数
+	RetryCount   int    `json:"retry_count,omitzero"`    // 重试次数
 	PartialError string `json:"partial_error,omitempty"` // 部分错误
 
 	// 元数据

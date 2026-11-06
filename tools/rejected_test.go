@@ -2,9 +2,10 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"testing"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/interfaces"

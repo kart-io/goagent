@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/kart-io/goagent/utils/json"
+	"github.com/kart-io/goagent/codec/json"
 )
 
 // State defines the interface for Agent state management.

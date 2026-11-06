@@ -4,7 +4,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -13,6 +12,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/kart-io/goagent/codec/json"
 )
 
 func TestCompatcheckSignalHelperProcess(t *testing.T) {

@@ -11,8 +11,9 @@ import (
 	"reflect"
 	"sync"
 
+	"github.com/kart-io/goagent/codec/json"
+
 	agentErrors "github.com/kart-io/goagent/errors"
-	"github.com/kart-io/goagent/utils/json"
 )
 
 // =============================================================================
@@ -49,13 +50,13 @@ type FieldSchema struct {
 	Description string `json:"description,omitempty"`
 
 	// Default 默认值
-	Default interface{} `json:"default,omitempty"`
+	Default interface{} `json:"default,omitzero"`
 
 	// ItemType 数组元素类型（仅当 Type == FieldTypeArray 时有效）
 	ItemType FieldType `json:"item_type,omitempty"`
 
 	// ObjectSchema 嵌套对象的 Schema（仅当 Type == FieldTypeObject 时有效）
-	ObjectSchema *StateSchema `json:"object_schema,omitempty"`
+	ObjectSchema *StateSchema `json:"object_schema,omitzero"`
 
 	// Validator 自定义验证函数
 	Validator func(value interface{}) error `json:"-"`

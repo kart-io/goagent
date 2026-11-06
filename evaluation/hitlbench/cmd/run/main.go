@@ -3,7 +3,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -11,6 +10,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/builder"
 	"github.com/kart-io/goagent/core/budget"
@@ -34,7 +35,7 @@ const (
 type state struct {
 	OrderID        string `json:"order_id"`
 	OriginalAmount int    `json:"original_amount"`
-	ApprovedAmount int    `json:"approved_amount,omitempty"`
+	ApprovedAmount int    `json:"approved_amount,omitzero"`
 	Draft          string `json:"draft,omitempty"`
 	Decision       string `json:"decision,omitempty"`
 	Reviewer       string `json:"reviewer,omitempty"`
@@ -96,7 +97,7 @@ type result struct {
 	StartedAt  time.Time                      `json:"started_at"`
 	DurationMS int64                          `json:"duration_ms"`
 	NewCalls   int64                          `json:"new_model_calls"`
-	Snapshot   *workflow.GraphSnapshot[state] `json:"snapshot,omitempty"`
+	Snapshot   *workflow.GraphSnapshot[state] `json:"snapshot,omitzero"`
 	Budget     budget.Snapshot                `json:"budget"`
 	Error      string                         `json:"error,omitempty"`
 }
@@ -283,7 +284,7 @@ func run() int {
 	if err != nil {
 		out.Error = redact(err.Error())
 	}
-	if err := json.NewEncoder(os.Stdout).Encode(out); err != nil {
+	if err := json.Encode(os.Stdout, out); err != nil {
 		fmt.Fprintln(os.Stderr, redact(err.Error()))
 		return 1
 	}

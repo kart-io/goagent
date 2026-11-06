@@ -2,7 +2,6 @@ package contextpolicy
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"maps"
 	"math"
@@ -11,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"unicode/utf8"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/google/uuid"
 	"github.com/kart-io/goagent/core/durable"
@@ -24,10 +25,14 @@ const ReadToolName = "read_context_result"
 // OffloadConfig keeps character counts distinct from model token limits.
 // Namespace identifies host storage configuration; changing backends requires a new namespace/version.
 type OffloadConfig struct {
-	ID, Version, Namespace                                  string
-	MaxToolResultRunes, KeepRecentToolRounds, ReadPageRunes int
-	ExcludeTools                                            []string
-	Store                                                   ResultStore
+	ID                   string      `json:"id"`
+	Version              string      `json:"version"`
+	Namespace            string      `json:"namespace"`
+	MaxToolResultRunes   int         `json:"max_tool_result_runes"`
+	KeepRecentToolRounds int         `json:"keep_recent_tool_rounds"`
+	ReadPageRunes        int         `json:"read_page_runes"`
+	ExcludeTools         []string    `json:"exclude_tools"`
+	Store                ResultStore `json:"-"`
 }
 
 // Offload 把超长的工具结果写入 ResultStore，在对话中换成引用，模型经读取工具（实例本身，名为 ReadToolName）分页读回；

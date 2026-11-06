@@ -12,8 +12,10 @@
 |--------|----------|
 | 任意（含 `examples/`） | `github.com/kart-io/goagent-harness` 及其子包 |
 | `interfaces/`、`errors/` | 任何 GoAgent 内部包 |
-| `utils/` | 除 `utils/...` 与 `errors` 以外的内部包 |
-| `cache/` | 除 `cache/...` 与 `utils/json` 以外的内部包 |
+| `utils/` | 除 `utils/...`、`errors` 与 `codec/...` 以外的内部包 |
+| `cache/` | 除 `cache/...` 与 `codec/...` 以外的内部包 |
+| `codec/` | 除 `codec/...` 以外的 GoAgent 内部包（统一格式转换入口，只依赖标准库、YAML 库、mapstructure 与彼此） |
+| 除 `codec/` 外的全部代码（含测试与 `examples/`） | `encoding/json`、`encoding/json/v2`、`encoding/json/jsontext`、`encoding/xml`、YAML 库（`go.yaml.in/yaml/...`、`gopkg.in/yaml.*`、`sigs.k8s.io/yaml`、`goccy/go-yaml`）、mapstructure，以及 sonic、json-iterator、go-json、easyjson、gjson、sjson、jsonparser、go-toml、BurntSushi/toml。数据格式转换统一用 `codec/json`、`codec/yaml` 的 `Marshal`/`Unmarshal`，`json.RawMessage`、`json.Number` 等类型与 `json.Strict`、`json.Indent` 等选项，格式运行时才确定时用 `codec`；测试文件只检查此条，其余分层规则只约束非测试代码 |
 | `core/` | `tools`、`middleware`、`parsers`、`builder`（顶层目录，`core/middleware` 不受影响） |
 | `builder/` | `middleware` |
 | `parsers/` | `middleware` |
@@ -29,7 +31,7 @@
 
 ## 当前依赖图
 
-`go list` 得到的实际内部依赖（不含 `examples/`、测试与 `cmd/`）见 [架构概述](ARCHITECTURE.md#包依赖)。基础叶子包为 `errors`、`interfaces`、`utils/json`、`llm/constants`、`harness/env`。
+`go list` 得到的实际内部依赖（不含 `examples/`、测试与 `cmd/`）见 [架构概述](ARCHITECTURE.md#包依赖)。基础叶子包为 `errors`、`interfaces`、`llm/constants`、`harness/env`。
 
 ## 运行
 

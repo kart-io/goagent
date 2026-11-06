@@ -2,7 +2,8 @@ package llm
 
 import (
 	"bytes"
-	"encoding/json"
+
+	"github.com/kart-io/goagent/codec/json"
 )
 
 // temperatureField 保留显式零；未设置时不生成字段，避免把默认行为变为零温。
@@ -38,7 +39,7 @@ func (r CompletionRequest) MarshalJSON() ([]byte, error) {
 	}
 	return json.Marshal(struct {
 		*plain
-		Temperature *float64 `json:"temperature,omitempty"`
+		Temperature *float64 `json:"temperature,omitzero"`
 	}{(*plain)(&r), temperatureField(r.Temperature, r.TemperatureSet)})
 }
 func (r *CompletionRequest) UnmarshalJSON(data []byte) error {
@@ -66,17 +67,23 @@ func (c LLMOptions) MarshalJSON() ([]byte, error) {
 	}
 	return json.Marshal(struct {
 		*plain
-		Temperature *float64 `json:"temperature,omitempty"`
+		Temperature *float64 `json:"temperature,omitzero"`
 	}{(*plain)(&c), temperatureField(c.Temperature, c.TemperatureSet)})
 }
 func (c *LLMOptions) UnmarshalJSON(data []byte) error {
+	return c.UnmarshalJSONFrom(json.NewDecoder(bytes.NewReader(data)))
+}
+
+// UnmarshalJSONFrom 沿用调用方的解码选项（如 config 包的未知字段报错与时长字符串）；
+// v1 风格的 UnmarshalJSON 拿不到这些选项。
+func (c *LLMOptions) UnmarshalJSONFrom(dec *json.Decoder) error {
 	type plain LLMOptions
 	next := plain(*c)
 	payload := struct {
 		*plain
 		Temperature json.RawMessage `json:"temperature"`
 	}{plain: &next}
-	if err := json.Unmarshal(data, &payload); err != nil {
+	if err := json.DecodeNext(dec, &payload); err != nil {
 		return err
 	}
 	if err := decodeTemperature(payload.Temperature, &next.Temperature, &next.TemperatureSet); err != nil {

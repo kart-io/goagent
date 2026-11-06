@@ -289,7 +289,7 @@ type Case struct {
 	// greater similarity to the query.
 	//
 	// Not persisted in storage.
-	Similarity float64 `json:"similarity,omitempty"`
+	Similarity float64 `json:"similarity,omitzero"`
 
 	// CreatedAt is when the case was first added.
 	CreatedAt time.Time `json:"created_at"`

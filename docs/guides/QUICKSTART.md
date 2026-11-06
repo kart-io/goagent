@@ -1,6 +1,6 @@
 # GoAgent 快速入门
 
-新应用统一使用 `agent.AsRunnable()`。同步和流式调用使用相同执行源，配置的工具、检索器、中间件及完成回调走同一路径。要求 Go 1.26+ 与实现 `llm.Client`（`CompleteStream`）的客户端；内置 Provider（OpenAI 及其兼容预设、DeepSeek、Gemini、Anthropic）都同时实现原生工具流（`llm.ToolStreamClient`）。
+新应用统一使用 `agent.AsRunnable()`。同步和流式调用使用相同执行源，配置的工具、检索器、中间件及完成回调走同一路径。要求 Go 1.27+ 与实现 `llm.Client`（`CompleteStream`）的客户端；内置 Provider（OpenAI 及其兼容预设、DeepSeek、Gemini、Anthropic）都同时实现原生工具流（`llm.ToolStreamClient`）。
 
 ```sh
 go get github.com/kart-io/goagent

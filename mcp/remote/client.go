@@ -3,9 +3,10 @@ package remote
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/interfaces"

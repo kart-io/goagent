@@ -2,9 +2,10 @@ package builder
 
 import (
 	"fmt"
+	"time"
+
 	"github.com/kart-io/goagent/builder/contextpolicy"
 	"github.com/kart-io/goagent/core/session"
-	"time"
 
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/budget"
@@ -48,7 +49,7 @@ var outputFormatPrompts = map[OutputFormat]string{
 
 // AgentConfig 保存 Agent 配置选项
 type AgentConfig struct {
-	Reasoning *usage.ReasoningConfig `json:"reasoning,omitempty"`
+	Reasoning *usage.ReasoningConfig `json:"reasoning,omitzero"`
 	UsageHook budget.UsageHook       `json:"-"`
 	AgentID   string                 `json:",omitempty"`
 	// TokenEstimator 是宿主的保守 Token 估计函数，不写入持久配置。

@@ -33,8 +33,8 @@ type SearchResult struct {
 	URL         string    `json:"url"`
 	Snippet     string    `json:"snippet"`
 	Source      string    `json:"source"`
-	PublishDate time.Time `json:"publish_date,omitempty"`
-	Score       float64   `json:"score,omitempty"`
+	PublishDate time.Time `json:"publish_date"`
+	Score       float64   `json:"score,omitzero"`
 }
 
 // NewSearchTool 创建搜索工具

@@ -11,16 +11,16 @@ GoAgent（`github.com/kart-io/goagent`）是 Go 的 Agent 执行内核：Builder
 
 ## 技术栈
 
-- 最低 Go 1.26.0，开发工具链 Go 1.26.10（以 `go.mod` 声明为准）
+- 最低 Go 1.27.0，开发工具链 Go 1.27.3（以 `go.mod` 声明为准）
 - 模型：`github.com/sashabaranov/go-openai`（OpenAI 兼容协议）、`google.golang.org/genai`（Gemini）、`github.com/anthropics/anthropic-sdk-go/v2`（Anthropic）；Ollama、Kimi、SiliconFlow 是 OpenAI 兼容预设，见 `llm/providers`
 - MCP：官方 `github.com/modelcontextprotocol/go-sdk`
 - 观测：OpenTelemetry（trace/metric/OTLP gRPC 导出）、Prometheus client
 - 日志：`github.com/kart-io/logger`
-- JSON：`github.com/bytedance/sonic`（经 `utils/json` 封装）
+- 数据格式：统一经 `codec/json`（基于标准库 `encoding/json/v2`）与 `codec/yaml`（基于 `go.yaml.in/yaml/v3` 并经 JSON 转换），格式运行时才确定时用 `codec`；`time.Duration` 为整数纳秒，配置文件经 `json.Strict` 还接受 `30s`，保留数字原文用 `json.UseNumber` 与 `json.Number`，JSON 原文用 `json.RawMessage`；除 `codec` 及其子包外不直接导入 JSON/YAML 库
 
 ## 包依赖
 
-下图由 `go list -f '{{.ImportPath}} {{.Imports}}' ./...` 整理（不含 `examples/`、`cmd/`、测试；省略几乎所有包都依赖的 `errors`、`interfaces`、`utils/json`）。箭头表示“导入”。
+下图由 `go list -f '{{.ImportPath}} {{.Imports}}' ./...` 整理（不含 `examples/`、`cmd/`、测试；省略几乎所有包都依赖的 `errors`、`interfaces`）。箭头表示“导入”。
 
 ```mermaid
 graph TD
@@ -116,6 +116,7 @@ graph TD
 | `mcp/remote` | 基于官方 SDK 的 MCP 客户端适配 |
 | `middleware`、`observability` | Agent 中间件实现（LLM 工具选择、动态提示词、可观测性等）；OTel 遥测提供者、指标与跨服务追踪 |
 | `parsers` | 输出解析器（JSON、结构化、列表、枚举等） |
+| `codec` | 统一的数据格式编解码入口，与 Kubernetes 一样一种格式一个子包：`codec/json`（`Marshal`、`Unmarshal`、`Encode`、`Strict` 等）、`codec/yaml`（经 JSON 转换，结构体只需 json 标签）；`codec` 提供按名称或扩展名选择的 `Codec` 接口、`ReadFile` 读取配置文件、`Convert` 按 json 标签转换通用值；其余代码不直接使用 JSON/YAML/TOML/XML 库与 mapstructure |
 | `harness/env` | 文件系统与命令执行的环境接口（本地、Docker、只读、检查点包装） |
 | `devtools` | 观察事件记录与图报告 |
 | `evaluation/...` | 离线评测：`agentbench`、`executionbench` |

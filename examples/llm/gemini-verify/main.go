@@ -4,12 +4,13 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
@@ -23,7 +24,7 @@ type result struct {
 	Passed     bool                   `json:"passed"`
 	Answer     string                 `json:"answer,omitempty"`
 	ToolCalls  []llm.ToolCall         `json:"tool_calls,omitempty"`
-	Usage      *interfaces.TokenUsage `json:"usage,omitempty"`
+	Usage      *interfaces.TokenUsage `json:"usage,omitzero"`
 	Error      string                 `json:"error,omitempty"`
 	DurationMS int64                  `json:"duration_ms"`
 	Details    map[string]any         `json:"details,omitempty"`
@@ -104,7 +105,7 @@ func run(args []string) error {
 		}
 	}
 	report := map[string]any{"provider": "GeminiProvider", "backend": "Gemini native API (Google GenAI SDK)", "model": *model, "timestamp": time.Now().UTC(), "suite": *suite, "embedding_model": p.Config.EmbeddingModel, "maximum_upstream_requests": plannedRequests, "completed": len(results), "passed": passed, "max_output_tokens": 2048, "temperature": 0.2, "timeout_seconds": 90, "sdk_retries": 0, "usage_reported_cases": known, "known_usage_only": usage, "limitations": "Embed does not expose token usage; known usage excludes those requests. Native suite exercises bounded tool loops on synthetic read-only tools; no production backend or broad retrieval quality validation.", "results": results}
-	data, err := json.MarshalIndent(report, "", "  ")
+	data, err := json.Marshal(report, json.Indent("  "))
 	if err != nil {
 		return err
 	}

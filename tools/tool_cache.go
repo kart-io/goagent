@@ -97,13 +97,13 @@ type CacheStats struct {
 // MemoryCacheConfig 内存缓存配置
 type MemoryCacheConfig struct {
 	// Capacity 最大容量（条目数）
-	Capacity int
+	Capacity int `json:"capacity"`
 
 	// DefaultTTL 默认 TTL
-	DefaultTTL time.Duration
+	DefaultTTL time.Duration `json:"default_ttl"`
 
 	// CleanupInterval 清理间隔
-	CleanupInterval time.Duration
+	CleanupInterval time.Duration `json:"cleanup_interval"`
 }
 
 // NewMemoryToolCache 创建内存工具缓存

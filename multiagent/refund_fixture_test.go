@@ -1,15 +1,15 @@
 package multiagent
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/durable"
@@ -42,7 +42,7 @@ type registration struct {
 
 type execution struct {
 	Receipt      string `json:"receipt,omitempty"`
-	OrderChanged bool   `json:"order_changed,omitempty"`
+	OrderChanged bool   `json:"order_changed,omitzero"`
 }
 
 // reviewInput 是审核回应；approver 由宿主认证后填入，reason 为 timeout 表示等待超时按拒绝处理。
@@ -55,10 +55,8 @@ type reviewInput struct {
 
 // validateReview 是纯函数：格式错误或批准却没有审核人时保持等待。
 func validateReview(raw json.RawMessage) error {
-	dec := json.NewDecoder(bytes.NewReader(raw))
-	dec.DisallowUnknownFields()
 	var in reviewInput
-	if err := dec.Decode(&in); err != nil {
+	if err := json.Unmarshal(raw, &in, json.Strict); err != nil {
 		return errors.New("审核输入格式应为 {approved, note, approver}")
 	}
 	if in.Approved && in.Approver == "" {

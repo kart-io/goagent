@@ -7,8 +7,8 @@ import "fmt"
 // BudgetSet preserves an explicit zero budget; -1 requests a dynamic budget.
 type ReasoningConfig struct {
 	Effort       string `json:"effort,omitempty"`
-	BudgetTokens int    `json:"budget_tokens,omitempty"`
-	BudgetSet    bool   `json:"budget_set,omitempty"`
+	BudgetTokens int    `json:"budget_tokens,omitzero"`
+	BudgetSet    bool   `json:"budget_set,omitzero"`
 }
 
 func (c ReasoningConfig) Validate() error {

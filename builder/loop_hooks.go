@@ -2,12 +2,13 @@ package builder
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/interfaces"
@@ -35,7 +36,7 @@ type Step struct {
 
 // PreStepResult 是 PreStep 的结果。Halt 为真时不再请求模型，以 Answer 作为本轮最终答复结束。
 type PreStepResult struct {
-	Halt   bool   `json:"halt,omitempty"`
+	Halt   bool   `json:"halt,omitzero"`
 	Answer string `json:"answer,omitempty"`
 }
 

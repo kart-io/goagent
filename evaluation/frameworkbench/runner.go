@@ -3,13 +3,14 @@ package frameworkbench
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/cloudwego/eino/adk"
 	"github.com/cloudwego/eino/components/model"
@@ -32,7 +33,7 @@ type Outcome struct {
 	ModelCalls int64  `json:"model_calls"`
 	ToolCalls  int64  `json:"tool_calls"`
 	Chunks     int    `json:"chunks"`
-	FirstNS    int64  `json:"first_ns,omitempty"`
+	FirstNS    int64  `json:"first_ns,omitzero"`
 }
 type Runner struct {
 	run func(context.Context) (Outcome, error)

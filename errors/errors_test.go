@@ -3,13 +3,14 @@ package errors
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
 	"testing"
 	"unicode/utf8"
+
+	"github.com/kart-io/goagent/codec/json"
 )
 
 func TestAgentError_Error(t *testing.T) {

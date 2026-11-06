@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kart-io/goagent/codec/json"
+
 	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/anthropics/anthropic-sdk-go/v2/option"
 
@@ -16,7 +18,6 @@ import (
 	agentllm "github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/common"
 	"github.com/kart-io/goagent/llm/constants"
-	"github.com/kart-io/goagent/utils/json"
 )
 
 var _ agentllm.ToolStreamClient = (*AnthropicProvider)(nil)

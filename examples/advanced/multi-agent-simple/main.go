@@ -8,10 +8,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kart-io/goagent/codec/json"
+
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/constants"
 	"github.com/kart-io/goagent/llm/providers"
-	"github.com/kart-io/goagent/utils/json"
 )
 
 // MultiAgentSystem coordinates multiple specialized agents working together
@@ -323,7 +324,7 @@ func main() {
 			if key != "summary" {
 				// Pretty print JSON if it's a map or slice
 				if _, ok := value.(map[string]interface{}); ok {
-					jsonBytes, _ := json.MarshalIndent(value, "  ", "  ")
+					jsonBytes, _ := json.Marshal(value, json.IndentPrefix("  "), json.Indent("  "))
 					fmt.Printf("%s:\n  %s\n", strings.ToTitle(key), string(jsonBytes))
 				} else {
 					fmt.Printf("%s:\n  %v\n", strings.ToTitle(key), truncate(fmt.Sprintf("%v", value), 200))

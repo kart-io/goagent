@@ -3,11 +3,12 @@ package session
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/stretchr/testify/require"
 

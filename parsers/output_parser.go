@@ -11,8 +11,9 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/kart-io/goagent/codec/json"
+
 	agentErrors "github.com/kart-io/goagent/errors"
-	"github.com/kart-io/goagent/utils/json"
 )
 
 var (
@@ -249,7 +250,7 @@ func (p *JSONOutputParser[T]) GetFormatInstructions() string {
 // generateExample 生成示例 JSON
 func (p *JSONOutputParser[T]) generateExample() string {
 	var zero T
-	example, _ := json.MarshalIndent(zero, "", "  ")
+	example, _ := json.Marshal(zero, json.Indent("  "))
 	return string(example)
 }
 

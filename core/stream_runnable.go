@@ -26,7 +26,7 @@ type StreamEvent struct {
 	Step    string                       `json:"step,omitempty"`
 	Tool    string                       `json:"tool,omitempty"`
 	Sources []interfaces.RetrievalSource `json:"sources,omitempty"`
-	Usage   *interfaces.TokenUsage       `json:"usage,omitempty"`
+	Usage   *interfaces.TokenUsage       `json:"usage,omitzero"`
 }
 
 // StreamCapability 让调用方显式区分最终块、步骤流和原生文本增量。

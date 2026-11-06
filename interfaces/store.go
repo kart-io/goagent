@@ -132,7 +132,7 @@ type Document struct {
 	//   - BM25: BM25 score
 	//
 	// Higher scores indicate better matches.
-	Score float64 `json:"score,omitempty"`
+	Score float64 `json:"score,omitzero"`
 }
 
 // Clone creates a deep copy of the document.

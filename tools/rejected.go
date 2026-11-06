@@ -1,10 +1,10 @@
 package tools
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/interfaces"
 )
@@ -38,20 +38,14 @@ func (r rejection) MarshalJSON() ([]byte, error) {
 	if r.data != nil {
 		out["data"] = r.data
 	}
-	var buf bytes.Buffer
-	encoder := json.NewEncoder(&buf)
-	encoder.SetEscapeHTML(false)
-	if err := encoder.Encode(out); err != nil {
-		return nil, err
-	}
-	return bytes.TrimSuffix(buf.Bytes(), []byte("\n")), nil
+	return json.Marshal(out, json.NoEscapeHTML)
 }
 
 // journaledOutput 是工具结果在操作日志中的形式。业务拒绝标记位于 ToolOutput 字段之外，
 // 工具返回的任何数据都写不到这一层，恢复时据此重建 rejection。
 type journaledOutput struct {
 	*interfaces.ToolOutput
-	Rejected bool `json:"goagent_rejected,omitempty"`
+	Rejected bool `json:"goagent_rejected,omitzero"`
 }
 
 func encodeJournaledOutput(out *interfaces.ToolOutput) (json.RawMessage, error) {
@@ -62,9 +56,7 @@ func encodeJournaledOutput(out *interfaces.ToolOutput) (json.RawMessage, error) 
 // decodeJournaledOutput 解码日志中的工具结果，数字为 json.Number。
 func decodeJournaledOutput(data json.RawMessage) (*interfaces.ToolOutput, error) {
 	var j journaledOutput
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.UseNumber()
-	if err := decoder.Decode(&j); err != nil {
+	if err := json.Unmarshal(data, &j, json.UseNumber); err != nil {
 		return nil, err
 	}
 	if !j.Rejected {

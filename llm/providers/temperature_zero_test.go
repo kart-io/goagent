@@ -2,12 +2,13 @@ package providers_test
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/builder"
 	"github.com/kart-io/goagent/interfaces"
@@ -22,7 +23,7 @@ func temperatureServer(t *testing.T) (*httptest.Server, <-chan map[string]any) {
 	received := make(chan map[string]any, 16)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var payload map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		if err := json.Decode(r.Body, &payload); err != nil {
 			http.Error(w, err.Error(), 400)
 			return
 		}
@@ -141,7 +142,7 @@ func TestProviderWireExplicitZero(t *testing.T) {
 					received := make(chan map[string]any, 1)
 					server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 						var data map[string]any
-						if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
+						if err := json.Decode(r.Body, &data); err != nil {
 							http.Error(w, err.Error(), 400)
 							return
 						}

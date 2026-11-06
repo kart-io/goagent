@@ -12,17 +12,18 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kart-io/goagent/codec/json"
+
 	"github.com/stretchr/testify/require"
 
 	agentllm "github.com/kart-io/goagent/llm"
-	"github.com/kart-io/goagent/utils/json"
 )
 
 func TestOpenAICompleteStreamContract(t *testing.T) {
 	requests := make(chan map[string]interface{}, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req map[string]interface{}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if err := json.Decode(r.Body, &req); err != nil {
 			t.Error(err)
 			return
 		}

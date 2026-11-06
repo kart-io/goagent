@@ -2,10 +2,11 @@ package durable
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	agentErrors "github.com/kart-io/goagent/errors"
 )
@@ -38,7 +39,7 @@ type InterruptContinuation struct {
 	Kind     string          `json:"kind"`
 	ID       string          `json:"id"`
 	Info     json.RawMessage `json:"info"`
-	Rejected bool            `json:"rejected,omitempty"`
+	Rejected bool            `json:"rejected,omitzero"`
 	Reason   string          `json:"reason,omitempty"`
 }
 

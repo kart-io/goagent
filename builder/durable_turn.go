@@ -2,11 +2,12 @@ package builder
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/kart-io/goagent/core/durable"

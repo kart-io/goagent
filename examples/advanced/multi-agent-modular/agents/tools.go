@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/kart-io/goagent/utils/json"
+	"github.com/kart-io/goagent/codec/json"
 )
 
 // HTTPTool performs HTTP requests
@@ -325,7 +325,7 @@ func (t *NotificationTool) Execute(ctx context.Context, params map[string]interf
 
 // SerializeTool converts tool results to JSON
 func SerializeTool(result interface{}) (string, error) {
-	data, err := json.MarshalIndent(result, "", "  ")
+	data, err := json.Marshal(result, json.Indent("  "))
 	if err != nil {
 		return "", fmt.Errorf("failed to serialize tool result: %w", err)
 	}

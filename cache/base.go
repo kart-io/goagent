@@ -12,7 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/kart-io/goagent/utils/json"
+	"github.com/kart-io/goagent/codec/json"
 )
 
 var (
@@ -547,11 +547,11 @@ func (c *NoOpCache) GetStats() CacheStats {
 
 // CacheConfig 缓存配置
 type CacheConfig struct {
-	Enabled         bool          // 是否启用缓存
-	Type            string        // 缓存类型: "memory", "redis", "multi-tier"
-	MaxSize         int           // 最大条目数
-	DefaultTTL      time.Duration // 默认 TTL
-	CleanupInterval time.Duration // 清理间隔
+	Enabled         bool          `json:"enabled"`          // 是否启用缓存
+	Type            string        `json:"type"`             // 缓存类型: "memory", "redis", "multi-tier"
+	MaxSize         int           `json:"max_size"`         // 最大条目数
+	DefaultTTL      time.Duration `json:"default_ttl"`      // 默认 TTL
+	CleanupInterval time.Duration `json:"cleanup_interval"` // 清理间隔
 }
 
 // DefaultCacheConfig 返回默认配置

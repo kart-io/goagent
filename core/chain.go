@@ -119,7 +119,7 @@ type ChainInput struct {
 	Vars map[string]interface{} `json:"vars,omitempty"` // 变量集合，用于在步骤间传递上下文
 
 	// 执行控制
-	Options ChainOptions `json:"options,omitempty"` // 执行选项
+	Options ChainOptions `json:"options"` // 执行选项
 }
 
 // ChainOutput Chain 输出
@@ -139,9 +139,9 @@ type ChainOutput struct {
 // ChainOptions Chain 执行选项
 type ChainOptions struct {
 	// 执行控制
-	StopOnError bool          `json:"stop_on_error,omitempty"` // 出错时是否停止
-	Timeout     time.Duration `json:"timeout,omitempty"`       // 超时时间
-	Parallel    bool          `json:"parallel,omitempty"`      // 是否并行执行（如果可能）
+	StopOnError bool          `json:"stop_on_error,omitzero"` // 出错时是否停止
+	Timeout     time.Duration `json:"timeout,omitzero"`       // 超时时间
+	Parallel    bool          `json:"parallel,omitzero"`      // 是否并行执行（如果可能）
 
 	// 步骤控制
 	SkipSteps []int `json:"skip_steps,omitempty"` // 跳过的步骤编号
