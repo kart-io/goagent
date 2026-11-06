@@ -97,8 +97,8 @@ func validateDurableTurn(turn *llm.StreamChunk, tools []interfaces.Tool, allowEm
 			}
 			return fmt.Errorf("模型请求了未提供的工具 %q", name)
 		}
-		var args map[string]any
-		if json.Unmarshal([]byte(call.Function.Arguments), &args) != nil || args == nil {
+		args, ok := call.ArgumentsObject()
+		if !ok {
 			if feedback {
 				ids[call.ID] = true
 				continue

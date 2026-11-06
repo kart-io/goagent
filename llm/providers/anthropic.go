@@ -202,8 +202,8 @@ func anthropicAssistant(msg agentllm.Message) (anthropic.MessageParam, error) {
 		blocks = append(blocks, anthropic.NewTextBlock(msg.Content))
 	}
 	for _, call := range msg.ToolCalls {
-		var input map[string]any
-		if json.Unmarshal([]byte(call.Function.Arguments), &input) != nil || input == nil || call.Function.Name == "" {
+		input, ok := call.ArgumentsObject()
+		if !ok || call.Function.Name == "" {
 			return anthropic.MessageParam{}, fmt.Errorf("anthropic: tool arguments must be an object with a function name")
 		}
 		blocks = append(blocks, anthropic.NewToolUseBlock(call.ID, input, call.Function.Name))

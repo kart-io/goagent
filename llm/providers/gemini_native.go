@@ -108,8 +108,8 @@ func geminiAssistant(msg llm.Message) (*genai.Content, []*genai.FunctionCall, er
 			content.Parts = append(content.Parts, &genai.Part{Text: msg.Content})
 		}
 		for _, call := range msg.ToolCalls {
-			var args map[string]any
-			if json.Unmarshal([]byte(call.Function.Arguments), &args) != nil || args == nil || call.Function.Name == "" {
+			args, ok := call.ArgumentsObject()
+			if !ok || call.Function.Name == "" {
 				return nil, nil, fmt.Errorf("gemini: tool arguments must be an object with a function name")
 			}
 			content.Parts = append(content.Parts, &genai.Part{FunctionCall: &genai.FunctionCall{ID: call.ID, Name: call.Function.Name, Args: args}})
@@ -133,12 +133,12 @@ func geminiAssistant(msg llm.Message) (*genai.Content, []*genai.FunctionCall, er
 	}
 	for i, call := range calls {
 		logical := msg.ToolCalls[i]
-		var args map[string]any
 		actual := call.Args
 		if actual == nil {
 			actual = map[string]any{}
 		}
-		if logical.Type != "function" || call.Name != logical.Function.Name || (call.ID != "" && call.ID != logical.ID) || json.Unmarshal([]byte(logical.Function.Arguments), &args) != nil || args == nil || !reflect.DeepEqual(args, actual) {
+		args, ok := logical.ArgumentsObject()
+		if logical.Type != "function" || call.Name != logical.Function.Name || (call.ID != "" && call.ID != logical.ID) || !ok || !reflect.DeepEqual(args, actual) {
 			return nil, nil, fmt.Errorf("gemini: provider state does not match tool call")
 		}
 	}

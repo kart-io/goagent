@@ -269,7 +269,9 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 			if durable.HasJournal(ctx) {
 				calls[i].ID = fmt.Sprintf("turn/%d/call/%s", round, tc.ID)
 			}
-			if err := json.Unmarshal([]byte(tc.Function.Arguments), &calls[i].Input); err != nil || calls[i].Input == nil {
+			args, ok := tc.ArgumentsObject()
+			calls[i].Input = args
+			if !ok {
 				if !a.config.ToolErrorFeedback {
 					return nil, fmt.Errorf("工具 %s 的参数必须为 JSON 对象", tc.Function.Name)
 				}
