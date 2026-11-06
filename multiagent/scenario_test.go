@@ -499,7 +499,7 @@ func TestScenarioAskCustomer(t *testing.T) {
 		require.Equal(t, "订单 A123 已确认", snap.State.Answer)
 		require.Equal(t, 2, client.Calls(), "只多出补充后的那次抽取，它使用另一个 scope")
 	})
-	for name, window := range map[string]time.Duration{"截止时间已过": 300 * time.Millisecond, "截止时间覆盖等待": time.Hour} {
+	for name, window := range map[string]time.Duration{"运行前已经到期": -time.Millisecond, "截止时间已过": 300 * time.Millisecond, "截止时间覆盖等待": time.Hour} {
 		t.Run(name, func(t *testing.T) {
 			e := newEnv(t, "ask-deadline")
 			e.budgetDir = t.TempDir() // 截止时间属于根预算配置，运行开始前确定，之后不可改
@@ -507,6 +507,17 @@ func TestScenarioAskCustomer(t *testing.T) {
 			e.restart()
 			client := scripts()
 			snap, err := graph(t, e, client).Run(e.ctx(), e.id, caseFile{Ticket: "我要退款"}, "")
+			// 根期限也约束首次抽取；负载较高时可能在进入等待前到期，不能要求一定先得到审批键。
+			if window < time.Second && errors.Is(err, context.DeadlineExceeded) {
+				if snap != nil {
+					require.False(t, snap.Done)
+				}
+				require.LessOrEqual(t, client.Calls(), 1, "过期后不能执行补充确认请求")
+				if window < 0 {
+					require.Zero(t, client.Calls(), "运行开始前已过期时不能调用模型")
+				}
+				return
+			}
 			require.ErrorIs(t, err, durable.ErrApprovalRequired)
 			if window < time.Second {
 				time.Sleep(window) // 客户隔了一段时间才回复
