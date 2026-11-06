@@ -102,3 +102,17 @@ func TestJSONNullKeepsExistingValue(t *testing.T) {
 	require.Equal(t, 5, v.N)
 	require.Equal(t, "默认", v.S)
 }
+
+func TestStrictAndUseNumberCompose(t *testing.T) {
+	type cfg struct {
+		Timeout time.Duration `json:"timeout"`
+		Extra   any           `json:"extra"`
+	}
+	data := []byte(`{"timeout":"30s","extra":9007199254740993}`)
+	for name, opts := range map[string][]Option{"Strict 在前": {Strict, UseNumber}, "UseNumber 在前": {UseNumber, Strict}} {
+		var out cfg
+		require.NoError(t, Unmarshal(data, &out, opts...), name)
+		require.Equal(t, 30*time.Second, out.Timeout, name)
+		require.Equal(t, Number("9007199254740993"), out.Extra, name)
+	}
+}

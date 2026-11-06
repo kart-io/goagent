@@ -83,7 +83,7 @@ func Marshal(v any, opts ...Option) ([]byte, error) {
 
 // Unmarshal 把 data 解码到 v（须为非 nil 指针），合并到已有值；只能含一个 JSON 值。
 func Unmarshal(data []byte, v any, opts ...Option) error {
-	return jsonv2.Unmarshal(data, v, withStable(opts)...)
+	return jsonv2.Unmarshal(data, v, withStable(joinUnmarshalers(opts))...)
 }
 
 // encoders 复用编码器及其缓冲区：逐行写事件时每次新建编码器约多 10 次分配。
@@ -102,18 +102,18 @@ func Encode(w io.Writer, v any, opts ...Option) error {
 
 // Decode 读取 r 的全部内容并解码到 v；只能含一个 JSON 值。
 func Decode(r io.Reader, v any, opts ...Option) error {
-	return jsonv2.UnmarshalRead(r, v, withStable(opts)...)
+	return jsonv2.UnmarshalRead(r, v, withStable(joinUnmarshalers(opts))...)
 }
 
 // DecodeNext 从 dec 读取下一个 JSON 值解码到 v，沿用 dec 上的选项（opts 优先），time.Duration
 // 缺省按整数纳秒。供实现 UnmarshalJSONFrom 的类型使用，调用方的选项（如 Strict）由此传入自定义解码。
 func DecodeNext(dec *Decoder, v any, opts ...Option) error {
-	return jsonv2.UnmarshalDecode(dec, v, append([]Option{jsonv1.FormatDurationAsNano(true)}, opts...)...)
+	return jsonv2.UnmarshalDecode(dec, v, append([]Option{jsonv1.FormatDurationAsNano(true)}, joinUnmarshalers(opts)...)...)
 }
 
 // NewDecoder 返回按默认规则读取 r 的 Decoder。
 func NewDecoder(r io.Reader, opts ...Option) *Decoder {
-	return jsontext.NewDecoder(r, withStable(opts)...)
+	return jsontext.NewDecoder(r, withStable(joinUnmarshalers(opts))...)
 }
 
 // Compact 返回去掉空白后的 data 副本，键序、数字写法与字符串原文（含转义与非法字节）原样保留，容忍重复键与非法 UTF-8。
@@ -132,6 +132,21 @@ func Valid(data []byte) bool { return len(data) > 0 && jsontext.Value(data).IsVa
 
 func withStable(opts []Option) []Option {
 	return append([]Option{stable}, opts...)
+}
+
+// joinUnmarshalers 合并各选项的解码钩子：v2 中后一个 WithUnmarshalers 会整体替换前一个，
+// 同时传 Strict 与 UseNumber 时其中一个钩子会失效。
+func joinUnmarshalers(opts []Option) []Option {
+	var hooks []*jsonv2.Unmarshalers
+	for _, opt := range opts {
+		if u, ok := jsonv2.GetOption(opt, jsonv2.WithUnmarshalers); ok && u != nil {
+			hooks = append(hooks, u)
+		}
+	}
+	if len(hooks) < 2 {
+		return opts
+	}
+	return append(opts[:len(opts):len(opts)], jsonv2.WithUnmarshalers(jsonv2.JoinUnmarshalers(hooks...)))
 }
 
 // decodeDurationString 解析 Go 时长字符串；数字交回默认的整数纳秒解码。
