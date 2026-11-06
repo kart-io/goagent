@@ -277,3 +277,11 @@ func TestGeminiStreamDropsEmptyPartsFromNativeState(t *testing.T) {
 	require.Equal(t, "42", out.Result)
 	require.Equal(t, int32(2), requests.Load())
 }
+
+func TestGeminiReplayablePartsDropsEmptyCollections(t *testing.T) {
+	var decoded genai.Part
+	require.NoError(t, json.Unmarshal([]byte(`{"thoughtSignature":"","partMetadata":{}}`), &decoded))
+	signed := &genai.Part{ThoughtSignature: []byte("sig")}
+	parts := []*genai.Part{{}, {Text: ""}, {ThoughtSignature: []byte{}}, {PartMetadata: map[string]any{}}, &decoded, signed}
+	require.Equal(t, []*genai.Part{signed}, geminiReplayableParts(parts), "编码为 {} 的 part 回放会被 API 拒绝")
+}
