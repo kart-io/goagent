@@ -89,17 +89,31 @@ func Unmarshal(data []byte, v any, opts ...Option) error {
 	return jsonv2.Unmarshal(data, v, withStable(joinUnmarshalers(opts))...)
 }
 
-// encoders 复用编码器及其缓冲区：逐行写事件时每次新建编码器约多 10 次分配。
-var encoders = sync.Pool{New: func() any { return jsontext.NewEncoder(io.Discard) }}
+// pooledEncoder 复用编码器及其缓冲区：逐行写事件时每次新建编码器约多 10 次分配。
+type pooledEncoder struct {
+	buf bytes.Buffer
+	enc *jsontext.Encoder
+}
+
+var encoders = sync.Pool{New: func() any { return &pooledEncoder{enc: jsontext.NewEncoder(io.Discard)} }}
+
+// maxPooledBuffer 以上的缓冲区不放回池中，避免偶发的大值长期占用内存。
+const maxPooledBuffer = 64 << 10
 
 // Encode 把 v 编码写入 w 并追加换行（与 v1 Encoder.Encode 一致），适合逐行输出 JSON。
+// 先完整编码到缓冲区再写入：编码器在缓冲区较大时会提前写出，失败时会在逐行输出中留下半条记录。
 func Encode(w io.Writer, v any, opts ...Option) error {
-	enc := encoders.Get().(*jsontext.Encoder)
-	enc.Reset(w, withStable(opts)...)
-	err := jsonv2.MarshalEncode(enc, v)
-	// 放回前解除对 w 的引用，避免池中对象延长调用方 Writer 的生命周期。
-	enc.Reset(io.Discard)
-	encoders.Put(enc)
+	p := encoders.Get().(*pooledEncoder)
+	p.buf.Reset()
+	p.enc.Reset(&p.buf, withStable(opts)...)
+	err := jsonv2.MarshalEncode(p.enc, v)
+	if err == nil {
+		_, err = w.Write(p.buf.Bytes())
+	}
+	p.enc.Reset(io.Discard)
+	if p.buf.Cap() <= maxPooledBuffer {
+		encoders.Put(p)
+	}
 	return err
 }
 

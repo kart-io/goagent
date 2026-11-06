@@ -2,6 +2,7 @@ package json
 
 import (
 	"bytes"
+	"math"
 	"strings"
 	"testing"
 
@@ -123,4 +124,14 @@ func TestPrettyIndentsWithTwoSpaces(t *testing.T) {
 	data, err := Marshal(map[string][]int{"a": {1}}, Pretty)
 	require.NoError(t, err)
 	require.Equal(t, "{\n  \"a\": [\n    1\n  ]\n}", string(data))
+}
+
+// 编码失败时不写出任何内容（与 v1 Encoder.Encode 一致），逐行 JSON 不会留下半条记录。
+func TestEncodeWritesNothingOnError(t *testing.T) {
+	var buf bytes.Buffer
+	err := Encode(&buf, []any{strings.Repeat("x", 1<<20), math.NaN()})
+	require.Error(t, err)
+	require.Zero(t, buf.Len(), "失败时已写出 %d 字节", buf.Len())
+	require.NoError(t, Encode(&buf, 1))
+	require.Equal(t, "1\n", buf.String())
 }
