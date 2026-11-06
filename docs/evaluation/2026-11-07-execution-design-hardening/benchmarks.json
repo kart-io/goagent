@@ -1,0 +1,802 @@
+[
+  {
+    "benchmark": "BenchmarkSessionHistory/内存/100/读取-14",
+    "samples": [
+      {
+        "iterations": 5,
+        "ns_per_op": 3442.0,
+        "bytes_per_op": 32464,
+        "allocs_per_op": 10
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 1967.0,
+        "bytes_per_op": 32464,
+        "allocs_per_op": 10
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 2467.0,
+        "bytes_per_op": 32464,
+        "allocs_per_op": 10
+      }
+    ],
+    "median_ns_per_op": 2467.0,
+    "median_bytes_per_op": 32464
+  },
+  {
+    "benchmark": "BenchmarkSessionHistory/内存/100/不变同步-14",
+    "samples": [
+      {
+        "iterations": 5,
+        "ns_per_op": 167025.0,
+        "bytes_per_op": 190208,
+        "allocs_per_op": 815
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 150008.0,
+        "bytes_per_op": 190208,
+        "allocs_per_op": 815
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 152150.0,
+        "bytes_per_op": 190208,
+        "allocs_per_op": 815
+      }
+    ],
+    "median_ns_per_op": 152150.0,
+    "median_bytes_per_op": 190208
+  },
+  {
+    "benchmark": "BenchmarkSessionHistory/内存/100/追加同步-14",
+    "samples": [
+      {
+        "iterations": 5,
+        "ns_per_op": 155675.0,
+        "bytes_per_op": 191883,
+        "allocs_per_op": 824
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 156533.0,
+        "bytes_per_op": 191883,
+        "allocs_per_op": 824
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 157083.0,
+        "bytes_per_op": 191883,
+        "allocs_per_op": 824
+      }
+    ],
+    "median_ns_per_op": 156533.0,
+    "median_bytes_per_op": 191883
+  },
+  {
+    "benchmark": "BenchmarkSessionHistory/内存/100/重写同步-14",
+    "samples": [
+      {
+        "iterations": 5,
+        "ns_per_op": 137534.0,
+        "bytes_per_op": 221641,
+        "allocs_per_op": 597
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 137033.0,
+        "bytes_per_op": 221641,
+        "allocs_per_op": 597
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 136525.0,
+        "bytes_per_op": 220640,
+        "allocs_per_op": 595
+      }
+    ],
+    "median_ns_per_op": 137033.0,
+    "median_bytes_per_op": 221641
+  },
+  {
+    "benchmark": "BenchmarkSessionHistory/内存/1000/读取-14",
+    "samples": [
+      {
+        "iterations": 5,
+        "ns_per_op": 14333.0,
+        "bytes_per_op": 261840,
+        "allocs_per_op": 13
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 12483.0,
+        "bytes_per_op": 261840,
+        "allocs_per_op": 13
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 11208.0,
+        "bytes_per_op": 261840,
+        "allocs_per_op": 13
+      }
+    ],
+    "median_ns_per_op": 12483.0,
+    "median_bytes_per_op": 261840
+  },
+  {
+    "benchmark": "BenchmarkSessionHistory/内存/1000/不变同步-14",
+    "samples": [
+      {
+        "iterations": 5,
+        "ns_per_op": 1627942.0,
+        "bytes_per_op": 1743696,
+        "allocs_per_op": 8030
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 1589450.0,
+        "bytes_per_op": 1742732,
+        "allocs_per_op": 8029
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 1565633.0,
+        "bytes_per_op": 1744806,
+        "allocs_per_op": 8031
+      }
+    ],
+    "median_ns_per_op": 1589450.0,
+    "median_bytes_per_op": 1743696
+  },
+  {
+    "benchmark": "BenchmarkSessionHistory/内存/1000/追加同步-14",
+    "samples": [
+      {
+        "iterations": 5,
+        "ns_per_op": 1516108.0,
+        "bytes_per_op": 1745926,
+        "allocs_per_op": 8041
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 1511533.0,
+        "bytes_per_op": 1745788,
+        "allocs_per_op": 8039
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 1487425.0,
+        "bytes_per_op": 1745923,
+        "allocs_per_op": 8040
+      }
+    ],
+    "median_ns_per_op": 1511533.0,
+    "median_bytes_per_op": 1745923
+  },
+  {
+    "benchmark": "BenchmarkSessionHistory/内存/1000/重写同步-14",
+    "samples": [
+      {
+        "iterations": 5,
+        "ns_per_op": 1327609.0,
+        "bytes_per_op": 2061372,
+        "allocs_per_op": 5572
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 1339892.0,
+        "bytes_per_op": 2068504,
+        "allocs_per_op": 5586
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 1360434.0,
+        "bytes_per_op": 2065425,
+        "allocs_per_op": 5583
+      }
+    ],
+    "median_ns_per_op": 1339892.0,
+    "median_bytes_per_op": 2065425
+  },
+  {
+    "benchmark": "BenchmarkSessionHistory/内存/10000/读取-14",
+    "samples": [
+      {
+        "iterations": 5,
+        "ns_per_op": 369233.0,
+        "bytes_per_op": 4382416,
+        "allocs_per_op": 21
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 347575.0,
+        "bytes_per_op": 4382416,
+        "allocs_per_op": 21
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 375067.0,
+        "bytes_per_op": 4382416,
+        "allocs_per_op": 21
+      }
+    ],
+    "median_ns_per_op": 369233.0,
+    "median_bytes_per_op": 4382416
+  },
+  {
+    "benchmark": "BenchmarkSessionHistory/内存/10000/不变同步-14",
+    "samples": [
+      {
+        "iterations": 5,
+        "ns_per_op": 14774700.0,
+        "bytes_per_op": 21541064,
+        "allocs_per_op": 80058
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 14765425.0,
+        "bytes_per_op": 21543028,
+        "allocs_per_op": 80059
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 14790083.0,
+        "bytes_per_op": 21542353,
+        "allocs_per_op": 80058
+      }
+    ],
+    "median_ns_per_op": 14774700.0,
+    "median_bytes_per_op": 21542353
+  },
+  {
+    "benchmark": "BenchmarkSessionHistory/内存/10000/追加同步-14",
+    "samples": [
+      {
+        "iterations": 5,
+        "ns_per_op": 15105925.0,
+        "bytes_per_op": 21545220,
+        "allocs_per_op": 80074
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 15469558.0,
+        "bytes_per_op": 21544432,
+        "allocs_per_op": 80072
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 15782775.0,
+        "bytes_per_op": 21542936,
+        "allocs_per_op": 80070
+      }
+    ],
+    "median_ns_per_op": 15469558.0,
+    "median_bytes_per_op": 21544432
+  },
+  {
+    "benchmark": "BenchmarkSessionHistory/内存/10000/重写同步-14",
+    "samples": [
+      {
+        "iterations": 5,
+        "ns_per_op": 13647483.0,
+        "bytes_per_op": 27509628,
+        "allocs_per_op": 55127
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 13722291.0,
+        "bytes_per_op": 27506876,
+        "allocs_per_op": 55121
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 13455866.0,
+        "bytes_per_op": 27507948,
+        "allocs_per_op": 55123
+      }
+    ],
+    "median_ns_per_op": 13647483.0,
+    "median_bytes_per_op": 27507948
+  },
+  {
+    "benchmark": "BenchmarkSessionHistory/文件/100/读取-14",
+    "samples": [
+      {
+        "iterations": 5,
+        "ns_per_op": 107650.0,
+        "bytes_per_op": 182980,
+        "allocs_per_op": 135
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 105833.0,
+        "bytes_per_op": 182980,
+        "allocs_per_op": 135
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 97875.0,
+        "bytes_per_op": 181920,
+        "allocs_per_op": 133
+      }
+    ],
+    "median_ns_per_op": 105833.0,
+    "median_bytes_per_op": 182980
+  },
+  {
+    "benchmark": "BenchmarkSessionHistory/文件/100/不变同步-14",
+    "samples": [
+      {
+        "iterations": 5,
+        "ns_per_op": 149625.0,
+        "bytes_per_op": 191350,
+        "allocs_per_op": 817
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 150500.0,
+        "bytes_per_op": 190259,
+        "allocs_per_op": 815
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 145625.0,
+        "bytes_per_op": 191350,
+        "allocs_per_op": 817
+      }
+    ],
+    "median_ns_per_op": 149625.0,
+    "median_bytes_per_op": 191350
+  },
+  {
+    "benchmark": "BenchmarkSessionHistory/文件/100/追加同步-14",
+    "samples": [
+      {
+        "iterations": 5,
+        "ns_per_op": 4497142.0,
+        "bytes_per_op": 260219,
+        "allocs_per_op": 856
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 4789375.0,
+        "bytes_per_op": 261310,
+        "allocs_per_op": 858
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 4704067.0,
+        "bytes_per_op": 262404,
+        "allocs_per_op": 860
+      }
+    ],
+    "median_ns_per_op": 4704067.0,
+    "median_bytes_per_op": 261310
+  },
+  {
+    "benchmark": "BenchmarkSessionHistory/文件/100/重写同步-14",
+    "samples": [
+      {
+        "iterations": 5,
+        "ns_per_op": 4951425.0,
+        "bytes_per_op": 316635,
+        "allocs_per_op": 634
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 4527250.0,
+        "bytes_per_op": 316635,
+        "allocs_per_op": 634
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 4591659.0,
+        "bytes_per_op": 315454,
+        "allocs_per_op": 631
+      }
+    ],
+    "median_ns_per_op": 4591659.0,
+    "median_bytes_per_op": 316635
+  },
+  {
+    "benchmark": "BenchmarkSessionHistory/文件/1000/读取-14",
+    "samples": [
+      {
+        "iterations": 5,
+        "ns_per_op": 870633.0,
+        "bytes_per_op": 1357896,
+        "allocs_per_op": 1050
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 858667.0,
+        "bytes_per_op": 1358944,
+        "allocs_per_op": 1051
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 854442.0,
+        "bytes_per_op": 1357910,
+        "allocs_per_op": 1050
+      }
+    ],
+    "median_ns_per_op": 858667.0,
+    "median_bytes_per_op": 1357910
+  },
+  {
+    "benchmark": "BenchmarkSessionHistory/文件/1000/不变同步-14",
+    "samples": [
+      {
+        "iterations": 5,
+        "ns_per_op": 1535842.0,
+        "bytes_per_op": 1742521,
+        "allocs_per_op": 8027
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 1504317.0,
+        "bytes_per_op": 1744073,
+        "allocs_per_op": 8033
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 1458583.0,
+        "bytes_per_op": 1743945,
+        "allocs_per_op": 8032
+      }
+    ],
+    "median_ns_per_op": 1504317.0,
+    "median_bytes_per_op": 1743945
+  },
+  {
+    "benchmark": "BenchmarkSessionHistory/文件/1000/追加同步-14",
+    "samples": [
+      {
+        "iterations": 5,
+        "ns_per_op": 5947517.0,
+        "bytes_per_op": 1818212,
+        "allocs_per_op": 8081
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 5807542.0,
+        "bytes_per_op": 1819150,
+        "allocs_per_op": 8081
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 5801834.0,
+        "bytes_per_op": 1818281,
+        "allocs_per_op": 8082
+      }
+    ],
+    "median_ns_per_op": 5807542.0,
+    "median_bytes_per_op": 1818281
+  },
+  {
+    "benchmark": "BenchmarkSessionHistory/文件/1000/重写同步-14",
+    "samples": [
+      {
+        "iterations": 5,
+        "ns_per_op": 5840600.0,
+        "bytes_per_op": 2381150,
+        "allocs_per_op": 5618
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 5857192.0,
+        "bytes_per_op": 2380174,
+        "allocs_per_op": 5614
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 6167358.0,
+        "bytes_per_op": 2485025,
+        "allocs_per_op": 5622
+      }
+    ],
+    "median_ns_per_op": 5857192.0,
+    "median_bytes_per_op": 2381150
+  },
+  {
+    "benchmark": "BenchmarkSessionHistory/文件/10000/读取-14",
+    "samples": [
+      {
+        "iterations": 5,
+        "ns_per_op": 8875633.0,
+        "bytes_per_op": 17035736,
+        "allocs_per_op": 10116
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 8865458.0,
+        "bytes_per_op": 17036811,
+        "allocs_per_op": 10118
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 8507858.0,
+        "bytes_per_op": 17037849,
+        "allocs_per_op": 10119
+      }
+    ],
+    "median_ns_per_op": 8865458.0,
+    "median_bytes_per_op": 17036811
+  },
+  {
+    "benchmark": "BenchmarkSessionHistory/文件/10000/不变同步-14",
+    "samples": [
+      {
+        "iterations": 5,
+        "ns_per_op": 15478683.0,
+        "bytes_per_op": 21541937,
+        "allocs_per_op": 80061
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 14846125.0,
+        "bytes_per_op": 21539899,
+        "allocs_per_op": 80059
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 15434167.0,
+        "bytes_per_op": 21538819,
+        "allocs_per_op": 80056
+      }
+    ],
+    "median_ns_per_op": 15434167.0,
+    "median_bytes_per_op": 21539899
+  },
+  {
+    "benchmark": "BenchmarkSessionHistory/文件/10000/追加同步-14",
+    "samples": [
+      {
+        "iterations": 5,
+        "ns_per_op": 19509967.0,
+        "bytes_per_op": 21610518,
+        "allocs_per_op": 80102
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 19656958.0,
+        "bytes_per_op": 21611814,
+        "allocs_per_op": 80103
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 19526383.0,
+        "bytes_per_op": 21610451,
+        "allocs_per_op": 80101
+      }
+    ],
+    "median_ns_per_op": 19526383.0,
+    "median_bytes_per_op": 21610518
+  },
+  {
+    "benchmark": "BenchmarkSessionHistory/文件/10000/重写同步-14",
+    "samples": [
+      {
+        "iterations": 5,
+        "ns_per_op": 20950034.0,
+        "bytes_per_op": 30017956,
+        "allocs_per_op": 55155
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 21127266.0,
+        "bytes_per_op": 30016896,
+        "allocs_per_op": 55153
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 21098216.0,
+        "bytes_per_op": 30017995,
+        "allocs_per_op": 55155
+      }
+    ],
+    "median_ns_per_op": 21098216.0,
+    "median_bytes_per_op": 30017956
+  },
+  {
+    "benchmark": "BenchmarkLargeToolResult/65536/卸载-14",
+    "samples": [
+      {
+        "iterations": 5,
+        "ns_per_op": 146350.0,
+        "bytes_per_op": 201241,
+        "allocs_per_op": 41
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 135867.0,
+        "bytes_per_op": 201241,
+        "allocs_per_op": 41
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 127667.0,
+        "bytes_per_op": 201241,
+        "allocs_per_op": 41
+      }
+    ],
+    "median_ns_per_op": 135867.0,
+    "median_bytes_per_op": 201241
+  },
+  {
+    "benchmark": "BenchmarkLargeToolResult/65536/还原-14",
+    "samples": [
+      {
+        "iterations": 5,
+        "ns_per_op": 50542.0,
+        "bytes_per_op": 133164,
+        "allocs_per_op": 20
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 43559.0,
+        "bytes_per_op": 133164,
+        "allocs_per_op": 20
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 40508.0,
+        "bytes_per_op": 134232,
+        "allocs_per_op": 22
+      }
+    ],
+    "median_ns_per_op": 43559.0,
+    "median_bytes_per_op": 133164
+  },
+  {
+    "benchmark": "BenchmarkLargeToolResult/1048576/卸载-14",
+    "samples": [
+      {
+        "iterations": 5,
+        "ns_per_op": 1795658.0,
+        "bytes_per_op": 3153086,
+        "allocs_per_op": 49
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 1707325.0,
+        "bytes_per_op": 3153576,
+        "allocs_per_op": 49
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 1565642.0,
+        "bytes_per_op": 3153064,
+        "allocs_per_op": 49
+      }
+    ],
+    "median_ns_per_op": 1707325.0,
+    "median_bytes_per_op": 3153086
+  },
+  {
+    "benchmark": "BenchmarkLargeToolResult/1048576/还原-14",
+    "samples": [
+      {
+        "iterations": 5,
+        "ns_per_op": 498850.0,
+        "bytes_per_op": 2105187,
+        "allocs_per_op": 29
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 455658.0,
+        "bytes_per_op": 2106232,
+        "allocs_per_op": 31
+      },
+      {
+        "iterations": 5,
+        "ns_per_op": 445775.0,
+        "bytes_per_op": 2106232,
+        "allocs_per_op": 31
+      }
+    ],
+    "median_ns_per_op": 455658.0,
+    "median_bytes_per_op": 2106232
+  },
+  {
+    "benchmark": "BenchmarkAgentSessions/共享会话",
+    "samples": [
+      {
+        "iterations": 55010,
+        "ns_per_op": 6161.0,
+        "bytes_per_op": 4232,
+        "allocs_per_op": 64
+      },
+      {
+        "iterations": 58356,
+        "ns_per_op": 6161.0,
+        "bytes_per_op": 4232,
+        "allocs_per_op": 64
+      },
+      {
+        "iterations": 58982,
+        "ns_per_op": 6282.0,
+        "bytes_per_op": 4232,
+        "allocs_per_op": 64
+      }
+    ],
+    "median_ns_per_op": 6161.0,
+    "median_bytes_per_op": 4232
+  },
+  {
+    "benchmark": "BenchmarkAgentSessions/共享会话-4",
+    "samples": [
+      {
+        "iterations": 51962,
+        "ns_per_op": 6897.0,
+        "bytes_per_op": 4241,
+        "allocs_per_op": 64
+      },
+      {
+        "iterations": 49206,
+        "ns_per_op": 6806.0,
+        "bytes_per_op": 4241,
+        "allocs_per_op": 64
+      },
+      {
+        "iterations": 49875,
+        "ns_per_op": 7324.0,
+        "bytes_per_op": 4241,
+        "allocs_per_op": 64
+      }
+    ],
+    "median_ns_per_op": 6897.0,
+    "median_bytes_per_op": 4241
+  },
+  {
+    "benchmark": "BenchmarkAgentSessions/独立会话",
+    "samples": [
+      {
+        "iterations": 53593,
+        "ns_per_op": 6427.0,
+        "bytes_per_op": 4232,
+        "allocs_per_op": 64
+      },
+      {
+        "iterations": 58345,
+        "ns_per_op": 6479.0,
+        "bytes_per_op": 4232,
+        "allocs_per_op": 64
+      },
+      {
+        "iterations": 54822,
+        "ns_per_op": 6328.0,
+        "bytes_per_op": 4232,
+        "allocs_per_op": 64
+      }
+    ],
+    "median_ns_per_op": 6427.0,
+    "median_bytes_per_op": 4232
+  },
+  {
+    "benchmark": "BenchmarkAgentSessions/独立会话-4",
+    "samples": [
+      {
+        "iterations": 188788,
+        "ns_per_op": 2005.0,
+        "bytes_per_op": 4233,
+        "allocs_per_op": 64
+      },
+      {
+        "iterations": 170720,
+        "ns_per_op": 2067.0,
+        "bytes_per_op": 4233,
+        "allocs_per_op": 64
+      },
+      {
+        "iterations": 164584,
+        "ns_per_op": 2057.0,
+        "bytes_per_op": 4233,
+        "allocs_per_op": 64
+      }
+    ],
+    "median_ns_per_op": 2057.0,
+    "median_bytes_per_op": 4233
+  }
+]

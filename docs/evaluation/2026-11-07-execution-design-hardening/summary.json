@@ -1,0 +1,31 @@
+{
+  "baseline": "fda8f34b7ce7b70f3c2663359071cc421ebf0f21",
+  "implementation_head": "332cecc22581f233bd05e40589c9264ffe778ce8",
+  "full_race": "passed",
+  "passed_test_packages": 60,
+  "review": {
+    "critical": 0,
+    "important_found": 1,
+    "important_fixed": 1,
+    "minor": 0
+  },
+  "deadline_fixture": "提前到期和等待后到期均保持失败关闭，10轮race通过",
+  "library_coverage_percent": 80.0,
+  "build": "passed",
+  "vet": "passed",
+  "lint_findings": 0,
+  "import_findings": 0,
+  "frameworkbench_race": "passed",
+  "governed_replay": "passed",
+  "real_model_requests": 0,
+  "compatibility": {
+    "core_is_current_worktree": true,
+    "modules": 15,
+    "passed": 7,
+    "failed": 8,
+    "failure": "关联Contrib仍导入已删除的utils/json，基线已存在；不宣称全跨仓通过",
+    "skipped_tests": 113
+  },
+  "benchmark_cases": 32,
+  "benchmark_samples_per_case": 3
+}
