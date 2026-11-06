@@ -1,0 +1,166 @@
+[
+  {
+    "path": "runs/anthropic-deepseek/number/crash-call-01-result.json",
+    "model": "deepseek-v4-pro",
+    "usage": {
+      "prompt_tokens": 479,
+      "completion_tokens": 149,
+      "total_tokens": 628
+    },
+    "error": null
+  },
+  {
+    "path": "runs/anthropic-deepseek/number/resume-call-01-result.json",
+    "model": "deepseek-v4-pro",
+    "usage": {
+      "prompt_tokens": 381,
+      "completion_tokens": 287,
+      "total_tokens": 668
+    },
+    "error": null
+  },
+  {
+    "path": "runs/anthropic-deepseek/string/run-call-01-result.json",
+    "model": "deepseek-v4-pro",
+    "usage": {
+      "prompt_tokens": 479,
+      "completion_tokens": 144,
+      "total_tokens": 623,
+      "cached_tokens": 384,
+      "known_fields": 15
+    },
+    "error": null
+  },
+  {
+    "path": "runs/anthropic-deepseek/string/run-call-02-result.json",
+    "model": "deepseek-v4-pro",
+    "usage": {
+      "prompt_tokens": 376,
+      "completion_tokens": 31,
+      "total_tokens": 407
+    },
+    "error": null
+  },
+  {
+    "path": "runs/anthropic-deepseek/text/run-call-01-result.json",
+    "model": "deepseek-v4-pro",
+    "usage": {
+      "prompt_tokens": 151,
+      "completion_tokens": 241,
+      "total_tokens": 392
+    },
+    "error": null
+  },
+  {
+    "path": "runs/deepseek/number/crash-call-01-result.json",
+    "model": "deepseek-flash",
+    "usage": {
+      "prompt_tokens": 417,
+      "completion_tokens": 186,
+      "total_tokens": 603,
+      "reasoning_tokens": 101,
+      "known_fields": 23
+    },
+    "error": null
+  },
+  {
+    "path": "runs/deepseek/number/resume-call-01-result.json",
+    "model": "deepseek-flash",
+    "usage": {
+      "prompt_tokens": 365,
+      "completion_tokens": 53,
+      "total_tokens": 418
+    },
+    "error": null
+  },
+  {
+    "path": "runs/deepseek/string/run-call-01-result.json",
+    "model": "deepseek-flash",
+    "usage": {
+      "prompt_tokens": 417,
+      "completion_tokens": 85,
+      "total_tokens": 502,
+      "cached_tokens": 128,
+      "known_fields": 15
+    },
+    "error": null
+  },
+  {
+    "path": "runs/deepseek/string/run-call-02-result.json",
+    "model": "deepseek-flash",
+    "usage": {
+      "prompt_tokens": 264,
+      "completion_tokens": 393,
+      "total_tokens": 657,
+      "reasoning_tokens": 378,
+      "known_fields": 23
+    },
+    "error": null
+  },
+  {
+    "path": "runs/deepseek/text/run-call-01-result.json",
+    "model": "deepseek-flash",
+    "usage": {
+      "prompt_tokens": 98,
+      "completion_tokens": 171,
+      "total_tokens": 269,
+      "reasoning_tokens": 125,
+      "known_fields": 23
+    },
+    "error": null
+  },
+  {
+    "path": "runs/deepseek-v4-native/number/crash-call-01-result.json",
+    "model": "deepseek-v4-pro",
+    "usage": {
+      "prompt_tokens": 480,
+      "completion_tokens": 165,
+      "total_tokens": 645,
+      "reasoning_tokens": 74,
+      "known_fields": 23
+    },
+    "error": null
+  },
+  {
+    "path": "runs/deepseek-v4-native/number/resume-call-01-result.json",
+    "model": "deepseek-v4-pro",
+    "usage": {
+      "prompt_tokens": 398,
+      "completion_tokens": 24,
+      "total_tokens": 422,
+      "reasoning_tokens": 7,
+      "known_fields": 23
+    },
+    "error": null
+  },
+  {
+    "path": "runs/gemini/number/crash-call-01-result.json",
+    "model": null,
+    "usage": null,
+    "error": "Error 402, Message: Your prepayment credits are depleted. Please go to AI Studio at https://ai.studio/projects to manage your project and billing. Learn more at https://ai.google.dev/gemini-api/docs/billing#prepay. , Status: RESOURCE_EXHAUSTED, Details: []"
+  },
+  {
+    "path": "runs/gemini/string/run-call-01-result.json",
+    "model": null,
+    "usage": null,
+    "error": "Error 402, Message: Your prepayment credits are depleted. Please go to AI Studio at https://ai.studio/projects to manage your project and billing. Learn more at https://ai.google.dev/gemini-api/docs/billing#prepay. , Status: RESOURCE_EXHAUSTED, Details: []"
+  },
+  {
+    "path": "runs/gemini/text/run-call-01-result.json",
+    "model": null,
+    "usage": null,
+    "error": "Error 402, Message: Your prepayment credits are depleted. Please go to AI Studio at https://ai.studio/projects to manage your project and billing. Learn more at https://ai.google.dev/gemini-api/docs/billing#prepay. , Status: RESOURCE_EXHAUSTED, Details: []"
+  },
+  {
+    "path": "fixed-live/fixed-call-01-result.json",
+    "model": "deepseek-v4-pro",
+    "usage": {
+      "prompt_tokens": 381,
+      "completion_tokens": 39,
+      "total_tokens": 420,
+      "cached_tokens": 256,
+      "known_fields": 15
+    },
+    "error": null
+  }
+]
