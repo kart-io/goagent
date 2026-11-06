@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/codec/json"
 )
 
 type yamlOut struct {
@@ -79,4 +81,32 @@ func TestMarshalControlCharacters(t *testing.T) {
 	var out map[string]string
 	require.NoError(t, Unmarshal(data, &out))
 	require.Equal(t, in, out)
+}
+
+// float64 无法精确表示的数字按原文传给 JSON 阶段；可精确表示的仍按原规则，1.0、1e3 照常解到整数字段。
+func TestUnmarshalPreservesNumberPrecision(t *testing.T) {
+	src := []byte("rate: 0.1234567890123456789\nbig: 123456789012345678901234567890\nanchored: &n 0.10000000000000000001\nalias: *n\nshort: .30000000000000000001\nplus: +1.00000000000000000001e+5\nlist: [12345678901234567890123]\nbase: &b {x: 1.00000000000000000001}\nmerged: {<<: *b}\n")
+	var out map[string]any
+	require.NoError(t, Unmarshal(src, &out, json.UseNumber))
+	require.Equal(t, map[string]any{
+		"rate":     json.Number("0.1234567890123456789"),
+		"big":      json.Number("123456789012345678901234567890"),
+		"anchored": json.Number("0.10000000000000000001"),
+		"alias":    json.Number("0.10000000000000000001"),
+		"short":    json.Number("0.30000000000000000001"),
+		"plus":     json.Number("1.00000000000000000001e+5"),
+		"list":     []any{json.Number("12345678901234567890123")},
+		"base":     map[string]any{"x": json.Number("1.00000000000000000001")},
+		"merged":   map[string]any{"x": json.Number("1.00000000000000000001")},
+	}, out)
+
+	var ints struct {
+		A int     `json:"a"`
+		B int     `json:"b"`
+		C float64 `json:"c"`
+	}
+	require.NoError(t, Unmarshal([]byte("a: 1.0\nb: 1e3\nc: 0.1\n"), &ints))
+	require.Equal(t, 1, ints.A)
+	require.Equal(t, 1000, ints.B)
+	require.Equal(t, 0.1, ints.C)
 }

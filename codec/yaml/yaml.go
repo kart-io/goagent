@@ -3,8 +3,11 @@ package yaml
 
 import (
 	"bytes"
+	"crypto/rand"
 	"errors"
 	"io"
+	"math/big"
+	"strconv"
 	"strings"
 
 	yamlv3 "go.yaml.in/yaml/v3"
@@ -66,7 +69,8 @@ func yamlToJSON(data []byte) ([]byte, error) {
 	if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
 		return nil, errors.New("只能包含一个 YAML 文档")
 	}
-	keepScalarText(&doc)
+	var nums exactNumbers
+	keepScalarText(&doc, &nums)
 	var v any
 	if err := doc.Decode(&v); err != nil {
 		return nil, err
@@ -74,21 +78,110 @@ func yamlToJSON(data []byte) ([]byte, error) {
 	if v == nil {
 		return nil, nil
 	}
+	if nums.marker != "" {
+		v = nums.restore(v)
+	}
 	return json.Marshal(v)
 }
 
-// keepScalarText 让隐式识别的时间戳与映射的标量键保持原文：解到 any 时 yaml 会把 2026-11-05
-// 转成 time.Time，把 true、1.5 键转成非字符串键；Kubernetes 同样把标量键转为字符串。
-func keepScalarText(n *yamlv3.Node) {
-	if n.Kind == yamlv3.ScalarNode && n.ShortTag() == "!!timestamp" {
-		n.Tag = "!!str"
+// keepScalarText 让隐式识别的时间戳、映射的标量键与 float64 表示不了的数字保持原文：解到 any 时 yaml 会把
+// 2026-11-05 转成 time.Time，把 true、1.5 键转成非字符串键，把数字转成 float64；Kubernetes 同样把标量键转为字符串。
+func keepScalarText(n *yamlv3.Node, nums *exactNumbers) {
+	if n.Kind == yamlv3.ScalarNode {
+		switch n.ShortTag() {
+		case "!!timestamp":
+			n.Tag = "!!str"
+		case "!!float":
+			nums.keep(n)
+		}
 	}
 	for i, c := range n.Content {
 		if n.Kind == yamlv3.MappingNode && i%2 == 0 && c.Kind == yamlv3.ScalarNode && c.ShortTag() != "!!merge" {
 			c.Tag = "!!str"
 		}
-		keepScalarText(c)
+		keepScalarText(c, nums)
 	}
+}
+
+// exactNumbers 把 float64 会丢精度的数字（超出 uint64 的整数在 yaml 中也按浮点数识别）暂存为带随机前缀的
+// 字符串，经 yaml 解码（含锚点、合并键展开）后再还原为 JSON 数字原文，由 JSON 阶段按目标类型与选项解码。
+// float64 能精确表示的数字不处理，1.0、1e3 仍可解到整数字段。
+type exactNumbers struct{ marker string }
+
+func (e *exactNumbers) keep(n *yamlv3.Node) {
+	text, ok := lossyNumberText(n.Value)
+	if !ok {
+		return
+	}
+	if e.marker == "" {
+		e.marker = "\x00number:" + rand.Text() + ":"
+	}
+	n.Tag, n.Value = "!!str", e.marker+text
+}
+
+func (e *exactNumbers) restore(v any) any {
+	switch t := v.(type) {
+	case map[string]any:
+		for k, c := range t {
+			t[k] = e.restore(c)
+		}
+	case []any:
+		for i, c := range t {
+			t[i] = e.restore(c)
+		}
+	case string:
+		if text, ok := strings.CutPrefix(t, e.marker); ok {
+			return json.Number(text)
+		}
+	}
+	return v
+}
+
+// lossyNumberText 在 yaml 浮点数 value 经 float64 会丢精度时返回其 JSON 数字原文。
+// 与 yaml 一致去掉下划线；.inf、溢出等 float64 无法解析的值沿用 yaml 原有处理。
+func lossyNumberText(value string) (string, bool) {
+	plain := strings.ReplaceAll(value, "_", "")
+	f, err := strconv.ParseFloat(plain, 64)
+	if err != nil {
+		return "", false
+	}
+	exact, ok := new(big.Rat).SetString(plain)
+	if !ok {
+		return "", false
+	}
+	shortest, _ := new(big.Rat).SetString(strconv.FormatFloat(f, 'g', -1, 64))
+	if exact.Cmp(shortest) == 0 {
+		return "", false
+	}
+	text := jsonNumberText(plain)
+	if !json.Valid([]byte(text)) {
+		return "", false
+	}
+	return text, true
+}
+
+// jsonNumberText 把 yaml 的 +1.5、.5、5.、007.5 等写法改成 JSON 数字语法，数值不变。
+func jsonNumberText(s string) string {
+	sign := ""
+	switch {
+	case strings.HasPrefix(s, "-"):
+		sign, s = "-", s[1:]
+	case strings.HasPrefix(s, "+"):
+		s = s[1:]
+	}
+	exp := ""
+	if i := strings.IndexAny(s, "eE"); i >= 0 {
+		s, exp = s[:i], s[i:]
+	}
+	intPart, frac, _ := strings.Cut(s, ".")
+	intPart = strings.TrimLeft(intPart, "0")
+	if intPart == "" {
+		intPart = "0"
+	}
+	if frac != "" {
+		frac = "." + frac
+	}
+	return sign + intPart + frac + exp
 }
 
 // jsonNode 把一个 JSON 值转为 YAML 节点，数字保留原文。
