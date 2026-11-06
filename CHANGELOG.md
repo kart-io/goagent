@@ -36,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Anthropic 原生 `ProviderState` 续接时直接回放 `tool_use.input` 的 JSON 原文，避免 SDK 解码到 `any` 后再次舍入大整数与高精度小数；保留思考块签名。修复覆盖持久化后的实际续接分支。
 - 同时传入 `json.Strict` 与 `json.UseNumber` 时，后一个选项的解码钩子不再覆盖前一个。
 - `codec/yaml` 解码保留 float64 表示不了的数字原文，配合 `json.UseNumber` 可得到精确值。
 - `json.Encode` 编码失败时不写出任何内容，逐行 JSON 不会留下半条记录。

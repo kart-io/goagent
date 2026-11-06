@@ -181,9 +181,20 @@ func anthropicAssistant(msg agentllm.Message) (anthropic.MessageParam, error) {
 		if err := json.Unmarshal(state.Data, &param); err != nil || param.OfAssistant == nil {
 			return anthropic.MessageParam{}, fmt.Errorf("anthropic: invalid provider state")
 		}
+		// SDK 自定义解码把 tool_use.input 解成含 float64 的 any；另外读取原文并覆盖，
+		// 避免原生状态回放绕过无状态分支的精度保护，同时保留思考签名等原生字段。
+		var raw struct {
+			Content []struct {
+				Input json.RawMessage `json:"input"`
+			} `json:"content"`
+		}
+		if err := json.Unmarshal(state.Data, &raw); err != nil || len(raw.Content) != len(param.OfAssistant.Content) {
+			return anthropic.MessageParam{}, fmt.Errorf("anthropic: invalid provider state")
+		}
 		var ids []string
-		for _, block := range param.OfAssistant.Content {
+		for i, block := range param.OfAssistant.Content {
 			if block.OfToolUse != nil {
+				block.OfToolUse.Input = raw.Content[i].Input
 				ids = append(ids, block.OfToolUse.ID)
 			}
 		}

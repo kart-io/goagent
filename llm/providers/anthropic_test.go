@@ -255,3 +255,80 @@ func TestAnthropicReplaysToolArgumentsExactly(t *testing.T) {
 	require.Contains(t, body, `"order_id":12345678901234567890123`)
 	require.Contains(t, body, `"rate":0.1234567890123456789`)
 }
+
+// 原生状态经持久化后续接，SDK 的工具 input 也必须保留原数值；不能只检查请求体某处出现过数字。
+func TestAnthropicProviderStateReplaysToolArgumentsExactly(t *testing.T) {
+	args := `{"order_id":9007199254740993,"rate":0.1234567890123456789,"nested":{"id":12345678901234567890123},"list":[9007199254740993,"9007199254740993",null]}`
+	delta, err := json.Marshal(map[string]any{"type": "input_json_delta", "partial_json": args})
+	require.NoError(t, err)
+	toolEvents := []anthropicEvent{
+		{"message_start", `{"type":"message_start","message":{"id":"msg_exact","type":"message","role":"assistant","model":"m","content":[],"stop_reason":null,"usage":{"input_tokens":2,"output_tokens":1}}}`},
+		{"content_block_start", `{"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":"","signature":""}}`},
+		{"content_block_delta", `{"type":"content_block_delta","index":0,"delta":{"type":"signature_delta","signature":"sig-exact"}}`},
+		{"content_block_stop", `{"type":"content_block_stop","index":0}`},
+		{"content_block_start", `{"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"exact_call","name":"lookup","input":{}}}`},
+		{"content_block_delta", `{"type":"content_block_delta","index":1,"delta":` + string(delta) + `}`},
+		{"content_block_stop", `{"type":"content_block_stop","index":1}`},
+		{"message_delta", `{"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"output_tokens":3}}`},
+		{"message_stop", `{"type":"message_stop"}`},
+	}
+	bodies := make(chan []byte, 2)
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, readErr := io.ReadAll(r.Body)
+		if readErr != nil {
+			t.Error(readErr)
+			http.Error(w, "读取请求体失败", http.StatusBadRequest)
+			return
+		}
+		bodies <- body
+		events := textEvents
+		if requests.Add(1) == 1 {
+			events = toolEvents
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		for _, event := range events {
+			_, _ = fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event.name, event.data)
+		}
+	}))
+	defer server.Close()
+	p := newTestAnthropic(t, server.URL)
+	user := agentllm.Message{Role: "user", Content: args}
+	stream, err := p.CompleteToolsStream(context.Background(), &agentllm.CompletionRequest{Messages: []agentllm.Message{user}}, nil)
+	require.NoError(t, err)
+	_, final := drain(t, stream)
+	require.NoError(t, final.Error)
+	require.NotNil(t, final.ProviderState)
+	<-bodies
+	// 与恢复路径一致：保存、重新解码消息，并重建 Provider。
+	saved, err := json.Marshal(agentllm.Message{Role: "assistant", ToolCalls: final.ToolCalls, ProviderState: final.ProviderState})
+	require.NoError(t, err)
+	var assistant agentllm.Message
+	require.NoError(t, json.Unmarshal(saved, &assistant))
+	p = newTestAnthropic(t, server.URL)
+	stream, err = p.CompleteToolsStream(context.Background(), &agentllm.CompletionRequest{Messages: []agentllm.Message{
+		user, assistant, {Role: "tool", ToolCallID: "exact_call", Content: args},
+	}}, nil)
+	require.NoError(t, err)
+	drain(t, stream)
+	var wire struct {
+		Messages []struct {
+			Content []struct {
+				Type      string         `json:"type"`
+				Signature string         `json:"signature"`
+				Input     map[string]any `json:"input"`
+			} `json:"content"`
+		} `json:"messages"`
+	}
+	require.NoError(t, json.Unmarshal(<-bodies, &wire, json.UseNumber))
+	replayed := wire.Messages[1].Content
+	require.Len(t, replayed, 2)
+	require.Equal(t, "sig-exact", replayed[0].Signature)
+	require.Equal(t, "tool_use", replayed[1].Type)
+	require.Equal(t, map[string]any{
+		"order_id": json.Number("9007199254740993"),
+		"rate":     json.Number("0.1234567890123456789"),
+		"nested":   map[string]any{"id": json.Number("12345678901234567890123")},
+		"list":     []any{json.Number("9007199254740993"), "9007199254740993", nil},
+	}, replayed[1].Input)
+}
