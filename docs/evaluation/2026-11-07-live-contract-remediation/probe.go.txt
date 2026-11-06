@@ -1,0 +1,484 @@
+// 本探针只向真实 Provider 发出有界请求，工具效果为本地合成记录。
+package main
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"flag"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/kart-io/goagent/builder"
+	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/core/budget"
+	"github.com/kart-io/goagent/core/durable"
+	"github.com/kart-io/goagent/evaluation/agentbench"
+	"github.com/kart-io/goagent/interfaces"
+	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/providers"
+	"github.com/kart-io/goagent/tools"
+)
+
+const (
+	id    = "9007199254740993"
+	rate  = "0.1234567890123456789"
+	label = "<测试&>"
+)
+
+var dir, phase, route, scenario, source string
+
+func redact(s string) string {
+	for _, name := range []string{"GEMINI_API_KEY", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "DEEPSEEK_API_KEY", "MINIMAX_CN_API_KEY", "MINIMAX_API_KEY"} {
+		if key := os.Getenv(name); key != "" {
+			s = strings.ReplaceAll(s, key, "[REDACTED]")
+		}
+	}
+	return s
+}
+
+func write(name string, v any) {
+	b, err := json.Marshal(v, json.Pretty)
+	if err != nil {
+		panic(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, name), []byte(redact(string(b))+"\n"), 0o600); err != nil {
+		panic(err)
+	}
+}
+
+func rawWrite(name string, b []byte) {
+	if err := os.WriteFile(filepath.Join(dir, name), []byte(redact(string(b))), 0o600); err != nil {
+		panic(err)
+	}
+}
+
+// transport 只观察真实网络，不替换响应；头部从不写入日志。
+type transport struct {
+	next         http.RoundTripper
+	mu           sync.Mutex
+	calls, limit int
+}
+
+func (t *transport) count() int { t.mu.Lock(); defer t.mu.Unlock(); return t.calls }
+func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if req.URL.Hostname() != "api.minimax.cn" && req.URL.Hostname() != "api.deepseek.com" {
+		return nil, errors.New("请求目的地不在本轮配置内")
+	}
+	t.mu.Lock()
+	if t.calls >= t.limit {
+		t.mu.Unlock()
+		return nil, errors.New("真实 HTTP 请求上限已到，未发送")
+	}
+	t.calls++
+	n := t.calls
+	t.mu.Unlock()
+	prefix := fmt.Sprintf("%s-wire-%02d", phase, n)
+	if req.Body != nil {
+		body, err := io.ReadAll(req.Body)
+		_ = req.Body.Close()
+		if err != nil {
+			return nil, err
+		}
+		rawWrite(prefix+"-request.json", body)
+		req.Body = io.NopCloser(bytes.NewReader(body))
+	}
+	meta := map[string]any{"method": req.Method, "endpoint": req.URL.Scheme + "://" + req.URL.Host + req.URL.Path, "started_at": time.Now().UTC()}
+	resp, err := t.next.RoundTrip(req)
+	if err != nil {
+		meta["error"] = redact(err.Error())
+		write(prefix+"-meta.json", meta)
+		return nil, err
+	}
+	meta["status"] = resp.StatusCode
+	write(prefix+"-meta.json", meta)
+	f, err := os.OpenFile(filepath.Join(dir, prefix+"-response.txt"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if err != nil {
+		_ = resp.Body.Close()
+		return nil, err
+	}
+	resp.Body = &responseBody{Reader: io.TeeReader(resp.Body, f), body: resp.Body, file: f}
+	return resp, nil
+}
+
+type responseBody struct {
+	io.Reader
+	body io.ReadCloser
+	file *os.File
+}
+
+func (b *responseBody) Close() error {
+	err := b.body.Close()
+	_ = b.file.Sync()
+	_ = b.file.Close()
+	return err
+}
+
+type tracked struct {
+	llm.ToolStreamClient
+	mu           sync.Mutex
+	calls, limit int
+	model        string
+}
+
+func (t *tracked) count() int { t.mu.Lock(); defer t.mu.Unlock(); return t.calls }
+func (t *tracked) start(req *llm.CompletionRequest) (*llm.CompletionRequest, int, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.calls >= t.limit {
+		return nil, 0, errors.New("模型调用上限已到，未发送")
+	}
+	t.calls++
+	n := t.calls
+	copy := *req
+	copy.Model = t.model
+	copy.MaxTokens = 4096
+	write(fmt.Sprintf("%s-call-%02d-request.json", phase, n), &copy)
+	return &copy, n, nil
+}
+
+func (t *tracked) forward(ctx context.Context, n int, ch <-chan *llm.StreamChunk, err error) (<-chan *llm.StreamChunk, error) {
+	name := fmt.Sprintf("%s-call-%02d-result.json", phase, n)
+	if err != nil {
+		write(name, map[string]any{"error": redact(err.Error())})
+		return nil, err
+	}
+	out := make(chan *llm.StreamChunk)
+	go func() {
+		defer close(out)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case chunk, ok := <-ch:
+				if !ok {
+					return
+				}
+				if chunk != nil && (chunk.Done || chunk.Error != nil) {
+					note := map[string]any{"chunk": chunk}
+					if chunk.Error != nil {
+						note["error"] = redact(chunk.Error.Error())
+					}
+					write(name, note)
+				}
+				select {
+				case <-ctx.Done():
+					return
+				case out <- chunk:
+				}
+			}
+		}
+	}()
+	return out, nil
+}
+
+func (t *tracked) CompleteStream(ctx context.Context, r *llm.CompletionRequest) (<-chan *llm.StreamChunk, error) {
+	r, n, err := t.start(r)
+	if err != nil {
+		return nil, err
+	}
+	ch, err := t.ToolStreamClient.CompleteStream(ctx, r)
+	return t.forward(ctx, n, ch, err)
+}
+
+func (t *tracked) CompleteToolsStream(ctx context.Context, r *llm.CompletionRequest, ts []interfaces.Tool) (<-chan *llm.StreamChunk, error) {
+	r, n, err := t.start(r)
+	if err != nil {
+		return nil, err
+	}
+	ch, err := t.ToolStreamClient.CompleteToolsStream(ctx, r, ts)
+	return t.forward(ctx, n, ch, err)
+}
+
+func client(model string, limit int) (*tracked, error) {
+	opts := []llm.ClientOption{llm.WithModel(model), llm.WithMaxTokens(4096), llm.WithTemperature(0), llm.WithTimeout(80 * time.Second), llm.WithStreamTimeout(100 * time.Second), llm.WithStreamIdleTimeout(40 * time.Second)}
+	var c llm.ToolStreamClient
+	var err error
+	switch route {
+	case "minimax-anthropic":
+		key := os.Getenv("MINIMAX_CN_API_KEY")
+		if key == "" {
+			return nil, errors.New("缺少 MiniMax 国内凭据")
+		}
+		c, err = providers.NewAnthropicWithOptions(append(opts,
+			llm.WithAPIKey(key), llm.WithBaseURL("https://api.minimax.cn/anthropic"),
+			llm.WithCustomHeaders(map[string]string{"Authorization": "Bearer " + key}))...)
+
+	case "deepseek":
+		key := os.Getenv("DEEPSEEK_API_KEY")
+		if key == "" {
+			key = os.Getenv("ANTHROPIC_AUTH_TOKEN")
+		}
+		c, err = providers.NewDeepSeekWithOptions(append(opts, llm.WithAPIKey(key), llm.WithBaseURL("https://api.deepseek.com"))...)
+	default:
+		return nil, errors.New("未知测试路由")
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &tracked{ToolStreamClient: c, limit: limit, model: model}, nil
+}
+
+func appendLine(name string, v any) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	f, err := os.OpenFile(filepath.Join(dir, name), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	if _, err = f.Write(append(b, '\n')); err != nil {
+		return err
+	}
+	return f.Sync()
+}
+
+func effects() int {
+	b, _ := os.ReadFile(filepath.Join(dir, "effects.jsonl"))
+	return len(bytes.FieldsFunc(b, func(r rune) bool { return r == '\n' }))
+}
+
+// continuationCase 保留历史错误回答和原工具结果，显式追加一次格式纠正。
+func continuationCase(ctx context.Context, c *tracked, out map[string]any) error {
+	b, err := os.ReadFile(source)
+	if err != nil {
+		return err
+	}
+	var request llm.CompletionRequest
+	if err = json.Unmarshal(b, &request); err != nil {
+		return err
+	}
+	var prior struct {
+		Chunk llm.StreamChunk `json:"chunk"`
+	}
+	b, err = os.ReadFile(strings.TrimSuffix(source, "-request.json") + "-result.json")
+	if err != nil {
+		return err
+	}
+	if err = json.Unmarshal(b, &prior); err != nil {
+		return err
+	}
+	var config struct {
+		Receipt string `json:"receipt"`
+	}
+	b, err = os.ReadFile(filepath.Join(filepath.Dir(source), "scenario.json"))
+	if err != nil {
+		return err
+	}
+	if err = json.Unmarshal(b, &config); err != nil {
+		return err
+	}
+	contract := agentbench.ToolContract{Receipt: config.Receipt}
+	if contract.CheckAnswer(prior.Chunk.Content) == nil {
+		return errors.New("历史样本应是格式失败")
+	}
+	correction, err := contract.Stop(ctx, &builder.Stopping{Step: 1, Answer: prior.Chunk.Content})
+	if err != nil {
+		return err
+	}
+	request.Messages = append(request.Messages, llm.Message{Role: "assistant", Content: prior.Chunk.Content, ReasoningContent: prior.Chunk.ReasoningContent, ProviderState: prior.Chunk.ProviderState, ToolCalls: prior.Chunk.ToolCalls}, llm.UserMessage(correction))
+	out["source_request"] = source
+	out["previous_answer"] = prior.Chunk.Content
+	out["correction"] = correction
+	out["expected_receipt"] = config.Receipt
+	ch, err := c.CompleteToolsStream(ctx, &request, nil)
+	if err != nil {
+		return err
+	}
+	var final *llm.StreamChunk
+	for chunk := range ch {
+		if chunk == nil {
+			continue
+		}
+		if chunk.Error != nil {
+			return chunk.Error
+		}
+		if chunk.Done {
+			final = chunk
+		}
+	}
+	if final == nil {
+		return errors.New("真实续接未返回终态")
+	}
+	out["terminal"] = final
+	if len(final.ToolCalls) != 0 {
+		return errors.New("续接又请求了工具，不追加工具效果")
+	}
+	if err := contract.CheckAnswer(final.Content); err != nil {
+		return err
+	}
+	return nil
+}
+
+func toolCase(ctx context.Context, c *tracked, wire *transport, out map[string]any) error {
+	stringMode := scenario == "string" || scenario == "direct-string"
+	var config struct {
+		Receipt string `json:"receipt"`
+	}
+	b, err := os.ReadFile(filepath.Join(dir, "scenario.json"))
+	if err != nil {
+		return err
+	}
+	if err = json.Unmarshal(b, &config); err != nil {
+		return err
+	}
+	contract := agentbench.ToolContract{ID: id, Rate: rate, Label: label, Receipt: config.Receipt, StringNumbers: stringMode}
+	check := func(args map[string]any) error { return contract.CheckArguments(&interfaces.ToolInput{Args: args}) }
+	schema := contract.Schema()
+	registry := tools.NewRegistry()
+	err = registry.Register(tools.NewBaseTool("verify_synthetic", "记录一次合成数据并返回不可预测的本地回执；不操作真实业务。", schema, func(_ context.Context, in *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+		if err := check(in.Args); err != nil {
+			return nil, err
+		}
+		if effects() != 0 {
+			_ = appendLine("duplicate-attempts.jsonl", in.Args)
+			return nil, errors.New("检测到重复工具效果尝试")
+		}
+		if err := appendLine("effects.jsonl", in.Args); err != nil {
+			return nil, err
+		}
+		return &interfaces.ToolOutput{Success: true, Result: map[string]any{"receipt": config.Receipt, "id": in.Args["id"], "rate": in.Args["rate"], "label": label, "items": []string(nil)}}, nil
+	}))
+	if err != nil {
+		return err
+	}
+	dispatcher, err := tools.NewDispatcher(registry, tools.DispatchConfig{Authorize: func(_ context.Context, _ string, in *interfaces.ToolInput) error {
+		if err := appendLine("authorized.jsonl", in.Args); err != nil {
+			return err
+		}
+		return check(in.Args)
+	}, OnResult: func(_ context.Context, _ tools.DispatchResult) error {
+		if phase == "crash" {
+			out["status"] = "crashed_after_effect"
+			out["new_model_calls"] = c.count()
+			out["wire_attempts"] = wire.count()
+			out["effects"] = effects()
+			write(phase+"-result.json", out)
+			os.Exit(86)
+		}
+		return nil
+	}})
+	if err != nil {
+		return err
+	}
+	store, err := durable.NewFileStore(filepath.Join(dir, "checkpoints"))
+	if err != nil {
+		return err
+	}
+	ctrl, err := budget.NewDurable(budget.Config{RootKey: "codec-live/" + route + "/" + scenario, Version: "contract-v3", MaxModelRequests: 3, MaxToolCalls: 1}, store)
+	if err != nil {
+		return err
+	}
+	ctx = durable.WithJournal(durable.WithExecutionKey(budget.WithController(ctx, ctrl), "codec-live/"+route+"/"+scenario), store)
+	builder := builder.NewSimpleBuilder(c).WithDurableScope("contract-v3").WithTools(dispatcher.Tools()...).WithSystemPrompt("这是合成数据的编解码测试。必须调用 verify_synthetic 恰好一次，id、rate、label 使用用户给出的原值和 JSON 类型；不要计算、不要四舍五入。工具成功后最终只输出工具返回的 receipt，不加说明，不重复调用。").WithMaxIterations(5).WithTurnStopping(contract.Stop).WithMaxTokens(4096).WithTemperature(0).WithTimeout(110 * time.Second)
+	agent, err := builder.Build()
+	if err != nil {
+		return err
+	}
+	input := fmt.Sprintf(`{"id":%s,"rate":%s,"label":"%s"}`, id, rate, label)
+	if stringMode {
+		input = fmt.Sprintf(`{"id":"%s","rate":"%s","label":"%s"}`, id, rate, label)
+	}
+	result, err := agent.AsRunnable().Invoke(ctx, input)
+	if snap, e := ctrl.Snapshot(context.Background()); e == nil {
+		out["budget"] = snap
+	}
+	if err != nil {
+		return err
+	}
+	out["answer"] = result.Result
+	out["metadata"] = result.Metadata
+	out["expected_receipt"] = config.Receipt
+	if err := contract.CheckAnswer(result.Result); err != nil {
+		return err
+	}
+	if result.Metadata["turn_stopping_skipped"] != nil {
+		return errors.New("最终校验钩子不应跳过")
+	}
+
+	if effects() != 1 {
+		return fmt.Errorf("工具效果次数=%d，预期 1", effects())
+	}
+	if phase == "replay" && (c.count() != 0 || wire.count() != 0) {
+		return errors.New("回放产生了新的模型或 HTTP 请求")
+	}
+	if phase == "run" && (c.count() < 2 || c.count() > 3) {
+		return fmt.Errorf("正常工具循环请求数=%d，预期 2 或 3", c.count())
+	}
+	if phase == "resume" {
+		want := 1
+		if scenario == "direct-string" {
+			want = 0
+		}
+		if c.count() != want {
+			return fmt.Errorf("恢复请求数=%d，预期 %d", c.count(), want)
+		}
+	}
+	return nil
+}
+
+func main() { os.Exit(run()) }
+func run() int {
+	live := flag.Bool("live", false, "显式允许真实模型调用")
+	flag.StringVar(&route, "route", "", "deepseek/minimax-anthropic")
+	flag.StringVar(&scenario, "case", "", "text/number/string")
+	flag.StringVar(&phase, "phase", "run", "run/crash/resume/replay")
+	flag.StringVar(&dir, "dir", "", "本次独立输出目录")
+	flag.StringVar(&source, "source", "", "修复复验使用的原始真实请求")
+	model := flag.String("model", "", "已确认可用的模型 ID")
+	flag.Parse()
+	if !*live || dir == "" || *model == "" {
+		fmt.Fprintln(os.Stderr, "必须显式设置 -live、-model、-dir")
+		return 2
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		panic(err)
+	}
+	limit := 3
+	if scenario == "text" || scenario == "continuation" || phase == "crash" || phase == "resume" {
+		limit = 1
+	}
+	if phase == "replay" {
+		limit = 0
+	}
+	if scenario == "direct-string" && phase == "resume" {
+		limit = 0
+	}
+	wire := &transport{next: http.DefaultTransport, limit: limit}
+	http.DefaultTransport = wire
+	out := map[string]any{"route": route, "model": *model, "case": scenario, "phase": phase, "started_at": time.Now().UTC(), "request_limit": limit}
+	ctx, cancel := context.WithTimeout(context.Background(), 125*time.Second)
+	defer cancel()
+	c, err := client(*model, limit)
+	if err == nil {
+		if scenario == "continuation" {
+			err = continuationCase(ctx, c, out)
+		} else {
+			err = toolCase(ctx, c, wire, out)
+		}
+	}
+	if c != nil {
+		out["new_model_calls"] = c.count()
+	}
+	out["wire_attempts"] = wire.count()
+	out["effects"] = effects()
+	out["status"] = "passed"
+	if err != nil {
+		out["status"] = "failed"
+		out["error"] = redact(err.Error())
+	}
+	write(phase+"-result.json", out)
+	fmt.Printf("%s %s %s: %v，HTTP=%d\n", route, scenario, phase, out["status"], wire.count())
+	if err != nil {
+		return 1
+	}
+	return 0
+}

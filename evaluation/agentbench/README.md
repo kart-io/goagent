@@ -2,6 +2,9 @@
 
 评测包已纳入主 Go 模块，使用实际 OpenAI 兼容 SDK、统一请求计量和严格评分。无独立模块依赖，根目录测试会包含本包。
 
+
+精确工具参数与模型回执的接入参考见 [ToolContract](tool_contract.go) 和[回归测试](tool_contract_test.go)：在执行前检查参数，最终回执最多纠正一次，严格限制请求预算并验证持久化重放。[真实复验](../../docs/evaluation/2026-11-07-live-contract-remediation/REPORT.md)保留历史失败；MiniMax 的精确小数采用字符串协议，未修复供应商的数字模式。
+
 ## 离线验证
 
 在仓库根目录执行：
