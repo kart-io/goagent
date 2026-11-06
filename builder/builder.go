@@ -15,6 +15,7 @@ import (
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/store"
 	"github.com/kart-io/goagent/store/memory"
+	"github.com/kart-io/goagent/tools"
 )
 
 // InputSerializer 定义输入序列化接口
@@ -43,9 +44,11 @@ func (s *DefaultInputSerializer) Serialize(input interface{}) (string, error) {
 //   - 输入序列化
 type AgentBuilder[C any, S core.State] struct {
 	// 核心组件
-	llmClient    llm.Client
-	tools        []interfaces.Tool
-	systemPrompt string
+	llmClient     llm.Client
+	dispatcher    *tools.Dispatcher
+	dispatcherSet bool
+	tools         []interfaces.Tool
+	systemPrompt  string
 
 	// Phase 1 组件
 	state        S
@@ -104,6 +107,16 @@ func (b *AgentBuilder[C, S]) BuildContext(ctx context.Context) (*ConfigurableAge
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("构建 Agent 已取消：%w", err)
 	}
+	toolset := b.tools
+	if b.dispatcherSet {
+		if b.dispatcher == nil {
+			return nil, fmt.Errorf("WithDispatcher需要非空派发器")
+		}
+		if len(toolset) > 0 {
+			return nil, fmt.Errorf("WithDispatcher不能与WithTools混用")
+		}
+		toolset = b.dispatcher.Tools()
+	}
 	for _, validate := range b.config.OutputValidators {
 		if validate == nil {
 			return nil, fmt.Errorf("最终输出验收器不能为nil")
@@ -113,7 +126,7 @@ func (b *AgentBuilder[C, S]) BuildContext(ctx context.Context) (*ConfigurableAge
 	if b.llmClient == nil {
 		return nil, agentErrors.NewInvalidConfigError("builder", "llm_client", "LLM client is required")
 	}
-	if _, ok := b.llmClient.(llm.ToolStreamClient); !ok && len(b.tools) > 0 {
+	if _, ok := b.llmClient.(llm.ToolStreamClient); !ok && len(toolset) > 0 {
 		return nil, agentErrors.NewInvalidConfigError("builder", "llm_client", "configured tools require llm.ToolStreamClient")
 	}
 	if b.inputSerializer == nil {
@@ -139,7 +152,7 @@ func (b *AgentBuilder[C, S]) BuildContext(ctx context.Context) (*ConfigurableAge
 		}
 		for _, name := range b.config.ReturnDirectTools {
 			matches := 0
-			for _, tool := range b.tools {
+			for _, tool := range toolset {
 				if tool != nil && tool.Name() == name {
 					matches++
 				}
@@ -151,10 +164,10 @@ func (b *AgentBuilder[C, S]) BuildContext(ctx context.Context) (*ConfigurableAge
 	}
 
 	if len(b.config.Offloads) > 0 {
-		if _, ok := b.llmClient.(llm.ToolStreamClient); !ok || len(b.tools) == 0 {
+		if _, ok := b.llmClient.(llm.ToolStreamClient); !ok || len(toolset) == 0 {
 			return nil, fmt.Errorf("WithOffload requires tools and llm.ToolStreamClient")
 		}
-		if err := b.validateOffloads(); err != nil {
+		if err := b.validateOffloads(toolset); err != nil {
 			return nil, err
 		}
 	}
@@ -199,7 +212,7 @@ func (b *AgentBuilder[C, S]) BuildContext(ctx context.Context) (*ConfigurableAge
 	agent := &ConfigurableAgent[C, S]{
 		executionGate:   make(chan struct{}, 1),
 		llmClient:       b.llmClient,
-		tools:           b.tools,
+		tools:           toolset,
 		systemPrompt:    b.systemPrompt,
 		runtime:         runtime,
 		chain:           chain,

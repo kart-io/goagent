@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/kart-io/goagent/builder/contextpolicy"
 	"github.com/kart-io/goagent/core/durable"
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 )
 
@@ -33,7 +34,7 @@ func (b *AgentBuilder[C, S]) WithOffload(o *contextpolicy.Offload) *AgentBuilder
 }
 
 // validateOffloads 要求每个结果卸载的读取工具恰好注册一次。
-func (b *AgentBuilder[C, S]) validateOffloads() error {
+func (b *AgentBuilder[C, S]) validateOffloads(toolset []interfaces.Tool) error {
 	if len(b.config.Offloads) == 0 {
 		return nil
 	}
@@ -44,7 +45,7 @@ func (b *AgentBuilder[C, S]) validateOffloads() error {
 		return fmt.Errorf("WithOffload 需要 Offload")
 	}
 	readers := 0
-	for _, tool := range b.tools {
+	for _, tool := range toolset {
 		if tool != nil && tool.Name() == contextpolicy.ReadToolName {
 			readers++
 		}
