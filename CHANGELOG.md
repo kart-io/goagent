@@ -18,20 +18,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `llm.LLMOptions` 实现 `UnmarshalJSONFrom`，自定义解码沿用调用方的解码选项（如 `json.Strict` 的未知字段报错与时长字符串）。
 - 可从配置文件加载的配置类型补齐 json 标签，字段名为 snake_case（如 `cache.CacheConfig` 的 `default_ttl`、`observability.TelemetryConfig` 的 `trace_endpoint`），函数、接口、Logger、Store 等不可加载的字段为 `json:"-"`；涉及 `cache`、`core`（`TimeoutConfig`、`InterruptConfig`、`LifecycleManagerConfig`、`RunnableConfig`、`RetryPolicy`）、`core/checkpoint`、`core/durable.OperationPolicy`、`core/execution`、`builder`（`RetrievalConfig`、`contextpolicy.OffloadConfig`）、`devtools`、`llm`、`llm/cache`、`llm/common`、`memory`、`observability`、`tools`、`tools/middleware`、`utils/httpclient`、`workflow.DurableConfig`。这些类型原先按 Go 字段名编码，自行用 JSON 编码过它们的调用方需改用新字段名；goagent 不持久化这些类型，意图指纹与持久记录不受影响。`builder.AgentConfig` 保持既有的 Go 字段名格式。
 - `examples/skills/02-weather-skill` 改用 `codec.ReadFile`，主模块不再依赖 `gopkg.in/yaml.v3`。
+- `json.Pretty`：两空格缩进的编码选项，`Marshal` 与 `Encode` 均可使用，替代各处的 `json.Indent("  ")`。
+- `tools/toolargs`：`Parse` 解析模型给出的工具参数，float64 表示不了的数字保留为 `json.Number`；`Validate` 按原文精确校验 schema 的数值约束；`Float64`、`Compare`、`IsInteger` 供工具读取与比较 `json.Number`。
+- `llm.ToolCall.ArgumentsObject`：解析 `Arguments` 并要求是 JSON 对象。
 
 ### Changed
 
 - JSON 编解码全部改用标准库 `encoding/json/v2` 与 `encoding/json/jsontext`，最低 Go 版本升为 1.27.0，开发工具链为 Go 1.27.3。迁移保持既有编码结果：数字、布尔、指针、接口字段的 `omitempty` 改为 `omitzero`，结构体字段去掉 v1 中本就不生效的 `omitempty`；持久意图、事件、会话、工具结果等可能含 map 的编码按键排序；`time.Duration` 仍编码为整数纳秒；Dispatcher 日志回放的工具结果中数字仍为 `json.Number`。工具参数 Schema 把 `omitzero` 字段视为可选。
 - `workflow.DurableGraph` 每个节点执行前保存的意图快照只更新位置与键，状态沿用上一次提交的原文，不再重新编码：每个节点少一次状态编码，8 节点图在内存存储上耗时与内存各降约 9%，`FileStore` 上内存降约 8%。从旧版本写入的检查点恢复时，意图快照保留原文，不再改写为当前版本的编码。
 - 调用方自己直接调用 `encoding/json/v2` 时默认行为与 `codec/json` 不同：nil 切片与 map 编码为 `[]`、`{}`，不做 HTML 转义，拒绝非法 UTF-8 与重复键，字段名精确匹配，数字、布尔的 `omitempty` 不省略零值，拒绝编码无导出字段的结构体（含非 nil 的 `error` 字段），`,string` 不作用于布尔与字符串，遇到类型错误立即停止解码，错误为 `SemanticError`；编码含 `time.Duration` 字段的类型（如 `observe.Event`）会报 `no default representation`。与 goagent 交换数据时使用 `codec/json`；`json.RawMessage` 与 `jsontext.Value` 是同一类型，已有代码无需改动即可传入。
+- 模型给出的工具参数中，float64 能精确表示的数字仍是 `float64`，大整数（如雪花 ID）与高精度小数改为 `json.Number`，校验、`Authorize`、审批、durable 意图、缓存键与执行看到同一个值；原先这类数字被舍入，类型化工具声明 `int64` 也会拿到错误的值。数字所在位置的 schema 用到 `anyOf`、`patternProperties`、元组 `items` 等无法精确判断的关键字时作为参数错误交还模型；舍入后才越界的合法值（如 `9007199254740993` 对 `multipleOf: 3`）会被保守拒绝。超出 float64 范围的数字（如 `1e400`）仍视为无效参数。
+- `core/state` 深拷贝解码回原值的类型：结构体不再变成 map，`time.Time`、`uint64` 大数与 `json.Number` 保持原类型。
 
 ### Removed
 
 - `utils/json` 包与 `github.com/bytedance/sonic` 依赖：改用 `codec/json`；`Marshal`、`Unmarshal`、`RawMessage`、`Number` 改用 `codec/json` 中的同名函数与类型，`MarshalIndent` 改用 `json.Marshal(v, json.Indent(...))`（缩进与前缀只能含空格与制表符），`Decode` 改用 `codec.Convert`，`Get`、`GetString` 等路径查询没有替代。
 
+### Fixed
+
+- 同时传入 `json.Strict` 与 `json.UseNumber` 时，后一个选项的解码钩子不再覆盖前一个。
+- `codec/yaml` 解码保留 float64 表示不了的数字原文，配合 `json.UseNumber` 可得到精确值。
+- `json.Encode` 编码失败时不写出任何内容，逐行 JSON 不会留下半条记录。
+- Gemini 回放时丢弃编码为 `{}` 的 part（含空 `thoughtSignature`、`partMetadata`），避免请求被拒。
+- Anthropic 回放历史工具调用时发送参数原文，大整数不再被改写。Gemini SDK 构造请求时自行经 float64 转换，仍会丢精度。
+
 ### 升级须知
 
 - goagent 经 `codec/json` 编码持久数据，与 v1 逐字节一致，调用方放入持久状态的自定义类型（含带 `omitempty` 的数字、布尔字段）编码结果也不变，在途持久运行升级后可直接恢复；回归测试覆盖 HTML 转义、非法 UTF-8、`omitempty` 与 nil 的编码。
+- 按 map 读取数值参数的工具：大整数与高精度小数现在是 `json.Number`，`args["x"].(float64)` 会取值失败，改用 `toolargs.Float64(args["x"])`；需要精确值时直接使用 `json.Number`。类型化工具（`tools.NewTypedFunctionTool`）无需改动。
 
 ## [0.49.0] - 2026-11-05
 
