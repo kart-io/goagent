@@ -73,6 +73,9 @@ var NoEscapeHTML = jsontext.EscapeForHTML(false)
 // Indent 让编码结果按 indent 缩进；indent 只能含空格与制表符，否则 panic（v1 MarshalIndent 不限制）。
 func Indent(indent string) Option { return jsontext.WithIndent(indent) }
 
+// Pretty 按两空格缩进编码，用于写给人看的文件与终端输出。
+var Pretty = Indent("  ")
+
 // IndentPrefix 在缩进输出的每一行（首行除外）前加 prefix（只能是空白字符），与 Indent 一起使用。
 func IndentPrefix(prefix string) Option { return jsontext.WithIndentPrefix(prefix) }
 

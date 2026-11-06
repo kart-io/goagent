@@ -277,7 +277,7 @@ func runExecutionDemo(ctx context.Context, strategyResult map[string]interface{}
 
 // Helper functions
 func printJSON(data interface{}) {
-	jsonBytes, err := json.Marshal(data, json.Indent("  "))
+	jsonBytes, err := json.Marshal(data, json.Pretty)
 	if err != nil {
 		fmt.Printf("%v\n", data)
 		return
@@ -286,7 +286,7 @@ func printJSON(data interface{}) {
 }
 
 func printJSONLimited(data interface{}, maxLines int) {
-	jsonBytes, err := json.Marshal(data, json.Indent("  "))
+	jsonBytes, err := json.Marshal(data, json.Pretty)
 	if err != nil {
 		fmt.Printf("%v\n", data)
 		return

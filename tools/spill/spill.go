@@ -212,7 +212,7 @@ func spillText(result any) ([]byte, error) {
 			if s, ok := v[k].(string); ok {
 				sb.WriteString(s)
 			} else {
-				data, err := json.Marshal(v[k], json.Indent("  "))
+				data, err := json.Marshal(v[k], json.Pretty)
 				if err != nil {
 					return nil, err
 				}
@@ -222,5 +222,5 @@ func spillText(result any) ([]byte, error) {
 		}
 		return []byte(sb.String()), nil
 	}
-	return json.Marshal(result, json.Indent("  "))
+	return json.Marshal(result, json.Pretty)
 }

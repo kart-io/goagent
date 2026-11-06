@@ -58,7 +58,7 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 	if err != nil && !errors.Is(err, durable.ErrApprovalRequired) {
 		return err
 	}
-	return json.Encode(out, snap, json.Indent("  "))
+	return json.Encode(out, snap, json.Pretty)
 }
 
 func build(ctx context.Context, store durable.Store) (*workflow.DurableGraph[refund], error) {

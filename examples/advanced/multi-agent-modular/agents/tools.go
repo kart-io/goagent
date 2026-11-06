@@ -325,7 +325,7 @@ func (t *NotificationTool) Execute(ctx context.Context, params map[string]interf
 
 // SerializeTool converts tool results to JSON
 func SerializeTool(result interface{}) (string, error) {
-	data, err := json.Marshal(result, json.Indent("  "))
+	data, err := json.Marshal(result, json.Pretty)
 	if err != nil {
 		return "", fmt.Errorf("failed to serialize tool result: %w", err)
 	}

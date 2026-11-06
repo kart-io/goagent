@@ -74,7 +74,7 @@ func main() {
 	status, err := exec.Command("git", "status", "--porcelain").Output()
 	dirty := err != nil || len(status) > 0
 	report := map[string]any{"live": true, "dataset": *dataset, "dataset_sha256": hex.EncodeToString(digest[:]), "goagent_revision": strings.TrimSpace(string(revision)), "goagent_dirty": dirty, "config": cfg, "repeats": *repeats, "timestamp": time.Now().UTC(), "results": results, "scoring": "最终答案去除首尾空白后完全匹配；有证据的题目还必须调用工具；失败样本保留", "limitations": "合成数据；未禁用供应商缓存；Token 阈值不是硬性计费上限；首次文本不是工具首帧；本实验不评价持久化恢复"}
-	if err := json.Encode(os.Stdout, report, json.Indent("  ")); err != nil {
+	if err := json.Encode(os.Stdout, report, json.Pretty); err != nil {
 		log.Fatal(fmt.Errorf("输出报告：%w", err))
 	}
 }

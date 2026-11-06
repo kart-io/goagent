@@ -105,7 +105,7 @@ func run(args []string) error {
 	if err := os.Mkdir(*out, 0700); err != nil {
 		return err
 	}
-	data, err := json.Marshal(cases, json.Indent("  "))
+	data, err := json.Marshal(cases, json.Pretty)
 	if err != nil {
 		return err
 	}
@@ -220,7 +220,7 @@ func run(args []string) error {
 }
 
 func writeJSON(path string, value any) error {
-	data, err := json.Marshal(value, json.Indent("  "))
+	data, err := json.Marshal(value, json.Pretty)
 	if err != nil {
 		return err
 	}

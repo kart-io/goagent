@@ -155,7 +155,7 @@ func discover(ctx context.Context, root string) ([]module, error) {
 }
 
 func writeJSON(path string, value any) error {
-	data, err := json.Marshal(value, json.Indent("  "))
+	data, err := json.Marshal(value, json.Pretty)
 	if err != nil {
 		return err
 	}

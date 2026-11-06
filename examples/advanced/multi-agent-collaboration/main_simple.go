@@ -300,7 +300,7 @@ func runAgent(ctx context.Context, agent *builder.ConfigurableAgent[any, core.St
 
 // formatResult converts a result map to a readable string
 func formatResult(result map[string]interface{}) string {
-	jsonBytes, err := json.Marshal(result, json.Indent("  "))
+	jsonBytes, err := json.Marshal(result, json.Pretty)
 	if err != nil {
 		return fmt.Sprintf("%v", result)
 	}

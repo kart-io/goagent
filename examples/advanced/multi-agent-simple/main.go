@@ -324,7 +324,7 @@ func main() {
 			if key != "summary" {
 				// Pretty print JSON if it's a map or slice
 				if _, ok := value.(map[string]interface{}); ok {
-					jsonBytes, _ := json.Marshal(value, json.IndentPrefix("  "), json.Indent("  "))
+					jsonBytes, _ := json.Marshal(value, json.IndentPrefix("  "), json.Pretty)
 					fmt.Printf("%s:\n  %s\n", strings.ToTitle(key), string(jsonBytes))
 				} else {
 					fmt.Printf("%s:\n  %v\n", strings.ToTitle(key), truncate(fmt.Sprintf("%v", value), 200))

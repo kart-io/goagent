@@ -355,7 +355,7 @@ func ollamaWithToolsExample() {
 	if err != nil {
 		log.Printf("Error invoking weather tool: %v\n", err)
 	} else {
-		weatherJSON, _ := json.Marshal(weatherOutput.Result, json.Indent("  "))
+		weatherJSON, _ := json.Marshal(weatherOutput.Result, json.Pretty)
 		fmt.Printf("✅ Weather Data:\n%s\n", string(weatherJSON))
 	}
 
@@ -482,7 +482,7 @@ Input: <tool_input_as_json>`, toolDescriptions)),
 				Context: ctx,
 			})
 			if err == nil {
-				weatherJSON, _ := json.Marshal(output.Result, json.Indent("  "))
+				weatherJSON, _ := json.Marshal(output.Result, json.Pretty)
 				fmt.Printf("🎯 Tool Result:\n%s\n", string(weatherJSON))
 			}
 		}

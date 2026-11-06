@@ -250,7 +250,7 @@ func (p *JSONOutputParser[T]) GetFormatInstructions() string {
 // generateExample 生成示例 JSON
 func (p *JSONOutputParser[T]) generateExample() string {
 	var zero T
-	example, _ := json.Marshal(zero, json.Indent("  "))
+	example, _ := json.Marshal(zero, json.Pretty)
 	return string(example)
 }
 

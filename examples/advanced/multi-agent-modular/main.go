@@ -174,7 +174,7 @@ func displayResults(result *agents.WorkflowResult) {
 	if len(result.ToolResults) > 0 {
 		fmt.Println("\n🛠️  Tool Results:")
 		for tool, res := range result.ToolResults {
-			jsonData, _ := json.Marshal(res, json.IndentPrefix("  "), json.Indent("  "))
+			jsonData, _ := json.Marshal(res, json.IndentPrefix("  "), json.Pretty)
 			fmt.Printf("  %s:\n  %s\n", tool, truncate(string(jsonData), 150))
 		}
 	}

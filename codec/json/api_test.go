@@ -118,3 +118,9 @@ func TestCompactJSON(t *testing.T) {
 	_, err = Compact([]byte(`{"a":`))
 	require.Error(t, err)
 }
+
+func TestPrettyIndentsWithTwoSpaces(t *testing.T) {
+	data, err := Marshal(map[string][]int{"a": {1}}, Pretty)
+	require.NoError(t, err)
+	require.Equal(t, "{\n  \"a\": [\n    1\n  ]\n}", string(data))
+}

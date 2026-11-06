@@ -84,7 +84,7 @@ func run() int {
 	if runErr != nil {
 		out.Error = runErr.Error()
 	}
-	if err := json.Encode(os.Stdout, out, json.Indent("  ")); err != nil {
+	if err := json.Encode(os.Stdout, out, json.Pretty); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}

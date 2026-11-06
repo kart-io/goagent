@@ -132,5 +132,5 @@ func run(ctx context.Context, args []string, output io.Writer) error {
 	if snapshot == nil {
 		return errors.New("missing checkpoint")
 	}
-	return json.Encode(output, snapshot, json.Indent("  "))
+	return json.Encode(output, snapshot, json.Pretty)
 }
