@@ -231,3 +231,34 @@ func TestVerifyExplicitWorktreeUsesSelectedCore(t *testing.T) {
 		t.Fatal("改写了原主工作区", err)
 	}
 }
+
+func TestDiscoverResolvesLinkedRepositoryRoots(t *testing.T) {
+	root := compatibilityFixture(t)
+	actual := filepath.Join(t.TempDir(), "修复后的Contrib工作树")
+	if err := os.Rename(filepath.Join(root, "goagent-contrib"), actual); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(actual, filepath.Join(root, "goagent-contrib")); err != nil {
+		t.Fatal(err)
+	}
+	modules, err := discover(context.Background(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	actual, err = filepath.EvalSymlinks(actual)
+	if err != nil {
+		t.Fatal(err)
+	}
+	matched := 0
+	for _, m := range modules {
+		if strings.HasPrefix(m.Path, "github.com/kart-io/goagent-contrib/") {
+			matched++
+			if !strings.HasPrefix(m.Dir, actual+string(filepath.Separator)) {
+				t.Fatalf("未选择实际工作树: %s", m.Dir)
+			}
+		}
+	}
+	if matched != 2 {
+		t.Fatalf("遗漏关联子模块: %d", matched)
+	}
+}

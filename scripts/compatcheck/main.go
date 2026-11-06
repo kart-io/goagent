@@ -124,6 +124,17 @@ func discover(ctx context.Context, root string, coreDir ...string) ([]module, er
 		if repo == "goagent" && selected != "" {
 			dir = selected
 		}
+		// 仅解析仓库根自身的链接，保留既有普通路径（如系统临时目录别名）的报告语义。
+		info, statErr := os.Lstat(dir)
+		if statErr != nil {
+			return nil, fmt.Errorf("读取仓库%s: %w", repo, statErr)
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			dir, err = filepath.EvalSymlinks(dir)
+			if err != nil {
+				return nil, fmt.Errorf("解析仓库%s: %w", repo, err)
+			}
+		}
 		err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return err
