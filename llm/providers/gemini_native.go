@@ -108,6 +108,7 @@ func geminiAssistant(msg llm.Message) (*genai.Content, []*genai.FunctionCall, er
 			content.Parts = append(content.Parts, &genai.Part{Text: msg.Content})
 		}
 		for _, call := range msg.ToolCalls {
+			// genai 构造请求时经 encoding/json 转成 map，数字总会变成 float64，这里无法保留原文。
 			args, ok := call.ArgumentsObject()
 			if !ok || call.Function.Name == "" {
 				return nil, nil, fmt.Errorf("gemini: tool arguments must be an object with a function name")

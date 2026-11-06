@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -228,4 +229,29 @@ func TestAnthropicRequiresAPIKey(t *testing.T) {
 	t.Setenv(constants.EnvAnthropicAPIKey, "")
 	_, err := NewAnthropicWithOptions()
 	require.Error(t, err)
+}
+
+// 历史工具调用回放时参数按模型给出的原文发送，大整数与高精度小数不经 float64 改写。
+func TestAnthropicReplaysToolArgumentsExactly(t *testing.T) {
+	bodies := make(chan []byte, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		data, _ := io.ReadAll(r.Body)
+		bodies <- data
+		w.Header().Set("Content-Type", "text/event-stream")
+		for _, e := range textEvents {
+			_, _ = fmt.Fprintf(w, "event: %s\ndata: %s\n\n", e.name, e.data)
+		}
+	}))
+	defer server.Close()
+	p := newTestAnthropic(t, server.URL)
+	call := agentllm.ToolCall{ID: "c1", Type: "function"}
+	call.Function.Name, call.Function.Arguments = "lookup", `{"order_id":12345678901234567890123,"rate":0.1234567890123456789}`
+	stream, err := p.CompleteStream(context.Background(), &agentllm.CompletionRequest{Messages: []agentllm.Message{
+		{Role: "user", Content: "q"}, {Role: "assistant", ToolCalls: []agentllm.ToolCall{call}}, {Role: "tool", ToolCallID: "c1", Content: "r"},
+	}})
+	require.NoError(t, err)
+	drain(t, stream)
+	body := string(<-bodies)
+	require.Contains(t, body, `"order_id":12345678901234567890123`)
+	require.Contains(t, body, `"rate":0.1234567890123456789`)
 }
