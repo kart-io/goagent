@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -22,12 +23,13 @@ func main() {
 		os.Exit(1)
 	}
 }
-func run(ctx context.Context) error {
+
+func run(ctx context.Context) (err error) {
 	directory, err := os.MkdirTemp("", "goagent-governed-")
 	if err != nil {
 		return err
 	}
-	defer os.RemoveAll(directory)
+	defer func() { err = errors.Join(err, os.RemoveAll(directory)) }()
 	journal, err := durable.NewFileStore(directory)
 	if err != nil {
 		return err
