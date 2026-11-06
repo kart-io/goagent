@@ -39,8 +39,10 @@ func (a *ConfigurableAgent[C, S]) AsRunnable() *core.StreamRunnable[any, *AgentO
 				if event.Type == "error" {
 					return fmt.Errorf("执行失败：%s", event.Message)
 				}
-				chunk := core.StreamChunk[*AgentOutput]{Data: event.Output, Done: event.Type == "done",
-					Event: &core.StreamEvent{Type: event.Type, Delta: event.Delta, Step: event.Step, Tool: event.Tool, Sources: event.Sources, Usage: event.Usage}}
+				chunk := core.StreamChunk[*AgentOutput]{
+					Data: event.Output, Done: event.Type == "done",
+					Event: &core.StreamEvent{Type: event.Type, Delta: event.Delta, Step: event.Step, Tool: event.Tool, Sources: event.Sources, Usage: event.Usage},
+				}
 				if chunk.Done && chunk.Data == nil {
 					return fmt.Errorf("最终事件缺少输出")
 				}
@@ -52,5 +54,5 @@ func (a *ConfigurableAgent[C, S]) AsRunnable() *core.StreamRunnable[any, *AgentO
 				}
 			}
 		}
-	})
+	}).WithFinalValidator(a.validateOutput)
 }

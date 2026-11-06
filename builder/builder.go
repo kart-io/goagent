@@ -104,6 +104,11 @@ func (b *AgentBuilder[C, S]) BuildContext(ctx context.Context) (*ConfigurableAge
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("构建 Agent 已取消：%w", err)
 	}
+	for _, validate := range b.config.OutputValidators {
+		if validate == nil {
+			return nil, fmt.Errorf("最终输出验收器不能为nil")
+		}
+	}
 	// 验证必需组件
 	if b.llmClient == nil {
 		return nil, agentErrors.NewInvalidConfigError("builder", "llm_client", "LLM client is required")

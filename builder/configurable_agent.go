@@ -133,7 +133,16 @@ func (a *ConfigurableAgent[C, S]) execute(ctx context.Context, input interface{}
 		TokenUsage: response.TokenUsage,
 	}
 
-	return output, a.notifyEnd(ctx, output)
+	if err := a.validateOutput(ctx, output); err != nil {
+		return nil, a.outputValidationError(ctx, err)
+	}
+	if err := a.notifyEnd(ctx, output); err != nil {
+		return nil, err
+	}
+	if err := a.validateOutput(ctx, output); err != nil {
+		return nil, a.outputValidationError(ctx, err)
+	}
+	return output, nil
 }
 
 // handleError 让错误依次经过 errorHandler 与各回调的 OnError。

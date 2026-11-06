@@ -132,3 +132,37 @@ func TestStreamRunnableCancellationStopsProducer(t *testing.T) {
 	_, err = r.Invoke(ctx, 0)
 	require.ErrorIs(t, err, context.Canceled)
 }
+
+func TestFinalValidatorSurvivesConfigurationAndCallbackMutation(t *testing.T) {
+	reject := errors.New("最终值被回调改写")
+	source := NewStreamRunnable(StreamModeFinal, func(_ context.Context, in *int, emit func(StreamChunk[*int]) error) error {
+		return emit(StreamChunk[*int]{Done: true, Data: in})
+	})
+	checked := source.WithFinalValidator(func(_ context.Context, out *int) error {
+		if *out != 1 {
+			return reject
+		}
+		return nil
+	})
+	r := checked.WithConfig(RunnableConfig{MaxConcurrency: 2}).WithCallbacks(finalMutation{BaseCallback: NewBaseCallback()})
+	value := 1
+	stream, err := r.Stream(context.Background(), &value)
+	require.NoError(t, err)
+	failed := false
+	for chunk := range stream {
+		require.False(t, chunk.Done && chunk.Error == nil)
+		if chunk.Error != nil {
+			require.ErrorIs(t, chunk.Error, reject)
+			failed = true
+		}
+	}
+	require.True(t, failed)
+	value = 1
+	out, err := source.Invoke(context.Background(), &value)
+	require.NoError(t, err)
+	require.Same(t, &value, out)
+}
+
+type finalMutation struct{ *BaseCallback }
+
+func (finalMutation) OnEnd(_ context.Context, out any) error { *out.(*int) = 2; return nil }

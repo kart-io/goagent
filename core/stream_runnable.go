@@ -40,9 +40,10 @@ type StreamSource[I, O any] func(context.Context, I, func(StreamChunk[O]) error)
 // 最终块在执行源和完成回调均成功后发出，避免错误后仍出现成功终止块。
 type StreamRunnable[I, O any] struct {
 	*BaseRunnable[I, O]
-	source      StreamSource[I, O]
-	mode        StreamMode
-	description func() any
+	source          StreamSource[I, O]
+	mode            StreamMode
+	description     func() any
+	finalValidators []func(context.Context, O) error
 }
 
 func NewStreamRunnable[I, O any](mode StreamMode, source StreamSource[I, O]) *StreamRunnable[I, O] {
@@ -121,6 +122,20 @@ func (r *StreamRunnable[I, O]) run(ctx context.Context, input I, send func(Strea
 		return cb.OnEnd(ctx, result)
 	}); err != nil {
 		return result, err
+	}
+	for _, validate := range r.finalValidators {
+		if validate == nil {
+			var zero O
+			return zero, fmt.Errorf("最终验收器不能为空")
+		}
+		if err = validate(ctx, result); err != nil {
+			var zero O
+			return zero, err
+		}
+	}
+	if err = ctx.Err(); err != nil {
+		var zero O
+		return zero, err
 	}
 	err = send(final)
 	return result, err
@@ -230,4 +245,12 @@ func forwardRunnableStream[T any](ctx context.Context, stream <-chan StreamChunk
 			}
 		}
 	}
+}
+
+// WithFinalValidator 追加成功终态发布前的验收；WithConfig 和 WithCallbacks 保留这些验收器。
+// 验收在完成回调之后执行，须只读且可重复调用；不会回滚已执行的回调或外部效果。
+func (r *StreamRunnable[I, O]) WithFinalValidator(validators ...func(context.Context, O) error) *StreamRunnable[I, O] {
+	copy := *r
+	copy.finalValidators = append(append([]func(context.Context, O) error(nil), r.finalValidators...), validators...)
+	return &copy
 }
