@@ -9,6 +9,7 @@ import (
 	"maps"
 	"os"
 	"slices"
+	"strings"
 
 	"github.com/kart-io/goagent/codec/json"
 
@@ -22,9 +23,12 @@ import (
 // Bump Version when functions, state schemas, policies or nested runnables change;
 // topology is fingerprinted automatically, Go closures cannot be fingerprinted.
 type DurableConfig struct {
-	Store         durable.Store `json:"-"`
-	Version       string        `json:"version"`
-	ApprovalNodes []string      `json:"approval_nodes"`
+	// StateVersion和Components声明宿主状态与组件版本，变化会阻止旧运行恢复。
+	StateVersion  string            `json:"state_version,omitempty"`
+	Components    map[string]string `json:"components,omitempty"`
+	Store         durable.Store     `json:"-"`
+	Version       string            `json:"version"`
+	ApprovalNodes []string          `json:"approval_nodes"`
 }
 
 // DurableGraph resumes at node boundaries. Branch routing is checkpointed
@@ -34,6 +38,8 @@ type DurableGraph[T any] struct {
 	graph         *compiled[T]
 	store         durable.Store
 	version, plan string
+	stateVersion  string
+	components    map[string]string
 	approvals     map[string]bool
 	beforeApprove func(context.Context, string, *GraphSnapshot[T]) error
 	resumeHandler func(context.Context, string, *GraphSnapshot[T], json.RawMessage) (T, error)
@@ -88,6 +94,7 @@ type graphState[T any] struct {
 // DurableKey identifies this node/branch visit across retries. External effect
 // services must deduplicate by this key or a stronger business request ID.
 func DurableKey(ctx context.Context) string { return durable.ExecutionKey(ctx) }
+
 func graphDigest(value any) string {
 	data, _ := json.Marshal(value)
 	sum := sha256.Sum256(data)
@@ -97,6 +104,15 @@ func graphDigest(value any) string {
 func (g *Graph[T]) CompileDurable(ctx context.Context, cfg DurableConfig, opts ...DurableOption[T]) (*DurableGraph[T], error) {
 	if cfg.Store == nil || cfg.Version == "" {
 		return nil, fmt.Errorf("durable graph requires store and version")
+	}
+	if strings.TrimSpace(cfg.StateVersion) != cfg.StateVersion {
+		return nil, fmt.Errorf("状态版本不能含首尾空白")
+	}
+	components := maps.Clone(cfg.Components)
+	for name, version := range components {
+		if name == "" || version == "" || strings.TrimSpace(name) != name || strings.TrimSpace(version) != version {
+			return nil, fmt.Errorf("组件名和版本必须非空且无首尾空白")
+		}
 	}
 	graph, err := g.compile(ctx)
 	if err != nil {
@@ -120,16 +136,18 @@ func (g *Graph[T]) CompileDurable(ctx context.Context, cfg DurableConfig, opts .
 		}
 	}
 	descriptor := struct {
-		Format    string
-		Version   string
-		Config    Config
-		Nodes     []string
-		Edges     map[string]string
-		Branches  map[string][]string
-		Approvals map[string]bool
-		Parallel  map[string][]string `json:",omitempty"`
-	}{"goagent-graph-v1", cfg.Version, graph.config, slices.Sorted(maps.Keys(graph.nodes)), graph.edges, branches, approvals, parallel}
-	d := &DurableGraph[T]{graph: graph, store: cfg.Store, version: cfg.Version, plan: graphDigest(descriptor), approvals: approvals}
+		Format       string
+		Version      string
+		Config       Config
+		Nodes        []string
+		Edges        map[string]string
+		Branches     map[string][]string
+		Approvals    map[string]bool
+		Parallel     map[string][]string `json:",omitempty"`
+		StateVersion string              `json:",omitempty"`
+		Components   map[string]string   `json:",omitempty"`
+	}{"goagent-graph-v1", cfg.Version, graph.config, slices.Sorted(maps.Keys(graph.nodes)), graph.edges, branches, approvals, parallel, cfg.StateVersion, components}
+	d := &DurableGraph[T]{graph: graph, store: cfg.Store, version: cfg.Version, plan: graphDigest(descriptor), stateVersion: cfg.StateVersion, components: components, approvals: approvals}
 	for _, opt := range opts {
 		opt(d)
 	}
