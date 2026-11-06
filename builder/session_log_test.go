@@ -111,9 +111,8 @@ func TestSessionLogAbortsInterruptedTurn(t *testing.T) {
 
 	// 只支持原生工具流。
 	plain, err := NewSimpleBuilder(newScriptModel(answer("x"))).WithSessionLog(store).Build()
-	require.NoError(t, err)
-	_, err = plain.AsRunnable().Invoke(context.Background(), "x")
-	require.ErrorContains(t, err, "会话日志只支持原生工具流")
+	require.Nil(t, plain)
+	require.ErrorContains(t, err, "SessionLog需要ToolStreamClient和至少一个工具")
 }
 
 // 持久运行以会话日志为 durable 日志：中断后以同一执行键恢复，日志与未中断的运行一致，消息不重复记录。

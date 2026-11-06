@@ -129,6 +129,9 @@ func (b *AgentBuilder[C, S]) BuildContext(ctx context.Context) (*ConfigurableAge
 	if _, ok := b.llmClient.(llm.ToolStreamClient); !ok && len(toolset) > 0 {
 		return nil, agentErrors.NewInvalidConfigError("builder", "llm_client", "configured tools require llm.ToolStreamClient")
 	}
+	if err := b.validateLoopCapabilities(toolset); err != nil {
+		return nil, err
+	}
 	if b.inputSerializer == nil {
 		return nil, agentErrors.NewInvalidConfigError("builder", "input_serializer", "input serializer must not be nil")
 	}
