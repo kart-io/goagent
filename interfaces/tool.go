@@ -133,7 +133,8 @@ type ToolInput struct {
 
 	// Args 包含工具的输入参数
 	//
-	// Args 的结构应与工具的 ArgsSchema 匹配
+	// Args 的结构应与工具的 ArgsSchema 匹配。来自模型的数字一般是 float64，
+	// float64 表示不了的大整数与高精度小数是 json.Number（见 tools/toolargs）。
 	Args map[string]interface{} `json:"args"`
 
 	// Context 是执行上下文（不序列化）

@@ -19,6 +19,7 @@ import (
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/tools"
+	"github.com/kart-io/goagent/tools/toolargs"
 )
 
 // maxFailureRunes 限制 MaxIterations 报错附带的工具失败文本长度。
@@ -269,7 +270,8 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 			if durable.HasJournal(ctx) {
 				calls[i].ID = fmt.Sprintf("turn/%d/call/%s", round, tc.ID)
 			}
-			args, ok := tc.ArgumentsObject()
+			// 从解析起只有一份参数：校验、授权、审批与执行看到同一个值，大整数不经 float64 舍入。
+			args, ok := toolargs.Parse(tc.Function.Arguments)
 			calls[i].Input = args
 			if !ok {
 				if !a.config.ToolErrorFeedback {

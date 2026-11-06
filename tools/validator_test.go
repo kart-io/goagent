@@ -8,9 +8,11 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
+	"github.com/kart-io/goagent/tools/toolargs"
 )
 
 // mockValidatableTool 实现 ValidatableTool 接口的 mock 工具
@@ -1195,5 +1197,25 @@ func TestInputValidator_CustomValidationErrorHidesValue(t *testing.T) {
 				assert.Equal(t, tt.wantCtx, agentErrors.GetContext(err)["validation_error"])
 			}
 		})
+	}
+}
+
+// json.Number 按原文校验类型与界限，舍入后才满足约束的值须被拒绝。
+func TestInputValidator_JSONNumberUsesExactValue(t *testing.T) {
+	tool := NewBaseTool("test_tool", "Test tool", `{"type":"object","properties":{"id":{"type":"integer"},"v":{"type":"number","maximum":1}}}`, nil)
+	for raw, wantErr := range map[string]bool{
+		`{"id":9007199254740993}`:   false,
+		`{"id":1.0000000000000001}`: true,
+		`{"v":1}`:                   false,
+		`{"v":1.0000000000000001}`:  true,
+	} {
+		args, ok := toolargs.Parse(raw)
+		require.True(t, ok)
+		err := NewInputValidator().Validate(context.Background(), tool, &interfaces.ToolInput{Args: args})
+		if wantErr {
+			require.Error(t, err, raw)
+		} else {
+			require.NoError(t, err, raw)
+		}
 	}
 }

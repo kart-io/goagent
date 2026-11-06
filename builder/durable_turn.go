@@ -13,6 +13,7 @@ import (
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/tools/toolargs"
 )
 
 // allowEmpty 为真时，正常结束的空回答按已完成记录，由调用方重问。
@@ -97,7 +98,7 @@ func validateDurableTurn(turn *llm.StreamChunk, tools []interfaces.Tool, allowEm
 			}
 			return fmt.Errorf("模型请求了未提供的工具 %q", name)
 		}
-		args, ok := call.ArgumentsObject()
+		args, ok := toolargs.Parse(call.Function.Arguments)
 		if !ok {
 			if feedback {
 				ids[call.ID] = true
@@ -108,7 +109,7 @@ func validateDurableTurn(turn *llm.StreamChunk, tools []interfaces.Tool, allowEm
 		// 工具会把参数错误作为结果交还模型时，回合照常提交。
 		returns, ok := byName[call.Function.Name].(interfaces.ArgumentErrorTool)
 		if !ok || !returns.ReturnsArgumentErrors() {
-			if err := known[call.Function.Name].Validate(args); err != nil {
+			if err := toolargs.Validate(known[call.Function.Name], args); err != nil {
 				return fmt.Errorf("model returned invalid arguments for %q: %w", call.Function.Name, err)
 			}
 		}

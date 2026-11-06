@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/kart-io/goagent/interfaces"
+	"github.com/kart-io/goagent/tools/toolargs"
 )
 
 // TestNewCalculatorTool tests calculator tool creation
@@ -484,4 +485,15 @@ func BenchmarkAdvancedCalculatorTool(b *testing.B) {
 			Context: ctx,
 		})
 	}
+}
+
+// 高精度操作数以 json.Number 传入时照常计算。
+func TestAdvancedCalculatorTool_AcceptsJSONNumberOperands(t *testing.T) {
+	calc := NewAdvancedCalculatorTool(CalculatorOperations{Add: true})
+	args, ok := toolargs.Parse(`{"operation":"add","operands":[3.141592653589793238,1]}`)
+	require.True(t, ok)
+	output, err := calc.Invoke(context.Background(), &interfaces.ToolInput{Args: args, Context: context.Background()})
+	require.NoError(t, err)
+	require.True(t, output.Success, output.Error)
+	assert.InDelta(t, 4.141592653589793, output.Result.(float64), 1e-12)
 }

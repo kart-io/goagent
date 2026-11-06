@@ -15,6 +15,7 @@ import (
 	"github.com/kart-io/goagent/core/durable"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
+	"github.com/kart-io/goagent/tools/toolargs"
 )
 
 // ErrToolWorkflowWaiting prevents host-required continuation from becoming an answer.
@@ -162,7 +163,7 @@ func (t *runnableTool[I, O]) Invoke(ctx context.Context, input *interfaces.ToolI
 	}
 	// 参数问题在启动子会话之前发现，可交还模型改正；Decode 只有返回 *ArgumentError 才可恢复。
 	// 子会话及其内层工具的错误一律定性为本工具的执行失败，不能被外层当作参数错误。
-	if err = t.schema.Validate(input.Args); err != nil {
+	if err = toolargs.Validate(t.schema, input.Args); err != nil {
 		return nil, &ArgumentError{Message: err.Error(), Err: err}
 	}
 	value, err := t.config.Decode(input.Args)

@@ -21,6 +21,7 @@ import (
 	"github.com/kart-io/goagent/core/observe"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
+	"github.com/kart-io/goagent/tools/toolargs"
 )
 
 // DispatchConfig is immutable after construction. Tools must honor context.
@@ -296,11 +297,11 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 	}
 	// 参数错误结果与正常执行走同一授权、事件和日志路径，只是不调用工具。
 	var argResult *interfaces.ToolOutput
-	if err = entry.resolved.Validate(input.Args); err != nil {
+	if err = toolargs.Validate(entry.resolved, input.Args); err != nil {
 		err = &ArgumentError{Message: fmt.Sprintf("tool %q arguments: %v", req.Name, err), Err: err}
 	} else if custom, ok := entry.tool.(interfaces.ValidatableTool); ok {
 		if err = custom.Validate(vctx, &input); err == nil {
-			if err = entry.resolved.Validate(input.Args); err != nil {
+			if err = toolargs.Validate(entry.resolved, input.Args); err != nil {
 				return nil, err
 			}
 		}
@@ -510,14 +511,14 @@ func (d *Dispatcher) checkSubstitute(ctx context.Context, target dispatchEntry, 
 	vctx, cancel := context.WithTimeout(ctx, target.timeout)
 	defer cancel()
 	input.Context = vctx
-	if err := target.resolved.Validate(input.Args); err != nil {
+	if err := toolargs.Validate(target.resolved, input.Args); err != nil {
 		return err
 	}
 	if custom, ok := target.tool.(interfaces.ValidatableTool); ok {
 		if err := custom.Validate(vctx, input); err != nil {
 			return err
 		}
-		if err := target.resolved.Validate(input.Args); err != nil {
+		if err := toolargs.Validate(target.resolved, input.Args); err != nil {
 			return err
 		}
 	}

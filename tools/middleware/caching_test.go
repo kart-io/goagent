@@ -11,6 +11,7 @@ import (
 
 	"github.com/kart-io/goagent/cache"
 	"github.com/kart-io/goagent/interfaces"
+	"github.com/kart-io/goagent/tools/toolargs"
 )
 
 // TestCachingMiddleware_Basic 测试基本缓存功能
@@ -408,4 +409,19 @@ func TestCachingMiddleware_CacheHitDoesNotCallNext(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 1, callCount, "CRITICAL: Cache hit should NOT call invoker again")
 	assert.True(t, output3.Metadata["cache_hit"].(bool))
+}
+
+// float64 相同但实际不同的大整数参数不得命中同一缓存项。
+func TestCachingMiddleware_ExactArgumentsDoNotCollide(t *testing.T) {
+	invoker := func(_ context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+		return &interfaces.ToolOutput{Success: true, Result: input.Args["id"]}, nil
+	}
+	wrapped := NewCachingMiddleware().Wrap(newMockTool(), invoker)
+	for _, id := range []string{"9007199254740992", "9007199254740993"} {
+		args, ok := toolargs.Parse(`{"id":` + id + `}`)
+		require.True(t, ok)
+		out, err := wrapped(context.Background(), &interfaces.ToolInput{Args: args})
+		require.NoError(t, err)
+		require.Equal(t, args["id"], out.Result)
+	}
 }
