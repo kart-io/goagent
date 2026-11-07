@@ -42,6 +42,8 @@ output, err := agent.AsRunnable().Invoke(ctx, "分析这些数据……")
 
 所有入口按会话串行执行，排队等待计入 Timeout；跨会话并发应创建独立 Agent。
 
+`Build` / `BuildContext` 为生成的 Agent 保存配置快照，后续修改 Builder 的选项、工具列表、回调列表和顶层元数据不会追溯修改已有 Agent。客户端、状态、存储、记忆、回调对象及元数据中的业务对象仍按引用共享；跨会话应创建独立 Builder，并按需提供独立状态。
+
 ## 运行中交互与循环扩展点
 
 以下能力只作用于原生工具流（`llm.ToolStreamClient` 且配置了工具）。

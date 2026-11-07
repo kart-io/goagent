@@ -63,6 +63,13 @@ type ToolResult struct {
 	Error error
 }
 
+// ToolOutputError 表示工具已返回但结果失败或无效；该结果不能触发自动重试。
+type ToolOutputError struct {
+	Message string
+}
+
+func (e *ToolOutputError) Error() string { return e.Message }
+
 // RetryPolicy 重试策略
 type RetryPolicy struct {
 	// MaxRetries 最大重试次数
@@ -281,7 +288,7 @@ func (e *ToolExecutor) ExecuteWithDependencies(ctx context.Context, graph *ToolG
 		allDepsSucceeded := true
 		for _, depID := range node.Dependencies {
 			if result, ok := resultMap[depID]; ok {
-				if result.Error != nil {
+				if result.Error != nil || result.Output == nil || !result.Output.Success || result.Output.Error != "" {
 					allDepsSucceeded = false
 					break
 				}
@@ -426,6 +433,12 @@ func (e *ToolExecutor) executeSingle(ctx context.Context, call *ToolCallRequest)
 	}); err != nil {
 		return nil, err
 	}
+	if output == nil {
+		return nil, &ToolOutputError{Message: "工具返回空输出"}
+	}
+	if _, rejected := RejectedResult(output); !rejected && (!output.Success || output.Error != "") {
+		return output, &ToolOutputError{Message: fmt.Sprintf("工具返回失败结果：%s", output.Error)}
+	}
 
 	return output, nil
 }
@@ -433,6 +446,11 @@ func (e *ToolExecutor) executeSingle(ctx context.Context, call *ToolCallRequest)
 // shouldRetry 判断是否应该重试
 func (e *ToolExecutor) shouldRetry(err error) bool {
 	if e.retryPolicy == nil {
+		return false
+	}
+	// 工具已完成业务调用，结果检查不能导致有副作用的操作再次执行。
+	var outputErr *ToolOutputError
+	if errors.As(err, &outputErr) {
 		return false
 	}
 

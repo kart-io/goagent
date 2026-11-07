@@ -46,6 +46,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Builder 构建时复制配置与元数据容器，后续配置不再追溯修改已有 Agent，记忆与检查点使用一致的会话身份。
+- 旧 `ChainableAgent` 保留多节点之间的任务、会话与选项，标准调用使用节点的 `Invoke`；流式、批量、管道和配置副本接入同一链执行源。
+- Runtime 工具的存储操作继承本次调用的上下文；偏好工具仅在明确不存在时创建记录，读取故障不再覆盖已有数据。
+- 旧工具执行器检查空结果和失败状态，失败或业务拒绝不再满足依赖节点的成功条件；结果校验失败不自动重试。
+- 会话日志记录 system 与工具定义的清空，跨轮导出不再保留已移除的配置。
 - 旧工具执行器拒绝超时后的成功结果，且不自动重试已报告成功的迟到操作；执行前及退避期间响应父上下文取消。
 - 会话日志的最后一个已完成持久轮次支持同执行键重建重放，不重复追加输入、消息或轮次；完成重放禁止创建新持久操作，最终输出验收仍生效。
 
@@ -58,6 +63,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 升级须知
 
+- 已构建的 Agent 现在持有配置快照；修改 Builder 后需重新构建才能应用新配置。状态、存储及嵌套业务对象仍按引用共享，跨会话使用独立 Builder。
+- 直接使用旧 `ToolExecutor` 的工具须显式返回 `Success=true` 表示成功；空结果和普通失败结果会报告错误，业务拒绝不再解锁依赖节点。
 - goagent 经 `codec/json` 编码持久数据，与 v1 逐字节一致，调用方放入持久状态的自定义类型（含带 `omitempty` 的数字、布尔字段）编码结果也不变，在途持久运行升级后可直接恢复；回归测试覆盖 HTML 转义、非法 UTF-8、`omitempty` 与 nil 的编码。
 - 按 map 读取数值参数的工具：大整数与高精度小数现在是 `json.Number`，`args["x"].(float64)` 会取值失败，改用 `toolargs.Float64(args["x"])`；需要精确值时直接使用 `json.Number`。类型化工具（`tools.NewTypedFunctionTool`）无需改动。
 

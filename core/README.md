@@ -47,7 +47,7 @@ type Orchestrator interface {
 ```
 
 - `BaseAgent`：嵌入用基础实现。默认 `Invoke` 返回 `Status: "failed"` 的输出；`Stream`、`Batch`、`RunGenerator` 调用的是 `BaseAgent.Invoke`，嵌入类型重写 `Invoke` 后需一并重写这些方法。
-- `ChainableAgent`：依次调用多个 Agent，前一个的输出作为下一个的输入。
+- `ChainableAgent`：依次调用多个 Agent，前一个输出的 Metadata 成为下一节点的 Context，任务、会话和执行选项继续保留。标准 Invoke、Stream、Batch、Pipe 与配置副本使用同一链执行源；只有显式调用 InvokeFast 才选择节点快速入口。
 - `AgentExecutor`：包装 Agent，提供 `WithMaxRetries`、`WithTimeout`、`WithStopOnError` 选项。
 - `BaseChain`：按顺序执行 `Step`（`Execute(ctx, input) (interface{}, error)`、`Name()`、`Description()`）。
 - `BaseOrchestrator`：管理 Agent/Chain/Tool 注册；`Execute` 返回 `ErrNotImplemented`，需嵌入后实现。

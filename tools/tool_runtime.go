@@ -39,6 +39,8 @@ type ToolRuntime struct {
 	// Additional context
 	Metadata map[string]interface{} // Additional metadata
 	mu       sync.RWMutex
+	// 单次调用视图与宿主共享元数据及其锁，不能复制已经使用的 mutex。
+	metadataOwner *ToolRuntime
 }
 
 // RuntimeConfig configures the tool runtime
@@ -95,8 +97,9 @@ func (r *ToolRuntime) WithStreamWriter(writer func(interface{}) error) *ToolRunt
 
 // WithMetadata adds metadata to the runtime
 func (r *ToolRuntime) WithMetadata(key string, value interface{}) *ToolRuntime {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	owner := r.metadataRuntime()
+	owner.mu.Lock()
+	defer owner.mu.Unlock()
 	r.Metadata[key] = value
 	return r
 }
@@ -206,16 +209,18 @@ func (r *ToolRuntime) Stream(data interface{}) error {
 
 // GetMetadata retrieves metadata value
 func (r *ToolRuntime) GetMetadata(key string) (interface{}, bool) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
+	owner := r.metadataRuntime()
+	owner.mu.RLock()
+	defer owner.mu.RUnlock()
 	value, exists := r.Metadata[key]
 	return value, exists
 }
 
 // Clone creates a copy of the runtime
 func (r *ToolRuntime) Clone() *ToolRuntime {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
+	owner := r.metadataRuntime()
+	owner.mu.RLock()
+	defer owner.mu.RUnlock()
 
 	// Copy metadata
 	metadata := make(map[string]interface{})
@@ -233,6 +238,29 @@ func (r *ToolRuntime) Clone() *ToolRuntime {
 		SessionID:    r.SessionID,
 		StreamWriter: r.StreamWriter,
 		Metadata:     metadata,
+	}
+}
+
+func (r *ToolRuntime) metadataRuntime() *ToolRuntime {
+	if r.metadataOwner != nil {
+		return r.metadataOwner
+	}
+	return r
+}
+
+// withContext 创建本次调用的视图，宿主资源、配置和元数据仍按引用共享。
+func (r *ToolRuntime) withContext(ctx context.Context) *ToolRuntime {
+	return &ToolRuntime{
+		State:         r.State,
+		Context:       ctx,
+		Store:         r.Store,
+		Config:        r.Config,
+		ToolCallID:    r.ToolCallID,
+		AgentID:       r.AgentID,
+		SessionID:     r.SessionID,
+		StreamWriter:  r.StreamWriter,
+		Metadata:      r.Metadata,
+		metadataOwner: r.metadataRuntime(),
 	}
 }
 
@@ -263,7 +291,7 @@ func NewRuntimeToolAdapter(tool RuntimeTool, runtime *ToolRuntime) *RuntimeToolA
 		tool.Description(),
 		tool.ArgsSchema(),
 		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
-			return adapter.tool.ExecuteWithRuntime(ctx, input, adapter.runtime)
+			return adapter.tool.ExecuteWithRuntime(ctx, input, adapter.runtime.withContext(ctx))
 		},
 	)
 
@@ -413,12 +441,24 @@ func (t *SavePreferenceTool) ExecuteWithRuntime(ctx context.Context, input *inte
 			WithOperation("get_state")
 	}
 
-	// Get existing preferences
-	existingPrefs, _ := runtime.GetFromStore([]string{"preferences"}, userID.(string))
-
-	prefs, ok := existingPrefs.(map[string]interface{})
-	if !ok || prefs == nil {
-		prefs = make(map[string]interface{})
+	// 只有明确缺失才允许创建，读取故障不能变成整条记录的覆盖。
+	existingPrefs, err := runtime.GetFromStore([]string{"preferences"}, userID.(string))
+	if err != nil && !errors.Is(err, ErrValueNotFound) {
+		return nil, agentErrors.Wrap(err, agentErrors.CodeStoreSerialization, "读取偏好失败").
+			WithComponent("save_preference_tool").
+			WithOperation("get_from_store")
+	}
+	prefs := make(map[string]interface{})
+	if err == nil {
+		existing, ok := existingPrefs.(map[string]interface{})
+		if !ok || existing == nil {
+			return nil, agentErrors.New(agentErrors.CodeStoreSerialization, "已有偏好记录不是有效的对象").
+				WithComponent("save_preference_tool").
+				WithOperation("get_from_store")
+		}
+		for k, v := range existing {
+			prefs[k] = v
+		}
 	}
 
 	// Update preference

@@ -270,30 +270,41 @@ func TestWithMiddleware_Concurrent(t *testing.T) {
 		Args: map[string]interface{}{"value": "test"},
 	}
 
-	// 并发执行 50 次
+	// 冷缓存不合并正在执行的请求；先验证并发调用，再验证热缓存命中。
 	const numGoroutines = 50
-	done := make(chan bool, numGoroutines)
-	var successCount atomic.Int32
-
-	for i := 0; i < numGoroutines; i++ {
-		go func() {
-			defer func() { done <- true }()
-			output, err := wrapped.Invoke(ctx, input)
-			if err == nil && output.Success {
-				successCount.Add(1)
+	runWave := func(cached bool) {
+		t.Helper()
+		type invocation struct {
+			output *interfaces.ToolOutput
+			err    error
+		}
+		start := make(chan struct{})
+		results := make(chan invocation, numGoroutines)
+		for range numGoroutines {
+			go func() {
+				<-start
+				output, err := wrapped.Invoke(ctx, input)
+				results <- invocation{output, err}
+			}()
+		}
+		close(start)
+		for range numGoroutines {
+			result := <-results
+			require.NoError(t, result.err)
+			require.NotNil(t, result.output)
+			assert.True(t, result.output.Success)
+			assert.Equal(t, "processed: test", result.output.Result)
+			if cached {
+				assert.Equal(t, true, result.output.Metadata["cache_hit"])
 			}
-		}()
+		}
 	}
 
-	// 等待所有 goroutine 完成
-	for i := 0; i < numGoroutines; i++ {
-		<-done
-	}
-
-	// 由于缓存，工具调用次数应该远小于并发数
-	t.Logf("interfaces.Tool call count: %d, Success count: %d", tool.callCount.Load(), successCount.Load())
-	assert.LessOrEqual(t, tool.callCount.Load(), int32(10), "Caching should reduce tool calls")
-	assert.Greater(t, int(successCount.Load()), 0, "Some requests should succeed")
+	runWave(false)
+	coldCalls := tool.callCount.Load()
+	require.Positive(t, coldCalls)
+	runWave(true)
+	assert.Equal(t, coldCalls, tool.callCount.Load(), "热缓存并发命中不应再次调用工具")
 }
 
 // TestWithMiddleware_MixedTypes 测试混合类型的中间件

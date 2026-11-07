@@ -3,7 +3,9 @@ package builder
 import (
 	"context"
 	"fmt"
+	"maps"
 	"reflect"
+	"slices"
 	"strings"
 
 	"github.com/kart-io/goagent/core"
@@ -215,14 +217,14 @@ func (b *AgentBuilder[C, S]) BuildContext(ctx context.Context) (*ConfigurableAge
 	agent := &ConfigurableAgent[C, S]{
 		executionGate:   make(chan struct{}, 1),
 		llmClient:       b.llmClient,
-		tools:           toolset,
+		tools:           slices.Clone(toolset),
 		systemPrompt:    b.systemPrompt,
 		runtime:         runtime,
 		chain:           chain,
-		config:          b.config,
-		callbacks:       b.callbacks,
+		config:          snapshotAgentConfig(b.config),
+		callbacks:       slices.Clone(b.callbacks),
 		errorHandler:    b.errorHandler,
-		metadata:        b.metadata,
+		metadata:        maps.Clone(b.metadata),
 		memoryManager:   b.memoryManager,
 		inputSerializer: b.inputSerializer,
 		retriever:       b.retriever,

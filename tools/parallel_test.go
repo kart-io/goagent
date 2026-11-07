@@ -144,9 +144,9 @@ func TestParallelToolExecutor_ExecuteParallel(t *testing.T) {
 	tool2 := &MockToolForParallel{name: "tool2", delay: 10 * time.Millisecond}
 	tool3 := &MockToolForParallel{name: "tool3", delay: 10 * time.Millisecond}
 
-	output1 := &interfaces.ToolOutput{Result: "output1"}
-	output2 := &interfaces.ToolOutput{Result: "output2"}
-	output3 := &interfaces.ToolOutput{Result: "output3"}
+	output1 := &interfaces.ToolOutput{Result: "output1", Success: true}
+	output2 := &interfaces.ToolOutput{Result: "output2", Success: true}
+	output3 := &interfaces.ToolOutput{Result: "output3", Success: true}
 
 	input1 := &interfaces.ToolInput{Args: map[string]interface{}{"data": "input1"}}
 	input2 := &interfaces.ToolInput{Args: map[string]interface{}{"data": "input2"}}
@@ -215,7 +215,7 @@ func TestToolExecutor_ConcurrencyLimit(t *testing.T) {
 				}
 				time.Sleep(50 * time.Millisecond)
 				atomic.AddInt32(&concurrentCount, -1)
-				return &interfaces.ToolOutput{Result: fmt.Sprintf("output_%s", name)}
+				return &interfaces.ToolOutput{Result: fmt.Sprintf("output_%s", name), Success: true}
 			},
 			func(ctx context.Context, input *interfaces.ToolInput) error {
 				return nil
@@ -265,7 +265,7 @@ func TestToolExecutor_WithRetry(t *testing.T) {
 			if attemptCount < 3 {
 				return nil
 			}
-			return &interfaces.ToolOutput{Result: "success"}
+			return &interfaces.ToolOutput{Result: "success", Success: true}
 		},
 		func(ctx context.Context, input *interfaces.ToolInput) error {
 			if attemptCount < 3 {
@@ -334,7 +334,7 @@ func TestToolExecutor_WithDependencies(t *testing.T) {
 				executionOrder = append(executionOrder, name)
 				mu.Unlock()
 				time.Sleep(10 * time.Millisecond)
-				return &interfaces.ToolOutput{Result: fmt.Sprintf("output_%s", name)}
+				return &interfaces.ToolOutput{Result: fmt.Sprintf("output_%s", name), Success: true}
 			},
 			func(ctx context.Context, input *interfaces.ToolInput) error {
 				return nil
@@ -379,7 +379,7 @@ func TestToolExecutor_Metrics(t *testing.T) {
 	successTool := &MockToolForParallel{name: "success"}
 	failTool := &MockToolForParallel{name: "fail", shouldFail: true}
 
-	successTool.On("Execute", mock.Anything, mock.Anything).Return(&interfaces.ToolOutput{Result: "output"}, nil)
+	successTool.On("Execute", mock.Anything, mock.Anything).Return(&interfaces.ToolOutput{Result: "output", Success: true}, nil)
 	failTool.On("Execute", mock.Anything, mock.Anything).Return((*interfaces.ToolOutput)(nil), errors.New("failed"))
 
 	calls := []*ToolCallRequest{
@@ -419,7 +419,7 @@ func TestBatchToolExecutor(t *testing.T) {
 	var calls []*ToolCallRequest
 	for i := 0; i < 5; i++ {
 		tool := &MockToolForParallel{name: fmt.Sprintf("tool%d", i)}
-		tool.On("Execute", mock.Anything, mock.Anything).Return(&interfaces.ToolOutput{Result: fmt.Sprintf("output%d", i)}, nil)
+		tool.On("Execute", mock.Anything, mock.Anything).Return(&interfaces.ToolOutput{Result: fmt.Sprintf("output%d", i), Success: true}, nil)
 		tools = append(tools, tool)
 
 		calls = append(calls, &ToolCallRequest{

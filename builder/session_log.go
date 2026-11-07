@@ -162,10 +162,12 @@ func (t *sessionTurn) begin(ctx context.Context, messages []llm.Message, offered
 	if t == nil || t.completed {
 		return nil
 	}
+	system := ""
 	if len(messages) > 0 && messages[0].Role == "system" {
-		if err := t.rec.SyncSystem(ctx, messages[0].Content); err != nil {
-			return err
-		}
+		system = messages[0].Content
+	}
+	if err := t.rec.SyncSystem(ctx, system); err != nil {
+		return err
 	}
 	defs := make([]session.ToolDefinition, 0, len(offered))
 	for _, tool := range offered {

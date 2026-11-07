@@ -93,7 +93,7 @@ func (r *Recorder) Append(ctx context.Context, events ...Event) ([]Event, error)
 
 // SyncSystem 在 system 提示词与上次记录的不同时记录它。
 func (r *Recorder) SyncSystem(ctx context.Context, system string) error {
-	if system == "" || system == r.system {
+	if system == r.system {
 		return nil
 	}
 	ev, err := NewEvent(TypeSystemMessage, MessageData{Message: llm.SystemMessage(system)})
@@ -107,7 +107,11 @@ func (r *Recorder) SyncSystem(ctx context.Context, system string) error {
 // SyncTools 在工具定义与上次记录的不同时记录它。
 func (r *Recorder) SyncTools(ctx context.Context, tools []ToolDefinition) error {
 	if len(tools) == 0 {
-		return nil
+		if r.tools == "" {
+			return nil
+		}
+		// nil 与空切片都表示移除工具，统一编码以避免重复清空事件。
+		tools = []ToolDefinition{}
 	}
 	ev, err := NewEvent(TypeToolDefinitions, ToolsData{Tools: tools})
 	if err != nil || string(ev.Data) == r.tools {

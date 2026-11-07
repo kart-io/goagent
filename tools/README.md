@@ -128,6 +128,10 @@ out, err := d.Invoke(ctx, tools.ToolRequest{Name: "calculator", Input: &interfac
 - `InputValidator`、`ValidateAndInvoke`：按 Schema 校验参数。
 - `ToolRuntime` 与 `UserInfoTool`、`SavePreferenceTool`、`UpdateStateTool`：可访问状态与存储的运行时工具。
 
+`RuntimeToolAdapter` 每次调用使用绑定当前 context 的运行时视图，使存储操作继承本次超时、取消与上下文值。偏好工具遇到读取故障时返回错误，只有明确不存在才创建新记录。
+
+旧 `ToolExecutor` 要求工具返回非空且成功的结果；空结果、失败状态或 Error 字段会形成执行错误，结果校验失败不自动重试。`Rejected` 仍可作为反馈结果返回，但不满足 `ExecuteWithDependencies` 的前置成功条件。工具实现须显式设置 `Success=true` 表示成功。
+
 ## 示例与测试
 
 示例见 [examples/tools](../examples/tools/README.md)：
