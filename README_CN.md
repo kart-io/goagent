@@ -1,14 +1,19 @@
 # GoAgent - Go 语言 AI Agent 框架
 
 [![Go Version](https://img.shields.io/badge/go-1.27.0-blue?style=flat-square&logo=go)](https://go.dev/)
+[![Latest Release](https://img.shields.io/github/v/release/kart-io/goagent?style=flat-square&logo=github)](https://github.com/kart-io/goagent/releases/latest)
 [![Build](https://img.shields.io/github/actions/workflow/status/kart-io/goagent/ci.yml?branch=master&style=flat-square&logo=github)](https://github.com/kart-io/goagent/actions/workflows/ci.yml)
+[![Provider Contracts](https://img.shields.io/github/actions/workflow/status/kart-io/goagent/provider-contracts.yml?branch=master&style=flat-square&logo=github&label=provider%20contracts)](https://github.com/kart-io/goagent/actions/workflows/provider-contracts.yml)
 [![License](https://img.shields.io/github/license/kart-io/goagent?style=flat-square)](LICENSE)
 [![Documentation](https://img.shields.io/badge/docs-latest-brightgreen?style=flat-square&logo=readthedocs)](docs/)
 [![Downloads](https://img.shields.io/endpoint?url=https://api.pinstudios.net/api/badges/downloads/kart-io/goagent/total)](https://github.com/kart-io/goagent/releases/latest)
 [![Go Reference](https://img.shields.io/badge/go-reference-blue?style=flat-square&logo=go)](https://pkg.go.dev/github.com/kart-io/goagent)
 [![Deepwiki](https://img.shields.io/badge/deepwiki-view-blueviolet?style=flat-square)](https://deepwiki.com/kart-io/goagent)
+[![Issues](https://img.shields.io/github/issues/kart-io/goagent?style=flat-square&logo=github)](https://github.com/kart-io/goagent/issues)
 
 [English](README.md) | [中文](README_CN.md)
+
+[快速开始](docs/guides/QUICKSTART.md) · [API 文档](https://pkg.go.dev/github.com/kart-io/goagent) · [示例](examples/README.md) · [更新日志](CHANGELOG.md)
 
 GoAgent 是嵌入 Go 业务服务的可恢复、可计量、可观测 Agent 执行内核：原生工具循环、带持久检查点与审批的类型化工作流图、请求预算、会话日志、OpenTelemetry 事件与 MCP。
 
@@ -16,7 +21,7 @@ GoAgent 是嵌入 Go 业务服务的可恢复、可计量、可观测 Agent 执�
 
 - [goagent-contrib](https://github.com/kart-io/goagent-contrib)：检索器（BM25、混合、重排序、Qdrant）、文档加载、实用工具与多实例 Postgres `durable.Store`。
 - [goagent-examples](https://github.com/kart-io/goagent-examples)：业务案例（DevOps、文章审核、自动回复、退款恢复、真实模型编排）。
-- `github.com/kart-io/goagent-harness`：Preset、计划模式、压缩、技能、子 Agent 组件与编码工具，见 [Harness 迁移指南](docs/guides/HARNESS_MIGRATION.md)。
+- [goagent-harness](https://github.com/kart-io/goagent-harness)：Preset、计划模式、压缩、技能、子 Agent 组件与编码工具，见 [Harness 迁移指南](docs/guides/HARNESS_MIGRATION.md)。
 
 ## 特性
 
@@ -216,7 +221,6 @@ Apache License 2.0，见 [LICENSE](LICENSE)。
 ## 支持
 
 - **问题反馈**：[GitHub Issues](https://github.com/kart-io/goagent/issues)
-- **讨论**：[GitHub Discussions](https://github.com/kart-io/goagent/discussions)
 
 ## 致谢
 
