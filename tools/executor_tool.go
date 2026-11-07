@@ -330,12 +330,21 @@ func (e *ToolExecutor) executeWithRetry(ctx context.Context, call *ToolCallReque
 		maxAttempts += e.retryPolicy.MaxRetries
 	}
 
+attempts:
 	for attempt := 0; attempt < maxAttempts; attempt++ {
+		if err := ctx.Err(); err != nil {
+			lastError = err
+			break
+		}
 		// 创建带超时的上下文
 		execCtx, cancel := context.WithTimeout(ctx, e.timeout)
 
 		// 执行工具
 		output, err := e.executeSingle(execCtx, call)
+		lateSuccess := err == nil && execCtx.Err() != nil
+		if err == nil {
+			err = execCtx.Err()
+		}
 		cancel()
 
 		if err == nil {
@@ -349,12 +358,27 @@ func (e *ToolExecutor) executeWithRetry(ctx context.Context, call *ToolCallReque
 		}
 
 		lastError = err
+		// 工具已报告成功，副作用可能已发生；迟到结果不能自动重试。
+		if lateSuccess {
+			break
+		}
+		if parentErr := ctx.Err(); parentErr != nil {
+			lastError = errors.Join(err, parentErr)
+			break
+		}
 
 		// 检查是否应该重试
 		if attempt < maxAttempts-1 && e.shouldRetry(err) {
 			// 计算重试延迟
 			delay := e.calculateRetryDelay(attempt)
-			time.Sleep(delay)
+			timer := time.NewTimer(delay)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				lastError = errors.Join(err, ctx.Err())
+				break attempts
+			case <-timer.C:
+			}
 			continue
 		}
 

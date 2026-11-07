@@ -11,7 +11,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
 
 	agentcore "github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/interfaces"
@@ -368,42 +367,6 @@ func TestToolExecutor_WithDependencies(t *testing.T) {
 	assert.NotNil(t, calls[2].Dependencies)
 	assert.Contains(t, calls[2].Dependencies, "call1")
 	assert.Contains(t, calls[2].Dependencies, "call2")
-}
-
-func TestToolExecutor_Timeout(t *testing.T) {
-	t.Skip("Skipping flaky timeout test - behavior varies by execution environment")
-
-	executor := NewToolExecutor(
-		WithMaxConcurrency(1),
-		WithTimeout(50*time.Millisecond),
-	)
-
-	ctx := context.Background()
-
-	// interfaces.Tool that takes too long
-	tool := &MockToolForParallel{name: "slow_tool", delay: 100 * time.Millisecond}
-	tool.On("Execute", mock.Anything, mock.Anything).Return(&interfaces.ToolOutput{Result: "output"}, nil)
-
-	calls := []*ToolCallRequest{
-		{ID: "call1", Tool: tool, Input: &interfaces.ToolInput{Args: map[string]interface{}{"data": "input"}}},
-	}
-
-	results, err := executor.ExecuteParallel(ctx, calls)
-
-	// ExecuteParallel may return error or embed error in results
-	if err != nil {
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "context deadline exceeded")
-	} else {
-		require.NotNil(t, results)
-		require.Greater(t, len(results), 0)
-		if len(results) > 0 && results[0] != nil {
-			assert.NotNil(t, results[0].Error)
-			if results[0].Error != nil {
-				assert.Contains(t, results[0].Error.Error(), "context deadline exceeded")
-			}
-		}
-	}
 }
 
 func TestToolExecutor_Metrics(t *testing.T) {
