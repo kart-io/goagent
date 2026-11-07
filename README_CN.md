@@ -4,16 +4,21 @@
 [![Latest Release](https://img.shields.io/github/v/release/kart-io/goagent?style=flat-square&logo=github)](https://github.com/kart-io/goagent/releases/latest)
 [![Build](https://img.shields.io/github/actions/workflow/status/kart-io/goagent/ci.yml?branch=master&style=flat-square&logo=github)](https://github.com/kart-io/goagent/actions/workflows/ci.yml)
 [![Provider Contracts](https://img.shields.io/github/actions/workflow/status/kart-io/goagent/provider-contracts.yml?branch=master&style=flat-square&logo=github&label=provider%20contracts)](https://github.com/kart-io/goagent/actions/workflows/provider-contracts.yml)
+[![Nightly](https://img.shields.io/github/actions/workflow/status/kart-io/goagent/nightly.yml?branch=master&style=flat-square&logo=github&label=nightly)](https://github.com/kart-io/goagent/actions/workflows/nightly.yml)
 [![License](https://img.shields.io/github/license/kart-io/goagent?style=flat-square)](LICENSE)
+
 [![Documentation](https://img.shields.io/badge/docs-latest-brightgreen?style=flat-square&logo=readthedocs)](docs/)
 [![Downloads](https://img.shields.io/endpoint?url=https://api.pinstudios.net/api/badges/downloads/kart-io/goagent/total)](https://github.com/kart-io/goagent/releases/latest)
 [![Go Reference](https://img.shields.io/badge/go-reference-blue?style=flat-square&logo=go)](https://pkg.go.dev/github.com/kart-io/goagent)
 [![Deepwiki](https://img.shields.io/badge/deepwiki-view-blueviolet?style=flat-square)](https://deepwiki.com/kart-io/goagent)
 [![Issues](https://img.shields.io/github/issues/kart-io/goagent?style=flat-square&logo=github)](https://github.com/kart-io/goagent/issues)
+[![Last Commit](https://img.shields.io/github/last-commit/kart-io/goagent/master?style=flat-square&logo=github)](https://github.com/kart-io/goagent/commits/master/)
 
 [English](README.md) | [中文](README_CN.md)
 
 [快速开始](docs/guides/QUICKSTART.md) · [API 文档](https://pkg.go.dev/github.com/kart-io/goagent) · [示例](examples/README.md) · [更新日志](CHANGELOG.md)
+
+[架构概述](docs/architecture/ARCHITECTURE.md) · [开发指南](docs/development/DEVELOPMENT_GUIDE.md) · [测试指南](docs/development/TESTING_BEST_PRACTICES.md) · [提供商能力](docs/guides/PROVIDER_CAPABILITIES.md)
 
 GoAgent 是嵌入 Go 业务服务的可恢复、可计量、可观测 Agent 执行内核：原生工具循环、带持久检查点与审批的类型化工作流图、请求预算、会话日志、OpenTelemetry 事件与 MCP。
 
