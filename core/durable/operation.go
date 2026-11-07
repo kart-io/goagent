@@ -16,6 +16,17 @@ import (
 
 type journalContext struct{}
 
+type replayOnlyContext struct{}
+
+// ErrReplayOnly 表示只读重放缺少已完成的持久记录；不得据此执行或核对新的副作用。
+var ErrReplayOnly = errors.New("只读重放需要已完成的持久记录")
+
+// WithReplayOnly 限制派生上下文中的 Do 只能回放已完成记录，不调用 run 或 Reconcile。
+// 宿主回调、授权逻辑及直接访问存储的代码仍须自行保证只读。
+func WithReplayOnly(ctx context.Context) context.Context {
+	return context.WithValue(ctx, replayOnlyContext{}, true)
+}
+
 // WithJournal binds child operations to a host-owned store. An execution key
 // must also be present. Records contain outputs and hashes of inputs, not inputs.
 func WithJournal(ctx context.Context, store Store) context.Context {
@@ -249,9 +260,13 @@ func Do(ctx context.Context, id string, input json.RawMessage, policy OperationP
 		childCtx = WithExecutionKey(ctx, key)
 	}
 	store, _ := ctx.Value(journalContext{}).(Store)
+	replayOnly, _ := ctx.Value(replayOnlyContext{}).(bool)
 	childCtx = context.WithValue(childCtx, waitableContext{}, policy.Resumable && store != nil && key != "")
 	childCtx = context.WithValue(childCtx, interruptHostContext{}, false)
 	if store == nil || key == "" {
+		if replayOnly {
+			return nil, ErrReplayOnly
+		}
 		value, e := run(childCtx)
 		return &OperationRecord{ID: id, Key: key, Value: value, Attempts: 1}, e
 	}
@@ -265,6 +280,9 @@ func Do(ctx context.Context, id string, input json.RawMessage, policy OperationP
 	record, err = loadOperation(ctx, store, key, id)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, err
+	}
+	if replayOnly && (err != nil || record.Status != "completed") {
+		return nil, ErrReplayOnly
 	}
 	if err == nil {
 		if record.InputHash != inputHash || record.MaxAttempts != policy.MaxAttempts {

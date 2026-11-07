@@ -3,7 +3,11 @@ package builder
 import (
 	"context"
 	"errors"
+	"github.com/kart-io/goagent/codec/json"
+	"os"
+	"path/filepath"
 	"slices"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -266,4 +270,133 @@ func TestSessionLogDurableResumeAfterRecordedToolResult(t *testing.T) {
 		session.TypeTurnStart, session.TypeToolDefinitions, session.TypeUserMessage, session.TypeAssistantMessage,
 		session.TypeToolResult, session.TypeAssistantMessage, session.TypeTurnEnd,
 	}, eventTypes(sessionEvents(t, store, "s")))
+}
+
+// 已完成持久轮次重建后仍须重放原请求，不能把其历史再次追加为新输入。
+func TestSessionLogCompletedDurableTurnReplaysWithoutNewEvents(t *testing.T) {
+	for _, backend := range []string{"memory", "file"} {
+		t.Run(backend, func(t *testing.T) {
+			var store session.Store = session.NewMemoryStore()
+			if backend == "file" {
+				var err error
+				store, err = session.NewFileStore(t.TempDir())
+				require.NoError(t, err)
+			}
+			var effects atomic.Int32
+			model := newScriptModel(callTool("c1", "lookup"), answer("答"), answer("第二轮"))
+			key := "run-1"
+			invoke := func(input string, reject bool) (*AgentOutput, error) {
+				tool := tools.NewBaseTool("lookup", "test", `{"type":"object"}`, func(context.Context, *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+					effects.Add(1)
+					return &interfaces.ToolOutput{Success: true, Result: "found"}, nil
+				})
+				dispatched, err := dispatcherTools(tools.DispatchConfig{}, tool)
+				require.NoError(t, err)
+				b := NewSimpleBuilder(model).WithSessionID("s").WithSessionLog(store).WithDurableScope("completed").WithTools(dispatched...).WithMaxIterations(4)
+				if reject {
+					b.WithOutputValidator(func(context.Context, *AgentOutput) error { return errors.New("新的最终验收拒绝") })
+				}
+				agent, err := b.Build()
+				require.NoError(t, err)
+				ctx := durable.WithJournal(durable.WithExecutionKey(context.Background(), key), session.DurableStore(store, "s"))
+				return agent.AsRunnable().Invoke(ctx, input)
+			}
+			out, err := invoke("查", false)
+			require.NoError(t, err)
+			require.Equal(t, "答", out.Result)
+			before := sessionEvents(t, store, "s")
+			out, err = invoke("查", false)
+			require.NoError(t, err)
+			require.Equal(t, "答", out.Result)
+			require.Equal(t, before, sessionEvents(t, store, "s"), "完成重放不得写入重复轮次或消息")
+			require.EqualValues(t, 1, effects.Load())
+			require.Equal(t, 2, model.count())
+			_, err = invoke("改变原始输入", false)
+			require.Error(t, err)
+			require.Equal(t, before, sessionEvents(t, store, "s"))
+			_, err = invoke("查", true)
+			require.ErrorContains(t, err, "新的最终验收拒绝")
+			require.Equal(t, before, sessionEvents(t, store, "s"))
+			require.Equal(t, 2, model.count())
+			require.EqualValues(t, 1, effects.Load())
+			key = "run-2"
+			out, err = invoke("第二次问", false)
+			require.NoError(t, err)
+			require.Equal(t, "第二轮", out.Result)
+			later := sessionEvents(t, store, "s")
+			key = "run-1"
+			_, err = invoke("查", false)
+			require.ErrorContains(t, err, "历史轮次")
+			require.Equal(t, later, sessionEvents(t, store, "s"))
+			key = "run-2"
+			_, err = session.Rewind(context.Background(), store, "s", 0, session.LastSeq(later))
+			require.NoError(t, err)
+			rewound := sessionEvents(t, store, "s")
+			_, err = invoke("第二次问", false)
+			require.ErrorContains(t, err, "退回")
+			require.Equal(t, rewound, sessionEvents(t, store, "s"))
+			require.Equal(t, 3, model.count())
+		})
+	}
+}
+
+func TestSessionLogCompletedReplayCannotCreateOperations(t *testing.T) {
+	for _, change := range []string{"scope", "journal", "tool-record"} {
+		t.Run(change, func(t *testing.T) {
+			sessions := session.NewMemoryStore()
+			directory := t.TempDir()
+			journal, err := durable.NewFileStore(directory)
+			require.NoError(t, err)
+			scope := "A"
+			model := newScriptModel(callTool("c1", "lookup"), answer("答"), callTool("c1", "lookup"), answer("答"))
+			effects := 0
+			invoke := func() error {
+				tool := tools.NewBaseTool("lookup", "test", `{"type":"object"}`, func(context.Context, *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+					effects++
+					return &interfaces.ToolOutput{Success: true, Result: "found"}, nil
+				})
+				dispatched, e := dispatcherTools(tools.DispatchConfig{}, tool)
+				require.NoError(t, e)
+				agent, e := NewSimpleBuilder(model).WithSessionID("s").WithSessionLog(sessions).WithDurableScope(scope).WithTools(dispatched...).Build()
+				require.NoError(t, e)
+				ctx := durable.WithJournal(durable.WithExecutionKey(context.Background(), "run"), journal)
+				_, e = agent.AsRunnable().Invoke(ctx, "查")
+				return e
+			}
+			require.NoError(t, invoke())
+			before := sessionEvents(t, sessions, "s")
+			switch change {
+			case "scope":
+				scope = "B"
+			case "journal":
+				journal, err = durable.NewFileStore(t.TempDir())
+				require.NoError(t, err)
+			case "tool-record":
+				files, e := os.ReadDir(directory)
+				require.NoError(t, e)
+				removed := 0
+				for _, file := range files {
+					if !strings.HasSuffix(file.Name(), ".json") {
+						continue
+					}
+					path := filepath.Join(directory, file.Name())
+					raw, e := os.ReadFile(path)
+					require.NoError(t, e)
+					var snap durable.Snapshot
+					require.NoError(t, json.Unmarshal(raw, &snap))
+					var record durable.OperationRecord
+					require.NoError(t, json.Unmarshal(snap.Data, &record))
+					if strings.HasPrefix(record.ID, "tool/") {
+						require.NoError(t, os.Remove(path))
+						removed++
+					}
+				}
+				require.Equal(t, 1, removed)
+			}
+			require.Error(t, invoke(), "完成会话只能回放已有操作")
+			require.Equal(t, 2, model.count(), "不能发送新的模型请求")
+			require.Equal(t, 1, effects, "不能产生新的工具效果")
+			require.Equal(t, before, sessionEvents(t, sessions, "s"))
+		})
+	}
 }

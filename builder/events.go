@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/core/budget"
+	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/middleware"
 	"github.com/kart-io/goagent/core/observe"
 	agentErrors "github.com/kart-io/goagent/errors"
@@ -193,6 +194,9 @@ func (a *ConfigurableAgent[C, S]) runEvents(ctx context.Context, request *middle
 			turn, history, err := a.openSessionTurn(ctx, input)
 			if err != nil {
 				return nil, fmt.Errorf("会话日志: %w", err)
+			}
+			if turn.completed {
+				ctx = durable.WithReplayOnly(ctx)
 			}
 			ctx = context.WithValue(context.WithValue(ctx, historyKey{}, history), sessionLogKey{}, turn)
 		}

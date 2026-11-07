@@ -32,7 +32,8 @@ type sessionTurn struct {
 	rec   *session.Recorder
 	tools map[string]session.ToolMeta
 	// resumed 是续写的轮次的 turn/start 序号：回放到已记录位置的同步不再记录，直到对话超出日志。
-	resumed int64
+	resumed   int64
+	completed bool
 }
 
 func sessionTurnFrom(ctx context.Context) *sessionTurn {
@@ -63,12 +64,26 @@ func (a *ConfigurableAgent[C, S]) openSessionTurn(ctx context.Context, input str
 	}
 	turn := &sessionTurn{rec: rec, tools: map[string]session.ToolMeta{}}
 	events := rec.Events()
+	if key != "" {
+		start, err := completedSessionTurn(events, key, input)
+		if err != nil {
+			return nil, nil, err
+		}
+		if start >= 0 {
+			turn.resumed, turn.completed = events[start].Seq, true
+			history, err := session.DeriveMessages(events[:start])
+			return turn, history, err
+		}
+	}
 	if open, ok := session.OpenTurn(events); ok {
 		var d session.TurnStart
 		if err := json.Unmarshal(open.Data, &d); err != nil {
 			return nil, nil, fmt.Errorf("会话日志事件 %d：%w", open.Seq, err)
 		}
 		if key != "" && d.ExecutionKey == key {
+			if d.Input != input {
+				return nil, nil, fmt.Errorf("同一执行键的原始输入不能改变")
+			}
 			// 恢复中的持久运行：历史是本轮之前的对话，本轮已记录的部分在同步时与回放的消息一致。
 			var before []session.Event
 			for _, ev := range events {
@@ -101,9 +116,50 @@ func (a *ConfigurableAgent[C, S]) openSessionTurn(ctx context.Context, input str
 	return turn, history, err
 }
 
+// completedSessionTurn 仅恢复当前最后一轮；退回或后续新轮次之后须使用新的执行键。
+func completedSessionTurn(events []session.Event, key, input string) (int, error) {
+	laterTurn := false
+	for i := len(events) - 1; i >= 0; i-- {
+		if events[i].Type != session.TypeTurnStart {
+			continue
+		}
+		var start session.TurnStart
+		if err := json.Unmarshal(events[i].Data, &start); err != nil {
+			return -1, err
+		}
+		if start.ExecutionKey != key {
+			laterTurn = true
+			continue
+		}
+		if start.Input != input || laterTurn {
+			return -1, fmt.Errorf("执行键已绑定其他输入或历史轮次，须使用新的执行键")
+		}
+		for _, ev := range events[i+1:] {
+			if ev.Type == session.TypeRewind {
+				return -1, fmt.Errorf("退回后的会话须使用新的执行键")
+			}
+		}
+		for _, ev := range events[i+1:] {
+			if ev.Type != session.TypeTurnEnd {
+				continue
+			}
+			var end session.TurnEnd
+			if err := json.Unmarshal(ev.Data, &end); err != nil {
+				return -1, err
+			}
+			if end.Aborted {
+				return -1, fmt.Errorf("已中止的会话轮次须使用新的执行键")
+			}
+			return i, nil
+		}
+		return -1, nil
+	}
+	return -1, nil
+}
+
 // begin 记录本轮的 system 提示词与工具定义（与上次不同时）。
 func (t *sessionTurn) begin(ctx context.Context, messages []llm.Message, offered []interfaces.Tool) error {
-	if t == nil {
+	if t == nil || t.completed {
 		return nil
 	}
 	if len(messages) > 0 && messages[0].Role == "system" {
@@ -131,6 +187,9 @@ func (t *sessionTurn) sync(ctx context.Context, messages []llm.Message) error {
 		if err != nil || replayed {
 			return err
 		}
+		if t.completed {
+			return fmt.Errorf("已完成轮次的重放对话与会话日志不一致")
+		}
 		t.resumed = 0
 	}
 	return t.rec.Sync(ctx, messages, t.tools)
@@ -149,6 +208,9 @@ func (t *sessionTurn) end(ctx context.Context, messages []llm.Message, answer st
 	}
 	if err := t.sync(ctx, messages); err != nil {
 		return err
+	}
+	if t.completed {
+		return nil
 	}
 	d := session.TurnEnd{Answer: answer}
 	if usage != nil {
