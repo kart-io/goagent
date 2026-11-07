@@ -20,7 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        provider: [gemini, deepseek]
+        provider: [gemini, deepseek, minimax]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -36,8 +36,10 @@ jobs:
           GEMINI_EMBEDDING_MODEL: ${{ vars.GEMINI_EMBEDDING_MODEL }}
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_MODEL }}
+          MINIMAX_CN_API_KEY: ${{ secrets.MINIMAX_CN_API_KEY }}
+          MINIMAX_MODEL: ${{ vars.MINIMAX_MODEL }}
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && matrix.provider != 'minimax'
         with:
           name: live-${{ matrix.provider }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: live-results/

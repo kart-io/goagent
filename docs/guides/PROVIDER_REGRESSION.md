@@ -17,15 +17,18 @@ DEEPSEEK_MODEL=deepseek-flash \
   bash scripts/provider_live.sh deepseek /tmp/deepseek-new-results
 ```
 
-密钥从对应的 `GEMINI_API_KEY` / `DEEPSEEK_API_KEY` 环境变量读取。脚本也支持 `openai`，需 `OPENAI_MODEL` 与 `OPENAI_API_KEY`，未加入默认付费矩阵。
+MiniMax 使用国内 Anthropic 协议，运行 `bash scripts/provider_live.sh minimax`，读取专用 `MINIMAX_CN_API_KEY`；默认模型 `MiniMax-M3.1-Flash`，可选 `MINIMAX_MODEL`。不需要输出目录，临时检查点自动删除，不写报告。
+
+其他密钥从对应的 `GEMINI_API_KEY` / `DEEPSEEK_API_KEY` 环境变量读取。脚本也支持 `openai`，需 `OPENAI_MODEL` 与 `OPENAI_API_KEY`，未加入默认付费矩阵。
 
 | 套件 | 题数 | 最多上游请求 | 限制 |
 |---|---:|---:|---|
+| MiniMax Anthropic | 1个完整工具流程及重建重放 | 3 | 一次工具效果、最多一次格式纠正、总期限180秒、每请求最多4096输出Token |
 | Gemini 原生 | 6 | 10（8 生成 + 2 向量） | 每案例 90 秒，生成最多 2048 输出 Token |
 | DeepSeek 租户订单 | 6 | 12 | 顺序执行，每案例最多 2 请求、90 秒，每请求最多 2048 输出 Token |
 
 无自动重试，失败保存结果并返回非零。DeepSeek 的 8000 Token 停止阈值是每个任务的已观测阈值，不是全局费用上限。Gemini Embed 接口未提供用量，报告已知 Token 不包含向量请求；请求上限不等于金额上限。数据为本地合成只读订单，无真实订单或支付写入。
 
-`provider-live.yml` 每周一 03:30 UTC 调度，也支持手动触发。启用前在仓库变量设置 `ENABLE_PROVIDER_LIVE=true`，在 `provider-live` environment 配置上述两个密钥和 `GEMINI_MODEL`、`GEMINI_EMBEDDING_MODEL`、`DEEPSEEK_MODEL` 变量。未启用时整个任务跳过；启用后缺少配置则失败，不将缺失密钥报告成测试通过。PR 不触发付费调用，也不接收密钥。工作流只读仓库权限、20 分钟超时、结果保留 14 天。
+`provider-live.yml` 每周一 03:30 UTC 调度，也支持手动触发。启用前在仓库变量设置 `ENABLE_PROVIDER_LIVE=true`，在 `provider-live` environment 配置 `MINIMAX_CN_API_KEY` 及上述两个密钥和 `GEMINI_MODEL`、`GEMINI_EMBEDDING_MODEL`、`DEEPSEEK_MODEL` 变量。未启用时整个任务跳过；启用后缺少配置则失败，不将缺失密钥报告成测试通过。PR 不触发付费调用，也不接收密钥。工作流只读仓库权限、20 分钟超时、Gemini/DeepSeek结果保留14天；MiniMax只输出验收状态，不上传报告。
 
 最新本地真实运行见[回归结果](../evaluation/2026-10-27-provider-regression/REPORT.md)。

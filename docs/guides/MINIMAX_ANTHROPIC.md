@@ -48,3 +48,9 @@ func NewClient() (*providers.AnthropicProvider, error) {
 需要模型按指定格式回答时，复用 `WithTurnStopping` 检查最终文本，最多纠正一次，仍错误就返回失败。评测参考实现为 [`agentbench.ToolContract`](../../evaluation/agentbench/tool_contract.go)，完整装配与重放见[回归测试](../../evaluation/agentbench/tool_contract_test.go)。`CheckArguments` 应接入 Dispatcher 授权和工具执行两处；`CheckAnswer` 应在返回权威终态前再次调用。该验收器针对本组合成字段，实际业务应替换为自己的 Schema、可信数据和权限规则。
 
 可采用 `WithMaxIterations(5)` 为停止钩子预留步骤，同时通过根预算限制 `MaxModelRequests: 3`、`MaxToolCalls: 1`，再设置请求超时。第二次错误格式应终止，不提取 JSON 字段充当模型回答成功；中间流文本仍可能已经输出。改变验收规则时，更新持久化 scope 和预算版本，避免直接复用旧策略终态。
+
+## 有界定期回归
+
+设置专用 `MINIMAX_CN_API_KEY` 后运行 `bash scripts/provider_live.sh minimax`。该入口固定使用国内 Anthropic 地址，默认模型为 `MiniMax-M3.1-Flash`，可通过 `MINIMAX_MODEL` 覆盖。最多三个模型请求、一次合成工具效果；检查精确字符串参数、最多一次回执纠正，以及重建后的零请求、零效果重放。网络错误不重试，任何验收失败返回非零退出码，临时检查点自动删除，不生成报告文件。
+
+定期工作流沿用 `ENABLE_PROVIDER_LIVE` 显式开关及 `provider-live` 环境。启用前在该环境配置 `MINIMAX_CN_API_KEY` Secret，可选配置 `MINIMAX_MODEL` Variable；凭据不复用其他供应商的 `ANTHROPIC_*` 设置。

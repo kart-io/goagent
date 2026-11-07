@@ -2,10 +2,16 @@
 # Explicitly opted-in, bounded synthetic live checks. No retries.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-provider=${1:?usage: provider_live.sh gemini|deepseek|openai NEW_OUTPUT_DIRECTORY}
-report_dir=${2:?new output directory required}
+provider=${1:?usage: provider_live.sh minimax|gemini|deepseek|openai [NEW_OUTPUT_DIRECTORY]}
+report_dir=${2:-}
 case "$provider" in
+  minimax)
+    # 国内 Anthropic 协议：最多三次请求、一次工具效果；临时检查点自动删除，不写报告。
+    : "${MINIMAX_CN_API_KEY:?MINIMAX_CN_API_KEY required}"
+    go run ./examples/llm/minimax-verify -live -model "${MINIMAX_MODEL:-MiniMax-M3.1-Flash}"
+    ;;
   gemini)
+    : "${report_dir:?new output directory required}"
     : "${GEMINI_API_KEY:?GEMINI_API_KEY required}"
     : "${GEMINI_MODEL:?GEMINI_MODEL required}"
     : "${GEMINI_EMBEDDING_MODEL:?GEMINI_EMBEDDING_MODEL required}"
@@ -16,6 +22,7 @@ case "$provider" in
       -out "$report_dir/results.json"
     ;;
   deepseek|openai)
+    : "${report_dir:?new output directory required}"
     if [[ "$provider" == deepseek ]]; then
       : "${DEEPSEEK_API_KEY:?DEEPSEEK_API_KEY required}"
       model=${DEEPSEEK_MODEL:?DEEPSEEK_MODEL required}

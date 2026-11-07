@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- MiniMax 国内 Anthropic 有界回归入口与每周验证矩阵：最多三个请求、一次合成工具效果，验证精确参数、回执纠正及零新增请求重放，不生成报告文件。
+- `scripts/stabilitysoak`：可配置时长的离线混合长稳验证，默认24小时；验证治理、会话、恢复、审批和取消，检查资源采样门槛并提供仅本机可读的内存状态。
+- `durable.WithReplayOnly`：`Do` 仅回放已完成记录，缺记录或未完成时返回 `ErrReplayOnly`，不执行或核对新效果。
+
 - `builder.WithOutputValidator`：不可被纠正额度跳过的最终输出验收，覆盖中间件、完成回调、工具直返、纯文本与持久回放；`core.StreamRunnable.WithFinalValidator`在外层完成回调后验收。
 - `builder.WithDispatcher`、`execution.NewGovernedBuilder`及治理配置报告：统一工具集合，显式预算/期限/授权/有限准入与排队，并检查运行使用创建时的Scope.Bind。
 - `workflow.DurableConfig.StateVersion/Components`、`DurableGraph.Manifest/CheckCompatibility`：恢复版本声明与只读批量升级检查，空声明保留旧计划摘要；不自动迁移或授权恢复。
@@ -41,6 +45,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `utils/json` 包与 `github.com/bytedance/sonic` 依赖：改用 `codec/json`；`Marshal`、`Unmarshal`、`RawMessage`、`Number` 改用 `codec/json` 中的同名函数与类型，`MarshalIndent` 改用 `json.Marshal(v, json.Indent(...))`（缩进与前缀只能含空格与制表符），`Decode` 改用 `codec.Convert`，`Get`、`GetString` 等路径查询没有替代。
 
 ### Fixed
+
+- 旧工具执行器拒绝超时后的成功结果，且不自动重试已报告成功的迟到操作；执行前及退避期间响应父上下文取消。
+- 会话日志的最后一个已完成持久轮次支持同执行键重建重放，不重复追加输入、消息或轮次；完成重放禁止创建新持久操作，最终输出验收仍生效。
 
 - Anthropic 原生 `ProviderState` 续接时直接回放 `tool_use.input` 的 JSON 原文，避免 SDK 解码到 `any` 后再次舍入大整数与高精度小数；保留思考块签名。修复覆盖持久化后的实际续接分支。
 - 同时传入 `json.Strict` 与 `json.UseNumber` 时，后一个选项的解码钩子不再覆盖前一个。
