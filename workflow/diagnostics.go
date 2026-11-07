@@ -3,12 +3,11 @@ package workflow
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 
 	"github.com/kart-io/goagent/codec/json"
-
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // Diagnose 只读取保存的续跑元数据，不执行节点、路由、审批钩子或 Store 写入与加锁。
@@ -16,7 +15,7 @@ import (
 // 检查点与操作读取不构成事务；恢复未知执行前，宿主须协调活跃执行者并核对外部效果。
 func (d *DurableGraph[T]) Diagnose(ctx context.Context, id string, refs ...durable.OperationRef) (*durable.DiagnosticReport, error) {
 	if d == nil || d.store == nil || d.graph == nil || id == "" {
-		return nil, fmt.Errorf("诊断需要已编译的持久图和运行 ID")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "诊断需要已编译的持久图和运行 ID").WithComponent("workflow").WithOperation("diagnose")
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, &durable.DiagnosticError{Cause: err}
@@ -73,10 +72,10 @@ func (d *DurableGraph[T]) Diagnose(ctx context.Context, id string, refs ...durab
 func (d *DurableGraph[T]) decodeDiagnosticCheckpoint(id string, cp *durable.Snapshot) (graphState[json.RawMessage], error) {
 	var meta graphState[json.RawMessage]
 	if cp.RunID != id || cp.Next < 0 || cp.Next > d.graph.config.MaxSteps || json.Unmarshal(cp.Data, &meta) != nil {
-		return meta, fmt.Errorf("检查点无效")
+		return meta, agentErrors.Newf(agentErrors.CodeStateValidation, "检查点无效").WithComponent("workflow").WithOperation("decode_diagnostic_checkpoint")
 	}
 	if meta.Node != END && d.graph.nodes[meta.Node] == nil {
-		return meta, fmt.Errorf("未知节点")
+		return meta, agentErrors.Newf(agentErrors.CodeStateValidation, "未知节点").WithComponent("workflow").WithOperation("decode_diagnostic_checkpoint")
 	}
 	if err := d.validateContinuation(id, cp, graphState[T]{Node: meta.Node, Routing: meta.Routing}); err != nil {
 		return meta, err
@@ -84,21 +83,21 @@ func (d *DurableGraph[T]) decodeDiagnosticCheckpoint(id string, cp *durable.Snap
 	if meta.Parallel != nil {
 		cfg, ok := d.graph.parallel[meta.Node]
 		if !ok || meta.Routing || cp.Key == "" || cp.Waiting || (d.approvals[meta.Node] && !cp.Approved) {
-			return meta, fmt.Errorf("并行检查点无效")
+			return meta, agentErrors.Newf(agentErrors.CodeStateValidation, "并行检查点无效").WithComponent("workflow").WithOperation("decode_diagnostic_checkpoint")
 		}
 		if len(meta.Parallel.Inputs) != len(cfg.Branches) || meta.Parallel.Outputs == nil {
-			return meta, fmt.Errorf("并行检查点无效")
+			return meta, agentErrors.Newf(agentErrors.CodeStateValidation, "并行检查点无效").WithComponent("workflow").WithOperation("decode_diagnostic_checkpoint")
 		}
 		allowed := map[string]bool{}
 		for _, b := range cfg.Branches {
 			allowed[b.Name] = true
 			if !json.Valid(meta.Parallel.Inputs[b.Name]) {
-				return meta, fmt.Errorf("并行输入无效")
+				return meta, agentErrors.Newf(agentErrors.CodeStateValidation, "并行输入无效").WithComponent("workflow").WithOperation("decode_diagnostic_checkpoint")
 			}
 		}
 		for name, data := range meta.Parallel.Outputs {
 			if !allowed[name] || !json.Valid(data) {
-				return meta, fmt.Errorf("并行输出无效")
+				return meta, agentErrors.Newf(agentErrors.CodeStateValidation, "并行输出无效").WithComponent("workflow").WithOperation("decode_diagnostic_checkpoint")
 			}
 		}
 	}

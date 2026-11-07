@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/kart-io/goagent/core/durable"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/codes"
@@ -51,8 +50,8 @@ func TestErrorKindCategories(t *testing.T) {
 		"wrapped_panic": {fmt.Errorf("node %q: %w", "n", panicErr), "panic"},
 		"canceled":      {fmt.Errorf("wrap: %w", context.Canceled), "canceled"},
 		"deadline":      {context.DeadlineExceeded, "deadline"},
-		"waiting":       {durable.ErrApprovalRequired, "waiting"},
-		"attention":     {durable.ErrOperationAttention, "attention"},
+		"waiting":       {agentErrors.ErrApprovalRequired, "waiting"},
+		"attention":     {agentErrors.ErrOperationAttention, "attention"},
 		"execution":     {errors.New("secret-provider-error"), "execution"},
 	} {
 		t.Run(name, func(t *testing.T) { require.Equal(t, tc.want, ErrorKind(tc.err)) })

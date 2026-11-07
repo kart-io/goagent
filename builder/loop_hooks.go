@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/codec/json"
-
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	toolspkg "github.com/kart-io/goagent/tools"
@@ -438,7 +438,7 @@ func (a *ConfigurableAgent[C, S]) requestTurn(ctx context.Context, box *inbox, r
 		}
 	}
 	if req.Client == nil || req.Request == nil {
-		return nil, nil, messages, fmt.Errorf("模型客户端或请求被 Request 钩子清空")
+		return nil, nil, messages, agentErrors.Newf(agentErrors.CodeInvalidOutput, "模型客户端或请求被 Request 钩子清空").WithComponent("builder").WithOperation("request_turn")
 	}
 	redirectable := box != nil && !durable.HasJournal(ctx)
 	attempt := 0
@@ -462,7 +462,7 @@ func (a *ConfigurableAgent[C, S]) requestTurn(ctx context.Context, box *inbox, r
 		cause := context.Cause(turnCtx)
 		cancel(nil)
 		if len(redirects) > 0 {
-			if err != nil && errors.Is(cause, errRedirected) && ctx.Err() == nil {
+			if err != nil && errors.Is(cause, agentErrors.ErrModelRedirected) && ctx.Err() == nil {
 				return nil, &redirection{partial: partial.String(), messages: redirects}, messages, nil
 			}
 			// 请求在取消前已经完成：纠正按 Steer 在下一步领取。

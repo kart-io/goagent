@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/kart-io/goagent/core"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // Adapt explicitly maps a Runnable's input and final output to graph state.
@@ -20,14 +21,14 @@ func Adapt[S, I, O any](runnable core.Runnable[I, O], input func(S) (I, error), 
 // preserve Event metadata. Replayed nodes may emit previews again.
 func AdaptStream[S, I, O any](runnable core.Runnable[I, O], input func(S) (I, error), output func(S, O) (S, error), intermediate func(S, core.StreamChunk[O]) (core.StreamChunk[S], error)) (*core.StreamRunnable[S, S], error) {
 	if intermediate == nil {
-		return nil, fmt.Errorf("workflow AdaptStream requires an intermediate mapping")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "workflow AdaptStream requires an intermediate mapping").WithComponent("workflow").WithOperation("adapt_stream")
 	}
 	return adapt(runnable, input, output, intermediate)
 }
 
 func adapt[S, I, O any](runnable core.Runnable[I, O], input func(S) (I, error), output func(S, O) (S, error), intermediate func(S, core.StreamChunk[O]) (core.StreamChunk[S], error)) (*core.StreamRunnable[S, S], error) {
 	if isNil(runnable) || input == nil || output == nil {
-		return nil, fmt.Errorf("workflow Adapt requires a runnable and both state mappings")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "workflow Adapt requires a runnable and both state mappings").WithComponent("workflow").WithOperation("adapt")
 	}
 	mode := core.StreamModeSteps
 	if capability, ok := runnable.(core.StreamCapability); ok {
@@ -45,7 +46,7 @@ func adapt[S, I, O any](runnable core.Runnable[I, O], input func(S) (I, error), 
 					return fmt.Errorf("workflow intermediate mapping: %w", err)
 				}
 				if mapped.Done {
-					return fmt.Errorf("workflow intermediate mapping cannot finalize a node")
+					return agentErrors.Newf(agentErrors.CodeInvalidOutput, "workflow intermediate mapping cannot finalize a node").WithComponent("workflow").WithOperation("adapt")
 				}
 				return emit(mapped)
 			}

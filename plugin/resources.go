@@ -1,11 +1,12 @@
 package plugin
 
 import (
-	"fmt"
 	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // Env 是插件可见的宿主环境，每个插件一个。
@@ -26,14 +27,14 @@ func (e *Env) Resources() *Resources { return e.resources }
 // Provide 发布本插件的共享资源，只能在本插件 Start 执行期间调用；key 须以 "<插件名>." 开头，避免冒用其他插件的命名空间。
 func (e *Env) Provide(key string, value any) error {
 	if !e.starting.Load() {
-		return fmt.Errorf("插件 %q 只能在 Start 中提供资源 %q", e.name, key)
+		return agentErrors.Newf(agentErrors.CodeInvalidConfig, "插件 %q 只能在 Start 中提供资源 %q", e.name, key).WithComponent("plugin").WithOperation("provide")
 	}
 	prefix := e.name + "."
 	if !strings.HasPrefix(key, prefix) || len(key) == len(prefix) {
-		return fmt.Errorf("插件 %q 的资源名须以 %q 开头：%q", e.name, prefix, key)
+		return agentErrors.Newf(agentErrors.CodeAccessDenied, "插件 %q 的资源名须以 %q 开头：%q", e.name, prefix, key).WithComponent("plugin").WithOperation("provide")
 	}
 	if value == nil {
-		return fmt.Errorf("资源 %q 为 nil", key)
+		return agentErrors.Newf(agentErrors.CodeInvalidInput, "资源 %q 为 nil", key).WithComponent("plugin").WithOperation("provide")
 	}
 	return e.resources.put(key, value)
 }
@@ -50,7 +51,7 @@ func (r *Resources) put(key string, value any) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if _, ok := r.values[key]; ok {
-		return fmt.Errorf("资源 %q 已存在", key)
+		return agentErrors.Newf(agentErrors.CodeAlreadyExists, "资源 %q 已存在", key).WithComponent("plugin").WithOperation("put")
 	}
 	r.values[key] = value
 	return nil
@@ -75,11 +76,11 @@ func Lookup[T any](r *Resources, key string) (T, error) {
 	var zero T
 	v, ok := r.Resolve(key)
 	if !ok {
-		return zero, fmt.Errorf("资源 %q 不存在", key)
+		return zero, agentErrors.Newf(agentErrors.CodeNotFound, "资源 %q 不存在", key).WithComponent("plugin").WithOperation("lookup")
 	}
 	typed, ok := v.(T)
 	if !ok {
-		return zero, fmt.Errorf("资源 %q 的类型是 %T，不是 %s", key, v, reflect.TypeFor[T]())
+		return zero, agentErrors.Newf(agentErrors.CodeTypeMismatch, "资源 %q 的类型是 %T，不是 %s", key, v, reflect.TypeFor[T]()).WithComponent("plugin").WithOperation("lookup")
 	}
 	return typed, nil
 }

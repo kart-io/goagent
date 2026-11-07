@@ -70,7 +70,7 @@ func (a *ConfigurableAgent[C, S]) executeStream(ctx context.Context, input inter
 	}
 	client := a.llmClient
 	if _, native := a.llmClient.(llm.ToolStreamClient); len(a.tools) > 0 && !native {
-		return nil, fmt.Errorf("configured tools require llm.ToolStreamClient")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "configured tools require llm.ToolStreamClient").WithComponent("builder").WithOperation("execute_stream")
 	}
 	// 终态事件按调用方的 ctx 投递：执行 ctx 可能因 WithTimeout 已结束，与仍在接收的调用方同时就绪时 select 会随机丢掉终态，
 	// 调用方只看到流被关闭。
@@ -207,7 +207,7 @@ func (a *ConfigurableAgent[C, S]) runEvents(ctx context.Context, request *middle
 		return a.runToolEvents(ctx, request, input, native, messages, metadata, emit)
 	}
 	if a.config.SessionLog != nil {
-		return nil, fmt.Errorf("会话日志只支持原生工具流：llm.ToolStreamClient 且配置了工具")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "会话日志只支持原生工具流：llm.ToolStreamClient 且配置了工具").WithComponent("builder").WithOperation("run_events")
 	}
 	messages, err := a.streamMessages(ctx, input, evidence)
 	if err != nil {

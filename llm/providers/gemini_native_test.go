@@ -17,7 +17,8 @@ import (
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/common"
-	"github.com/kart-io/goagent/llm/constants"
+
+	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/tools"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/genai"
@@ -141,7 +142,7 @@ func TestGeminiNativeStateRoundTripAndMismatch(t *testing.T) {
 		func(m []llm.Message) { m[1].Content = "tampered" },
 		func(m []llm.Message) { m[2].ToolCallID = "wrong" },
 		func(m []llm.Message) {
-			m[1].ProviderState = &llm.ProviderState{Provider: constants.ProviderOpenAI, Data: original.ProviderState.Data}
+			m[1].ProviderState = &llm.ProviderState{Provider: shared.ProviderOpenAI, Data: original.ProviderState.Data}
 		},
 		func(m []llm.Message) { m[1].ToolCalls = []llm.ToolCall{{ID: "native", Type: "function"}} },
 	} {
@@ -157,7 +158,7 @@ func TestGeminiNativeStateRoundTripAndMismatch(t *testing.T) {
 }
 
 func TestGeminiEmbeddingRealProtocol(t *testing.T) {
-	t.Setenv(constants.EnvGeminiEmbeddingModel, "env-embed")
+	t.Setenv(shared.EnvGeminiEmbeddingModel, "env-embed")
 	var requests atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests.Add(1)

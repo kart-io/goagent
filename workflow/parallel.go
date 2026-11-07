@@ -8,6 +8,7 @@ import (
 
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/observe"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // Branch is one named function inside an explicit parallel fork/join.
@@ -30,15 +31,15 @@ type ParallelConfig[T any] struct {
 // the node waits for all started workers before returning, including on failure.
 func (g *Graph[T]) AddParallel(name string, config ParallelConfig[T]) error {
 	if g == nil || g.nodes == nil {
-		return fmt.Errorf("use workflow.NewGraph to initialize the builder")
+		return agentErrors.Newf(agentErrors.CodeInvalidConfig, "use workflow.NewGraph to initialize the builder").WithComponent("workflow").WithOperation("add_parallel")
 	}
 	if len(config.Branches) == 0 || config.Clone == nil || config.Merge == nil {
-		return fmt.Errorf("parallel node %q requires branches, Clone and Merge", name)
+		return agentErrors.Newf(agentErrors.CodeInvalidConfig, "parallel node %q requires branches, Clone and Merge", name).WithComponent("workflow").WithOperation("add_parallel")
 	}
 	names := map[string]bool{}
 	for _, branch := range config.Branches {
 		if !validName(branch.Name) || names[branch.Name] || branch.Run == nil {
-			return fmt.Errorf("invalid or duplicate parallel branch %q", branch.Name)
+			return agentErrors.Newf(agentErrors.CodeInvalidConfig, "invalid or duplicate parallel branch %q", branch.Name).WithComponent("workflow").WithOperation("add_parallel")
 		}
 		names[branch.Name] = true
 	}

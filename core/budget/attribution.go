@@ -2,11 +2,12 @@ package budget
 
 import (
 	"context"
-	"fmt"
-	"github.com/kart-io/goagent/core/usage"
-	"github.com/kart-io/goagent/interfaces"
 	"math"
 	"sort"
+
+	"github.com/kart-io/goagent/core/usage"
+	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/interfaces"
 )
 
 type UsageSummary struct {
@@ -38,25 +39,25 @@ func validOwner(o usage.Owner) bool {
 }
 func (c *Controller) register(l *ledger, chain []usage.Owner) error {
 	if len(chain) == 0 || len(chain) > c.config.MaxAgentCalls {
-		return fmt.Errorf("invalid attribution lineage")
+		return agentErrors.Newf(agentErrors.CodeInvalidInput, "invalid attribution lineage").WithComponent("budget").WithOperation("register")
 	}
 	seen := map[string]bool{}
 	added := 0
 	for i, o := range chain {
 		if !validOwner(o) || o.RunID != c.config.RootKey || seen[o.AgentCallKey] || (i == 0 && o.ParentAgentCallKey != "") || (i > 0 && o.ParentAgentCallKey != chain[i-1].AgentCallKey) {
-			return fmt.Errorf("invalid attribution owner or lineage")
+			return agentErrors.Newf(agentErrors.CodeInvalidInput, "invalid attribution owner or lineage").WithComponent("budget").WithOperation("register")
 		}
 		seen[o.AgentCallKey] = true
 		if old, ok := l.AgentCalls[o.AgentCallKey]; ok {
 			if old != o {
-				return fmt.Errorf("agent owner changed")
+				return agentErrors.Newf(agentErrors.CodeConflict, "agent owner changed").WithComponent("budget").WithOperation("register")
 			}
 		} else {
 			added++
 		}
 	}
 	if len(l.AgentCalls)+added > c.config.MaxAgentCalls {
-		return fmt.Errorf("agent call limit exceeded")
+		return agentErrors.Newf(agentErrors.CodeExecutionLimit, "agent call limit exceeded").WithComponent("budget").WithOperation("register")
 	}
 	if l.AgentCalls == nil {
 		l.AgentCalls = map[string]usage.Owner{}
@@ -71,10 +72,10 @@ func (c *Controller) RegisterAgent(ctx context.Context, lineage []usage.Owner) e
 }
 func (c *Controller) ReserveAttributed(ctx context.Context, key string, tokens int, lineage []usage.Owner) error {
 	if key == "" || tokens < 0 {
-		return fmt.Errorf("invalid reservation")
+		return agentErrors.Newf(agentErrors.CodeInvalidInput, "invalid reservation").WithComponent("budget").WithOperation("reserve_attributed")
 	}
 	if c.config.MaxReservedTokens > 0 && tokens == 0 {
-		return ErrTokenEstimateRequired
+		return agentErrors.ErrTokenEstimateRequired
 	}
 	return c.transaction(ctx, true, func(l *ledger) error {
 		if err := c.checkDeadline(ctx); err != nil {
@@ -86,17 +87,17 @@ func (c *Controller) ReserveAttributed(ctx context.Context, key string, tokens i
 			}
 		}
 		if _, ok := l.Entries[key]; ok {
-			return ErrReservationExists
+			return agentErrors.ErrReservationExists
 		}
 		if len(l.Entries) >= c.config.MaxModelRequests {
-			return ErrBudgetExceeded
+			return agentErrors.ErrModelBudgetExceeded
 		}
 		n, e := reservedTokens(l)
 		if e != nil {
 			return e
 		}
 		if tokens > math.MaxInt-n || (c.config.MaxReservedTokens > 0 && tokens > c.config.MaxReservedTokens-n) {
-			return ErrBudgetExceeded
+			return agentErrors.ErrModelBudgetExceeded
 		}
 		item := entry{Estimate: tokens}
 		if len(lineage) > 0 {
@@ -118,14 +119,14 @@ func (c *Controller) RecordEvidence(ctx context.Context, key string, lineage []u
 		}
 		item, ok := l.Entries[key]
 		if !ok {
-			return fmt.Errorf("usage has no reservation")
+			return agentErrors.Newf(agentErrors.CodeInvalidInput, "usage has no reservation").WithComponent("budget").WithOperation("record_evidence")
 		}
 		owner := ""
 		if len(lineage) > 0 {
 			owner = lineage[len(lineage)-1].AgentCallKey
 		}
 		if owner != item.AgentCallKey {
-			return fmt.Errorf("attempt owner changed")
+			return agentErrors.Newf(agentErrors.CodeConflict, "attempt owner changed").WithComponent("budget").WithOperation("record_evidence")
 		}
 		var err error
 		out, err = usage.Merge(item.Evidence, e)
@@ -140,29 +141,29 @@ func (c *Controller) RecordEvidence(ctx context.Context, key string, lineage []u
 }
 func (c *Controller) validateAttribution(l *ledger) error {
 	if len(l.AgentCalls) > c.config.MaxAgentCalls {
-		return fmt.Errorf("agent call limit exceeded")
+		return agentErrors.Newf(agentErrors.CodeStateValidation, "agent call limit exceeded").WithComponent("budget").WithOperation("validate_attribution")
 	}
 	for key, o := range l.AgentCalls {
 		if key != o.AgentCallKey || !validOwner(o) || o.RunID != c.config.RootKey {
-			return fmt.Errorf("invalid saved owner")
+			return agentErrors.Newf(agentErrors.CodeStateValidation, "invalid saved owner").WithComponent("budget").WithOperation("validate_attribution")
 		}
 		seen := map[string]bool{}
 		for o.ParentAgentCallKey != "" {
 			if seen[o.AgentCallKey] {
-				return fmt.Errorf("attribution cycle")
+				return agentErrors.Newf(agentErrors.CodeStateValidation, "attribution cycle").WithComponent("budget").WithOperation("validate_attribution")
 			}
 			seen[o.AgentCallKey] = true
 			var ok bool
 			o, ok = l.AgentCalls[o.ParentAgentCallKey]
 			if !ok {
-				return fmt.Errorf("missing ancestor")
+				return agentErrors.Newf(agentErrors.CodeStateValidation, "missing ancestor").WithComponent("budget").WithOperation("validate_attribution")
 			}
 		}
 	}
 	for _, item := range l.Entries {
 		if item.AgentCallKey != "" {
 			if _, ok := l.AgentCalls[item.AgentCallKey]; !ok {
-				return fmt.Errorf("unknown attempt owner")
+				return agentErrors.Newf(agentErrors.CodeStateValidation, "unknown attempt owner").WithComponent("budget").WithOperation("validate_attribution")
 			}
 		}
 	}
@@ -190,7 +191,7 @@ func rootSnapshot(l *ledger) (out Snapshot, err error) {
 		if e.KnownFields&usage.Total != 0 {
 			delta := e.Tokens.TotalTokens - item.Estimate
 			if (delta > 0 && out.KnownTokenDelta > math.MaxInt-delta) || (delta < 0 && out.KnownTokenDelta < math.MinInt-delta) {
-				err = fmt.Errorf("token delta overflow")
+				err = agentErrors.Newf(agentErrors.CodeStateValidation, "token delta overflow").WithComponent("budget").WithOperation("root_snapshot")
 				return
 			}
 			out.KnownTokenDelta += delta
@@ -203,7 +204,7 @@ func addTokens(dst *interfaces.TokenUsage, src interfaces.TokenUsage) error {
 	s := []int{src.PromptTokens, src.CompletionTokens, src.TotalTokens, src.CachedTokens, src.ReasoningTokens, src.ToolUsePromptTokens}
 	for i, p := range d {
 		if s[i] < 0 || *p > math.MaxInt-s[i] {
-			return fmt.Errorf("token sum overflow")
+			return agentErrors.Newf(agentErrors.CodeStateValidation, "token sum overflow").WithComponent("budget").WithOperation("add_tokens")
 		}
 	}
 	for i, p := range d {

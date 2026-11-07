@@ -11,11 +11,11 @@ import (
 
 	"github.com/sashabaranov/go-openai"
 
+	shared "github.com/kart-io/goagent/constants"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	agentllm "github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/common"
-	"github.com/kart-io/goagent/llm/constants"
 )
 
 // OpenAIProvider implements LLM interface for OpenAI
@@ -30,12 +30,12 @@ type OpenAIProvider struct {
 // NewOpenAIWithOptions creates a new OpenAI provider using options pattern
 func NewOpenAIWithOptions(opts ...agentllm.ClientOption) (*OpenAIProvider, error) {
 	return newOpenAICompatible(openAICompatibleSpec{
-		provider:       constants.ProviderOpenAI,
+		provider:       shared.ProviderOpenAI,
 		defaultBaseURL: "https://api.openai.com/v1",
 		defaultModel:   openai.GPT4TurboPreview,
-		envAPIKey:      constants.EnvOpenAIAPIKey,
-		envBaseURL:     constants.EnvOpenAIBaseURL,
-		envModel:       constants.EnvOpenAIModel,
+		envAPIKey:      shared.EnvOpenAIAPIKey,
+		envBaseURL:     shared.EnvOpenAIBaseURL,
+		envModel:       shared.EnvOpenAIModel,
 		reasoning:      true,
 		capabilities: []agentllm.Capability{
 			agentllm.CapabilityCompletion,
@@ -53,7 +53,7 @@ func NewOpenAIWithOptions(opts ...agentllm.ClientOption) (*OpenAIProvider, error
 
 // openAICompatibleSpec 描述走 OpenAI Chat Completions 协议的服务：身份、默认值与声明的能力。
 type openAICompatibleSpec struct {
-	provider                        constants.Provider
+	provider                        shared.Provider
 	defaultBaseURL, defaultModel    string
 	envAPIKey, envBaseURL, envModel string
 	// apiKeyOptional 用于本地服务：未提供密钥时发送占位值，SDK 要求非空。
@@ -200,13 +200,14 @@ func (p *OpenAIProvider) Embed(ctx context.Context, text string) ([]float32, err
 		model = openai.AdaEmbeddingV2
 	}
 
+	ctx, retryAfter := withRetryAfterSlot(ctx)
 	resp, err := p.client.CreateEmbeddings(ctx, openai.EmbeddingRequest{
 		Input: []string{text},
 		Model: model,
 	})
 	if err != nil {
-		return nil, agentErrors.NewRetrievalEmbeddingError(textPreview, err).
-			WithContext("model", string(model))
+		return nil, wrapProviderError(p.ProviderName(), string(model), openAIProviderError(err, *retryAfter)).
+			WithContext("text_preview", textPreview).WithOperation("generate_embedding")
 	}
 
 	if len(resp.Data) == 0 {
@@ -217,7 +218,7 @@ func (p *OpenAIProvider) Embed(ctx context.Context, text string) ([]float32, err
 }
 
 // Provider returns the provider type
-func (p *OpenAIProvider) Provider() constants.Provider {
+func (p *OpenAIProvider) Provider() shared.Provider {
 	return p.Config.Provider
 }
 

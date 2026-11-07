@@ -2,11 +2,11 @@ package multiagent
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"slices"
 
 	"github.com/kart-io/goagent/core"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/workflow"
 )
 
@@ -18,16 +18,14 @@ type ParallelConfig[T any] struct {
 	Merge func(context.Context, T, []T) (T, error)
 }
 
-var errParallelRun = errors.New("ParallelStep 只能经 AddStep 或 multiagent 构造器注册，不能直接执行")
-
 // ParallelStep 把一组并行分支包装成名为 name 的一步；整组计 1 步。分支名只需在本节点内唯一，
 // 分支不得再是 ParallelStep。返回值的 Run 直接调用即返回错误，构造器与 AddStep 忽略它。
 func ParallelStep[T any](name string, p ParallelConfig[T]) (Step[T], error) {
 	if !validName(name) {
-		return Step[T]{}, fmt.Errorf("Step 名称 %q 无效", name)
+		return Step[T]{}, agentErrors.Newf(agentErrors.CodeInvalidConfig, "Step 名称 %q 无效", name).WithComponent("multiagent").WithOperation("parallel_step")
 	}
 	if p.Clone == nil || p.Merge == nil || len(p.Steps) == 0 {
-		return Step[T]{}, fmt.Errorf("ParallelStep %q 需要至少一个分支以及 Clone 与 Merge", name)
+		return Step[T]{}, agentErrors.Newf(agentErrors.CodeInvalidConfig, "ParallelStep %q 需要至少一个分支以及 Clone 与 Merge", name).WithComponent("multiagent").WithOperation("parallel_step")
 	}
 	seen := map[string]bool{}
 	for _, s := range p.Steps {
@@ -35,14 +33,14 @@ func ParallelStep[T any](name string, p ParallelConfig[T]) (Step[T], error) {
 			return Step[T]{}, fmt.Errorf("ParallelStep %q: %w", name, err)
 		}
 		if s.parallel != nil {
-			return Step[T]{}, fmt.Errorf("ParallelStep %q 的分支 %q 不能是 ParallelStep", name, s.Name)
+			return Step[T]{}, agentErrors.Newf(agentErrors.CodeInvalidConfig, "ParallelStep %q 的分支 %q 不能是 ParallelStep", name, s.Name).WithComponent("multiagent").WithOperation("parallel_step")
 		}
 		if seen[s.Name] {
-			return Step[T]{}, fmt.Errorf("ParallelStep %q 的分支名 %q 重复", name, s.Name)
+			return Step[T]{}, agentErrors.Newf(agentErrors.CodeInvalidConfig, "ParallelStep %q 的分支名 %q 重复", name, s.Name).WithComponent("multiagent").WithOperation("parallel_step")
 		}
 		seen[s.Name] = true
 	}
-	run := core.NewRunnableFunc(func(_ context.Context, in T) (T, error) { return in, errParallelRun })
+	run := core.NewRunnableFunc(func(_ context.Context, in T) (T, error) { return in, agentErrors.ErrParallelRegistration })
 	return Step[T]{Name: name, Run: run, parallel: &parallelSpec[T]{steps: slices.Clone(p.Steps), clone: p.Clone, merge: p.Merge}}, nil
 }
 
@@ -50,7 +48,7 @@ func ParallelStep[T any](name string, p ParallelConfig[T]) (Step[T], error) {
 // 三个构造器内部也用它注册节点。
 func AddStep[T any](g *workflow.Graph[T], s Step[T]) error {
 	if g == nil {
-		return errors.New("AddStep 需要非 nil 的图")
+		return agentErrors.NewInvalidConfigError("multiagent", "graph", "AddStep 需要非 nil 的图")
 	}
 	if err := checkStep(s); err != nil {
 		return err

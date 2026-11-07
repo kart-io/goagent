@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 type hostState int
@@ -37,7 +39,7 @@ func NewHost(plugins ...Plugin) (*Host, error) {
 	var names []string
 	for i, p := range plugins {
 		if p == nil {
-			errs = append(errs, fmt.Errorf("第 %d 个插件为 nil", i))
+			errs = append(errs, agentErrors.Newf(agentErrors.CodeInvalidConfig, "第 %d 个插件为 nil", i).WithComponent("plugin").WithOperation("new_host"))
 			continue
 		}
 		name := p.Name()
@@ -49,7 +51,7 @@ func NewHost(plugins ...Plugin) (*Host, error) {
 			errs = append(errs, fmt.Errorf("插件 %q：%w", name, err))
 		}
 		if _, dup := byName[name]; dup {
-			errs = append(errs, fmt.Errorf("插件名 %q 重复", name))
+			errs = append(errs, agentErrors.Newf(agentErrors.CodeInvalidConfig, "插件名 %q 重复", name).WithComponent("plugin").WithOperation("new_host"))
 			continue
 		}
 		byName[name] = p
@@ -58,7 +60,7 @@ func NewHost(plugins ...Plugin) (*Host, error) {
 	for _, name := range names {
 		for _, req := range requires(byName[name]) {
 			if _, ok := byName[req]; !ok {
-				errs = append(errs, fmt.Errorf("插件 %q 依赖的 %q 未注册", name, req))
+				errs = append(errs, agentErrors.Newf(agentErrors.CodeInvalidConfig, "插件 %q 依赖的 %q 未注册", name, req).WithComponent("plugin").WithOperation("new_host"))
 			}
 		}
 	}
@@ -114,7 +116,7 @@ func topoSort(names []string, byName map[string]Plugin) ([]Plugin, error) {
 					rest = append(rest, name)
 				}
 			}
-			return nil, fmt.Errorf("插件存在循环依赖：%s", strings.Join(rest, "、"))
+			return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "插件存在循环依赖：%s", strings.Join(rest, "、")).WithComponent("plugin").WithOperation("topo_sort")
 		}
 	}
 	return order, nil
@@ -135,7 +137,7 @@ func (h *Host) Start(ctx context.Context) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if h.state != hostNew {
-		return errors.New("Host 只能启动一次")
+		return agentErrors.New(agentErrors.CodeInvalidConfig, "Host 只能启动一次").WithComponent("plugin").WithOperation("start")
 	}
 	if err := ctx.Err(); err != nil {
 		return err

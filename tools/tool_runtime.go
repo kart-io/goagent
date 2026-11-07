@@ -12,14 +12,6 @@ import (
 	"github.com/kart-io/goagent/store"
 )
 
-// Sentinel errors
-var (
-	ErrKeyNotFound       = errors.New("key not found")
-	ErrValueNotFound     = errors.New("value not found")
-	ErrStateAccessDenied = errors.New("state access is disabled")
-	ErrStoreAccessDenied = errors.New("store access is disabled")
-)
-
 // ToolRuntime provides access to agent state and context from within tools
 type ToolRuntime struct {
 	// Core components
@@ -107,12 +99,12 @@ func (r *ToolRuntime) WithMetadata(key string, value interface{}) *ToolRuntime {
 // GetState retrieves a value from agent state
 func (r *ToolRuntime) GetState(key string) (interface{}, error) {
 	if !r.Config.EnableStateAccess {
-		return nil, ErrStateAccessDenied
+		return nil, agentErrors.ErrStateAccessDenied
 	}
 
 	val, ok := r.State.Get(key)
 	if !ok {
-		return nil, ErrKeyNotFound
+		return nil, agentErrors.ErrToolKeyNotFound
 	}
 	return val, nil
 }
@@ -132,7 +124,7 @@ func (r *ToolRuntime) SetState(key string, value interface{}) error {
 // GetFromStore retrieves data from long-term store
 func (r *ToolRuntime) GetFromStore(namespace []string, key string) (interface{}, error) {
 	if !r.Config.EnableStoreAccess {
-		return nil, ErrStoreAccessDenied
+		return nil, agentErrors.ErrStoreAccessDenied
 	}
 
 	// Check namespace restrictions
@@ -157,7 +149,7 @@ func (r *ToolRuntime) GetFromStore(namespace []string, key string) (interface{},
 		return nil, err
 	}
 	if val == nil {
-		return nil, ErrValueNotFound
+		return nil, agentErrors.ErrToolValueNotFound
 	}
 	return val.Value, nil
 }
@@ -443,7 +435,7 @@ func (t *SavePreferenceTool) ExecuteWithRuntime(ctx context.Context, input *inte
 
 	// 只有明确缺失才允许创建，读取故障不能变成整条记录的覆盖。
 	existingPrefs, err := runtime.GetFromStore([]string{"preferences"}, userID.(string))
-	if err != nil && !errors.Is(err, ErrValueNotFound) {
+	if err != nil && !errors.Is(err, agentErrors.ErrToolValueNotFound) {
 		return nil, agentErrors.Wrap(err, agentErrors.CodeStoreSerialization, "读取偏好失败").
 			WithComponent("save_preference_tool").
 			WithOperation("get_from_store")

@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"fmt"
 	"strings"
 	"sync"
 
@@ -25,11 +24,16 @@ func NewRegistry() *Registry {
 // Register adds a tool to the registry
 func (r *Registry) Register(tool interfaces.Tool) error {
 	if r == nil || nilTool(tool) {
-		return fmt.Errorf("registry and non-nil tool are required")
+		return agentErrors.Newf(agentErrors.CodeInvalidConfig, "registry and non-nil tool are required").
+			WithComponent("registry").
+			WithOperation("register")
 	}
 	name := tool.Name()
 	if name == "" || strings.TrimSpace(name) != name {
-		return fmt.Errorf("invalid tool name")
+		return agentErrors.Newf(agentErrors.CodeToolValidation, "invalid tool name").
+			WithComponent("registry").
+			WithOperation("register").
+			WithContext("tool_name", name)
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()

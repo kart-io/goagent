@@ -12,14 +12,11 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/codec/json"
-
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 const resultVersion = "goagent-context-result-v1"
-
-// ErrReleased 表示该运行键已经 Release，迟到的读写被拒绝。
-var ErrReleased = errors.New("结果作用域已释放，拒绝读写")
 
 // Ref identifies one immutable result within a host-owned run.
 type Ref struct{ RunKey, Key, SHA256, Version string }
@@ -60,7 +57,7 @@ func validRef(ctx context.Context, ref Ref) error {
 		return err
 	}
 	if ref.RunKey == "" || ref.RunKey != ResultScope(ctx) || ref.Key == "" || len(ref.SHA256) != 64 || ref.Version != resultVersion {
-		return fmt.Errorf("invalid or out-of-scope result reference")
+		return agentErrors.Newf(agentErrors.CodeAccessDenied, "invalid or out-of-scope result reference").WithComponent("builder/contextpolicy").WithOperation("valid_ref")
 	}
 	return nil
 }
@@ -89,7 +86,7 @@ func NewMemoryStore() ResultStore {
 // 拒绝读写的保证由底层实现给出（FileStore 覆盖本机所有进程）；否则证据写入底层 store 本身，Release 与 PruneReleased 返回错误。
 func NewDurableResultStore(store durable.Store) (ResultStore, error) {
 	if store == nil {
-		return nil, fmt.Errorf("result store required")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "result store required").WithComponent("builder/contextpolicy").WithOperation("new_durable_result_store")
 	}
 	return &resultStore{store: store}, nil
 }
@@ -114,21 +111,24 @@ func load(ctx context.Context, store durable.Store, id string) (saved entry, fou
 		return saved, false, err
 	}
 	if snap == nil || snap.RunID != id || snap.Version != resultVersion || json.Unmarshal(snap.Data, &saved) != nil {
-		return saved, false, fmt.Errorf("invalid context result record")
+		return saved, false, agentErrors.Newf(agentErrors.CodeStateValidation, "invalid context result record").WithComponent("builder/contextpolicy").WithOperation("load")
 	}
 	return saved, true, nil
 }
 
 // releasedError 把底层作用域的 ErrScopeRemoved 转为 ErrReleased，并保留原错误链。
 func releasedError(err error) error {
-	if errors.Is(err, durable.ErrScopeRemoved) {
-		return fmt.Errorf("%w: %w", ErrReleased, err)
+	if errors.Is(err, agentErrors.ErrScopeRemoved) {
+		return fmt.Errorf("%w: %w", agentErrors.ErrResultScopeReleased, err)
 	}
 	return err
 }
 func verify(saved entry, ref Ref) error {
-	if saved.Ref != ref || digest(saved.Data) != ref.SHA256 {
-		return fmt.Errorf("result identity or content conflict")
+	if digest(saved.Data) != saved.Ref.SHA256 {
+		return agentErrors.Newf(agentErrors.CodeStateValidation, "result identity or content conflict").WithComponent("builder/contextpolicy").WithOperation("verify")
+	}
+	if saved.Ref != ref {
+		return agentErrors.Newf(agentErrors.CodeConflict, "result identity or content conflict").WithComponent("builder/contextpolicy").WithOperation("verify")
 	}
 	return nil
 }
@@ -138,7 +138,7 @@ func (s *resultStore) PutIfAbsent(ctx context.Context, ref Ref, data []byte) (er
 		return err
 	}
 	if digest(data) != ref.SHA256 {
-		return fmt.Errorf("result content digest mismatch")
+		return agentErrors.Newf(agentErrors.CodeInvalidInput, "result content digest mismatch").WithComponent("builder/contextpolicy").WithOperation("put_if_absent")
 	}
 	id := resultID(ref)
 	saved := entry{Ref: ref, Data: append([]byte(nil), data...)}
@@ -146,7 +146,7 @@ func (s *resultStore) PutIfAbsent(ctx context.Context, ref Ref, data []byte) (er
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		if _, ok := s.released[ref.RunKey]; ok {
-			return ErrReleased
+			return agentErrors.ErrResultScopeReleased
 		}
 		if old, ok := s.memory[ref.RunKey][id]; ok {
 			return verify(old, ref)
@@ -194,7 +194,7 @@ func (s *resultStore) Get(ctx context.Context, ref Ref) ([]byte, error) {
 		saved, found = s.memory[ref.RunKey][id]
 		s.mu.Unlock()
 		if released {
-			return nil, ErrReleased
+			return nil, agentErrors.ErrResultScopeReleased
 		}
 	} else {
 		var err error
@@ -214,7 +214,7 @@ func (s *resultStore) Get(ctx context.Context, ref Ref) ([]byte, error) {
 // Release 实现 ResultStore。
 func (s *resultStore) Release(ctx context.Context, run string) error {
 	if run == "" {
-		return fmt.Errorf("result run key required")
+		return agentErrors.Newf(agentErrors.CodeInvalidInput, "result run key required").WithComponent("builder/contextpolicy").WithOperation("release")
 	}
 	if s.store == nil {
 		s.mu.Lock()
@@ -242,7 +242,7 @@ func (s *resultStore) PruneReleased(ctx context.Context, olderThan time.Duration
 		return scoped.PruneRemoved(ctx, olderThan)
 	}
 	if olderThan < 0 {
-		return fmt.Errorf("墓碑保留时长不能为负：%v", olderThan)
+		return agentErrors.Newf(agentErrors.CodeInvalidInput, "墓碑保留时长不能为负：%v", olderThan).WithComponent("builder/contextpolicy").WithOperation("prune_released")
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -261,7 +261,7 @@ func (s *resultStore) PruneReleased(ctx context.Context, olderThan time.Duration
 func (s *resultStore) scoped() (durable.Scoped, error) {
 	scoped, ok := s.store.(durable.Scoped)
 	if !ok {
-		return nil, fmt.Errorf("持久结果存储不支持释放：底层 store 未实现 durable.Scoped")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "持久结果存储不支持释放：底层 store 未实现 durable.Scoped").WithComponent("builder/contextpolicy").WithOperation("scoped")
 	}
 	return scoped, nil
 }

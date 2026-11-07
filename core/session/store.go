@@ -2,24 +2,14 @@ package session
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"slices"
 	"sort"
 	"sync"
 	"time"
 
-	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
-
-// ErrConflict 表示 Append 的期望序号不是会话当前的最后序号：会话已被他人写入，调用方须重新读取后决定。
-var ErrConflict = errors.New("会话日志已被并发写入")
-
-// ErrNotFound 表示会话不存在。
-var ErrNotFound = errors.New("会话不存在")
-
-// ErrExists 表示 Fork 的目标会话已存在。
-var ErrExists = errors.New("会话已存在")
 
 // Store 保存会话日志。实现须满足：
 //   - Append 原子地追加全部事件或都不追加，按 expected 做比较并交换（CAS）：expected 为 0 时会话须不存在或为空，
@@ -56,7 +46,7 @@ func ValidateBatches(batches []AppendBatch) error {
 			return err
 		}
 		if seen[batch.ID] {
-			return fmt.Errorf("批量追加的会话重复：%q", batch.ID)
+			return agentErrors.Newf(agentErrors.CodeInvalidInput, "批量追加的会话重复：%q", batch.ID).WithComponent("session_store").WithOperation("validate_batches")
 		}
 		seen[batch.ID] = true
 	}
@@ -65,7 +55,7 @@ func ValidateBatches(batches []AppendBatch) error {
 
 func validID(id string) error {
 	if id == "" {
-		return errors.New("会话 ID 不能为空")
+		return agentErrors.New(agentErrors.CodeInvalidInput, "会话 ID 不能为空").WithComponent("session").WithOperation("validate_id")
 	}
 	return nil
 }
@@ -114,7 +104,7 @@ func (s *MemoryStore) Append(ctx context.Context, id string, expected int64, eve
 	defer s.mu.Unlock()
 	cur := s.sessions[id]
 	if LastSeq(cur) != expected {
-		return 0, fmt.Errorf("%w：期望序号 %d，当前 %d", ErrConflict, expected, LastSeq(cur))
+		return 0, fmt.Errorf("%w：期望序号 %d，当前 %d", agentErrors.ErrSessionConflict, expected, LastSeq(cur))
 	}
 	s.sessions[id] = append(cur, assign(events, expected)...)
 	return expected + int64(len(events)), nil
@@ -132,7 +122,7 @@ func (s *MemoryStore) AppendAll(ctx context.Context, batches ...AppendBatch) ([]
 	defer s.mu.Unlock()
 	for _, batch := range batches {
 		if cur := LastSeq(s.sessions[batch.ID]); cur != batch.Expected {
-			return nil, fmt.Errorf("%w：会话 %q 期望序号 %d，当前 %d", ErrConflict, batch.ID, batch.Expected, cur)
+			return nil, fmt.Errorf("%w：会话 %q 期望序号 %d，当前 %d", agentErrors.ErrSessionConflict, batch.ID, batch.Expected, cur)
 		}
 	}
 	lasts := make([]int64, len(batches))
@@ -153,7 +143,7 @@ func (s *MemoryStore) Read(ctx context.Context, id string, after int64) ([]Event
 	defer s.mu.Unlock()
 	events, ok := s.sessions[id]
 	if !ok {
-		return nil, ErrNotFound
+		return nil, agentErrors.ErrSessionNotFound
 	}
 	n := sort.Search(len(events), func(i int) bool { return events[i].Seq > after })
 	return slices.Clone(events[n:]), nil
@@ -181,10 +171,10 @@ func (s *MemoryStore) Fork(ctx context.Context, src, dst string, upTo int64) err
 	defer s.mu.Unlock()
 	events, ok := s.sessions[src]
 	if !ok {
-		return ErrNotFound
+		return agentErrors.ErrSessionNotFound
 	}
 	if _, ok := s.sessions[dst]; ok {
-		return ErrExists
+		return agentErrors.ErrSessionExists
 	}
 	s.sessions[dst] = slices.Clone(forkRange(events, upTo))
 	return nil
@@ -214,7 +204,7 @@ func (s *MemoryStore) Lock(ctx context.Context, id, name string) (func() error, 
 		select {
 		case <-held:
 		case <-ctx.Done():
-			return nil, fmt.Errorf("%w: %w", durable.ErrLockUnavailable, ctx.Err())
+			return nil, fmt.Errorf("%w: %w", agentErrors.ErrLockUnavailable, ctx.Err())
 		}
 	}
 }

@@ -7,9 +7,9 @@ import (
 	"strings"
 	"sync"
 
+	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
-	"github.com/kart-io/goagent/llm/constants"
 )
 
 var _ llm.ToolStreamClient = (*ScriptedClient)(nil)
@@ -83,7 +83,7 @@ func RequestContains(parts ...string) func(*llm.CompletionRequest) bool {
 	}
 }
 
-func (c *ScriptedClient) Provider() constants.Provider { return constants.ProviderCustom }
+func (c *ScriptedClient) Provider() shared.Provider { return shared.ProviderCustom }
 
 func (c *ScriptedClient) CompleteStream(ctx context.Context, req *llm.CompletionRequest) (<-chan *llm.StreamChunk, error) {
 	return c.CompleteToolsStream(ctx, req, nil)

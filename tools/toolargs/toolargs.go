@@ -13,6 +13,7 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 
 	"github.com/kart-io/goagent/codec/json"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // Parse 解析参数 JSON 文本，只接受对象（null 不算）。float64 能精确表示的数字解为 float64；
@@ -145,18 +146,27 @@ func checkExact(root, s *jsonschema.Schema, v any, path string) error {
 func checkNumber(s *jsonschema.Schema, n json.Number, path string) error {
 	x, ok := new(big.Rat).SetString(string(n))
 	if !ok {
-		return fmt.Errorf("validating %s: invalid number %s", path, n)
+		return agentErrors.Newf(agentErrors.CodeToolValidation, "validating %s: invalid number %s", path, n).
+			WithComponent("toolargs").
+			WithOperation("validate").
+			WithContext("path", path)
 	}
 	types := s.Types
 	if s.Type != "" {
 		types = []string{s.Type}
 	}
 	if slices.Contains(types, "integer") && !slices.Contains(types, "number") && !x.IsInt() {
-		return fmt.Errorf("validating %s: %s is not an integer", path, n)
+		return agentErrors.Newf(agentErrors.CodeToolValidation, "validating %s: %s is not an integer", path, n).
+			WithComponent("toolargs").
+			WithOperation("validate").
+			WithContext("path", path)
 	}
 	bound := func(f *float64, bad func(int) bool, name string) error {
 		if f != nil && bad(x.Cmp(schemaRat(*f))) {
-			return fmt.Errorf("validating %s: %s violates %s %v", path, n, name, *f)
+			return agentErrors.Newf(agentErrors.CodeToolValidation, "validating %s: %s violates %s %v", path, n, name, *f).
+				WithComponent("toolargs").
+				WithOperation("validate").
+				WithContext("path", path)
 		}
 		return nil
 	}
@@ -174,7 +184,10 @@ func checkNumber(s *jsonschema.Schema, n json.Number, path string) error {
 	}
 	if s.MultipleOf != nil {
 		if m := schemaRat(*s.MultipleOf); m.Sign() != 0 && !new(big.Rat).Quo(x, m).IsInt() {
-			return fmt.Errorf("validating %s: %s is not a multiple of %v", path, n, *s.MultipleOf)
+			return agentErrors.Newf(agentErrors.CodeToolValidation, "validating %s: %s is not a multiple of %v", path, n, *s.MultipleOf).
+				WithComponent("toolargs").
+				WithOperation("validate").
+				WithContext("path", path)
 		}
 	}
 	return nil
@@ -230,7 +243,10 @@ func usesOnly(s *jsonschema.Schema, allowed map[string]bool, extra ...string) bo
 }
 
 func unchecked(path string) error {
-	return fmt.Errorf("validating %s: number exceeds float64 precision and the schema here cannot be checked exactly", path)
+	return agentErrors.Newf(agentErrors.CodeToolValidation, "validating %s: number exceeds float64 precision and the schema here cannot be checked exactly", path).
+		WithComponent("toolargs").
+		WithOperation("validate").
+		WithContext("path", path)
 }
 
 // restore 把 float64 能精确表示的 json.Number 换回 float64；数字超出 float64 范围时返回 false。
@@ -267,7 +283,10 @@ func toFloat(v any, path string) (any, error) {
 	case json.Number:
 		f, err := t.Float64()
 		if err != nil {
-			return nil, fmt.Errorf("validating %s: %s is not a finite float64 number", path, t)
+			return nil, agentErrors.Newf(agentErrors.CodeToolValidation, "validating %s: %s is not a finite float64 number", path, t).
+				WithComponent("toolargs").
+				WithOperation("validate").
+				WithContext("path", path)
 		}
 		return f, nil
 	case map[string]any:

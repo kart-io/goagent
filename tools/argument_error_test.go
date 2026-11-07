@@ -73,9 +73,9 @@ func TestArgumentErrorClassification(t *testing.T) {
 		"普通错误":               {errors.New("upstream"), "", false},
 		"nil":                {nil, "", false},
 		"空 Join":             {errors.Join(), "", false},
-		"原因为深度超限":            {&ArgumentError{Message: "x", Err: ErrNestedExecutionLimit}, "", false},
-		"原因为重入":              {&ArgumentError{Message: "x", Err: ErrDispatcherReentry}, "", false},
-		"原因为等待宿主":            {&ArgumentError{Message: "x", Err: ErrToolWorkflowWaiting}, "", false},
+		"原因为深度超限":            {&ArgumentError{Message: "x", Err: agentErrors.ErrNestedExecutionLimit}, "", false},
+		"原因为重入":              {&ArgumentError{Message: "x", Err: agentErrors.ErrDispatcherReentry}, "", false},
+		"原因为等待宿主":            {&ArgumentError{Message: "x", Err: agentErrors.ErrToolWorkflowWaiting}, "", false},
 		"与取消并列":              {errors.Join(a, context.Canceled), "", false},
 		"原因为超时":              {&ArgumentError{Message: "x", Err: context.DeadlineExceeded}, "", false},
 		"内层已定性":              {innerArg, "", false},
@@ -176,9 +176,9 @@ func TestDispatcherReturnsArgumentErrors(t *testing.T) {
 		for _, fatal := range []error{
 			errors.New("upstream"),
 			errors.Join(&ArgumentError{Message: "x"}, errors.New("cleanup failed")),
-			ErrNestedExecutionLimit,
-			ErrDispatcherReentry,
-			&ArgumentError{Message: "x", Err: ErrNestedExecutionLimit},
+			agentErrors.ErrNestedExecutionLimit,
+			agentErrors.ErrDispatcherReentry,
+			&ArgumentError{Message: "x", Err: agentErrors.ErrNestedExecutionLimit},
 		} {
 			out, err = invoke(fatal)
 			require.Nil(t, out, fatal)
@@ -426,7 +426,12 @@ func TestNestedDispatcherArgumentErrors(t *testing.T) {
 
 	out, err = outer.Invoke(ctx, ToolRequest{Name: "lookup", Input: in()})
 	require.Nil(t, out)
-	require.EqualError(t, err, `tool "lookup" failed: 未知 id`, "宿主路径致命且带上消息")
+	var detail *agentErrors.AgentError
+	require.ErrorAs(t, err, &detail)
+	require.Equal(t, agentErrors.CodeToolExecution, detail.Code)
+	require.Equal(t, `tool "lookup" failed: 未知 id`, detail.Message, "宿主路径致命且带上消息")
+	_, marked := detail.ModelArgumentMessage()
+	require.False(t, marked, "执行失败不被外层恢复为参数错误")
 
 	outer = argDispatcher(t, DispatchConfig{ReturnArgumentErrors: true}, inner(false))
 	out, err = modelCall(ctx, outer, "lookup", in())
@@ -512,13 +517,13 @@ func TestRunnableToolArgumentErrors(t *testing.T) {
 	}
 	out, err = invoke(deep, float64(-1))
 	require.Nil(t, out)
-	require.ErrorIs(t, err, ErrNestedExecutionLimit, "深度检查先于参数校验")
+	require.ErrorIs(t, err, agentErrors.ErrNestedExecutionLimit, "深度检查先于参数校验")
 }
 
 // 子会话返回的错误原样交给外层：组合工具不包装、errors.Is 可识别，外层模型路径不恢复。
 func TestRunnableChildErrorsSettled(t *testing.T) {
 	in := func() *interfaces.ToolInput { return &interfaces.ToolInput{Args: map[string]any{"n": float64(1)}} }
-	for _, cause := range []error{context.Canceled, ErrNestedExecutionLimit, &ArgumentError{Message: "内层"}, marked("内层")} {
+	for _, cause := range []error{context.Canceled, agentErrors.ErrNestedExecutionLimit, &ArgumentError{Message: "内层"}, marked("内层")} {
 		child := core.NewStreamRunnable(core.StreamModeFinal, func(context.Context, int, func(core.StreamChunk[int]) error) error {
 			return cause
 		})

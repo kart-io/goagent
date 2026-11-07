@@ -70,7 +70,7 @@ func (g *compiled[T]) run(ctx context.Context, state T, emit func(core.StreamChu
 				return fmt.Errorf("branch %q: %w", name, err)
 			}
 			if !branch.targets[target] {
-				return fmt.Errorf("branch %q selected undeclared destination %q", name, target)
+				return agentErrors.Newf(agentErrors.CodeInvalidOutput, "branch %q selected undeclared destination %q", name, target).WithComponent("workflow").WithOperation("run")
 			}
 		}
 		if target == END {
@@ -78,7 +78,7 @@ func (g *compiled[T]) run(ctx context.Context, state T, emit func(core.StreamChu
 		}
 		name = target
 	}
-	return fmt.Errorf("%w: limit %d", ErrMaxSteps, g.config.MaxSteps)
+	return fmt.Errorf("%w: limit %d", agentErrors.ErrWorkflowMaxSteps, g.config.MaxSteps)
 }
 
 // Node finalization is local: drain until close to detect late errors and
@@ -91,7 +91,7 @@ func consumeNode[I, O any](ctx context.Context, node core.Runnable[I, O], state 
 		return result, err
 	}
 	if chunks == nil {
-		return result, fmt.Errorf("node returned a nil stream")
+		return result, agentErrors.Newf(agentErrors.CodeInvalidOutput, "node returned a nil stream").WithComponent("workflow").WithOperation("consume_node")
 	}
 	// 节点在独立 goroutine 中运行，退出前必须等它结束，否则清理和副作用会发生在图返回之后。
 	// 因此节点须响应取消并关闭流；忽略取消的节点会阻塞图，直到它自行结束。
@@ -119,7 +119,7 @@ func consumeNode[I, O any](ctx context.Context, node core.Runnable[I, O], state 
 				return result, chunk.Error
 			}
 			if finished {
-				return result, fmt.Errorf("node emitted data after its final chunk")
+				return result, agentErrors.Newf(agentErrors.CodeInvalidOutput, "node emitted data after its final chunk").WithComponent("workflow").WithOperation("consume_node")
 			}
 			if chunk.Done {
 				result = chunk.Data

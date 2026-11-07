@@ -12,6 +12,7 @@ import (
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/tools"
@@ -145,7 +146,7 @@ func TestDurableTextFailureRetainsUsageAndStopsRetry(t *testing.T) {
 	require.NotNil(t, model.request)
 	model.request = nil
 	_, err = agent.AsRunnable().Invoke(ctx, "question")
-	require.ErrorIs(t, err, durable.ErrOperationAttention)
+	require.ErrorIs(t, err, agentErrors.ErrOperationAttention)
 	require.Nil(t, model.request, "no new request for persisted failure")
 	scoped, err := agent.scopeDurableExecution(ctx)
 	require.NoError(t, err)

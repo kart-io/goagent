@@ -10,17 +10,19 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/kart-io/goagent/codec/json"
-
 	"github.com/cloudwego/eino/adk"
 	"github.com/cloudwego/eino/components/model"
 	etool "github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
+
 	"github.com/kart-io/goagent/builder"
+	"github.com/kart-io/goagent/codec/json"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
-	"github.com/kart-io/goagent/llm/constants"
+
+	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/tools"
 	"github.com/kart-io/goagent/workflow"
 )
@@ -46,14 +48,14 @@ type counts struct{ model, tool atomic.Int64 }
 func (c *counts) reset() { c.model.Store(0); c.tool.Store(0) }
 func validateArgs(args map[string]any) error {
 	if len(args) != 1 || args["order_id"] != "DEMO-1001" {
-		return fmt.Errorf("wrong tool arguments: %v", args)
+		return agentErrors.Newf(agentErrors.CodeInvalidInput, "wrong tool arguments: %v", args).WithComponent("evaluation/frameworkbench").WithOperation("validate_args")
 	}
 	return nil
 }
 
 func NewRunner(framework, scenario string) (*Runner, error) {
 	if scenario != "graph_8" && scenario != "branch_loop_8" && scenario != "agent_tool" && scenario != "stream_64" {
-		return nil, fmt.Errorf("unknown scenario %q", scenario)
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidInput, "unknown scenario %q", scenario).WithComponent("evaluation/frameworkbench").WithOperation("new_runner")
 	}
 	switch framework {
 	case "goagent":
@@ -61,7 +63,7 @@ func NewRunner(framework, scenario string) (*Runner, error) {
 	case "eino":
 		return newEino(scenario)
 	}
-	return nil, fmt.Errorf("unknown framework %q", framework)
+	return nil, agentErrors.Newf(agentErrors.CodeInvalidInput, "unknown framework %q", framework).WithComponent("evaluation/frameworkbench").WithOperation("new_runner")
 }
 
 func newGoAgent(scenario string) (*Runner, error) {
@@ -164,13 +166,13 @@ type goModel struct {
 	scenario string
 }
 
-func (m *goModel) Provider() constants.Provider { return constants.ProviderOpenAI }
-func (m *goModel) IsAvailable() bool            { return true }
+func (m *goModel) Provider() shared.Provider { return shared.ProviderOpenAI }
+func (m *goModel) IsAvailable() bool         { return true }
 func (m *goModel) Complete(context.Context, *llm.CompletionRequest) (*llm.CompletionResponse, error) {
-	return nil, fmt.Errorf("unexpected nonstream model path")
+	return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "unexpected nonstream model path").WithComponent("evaluation/frameworkbench").WithOperation("complete")
 }
 func (m *goModel) Chat(context.Context, []llm.Message) (*llm.CompletionResponse, error) {
-	return nil, fmt.Errorf("unexpected chat path")
+	return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "unexpected chat path").WithComponent("evaluation/frameworkbench").WithOperation("chat")
 }
 func (m *goModel) CompleteStream(ctx context.Context, r *llm.CompletionRequest) (<-chan *llm.StreamChunk, error) {
 	return m.CompleteToolsStream(ctx, r, nil)
@@ -193,7 +195,7 @@ func (m *goModel) CompleteToolsStream(_ context.Context, r *llm.CompletionReques
 	if len(r.Messages) > 0 && r.Messages[len(r.Messages)-1].Role == "tool" {
 		last := r.Messages[len(r.Messages)-1]
 		if last.Content != "30" || last.ToolCallID != "call-1" {
-			return nil, fmt.Errorf("tool result not preserved: %+v", last)
+			return nil, agentErrors.Newf(agentErrors.CodeInvalidOutput, "tool result not preserved: %+v", last).WithComponent("evaluation/frameworkbench").WithOperation("complete_tools_stream")
 		}
 		ch <- &llm.StreamChunk{Delta: last.Content}
 		ch <- &llm.StreamChunk{Done: true, FinishReason: "stop", Usage: &llm.Usage{TotalTokens: 2}}
@@ -324,7 +326,7 @@ func (m *einoModel) Generate(_ context.Context, msg []*schema.Message, _ ...mode
 	if len(msg) > 0 && msg[len(msg)-1].Role == schema.Tool {
 		last := msg[len(msg)-1]
 		if last.Content != "30" || last.ToolCallID != "call-1" {
-			return nil, fmt.Errorf("tool result not preserved: %+v", last)
+			return nil, agentErrors.Newf(agentErrors.CodeInvalidOutput, "tool result not preserved: %+v", last).WithComponent("evaluation/frameworkbench").WithOperation("generate")
 		}
 		return &schema.Message{Role: schema.Assistant, Content: last.Content, ResponseMeta: &schema.ResponseMeta{FinishReason: "stop", Usage: &schema.TokenUsage{PromptTokens: 1, CompletionTokens: 1, TotalTokens: 2}}}, nil
 	}
@@ -333,7 +335,7 @@ func (m *einoModel) Generate(_ context.Context, msg []*schema.Message, _ ...mode
 func (m *einoModel) Stream(_ context.Context, _ []*schema.Message, _ ...model.Option) (*schema.StreamReader[*schema.Message], error) {
 	m.counts.model.Add(1)
 	if m.scenario != "stream_64" {
-		return nil, fmt.Errorf("unexpected stream")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "unexpected stream").WithComponent("evaluation/frameworkbench").WithOperation("stream")
 	}
 	parts := make([]*schema.Message, 64)
 	for i := range parts {
@@ -370,7 +372,7 @@ func Validate(scenario string, result Outcome) error {
 		want = Outcome{Answer: strings.Repeat("x", 64), ModelCalls: 1, Chunks: 64}
 	}
 	if result.Answer != want.Answer || result.ModelCalls != want.ModelCalls || result.ToolCalls != want.ToolCalls || result.Chunks != want.Chunks {
-		return fmt.Errorf("contract failure %s: got %+v want %+v", scenario, result, want)
+		return agentErrors.Newf(agentErrors.CodeInvalidOutput, "contract failure %s: got %+v want %+v", scenario, result, want).WithComponent("evaluation/frameworkbench").WithOperation("validate")
 	}
 	return nil
 }

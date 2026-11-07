@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 )
 
@@ -19,6 +20,14 @@ type ArgumentError struct {
 
 func (e *ArgumentError) Error() string { return e.Message }
 func (e *ArgumentError) Unwrap() error { return e.Err }
+
+// ErrorCode 使无底层原因的参数错误也能在宿主调用边界保留校验分类。
+func (e *ArgumentError) ErrorCode() agentErrors.ErrorCode {
+	if e == nil {
+		return agentErrors.CodeInternal
+	}
+	return agentErrors.CodeToolValidation
+}
 
 // settledSet 记录内层 Dispatcher 或组合工具已定性的参数错误节点。外层模型路径在调用工具前把它放进 ctx，
 // 内层返回错误时登记，错误值本身不变；外层只把未登记的节点当作本层模型的参数错误。
@@ -98,7 +107,7 @@ func argumentNode(err error) (string, bool) {
 // Join 只有每个分支都是参数错误才可恢复。
 func argumentErrorMessage(err error, settled *settledSet) (string, bool) {
 	if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) ||
-		errors.Is(err, ErrNestedExecutionLimit) || errors.Is(err, ErrDispatcherReentry) || errors.Is(err, ErrToolWorkflowWaiting) {
+		errors.Is(err, agentErrors.ErrNestedExecutionLimit) || errors.Is(err, agentErrors.ErrDispatcherReentry) || errors.Is(err, agentErrors.ErrToolWorkflowWaiting) {
 		return "", false
 	}
 	if message, ok := argumentNode(err); ok {

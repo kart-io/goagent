@@ -1,10 +1,12 @@
 package providers
 
 import (
-	"fmt"
-	"github.com/kart-io/goagent/llm"
-	"google.golang.org/genai"
 	"strings"
+
+	"google.golang.org/genai"
+
+	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/llm"
 )
 
 func (p *OpenAIProvider) reasoningEffort(req *llm.CompletionRequest) (string, error) {
@@ -19,7 +21,9 @@ func (p *OpenAIProvider) reasoningEffort(req *llm.CompletionRequest) (string, er
 		return "", err
 	}
 	if c.BudgetSet {
-		return "", fmt.Errorf("OpenAI-compatible requests do not support a thinking budget; use effort")
+		return "", agentErrors.Newf(agentErrors.CodeInvalidInput, "OpenAI-compatible requests do not support a thinking budget; use effort").
+			WithComponent("openai").
+			WithOperation("validate_reasoning")
 	}
 	return c.Effort, nil
 }
@@ -41,7 +45,10 @@ func (p *GeminiProvider) thinkingConfig(req *llm.CompletionRequest) (*genai.Thin
 		case "minimal", "low", "medium", "high":
 			cfg.ThinkingLevel = genai.ThinkingLevel(strings.ToUpper(c.Effort))
 		default:
-			return nil, fmt.Errorf("gemini does not support reasoning effort %q; use a supported level or thinking budget", c.Effort)
+			return nil, agentErrors.Newf(agentErrors.CodeInvalidInput, "gemini does not support reasoning effort %q; use a supported level or thinking budget", c.Effort).
+				WithComponent("gemini").
+				WithOperation("validate_reasoning").
+				WithContext("effort", c.Effort)
 		}
 	}
 	return cfg, nil

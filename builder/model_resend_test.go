@@ -7,6 +7,7 @@ import (
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/tools"
@@ -129,7 +130,7 @@ func TestModelResendStopsAtAttemptLimit(t *testing.T) {
 	}
 	*f.crash = false
 	_, err := agent.Invoke(f.ctx, "q")
-	require.ErrorIs(t, err, durable.ErrOperationAttention)
+	require.ErrorIs(t, err, agentErrors.ErrOperationAttention)
 	require.Equal(t, modelResendAttempts, model.calls)
 }
 
@@ -144,7 +145,7 @@ func TestModelResendRejectedByBudgetBeforeSend(t *testing.T) {
 	*f.crash = false
 
 	_, err = agent.Invoke(f.ctx, "q")
-	require.ErrorIs(t, err, budget.ErrBudgetExceeded)
+	require.ErrorIs(t, err, agentErrors.ErrModelBudgetExceeded)
 	require.Equal(t, 1, model.calls, "额度不足时不发请求")
 }
 
@@ -156,7 +157,7 @@ func TestModelResendSkipsOrdinaryFailure(t *testing.T) {
 	_, err := agent.Invoke(f.ctx, "q")
 	require.Error(t, err)
 	_, err = agent.Invoke(f.ctx, "q")
-	require.ErrorIs(t, err, durable.ErrOperationAttention)
+	require.ErrorIs(t, err, agentErrors.ErrOperationAttention)
 	require.Equal(t, 1, model.calls, "模型明确拒绝的请求不是中断")
 }
 
@@ -197,7 +198,7 @@ func TestModelResendIsNotInheritedByChildAgent(t *testing.T) {
 	require.ErrorContains(t, err, "crash")
 	*f.crash = false
 	_, err = child.AsRunnable().Invoke(ctx, "q")
-	require.ErrorIs(t, err, durable.ErrOperationAttention)
+	require.ErrorIs(t, err, agentErrors.ErrOperationAttention)
 	require.Equal(t, 1, model.calls)
 }
 
@@ -240,7 +241,7 @@ func TestModelResendInDurableToolLoop(t *testing.T) {
 			require.Equal(t, "好的", out.Result)
 			require.Equal(t, 3, model.calls)
 		} else {
-			require.ErrorIs(t, err, durable.ErrOperationAttention)
+			require.ErrorIs(t, err, agentErrors.ErrOperationAttention)
 			require.Equal(t, 2, model.calls)
 		}
 		require.Equal(t, 1, calls, "已完成的工具不重跑")

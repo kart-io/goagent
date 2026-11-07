@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- 格式化业务错误统一使用现有 `Newf`/专用构造器并补齐分类和组件，保留合法 `%w` 错误链；治理检查覆盖 `fmt` 导入别名及 `%%w` 转义。
+- 框架错误统一由 `errors` 包处理：清理68个历史哨兵，统一保留46个实际使用的对象，保持身份与文本并提供错误码；45处即时业务错误补齐分类及组件。旧领域错误入口删除，文案改为 `Message*`，已联动案例和扩展；详见错误处理迁移指南。
+- 顶层 `constants` 包按领域集中维护共享常量与默认值；错误码、错误分类及提示由 `errors` 包按领域维护；共享协议常量的旧转发入口全部删除，直接使用 `constants`；`Provider` 具名类型及8个typed枚举一并迁入中央，精确值及其余常量类型保持不变。见[常量迁移指南](docs/guides/CONSTANTS_MIGRATION.md)；错误入口迁移到 `errors`，见错误处理迁移指南。导入检查约束常量包只依赖标准库。
 - MiniMax 国内 Anthropic 有界回归入口与每周验证矩阵：最多三个请求、一次合成工具效果，验证精确参数、回执纠正及零新增请求重放，不生成报告文件。
 - `scripts/stabilitysoak`：可配置时长的离线混合长稳验证，默认24小时；验证治理、会话、恢复、审批和取消，检查资源采样门槛并提供仅本机可读的内存状态。
 - `durable.WithReplayOnly`：`Do` 仅回放已完成记录，缺记录或未完成时返回 `ErrReplayOnly`，不执行或核对新效果。

@@ -1,8 +1,8 @@
 package common
 
 import (
-	"fmt"
 	"github.com/kart-io/goagent/core/usage"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
 )
 
@@ -22,7 +22,10 @@ func (b *BaseProvider) ResolveReasoning(req *llm.CompletionRequest) *usage.Reaso
 // RejectReasoning is used by providers without an implementation for controls.
 func (b *BaseProvider) RejectReasoning(req *llm.CompletionRequest) error {
 	if b.ResolveReasoning(req) != nil {
-		return fmt.Errorf("provider %s does not support explicit reasoning configuration", b.Config.Provider)
+		return agentErrors.Newf(agentErrors.CodeInvalidConfig, "provider %s does not support explicit reasoning configuration", b.Config.Provider).
+			WithComponent("llm").
+			WithOperation("validate_reasoning").
+			WithContext("provider", b.Config.Provider)
 	}
 	return nil
 }

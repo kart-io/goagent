@@ -12,11 +12,8 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/codec/json"
-
 	agentErrors "github.com/kart-io/goagent/errors"
 )
-
-var ErrApprovalRequired = errors.New("durable step requires approval")
 
 // Step functions must use Key to deduplicate external side effects. A crash
 // after an effect but before its checkpoint can repeat the SAME key on restart.
@@ -73,25 +70,15 @@ func ValidateWrites(writes []Write) error {
 	seen := make(map[string]bool, len(writes))
 	for _, write := range writes {
 		if write.ID == "" || write.Snapshot == nil {
-			return fmt.Errorf("批量写入需要 ID 和快照")
+			return agentErrors.Newf(agentErrors.CodeInvalidInput, "批量写入需要 ID 和快照").WithComponent("durable_runner").WithOperation("validate_writes")
 		}
 		if seen[write.ID] {
-			return fmt.Errorf("批量写入的 ID 重复：%q", write.ID)
+			return agentErrors.Newf(agentErrors.CodeInvalidInput, "批量写入的 ID 重复：%q", write.ID).WithComponent("durable_runner").WithOperation("validate_writes")
 		}
 		seen[write.ID] = true
 	}
 	return nil
 }
-
-// ErrLockUnavailable 表示 ctx 结束前未能获得锁：运行锁通常是其他持有者正在执行同一运行，
-// 作用域相关的操作也可能在等待作用域的删除或写入结束。
-var ErrLockUnavailable = errors.New("持久运行锁不可用")
-
-// ErrLeaseLost 表示写入时调用方已不再持有该 ID 的锁（如租约过期后被其他实例接管），写入被拒绝。
-var ErrLeaseLost = errors.New("持久运行锁已失效，拒绝写入")
-
-// ErrScopeRemoved 表示作用域已被 RemoveScope 删除，不再接受读写。
-var ErrScopeRemoved = errors.New("持久作用域已删除，拒绝读写")
 
 // Scoped 是 Store 可选的分区能力：Scope 返回独立命名空间（按需创建，只读不产生文件），
 // RemoveScope 整体删除该命名空间并留下墓碑，使其拒绝读写（Lock/Save/Load 返回 ErrScopeRemoved），作用域不存在时同样生效；
@@ -120,7 +107,7 @@ type Runner struct {
 // is an idempotency key, NOT an authentication secret.
 func (r *Runner) Run(ctx context.Context, id string, initial json.RawMessage, approvalKey string) (snapshot *Snapshot, err error) {
 	if id == "" || r.Version == "" || r.Store == nil {
-		return nil, fmt.Errorf("run ID, version and store are required")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "run ID, version and store are required").WithComponent("durable_runner").WithOperation("run")
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -129,7 +116,7 @@ func (r *Runner) Run(ctx context.Context, id string, initial json.RawMessage, ap
 	descriptor := r.Version
 	for _, step := range r.Steps {
 		if step.Name == "" || names[step.Name] || step.Run == nil {
-			return nil, fmt.Errorf("steps require unique names and functions")
+			return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "steps require unique names and functions").WithComponent("durable_runner").WithOperation("run")
 		}
 		names[step.Name] = true
 		descriptor += fmt.Sprintf("\x00%s:%t", step.Name, step.RequireApproval)
@@ -147,13 +134,13 @@ func (r *Runner) Run(ctx context.Context, id string, initial json.RawMessage, ap
 	snapshot, err = r.Store.Load(ctx, id)
 	if errors.Is(err, os.ErrNotExist) {
 		if approvalKey != "" {
-			return nil, fmt.Errorf("cannot approve a run that does not exist")
+			return nil, agentErrors.Newf(agentErrors.CodeInvalidInput, "cannot approve a run that does not exist").WithComponent("durable_runner").WithOperation("run")
 		}
 		if len(initial) == 0 {
 			initial = json.RawMessage(`null`)
 		}
 		if !json.Valid(initial) {
-			return nil, fmt.Errorf("initial data must be valid JSON")
+			return nil, agentErrors.Newf(agentErrors.CodeInvalidInput, "initial data must be valid JSON").WithComponent("durable_runner").WithOperation("run")
 		}
 		snapshot = &Snapshot{Version: r.Version, Plan: plan, RunID: id, Data: append(json.RawMessage(nil), initial...)}
 		if err = r.Store.Save(ctx, id, snapshot); err != nil {
@@ -163,10 +150,10 @@ func (r *Runner) Run(ctx context.Context, id string, initial json.RawMessage, ap
 		return nil, err
 	}
 	if snapshot.Plan != plan || snapshot.Version != r.Version || snapshot.RunID != id || snapshot.Next < 0 || snapshot.Next > len(r.Steps) || !json.Valid(snapshot.Data) {
-		return nil, fmt.Errorf("checkpoint does not match this versioned plan or is corrupt")
+		return nil, agentErrors.Newf(agentErrors.CodeStateValidation, "checkpoint does not match this versioned plan or is corrupt").WithComponent("durable_runner").WithOperation("run")
 	}
 	if approvalKey != "" && (!snapshot.Waiting || snapshot.Key != approvalKey) {
-		return snapshot, fmt.Errorf("approval does not match waiting step")
+		return snapshot, agentErrors.Newf(agentErrors.CodeInvalidInput, "approval does not match waiting step").WithComponent("durable_runner").WithOperation("run")
 	}
 	if approvalKey != "" && r.BeforeApprove != nil {
 		if err = r.checkBeforeApprove(ctx, id, snapshot); err != nil {
@@ -189,7 +176,7 @@ func (r *Runner) Run(ctx context.Context, id string, initial json.RawMessage, ap
 				if err = r.Store.Save(ctx, id, snapshot); err != nil {
 					return snapshot, err
 				}
-				return snapshot, ErrApprovalRequired
+				return snapshot, agentErrors.ErrApprovalRequired
 			}
 		}
 		// Persist intent before execution. On a failed/ambiguous effect this exact
@@ -202,7 +189,7 @@ func (r *Runner) Run(ctx context.Context, id string, initial json.RawMessage, ap
 			return snapshot, e
 		}
 		if !json.Valid(output) {
-			return snapshot, fmt.Errorf("step %s returned invalid JSON", step.Name)
+			return snapshot, agentErrors.Newf(agentErrors.CodeInvalidOutput, "step %s returned invalid JSON", step.Name).WithComponent("durable_runner").WithOperation("run")
 		}
 		next := *snapshot
 		next.Data = append(json.RawMessage(nil), output...)

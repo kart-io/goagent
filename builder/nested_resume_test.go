@@ -11,6 +11,7 @@ import (
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/tools"
@@ -76,7 +77,7 @@ func dispatcherFor(t *testing.T, ts ...interfaces.Tool) *tools.Dispatcher {
 
 func requireWaiting(t *testing.T, err error) (*durable.WaitError, workflow.ChildContinuation) {
 	t.Helper()
-	require.ErrorIs(t, err, ErrWaiting)
+	require.ErrorIs(t, err, agentErrors.ErrAgentWaiting)
 	var waiting *WaitingError
 	require.True(t, errors.As(err, &waiting))
 	require.Len(t, waiting.Waits, 1)
@@ -270,12 +271,12 @@ func TestChildGraphInNonResumableToolFailsBeforeRunning(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = agent.AsRunnable().Invoke(ctx, "退款 D4")
-	require.ErrorIs(t, err, durable.ErrWaitNotResumable)
-	require.NotErrorIs(t, err, ErrWaiting)
+	require.ErrorIs(t, err, agentErrors.ErrWaitNotResumable)
+	require.NotErrorIs(t, err, agentErrors.ErrAgentWaiting)
 	require.Zero(t, checked, "子图一个节点都没有执行")
 
 	_, err = agent.AsRunnable().Invoke(durable.WithResume(ctx, "any", "key"), "退款 D4")
-	require.ErrorIs(t, err, durable.ErrOperationAttention, "失败记录交给宿主处理，而不是一直返回等待")
+	require.ErrorIs(t, err, agentErrors.ErrOperationAttention, "失败记录交给宿主处理，而不是一直返回等待")
 	require.Len(t, model.requests, 1)
 }
 

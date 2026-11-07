@@ -101,11 +101,11 @@ func TestAwaitInputAcceptsNullWithoutValidator(t *testing.T) {
 
 func TestAwaitInputRequiresJournalAndWaitableContext(t *testing.T) {
 	_, err := AwaitInput(AllowInterrupt(context.Background()), "amount", amountInfo, nil)
-	require.ErrorIs(t, err, ErrInterruptNotDurable)
+	require.ErrorIs(t, err, agentErrors.ErrInterruptNotDurable)
 
 	ctx := operationContext(t)
 	_, err = AwaitInput(ctx, "amount", amountInfo, nil)
-	require.ErrorIs(t, err, ErrWaitNotResumable)
+	require.ErrorIs(t, err, agentErrors.ErrWaitNotResumable)
 	_, err = InspectOperation(ctx, "interrupt/amount")
 	require.ErrorIs(t, err, os.ErrNotExist, "不可等待时不能写记录")
 
@@ -115,7 +115,7 @@ func TestAwaitInputRequiresJournalAndWaitableContext(t *testing.T) {
 		_, e := AwaitInput(ctx, "amount", amountInfo, nil)
 		return nil, e
 	})
-	require.ErrorIs(t, err, ErrWaitNotResumable)
+	require.ErrorIs(t, err, agentErrors.ErrWaitNotResumable)
 	_, err = InspectOperation(WithExecutionKey(host, ChildKey("node-key", "plain")), "interrupt/amount")
 	require.ErrorIs(t, err, os.ErrNotExist)
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/workflow"
 	"github.com/stretchr/testify/require"
 )
@@ -65,7 +66,7 @@ func TestDurableParallelResumeAndMergeFailure(t *testing.T) {
 	run, err := g.CompileDurable(ctx, cfg)
 	require.NoError(t, err)
 	wait, err := run.Run(ctx, "parallel", 10, "")
-	require.ErrorIs(t, err, durable.ErrApprovalRequired)
+	require.ErrorIs(t, err, agentErrors.ErrApprovalRequired)
 	failed, err := run.Run(ctx, "parallel", 999, wait.Key)
 	require.ErrorContains(t, err, "branch unavailable")
 	require.Equal(t, 10, failed.State)

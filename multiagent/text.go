@@ -2,14 +2,13 @@ package multiagent
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"slices"
 	"strings"
 
-	"github.com/kart-io/goagent/codec/json"
-
 	"github.com/kart-io/goagent/builder"
+	"github.com/kart-io/goagent/codec/json"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // Turn 是文本接力中的一轮：执行该轮的 Step 名与其输出。
@@ -51,17 +50,17 @@ func TextStep(name string, agent AgentFactory, opts ...TextOption) (Step[Convers
 	var cfg textConfig
 	for _, opt := range opts {
 		if opt == nil {
-			return Step[Conversation]{}, fmt.Errorf("TextStep %q 收到 nil 选项", name)
+			return Step[Conversation]{}, agentErrors.Newf(agentErrors.CodeInvalidConfig, "TextStep %q 收到 nil 选项", name).WithComponent("multiagent").WithOperation("text_step")
 		}
 		opt(&cfg)
 	}
 	switch {
 	case cfg.renderSet && cfg.lastSet:
-		return Step[Conversation]{}, fmt.Errorf("TextStep %q 不能同时使用 WithRender 与 WithLastTurns", name)
+		return Step[Conversation]{}, agentErrors.Newf(agentErrors.CodeInvalidConfig, "TextStep %q 不能同时使用 WithRender 与 WithLastTurns", name).WithComponent("multiagent").WithOperation("text_step")
 	case cfg.renderSet && cfg.render == nil:
-		return Step[Conversation]{}, fmt.Errorf("TextStep %q 的 WithRender 需要非 nil 函数", name)
+		return Step[Conversation]{}, agentErrors.Newf(agentErrors.CodeInvalidConfig, "TextStep %q 的 WithRender 需要非 nil 函数", name).WithComponent("multiagent").WithOperation("text_step")
 	case cfg.lastSet && cfg.lastTurns <= 0:
-		return Step[Conversation]{}, fmt.Errorf("TextStep %q 的 WithLastTurns 需要大于 0 的轮数", name)
+		return Step[Conversation]{}, agentErrors.Newf(agentErrors.CodeInvalidConfig, "TextStep %q 的 WithLastTurns 需要大于 0 的轮数", name).WithComponent("multiagent").WithOperation("text_step")
 	}
 	render := cfg.render
 	if render == nil {
@@ -121,7 +120,7 @@ func MergeTurns(_ context.Context, base Conversation, branches []Conversation) (
 	n := len(base.Turns)
 	for i, b := range branches {
 		if len(b.Turns) < n || !slices.Equal(b.Turns[:n], base.Turns) {
-			return Conversation{}, fmt.Errorf("第 %d 个分支的记录不以合并前的记录为前缀", i+1)
+			return Conversation{}, agentErrors.Newf(agentErrors.CodeInvalidOutput, "第 %d 个分支的记录不以合并前的记录为前缀", i+1).WithComponent("multiagent").WithOperation("merge_turns")
 		}
 		out.Turns = append(out.Turns, b.Turns[n:]...)
 	}
@@ -132,27 +131,27 @@ func MergeTurns(_ context.Context, base Conversation, branches []Conversation) (
 // 必须恰好等于某个成员名或 Finish；记录为空、首行为空或不匹配时返回包装 ErrInvalidRoute 的错误，不做模糊匹配。
 func TextNext(members ...Step[Conversation]) (func(context.Context, Conversation) (string, error), error) {
 	if len(members) == 0 {
-		return nil, errors.New("TextNext 需要至少一个成员")
+		return nil, agentErrors.NewInvalidConfigError("multiagent", "members", "TextNext 需要至少一个成员")
 	}
 	names := make(map[string]bool, len(members))
 	for _, m := range members {
 		n := m.Name
 		if n == "" || strings.TrimSpace(n) != n || strings.ContainsAny(n, "\r\n") || n == Finish || names[n] {
-			return nil, fmt.Errorf("TextNext 的成员名 %q 必须非空、单行、不重复且不等于 %s", n, Finish)
+			return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "TextNext 的成员名 %q 必须非空、单行、不重复且不等于 %s", n, Finish).WithComponent("multiagent").WithOperation("text_next")
 		}
 		names[n] = true
 	}
 	return func(_ context.Context, c Conversation) (string, error) {
 		if len(c.Turns) == 0 {
-			return "", fmt.Errorf("%w：记录为空", ErrInvalidRoute)
+			return "", fmt.Errorf("%w：记录为空", agentErrors.ErrInvalidRoute)
 		}
 		line, _, _ := strings.Cut(c.Turns[len(c.Turns)-1].Output, "\n")
 		line = strings.TrimSpace(line)
 		if line == "" {
-			return "", fmt.Errorf("%w：最后一轮输出的首行为空", ErrInvalidRoute)
+			return "", fmt.Errorf("%w：最后一轮输出的首行为空", agentErrors.ErrInvalidRoute)
 		}
 		if line != Finish && !names[line] {
-			return "", fmt.Errorf("%w：%q 不是成员名或 %s", ErrInvalidRoute, line, Finish)
+			return "", fmt.Errorf("%w：%q 不是成员名或 %s", agentErrors.ErrInvalidRoute, line, Finish)
 		}
 		return line, nil
 	}, nil

@@ -2,8 +2,10 @@ package evaluation
 
 import (
 	"context"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
-	"github.com/kart-io/goagent/llm/constants"
+
+	shared "github.com/kart-io/goagent/constants"
 	"github.com/stretchr/testify/require"
 	"testing"
 )
@@ -20,7 +22,7 @@ func (m *budgetMock) CompleteStream(ctx context.Context, r *llm.CompletionReques
 	close(ch)
 	return ch, nil
 }
-func (m *budgetMock) Provider() constants.Provider { return constants.ProviderCustom }
+func (m *budgetMock) Provider() shared.Provider { return shared.ProviderCustom }
 
 func TestBudgetStopsCallsAndMeasuresActualUsage(t *testing.T) {
 	m := &budgetMock{}
@@ -28,7 +30,7 @@ func TestBudgetStopsCallsAndMeasuresActualUsage(t *testing.T) {
 	_, err := llm.Chat(context.Background(), c, nil)
 	require.NoError(t, err)
 	_, err = llm.Chat(context.Background(), c, nil)
-	require.ErrorIs(t, err, ErrBudgetExceeded)
+	require.ErrorIs(t, err, agentErrors.ErrEvaluationBudgetExceeded)
 	require.Len(t, m.requests, 1)
 	require.Equal(t, 50, m.requests[0].MaxTokens)
 	require.Equal(t, "same-model", m.requests[0].Model)

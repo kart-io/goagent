@@ -7,10 +7,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/interfaces"
 	agentllm "github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/common"
-	"github.com/kart-io/goagent/llm/constants"
 )
 
 // TestGemini_NewGeminiWithOptions_Success 测试成功创建 Gemini provider
@@ -33,7 +33,7 @@ func TestGemini_NewGeminiWithOptions_Success(t *testing.T) {
 // TestGemini_NewGeminiWithOptions_MissingAPIKey 测试缺少 API key 的错误
 func TestGemini_NewGeminiWithOptions_MissingAPIKey(t *testing.T) {
 	// Ensure environment variable doesn't interfere with test
-	t.Setenv(constants.EnvGeminiAPIKey, "")
+	t.Setenv(shared.EnvGeminiAPIKey, "")
 
 	provider, err := NewGeminiWithOptions(
 		agentllm.WithModel("gemini-pro"),
@@ -90,7 +90,7 @@ func TestGemini_Provider(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	assert.Equal(t, constants.ProviderGemini, provider.Provider())
+	assert.Equal(t, shared.ProviderGemini, provider.Provider())
 }
 
 // TestGemini_ProviderName 测试 ProviderName 方法
@@ -100,7 +100,7 @@ func TestGemini_ProviderName(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	assert.Equal(t, string(constants.ProviderGemini), provider.ProviderName())
+	assert.Equal(t, string(shared.ProviderGemini), provider.ProviderName())
 }
 
 // TestGemini_ModelName 测试 ModelName 方法
@@ -338,7 +338,7 @@ func TestGeminiStreaming_NewGeminiStreamingWithOptions(t *testing.T) {
 // TestGeminiStreaming_MissingAPIKey 测试流式 provider 缺少 API key
 func TestGeminiStreaming_MissingAPIKey(t *testing.T) {
 	// Ensure environment variable doesn't interfere with test
-	t.Setenv(constants.EnvGeminiAPIKey, "")
+	t.Setenv(shared.EnvGeminiAPIKey, "")
 
 	provider, err := NewGeminiStreamingWithOptions(
 		agentllm.WithModel("gemini-pro"),
@@ -357,7 +357,7 @@ func TestGeminiStreaming_Inheritance(t *testing.T) {
 	require.NoError(t, err)
 
 	// 测试继承的方法
-	assert.Equal(t, constants.ProviderGemini, provider.Provider())
+	assert.Equal(t, shared.ProviderGemini, provider.Provider())
 	assert.Equal(t, "gemini-pro", provider.ModelName())
 	assert.Greater(t, provider.MaxTokens(), 0)
 }
@@ -365,7 +365,7 @@ func TestGeminiStreaming_Inheritance(t *testing.T) {
 // TestGeminiStreaming_Configuration 测试流式 provider 配置
 func TestGeminiStreaming_Configuration(t *testing.T) {
 	config := &agentllm.LLMOptions{
-		Provider:    constants.ProviderGemini,
+		Provider:    shared.ProviderGemini,
 		APIKey:      "test-api-key",
 		Model:       "gemini-1.5-pro",
 		MaxTokens:   2048,
@@ -394,7 +394,7 @@ func TestGeminiStreaming_DefaultValues(t *testing.T) {
 // TestGeminiStreaming_NewGeminiStreaming_Deprecated 测试已弃用的构造函数
 func TestGeminiStreaming_NewGeminiStreaming_Deprecated(t *testing.T) {
 	config := &agentllm.LLMOptions{
-		Provider: constants.ProviderGemini,
+		Provider: shared.ProviderGemini,
 		APIKey:   "test-api-key",
 		Model:    "gemini-pro",
 	}
@@ -408,10 +408,10 @@ func TestGeminiStreaming_NewGeminiStreaming_Deprecated(t *testing.T) {
 // TestGeminiStreaming_NewGeminiStreaming_MissingAPIKey 测试已弃用构造函数缺少 API key
 func TestGeminiStreaming_NewGeminiStreaming_MissingAPIKey(t *testing.T) {
 	// Ensure environment variable doesn't interfere with test
-	t.Setenv(constants.EnvGeminiAPIKey, "")
+	t.Setenv(shared.EnvGeminiAPIKey, "")
 
 	config := &agentllm.LLMOptions{
-		Provider: constants.ProviderGemini,
+		Provider: shared.ProviderGemini,
 		Model:    "gemini-pro",
 	}
 

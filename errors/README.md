@@ -2,6 +2,23 @@
 
 本模块是 goagent 框架的统一错误处理系统，提供结构化、可追踪的错误管理机制。
 
+## 目录归属
+
+本包统一维护框架错误码、固定控制信号、错误文案与错误构造函数；协议字段和默认配置仍在 `constants/`。
+
+| 文件 | 管理内容 |
+|---|---|
+| `codes.go` | `ErrorCode` 及分类码 |
+| `sentinel.go`、`sentinels.go` | 不可变的 `SentinelError` 及唯一哨兵定义 |
+| `llm.go` | 实际使用的 `Message*` 错误文案及错误上下文字段 |
+| `errors.go`、`helpers.go` | `AgentError`、错误链、分类提取及业务构造器 |
+
+业务错误使用 `New`/`Newf`、`Wrap`/`Wrapf` 或已有专用构造器，添加组件、操作与上下文。等待、预算、锁、会话冲突等固定控制信号使用本包的 `Err*`；通过标准库 `errors.Is` 判断身份，通过本包 `GetCode` 判断分类。不同哨兵可以共用分类码，但不会因此相等；它们没有可变 Context，禁止把共享信号当作可修改的业务错误。
+
+领域错误通过 `CodedError.ErrorCode()` 提供分类；`AgentError.Code` 字段保留。无 `%w` 的格式化业务错误使用 `Newf`，携带原错误时可使用 `Wrapf`；已有合法 `%w` 包装保留标准 `fmt.Errorf` 的错误树语义。标准库 `Is`、`As`、`Join` 保留原用法，自定义 `As` 对 `AgentError` 的投影继续有效。`GetCode` 按错误链遍历顺序取首个框架分类，外层业务包装优先，未知错误返回 `CodeInternal`。codec、harness/env、命令行、测试工具等独立边界保留标准库错误，详细范围由导入检查器约束。
+
+旧领域哨兵和错误常量转发已经删除，主仓及已知关联仓库已同步迁移。迁移路径见 [错误处理迁移指南](../docs/guides/ERROR_HANDLING_MIGRATION.md)。
+
 ## 目录
 
 - [架构设计](#架构设计)
@@ -372,10 +389,14 @@ ErrorWithDuration(err error, durationMs int64) *AgentError
 ```text
 errors/
 ├── errors.go       # 核心类型和基础方法
-│                   # - ErrorCode 常量定义
 │                   # - AgentError 结构体
 │                   # - 构造函数和流式方法
 │                   # - 错误检查和提取函数、URL 脱敏
+│
+├── codes.go        # ErrorCode 类型和 Code* 错误码
+├── llm.go          # 模型错误字段与提示
+├── sentinel.go     # 不可变编码哨兵类型
+├── sentinels.go    # 框架固定信号的唯一对象定义
 │
 ├── helpers.go      # 专用错误创建函数
 │
@@ -386,7 +407,7 @@ errors/
 
 ### 结构化错误
 
-- **错误代码分类**：60 个错误代码，按组件分类
+- **错误代码分类**：错误代码按组件分类
 - **上下文信息**：灵活的 key-value 存储
 - **堆栈跟踪**：自动捕获调用栈
 

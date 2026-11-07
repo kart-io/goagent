@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/kart-io/goagent/codec/json"
-
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 )
 
@@ -34,7 +34,7 @@ func DecodeSuite(data []byte) ([]SuiteCase, error) {
 // ValidateSuite 防止重复 ID、空标签或无工具直返被当成有效样本。
 func ValidateSuite(cases []SuiteCase) error {
 	if len(cases) == 0 {
-		return fmt.Errorf("题集不能为空")
+		return agentErrors.Newf(agentErrors.CodeInvalidConfig, "题集不能为空").WithComponent("evaluation/agentbench").WithOperation("validate_suite")
 	}
 	seen := map[string]bool{}
 	for _, c := range cases {
@@ -42,10 +42,10 @@ func ValidateSuite(cases []SuiteCase) error {
 			return err
 		}
 		if strings.TrimSpace(c.ID) == "" || seen[c.ID] || strings.TrimSpace(c.Category) == "" || strings.TrimSpace(c.Question) == "" || strings.TrimSpace(c.Answer) == "" {
-			return fmt.Errorf("题目 %q 需要唯一 ID、类别、问题和答案", c.ID)
+			return agentErrors.Newf(agentErrors.CodeInvalidConfig, "题目 %q 需要唯一 ID、类别、问题和答案", c.ID).WithComponent("evaluation/agentbench").WithOperation("validate_suite")
 		}
 		if c.DirectEligible && !hasLookupTool(c.Case) {
-			return fmt.Errorf("直返题目 %q 需要工具结果", c.ID)
+			return agentErrors.Newf(agentErrors.CodeInvalidConfig, "直返题目 %q 需要工具结果", c.ID).WithComponent("evaluation/agentbench").WithOperation("validate_suite")
 		}
 		seen[c.ID] = true
 	}
@@ -129,7 +129,7 @@ type SuiteJob struct {
 // SelectSuiteJobs 的 contract 模式按预先声明的任务类型选择执行配置，不读取答案。
 func SelectSuiteJobs(jobs []SuiteJob, mode string) ([]SuiteJob, error) {
 	if mode != "all" && mode != "baseline" && mode != "contract" {
-		return nil, fmt.Errorf("mode 必须是 all、baseline 或 contract")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "mode 必须是 all、baseline 或 contract").WithComponent("evaluation/agentbench").WithOperation("select_suite_jobs")
 	}
 	selected := make([]SuiteJob, 0, len(jobs))
 	for _, job := range jobs {

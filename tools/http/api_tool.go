@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-resty/resty/v2"
 
+	shared "github.com/kart-io/goagent/constants"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/tools"
@@ -58,8 +59,8 @@ func NewAPITool(baseURL string, timeout time.Duration, headers map[string]string
 	}
 
 	tool.BaseTool = tools.NewBaseTool(
-		tools.ToolAPI,
-		tools.DescAPI,
+		shared.ToolAPI,
+		shared.DescAPI,
 		`{
 			"type": "object",
 			"properties": {
@@ -98,19 +99,19 @@ func (a *APITool) run(ctx context.Context, input *interfaces.ToolInput) (*interf
 	resp := tools.NewToolErrorResponse(a.Name()).WithOperation("run")
 
 	// 解析参数
-	method, _ := input.Args[interfaces.FieldMethod].(string)
+	method, _ := input.Args[shared.FieldMethod].(string)
 	if method == "" {
-		method = interfaces.MethodGet
+		method = shared.MethodGet
 	}
 
-	urlStr, ok := input.Args[interfaces.FieldURL].(string)
+	urlStr, ok := input.Args[shared.FieldURL].(string)
 	if !ok || urlStr == "" {
 		return resp.ValidationError("url is required and must be a non-empty string", "field", "url")
 	}
 
 	// 解析请求头
 	headers := make(map[string]string)
-	if h, ok := input.Args[interfaces.FieldHeaders].(map[string]interface{}); ok {
+	if h, ok := input.Args[shared.FieldHeaders].(map[string]interface{}); ok {
 		for k, v := range h {
 			headers[k] = fmt.Sprint(v)
 		}
@@ -118,12 +119,12 @@ func (a *APITool) run(ctx context.Context, input *interfaces.ToolInput) (*interf
 
 	// 解析请求体
 	var body interface{}
-	if b, ok := input.Args[interfaces.FieldBody]; ok {
+	if b, ok := input.Args[shared.FieldBody]; ok {
 		body = b
 	}
 
 	// 解析超时并应用到 context
-	if timeoutSec, ok := toolargs.Float64(input.Args[interfaces.FieldTimeout]); ok && timeoutSec > 0 {
+	if timeoutSec, ok := toolargs.Float64(input.Args[shared.FieldTimeout]); ok && timeoutSec > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, time.Duration(timeoutSec)*time.Second)
 		defer cancel()
@@ -137,7 +138,7 @@ func (a *APITool) run(ctx context.Context, input *interfaces.ToolInput) (*interf
 	// 如果有请求体，设置为 JSON
 	if body != nil {
 		req.SetBody(body).
-			SetHeader(interfaces.HeaderContentType, interfaces.ContentTypeJSON)
+			SetHeader(shared.HeaderContentType, shared.ContentTypeJSON)
 	}
 
 	// 执行请求
@@ -146,18 +147,18 @@ func (a *APITool) run(ctx context.Context, input *interfaces.ToolInput) (*interf
 	var err error
 
 	switch method {
-	case interfaces.MethodGet:
+	case shared.MethodGet:
 		httpResp, err = req.Get(urlStr)
-	case interfaces.MethodPost:
+	case shared.MethodPost:
 		httpResp, err = req.Post(urlStr)
-	case interfaces.MethodPut:
+	case shared.MethodPut:
 		httpResp, err = req.Put(urlStr)
-	case interfaces.MethodDelete:
+	case shared.MethodDelete:
 		httpResp, err = req.Delete(urlStr)
-	case interfaces.MethodPatch:
+	case shared.MethodPatch:
 		httpResp, err = req.Patch(urlStr)
 	default:
-		return resp.ValidationError(fmt.Sprintf("unsupported HTTP method: %s", method), interfaces.FieldMethod, method)
+		return resp.ValidationError(fmt.Sprintf("unsupported HTTP method: %s", method), shared.FieldMethod, method)
 	}
 
 	duration := time.Since(startTime)
@@ -178,11 +179,11 @@ func (a *APITool) run(ctx context.Context, input *interfaces.ToolInput) (*interf
 
 	// 构建结果
 	result := map[string]interface{}{
-		interfaces.FieldStatusCode: httpResp.StatusCode(),
-		interfaces.FieldStatus:     httpResp.Status(),
-		interfaces.FieldHeaders:    httpResp.Header(),
-		interfaces.FieldBody:       jsonBody,
-		interfaces.FieldDuration:   duration.String(),
+		shared.FieldStatusCode: httpResp.StatusCode(),
+		shared.FieldStatus:     httpResp.Status(),
+		shared.FieldHeaders:    httpResp.Header(),
+		shared.FieldBody:       jsonBody,
+		shared.FieldDuration:   duration.String(),
 	}
 
 	success := httpResp.IsSuccess()
@@ -191,13 +192,13 @@ func (a *APITool) run(ctx context.Context, input *interfaces.ToolInput) (*interf
 		// HTTP 请求失败但有响应，返回部分结果
 		return resp.ExecutionError(fmt.Sprintf("HTTP request failed with status %d", httpResp.StatusCode()), result,
 			agentErrors.New(agentErrors.CodeToolExecution, "HTTP request failed with non-2xx status").
-				WithContext(interfaces.FieldStatusCode, httpResp.StatusCode()).
-				WithContext(interfaces.FieldURL, agentErrors.RedactURL(urlStr)))
+				WithContext(shared.FieldStatusCode, httpResp.StatusCode()).
+				WithContext(shared.FieldURL, agentErrors.RedactURL(urlStr)))
 	}
 
 	return resp.Success(result, map[string]interface{}{
-		interfaces.FieldMethod: method,
-		interfaces.FieldURL:    urlStr,
+		shared.FieldMethod: method,
+		shared.FieldURL:    urlStr,
 	})
 }
 
@@ -205,9 +206,9 @@ func (a *APITool) run(ctx context.Context, input *interfaces.ToolInput) (*interf
 func (a *APITool) Get(ctx context.Context, url string, headers map[string]string) (*interfaces.ToolOutput, error) {
 	return a.Invoke(ctx, &interfaces.ToolInput{
 		Args: map[string]interface{}{
-			interfaces.FieldMethod:  interfaces.MethodGet,
-			interfaces.FieldURL:     url,
-			interfaces.FieldHeaders: headers,
+			shared.FieldMethod:  shared.MethodGet,
+			shared.FieldURL:     url,
+			shared.FieldHeaders: headers,
 		},
 		Context: ctx,
 	})
@@ -217,10 +218,10 @@ func (a *APITool) Get(ctx context.Context, url string, headers map[string]string
 func (a *APITool) Post(ctx context.Context, url string, body interface{}, headers map[string]string) (*interfaces.ToolOutput, error) {
 	return a.Invoke(ctx, &interfaces.ToolInput{
 		Args: map[string]interface{}{
-			interfaces.FieldMethod:  interfaces.MethodPost,
-			interfaces.FieldURL:     url,
-			interfaces.FieldBody:    body,
-			interfaces.FieldHeaders: headers,
+			shared.FieldMethod:  shared.MethodPost,
+			shared.FieldURL:     url,
+			shared.FieldBody:    body,
+			shared.FieldHeaders: headers,
 		},
 		Context: ctx,
 	})
@@ -230,10 +231,10 @@ func (a *APITool) Post(ctx context.Context, url string, body interface{}, header
 func (a *APITool) Put(ctx context.Context, url string, body interface{}, headers map[string]string) (*interfaces.ToolOutput, error) {
 	return a.Invoke(ctx, &interfaces.ToolInput{
 		Args: map[string]interface{}{
-			interfaces.FieldMethod:  interfaces.MethodPut,
-			interfaces.FieldURL:     url,
-			interfaces.FieldBody:    body,
-			interfaces.FieldHeaders: headers,
+			shared.FieldMethod:  shared.MethodPut,
+			shared.FieldURL:     url,
+			shared.FieldBody:    body,
+			shared.FieldHeaders: headers,
 		},
 		Context: ctx,
 	})
@@ -243,9 +244,9 @@ func (a *APITool) Put(ctx context.Context, url string, body interface{}, headers
 func (a *APITool) Delete(ctx context.Context, url string, headers map[string]string) (*interfaces.ToolOutput, error) {
 	return a.Invoke(ctx, &interfaces.ToolInput{
 		Args: map[string]interface{}{
-			interfaces.FieldMethod:  interfaces.MethodDelete,
-			interfaces.FieldURL:     url,
-			interfaces.FieldHeaders: headers,
+			shared.FieldMethod:  shared.MethodDelete,
+			shared.FieldURL:     url,
+			shared.FieldHeaders: headers,
 		},
 		Context: ctx,
 	})
@@ -255,10 +256,10 @@ func (a *APITool) Delete(ctx context.Context, url string, headers map[string]str
 func (a *APITool) Patch(ctx context.Context, url string, body interface{}, headers map[string]string) (*interfaces.ToolOutput, error) {
 	return a.Invoke(ctx, &interfaces.ToolInput{
 		Args: map[string]interface{}{
-			interfaces.FieldMethod:  interfaces.MethodPatch,
-			interfaces.FieldURL:     url,
-			interfaces.FieldBody:    body,
-			interfaces.FieldHeaders: headers,
+			shared.FieldMethod:  shared.MethodPatch,
+			shared.FieldURL:     url,
+			shared.FieldBody:    body,
+			shared.FieldHeaders: headers,
 		},
 		Context: ctx,
 	})
@@ -307,7 +308,7 @@ func (b *APIToolBuilder) WithHeaders(headers map[string]string) *APIToolBuilder 
 
 // WithAuth 设置认证头
 func (b *APIToolBuilder) WithAuth(token string) *APIToolBuilder {
-	b.headers[interfaces.HeaderAuthorization] = interfaces.Bearer + " " + token
+	b.headers[shared.HeaderAuthorization] = shared.Bearer + " " + token
 	return b
 }
 

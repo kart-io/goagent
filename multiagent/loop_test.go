@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/workflow"
 )
 
@@ -49,8 +50,8 @@ func TestLoopIterationLimit(t *testing.T) {
 	}
 	requireSameResult(t, build(2), []string{"write", "review", "write", "review"})
 	plain, plainErr, durableOut, durableErr := runBoth(t, build(3))
-	require.ErrorIs(t, plainErr, workflow.ErrMaxSteps)
-	require.ErrorIs(t, durableErr, workflow.ErrMaxSteps)
+	require.ErrorIs(t, plainErr, agentErrors.ErrWorkflowMaxSteps)
+	require.ErrorIs(t, durableErr, agentErrors.ErrWorkflowMaxSteps)
 	require.Empty(t, plain.Log)
 	require.Equal(t, 2, count(durableOut, "review"))
 }
@@ -63,7 +64,7 @@ func loopWith(until func(context.Context, record) (bool, error), fallback *Step[
 
 func TestLoopFallback(t *testing.T) {
 	invalidOnce := func(_ context.Context, r record) (bool, error) {
-		return false, fmt.Errorf("%w：评审结论无法解析", ErrInvalidRoute)
+		return false, fmt.Errorf("%w：评审结论无法解析", agentErrors.ErrInvalidRoute)
 	}
 	fb := mark("human")
 	plain, plainErr, durableOut, durableErr := runBoth(t, loopWith(invalidOnce, &fb, 2))
@@ -73,8 +74,8 @@ func TestLoopFallback(t *testing.T) {
 	require.Equal(t, plain.Log, durableOut.Log)
 
 	_, plainErr, _, durableErr = runBoth(t, loopWith(invalidOnce, nil, 2))
-	require.ErrorIs(t, plainErr, ErrInvalidRoute)
-	require.ErrorIs(t, durableErr, ErrInvalidRoute)
+	require.ErrorIs(t, plainErr, agentErrors.ErrInvalidRoute)
+	require.ErrorIs(t, durableErr, agentErrors.ErrInvalidRoute)
 
 	other := errors.New("评审服务不可用")
 	_, plainErr, _, _ = runBoth(t, loopWith(func(context.Context, record) (bool, error) { return false, other }, &fb, 2))
@@ -82,12 +83,12 @@ func TestLoopFallback(t *testing.T) {
 
 	// 最后一轮判断无效：有兜底时返回 ErrMaxSteps，写作者不会多执行一次。
 	_, plainErr, durableOut, durableErr = runBoth(t, loopWith(invalidOnce, &fb, 1))
-	require.ErrorIs(t, plainErr, workflow.ErrMaxSteps)
-	require.ErrorIs(t, durableErr, workflow.ErrMaxSteps)
+	require.ErrorIs(t, plainErr, agentErrors.ErrWorkflowMaxSteps)
+	require.ErrorIs(t, durableErr, agentErrors.ErrWorkflowMaxSteps)
 	require.Equal(t, 1, count(durableOut, "write"))
 	_, plainErr, _, durableErr = runBoth(t, loopWith(invalidOnce, nil, 1))
-	require.ErrorIs(t, plainErr, ErrInvalidRoute)
-	require.ErrorIs(t, durableErr, ErrInvalidRoute)
+	require.ErrorIs(t, plainErr, agentErrors.ErrInvalidRoute)
+	require.ErrorIs(t, durableErr, agentErrors.ErrInvalidRoute)
 }
 
 func TestLoopValidation(t *testing.T) {

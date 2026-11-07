@@ -11,7 +11,8 @@ import (
 	"github.com/kart-io/goagent/execution"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
-	"github.com/kart-io/goagent/llm/constants"
+
+	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/tools"
 	"github.com/kart-io/goagent/workflow"
 	"github.com/stretchr/testify/require"
@@ -24,7 +25,7 @@ type scopeModel struct {
 	allow    bool
 }
 
-func (m *scopeModel) Provider() constants.Provider { return constants.ProviderOpenAI }
+func (m *scopeModel) Provider() shared.Provider { return shared.ProviderOpenAI }
 func (m *scopeModel) CompleteToolsStream(context.Context, *llm.CompletionRequest, []interfaces.Tool) (<-chan *llm.StreamChunk, error) {
 	m.requests++
 	if !m.allow {

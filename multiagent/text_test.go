@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/workflow"
 )
 
@@ -160,7 +161,7 @@ func TestTextNextReadsFirstLine(t *testing.T) {
 		"前缀":   last("refund please"),
 	} {
 		_, err := next(context.Background(), c)
-		require.ErrorIs(t, err, ErrInvalidRoute, name)
+		require.ErrorIs(t, err, agentErrors.ErrInvalidRoute, name)
 	}
 }
 

@@ -17,6 +17,7 @@ import (
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/usage"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/providers"
@@ -265,7 +266,7 @@ func run() int {
 		default:
 			return errors.New("unknown phase")
 		}
-		if e == durable.ErrApprovalRequired && out.Snapshot != nil && out.Snapshot.Waiting {
+		if e == agentErrors.ErrApprovalRequired && out.Snapshot != nil && out.Snapshot.Waiting {
 			return nil
 		}
 		return e

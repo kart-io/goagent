@@ -5,17 +5,17 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/codec/json"
+	shared "github.com/kart-io/goagent/constants"
 
 	"github.com/kart-io/goagent/core/usage"
 	"github.com/kart-io/goagent/interfaces"
-	"github.com/kart-io/goagent/llm/constants"
 )
 
 // Client 是 LLM 客户端的唯一必需接口：流式补全加提供商标识。
 // 需要完整响应时用 Complete 收集流；调用方停止读取时必须取消 ctx。
 type Client interface {
 	CompleteStream(ctx context.Context, req *CompletionRequest) (<-chan *StreamChunk, error)
-	Provider() constants.Provider
+	Provider() shared.Provider
 }
 
 // Message 定义聊天消息
@@ -33,8 +33,8 @@ type Message struct {
 }
 
 type ProviderState struct {
-	Provider constants.Provider `json:"provider"`
-	Data     json.RawMessage    `json:"data"`
+	Provider shared.Provider `json:"provider"`
+	Data     json.RawMessage `json:"data"`
 }
 
 // CompletionRequest 定义补全请求
@@ -81,11 +81,11 @@ type LLMOptions struct {
 	// TemperatureSet 区分显式零与零值配置；WithTemperature 和 JSON 解码自动维护。
 	TemperatureSet bool `json:"-"`
 	// 基础配置
-	Provider       constants.Provider `json:"provider"`                  // 提供商
-	APIKey         string             `json:"api_key"`                   // API 密钥
-	BaseURL        string             `json:"base_url,omitempty"`        // 自定义 API 端点
-	Model          string             `json:"model"`                     // 默认模型
-	EmbeddingModel string             `json:"embedding_model,omitempty"` // Separate embedding model, used by OpenAI and Gemini.
+	Provider       shared.Provider `json:"provider"`                  // 提供商
+	APIKey         string          `json:"api_key"`                   // API 密钥
+	BaseURL        string          `json:"base_url,omitempty"`        // 自定义 API 端点
+	Model          string          `json:"model"`                     // 默认模型
+	EmbeddingModel string          `json:"embedding_model,omitempty"` // Separate embedding model, used by OpenAI and Gemini.
 
 	// 生成参数
 	MaxTokens      int             `json:"max_tokens"`               // 默认最大 token 数
@@ -108,11 +108,11 @@ type LLMOptions struct {
 // DefaultConfig 返回默认配置
 func DefaultLLMOptions() *LLMOptions {
 	return &LLMOptions{
-		Provider:    constants.ProviderOpenAI,
-		MaxTokens:   2000,
-		Temperature: 0.7,
-		Timeout:     60,
-		TopP:        1.0,
+		Provider:    shared.ProviderOpenAI,
+		MaxTokens:   shared.DefaultClientMaxTokens,
+		Temperature: shared.DefaultTemperature,
+		Timeout:     shared.DefaultLLMTimeoutSeconds,
+		TopP:        shared.DefaultTopP,
 	}
 }
 
@@ -126,15 +126,15 @@ func NewMessage(role, content string) Message {
 
 // SystemMessage 创建系统消息
 func SystemMessage(content string) Message {
-	return NewMessage("system", content)
+	return NewMessage(shared.RoleSystem, content)
 }
 
 // UserMessage 创建用户消息
 func UserMessage(content string) Message {
-	return NewMessage("user", content)
+	return NewMessage(shared.RoleUser, content)
 }
 
 // AssistantMessage 创建助手消息
 func AssistantMessage(content string) Message {
-	return NewMessage("assistant", content)
+	return NewMessage(shared.RoleAssistant, content)
 }

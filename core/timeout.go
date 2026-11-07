@@ -1,6 +1,10 @@
 package core
 
-import "time"
+import (
+	"time"
+
+	shared "github.com/kart-io/goagent/constants"
+)
 
 // TimeoutConfig 统一的超时配置
 // 管理所有类型的超时设置，确保项目中超时处理的一致性
@@ -42,65 +46,37 @@ func DefaultTimeoutConfig() *TimeoutConfig {
 	return &TimeoutConfig{
 		// LLM 调用：60秒
 		// 理由：大多数 LLM 调用在 10-30 秒内完成，60 秒足够处理复杂推理
-		LLMTimeout: 60 * time.Second,
+		LLMTimeout: shared.DefaultLLMTimeout,
 
 		// 工具执行：30秒
 		// 理由：工具执行通常较快，30 秒可以处理大多数场景（文件操作、API 调用等）
-		ToolTimeout: 30 * time.Second,
+		ToolTimeout: shared.DefaultToolTimeout,
 
 		// 数据库连接：5秒
 		// 理由：快速失败原则，连接建立应该很快，超时说明网络或服务有问题
-		DBConnectionTimeout: 5 * time.Second,
+		DBConnectionTimeout: shared.DefaultDBConnectionTimeout,
 
 		// 数据库操作：10秒
 		// 理由：允许执行较复杂的查询，但避免长时间阻塞
-		DBOperationTimeout: 10 * time.Second,
+		DBOperationTimeout: shared.DefaultDBOperationTimeout,
 
 		// HTTP 请求：30秒
 		// 理由：符合 HTTP 标准超时，平衡网络延迟和响应时间
-		HTTPTimeout: 30 * time.Second,
+		HTTPTimeout: shared.DefaultHTTPTimeout,
 
 		// 池资源获取：10秒
 		// 理由：等待资源可用的合理时间，避免无限等待
-		PoolAcquireTimeout: 10 * time.Second,
+		PoolAcquireTimeout: shared.DefaultPoolAcquireTimeout,
 
 		// 批量执行：5分钟
 		// 理由：批量操作涉及多个子任务，需要较长时间
-		BatchTimeout: 5 * time.Minute,
+		BatchTimeout: shared.DefaultBatchTimeout,
 
 		// Agent 执行：5分钟
 		// 理由：Agent 可能执行多轮推理和工具调用，需要足够时间
-		AgentExecutionTimeout: 5 * time.Minute,
+		AgentExecutionTimeout: shared.DefaultAgentExecutionTimeout,
 	}
 }
-
-// 超时常量定义
-// 为常见场景提供预定义的超时值
-const (
-	// 默认 LLM 调用超时
-	DefaultLLMTimeout = 60 * time.Second
-
-	// 默认工具执行超时
-	DefaultToolTimeout = 30 * time.Second
-
-	// 默认数据库连接超时
-	DefaultDBConnectionTimeout = 5 * time.Second
-
-	// 默认数据库操作超时
-	DefaultDBOperationTimeout = 10 * time.Second
-
-	// 默认 HTTP 请求超时
-	DefaultHTTPTimeout = 30 * time.Second
-
-	// 默认池获取超时
-	DefaultPoolAcquireTimeout = 10 * time.Second
-
-	// 默认批量执行超时
-	DefaultBatchTimeout = 5 * time.Minute
-
-	// 默认 Agent 执行超时
-	DefaultAgentExecutionTimeout = 5 * time.Minute
-)
 
 // WithLLMTimeout 设置 LLM 调用超时
 func (c *TimeoutConfig) WithLLMTimeout(timeout time.Duration) *TimeoutConfig {

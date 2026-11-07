@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -54,7 +55,7 @@ func TestMemoryStorePruneReleased(t *testing.T) {
 
 	require.NoError(t, s.PruneReleased(ctx, time.Hour))
 	require.Len(t, mem.released, 1)
-	require.ErrorIs(t, putOne(s, "fresh", "late"), ErrReleased, "未过期墓碑仍拒绝")
+	require.ErrorIs(t, putOne(s, "fresh", "late"), agentErrors.ErrResultScopeReleased, "未过期墓碑仍拒绝")
 	require.NoError(t, putOne(s, "old", "late"), "墓碑回收后迟到写入不再被拒绝（保证边界）")
 
 	require.NoError(t, s.Release(ctx, "old"))
@@ -82,9 +83,9 @@ func TestMemoryStorePruneConcurrent(t *testing.T) {
 	for w := range 4 {
 		wg.Go(func() {
 			for i := range 16 {
-				assert.ErrorIs(t, putOne(s, fmt.Sprintf("fresh-%d", i), fmt.Sprint(w)), ErrReleased)
+				assert.ErrorIs(t, putOne(s, fmt.Sprintf("fresh-%d", i), fmt.Sprint(w)), agentErrors.ErrResultScopeReleased)
 				if err := putOne(s, fmt.Sprintf("old-%d", i), fmt.Sprint(w)); err != nil {
-					assert.ErrorIs(t, err, ErrReleased)
+					assert.ErrorIs(t, err, agentErrors.ErrResultScopeReleased)
 				}
 			}
 		})
@@ -119,14 +120,14 @@ func TestDurableStorePruneReleased(t *testing.T) {
 	for w, store := range []ResultStore{s, other} {
 		wg.Go(func() {
 			for round := range 8 {
-				assert.ErrorIs(t, putOne(store, "fresh", fmt.Sprint(w, round)), ErrReleased)
+				assert.ErrorIs(t, putOne(store, "fresh", fmt.Sprint(w, round)), agentErrors.ErrResultScopeReleased)
 			}
 		})
 		wg.Go(func() { assert.NoError(t, store.PruneReleased(ctx, time.Hour)) })
 	}
 	wg.Wait()
 	requireOnlyTombstones(t, dir, 1)
-	require.ErrorIs(t, putOne(other, "fresh", "late"), ErrReleased, "未过期墓碑仍拒绝")
+	require.ErrorIs(t, putOne(other, "fresh", "late"), agentErrors.ErrResultScopeReleased, "未过期墓碑仍拒绝")
 	require.NoError(t, putOne(other, "old-0", "late"), "墓碑回收后迟到写入不再被拒绝（保证边界）")
 
 	file, err := durable.NewFileStore(t.TempDir())

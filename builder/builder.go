@@ -104,7 +104,7 @@ func (b *AgentBuilder[C, S]) Build() (*ConfigurableAgent[C, S], error) {
 // 取消会阻止后续初始化步骤；忽略上下文的宿主调用仍需自行返回。
 func (b *AgentBuilder[C, S]) BuildContext(ctx context.Context) (*ConfigurableAgent[C, S], error) {
 	if ctx == nil {
-		return nil, fmt.Errorf("构建 Agent 的 context 不能为空")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidInput, "构建 Agent 的 context 不能为空").WithComponent("builder").WithOperation("build_context")
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("构建 Agent 已取消：%w", err)
@@ -112,16 +112,16 @@ func (b *AgentBuilder[C, S]) BuildContext(ctx context.Context) (*ConfigurableAge
 	toolset := b.tools
 	if b.dispatcherSet {
 		if b.dispatcher == nil {
-			return nil, fmt.Errorf("WithDispatcher需要非空派发器")
+			return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "WithDispatcher需要非空派发器").WithComponent("builder").WithOperation("build_context")
 		}
 		if len(toolset) > 0 {
-			return nil, fmt.Errorf("WithDispatcher不能与WithTools混用")
+			return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "WithDispatcher不能与WithTools混用").WithComponent("builder").WithOperation("build_context")
 		}
 		toolset = b.dispatcher.Tools()
 	}
 	for _, validate := range b.config.OutputValidators {
 		if validate == nil {
-			return nil, fmt.Errorf("最终输出验收器不能为nil")
+			return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "最终输出验收器不能为nil").WithComponent("builder").WithOperation("build_context")
 		}
 	}
 	// 验证必需组件
@@ -153,7 +153,7 @@ func (b *AgentBuilder[C, S]) BuildContext(ctx context.Context) (*ConfigurableAge
 	}
 	if len(b.config.ReturnDirectTools) > 0 {
 		if _, ok := b.llmClient.(llm.ToolStreamClient); !ok {
-			return nil, fmt.Errorf("ReturnDirectTools 需要 llm.ToolStreamClient")
+			return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "ReturnDirectTools 需要 llm.ToolStreamClient").WithComponent("builder").WithOperation("build_context")
 		}
 		for _, name := range b.config.ReturnDirectTools {
 			matches := 0
@@ -163,14 +163,14 @@ func (b *AgentBuilder[C, S]) BuildContext(ctx context.Context) (*ConfigurableAge
 				}
 			}
 			if strings.TrimSpace(name) == "" || matches != 1 {
-				return nil, fmt.Errorf("直接返回工具 %q 必须唯一注册", name)
+				return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "直接返回工具 %q 必须唯一注册", name).WithComponent("builder").WithOperation("build_context")
 			}
 		}
 	}
 
 	if len(b.config.Offloads) > 0 {
 		if _, ok := b.llmClient.(llm.ToolStreamClient); !ok || len(toolset) == 0 {
-			return nil, fmt.Errorf("WithOffload requires tools and llm.ToolStreamClient")
+			return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "WithOffload requires tools and llm.ToolStreamClient").WithComponent("builder").WithOperation("build_context")
 		}
 		if err := b.validateOffloads(toolset); err != nil {
 			return nil, err

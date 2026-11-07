@@ -2,15 +2,16 @@ package builder
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
+
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/observe"
 	"github.com/kart-io/goagent/core/usage"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
 )
 
@@ -37,27 +38,27 @@ func (a *ConfigurableAgent[C, S]) prepareAgentUsage(ctx context.Context) (contex
 	id := a.config.AgentID
 	if (id != "" || budget.HasUsageHook(ctx)) && len(a.tools) > 0 {
 		if _, ok := a.llmClient.(llm.ToolStreamClient); !ok {
-			return nil, fmt.Errorf("agent usage requires native ToolStreamClient for tool selection")
+			return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "agent usage requires native ToolStreamClient for tool selection").WithComponent("builder").WithOperation("prepare_agent_usage")
 		}
 	}
 	if id == "" {
 		id = "anonymous"
 	}
 	if strings.TrimSpace(id) != id || len(id) > 256 {
-		return nil, fmt.Errorf("invalid AgentID")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "invalid AgentID").WithComponent("builder").WithOperation("prepare_agent_usage")
 	}
 	parent, nested := usage.FromContext(ctx)
 	runID := observe.RunIDFromContext(ctx)
 	if nested {
 		if runID != "" && runID != parent.RunID {
-			return nil, fmt.Errorf("agent observation root conflict")
+			return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "agent observation root conflict").WithComponent("builder").WithOperation("prepare_agent_usage")
 		}
 		runID = parent.RunID
 	}
 	if metered {
 		root := c.Configuration().RootKey
 		if runID != "" && runID != root {
-			return nil, fmt.Errorf("agent budget root conflict")
+			return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "agent budget root conflict").WithComponent("builder").WithOperation("prepare_agent_usage")
 		}
 		runID = root
 	}
@@ -140,7 +141,11 @@ func publishModelUsage(ctx context.Context, operation, key string, attempt int, 
 		if observe.Enabled(ctx) {
 			observe.Emit(ctx, observe.Event{Type: "model_usage", Path: "usage", OperationKey: key, Replayed: replayed, ErrorKind: "usage_invalid", Usage: &notification})
 		}
-		return err
+		code := agentErrors.CodeLLMResponse
+		if replayed {
+			code = agentErrors.CodeStateValidation
+		}
+		return agentErrors.Wrap(err, code, "模型用量证据无效").WithComponent("builder").WithOperation("publish_model_usage")
 	}
 	if c, ok := budget.FromContext(ctx); ok {
 		saveCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)

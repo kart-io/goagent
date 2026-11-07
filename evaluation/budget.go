@@ -2,15 +2,12 @@ package evaluation
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"sync"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 )
-
-var ErrBudgetExceeded = errors.New("evaluation budget exhausted")
 
 // Budget fixes the model, temperature, call ceiling and per-call output ceiling.
 // ObservedTokens stops subsequent calls after the reported usage reaches it.
@@ -47,11 +44,11 @@ func (c *BudgetClient) CompleteStream(ctx context.Context, req *llm.CompletionRe
 	}
 	if req == nil || c.Client == nil || c.Budget.MaxCalls <= 0 || c.Budget.MaxOutputTokens <= 0 {
 		c.mu.Unlock()
-		return nil, fmt.Errorf("client, request and positive call/output budgets required")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidInput, "client, request and positive call/output budgets required").WithComponent("evaluation").WithOperation("complete_stream")
 	}
 	if c.metrics.Calls >= c.Budget.MaxCalls || (c.Budget.ObservedTokens > 0 && c.metrics.Usage.TotalTokens >= c.Budget.ObservedTokens) {
 		c.mu.Unlock()
-		return nil, ErrBudgetExceeded
+		return nil, agentErrors.ErrEvaluationBudgetExceeded
 	}
 	request := *req
 	request.Model = c.Budget.Model

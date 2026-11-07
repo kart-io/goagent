@@ -1,14 +1,11 @@
 package builder
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
-
-// ErrWaiting 标识本次执行因子流程等待宿主续跑而暂停；它既不是失败，也没有答案。
-var ErrWaiting = errors.New("agent is waiting for host continuation")
 
 // WaitingError 列出暂停处的全部等待。已提交的模型回合与已完成的工具调用都保留在日志中；
 // 宿主提供续跑输入（durable.WithResume，键取等待路径最后一项的 Key）后，用同一执行键再次调用即可继续。
@@ -17,11 +14,19 @@ type WaitingError struct {
 	Waits []*durable.WaitError
 }
 
-func (e *WaitingError) Error() string {
-	return fmt.Sprintf("%v: %d pending wait(s)", ErrWaiting, len(e.Waits))
+// ErrorCode 标识等待分类，不改变等待叶子或诊断原因的展开规则。
+func (e *WaitingError) ErrorCode() agentErrors.ErrorCode {
+	if e == nil {
+		return agentErrors.CodeInternal
+	}
+	return agentErrors.CodeWaiting
 }
 
-func (e *WaitingError) Is(target error) bool { return target == ErrWaiting }
+func (e *WaitingError) Error() string {
+	return fmt.Sprintf("%v: %d pending wait(s)", agentErrors.ErrAgentWaiting, len(e.Waits))
+}
+
+func (e *WaitingError) Is(target error) bool { return target == agentErrors.ErrAgentWaiting }
 
 func (e *WaitingError) Unwrap() []error {
 	errs := make([]error, len(e.Waits))

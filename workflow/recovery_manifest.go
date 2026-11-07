@@ -2,8 +2,9 @@ package workflow
 
 import (
 	"context"
-	"fmt"
 	"maps"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // RecoveryManifest 是宿主可归档的恢复身份清单，不包含业务状态或资源引用。
@@ -39,12 +40,12 @@ func (d *DurableGraph[T]) Manifest() RecoveryManifest {
 // CheckCompatibility 复用Diagnose读取已知运行，不执行节点、业务解码、审批或写入。
 func (d *DurableGraph[T]) CheckCompatibility(ctx context.Context, ids ...string) (*CompatibilityReport, error) {
 	if d == nil || d.store == nil || d.graph == nil || ctx == nil || len(ids) == 0 {
-		return nil, fmt.Errorf("兼容检查需要已编译图、上下文和运行ID")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "兼容检查需要已编译图、上下文和运行ID").WithComponent("workflow").WithOperation("check_compatibility")
 	}
 	seen := map[string]bool{}
 	for _, id := range ids {
 		if id == "" || seen[id] {
-			return nil, fmt.Errorf("运行ID不能为空或重复")
+			return nil, agentErrors.Newf(agentErrors.CodeInvalidInput, "运行ID不能为空或重复").WithComponent("workflow").WithOperation("check_compatibility")
 		}
 		seen[id] = true
 	}

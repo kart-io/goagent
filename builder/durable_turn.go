@@ -7,10 +7,11 @@ import (
 	"os"
 	"strings"
 
-	"github.com/kart-io/goagent/codec/json"
-
 	"github.com/google/jsonschema-go/jsonschema"
+
+	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/tools/toolargs"
@@ -59,14 +60,14 @@ func readJournaledTurn(ctx context.Context, round int, client llm.Client, req *l
 // feedback 为真时未提供的工具与非 JSON 参数照常提交，由工具循环交还模型。
 func validateDurableTurn(turn *llm.StreamChunk, tools []interfaces.Tool, allowEmpty, feedback bool) error {
 	if turn.FinishReason != "stop" && turn.FinishReason != "tool_calls" {
-		return fmt.Errorf("incomplete model turn")
+		return agentErrors.Newf(agentErrors.CodeInvalidOutput, "incomplete model turn").WithComponent("builder").WithOperation("validate_durable_turn")
 	}
 	if allowEmpty && isEmptyAnswer(turn) {
 		return nil
 	}
 	if len(turn.ToolCalls) == 0 {
 		if turn.FinishReason == "tool_calls" || strings.TrimSpace(turn.Content) == "" {
-			return fmt.Errorf("model returned no final answer or tool calls")
+			return agentErrors.Newf(agentErrors.CodeInvalidOutput, "model returned no final answer or tool calls").WithComponent("builder").WithOperation("validate_durable_turn")
 		}
 		return nil
 	}
@@ -75,7 +76,7 @@ func validateDurableTurn(turn *llm.StreamChunk, tools []interfaces.Tool, allowEm
 		byName[t.Name()] = t
 		var schema jsonschema.Schema
 		if err := json.Unmarshal([]byte(t.ArgsSchema()), &schema); err != nil {
-			return fmt.Errorf("invalid tool schema %q", t.Name())
+			return agentErrors.Newf(agentErrors.CodeInvalidConfig, "invalid tool schema %q", t.Name()).WithComponent("builder").WithOperation("validate_durable_turn")
 		}
 		resolved, err := schema.Resolve(nil)
 		if err != nil {
@@ -88,15 +89,15 @@ func validateDurableTurn(turn *llm.StreamChunk, tools []interfaces.Tool, allowEm
 		name := call.Function.Name
 		switch {
 		case call.ID == "":
-			return fmt.Errorf("模型返回的工具 %q 调用缺少 ID", name)
+			return agentErrors.Newf(agentErrors.CodeInvalidOutput, "模型返回的工具 %q 调用缺少 ID", name).WithComponent("builder").WithOperation("validate_durable_turn")
 		case ids[call.ID]:
-			return fmt.Errorf("模型返回的工具 %q 调用 ID 重复", name)
+			return agentErrors.Newf(agentErrors.CodeInvalidOutput, "模型返回的工具 %q 调用 ID 重复", name).WithComponent("builder").WithOperation("validate_durable_turn")
 		case known[name] == nil:
 			if feedback {
 				ids[call.ID] = true
 				continue
 			}
-			return fmt.Errorf("模型请求了未提供的工具 %q", name)
+			return agentErrors.Newf(agentErrors.CodeInvalidOutput, "模型请求了未提供的工具 %q", name).WithComponent("builder").WithOperation("validate_durable_turn")
 		}
 		args, ok := toolargs.Parse(call.Function.Arguments)
 		if !ok {
@@ -104,7 +105,7 @@ func validateDurableTurn(turn *llm.StreamChunk, tools []interfaces.Tool, allowEm
 				ids[call.ID] = true
 				continue
 			}
-			return fmt.Errorf("模型返回的工具 %q 参数不是 JSON 对象", name)
+			return agentErrors.Newf(agentErrors.CodeInvalidOutput, "模型返回的工具 %q 参数不是 JSON 对象", name).WithComponent("builder").WithOperation("validate_durable_turn")
 		}
 		// 工具会把参数错误作为结果交还模型时，回合照常提交。
 		returns, ok := byName[call.Function.Name].(interfaces.ArgumentErrorTool)
@@ -126,24 +127,24 @@ func (a *ConfigurableAgent[C, S]) scopeDurableExecution(ctx context.Context) (co
 	}
 	if len(a.tools) > 0 {
 		if _, ok := a.llmClient.(llm.ToolStreamClient); !ok {
-			return nil, fmt.Errorf("durable tools require llm.ToolStreamClient; legacy tool selection is not journaled")
+			return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "durable tools require llm.ToolStreamClient; legacy tool selection is not journaled").WithComponent("builder").WithOperation("scope_durable_execution")
 		}
 		for _, tool := range a.tools {
 			capability, ok := tool.(interfaces.DurableCallTool)
 			if !ok || !capability.SupportsDurableCalls() {
-				return nil, fmt.Errorf("durable tool %q requires a journaled adapter such as Dispatcher.Tools", tool.Name())
+				return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "durable tool %q requires a journaled adapter such as Dispatcher.Tools", tool.Name()).WithComponent("builder").WithOperation("scope_durable_execution")
 			}
 		}
 	}
 	scope := a.config.DurableScope
 	if strings.TrimSpace(scope) == "" || strings.TrimSpace(scope) != scope {
-		return nil, fmt.Errorf("durable Agent requires a nonempty stable DurableScope; use WithDurableScope")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "durable Agent requires a nonempty stable DurableScope; use WithDurableScope").WithComponent("builder").WithOperation("scope_durable_execution")
 	}
 	// Do not silently move an old unscoped run to new keys: that would rerun
 	// completed tools under different idempotency keys.
 	for _, id := range []string{"model/turn/0", "model/answer/0"} {
 		if _, err := durable.InspectOperation(ctx, id); err == nil {
-			return nil, fmt.Errorf("unscoped checkpoint exists; reconcile its effects and migrate the workflow version before using DurableScope")
+			return nil, agentErrors.Newf(agentErrors.CodeStateValidation, "unscoped checkpoint exists; reconcile its effects and migrate the workflow version before using DurableScope").WithComponent("builder").WithOperation("scope_durable_execution")
 		} else if !errors.Is(err, os.ErrNotExist) {
 			return nil, err
 		}

@@ -17,12 +17,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kart-io/goagent/codec/json"
-
 	"github.com/gofrs/flock"
-
-	"github.com/kart-io/goagent/core/durable"
+	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/core/internal/txnlog"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 const fileVersion = "goagent-session-v1"
@@ -73,12 +71,12 @@ func lockFile(ctx context.Context, path string) (func() error, error) {
 	ok, err := lock.TryLockContext(ctx, 20*time.Millisecond)
 	if err != nil {
 		if ctx.Err() != nil {
-			return nil, fmt.Errorf("%w: %w", durable.ErrLockUnavailable, ctx.Err())
+			return nil, fmt.Errorf("%w: %w", agentErrors.ErrLockUnavailable, ctx.Err())
 		}
 		return nil, err
 	}
 	if !ok {
-		return nil, durable.ErrLockUnavailable
+		return nil, agentErrors.ErrLockUnavailable
 	}
 	return lock.Close, nil
 }
@@ -104,7 +102,7 @@ func scan(r io.Reader, start int64, id string) (events []Event, end int64, err e
 		if end == 0 {
 			var h fileHeader
 			if json.Unmarshal(line, &h) != nil || h.Version != fileVersion || h.Session != id {
-				return nil, 0, fmt.Errorf("会话文件头无效")
+				return nil, 0, agentErrors.Newf(agentErrors.CodeStateValidation, "会话文件头无效").WithComponent("session_store").WithOperation("scan")
 			}
 		} else {
 			var batch []Event
@@ -121,7 +119,7 @@ func scan(r io.Reader, start int64, id string) (events []Event, end int64, err e
 func (s *FileStore) load(id string, after int64) (events []Event, last, end int64, err error) {
 	f, err := os.Open(s.path(id))
 	if errors.Is(err, fs.ErrNotExist) {
-		return nil, 0, 0, ErrNotFound
+		return nil, 0, 0, agentErrors.ErrSessionNotFound
 	}
 	if err != nil {
 		return nil, 0, 0, err
@@ -200,12 +198,12 @@ func (s *FileStore) Append(ctx context.Context, id string, expected int64, event
 // appendLocked 比较序号并追加；调用方持有 id 的会话锁。
 func (s *FileStore) appendLocked(id string, expected int64, events []Event) (last int64, err error) {
 	_, cur, end, err := s.load(id, 1<<62)
-	created := errors.Is(err, ErrNotFound)
+	created := errors.Is(err, agentErrors.ErrSessionNotFound)
 	if err != nil && !created {
 		return 0, err
 	}
 	if cur != expected {
-		return 0, fmt.Errorf("%w：期望序号 %d，当前 %d", ErrConflict, expected, cur)
+		return 0, fmt.Errorf("%w：期望序号 %d，当前 %d", agentErrors.ErrSessionConflict, expected, cur)
 	}
 	if len(events) == 0 {
 		return cur, nil
@@ -266,7 +264,7 @@ func (s *FileStore) applyTxn(payload []byte) error {
 			continue
 		}
 		_, cur, _, err := s.load(batch.ID, 1<<62)
-		if err != nil && !errors.Is(err, ErrNotFound) {
+		if err != nil && !errors.Is(err, agentErrors.ErrSessionNotFound) {
 			return err
 		}
 		if cur >= batch.Expected+int64(len(batch.Events)) {
@@ -306,11 +304,11 @@ func (s *FileStore) AppendAll(ctx context.Context, batches ...AppendBatch) (last
 	txn := make([]AppendBatch, len(batches))
 	for i, batch := range batches {
 		_, cur, _, loadErr := s.load(batch.ID, 1<<62)
-		if loadErr != nil && !errors.Is(loadErr, ErrNotFound) {
+		if loadErr != nil && !errors.Is(loadErr, agentErrors.ErrSessionNotFound) {
 			return nil, loadErr
 		}
 		if cur != batch.Expected {
-			return nil, fmt.Errorf("%w：会话 %q 期望序号 %d，当前 %d", ErrConflict, batch.ID, batch.Expected, cur)
+			return nil, fmt.Errorf("%w：会话 %q 期望序号 %d，当前 %d", agentErrors.ErrSessionConflict, batch.ID, batch.Expected, cur)
 		}
 		txn[i] = AppendBatch{ID: batch.ID, Expected: batch.Expected, Events: assign(batch.Events, batch.Expected)}
 		lasts[i] = batch.Expected + int64(len(batch.Events))
@@ -381,7 +379,7 @@ func (s *FileStore) Fork(ctx context.Context, src, dst string, upTo int64) (err 
 		return err
 	}
 	if _, err := os.Stat(s.path(dst)); err == nil {
-		return ErrExists
+		return agentErrors.ErrSessionExists
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}

@@ -20,7 +20,7 @@ GoAgent（`github.com/kart-io/goagent`）是 Go 的 Agent 执行内核：Builder
 
 ## 包依赖
 
-下图由 `go list -f '{{.ImportPath}} {{.Imports}}' ./...` 整理（不含 `examples/`、`cmd/`、测试；省略几乎所有包都依赖的 `errors`、`interfaces`）。箭头表示“导入”。
+下图由 `go list -f '{{.ImportPath}} {{.Imports}}' ./...` 整理（不含 `examples/`、`cmd/`、测试；省略基础包 `constants`、`errors`、`interfaces`）。箭头表示“导入”。
 
 ```mermaid
 graph TD
@@ -90,8 +90,9 @@ graph TD
 
 | 包 | 职责 |
 |----|------|
-| `interfaces` | 共享接口与常量：`Tool`、`ToolInput/ToolOutput`、`MemoryManager`、`DocumentRetriever` 等 |
-| `errors` | 统一错误类型与构造函数（含 panic 错误） |
+| `constants` | 共享协议值、字段、状态、默认参数及 Provider 类型的唯一公开入口；只依赖标准库，不保留旧包转发 |
+| `interfaces` | 共享接口：`Tool`、`ToolInput/ToolOutput`、`MemoryManager`、`DocumentRetriever` 等 |
+| `errors` | 统一错误码、不可变固定哨兵、文案、上下文字段及业务错误构造函数（含 panic 错误） |
 | `core` | `Runnable[I,O]`、`StreamRunnable`、`RunnablePipe/Sequence`、`Callback`、panic 处理注册表、生命周期与 Runnable 注册表 |
 | `core/state`、`core/checkpoint`、`core/execution` | Agent 状态、检查点（`Checkpointer`、`InMemorySaver`）、`Runtime` 与旧流式类型 |
 | `core/durable` | 显式、带版本的持久操作：`Do`、`Runner`、`Store`（`FileStore`）、等待与审批 |
@@ -107,7 +108,7 @@ graph TD
 | `tools/compute`、`tools/http`、`tools/search`、`tools/shell` | 内置工具 |
 | `tools/middleware` | 工具级中间件（日志、缓存、限流） |
 | `tools/policy`、`tools/spill` | 按工具名/命令前缀的权限规则；超长结果落盘与 `read_spill` |
-| `llm`、`llm/providers`、`llm/common`、`llm/cache`、`llm/constants` | 模型客户端接口与能力接口（`Client`、`ToolStreamClient` 等）、各提供方实现、语义缓存 |
+| `llm`、`llm/providers`、`llm/common`、`llm/cache` | 模型客户端接口与能力接口（`Client`、`ToolStreamClient` 等）、各提供方实现、语义缓存 |
 | `workflow` | 类型化有界控制流图 `Graph[T]`，`Compile` / `CompileDurable` |
 | `multiagent` | 多 Agent 预置模式：`Sequential`、`Loop`、`RouterSupervisor` 构造器，`ParallelStep`、`AddStep`、`GuardRoute`，`SupervisorTools` 与文本接力层（`Conversation`、`TextStep`、`TextNext`） |
 | `workflow/refund` | 绑定事务的退款防护示范实现 |

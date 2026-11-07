@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/kart-io/goagent/codec/json"
-
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
 )
 
@@ -28,7 +28,7 @@ func OpenRecorder(ctx context.Context, store Store, id string) (*Recorder, []Eve
 		return nil, nil, err
 	}
 	events, err := store.Read(ctx, id, 0)
-	if err != nil && !errors.Is(err, ErrNotFound) {
+	if err != nil && !errors.Is(err, agentErrors.ErrSessionNotFound) {
 		return nil, nil, err
 	}
 	r := &Recorder{store: store, id: id}
@@ -72,7 +72,7 @@ func (r *Recorder) Append(ctx context.Context, events ...Event) ([]Event, error)
 			r.absorb(added)
 			return added, nil
 		}
-		if !errors.Is(err, ErrConflict) {
+		if !errors.Is(err, agentErrors.ErrSessionConflict) {
 			return nil, err
 		}
 		newer, rerr := r.store.Read(ctx, r.id, r.seq)
@@ -81,7 +81,7 @@ func (r *Recorder) Append(ctx context.Context, events ...Event) ([]Event, error)
 		}
 		for _, ev := range newer {
 			if ev.Type != TypeBoundarySnapshot {
-				return nil, fmt.Errorf("%w：序号 %d 处出现了其他写入者的 %s", ErrConflict, ev.Seq, ev.Type)
+				return nil, fmt.Errorf("%w：序号 %d 处出现了其他写入者的 %s", agentErrors.ErrSessionConflict, ev.Seq, ev.Type)
 			}
 		}
 		if len(newer) == 0 {
@@ -213,7 +213,7 @@ func sameMessage(a, b llm.Message) bool {
 // 其间有新的写入时返回 ErrConflict，调用方应重新查看后再决定。被遮蔽的事件仍保留在日志中，持久操作的快照不受影响。
 func Rewind(ctx context.Context, store Store, id string, to, expected int64) (int64, error) {
 	if to < 0 || to >= expected {
-		return 0, fmt.Errorf("退回位置 %d 须在 [0, %d) 内", to, expected)
+		return 0, agentErrors.Newf(agentErrors.CodeInvalidInput, "退回位置 %d 须在 [0, %d) 内", to, expected).WithComponent("session_recorder").WithOperation("rewind")
 	}
 	ev, err := NewEvent(TypeRewind, struct {
 		To int64 `json:"to"`

@@ -38,7 +38,7 @@ func TestRestartApprovalAndIdempotentRetry(t *testing.T) {
 	}
 	runner := &Runner{Store: store, Version: "v1", Steps: steps}
 	snapshot, err := runner.Run(context.Background(), "run", nil, "")
-	require.ErrorIs(t, err, ErrApprovalRequired)
+	require.ErrorIs(t, err, agentErrors.ErrApprovalRequired)
 	require.Equal(t, 1, firstCalls)
 	require.Empty(t, keys)
 	// Discard all runtime state and load the continuation through a new store.
@@ -88,7 +88,7 @@ func TestDurableProcessRestart(t *testing.T) {
 		require.NoError(t, err)
 		runner := &Runner{Store: store, Version: "process-v1", Steps: processSteps(dir)}
 		_, err = runner.Run(context.Background(), "process", nil, "")
-		require.ErrorIs(t, err, ErrApprovalRequired)
+		require.ErrorIs(t, err, agentErrors.ErrApprovalRequired)
 		return
 	}
 	dir := t.TempDir()
@@ -136,7 +136,7 @@ func TestBeforeApproveRunsUnderLock(t *testing.T) {
 		}},
 	}}
 	wait, err := runner.Run(ctx, "run", json.RawMessage(`{"ticket":"h1"}`), "")
-	require.ErrorIs(t, err, ErrApprovalRequired)
+	require.ErrorIs(t, err, agentErrors.ErrApprovalRequired)
 	var seen *Snapshot
 	reject := errors.New("工单已变更")
 	runner.BeforeApprove = func(_ context.Context, id string, snap *Snapshot) error {

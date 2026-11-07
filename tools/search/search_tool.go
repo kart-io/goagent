@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
@@ -45,8 +46,8 @@ func NewSearchTool(engine SearchEngine) *SearchTool {
 	}
 
 	tool.BaseTool = tools.NewBaseTool(
-		tools.ToolSearch,
-		tools.DescSearch,
+		shared.ToolSearch,
+		shared.DescSearch,
 		`{
 			"type": "object",
 			"properties": {

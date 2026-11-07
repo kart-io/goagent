@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/kart-io/goagent/core/budget"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 )
@@ -41,7 +42,7 @@ func reserveModelBudget(ctx context.Context, controller *budget.Controller, key 
 	estimator, _ := ctx.Value(tokenEstimatorKey{}).(TokenEstimator)
 	req, _ := ctx.Value(tokenRequestKey{}).(tokenRequest)
 	if estimator == nil || req.request == nil {
-		return budget.ErrTokenEstimateRequired
+		return agentErrors.ErrTokenEstimateRequired
 	}
 	estimate, err := estimator(ctx, req.request, req.tools)
 	if err != nil {

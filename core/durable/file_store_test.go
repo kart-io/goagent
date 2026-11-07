@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/testing/panictest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -59,16 +60,16 @@ func TestRemoveScopeCrashAfterTombstoneProcess(t *testing.T) {
 
 	restarted, err := NewFileStore(dir)
 	require.NoError(t, err)
-	require.ErrorIs(t, saveScope(ctx, restarted, "run", "late"), ErrScopeRemoved)
+	require.ErrorIs(t, saveScope(ctx, restarted, "run", "late"), agentErrors.ErrScopeRemoved)
 	_, err = restarted.Scope("run").Lock(ctx, "late")
-	require.ErrorIs(t, err, ErrScopeRemoved)
+	require.ErrorIs(t, err, agentErrors.ErrScopeRemoved)
 
 	lockCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	require.NoError(t, restarted.RemoveScope(lockCtx, "run"), "死亡进程的排他锁已释放")
 	_, err = os.Stat(scope.files.dir)
 	require.ErrorIs(t, err, os.ErrNotExist)
-	require.ErrorIs(t, saveScope(ctx, restarted, "run", "late"), ErrScopeRemoved)
+	require.ErrorIs(t, saveScope(ctx, restarted, "run", "late"), agentErrors.ErrScopeRemoved)
 	entries, err := os.ReadDir(filepath.Join(dir, scopesDir))
 	require.NoError(t, err)
 	require.Len(t, entries, 1, "只剩墓碑")
@@ -104,7 +105,7 @@ func TestPruneRemoved(t *testing.T) {
 		_, err = os.Stat(store.scope(name).files.dir)
 		require.ErrorIs(t, err, os.ErrNotExist, name)
 	}
-	require.ErrorIs(t, saveScope(ctx, store, "fresh", "late"), ErrScopeRemoved, "未过期墓碑仍拒绝")
+	require.ErrorIs(t, saveScope(ctx, store, "fresh", "late"), agentErrors.ErrScopeRemoved, "未过期墓碑仍拒绝")
 	_, err = store.Scope("live").Load(ctx, "a")
 	require.NoError(t, err, "未删除的作用域不受影响")
 	require.NoError(t, saveScope(ctx, store, "live", "b"))
@@ -137,7 +138,7 @@ func TestPruneRemovedConcurrentWrites(t *testing.T) {
 			store := stores[w%len(stores)]
 			for round := range 20 {
 				i := round % scopes
-				assert.ErrorIs(t, saveScope(ctx, store, fmt.Sprintf("fresh-%d", i), "x"), ErrScopeRemoved)
+				assert.ErrorIs(t, saveScope(ctx, store, fmt.Sprintf("fresh-%d", i), "x"), agentErrors.ErrScopeRemoved)
 				name, id := fmt.Sprintf("old-%d", i), fmt.Sprintf("w%d-%d", w, round)
 				err := saveScope(ctx, store, name, id)
 				if err == nil {
@@ -145,7 +146,7 @@ func TestPruneRemovedConcurrentWrites(t *testing.T) {
 					written[[2]string{name, id}] = true
 					mu.Unlock()
 				} else {
-					assert.ErrorIs(t, err, ErrScopeRemoved)
+					assert.ErrorIs(t, err, agentErrors.ErrScopeRemoved)
 				}
 			}
 		})
@@ -196,7 +197,7 @@ func TestLoadAfterTombstoneBeforeRemoval(t *testing.T) {
 	before := listTree(t, dir)
 	for _, id := range []string{"a", "missing"} {
 		_, err = store.Scope("run").Load(ctx, id)
-		require.ErrorIs(t, err, ErrScopeRemoved, id)
+		require.ErrorIs(t, err, agentErrors.ErrScopeRemoved, id)
 	}
 	require.Equal(t, before, listTree(t, dir), "读取不产生任何文件")
 

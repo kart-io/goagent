@@ -78,12 +78,12 @@ type ConcurrentCallTool interface {
 // 如果工具实现了此接口，验证器将在执行工具之前调用 Validate
 // 允许进行比单独使用 JSON schema 更复杂的验证
 //
-// 示例实现：
+// 示例实现中 agentErrors 为 github.com/kart-io/goagent/errors 的导入别名：
 //
 //	func (t *MyTool) Validate(ctx context.Context, input *ToolInput) error {
 //	    // 自定义验证逻辑
 //	    if val, ok := input.Args["amount"].(float64); ok && val < 0 {
-//	        return fmt.Errorf("amount must be non-negative")
+//	        return agentErrors.NewToolValidationError(t.Name(), "amount must be non-negative")
 //	    }
 //	    return nil
 //	}

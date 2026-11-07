@@ -6,9 +6,9 @@ import (
 	"strings"
 	"sync"
 
+	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
-	"github.com/kart-io/goagent/llm/constants"
 )
 
 var (
@@ -131,8 +131,8 @@ func (m *MockLLMClient) CompleteToolsStream(ctx context.Context, req *llm.Comple
 }
 
 // Provider returns the provider type
-func (m *MockLLMClient) Provider() constants.Provider {
-	return constants.ProviderCustom
+func (m *MockLLMClient) Provider() shared.Provider {
+	return shared.ProviderCustom
 }
 
 // GetRequestHistory returns the history of requests made

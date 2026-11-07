@@ -2,12 +2,11 @@ package parsers
 
 import (
 	"context"
-	"fmt"
 	"regexp"
 	"strings"
 
 	"github.com/kart-io/goagent/codec/json"
-
+	shared2 "github.com/kart-io/goagent/constants"
 	agentErrors "github.com/kart-io/goagent/errors"
 )
 
@@ -40,9 +39,9 @@ type ReActOutputParser struct {
 func NewReActOutputParser() *ReActOutputParser {
 	return &ReActOutputParser{
 		BaseOutputParser:   NewBaseOutputParser[*ReActOutput](),
-		thoughtPattern:     regexp.MustCompile(`(?i)` + regexp.QuoteMeta(MarkerThought) + `\s*(.+?)(?:\n|$)`),
-		actionPattern:      regexp.MustCompile(`(?i)` + regexp.QuoteMeta(MarkerAction) + `\s*(.+?)(?:\n|$)`),
-		actionInputPattern: regexp.MustCompile(`(?i)` + regexp.QuoteMeta(MarkerActionInput) + `\s*(.+?)(?:\n|$)`),
+		thoughtPattern:     regexp.MustCompile(`(?i)` + regexp.QuoteMeta(shared2.MarkerThought) + `\s*(.+?)(?:\n|$)`),
+		actionPattern:      regexp.MustCompile(`(?i)` + regexp.QuoteMeta(shared2.MarkerAction) + `\s*(.+?)(?:\n|$)`),
+		actionInputPattern: regexp.MustCompile(`(?i)` + regexp.QuoteMeta(shared2.MarkerActionInput) + `\s*(.+?)(?:\n|$)`),
 		finalAnswerPattern: regexp.MustCompile(`(?ims)^[\t ]*(?:#{1,6}[\t ]+)?(?:\*\*)?(?:final[\t ]+answer|answer|最终答案|最终回答)(?:\*\*)?[\t ]*[:：](?:\*\*)?[\t ]*(.*)\z`),
 	}
 }
@@ -104,13 +103,13 @@ func (p *ReActOutputParser) Parse(ctx context.Context, text string) (*ReActOutpu
 func (p *ReActOutputParser) GetFormatInstructions() string {
 	return `Use the following format:
 
-` + MarkerThought + ` you should always think about what to do
-` + MarkerAction + ` the action to take, should be one of the available tools
-` + MarkerActionInput + ` the input to the action (in JSON format if multiple parameters)
-` + MarkerObservation + ` the result of the action
+` + shared2.MarkerThought + ` you should always think about what to do
+` + shared2.MarkerAction + ` the action to take, should be one of the available tools
+` + shared2.MarkerActionInput + ` the input to the action (in JSON format if multiple parameters)
+` + shared2.MarkerObservation + ` the result of the action
 ... (this Thought/Action/Action Input/Observation can repeat N times)
-` + MarkerThought + ` I now know the final answer
-` + MarkerFinalAnswer + ` the final answer to the original input question`
+` + shared2.MarkerThought + ` I now know the final answer
+` + shared2.MarkerFinalAnswer + ` the final answer to the original input question`
 }
 
 // ParseWithRetry 带重试的解析
@@ -124,7 +123,10 @@ func (p *ReActOutputParser) ParseWithRetry(ctx context.Context, text string, max
 		lastErr = err
 	}
 	if lastErr == nil {
-		lastErr = fmt.Errorf("no parse attempted: maxRetries=%d", maxRetries)
+		lastErr = agentErrors.Newf(agentErrors.CodeInvalidConfig, "no parse attempted: maxRetries=%d", maxRetries).
+			WithComponent("react_parser").
+			WithOperation("parse_with_retry").
+			WithContext("max_retries", maxRetries)
 	}
 	return nil, agentErrors.Wrap(lastErr, agentErrors.CodeParserFailed, "failed to parse after retries").
 		WithComponent("react_parser").

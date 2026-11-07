@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/kart-io/goagent/core"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -67,7 +68,7 @@ func TestGraphLoopUsesUpdatedStateAndEnforcesBudget(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 3, out)
 	_, err = r.Invoke(context.Background(), -1)
-	require.ErrorIs(t, err, ErrMaxSteps)
+	require.ErrorIs(t, err, agentErrors.ErrWorkflowMaxSteps)
 }
 
 func TestGraphRejectsInvalidDefinitions(t *testing.T) {

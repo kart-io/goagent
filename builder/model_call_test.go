@@ -9,6 +9,7 @@ import (
 
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
 	"github.com/stretchr/testify/require"
 )
@@ -41,7 +42,7 @@ func TestBudgetCoversParentChildAndSummary(t *testing.T) {
 		if e == nil {
 			success++
 		} else {
-			require.ErrorIs(t, e, budget.ErrBudgetExceeded)
+			require.ErrorIs(t, e, agentErrors.ErrModelBudgetExceeded)
 		}
 	}
 	require.Equal(t, 1, success)
@@ -170,7 +171,7 @@ func TestScopedPlainAgentsShareBudgetAndReplay(t *testing.T) {
 			agent, err := NewSimpleBuilder(model).WithDurableScope("over-budget").Build()
 			require.NoError(t, err)
 			_, err = agent.AsRunnable().Invoke(ctx, "same question")
-			require.ErrorIs(t, err, budget.ErrBudgetExceeded)
+			require.ErrorIs(t, err, agentErrors.ErrModelBudgetExceeded)
 			require.Nil(t, model.request)
 		}
 		ledger, err := controller.Snapshot(ctx)

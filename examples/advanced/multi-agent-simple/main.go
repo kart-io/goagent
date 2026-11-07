@@ -11,7 +11,8 @@ import (
 	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/llm"
-	"github.com/kart-io/goagent/llm/constants"
+
+	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/llm/providers"
 )
 
@@ -409,8 +410,8 @@ func (m *MockLLMClient) CompleteStream(ctx context.Context, req *llm.CompletionR
 	return stream, nil
 }
 
-func (m *MockLLMClient) Provider() constants.Provider {
-	return constants.ProviderCustom
+func (m *MockLLMClient) Provider() shared.Provider {
+	return shared.ProviderCustom
 }
 
 // ollamaHasModel 确认本地 Ollama 可达且已拉取所需模型；ListModels 读取 /models，不产生生成请求。

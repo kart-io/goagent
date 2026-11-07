@@ -4,7 +4,6 @@ package devtools
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -15,6 +14,7 @@ import (
 
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/observe"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // RecorderConfig sets bounded asynchronous recording. Supply Writer or Path.
@@ -50,10 +50,16 @@ func NewRecorder(cfg RecorderConfig) (*Recorder, error) {
 		cfg.MaxEvents = 10000
 	}
 	if cfg.QueueCapacity < 1 || cfg.MaxEvents < 1 {
-		return nil, fmt.Errorf("positive recorder limits required")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "positive recorder limits required").
+			WithComponent("devtools_recorder").
+			WithOperation("initialize").
+			WithContext("queue_capacity", cfg.QueueCapacity).
+			WithContext("max_events", cfg.MaxEvents)
 	}
 	if cfg.Writer != nil && cfg.Path != "" {
-		return nil, fmt.Errorf("choose writer or path")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "choose writer or path").
+			WithComponent("devtools_recorder").
+			WithOperation("initialize")
 	}
 	r := &Recorder{queue: make(chan observe.Event, cfg.QueueCapacity), done: make(chan struct{}), max: cfg.MaxEvents, writer: cfg.Writer}
 	if cfg.Path != "" {
@@ -68,7 +74,9 @@ func NewRecorder(cfg RecorderConfig) (*Recorder, error) {
 		r.owned = f
 	}
 	if r.writer == nil {
-		return nil, fmt.Errorf("recorder writer or new path required")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "recorder writer or new path required").
+			WithComponent("devtools_recorder").
+			WithOperation("initialize")
 	}
 	go r.write()
 	return r, nil

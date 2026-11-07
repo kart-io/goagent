@@ -2,10 +2,8 @@ package workflow
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/kart-io/goagent/codec/json"
-
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/durable"
 	agentErrors "github.com/kart-io/goagent/errors"
@@ -47,10 +45,10 @@ func WithResumeHandler[T any](fn func(context.Context, string, *GraphSnapshot[T]
 // business idempotency. Resume cannot create a new run or edit an executing node.
 func (d *DurableGraph[T]) Resume(ctx context.Context, id string, req ResumeRequest) (*GraphSnapshot[T], error) {
 	if d == nil {
-		return nil, fmt.Errorf("compiled durable graph is required")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "compiled durable graph is required").WithComponent("workflow").WithOperation("resume")
 	}
 	if req.Key == "" {
-		return nil, &ResumeRejectedError{Err: fmt.Errorf("waiting checkpoint key is required")}
+		return nil, &ResumeRejectedError{Err: agentErrors.Newf(agentErrors.CodeInvalidInput, "waiting checkpoint key is required").WithComponent("workflow").WithOperation("resume")}
 	}
 	var initial T
 	return d.run(ctx, d.store, id, initial, req.Key, req.Input, func(core.StreamChunk[*GraphSnapshot[T]]) error { return nil })
@@ -63,7 +61,7 @@ func (d *DurableGraph[T]) Resume(ctx context.Context, id string, req ResumeReque
 // Legacy approval-only durable.WithResume calls remain supported.
 func WithResume(ctx context.Context, operationKey string, req ResumeRequest) (context.Context, error) {
 	if operationKey == "" || req.Key == "" {
-		return nil, &ResumeRejectedError{Err: fmt.Errorf("operation and checkpoint keys are required")}
+		return nil, &ResumeRejectedError{Err: agentErrors.Newf(agentErrors.CodeInvalidInput, "operation and checkpoint keys are required").WithComponent("workflow").WithOperation("with_resume")}
 	}
 	data, err := json.Marshal(req)
 	if err != nil {
@@ -79,7 +77,7 @@ func (d *DurableGraph[T]) applyResume(ctx context.Context, id string, cp *durabl
 		}
 	}()
 	if d.resumeHandler == nil {
-		return next, state, &ResumeRejectedError{Err: fmt.Errorf("human input requires WithResumeHandler")}
+		return next, state, &ResumeRejectedError{Err: agentErrors.Newf(agentErrors.CodeInvalidInput, "human input requires WithResumeHandler").WithComponent("workflow").WithOperation("apply_resume")}
 	}
 	state, err = d.decodeCheckpoint(id, cp)
 	if err != nil {

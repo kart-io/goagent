@@ -2,7 +2,7 @@ package llm
 
 import (
 	"context"
-	"errors"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"io"
 	"strings"
 )
@@ -25,7 +25,7 @@ func Complete(ctx context.Context, client Client, req *CompletionRequest) (*Comp
 		return nil, err
 	}
 	if stream == nil {
-		return nil, errors.New("模型返回空流")
+		return nil, agentErrors.New(agentErrors.CodeLLMResponse, "模型返回空流").WithComponent("llm").WithOperation("complete")
 	}
 	var deltas strings.Builder
 	for {

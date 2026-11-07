@@ -8,6 +8,7 @@ import (
 	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/workflow"
 	"github.com/stretchr/testify/require"
 )
@@ -26,7 +27,7 @@ func TestGraphDiagnoseAmbiguityAndCompletion(t *testing.T) {
 	d, err := g.CompileDurable(ctx, cfg)
 	require.NoError(t, err)
 	cp, err := d.Run(ctx, "run", 99, "")
-	require.ErrorIs(t, err, durable.ErrApprovalRequired)
+	require.ErrorIs(t, err, agentErrors.ErrApprovalRequired)
 	readonly, err := g.CompileDurable(ctx, workflow.DurableConfig{Store: graphDiagnosticReadOnly{store}, Version: "v1", ApprovalNodes: cfg.ApprovalNodes})
 	require.NoError(t, err)
 	report, err := readonly.Diagnose(ctx, "run")

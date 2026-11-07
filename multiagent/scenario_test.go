@@ -16,6 +16,7 @@ import (
 	"github.com/kart-io/goagent/builder"
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/testing/mocks"
 	"github.com/kart-io/goagent/workflow"
 )
@@ -72,9 +73,9 @@ func parseVerdict(c Conversation) (bool, error) {
 		case strings.HasPrefix(line, "REJECT"):
 			return false, nil
 		}
-		return false, fmt.Errorf("%w：评审结论 %q 无法解析", ErrInvalidRoute, line)
+		return false, fmt.Errorf("%w：评审结论 %q 无法解析", agentErrors.ErrInvalidRoute, line)
 	}
-	return false, fmt.Errorf("%w：没有评审结论", ErrInvalidRoute)
+	return false, fmt.Errorf("%w：没有评审结论", agentErrors.ErrInvalidRoute)
 }
 
 func untilPassed(_ context.Context, c Conversation) (bool, error) { return parseVerdict(c) }
@@ -245,7 +246,7 @@ func TestScenarioEscalation(t *testing.T) {
 	}
 	t.Run("Loop 普通", func(t *testing.T) {
 		_, _, err := execute(t, loop(t, always("REJECT 仍不合格", 2), always("稿", 2)), false, Conversation{Input: "q"})
-		require.ErrorIs(t, err, workflow.ErrMaxSteps)
+		require.ErrorIs(t, err, agentErrors.ErrWorkflowMaxSteps)
 	})
 	t.Run("Router 普通", func(t *testing.T) {
 		refund := textAgent(t, "refund", always("处理中", 2))
@@ -255,7 +256,7 @@ func TestScenarioEscalation(t *testing.T) {
 		g, err := RouterSupervisor(workflow.Config{}, RouterConfig[Conversation]{Supervisor: textAgent(t, "triage", triage), Members: []Step[Conversation]{refund}, Next: next, MaxRounds: 2})
 		require.NoError(t, err)
 		_, _, err = execute(t, g, false, Conversation{Input: "q"})
-		require.ErrorIs(t, err, workflow.ErrMaxSteps)
+		require.ErrorIs(t, err, agentErrors.ErrWorkflowMaxSteps)
 		require.Equal(t, 3, triage.Calls(), "第 MaxRounds 次成员后 Supervisor 再请求一次")
 	})
 	t.Run("持久转人工", func(t *testing.T) {
@@ -263,9 +264,9 @@ func TestScenarioEscalation(t *testing.T) {
 		reviewer, writer := always("REJECT 仍不合格", 2), always("稿", 2)
 		d := compile(t, e, loop(t, reviewer, writer), "v1")
 		_, err := d.Run(e.ctx(), e.id, Conversation{Input: "q"}, "")
-		require.ErrorIs(t, err, workflow.ErrMaxSteps)
+		require.ErrorIs(t, err, agentErrors.ErrWorkflowMaxSteps)
 		_, err = d.Run(e.ctx(), e.id, Conversation{Input: "q"}, "")
-		require.ErrorIs(t, err, workflow.ErrMaxSteps, "同一运行 ID 再 Run 仍报错")
+		require.ErrorIs(t, err, agentErrors.ErrWorkflowMaxSteps, "同一运行 ID 再 Run 仍报错")
 		require.Equal(t, 2, reviewer.Calls())
 
 		e.renew("ticket-1-human")
@@ -326,7 +327,7 @@ func reviewExit(_ context.Context, c Conversation) (string, error) {
 		}
 	}
 	if rounds >= reviewRounds {
-		return "", fmt.Errorf("%w: review loop limit %d", workflow.ErrMaxSteps, reviewRounds)
+		return "", fmt.Errorf("%w: review loop limit %d", agentErrors.ErrWorkflowMaxSteps, reviewRounds)
 	}
 	return "write", nil
 }
@@ -386,7 +387,7 @@ func TestScenarioComposedPipeline(t *testing.T) {
 	t.Run("始终不通过/普通", func(t *testing.T) {
 		sc := composedScripts{script("稿一", "稿二"), script("REJECT", "REJECT"), script()}
 		_, _, err := execute(t, composedGraph(t, sc, nil), false, Conversation{Input: "q"})
-		require.ErrorIs(t, err, workflow.ErrMaxSteps)
+		require.ErrorIs(t, err, agentErrors.ErrWorkflowMaxSteps)
 		require.Equal(t, reviewRounds, sc.writer.Calls())
 		require.Equal(t, reviewRounds, sc.reviewer.Calls())
 		require.Zero(t, sc.compliance.Calls())
@@ -396,14 +397,14 @@ func TestScenarioComposedPipeline(t *testing.T) {
 		e := newEnv(t, "composed")
 		d := compile(t, e, composedGraph(t, sc, nil), "v1")
 		_, err := d.Run(e.ctx(), e.id, Conversation{Input: "q"}, "")
-		require.ErrorIs(t, err, workflow.ErrMaxSteps)
+		require.ErrorIs(t, err, agentErrors.ErrWorkflowMaxSteps)
 		snap, err := d.Snapshot(context.Background(), e.id)
 		require.NoError(t, err)
 		require.Equal(t, "review", snap.Node)
 		require.True(t, snap.Routing)
 		require.Equal(t, 2+2*reviewRounds, snap.Steps)
 		_, err = d.Run(e.ctx(), e.id, Conversation{Input: "q"}, "")
-		require.ErrorIs(t, err, workflow.ErrMaxSteps, "同一运行 ID 再 Run 重新路由，得到同样的错误")
+		require.ErrorIs(t, err, agentErrors.ErrWorkflowMaxSteps, "同一运行 ID 再 Run 重新路由，得到同样的错误")
 		require.Equal(t, reviewRounds, sc.writer.Calls())
 		require.Equal(t, reviewRounds, sc.reviewer.Calls())
 		require.Zero(t, sc.compliance.Calls())
@@ -478,7 +479,7 @@ func TestScenarioAskCustomer(t *testing.T) {
 		e := newEnv(t, "ask-customer")
 		client := scripts()
 		snap, err := graph(t, e, client).Run(e.ctx(), e.id, caseFile{Ticket: "我要退款"}, "")
-		require.ErrorIs(t, err, durable.ErrApprovalRequired)
+		require.ErrorIs(t, err, agentErrors.ErrApprovalRequired)
 		require.Len(t, snap.Interrupts, 1)
 		key := snap.Interrupts[0].Key
 
@@ -518,7 +519,7 @@ func TestScenarioAskCustomer(t *testing.T) {
 				}
 				return
 			}
-			require.ErrorIs(t, err, durable.ErrApprovalRequired)
+			require.ErrorIs(t, err, agentErrors.ErrApprovalRequired)
 			if window < time.Second {
 				time.Sleep(window) // 客户隔了一段时间才回复
 			}
@@ -570,7 +571,7 @@ func (rc *refundCase) graph(t *testing.T) *workflow.DurableGraph[Conversation] {
 func (rc *refundCase) start(t *testing.T) workflow.InterruptPoint {
 	t.Helper()
 	snap, err := rc.graph(t).Run(rc.e.ctx(), rc.e.id, Conversation{Input: "订单 A1 重复扣款，申请退款"}, "")
-	require.ErrorIs(t, err, durable.ErrApprovalRequired)
+	require.ErrorIs(t, err, agentErrors.ErrApprovalRequired)
 	require.Len(t, snap.Interrupts, 1)
 	require.Equal(t, "refund-review", snap.Interrupts[0].ID)
 	require.Zero(t, rc.desk.ledger.refunds(), "等待期间账本没有退款")
@@ -716,7 +717,7 @@ func TestScenarioRefundApproval(t *testing.T) {
 
 		rc.e.restart()
 		snap, err := rc.graph(t).Run(rc.e.ctx(), rc.e.id, Conversation{}, "")
-		require.ErrorIs(t, err, durable.ErrApprovalRequired, "补记的判定仍为有争议，停在审核")
+		require.ErrorIs(t, err, agentErrors.ErrApprovalRequired, "补记的判定仍为有争议，停在审核")
 		require.Len(t, snap.Interrupts, 1)
 		require.Equal(t, "refund-review", snap.Interrupts[0].ID)
 		require.EqualValues(t, 1, rc.desk.registers.Load(), "登记没有重跑")

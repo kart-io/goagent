@@ -8,6 +8,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	shared2 "github.com/kart-io/goagent/constants"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 type personOutput struct {
@@ -40,17 +43,17 @@ func TestJSONOutputParser_ParseFailures(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := NewJSONOutputParser[map[string]any](false).Parse(ctx, "纯文本")
-	assert.ErrorIs(t, err, ErrParseFailed)
+	assert.ErrorIs(t, err, agentErrors.ErrParseFailed)
 
 	_, err = NewJSONOutputParser[personOutput](false).Parse(ctx, `{"name": 1}`)
 	assert.Error(t, err, "字段类型不符应失败")
 
 	_, err = NewJSONOutputParser[map[string]any](true).Parse(ctx, `{"a": 1`)
-	assert.ErrorIs(t, err, ErrParseFailed, "严格模式不接受未闭合的 JSON")
+	assert.ErrorIs(t, err, agentErrors.ErrParseFailed, "严格模式不接受未闭合的 JSON")
 
 	_, err = NewJSONOutputParser[map[string]any](false).Parse(ctx, `{"a": 1`)
 	require.Error(t, err, "宽松模式返回残片，但残片本身仍无法解析")
-	assert.NotErrorIs(t, err, ErrParseFailed)
+	assert.NotErrorIs(t, err, agentErrors.ErrParseFailed)
 }
 
 func TestJSONOutputParser_ExtractionEdges(t *testing.T) {
@@ -97,7 +100,7 @@ func TestStructuredOutputParser(t *testing.T) {
 	assert.Equal(t, output{Title: "粗体"}, got, "可选字段缺失不报错")
 
 	_, err = p.Parse(ctx, "note: 缺少必需字段")
-	assert.ErrorIs(t, err, ErrMissingField)
+	assert.ErrorIs(t, err, agentErrors.ErrMissingField)
 
 	instructions := p.GetFormatInstructions()
 	assert.Contains(t, instructions, "**title** (REQUIRED): 标题")
@@ -141,10 +144,10 @@ func TestEnumOutputParser(t *testing.T) {
 	assert.Equal(t, "Green", got)
 
 	_, err = NewEnumOutputParser(allowed, true).Parse(ctx, "green")
-	assert.ErrorIs(t, err, ErrInvalidFormat)
+	assert.ErrorIs(t, err, agentErrors.ErrInvalidFormat)
 
 	_, err = NewEnumOutputParser(allowed, false).Parse(ctx, "Blue")
-	assert.ErrorIs(t, err, ErrInvalidFormat)
+	assert.ErrorIs(t, err, agentErrors.ErrInvalidFormat)
 
 	assert.Contains(t, NewEnumOutputParser(allowed, true).GetFormatInstructions(), "Red, Green")
 }
@@ -163,7 +166,7 @@ func TestBooleanOutputParser(t *testing.T) {
 	}
 
 	_, err := p.Parse(ctx, "abc")
-	assert.ErrorIs(t, err, ErrParseFailed)
+	assert.ErrorIs(t, err, agentErrors.ErrParseFailed)
 
 	assert.Contains(t, p.GetFormatInstructions(), "'yes' or 'no'")
 }
@@ -201,7 +204,7 @@ func TestChainOutputParser(t *testing.T) {
 	assert.Equal(t, "b", got, "前一个解析器失败后尝试下一个")
 
 	_, err = chain.Parse(ctx, "c")
-	assert.ErrorIs(t, err, ErrInvalidFormat, "保留最后一个解析器的错误")
+	assert.ErrorIs(t, err, agentErrors.ErrInvalidFormat, "保留最后一个解析器的错误")
 
 	assert.Equal(t, strict.GetFormatInstructions(), chain.GetFormatInstructions())
 	assert.Equal(t, "string", chain.GetType())
@@ -209,7 +212,7 @@ func TestChainOutputParser(t *testing.T) {
 	empty := NewChainOutputParser[string]()
 	_, err = empty.Parse(ctx, "a")
 	require.Error(t, err, "空链不能返回成功")
-	assert.True(t, errors.Is(err, errNoParsers))
+	assert.True(t, errors.Is(err, agentErrors.ErrNoParsers))
 	assert.Empty(t, empty.GetFormatInstructions())
 	assert.Equal(t, "unknown", empty.GetType())
 }
@@ -240,7 +243,7 @@ func TestReActOutputParser_Parse(t *testing.T) {
 	_, err = p.Parse(canceled, "Final Answer: 完成")
 	assert.ErrorIs(t, err, context.Canceled)
 
-	assert.Contains(t, p.GetFormatInstructions(), MarkerFinalAnswer)
+	assert.Contains(t, p.GetFormatInstructions(), shared2.MarkerFinalAnswer)
 }
 
 func TestReActOutputParser_ParseWithRetry(t *testing.T) {

@@ -3,7 +3,6 @@ package tools
 import (
 	"context"
 	"errors"
-	"fmt"
 	"reflect"
 	"strings"
 	"time"
@@ -11,15 +10,13 @@ import (
 	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/google/jsonschema-go/jsonschema"
+	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/durable"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/tools/toolargs"
 )
-
-// ErrToolWorkflowWaiting prevents host-required continuation from becoming an answer.
-var ErrToolWorkflowWaiting = errors.New("tool workflow requires host continuation")
 
 // DurableIntentVersioner versions otherwise opaque tool implementation semantics.
 type DurableIntentVersioner interface{ DurableIntentVersion() string }
@@ -66,7 +63,10 @@ type runnableTool[I, O any] struct {
 // NewRunnableTool adapts a fixed runnable without taking ownership of its resources.
 func NewRunnableTool[I, O any](run core.Runnable[I, O], cfg RunnableToolConfig[I, O]) (interfaces.Tool, error) {
 	if nilRunnable(run) {
-		return nil, fmt.Errorf("runnable required")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "runnable required").
+			WithComponent("runnable_tool").
+			WithOperation("initialize").
+			WithContext("tool_name", cfg.Name)
 	}
 	t, err := newRunnableTool(cfg)
 	if err != nil {
@@ -85,7 +85,10 @@ type OwnedRunnable[I, O any] struct {
 // NewRunnableToolFactory creates a new child session for each actual invocation.
 func NewRunnableToolFactory[I, O any](factory func(context.Context) (OwnedRunnable[I, O], error), cfg RunnableToolConfig[I, O]) (interfaces.Tool, error) {
 	if factory == nil {
-		return nil, fmt.Errorf("runnable factory required")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "runnable factory required").
+			WithComponent("runnable_tool").
+			WithOperation("initialize").
+			WithContext("tool_name", cfg.Name)
 	}
 	t, err := newRunnableTool(cfg)
 	if err != nil {
@@ -107,14 +110,20 @@ func nilRunnable(value any) bool {
 }
 func newRunnableTool[I, O any](cfg RunnableToolConfig[I, O]) (*runnableTool[I, O], error) {
 	if cfg.Name == "" || strings.TrimSpace(cfg.Name) != cfg.Name || cfg.Version == "" || cfg.Decode == nil || cfg.Encode == nil || cfg.MaxDepth < 0 || cfg.CleanupTimeout < 0 || cfg.Timeout < 0 {
-		return nil, fmt.Errorf("tool requires name, version, codecs, valid depth, cleanup timeout and timeout")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "tool requires name, version, codecs, valid depth, cleanup timeout and timeout").
+			WithComponent("runnable_tool").
+			WithOperation("initialize").
+			WithContext("tool_name", cfg.Name)
 	}
 	var schema jsonschema.Schema
 	if err := json.Unmarshal([]byte(cfg.ArgsSchema), &schema); err != nil {
 		return nil, err
 	}
 	if schema.Type != "object" {
-		return nil, fmt.Errorf("tool schema must be object")
+		return nil, agentErrors.Newf(agentErrors.CodeToolValidation, "tool schema must be object").
+			WithComponent("runnable_tool").
+			WithOperation("initialize").
+			WithContext("tool_name", cfg.Name)
 	}
 	resolved, err := schema.Resolve(nil)
 	if err != nil {
@@ -124,7 +133,7 @@ func newRunnableTool[I, O any](cfg RunnableToolConfig[I, O]) (*runnableTool[I, O
 		cfg.MaxDepth = 8
 	}
 	if cfg.CleanupTimeout == 0 {
-		cfg.CleanupTimeout = 5 * time.Second
+		cfg.CleanupTimeout = shared.DefaultSessionCleanupTimeout
 	}
 	return &runnableTool[I, O]{config: cfg, schema: resolved}, nil
 }
@@ -156,15 +165,25 @@ func (t *runnableTool[I, O]) Invoke(ctx context.Context, input *interfaces.ToolI
 		return nil, err
 	}
 	if t.config.Resumable && !durable.HasJournal(ctx) {
-		return nil, fmt.Errorf("resumable tool %q requires a journaled dispatcher call", t.config.Name)
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "resumable tool %q requires a journaled dispatcher call", t.config.Name).
+			WithComponent("runnable_tool").
+			WithOperation("invoke").
+			WithContext("tool_name", t.config.Name)
 	}
 	if input == nil || input.Args == nil {
-		return nil, fmt.Errorf("tool object arguments required")
+		return nil, agentErrors.Newf(agentErrors.CodeToolValidation, "tool object arguments required").
+			WithComponent("runnable_tool").
+			WithOperation("invoke").
+			WithContext("tool_name", t.config.Name)
 	}
 	// 参数问题在启动子会话之前发现，可交还模型改正；Decode 只有返回 *ArgumentError 才可恢复。
 	// 子会话及其内层工具的错误一律定性为本工具的执行失败，不能被外层当作参数错误。
 	if err = toolargs.Validate(t.schema, input.Args); err != nil {
-		return nil, &ArgumentError{Message: err.Error(), Err: err}
+		message := err.Error()
+		if detail, ok := err.(*agentErrors.AgentError); ok {
+			message = detail.Message
+		}
+		return nil, &ArgumentError{Message: message, Err: err}
 	}
 	value, err := t.config.Decode(input.Args)
 	if err != nil {
@@ -187,7 +206,10 @@ func (t *runnableTool[I, O]) Invoke(ctx context.Context, input *interfaces.ToolI
 			return nil, Settle(ctx, e)
 		}
 		if owned.Close == nil || nilRunnable(owned.Runnable) {
-			return nil, fmt.Errorf("owned runnable and cleanup required")
+			return nil, agentErrors.Newf(agentErrors.CodeInvalidOutput, "owned runnable and cleanup required").
+				WithComponent("runnable_tool").
+				WithOperation("invoke").
+				WithContext("tool_name", t.config.Name)
 		}
 		run = owned.Runnable
 	}

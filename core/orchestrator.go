@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 )
 
@@ -160,7 +161,7 @@ func (o *BaseOrchestrator) Name() string {
 // RegisterAgent 注册 Agent
 func (o *BaseOrchestrator) RegisterAgent(name string, agent Agent) error {
 	if _, exists := o.agents[name]; exists {
-		return ErrAgentAlreadyExists
+		return agentErrors.ErrAgentAlreadyExists
 	}
 	o.agents[name] = agent
 	return nil
@@ -169,7 +170,7 @@ func (o *BaseOrchestrator) RegisterAgent(name string, agent Agent) error {
 // RegisterChain 注册 Chain
 func (o *BaseOrchestrator) RegisterChain(name string, chain Chain) error {
 	if _, exists := o.chains[name]; exists {
-		return ErrChainAlreadyExists
+		return agentErrors.ErrChainAlreadyExists
 	}
 	o.chains[name] = chain
 	return nil
@@ -178,7 +179,7 @@ func (o *BaseOrchestrator) RegisterChain(name string, chain Chain) error {
 // RegisterTool 注册 Tool
 func (o *BaseOrchestrator) RegisterTool(name string, tool interfaces.Tool) error {
 	if _, exists := o.tools[name]; exists {
-		return ErrToolAlreadyExists
+		return agentErrors.ErrToolAlreadyExists
 	}
 	o.tools[name] = tool
 	return nil
@@ -207,7 +208,7 @@ func (o *BaseOrchestrator) GetTool(name string) (interfaces.Tool, bool) {
 // Concrete orchestrator implementations must override this method.
 // Using composition: embed BaseOrchestrator and implement Execute.
 func (o *BaseOrchestrator) Execute(ctx context.Context, request *OrchestratorRequest) (*OrchestratorResponse, error) {
-	return nil, ErrNotImplemented
+	return nil, agentErrors.ErrNotImplemented
 }
 
 // DefaultOrchestratorStrategy 返回默认编排策略

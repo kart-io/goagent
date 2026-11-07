@@ -2,10 +2,10 @@ package multiagent
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/workflow"
 )
 
@@ -23,13 +23,13 @@ func Loop[T any](cfg workflow.Config, l LoopConfig[T]) (*workflow.Graph[T], erro
 	n := len(l.Steps)
 	switch {
 	case n == 0:
-		return nil, errors.New("Loop 需要至少一个 Step")
+		return nil, agentErrors.NewInvalidConfigError("multiagent", "steps", "Loop 需要至少一个 Step")
 	case l.Until == nil:
-		return nil, errors.New("Loop 需要 Until")
+		return nil, agentErrors.NewInvalidConfigError("multiagent", "until", "Loop 需要 Until")
 	case l.MaxIterations <= 0:
-		return nil, errors.New("Loop 的 MaxIterations 必须大于 0")
+		return nil, agentErrors.NewInvalidConfigError("multiagent", "max_iterations", "Loop 的 MaxIterations 必须大于 0")
 	case l.MaxIterations > math.MaxInt/n:
-		return nil, errors.New("Loop 的 MaxIterations × 步数超出 int 范围")
+		return nil, agentErrors.NewInvalidConfigError("multiagent", "max_iterations", "Loop 的 MaxIterations × 步数超出 int 范围")
 	}
 	g, err := newGraph[T](cfg, l.MaxIterations*n)
 	if err != nil {
@@ -70,7 +70,7 @@ func addFallback[T any](g *workflow.Graph[T], fb *Step[T]) (string, error) {
 		return "", nil
 	}
 	if fb.Name == Finish {
-		return "", fmt.Errorf("兜底 Step 不能命名为 %s", Finish)
+		return "", agentErrors.Newf(agentErrors.CodeInvalidConfig, "兜底 Step 不能命名为 %s", Finish).WithComponent("multiagent").WithOperation("add_fallback")
 	}
 	if err := AddStep(g, *fb); err != nil {
 		return "", fmt.Errorf("兜底 Step: %w", err)

@@ -70,7 +70,7 @@ func compileAsk(t *testing.T, store durable.Store, prepared *atomic.Int32, opts 
 
 func requireInterrupted(t *testing.T, snap *workflow.GraphSnapshot[int], err error) workflow.InterruptPoint {
 	t.Helper()
-	require.ErrorIs(t, err, durable.ErrApprovalRequired)
+	require.ErrorIs(t, err, agentErrors.ErrApprovalRequired)
 	require.True(t, snap.Waiting)
 	require.Len(t, snap.Interrupts, 1)
 	require.Equal(t, "amount", snap.Interrupts[0].ID)
@@ -99,7 +99,7 @@ func TestNodeInterruptPausesAndResumesAfterRestart(t *testing.T) {
 	require.EqualValues(t, 1, prepared.Load(), "准备步骤只回放")
 
 	_, err = compileAsk(t, store, &prepared).Resume(ctx, "ask", workflow.ResumeRequest{Key: point.Key, Input: json.RawMessage(`5`)})
-	require.ErrorIs(t, err, workflow.ErrApprovalMismatch)
+	require.ErrorIs(t, err, agentErrors.ErrApprovalMismatch)
 }
 
 func TestNodeInterruptRejectsInvalidInput(t *testing.T) {
@@ -116,7 +116,7 @@ func TestNodeInterruptRejectsInvalidInput(t *testing.T) {
 	_, err = run.Resume(ctx, "ask", workflow.ResumeRequest{Key: point.Key})
 	require.ErrorAs(t, err, &rejected)
 	_, err = run.Resume(ctx, "ask", workflow.ResumeRequest{Key: "forged", Input: json.RawMessage(`1`)})
-	require.ErrorIs(t, err, workflow.ErrApprovalMismatch)
+	require.ErrorIs(t, err, agentErrors.ErrApprovalMismatch)
 
 	snap, err = run.Resume(ctx, "ask", workflow.ResumeRequest{Key: point.Key, Input: json.RawMessage(`-1`)})
 	require.ErrorAs(t, err, &rejected)
@@ -163,7 +163,7 @@ func TestNodeInterruptAnswerLoggedBeforeCheckpointUpdate(t *testing.T) {
 	var rejected *workflow.ResumeRejectedError
 	_, err = run.Resume(ctx, "ask", workflow.ResumeRequest{Key: point.Key, Input: json.RawMessage(`7`)})
 	require.ErrorAs(t, err, &rejected)
-	require.ErrorIs(t, err, workflow.ErrInterruptAnswered)
+	require.ErrorIs(t, err, agentErrors.ErrInterruptAnswered)
 	require.EqualValues(t, 1, prepared.Load(), "冲突输入不执行节点")
 
 	out, err := run.Resume(ctx, "ask", workflow.ResumeRequest{Key: point.Key, Input: json.RawMessage(" 5 ")})
@@ -198,7 +198,7 @@ func TestInterruptAfterApprovalDoesNotApproveAgain(t *testing.T) {
 	run, err := oneNode(t, askNode(&prepared)).CompileDurable(ctx, cfg, before)
 	require.NoError(t, err)
 	wait, err := run.Run(ctx, "ask", 10, "")
-	require.ErrorIs(t, err, durable.ErrApprovalRequired)
+	require.ErrorIs(t, err, agentErrors.ErrApprovalRequired)
 	require.Empty(t, wait.Interrupts)
 
 	snap, err := run.Run(ctx, "ask", 0, wait.Key)
@@ -231,7 +231,7 @@ func TestInterruptCheckpointCorruptionIsDetected(t *testing.T) {
 			var prepared atomic.Int32
 			run := compileAsk(t, store, &prepared)
 			_, err := run.Run(ctx, "ask", 10, "")
-			require.ErrorIs(t, err, durable.ErrApprovalRequired)
+			require.ErrorIs(t, err, agentErrors.ErrApprovalRequired)
 			cp, err := store.Load(ctx, "ask")
 			require.NoError(t, err)
 			var data map[string]any
@@ -311,12 +311,12 @@ func TestParallelInterruptsDoNotCancelSiblings(t *testing.T) {
 	require.NoError(t, err)
 
 	snap, err := run.Run(ctx, "par", 1, "")
-	require.ErrorIs(t, err, durable.ErrApprovalRequired)
+	require.ErrorIs(t, err, agentErrors.ErrApprovalRequired)
 	require.Len(t, snap.Interrupts, 2)
 	require.EqualValues(t, 1, c.Load())
 
 	snap, err = run.Resume(ctx, "par", workflow.ResumeRequest{Key: interruptFor(t, snap, "a").Key, Input: json.RawMessage(`2`)})
-	require.ErrorIs(t, err, durable.ErrApprovalRequired)
+	require.ErrorIs(t, err, agentErrors.ErrApprovalRequired)
 	require.Len(t, snap.Interrupts, 1)
 	interruptFor(t, snap, "b")
 	require.EqualValues(t, 1, c.Load(), "已完成的兄弟分支不重跑")
@@ -335,7 +335,7 @@ func TestParallelPartialAnswerSurvivesCrash(t *testing.T) {
 		CompileDurable(ctx, workflow.DurableConfig{Store: store, Version: "par-v1"})
 	require.NoError(t, err)
 	snap, err := run.Run(ctx, "par", 1, "")
-	require.ErrorIs(t, err, durable.ErrApprovalRequired)
+	require.ErrorIs(t, err, agentErrors.ErrApprovalRequired)
 
 	// A 的输入写入日志后，保存 A 的分支输出失败：检查点仍等待 A 与 B。
 	store.fail = func(v *durable.Snapshot) bool { return !bytes.Contains(v.Data, []byte(`"outputs":{}`)) }
@@ -344,7 +344,7 @@ func TestParallelPartialAnswerSurvivesCrash(t *testing.T) {
 	store.fail = nil
 
 	snap, err = run.Run(ctx, "par", 0, "")
-	require.ErrorIs(t, err, durable.ErrApprovalRequired)
+	require.ErrorIs(t, err, agentErrors.ErrApprovalRequired)
 	require.Len(t, snap.Interrupts, 1, "只剩 B")
 	interruptFor(t, snap, "b")
 
@@ -448,7 +448,7 @@ func TestNodeInterruptEmptyValidateErrorIsRejection(t *testing.T) {
 	}).CompileDurable(ctx, workflow.DurableConfig{Store: store, Version: "empty-v1"})
 	require.NoError(t, err)
 	snap, err := run.Run(ctx, "ask", 1, "")
-	require.ErrorIs(t, err, durable.ErrApprovalRequired)
+	require.ErrorIs(t, err, agentErrors.ErrApprovalRequired)
 
 	var rejected *workflow.ResumeRejectedError
 	snap, err = run.Resume(ctx, "ask", workflow.ResumeRequest{Key: snap.Interrupts[0].Key, Input: json.RawMessage(`1`)})
@@ -467,7 +467,7 @@ func TestParallelFailureWinsOverInterrupt(t *testing.T) {
 	require.NoError(t, err)
 	_, err = run.Run(ctx, "par", 1, "")
 	require.ErrorIs(t, err, errDisk)
-	require.NotErrorIs(t, err, durable.ErrApprovalRequired)
+	require.NotErrorIs(t, err, agentErrors.ErrApprovalRequired)
 }
 
 // approvedChild 是先审批再向人要输入的子图，以及在可续跑父操作内运行它的函数。
@@ -521,7 +521,7 @@ func TestNodeInterruptValidatePanicIsDiagnosable(t *testing.T) {
 	run, err := oneNode(t, node).CompileDurable(ctx, workflow.DurableConfig{Store: newStore(t), Version: "panic-v1"})
 	require.NoError(t, err)
 	snap, err := run.Run(ctx, "panic", 1, "")
-	require.ErrorIs(t, err, durable.ErrApprovalRequired)
+	require.ErrorIs(t, err, agentErrors.ErrApprovalRequired)
 
 	_, err = run.Resume(ctx, "panic", workflow.ResumeRequest{Key: snap.Interrupts[0].Key, Input: json.RawMessage(`1`)})
 	var rejected *workflow.ResumeRejectedError

@@ -11,7 +11,8 @@ import (
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
-	"github.com/kart-io/goagent/llm/constants"
+
+	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/tools"
 )
 
@@ -43,8 +44,8 @@ func (m *MockLLMClient) CompleteStream(ctx context.Context, req *llm.CompletionR
 	return stream, nil
 }
 
-func (m *MockLLMClient) Provider() constants.Provider {
-	return constants.ProviderCustom
+func (m *MockLLMClient) Provider() shared.Provider {
+	return shared.ProviderCustom
 }
 
 // MockTool for testing

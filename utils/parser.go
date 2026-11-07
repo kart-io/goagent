@@ -1,7 +1,7 @@
 package utils
 
 import (
-	"errors"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"regexp"
 	"strings"
 	"sync"
@@ -99,7 +99,7 @@ func (p *ResponseParser) ExtractJSON() (string, error) {
 		return match, nil
 	}
 
-	return "", errors.New("no valid JSON found in response")
+	return "", agentErrors.New(agentErrors.CodeParserInvalidJSON, "no valid JSON found in response").WithComponent("response_parser").WithOperation("extract_json")
 }
 
 // ParseToMap 解析为 map
@@ -136,7 +136,7 @@ func (p *ResponseParser) ExtractCodeBlock(language string) (string, error) {
 	if len(matches) > 1 {
 		return strings.TrimSpace(matches[1]), nil
 	}
-	return "", errors.New("code block not found")
+	return "", agentErrors.New(agentErrors.CodeNotFound, "code block not found").WithComponent("response_parser").WithOperation("extract_code_block")
 }
 
 // ExtractAllCodeBlocks 提取所有代码块
@@ -194,7 +194,7 @@ func (p *ResponseParser) ExtractKeyValue(key string) (string, error) {
 			if str, ok := value.(string); ok {
 				return str, nil
 			}
-			return "", errors.New("value is not a string")
+			return "", agentErrors.New(agentErrors.CodeParserFailed, "value is not a string").WithComponent("response_parser").WithOperation("extract_key_value")
 		}
 	}
 
@@ -206,7 +206,7 @@ func (p *ResponseParser) ExtractKeyValue(key string) (string, error) {
 		return strings.TrimSpace(matches[1]), nil
 	}
 
-	return "", errors.New("key not found")
+	return "", agentErrors.New(agentErrors.CodeParserMissingField, "key not found").WithComponent("response_parser").WithOperation("extract_key_value")
 }
 
 // ExtractSection 提取指定章节
@@ -218,7 +218,7 @@ func (p *ResponseParser) ExtractSection(title string) (string, error) {
 	if len(matches) > 1 {
 		return strings.TrimSpace(matches[1]), nil
 	}
-	return "", errors.New("section not found")
+	return "", agentErrors.New(agentErrors.CodeNotFound, "section not found").WithComponent("response_parser").WithOperation("extract_section")
 }
 
 // RemoveMarkdown 移除 Markdown 格式

@@ -5,14 +5,14 @@ import (
 	"sync/atomic"
 	"testing"
 
+	shared2 "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/llm"
-	"github.com/kart-io/goagent/llm/constants"
 )
 
 // throughputModel 是不保留对话的离线终态源，只测框架与会话互斥，不模拟网络延迟。
 type throughputModel struct{ calls atomic.Int64 }
 
-func (*throughputModel) Provider() constants.Provider { return constants.ProviderCustom }
+func (*throughputModel) Provider() shared2.Provider { return shared2.ProviderCustom }
 func (m *throughputModel) CompleteStream(ctx context.Context, _ *llm.CompletionRequest) (<-chan *llm.StreamChunk, error) {
 	m.calls.Add(1)
 	ch := make(chan *llm.StreamChunk, 1)

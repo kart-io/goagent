@@ -8,6 +8,7 @@ import (
 
 	"github.com/kart-io/goagent/builder"
 	"github.com/kart-io/goagent/codec/json"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 )
 
@@ -29,13 +30,13 @@ func (c ToolContract) Schema() string {
 // CheckArguments 在授权和执行两处检查同一个原始值，任何不一致都应在效果发生前失败。
 func (c ToolContract) CheckArguments(input *interfaces.ToolInput) error {
 	if input == nil || c.ID == "" || c.Rate == "" {
-		return fmt.Errorf("缺少精确参数或宿主参考值")
+		return agentErrors.Newf(agentErrors.CodeInvalidOutput, "缺少精确参数或宿主参考值").WithComponent("evaluation/agentbench").WithOperation("check_arguments")
 	}
 	for _, field := range []struct{ name, want string }{{"id", c.ID}, {"rate", c.Rate}} {
 		value := input.Args[field.name]
 		if c.StringNumbers {
 			if value != field.want {
-				return fmt.Errorf("字段 %s 必须按字符串保持原始精度", field.name)
+				return agentErrors.Newf(agentErrors.CodeInvalidOutput, "字段 %s 必须按字符串保持原始精度", field.name).WithComponent("evaluation/agentbench").WithOperation("check_arguments")
 			}
 		} else {
 			b, err := json.Marshal(value)
@@ -45,12 +46,12 @@ func (c ToolContract) CheckArguments(input *interfaces.ToolInput) error {
 			got, ok := new(big.Rat).SetString(string(b))
 			want, valid := new(big.Rat).SetString(field.want)
 			if !ok || !valid || got.Cmp(want) != 0 {
-				return fmt.Errorf("字段 %s 与宿主精确值不一致", field.name)
+				return agentErrors.Newf(agentErrors.CodeInvalidOutput, "字段 %s 与宿主精确值不一致", field.name).WithComponent("evaluation/agentbench").WithOperation("check_arguments")
 			}
 		}
 	}
 	if input.Args["label"] != c.Label {
-		return fmt.Errorf("字段 label 与宿主参考值不一致")
+		return agentErrors.Newf(agentErrors.CodeInvalidOutput, "字段 label 与宿主参考值不一致").WithComponent("evaluation/agentbench").WithOperation("check_arguments")
 	}
 	return nil
 }
@@ -59,7 +60,7 @@ func (c ToolContract) CheckArguments(input *interfaces.ToolInput) error {
 func (c ToolContract) CheckAnswer(answer any) error {
 	text, ok := answer.(string)
 	if c.Receipt == "" || !ok || strings.TrimSpace(text) != c.Receipt {
-		return fmt.Errorf("最终答案必须只包含实际工具回执")
+		return agentErrors.Newf(agentErrors.CodeInvalidOutput, "最终答案必须只包含实际工具回执").WithComponent("evaluation/agentbench").WithOperation("check_answer")
 	}
 	return nil
 }
@@ -70,13 +71,13 @@ func (c ToolContract) Stop(ctx context.Context, stopping *builder.Stopping) (str
 		return "", err
 	}
 	if stopping == nil || c.Receipt == "" {
-		return "", fmt.Errorf("缺少最终答复或宿主回执")
+		return "", agentErrors.Newf(agentErrors.CodeInvalidOutput, "缺少最终答复或宿主回执").WithComponent("evaluation/agentbench").WithOperation("stop")
 	}
 	if c.CheckAnswer(stopping.Answer) == nil {
 		return "", nil
 	}
 	if stopping.Blocked >= 1 {
-		return "", fmt.Errorf("已纠正一次，最终答案仍不符合回执格式")
+		return "", agentErrors.Newf(agentErrors.CodeInvalidOutput, "已纠正一次，最终答案仍不符合回执格式").WithComponent("evaluation/agentbench").WithOperation("stop")
 	}
 	return "上一轮回答格式错误。最终只输出已完成工具结果中 receipt 字段的原始字符串值；不要输出 JSON、引号、代码块或解释。不得再次调用工具。", nil
 }

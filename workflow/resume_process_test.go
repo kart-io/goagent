@@ -11,6 +11,7 @@ import (
 	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/workflow"
 	"github.com/stretchr/testify/require"
 )
@@ -57,7 +58,7 @@ func TestHumanResumeSurvivesProcessExitAfterAcceptance(t *testing.T) {
 		switch phase {
 		case "start":
 			wait, e := run.Run(ctx, "human", 10, "")
-			require.ErrorIs(t, e, durable.ErrApprovalRequired)
+			require.ErrorIs(t, e, agentErrors.ErrApprovalRequired)
 			require.True(t, wait.Waiting)
 		case "accept":
 			wait, e := run.Snapshot(ctx, "human")

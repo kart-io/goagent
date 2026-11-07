@@ -9,6 +9,7 @@ import (
 	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/tools"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -53,7 +54,9 @@ func WithDurablePolicy(p durable.OperationPolicy) Option {
 // unless WithToolErrorsAsRejected is given.
 func Tools(ctx context.Context, session *mcp.ClientSession, opts ...Option) ([]interfaces.Tool, error) {
 	if session == nil {
-		return nil, fmt.Errorf("MCP session is required")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "MCP session is required").
+			WithComponent("mcp_remote").
+			WithOperation("list_tools")
 	}
 	var o options
 	for _, opt := range opts {
@@ -105,23 +108,35 @@ func (t *remoteTool) Description() string { return t.description }
 func (t *remoteTool) ArgsSchema() string  { return t.schema }
 func (t *remoteTool) Invoke(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 	if input == nil {
-		return nil, fmt.Errorf("MCP tool input is required")
+		return nil, agentErrors.Newf(agentErrors.CodeToolValidation, "MCP tool input is required").
+			WithComponent("mcp_remote").
+			WithOperation("invoke").
+			WithContext("tool_name", t.name)
 	}
 	result, err := t.session.CallTool(ctx, &mcp.CallToolParams{Name: t.remoteName, Arguments: input.Args})
 	if err != nil {
 		return nil, fmt.Errorf("MCP tool %s: %w", t.name, err)
 	}
 	if result == nil {
-		return nil, fmt.Errorf("MCP tool %s returned nil result", t.name)
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidOutput, "MCP tool %s returned nil result", t.name).
+			WithComponent("mcp_remote").
+			WithOperation("invoke").
+			WithContext("tool_name", t.name)
 	}
 	if result.NeedsInput() {
-		return nil, fmt.Errorf("MCP tool %s requires an input response; use the SDK session to continue", t.name)
+		return nil, agentErrors.Newf(agentErrors.CodeToolExecution, "MCP tool %s requires an input response; use the SDK session to continue", t.name).
+			WithComponent("mcp_remote").
+			WithOperation("invoke").
+			WithContext("tool_name", t.name)
 	}
 	if result.IsError {
 		if t.rejectToolErrs {
 			return tools.Rejected(fmt.Sprintf("MCP tool %s returned an error: %s", t.name, errorText(result)), nil), nil
 		}
-		return nil, fmt.Errorf("MCP tool %s: %s", t.name, errorText(result))
+		return nil, agentErrors.Newf(agentErrors.CodeToolExecution, "MCP tool %s: %s", t.name, errorText(result)).
+			WithComponent("mcp_remote").
+			WithOperation("invoke").
+			WithContext("tool_name", t.name)
 	}
 	// Keep the complete MCP result, including text, images and structured content.
 	return &interfaces.ToolOutput{Result: result, Success: true}, nil

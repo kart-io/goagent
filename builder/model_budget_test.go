@@ -9,6 +9,7 @@ import (
 
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/stretchr/testify/require"
@@ -28,7 +29,7 @@ func TestHostTokenEstimatorControlsNativeRequests(t *testing.T) {
 			require.NoError(t, err)
 			_, err = a.AsRunnable().Invoke(budget.WithController(context.Background(), c), "问题")
 			if !estimated {
-				require.ErrorIs(t, err, budget.ErrTokenEstimateRequired)
+				require.ErrorIs(t, err, agentErrors.ErrTokenEstimateRequired)
 				require.Empty(t, model.requests)
 				return
 			}

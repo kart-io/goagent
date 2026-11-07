@@ -14,6 +14,7 @@ import (
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/observe"
 	"github.com/kart-io/goagent/core/usage"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/tools"
@@ -87,7 +88,7 @@ func TestAgentUsageRetryUnknownAndBudgetRejection(t *testing.T) {
 	require.Equal(t, 1, unknown)
 	require.Len(t, keys, 2)
 	_, err = a.AsRunnable().Invoke(ctx, "over budget")
-	require.ErrorIs(t, err, budget.ErrBudgetExceeded)
+	require.ErrorIs(t, err, agentErrors.ErrModelBudgetExceeded)
 	require.Equal(t, 2, model.calls)
 	var newStarts int
 	for _, e := range sink.snapshot() {
@@ -344,7 +345,9 @@ func TestAgentUsageInvalidEvidenceStillClosesAttemptObservation(t *testing.T) {
 	a, err := NewSimpleBuilder(m).WithAgentID("root").WithTools(plainTool()).Build()
 	require.NoError(t, err)
 	_, err = a.AsRunnable().Invoke(observe.WithObserver(budget.WithController(context.Background(), c), sink), "task")
-	require.Error(t, err)
+	require.Equal(t, agentErrors.CodeLLMResponse, agentErrors.GetCode(err))
+	require.Equal(t, "builder", agentErrors.GetComponent(err))
+	require.Equal(t, "publish_model_usage", agentErrors.GetOperation(err))
 	var ends int
 	for _, e := range sink.snapshot() {
 		if e.Type == "model_usage" {
@@ -359,4 +362,38 @@ func TestAgentUsageInvalidEvidenceStillClosesAttemptObservation(t *testing.T) {
 	r, err := c.Attribution(context.Background())
 	require.NoError(t, err)
 	require.Equal(t, 1, r.UnknownUsageEntries)
+}
+
+// 发布边界按证据来源分类，同时保留共享校验根因与用量无效通知。
+func TestPublishModelUsageClassifiesInvalidEvidenceBySource(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		replayed bool
+		code     agentErrors.ErrorCode
+	}{{"实时模型", false, agentErrors.CodeLLMResponse}, {"持久回放", true, agentErrors.CodeStateValidation}} {
+		t.Run(tc.name, func(t *testing.T) {
+			sink := &agentUsageSink{}
+			ctx := observe.WithObserver(context.Background(), sink)
+			turn := &llm.StreamChunk{Usage: &llm.Usage{TotalTokens: -1}}
+			err := publishModelUsage(ctx, "operation", "attempt", 1, turn, tc.replayed)
+			require.Equal(t, tc.code, agentErrors.GetCode(err))
+			require.Equal(t, "builder", agentErrors.GetComponent(err))
+			require.Equal(t, "publish_model_usage", agentErrors.GetOperation(err))
+			var outer *agentErrors.AgentError
+			require.ErrorAs(t, err, &outer)
+			cause := errors.Unwrap(outer)
+			require.Equal(t, agentErrors.CodeInvalidInput, agentErrors.GetCode(cause))
+			require.Equal(t, "usage", agentErrors.GetComponent(cause))
+			require.ErrorContains(t, cause, "invalid usage evidence")
+			events := sink.snapshot()
+			require.Len(t, events, 1)
+			require.Equal(t, "model_usage", events[0].Type)
+			require.Equal(t, "usage_invalid", events[0].ErrorKind)
+			require.Equal(t, tc.replayed, events[0].Replayed)
+			require.Equal(t, tc.replayed, events[0].Usage.Replayed)
+			require.Zero(t, events[0].Usage.KnownFields)
+			require.Zero(t, events[0].Usage.Tokens.TotalTokens)
+			require.False(t, events[0].Usage.AccountingCommitted)
+		})
+	}
 }

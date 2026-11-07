@@ -9,11 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kart-io/goagent/codec/json"
-
 	"github.com/gofrs/flock"
-
+	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/core/internal/txnlog"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // FileStore uses OS-backed per-run locks, fsync and same-directory atomic rename.
@@ -39,7 +38,7 @@ func (s *FileStore) Lock(ctx context.Context, id string) (func() error, error) {
 		return nil, lockError(ctx, err)
 	}
 	if !ok {
-		return nil, ErrLockUnavailable
+		return nil, agentErrors.ErrLockUnavailable
 	}
 	return lock.Close, nil
 }
@@ -211,7 +210,7 @@ func (s *FileStore) RemoveScope(ctx context.Context, name string) (err error) {
 // 墓碑回收后同名作用域的迟到写入会成功并留下残留，olderThan 须大于最长的重试或恢复窗口。
 func (s *FileStore) PruneRemoved(ctx context.Context, olderThan time.Duration) error {
 	if olderThan < 0 {
-		return fmt.Errorf("墓碑保留时长不能为负：%v", olderThan)
+		return agentErrors.Newf(agentErrors.CodeInvalidInput, "墓碑保留时长不能为负：%v", olderThan).WithComponent("durable_store").WithOperation("prune_removed")
 	}
 	root := filepath.Join(s.dir, scopesDir)
 	entries, err := os.ReadDir(root)
@@ -281,7 +280,7 @@ func lockGate(ctx context.Context, path string, shared, create bool) (*flock.Flo
 		}
 		ok, err := try(ctx, 20*time.Millisecond)
 		if err == nil && !ok {
-			err = ErrLockUnavailable
+			err = agentErrors.ErrLockUnavailable
 		}
 		if err != nil {
 			return nil, lockError(ctx, err)
@@ -306,7 +305,7 @@ func lockGate(ctx context.Context, path string, shared, create bool) (*flock.Flo
 // lockError 把 ctx 结束导致的等锁失败标记为 ErrLockUnavailable，同时保留 ctx 错误；其他错误（如 I/O）原样返回。
 func lockError(ctx context.Context, err error) error {
 	if ctx.Err() != nil && errors.Is(err, ctx.Err()) {
-		return fmt.Errorf("%w: %w", ErrLockUnavailable, err)
+		return fmt.Errorf("%w: %w", agentErrors.ErrLockUnavailable, err)
 	}
 	return err
 }
@@ -358,7 +357,7 @@ func (s *fileScope) enter(ctx context.Context) (func() error, error) {
 	}
 	removed, err := scopeRemoved(gate)
 	if err == nil && removed {
-		err = ErrScopeRemoved
+		err = agentErrors.ErrScopeRemoved
 	}
 	if err == nil {
 		err = os.MkdirAll(s.files.dir, 0700)
@@ -404,7 +403,7 @@ func (s *fileScope) checkRemoved() error {
 	case err != nil:
 		return err
 	case info.Size() > 0:
-		return ErrScopeRemoved
+		return agentErrors.ErrScopeRemoved
 	}
 	return nil
 }

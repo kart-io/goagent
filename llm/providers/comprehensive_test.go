@@ -14,11 +14,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	agentllm "github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/common"
-	"github.com/kart-io/goagent/llm/constants"
 )
 
 // ==============================================================================
@@ -36,7 +36,7 @@ func TestDeepSeekProvider_Initialization(t *testing.T) {
 		{
 			name: "valid config with all parameters",
 			config: &llm.LLMOptions{
-				Provider:    constants.ProviderDeepSeek,
+				Provider:    shared.ProviderDeepSeek,
 				APIKey:      "test-key",
 				Model:       "deepseek-coder",
 				MaxTokens:   4000,
@@ -49,7 +49,7 @@ func TestDeepSeekProvider_Initialization(t *testing.T) {
 		{
 			name: "missing API key",
 			config: &llm.LLMOptions{
-				Provider:    constants.ProviderDeepSeek,
+				Provider:    shared.ProviderDeepSeek,
 				Model:       "deepseek-chat",
 				MaxTokens:   4000,
 				Temperature: 0.5,
@@ -62,7 +62,7 @@ func TestDeepSeekProvider_Initialization(t *testing.T) {
 		{
 			name: "valid config with minimal parameters",
 			config: &llm.LLMOptions{
-				Provider: constants.ProviderDeepSeek,
+				Provider: shared.ProviderDeepSeek,
 				APIKey:   "test-key",
 			},
 			wantErr: false,
@@ -70,7 +70,7 @@ func TestDeepSeekProvider_Initialization(t *testing.T) {
 		{
 			name: "config with custom base URL",
 			config: &llm.LLMOptions{
-				Provider: constants.ProviderDeepSeek,
+				Provider: shared.ProviderDeepSeek,
 				APIKey:   "test-key",
 				BaseURL:  "https://custom.deepseek.com",
 			},
@@ -102,7 +102,7 @@ func TestDeepSeekProvider_Initialization(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 				assert.NotNil(t, provider)
-				assert.Equal(t, constants.ProviderDeepSeek, provider.Provider())
+				assert.Equal(t, shared.ProviderDeepSeek, provider.Provider())
 				assert.NotZero(t, provider.GetMaxTokens(0))
 				assert.NotZero(t, provider.GetTemperature(0))
 			}
@@ -113,7 +113,7 @@ func TestDeepSeekProvider_Initialization(t *testing.T) {
 // TestDeepSeekProvider_DefaultValues tests default value assignments
 func TestDeepSeekProvider_DefaultValues(t *testing.T) {
 	config := &llm.LLMOptions{
-		Provider: constants.ProviderDeepSeek,
+		Provider: shared.ProviderDeepSeek,
 		APIKey:   "test-key",
 	}
 
@@ -129,7 +129,7 @@ func TestDeepSeekProvider_DefaultValues(t *testing.T) {
 // TestDeepSeekProvider_ModelName tests model name retrieval
 func TestDeepSeekProvider_ModelName(t *testing.T) {
 	config := &llm.LLMOptions{
-		Provider: constants.ProviderDeepSeek,
+		Provider: shared.ProviderDeepSeek,
 		APIKey:   "test-key",
 		Model:    "deepseek-coder",
 	}
@@ -143,7 +143,7 @@ func TestDeepSeekProvider_ModelName(t *testing.T) {
 // TestDeepSeekProvider_MaxTokens tests max tokens retrieval
 func TestDeepSeekProvider_MaxTokens(t *testing.T) {
 	config := &llm.LLMOptions{
-		Provider:  constants.ProviderDeepSeek,
+		Provider:  shared.ProviderDeepSeek,
 		APIKey:    "test-key",
 		MaxTokens: 3000,
 	}
@@ -233,7 +233,7 @@ func TestDeepSeekProvider_CallAPI_NetworkError(t *testing.T) {
 // TestDeepSeekStreamingProvider_Creation tests streaming provider creation
 func TestDeepSeekStreamingProvider_Creation(t *testing.T) {
 	config := &llm.LLMOptions{
-		Provider: constants.ProviderDeepSeek,
+		Provider: shared.ProviderDeepSeek,
 		APIKey:   "test-key",
 	}
 
@@ -280,7 +280,7 @@ func TestDeepSeekStreamingProvider_StreamWithMetadata(t *testing.T) {
 // TestOpenAIStreamingProvider_CreationComprehensive tests OpenAI streaming provider creation
 func TestOpenAIStreamingProvider_CreationComprehensive(t *testing.T) {
 	config := &llm.LLMOptions{
-		Provider:    constants.ProviderOpenAI,
+		Provider:    shared.ProviderOpenAI,
 		APIKey:      "test-key",
 		BaseURL:     "https://api.openai.com/v1",
 		Timeout:     5,
@@ -296,7 +296,7 @@ func TestOpenAIStreamingProvider_CreationComprehensive(t *testing.T) {
 // TestOpenAIStreamingProvider_CreationErrorComprehensive tests error handling in creation
 func TestOpenAIStreamingProvider_CreationErrorComprehensive(t *testing.T) {
 	config := &llm.LLMOptions{
-		Provider:    constants.ProviderOpenAI,
+		Provider:    shared.ProviderOpenAI,
 		BaseURL:     "https://api.openai.com/v1",
 		Timeout:     5,
 		Model:       "gpt-4",
@@ -319,7 +319,7 @@ func TestOpenAIProvider_InitializationComprehensive(t *testing.T) {
 		{
 			name: "valid config",
 			config: &llm.LLMOptions{
-				Provider:    constants.ProviderOpenAI,
+				Provider:    shared.ProviderOpenAI,
 				APIKey:      "test-key",
 				Model:       "gpt-4",
 				MaxTokens:   2000,
@@ -332,7 +332,7 @@ func TestOpenAIProvider_InitializationComprehensive(t *testing.T) {
 		{
 			name: "missing API key",
 			config: &llm.LLMOptions{
-				Provider:    constants.ProviderOpenAI,
+				Provider:    shared.ProviderOpenAI,
 				BaseURL:     "https://api.openai.com/v1",
 				Timeout:     5,
 				Model:       "gpt-4",
@@ -344,7 +344,7 @@ func TestOpenAIProvider_InitializationComprehensive(t *testing.T) {
 		{
 			name: "with custom base URL",
 			config: &llm.LLMOptions{
-				Provider: constants.ProviderOpenAI,
+				Provider: shared.ProviderOpenAI,
 				APIKey:   "test-key",
 				BaseURL:  "https://custom.openai.com",
 			},
@@ -361,7 +361,7 @@ func TestOpenAIProvider_InitializationComprehensive(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 				assert.NotNil(t, provider)
-				assert.Equal(t, constants.ProviderOpenAI, provider.Provider())
+				assert.Equal(t, shared.ProviderOpenAI, provider.Provider())
 			}
 		})
 	}
@@ -370,7 +370,7 @@ func TestOpenAIProvider_InitializationComprehensive(t *testing.T) {
 // TestOpenAIProvider_DefaultModelComprehensive tests default model assignment
 func TestOpenAIProvider_DefaultModelComprehensive(t *testing.T) {
 	config := &llm.LLMOptions{
-		Provider: constants.ProviderOpenAI,
+		Provider: shared.ProviderOpenAI,
 		APIKey:   "test-key",
 	}
 
@@ -384,7 +384,7 @@ func TestOpenAIProvider_DefaultModelComprehensive(t *testing.T) {
 // TestOpenAIProvider_ModelNameComprehensive tests model name retrieval
 func TestOpenAIProvider_ModelNameComprehensive(t *testing.T) {
 	config := &llm.LLMOptions{
-		Provider:    constants.ProviderOpenAI,
+		Provider:    shared.ProviderOpenAI,
 		APIKey:      "test-key",
 		BaseURL:     "https://api.openai.com/v1",
 		Timeout:     5,
@@ -402,7 +402,7 @@ func TestOpenAIProvider_ModelNameComprehensive(t *testing.T) {
 // TestOpenAIProvider_MaxTokensComprehensive tests max tokens retrieval
 func TestOpenAIProvider_MaxTokensComprehensive(t *testing.T) {
 	config := &llm.LLMOptions{
-		Provider:    constants.ProviderOpenAI,
+		Provider:    shared.ProviderOpenAI,
 		APIKey:      "test-key",
 		BaseURL:     "https://api.openai.com/v1",
 		Timeout:     5,
@@ -476,7 +476,7 @@ func TestGeminiProvider_InitializationComprehensive(t *testing.T) {
 		{
 			name: "missing API key",
 			config: &llm.LLMOptions{
-				Provider: constants.ProviderGemini,
+				Provider: shared.ProviderGemini,
 				// No API key provided
 			},
 			wantErr: true,
@@ -484,7 +484,7 @@ func TestGeminiProvider_InitializationComprehensive(t *testing.T) {
 		{
 			name: "valid config with API key",
 			config: &llm.LLMOptions{
-				Provider: constants.ProviderGemini,
+				Provider: shared.ProviderGemini,
 				APIKey:   "test-key",
 			},
 			wantErr: false,
@@ -500,7 +500,7 @@ func TestGeminiProvider_InitializationComprehensive(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 				assert.NotNil(t, provider)
-				assert.Equal(t, constants.ProviderGemini, provider.Provider())
+				assert.Equal(t, shared.ProviderGemini, provider.Provider())
 			}
 		})
 	}

@@ -1,9 +1,9 @@
 package builder
 
 import (
-	"fmt"
 	"strings"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 )
@@ -30,7 +30,7 @@ func (b *AgentBuilder[C, S]) validateLoopCapabilities(toolset []interfaces.Tool)
 		}
 	}
 	if len(unavailable) > 0 {
-		return fmt.Errorf("%s需要ToolStreamClient和至少一个工具，当前配置没有原生工具循环", strings.Join(unavailable, "、"))
+		return agentErrors.Newf(agentErrors.CodeInvalidConfig, "%s需要ToolStreamClient和至少一个工具，当前配置没有原生工具循环", strings.Join(unavailable, "、")).WithComponent("builder").WithOperation("validate_loop_capabilities")
 	}
 	return nil
 }

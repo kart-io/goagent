@@ -15,6 +15,7 @@ import (
 
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/tools"
 )
@@ -54,22 +55,22 @@ func Run(ctx context.Context, cfg Config) (report Report, err error) {
 	report.SyntheticUsage = interfaces.TokenUsage{PromptTokens: 2, CompletionTokens: 1, TotalTokens: 3}
 	report.MeasurementScope = "操作循环：合成usage预留、Dispatcher工具调用及usage记账；不含初始化、统计和清理；无模型请求；TotalAlloc为循环期间进程级差值，GC后堆和goroutine为进程采样，不证明无泄漏"
 	if ctx == nil {
-		return report, fmt.Errorf("context不能为空")
+		return report, agentErrors.Newf(agentErrors.CodeInvalidInput, "context不能为空").WithComponent("evaluation/executionbench").WithOperation("run")
 	}
 	if cfg.Mode != "none" && cfg.Mode != "memory" && cfg.Mode != "file" {
-		return report, fmt.Errorf("mode必须是none、memory或file")
+		return report, agentErrors.Newf(agentErrors.CodeInvalidInput, "mode必须是none、memory或file").WithComponent("evaluation/executionbench").WithOperation("run")
 	}
 	if cfg.Operations <= 0 {
-		return report, fmt.Errorf("operations必须为正数")
+		return report, agentErrors.Newf(agentErrors.CodeInvalidInput, "operations必须为正数").WithComponent("evaluation/executionbench").WithOperation("run")
 	}
 	if cfg.TempDir != "" && cfg.Mode != "file" {
-		return report, fmt.Errorf("tempDir仅适用于file模式")
+		return report, agentErrors.Newf(agentErrors.CodeInvalidInput, "tempDir仅适用于file模式").WithComponent("evaluation/executionbench").WithOperation("run")
 	}
 	if err = ctx.Err(); err != nil {
 		return report, err
 	}
 	if durable.JournalStore(ctx) != nil {
-		return report, fmt.Errorf("离线探针不接受已绑定Journal的context")
+		return report, agentErrors.Newf(agentErrors.CodeInvalidInput, "离线探针不接受已绑定Journal的context").WithComponent("evaluation/executionbench").WithOperation("run")
 	}
 	var controller *budget.Controller
 	var dir string
@@ -132,7 +133,7 @@ func Run(ctx context.Context, cfg Config) (report Report, err error) {
 			break
 		}
 		if out == nil || !out.Success {
-			err = fmt.Errorf("操作%s未成功", key)
+			err = agentErrors.Newf(agentErrors.CodeAgentExecution, "操作%s未成功", key).WithComponent("evaluation/executionbench").WithOperation("run")
 			break
 		}
 		if controller != nil {

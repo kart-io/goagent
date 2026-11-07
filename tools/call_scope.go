@@ -2,18 +2,11 @@ package tools
 
 import (
 	"context"
-	"errors"
-	"fmt"
 
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
-
-// ErrNestedExecutionLimit rejects recursion before starting another child.
-var ErrNestedExecutionLimit = errors.New("nested runnable depth exceeded")
-
-// ErrDispatcherReentry rejects waiting for a slot held by an ancestor invocation.
-var ErrDispatcherReentry = errors.New("dispatcher reentry requires an independent child dispatcher")
 
 type depthKey struct{}
 type depthScope struct{ depth, limit int }
@@ -28,15 +21,19 @@ func enterRunnable(ctx context.Context, maxDepth int, modelInvoking bool) (conte
 	}
 	scope.depth++
 	if scope.depth > scope.limit {
-		return nil, ErrNestedExecutionLimit
+		return nil, agentErrors.ErrNestedExecutionLimit
 	}
 	if modelInvoking {
 		c, ok := budget.FromContext(ctx)
 		if !ok {
-			return nil, fmt.Errorf("model tool requires root budget")
+			return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "model tool requires root budget").
+				WithComponent("runnable_tool").
+				WithOperation("enter_scope")
 		}
 		if durable.HasJournal(ctx) && !c.IsDurable() {
-			return nil, fmt.Errorf("model tool requires durable root budget")
+			return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "model tool requires durable root budget").
+				WithComponent("runnable_tool").
+				WithOperation("enter_scope")
 		}
 	}
 	return context.WithValue(ctx, depthKey{}, scope), nil
@@ -48,7 +45,7 @@ func enterDispatcher(ctx context.Context, d *Dispatcher) (context.Context, error
 	stack, _ := ctx.Value(dispatcherKey{}).([]*Dispatcher)
 	for _, active := range stack {
 		if active == d {
-			return nil, ErrDispatcherReentry
+			return nil, agentErrors.ErrDispatcherReentry
 		}
 	}
 	next := append(append([]*Dispatcher(nil), stack...), d)

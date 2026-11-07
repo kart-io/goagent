@@ -10,9 +10,19 @@ import (
 	"github.com/sashabaranov/go-openai"
 	"google.golang.org/genai"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	agentllm "github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/common"
 )
+
+// wrapProviderError 保留 SDK 原因与恢复提示，并为提供方请求补充统一的业务上下文。
+func wrapProviderError(provider, model string, cause *agentllm.ProviderError) *agentErrors.AgentError {
+	return agentErrors.Wrap(cause, cause.ErrorCode(), "模型请求失败").
+		WithComponent("llm").
+		WithOperation("request").
+		WithContext("provider", provider).
+		WithContext("model", model)
+}
 
 type retryAfterKey struct{}
 
@@ -40,7 +50,7 @@ func openAIProviderError(err error, retryAfter time.Duration) *agentllm.Provider
 	var reqErr *openai.RequestError
 	if errors.As(err, &apiErr) && apiErr == nil {
 		// 上游对流式请求回了非 SSE 内容时，go-openai 包装的是空 *APIError，其 Error() 不可调用。
-		e.Err = errors.New("上游返回的不是 SSE 事件流")
+		e.Err = agentErrors.New(agentErrors.CodeLLMResponse, "上游返回的不是 SSE 事件流").WithComponent("llm").WithOperation("decode_stream")
 	} else if errors.As(err, &apiErr) {
 		e.StatusCode = apiErr.HTTPStatusCode
 		e.QuotaExhausted = quotaExhausted(apiErr)

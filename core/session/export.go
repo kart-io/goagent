@@ -1,7 +1,7 @@
 package session
 
 import (
-	"errors"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"io"
 	"sort"
 
@@ -173,7 +173,7 @@ func (t *Trajectory) WriteShareGPT(w io.Writer) error {
 	}
 	flush()
 	if len(turns) == 0 || turns[0].From != "human" {
-		return errors.New("轨迹须以用户消息开始")
+		return agentErrors.New(agentErrors.CodeInvalidInput, "轨迹须以用户消息开始").WithComponent("session").WithOperation("export_sharegpt")
 	}
 	line := struct {
 		Conversations []shareGPTTurn `json:"conversations"`

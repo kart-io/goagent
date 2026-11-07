@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // callbackPanicCase 描述第一个回调在哪个通知中 panic，以及第二个回调此时应观察到的调用次数。
@@ -66,14 +68,14 @@ func TestBaseAgentCallbackPanic(t *testing.T) {
 			agent := NewBaseAgent("base", "", nil).WithCallbacks(first, second)
 			_, err := agent.Invoke(context.Background(), &AgentInput{})
 			requirePanicError(t, err, "回调 panic", "(*panicCallback).On")
-			require.NotErrorIs(t, err, ErrNotImplemented, "回调 panic 不被 ErrNotImplemented 掩盖")
+			require.NotErrorIs(t, err, agentErrors.ErrNotImplemented, "回调 panic 不被 ErrNotImplemented 掩盖")
 			require.EqualValues(t, 0, second.ends.Load())
 		})
 	}
 	// 回调的普通错误仍让位于 ErrNotImplemented
 	_, err := NewBaseAgent("base", "", nil).WithCallbacks(&errorFinishCallback{BaseCallback: NewBaseCallback()}).
 		Invoke(context.Background(), &AgentInput{})
-	require.ErrorIs(t, err, ErrNotImplemented)
+	require.ErrorIs(t, err, agentErrors.ErrNotImplemented)
 }
 
 type errorFinishCallback struct{ *BaseCallback }

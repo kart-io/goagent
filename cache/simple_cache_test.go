@@ -5,6 +5,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 func TestSimpleCache_GetSet(t *testing.T) {
@@ -36,7 +38,7 @@ func TestSimpleCache_Miss(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := cache.Get(ctx, "nonexistent")
-	if err != ErrCacheMiss {
+	if err != agentErrors.ErrCacheMiss {
 		t.Errorf("Expected ErrCacheMiss, got %v", err)
 	}
 }
@@ -64,7 +66,7 @@ func TestSimpleCache_TTL(t *testing.T) {
 
 	// Should be expired
 	_, err = cache.Get(ctx, "key1")
-	if err != ErrCacheMiss {
+	if err != agentErrors.ErrCacheMiss {
 		t.Errorf("Expected ErrCacheMiss after expiration, got %v", err)
 	}
 }
@@ -79,7 +81,7 @@ func TestSimpleCache_Delete(t *testing.T) {
 	cache.Delete(ctx, "key1")
 
 	_, err := cache.Get(ctx, "key1")
-	if err != ErrCacheMiss {
+	if err != agentErrors.ErrCacheMiss {
 		t.Errorf("Expected ErrCacheMiss after delete, got %v", err)
 	}
 }
@@ -95,12 +97,12 @@ func TestSimpleCache_Clear(t *testing.T) {
 	cache.Clear(ctx)
 
 	_, err := cache.Get(ctx, "key1")
-	if err != ErrCacheMiss {
+	if err != agentErrors.ErrCacheMiss {
 		t.Errorf("Expected ErrCacheMiss after clear, got %v", err)
 	}
 
 	_, err = cache.Get(ctx, "key2")
-	if err != ErrCacheMiss {
+	if err != agentErrors.ErrCacheMiss {
 		t.Errorf("Expected ErrCacheMiss after clear, got %v", err)
 	}
 }
@@ -196,7 +198,7 @@ func TestSimpleCache_Cleanup(t *testing.T) {
 
 	// All should be cleaned up
 	_, err := cache.Get(ctx, "key")
-	if err != ErrCacheMiss {
+	if err != agentErrors.ErrCacheMiss {
 		t.Errorf("Expected ErrCacheMiss after cleanup, got %v", err)
 	}
 }

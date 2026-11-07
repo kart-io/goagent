@@ -7,8 +7,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/llm"
-	"github.com/kart-io/goagent/llm/constants"
 )
 
 type countingStream struct {
@@ -30,7 +30,7 @@ func (c *countingStream) CompleteStream(context.Context, *llm.CompletionRequest)
 	return out, nil
 }
 
-func (c *countingStream) Provider() constants.Provider { return constants.ProviderCustom }
+func (c *countingStream) Provider() shared.Provider { return shared.ProviderCustom }
 
 func newCached(t *testing.T, upstream llm.Client) *CachedLLMClient {
 	t.Helper()

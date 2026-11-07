@@ -12,10 +12,12 @@ import (
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/session"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/execution"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
-	"github.com/kart-io/goagent/llm/constants"
+
+	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/tools"
 	"github.com/kart-io/goagent/workflow"
 )
@@ -25,7 +27,7 @@ type cycleResult struct{ Requests, Effects, ReplayRequests, ReplayEffects uint64
 // syntheticModel 不保留请求历史；一毫秒延迟只用于观察取消，不模拟真实供应商性能。
 type syntheticModel struct{ calls atomic.Uint64 }
 
-func (*syntheticModel) Provider() constants.Provider { return constants.ProviderCustom }
+func (*syntheticModel) Provider() shared.Provider { return shared.ProviderCustom }
 func (m *syntheticModel) CompleteStream(ctx context.Context, req *llm.CompletionRequest) (<-chan *llm.StreamChunk, error) {
 	return m.CompleteToolsStream(ctx, req, nil)
 }
@@ -140,7 +142,7 @@ func exercise(ctx context.Context, directory string) (got cycleResult, err error
 		return got, err
 	}
 	wait, err := compiled.Run(ctx, "approval", 41, "")
-	if !errors.Is(err, durable.ErrApprovalRequired) || !wait.Waiting || got.Effects != 1 {
+	if !errors.Is(err, agentErrors.ErrApprovalRequired) || !wait.Waiting || got.Effects != 1 {
 		return got, fmt.Errorf("审批前产生效果或未暂停：%w", err)
 	}
 	done, err := compiled.Run(ctx, "approval", 999, wait.Key)

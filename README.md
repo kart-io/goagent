@@ -165,7 +165,7 @@ With a `llm.ToolStreamClient` and at least one tool, `agent.Start(ctx, input)` r
 - [Workflow](workflow/README.md) - typed graphs, branches, parallel joins and bounded loops.
 - [Multi-agent usage](docs/guides/MULTI_AGENT_USAGE.md) - `WithUsageHook` for per-attempt tokens and cumulative statistics, agent identity and unified accounting; examples: [goagent-examples/agent-usage](https://github.com/kart-io/goagent-examples/tree/main/agent-usage).
 - [Multi-agent patterns](docs/guides/MULTI_AGENT_PATTERNS.md) - `multiagent`: Sequential, Loop, RouterSupervisor, `ParallelStep`, `SupervisorTools` and the text relay layer on top of `workflow`; offline example: `go run ./examples/multi-agent-patterns`.
-- [Composable orchestration](docs/guides/COMPOSABLE_ORCHESTRATION.md) - wrap a child agent or `workflow.DurableGraph` as a tool with `tools.NewRunnableToolFactory`; a child waiting for approval suspends the parent with `builder.ErrWaiting`.
+- [Composable orchestration](docs/guides/COMPOSABLE_ORCHESTRATION.md) - wrap a child agent or `workflow.DurableGraph` as a tool with `tools.NewRunnableToolFactory`; a child waiting for approval suspends the parent with `agentErrors.ErrAgentWaiting`.
 - [Agent composition and input boundaries](docs/guides/AGENT_COMPOSITION.md) - direct workflows, child-agent tools, pending input and completion scopes; [Pi design comparison](docs/research/2026-11-01-pi-core-gap-analysis.md).
 - [Host integration](docs/guides/HOST_INTEGRATION.md) - `execution.NewScope` + `execution.ConfigureBuilder` + `BuildContext`; offline example: `go run ./examples/execution-scope`.
 - [最终验收、治理装配与升级检查](docs/guides/EXECUTION_ACCEPTANCE.md) - 最终结果校验、受治理Builder、恢复版本清单与规模基准。

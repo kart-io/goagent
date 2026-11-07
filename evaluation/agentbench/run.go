@@ -10,9 +10,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/kart-io/goagent/codec/json"
-
 	"github.com/kart-io/goagent/builder"
+	"github.com/kart-io/goagent/codec/json"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/evaluation"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
@@ -96,7 +96,7 @@ func (t *lookup) Invoke(ctx context.Context, input *interfaces.ToolInput) (*inte
 	t.calls.Add(1)
 	if len(t.parameters) > 0 {
 		if input == nil {
-			return nil, fmt.Errorf("missing tool input")
+			return nil, agentErrors.Newf(agentErrors.CodeInvalidInput, "missing tool input").WithComponent("evaluation/agentbench").WithOperation("invoke")
 		}
 		data, err := json.Marshal(input.Args)
 		if err != nil {
@@ -108,7 +108,7 @@ func (t *lookup) Invoke(ctx context.Context, input *interfaces.ToolInput) (*inte
 	}
 	if t.orders != nil {
 		if input == nil {
-			return nil, fmt.Errorf("missing tool input")
+			return nil, agentErrors.Newf(agentErrors.CodeInvalidInput, "missing tool input").WithComponent("evaluation/agentbench").WithOperation("invoke")
 		}
 		text, missed, err := t.orders.query(ctx, input.Args)
 		if err != nil {
@@ -255,7 +255,7 @@ func runGoAgent(ctx context.Context, baseURL string, cfg Config, c Case, t *look
 		}
 		if chunk.Done {
 			if chunk.Data == nil {
-				return fmt.Errorf("最终输出为空")
+				return agentErrors.Newf(agentErrors.CodeInvalidOutput, "最终输出为空").WithComponent("evaluation/agentbench").WithOperation("run_go_agent")
 			}
 			onFinal(fmt.Sprint(chunk.Data.Result))
 			return nil

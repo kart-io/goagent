@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/usage"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/testing/panictest"
 	"github.com/stretchr/testify/require"
@@ -64,7 +65,7 @@ func TestAttributionProcessRecovery(t *testing.T) {
 			r, e = c.Attribution(ctx)
 			require.NoError(t, e)
 			require.Equal(t, 5, r.Root.KnownTokens.TotalTokens)
-			require.ErrorIs(t, c.ReserveAttributed(ctx, "a", 0, chain), ErrReservationExists)
+			require.ErrorIs(t, c.ReserveAttributed(ctx, "a", 0, chain), agentErrors.ErrReservationExists)
 		})
 	}
 }

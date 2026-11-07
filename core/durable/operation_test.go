@@ -9,6 +9,7 @@ import (
 
 	"github.com/kart-io/goagent/codec/json"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -56,7 +57,7 @@ func TestOperationFailureRetainsUsageAndNeedsAttention(t *testing.T) {
 	require.Equal(t, "failed", record.Status)
 	require.JSONEq(t, `{"usage":91,"failure":"invalid_json"}`, string(record.Value))
 	second, err := Do(ctx, "model", json.RawMessage(`{}`), OperationPolicy{}, fn)
-	require.ErrorIs(t, err, ErrOperationAttention)
+	require.ErrorIs(t, err, agentErrors.ErrOperationAttention)
 	require.NotContains(t, err.Error(), "sensitive-provider-error")
 	require.True(t, second.Replayed)
 	require.Equal(t, 1, calls)
@@ -135,7 +136,7 @@ func TestOperationSaveFailureDoesNotDuplicatePaidRequest(t *testing.T) {
 			require.NoError(t, err)
 		} else {
 			_, err = Do(ctx, "paid", json.RawMessage(`{}`), OperationPolicy{}, fn)
-			require.ErrorIs(t, err, ErrOperationAttention)
+			require.ErrorIs(t, err, agentErrors.ErrOperationAttention)
 			saved, err := InspectOperation(ctx, "paid")
 			require.NoError(t, err)
 			require.Equal(t, "pending", saved.Status)
@@ -178,7 +179,7 @@ func TestRetryInterruptedOnlyRerunsInterruptedRecords(t *testing.T) {
 				require.Equal(t, test.attempts+1, attempt, "run 能看到这是第几次尝试")
 				return
 			}
-			require.ErrorIs(t, err, ErrOperationAttention)
+			require.ErrorIs(t, err, agentErrors.ErrOperationAttention)
 			require.Zero(t, attempt)
 		})
 	}
@@ -197,7 +198,7 @@ func TestInterruptedOperationStaysStoppedByDefault(t *testing.T) {
 		t.Fatal("不应重跑")
 		return nil, nil
 	})
-	require.ErrorIs(t, err, ErrOperationAttention)
+	require.ErrorIs(t, err, agentErrors.ErrOperationAttention)
 }
 
 // 取消后供应方可能返回不带 context.Canceled 的错误（如连接被关闭），仍然算中断。

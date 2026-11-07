@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/workflow"
 )
 
@@ -45,9 +46,9 @@ func TestGuardRouteTargets(t *testing.T) {
 }
 
 func TestGuardRouteOrder(t *testing.T) {
-	invalid := fmt.Errorf("%w：无法识别", ErrInvalidRoute)
+	invalid := fmt.Errorf("%w：无法识别", agentErrors.ErrInvalidRoute)
 	other := errors.New("存储不可用")
-	limit := fmt.Errorf("%w: review loop limit 3", workflow.ErrMaxSteps)
+	limit := fmt.Errorf("%w: review loop limit 3", agentErrors.ErrWorkflowMaxSteps)
 	for _, tc := range []struct {
 		name     string
 		next     func(context.Context, record) (string, error)
@@ -56,15 +57,15 @@ func TestGuardRouteOrder(t *testing.T) {
 		wantErr  error
 	}{
 		{"无效错误转兜底", fixed("a", invalid), "human", "human", nil},
-		{"无效错误无兜底", fixed("a", invalid), "", "", ErrInvalidRoute},
+		{"无效错误无兜底", fixed("a", invalid), "", "", agentErrors.ErrInvalidRoute},
 		{"其他错误原样返回", fixed("a", other), "human", "", other},
-		{"ErrMaxSteps 原样返回", fixed("", limit), "human", "", workflow.ErrMaxSteps},
+		{"ErrMaxSteps 原样返回", fixed("", limit), "human", "", agentErrors.ErrWorkflowMaxSteps},
 		{"FINISH 映射为 END", fixed(Finish, nil), "human", workflow.END, nil},
 		{"成员", fixed("b", nil), "human", "b", nil},
 		{"未知名转兜底", fixed("x", nil), "human", "human", nil},
-		{"未知名无兜底", fixed("x", nil), "", "", ErrInvalidRoute},
-		{"END 字面值按无效", fixed(workflow.END, nil), "", "", ErrInvalidRoute},
-		{"Supervisor 名按无效", fixed("sup", nil), "", "", ErrInvalidRoute},
+		{"未知名无兜底", fixed("x", nil), "", "", agentErrors.ErrInvalidRoute},
+		{"END 字面值按无效", fixed(workflow.END, nil), "", "", agentErrors.ErrInvalidRoute},
+		{"Supervisor 名按无效", fixed("sup", nil), "", "", agentErrors.ErrInvalidRoute},
 		{"兜底名按无效路由转兜底", fixed("human", nil), "human", "human", nil},
 	} {
 		route, _, err := GuardRoute(tc.next, []string{"a", "b"}, tc.fallback)

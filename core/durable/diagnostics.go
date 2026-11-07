@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/kart-io/goagent/codec/json"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // OperationRef 定位宿主已知的操作日志，不要求 Store 支持列举。
@@ -50,7 +51,7 @@ func (e *DiagnosticError) Unwrap() error { return e.Cause }
 // 不取得执行锁、不写入，也不调用核对函数。pending 仅表示结果未知，不证明正在执行。
 func DiagnoseOperations(ctx context.Context, store Store, refs ...OperationRef) ([]OperationDiagnostic, error) {
 	if store == nil {
-		return nil, fmt.Errorf("诊断需要 Store")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidInput, "诊断需要 Store").WithComponent("durable_diagnostics").WithOperation("diagnose_operations")
 	}
 	result := make([]OperationDiagnostic, 0, len(refs))
 	for _, ref := range refs {
@@ -58,7 +59,7 @@ func DiagnoseOperations(ctx context.Context, store Store, refs ...OperationRef) 
 			return nil, &DiagnosticError{Cause: err}
 		}
 		if ref.ParentKey == "" || ref.ID == "" {
-			return nil, fmt.Errorf("操作父执行键和 ID 不能为空")
+			return nil, agentErrors.Newf(agentErrors.CodeInvalidInput, "操作父执行键和 ID 不能为空").WithComponent("durable_diagnostics").WithOperation("diagnose_operations")
 		}
 		item := OperationDiagnostic{ID: ref.ID}
 		record, err := loadOperation(ctx, store, ChildKey(ref.ParentKey, ref.ID), ref.ID)
@@ -98,7 +99,7 @@ func DiagnoseOperations(ctx context.Context, store Store, refs ...OperationRef) 
 // 单凭检查点无法证明重试外部效果是安全的。
 func (r *Runner) Diagnose(ctx context.Context, id string, refs ...OperationRef) (*DiagnosticReport, error) {
 	if r == nil || r.Store == nil || r.Version == "" || id == "" {
-		return nil, fmt.Errorf("运行 ID、版本和 Store 不能为空")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "运行 ID、版本和 Store 不能为空").WithComponent("durable_diagnostics").WithOperation("diagnose")
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, &DiagnosticError{Cause: err}
@@ -107,7 +108,7 @@ func (r *Runner) Diagnose(ctx context.Context, id string, refs ...OperationRef) 
 	descriptor := r.Version
 	for _, step := range r.Steps {
 		if step.Name == "" || names[step.Name] || step.Run == nil {
-			return nil, fmt.Errorf("步骤需要唯一名称和执行函数")
+			return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "步骤需要唯一名称和执行函数").WithComponent("durable_diagnostics").WithOperation("diagnose")
 		}
 		names[step.Name] = true
 		descriptor += fmt.Sprintf("\x00%s:%t", step.Name, step.RequireApproval)

@@ -374,9 +374,6 @@ func (m *TransformMiddleware) OnAfter(ctx context.Context, response *MiddlewareR
 	return response, nil
 }
 
-// errCircuitOpen 标记熔断器自己的拒绝：链会把 OnBefore 的错误交给 OnError，它不应计为一次失败。
-var errCircuitOpen = errors.New("circuit breaker is open")
-
 // CircuitBreakerMiddleware implements circuit breaker pattern
 type CircuitBreakerMiddleware struct {
 	*BaseMiddleware
@@ -414,7 +411,7 @@ func (m *CircuitBreakerMiddleware) OnBefore(ctx context.Context, request *Middle
 			m.state = "half-open"
 			m.mu.Unlock()
 		} else {
-			return nil, agentErrors.Wrap(errCircuitOpen, agentErrors.CodeMiddlewareExecution, "circuit breaker is open").
+			return nil, agentErrors.Wrap(agentErrors.ErrCircuitOpen, agentErrors.CodeMiddlewareExecution, "circuit breaker is open").
 				WithComponent("circuit-breaker").
 				WithOperation("OnBefore").
 				WithContext("state", state).
@@ -432,7 +429,7 @@ func (m *CircuitBreakerMiddleware) OnBefore(ctx context.Context, request *Middle
 
 // OnError handles errors and updates circuit state
 func (m *CircuitBreakerMiddleware) OnError(ctx context.Context, err error) error {
-	if err != nil && !errors.Is(err, errCircuitOpen) {
+	if err != nil && !errors.Is(err, agentErrors.ErrCircuitOpen) {
 		m.mu.Lock()
 		defer m.mu.Unlock()
 

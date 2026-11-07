@@ -9,7 +9,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/kart-io/goagent/llm"
-	"github.com/kart-io/goagent/llm/constants"
+
+	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/llm/providers"
 )
 
@@ -20,7 +21,7 @@ func TestOptionPatternIntegration(t *testing.T) {
 
 	t.Run("CreateWithOptions", func(t *testing.T) {
 		client, err := providers.NewOpenAIWithOptions(
-			llm.WithProvider(constants.ProviderOpenAI),
+			llm.WithProvider(shared.ProviderOpenAI),
 			llm.WithModel("gpt-3.5-turbo"),
 			llm.WithMaxTokens(1000),
 			llm.WithTemperature(0.7),
@@ -28,12 +29,12 @@ func TestOptionPatternIntegration(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.NotNil(t, client)
-		assert.Equal(t, constants.ProviderOpenAI, client.Provider())
+		assert.Equal(t, shared.ProviderOpenAI, client.Provider())
 	})
 
 	t.Run("CreateWithExplicitOptions", func(t *testing.T) {
 		client, err := providers.NewOpenAIWithOptions(
-			llm.WithProvider(constants.ProviderOpenAI),
+			llm.WithProvider(shared.ProviderOpenAI),
 			llm.WithModel("gpt-3.5-turbo"),
 			llm.WithMaxTokens(1000),
 			llm.WithTemperature(0.5),
@@ -46,7 +47,7 @@ func TestOptionPatternIntegration(t *testing.T) {
 
 	t.Run("CreateWithScenarioOptions", func(t *testing.T) {
 		client, err := providers.NewOpenAIWithOptions(
-			llm.WithProvider(constants.ProviderOpenAI),
+			llm.WithProvider(shared.ProviderOpenAI),
 			llm.WithTemperature(0.2),
 			llm.WithMaxTokens(2500),
 			llm.WithTopP(0.95),
@@ -95,20 +96,20 @@ func TestConvenienceMethods(t *testing.T) {
 
 	t.Run("CreateWithOptionsForOpenAI", func(t *testing.T) {
 		config := llm.NewLLMOptionsWithOptions(
-			llm.WithProvider(constants.ProviderOpenAI),
+			llm.WithProvider(shared.ProviderOpenAI),
 			llm.WithAPIKey(os.Getenv("OPENAI_API_KEY")),
 			llm.WithModel("gpt-3.5-turbo"),
 			llm.WithMaxTokens(500),
 		)
 
 		require.NotNil(t, config)
-		assert.Equal(t, constants.ProviderOpenAI, config.Provider)
+		assert.Equal(t, shared.ProviderOpenAI, config.Provider)
 	})
 
 	t.Run("CreateWithOptionsForOllama", func(t *testing.T) {
 		// Ollama 不需要 API key
 		config := llm.NewLLMOptionsWithOptions(
-			llm.WithProvider(constants.ProviderOllama),
+			llm.WithProvider(shared.ProviderOllama),
 			llm.WithBaseURL("http://localhost:11434"),
 			llm.WithModel("llama2"),
 			llm.WithMaxTokens(2048),
@@ -116,7 +117,7 @@ func TestConvenienceMethods(t *testing.T) {
 		)
 
 		require.NotNil(t, config)
-		assert.Equal(t, constants.ProviderOllama, config.Provider)
+		assert.Equal(t, shared.ProviderOllama, config.Provider)
 	})
 }
 
@@ -125,7 +126,7 @@ func TestConfigMigration(t *testing.T) {
 	t.Run("ApplyOptionsToExistingConfig", func(t *testing.T) {
 		// 现有配置
 		oldConfig := &llm.LLMOptions{
-			Provider:    constants.ProviderOpenAI,
+			Provider:    shared.ProviderOpenAI,
 			APIKey:      "test-key",
 			Model:       "gpt-3.5-turbo",
 			MaxTokens:   1000,

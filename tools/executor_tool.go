@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
@@ -101,13 +102,13 @@ type ExecutorOption func(*ToolExecutor)
 // NewToolExecutor 创建工具执行器
 func NewToolExecutor(opts ...ExecutorOption) *ToolExecutor {
 	executor := &ToolExecutor{
-		maxConcurrency: 10,
-		timeout:        30 * time.Second,
+		maxConcurrency: shared.DefaultToolConcurrency,
+		timeout:        shared.DefaultToolTimeout,
 		retryPolicy: &RetryPolicy{
-			MaxRetries:   3,
-			InitialDelay: time.Second,
-			MaxDelay:     10 * time.Second,
-			Multiplier:   2.0,
+			MaxRetries:   shared.DefaultToolRetries,
+			InitialDelay: shared.DefaultToolRetryDelay,
+			MaxDelay:     shared.DefaultToolRetryMaxDelay,
+			Multiplier:   shared.DefaultToolRetryMultiplier,
 		},
 		errorHandler: defaultErrorHandler,
 	}

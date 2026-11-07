@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"github.com/kart-io/goagent/codec/json"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/stretchr/testify/require"
 	"testing"
 )
@@ -42,7 +43,7 @@ func TestReplayOnlyRequiresCompletedRecord(t *testing.T) {
 				require.NoError(t, err)
 				require.True(t, result.Replayed)
 			} else {
-				require.ErrorIs(t, err, ErrReplayOnly)
+				require.ErrorIs(t, err, agentErrors.ErrReplayOnly)
 				require.Nil(t, result)
 			}
 			require.Equal(t, before, calls)
@@ -50,6 +51,6 @@ func TestReplayOnlyRequiresCompletedRecord(t *testing.T) {
 		})
 	}
 	_, err := Do(WithReplayOnly(context.Background()), "effect", json.RawMessage(`{}`), OperationPolicy{}, func(context.Context) (json.RawMessage, error) { t.Fatal("无日志不得执行"); return nil, nil })
-	require.ErrorIs(t, err, ErrReplayOnly)
+	require.ErrorIs(t, err, agentErrors.ErrReplayOnly)
 	require.False(t, errors.Is(err, context.Canceled))
 }

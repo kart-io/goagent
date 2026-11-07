@@ -11,6 +11,7 @@ import (
 
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/testing/panictest"
 	"github.com/stretchr/testify/require"
@@ -202,7 +203,7 @@ func TestHandleSteerOnceWithoutJournal(t *testing.T) {
 	require.Len(t, h.PendingInputs(), 1)
 	close(release)
 	require.Equal(t, "done", waitAnswer(t, h).Result)
-	require.ErrorIs(t, h.SteerOnce("k2", "late"), ErrHandleDone)
+	require.ErrorIs(t, h.SteerOnce("k2", "late"), agentErrors.ErrAgentHandleDone)
 }
 
 // failInboxSave 使收件箱的写入失败。

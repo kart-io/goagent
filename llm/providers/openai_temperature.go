@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/kart-io/goagent/codec/json"
+	agentErrors "github.com/kart-io/goagent/errors"
 
 	"github.com/sashabaranov/go-openai"
 )
@@ -38,7 +39,7 @@ func (d zeroTemperatureDoer) Do(request *http.Request) (*http.Response, error) {
 		return nil, fmt.Errorf("解析零温请求：%w", err)
 	}
 	if payload == nil {
-		return nil, fmt.Errorf("零温请求必须为 JSON 对象")
+		return nil, agentErrors.Newf(agentErrors.CodeLLMRequest, "零温请求必须为 JSON 对象").WithComponent("openai").WithOperation("serialize_request")
 	}
 	payload["temperature"] = json.RawMessage("0")
 	data, err = json.Marshal(payload)

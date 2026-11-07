@@ -7,6 +7,7 @@ import (
 	"reflect"
 
 	"github.com/kart-io/goagent/codec/json"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // LookupCase adds argument extraction to a read-only task.
@@ -30,11 +31,11 @@ func ValidateLookupCase(c Case) error {
 		AdditionalProperties json.RawMessage            `json:"additionalProperties"`
 	}
 	if !hasLookupTool(c) || json.Unmarshal(c.Lookup.Parameters, &schema) != nil || schema.Type != "object" || schema.Properties == nil {
-		return fmt.Errorf("case %q: lookup requires evidence and an object schema with properties", c.ID)
+		return agentErrors.Newf(agentErrors.CodeInvalidConfig, "case %q: lookup requires evidence and an object schema with properties", c.ID).WithComponent("evaluation/agentbench").WithOperation("validate_lookup_case")
 	}
 	var expected map[string]json.RawMessage
 	if json.Unmarshal(c.Lookup.ExpectedArguments, &expected) != nil || expected == nil {
-		return fmt.Errorf("case %q: expected_arguments must be a JSON object", c.ID)
+		return agentErrors.Newf(agentErrors.CodeInvalidConfig, "case %q: expected_arguments must be a JSON object", c.ID).WithComponent("evaluation/agentbench").WithOperation("validate_lookup_case")
 	}
 	if c.Lookup.Orders != nil {
 		var property struct {
@@ -44,7 +45,7 @@ func ValidateLookupCase(c Case) error {
 		if c.Evidence != "" || len(schema.Properties) != 1 || json.Unmarshal(schema.Properties["order_id"], &property) != nil || property.Type != "string" ||
 			len(schema.Required) != 1 || schema.Required[0] != "order_id" || string(bytes.TrimSpace(schema.AdditionalProperties)) != "false" ||
 			len(expected) != 1 || json.Unmarshal(expected["order_id"], &id) != nil || id == "" {
-			return fmt.Errorf("case %q: orders backend requires only a required string order_id, no extra arguments or fixed evidence", c.ID)
+			return agentErrors.Newf(agentErrors.CodeInvalidConfig, "case %q: orders backend requires only a required string order_id, no extra arguments or fixed evidence", c.ID).WithComponent("evaluation/agentbench").WithOperation("validate_lookup_case")
 		}
 		if err := c.Lookup.Orders.validate(); err != nil {
 			return fmt.Errorf("case %q: %w", c.ID, err)
@@ -62,7 +63,7 @@ func hasLookupTool(c Case) bool {
 func equalArguments(expected, actual json.RawMessage) bool {
 	decode := func(raw json.RawMessage) (any, error) {
 		if !json.Valid(raw) {
-			return nil, fmt.Errorf("invalid JSON")
+			return nil, agentErrors.Newf(agentErrors.CodeInvalidInput, "invalid JSON").WithComponent("evaluation/agentbench").WithOperation("equal_arguments")
 		}
 		var value any
 		err := json.Unmarshal(raw, &value, json.UseNumber)

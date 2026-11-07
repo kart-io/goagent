@@ -1,16 +1,16 @@
 package multiagent
 
 import (
-	"errors"
 	"fmt"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/workflow"
 )
 
 // newGraph 用构造器算出的步数上限创建图；宿主设置的 MaxSteps 会让上限与拓扑不一致，因此拒绝。
 func newGraph[T any](cfg workflow.Config, maxSteps int) (*workflow.Graph[T], error) {
 	if cfg.MaxSteps != 0 {
-		return nil, errors.New("cfg.MaxSteps 由构造器计算，必须为 0")
+		return nil, agentErrors.NewInvalidConfigError("multiagent", "max_steps", "cfg.MaxSteps 由构造器计算，必须为 0")
 	}
 	cfg.MaxSteps = maxSteps
 	return workflow.NewGraph[T](cfg), nil
@@ -34,7 +34,7 @@ func chain[T any](g *workflow.Graph[T], steps []Step[T]) error {
 // Sequential 构造 START → s1 → … → sn → END，MaxSteps 为 n。
 func Sequential[T any](cfg workflow.Config, steps ...Step[T]) (*workflow.Graph[T], error) {
 	if len(steps) == 0 {
-		return nil, errors.New("Sequential 需要至少一个 Step")
+		return nil, agentErrors.NewInvalidConfigError("multiagent", "steps", "Sequential 需要至少一个 Step")
 	}
 	g, err := newGraph[T](cfg, len(steps))
 	if err != nil {

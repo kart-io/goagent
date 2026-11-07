@@ -2,7 +2,6 @@ package contextpolicy
 
 import (
 	"context"
-	"fmt"
 	"maps"
 	"math"
 	"slices"
@@ -11,10 +10,11 @@ import (
 	"sync"
 	"unicode/utf8"
 
-	"github.com/kart-io/goagent/codec/json"
-
 	"github.com/google/uuid"
+
+	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 )
@@ -68,7 +68,7 @@ type reference struct {
 // NewOffload validates immutable configuration.
 func NewOffload(cfg OffloadConfig) (*Offload, error) {
 	if cfg.MaxToolResultRunes < 1 || cfg.KeepRecentToolRounds < 0 || cfg.ReadPageRunes < 0 || cfg.ReadPageRunes > 16384 || cfg.Store == nil {
-		return nil, fmt.Errorf("offload requires store and positive limits")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "offload requires store and positive limits").WithComponent("builder/contextpolicy").WithOperation("new_offload")
 	}
 	if cfg.ID == "" {
 		cfg.ID = "offload"
@@ -167,10 +167,10 @@ func (p *Offload) Reduce(ctx context.Context, messages []llm.Message, final bool
 	}
 	run := ResultScope(ctx)
 	if run == "" {
-		return nil, fmt.Errorf("offload result scope required")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidInput, "offload result scope required").WithComponent("builder/contextpolicy").WithOperation("reduce")
 	}
 	if durable.HasJournal(ctx) && (!p.persistent || durable.ExecutionKey(ctx) == "") {
-		return nil, fmt.Errorf("durable offload requires a durable result store and stable execution key")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "durable offload requires a durable result store and stable execution key").WithComponent("builder/contextpolicy").WithOperation("reduce")
 	}
 	out := slices.Clone(messages)
 	table := p.track(run, out)
@@ -238,7 +238,7 @@ func (p *Offload) ArgsSchema() string {
 }
 func (p *Offload) Invoke(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 	if input == nil || input.Args == nil {
-		return nil, fmt.Errorf("evidence reader arguments required")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidInput, "evidence reader arguments required").WithComponent("builder/contextpolicy").WithOperation("invoke")
 	}
 	key, _ := input.Args["key"].(string)
 	p.mu.Lock()
@@ -268,7 +268,7 @@ func (p *Offload) Invoke(ctx context.Context, input *interfaces.ToolInput) (*int
 		case json.Number:
 			n, err = v.Float64()
 		default:
-			err = fmt.Errorf("invalid offset type")
+			err = agentErrors.Newf(agentErrors.CodeInvalidInput, "invalid offset type").WithComponent("builder/contextpolicy").WithOperation("invoke")
 		}
 		if err != nil || math.IsNaN(n) || math.IsInf(n, 0) || n < 0 || n > float64(len(runes)) || math.Trunc(n) != n {
 			// 与未知键一致，以成功结果交还模型改正。

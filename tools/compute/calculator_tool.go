@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/kart-io/goagent/codec/json"
+	shared "github.com/kart-io/goagent/constants"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/tools"
@@ -25,8 +26,8 @@ type CalculatorTool struct {
 func NewCalculatorTool() *CalculatorTool {
 	tool := &CalculatorTool{}
 	tool.BaseTool = tools.NewBaseTool(
-		tools.ToolCalculator,
-		tools.DescCalculator,
+		shared.ToolCalculator,
+		shared.DescCalculator,
 		`{
 			"type": "object",
 			"properties": {

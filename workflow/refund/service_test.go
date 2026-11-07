@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/workflow/refund"
 	"github.com/stretchr/testify/require"
 )
@@ -37,13 +38,13 @@ func (s *memoryStore) Transaction(_ context.Context, f func(refund.Transaction) 
 func (t *memoryTx) Order(context.Context, string) (refund.Order, error) { return t.order, nil }
 func (t *memoryTx) Request(_ context.Context, id string) (refund.Request, string, error) {
 	if t.req.RequestID != id {
-		return refund.Request{}, "", refund.ErrNotFound
+		return refund.Request{}, "", agentErrors.ErrRefundNotFound
 	}
 	return t.req, t.actor, nil
 }
 func (t *memoryTx) Receipt(context.Context, string) (string, error) {
 	if t.receipt == "" {
-		return "", refund.ErrNotFound
+		return "", agentErrors.ErrRefundNotFound
 	}
 	return t.receipt, nil
 }

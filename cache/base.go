@@ -13,12 +13,7 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/codec/json"
-)
-
-var (
-	ErrCacheMiss     = errors.New("cache miss")
-	ErrCacheInvalid  = errors.New("invalid cache entry")
-	ErrCacheDisabled = errors.New("cache is disabled")
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // Cache 定义缓存接口
@@ -119,7 +114,7 @@ func (c *InMemoryCache) Get(ctx context.Context, key string) (interface{}, error
 	if !ok {
 		c.entriesMu.Unlock()
 		c.misses.Add(1)
-		return nil, ErrCacheMiss
+		return nil, agentErrors.ErrCacheMiss
 	}
 
 	// 检查是否过期
@@ -128,7 +123,7 @@ func (c *InMemoryCache) Get(ctx context.Context, key string) (interface{}, error
 		c.entriesMu.Unlock()
 		c.misses.Add(1)
 		c.evictions.Add(1)
-		return nil, ErrCacheMiss
+		return nil, agentErrors.ErrCacheMiss
 	}
 
 	// 更新访问信息（在持有锁的情况下更新，保证线程安全）
@@ -384,12 +379,12 @@ func (c *MultiTierCache) Get(ctx context.Context, key string) (interface{}, erro
 		}
 		// Log tier failures at WARN level for debugging cascading failures
 		// Skip logging for simple cache misses as they are expected
-		if !errors.Is(err, ErrCacheMiss) && !errors.Is(err, ErrCacheDisabled) {
+		if !errors.Is(err, agentErrors.ErrCacheMiss) && !errors.Is(err, agentErrors.ErrCacheDisabled) {
 			fmt.Fprintf(os.Stderr, "[WARN] cache tier %d get failed (key=%s): %v\n", i, key, err)
 		}
 	}
 
-	return nil, ErrCacheMiss
+	return nil, agentErrors.ErrCacheMiss
 }
 
 // Set 设置到所有层级
@@ -522,23 +517,23 @@ func NewNoOpCache() *NoOpCache {
 }
 
 func (c *NoOpCache) Get(ctx context.Context, key string) (interface{}, error) {
-	return nil, ErrCacheDisabled
+	return nil, agentErrors.ErrCacheDisabled
 }
 
 func (c *NoOpCache) Set(ctx context.Context, key string, value interface{}, ttl time.Duration) error {
-	return ErrCacheDisabled
+	return agentErrors.ErrCacheDisabled
 }
 
 func (c *NoOpCache) Delete(ctx context.Context, key string) error {
-	return ErrCacheDisabled
+	return agentErrors.ErrCacheDisabled
 }
 
 func (c *NoOpCache) Clear(ctx context.Context) error {
-	return ErrCacheDisabled
+	return agentErrors.ErrCacheDisabled
 }
 
 func (c *NoOpCache) Has(ctx context.Context, key string) (bool, error) {
-	return false, ErrCacheDisabled
+	return false, agentErrors.ErrCacheDisabled
 }
 
 func (c *NoOpCache) GetStats() CacheStats {

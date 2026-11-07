@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	shared2 "github.com/kart-io/goagent/constants"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -37,14 +38,14 @@ func TestTimeoutConstants(t *testing.T) {
 	// 验证常量与默认配置一致
 	config := DefaultTimeoutConfig()
 
-	assert.Equal(t, DefaultLLMTimeout, config.LLMTimeout, "LLM 超时常量应该与默认配置一致")
-	assert.Equal(t, DefaultToolTimeout, config.ToolTimeout, "工具超时常量应该与默认配置一致")
-	assert.Equal(t, DefaultDBConnectionTimeout, config.DBConnectionTimeout, "数据库连接超时常量应该与默认配置一致")
-	assert.Equal(t, DefaultDBOperationTimeout, config.DBOperationTimeout, "数据库操作超时常量应该与默认配置一致")
-	assert.Equal(t, DefaultHTTPTimeout, config.HTTPTimeout, "HTTP 超时常量应该与默认配置一致")
-	assert.Equal(t, DefaultPoolAcquireTimeout, config.PoolAcquireTimeout, "池获取超时常量应该与默认配置一致")
-	assert.Equal(t, DefaultBatchTimeout, config.BatchTimeout, "批量执行超时常量应该与默认配置一致")
-	assert.Equal(t, DefaultAgentExecutionTimeout, config.AgentExecutionTimeout, "Agent 执行超时常量应该与默认配置一致")
+	assert.Equal(t, shared2.DefaultLLMTimeout, config.LLMTimeout, "LLM 超时常量应该与默认配置一致")
+	assert.Equal(t, shared2.DefaultToolTimeout, config.ToolTimeout, "工具超时常量应该与默认配置一致")
+	assert.Equal(t, shared2.DefaultDBConnectionTimeout, config.DBConnectionTimeout, "数据库连接超时常量应该与默认配置一致")
+	assert.Equal(t, shared2.DefaultDBOperationTimeout, config.DBOperationTimeout, "数据库操作超时常量应该与默认配置一致")
+	assert.Equal(t, shared2.DefaultHTTPTimeout, config.HTTPTimeout, "HTTP 超时常量应该与默认配置一致")
+	assert.Equal(t, shared2.DefaultPoolAcquireTimeout, config.PoolAcquireTimeout, "池获取超时常量应该与默认配置一致")
+	assert.Equal(t, shared2.DefaultBatchTimeout, config.BatchTimeout, "批量执行超时常量应该与默认配置一致")
+	assert.Equal(t, shared2.DefaultAgentExecutionTimeout, config.AgentExecutionTimeout, "Agent 执行超时常量应该与默认配置一致")
 }
 
 // TestWithLLMTimeout 测试设置 LLM 超时

@@ -6,6 +6,7 @@ import (
 
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/tools"
 	"github.com/stretchr/testify/require"
@@ -86,7 +87,7 @@ func TestEmptyAnswerRetryLimits(t *testing.T) {
 				if persistent {
 					require.ErrorContains(t, err, "model returned no final answer or tool calls")
 					_, err = agent.AsRunnable().Invoke(ctx, "问题")
-					require.ErrorIs(t, err, durable.ErrOperationAttention)
+					require.ErrorIs(t, err, agentErrors.ErrOperationAttention)
 				} else {
 					require.ErrorContains(t, err, "模型未返回最终答案或完整工具调用")
 				}

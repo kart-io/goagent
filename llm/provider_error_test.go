@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"testing"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -84,4 +85,19 @@ func TestClassifyError(t *testing.T) {
 			t.Errorf("ClassifyError(%v) = %+v, want %+v", c.err, got, c.want)
 		}
 	}
+}
+
+func TestProviderError显式外层错误码保持优先(t *testing.T) {
+	cause := &ProviderError{StatusCode: 429, Err: errors.New("限流")}
+	explicit := agentErrors.NewLLMRequestError("test", "m", cause)
+	require.Equal(t, agentErrors.CodeLLMRequest, agentErrors.GetCode(explicit))
+	require.True(t, ClassifyError(explicit).Retryable)
+	require.Equal(t, agentErrors.CodeLLMRateLimit, agentErrors.GetCode(cause))
+}
+
+func TestProviderError空指针分类不崩溃(t *testing.T) {
+	var providerError *ProviderError
+	require.NotPanics(t, func() {
+		require.Equal(t, agentErrors.CodeInternal, agentErrors.GetCode(providerError))
+	})
 }

@@ -8,6 +8,9 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/kart-io/goagent/codec/json"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // ProviderError 携带模型服务失败中可用于判定重试的信息，由 Provider 构造；
@@ -25,6 +28,43 @@ type ProviderError struct {
 
 func (e *ProviderError) Error() string { return e.Err.Error() }
 func (e *ProviderError) Unwrap() error { return e.Err }
+
+// ErrorCode 将提供方边界已知的失败映射到框架现有类别，不改变原始原因链。
+func (e *ProviderError) ErrorCode() agentErrors.ErrorCode {
+	if e == nil {
+		return agentErrors.CodeInternal
+	}
+	switch {
+	case e.StatusCode == 429:
+		return agentErrors.CodeLLMRateLimit
+	case e.StatusCode == 401:
+		return agentErrors.CodeInvalidConfig
+	case e.StatusCode == 403:
+		return agentErrors.CodeAccessDenied
+	case e.StatusCode == 400 || e.StatusCode == 413 || e.StatusCode == 422:
+		return agentErrors.CodeInvalidInput
+	case e.StatusCode != 0:
+		return agentErrors.CodeLLMResponse
+	case errors.Is(e.Err, context.Canceled):
+		return agentErrors.CodeContextCanceled
+	case errors.Is(e.Err, context.DeadlineExceeded):
+		return agentErrors.CodeLLMTimeout
+	}
+	var coded agentErrors.CodedError
+	if errors.As(e.Err, &coded) {
+		return coded.ErrorCode()
+	}
+	var netErr net.Error
+	if errors.As(e.Err, &netErr) && netErr.Timeout() {
+		return agentErrors.CodeLLMTimeout
+	}
+	var syntaxErr *json.SyntaxError
+	var typeErr *json.UnmarshalTypeError
+	if errors.As(e.Err, &syntaxErr) || errors.As(e.Err, &typeErr) {
+		return agentErrors.CodeLLMResponse
+	}
+	return agentErrors.CodeLLMRequest
+}
 
 // Retryable 报告失败是否可能因重试而消失：429、5xx，以及暂时性的连接错误（网络超时、连接被拒绝或重置、
 // 连接意外关闭、DNS 暂时失败）。额度耗尽、其他 4xx、取消与上下文超时、证书与 TLS 错误、域名不存在、协议或解码错误都不可重试。

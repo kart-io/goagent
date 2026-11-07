@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/internal/processgroup"
 	"github.com/kart-io/goagent/tools"
@@ -44,8 +45,8 @@ func NewShellTool(allowedCommands []string, timeout time.Duration) *ShellTool {
 	}
 
 	tool.BaseTool = tools.NewBaseTool(
-		tools.ToolShell,
-		tools.DescShell,
+		shared.ToolShell,
+		shared.DescShell,
 		`{
 			"type": "object",
 			"properties": {

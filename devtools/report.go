@@ -2,12 +2,12 @@ package devtools
 
 import (
 	_ "embed"
-	"fmt"
 	"html/template"
 	"io"
 	"strings"
 
 	"github.com/kart-io/goagent/core/observe"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/workflow"
 )
 
@@ -18,10 +18,13 @@ var reportHTML string
 // It cannot resume a workflow or infer business state from missing events.
 func WriteReport(w io.Writer, graph workflow.GraphDescription, events []observe.Event) error {
 	if w == nil {
-		return fmt.Errorf("report writer required")
+		return agentErrors.Newf(agentErrors.CodeInvalidInput, "report writer required").WithComponent("devtools_report").WithOperation("write")
 	}
 	if graph.FormatVersion != "goagent-graph-v1" {
-		return fmt.Errorf("unsupported graph description format")
+		return agentErrors.Newf(agentErrors.CodeInvalidInput, "unsupported graph description format").
+			WithComponent("devtools_report").
+			WithOperation("write").
+			WithContext("format_version", graph.FormatVersion)
 	}
 	var dropped uint64
 	for _, e := range events {

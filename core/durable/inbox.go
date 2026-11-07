@@ -3,11 +3,11 @@ package durable
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"slices"
 
 	"github.com/kart-io/goagent/codec/json"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 const (
@@ -59,7 +59,7 @@ func (b *Inbox) load(ctx context.Context) (*inboxState, error) {
 	}
 	var state inboxState
 	if snapshot == nil || snapshot.Version != inboxVersion || snapshot.RunID != b.id || json.Unmarshal(snapshot.Data, &state) != nil {
-		return nil, fmt.Errorf("invalid durable inbox record")
+		return nil, agentErrors.Newf(agentErrors.CodeStateValidation, "invalid durable inbox record").WithComponent("durable_inbox").WithOperation("load")
 	}
 	return &state, nil
 }

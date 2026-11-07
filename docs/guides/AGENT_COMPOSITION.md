@@ -30,7 +30,7 @@ go test ./tools -run '^ExampleNewRunnableTool_workflow$' -v
 
 ## 可恢复子流程不等于后台任务服务
 
-`DurableGraph.AsChildRunnable()` 使用父操作日志的 Store 和派生执行键；外层工具需声明 `Resumable: true`。审批等待返回 `durable.WaitError`，父 Builder 以 `builder.ErrWaiting` 暂停，不能把等待当作模型可见的成功工具结果。
+`DurableGraph.AsChildRunnable()` 使用父操作日志的 Store 和派生执行键；外层工具需声明 `Resumable: true`。审批等待返回 `durable.WaitError`，父 Builder 以 `agentErrors.ErrAgentWaiting` 暂停，不能把等待当作模型可见的成功工具结果。
 
 宿主从等待路径取得续跑定位信息，完成业务鉴权后用 `durable.WithResume` 提供批准。审批键是恢复凭据，不是用户有权审批的证明。恢复时保持执行键、作用域、版本和输入意图稳定。可参考[实际嵌套审批回归](../../builder/nested_resume_test.go)及[图入口](../../workflow/README.md)。
 

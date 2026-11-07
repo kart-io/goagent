@@ -6,6 +6,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 func TestBooleanOutputParser_MatchesWholeWords(t *testing.T) {
@@ -32,7 +34,7 @@ func TestBooleanOutputParser_MatchesWholeWords(t *testing.T) {
 
 	for _, text := range []string{"sorry, unknown", "nothing", "10", "maybe"} {
 		_, err := p.Parse(ctx, text)
-		assert.ErrorIs(t, err, ErrParseFailed, "%q 中只有子串命中，不应判定", text)
+		assert.ErrorIs(t, err, agentErrors.ErrParseFailed, "%q 中只有子串命中，不应判定", text)
 	}
 }
 
@@ -94,5 +96,5 @@ func TestStructuredOutputParser_ConvertsBySchemaType(t *testing.T) {
 	assert.Equal(t, output{Name: "42", Age: 30, Score: 1.5, Active: true}, got)
 
 	_, err = p.Parse(ctx, "age: 三十")
-	assert.ErrorIs(t, err, ErrTypeConversion)
+	assert.ErrorIs(t, err, agentErrors.ErrTypeConversion)
 }

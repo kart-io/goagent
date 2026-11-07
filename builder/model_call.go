@@ -7,13 +7,14 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/kart-io/goagent/codec/json"
-
 	"github.com/google/uuid"
+
+	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/observe"
 	"github.com/kart-io/goagent/core/usage"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
 )
 
@@ -34,7 +35,7 @@ func modelInvocations(ctx context.Context) int64 {
 }
 func validateModelBudget(ctx context.Context) error {
 	if c, ok := budget.FromContext(ctx); ok && durable.HasJournal(ctx) && !c.IsDurable() {
-		return fmt.Errorf("durable model calls require a durable root budget")
+		return agentErrors.Newf(agentErrors.CodeInvalidConfig, "durable model calls require a durable root budget").WithComponent("builder").WithOperation("validate_model_budget")
 	}
 	return nil
 }
@@ -165,7 +166,7 @@ func modelOperation(ctx context.Context, id string, intent json.RawMessage, invo
 				return turn, n - 1, err
 			case decision.Messages != nil || decision.Client != nil:
 				if durable.HasJournal(ctx) {
-					return turn, n - 1, errors.Join(err, errors.New("持久运行中 RequestError 只能原样重试，不能替换消息或客户端"))
+					return turn, n - 1, errors.Join(err, agentErrors.NewInvalidConfigError("builder", "request_error_recovery", "持久运行中 RequestError 只能原样重试，不能替换消息或客户端"))
 				}
 				return turn, n - 1, &replanRequest{decision: decision, err: err}
 			}
@@ -260,7 +261,7 @@ func modelOperation(ctx context.Context, id string, intent json.RawMessage, invo
 		return turn, opErr
 	}
 	if turn == nil {
-		return nil, fmt.Errorf("model operation has no result")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidOutput, "model operation has no result").WithComponent("builder").WithOperation("model_operation")
 	}
 	if record.Replayed {
 		if err := emit(AgentEvent{Type: "step", Step: "model_replayed"}); err != nil {

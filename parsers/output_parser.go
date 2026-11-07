@@ -2,7 +2,7 @@ package parsers
 
 import (
 	"context"
-	"errors"
+
 	"fmt"
 	"reflect"
 	"regexp"
@@ -14,13 +14,6 @@ import (
 	"github.com/kart-io/goagent/codec/json"
 
 	agentErrors "github.com/kart-io/goagent/errors"
-)
-
-var (
-	ErrParseFailed    = errors.New("failed to parse output")
-	ErrInvalidFormat  = errors.New("invalid output format")
-	ErrMissingField   = errors.New("missing required field")
-	ErrTypeConversion = errors.New("type conversion failed")
 )
 
 // OutputParser 定义输出解析器接口
@@ -99,7 +92,7 @@ func (p *JSONOutputParser[T]) Parse(ctx context.Context, text string) (T, error)
 	// 提取 JSON（支持 markdown 代码块）
 	jsonStr := p.extractJSON(text)
 	if jsonStr == "" {
-		return result, agentErrors.Wrap(ErrParseFailed, agentErrors.CodeParserInvalidJSON, "no JSON found in output").
+		return result, agentErrors.Wrap(agentErrors.ErrParseFailed, agentErrors.CodeParserInvalidJSON, "no JSON found in output").
 			WithComponent("json_parser").
 			WithOperation("parse").
 			WithContext("text_length", len(text))
@@ -294,7 +287,7 @@ func (p *StructuredOutputParser[T]) Parse(ctx context.Context, text string) (T, 
 	// 检查必需字段
 	for fieldName, schema := range p.schema {
 		if schema.Required && fields[fieldName] == "" {
-			return result, agentErrors.Wrap(ErrMissingField, agentErrors.CodeParserMissingField, "required field not found").
+			return result, agentErrors.Wrap(agentErrors.ErrMissingField, agentErrors.CodeParserMissingField, "required field not found").
 				WithComponent("structured_parser").
 				WithOperation("parse").
 				WithContext("field", fieldName).
@@ -306,7 +299,7 @@ func (p *StructuredOutputParser[T]) Parse(ctx context.Context, text string) (T, 
 	for fieldName, value := range fields {
 		converted, err := convertFieldValue(value, p.schema[fieldName].Type)
 		if err != nil {
-			return result, agentErrors.Wrap(ErrTypeConversion, agentErrors.CodeParserFailed, "field value does not match schema type").
+			return result, agentErrors.Wrap(agentErrors.ErrTypeConversion, agentErrors.CodeParserFailed, "field value does not match schema type").
 				WithComponent("structured_parser").
 				WithOperation("parse").
 				WithContext("field", fieldName).
@@ -507,7 +500,7 @@ func (p *EnumOutputParser) Parse(ctx context.Context, text string) (string, erro
 		}
 	}
 
-	return "", agentErrors.Wrap(ErrInvalidFormat, agentErrors.CodeParserFailed, "value is not in allowed enum values").
+	return "", agentErrors.Wrap(agentErrors.ErrInvalidFormat, agentErrors.CodeParserFailed, "value is not in allowed enum values").
 		WithComponent("enum_parser").
 		WithOperation("parse").
 		WithContext("value", text).
@@ -551,7 +544,7 @@ func (p *BooleanOutputParser) Parse(ctx context.Context, text string) (bool, err
 		}
 	}
 
-	return false, agentErrors.Wrap(ErrParseFailed, agentErrors.CodeParserFailed, "cannot determine boolean value from text").
+	return false, agentErrors.Wrap(agentErrors.ErrParseFailed, agentErrors.CodeParserFailed, "cannot determine boolean value from text").
 		WithComponent("boolean_parser").
 		WithOperation("parse").
 		WithContext("text", text).
@@ -660,9 +653,6 @@ func NewChainOutputParser[T any](parsers ...OutputParser[T]) *ChainOutputParser[
 	}
 }
 
-// errNoParsers 作为未配置任何解析器时的失败原因，避免 Wrap(nil) 返回值为 nil 的错误。
-var errNoParsers = errors.New("no parsers configured")
-
 // Parse 尝试所有解析器
 func (p *ChainOutputParser[T]) Parse(ctx context.Context, text string) (T, error) {
 	var lastErr error
@@ -675,7 +665,7 @@ func (p *ChainOutputParser[T]) Parse(ctx context.Context, text string) (T, error
 	}
 
 	if lastErr == nil {
-		lastErr = errNoParsers
+		lastErr = agentErrors.ErrNoParsers
 	}
 	var zero T
 	return zero, agentErrors.Wrap(lastErr, agentErrors.CodeParserFailed, "all parsers in chain failed").

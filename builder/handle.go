@@ -14,14 +14,9 @@ import (
 	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
 )
-
-// ErrHandleDone 表示句柄的全部轮次已经结束，不再接收输入。
-var ErrHandleDone = errors.New("agent handle is done")
-
-// errRedirected 是 Redirect 取消进行中的模型请求时的原因。
-var errRedirected = errors.New("model request redirected")
 
 // inboxWriteTimeout 限制一次收件箱写入；写入不跟随运行的取消，取消后的确认仍要落盘。
 const inboxWriteTimeout = 5 * time.Second
@@ -99,7 +94,7 @@ func (b *inbox) push(kind inboxKind, text string) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.done {
-		return ErrHandleDone
+		return agentErrors.ErrAgentHandleDone
 	}
 	name := inboxKindInject
 	if kind == inboxSteer {
@@ -250,7 +245,7 @@ func (a *ConfigurableAgent[C, S]) Start(ctx context.Context, input string) *Hand
 		return h
 	}
 	if _, ok := a.llmClient.(llm.ToolStreamClient); !ok || len(a.tools) == 0 {
-		return fail(errors.New("Handle 需要原生工具流：llm.ToolStreamClient 且配置了工具"))
+		return fail(agentErrors.NewInvalidConfigError("builder", "native_tool_stream", "Handle 需要原生工具流：llm.ToolStreamClient 且配置了工具"))
 	}
 	box, entries, err := durable.OpenInbox(ctx)
 	if err != nil {
@@ -385,7 +380,7 @@ func (h *Handle) SteerOnce(key, msg string) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.done {
-		return ErrHandleDone
+		return agentErrors.ErrAgentHandleDone
 	}
 	var seq uint64
 	if b.durable != nil {
@@ -417,7 +412,7 @@ func (h *Handle) Followup(msg string) error {
 	h.inbox.mu.Lock()
 	defer h.inbox.mu.Unlock()
 	if h.inbox.done {
-		return ErrHandleDone
+		return agentErrors.ErrAgentHandleDone
 	}
 	seq, err := h.inbox.persist(inboxKindFollowup, msg)
 	if err != nil {
@@ -433,12 +428,12 @@ func (h *Handle) Redirect(msg string) error {
 	h.inbox.mu.Lock()
 	if h.inbox.done {
 		h.inbox.mu.Unlock()
-		return ErrHandleDone
+		return agentErrors.ErrAgentHandleDone
 	}
 	if cancel := h.inbox.cancelModel; cancel != nil {
 		h.inbox.redirects = append(h.inbox.redirects, msg)
 		h.inbox.mu.Unlock()
-		cancel(errRedirected)
+		cancel(agentErrors.ErrModelRedirected)
 		return nil
 	}
 	seq, err := h.inbox.persist(inboxKindSteer, msg)

@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // A failed turn must not discard input which was accepted for a later turn.
@@ -54,7 +56,7 @@ func TestHandlePendingInputsAtStoppingBoundary(t *testing.T) {
 		{Kind: "steer", Text: "late redirect"},
 	}, h.PendingInputs())
 	require.Equal(t, 1, model.count(), "snapshot does not create another turn or bypass limits")
-	require.ErrorIs(t, h.Followup("too late"), ErrHandleDone)
+	require.ErrorIs(t, h.Followup("too late"), agentErrors.ErrAgentHandleDone)
 }
 
 func TestHandlePendingInputsAtIterationLimit(t *testing.T) {

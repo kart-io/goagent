@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/kart-io/goagent/core/budget"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/tools"
@@ -84,7 +84,7 @@ func TestToolErrorFeedbackInvalidArguments(t *testing.T) {
 
 func TestToolErrorFeedbackKeepsFatalErrors(t *testing.T) {
 	for name, fatal := range map[string]error{
-		"budget": budget.ErrBudgetExceeded,
+		"budget": agentErrors.ErrModelBudgetExceeded,
 	} {
 		t.Run(name, func(t *testing.T) {
 			calls := 0

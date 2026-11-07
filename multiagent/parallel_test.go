@@ -56,7 +56,7 @@ func TestParallelStepValidation(t *testing.T) {
 
 func TestParallelStepRunCannotBeInvokedDirectly(t *testing.T) {
 	_, err := lookups(t).Run.Invoke(context.Background(), record{})
-	require.ErrorIs(t, err, errParallelRun)
+	require.ErrorIs(t, err, agentErrors.ErrParallelRegistration)
 }
 
 // single 用 AddStep 构造 START → s → END。

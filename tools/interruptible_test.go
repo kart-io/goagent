@@ -7,6 +7,7 @@ import (
 	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/stretchr/testify/require"
 )
@@ -73,7 +74,7 @@ func TestToolWithoutInterruptibleCannotPause(t *testing.T) {
 	calls := 0
 	d := dispatcherWith(t, DispatchConfig{}, confirmTool(t, "", &calls))
 	_, err := d.Invoke(ctx, confirmRequest())
-	require.ErrorIs(t, err, durable.ErrWaitNotResumable)
+	require.ErrorIs(t, err, agentErrors.ErrWaitNotResumable)
 	require.Nil(t, durable.Waits(err))
 }
 

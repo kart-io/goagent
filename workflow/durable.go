@@ -12,7 +12,6 @@ import (
 	"strings"
 
 	"github.com/kart-io/goagent/codec/json"
-
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/observe"
@@ -55,9 +54,6 @@ type DurableOption[T any] func(*DurableGraph[T])
 func WithBeforeApprove[T any](fn func(ctx context.Context, id string, snap *GraphSnapshot[T]) error) DurableOption[T] {
 	return func(d *DurableGraph[T]) { d.beforeApprove = fn }
 }
-
-// ErrApprovalMismatch 表示提供的审批键与等待中的节点不符；检查点不变，仍在等待。
-var ErrApprovalMismatch = errors.New("approval does not match waiting node")
 
 // ApprovalRejectedError 是 WithBeforeApprove 的钩子返回错误时的拒绝；检查点不变，仍在等待。
 // 钩子 panic 时返回 *errors.PanicError，不属于拒绝。
@@ -103,15 +99,15 @@ func graphDigest(value any) string {
 
 func (g *Graph[T]) CompileDurable(ctx context.Context, cfg DurableConfig, opts ...DurableOption[T]) (*DurableGraph[T], error) {
 	if cfg.Store == nil || cfg.Version == "" {
-		return nil, fmt.Errorf("durable graph requires store and version")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "durable graph requires store and version").WithComponent("workflow").WithOperation("compile_durable")
 	}
 	if strings.TrimSpace(cfg.StateVersion) != cfg.StateVersion {
-		return nil, fmt.Errorf("状态版本不能含首尾空白")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "状态版本不能含首尾空白").WithComponent("workflow").WithOperation("compile_durable")
 	}
 	components := maps.Clone(cfg.Components)
 	for name, version := range components {
 		if name == "" || version == "" || strings.TrimSpace(name) != name || strings.TrimSpace(version) != version {
-			return nil, fmt.Errorf("组件名和版本必须非空且无首尾空白")
+			return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "组件名和版本必须非空且无首尾空白").WithComponent("workflow").WithOperation("compile_durable")
 		}
 	}
 	graph, err := g.compile(ctx)
@@ -121,7 +117,7 @@ func (g *Graph[T]) CompileDurable(ctx context.Context, cfg DurableConfig, opts .
 	approvals := map[string]bool{}
 	for _, node := range cfg.ApprovalNodes {
 		if graph.nodes[node] == nil || approvals[node] {
-			return nil, fmt.Errorf("unknown or duplicate approval node %q", node)
+			return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "unknown or duplicate approval node %q", node).WithComponent("workflow").WithOperation("compile_durable")
 		}
 		approvals[node] = true
 	}
@@ -181,7 +177,7 @@ func (d *DurableGraph[T]) run(ctx context.Context, store durable.Store, id strin
 		return emitChunk(core.StreamChunk[*GraphSnapshot[T]]{Event: event})
 	}
 	if d == nil || store == nil || id == "" {
-		return nil, fmt.Errorf("compiled durable graph and run ID are required")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "compiled durable graph and run ID are required").WithComponent("workflow").WithOperation("run")
 	}
 	if err = ctx.Err(); err != nil {
 		return nil, err
@@ -198,7 +194,7 @@ func (d *DurableGraph[T]) run(ctx context.Context, store durable.Store, id strin
 	checkpoint, err := store.Load(ctx, id)
 	if errors.Is(err, os.ErrNotExist) {
 		if approvalKey != "" {
-			return nil, fmt.Errorf("cannot approve a run that does not exist")
+			return nil, agentErrors.Newf(agentErrors.CodeNotFound, "cannot approve a run that does not exist").WithComponent("workflow").WithOperation("run")
 		}
 		data, e := json.Marshal(graphState[T]{Node: d.graph.entry, State: initial})
 		if e != nil {
@@ -244,11 +240,11 @@ func (d *DurableGraph[T]) run(ctx context.Context, store durable.Store, id strin
 		approvalKey = ""
 	} else {
 		if approvalKey != "" && (!checkpoint.Waiting || checkpoint.Key != approvalKey) {
-			return result, ErrApprovalMismatch
+			return result, agentErrors.ErrApprovalMismatch
 		}
 		if resumeInput != nil || (approvalKey != "" && d.resumeHandler != nil) {
 			if approvalKey == "" || (resumeInput != nil && !json.Valid(resumeInput)) {
-				return result, &ResumeRejectedError{Err: fmt.Errorf("human input requires a waiting key and valid JSON")}
+				return result, &ResumeRejectedError{Err: agentErrors.Newf(agentErrors.CodeInvalidInput, "human input requires a waiting key and valid JSON").WithComponent("workflow").WithOperation("run")}
 			}
 			next, updated, e := d.applyResume(ctx, id, checkpoint, resumeInput)
 			if e != nil {
@@ -295,7 +291,7 @@ func (d *DurableGraph[T]) run(ctx context.Context, store durable.Store, id strin
 			continue
 		}
 		if checkpoint.Next >= d.graph.config.MaxSteps {
-			return result, fmt.Errorf("%w: limit %d", ErrMaxSteps, d.graph.config.MaxSteps)
+			return result, fmt.Errorf("%w: limit %d", agentErrors.ErrWorkflowMaxSteps, d.graph.config.MaxSteps)
 		}
 		// 意图快照只改位置与键，状态沿用 checkpoint.Data，不重新编码。
 		intent := *checkpoint
@@ -313,7 +309,7 @@ func (d *DurableGraph[T]) run(ctx context.Context, store durable.Store, id strin
 				if err = emit(&core.StreamEvent{Type: "approval_required", Step: state.Node}); err != nil {
 					return result, err
 				}
-				return result, durable.ErrApprovalRequired
+				return result, agentErrors.ErrApprovalRequired
 			}
 		}
 		if err = commit(intent, state); err != nil {
@@ -379,7 +375,7 @@ func (d *DurableGraph[T]) run(ctx context.Context, store durable.Store, id strin
 					return result, err
 				}
 				if i := slices.IndexFunc(points, func(p InterruptPoint) bool { return p.Key == answered && p.Rejected }); answered != "" && i >= 0 {
-					rejected := fmt.Errorf("中断输入被拒绝：%s", points[i].Reason)
+					var rejected error = agentErrors.Newf(agentErrors.CodeInvalidInput, "中断输入被拒绝：%s", points[i].Reason).WithComponent("workflow").WithOperation("run")
 					if cause := waitCause(durable.Waits(e)); cause != nil {
 						rejected = fmt.Errorf("%w: %w", rejected, cause)
 					}
@@ -388,7 +384,7 @@ func (d *DurableGraph[T]) run(ctx context.Context, store durable.Store, id strin
 				if err = emit(&core.StreamEvent{Type: "interrupt_required", Step: nodeName}); err != nil {
 					return result, err
 				}
-				return result, durable.ErrApprovalRequired
+				return result, agentErrors.ErrApprovalRequired
 			}
 			return result, fmt.Errorf("node %q: %w", state.Node, e)
 		}
@@ -431,10 +427,10 @@ func (d *DurableGraph[T]) decodeCheckpoint(id string, checkpoint *durable.Snapsh
 		}
 	}()
 	if checkpoint == nil || checkpoint.Plan != d.plan || checkpoint.Version != d.version || checkpoint.RunID != id || checkpoint.Next < 0 || checkpoint.Next > d.graph.config.MaxSteps || json.Unmarshal(checkpoint.Data, &state) != nil {
-		return state, fmt.Errorf("checkpoint does not match versioned graph or is corrupt")
+		return state, agentErrors.Newf(agentErrors.CodeStateValidation, "checkpoint does not match versioned graph or is corrupt").WithComponent("workflow").WithOperation("decode_checkpoint")
 	}
 	if state.Node != END && d.graph.nodes[state.Node] == nil {
-		return state, fmt.Errorf("checkpoint contains unknown node")
+		return state, agentErrors.Newf(agentErrors.CodeStateValidation, "checkpoint contains unknown node").WithComponent("workflow").WithOperation("decode_checkpoint")
 	}
 	if err = d.validateContinuation(id, checkpoint, state); err != nil {
 		return state, err
@@ -446,14 +442,14 @@ func (d *DurableGraph[T]) decodeCheckpoint(id string, checkpoint *durable.Snapsh
 // run lock and may wait for active work; use a bounded context for status reads.
 func (d *DurableGraph[T]) Snapshot(ctx context.Context, id string) (out *GraphSnapshot[T], err error) {
 	if d == nil {
-		return nil, fmt.Errorf("compiled durable graph and run ID are required")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "compiled durable graph and run ID are required").WithComponent("workflow").WithOperation("snapshot")
 	}
 	return d.snapshot(ctx, d.store, id)
 }
 
 func (d *DurableGraph[T]) snapshot(ctx context.Context, store durable.Store, id string) (out *GraphSnapshot[T], err error) {
 	if store == nil || id == "" {
-		return nil, fmt.Errorf("compiled durable graph and run ID are required")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "compiled durable graph and run ID are required").WithComponent("workflow").WithOperation("snapshot")
 	}
 	unlock, err := store.Lock(ctx, id)
 	if err != nil {
@@ -480,47 +476,47 @@ func (d *DurableGraph[T]) validateContinuation(id string, cp *durable.Snapshot, 
 	if state.Parallel != nil {
 		cfg, ok := d.graph.parallel[state.Node]
 		if !ok || state.Routing || cp.Key == "" || (cp.Waiting && !interrupted) || (d.approvals[state.Node] && !cp.Approved) {
-			return fmt.Errorf("corrupt parallel continuation")
+			return agentErrors.Newf(agentErrors.CodeStateValidation, "corrupt parallel continuation").WithComponent("workflow").WithOperation("validate_continuation")
 		}
 		if err := validateParallel[T](cfg, state.Parallel); err != nil {
 			return err
 		}
 	}
 	if state.Routing && (state.Node == END || cp.Next == 0) {
-		return fmt.Errorf("corrupt graph routing position")
+		return agentErrors.Newf(agentErrors.CodeStateValidation, "corrupt graph routing position").WithComponent("workflow").WithOperation("validate_continuation")
 	}
 	if state.Node == END && cp.Next == 0 {
-		return fmt.Errorf("corrupt graph completion position")
+		return agentErrors.Newf(agentErrors.CodeStateValidation, "corrupt graph completion position").WithComponent("workflow").WithOperation("validate_continuation")
 	}
 	if state.Routing || state.Node == END {
 		if cp.Key != "" || cp.Waiting || cp.Approved || interrupted {
-			return fmt.Errorf("corrupt completed node intent")
+			return agentErrors.Newf(agentErrors.CodeStateValidation, "corrupt completed node intent").WithComponent("workflow").WithOperation("validate_continuation")
 		}
 		return nil
 	}
 	if interrupted {
 		// 中断等待：节点已开始执行；审批节点必须已获批准。
 		if !cp.Waiting || cp.Key == "" || (d.approvals[state.Node] && !cp.Approved) {
-			return fmt.Errorf("corrupt graph interrupt state")
+			return agentErrors.Newf(agentErrors.CodeStateValidation, "corrupt graph interrupt state").WithComponent("workflow").WithOperation("validate_continuation")
 		}
 		for _, p := range state.Interrupts {
 			if p.Key == "" || p.ID == "" || !json.Valid(p.Info) {
-				return fmt.Errorf("corrupt graph interrupt state")
+				return agentErrors.Newf(agentErrors.CodeStateValidation, "corrupt graph interrupt state").WithComponent("workflow").WithOperation("validate_continuation")
 			}
 		}
 	} else {
 		if cp.Waiting && cp.Approved {
-			return fmt.Errorf("corrupt graph approval state")
+			return agentErrors.Newf(agentErrors.CodeStateValidation, "corrupt graph approval state").WithComponent("workflow").WithOperation("validate_continuation")
 		}
 		if cp.Waiting || cp.Approved {
 			if !d.approvals[state.Node] || cp.Key == "" {
-				return fmt.Errorf("corrupt graph approval binding")
+				return agentErrors.Newf(agentErrors.CodeStateValidation, "corrupt graph approval binding").WithComponent("workflow").WithOperation("validate_continuation")
 			}
 		}
 	}
 	expected := graphDigest([]any{id, d.plan, state.Node, cp.Next})
 	if cp.Key != "" && cp.Key != expected {
-		return fmt.Errorf("corrupt graph execution key")
+		return agentErrors.Newf(agentErrors.CodeStateValidation, "corrupt graph execution key").WithComponent("workflow").WithOperation("validate_continuation")
 	}
 	return nil
 }
@@ -538,7 +534,7 @@ func (d *DurableGraph[T]) route(ctx context.Context, name string, state T) (targ
 			return "", fmt.Errorf("branch %q: %w", name, err)
 		}
 		if !branch.targets[target] {
-			return "", fmt.Errorf("branch %q selected undeclared destination %q", name, target)
+			return "", agentErrors.Newf(agentErrors.CodeInvalidOutput, "branch %q selected undeclared destination %q", name, target).WithComponent("workflow").WithOperation("route")
 		}
 	}
 	if err = ctx.Err(); err != nil {

@@ -8,9 +8,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	shared "github.com/kart-io/goagent/constants"
 	agentllm "github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/common"
-	"github.com/kart-io/goagent/llm/constants"
 )
 
 func TestNewBaseProvider(t *testing.T) {
@@ -55,21 +55,21 @@ func TestApplyProviderDefaults(t *testing.T) {
 	bp := common.NewBaseProvider()
 
 	bp.ApplyProviderDefaults(
-		constants.ProviderOpenAI,
+		shared.ProviderOpenAI,
 		"https://api.openai.com/v1",
 		"gpt-4",
 		"OPENAI_BASE_URL",
 		"OPENAI_MODEL",
 	)
 
-	assert.Equal(t, constants.ProviderOpenAI, bp.Config.Provider)
+	assert.Equal(t, shared.ProviderOpenAI, bp.Config.Provider)
 	assert.Equal(t, "https://api.openai.com/v1", bp.Config.BaseURL)
 	assert.Equal(t, "gpt-4", bp.Config.Model)
 }
 
 func TestConfigToOptions(t *testing.T) {
 	config := &agentllm.LLMOptions{
-		Provider:     constants.ProviderOpenAI,
+		Provider:     shared.ProviderOpenAI,
 		APIKey:       "test-key",
 		BaseURL:      "https://api.test.com",
 		Model:        "test-model",
@@ -105,7 +105,7 @@ func TestConfigToOptions_NilConfig(t *testing.T) {
 func TestEnsureAPIKey_FromConfig(t *testing.T) {
 	bp := common.NewBaseProvider(agentllm.WithAPIKey("test-key"))
 
-	err := bp.EnsureAPIKey("TEST_API_KEY", constants.ProviderOpenAI)
+	err := bp.EnsureAPIKey("TEST_API_KEY", shared.ProviderOpenAI)
 
 	require.NoError(t, err)
 	assert.Equal(t, "test-key", bp.Config.APIKey)
@@ -117,7 +117,7 @@ func TestEnsureAPIKey_FromEnv(t *testing.T) {
 
 	bp := common.NewBaseProvider()
 
-	err := bp.EnsureAPIKey("TEST_API_KEY", constants.ProviderOpenAI)
+	err := bp.EnsureAPIKey("TEST_API_KEY", shared.ProviderOpenAI)
 
 	require.NoError(t, err)
 	assert.Equal(t, "env-key", bp.Config.APIKey)
@@ -128,7 +128,7 @@ func TestEnsureAPIKey_Missing(t *testing.T) {
 
 	bp := common.NewBaseProvider()
 
-	err := bp.EnsureAPIKey("TEST_API_KEY", constants.ProviderOpenAI)
+	err := bp.EnsureAPIKey("TEST_API_KEY", shared.ProviderOpenAI)
 
 	require.Error(t, err)
 }
@@ -215,7 +215,7 @@ func TestGetMaxTokens(t *testing.T) {
 	// 测试零配置时的兜底默认值（应使用 constants.DefaultMaxTokens）
 	// 需要创建一个空配置（不使用 DefaultLLMOptions）
 	bp3 := &common.BaseProvider{Config: &agentllm.LLMOptions{}}
-	assert.Equal(t, constants.DefaultMaxTokens, bp3.GetMaxTokens(0))
+	assert.Equal(t, shared.DefaultProviderMaxTokens, bp3.GetMaxTokens(0))
 }
 
 func TestGetTemperature(t *testing.T) {
@@ -232,7 +232,7 @@ func TestGetTemperature(t *testing.T) {
 
 	// Test with zero config (should use constants.DefaultTemperature)
 	bp3 := common.NewBaseProvider(common.ConfigToOptions(&agentllm.LLMOptions{Temperature: 0})...)
-	assert.Equal(t, constants.DefaultTemperature, bp3.GetTemperature(0))
+	assert.Equal(t, shared.DefaultTemperature, bp3.GetTemperature(0))
 }
 
 func TestGetTimeout(t *testing.T) {
@@ -248,7 +248,7 @@ func TestGetTimeout(t *testing.T) {
 	// 测试零配置时的兜底默认值（应使用 constants.DefaultTimeout）
 	// 需要创建一个空配置（不使用 DefaultLLMOptions）
 	bp3 := &common.BaseProvider{Config: &agentllm.LLMOptions{}}
-	assert.Equal(t, constants.DefaultTimeout, bp3.GetTimeout())
+	assert.Equal(t, shared.DefaultProviderTimeout, bp3.GetTimeout())
 }
 
 func TestGetTopP(t *testing.T) {
@@ -265,7 +265,7 @@ func TestGetTopP(t *testing.T) {
 
 	// Test with zero config (should use constants.DefaultTopP)
 	bp3 := common.NewBaseProvider(common.ConfigToOptions(&agentllm.LLMOptions{TopP: 0})...)
-	assert.Equal(t, constants.DefaultTopP, bp3.GetTopP(0))
+	assert.Equal(t, shared.DefaultTopP, bp3.GetTopP(0))
 }
 
 func TestModelName(t *testing.T) {
@@ -281,7 +281,7 @@ func TestMaxTokensValue(t *testing.T) {
 }
 
 func TestProviderName(t *testing.T) {
-	bp := common.NewBaseProvider(agentllm.WithProvider(constants.ProviderOpenAI))
+	bp := common.NewBaseProvider(agentllm.WithProvider(shared.ProviderOpenAI))
 
 	assert.Equal(t, "openai", bp.ProviderName())
 }

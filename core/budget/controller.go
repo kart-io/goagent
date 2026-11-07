@@ -15,9 +15,9 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/codec/json"
-
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/usage"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 )
 
@@ -27,12 +27,6 @@ const Unlimited = math.MaxInt
 // DefaultMaxAgentCalls bounds topology when the host does not configure a limit.
 const DefaultMaxAgentCalls = 1000
 const ledgerFormat = "goagent-model-budget"
-
-var (
-	ErrBudgetExceeded        = errors.New("root model request budget exceeded")
-	ErrReservationExists     = errors.New("model request reservation already exists")
-	ErrTokenEstimateRequired = errors.New("token limit requires a host estimate")
-)
 
 // Config is supplied by the host. RootKey identifies one logical run.
 type Config struct {
@@ -74,10 +68,10 @@ type Controller struct {
 // New creates an in-memory request budget.
 func New(config Config) (*Controller, error) {
 	if config.RootKey == "" || config.Version == "" || config.MaxModelRequests < 1 || config.MaxReservedTokens < 0 || config.MaxToolCalls < 0 || config.DeadlineUnixMilli < 0 || (config.MaxReservedTokens > 0 && config.TokenPolicyVersion == "") {
-		return nil, fmt.Errorf("budget requires root key, version and positive request limit")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "budget requires root key, version and positive request limit").WithComponent("budget").WithOperation("new")
 	}
 	if config.MaxAgentCalls < 0 {
-		return nil, fmt.Errorf("negative agent call limit")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "negative agent call limit").WithComponent("budget").WithOperation("new")
 	}
 	if config.MaxAgentCalls == 0 {
 		config.MaxAgentCalls = DefaultMaxAgentCalls
@@ -88,7 +82,7 @@ func New(config Config) (*Controller, error) {
 // NewDurable binds an immutable budget policy to a stable root record.
 func NewDurable(config Config, store durable.Store) (*Controller, error) {
 	if store == nil {
-		return nil, fmt.Errorf("budget store required")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "budget store required").WithComponent("budget").WithOperation("new_durable")
 	}
 	c, err := New(config)
 	if err != nil {
@@ -151,34 +145,34 @@ func (c *Controller) transaction(ctx context.Context, write bool, fn func(*ledge
 			// 从零值解码，避免JSON缺省字段继承当前配置或上次内存快照。
 			l = ledger{}
 			if s != nil && s.Version != ledgerFormat {
-				return fmt.Errorf("unsupported budget record format %q; expected %q", s.Version, ledgerFormat)
+				return agentErrors.Newf(agentErrors.CodeStateValidation, "unsupported budget record format %q; expected %q", s.Version, ledgerFormat).WithComponent("budget").WithOperation("transaction")
 			}
 			if s == nil || s.RunID != id || json.Unmarshal(s.Data, &l) != nil {
-				return fmt.Errorf("invalid budget record")
+				return agentErrors.Newf(agentErrors.CodeStateValidation, "invalid budget record").WithComponent("budget").WithOperation("transaction")
 			}
 		}
 	}
 	if l.Config != c.config || l.Entries == nil || len(l.Entries) > c.config.MaxModelRequests {
-		return fmt.Errorf("budget configuration or record changed")
+		return agentErrors.Newf(agentErrors.CodeStateValidation, "budget configuration or record changed").WithComponent("budget").WithOperation("transaction")
 	}
 	for key, item := range l.Entries {
 		if key == "" || item.Estimate < 0 || (c.config.MaxReservedTokens > 0 && item.Estimate == 0) {
-			return fmt.Errorf("invalid reservation record")
+			return agentErrors.Newf(agentErrors.CodeStateValidation, "invalid reservation record").WithComponent("budget").WithOperation("transaction")
 		}
 		if err := item.Evidence.Validate(); err != nil {
-			return err
+			return agentErrors.Wrap(err, agentErrors.CodeStateValidation, "invalid reservation record").WithComponent("budget").WithOperation("transaction")
 		}
 	}
 
 	if reserved, e := reservedTokens(&l); e != nil || (c.config.MaxReservedTokens > 0 && reserved > c.config.MaxReservedTokens) {
-		return fmt.Errorf("无效的 Token 预算记录")
+		return agentErrors.Newf(agentErrors.CodeStateValidation, "无效的 Token 预算记录").WithComponent("budget").WithOperation("transaction")
 	}
 	if c.config.MaxToolCalls > 0 && len(l.Tools) > c.config.MaxToolCalls {
-		return fmt.Errorf("无效的工具预算记录")
+		return agentErrors.Newf(agentErrors.CodeStateValidation, "无效的工具预算记录").WithComponent("budget").WithOperation("transaction")
 	}
 	for key, used := range l.Tools {
 		if key == "" || !used {
-			return fmt.Errorf("无效的工具执行记录")
+			return agentErrors.Newf(agentErrors.CodeStateValidation, "无效的工具执行记录").WithComponent("budget").WithOperation("transaction")
 		}
 	}
 	if err = c.validateAttribution(&l); err != nil {
@@ -212,7 +206,7 @@ func (c *Controller) Reserve(ctx context.Context, key string) error {
 		return err
 	}
 	if c.config.MaxReservedTokens > 0 {
-		return ErrTokenEstimateRequired
+		return agentErrors.ErrTokenEstimateRequired
 	}
 	return c.ReserveEstimated(ctx, key, 0)
 }
@@ -266,20 +260,20 @@ func (c *Controller) ReserveEstimated(ctx context.Context, key string, tokens in
 // ReserveTool 预留一次实际工具执行；日志回放不应调用它。重试属于新的实际执行，应使用新键。
 func (c *Controller) ReserveTool(ctx context.Context, key string) error {
 	if durable.HasJournal(ctx) && !c.IsDurable() {
-		return fmt.Errorf("持久工具执行必须绑定持久根预算")
+		return agentErrors.Newf(agentErrors.CodeInvalidConfig, "持久工具执行必须绑定持久根预算").WithComponent("budget").WithOperation("reserve_tool")
 	}
 	if key == "" {
-		return fmt.Errorf("工具执行键必填")
+		return agentErrors.Newf(agentErrors.CodeInvalidInput, "工具执行键必填").WithComponent("budget").WithOperation("reserve_tool")
 	}
 	return c.transaction(ctx, true, func(l *ledger) error {
 		if err := c.checkDeadline(ctx); err != nil {
 			return err
 		}
 		if l.Tools[key] {
-			return ErrReservationExists
+			return agentErrors.ErrReservationExists
 		}
 		if c.config.MaxToolCalls > 0 && len(l.Tools) >= c.config.MaxToolCalls {
-			return ErrBudgetExceeded
+			return agentErrors.ErrModelBudgetExceeded
 		}
 		if l.Tools == nil {
 			l.Tools = map[string]bool{}
@@ -312,7 +306,7 @@ func reservedTokens(l *ledger) (int, error) {
 	total := 0
 	for _, item := range l.Entries {
 		if item.Estimate < 0 || item.Estimate > math.MaxInt-total {
-			return 0, fmt.Errorf("invalid token reservation")
+			return 0, agentErrors.Newf(agentErrors.CodeStateValidation, "invalid token reservation").WithComponent("budget").WithOperation("reserved_tokens")
 		}
 		total += item.Estimate
 	}

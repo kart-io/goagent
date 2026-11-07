@@ -14,7 +14,8 @@ import (
 	"github.com/kart-io/goagent/core/middleware"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
-	"github.com/kart-io/goagent/llm/constants"
+
+	shared2 "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/store/memory"
 )
 
@@ -56,8 +57,8 @@ func (m *MockLLMClient) CompleteStream(ctx context.Context, req *llm.CompletionR
 	return stream, nil
 }
 
-func (m *MockLLMClient) Provider() constants.Provider {
-	return constants.ProviderCustom
+func (m *MockLLMClient) Provider() shared2.Provider {
+	return shared2.ProviderCustom
 }
 
 // MockToolLLMClient 在 MockLLMClient 之上提供原生工具流，始终直接回答、不调用工具。

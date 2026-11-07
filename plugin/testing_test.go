@@ -9,7 +9,8 @@ import (
 
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
-	"github.com/kart-io/goagent/llm/constants"
+
+	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/tools"
 )
 
@@ -115,8 +116,8 @@ type scriptModel struct {
 
 func newModel(turns ...turn) *scriptModel { return &scriptModel{turns: turns} }
 
-func (m *scriptModel) Provider() constants.Provider { return constants.ProviderCustom }
-func (m *scriptModel) IsAvailable() bool            { return true }
+func (m *scriptModel) Provider() shared.Provider { return shared.ProviderCustom }
+func (m *scriptModel) IsAvailable() bool         { return true }
 func (m *scriptModel) Complete(context.Context, *llm.CompletionRequest) (*llm.CompletionResponse, error) {
 	return nil, errors.New("测试模型只支持流式")
 }

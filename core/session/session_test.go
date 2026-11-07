@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
 )
 
@@ -93,7 +94,7 @@ func TestDerive(t *testing.T) {
 	_, err = Rewind(ctx, s, "s", 4, 4)
 	require.ErrorContains(t, err, "须在")
 	_, err = Rewind(ctx, s, "s", 3, 4)
-	require.ErrorIs(t, err, ErrConflict, "a stale view cannot rewind")
+	require.ErrorIs(t, err, agentErrors.ErrSessionConflict, "a stale view cannot rewind")
 	_, err = Rewind(ctx, s, "s", 4, LastSeq(events))
 	require.NoError(t, err)
 	events, _ = s.Read(ctx, "s", 0)
@@ -118,7 +119,7 @@ func TestRecorderToleratesSnapshots(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, other.Sync(ctx, []llm.Message{llm.UserMessage("一"), {Role: "assistant", Content: "二"}, llm.UserMessage("他人")}, nil))
 	err = r.Sync(ctx, []llm.Message{llm.UserMessage("一"), {Role: "assistant", Content: "二"}, llm.UserMessage("我")}, nil)
-	require.ErrorIs(t, err, ErrConflict, "messages from another writer are a conflict")
+	require.ErrorIs(t, err, agentErrors.ErrSessionConflict, "messages from another writer are a conflict")
 	_, err = ds.Load(ctx, "missing")
 	require.ErrorIs(t, err, os.ErrNotExist)
 }

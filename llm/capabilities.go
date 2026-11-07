@@ -2,12 +2,7 @@ package llm
 
 import (
 	"context"
-	"errors"
 )
-
-// ErrUnsupportedCapability means the provider has no implementation for the
-// requested operation. Callers must not treat placeholder data as success.
-var ErrUnsupportedCapability = errors.New("provider capability is not supported")
 
 // EmbeddingClient defines the interface for LLM providers that support text embeddings.
 // Implement this interface in addition to Client to enable embedding generation.

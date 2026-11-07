@@ -17,6 +17,7 @@ import (
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/multiagent"
 	"github.com/kart-io/goagent/testing/mocks"
@@ -184,9 +185,9 @@ func parseVerdict(c multiagent.Conversation) (bool, error) {
 		case strings.HasPrefix(line, "REJECT"):
 			return false, nil
 		}
-		return false, fmt.Errorf("%w：评审结论 %q 无法解析", multiagent.ErrInvalidRoute, line)
+		return false, fmt.Errorf("%w：评审结论 %q 无法解析", agentErrors.ErrInvalidRoute, line)
 	}
-	return false, fmt.Errorf("%w：没有评审结论", multiagent.ErrInvalidRoute)
+	return false, fmt.Errorf("%w：没有评审结论", agentErrors.ErrInvalidRoute)
 }
 
 // S2 回复写作与评审：第一轮不通过，带意见重写后通过。
@@ -399,7 +400,7 @@ func refundApproval(ctx context.Context, w io.Writer, k *kit) error {
 		return err
 	}
 	snap, err := d.Run(runCtx, runID, multiagent.Conversation{Input: "订单 A1 申请退款 800 元"}, "")
-	if !errors.Is(err, durable.ErrApprovalRequired) || len(snap.Interrupts) != 1 {
+	if !errors.Is(err, agentErrors.ErrApprovalRequired) || len(snap.Interrupts) != 1 {
 		return fmt.Errorf("应等待审核，得到 %v", err)
 	}
 	_, _ = fmt.Fprintf(w, "  等待审核：%s\n", snap.Interrupts[0].Info)
@@ -519,7 +520,7 @@ func composedPipeline(ctx context.Context, w io.Writer, k *kit) error {
 			}
 		}
 		if rounds >= reviewRounds {
-			return "", fmt.Errorf("%w: review loop limit %d", workflow.ErrMaxSteps, reviewRounds)
+			return "", fmt.Errorf("%w: review loop limit %d", agentErrors.ErrWorkflowMaxSteps, reviewRounds)
 		}
 		return "write", nil
 	}

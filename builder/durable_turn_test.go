@@ -4,13 +4,14 @@ import (
 	"context"
 	"testing"
 
-	"github.com/kart-io/goagent/codec/json"
+	"github.com/stretchr/testify/require"
 
+	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/tools"
-	"github.com/stretchr/testify/require"
 )
 
 func TestJournaledTurnRetainsFailedUsageAndDoesNotRetry(t *testing.T) {
@@ -32,7 +33,7 @@ func TestJournaledTurnRetainsFailedUsageAndDoesNotRetry(t *testing.T) {
 			_, err = readJournaledTurn(ctx, 0, model, &llm.CompletionRequest{}, nil, false, false, emit)
 			require.Error(t, err)
 			_, err = readJournaledTurn(ctx, 0, model, &llm.CompletionRequest{}, nil, false, false, emit)
-			require.ErrorIs(t, err, durable.ErrOperationAttention)
+			require.ErrorIs(t, err, agentErrors.ErrOperationAttention)
 			require.Len(t, model.requests, 1)
 			record, err := durable.InspectOperation(ctx, "model/turn/0")
 			require.NoError(t, err)
@@ -63,7 +64,7 @@ func TestInvalidSecondToolPlanBlocksWholeRound(t *testing.T) {
 	require.ErrorContains(t, err, "invalid arguments")
 	require.Zero(t, calls, "first tool must not run when second plan arguments are invalid")
 	_, err = agent.AsRunnable().Invoke(ctx, "run")
-	require.ErrorIs(t, err, durable.ErrOperationAttention)
+	require.ErrorIs(t, err, agentErrors.ErrOperationAttention)
 	require.Len(t, model.requests, 1)
 }
 
@@ -98,7 +99,8 @@ func TestInvalidToolPlanReportsReason(t *testing.T) {
 			ctx := durable.WithJournal(durable.WithExecutionKey(context.Background(), "node"), store)
 			model := nativeModel([]*llm.StreamChunk{{Done: true, FinishReason: "tool_calls", ToolCalls: tc.calls}})
 			_, err = readJournaledTurn(ctx, 0, model, &llm.CompletionRequest{}, []interfaces.Tool{NewMockTool("lookup", "结果")}, false, false, func(AgentEvent) error { return nil })
-			require.EqualError(t, err, tc.want)
+			require.Equal(t, agentErrors.CodeInvalidOutput, agentErrors.GetCode(err))
+			require.ErrorContains(t, err, tc.want)
 			record, err := durable.InspectOperation(ctx, "model/turn/0")
 			require.NoError(t, err)
 			require.Equal(t, "failed", record.Status)

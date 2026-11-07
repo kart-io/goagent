@@ -4,10 +4,9 @@ import (
 	"context"
 	"time"
 
+	shared2 "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/usage"
 	"github.com/kart-io/goagent/interfaces"
-
-	"github.com/kart-io/goagent/llm/constants"
 )
 
 // ToolStreamClient 在一次请求内选择工具或直接流式回答，保留原生消息和用量。
@@ -116,12 +115,12 @@ func DefaultStreamOptions() *StreamOptions {
 
 // MockStreamClient 模拟流式客户端（用于测试）
 type MockStreamClient struct {
-	provider constants.Provider
+	provider shared2.Provider
 }
 
 // NewMockStreamClient 创建模拟流式客户端
 func NewMockStreamClient() *MockStreamClient {
-	return &MockStreamClient{provider: constants.ProviderCustom}
+	return &MockStreamClient{provider: shared2.ProviderCustom}
 }
 
 // CompleteStream 流式补全
@@ -235,7 +234,7 @@ func (m *MockStreamClient) CompleteStream(ctx context.Context, req *CompletionRe
 }
 
 // Provider 返回提供商类型
-func (m *MockStreamClient) Provider() constants.Provider {
+func (m *MockStreamClient) Provider() shared2.Provider {
 	return m.provider
 }
 

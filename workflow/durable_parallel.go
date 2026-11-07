@@ -8,10 +8,10 @@ import (
 	"sync"
 
 	"github.com/kart-io/goagent/codec/json"
-
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/observe"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // Inputs are frozen before dispatch. Outputs are committed independently in the
@@ -23,20 +23,20 @@ type parallelCheckpoint struct {
 
 func validateParallel[T any](cfg ParallelConfig[T], cp *parallelCheckpoint) error {
 	if len(cp.Inputs) != len(cfg.Branches) || cp.Outputs == nil {
-		return fmt.Errorf("corrupt parallel checkpoint")
+		return agentErrors.Newf(agentErrors.CodeStateValidation, "corrupt parallel checkpoint").WithComponent("workflow").WithOperation("validate_parallel")
 	}
 	allowed := map[string]bool{}
 	for _, branch := range cfg.Branches {
 		allowed[branch.Name] = true
 		var input T
 		if json.Unmarshal(cp.Inputs[branch.Name], &input) != nil {
-			return fmt.Errorf("invalid checkpoint input for branch %q", branch.Name)
+			return agentErrors.Newf(agentErrors.CodeStateValidation, "invalid checkpoint input for branch %q", branch.Name).WithComponent("workflow").WithOperation("validate_parallel")
 		}
 	}
 	for name, data := range cp.Outputs {
 		var output T
 		if !allowed[name] || json.Unmarshal(data, &output) != nil {
-			return fmt.Errorf("invalid checkpoint output for branch %q", name)
+			return agentErrors.Newf(agentErrors.CodeStateValidation, "invalid checkpoint output for branch %q", name).WithComponent("workflow").WithOperation("validate_parallel")
 		}
 	}
 	return nil

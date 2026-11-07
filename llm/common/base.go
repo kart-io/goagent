@@ -3,6 +3,7 @@ package common
 import (
 	"context"
 	"fmt"
+	"math"
 	mathrand "math/rand"
 	"os"
 	"time"
@@ -11,7 +12,8 @@ import (
 
 	agentErrors "github.com/kart-io/goagent/errors"
 	agentllm "github.com/kart-io/goagent/llm"
-	"github.com/kart-io/goagent/llm/constants"
+
+	shared2 "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/utils/httpclient"
 )
 
@@ -31,7 +33,7 @@ func NewBaseProvider(opts ...agentllm.ClientOption) *BaseProvider {
 }
 
 // ApplyProviderDefaults applies provider-specific default values.
-func (b *BaseProvider) ApplyProviderDefaults(provider constants.Provider, defaultBaseURL, defaultModel string, envBaseURL, envModel string) {
+func (b *BaseProvider) ApplyProviderDefaults(provider shared2.Provider, defaultBaseURL, defaultModel string, envBaseURL, envModel string) {
 	b.Config.Provider = provider
 	b.EnsureBaseURL(envBaseURL, defaultBaseURL)
 	b.EnsureModel(envModel, defaultModel)
@@ -85,15 +87,15 @@ func ConfigToOptions(config *agentllm.LLMOptions) []agentllm.ClientOption {
 }
 
 // EnsureAPIKey validates and sets the API key, supporting environment variable fallback.
-func (b *BaseProvider) EnsureAPIKey(envVar string, providerName constants.Provider) error {
-	if b.Config.Reasoning != nil && providerName != constants.ProviderOpenAI && providerName != constants.ProviderDeepSeek && providerName != constants.ProviderGemini {
+func (b *BaseProvider) EnsureAPIKey(envVar string, providerName shared2.Provider) error {
+	if b.Config.Reasoning != nil && providerName != shared2.ProviderOpenAI && providerName != shared2.ProviderDeepSeek && providerName != shared2.ProviderGemini {
 		return b.RejectReasoning(nil)
 	}
 	if b.Config.APIKey == "" {
 		b.Config.APIKey = os.Getenv(envVar)
 	}
 	if b.Config.APIKey == "" {
-		return agentErrors.NewInvalidConfigError(string(providerName), constants.ErrorFieldAPIKey, fmt.Sprintf(constants.ErrAPIKeyMissing, string(providerName)))
+		return agentErrors.NewInvalidConfigError(string(providerName), agentErrors.ErrorFieldAPIKey, fmt.Sprintf(agentErrors.MessageAPIKeyMissing, string(providerName)))
 	}
 	return nil
 }
@@ -134,7 +136,7 @@ func (b *BaseProvider) GetMaxTokens(reqMaxTokens int) int {
 	if b.Config.MaxTokens > 0 {
 		return b.Config.MaxTokens
 	}
-	return constants.DefaultMaxTokens
+	return shared2.DefaultProviderMaxTokens
 }
 
 // GetTemperature returns the temperature parameter with fallback to default value.
@@ -145,7 +147,7 @@ func (b *BaseProvider) GetTemperature(reqTemperature float64) float64 {
 	if b.Config.TemperatureSet || b.Config.Temperature > 0 {
 		return b.Config.Temperature
 	}
-	return constants.DefaultTemperature
+	return shared2.DefaultTemperature
 }
 
 // ResolveTemperature 在请求显式设置（包括零）时优先使用请求，否则沿用客户端与默认值回落。
@@ -164,7 +166,7 @@ func (b *BaseProvider) GetTimeout() time.Duration {
 	if b.Config.Timeout > 0 {
 		return time.Duration(b.Config.Timeout) * time.Second
 	}
-	return constants.DefaultTimeout
+	return shared2.DefaultProviderTimeout
 }
 
 // GetTopP returns the TopP parameter with fallback to default value.
@@ -175,7 +177,7 @@ func (b *BaseProvider) GetTopP(reqTopP float64) float64 {
 	if b.Config.TopP > 0 {
 		return b.Config.TopP
 	}
-	return constants.DefaultTopP
+	return shared2.DefaultTopP
 }
 
 // ModelName returns the configured model name.
@@ -248,9 +250,9 @@ type RetryConfig struct {
 // DefaultRetryConfig returns the default retry configuration.
 func DefaultRetryConfig() RetryConfig {
 	return RetryConfig{
-		MaxAttempts: constants.DefaultMaxAttempts,
-		BaseDelay:   constants.DefaultBaseDelay,
-		MaxDelay:    constants.DefaultMaxDelay,
+		MaxAttempts: shared2.DefaultMaxAttempts,
+		BaseDelay:   shared2.DefaultBaseDelay,
+		MaxDelay:    shared2.DefaultMaxDelay,
 	}
 }
 
@@ -262,6 +264,9 @@ type ExecuteFunc[T any] func(ctx context.Context) (T, error)
 // It respects context cancellation and uses test-friendly delay settings.
 func ExecuteWithRetry[T any](ctx context.Context, cfg RetryConfig, providerName string, execute ExecuteFunc[T]) (T, error) {
 	var zero T
+	if cfg.BaseDelay < 0 || cfg.MaxDelay < 0 {
+		return zero, agentErrors.NewInvalidConfigError(providerName, "retry_delay", "重试延迟不能为负数")
+	}
 
 	// Use shorter delays in test environment
 	baseDelay := cfg.BaseDelay
@@ -273,13 +278,21 @@ func ExecuteWithRetry[T any](ctx context.Context, cfg RetryConfig, providerName 
 
 	maxAttempts := cfg.MaxAttempts
 	if maxAttempts <= 0 {
-		maxAttempts = constants.DefaultMaxAttempts
+		maxAttempts = shared2.DefaultMaxAttempts
 	}
 
+	delay := baseDelay
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return zero, retryContextError(err)
+		}
 		result, err := execute(ctx)
 		if err == nil {
 			return result, nil
+		}
+
+		if contextErr := ctx.Err(); contextErr != nil {
+			return zero, retryContextError(contextErr)
 		}
 
 		// Check if error is retryable
@@ -292,23 +305,39 @@ func ExecuteWithRetry[T any](ctx context.Context, cfg RetryConfig, providerName 
 			return zero, agentErrors.ErrorWithRetry(err, attempt, maxAttempts)
 		}
 
-		// Exponential backoff with jitter
-		delay := baseDelay * time.Duration(1<<uint(attempt-1))
+		// 纳秒级或零延迟不需要随机抖动；饱和运算避免大退避值溢出。
 		if cfg.MaxDelay > 0 && delay > cfg.MaxDelay {
 			delay = cfg.MaxDelay
 		}
-		// Simple jitter using math/rand is sufficient for retry logic
-		jitter := time.Duration(mathrand.Int63n(int64(delay) / 2))
-
+		wait := delay
+		if bound := int64(delay) / 2; bound > 0 {
+			wait += min(time.Duration(mathrand.Int63n(bound)), time.Duration(math.MaxInt64)-wait)
+		}
+		if cfg.MaxDelay > 0 && wait > cfg.MaxDelay {
+			wait = cfg.MaxDelay
+		}
+		timer := time.NewTimer(wait)
 		select {
 		case <-ctx.Done():
-			return zero, agentErrors.NewContextCanceledError("llm_request")
-		case <-time.After(delay + jitter):
-			// Continue to next attempt
+			timer.Stop()
+			return zero, retryContextError(ctx.Err())
+		case <-timer.C:
 		}
+		delay += min(delay, time.Duration(math.MaxInt64)-delay)
 	}
 
-	return zero, agentErrors.NewInternalError(providerName, "execute_with_retry", fmt.Errorf("%s", constants.ErrMaxRetriesExceeded))
+	return zero, agentErrors.NewInternalError(providerName, "execute_with_retry", agentErrors.Newf(agentErrors.CodeInternal, "%s", agentErrors.MessageMaxRetriesExceeded).
+		WithComponent("llm").
+		WithOperation("execute_with_retry").
+		WithContext("provider", providerName))
+}
+
+// retryContextError 保留原始上下文原因，调用方可继续使用 errors.Is。
+func retryContextError(err error) error {
+	if err == context.DeadlineExceeded {
+		return agentErrors.NewContextTimeoutError("llm_request", 0)
+	}
+	return agentErrors.NewContextCanceledError("llm_request")
 }
 
 // HTTPError represents an HTTP error with status code and response body.
@@ -379,32 +408,44 @@ func mapHTTPError(err HTTPError, providerName, model string, parseError func(bod
 		if errorMsg != "" {
 			return agentErrors.NewInvalidInputError(providerName, "request", errorMsg)
 		}
-		return agentErrors.NewInvalidInputError(providerName, "request", constants.StatusBadRequest)
+		return agentErrors.NewInvalidInputError(providerName, "request", agentErrors.MessageBadRequest)
 	case 401:
 		if errorMsg != "" {
-			return agentErrors.NewInvalidConfigError(providerName, constants.ErrorFieldAPIKey, errorMsg)
+			return agentErrors.NewInvalidConfigError(providerName, agentErrors.ErrorFieldAPIKey, errorMsg)
 		}
-		return agentErrors.NewInvalidConfigError(providerName, constants.ErrorFieldAPIKey, constants.StatusInvalidAPIKey)
+		return agentErrors.NewInvalidConfigError(providerName, agentErrors.ErrorFieldAPIKey, agentErrors.MessageInvalidAPIKey)
 	case 403:
 		if errorMsg != "" {
-			return agentErrors.NewInvalidConfigError(providerName, constants.ErrorFieldAPIKey, errorMsg)
+			return agentErrors.NewInvalidConfigError(providerName, agentErrors.ErrorFieldAPIKey, errorMsg)
 		}
-		return agentErrors.NewInvalidConfigError(providerName, constants.ErrorFieldAPIKey, constants.StatusAPIKeyLacksPermissions)
+		return agentErrors.NewInvalidConfigError(providerName, agentErrors.ErrorFieldAPIKey, agentErrors.MessageAPIKeyLacksPermissions)
 	case 404:
 		if errorMsg != "" {
 			return agentErrors.NewLLMResponseError(providerName, model, errorMsg)
 		}
-		return agentErrors.NewLLMResponseError(providerName, model, constants.StatusModelNotFound)
+		return agentErrors.NewLLMResponseError(providerName, model, agentErrors.MessageModelNotFound)
 	case 429:
 		retryAfter := ParseRetryAfter(err.Headers["Retry-After"])
 		return agentErrors.NewLLMRateLimitError(providerName, model, retryAfter)
 	case 500, 502, 503, 504:
 		if errorMsg != "" {
-			return agentErrors.NewLLMRequestError(providerName, model, fmt.Errorf("server error: %s", errorMsg))
+			return agentErrors.NewLLMRequestError(providerName, model, agentErrors.Newf(agentErrors.CodeLLMRequest, "server error: %s", errorMsg).
+				WithComponent("llm").
+				WithOperation("request").
+				WithContext("provider", providerName).
+				WithContext("model", model))
 		}
-		return agentErrors.NewLLMRequestError(providerName, model, fmt.Errorf("server error: %d", err.StatusCode))
+		return agentErrors.NewLLMRequestError(providerName, model, agentErrors.Newf(agentErrors.CodeLLMRequest, "server error: %d", err.StatusCode).
+			WithComponent("llm").
+			WithOperation("request").
+			WithContext("provider", providerName).
+			WithContext("model", model))
 	default:
-		return agentErrors.NewLLMRequestError(providerName, model, fmt.Errorf("unexpected status: %d", err.StatusCode))
+		return agentErrors.NewLLMRequestError(providerName, model, agentErrors.Newf(agentErrors.CodeLLMRequest, "unexpected status: %d", err.StatusCode).
+			WithComponent("llm").
+			WithOperation("request").
+			WithContext("provider", providerName).
+			WithContext("model", model))
 	}
 }
 
@@ -413,7 +454,10 @@ func mapHTTPError(err HTTPError, providerName, model string, parseError func(bod
 func WithHTTPStatus(e *agentErrors.AgentError, resp HTTPError) *agentErrors.AgentError {
 	cause := e.Cause
 	if cause == nil {
-		cause = fmt.Errorf("HTTP %d", resp.StatusCode)
+		cause = agentErrors.Newf(agentErrors.CodeLLMRequest, "HTTP %d", resp.StatusCode).
+			WithComponent("llm").
+			WithOperation("request").
+			WithContext("status_code", resp.StatusCode)
 	}
 	e.Cause = &agentllm.ProviderError{
 		StatusCode: resp.StatusCode,

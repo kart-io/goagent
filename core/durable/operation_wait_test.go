@@ -7,6 +7,7 @@ import (
 
 	"github.com/kart-io/goagent/codec/json"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -27,7 +28,7 @@ func TestOperationWaitIsRecordedAndReentered(t *testing.T) {
 	require.Equal(t, "waiting", record.Status)
 	require.Equal(t, []WaitStep{{ID: "tool/c1", Key: ChildKey("node-key", "tool/c1")}}, waits[0].Path)
 	require.JSONEq(t, `{"node":"approve"}`, string(waits[0].Continuation))
-	require.NotErrorIs(t, err, ErrOperationAttention)
+	require.NotErrorIs(t, err, agentErrors.ErrOperationAttention)
 }
 
 // 不可续跑的操作以后不会重新进入，记成等待就永远续不上；它收到的等待按失败处理并说明原因。
@@ -39,7 +40,7 @@ func TestOperationWaitWithoutResumablePolicyFails(t *testing.T) {
 		sawWaitable = CanWait(ctx)
 		return waitingRun(&calls)(ctx)
 	})
-	require.ErrorIs(t, err, ErrWaitNotResumable)
+	require.ErrorIs(t, err, agentErrors.ErrWaitNotResumable)
 	require.Nil(t, Waits(err), "不能作为等待向上传递")
 	require.False(t, sawWaitable)
 	require.Equal(t, "failed", record.Status)
@@ -115,7 +116,7 @@ func TestOperationResumableReentersPendingWithinAttempts(t *testing.T) {
 				require.Equal(t, 2, calls)
 				return
 			}
-			require.ErrorIs(t, err, ErrOperationAttention)
+			require.ErrorIs(t, err, agentErrors.ErrOperationAttention)
 			require.Equal(t, 1, calls)
 		})
 	}

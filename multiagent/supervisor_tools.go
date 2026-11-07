@@ -1,11 +1,11 @@
 package multiagent
 
 import (
-	"errors"
 	"fmt"
 	"time"
 
 	"github.com/kart-io/goagent/builder"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/tools"
 )
@@ -25,18 +25,18 @@ const memberArgsSchema = `{"type":"object","properties":{"task":{"type":"string"
 // 调用时 ctx 必须带根预算，持久运行中必须是持久预算。
 func SupervisorTools(members ...Member) ([]interfaces.Tool, error) {
 	if len(members) == 0 {
-		return nil, errors.New("SupervisorTools 需要至少一个成员")
+		return nil, agentErrors.NewInvalidConfigError("multiagent", "members", "SupervisorTools 需要至少一个成员")
 	}
 	seen := map[string]bool{}
 	out := make([]interfaces.Tool, 0, len(members))
 	for _, m := range members {
 		switch {
 		case m.Name == "" || m.Description == "" || m.Version == "" || m.Factory == nil:
-			return nil, fmt.Errorf("成员 %q 需要 Name、Description、Version 与 Factory", m.Name)
+			return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "成员 %q 需要 Name、Description、Version 与 Factory", m.Name).WithComponent("multiagent").WithOperation("supervisor_tools")
 		case seen[m.Name]:
-			return nil, fmt.Errorf("成员名 %q 重复", m.Name)
+			return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "成员名 %q 重复", m.Name).WithComponent("multiagent").WithOperation("supervisor_tools")
 		case m.Timeout < 0:
-			return nil, fmt.Errorf("成员 %q 的 Timeout 不能为负", m.Name)
+			return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "成员 %q 的 Timeout 不能为负", m.Name).WithComponent("multiagent").WithOperation("supervisor_tools")
 		}
 		seen[m.Name] = true
 		tool, err := tools.NewRunnableToolFactory(m.Factory, tools.RunnableToolConfig[any, *builder.AgentOutput]{
@@ -63,7 +63,7 @@ func decodeTask(args map[string]any) (any, error) {
 
 func encodeAgentResult(o *builder.AgentOutput) (any, error) {
 	if o == nil {
-		return nil, errors.New("成员 Agent 没有返回输出")
+		return nil, agentErrors.New(agentErrors.CodeInvalidOutput, "成员 Agent 没有返回输出").WithComponent("multiagent").WithOperation("encode_agent_result")
 	}
 	return resultText(o.Result)
 }

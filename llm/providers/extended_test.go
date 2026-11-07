@@ -12,10 +12,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/interfaces"
 	agentllm "github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/common"
-	"github.com/kart-io/goagent/llm/constants"
 )
 
 // ==============================================================================
@@ -127,7 +127,7 @@ func TestOpenAIProvider_ConvertToolsLarge(t *testing.T) {
 // TestGeminiProvider_ModelName tests model name retrieval
 func TestGeminiProvider_ModelName(t *testing.T) {
 	config := &agentllm.LLMOptions{
-		Provider: constants.ProviderGemini,
+		Provider: shared.ProviderGemini,
 		APIKey:   "test-key",
 		Model:    "gemini-pro",
 	}
@@ -140,7 +140,7 @@ func TestGeminiProvider_ModelName(t *testing.T) {
 // TestGeminiProvider_MaxTokens tests max tokens retrieval
 func TestGeminiProvider_MaxTokens(t *testing.T) {
 	config := &agentllm.LLMOptions{
-		Provider:  constants.ProviderGemini,
+		Provider:  shared.ProviderGemini,
 		APIKey:    "test-key",
 		MaxTokens: 3000,
 	}
@@ -153,7 +153,7 @@ func TestGeminiProvider_MaxTokens(t *testing.T) {
 // TestGeminiProvider_DefaultModel tests default model assignment
 func TestGeminiProvider_DefaultModel(t *testing.T) {
 	config := &agentllm.LLMOptions{
-		Provider: constants.ProviderGemini,
+		Provider: shared.ProviderGemini,
 		APIKey:   "test-key",
 	}
 
@@ -192,7 +192,7 @@ func TestGeminiProvider_ToolSchemaToGeminiSchema(t *testing.T) {
 // TestGeminiStreamingProvider_Creation tests streaming provider creation
 func TestGeminiStreamingProvider_CreationComprehensive(t *testing.T) {
 	config := &agentllm.LLMOptions{
-		Provider: constants.ProviderGemini,
+		Provider: shared.ProviderGemini,
 		APIKey:   "test-key",
 		Model:    "gemini-pro",
 	}
@@ -206,7 +206,7 @@ func TestGeminiStreamingProvider_CreationComprehensive(t *testing.T) {
 // TestGeminiStreamingProvider_Inheritance tests inherited methods
 func TestGeminiStreamingProvider_Inheritance(t *testing.T) {
 	config := &agentllm.LLMOptions{
-		Provider: constants.ProviderGemini,
+		Provider: shared.ProviderGemini,
 		APIKey:   "test-key",
 		Model:    "gemini-pro",
 	}
@@ -215,7 +215,7 @@ func TestGeminiStreamingProvider_Inheritance(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test inherited methods
-	assert.Equal(t, constants.ProviderGemini, provider.Provider())
+	assert.Equal(t, shared.ProviderGemini, provider.Provider())
 	assert.Equal(t, "gemini-pro", provider.ModelName())
 	assert.Greater(t, provider.MaxTokens(), 0)
 }

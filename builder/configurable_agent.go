@@ -40,7 +40,7 @@ type ConfigurableAgent[C any, S core.State] struct {
 func (a *ConfigurableAgent[C, S]) Initialize(ctx context.Context) (err error) {
 	defer recoverPanic("Agent 初始化", &err)
 	if ctx == nil {
-		return fmt.Errorf("初始化 Agent 的 context 不能为空")
+		return agentErrors.Newf(agentErrors.CodeInvalidInput, "初始化 Agent 的 context 不能为空").WithComponent("builder").WithOperation("initialize")
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -67,7 +67,7 @@ func (a *ConfigurableAgent[C, S]) Initialize(ctx context.Context) (err error) {
 			}
 			loaded, ok := state.(S)
 			if !ok || isNilState(loaded) {
-				return fmt.Errorf("checkpoint state type mismatch: got %T", state)
+				return agentErrors.Newf(agentErrors.CodeStateValidation, "checkpoint state type mismatch: got %T", state).WithComponent("builder").WithOperation("initialize")
 			}
 			a.runtime.State = loaded
 		}
@@ -239,10 +239,10 @@ func (a *ConfigurableAgent[C, S]) invokeToolCall(ctx context.Context, call ToolC
 				return nil, err
 			}
 			if output == nil {
-				return nil, fmt.Errorf("tool %s returned nil output", call.Name)
+				return nil, agentErrors.Newf(agentErrors.CodeInvalidOutput, "tool %s returned nil output", call.Name).WithComponent("builder").WithOperation("invoke_tool_call")
 			}
 			if output.Error != "" {
-				return nil, fmt.Errorf("tool %s: %s", call.Name, output.Error)
+				return nil, agentErrors.Newf(agentErrors.CodeToolExecution, "tool %s: %s", call.Name, output.Error).WithComponent("builder").WithOperation("invoke_tool_call")
 			}
 			return output, nil
 		}

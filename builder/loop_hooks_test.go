@@ -11,6 +11,7 @@ import (
 
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/tools"
@@ -158,7 +159,7 @@ func TestHandleSteerDuringTool(t *testing.T) {
 	require.Equal(t, llm.UserMessage("顺便检查 B"), tail[1])
 	require.Equal(t, llm.UserMessage("工具执行中的纠正降级为 Steer"), tail[2])
 	require.Equal(t, []int{1, 2}, inputs, "PreStep sees the turn input, then the two steered messages")
-	require.ErrorIs(t, h.Steer("太晚了"), ErrHandleDone)
+	require.ErrorIs(t, h.Steer("太晚了"), agentErrors.ErrAgentHandleDone)
 }
 
 // 模型给出答复时还有待处理的 Steer：唤醒续跑，而不是结束。

@@ -7,7 +7,6 @@ import (
 	"os"
 
 	"github.com/kart-io/goagent/codec/json"
-
 	agentErrors "github.com/kart-io/goagent/errors"
 )
 
@@ -29,9 +28,6 @@ const (
 	interruptAttempts = 3
 	maxReasonRunes    = 200
 )
-
-// ErrInterruptNotDurable 表示 ctx 没有持久日志，暂停后无法恢复。
-var ErrInterruptNotDurable = errors.New("暂停需要持久日志")
 
 // InterruptContinuation 是 AwaitInput 等待时放进 WaitError.Continuation 的内容。
 // Info 会经快照暴露给宿主，不得包含凭证。
@@ -64,13 +60,13 @@ func interruptHost(ctx context.Context) bool {
 // validate 的错误文本会持久化并经 Snapshot 与 ResumeRejectedError 暴露，不得包含凭证等敏感信息。
 func AwaitInput(ctx context.Context, id string, info json.RawMessage, validate func(json.RawMessage) error) (json.RawMessage, error) {
 	if id == "" || !json.Valid(info) {
-		return nil, fmt.Errorf("中断需要 ID 与 JSON 格式的 info")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidInput, "中断需要 ID 与 JSON 格式的 info").WithComponent("durable_interrupt").WithOperation("await_input")
 	}
 	if !HasJournal(ctx) {
-		return nil, ErrInterruptNotDurable
+		return nil, agentErrors.ErrInterruptNotDurable
 	}
 	if !CanWait(ctx) && !interruptHost(ctx) {
-		return nil, fmt.Errorf("%w：中断 %q 须在可续跑的操作或工作流节点内调用", ErrWaitNotResumable, id)
+		return nil, fmt.Errorf("%w：中断 %q 须在可续跑的操作或工作流节点内调用", agentErrors.ErrWaitNotResumable, id)
 	}
 	policy := OperationPolicy{Resumable: true, MaxAttempts: interruptAttempts}
 	record, err := Do(ctx, interruptPrefix+id, info, policy, func(ctx context.Context) (json.RawMessage, error) {
@@ -132,7 +128,7 @@ func rejectReason(err error) string {
 // key 是 WaitError.Path 最后一项的 Key，id 是 AwaitInput 的 id。
 func InterruptAnswer(ctx context.Context, store Store, key, id string) (answer json.RawMessage, ok bool, err error) {
 	if store == nil || key == "" || id == "" {
-		return nil, false, fmt.Errorf("查询中断需要 Store、键和 ID")
+		return nil, false, agentErrors.Newf(agentErrors.CodeInvalidInput, "查询中断需要 Store、键和 ID").WithComponent("durable_interrupt").WithOperation("interrupt_answer")
 	}
 	storageID := operationStorageID(key)
 	unlock, err := store.Lock(ctx, storageID)

@@ -13,6 +13,7 @@ import (
 
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/workflow"
 	"github.com/kart-io/goagent/workflow/refund"
 )
@@ -133,7 +134,7 @@ func (t *ledgerTx) Order(context.Context, string) (refund.Order, error) { return
 func (t *ledgerTx) Request(_ context.Context, id string) (refund.Request, string, error) {
 	r, ok := t.s.requests[id]
 	if !ok {
-		return refund.Request{}, "", refund.ErrNotFound
+		return refund.Request{}, "", agentErrors.ErrRefundNotFound
 	}
 	return r, t.s.actors[id], nil
 }
@@ -141,7 +142,7 @@ func (t *ledgerTx) Request(_ context.Context, id string) (refund.Request, string
 func (t *ledgerTx) Receipt(_ context.Context, id string) (string, error) {
 	r, ok := t.s.receipts[id]
 	if !ok {
-		return "", refund.ErrNotFound
+		return "", agentErrors.ErrRefundNotFound
 	}
 	return r, nil
 }

@@ -17,7 +17,7 @@
 | SiliconFlow | `NewSiliconFlowWithOptions` | `SILICONFLOW_API_KEY` | `SILICONFLOW_BASE_URL` / `SILICONFLOW_MODEL` | `https://api.siliconflow.cn/v1` | `Qwen/Qwen2-7B-Instruct` |
 | Ollama | `NewOllamaWithOptions` | 不需要 | `OLLAMA_BASE_URL` / `OLLAMA_MODEL` | `http://localhost:11434/v1` | `llama2` |
 
-环境变量名也以常量形式定义在 `llm/constants`（如 `constants.EnvOpenAIAPIKey`）。默认模型只是兜底值，生产环境应显式指定当前可用的模型。
+环境变量名与 Provider 类型统一定义在 `github.com/kart-io/goagent/constants`（如 `constants.EnvOpenAIAPIKey`）。默认模型只是兜底值，生产环境应显式指定当前可用的模型。
 
 ### 提供商说明
 

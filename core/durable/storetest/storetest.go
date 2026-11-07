@@ -18,6 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // Options 选择要运行的可选用例。
@@ -123,7 +124,7 @@ func requireBlocked(t *testing.T, s durable.Store, id string) {
 	if err == nil {
 		_ = unlock()
 	}
-	require.ErrorIs(t, err, durable.ErrLockUnavailable)
+	require.ErrorIs(t, err, agentErrors.ErrLockUnavailable)
 	require.ErrorIs(t, err, context.DeadlineExceeded, "须保留 ctx 错误")
 	require.GreaterOrEqual(t, time.Since(start), blockedWait*8/10, "Lock 应等待到 ctx 结束")
 }
@@ -303,7 +304,7 @@ func testRunnerResume(t *testing.T, a, b durable.Store) {
 	}
 	first := &durable.Runner{Store: a, Version: "v1", Steps: steps}
 	snap, err := first.Run(ctx, "order", json.RawMessage(`{"amount":1}`), "")
-	require.ErrorIs(t, err, durable.ErrApprovalRequired)
+	require.ErrorIs(t, err, agentErrors.ErrApprovalRequired)
 	require.True(t, snap.Waiting)
 
 	second := &durable.Runner{Store: b, Version: "v1", Steps: steps}
@@ -361,12 +362,12 @@ func requireRemoved(t *testing.T, s durable.Store) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_, err := s.Load(ctx, "run")
-	require.ErrorIs(t, err, durable.ErrScopeRemoved)
+	require.ErrorIs(t, err, agentErrors.ErrScopeRemoved)
 	unlock, err := s.Lock(ctx, "run")
 	if err == nil {
 		_ = unlock()
 	}
-	require.ErrorIs(t, err, durable.ErrScopeRemoved)
+	require.ErrorIs(t, err, agentErrors.ErrScopeRemoved)
 }
 
 func testScopeRemoval(t *testing.T, a, b durable.Store) {
@@ -403,7 +404,7 @@ func testScopeRemovalWhileLocked(t *testing.T, a, b durable.Store) {
 	select {
 	case err := <-removed:
 		require.NoError(t, err)
-		require.ErrorIs(t, scope.Save(context.Background(), "run", snap), durable.ErrScopeRemoved, "删除返回后持锁者的写入须被拒绝")
+		require.ErrorIs(t, scope.Save(context.Background(), "run", snap), agentErrors.ErrScopeRemoved, "删除返回后持锁者的写入须被拒绝")
 		unlock()
 	case <-time.After(blockedWait):
 		require.NoError(t, scope.Save(context.Background(), "run", snap), "删除仍在等待时持锁者照常写入")
@@ -472,7 +473,7 @@ func testFencing(t *testing.T, l *Leases, a, b durable.Store) {
 	l.Expire(t, a, "run")
 	unlockB := lockWithin(t, b, "run", 5*time.Second)
 	require.NoError(t, b.Save(context.Background(), "run", snapshot("b")))
-	require.ErrorIs(t, a.Save(context.Background(), "run", snapshot("a")), durable.ErrLeaseLost)
+	require.ErrorIs(t, a.Save(context.Background(), "run", snapshot("a")), agentErrors.ErrLeaseLost)
 	require.NoError(t, unlockA(), "租约被接管后解锁不报错")
 	requireVersion(t, b, "run", "b")
 	require.NoError(t, b.Save(context.Background(), "run", snapshot("b2")), "旧持有者解锁不影响新持有者")
@@ -487,7 +488,7 @@ func testSameProcessFencing(t *testing.T, l *Leases, a, b durable.Store) {
 	l.Expire(t, a, "run")
 	lockWithin(t, b, "run", 5*time.Second)()
 	requireBlocked(t, a, "run")
-	require.ErrorIs(t, a.Save(context.Background(), "run", snapshot("g1")), durable.ErrLeaseLost)
+	require.ErrorIs(t, a.Save(context.Background(), "run", snapshot("g1")), agentErrors.ErrLeaseLost)
 	require.NoError(t, unlockG1())
 	unlockG2 := lock(t, a, "run")
 	require.NoError(t, a.Save(context.Background(), "run", snapshot("g2")))
@@ -601,7 +602,7 @@ func testSaveAllFencing(t *testing.T, l *Leases, a, b durable.Store) {
 		durable.Write{ID: "x", Snapshot: versioned("x", "new")},
 		durable.Write{ID: "y", Snapshot: versioned("y", "new")},
 	)
-	require.ErrorIs(t, err, durable.ErrLeaseLost)
+	require.ErrorIs(t, err, agentErrors.ErrLeaseLost)
 	requireVersion(t, b, "x", "old")
 	requireVersion(t, b, "y", "old")
 }

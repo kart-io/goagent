@@ -145,7 +145,7 @@ agent, err := builder.NewSimpleBuilder(client).
 
 ## 通用图执行
 
-`workflow.NewGraph[T]().Compile(ctx)` 生成标准 StreamRunnable，单次调用、步骤流、批处理、组合和回调共用同一执行源。AddRunnable 接入同类型节点，Adapt 显式转换异构 Agent 输入与输出。默认 MaxSteps=100，每次进入节点计一步；超限通过 errors.Is(err, workflow.ErrMaxSteps) 检查。
+`workflow.NewGraph[T]().Compile(ctx)` 生成标准 StreamRunnable，单次调用、步骤流、批处理、组合和回调共用同一执行源。AddRunnable 接入同类型节点，Adapt 显式转换异构 Agent 输入与输出。默认 MaxSteps=100，每次进入节点计一步；超限通过 errors.Is(err, agentErrors.ErrWorkflowMaxSteps) 检查。
 
 条件路由只能返回预先声明的目标，每次选择一个后继；普通多入边不等待未选中路径。并行节点必须提供 Clone 和 Merge，按注册顺序汇合；MaxConcurrency 默认 4，约束每个并行节点的 worker。并行失败取消同组分支并等待退出，函数必须响应 context。
 
@@ -157,7 +157,7 @@ agent, err := builder.NewSimpleBuilder(client).
 
 `tools.Dispatcher` 为图节点和 Builder 工具提供同一调度入口，详见[原生编排与工具体系](NATIVE_ORCHESTRATION.md)。默认不重试，失败结果不能转为成功，工具执行键由宿主 context 注入。
 
-`DurableGraph.AsRunnable` 的 Stream Done 表示本次调用结束；业务完成检查 `Data.Done`。审批等待返回 `Data.Waiting=true`、`Data.Done=false`，兼容 `Run` 保留 `durable.ErrApprovalRequired`。已保存并行分支在恢复时跳过，Merge 保持无副作用并可能重做；节点内部模型循环仍作为整体执行。
+`DurableGraph.AsRunnable` 的 Stream Done 表示本次调用结束；业务完成检查 `Data.Done`。审批等待返回 `Data.Waiting=true`、`Data.Done=false`，兼容 `Run` 保留 `agentErrors.ErrApprovalRequired`。已保存并行分支在恢复时跳过，Merge 保持无副作用并可能重做；节点内部模型循环仍作为整体执行。
 
 ## 可组合编排 R2
 

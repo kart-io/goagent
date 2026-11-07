@@ -15,6 +15,7 @@ import (
 
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/google/uuid"
+	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
@@ -106,19 +107,23 @@ func NewDispatcher(registry *Registry, cfg DispatchConfig) (dispatcher *Dispatch
 		}
 	}()
 	if registry == nil {
-		return nil, fmt.Errorf("tool registry is required")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "tool registry is required").
+			WithComponent("dispatcher").
+			WithOperation("initialize")
 	}
 	if cfg.MaxConcurrency == 0 {
-		cfg.MaxConcurrency = 4
+		cfg.MaxConcurrency = shared.DefaultDispatcherConcurrency
 	}
 	if cfg.MaxAttempts == 0 {
-		cfg.MaxAttempts = 3
+		cfg.MaxAttempts = shared.DefaultDispatcherAttempts
 	}
 	if cfg.Timeout == 0 {
-		cfg.Timeout = 30 * time.Second
+		cfg.Timeout = shared.DefaultToolTimeout
 	}
 	if cfg.MaxConcurrency < 1 || cfg.Timeout < 0 || cfg.MaxAttempts < 1 || cfg.MaxAdmissionConcurrency < 0 || cfg.MaxQueued < 0 {
-		return nil, fmt.Errorf("positive tool concurrency and timeout required")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "positive tool concurrency and timeout required").
+			WithComponent("dispatcher").
+			WithOperation("initialize")
 	}
 	d := &Dispatcher{entries: map[string]dispatchEntry{}, config: cfg, slots: make(chan struct{}, cfg.MaxConcurrency)}
 	if cfg.MaxAdmissionConcurrency > 0 {
@@ -126,14 +131,20 @@ func NewDispatcher(registry *Registry, cfg DispatchConfig) (dispatcher *Dispatch
 	}
 	for _, tool := range registry.List() {
 		if nilTool(tool) {
-			return nil, fmt.Errorf("nil tool")
+			return nil, agentErrors.Newf(agentErrors.CodeToolValidation, "nil tool").WithComponent("dispatcher").WithOperation("initialize")
 		}
 		name := tool.Name()
 		if strings.TrimSpace(name) != name || name == "" {
-			return nil, fmt.Errorf("invalid tool name")
+			return nil, agentErrors.Newf(agentErrors.CodeToolValidation, "invalid tool name").
+				WithComponent("dispatcher").
+				WithOperation("initialize").
+				WithContext("tool_name", name)
 		}
 		if _, ok := d.entries[name]; ok {
-			return nil, fmt.Errorf("duplicate tool %q", name)
+			return nil, agentErrors.Newf(agentErrors.CodeToolValidation, "duplicate tool %q", name).
+				WithComponent("dispatcher").
+				WithOperation("initialize").
+				WithContext("tool_name", name)
 		}
 		raw := tool.ArgsSchema()
 		var schema jsonschema.Schema
@@ -141,7 +152,10 @@ func NewDispatcher(registry *Registry, cfg DispatchConfig) (dispatcher *Dispatch
 			return nil, fmt.Errorf("tool %q schema: %w", name, e)
 		}
 		if schema.Type != "object" {
-			return nil, fmt.Errorf("tool %q schema must have type object", name)
+			return nil, agentErrors.Newf(agentErrors.CodeToolValidation, "tool %q schema must have type object", name).
+				WithComponent("dispatcher").
+				WithOperation("initialize").
+				WithContext("tool_name", name)
 		}
 		resolved, e := schema.Resolve(nil) // external references have no loader and fail closed
 		if e != nil {
@@ -152,29 +166,44 @@ func NewDispatcher(registry *Registry, cfg DispatchConfig) (dispatcher *Dispatch
 			if timeout := v.DispatchTimeout(); timeout > 0 {
 				entry.timeout = timeout
 			} else if timeout < 0 {
-				return nil, fmt.Errorf("tool %q timeout must not be negative", name)
+				return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "tool %q timeout must not be negative", name).
+					WithComponent("dispatcher").
+					WithOperation("initialize").
+					WithContext("tool_name", name)
 			}
 		}
 		if v, ok := tool.(DurableIntentVersioner); ok {
 			entry.version = v.DurableIntentVersion()
 			if entry.version == "" {
-				return nil, fmt.Errorf("tool version required")
+				return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "tool version required").
+					WithComponent("dispatcher").
+					WithOperation("initialize").
+					WithContext("tool_name", name)
 			}
 		}
 		if v, ok := tool.(DurablePolicyProvider); ok {
 			policy := v.DurableOperationPolicy()
 			if policy.MaxAttempts < 1 {
-				return nil, fmt.Errorf("tool attempt policy required")
+				return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "tool attempt policy required").
+					WithComponent("dispatcher").
+					WithOperation("initialize").
+					WithContext("tool_name", name)
 			}
 			entry.policy = &policy
 		}
 		if v, ok := tool.(InterruptibleTool); ok {
 			if version, on := v.InterruptibleVersion(); on {
 				if entry.policy != nil {
-					return nil, fmt.Errorf("工具 %q 不能同时声明持久策略与可中断", name)
+					return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "工具 %q 不能同时声明持久策略与可中断", name).
+						WithComponent("dispatcher").
+						WithOperation("initialize").
+						WithContext("tool_name", name)
 				}
 				if version == "" {
-					return nil, fmt.Errorf("可中断工具 %q 必须声明版本", name)
+					return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "可中断工具 %q 必须声明版本", name).
+						WithComponent("dispatcher").
+						WithOperation("initialize").
+						WithContext("tool_name", name)
 				}
 				// MaxAttempts 为 1：只允许从等待中重入，崩溃留下的 pending 仍交给宿主处理。
 				policy := durable.OperationPolicy{Resumable: true, MaxAttempts: 1}
@@ -228,10 +257,16 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 		}
 	}()
 	if d == nil {
-		return nil, fmt.Errorf("dispatcher is required")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "dispatcher is required").
+			WithComponent("dispatcher").
+			WithOperation("invoke").
+			WithContext("tool_name", req.Name)
 	}
 	if controller, ok := budget.FromContext(ctx); ok && durable.HasJournal(ctx) && !controller.IsDurable() {
-		return nil, fmt.Errorf("持久工具执行需要持久根预算")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "持久工具执行需要持久根预算").
+			WithComponent("dispatcher").
+			WithOperation("invoke").
+			WithContext("tool_name", req.Name)
 	}
 	if controller, ok := budget.FromContext(ctx); ok && controller.Configuration().DeadlineUnixMilli > 0 {
 		var stop context.CancelFunc
@@ -255,10 +290,16 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 	}
 	entry, ok := d.entries[req.Name]
 	if !ok {
-		return nil, fmt.Errorf("unknown tool %q", req.Name)
+		return nil, agentErrors.Newf(agentErrors.CodeToolNotFound, "unknown tool %q", req.Name).
+			WithComponent("dispatcher").
+			WithOperation("invoke").
+			WithContext("tool_name", req.Name)
 	}
 	if req.Input == nil || req.Input.Args == nil {
-		return nil, fmt.Errorf("tool %q requires object arguments", req.Name)
+		return nil, agentErrors.Newf(agentErrors.CodeToolValidation, "tool %q requires object arguments", req.Name).
+			WithComponent("dispatcher").
+			WithOperation("invoke").
+			WithContext("tool_name", req.Name)
 	}
 	// Context and execution key are host-controlled, never accepted from Args.
 	input := *req.Input
@@ -274,7 +315,10 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 	}
 	// 宿主输入键可以在原 ctx 没有执行键时启用日志，因此也校验最终绑定。
 	if controller, ok := budget.FromContext(ctx); ok && durable.HasJournal(ctx) && !controller.IsDurable() {
-		return nil, fmt.Errorf("持久工具执行需要持久根预算")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "持久工具执行需要持久根预算").
+			WithComponent("dispatcher").
+			WithOperation("invoke").
+			WithContext("tool_name", req.Name)
 	}
 	ctx, endTool = observe.Start(ctx, observe.Event{Type: "tool", Path: req.Name, OperationKey: input.ExecutionKey})
 	releaseAdmission, err := d.acquireSlot(ctx, d.admissionSlots)
@@ -298,7 +342,11 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 	// 参数错误结果与正常执行走同一授权、事件和日志路径，只是不调用工具。
 	var argResult *interfaces.ToolOutput
 	if err = toolargs.Validate(entry.resolved, input.Args); err != nil {
-		err = &ArgumentError{Message: fmt.Sprintf("tool %q arguments: %v", req.Name, err), Err: err}
+		message := err.Error()
+		if detail, ok := err.(*agentErrors.AgentError); ok {
+			message = detail.Message
+		}
+		err = &ArgumentError{Message: fmt.Sprintf("tool %q arguments: %s", req.Name, message), Err: err}
 	} else if custom, ok := entry.tool.(interfaces.ValidatableTool); ok {
 		if err = custom.Validate(vctx, &input); err == nil {
 			if err = toolargs.Validate(entry.resolved, input.Args); err != nil {
@@ -362,7 +410,10 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 			return argResult, nil
 		}
 		if admitted == nil {
-			return nil, fmt.Errorf("tool %q: journaled call is no longer completed", req.Name)
+			return nil, agentErrors.Newf(agentErrors.CodeStateValidation, "tool %q: journaled call is no longer completed", req.Name).
+				WithComponent("dispatcher").
+				WithOperation("invoke").
+				WithContext("tool_name", req.Name)
 		}
 		return d.execute(callCtx, admitted, settled, recoverArgs)
 	}
@@ -398,7 +449,10 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 					return nil, false, e
 				}
 				if _, rejected := RejectedResult(result); result == nil || result.Error != "" || (!result.Success && !rejected) {
-					return nil, false, fmt.Errorf("tool %q reconciled an unsuccessful result", req.Name)
+					return nil, false, agentErrors.Newf(agentErrors.CodeInvalidOutput, "tool %q reconciled an unsuccessful result", req.Name).
+						WithComponent("dispatcher").
+						WithOperation("invoke").
+						WithContext("tool_name", req.Name)
 				}
 				data, e := encodeJournaledOutput(result)
 				return data, e == nil, e
@@ -417,7 +471,10 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 		// Journaled outputs use a JSON boundary on fresh and replayed calls alike.
 		out, err = decodeJournaledOutput(record.Value)
 		if _, rejected := RejectedResult(out); err == nil && out != nil && !out.Success && !rejected && !recoverArgs {
-			err = fmt.Errorf("tool %q journaled an argument error result, but argument recovery is not enabled on this path", req.Name)
+			err = agentErrors.Newf(agentErrors.CodeInvalidConfig, "tool %q journaled an argument error result, but argument recovery is not enabled on this path", req.Name).
+				WithComponent("dispatcher").
+				WithOperation("invoke").
+				WithContext("tool_name", req.Name)
 		}
 		replayed = record.Replayed
 		if record.Replayed && err == nil {
@@ -488,10 +545,14 @@ func (d *Dispatcher) admit(ctx context.Context, entry dispatchEntry, input inter
 	}
 	target, ok := d.entries[sub.Tool]
 	if !ok {
-		return nil, fmt.Errorf("tool %q substitution %q: %w", entry.name, sub.Tool, errSubstituteUnknown)
+		return nil, fmt.Errorf("tool %q substitution %q: %w", entry.name, sub.Tool, agentErrors.ErrSubstituteUnknown)
 	}
 	if sub.Args == nil {
-		return nil, fmt.Errorf("tool %q substitution %q requires object arguments", entry.name, sub.Tool)
+		return nil, agentErrors.Newf(agentErrors.CodeToolValidation, "tool %q substitution %q requires object arguments", entry.name, sub.Tool).
+			WithComponent("dispatcher").
+			WithOperation("admit").
+			WithContext("tool_name", entry.name).
+			WithContext("substitute", sub.Tool)
 	}
 	input.Args = sub.Args
 	vctx, cancel := context.WithDeadline(ctx, *deadline)
@@ -569,7 +630,10 @@ func (d *Dispatcher) execute(ctx context.Context, a *admission, settled *settled
 			return nil, err
 		}
 		if out == nil {
-			return nil, fmt.Errorf("tool %q returned nil output", a.entry.name)
+			return nil, agentErrors.Newf(agentErrors.CodeInvalidOutput, "tool %q returned nil output", a.entry.name).
+				WithComponent("dispatcher").
+				WithOperation("execute").
+				WithContext("tool_name", a.entry.name)
 		}
 	}
 	// 交还模型的参数错误结果不经过调用后钩子，保持其形状供上层识别。
@@ -582,7 +646,10 @@ func (d *Dispatcher) execute(ctx context.Context, a *admission, settled *settled
 	}
 	// Around 与 PostHook 给出的结果同样只能是成功或拒绝。
 	if _, rejected := RejectedResult(out); !rejected && (!out.Success || out.Error != "") {
-		return nil, fmt.Errorf("tool %q failed: %s", a.entry.name, nonEmpty(out.Error, "unsuccessful output from pipeline"))
+		return nil, agentErrors.Newf(agentErrors.CodeToolExecution, "tool %q failed: %s", a.entry.name, nonEmpty(out.Error, "unsuccessful output from pipeline")).
+			WithComponent("dispatcher").
+			WithOperation("execute").
+			WithContext("tool_name", a.entry.name)
 	}
 	if a.substitutedFor == "" {
 		return out, nil
@@ -616,7 +683,10 @@ func (d *Dispatcher) runTool(callCtx context.Context, entry dispatchEntry, input
 		return nil, e
 	}
 	if result == nil {
-		return nil, fmt.Errorf("tool %q returned nil output", entry.name)
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidOutput, "tool %q returned nil output", entry.name).
+			WithComponent("dispatcher").
+			WithOperation("execute").
+			WithContext("tool_name", entry.name)
 	}
 	if _, rejected := RejectedResult(result); rejected {
 		return result, nil
@@ -630,7 +700,10 @@ func (d *Dispatcher) runTool(callCtx context.Context, entry dispatchEntry, input
 		if result.Error != "" {
 			message = result.Error
 		}
-		return nil, fmt.Errorf("tool %q failed: %s", entry.name, message)
+		return nil, agentErrors.Newf(agentErrors.CodeToolExecution, "tool %q failed: %s", entry.name, message).
+			WithComponent("dispatcher").
+			WithOperation("execute").
+			WithContext("tool_name", entry.name)
 	}
 	return result, nil
 }
@@ -800,9 +873,6 @@ func (t *dispatchedTool) Invoke(ctx context.Context, in *interfaces.ToolInput) (
 // SupportsConcurrentCalls 实现 interfaces.ConcurrentCallTool：同一轮的多个调用共享 MaxConcurrency 限流，可并发执行。
 func (t *dispatchedTool) SupportsConcurrentCalls() bool { return true }
 
-// ErrDispatcherBusy 表示可选的共享等待队列已满，可用 errors.Is 识别。
-var ErrDispatcherBusy = errors.New("Dispatcher 等待队列已满")
-
 // acquireSlot 仅在不能立即取得槽位时计入排队。取得槽位后重查取消，
 // 避免空闲槽位与 ctx 取消竞争时迟到执行；释放函数幂等，支持提前交接阶段。
 func (d *Dispatcher) acquireSlot(ctx context.Context, slots chan struct{}) (func(), error) {
@@ -837,7 +907,7 @@ func (d *Dispatcher) acquireSlot(ctx context.Context, slots chan struct{}) (func
 	}
 	if d.config.MaxQueued > 0 && d.queued >= d.config.MaxQueued {
 		d.queueMu.Unlock()
-		return nil, ErrDispatcherBusy
+		return nil, agentErrors.ErrDispatcherBusy
 	}
 	d.queued++
 	d.queueMu.Unlock()

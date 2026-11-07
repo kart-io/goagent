@@ -5,7 +5,8 @@ package flow
 import (
 	"context"
 	"errors"
-	"fmt"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // Source yields data synchronously; nil return is successful completion.
@@ -15,7 +16,7 @@ type Source[T any] func(context.Context, func(T) error) error
 func Map[A, B any](source Source[A], fn func(context.Context, A) (B, error)) Source[B] {
 	return func(ctx context.Context, yield func(B) error) error {
 		if source == nil || fn == nil || yield == nil {
-			return fmt.Errorf("source, mapper and yield required")
+			return agentErrors.Newf(agentErrors.CodeInvalidInput, "source, mapper and yield required").WithComponent("flow").WithOperation("map")
 		}
 		var first error
 		err := source(ctx, func(a A) error {

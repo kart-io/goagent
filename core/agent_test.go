@@ -7,6 +7,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // MockAgent 模拟 Agent 实现
@@ -131,7 +133,7 @@ func TestBaseAgent_Invoke_ReturnsError(t *testing.T) {
 	output, err := agent.Invoke(context.Background(), input)
 
 	require.Error(t, err)
-	assert.Equal(t, ErrNotImplemented, err)
+	assert.Equal(t, agentErrors.ErrNotImplemented, err)
 	assert.NotNil(t, output)
 	assert.Equal(t, "failed", output.Status)
 	assert.Equal(t, "Invoke method must be implemented by concrete agent", output.Message)

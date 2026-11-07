@@ -2,11 +2,12 @@ package core
 
 import (
 	"context"
-	"fmt"
 	"maps"
 	"slices"
 	"sync"
 	"time"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // ChainableAgent 顺序执行多个 Agent，并将前一节点的 Metadata 作为下一节点的 Context。
@@ -111,7 +112,7 @@ func (c *ChainableAgent) executeChain(ctx context.Context, input *AgentInput, fa
 		return &AgentOutput{Status: "success", Message: "链中没有节点", Timestamp: time.Now()}, nil
 	}
 	if input == nil {
-		return nil, fmt.Errorf("链输入不能为空")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidInput, "链输入不能为空").WithComponent("agent_chain").WithOperation("execute_chain")
 	}
 	current := input
 	var output *AgentOutput
@@ -129,7 +130,7 @@ func (c *ChainableAgent) executeChain(ctx context.Context, input *AgentInput, fa
 			return nil, err
 		}
 		if output == nil {
-			return nil, fmt.Errorf("链节点 %q 返回空输出", agent.Name())
+			return nil, agentErrors.Newf(agentErrors.CodeInvalidOutput, "链节点 %q 返回空输出", agent.Name()).WithComponent("agent_chain").WithOperation("execute_chain")
 		}
 		if i < len(agents)-1 {
 			options := current.Options

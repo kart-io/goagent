@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/gofrs/flock"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 const commitExt = ".commit"
@@ -40,7 +41,7 @@ func (l *Log) lock(ctx context.Context) (func() error, error) {
 		return nil, err
 	}
 	if !ok {
-		return nil, fmt.Errorf("提交日志锁不可用")
+		return nil, agentErrors.Newf(agentErrors.CodeLockUnavailable, "提交日志锁不可用").WithComponent("txnlog").WithOperation("lock")
 	}
 	return lock.Close, nil
 }

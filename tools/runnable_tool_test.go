@@ -7,6 +7,7 @@ import (
 
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/stretchr/testify/require"
 )
@@ -64,7 +65,7 @@ func TestOpaqueToolReplayAndPending(t *testing.T) {
 			_, second := d.Invoke(ctx, req)
 			if fail {
 				require.Error(t, first)
-				require.ErrorIs(t, second, durable.ErrOperationAttention)
+				require.ErrorIs(t, second, agentErrors.ErrOperationAttention)
 			} else {
 				require.NoError(t, first)
 				require.NoError(t, second)
@@ -85,9 +86,9 @@ func TestOpaqueToolReplayAndPending(t *testing.T) {
 func TestWaitingOutputIsNotSuccess(t *testing.T) {
 	calls := 0
 	cfg := runnableConfig()
-	cfg.Encode = func(int) (any, error) { return nil, ErrToolWorkflowWaiting }
+	cfg.Encode = func(int) (any, error) { return nil, agentErrors.ErrToolWorkflowWaiting }
 	tool, err := NewRunnableTool(numberRun(&calls, false), cfg)
 	require.NoError(t, err)
 	_, err = tool.Invoke(context.Background(), &interfaces.ToolInput{Args: map[string]any{"n": float64(2)}})
-	require.ErrorIs(t, err, ErrToolWorkflowWaiting)
+	require.ErrorIs(t, err, agentErrors.ErrToolWorkflowWaiting)
 }

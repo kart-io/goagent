@@ -38,7 +38,7 @@ agent, err := builder.NewSimpleBuilder(client).
 
 - `MaxConcurrency`（默认4）只约束实际执行，不再被审批等待占用。
 - `MaxAdmissionConcurrency`（默认0，不限）独立约束校验及Pipeline准入；需控制大量待审批请求的宿主应显式配置。
-- `MaxQueued`（默认0，不限）限制两阶段共用的阻塞等待人数；立即取得空槽不占排队名额。超限返回可errors.Is匹配的 `tools.ErrDispatcherBusy`。
+- `MaxQueued`（默认0，不限）限制两阶段共用的阻塞等待人数；立即取得空槽不占排队名额。超限返回可errors.Is匹配的 `agentErrors.ErrDispatcherBusy`。
 - 两段排队仅受宿主/根预算ctx约束。校验、Authorize、日志和执行累计消耗单次Timeout；Pipeline准入与等待执行槽暂停计时。取得槽位后再次检查取消，避免迟到执行。
 - 回放、准入拒绝不需要执行槽；取消或排队失败不新建pending操作。第三方不响应context不能靠超时强行停止。
 

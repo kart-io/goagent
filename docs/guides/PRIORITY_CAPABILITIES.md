@@ -85,7 +85,7 @@ runner := &durable.Runner{Store: store, Version: "refund-v1", Steps: []durable.S
      }},
 }}
 snapshot, err := runner.Run(ctx, "request-123", json.RawMessage(`{"order":"123"}`), "")
-// errors.Is(err, durable.ErrApprovalRequired): 保存/展示 snapshot，等待应用授权。
+// errors.Is(err, agentErrors.ErrApprovalRequired): 保存/展示 snapshot，等待应用授权。
 // 重启后重新注册同一版本的步骤，再传入经批准的 snapshot.Key：
 snapshot, err = runner.Run(ctx, "request-123", nil, snapshot.Key)
 ```

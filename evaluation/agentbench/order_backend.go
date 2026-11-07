@@ -2,7 +2,8 @@ package agentbench
 
 import (
 	"context"
-	"fmt"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // OrderLookupBackend is an isolated test database with a host-bound tenant.
@@ -20,13 +21,13 @@ type OrderLookupRecord struct {
 
 func (b *OrderLookupBackend) validate() error {
 	if b.TenantID == "" || len(b.Records) == 0 {
-		return fmt.Errorf("orders backend needs a trusted tenant and records")
+		return agentErrors.Newf(agentErrors.CodeInvalidConfig, "orders backend needs a trusted tenant and records").WithComponent("evaluation/agentbench").WithOperation("validate")
 	}
 	seen := map[[2]string]bool{}
 	for _, record := range b.Records {
 		key := [2]string{record.TenantID, record.OrderID}
 		if record.TenantID == "" || record.OrderID == "" || record.Text == "" || seen[key] {
-			return fmt.Errorf("orders backend has an incomplete or duplicate record")
+			return agentErrors.Newf(agentErrors.CodeInvalidConfig, "orders backend has an incomplete or duplicate record").WithComponent("evaluation/agentbench").WithOperation("validate")
 		}
 		seen[key] = true
 	}
@@ -39,7 +40,7 @@ func (b *OrderLookupBackend) query(ctx context.Context, args map[string]any) (st
 	}
 	id, ok := args["order_id"].(string)
 	if len(args) != 1 || !ok || id == "" {
-		return "", false, fmt.Errorf("lookup requires only a nonempty string order_id")
+		return "", false, agentErrors.Newf(agentErrors.CodeInvalidInput, "lookup requires only a nonempty string order_id").WithComponent("evaluation/agentbench").WithOperation("query")
 	}
 	for _, record := range b.Records {
 		if record.TenantID == b.TenantID && record.OrderID == id {

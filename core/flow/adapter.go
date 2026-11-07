@@ -3,8 +3,9 @@ package flow
 import (
 	"context"
 	"errors"
-	"fmt"
+
 	"github.com/kart-io/goagent/core"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // Fold creates an independent accumulator per invocation. Finish is optional.
@@ -24,10 +25,10 @@ type Limits[D any] struct {
 // AsRunnable publishes preview events immediately and commits data only after source and fold success.
 func AsRunnable[I, D, O any](open func(context.Context, I) (Source[D], error), fold Fold[D, O], preview func(D) (*core.StreamEvent, error), limits Limits[D]) (core.Runnable[I, O], error) {
 	if open == nil || fold.Init == nil || fold.Add == nil {
-		return nil, fmt.Errorf("open, fold Init and Add required")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "open, fold Init and Add required").WithComponent("flow").WithOperation("as_runnable")
 	}
 	if limits.MaxItems < 0 || limits.MaxBytes < 0 || limits.MaxBytes > 0 && limits.Size == nil {
-		return nil, fmt.Errorf("invalid flow limits")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "invalid flow limits").WithComponent("flow").WithOperation("as_runnable")
 	}
 	if limits.MaxItems == 0 {
 		limits.MaxItems = 1024
@@ -42,7 +43,7 @@ func AsRunnable[I, D, O any](open func(context.Context, I) (Source[D], error), f
 			return err
 		}
 		if source == nil {
-			return fmt.Errorf("nil source")
+			return agentErrors.Newf(agentErrors.CodeInvalidOutput, "nil source").WithComponent("flow").WithOperation("as_runnable")
 		}
 		acc := fold.Init()
 		count := 0
@@ -57,17 +58,17 @@ func AsRunnable[I, D, O any](open func(context.Context, I) (Source[D], error), f
 			}
 			count++
 			if count > limits.MaxItems {
-				first = fmt.Errorf("flow item limit exceeded")
+				first = agentErrors.Newf(agentErrors.CodeExecutionLimit, "flow item limit exceeded").WithComponent("flow").WithOperation("as_runnable")
 				return first
 			}
 			if limits.Size != nil {
 				n := limits.Size(data)
 				if n < 0 {
-					first = fmt.Errorf("negative flow size")
+					first = agentErrors.Newf(agentErrors.CodeInvalidOutput, "negative flow size").WithComponent("flow").WithOperation("as_runnable")
 					return first
 				}
 				if limits.MaxBytes > 0 && n > limits.MaxBytes-size {
-					first = fmt.Errorf("flow byte limit exceeded")
+					first = agentErrors.Newf(agentErrors.CodeExecutionLimit, "flow byte limit exceeded").WithComponent("flow").WithOperation("as_runnable")
 					return first
 				}
 				if limits.MaxBytes > 0 {

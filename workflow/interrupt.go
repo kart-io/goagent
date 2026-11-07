@@ -4,17 +4,13 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"slices"
 	"strings"
 
 	"github.com/kart-io/goagent/codec/json"
-
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
-
-// ErrInterruptAnswered 表示该中断已经回应，新的输入与已固定的输入不同，被拒绝。
-var ErrInterruptAnswered = errors.New("中断已回应")
 
 // InterruptPoint 是一处等待人工输入的中断。Key 只用于 Resume 定位，不是授权凭证；
 // 宿主必须先认证回应者并确认其有权回应。
@@ -59,17 +55,17 @@ func interruptPoints(waits []*durable.WaitError) ([]InterruptPoint, bool) {
 func (d *DurableGraph[T]) prepareInterruptResume(ctx context.Context, store durable.Store, points []InterruptPoint, key string, input json.RawMessage) (context.Context, string, error) {
 	if key == "" {
 		if input != nil {
-			return ctx, "", &ResumeRejectedError{Err: fmt.Errorf("人工输入需要中断键")}
+			return ctx, "", &ResumeRejectedError{Err: agentErrors.Newf(agentErrors.CodeInvalidInput, "人工输入需要中断键").WithComponent("workflow").WithOperation("prepare_interrupt_resume")}
 		}
 		ready, err := interruptReady(ctx, store, points)
 		if err != nil || ready {
 			return ctx, "", err
 		}
-		return ctx, "", durable.ErrApprovalRequired
+		return ctx, "", agentErrors.ErrApprovalRequired
 	}
 	i := slices.IndexFunc(points, func(p InterruptPoint) bool { return p.Key == key })
 	if i < 0 {
-		return ctx, "", ErrApprovalMismatch
+		return ctx, "", agentErrors.ErrApprovalMismatch
 	}
 	recorded, answered, err := durable.InterruptAnswer(ctx, store, key, points[i].ID)
 	if err != nil {
@@ -77,15 +73,15 @@ func (d *DurableGraph[T]) prepareInterruptResume(ctx context.Context, store dura
 	}
 	if answered {
 		if input != nil && !sameJSON(input, recorded) {
-			return ctx, "", &ResumeRejectedError{Err: ErrInterruptAnswered}
+			return ctx, "", &ResumeRejectedError{Err: agentErrors.ErrInterruptAnswered}
 		}
 		return ctx, "", nil
 	}
 	if input == nil {
-		return ctx, "", &ResumeRejectedError{Err: fmt.Errorf("中断 %q 需要输入", points[i].ID)}
+		return ctx, "", &ResumeRejectedError{Err: agentErrors.Newf(agentErrors.CodeInvalidInput, "中断 %q 需要输入", points[i].ID).WithComponent("workflow").WithOperation("prepare_interrupt_resume")}
 	}
 	if !json.Valid(input) {
-		return ctx, "", &ResumeRejectedError{Err: fmt.Errorf("中断输入必须是合法 JSON")}
+		return ctx, "", &ResumeRejectedError{Err: agentErrors.Newf(agentErrors.CodeInvalidInput, "中断输入必须是合法 JSON").WithComponent("workflow").WithOperation("prepare_interrupt_resume")}
 	}
 	return durable.WithResume(ctx, key, string(input)), key, nil
 }

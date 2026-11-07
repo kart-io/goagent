@@ -5,15 +5,16 @@ import (
 	"fmt"
 	"strings"
 
+	shared "github.com/kart-io/goagent/constants"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
-	"github.com/kart-io/goagent/llm/constants"
 )
 
 // CachedLLMClient wraps an LLM client with semantic caching
 type CachedLLMClient struct {
 	client   llm.Client
 	cache    SemanticCache
-	provider constants.Provider
+	provider shared.Provider
 }
 
 // CachedLLMClientConfig configures the cached LLM client
@@ -31,13 +32,15 @@ type CachedLLMClientConfig struct {
 // NewCachedLLMClient creates a new cached LLM client
 func NewCachedLLMClient(config *CachedLLMClientConfig) (*CachedLLMClient, error) {
 	if config == nil {
-		return nil, fmt.Errorf("config is required")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "config is required").WithComponent("llm_cache").WithOperation("initialize")
 	}
 	if config.Client == nil {
-		return nil, fmt.Errorf("client is required")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "client is required").WithComponent("llm_cache").WithOperation("initialize")
 	}
 	if config.EmbeddingProvider == nil {
-		return nil, fmt.Errorf("embedding provider is required")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "embedding provider is required").
+			WithComponent("llm_cache").
+			WithOperation("initialize")
 	}
 
 	cache := NewMemorySemanticCache(config.EmbeddingProvider, config.CacheConfig)
@@ -108,7 +111,7 @@ func (c *CachedLLMClient) CompleteStream(ctx context.Context, req *llm.Completio
 }
 
 // Provider returns the underlying provider type
-func (c *CachedLLMClient) Provider() constants.Provider {
+func (c *CachedLLMClient) Provider() shared.Provider {
 	return c.provider
 }
 

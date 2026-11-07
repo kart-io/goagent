@@ -2,9 +2,10 @@ package observe
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"sync/atomic"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 type queuedEvent struct {
@@ -34,7 +35,7 @@ type AsyncObserver struct {
 // NewAsyncObserver 要求提供观察者，队列容量和工作协程数量均须为正数。
 func NewAsyncObserver(sink Observer, capacity, workers int) (*AsyncObserver, error) {
 	if sink == nil || capacity <= 0 || workers <= 0 {
-		return nil, fmt.Errorf("async observer requires a sink and positive capacity/workers")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "async observer requires a sink and positive capacity/workers").WithComponent("async_observer").WithOperation("new_async_observer")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	a := &AsyncObserver{sink: sink, queue: make(chan queuedEvent, capacity), ctx: ctx, cancel: cancel, done: make(chan struct{})}

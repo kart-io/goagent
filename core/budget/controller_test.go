@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/testing/panictest"
 	"github.com/stretchr/testify/require"
@@ -35,7 +36,7 @@ func TestRootBudgetConcurrentAdmission(t *testing.T) {
 		if e == nil {
 			admitted++
 		} else {
-			require.ErrorIs(t, e, ErrBudgetExceeded)
+			require.ErrorIs(t, e, agentErrors.ErrModelBudgetExceeded)
 		}
 	}
 	require.Equal(t, 2, admitted)
@@ -50,7 +51,7 @@ func TestUsageIsIdempotentAndRequiresReservation(t *testing.T) {
 	require.NoError(t, err)
 	require.Error(t, c.RecordUsage(ctx, "missing", nil))
 	require.NoError(t, c.Reserve(ctx, "a"))
-	require.ErrorIs(t, c.Reserve(ctx, "a"), ErrReservationExists)
+	require.ErrorIs(t, c.Reserve(ctx, "a"), agentErrors.ErrReservationExists)
 	require.NoError(t, c.RecordUsage(ctx, "a", nil))
 	u := &interfaces.TokenUsage{PromptTokens: 2, CompletionTokens: 3, TotalTokens: 5}
 	require.NoError(t, c.RecordUsage(ctx, "a", u))
@@ -89,7 +90,7 @@ func TestBudgetSurvivesProcessExit(t *testing.T) {
 	cfg := Config{RootKey: "run", Version: "v1", MaxModelRequests: 1}
 	c, err := NewDurable(cfg, store)
 	require.NoError(t, err)
-	require.ErrorIs(t, c.Reserve(context.Background(), "new"), ErrBudgetExceeded)
+	require.ErrorIs(t, c.Reserve(context.Background(), "new"), agentErrors.ErrModelBudgetExceeded)
 	cfg.Version = "v2"
 	_, err = NewDurable(cfg, store)
 	require.Error(t, err)
@@ -129,9 +130,9 @@ func TestRemainingDecreasesAfterReserve(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 1, n)
 		// 重复预留被拒绝时余量不变。
-		require.ErrorIs(t, c.Reserve(ctx, "a"), ErrReservationExists)
+		require.ErrorIs(t, c.Reserve(ctx, "a"), agentErrors.ErrReservationExists)
 		require.NoError(t, c.Reserve(ctx, "b"))
-		require.ErrorIs(t, c.Reserve(ctx, "c"), ErrBudgetExceeded)
+		require.ErrorIs(t, c.Reserve(ctx, "c"), agentErrors.ErrModelBudgetExceeded)
 		n, err = c.Remaining(ctx)
 		require.NoError(t, err)
 		require.Zero(t, n)

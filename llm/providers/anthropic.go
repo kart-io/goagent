@@ -3,7 +3,6 @@ package providers
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"strings"
 	"time"
@@ -13,11 +12,11 @@ import (
 	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/anthropics/anthropic-sdk-go/v2/option"
 
+	shared "github.com/kart-io/goagent/constants"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	agentllm "github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/common"
-	"github.com/kart-io/goagent/llm/constants"
 )
 
 var _ agentllm.ToolStreamClient = (*AnthropicProvider)(nil)
@@ -33,8 +32,8 @@ type AnthropicProvider struct {
 // NewAnthropicWithOptions creates a new Anthropic provider using options pattern.
 func NewAnthropicWithOptions(opts ...agentllm.ClientOption) (*AnthropicProvider, error) {
 	base := common.NewBaseProvider(opts...)
-	base.ApplyProviderDefaults(constants.ProviderAnthropic, constants.AnthropicBaseURL, constants.AnthropicDefaultModel, constants.EnvAnthropicBaseURL, constants.EnvAnthropicModel)
-	if err := base.EnsureAPIKey(constants.EnvAnthropicAPIKey, constants.ProviderAnthropic); err != nil {
+	base.ApplyProviderDefaults(shared.ProviderAnthropic, shared.AnthropicBaseURL, shared.AnthropicDefaultModel, shared.EnvAnthropicBaseURL, shared.EnvAnthropicModel)
+	if err := base.EnsureAPIKey(shared.EnvAnthropicAPIKey, shared.ProviderAnthropic); err != nil {
 		return nil, err
 	}
 	// 关闭 SDK 隐式重试：一次调用对应一次上游请求，重试由 Builder 的 RequestError 钩子决定。
@@ -60,7 +59,9 @@ func NewAnthropicWithOptions(opts ...agentllm.ClientOption) (*AnthropicProvider,
 
 func (p *AnthropicProvider) params(req *agentllm.CompletionRequest, tools []interfaces.Tool) (anthropic.MessageNewParams, error) {
 	if req == nil || len(req.Messages) == 0 {
-		return anthropic.MessageNewParams{}, fmt.Errorf("anthropic: messages are required")
+		return anthropic.MessageNewParams{}, agentErrors.Newf(agentErrors.CodeInvalidInput, "anthropic: messages are required").
+			WithComponent("anthropic").
+			WithOperation("build_request")
 	}
 	if err := p.RejectReasoning(req); err != nil {
 		return anthropic.MessageNewParams{}, err
@@ -124,7 +125,9 @@ func anthropicMessages(messages []agentllm.Message, configuredSystem string) ([]
 	pending := map[string]bool{}
 	flush := func() error {
 		if len(pending) > 0 {
-			return fmt.Errorf("anthropic: missing tool responses before next message")
+			return agentErrors.Newf(agentErrors.CodeInvalidInput, "anthropic: missing tool responses before next message").
+				WithComponent("anthropic").
+				WithOperation("build_request")
 		}
 		if len(results) > 0 {
 			result = append(result, anthropic.NewUserMessage(results...))
@@ -151,35 +154,46 @@ func anthropicMessages(messages []agentllm.Message, configuredSystem string) ([]
 			result = append(result, param)
 			for _, call := range msg.ToolCalls {
 				if call.ID == "" || pending[call.ID] {
-					return nil, "", fmt.Errorf("anthropic: missing or duplicate tool call ID")
+					return nil, "", agentErrors.Newf(agentErrors.CodeInvalidInput, "anthropic: missing or duplicate tool call ID").
+						WithComponent("anthropic").
+						WithOperation("build_request")
 				}
 				pending[call.ID] = true
 			}
 		case "tool":
 			if !pending[msg.ToolCallID] {
-				return nil, "", fmt.Errorf("anthropic: unmatched or duplicate tool response")
+				return nil, "", agentErrors.Newf(agentErrors.CodeInvalidInput, "anthropic: unmatched or duplicate tool response").
+					WithComponent("anthropic").
+					WithOperation("build_request")
 			}
 			delete(pending, msg.ToolCallID)
 			results = append(results, anthropic.NewToolResultBlock(msg.ToolCallID, msg.Content, false))
 		default:
-			return nil, "", fmt.Errorf("anthropic: unsupported message role %q", msg.Role)
+			return nil, "", agentErrors.Newf(agentErrors.CodeInvalidInput, "anthropic: unsupported message role %q", msg.Role).
+				WithComponent("anthropic").
+				WithOperation("build_request").
+				WithContext("role", msg.Role)
 		}
 	}
 	if err := flush(); err != nil {
 		return nil, "", err
 	}
 	if len(result) == 0 {
-		return nil, "", fmt.Errorf("anthropic: at least one user message is required")
+		return nil, "", agentErrors.Newf(agentErrors.CodeInvalidInput, "anthropic: at least one user message is required").
+			WithComponent("anthropic").
+			WithOperation("build_request")
 	}
 	return result, strings.Join(system, "\n\n"), nil
 }
 
 // anthropicAssistant 优先回放原生内容（含思考块签名），否则由文本与工具调用重建。
 func anthropicAssistant(msg agentllm.Message) (anthropic.MessageParam, error) {
-	if state := msg.ProviderState; state != nil && state.Provider == constants.ProviderAnthropic {
+	if state := msg.ProviderState; state != nil && state.Provider == shared.ProviderAnthropic {
 		var param anthropic.MessageParam
 		if err := json.Unmarshal(state.Data, &param); err != nil || param.OfAssistant == nil {
-			return anthropic.MessageParam{}, fmt.Errorf("anthropic: invalid provider state")
+			return anthropic.MessageParam{}, agentErrors.Newf(agentErrors.CodeInvalidInput, "anthropic: invalid provider state").
+				WithComponent("anthropic").
+				WithOperation("build_request")
 		}
 		// SDK 自定义解码把 tool_use.input 解成含 float64 的 any；另外读取原文并覆盖，
 		// 避免原生状态回放绕过无状态分支的精度保护，同时保留思考签名等原生字段。
@@ -189,7 +203,9 @@ func anthropicAssistant(msg agentllm.Message) (anthropic.MessageParam, error) {
 			} `json:"content"`
 		}
 		if err := json.Unmarshal(state.Data, &raw); err != nil || len(raw.Content) != len(param.OfAssistant.Content) {
-			return anthropic.MessageParam{}, fmt.Errorf("anthropic: invalid provider state")
+			return anthropic.MessageParam{}, agentErrors.Newf(agentErrors.CodeInvalidInput, "anthropic: invalid provider state").
+				WithComponent("anthropic").
+				WithOperation("build_request")
 		}
 		var ids []string
 		for i, block := range param.OfAssistant.Content {
@@ -199,11 +215,15 @@ func anthropicAssistant(msg agentllm.Message) (anthropic.MessageParam, error) {
 			}
 		}
 		if len(ids) != len(msg.ToolCalls) {
-			return anthropic.MessageParam{}, fmt.Errorf("anthropic: provider state does not match tool calls")
+			return anthropic.MessageParam{}, agentErrors.Newf(agentErrors.CodeInvalidInput, "anthropic: provider state does not match tool calls").
+				WithComponent("anthropic").
+				WithOperation("build_request")
 		}
 		for i, id := range ids {
 			if id != msg.ToolCalls[i].ID {
-				return anthropic.MessageParam{}, fmt.Errorf("anthropic: provider state does not match tool calls")
+				return anthropic.MessageParam{}, agentErrors.Newf(agentErrors.CodeInvalidInput, "anthropic: provider state does not match tool calls").
+					WithComponent("anthropic").
+					WithOperation("build_request")
 			}
 		}
 		return param, nil
@@ -214,7 +234,9 @@ func anthropicAssistant(msg agentllm.Message) (anthropic.MessageParam, error) {
 	}
 	for _, call := range msg.ToolCalls {
 		if _, ok := call.ArgumentsObject(); !ok || call.Function.Name == "" {
-			return anthropic.MessageParam{}, fmt.Errorf("anthropic: tool arguments must be an object with a function name")
+			return anthropic.MessageParam{}, agentErrors.Newf(agentErrors.CodeInvalidInput, "anthropic: tool arguments must be an object with a function name").
+				WithComponent("anthropic").
+				WithOperation("build_request")
 		}
 		// 发送参数原文：解到 map 会把大整数与高精度小数改写为 float64，SDK 又会把 json.Number 编码成字符串。
 		raw, err := json.Compact([]byte(call.Function.Arguments))
@@ -256,16 +278,22 @@ func anthropicResult(message *anthropic.Message) (*agentllm.StreamChunk, error) 
 		chunk.FinishReason = "tool_calls"
 	case anthropic.StopReasonRefusal:
 		chunk.ToolCalls = nil
-		return chunk, fmt.Errorf("anthropic: request refused (category=%q)", message.StopDetails.Category)
+		return chunk, agentErrors.Newf(agentErrors.CodeLLMResponse, "anthropic: request refused (category=%q)", message.StopDetails.Category).
+			WithComponent("anthropic").
+			WithOperation("parse_response").
+			WithContext("category", message.StopDetails.Category)
 	default:
 		chunk.ToolCalls = nil
-		return chunk, fmt.Errorf("anthropic: incomplete response (stop_reason=%q)", message.StopReason)
+		return chunk, agentErrors.Newf(agentErrors.CodeLLMResponse, "anthropic: incomplete response (stop_reason=%q)", message.StopReason).
+			WithComponent("anthropic").
+			WithOperation("parse_response").
+			WithContext("stop_reason", message.StopReason)
 	}
 	data, err := json.Marshal(message.ToParam())
 	if err != nil {
 		return chunk, err
 	}
-	chunk.ProviderState = &agentllm.ProviderState{Provider: constants.ProviderAnthropic, Data: data}
+	chunk.ProviderState = &agentllm.ProviderState{Provider: shared.ProviderAnthropic, Data: data}
 	return chunk, nil
 }
 
@@ -302,7 +330,7 @@ func (p *AnthropicProvider) stream(ctx context.Context, req *agentllm.Completion
 		if stall := watch.stalled(); stall != nil {
 			err = stall
 		}
-		return agentErrors.NewLLMRequestError(p.ProviderName(), params.Model, anthropicProviderError(err)).WithContext("stream", true)
+		return wrapProviderError(p.ProviderName(), params.Model, anthropicProviderError(err)).WithContext("stream", true)
 	}
 	stream := p.client.Messages.NewStreaming(watch.ctx, params)
 	if !stream.Next() {
@@ -365,11 +393,11 @@ func (p *AnthropicProvider) stream(ctx context.Context, req *agentllm.Completion
 }
 
 // Provider returns the provider type.
-func (p *AnthropicProvider) Provider() constants.Provider {
-	return constants.ProviderAnthropic
+func (p *AnthropicProvider) Provider() shared.Provider {
+	return shared.ProviderAnthropic
 }
 
 // ProviderName returns the provider name as a string
 func (p *AnthropicProvider) ProviderName() string {
-	return string(constants.ProviderAnthropic)
+	return string(shared.ProviderAnthropic)
 }

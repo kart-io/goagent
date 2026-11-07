@@ -13,6 +13,7 @@ import (
 	"github.com/kart-io/goagent/builder"
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/testing/mocks"
@@ -247,7 +248,7 @@ func runResumableDelegation(t *testing.T) {
 		return compile(t, e, g, "v1")
 	}
 	snap, err := build().Run(e.ctx(), e.id, ticket{Text: "核对账单"}, "")
-	require.ErrorIs(t, err, durable.ErrApprovalRequired)
+	require.ErrorIs(t, err, agentErrors.ErrApprovalRequired)
 	require.Len(t, snap.Interrupts, 1)
 
 	e.restart()

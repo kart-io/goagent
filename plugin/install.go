@@ -9,6 +9,7 @@ import (
 
 	"github.com/kart-io/goagent/builder"
 	"github.com/kart-io/goagent/core"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/tools"
 )
@@ -44,7 +45,7 @@ func Dispatch(cfg tools.DispatchConfig) InstallOption {
 // 多个 goroutine 可同时 Install 同一 Host，插件的 Contribute 须并发安全；Install 不得与 Host.Stop 并发。
 func Install[C any, S core.State](ctx context.Context, b *builder.AgentBuilder[C, S], h *Host, opts ...InstallOption) error {
 	if b == nil || h == nil {
-		return errors.New("plugin.Install 需要非 nil 的 Builder 与 Host")
+		return agentErrors.New(agentErrors.CodeInvalidInput, "plugin.Install 需要非 nil 的 Builder 与 Host").WithComponent("plugin").WithOperation("install")
 	}
 	var cfg installConfig
 	for _, opt := range opts {
@@ -78,19 +79,19 @@ func (h *Host) selectStarted(cfg installConfig) ([]Plugin, error) {
 	state := h.state
 	h.mu.Unlock()
 	if state != hostStarted {
-		return nil, errors.New("Host 未启动或已停止，Install 前须先调用 Start")
+		return nil, agentErrors.New(agentErrors.CodeInvalidConfig, "Host 未启动或已停止，Install 前须先调用 Start").WithComponent("plugin").WithOperation("install")
 	}
 	if !cfg.onlySet {
 		return append([]Plugin(nil), h.order...), nil
 	}
 	if len(cfg.only) == 0 {
-		return nil, errors.New("Only 至少需要一个插件名")
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "Only 至少需要一个插件名").WithComponent("plugin").WithOperation("select")
 	}
 	wanted := map[string]bool{}
 	var unknown []error
 	for _, name := range cfg.only {
 		if _, ok := h.envs[name]; !ok {
-			unknown = append(unknown, fmt.Errorf("插件 %q 未注册", name))
+			unknown = append(unknown, agentErrors.Newf(agentErrors.CodeNotFound, "插件 %q 未注册", name).WithComponent("plugin").WithOperation("select_started"))
 		}
 		wanted[name] = true
 	}
@@ -112,7 +113,7 @@ func validate(selected []Plugin, cs []Contribution) error {
 	claim := func(kind, key, plugin string) {
 		k := kind + "\x00" + key
 		if prev, ok := owners[k]; ok {
-			errs = append(errs, fmt.Errorf("插件 %q 与 %q 提供了同名%s %q", prev, plugin, kind, key))
+			errs = append(errs, agentErrors.Newf(agentErrors.CodeInvalidConfig, "插件 %q 与 %q 提供了同名%s %q", prev, plugin, kind, key).WithComponent("plugin").WithOperation("validate"))
 			return
 		}
 		owners[k] = plugin
@@ -120,7 +121,7 @@ func validate(selected []Plugin, cs []Contribution) error {
 	for i, p := range selected {
 		name, c := p.Name(), cs[i]
 		bad := func(format string, args ...any) {
-			errs = append(errs, fmt.Errorf("插件 %q 贡献无效：%s", name, fmt.Sprintf(format, args...)))
+			errs = append(errs, agentErrors.Newf(agentErrors.CodeInvalidConfig, "插件 %q 贡献无效：%s", name, fmt.Sprintf(format, args...)).WithComponent("plugin").WithOperation("validate"))
 		}
 		for j, t := range c.Tools {
 			if t == nil {

@@ -195,10 +195,10 @@ func TestRunnableToolCleanupOnEveryPath(t *testing.T) {
 			return probedFactory(p, &calls)
 		}, "encode failed", 1},
 		{"waiting output", func(c *RunnableToolConfig[int, int], p *cleanupProbe) func(context.Context) (OwnedRunnable[int, int], error) {
-			c.Encode = func(int) (any, error) { return nil, ErrToolWorkflowWaiting }
+			c.Encode = func(int) (any, error) { return nil, agentErrors.ErrToolWorkflowWaiting }
 			calls := 0
 			return probedFactory(p, &calls)
-		}, ErrToolWorkflowWaiting.Error(), 1},
+		}, agentErrors.ErrToolWorkflowWaiting.Error(), 1},
 		{"factory error with partial cleanup", func(_ *RunnableToolConfig[int, int], p *cleanupProbe) func(context.Context) (OwnedRunnable[int, int], error) {
 			return func(context.Context) (OwnedRunnable[int, int], error) {
 				return OwnedRunnable[int, int]{Close: p.close}, errors.New("factory failed")
@@ -321,7 +321,7 @@ func TestDurableCleanupTimeoutIsNotCachedAsSuccess(t *testing.T) {
 	require.ErrorIs(t, err, context.DeadlineExceeded)
 	out, err = d.Invoke(ctx, req)
 	require.Nil(t, out)
-	require.ErrorIs(t, err, durable.ErrOperationAttention)
+	require.ErrorIs(t, err, agentErrors.ErrOperationAttention)
 	require.Equal(t, int64(1), created.Load(), "the opaque composite call is attempted at most once")
 }
 
@@ -465,7 +465,7 @@ func TestDispatcherSurfacesRunnableToolPanic(t *testing.T) {
 		_, err = d.Invoke(ctx, req)
 		requireRedactedPanic(t, err, "journaled-panic")
 		_, err = d.Invoke(ctx, req)
-		require.ErrorIs(t, err, durable.ErrOperationAttention)
+		require.ErrorIs(t, err, agentErrors.ErrOperationAttention)
 		require.Equal(t, int64(1), panics.Load(), "a panicking opaque call is not retried")
 	})
 }

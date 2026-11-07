@@ -7,6 +7,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 func TestInMemoryCache_GetSet(t *testing.T) {
@@ -33,7 +35,7 @@ func TestInMemoryCache_Miss(t *testing.T) {
 	// Test cache miss
 	value, err := cache.Get(ctx, "nonexistent")
 	assert.Error(t, err)
-	assert.Equal(t, ErrCacheMiss, err)
+	assert.Equal(t, agentErrors.ErrCacheMiss, err)
 	assert.Nil(t, value)
 }
 
@@ -58,7 +60,7 @@ func TestInMemoryCache_Expiration(t *testing.T) {
 	// Should be expired
 	value, err = cache.Get(ctx, "key1")
 	assert.Error(t, err)
-	assert.Equal(t, ErrCacheMiss, err)
+	assert.Equal(t, agentErrors.ErrCacheMiss, err)
 	assert.Nil(t, value)
 }
 
@@ -428,20 +430,20 @@ func TestNoOpCache(t *testing.T) {
 
 	// All operations should return ErrCacheDisabled
 	_, err := cache.Get(ctx, "key")
-	assert.Equal(t, ErrCacheDisabled, err)
+	assert.Equal(t, agentErrors.ErrCacheDisabled, err)
 
 	err = cache.Set(ctx, "key", "value", 0)
-	assert.Equal(t, ErrCacheDisabled, err)
+	assert.Equal(t, agentErrors.ErrCacheDisabled, err)
 
 	err = cache.Delete(ctx, "key")
-	assert.Equal(t, ErrCacheDisabled, err)
+	assert.Equal(t, agentErrors.ErrCacheDisabled, err)
 
 	err = cache.Clear(ctx)
-	assert.Equal(t, ErrCacheDisabled, err)
+	assert.Equal(t, agentErrors.ErrCacheDisabled, err)
 
 	has, err := cache.Has(ctx, "key")
 	assert.False(t, has)
-	assert.Equal(t, ErrCacheDisabled, err)
+	assert.Equal(t, agentErrors.ErrCacheDisabled, err)
 
 	stats := cache.GetStats()
 	assert.Equal(t, CacheStats{}, stats)

@@ -1,7 +1,7 @@
 <!-- generated-by: gsd-doc-writer -->
 # GoAgent LLM API 参考
 
-本文概述 `llm`、`llm/providers`、`llm/common`、`llm/constants` 的公开 API。完整签名以 Go 文档为准：
+本文概述 `llm`、`llm/providers`、`llm/common` 以及顶层 `constants` 的公开 API。`Provider` 类型与共享值统一来自 `github.com/kart-io/goagent/constants`，旧 `llm/constants` 包已删除。完整签名以 Go 文档为准：
 
 ```bash
 go doc -all github.com/kart-io/goagent/llm

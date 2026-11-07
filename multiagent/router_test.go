@@ -10,7 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/workflow"
 )
 
@@ -42,8 +42,8 @@ func TestRouterRoundLimit(t *testing.T) {
 	}
 	requireSameResult(t, build("a", "a"), []string{"sup", "a", "sup", "a", "sup"})
 	_, plainErr, durableOut, durableErr := runBoth(t, build("a", "a", "a"))
-	require.ErrorIs(t, plainErr, workflow.ErrMaxSteps)
-	require.ErrorIs(t, durableErr, workflow.ErrMaxSteps)
+	require.ErrorIs(t, plainErr, agentErrors.ErrWorkflowMaxSteps)
+	require.ErrorIs(t, durableErr, agentErrors.ErrWorkflowMaxSteps)
 	require.Equal(t, 2, count(durableOut, "a"), "第 MaxRounds 次成员后 Supervisor 再执行一次，选成员即超限")
 	require.Equal(t, 3, count(durableOut, "sup"))
 }
@@ -55,7 +55,7 @@ func routerWith(next func(context.Context, record) (string, error), fallback *St
 }
 
 func TestRouterFallback(t *testing.T) {
-	invalid := fmt.Errorf("%w：无法识别", ErrInvalidRoute)
+	invalid := fmt.Errorf("%w：无法识别", agentErrors.ErrInvalidRoute)
 	for name, next := range map[string]func(context.Context, record) (string, error){
 		"ErrInvalidRoute": fixed("", invalid),
 		"未知成员":            fixed("x", nil),
@@ -73,8 +73,8 @@ func TestRouterFallback(t *testing.T) {
 			continue // 没有兜底时兜底名不存在，等同未知成员
 		}
 		_, plainErr, _, durableErr = runBoth(t, routerWith(next, nil, 2))
-		require.ErrorIs(t, plainErr, ErrInvalidRoute, name)
-		require.ErrorIs(t, durableErr, ErrInvalidRoute, name)
+		require.ErrorIs(t, plainErr, agentErrors.ErrInvalidRoute, name)
+		require.ErrorIs(t, durableErr, agentErrors.ErrInvalidRoute, name)
 	}
 	fb := mark("human")
 	other := errors.New("分流服务不可用")
@@ -89,16 +89,16 @@ func TestRouterFallbackOnLastRoundHitsStepLimit(t *testing.T) {
 		if count(r, "sup") == 1 {
 			return "a", nil
 		}
-		return "", ErrInvalidRoute
+		return "", agentErrors.ErrInvalidRoute
 	}
 	fb := mark("human")
 	_, plainErr, durableOut, durableErr := runBoth(t, routerWith(next, &fb, 1))
-	require.ErrorIs(t, plainErr, workflow.ErrMaxSteps)
-	require.ErrorIs(t, durableErr, workflow.ErrMaxSteps)
+	require.ErrorIs(t, plainErr, agentErrors.ErrWorkflowMaxSteps)
+	require.ErrorIs(t, durableErr, agentErrors.ErrWorkflowMaxSteps)
 	require.NotContains(t, durableOut.Log, "human")
 	_, plainErr, _, durableErr = runBoth(t, routerWith(next, nil, 1))
-	require.ErrorIs(t, plainErr, ErrInvalidRoute)
-	require.ErrorIs(t, durableErr, ErrInvalidRoute)
+	require.ErrorIs(t, plainErr, agentErrors.ErrInvalidRoute)
+	require.ErrorIs(t, durableErr, agentErrors.ErrInvalidRoute)
 }
 
 func TestApprovalNodesAcceptOuterNames(t *testing.T) {
@@ -114,7 +114,7 @@ func TestApprovalNodesAcceptOuterNames(t *testing.T) {
 
 	d := compile(t, e, g, "v1", "lookup", "human")
 	snap, err := d.Run(context.Background(), e.id, record{}, "")
-	require.ErrorIs(t, err, durable.ErrApprovalRequired)
+	require.ErrorIs(t, err, agentErrors.ErrApprovalRequired)
 	require.Equal(t, "human", snap.Node, "兜底可列入审批")
 	snap, err = d.Run(context.Background(), e.id, record{}, snap.Key)
 	require.NoError(t, err)
@@ -130,7 +130,7 @@ func TestRouterParallelMemberApprovedByOuterName(t *testing.T) {
 	e := newEnv(t, "parallel-approval")
 	d := compile(t, e, g, "v1", "lookup")
 	snap, err := d.Run(context.Background(), e.id, record{}, "")
-	require.ErrorIs(t, err, durable.ErrApprovalRequired)
+	require.ErrorIs(t, err, agentErrors.ErrApprovalRequired)
 	require.Equal(t, "lookup", snap.Node)
 	snap, err = d.Run(context.Background(), e.id, record{}, snap.Key)
 	require.NoError(t, err)

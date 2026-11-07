@@ -2,10 +2,10 @@ package budget
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/kart-io/goagent/core/usage"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // UsageEvent contains one attempt's evidence and an optional cumulative ledger
@@ -60,7 +60,7 @@ func usageStatistics(ctx context.Context, c *Controller) (report AttributionRepo
 	defer func() {
 		if recover() != nil {
 			report = AttributionReport{}
-			err = fmt.Errorf("usage statistics query panicked")
+			err = agentErrors.Newf(agentErrors.CodeAgentExecution, "usage statistics query panicked").WithComponent("budget").WithOperation("usage_statistics")
 		}
 	}()
 	return c.Attribution(ctx)

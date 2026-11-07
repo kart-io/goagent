@@ -15,92 +15,6 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-// ErrorCode defines different error categories for agent operations
-type ErrorCode string
-
-const (
-	// Agent execution errors
-	CodeAgentExecution      ErrorCode = "AGENT_EXECUTION"
-	CodeAgentValidation     ErrorCode = "AGENT_VALIDATION"
-	CodeAgentNotFound       ErrorCode = "AGENT_NOT_FOUND"
-	CodeAgentInitialization ErrorCode = "AGENT_INITIALIZATION"
-
-	// Tool errors
-	CodeToolExecution      ErrorCode = "TOOL_EXECUTION"
-	CodeToolNotFound       ErrorCode = "TOOL_NOT_FOUND"
-	CodeToolValidation     ErrorCode = "TOOL_VALIDATION"
-	CodeToolTimeout        ErrorCode = "TOOL_TIMEOUT"
-	CodeToolRetryExhausted ErrorCode = "TOOL_RETRY_EXHAUSTED"
-
-	// Middleware errors
-	CodeMiddlewareExecution  ErrorCode = "MIDDLEWARE_EXECUTION"
-	CodeMiddlewareChain      ErrorCode = "MIDDLEWARE_CHAIN"
-	CodeMiddlewareValidation ErrorCode = "MIDDLEWARE_VALIDATION"
-
-	// State management errors
-	CodeStateLoad       ErrorCode = "STATE_LOAD"
-	CodeStateSave       ErrorCode = "STATE_SAVE"
-	CodeStateValidation ErrorCode = "STATE_VALIDATION"
-	CodeStateCheckpoint ErrorCode = "STATE_CHECKPOINT"
-
-	// Stream processing errors
-	CodeStreamRead    ErrorCode = "STREAM_READ"
-	CodeStreamWrite   ErrorCode = "STREAM_WRITE"
-	CodeStreamTimeout ErrorCode = "STREAM_TIMEOUT"
-	CodeStreamClosed  ErrorCode = "STREAM_CLOSED"
-
-	// LLM errors
-	CodeLLMRequest   ErrorCode = "LLM_REQUEST"
-	CodeLLMResponse  ErrorCode = "LLM_RESPONSE"
-	CodeLLMTimeout   ErrorCode = "LLM_TIMEOUT"
-	CodeLLMRateLimit ErrorCode = "LLM_RATE_LIMIT"
-
-	// Context errors
-	CodeContextCanceled ErrorCode = "CONTEXT_CANCELED"
-	CodeContextTimeout  ErrorCode = "CONTEXT_TIMEOUT"
-
-	// General errors
-	CodeInvalidInput   ErrorCode = "INVALID_INPUT"
-	CodeInvalidConfig  ErrorCode = "INVALID_CONFIG"
-	CodeNotImplemented ErrorCode = "NOT_IMPLEMENTED"
-	CodeInternal       ErrorCode = "INTERNAL_ERROR"
-
-	// Distributed/Network errors
-	CodeDistributedConnection    ErrorCode = "DISTRIBUTED_CONNECTION"
-	CodeDistributedSerialization ErrorCode = "DISTRIBUTED_SERIALIZATION"
-	CodeDistributedCoordination  ErrorCode = "DISTRIBUTED_COORDINATION"
-	CodeDistributedScheduling    ErrorCode = "DISTRIBUTED_SCHEDULING"
-	CodeDistributedHeartbeat     ErrorCode = "DISTRIBUTED_HEARTBEAT"
-	CodeDistributedRegistry      ErrorCode = "DISTRIBUTED_REGISTRY"
-
-	// Retrieval/RAG errors
-	CodeRetrievalSearch    ErrorCode = "RETRIEVAL_SEARCH"
-	CodeRetrievalEmbedding ErrorCode = "RETRIEVAL_EMBEDDING"
-	CodeDocumentNotFound   ErrorCode = "DOCUMENT_NOT_FOUND"
-	CodeVectorDimMismatch  ErrorCode = "VECTOR_DIM_MISMATCH"
-
-	// Parser errors
-	CodeParserFailed       ErrorCode = "PARSER_FAILED"
-	CodeParserInvalidJSON  ErrorCode = "PARSER_INVALID_JSON"
-	CodeParserMissingField ErrorCode = "PARSER_MISSING_FIELD"
-
-	// Store errors (supplemental)
-	CodeStoreConnection    ErrorCode = "STORE_CONNECTION"
-	CodeStoreSerialization ErrorCode = "STORE_SERIALIZATION"
-	CodeStoreNotFound      ErrorCode = "STORE_NOT_FOUND"
-
-	// Router errors
-	CodeRouterNoMatch  ErrorCode = "ROUTER_NO_MATCH"
-	CodeRouterFailed   ErrorCode = "ROUTER_FAILED"
-	CodeRouterOverload ErrorCode = "ROUTER_OVERLOAD"
-
-	// Plugin/Type system errors
-	CodeTypeMismatch  ErrorCode = "TYPE_MISMATCH"
-	CodeAlreadyExists ErrorCode = "ALREADY_EXISTS"
-	CodeNotFound      ErrorCode = "NOT_FOUND"
-	CodeInvalidOutput ErrorCode = "INVALID_OUTPUT"
-)
-
 // AgentError is the structured error type for all agent operations
 //
 // It provides:
@@ -199,7 +113,7 @@ func (e *AgentError) LogValue() slog.Value {
 	}
 
 	if e.Cause != nil {
-		attrs = append(attrs, slog.String("cause", e.Cause.Error()))
+		attrs = append(attrs, slog.String("cause", fmt.Sprint(e.Cause)))
 	}
 
 	return slog.GroupValue(attrs...)
@@ -235,7 +149,7 @@ func (e *AgentError) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	}
 
 	if e.Cause != nil {
-		enc.AddString("cause", e.Cause.Error())
+		enc.AddString("cause", fmt.Sprint(e.Cause))
 	}
 	return nil
 }
@@ -553,16 +467,52 @@ func (e *AgentError) WithContextMap(ctx map[string]interface{}) *AgentError {
 }
 
 // GetCode extracts the error code from any error.
-// err 为 nil 时返回空字符串；不是 *AgentError（也未包装）时返回 CodeInternal。
+// err 为 nil 时返回空字符串；按错误链顺序取首个框架错误码，未知错误返回 CodeInternal。
 func GetCode(err error) ErrorCode {
 	if err == nil {
 		return ""
 	}
-	var agentErr *AgentError
-	if errors.As(err, &agentErr) && agentErr != nil {
-		return agentErr.Code
+	if code, ok := findCode(err); ok {
+		return code
 	}
 	return CodeInternal
+}
+
+// 按标准错误树的深度优先顺序逐节点取码，同时保留自定义 As 的类型投影。
+func findCode(err error) (ErrorCode, bool) {
+	for err != nil {
+		if coded, ok := err.(CodedError); ok {
+			return coded.ErrorCode(), true
+		}
+		if projected, ok := err.(interface{ As(any) bool }); ok {
+			var coded CodedError
+			if projected.As(&coded) && coded != nil {
+				return coded.ErrorCode(), true
+			}
+			var business *AgentError
+			if projected.As(&business) && business != nil {
+				return business.Code, true
+			}
+			var signal *SentinelError
+			if projected.As(&signal) && signal != nil {
+				return signal.ErrorCode(), true
+			}
+		}
+		switch node := err.(type) {
+		case interface{ Unwrap() error }:
+			err = node.Unwrap()
+		case interface{ Unwrap() []error }:
+			for _, child := range node.Unwrap() {
+				if code, ok := findCode(child); ok {
+					return code, true
+				}
+			}
+			return "", false
+		default:
+			return "", false
+		}
+	}
+	return "", false
 }
 
 // GetOperation extracts the operation from any error

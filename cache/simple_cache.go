@@ -5,6 +5,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // SimpleCache 简化的缓存实现
@@ -60,14 +62,14 @@ func (c *SimpleCache) Get(ctx context.Context, key string) (interface{}, error) 
 	v, ok := c.data.Load(key)
 	if !ok {
 		c.misses.Add(1)
-		return nil, ErrCacheMiss
+		return nil, agentErrors.ErrCacheMiss
 	}
 
 	entry := v.(*cacheEntry)
 	if time.Now().After(entry.expiresAt) {
 		c.data.Delete(key)
 		c.misses.Add(1)
-		return nil, ErrCacheMiss
+		return nil, agentErrors.ErrCacheMiss
 	}
 
 	c.hits.Add(1)

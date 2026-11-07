@@ -9,7 +9,8 @@ import (
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
-	"github.com/kart-io/goagent/llm/constants"
+
+	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/store/memory"
 	"github.com/kart-io/goagent/tools"
 )
@@ -47,8 +48,8 @@ func (s *SimpleLLMClient) CompleteToolsStream(ctx context.Context, req *llm.Comp
 	return s.CompleteStream(ctx, req)
 }
 
-func (s *SimpleLLMClient) Provider() constants.Provider {
-	return constants.ProviderCustom
+func (s *SimpleLLMClient) Provider() shared.Provider {
+	return shared.ProviderCustom
 }
 
 func main() {

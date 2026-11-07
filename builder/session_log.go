@@ -2,13 +2,12 @@ package builder
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/kart-io/goagent/codec/json"
-
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/session"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/tools"
@@ -52,7 +51,7 @@ func (a *ConfigurableAgent[C, S]) sessionLogID(ctx context.Context) string {
 func (a *ConfigurableAgent[C, S]) openSessionTurn(ctx context.Context, input string) (*sessionTurn, []llm.Message, error) {
 	id := a.sessionLogID(ctx)
 	if id == "" {
-		return nil, nil, errors.New("会话日志需要会话 ID")
+		return nil, nil, agentErrors.NewInvalidConfigError("builder", "session_id", "会话日志需要会话 ID")
 	}
 	rec, _, err := session.OpenRecorder(ctx, a.config.SessionLog, id)
 	if err != nil {
@@ -82,7 +81,7 @@ func (a *ConfigurableAgent[C, S]) openSessionTurn(ctx context.Context, input str
 		}
 		if key != "" && d.ExecutionKey == key {
 			if d.Input != input {
-				return nil, nil, fmt.Errorf("同一执行键的原始输入不能改变")
+				return nil, nil, agentErrors.Newf(agentErrors.CodeConflict, "同一执行键的原始输入不能改变").WithComponent("builder").WithOperation("open_session_turn")
 			}
 			// 恢复中的持久运行：历史是本轮之前的对话，本轮已记录的部分在同步时与回放的消息一致。
 			var before []session.Event
@@ -132,11 +131,11 @@ func completedSessionTurn(events []session.Event, key, input string) (int, error
 			continue
 		}
 		if start.Input != input || laterTurn {
-			return -1, fmt.Errorf("执行键已绑定其他输入或历史轮次，须使用新的执行键")
+			return -1, agentErrors.Newf(agentErrors.CodeConflict, "执行键已绑定其他输入或历史轮次，须使用新的执行键").WithComponent("builder").WithOperation("completed_session_turn")
 		}
 		for _, ev := range events[i+1:] {
 			if ev.Type == session.TypeRewind {
-				return -1, fmt.Errorf("退回后的会话须使用新的执行键")
+				return -1, agentErrors.Newf(agentErrors.CodeConflict, "退回后的会话须使用新的执行键").WithComponent("builder").WithOperation("completed_session_turn")
 			}
 		}
 		for _, ev := range events[i+1:] {
@@ -148,7 +147,7 @@ func completedSessionTurn(events []session.Event, key, input string) (int, error
 				return -1, err
 			}
 			if end.Aborted {
-				return -1, fmt.Errorf("已中止的会话轮次须使用新的执行键")
+				return -1, agentErrors.Newf(agentErrors.CodeConflict, "已中止的会话轮次须使用新的执行键").WithComponent("builder").WithOperation("completed_session_turn")
 			}
 			return i, nil
 		}
@@ -190,7 +189,7 @@ func (t *sessionTurn) sync(ctx context.Context, messages []llm.Message) error {
 			return err
 		}
 		if t.completed {
-			return fmt.Errorf("已完成轮次的重放对话与会话日志不一致")
+			return agentErrors.Newf(agentErrors.CodeStateValidation, "已完成轮次的重放对话与会话日志不一致").WithComponent("builder").WithOperation("sync")
 		}
 		t.resumed = 0
 	}

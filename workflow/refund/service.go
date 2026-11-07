@@ -7,12 +7,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"time"
-)
 
-// ErrNotFound is returned by a Transaction for an absent record.
-var ErrNotFound = errors.New("refund record not found")
+	agentErrors "github.com/kart-io/goagent/errors"
+)
 
 // Request binds a business idempotency key to reviewed order facts. IDs must be
 // namespaced by the host for its tenant; this package does not infer tenancy.
@@ -67,7 +65,7 @@ type AuthorizeFunc func(context.Context, string, Request) error
 
 func (f AuthorizeFunc) Authorize(ctx context.Context, actor string, req Request) error {
 	if f == nil {
-		return fmt.Errorf("authorizer is required")
+		return agentErrors.Newf(agentErrors.CodeInvalidConfig, "authorizer is required").WithComponent("workflow/refund").WithOperation("authorize")
 	}
 	return f(ctx, actor, req)
 }
@@ -98,7 +96,7 @@ func (s *Service) transact(ctx context.Context, f func(Transaction) error) error
 		return err
 	}
 	if s == nil || s.Store == nil || s.Authorizer == nil || s.Policy == nil {
-		return fmt.Errorf("store, authorizer and policy are required")
+		return agentErrors.Newf(agentErrors.CodeInvalidConfig, "store, authorizer and policy are required").WithComponent("workflow/refund").WithOperation("transact")
 	}
 	return s.Store.Transaction(ctx, f)
 }
@@ -107,7 +105,7 @@ func sameIntent(a, b Request) bool {
 }
 func validIntent(req Request) error {
 	if req.RequestID == "" || req.OrderID == "" || req.AmountCents <= 0 {
-		return fmt.Errorf("business request ID, order ID and positive amount are required")
+		return agentErrors.Newf(agentErrors.CodeInvalidInput, "business request ID, order ID and positive amount are required").WithComponent("workflow/refund").WithOperation("valid_intent")
 	}
 	return nil
 }
@@ -120,14 +118,14 @@ func (s *Service) Existing(ctx context.Context, req Request) (out Request, found
 	}
 	err = s.transact(ctx, func(tx Transaction) error {
 		stored, _, e := tx.Request(ctx, req.RequestID)
-		if errors.Is(e, ErrNotFound) {
+		if errors.Is(e, agentErrors.ErrRefundNotFound) {
 			return nil
 		}
 		if e != nil {
 			return e
 		}
 		if !sameIntent(stored, req) {
-			return fmt.Errorf("business request ID belongs to a different refund")
+			return agentErrors.Newf(agentErrors.CodeConflict, "business request ID belongs to a different refund").WithComponent("workflow/refund").WithOperation("existing")
 		}
 		out, found = stored, true
 		return nil
@@ -138,17 +136,17 @@ func (s *Service) Existing(ctx context.Context, req Request) (out Request, found
 func (s *Service) checkCurrent(ctx context.Context, tx Transaction, req Request) error {
 	deadline, err := time.Parse(time.RFC3339Nano, req.ValidUntil)
 	if err != nil || !s.now().Before(deadline) {
-		return fmt.Errorf("approval expired; create a new reviewed business request")
+		return agentErrors.Newf(agentErrors.CodeAccessDenied, "approval expired; create a new reviewed business request").WithComponent("workflow/refund").WithOperation("check_current")
 	}
 	order, err := tx.Order(ctx, req.OrderID)
 	if err != nil {
 		return err
 	}
 	if order.Version != req.OrderVersion || order.PaidCents != req.PaidCents || order.Currency != req.Currency || order.DeliveryDays != req.DeliveryDays {
-		return fmt.Errorf("order changed; a new review is required")
+		return agentErrors.Newf(agentErrors.CodeConflict, "order changed; a new review is required").WithComponent("workflow/refund").WithOperation("check_current")
 	}
 	if req.AmountCents <= 0 || req.AmountCents > order.PaidCents || order.Currency == "" || order.Version <= 0 {
-		return fmt.Errorf("invalid refund amount, currency or order version")
+		return agentErrors.Newf(agentErrors.CodeInvalidInput, "invalid refund amount, currency or order version").WithComponent("workflow/refund").WithOperation("check_current")
 	}
 	return s.Policy(ctx, req, order)
 }
@@ -158,18 +156,18 @@ func (s *Service) Register(ctx context.Context, req Request) (out Request, err e
 		return
 	}
 	if req.ReceiptID != "" {
-		return out, fmt.Errorf("new request cannot contain a receipt")
+		return out, agentErrors.Newf(agentErrors.CodeInvalidInput, "new request cannot contain a receipt").WithComponent("workflow/refund").WithOperation("register")
 	}
 	err = s.transact(ctx, func(tx Transaction) error {
 		stored, _, e := tx.Request(ctx, req.RequestID)
 		if e == nil {
 			if !sameIntent(stored, req) {
-				return fmt.Errorf("business request ID belongs to a different refund")
+				return agentErrors.Newf(agentErrors.CodeConflict, "business request ID belongs to a different refund").WithComponent("workflow/refund").WithOperation("register")
 			}
 			out = stored
 			return nil
 		}
-		if !errors.Is(e, ErrNotFound) {
+		if !errors.Is(e, agentErrors.ErrRefundNotFound) {
 			return e
 		}
 		if e = s.checkCurrent(ctx, tx, req); e != nil {
@@ -194,7 +192,7 @@ func (s *Service) Approve(ctx context.Context, req Request, actor string) error 
 		return err
 	}
 	if actor == "" {
-		return fmt.Errorf("authenticated approver is required")
+		return agentErrors.Newf(agentErrors.CodeAccessDenied, "authenticated approver is required").WithComponent("workflow/refund").WithOperation("approve")
 	}
 	return s.transact(ctx, func(tx Transaction) error {
 		stored, _, err := tx.Request(ctx, req.RequestID)
@@ -202,7 +200,7 @@ func (s *Service) Approve(ctx context.Context, req Request, actor string) error 
 			return err
 		}
 		if stored != req {
-			return fmt.Errorf("approval payload differs from registered request")
+			return agentErrors.Newf(agentErrors.CodeConflict, "approval payload differs from registered request").WithComponent("workflow/refund").WithOperation("approve")
 		}
 		if err = s.Authorizer.Authorize(ctx, actor, stored); err != nil {
 			return err
@@ -223,7 +221,7 @@ func (s *Service) Refund(ctx context.Context, key string, req Request) (receipt 
 		return
 	}
 	if key == "" {
-		return "", fmt.Errorf("execution key is required")
+		return "", agentErrors.Newf(agentErrors.CodeInvalidInput, "execution key is required").WithComponent("workflow/refund").WithOperation("refund")
 	}
 	err = s.transact(ctx, func(tx Transaction) error {
 		stored, actor, e := tx.Request(ctx, req.RequestID)
@@ -231,20 +229,20 @@ func (s *Service) Refund(ctx context.Context, key string, req Request) (receipt 
 			return e
 		}
 		if stored != req {
-			return fmt.Errorf("business request ID belongs to a different refund")
+			return agentErrors.Newf(agentErrors.CodeConflict, "business request ID belongs to a different refund").WithComponent("workflow/refund").WithOperation("refund")
 		}
 		receipt, e = tx.Receipt(ctx, req.RequestID)
 		if e == nil {
 			if receipt == "" {
-				return fmt.Errorf("empty committed receipt")
+				return agentErrors.Newf(agentErrors.CodeStateValidation, "empty committed receipt").WithComponent("workflow/refund").WithOperation("refund")
 			}
 			return nil
 		}
-		if !errors.Is(e, ErrNotFound) {
+		if !errors.Is(e, agentErrors.ErrRefundNotFound) {
 			return e
 		}
 		if actor == "" {
-			return fmt.Errorf("refund requires an authorized approval")
+			return agentErrors.Newf(agentErrors.CodeAccessDenied, "refund requires an authorized approval").WithComponent("workflow/refund").WithOperation("refund")
 		}
 		if e = s.Authorizer.Authorize(ctx, actor, stored); e != nil {
 			return e
@@ -257,7 +255,7 @@ func (s *Service) Refund(ctx context.Context, key string, req Request) (receipt 
 			return e
 		}
 		if refunded < 0 || refunded > req.PaidCents || req.AmountCents > req.PaidCents-refunded {
-			return fmt.Errorf("cumulative refund exceeds paid amount")
+			return agentErrors.Newf(agentErrors.CodeInvalidInput, "cumulative refund exceeds paid amount").WithComponent("workflow/refund").WithOperation("refund")
 		}
 		hash := sha256.Sum256([]byte(req.RequestID))
 		receipt = "demo-refund-" + hex.EncodeToString(hash[:])

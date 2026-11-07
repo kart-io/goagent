@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -41,7 +42,7 @@ type Store struct {
 // New 以 dir 为溢出目录（不存在时创建），结果的文本形式超过 maxBytes 字节时溢出。
 func New(dir string, maxBytes int) (*Store, error) {
 	if maxBytes <= 0 {
-		return nil, errors.New("spill max bytes must be positive")
+		return nil, agentErrors.New(agentErrors.CodeInvalidConfig, "spill max bytes must be positive").WithComponent("spill").WithOperation("new_store")
 	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err

@@ -10,8 +10,6 @@ import (
 	"sync"
 
 	"github.com/kart-io/goagent/codec/json"
-
-	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/middleware"
 	"github.com/kart-io/goagent/core/usage"
@@ -111,9 +109,9 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 	lastFailure := ""
 	exhausted := func() error {
 		if lastFailure != "" {
-			return fmt.Errorf("模型调用达到 MaxIterations 上限，尚未生成答案；最近一次工具失败：%s", lastFailure)
+			return agentErrors.Newf(agentErrors.CodeExecutionLimit, "模型调用达到 MaxIterations 上限，尚未生成答案；最近一次工具失败：%s", lastFailure).WithComponent("builder").WithOperation("run_tool_events")
 		}
-		return fmt.Errorf("模型调用达到 MaxIterations 上限，尚未生成答案")
+		return agentErrors.Newf(agentErrors.CodeExecutionLimit, "模型调用达到 MaxIterations 上限，尚未生成答案").WithComponent("builder").WithOperation("run_tool_events")
 	}
 	emptyRetries := 0
 	// inputs 是尚未交给 PreStep 的用户输入条数，起始为轮次输入。
@@ -202,7 +200,7 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 			if lastFailure != "" {
 				return nil, fmt.Errorf("最终回答回合未提供工具，模型仍返回工具调用；%w", exhausted())
 			}
-			return nil, fmt.Errorf("最终回答回合未提供工具，模型仍返回工具调用")
+			return nil, agentErrors.Newf(agentErrors.CodeInvalidOutput, "最终回答回合未提供工具，模型仍返回工具调用").WithComponent("builder").WithOperation("run_tool_events")
 		}
 		if allowEmpty && isEmptyAnswer(turn) {
 			// 不追加空 assistant 消息：部分提供方拒绝空内容。
@@ -213,7 +211,7 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 		}
 		if len(turn.ToolCalls) == 0 {
 			if turn.FinishReason == "tool_calls" || strings.TrimSpace(turn.Content) == "" {
-				return nil, fmt.Errorf("模型未返回最终答案或完整工具调用")
+				return nil, agentErrors.Newf(agentErrors.CodeInvalidOutput, "模型未返回最终答案或完整工具调用").WithComponent("builder").WithOperation("run_tool_events")
 			}
 			metadata["answer_usage_reported"] = turn.Usage != nil
 			final := llm.Message{Role: "assistant", Content: turn.Content, ReasoningContent: turn.ReasoningContent, ProviderState: turn.ProviderState}
@@ -256,13 +254,13 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 		invalid := map[int]string{}
 		for i, tc := range turn.ToolCalls {
 			if tc.ID == "" || ids[tc.ID] || tc.Function.Name == "" {
-				return nil, fmt.Errorf("工具调用 ID 或名称无效")
+				return nil, agentErrors.Newf(agentErrors.CodeInvalidOutput, "工具调用 ID 或名称无效").WithComponent("builder").WithOperation("run_tool_events")
 			}
 			ids[tc.ID] = true
 			calls[i] = ToolCall{Name: tc.Function.Name}
 			if !slices.ContainsFunc(tools, func(t interfaces.Tool) bool { return t.Name() == tc.Function.Name }) {
 				if !a.config.ToolErrorFeedback {
-					return nil, fmt.Errorf("model requested unoffered tool %q", tc.Function.Name)
+					return nil, agentErrors.Newf(agentErrors.CodeInvalidOutput, "model requested unoffered tool %q", tc.Function.Name).WithComponent("builder").WithOperation("run_tool_events")
 				}
 				invalid[i] = unofferedToolMessage(tc.Function.Name, tools)
 				continue
@@ -275,7 +273,7 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 			calls[i].Input = args
 			if !ok {
 				if !a.config.ToolErrorFeedback {
-					return nil, fmt.Errorf("工具 %s 的参数必须为 JSON 对象", tc.Function.Name)
+					return nil, agentErrors.Newf(agentErrors.CodeInvalidOutput, "工具 %s 的参数必须为 JSON 对象", tc.Function.Name).WithComponent("builder").WithOperation("run_tool_events")
 				}
 				invalid[i] = fmt.Sprintf("工具 %s 的参数必须为 JSON 对象，请修正后重新调用", tc.Function.Name)
 			}
@@ -335,12 +333,12 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 				return nil, err
 			}
 			if output == nil {
-				return nil, fmt.Errorf("tool returned nil output")
+				return nil, agentErrors.Newf(agentErrors.CodeInvalidOutput, "tool returned nil output").WithComponent("builder").WithOperation("run_tool_events")
 			}
 			// 参数错误与业务拒绝按普通工具结果交给模型，其他失败不能成为答案。
 			if direct && !output.Success {
 				if !isArgumentErrorResult(output) && !isRejectedResult(output) {
-					return nil, fmt.Errorf("直接返回工具 %s 未成功完成", call.Name)
+					return nil, agentErrors.Newf(agentErrors.CodeInvalidOutput, "直接返回工具 %s 未成功完成", call.Name).WithComponent("builder").WithOperation("run_tool_events")
 				}
 			}
 			text, isText := output.Result.(string)
@@ -379,7 +377,7 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 			if direct {
 				answer := text
 				if output.Result == nil || (!isText && text == "null") || strings.TrimSpace(answer) == "" {
-					return nil, fmt.Errorf("直接返回工具 %s 返回空答案", call.Name)
+					return nil, agentErrors.Newf(agentErrors.CodeInvalidOutput, "直接返回工具 %s 返回空答案", call.Name).WithComponent("builder").WithOperation("run_tool_events")
 				}
 				metadata["answer_source"] = "tool"
 				metadata["return_direct_tool"] = call.Name
@@ -465,7 +463,7 @@ func (a *ConfigurableAgent[C, S]) errorFeedback(ctx context.Context, err error) 
 		return nil, false
 	}
 	var panicErr *agentErrors.PanicError
-	if durable.Waits(err) != nil || errors.Is(err, budget.ErrBudgetExceeded) || errors.As(err, &panicErr) {
+	if durable.Waits(err) != nil || errors.Is(err, agentErrors.ErrModelBudgetExceeded) || errors.As(err, &panicErr) {
 		return nil, false
 	}
 	return tools.Rejected("工具执行失败："+err.Error(), nil), true
@@ -507,7 +505,7 @@ func toolResultText(result any) (string, error) {
 
 func readToolTurn(ctx context.Context, stream <-chan *llm.StreamChunk, emit func(AgentEvent) error) (*llm.StreamChunk, error) {
 	if stream == nil {
-		return nil, fmt.Errorf("模型返回空流")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidOutput, "模型返回空流").WithComponent("builder").WithOperation("read_tool_turn")
 	}
 	var content strings.Builder
 	var result llm.StreamChunk
@@ -554,7 +552,7 @@ func readToolTurn(ctx context.Context, stream <-chan *llm.StreamChunk, emit func
 			}
 			if chunk.Done {
 				if chunk.FinishReason == "length" || chunk.FinishReason == "content_filter" {
-					return partial(), fmt.Errorf("模型输出未完整结束：%s", chunk.FinishReason)
+					return partial(), agentErrors.Newf(agentErrors.CodeInvalidOutput, "模型输出未完整结束：%s", chunk.FinishReason).WithComponent("builder").WithOperation("read_tool_turn")
 				}
 				return partial(), nil
 			}

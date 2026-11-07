@@ -4,7 +4,7 @@ import (
 	"github.com/kart-io/goagent/core/usage"
 	"time"
 
-	"github.com/kart-io/goagent/llm/constants"
+	shared "github.com/kart-io/goagent/constants"
 )
 
 // ClientOption 定义 LLM 客户端配置选项
@@ -13,16 +13,16 @@ type ClientOption func(*LLMOptions)
 // DefaultClientConfig 返回默认的客户端配置
 func DefaultClientConfig() *LLMOptions {
 	return &LLMOptions{
-		Provider:    constants.ProviderCustom,
-		MaxTokens:   2000,
-		Temperature: 0.7,
-		Timeout:     60,
-		TopP:        1.0,
+		Provider:    shared.ProviderCustom,
+		MaxTokens:   shared.DefaultClientMaxTokens,
+		Temperature: shared.DefaultTemperature,
+		Timeout:     shared.DefaultLLMTimeoutSeconds,
+		TopP:        shared.DefaultTopP,
 	}
 }
 
 // WithProvider 设置 LLM 提供商
-func WithProvider(provider constants.Provider) ClientOption {
+func WithProvider(provider shared.Provider) ClientOption {
 	return func(c *LLMOptions) {
 		c.Provider = provider
 	}

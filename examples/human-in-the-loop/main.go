@@ -13,6 +13,7 @@ import (
 	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/workflow"
 )
 
@@ -126,7 +127,7 @@ func run(ctx context.Context, args []string, output io.Writer) error {
 	default:
 		return fmt.Errorf("unknown action %q", *action)
 	}
-	if err != nil && (err != durable.ErrApprovalRequired || snapshot == nil || !snapshot.Waiting) {
+	if err != nil && (err != agentErrors.ErrApprovalRequired || snapshot == nil || !snapshot.Waiting) {
 		return err
 	}
 	if snapshot == nil {

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/store"
 	"github.com/stretchr/testify/require"
@@ -152,7 +153,7 @@ func TestReviewSavePreferenceReadSafety(t *testing.T) {
 		{"空值记录", &store.Value{Value: nil}, nil, false, nil},
 		{"空指针map记录", &store.Value{Value: map[string]interface{}(nil)}, nil, false, nil},
 		{"明确缺失", nil, nil, true, map[string]interface{}{"theme": "dark"}},
-		{"包装的缺失错误", nil, fmt.Errorf("读取：%w", ErrValueNotFound), true, map[string]interface{}{"theme": "dark"}},
+		{"包装的缺失错误", nil, fmt.Errorf("读取：%w", agentErrors.ErrToolValueNotFound), true, map[string]interface{}{"theme": "dark"}},
 		{"合并已有偏好", &store.Value{Value: map[string]interface{}{"language": "zh", "notifications": true}}, nil, true, map[string]interface{}{"language": "zh", "notifications": true, "theme": "dark"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

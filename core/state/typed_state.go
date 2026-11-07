@@ -12,7 +12,6 @@ import (
 	"sync"
 
 	"github.com/kart-io/goagent/codec/json"
-
 	agentErrors "github.com/kart-io/goagent/errors"
 )
 
@@ -187,28 +186,28 @@ func validateType(expected FieldType, value interface{}) error {
 	switch expected {
 	case FieldTypeString:
 		if kind != reflect.String {
-			return fmt.Errorf("expected string, got %s", kind)
+			return agentErrors.Newf(agentErrors.CodeStateValidation, "expected string, got %s", kind).WithComponent("state_schema").WithOperation("validate_type")
 		}
 	case FieldTypeInt:
 		if kind != reflect.Int && kind != reflect.Int64 && kind != reflect.Int32 &&
 			kind != reflect.Float64 { // JSON 数字默认解析为 float64
-			return fmt.Errorf("expected int, got %s", kind)
+			return agentErrors.Newf(agentErrors.CodeStateValidation, "expected int, got %s", kind).WithComponent("state_schema").WithOperation("validate_type")
 		}
 	case FieldTypeFloat:
 		if kind != reflect.Float64 && kind != reflect.Float32 {
-			return fmt.Errorf("expected float, got %s", kind)
+			return agentErrors.Newf(agentErrors.CodeStateValidation, "expected float, got %s", kind).WithComponent("state_schema").WithOperation("validate_type")
 		}
 	case FieldTypeBool:
 		if kind != reflect.Bool {
-			return fmt.Errorf("expected bool, got %s", kind)
+			return agentErrors.Newf(agentErrors.CodeStateValidation, "expected bool, got %s", kind).WithComponent("state_schema").WithOperation("validate_type")
 		}
 	case FieldTypeObject:
 		if kind != reflect.Map {
-			return fmt.Errorf("expected object, got %s", kind)
+			return agentErrors.Newf(agentErrors.CodeStateValidation, "expected object, got %s", kind).WithComponent("state_schema").WithOperation("validate_type")
 		}
 	case FieldTypeArray:
 		if kind != reflect.Slice && kind != reflect.Array {
-			return fmt.Errorf("expected array, got %s", kind)
+			return agentErrors.Newf(agentErrors.CodeStateValidation, "expected array, got %s", kind).WithComponent("state_schema").WithOperation("validate_type")
 		}
 	}
 

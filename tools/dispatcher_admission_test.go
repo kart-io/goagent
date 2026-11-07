@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/stretchr/testify/require"
 )
@@ -169,7 +170,7 @@ func TestDispatcherBothQueuesShareLimitAndCancellationDoesNotExecute(t *testing.
 	gated := admissionStart(ctx, d, "gate")
 	admissionWait(t, ctx, gateEntered)
 	_, err := d.Invoke(ctx, admissionRequest("quick"))
-	require.ErrorIs(t, err, ErrDispatcherBusy)
+	require.ErrorIs(t, err, agentErrors.ErrDispatcherBusy)
 	stopWait()
 	require.ErrorIs(t, <-waiting, context.Canceled)
 	admissionQueued(t, d, 0)
@@ -177,7 +178,7 @@ func TestDispatcherBothQueuesShareLimitAndCancellationDoesNotExecute(t *testing.
 	waiting2 := admissionStart(waitCtx2, d, "quick")
 	admissionQueued(t, d, 1)
 	_, err = d.Invoke(ctx, admissionRequest("quick"))
-	require.ErrorIs(t, err, ErrDispatcherBusy)
+	require.ErrorIs(t, err, agentErrors.ErrDispatcherBusy)
 	stopWait2()
 	require.ErrorIs(t, <-waiting2, context.Canceled)
 	close(releaseGate)

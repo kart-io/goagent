@@ -2,9 +2,10 @@
 package evaluation
 
 import (
-	"fmt"
 	"regexp"
 	"strconv"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // RetrievalMetrics uses unique retrieved IDs; irrelevant and duplicate results do
@@ -16,7 +17,7 @@ type RetrievalMetrics struct {
 
 func ScoreRetrieval(retrieved, relevant []string, k int) (RetrievalMetrics, error) {
 	if k <= 0 || len(relevant) == 0 {
-		return RetrievalMetrics{}, fmt.Errorf("positive k and relevance labels required")
+		return RetrievalMetrics{}, agentErrors.Newf(agentErrors.CodeInvalidInput, "positive k and relevance labels required").WithComponent("evaluation").WithOperation("score_retrieval")
 	}
 	labels := map[string]bool{}
 	for _, id := range relevant {
@@ -54,7 +55,7 @@ var citationPattern = regexp.MustCompile(`\[(\d+)\]`)
 
 func ScoreCitations(answer string, sources, relevant []string) (CitationMetrics, error) {
 	if len(relevant) == 0 {
-		return CitationMetrics{}, fmt.Errorf("citation relevance labels required")
+		return CitationMetrics{}, agentErrors.Newf(agentErrors.CodeInvalidInput, "citation relevance labels required").WithComponent("evaluation").WithOperation("score_citations")
 	}
 	labels := map[string]bool{}
 	for _, id := range relevant {

@@ -10,16 +10,12 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/codec/json"
-
 	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 type journalContext struct{}
 
 type replayOnlyContext struct{}
-
-// ErrReplayOnly 表示只读重放缺少已完成的持久记录；不得据此执行或核对新的副作用。
-var ErrReplayOnly = errors.New("只读重放需要已完成的持久记录")
 
 // WithReplayOnly 限制派生上下文中的 Do 只能回放已完成记录，不调用 run 或 Reconcile。
 // 宿主回调、授权逻辑及直接访问存储的代码仍须自行保证只读。
@@ -92,12 +88,6 @@ const (
 	operationVersion   = "goagent-operation-v2"
 )
 
-var ErrOperationAttention = errors.New("durable operation needs host attention")
-
-// ErrWaitNotResumable 表示没有声明 Resumable 的持久操作收到了等待：它以后不会重新进入，等待无法续跑，
-// 因此记为失败（FailureKind 为 not_resumable）。承载等待的操作（如包住子图的工具）须声明 Resumable。
-var ErrWaitNotResumable = errors.New("等待只能由声明 Resumable 的持久操作承载")
-
 type waitableContext struct{}
 
 // CanWait 报告在 ctx 中返回 *WaitError 能否被续跑：ctx 所在的最内层持久操作带日志且声明了 Resumable。
@@ -112,7 +102,7 @@ type OperationError struct{ ID, Kind string }
 func (e *OperationError) Error() string {
 	return fmt.Sprintf("operation %q needs host attention (%s)", e.ID, e.Kind)
 }
-func (e *OperationError) Unwrap() error { return ErrOperationAttention }
+func (e *OperationError) Unwrap() error { return agentErrors.ErrOperationAttention }
 
 // WaitStep locates one journaled operation on the path to a wait, outermost first.
 type WaitStep struct {
@@ -129,6 +119,14 @@ type WaitError struct {
 	Continuation json.RawMessage `json:"continuation,omitempty"`
 	// Cause 是本次等待的进程内诊断，如 validate 的 panic；不持久化，也不经 Unwrap 暴露，以免等待被当作失败。
 	Cause error `json:"-"`
+}
+
+// ErrorCode 标识等待分类，不改变等待叶子或诊断原因的展开规则。
+func (e *WaitError) ErrorCode() agentErrors.ErrorCode {
+	if e == nil {
+		return agentErrors.CodeInternal
+	}
+	return agentErrors.CodeWaiting
 }
 
 func (e *WaitError) Error() string {
@@ -174,7 +172,7 @@ func Waits(err error) []*WaitError {
 func decodeWaits(r *OperationRecord) ([]*WaitError, error) {
 	var waits []*WaitError
 	if json.Unmarshal(r.Continuation, &waits) != nil || len(waits) == 0 || slices.Contains(waits, nil) {
-		return nil, fmt.Errorf("invalid durable operation record")
+		return nil, agentErrors.Newf(agentErrors.CodeStateValidation, "invalid durable operation record").WithComponent("durable_operation").WithOperation("decode_waits")
 	}
 	return waits, nil
 }
@@ -203,7 +201,7 @@ func InspectOperation(ctx context.Context, id string) (record *OperationRecord, 
 	store, _ := ctx.Value(journalContext{}).(Store)
 	key := ChildKey(ExecutionKey(ctx), id)
 	if store == nil || key == "" {
-		return nil, fmt.Errorf("operation journal, parent key and ID required")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidInput, "operation journal, parent key and ID required").WithComponent("durable_operation").WithOperation("inspect_operation")
 	}
 	unlock, err := store.Lock(ctx, operationStorageID(key))
 	if err != nil {
@@ -222,12 +220,12 @@ func loadOperation(ctx context.Context, store Store, key, id string) (*Operation
 	if snapshot == nil || (snapshot.Version != operationVersion && snapshot.Version != operationVersionV1) || snapshot.RunID != operationStorageID(key) || json.Unmarshal(snapshot.Data, &r) != nil ||
 		r.ID != id || r.Key != key || r.InputHash == "" || r.Attempts < 1 || r.MaxAttempts < 1 || r.Attempts > r.MaxAttempts || !json.Valid(r.Value) ||
 		(r.Status != "pending" && r.Status != "completed" && r.Status != "failed" && r.Status != "waiting") {
-		return nil, fmt.Errorf("invalid durable operation record")
+		return nil, agentErrors.Newf(agentErrors.CodeStateValidation, "invalid durable operation record").WithComponent("durable_operation").WithOperation("load_operation")
 	}
 	// v1 记录没有等待与核对语义，不能被重新解释。
 	if (r.Status == "waiting") != (len(r.Continuation) > 0) || (r.Reconciled && r.Status != "completed") ||
 		(snapshot.Version == operationVersionV1 && (r.Status == "waiting" || r.Reconciled)) {
-		return nil, fmt.Errorf("invalid durable operation record")
+		return nil, agentErrors.Newf(agentErrors.CodeStateValidation, "invalid durable operation record").WithComponent("durable_operation").WithOperation("load_operation")
 	}
 	if r.Status == "waiting" {
 		if _, err := decodeWaits(&r); err != nil {
@@ -243,13 +241,13 @@ func loadOperation(ctx context.Context, store Store, key, id string) (*Operation
 // Effects around a process crash still need target-side idempotency by child key.
 func Do(ctx context.Context, id string, input json.RawMessage, policy OperationPolicy, run func(context.Context) (json.RawMessage, error)) (record *OperationRecord, err error) {
 	if id == "" || !json.Valid(input) || run == nil {
-		return nil, fmt.Errorf("operation requires ID, JSON intent and function")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidInput, "operation requires ID, JSON intent and function").WithComponent("durable_operation").WithOperation("do")
 	}
 	if policy.MaxAttempts == 0 {
 		policy.MaxAttempts = 1
 	}
 	if policy.MaxAttempts < 1 {
-		return nil, fmt.Errorf("positive operation attempt budget required")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "positive operation attempt budget required").WithComponent("durable_operation").WithOperation("do")
 	}
 	if err = ctx.Err(); err != nil {
 		return nil, err
@@ -265,7 +263,7 @@ func Do(ctx context.Context, id string, input json.RawMessage, policy OperationP
 	childCtx = context.WithValue(childCtx, interruptHostContext{}, false)
 	if store == nil || key == "" {
 		if replayOnly {
-			return nil, ErrReplayOnly
+			return nil, agentErrors.ErrReplayOnly
 		}
 		value, e := run(childCtx)
 		return &OperationRecord{ID: id, Key: key, Value: value, Attempts: 1}, e
@@ -282,11 +280,11 @@ func Do(ctx context.Context, id string, input json.RawMessage, policy OperationP
 		return nil, err
 	}
 	if replayOnly && (err != nil || record.Status != "completed") {
-		return nil, ErrReplayOnly
+		return nil, agentErrors.ErrReplayOnly
 	}
 	if err == nil {
 		if record.InputHash != inputHash || record.MaxAttempts != policy.MaxAttempts {
-			return record, fmt.Errorf("operation intent or attempt policy changed")
+			return record, agentErrors.Newf(agentErrors.CodeConflict, "operation intent or attempt policy changed").WithComponent("durable_operation").WithOperation("do")
 		}
 		if record.Status == "completed" {
 			record.Replayed = true
@@ -334,12 +332,12 @@ func Do(ctx context.Context, id string, input json.RawMessage, policy OperationP
 	}
 	if !json.Valid(value) {
 		value = json.RawMessage(`null`)
-		callErr = errors.Join(callErr, fmt.Errorf("operation output is not JSON"))
+		callErr = errors.Join(callErr, agentErrors.Newf(agentErrors.CodeInvalidOutput, "operation output is not JSON").WithComponent("durable_operation").WithOperation("do"))
 	}
 	record.Value, record.Status, record.FailureKind = value, "completed", ""
 	if waits := Waits(callErr); waits != nil && !policy.Resumable {
 		record.Status, record.FailureKind = "failed", "not_resumable"
-		callErr = fmt.Errorf("%w：操作 %q 收到 %v", ErrWaitNotResumable, id, callErr)
+		callErr = fmt.Errorf("%w：操作 %q 收到 %v", agentErrors.ErrWaitNotResumable, id, callErr)
 	} else if waits != nil {
 		record.Status = "waiting"
 		if record.Continuation, err = json.Marshal(waits); err != nil {
@@ -398,7 +396,7 @@ func reconcileOperation(ctx context.Context, reconcile func(context.Context) (js
 			value = json.RawMessage(`null`)
 		}
 		if !json.Valid(value) {
-			return nil, false, fmt.Errorf("reconciled output is not JSON")
+			return nil, false, agentErrors.Newf(agentErrors.CodeInvalidOutput, "reconciled output is not JSON").WithComponent("durable_operation").WithOperation("reconcile_operation")
 		}
 	}
 	return value, found, err

@@ -32,7 +32,7 @@ func TestResumeHumanInputUsesLatestCheckpointAndRejectsStaleKey(t *testing.T) {
 	run, err := graph.CompileDurable(ctx, cfg, workflow.WithResumeHandler(addHumanNumber))
 	require.NoError(t, err)
 	wait, err := run.Run(ctx, "human", 10, "")
-	require.ErrorIs(t, err, durable.ErrApprovalRequired)
+	require.ErrorIs(t, err, agentErrors.ErrApprovalRequired)
 	require.True(t, wait.Waiting)
 	require.Zero(t, effects.Load())
 	// Reconstruct the graph; the host's new initial state cannot replace saved state.
@@ -45,7 +45,7 @@ func TestResumeHumanInputUsesLatestCheckpointAndRejectsStaleKey(t *testing.T) {
 	require.Equal(t, 26, out.State)
 	require.EqualValues(t, 1, effects.Load())
 	_, err = run.Resume(ctx, "human", workflow.ResumeRequest{Key: wait.Key, Input: json.RawMessage(`100`)})
-	require.ErrorIs(t, err, workflow.ErrApprovalMismatch)
+	require.ErrorIs(t, err, agentErrors.ErrApprovalMismatch)
 	replayed, err := run.Run(ctx, "human", 999, "")
 	require.NoError(t, err)
 	require.Equal(t, 26, replayed.State)
@@ -92,7 +92,7 @@ func TestResumeRejectsWithoutChangingCheckpoint(t *testing.T) {
 			run, err := g.CompileDurable(ctx, workflow.DurableConfig{Store: store, Version: "v1", ApprovalNodes: []string{"effect"}}, opts...)
 			require.NoError(t, err)
 			wait, err := run.Run(ctx, "human", map[string]int{"n": 1}, "")
-			require.ErrorIs(t, err, durable.ErrApprovalRequired)
+			require.ErrorIs(t, err, agentErrors.ErrApprovalRequired)
 			before, err := store.Load(ctx, "human")
 			require.NoError(t, err)
 			req := workflow.ResumeRequest{Key: wait.Key, Input: json.RawMessage(`{}`)}
@@ -146,7 +146,7 @@ func TestResumeAcceptanceSurvivesNodeFailureWithoutReapplyingInput(t *testing.T)
 		}))
 	require.NoError(t, err)
 	wait, err := run.Run(ctx, "human", 10, "")
-	require.ErrorIs(t, err, durable.ErrApprovalRequired)
+	require.ErrorIs(t, err, agentErrors.ErrApprovalRequired)
 	_, err = run.Resume(ctx, "human", workflow.ResumeRequest{Key: wait.Key, Input: json.RawMessage(`3`)})
 	require.ErrorContains(t, err, "downstream unavailable")
 	snap, err := run.Snapshot(ctx, "human")
@@ -170,7 +170,7 @@ func TestConcurrentResumeAcceptsOnlyOneDecision(t *testing.T) {
 	other, err := g.CompileDurable(ctx, cfg, workflow.WithResumeHandler(addHumanNumber))
 	require.NoError(t, err)
 	wait, err := run.Run(ctx, "human", 10, "")
-	require.ErrorIs(t, err, durable.ErrApprovalRequired)
+	require.ErrorIs(t, err, agentErrors.ErrApprovalRequired)
 	results := make(chan error, 2)
 	var wg sync.WaitGroup
 	for _, r := range []*workflow.DurableGraph[int]{run, other} {
@@ -188,7 +188,7 @@ func TestConcurrentResumeAcceptsOnlyOneDecision(t *testing.T) {
 		if err == nil {
 			accepted++
 		} else {
-			require.ErrorIs(t, err, workflow.ErrApprovalMismatch)
+			require.ErrorIs(t, err, agentErrors.ErrApprovalMismatch)
 		}
 	}
 	require.Equal(t, 1, accepted)
@@ -228,7 +228,7 @@ func TestResumeHandlerCannotBeBypassedWithApprovalOnly(t *testing.T) {
 		workflow.DurableConfig{Store: newStore(t), Version: "v1", ApprovalNodes: []string{"effect"}}, workflow.WithResumeHandler(addHumanNumber))
 	require.NoError(t, err)
 	wait, err := run.Run(ctx, "human", 10, "")
-	require.ErrorIs(t, err, durable.ErrApprovalRequired)
+	require.ErrorIs(t, err, agentErrors.ErrApprovalRequired)
 	_, err = run.Run(ctx, "human", 0, wait.Key)
 	var rejected *workflow.ResumeRejectedError
 	require.ErrorAs(t, err, &rejected)
@@ -256,7 +256,7 @@ func TestResumeStreamStopsAtNextGateWithDistinctKey(t *testing.T) {
 	run, err := g.CompileDurable(ctx, workflow.DurableConfig{Store: newStore(t), Version: "v1", ApprovalNodes: []string{"loop"}}, workflow.WithResumeHandler(addHumanNumber))
 	require.NoError(t, err)
 	wait, err := run.Run(ctx, "human", 0, "")
-	require.ErrorIs(t, err, durable.ErrApprovalRequired)
+	require.ErrorIs(t, err, agentErrors.ErrApprovalRequired)
 	chunks, err := run.AsRunnable().Stream(ctx, workflow.RunRequest[int]{RunID: "human", Resume: &workflow.ResumeRequest{Key: wait.Key, Input: json.RawMessage(`1`)}})
 	require.NoError(t, err)
 	var next *workflow.GraphSnapshot[int]
@@ -274,7 +274,7 @@ func TestResumeStreamStopsAtNextGateWithDistinctKey(t *testing.T) {
 	require.Equal(t, 1, next.State)
 	require.NotEqual(t, wait.Key, next.Key)
 	_, err = run.Resume(ctx, "human", workflow.ResumeRequest{Key: wait.Key, Input: json.RawMessage(`9`)})
-	require.ErrorIs(t, err, workflow.ErrApprovalMismatch)
+	require.ErrorIs(t, err, agentErrors.ErrApprovalMismatch)
 	done, err := run.Resume(ctx, "human", workflow.ResumeRequest{Key: next.Key, Input: json.RawMessage(`1`)})
 	require.NoError(t, err)
 	require.True(t, done.Done)

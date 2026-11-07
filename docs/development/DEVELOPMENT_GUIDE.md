@@ -111,7 +111,7 @@ func weatherDispatcher() (*tools.Dispatcher, error) {
 在 `llm/providers` 中实现 `llm.Client`（`CompleteStream` 与 `Provider`）；要用于原生工具循环还须实现 `llm.ToolStreamClient`（参考 `openai_stream.go`、`deepseek_stream.go`、`gemini_native.go`）。构造函数沿用 `NewXxxWithOptions(opts ...llm.ClientOption)` 并复用 `common.BaseProvider`：
 
 ```go
-// 正式接入时把常量与环境变量名加到 llm/constants。
+// constants 指 github.com/kart-io/goagent/constants；正式接入时在该包维护提供商与环境变量。
 const ProviderMy constants.Provider = "myprovider"
 
 type MyClient struct {

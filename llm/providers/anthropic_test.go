@@ -15,10 +15,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/usage"
 	"github.com/kart-io/goagent/interfaces"
 	agentllm "github.com/kart-io/goagent/llm"
-	"github.com/kart-io/goagent/llm/constants"
 )
 
 type anthropicEvent struct{ name, data string }
@@ -82,7 +82,7 @@ var textEvents = []anthropicEvent{
 
 func TestAnthropicStreamText(t *testing.T) {
 	// 默认值断言不应读取开发者或宿主进程选择的模型。
-	t.Setenv(constants.EnvAnthropicModel, "")
+	t.Setenv(shared.EnvAnthropicModel, "")
 	bodies := make(chan map[string]any, 1)
 	server := anthropicServer(t, textEvents, bodies)
 	defer server.Close()
@@ -102,7 +102,7 @@ func TestAnthropicStreamText(t *testing.T) {
 	require.Equal(t, 6, final.Usage.CompletionTokens)
 
 	body := <-bodies
-	require.Equal(t, constants.AnthropicDefaultModel, body["model"])
+	require.Equal(t, shared.AnthropicDefaultModel, body["model"])
 	require.Equal(t, true, body["stream"])
 	// SDK 发送的 API 版本拒绝采样参数，显式设置也不得出现在请求中。
 	require.NotContains(t, body, "temperature")
@@ -226,7 +226,7 @@ func TestAnthropicRejectsReasoning(t *testing.T) {
 }
 
 func TestAnthropicRequiresAPIKey(t *testing.T) {
-	t.Setenv(constants.EnvAnthropicAPIKey, "")
+	t.Setenv(shared.EnvAnthropicAPIKey, "")
 	_, err := NewAnthropicWithOptions()
 	require.Error(t, err)
 }

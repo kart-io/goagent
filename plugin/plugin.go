@@ -4,12 +4,12 @@ package plugin
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/kart-io/goagent/builder"
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/middleware"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 )
 
@@ -66,10 +66,10 @@ func validateName(name string) error {
 		return err
 	}
 	if strings.Contains(name, "@") {
-		return fmt.Errorf("插件名 %q 不能包含 @", name)
+		return agentErrors.Newf(agentErrors.CodeInvalidConfig, "插件名 %q 不能包含 @", name).WithComponent("plugin").WithOperation("validate_name")
 	}
 	if strings.Contains(name, ".") {
-		return fmt.Errorf("插件名 %q 不能包含点号", name)
+		return agentErrors.Newf(agentErrors.CodeInvalidConfig, "插件名 %q 不能包含点号", name).WithComponent("plugin").WithOperation("validate_name")
 	}
 	return nil
 }
@@ -79,11 +79,11 @@ func validateVersion(version string) error { return validateIdent("插件版本"
 func validateIdent(kind, v string) error {
 	switch {
 	case v == "":
-		return fmt.Errorf("%s为空", kind)
+		return agentErrors.Newf(agentErrors.CodeInvalidConfig, "%s为空", kind).WithComponent("plugin").WithOperation("validate_ident")
 	case strings.TrimSpace(v) != v:
-		return fmt.Errorf("%s %q 含首尾空白", kind, v)
+		return agentErrors.Newf(agentErrors.CodeInvalidConfig, "%s %q 含首尾空白", kind, v).WithComponent("plugin").WithOperation("validate_ident")
 	case strings.Contains(v, "/"):
-		return fmt.Errorf("%s %q 不能包含 /", kind, v)
+		return agentErrors.Newf(agentErrors.CodeInvalidConfig, "%s %q 不能包含 /", kind, v).WithComponent("plugin").WithOperation("validate_ident")
 	}
 	return nil
 }

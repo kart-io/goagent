@@ -2,10 +2,10 @@ package multiagent
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/workflow"
 )
 
@@ -23,23 +23,23 @@ type RouterConfig[T any] struct {
 func RouterSupervisor[T any](cfg workflow.Config, r RouterConfig[T]) (*workflow.Graph[T], error) {
 	switch {
 	case r.MaxRounds <= 0:
-		return nil, errors.New("RouterSupervisor 的 MaxRounds 必须大于 0")
+		return nil, agentErrors.NewInvalidConfigError("multiagent", "max_rounds", "RouterSupervisor 的 MaxRounds 必须大于 0")
 	case r.MaxRounds > (math.MaxInt-1)/2:
-		return nil, errors.New("RouterSupervisor 的 2 × MaxRounds + 1 超出 int 范围")
+		return nil, agentErrors.NewInvalidConfigError("multiagent", "max_rounds", "RouterSupervisor 的 2 × MaxRounds + 1 超出 int 范围")
 	case r.Next == nil:
-		return nil, errors.New("RouterSupervisor 需要 Next")
+		return nil, agentErrors.NewInvalidConfigError("multiagent", "next", "RouterSupervisor 需要 Next")
 	case len(r.Members) == 0:
-		return nil, errors.New("RouterSupervisor 需要至少一个成员")
+		return nil, agentErrors.NewInvalidConfigError("multiagent", "members", "RouterSupervisor 需要至少一个成员")
 	}
 	names := make([]string, len(r.Members))
 	for i, m := range r.Members {
 		if m.Name == Finish || m.Name == r.Supervisor.Name {
-			return nil, fmt.Errorf("成员名 %q 不能是 %s 或 Supervisor 名", m.Name, Finish)
+			return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "成员名 %q 不能是 %s 或 Supervisor 名", m.Name, Finish).WithComponent("multiagent").WithOperation("router_supervisor")
 		}
 		names[i] = m.Name
 	}
 	if r.Fallback != nil && r.Fallback.Name == r.Supervisor.Name {
-		return nil, fmt.Errorf("兜底名 %q 不能与 Supervisor 同名", r.Fallback.Name)
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "兜底名 %q 不能与 Supervisor 同名", r.Fallback.Name).WithComponent("multiagent").WithOperation("router_supervisor")
 	}
 	g, err := newGraph[T](cfg, 2*r.MaxRounds+1)
 	if err != nil {

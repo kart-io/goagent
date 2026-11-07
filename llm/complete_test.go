@@ -3,11 +3,10 @@ package llm
 import (
 	"context"
 	"errors"
+	shared2 "github.com/kart-io/goagent/constants"
 	"io"
 	"testing"
 	"time"
-
-	"github.com/kart-io/goagent/llm/constants"
 )
 
 type scriptedStream struct {
@@ -27,7 +26,7 @@ func (s scriptedStream) CompleteStream(ctx context.Context, _ *CompletionRequest
 	return out, nil
 }
 
-func (scriptedStream) Provider() constants.Provider { return constants.ProviderCustom }
+func (scriptedStream) Provider() shared2.Provider { return shared2.ProviderCustom }
 
 func TestCompleteCollectsTerminalChunk(t *testing.T) {
 	client := scriptedStream{chunks: []*StreamChunk{
@@ -39,7 +38,7 @@ func TestCompleteCollectsTerminalChunk(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if resp.Content != "你好" || resp.Model != "m-1" || resp.FinishReason != "stop" || resp.TokensUsed != 5 || resp.Usage.PromptTokens != 2 || resp.Provider != string(constants.ProviderCustom) {
+	if resp.Content != "你好" || resp.Model != "m-1" || resp.FinishReason != "stop" || resp.TokensUsed != 5 || resp.Usage.PromptTokens != 2 || resp.Provider != string(shared2.ProviderCustom) {
 		t.Fatalf("unexpected response: %+v", resp)
 	}
 }
@@ -85,7 +84,7 @@ func (b blockingStream) CompleteStream(context.Context, *CompletionRequest) (<-c
 	return b, nil
 }
 
-func (blockingStream) Provider() constants.Provider { return constants.ProviderCustom }
+func (blockingStream) Provider() shared2.Provider { return shared2.ProviderCustom }
 
 type completionStreamFunc func(context.Context, *CompletionRequest) (<-chan *StreamChunk, error)
 
@@ -93,7 +92,7 @@ func (f completionStreamFunc) CompleteStream(ctx context.Context, req *Completio
 	return f(ctx, req)
 }
 
-func (completionStreamFunc) Provider() constants.Provider { return constants.ProviderCustom }
+func (completionStreamFunc) Provider() shared2.Provider { return shared2.ProviderCustom }
 
 func TestCompleteDoesNotRequestWithFinishedContext(t *testing.T) {
 	for _, mode := range []string{"取消", "超时"} {

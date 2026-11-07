@@ -4,16 +4,15 @@ import (
 	"testing"
 	"time"
 
+	shared2 "github.com/kart-io/goagent/constants"
 	"github.com/stretchr/testify/assert"
-
-	"github.com/kart-io/goagent/llm/constants"
 )
 
 // TestDefaultConfig 测试默认配置
 func TestDefaultConfig(t *testing.T) {
 	config := DefaultClientConfig()
 
-	assert.Equal(t, constants.ProviderCustom, config.Provider)
+	assert.Equal(t, shared2.ProviderCustom, config.Provider)
 	assert.Equal(t, 2000, config.MaxTokens)
 	assert.Equal(t, 0.7, config.Temperature)
 	assert.Equal(t, 60, config.Timeout)
@@ -23,7 +22,7 @@ func TestDefaultConfig(t *testing.T) {
 // TestBasicOptions 测试基本选项
 func TestBasicOptions(t *testing.T) {
 	config := NewLLMOptionsWithOptions(
-		WithProvider(constants.ProviderAnthropic),
+		WithProvider(shared2.ProviderAnthropic),
 		WithAPIKey("test-key"),
 		WithModel("claude-3"),
 		WithMaxTokens(3000),
@@ -31,7 +30,7 @@ func TestBasicOptions(t *testing.T) {
 		WithTimeout(120*time.Second),
 	)
 
-	assert.Equal(t, constants.ProviderAnthropic, config.Provider)
+	assert.Equal(t, shared2.ProviderAnthropic, config.Provider)
 	assert.Equal(t, "test-key", config.APIKey)
 	assert.Equal(t, "claude-3", config.Model)
 	assert.Equal(t, 3000, config.MaxTokens)
@@ -79,7 +78,7 @@ func TestOptionOverride(t *testing.T) {
 func TestApplyOptionsToExistingConfig(t *testing.T) {
 	// 现有配置
 	config := &LLMOptions{
-		Provider:    constants.ProviderOpenAI,
+		Provider:    shared2.ProviderOpenAI,
 		APIKey:      "original-key",
 		Model:       "gpt-3.5-turbo",
 		MaxTokens:   1000,

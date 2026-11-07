@@ -5,9 +5,9 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/builder/contextpolicy"
+	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/session"
 
-	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/usage"
 )
@@ -203,14 +203,14 @@ func (b *AgentBuilder[C, S]) WithReplayablePartialOutput() *AgentBuilder[C, S] {
 // DefaultAgentConfig 返回默认配置
 func DefaultAgentConfig() *AgentConfig {
 	return &AgentConfig{
-		MaxIterations:          10,
-		Timeout:                core.DefaultAgentExecutionTimeout,
+		MaxIterations:          shared.DefaultAgentMaxIterations,
+		Timeout:                shared.DefaultAgentExecutionTimeout,
 		EnableAutoSave:         true,
-		MaxTokens:              2000,
-		Temperature:            0.7,
+		MaxTokens:              shared.DefaultAgentMaxTokens,
+		Temperature:            shared.DefaultTemperature,
 		SessionID:              fmt.Sprintf("session-%d", time.Now().UnixNano()),
 		Verbose:                false,
-		MaxConversationHistory: 20, // 默认保留最近 20 轮对话
+		MaxConversationHistory: shared.DefaultConversationHistory,
 	}
 }
 

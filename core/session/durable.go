@@ -10,6 +10,7 @@ import (
 	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // DurableStore 把会话 id 的日志作为 durable.Store：每次 Save 追加一条 boundary/snapshot 事件，Load 取该 ID 最近一次写入的快照。
@@ -38,7 +39,7 @@ func (s *durableStore) Lock(ctx context.Context, name string) (func() error, err
 // refresh 读入上次之后的快照事件；调用方持有 s.mu。
 func (s *durableStore) refresh(ctx context.Context) error {
 	events, err := s.store.Read(ctx, s.id, s.seq)
-	if errors.Is(err, ErrNotFound) {
+	if errors.Is(err, agentErrors.ErrSessionNotFound) {
 		return nil
 	}
 	if err != nil {
@@ -118,7 +119,7 @@ func (s *durableStore) SaveAll(ctx context.Context, writes ...durable.Write) err
 			}
 			return nil
 		}
-		if !errors.Is(err, ErrConflict) {
+		if !errors.Is(err, agentErrors.ErrSessionConflict) {
 			return err
 		}
 		before := s.seq

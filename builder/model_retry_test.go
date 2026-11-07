@@ -9,6 +9,7 @@ import (
 
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/tools"
@@ -144,7 +145,7 @@ func TestModelRetryRejectedByBudgetBeforeSend(t *testing.T) {
 	agent, err := NewSimpleBuilder(model).WithRequestError(3, RetryTransient(3, noWait)).Build()
 	require.NoError(t, err)
 	_, err = agent.AsRunnable().Invoke(budget.WithController(context.Background(), c), "q")
-	require.ErrorIs(t, err, budget.ErrBudgetExceeded)
+	require.ErrorIs(t, err, agentErrors.ErrModelBudgetExceeded)
 	var pe *llm.ProviderError
 	require.True(t, errors.As(err, &pe), "原始失败仍可识别")
 	require.Equal(t, 1, model.calls)
@@ -218,7 +219,7 @@ func TestModelRetryCrashDuringRetryNeedsHostAttention(t *testing.T) {
 	require.ErrorContains(t, err, "crash")
 	crash = false
 	_, err = agent.AsRunnable().Invoke(ctx, "q")
-	require.ErrorIs(t, err, durable.ErrOperationAttention)
+	require.ErrorIs(t, err, agentErrors.ErrOperationAttention)
 	require.Equal(t, 2, model.calls, "恢复时不再发请求")
 	snap, err := c.Snapshot(context.Background())
 	require.NoError(t, err)

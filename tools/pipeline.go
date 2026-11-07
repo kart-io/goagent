@@ -388,7 +388,10 @@ func (p *Pipeline) gate(ctx context.Context, call *Call, allowSubstitute bool) (
 		case PreAsk:
 			asks = append(asks, hookAsk{hook: i, decision: d})
 		default:
-			return nil, nil, fmt.Errorf("tool %q: unknown pre decision %d", call.Tool, d.Kind)
+			return nil, nil, agentErrors.Newf(agentErrors.CodeInvalidOutput, "tool %q: unknown pre decision %d", call.Tool, d.Kind).
+				WithComponent("tool_pipeline").
+				WithOperation("pre").
+				WithContext("tool_name", call.Tool)
 		}
 	}
 	switch {
@@ -398,7 +401,10 @@ func (p *Pipeline) gate(ctx context.Context, call *Call, allowSubstitute bool) (
 		return Rejected(strings.Join(denied, "; "), nil), nil, nil
 	case len(subs) > 0:
 		if !allowSubstitute || len(subs) > 1 || subs[0] == nil {
-			return nil, nil, fmt.Errorf("tool %q: invalid substitution", call.Tool)
+			return nil, nil, agentErrors.Newf(agentErrors.CodeInvalidOutput, "tool %q: invalid substitution", call.Tool).
+				WithComponent("tool_pipeline").
+				WithOperation("pre").
+				WithContext("tool_name", call.Tool)
 		}
 		return nil, subs[0], nil
 	case len(asks) > 0:
@@ -567,5 +573,3 @@ func SessionIDFrom(ctx context.Context) string {
 	id, _ := ctx.Value(sessionKey{}).(string)
 	return id
 }
-
-var errSubstituteUnknown = errors.New("substitute tool is not registered")

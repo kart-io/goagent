@@ -8,6 +8,7 @@ import (
 
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/stretchr/testify/require"
 )
@@ -34,7 +35,7 @@ func TestDispatcherRootToolBudgetDoesNotChargeReplay(t *testing.T) {
 	require.NoError(t, err)
 	req.Input.CallID = "two"
 	_, err = dispatcher.Invoke(ctx, req)
-	require.ErrorIs(t, err, budget.ErrBudgetExceeded)
+	require.ErrorIs(t, err, agentErrors.ErrModelBudgetExceeded)
 	require.Equal(t, 1, calls)
 	snap, err := controller.Snapshot(context.Background())
 	require.NoError(t, err)

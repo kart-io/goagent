@@ -14,11 +14,11 @@ import (
 
 	"google.golang.org/genai"
 
+	shared "github.com/kart-io/goagent/constants"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	agentllm "github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/common"
-	"github.com/kart-io/goagent/llm/constants"
 )
 
 // GeminiProvider retains the legacy public API and uses Google's native Gemini API.
@@ -31,8 +31,8 @@ type GeminiProvider struct {
 
 func NewGeminiWithOptions(opts ...agentllm.ClientOption) (*GeminiProvider, error) {
 	base := common.NewBaseProvider(opts...)
-	base.ApplyProviderDefaults(constants.ProviderGemini, "https://generativelanguage.googleapis.com", "gemini-2.5-flash", constants.EnvGeminiBaseURL, constants.EnvGeminiModel)
-	if err := base.EnsureAPIKey(constants.EnvGeminiAPIKey, constants.ProviderGemini); err != nil {
+	base.ApplyProviderDefaults(shared.ProviderGemini, "https://generativelanguage.googleapis.com", "gemini-2.5-flash", shared.EnvGeminiBaseURL, shared.EnvGeminiModel)
+	if err := base.EnsureAPIKey(shared.EnvGeminiAPIKey, shared.ProviderGemini); err != nil {
 		return nil, err
 	}
 	// Explicit backend prevents ambient Vertex settings from changing authentication.
@@ -51,7 +51,7 @@ func NewGeminiWithOptions(opts ...agentllm.ClientOption) (*GeminiProvider, error
 		return nil, agentErrors.NewAgentInitializationError("gemini_provider", err)
 	}
 	if base.Config.EmbeddingModel == "" {
-		base.Config.EmbeddingModel = os.Getenv(constants.EnvGeminiEmbeddingModel)
+		base.Config.EmbeddingModel = os.Getenv(shared.EnvGeminiEmbeddingModel)
 	}
 	if base.Config.EmbeddingModel == "" {
 		base.Config.EmbeddingModel = "gemini-embedding-001"
@@ -63,7 +63,9 @@ func NewGeminiWithOptions(opts ...agentllm.ClientOption) (*GeminiProvider, error
 // never mutate a shared model. System messages stay outside conversation history.
 func (p *GeminiProvider) request(req *agentllm.CompletionRequest, tools []interfaces.Tool) ([]*genai.Content, *genai.GenerateContentConfig, error) {
 	if req == nil || len(req.Messages) == 0 {
-		return nil, nil, fmt.Errorf("gemini: messages are required")
+		return nil, nil, agentErrors.Newf(agentErrors.CodeInvalidInput, "gemini: messages are required").
+			WithComponent("gemini").
+			WithOperation("build_request")
 	}
 	contents, system, err := geminiMessages(req.Messages, p.Config.SystemPrompt)
 	if err != nil {
@@ -125,18 +127,26 @@ func decodeGeminiResponse(resp *genai.GenerateContentResponse) (*agentllm.Stream
 		chunk.Usage = sdkUsageDetails(sdkUsage(int(u.PromptTokenCount), int(u.CandidatesTokenCount), int(u.TotalTokenCount), int(u.CachedContentTokenCount)), int(u.ThoughtsTokenCount), int(u.ToolUsePromptTokenCount))
 	}
 	if resp.PromptFeedback != nil && resp.PromptFeedback.BlockReason != "" {
-		return chunk, fmt.Errorf("gemini: prompt blocked (%s)", resp.PromptFeedback.BlockReason)
+		return chunk, agentErrors.Newf(agentErrors.CodeLLMResponse, "gemini: prompt blocked (%s)", resp.PromptFeedback.BlockReason).
+			WithComponent("gemini").
+			WithOperation("parse_response").
+			WithContext("block_reason", resp.PromptFeedback.BlockReason)
 	}
 	if len(resp.Candidates) == 0 {
 		return chunk, nil
 	} // A stream may have a usage-only frame.
 	candidate := resp.Candidates[0]
 	if candidate == nil {
-		return chunk, fmt.Errorf("gemini: nil candidate")
+		return chunk, agentErrors.Newf(agentErrors.CodeLLMResponse, "gemini: nil candidate").
+			WithComponent("gemini").
+			WithOperation("parse_response")
 	}
 	chunk.FinishReason = string(candidate.FinishReason)
 	if chunk.FinishReason != "" && chunk.FinishReason != "STOP" {
-		return chunk, fmt.Errorf("gemini: incomplete or blocked response (finish=%q)", chunk.FinishReason)
+		return chunk, agentErrors.Newf(agentErrors.CodeLLMResponse, "gemini: incomplete or blocked response (finish=%q)", chunk.FinishReason).
+			WithComponent("gemini").
+			WithOperation("parse_response").
+			WithContext("finish_reason", chunk.FinishReason)
 	}
 	if chunk.FinishReason == "STOP" {
 		chunk.FinishReason = "stop"
@@ -151,7 +161,7 @@ func decodeGeminiResponse(resp *genai.GenerateContentResponse) (*agentllm.Stream
 	if err != nil {
 		return chunk, err
 	}
-	chunk.ProviderState = &agentllm.ProviderState{Provider: constants.ProviderGemini, Data: data}
+	chunk.ProviderState = &agentllm.ProviderState{Provider: shared.ProviderGemini, Data: data}
 	for _, part := range candidate.Content.Parts {
 		if part == nil || part.Thought {
 			continue
@@ -159,10 +169,14 @@ func decodeGeminiResponse(resp *genai.GenerateContentResponse) (*agentllm.Stream
 		chunk.Content += part.Text
 		if f := part.FunctionCall; f != nil {
 			if len(f.PartialArgs) > 0 || (f.WillContinue != nil && *f.WillContinue) {
-				return chunk, fmt.Errorf("gemini: incomplete function arguments")
+				return chunk, agentErrors.Newf(agentErrors.CodeLLMResponse, "gemini: incomplete function arguments").
+					WithComponent("gemini").
+					WithOperation("parse_response")
 			}
 			if f.Name == "" {
-				return chunk, fmt.Errorf("gemini: function call without a name")
+				return chunk, agentErrors.Newf(agentErrors.CodeLLMResponse, "gemini: function call without a name").
+					WithComponent("gemini").
+					WithOperation("parse_response")
 			}
 			args := f.Args
 			if args == nil {
@@ -295,7 +309,7 @@ func (p *GeminiProvider) stream(ctx context.Context, req *agentllm.CompletionReq
 				total.Error = err
 				total.ToolCalls = nil
 			} else {
-				total.ProviderState = &agentllm.ProviderState{Provider: constants.ProviderGemini, Data: data}
+				total.ProviderState = &agentllm.ProviderState{Provider: shared.ProviderGemini, Data: data}
 			}
 		}
 		send(total)
@@ -306,7 +320,9 @@ func (p *GeminiProvider) stream(ctx context.Context, req *agentllm.CompletionReq
 func geminiSDKNext(next func() (*genai.GenerateContentResponse, error, bool)) (response *genai.GenerateContentResponse, err error, ok bool) {
 	defer func() {
 		if recover() != nil {
-			response, err, ok = nil, fmt.Errorf("gemini: SDK failed to decode stream response"), false
+			response, err, ok = nil, agentErrors.Newf(agentErrors.CodeLLMResponse, "gemini: SDK failed to decode stream response").
+				WithComponent("gemini").
+				WithOperation("parse_response"), false
 		}
 	}()
 	return next()
@@ -316,7 +332,9 @@ func (p *GeminiProvider) convertToolsToFunctions(tools []interfaces.Tool) ([]*ge
 	functions := make([]*genai.FunctionDeclaration, 0, len(tools))
 	for _, tool := range tools {
 		if tool == nil || tool.Name() == "" {
-			return nil, fmt.Errorf("gemini: tool name is required")
+			return nil, agentErrors.Newf(agentErrors.CodeToolValidation, "gemini: tool name is required").
+				WithComponent("gemini").
+				WithOperation("convert_tool_schema")
 		}
 		schema, err := p.toolSchemaToGeminiSchema(tool.ArgsSchema())
 		if err != nil {
@@ -355,15 +373,17 @@ func (p *GeminiProvider) toolSchemaToGeminiSchema(schema any) (map[string]any, e
 		return nil, err
 	}
 	if result == nil || result["type"] != "object" {
-		return nil, fmt.Errorf("parameters must be an object schema")
+		return nil, agentErrors.Newf(agentErrors.CodeToolValidation, "parameters must be an object schema").
+			WithComponent("gemini").
+			WithOperation("convert_tool_schema")
 	}
 	return result, nil
 }
 
-func (p *GeminiProvider) Provider() constants.Provider { return constants.ProviderGemini }
-func (p *GeminiProvider) ProviderName() string         { return string(constants.ProviderGemini) }
-func (p *GeminiProvider) ModelName() string            { return p.GetModel("") }
-func (p *GeminiProvider) MaxTokens() int               { return p.GetMaxTokens(0) }
+func (p *GeminiProvider) Provider() shared.Provider { return shared.ProviderGemini }
+func (p *GeminiProvider) ProviderName() string      { return string(shared.ProviderGemini) }
+func (p *GeminiProvider) ModelName() string         { return p.GetModel("") }
+func (p *GeminiProvider) MaxTokens() int            { return p.GetMaxTokens(0) }
 
 type GeminiStreamingProvider struct{ *GeminiProvider }
 

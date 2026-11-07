@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/builder"
+	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
-	"github.com/kart-io/goagent/llm/constants"
 )
 
 // MockLLMClient implements a simple mock LLM client for demonstration
@@ -59,8 +59,8 @@ func (m *MockLLMClient) CompleteToolsStream(ctx context.Context, req *llm.Comple
 	return m.CompleteStream(ctx, req)
 }
 
-func (m *MockLLMClient) Provider() constants.Provider {
-	return constants.ProviderCustom
+func (m *MockLLMClient) Provider() shared.Provider {
+	return shared.ProviderCustom
 }
 
 func main() {

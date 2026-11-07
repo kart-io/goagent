@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/testing/panictest"
 	"github.com/stretchr/testify/require"
 )
@@ -88,7 +89,7 @@ func TestResultStoreChildProcess(t *testing.T) {
 			for j := range childRefs {
 				ref, data := childRef(run, j)
 				outcome := "ok"
-				if err := s.PutIfAbsent(ctx, ref, data); errors.Is(err, ErrReleased) {
+				if err := s.PutIfAbsent(ctx, ref, data); errors.Is(err, agentErrors.ErrResultScopeReleased) {
 					outcome = "released"
 				} else if err != nil {
 					outcome = "error " + strings.ReplaceAll(err.Error(), "\n", " ")
@@ -286,7 +287,7 @@ func TestResultStoreProcessConcurrentRelease(t *testing.T) {
 		for j := range childRefs {
 			ref, _ := childRef(run, j)
 			_, err := s.Get(WithResultScope(context.Background(), run), ref)
-			require.ErrorIs(t, err, ErrReleased)
+			require.ErrorIs(t, err, agentErrors.ErrResultScopeReleased)
 		}
 	}
 }
@@ -324,7 +325,7 @@ func TestResultStoreProcessKilledWriter(t *testing.T) {
 	require.Less(t, time.Since(start), time.Second)
 	requireOnlyTombstones(t, dir, 1)
 	ref, data := childRef(run, 1)
-	require.ErrorIs(t, s.PutIfAbsent(ctx, ref, data), ErrReleased)
+	require.ErrorIs(t, s.PutIfAbsent(ctx, ref, data), agentErrors.ErrResultScopeReleased)
 	requireOnlyTombstones(t, dir, 1)
 }
 

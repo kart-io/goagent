@@ -8,9 +8,9 @@ import (
 	"strings"
 
 	"github.com/kart-io/goagent/codec/json"
-
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // RunRequest binds a persisted workflow invocation to an explicit run ID.
@@ -36,14 +36,14 @@ func (d *DurableGraph[T]) AsRunnable() *core.StreamRunnable[RunRequest[T], *Grap
 		var input json.RawMessage
 		if req.Resume != nil {
 			if key != "" || req.Resume.Key == "" {
-				return &ResumeRejectedError{Err: fmt.Errorf("provide only Resume with a waiting checkpoint key, or ApprovalKey")}
+				return &ResumeRejectedError{Err: agentErrors.Newf(agentErrors.CodeInvalidInput, "provide only Resume with a waiting checkpoint key, or ApprovalKey").WithComponent("workflow").WithOperation("as_runnable")}
 			}
 			key, input = req.Resume.Key, req.Resume.Input
 		}
 		snapshot, err := d.run(ctx, d.store, req.RunID, req.Initial, key, input, emit)
 		// Only the actual durable wait is a normal pause. Joined unlock errors or
 		// observer errors must not be converted to a successful invocation.
-		if err != nil && (err != durable.ErrApprovalRequired || snapshot == nil || !snapshot.Waiting) {
+		if err != nil && (err != agentErrors.ErrApprovalRequired || snapshot == nil || !snapshot.Waiting) {
 			return err
 		}
 		return emit(core.StreamChunk[*GraphSnapshot[T]]{Done: true, Data: snapshot})
@@ -83,9 +83,9 @@ func approvalWait(err error) (reason string, ok bool) {
 	var rejected *ApprovalRejectedError
 	var inputRejected *ResumeRejectedError
 	switch {
-	case errors.Is(err, durable.ErrApprovalRequired):
+	case errors.Is(err, agentErrors.ErrApprovalRequired):
 		return "", true
-	case errors.Is(err, ErrApprovalMismatch):
+	case errors.Is(err, agentErrors.ErrApprovalMismatch):
 		return RejectApprovalMismatch, true
 	case errors.As(err, &rejected):
 		return RejectBeforeApprove, true
@@ -107,10 +107,10 @@ func (d *DurableGraph[T]) AsChildRunnable() *core.RunnableFunc[T, T] {
 		var zero T
 		id := durable.ExecutionKey(ctx)
 		if id == "" {
-			return zero, fmt.Errorf("child graph requires an execution key")
+			return zero, agentErrors.Newf(agentErrors.CodeInvalidConfig, "child graph requires an execution key").WithComponent("workflow").WithOperation("as_child_runnable")
 		}
 		if !durable.CanWait(ctx) {
-			return zero, fmt.Errorf("%w：子图须在可续跑的操作内运行，如 RunnableToolConfig.Resumable", durable.ErrWaitNotResumable)
+			return zero, fmt.Errorf("%w：子图须在可续跑的操作内运行，如 RunnableToolConfig.Resumable", agentErrors.ErrWaitNotResumable)
 		}
 		// CanWait 为真时 ctx 必有日志。
 		store := durable.JournalStore(ctx)
@@ -140,7 +140,7 @@ func (d *DurableGraph[T]) AsChildRunnable() *core.RunnableFunc[T, T] {
 				if current.Waiting && ctx.Err() == nil {
 					return zero, childWait(id, current, RejectResumeInput, nil)
 				}
-				return zero, &ResumeRejectedError{Err: fmt.Errorf("invalid human resume request")}
+				return zero, &ResumeRejectedError{Err: agentErrors.Newf(agentErrors.CodeInvalidInput, "invalid human resume request").WithComponent("workflow").WithOperation("as_child_runnable")}
 			}
 			approvalKey, input = req.Key, req.Input
 		}
@@ -168,7 +168,7 @@ func (d *DurableGraph[T]) AsChildRunnable() *core.RunnableFunc[T, T] {
 			return zero, err
 		}
 		if !snapshot.Done {
-			return zero, fmt.Errorf("child graph stopped before completion")
+			return zero, agentErrors.Newf(agentErrors.CodeAgentExecution, "child graph stopped before completion").WithComponent("workflow").WithOperation("as_child_runnable")
 		}
 		return snapshot.State, nil
 	})

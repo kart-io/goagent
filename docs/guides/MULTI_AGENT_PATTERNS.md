@@ -15,7 +15,7 @@
 | S5 高风险操作审批 | `RouterSupervisor`，退款成员为自定义 `Step.Run` | 登记 → 审核 → 执行分段，每段由持久操作固定 |
 | S6 向客户追问 | 自定义 `Step.Run` 内 `durable.AwaitInput` | 格式校验放进 validate |
 | S7 复杂咨询由模型委派 | `SupervisorTools` | 主 Agent 自行决定调用哪些专家 |
-| S8 超限转人工 | `MaxRounds` / `MaxIterations` | 返回 `workflow.ErrMaxSteps`，换运行 ID 与新根预算 |
+| S8 超限转人工 | `MaxRounds` / `MaxIterations` | 返回 `agentErrors.ErrWorkflowMaxSteps`，换运行 ID 与新根预算 |
 | S9 判断无效转人工 | `RouterConfig.Fallback`、`LoopConfig.Fallback` | 路由无效时执行兜底 Step 后结束 |
 
 两种 Supervisor 的取舍：`RouterSupervisor` 的每一步都是图节点，有节点检查点、可列入 `ApprovalNodes`、步数有硬上限，路由由宿主代码决定；`SupervisorTools` 把成员做成模型工具，由模型在一个回合内决定调用哪些成员、调用几次，灵活但只有 Agent 的 `MaxIterations` 与根预算约束，成员调用不是图节点，不能单独审批。
@@ -38,7 +38,7 @@
 
 执行器只为节点计步，路由不计步，最后一个允许的节点执行后仍会路由，路由到 `END` 即成功：
 
-- Loop 第 `MaxIterations` 轮结束时 `Until` 为真，正常结束；为假时返回 `workflow.ErrMaxSteps`。
+- Loop 第 `MaxIterations` 轮结束时 `Until` 为真，正常结束；为假时返回 `agentErrors.ErrWorkflowMaxSteps`。
 - Router 第 `MaxRounds` 次成员执行后 Supervisor 还会再执行一次（再发一次模型请求）：返回 `FINISH` 正常结束，选择成员返回 `ErrMaxSteps`。
 - Fallback 不增加步数：Router 的 Fallback 占用一次成员轮数，Loop 的 Fallback 占用下一轮第一步的位置。最后一次判断无效时，配置了 Fallback 返回 `ErrMaxSteps`（与超限同样转人工），没有配置返回 `ErrInvalidRoute`。
 - 需要“固定跑 N 轮后正常结束”时，在 T 中记录轮数，由 `Until` 判断。
@@ -59,7 +59,7 @@ snap, err := graph.Run(budget.WithController(ctx, c), runID, initial, "")
 持久图提交节点输出后，恢复时用同一份已提交状态重新执行路由。`Next`、`Until` 是纯函数，无效输入每次恢复都得到同样的错误，所以兜底由包装路由完成，而不是靠重试：
 
 - `TextNext` 取最后一轮输出的第一行、去掉首尾空白，必须恰好等于某个成员名或 `FINISH`；记录为空、首行为空或不匹配时返回包装 `ErrInvalidRoute` 的错误，不做模糊匹配。用于文本路由的成员名必须是单行。
-- 自定义 `Next`、`Until` 判定输入无效时也应包装 `multiagent.ErrInvalidRoute`。
+- 自定义 `Next`、`Until` 判定输入无效时也应包装 `agentErrors.ErrInvalidRoute`。
 - `GuardRoute` 依次：`Next` 返回包装 `ErrInvalidRoute` 的错误且配置了兜底时转兜底，其他错误原样返回；`FINISH` 映射为 `END`；不在成员集合中的名字（Supervisor 名、兜底名、`"__end__"`）按无效处理；否则返回成员名。
 - 兜底 Step 执行后结束，它收到的状态里有无效的那次输出，可据此转人工。没有配置兜底时，`ErrInvalidRoute` 对该运行 ID 是终态，换运行 ID 与新根预算重新处理。
 - 本包不做“重问一次”：需要时写进 Supervisor Step 自身。
@@ -92,13 +92,13 @@ snap, err := graph.Run(budget.WithController(ctx, c), runID, initial, "")
 | 错误链含 `context.DeadlineExceeded` | failed（`deadline`） | 拒绝 | 拒绝 |
 | 模型返回其他错误 | failed（`execution`） | 拒绝 | 拒绝 |
 
-“拒绝”指节点以 `*durable.OperationError` 失败（`errors.Is(err, durable.ErrOperationAttention)`），同一运行 ID 无法继续。3 次是持久尝试次数，不是请求次数：每次尝试内 `WithRequestError` 还可原样重试，同一回合最多发出 `3 × (1 + maxRecoveries)` 个请求（`builder/model_resend_test.go` 的 `TestModelResendWithRequestRetries`）。模型客户端把超时包装成取消时，超时也会记为 canceled 并可能被重发。重发可能重复计费；开关在运行的整个生命周期内必须一致，否则恢复时报策略变更。deadline 与 execution 的分类见 `core/durable/operation_test.go`。
+“拒绝”指节点以 `*durable.OperationError` 失败（`errors.Is(err, agentErrors.ErrOperationAttention)`），同一运行 ID 无法继续。3 次是持久尝试次数，不是请求次数：每次尝试内 `WithRequestError` 还可原样重试，同一回合最多发出 `3 × (1 + maxRecoveries)` 个请求（`builder/model_resend_test.go` 的 `TestModelResendWithRequestRetries`）。模型客户端把超时包装成取消时，超时也会记为 canceled 并可能被重发。重发可能重复计费；开关在运行的整个生命周期内必须一致，否则恢复时报策略变更。deadline 与 execution 的分类见 `core/durable/operation_test.go`。
 
 **预算**：
 
 - `SupervisorTools` 的成员是模型工具，调用时 ctx 必须带根预算；持久运行必须是 `budget.NewDurable` 创建的持久预算。
 - 持久模型请求的意图包含预算配置。恢复时必须复用原来的预算存储与完全相同的配置：复用存储但配置变化时 `budget.NewDurable` 报 `budget configuration or record changed`；换用新存储且配置也变时已完成的请求报意图不一致；换用新存储、配置相同时回放报 `usage has no reservation`；如果续跑时没有需要回放的请求，则完全拦不住，用量从零计数。预算存储必须与图存储一起持久化，恢复时总是复用。
-- 成员 Agent 不得使用 Supervisor 或任何祖先调用的 Dispatcher，否则触发 `tools.ErrDispatcherReentry`；成员之间互不嵌套时可以共用一个。
+- 成员 Agent 不得使用 Supervisor 或任何祖先调用的 Dispatcher，否则触发 `agentErrors.ErrDispatcherReentry`；成员之间互不嵌套时可以共用一个。
 
 ## 人工等待
 
@@ -121,7 +121,7 @@ step := multiagent.Step[Case]{Name: "extract", Run: core.NewRunnableFunc(func(ct
 })}
 ```
 
-- 订单号的格式校验必须放进 validate。validate 拒绝时中断保持等待，`Resume` 返回 `*workflow.ResumeRejectedError`，宿主用同一中断键提交修正值；validate 接受的输入就此固定，之后提交不同的值报 `workflow.ErrInterruptAnswered`。
+- 订单号的格式校验必须放进 validate。validate 拒绝时中断保持等待，`Resume` 返回 `*workflow.ResumeRejectedError`，宿主用同一中断键提交修正值；validate 接受的输入就此固定，之后提交不同的值报 `agentErrors.ErrInterruptAnswered`。
 - validate 必须是输入的纯函数，它的错误文本会持久化并对外暴露，不得包含敏感信息。
 - 依赖外部数据的核对（如订单是否存在）不能与 `AwaitInput` 放在同一节点，否则重入时外部数据变化会走另一条分支。核对做成下一个节点，结果写进状态，不通过时路由回追问节点；每次访问追问节点都是新的节点执行，中断互不冲突：
 
@@ -183,7 +183,7 @@ _ = g.AddBranch("check", func(_ context.Context, c Case) (string, error) {
 const reviewRounds = 3 // MaxSteps = 1 + 2*reviewRounds + 1
 
 reviewExit := func(ctx context.Context, c multiagent.Conversation) (string, error) {
-    passed, err := parseVerdict(c) // 无法解析时返回包装 multiagent.ErrInvalidRoute 的错误
+    passed, err := parseVerdict(c) // 无法解析时返回包装 agentErrors.ErrInvalidRoute 的错误
     if err != nil {
         return "", err
     }
@@ -197,7 +197,7 @@ reviewExit := func(ctx context.Context, c multiagent.Conversation) (string, erro
         }
     }
     if rounds >= reviewRounds {
-        return "", fmt.Errorf("%w: review loop limit %d", workflow.ErrMaxSteps, reviewRounds)
+        return "", fmt.Errorf("%w: review loop limit %d", agentErrors.ErrWorkflowMaxSteps, reviewRounds)
     }
     return "write", nil
 }
@@ -237,4 +237,4 @@ return graph.Run(ctx, runID, initial, approvalKey)
 
 ## 运营监控
 
-从节点事件统计：Fallback 节点（如 `human`）的执行率、`workflow.ErrMaxSteps` 与 `multiagent.ErrInvalidRoute` 的发生率。用量超过阈值的提示用 `budget.WithUsageHook`，事件含累计统计；`MaxModelRequests` 必须 ≥ 1，设为宽松的防失控上限，触达时与轮数超限一样转人工。
+从节点事件统计：Fallback 节点（如 `human`）的执行率、`agentErrors.ErrWorkflowMaxSteps` 与 `agentErrors.ErrInvalidRoute` 的发生率。用量超过阈值的提示用 `budget.WithUsageHook`，事件含累计统计；`MaxModelRequests` 必须 ≥ 1，设为宽松的防失控上限，触达时与轮数超限一样转人工。

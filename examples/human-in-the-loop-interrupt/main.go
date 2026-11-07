@@ -12,6 +12,7 @@ import (
 	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/workflow"
 )
 
@@ -55,7 +56,7 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 		// 实际应用须先认证回应者；中断键只定位暂停，不是授权凭证。
 		snap, err = graph.Resume(ctx, "refund-"+*order, workflow.ResumeRequest{Key: *key, Input: json.RawMessage(*input)})
 	}
-	if err != nil && !errors.Is(err, durable.ErrApprovalRequired) {
+	if err != nil && !errors.Is(err, agentErrors.ErrApprovalRequired) {
 		return err
 	}
 	return json.Encode(out, snap, json.Pretty)

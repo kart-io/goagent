@@ -2,12 +2,12 @@ package memory
 
 import (
 	"context"
-	"errors"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 )
 
@@ -46,11 +46,11 @@ func NewInMemoryManager(config *Config) *InMemoryManager {
 // AddConversation 添加对话
 func (m *InMemoryManager) AddConversation(ctx context.Context, conv *interfaces.Conversation) error {
 	if conv == nil {
-		return errors.New("conversation is nil")
+		return agentErrors.NewInvalidInputError("memory", "conversation", "conversation is nil")
 	}
 
 	if conv.SessionID == "" {
-		return errors.New("session_id is required")
+		return agentErrors.NewInvalidInputError("memory", "session_id", "session_id is required")
 	}
 
 	// 生成 ID
@@ -83,7 +83,7 @@ func (m *InMemoryManager) AddConversation(ctx context.Context, conv *interfaces.
 // GetConversationHistory 获取对话历史
 func (m *InMemoryManager) GetConversationHistory(ctx context.Context, sessionID string, limit int) ([]*interfaces.Conversation, error) {
 	if sessionID == "" {
-		return nil, errors.New("session_id is required")
+		return nil, agentErrors.NewInvalidInputError("memory", "session_id", "session_id is required")
 	}
 
 	m.convMu.RLock()
@@ -105,7 +105,7 @@ func (m *InMemoryManager) GetConversationHistory(ctx context.Context, sessionID 
 // ClearConversation 清空会话对话
 func (m *InMemoryManager) ClearConversation(ctx context.Context, sessionID string) error {
 	if sessionID == "" {
-		return errors.New("session_id is required")
+		return agentErrors.NewInvalidInputError("memory", "session_id", "session_id is required")
 	}
 
 	m.convMu.Lock()
@@ -118,7 +118,7 @@ func (m *InMemoryManager) ClearConversation(ctx context.Context, sessionID strin
 // AddCase 添加案例
 func (m *InMemoryManager) AddCase(ctx context.Context, caseMemory *interfaces.Case) error {
 	if caseMemory == nil {
-		return errors.New("case is nil")
+		return agentErrors.NewInvalidInputError("memory", "case", "case is nil")
 	}
 
 	// 生成 ID
@@ -173,7 +173,7 @@ func (m *InMemoryManager) SearchSimilarCases(ctx context.Context, query string, 
 // Store 存储键值对
 func (m *InMemoryManager) Store(ctx context.Context, key string, value interface{}) error {
 	if key == "" {
-		return errors.New("key is required")
+		return agentErrors.NewInvalidInputError("memory", "key", "key is required")
 	}
 
 	m.storeMu.Lock()
@@ -186,7 +186,7 @@ func (m *InMemoryManager) Store(ctx context.Context, key string, value interface
 // Retrieve 检索值
 func (m *InMemoryManager) Retrieve(ctx context.Context, key string) (interface{}, error) {
 	if key == "" {
-		return nil, errors.New("key is required")
+		return nil, agentErrors.NewInvalidInputError("memory", "key", "key is required")
 	}
 
 	m.storeMu.RLock()
@@ -194,7 +194,7 @@ func (m *InMemoryManager) Retrieve(ctx context.Context, key string) (interface{}
 
 	value, exists := m.store[key]
 	if !exists {
-		return nil, errors.New("key not found")
+		return nil, agentErrors.New(agentErrors.CodeNotFound, "key not found").WithComponent("memory").WithOperation("retrieve").WithContext("key", key)
 	}
 
 	return value, nil
@@ -203,7 +203,7 @@ func (m *InMemoryManager) Retrieve(ctx context.Context, key string) (interface{}
 // Delete 删除键值对
 func (m *InMemoryManager) Delete(ctx context.Context, key string) error {
 	if key == "" {
-		return errors.New("key is required")
+		return agentErrors.NewInvalidInputError("memory", "key", "key is required")
 	}
 
 	m.storeMu.Lock()

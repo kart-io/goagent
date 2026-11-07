@@ -50,6 +50,124 @@ func TestCoreDoesNotDependOnHarness(t *testing.T) {
 	require.False(t, forbidden("core/x.go", "github.com/kart-io/goagent-harness-extra/client"))
 }
 
+// 共享常量只依赖标准库，基础层可导入它，不能经常量包反向依赖实现。
+func TestConstantsAreAnIndependentLeaf(t *testing.T) {
+	for _, source := range []string{"interfaces", "errors", "utils", "cache", "core", "builder", "llm", "tools", "store", "parsers"} {
+		require.False(t, forbidden(source+"/x.go", module+"constants"), source)
+	}
+	for _, dep := range []string{"interfaces", "errors", "core", "builder", "llm/constants", "tools", "codec", "constants"} {
+		require.True(t, forbidden("constants/defaults.go", module+dep), dep)
+	}
+	for _, dep := range []string{"time", "math", "net/http"} {
+		require.False(t, forbidden("constants/defaults.go", dep), dep)
+	}
+	require.True(t, forbidden("constants/defaults.go", "example.com/provider/sdk"))
+	require.True(t, forbidden("interfaces/x.go", module+"llm/constants"))
+}
+
+// 错误分类、提示和错误上下文字段属于 errors，协议字段与状态仍可留在 constants。
+func TestErrorConstantsBelongToErrors(t *testing.T) {
+	for _, tc := range []struct {
+		file, src string
+		bad       bool
+	}{
+		{"constants/tools.go", `package constants; const ErrInvalidInput = "invalid input"`, true},
+		{"constants/llm.go", `package constants; const StatusInvalidAPIKey = "invalid API key"`, true},
+		{"constants/llm.go", `package constants; const ErrorFieldAPIKey = "api_key"`, true},
+		{"constants/codes.go", `package constants; const CodeInvalidInput = "INVALID_INPUT"`, true},
+		{"errors/tools.go", `package errors; const ErrInvalidInput = "invalid input"`, false},
+		{"constants/http.go", `package constants; const StatusCodeInternalServerError = 500`, false},
+		{"constants/fields.go", `package constants; const FieldError = "error"`, false},
+		{"constants/llm.go", `package constants; const StreamEventError = "error"`, false},
+		{"constants/status.go", `package constants; const StatusError = "error"`, false},
+	} {
+		fset := token.NewFileSet()
+		node, err := parser.ParseFile(fset, tc.file, tc.src, 0)
+		require.NoError(t, err)
+		require.Equal(t, tc.bad, len(inspect(fset, tc.file, node)) > 0, tc.file+": "+tc.src)
+	}
+}
+
+// 共享协议值和错误码直接引用唯一入口，领域自己的枚举仍可独立定义。
+func TestCanonicalConstantsDoNotGainForwardingEntrypoints(t *testing.T) {
+	for _, tc := range []struct {
+		file, src string
+		bad       bool
+	}{
+		{"interfaces/roles.go", `package interfaces; import c "github.com/kart-io/goagent/constants"; const RoleUser = c.RoleUser`, true},
+		{"core/timeout.go", `package core; import c "github.com/kart-io/goagent/constants"; const timeout = (c.DefaultToolTimeout)`, true},
+		{"tools/codes.go", `package tools; import e "github.com/kart-io/goagent/errors"; const CodeToolFailure = e.CodeToolExecution`, true},
+		{"constants/defaults.go", `package constants; import "time"; const Timeout = 5*time.Second`, false},
+		{"multiagent/route.go", `package multiagent; import "github.com/kart-io/goagent/workflow"; const Finish = workflow.END`, false},
+		{"llm/custom.go", `package llm; import c "github.com/kart-io/goagent/constants"; const Custom c.Provider = "minimax"`, false},
+		{"core/options.go", `package core; import c "github.com/kart-io/goagent/constants"; const Extra = c.DefaultToolTimeout * 2`, false},
+	} {
+		fset := token.NewFileSet()
+		node, err := parser.ParseFile(fset, tc.file, tc.src, 0)
+		require.NoError(t, err)
+		require.Equal(t, tc.bad, len(inspect(fset, tc.file, node)) > 0, tc.file+": "+tc.src)
+	}
+}
+
+// 按真实导入路径识别错误构造，覆盖别名、局部遮蔽和独立工具边界。
+func TestFrameworkErrorsUseStructuredConstruction(t *testing.T) {
+	for _, tc := range []struct {
+		file, src string
+		bad       bool
+	}{
+		{"core/x.go", `package core; import "errors"; var err = errors.New("failure")`, true},
+		{"memory/x.go", `package memory; import stdErrors "errors"; func f() error { return stdErrors.New("failure") }`, true},
+		{"core/x.go", `package core; import "errors"; var makeError = errors.New`, true},
+		{"core/x.go", `package core; import . "errors"; var err = New("failure")`, true},
+		{"core/x.go", `package core; import "errors"; func f(err error) bool { return errors.Is(err, nil) }`, false},
+		{"core/x.go", `package core; import "errors"; func f(err error) error { return errors.Join(err, nil) }`, false},
+		{"core/x.go", `package core; import "errors"; func f(err error) bool { return errors.As(err, new(*structError)) }`, false},
+		{"core/x.go", `package core; import errors "github.com/kart-io/goagent/errors"; var err = errors.New(errors.CodeInternal, "failure")`, false},
+		{"core/x.go", `package core; import "errors"; func f() { errors := struct{ New func(string) error }{}; _ = errors.New("local") }`, false},
+		{"core/x_test.go", `package core; import "errors"; var err = errors.New("injected")`, false},
+		{"errors/sentinels.go", `package errors; import stdErrors "errors"; var err = stdErrors.New("sentinel")`, false},
+		{"codec/yaml/yaml.go", `package yaml; import "errors"; var err = errors.New("format")`, false},
+		{"harness/env/localfs.go", `package env; import "errors"; var err = errors.New("path")`, false},
+		{"harness/env_extra/x.go", `package envextra; import "errors"; var err = errors.New("failure")`, true},
+		{"examples/demo/main.go", `package main; import "errors"; var err = errors.New("flag")`, false},
+		{"scripts/probe/main.go", `package main; import "errors"; var err = errors.New("flag")`, false},
+		{"testing/panictest/helper.go", `package panictest; import "errors"; var err = errors.New("injected")`, false},
+		{"cmd/host/main.go", `package main; import "errors"; var err = errors.New("flag")`, false},
+		{"evaluation/hitlbench/cmd/run/main.go", `package main; import "errors"; var err = errors.New("flag")`, false},
+		{"evaluation/budget.go", `package evaluation; import "errors"; var err = errors.New("budget")`, true},
+		{"core/cmd/x.go", `package command; import "errors"; var err = errors.New("failure")`, true},
+	} {
+		fset := token.NewFileSet()
+		node, err := parser.ParseFile(fset, tc.file, tc.src, 0)
+		require.NoError(t, err)
+		require.Equal(t, tc.bad, len(inspect(fset, tc.file, node)) > 0, tc.file+": "+tc.src)
+	}
+}
+
+func TestCacheCanImportOnlyRootErrors(t *testing.T) {
+	require.False(t, forbidden("cache/base.go", module+"errors"))
+	require.True(t, forbidden("cache/base.go", module+"errors/sub"))
+	require.True(t, forbidden("errors/sentinels.go", module+"cache"))
+}
+
+func TestScanEnforcesErrorConstructionOutsideIndependentTools(t *testing.T) {
+	root := t.TempDir()
+	for name, src := range map[string]string{
+		"core/a.go":                    "package core\nimport plain \"errors\"\nvar err = plain.New(\"failure\")\n",
+		"evaluation/budget.go":         "package evaluation\nimport \"errors\"\nvar err = errors.New(\"budget\")\n",
+		"evaluation/x/cmd/run/main.go": "package main\nimport \"errors\"\nvar err = errors.New(\"flag\")\n",
+		"core/a_test.go":               "package core\nimport \"errors\"\nvar err = errors.New(\"injected\")\n",
+		"harness/env/localfs.go":       "package env\nimport \"errors\"\nvar err = errors.New(\"path\")\n",
+	} {
+		path := filepath.Join(root, name)
+		require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+		require.NoError(t, os.WriteFile(path, []byte(src), 0o644))
+	}
+	count, err := scan(root)
+	require.NoError(t, err)
+	require.Equal(t, 2, count)
+}
+
 func TestExecutionFacadeCannotBeImportedByLowerLayers(t *testing.T) {
 	for _, file := range []string{"core/x.go", "builder/x.go", "tools/x.go", "workflow/x.go", "interfaces/x.go", "llm/x.go", "memory/x.go", "store/x.go", "cache/x.go", "utils/x.go", "parsers/x.go", "middleware/x.go", "observability/x.go", "devtools/x.go", "harness/env/x.go"} {
 		require.True(t, forbidden(file, module+"execution"), file)
@@ -124,7 +242,68 @@ func TestScanChecksTestFilesForFormatLibsOnly(t *testing.T) {
 	}
 	write("core/a_test.go", "package core\nimport _ \"encoding/json/v2\"\n")
 	write("core/b_test.go", "package core\nimport _ \"github.com/kart-io/goagent/tools\"\n")
+	write("core/c_test.go", "package core\nimport \"errors\"\nvar err = errors.New(\"injected\")\n")
 	count, err := scan(root)
 	require.NoError(t, err)
 	require.Equal(t, 1, count)
+}
+
+// 格式化业务错误必须有分类，标准错误链包装保持原构造语义。
+func TestFormattedBusinessErrorConstruction(t *testing.T) {
+	for _, tc := range []struct {
+		file, src string
+		bad       bool
+	}{
+		{"core/x.go", `package x; import "fmt"; var e=fmt.Errorf("invalid input %d",1)`, true},
+		{"core/x.go", `package x; import f "fmt"; var e=f.Errorf("invalid input")`, true},
+		{"core/x.go", `package x; import "fmt"; var e=fmt.Errorf("literal %%w")`, true},
+		{"core/x.go", `package x; import "fmt"; var e=fmt.Errorf("% %w")`, true},
+		{"core/x.go", `package x; import "fmt"; var e=fmt.Errorf("%*%w",1)`, true},
+		{"core/x.go", `package x; import "fmt"; var cause error; var e=fmt.Errorf("wrapped: %w",cause)`, false},
+		{"core/x.go", `package x; import "fmt"; var cause error; var e=(fmt.Errorf)("wrapped: %w",cause)`, false},
+		{"core/x.go", `package x; import f "fmt"; var cause error; var e=(((f.Errorf)))("wrapped: %w",cause)`, false},
+		{"core/x.go", `package x; import "fmt"; var e=(fmt.Errorf)("invalid input")`, true},
+		{"core/x.go", `package x; import "fmt"; var cause error; var e=fmt.Errorf("wrapped: %[1]w",cause)`, false},
+		{"core/x.go", `package x; import "fmt"; var cause error; var e=fmt.Errorf("%[1]2w",cause)`, true},
+		{"core/x.go", `package x; import "fmt"; var cause error; var e=fmt.Errorf("%[1].2w",cause)`, true},
+		{"core/x.go", `package x; import "fmt"; var cause error; var e=fmt.Errorf("%[1][1]w",cause)`, true},
+		{"core/x.go", `package x; import "fmt"; var cause error; var e=fmt.Errorf("%[0]w",cause)`, true},
+		{"core/x.go", `package x; import "fmt"; var cause error; var e=fmt.Errorf("%10000010w",cause)`, true},
+		{"core/x.go", `package x; import "fmt"; var cause error; var e=fmt.Errorf("%.10000010w",cause)`, true},
+		{"core/x.go", `package x; import "fmt"; var cause error; var e=fmt.Errorf("%w %10000010w",cause,cause)`, false},
+		{"core/x.go", `package x; import "fmt"; var cause error; var e=fmt.Errorf("%[2]*[1]w",cause,1)`, false},
+		{"core/x.go", `package x; import "fmt"; var cause error; var e=fmt.Errorf("%[2]*.[3]*[1]w",cause,4,2)`, false},
+		{"core/x.go", `package x; import "fmt"; var cause error; var e=fmt.Errorf("prefix " + "%w",cause)`, false},
+		{"core/x.go", `package x; import "fmt"; var a,b error; var e=fmt.Errorf("%w: %w",a,b)`, false},
+		{"core/x.go", `package x; import "fmt"; var newError=fmt.Errorf`, true},
+		{"core/x.go", `package x; import . "fmt"; var e=Errorf("invalid")`, true},
+		{"core/x.go", `package x; import "fmt"; var format string; var e=fmt.Errorf(format)`, true},
+		{"core/x.go", `package x; import "fmt"; func f(){fmt:=struct{Errorf func(string)error}{}; _=fmt.Errorf("local")}`, false},
+		{"core/x.go", `package x; import e "github.com/kart-io/goagent/errors"; var err=e.Newf(e.CodeInvalidInput,"invalid %d",1)`, false},
+		{"codec/x.go", `package x; import "fmt"; var e=fmt.Errorf("invalid %d",1)`, false},
+		{"core/durable/storetest/x.go", `package x; import "fmt"; var e=fmt.Errorf("injected %d",1)`, false},
+		{"evaluation/agentbench/run.go", `package x; import "fmt"; var e=fmt.Errorf("invalid %d",1)`, true},
+	} {
+		fset := token.NewFileSet()
+		node, err := parser.ParseFile(fset, tc.file, tc.src, 0)
+		require.NoError(t, err)
+		require.Equal(t, tc.bad, len(inspect(fset, tc.file, node)) > 0, tc.file+": "+tc.src)
+	}
+}
+
+func TestScanEnforcesFormattedErrorBoundary(t *testing.T) {
+	root := t.TempDir()
+	for file, src := range map[string]string{
+		"core/plain.go":                     "package core\nimport f \"fmt\"\nvar e=f.Errorf(\"input %d\",1)\n",
+		"core/wrapped.go":                   "package core\nimport \"fmt\"\nvar cause error\nvar e=fmt.Errorf(\"operation: %w\",cause)\n",
+		"core/injected_test.go":             "package core\nimport \"fmt\"\nvar e=fmt.Errorf(\"injected %d\",1)\n",
+		"core/durable/storetest/helpers.go": "package storetest\nimport \"fmt\"\nvar e=fmt.Errorf(\"injected %d\",1)\n",
+	} {
+		p := filepath.Join(root, file)
+		require.NoError(t, os.MkdirAll(filepath.Dir(p), 0o755))
+		require.NoError(t, os.WriteFile(p, []byte(src), 0o644))
+	}
+	findings, err := scan(root)
+	require.NoError(t, err)
+	require.Equal(t, 1, findings)
 }

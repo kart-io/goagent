@@ -10,31 +10,31 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/usage"
 	"github.com/kart-io/goagent/interfaces"
 	agentllm "github.com/kart-io/goagent/llm"
-	"github.com/kart-io/goagent/llm/constants"
 )
 
 func TestOpenAICompatiblePresetsDefaults(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
 		new      func(...agentllm.ClientOption) (*OpenAIProvider, error)
-		provider constants.Provider
+		provider shared.Provider
 		baseURL  string
 		model    string
 	}{
-		{"kimi", NewKimiWithOptions, constants.ProviderKimi, constants.KimiBaseURL, "moonshot-v1-8k"},
-		{"siliconflow", NewSiliconFlowWithOptions, constants.ProviderSiliconFlow, constants.SiliconFlowBaseURL, "Qwen/Qwen2-7B-Instruct"},
-		{"ollama", NewOllamaWithOptions, constants.ProviderOllama, OllamaBaseURL, "llama2"},
+		{"kimi", NewKimiWithOptions, shared.ProviderKimi, shared.KimiBaseURL, "moonshot-v1-8k"},
+		{"siliconflow", NewSiliconFlowWithOptions, shared.ProviderSiliconFlow, shared.SiliconFlowBaseURL, "Qwen/Qwen2-7B-Instruct"},
+		{"ollama", NewOllamaWithOptions, shared.ProviderOllama, OllamaBaseURL, "llama2"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Setenv(constants.EnvKimiBaseURL, "")
-			t.Setenv(constants.EnvKimiModel, "")
-			t.Setenv(constants.EnvSiliconFlowBaseURL, "")
-			t.Setenv(constants.EnvSiliconFlowModel, "")
-			t.Setenv(constants.EnvOllamaBaseURL, "")
-			t.Setenv(constants.EnvOllamaModel, "")
+			t.Setenv(shared.EnvKimiBaseURL, "")
+			t.Setenv(shared.EnvKimiModel, "")
+			t.Setenv(shared.EnvSiliconFlowBaseURL, "")
+			t.Setenv(shared.EnvSiliconFlowModel, "")
+			t.Setenv(shared.EnvOllamaBaseURL, "")
+			t.Setenv(shared.EnvOllamaModel, "")
 			p, err := tc.new(agentllm.WithAPIKey("key"))
 			require.NoError(t, err)
 			require.Equal(t, tc.provider, p.Provider())
@@ -49,8 +49,8 @@ func TestOpenAICompatiblePresetsDefaults(t *testing.T) {
 }
 
 func TestOpenAICompatiblePresetsRequireAPIKey(t *testing.T) {
-	t.Setenv(constants.EnvKimiAPIKey, "")
-	t.Setenv(constants.EnvSiliconFlowAPIKey, "")
+	t.Setenv(shared.EnvKimiAPIKey, "")
+	t.Setenv(shared.EnvSiliconFlowAPIKey, "")
 	_, err := NewKimiWithOptions()
 	require.Error(t, err)
 	_, err = NewSiliconFlowWithOptions()

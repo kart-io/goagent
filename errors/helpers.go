@@ -2,7 +2,6 @@ package errors
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"unicode/utf8"
 )
@@ -289,12 +288,7 @@ func annotate(err error) *AgentError {
 		}
 		return &cp
 	}
-	code := CodeInternal
-	var inner *AgentError
-	if errors.As(err, &inner) && inner != nil {
-		code = inner.Code
-	}
-	return &AgentError{Code: code, Message: "operation failed", Cause: err, pcs: callers()}
+	return &AgentError{Code: GetCode(err), Message: "operation failed", Cause: err, pcs: callers()}
 }
 
 // Distributed Errors

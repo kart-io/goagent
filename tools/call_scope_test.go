@@ -10,6 +10,7 @@ import (
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/stretchr/testify/require"
 )
@@ -89,7 +90,7 @@ func TestNestedDispatcherScope(t *testing.T) {
 	dispatcher, err = NewDispatcher(reg, DispatchConfig{MaxConcurrency: 1, Timeout: time.Second})
 	require.NoError(t, err)
 	_, err = dispatcher.Invoke(context.Background(), ToolRequest{Name: "recursive", Input: &interfaces.ToolInput{Args: map[string]any{}}})
-	require.ErrorIs(t, err, ErrDispatcherReentry)
+	require.ErrorIs(t, err, agentErrors.ErrDispatcherReentry)
 }
 func TestOwnedAgentIsolation(t *testing.T) {
 	calls := 0
@@ -132,6 +133,6 @@ func TestNestedDepthBoundary(t *testing.T) {
 	require.Equal(t, 8, calls)
 	calls = 0
 	_, err = tool.Invoke(context.Background(), &interfaces.ToolInput{Args: map[string]any{"n": float64(8)}})
-	require.ErrorIs(t, err, ErrNestedExecutionLimit)
+	require.ErrorIs(t, err, agentErrors.ErrNestedExecutionLimit)
 	require.Equal(t, 8, calls)
 }

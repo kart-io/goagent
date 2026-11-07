@@ -9,7 +9,8 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/llm"
-	"github.com/kart-io/goagent/llm/constants"
+
+	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/llm/providers"
 )
 
@@ -26,7 +27,7 @@ func main() {
 	if apiKey := os.Getenv("OPENAI_API_KEY"); apiKey != "" {
 		// 使用 Options 模式创建客户端（推荐方式）
 		opts := []llm.ClientOption{
-			llm.WithProvider(constants.ProviderOpenAI),
+			llm.WithProvider(shared.ProviderOpenAI),
 			llm.WithAPIKey(apiKey),
 			llm.WithModel("gpt-3.5-turbo"),
 			llm.WithMaxTokens(100),
@@ -50,7 +51,7 @@ func main() {
 	if apiKey := os.Getenv("GEMINI_API_KEY"); apiKey != "" {
 		// 使用 Options 模式创建客户端（推荐方式）
 		opts := []llm.ClientOption{
-			llm.WithProvider(constants.ProviderGemini),
+			llm.WithProvider(shared.ProviderGemini),
 			llm.WithAPIKey(apiKey),
 			llm.WithModel("gemini-pro"),
 			llm.WithMaxTokens(100),
@@ -74,7 +75,7 @@ func main() {
 	if apiKey := os.Getenv("DEEPSEEK_API_KEY"); apiKey != "" {
 		// 使用 Options 模式创建客户端（推荐方式）
 		opts := []llm.ClientOption{
-			llm.WithProvider(constants.ProviderDeepSeek),
+			llm.WithProvider(shared.ProviderDeepSeek),
 			llm.WithAPIKey(apiKey),
 			llm.WithBaseURL("https://api.deepseek.com/v1"),
 			llm.WithModel("deepseek-chat"),
@@ -114,7 +115,7 @@ func main() {
 	if apiKey := os.Getenv("SILICONFLOW_API_KEY"); apiKey != "" {
 		// 使用 Options 模式创建客户端（推荐方式）
 		opts := []llm.ClientOption{
-			llm.WithProvider(constants.ProviderSiliconFlow),
+			llm.WithProvider(shared.ProviderSiliconFlow),
 			llm.WithAPIKey(apiKey),
 			llm.WithModel("Qwen/Qwen2-7B-Instruct"),
 			llm.WithMaxTokens(100),
@@ -141,7 +142,7 @@ func main() {
 	if apiKey := os.Getenv("KIMI_API_KEY"); apiKey != "" {
 		// 使用 Options 模式创建客户端（推荐方式）
 		opts := []llm.ClientOption{
-			llm.WithProvider(constants.ProviderKimi),
+			llm.WithProvider(shared.ProviderKimi),
 			llm.WithAPIKey(apiKey),
 			llm.WithModel("moonshot-v1-8k"),
 			llm.WithMaxTokens(100),

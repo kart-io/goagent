@@ -3,18 +3,17 @@ package llm
 import (
 	"context"
 	"errors"
+	shared2 "github.com/kart-io/goagent/constants"
 	"testing"
 	"time"
-
-	"github.com/kart-io/goagent/llm/constants"
 )
 
 func TestMockStreamClient(t *testing.T) {
 	client := NewMockStreamClient()
 
 	t.Run("Provider", func(t *testing.T) {
-		if client.Provider() != constants.ProviderCustom {
-			t.Errorf("Expected provider %s, got %s", constants.ProviderCustom, client.Provider())
+		if client.Provider() != shared2.ProviderCustom {
+			t.Errorf("Expected provider %s, got %s", shared2.ProviderCustom, client.Provider())
 		}
 	})
 

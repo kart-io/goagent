@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -191,7 +190,10 @@ func (m *RateLimitMiddleware) Wrap(tool interfaces.Tool, next ToolInvoker) ToolI
 			}
 
 			return nil, errors.Wrap(
-				fmt.Errorf("rate limit exceeded for tool: %s", tool.Name()),
+				errors.Newf(errors.CodeMiddlewareExecution, "rate limit exceeded for tool: %s", tool.Name()).
+					WithComponent("rate_limit").
+					WithOperation("execute").
+					WithContext("tool_name", tool.Name()),
 				errors.CodeMiddlewareExecution,
 				"rate limit exceeded",
 			)

@@ -3,9 +3,9 @@ package core
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 )
 
@@ -57,7 +57,7 @@ func (r *StreamRunnable[I, O]) run(ctx context.Context, input I, send func(Strea
 		return result, err
 	}
 	if r.source == nil {
-		return result, fmt.Errorf("流式执行源未配置")
+		return result, agentErrors.Newf(agentErrors.CodeInvalidConfig, "流式执行源未配置").WithComponent("stream_runnable").WithOperation("run")
 	}
 	callbacks := r.GetConfig().Callbacks
 	callbackPanicked := false
@@ -97,7 +97,7 @@ func (r *StreamRunnable[I, O]) run(ctx context.Context, input I, send func(Strea
 		case chunk.Error != nil:
 			emitErr = chunk.Error
 		case finished:
-			emitErr = fmt.Errorf("最终块之后不能继续发送事件")
+			emitErr = agentErrors.Newf(agentErrors.CodeInvalidOutput, "最终块之后不能继续发送事件").WithComponent("stream_runnable").WithOperation("run")
 		case chunk.Done:
 			final, finished = chunk, true
 		default:
@@ -130,7 +130,7 @@ func (r *StreamRunnable[I, O]) run(ctx context.Context, input I, send func(Strea
 	for _, validate := range r.finalValidators {
 		if validate == nil {
 			var zero O
-			return zero, fmt.Errorf("最终验收器不能为空")
+			return zero, agentErrors.Newf(agentErrors.CodeInvalidConfig, "最终验收器不能为空").WithComponent("stream_runnable").WithOperation("run")
 		}
 		if err = validate(ctx, result); err != nil {
 			var zero O
@@ -174,7 +174,7 @@ func (r *StreamRunnable[I, O]) Stream(ctx context.Context, input I) (<-chan Stre
 		return nil, err
 	}
 	if r.source == nil {
-		return nil, fmt.Errorf("流式执行源未配置")
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "流式执行源未配置").WithComponent("stream_runnable").WithOperation("stream")
 	}
 	output := make(chan StreamChunk[O], 1)
 	go func() {

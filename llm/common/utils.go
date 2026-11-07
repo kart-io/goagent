@@ -1,8 +1,10 @@
 package common
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math"
 	"net/http"
@@ -11,6 +13,7 @@ import (
 	"time"
 
 	agentErrors "github.com/kart-io/goagent/errors"
+	agentllm "github.com/kart-io/goagent/llm"
 )
 
 // ParseRetryAfter parses Retry-After header (seconds or HTTP-date)
@@ -55,11 +58,14 @@ func GenerateCallID() string {
 	return fmt.Sprintf("call_%d_%s", time.Now().UnixNano(), hex.EncodeToString(b))
 }
 
-// IsRetryable checks if an error is retryable based on its error code.
-// Retryable errors include rate limit errors, timeout errors, and general request errors.
+// IsRetryable 优先使用提供方的恢复信息；只有缺少该信息时才兼容既有框架码。
 func IsRetryable(err error) bool {
-	if err == nil {
+	if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return false
+	}
+	var providerErr *agentllm.ProviderError
+	if errors.As(err, &providerErr) {
+		return agentllm.ClassifyError(err).Retryable
 	}
 
 	code := agentErrors.GetCode(err)

@@ -13,6 +13,7 @@ import (
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/testing/mocks"
@@ -335,9 +336,9 @@ func TestDurableFallback(t *testing.T) {
 	triage = mocks.NewScriptedClient(mocks.TextReply("无效分流", "退款（原因：重复扣款）"))
 	d := compile(t, e, triageGraph(t, triage, mocks.NewScriptedClient(), false, nil), "v1")
 	_, err = d.Run(e.ctx(), e.id, Conversation{Input: "重复扣款"}, "")
-	require.ErrorIs(t, err, ErrInvalidRoute)
+	require.ErrorIs(t, err, agentErrors.ErrInvalidRoute)
 	_, err = d.Run(e.ctx(), e.id, Conversation{Input: "重复扣款"}, "")
-	require.ErrorIs(t, err, ErrInvalidRoute, "无兜底时对该运行 ID 是终态")
+	require.ErrorIs(t, err, agentErrors.ErrInvalidRoute, "无兜底时对该运行 ID 是终态")
 	require.Equal(t, 1, triage.Calls())
 }
 
@@ -381,7 +382,7 @@ func TestDurableFallbackRerouteWindow(t *testing.T) {
 			})}
 			g, err := Loop(workflow.Config{}, LoopConfig[record]{
 				Steps: []Step[record]{mark("review")}, MaxIterations: 2, Fallback: &fb,
-				Until: func(context.Context, record) (bool, error) { return false, ErrInvalidRoute },
+				Until: func(context.Context, record) (bool, error) { return false, agentErrors.ErrInvalidRoute },
 			})
 			require.NoError(t, err)
 			return compile(t, e, g, "v1")
@@ -455,7 +456,7 @@ func TestDurableVersionMigration(t *testing.T) {
 	}
 	old := compile(t, e, loop(2), "v1", "review")
 	snap, err := old.Run(context.Background(), e.id, record{}, "")
-	require.ErrorIs(t, err, durable.ErrApprovalRequired)
+	require.ErrorIs(t, err, agentErrors.ErrApprovalRequired)
 
 	_, err = compile(t, e, loop(3), "v1", "review").Run(context.Background(), e.id, record{}, snap.Key)
 	require.ErrorContains(t, err, "checkpoint does not match versioned graph")
@@ -466,7 +467,7 @@ func TestDurableVersionMigration(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "v1", stored.Version, "检查点自带版本，宿主据此选择旧图")
 	snap, err = compile(t, e, loop(2), "v1", "review").Run(context.Background(), e.id, record{}, snap.Key)
-	require.ErrorIs(t, err, durable.ErrApprovalRequired, "第二轮评审仍需审批")
+	require.ErrorIs(t, err, agentErrors.ErrApprovalRequired, "第二轮评审仍需审批")
 	snap, err = compile(t, e, loop(2), "v1", "review").Run(context.Background(), e.id, record{}, snap.Key)
 	require.NoError(t, err)
 	require.Equal(t, []string{"write", "review", "write", "review"}, snap.State.Log)

@@ -9,6 +9,7 @@ import (
 	"github.com/kart-io/goagent/codec/json"
 
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/stretchr/testify/require"
 )
@@ -28,15 +29,15 @@ func TestTokenAndToolLimitsRemainConservativeAcrossRestart(t *testing.T) {
 	cfg := Config{RootKey: "root", Version: "v1", MaxModelRequests: 4, MaxReservedTokens: 10, TokenPolicyVersion: "tokens-v1", MaxToolCalls: 1}
 	c, err := NewDurable(cfg, store)
 	require.NoError(t, err)
-	require.ErrorIs(t, c.Reserve(ctx, "missing"), ErrTokenEstimateRequired)
+	require.ErrorIs(t, c.Reserve(ctx, "missing"), agentErrors.ErrTokenEstimateRequired)
 	require.NoError(t, c.ReserveEstimated(ctx, "one", 6))
 	require.NoError(t, c.RecordUsage(ctx, "one", &interfaces.TokenUsage{TotalTokens: 3}))
 	require.NoError(t, c.ReserveTool(ctx, "tool-one"))
 	restarted, err := NewDurable(cfg, store)
 	require.NoError(t, err)
-	require.ErrorIs(t, restarted.ReserveEstimated(ctx, "two", 5), ErrBudgetExceeded)
+	require.ErrorIs(t, restarted.ReserveEstimated(ctx, "two", 5), agentErrors.ErrModelBudgetExceeded)
 	require.NoError(t, restarted.ReserveEstimated(ctx, "two", 4))
-	require.ErrorIs(t, restarted.ReserveTool(ctx, "tool-two"), ErrBudgetExceeded)
+	require.ErrorIs(t, restarted.ReserveTool(ctx, "tool-two"), agentErrors.ErrModelBudgetExceeded)
 	snap, err := restarted.Snapshot(ctx)
 	require.NoError(t, err)
 	require.Equal(t, 10, snap.ReservedTokens)
@@ -104,13 +105,13 @@ func TestExtendedLimitsAreAtomicAcrossControllers(t *testing.T) {
 		if err := <-results; err == nil {
 			success++
 		} else {
-			require.ErrorIs(t, err, ErrBudgetExceeded)
+			require.ErrorIs(t, err, agentErrors.ErrModelBudgetExceeded)
 		}
 	}
 	require.Equal(t, 3, success)
 	require.NoError(t, a.ReserveTool(ctx, "a"))
 	require.NoError(t, b.ReserveTool(ctx, "b"))
-	require.ErrorIs(t, a.ReserveTool(ctx, "c"), ErrBudgetExceeded)
+	require.ErrorIs(t, a.ReserveTool(ctx, "c"), agentErrors.ErrModelBudgetExceeded)
 	snap, err := b.Snapshot(ctx)
 	require.NoError(t, err)
 	require.Equal(t, 3, snap.ReservedTokens)

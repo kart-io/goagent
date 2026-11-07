@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 )
 
@@ -317,7 +318,7 @@ func (a *BaseAgent) Invoke(ctx context.Context, input *AgentInput) (*AgentOutput
 		return output, err
 	}
 
-	return output, ErrNotImplemented
+	return output, agentErrors.ErrNotImplemented
 }
 
 // InvokeFast 快速调用（绕过中间件）
@@ -341,7 +342,7 @@ func (a *BaseAgent) InvokeFast(ctx context.Context, input *AgentInput) (*AgentOu
 		Latency:   time.Since(startTime),
 	}
 
-	return output, ErrNotImplemented
+	return output, agentErrors.ErrNotImplemented
 }
 
 // Stream 流式执行 Agent

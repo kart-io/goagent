@@ -16,7 +16,8 @@ import (
 	"github.com/kart-io/goagent/core/session"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
-	"github.com/kart-io/goagent/llm/constants"
+
+	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/testing/replay"
 	"github.com/kart-io/goagent/tools"
 )
@@ -56,8 +57,8 @@ func (m *model) Complete(context.Context, *llm.CompletionRequest) (*llm.Completi
 func (m *model) Chat(context.Context, []llm.Message) (*llm.CompletionResponse, error) {
 	return nil, errors.New("unused")
 }
-func (*model) Provider() constants.Provider { return constants.ProviderCustom }
-func (*model) IsAvailable() bool            { return true }
+func (*model) Provider() shared.Provider { return shared.ProviderCustom }
+func (*model) IsAvailable() bool         { return true }
 func (m *model) CompleteStream(context.Context, *llm.CompletionRequest) (<-chan *llm.StreamChunk, error) {
 	return nil, errors.New("unused")
 }

@@ -10,6 +10,7 @@ import (
 
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/tools"
@@ -51,7 +52,7 @@ func interruptModel() *nativeEventModel {
 
 func interruptKeyFrom(t *testing.T, err error) string {
 	t.Helper()
-	require.ErrorIs(t, err, ErrWaiting)
+	require.ErrorIs(t, err, agentErrors.ErrAgentWaiting)
 	var waiting *WaitingError
 	require.True(t, errors.As(err, &waiting))
 	require.Len(t, waiting.Waits, 1)

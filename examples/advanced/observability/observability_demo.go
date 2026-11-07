@@ -10,7 +10,8 @@ import (
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
-	"github.com/kart-io/goagent/llm/constants"
+
+	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/middleware"
 	"github.com/kart-io/goagent/observability"
 )
@@ -47,8 +48,8 @@ func (c *MockLLMClient) CompleteToolsStream(ctx context.Context, req *llm.Comple
 	return c.CompleteStream(ctx, req)
 }
 
-func (c *MockLLMClient) Provider() constants.Provider {
-	return constants.ProviderOpenAI
+func (c *MockLLMClient) Provider() shared.Provider {
+	return shared.ProviderOpenAI
 }
 
 func main() {

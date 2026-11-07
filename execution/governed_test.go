@@ -8,6 +8,7 @@ import (
 	"github.com/kart-io/goagent/builder"
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/execution"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/testing/mocks"
@@ -108,7 +109,7 @@ func TestGovernedBuilderRequiresBoundScopeAndEnforcesBudget(t *testing.T) {
 	require.Equal(t, 1, effects)
 	require.Equal(t, 1, authorized)
 	_, err = a.AsRunnable().Invoke(ctx, "额度耗尽")
-	require.ErrorIs(t, err, budget.ErrBudgetExceeded)
+	require.ErrorIs(t, err, agentErrors.ErrModelBudgetExceeded)
 	require.Len(t, model.Requests(), 2)
 	require.Equal(t, 1, effects)
 }

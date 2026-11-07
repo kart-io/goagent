@@ -12,7 +12,8 @@ import (
 	agentErrors "github.com/kart-io/goagent/errors"
 	agentllm "github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/common"
-	"github.com/kart-io/goagent/llm/constants"
+
+	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/utils/httpclient"
 )
 
@@ -32,15 +33,15 @@ func NewDeepSeekWithOptions(opts ...agentllm.ClientOption) (*DeepSeekProvider, e
 
 	// 应用 Provider 特定的默认值
 	base.ApplyProviderDefaults(
-		constants.ProviderDeepSeek,
-		constants.DeepSeekBaseURL,
-		constants.DeepSeekDefaultModel,
-		constants.EnvDeepSeekBaseURL,
-		constants.EnvDeepSeekModel,
+		shared.ProviderDeepSeek,
+		shared.DeepSeekBaseURL,
+		shared.DeepSeekDefaultModel,
+		shared.EnvDeepSeekBaseURL,
+		shared.EnvDeepSeekModel,
 	)
 
 	// 统一处理 API Key
-	if err := base.EnsureAPIKey(constants.EnvDeepSeekAPIKey, constants.ProviderDeepSeek); err != nil {
+	if err := base.EnsureAPIKey(shared.EnvDeepSeekAPIKey, shared.ProviderDeepSeek); err != nil {
 		return nil, err
 	}
 
@@ -121,8 +122,8 @@ func (p *DeepSeekProvider) Embed(ctx context.Context, text string) ([]float32, e
 }
 
 // Provider returns the provider type
-func (p *DeepSeekProvider) Provider() constants.Provider {
-	return constants.ProviderDeepSeek
+func (p *DeepSeekProvider) Provider() shared.Provider {
+	return shared.ProviderDeepSeek
 }
 
 // MaxTokens returns the max tokens setting

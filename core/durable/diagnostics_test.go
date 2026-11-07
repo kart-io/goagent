@@ -9,6 +9,7 @@ import (
 
 	"github.com/kart-io/goagent/codec/json"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -23,7 +24,7 @@ func TestRunnerDiagnoseEvidenceAndReadOnly(t *testing.T) {
 		return nil, errors.New("SECRET failure")
 	}}}}
 	cp, err := r.Run(ctx, "run", json.RawMessage(`"SECRET input"`), "")
-	require.ErrorIs(t, err, ErrApprovalRequired)
+	require.ErrorIs(t, err, agentErrors.ErrApprovalRequired)
 	r.Store = diagnosticReadOnlyStore{Store: store}
 	r.BeforeApprove = func(context.Context, string, *Snapshot) error { t.Fatal("approval hook executed"); return nil }
 	report, err := r.Diagnose(ctx, "run")

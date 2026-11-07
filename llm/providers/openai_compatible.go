@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
+	shared "github.com/kart-io/goagent/constants"
 	agentllm "github.com/kart-io/goagent/llm"
-	"github.com/kart-io/goagent/llm/constants"
 )
 
 // OllamaBaseURL 是 Ollama 的 OpenAI 兼容端点；原生 /api 路径不再使用。
@@ -14,12 +14,12 @@ const OllamaBaseURL = "http://localhost:11434/v1"
 // NewKimiWithOptions 创建 Moonshot（Kimi）客户端，经 OpenAI 兼容协议支持流式与原生工具流。
 func NewKimiWithOptions(opts ...agentllm.ClientOption) (*OpenAIProvider, error) {
 	return newOpenAICompatible(openAICompatibleSpec{
-		provider:       constants.ProviderKimi,
-		defaultBaseURL: constants.KimiBaseURL,
+		provider:       shared.ProviderKimi,
+		defaultBaseURL: shared.KimiBaseURL,
 		defaultModel:   "moonshot-v1-8k",
-		envAPIKey:      constants.EnvKimiAPIKey,
-		envBaseURL:     constants.EnvKimiBaseURL,
-		envModel:       constants.EnvKimiModel,
+		envAPIKey:      shared.EnvKimiAPIKey,
+		envBaseURL:     shared.EnvKimiBaseURL,
+		envModel:       shared.EnvKimiModel,
 		capabilities:   openAICompatibleCapabilities,
 	}, opts...)
 }
@@ -27,12 +27,12 @@ func NewKimiWithOptions(opts ...agentllm.ClientOption) (*OpenAIProvider, error) 
 // NewSiliconFlowWithOptions 创建 SiliconFlow 客户端，经 OpenAI 兼容协议支持流式与原生工具流。
 func NewSiliconFlowWithOptions(opts ...agentllm.ClientOption) (*OpenAIProvider, error) {
 	return newOpenAICompatible(openAICompatibleSpec{
-		provider:       constants.ProviderSiliconFlow,
-		defaultBaseURL: constants.SiliconFlowBaseURL,
+		provider:       shared.ProviderSiliconFlow,
+		defaultBaseURL: shared.SiliconFlowBaseURL,
 		defaultModel:   "Qwen/Qwen2-7B-Instruct",
-		envAPIKey:      constants.EnvSiliconFlowAPIKey,
-		envBaseURL:     constants.EnvSiliconFlowBaseURL,
-		envModel:       constants.EnvSiliconFlowModel,
+		envAPIKey:      shared.EnvSiliconFlowAPIKey,
+		envBaseURL:     shared.EnvSiliconFlowBaseURL,
+		envModel:       shared.EnvSiliconFlowModel,
 		capabilities:   openAICompatibleCapabilities,
 	}, opts...)
 }
@@ -41,11 +41,11 @@ func NewSiliconFlowWithOptions(opts ...agentllm.ClientOption) (*OpenAIProvider, 
 // 本地模型首块较慢，未改动默认超时时使用 120 秒。
 func NewOllamaWithOptions(opts ...agentllm.ClientOption) (*OpenAIProvider, error) {
 	return newOpenAICompatible(openAICompatibleSpec{
-		provider:       constants.ProviderOllama,
+		provider:       shared.ProviderOllama,
 		defaultBaseURL: OllamaBaseURL,
 		defaultModel:   "llama2",
-		envBaseURL:     constants.EnvOllamaBaseURL,
-		envModel:       constants.EnvOllamaModel,
+		envBaseURL:     shared.EnvOllamaBaseURL,
+		envModel:       shared.EnvOllamaModel,
 		apiKeyOptional: true,
 		defaultTimeout: 120 * time.Second,
 		capabilities:   openAICompatibleCapabilities,

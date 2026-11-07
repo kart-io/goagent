@@ -2,10 +2,10 @@ package tools
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/kart-io/goagent/codec/json"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 )
 
@@ -63,12 +63,16 @@ func decodeJournaledOutput(data json.RawMessage) (*interfaces.ToolOutput, error)
 		return j.ToolOutput, nil
 	}
 	if j.ToolOutput == nil || j.Success || j.Error != "" {
-		return nil, fmt.Errorf("invalid journaled rejected tool result")
+		return nil, agentErrors.Newf(agentErrors.CodeStateValidation, "invalid journaled rejected tool result").
+			WithComponent("dispatcher").
+			WithOperation("decode_journaled_output")
 	}
 	m, _ := j.Result.(map[string]any)
 	message, ok := m["message"].(string)
 	if !ok {
-		return nil, fmt.Errorf("invalid journaled rejected tool result")
+		return nil, agentErrors.Newf(agentErrors.CodeStateValidation, "invalid journaled rejected tool result").
+			WithComponent("dispatcher").
+			WithOperation("decode_journaled_output")
 	}
 	j.Result = rejection{message: message, data: m["data"]}
 	return j.ToolOutput, nil

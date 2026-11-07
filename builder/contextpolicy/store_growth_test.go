@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -92,7 +93,7 @@ func TestResultStoreBoundedGrowth(t *testing.T) {
 	for _, s := range []ResultStore{mem, ds} {
 		ctx := WithResultScope(context.Background(), "run-0")
 		_, err := s.Get(ctx, NewRef("run-0", "p", "0", append([]byte{0}, payload...)))
-		require.ErrorIs(t, err, ErrReleased, "释放后读不到证据")
+		require.ErrorIs(t, err, agentErrors.ErrResultScopeReleased, "释放后读不到证据")
 	}
 	requireOnlyTombstones(t, dir, runs+1)
 
@@ -119,8 +120,8 @@ func TestResultStoreGetMissingLeavesNoFiles(t *testing.T) {
 	require.NoError(t, s.PutIfAbsent(ctx, ref, []byte("x")))
 	require.NoError(t, s.Release(ctx, "run"))
 	_, err = s.Get(ctx, ref)
-	require.ErrorIs(t, err, ErrReleased)
-	require.ErrorIs(t, err, durable.ErrScopeRemoved)
+	require.ErrorIs(t, err, agentErrors.ErrResultScopeReleased)
+	require.ErrorIs(t, err, agentErrors.ErrScopeRemoved)
 	requireOnlyTombstones(t, dir, 1)
 }
 
@@ -134,10 +135,10 @@ func TestResultStoreLatePutAfterRelease(t *testing.T) {
 	mem := NewMemoryStore()
 	require.NoError(t, mem.PutIfAbsent(ctx, ref, data))
 	require.NoError(t, mem.Release(ctx, "run"))
-	require.ErrorIs(t, mem.PutIfAbsent(ctx, late, data), ErrReleased)
-	require.ErrorIs(t, mem.PutIfAbsent(ctx, ref, data), ErrReleased)
+	require.ErrorIs(t, mem.PutIfAbsent(ctx, late, data), agentErrors.ErrResultScopeReleased)
+	require.ErrorIs(t, mem.PutIfAbsent(ctx, ref, data), agentErrors.ErrResultScopeReleased)
 	_, err := mem.Get(ctx, late)
-	require.ErrorIs(t, err, ErrReleased, "内存版释放后读取与持久版一致")
+	require.ErrorIs(t, err, agentErrors.ErrResultScopeReleased, "内存版释放后读取与持久版一致")
 	require.Empty(t, mem.(*resultStore).memory)
 
 	dir := t.TempDir()
@@ -145,9 +146,9 @@ func TestResultStoreLatePutAfterRelease(t *testing.T) {
 	require.NoError(t, writer.PutIfAbsent(ctx, ref, data))
 	require.NoError(t, releaser.Release(ctx, "run"))
 	err = writer.PutIfAbsent(ctx, late, data)
-	require.ErrorIs(t, err, ErrReleased)
-	require.ErrorIs(t, err, durable.ErrScopeRemoved)
-	require.ErrorIs(t, newFileResultStore(t, dir).PutIfAbsent(ctx, ref, data), ErrReleased, "新实例（重启后）同样拒绝")
+	require.ErrorIs(t, err, agentErrors.ErrResultScopeReleased)
+	require.ErrorIs(t, err, agentErrors.ErrScopeRemoved)
+	require.ErrorIs(t, newFileResultStore(t, dir).PutIfAbsent(ctx, ref, data), agentErrors.ErrResultScopeReleased, "新实例（重启后）同样拒绝")
 	require.NoError(t, releaser.Release(ctx, "run"), "重复释放幂等")
 	requireOnlyTombstones(t, dir, 1)
 
@@ -161,7 +162,7 @@ func TestResultStoreLatePutAfterRelease(t *testing.T) {
 				d := []byte(fmt.Sprint(j))
 				err := writer.PutIfAbsent(ctx, NewRef(run, "p", fmt.Sprint(j), d), d)
 				if err != nil {
-					assert.ErrorIs(t, err, ErrReleased)
+					assert.ErrorIs(t, err, agentErrors.ErrResultScopeReleased)
 				}
 			})
 		}
@@ -225,7 +226,7 @@ func TestResultStoreRunsIsolated(t *testing.T) {
 			require.NoError(t, s.PutIfAbsent(b, refB, []byte("b")))
 			require.NoError(t, s.Release(a, "A"))
 			_, err := s.Get(a, refA)
-			require.ErrorIs(t, err, ErrReleased)
+			require.ErrorIs(t, err, agentErrors.ErrResultScopeReleased)
 			got, err := s.Get(b, refB)
 			require.NoError(t, err)
 			require.Equal(t, "b", string(got))
@@ -257,8 +258,8 @@ func TestResultStoreGetAfterTombstoneBeforeRemoval(t *testing.T) {
 	before, beforeDirs := diskFiles(t, dir)
 	for _, r := range []Ref{ref, NewRef("run", "p", "missing", data)} {
 		_, err = s.Get(ctx, r)
-		require.ErrorIs(t, err, ErrReleased)
-		require.ErrorIs(t, err, durable.ErrScopeRemoved)
+		require.ErrorIs(t, err, agentErrors.ErrResultScopeReleased)
+		require.ErrorIs(t, err, agentErrors.ErrScopeRemoved)
 	}
 	after, afterDirs := diskFiles(t, dir)
 	require.Equal(t, before, after, "读取不产生文件")

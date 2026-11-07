@@ -2,10 +2,10 @@ package builder
 
 import (
 	"context"
-	"fmt"
 	"io"
 
 	"github.com/kart-io/goagent/core"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // AsRunnable 将 Builder 接入标准泛型执行契约。
@@ -37,14 +37,14 @@ func (a *ConfigurableAgent[C, S]) AsRunnable() *core.StreamRunnable[any, *AgentO
 					return event.Error
 				}
 				if event.Type == "error" {
-					return fmt.Errorf("执行失败：%s", event.Message)
+					return agentErrors.Newf(agentErrors.CodeAgentExecution, "执行失败：%s", event.Message).WithComponent("builder").WithOperation("as_runnable")
 				}
 				chunk := core.StreamChunk[*AgentOutput]{
 					Data: event.Output, Done: event.Type == "done",
 					Event: &core.StreamEvent{Type: event.Type, Delta: event.Delta, Step: event.Step, Tool: event.Tool, Sources: event.Sources, Usage: event.Usage},
 				}
 				if chunk.Done && chunk.Data == nil {
-					return fmt.Errorf("最终事件缺少输出")
+					return agentErrors.Newf(agentErrors.CodeInvalidOutput, "最终事件缺少输出").WithComponent("builder").WithOperation("as_runnable")
 				}
 				if err := emit(chunk); err != nil {
 					return err

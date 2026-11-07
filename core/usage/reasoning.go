@@ -1,6 +1,6 @@
 package usage
 
-import "fmt"
+import agentErrors "github.com/kart-io/goagent/errors"
 
 // ReasoningConfig is an explicit request setting, never an inferred server
 // default or a claim that two providers apply equivalent reasoning policies.
@@ -13,18 +13,18 @@ type ReasoningConfig struct {
 
 func (c ReasoningConfig) Validate() error {
 	if c.BudgetSet && (c.BudgetTokens < -1 || int64(c.BudgetTokens) > 2147483647) {
-		return fmt.Errorf("invalid thinking budget")
+		return agentErrors.Newf(agentErrors.CodeInvalidConfig, "invalid thinking budget").WithComponent("reasoning").WithOperation("validate")
 	}
 	if !c.BudgetSet && c.BudgetTokens != 0 {
-		return fmt.Errorf("thinking budget requires BudgetSet")
+		return agentErrors.Newf(agentErrors.CodeInvalidConfig, "thinking budget requires BudgetSet").WithComponent("reasoning").WithOperation("validate")
 	}
 	if c.BudgetSet && c.Effort != "" {
-		return fmt.Errorf("reasoning effort and thinking budget are mutually exclusive")
+		return agentErrors.Newf(agentErrors.CodeInvalidConfig, "reasoning effort and thinking budget are mutually exclusive").WithComponent("reasoning").WithOperation("validate")
 	}
 	switch c.Effort {
 	case "", "none", "minimal", "low", "medium", "high", "xhigh", "max":
 	default:
-		return fmt.Errorf("invalid reasoning effort")
+		return agentErrors.Newf(agentErrors.CodeInvalidConfig, "invalid reasoning effort").WithComponent("reasoning").WithOperation("validate")
 	}
 	return nil
 }

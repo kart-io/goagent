@@ -16,6 +16,7 @@ import (
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/durable/storetest"
 	"github.com/kart-io/goagent/core/session"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
 )
 
@@ -123,20 +124,20 @@ func seqs(events []session.Event) []int64 {
 
 func testNotFound(t *testing.T, a, _ session.Store) {
 	_, err := a.Read(context.Background(), "s", 0)
-	require.ErrorIs(t, err, session.ErrNotFound)
+	require.ErrorIs(t, err, agentErrors.ErrSessionNotFound)
 }
 
 func testAppendCAS(t *testing.T, a, b session.Store) {
 	ctx := context.Background()
 	_, err := a.Append(ctx, "s", 1, user(t, "不存在的会话"))
-	require.ErrorIs(t, err, session.ErrConflict, "会话不存在时期望序号须为 0")
+	require.ErrorIs(t, err, agentErrors.ErrSessionConflict, "会话不存在时期望序号须为 0")
 	last, err := a.Append(ctx, "s", 0, user(t, "一"), user(t, "二"))
 	require.NoError(t, err)
 	require.EqualValues(t, 2, last)
 	_, err = b.Append(ctx, "s", 0, user(t, "冲突"))
-	require.ErrorIs(t, err, session.ErrConflict, "过期的期望序号被拒")
+	require.ErrorIs(t, err, agentErrors.ErrSessionConflict, "过期的期望序号被拒")
 	_, err = b.Append(ctx, "s", 3, user(t, "超前"))
-	require.ErrorIs(t, err, session.ErrConflict)
+	require.ErrorIs(t, err, agentErrors.ErrSessionConflict)
 	last, err = b.Append(ctx, "s", 2, user(t, "三"))
 	require.NoError(t, err)
 	require.EqualValues(t, 3, last)
@@ -170,7 +171,7 @@ func testConcurrentAppend(t *testing.T, a, b session.Store) {
 				won = append(won, lasts[w])
 				continue
 			}
-			require.ErrorIs(t, err, session.ErrConflict)
+			require.ErrorIs(t, err, agentErrors.ErrSessionConflict)
 		}
 		require.Equal(t, []int64{expected + 2}, won, "第 %d 轮", round)
 		expected += 2
@@ -236,16 +237,16 @@ func testFork(t *testing.T, a, b session.Store) {
 	_, err := a.Append(ctx, "s", 0, user(t, "一"), user(t, "二"), user(t, "三"))
 	require.NoError(t, err)
 	require.NoError(t, a.Fork(ctx, "s", "f", 2))
-	require.ErrorIs(t, b.Fork(ctx, "s", "f", 0), session.ErrExists)
-	require.ErrorIs(t, b.Fork(ctx, "missing", "g", 0), session.ErrNotFound)
+	require.ErrorIs(t, b.Fork(ctx, "s", "f", 0), agentErrors.ErrSessionExists)
+	require.ErrorIs(t, b.Fork(ctx, "missing", "g", 0), agentErrors.ErrSessionNotFound)
 	_, err = b.Read(ctx, "g", 0)
-	require.ErrorIs(t, err, session.ErrNotFound, "失败的分叉不创建会话")
+	require.ErrorIs(t, err, agentErrors.ErrSessionNotFound, "失败的分叉不创建会话")
 
 	forked := read(t, b, "f", 0)
 	require.Equal(t, []int64{1, 2}, seqs(forked))
 	require.Equal(t, read(t, a, "s", 0)[:2], forked, "分叉原样复制事件")
 	_, err = b.Append(ctx, "f", 3, user(t, "超前"))
-	require.ErrorIs(t, err, session.ErrConflict, "分叉的最后序号是复制的最后一个事件")
+	require.ErrorIs(t, err, agentErrors.ErrSessionConflict, "分叉的最后序号是复制的最后一个事件")
 	_, err = b.Append(ctx, "f", 2, user(t, "分支"))
 	require.NoError(t, err)
 	require.Len(t, read(t, a, "s", 0), 3, "分叉不影响来源")
@@ -297,7 +298,7 @@ func requireBlocked(t *testing.T, s session.Store, id, name string) {
 	if err == nil {
 		_ = unlock()
 	}
-	require.ErrorIs(t, err, durable.ErrLockUnavailable)
+	require.ErrorIs(t, err, agentErrors.ErrLockUnavailable)
 	require.ErrorIs(t, err, context.DeadlineExceeded, "须保留 ctx 错误")
 }
 
@@ -343,18 +344,18 @@ func testAppendAllConflict(t *testing.T, a, b session.Store) {
 		session.AppendBatch{ID: "s2", Events: []session.Event{user(t, "new")}},
 		session.AppendBatch{ID: "s1", Events: []session.Event{user(t, "stale")}},
 	)
-	require.ErrorIs(t, err, session.ErrConflict)
+	require.ErrorIs(t, err, agentErrors.ErrSessionConflict)
 	_, err = b.Read(ctx, "s2", 0)
-	require.ErrorIs(t, err, session.ErrNotFound)
+	require.ErrorIs(t, err, agentErrors.ErrSessionNotFound)
 	require.Len(t, read(t, b, "s1", 0), 1)
 	// 只比较的空批次同样参与判定。
 	_, err = a.AppendAll(ctx,
 		session.AppendBatch{ID: "s2", Events: []session.Event{user(t, "new")}},
 		session.AppendBatch{ID: "s1", Expected: 9},
 	)
-	require.ErrorIs(t, err, session.ErrConflict)
+	require.ErrorIs(t, err, agentErrors.ErrSessionConflict)
 	_, err = b.Read(ctx, "s2", 0)
-	require.ErrorIs(t, err, session.ErrNotFound)
+	require.ErrorIs(t, err, agentErrors.ErrSessionNotFound)
 }
 
 func testAppendAllRejected(t *testing.T, a, b session.Store) {
@@ -367,5 +368,5 @@ func testAppendAllRejected(t *testing.T, a, b session.Store) {
 	_, err = a.AppendAll(ctx, session.AppendBatch{ID: "s1", Events: []session.Event{user(t, "x")}}, session.AppendBatch{})
 	require.Error(t, err)
 	_, err = b.Read(ctx, "s1", 0)
-	require.ErrorIs(t, err, session.ErrNotFound)
+	require.ErrorIs(t, err, agentErrors.ErrSessionNotFound)
 }

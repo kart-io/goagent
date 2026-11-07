@@ -19,7 +19,7 @@ defer c.Close()
 
 _ = c.Set(ctx, "key", "value", 10*time.Minute) // ttl <= 0 时使用构造时的 TTL
 value, err := c.Get(ctx, "key")
-if errors.Is(err, cache.ErrCacheMiss) {
+if errors.Is(err, agentErrors.ErrCacheMiss) {
     // 未命中或已过期
 }
 stats := c.GetStats() // Hits、Misses、Size、HitRate

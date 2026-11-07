@@ -3,7 +3,6 @@ package providers
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"strings"
 	"time"
@@ -68,7 +67,7 @@ func (p *OpenAIProvider) completeStream(ctx context.Context, req *agentllm.Compl
 			err = stall
 		}
 		watch.stop()
-		return nil, agentErrors.NewLLMRequestError(p.ProviderName(), model, openAIProviderError(err, *retryAfter)).WithContext("stream", true)
+		return nil, wrapProviderError(p.ProviderName(), model, openAIProviderError(err, *retryAfter)).WithContext("stream", true)
 	}
 	out := make(chan *agentllm.StreamChunk)
 	go func() {
@@ -105,17 +104,19 @@ func (p *OpenAIProvider) completeStream(ctx context.Context, req *agentllm.Compl
 				terminal := &agentllm.StreamChunk{ResponseModel: responseModel, Content: content.String(), ReasoningContent: reasoning.String(), FinishReason: finishReason, Usage: usage, Done: true}
 				// 正常结束恰好碰上时限时仍按正常结束处理。
 				if stall := watch.stalled(); stall != nil && (!errors.Is(err, io.EOF) || finishReason == "") {
-					terminal.Error = agentErrors.NewLLMRequestError(p.ProviderName(), model, openAIProviderError(stall, 0))
+					terminal.Error = wrapProviderError(p.ProviderName(), model, openAIProviderError(stall, 0))
 				} else if !errors.Is(err, io.EOF) {
-					terminal.Error = agentErrors.NewLLMRequestError(p.ProviderName(), model, openAIProviderError(err, 0))
+					terminal.Error = wrapProviderError(p.ProviderName(), model, openAIProviderError(err, 0))
 				} else if finishReason == "" {
 					// 连接在结束帧前关闭：包成 ProviderError，ClassifyError 才能判为可重试。
-					terminal.Error = agentErrors.NewLLMRequestError(p.ProviderName(), model, openAIProviderError(io.ErrUnexpectedEOF, 0))
+					terminal.Error = wrapProviderError(p.ProviderName(), model, openAIProviderError(io.ErrUnexpectedEOF, 0))
 				} else {
 					for _, index := range order {
 						call := calls[index]
 						if call.ID == "" || call.Function.Name == "" {
-							terminal.Error = fmt.Errorf("工具调用缺少 ID 或名称")
+							terminal.Error = agentErrors.Newf(agentErrors.CodeLLMResponse, "工具调用缺少 ID 或名称").
+								WithComponent("openai").
+								WithOperation("parse_response")
 							terminal.ToolCalls = nil
 							break
 						}
@@ -139,12 +140,14 @@ func (p *OpenAIProvider) completeStream(ctx context.Context, req *agentllm.Compl
 			choice := response.Choices[0]
 			reasoning.WriteString(choice.Delta.ReasoningContent)
 			if choice.Delta.FunctionCall != nil {
-				fail(fmt.Errorf("原生工具流需要 tool_calls 响应，服务返回了旧 function_call 协议"))
+				fail(agentErrors.Newf(agentErrors.CodeLLMResponse, "原生工具流需要 tool_calls 响应，服务返回了旧 function_call 协议").
+					WithComponent("openai").
+					WithOperation("parse_response"))
 				return
 			}
 			if len(choice.Delta.ToolCalls) > 0 {
 				if completeBatchSeen {
-					fail(fmt.Errorf("完整工具调用结束帧后仍收到工具分片"))
+					fail(agentErrors.Newf(agentErrors.CodeLLMResponse, "完整工具调用结束帧后仍收到工具分片").WithComponent("openai").WithOperation("parse_response"))
 					return
 				}
 				completeBatch, err := indexCompleteToolBatch(choice.Delta.ToolCalls, string(choice.FinishReason), len(calls) > 0)
@@ -156,7 +159,7 @@ func (p *OpenAIProvider) completeStream(ctx context.Context, req *agentllm.Compl
 			}
 			for _, delta := range choice.Delta.ToolCalls {
 				if delta.Index == nil || *delta.Index < 0 {
-					fail(fmt.Errorf("工具分片缺少有效索引"))
+					fail(agentErrors.Newf(agentErrors.CodeLLMResponse, "工具分片缺少有效索引").WithComponent("openai").WithOperation("parse_response"))
 					return
 				}
 				i := *delta.Index
@@ -198,7 +201,9 @@ func indexCompleteToolBatch(calls []openai.ToolCall, finish string, hasPrevious 
 		return false, nil
 	}
 	invalid := func() (bool, error) {
-		return false, fmt.Errorf("缺少索引的工具调用必须为独立、完整的结束帧")
+		return false, agentErrors.Newf(agentErrors.CodeLLMResponse, "缺少索引的工具调用必须为独立、完整的结束帧").
+			WithComponent("openai").
+			WithOperation("parse_response")
 	}
 	if hasPrevious || finish != "tool_calls" {
 		return invalid()

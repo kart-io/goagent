@@ -3,19 +3,16 @@ package multiagent
 import (
 	"context"
 	"errors"
-	"fmt"
 	"reflect"
 	"strings"
-	"time"
 
 	"github.com/kart-io/goagent/builder"
+	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/tools"
 	"github.com/kart-io/goagent/workflow"
 )
-
-// sessionCleanupTimeout 与 tools.RunnableToolConfig.CleanupTimeout 的默认值一致。
-const sessionCleanupTimeout = 5 * time.Second
 
 // Step 是图中的一步。Run 必须非 nil；ParallelStep 返回的 Step 由私有字段描述并行分支，忽略 Run。
 type Step[T any] struct {
@@ -43,10 +40,10 @@ func AgentStep[T any](name string, agent AgentFactory,
 	in func(T) (any, error), out func(T, *builder.AgentOutput) (T, error),
 ) (Step[T], error) {
 	if !validName(name) {
-		return Step[T]{}, fmt.Errorf("Step 名称 %q 无效", name)
+		return Step[T]{}, agentErrors.Newf(agentErrors.CodeInvalidConfig, "Step 名称 %q 无效", name).WithComponent("multiagent").WithOperation("agent_step")
 	}
 	if agent == nil || in == nil || out == nil {
-		return Step[T]{}, fmt.Errorf("AgentStep %q 需要 agent、in 与 out", name)
+		return Step[T]{}, agentErrors.Newf(agentErrors.CodeInvalidConfig, "AgentStep %q 需要 agent、in 与 out", name).WithComponent("multiagent").WithOperation("agent_step")
 	}
 	run, err := workflow.Adapt(sessionRunnable(agent), in, out)
 	if err != nil {
@@ -62,7 +59,7 @@ func sessionRunnable(factory AgentFactory) *core.StreamRunnable[any, *builder.Ag
 		owned, err := factory(ctx)
 		if owned.Close != nil {
 			defer func() {
-				cleanCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), sessionCleanupTimeout)
+				cleanCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), shared.DefaultSessionCleanupTimeout)
 				defer cancel()
 				err = errors.Join(err, owned.Close(cleanCtx))
 			}()
@@ -71,14 +68,14 @@ func sessionRunnable(factory AgentFactory) *core.StreamRunnable[any, *builder.Ag
 			return err
 		}
 		if owned.Close == nil || isNil(owned.Runnable) {
-			return errors.New("会话需要 Runnable 与 Close")
+			return agentErrors.NewInvalidConfigError("multiagent", "session_factory", "会话需要 Runnable 与 Close")
 		}
 		chunks, err := owned.Runnable.Stream(ctx, input)
 		if err != nil {
 			return err
 		}
 		if chunks == nil {
-			return errors.New("会话返回了 nil 流")
+			return agentErrors.New(agentErrors.CodeInvalidOutput, "会话返回了 nil 流").WithComponent("multiagent").WithOperation("stream_session")
 		}
 		var failure error
 		// 出错后仍读到流关闭，保证 Close 在会话结束之后调用。
@@ -88,7 +85,7 @@ func sessionRunnable(factory AgentFactory) *core.StreamRunnable[any, *builder.Ag
 			case chunk.Error != nil:
 				failure = chunk.Error
 			case chunk.Done && chunk.Data == nil:
-				failure = errors.New("会话没有返回输出")
+				failure = agentErrors.New(agentErrors.CodeInvalidOutput, "会话没有返回输出").WithComponent("multiagent").WithOperation("stream_session")
 			default:
 				failure = emit(chunk)
 			}
@@ -116,10 +113,10 @@ func isNil(value any) bool {
 
 func checkStep[T any](s Step[T]) error {
 	if !validName(s.Name) {
-		return fmt.Errorf("Step 名称 %q 无效", s.Name)
+		return agentErrors.Newf(agentErrors.CodeInvalidConfig, "Step 名称 %q 无效", s.Name).WithComponent("multiagent").WithOperation("check_step")
 	}
 	if isNil(s.Run) {
-		return fmt.Errorf("Step %q 缺少 Run", s.Name)
+		return agentErrors.Newf(agentErrors.CodeInvalidConfig, "Step %q 缺少 Run", s.Name).WithComponent("multiagent").WithOperation("check_step")
 	}
 	return nil
 }

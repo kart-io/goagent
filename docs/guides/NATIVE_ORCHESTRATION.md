@@ -84,7 +84,7 @@ if snapshot.Waiting {
 }
 ```
 
-`AsRunnable` 的审批暂停是一次正常结束的调用：`snapshot.Waiting=true`、`snapshot.Done=false`。Stream 的最终 Done 只代表本次调用结束，业务流程是否完成要检查 Data.Done。兼容方法 `Run` 仍返回 `durable.ErrApprovalRequired`。`Snapshot(ctx, runID)` 只读加载并验证持久状态，需要获取运行锁；活跃执行期间可能等待，调用方应设置超时。
+`AsRunnable` 的审批暂停是一次正常结束的调用：`snapshot.Waiting=true`、`snapshot.Done=false`。Stream 的最终 Done 只代表本次调用结束，业务流程是否完成要检查 Data.Done。兼容方法 `Run` 仍返回 `agentErrors.ErrApprovalRequired`。`Snapshot(ctx, runID)` 只读加载并验证持久状态，需要获取运行锁；活跃执行期间可能等待，调用方应设置超时。
 
 事件包括 node_start/node_end、branch_start/branch_end、工具及节点原有事件、approval_required。分支和子事件带节点作用域。它们是本次执行的实时观察，不是可恢复的事件日志；消费者断开不会撤销已经提交的业务效果。提前停止消费 Stream 必须取消 context。
 
