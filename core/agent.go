@@ -54,9 +54,6 @@ type AgentInput struct {
 
 	// 并发安全保护
 	contextMu sync.RWMutex `json:"-"` // Context map 的读写锁
-
-	// Debugging
-	inUse bool `json:"-"` // Only used when DebugMode is true
 }
 
 // AgentOutput Agent 输出

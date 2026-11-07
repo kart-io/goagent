@@ -329,7 +329,7 @@ func hasWrappingVerb(format string) bool {
 		}
 		if !afterIndex {
 			var ok bool
-			i, afterIndex, ok = index(i)
+			i, _, ok = index(i)
 			valid = valid && ok
 		}
 		if i < len(format) {
