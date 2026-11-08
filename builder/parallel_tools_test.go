@@ -22,6 +22,8 @@ type concurrencyProbe struct {
 	active, peak  int
 	calls         int
 	siblingCancel bool
+	startBarrier  chan struct{}
+	barrierCalls  int
 }
 
 func (p *concurrencyProbe) invoke(ctx context.Context, in *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
@@ -30,12 +32,25 @@ func (p *concurrencyProbe) invoke(ctx context.Context, in *interfaces.ToolInput)
 	p.calls++
 	p.active++
 	p.peak = max(p.peak, p.active)
+	if p.startBarrier != nil && p.calls == p.barrierCalls {
+		close(p.startBarrier)
+	}
 	p.mu.Unlock()
 	defer func() {
 		p.mu.Lock()
 		p.active--
 		p.mu.Unlock()
 	}()
+	if p.startBarrier != nil {
+		select {
+		case <-p.startBarrier:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+	}
 	if id == "bad" {
 		return nil, errors.New("执行失败")
 	}
@@ -144,8 +159,11 @@ func TestParallelToolCallFailureDoesNotCancelSiblings(t *testing.T) {
 func TestParallelToolCallsReplay(t *testing.T) {
 	store, err := durable.NewFileStore(t.TempDir())
 	require.NoError(t, err)
-	ctx := durable.WithJournal(durable.WithExecutionKey(context.Background(), "node"), store)
-	probe := &concurrencyProbe{}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	ctx = durable.WithJournal(durable.WithExecutionKey(ctx, "node"), store)
+	// 所有工具入场后再完成，峰值由事件同步保证，不依赖日志写入速度或人工休眠。
+	probe := &concurrencyProbe{startBarrier: make(chan struct{}), barrierCalls: 3}
 	business := probeTools(t, probe, 4)
 	model := nativeModel(
 		[]*llm.StreamChunk{{Done: true, FinishReason: "tool_calls", ToolCalls: probeCalls("0", "1", "2")}},
@@ -161,6 +179,17 @@ func TestParallelToolCallsReplay(t *testing.T) {
 	require.Len(t, model.requests, 2)
 	require.Equal(t, 3, probe.calls)
 	require.Equal(t, 3, probe.peak)
+}
+
+func TestParallelProbeBarrierCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	probe := &concurrencyProbe{startBarrier: make(chan struct{}), barrierCalls: 2}
+	out, err := probe.invoke(ctx, &interfaces.ToolInput{Args: map[string]interface{}{"id": "0"}})
+	require.ErrorIs(t, err, context.Canceled)
+	require.Nil(t, out)
+	require.Equal(t, 1, probe.calls)
+	require.Zero(t, probe.active, "取消后释放工具的在场计数")
 }
 
 // 含未声明并发能力的工具时，整轮按顺序执行。

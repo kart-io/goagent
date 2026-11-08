@@ -7,8 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.50.0] - 2026-11-08
+
+### Changed
+
+- **破坏性**：共享常量和默认策略统一使用 `constants`，错误统一使用 `errors`；工作流起止、多 Agent 完成标记、会话事件及工具名称的旧入口已删除，不保留转发别名。调用方按[常量迁移指南](docs/guides/CONSTANTS_MIGRATION.md)更新导入和符号。
+- **破坏性**：`tools.WithMiddleware` 只接受 `middleware.ToolMiddlewareFunc`，删除旧钩子生命周期；状态对象须显式传 `.Wrap`。日志按每次调用独立计时，不修改调用方参数，错误时保留部分结果。见[工具中间件指南](docs/guides/TOOL_MIDDLEWARE.md)。
+- **破坏性**：子图审批统一使用 `workflow.WithResume` 和结构化 `ResumeRequest`，不再识别裸审批键；叶子中断及普通持久操作的原始输入仍由 `durable.WithResume` 提供。无载荷与显式 JSON `null` 保持区别。
+- 在线持久操作只接受 operation-v2；旧 operation-v1 须显式离线迁移，不能删除账本后强行重跑。检查点故障切换后保持副库权威，不因主库重新健康自动切回。
+
 ### Added
 
+- `core/durable/migrate.OperationsV1`：默认只读预览，显式 `Apply` 才按有序锁和原子 `SaveAll` 转换目标账本；保留身份、输入指纹、结果、次数及业务数据，不执行业务回调。提供[操作步骤和可执行示例](core/durable/migrate/README.md)。
+- 退役接口与无效配置的 AST 门禁：覆盖别名、匿名嵌入、函数变量及接收者别名，防止旧入口回流；合法领域类型、现行 JSON facade 与崩溃恢复契约保持。
 - 格式化业务错误统一使用现有 `Newf`/专用构造器并补齐分类和组件，保留合法 `%w` 错误链；治理检查覆盖 `fmt` 导入别名及 `%%w` 转义。
 - 框架错误统一由 `errors` 包处理：清理68个历史哨兵，统一保留46个实际使用的对象，保持身份与文本并提供错误码；45处即时业务错误补齐分类及组件。旧领域错误入口删除，文案改为 `Message*`，已联动案例和扩展；详见错误处理迁移指南。
 - 顶层 `constants` 包按领域集中维护共享常量与默认值；错误码、错误分类及提示由 `errors` 包按领域维护；共享协议常量的旧转发入口全部删除，直接使用 `constants`；`Provider` 具名类型及8个typed枚举一并迁入中央，精确值及其余常量类型保持不变。见[常量迁移指南](docs/guides/CONSTANTS_MIGRATION.md)；错误入口迁移到 `errors`，见错误处理迁移指南。导入检查约束常量包只依赖标准库。
@@ -45,10 +56,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- `tools.ToolCall` 兼容别名；使用 `ToolCallRequest`。删除旧 `core/execution` 流协议及 `core/streaming_alias.go`，使用现行泛型 `Runnable/StreamRunnable`。
+- 通用缓存的 `InMemoryCache/LRUCache/MultiTierCache`、对应构造器及专属 `CacheEntry`；`CacheConfig` 删除无执行路径的 `Type/MaxSize/CleanupInterval`。`SimpleCache` 只提供自身 TTL 契约，不作为 LRU 或多级能力的等价替代。
+- Runtime 无效配置和指标容器、Runnable 空重试配置，以及检查点的 `FailbackDelay` 与无调用切回方法。RuntimeManager 改为零参构造；模型恢复使用真实的 Builder `RequestError` 路径。完整接口清单见[兼容入口迁移指南](docs/guides/COMPATIBILITY_CLEANUP.md)。
 - `utils/json` 包与 `github.com/bytedance/sonic` 依赖：改用 `codec/json`；`Marshal`、`Unmarshal`、`RawMessage`、`Number` 改用 `codec/json` 中的同名函数与类型，`MarshalIndent` 改用 `json.Marshal(v, json.Indent(...))`（缩进与前缀只能含空格与制表符），`Decode` 改用 `codec.Convert`，`Get`、`GetString` 等路径查询没有替代。
 
 ### Fixed
 
+- 并发工具回放测试采用可取消的入场屏障，保留模型请求数、真实工具执行数和并发峰值断言，消除日志 I/O 耗时导致的时序性误报；生产执行逻辑不变。
+- 存储、会话和缓存输入输出取得独立快照；Update 错误、panic 或复制失败不发布部分记录、版本和事件，业务绝对 TTL 与缓存淘汰期限独立维护。
+- 修复 Runtime 注册表并发、状态读写锁活性、配置池重置、完成回调错误传播及取消边界；TypedState 保持数组、字节、时间和大整数的具体类型与精确值。
+- 检查点提交与复制入队保持顺序，副库复制与切换共享屏障，旧任务不覆盖切换后的写入或复活已删除数据；会话首次写入中断可安全恢复。
+- 工具缓存保留完整输出及所有权，注入资源不被默认工厂误创建或关闭；实际工具选择与请求模型成本统计接入真实执行路径。同步更新本仓示例和评测入口。
 - Builder 构建时复制配置与元数据容器，后续配置不再追溯修改已有 Agent，记忆与检查点使用一致的会话身份。
 - 旧 `ChainableAgent` 保留多节点之间的任务、会话与选项，标准调用使用节点的 `Invoke`；流式、批量、管道和配置副本接入同一链执行源。
 - Runtime 工具的存储操作继承本次调用的上下文；偏好工具仅在明确不存在时创建记录，读取故障不再覆盖已有数据。
@@ -66,9 +85,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 升级须知
 
+- 本版本包含公开 API 删除和配置收敛，按 0.x 约定升级 minor；请先完成[接口迁移](docs/guides/COMPATIBILITY_CLEANUP.md)，严格配置解码会拒绝已删除的键。
+- 有 operation-v1 账本时，先停写、备份，在相同 Store/Scope 下提供明确身份清单，执行[离线迁移](core/durable/migrate/README.md)的预览、应用和复核后再恢复写入。迁移不是在线兼容开关，也不替代宿主授权、业务版本校验或外部效果核对。
 - 已构建的 Agent 现在持有配置快照；修改 Builder 后需重新构建才能应用新配置。状态、存储及嵌套业务对象仍按引用共享，跨会话使用独立 Builder。
 - 直接使用旧 `ToolExecutor` 的工具须显式返回 `Success=true` 表示成功；空结果和普通失败结果会报告错误，业务拒绝不再解锁依赖节点。
-- goagent 经 `codec/json` 编码持久数据，与 v1 逐字节一致，调用方放入持久状态的自定义类型（含带 `omitempty` 的数字、布尔字段）编码结果也不变，在途持久运行升级后可直接恢复；回归测试覆盖 HTML 转义、非法 UTF-8、`omitempty` 与 nil 的编码。
+- goagent 经 `codec/json` 编码持久数据，与 v1 逐字节一致，调用方放入持久状态的自定义类型（含带 `omitempty` 的数字、布尔字段）编码结果也不变；JSON 编码保持不代表账本版本兼容，operation-v1 须按上述步骤迁移，现行 v2 仍须通过原身份及业务版本校验才能恢复。回归测试覆盖 HTML 转义、非法 UTF-8、`omitempty` 与 nil 的编码。
 - 按 map 读取数值参数的工具：大整数与高精度小数现在是 `json.Number`，`args["x"].(float64)` 会取值失败，改用 `toolargs.Float64(args["x"])`；需要精确值时直接使用 `json.Number`。类型化工具（`tools.NewTypedFunctionTool`）无需改动。
 
 ## [0.49.0] - 2026-11-05
@@ -1137,7 +1158,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/kart-io/goagent/compare/v0.49.0...HEAD
+[Unreleased]: https://github.com/kart-io/goagent/compare/v0.50.0...HEAD
+[0.50.0]: https://github.com/kart-io/goagent/compare/v0.49.2...v0.50.0
 [0.49.0]: https://github.com/kart-io/goagent/compare/v0.48.1...v0.49.0
 [0.48.1]: https://github.com/kart-io/goagent/compare/v0.48.0...v0.48.1
 [0.48.0]: https://github.com/kart-io/goagent/compare/v0.47.1...v0.48.0
