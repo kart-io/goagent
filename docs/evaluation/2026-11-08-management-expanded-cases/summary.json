@@ -1,0 +1,741 @@
+{
+  "时间": "2026-11-08T18:43:53.469416+08:00",
+  "核心原始基线": "ea9cbca116eb4b158dd67a56ab67b85599812aca",
+  "扩展原始基线": "76b96d3d21d94a3e925cd05ea90f3e87fe3d1089",
+  "核心实现提交": "6747dc0b0d739de3c2d753a5b071dd8eb3ea64de",
+  "扩展受检提交": "e92f5cb01bd9338845ec35ebed9faf9916a10bc8",
+  "新增内容": {
+    "HTTP新增组": 12,
+    "HTTP总组": 20,
+    "数据库新增业务案例": 4
+  },
+  "修复前": {
+    "测试事件": {
+      "fail": 1,
+      "pass": 3
+    },
+    "分包事件": {
+      "github.com/kart-io/goagent-contrib/management/integration": {
+        "fail": 1,
+        "pass": 3
+      }
+    },
+    "失败测试": [
+      "TestExpandedForkRejectsDisabledAgent"
+    ],
+    "通过测试": [
+      "TestExpandedTenantIdempotencyKeysAreIndependent",
+      "TestExpandedQueueCapacityRecoversAfterQueuedCancel",
+      "TestExpandedInputResumeAfterHostRebuild"
+    ],
+    "跳过测试": [],
+    "日志SHA256": "0442cd366717fba28063b9f110fc7ebcdb4d91a9071f6dac69723ed0f38aa3da"
+  },
+  "修复后3轮": {
+    "测试事件": {
+      "pass": 12
+    },
+    "分包事件": {
+      "github.com/kart-io/goagent-contrib/management/integration": {
+        "pass": 12
+      }
+    },
+    "失败测试": [],
+    "通过测试": [
+      "TestExpandedForkRejectsDisabledAgent",
+      "TestExpandedTenantIdempotencyKeysAreIndependent",
+      "TestExpandedQueueCapacityRecoversAfterQueuedCancel",
+      "TestExpandedInputResumeAfterHostRebuild",
+      "TestExpandedForkRejectsDisabledAgent",
+      "TestExpandedTenantIdempotencyKeysAreIndependent",
+      "TestExpandedQueueCapacityRecoversAfterQueuedCancel",
+      "TestExpandedInputResumeAfterHostRebuild",
+      "TestExpandedForkRejectsDisabledAgent",
+      "TestExpandedTenantIdempotencyKeysAreIndependent",
+      "TestExpandedQueueCapacityRecoversAfterQueuedCancel",
+      "TestExpandedInputResumeAfterHostRebuild"
+    ],
+    "跳过测试": [],
+    "日志SHA256": "7fb9290a1745505fa3dce7c316cd9fd26b397ff5a4bfbd583e45d7bfcdf0cbfc"
+  },
+  "独立模块新案例": {
+    "测试事件": {
+      "pass": 4
+    },
+    "分包事件": {
+      "github.com/kart-io/goagent-contrib/management/integration": {
+        "pass": 4
+      }
+    },
+    "失败测试": [],
+    "通过测试": [
+      "TestExpandedForkRejectsDisabledAgent",
+      "TestExpandedTenantIdempotencyKeysAreIndependent",
+      "TestExpandedQueueCapacityRecoversAfterQueuedCancel",
+      "TestExpandedInputResumeAfterHostRebuild"
+    ],
+    "跳过测试": [],
+    "日志SHA256": "6a01d7443c9eed0eb536b186f013aaabd9912789811cfb79d12fb801632cd2c2"
+  },
+  "完整管理": {
+    "测试事件": {
+      "pass": 76
+    },
+    "分包事件": {
+      "github.com/kart-io/goagent-contrib/management/pgstore": {
+        "pass": 4
+      },
+      "github.com/kart-io/goagent-contrib/management/integration": {
+        "pass": 72
+      }
+    },
+    "失败测试": [],
+    "跳过测试": [],
+    "日志SHA256": "6dccb21248d650849660dc71b962ffc06eb2582f95078dd3f74cdbbc420fd001"
+  },
+  "核心完整": {
+    "测试事件": {
+      "pass": 4771,
+      "skip": 9
+    },
+    "分包事件": {
+      "github.com/kart-io/goagent/builder": {
+        "pass": 477,
+        "skip": 1
+      },
+      "github.com/kart-io/goagent/builder/contextpolicy": {
+        "pass": 31,
+        "skip": 1
+      },
+      "github.com/kart-io/goagent/cache": {
+        "pass": 23
+      },
+      "github.com/kart-io/goagent/codec": {
+        "pass": 22
+      },
+      "github.com/kart-io/goagent/codec/json": {
+        "pass": 130
+      },
+      "github.com/kart-io/goagent/codec/yaml": {
+        "pass": 22
+      },
+      "github.com/kart-io/goagent/core": {
+        "pass": 415
+      },
+      "github.com/kart-io/goagent/core/budget": {
+        "pass": 50
+      },
+      "github.com/kart-io/goagent/core/checkpoint": {
+        "pass": 70
+      },
+      "github.com/kart-io/goagent/core/durable": {
+        "pass": 91
+      },
+      "github.com/kart-io/goagent/core/execution": {
+        "pass": 13
+      },
+      "github.com/kart-io/goagent/core/durable/migrate": {
+        "pass": 19
+      },
+      "github.com/kart-io/goagent/core/flow": {
+        "pass": 4
+      },
+      "github.com/kart-io/goagent/core/middleware": {
+        "pass": 140
+      },
+      "github.com/kart-io/goagent/core/observe": {
+        "pass": 25
+      },
+      "github.com/kart-io/goagent/core/session": {
+        "pass": 166
+      },
+      "github.com/kart-io/goagent/core/state": {
+        "pass": 137
+      },
+      "github.com/kart-io/goagent/core/usage": {
+        "pass": 6
+      },
+      "github.com/kart-io/goagent/errors": {
+        "pass": 109
+      },
+      "github.com/kart-io/goagent/evaluation": {
+        "pass": 2
+      },
+      "github.com/kart-io/goagent/devtools": {
+        "pass": 4
+      },
+      "github.com/kart-io/goagent/evaluation/agentbench": {
+        "pass": 98
+      },
+      "github.com/kart-io/goagent/evaluation/agentbench/cmd/stress": {
+        "pass": 10
+      },
+      "github.com/kart-io/goagent/evaluation/executionbench": {
+        "pass": 16
+      },
+      "github.com/kart-io/goagent/examples/llm/minimax-verify": {
+        "pass": 6
+      },
+      "github.com/kart-io/goagent/execution": {
+        "pass": 22
+      },
+      "github.com/kart-io/goagent/interfaces": {
+        "pass": 33
+      },
+      "github.com/kart-io/goagent/examples/integration/human-in-loop": {
+        "pass": 1
+      },
+      "github.com/kart-io/goagent/internal/snapshot": {
+        "pass": 9
+      },
+      "github.com/kart-io/goagent/llm": {
+        "pass": 59
+      },
+      "github.com/kart-io/goagent/examples/multi-agent-patterns": {
+        "pass": 1
+      },
+      "github.com/kart-io/goagent/llm/cache": {
+        "pass": 26
+      },
+      "github.com/kart-io/goagent/llm/common": {
+        "pass": 93
+      },
+      "github.com/kart-io/goagent/llm/providers": {
+        "pass": 372
+      },
+      "github.com/kart-io/goagent/harness/env": {
+        "pass": 27,
+        "skip": 1
+      },
+      "github.com/kart-io/goagent/management": {
+        "pass": 11
+      },
+      "github.com/kart-io/goagent/management/httpapi": {
+        "pass": 3
+      },
+      "github.com/kart-io/goagent/management/adapters": {
+        "pass": 7
+      },
+      "github.com/kart-io/goagent/mcp/remote": {
+        "pass": 4
+      },
+      "github.com/kart-io/goagent/middleware": {
+        "pass": 53
+      },
+      "github.com/kart-io/goagent/memory": {
+        "pass": 241
+      },
+      "github.com/kart-io/goagent/observability": {
+        "pass": 250
+      },
+      "github.com/kart-io/goagent/parsers": {
+        "pass": 45
+      },
+      "github.com/kart-io/goagent/multiagent": {
+        "pass": 130
+      },
+      "github.com/kart-io/goagent/plugin": {
+        "pass": 28
+      },
+      "github.com/kart-io/goagent/scripts/apicheck": {
+        "pass": 171
+      },
+      "github.com/kart-io/goagent/scripts/coveragecheck": {
+        "pass": 30
+      },
+      "github.com/kart-io/goagent/scripts/compatcheck": {
+        "pass": 11
+      },
+      "github.com/kart-io/goagent/store": {
+        "pass": 41
+      },
+      "github.com/kart-io/goagent/store/decorator": {
+        "pass": 2
+      },
+      "github.com/kart-io/goagent/store/memory": {
+        "pass": 28
+      },
+      "github.com/kart-io/goagent/scripts/stabilitysoak": {
+        "pass": 8
+      },
+      "github.com/kart-io/goagent/testing/mocks": {
+        "pass": 6
+      },
+      "github.com/kart-io/goagent/testing/panictest": {
+        "skip": 1,
+        "pass": 4
+      },
+      "github.com/kart-io/goagent/testing/replay": {
+        "pass": 4
+      },
+      "github.com/kart-io/goagent/tools": {
+        "pass": 518,
+        "skip": 5
+      },
+      "github.com/kart-io/goagent/tools/compute": {
+        "pass": 60
+      },
+      "github.com/kart-io/goagent/tools/http": {
+        "pass": 33
+      },
+      "github.com/kart-io/goagent/tools/middleware": {
+        "pass": 37
+      },
+      "github.com/kart-io/goagent/tools/policy": {
+        "pass": 5
+      },
+      "github.com/kart-io/goagent/tools/spill": {
+        "pass": 5
+      },
+      "github.com/kart-io/goagent/tools/toolargs": {
+        "pass": 7
+      },
+      "github.com/kart-io/goagent/tools/search": {
+        "pass": 22
+      },
+      "github.com/kart-io/goagent/utils": {
+        "pass": 67
+      },
+      "github.com/kart-io/goagent/utils/httpclient": {
+        "pass": 32
+      },
+      "github.com/kart-io/goagent/workflow": {
+        "pass": 144
+      },
+      "github.com/kart-io/goagent/tools/shell": {
+        "pass": 30
+      },
+      "github.com/kart-io/goagent/workflow/refund": {
+        "pass": 5
+      }
+    },
+    "失败测试": [],
+    "跳过测试": [
+      {
+        "包": "github.com/kart-io/goagent/harness/env",
+        "用例": "TestDockerExecutor"
+      },
+      {
+        "包": "github.com/kart-io/goagent/testing/panictest",
+        "用例": "TestHungChildHelper"
+      },
+      {
+        "包": "github.com/kart-io/goagent/builder",
+        "用例": "TestPanicChild"
+      },
+      {
+        "包": "github.com/kart-io/goagent/tools",
+        "用例": "TestInvalidateByPattern"
+      },
+      {
+        "包": "github.com/kart-io/goagent/tools",
+        "用例": "TestInvalidateByTool"
+      },
+      {
+        "包": "github.com/kart-io/goagent/tools",
+        "用例": "TestDependencyTracking"
+      },
+      {
+        "包": "github.com/kart-io/goagent/tools",
+        "用例": "TestVersioning"
+      },
+      {
+        "包": "github.com/kart-io/goagent/tools",
+        "用例": "TestInvalidationStatistics"
+      },
+      {
+        "包": "github.com/kart-io/goagent/builder/contextpolicy",
+        "用例": "TestResultStoreChildProcess"
+      }
+    ],
+    "日志SHA256": "e3b571317c18f657112811ca55efa7ba9e9705e4fe45fa26a24b3ff259f411a8"
+  },
+  "第一次全仓环境失败": {
+    "测试事件": {
+      "pass": 862,
+      "skip": 12,
+      "fail": 109
+    },
+    "分包事件": {
+      "github.com/kart-io/goagent-contrib/acp": {
+        "pass": 79
+      },
+      "github.com/kart-io/goagent-contrib/document": {
+        "pass": 85
+      },
+      "github.com/kart-io/goagent-contrib/document/pdf": {
+        "pass": 26,
+        "skip": 3
+      },
+      "github.com/kart-io/goagent-contrib/durable/pgstore": {
+        "pass": 40,
+        "fail": 39
+      },
+      "github.com/kart-io/goagent-contrib/httpagent": {
+        "pass": 50
+      },
+      "github.com/kart-io/goagent-contrib/management/pgstore": {
+        "fail": 4
+      },
+      "github.com/kart-io/goagent-contrib/management/integration": {
+        "fail": 66,
+        "pass": 1
+      },
+      "github.com/kart-io/goagent-contrib/management/harness": {
+        "pass": 5
+      },
+      "github.com/kart-io/goagent-contrib/retrieval/cohere": {
+        "pass": 15
+      },
+      "github.com/kart-io/goagent-contrib/retrieval": {
+        "pass": 296
+      },
+      "github.com/kart-io/goagent-contrib/retrieval/qdrant": {
+        "pass": 22,
+        "skip": 9
+      },
+      "github.com/kart-io/goagent-contrib/retrieval/vertexai": {
+        "pass": 2
+      },
+      "github.com/kart-io/goagent-contrib/tools/database": {
+        "pass": 137
+      },
+      "github.com/kart-io/goagent-contrib/tools/practical": {
+        "pass": 104
+      }
+    },
+    "失败测试": [
+      "TestPrimaryRestart",
+      "TestAcquireUncertainCommitCleanup",
+      "TestSyncCommit",
+      "TestSessionConformance/不存在返回ErrNotFound",
+      "TestSessionConformance/追加按期望序号比较并交换",
+      "TestSessionConformance/批量追加跨实例可见",
+      "TestSessionConformance/批量追加任一冲突时不写入",
+      "TestSessionConformance/批量追加拒绝时不写入",
+      "TestSessionConformance/并发追加只有一个成功",
+      "TestSessionConformance/事件原样往返",
+      "TestSessionConformance/按序号读取",
+      "TestSessionConformance/分叉",
+      "TestSessionConformance/按字节序列出",
+      "TestSessionConformance/拒绝空会话ID",
+      "TestSessionConformance/锁",
+      "TestSessionConformance/DurableStore/互斥",
+      "TestSessionConformance/DurableStore/不可重入",
+      "TestSessionConformance/DurableStore/不同ID互不阻塞",
+      "TestSessionConformance/DurableStore/同实例同时持有多个ID",
+      "TestSessionConformance/DurableStore/跨实例读写",
+      "TestSessionConformance/DurableStore/不存在返回ErrNotExist",
+      "TestSessionConformance/DurableStore/取消后仍可写入",
+      "TestSessionConformance/DurableStore/写入原子",
+      "TestSessionConformance/DurableStore/批量写入跨实例可见",
+      "TestSessionConformance/DurableStore/批量写入拒绝时不写入",
+      "TestSessionConformance/DurableStore/批量写入对并发读者原子",
+      "TestSessionConformance/DurableStore/审批跨实例续跑",
+      "TestSessionConformance/DurableStore/操作跨实例回放",
+      "TestSessionConformance/DurableStore/崩溃后接管",
+      "TestSessionConformance/DurableStore/续约维持长时间持锁",
+      "TestSessionConformance/DurableStore/接管后旧持有者写入被拒",
+      "TestSessionConformance/DurableStore/同进程旧持有者不放行新持有者",
+      "TestSessionConformance/DurableStore/过期未接管时仍可写入",
+      "TestSessionConformance/DurableStore/批量写入按租约全部拒绝",
+      "TestSessionConformance/DurableStore",
+      "TestSessionConformance",
+      "TestSessionSchemaVersion",
+      "TestSessionSnapshotRequiresLock",
+      "TestSessionLogResumeAcrossInstances",
+      "TestAdmissionRollsBackAllRecords",
+      "TestPaginationAppliesVisibilityBeforeLimit",
+      "TestCanceledTransactionReleasesConnection",
+      "TestConcurrentRevisionCASHasOneWinnerAndTenantForeignKeyIsEnforced",
+      "TestDatabaseUnavailableLeavesNoFalseAcceptance",
+      "TestAdmissionAndDecisionRollbackAllManagementRecords",
+      "TestHostRegisterPublishSessionTaskApprovalResume",
+      "TestExpandedForkRejectsDisabledAgent",
+      "TestExpandedTenantIdempotencyKeysAreIndependent",
+      "TestExpandedQueueCapacityRecoversAfterQueuedCancel",
+      "TestExpandedInputResumeAfterHostRebuild",
+      "TestRestartAtEveryCommitBoundary/admission",
+      "TestRestartAtEveryCommitBoundary/create_log",
+      "TestRestartAtEveryCommitBoundary/answer_before",
+      "TestRestartAtEveryCommitBoundary/answer_after",
+      "TestRestartAtEveryCommitBoundary/turn_end",
+      "TestRestartAtEveryCommitBoundary/outcome",
+      "TestRestartAtEveryCommitBoundary/sql_before",
+      "TestRestartAtEveryCommitBoundary/sql_after",
+      "TestRestartAtEveryCommitBoundary/effect_after_apply",
+      "TestRestartAtEveryCommitBoundary/effect_after_apply_cancel",
+      "TestRestartAtEveryCommitBoundary",
+      "TestOutboxCrashAfterRemoteAcceptanceKeepsStableDelivery",
+      "TestForkSourceAndTargetIsolated",
+      "TestGraphDecisionAfterLostAck/approve",
+      "TestGraphDecisionAfterLostAck/reject",
+      "TestGraphDecisionAfterLostAck",
+      "TestAllManagementRoutes",
+      "TestClientDisconnectDoesNotCancelAcceptedTask",
+      "TestNativeInspectCompletedDoesNotRepeatModel",
+      "TestCancelRequestWaitsForRealExit",
+      "TestSameSessionNeverOverlaps",
+      "TestSecondWorkerRejected",
+      "TestConcurrentDecisionsHaveOneWinner",
+      "TestRejectDoesNotExecuteEffect",
+      "TestRunDurationsAndTraceAreDerivedFromAttempts",
+      "TestRunSummaryAcrossSessionsKeepsUnknownAndDoesNotCountReplayTwice",
+      "TestRunSummaryUsesSelfAndPreservesUnknownEvidence/known",
+      "TestRunSummaryUsesSelfAndPreservesUnknownEvidence/unknown",
+      "TestRunSummaryUsesSelfAndPreservesUnknownEvidence",
+      "TestNotifyFailureDoesNotRerunTask",
+      "TestForkCrashAfterLogCopy",
+      "TestApprovalSurvivesProcessKillAndRestart",
+      "TestAuditRunQueryIsReadOnly",
+      "TestRunUsageMissingAndUnavailableStayUnknown",
+      "TestCompletedRunUsageQueriesDoNotWriteAndDoNotDoubleCount",
+      "TestCommitUnknownRetriesSameTaskWithoutLosingAdmission",
+      "TestRetentionKeepsLiveKeysAndUnconfirmedDependencies",
+      "TestInvalidRetentionAndTypedNilTracerAreRejected",
+      "TestReviewCancelPreservesAttention",
+      "TestReviewValidateHonorsShutdownDeadline",
+      "TestReviewUnknownUnattributedIsNotZero",
+      "TestReviewMixedUnattributedKeepsPartialCounters",
+      "TestTenantIsolationRejectsReadWriteAndEnumeration",
+      "TestResourceVisibilityAndCursorPolicyAreEnforced",
+      "TestRevokedPermissionAndDisabledAgentKeepDecisionPending/permission",
+      "TestRevokedPermissionAndDisabledAgentKeepDecisionPending/disabled",
+      "TestRevokedPermissionAndDisabledAgentKeepDecisionPending",
+      "TestMissingImplementationBlocksInsteadOfUsingAnotherFactory",
+      "TestVersionCannotBeOverwritten",
+      "TestSessionKeepsPublishedVersion",
+      "TestUncooperativeRuntimeRetainsOwnerUntilActualExit",
+      "TestCancelDisableShutdownCannotOverwriteSuccessfulResult",
+      "TestCleanupFailureDoesNotReplaceOutcomeAndPartialBuildIsClosed/success",
+      "TestCleanupFailureDoesNotReplaceOutcomeAndPartialBuildIsClosed/partial_build",
+      "TestCleanupFailureDoesNotReplaceOutcomeAndPartialBuildIsClosed",
+      "TestShutdownDuringStartupRecoveryIsGraceful",
+      "TestStartupRecoveryErrorIsNotSuppressed",
+      "TestSubmitTaskReturnsAfterDurableAcceptance",
+      "TestQueuedCancelNeverBuildsRuntime"
+    ],
+    "跳过测试": [
+      {
+        "包": "github.com/kart-io/goagent-contrib/document/pdf",
+        "用例": "TestPDFLoader_LoadRealPDF"
+      },
+      {
+        "包": "github.com/kart-io/goagent-contrib/document/pdf",
+        "用例": "TestPDFLoader_LoadAndSplit"
+      },
+      {
+        "包": "github.com/kart-io/goagent-contrib/document/pdf",
+        "用例": "TestPDFLoader_LoadByPage"
+      },
+      {
+        "包": "github.com/kart-io/goagent-contrib/retrieval/qdrant",
+        "用例": "TestRealQdrantRetrieveFilter"
+      },
+      {
+        "包": "github.com/kart-io/goagent-contrib/retrieval/qdrant",
+        "用例": "TestRealQdrantBusinessIDsAndMetadataRoundTrip"
+      },
+      {
+        "包": "github.com/kart-io/goagent-contrib/retrieval/qdrant",
+        "用例": "TestQdrantVectorStore_DocumentOperations"
+      },
+      {
+        "包": "github.com/kart-io/goagent-contrib/retrieval/qdrant",
+        "用例": "TestQdrantVectorStore_AddDocuments"
+      },
+      {
+        "包": "github.com/kart-io/goagent-contrib/retrieval/qdrant",
+        "用例": "TestQdrantVectorStore_Search"
+      },
+      {
+        "包": "github.com/kart-io/goagent-contrib/retrieval/qdrant",
+        "用例": "TestQdrantVectorStore_EmptyOperations"
+      },
+      {
+        "包": "github.com/kart-io/goagent-contrib/retrieval/qdrant",
+        "用例": "TestQdrantVectorStore_BatchOperations"
+      },
+      {
+        "包": "github.com/kart-io/goagent-contrib/retrieval/qdrant",
+        "用例": "TestQdrantVectorStore_ErrorCases"
+      },
+      {
+        "包": "github.com/kart-io/goagent-contrib/retrieval/qdrant",
+        "用例": "TestQdrantVectorStore_Close"
+      }
+    ],
+    "日志SHA256": "b10d2e242d4297786f245ea35073f03c510e94ced508f09b2663dbcbe09502f0"
+  },
+  "固定端口全仓": {
+    "测试事件": {
+      "pass": 976,
+      "skip": 12
+    },
+    "分包事件": {
+      "github.com/kart-io/goagent-contrib/acp": {
+        "pass": 79
+      },
+      "github.com/kart-io/goagent-contrib/document": {
+        "pass": 85
+      },
+      "github.com/kart-io/goagent-contrib/document/pdf": {
+        "pass": 26,
+        "skip": 3
+      },
+      "github.com/kart-io/goagent-contrib/durable/pgstore": {
+        "pass": 79
+      },
+      "github.com/kart-io/goagent-contrib/httpagent": {
+        "pass": 50
+      },
+      "github.com/kart-io/goagent-contrib/management/integration": {
+        "pass": 72
+      },
+      "github.com/kart-io/goagent-contrib/management/pgstore": {
+        "pass": 4
+      },
+      "github.com/kart-io/goagent-contrib/management/harness": {
+        "pass": 5
+      },
+      "github.com/kart-io/goagent-contrib/retrieval/cohere": {
+        "pass": 15
+      },
+      "github.com/kart-io/goagent-contrib/retrieval": {
+        "pass": 296
+      },
+      "github.com/kart-io/goagent-contrib/retrieval/qdrant": {
+        "pass": 22,
+        "skip": 9
+      },
+      "github.com/kart-io/goagent-contrib/retrieval/vertexai": {
+        "pass": 2
+      },
+      "github.com/kart-io/goagent-contrib/tools/database": {
+        "pass": 137
+      },
+      "github.com/kart-io/goagent-contrib/tools/practical": {
+        "pass": 104
+      }
+    },
+    "失败测试": [],
+    "跳过测试": [
+      {
+        "包": "github.com/kart-io/goagent-contrib/document/pdf",
+        "用例": "TestPDFLoader_LoadRealPDF"
+      },
+      {
+        "包": "github.com/kart-io/goagent-contrib/document/pdf",
+        "用例": "TestPDFLoader_LoadAndSplit"
+      },
+      {
+        "包": "github.com/kart-io/goagent-contrib/document/pdf",
+        "用例": "TestPDFLoader_LoadByPage"
+      },
+      {
+        "包": "github.com/kart-io/goagent-contrib/retrieval/qdrant",
+        "用例": "TestRealQdrantRetrieveFilter"
+      },
+      {
+        "包": "github.com/kart-io/goagent-contrib/retrieval/qdrant",
+        "用例": "TestRealQdrantBusinessIDsAndMetadataRoundTrip"
+      },
+      {
+        "包": "github.com/kart-io/goagent-contrib/retrieval/qdrant",
+        "用例": "TestQdrantVectorStore_DocumentOperations"
+      },
+      {
+        "包": "github.com/kart-io/goagent-contrib/retrieval/qdrant",
+        "用例": "TestQdrantVectorStore_AddDocuments"
+      },
+      {
+        "包": "github.com/kart-io/goagent-contrib/retrieval/qdrant",
+        "用例": "TestQdrantVectorStore_Search"
+      },
+      {
+        "包": "github.com/kart-io/goagent-contrib/retrieval/qdrant",
+        "用例": "TestQdrantVectorStore_EmptyOperations"
+      },
+      {
+        "包": "github.com/kart-io/goagent-contrib/retrieval/qdrant",
+        "用例": "TestQdrantVectorStore_BatchOperations"
+      },
+      {
+        "包": "github.com/kart-io/goagent-contrib/retrieval/qdrant",
+        "用例": "TestQdrantVectorStore_ErrorCases"
+      },
+      {
+        "包": "github.com/kart-io/goagent-contrib/retrieval/qdrant",
+        "用例": "TestQdrantVectorStore_Close"
+      }
+    ],
+    "日志SHA256": "bbcd45446d4850d2210225ded2a4b96f38a5b837bc39ff1f272a3f89177304e4"
+  },
+  "环境失败根因": {
+    "原DSN端口": 32884,
+    "容器重启后端口": 32885,
+    "原因": "Docker动态HostPort在restart后重新分配，DSN仍指向旧端口，后续数据库测试连锁失败",
+    "修正": "另建固定55443专用容器，完整重跑13模块；HTTP数据容器独立保留",
+    "业务代码修复": "未为此修改业务代码"
+  },
+  "模块制品": {
+    "commit": "6747dc0b0d739de3c2d753a5b071dd8eb3ea64de",
+    "time": "2026-11-08T10:30:07Z",
+    "version": "v0.50.1-0.20261108103007-6747dc0b0d73"
+  },
+  "独立审阅": {
+    "Critical": 0,
+    "Important": 0,
+    "Minor": 1,
+    "结论": "允许本地合并",
+    "建议": "补成功Fork后停用的同键重投场景",
+    "处理": "已补Go和HTTP断言，完整全仓及最终20组通过；未声称二次独立审阅"
+  },
+  "数据库SQL独立核对": {
+    "tasks": 36,
+    "states": {
+      "canceled": 7,
+      "succeeded": 29
+    },
+    "refunds": 25,
+    "refund_amount": 1250,
+    "active_workers": 0,
+    "unique_task_ids": 25,
+    "unique_execution_keys": 25
+  },
+  "发布": "本轮仅本地合并，不推送、发布；需先让新核心提交可远端获取，再消费扩展。",
+  "HTTP执行": {
+    "extended-http": {
+      "结果": "passed",
+      "组数": 20,
+      "请求数": 260,
+      "宿主退出码": 0,
+      "累计任务": 10,
+      "累计Tokens": 85
+    },
+    "extended-http-repeat": {
+      "结果": "passed",
+      "组数": 20,
+      "请求数": 456,
+      "宿主退出码": 0,
+      "累计任务": 20,
+      "累计Tokens": 170
+    },
+    "baseline-http": {
+      "结果": "passed",
+      "组数": 8,
+      "请求数": 130,
+      "宿主退出码": 0,
+      "累计任务": null,
+      "累计Tokens": null
+    },
+    "extended-http-final": {
+      "结果": "passed",
+      "组数": 20,
+      "请求数": 266,
+      "宿主退出码": 0,
+      "累计任务": 36,
+      "累计Tokens": 310
+    }
+  }
+}

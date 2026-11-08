@@ -16,6 +16,7 @@ PostgreSQL 参考实现、真实数据库集成测试、退款业务案例位于
 
 - 创建和命令使用 Idempotency-Key；内容相同复用原响应，内容不同拒绝。修订更新采用 expected_revision。
 - 业务配置版本为不可变记录。发布影响新 Session，已有 Session 和 Fork 继续绑定原版本；这不属于软件旧接口兼容。
+- Agent 停用后拒绝新 Session（包括 Fork）和新 Task；重新启用后可重试先前被拒绝的请求。
 - 任务取消在生产者实际退出后确认。未知外部效果保持 attention，须提供可信核对证据，不能直接重新执行。
 - 审批必须经 DecideApproval；决定和续跑命令原子持久化，普通 ResumeTask 不能绕过审批。
 - JSON 使用 codec/json，精确保留数字并拒绝重复键；HTTP DTO 使用 Strict 规则，拒绝未知字段、非法 UTF-8 和不匹配大小写的字段名。
@@ -33,3 +34,5 @@ env -u GOROOT GOTOOLCHAIN=go1.27.3 GOWORK=off go build ./...
 ```
 
 核心单测不需要数据库。持久恢复、进程故障和 HTTP 退款案例继续在 contrib 使用专用 Postgres 验证，不能用内存单测或数据库 SKIP 代替。
+
+新增20组HTTP与4项数据库业务案例的功能映射、红绿修复和执行结果见 [扩展案例验收](../docs/evaluation/2026-11-08-management-expanded-cases/REPORT.md)。

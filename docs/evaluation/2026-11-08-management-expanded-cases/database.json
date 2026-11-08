@@ -1,0 +1,12 @@
+{
+  "tasks": 36,
+  "states": {
+    "canceled": 7,
+    "succeeded": 29
+  },
+  "refunds": 25,
+  "refund_amount": 1250,
+  "active_workers": 0,
+  "unique_task_ids": 25,
+  "unique_execution_keys": 25
+}
