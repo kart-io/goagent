@@ -74,9 +74,9 @@
 
 **接口：**消费 T0 的 DTO/接口；产出保存、读取、列表、更新、替代、删除、作用域清空的默认服务语义和 Store transaction contract。
 
-- [ ] 新增 `TestFactSaveIdempotentSameRequest`、`TestFactIdempotencyRejectsDifferentRequest`、`TestFactSaveDeleteRestartReplayDoesNotLeakOrResurrect`、`TestFactExpiredIdempotencyTombstoneSurvivesGCAndRestart`。
-- [ ] 新增 `TestFactRevisionCASHasSingleWinner`、`TestFactSupersedeLeavesOneActiveFact`、`TestFactDeleteImmediatelyBlocksHydration`。
-- [ ] Fact、幂等操作引用/请求摘要、append-only ChangeRecord 和 IndexMutation outbox 原子提交；幂等记录不得存正文，重放时重新授权和解析当前事实生命周期。更新/替代/过期回放只返回原不可变收据；删除返回 Gone；撤权返回授权错误。幂等原结果有配置保留期；期限后清除原结果正文，只保留最小 digest tombstone 并返回 IdempotencyExpired，不能复用键。
+- [x] 新增 `TestFactSaveIdempotentSameRequest`、`TestFactIdempotencyRejectsDifferentRequest`、`TestFactSaveDeleteRestartReplayDoesNotLeakOrResurrect`、`TestFactExpiredIdempotencyTombstoneSurvivesGCAndRestart`。
+- [x] 新增 `TestFactRevisionCASHasSingleWinner`、`TestFactSupersedeLeavesOneActiveFact`、`TestFactDeleteImmediatelyBlocksHydration`。
+- [ ] Fact、幂等操作引用/请求摘要、append-only ChangeRecord 和 IndexMutation outbox 原子提交；ApplyFact 返回不含正文的不可变 MutationReceipt 与当前 Lifecycle；幂等记录不得存正文，重放时重新授权和解析当前事实生命周期。更新/替代/过期回放只返回原不可变收据；删除返回 Gone；撤权返回授权错误。幂等原结果有配置保留期；期限后清除原结果正文，只保留最小 digest tombstone 并返回 IdempotencyExpired，不能复用键。
 - [ ] 事实写入与 outbox 必须同事务容量检查；普通写入超出 tenant outbox 容量时整笔拒绝，不能只写 Fact 或只写 mutation；Delete/DeleteScope 走独立保留容量并立即逻辑失效。将 IndexState=Pending 作为持久结果；全局 StoreSequence 与 per-Fact MutationVersion 分别分配，旧 mutation 可 Obsolete 终结。
 - [ ] Store contract 覆盖精确 scope 查询、ListChanges、revision CAS、租约领取、MutationVersion ack、Obsolete 终态、tombstone 水位、幂等摘要期限和跨重启恢复；外部适配器可在自己的持久实现满足同一行为。
 - [ ] 运行 `go test -race ./memory -run 'TestFact(Save|Idempotency|Revision|Supersede|Delete|Outbox)'`，预期并发、重试和删除恢复案例 PASS。

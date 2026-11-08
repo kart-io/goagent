@@ -15,6 +15,8 @@ var (
 	ErrMaintenanceNotFound = errors.New("维护任务不存在")
 	ErrInvalidLimits       = errors.New("事实记忆限额无效")
 	ErrProviderCapability  = errors.New("Provider 能力不足")
+	ErrInvalidFact         = errors.New("事实内容无效")
+	ErrFeatureUnavailable  = errors.New("事实记忆能力尚未启用")
 )
 
 // MemoryError 是可分类的事实记忆错误；Error 不格式化底层 cause，避免泄露事实内容。

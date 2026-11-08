@@ -1,0 +1,25 @@
+# SDD ledger — plan: docs/superpowers/plans/2026-11-08-persistent-factual-memory.md
+
+## Setup
+
+- Workspace: `/Users/costalong/.codex/worktrees/5347/goagent`, branch `feat/persistent-factual-memory`.
+- Plan and specs copied from the authorized working tree before implementation.
+- Pre-flight T0 → T1: T0 freezes public IDs, scopes, cursors, limits, errors, and Provider methods; T1 consumes those public contracts to implement fact CAS/idempotency/outbox. Compatible; no mismatch found.
+- Pre-flight T1 → T2: T2 consumes T1 transaction/outbox and adds clear/change record state. Compatible after Store contract includes append-only ChangeRecord and clear claim/progress/ack.
+- Pre-flight T1 → T3: T3 consumes T1 outbox and adds maintenance/rebuild persistence. Compatible after StoreSequence and EmbedderResolver are frozen in T0.
+- Pre-flight T1/T3 → T4: T4 consumes persistence, recall/index, and maintenance contracts; Builder depends only on public MemoryService. Compatible; no package cycle planned.
+- Pre-flight T0/T4 → T5: T5 conformance tests consume public APIs and Builder injectability. Compatible; requires selected real Provider fixture.
+- Pre-flight T5 → T6: T6 uses same fixture for restart acceptance and reports evidence. Compatible.
+- Provider selection remains a T0 feasibility item; inspect repository and adjacent approved modules before asking for a backend decision.
+
+- T0: complete. Public DTO/interfaces, error classification, provider limits/capabilities, external-package compile fixtures, and Postgres reference-provider decision record are committed below.
+- RED evidence: initial `GOWORK=off go test ./memory -run 'TestFact(PublicInterfacesHaveNoUnexportedMethods|ExternalPackageCanImplementInterfaces|DefaultsAndProviderCapacity)' -count=1` failed with undefined new API; provider capability extension also failed at compile time before adding capability fields. `TestMemoryErrorSupportsIsAsWithoutExposingCause` failed before `MemoryError` existed.
+- GREEN verification: `GOWORK=off go test ./memory -run 'TestFact(PublicInterfacesHaveNoUnexportedMethods|ExternalPackageCanImplementInterfaces|DefaultsAndProviderCapacity|ProviderMustDeclareLifecycleCapabilities)' -count=1` PASS; `GOWORK=off go test ./memory` PASS; `go vet ./memory` PASS; `git diff --check` PASS.
+- T0 ruling: select an optional `examples/fact-memory/postgres` nested module using pgx v5.10.0 as the real restartable fixture; GoAgent core remains Provider-neutral and does not import pgx. Rationale/evidence: adjacent contrib pgstore uses pgx but only handles durable session/run storage; no facts provider currently exists. Cost if wrong: adds an optional database example and local Postgres test requirement.
+- Tool ruling: `task-start` and `task-done` scripts are absent in the installed skill; used `task-brief` and manual ledger state instead.
+- Task 0: complete — `GOWORK=off go test ./memory` and `go vet ./memory` passed. Commit: pending.
+- Task 0: complete — `GOWORK=off go test ./memory -run 'TestFact(PublicInterfacesHaveNoUnexportedMethods|ExternalPackageCanImplementInterfaces|DefaultsAndProviderCapacity|ProviderMustDeclareLifecycleCapabilities)' -count=1`, `GOWORK=off go test ./memory`, `go vet ./memory`, and `git diff --check` passed. Commit `e651501`.
+- T1 ruling: `FactStore.ApplyFact` returns `FactMutationResult{Receipt, Lifecycle}` rather than mutable Fact content. This lets the Provider return a stable, body-free receipt on an idempotent retry while rechecking current lifecycle; `FactMutation.NewFactID` makes replacement IDs explicit and separate from the superseded ID. Scope: public API and implementation doc.
+- T1 implementation: added `DefaultMemoryService` validation/orchestration for save/get/list/update/supersede/delete/scope-clear/change-list, deterministic request digests, read/write scope checks, lifecycle handling, and a mutex-protected unit contract fixture modeling atomic fact/change/outbox/idempotency transitions.
+- T1 RED/GREEN: focused cases first failed because service was undefined. After implementation, `GOWORK=off go test ./memory -run 'TestFact(SaveIdempotentSameRequest|IdempotencyRejectsDifferentRequest|SaveDeleteRestartReplayDoesNotLeakOrResurrect|ExpiredIdempotencyTombstoneSurvivesGCAndRestart|RevisionCASHasSingleWinner|SupersedeLeavesOneActiveFact|DeleteImmediatelyBlocksHydration)$' -count=1` PASS; `GOWORK=off go test ./memory -count=1` PASS; `GOWORK=off go test -race ./memory -run 'TestFact(Save|Idempotency|Revision|Supersede|Delete|Outbox)' -count=1` PASS; `go vet ./memory` PASS; `git diff --check` PASS.
+- T1 remaining: persistent provider atomic transaction/outbox, server-side capacity admission, lease/ack behavior and real restart verification remain for T5 PostgreSQL adapter/conformance; do not claim durable acceptance based on the in-process fixture.

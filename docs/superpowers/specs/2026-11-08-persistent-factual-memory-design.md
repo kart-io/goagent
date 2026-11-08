@@ -139,7 +139,7 @@ type MemoryScopeResolver interface {
 }
 
 type FactStore interface {
-    ApplyFact(context.Context, WriteScope, FactMutation) (Fact, error)
+    ApplyFact(context.Context, WriteScope, FactMutation) (FactMutationResult, error)
     Get(context.Context, MemoryAccess, FactID, Revision) (Fact, error)
     List(context.Context, MemoryAccess, FactFilter, PageRequest) (FactPage, error)
     ListChanges(context.Context, MemoryAccess, FactID, PageRequest) (ChangePage, error)

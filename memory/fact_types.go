@@ -164,13 +164,22 @@ const (
 	IndexFailed  IndexState = "failed"
 )
 
-// SaveResult 是不可变写入操作收据。
-type SaveResult struct {
+// MutationReceipt 是不包含事实正文的不可变操作收据。
+type MutationReceipt struct {
 	OperationID string
 	FactID      FactID
 	Revision    Revision
 	IndexState  IndexState
 }
+
+// FactMutationResult 是操作收据与事实当前生命周期状态。
+type FactMutationResult struct {
+	Receipt   MutationReceipt
+	Lifecycle FactStatus
+}
+
+// SaveResult 是不可变写入操作收据。
+type SaveResult = MutationReceipt
 
 // DeleteResult 是逻辑删除收据。
 type DeleteResult struct {
@@ -433,7 +442,7 @@ type MemoryScopeResolver interface {
 
 // FactStore 是事实正文、审计、幂等记录和维护状态的权威持久存储。
 type FactStore interface {
-	ApplyFact(context.Context, WriteScope, FactMutation) (Fact, error)
+	ApplyFact(context.Context, WriteScope, FactMutation) (FactMutationResult, error)
 	Get(context.Context, MemoryAccess, FactID, Revision) (Fact, error)
 	List(context.Context, MemoryAccess, FactFilter, PageRequest) (FactPage, error)
 	ListChanges(context.Context, MemoryAccess, FactID, PageRequest) (ChangePage, error)
@@ -455,6 +464,7 @@ type FactStore interface {
 // FactMutation 是一个可事务提交的事实变更命令。
 type FactMutation struct {
 	FactID           FactID
+	NewFactID        FactID
 	ExpectedRevision Revision
 	Input            FactInput
 	Patch            *FactPatch

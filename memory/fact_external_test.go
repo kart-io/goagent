@@ -59,8 +59,8 @@ func (externalScopeResolver) Resolve(context.Context, string) (memory.MemoryAcce
 // externalFactStore 仅用于编译期确认 Store 契约完全由导出类型组成。
 type externalFactStore struct{}
 
-func (externalFactStore) ApplyFact(context.Context, memory.WriteScope, memory.FactMutation) (memory.Fact, error) {
-	return memory.Fact{}, nil
+func (externalFactStore) ApplyFact(context.Context, memory.WriteScope, memory.FactMutation) (memory.FactMutationResult, error) {
+	return memory.FactMutationResult{}, nil
 }
 func (externalFactStore) Get(context.Context, memory.MemoryAccess, memory.FactID, memory.Revision) (memory.Fact, error) {
 	return memory.Fact{}, nil
