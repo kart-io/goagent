@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.51.0] - 2026-11-08
+
+### 新增
+
+- 核心新增 `management`：统一 Agent 注册和配置发布、Session 创建与 Fork、Task 提交/取消/恢复、Approval 决定、持久 Worker/Outbox 以及按 Agent、Session、Task 查询运行和用量。宿主显式注入存储、认证授权和固定版本执行工厂。
+- `management/adapters` 提供原生 Builder 与 Graph 适配；`management/httpapi` 提供标准库 HTTP Handler 和 OpenAPI。管理层复用 `execution.Scope`、durable 与 budget，核心不新增 PostgreSQL、contrib 或 Harness 依赖。
+
+### 修复
+
+- Agent 停用后拒绝通过 Fork 创建新 Session；重新启用可重试先前拒绝的请求，已成功请求的幂等重投仍返回原响应。
+
+### 迁移与验证
+
+- 通用管理入口由 contrib 迁入核心，直接使用 `github.com/kart-io/goagent/management`；领域错误使用 `errors.ErrManagement*`，JSON 使用 `codec/json`。不保留旧根包转发、错误别名或版本回退，详见[管理层迁移指南](docs/guides/MANAGEMENT_MIGRATION.md)。PostgreSQL 实现、数据库集成案例与可选 Harness 适配仍在 contrib。
+- 已归档[20组HTTP与数据库扩展案例](docs/evaluation/2026-11-08-management-expanded-cases/REPORT.md)、[DeepSeek与Gemini真实模型案例](docs/evaluation/2026-11-08-management-live-model/REPORT.md)及[验收可靠性修复](docs/evaluation/2026-11-08-management-live-reliability/REPORT.md)。真实模型验证覆盖审批续跑、多轮会话、精确 Fork、版本绑定和实际用量；合成退款只写入隔离数据库。
+
 ## [0.50.0] - 2026-11-08
 
 ### Changed
