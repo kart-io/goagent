@@ -26,20 +26,20 @@
 **Files:** 新增 management/*.go、management/adapters/*、management/httpapi/*、errors/management.go；修改 scripts/apicheck/main.go 和 main_test.go。
 **Interfaces:** 消费原 Store/Runtime/Factory/Config 合约；产出 management.New、NewWorker、adapters.NativeFactory/GraphFactory、httpapi.New，公共领域错误改为 errors.ErrManagement*。
 
-- [ ] 运行未修改核心的全套 race 基线；保留日志。
-- [ ] 先移入现有管理测试并补实际外部消费者新路径编译检查；观察新包尚不存在时失败。为分层规则添加禁止下层导入 management、禁止核心导入 contrib/pgx 的失败用例。
-- [ ] 移入通用生产文件和 OpenAPI；统一 codec/json、精确数值/重复键/未知字段解码；集中错误定义并修改直接引用；删除 contrib 旧通用实现。
-- [ ] 运行核心管理用例、分层检查、独立消费者构建；期望通过且依赖图不含 pgx/contrib/Harness。
-- [ ] 运行核心全套 race 与覆盖率、vet、lint、独立 frameworkbench、现有 make build/run；期望按当前门禁通过，记录任何现有跳过或基线问题。
-- [ ] 提交核心包迁移和核心迁移指南。
+- [x] 运行未修改核心的全套 race 基线；保留日志。
+- [x] 先移入现有管理测试并补实际外部消费者新路径编译检查；观察新包尚不存在时失败。为分层规则添加禁止下层导入 management、禁止核心导入 contrib/pgx 的失败用例。
+- [x] 移入通用生产文件和 OpenAPI；统一 codec/json、精确数值/重复键/未知字段解码；集中错误定义并修改直接引用；删除 contrib 旧通用实现。
+- [x] 运行核心管理用例、分层检查、独立消费者构建；期望通过且依赖图不含 pgx/contrib/Harness。
+- [x] 运行核心全套 race 与覆盖率、vet、lint、独立 frameworkbench、现有 make build/run；期望按当前门禁通过，记录任何现有跳过或基线问题。
+- [x] 提交核心包迁移和核心迁移指南。
 
 ### Task 2: 扩展与案例接入新核心
 
 **Files:** 修改 contrib management/pgstore、integration、examples/host 的 imports、management/README.md、当前操作/验收文档和必要的本地验证入口；保留 management/harness 独立模块。
 **Interfaces:** 消费 Task 1 的新 management 和 errors.ErrManagement*；pgstore 继续实现 management.Store/HistoryReader，案例通过新 httpapi.New 服务。
 
-- [ ] 将数据库集成测试切换到新核心入口，在无对应核心包时观察失败；更新实际 SQL 实现和案例，禁止旧根包别名。
-- [ ] 使用 GOAGENT_CORE_ROOT 临时 workspace 跑 contrib 13 模块 vet/race，专用 Postgres 执行重启/同步提交测试；无新失败，管理模块不得跳过。
-- [ ] 编译新入口的案例宿主，实际执行内置退款案例及8组 HTTP 黑盒案例，检查审批退款一次、拒绝/取消、版本/Fork和只读汇总。
-- [ ] 跑 contrib lint，核对全部原测试归属/数量、依赖边界和文档链接；提交扩展改动。
-- [ ] 进行一次独立完整差异审阅；重要问题先失败后修复并回归；输出迁移报告、复跑命令、实际结果及真实发布前提。
+- [x] 将数据库集成测试切换到新核心入口，在无对应核心包时观察失败；更新实际 SQL 实现和案例，禁止旧根包别名。
+- [x] 使用 GOAGENT_CORE_ROOT 临时 workspace 跑 contrib 13 模块 vet/race，专用 Postgres 执行重启/同步提交测试；无新失败，管理模块不得跳过。
+- [x] 编译新入口的案例宿主，实际执行内置退款案例及8组 HTTP 黑盒案例，检查审批退款一次、拒绝/取消、版本/Fork和只读汇总。
+- [x] 跑 contrib lint，核对全部原测试归属/数量、依赖边界和文档链接；提交扩展改动。
+- [x] 进行一次独立完整差异审阅；重要问题先失败后修复并回归；输出迁移报告、复跑命令、实际结果及真实发布前提。
