@@ -297,6 +297,8 @@ type factStoreFixture struct {
 	clears           map[ClearOperationID]ClearOperation
 	clearKeys        map[string]ClearOperationID
 	blockedScopes    map[MemoryScope]ClearOperationID
+	mutationResults  map[MutationID]IndexMutationResult
+	nextMutation     int
 }
 
 type fixtureIdempotency struct {
@@ -308,7 +310,7 @@ type fixtureIdempotency struct {
 }
 
 func newFactStoreFixture() *factStoreFixture {
-	return &factStoreFixture{facts: map[FactID]Fact{}, idempotency: map[string]fixtureIdempotency{}, clears: map[ClearOperationID]ClearOperation{}, clearKeys: map[string]ClearOperationID{}, blockedScopes: map[MemoryScope]ClearOperationID{}, now: time.Now().UTC(), receiptRetention: 30 * 24 * time.Hour}
+	return &factStoreFixture{facts: map[FactID]Fact{}, idempotency: map[string]fixtureIdempotency{}, clears: map[ClearOperationID]ClearOperation{}, clearKeys: map[string]ClearOperationID{}, blockedScopes: map[MemoryScope]ClearOperationID{}, mutationResults: map[MutationID]IndexMutationResult{}, now: time.Now().UTC(), receiptRetention: 30 * 24 * time.Hour}
 }
 func (s *factStoreFixture) capabilities() ProviderCapabilities {
 	return ProviderCapabilities{MaxFactBytes: 1024, MaxMetadataBytes: 1024, MaxPageSize: 200, MaxWorkerConcurrency: 4, MaxPendingPerTenant: 100, DurableOutbox: true, AtomicFactOutbox: true, ServerSideScopeFilter: true, DurableFacts: true, ChangeLog: true, ResumableClear: true, OnlineRebuild: true, IdempotencyTombstones: true, ReservedCleanupCapacity: true}
@@ -331,6 +333,11 @@ func (s *factStoreFixture) activeFactCount() int {
 		}
 	}
 	return n
+}
+func (s *factStoreFixture) enqueue(m IndexMutation) {
+	s.nextMutation++
+	m.ID = MutationID(fmt.Sprintf("mutation-%d", s.nextMutation))
+	s.outbox = append(s.outbox, m)
 }
 func (s *factStoreFixture) collectExpiredReceipts() {
 	s.mu.Lock()
@@ -438,14 +445,14 @@ func (s *factStoreFixture) ApplyFact(ctx context.Context, scope WriteScope, muta
 	}
 	if mutation.Action == ChangeSuperseded {
 		s.changes = append(s.changes, ChangeRecord{FactID: old.ID, Scope: old.Scope, Revision: old.Revision + 1, Action: mutation.Action, Actor: mutation.Actor, At: now, SupersedesID: fact.ID})
-		s.outbox = append(s.outbox, IndexMutation{FactID: old.ID, Scope: old.Scope, Revision: old.Revision + 1, MutationVersion: old.MutationVersion + 1, StoreSequence: s.seq, Action: MutationTombstone})
+		s.enqueue(IndexMutation{FactID: old.ID, Scope: old.Scope, Revision: old.Revision + 1, MutationVersion: old.MutationVersion + 1, StoreSequence: s.seq, Action: MutationTombstone})
 	}
 	s.changes = append(s.changes, ChangeRecord{FactID: fact.ID, Scope: fact.Scope, Revision: fact.Revision, Action: mutation.Action, Actor: mutation.Actor, At: now, Source: fact.Source, SupersedesID: fact.SupersedesID})
 	action := MutationUpsert
 	if fact.Status != FactActive {
 		action = MutationTombstone
 	}
-	s.outbox = append(s.outbox, IndexMutation{FactID: fact.ID, Scope: fact.Scope, Revision: fact.Revision, MutationVersion: fact.MutationVersion, StoreSequence: s.seq, Action: action})
+	s.enqueue(IndexMutation{FactID: fact.ID, Scope: fact.Scope, Revision: fact.Revision, MutationVersion: fact.MutationVersion, StoreSequence: s.seq, Action: action})
 	return FactMutationResult{Receipt: receipt, Lifecycle: fact.Status}, nil
 }
 
@@ -506,6 +513,18 @@ func (s *factStoreFixture) Get(ctx context.Context, access MemoryAccess, id Fact
 	}
 	return f, nil
 }
+func (s *factStoreFixture) LoadIndexInput(ctx context.Context, mutation IndexMutation) (IndexInput, error) {
+	if err := ctx.Err(); err != nil {
+		return IndexInput{}, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	f, ok := s.facts[mutation.FactID]
+	if !ok {
+		return IndexInput{}, &MemoryError{Kind: ErrGone}
+	}
+	return IndexInput{FactID: f.ID, Content: f.Content, MutationVersion: f.MutationVersion, Active: f.Status == FactActive}, nil
+}
 func (s *factStoreFixture) List(ctx context.Context, access MemoryAccess, filter FactFilter, page PageRequest) (FactPage, error) {
 	if err := ctx.Err(); err != nil {
 		return FactPage{}, err
@@ -531,10 +550,30 @@ func (s *factStoreFixture) List(ctx context.Context, access MemoryAccess, filter
 func (s *factStoreFixture) ListChanges(ctx context.Context, access MemoryAccess, id FactID, page PageRequest) (ChangePage, error) {
 	return ChangePage{}, nil
 }
-func (s *factStoreFixture) ClaimIndexMutations(context.Context, int) ([]IndexMutation, error) {
-	return nil, nil
+func (s *factStoreFixture) ClaimIndexMutations(ctx context.Context, limit int) ([]IndexMutation, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := []IndexMutation{}
+	for _, m := range s.outbox {
+		if _, ok := s.mutationResults[m.ID]; !ok {
+			out = append(out, m)
+			if len(out) >= limit {
+				break
+			}
+		}
+	}
+	return out, nil
 }
-func (s *factStoreFixture) AckIndexMutation(context.Context, IndexMutation, IndexMutationResult) error {
+func (s *factStoreFixture) AckIndexMutation(ctx context.Context, m IndexMutation, result IndexMutationResult) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.mutationResults[m.ID] = result
 	return nil
 }
 func (s *factStoreFixture) BeginScopeClear(ctx context.Context, access ClearAccess, target MemoryScope, key IdempotencyKey) (ClearOperation, error) {
@@ -573,7 +612,7 @@ func (s *factStoreFixture) BeginScopeClear(ctx context.Context, access ClearAcce
 			s.facts[id] = f
 			s.seq++
 			s.changes = append(s.changes, ChangeRecord{FactID: id, Scope: target, Revision: f.Revision, Action: ChangeDeleted, At: s.now})
-			s.outbox = append(s.outbox, IndexMutation{FactID: id, Scope: target, Revision: f.Revision, MutationVersion: f.MutationVersion, StoreSequence: s.seq, Action: MutationTombstone})
+			s.enqueue(IndexMutation{FactID: id, Scope: target, Revision: f.Revision, MutationVersion: f.MutationVersion, StoreSequence: s.seq, Action: MutationTombstone})
 			for idemKey, record := range s.idempotency {
 				if record.receipt.FactID == id {
 					record.state = FactDeleted
@@ -652,8 +691,54 @@ func (s *factStoreFixture) AdvanceRebuild(context.Context, RebuildID, RebuildPro
 	return nil
 }
 func (s *factStoreFixture) ActiveIndexProfile(context.Context) (IndexProfileState, error) {
-	return IndexProfileState{}, nil
+	return IndexProfileState{Profile: EmbeddingProfile{ID: "test-profile", Dimension: 2}, Generation: 1}, nil
 }
 func (s *factStoreFixture) SwitchActiveGeneration(context.Context, IndexGeneration, RebuildID, StoreSequence) error {
 	return nil
+}
+
+type fixtureEmbedderResolver struct{}
+
+func (fixtureEmbedderResolver) Resolve(context.Context, EmbeddingProfileID) (Embedder, error) {
+	return fixtureEmbedder{}, nil
+}
+
+type fixtureEmbedder struct{}
+
+func (fixtureEmbedder) Embed(context.Context, string) ([]float32, error) {
+	return []float32{0.25, 0.75}, nil
+}
+func (fixtureEmbedder) Profile() EmbeddingProfile {
+	return EmbeddingProfile{ID: "test-profile", Dimension: 2}
+}
+
+type fixtureIndex struct {
+	mu      sync.Mutex
+	applied []IndexMutation
+}
+
+func (i *fixtureIndex) ApplyMutation(_ context.Context, mutation IndexMutation) error {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	i.applied = append(i.applied, mutation)
+	return nil
+}
+func (*fixtureIndex) Search(context.Context, IndexQuery) (IndexPage, error) { return IndexPage{}, nil }
+
+func TestFactWorkerEmbedsAndAppliesPendingMutation(t *testing.T) {
+	svc, store, scope := testMemoryService(t)
+	if _, err := svc.Save(context.Background(), scope, "worker", FactInput{Content: "index me"}); err != nil {
+		t.Fatal(err)
+	}
+	index := &fixtureIndex{}
+	worker, err := NewFactWorker(FactWorkerConfig{Store: store, Index: index, Embedders: fixtureEmbedderResolver{}, BatchSize: 10, Concurrency: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := worker.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(index.applied) != 1 || len(index.applied[0].Vector) != 2 || index.applied[0].Generation != 1 {
+		t.Fatalf("索引 mutation 未正确处理：%+v", index.applied)
+	}
 }

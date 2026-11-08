@@ -315,6 +315,16 @@ type IndexMutation struct {
 	ProfileID       EmbeddingProfileID
 	Generation      IndexGeneration
 	Action          IndexMutationAction
+	// Vector 仅由 Worker 在内存中填充，不由 Store 持久化或返回。
+	Vector []float32
+}
+
+// IndexInput 是 Worker 在应用 upsert 前从权威 Store 读取的当前事实正文。
+type IndexInput struct {
+	FactID          FactID
+	Content         string
+	MutationVersion MutationVersion
+	Active          bool
 }
 
 // IndexMutationResult 是索引任务的终态结果。
@@ -443,6 +453,7 @@ type MemoryScopeResolver interface {
 // FactStore 是事实正文、审计、幂等记录和维护状态的权威持久存储。
 type FactStore interface {
 	ApplyFact(context.Context, WriteScope, FactMutation) (FactMutationResult, error)
+	LoadIndexInput(context.Context, IndexMutation) (IndexInput, error)
 	Get(context.Context, MemoryAccess, FactID, Revision) (Fact, error)
 	List(context.Context, MemoryAccess, FactFilter, PageRequest) (FactPage, error)
 	ListChanges(context.Context, MemoryAccess, FactID, PageRequest) (ChangePage, error)

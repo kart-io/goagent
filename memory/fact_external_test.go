@@ -62,6 +62,9 @@ type externalFactStore struct{}
 func (externalFactStore) ApplyFact(context.Context, memory.WriteScope, memory.FactMutation) (memory.FactMutationResult, error) {
 	return memory.FactMutationResult{}, nil
 }
+func (externalFactStore) LoadIndexInput(context.Context, memory.IndexMutation) (memory.IndexInput, error) {
+	return memory.IndexInput{}, nil
+}
 func (externalFactStore) Get(context.Context, memory.MemoryAccess, memory.FactID, memory.Revision) (memory.Fact, error) {
 	return memory.Fact{}, nil
 }
