@@ -54,3 +54,6 @@ __pycache__/
 /examples/basic/06-all-providers/06-all-providers
 /tools/plugingen/cmd/plugingen/plugingen
 /tools/plugingen/plugingen
+
+# Local execution ledgers and workspaces
+.superpowers/
