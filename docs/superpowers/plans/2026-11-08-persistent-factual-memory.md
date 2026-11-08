@@ -54,21 +54,21 @@
 
 `T0 → T1 → T2/T3 → T4 → T5 → T6`。T2 与 T3 可在 T1 接口冻结后独立实现；T4 依赖核心 service/store/index，T5 依赖全部公开接口与 T0 选定的真实 Provider；T6 依赖端到端验收。
 
-### T0：冻结公开契约、资源边界与错误语义
+### Task 0: T0：冻结公开契约、资源边界与错误语义
 
-**文件：**新增 `memory/fact_types.go`、`fact_errors.go`、`fact_limits.go`、`fact_contract_test.go`。
+**文件：**新增 `memory/fact_types.go`、`fact_errors.go`、`fact_limits.go`、`fact_contract_test.go`、`fact_external_test.go`、`docs/feasibility/persistent-factual-memory-provider.md`。
 
-**接口输出：**`MemoryService`、`FactStore`、`MemoryIndex`、`Embedder`、`MemoryScopeResolver`、`MemoryMaintenance` 及请求/结果 DTO。冻结 `RecallClass`（`normal`/`always`）、操作收据、变更记录、清空操作、Worker 状态和游标字段。
+**接口输出：**`MemoryService`、`FactStore`、`MemoryIndex`、`Embedder`、`EmbedderResolver`、`MemoryScopeResolver`、`MemoryMaintenance` 及请求/结果 DTO。冻结 `RecallClass`（`normal`/`always`）、操作收据、变更记录、清空操作、Worker 状态和游标字段。
 
-- [ ] 新增 `TestFactPublicInterfacesHaveNoUnexportedMethods`、`TestFactExternalPackageCanImplementInterfaces`、`TestFactDefaultsAndProviderCapacity`。
-- [ ] 定义公开方法的精确 Go 签名；`MemoryService` 增加 `ListChanges`，维护接口提供 `Run/Status/Retry/ClearStatus/StartRebuild/RebuildStatus`；FactStore 持久实现 `ListChanges`、维护状态/重试、`BeginScopeClear(ClearAccess,targetScope)/GetClearOperation/ClaimClearOperations/AckClearOperation`、重建进度和 ActiveGeneration 原子切换。
-- [ ] 定义稳定错误：授权/越权、RevisionConflict、IdempotencyConflict、IdempotencyExpired、Deleted/Gone、SnapshotInvalidated、CapacityExceeded、InvalidCursor、MaintenanceNotFound；索引待处理作为结果状态而非成功索引承诺；所有错误可通过 `errors.Is/As` 检查且不带事实正文。Save 重放对更新/替代/过期返回原不可变收据；删除返回 Gone；撤权返回授权错误；过期幂等键由永久最小 digest tombstone 拒绝，不保留正文。
-- [ ] 记录初始默认：页 50/最大 200、正文 64 KiB、Metadata 16 KiB、Worker 并发 4/最大 32、tenant outbox 100,000；明确它们是可配置建议值与 Provider 能力边界，不是统一硬上限。所有 byte 和计数单位写入 GoDoc。
-- [ ] 定义 Cursor 签名与绑定字段；首请求高水位仅限定候选成员，不是正文快照；每页按当前授权/生命周期 hydrate，删除/撤权项可消失，原位更新返回当前 revision，后续成员不重复。游标有效期用可注入时钟测试。
-- [ ] 查明现有仓库及用户可用的真实持久 Provider；在可行性记录中选定一个可重启验收 fixture（可以独立模块，不得成为 GoAgent 核心依赖）。未选定前不得宣称持久化验收完成。
-- [ ] 运行 `go test ./memory -run 'TestFact(PublicInterfaces|ExternalPackage|DefaultsAndHardLimits)'`，预期新增用例 PASS，外部 package fixture 独立编译。
+- [x] 新增 `TestFactPublicInterfacesHaveNoUnexportedMethods`、`TestFactExternalPackageCanImplementInterfaces`、`TestFactDefaultsAndProviderCapacity`。
+- [x] 定义公开方法的精确 Go 签名；`MemoryService` 增加 `ListChanges`，维护接口提供 `Run/Status/Retry/ClearStatus/StartRebuild/RebuildStatus`；FactStore 持久实现 `ListChanges`、维护状态/重试、`BeginScopeClear(ClearAccess,targetScope)/GetClearOperation/ClaimClearOperations/AckClearOperation`、重建进度和 ActiveGeneration 原子切换。
+- [x] 定义稳定错误：授权/越权、RevisionConflict、IdempotencyConflict、IdempotencyExpired、Deleted/Gone、SnapshotInvalidated、CapacityExceeded、InvalidCursor、MaintenanceNotFound；索引待处理作为结果状态而非成功索引承诺；所有错误可通过 `errors.Is/As` 检查且不带事实正文。Save 重放对更新/替代/过期返回原不可变收据；删除返回 Gone；撤权返回授权错误；过期幂等键由永久最小 digest tombstone 拒绝，不保留正文。
+- [x] 记录初始默认：页 50/最大 200、正文 64 KiB、Metadata 16 KiB、Worker 并发 4/最大 32、tenant outbox 100,000；明确它们是可配置建议值与 Provider 能力边界，不是统一硬上限。所有 byte 和计数单位写入 GoDoc。
+- [x] 定义 Cursor 签名与绑定字段；首请求高水位仅限定候选成员，不是正文快照；每页按当前授权/生命周期 hydrate，删除/撤权项可消失，原位更新返回当前 revision，后续成员不重复。游标有效期用可注入时钟测试。
+- [x] 查明现有仓库及用户可用的真实持久 Provider；在可行性记录中选定独立可选模块 `examples/fact-memory/postgres` 作为真实 Postgres Provider 的实现路径，复用项目已使用的 pgx v5.10.0 与 GoAgent 1.27 工具链；该模块不进入核心 go.mod，实际 Provider 由 T5 实现。未完成跨进程重启验收前不得宣称持久化验收完成。
+- [x] 运行 `go test ./memory -run 'TestFact(PublicInterfaces|ExternalPackage|DefaultsAndProviderCapacity)'`，预期新增用例 PASS，外部 package fixture 独立编译。
 
-### T1：实现事实 Store、幂等与一致性 outbox
+### Task 1: T1：实现事实 Store、幂等与一致性 outbox
 
 **文件：**新增 `memory/fact_service.go`、`fact_store.go`、`fact_outbox.go`、`fact_service_test.go`、`fact_store_contract_test.go`。
 
@@ -81,7 +81,7 @@
 - [ ] Store contract 覆盖精确 scope 查询、ListChanges、revision CAS、租约领取、MutationVersion ack、Obsolete 终态、tombstone 水位、幂等摘要期限和跨重启恢复；外部适配器可在自己的持久实现满足同一行为。
 - [ ] 运行 `go test -race ./memory -run 'TestFact(Save|Idempotency|Revision|Supersede|Delete|Outbox)'`，预期并发、重试和删除恢复案例 PASS。
 
-### T2：实现作用域管理、清空恢复与变更链查询
+### Task 2: T2：实现作用域管理、清空恢复与变更链查询
 
 **文件：**新增 `memory/fact_clear.go`、`fact_changes.go`、`fact_clear_test.go`、`fact_changes_test.go`。
 
@@ -94,7 +94,7 @@
 - [ ] 宿主注销的规范调用顺序写入 API 文档：先封禁该 scope 的新写入权限，再 DeleteScope，轮询 ClearOperation 到 Complete；Session 删除/Fork 不隐式删除或复制事实。
 - [ ] 运行 `go test -race ./memory -run 'TestFact(Clear|Changes|DeleteAndClear)'`，预期并发边界、恢复、审计隐私和游标案例 PASS。
 
-### T3：实现索引 Worker、维护接口与容量背压
+### Task 3: T3：实现索引 Worker、维护接口与容量背压
 
 **文件：**新增 `memory/fact_worker.go`、`fact_maintenance.go`、`fact_maintenance_test.go`。
 
@@ -107,7 +107,7 @@
 - [ ] 新增 `TestFactCapacityRejectsOversizedContentMetadataAndWorkerLimit`、`TestFactOutboxBackpressureIsAtomicAndRecovers`。
 - [ ] 运行 `go test -race ./memory -run 'TestFact(Worker|Maintenance|Rebuild|Capacity|OutboxBackpressure)'`，预期重试耗尽、恢复、全局重建双写追平/切换、旧 mutation Obsolete、删除清理保留容量和背压案例 PASS。
 
-### T4：实现受控召回、Builder 注入和 durable 快照
+### Task 4: T4：实现受控召回、Builder 注入和 durable 快照
 
 **文件：**新增 `memory/fact_recall.go`、`fact_snapshot.go`、`fact_recall_test.go`、`builder/fact_memory.go`、`builder/fact_memory_test.go`、`builder/durable_fact_memory.go` 及相关 durable 测试。
 
@@ -120,18 +120,18 @@
 - [ ] durable journal 固定 SnapshotRef 引用；恢复时依据当前授权解析相同 facts，已删除/过期/修改/撤权/profile generation 变化返回 `ErrMemorySnapshotInvalidated`。
 - [ ] 运行 `go test -race ./memory ./builder -run 'Test(FactRecall|FactBuilder|FactDurable)'`，预期语义门槛、常驻偏好、缓存 no-read/no-store、会话隔离和恢复用例 PASS。
 
-### T5：提供外部实现者 conformance 套件与持久 Provider 示例
+### Task 5: T5：提供外部实现者 conformance 套件与持久 Provider 示例
 
-**文件：**新增 `memory/conformance/`、`examples/fact-memory/`、`memory/conformance_test.go`，并接入 T0 选定的独立可重启 Provider fixture（不添加到核心模块依赖）。
+**文件：**新增 `memory/conformance/`、`memory/conformance_test.go`、`examples/fact-memory/`，以及 `examples/fact-memory/postgres/` 独立 Go module（依赖 pgx v5.10.0，不加入核心 go.mod），作为真实可重启 Provider。
 
 **接口：**外部实现者只需提供公开 `MemoryService` 或 Store/Index/Embedder 测试 fixture，即可运行同一套行为验证。
 
 - [ ] 新增可从 external package 调用的 `conformance.Suite`，不得导入私有测试 helper；覆盖 PM-01～PM-35 中 Provider 可观察的持久性、隔离、幂等、更新、删除、TTL、维护、清空、来源和容量语义。
 - [ ] 示例实现者从独立 Go package 实现公开接口并注入 Builder；演示授权 scope、保存常驻偏好、列表/变更查询、清空状态和索引维护入口。
-- [ ] 持久化验收使用 T0 选定的真实可重启 Provider；记录精确初始化、清理、跨进程重启命令和环境变量。环境缺失必须失败，不允许 SKIP；T0 的 Provider 选择记录列明 backend 及其非核心依赖；内存 fixture 只用于确定性单元/契约逻辑，不能宣称满足持久恢复。
+- [ ] 持久化验收使用 `examples/fact-memory/postgres` 的真实可重启 Provider；记录精确初始化、清理、跨进程重启命令和环境变量。环境缺失必须失败，不允许 SKIP；T0 的 Provider 选择记录列明 backend 及其非核心依赖；内存 fixture 只用于确定性单元/契约逻辑，不能宣称满足持久恢复。
 - [ ] 运行 `go test -race ./memory/conformance/... ./examples/fact-memory/...`，并以模块外 fixture 编译验证无私有依赖。
 
-### T6：完成文档、端到端案例和验收报告
+### Task 6: T6：完成文档、端到端案例和验收报告
 
 **文件：**更新 `memory/README.md`、`builder/README.md`、`docs/README.md`；新增 `memory/integration/acceptance_test.go`、`docs/evaluation/persistent-factual-memory/REPORT.md`、配置/运行说明。
 
