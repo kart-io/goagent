@@ -1,0 +1,9 @@
+--- FAIL: TestLiveManagement (0.00s)
+    live_model_test.go:37: 
+        	Error Trace:	/Users/costalong/code/go/src/github.com/kart/goagent-contrib-management/management/integration/live_model_test.go:37
+        	Error:      	Should NOT be empty, but was 
+        	Test:       	TestLiveManagement
+        	Messages:   	真实模型验收需要专用Postgres
+FAIL
+FAIL	github.com/kart-io/goagent-contrib/management/integration	0.580s
+FAIL

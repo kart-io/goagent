@@ -1,0 +1,50 @@
+{
+  "Provider": "gemini",
+  "Model": "gemini-2.5-flash",
+  "Scenario": "拒绝审批",
+  "Passed": false,
+  "Calls": [
+    {
+      "task_id": "8c3f34a5-73e0-42d6-9bcb-e6e5ad937c2d",
+      "response_model": "gemini-2.5-flash",
+      "finish_reason": "tool_calls",
+      "tool_calls": [
+        {
+          "id": "call_1794138526387966000_3cc9f28636560a9d",
+          "type": "function",
+          "function": {
+            "name": "refund",
+            "arguments": "{\"amount\":50}"
+          }
+        }
+      ],
+      "usage": {
+        "prompt_tokens": 159,
+        "completion_tokens": 14,
+        "total_tokens": 231,
+        "reasoning_tokens": 58,
+        "known_fields": 23
+      },
+      "usage_fields": 23,
+      "status": "completed"
+    },
+    {
+      "task_id": "8c3f34a5-73e0-42d6-9bcb-e6e5ad937c2d",
+      "response_model": "gemini-2.5-flash",
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 264,
+        "completion_tokens": 5,
+        "total_tokens": 346,
+        "reasoning_tokens": 77,
+        "known_fields": 23
+      },
+      "usage_fields": 23,
+      "status": "completed"
+    }
+  ],
+  "Runs": null,
+  "HTTPRequests": 107,
+  "Effects": 0,
+  "Assertions": null
+}

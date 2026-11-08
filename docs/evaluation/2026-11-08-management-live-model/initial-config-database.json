@@ -1,0 +1,26 @@
+{
+  "预算请求预留数": 1,
+  "预算条目": [
+    {
+      "Evidence": {
+        "Tokens": {
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "total_tokens": 0
+        },
+        "KnownFields": 0,
+        "Source": "",
+        "Revision": 0
+      },
+      "AgentCallKey": "e3cdb04d51a09931f4f818857d7a0b55ef777080870775b62b81eb808bed2738"
+    }
+  ],
+  "模型操作状态": {
+    "status": "failed",
+    "failure_kind": "execution",
+    "attempts": 1,
+    "max_attempts": 1
+  },
+  "模型记录值字段": "NoneType",
+  "说明": "首次从contrib工作区运行时凭据与核心工作区不同；DeepSeek在凭据前检退出，Gemini任务失败。测试作者使用Fatal在Eventually条件协程中导致等待器未及时退出，手动终止本轮进程；随后修为条件先返回终态、主测试协程断言。保留数据库预算与模型操作证据，不把请求预留直接视为提供方已接收。"
+}

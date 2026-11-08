@@ -1,0 +1,713 @@
+{
+  "Provider": "deepseek",
+  "Model": "deepseek-flash",
+  "Scenario": "多轮上下文与精确Fork",
+  "Passed": true,
+  "Calls": [
+    {
+      "task_id": "1732398f-2545-40b6-9914-2660e89af369",
+      "response_model": "deepseek-flash",
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 442,
+        "completion_tokens": 51,
+        "total_tokens": 493,
+        "cached_tokens": 256,
+        "reasoning_tokens": 23,
+        "known_fields": 31
+      },
+      "usage_fields": 31,
+      "status": "completed"
+    },
+    {
+      "task_id": "a6efa414-1ca4-4cb4-9e24-11ed6cbdf361",
+      "response_model": "deepseek-flash",
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 540,
+        "completion_tokens": 41,
+        "total_tokens": 581,
+        "cached_tokens": 384,
+        "reasoning_tokens": 13,
+        "known_fields": 31
+      },
+      "usage_fields": 31,
+      "status": "completed"
+    },
+    {
+      "task_id": "bd7c6f37-4d72-4d27-810c-e91013d65b20",
+      "response_model": "deepseek-flash",
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 510,
+        "completion_tokens": 28,
+        "total_tokens": 538,
+        "cached_tokens": 256,
+        "known_fields": 15
+      },
+      "usage_fields": 15,
+      "status": "completed"
+    },
+    {
+      "task_id": "99b35f71-cd31-4107-b4a3-e238488f5707",
+      "response_model": "deepseek-flash",
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 598,
+        "completion_tokens": 75,
+        "total_tokens": 673,
+        "cached_tokens": 384,
+        "reasoning_tokens": 47,
+        "known_fields": 31
+      },
+      "usage_fields": 31,
+      "status": "completed"
+    }
+  ],
+  "Runs": [
+    {
+      "duration_complete": true,
+      "unfinished_attempts": 0,
+      "queued_millis": 28,
+      "execution_millis": 1127,
+      "waiting_millis": 0,
+      "elapsed_millis": 1161,
+      "task": {
+        "id": "99b35f71-cd31-4107-b4a3-e238488f5707",
+        "tenant_id": "3d9e85b1-a926-432e-a7a6-c5cab4ae9282",
+        "revision": 3,
+        "created_at": "2026-11-08T11:48:37.618293Z",
+        "session_id": "07d2dcda-b40c-4655-84d6-bdbcd469286a",
+        "agent_id": "bd17fecd-0afd-48f9-a61a-ea95cf8c6c6d",
+        "version": "v1",
+        "run_id": "99b35f71-cd31-4107-b4a3-e238488f5707",
+        "execution_key": "",
+        "input": "当前验收代码是什么？只回复代码，不要调用工具。",
+        "input_hash": "",
+        "state": "succeeded",
+        "wait_epoch": 0,
+        "result": "LIVE-e3eebf0a-048c-4161-a752-38e2c70f7e57",
+        "result_ref": "f4226979201fa1ed0ea345feea6a2f648a038407b101216fb8bce44340c46bc2",
+        "finished_at": "2026-11-08T11:48:38.780034Z",
+        "budget": {
+          "RootKey": "99b35f71-cd31-4107-b4a3-e238488f5707",
+          "Version": "management/v1",
+          "MaxModelRequests": 100,
+          "MaxToolCalls": 1000,
+          "DeadlineUnixMilli": 1794224917618
+        },
+        "actor": {
+          "tenant_id": "3d9e85b1-a926-432e-a7a6-c5cab4ae9282",
+          "subject": "验收操作人"
+        }
+      },
+      "attempts": [
+        {
+          "id": "576a50ae-d81e-4699-8546-956ebc16b9ec",
+          "tenant_id": "3d9e85b1-a926-432e-a7a6-c5cab4ae9282",
+          "revision": 2,
+          "created_at": "2026-11-08T11:48:37.646897Z",
+          "task_id": "99b35f71-cd31-4107-b4a3-e238488f5707",
+          "number": 1,
+          "worker_id": "eac6480b-250a-42ab-aada-e4389b8e6a86",
+          "finished_at": "2026-11-08T11:48:38.774248Z",
+          "outcome": "succeeded"
+        }
+      ],
+      "usage": {
+        "Root": {
+          "ReservedRequests": 1,
+          "KnownUsageEntries": 1,
+          "UnknownUsageEntries": 0,
+          "KnownTokens": {
+            "prompt_tokens": 598,
+            "completion_tokens": 75,
+            "total_tokens": 673,
+            "cached_tokens": 384,
+            "reasoning_tokens": 47
+          },
+          "ReservedTokens": 0,
+          "ReservedToolCalls": 0,
+          "KnownTokenDelta": 673
+        },
+        "Calls": [
+          {
+            "RunID": "99b35f71-cd31-4107-b4a3-e238488f5707",
+            "AgentID": "bd17fecd-0afd-48f9-a61a-ea95cf8c6c6d",
+            "AgentCallKey": "1f5aa1528b2e63b3f5a09d9de0cf779e20b7fc7fd56e7b369b82a12e13e01ba4",
+            "ParentAgentCallKey": "",
+            "Self": {
+              "UnknownPromptEntries": 0,
+              "UnknownCompletionEntries": 0,
+              "UnknownTotalEntries": 0,
+              "UnknownCachedEntries": 0,
+              "UnknownReasoningEntries": 0,
+              "UnknownToolUsePromptEntries": 1,
+              "KnownTokens": {
+                "prompt_tokens": 598,
+                "completion_tokens": 75,
+                "total_tokens": 673,
+                "cached_tokens": 384,
+                "reasoning_tokens": 47
+              },
+              "ReservedRequests": 1,
+              "KnownUsageEntries": 1,
+              "UnknownUsageEntries": 0,
+              "PartialUsageEntries": 0
+            },
+            "Inclusive": {
+              "UnknownPromptEntries": 0,
+              "UnknownCompletionEntries": 0,
+              "UnknownTotalEntries": 0,
+              "UnknownCachedEntries": 0,
+              "UnknownReasoningEntries": 0,
+              "UnknownToolUsePromptEntries": 1,
+              "KnownTokens": {
+                "prompt_tokens": 598,
+                "completion_tokens": 75,
+                "total_tokens": 673,
+                "cached_tokens": 384,
+                "reasoning_tokens": 47
+              },
+              "ReservedRequests": 1,
+              "KnownUsageEntries": 1,
+              "UnknownUsageEntries": 0,
+              "PartialUsageEntries": 0
+            }
+          }
+        ],
+        "Agents": [
+          {
+            "AgentID": "bd17fecd-0afd-48f9-a61a-ea95cf8c6c6d",
+            "Self": {
+              "UnknownPromptEntries": 0,
+              "UnknownCompletionEntries": 0,
+              "UnknownTotalEntries": 0,
+              "UnknownCachedEntries": 0,
+              "UnknownReasoningEntries": 0,
+              "UnknownToolUsePromptEntries": 1,
+              "KnownTokens": {
+                "prompt_tokens": 598,
+                "completion_tokens": 75,
+                "total_tokens": 673,
+                "cached_tokens": 384,
+                "reasoning_tokens": 47
+              },
+              "ReservedRequests": 1,
+              "KnownUsageEntries": 1,
+              "UnknownUsageEntries": 0,
+              "PartialUsageEntries": 0
+            }
+          }
+        ],
+        "Unattributed": {
+          "UnknownPromptEntries": 0,
+          "UnknownCompletionEntries": 0,
+          "UnknownTotalEntries": 0,
+          "UnknownCachedEntries": 0,
+          "UnknownReasoningEntries": 0,
+          "UnknownToolUsePromptEntries": 0,
+          "KnownTokens": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0
+          },
+          "ReservedRequests": 0,
+          "KnownUsageEntries": 0,
+          "UnknownUsageEntries": 0,
+          "PartialUsageEntries": 0
+        },
+        "UnknownUsageEntries": 0,
+        "PartialUsageEntries": 0,
+        "Complete": true
+      },
+      "complete": true,
+      "usage_status": "available"
+    },
+    {
+      "duration_complete": true,
+      "unfinished_attempts": 0,
+      "queued_millis": 29,
+      "execution_millis": 854,
+      "waiting_millis": 0,
+      "elapsed_millis": 894,
+      "task": {
+        "id": "1732398f-2545-40b6-9914-2660e89af369",
+        "tenant_id": "3d9e85b1-a926-432e-a7a6-c5cab4ae9282",
+        "revision": 3,
+        "created_at": "2026-11-08T11:48:34.718179Z",
+        "session_id": "07d2dcda-b40c-4655-84d6-bdbcd469286a",
+        "agent_id": "bd17fecd-0afd-48f9-a61a-ea95cf8c6c6d",
+        "version": "v1",
+        "run_id": "1732398f-2545-40b6-9914-2660e89af369",
+        "execution_key": "",
+        "input": "请记住当前验收代码为LIVE-6e38f385-77d9-4af9-a92a-0e54cecc4536。只回复该代码，不要调用工具。",
+        "input_hash": "",
+        "state": "succeeded",
+        "wait_epoch": 0,
+        "result": "LIVE-6e38f385-77d9-4af9-a92a-0e54cecc4536",
+        "result_ref": "2812c4fa142d97efcff7079762af05e00d8500e0f2c04c7ace94c0fc8175a57d",
+        "finished_at": "2026-11-08T11:48:35.612661Z",
+        "budget": {
+          "RootKey": "1732398f-2545-40b6-9914-2660e89af369",
+          "Version": "management/v1",
+          "MaxModelRequests": 100,
+          "MaxToolCalls": 1000,
+          "DeadlineUnixMilli": 1794224914718
+        },
+        "actor": {
+          "tenant_id": "3d9e85b1-a926-432e-a7a6-c5cab4ae9282",
+          "subject": "验收操作人"
+        }
+      },
+      "attempts": [
+        {
+          "id": "679d66a2-8817-424c-99fa-0970bde7fab8",
+          "tenant_id": "3d9e85b1-a926-432e-a7a6-c5cab4ae9282",
+          "revision": 2,
+          "created_at": "2026-11-08T11:48:34.747658Z",
+          "task_id": "1732398f-2545-40b6-9914-2660e89af369",
+          "number": 1,
+          "worker_id": "eac6480b-250a-42ab-aada-e4389b8e6a86",
+          "finished_at": "2026-11-08T11:48:35.602404Z",
+          "outcome": "succeeded"
+        }
+      ],
+      "usage": {
+        "Root": {
+          "ReservedRequests": 1,
+          "KnownUsageEntries": 1,
+          "UnknownUsageEntries": 0,
+          "KnownTokens": {
+            "prompt_tokens": 442,
+            "completion_tokens": 51,
+            "total_tokens": 493,
+            "cached_tokens": 256,
+            "reasoning_tokens": 23
+          },
+          "ReservedTokens": 0,
+          "ReservedToolCalls": 0,
+          "KnownTokenDelta": 493
+        },
+        "Calls": [
+          {
+            "RunID": "1732398f-2545-40b6-9914-2660e89af369",
+            "AgentID": "bd17fecd-0afd-48f9-a61a-ea95cf8c6c6d",
+            "AgentCallKey": "dda6b63084ab07e52a9cc115c762285b42ba6b790109a80ad25874aac5f5cf53",
+            "ParentAgentCallKey": "",
+            "Self": {
+              "UnknownPromptEntries": 0,
+              "UnknownCompletionEntries": 0,
+              "UnknownTotalEntries": 0,
+              "UnknownCachedEntries": 0,
+              "UnknownReasoningEntries": 0,
+              "UnknownToolUsePromptEntries": 1,
+              "KnownTokens": {
+                "prompt_tokens": 442,
+                "completion_tokens": 51,
+                "total_tokens": 493,
+                "cached_tokens": 256,
+                "reasoning_tokens": 23
+              },
+              "ReservedRequests": 1,
+              "KnownUsageEntries": 1,
+              "UnknownUsageEntries": 0,
+              "PartialUsageEntries": 0
+            },
+            "Inclusive": {
+              "UnknownPromptEntries": 0,
+              "UnknownCompletionEntries": 0,
+              "UnknownTotalEntries": 0,
+              "UnknownCachedEntries": 0,
+              "UnknownReasoningEntries": 0,
+              "UnknownToolUsePromptEntries": 1,
+              "KnownTokens": {
+                "prompt_tokens": 442,
+                "completion_tokens": 51,
+                "total_tokens": 493,
+                "cached_tokens": 256,
+                "reasoning_tokens": 23
+              },
+              "ReservedRequests": 1,
+              "KnownUsageEntries": 1,
+              "UnknownUsageEntries": 0,
+              "PartialUsageEntries": 0
+            }
+          }
+        ],
+        "Agents": [
+          {
+            "AgentID": "bd17fecd-0afd-48f9-a61a-ea95cf8c6c6d",
+            "Self": {
+              "UnknownPromptEntries": 0,
+              "UnknownCompletionEntries": 0,
+              "UnknownTotalEntries": 0,
+              "UnknownCachedEntries": 0,
+              "UnknownReasoningEntries": 0,
+              "UnknownToolUsePromptEntries": 1,
+              "KnownTokens": {
+                "prompt_tokens": 442,
+                "completion_tokens": 51,
+                "total_tokens": 493,
+                "cached_tokens": 256,
+                "reasoning_tokens": 23
+              },
+              "ReservedRequests": 1,
+              "KnownUsageEntries": 1,
+              "UnknownUsageEntries": 0,
+              "PartialUsageEntries": 0
+            }
+          }
+        ],
+        "Unattributed": {
+          "UnknownPromptEntries": 0,
+          "UnknownCompletionEntries": 0,
+          "UnknownTotalEntries": 0,
+          "UnknownCachedEntries": 0,
+          "UnknownReasoningEntries": 0,
+          "UnknownToolUsePromptEntries": 0,
+          "KnownTokens": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0
+          },
+          "ReservedRequests": 0,
+          "KnownUsageEntries": 0,
+          "UnknownUsageEntries": 0,
+          "PartialUsageEntries": 0
+        },
+        "UnknownUsageEntries": 0,
+        "PartialUsageEntries": 0,
+        "Complete": true
+      },
+      "complete": true,
+      "usage_status": "available"
+    },
+    {
+      "duration_complete": true,
+      "unfinished_attempts": 0,
+      "queued_millis": 14,
+      "execution_millis": 959,
+      "waiting_millis": 0,
+      "elapsed_millis": 984,
+      "task": {
+        "id": "a6efa414-1ca4-4cb4-9e24-11ed6cbdf361",
+        "tenant_id": "3d9e85b1-a926-432e-a7a6-c5cab4ae9282",
+        "revision": 3,
+        "created_at": "2026-11-08T11:48:35.631194Z",
+        "session_id": "07d2dcda-b40c-4655-84d6-bdbcd469286a",
+        "agent_id": "bd17fecd-0afd-48f9-a61a-ea95cf8c6c6d",
+        "version": "v1",
+        "run_id": "a6efa414-1ca4-4cb4-9e24-11ed6cbdf361",
+        "execution_key": "",
+        "input": "现在把验收代码更新为LIVE-e3eebf0a-048c-4161-a752-38e2c70f7e57。只回复新代码，不要调用工具。",
+        "input_hash": "",
+        "state": "succeeded",
+        "wait_epoch": 0,
+        "result": "LIVE-e3eebf0a-048c-4161-a752-38e2c70f7e57",
+        "result_ref": "e24cc25b59f21d3472fa4af6f94fc388b582d3e0a1dd1b2a6f02ccef4977bed3",
+        "finished_at": "2026-11-08T11:48:36.61536Z",
+        "budget": {
+          "RootKey": "a6efa414-1ca4-4cb4-9e24-11ed6cbdf361",
+          "Version": "management/v1",
+          "MaxModelRequests": 100,
+          "MaxToolCalls": 1000,
+          "DeadlineUnixMilli": 1794224915631
+        },
+        "actor": {
+          "tenant_id": "3d9e85b1-a926-432e-a7a6-c5cab4ae9282",
+          "subject": "验收操作人"
+        }
+      },
+      "attempts": [
+        {
+          "id": "5f8d3107-7860-45ed-946b-3e2a216b62cf",
+          "tenant_id": "3d9e85b1-a926-432e-a7a6-c5cab4ae9282",
+          "revision": 2,
+          "created_at": "2026-11-08T11:48:35.646167Z",
+          "task_id": "a6efa414-1ca4-4cb4-9e24-11ed6cbdf361",
+          "number": 1,
+          "worker_id": "eac6480b-250a-42ab-aada-e4389b8e6a86",
+          "finished_at": "2026-11-08T11:48:36.606151Z",
+          "outcome": "succeeded"
+        }
+      ],
+      "usage": {
+        "Root": {
+          "ReservedRequests": 1,
+          "KnownUsageEntries": 1,
+          "UnknownUsageEntries": 0,
+          "KnownTokens": {
+            "prompt_tokens": 540,
+            "completion_tokens": 41,
+            "total_tokens": 581,
+            "cached_tokens": 384,
+            "reasoning_tokens": 13
+          },
+          "ReservedTokens": 0,
+          "ReservedToolCalls": 0,
+          "KnownTokenDelta": 581
+        },
+        "Calls": [
+          {
+            "RunID": "a6efa414-1ca4-4cb4-9e24-11ed6cbdf361",
+            "AgentID": "bd17fecd-0afd-48f9-a61a-ea95cf8c6c6d",
+            "AgentCallKey": "30874f30aa9d505ecad51d6dd05f6e34464c7949ad8a1944e686fca7356a7119",
+            "ParentAgentCallKey": "",
+            "Self": {
+              "UnknownPromptEntries": 0,
+              "UnknownCompletionEntries": 0,
+              "UnknownTotalEntries": 0,
+              "UnknownCachedEntries": 0,
+              "UnknownReasoningEntries": 0,
+              "UnknownToolUsePromptEntries": 1,
+              "KnownTokens": {
+                "prompt_tokens": 540,
+                "completion_tokens": 41,
+                "total_tokens": 581,
+                "cached_tokens": 384,
+                "reasoning_tokens": 13
+              },
+              "ReservedRequests": 1,
+              "KnownUsageEntries": 1,
+              "UnknownUsageEntries": 0,
+              "PartialUsageEntries": 0
+            },
+            "Inclusive": {
+              "UnknownPromptEntries": 0,
+              "UnknownCompletionEntries": 0,
+              "UnknownTotalEntries": 0,
+              "UnknownCachedEntries": 0,
+              "UnknownReasoningEntries": 0,
+              "UnknownToolUsePromptEntries": 1,
+              "KnownTokens": {
+                "prompt_tokens": 540,
+                "completion_tokens": 41,
+                "total_tokens": 581,
+                "cached_tokens": 384,
+                "reasoning_tokens": 13
+              },
+              "ReservedRequests": 1,
+              "KnownUsageEntries": 1,
+              "UnknownUsageEntries": 0,
+              "PartialUsageEntries": 0
+            }
+          }
+        ],
+        "Agents": [
+          {
+            "AgentID": "bd17fecd-0afd-48f9-a61a-ea95cf8c6c6d",
+            "Self": {
+              "UnknownPromptEntries": 0,
+              "UnknownCompletionEntries": 0,
+              "UnknownTotalEntries": 0,
+              "UnknownCachedEntries": 0,
+              "UnknownReasoningEntries": 0,
+              "UnknownToolUsePromptEntries": 1,
+              "KnownTokens": {
+                "prompt_tokens": 540,
+                "completion_tokens": 41,
+                "total_tokens": 581,
+                "cached_tokens": 384,
+                "reasoning_tokens": 13
+              },
+              "ReservedRequests": 1,
+              "KnownUsageEntries": 1,
+              "UnknownUsageEntries": 0,
+              "PartialUsageEntries": 0
+            }
+          }
+        ],
+        "Unattributed": {
+          "UnknownPromptEntries": 0,
+          "UnknownCompletionEntries": 0,
+          "UnknownTotalEntries": 0,
+          "UnknownCachedEntries": 0,
+          "UnknownReasoningEntries": 0,
+          "UnknownToolUsePromptEntries": 0,
+          "KnownTokens": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0
+          },
+          "ReservedRequests": 0,
+          "KnownUsageEntries": 0,
+          "UnknownUsageEntries": 0,
+          "PartialUsageEntries": 0
+        },
+        "UnknownUsageEntries": 0,
+        "PartialUsageEntries": 0,
+        "Complete": true
+      },
+      "complete": true,
+      "usage_status": "available"
+    },
+    {
+      "duration_complete": true,
+      "unfinished_attempts": 0,
+      "queued_millis": 33,
+      "execution_millis": 844,
+      "waiting_millis": 0,
+      "elapsed_millis": 885,
+      "task": {
+        "id": "bd7c6f37-4d72-4d27-810c-e91013d65b20",
+        "tenant_id": "3d9e85b1-a926-432e-a7a6-c5cab4ae9282",
+        "revision": 3,
+        "created_at": "2026-11-08T11:48:36.70556Z",
+        "session_id": "2dbdc2ac-6eb0-4b1a-94f0-ec454d370263",
+        "agent_id": "bd17fecd-0afd-48f9-a61a-ea95cf8c6c6d",
+        "version": "v1",
+        "run_id": "bd7c6f37-4d72-4d27-810c-e91013d65b20",
+        "execution_key": "",
+        "input": "当前验收代码是什么？只回复代码，不要调用工具。",
+        "input_hash": "",
+        "state": "succeeded",
+        "wait_epoch": 0,
+        "result": "LIVE-6e38f385-77d9-4af9-a92a-0e54cecc4536",
+        "result_ref": "ccbc3cdf050c4fb315b014ab290c26f37be2c893abba90017767a767301465f5",
+        "finished_at": "2026-11-08T11:48:37.59063Z",
+        "budget": {
+          "RootKey": "bd7c6f37-4d72-4d27-810c-e91013d65b20",
+          "Version": "management/v1",
+          "MaxModelRequests": 100,
+          "MaxToolCalls": 1000,
+          "DeadlineUnixMilli": 1794224916705
+        },
+        "actor": {
+          "tenant_id": "3d9e85b1-a926-432e-a7a6-c5cab4ae9282",
+          "subject": "验收操作人"
+        }
+      },
+      "attempts": [
+        {
+          "id": "8c46cb01-6d0e-4d85-8cd5-5f71fb6d8d00",
+          "tenant_id": "3d9e85b1-a926-432e-a7a6-c5cab4ae9282",
+          "revision": 2,
+          "created_at": "2026-11-08T11:48:36.739425Z",
+          "task_id": "bd7c6f37-4d72-4d27-810c-e91013d65b20",
+          "number": 1,
+          "worker_id": "eac6480b-250a-42ab-aada-e4389b8e6a86",
+          "finished_at": "2026-11-08T11:48:37.583817Z",
+          "outcome": "succeeded"
+        }
+      ],
+      "usage": {
+        "Root": {
+          "ReservedRequests": 1,
+          "KnownUsageEntries": 1,
+          "UnknownUsageEntries": 0,
+          "KnownTokens": {
+            "prompt_tokens": 510,
+            "completion_tokens": 28,
+            "total_tokens": 538,
+            "cached_tokens": 256
+          },
+          "ReservedTokens": 0,
+          "ReservedToolCalls": 0,
+          "KnownTokenDelta": 538
+        },
+        "Calls": [
+          {
+            "RunID": "bd7c6f37-4d72-4d27-810c-e91013d65b20",
+            "AgentID": "bd17fecd-0afd-48f9-a61a-ea95cf8c6c6d",
+            "AgentCallKey": "f19c82c383c5133fb8ae36a3de36f3141462389dfdd3bdd73c5767912d3c692d",
+            "ParentAgentCallKey": "",
+            "Self": {
+              "UnknownPromptEntries": 0,
+              "UnknownCompletionEntries": 0,
+              "UnknownTotalEntries": 0,
+              "UnknownCachedEntries": 0,
+              "UnknownReasoningEntries": 1,
+              "UnknownToolUsePromptEntries": 1,
+              "KnownTokens": {
+                "prompt_tokens": 510,
+                "completion_tokens": 28,
+                "total_tokens": 538,
+                "cached_tokens": 256
+              },
+              "ReservedRequests": 1,
+              "KnownUsageEntries": 1,
+              "UnknownUsageEntries": 0,
+              "PartialUsageEntries": 0
+            },
+            "Inclusive": {
+              "UnknownPromptEntries": 0,
+              "UnknownCompletionEntries": 0,
+              "UnknownTotalEntries": 0,
+              "UnknownCachedEntries": 0,
+              "UnknownReasoningEntries": 1,
+              "UnknownToolUsePromptEntries": 1,
+              "KnownTokens": {
+                "prompt_tokens": 510,
+                "completion_tokens": 28,
+                "total_tokens": 538,
+                "cached_tokens": 256
+              },
+              "ReservedRequests": 1,
+              "KnownUsageEntries": 1,
+              "UnknownUsageEntries": 0,
+              "PartialUsageEntries": 0
+            }
+          }
+        ],
+        "Agents": [
+          {
+            "AgentID": "bd17fecd-0afd-48f9-a61a-ea95cf8c6c6d",
+            "Self": {
+              "UnknownPromptEntries": 0,
+              "UnknownCompletionEntries": 0,
+              "UnknownTotalEntries": 0,
+              "UnknownCachedEntries": 0,
+              "UnknownReasoningEntries": 1,
+              "UnknownToolUsePromptEntries": 1,
+              "KnownTokens": {
+                "prompt_tokens": 510,
+                "completion_tokens": 28,
+                "total_tokens": 538,
+                "cached_tokens": 256
+              },
+              "ReservedRequests": 1,
+              "KnownUsageEntries": 1,
+              "UnknownUsageEntries": 0,
+              "PartialUsageEntries": 0
+            }
+          }
+        ],
+        "Unattributed": {
+          "UnknownPromptEntries": 0,
+          "UnknownCompletionEntries": 0,
+          "UnknownTotalEntries": 0,
+          "UnknownCachedEntries": 0,
+          "UnknownReasoningEntries": 0,
+          "UnknownToolUsePromptEntries": 0,
+          "KnownTokens": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0
+          },
+          "ReservedRequests": 0,
+          "KnownUsageEntries": 0,
+          "UnknownUsageEntries": 0,
+          "PartialUsageEntries": 0
+        },
+        "UnknownUsageEntries": 0,
+        "PartialUsageEntries": 0,
+        "Complete": true
+      },
+      "complete": true,
+      "usage_status": "available"
+    }
+  ],
+  "HTTPRequests": 108,
+  "Effects": 0,
+  "Assertions": [
+    "模型通过持久日志读到多轮上下文",
+    "指定完整轮次Fork仅继承旧代码",
+    "父会话仍读到新代码",
+    "全部代码每轮随机生成且查询不携带答案",
+    "提供方实际prompt/completion/total用量逐Task等于GetRun",
+    "跨Session汇总与提供方实际用量一致",
+    "重复只读查询不产生模型请求",
+    "独立SQL核对效果与唯一执行键"
+  ]
+}

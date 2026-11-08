@@ -36,3 +36,5 @@ env -u GOROOT GOTOOLCHAIN=go1.27.3 GOWORK=off go build ./...
 核心单测不需要数据库。持久恢复、进程故障和 HTTP 退款案例继续在 contrib 使用专用 Postgres 验证，不能用内存单测或数据库 SKIP 代替。
 
 新增20组HTTP与4项数据库业务案例的功能映射、红绿修复和执行结果见 [扩展案例验收](../docs/evaluation/2026-11-08-management-expanded-cases/REPORT.md)。
+
+DeepSeek与Gemini的真实模型、审批续跑、多轮会话、Fork及实际用量结果见 [真实模型验收](../docs/evaluation/2026-11-08-management-live-model/REPORT.md)。

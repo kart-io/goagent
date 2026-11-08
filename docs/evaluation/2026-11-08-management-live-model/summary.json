@@ -1,0 +1,132 @@
+{
+  "时间": "2026-11-08T19:56:26.045572+08:00",
+  "核心基线": "1ef1a7a",
+  "contrib基线": "89f9a73",
+  "源码SHA256": "af53e379c20b0ff9c21a47740941768a4b8ce76f0460c0efb2eae7cab43833e1",
+  "各轮": {
+    "deepseek-results": {
+      "场景数": 5,
+      "通过场景": 3,
+      "客户端请求": 10,
+      "已知Token": 5182,
+      "提供方": {
+        "deepseek": {
+          "场景数": 5,
+          "通过场景": 3,
+          "请求": 10,
+          "已知Token": 5182
+        }
+      }
+    },
+    "gemini-results": {
+      "场景数": 5,
+      "通过场景": 3,
+      "客户端请求": 11,
+      "已知Token": 3030,
+      "提供方": {
+        "gemini": {
+          "场景数": 5,
+          "通过场景": 3,
+          "请求": 11,
+          "已知Token": 3030
+        }
+      }
+    },
+    "recheck-results": {
+      "场景数": 6,
+      "通过场景": 6,
+      "客户端请求": 10,
+      "已知Token": 3602,
+      "提供方": {
+        "deepseek": {
+          "场景数": 3,
+          "通过场景": 3,
+          "请求": 5,
+          "已知Token": 2307
+        },
+        "gemini": {
+          "场景数": 3,
+          "通过场景": 3,
+          "请求": 5,
+          "已知Token": 1295
+        }
+      }
+    },
+    "final-results": {
+      "场景数": 10,
+      "通过场景": 10,
+      "客户端请求": 22,
+      "已知Token": 8637,
+      "提供方": {
+        "deepseek": {
+          "场景数": 5,
+          "通过场景": 5,
+          "请求": 11,
+          "已知Token": 5557
+        },
+        "gemini": {
+          "场景数": 5,
+          "通过场景": 5,
+          "请求": 11,
+          "已知Token": 3080
+        }
+      }
+    },
+    "review-results": {
+      "场景数": 2,
+      "通过场景": 2,
+      "客户端请求": 4,
+      "已知Token": 1608,
+      "提供方": {
+        "deepseek": {
+          "场景数": 1,
+          "通过场景": 1,
+          "请求": 2,
+          "已知Token": 1034
+        },
+        "gemini": {
+          "场景数": 1,
+          "通过场景": 1,
+          "请求": 2,
+          "已知Token": 574
+        }
+      }
+    }
+  },
+  "全部已完成真实模型请求": 57,
+  "全部已完成请求已知Token": 22059,
+  "首次中止轮": {
+    "DeepSeek": "凭据前检为空，未进入案例",
+    "Gemini": "数据库保留1个请求预留、失败操作、KnownFields=0；不能确认提供方收到请求或实际用量，不纳入已知Token合计"
+  },
+  "独立审阅": "0 Critical、0 Important、1 Minor已落实并由原审阅者复核通过",
+  "凭据扫描": "核心与contrib两个工作区均扫描，证据未发现各自配置的凭据原值",
+  "证据SHA256": {
+    "live.jsonl": "f35270b63be8000069ed5d872d85d143defe7fd68cb59be66d4b39dfc60d2450",
+    "deepseek-live.jsonl": "7d9c85417244a42d18a7e78619bbaed3c1b4dfbb6985844369bb0482f05cd37a",
+    "gemini-live.jsonl": "be203ff0c8e2aa481386c228800800ae1afa52aa9d3c2647442ac0f89287799c",
+    "recheck-live.jsonl": "cb1e7a149ce614511b94ffb12d8348193e95094ed822fbce4a353fe2b8416785",
+    "final-live.jsonl": "248a8f0ae040781143b1c60d36a31cf7432ebe035374556c10937e266fd37b57",
+    "review-live.jsonl": "aa5a579432c0604d0b3b36ee198710810fd1ce56353cc66e960e1b48b68828bf",
+    "initial-config-database.json": "c69468707bea0997fecfb72d008576d00f3eb8257c9de5678c80d383a518f449",
+    "baseline-management.jsonl": "c0050f1f93a74d852ad3c9a36808c6d4142cbb2be6b85dfa73a75a9dc58a82c0",
+    "default-final.jsonl": "0eca32d4908959c31975946161e959030d023b59c74e332d2e67ea7bb88e5528",
+    "standalone-management.jsonl": "1db646583ff339a509c6ceb02ab4acd833565256c46b5a462b2487ac4dab171c",
+    "reviewed-vet-lint.log": "e92606b0bf483111dff0a120c315ea165821348f31365020e2468a0059095c47",
+    "missing-dsn.log": "3fe7b78b3bddfa842d954218ac06f5bc376ca2c55dcd716e84d059531e27df8f",
+    "missing-key.log": "7ea867f345751ef7fb77b3df374e5d3d05d301b904eaa2a552143e3906930017",
+    "default-reviewed.jsonl": "e0fcca495d09b85d890b640021f9efcb47ac2b0457a924f4235b1e205d262533"
+  },
+  "contrib受检提交": "ca7138f10ddaea9109ae650cc1f51b41dc0f6784",
+  "最终默认管理回归": {
+    "pass": 76,
+    "fail": 0,
+    "skip": 1,
+    "skip说明": "新增真实模型入口默认不启用付费请求"
+  },
+  "GOWORK_off独立模块管理回归": {
+    "pass": 76,
+    "fail": 0,
+    "skip": 1
+  }
+}

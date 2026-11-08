@@ -1,0 +1,26 @@
+{
+  "Provider": "deepseek",
+  "Model": "deepseek-flash",
+  "Scenario": "发布版本与会话绑定",
+  "Passed": false,
+  "Calls": [
+    {
+      "task_id": "330d40f8-2d90-4fa4-8b20-75c213248515",
+      "response_model": "deepseek-flash",
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 411,
+        "completion_tokens": 11,
+        "total_tokens": 422,
+        "cached_tokens": 256,
+        "known_fields": 15
+      },
+      "usage_fields": 15,
+      "status": "completed"
+    }
+  ],
+  "Runs": null,
+  "HTTPRequests": 37,
+  "Effects": 0,
+  "Assertions": null
+}

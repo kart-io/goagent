@@ -1,0 +1,234 @@
+{
+  "Provider": "deepseek",
+  "Model": "deepseek-flash",
+  "Scenario": "批准与宿主重建",
+  "Passed": true,
+  "Calls": [
+    {
+      "task_id": "ec7a9955-f364-4cd4-b63f-550391b979c7",
+      "response_model": "deepseek-flash",
+      "finish_reason": "tool_calls",
+      "tool_calls": [
+        {
+          "id": "call_00_KcqQSWV4sNzTuKFJawZR0949",
+          "type": "function",
+          "function": {
+            "name": "refund",
+            "arguments": "{\"amount\": 50}"
+          }
+        }
+      ],
+      "usage": {
+        "prompt_tokens": 412,
+        "completion_tokens": 64,
+        "total_tokens": 476,
+        "cached_tokens": 256,
+        "reasoning_tokens": 26,
+        "known_fields": 31
+      },
+      "usage_fields": 31,
+      "status": "completed",
+      "max_output_tokens": 1024
+    },
+    {
+      "task_id": "ec7a9955-f364-4cd4-b63f-550391b979c7",
+      "response_model": "deepseek-flash",
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 518,
+        "completion_tokens": 40,
+        "total_tokens": 558,
+        "cached_tokens": 384,
+        "known_fields": 15
+      },
+      "usage_fields": 15,
+      "status": "completed",
+      "max_output_tokens": 1024
+    }
+  ],
+  "Runs": [
+    {
+      "duration_complete": true,
+      "unfinished_attempts": 0,
+      "queued_millis": 29,
+      "execution_millis": 2162,
+      "waiting_millis": 72,
+      "elapsed_millis": 2271,
+      "task": {
+        "id": "ec7a9955-f364-4cd4-b63f-550391b979c7",
+        "tenant_id": "136eb90d-1c9b-473e-9487-24cefd9fdb2c",
+        "revision": 5,
+        "created_at": "2026-11-08T11:54:22.054224Z",
+        "session_id": "75e949da-ed3e-41b2-986e-b7960a57eab6",
+        "agent_id": "20520dec-e8bd-46bd-a6d3-c5960dcef78d",
+        "version": "v1",
+        "run_id": "ec7a9955-f364-4cd4-b63f-550391b979c7",
+        "execution_key": "",
+        "input": "请调用工具退还50元，并返回完整退款凭证。",
+        "input_hash": "",
+        "state": "succeeded",
+        "wait_epoch": 1,
+        "result": "退款已成功执行，完整凭证如下：\n\n退款成功；凭证 LIVE-REFUND-ec7a9955-f364-4cd4-b63f-550391b979c7",
+        "result_ref": "b10397e5d381dfd5fd452f54d10d6787ab8e9f9fe7913ef6350798f05221ed50",
+        "finished_at": "2026-11-08T11:54:24.325544Z",
+        "budget": {
+          "RootKey": "ec7a9955-f364-4cd4-b63f-550391b979c7",
+          "Version": "management/v1",
+          "MaxModelRequests": 100,
+          "MaxToolCalls": 1000,
+          "DeadlineUnixMilli": 1794225262054
+        },
+        "actor": {
+          "tenant_id": "136eb90d-1c9b-473e-9487-24cefd9fdb2c",
+          "subject": "验收操作人"
+        }
+      },
+      "attempts": [
+        {
+          "id": "679f59a6-fad8-46dd-814b-6865f9eb5316",
+          "tenant_id": "136eb90d-1c9b-473e-9487-24cefd9fdb2c",
+          "revision": 2,
+          "created_at": "2026-11-08T11:54:22.083256Z",
+          "task_id": "ec7a9955-f364-4cd4-b63f-550391b979c7",
+          "number": 1,
+          "worker_id": "fa22bcf7-4b1c-417d-913a-6112bfc593c9",
+          "finished_at": "2026-11-08T11:54:22.987816Z",
+          "outcome": "waiting_approval"
+        },
+        {
+          "id": "bd4dbccb-b5b0-4f4b-94fb-c86c7dd42393",
+          "tenant_id": "136eb90d-1c9b-473e-9487-24cefd9fdb2c",
+          "revision": 2,
+          "created_at": "2026-11-08T11:54:23.060685Z",
+          "task_id": "ec7a9955-f364-4cd4-b63f-550391b979c7",
+          "number": 2,
+          "worker_id": "9b9157d7-7ebe-4bc0-8ae6-cd1b0d1466f4",
+          "finished_at": "2026-11-08T11:54:24.318885Z",
+          "outcome": "succeeded"
+        }
+      ],
+      "usage": {
+        "Root": {
+          "ReservedRequests": 2,
+          "KnownUsageEntries": 2,
+          "UnknownUsageEntries": 0,
+          "KnownTokens": {
+            "prompt_tokens": 930,
+            "completion_tokens": 104,
+            "total_tokens": 1034,
+            "cached_tokens": 640,
+            "reasoning_tokens": 26
+          },
+          "ReservedTokens": 0,
+          "ReservedToolCalls": 1,
+          "KnownTokenDelta": 1034
+        },
+        "Calls": [
+          {
+            "RunID": "ec7a9955-f364-4cd4-b63f-550391b979c7",
+            "AgentID": "20520dec-e8bd-46bd-a6d3-c5960dcef78d",
+            "AgentCallKey": "debb081a950208b716edaf526a21be2f4fa1e013604c3df43217261cee4ab2b3",
+            "ParentAgentCallKey": "",
+            "Self": {
+              "UnknownPromptEntries": 0,
+              "UnknownCompletionEntries": 0,
+              "UnknownTotalEntries": 0,
+              "UnknownCachedEntries": 0,
+              "UnknownReasoningEntries": 1,
+              "UnknownToolUsePromptEntries": 2,
+              "KnownTokens": {
+                "prompt_tokens": 930,
+                "completion_tokens": 104,
+                "total_tokens": 1034,
+                "cached_tokens": 640,
+                "reasoning_tokens": 26
+              },
+              "ReservedRequests": 2,
+              "KnownUsageEntries": 2,
+              "UnknownUsageEntries": 0,
+              "PartialUsageEntries": 0
+            },
+            "Inclusive": {
+              "UnknownPromptEntries": 0,
+              "UnknownCompletionEntries": 0,
+              "UnknownTotalEntries": 0,
+              "UnknownCachedEntries": 0,
+              "UnknownReasoningEntries": 1,
+              "UnknownToolUsePromptEntries": 2,
+              "KnownTokens": {
+                "prompt_tokens": 930,
+                "completion_tokens": 104,
+                "total_tokens": 1034,
+                "cached_tokens": 640,
+                "reasoning_tokens": 26
+              },
+              "ReservedRequests": 2,
+              "KnownUsageEntries": 2,
+              "UnknownUsageEntries": 0,
+              "PartialUsageEntries": 0
+            }
+          }
+        ],
+        "Agents": [
+          {
+            "AgentID": "20520dec-e8bd-46bd-a6d3-c5960dcef78d",
+            "Self": {
+              "UnknownPromptEntries": 0,
+              "UnknownCompletionEntries": 0,
+              "UnknownTotalEntries": 0,
+              "UnknownCachedEntries": 0,
+              "UnknownReasoningEntries": 1,
+              "UnknownToolUsePromptEntries": 2,
+              "KnownTokens": {
+                "prompt_tokens": 930,
+                "completion_tokens": 104,
+                "total_tokens": 1034,
+                "cached_tokens": 640,
+                "reasoning_tokens": 26
+              },
+              "ReservedRequests": 2,
+              "KnownUsageEntries": 2,
+              "UnknownUsageEntries": 0,
+              "PartialUsageEntries": 0
+            }
+          }
+        ],
+        "Unattributed": {
+          "UnknownPromptEntries": 0,
+          "UnknownCompletionEntries": 0,
+          "UnknownTotalEntries": 0,
+          "UnknownCachedEntries": 0,
+          "UnknownReasoningEntries": 0,
+          "UnknownToolUsePromptEntries": 0,
+          "KnownTokens": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0
+          },
+          "ReservedRequests": 0,
+          "KnownUsageEntries": 0,
+          "UnknownUsageEntries": 0,
+          "PartialUsageEntries": 0
+        },
+        "UnknownUsageEntries": 0,
+        "PartialUsageEntries": 0,
+        "Complete": true
+      },
+      "complete": true,
+      "usage_status": "available"
+    }
+  ],
+  "HTTPRequests": 66,
+  "Effects": 1,
+  "Assertions": [
+    "审批前0效果",
+    "重建Service和Worker后批准续跑",
+    "重复提交及重复审批均复用原记录",
+    "模型请求恰好2次且SQL效果仅1次",
+    "模型返回真实工具回执",
+    "提供方实际prompt/completion/total用量逐Task等于GetRun",
+    "跨Session汇总与提供方实际用量一致",
+    "重复只读查询不产生模型请求",
+    "独立SQL核对效果与唯一执行键"
+  ]
+}

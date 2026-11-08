@@ -1,0 +1,9 @@
+--- FAIL: TestLiveManagement (0.00s)
+    --- FAIL: TestLiveManagement/deepseek (0.00s)
+        live_model_test.go:49: 
+            	Error Trace:	/Users/costalong/code/go/src/github.com/kart/goagent-contrib-management/management/integration/live_model_test.go:49
+            	Error:      	Should NOT be empty, but was 
+            	Test:       	TestLiveManagement/deepseek
+FAIL
+FAIL	github.com/kart-io/goagent-contrib/management/integration	0.371s
+FAIL

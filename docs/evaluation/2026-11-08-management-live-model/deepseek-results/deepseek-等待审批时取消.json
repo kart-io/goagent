@@ -1,0 +1,36 @@
+{
+  "Provider": "deepseek",
+  "Model": "deepseek-flash",
+  "Scenario": "等待审批时取消",
+  "Passed": false,
+  "Calls": [
+    {
+      "task_id": "1439440f-8d29-4e03-801d-641626eea315",
+      "response_model": "deepseek-flash",
+      "finish_reason": "tool_calls",
+      "tool_calls": [
+        {
+          "id": "call_00_ET_QHojVu6trr6UQlIVbgfF0961",
+          "type": "function",
+          "function": {
+            "name": "refund",
+            "arguments": "{\"amount\": 50}"
+          }
+        }
+      ],
+      "usage": {
+        "prompt_tokens": 406,
+        "completion_tokens": 38,
+        "total_tokens": 444,
+        "cached_tokens": 256,
+        "known_fields": 15
+      },
+      "usage_fields": 15,
+      "status": "completed"
+    }
+  ],
+  "Runs": null,
+  "HTTPRequests": 29,
+  "Effects": 0,
+  "Assertions": null
+}
