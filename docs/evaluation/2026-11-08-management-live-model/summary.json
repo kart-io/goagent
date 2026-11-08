@@ -115,7 +115,9 @@
     "reviewed-vet-lint.log": "e92606b0bf483111dff0a120c315ea165821348f31365020e2468a0059095c47",
     "missing-dsn.log": "3fe7b78b3bddfa842d954218ac06f5bc376ca2c55dcd716e84d059531e27df8f",
     "missing-key.log": "7ea867f345751ef7fb77b3df374e5d3d05d301b904eaa2a552143e3906930017",
-    "default-reviewed.jsonl": "e0fcca495d09b85d890b640021f9efcb47ac2b0457a924f4235b1e205d262533"
+    "default-reviewed.jsonl": "e0fcca495d09b85d890b640021f9efcb47ac2b0457a924f4235b1e205d262533",
+    "merged-core.jsonl": "ac772447d517883cdfe751b869fc57833a50a8b986fe95d196fa7bb9f670fb2c",
+    "merged-management.jsonl": "80e4258dd92506f15912459513358c16e43a840cae87d5e0e496da61f96595db"
   },
   "contrib受检提交": "ca7138f10ddaea9109ae650cc1f51b41dc0f6784",
   "最终默认管理回归": {
@@ -128,5 +130,28 @@
     "pass": 76,
     "fail": 0,
     "skip": 1
+  },
+  "合并后验证": {
+    "时间": "2026-11-08T19:59:22.532076+08:00",
+    "核心主线受检提交": "9e3e0fd24a923cd005a88ebbfd60a20f2caab5b0",
+    "contrib主线受检提交": "ca7138f10ddaea9109ae650cc1f51b41dc0f6784",
+    "merged-core.jsonl": {
+      "pass": 21,
+      "fail": 0,
+      "skip": 0
+    },
+    "merged-management.jsonl": {
+      "pass": 76,
+      "fail": 0,
+      "skip": 1
+    },
+    "原有未提交文件": "6份内容SHA256未变",
+    "主线测试源码": "与受检最终源码SHA256一致",
+    "付费复跑": "合并后未重复付费调用；真实完整矩阵与幂等补测见前述记录"
+  },
+  "清理": {
+    "专用容器": "management-live-20261108-194333及数据卷已删除",
+    "本轮lint二进制": "已删除",
+    "其他容器与工作树": "未改动"
   }
 }
