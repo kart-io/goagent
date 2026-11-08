@@ -350,7 +350,19 @@ func validateReadAccess(access MemoryAccess) error {
 		return &MemoryError{Kind: ErrAuthorization, Op: "读取事实"}
 	}
 	for _, scope := range access.ReadScopes {
-		if scope.TenantID != access.Principal.TenantID || scope.OwnerID == "" || scope.AgentID != access.Principal.AgentID {
+		if scope.TenantID != access.Principal.TenantID || scope.OwnerID == "" {
+			return &MemoryError{Kind: ErrAuthorization, Op: "读取事实"}
+		}
+		switch scope.OwnerKind {
+		case OwnerAgent:
+			if scope.AgentID != access.Principal.AgentID {
+				return &MemoryError{Kind: ErrAuthorization, Op: "读取事实"}
+			}
+		case OwnerUser:
+			if scope.OwnerID != access.Principal.UserID || (scope.AgentID != "" && scope.AgentID != access.Principal.AgentID) {
+				return &MemoryError{Kind: ErrAuthorization, Op: "读取事实"}
+			}
+		default:
 			return &MemoryError{Kind: ErrAuthorization, Op: "读取事实"}
 		}
 	}

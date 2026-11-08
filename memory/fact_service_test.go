@@ -253,6 +253,24 @@ func TestFactClearRejectsWritesUntilComplete(t *testing.T) {
 	}
 }
 
+func TestFactUserSharedScopeCanBeReadWithoutAgentBinding(t *testing.T) {
+	svc, _, originalScope := testMemoryService(t)
+	shared := MemoryScope{TenantID: "tenant-a", OwnerKind: OwnerUser, OwnerID: "user-a"}
+	access := MemoryAccess{Principal: originalScope.Access.Principal, ReadScopes: []MemoryScope{shared}, WriteScopes: []MemoryScope{shared}}
+	scope := WriteScope{Access: access, Target: shared}
+	receipt, err := svc.Save(context.Background(), scope, "shared", FactInput{Content: "shared preference"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fact, err := svc.Get(context.Background(), access, receipt.FactID)
+	if err != nil {
+		t.Fatalf("user_shared scope 读取失败：%v", err)
+	}
+	if fact.Scope != shared {
+		t.Fatalf("scope 不匹配：%+v", fact.Scope)
+	}
+}
+
 func (s *factStoreFixture) blockedScopeCount() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
