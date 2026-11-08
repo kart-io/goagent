@@ -2,6 +2,7 @@ package execution
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/kart-io/goagent/core/checkpoint"
@@ -168,97 +169,37 @@ func (t *ToolWithRuntime[I, O, C, S]) WithRuntime(runtime *Runtime[C, S]) *ToolW
 	}
 }
 
-// RuntimeConfig configures runtime behavior.
-type RuntimeConfig struct {
-	// EnableAutoSave automatically saves state after tool execution
-	EnableAutoSave bool `json:"enable_auto_save"`
-
-	// SaveInterval specifies how often to auto-save state (if enabled)
-	SaveInterval time.Duration `json:"save_interval"`
-
-	// MaxStateSize limits the maximum state size in bytes
-	MaxStateSize int64 `json:"max_state_size"`
-
-	// EnableMetrics enables runtime metrics collection
-	EnableMetrics bool `json:"enable_metrics"`
-}
-
-// DefaultRuntimeConfig returns the default runtime configuration.
-func DefaultRuntimeConfig() *RuntimeConfig {
-	return &RuntimeConfig{
-		EnableAutoSave: true,
-		SaveInterval:   30 * time.Second,
-		MaxStateSize:   10 * 1024 * 1024, // 10MB
-		EnableMetrics:  false,
-	}
-}
-
-// RuntimeMetrics tracks runtime execution metrics.
-type RuntimeMetrics struct {
-	// TotalToolCalls is the total number of tool calls executed
-	TotalToolCalls int64
-
-	// TotalStateUpdates is the total number of state updates
-	TotalStateUpdates int64
-
-	// TotalStorageOperations is the total number of storage operations
-	TotalStorageOperations int64
-
-	// TotalCheckpoints is the total number of checkpoints saved
-	TotalCheckpoints int64
-
-	// LastToolCall is the timestamp of the last tool call
-	LastToolCall time.Time
-
-	// LastStateUpdate is the timestamp of the last state update
-	LastStateUpdate time.Time
-
-	// AverageToolLatency is the average tool execution latency
-	AverageToolLatency time.Duration
-}
-
-// NewRuntimeMetrics creates a new RuntimeMetrics instance.
-func NewRuntimeMetrics() *RuntimeMetrics {
-	return &RuntimeMetrics{}
-}
-
-// RuntimeManager manages multiple runtimes and their lifecycle.
+// RuntimeManager 并发安全地管理运行时注册表；返回的 Runtime 业务字段仍由宿主同步。
 type RuntimeManager[C any, S state.State] struct {
+	mu sync.RWMutex
 	// runtimes maps session ID to runtime
 	runtimes map[string]*Runtime[C, S]
-
-	// config is the runtime configuration
-	config *RuntimeConfig
-
-	// metrics tracks runtime metrics
-	metrics *RuntimeMetrics
 }
 
-// NewRuntimeManager creates a new RuntimeManager.
-func NewRuntimeManager[C any, S state.State](config *RuntimeConfig) *RuntimeManager[C, S] {
-	if config == nil {
-		config = DefaultRuntimeConfig()
-	}
-	return &RuntimeManager[C, S]{
-		runtimes: make(map[string]*Runtime[C, S]),
-		config:   config,
-		metrics:  NewRuntimeMetrics(),
-	}
+// NewRuntimeManager 创建仅管理会话注册表的运行时管理器。
+func NewRuntimeManager[C any, S state.State]() *RuntimeManager[C, S] {
+	return &RuntimeManager[C, S]{runtimes: make(map[string]*Runtime[C, S])}
 }
 
 // GetRuntime retrieves a runtime by session ID.
 func (m *RuntimeManager[C, S]) GetRuntime(sessionID string) (*Runtime[C, S], bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	runtime, ok := m.runtimes[sessionID]
 	return runtime, ok
 }
 
 // SetRuntime stores a runtime for a session ID.
 func (m *RuntimeManager[C, S]) SetRuntime(sessionID string, runtime *Runtime[C, S]) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.runtimes[sessionID] = runtime
 }
 
 // RemoveRuntime removes a runtime by session ID.
 func (m *RuntimeManager[C, S]) RemoveRuntime(sessionID string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	delete(m.runtimes, sessionID)
 }
 
@@ -270,6 +211,8 @@ func (m *RuntimeManager[C, S]) GetOrCreateRuntime(
 	store store.Store,
 	checkpointer checkpoint.Checkpointer,
 ) *Runtime[C, S] {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if runtime, ok := m.runtimes[sessionID]; ok {
 		return runtime
 	}
@@ -281,6 +224,8 @@ func (m *RuntimeManager[C, S]) GetOrCreateRuntime(
 
 // CleanupExpired removes expired runtimes based on max age.
 func (m *RuntimeManager[C, S]) CleanupExpired(maxAge time.Duration) int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	now := time.Now()
 	removed := 0
 
@@ -294,12 +239,9 @@ func (m *RuntimeManager[C, S]) CleanupExpired(maxAge time.Duration) int {
 	return removed
 }
 
-// Metrics returns the runtime metrics.
-func (m *RuntimeManager[C, S]) Metrics() *RuntimeMetrics {
-	return m.metrics
-}
-
 // Size returns the number of active runtimes.
 func (m *RuntimeManager[C, S]) Size() int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	return len(m.runtimes)
 }

@@ -2,21 +2,17 @@ package providers
 
 import (
 	"context"
-	"time"
 
 	shared "github.com/kart-io/goagent/constants"
 	agentllm "github.com/kart-io/goagent/llm"
 )
-
-// OllamaBaseURL 是 Ollama 的 OpenAI 兼容端点；原生 /api 路径不再使用。
-const OllamaBaseURL = "http://localhost:11434/v1"
 
 // NewKimiWithOptions 创建 Moonshot（Kimi）客户端，经 OpenAI 兼容协议支持流式与原生工具流。
 func NewKimiWithOptions(opts ...agentllm.ClientOption) (*OpenAIProvider, error) {
 	return newOpenAICompatible(openAICompatibleSpec{
 		provider:       shared.ProviderKimi,
 		defaultBaseURL: shared.KimiBaseURL,
-		defaultModel:   "moonshot-v1-8k",
+		defaultModel:   shared.KimiDefaultModel,
 		envAPIKey:      shared.EnvKimiAPIKey,
 		envBaseURL:     shared.EnvKimiBaseURL,
 		envModel:       shared.EnvKimiModel,
@@ -29,7 +25,7 @@ func NewSiliconFlowWithOptions(opts ...agentllm.ClientOption) (*OpenAIProvider, 
 	return newOpenAICompatible(openAICompatibleSpec{
 		provider:       shared.ProviderSiliconFlow,
 		defaultBaseURL: shared.SiliconFlowBaseURL,
-		defaultModel:   "Qwen/Qwen2-7B-Instruct",
+		defaultModel:   shared.SiliconFlowDefaultModel,
 		envAPIKey:      shared.EnvSiliconFlowAPIKey,
 		envBaseURL:     shared.EnvSiliconFlowBaseURL,
 		envModel:       shared.EnvSiliconFlowModel,
@@ -42,12 +38,12 @@ func NewSiliconFlowWithOptions(opts ...agentllm.ClientOption) (*OpenAIProvider, 
 func NewOllamaWithOptions(opts ...agentllm.ClientOption) (*OpenAIProvider, error) {
 	return newOpenAICompatible(openAICompatibleSpec{
 		provider:       shared.ProviderOllama,
-		defaultBaseURL: OllamaBaseURL,
-		defaultModel:   "llama2",
+		defaultBaseURL: shared.OllamaBaseURL,
+		defaultModel:   shared.OllamaDefaultModel,
 		envBaseURL:     shared.EnvOllamaBaseURL,
 		envModel:       shared.EnvOllamaModel,
 		apiKeyOptional: true,
-		defaultTimeout: 120 * time.Second,
+		defaultTimeout: shared.DefaultOllamaTimeout,
 		capabilities:   openAICompatibleCapabilities,
 	}, opts...)
 }

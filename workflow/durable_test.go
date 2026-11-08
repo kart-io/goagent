@@ -11,18 +11,20 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/durable"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/workflow"
-	"github.com/stretchr/testify/require"
 )
 
 func oneNode(t *testing.T, fn workflow.Node[int]) *workflow.Graph[int] {
 	t.Helper()
 	g := workflow.NewGraph[int]()
 	require.NoError(t, g.AddNode("effect", fn))
-	require.NoError(t, g.AddEdge(workflow.START, "effect"))
-	require.NoError(t, g.AddEdge("effect", workflow.END))
+	require.NoError(t, g.AddEdge(constants.WorkflowStart, "effect"))
+	require.NoError(t, g.AddEdge("effect", constants.WorkflowEnd))
 	return g
 }
 func newStore(t *testing.T) *durable.FileStore {
@@ -92,14 +94,14 @@ func TestDurableGraphRouteFailureSkipsCommittedNode(t *testing.T) {
 	calls := 0
 	fail := true
 	require.NoError(t, g.AddNode("node", func(_ context.Context, s map[string]int) (map[string]int, error) { calls++; s["n"]++; return s, nil }))
-	require.NoError(t, g.AddEdge(workflow.START, "node"))
+	require.NoError(t, g.AddEdge(constants.WorkflowStart, "node"))
 	require.NoError(t, g.AddBranch("node", func(_ context.Context, s map[string]int) (string, error) {
 		s["n"] = 999 // Router mutations must not corrupt committed node state.
 		if fail {
 			return "", errors.New("routing unavailable")
 		}
-		return workflow.END, nil
-	}, workflow.END))
+		return constants.WorkflowEnd, nil
+	}, constants.WorkflowEnd))
 	cfg := workflow.DurableConfig{Store: newStore(t), Version: "v1"}
 	run, err := g.CompileDurable(ctx, cfg)
 	require.NoError(t, err)
@@ -124,8 +126,8 @@ func TestDurableGraphLoopBudgetSurvivesResume(t *testing.T) {
 		keys = append(keys, workflow.DurableKey(ctx))
 		return n + 1, nil
 	}))
-	require.NoError(t, g.AddEdge(workflow.START, "loop"))
-	require.NoError(t, g.AddBranch("loop", func(context.Context, int) (string, error) { return "loop", nil }, "loop", workflow.END))
+	require.NoError(t, g.AddEdge(constants.WorkflowStart, "loop"))
+	require.NoError(t, g.AddBranch("loop", func(context.Context, int) (string, error) { return "loop", nil }, "loop", constants.WorkflowEnd))
 	cfg := workflow.DurableConfig{Store: newStore(t), Version: "v1", ApprovalNodes: []string{"loop"}}
 	run, err := g.CompileDurable(ctx, cfg)
 	require.NoError(t, err)
@@ -297,8 +299,8 @@ func TestDurableGraphBeforeApproveUnderLock(t *testing.T) {
 		s["applied"] = s["ticket"]
 		return s, nil
 	}))
-	require.NoError(t, g.AddEdge(workflow.START, "apply"))
-	require.NoError(t, g.AddEdge("apply", workflow.END))
+	require.NoError(t, g.AddEdge(constants.WorkflowStart, "apply"))
+	require.NoError(t, g.AddEdge("apply", constants.WorkflowEnd))
 	cfg := workflow.DurableConfig{Store: store, Version: "v1", ApprovalNodes: []string{"apply"}}
 	var check func(context.Context, string, *workflow.GraphSnapshot[map[string]int]) error
 	run, err := g.CompileDurable(ctx, cfg, workflow.WithBeforeApprove(func(ctx context.Context, id string, snap *workflow.GraphSnapshot[map[string]int]) error {

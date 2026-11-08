@@ -8,6 +8,7 @@ import (
 
 	"github.com/kart-io/goagent/builder"
 	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/constants"
 	agentErrors "github.com/kart-io/goagent/errors"
 )
 
@@ -128,7 +129,7 @@ func MergeTurns(_ context.Context, base Conversation, branches []Conversation) (
 }
 
 // TextNext 从成员 Step 推导名称，返回供 RouterConfig.Next 使用的路由：取最后一轮输出的第一行并去掉首尾空白，
-// 必须恰好等于某个成员名或 Finish；记录为空、首行为空或不匹配时返回包装 ErrInvalidRoute 的错误，不做模糊匹配。
+// 必须恰好等于某个成员名或 constants.MultiagentFinish；记录为空、首行为空或不匹配时返回包装 ErrInvalidRoute 的错误，不做模糊匹配。
 func TextNext(members ...Step[Conversation]) (func(context.Context, Conversation) (string, error), error) {
 	if len(members) == 0 {
 		return nil, agentErrors.NewInvalidConfigError("multiagent", "members", "TextNext 需要至少一个成员")
@@ -136,8 +137,8 @@ func TextNext(members ...Step[Conversation]) (func(context.Context, Conversation
 	names := make(map[string]bool, len(members))
 	for _, m := range members {
 		n := m.Name
-		if n == "" || strings.TrimSpace(n) != n || strings.ContainsAny(n, "\r\n") || n == Finish || names[n] {
-			return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "TextNext 的成员名 %q 必须非空、单行、不重复且不等于 %s", n, Finish).WithComponent("multiagent").WithOperation("text_next")
+		if n == "" || strings.TrimSpace(n) != n || strings.ContainsAny(n, "\r\n") || n == constants.MultiagentFinish || names[n] {
+			return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "TextNext 的成员名 %q 必须非空、单行、不重复且不等于 %s", n, constants.MultiagentFinish).WithComponent("multiagent").WithOperation("text_next")
 		}
 		names[n] = true
 	}
@@ -150,8 +151,8 @@ func TextNext(members ...Step[Conversation]) (func(context.Context, Conversation
 		if line == "" {
 			return "", fmt.Errorf("%w：最后一轮输出的首行为空", agentErrors.ErrInvalidRoute)
 		}
-		if line != Finish && !names[line] {
-			return "", fmt.Errorf("%w：%q 不是成员名或 %s", agentErrors.ErrInvalidRoute, line, Finish)
+		if line != constants.MultiagentFinish && !names[line] {
+			return "", fmt.Errorf("%w：%q 不是成员名或 %s", agentErrors.ErrInvalidRoute, line, constants.MultiagentFinish)
 		}
 		return line, nil
 	}, nil

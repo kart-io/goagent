@@ -29,9 +29,8 @@ import (
 //	    WithLogger(logger),
 //	    WithoutInputLogging(),  // 不记录输入（保护敏感数据）
 //	)
-//	wrappedTool := tools.WithMiddleware(myTool, loggingMW)
+//	wrappedTool := tools.WithMiddleware(myTool, loggingMW.Wrap)
 type LoggingMiddleware struct {
-	*BaseToolMiddleware
 	logger      loggerCore.Logger
 	logInput    bool
 	logOutput   bool
@@ -43,7 +42,7 @@ type LoggingOption func(*LoggingMiddleware)
 
 // WithLogger 设置自定义日志器
 //
-// 如果不设置，将使用默认的 factory.GetLogger("tools")
+// 不设置时使用输出到 stdout 的 JSON slog；显式传 nil 可关闭日志。
 func WithLogger(logger loggerCore.Logger) LoggingOption {
 	return func(m *LoggingMiddleware) {
 		m.logger = logger
@@ -101,11 +100,10 @@ func NewLoggingMiddleware(opts ...LoggingOption) *LoggingMiddleware {
 	}
 
 	middleware := &LoggingMiddleware{
-		BaseToolMiddleware: NewBaseToolMiddleware("logging"),
-		logger:             defaultLogger,
-		logInput:           true,
-		logOutput:          true,
-		maxArgBytes:        1024, // 默认 1KB
+		logger:      defaultLogger,
+		logInput:    true,
+		logOutput:   true,
+		maxArgBytes: 1024, // 默认 1KB
 	}
 
 	for _, opt := range opts {
@@ -115,90 +113,55 @@ func NewLoggingMiddleware(opts ...LoggingOption) *LoggingMiddleware {
 	return middleware
 }
 
-// OnBeforeInvoke 在工具调用前记录日志
-func (m *LoggingMiddleware) OnBeforeInvoke(ctx context.Context, tool interfaces.Tool, input *interfaces.ToolInput) (*interfaces.ToolInput, error) {
-	if m.logger == nil {
-		return input, nil // 如果没有 logger，跳过日志
-	}
-
-	fields := []interface{}{
-		"tool", tool.Name(),
-		"caller_id", input.CallerID,
-		"trace_id", input.TraceID,
-	}
-
-	// 记录输入参数（如果启用）
-	if m.logInput && input.Args != nil {
-		argsStr := m.serializeArgs(input.Args)
-		fields = append(fields, "args", argsStr)
-	}
-
-	m.logger.Infow("Tool invocation started", fields...)
-
-	// 将开始时间存储在 Args 中（用于传递给 OnAfterInvoke）
-	// 这是安全的，因为 Chain 会将 input 传递到下一个中间件
-	if input.Args == nil {
-		input.Args = make(map[string]interface{})
-	}
-	input.Args["__logging_start_time"] = time.Now()
-
-	return input, nil
-}
-
-// OnAfterInvoke 在工具调用后记录日志
-func (m *LoggingMiddleware) OnAfterInvoke(ctx context.Context, tool interfaces.Tool, output *interfaces.ToolOutput) (*interfaces.ToolOutput, error) {
-	if m.logger == nil {
-		return output, nil // 如果没有 logger，跳过日志
-	}
-
-	// 计算执行耗时
-	var duration time.Duration
-	if output.Metadata != nil {
-		if startTime, ok := output.Metadata["__logging_start_time"].(time.Time); ok {
-			duration = time.Since(startTime)
-			// 清理临时元数据
-			delete(output.Metadata, "__logging_start_time")
+// Wrap 为每次调用独立计时，不通过业务参数或元数据传递内部状态。
+// 日志不改变执行错误及其部分结果；空输入和空输出也原样传递。
+func (m *LoggingMiddleware) Wrap(tool interfaces.Tool, next ToolInvoker) ToolInvoker {
+	return func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+		if m.logger == nil {
+			return next(ctx, input)
 		}
-	}
+		started := time.Now()
+		fields := []interface{}{"tool", tool.Name()}
+		if input != nil {
+			fields = append(fields, "caller_id", input.CallerID, "trace_id", input.TraceID)
+			if m.logInput && input.Args != nil {
+				fields = append(fields, "args", m.serializeArgs(input.Args))
+			}
+		}
+		m.logger.Infow("Tool invocation started", fields...)
 
-	fields := []interface{}{
-		"tool", tool.Name(),
-		"success", output.Success,
-		"duration_ms", duration.Milliseconds(),
+		output, err := next(ctx, input)
+		duration := time.Since(started).Milliseconds()
+		if err != nil {
+			m.logger.Errorw("Tool invocation error", "tool", tool.Name(), "error", err.Error(), "duration_ms", duration)
+			return output, err
+		}
+		fields = []interface{}{"tool", tool.Name(), "duration_ms", duration}
+		if output == nil {
+			m.logger.Infow("Tool invocation completed", fields...)
+			return nil, nil
+		}
+		fields = append(fields, "success", output.Success)
+		if output.Metadata == nil {
+			output.Metadata = make(map[string]interface{})
+		}
+		output.Metadata["execution_time"] = duration
+		if m.logOutput && output.Result != nil {
+			fields = append(fields, "result", m.serializeResult(output.Result))
+		}
+		if output.Success {
+			m.logger.Infow("Tool invocation completed", fields...)
+		} else {
+			fields = append(fields, "error", output.Error)
+			m.logger.Errorw("Tool invocation failed", fields...)
+		}
+		return output, nil
 	}
-
-	// 将耗时存储到 Metadata
-	if output.Metadata == nil {
-		output.Metadata = make(map[string]interface{})
-	}
-	output.Metadata["execution_time"] = duration.Milliseconds()
-
-	// 记录输出结果（如果启用）
-	if m.logOutput && output.Result != nil {
-		resultStr := m.serializeResult(output.Result)
-		fields = append(fields, "result", resultStr)
-	}
-
-	// 根据成功/失败使用不同的日志级别
-	if output.Success {
-		m.logger.Infow("Tool invocation completed", fields...)
-	} else {
-		fields = append(fields, "error", output.Error)
-		m.logger.Errorw("Tool invocation failed", fields...)
-	}
-
-	return output, nil
 }
 
-// OnError 在工具执行出错时记录日志
-func (m *LoggingMiddleware) OnError(ctx context.Context, tool interfaces.Tool, err error) error {
-	if m.logger != nil {
-		m.logger.Errorw("Tool invocation error",
-			"tool", tool.Name(),
-			"error", err.Error(),
-		)
-	}
-	return err
+// Logging 返回直接用于装配的日志中间件函数。
+func Logging(opts ...LoggingOption) ToolMiddlewareFunc {
+	return NewLoggingMiddleware(opts...).Wrap
 }
 
 // serializeArgs 序列化参数为字符串，限制大小

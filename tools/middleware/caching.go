@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -13,7 +14,9 @@ import (
 	loggercore "github.com/kart-io/logger/core"
 
 	"github.com/kart-io/goagent/cache"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
+	"github.com/kart-io/goagent/internal/snapshot"
 )
 
 // CachingConfig 缓存中间件配置
@@ -87,7 +90,6 @@ type CachingMiddleware struct {
 //   - *CachingMiddleware: 缓存中间件实例
 func NewCachingMiddleware(opts ...CachingOption) *CachingMiddleware {
 	cfg := &CachingConfig{
-		Cache:   cache.NewSimpleCache(5 * time.Minute), // 使用简化的 SimpleCache
 		TTL:     5 * time.Minute,
 		KeyFunc: defaultCacheKeyFunc,
 		Logger:  nil, // 默认不使用日志（避免依赖）
@@ -97,6 +99,12 @@ func NewCachingMiddleware(opts ...CachingOption) *CachingMiddleware {
 		opt(cfg)
 	}
 
+	if cfg.Cache == nil {
+		cfg.Cache = cache.NewSimpleCache(cfg.TTL, cache.WithoutBackgroundCleanup())
+	}
+	if cfg.KeyFunc == nil {
+		cfg.KeyFunc = defaultCacheKeyFunc
+	}
 	return &CachingMiddleware{
 		config: cfg,
 		stats:  &cachingStats{},
@@ -113,10 +121,9 @@ func (m *CachingMiddleware) Wrap(tool interfaces.Tool, next ToolInvoker) ToolInv
 		cacheKey := m.config.KeyFunc(tool.Name(), input.Args)
 
 		// 尝试从缓存获取
-		if cached, err := m.config.Cache.Get(ctx, cacheKey); err == nil {
+		if result, ok := m.cachedOutput(ctx, cacheKey); ok {
 			// 缓存命中
 			m.stats.Hits.Add(1)
-			cachedOutput := cached.(*interfaces.ToolOutput)
 
 			if m.config.Logger != nil {
 				m.config.Logger.Debug("工具缓存命中",
@@ -125,19 +132,6 @@ func (m *CachingMiddleware) Wrap(tool interfaces.Tool, next ToolInvoker) ToolInv
 					"hits", m.stats.Hits.Load(),
 					"misses", m.stats.Misses.Load(),
 				)
-			}
-
-			// 创建输出副本，添加缓存元数据
-			result := &interfaces.ToolOutput{
-				Result:   cachedOutput.Result,
-				Success:  cachedOutput.Success,
-				Error:    cachedOutput.Error,
-				Metadata: make(map[string]interface{}),
-			}
-
-			// 复制原始元数据
-			for k, v := range cachedOutput.Metadata {
-				result.Metadata[k] = v
 			}
 
 			// 添加缓存命中标记
@@ -162,24 +156,24 @@ func (m *CachingMiddleware) Wrap(tool interfaces.Tool, next ToolInvoker) ToolInv
 			return output, err
 		}
 
+		if output == nil {
+			return nil, agentErrors.New(agentErrors.CodeInvalidOutput, "工具返回空结果").WithComponent("tool_cache").WithOperation("invoke")
+		}
 		// 如果执行成功，缓存结果
 		if output.Success {
-			// 创建缓存副本（避免后续修改影响缓存）
-			cachedOutput := &interfaces.ToolOutput{
-				Result:   output.Result,
-				Success:  output.Success,
-				Error:    output.Error,
-				Metadata: make(map[string]interface{}),
-			}
-
-			// 复制元数据（排除内部临时键）
-			for k, v := range output.Metadata {
-				if len(k) < 2 || k[:2] != "__" {
-					cachedOutput.Metadata[k] = v
+			cachedOutput, copyErr := cloneToolOutput(output)
+			if copyErr != nil {
+				return output, nil
+			} // 业务结果仍交付，不缓存无法隔离的资源对象。
+			// 仅删除已隔离副本的临时键，不能再次插入原响应的可变引用。
+			for k := range cachedOutput.Metadata {
+				if strings.HasPrefix(k, "__") {
+					delete(cachedOutput.Metadata, k)
 				}
 			}
 
 			// 存储到缓存
+			stored := false
 			if err := m.config.Cache.Set(ctx, cacheKey, cachedOutput, m.config.TTL); err != nil {
 				if m.config.Logger != nil {
 					m.config.Logger.Warn("缓存设置失败",
@@ -187,6 +181,8 @@ func (m *CachingMiddleware) Wrap(tool interfaces.Tool, next ToolInvoker) ToolInv
 						"error", err,
 					)
 				}
+			} else {
+				stored = true
 			}
 
 			// 添加缓存存储标记
@@ -194,7 +190,7 @@ func (m *CachingMiddleware) Wrap(tool interfaces.Tool, next ToolInvoker) ToolInv
 				output.Metadata = make(map[string]interface{})
 			}
 			output.Metadata["cache_hit"] = false
-			output.Metadata["cache_stored"] = true
+			output.Metadata["cache_stored"] = stored
 		}
 
 		return output, nil
@@ -220,9 +216,9 @@ func Caching(opts ...CachingOption) ToolMiddlewareFunc {
 
 // defaultCacheKeyFunc 是默认的缓存键生成函数
 //
-// 格式: tool:<tool_name>:<sha256(args)[:8]>
+// 格式: tool:<tool_name>:<完整 sha256(args)>
 //
-// 示例: tool:calculator:a3b2c1d4
+// 示例格式: tool:calculator:<64个十六进制字符>
 func defaultCacheKeyFunc(toolName string, args map[string]interface{}) string {
 	// 过滤掉内部元数据
 	filtered := make(map[string]interface{})
@@ -243,6 +239,33 @@ func defaultCacheKeyFunc(toolName string, args map[string]interface{}) string {
 	hash := sha256.Sum256(data)
 	hashStr := hex.EncodeToString(hash[:])
 
-	// 使用前 8 个字符作为短哈希
-	return "tool:" + toolName + ":" + hashStr[:8]
+	// 保留完整摘要，避免短键碰撞复用另一组参数的结果。
+	return "tool:" + toolName + ":" + hashStr
+}
+
+// cloneToolOutput 隔离所有业务字段，保留具体 Go 类型。
+func cloneToolOutput(out *interfaces.ToolOutput) (*interfaces.ToolOutput, error) {
+	cloned, err := snapshot.Clone(out)
+	if err != nil {
+		return nil, err
+	}
+	result := cloned.(*interfaces.ToolOutput)
+	if result.Metadata == nil {
+		result.Metadata = make(map[string]any)
+	}
+	return result, nil
+}
+
+// cachedOutput 将共享缓存中的非本组件数据视为未命中，异常缓存不阻断真实工具。
+func (m *CachingMiddleware) cachedOutput(ctx context.Context, key string) (*interfaces.ToolOutput, bool) {
+	value, err := m.config.Cache.Get(ctx, key)
+	if err != nil {
+		return nil, false
+	}
+	out, ok := value.(*interfaces.ToolOutput)
+	if !ok || out == nil {
+		return nil, false
+	}
+	copy, err := cloneToolOutput(out)
+	return copy, err == nil
 }

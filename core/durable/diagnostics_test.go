@@ -97,7 +97,7 @@ func TestDiagnoseOperationsUseOnlyExplicitEvidence(t *testing.T) {
 		if status == "waiting" {
 			rec.Continuation = json.RawMessage(`[{"continuation":{"secret":"SECRET continuation"}}]`)
 		}
-		require.NoError(t, saveOperation(ctx, store, operationStorageID(key), rec))
+		require.NoError(t, saveOperation(ctx, store, OperationStorageID(key), rec))
 	}
 	r.Store = diagnosticReadOnlyStore{Store: store}
 	report, err := r.Diagnose(ctx, "run", OperationRef{ParentKey: "parent", ID: "pending"}, OperationRef{ParentKey: "parent", ID: "failed"}, OperationRef{ParentKey: "parent", ID: "completed"}, OperationRef{ParentKey: "parent", ID: "waiting"}, OperationRef{ParentKey: "parent", ID: "missing"})

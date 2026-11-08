@@ -6,12 +6,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kart-io/goagent/codec/json"
+	"github.com/stretchr/testify/require"
 
+	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/durable"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/workflow"
-	"github.com/stretchr/testify/require"
 )
 
 // checkpointFailStore 在 fail 非空时让图检查点的写入失败，操作记录照常保存。
@@ -31,7 +32,11 @@ func (s *checkpointFailStore) Save(ctx context.Context, id string, v *durable.Sn
 func runChild(ctx context.Context, g *workflow.DurableGraph[int], approval string) (*durable.OperationRecord, error) {
 	return durable.Do(ctx, "tool/c1", json.RawMessage(`{}`), durable.OperationPolicy{MaxAttempts: 3, Resumable: true}, func(ctx context.Context) (json.RawMessage, error) {
 		if approval != "" {
-			ctx = durable.WithResume(ctx, durable.ExecutionKey(ctx), approval)
+			var err error
+			ctx, err = workflow.WithResume(ctx, durable.ExecutionKey(ctx), workflow.ResumeRequest{Key: approval})
+			if err != nil {
+				return nil, err
+			}
 		}
 		out, err := g.AsChildRunnable().Invoke(ctx, 1)
 		if err != nil {
@@ -60,8 +65,8 @@ func TestChildRunnableClassifiesApprovalOutcome(t *testing.T) {
 		reason   string
 		failure  func(*testing.T, error)
 	}{
-		{name: "审批键不符", approval: func(string) string { return "forged" }, reason: workflow.RejectApprovalMismatch},
-		{name: "前置校验拒绝", approval: func(k string) string { return k }, before: func() error { return refuse }, reason: workflow.RejectBeforeApprove},
+		{name: "审批键不符", approval: func(string) string { return "forged" }, reason: constants.WorkflowRejectApprovalMismatch},
+		{name: "前置校验拒绝", approval: func(k string) string { return k }, before: func() error { return refuse }, reason: constants.WorkflowRejectBeforeApprove},
 		{name: "前置校验 panic", approval: func(k string) string { return k }, before: func() error { panic("boom") }, failure: func(t *testing.T, err error) {
 			var p *agentErrors.PanicError
 			require.ErrorAs(t, err, &p)
@@ -112,4 +117,12 @@ func TestChildRunnableClassifiesApprovalOutcome(t *testing.T) {
 			require.Equal(t, 1, effects)
 		})
 	}
+}
+
+// childApprovalContext 通过唯一结构化入口回应子图审批。
+func childApprovalContext(t *testing.T, ctx context.Context, operationKey, key string) context.Context {
+	t.Helper()
+	resumed, err := workflow.WithResume(ctx, operationKey, workflow.ResumeRequest{Key: key})
+	require.NoError(t, err)
+	return resumed
 }

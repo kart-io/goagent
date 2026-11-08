@@ -26,9 +26,11 @@ type SimpleCache struct {
 	misses atomic.Int64
 
 	// 生命周期管理
-	ctx    context.Context
-	cancel context.CancelFunc
-	wg     sync.WaitGroup
+	ctx         context.Context
+	cancel      context.CancelFunc
+	wg          sync.WaitGroup
+	lazy        bool
+	nextCleanup atomic.Int64
 }
 
 // cacheEntry 缓存条目
@@ -37,22 +39,39 @@ type cacheEntry struct {
 	expiresAt time.Time
 }
 
-// NewSimpleCache 创建简化缓存
-func NewSimpleCache(ttl time.Duration) *SimpleCache {
+// SimpleCacheOption 配置缓存的清理生命周期。
+type SimpleCacheOption func(*simpleCacheConfig)
+type simpleCacheConfig struct{ lazy bool }
+
+// WithoutBackgroundCleanup 以访问和写入驱动清理，不创建后台协程。
+// 适用于不能把 Close 句柄交给调用方的函数式装配；闲置期间到期数据在下次访问或写入回收。
+func WithoutBackgroundCleanup() SimpleCacheOption {
+	return func(cfg *simpleCacheConfig) { cfg.lazy = true }
+}
+
+// NewSimpleCache 创建简化缓存。默认启用后台清理，调用方须关闭它。
+func NewSimpleCache(ttl time.Duration, opts ...SimpleCacheOption) *SimpleCache {
 	if ttl <= 0 {
 		ttl = 5 * time.Minute
 	}
 
+	var cfg simpleCacheConfig
+	for _, opt := range opts {
+		opt(&cfg)
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	c := &SimpleCache{
 		ttl:    ttl,
 		ctx:    ctx,
 		cancel: cancel,
+		lazy:   cfg.lazy,
 	}
 
-	// 启动定期清理
-	c.wg.Add(1)
-	go c.cleanup()
+	c.nextCleanup.Store(time.Now().Add(max(ttl/2, time.Nanosecond)).UnixNano())
+	if !c.lazy {
+		c.wg.Add(1)
+		go c.cleanup()
+	}
 
 	return c
 }
@@ -67,7 +86,7 @@ func (c *SimpleCache) Get(ctx context.Context, key string) (interface{}, error) 
 
 	entry := v.(*cacheEntry)
 	if time.Now().After(entry.expiresAt) {
-		c.data.Delete(key)
+		c.data.CompareAndDelete(key, v)
 		c.misses.Add(1)
 		return nil, agentErrors.ErrCacheMiss
 	}
@@ -86,6 +105,13 @@ func (c *SimpleCache) Set(ctx context.Context, key string, value interface{}, tt
 		value:     value,
 		expiresAt: time.Now().Add(ttl),
 	})
+	if c.lazy {
+		now := time.Now()
+		due := c.nextCleanup.Load()
+		if now.UnixNano() >= due && c.nextCleanup.CompareAndSwap(due, now.Add(max(c.ttl/2, time.Nanosecond)).UnixNano()) {
+			c.cleanupExpired()
+		}
+	}
 	return nil
 }
 
@@ -113,7 +139,7 @@ func (c *SimpleCache) Has(ctx context.Context, key string) (bool, error) {
 
 	entry := v.(*cacheEntry)
 	if time.Now().After(entry.expiresAt) {
-		c.data.Delete(key)
+		c.data.CompareAndDelete(key, v)
 		return false, nil
 	}
 
@@ -156,7 +182,7 @@ func (c *SimpleCache) Close() {
 func (c *SimpleCache) cleanup() {
 	defer c.wg.Done()
 
-	ticker := time.NewTicker(c.ttl / 2)
+	ticker := time.NewTicker(max(c.ttl/2, time.Nanosecond))
 	defer ticker.Stop()
 
 	for {
@@ -175,7 +201,7 @@ func (c *SimpleCache) cleanupExpired() {
 	c.data.Range(func(key, value interface{}) bool {
 		entry := value.(*cacheEntry)
 		if now.After(entry.expiresAt) {
-			c.data.Delete(key)
+			c.data.CompareAndDelete(key, value)
 		}
 		return true
 	})

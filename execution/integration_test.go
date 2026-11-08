@@ -5,17 +5,17 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/builder"
+	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/execution"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
-
-	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/tools"
 	"github.com/kart-io/goagent/workflow"
-	"github.com/stretchr/testify/require"
 )
 
 // 固定离线响应；重建后的多余请求直接失败，证明恢复使用日志。
@@ -85,8 +85,8 @@ func TestScopeBuilderGraphApprovalAndRestart(t *testing.T) {
 			}
 			return out.Result.(string), nil
 		}))
-		require.NoError(t, g.AddEdge(workflow.START, "effect"))
-		require.NoError(t, g.AddEdge("effect", workflow.END))
+		require.NoError(t, g.AddEdge(shared.WorkflowStart, "effect"))
+		require.NoError(t, g.AddEdge("effect", shared.WorkflowEnd))
 		graph, err := g.CompileDurable(ctx, workflow.DurableConfig{Store: store, Version: "v1", ApprovalNodes: []string{"effect"}})
 		require.NoError(t, err)
 		result, err := graph.AsRunnable().Invoke(ctx, workflow.RunRequest[string]{RunID: scope.RunID(), Initial: "task", ApprovalKey: approval})

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/kart-io/goagent/constants"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/workflow"
 )
@@ -46,7 +47,7 @@ func Loop[T any](cfg workflow.Config, l LoopConfig[T]) (*workflow.Graph[T], erro
 			return "", err
 		}
 		if done {
-			return Finish, nil
+			return constants.MultiagentFinish, nil
 		}
 		return first, nil
 	}
@@ -69,13 +70,13 @@ func addFallback[T any](g *workflow.Graph[T], fb *Step[T]) (string, error) {
 	if fb == nil {
 		return "", nil
 	}
-	if fb.Name == Finish {
-		return "", agentErrors.Newf(agentErrors.CodeInvalidConfig, "兜底 Step 不能命名为 %s", Finish).WithComponent("multiagent").WithOperation("add_fallback")
+	if fb.Name == constants.MultiagentFinish {
+		return "", agentErrors.Newf(agentErrors.CodeInvalidConfig, "兜底 Step 不能命名为 %s", constants.MultiagentFinish).WithComponent("multiagent").WithOperation("add_fallback")
 	}
 	if err := AddStep(g, *fb); err != nil {
 		return "", fmt.Errorf("兜底 Step: %w", err)
 	}
-	if err := g.AddEdge(fb.Name, workflow.END); err != nil {
+	if err := g.AddEdge(fb.Name, constants.WorkflowEnd); err != nil {
 		return "", err
 	}
 	return fb.Name, nil

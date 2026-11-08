@@ -8,8 +8,8 @@
 
 | 工厂 | 分片 | 容量 | 默认 TTL | 清理间隔 | 其他 |
 | --- | --- | --- | --- | --- | --- |
-| `tools.NewHighPerformanceCache()` | 64 | 100000 | 10m | 30s | 启用 `AutoTuning`、`MetricsEnabled` |
-| `tools.NewLowMemoryCache()` | 8 | 1000 | 2m | 1m | `CompressionThreshold: 1024` |
+| `tools.NewHighPerformanceCache()` | 64 | 100000 | 10m | 30s | 固定哈希分片与 LRU |
+| `tools.NewLowMemoryCache()` | 8 | 1000 | 2m | 1m | 固定哈希分片与 LRU |
 
 两者都返回 `*ShardedToolCache`，用完需 `Close()`。
 

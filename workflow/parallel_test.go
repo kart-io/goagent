@@ -11,6 +11,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core"
 )
 
@@ -48,8 +49,8 @@ func TestParallelOverlapsBoundsConcurrencyAndMergesInOrder(t *testing.T) {
 			return results[0] + results[1] + results[2], nil
 		},
 	}))
-	require.NoError(t, g.AddEdge(START, "fanout"))
-	require.NoError(t, g.AddEdge("fanout", END))
+	require.NoError(t, g.AddEdge(constants.WorkflowStart, "fanout"))
+	require.NoError(t, g.AddEdge("fanout", constants.WorkflowEnd))
 	r, err := g.Compile(context.Background())
 	require.NoError(t, err)
 	type response struct {
@@ -104,8 +105,8 @@ func TestParallelClonesMutableStateBeforeStarting(t *testing.T) {
 			return map[string]int{"sum": results[0]["value"] + results[1]["value"]}, nil
 		},
 	}))
-	require.NoError(t, g.AddEdge(START, "parallel"))
-	require.NoError(t, g.AddEdge("parallel", END))
+	require.NoError(t, g.AddEdge(constants.WorkflowStart, "parallel"))
+	require.NoError(t, g.AddEdge("parallel", constants.WorkflowEnd))
 	r, err := g.Compile(context.Background())
 	require.NoError(t, err)
 	out, err := r.Invoke(context.Background(), input)
@@ -142,8 +143,8 @@ func TestParallelFailureAndPanicCancelSiblingsWithoutMerging(t *testing.T) {
 				}},
 			}, Clone: func(in int) int { return in }, Merge: func(_ context.Context, in int, _ []int) (int, error) { merges.Add(1); return in, nil },
 		}))
-		require.NoError(t, g.AddEdge(START, "parallel"))
-		require.NoError(t, g.AddEdge("parallel", END))
+		require.NoError(t, g.AddEdge(constants.WorkflowStart, "parallel"))
+		require.NoError(t, g.AddEdge("parallel", constants.WorkflowEnd))
 		r, err := g.Compile(context.Background())
 		require.NoError(t, err)
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -180,8 +181,8 @@ func TestParallelCancellationAndMergeFailure(t *testing.T) {
 			}}},
 			Clone: func(in int) int { return in }, Merge: func(context.Context, int, []int) (int, error) { return 0, failure },
 		}))
-		require.NoError(t, g.AddEdge(START, "parallel"))
-		require.NoError(t, g.AddEdge("parallel", END))
+		require.NoError(t, g.AddEdge(constants.WorkflowStart, "parallel"))
+		require.NoError(t, g.AddEdge("parallel", constants.WorkflowEnd))
 		r, err := g.Compile(context.Background())
 		require.NoError(t, err)
 		ctx, cancel := context.WithCancel(context.Background())
@@ -249,8 +250,8 @@ func TestParallelWaitsForAdaptedNodeToSettle(t *testing.T) {
 		Clone: func(in int) int { return in },
 		Merge: func(_ context.Context, in int, _ []int) (int, error) { return in, nil },
 	}))
-	require.NoError(t, g.AddEdge(START, "parallel"))
-	require.NoError(t, g.AddEdge("parallel", END))
+	require.NoError(t, g.AddEdge(constants.WorkflowStart, "parallel"))
+	require.NoError(t, g.AddEdge("parallel", constants.WorkflowEnd))
 	r, err := g.Compile(context.Background())
 	require.NoError(t, err)
 

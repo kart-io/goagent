@@ -209,7 +209,10 @@ func (s *FileStore) appendLocked(id string, expected int64, events []Event) (las
 		return cur, nil
 	}
 	var buf bytes.Buffer
-	if created {
+	// 没有完整文件头的现存空文件或半截首行，属于首次写入的崩溃窗口。
+	// end 为 0 时重新初始化，并同步目录以覆盖尚未持久化的创建操作。
+	initialize := created || end == 0
+	if initialize {
 		header, _ := json.Marshal(fileHeader{Session: id, Version: fileVersion})
 		buf.Write(append(header, '\n'))
 	}
@@ -235,7 +238,7 @@ func (s *FileStore) appendLocked(id string, expected int64, events []Event) (las
 		_ = f.Truncate(end)
 		return 0, err
 	}
-	if created {
+	if initialize {
 		if err := syncDir(s.dir); err != nil {
 			return 0, err
 		}

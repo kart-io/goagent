@@ -7,12 +7,13 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/kart-io/goagent/codec/json"
+	"github.com/stretchr/testify/require"
 
+	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/durable"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/workflow"
-	"github.com/stretchr/testify/require"
 )
 
 func addHumanNumber(_ context.Context, _ string, snap *workflow.GraphSnapshot[int], input json.RawMessage) (int, error) {
@@ -61,8 +62,8 @@ func TestResumeRejectsWithoutChangingCheckpoint(t *testing.T) {
 			effects := 0
 			g := workflow.NewGraph[map[string]int]()
 			require.NoError(t, g.AddNode("effect", func(_ context.Context, in map[string]int) (map[string]int, error) { effects++; return in, nil }))
-			require.NoError(t, g.AddEdge(workflow.START, "effect"))
-			require.NoError(t, g.AddEdge("effect", workflow.END))
+			require.NoError(t, g.AddEdge(constants.WorkflowStart, "effect"))
+			require.NoError(t, g.AddEdge("effect", constants.WorkflowEnd))
 			var opts []workflow.DurableOption[map[string]int]
 			if kind != "missing_handler" {
 				opts = append(opts, workflow.WithResumeHandler(func(_ context.Context, _ string, snap *workflow.GraphSnapshot[map[string]int], _ json.RawMessage) (map[string]int, error) {
@@ -213,7 +214,7 @@ func TestChildResumeInputRejectionRemainsResumable(t *testing.T) {
 		if input == `-1` {
 			require.Equal(t, "waiting", record.Status)
 			rejected := childContinuation(t, err)
-			require.Equal(t, workflow.RejectResumeInput, rejected.Reason)
+			require.Equal(t, constants.WorkflowRejectResumeInput, rejected.Reason)
 		} else {
 			require.NoError(t, err)
 			require.Equal(t, "completed", record.Status)
@@ -246,13 +247,13 @@ func TestResumeStreamStopsAtNextGateWithDistinctKey(t *testing.T) {
 	ctx := context.Background()
 	g := workflow.NewGraph[int]()
 	require.NoError(t, g.AddNode("loop", func(_ context.Context, n int) (int, error) { return n, nil }))
-	require.NoError(t, g.AddEdge(workflow.START, "loop"))
+	require.NoError(t, g.AddEdge(constants.WorkflowStart, "loop"))
 	require.NoError(t, g.AddBranch("loop", func(_ context.Context, n int) (string, error) {
 		if n >= 2 {
-			return workflow.END, nil
+			return constants.WorkflowEnd, nil
 		}
 		return "loop", nil
-	}, "loop", workflow.END))
+	}, "loop", constants.WorkflowEnd))
 	run, err := g.CompileDurable(ctx, workflow.DurableConfig{Store: newStore(t), Version: "v1", ApprovalNodes: []string{"loop"}}, workflow.WithResumeHandler(addHumanNumber))
 	require.NoError(t, err)
 	wait, err := run.Run(ctx, "human", 0, "")

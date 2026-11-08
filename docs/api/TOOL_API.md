@@ -193,30 +193,26 @@ searchTool := search.NewSearchTool(search.NewDuckDuckGoSearchEngine())
 
 ## 工具中间件
 
-`tools/middleware` 在单个工具的调用前后插入逻辑：
+`tools/middleware` 通过统一函数包装单个工具调用：
 
 ```go
-type ToolMiddleware interface {
-    Name() string
-    OnBeforeInvoke(ctx context.Context, tool interfaces.Tool, input *interfaces.ToolInput) (*interfaces.ToolInput, error)
-    OnAfterInvoke(ctx context.Context, tool interfaces.Tool, output *interfaces.ToolOutput) (*interfaces.ToolOutput, error)
-    OnError(ctx context.Context, tool interfaces.Tool, err error) error
-}
-
+type ToolInvoker func(context.Context, *interfaces.ToolInput) (*interfaces.ToolOutput, error)
 type ToolMiddlewareFunc func(interfaces.Tool, ToolInvoker) ToolInvoker
+
+func WithMiddleware(tool interfaces.Tool, middlewares ...ToolMiddlewareFunc) interfaces.Tool
 ```
 
-| 中间件 | 接口式构造 | 函数式构造 |
+| 中间件 | 有状态对象 | 装配函数 |
 |---|---|---|
-| 日志 | `NewLoggingMiddleware(WithLogger, WithMaxArgBytes, WithoutInputLogging, WithoutOutputLogging)` | - |
+| 日志 | `NewLoggingMiddleware(WithLogger, WithMaxArgBytes, WithoutInputLogging, WithoutOutputLogging)` | `Logging(...)` |
 | 缓存 | `NewCachingMiddleware(WithCache, WithTTL, WithCacheKeyFunc, WithCacheLogger)` | `Caching(...)` |
 | 限流 | `NewRateLimitMiddleware(WithQPS, WithBurst, WithPerToolRateLimit, WithWaitTimeout, WithRateLimitLogger)` | `RateLimit(...)` |
 
-`BaseToolMiddleware`（`NewBaseToolMiddleware(name)`）提供空实现。用 `tools.WithMiddleware(tool, mws...)` 包装工具，参数可混用 `ToolMiddleware` 与 `ToolMiddlewareFunc`；`middleware.Chain` 按洋葱模型组合（`OnBeforeInvoke` 正序、`OnAfterInvoke` 逆序）。
+对象通过显式的 `.Wrap` 方法装配；函数按列表顺序从外向内调用，返回时反向经过各层。调用方自定义函数应保留结果与错误的组合。日志计时不写入输入参数。空函数或返回空调用器在装配时失败，其他类型不能通过编译。
 
 ```go
 wrapped := tools.WithMiddleware(searchTool,
-    toolmw.NewLoggingMiddleware(),
+    toolmw.Logging(),
     toolmw.RateLimit(toolmw.WithQPS(5)),
 )
 ```

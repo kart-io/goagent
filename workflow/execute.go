@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/observe"
 	agentErrors "github.com/kart-io/goagent/errors"
@@ -73,7 +74,7 @@ func (g *compiled[T]) run(ctx context.Context, state T, emit func(core.StreamChu
 				return agentErrors.Newf(agentErrors.CodeInvalidOutput, "branch %q selected undeclared destination %q", name, target).WithComponent("workflow").WithOperation("run")
 			}
 		}
-		if target == END {
+		if target == constants.WorkflowEnd {
 			return emit(core.StreamChunk[T]{Done: true, Data: state})
 		}
 		name = target

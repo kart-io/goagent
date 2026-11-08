@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kart-io/goagent/constants"
 	agentstate "github.com/kart-io/goagent/core/state"
 	"github.com/kart-io/goagent/testing/panictest"
 )
@@ -32,7 +33,7 @@ func TestDistributedCheckpointerBackendPanicDoesNotKillProcess(t *testing.T) {
 			PrimaryBackend:      NewInMemorySaver(),
 			SecondaryBackend:    secondary,
 			EnableReplication:   true,
-			ReplicationMode:     ReplicationModeAsync,
+			ReplicationMode:     constants.CheckpointReplicationModeAsync,
 			HealthCheckInterval: 10 * time.Millisecond,
 		})
 		if err != nil {

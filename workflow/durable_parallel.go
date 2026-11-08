@@ -22,20 +22,38 @@ type parallelCheckpoint struct {
 }
 
 func validateParallel[T any](cfg ParallelConfig[T], cp *parallelCheckpoint) error {
+	if err := validateParallelStructure(cfg, cp); err != nil {
+		return err
+	}
+	for name, data := range cp.Inputs {
+		var input T
+		if err := json.Unmarshal(data, &input); err != nil {
+			return agentErrors.Wrap(err, agentErrors.CodeStateValidation, "并行输入与业务类型不匹配").WithComponent("workflow").WithOperation("validate_parallel").WithContext("branch", name)
+		}
+	}
+	for name, data := range cp.Outputs {
+		var output T
+		if err := json.Unmarshal(data, &output); err != nil {
+			return agentErrors.Wrap(err, agentErrors.CodeStateValidation, "并行输出与业务类型不匹配").WithComponent("workflow").WithOperation("validate_parallel").WithContext("branch", name)
+		}
+	}
+	return nil
+}
+
+// validateParallelStructure 仅验证原始 JSON，不调用宿主业务反序列化。
+func validateParallelStructure[T any](cfg ParallelConfig[T], cp *parallelCheckpoint) error {
 	if len(cp.Inputs) != len(cfg.Branches) || cp.Outputs == nil {
 		return agentErrors.Newf(agentErrors.CodeStateValidation, "corrupt parallel checkpoint").WithComponent("workflow").WithOperation("validate_parallel")
 	}
 	allowed := map[string]bool{}
 	for _, branch := range cfg.Branches {
 		allowed[branch.Name] = true
-		var input T
-		if json.Unmarshal(cp.Inputs[branch.Name], &input) != nil {
+		if !json.Valid(cp.Inputs[branch.Name]) {
 			return agentErrors.Newf(agentErrors.CodeStateValidation, "invalid checkpoint input for branch %q", branch.Name).WithComponent("workflow").WithOperation("validate_parallel")
 		}
 	}
 	for name, data := range cp.Outputs {
-		var output T
-		if !allowed[name] || json.Unmarshal(data, &output) != nil {
+		if !allowed[name] || !json.Valid(data) {
 			return agentErrors.Newf(agentErrors.CodeStateValidation, "invalid checkpoint output for branch %q", name).WithComponent("workflow").WithOperation("validate_parallel")
 		}
 	}

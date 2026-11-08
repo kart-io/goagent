@@ -10,7 +10,7 @@ import (
 	"os"
 
 	"github.com/kart-io/goagent/codec/json"
-
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/durable"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/workflow"
@@ -84,10 +84,10 @@ func build(ctx context.Context, store durable.Store) (*workflow.DurableGraph[ref
 	if err != nil {
 		return nil, err
 	}
-	if err := g.AddEdge(workflow.START, "refund"); err != nil {
+	if err := g.AddEdge(constants.WorkflowStart, "refund"); err != nil {
 		return nil, err
 	}
-	if err := g.AddEdge("refund", workflow.END); err != nil {
+	if err := g.AddEdge("refund", constants.WorkflowEnd); err != nil {
 		return nil, err
 	}
 	return g.CompileDurable(ctx, workflow.DurableConfig{Store: store, Version: "refund-interrupt-v1"})

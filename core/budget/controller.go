@@ -15,17 +15,13 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/usage"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 )
 
-// Unlimited 是未绑定预算（nil *Controller）时 Remaining 返回的余量，可直接参与大小比较。
-const Unlimited = math.MaxInt
-
-// DefaultMaxAgentCalls bounds topology when the host does not configure a limit.
-const DefaultMaxAgentCalls = 1000
 const ledgerFormat = "goagent-model-budget"
 
 // Config is supplied by the host. RootKey identifies one logical run.
@@ -74,7 +70,7 @@ func New(config Config) (*Controller, error) {
 		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "negative agent call limit").WithComponent("budget").WithOperation("new")
 	}
 	if config.MaxAgentCalls == 0 {
-		config.MaxAgentCalls = DefaultMaxAgentCalls
+		config.MaxAgentCalls = constants.DefaultMaxAgentCalls
 	}
 	return &Controller{config: config, memory: ledger{Config: config, Entries: map[string]entry{}}}, nil
 }
@@ -213,10 +209,10 @@ func (c *Controller) Reserve(ctx context.Context, key string) error {
 
 // Remaining 返回尚可预留的模型请求次数；持久预算在 Store 锁内读取，计入其他进程的预留。
 // 结果只是时点快照，并发预留可能随即消耗余量，准入仍以 Reserve 为准。
-// nil 接收者表示未绑定预算，返回 Unlimited，可与 FromContext 直接配合使用。
+// nil 接收者表示未绑定预算，返回 constants.BudgetUnlimited，可与 FromContext 直接配合使用。
 func (c *Controller) Remaining(ctx context.Context) (remaining int, err error) {
 	if c == nil {
-		return Unlimited, nil
+		return constants.BudgetUnlimited, nil
 	}
 	err = c.transaction(ctx, false, func(l *ledger) error {
 		remaining = c.config.MaxModelRequests - len(l.Entries)

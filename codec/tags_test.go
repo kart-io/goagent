@@ -13,7 +13,6 @@ import (
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/checkpoint"
 	"github.com/kart-io/goagent/core/durable"
-	"github.com/kart-io/goagent/core/execution"
 	"github.com/kart-io/goagent/devtools"
 	"github.com/kart-io/goagent/llm"
 	llmcache "github.com/kart-io/goagent/llm/cache"
@@ -37,11 +36,9 @@ func TestConfigTypesTagEveryField(t *testing.T) {
 		reflect.TypeFor[checkpoint.CheckpointerConfig](),
 		reflect.TypeFor[checkpoint.DistributedCheckpointerConfig](),
 		reflect.TypeFor[durable.OperationPolicy](),
-		reflect.TypeFor[execution.RuntimeConfig](),
 		reflect.TypeFor[core.InterruptConfig](),
 		reflect.TypeFor[core.LifecycleManagerConfig](),
 		reflect.TypeFor[core.RunnableConfig](),
-		reflect.TypeFor[core.RetryPolicy](),
 		reflect.TypeFor[core.TimeoutConfig](),
 		reflect.TypeFor[devtools.RecorderConfig](),
 		reflect.TypeFor[llmcache.CachedLLMClientConfig](),
@@ -73,12 +70,9 @@ func TestConfigTypesTagEveryField(t *testing.T) {
 
 func TestLoadCacheConfigFromYAML(t *testing.T) {
 	cfg := cache.DefaultCacheConfig()
-	require.NoError(t, yaml.Unmarshal([]byte("type: redis\nmax_size: 10\ndefault_ttl: 5m\n"), &cfg, json.Strict))
-	require.Equal(t, "redis", cfg.Type)
-	require.Equal(t, 10, cfg.MaxSize)
+	require.NoError(t, yaml.Unmarshal([]byte("default_ttl: 5m\n"), &cfg, json.Strict))
 	require.Equal(t, 5*time.Minute, cfg.DefaultTTL)
 	require.True(t, cfg.Enabled, "未写的字段保留默认值")
-	require.Equal(t, time.Minute, cfg.CleanupInterval)
 }
 
 func TestDecodeLLMOptions(t *testing.T) {

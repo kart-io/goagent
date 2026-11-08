@@ -1,12 +1,12 @@
 package session
 
 import (
-	agentErrors "github.com/kart-io/goagent/errors"
 	"io"
 	"sort"
 
 	"github.com/kart-io/goagent/codec/json"
-
+	"github.com/kart-io/goagent/constants"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
 )
 
@@ -36,19 +36,19 @@ func BuildTrajectory(events []Event) (*Trajectory, error) {
 	t := &Trajectory{}
 	for _, ev := range events {
 		switch ev.Type {
-		case TypeSystemMessage:
+		case constants.SessionEventSystemMessage:
 			var d MessageData
 			if err := json.Unmarshal(ev.Data, &d); err != nil {
 				return nil, err
 			}
 			t.System = d.Message.Content
-		case TypeToolDefinitions:
+		case constants.SessionEventToolDefinitions:
 			var d ToolsData
 			if err := json.Unmarshal(ev.Data, &d); err != nil {
 				return nil, err
 			}
 			t.Tools = d.Tools
-		case TypeTurnEnd:
+		case constants.SessionEventTurnEnd:
 			var d TurnEnd
 			if json.Unmarshal(ev.Data, &d) == nil && !d.Aborted {
 				t.Turns++

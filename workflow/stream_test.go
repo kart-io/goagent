@@ -8,8 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kart-io/goagent/core"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/constants"
+	"github.com/kart-io/goagent/core"
 )
 
 // rawRunnable deliberately bypasses core's checked source to exercise the graph
@@ -43,9 +45,9 @@ func TestGraphForwardsNodeEventsButOnlyGraphFinalizes(t *testing.T) {
 	})
 	require.NoError(t, g.AddRunnable("model", node))
 	require.NoError(t, g.AddNode("increment", increment))
-	require.NoError(t, g.AddEdge(START, "model"))
+	require.NoError(t, g.AddEdge(constants.WorkflowStart, "model"))
 	require.NoError(t, g.AddEdge("model", "increment"))
-	require.NoError(t, g.AddEdge("increment", END))
+	require.NoError(t, g.AddEdge("increment", constants.WorkflowEnd))
 	r, err := g.Compile(context.Background())
 	require.NoError(t, err)
 	require.Equal(t, core.StreamModeSteps, r.StreamMode())
@@ -90,9 +92,9 @@ func TestGraphRejectsBrokenNodeStreamsBeforeDownstream(t *testing.T) {
 			g := NewGraph[int]()
 			require.NoError(t, g.AddRunnable("broken", scenario.node))
 			require.NoError(t, g.AddNode("downstream", func(_ context.Context, in int) (int, error) { downstream.Add(1); return in, nil }))
-			require.NoError(t, g.AddEdge(START, "broken"))
+			require.NoError(t, g.AddEdge(constants.WorkflowStart, "broken"))
 			require.NoError(t, g.AddEdge("broken", "downstream"))
-			require.NoError(t, g.AddEdge("downstream", END))
+			require.NoError(t, g.AddEdge("downstream", constants.WorkflowEnd))
 			r, err := g.Compile(context.Background())
 			require.NoError(t, err)
 			cb := &workflowCallback{BaseCallback: core.NewBaseCallback()}
@@ -130,8 +132,8 @@ func TestGraphStreamCancellationStopsNodeProducer(t *testing.T) {
 	})
 	g := NewGraph[int]()
 	require.NoError(t, g.AddRunnable("producer", node))
-	require.NoError(t, g.AddEdge(START, "producer"))
-	require.NoError(t, g.AddEdge("producer", END))
+	require.NoError(t, g.AddEdge(constants.WorkflowStart, "producer"))
+	require.NoError(t, g.AddEdge("producer", constants.WorkflowEnd))
 	r, err := g.Compile(context.Background())
 	require.NoError(t, err)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -158,8 +160,8 @@ func TestGraphStreamCancellationStopsNodeProducer(t *testing.T) {
 func TestParallelEventsAreScopedAndGraphFinishesOnce(t *testing.T) {
 	g := NewGraph[int]()
 	require.NoError(t, g.AddParallel("fork", ParallelConfig[int]{Branches: []Branch[int]{{Name: "a", Run: increment}, {Name: "b", Run: increment}}, Clone: func(in int) int { return in }, Merge: func(_ context.Context, _ int, out []int) (int, error) { return out[0] + out[1], nil }}))
-	require.NoError(t, g.AddEdge(START, "fork"))
-	require.NoError(t, g.AddEdge("fork", END))
+	require.NoError(t, g.AddEdge(constants.WorkflowStart, "fork"))
+	require.NoError(t, g.AddEdge("fork", constants.WorkflowEnd))
 	r, err := g.Compile(context.Background())
 	require.NoError(t, err)
 	stream, err := r.Stream(context.Background(), 2)

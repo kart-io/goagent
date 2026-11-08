@@ -26,7 +26,7 @@ executor := tools.NewToolExecutor(
         Jitter:       0.5, // 不设置或 <= 0 时使用 0.25
     }),
 )
-results, _ := executor.ExecuteParallel(ctx, []*tools.ToolCall{call})
+results, _ := executor.ExecuteParallel(ctx, []*tools.ToolCallRequest{call})
 ```
 
 第 n 次重试的延迟由 `calculateRetryDelay`（`tools/executor_tool.go`）计算：

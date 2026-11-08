@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"errors"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -12,6 +13,97 @@ import (
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/tools/middleware"
 )
+
+// 装配入口的函数类型由编译器检查，不接受对象或任意值。
+var _ func(interfaces.Tool, ...middleware.ToolMiddlewareFunc) interfaces.Tool = WithMiddleware
+
+func TestCleanupFunctionalMiddlewareOnionOrder(t *testing.T) {
+	var order []string
+	wrap := func(name string) middleware.ToolMiddlewareFunc {
+		return func(_ interfaces.Tool, next middleware.ToolInvoker) middleware.ToolInvoker {
+			return func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+				order = append(order, name+":前")
+				out, err := next(ctx, input)
+				order = append(order, name+":后")
+				return out, err
+			}
+		}
+	}
+	tool := NewBaseTool("顺序", "", `{}`, func(context.Context, *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+		order = append(order, "执行")
+		return &interfaces.ToolOutput{Result: "成功", Success: true}, nil
+	})
+	out, err := WithMiddleware(tool, wrap("甲"), wrap("乙"), wrap("丙")).Invoke(context.Background(), &interfaces.ToolInput{})
+	require.NoError(t, err)
+	require.True(t, out.Success)
+	require.Equal(t, []string{"甲:前", "乙:前", "丙:前", "执行", "丙:后", "乙:后", "甲:后"}, order)
+}
+
+func TestCleanupFunctionalMiddlewareErrorBoundaries(t *testing.T) {
+	for _, phase := range []string{"前置", "执行", "后置"} {
+		t.Run(phase, func(t *testing.T) {
+			want := errors.New("边界错误")
+			calls := 0
+			observed := false
+			tool := NewBaseTool("边界", "", `{}`, func(context.Context, *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+				calls++
+				if phase == "执行" {
+					return &interfaces.ToolOutput{Result: "部分结果"}, want
+				}
+				return &interfaces.ToolOutput{Result: "成功", Success: true}, nil
+			})
+			observer := func(_ interfaces.Tool, next middleware.ToolInvoker) middleware.ToolInvoker {
+				return func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+					out, err := next(ctx, input)
+					observed = errors.Is(err, want)
+					return out, err
+				}
+			}
+			boundary := func(_ interfaces.Tool, next middleware.ToolInvoker) middleware.ToolInvoker {
+				return func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+					if phase == "前置" {
+						return nil, want
+					}
+					out, err := next(ctx, input)
+					if err == nil && phase == "后置" {
+						return out, want
+					}
+					return out, err
+				}
+			}
+			out, err := WithMiddleware(tool, observer, boundary).Invoke(context.Background(), &interfaces.ToolInput{})
+			require.ErrorIs(t, err, want)
+			require.True(t, observed, "外层函数须观察到内层真实错误")
+			if phase == "前置" {
+				require.Zero(t, calls)
+				require.Nil(t, out)
+			} else {
+				require.Equal(t, 1, calls)
+				require.NotNil(t, out, "错误不能吞掉已生成结果")
+			}
+		})
+	}
+}
+
+func TestCleanupLoggingCacheAndRateLimitCompose(t *testing.T) {
+	tool := &mockToolForWrapper{name: "实际组合"}
+	caching := middleware.NewCachingMiddleware()
+	limit := middleware.NewRateLimitMiddleware(middleware.WithQPS(0), middleware.WithBurst(1))
+	wrapped := WithMiddleware(tool, middleware.Logging(middleware.WithLogger(nil)), caching.Wrap, limit.Wrap)
+	input := &interfaces.ToolInput{Args: map[string]interface{}{"value": "甲"}}
+	_, err := wrapped.Invoke(context.Background(), input)
+	require.NoError(t, err)
+	out, err := wrapped.Invoke(context.Background(), input)
+	require.NoError(t, err)
+	require.Equal(t, true, out.Metadata["cache_hit"])
+	_, err = wrapped.Invoke(context.Background(), &interfaces.ToolInput{Args: map[string]interface{}{"value": "乙"}})
+	require.Error(t, err, "不同输入缓存未命中时须经过真实限流")
+	require.EqualValues(t, 1, tool.callCount.Load())
+	allowed, rejected := limit.GetStats()
+	require.EqualValues(t, 1, allowed)
+	require.EqualValues(t, 1, rejected)
+	require.Equal(t, map[string]interface{}{"value": "甲"}, input.Args)
+}
 
 // mockToolForWrapper 是用于测试包装器的模拟工具
 type mockToolForWrapper struct {
@@ -139,8 +231,8 @@ func TestWithMiddleware_MultipleFunctionalMiddleware(t *testing.T) {
 	assert.True(t, output2.Metadata["cache_hit"].(bool))
 }
 
-// TestWithMiddleware_InterfaceMiddleware 测试接口式中间件（旧接口）
-func TestWithMiddleware_InterfaceMiddleware(t *testing.T) {
+// TestWithMiddleware_StatefulWrap 测试显式装配有状态对象。
+func TestWithMiddleware_StatefulWrap(t *testing.T) {
 	ctx := context.Background()
 	tool := &mockToolForWrapper{name: "test_tool"}
 

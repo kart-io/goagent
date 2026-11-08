@@ -197,7 +197,8 @@ func TestCachingMiddleware_CustomCache(t *testing.T) {
 	ctx := context.Background()
 	tool := newMockTool()
 
-	customCache := cache.NewInMemoryCache(100, 5*time.Minute, 1*time.Minute)
+	customCache := cache.NewSimpleCache(5 * time.Minute)
+	t.Cleanup(customCache.Close)
 	middleware := NewCachingMiddleware(
 		WithCache(customCache),
 	)
@@ -297,8 +298,8 @@ func TestDefaultCacheKeyFunc(t *testing.T) {
 	assert.Contains(t, key1, "test_tool", "Key should contain tool name")
 	assert.Contains(t, key1, "tool:", "Key should have 'tool:' prefix")
 
-	// 键应该是合理的长度（不会过长）
-	assert.LessOrEqual(t, len(key1), 50, "Key should not be too long")
+	// 默认键保留完整SHA256，避免32位短摘要碰撞。
+	assert.Len(t, key1, len("tool:test_tool:")+64)
 }
 
 // TestDefaultCacheKeyFunc_InternalMetadata 测试默认键函数过滤内部元数据

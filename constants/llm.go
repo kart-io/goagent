@@ -174,3 +174,16 @@ const (
 	DefaultFrequencyPenalty    = 0.0
 	DefaultPresencePenalty     = 0.0
 )
+
+// 共享默认策略与协议值；领域实现直接引用本包。
+const (
+	OllamaBaseURL = "http://localhost:11434/v1"
+)
+
+// 提供商模型和首块等待时间分别保留各自策略。
+const (
+	KimiDefaultModel        = "moonshot-v1-8k"
+	SiliconFlowDefaultModel = "Qwen/Qwen2-7B-Instruct"
+	OllamaDefaultModel      = "llama2"
+	DefaultOllamaTimeout    = 120 * time.Second
+)

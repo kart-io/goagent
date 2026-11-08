@@ -7,11 +7,11 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/kart-io/goagent/codec/json"
-
 	"github.com/stretchr/testify/require"
 
 	"github.com/kart-io/goagent/builder/contextpolicy"
+	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/interfaces"
@@ -56,7 +56,7 @@ func (m *readingModel) CompleteToolsStream(ctx context.Context, req *llm.Complet
 			return nil, err
 		}
 		args, _ := json.Marshal(map[string]any{"key": ref["context_result"], "offset": 2})
-		m.turns[2] = toolCalls(nativeCall("read", contextpolicy.ReadToolName, string(args)))
+		m.turns[2] = toolCalls(nativeCall("read", constants.ToolReadContextResult, string(args)))
 	}
 	return m.nativeEventModel.CompleteToolsStream(ctx, req, ts)
 }
@@ -123,7 +123,7 @@ func TestOffloadReadsAfterResume(t *testing.T) {
 	require.ErrorContains(t, err, "进程中断")
 	require.Len(t, first.requests, 1)
 
-	resumed := nativeModel(toolCalls(nativeCall("b", contextpolicy.ReadToolName, `{"key":"r1","offset":0}`)), finalAnswer("answer"))
+	resumed := nativeModel(toolCalls(nativeCall("b", constants.ToolReadContextResult, `{"key":"r1","offset":0}`)), finalAnswer("answer"))
 	out, err := build(resumed).AsRunnable().Invoke(ctx, "question")
 	require.NoError(t, err)
 	require.Equal(t, "answer", out.Result)
@@ -186,8 +186,8 @@ func TestOffloadWrongKeyReturnedToModel(t *testing.T) {
 	ctx, results := durableOffloadContext(t, "wrong-key")
 	model := nativeModel(
 		toolCalls(nativeCall("a", "lookup", "{}")),
-		toolCalls(nativeCall("b", contextpolicy.ReadToolName, `{"key":"r9","offset":0}`)),
-		toolCalls(nativeCall("c", contextpolicy.ReadToolName, `{"key":"r1","offset":0}`)),
+		toolCalls(nativeCall("b", constants.ToolReadContextResult, `{"key":"r9","offset":0}`)),
+		toolCalls(nativeCall("c", constants.ToolReadContextResult, `{"key":"r1","offset":0}`)),
 		finalAnswer("answer"),
 	)
 	for range 2 {
@@ -262,7 +262,7 @@ func TestOffloadConfiguration(t *testing.T) {
 	lookup := NewMockTool("lookup", "x")
 	_, err := NewSimpleBuilder(nativeModel()).WithTools(lookup).WithOffload(offload).Build()
 	require.ErrorContains(t, err, "读取工具")
-	_, err = NewSimpleBuilder(nativeModel()).WithTools(lookup, offload, NewMockTool(contextpolicy.ReadToolName, "x")).WithOffload(offload).Build()
+	_, err = NewSimpleBuilder(nativeModel()).WithTools(lookup, offload, NewMockTool(constants.ToolReadContextResult, "x")).WithOffload(offload).Build()
 	require.Error(t, err)
 	_, err = NewSimpleBuilder(nativeModel()).WithTools(lookup, offload).WithOffload(offload).WithOffload(offload).Build()
 	require.Error(t, err)

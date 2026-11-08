@@ -4,7 +4,7 @@ GoAgent 不默认缓存任何模型答案或工具结果（`ConfigureForRAG` 也
 
 | 缓存对象 | 组件 | 说明 |
 |---|---|---|
-| 通用键值 | `cache.Cache`；推荐 `cache.NewSimpleCache(ttl)` | `sync.Map` + TTL，后台清理；`NoOpCache` 为空实现。包说明见 [cache/README.md](../../cache/README.md) |
+| 通用键值 | `cache.Cache`；推荐 `cache.NewSimpleCache(ttl)`；无后台生命周期入口时用 `cache.WithoutBackgroundCleanup()` | `sync.Map` + TTL，后台清理；`NoOpCache` 为空实现。包说明见 [cache/README.md](../../cache/README.md) |
 | 单个工具的结果 | `tools/middleware.Caching`（经 `tools.WithMiddleware`） | 底层是任意 `cache.Cache`，见[工具中间件](TOOL_MIDDLEWARE.md#内置中间件) |
 | 单个工具的结果（简化包装） | `tools.NewCachedTool(tool, ttl)` | 内部使用 `tools.SimpleToolCache`；ttl<=0 时取 5 分钟 |
 | 工具结果存储 | `tools.ToolCache` 接口：`SimpleToolCache`、`MemoryToolCache`、`ShardedToolCache` | 按工具名或正则失效；分片版预设 `NewHighPerformanceCache`/`NewLowMemoryCache`，示例见 [02-cache-presets](../../examples/optimization/02-cache-presets/main.go) |
@@ -25,15 +25,17 @@ if errors.Is(err, agentErrors.ErrCacheMiss) {
 stats := c.GetStats() // Hits、Misses、Size、HitRate
 ```
 
-`cache.NewCacheKeyGenerator(prefix)` 用 SHA256 生成键（`GenerateKey(prompt, params)`、`GenerateKeySimple(parts...)`）。`cache.NewCacheFromConfig(cfg)` 在 `Enabled=false` 时返回 `NoOpCache`，否则返回以 `DefaultTTL` 构造的 `SimpleCache`（不读取 `Type`）。
+`cache.NewCacheKeyGenerator(prefix)` 用 SHA256 生成键（`GenerateKey(prompt, params)`、`GenerateKeySimple(parts...)`）。`cache.NewCacheFromConfig(cfg)` 在 `Enabled=false` 时返回 `NoOpCache`，否则返回以 `DefaultTTL` 构造的 `SimpleCache`。`CacheConfig` 只包含实际生效的 `Enabled` 和 `DefaultTTL`；原 `Type`、`MaxSize`、`CleanupInterval` 字段已删除，严格配置解码会拒绝对应旧键。
 
-`NewInMemoryCache`、`NewLRUCache`、`NewMultiTierCache` 已标记 Deprecated：
+`InMemoryCache`、`LRUCache`、`MultiTierCache` 及其构造器已经删除，不保留兼容别名：
 
 | 旧 | 新 |
 |---|---|
-| `cache.NewInMemoryCache(maxSize, ttl, cleanup)` | `cache.NewSimpleCache(ttl)` |
-| `cache.NewLRUCache(maxSize, ttl, cleanup)` | `cache.NewSimpleCache(ttl)`（不限容量，按 TTL 过期） |
-| `cache.NewMultiTierCache(tiers...)` | `cache.NewSimpleCache(ttl)`，或宿主自行组合 |
+| `cache.NewInMemoryCache(maxSize, ttl, cleanup)` | `cache.NewSimpleCache(ttl)`；无后台生命周期入口时用 `cache.WithoutBackgroundCleanup()` |
+| `cache.NewLRUCache(maxSize, ttl, cleanup)` | 仅需 TTL 时改用 `cache.NewSimpleCache(ttl)`；需要容量和 LRU 语义时注入明确实现这些契约的 `cache.Cache` |
+| `cache.NewMultiTierCache(tiers...)` | 仅需单层 TTL 时改用 `cache.NewSimpleCache(ttl)`；需要多层语义时显式组合并实现 `cache.Cache` |
+
+`SimpleCache` 不提供容量限制、LRU 或多级回填语义，不能把上述构造器机械替换后仍宣称保留这些策略。`NoOpCache.Get` 返回中央 `errors.ErrCacheDisabled`，`Set` 不存储。其它接口清理见[兼容入口迁移指南](COMPATIBILITY_CLEANUP.md)。
 
 ## 工具结果缓存
 
@@ -44,7 +46,7 @@ cachedTool := tools.WithMiddleware(originalTool, middleware.Caching(
 ))
 ```
 
-- 只缓存成功结果；默认键只含工具名与参数，多租户或按用户返回不同结果的工具必须用 `WithCacheKeyFunc` 把身份放进键，或不缓存。
+- 只缓存成功结果；默认键只含工具名与参数的完整 SHA256，多租户或按用户返回不同结果的工具必须用 `WithCacheKeyFunc` 把身份放进键，或不缓存。
 - 有副作用的工具不要缓存：命中时工具不执行。
 - 持久运行已由 Dispatcher 调用日志保证恢复时回放、不重复执行；工具缓存解决的是跨运行的重复计算，二者无关。包装后的工具不转发 `DispatchTimeoutProvider` 等可选接口，注意事项见[工具中间件](TOOL_MIDDLEWARE.md#toolswithmiddleware)。
 
@@ -73,4 +75,14 @@ resp, err := llm.Complete(ctx, client, req)
 
 - 缓存键必须覆盖影响结果的全部维度：用户/租户、会话、知识或数据版本、工具版本。
 - 检索增强回答优先每次检索新证据；需要答案缓存时，键中带上知识版本。
-- TTL 按数据变化频率设置；`SimpleCache` 不限容量，条目数不可控时改用 `tools.ShardedToolCache`（容量与淘汰策略可配）或外部缓存实现 `cache.Cache`。
+- TTL 按数据变化频率设置；`SimpleCache` 不限容量，条目数不可控时改用 `tools.ShardedToolCache`（容量可配，固定哈希分片和 LRU 淘汰）或外部缓存实现 `cache.Cache`。
+
+## 设计审核修复后的配置迁移
+
+`ShardedToolCache` 固定使用哈希分片和 LRU。已移除没有执行实现的淘汰策略、负载均衡、压缩、字节内存上限、分片并发数、指标开关和自动调优字段及相应 `With*` 选项，不保留空壳兼容入口。容量表示条目数，不表示进程内存字节数；需要字节约束或其他淘汰算法时由宿主提供对应缓存实现。性能/工作负载预设仅调整实际生效的分片与清理参数。
+
+`SimpleCache` 默认仍需要 `Close()`；`NewSimpleCache(ttl, cache.WithoutBackgroundCleanup())` 不创建后台清理协程，在访问/写入时回收到期项。工具函数式缓存默认使用这一模式，注入缓存的生命周期归宿主管理，构造中间件不会额外创建或关闭宿主缓存。
+
+工具缓存对业务输出做保留 Go 类型的隔离快照，保留 `AdditionalContext`、`Labels` 与嵌套结果。不支持安全快照的资源对象仍正常返回，但不会进入缓存。默认完整摘要改变缓存键，旧短摘要条目等待原 TTL 到期或由宿主清空；不会回退读取旧键。
+
+分片数上限为 `constants.MaxCacheShards`（65536）；超限配置在构造时以 `CodeInvalidConfig` panic 拒绝，不执行整数进位或分片分配。此限制也用于 Agent 缓存中间件。

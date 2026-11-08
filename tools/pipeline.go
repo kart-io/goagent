@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/codec/json"
-
+	"github.com/kart-io/goagent/constants"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 )
@@ -125,8 +125,6 @@ type ApproverFunc func(ctx context.Context, req ApprovalRequest) (ApprovalResult
 func (f ApproverFunc) Approve(ctx context.Context, req ApprovalRequest) (ApprovalResult, error) {
 	return f(ctx, req)
 }
-
-const defaultApprovalTimeout = 10 * time.Minute
 
 // Pipeline 是 Dispatcher 对每次模型可见调用执行的管线：PreHook → 审批 → Guard → Around（含超时）→ 工具 → PostHook。
 // 参数不合法的调用不进入管线。准入阶段（PreHook、审批、Guard）在操作日志之外执行：终止、取消和出错不留记录、
@@ -317,7 +315,7 @@ func (p *Pipeline) leadApproval(ctx context.Context, key string, pending *pendin
 func (p *Pipeline) askApprover(ctx context.Context, req ApprovalRequest) (ApprovalResult, error) {
 	timeout := p.ApprovalTimeout
 	if timeout <= 0 {
-		timeout = defaultApprovalTimeout
+		timeout = constants.DefaultApprovalTimeout
 	}
 	actx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()

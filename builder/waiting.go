@@ -8,7 +8,7 @@ import (
 )
 
 // WaitingError 列出暂停处的全部等待。已提交的模型回合与已完成的工具调用都保留在日志中；
-// 宿主提供续跑输入（durable.WithResume，键取等待路径最后一项的 Key）后，用同一执行键再次调用即可继续。
+// 宿主按等待类型提供续跑输入后，用同一执行键再次调用即可继续：叶子中断使用 durable.WithResume，子图审批使用 workflow.WithResume 的结构化请求；操作键取等待路径最后一项的 Key。
 // 它展开为各个 *durable.WaitError，嵌套在上层持久操作中时会被记录为等待。
 type WaitingError struct {
 	Waits []*durable.WaitError

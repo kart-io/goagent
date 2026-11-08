@@ -354,9 +354,9 @@ func TestNamespaceToString(t *testing.T) {
 		namespace []string
 		expected  string
 	}{
-		{[]string{"users"}, "users"},
-		{[]string{"org", "team"}, "org:team"},
-		{[]string{"a", "b", "c", "d"}, "a:b:c:d"},
+		{[]string{"users"}, "5:users"},
+		{[]string{"org", "team"}, "3:org4:team"},
+		{[]string{"a", "b", "c", "d"}, "1:a1:b1:c1:d"},
 		{[]string{}, ""},
 	}
 
@@ -558,7 +558,8 @@ func TestCopyStoreValue(t *testing.T) {
 		Version:   1,
 	}
 
-	copy := store.copyStoreValue(original)
+	copy, err := store.copyStoreValue(original)
+	assert.NoError(t, err)
 
 	// Verify deep copy
 	assert.Equal(t, original.Value, copy.Value)
@@ -573,6 +574,7 @@ func TestCopyStoreValue(t *testing.T) {
 	assert.False(t, exists)
 
 	// Test nil input
-	nilCopy := store.copyStoreValue(nil)
+	nilCopy, err := store.copyStoreValue(nil)
+	assert.NoError(t, err)
 	assert.Nil(t, nilCopy)
 }

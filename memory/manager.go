@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/interfaces"
 )
 
@@ -65,40 +66,17 @@ type Config struct {
 	SimilarityThreshold float64 `json:"similarity_threshold"` // 相似度阈值
 }
 
-// 向量存储类型
-const (
-	VectorStoreTypeMemory   = "memory"   // 内存存储
-	VectorStoreTypeChroma   = "chroma"   // Chroma 向量数据库
-	VectorStoreTypePinecone = "pinecone" // Pinecone
-	VectorStoreTypeWeaviate = "weaviate" // Weaviate
-)
-
-// 嵌入提供商
-const (
-	EmbedderProviderOpenAI = "openai" // OpenAI
-	EmbedderProviderLocal  = "local"  // 本地模型
-	EmbedderProviderMock   = "mock"   // Mock（测试用）
-)
-
-// 默认配置值
-const (
-	DefaultMaxConversationLength = 10   // 默认最大对话长度
-	DefaultSearchLimit           = 5    // 默认搜索结果数量
-	DefaultSimilarityThreshold   = 0.7  // 默认相似度阈值
-	DefaultEmbeddingDimension    = 1536 // OpenAI text-embedding-ada-002 维度
-)
-
 // DefaultConfig 返回默认配置
 func DefaultConfig() *Config {
 	return &Config{
 		EnableConversation:    true,
-		MaxConversationLength: DefaultMaxConversationLength,
+		MaxConversationLength: constants.DefaultMemoryMaxConversationLength,
 		EnableVectorStore:     false,
-		VectorStoreType:       VectorStoreTypeMemory,
-		EmbeddingDimension:    DefaultEmbeddingDimension,
-		EmbeddingModel:        "text-embedding-ada-002",
-		EmbeddingProvider:     EmbedderProviderOpenAI,
-		DefaultSearchLimit:    DefaultSearchLimit,
-		SimilarityThreshold:   DefaultSimilarityThreshold,
+		VectorStoreType:       constants.VectorStoreTypeMemory,
+		EmbeddingDimension:    constants.DefaultMemoryEmbeddingDimension,
+		EmbeddingModel:        constants.DefaultMemoryEmbeddingModel,
+		EmbeddingProvider:     constants.EmbedderProviderOpenAI,
+		DefaultSearchLimit:    constants.DefaultMemorySearchLimit,
+		SimilarityThreshold:   constants.DefaultMemorySimilarityThreshold,
 	}
 }

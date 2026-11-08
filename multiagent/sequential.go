@@ -3,6 +3,7 @@ package multiagent
 import (
 	"fmt"
 
+	"github.com/kart-io/goagent/constants"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/workflow"
 )
@@ -18,7 +19,7 @@ func newGraph[T any](cfg workflow.Config, maxSteps int) (*workflow.Graph[T], err
 
 // chain 注册 steps 并按顺序连边：START → s1 → … → sn，不连 sn 的出边。
 func chain[T any](g *workflow.Graph[T], steps []Step[T]) error {
-	prev := workflow.START
+	prev := constants.WorkflowStart
 	for i, s := range steps {
 		if err := AddStep(g, s); err != nil {
 			return fmt.Errorf("第 %d 步: %w", i+1, err)
@@ -43,7 +44,7 @@ func Sequential[T any](cfg workflow.Config, steps ...Step[T]) (*workflow.Graph[T
 	if err = chain(g, steps); err != nil {
 		return nil, err
 	}
-	if err = g.AddEdge(steps[len(steps)-1].Name, workflow.END); err != nil {
+	if err = g.AddEdge(steps[len(steps)-1].Name, constants.WorkflowEnd); err != nil {
 		return nil, err
 	}
 	return g, nil

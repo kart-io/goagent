@@ -5,15 +5,16 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/kart-io/goagent/constants"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/workflow"
 )
 
-// RouterConfig 描述 Supervisor 分流：Supervisor 执行后由 Next 选择成员或 Finish，成员执行后回到 Supervisor。
+// RouterConfig 描述 Supervisor 分流：Supervisor 执行后由 Next 选择成员或 constants.MultiagentFinish，成员执行后回到 Supervisor。
 type RouterConfig[T any] struct {
 	Supervisor Step[T]
 	Members    []Step[T]
-	Next       func(context.Context, T) (string, error) // 返回成员名或 Finish，必须是纯函数
+	Next       func(context.Context, T) (string, error) // 返回成员名或 constants.MultiagentFinish，必须是纯函数
 	MaxRounds  int                                      // 必填，> 0：成员最多执行的次数
 	Fallback   *Step[T]                                 // 可选；路由无效时执行，之后结束
 }
@@ -33,8 +34,8 @@ func RouterSupervisor[T any](cfg workflow.Config, r RouterConfig[T]) (*workflow.
 	}
 	names := make([]string, len(r.Members))
 	for i, m := range r.Members {
-		if m.Name == Finish || m.Name == r.Supervisor.Name {
-			return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "成员名 %q 不能是 %s 或 Supervisor 名", m.Name, Finish).WithComponent("multiagent").WithOperation("router_supervisor")
+		if m.Name == constants.MultiagentFinish || m.Name == r.Supervisor.Name {
+			return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "成员名 %q 不能是 %s 或 Supervisor 名", m.Name, constants.MultiagentFinish).WithComponent("multiagent").WithOperation("router_supervisor")
 		}
 		names[i] = m.Name
 	}

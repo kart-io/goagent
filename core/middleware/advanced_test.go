@@ -215,7 +215,7 @@ func TestToolSelectorMiddleware_ContainsKeyword(t *testing.T) {
 	}{
 		{"calculate 5 + 3", "calculate", true},
 		{"", "calculate", false},
-		{"search for data", "find", true}, // containsKeyword returns true for any non-empty query and keyword
+		{"search for data", "find", false},
 		{"", "", false},
 	}
 

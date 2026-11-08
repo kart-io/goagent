@@ -64,7 +64,7 @@ func TestHandleFollowupApprovalRecoveryUsesRecordedBatch(t *testing.T) {
 	wait, continuation := requireWaiting(t, err)
 	require.Empty(t, h.PendingInputs(), "the waiting Followup has already been claimed")
 	require.Empty(t, effects)
-	resumeCtx := durable.WithResume(ctx, wait.Path[len(wait.Path)-1].Key, continuation.ApprovalKey)
+	resumeCtx := nestedApprovalContext(t, ctx, wait.Path[len(wait.Path)-1].Key, continuation.ApprovalKey)
 
 	resumed := newScriptModel(answer("refund completed"))
 	require.Equal(t, "refund completed", waitAnswer(t, build(resumed, nil).Start(resumeCtx, "first")).Result)

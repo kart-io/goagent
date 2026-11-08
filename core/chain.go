@@ -227,6 +227,9 @@ func executeStep(ctx context.Context, step Step, data interface{}) (result inter
 // Invoke 执行链式处理（实现 Runnable 接口）
 func (c *BaseChain) Invoke(ctx context.Context, input *ChainInput) (*ChainOutput, error) {
 	start := time.Now()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 
 	// 触发 Chain 开始回调
 	if panicked, err := c.notify(ctx, "on_chain_start", func(cb Callback) error {
@@ -256,6 +259,11 @@ func (c *BaseChain) Invoke(ctx context.Context, input *ChainInput) (*ChainOutput
 	// 执行步骤
 	currentData := input.Data
 	for i, step := range c.steps {
+		if err := ctx.Err(); err != nil {
+			output.Status = "failed"
+			output.TotalLatency = time.Since(start)
+			return output, err
+		}
 		// 检查是否跳过
 		if shouldSkipStep(i+1, input.Options) {
 			output.StepsExecuted = append(output.StepsExecuted, StepExecution{
@@ -309,6 +317,10 @@ func (c *BaseChain) Invoke(ctx context.Context, input *ChainInput) (*ChainOutput
 
 	output.Data = currentData
 	output.TotalLatency = time.Since(start)
+	if err := ctx.Err(); err != nil {
+		output.Status = "failed"
+		return output, err
+	}
 
 	// 触发 Chain 结束回调
 	if panicked, panicErr := c.notify(ctx, "on_chain_end", func(cb Callback) error {

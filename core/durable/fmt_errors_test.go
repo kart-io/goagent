@@ -23,7 +23,7 @@ func TestFormattedOperationErrorClassification(t *testing.T) {
 	t.Run("损坏记录不能续跑", func(t *testing.T) {
 		ctx := operationContext(t)
 		key := ChildKey(ExecutionKey(ctx), "op")
-		id := operationStorageID(key)
+		id := OperationStorageID(key)
 		require.NoError(t, JournalStore(ctx).Save(ctx, id, &Snapshot{RunID: id, Version: operationVersion, Data: json.RawMessage(`{}`)}))
 		calls := 0
 		_, err := Do(ctx, "op", json.RawMessage(`{}`), OperationPolicy{}, func(context.Context) (json.RawMessage, error) { calls++; return json.RawMessage(`null`), nil })

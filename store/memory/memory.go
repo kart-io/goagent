@@ -3,22 +3,14 @@ package memory
 import (
 	"context"
 	"fmt"
-	"strings"
+	"reflect"
 	"sync"
 	"time"
 
 	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/internal/snapshot"
 	"github.com/kart-io/goagent/store"
 )
-
-// valuePool is a sync.Pool for store.Value objects to reduce allocations
-var valuePool = sync.Pool{
-	New: func() interface{} {
-		return &store.Value{
-			Metadata: make(map[string]interface{}),
-		}
-	},
-}
 
 // Store is a thread-safe in-memory implementation of store.Store.
 //
@@ -29,8 +21,6 @@ var valuePool = sync.Pool{
 //
 // Performance optimizations:
 //   - Uses sync.RWMutex for efficient read-heavy workloads
-//   - Object pooling with sync.Pool to reduce GC pressure
-//   - Optimized lock granularity to minimize write lock duration
 //   - Inverted index for O(1) metadata-based search queries
 type Store struct {
 	// data maps namespace path to key-value pairs
@@ -51,69 +41,55 @@ func New() *Store {
 	}
 }
 
-// Put stores a value with the given namespace and key.
-// Optimizations:
-//   - Uses object pool to reduce allocations
-//   - Minimizes write lock duration by preparing data outside critical section
+// Put 保存独立快照，并保留已有元数据。
 func (s *Store) Put(ctx context.Context, namespace []string, key string, value interface{}) error {
+	return s.PutWithMetadata(ctx, namespace, key, value, nil)
+}
+
+// PutWithMetadata 原子合并元数据、替换记录并维护索引；输入均由存储取得独立所有权。
+func (s *Store) PutWithMetadata(ctx context.Context, namespace []string, key string, value interface{}, metadata map[string]interface{}) error {
+	input, err := snapshot.Clone(&store.Value{Value: value, Namespace: namespace, Metadata: metadata})
+	if err != nil {
+		return agentErrors.Wrap(err, agentErrors.CodeStoreSerialization, "存储写入快照失败").WithComponent("store").WithOperation("put_with_metadata")
+	}
+	storeValue := input.(*store.Value)
 	nsKey := namespaceToKey(namespace)
 	now := time.Now()
-
-	// Get object from pool
-	storeValue := valuePool.Get().(*store.Value)
-	storeValue.Value = value
 	storeValue.Updated = now
-	storeValue.Namespace = namespace
 	storeValue.Key = key
-
-	// First try with read lock to check if we're updating existing value
-	s.mu.RLock()
-	existing := s.data[nsKey]
-	var existingValue *store.Value
-	if existing != nil {
-		existingValue = existing[key]
-	}
-	s.mu.RUnlock()
-
-	// Prepare metadata outside write lock
-	if existingValue != nil {
-		storeValue.Created = existingValue.Created
-		// Copy existing metadata
-		for k, v := range existingValue.Metadata {
-			storeValue.Metadata[k] = v
-		}
-	} else {
-		storeValue.Created = now
-		// Clear metadata from pool if it has any (使用 Go 1.21+ clear() 提高性能)
-		if len(storeValue.Metadata) > 0 {
-			clear(storeValue.Metadata)
-		}
-	}
-
-	// Now acquire write lock only for the actual update
+	storeValue.Created = now
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
 	if s.data[nsKey] == nil {
 		s.data[nsKey] = make(map[string]*store.Value)
 	}
-
-	// Return old value to pool and remove from index if it exists
-	if oldValue := s.data[nsKey][key]; oldValue != nil && oldValue != existingValue {
+	merged := make(map[string]interface{})
+	if oldValue := s.data[nsKey][key]; oldValue != nil {
+		storeValue.Created = oldValue.Created
+		for k, v := range oldValue.Metadata {
+			merged[k] = v
+		}
 		s.removeFromIndex(nsKey, oldValue)
-		returnValueToPool(oldValue)
 	}
-
+	for k, v := range storeValue.Metadata {
+		merged[k] = v
+	}
+	storeValue.Metadata = merged
 	s.data[nsKey][key] = storeValue
-
-	// Update inverted index for this value
 	s.addToIndex(nsKey, storeValue)
-
 	return nil
 }
 
 // Get retrieves a value by namespace and key.
 func (s *Store) Get(ctx context.Context, namespace []string, key string) (*store.Value, error) {
+	value, err := s.readValue(namespace, key)
+	if err != nil {
+		return nil, err
+	}
+	return copyValue(value)
+}
+
+func (s *Store) readValue(namespace []string, key string) (*store.Value, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -133,8 +109,15 @@ func (s *Store) Get(ctx context.Context, namespace []string, key string) (*store
 	return value, nil
 }
 
+func copyValue(value *store.Value) (*store.Value, error) {
+	copy, err := snapshot.Clone(value)
+	if err != nil {
+		return nil, agentErrors.Wrap(err, agentErrors.CodeStoreSerialization, "存储记录快照失败").WithComponent("store").WithOperation("snapshot")
+	}
+	return copy.(*store.Value), nil
+}
+
 // Delete removes a value by namespace and key.
-// Returns the old value to the object pool.
 func (s *Store) Delete(ctx context.Context, namespace []string, key string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -144,11 +127,8 @@ func (s *Store) Delete(ctx context.Context, namespace []string, key string) erro
 		return nil
 	}
 
-	// Return old value to pool before deleting
 	if oldValue := s.data[nsKey][key]; oldValue != nil {
-		// Remove from index first
 		s.removeFromIndex(nsKey, oldValue)
-		returnValueToPool(oldValue)
 	}
 
 	delete(s.data[nsKey], key)
@@ -165,12 +145,24 @@ func (s *Store) Delete(ctx context.Context, namespace []string, key string) erro
 // Optimization: Uses inverted index for O(1) lookup when filter is provided,
 // falling back to linear scan only when no filter is specified.
 func (s *Store) Search(ctx context.Context, namespace []string, filter map[string]interface{}) ([]*store.Value, error) {
+	results := s.searchValues(namespace, filter)
+	for i, value := range results {
+		copy, err := copyValue(value)
+		if err != nil {
+			return nil, err
+		}
+		results[i] = copy
+	}
+	return results, nil
+}
+
+func (s *Store) searchValues(namespace []string, filter map[string]interface{}) []*store.Value {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	nsKey := namespaceToKey(namespace)
 	if s.data[nsKey] == nil {
-		return []*store.Value{}, nil
+		return []*store.Value{}
 	}
 
 	// If no filter, return all values (fast path)
@@ -180,11 +172,11 @@ func (s *Store) Search(ctx context.Context, namespace []string, filter map[strin
 		for _, value := range nsData {
 			results = append(results, value)
 		}
-		return results, nil
+		return results
 	}
 
 	// Use inverted index for fast lookup when filter is provided
-	return s.searchWithIndex(nsKey, filter), nil
+	return s.searchWithIndex(nsKey, filter)
 }
 
 // List returns all keys within a namespace.
@@ -212,6 +204,7 @@ func (s *Store) Clear(ctx context.Context, namespace []string) error {
 
 	nsKey := namespaceToKey(namespace)
 	delete(s.data, nsKey)
+	delete(s.index, nsKey)
 
 	return nil
 }
@@ -242,19 +235,7 @@ func (s *Store) Namespaces() []string {
 
 // namespaceToKey converts a namespace slice to a string key.
 func namespaceToKey(namespace []string) string {
-	if len(namespace) == 0 {
-		return "/"
-	}
-	return "/" + joinNamespace(namespace)
-}
-
-// joinNamespace joins namespace components with "/".
-// Optimized to use strings.Join instead of string concatenation to reduce allocations.
-func joinNamespace(namespace []string) string {
-	if len(namespace) == 0 {
-		return ""
-	}
-	return strings.Join(namespace, "/")
+	return store.NamespaceKey(namespace)
 }
 
 // matchesFilter checks if a store.Value matches the given filter.
@@ -268,33 +249,12 @@ func matchesFilter(value *store.Value, filter map[string]interface{}) bool {
 		if !ok {
 			return false
 		}
-		if metaValue != filterValue {
+		if !reflect.DeepEqual(metaValue, filterValue) {
 			return false
 		}
 	}
 
 	return true
-}
-
-// returnValueToPool returns a store.Value object to the pool after clearing it.
-// This reduces GC pressure by reusing objects.
-func returnValueToPool(v *store.Value) {
-	if v == nil {
-		return
-	}
-
-	// Clear the value to prevent memory leaks
-	v.Value = nil
-	v.Namespace = nil
-	v.Key = ""
-
-	// Clear metadata map but keep it for reuse (使用 Go 1.21+ clear() 提高性能)
-	if len(v.Metadata) > 0 {
-		clear(v.Metadata)
-	}
-
-	// Return to pool
-	valuePool.Put(v)
 }
 
 // addToIndex adds a value to the inverted index.
@@ -306,6 +266,9 @@ func (s *Store) addToIndex(nsKey string, value *store.Value) {
 
 	// Index each metadata field
 	for metaKey, metaValue := range value.Metadata {
+		if !indexable(metaValue) {
+			continue
+		}
 		if s.index[nsKey][metaKey] == nil {
 			s.index[nsKey][metaKey] = make(map[interface{}]map[*store.Value]struct{})
 		}
@@ -325,6 +288,9 @@ func (s *Store) removeFromIndex(nsKey string, value *store.Value) {
 
 	// Remove from each metadata index
 	for metaKey, metaValue := range value.Metadata {
+		if !indexable(metaValue) {
+			continue
+		}
 		if s.index[nsKey][metaKey] != nil && s.index[nsKey][metaKey][metaValue] != nil {
 			delete(s.index[nsKey][metaKey][metaValue], value)
 
@@ -348,6 +314,18 @@ func (s *Store) removeFromIndex(nsKey string, value *store.Value) {
 // Time complexity: O(min(result_set_size)) instead of O(N).
 // Must be called while holding read lock.
 func (s *Store) searchWithIndex(nsKey string, filter map[string]interface{}) []*store.Value {
+	// 不可比较值不能作为map键；对这类元数据使用完整相等比较。
+	for _, v := range filter {
+		if !indexable(v) {
+			results := []*store.Value{}
+			for _, value := range s.data[nsKey] {
+				if matchesFilter(value, filter) {
+					results = append(results, value)
+				}
+			}
+			return results
+		}
+	}
 	if s.index[nsKey] == nil {
 		return []*store.Value{}
 	}
@@ -377,7 +355,9 @@ func (s *Store) searchWithIndex(nsKey string, filter map[string]interface{}) []*
 	if len(filter) == 1 {
 		results := make([]*store.Value, 0, len(candidates))
 		for value := range candidates {
-			results = append(results, value)
+			if s.data[nsKey][value.Key] == value {
+				results = append(results, value)
+			}
 		}
 		return results
 	}
@@ -385,13 +365,16 @@ func (s *Store) searchWithIndex(nsKey string, filter map[string]interface{}) []*
 	// For multiple filters, intersect candidate sets
 	results := make([]*store.Value, 0, len(candidates))
 	for value := range candidates {
+		if s.data[nsKey][value.Key] != value {
+			continue
+		}
 		// Check if value matches all other filter criteria
 		allMatch := true
 		for filterKey, filterValue := range filter {
 			if filterKey == firstKey {
 				continue // Already verified
 			}
-			if value.Metadata[filterKey] != filterValue {
+			if !reflect.DeepEqual(value.Metadata[filterKey], filterValue) {
 				allMatch = false
 				break
 			}
@@ -402,4 +385,18 @@ func (s *Store) searchWithIndex(nsKey string, filter map[string]interface{}) []*
 	}
 
 	return results
+}
+
+func indexable(value interface{}) bool {
+	if value == nil {
+		return true
+	}
+	switch reflect.TypeOf(value).Kind() {
+	case reflect.Bool, reflect.String, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
+		reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128:
+		return true
+	default:
+		return false
+	}
 }

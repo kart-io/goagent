@@ -4,6 +4,8 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/kart-io/goagent/constants"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 )
 
@@ -13,31 +15,13 @@ type ShardedCacheOption func(*ShardedCacheConfig)
 // DefaultShardedCacheConfig returns the default configuration
 func DefaultShardedCacheConfig() ShardedCacheConfig {
 	return ShardedCacheConfig{
-		ShardCount:      32,
-		Capacity:        10000,
-		DefaultTTL:      5 * time.Minute,
-		CleanupInterval: 1 * time.Minute,
-		EvictionPolicy:  LRUEviction,
+		ShardCount:      constants.DefaultToolCacheShards,
+		Capacity:        constants.DefaultToolCacheCapacity,
+		DefaultTTL:      constants.DefaultToolCacheTTL,
+		CleanupInterval: constants.DefaultToolCacheCleanupInterval,
 		CleanupStrategy: PeriodicCleanup,
-		LoadBalancing:   HashBasedBalancing,
-		AutoTuning:      false,
-		MetricsEnabled:  true,
 	}
 }
-
-// EvictionPolicy defines cache eviction strategies
-type EvictionPolicy int
-
-const (
-	// LRUEviction evicts least recently used items
-	LRUEviction EvictionPolicy = iota
-	// LFUEviction evicts least frequently used items
-	LFUEviction
-	// FIFOEviction evicts oldest items first
-	FIFOEviction
-	// RandomEviction evicts random items
-	RandomEviction
-)
 
 // CleanupStrategy defines cleanup strategies
 type CleanupStrategy int
@@ -53,20 +37,6 @@ const (
 	HybridCleanup
 )
 
-// LoadBalancingStrategy defines how keys are distributed across shards
-type LoadBalancingStrategy int
-
-const (
-	// HashBasedBalancing uses hash function for distribution
-	HashBasedBalancing LoadBalancingStrategy = iota
-	// ConsistentHashBalancing uses consistent hashing
-	ConsistentHashBalancing
-	// RoundRobinBalancing distributes evenly in round-robin fashion
-	RoundRobinBalancing
-	// LeastLoadedBalancing routes to least loaded shard
-	LeastLoadedBalancing
-)
-
 // WithShardCount sets the number of shards
 // Recommended values:
 // - Light load (< 100 req/s): 8-16 shards
@@ -77,7 +47,7 @@ func WithShardCount(count uint32) ShardedCacheOption {
 	return func(c *ShardedCacheConfig) {
 		if count == 0 {
 			// Auto-detect based on CPU cores
-			c.ShardCount = uint32(runtime.NumCPU() * 4)
+			c.ShardCount = uint32(runtime.NumCPU() * constants.DefaultToolCacheCPUShardMultiplier)
 			// Ensure it's a power of 2
 			c.ShardCount = nextPowerOfTwo(c.ShardCount)
 		} else {
@@ -113,13 +83,6 @@ func WithCleanupInterval(interval time.Duration) ShardedCacheOption {
 	}
 }
 
-// WithEvictionPolicy sets the eviction policy for the cache
-func WithEvictionPolicy(policy EvictionPolicy) ShardedCacheOption {
-	return func(c *ShardedCacheConfig) {
-		c.EvictionPolicy = policy
-	}
-}
-
 // WithCleanupStrategy sets the cleanup strategy
 func WithCleanupStrategy(strategy CleanupStrategy) ShardedCacheOption {
 	return func(c *ShardedCacheConfig) {
@@ -127,64 +90,10 @@ func WithCleanupStrategy(strategy CleanupStrategy) ShardedCacheOption {
 	}
 }
 
-// WithLoadBalancing sets the load balancing strategy for shard selection
-func WithLoadBalancing(strategy LoadBalancingStrategy) ShardedCacheOption {
-	return func(c *ShardedCacheConfig) {
-		c.LoadBalancing = strategy
-	}
-}
-
-// WithAutoTuning enables automatic performance tuning
-// The cache will automatically adjust parameters based on workload patterns
-func WithAutoTuning(enabled bool) ShardedCacheOption {
-	return func(c *ShardedCacheConfig) {
-		c.AutoTuning = enabled
-		if enabled {
-			// Enable metrics for auto-tuning
-			c.MetricsEnabled = true
-		}
-	}
-}
-
-// WithMetrics enables or disables metrics collection
-func WithMetrics(enabled bool) ShardedCacheOption {
-	return func(c *ShardedCacheConfig) {
-		c.MetricsEnabled = enabled
-	}
-}
-
-// WithMaxShardConcurrency sets the maximum concurrent operations per shard
-func WithMaxShardConcurrency(max int) ShardedCacheOption {
-	return func(c *ShardedCacheConfig) {
-		c.MaxConcurrency = max
-	}
-}
-
 // WithWarmup enables cache warmup with specified entries
 func WithWarmup(entries map[string]*interfaces.ToolOutput) ShardedCacheOption {
 	return func(c *ShardedCacheConfig) {
 		c.WarmupEntries = entries
-	}
-}
-
-// WithCompressionThreshold enables compression for entries larger than threshold
-func WithCompressionThreshold(bytes int) ShardedCacheOption {
-	return func(c *ShardedCacheConfig) {
-		c.CompressionThreshold = bytes
-	}
-}
-
-// WithMaxEntrySize sets the maximum size for a single cache entry
-func WithMaxEntrySize(bytes int) ShardedCacheOption {
-	return func(c *ShardedCacheConfig) {
-		c.MaxEntrySize = bytes
-	}
-}
-
-// WithMemoryLimit sets the maximum memory usage for the cache
-func WithMemoryLimit(bytes int64) ShardedCacheOption {
-	return func(c *ShardedCacheConfig) {
-		c.MemoryLimit = bytes
 	}
 }
 
@@ -208,32 +117,24 @@ func WithPerformanceProfile(profile PerformanceProfile) ShardedCacheOption {
 		switch profile {
 		case LowLatencyProfile:
 			// More shards for less contention
-			c.ShardCount = nextPowerOfTwo(uint32(runtime.NumCPU() * 8))
+			c.ShardCount = nextPowerOfTwo(uint32(runtime.NumCPU() * constants.ToolCacheLowLatencyCPUShardMultiplier))
 			c.CleanupStrategy = LazyCleanup
-			c.LoadBalancing = LeastLoadedBalancing
-			c.MaxConcurrency = 0 // No limit
 
 		case HighThroughputProfile:
 			// Balanced shards with efficient cleanup
-			c.ShardCount = nextPowerOfTwo(uint32(runtime.NumCPU() * 4))
+			c.ShardCount = nextPowerOfTwo(uint32(runtime.NumCPU() * constants.ToolCacheHighThroughputCPUShardMultiplier))
 			c.CleanupStrategy = AdaptiveCleanup
-			c.LoadBalancing = HashBasedBalancing
-			c.EvictionPolicy = LRUEviction
 
 		case BalancedProfile:
 			// Default balanced configuration
-			c.ShardCount = 32
+			c.ShardCount = constants.ToolCacheBalancedProfileShards
 			c.CleanupStrategy = HybridCleanup
-			c.LoadBalancing = HashBasedBalancing
-			c.EvictionPolicy = LRUEviction
 
 		case MemoryEfficientProfile:
 			// Fewer shards, aggressive cleanup
-			c.ShardCount = nextPowerOfTwo(uint32(runtime.NumCPU() * 2))
+			c.ShardCount = nextPowerOfTwo(uint32(runtime.NumCPU() * constants.ToolCacheMemoryEfficientCPUShardMultiplier))
 			c.CleanupStrategy = PeriodicCleanup
-			c.CleanupInterval = 30 * time.Second
-			c.EvictionPolicy = LFUEviction
-			c.CompressionThreshold = 1024 // Compress large entries
+			c.CleanupInterval = constants.ToolCacheMemoryEfficientCleanupInterval
 		}
 	}
 }
@@ -258,35 +159,34 @@ func WithWorkloadType(workload WorkloadType) ShardedCacheOption {
 		switch workload {
 		case ReadHeavyWorkload:
 			// Optimize for reads with more shards and less frequent cleanup
-			c.ShardCount = nextPowerOfTwo(uint32(runtime.NumCPU() * 8))
-			c.CleanupInterval = 5 * time.Minute
+			c.ShardCount = nextPowerOfTwo(uint32(runtime.NumCPU() * constants.ToolCacheReadHeavyCPUShardMultiplier))
+			c.CleanupInterval = constants.ToolCacheReadHeavyCleanupInterval
 			c.CleanupStrategy = LazyCleanup
 
 		case WriteHeavyWorkload:
 			// Optimize for writes with efficient eviction
-			c.ShardCount = nextPowerOfTwo(uint32(runtime.NumCPU() * 4))
-			c.CleanupInterval = 30 * time.Second
-			c.EvictionPolicy = FIFOEviction // Faster eviction
+			c.ShardCount = nextPowerOfTwo(uint32(runtime.NumCPU() * constants.ToolCacheWriteHeavyCPUShardMultiplier))
+			c.CleanupInterval = constants.ToolCacheWriteHeavyCleanupInterval
 
 		case MixedWorkload:
 			// Balanced configuration
-			c.ShardCount = 32
-			c.CleanupInterval = 1 * time.Minute
+			c.ShardCount = constants.ToolCacheMixedWorkloadShards
+			c.CleanupInterval = constants.ToolCacheMixedWorkloadCleanupInterval
 			c.CleanupStrategy = HybridCleanup
 
 		case BurstyWorkload:
 			// Handle traffic spikes
-			c.ShardCount = nextPowerOfTwo(uint32(runtime.NumCPU() * 6))
+			c.ShardCount = nextPowerOfTwo(uint32(runtime.NumCPU() * constants.ToolCacheBurstyCPUShardMultiplier))
 			c.CleanupStrategy = AdaptiveCleanup
-			c.AutoTuning = true
-			c.MaxConcurrency = 100 // Limit concurrent operations
 		}
-		c.WorkloadType = workload
 	}
 }
 
 // nextPowerOfTwo returns the next power of 2 greater than or equal to n
 func nextPowerOfTwo(n uint32) uint32 {
+	if n > constants.MaxCacheShards {
+		panic(agentErrors.New(agentErrors.CodeInvalidConfig, "缓存分片数超过上限").WithComponent("tool_cache").WithOperation("initialize"))
+	}
 	if n <= 1 {
 		return 1
 	}

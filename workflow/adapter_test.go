@@ -6,8 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kart-io/goagent/core"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/constants"
+	"github.com/kart-io/goagent/core"
 )
 
 type adaptedState struct {
@@ -26,8 +28,8 @@ func TestAdaptMapsDifferentRunnableTypesAndPreservesEvents(t *testing.T) {
 	require.NoError(t, err)
 	g := NewGraph[adaptedState]()
 	require.NoError(t, g.AddRunnable("agent", adapted))
-	require.NoError(t, g.AddEdge(START, "agent"))
-	require.NoError(t, g.AddEdge("agent", END))
+	require.NoError(t, g.AddEdge(constants.WorkflowStart, "agent"))
+	require.NoError(t, g.AddEdge("agent", constants.WorkflowEnd))
 	compiled, err := g.Compile(context.Background())
 	require.NoError(t, err)
 	stream, err := compiled.Stream(context.Background(), adaptedState{Question: "hello"})
@@ -102,9 +104,9 @@ func TestAdaptStreamTypedPreviewsDoNotAdvanceState(t *testing.T) {
 		s.Answer++
 		return s, nil
 	}))
-	require.NoError(t, graph.AddEdge(START, "model"))
+	require.NoError(t, graph.AddEdge(constants.WorkflowStart, "model"))
 	require.NoError(t, graph.AddEdge("model", "consumer"))
-	require.NoError(t, graph.AddEdge("consumer", END))
+	require.NoError(t, graph.AddEdge("consumer", constants.WorkflowEnd))
 	run, err := graph.Compile(context.Background())
 	require.NoError(t, err)
 	stream, err := run.Stream(context.Background(), adaptedState{Question: "test"})

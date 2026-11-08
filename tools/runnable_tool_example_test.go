@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/tools"
 	"github.com/kart-io/goagent/workflow"
@@ -22,8 +23,8 @@ func ExampleNewRunnableTool_workflow() {
 	check(graph.AddNode("format", func(_ context.Context, input string) (string, error) {
 		return "processed: " + input, nil
 	}))
-	check(graph.AddEdge(workflow.START, "format"))
-	check(graph.AddEdge("format", workflow.END))
+	check(graph.AddEdge(constants.WorkflowStart, "format"))
+	check(graph.AddEdge("format", constants.WorkflowEnd))
 	run, err := graph.Compile(ctx)
 	check(err)
 

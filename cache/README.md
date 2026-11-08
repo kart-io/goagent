@@ -7,17 +7,30 @@
 | 名称 | 说明 |
 |---|---|
 | `Cache` | 接口：`Get`/`Set`/`Delete`/`Clear`/`Has`/`GetStats` |
-| `SimpleCache` | 推荐实现，`sync.Map` + TTL，后台每 `ttl/2` 清理一次过期条目，`Close()` 停止清理 |
-| `NoOpCache` | 空实现：`Set` 不存储，`Get` 总是返回 `ErrCacheMiss` |
+| `SimpleCache` | 内置实现，`sync.Map` + TTL，默认后台每 `ttl/2` 清理一次过期条目，`Close()` 停止清理；访问驱动模式见 `WithoutBackgroundCleanup` |
+| `NoOpCache` | 禁用实现：不存储条目，读写均返回 `agentErrors.ErrCacheDisabled` |
 | `CacheKeyGenerator` | 基于 SHA256 的键生成器 |
 | `CacheStats` | 统计信息；`SimpleCache` 填写 `Hits`、`Misses`、`Size`、`HitRate` |
 | `CacheConfig` | 配置；`NewCacheFromConfig` 在 `Enabled` 为 false 时返回 `NoOpCache`，否则返回以 `DefaultTTL` 构造的 `SimpleCache` |
 
-错误：`ErrCacheMiss`、`ErrCacheInvalid`、`ErrCacheDisabled`。
+缓存错误统一使用 `github.com/kart-io/goagent/errors` 的 `ErrCacheMiss`、`ErrCacheInvalid`、`ErrCacheDisabled`。
 
 ## 使用方法
 
 ### 基础操作
+
+示例中的 `ctx` 为调用方提供的 `context.Context`，导入如下：
+
+```go
+import (
+    "errors"
+	"fmt"
+    "time"
+
+    "github.com/kart-io/goagent/cache"
+    agentErrors "github.com/kart-io/goagent/errors"
+)
+```
 
 ```go
 c := cache.NewSimpleCache(5 * time.Minute) // ttl <= 0 时取 5 分钟
@@ -26,7 +39,7 @@ defer c.Close()
 _ = c.Set(ctx, "key", "value", 10*time.Minute) // ttl <= 0 时使用构造时的默认 TTL
 
 value, err := c.Get(ctx, "key")
-if errors.Is(err, cache.ErrCacheMiss) {
+if errors.Is(err, agentErrors.ErrCacheMiss) {
     // 未命中或已过期
 }
 
@@ -61,8 +74,10 @@ return resp, nil
 ### 工具执行缓存
 
 ```go
+c := cache.NewSimpleCache(10 * time.Minute)
+defer c.Close()
 cachedTool := tools.WithMiddleware(originalTool, middleware.Caching(
-    middleware.WithCache(cache.NewSimpleCache(10*time.Minute)),
+    middleware.WithCache(c),
     middleware.WithTTL(10*time.Minute),
 ))
 result, err := cachedTool.Invoke(ctx, input)
@@ -84,9 +99,14 @@ gen.GenerateKeySimple("model", "gpt4", "system")                     // "llm:" +
 config := cache.DefaultCacheConfig() // Enabled=true，DefaultTTL=5m
 config.DefaultTTL = 10 * time.Minute
 c := cache.NewCacheFromConfig(config)
+if enabled, ok := c.(*cache.SimpleCache); ok {
+    defer enabled.Close()
+}
 ```
 
-`CacheConfig` 的 `Type`、`MaxSize`、`CleanupInterval` 当前不影响 `NewCacheFromConfig` 的结果。
+`CacheConfig` 仅接受实际执行的 `Enabled` 和 `DefaultTTL`。旧 `Type`、`MaxSize`、`CleanupInterval` 已删除；配置文件须移除这些字段，使用统一 codec 的 Strict 解码时会拒绝旧字段。
+
+`NewInMemoryCache`、`NewLRUCache`、`NewMultiTierCache` 及其类型已删除，不提供旧名转发。`SimpleCache` 按 TTL 过期，不承诺容量上限、LRU 或多级回源；需要这些能力的宿主应提供实现 `Cache` 的缓存，并自行管理其资源生命周期。
 
 ## 代码结构
 

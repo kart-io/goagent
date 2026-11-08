@@ -2,6 +2,8 @@
 
 `multiagent` 包在 `workflow` 之上提供三个图构造器（`Sequential`、`Loop`、`RouterSupervisor`）、并行组合件 `ParallelStep`、工具型 Supervisor（`SupervisorTools`）与文本接力层（`Conversation`、`TextStep`、`TextNext`）。构造器返回未编译的 `*workflow.Graph[T]`，宿主自己选择 `Compile` 或 `CompileDurable`，持久语义直接继承 `workflow`。本包不新增运行时、调度器或消息投递。
 
+图起止和路由完成标识统一导入 `github.com/kart-io/goagent/constants`，使用 `WorkflowStart`、`WorkflowEnd` 和 `MultiagentFinish`；原 `workflow.START/END` 与 `multiagent.Finish` 入口已删除。
+
 本包与 v0.17 删除的旧 `multiagent` 同名，但 API 与语义不兼容，旧代码不能直接迁移。设计依据见[多 Agent 预置模式设计](../superpowers/specs/2026-11-05-multiagent-patterns-design.md)，离线示例见 [`examples/multi-agent-patterns`](../../examples/multi-agent-patterns/README.md)。`examples/advanced/multi-agent-*` 四个示例演示手写拓扑，本包演示预置模式。
 
 ## 选择模式
@@ -129,14 +131,14 @@ step := multiagent.Step[Case]{Name: "extract", Run: core.NewRunnableFunc(func(ct
 g := workflow.NewGraph[Case](workflow.Config{MaxSteps: 1 + 2*maxAsks})
 _ = multiagent.AddStep(g, askStep)   // 追问
 _ = multiagent.AddStep(g, checkStep) // 核对订单是否存在，写入 c.OrderFound
-_ = g.AddEdge(workflow.START, "ask")
+_ = g.AddEdge(constants.WorkflowStart, "ask")
 _ = g.AddEdge("ask", "check")
 _ = g.AddBranch("check", func(_ context.Context, c Case) (string, error) {
     if c.OrderFound {
-        return workflow.END, nil
+        return constants.WorkflowEnd, nil
     }
     return "ask", nil
-}, "ask", workflow.END)
+}, "ask", constants.WorkflowEnd)
 ```
 
 ### 登记后审核（S5）

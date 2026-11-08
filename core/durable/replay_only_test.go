@@ -21,7 +21,7 @@ func TestReplayOnlyRequiresCompletedRecord(t *testing.T) {
 				require.NoError(t, err)
 				if status != "completed" {
 					key := ChildKey(ExecutionKey(ctx), "effect")
-					snap, err := JournalStore(ctx).Load(ctx, operationStorageID(key))
+					snap, err := JournalStore(ctx).Load(ctx, OperationStorageID(key))
 					require.NoError(t, err)
 					var record OperationRecord
 					require.NoError(t, json.Unmarshal(snap.Data, &record))
@@ -29,7 +29,7 @@ func TestReplayOnlyRequiresCompletedRecord(t *testing.T) {
 					record.Value = json.RawMessage(`null`)
 					snap.Data, err = json.Marshal(record)
 					require.NoError(t, err)
-					require.NoError(t, JournalStore(ctx).Save(ctx, operationStorageID(key), snap))
+					require.NoError(t, JournalStore(ctx).Save(ctx, OperationStorageID(key), snap))
 				}
 			}
 			before := calls

@@ -7,26 +7,12 @@ import (
 	"os"
 
 	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/constants"
 	agentErrors "github.com/kart-io/goagent/errors"
 )
 
-// ContinuationKindInterrupt 标识 WaitError.Continuation 是 InterruptContinuation。
-const ContinuationKindInterrupt = "interrupt"
-
-// ReasonInvalidJSON 是输入不是合法 JSON 时的拒绝原因。
-const ReasonInvalidJSON = "invalid_json"
-
-// ReasonValidatePanic 是 validate 发生 panic 时的拒绝原因。
-const ReasonValidatePanic = "validate_panic"
-
-// ReasonRejected 是 validate 返回空错误文本时的拒绝原因。
-const ReasonRejected = "rejected"
-
 const (
 	interruptPrefix = "interrupt/"
-	// interruptAttempts 允许在写 pending 与写 waiting 之间崩溃后重入；中断本身没有副作用。
-	interruptAttempts = 3
-	maxReasonRunes    = 200
 )
 
 // InterruptContinuation 是 AwaitInput 等待时放进 WaitError.Continuation 的内容。
@@ -68,10 +54,10 @@ func AwaitInput(ctx context.Context, id string, info json.RawMessage, validate f
 	if !CanWait(ctx) && !interruptHost(ctx) {
 		return nil, fmt.Errorf("%w：中断 %q 须在可续跑的操作或工作流节点内调用", agentErrors.ErrWaitNotResumable, id)
 	}
-	policy := OperationPolicy{Resumable: true, MaxAttempts: interruptAttempts}
+	policy := OperationPolicy{Resumable: true, MaxAttempts: constants.DefaultInterruptAttempts}
 	record, err := Do(ctx, interruptPrefix+id, info, policy, func(ctx context.Context) (json.RawMessage, error) {
 		wait := func(rejected bool, reason string, cause error) error {
-			data, e := json.Marshal(InterruptContinuation{Kind: ContinuationKindInterrupt, ID: id, Info: info, Rejected: rejected, Reason: reason})
+			data, e := json.Marshal(InterruptContinuation{Kind: constants.ContinuationKindInterrupt, ID: id, Info: info, Rejected: rejected, Reason: reason})
 			if e != nil {
 				return e
 			}
@@ -83,7 +69,7 @@ func AwaitInput(ctx context.Context, id string, info json.RawMessage, validate f
 		}
 		input := json.RawMessage(raw)
 		if !json.Valid(input) {
-			return nil, wait(true, ReasonInvalidJSON, nil)
+			return nil, wait(true, constants.InterruptReasonInvalidJSON, nil)
 		}
 		if validate != nil {
 			if reason, rejected, cause := checkInput(validate, input); rejected {
@@ -103,7 +89,7 @@ func AwaitInput(ctx context.Context, id string, info json.RawMessage, validate f
 func checkInput(validate func(json.RawMessage) error, input json.RawMessage) (reason string, rejected bool, cause error) {
 	defer func() {
 		if v := recover(); v != nil {
-			reason, rejected, cause = ReasonValidatePanic, true, agentErrors.NewPanicError("中断输入校验", v)
+			reason, rejected, cause = constants.InterruptReasonValidatePanic, true, agentErrors.NewPanicError("中断输入校验", v)
 		}
 	}()
 	if err := validate(input); err != nil {
@@ -116,10 +102,10 @@ func checkInput(validate func(json.RawMessage) error, input json.RawMessage) (re
 func rejectReason(err error) string {
 	r := []rune(err.Error())
 	if len(r) == 0 {
-		return ReasonRejected
+		return constants.InterruptReasonRejected
 	}
-	if len(r) > maxReasonRunes {
-		r = r[:maxReasonRunes]
+	if len(r) > constants.InterruptMaxReasonRunes {
+		r = r[:constants.InterruptMaxReasonRunes]
 	}
 	return string(r)
 }
@@ -130,7 +116,7 @@ func InterruptAnswer(ctx context.Context, store Store, key, id string) (answer j
 	if store == nil || key == "" || id == "" {
 		return nil, false, agentErrors.Newf(agentErrors.CodeInvalidInput, "查询中断需要 Store、键和 ID").WithComponent("durable_interrupt").WithOperation("interrupt_answer")
 	}
-	storageID := operationStorageID(key)
+	storageID := OperationStorageID(key)
 	unlock, err := store.Lock(ctx, storageID)
 	if err != nil {
 		return nil, false, err

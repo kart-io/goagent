@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/constants"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
 )
@@ -37,17 +38,17 @@ func OpenRecorder(ctx context.Context, store Store, id string) (*Recorder, []Eve
 }
 
 func (r *Recorder) absorb(events []Event) {
-	for _, ev := range events {
+	for _, ev := range cloneEvents(events) {
 		r.seq = ev.Seq
 		switch ev.Type {
-		case TypeBoundarySnapshot:
+		case constants.SessionEventBoundarySnapshot:
 			continue
-		case TypeSystemMessage:
+		case constants.SessionEventSystemMessage:
 			var d MessageData
 			if json.Unmarshal(ev.Data, &d) == nil {
 				r.system = d.Message.Content
 			}
-		case TypeToolDefinitions:
+		case constants.SessionEventToolDefinitions:
 			r.tools = string(ev.Data)
 		}
 		r.events = append(r.events, ev)
@@ -57,8 +58,8 @@ func (r *Recorder) absorb(events []Event) {
 // Seq 返回已知的最后序号。
 func (r *Recorder) Seq() int64 { return r.seq }
 
-// Events 返回已知的非快照事件。
-func (r *Recorder) Events() []Event { return r.events }
+// Events 返回已知的非快照事件的独立副本。
+func (r *Recorder) Events() []Event { return cloneEvents(r.events) }
 
 // Append 追加事件，返回分配了序号的事件。
 func (r *Recorder) Append(ctx context.Context, events ...Event) ([]Event, error) {
@@ -80,7 +81,7 @@ func (r *Recorder) Append(ctx context.Context, events ...Event) ([]Event, error)
 			return nil, rerr
 		}
 		for _, ev := range newer {
-			if ev.Type != TypeBoundarySnapshot {
+			if ev.Type != constants.SessionEventBoundarySnapshot {
 				return nil, fmt.Errorf("%w：序号 %d 处出现了其他写入者的 %s", agentErrors.ErrSessionConflict, ev.Seq, ev.Type)
 			}
 		}
@@ -96,7 +97,7 @@ func (r *Recorder) SyncSystem(ctx context.Context, system string) error {
 	if system == r.system {
 		return nil
 	}
-	ev, err := NewEvent(TypeSystemMessage, MessageData{Message: llm.SystemMessage(system)})
+	ev, err := NewEvent(constants.SessionEventSystemMessage, MessageData{Message: llm.SystemMessage(system)})
 	if err != nil {
 		return err
 	}
@@ -113,7 +114,7 @@ func (r *Recorder) SyncTools(ctx context.Context, tools []ToolDefinition) error 
 		// nil 与空切片都表示移除工具，统一编码以避免重复清空事件。
 		tools = []ToolDefinition{}
 	}
-	ev, err := NewEvent(TypeToolDefinitions, ToolsData{Tools: tools})
+	ev, err := NewEvent(constants.SessionEventToolDefinitions, ToolsData{Tools: tools})
 	if err != nil || string(ev.Data) == r.tools {
 		return err
 	}
@@ -149,7 +150,7 @@ func (r *Recorder) Sync(ctx context.Context, messages []llm.Message, tools map[s
 		for _, m := range messages[start:] {
 			rewrite.Messages = append(rewrite.Messages, data(m))
 		}
-		ev, err := NewEvent(TypeHistoryRewrite, rewrite)
+		ev, err := NewEvent(constants.SessionEventHistoryRewrite, rewrite)
 		if err != nil {
 			return err
 		}
@@ -157,12 +158,12 @@ func (r *Recorder) Sync(ctx context.Context, messages []llm.Message, tools map[s
 		events = append(events, ev)
 	} else {
 		for _, m := range messages[p:] {
-			typ := TypeUserMessage
+			typ := constants.SessionEventUserMessage
 			switch m.Role {
 			case "assistant":
-				typ = TypeAssistantMessage
+				typ = constants.SessionEventAssistantMessage
 			case "tool":
-				typ = TypeToolResult
+				typ = constants.SessionEventToolResult
 			}
 			ev, err := NewEvent(typ, data(m))
 			if err != nil {
@@ -215,7 +216,7 @@ func Rewind(ctx context.Context, store Store, id string, to, expected int64) (in
 	if to < 0 || to >= expected {
 		return 0, agentErrors.Newf(agentErrors.CodeInvalidInput, "退回位置 %d 须在 [0, %d) 内", to, expected).WithComponent("session_recorder").WithOperation("rewind")
 	}
-	ev, err := NewEvent(TypeRewind, struct {
+	ev, err := NewEvent(constants.SessionEventRewind, struct {
 		To int64 `json:"to"`
 	}{to})
 	if err != nil {

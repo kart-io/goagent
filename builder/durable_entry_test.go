@@ -7,8 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kart-io/goagent/codec/json"
+	"github.com/stretchr/testify/require"
 
+	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
@@ -17,7 +19,6 @@ import (
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/tools"
 	"github.com/kart-io/goagent/workflow"
-	"github.com/stretchr/testify/require"
 )
 
 func journalContextForTest(t *testing.T) context.Context {
@@ -110,8 +111,8 @@ func TestDurableScopesIsolateAgentResultsToolsAndRecovery(t *testing.T) {
 			}
 			return fmt.Sprint(a.Result) + fmt.Sprint(b.Result), nil
 		}))
-		require.NoError(t, graph.AddEdge(workflow.START, "both"))
-		require.NoError(t, graph.AddEdge("both", workflow.END))
+		require.NoError(t, graph.AddEdge(constants.WorkflowStart, "both"))
+		require.NoError(t, graph.AddEdge("both", constants.WorkflowEnd))
 		run, err := graph.CompileDurable(ctx, workflow.DurableConfig{Store: store, Version: "v1"})
 		require.NoError(t, err)
 		snapshot, err := run.Run(ctx, controller.Configuration().RootKey, "same question", "")

@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kart-io/goagent/codec/json"
-
 	"github.com/google/jsonschema-go/jsonschema"
+
+	"github.com/kart-io/goagent/codec/json"
 	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/durable"
@@ -143,14 +143,10 @@ func (t *runnableTool[I, O]) ArgsSchema() string           { return t.config.Arg
 func (t *runnableTool[I, O]) DurableIntentVersion() string { return t.config.Version }
 func (t *runnableTool[I, O]) DurableOperationPolicy() durable.OperationPolicy {
 	if t.config.Resumable {
-		return durable.OperationPolicy{MaxAttempts: resumableAttempts, Resumable: true}
+		return durable.OperationPolicy{MaxAttempts: shared.DefaultResumableToolAttempts, Resumable: true}
 	}
 	return durable.OperationPolicy{MaxAttempts: 1}
 }
-
-// resumableAttempts 限制可续跑工具在执行中断后重新进入的次数；重新进入只回放已完成的步骤，
-// 但反复中断说明需要宿主介入。从等待中续跑不计次数。
-const resumableAttempts = 3
 
 func (t *runnableTool[I, O]) DispatchTimeout() time.Duration { return t.config.Timeout }
 func (t *runnableTool[I, O]) Invoke(ctx context.Context, input *interfaces.ToolInput) (out *interfaces.ToolOutput, err error) {

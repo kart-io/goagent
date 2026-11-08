@@ -8,7 +8,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	agentErrors "github.com/kart-io/goagent/errors"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -18,19 +17,11 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/codec/json"
-
+	"github.com/kart-io/goagent/constants"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/harness/env"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/tools"
-)
-
-// ToolReadSpill 是读取溢出文件的工具名。
-const ToolReadSpill = "read_spill"
-
-const (
-	previewRunes     = 1500
-	defaultReadLimit = 2000
-	maxLineRunes     = 2000
 )
 
 // Store 是溢出目录。溢出文件按会话分目录，文件名由工具名与调用 ID 组成。
@@ -69,8 +60,8 @@ func (s *Store) Hook() tools.PostHook {
 			return tools.PostDecision{}, nil
 		}
 		preview := []rune(string(data))
-		if len(preview) > previewRunes {
-			preview = preview[:previewRunes]
+		if len(preview) > constants.SpillPreviewRunes {
+			preview = preview[:constants.SpillPreviewRunes]
 		}
 		result := map[string]any{"truncated": true, "bytes": len(data), "preview": string(preview)}
 		name, err := s.write(ctx, call, data)
@@ -78,7 +69,7 @@ func (s *Store) Hook() tools.PostHook {
 			result["note"] = "the full result could not be saved (" + err.Error() + "); only the preview is available"
 		} else {
 			result["spill_path"] = name
-			result["note"] = "the full result was saved to spill_path; read it with " + ToolReadSpill + " using offset and limit"
+			result["note"] = "the full result was saved to spill_path; read it with " + constants.ToolReadSpill + " using offset and limit"
 		}
 		replaced := *out
 		replaced.Result = result
@@ -126,21 +117,21 @@ func (s *Store) Prune(olderThan time.Duration) error {
 
 // ReadTool 返回 read_spill 工具，只能读取本目录内的溢出文件。
 func (s *Store) ReadTool() interfaces.Tool {
-	return tools.NewBaseTool(ToolReadSpill,
+	return tools.NewBaseTool(constants.ToolReadSpill,
 		"读取被截断的工具结果的完整内容，path 为截断结果中的 spill_path。返回带行号的内容（格式为 行号<TAB>内容），用 offset 与 limit 分段读取。",
-		`{
+		fmt.Sprintf(`{
 			"type": "object",
 			"properties": {
 				"path": {"type": "string", "description": "截断结果中的 spill_path"},
 				"offset": {"type": "integer", "minimum": 1, "description": "起始行号，从 1 开始，默认 1"},
-				"limit": {"type": "integer", "minimum": 1, "description": "最多读取的行数，默认 2000"}
+				"limit": {"type": "integer", "minimum": 1, "description": "最多读取的行数，默认 %d"}
 			},
 			"required": ["path"],
 			"additionalProperties": false
-		}`,
+		}`, constants.DefaultSpillReadLimitLines),
 		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 			name, _ := input.Args["path"].(string)
-			offset, limit := intArg(input.Args["offset"], 1), intArg(input.Args["limit"], defaultReadLimit)
+			offset, limit := intArg(input.Args["offset"], 1), intArg(input.Args["limit"], constants.DefaultSpillReadLimitLines)
 			if offset < 1 || limit < 1 {
 				return tools.Rejected("offset and limit must be integers >= 1", nil), nil
 			}
@@ -159,8 +150,8 @@ func (s *Store) ReadTool() interfaces.Tool {
 			var sb strings.Builder
 			for i := offset - 1; i < end; i++ {
 				line := lines[i]
-				if r := []rune(line); len(r) > maxLineRunes {
-					line = string(r[:maxLineRunes]) + "…"
+				if r := []rune(line); len(r) > constants.SpillMaxLineRunes {
+					line = string(r[:constants.SpillMaxLineRunes]) + "…"
 				}
 				fmt.Fprintf(&sb, "%6d\t%s\n", i+1, line)
 			}

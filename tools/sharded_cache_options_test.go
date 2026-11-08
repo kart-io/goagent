@@ -82,7 +82,11 @@ func TestShardedCacheWithOptions(t *testing.T) {
 				defer cache.Close()
 
 				assert.NotNil(t, cache)
-				assert.Equal(t, workload, cache.config.WorkloadType)
+				ctx := context.Background()
+				require.NoError(t, cache.Set(ctx, "profile", &interfaces.ToolOutput{Result: "有效"}, time.Minute))
+				out, ok := cache.Get(ctx, "profile")
+				require.True(t, ok)
+				assert.Equal(t, "有效", out.Result)
 			})
 		}
 	})
@@ -92,22 +96,14 @@ func TestShardedCacheWithOptions(t *testing.T) {
 			WithCapacity(50000),
 			WithDefaultTTL(10*time.Minute),
 			WithCleanupInterval(30*time.Second),
-			WithEvictionPolicy(LFUEviction),
 			WithCleanupStrategy(AdaptiveCleanup),
-			WithLoadBalancing(ConsistentHashBalancing),
-			WithAutoTuning(true),
-			WithMetrics(true),
 		)
 		defer cache.Close()
 
 		assert.Equal(t, 50000, cache.config.Capacity)
 		assert.Equal(t, 10*time.Minute, cache.config.DefaultTTL)
 		assert.Equal(t, 30*time.Second, cache.config.CleanupInterval)
-		assert.Equal(t, LFUEviction, cache.config.EvictionPolicy)
 		assert.Equal(t, AdaptiveCleanup, cache.config.CleanupStrategy)
-		assert.Equal(t, ConsistentHashBalancing, cache.config.LoadBalancing)
-		assert.True(t, cache.config.AutoTuning)
-		assert.True(t, cache.config.MetricsEnabled)
 	})
 }
 
@@ -286,47 +282,6 @@ func TestAdaptiveCleanup(t *testing.T) {
 	assert.LessOrEqual(t, finalSize, initialSize)
 }
 
-// TestAutoTuning tests auto-tuning functionality
-func TestAutoTuning(t *testing.T) {
-	cache := NewShardedToolCacheWithOptions(
-		WithCapacity(1000),
-		WithAutoTuning(true),
-		WithMetrics(true),
-	)
-	defer cache.Close()
-
-	ctx := context.Background()
-
-	// Simulate workload
-	var wg sync.WaitGroup
-	for i := 0; i < 5; i++ {
-		wg.Add(1)
-		go func(worker int) {
-			defer wg.Done()
-			for j := 0; j < 100; j++ {
-				key := fmt.Sprintf("worker%d:key%d", worker, j)
-				output := &interfaces.ToolOutput{Result: fmt.Sprintf("value%d", j)}
-				_ = cache.Set(ctx, key, output, 5*time.Minute)
-				_, _ = cache.Get(ctx, key)
-				time.Sleep(time.Millisecond)
-			}
-		}(i)
-	}
-
-	wg.Wait()
-
-	// Wait for autoTune to complete at least one cycle
-	time.Sleep(200 * time.Millisecond)
-
-	// Stop autotuning before accessing metrics
-	cache.Close()
-
-	// Verify metrics were collected
-	assert.NotNil(t, cache.tuneMetrics)
-	stats := cache.GetStats()
-	assert.Greater(t, stats.Hits.Load(), int64(0))
-}
-
 // TestConcurrentOperationsWithOptions tests concurrent access with various configurations
 func TestConcurrentOperationsWithOptions(t *testing.T) {
 	configurations := []struct {
@@ -352,7 +307,6 @@ func TestConcurrentOperationsWithOptions(t *testing.T) {
 			[]ShardedCacheOption{
 				WithWorkloadType(BurstyWorkload),
 				WithCapacity(10000),
-				WithMaxShardConcurrency(50),
 			},
 		},
 	}

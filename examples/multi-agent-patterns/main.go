@@ -11,9 +11,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/kart-io/goagent/codec/json"
-
 	"github.com/kart-io/goagent/builder"
+	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
@@ -500,7 +500,7 @@ func composedPipeline(ctx context.Context, w io.Writer, k *kit) error {
 			return err
 		}
 	}
-	for _, e := range [][2]string{{workflow.START, "extract"}, {"extract", "write"}, {"write", "review"}, {"compliance", workflow.END}, {"human", workflow.END}} {
+	for _, e := range [][2]string{{constants.WorkflowStart, "extract"}, {"extract", "write"}, {"write", "review"}, {"compliance", constants.WorkflowEnd}, {"human", constants.WorkflowEnd}} {
 		if err := g.AddEdge(e[0], e[1]); err != nil {
 			return err
 		}

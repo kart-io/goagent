@@ -83,10 +83,7 @@ type OperationRecord struct {
 	Replayed   bool `json:"-"`
 }
 
-const (
-	operationVersionV1 = "goagent-operation-v1"
-	operationVersion   = "goagent-operation-v2"
-)
+const operationVersion = "goagent-operation-v2"
 
 type waitableContext struct{}
 
@@ -194,7 +191,8 @@ func storedWaits(r *OperationRecord) error {
 	return errors.Join(errs...)
 }
 
-func operationStorageID(key string) string { return "goagent/operation/" + key }
+// OperationStorageID 返回操作在当前日志 Store 中的存储身份；不访问存储或改变执行状态。
+func OperationStorageID(key string) string { return "goagent/operation/" + key }
 
 // InspectOperation reads a child record under the same host store/parent key.
 func InspectOperation(ctx context.Context, id string) (record *OperationRecord, err error) {
@@ -203,7 +201,7 @@ func InspectOperation(ctx context.Context, id string) (record *OperationRecord, 
 	if store == nil || key == "" {
 		return nil, agentErrors.Newf(agentErrors.CodeInvalidInput, "operation journal, parent key and ID required").WithComponent("durable_operation").WithOperation("inspect_operation")
 	}
-	unlock, err := store.Lock(ctx, operationStorageID(key))
+	unlock, err := store.Lock(ctx, OperationStorageID(key))
 	if err != nil {
 		return nil, err
 	}
@@ -212,19 +210,24 @@ func InspectOperation(ctx context.Context, id string) (record *OperationRecord, 
 }
 
 func loadOperation(ctx context.Context, store Store, key, id string) (*OperationRecord, error) {
-	snapshot, err := store.Load(ctx, operationStorageID(key))
+	snapshot, err := store.Load(ctx, OperationStorageID(key))
 	if err != nil {
 		return nil, err
 	}
+	return DecodeOperationRecord(snapshot, key, id)
+}
+
+// DecodeOperationRecord 只解码与验证当前版本的操作快照，不访问 Store、不执行业务、不修改输入。
+// key 和 id 是调用方预期的操作身份；迁移工具与在线执行共用同一数据契约。
+func DecodeOperationRecord(snapshot *Snapshot, key, id string) (*OperationRecord, error) {
 	var r OperationRecord
-	if snapshot == nil || (snapshot.Version != operationVersion && snapshot.Version != operationVersionV1) || snapshot.RunID != operationStorageID(key) || json.Unmarshal(snapshot.Data, &r) != nil ||
+	if key == "" || id == "" || snapshot == nil || snapshot.Version != operationVersion || snapshot.RunID != OperationStorageID(key) || json.Unmarshal(snapshot.Data, &r) != nil ||
 		r.ID != id || r.Key != key || r.InputHash == "" || r.Attempts < 1 || r.MaxAttempts < 1 || r.Attempts > r.MaxAttempts || !json.Valid(r.Value) ||
 		(r.Status != "pending" && r.Status != "completed" && r.Status != "failed" && r.Status != "waiting") {
 		return nil, agentErrors.Newf(agentErrors.CodeStateValidation, "invalid durable operation record").WithComponent("durable_operation").WithOperation("load_operation")
 	}
-	// v1 记录没有等待与核对语义，不能被重新解释。
-	if (r.Status == "waiting") != (len(r.Continuation) > 0) || (r.Reconciled && r.Status != "completed") ||
-		(snapshot.Version == operationVersionV1 && (r.Status == "waiting" || r.Reconciled)) {
+	// 等待状态与续跑定位信息必须一致，核对结果只能用于已完成记录。
+	if (r.Status == "waiting") != (len(r.Continuation) > 0) || (r.Reconciled && r.Status != "completed") {
 		return nil, agentErrors.Newf(agentErrors.CodeStateValidation, "invalid durable operation record").WithComponent("durable_operation").WithOperation("load_operation")
 	}
 	if r.Status == "waiting" {
@@ -268,7 +271,7 @@ func Do(ctx context.Context, id string, input json.RawMessage, policy OperationP
 		value, e := run(childCtx)
 		return &OperationRecord{ID: id, Key: key, Value: value, Attempts: 1}, e
 	}
-	storageID := operationStorageID(key)
+	storageID := OperationStorageID(key)
 	unlock, err := store.Lock(ctx, storageID)
 	if err != nil {
 		return nil, err

@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/kart-io/goagent/builder"
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/testing/mocks"
 	"github.com/kart-io/goagent/tools"
@@ -31,8 +32,8 @@ func runOne(t *testing.T, s Step[ticket], in ticket) (ticket, error) {
 	t.Helper()
 	g := workflow.NewGraph[ticket]()
 	require.NoError(t, g.AddRunnable(s.Name, s.Run))
-	require.NoError(t, g.AddEdge(workflow.START, s.Name))
-	require.NoError(t, g.AddEdge(s.Name, workflow.END))
+	require.NoError(t, g.AddEdge(constants.WorkflowStart, s.Name))
+	require.NoError(t, g.AddEdge(s.Name, constants.WorkflowEnd))
 	run, err := g.Compile(context.Background())
 	require.NoError(t, err)
 	return run.Invoke(context.Background(), in)
@@ -57,7 +58,7 @@ func TestAgentStepValidation(t *testing.T) {
 	for name, build := range map[string]func() (Step[ticket], error){
 		"空名称":      func() (Step[ticket], error) { return AgentStep("", agent, askText, keepAnswer) },
 		"首尾空白":     func() (Step[ticket], error) { return AgentStep(" a", agent, askText, keepAnswer) },
-		"保留名":      func() (Step[ticket], error) { return AgentStep(workflow.END, agent, askText, keepAnswer) },
+		"保留名":      func() (Step[ticket], error) { return AgentStep(constants.WorkflowEnd, agent, askText, keepAnswer) },
 		"agent 为空": func() (Step[ticket], error) { return AgentStep("a", nil, askText, keepAnswer) },
 		"in 为空":    func() (Step[ticket], error) { return AgentStep[ticket]("a", agent, nil, keepAnswer) },
 		"out 为空":   func() (Step[ticket], error) { return AgentStep("a", agent, askText, nil) },

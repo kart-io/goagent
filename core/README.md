@@ -140,6 +140,16 @@ err := saver.Save(ctx, "session-001", st)
 restored, err := saver.Load(ctx, "session-001")
 ```
 
+## 中间件与辅助执行契约
+
+- 三种中间件链共用错误恢复规则；`FastMiddlewareChain` 保持不调用 `OnAfter`。`OnBefore` / `OnAfter` 返回 `(nil, err)` 且自己的 `OnError` 抑制错误时，保留进入该阶段的有效对象；处理器错误被抑制时保留处理器提供的部分响应，没有响应则构造空响应并保留请求状态。`OnError` 可通过 `RequestFromContext` 读取当前请求；错误清除后停止错误传播。
+- `CacheMiddleware` 在链内保存处理器原始响应，命中后每次各执行一次正常后处理，因此与非幂等转换的顺序无关。写入和读取均创建保留具体类型的快照，支持普通容器及导出结构字段；默认 `AgentState` 通过其状态 map 快照，其他不透明状态和宿主对象须实现 `CloneSnapshot() (any, error)`。无法隔离的响应会跳过缓存。宿主不能在快照期间并发修改输出中的可变值；已归还池的响应不能继续使用。单独调用 `OnAfter` 时，调用方须提供 `original_input` 元数据且负责原始输出边界。
+- 默认工具选择器按不区分大小写的完整单词或工具名匹配，`maxTools == 0` 表示不选择，负数表示不限数量。自定义选择器不能引入候选集之外的工具。Builder 消费每次请求的 `selected_tools`，进一步与最后一轮直接返回工具取交集；选择仅控制模型可见工具，宿主授权仍由 Dispatcher 执行。
+- `RunnableFunc` 完成回调的错误会作为执行错误返回。`BaseChain.Invoke` 在进入、每次步骤启动和成功收尾前检查取消，`StopOnError=false` 不会允许取消后启动后续步骤。
+- `RuntimeManager` 只提供并发安全的会话注册表，返回的 Runtime 业务字段由宿主同步。构造器 `NewRuntimeManager[C,S]()` 无配置参数；需要保存、观测或模型恢复时，显式使用宿主持久化、Scope/Observer 和 Builder `RequestError`。
+- `CostTrackingCallback` 需要宿主显式发送成对的模型开始/结束事件。每个并发模型调用须使用独立 context，同一 context 的重叠调用会被拒绝；失败调用须发送 `OnLLMError` 清理关联。缺少起始事件或模型单价时只累计 token。Builder 模型用量应使用其 UsageHook；旧回调不会自动接收 Builder 的模型事件。
+- `TypedState` 的整数范围为 `int64`，JSON 浮点整数必须有限、无小数且不溢出；数组逐项验证，嵌套对象只接受字符串键，字节与时间分别要求字节切片和 `time.Time`。未知字段类型与必需字段空值会被拒绝。
+
 ## 代码结构
 
 ```text

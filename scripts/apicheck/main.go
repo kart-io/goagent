@@ -92,6 +92,10 @@ var formatLibs = []string{
 }
 
 func inspect(fset *token.FileSet, file string, node *ast.File) []finding {
+	return inspectWithConstantTypes(fset, file, node, newConstantTypeContext(node))
+}
+
+func inspectWithConstantTypes(fset *token.FileSet, file string, node *ast.File, types *constantTypeContext) []finding {
 	var out []finding
 	for _, imp := range node.Imports {
 		path, _ := strconv.Unquote(imp.Path.Value)
@@ -101,6 +105,8 @@ func inspect(fset *token.FileSet, file string, node *ast.File) []finding {
 	}
 	out = append(out, errorConstantFindings(fset, file, node)...)
 	out = append(out, forwardingConstantFindings(fset, file, node)...)
+	out = append(out, sharedConstantFindings(fset, file, node, types)...)
+	out = append(out, retiredAPIFindings(fset, file, node, types)...)
 	out = append(out, errorConstructionFindings(fset, file, node)...)
 	out = append(out, formattedErrorFindings(fset, file, node)...)
 	return append(out, formatFindings(fset, file, node)...)
@@ -433,7 +439,12 @@ func formatLib(path string) bool {
 
 func scan(root string) (int, error) {
 	fset := token.NewFileSet()
-	count := 0
+	type sourceFile struct {
+		path, relative string
+		node           *ast.File
+	}
+	var files []sourceFile
+	packages := map[string][]*ast.File{}
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -455,17 +466,35 @@ func scan(root string) (int, error) {
 		if err != nil {
 			return err
 		}
-		check := inspect
-		if strings.HasSuffix(path, "_test.go") {
-			check = formatFindings
-		}
-		for _, f := range check(fset, rel, node) {
-			fmt.Printf("%s:%d: %s\n", path, f.line, f.message)
-			count++
+		files = append(files, sourceFile{path: path, relative: rel, node: node})
+		if !strings.HasSuffix(path, "_test.go") {
+			key := constantPackageKey(rel, node)
+			packages[key] = append(packages[key], node)
 		}
 		return nil
 	})
-	return count, err
+	if err != nil {
+		return 0, err
+	}
+	// 先建立包级生产类型上下文，避免较晚解析的别名以及测试声明改变默认值归属。
+	contexts := map[string]*constantTypeContext{}
+	for key, nodes := range packages {
+		contexts[key] = newConstantTypeContext(nodes...)
+	}
+	count := 0
+	for _, file := range files {
+		var findings []finding
+		if strings.HasSuffix(file.path, "_test.go") {
+			findings = formatFindings(fset, file.relative, file.node)
+		} else {
+			findings = inspectWithConstantTypes(fset, file.relative, file.node, contexts[constantPackageKey(file.relative, file.node)])
+		}
+		for _, finding := range findings {
+			fmt.Printf("%s:%d: %s\n", file.path, finding.line, finding.message)
+			count++
+		}
+	}
+	return count, nil
 }
 func main() {
 	root := flag.String("root", ".", "source root")

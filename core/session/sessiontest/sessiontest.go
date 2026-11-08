@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kart-io/goagent/codec/json"
-
 	"github.com/stretchr/testify/require"
 
+	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/durable/storetest"
 	"github.com/kart-io/goagent/core/session"
@@ -102,7 +102,7 @@ func Run(t *testing.T, newPair func(t *testing.T) (a, b session.Store), opts Opt
 
 func user(t *testing.T, text string) session.Event {
 	t.Helper()
-	ev, err := session.NewEvent(session.TypeUserMessage, session.MessageData{Message: llm.UserMessage(text)})
+	ev, err := session.NewEvent(constants.SessionEventUserMessage, session.MessageData{Message: llm.UserMessage(text)})
 	require.NoError(t, err)
 	return ev
 }
@@ -186,10 +186,10 @@ func testConcurrentAppend(t *testing.T, a, b session.Store) {
 func testRoundTrip(t *testing.T, a, b session.Store) {
 	at := time.Date(2026, 10, 31, 8, 30, 1, 123456789, time.UTC)
 	tool := llm.Message{Role: "tool", ToolCallID: "c1", Name: "lookup", Content: "{\"k\": [1, 2.50, \"\\u00e9\"]}\n"}
-	msg, err := session.NewEvent(session.TypeToolResult, session.MessageData{Message: tool, Tool: &session.ToolMeta{Name: "lookup", Success: true}})
+	msg, err := session.NewEvent(constants.SessionEventToolResult, session.MessageData{Message: tool, Tool: &session.ToolMeta{Name: "lookup", Success: true}})
 	require.NoError(t, err)
 	msg.Time = at
-	rewrite, err := session.NewEvent(session.TypeHistoryRewrite, session.RewriteData{Messages: []session.MessageData{{Message: llm.UserMessage("摘要")}}})
+	rewrite, err := session.NewEvent(constants.SessionEventHistoryRewrite, session.RewriteData{Messages: []session.MessageData{{Message: llm.UserMessage("摘要")}}})
 	require.NoError(t, err)
 	rewrite.Surface = &session.Surface{Start: 1, End: 1}
 	// Data 的键序与数字写法不变（空白可被压缩）：以 jsonb 等规范化格式保存的后端不满足。

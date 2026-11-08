@@ -2,15 +2,19 @@ package spill
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/tools"
-	"github.com/stretchr/testify/require"
 )
 
 func dispatcher(t *testing.T, s *Store, extra ...interfaces.Tool) *tools.Dispatcher {
@@ -30,6 +34,45 @@ func fixed(name string, result any) interfaces.Tool {
 	})
 }
 
+// 模型看到的分页默认值必须与省略 limit 时的实际读取边界一致。
+func TestReadToolSchemaDefaultMatchesPagination(t *testing.T) {
+	dir := t.TempDir()
+	s, err := New(dir, 1)
+	require.NoError(t, err)
+	tool := s.ReadTool()
+	var schema struct {
+		Properties map[string]struct {
+			Description string `json:"description"`
+		} `json:"properties"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(tool.ArgsSchema()), &schema))
+	var describedLimit int
+	_, err = fmt.Sscanf(schema.Properties["limit"].Description, "最多读取的行数，默认 %d", &describedLimit)
+	require.NoError(t, err)
+	require.Equal(t, constants.DefaultSpillReadLimitLines, describedLimit)
+
+	total := describedLimit + 2
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "page.txt"), []byte(strings.Repeat("一行\n", total)), 0o600))
+	for _, tc := range []struct {
+		name    string
+		args    map[string]any
+		wantEnd int
+	}{
+		{name: "省略上限", args: map[string]any{"path": "page.txt"}, wantEnd: describedLimit},
+		{name: "显式覆盖上限", args: map[string]any{"path": "page.txt", "limit": 1}, wantEnd: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, err := tool.Invoke(context.Background(), &interfaces.ToolInput{Args: tc.args})
+			require.NoError(t, err)
+			require.True(t, out.Success)
+			result := out.Result.(map[string]any)
+			require.Equal(t, tc.wantEnd, result["end_line"])
+			require.Equal(t, total, result["total_lines"])
+			require.Equal(t, tc.wantEnd, strings.Count(result["content"].(string), "\n"))
+		})
+	}
+}
+
 func TestSpill(t *testing.T) {
 	dir := t.TempDir()
 	s, err := New(dir, 1000)
@@ -43,12 +86,12 @@ func TestSpill(t *testing.T) {
 	res := out.Result.(map[string]any)
 	require.Equal(t, true, res["truncated"])
 	require.Equal(t, "s_1/fetch-c_1.txt", res["spill_path"])
-	require.Equal(t, previewRunes, len([]rune(res["preview"].(string))))
+	require.Equal(t, constants.SpillPreviewRunes, len([]rune(res["preview"].(string))))
 	data, err := os.ReadFile(filepath.Join(dir, "s_1/fetch-c_1.txt"))
 	require.NoError(t, err)
 	require.Contains(t, string(data), big)
 
-	read, err := d.Invoke(ctx, tools.ToolRequest{Name: ToolReadSpill, Input: &interfaces.ToolInput{Args: map[string]any{"path": res["spill_path"], "limit": float64(1)}}})
+	read, err := d.Invoke(ctx, tools.ToolRequest{Name: constants.ToolReadSpill, Input: &interfaces.ToolInput{Args: map[string]any{"path": res["spill_path"], "limit": float64(1)}}})
 	require.NoError(t, err)
 	require.Equal(t, "     1\t== body ==\n", read.Result.(map[string]any)["content"])
 
@@ -58,7 +101,7 @@ func TestSpill(t *testing.T) {
 
 	// 目录外与已清理的文件交给模型，不中止运行。
 	for _, p := range []string{"../outside.txt", "s_1/missing.txt"} {
-		read, err = d.Invoke(ctx, tools.ToolRequest{Name: ToolReadSpill, Input: &interfaces.ToolInput{Args: map[string]any{"path": p}}})
+		read, err = d.Invoke(ctx, tools.ToolRequest{Name: constants.ToolReadSpill, Input: &interfaces.ToolInput{Args: map[string]any{"path": p}}})
 		require.NoError(t, err)
 		_, rejected := tools.RejectedResult(read)
 		require.True(t, rejected, p)

@@ -141,13 +141,23 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 		if err := emit(AgentEvent{Type: "step", Step: "model_start"}); err != nil {
 			return nil, err
 		}
+		// 选择器仅收窄本次模型可见工具；宿主授权仍由 Dispatcher 独立执行。
 		tools := a.tools
+		if selected, ok := request.Metadata["selected_tools"].([]string); ok {
+			tools = nil
+			for _, tool := range a.tools {
+				if slices.Contains(selected, tool.Name()) {
+					tools = append(tools, tool)
+				}
+			}
+		}
 		// 已有结果的最后一轮只能回答或使用显式配置的终态工具。
 		// 首轮及尚有更多额度时保留完整工具集，支持连续查询。
 		final := round > 0 && round+1 == a.config.MaxIterations
 		if final {
+			selected := tools
 			tools = nil
-			for _, tool := range a.tools {
+			for _, tool := range selected {
 				if slices.Contains(a.config.ReturnDirectTools, tool.Name()) {
 					tools = append(tools, tool)
 				}

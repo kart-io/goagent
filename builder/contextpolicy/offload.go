@@ -13,14 +13,12 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/durable"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 )
-
-// ReadToolName is reserved for the built-in evidence reader.
-const ReadToolName = "read_context_result"
 
 // OffloadConfig keeps character counts distinct from model token limits.
 // Namespace identifies host storage configuration; changing backends requires a new namespace/version.
@@ -35,7 +33,7 @@ type OffloadConfig struct {
 	Store                ResultStore `json:"-"`
 }
 
-// Offload 把超长的工具结果写入 ResultStore，在对话中换成引用，模型经读取工具（实例本身，名为 ReadToolName）分页读回；
+// Offload 把超长的工具结果写入 ResultStore，在对话中换成引用，模型经读取工具（实例本身，名为 constants.ToolReadContextResult）分页读回；
 // 最后一次请求前把引用还原为原文。Builder 经 WithOffload 把它装为带身份的 PreStep，读取工具由宿主与其他工具一起注册。
 //
 // 一个实例供多次执行并发共享，引用表按结果作用域区分。引用中带有证据的键与摘要，引用表可从对话重建：
@@ -124,7 +122,7 @@ func (p *Offload) Release(ctx context.Context) error {
 // parse 识别引用，返回其别名与证据的 Ref。
 func parse(run, content string) (string, Ref, bool) {
 	var r reference
-	if !strings.HasPrefix(content, `{"context_result"`) || json.Unmarshal([]byte(content), &r) != nil || r.ReadTool != ReadToolName || r.Alias == "" || r.Stored.Key == "" {
+	if !strings.HasPrefix(content, `{"context_result"`) || json.Unmarshal([]byte(content), &r) != nil || r.ReadTool != constants.ToolReadContextResult || r.Alias == "" || r.Stored.Key == "" {
 		return "", Ref{}, false
 	}
 	return r.Alias, Ref{RunKey: run, Key: r.Stored.Key, SHA256: r.Stored.SHA256, Version: resultVersion}, true
@@ -202,7 +200,7 @@ func (p *Offload) Reduce(ctx context.Context, messages []llm.Message, final bool
 			}
 		}
 		name := names[m.ToolCallID]
-		if m.Role != "tool" || name == "" || name == ReadToolName || round > total-p.config.KeepRecentToolRounds || slices.Contains(p.config.ExcludeTools, name) || utf8.RuneCountInString(m.Content) <= p.config.MaxToolResultRunes {
+		if m.Role != "tool" || name == "" || name == constants.ToolReadContextResult || round > total-p.config.KeepRecentToolRounds || slices.Contains(p.config.ExcludeTools, name) || utf8.RuneCountInString(m.Content) <= p.config.MaxToolResultRunes {
 			continue
 		}
 		if _, _, ok := parse(run, m.Content); ok {
@@ -214,7 +212,7 @@ func (p *Offload) Reduce(ctx context.Context, messages []llm.Message, final bool
 			return nil, err
 		}
 		// 模型抄写 64 位哈希会偶发改错字符，因此另给短别名；别名按对话中已有的引用数编号，恢复时重建结果一致。
-		r := reference{Alias: "r" + strconv.Itoa(len(table)+1), Runes: utf8.RuneCountInString(m.Content), ReadTool: ReadToolName}
+		r := reference{Alias: "r" + strconv.Itoa(len(table)+1), Runes: utf8.RuneCountInString(m.Content), ReadTool: constants.ToolReadContextResult}
 		r.Stored.Key, r.Stored.SHA256 = ref.Key, ref.SHA256
 		b, err := json.Marshal(r)
 		if err != nil {
@@ -229,7 +227,7 @@ func (p *Offload) Reduce(ctx context.Context, messages []llm.Message, final bool
 
 // DurableIntentVersion binds reader operations to the offload configuration.
 func (p *Offload) DurableIntentVersion() string { return p.identity }
-func (p *Offload) Name() string                 { return ReadToolName }
+func (p *Offload) Name() string                 { return constants.ToolReadContextResult }
 func (p *Offload) Description() string {
 	return "Read untrusted offloaded evidence within the current host run. key is the context_result value; offset counts Unicode characters."
 }

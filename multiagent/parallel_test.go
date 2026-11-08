@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kart-io/goagent/codec/json"
-
 	"github.com/stretchr/testify/require"
 
+	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/workflow"
@@ -64,8 +64,8 @@ func single[T any](t *testing.T, cfg workflow.Config, s Step[T]) *workflow.Graph
 	t.Helper()
 	g := workflow.NewGraph[T](cfg)
 	require.NoError(t, AddStep(g, s))
-	require.NoError(t, g.AddEdge(workflow.START, s.Name))
-	require.NoError(t, g.AddEdge(s.Name, workflow.END))
+	require.NoError(t, g.AddEdge(constants.WorkflowStart, s.Name))
+	require.NoError(t, g.AddEdge(s.Name, constants.WorkflowEnd))
 	return g
 }
 
@@ -87,9 +87,9 @@ func handGraph(t *testing.T) *workflow.Graph[record] {
 	g := workflow.NewGraph[record]()
 	require.NoError(t, AddStep(g, mark("triage")))
 	require.NoError(t, AddStep(g, lookups(t)))
-	require.NoError(t, g.AddEdge(workflow.START, "triage"))
+	require.NoError(t, g.AddEdge(constants.WorkflowStart, "triage"))
 	require.NoError(t, g.AddEdge("triage", "lookup"))
-	require.NoError(t, g.AddEdge("lookup", workflow.END))
+	require.NoError(t, g.AddEdge("lookup", constants.WorkflowEnd))
 	return g
 }
 

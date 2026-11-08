@@ -182,28 +182,13 @@ func TestStore_Search(t *testing.T) {
 	namespace := []string{"products"}
 
 	// Put values with metadata
-	err := store.Put(ctx, namespace, "product1", "Laptop")
-	require.NoError(t, err)
-	val1, _ := store.Get(ctx, namespace, "product1")
-	val1.Metadata["category"] = "electronics"
-	val1.Metadata["price"] = 1000
-	err = store.Put(ctx, namespace, "product1", val1.Value)
+	err := store.PutWithMetadata(ctx, namespace, "product1", "Laptop", map[string]interface{}{"category": "electronics", "price": 1000})
 	require.NoError(t, err)
 
-	err = store.Put(ctx, namespace, "product2", "Phone")
-	require.NoError(t, err)
-	val2, _ := store.Get(ctx, namespace, "product2")
-	val2.Metadata["category"] = "electronics"
-	val2.Metadata["price"] = 500
-	err = store.Put(ctx, namespace, "product2", val2.Value)
+	err = store.PutWithMetadata(ctx, namespace, "product2", "Phone", map[string]interface{}{"category": "electronics", "price": 500})
 	require.NoError(t, err)
 
-	err = store.Put(ctx, namespace, "product3", "Desk")
-	require.NoError(t, err)
-	val3, _ := store.Get(ctx, namespace, "product3")
-	val3.Metadata["category"] = "furniture"
-	val3.Metadata["price"] = 300
-	err = store.Put(ctx, namespace, "product3", val3.Value)
+	err = store.PutWithMetadata(ctx, namespace, "product3", "Desk", map[string]interface{}{"category": "furniture", "price": 300})
 	require.NoError(t, err)
 
 	// Search with no filter (returns all)
@@ -284,8 +269,8 @@ func TestStore_Namespaces(t *testing.T) {
 
 	namespaces := store.Namespaces()
 	assert.Equal(t, 2, len(namespaces))
-	assert.Contains(t, namespaces, "/users")
-	assert.Contains(t, namespaces, "/products")
+	assert.Contains(t, namespaces, "5:users")
+	assert.Contains(t, namespaces, "8:products")
 }
 
 func TestNamespaceToKey(t *testing.T) {
@@ -293,10 +278,10 @@ func TestNamespaceToKey(t *testing.T) {
 		namespace []string
 		expected  string
 	}{
-		{[]string{}, "/"},
-		{[]string{"users"}, "/users"},
-		{[]string{"users", "preferences"}, "/users/preferences"},
-		{[]string{"a", "b", "c", "d"}, "/a/b/c/d"},
+		{[]string{}, ""},
+		{[]string{"users"}, "5:users"},
+		{[]string{"users", "preferences"}, "5:users11:preferences"},
+		{[]string{"a", "b", "c", "d"}, "1:a1:b1:c1:d"},
 	}
 
 	for _, tt := range tests {
@@ -369,10 +354,7 @@ func BenchmarkStore_Search(b *testing.B) {
 
 	// Populate with test data
 	for i := 0; i < 100; i++ {
-		store.Put(ctx, namespace, fmt.Sprintf("key%d", i), i)
-		val, _ := store.Get(ctx, namespace, fmt.Sprintf("key%d", i))
-		val.Metadata["category"] = "test"
-		store.Put(ctx, namespace, fmt.Sprintf("key%d", i), val.Value)
+		store.PutWithMetadata(ctx, namespace, fmt.Sprintf("key%d", i), i, map[string]interface{}{"category": "test"})
 	}
 
 	filter := map[string]interface{}{"category": "test"}

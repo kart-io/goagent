@@ -8,10 +8,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kart-io/goagent/codec/json"
-
 	"github.com/stretchr/testify/require"
 
+	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/durable"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
@@ -19,7 +19,7 @@ import (
 
 func msgEvent(t *testing.T, m llm.Message) Event {
 	t.Helper()
-	typ := map[string]string{"user": TypeUserMessage, "assistant": TypeAssistantMessage, "tool": TypeToolResult}[m.Role]
+	typ := map[string]string{"user": constants.SessionEventUserMessage, "assistant": constants.SessionEventAssistantMessage, "tool": constants.SessionEventToolResult}[m.Role]
 	ev, err := NewEvent(typ, MessageData{Message: m})
 	require.NoError(t, err)
 	return ev
@@ -76,7 +76,7 @@ func TestDerive(t *testing.T) {
 	require.NoError(t, r.Sync(ctx, compacted, nil))
 	events, err := s.Read(ctx, "s", 0)
 	require.NoError(t, err)
-	require.Equal(t, TypeHistoryRewrite, events[3].Type)
+	require.Equal(t, constants.SessionEventHistoryRewrite, events[3].Type)
 	require.Equal(t, &Surface{Start: 1, End: 3}, events[3].Surface)
 	got, err := DeriveMessages(events)
 	require.NoError(t, err)
@@ -143,7 +143,7 @@ func TestExport(t *testing.T) {
 		{Role: "assistant", Content: "a 是 A，b 没查到"},
 	}
 	require.NoError(t, r.Sync(ctx, convo, map[string]ToolMeta{"c1": {Name: "lookup", Success: true}, "c2": {Name: "lookup"}}))
-	end, err := NewEvent(TypeTurnEnd, TurnEnd{Answer: "a 是 A，b 没查到"})
+	end, err := NewEvent(constants.SessionEventTurnEnd, TurnEnd{Answer: "a 是 A，b 没查到"})
 	require.NoError(t, err)
 	_, err = r.Append(ctx, end)
 	require.NoError(t, err)

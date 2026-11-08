@@ -6,9 +6,11 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core"
 	agentErrors "github.com/kart-io/goagent/errors"
-	"github.com/stretchr/testify/require"
 )
 
 func increment(_ context.Context, in int) (int, error) { return in + 1, nil }
@@ -16,8 +18,8 @@ func compileLinear(t *testing.T, config ...Config) *core.StreamRunnable[int, int
 	t.Helper()
 	g := NewGraph[int](config...)
 	require.NoError(t, g.AddNode("increment", increment))
-	require.NoError(t, g.AddEdge(START, "increment"))
-	require.NoError(t, g.AddEdge("increment", END))
+	require.NoError(t, g.AddEdge(constants.WorkflowStart, "increment"))
+	require.NoError(t, g.AddEdge("increment", constants.WorkflowEnd))
 	r, err := g.Compile(context.Background())
 	require.NoError(t, err)
 	return r
@@ -29,7 +31,7 @@ func TestGraphBranchRunsOnlySelectedPathAndMerges(t *testing.T) {
 	require.NoError(t, g.AddNode("positive", func(_ context.Context, in int) (int, error) { return in * 2, nil }))
 	require.NoError(t, g.AddNode("negative", func(_ context.Context, in int) (int, error) { return -in, nil }))
 	require.NoError(t, g.AddNode("join", increment))
-	require.NoError(t, g.AddEdge(START, "route"))
+	require.NoError(t, g.AddEdge(constants.WorkflowStart, "route"))
 	require.NoError(t, g.AddBranch("route", func(_ context.Context, in int) (string, error) {
 		if in >= 0 {
 			return "positive", nil
@@ -38,7 +40,7 @@ func TestGraphBranchRunsOnlySelectedPathAndMerges(t *testing.T) {
 	}, "positive", "negative"))
 	require.NoError(t, g.AddEdge("positive", "join"))
 	require.NoError(t, g.AddEdge("negative", "join"))
-	require.NoError(t, g.AddEdge("join", END))
+	require.NoError(t, g.AddEdge("join", constants.WorkflowEnd))
 	r, err := g.Compile(context.Background())
 	require.NoError(t, err)
 	out, err := r.Invoke(context.Background(), 3)
@@ -55,13 +57,13 @@ func TestGraphBranchRunsOnlySelectedPathAndMerges(t *testing.T) {
 func TestGraphLoopUsesUpdatedStateAndEnforcesBudget(t *testing.T) {
 	g := NewGraph[int](Config{MaxSteps: 3})
 	require.NoError(t, g.AddNode("increment", increment))
-	require.NoError(t, g.AddEdge(START, "increment"))
+	require.NoError(t, g.AddEdge(constants.WorkflowStart, "increment"))
 	require.NoError(t, g.AddBranch("increment", func(_ context.Context, in int) (string, error) {
 		if in >= 3 {
-			return END, nil
+			return constants.WorkflowEnd, nil
 		}
 		return "increment", nil
-	}, "increment", END))
+	}, "increment", constants.WorkflowEnd))
 	r, err := g.Compile(context.Background())
 	require.NoError(t, err)
 	out, err := r.Invoke(context.Background(), 0)
@@ -88,20 +90,20 @@ func TestGraphRejectsInvalidDefinitions(t *testing.T) {
 			}
 			require.NoError(t, g.AddNode("a", increment))
 			if scenario != "missing entry" {
-				require.NoError(t, g.AddEdge(START, "a"))
+				require.NoError(t, g.AddEdge(constants.WorkflowStart, "a"))
 			}
 			switch scenario {
 			case "unknown target":
 				require.NoError(t, g.AddEdge("a", "missing"))
 			case "unreachable":
 				require.NoError(t, g.AddNode("unused", increment))
-				require.NoError(t, g.AddEdge("unused", END))
-				require.NoError(t, g.AddEdge("a", END))
+				require.NoError(t, g.AddEdge("unused", constants.WorkflowEnd))
+				require.NoError(t, g.AddEdge("a", constants.WorkflowEnd))
 			case "no exit":
 				require.NoError(t, g.AddEdge("a", "a"))
 			case "missing route":
 			default:
-				require.NoError(t, g.AddEdge("a", END))
+				require.NoError(t, g.AddEdge("a", constants.WorkflowEnd))
 			}
 			if scenario == "negative steps" {
 				g.config.MaxSteps = -1
@@ -114,25 +116,25 @@ func TestGraphRejectsInvalidDefinitions(t *testing.T) {
 		})
 	}
 	g := NewGraph[int]()
-	require.Error(t, g.AddNode(START, increment))
+	require.Error(t, g.AddNode(constants.WorkflowStart, increment))
 	require.Error(t, g.AddNode("", increment))
 	require.Error(t, g.AddNode("nil", nil))
 	require.NoError(t, g.AddNode("a", increment))
 	require.Error(t, g.AddNode("a", increment))
-	require.NoError(t, g.AddEdge(START, "a"))
-	require.Error(t, g.AddEdge(START, "a"))
-	require.Error(t, g.AddEdge(END, "a"))
-	require.Error(t, g.AddEdge("a", START))
-	require.NoError(t, g.AddEdge("a", END))
-	require.Error(t, g.AddBranch("a", func(context.Context, int) (string, error) { return END, nil }, END))
+	require.NoError(t, g.AddEdge(constants.WorkflowStart, "a"))
+	require.Error(t, g.AddEdge(constants.WorkflowStart, "a"))
+	require.Error(t, g.AddEdge(constants.WorkflowEnd, "a"))
+	require.Error(t, g.AddEdge("a", constants.WorkflowStart))
+	require.NoError(t, g.AddEdge("a", constants.WorkflowEnd))
+	require.Error(t, g.AddBranch("a", func(context.Context, int) (string, error) { return constants.WorkflowEnd, nil }, constants.WorkflowEnd))
 	require.Error(t, g.AddRunnable("nil", (*core.StreamRunnable[int, int])(nil)))
 }
 
 func TestGraphCompileIsSnapshot(t *testing.T) {
 	g := NewGraph[int]()
 	require.NoError(t, g.AddNode("a", increment))
-	require.NoError(t, g.AddEdge(START, "a"))
-	require.NoError(t, g.AddEdge("a", END))
+	require.NoError(t, g.AddEdge(constants.WorkflowStart, "a"))
+	require.NoError(t, g.AddEdge("a", constants.WorkflowEnd))
 	r, err := g.Compile(context.Background())
 	require.NoError(t, err)
 	require.NoError(t, g.AddNode("unreachable", increment))
@@ -159,8 +161,8 @@ func TestGraphRejectsUndeclaredBranchAndPropagatesFailure(t *testing.T) {
 				return in, nil
 			}))
 			require.NoError(t, g.AddNode("b", func(_ context.Context, in int) (int, error) { downstream.Add(1); return in, nil }))
-			require.NoError(t, g.AddEdge(START, "a"))
-			require.NoError(t, g.AddEdge("b", END))
+			require.NoError(t, g.AddEdge(constants.WorkflowStart, "a"))
+			require.NoError(t, g.AddEdge("b", constants.WorkflowEnd))
 			require.NoError(t, g.AddBranch("a", func(context.Context, int) (string, error) {
 				if scenario == "router" {
 					return "", failure

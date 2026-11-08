@@ -216,9 +216,8 @@ func (s *AgentState) Size() int {
 
 // String returns a string representation of the state for debugging.
 func (s *AgentState) String() string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return fmt.Sprintf("AgentState{size: %d, keys: %v}", len(s.state), s.Keys())
+	keys := s.Keys()
+	return fmt.Sprintf("AgentState{size: %d, keys: %v}", len(keys), keys)
 }
 
 // GetString retrieves a string value from state by key.

@@ -6,8 +6,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kart-io/goagent/codec/json"
+	"github.com/stretchr/testify/require"
 
+	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
@@ -16,7 +18,6 @@ import (
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/tools"
 	"github.com/kart-io/goagent/workflow"
-	"github.com/stretchr/testify/require"
 )
 
 type refundState struct {
@@ -35,9 +36,9 @@ func refundGraph(t *testing.T, store durable.Store, effects map[string]int) *wor
 		s.Receipt, s.Approved = "R-"+s.OrderID, true
 		return s, nil
 	}))
-	require.NoError(t, g.AddEdge(workflow.START, "check"))
+	require.NoError(t, g.AddEdge(constants.WorkflowStart, "check"))
 	require.NoError(t, g.AddEdge("check", "refund"))
-	require.NoError(t, g.AddEdge("refund", workflow.END))
+	require.NoError(t, g.AddEdge("refund", constants.WorkflowEnd))
 	run, err := g.CompileDurable(context.Background(), workflow.DurableConfig{Store: store, Version: "v1", ApprovalNodes: []string{"refund"}})
 	require.NoError(t, err)
 	return run
@@ -118,12 +119,12 @@ func TestNestedApprovalPausesAndResumesParentAgent(t *testing.T) {
 	require.Len(t, model.requests, 1)
 
 	// 错误的审批键不被采纳，状态不变，仍可续跑。
-	_, err = agent.AsRunnable().Invoke(durable.WithResume(ctx, waitKey, "forged"), "退款 A1")
+	_, err = agent.AsRunnable().Invoke(nestedApprovalContext(t, ctx, waitKey, "forged"), "退款 A1")
 	_, rejected := requireWaiting(t, err)
 	require.True(t, rejected.Rejected)
 	require.Empty(t, effects)
 
-	out, err := agent.AsRunnable().Invoke(durable.WithResume(ctx, waitKey, c.ApprovalKey), "退款 A1")
+	out, err := agent.AsRunnable().Invoke(nestedApprovalContext(t, ctx, waitKey, c.ApprovalKey), "退款 A1")
 	require.NoError(t, err)
 	require.Equal(t, "已退款 R-A1", out.Result)
 	require.Len(t, model.requests, 2, "续跑只新增最终回答这一次请求")
@@ -185,7 +186,7 @@ func TestNestedWaitThroughChildAgent(t *testing.T) {
 	require.Len(t, parentModel.requests, 1)
 	require.Len(t, childModel.requests, 1)
 
-	out, err := parent.AsRunnable().Invoke(durable.WithResume(ctx, wait.Path[len(wait.Path)-1].Key, c.ApprovalKey), "退款 B2")
+	out, err := parent.AsRunnable().Invoke(nestedApprovalContext(t, ctx, wait.Path[len(wait.Path)-1].Key, c.ApprovalKey), "退款 B2")
 	require.NoError(t, err)
 	require.Equal(t, "已处理", out.Result)
 	require.Len(t, parentModel.requests, 2)
@@ -232,7 +233,7 @@ func TestNestedResumeAfterCrashDoesNotRepeatEffect(t *testing.T) {
 	require.NoError(t, err)
 	_, err = agent.AsRunnable().Invoke(ctx, "退款 C3")
 	wait, c := requireWaiting(t, err)
-	resumeCtx := durable.WithResume(ctx, wait.Path[len(wait.Path)-1].Key, c.ApprovalKey)
+	resumeCtx := nestedApprovalContext(t, ctx, wait.Path[len(wait.Path)-1].Key, c.ApprovalKey)
 
 	crash = true
 	_, err = agent.AsRunnable().Invoke(resumeCtx, "退款 C3")
@@ -257,8 +258,8 @@ func TestChildGraphInNonResumableToolFailsBeforeRunning(t *testing.T) {
 	checked := 0
 	g := workflow.NewGraph[refundState]()
 	require.NoError(t, g.AddNode("check", func(_ context.Context, s refundState) (refundState, error) { checked++; return s, nil }))
-	require.NoError(t, g.AddEdge(workflow.START, "check"))
-	require.NoError(t, g.AddEdge("check", workflow.END))
+	require.NoError(t, g.AddEdge(constants.WorkflowStart, "check"))
+	require.NoError(t, g.AddEdge("check", constants.WorkflowEnd))
 	graph, err := g.CompileDurable(context.Background(), workflow.DurableConfig{Store: store, Version: "v1"})
 	require.NoError(t, err)
 	model := nativeModel(
@@ -307,7 +308,7 @@ func TestChildGraphCheckpointsLiveInParentJournalStore(t *testing.T) {
 	}
 	_, err = newAgent().AsRunnable().Invoke(ctx, "退款 E5")
 	wait, c := requireWaiting(t, err)
-	resumeCtx := durable.WithResume(ctx, wait.Path[len(wait.Path)-1].Key, c.ApprovalKey)
+	resumeCtx := nestedApprovalContext(t, ctx, wait.Path[len(wait.Path)-1].Key, c.ApprovalKey)
 
 	crash = true
 	_, err = newAgent().AsRunnable().Invoke(resumeCtx, "退款 E5")
@@ -321,4 +322,12 @@ func TestChildGraphCheckpointsLiveInParentJournalStore(t *testing.T) {
 	for _, n := range effects {
 		require.Equal(t, 1, n, "崩溃后续跑不重复退款")
 	}
+}
+
+// nestedApprovalContext 统一通过结构化协议回应嵌套图审批。
+func nestedApprovalContext(t *testing.T, ctx context.Context, operationKey, key string) context.Context {
+	t.Helper()
+	resumed, err := workflow.WithResume(ctx, operationKey, workflow.ResumeRequest{Key: key})
+	require.NoError(t, err)
+	return resumed
 }

@@ -5,7 +5,9 @@ import (
 	"time"
 )
 
-// Store defines the interface for namespace-based persistent storage.
+// Store 定义按命名空间组织的存储接口。
+// memory.Store 在输入和 Get/Search 输出处取得独立快照；修改返回值不会写回。
+// 元数据通过可选 MetadataWriter 写入，不得通过修改 Get 返回值设置。
 //
 // NOTE: This is a legacy interface with namespace support.
 // For new code, consider using interfaces.Store for simpler key-value storage,
@@ -39,6 +41,12 @@ type Store interface {
 
 	// Clear removes all values within a namespace.
 	Clear(ctx context.Context, namespace []string) error
+}
+
+// MetadataWriter 在一次写入中保存值与附加元数据，供 metadata 装饰器使用。
+// 元数据按字段合并；Get/Search 返回的快照修改不会写回存储。
+type MetadataWriter interface {
+	PutWithMetadata(ctx context.Context, namespace []string, key string, value interface{}, metadata map[string]interface{}) error
 }
 
 // Value represents a value stored in the Store.

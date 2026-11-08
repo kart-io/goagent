@@ -7,13 +7,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/tools"
-	"github.com/stretchr/testify/require"
 )
 
 // flakyModel 的 steps[i] 非 nil 时第 i 次请求在建流时返回该错误，否则按 turns 回放下一个回合。
@@ -127,7 +129,7 @@ func TestModelRetryHonorsRetryAfter(t *testing.T) {
 }
 
 func TestModelRetryDoesNotWaitBeyondRetryAfterCap(t *testing.T) {
-	model := &flakyModel{nativeEventModel: nativeModel(answerTurn("ok", 1)), steps: []error{unavailable(429, 2*maxRetryAfter)}}
+	model := &flakyModel{nativeEventModel: nativeModel(answerTurn("ok", 1)), steps: []error{unavailable(429, 2*constants.MaxModelRetryAfter)}}
 	agent, err := NewSimpleBuilder(model).WithRequestError(1, RetryTransient(1, noWait)).WithTimeout(time.Hour).Build()
 	require.NoError(t, err)
 	started := time.Now()

@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/kart-io/goagent/constants"
 	agentstate "github.com/kart-io/goagent/core/state"
 )
 
@@ -118,11 +119,10 @@ func TestDefaultDistributedCheckpointerConfig(t *testing.T) {
 
 	require.NotNil(t, config)
 	assert.True(t, config.EnableReplication)
-	assert.Equal(t, "async", config.ReplicationMode)
+	assert.Equal(t, constants.CheckpointReplicationModeAsync, config.ReplicationMode)
 	assert.Equal(t, 30*time.Second, config.HealthCheckInterval)
 	assert.True(t, config.EnableAutoFailover)
 	assert.Equal(t, 3, config.MaxFailoverAttempts)
-	assert.Equal(t, 5*time.Minute, config.FailbackDelay)
 }
 
 // TestNewDistributedCheckpointer_NoPrimary tests creation without primary
@@ -422,7 +422,7 @@ func TestDistributedCheckpointer_ReplicationSync(t *testing.T) {
 		PrimaryBackend:      primary,
 		SecondaryBackend:    secondary,
 		EnableReplication:   true,
-		ReplicationMode:     ReplicationModeSync,
+		ReplicationMode:     constants.CheckpointReplicationModeSync,
 		HealthCheckInterval: 100 * time.Millisecond,
 	}
 
@@ -458,7 +458,7 @@ func TestDistributedCheckpointer_ReplicationAsync(t *testing.T) {
 		PrimaryBackend:      primary,
 		SecondaryBackend:    secondary,
 		EnableReplication:   true,
-		ReplicationMode:     ReplicationModeAsync,
+		ReplicationMode:     constants.CheckpointReplicationModeAsync,
 		HealthCheckInterval: 100 * time.Millisecond,
 	}
 
@@ -490,7 +490,7 @@ func TestDistributedCheckpointer_ReplicationDelete(t *testing.T) {
 		PrimaryBackend:      primary,
 		SecondaryBackend:    secondary,
 		EnableReplication:   true,
-		ReplicationMode:     ReplicationModeSync,
+		ReplicationMode:     constants.CheckpointReplicationModeSync,
 		HealthCheckInterval: 100 * time.Millisecond,
 	}
 
@@ -577,7 +577,7 @@ func TestDistributedCheckpointer_HealthCheck_FailoverTrigger(t *testing.T) {
 	dc.Close()
 }
 
-// TestDistributedCheckpointer_HealthCheck_Failback tests failback to primary
+// 主库恢复健康不能绕过追平屏障切回。
 func TestDistributedCheckpointer_HealthCheck_Failback(t *testing.T) {
 	primary := NewMockCheckpointer()
 	secondary := NewMockCheckpointer()
@@ -588,7 +588,6 @@ func TestDistributedCheckpointer_HealthCheck_Failback(t *testing.T) {
 		EnableAutoFailover:  true,
 		HealthCheckInterval: 50 * time.Millisecond,
 		MaxFailoverAttempts: 3,
-		FailbackDelay:       50 * time.Millisecond,
 	}
 
 	dc, err := NewDistributedCheckpointer(config)
@@ -609,14 +608,14 @@ func TestDistributedCheckpointer_HealthCheck_Failback(t *testing.T) {
 	primary.SetPingError(nil)
 	time.Sleep(150 * time.Millisecond)
 
-	// Verify failed back
+	// 保持副库为权威来源。
 	dc.mu.RLock()
 	failedOver := dc.failedOver
 	activeBackend := dc.activeBackend
 	dc.mu.RUnlock()
 
-	assert.False(t, failedOver)
-	assert.Equal(t, primary, activeBackend)
+	assert.True(t, failedOver)
+	assert.Equal(t, secondary, activeBackend)
 
 	dc.Close()
 }
@@ -662,7 +661,7 @@ func TestDistributedCheckpointer_GetStatus(t *testing.T) {
 		PrimaryBackend:      primary,
 		SecondaryBackend:    secondary,
 		EnableReplication:   true,
-		ReplicationMode:     ReplicationModeAsync,
+		ReplicationMode:     constants.CheckpointReplicationModeAsync,
 		HealthCheckInterval: 100 * time.Millisecond,
 	}
 
@@ -678,7 +677,7 @@ func TestDistributedCheckpointer_GetStatus(t *testing.T) {
 	assert.False(t, status["failed_over"].(bool))
 	assert.Equal(t, "primary", status["active_backend"])
 	assert.True(t, status["enable_replication"].(bool))
-	assert.Equal(t, ReplicationModeAsync, status["replication_mode"])
+	assert.Equal(t, constants.CheckpointReplicationModeAsync, status["replication_mode"])
 }
 
 // TestDistributedCheckpointer_ConcurrentOperations tests concurrent save/load
@@ -740,7 +739,7 @@ func TestDistributedCheckpointer_Close(t *testing.T) {
 		PrimaryBackend:      primary,
 		SecondaryBackend:    secondary,
 		EnableReplication:   true,
-		ReplicationMode:     ReplicationModeAsync,
+		ReplicationMode:     constants.CheckpointReplicationModeAsync,
 		HealthCheckInterval: 50 * time.Millisecond,
 	}
 
@@ -766,7 +765,7 @@ func TestDistributedCheckpointer_ReplicationQueueFull(t *testing.T) {
 		PrimaryBackend:      primary,
 		SecondaryBackend:    secondary,
 		EnableReplication:   true,
-		ReplicationMode:     ReplicationModeAsync,
+		ReplicationMode:     constants.CheckpointReplicationModeAsync,
 		HealthCheckInterval: 1 * time.Second,
 	}
 

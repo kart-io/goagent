@@ -4,14 +4,15 @@ import (
 	"context"
 	"testing"
 
-	"github.com/kart-io/goagent/codec/json"
+	"github.com/stretchr/testify/require"
 
+	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/session"
 	"github.com/kart-io/goagent/core/usage"
 	"github.com/kart-io/goagent/llm"
-	"github.com/stretchr/testify/require"
 )
 
 func TestExplainabilitySurvivesJournalAndHooks(t *testing.T) {
@@ -75,7 +76,7 @@ func TestSessionLogRetainsUsageDetails(t *testing.T) {
 	require.NoError(t, err)
 	found := false
 	for _, e := range sessionEvents(t, store, "details") {
-		if e.Type != session.TypeTurnEnd {
+		if e.Type != constants.SessionEventTurnEnd {
 			continue
 		}
 		var end session.TurnEnd

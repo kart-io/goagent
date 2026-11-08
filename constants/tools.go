@@ -1,6 +1,8 @@
 // 工具名称、描述与旧执行器默认值。
 package constants
 
+import "time"
+
 const (
 	ToolCalculator            = "calculator"
 	ToolAPI                   = "api"
@@ -21,4 +23,15 @@ const (
 	DefaultToolTimeoutSeconds = 30
 	DefaultToolConcurrency    = 10
 	DefaultToolRetries        = 3
+)
+
+// 共享默认策略与协议值；领域实现直接引用本包。
+const (
+	DefaultApprovalTimeout       = 10 * time.Minute
+	DefaultResumableToolAttempts = 3
+	ToolReadSpill                = "read_spill"
+	SpillPreviewRunes            = 1500
+	DefaultSpillReadLimitLines   = 2000
+	SpillMaxLineRunes            = 2000
+	ToolReadContextResult        = "read_context_result"
 )

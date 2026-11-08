@@ -11,7 +11,7 @@ import (
 	"sync"
 
 	"github.com/kart-io/goagent/codec/json"
-
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/session"
 )
@@ -114,7 +114,7 @@ func (rp *Replayer) Turns(ctx context.Context) ([]Turn, error) {
 	var open *Turn
 	for _, ev := range events {
 		switch ev.Type {
-		case session.TypeTurnStart:
+		case constants.SessionEventTurnStart:
 			var d session.TurnStart
 			if err := json.Unmarshal(ev.Data, &d); err != nil {
 				return nil, fmt.Errorf("事件 %d：%w", ev.Seq, err)
@@ -123,7 +123,7 @@ func (rp *Replayer) Turns(ctx context.Context) ([]Turn, error) {
 			if d.ExecutionKey != "" {
 				open = &Turn{Seq: ev.Seq, Input: d.Input, ExecutionKey: d.ExecutionKey}
 			}
-		case session.TypeTurnEnd:
+		case constants.SessionEventTurnEnd:
 			var d session.TurnEnd
 			if open != nil && json.Unmarshal(ev.Data, &d) == nil && !d.Aborted {
 				turns = append(turns, *open)
@@ -148,7 +148,7 @@ func (rp *Replayer) Prepare(ctx context.Context, turn Turn) (context.Context, se
 		if ev.Seq < turn.Seq {
 			before = append(before, ev)
 		}
-		if ev.Type == session.TypeBoundarySnapshot {
+		if ev.Type == constants.SessionEventBoundarySnapshot {
 			var d session.BoundaryData
 			if err := json.Unmarshal(ev.Data, &d); err != nil {
 				return nil, nil, nil, fmt.Errorf("事件 %d：%w", ev.Seq, err)

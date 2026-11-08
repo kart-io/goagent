@@ -5,10 +5,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/builder"
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/workflow"
-	"github.com/stretchr/testify/require"
 )
 
 type answerState struct {
@@ -31,9 +33,9 @@ func TestBuilderAgentRunsInsideTypedWorkflow(t *testing.T) {
 		state.Validated = state.Answer != ""
 		return state, nil
 	}))
-	require.NoError(t, graph.AddEdge(workflow.START, "answer"))
+	require.NoError(t, graph.AddEdge(constants.WorkflowStart, "answer"))
 	require.NoError(t, graph.AddEdge("answer", "validate"))
-	require.NoError(t, graph.AddEdge("validate", workflow.END))
+	require.NoError(t, graph.AddEdge("validate", constants.WorkflowEnd))
 	run, err := graph.Compile(context.Background())
 	require.NoError(t, err)
 	events, err := run.Stream(context.Background(), answerState{Question: "question"})

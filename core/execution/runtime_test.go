@@ -159,37 +159,15 @@ func TestToolWithRuntime_WithRuntime(t *testing.T) {
 	assert.Equal(t, "Hello Bob", result2)
 }
 
-func TestDefaultRuntimeConfig(t *testing.T) {
-	config := DefaultRuntimeConfig()
-
-	require.NotNil(t, config)
-	assert.True(t, config.EnableAutoSave)
-	assert.Equal(t, 30*time.Second, config.SaveInterval)
-	assert.Equal(t, int64(10*1024*1024), config.MaxStateSize)
-	assert.False(t, config.EnableMetrics)
-}
-
-func TestNewRuntimeMetrics(t *testing.T) {
-	metrics := NewRuntimeMetrics()
-
-	require.NotNil(t, metrics)
-	assert.Equal(t, int64(0), metrics.TotalToolCalls)
-	assert.Equal(t, int64(0), metrics.TotalStateUpdates)
-	assert.Equal(t, int64(0), metrics.TotalStorageOperations)
-	assert.Equal(t, int64(0), metrics.TotalCheckpoints)
-}
-
 func TestNewRuntimeManager(t *testing.T) {
-	config := DefaultRuntimeConfig()
-	manager := NewRuntimeManager[MockContext, *state.AgentState](config)
+	manager := NewRuntimeManager[MockContext, *state.AgentState]()
 
 	require.NotNil(t, manager)
 	assert.Equal(t, 0, manager.Size())
-	assert.NotNil(t, manager.Metrics())
 }
 
 func TestRuntimeManager_GetAndSetRuntime(t *testing.T) {
-	manager := NewRuntimeManager[MockContext, *state.AgentState](nil)
+	manager := NewRuntimeManager[MockContext, *state.AgentState]()
 	ctx := MockContext{UserID: "user123"}
 	st := state.NewAgentState()
 	runtime := NewRuntime(ctx, st, nil, nil, "session123")
@@ -210,7 +188,7 @@ func TestRuntimeManager_GetAndSetRuntime(t *testing.T) {
 }
 
 func TestRuntimeManager_RemoveRuntime(t *testing.T) {
-	manager := NewRuntimeManager[MockContext, *state.AgentState](nil)
+	manager := NewRuntimeManager[MockContext, *state.AgentState]()
 	ctx := MockContext{UserID: "user123"}
 	st := state.NewAgentState()
 	runtime := NewRuntime(ctx, st, nil, nil, "session123")
@@ -226,7 +204,7 @@ func TestRuntimeManager_RemoveRuntime(t *testing.T) {
 }
 
 func TestRuntimeManager_GetOrCreateRuntime(t *testing.T) {
-	manager := NewRuntimeManager[MockContext, *state.AgentState](nil)
+	manager := NewRuntimeManager[MockContext, *state.AgentState]()
 	ctx := MockContext{UserID: "user123"}
 	st := state.NewAgentState()
 	store := memory.New()
@@ -246,7 +224,7 @@ func TestRuntimeManager_GetOrCreateRuntime(t *testing.T) {
 }
 
 func TestRuntimeManager_CleanupExpired(t *testing.T) {
-	manager := NewRuntimeManager[MockContext, *state.AgentState](nil)
+	manager := NewRuntimeManager[MockContext, *state.AgentState]()
 
 	// Create old runtime
 	ctx := MockContext{UserID: "user1"}
@@ -276,14 +254,6 @@ func TestRuntimeManager_CleanupExpired(t *testing.T) {
 	// session2 should still exist
 	_, ok = manager.GetRuntime("session2")
 	assert.True(t, ok)
-}
-
-func TestRuntimeManager_Metrics(t *testing.T) {
-	manager := NewRuntimeManager[MockContext, *state.AgentState](nil)
-
-	metrics := manager.Metrics()
-	require.NotNil(t, metrics)
-	assert.Equal(t, int64(0), metrics.TotalToolCalls)
 }
 
 func BenchmarkRuntime_WithToolCallID(b *testing.B) {

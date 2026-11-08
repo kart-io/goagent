@@ -3,6 +3,8 @@ package decorator
 import (
 	"context"
 
+	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/internal/snapshot"
 	"github.com/kart-io/goagent/store"
 )
 
@@ -10,36 +12,43 @@ import (
 type WithMetadata struct {
 	store    store.Store
 	metadata map[string]interface{}
+	initErr  error
 }
 
 // NewWithMetadata creates a Store that adds metadata to all Put operations.
 func NewWithMetadata(s store.Store, metadata map[string]interface{}) *WithMetadata {
-	return &WithMetadata{
-		store:    s,
-		metadata: metadata,
+	d := &WithMetadata{store: s}
+	copy, err := snapshot.Clone(metadata)
+	if err != nil {
+		d.initErr = agentErrors.Wrap(err, agentErrors.CodeStoreSerialization, "存储元数据快照失败").WithComponent("store_metadata").WithOperation("configure")
+		return d
 	}
+	d.metadata = copy.(map[string]interface{})
+	return d
 }
 
 // Put stores a value and adds the configured metadata.
 func (d *WithMetadata) Put(ctx context.Context, namespace []string, key string, value interface{}) error {
-	// First put the value
-	err := d.store.Put(ctx, namespace, key, value)
-	if err != nil {
-		return err
-	}
+	return d.PutWithMetadata(ctx, namespace, key, value, nil)
+}
 
-	// Then update with metadata
-	storeValue, err := d.store.Get(ctx, namespace, key)
-	if err != nil {
-		return err
+// PutWithMetadata 将所有装饰层的元数据合并后以一次后端写入提交。
+func (d *WithMetadata) PutWithMetadata(ctx context.Context, namespace []string, key string, value interface{}, metadata map[string]interface{}) error {
+	if d.initErr != nil {
+		return d.initErr
 	}
-
-	// Add configured metadata
+	writer, ok := d.store.(store.MetadataWriter)
+	if !ok {
+		return agentErrors.New(agentErrors.CodeInvalidConfig, "存储后端不支持原子元数据写入：需要实现 store.MetadataWriter").WithComponent("store_metadata").WithOperation("put")
+	}
+	merged := make(map[string]interface{}, len(d.metadata)+len(metadata))
 	for k, v := range d.metadata {
-		storeValue.Metadata[k] = v
+		merged[k] = v
 	}
-
-	return d.store.Put(ctx, namespace, key, storeValue.Value)
+	for k, v := range metadata {
+		merged[k] = v
+	}
+	return writer.PutWithMetadata(ctx, namespace, key, value, merged)
 }
 
 // Get retrieves a value by namespace and key.

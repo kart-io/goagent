@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/kart-io/goagent/builder/contextpolicy"
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/durable"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
@@ -40,19 +41,19 @@ func (b *AgentBuilder[C, S]) validateOffloads(toolset []interfaces.Tool) error {
 		return nil
 	}
 	if len(b.config.Offloads) > 1 {
-		return agentErrors.Newf(agentErrors.CodeInvalidConfig, "同一 Agent 只能装一个 Offload：读取工具名 %q 唯一", contextpolicy.ReadToolName).WithComponent("builder").WithOperation("validate_offloads")
+		return agentErrors.Newf(agentErrors.CodeInvalidConfig, "同一 Agent 只能装一个 Offload：读取工具名 %q 唯一", constants.ToolReadContextResult).WithComponent("builder").WithOperation("validate_offloads")
 	}
 	if b.config.Offloads[0] == nil {
 		return agentErrors.Newf(agentErrors.CodeInvalidConfig, "WithOffload 需要 Offload").WithComponent("builder").WithOperation("validate_offloads")
 	}
 	readers := 0
 	for _, tool := range toolset {
-		if tool != nil && tool.Name() == contextpolicy.ReadToolName {
+		if tool != nil && tool.Name() == constants.ToolReadContextResult {
 			readers++
 		}
 	}
 	if readers != 1 {
-		return agentErrors.Newf(agentErrors.CodeInvalidConfig, "WithOffload 需要把 Offload 作为读取工具 %q 注册一次（持久运行经 Dispatcher）", contextpolicy.ReadToolName).WithComponent("builder").WithOperation("validate_offloads")
+		return agentErrors.Newf(agentErrors.CodeInvalidConfig, "WithOffload 需要把 Offload 作为读取工具 %q 注册一次（持久运行经 Dispatcher）", constants.ToolReadContextResult).WithComponent("builder").WithOperation("validate_offloads")
 	}
 	return nil
 }

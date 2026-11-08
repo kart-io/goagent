@@ -26,7 +26,7 @@ func TestOpenAICompatiblePresetsDefaults(t *testing.T) {
 	}{
 		{"kimi", NewKimiWithOptions, shared.ProviderKimi, shared.KimiBaseURL, "moonshot-v1-8k"},
 		{"siliconflow", NewSiliconFlowWithOptions, shared.ProviderSiliconFlow, shared.SiliconFlowBaseURL, "Qwen/Qwen2-7B-Instruct"},
-		{"ollama", NewOllamaWithOptions, shared.ProviderOllama, OllamaBaseURL, "llama2"},
+		{"ollama", NewOllamaWithOptions, shared.ProviderOllama, shared.OllamaBaseURL, "llama2"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Setenv(shared.EnvKimiBaseURL, "")

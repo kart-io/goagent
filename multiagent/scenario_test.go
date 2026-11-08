@@ -9,11 +9,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kart-io/goagent/codec/json"
-
 	"github.com/stretchr/testify/require"
 
 	"github.com/kart-io/goagent/builder"
+	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/durable"
 	agentErrors "github.com/kart-io/goagent/errors"
@@ -348,7 +348,7 @@ func composedGraph(t *testing.T, sc composedScripts, received *[]Conversation) *
 	} {
 		require.NoError(t, AddStep(g, s))
 	}
-	for _, edge := range [][2]string{{workflow.START, "extract"}, {"extract", "lookup"}, {"lookup", "write"}, {"write", "review"}, {"compliance", workflow.END}, {"human", workflow.END}} {
+	for _, edge := range [][2]string{{constants.WorkflowStart, "extract"}, {"extract", "lookup"}, {"lookup", "write"}, {"write", "review"}, {"compliance", constants.WorkflowEnd}, {"human", constants.WorkflowEnd}} {
 		require.NoError(t, g.AddEdge(edge[0], edge[1]))
 	}
 	route, targets, err := GuardRoute(reviewExit, []string{"write", "compliance"}, "human")

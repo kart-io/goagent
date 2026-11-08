@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/observe"
@@ -50,9 +51,6 @@ func withRequestRecovery(ctx context.Context, r requestRecovery) context.Context
 }
 
 type modelResendKey struct{}
-
-// modelResendAttempts 是开启 WithInterruptedModelResend 时同一回合操作的尝试上限。记录校验它，改动会让进行中的运行报策略变更。
-const modelResendAttempts = 3
 
 // withInterruptedModelResend 与 withRequestRecovery 一样由每条请求路径安装，子 Agent 不继承。
 func withInterruptedModelResend(ctx context.Context, on bool) context.Context {
@@ -210,7 +208,7 @@ func modelOperation(ctx context.Context, id string, intent json.RawMessage, invo
 	attempted := false
 	policy := durable.OperationPolicy{}
 	if on, _ := ctx.Value(modelResendKey{}).(bool); on {
-		policy = durable.OperationPolicy{MaxAttempts: modelResendAttempts, RetryInterrupted: true}
+		policy = durable.OperationPolicy{MaxAttempts: constants.DefaultModelResendAttempts, RetryInterrupted: true}
 	}
 	record, opErr := durable.Do(ctx, id, intent, policy, func(callCtx context.Context) (json.RawMessage, error) {
 		attempted = true

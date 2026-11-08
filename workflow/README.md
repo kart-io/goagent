@@ -5,16 +5,17 @@
 人工介入使用持久图的 `ApprovalNodes`、`Snapshot` 与 `Resume`；通过 `WithResumeHandler` 校验人工输入并修改业务状态，状态与放行一次性落盘后再执行节点。详见 [暂停、恢复与检查点](../docs/guides/HUMAN_IN_THE_LOOP.md) 和 [离线示例](../examples/human-in-the-loop/README.md)。
 
 ```go
+// 导入 github.com/kart-io/goagent/constants。
 graph := workflow.NewGraph[int](workflow.Config{MaxSteps: 20, MaxConcurrency: 4})
 err := graph.AddNode("increment", func(ctx context.Context, value int) (int, error) {
     return value + 1, nil
 })
 if err != nil { return err }
-if err := graph.AddEdge(workflow.START, "increment"); err != nil { return err }
+if err := graph.AddEdge(constants.WorkflowStart, "increment"); err != nil { return err }
 if err := graph.AddBranch("increment", func(ctx context.Context, value int) (string, error) {
-    if value >= 3 { return workflow.END, nil }
+    if value >= 3 { return constants.WorkflowEnd, nil }
     return "increment", nil
-}, "increment", workflow.END); err != nil { return err }
+}, "increment", constants.WorkflowEnd); err != nil { return err }
 run, err := graph.Compile(ctx)
 if err != nil { return err }
 result, err := run.Invoke(ctx, 0) // 3
@@ -172,3 +173,7 @@ go test -race ./workflow -run DurableGraph
 持久图的 `AsRunnable().Stream` 同样保留 `AdaptStream` 的类型化预览：中间块 `Data.Preview=true`，预览值在 `Data.State`。即使没有 Event 或数据为零值也不丢弃。预览不写入检查点；失败或取消后 `Snapshot` 仍返回上次提交状态，Preview=false。最终成功块也为 Preview=false，业务完成须继续检查 Data.Done。
 
 持久化入口现支持无工具 `llm.Client` 的模型日志与恢复。旧无作用域模型日志不会自动迁移为新键；补充 scope、核对已有业务效果并提升 Version，详见[接入约束](../docs/guides/NATIVE_ORCHESTRATION.md#多-agent-作用域与入口约束)。
+
+## 只读恢复诊断
+
+`Diagnose` 与 `CheckCompatibility` 和执行器共享节点、路由、并行输入输出、中断及审批绑定的结构校验。普通、审批后、并行及嵌套动态中断均属于合法等待；中断的键、ID、信息或绑定状态损坏时仍会阻止恢复。结构校验只检查原始 JSON，不解码业务状态，不执行节点或宿主 `UnmarshalJSON`，不写 Store 或获取执行锁。业务状态类型能否解码仍由真正执行恢复时验证。

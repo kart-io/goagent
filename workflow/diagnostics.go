@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/durable"
 	agentErrors "github.com/kart-io/goagent/errors"
 )
@@ -45,7 +46,7 @@ func (d *DurableGraph[T]) Diagnose(ctx context.Context, id string, refs ...durab
 			} else {
 				report.Position = cp.Next
 				switch {
-				case state.Node == END:
+				case state.Node == constants.WorkflowEnd:
 					report.Status = "completed"
 				case cp.Waiting:
 					report.Status = "approval_waiting"
@@ -74,32 +75,11 @@ func (d *DurableGraph[T]) decodeDiagnosticCheckpoint(id string, cp *durable.Snap
 	if cp.RunID != id || cp.Next < 0 || cp.Next > d.graph.config.MaxSteps || json.Unmarshal(cp.Data, &meta) != nil {
 		return meta, agentErrors.Newf(agentErrors.CodeStateValidation, "检查点无效").WithComponent("workflow").WithOperation("decode_diagnostic_checkpoint")
 	}
-	if meta.Node != END && d.graph.nodes[meta.Node] == nil {
+	if meta.Node != constants.WorkflowEnd && d.graph.nodes[meta.Node] == nil {
 		return meta, agentErrors.Newf(agentErrors.CodeStateValidation, "未知节点").WithComponent("workflow").WithOperation("decode_diagnostic_checkpoint")
 	}
-	if err := d.validateContinuation(id, cp, graphState[T]{Node: meta.Node, Routing: meta.Routing}); err != nil {
+	if err := d.validateContinuationMetadata(id, cp, meta); err != nil {
 		return meta, err
-	}
-	if meta.Parallel != nil {
-		cfg, ok := d.graph.parallel[meta.Node]
-		if !ok || meta.Routing || cp.Key == "" || cp.Waiting || (d.approvals[meta.Node] && !cp.Approved) {
-			return meta, agentErrors.Newf(agentErrors.CodeStateValidation, "并行检查点无效").WithComponent("workflow").WithOperation("decode_diagnostic_checkpoint")
-		}
-		if len(meta.Parallel.Inputs) != len(cfg.Branches) || meta.Parallel.Outputs == nil {
-			return meta, agentErrors.Newf(agentErrors.CodeStateValidation, "并行检查点无效").WithComponent("workflow").WithOperation("decode_diagnostic_checkpoint")
-		}
-		allowed := map[string]bool{}
-		for _, b := range cfg.Branches {
-			allowed[b.Name] = true
-			if !json.Valid(meta.Parallel.Inputs[b.Name]) {
-				return meta, agentErrors.Newf(agentErrors.CodeStateValidation, "并行输入无效").WithComponent("workflow").WithOperation("decode_diagnostic_checkpoint")
-			}
-		}
-		for name, data := range meta.Parallel.Outputs {
-			if !allowed[name] || !json.Valid(data) {
-				return meta, agentErrors.Newf(agentErrors.CodeStateValidation, "并行输出无效").WithComponent("workflow").WithOperation("decode_diagnostic_checkpoint")
-			}
-		}
 	}
 	return meta, nil
 }

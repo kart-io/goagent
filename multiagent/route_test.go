@@ -8,8 +8,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/kart-io/goagent/constants"
 	agentErrors "github.com/kart-io/goagent/errors"
-	"github.com/kart-io/goagent/workflow"
 )
 
 func fixed(name string, err error) func(context.Context, record) (string, error) {
@@ -27,8 +27,8 @@ func TestGuardRouteValidation(t *testing.T) {
 		"没有成员":       {next, nil, ""},
 		"成员为空":       {next, []string{""}, ""},
 		"成员重复":       {next, []string{"a", "a"}, ""},
-		"成员为 FINISH": {next, []string{Finish}, ""},
-		"成员为 END":    {next, []string{workflow.END}, ""},
+		"成员为 FINISH": {next, []string{constants.MultiagentFinish}, ""},
+		"成员为 END":    {next, []string{constants.WorkflowEnd}, ""},
 		"兜底与成员同名":    {next, []string{"a"}, "a"},
 	} {
 		_, _, err := GuardRoute(tc.next, tc.members, tc.fallback)
@@ -39,10 +39,10 @@ func TestGuardRouteValidation(t *testing.T) {
 func TestGuardRouteTargets(t *testing.T) {
 	_, targets, err := GuardRoute(fixed("a", nil), []string{"a", "b"}, "")
 	require.NoError(t, err)
-	require.Equal(t, []string{"a", "b", workflow.END}, targets)
+	require.Equal(t, []string{"a", "b", constants.WorkflowEnd}, targets)
 	_, targets, err = GuardRoute(fixed("a", nil), []string{"a", "b"}, "human")
 	require.NoError(t, err)
-	require.Equal(t, []string{"a", "b", workflow.END, "human"}, targets)
+	require.Equal(t, []string{"a", "b", constants.WorkflowEnd, "human"}, targets)
 }
 
 func TestGuardRouteOrder(t *testing.T) {
@@ -60,11 +60,11 @@ func TestGuardRouteOrder(t *testing.T) {
 		{"无效错误无兜底", fixed("a", invalid), "", "", agentErrors.ErrInvalidRoute},
 		{"其他错误原样返回", fixed("a", other), "human", "", other},
 		{"ErrMaxSteps 原样返回", fixed("", limit), "human", "", agentErrors.ErrWorkflowMaxSteps},
-		{"FINISH 映射为 END", fixed(Finish, nil), "human", workflow.END, nil},
+		{"FINISH 映射为 END", fixed(constants.MultiagentFinish, nil), "human", constants.WorkflowEnd, nil},
 		{"成员", fixed("b", nil), "human", "b", nil},
 		{"未知名转兜底", fixed("x", nil), "human", "human", nil},
 		{"未知名无兜底", fixed("x", nil), "", "", agentErrors.ErrInvalidRoute},
-		{"END 字面值按无效", fixed(workflow.END, nil), "", "", agentErrors.ErrInvalidRoute},
+		{"END 字面值按无效", fixed(constants.WorkflowEnd, nil), "", "", agentErrors.ErrInvalidRoute},
 		{"Supervisor 名按无效", fixed("sup", nil), "", "", agentErrors.ErrInvalidRoute},
 		{"兜底名按无效路由转兜底", fixed("human", nil), "human", "human", nil},
 	} {

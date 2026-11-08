@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/durable"
 	agentErrors "github.com/kart-io/goagent/errors"
 )
@@ -34,7 +35,7 @@ func interruptPoints(waits []*durable.WaitError) ([]InterruptPoint, bool) {
 			return nil, false
 		}
 		switch {
-		case probe.Kind == durable.ContinuationKindInterrupt:
+		case probe.Kind == constants.ContinuationKindInterrupt:
 			var c durable.InterruptContinuation
 			if json.Unmarshal(w.Continuation, &c) != nil || len(w.Path) == 0 {
 				return nil, false

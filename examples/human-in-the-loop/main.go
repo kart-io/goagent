@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/kart-io/goagent/codec/json"
-
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/durable"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/workflow"
@@ -67,7 +67,7 @@ func run(ctx context.Context, args []string, output io.Writer) error {
 	if err := g.AddNode("reject", func(_ context.Context, in reviewState) (reviewState, error) { in.Status = "rejected"; return in, nil }); err != nil {
 		return err
 	}
-	for _, edge := range [][2]string{{workflow.START, "review"}, {"accept", workflow.END}, {"reject", workflow.END}} {
+	for _, edge := range [][2]string{{constants.WorkflowStart, "review"}, {"accept", constants.WorkflowEnd}, {"reject", constants.WorkflowEnd}} {
 		if err := g.AddEdge(edge[0], edge[1]); err != nil {
 			return err
 		}

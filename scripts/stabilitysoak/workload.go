@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/builder"
+	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/session"
@@ -16,8 +17,6 @@ import (
 	"github.com/kart-io/goagent/execution"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
-
-	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/tools"
 	"github.com/kart-io/goagent/workflow"
 )
@@ -131,10 +130,10 @@ func exercise(ctx context.Context, directory string) (got cycleResult, err error
 	if err = graph.AddNode("effect", func(_ context.Context, state int) (int, error) { got.Effects++; return state + 1, nil }); err != nil {
 		return got, err
 	}
-	if err = graph.AddEdge(workflow.START, "effect"); err != nil {
+	if err = graph.AddEdge(shared.WorkflowStart, "effect"); err != nil {
 		return got, err
 	}
-	if err = graph.AddEdge("effect", workflow.END); err != nil {
+	if err = graph.AddEdge("effect", shared.WorkflowEnd); err != nil {
 		return got, err
 	}
 	compiled, err := graph.CompileDurable(ctx, workflow.DurableConfig{Store: store, Version: "v1", ApprovalNodes: []string{"effect"}})

@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/kart-io/goagent/codec/json"
-
 	"github.com/stretchr/testify/require"
 
+	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/constants"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/workflow"
 )
@@ -130,7 +130,7 @@ func TestTextNextValidation(t *testing.T) {
 		"多行":     {{Name: "a\nb"}},
 		"回车":     {{Name: "a\rb"}},
 		"重复":     {textMember(t, "a"), textMember(t, "a")},
-		"FINISH": {{Name: Finish}},
+		"FINISH": {{Name: constants.MultiagentFinish}},
 		"空名":     {{Name: ""}},
 	} {
 		_, err := TextNext(members...)
@@ -147,7 +147,7 @@ func TestTextNextReadsFirstLine(t *testing.T) {
 	for output, want := range map[string]string{
 		"refund":                 "refund",
 		"  logistics  \n理由：物流延误": "logistics",
-		"FINISH\r\n":             Finish,
+		"FINISH\r\n":             constants.MultiagentFinish,
 	} {
 		got, err := next(context.Background(), last(output))
 		require.NoError(t, err, output)

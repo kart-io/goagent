@@ -4,8 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/kart-io/goagent/workflow"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/constants"
+	"github.com/kart-io/goagent/workflow"
 )
 
 func TestRecoveryManifestLegacyPlan(t *testing.T) {
@@ -90,8 +92,8 @@ func TestRecoveryCompatibilityIsReadOnly(t *testing.T) {
 		t.Fatal("不能执行节点")
 		return 0, nil
 	}))
-	require.NoError(t, g.AddEdge(workflow.START, "effect"))
-	require.NoError(t, g.AddEdge("effect", workflow.END))
+	require.NoError(t, g.AddEdge(constants.WorkflowStart, "effect"))
+	require.NoError(t, g.AddEdge("effect", constants.WorkflowEnd))
 	readOnly, err := g.CompileDurable(ctx, workflow.DurableConfig{Store: graphDiagnosticReadOnly{store}, Version: "v1"})
 	require.NoError(t, err)
 	report, err := readOnly.CheckCompatibility(ctx, "run")

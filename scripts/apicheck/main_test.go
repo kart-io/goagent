@@ -98,7 +98,7 @@ func TestCanonicalConstantsDoNotGainForwardingEntrypoints(t *testing.T) {
 		{"core/timeout.go", `package core; import c "github.com/kart-io/goagent/constants"; const timeout = (c.DefaultToolTimeout)`, true},
 		{"tools/codes.go", `package tools; import e "github.com/kart-io/goagent/errors"; const CodeToolFailure = e.CodeToolExecution`, true},
 		{"constants/defaults.go", `package constants; import "time"; const Timeout = 5*time.Second`, false},
-		{"multiagent/route.go", `package multiagent; import "github.com/kart-io/goagent/workflow"; const Finish = workflow.END`, false},
+		{"tools/policy/policy.go", `package policy; type Decision string; const Allow Decision="allow"`, false},
 		{"llm/custom.go", `package llm; import c "github.com/kart-io/goagent/constants"; const Custom c.Provider = "minimax"`, false},
 		{"core/options.go", `package core; import c "github.com/kart-io/goagent/constants"; const Extra = c.DefaultToolTimeout * 2`, false},
 	} {

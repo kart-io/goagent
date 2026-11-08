@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/kart-io/goagent/constants"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/workflow"
 )
@@ -21,7 +22,7 @@ func routeBy(seq ...string) func(context.Context, record) (string, error) {
 		if k < len(seq) {
 			return seq[k], nil
 		}
-		return Finish, nil
+		return constants.MultiagentFinish, nil
 	}
 }
 
@@ -59,7 +60,7 @@ func TestRouterFallback(t *testing.T) {
 	for name, next := range map[string]func(context.Context, record) (string, error){
 		"ErrInvalidRoute": fixed("", invalid),
 		"未知成员":            fixed("x", nil),
-		"END 字面值":         fixed(workflow.END, nil),
+		"END 字面值":         fixed(constants.WorkflowEnd, nil),
 		"Supervisor 名":    fixed("sup", nil),
 		"兜底名":             fixed("human", nil),
 	} {
@@ -154,7 +155,7 @@ func TestRouterValidation(t *testing.T) {
 			return RouterSupervisor(workflow.Config{}, RouterConfig[record]{Supervisor: mark("sup"), Next: next, MaxRounds: 1})
 		},
 		"Router 成员 FINISH": func() (*workflow.Graph[record], error) {
-			return RouterSupervisor(workflow.Config{}, RouterConfig[record]{Supervisor: mark("sup"), Members: []Step[record]{mark(Finish)}, Next: next, MaxRounds: 1})
+			return RouterSupervisor(workflow.Config{}, RouterConfig[record]{Supervisor: mark("sup"), Members: []Step[record]{mark(constants.MultiagentFinish)}, Next: next, MaxRounds: 1})
 		},
 		"Router 成员与 Supervisor 同名": func() (*workflow.Graph[record], error) {
 			return RouterSupervisor(workflow.Config{}, RouterConfig[record]{Supervisor: mark("sup"), Members: []Step[record]{mark("sup")}, Next: next, MaxRounds: 1})
@@ -163,7 +164,7 @@ func TestRouterValidation(t *testing.T) {
 			return RouterSupervisor(workflow.Config{}, RouterConfig[record]{Supervisor: mark("sup"), Members: []Step[record]{mark("a"), mark("a")}, Next: next, MaxRounds: 1})
 		},
 		"Router 兜底 FINISH": func() (*workflow.Graph[record], error) {
-			fb := mark(Finish)
+			fb := mark(constants.MultiagentFinish)
 			return RouterSupervisor(workflow.Config{}, RouterConfig[record]{Supervisor: mark("sup"), Members: []Step[record]{mark("a")}, Next: next, MaxRounds: 1, Fallback: &fb})
 		},
 		"Router 兜底与 Supervisor 同名": func() (*workflow.Graph[record], error) {

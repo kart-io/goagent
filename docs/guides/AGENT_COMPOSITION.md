@@ -32,7 +32,7 @@ go test ./tools -run '^ExampleNewRunnableTool_workflow$' -v
 
 `DurableGraph.AsChildRunnable()` 使用父操作日志的 Store 和派生执行键；外层工具需声明 `Resumable: true`。审批等待返回 `durable.WaitError`，父 Builder 以 `agentErrors.ErrAgentWaiting` 暂停，不能把等待当作模型可见的成功工具结果。
 
-宿主从等待路径取得续跑定位信息，完成业务鉴权后用 `durable.WithResume` 提供批准。审批键是恢复凭据，不是用户有权审批的证明。恢复时保持执行键、作用域、版本和输入意图稳定。可参考[实际嵌套审批回归](../../builder/nested_resume_test.go)及[图入口](../../workflow/README.md)。
+宿主从等待路径最后一项取得操作执行键 `operationKey`，从 `ChildContinuation.ApprovalKey` 取得子图检查点键 `approvalKey`。完成业务鉴权后用 `workflow.WithResume(ctx, operationKey, workflow.ResumeRequest{Key: approvalKey})` 提供结构化批准；有人工载荷时写入 `ResumeRequest.Input`。两种键不能互换，裸审批键不再作为子图恢复输入接受。审批键是恢复凭据，不是用户有权审批的证明。恢复时保持执行键、作用域、版本和输入意图稳定。可参考[实际嵌套审批回归](../../builder/nested_resume_test.go)及[图入口](../../workflow/README.md)。
 
 只有所有效果都记在正确派生键下的可恢复流程才能声明 Resumable。普通外部 API、命令或包含未记录模型请求的闭包不能直接打开它来获得安全重试；pending 未知结果应先 Reconcile 或交宿主处理。
 

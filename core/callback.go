@@ -6,6 +6,8 @@ import (
 	"slices"
 	"sync"
 	"time"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // Callback 定义回调处理器接口
@@ -400,21 +402,46 @@ func (t *TracingCallback) OnLLMError(ctx context.Context, err error) error {
 
 // CostTrackingCallback 成本追踪回调
 //
-// 追踪 LLM 调用的成本
+// 按成对 OnLLMStart/OnLLMEnd 的模型与单价估算成本。
+// 无起始事件或无模型单价时只累计 token；该回调不会自行接入 Builder 模型事件。
 type CostTrackingCallback struct {
 	*BaseCallback
 	totalCost   float64
 	totalTokens int
 	mu          sync.Mutex
 	pricing     map[string]float64 // model -> cost per token
+	models      map[context.Context]string
 }
 
 // NewCostTrackingCallback 创建成本追踪回调
 func NewCostTrackingCallback(pricing map[string]float64) *CostTrackingCallback {
+	prices := make(map[string]float64, len(pricing))
+	for model, price := range pricing {
+		prices[model] = price
+	}
 	return &CostTrackingCallback{
 		BaseCallback: NewBaseCallback(),
-		pricing:      pricing,
+		pricing:      prices,
+		models:       make(map[context.Context]string),
 	}
+}
+
+// OnLLMStart 要求每个并发调用使用独立 context；同一 context 重叠时拒绝模糊关联。
+func (c *CostTrackingCallback) OnLLMStart(ctx context.Context, prompts []string, model string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if _, exists := c.models[ctx]; exists {
+		return agentErrors.New(agentErrors.CodeInvalidInput, "成本回调的并发模型调用必须使用独立 context").WithComponent("cost_tracking_callback").WithOperation("on_llm_start")
+	}
+	c.models[ctx] = model
+	return nil
+}
+
+func (c *CostTrackingCallback) OnLLMError(ctx context.Context, err error) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.models, ctx)
+	return nil
 }
 
 func (c *CostTrackingCallback) OnLLMEnd(ctx context.Context, output string, tokenUsage int) error {
@@ -423,10 +450,9 @@ func (c *CostTrackingCallback) OnLLMEnd(ctx context.Context, output string, toke
 
 	c.totalTokens += tokenUsage
 
-	// 计算成本（简化版本，实际需要根据模型）
-	// 这里假设从 context 中可以获取模型信息
-	model := "gpt-4" // 从 context 获取
-	if pricePerToken, ok := c.pricing[model]; ok {
+	model, associated := c.models[ctx]
+	delete(c.models, ctx)
+	if pricePerToken, ok := c.pricing[model]; ok && associated {
 		cost := float64(tokenUsage) * pricePerToken
 		c.totalCost += cost
 	}
@@ -454,6 +480,7 @@ func (c *CostTrackingCallback) Reset() {
 	defer c.mu.Unlock()
 	c.totalCost = 0
 	c.totalTokens = 0
+	clear(c.models)
 }
 
 // StdoutCallback 标准输出回调

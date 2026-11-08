@@ -10,20 +10,21 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kart-io/goagent/codec/json"
+	"github.com/stretchr/testify/require"
 
+	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/durable"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/workflow"
-	"github.com/stretchr/testify/require"
 )
 
 func parallelGraph(t *testing.T, limit int, branches []workflow.Branch[int], merge func(context.Context, int, []int) (int, error)) *workflow.Graph[int] {
 	t.Helper()
 	g := workflow.NewGraph[int](workflow.Config{MaxConcurrency: limit})
 	require.NoError(t, g.AddParallel("fork", workflow.ParallelConfig[int]{Branches: branches, Clone: func(n int) int { return n }, Merge: merge}))
-	require.NoError(t, g.AddEdge(workflow.START, "fork"))
-	require.NoError(t, g.AddEdge("fork", workflow.END))
+	require.NoError(t, g.AddEdge(constants.WorkflowStart, "fork"))
+	require.NoError(t, g.AddEdge("fork", constants.WorkflowEnd))
 	return g
 }
 func sumBranches(_ context.Context, _ int, out []int) (int, error) {
@@ -314,8 +315,8 @@ func TestDurableParallelSerializationPanicIsContained(t *testing.T) {
 		Branches: []workflow.Branch[panicJSONState]{{Name: "panic", Run: func(context.Context, panicJSONState) (panicJSONState, error) { return panicJSONState{Panic: true}, nil }}},
 		Clone:    func(s panicJSONState) panicJSONState { return s }, Merge: func(_ context.Context, s panicJSONState, _ []panicJSONState) (panicJSONState, error) { return s, nil },
 	}))
-	require.NoError(t, g.AddEdge(workflow.START, "fork"))
-	require.NoError(t, g.AddEdge("fork", workflow.END))
+	require.NoError(t, g.AddEdge(constants.WorkflowStart, "fork"))
+	require.NoError(t, g.AddEdge("fork", constants.WorkflowEnd))
 	run, err := g.CompileDurable(context.Background(), workflow.DurableConfig{Store: newStore(t), Version: "v1"})
 	require.NoError(t, err)
 	_, err = run.Run(context.Background(), "panic", panicJSONState{}, "")

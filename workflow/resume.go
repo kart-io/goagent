@@ -30,7 +30,7 @@ func (e *ResumeRejectedError) Unwrap() error { return e.Err }
 // the returned state and approval are saved atomically before executing the node.
 // The handler must be side-effect-free: failed saves can cause it to run again.
 // It must validate allowed fields and decisions; the host authenticates callers.
-// It runs for every approval, including legacy approval-only calls with nil input.
+// It runs for every approval, including requests with no input payload.
 // WithBeforeApprove then checks the proposed state before it is saved.
 // Bump DurableConfig.Version when changing the handler's semantics.
 func WithResumeHandler[T any](fn func(context.Context, string, *GraphSnapshot[T], json.RawMessage) (T, error)) DurableOption[T] {
@@ -58,7 +58,7 @@ func (d *DurableGraph[T]) Resume(ctx context.Context, id string, req ResumeReque
 // a resumable tool/operation. operationKey is the last WaitError.Path key;
 // req.Key is ChildContinuation.ApprovalKey. They identify different boundaries.
 // req.Key 也可以是 ChildContinuation.Interrupts 中的中断键。
-// Legacy approval-only durable.WithResume calls remain supported.
+// 子图审批必须使用本函数生成结构化请求；叶子中断仍可使用 durable.WithResume 传入原始输入。
 func WithResume(ctx context.Context, operationKey string, req ResumeRequest) (context.Context, error) {
 	if operationKey == "" || req.Key == "" {
 		return nil, &ResumeRejectedError{Err: agentErrors.Newf(agentErrors.CodeInvalidInput, "operation and checkpoint keys are required").WithComponent("workflow").WithOperation("with_resume")}

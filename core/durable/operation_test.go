@@ -165,7 +165,7 @@ func TestRetryInterruptedOnlyRerunsInterruptedRecords(t *testing.T) {
 			input := json.RawMessage(`{}`)
 			key := ChildKey(ExecutionKey(ctx), "effect")
 			store := ctx.Value(journalContext{}).(Store)
-			require.NoError(t, saveOperation(ctx, store, operationStorageID(key), &OperationRecord{
+			require.NoError(t, saveOperation(ctx, store, OperationStorageID(key), &OperationRecord{
 				ID: "effect", Key: key, InputHash: digest(string(input)), Status: test.status, FailureKind: test.kind,
 				Attempts: test.attempts, MaxAttempts: policy.MaxAttempts, Value: json.RawMessage(`null`),
 			}))

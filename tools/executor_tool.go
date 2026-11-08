@@ -46,9 +46,6 @@ type ToolCallRequest struct {
 	Dependencies []string
 }
 
-// ToolCall 是 ToolCallRequest 的别名，用于向后兼容
-type ToolCall = ToolCallRequest
-
 // ToolResult 工具执行结果
 type ToolResult struct {
 	// CallID 调用标识符

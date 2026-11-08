@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 
 // mockLogger 用于测试的模拟日志器
 type mockLogger struct {
+	mu        sync.Mutex
 	infoLogs  []logEntry
 	errorLogs []logEntry
 }
@@ -36,6 +38,8 @@ func (m *mockLogger) Info(args ...interface{})  {}
 func (m *mockLogger) Error(args ...interface{}) {}
 
 func (m *mockLogger) Infow(msg string, keysAndValues ...interface{}) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	entry := logEntry{
 		message: msg,
 		fields:  parseFields(keysAndValues),
@@ -44,6 +48,8 @@ func (m *mockLogger) Infow(msg string, keysAndValues ...interface{}) {
 }
 
 func (m *mockLogger) Errorw(msg string, keysAndValues ...interface{}) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	entry := logEntry{
 		message: msg,
 		fields:  parseFields(keysAndValues),
@@ -82,6 +88,71 @@ func parseFields(keysAndValues []interface{}) map[string]interface{} {
 	return fields
 }
 
+func TestCleanupLoggingKeepsInputOwnedByCaller(t *testing.T) {
+	logger := newMockLogger()
+	m := NewLoggingMiddleware(WithLogger(logger))
+	input := &interfaces.ToolInput{Args: map[string]interface{}{"value": "业务输入"}, CallerID: "调用方"}
+	wrapped := m.Wrap(newMockTool(), func(_ context.Context, got *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+		require.Same(t, input, got)
+		require.Equal(t, map[string]interface{}{"value": "业务输入"}, got.Args, "日志计时不得写进业务参数")
+		return &interfaces.ToolOutput{Result: "成功", Success: true}, nil
+	})
+	_, err := wrapped(context.Background(), input)
+	require.NoError(t, err)
+	require.Equal(t, map[string]interface{}{"value": "业务输入"}, input.Args)
+	require.Len(t, logger.infoLogs, 2)
+}
+
+func TestCleanupLoggingPreservesPartialResultOnError(t *testing.T) {
+	logger := newMockLogger()
+	m := NewLoggingMiddleware(WithLogger(logger))
+	want := &interfaces.ToolOutput{Result: "部分结果", Success: false}
+	wantErr := errors.New("工具执行失败")
+	wrapped := m.Wrap(newMockTool(), func(context.Context, *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+		return want, wantErr
+	})
+	got, err := wrapped(context.Background(), &interfaces.ToolInput{Args: map[string]interface{}{}})
+	require.ErrorIs(t, err, wantErr)
+	require.Same(t, want, got, "日志不能丢弃执行器的部分结果")
+	require.Len(t, logger.errorLogs, 1)
+}
+
+func TestCleanupLoggingAllowsNilInputAndOutput(t *testing.T) {
+	logger := newMockLogger()
+	wrapped := NewLoggingMiddleware(WithLogger(logger)).Wrap(newMockTool(), func(_ context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+		require.Nil(t, input)
+		return nil, nil
+	})
+	out, err := wrapped(context.Background(), nil)
+	require.NoError(t, err)
+	require.Nil(t, out)
+	require.Len(t, logger.infoLogs, 2)
+}
+
+func TestCleanupLoggingConcurrentInputIsReadOnly(t *testing.T) {
+	logger := newMockLogger()
+	wrapped := NewLoggingMiddleware(WithLogger(logger)).Wrap(newMockTool(), func(context.Context, *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+		return &interfaces.ToolOutput{Success: true}, nil
+	})
+	input := &interfaces.ToolInput{Args: map[string]interface{}{"共享": "只读参数"}}
+	var wg sync.WaitGroup
+	start := make(chan struct{})
+	const calls = 32
+	for range calls {
+		wg.Go(func() {
+			<-start
+			out, err := wrapped(context.Background(), input)
+			if err != nil || out == nil || !out.Success {
+				t.Errorf("日志包装改变了工具结果：%v，%v", out, err)
+			}
+		})
+	}
+	close(start)
+	wg.Wait()
+	require.Equal(t, map[string]interface{}{"共享": "只读参数"}, input.Args)
+	require.Len(t, logger.infoLogs, calls*2)
+}
+
 // TestLoggingMiddleware_Basic 测试基本日志功能
 func TestLoggingMiddleware_Basic(t *testing.T) {
 	ctx := context.Background()
@@ -99,7 +170,7 @@ func TestLoggingMiddleware_Basic(t *testing.T) {
 		}, nil
 	}
 
-	wrapped := Chain(tool, invoker, middleware)
+	wrapped := middleware.Wrap(tool, invoker)
 	input := &interfaces.ToolInput{
 		Args:     map[string]interface{}{"key": "value"},
 		CallerID: "test_caller",
@@ -153,7 +224,7 @@ func TestLoggingMiddleware_WithoutInputLogging(t *testing.T) {
 		}, nil
 	}
 
-	wrapped := Chain(tool, invoker, middleware)
+	wrapped := middleware.Wrap(tool, invoker)
 	input := &interfaces.ToolInput{
 		Args: map[string]interface{}{"secret": "password123"},
 	}
@@ -184,7 +255,7 @@ func TestLoggingMiddleware_WithoutOutputLogging(t *testing.T) {
 		}, nil
 	}
 
-	wrapped := Chain(tool, invoker, middleware)
+	wrapped := middleware.Wrap(tool, invoker)
 	input := &interfaces.ToolInput{Args: map[string]interface{}{}}
 
 	_, err := wrapped(ctx, input)
@@ -213,7 +284,7 @@ func TestLoggingMiddleware_MaxArgBytes(t *testing.T) {
 		}, nil
 	}
 
-	wrapped := Chain(tool, invoker, middleware)
+	wrapped := middleware.Wrap(tool, invoker)
 	input := &interfaces.ToolInput{
 		Args: map[string]interface{}{
 			"long_key": strings.Repeat("a", 200), // 很长的值
@@ -245,7 +316,7 @@ func TestLoggingMiddleware_ErrorLogging(t *testing.T) {
 		return nil, testErr
 	}
 
-	wrapped := Chain(tool, invoker, middleware)
+	wrapped := middleware.Wrap(tool, invoker)
 	input := &interfaces.ToolInput{Args: map[string]interface{}{}}
 
 	_, err := wrapped(ctx, input)
@@ -277,7 +348,7 @@ func TestLoggingMiddleware_FailedOutput(t *testing.T) {
 		}, nil
 	}
 
-	wrapped := Chain(tool, invoker, middleware)
+	wrapped := middleware.Wrap(tool, invoker)
 	input := &interfaces.ToolInput{Args: map[string]interface{}{}}
 
 	output, err := wrapped(ctx, input)
@@ -308,7 +379,7 @@ func TestLoggingMiddleware_StringResult(t *testing.T) {
 		}, nil
 	}
 
-	wrapped := Chain(tool, invoker, middleware)
+	wrapped := middleware.Wrap(tool, invoker)
 	input := &interfaces.ToolInput{Args: map[string]interface{}{}}
 
 	_, err := wrapped(ctx, input)
@@ -336,7 +407,7 @@ func TestLoggingMiddleware_ComplexResult(t *testing.T) {
 		}, nil
 	}
 
-	wrapped := Chain(tool, invoker, middleware)
+	wrapped := middleware.Wrap(tool, invoker)
 	input := &interfaces.ToolInput{Args: map[string]interface{}{}}
 
 	_, err := wrapped(ctx, input)
@@ -364,7 +435,7 @@ func TestLoggingMiddleware_NilOutput(t *testing.T) {
 		}, nil
 	}
 
-	wrapped := Chain(tool, invoker, middleware)
+	wrapped := middleware.Wrap(tool, invoker)
 	input := &interfaces.ToolInput{Args: map[string]interface{}{}}
 
 	_, err := wrapped(ctx, input)

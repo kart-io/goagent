@@ -95,7 +95,7 @@ func sessionRunnable(factory AgentFactory) *core.StreamRunnable[any, *builder.Ag
 }
 
 func validName(name string) bool {
-	return name != "" && strings.TrimSpace(name) == name && name != workflow.START && name != workflow.END
+	return name != "" && strings.TrimSpace(name) == name && name != shared.WorkflowStart && name != shared.WorkflowEnd
 }
 
 // isNil 把 typed nil 也视为 nil，与 tools 校验 Runnable 的方式一致。

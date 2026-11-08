@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/observe"
@@ -151,7 +152,7 @@ func (g *Graph[T]) CompileDurable(ctx context.Context, cfg DurableConfig, opts .
 }
 
 func publicGraphSnapshot[T any](s *durable.Snapshot, state graphState[T]) *GraphSnapshot[T] {
-	return &GraphSnapshot[T]{State: state.State, Node: state.Node, Steps: s.Next, Routing: state.Routing, Key: s.Key, Waiting: s.Waiting, Done: state.Node == END, Interrupts: slices.Clone(state.Interrupts)}
+	return &GraphSnapshot[T]{State: state.State, Node: state.Node, Steps: s.Next, Routing: state.Routing, Key: s.Key, Waiting: s.Waiting, Done: state.Node == constants.WorkflowEnd, Interrupts: slices.Clone(state.Interrupts)}
 }
 
 // Run holds the Store's run lock until completion, failure or approval wait.
@@ -269,7 +270,7 @@ func (d *DurableGraph[T]) run(ctx context.Context, store durable.Store, id strin
 			}
 		}
 	}
-	for state.Node != END {
+	for state.Node != constants.WorkflowEnd {
 		if err = ctx.Err(); err != nil {
 			return result, err
 		}
@@ -429,7 +430,7 @@ func (d *DurableGraph[T]) decodeCheckpoint(id string, checkpoint *durable.Snapsh
 	if checkpoint == nil || checkpoint.Plan != d.plan || checkpoint.Version != d.version || checkpoint.RunID != id || checkpoint.Next < 0 || checkpoint.Next > d.graph.config.MaxSteps || json.Unmarshal(checkpoint.Data, &state) != nil {
 		return state, agentErrors.Newf(agentErrors.CodeStateValidation, "checkpoint does not match versioned graph or is corrupt").WithComponent("workflow").WithOperation("decode_checkpoint")
 	}
-	if state.Node != END && d.graph.nodes[state.Node] == nil {
+	if state.Node != constants.WorkflowEnd && d.graph.nodes[state.Node] == nil {
 		return state, agentErrors.Newf(agentErrors.CodeStateValidation, "checkpoint contains unknown node").WithComponent("workflow").WithOperation("decode_checkpoint")
 	}
 	if err = d.validateContinuation(id, checkpoint, state); err != nil {
@@ -472,23 +473,34 @@ func (d *DurableGraph[T]) snapshot(ctx context.Context, store durable.Store, id 
 }
 
 func (d *DurableGraph[T]) validateContinuation(id string, cp *durable.Snapshot, state graphState[T]) error {
+	if err := d.validateContinuationMetadata(id, cp, graphState[json.RawMessage]{Node: state.Node, Routing: state.Routing, Parallel: state.Parallel, Interrupts: state.Interrupts}); err != nil {
+		return err
+	}
+	if state.Parallel != nil {
+		return validateParallel(d.graph.parallel[state.Node], state.Parallel)
+	}
+	return nil
+}
+
+// validateContinuationMetadata 是执行与只读诊断共用的续跑结构校验，不解码业务状态。
+func (d *DurableGraph[T]) validateContinuationMetadata(id string, cp *durable.Snapshot, state graphState[json.RawMessage]) error {
 	interrupted := len(state.Interrupts) > 0
 	if state.Parallel != nil {
 		cfg, ok := d.graph.parallel[state.Node]
 		if !ok || state.Routing || cp.Key == "" || (cp.Waiting && !interrupted) || (d.approvals[state.Node] && !cp.Approved) {
 			return agentErrors.Newf(agentErrors.CodeStateValidation, "corrupt parallel continuation").WithComponent("workflow").WithOperation("validate_continuation")
 		}
-		if err := validateParallel[T](cfg, state.Parallel); err != nil {
+		if err := validateParallelStructure(cfg, state.Parallel); err != nil {
 			return err
 		}
 	}
-	if state.Routing && (state.Node == END || cp.Next == 0) {
+	if state.Routing && (state.Node == constants.WorkflowEnd || cp.Next == 0) {
 		return agentErrors.Newf(agentErrors.CodeStateValidation, "corrupt graph routing position").WithComponent("workflow").WithOperation("validate_continuation")
 	}
-	if state.Node == END && cp.Next == 0 {
+	if state.Node == constants.WorkflowEnd && cp.Next == 0 {
 		return agentErrors.Newf(agentErrors.CodeStateValidation, "corrupt graph completion position").WithComponent("workflow").WithOperation("validate_continuation")
 	}
-	if state.Routing || state.Node == END {
+	if state.Routing || state.Node == constants.WorkflowEnd {
 		if cp.Key != "" || cp.Waiting || cp.Approved || interrupted {
 			return agentErrors.Newf(agentErrors.CodeStateValidation, "corrupt completed node intent").WithComponent("workflow").WithOperation("validate_continuation")
 		}

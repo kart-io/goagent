@@ -6,10 +6,11 @@ import (
 	"os"
 	"testing"
 
-	"github.com/kart-io/goagent/codec/json"
-
-	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/constants"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 var amountInfo = json.RawMessage(`{"question":"金额"}`)
@@ -36,7 +37,7 @@ func requireInterruptWait(t *testing.T, err error) InterruptContinuation {
 	require.Equal(t, interruptKey("amount"), waits[0].Path[len(waits[0].Path)-1].Key)
 	var c InterruptContinuation
 	require.NoError(t, json.Unmarshal(waits[0].Continuation, &c))
-	require.Equal(t, ContinuationKindInterrupt, c.Kind)
+	require.Equal(t, constants.ContinuationKindInterrupt, c.Kind)
 	return c
 }
 
@@ -71,8 +72,8 @@ func TestAwaitInputRejectionsStayWaiting(t *testing.T) {
 		name, input, reason string
 		validate            func(json.RawMessage) error
 	}{
-		{name: "空字符串", input: "", reason: ReasonInvalidJSON, validate: positive},
-		{name: "非法 JSON", input: "{", reason: ReasonInvalidJSON, validate: positive},
+		{name: "空字符串", input: "", reason: constants.InterruptReasonInvalidJSON, validate: positive},
+		{name: "非法 JSON", input: "{", reason: constants.InterruptReasonInvalidJSON, validate: positive},
 		{name: "校验失败", input: "-1", reason: "需要正整数", validate: positive},
 		{name: "null 被校验拒绝", input: "null", reason: "需要正整数", validate: positive},
 	} {
@@ -140,8 +141,8 @@ func TestAwaitInputReentersAfterCrashBeforeWaitingSaved(t *testing.T) {
 	ctx := interruptContext(t)
 	key := interruptKey("amount")
 	pending := &OperationRecord{ID: "interrupt/amount", Key: key, InputHash: digest(string(amountInfo)), Status: "pending",
-		Attempts: 1, MaxAttempts: interruptAttempts, Value: json.RawMessage(`null`), FailureKind: "ambiguous"}
-	require.NoError(t, saveOperation(ctx, JournalStore(ctx), operationStorageID(key), pending))
+		Attempts: 1, MaxAttempts: constants.DefaultInterruptAttempts, Value: json.RawMessage(`null`), FailureKind: "ambiguous"}
+	require.NoError(t, saveOperation(ctx, JournalStore(ctx), OperationStorageID(key), pending))
 	got, err := AwaitInput(WithResume(ctx, key, `7`), "amount", amountInfo, positive)
 	require.NoError(t, err)
 	require.JSONEq(t, `7`, string(got))
@@ -179,7 +180,7 @@ func TestAwaitInputValidatePanicStaysWaiting(t *testing.T) {
 	_, err := AwaitInput(WithResume(ctx, interruptKey("amount"), `null`), "amount", amountInfo, validate)
 	c := requireInterruptWait(t, err)
 	require.True(t, c.Rejected)
-	require.Equal(t, ReasonValidatePanic, c.Reason)
+	require.Equal(t, constants.InterruptReasonValidatePanic, c.Reason)
 	waits := Waits(err)
 	require.Len(t, waits, 1)
 	var panicErr *agentErrors.PanicError
@@ -198,12 +199,12 @@ func TestAwaitInputEmptyValidateErrorIsRejection(t *testing.T) {
 	_, err := AwaitInput(WithResume(ctx, interruptKey("amount"), `1`), "amount", amountInfo, validate)
 	c := requireInterruptWait(t, err)
 	require.True(t, c.Rejected)
-	require.Equal(t, ReasonRejected, c.Reason)
+	require.Equal(t, constants.InterruptReasonRejected, c.Reason)
 }
 
 func TestAwaitInputAcceptsAfterManyRejections(t *testing.T) {
 	ctx := interruptContext(t)
-	for i := 0; i < interruptAttempts+2; i++ {
+	for i := 0; i < constants.DefaultInterruptAttempts+2; i++ {
 		_, err := AwaitInput(WithResume(ctx, interruptKey("amount"), `-1`), "amount", amountInfo, positive)
 		c := requireInterruptWait(t, err)
 		require.True(t, c.Rejected, "第 %d 次", i)

@@ -10,11 +10,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/durable"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/testing/panictest"
-	"github.com/stretchr/testify/require"
 )
 
 func TestRootBudgetConcurrentAdmission(t *testing.T) {
@@ -150,7 +152,7 @@ func TestRemainingUnlimitedAndCanceled(t *testing.T) {
 	require.False(t, ok)
 	n, err := c.Remaining(context.Background())
 	require.NoError(t, err)
-	require.Equal(t, Unlimited, n)
+	require.Equal(t, constants.BudgetUnlimited, n)
 	bound, err := New(Config{RootKey: "run", Version: "v1", MaxModelRequests: 1})
 	require.NoError(t, err)
 	ctx, cancel := context.WithCancel(context.Background())

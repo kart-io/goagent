@@ -6,9 +6,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/durable"
-	"github.com/stretchr/testify/require"
 )
 
 func TestDurableAdaptStreamPreservesPreviewWithoutCommittingIt(t *testing.T) {
@@ -30,8 +32,8 @@ func TestDurableAdaptStreamPreservesPreviewWithoutCommittingIt(t *testing.T) {
 		require.NoError(t, err)
 		graph := NewGraph[int]()
 		require.NoError(t, graph.AddRunnable("stream", adapted))
-		require.NoError(t, graph.AddEdge(START, "stream"))
-		require.NoError(t, graph.AddEdge("stream", END))
+		require.NoError(t, graph.AddEdge(constants.WorkflowStart, "stream"))
+		require.NoError(t, graph.AddEdge("stream", constants.WorkflowEnd))
 		store, err := durable.NewFileStore(t.TempDir())
 		require.NoError(t, err)
 		run, err := graph.CompileDurable(ctx, DurableConfig{Store: store, Version: "v1"})
@@ -89,8 +91,8 @@ func TestDurablePreviewCancellationDoesNotCommit(t *testing.T) {
 	})
 	g := NewGraph[int]()
 	require.NoError(t, g.AddRunnable("stream", node))
-	require.NoError(t, g.AddEdge(START, "stream"))
-	require.NoError(t, g.AddEdge("stream", END))
+	require.NoError(t, g.AddEdge(constants.WorkflowStart, "stream"))
+	require.NoError(t, g.AddEdge("stream", constants.WorkflowEnd))
 	store, err := durable.NewFileStore(t.TempDir())
 	require.NoError(t, err)
 	run, err := g.CompileDurable(context.Background(), DurableConfig{Store: store, Version: "v1"})

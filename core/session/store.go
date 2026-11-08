@@ -12,6 +12,7 @@ import (
 )
 
 // Store 保存会话日志。实现须满足：
+//   - Append/AppendAll 返回后调用方可复用事件；Read 返回值以及 Fork 的源与分支相互隔离，包括 Data 与 Surface。
 //   - Append 原子地追加全部事件或都不追加，按 expected 做比较并交换（CAS）：expected 为 0 时会话须不存在或为空，
 //     会话不存在时创建；成功时为事件分配从 expected+1 起的连续序号并持久化后返回最后序号。
 //   - AppendAll 把多个会话的追加作为一次原子提交：全部 Expected 都匹配才写入，要么全部可见，要么都不可见，崩溃后同样如此。
@@ -62,13 +63,26 @@ func validID(id string) error {
 
 // assign 为事件分配序号并补全时间。
 func assign(events []Event, expected int64) []Event {
-	out := make([]Event, len(events))
-	for i, ev := range events {
+	out := cloneEvents(events)
+	for i, ev := range out {
 		ev.Seq = expected + int64(i) + 1
 		if ev.Time.IsZero() {
 			ev.Time = time.Now().UTC()
 		}
 		out[i] = ev
+	}
+	return out
+}
+
+// cloneEvents 在日志边界隔离事件中全部可写引用。
+func cloneEvents(events []Event) []Event {
+	out := slices.Clone(events)
+	for i := range out {
+		out[i].Data = slices.Clone(out[i].Data)
+		if out[i].Surface != nil {
+			surface := *out[i].Surface
+			out[i].Surface = &surface
+		}
 	}
 	return out
 }
@@ -146,7 +160,7 @@ func (s *MemoryStore) Read(ctx context.Context, id string, after int64) ([]Event
 		return nil, agentErrors.ErrSessionNotFound
 	}
 	n := sort.Search(len(events), func(i int) bool { return events[i].Seq > after })
-	return slices.Clone(events[n:]), nil
+	return cloneEvents(events[n:]), nil
 }
 
 func (s *MemoryStore) List(context.Context) ([]string, error) {
@@ -176,7 +190,7 @@ func (s *MemoryStore) Fork(ctx context.Context, src, dst string, upTo int64) err
 	if _, ok := s.sessions[dst]; ok {
 		return agentErrors.ErrSessionExists
 	}
-	s.sessions[dst] = slices.Clone(forkRange(events, upTo))
+	s.sessions[dst] = cloneEvents(forkRange(events, upTo))
 	return nil
 }
 

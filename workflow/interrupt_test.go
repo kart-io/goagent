@@ -8,12 +8,13 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/kart-io/goagent/codec/json"
+	"github.com/stretchr/testify/require"
 
+	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/durable"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/workflow"
-	"github.com/stretchr/testify/require"
 )
 
 var errDisk = errors.New("disk full")
@@ -430,7 +431,7 @@ func TestChildRunnableReportsInterruptsAndAcceptsWrappedResume(t *testing.T) {
 	_, err = durable.Do(wrapped, "tool/c1", json.RawMessage(`{}`), policy, run)
 	rejected := childContinuation(t, err)
 	require.True(t, rejected.Rejected)
-	require.Equal(t, workflow.RejectResumeInput, rejected.Reason)
+	require.Equal(t, constants.WorkflowRejectResumeInput, rejected.Reason)
 
 	wrapped, err = workflow.WithResume(ctx, opKey, workflow.ResumeRequest{Key: c.Interrupts[0].Key, Input: json.RawMessage(`5`)})
 	require.NoError(t, err)
@@ -454,7 +455,7 @@ func TestNodeInterruptEmptyValidateErrorIsRejection(t *testing.T) {
 	snap, err = run.Resume(ctx, "ask", workflow.ResumeRequest{Key: snap.Interrupts[0].Key, Input: json.RawMessage(`1`)})
 	require.ErrorAs(t, err, &rejected)
 	require.True(t, snap.Interrupts[0].Rejected)
-	require.Equal(t, durable.ReasonRejected, snap.Interrupts[0].Reason)
+	require.Equal(t, constants.InterruptReasonRejected, snap.Interrupts[0].Reason)
 }
 
 func TestParallelFailureWinsOverInterrupt(t *testing.T) {
@@ -498,7 +499,7 @@ func TestChildInterruptAfterApprovalIgnoresUsedApprovalKey(t *testing.T) {
 	waits := durable.Waits(err)
 	opKey := waits[0].Path[len(waits[0].Path)-1].Key
 
-	approved := durable.WithResume(ctx, opKey, approval.ApprovalKey)
+	approved := childApprovalContext(t, ctx, opKey, approval.ApprovalKey)
 	_, err = durable.Do(approved, "tool/c1", json.RawMessage(`{}`), policy, run)
 	interrupted := childContinuation(t, err)
 	require.False(t, interrupted.Rejected, "已用过的审批键不是审批不符")
@@ -532,7 +533,7 @@ func TestNodeInterruptValidatePanicIsDiagnosable(t *testing.T) {
 
 	after, err := run.Snapshot(ctx, "panic")
 	require.NoError(t, err)
-	require.Equal(t, durable.ReasonValidatePanic, after.Interrupts[0].Reason)
+	require.Equal(t, constants.InterruptReasonValidatePanic, after.Interrupts[0].Reason)
 }
 
 func TestChildInterruptRejectsInputSentWithIntentKey(t *testing.T) {
@@ -545,7 +546,7 @@ func TestChildInterruptRejectsInputSentWithIntentKey(t *testing.T) {
 	approval := childContinuation(t, err)
 	waits := durable.Waits(err)
 	opKey := waits[0].Path[len(waits[0].Path)-1].Key
-	_, err = durable.Do(durable.WithResume(ctx, opKey, approval.ApprovalKey), "tool/c1", json.RawMessage(`{}`), policy, run)
+	_, err = durable.Do(childApprovalContext(t, ctx, opKey, approval.ApprovalKey), "tool/c1", json.RawMessage(`{}`), policy, run)
 	interrupted := childContinuation(t, err)
 	require.Len(t, interrupted.Interrupts, 1)
 
@@ -555,7 +556,7 @@ func TestChildInterruptRejectsInputSentWithIntentKey(t *testing.T) {
 	_, err = durable.Do(misused, "tool/c1", json.RawMessage(`{}`), policy, run)
 	rejected := childContinuation(t, err)
 	require.True(t, rejected.Rejected)
-	require.Equal(t, workflow.RejectApprovalMismatch, rejected.Reason)
+	require.Equal(t, constants.WorkflowRejectApprovalMismatch, rejected.Reason)
 	require.Equal(t, interrupted.Interrupts, rejected.Interrupts)
 
 	// 带着同一请求再叠加叶子中断输入时照常推进。

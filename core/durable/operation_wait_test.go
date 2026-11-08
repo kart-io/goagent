@@ -224,28 +224,19 @@ func TestOperationNestedWaitsPrefixPath(t *testing.T) {
 	require.Equal(t, ChildKey(ChildKey("node-key", "outer"), "inner"), waits[0].Path[1].Key)
 }
 
-func TestOperationReadsV1Records(t *testing.T) {
+func TestOperationRejectsV1Records(t *testing.T) {
 	store, err := NewFileStore(t.TempDir())
 	require.NoError(t, err)
 	ctx := WithJournal(WithExecutionKey(context.Background(), "parent"), store)
-	key := ChildKey("parent", "legacy")
-	write := func(status string, extra map[string]any) {
-		r := map[string]any{"id": "legacy", "key": key, "input_hash": digest(`{}`), "status": status, "attempts": 1, "max_attempts": 1, "value": `"v1"`}
-		for k, v := range extra {
-			r[k] = v
-		}
-		data, err := json.Marshal(r)
-		require.NoError(t, err)
-		require.NoError(t, store.Save(ctx, operationStorageID(key), &Snapshot{RunID: operationStorageID(key), Version: operationVersionV1, Data: data}))
-	}
-	write("completed", nil)
-	_, err = Do(ctx, "legacy", json.RawMessage(`{}`), OperationPolicy{}, nil)
-	require.ErrorContains(t, err, "requires ID")
-	record, err := Do(ctx, "legacy", json.RawMessage(`{}`), OperationPolicy{}, func(context.Context) (json.RawMessage, error) { panic("不应执行") })
+	key := ChildKey("parent", "retired")
+	data, err := json.Marshal(OperationRecord{ID: "retired", Key: key, InputHash: digest(`{}`), Status: "completed", Attempts: 1, MaxAttempts: 1, Value: json.RawMessage(`"saved"`)})
 	require.NoError(t, err)
-	require.True(t, record.Replayed)
-
-	write("waiting", map[string]any{"continuation": []any{map[string]any{}}})
-	_, err = InspectOperation(ctx, "legacy")
-	require.ErrorContains(t, err, "invalid", "v1 记录不能被解释成等待")
+	require.NoError(t, store.Save(ctx, OperationStorageID(key), &Snapshot{RunID: OperationStorageID(key), Version: "goagent-operation-v1", Data: data}))
+	calls := 0
+	_, err = Do(ctx, "retired", json.RawMessage(`{}`), OperationPolicy{}, func(context.Context) (json.RawMessage, error) { calls++; return json.RawMessage(`"new"`), nil })
+	require.Error(t, err, "在线执行不读取退役账本格式")
+	require.Zero(t, calls)
+	saved, loadErr := store.Load(ctx, OperationStorageID(key))
+	require.NoError(t, loadErr)
+	require.Equal(t, "goagent-operation-v1", saved.Version, "拒绝不改写旧账本")
 }

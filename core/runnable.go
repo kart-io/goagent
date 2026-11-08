@@ -63,21 +63,6 @@ type RunnableConfig struct {
 
 	// MaxConcurrency 最大并发数（用于 Batch）
 	MaxConcurrency int `json:"max_concurrency"`
-
-	// RetryPolicy 重试策略
-	RetryPolicy *RetryPolicy `json:"retry_policy"`
-}
-
-// RetryPolicy 重试策略
-type RetryPolicy struct {
-	MaxRetries int           `json:"max_retries"` // 最大重试次数
-	Backoff    BackoffPolicy `json:"-"`           // 退避策略
-}
-
-// BackoffPolicy 退避策略
-type BackoffPolicy interface {
-	// NextDelay 计算下一次重试的延迟
-	NextDelay(attempt int) int64 // 返回毫秒数
 }
 
 // =============================================================================
@@ -240,10 +225,6 @@ func cloneRunnableConfig(config RunnableConfig) RunnableConfig {
 	config.Callbacks = slices.Clone(config.Callbacks)
 	config.Tags = slices.Clone(config.Tags)
 	config.Metadata = maps.Clone(config.Metadata)
-	if config.RetryPolicy != nil {
-		policy := *config.RetryPolicy
-		config.RetryPolicy = &policy
-	}
 	return config
 }
 
@@ -383,14 +364,14 @@ func (f *RunnableFunc[I, O]) Invoke(ctx context.Context, input I) (O, error) {
 	// 执行函数（带 panic 保护 - 这是保护第三方插件的关键）
 	output, err := safeInvoke(f.fn, ctx, input)
 
-	// OnError/OnEnd 的返回值被忽略，只有其自身 panic 会替代结果返回
-	operation, notify := "on_end", func(cb Callback) error { _ = cb.OnEnd(ctx, output); return nil }
+	// 完成回调可以拒绝结果；错误回调不能覆盖原始执行错误。
+	operation, notify := "on_end", func(cb Callback) error { return cb.OnEnd(ctx, output) }
 	if err != nil {
 		failure := err
 		operation, notify = "on_error", func(cb Callback) error { _ = cb.OnError(ctx, failure); return nil }
 	}
-	if panicked, panicErr := NotifyCallbacks(ctx, "runnable_func", operation, callbacks, notify); panicked {
-		return output, panicErr
+	if _, callbackErr := NotifyCallbacks(ctx, "runnable_func", operation, callbacks, notify); callbackErr != nil {
+		return output, callbackErr
 	}
 	return output, err
 }

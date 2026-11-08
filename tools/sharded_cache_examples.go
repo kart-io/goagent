@@ -27,7 +27,6 @@ func ExampleShardedCacheUsage() {
 	highThroughputCache := NewShardedToolCacheWithOptions(
 		WithPerformanceProfile(HighThroughputProfile),
 		WithCapacity(100000),
-		WithAutoTuning(true),
 	)
 	defer highThroughputCache.Close()
 
@@ -36,21 +35,16 @@ func ExampleShardedCacheUsage() {
 		WithWorkloadType(ReadHeavyWorkload),
 		WithCapacity(200000),
 		WithDefaultTTL(30*time.Minute),
-		WithMetrics(true),
 	)
 	defer readHeavyCache.Close()
 
 	// 示例5: 自定义配置
 	customCache := NewShardedToolCacheWithOptions(
-		WithShardCount(64),                    // 64个分片
-		WithCapacity(50000),                   // 总容量50000
-		WithDefaultTTL(15*time.Minute),        // 15分钟TTL
-		WithCleanupInterval(2*time.Minute),    // 2分钟清理间隔
-		WithEvictionPolicy(LRUEviction),       // LRU淘汰策略
-		WithCleanupStrategy(AdaptiveCleanup),  // 自适应清理
-		WithLoadBalancing(HashBasedBalancing), // 哈希负载均衡
-		WithAutoTuning(true),                  // 启用自动调优
-		WithMetrics(true),                     // 启用指标收集
+		WithShardCount(64),                   // 64个分片
+		WithCapacity(50000),                  // 总容量50000
+		WithDefaultTTL(15*time.Minute),       // 15分钟TTL
+		WithCleanupInterval(2*time.Minute),   // 2分钟清理间隔
+		WithCleanupStrategy(AdaptiveCleanup), // 自适应清理
 	)
 	defer customCache.Close()
 
@@ -65,7 +59,6 @@ func ExampleShardedCacheUsage() {
 		WithShardCount(recommendation.RecommendedCount),
 		WithWorkloadType(MixedWorkload),
 		WithCapacity(100000),
-		WithAutoTuning(true),
 	)
 	defer qpsOptimizedCache.Close()
 
@@ -73,9 +66,6 @@ func ExampleShardedCacheUsage() {
 	memoryEfficientCache := NewShardedToolCacheWithOptions(
 		WithPerformanceProfile(MemoryEfficientProfile),
 		WithCapacity(10000),
-		WithMemoryLimit(100*1024*1024), // 100MB内存限制
-		WithCompressionThreshold(1024), // 压缩大于1KB的条目
-		WithMaxEntrySize(10*1024),      // 单个条目最大10KB
 	)
 	defer memoryEfficientCache.Close()
 
@@ -84,8 +74,6 @@ func ExampleShardedCacheUsage() {
 		WithWorkloadType(BurstyWorkload),
 		WithShardCount(0), // 自动检测（CPU核心数*4）
 		WithCapacity(50000),
-		WithAutoTuning(true),
-		WithMaxShardConcurrency(100), // 限制并发
 	)
 	defer burstyCache.Close()
 
@@ -118,7 +106,6 @@ func ExampleCacheOperations() {
 		WithShardCount(32),
 		WithCapacity(10000),
 		WithDefaultTTL(5*time.Minute),
-		WithAutoTuning(true),
 	)
 	defer cache.Close()
 
@@ -194,14 +181,12 @@ func ExampleDynamicConfiguration() {
 			WithShardCount(0), // 自动检测
 			WithCapacity(100000),
 			WithPerformanceProfile(HighThroughputProfile),
-			WithAutoTuning(true),
 		)
 	}
 
 	// 添加通用选项
 	cacheOptions = append(cacheOptions,
 		WithDefaultTTL(10*time.Minute),
-		WithMetrics(true),
 	)
 
 	cache := NewShardedToolCacheWithOptions(cacheOptions...)
@@ -216,8 +201,6 @@ func ExampleMonitoringAndTuning() {
 	// 创建启用监控和自动调优的缓存
 	cache := NewShardedToolCacheWithOptions(
 		WithCapacity(50000),
-		WithAutoTuning(true),
-		WithMetrics(true),
 		WithWorkloadType(MixedWorkload),
 	)
 	defer cache.Close()

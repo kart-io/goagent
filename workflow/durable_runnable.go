@@ -5,9 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/durable"
 	agentErrors "github.com/kart-io/goagent/errors"
@@ -51,14 +51,15 @@ func (d *DurableGraph[T]) AsRunnable() *core.StreamRunnable[RunRequest[T], *Grap
 }
 
 // ChildContinuation 是嵌套运行的图在审批暂停或中断等待时放进 durable.WaitError 的定位信息。
-// 审批暂停时用 durable.WithResume(ctx, 等待处的执行键, ApprovalKey) 提供批准；中断等待时 ApprovalKey 为空，
+// 审批暂停时用 workflow.WithResume(ctx, 等待处的执行键, ResumeRequest{Key: ApprovalKey}) 提供批准；中断等待时 ApprovalKey 为空，
 // 须用 Interrupts[i].Key（最内层中断键）回应。
 type ChildContinuation struct {
 	RunID       string `json:"run_id"`
 	Node        string `json:"node"`
 	ApprovalKey string `json:"approval_key"`
 	// Rejected 表示本次提供的审批未被采纳，图的状态未改变，仍在等待；Reason 为原因类别
-	// RejectApprovalMismatch（含中断等待时用意图键交输入）、RejectBeforeApprove 或 RejectResumeInput。
+	// constants.WorkflowRejectApprovalMismatch（含中断等待时用意图键交输入）、
+	// constants.WorkflowRejectBeforeApprove 或 constants.WorkflowRejectResumeInput。
 	// 存储失败、panic 等不属于拒绝，照常作为失败返回。
 	Rejected bool   `json:"rejected,omitzero"`
 	Reason   string `json:"reason,omitempty"`
@@ -66,13 +67,6 @@ type ChildContinuation struct {
 	// durable.WithResume(ctx, Key, input) 回应，也可以经 WithResume 封装给本子图。
 	Interrupts []InterruptPoint `json:"interrupts,omitempty"`
 }
-
-// ChildContinuation.Reason 的取值。
-const (
-	RejectApprovalMismatch = "approval_mismatch" // 审批键与等待的节点不符
-	RejectBeforeApprove    = "before_approve"    // WithBeforeApprove 的钩子拒绝
-	RejectResumeInput      = "resume_input"      // 人工输入无效或未配置处理器
-)
 
 // approvalWait 判断 err 是否为审批暂停或未被采纳的审批，并返回拒绝原因类别（审批暂停时为空）。
 // 与别的错误并列（如解锁失败）时不算，照常作为失败。
@@ -86,11 +80,11 @@ func approvalWait(err error) (reason string, ok bool) {
 	case errors.Is(err, agentErrors.ErrApprovalRequired):
 		return "", true
 	case errors.Is(err, agentErrors.ErrApprovalMismatch):
-		return RejectApprovalMismatch, true
+		return constants.WorkflowRejectApprovalMismatch, true
 	case errors.As(err, &rejected):
-		return RejectBeforeApprove, true
+		return constants.WorkflowRejectBeforeApprove, true
 	case errors.As(err, &inputRejected):
-		return RejectResumeInput, true
+		return constants.WorkflowRejectResumeInput, true
 	}
 	return "", false
 }
@@ -100,7 +94,7 @@ func approvalWait(err error) (reason string, ok bool) {
 // 同一 Store，否则崩溃后子图从头重跑、已执行的节点再执行一次。读取子图状态时以该 Store 编译图后调用 Snapshot。
 // 运行 ID 取当前执行键，须在声明 Resumable 的持久操作内调用（见 durable.CanWait），否则在执行任何节点前
 // 返回 durable.ErrWaitNotResumable：其他操作不会重新进入，审批之后无法续跑。审批暂停返回 *durable.WaitError 而不是成功，
-// 等待不会被当作结果交给上层。续跑时从 durable.ResumeInput 读取审批键或 WithResume 编码的人工输入，首次运行时它被忽略。
+// 等待不会被当作结果交给上层。续跑时只解析 WithResume 编码的 ResumeRequest，裸审批键会被拒绝；首次运行时续跑输入被忽略。
 // 完成时返回最终状态。
 func (d *DurableGraph[T]) AsChildRunnable() *core.RunnableFunc[T, T] {
 	return core.NewRunnableFunc(func(ctx context.Context, initial T) (T, error) {
@@ -115,30 +109,31 @@ func (d *DurableGraph[T]) AsChildRunnable() *core.RunnableFunc[T, T] {
 		// CanWait 为真时 ctx 必有日志。
 		store := durable.JournalStore(ctx)
 		// 续跑输入只用于仍在等待的图；已越过审批后中断再进入时，宿主多半还带着同一输入。
-		approvalKey, ok := durable.ResumeInput(ctx)
+		payload, ok := durable.ResumeInput(ctx)
 		var current *GraphSnapshot[T]
 		if ok {
 			var err error
 			current, err = d.snapshot(ctx, store, id)
 			switch {
 			case errors.Is(err, os.ErrNotExist):
-				approvalKey = ""
+				ok = false
 			case err != nil:
 				return zero, err
 			case !current.Waiting:
-				approvalKey = ""
+				ok = false
 			}
 		}
+		var approvalKey string
 		var input json.RawMessage
-		if strings.HasPrefix(approvalKey, "{") {
+		if ok {
 			var req ResumeRequest
-			if err := json.Unmarshal([]byte(approvalKey), &req); err != nil || req.Key == "" {
+			if err := json.Unmarshal([]byte(payload), &req); err != nil || req.Key == "" {
 				current, e := d.snapshot(ctx, store, id)
 				if e != nil {
 					return zero, e
 				}
 				if current.Waiting && ctx.Err() == nil {
-					return zero, childWait(id, current, RejectResumeInput, nil)
+					return zero, childWait(id, current, constants.WorkflowRejectResumeInput, nil)
 				}
 				return zero, &ResumeRejectedError{Err: agentErrors.Newf(agentErrors.CodeInvalidInput, "invalid human resume request").WithComponent("workflow").WithOperation("as_child_runnable")}
 			}
@@ -153,7 +148,7 @@ func (d *DurableGraph[T]) AsChildRunnable() *core.RunnableFunc[T, T] {
 					return zero, err
 				}
 				if !ready && ctx.Err() == nil {
-					return zero, childWait(id, current, RejectApprovalMismatch, nil)
+					return zero, childWait(id, current, constants.WorkflowRejectApprovalMismatch, nil)
 				}
 			}
 			approvalKey, input = "", nil

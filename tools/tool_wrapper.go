@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/tools/middleware"
 )
@@ -16,7 +17,7 @@ import (
 //
 //	tool := NewCalculatorTool()
 //	wrappedTool := tools.WithMiddleware(tool,
-//	    middleware.NewLoggingMiddleware(),
+//	    middleware.Logging(),
 //	    middleware.Caching(middleware.WithTTL(5*time.Minute)),
 //	    middleware.RateLimit(middleware.WithQPS(10)),
 //	)
@@ -25,33 +26,9 @@ type MiddlewareTool struct {
 	invoker middleware.ToolInvoker
 }
 
-// WithMiddleware 为工具应用中间件
-//
-// 支持两种中间件类型：
-//   - ToolMiddleware: 基于接口的中间件（旧接口，已废弃）
-//   - ToolMiddlewareFunc: 基于函数的中间件（推荐）
-//
-// 参数:
-//   - tool: 要包装的工具
-//   - middlewares: 中间件列表，按顺序应用
-//
-// 返回:
-//   - interfaces.Tool: 包装后的工具
-//
-// 使用示例:
-//
-//	// 使用函数式中间件（推荐）
-//	wrappedTool := WithMiddleware(tool,
-//	    middleware.Caching(),
-//	    middleware.RateLimit(middleware.WithQPS(10)),
-//	)
-//
-//	// 使用接口式中间件（旧接口）
-//	wrappedTool := WithMiddleware(tool,
-//	    middleware.NewLoggingMiddleware(),
-//	    middleware.NewCachingMiddleware(),
-//	)
-func WithMiddleware(tool interfaces.Tool, middlewares ...interface{}) interfaces.Tool {
+// WithMiddleware 按传入顺序装配函数式中间件，第一个位于最外层。
+// 需要读取对象统计时，调用方保留对象并显式传入其 Wrap 方法。
+func WithMiddleware(tool interfaces.Tool, middlewares ...middleware.ToolMiddlewareFunc) interfaces.Tool {
 	if len(middlewares) == 0 {
 		return tool
 	}
@@ -67,23 +44,12 @@ func WithMiddleware(tool interfaces.Tool, middlewares ...interface{}) interfaces
 	// 从后向前应用（洋葱模型），这样第一个中间件在最外层
 	for i := len(middlewares) - 1; i >= 0; i-- {
 		mw := middlewares[i]
-
-		switch m := mw.(type) {
-		case middleware.ToolMiddlewareFunc:
-			// 函数式中间件（推荐）
-			invoker = m(tool, invoker)
-
-		case middleware.ToolMiddleware:
-			// 接口式中间件（旧接口，通过 Chain 转换）
-			invoker = middleware.Chain(tool, invoker, m)
-
-		case func(interfaces.Tool, middleware.ToolInvoker) middleware.ToolInvoker:
-			// 直接的函数类型
-			invoker = m(tool, invoker)
-
-		default:
-			// 忽略不支持的类型
-			continue
+		if mw == nil {
+			panic(agentErrors.New(agentErrors.CodeInvalidConfig, "工具中间件不能为空").WithComponent("tool_middleware").WithOperation("assemble"))
+		}
+		invoker = mw(tool, invoker)
+		if invoker == nil {
+			panic(agentErrors.New(agentErrors.CodeInvalidConfig, "工具中间件必须返回调用器").WithComponent("tool_middleware").WithOperation("assemble"))
 		}
 	}
 

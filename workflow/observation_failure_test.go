@@ -2,10 +2,13 @@ package workflow
 
 import (
 	"context"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/observe"
-	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 type eventCollector struct{ events []observe.Event }
@@ -14,8 +17,8 @@ func (c *eventCollector) Observe(_ context.Context, e observe.Event) { c.events 
 func TestPanickingNodeObservationIsNotSuccess(t *testing.T) {
 	g := NewGraph[int]()
 	require.NoError(t, g.AddNode("panic", func(context.Context, int) (int, error) { panic("sensitive panic body") }))
-	require.NoError(t, g.AddEdge(START, "panic"))
-	require.NoError(t, g.AddEdge("panic", END))
+	require.NoError(t, g.AddEdge(constants.WorkflowStart, "panic"))
+	require.NoError(t, g.AddEdge("panic", constants.WorkflowEnd))
 	r, err := g.Compile(context.Background())
 	require.NoError(t, err)
 	sink := &eventCollector{}
@@ -37,8 +40,8 @@ func TestPanickingNodeObservationIsNotSuccess(t *testing.T) {
 func TestDurableResumesHaveDistinctObservationIdentities(t *testing.T) {
 	g := NewGraph[int]()
 	require.NoError(t, g.AddNode("node", func(_ context.Context, n int) (int, error) { return n + 1, nil }))
-	require.NoError(t, g.AddEdge(START, "node"))
-	require.NoError(t, g.AddEdge("node", END))
+	require.NoError(t, g.AddEdge(constants.WorkflowStart, "node"))
+	require.NoError(t, g.AddEdge("node", constants.WorkflowEnd))
 	store, err := durable.NewFileStore(t.TempDir())
 	require.NoError(t, err)
 	run, err := g.CompileDurable(context.Background(), DurableConfig{Store: store, Version: "v1"})

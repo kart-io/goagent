@@ -8,8 +8,12 @@ package state
 
 import (
 	"fmt"
+	"math"
+	"math/big"
 	"reflect"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/kart-io/goagent/codec/json"
 	agentErrors "github.com/kart-io/goagent/errors"
@@ -139,7 +143,13 @@ func (s *StateSchema) Validate(data map[string]interface{}) error {
 
 // validateField 验证单个字段
 func (s *StateSchema) validateField(field *FieldSchema, value interface{}) error {
+	if !knownFieldType(field.Type) || (field.Type == FieldTypeArray && field.ItemType != "" && !knownFieldType(field.ItemType)) {
+		return agentErrors.Newf(agentErrors.CodeStateValidation, "字段 %s 使用未知类型", field.Name)
+	}
 	if value == nil {
+		if field.Required {
+			return agentErrors.Newf(agentErrors.CodeStateValidation, "必需字段 %s 不能为空", field.Name)
+		}
 		return nil
 	}
 
@@ -164,14 +174,33 @@ func (s *StateSchema) validateField(field *FieldSchema, value interface{}) error
 
 	// 嵌套对象验证
 	if field.Type == FieldTypeObject && field.ObjectSchema != nil {
-		if objMap, ok := value.(map[string]interface{}); ok {
-			if err := field.ObjectSchema.Validate(objMap); err != nil {
+		objMap := make(map[string]interface{})
+		iter := reflect.ValueOf(value).MapRange()
+		for iter.Next() {
+			objMap[iter.Key().String()] = iter.Value().Interface()
+		}
+		if err := field.ObjectSchema.Validate(objMap); err != nil {
+			return err
+		}
+	}
+	if field.Type == FieldTypeArray && field.ItemType != "" {
+		items := reflect.ValueOf(value)
+		for i := 0; i < items.Len(); i++ {
+			if err := s.validateField(&FieldSchema{Name: fmt.Sprintf("%s[%d]", field.Name, i), Type: field.ItemType}, items.Index(i).Interface()); err != nil {
 				return err
 			}
 		}
 	}
 
 	return nil
+}
+
+func knownFieldType(t FieldType) bool {
+	switch t {
+	case FieldTypeString, FieldTypeInt, FieldTypeFloat, FieldTypeBool, FieldTypeObject, FieldTypeArray, FieldTypeAny, FieldTypeBytes, FieldTypeTime:
+		return true
+	}
+	return false
 }
 
 // validateType 验证值的类型
@@ -189,9 +218,8 @@ func validateType(expected FieldType, value interface{}) error {
 			return agentErrors.Newf(agentErrors.CodeStateValidation, "expected string, got %s", kind).WithComponent("state_schema").WithOperation("validate_type")
 		}
 	case FieldTypeInt:
-		if kind != reflect.Int && kind != reflect.Int64 && kind != reflect.Int32 &&
-			kind != reflect.Float64 { // JSON 数字默认解析为 float64
-			return agentErrors.Newf(agentErrors.CodeStateValidation, "expected int, got %s", kind).WithComponent("state_schema").WithOperation("validate_type")
+		if _, err := integerValue(value); err != nil {
+			return err
 		}
 	case FieldTypeFloat:
 		if kind != reflect.Float64 && kind != reflect.Float32 {
@@ -202,16 +230,45 @@ func validateType(expected FieldType, value interface{}) error {
 			return agentErrors.Newf(agentErrors.CodeStateValidation, "expected bool, got %s", kind).WithComponent("state_schema").WithOperation("validate_type")
 		}
 	case FieldTypeObject:
-		if kind != reflect.Map {
+		if kind != reflect.Map || v.Type().Key().Kind() != reflect.String {
 			return agentErrors.Newf(agentErrors.CodeStateValidation, "expected object, got %s", kind).WithComponent("state_schema").WithOperation("validate_type")
 		}
 	case FieldTypeArray:
 		if kind != reflect.Slice && kind != reflect.Array {
 			return agentErrors.Newf(agentErrors.CodeStateValidation, "expected array, got %s", kind).WithComponent("state_schema").WithOperation("validate_type")
 		}
+	case FieldTypeBytes:
+		if kind != reflect.Slice || v.Type().Elem().Kind() != reflect.Uint8 {
+			return agentErrors.Newf(agentErrors.CodeStateValidation, "期望字节切片，实际为 %T", value).WithComponent("state_schema").WithOperation("validate_type")
+		}
+	case FieldTypeTime:
+		if _, ok := value.(time.Time); !ok {
+			return agentErrors.Newf(agentErrors.CodeStateValidation, "期望time.Time，实际为 %T", value).WithComponent("state_schema").WithOperation("validate_type")
+		}
+	default:
+		return agentErrors.Newf(agentErrors.CodeStateValidation, "未知字段类型 %q", expected).WithComponent("state_schema").WithOperation("validate_type")
 	}
 
 	return nil
+}
+
+// integerValue 将所有受支持整数表示约束到 int64 的有效范围，拒绝截断与溢出。
+func integerValue(value interface{}) (int64, error) {
+	v := reflect.ValueOf(value)
+	switch v.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return v.Int(), nil
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		if n := v.Uint(); n <= math.MaxInt64 {
+			return int64(n), nil
+		}
+	case reflect.Float32, reflect.Float64:
+		f := v.Float()
+		if !math.IsNaN(f) && !math.IsInf(f, 0) && math.Trunc(f) == f && f >= -0x1p63 && f < 0x1p63 {
+			return int64(f), nil
+		}
+	}
+	return 0, agentErrors.Newf(agentErrors.CodeTypeMismatch, "期望int64范围内整数，实际为 %v", value)
 }
 
 // =============================================================================
@@ -261,8 +318,8 @@ func (ts *TypedState) GetString(key string) (string, error) {
 		return "", nil
 	}
 
-	if str, ok := value.(string); ok {
-		return str, nil
+	if v := reflect.ValueOf(value); v.Kind() == reflect.String {
+		return v.String(), nil
 	}
 
 	return "", agentErrors.New(agentErrors.CodeTypeMismatch, "field is not a string").
@@ -276,17 +333,7 @@ func (ts *TypedState) GetInt(key string) (int64, error) {
 		return 0, nil
 	}
 
-	switch v := value.(type) {
-	case int:
-		return int64(v), nil
-	case int64:
-		return v, nil
-	case float64:
-		return int64(v), nil
-	default:
-		return 0, agentErrors.New(agentErrors.CodeTypeMismatch, "field is not an int").
-			WithContext("field", key)
-	}
+	return integerValue(value)
 }
 
 // GetFloat 获取浮点数字段
@@ -296,8 +343,8 @@ func (ts *TypedState) GetFloat(key string) (float64, error) {
 		return 0, nil
 	}
 
-	if f, ok := value.(float64); ok {
-		return f, nil
+	if v := reflect.ValueOf(value); v.Kind() == reflect.Float32 || v.Kind() == reflect.Float64 {
+		return v.Float(), nil
 	}
 
 	return 0, agentErrors.New(agentErrors.CodeTypeMismatch, "field is not a float").
@@ -311,8 +358,8 @@ func (ts *TypedState) GetBool(key string) (bool, error) {
 		return false, nil
 	}
 
-	if b, ok := value.(bool); ok {
-		return b, nil
+	if v := reflect.ValueOf(value); v.Kind() == reflect.Bool {
+		return v.Bool(), nil
 	}
 
 	return false, agentErrors.New(agentErrors.CodeTypeMismatch, "field is not a bool").
@@ -489,7 +536,7 @@ func (ts *TypedState) MarshalJSON() ([]byte, error) {
 	defer ts.mu.RUnlock()
 
 	envelope := StateEnvelope{
-		Data: ts.data,
+		Data: encodeStateJSONFields(ts.schema, ts.data),
 	}
 
 	if ts.schema != nil {
@@ -500,9 +547,63 @@ func (ts *TypedState) MarshalJSON() ([]byte, error) {
 	return json.Marshal(envelope)
 }
 
+// encodeStateJSONFields 仅投影 schema 声明的容器形状，不修改宿主持有的值。
+// Go 的字节切片默认编码为 base64；Array 必须显式展开，Bytes 则保留默认编码。
+func encodeStateJSONFields(schema *StateSchema, data map[string]interface{}) map[string]interface{} {
+	if schema == nil {
+		return data
+	}
+	values := make(map[string]interface{}, len(data))
+	for name, value := range data {
+		values[name] = encodeStateJSONField(schema.Fields[name], value)
+	}
+	return values
+}
+
+func encodeStateJSONField(field *FieldSchema, value interface{}) interface{} {
+	if field == nil || value == nil {
+		return value
+	}
+	v := reflect.ValueOf(value)
+	switch field.Type {
+	case FieldTypeArray:
+		if v.Kind() != reflect.Slice && v.Kind() != reflect.Array {
+			return value
+		}
+		if v.Kind() == reflect.Slice && v.IsNil() {
+			return []interface{}(nil)
+		}
+		items := make([]interface{}, v.Len())
+		var item *FieldSchema
+		if field.ItemType != "" {
+			item = &FieldSchema{Type: field.ItemType}
+		}
+		for i := range items {
+			items[i] = encodeStateJSONField(item, v.Index(i).Interface())
+		}
+		return items
+	case FieldTypeObject:
+		if field.ObjectSchema == nil || v.Kind() != reflect.Map || v.Type().Key().Kind() != reflect.String || v.IsNil() {
+			return value
+		}
+		values := make(map[string]interface{}, v.Len())
+		iter := v.MapRange()
+		for iter.Next() {
+			name := iter.Key().String()
+			values[name] = encodeStateJSONField(field.ObjectSchema.Fields[name], iter.Value().Interface())
+		}
+		return values
+	}
+	return value
+}
+
 // UnmarshalJSON 实现 json.Unmarshaler
 func (ts *TypedState) UnmarshalJSON(data []byte) error {
-	var envelope StateEnvelope
+	// 先保留字段原文；整数不能先经过 float64，字节与时间只能在 JSON 边界恢复。
+	var envelope struct {
+		SchemaVersion string                     `json:"schema_version"`
+		Data          map[string]json.RawMessage `json:"data"`
+	}
 	if err := json.Unmarshal(data, &envelope); err != nil {
 		return agentErrors.Wrap(err, agentErrors.CodeStoreSerialization, "failed to unmarshal state").
 			WithComponent("typed_state").
@@ -520,7 +621,116 @@ func (ts *TypedState) UnmarshalJSON(data []byte) error {
 		}
 	}
 
-	return ts.FromMap(envelope.Data)
+	values, err := decodeStateJSONFields(ts.schema, envelope.Data)
+	if err != nil {
+		return agentErrors.Wrap(err, agentErrors.CodeStateValidation, "状态JSON字段恢复失败").WithComponent("typed_state").WithOperation("unmarshal")
+	}
+	// 全部恢复并验证成功后才替换现有状态，不留下部分修改。
+	return ts.FromMap(values)
+}
+
+func decodeStateJSONFields(schema *StateSchema, raw map[string]json.RawMessage) (map[string]interface{}, error) {
+	values := make(map[string]interface{}, len(raw))
+	for name, data := range raw {
+		var field *FieldSchema
+		if schema != nil {
+			field = schema.Fields[name]
+		}
+		value, err := decodeStateJSONField(field, data)
+		if err != nil {
+			return nil, fmt.Errorf("字段 %s: %w", name, err)
+		}
+		values[name] = value
+	}
+	return values, nil
+}
+
+func decodeStateJSONField(field *FieldSchema, data json.RawMessage) (interface{}, error) {
+	if field != nil && strings.TrimSpace(string(data)) == "null" {
+		switch field.Type {
+		case FieldTypeBytes:
+			return []byte(nil), nil
+		case FieldTypeArray:
+			return []interface{}(nil), nil
+		case FieldTypeObject:
+			if !field.Required {
+				return nil, nil
+			}
+			return map[string]interface{}(nil), nil
+		}
+	}
+	if field != nil && strings.TrimSpace(string(data)) != "null" {
+		switch field.Type {
+		case FieldTypeBytes:
+			var value []byte
+			err := json.Unmarshal(data, &value)
+			return value, err
+		case FieldTypeTime:
+			var value time.Time
+			err := json.Unmarshal(data, &value)
+			return value, err
+		case FieldTypeInt:
+			var value interface{}
+			if err := json.Unmarshal(data, &value, json.UseNumber); err != nil {
+				return nil, err
+			}
+			if number, ok := value.(json.Number); ok {
+				return decodeStateJSONInteger(number)
+			}
+			return value, nil
+		case FieldTypeObject:
+			if field.ObjectSchema != nil {
+				var raw map[string]json.RawMessage
+				if err := json.Unmarshal(data, &raw); err != nil {
+					return nil, err
+				}
+				return decodeStateJSONFields(field.ObjectSchema, raw)
+			}
+		case FieldTypeArray:
+			if field.ItemType != "" {
+				var raw []json.RawMessage
+				if err := json.Unmarshal(data, &raw); err != nil {
+					return nil, err
+				}
+				values := make([]interface{}, len(raw))
+				for i, item := range raw {
+					value, err := decodeStateJSONField(&FieldSchema{Type: field.ItemType}, item)
+					if err != nil {
+						return nil, fmt.Errorf("元素 %d: %w", i, err)
+					}
+					values[i] = value
+				}
+				return values, nil
+			}
+		}
+	}
+	var value interface{}
+	err := json.Unmarshal(data, &value)
+	return value, err
+}
+
+// decodeStateJSONInteger 只在 JSON 边界将精确整数原文转为 int64；普通 FromMap 不接受数字字符串。
+func decodeStateJSONInteger(number json.Number) (int64, error) {
+	f, err := number.Float64()
+	if err != nil {
+		return 0, agentErrors.Wrapf(err, agentErrors.CodeStateValidation, "JSON整数超出int64范围: %s", number).WithComponent("typed_state").WithOperation("decode_integer")
+	}
+	if f < -0x1p63 || f > 0x1p63 {
+		return 0, agentErrors.Newf(agentErrors.CodeStateValidation, "JSON整数超出int64范围: %s", number).WithComponent("typed_state").WithOperation("decode_integer")
+	}
+	if f == 0 {
+		// 巨大负指数无需构建任意精度分母；非零尾数下溢仍然是小数。
+		mantissa := strings.FieldsFunc(string(number), func(r rune) bool { return r == 'e' || r == 'E' })[0]
+		if strings.ContainsAny(mantissa, "123456789") {
+			return 0, agentErrors.Newf(agentErrors.CodeStateValidation, "JSON数值不是整数: %s", number).WithComponent("typed_state").WithOperation("decode_integer")
+		}
+		return 0, nil
+	}
+	rational, ok := new(big.Rat).SetString(string(number))
+	if !ok || !rational.IsInt() || !rational.Num().IsInt64() {
+		return 0, agentErrors.Newf(agentErrors.CodeStateValidation, "JSON数值不是int64范围内整数: %s", number).WithComponent("typed_state").WithOperation("decode_integer")
+	}
+	return rational.Num().Int64(), nil
 }
 
 // =============================================================================

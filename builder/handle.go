@@ -9,17 +9,13 @@ import (
 	"slices"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/kart-io/goagent/codec/json"
-
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/durable"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
 )
-
-// inboxWriteTimeout 限制一次收件箱写入；写入不跟随运行的取消，取消后的确认仍要落盘。
-const inboxWriteTimeout = 5 * time.Second
 
 // 持久收件箱记录的输入种类。
 const (
@@ -85,7 +81,7 @@ func (b *inbox) persist(kind, text string) (uint64, error) {
 	if b.durable == nil {
 		return 0, nil
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), inboxWriteTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), constants.DefaultInboxWriteTimeout)
 	defer cancel()
 	return b.durable.Append(ctx, kind, text)
 }
@@ -113,7 +109,7 @@ func (b *inbox) ack(seqs []uint64) error {
 	if b == nil || b.durable == nil || len(seqs) == 0 {
 		return nil
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), inboxWriteTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), constants.DefaultInboxWriteTimeout)
 	defer cancel()
 	if err := b.durable.Ack(ctx, seqs...); err != nil {
 		return err
@@ -384,7 +380,7 @@ func (h *Handle) SteerOnce(key, msg string) error {
 	}
 	var seq uint64
 	if b.durable != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), inboxWriteTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), constants.DefaultInboxWriteTimeout)
 		defer cancel()
 		var duplicate bool
 		var err error

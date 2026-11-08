@@ -8,7 +8,7 @@ import (
 	"sync"
 
 	"github.com/kart-io/goagent/codec/json"
-
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/durable"
 	agentErrors "github.com/kart-io/goagent/errors"
 )
@@ -47,7 +47,7 @@ func (s *durableStore) refresh(ctx context.Context) error {
 	}
 	for _, ev := range events {
 		s.seq = ev.Seq
-		if ev.Type != TypeBoundarySnapshot {
+		if ev.Type != constants.SessionEventBoundarySnapshot {
 			continue
 		}
 		var d BoundaryData
@@ -104,7 +104,7 @@ func (s *durableStore) SaveAll(ctx context.Context, writes ...durable.Write) err
 			return err
 		}
 		raws[i] = raw
-		if events[i], err = NewEvent(TypeBoundarySnapshot, BoundaryData{ID: write.ID, Snapshot: raw}); err != nil {
+		if events[i], err = NewEvent(constants.SessionEventBoundarySnapshot, BoundaryData{ID: write.ID, Snapshot: raw}); err != nil {
 			return err
 		}
 	}

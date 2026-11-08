@@ -6,8 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"slices"
+	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	agentErrors "github.com/kart-io/goagent/errors"
 )
@@ -72,7 +75,7 @@ type ToolSelectorMiddleware struct {
 func NewToolSelectorMiddleware(tools []string, maxTools int) *ToolSelectorMiddleware {
 	return &ToolSelectorMiddleware{
 		BaseMiddleware: NewBaseMiddleware("tool-selector"),
-		availableTools: tools,
+		availableTools: slices.Clone(tools),
 		maxTools:       maxTools,
 		selector:       defaultToolSelector,
 	}
@@ -98,10 +101,18 @@ func (m *ToolSelectorMiddleware) OnBefore(ctx context.Context, request *Middlewa
 	}
 
 	// Select tools
-	selectedTools := m.selector(query, m.availableTools)
+	selectedTools := m.selector(query, slices.Clone(m.availableTools))
+	// 自定义选择器只能收窄候选集，不能增加未知工具或重复工具。
+	filtered := make([]string, 0, len(selectedTools))
+	for _, name := range selectedTools {
+		if slices.Contains(m.availableTools, name) && !slices.Contains(filtered, name) {
+			filtered = append(filtered, name)
+		}
+	}
+	selectedTools = filtered
 
 	// Limit number of tools
-	if len(selectedTools) > m.maxTools {
+	if m.maxTools >= 0 && len(selectedTools) > m.maxTools {
 		selectedTools = selectedTools[:m.maxTools]
 	}
 
@@ -130,6 +141,9 @@ func defaultToolSelector(query string, tools []string) []string {
 
 // shouldSelectTool determines if a tool should be selected for a query
 func shouldSelectTool(query string, tool string) bool {
+	if containsKeyword(query, tool) {
+		return true
+	}
 	// Simplified logic - in production, use more sophisticated matching
 	keywordMap := map[string][]string{
 		"calculator":   {"calculate", "math", "add", "subtract", "multiply", "divide"},
@@ -158,8 +172,11 @@ func shouldSelectTool(query string, tool string) bool {
 
 // containsKeyword checks if a query contains a keyword
 func containsKeyword(query, keyword string) bool {
-	// Simplified - in production, use proper NLP tokenization
-	return len(query) > 0 && len(keyword) > 0
+	if keyword == "" {
+		return false
+	}
+	words := strings.FieldsFunc(strings.ToLower(query), func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '_' })
+	return slices.Contains(words, strings.ToLower(keyword))
 }
 
 // RateLimiterMiddleware implements rate limiting

@@ -52,7 +52,7 @@ func TestToolExecutor_ExecuteParallel(t *testing.T) {
 	)
 
 	t.Run("Execute multiple tools successfully", func(t *testing.T) {
-		calls := []*ToolCall{
+		calls := []*ToolCallRequest{
 			{
 				Tool:  NewMockTool("tool1", 100*time.Millisecond, false),
 				Input: &interfaces.ToolInput{Args: map[string]interface{}{"arg": "value1"}},
@@ -92,7 +92,7 @@ func TestToolExecutor_ExecuteParallel(t *testing.T) {
 	})
 
 	t.Run("Handle tool failures", func(t *testing.T) {
-		calls := []*ToolCall{
+		calls := []*ToolCallRequest{
 			{
 				Tool:  NewMockTool("tool1", 50*time.Millisecond, false),
 				Input: &interfaces.ToolInput{Args: map[string]interface{}{}},
@@ -136,7 +136,7 @@ func TestToolExecutor_ExecuteSequential(t *testing.T) {
 	executor := NewToolExecutor(WithTimeout(5 * time.Second))
 
 	t.Run("Execute tools in sequence", func(t *testing.T) {
-		calls := []*ToolCall{
+		calls := []*ToolCallRequest{
 			{
 				Tool:  NewMockTool("tool1", 100*time.Millisecond, false),
 				Input: &interfaces.ToolInput{Args: map[string]interface{}{}},
@@ -169,7 +169,7 @@ func TestToolExecutor_ExecuteSequential(t *testing.T) {
 	})
 
 	t.Run("Stop on first error", func(t *testing.T) {
-		calls := []*ToolCall{
+		calls := []*ToolCallRequest{
 			{
 				Tool:  NewMockTool("tool1", 50*time.Millisecond, true),
 				Input: &interfaces.ToolInput{Args: map[string]interface{}{}},
@@ -362,9 +362,9 @@ func TestToolExecutor_ExecuteWithDependencies(t *testing.T) {
 func BenchmarkToolExecutor_Parallel(b *testing.B) {
 	executor := NewToolExecutor(WithMaxConcurrency(10))
 
-	calls := make([]*ToolCall, 10)
+	calls := make([]*ToolCallRequest, 10)
 	for i := 0; i < 10; i++ {
-		calls[i] = &ToolCall{
+		calls[i] = &ToolCallRequest{
 			Tool:  NewMockTool("tool", 10*time.Millisecond, false),
 			Input: &interfaces.ToolInput{Args: map[string]interface{}{}},
 			ID:    string(rune('A' + i)),

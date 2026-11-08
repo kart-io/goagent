@@ -8,6 +8,7 @@ import (
 	"log"
 	"strings"
 
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/workflow"
 )
@@ -80,7 +81,7 @@ func build() *core.StreamRunnable[state, state] {
 		s.Answer = "快速处理：" + strings.TrimPrefix(s.Question, "quick:")
 		return s, nil
 	}))
-	must(graph.AddEdge(workflow.START, "validate"))
+	must(graph.AddEdge(constants.WorkflowStart, "validate"))
 	must(graph.AddBranch("validate", func(_ context.Context, s state) (string, error) {
 		if strings.HasPrefix(s.Question, "quick:") {
 			return "fast", nil
@@ -93,9 +94,9 @@ func build() *core.StreamRunnable[state, state] {
 		if s.Attempts < 2 {
 			return "draft", nil
 		}
-		return workflow.END, nil
-	}, "draft", workflow.END))
-	must(graph.AddEdge("fast", workflow.END))
+		return constants.WorkflowEnd, nil
+	}, "draft", constants.WorkflowEnd))
+	must(graph.AddEdge("fast", constants.WorkflowEnd))
 	compiled, err := graph.Compile(context.Background())
 	must(err)
 	return compiled

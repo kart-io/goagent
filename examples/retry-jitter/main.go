@@ -35,14 +35,14 @@ func main() {
 		}),
 	)
 
-	call := &tools.ToolCall{
+	call := &tools.ToolCallRequest{
 		Tool:  failingTool,
 		Input: &interfaces.ToolInput{Args: map[string]interface{}{}},
 		ID:    "call1",
 	}
 
 	start := time.Now()
-	results, _ := executor1.ExecuteParallel(context.Background(), []*tools.ToolCall{call})
+	results, _ := executor1.ExecuteParallel(context.Background(), []*tools.ToolCallRequest{call})
 	duration := time.Since(start)
 
 	fmt.Printf("执行结果: %v\n", results[0].Error)
@@ -63,7 +63,7 @@ func main() {
 	)
 
 	start = time.Now()
-	results, _ = executor2.ExecuteParallel(context.Background(), []*tools.ToolCall{call})
+	results, _ = executor2.ExecuteParallel(context.Background(), []*tools.ToolCallRequest{call})
 	duration = time.Since(start)
 
 	fmt.Printf("执行结果: %v\n", results[0].Error)
@@ -86,7 +86,7 @@ func main() {
 	fmt.Println("执行 10 次，观察延迟差异:")
 	for i := 0; i < 10; i++ {
 		start = time.Now()
-		_, _ = executor3.ExecuteParallel(context.Background(), []*tools.ToolCall{call})
+		_, _ = executor3.ExecuteParallel(context.Background(), []*tools.ToolCallRequest{call})
 		duration = time.Since(start)
 		fmt.Printf("  第 %2d 次: %v\n", i+1, duration)
 	}

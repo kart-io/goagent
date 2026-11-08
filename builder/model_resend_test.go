@@ -4,6 +4,9 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
@@ -11,7 +14,6 @@ import (
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/tools"
-	"github.com/stretchr/testify/require"
 )
 
 // resendFixture 用保存失败模拟进程在回合落盘前崩溃。
@@ -124,14 +126,14 @@ func TestModelResendStopsAtAttemptLimit(t *testing.T) {
 	agent := resendAgent(t, model)
 
 	*f.crash = true
-	for range modelResendAttempts {
+	for range constants.DefaultModelResendAttempts {
 		_, err := agent.Invoke(f.ctx, "q")
 		require.ErrorContains(t, err, "crash")
 	}
 	*f.crash = false
 	_, err := agent.Invoke(f.ctx, "q")
 	require.ErrorIs(t, err, agentErrors.ErrOperationAttention)
-	require.Equal(t, modelResendAttempts, model.calls)
+	require.Equal(t, constants.DefaultModelResendAttempts, model.calls)
 }
 
 func TestModelResendRejectedByBudgetBeforeSend(t *testing.T) {

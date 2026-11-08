@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/kart-io/goagent/codec/json"
-
 	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/constants"
 )
 
 func TestInboxKeepsEntriesUntilAcked(t *testing.T) {
@@ -91,15 +92,15 @@ func TestInboxAppendOnceBoundsRememberedKeys(t *testing.T) {
 	ctx := WithJournal(WithExecutionKey(context.Background(), "run"), store)
 	box, _, err := OpenInbox(ctx)
 	require.NoError(t, err)
-	for i := range inboxSeenLimit + 1 {
+	for i := range constants.DurableInboxSeenLimit + 1 {
 		_, duplicate, err := box.AppendOnce(ctx, fmt.Sprintf("k%d", i), "steer", "x")
 		require.NoError(t, err)
 		require.False(t, duplicate)
 	}
 	state, err := box.load(ctx)
 	require.NoError(t, err)
-	require.Len(t, state.Seen, inboxSeenLimit)
-	_, duplicate, err := box.AppendOnce(ctx, fmt.Sprintf("k%d", inboxSeenLimit), "steer", "x")
+	require.Len(t, state.Seen, constants.DurableInboxSeenLimit)
+	_, duplicate, err := box.AppendOnce(ctx, fmt.Sprintf("k%d", constants.DurableInboxSeenLimit), "steer", "x")
 	require.NoError(t, err)
 	require.True(t, duplicate, "最近的键仍然记得")
 }

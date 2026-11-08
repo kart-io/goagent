@@ -17,6 +17,8 @@ ctx = durable.WithJournal(durable.WithExecutionKey(ctx, runKey), session.Durable
 
 ## 事件
 
+事件标识统一使用 `github.com/kart-io/goagent/constants` 中的 `SessionEvent*`，例如 `constants.SessionEventUserMessage`、`constants.SessionEventBoundarySnapshot`；原 `session.Type*` 入口已删除。`session.Event`、`MessageData` 等事件结构及日志行为保持在本包。
+
 | 类型 | 内容 |
 |---|---|
 | `turn/start`、`turn/end` | 一轮的输入、答复与用量；中断的轮次在下一轮开始时记为 `aborted` |
@@ -49,6 +51,10 @@ Builder 在每次模型请求前把实际发送的对话（不含 system 与运�
 - PostgreSQL：[goagent-contrib 的 `durable/pgstore`](https://github.com/kart-io/goagent-contrib/tree/master/durable/pgstore) 提供 `SessionStore`，锁为租约，追加快照时校验持有者。
 
 自行实现 `Store` 时用 `sessiontest.Run` 验证契约，传入同一后端上的两个实例模拟两个进程；以租约实现 `Lock` 的后端经 `Options.Leases` 另跑接管与写入隔离用例。
+
+事件使用独立所有权：`Append/AppendAll` 返回后调用方可以复用输入的 `Data` 与 `Surface`；修改 `Read` 的返回值不会改变日志或 `Fork` 的源与分支。`Recorder.Append`、`OpenRecorder` 和 `Recorder.Events` 返回的事件也与记录器内部状态隔离；修改已有返回值不会形成一次日志更新。自定义 Store 应保持相同约定，不能让内存与文件后端产生不同恢复结果。
+
+首次创建文件时，在完整文件头换行写完之前退出会留下空文件或半截首行；下次非空追加会重建完整文件头、同步文件及目录，再返回成功。完整但非法的文件头仍拒绝读取与追加，不会把损坏数据当空会话覆盖。
 
 `Rewind(ctx, store, id, to, expected)` 以调用方看到的最后序号做比较并交换，其间有新写入时返回 `ErrConflict`。被撤销的事件仍保留在日志中；持久操作的快照不受影响。`Fork` 把会话的前缀复制为新会话。
 

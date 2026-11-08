@@ -4,10 +4,12 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/durable"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/workflow"
-	"github.com/stretchr/testify/require"
 )
 
 // panicLoadStore 的 Load 直接 panic。
@@ -45,8 +47,8 @@ func TestDurableGraphPanicIsPanicError(t *testing.T) {
 	t.Run("decode", func(t *testing.T) {
 		g := workflow.NewGraph[*panicDecodeState]()
 		require.NoError(t, g.AddNode("effect", func(_ context.Context, s *panicDecodeState) (*panicDecodeState, error) { return s, nil }))
-		require.NoError(t, g.AddEdge(workflow.START, "effect"))
-		require.NoError(t, g.AddEdge("effect", workflow.END))
+		require.NoError(t, g.AddEdge(constants.WorkflowStart, "effect"))
+		require.NoError(t, g.AddEdge("effect", constants.WorkflowEnd))
 		run, err := g.CompileDurable(ctx, workflow.DurableConfig{Store: newStore(t), Version: "v1"})
 		require.NoError(t, err)
 		_, err = run.Run(ctx, "run", &panicDecodeState{N: 1}, "")
@@ -57,9 +59,9 @@ func TestDurableGraphPanicIsPanicError(t *testing.T) {
 		g := workflow.NewGraph[int]()
 		require.NoError(t, g.AddNode("a", noop))
 		require.NoError(t, g.AddNode("b", noop))
-		require.NoError(t, g.AddEdge(workflow.START, "a"))
+		require.NoError(t, g.AddEdge(constants.WorkflowStart, "a"))
 		require.NoError(t, g.AddBranch("a", func(context.Context, int) (string, error) { panic("route boom") }, "b"))
-		require.NoError(t, g.AddEdge("b", workflow.END))
+		require.NoError(t, g.AddEdge("b", constants.WorkflowEnd))
 		run, err := g.CompileDurable(ctx, workflow.DurableConfig{Store: newStore(t), Version: "v1"})
 		require.NoError(t, err)
 		_, err = run.Run(ctx, "run", 1, "")

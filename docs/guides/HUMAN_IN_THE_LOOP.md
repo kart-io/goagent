@@ -53,7 +53,7 @@ workflow.WithResumeHandler(func(
 })
 ```
 
-处理器在运行锁内执行，必须无副作用，不能重入同一运行的 `Run`、`Resume` 或 `Snapshot`。写盘失败后可能再次调用它。配置处理器后，旧的纯审批入口也会调用它，输入为 nil；需要人工载荷时应拒绝 nil，不能只靠 UI 必填。JSON `null` 与没有载荷不同，都会交给处理器校验。
+处理器在运行锁内执行，必须无副作用，不能重入同一运行的 `Run`、`Resume` 或 `Snapshot`。写盘失败后可能再次调用它。配置处理器后，没有人工载荷的审批请求也会调用它，输入为 nil；需要人工载荷时应拒绝 nil，不能只靠 UI 必填。JSON `null` 与没有载荷不同，都会交给处理器校验。
 
 `WithBeforeApprove` 在处理器之后校验**拟保存的新状态**，可复核暂停期间变化的订单事实、权限和期限；它拿到的也是独立副本，修改无效。业务上的“拒绝”可作为有效人工决定写入状态并路由到拒绝分支；`ResumeRejectedError` 表示本次输入无效，`ApprovalRejectedError` 表示授权/复核失败，两者都保持原检查点继续等待。
 
@@ -118,7 +118,7 @@ if err != nil { return err }
 out, err := agent.AsRunnable().Invoke(resumeCtx, originalInput)
 ```
 
-这两个 Key 不同，不能互换。子图与父操作使用相同 Store；输入拒绝会保持父操作为 waiting，并通过 `ChildContinuation.Reason=resume_input` 返回。旧的 `durable.WithResume(ctx, operationKey, approvalKey)` 纯审批调用继续可用。由 `Start` 开始的 Agent 应同样以 `Start` 恢复，见 [Builder](../../builder/README.md)。
+这两个 Key 不同，不能互换。子图与父操作使用相同 Store；输入拒绝会保持父操作为 waiting，并通过 `ChildContinuation.Reason=resume_input` 返回。子图审批只接受 `workflow.WithResume` 编码的结构化 `ResumeRequest`，不再接受 `durable.WithResume(ctx, operationKey, approvalKey)` 裸键调用；`durable.WithResume` 仍可向叶子中断传原始输入。由 `Start` 开始的 Agent 应同样以 `Start` 恢复，见 [Builder](../../builder/README.md)。
 
 ## 现有 Interrupt 与 Checkpointer 的边界
 

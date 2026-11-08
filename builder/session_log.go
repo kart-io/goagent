@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/session"
 	agentErrors "github.com/kart-io/goagent/errors"
@@ -94,7 +95,7 @@ func (a *ConfigurableAgent[C, S]) openSessionTurn(ctx context.Context, input str
 			turn.resumed = open.Seq
 			return turn, history, err
 		}
-		end, err := session.NewEvent(session.TypeTurnEnd, session.TurnEnd{Aborted: true})
+		end, err := session.NewEvent(constants.SessionEventTurnEnd, session.TurnEnd{Aborted: true})
 		if err != nil {
 			return nil, nil, err
 		}
@@ -107,7 +108,7 @@ func (a *ConfigurableAgent[C, S]) openSessionTurn(ctx context.Context, input str
 	if err != nil {
 		return nil, nil, err
 	}
-	start, err := session.NewEvent(session.TypeTurnStart, session.TurnStart{Input: input, ExecutionKey: key})
+	start, err := session.NewEvent(constants.SessionEventTurnStart, session.TurnStart{Input: input, ExecutionKey: key})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -119,7 +120,7 @@ func (a *ConfigurableAgent[C, S]) openSessionTurn(ctx context.Context, input str
 func completedSessionTurn(events []session.Event, key, input string) (int, error) {
 	laterTurn := false
 	for i := len(events) - 1; i >= 0; i-- {
-		if events[i].Type != session.TypeTurnStart {
+		if events[i].Type != constants.SessionEventTurnStart {
 			continue
 		}
 		var start session.TurnStart
@@ -134,12 +135,12 @@ func completedSessionTurn(events []session.Event, key, input string) (int, error
 			return -1, agentErrors.Newf(agentErrors.CodeConflict, "执行键已绑定其他输入或历史轮次，须使用新的执行键").WithComponent("builder").WithOperation("completed_session_turn")
 		}
 		for _, ev := range events[i+1:] {
-			if ev.Type == session.TypeRewind {
+			if ev.Type == constants.SessionEventRewind {
 				return -1, agentErrors.Newf(agentErrors.CodeConflict, "退回后的会话须使用新的执行键").WithComponent("builder").WithOperation("completed_session_turn")
 			}
 		}
 		for _, ev := range events[i+1:] {
-			if ev.Type != session.TypeTurnEnd {
+			if ev.Type != constants.SessionEventTurnEnd {
 				continue
 			}
 			var end session.TurnEnd
@@ -218,7 +219,7 @@ func (t *sessionTurn) end(ctx context.Context, messages []llm.Message, answer st
 		copy := *usage
 		d.Usage = &copy
 	}
-	ev, err := session.NewEvent(session.TypeTurnEnd, d)
+	ev, err := session.NewEvent(constants.SessionEventTurnEnd, d)
 	if err != nil {
 		return err
 	}

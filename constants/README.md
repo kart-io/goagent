@@ -13,6 +13,14 @@
 | `store.go` | 存储类型、操作及连接参数 |
 | `parsers.go` | 解析字段、标记和模式 |
 | `defaults.go` | 共享超时、清理期限及各调用层默认策略 |
+| `cache.go` | 缓存分片上限、中间件/工具缓存默认值与独立预设 |
+| `execution.go` | 模型重发、收件箱写入和暂时性请求重试策略 |
+| `budget.go` | Agent 拓扑预算默认值与架构相关无限余量 |
+| `durable.go` | 中断续跑协议、原因及重入/去重边界 |
+| `session.go` | 会话事件类型；事件数据结构仍由 `core/session` 定义 |
+| `workflow.go` | 图起止标记、多 Agent 完成标记和续跑拒绝原因 |
+| `checkpoint.go` | 复制模式、健康检查与故障切换默认值 |
+| `memory.go` | 记忆默认配置、向量存储及嵌入提供商词汇 |
 
 ```go
 import shared "github.com/kart-io/goagent/constants"
@@ -34,3 +42,7 @@ role := shared.RoleAssistant
 - 数字相同不代表语义相同。Provider 兜底 `DefaultProviderMaxTokens=1000`、旧补全接口 `DefaultCompletionMaxTokens=2048`、Client/Agent 默认 2000 仍分别管理。
 - 显式区分单位：`DefaultToolTimeoutSeconds` 是整数秒，`DefaultToolTimeout` 是 `time.Duration`，原接口类型不变。
 - 不为每个字面量创建通用常量，也不按相同字符串强行合并不同领域概念。迁移验证保留精确值、单位与调用行为，并单独检查 Provider 具名类型位置的有意变化。
+- `BudgetUnlimited` 保留 `math.MaxInt`，随目标架构确定上限；不得固化为 64 位十进制字面量。`DefaultApprovalTimeout`、`DefaultInboxWriteTimeout`、`MaxModelRetryAfter` 等仍为 `time.Duration`。
+- `DefaultTransientRetryBaseDelay=500ms`、`DefaultTransientRetryMaxDelay=8s` 专属于 `builder.RetryTransient`；提供商层 `DefaultBaseDelay=1s`、`DefaultMaxDelay=30s` 是另一策略。
+- 工具缓存的默认配置、性能配置、负载配置和便捷构造器预设分别命名；领域类型 `CleanupStrategy`、`PerformanceProfile`、`WorkloadType` 保持在 `tools`。
+- `VectorStoreTypeChroma`、`VectorStoreTypePinecone`、`VectorStoreTypeWeaviate`、`EmbedderProviderLocal`、`EmbedderProviderMock` 仅保留公开配置词汇，不代表框架已实现或注册这些后端。

@@ -7,8 +7,11 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/state"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
+	"github.com/kart-io/goagent/internal/snapshot"
 )
 
 // Object pools for MiddlewareRequest and MiddlewareResponse to reduce allocations
@@ -33,17 +36,15 @@ var middlewareResponsePool = sync.Pool{
 // GetMiddlewareRequest retrieves a MiddlewareRequest from the object pool
 func GetMiddlewareRequest() *MiddlewareRequest {
 	req := middlewareRequestPool.Get().(*MiddlewareRequest)
-	// Reset to default state (使用 Go 1.21+ clear() 提高性能)
-	req.Input = nil
-	req.State = nil
-	req.Runtime = nil
+	metadata, headers := req.Metadata, req.Headers
+	*req = MiddlewareRequest{Metadata: metadata, Headers: headers}
+	// 清空容器并保留容量，其余所有字段已整体归零。
 	if len(req.Metadata) > 0 {
 		clear(req.Metadata)
 	}
 	if len(req.Headers) > 0 {
 		clear(req.Headers)
 	}
-	req.Timestamp = time.Time{}
 	return req
 }
 
@@ -57,17 +58,15 @@ func PutMiddlewareRequest(req *MiddlewareRequest) {
 // GetMiddlewareResponse retrieves a MiddlewareResponse from the object pool
 func GetMiddlewareResponse() *MiddlewareResponse {
 	resp := middlewareResponsePool.Get().(*MiddlewareResponse)
-	// Reset to default state (使用 Go 1.21+ clear() 提高性能)
-	resp.Output = nil
-	resp.State = nil
+	metadata, headers := resp.Metadata, resp.Headers
+	*resp = MiddlewareResponse{Metadata: metadata, Headers: headers}
+	// 清空容器并保留容量，其余所有字段已整体归零。
 	if len(resp.Metadata) > 0 {
 		clear(resp.Metadata)
 	}
 	if len(resp.Headers) > 0 {
 		clear(resp.Headers)
 	}
-	resp.Duration = 0
-	resp.Error = nil
 	return resp
 }
 
@@ -209,50 +208,49 @@ func RequestFromContext(ctx context.Context) (*MiddlewareRequest, bool) {
 // Execute runs the request through the middleware chain
 // 热路径零拷贝：直接读取不可变 slice，无需加锁或复制
 func (c *MiddlewareChain) Execute(ctx context.Context, request *MiddlewareRequest) (*MiddlewareResponse, error) {
-	// 原子加载不可变 slice，无需复制
-	middlewares := c.middlewares.Load().items
+	return executeMiddleware(ctx, request, c.handler, c.middlewares.Load().items, true)
+}
 
-	// Run OnBefore hooks in order
+type chainContextKey struct{}
+
+// executeMiddleware 为各链共用错误恢复、请求关联与处理器输出缓存边界。
+func executeMiddleware(ctx context.Context, request *MiddlewareRequest, handler Handler, middlewares []Middleware, after bool) (*MiddlewareResponse, error) {
+	ctx = context.WithValue(ctx, chainContextKey{}, true)
 	for i, mw := range middlewares {
-		var err error
 		entered := request
-		request, err = mw.OnBefore(ctx, request)
+		next, err := mw.OnBefore(ctx, request)
 		if err != nil {
-			// Allow middleware to handle the error
-			if handledErr := mw.OnError(ctx, err); handledErr != nil {
-				// 链到此终止，已进入的中间件不会再收到 OnAfter，须在这里收尾
-				errCtx := context.WithValue(ctx, requestContextKey{}, entered)
+			errCtx := context.WithValue(ctx, requestContextKey{}, entered)
+			if err = mw.OnError(errCtx, err); err != nil {
 				for _, previous := range middlewares[:i] {
-					_ = previous.OnError(errCtx, handledErr)
+					_ = previous.OnError(errCtx, err)
 				}
-				return nil, handledErr
+				return nil, err
 			}
-			// Error was suppressed, continue
+			if next == nil {
+				next = entered
+			}
 		}
+		if next == nil {
+			return nil, agentErrors.Newf(agentErrors.CodeMiddlewareExecution, "中间件 %s 返回空请求", mw.Name()).WithComponent("middleware_chain").WithOperation("execute")
+		}
+		request = next
 	}
-
-	// 检查缓存命中（短路执行）
-	var response *MiddlewareResponse
-	var err error
+	if request == nil {
+		return nil, agentErrors.New(agentErrors.CodeInvalidInput, "中间件请求不能为空").WithComponent("middleware_chain").WithOperation("execute")
+	}
+	ctx = context.WithValue(ctx, requestContextKey{}, request)
 	start := time.Now()
-
-	if request != nil && request.Metadata != nil {
-		if cached, ok := request.Metadata["cached_response"].(*MiddlewareResponse); ok && cached != nil {
-			// 缓存命中，跳过 handler 执行
-			response = cached
-			response.Duration = 0 // 缓存响应无执行时间
-		}
-	}
-
-	// 如果没有缓存命中，执行主处理器
-	if response == nil {
-		response, err = c.handler(ctx, request)
+	response, hit := request.Metadata["cached_response"].(*MiddlewareResponse)
+	hit = hit && response != nil
+	if !hit {
+		var err error
+		response, err = handler(ctx, request)
 		if err != nil {
-			// Let middleware handle the error
-			errCtx := context.WithValue(ctx, requestContextKey{}, request)
 			for _, mw := range middlewares {
-				if handledErr := mw.OnError(errCtx, err); handledErr != nil {
-					err = handledErr
+				err = mw.OnError(ctx, err)
+				if err == nil {
+					break
 				}
 			}
 			if err != nil {
@@ -260,34 +258,40 @@ func (c *MiddlewareChain) Execute(ctx context.Context, request *MiddlewareReques
 			}
 		}
 	}
-
-	// Ensure response is not nil
 	if response == nil {
-		response = &MiddlewareResponse{
-			Output:   nil,
-			State:    request.State,
-			Metadata: make(map[string]interface{}),
-			Headers:  make(map[string]string),
-			Duration: time.Since(start),
-			Error:    err,
-		}
+		response = &MiddlewareResponse{State: request.State, Metadata: make(map[string]interface{}), Headers: make(map[string]string)}
+	}
+	if hit {
+		response.Duration = 0
 	} else if response.Duration == 0 {
-		// 仅当未设置时才计算 Duration（缓存命中时已设为 0）
 		response.Duration = time.Since(start)
 	}
-
-	// Run OnAfter hooks in reverse order
-	for i := len(middlewares) - 1; i >= 0; i-- {
-		mw := middlewares[i]
-		var afterErr error
-		response, afterErr = mw.OnAfter(ctx, response)
-		if afterErr != nil {
-			if handledErr := mw.OnError(ctx, afterErr); handledErr != nil {
-				return nil, handledErr
+	// 只缓存处理器结果；非幂等后处理在每个请求内各执行一次。
+	if !hit {
+		for _, mw := range middlewares {
+			if cache, ok := mw.(*CacheMiddleware); ok {
+				cache.storeResponse(cache.getCacheKey(request), response)
 			}
 		}
 	}
-
+	if after {
+		for i := len(middlewares) - 1; i >= 0; i-- {
+			entered := response
+			next, err := middlewares[i].OnAfter(ctx, response)
+			if err != nil {
+				if err = middlewares[i].OnError(ctx, err); err != nil {
+					return nil, err
+				}
+				if next == nil {
+					next = entered
+				}
+			}
+			if next == nil {
+				return nil, agentErrors.Newf(agentErrors.CodeMiddlewareExecution, "中间件 %s 返回空响应", middlewares[i].Name()).WithComponent("middleware_chain").WithOperation("execute")
+			}
+			response = next
+		}
+	}
 	return response, nil
 }
 
@@ -524,18 +528,18 @@ type CacheEntry struct {
 	ExpiresAt time.Time
 }
 
-// defaultNumShards 默认分片数量（应为 2 的幂）
-const defaultNumShards = 32
-
 // NewCacheMiddleware creates a cache middleware with sharded locks
 func NewCacheMiddleware(ttl time.Duration) *CacheMiddleware {
-	return NewCacheMiddlewareWithShards(ttl, defaultNumShards)
+	return NewCacheMiddlewareWithShards(ttl, constants.DefaultMiddlewareCacheShards)
 }
 
 // NewCacheMiddlewareWithShards creates a cache middleware with specified number of shards
 func NewCacheMiddlewareWithShards(ttl time.Duration, numShards uint32) *CacheMiddleware {
+	if numShards > constants.MaxCacheShards {
+		panic(agentErrors.New(agentErrors.CodeInvalidConfig, "缓存分片数超过上限").WithComponent("cache_middleware").WithOperation("initialize"))
+	}
 	if numShards == 0 {
-		numShards = defaultNumShards
+		numShards = constants.DefaultMiddlewareCacheShards
 	}
 	// 确保是 2 的幂，方便取模
 	numShards = nextPowerOfTwo(numShards)
@@ -597,9 +601,13 @@ func (m *CacheMiddleware) OnBefore(ctx context.Context, request *MiddlewareReque
 	if request.Metadata == nil {
 		request.Metadata = make(map[string]interface{})
 	}
+	delete(request.Metadata, "cache_hit")
+	delete(request.Metadata, "cached_response")
 	if ok && time.Now().Before(entry.ExpiresAt) {
-		request.Metadata["cache_hit"] = true
-		request.Metadata["cached_response"] = entry.Response
+		if response, err := cloneCachedResponse(entry.Response); err == nil {
+			request.Metadata["cache_hit"] = true
+			request.Metadata["cached_response"] = response
+		}
 	} else {
 		// 未命中：处理器把请求元数据带入响应（Builder 即如此），OnAfter 据此写入缓存
 		request.Metadata["original_input"] = request.Input
@@ -610,38 +618,59 @@ func (m *CacheMiddleware) OnBefore(ctx context.Context, request *MiddlewareReque
 
 // OnAfter caches successful responses
 func (m *CacheMiddleware) OnAfter(ctx context.Context, response *MiddlewareResponse) (*MiddlewareResponse, error) {
-	// Check if this was a cache hit
-	if response.Metadata != nil {
-		if cached, ok := response.Metadata["cached_response"].(*MiddlewareResponse); ok {
-			return cached, nil
-		}
+	if managed, _ := ctx.Value(chainContextKey{}).(bool); !managed {
+		m.storeResponse(m.getCacheKeyFromResponse(response), response)
 	}
-
-	// Cache the response
-	if response.Error == nil {
-		key := m.getCacheKeyFromResponse(response)
-		if key != "" {
-			// 缓存的副本不带键：命中时链直接返回它，不会再次写入而延长过期时间
-			cached := *response
-			cached.Metadata = make(map[string]interface{}, len(response.Metadata))
-			for k, v := range response.Metadata {
-				if k != "original_input" {
-					cached.Metadata[k] = v
-				}
-			}
-			entry := &CacheEntry{
-				Response:  &cached,
-				ExpiresAt: time.Now().Add(m.ttl),
-			}
-
-			shard := m.getShard(key)
-			shard.mu.Lock()
-			shard.cache[key] = entry
-			shard.mu.Unlock()
-		}
-	}
-
 	return response, nil
+}
+
+// storeResponse 对不透明宿主对象跳过缓存；绝不以浅拷贝冒充请求隔离。
+func (m *CacheMiddleware) storeResponse(key string, response *MiddlewareResponse) {
+	if key == "" || response.Error != nil {
+		return
+	}
+	cached, err := cloneCachedResponse(response)
+	if err != nil {
+		return
+	}
+	shard := m.getShard(key)
+	shard.mu.Lock()
+	shard.cache[key] = &CacheEntry{Response: cached, ExpiresAt: time.Now().Add(m.ttl)}
+	shard.mu.Unlock()
+}
+
+func cloneCachedResponse(response *MiddlewareResponse) (*MiddlewareResponse, error) {
+	// 有锁的 State 须实现快照协议；不改变业务状态的具体类型。
+	copy := *response
+	copy.State = nil
+	metadata := make(map[string]interface{}, len(response.Metadata))
+	for k, v := range response.Metadata {
+		if k != "original_input" && k != "cached_response" && k != "cache_hit" {
+			metadata[k] = v
+		}
+	}
+	copy.Metadata = metadata
+	cloned, err := snapshot.Clone(&copy)
+	if err != nil {
+		return nil, err
+	}
+	result := cloned.(*MiddlewareResponse)
+	if response.State != nil {
+		if st, ok := response.State.(*state.AgentState); ok && st != nil {
+			values, err := snapshot.Clone(st.Snapshot())
+			if err != nil {
+				return nil, err
+			}
+			result.State = state.NewAgentStateWithData(values.(map[string]interface{}))
+		} else {
+			cloned, err := snapshot.Clone(response.State)
+			if err != nil {
+				return nil, err
+			}
+			result.State = cloned.(state.State)
+		}
+	}
+	return result, nil
 }
 
 // getCacheKey generates a cache key from request

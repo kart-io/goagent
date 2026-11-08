@@ -3,7 +3,6 @@ package builder
 import (
 	"context"
 	"errors"
-	"github.com/kart-io/goagent/codec/json"
 	"os"
 	"path/filepath"
 	"slices"
@@ -13,6 +12,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/session"
@@ -31,7 +32,7 @@ func sessionEvents(t *testing.T, store session.Store, id string) []session.Event
 func eventTypes(events []session.Event) []string {
 	var out []string
 	for _, ev := range events {
-		if ev.Type != session.TypeBoundarySnapshot {
+		if ev.Type != constants.SessionEventBoundarySnapshot {
 			out = append(out, ev.Type)
 		}
 	}
@@ -71,10 +72,10 @@ func TestSessionLogRebuildsRequests(t *testing.T) {
 	require.Equal(t, 3, rebuilt)
 	events := sessionEvents(t, store, "s")
 	require.Equal(t, []string{
-		session.TypeTurnStart, session.TypeSystemMessage, session.TypeToolDefinitions, session.TypeUserMessage,
-		session.TypeAssistantMessage, session.TypeToolResult,
+		constants.SessionEventTurnStart, constants.SessionEventSystemMessage, constants.SessionEventToolDefinitions, constants.SessionEventUserMessage,
+		constants.SessionEventAssistantMessage, constants.SessionEventToolResult,
 		// 第三步前的压缩连同第二次调用及其结果一起记为改写。
-		session.TypeHistoryRewrite, session.TypeAssistantMessage, session.TypeTurnEnd,
+		constants.SessionEventHistoryRewrite, constants.SessionEventAssistantMessage, constants.SessionEventTurnEnd,
 	}, eventTypes(events))
 
 	// 下一轮的历史来自日志（压缩后的对话加上答复），而不是记忆。
@@ -171,10 +172,10 @@ func TestSessionLogDurableResume(t *testing.T) {
 
 	events := sessionEvents(t, reopened, "s")
 	require.Equal(t, []string{
-		session.TypeTurnStart, session.TypeToolDefinitions, session.TypeUserMessage, session.TypeAssistantMessage,
-		session.TypeToolResult, session.TypeAssistantMessage, session.TypeTurnEnd,
+		constants.SessionEventTurnStart, constants.SessionEventToolDefinitions, constants.SessionEventUserMessage, constants.SessionEventAssistantMessage,
+		constants.SessionEventToolResult, constants.SessionEventAssistantMessage, constants.SessionEventTurnEnd,
 	}, eventTypes(events), "one turn, no duplicated messages")
-	require.True(t, slices.ContainsFunc(events, func(ev session.Event) bool { return ev.Type == session.TypeBoundarySnapshot }),
+	require.True(t, slices.ContainsFunc(events, func(ev session.Event) bool { return ev.Type == constants.SessionEventBoundarySnapshot }),
 		"durable records live in the same log")
 	derived, err := session.DeriveMessages(events)
 	require.NoError(t, err)
@@ -204,7 +205,7 @@ func TestSessionLogForkContinuesDurableRun(t *testing.T) {
 	require.Equal(t, "原答", out.Result)
 	original := sessionEvents(t, store, "s")
 
-	at := slices.IndexFunc(original, func(ev session.Event) bool { return ev.Type == session.TypeToolResult })
+	at := slices.IndexFunc(original, func(ev session.Event) bool { return ev.Type == constants.SessionEventToolResult })
 	require.NoError(t, store.Fork(context.Background(), "s", "f", original[at].Seq))
 
 	model := newScriptModel(answer("新答"))
@@ -217,8 +218,8 @@ func TestSessionLogForkContinuesDurableRun(t *testing.T) {
 
 	forked := sessionEvents(t, store, "f")
 	require.Equal(t, []string{
-		session.TypeTurnStart, session.TypeToolDefinitions, session.TypeUserMessage, session.TypeAssistantMessage,
-		session.TypeToolResult, session.TypeAssistantMessage, session.TypeTurnEnd,
+		constants.SessionEventTurnStart, constants.SessionEventToolDefinitions, constants.SessionEventUserMessage, constants.SessionEventAssistantMessage,
+		constants.SessionEventToolResult, constants.SessionEventAssistantMessage, constants.SessionEventTurnEnd,
 	}, eventTypes(forked), "续写分叉出的那一轮")
 	derived, err := session.DeriveMessages(forked)
 	require.NoError(t, err)
@@ -259,7 +260,7 @@ func TestSessionLogDurableResumeAfterRecordedToolResult(t *testing.T) {
 	}
 	_, err := run(newScriptModel(callTool("c1", "lookup")))
 	require.ErrorContains(t, err, "crash")
-	require.Contains(t, eventTypes(sessionEvents(t, store, "s")), session.TypeToolResult)
+	require.Contains(t, eventTypes(sessionEvents(t, store, "s")), constants.SessionEventToolResult)
 
 	model := newScriptModel(answer("答"))
 	out, err := run(model)
@@ -267,8 +268,8 @@ func TestSessionLogDurableResumeAfterRecordedToolResult(t *testing.T) {
 	require.Equal(t, "答", out.Result)
 	require.Equal(t, 1, model.count())
 	require.Equal(t, []string{
-		session.TypeTurnStart, session.TypeToolDefinitions, session.TypeUserMessage, session.TypeAssistantMessage,
-		session.TypeToolResult, session.TypeAssistantMessage, session.TypeTurnEnd,
+		constants.SessionEventTurnStart, constants.SessionEventToolDefinitions, constants.SessionEventUserMessage, constants.SessionEventAssistantMessage,
+		constants.SessionEventToolResult, constants.SessionEventAssistantMessage, constants.SessionEventTurnEnd,
 	}, eventTypes(sessionEvents(t, store, "s")))
 }
 

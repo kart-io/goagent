@@ -10,15 +10,9 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core"
 	agentErrors "github.com/kart-io/goagent/errors"
-)
-
-const (
-	// START is the graph entry, with exactly one outgoing edge.
-	START = "__start__"
-	// END terminates the selected execution path.
-	END = "__end__"
 )
 
 // Config bounds one graph execution. Zero fields use the defaults.
@@ -94,7 +88,7 @@ func (g *Graph[T]) addRunner(name string, run nodeRunner[T]) error {
 	if g == nil || g.nodes == nil {
 		return agentErrors.Newf(agentErrors.CodeInvalidConfig, "use workflow.NewGraph to initialize the builder").WithComponent("workflow").WithOperation("add_runner")
 	}
-	if !validName(name) || name == START || name == END {
+	if !validName(name) || name == constants.WorkflowStart || name == constants.WorkflowEnd {
 		return agentErrors.Newf(agentErrors.CodeInvalidConfig, "invalid or reserved node name %q", name).WithComponent("workflow").WithOperation("add_runner")
 	}
 	if isNil(run) {
@@ -125,7 +119,7 @@ func (g *Graph[T]) AddEdge(from, to string) error {
 	if g == nil || g.edges == nil {
 		return agentErrors.Newf(agentErrors.CodeInvalidConfig, "use workflow.NewGraph to initialize the builder").WithComponent("workflow").WithOperation("add_edge")
 	}
-	if !validName(from) || !validName(to) || from == END || to == START {
+	if !validName(from) || !validName(to) || from == constants.WorkflowEnd || to == constants.WorkflowStart {
 		return agentErrors.Newf(agentErrors.CodeInvalidConfig, "invalid workflow edge %q -> %q", from, to).WithComponent("workflow").WithOperation("add_edge")
 	}
 	if _, ok := g.edges[from]; ok {
@@ -144,7 +138,7 @@ func (g *Graph[T]) AddBranch(from string, choose Router[T], targets ...string) e
 	if g == nil || g.branches == nil {
 		return agentErrors.Newf(agentErrors.CodeInvalidConfig, "use workflow.NewGraph to initialize the builder").WithComponent("workflow").WithOperation("add_branch")
 	}
-	if !validName(from) || from == START || from == END || choose == nil || len(targets) == 0 {
+	if !validName(from) || from == constants.WorkflowStart || from == constants.WorkflowEnd || choose == nil || len(targets) == 0 {
 		return agentErrors.Newf(agentErrors.CodeInvalidConfig, "invalid branch on %q", from).WithComponent("workflow").WithOperation("add_branch")
 	}
 	if _, ok := g.edges[from]; ok {
@@ -155,7 +149,7 @@ func (g *Graph[T]) AddBranch(from string, choose Router[T], targets ...string) e
 	}
 	allowed := map[string]bool{}
 	for _, target := range targets {
-		if !validName(target) || target == START || allowed[target] {
+		if !validName(target) || target == constants.WorkflowStart || allowed[target] {
 			return agentErrors.Newf(agentErrors.CodeInvalidConfig, "invalid or duplicate branch target %q", target).WithComponent("workflow").WithOperation("add_branch")
 		}
 		allowed[target] = true
@@ -197,11 +191,11 @@ func (g *Graph[T]) compile(ctx context.Context) (*compiled[T], error) {
 	if g.config.MaxSteps < 1 || g.config.MaxConcurrency < 1 {
 		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "workflow step and concurrency limits must be positive").WithComponent("workflow").WithOperation("compile")
 	}
-	entry, ok := g.edges[START]
+	entry, ok := g.edges[constants.WorkflowStart]
 	if !ok || len(g.nodes) == 0 {
 		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "workflow requires nodes and exactly one START edge").WithComponent("workflow").WithOperation("compile")
 	}
-	exists := func(name string) bool { return name == END || g.nodes[name] != nil }
+	exists := func(name string) bool { return name == constants.WorkflowEnd || g.nodes[name] != nil }
 	if !exists(entry) {
 		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "unknown entry node %q", entry).WithComponent("workflow").WithOperation("compile")
 	}
@@ -209,7 +203,7 @@ func (g *Graph[T]) compile(ctx context.Context) (*compiled[T], error) {
 	adjacency := map[string][]string{}
 	keys := slices.Sorted(maps.Keys(g.nodes))
 	for from, to := range g.edges {
-		if from != START && g.nodes[from] == nil {
+		if from != constants.WorkflowStart && g.nodes[from] == nil {
 			return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "unknown edge source %q", from).WithComponent("workflow").WithOperation("compile")
 		}
 		if !exists(to) {
@@ -231,7 +225,7 @@ func (g *Graph[T]) compile(ctx context.Context) (*compiled[T], error) {
 		}
 	}
 	reachable := walk(entry, adjacency)
-	exits := walk(END, reverse)
+	exits := walk(constants.WorkflowEnd, reverse)
 	for _, name := range keys {
 		if len(adjacency[name]) == 0 {
 			return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "node %q has no successor", name).WithComponent("workflow").WithOperation("compile")

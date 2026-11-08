@@ -11,9 +11,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/kart-io/goagent/codec/json"
-
 	"github.com/kart-io/goagent/builder"
+	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/usage"
@@ -153,7 +153,7 @@ func build(ctx context.Context, client *countedClient, store durable.Store, prov
 			return nil, err
 		}
 	}
-	for _, edge := range [][2]string{{workflow.START, "draft"}, {"draft", "review"}, {"final", workflow.END}, {"reject", workflow.END}} {
+	for _, edge := range [][2]string{{constants.WorkflowStart, "draft"}, {"draft", "review"}, {"final", constants.WorkflowEnd}, {"reject", constants.WorkflowEnd}} {
 		if err := g.AddEdge(edge[0], edge[1]); err != nil {
 			return nil, err
 		}

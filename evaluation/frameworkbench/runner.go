@@ -74,7 +74,7 @@ func newGoAgent(scenario string) (*Runner, error) {
 		if scenario == "branch_loop_8" {
 			nodes = 1
 		}
-		prev := workflow.START
+		prev := shared.WorkflowStart
 		for i := 0; i < nodes; i++ {
 			name := fmt.Sprintf("n%d", i)
 			if err := graph.AddNode(name, func(_ context.Context, n int) (int, error) { return n + 1, nil }); err != nil {
@@ -91,10 +91,10 @@ func newGoAgent(scenario string) (*Runner, error) {
 				if n < 8 {
 					return prev, nil
 				}
-				return workflow.END, nil
-			}, prev, workflow.END)
+				return shared.WorkflowEnd, nil
+			}, prev, shared.WorkflowEnd)
 		} else {
-			err = graph.AddEdge(prev, workflow.END)
+			err = graph.AddEdge(prev, shared.WorkflowEnd)
 		}
 		if err != nil {
 			return nil, err

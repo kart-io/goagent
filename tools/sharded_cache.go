@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/kart-io/goagent/constants"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 )
@@ -26,18 +27,6 @@ type ShardedToolCache struct {
 	dependencies map[string][]string
 	depMu        sync.RWMutex
 	config       ShardedCacheConfig // 存储配置
-
-	// 自动调优相关
-	lastTuneTime time.Time
-	tuneMetrics  *tuneMetrics
-}
-
-// tuneMetrics 自动调优指标
-type tuneMetrics struct {
-	mu            sync.RWMutex
-	avgHitRate    float64
-	avgLoadFactor float64
-	qpsHistory    []float64
 }
 
 // cacheShard 单个缓存分片
@@ -58,7 +47,7 @@ type ShardedCacheConfig struct {
 	// ShardCount 分片数量（建议为 2 的幂，默认 32）
 	ShardCount uint32 `json:"shard_count"`
 
-	// Capacity 总容量（每个分片的容量 = Capacity / ShardCount）
+	// Capacity 条目总容量；分片数自动收窄到不超过容量，余数分给前面的分片。
 	Capacity int `json:"capacity"`
 
 	// DefaultTTL 默认 TTL
@@ -67,54 +56,30 @@ type ShardedCacheConfig struct {
 	// CleanupInterval 清理间隔
 	CleanupInterval time.Duration `json:"cleanup_interval"`
 
-	// EvictionPolicy 淘汰策略
-	EvictionPolicy EvictionPolicy `json:"eviction_policy"`
-
 	// CleanupStrategy 清理策略
 	CleanupStrategy CleanupStrategy `json:"cleanup_strategy"`
 
-	// LoadBalancing 负载均衡策略
-	LoadBalancing LoadBalancingStrategy `json:"load_balancing"`
-
-	// AutoTuning 自动调优
-	AutoTuning bool `json:"auto_tuning"`
-
-	// MetricsEnabled 是否启用指标收集
-	MetricsEnabled bool `json:"metrics_enabled"`
-
-	// MaxConcurrency 每个分片的最大并发数
-	MaxConcurrency int `json:"max_concurrency"`
-
 	// WarmupEntries 预热条目
 	WarmupEntries map[string]*interfaces.ToolOutput `json:"warmup_entries"`
-
-	// CompressionThreshold 压缩阈值（字节）
-	CompressionThreshold int `json:"compression_threshold"`
-
-	// MaxEntrySize 单个条目最大大小（字节）
-	MaxEntrySize int `json:"max_entry_size"`
-
-	// MemoryLimit 内存限制（字节）
-	MemoryLimit int64 `json:"memory_limit"`
-
-	// WorkloadType 工作负载类型
-	WorkloadType WorkloadType `json:"workload_type"`
 }
 
 // NewShardedToolCache 创建分片工具缓存（使用配置结构体）
 func NewShardedToolCache(config ShardedCacheConfig) *ShardedToolCache {
+	if config.ShardCount > constants.MaxCacheShards {
+		panic(agentErrors.New(agentErrors.CodeInvalidConfig, "缓存分片数超过上限").WithComponent("tool_cache").WithOperation("initialize"))
+	}
 	// 应用默认值
 	if config.ShardCount <= 0 || (config.ShardCount&(config.ShardCount-1)) != 0 {
-		config.ShardCount = 32
+		config.ShardCount = constants.DefaultToolCacheShards
 	}
 	if config.Capacity <= 0 {
-		config.Capacity = 10000
+		config.Capacity = constants.DefaultToolCacheCapacity
 	}
 	if config.DefaultTTL <= 0 {
-		config.DefaultTTL = 5 * time.Minute
+		config.DefaultTTL = constants.DefaultToolCacheTTL
 	}
 	if config.CleanupInterval <= 0 {
-		config.CleanupInterval = 1 * time.Minute
+		config.CleanupInterval = constants.DefaultToolCacheCleanupInterval
 	}
 
 	return newShardedToolCacheWithConfig(config)
@@ -139,15 +104,13 @@ func NewShardedToolCacheWithOptions(opts ...ShardedCacheOption) *ShardedToolCach
 // 特点：
 // - 更多分片 (64)
 // - 更大容量 (100,000)
-// - 激进的预取和保留策略
+// - 每30秒清理过期条目
 func NewHighPerformanceCache() *ShardedToolCache {
 	return NewShardedToolCache(ShardedCacheConfig{
-		ShardCount:      64,
-		Capacity:        100000,
-		DefaultTTL:      10 * time.Minute,
-		CleanupInterval: 30 * time.Second,
-		AutoTuning:      true,
-		MetricsEnabled:  true,
+		ShardCount:      constants.ToolCacheHighPerformanceShards,
+		Capacity:        constants.ToolCacheHighPerformanceCapacity,
+		DefaultTTL:      constants.ToolCacheHighPerformanceTTL,
+		CleanupInterval: constants.ToolCacheHighPerformanceCleanupInterval,
 	})
 }
 
@@ -160,18 +123,31 @@ func NewHighPerformanceCache() *ShardedToolCache {
 // - 激进的清理策略
 func NewLowMemoryCache() *ShardedToolCache {
 	return NewShardedToolCache(ShardedCacheConfig{
-		ShardCount:           8,
-		Capacity:             1000,
-		DefaultTTL:           2 * time.Minute,
-		CleanupInterval:      1 * time.Minute,
-		AutoTuning:           false,
-		MetricsEnabled:       false,
-		CompressionThreshold: 1024, // 启用压缩
+		ShardCount:      constants.ToolCacheLowMemoryShards,
+		Capacity:        constants.ToolCacheLowMemoryCapacity,
+		DefaultTTL:      constants.ToolCacheLowMemoryTTL,
+		CleanupInterval: constants.ToolCacheLowMemoryCleanupInterval,
 	})
 }
 
 // newShardedToolCacheWithConfig 内部创建函数
 func newShardedToolCacheWithConfig(config ShardedCacheConfig) *ShardedToolCache {
+	if config.ShardCount > constants.MaxCacheShards {
+		panic(agentErrors.New(agentErrors.CodeInvalidConfig, "缓存分片数超过上限").WithComponent("tool_cache").WithOperation("initialize"))
+	}
+	if config.ShardCount == 0 || config.ShardCount&(config.ShardCount-1) != 0 {
+		config.ShardCount = constants.DefaultToolCacheShards
+	}
+	if config.Capacity <= 0 {
+		config.Capacity = constants.DefaultToolCacheCapacity
+	}
+	if config.DefaultTTL <= 0 {
+		config.DefaultTTL = constants.DefaultToolCacheTTL
+	}
+	// 分片数不超过总容量，并分配余数，保证总容量精确且每个分片至少容纳一个条目。
+	for uint64(config.ShardCount) > uint64(config.Capacity) {
+		config.ShardCount >>= 1
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	shardCapacity := config.Capacity / int(config.ShardCount)
 	if shardCapacity < 1 {
@@ -190,9 +166,13 @@ func newShardedToolCacheWithConfig(config ShardedCacheConfig) *ShardedToolCache 
 
 	// 初始化分片
 	for i := uint32(0); i < config.ShardCount; i++ {
+		capacity := shardCapacity
+		if int(i) < config.Capacity%int(config.ShardCount) {
+			capacity++
+		}
 		cache.shards[i] = &cacheShard{
 			cache:    make(map[string]*cacheEntry),
-			capacity: shardCapacity,
+			capacity: capacity,
 			head:     nil,
 			tail:     nil,
 			size:     0,
@@ -218,12 +198,6 @@ func newShardedToolCacheWithConfig(config ShardedCacheConfig) *ShardedToolCache 
 	case AdaptiveCleanup:
 		cache.cleanupDone.Add(1)
 		go cache.adaptiveCleanup()
-	}
-
-	// 启动自动调优
-	if config.AutoTuning {
-		cache.cleanupDone.Add(1)
-		go cache.autoTune()
 	}
 
 	return cache
@@ -282,6 +256,9 @@ func (c *ShardedToolCache) Get(ctx context.Context, key string) (*interfaces.Too
 
 // Set 设置缓存结果
 func (c *ShardedToolCache) Set(ctx context.Context, key string, output *interfaces.ToolOutput, ttl time.Duration) error {
+	if ttl <= 0 {
+		ttl = c.config.DefaultTTL
+	}
 	shard := c.getShard(key)
 	toolName := extractToolNameFromKey(key)
 
@@ -685,10 +662,10 @@ func (c *ShardedToolCache) performCleanup() {
 // CreateShardedCache 创建分片缓存的辅助函数
 func CreateShardedCache() ToolCache {
 	return NewShardedToolCache(ShardedCacheConfig{
-		ShardCount:      32,    // 32 个分片
-		Capacity:        10000, // 总容量 10000
-		DefaultTTL:      5 * time.Minute,
-		CleanupInterval: 1 * time.Minute,
+		ShardCount:      constants.DefaultToolCacheShards,
+		Capacity:        constants.DefaultToolCacheCapacity,
+		DefaultTTL:      constants.DefaultToolCacheTTL,
+		CleanupInterval: constants.DefaultToolCacheCleanupInterval,
 	})
 }
 
@@ -704,10 +681,10 @@ func BenchmarkCompareShardedVsNormal() {
 	defer normalCache.Close()
 
 	shardedCache := NewShardedToolCache(ShardedCacheConfig{
-		ShardCount:      32,
-		Capacity:        10000,
-		DefaultTTL:      5 * time.Minute,
-		CleanupInterval: 1 * time.Minute,
+		ShardCount:      constants.DefaultToolCacheShards,
+		Capacity:        constants.DefaultToolCacheCapacity,
+		DefaultTTL:      constants.DefaultToolCacheTTL,
+		CleanupInterval: constants.DefaultToolCacheCleanupInterval,
 	})
 	defer shardedCache.Close()
 
@@ -722,7 +699,7 @@ func (c *ShardedToolCache) adaptiveCleanup() {
 
 	baseInterval := c.config.CleanupInterval
 	if baseInterval <= 0 {
-		baseInterval = 1 * time.Minute
+		baseInterval = constants.DefaultToolCacheCleanupInterval
 	}
 
 	currentInterval := baseInterval
@@ -807,95 +784,4 @@ func (c *ShardedToolCache) performCleanupWithCount() int {
 	}
 
 	return totalCleaned
-}
-
-// autoTune 自动调优
-func (c *ShardedToolCache) autoTune() {
-	defer c.cleanupDone.Done()
-
-	// 初始化调优指标
-	c.tuneMetrics = &tuneMetrics{
-		qpsHistory: make([]float64, 0, 60), // 保留60个样本
-	}
-
-	ticker := time.NewTicker(10 * time.Second) // 每10秒检查一次
-	defer ticker.Stop()
-
-	var lastHits, lastMisses int64
-	lastCheck := time.Now()
-
-	for {
-		select {
-		case <-c.ctx.Done():
-			return
-		case <-ticker.C:
-			now := time.Now()
-			duration := now.Sub(lastCheck).Seconds()
-
-			// 计算QPS
-			currentHits := c.stats.Hits.Load()
-			currentMisses := c.stats.Misses.Load()
-			totalRequests := (currentHits - lastHits) + (currentMisses - lastMisses)
-			qps := float64(totalRequests) / duration
-
-			// 更新指标
-			c.tuneMetrics.mu.Lock()
-			c.tuneMetrics.qpsHistory = append(c.tuneMetrics.qpsHistory, qps)
-			if len(c.tuneMetrics.qpsHistory) > 60 {
-				c.tuneMetrics.qpsHistory = c.tuneMetrics.qpsHistory[1:]
-			}
-
-			// 计算命中率
-			if totalRequests > 0 {
-				c.tuneMetrics.avgHitRate = float64(currentHits-lastHits) / float64(totalRequests)
-			}
-
-			// 计算负载因子
-			c.tuneMetrics.avgLoadFactor = float64(c.Size()) / float64(c.config.Capacity)
-			c.tuneMetrics.mu.Unlock()
-
-			// 每分钟执行一次调优决策
-			if now.Sub(c.lastTuneTime) >= time.Minute {
-				c.performTuning()
-				c.lastTuneTime = now
-			}
-
-			lastHits = currentHits
-			lastMisses = currentMisses
-			lastCheck = now
-		}
-	}
-}
-
-// performTuning 执行调优决策
-func (c *ShardedToolCache) performTuning() {
-	c.tuneMetrics.mu.RLock()
-	defer c.tuneMetrics.mu.RUnlock()
-
-	if len(c.tuneMetrics.qpsHistory) < 6 {
-		return // 需要至少1分钟的数据
-	}
-
-	// 计算平均QPS
-	var avgQPS float64
-	for _, qps := range c.tuneMetrics.qpsHistory {
-		avgQPS += qps
-	}
-	avgQPS /= float64(len(c.tuneMetrics.qpsHistory))
-
-	// 根据指标调整配置
-	// 注意：分片数量在运行时不能更改，但可以记录建议供下次重启使用
-	if avgQPS > 1000 && c.tuneMetrics.avgHitRate < 0.7 {
-		log.Printf("Auto-tuning: High QPS (%.2f) with low hit rate (%.2f%%). Consider increasing cache capacity or TTL.",
-			avgQPS, c.tuneMetrics.avgHitRate*100)
-	}
-
-	if c.tuneMetrics.avgLoadFactor > 0.95 {
-		log.Printf("Auto-tuning: Cache nearly full (%.2f%%). Consider increasing capacity.",
-			c.tuneMetrics.avgLoadFactor*100)
-	}
-
-	// 可以动态调整的参数示例：
-	// - 调整清理间隔（已在adaptiveCleanup中实现）
-	// - 记录性能建议供监控系统使用
 }

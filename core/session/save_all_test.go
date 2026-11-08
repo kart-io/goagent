@@ -6,19 +6,20 @@ import (
 	"os/exec"
 	"testing"
 
-	"github.com/kart-io/goagent/codec/json"
+	"github.com/stretchr/testify/require"
 
+	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/internal/txnlog"
 	"github.com/kart-io/goagent/llm"
-	"github.com/stretchr/testify/require"
 )
 
 const appendAllCrashExit = 89
 
 func userEvent(t *testing.T, text string) Event {
 	t.Helper()
-	ev, err := NewEvent(TypeUserMessage, MessageData{Message: llm.UserMessage(text)})
+	ev, err := NewEvent(constants.SessionEventUserMessage, MessageData{Message: llm.UserMessage(text)})
 	require.NoError(t, err)
 	return ev
 }

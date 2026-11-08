@@ -9,32 +9,9 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/codec/json"
-
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
-)
-
-// 事件类型。
-const (
-	// TypeTurnStart 开始一轮，Data 为 TurnStart。
-	TypeTurnStart = "turn/start"
-	// TypeTurnEnd 结束一轮，Data 为 TurnEnd。Aborted 的轮次带 Surface，撤销该轮的全部事件。
-	TypeTurnEnd = "turn/end"
-	// TypeSystemMessage 记录与上一次不同的 system 提示词，Data 为 MessageData；不进入 DeriveMessages，供导出使用。
-	TypeSystemMessage = "system/message"
-	// TypeToolDefinitions 记录与上一次不同的工具定义，Data 为 ToolsData；不进入 DeriveMessages，供导出使用。
-	TypeToolDefinitions = "tool/definitions"
-	// TypeUserMessage、TypeAssistantMessage、TypeToolResult 各记录一条对话消息，Data 为 MessageData。
-	TypeUserMessage      = "user/message"
-	TypeAssistantMessage = "assistant/message"
-	TypeToolResult       = "tool/result"
-	// TypeHistoryRewrite 记录对已有历史的改写（压缩、钩子补充上下文等）：Surface 遮蔽被改写的区间，
-	// Data 为 RewriteData，其中的消息代替该区间。
-	TypeHistoryRewrite = "history/rewrite"
-	// TypeRewind 把会话退回到 Surface.Start 之前：撤销区间内的全部事件。
-	TypeRewind = "session/rewind"
-	// TypeBoundarySnapshot 是 core/durable 的一次快照写入，Data 为 BoundaryData。
-	TypeBoundarySnapshot = "boundary/snapshot"
 )
 
 // Event 是日志中的一条事件。Seq 由 Store 分配，从 1 起连续递增。
@@ -151,13 +128,13 @@ func Derive(events []Event) ([]Entry, error) {
 	for _, ev := range active {
 		var added []Entry
 		switch ev.Type {
-		case TypeUserMessage, TypeAssistantMessage, TypeToolResult:
+		case constants.SessionEventUserMessage, constants.SessionEventAssistantMessage, constants.SessionEventToolResult:
 			var d MessageData
 			if err := json.Unmarshal(ev.Data, &d); err != nil {
 				return nil, fmt.Errorf("事件 %d：%w", ev.Seq, err)
 			}
 			added = []Entry{{Seq: ev.Seq, Message: d.Message, Tool: d.Tool}}
-		case TypeHistoryRewrite:
+		case constants.SessionEventHistoryRewrite:
 			var d RewriteData
 			if err := json.Unmarshal(ev.Data, &d); err != nil {
 				return nil, fmt.Errorf("事件 %d：%w", ev.Seq, err)
@@ -189,10 +166,10 @@ func undoes(ev Event) bool {
 	if ev.Surface == nil {
 		return false
 	}
-	if ev.Type == TypeRewind {
+	if ev.Type == constants.SessionEventRewind {
 		return true
 	}
-	if ev.Type == TypeTurnEnd {
+	if ev.Type == constants.SessionEventTurnEnd {
 		var d TurnEnd
 		return json.Unmarshal(ev.Data, &d) == nil && d.Aborted
 	}
@@ -211,9 +188,9 @@ func LastSeq(events []Event) int64 {
 func OpenTurn(events []Event) (start Event, ok bool) {
 	for i := len(events) - 1; i >= 0; i-- {
 		switch events[i].Type {
-		case TypeTurnEnd:
+		case constants.SessionEventTurnEnd:
 			return Event{}, false
-		case TypeTurnStart:
+		case constants.SessionEventTurnStart:
 			return events[i], true
 		}
 	}

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/durable"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
@@ -95,12 +96,8 @@ type RequestFailure struct {
 // RequestErrorHook 在模型请求失败时执行，第一个返回 RequestRetry 的决定生效。
 type RequestErrorHook func(ctx context.Context, failure *RequestFailure) (RequestErrorDecision, error)
 
-// maxRetryAfter 是 RetryTransient 愿意按服务端 Retry-After 等待的上限：持久运行中等待期间持有回合的操作锁，
-// 更长的建议说明服务端短期内不会恢复，不如立即失败交给宿主。
-const maxRetryAfter = time.Minute
-
 func defaultRetryBackoff(retry int) time.Duration {
-	return min(500*time.Millisecond<<min(retry-1, 5), 8*time.Second)
+	return min(constants.DefaultTransientRetryBaseDelay<<min(retry-1, 5), constants.DefaultTransientRetryMaxDelay)
 }
 
 // RetryTransient 返回原样重试暂时性失败的 RequestError 钩子：只重试 llm.ClassifyError 判定为可重试的失败
@@ -117,7 +114,7 @@ func RetryTransient(retries int, backoff func(retry int) time.Duration) RequestE
 		}
 		var delay time.Duration
 		if pe := (*llm.ProviderError)(nil); errors.As(f.Err, &pe) && pe.RetryAfter > 0 {
-			if pe.RetryAfter > maxRetryAfter {
+			if pe.RetryAfter > constants.MaxModelRetryAfter {
 				return RequestErrorDecision{}, nil
 			}
 			delay = pe.RetryAfter
