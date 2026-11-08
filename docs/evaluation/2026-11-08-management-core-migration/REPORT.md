@@ -2,7 +2,7 @@
 
 2026-11-08，通用管理层、原生/Graph 适配、标准库管理 HTTP Handler 已迁入 GoAgent 主模块；Postgres 实现、数据库集成测试、退款案例和独立 Harness 适配保留在 contrib。没有旧根包、错误别名或兼容转发。
 
-受检代码为核心 `db7fffed9a84`，扩展 `4cc802d`。以下是本地真实执行结果，不代表远端 CI 或发布已经完成。原核心主工作区未提交文档保留，源码工作在隔离分支完成，再按用户此前要求同步本地主线；本轮不推送或发布。
+受检代码为核心 `db7fffed9a84`，扩展 `4cc802d`。以下是本地真实执行结果，不代表远端 CI 或发布已经完成。源码在隔离分支完成并独立审阅后，已按用户此前要求快进合入两个仓库的本地 master；核心原有未提交文档完整保留，索引三方合并且有恢复备份。本轮不推送或发布。
 
 ## 结构与依赖
 
@@ -59,3 +59,9 @@ JSON 统一使用 codec/json，管理领域错误直接使用核心 errors.ErrMa
 ## 复跑入口
 
 核心根目录使用 Go1.27.3 执行 `go test -race ./...`、`go vet ./...`、`scripts/verify_imports.sh`、`make test-frameworkbench`，覆盖率按现有 scripts/check_coverage.sh。contrib 在专用 Postgres 上显式指定包含新包的 GOAGENT_CORE_ROOT，执行 scripts/test-all.sh 与 scripts/lint-all.sh；真实退款案例和完整迁移入口见 [迁移指南](../../guides/MANAGEMENT_MIGRATION.md)。
+
+## 合入本地主线后的复测
+
+核心主线再次完整执行竞态测试：4771个通过事件、0失败、9个既有跳过；contrib主线再次执行13模块vet及真实数据库竞态测试：972个通过事件、0失败、12个既有跳过。核心新管理包独立构建通过，主线Go源码与受检核心实现db7fffed9a84一致。核心原有文档改动继续保持未提交；contrib工作区干净。
+
+原文档文件与补丁、文档索引三方合并结果及关键原始验证日志保留在核心主仓库 `.git/merge-backups/management-core-20261108`。本轮专用Postgres验证后删除，未操作其他业务容器。
