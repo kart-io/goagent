@@ -713,8 +713,9 @@ func (fixtureEmbedder) Profile() EmbeddingProfile {
 }
 
 type fixtureIndex struct {
-	mu      sync.Mutex
-	applied []IndexMutation
+	mu         sync.Mutex
+	applied    []IndexMutation
+	candidates []IndexCandidate
 }
 
 func (i *fixtureIndex) ApplyMutation(_ context.Context, mutation IndexMutation) error {
@@ -723,7 +724,11 @@ func (i *fixtureIndex) ApplyMutation(_ context.Context, mutation IndexMutation) 
 	i.applied = append(i.applied, mutation)
 	return nil
 }
-func (*fixtureIndex) Search(context.Context, IndexQuery) (IndexPage, error) { return IndexPage{}, nil }
+func (i *fixtureIndex) Search(context.Context, IndexQuery) (IndexPage, error) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	return IndexPage{Items: append([]IndexCandidate(nil), i.candidates...)}, nil
+}
 
 func TestFactWorkerEmbedsAndAppliesPendingMutation(t *testing.T) {
 	svc, store, scope := testMemoryService(t)
@@ -740,5 +745,64 @@ func TestFactWorkerEmbedsAndAppliesPendingMutation(t *testing.T) {
 	}
 	if len(index.applied) != 1 || len(index.applied[0].Vector) != 2 || index.applied[0].Generation != 1 {
 		t.Fatalf("索引 mutation 未正确处理：%+v", index.applied)
+	}
+}
+
+func TestFactRecallRequiresSimilarityThreshold(t *testing.T) {
+	svc, _, scope := testMemoryService(t)
+	receipt, err := svc.Save(context.Background(), scope, "recall-normal", FactInput{Content: "a weakly related fact"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	index := &fixtureIndex{candidates: []IndexCandidate{{FactID: receipt.FactID, Revision: receipt.Revision, ProfileID: "test-profile", Generation: 1, Score: 0.3}}}
+	svc.index = index
+	svc.embedders = fixtureEmbedderResolver{}
+	result, err := svc.Recall(context.Background(), scope.Access, "unrelated query", RecallOptions{MinScore: 0.7})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Matches) != 0 {
+		t.Fatalf("低于阈值的事实被召回：%+v", result.Matches)
+	}
+}
+
+func TestFactRecallAlwaysClassSurvivesUnrelatedQuery(t *testing.T) {
+	svc, _, scope := testMemoryService(t)
+	if _, err := svc.Save(context.Background(), scope, "recall-always", FactInput{Content: "prefers Mandarin", RecallClass: RecallAlways}); err != nil {
+		t.Fatal(err)
+	}
+	svc.index = &fixtureIndex{}
+	svc.embedders = fixtureEmbedderResolver{}
+	result, err := svc.Recall(context.Background(), scope.Access, "unrelated query", RecallOptions{MinScore: 0.9})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Matches) != 1 || result.Matches[0].MatchKind != MatchAlways {
+		t.Fatalf("常驻事实未召回：%+v", result.Matches)
+	}
+}
+
+func TestFactRecallAlwaysStillHonorsBudgetAndTTL(t *testing.T) {
+	svc, _, scope := testMemoryService(t)
+	expiry := time.Date(2026, 11, 9, 0, 0, 0, 0, time.UTC)
+	if _, err := svc.Save(context.Background(), scope, "recall-expiring", FactInput{Content: "a long preference", RecallClass: RecallAlways, ExpiresAt: expiry}); err != nil {
+		t.Fatal(err)
+	}
+	svc.index = &fixtureIndex{}
+	svc.embedders = fixtureEmbedderResolver{}
+	result, err := svc.Recall(context.Background(), scope.Access, "anything", RecallOptions{MaxBytes: 3})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Matches) != 0 {
+		t.Fatal("超预算的常驻事实未被截断")
+	}
+	svc.now = func() time.Time { return expiry }
+	result, err = svc.Recall(context.Background(), scope.Access, "anything", RecallOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Matches) != 0 {
+		t.Fatal("过期常驻事实仍被召回")
 	}
 }

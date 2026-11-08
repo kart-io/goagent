@@ -242,16 +242,16 @@ func (s *DefaultMemoryService) DeleteScope(ctx context.Context, access ClearAcce
 }
 
 // Recall 在配置索引与嵌入解析器前返回明确能力错误。
-func (s *DefaultMemoryService) Recall(context.Context, MemoryAccess, string, RecallOptions) (RecallResult, error) {
+func (s *DefaultMemoryService) Recall(ctx context.Context, access MemoryAccess, query string, options RecallOptions) (RecallResult, error) {
 	if s.index == nil || s.embedders == nil {
 		return RecallResult{}, &MemoryError{Kind: ErrProviderCapability, Op: "召回事实：未配置索引或嵌入器"}
 	}
-	return RecallResult{}, &MemoryError{Kind: ErrFeatureUnavailable, Op: "召回事实尚未启用"}
+	return s.recall(ctx, access, query, options)
 }
 
 // ResolveSnapshot 在快照恢复能力接入前返回明确错误。
-func (s *DefaultMemoryService) ResolveSnapshot(context.Context, MemoryAccess, SnapshotRef) (RecallResult, error) {
-	return RecallResult{}, &MemoryError{Kind: ErrFeatureUnavailable, Op: "事实快照恢复尚未启用"}
+func (s *DefaultMemoryService) ResolveSnapshot(ctx context.Context, access MemoryAccess, snapshot SnapshotRef) (RecallResult, error) {
+	return s.resolveSnapshot(ctx, access, snapshot)
 }
 
 // ListChanges 查询不含正文的变更记录。
