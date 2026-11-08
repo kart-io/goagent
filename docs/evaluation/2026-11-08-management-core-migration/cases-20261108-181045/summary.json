@@ -1,0 +1,151 @@
+{
+  "执行时间": "2026-11-08T18:10:45.248594+08:00",
+  "core_commit": "1940ddd3cd44a56dea1b5e6bc35ff0d50ed98708",
+  "contrib_commit": "76b96d3d21d94a3e925cd05ea90f3e87fe3d1089",
+  "内置退款": {
+    "Agent": "f715962d-3a2f-4b44-acb3-9788dedce874",
+    "Task": "5d2799ba-8215-4cb9-9b39-b9ed4a28d442",
+    "Token": 10,
+    "分支版本": "v1",
+    "新会话版本": "v2",
+    "旧会话版本": "v1",
+    "结果": "v1：退款凭证已生成",
+    "退款次数": 1,
+    "重复提交复用任务": true,
+    "验证": "通过"
+  },
+  "HTTP": {
+    "状态": "passed",
+    "组数": 8,
+    "请求数": 133,
+    "宿主退出码": 0,
+    "案例": [
+      {
+        "案例": "未认证请求被拒绝",
+        "结果": "通过",
+        "HTTP": 401
+      },
+      {
+        "案例": "重复提交与审批绕过保护",
+        "结果": "通过",
+        "Task": "f94f07c3-fb7e-4452-9f14-d77dee529113",
+        "重投复用任务": true,
+        "同键不同内容HTTP": 409,
+        "绕过审批HTTP": 409,
+        "审批前退款": 0
+      },
+      {
+        "案例": "批准与重复审批只退款一次",
+        "结果": "通过",
+        "Task": "f94f07c3-fb7e-4452-9f14-d77dee529113",
+        "退款次数": 1,
+        "决定复用": true,
+        "迟到反向决定HTTP": 409,
+        "处理人": "案例审批人"
+      },
+      {
+        "案例": "拒绝审批不退款",
+        "结果": "通过",
+        "Task": "6287c7cc-75ab-4f9f-b43a-abe5e54851cf",
+        "退款次数": 0,
+        "业务答复": "v1：审批拒绝，未执行退款"
+      },
+      {
+        "案例": "等待审批时取消且拒绝迟到批准",
+        "结果": "通过",
+        "Task": "166dfcd3-0854-4bd8-b83d-ac538f3f4d6c",
+        "状态": "canceled",
+        "退款次数": 0,
+        "迟到批准HTTP": 409
+      },
+      {
+        "案例": "停用阻塞并在启用后沿用原决定",
+        "结果": "通过",
+        "Task": "0b4b1f2d-6f8c-4d62-8090-b2a16c872149",
+        "阻塞原因": "agent_disabled",
+        "停用期间退款": 0,
+        "启用后退款": 1,
+        "决定时间未变": true
+      },
+      {
+        "案例": "版本发布与Fork独立执行",
+        "结果": "通过",
+        "旧会话版本": "v1",
+        "新会话版本": "v2",
+        "分支版本": "v1",
+        "源历史未变": true,
+        "分支任务": "4c07f4b8-8e6c-454b-b2a7-fe2b654967b4"
+      },
+      {
+        "案例": "只读查询和跨页汇总与数据库一致",
+        "结果": "通过",
+        "查询前事件数": 30,
+        "查询后事件数": 30,
+        "日志内容摘要未变": true,
+        "任务数": 6,
+        "Token": 55,
+        "退款次数": 4,
+        "退款总额": 200,
+        "状态": {
+          "canceled": 1,
+          "succeeded": 5
+        }
+      }
+    ]
+  },
+  "恢复并发资源案例": {
+    "测试事件": {
+      "pass": 29
+    },
+    "通过用例": [
+      "TestRestartAtEveryCommitBoundary/admission",
+      "TestRestartAtEveryCommitBoundary/create_log",
+      "TestRestartAtEveryCommitBoundary/answer_before",
+      "TestRestartAtEveryCommitBoundary/answer_after",
+      "TestRestartAtEveryCommitBoundary/turn_end",
+      "TestRestartAtEveryCommitBoundary/outcome",
+      "TestRestartAtEveryCommitBoundary/sql_before",
+      "TestRestartAtEveryCommitBoundary/sql_after",
+      "TestRestartAtEveryCommitBoundary/effect_after_apply",
+      "TestRestartAtEveryCommitBoundary/effect_after_apply_cancel",
+      "TestRestartAtEveryCommitBoundary",
+      "TestGraphDecisionAfterLostAck/approve",
+      "TestGraphDecisionAfterLostAck/reject",
+      "TestGraphDecisionAfterLostAck",
+      "TestCancelRequestWaitsForRealExit",
+      "TestSameSessionNeverOverlaps",
+      "TestConcurrentDecisionsHaveOneWinner",
+      "TestForkCrashAfterLogCopy",
+      "TestApprovalSurvivesProcessKillAndRestart",
+      "TestReviewValidateHonorsShutdownDeadline",
+      "TestRevokedPermissionAndDisabledAgentKeepDecisionPending/permission",
+      "TestRevokedPermissionAndDisabledAgentKeepDecisionPending/disabled",
+      "TestRevokedPermissionAndDisabledAgentKeepDecisionPending",
+      "TestShutdownDuringStartupRecoveryIsGraceful",
+      "TestStartupRecoveryErrorIsNotSuppressed",
+      "TestOutboxCrashAfterRemoteAcceptanceKeepsStableDelivery",
+      "TestRunSummaryUsesSelfAndPreservesUnknownEvidence/known",
+      "TestRunSummaryUsesSelfAndPreservesUnknownEvidence/unknown",
+      "TestRunSummaryUsesSelfAndPreservesUnknownEvidence"
+    ]
+  },
+  "数据库独立核对": {
+    "tenants": 2,
+    "all_tasks": 7,
+    "all_amount": 250,
+    "all_states": {
+      "canceled": 1,
+      "succeeded": 6
+    },
+    "http_tasks": 6,
+    "all_refunds": 5,
+    "http_amount": 200,
+    "http_refunds": 4,
+    "active_workers": 0,
+    "builtin_refunds": 1,
+    "unique_execution_keys": 5
+  },
+  "SQL核对说明": "内置-verify案例使用随机demo-UUID租户，HTTP脚本固定demo租户；按两组分别核对及全表核对，不能将demo筛选结果当作两组总数。",
+  "模型": "离线脚本模型，真实Agent执行与TCP HTTP、Postgres持久记录，无外部模型请求或真实支付请求。",
+  "生产代码修改": false
+}

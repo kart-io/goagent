@@ -1,0 +1,16 @@
+{
+  "tenants": 2,
+  "all_tasks": 7,
+  "all_amount": 250,
+  "all_states": {
+    "canceled": 1,
+    "succeeded": 6
+  },
+  "http_tasks": 6,
+  "all_refunds": 5,
+  "http_amount": 200,
+  "http_refunds": 4,
+  "active_workers": 0,
+  "builtin_refunds": 1,
+  "unique_execution_keys": 5
+}
