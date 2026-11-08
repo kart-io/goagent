@@ -59,6 +59,7 @@ GoAgent 是嵌入 Go 服务的 Agent 执行内核：原生工具循环、类型�
 - [多框架调研与方案复审](research/2026-10-27-framework-orchestration-review.md)
 - [Eino 对照：组件、编排、ADK 与扩展生态](research/2026-11-04-eino-comparison.md)
 - [可组合编排需求](superpowers/specs/2026-10-27-composable-orchestration-requirements.md)与[实现方案](superpowers/plans/2026-10-27-composable-orchestration.md)
+- [统一管理需求](superpowers/specs/2026-11-08-unified-management-requirements.md)、[可行性调研](research/2026-11-08-unified-management-feasibility.md)、[技术设计](superpowers/specs/2026-11-08-unified-management-design.md)与[实施计划](superpowers/plans/2026-11-08-unified-management.md)：管理模块已在 contrib 仓库实现，GoAgent 核心已发布 v0.51.0，见[实施验收](evaluation/2026-11-08-unified-management/REPORT.md)
 
 ## API 参考
 
