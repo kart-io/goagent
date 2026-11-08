@@ -54,6 +54,13 @@ func (s *Service) ForkSession(ctx context.Context, a Actor, r ForkSessionRequest
 		if source.Revision != r.ExpectedRevision || source.Status != "ready" || source.ActiveTaskID != "" || r.UpTo < 0 {
 			return Session{}, agentErrors.ErrManagementConflict
 		}
+		agent, err := read[Agent](ctx, tx, "agents", a.TenantID, source.AgentID)
+		if err != nil {
+			return Session{}, err
+		}
+		if !agent.Enabled {
+			return Session{}, agentErrors.ErrManagementConflict
+		}
 		tasks, err := all[Task](ctx, tx, "tasks", a.TenantID, Query{SessionID: source.ID, Limit: s.cfg.Limits.MaxPending + 1})
 		if err != nil {
 			return Session{}, err
