@@ -17,7 +17,7 @@ flowchart LR
     Queue[宿主持久接纳与worker] --> Adapter
 ```
 
-GoAgent不因新增HTTP或Web页面变成特定业务平台。主库保留通用执行内核，contrib隔离网络协议和第三方帧依赖，examples展示业务装配与页面；宿主负责身份、路由、存储、队列及共享资源。
+GoAgent不因新增HTTP或Web页面变成特定业务平台。主库保留通用执行内核及 management 的标准库管理 Handler，contrib隔离流式执行网络协议和第三方帧依赖，examples展示业务装配与页面；宿主负责身份、路由、存储、队列及共享资源。
 
 ## 必须保持的契约
 

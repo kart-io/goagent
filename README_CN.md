@@ -230,3 +230,5 @@ Apache License 2.0，见 [LICENSE](LICENSE)。
 ## 致谢
 
 GoAgent 受 [LangChain](https://github.com/langchain-ai/langchain)、[LangGraph](https://github.com/langchain-ai/langgraph) 与 [AutoGen](https://github.com/microsoft/autogen) 启发。
+
+统一运行管理入口见 [management](management/README.md)，支持 Agent、Session、Task、Approval 与运行观测；数据库和 Harness 适配保留在扩展项目。

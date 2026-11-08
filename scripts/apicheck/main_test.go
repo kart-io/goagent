@@ -307,3 +307,18 @@ func TestScanEnforcesFormattedErrorBoundary(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, findings)
 }
+
+// 管理层可以装配执行能力，执行基础层不能反向依赖它或外部具体后端。
+func TestManagementLayerIsAboveExecution(t *testing.T) {
+	for _, source := range []string{"core", "execution", "builder", "workflow", "tools", "multiagent", "plugin"} {
+		require.True(t, forbidden(source+"/x.go", module+"management"), source)
+		require.True(t, forbidden(source+"/x.go", module+"management/httpapi"), source)
+	}
+	for _, dep := range []string{"execution", "core/durable", "builder", "workflow", "codec/json", "errors"} {
+		require.False(t, forbidden("management/x.go", module+dep), dep)
+	}
+	for _, dep := range []string{"github.com/kart-io/goagent-contrib/management/pgstore", "github.com/jackc/pgx/v5", "github.com/jackc/pgx/v5/pgxpool"} {
+		require.True(t, forbidden("management/x.go", dep), dep)
+	}
+	require.False(t, forbidden("management/x.go", "github.com/jackc/pgx-extra"))
+}

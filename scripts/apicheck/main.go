@@ -32,11 +32,20 @@ func forbidden(file, path string) bool {
 	if path == harnessModule || strings.HasPrefix(path, harnessModule+"/") {
 		return true
 	}
+	for _, external := range []string{"github.com/kart-io/goagent-contrib", "github.com/jackc/pgx"} {
+		if path == external || strings.HasPrefix(path, external+"/") {
+			return true
+		}
+	}
 	if !strings.HasPrefix(path, module) {
 		return false
 	}
 	dep := strings.TrimPrefix(path, module)
 	dest := strings.Split(dep, "/")[0]
+	// management 位于执行和装配之上，下层不得反向依赖管理服务。
+	if dest == "management" && source != "management" && source != "examples" && source != "cmd" && source != "testing" && source != "evaluation" && source != "scripts" {
+		return true
+	}
 	// execution 是宿主装配薄层，基础和执行机制不得反向依赖它。
 	if dest == "execution" {
 		switch source {

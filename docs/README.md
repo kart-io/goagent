@@ -9,6 +9,8 @@ GoAgent 是嵌入 Go 服务的 Agent 执行内核：原生工具循环、类型�
 - [Builder API 参考](guides/BUILDER_API_REFERENCE.md)：Builder 方法、默认值与循环扩展点
 - [执行契约](guides/EXECUTION_CONTRACT.md)：各执行入口的能力与边界
 
+- [统一运行管理](../management/README.md)：Agent、Session、Task、Approval、Worker 与只读运行观测；[迁移指南](guides/MANAGEMENT_MIGRATION.md)
+
 ## 编排与持久执行
 
 - [人工介入：暂停、恢复与检查点](guides/HUMAN_IN_THE_LOOP.md)：人工输入、状态修改、审批分支与跨进程恢复
