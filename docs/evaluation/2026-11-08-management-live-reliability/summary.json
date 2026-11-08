@@ -1,0 +1,106 @@
+{
+  "时间": "2026-11-08T20:16:51.445261+08:00",
+  "核心基线": "aaec092",
+  "contrib基线": "ca7138f",
+  "轮次": {
+    "live-final": {
+      "deepseek": {
+        "业务场景": 5,
+        "通过": 5,
+        "请求": 11,
+        "已知Token": 5508
+      },
+      "gemini": {
+        "业务场景": 5,
+        "通过": 5,
+        "请求": 11,
+        "已知Token": 3208
+      }
+    },
+    "live-reviewed": {
+      "deepseek": {
+        "业务场景": 1,
+        "通过": 1,
+        "请求": 2,
+        "已知Token": 1028
+      },
+      "gemini": {
+        "业务场景": 1,
+        "通过": 1,
+        "请求": 2,
+        "已知Token": 594
+      }
+    }
+  },
+  "源码SHA256": {
+    "live_model_test.go": "323f38d73c0cc9ca9912020dec0eac0befee06932904e4340a1d1b5496896ebc",
+    "live_observer_test.go": "ce6c7f98659ec2f557face9f56eb341f4d06e07a56db7d3ef6f4eed2ccf33f26",
+    "live_reliability_test.go": "cfdab62e3f7b4bb41b84b3879dad11943e22a2a3bb0fe2c73e39ad7e819fb33a"
+  },
+  "增量日志独立校验": {
+    "live-final/deepseek-requests.jsonl": {
+      "行数": 22,
+      "独立请求": 11,
+      "started条目": 11,
+      "最终completed": 11,
+      "与场景Calls及Task用量": "全部一致"
+    },
+    "live-final/gemini-requests.jsonl": {
+      "行数": 22,
+      "独立请求": 11,
+      "started条目": 11,
+      "最终completed": 11,
+      "与场景Calls及Task用量": "全部一致"
+    },
+    "live-reviewed/deepseek-requests.jsonl": {
+      "行数": 4,
+      "独立请求": 2,
+      "started条目": 2,
+      "最终completed": 2,
+      "与场景Calls及Task用量": "全部一致"
+    },
+    "live-reviewed/gemini-requests.jsonl": {
+      "行数": 4,
+      "独立请求": 2,
+      "started条目": 2,
+      "最终completed": 2,
+      "与场景Calls及Task用量": "全部一致"
+    }
+  },
+  "证据SHA256": {
+    "live.jsonl": "5d289fd153642456a9f0905048097dee0065f05f63b99d1a52743305135a966a",
+    "live-reviewed.jsonl": "c08e9b73ee6004ddd16ebfbb46bd1be51c2804e27bb60c788eacc5342b6b2f53",
+    "red.jsonl": "9f68118c960c7adfb221627bfc76bf87c1868bc72e5f39c65208eb3549b973cc",
+    "red-correct-fixture.jsonl": "09efcb94f09a8cf017b7044a58d1a3c0af1c65a4f69974db6beb64fec5109e10",
+    "green-initial.jsonl": "0f416b3763c81844813a484fcb491abc7edf19bdd4a149363f16ce80b1e47868",
+    "green-full.jsonl": "229983ddde1fc8717f94896f55c6fa14dd9499a46b8671bf14037755e85474d2",
+    "green-three-rounds.jsonl": "cda1b286768ceff69a8bd71ccf12d8498248332c93a99261e07db2e1ca4584bf",
+    "review-red.jsonl": "237d693152660e35ec99d4978312002d2fb538da8c46ea401566983e6a188129",
+    "green-reviewed-three-rounds.jsonl": "d002c1c75f341026e954a5260d59b5429c9099a89e14e1a335f092117fb11fb4",
+    "green-reviewed-final.jsonl": "01e7ff191d1510f9d4f2a7a1636ae33aea387845c6abf76a9a388e33ddace509",
+    "terminal-red.jsonl": "2473cf0506a3504c1a7521925d9f034f7c4919be9a450a5adef57423a145b0f7",
+    "final-fault-three-rounds.jsonl": "9c73a6badc50d95bc11380ebc36010b24628df18f0914e71474e5e12932e81e8",
+    "management-full.jsonl": "90549525455ba3b4cf66577d4c2b2a73dd1d91c2a6cacdfda371c45fd43aadc6",
+    "management-standalone.jsonl": "0bd9b14b47404d1c62830ebf933fc7f5f493dd7e70e48b9749945a850af44c9e",
+    "vet-lint.log": "e92606b0bf483111dff0a120c315ea165821348f31365020e2468a0059095c47",
+    "management-final.jsonl": "24e8c7a234c0318528ff207e4c3b305d606ae1cd63313f08c6af876e54722770",
+    "standalone-final.jsonl": "eb1e6d944eb8b499227b0c8242e5e15f9226123b008845f27d1b61fd059cfa11",
+    "verified-vet-lint.log": "e92606b0bf483111dff0a120c315ea165821348f31365020e2468a0059095c47"
+  },
+  "真实请求合计": 26,
+  "真实已知Token合计": 10338,
+  "真实请求未知用量": 0,
+  "历史未知用量": "前轮一次请求预留仍未知；此次没有补填0或推算",
+  "最后审阅": "首次0 Critical、1 Important、1 Minor；Important及Minor已修，复核发现原终态排队丢失的残余Minor也已修；最终只读复核无剩余问题",
+  "contrib交付提交": "c85121eb6ef581b28a0fbc673c3ac579cf0559c7",
+  "management-final.jsonl": {
+    "pass": 98,
+    "fail": 0,
+    "skip": 1
+  },
+  "standalone-final.jsonl": {
+    "pass": 98,
+    "fail": 0,
+    "skip": 1
+  }
+}

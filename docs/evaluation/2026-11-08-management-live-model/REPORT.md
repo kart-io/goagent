@@ -66,3 +66,5 @@ Minor补充验证完成后，重复提交仍返回最初queued响应，但GET当
 [核心复验](merged-core.jsonl)、[管理模块复验](merged-management.jsonl)。原有6份未提交文件内容SHA256保持不变；两个隔离工作树及本地原始日志保留。
 
 本轮专用Postgres容器及其数据卷已删除，临时安装的lint二进制已清理，没有改动其他运行容器。
+
+后续请求证据和验收工具可靠性问题已修复，见[修复与复验](../2026-11-08-management-live-reliability/REPORT.md)。本页保留当时的结果和历史未知用量。

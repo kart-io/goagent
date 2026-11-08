@@ -38,3 +38,5 @@ env -u GOROOT GOTOOLCHAIN=go1.27.3 GOWORK=off go build ./...
 新增20组HTTP与4项数据库业务案例的功能映射、红绿修复和执行结果见 [扩展案例验收](../docs/evaluation/2026-11-08-management-expanded-cases/REPORT.md)。
 
 DeepSeek与Gemini的真实模型、审批续跑、多轮会话、Fork及实际用量结果见 [真实模型验收](../docs/evaluation/2026-11-08-management-live-model/REPORT.md)。
+
+真实模型验收工具的失败退出、请求增量证据和配置前检修复见 [可靠性修复](../docs/evaluation/2026-11-08-management-live-reliability/REPORT.md)。
