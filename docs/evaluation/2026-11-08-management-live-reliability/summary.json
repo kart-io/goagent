@@ -85,7 +85,8 @@
     "vet-lint.log": "e92606b0bf483111dff0a120c315ea165821348f31365020e2468a0059095c47",
     "management-final.jsonl": "24e8c7a234c0318528ff207e4c3b305d606ae1cd63313f08c6af876e54722770",
     "standalone-final.jsonl": "eb1e6d944eb8b499227b0c8242e5e15f9226123b008845f27d1b61fd059cfa11",
-    "verified-vet-lint.log": "e92606b0bf483111dff0a120c315ea165821348f31365020e2468a0059095c47"
+    "verified-vet-lint.log": "e92606b0bf483111dff0a120c315ea165821348f31365020e2468a0059095c47",
+    "merged-regression.jsonl": "64fcaa683ceca859a056bcc806620e12a669a9f0d41a70b1d692e2b35c0830ef"
   },
   "真实请求合计": 26,
   "真实已知Token合计": 10338,
@@ -102,5 +103,18 @@
     "pass": 98,
     "fail": 0,
     "skip": 1
-  }
+  },
+  "合并后验证": {
+    "时间": "2026-11-08T20:20:05.506687+08:00",
+    "核心主线受检提交": "abdcd6a89e4ad9d5ced6220f57c32e5e93854fed",
+    "contrib主线受检提交": "c85121eb6ef581b28a0fbc673c3ac579cf0559c7",
+    "测试事件": {
+      "pass": 24,
+      "fail": 0,
+      "skip": 0
+    },
+    "内容校验": "三个受检测试文件SHA256一致，原有6份未提交文件SHA256未变",
+    "是否重复付费": "否"
+  },
+  "清理": "仅删除本轮专用Postgres容器及数据卷、本轮lint二进制；原始日志和工作树保留"
 }
