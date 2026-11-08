@@ -141,6 +141,13 @@ func (b *AgentBuilder[C, S]) BuildContext(ctx context.Context) (*ConfigurableAge
 	if b.factMemory != nil && (nilFactInterface(b.factMemory.service) || nilFactInterface(b.factMemory.resolver) || strings.TrimSpace(b.config.AgentID) == "") {
 		return nil, agentErrors.NewInvalidConfigError("builder", "fact_memory", "fact memory requires a service, trusted scope resolver, and AgentID")
 	}
+	if b.factMemory != nil {
+		for _, mw := range b.middlewares {
+			if cache, ok := mw.(middleware.ResponseCacheBypassCapability); ok && !cache.SupportsCacheBypass() {
+				return nil, agentErrors.NewInvalidConfigError("builder", "fact_memory", "response cache middleware must support cache bypass")
+			}
+		}
+	}
 	if b.config.MemoryFailurePolicy != MemoryFailureBestEffort && b.config.MemoryFailurePolicy != MemoryFailureStrict {
 		return nil, agentErrors.NewInvalidConfigError("builder", "memory_failure_policy", "unknown memory failure policy")
 	}

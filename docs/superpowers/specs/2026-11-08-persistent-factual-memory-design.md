@@ -155,7 +155,7 @@ type FactStore interface {
     GetRebuild(context.Context, MaintenanceAccess, RebuildID) (Rebuild, error)
     AdvanceRebuild(context.Context, RebuildID, RebuildProgress) error
     ActiveIndexProfile(context.Context) (IndexProfileState, error)
-    SwitchActiveGeneration(context.Context, IndexGeneration, RebuildID, StoreSequence) error
+    SwitchActiveGeneration(context.Context, IndexGeneration, RebuildID, StoreSequence, uint64) error
 }
 
 type MemoryIndex interface {

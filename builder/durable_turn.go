@@ -50,11 +50,28 @@ func readJournaledTurn(ctx context.Context, round int, client llm.Client, req *l
 		Provider string
 		Request  *llm.CompletionRequest
 		Tools    []definition
-	}{string(client.Provider()), req, definitions})
+	}{string(client.Provider()), durableIntentRequest(req), definitions})
 	if err != nil {
 		return nil, err
 	}
 	return modelOperation(ctx, fmt.Sprintf("model/turn/%d", round), intent, invoke, func(turn *llm.StreamChunk) error { return validateDurableTurn(turn, tools, allowEmpty, feedback) }, emit)
+}
+
+// durableIntentRequest removes ephemeral fact bodies from the persisted model
+// request intent. The durable fact snapshot operation is journaled separately
+// and validated before this request is reconstructed on replay.
+func durableIntentRequest(req *llm.CompletionRequest) *llm.CompletionRequest {
+	if req == nil {
+		return nil
+	}
+	copy := *req
+	copy.Messages = append([]llm.Message(nil), req.Messages...)
+	for i := range copy.Messages {
+		if copy.Messages[i].Name == factMemoryMessageName {
+			copy.Messages[i].Content = ""
+		}
+	}
+	return &copy
 }
 
 // feedback 为真时未提供的工具与非 JSON 参数照常提交，由工具循环交还模型。

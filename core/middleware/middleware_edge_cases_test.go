@@ -12,6 +12,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestPublicCacheBypassSignal(t *testing.T) {
+	if IsCacheBypassed(context.Background()) {
+		t.Fatal("ordinary execution unexpectedly requested cache bypass")
+	}
+	if !IsCacheBypassed(WithCacheBypass(context.Background())) {
+		t.Fatal("external cache middleware cannot observe the bypass request")
+	}
+}
+
 // ===== MiddlewareChain Edge Cases =====
 
 func TestMiddlewareChain_Execute_HandlerReturnsNilResponse(t *testing.T) {

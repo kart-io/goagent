@@ -74,7 +74,7 @@ func (s *DefaultMemoryService) recall(ctx context.Context, access MemoryAccess, 
 		}
 	}
 	// 常驻事实独立于语义分数，但仍走同一授权、TTL 与预算约束。
-	page, err := s.List(ctx, access, FactFilter{}, PageRequest{Limit: s.limits.MaxPageSize})
+	page, err := s.List(ctx, access, FactFilter{RecallClasses: []RecallClass{RecallAlways}}, PageRequest{Limit: s.limits.MaxPageSize})
 	if err != nil {
 		return RecallResult{}, err
 	}

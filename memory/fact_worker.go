@@ -3,7 +3,9 @@ package memory
 import (
 	"context"
 	"errors"
+	"strconv"
 	"sync"
+	"time"
 )
 
 // FactWorkerConfig 配置索引 outbox Worker。
@@ -13,6 +15,7 @@ type FactWorkerConfig struct {
 	Embedders   EmbedderResolver
 	BatchSize   int
 	Concurrency int
+	Observer    MemoryObserver
 }
 
 // FactWorker 将持久 outbox 中的事实变更应用到可重建索引。
@@ -40,6 +43,25 @@ func (w *FactWorker) Run(ctx context.Context) error {
 			return errors.Join(errors.Join(failures...), err)
 		}
 		if len(batch) == 0 {
+			clears, clearErr := w.config.Store.ClaimClearOperations(ctx, w.config.BatchSize)
+			if clearErr != nil {
+				return errors.Join(errors.Join(failures...), clearErr)
+			}
+			for _, operation := range clears {
+				started := time.Now()
+				err := w.config.Store.AckClearOperation(ctx, operation.ID, ClearProgress{Done: true})
+				count := 0
+				if err == nil {
+					count = 1
+				}
+				observeMemory(w.config.Observer, MemoryEvent{Operation: "scope_clear", Duration: time.Since(started), Count: count, ErrorCode: memoryErrorCode(err)})
+				if err != nil {
+					failures = append(failures, err)
+				}
+			}
+			if err := w.runRebuilds(ctx); err != nil {
+				failures = append(failures, err)
+			}
 			return errors.Join(failures...)
 		}
 		sem := make(chan struct{}, w.config.Concurrency)
@@ -74,7 +96,68 @@ func (w *FactWorker) Run(ctx context.Context) error {
 	}
 }
 
-func (w *FactWorker) apply(ctx context.Context, mutation IndexMutation) error {
+func (w *FactWorker) runRebuilds(ctx context.Context) (retErr error) {
+	rebuilds, err := w.config.Store.ClaimRebuilds(ctx, 1)
+	if err != nil {
+		return err
+	}
+	for _, rebuild := range rebuilds {
+		started := time.Now()
+		processed := 0
+		defer func() {
+			observeMemory(w.config.Observer, MemoryEvent{Operation: "index_rebuild", Duration: time.Since(started), Count: processed, ErrorCode: memoryErrorCode(retErr)})
+		}()
+		page, err := w.config.Store.ScanRebuildFacts(ctx, rebuild.ID, rebuild.Cursor, w.config.BatchSize)
+		if err != nil {
+			return err
+		}
+		for _, fact := range page.Items {
+			embedder, err := w.config.Embedders.Resolve(ctx, rebuild.Profile.ID)
+			if err != nil {
+				return err
+			}
+			profile := embedder.Profile()
+			if profile.ID != rebuild.Profile.ID {
+				return &MemoryError{Kind: ErrProviderCapability, Op: "重建 Embedder Profile 不匹配"}
+			}
+			vector, err := embedder.Embed(ctx, fact.Content)
+			if err != nil {
+				return err
+			}
+			if profile.Dimension > 0 && len(vector) != profile.Dimension {
+				return &MemoryError{Kind: ErrProviderCapability, Op: "重建嵌入维度不匹配"}
+			}
+			mutation := IndexMutation{ID: MutationID(string(rebuild.ID) + ":" + string(fact.ID) + ":" + strconv.FormatUint(uint64(fact.MutationVersion), 10)), FactID: fact.ID, Scope: fact.Scope, Revision: fact.Revision, MutationVersion: fact.MutationVersion, StoreSequence: fact.StoreSequence, ProfileID: rebuild.Profile.ID, Generation: rebuild.Generation, Action: MutationUpsert, Vector: vector}
+			if err = w.config.Index.ApplyMutation(ctx, mutation); err != nil {
+				return &MemoryError{Kind: ErrProviderCapability, Op: "应用重建索引页", Cause: err}
+			}
+			processed++
+		}
+		if err = w.config.Store.AdvanceRebuild(ctx, rebuild.ID, RebuildProgress{LeaseToken: rebuild.LeaseToken, Cursor: page.NextCursor, CaughtUp: page.CaughtUp, Done: page.Done}); err != nil {
+			return err
+		}
+		if page.Done {
+			active, err := w.config.Store.ActiveIndexProfile(ctx)
+			if err != nil {
+				return err
+			}
+			if err = w.config.Store.SwitchActiveGeneration(ctx, active.Generation, rebuild.ID, page.CaughtUp, rebuild.LeaseToken); err != nil && !errors.Is(err, ErrRevisionConflict) {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (w *FactWorker) apply(ctx context.Context, mutation IndexMutation) (retErr error) {
+	started := time.Now()
+	defer func() {
+		count := 0
+		if retErr == nil {
+			count = 1
+		}
+		observeMemory(w.config.Observer, MemoryEvent{Operation: "index_mutation", Duration: time.Since(started), Count: count, ErrorCode: memoryErrorCode(retErr)})
+	}()
 	result := MutationApplied
 	if mutation.Action == MutationUpsert {
 		input, err := w.config.Store.LoadIndexInput(ctx, mutation)
@@ -88,20 +171,29 @@ func (w *FactWorker) apply(ctx context.Context, mutation IndexMutation) error {
 		if err != nil {
 			return w.fail(ctx, mutation, err)
 		}
-		embedder, err := w.config.Embedders.Resolve(ctx, state.Profile.ID)
+		profileID, generation := state.Profile.ID, state.Generation
+		if mutation.ProfileID != "" {
+			profileID = mutation.ProfileID
+			generation = mutation.Generation
+		}
+		embedder, err := w.config.Embedders.Resolve(ctx, profileID)
 		if err != nil {
 			return w.fail(ctx, mutation, err)
+		}
+		profile := embedder.Profile()
+		if profile.ID != profileID {
+			return w.fail(ctx, mutation, &MemoryError{Kind: ErrProviderCapability, Op: "Embedder Profile 不匹配"})
 		}
 		vector, err := embedder.Embed(ctx, input.Content)
 		if err != nil {
 			return w.fail(ctx, mutation, err)
 		}
-		if state.Profile.Dimension > 0 && len(vector) != state.Profile.Dimension {
+		if profile.Dimension > 0 && len(vector) != profile.Dimension {
 			return w.fail(ctx, mutation, &MemoryError{Kind: ErrProviderCapability, Op: "嵌入维度不匹配"})
 		}
 		mutation.Vector = vector
-		mutation.ProfileID = state.Profile.ID
-		mutation.Generation = state.Generation
+		mutation.ProfileID = profileID
+		mutation.Generation = generation
 	}
 	if err := w.config.Index.ApplyMutation(ctx, mutation); err != nil {
 		return w.fail(ctx, mutation, err)

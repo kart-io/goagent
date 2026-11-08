@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 	"testing"
 	"time"
@@ -76,6 +77,31 @@ func TestFactIdempotencyRejectsDifferentRequest(t *testing.T) {
 	}
 }
 
+func TestFactExpiredInputReplayReturnsOriginalReceipt(t *testing.T) {
+	svc, store, scope := testMemoryService(t)
+	now := time.Date(2026, 11, 8, 0, 0, 0, 0, time.UTC)
+	svc.now = func() time.Time { return now }
+	store.now = now
+	expiresAt := now.Add(time.Hour)
+	input := FactInput{Content: "temporary fact", ExpiresAt: expiresAt}
+	first, err := svc.Save(context.Background(), scope, "expires-after-save", input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now = expiresAt.Add(time.Second)
+	store.now = now
+	replayed, err := svc.Save(context.Background(), scope, "expires-after-save", input)
+	if err != nil {
+		t.Fatalf("expired input replay did not return its original receipt: %v", err)
+	}
+	if replayed != first || store.factCount() != 1 {
+		t.Fatalf("expired replay changed receipt or created a fact: got=%+v want=%+v facts=%d", replayed, first, store.factCount())
+	}
+	if _, err = svc.Save(context.Background(), scope, "new-already-expired", input); !errors.Is(err, ErrInvalidFact) {
+		t.Fatalf("new expired fact was accepted: %v", err)
+	}
+}
+
 func TestFactSaveDeleteRestartReplayDoesNotLeakOrResurrect(t *testing.T) {
 	svc, store, scope := testMemoryService(t)
 	receipt, err := svc.Save(context.Background(), scope, "delete-replay", FactInput{Content: "private fact"})
@@ -120,6 +146,10 @@ func TestFactExpiredIdempotencyTombstoneSurvivesGCAndRestart(t *testing.T) {
 	_, err = restarted.Save(context.Background(), scope, "expired-key", FactInput{Content: "old fact"})
 	if !errors.Is(err, ErrIdempotencyExpired) {
 		t.Fatalf("清理/重启后旧键应被拒绝，实际为 %v", err)
+	}
+	_, err = restarted.Save(context.Background(), scope, "expired-key", FactInput{Content: "different body"})
+	if !errors.Is(err, ErrIdempotencyExpired) {
+		t.Fatalf("过期键不得因请求摘要变化而重新启用：%v", err)
 	}
 	if store.factCount() != 1 {
 		t.Fatal("过期幂等键重放创建了新事实")
@@ -166,7 +196,8 @@ func TestFactRevisionCASHasSingleWinner(t *testing.T) {
 
 func TestFactSupersedeLeavesOneActiveFact(t *testing.T) {
 	svc, store, scope := testMemoryService(t)
-	old, err := svc.Save(context.Background(), scope, "old", FactInput{Content: "lives in Hangzhou"})
+	oldInput := FactInput{Content: "lives in Hangzhou"}
+	old, err := svc.Save(context.Background(), scope, "old", oldInput)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -189,6 +220,10 @@ func TestFactSupersedeLeavesOneActiveFact(t *testing.T) {
 	}
 	if got := store.activeFactCount(); got != 1 {
 		t.Fatalf("有效事实数=%d，期望 1", got)
+	}
+	replayed, err := svc.Save(context.Background(), scope, "old", oldInput)
+	if err != nil || replayed != old {
+		t.Fatalf("superseded fact replay did not preserve original receipt: got=%+v want=%+v err=%v", replayed, old, err)
 	}
 }
 
@@ -271,6 +306,27 @@ func TestFactUserSharedScopeCanBeReadWithoutAgentBinding(t *testing.T) {
 	}
 }
 
+func TestFactAgentPrivateScopeBindsAuthenticatedUser(t *testing.T) {
+	svc, _, write := testMemoryService(t)
+	if _, err := svc.Save(context.Background(), write, "private-for-user-a", FactInput{Content: "private"}); err != nil {
+		t.Fatal(err)
+	}
+	other := write.Access
+	other.Principal.UserID = "user-b"
+	if _, err := svc.List(context.Background(), other, FactFilter{}, PageRequest{Limit: 10}); !errors.Is(err, ErrAuthorization) {
+		t.Fatalf("different user read agent-private facts: %v", err)
+	}
+	if _, err := svc.Save(context.Background(), WriteScope{Access: other, Target: write.Target}, "cross-user-write", FactInput{Content: "private"}); !errors.Is(err, ErrAuthorization) {
+		t.Fatalf("different user wrote another user's agent-private scope: %v", err)
+	}
+	invalid := write
+	invalid.Target.OwnerID = "agent-a"
+	invalid.Access.WriteScopes = []MemoryScope{invalid.Target}
+	if _, err := svc.Save(context.Background(), invalid, "owner-shape", FactInput{Content: "private"}); !errors.Is(err, ErrAuthorization) {
+		t.Fatalf("malformed agent-private owner shape was accepted: %v", err)
+	}
+}
+
 func (s *factStoreFixture) blockedScopeCount() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -286,6 +342,7 @@ func newFactServiceOnStore(store *factStoreFixture, access MemoryAccess) (*Defau
 
 type factStoreFixture struct {
 	mu               sync.Mutex
+	activeProfile    IndexProfileState
 	facts            map[FactID]Fact
 	idempotency      map[string]fixtureIdempotency
 	changes          []ChangeRecord
@@ -362,14 +419,17 @@ func (s *factStoreFixture) ApplyFact(ctx context.Context, scope WriteScope, muta
 	idemKey := string(scope.Target.TenantID) + "|" + string(mutation.Action) + "|" + string(scope.Target.OwnerKind) + "|" + scope.Target.OwnerID + "|" + scope.Target.AgentID + "|" + string(mutation.IdempotencyKey)
 	if mutation.IdempotencyKey != "" {
 		if old, ok := s.idempotency[idemKey]; ok {
-			if old.digest != mutation.RequestDigest {
-				return FactMutationResult{}, &MemoryError{Kind: ErrIdempotencyConflict}
-			}
 			if old.expired {
 				return FactMutationResult{}, &MemoryError{Kind: ErrIdempotencyExpired}
 			}
+			if old.digest != mutation.RequestDigest {
+				return FactMutationResult{}, &MemoryError{Kind: ErrIdempotencyConflict}
+			}
 			return FactMutationResult{Receipt: old.receipt, Lifecycle: old.state}, nil
 		}
+	}
+	if (mutation.Action == ChangeCreated || mutation.Action == ChangeSuperseded) && !mutation.Input.ExpiresAt.IsZero() && !s.now.Before(mutation.Input.ExpiresAt) {
+		return FactMutationResult{}, &MemoryError{Kind: ErrInvalidFact, Op: "事实有效期必须晚于当前时间"}
 	}
 	now := s.now
 	var fact Fact
@@ -539,13 +599,26 @@ func (s *factStoreFixture) List(ctx context.Context, access MemoryAccess, filter
 		if len(filter.Scopes) > 0 && !scopeAllowed(filter.Scopes, f.Scope) {
 			continue
 		}
+		if len(filter.RecallClasses) > 0 && !recallClassAllowed(filter.RecallClasses, f.RecallClass) {
+			continue
+		}
 		result.Items = append(result.Items, f)
 	}
+	sort.Slice(result.Items, func(i, j int) bool { return result.Items[i].ID < result.Items[j].ID })
 	if len(result.Items) > page.Limit {
 		result.Items = result.Items[:page.Limit]
 		result.NextCursor = "more"
 	}
 	return result, nil
+}
+
+func recallClassAllowed(classes []RecallClass, value RecallClass) bool {
+	for _, class := range classes {
+		if class == value {
+			return true
+		}
+	}
+	return false
 }
 func (s *factStoreFixture) ListChanges(ctx context.Context, access MemoryAccess, id FactID, page PageRequest) (ChangePage, error) {
 	return ChangePage{}, nil
@@ -684,6 +757,10 @@ func (s *factStoreFixture) RetryMutation(context.Context, MaintenanceAccess, Mut
 func (s *factStoreFixture) CreateRebuild(context.Context, MaintenancePrincipal, EmbeddingProfile) (Rebuild, error) {
 	return Rebuild{}, nil
 }
+func (s *factStoreFixture) ClaimRebuilds(context.Context, int) ([]Rebuild, error) { return nil, nil }
+func (s *factStoreFixture) ScanRebuildFacts(context.Context, RebuildID, string, int) (RebuildPage, error) {
+	return RebuildPage{}, nil
+}
 func (s *factStoreFixture) GetRebuild(context.Context, MaintenanceAccess, RebuildID) (Rebuild, error) {
 	return Rebuild{}, nil
 }
@@ -691,9 +768,14 @@ func (s *factStoreFixture) AdvanceRebuild(context.Context, RebuildID, RebuildPro
 	return nil
 }
 func (s *factStoreFixture) ActiveIndexProfile(context.Context) (IndexProfileState, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.activeProfile.Profile.ID != "" {
+		return s.activeProfile, nil
+	}
 	return IndexProfileState{Profile: EmbeddingProfile{ID: "test-profile", Dimension: 2}, Generation: 1}, nil
 }
-func (s *factStoreFixture) SwitchActiveGeneration(context.Context, IndexGeneration, RebuildID, StoreSequence) error {
+func (s *factStoreFixture) SwitchActiveGeneration(context.Context, IndexGeneration, RebuildID, StoreSequence, uint64) error {
 	return nil
 }
 
@@ -736,7 +818,8 @@ func TestFactWorkerEmbedsAndAppliesPendingMutation(t *testing.T) {
 		t.Fatal(err)
 	}
 	index := &fixtureIndex{}
-	worker, err := NewFactWorker(FactWorkerConfig{Store: store, Index: index, Embedders: fixtureEmbedderResolver{}, BatchSize: 10, Concurrency: 2})
+	observer := &factObserverFixture{}
+	worker, err := NewFactWorker(FactWorkerConfig{Store: store, Index: index, Embedders: fixtureEmbedderResolver{}, BatchSize: 10, Concurrency: 2, Observer: observer})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -745,6 +828,9 @@ func TestFactWorkerEmbedsAndAppliesPendingMutation(t *testing.T) {
 	}
 	if len(index.applied) != 1 || len(index.applied[0].Vector) != 2 || index.applied[0].Generation != 1 {
 		t.Fatalf("索引 mutation 未正确处理：%+v", index.applied)
+	}
+	if len(observer.events) != 1 || observer.events[0].Operation != "index_mutation" || observer.events[0].ErrorCode != "" {
+		t.Fatalf("index worker event missing or incorrect: %+v", observer.events)
 	}
 }
 
@@ -807,6 +893,29 @@ func TestFactRecallAlwaysStillHonorsBudgetAndTTL(t *testing.T) {
 	}
 }
 
+func TestFactRecallAlwaysBeyondOrdinaryListPage(t *testing.T) {
+	svc, _, scope := testMemoryService(t)
+	id := 0
+	svc.newID = func() (FactID, error) { id++; return FactID(fmt.Sprintf("fact-%04d", id)), nil }
+	for n := 0; n < DefaultFactLimits().MaxPageSize+1; n++ {
+		if _, err := svc.Save(context.Background(), scope, IdempotencyKey(fmt.Sprintf("normal-%d", n)), FactInput{Content: fmt.Sprintf("ordinary %d", n)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := svc.Save(context.Background(), scope, "always-late", FactInput{Content: "language preference", RecallClass: RecallAlways, Priority: 10}); err != nil {
+		t.Fatal(err)
+	}
+	svc.index = &fixtureIndex{}
+	svc.embedders = fixtureEmbedderResolver{}
+	result, err := svc.Recall(context.Background(), scope.Access, "", RecallOptions{Limit: 5})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Matches) != 1 || result.Matches[0].Fact.Content != "language preference" {
+		t.Fatalf("always fact beyond ordinary list page was not recalled: %+v", result.Matches)
+	}
+}
+
 func TestFactSnapshotInvalidatesAfterDelete(t *testing.T) {
 	svc, _, scope := testMemoryService(t)
 	receipt, err := svc.Save(context.Background(), scope, "snapshot-fact", FactInput{Content: "snapshot content"})
@@ -830,5 +939,46 @@ func TestFactSnapshotInvalidatesAfterDelete(t *testing.T) {
 	}
 	if _, err := svc.ResolveSnapshot(context.Background(), scope.Access, result.Snapshot); !errors.Is(err, ErrSnapshotInvalidated) {
 		t.Fatalf("删除后快照未失效：%v", err)
+	}
+}
+
+func TestFactSnapshotInvalidatesAfterUpdate(t *testing.T) {
+	svc, _, scope := testMemoryService(t)
+	receipt, err := svc.Save(context.Background(), scope, "snapshot-update", FactInput{Content: "before update"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc.index = &fixtureIndex{candidates: []IndexCandidate{{FactID: receipt.FactID, Revision: receipt.Revision, ProfileID: "test-profile", Generation: 1, Score: 0.95}}}
+	svc.embedders = fixtureEmbedderResolver{}
+	result, err := svc.Recall(context.Background(), scope.Access, "before", RecallOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated := "after update"
+	if _, err = svc.Update(context.Background(), scope, receipt.FactID, receipt.Revision, FactPatch{Content: &updated}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = svc.ResolveSnapshot(context.Background(), scope.Access, result.Snapshot); !errors.Is(err, ErrSnapshotInvalidated) {
+		t.Fatalf("updated fact did not invalidate prior snapshot: %v", err)
+	}
+}
+
+func TestFactSnapshotInvalidatesAfterProfileChange(t *testing.T) {
+	svc, store, scope := testMemoryService(t)
+	receipt, err := svc.Save(context.Background(), scope, "snapshot-profile", FactInput{Content: "profile scoped fact"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc.index = &fixtureIndex{candidates: []IndexCandidate{{FactID: receipt.FactID, Revision: receipt.Revision, ProfileID: "test-profile", Generation: 1, Score: 0.95}}}
+	svc.embedders = fixtureEmbedderResolver{}
+	result, err := svc.Recall(context.Background(), scope.Access, "profile", RecallOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	store.mu.Lock()
+	store.activeProfile = IndexProfileState{Profile: EmbeddingProfile{ID: "new-profile", Dimension: 2}, Generation: 2}
+	store.mu.Unlock()
+	if _, err = svc.ResolveSnapshot(context.Background(), scope.Access, result.Snapshot); !errors.Is(err, ErrSnapshotInvalidated) {
+		t.Fatalf("profile change did not invalidate prior snapshot: %v", err)
 	}
 }

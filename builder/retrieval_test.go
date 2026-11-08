@@ -3,12 +3,16 @@ package builder
 import (
 	"context"
 	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"unicode/utf8"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/middleware"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
@@ -39,6 +43,10 @@ type testFactResolver struct {
 	access factmemory.MemoryAccess
 	err    error
 }
+
+type unsupportedFactCache struct{ *middleware.BaseMiddleware }
+
+func (unsupportedFactCache) SupportsCacheBypass() bool { return false }
 
 func (r testFactResolver) Resolve(context.Context, string) (factmemory.MemoryAccess, error) {
 	return r.access, r.err
@@ -88,6 +96,122 @@ func TestFactBuilderRejectsMissingPrincipalBeforeCache(t *testing.T) {
 	require.Empty(t, model.requests)
 	require.Zero(t, service.calls)
 	require.Equal(t, 1, cache.Size())
+}
+
+func TestFactBuilderRejectsResponseCacheWithoutBypassSupport(t *testing.T) {
+	cache := unsupportedFactCache{BaseMiddleware: middleware.NewBaseMiddleware("external-cache")}
+	_, err := NewSimpleBuilder(NewMockLLMClient()).WithAgentID("agent").WithMiddleware(cache).
+		WithFactMemory(&testFactService{content: "private"}, testFactResolver{access: testFactAccess()}).Build()
+	require.ErrorContains(t, err, "response cache middleware must support cache bypass")
+}
+
+type durableFactMemoryService struct {
+	factmemory.MemoryService
+	recalls int
+	current factmemory.Revision
+}
+
+func (s *durableFactMemoryService) Recall(context.Context, factmemory.MemoryAccess, string, factmemory.RecallOptions) (factmemory.RecallResult, error) {
+	s.recalls++
+	ref := factmemory.SnapshotRef{ScopeFingerprint: "trusted-scope", PolicyVersion: "v1", EmbeddingProfileID: "profile", IndexGeneration: 1, Facts: []factmemory.SnapshotFactRef{{FactID: "f1", Revision: 1, MutationVersion: 1, Score: 0.9}}}
+	return factmemory.RecallResult{Snapshot: ref, Matches: []factmemory.FactMatch{{Fact: factmemory.Fact{ID: "f1", Content: "private fact text", Revision: 1}, Score: 0.9}}}, nil
+}
+func (s *durableFactMemoryService) ResolveSnapshot(_ context.Context, _ factmemory.MemoryAccess, ref factmemory.SnapshotRef) (factmemory.RecallResult, error) {
+	if len(ref.Facts) != 1 || ref.Facts[0].Revision != s.current {
+		return factmemory.RecallResult{}, &factmemory.MemoryError{Kind: factmemory.ErrSnapshotInvalidated}
+	}
+	return factmemory.RecallResult{Snapshot: ref, Matches: []factmemory.FactMatch{{Fact: factmemory.Fact{ID: "f1", Content: "private fact text", Revision: s.current}, Score: 0.9}}}, nil
+}
+
+func TestFactBuilderDurableReplayPinsSnapshotAndRejectsChangedFact(t *testing.T) {
+	dir := t.TempDir()
+	journal, err := durable.NewFileStore(dir)
+	require.NoError(t, err)
+	service := &durableFactMemoryService{current: 1}
+	agent, err := NewSimpleBuilder(NewMockLLMClient()).WithAgentID("agent").WithFactMemory(service, testFactResolver{access: testFactAccess()}).Build()
+	require.NoError(t, err)
+	ctx := durable.WithJournal(durable.WithExecutionKey(context.Background(), "fact-run"), journal)
+	ctx = context.WithValue(ctx, factAccessKey{}, testFactAccess())
+	first, err := agent.factContext(ctx, "question")
+	require.NoError(t, err)
+	require.Contains(t, first, "private fact text")
+	require.Equal(t, 1, service.recalls)
+	service.current = 2
+	restartedJournal, err := durable.NewFileStore(dir)
+	require.NoError(t, err)
+	restarted := durable.WithJournal(durable.WithExecutionKey(context.Background(), "fact-run"), restartedJournal)
+	restarted = context.WithValue(restarted, factAccessKey{}, testFactAccess())
+	_, err = agent.factContext(restarted, "question")
+	require.ErrorIs(t, err, factmemory.ErrSnapshotInvalidated)
+	require.Equal(t, 1, service.recalls, "durable replay must reuse the pinned snapshot instead of recalling a new set")
+	files, err := filepath.Glob(filepath.Join(dir, "*"))
+	require.NoError(t, err)
+	for _, path := range files {
+		raw, e := os.ReadFile(path)
+		require.NoError(t, e)
+		require.NotContains(t, string(raw), "private fact text", fmt.Sprintf("fact body leaked into durable journal %s", path))
+	}
+}
+
+func TestFactPreStepJournalDoesNotPersistFactBody(t *testing.T) {
+	dir := t.TempDir()
+	journal, err := durable.NewFileStore(dir)
+	require.NoError(t, err)
+	service := &durableFactMemoryService{current: 1}
+	noop := func(context.Context, *Step) (PreStepResult, error) { return PreStepResult{}, nil }
+	agent, err := NewSimpleBuilder(newScriptModel(answer("ok"))).WithAgentID("agent").WithTools(plainTool()).WithFactMemory(service, testFactResolver{access: testFactAccess()}).WithPreStep(noop).Build()
+	require.NoError(t, err)
+	ctx := durable.WithJournal(durable.WithExecutionKey(context.Background(), "fact-pre-step"), journal)
+	ctx = context.WithValue(ctx, factAccessKey{}, testFactAccess())
+	factContext, err := agent.factContext(ctx, "question")
+	require.NoError(t, err)
+	messages := []llm.Message{llm.UserMessage("question"), {Role: "user", Name: factMemoryMessageName, Content: factContext}}
+	_, _, err = agent.runPreStep(ctx, 0, 1, true, messages)
+	require.NoError(t, err)
+	model := newScriptModel(answer("ok"))
+	_, err = readJournaledTurn(ctx, 0, model, &llm.CompletionRequest{Messages: messages}, nil, false, false, func(AgentEvent) error { return nil })
+	require.NoError(t, err)
+	files, err := filepath.Glob(filepath.Join(dir, "*"))
+	require.NoError(t, err)
+	for _, path := range files {
+		raw, readErr := os.ReadFile(path)
+		require.NoError(t, readErr)
+		require.NotContains(t, string(raw), "private fact text", "PreStep journal must not persist memory bodies")
+	}
+}
+
+func TestFactBuilderRecallsForHandleFollowup(t *testing.T) {
+	started, release := make(chan struct{}), make(chan struct{})
+	model := newScriptModel(answer("first answer"), answer("followup answer"))
+	service := &testFactService{content: "likes tea"}
+	turns := 0
+	agent, err := NewSimpleBuilder(model).WithAgentID("agent").WithTools(plainTool()).WithMaxIterations(3).
+		WithFactMemory(service, testFactResolver{access: testFactAccess()}).
+		WithRequestHook(func(_ context.Context, request *ModelRequest) error {
+			for _, message := range request.Request.Messages {
+				require.NotContains(t, message.Content, "likes tea", "Request hooks must not persist or transform fact bodies")
+			}
+			return nil
+		}).
+		WithTurnStopping(func(context.Context, *Stopping) (string, error) {
+			turns++
+			if turns == 1 {
+				close(started)
+				<-release
+			}
+			return "", nil
+		}).Build()
+	require.NoError(t, err)
+	handle := agent.Start(context.Background(), "first question")
+	<-started
+	require.NoError(t, handle.Followup("followup question"))
+	close(release)
+	output, err := handle.Wait(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, "followup answer", output.Result)
+	require.Equal(t, 2, service.calls, "each new user followup must get a fresh authorized snapshot")
+	require.Len(t, model.requests, 2)
+	require.Contains(t, model.requests[1].Messages[len(model.requests[1].Messages)-1].Content, "likes tea")
 }
 
 func (m *evidenceLLM) CompleteStream(ctx context.Context, req *llm.CompletionRequest) (<-chan *llm.StreamChunk, error) {

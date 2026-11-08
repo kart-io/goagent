@@ -19,6 +19,7 @@ type MemoryServiceConfig struct {
 	NewID        func() (FactID, error)
 	Index        MemoryIndex
 	Embedders    EmbedderResolver
+	Observer     MemoryObserver
 }
 
 // DefaultMemoryService 使用宿主提供的持久 Store 实现事实生命周期与权限校验。
@@ -29,6 +30,7 @@ type DefaultMemoryService struct {
 	newID     func() (FactID, error)
 	index     MemoryIndex
 	embedders EmbedderResolver
+	observer  MemoryObserver
 }
 
 var _ MemoryService = (*DefaultMemoryService)(nil)
@@ -52,7 +54,7 @@ func NewDefaultMemoryService(config MemoryServiceConfig) (*DefaultMemoryService,
 	}
 	return &DefaultMemoryService{
 		store: config.Store, limits: config.Limits, now: config.Now,
-		newID: config.NewID, index: config.Index, embedders: config.Embedders,
+		newID: config.NewID, index: config.Index, embedders: config.Embedders, observer: config.Observer,
 	}, nil
 }
 
@@ -65,7 +67,15 @@ func randomFactID() (FactID, error) {
 }
 
 // Save 创建事实并返回不可变操作收据。
-func (s *DefaultMemoryService) Save(ctx context.Context, scope WriteScope, key IdempotencyKey, input FactInput) (SaveResult, error) {
+func (s *DefaultMemoryService) Save(ctx context.Context, scope WriteScope, key IdempotencyKey, input FactInput) (result SaveResult, retErr error) {
+	started := time.Now()
+	defer func() {
+		count := 0
+		if retErr == nil {
+			count = 1
+		}
+		s.observe("save", started, count, retErr)
+	}()
 	if err := s.validateWriteScope(scope); err != nil {
 		return SaveResult{}, err
 	}
@@ -83,21 +93,33 @@ func (s *DefaultMemoryService) Save(ctx context.Context, scope WriteScope, key I
 	if err != nil {
 		return SaveResult{}, err
 	}
-	result, err := s.store.ApplyFact(ctx, scope, FactMutation{
+	mutationResult, err := s.store.ApplyFact(ctx, scope, FactMutation{
 		FactID: id, NewFactID: id, Input: input, Actor: scope.Access.Principal,
 		IdempotencyKey: key, RequestDigest: digest, Action: ChangeCreated,
+		IdempotencyExpiresAt: s.now().Add(s.limits.IdempotencyRetention),
 	})
 	if err != nil {
-		return result.Receipt, err
+		return mutationResult.Receipt, err
 	}
-	if err := lifecycleError(result.Lifecycle); err != nil {
-		return result.Receipt, err
+	if mutationResult.Lifecycle == FactDeleted {
+		return mutationResult.Receipt, lifecycleError(mutationResult.Lifecycle)
 	}
-	return result.Receipt, nil
+	if mutationResult.Lifecycle != FactActive && mutationResult.Lifecycle != FactExpired && mutationResult.Lifecycle != FactSuperseded {
+		return mutationResult.Receipt, lifecycleError(mutationResult.Lifecycle)
+	}
+	return mutationResult.Receipt, nil
 }
 
 // Get 读取当前可见的有效事实。
-func (s *DefaultMemoryService) Get(ctx context.Context, access MemoryAccess, id FactID) (Fact, error) {
+func (s *DefaultMemoryService) Get(ctx context.Context, access MemoryAccess, id FactID) (fact Fact, retErr error) {
+	started := time.Now()
+	defer func() {
+		count := 0
+		if retErr == nil {
+			count = 1
+		}
+		s.observe("get", started, count, retErr)
+	}()
 	if err := validateReadAccess(access); err != nil {
 		return Fact{}, err
 	}
@@ -118,7 +140,9 @@ func (s *DefaultMemoryService) Get(ctx context.Context, access MemoryAccess, id 
 }
 
 // List 返回授权作用域中的有效事实分页。
-func (s *DefaultMemoryService) List(ctx context.Context, access MemoryAccess, filter FactFilter, page PageRequest) (FactPage, error) {
+func (s *DefaultMemoryService) List(ctx context.Context, access MemoryAccess, filter FactFilter, page PageRequest) (result FactPage, retErr error) {
+	started := time.Now()
+	defer func() { s.observe("list", started, len(result.Items), retErr) }()
 	if err := validateReadAccess(access); err != nil {
 		return FactPage{}, err
 	}
@@ -152,7 +176,15 @@ func (s *DefaultMemoryService) List(ctx context.Context, access MemoryAccess, fi
 }
 
 // Update 按 expected revision 原位修改事实。
-func (s *DefaultMemoryService) Update(ctx context.Context, scope WriteScope, id FactID, revision Revision, patch FactPatch) (Fact, error) {
+func (s *DefaultMemoryService) Update(ctx context.Context, scope WriteScope, id FactID, revision Revision, patch FactPatch) (fact Fact, retErr error) {
+	started := time.Now()
+	defer func() {
+		count := 0
+		if retErr == nil {
+			count = 1
+		}
+		s.observe("update", started, count, retErr)
+	}()
 	if err := s.validateWriteScope(scope); err != nil {
 		return Fact{}, err
 	}
@@ -166,21 +198,29 @@ func (s *DefaultMemoryService) Update(ctx context.Context, scope WriteScope, id 
 	if err != nil {
 		return Fact{}, err
 	}
-	result, err := s.store.ApplyFact(ctx, scope, FactMutation{
+	mutationResult, err := s.store.ApplyFact(ctx, scope, FactMutation{
 		FactID: id, ExpectedRevision: revision, Patch: &patch,
 		Actor: scope.Access.Principal, RequestDigest: digest, Action: ChangeUpdated,
 	})
 	if err != nil {
 		return Fact{}, err
 	}
-	if err := lifecycleError(result.Lifecycle); err != nil {
+	if err := lifecycleError(mutationResult.Lifecycle); err != nil {
 		return Fact{}, err
 	}
 	return s.Get(ctx, scope.Access, id)
 }
 
 // Supersede 创建新事实并使被替代事实退出默认读取。
-func (s *DefaultMemoryService) Supersede(ctx context.Context, scope WriteScope, oldID FactID, revision Revision, key IdempotencyKey, input FactInput) (SaveResult, error) {
+func (s *DefaultMemoryService) Supersede(ctx context.Context, scope WriteScope, oldID FactID, revision Revision, key IdempotencyKey, input FactInput) (result SaveResult, retErr error) {
+	started := time.Now()
+	defer func() {
+		count := 0
+		if retErr == nil {
+			count = 1
+		}
+		s.observe("supersede", started, count, retErr)
+	}()
 	if err := s.validateWriteScope(scope); err != nil {
 		return SaveResult{}, err
 	}
@@ -198,40 +238,60 @@ func (s *DefaultMemoryService) Supersede(ctx context.Context, scope WriteScope, 
 	if err != nil {
 		return SaveResult{}, err
 	}
-	result, err := s.store.ApplyFact(ctx, scope, FactMutation{
+	mutationResult, err := s.store.ApplyFact(ctx, scope, FactMutation{
 		FactID: oldID, NewFactID: id, ExpectedRevision: revision, Input: input,
 		Actor: scope.Access.Principal, IdempotencyKey: key, RequestDigest: digest,
-		Action: ChangeSuperseded,
+		IdempotencyExpiresAt: s.now().Add(s.limits.IdempotencyRetention),
+		Action:               ChangeSuperseded,
 	})
 	if err != nil {
-		return result.Receipt, err
+		return mutationResult.Receipt, err
 	}
-	if err := lifecycleError(result.Lifecycle); err != nil {
-		return result.Receipt, err
+	if mutationResult.Lifecycle == FactDeleted {
+		return mutationResult.Receipt, lifecycleError(mutationResult.Lifecycle)
 	}
-	return result.Receipt, nil
+	if mutationResult.Lifecycle != FactActive && mutationResult.Lifecycle != FactExpired && mutationResult.Lifecycle != FactSuperseded {
+		return mutationResult.Receipt, lifecycleError(mutationResult.Lifecycle)
+	}
+	return mutationResult.Receipt, nil
 }
 
 // Delete 逻辑删除事实；持久索引清理由 outbox 异步完成。
-func (s *DefaultMemoryService) Delete(ctx context.Context, scope WriteScope, id FactID, revision Revision) (DeleteResult, error) {
+func (s *DefaultMemoryService) Delete(ctx context.Context, scope WriteScope, id FactID, revision Revision) (result DeleteResult, retErr error) {
+	started := time.Now()
+	defer func() {
+		count := 0
+		if retErr == nil && result.Deleted {
+			count = 1
+		}
+		s.observe("delete", started, count, retErr)
+	}()
 	if err := s.validateWriteScope(scope); err != nil {
 		return DeleteResult{}, err
 	}
 	if id == "" || revision == 0 {
 		return DeleteResult{}, &MemoryError{Kind: ErrRevisionConflict, Op: "删除事实"}
 	}
-	result, err := s.store.ApplyFact(ctx, scope, FactMutation{
+	mutationResult, err := s.store.ApplyFact(ctx, scope, FactMutation{
 		FactID: id, ExpectedRevision: revision, Actor: scope.Access.Principal,
 		Action: ChangeDeleted,
 	})
 	if err != nil {
 		return DeleteResult{}, err
 	}
-	return DeleteResult{FactID: result.Receipt.FactID, Deleted: result.Lifecycle == FactDeleted}, nil
+	return DeleteResult{FactID: mutationResult.Receipt.FactID, Deleted: mutationResult.Lifecycle == FactDeleted}, nil
 }
 
 // DeleteScope 发起受独立 ClearAccess 授权的作用域清理。
-func (s *DefaultMemoryService) DeleteScope(ctx context.Context, access ClearAccess, target MemoryScope, key IdempotencyKey) (ClearOperation, error) {
+func (s *DefaultMemoryService) DeleteScope(ctx context.Context, access ClearAccess, target MemoryScope, key IdempotencyKey) (operation ClearOperation, retErr error) {
+	started := time.Now()
+	defer func() {
+		count := 0
+		if retErr == nil {
+			count = 1
+		}
+		s.observe("delete_scope", started, count, retErr)
+	}()
 	if !clearAllowed(access, target) {
 		return ClearOperation{}, &MemoryError{Kind: ErrAuthorization, Op: "清空作用域"}
 	}
@@ -242,7 +302,9 @@ func (s *DefaultMemoryService) DeleteScope(ctx context.Context, access ClearAcce
 }
 
 // Recall 在配置索引与嵌入解析器前返回明确能力错误。
-func (s *DefaultMemoryService) Recall(ctx context.Context, access MemoryAccess, query string, options RecallOptions) (RecallResult, error) {
+func (s *DefaultMemoryService) Recall(ctx context.Context, access MemoryAccess, query string, options RecallOptions) (result RecallResult, retErr error) {
+	started := time.Now()
+	defer func() { s.observe("recall", started, len(result.Matches), retErr) }()
 	if s.index == nil || s.embedders == nil {
 		return RecallResult{}, &MemoryError{Kind: ErrProviderCapability, Op: "召回事实：未配置索引或嵌入器"}
 	}
@@ -250,12 +312,16 @@ func (s *DefaultMemoryService) Recall(ctx context.Context, access MemoryAccess, 
 }
 
 // ResolveSnapshot 在快照恢复能力接入前返回明确错误。
-func (s *DefaultMemoryService) ResolveSnapshot(ctx context.Context, access MemoryAccess, snapshot SnapshotRef) (RecallResult, error) {
+func (s *DefaultMemoryService) ResolveSnapshot(ctx context.Context, access MemoryAccess, snapshot SnapshotRef) (result RecallResult, retErr error) {
+	started := time.Now()
+	defer func() { s.observe("resolve_snapshot", started, len(result.Matches), retErr) }()
 	return s.resolveSnapshot(ctx, access, snapshot)
 }
 
 // ListChanges 查询不含正文的变更记录。
-func (s *DefaultMemoryService) ListChanges(ctx context.Context, access MemoryAccess, id FactID, page PageRequest) (ChangePage, error) {
+func (s *DefaultMemoryService) ListChanges(ctx context.Context, access MemoryAccess, id FactID, page PageRequest) (result ChangePage, retErr error) {
+	started := time.Now()
+	defer func() { s.observe("list_changes", started, len(result.Items), retErr) }()
 	if err := validateReadAccess(access); err != nil {
 		return ChangePage{}, err
 	}
@@ -263,6 +329,12 @@ func (s *DefaultMemoryService) ListChanges(ctx context.Context, access MemoryAcc
 		return ChangePage{}, err
 	}
 	return s.store.ListChanges(ctx, access, id, page)
+}
+
+func (s *DefaultMemoryService) observe(operation string, started time.Time, count int, err error) {
+	if s.observer != nil {
+		observeMemory(s.observer, MemoryEvent{Operation: operation, Duration: time.Since(started), Count: count, ErrorCode: memoryErrorCode(err)})
+	}
 }
 
 func (s *DefaultMemoryService) validateInput(input FactInput) error {
@@ -278,9 +350,6 @@ func (s *DefaultMemoryService) validateInput(input FactInput) error {
 	}
 	if input.RecallClass != "" && input.RecallClass != RecallNormal && input.RecallClass != RecallAlways {
 		return &MemoryError{Kind: ErrInvalidFact, Op: "事实召回类型无效"}
-	}
-	if !input.ExpiresAt.IsZero() && !s.now().Before(input.ExpiresAt) {
-		return &MemoryError{Kind: ErrInvalidFact, Op: "事实有效期必须晚于当前时间"}
 	}
 	return nil
 }
@@ -313,7 +382,7 @@ func (s *DefaultMemoryService) validatePage(page PageRequest) error {
 
 func (s *DefaultMemoryService) validateWriteScope(scope WriteScope) error {
 	if scope.Access.Principal.TenantID == "" || scope.Access.Principal.UserID == "" || scope.Access.Principal.AgentID == "" ||
-		scope.Target.TenantID != scope.Access.Principal.TenantID || !scopeAllowed(scope.Access.WriteScopes, scope.Target) {
+		scope.Target.TenantID != scope.Access.Principal.TenantID || !scopeMatchesPrincipal(scope.Access.Principal, scope.Target) || !scopeAllowed(scope.Access.WriteScopes, scope.Target) {
 		return &MemoryError{Kind: ErrAuthorization, Op: "写入事实"}
 	}
 	return nil
@@ -355,7 +424,7 @@ func validateReadAccess(access MemoryAccess) error {
 		}
 		switch scope.OwnerKind {
 		case OwnerAgent:
-			if scope.AgentID != access.Principal.AgentID {
+			if scope.OwnerID != access.Principal.UserID || scope.AgentID != access.Principal.AgentID {
 				return &MemoryError{Kind: ErrAuthorization, Op: "读取事实"}
 			}
 		case OwnerUser:
@@ -367,6 +436,20 @@ func validateReadAccess(access MemoryAccess) error {
 		}
 	}
 	return nil
+}
+
+func scopeMatchesPrincipal(principal Principal, scope MemoryScope) bool {
+	if scope.TenantID != principal.TenantID || scope.OwnerID == "" {
+		return false
+	}
+	switch scope.OwnerKind {
+	case OwnerAgent:
+		return scope.OwnerID == principal.UserID && scope.AgentID == principal.AgentID
+	case OwnerUser:
+		return scope.OwnerID == principal.UserID && (scope.AgentID == "" || scope.AgentID == principal.AgentID)
+	default:
+		return false
+	}
 }
 
 func scopeAllowed(scopes []MemoryScope, target MemoryScope) bool {

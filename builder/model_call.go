@@ -286,7 +286,7 @@ func readPlainModelTurn(ctx context.Context, id string, client llm.Client, req *
 		intent, err = json.Marshal(struct {
 			Provider string
 			Request  *llm.CompletionRequest
-		}{string(client.Provider()), req})
+		}{string(client.Provider()), durableIntentRequest(req)})
 	}
 	if err != nil {
 		return nil, err

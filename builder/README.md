@@ -78,6 +78,12 @@ pending := h.PendingInputs()   // 独立快照：仍在队列、尚未被执行�
 
 `WithSessionLog(store)` 把会话记入 [`core/session`](../core/session/README.md) 的事件日志：模型历史从日志推导（不再读取记忆），每次模型请求前记录与日志不同的对话，PreStep 等对历史的改写记为 `history/rewrite`，因此每次请求都能由日志重建。持久运行可用 `session.DurableStore(store, id)` 作为 durable 日志，操作快照与对话位于同一份日志；`session.BuildTrajectory` 把日志导出为训练轨迹。只支持原生工具流。
 
+## 持久事实记忆
+
+`WithFactMemory(service, resolver, options...)` 在每个新模型请求前调用宿主的 `MemoryScopeResolver`，按可信 Principal/授权 scope 召回事实。使用时必须设置 `WithAgentID`，并由 resolver 将该 Agent 身份绑定到 tenant/user 与读取范围。缺少身份或授权时请求会在 middleware/cache 执行前失败。
+
+事实以独立 user 消息发送，作为低权限数据，不能覆写 system policy。启用后 CacheMiddleware 对该 Agent 请求不读取也不写入响应缓存；SessionLog 和 Handle 后续对话历史会剔除事实消息。durable 执行会记录 SnapshotRef 并在恢复时重新按当前授权和生命周期校验。外部服务与 Provider 的构造见 [memory 文档](../memory/README.md) 和 [PostgreSQL 示例](../examples/fact-memory/README.md)。
+
 ## 代码结构
 
 ```text

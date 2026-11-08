@@ -153,6 +153,7 @@ type Fact struct {
 	Priority        int
 	IndexState      IndexState
 	MutationVersion MutationVersion
+	StoreSequence   StoreSequence
 }
 
 // IndexState 表示事实当前索引同步状态。
@@ -197,6 +198,7 @@ type PageRequest struct {
 type FactFilter struct {
 	Scopes        []MemoryScope
 	Statuses      []FactStatus
+	RecallClasses []RecallClass
 	Tags          []string
 	SourceIDs     []string
 	UpdatedAfter  time.Time
@@ -306,7 +308,9 @@ const (
 
 // IndexMutation 是事实存储事务写入的持久索引任务。
 type IndexMutation struct {
-	ID              MutationID
+	ID MutationID
+	// LeaseToken fences acknowledgements from superseded or expired worker claims.
+	LeaseToken      uint64
 	FactID          FactID
 	Scope           MemoryScope
 	Revision        Revision
@@ -413,22 +417,34 @@ type ClearProgress struct {
 
 // Rebuild 描述全局索引代际重建状态。
 type Rebuild struct {
-	ID             RebuildID
+	ID RebuildID
+	// LeaseToken fences progress from workers whose rebuild claim expired.
+	LeaseToken     uint64
 	Profile        EmbeddingProfile
 	Generation     IndexGeneration
 	Cutoff         StoreSequence
 	CaughtUp       StoreSequence
 	State          string
 	DiagnosticCode string
+	Cursor         string
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 }
 
 // RebuildProgress 是重建 Worker 的持久进度。
 type RebuildProgress struct {
-	Cursor   string
-	CaughtUp StoreSequence
-	Done     bool
+	LeaseToken uint64
+	Cursor     string
+	CaughtUp   StoreSequence
+	Done       bool
+}
+
+// RebuildPage contains an ordered durable scan page and its global sequence watermark.
+type RebuildPage struct {
+	Items      []Fact
+	NextCursor string
+	CaughtUp   StoreSequence
+	Done       bool
 }
 
 // MemoryService 是事实记忆的稳定高层消费接口。
@@ -466,23 +482,26 @@ type FactStore interface {
 	ListMaintenance(context.Context, MaintenanceAccess, MaintenanceFilter, PageRequest) (MaintenancePage, error)
 	RetryMutation(context.Context, MaintenanceAccess, MutationID) error
 	CreateRebuild(context.Context, MaintenancePrincipal, EmbeddingProfile) (Rebuild, error)
+	ClaimRebuilds(context.Context, int) ([]Rebuild, error)
+	ScanRebuildFacts(context.Context, RebuildID, string, int) (RebuildPage, error)
 	GetRebuild(context.Context, MaintenanceAccess, RebuildID) (Rebuild, error)
 	AdvanceRebuild(context.Context, RebuildID, RebuildProgress) error
 	ActiveIndexProfile(context.Context) (IndexProfileState, error)
-	SwitchActiveGeneration(context.Context, IndexGeneration, RebuildID, StoreSequence) error
+	SwitchActiveGeneration(context.Context, IndexGeneration, RebuildID, StoreSequence, uint64) error
 }
 
 // FactMutation 是一个可事务提交的事实变更命令。
 type FactMutation struct {
-	FactID           FactID
-	NewFactID        FactID
-	ExpectedRevision Revision
-	Input            FactInput
-	Patch            *FactPatch
-	Actor            Principal
-	IdempotencyKey   IdempotencyKey
-	RequestDigest    string
-	Action           ChangeAction
+	FactID               FactID
+	NewFactID            FactID
+	ExpectedRevision     Revision
+	Input                FactInput
+	Patch                *FactPatch
+	Actor                Principal
+	IdempotencyKey       IdempotencyKey
+	RequestDigest        string
+	IdempotencyExpiresAt time.Time
+	Action               ChangeAction
 }
 
 // MemoryIndex 保存候选向量索引，不是事实正文的权威来源。

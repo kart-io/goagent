@@ -1,5 +1,31 @@
 # memory 记忆管理系统
 
+## 持久事实记忆
+
+现有 `LongTermMemory`、`HierarchicalMemory` 和 `interfaces.DocumentRetriever` 仍用于进程内分层记忆与文档 RAG。需要跨进程保存用户偏好、项目事实和已确认经验时，使用新增的事实服务抽象：`MemoryService` 管理事实生命周期，`FactStore` 保存事实正文、来源与变更，`MemoryIndex` 只返回候选 ID/分数，`Embedder`/`EmbedderResolver` 负责生成向量。外部实现可以直接实现 `MemoryService`，也可以实现底层接口并交给 `NewDefaultMemoryService` 组合。
+
+```go
+service, err := memory.NewDefaultMemoryService(memory.MemoryServiceConfig{
+    Store: providerStore, // 实现 memory.FactStore 的宿主 Provider
+    Capabilities: providerStore.Capabilities(),
+    Limits: memory.DefaultFactLimits(),
+})
+if err != nil { return err }
+receipt, err := service.Save(ctx, writeScope, "stable-request-key", memory.FactInput{
+    Content: "用户偏好中文回答",
+    RecallClass: memory.RecallAlways,
+    Source: memory.FactSource{Kind: "human", ConfirmedBy: principal.UserID},
+})
+```
+
+身份和 scope 必须来自宿主认证授权结果；请求正文中的 tenant/user 字段不能作为凭据。保存成功表示事实、审计和索引 outbox 已由 Provider 原子接纳，索引状态仍可能是 `pending`。逻辑删除立即阻止读取，物理向量清理由 Worker 异步完成。`memory/conformance` 提供可由外部 Go package 调用的行为测试入口。可运行的 PostgreSQL/pgvector 参考实现和跨进程验收见 [fact-memory Provider 示例](../examples/fact-memory/README.md)。
+
+作用域形状固定：`OwnerAgent` 私有事实的 `OwnerID` 必须等于认证主体 `UserID`，`AgentID` 必须匹配当前 Agent；`OwnerUser` 共享事实仍归当前用户，可不绑定 Agent 或绑定当前 Agent。DefaultMemoryService 会校验读写 scope，防止两个用户因使用同一 AgentID 而共享私有事实。启用事实记忆时，外部响应缓存可检查 `middleware.IsCacheBypassed(ctx)`；缓存中间件应实现 `middleware.ResponseCacheBypassCapability`，不支持旁路的响应缓存会在 Builder 构建时被拒绝。
+
+宿主可以通过 `MemoryServiceConfig.Observer` 和 `FactWorkerConfig.Observer` 接收 `MemoryEvent`，统计读写、召回、索引更新和重建的耗时、数量及稳定错误分类。事件不含 tenant/fact ID、query、事实正文、metadata 或 embedding；Observer 同步调用，应快速聚合并避免阻塞业务请求。
+
+数据用途保持区分：会话事件记录对话和执行过程，事实服务保存未来仍有用的结构化事实，RAG 检索业务文档。Builder 只在当前模型请求注入低权限 user 数据消息；启用事实服务时自动绕过响应缓存，且不会把事实正文写入 SessionLog。
+
 本模块是 goagent 框架的记忆管理系统，提供对话历史、案例存储、向量搜索和分层记忆能力。
 
 ## 目录

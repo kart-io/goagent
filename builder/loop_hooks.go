@@ -328,6 +328,9 @@ func (a *ConfigurableAgent[C, S]) runPreStep(ctx context.Context, round, inputs 
 	if len(a.config.PreStep) == 0 {
 		return messages, PreStepResult{}, nil
 	}
+	// Retrieved facts are ephemeral model context, not conversation state. Keep
+	// them out of the PreStep outcome persisted in the durable journal.
+	messages = withoutFactMemoryMessages(messages)
 	type outcome struct {
 		Messages []llm.Message `json:"messages"`
 		Result   PreStepResult `json:"result"`
@@ -411,6 +414,13 @@ type redirection struct {
 // requestTurn 组装并发送本步的模型请求：附加运行上下文、执行 Request 钩子；失败时按 RequestError 钩子恢复，
 // 原样重试在模型操作内进行，替换消息或客户端时在这里重新组装，替换的消息作为新的历史返回。被 Redirect 取消时返回 redirection。
 func (a *ConfigurableAgent[C, S]) requestTurn(ctx context.Context, box *inbox, round int, client llm.ToolStreamClient, messages []llm.Message, tools []interfaces.Tool, final, allowEmpty bool, emit func(AgentEvent) error) (*llm.StreamChunk, *redirection, []llm.Message, error) {
+	var factMessages []llm.Message
+	for _, message := range messages {
+		if message.Name == factMemoryMessageName {
+			factMessages = append(factMessages, message)
+		}
+	}
+	messages = withoutFactMemoryMessages(messages)
 	withContext := func(msgs []llm.Message) ([]llm.Message, error) {
 		if len(a.config.PromptContexts) == 0 {
 			return msgs, nil
@@ -437,6 +447,9 @@ func (a *ConfigurableAgent[C, S]) requestTurn(ctx context.Context, box *inbox, r
 	if req.Client == nil || req.Request == nil {
 		return nil, nil, messages, agentErrors.Newf(agentErrors.CodeInvalidOutput, "模型客户端或请求被 Request 钩子清空").WithComponent("builder").WithOperation("request_turn")
 	}
+	// Append ephemeral memory only after deterministic request hooks have
+	// finished; hooks cannot fold private fact bodies into journaled messages.
+	req.Request.Messages = append(req.Request.Messages, factMessages...)
 	redirectable := box != nil && !durable.HasJournal(ctx)
 	attempt := 0
 	for {
@@ -478,6 +491,7 @@ func (a *ConfigurableAgent[C, S]) requestTurn(ctx context.Context, box *inbox, r
 			if req.Request.Messages, err = withContext(messages); err != nil {
 				return nil, nil, messages, err
 			}
+			req.Request.Messages = append(req.Request.Messages, factMessages...)
 		}
 		if decision.Client != nil {
 			req.Client = decision.Client

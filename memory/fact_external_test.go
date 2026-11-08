@@ -101,6 +101,12 @@ func (externalFactStore) RetryMutation(context.Context, memory.MaintenanceAccess
 func (externalFactStore) CreateRebuild(context.Context, memory.MaintenancePrincipal, memory.EmbeddingProfile) (memory.Rebuild, error) {
 	return memory.Rebuild{}, nil
 }
+func (externalFactStore) ClaimRebuilds(context.Context, int) ([]memory.Rebuild, error) {
+	return nil, nil
+}
+func (externalFactStore) ScanRebuildFacts(context.Context, memory.RebuildID, string, int) (memory.RebuildPage, error) {
+	return memory.RebuildPage{}, nil
+}
 func (externalFactStore) GetRebuild(context.Context, memory.MaintenanceAccess, memory.RebuildID) (memory.Rebuild, error) {
 	return memory.Rebuild{}, nil
 }
@@ -110,7 +116,7 @@ func (externalFactStore) AdvanceRebuild(context.Context, memory.RebuildID, memor
 func (externalFactStore) ActiveIndexProfile(context.Context) (memory.IndexProfileState, error) {
 	return memory.IndexProfileState{}, nil
 }
-func (externalFactStore) SwitchActiveGeneration(context.Context, memory.IndexGeneration, memory.RebuildID, memory.StoreSequence) error {
+func (externalFactStore) SwitchActiveGeneration(context.Context, memory.IndexGeneration, memory.RebuildID, memory.StoreSequence, uint64) error {
 	return nil
 }
 

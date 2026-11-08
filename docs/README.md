@@ -63,6 +63,7 @@ GoAgent 是嵌入 Go 服务的 Agent 执行内核：原生工具循环、类型�
 - [持久事实记忆服务需求](superpowers/specs/2026-11-08-persistent-factual-memory-requirements.md)：定义公开可扩展接口、外部 Provider 注入、数据隔离、持久化、管理和上下文召回验收
 - [持久事实记忆服务架构与设计](superpowers/specs/2026-11-08-persistent-factual-memory-design.md)：双层扩展边界、Builder 集成、索引同步，以及保存、召回、替代和删除流程图
 - [持久事实记忆服务实施计划](superpowers/plans/2026-11-08-persistent-factual-memory.md)：PM-01～PM-35 的任务拆分、接口验收、维护恢复和端到端案例
+- [持久事实记忆实现与验收](../examples/fact-memory/README.md)：外部 Provider 扩展、PostgreSQL/pgvector 示例、跨进程重启测试与运行命令
 
 ## API 参考
 

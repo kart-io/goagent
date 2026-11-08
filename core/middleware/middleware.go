@@ -108,6 +108,13 @@ type Middleware interface {
 	OnError(ctx context.Context, err error) error
 }
 
+// ResponseCacheBypassCapability marks middleware that stores whole agent
+// responses. When factual memory is enabled, Builder rejects a marked cache
+// that cannot honor the per-execution bypass signal.
+type ResponseCacheBypassCapability interface {
+	SupportsCacheBypass() bool
+}
+
 // MiddlewareRequest represents a request passing through middleware
 type MiddlewareRequest struct {
 	// Input is the original input to the agent/tool
@@ -516,6 +523,10 @@ type CacheMiddleware struct {
 	ttl       time.Duration
 }
 
+// SupportsCacheBypass reports that this cache skips both lookup and storage
+// when IsCacheBypassed returns true.
+func (*CacheMiddleware) SupportsCacheBypass() bool { return true }
+
 type cacheBypassKey struct{}
 
 // WithCacheBypass skips response cache reads and writes for this execution.
@@ -523,10 +534,15 @@ func WithCacheBypass(ctx context.Context) context.Context {
 	return context.WithValue(ctx, cacheBypassKey{}, true)
 }
 
-func cacheBypassFrom(ctx context.Context) bool {
+// IsCacheBypassed reports whether the current execution requires all response
+// caches to skip both reads and writes. External cache middleware can use this
+// public signal to preserve request isolation.
+func IsCacheBypassed(ctx context.Context) bool {
 	bypass, _ := ctx.Value(cacheBypassKey{}).(bool)
 	return bypass
 }
+
+func cacheBypassFrom(ctx context.Context) bool { return IsCacheBypassed(ctx) }
 
 // cacheShard 单个缓存分片，减少锁竞争
 type cacheShard struct {

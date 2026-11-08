@@ -198,11 +198,7 @@ func (a *ConfigurableAgent[C, S]) runEvents(ctx context.Context, request *middle
 			return nil, err
 		}
 	}
-	continued := false
-	if history, ok := ctx.Value(historyKey{}).([]llm.Message); ok && len(history) > 0 {
-		continued = true
-	}
-	if a.factMemory != nil && !continued {
+	if a.factMemory != nil {
 		factContext, err = a.factContext(ctx, input)
 		if err != nil {
 			return nil, err

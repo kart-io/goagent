@@ -101,9 +101,6 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 	if err := slog.begin(ctx, messages, a.tools); err != nil {
 		return nil, fmt.Errorf("会话日志: %w", err)
 	}
-	if factContext != "" {
-		messages = append(messages, llm.Message{Role: "user", Name: factMemoryMessageName, Content: factContext})
-	}
 	// finish 结束本轮：记下对话供 Handle 的 Followup 续接。
 	finish := func(answer string, final llm.Message) (*middleware.MiddlewareResponse, error) {
 		visibleMessages := withoutFactMemoryMessages(messages)
@@ -195,11 +192,15 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 		}
 		// 重问需要下一轮额度，最后一轮的空回答按原方式报错。
 		allowEmpty := emptyRetries < a.config.EmptyAnswerRetries && round+1 < a.config.MaxIterations
-		turn, redirected, recovered, err := a.requestTurn(ctx, box, round, client, messages, tools, final, allowEmpty, emit)
+		requestMessages := messages
+		if factContext != "" {
+			requestMessages = append(slices.Clone(messages), llm.Message{Role: "user", Name: factMemoryMessageName, Content: factContext})
+		}
+		turn, redirected, recovered, err := a.requestTurn(ctx, box, round, client, requestMessages, tools, final, allowEmpty, emit)
 		if err != nil {
 			return nil, err
 		}
-		messages = recovered
+		messages = withoutFactMemoryMessages(recovered)
 		if redirected != nil {
 			// 保留已流出的文本，追加纠正后重新请求；重新请求占用一次额度。
 			if redirected.partial != "" {
