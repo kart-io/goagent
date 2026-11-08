@@ -206,6 +206,59 @@ func TestFactDeleteImmediatelyBlocksHydration(t *testing.T) {
 	}
 }
 
+func TestFactClearScopeHasImmediateVisibilityBoundary(t *testing.T) {
+	svc, store, scope := testMemoryService(t)
+	receipt, err := svc.Save(context.Background(), scope, "before-clear", FactInput{Content: "sensitive"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	clearAccess := ClearAccess{Principal: scope.Access.Principal, TargetScopes: []MemoryScope{scope.Target}, Capabilities: []string{"memory.clear"}}
+	op, err := svc.DeleteScope(context.Background(), clearAccess, scope.Target, "clear-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Get(context.Background(), scope.Access, receipt.FactID); !errors.Is(err, ErrGone) {
+		t.Fatalf("清空建立边界后事实仍可见：%v", err)
+	}
+	page, err := svc.List(context.Background(), scope.Access, FactFilter{}, PageRequest{Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != 0 {
+		t.Fatalf("清空后 List 返回 %d 条事实", len(page.Items))
+	}
+	if op.State == "complete" {
+		t.Fatal("开始清空时不能提前报告完成")
+	}
+	if got := store.blockedScopeCount(); got != 1 {
+		t.Fatalf("清空期间封锁作用域数=%d", got)
+	}
+}
+
+func TestFactClearRejectsWritesUntilComplete(t *testing.T) {
+	svc, store, scope := testMemoryService(t)
+	clearAccess := ClearAccess{Principal: scope.Access.Principal, TargetScopes: []MemoryScope{scope.Target}, Capabilities: []string{"memory.clear"}}
+	op, err := svc.DeleteScope(context.Background(), clearAccess, scope.Target, "clear-2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Save(context.Background(), scope, "during-clear", FactInput{Content: "blocked"}); !errors.Is(err, ErrCapacityExceeded) {
+		t.Fatalf("清理期间写入未拒绝：%v", err)
+	}
+	if err := store.AckClearOperation(context.Background(), op.ID, ClearProgress{Done: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Save(context.Background(), scope, "after-clear", FactInput{Content: "allowed"}); err != nil {
+		t.Fatalf("清理完成后仍不能写入：%v", err)
+	}
+}
+
+func (s *factStoreFixture) blockedScopeCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.blockedScopes)
+}
+
 func newFactServiceOnStore(store *factStoreFixture, access MemoryAccess) (*DefaultMemoryService, error) {
 	limits := DefaultFactLimits()
 	limits.MaxFactBytes, limits.MaxMetadataBytes, limits.MaxPendingPerTenant = 1024, 1024, 100
@@ -223,6 +276,9 @@ type factStoreFixture struct {
 	next             int
 	now              time.Time
 	receiptRetention time.Duration
+	clears           map[ClearOperationID]ClearOperation
+	clearKeys        map[string]ClearOperationID
+	blockedScopes    map[MemoryScope]ClearOperationID
 }
 
 type fixtureIdempotency struct {
@@ -234,7 +290,7 @@ type fixtureIdempotency struct {
 }
 
 func newFactStoreFixture() *factStoreFixture {
-	return &factStoreFixture{facts: map[FactID]Fact{}, idempotency: map[string]fixtureIdempotency{}, now: time.Now().UTC(), receiptRetention: 30 * 24 * time.Hour}
+	return &factStoreFixture{facts: map[FactID]Fact{}, idempotency: map[string]fixtureIdempotency{}, clears: map[ClearOperationID]ClearOperation{}, clearKeys: map[string]ClearOperationID{}, blockedScopes: map[MemoryScope]ClearOperationID{}, now: time.Now().UTC(), receiptRetention: 30 * 24 * time.Hour}
 }
 func (s *factStoreFixture) capabilities() ProviderCapabilities {
 	return ProviderCapabilities{MaxFactBytes: 1024, MaxMetadataBytes: 1024, MaxPageSize: 200, MaxWorkerConcurrency: 4, MaxPendingPerTenant: 100, DurableOutbox: true, AtomicFactOutbox: true, ServerSideScopeFilter: true, DurableFacts: true, ChangeLog: true, ResumableClear: true, OnlineRebuild: true, IdempotencyTombstones: true, ReservedCleanupCapacity: true}
@@ -275,6 +331,9 @@ func (s *factStoreFixture) ApplyFact(ctx context.Context, scope WriteScope, muta
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if _, blocked := s.blockedScopes[scope.Target]; blocked && mutation.Action != ChangeDeleted {
+		return FactMutationResult{}, &MemoryError{Kind: ErrCapacityExceeded, Op: "作用域正在清理"}
+	}
 	idemKey := string(scope.Target.TenantID) + "|" + string(mutation.Action) + "|" + string(scope.Target.OwnerKind) + "|" + scope.Target.OwnerID + "|" + scope.Target.AgentID + "|" + string(mutation.IdempotencyKey)
 	if mutation.IdempotencyKey != "" {
 		if old, ok := s.idempotency[idemKey]; ok {
@@ -460,16 +519,103 @@ func (s *factStoreFixture) ClaimIndexMutations(context.Context, int) ([]IndexMut
 func (s *factStoreFixture) AckIndexMutation(context.Context, IndexMutation, IndexMutationResult) error {
 	return nil
 }
-func (s *factStoreFixture) BeginScopeClear(context.Context, ClearAccess, MemoryScope, IdempotencyKey) (ClearOperation, error) {
-	return ClearOperation{}, nil
+func (s *factStoreFixture) BeginScopeClear(ctx context.Context, access ClearAccess, target MemoryScope, key IdempotencyKey) (ClearOperation, error) {
+	if err := ctx.Err(); err != nil {
+		return ClearOperation{}, err
+	}
+	if key == "" {
+		return ClearOperation{}, &MemoryError{Kind: ErrIdempotencyConflict}
+	}
+	if !clearAllowed(access, target) {
+		return ClearOperation{}, &MemoryError{Kind: ErrAuthorization}
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	keyID := target.TenantID + "|" + string(target.OwnerKind) + "|" + target.OwnerID + "|" + target.AgentID + "|" + string(key)
+	if id, ok := s.clearKeys[keyID]; ok {
+		return s.clears[id], nil
+	}
+	for _, op := range s.clears {
+		if op.Scope == target && op.State != "complete" {
+			return op, nil
+		}
+	}
+	s.seq++
+	id := ClearOperationID(fmt.Sprintf("clear-%d", s.seq))
+	op := ClearOperation{ID: id, Scope: target, State: "pending", Cutoff: s.seq, CreatedAt: s.now, UpdatedAt: s.now}
+	s.clears[id] = op
+	s.clearKeys[keyID] = id
+	s.blockedScopes[target] = id
+	for id, f := range s.facts {
+		if f.Scope == target && f.Status == FactActive {
+			f.Status = FactDeleted
+			f.Revision++
+			f.MutationVersion++
+			f.UpdatedAt = s.now
+			s.facts[id] = f
+			s.seq++
+			s.changes = append(s.changes, ChangeRecord{FactID: id, Scope: target, Revision: f.Revision, Action: ChangeDeleted, At: s.now})
+			s.outbox = append(s.outbox, IndexMutation{FactID: id, Scope: target, Revision: f.Revision, MutationVersion: f.MutationVersion, StoreSequence: s.seq, Action: MutationTombstone})
+			for idemKey, record := range s.idempotency {
+				if record.receipt.FactID == id {
+					record.state = FactDeleted
+					s.idempotency[idemKey] = record
+				}
+			}
+		}
+	}
+	return op, nil
 }
-func (s *factStoreFixture) GetClearOperation(context.Context, MemoryAccess, ClearOperationID) (ClearOperation, error) {
-	return ClearOperation{}, nil
+func (s *factStoreFixture) GetClearOperation(ctx context.Context, access MemoryAccess, id ClearOperationID) (ClearOperation, error) {
+	if err := ctx.Err(); err != nil {
+		return ClearOperation{}, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	op, ok := s.clears[id]
+	if !ok {
+		return ClearOperation{}, &MemoryError{Kind: ErrMaintenanceNotFound}
+	}
+	if !scopeAllowed(access.ReadScopes, op.Scope) {
+		return ClearOperation{}, &MemoryError{Kind: ErrAuthorization}
+	}
+	return op, nil
 }
-func (s *factStoreFixture) ClaimClearOperations(context.Context, int) ([]ClearOperation, error) {
-	return nil, nil
+func (s *factStoreFixture) ClaimClearOperations(ctx context.Context, limit int) ([]ClearOperation, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := []ClearOperation{}
+	for _, op := range s.clears {
+		if op.State != "complete" {
+			out = append(out, op)
+			if len(out) >= limit {
+				break
+			}
+		}
+	}
+	return out, nil
 }
-func (s *factStoreFixture) AckClearOperation(context.Context, ClearOperationID, ClearProgress) error {
+func (s *factStoreFixture) AckClearOperation(ctx context.Context, id ClearOperationID, progress ClearProgress) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	op, ok := s.clears[id]
+	if !ok {
+		return &MemoryError{Kind: ErrMaintenanceNotFound}
+	}
+	if progress.Done {
+		op.State = "complete"
+		delete(s.blockedScopes, op.Scope)
+	} else {
+		op.State = "running"
+	}
+	op.UpdatedAt = s.now
+	s.clears[id] = op
 	return nil
 }
 func (s *factStoreFixture) ListMaintenance(context.Context, MaintenanceAccess, MaintenanceFilter, PageRequest) (MaintenancePage, error) {
