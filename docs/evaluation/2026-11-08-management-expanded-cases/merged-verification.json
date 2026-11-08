@@ -1,0 +1,41 @@
+{
+  "时间": "2026-11-08T18:49:12.128562+08:00",
+  "核心主线受检提交": "351dd0ee40a980d35df75897e53cf5b965bdd5d5",
+  "扩展主线受检提交": "89f9a73979a37e9cb3f23eb7718957285bddc7f1",
+  "数据库独立核对": {
+    "tasks": 46,
+    "states": {
+      "succeeded": 37,
+      "canceled": 9
+    },
+    "refunds": 32,
+    "refund_amount": 1600,
+    "unique_task_ids": 32,
+    "unique_execution_keys": 32,
+    "active_workers": 0
+  },
+  "原有6份未提交文件内容": "SHA256核对未变",
+  "日志SHA256": {
+    "merged-core.jsonl": "0e077e80b10de6febf5f8ace9f89a9756523f21602b95eeb9c8b396c64b60499",
+    "merged-expanded.jsonl": "bfe4795951adafcfbe1f2af7acff11428ac2f6cf9346f3ac02eb6e268a590d3f",
+    "merged-http.json": "05bff662d35d84d6588c8d4d56784cee7c13435782e4de7a081bd3cc2dae1d89"
+  },
+  "merged-core.jsonl": {
+    "pass": 21,
+    "fail": 0,
+    "skip": 0
+  },
+  "merged-expanded.jsonl": {
+    "pass": 4,
+    "fail": 0,
+    "skip": 0
+  },
+  "HTTP": {
+    "组数": 20,
+    "请求数": 258,
+    "状态": "passed",
+    "累计Task": 46,
+    "累计已知Tokens": 395,
+    "宿主退出码": 0
+  }
+}

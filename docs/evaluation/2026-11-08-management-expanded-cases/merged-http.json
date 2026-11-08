@@ -1,0 +1,1468 @@
+{
+  "status": "passed",
+  "Agent": "46e88f28-5374-42cb-a763-360af2994b4d",
+  "cases": [
+    {
+      "案例": "未认证请求被拒绝",
+      "结果": "通过",
+      "HTTP": 401
+    },
+    {
+      "案例": "重复提交与审批绕过保护",
+      "结果": "通过",
+      "Task": "99bcb574-ac37-4965-b717-be93b6ffe56e",
+      "重投复用任务": true,
+      "同键不同内容HTTP": 409,
+      "绕过审批HTTP": 409,
+      "审批前退款": 0
+    },
+    {
+      "案例": "批准与重复审批只退款一次",
+      "结果": "通过",
+      "Task": "99bcb574-ac37-4965-b717-be93b6ffe56e",
+      "退款次数": 1,
+      "决定复用": true,
+      "迟到反向决定HTTP": 409,
+      "处理人": "案例审批人"
+    },
+    {
+      "案例": "拒绝审批不退款",
+      "结果": "通过",
+      "Task": "308bfe97-2099-452d-9cad-8821944e896e",
+      "退款次数": 0,
+      "业务答复": "v1：审批拒绝，未执行退款"
+    },
+    {
+      "案例": "等待审批时取消且拒绝迟到批准",
+      "结果": "通过",
+      "Task": "6440411a-531a-42d1-b087-8cb7435f5a05",
+      "状态": "canceled",
+      "退款次数": 0,
+      "迟到批准HTTP": 409
+    },
+    {
+      "案例": "停用阻塞并在启用后沿用原决定",
+      "结果": "通过",
+      "Task": "75a85fe3-146a-489b-8635-d49b7951f7db",
+      "阻塞原因": "agent_disabled",
+      "停用期间退款": 0,
+      "启用后退款": 1,
+      "决定时间未变": true
+    },
+    {
+      "案例": "版本发布与Fork独立执行",
+      "结果": "通过",
+      "旧会话版本": "v1",
+      "新会话版本": "v2",
+      "分支版本": "v1",
+      "源历史未变": true,
+      "分支任务": "8e3faae5-a9af-40c1-90ff-c32602b3f5bb"
+    },
+    {
+      "案例": "只读查询和跨页汇总与数据库一致",
+      "结果": "通过",
+      "查询前事件数": 30,
+      "查询后事件数": 30,
+      "日志内容摘要未变": true,
+      "任务数": 6,
+      "Token": 55,
+      "退款次数": 4,
+      "退款总额": 200,
+      "状态": {
+        "canceled": 1,
+        "succeeded": 5
+      }
+    },
+    {
+      "案例": "Agent注册幂等与不同内容冲突",
+      "结果": "通过",
+      "Agent": "9796365e-2542-4d62-942f-4b4f48f98b7a",
+      "重投复用": true,
+      "内容冲突HTTP": 409
+    },
+    {
+      "案例": "版本不可覆盖与JSON精确数值",
+      "结果": "通过",
+      "版本数": 1,
+      "大整数": 9007199254740993,
+      "键序不影响幂等": true
+    },
+    {
+      "案例": "发布失败与修订冲突保持状态",
+      "结果": "通过",
+      "不存在版本HTTP": 404,
+      "陈旧修订HTTP": 409,
+      "当前版本": "v2"
+    },
+    {
+      "案例": "显式旧版本与默认新版本会话",
+      "结果": "通过",
+      "显式版本": "v1",
+      "默认版本": "v2"
+    },
+    {
+      "案例": "分页完整且游标绑定查询",
+      "结果": "通过",
+      "会话数": 3,
+      "无重复遗漏": true,
+      "变更查询或非法参数HTTP": 400
+    },
+    {
+      "案例": "非法请求拒绝且不创建Agent",
+      "结果": "通过",
+      "JSON拒绝数": 5,
+      "缺幂等键HTTP": 400,
+      "超大请求HTTP": 413,
+      "未知资源HTTP": 404,
+      "Agent数量未变": true
+    },
+    {
+      "案例": "同会话队列查询及取消隔离",
+      "结果": "通过",
+      "前序状态": "waiting_approval",
+      "队尾状态": "canceled",
+      "前序退款": 0
+    },
+    {
+      "案例": "取消幂等与终态禁止续跑",
+      "结果": "通过",
+      "重投复用": true,
+      "取消后恢复HTTP": 409,
+      "尝试数": 0,
+      "用量": null,
+      "退款": 0
+    },
+    {
+      "案例": "终态结果保护与队列继续执行",
+      "结果": "通过",
+      "完成后取消保持成功": true,
+      "完成后恢复HTTP": 409,
+      "旧版实际结果": "v1：退款凭证已生成",
+      "新版实际结果": "v2：退款凭证已生成"
+    },
+    {
+      "案例": "历史分页完整并保护内部类型",
+      "结果": "通过",
+      "历史事件数": 13,
+      "页大小": 2,
+      "内部类型HTTP": 403,
+      "负序号HTTP": 400
+    },
+    {
+      "案例": "精确轮次Fork与非法边界拒绝",
+      "结果": "通过",
+      "Fork序号": 29,
+      "分支事件数": 7,
+      "源事件数": 13,
+      "非结束或未来边界HTTP": 400,
+      "陈旧修订HTTP": 409
+    },
+    {
+      "案例": "停用阻止Fork且启用后原键重试",
+      "结果": "通过",
+      "停用ForkHTTP": 409,
+      "拒绝未新增会话": true,
+      "启用后同键成功": true,
+      "成功后停用重投仍复用": true
+    }
+  ],
+  "http_requests": [
+    {
+      "method": "GET",
+      "path": "/v1/agents",
+      "status": 401
+    },
+    {
+      "method": "POST",
+      "path": "/v1/agents",
+      "status": 201
+    },
+    {
+      "method": "POST",
+      "path": "/v1/agents/46e88f28-5374-42cb-a763-360af2994b4d/versions",
+      "status": 201
+    },
+    {
+      "method": "POST",
+      "path": "/v1/agents/46e88f28-5374-42cb-a763-360af2994b4d/publish",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/sessions",
+      "status": 202
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions/a2d88bad-7d0a-430f-961b-cb2a8dd14246",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions/a2d88bad-7d0a-430f-961b-cb2a8dd14246",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions/a2d88bad-7d0a-430f-961b-cb2a8dd14246",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/tasks",
+      "status": 202
+    },
+    {
+      "method": "POST",
+      "path": "/v1/tasks",
+      "status": 202
+    },
+    {
+      "method": "POST",
+      "path": "/v1/tasks",
+      "status": 409
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/99bcb574-ac37-4965-b717-be93b6ffe56e",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/99bcb574-ac37-4965-b717-be93b6ffe56e",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/99bcb574-ac37-4965-b717-be93b6ffe56e",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/99bcb574-ac37-4965-b717-be93b6ffe56e",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/approvals?task_id=99bcb574-ac37-4965-b717-be93b6ffe56e&status=pending",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/tasks/99bcb574-ac37-4965-b717-be93b6ffe56e/resume",
+      "status": 409
+    },
+    {
+      "method": "POST",
+      "path": "/v1/approvals/bbd16999dee447e4121813f4645ee4170b25677e8a242423492105c17beeee8a/decision",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/approvals/bbd16999dee447e4121813f4645ee4170b25677e8a242423492105c17beeee8a/decision",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/99bcb574-ac37-4965-b717-be93b6ffe56e",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/99bcb574-ac37-4965-b717-be93b6ffe56e",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/99bcb574-ac37-4965-b717-be93b6ffe56e",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/99bcb574-ac37-4965-b717-be93b6ffe56e",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/99bcb574-ac37-4965-b717-be93b6ffe56e",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/99bcb574-ac37-4965-b717-be93b6ffe56e",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/approvals/bbd16999dee447e4121813f4645ee4170b25677e8a242423492105c17beeee8a/decision",
+      "status": 409
+    },
+    {
+      "method": "GET",
+      "path": "/v1/approvals/bbd16999dee447e4121813f4645ee4170b25677e8a242423492105c17beeee8a",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/sessions",
+      "status": 202
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions/618028b6-b203-4de2-9824-a0268b00ed3c",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions/618028b6-b203-4de2-9824-a0268b00ed3c",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/tasks",
+      "status": 202
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/308bfe97-2099-452d-9cad-8821944e896e",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/308bfe97-2099-452d-9cad-8821944e896e",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/308bfe97-2099-452d-9cad-8821944e896e",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/308bfe97-2099-452d-9cad-8821944e896e",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/approvals?task_id=308bfe97-2099-452d-9cad-8821944e896e&status=pending",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/approvals/303e16d98c4f228b9c559724fddb42e5ec3d0282d686aced2cf83c56467570cf/decision",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/308bfe97-2099-452d-9cad-8821944e896e",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/308bfe97-2099-452d-9cad-8821944e896e",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/308bfe97-2099-452d-9cad-8821944e896e",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/308bfe97-2099-452d-9cad-8821944e896e",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/308bfe97-2099-452d-9cad-8821944e896e",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/308bfe97-2099-452d-9cad-8821944e896e",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/sessions",
+      "status": 202
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions/3f6a110b-d9aa-4233-a866-bcc514a8978f",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions/3f6a110b-d9aa-4233-a866-bcc514a8978f",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/tasks",
+      "status": 202
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/6440411a-531a-42d1-b087-8cb7435f5a05",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/6440411a-531a-42d1-b087-8cb7435f5a05",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/6440411a-531a-42d1-b087-8cb7435f5a05",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/6440411a-531a-42d1-b087-8cb7435f5a05",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/6440411a-531a-42d1-b087-8cb7435f5a05",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/approvals?task_id=6440411a-531a-42d1-b087-8cb7435f5a05&status=pending",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/tasks/6440411a-531a-42d1-b087-8cb7435f5a05/cancel",
+      "status": 202
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/6440411a-531a-42d1-b087-8cb7435f5a05",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/approvals/d9141031158ef9c33a021c2fe2f755fc0114ed428456cd289a9d086bae25b44f/decision",
+      "status": 409
+    },
+    {
+      "method": "POST",
+      "path": "/v1/sessions",
+      "status": 202
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions/4dd70ab6-34b5-42b5-84b7-aa59ca639f6c",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions/4dd70ab6-34b5-42b5-84b7-aa59ca639f6c",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions/4dd70ab6-34b5-42b5-84b7-aa59ca639f6c",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/tasks",
+      "status": 202
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/75a85fe3-146a-489b-8635-d49b7951f7db",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/75a85fe3-146a-489b-8635-d49b7951f7db",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/75a85fe3-146a-489b-8635-d49b7951f7db",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/75a85fe3-146a-489b-8635-d49b7951f7db",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/approvals?task_id=75a85fe3-146a-489b-8635-d49b7951f7db&status=pending",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/agents/46e88f28-5374-42cb-a763-360af2994b4d/disable",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/approvals/5506bbbe4f487981f80d730ae4b25802a8d805470dce1c1f517efec9fd755a8e/decision",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/approvals/5506bbbe4f487981f80d730ae4b25802a8d805470dce1c1f517efec9fd755a8e",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/approvals/5506bbbe4f487981f80d730ae4b25802a8d805470dce1c1f517efec9fd755a8e",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/commands/725afd8c-f5d4-4838-8ac1-69b25b856494",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/sessions",
+      "status": 409
+    },
+    {
+      "method": "POST",
+      "path": "/v1/tasks",
+      "status": 409
+    },
+    {
+      "method": "POST",
+      "path": "/v1/agents/46e88f28-5374-42cb-a763-360af2994b4d/enable",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/75a85fe3-146a-489b-8635-d49b7951f7db",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/75a85fe3-146a-489b-8635-d49b7951f7db",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/75a85fe3-146a-489b-8635-d49b7951f7db",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/75a85fe3-146a-489b-8635-d49b7951f7db",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/75a85fe3-146a-489b-8635-d49b7951f7db",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/approvals/5506bbbe4f487981f80d730ae4b25802a8d805470dce1c1f517efec9fd755a8e",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/agents/46e88f28-5374-42cb-a763-360af2994b4d/versions",
+      "status": 201
+    },
+    {
+      "method": "POST",
+      "path": "/v1/agents/46e88f28-5374-42cb-a763-360af2994b4d/publish",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/sessions",
+      "status": 202
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions/e373ab51-4a58-4816-9b2d-302523716bbc",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions/e373ab51-4a58-4816-9b2d-302523716bbc",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions/a2d88bad-7d0a-430f-961b-cb2a8dd14246",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/tasks",
+      "status": 202
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/c8dbff6f-f63f-4e80-a0c2-c067e1e6543c",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/c8dbff6f-f63f-4e80-a0c2-c067e1e6543c",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/c8dbff6f-f63f-4e80-a0c2-c067e1e6543c",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/c8dbff6f-f63f-4e80-a0c2-c067e1e6543c",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/c8dbff6f-f63f-4e80-a0c2-c067e1e6543c",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/approvals?task_id=c8dbff6f-f63f-4e80-a0c2-c067e1e6543c&status=pending",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/approvals/7bc0c6eb517585760ee426bf84c21d0a94f0848435485da5403b9a8344832843/decision",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/c8dbff6f-f63f-4e80-a0c2-c067e1e6543c",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/c8dbff6f-f63f-4e80-a0c2-c067e1e6543c",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/c8dbff6f-f63f-4e80-a0c2-c067e1e6543c",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/c8dbff6f-f63f-4e80-a0c2-c067e1e6543c",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/c8dbff6f-f63f-4e80-a0c2-c067e1e6543c",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions/a2d88bad-7d0a-430f-961b-cb2a8dd14246/history?limit=200",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/sessions/a2d88bad-7d0a-430f-961b-cb2a8dd14246/fork",
+      "status": 202
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions/7015c097-2f56-4657-9adb-0ea054ccb66f",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions/7015c097-2f56-4657-9adb-0ea054ccb66f",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions/7015c097-2f56-4657-9adb-0ea054ccb66f/history?limit=200",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/tasks",
+      "status": 202
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/8e3faae5-a9af-40c1-90ff-c32602b3f5bb",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/8e3faae5-a9af-40c1-90ff-c32602b3f5bb",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/8e3faae5-a9af-40c1-90ff-c32602b3f5bb",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/8e3faae5-a9af-40c1-90ff-c32602b3f5bb",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/8e3faae5-a9af-40c1-90ff-c32602b3f5bb",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/approvals?task_id=8e3faae5-a9af-40c1-90ff-c32602b3f5bb&status=pending",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/approvals/65e6414edb06a0c48dd8be5972858085f095d7776637842316398d9b1b87fe04/decision",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/8e3faae5-a9af-40c1-90ff-c32602b3f5bb",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/8e3faae5-a9af-40c1-90ff-c32602b3f5bb",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/8e3faae5-a9af-40c1-90ff-c32602b3f5bb",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/8e3faae5-a9af-40c1-90ff-c32602b3f5bb",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/8e3faae5-a9af-40c1-90ff-c32602b3f5bb",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/8e3faae5-a9af-40c1-90ff-c32602b3f5bb",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions/a2d88bad-7d0a-430f-961b-cb2a8dd14246/history?limit=200",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/runs/99bcb574-ac37-4965-b717-be93b6ffe56e",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/runs/summary?agent_id=46e88f28-5374-42cb-a763-360af2994b4d&limit=1",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/runs/99bcb574-ac37-4965-b717-be93b6ffe56e",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/runs/summary?agent_id=46e88f28-5374-42cb-a763-360af2994b4d&limit=1",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/runs/99bcb574-ac37-4965-b717-be93b6ffe56e",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/runs/summary?agent_id=46e88f28-5374-42cb-a763-360af2994b4d&limit=1",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/runs/summary?limit=1",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/agents",
+      "status": 201
+    },
+    {
+      "method": "POST",
+      "path": "/v1/agents",
+      "status": 201
+    },
+    {
+      "method": "POST",
+      "path": "/v1/agents",
+      "status": 409
+    },
+    {
+      "method": "POST",
+      "path": "/v1/agents/9796365e-2542-4d62-942f-4b4f48f98b7a/versions",
+      "status": 201
+    },
+    {
+      "method": "POST",
+      "path": "/v1/agents/9796365e-2542-4d62-942f-4b4f48f98b7a/versions",
+      "status": 201
+    },
+    {
+      "method": "POST",
+      "path": "/v1/agents/9796365e-2542-4d62-942f-4b4f48f98b7a/versions",
+      "status": 409
+    },
+    {
+      "method": "GET",
+      "path": "/v1/agents/9796365e-2542-4d62-942f-4b4f48f98b7a/versions?limit=200",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/agents/9796365e-2542-4d62-942f-4b4f48f98b7a/publish",
+      "status": 404
+    },
+    {
+      "method": "GET",
+      "path": "/v1/agents/9796365e-2542-4d62-942f-4b4f48f98b7a",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/agents/9796365e-2542-4d62-942f-4b4f48f98b7a/versions",
+      "status": 201
+    },
+    {
+      "method": "POST",
+      "path": "/v1/agents/9796365e-2542-4d62-942f-4b4f48f98b7a/publish",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/agents/9796365e-2542-4d62-942f-4b4f48f98b7a/publish",
+      "status": 409
+    },
+    {
+      "method": "POST",
+      "path": "/v1/agents/9796365e-2542-4d62-942f-4b4f48f98b7a/disable",
+      "status": 409
+    },
+    {
+      "method": "GET",
+      "path": "/v1/agents/9796365e-2542-4d62-942f-4b4f48f98b7a",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/agents/9796365e-2542-4d62-942f-4b4f48f98b7a/publish",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/sessions",
+      "status": 202
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions/fe769f3f-3623-4400-8e06-037d2f12ee0c",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions/fe769f3f-3623-4400-8e06-037d2f12ee0c",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/sessions",
+      "status": 202
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions/75632866-01b0-4b4f-a787-23a030bc3023",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions/75632866-01b0-4b4f-a787-23a030bc3023",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/sessions",
+      "status": 202
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions/e26104a3-3344-497f-8657-c9bcee93ce9e",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions/e26104a3-3344-497f-8657-c9bcee93ce9e",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions?agent_id=9796365e-2542-4d62-942f-4b4f48f98b7a&limit=1",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions?agent_id=9796365e-2542-4d62-942f-4b4f48f98b7a&limit=1&cursor=MGEwOGQyMWQ1NDdlZjVlYzkzZDAzMjM3OTc2MWQwZmFjYmFiZDBiOTYxYTExOGJkNzNmMWEzNTRkNTExMDUxZiMyMDI2LTExLTA4VDE4OjQ4OjM2LjQ3ODAwOCswODowMHxmZTc2OWYzZi0zNjIzLTQ0MDAtOGUwNi0wMzdkMmYxMmVlMGM",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions?agent_id=9796365e-2542-4d62-942f-4b4f48f98b7a&limit=1&cursor=MGEwOGQyMWQ1NDdlZjVlYzkzZDAzMjM3OTc2MWQwZmFjYmFiZDBiOTYxYTExOGJkNzNmMWEzNTRkNTExMDUxZiMyMDI2LTExLTA4VDE4OjQ4OjM2LjUwNTQwNyswODowMHw3NTYzMjg2Ni0wMWIwLTRiNGYtYTc4Ny0yM2EwMzBiYzMwMjM",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions?agent_id=9796365e-2542-4d62-942f-4b4f48f98b7a&limit=2&cursor=MGEwOGQyMWQ1NDdlZjVlYzkzZDAzMjM3OTc2MWQwZmFjYmFiZDBiOTYxYTExOGJkNzNmMWEzNTRkNTExMDUxZiMyMDI2LTExLTA4VDE4OjQ4OjM2LjQ3ODAwOCswODowMHxmZTc2OWYzZi0zNjIzLTQ0MDAtOGUwNi0wMzdkMmYxMmVlMGM",
+      "status": 400
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions?agent_id=0e12cca3-a9c2-4463-bc27-fe9aefca79dc&limit=1&cursor=MGEwOGQyMWQ1NDdlZjVlYzkzZDAzMjM3OTc2MWQwZmFjYmFiZDBiOTYxYTExOGJkNzNmMWEzNTRkNTExMDUxZiMyMDI2LTExLTA4VDE4OjQ4OjM2LjQ3ODAwOCswODowMHxmZTc2OWYzZi0zNjIzLTQ0MDAtOGUwNi0wMzdkMmYxMmVlMGM",
+      "status": 400
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions?limit=-1",
+      "status": 400
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions?limit=201",
+      "status": 400
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions?limit=%E9%9D%9E%E6%95%B0%E5%AD%97",
+      "status": 400
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions?cursor=not-a-cursor",
+      "status": 400
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions?created_from=not-a-date",
+      "status": 400
+    },
+    {
+      "method": "POST",
+      "path": "/v1/agents",
+      "status": 400
+    },
+    {
+      "method": "POST",
+      "path": "/v1/agents",
+      "status": 400
+    },
+    {
+      "method": "POST",
+      "path": "/v1/agents",
+      "status": 400
+    },
+    {
+      "method": "POST",
+      "path": "/v1/agents",
+      "status": 400
+    },
+    {
+      "method": "POST",
+      "path": "/v1/agents",
+      "status": 400
+    },
+    {
+      "method": "POST",
+      "path": "/v1/agents",
+      "status": 400
+    },
+    {
+      "method": "POST",
+      "path": "/v1/agents",
+      "status": 413
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/2dc1b420-c2c0-4bd4-84a0-6c83c3abd1eb",
+      "status": 404
+    },
+    {
+      "method": "GET",
+      "path": "/v1/commands/2dc1b420-c2c0-4bd4-84a0-6c83c3abd1eb",
+      "status": 404
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions/2dc1b420-c2c0-4bd4-84a0-6c83c3abd1eb/history",
+      "status": 404
+    },
+    {
+      "method": "POST",
+      "path": "/v1/tasks",
+      "status": 202
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/6ea89d7d-b0a9-4c81-a240-c7ad54b7eb60",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/6ea89d7d-b0a9-4c81-a240-c7ad54b7eb60",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/6ea89d7d-b0a9-4c81-a240-c7ad54b7eb60",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/6ea89d7d-b0a9-4c81-a240-c7ad54b7eb60",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/6ea89d7d-b0a9-4c81-a240-c7ad54b7eb60",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/6ea89d7d-b0a9-4c81-a240-c7ad54b7eb60",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/approvals?task_id=6ea89d7d-b0a9-4c81-a240-c7ad54b7eb60&status=pending",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/tasks",
+      "status": 202
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/f2f67c75-e30d-4963-bd2e-c9cc00621b1e",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks?session_id=fe769f3f-3623-4400-8e06-037d2f12ee0c&status=queued",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks?session_id=fe769f3f-3623-4400-8e06-037d2f12ee0c&status=waiting_approval",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/tasks/f2f67c75-e30d-4963-bd2e-c9cc00621b1e/cancel",
+      "status": 202
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/f2f67c75-e30d-4963-bd2e-c9cc00621b1e",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/6ea89d7d-b0a9-4c81-a240-c7ad54b7eb60",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/tasks/f2f67c75-e30d-4963-bd2e-c9cc00621b1e/cancel",
+      "status": 202
+    },
+    {
+      "method": "POST",
+      "path": "/v1/tasks/f2f67c75-e30d-4963-bd2e-c9cc00621b1e/resume",
+      "status": 409
+    },
+    {
+      "method": "GET",
+      "path": "/v1/runs/f2f67c75-e30d-4963-bd2e-c9cc00621b1e",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/approvals/e48323e92f58898ba188c200e29635170e8eeae6ea99322a25f166d7161c3f5a/decision",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/6ea89d7d-b0a9-4c81-a240-c7ad54b7eb60",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/6ea89d7d-b0a9-4c81-a240-c7ad54b7eb60",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/6ea89d7d-b0a9-4c81-a240-c7ad54b7eb60",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/6ea89d7d-b0a9-4c81-a240-c7ad54b7eb60",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/6ea89d7d-b0a9-4c81-a240-c7ad54b7eb60",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/6ea89d7d-b0a9-4c81-a240-c7ad54b7eb60",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/6ea89d7d-b0a9-4c81-a240-c7ad54b7eb60",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions/fe769f3f-3623-4400-8e06-037d2f12ee0c/history?limit=200",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/tasks",
+      "status": 202
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/6c2a688d-a7d9-44b8-9a9a-5e4146fea0e9",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/6c2a688d-a7d9-44b8-9a9a-5e4146fea0e9",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/6c2a688d-a7d9-44b8-9a9a-5e4146fea0e9",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/6c2a688d-a7d9-44b8-9a9a-5e4146fea0e9",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/6c2a688d-a7d9-44b8-9a9a-5e4146fea0e9",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/approvals?task_id=6c2a688d-a7d9-44b8-9a9a-5e4146fea0e9&status=pending",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/approvals/66dec4591dbc1ad586dac2a41f15b5e81b692d1df91eaf0593b046f98f1bfd90/decision",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/6c2a688d-a7d9-44b8-9a9a-5e4146fea0e9",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/6c2a688d-a7d9-44b8-9a9a-5e4146fea0e9",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/6c2a688d-a7d9-44b8-9a9a-5e4146fea0e9",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/6c2a688d-a7d9-44b8-9a9a-5e4146fea0e9",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/6c2a688d-a7d9-44b8-9a9a-5e4146fea0e9",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/6c2a688d-a7d9-44b8-9a9a-5e4146fea0e9",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/tasks",
+      "status": 202
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/7ddb3f40-86e7-43b5-b669-f90e35c7bb12",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/7ddb3f40-86e7-43b5-b669-f90e35c7bb12",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/7ddb3f40-86e7-43b5-b669-f90e35c7bb12",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/7ddb3f40-86e7-43b5-b669-f90e35c7bb12",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/approvals?task_id=7ddb3f40-86e7-43b5-b669-f90e35c7bb12&status=pending",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/approvals/d18bd5606d11b21953018993e5e483a5490297e699177f9f59d2f70d375d6367/decision",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/7ddb3f40-86e7-43b5-b669-f90e35c7bb12",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/7ddb3f40-86e7-43b5-b669-f90e35c7bb12",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/7ddb3f40-86e7-43b5-b669-f90e35c7bb12",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/7ddb3f40-86e7-43b5-b669-f90e35c7bb12",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/7ddb3f40-86e7-43b5-b669-f90e35c7bb12",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/tasks/6ea89d7d-b0a9-4c81-a240-c7ad54b7eb60/cancel",
+      "status": 202
+    },
+    {
+      "method": "POST",
+      "path": "/v1/tasks/6ea89d7d-b0a9-4c81-a240-c7ad54b7eb60/resume",
+      "status": 409
+    },
+    {
+      "method": "GET",
+      "path": "/v1/runs/6ea89d7d-b0a9-4c81-a240-c7ad54b7eb60",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions/fe769f3f-3623-4400-8e06-037d2f12ee0c/history?limit=200",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions/fe769f3f-3623-4400-8e06-037d2f12ee0c/history?limit=2&after_seq=0",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions/fe769f3f-3623-4400-8e06-037d2f12ee0c/history?limit=2&after_seq=5",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions/fe769f3f-3623-4400-8e06-037d2f12ee0c/history?limit=2&after_seq=22",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions/fe769f3f-3623-4400-8e06-037d2f12ee0c/history?limit=2&after_seq=28",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions/fe769f3f-3623-4400-8e06-037d2f12ee0c/history?limit=2&after_seq=33",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions/fe769f3f-3623-4400-8e06-037d2f12ee0c/history?limit=2&after_seq=50",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions/fe769f3f-3623-4400-8e06-037d2f12ee0c/history?limit=2&after_seq=56",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions/fe769f3f-3623-4400-8e06-037d2f12ee0c/history?limit=2&after_seq=57",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions/fe769f3f-3623-4400-8e06-037d2f12ee0c/history?type=boundary%2Fsnapshot",
+      "status": 403
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions/fe769f3f-3623-4400-8e06-037d2f12ee0c/history?type=management%2Fsession",
+      "status": 403
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions/fe769f3f-3623-4400-8e06-037d2f12ee0c/history?after_seq=-1",
+      "status": 400
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions/fe769f3f-3623-4400-8e06-037d2f12ee0c",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/sessions/fe769f3f-3623-4400-8e06-037d2f12ee0c/fork",
+      "status": 202
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions/caefd8df-dbed-42fb-8aa2-89a6b2353de9",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions/caefd8df-dbed-42fb-8aa2-89a6b2353de9",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions/caefd8df-dbed-42fb-8aa2-89a6b2353de9/history?limit=200",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/sessions/fe769f3f-3623-4400-8e06-037d2f12ee0c/fork",
+      "status": 400
+    },
+    {
+      "method": "POST",
+      "path": "/v1/sessions/fe769f3f-3623-4400-8e06-037d2f12ee0c/fork",
+      "status": 400
+    },
+    {
+      "method": "POST",
+      "path": "/v1/sessions/fe769f3f-3623-4400-8e06-037d2f12ee0c/fork",
+      "status": 409
+    },
+    {
+      "method": "POST",
+      "path": "/v1/sessions/e26104a3-3344-497f-8657-c9bcee93ce9e/fork",
+      "status": 400
+    },
+    {
+      "method": "GET",
+      "path": "/v1/agents/9796365e-2542-4d62-942f-4b4f48f98b7a",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/agents/9796365e-2542-4d62-942f-4b4f48f98b7a/disable",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/sessions/fe769f3f-3623-4400-8e06-037d2f12ee0c/fork",
+      "status": 409
+    },
+    {
+      "method": "POST",
+      "path": "/v1/agents/9796365e-2542-4d62-942f-4b4f48f98b7a/enable",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/sessions/fe769f3f-3623-4400-8e06-037d2f12ee0c/fork",
+      "status": 202
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions/ca9ba705-0ca1-4dd7-bc86-d3c5aab80e1c",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sessions/ca9ba705-0ca1-4dd7-bc86-d3c5aab80e1c",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/agents/9796365e-2542-4d62-942f-4b4f48f98b7a/disable",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/sessions/fe769f3f-3623-4400-8e06-037d2f12ee0c/fork",
+      "status": 202
+    },
+    {
+      "method": "GET",
+      "path": "/v1/runs/summary?agent_id=9796365e-2542-4d62-942f-4b4f48f98b7a&limit=1",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/runs/summary?limit=1",
+      "status": 200
+    }
+  ],
+  "extended_agent": "9796365e-2542-4d62-942f-4b4f48f98b7a",
+  "extended_tasks": 4,
+  "extended_refunds": 3,
+  "extended_tokens": 30,
+  "combined_tasks": 46,
+  "combined_tokens": 395,
+  "host_exit_code": 0
+}
