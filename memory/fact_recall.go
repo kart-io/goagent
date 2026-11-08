@@ -130,7 +130,7 @@ func (s *DefaultMemoryService) resolveSnapshot(ctx context.Context, access Memor
 	if err := validateReadAccess(access); err != nil {
 		return RecallResult{}, err
 	}
-	if snapshot.ScopeFingerprint == "" || snapshot.ScopeFingerprint != scopeFingerprint(access) {
+	if snapshot.PolicyVersion != "fact-recall-v1" || snapshot.ScopeFingerprint == "" || snapshot.ScopeFingerprint != scopeFingerprint(access) {
 		return RecallResult{}, &MemoryError{Kind: ErrSnapshotInvalidated, Op: "事实快照授权范围已变化"}
 	}
 	state, err := s.store.ActiveIndexProfile(ctx)
@@ -142,6 +142,9 @@ func (s *DefaultMemoryService) resolveSnapshot(ctx context.Context, access Memor
 	}
 	result := RecallResult{Snapshot: snapshot}
 	for _, ref := range snapshot.Facts {
+		if ref.Score < 0 || ref.Score > 1 {
+			return RecallResult{}, &MemoryError{Kind: ErrSnapshotInvalidated, Op: "事实快照分值无效"}
+		}
 		fact, err := s.store.Get(ctx, access, ref.FactID, ref.Revision)
 		if err != nil || fact.MutationVersion != ref.MutationVersion || fact.Status != FactActive || (!fact.ExpiresAt.IsZero() && !s.now().Before(fact.ExpiresAt)) {
 			return RecallResult{}, &MemoryError{Kind: ErrSnapshotInvalidated, Op: "事实快照引用已失效", Cause: err}

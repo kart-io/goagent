@@ -806,3 +806,29 @@ func TestFactRecallAlwaysStillHonorsBudgetAndTTL(t *testing.T) {
 		t.Fatal("过期常驻事实仍被召回")
 	}
 }
+
+func TestFactSnapshotInvalidatesAfterDelete(t *testing.T) {
+	svc, _, scope := testMemoryService(t)
+	receipt, err := svc.Save(context.Background(), scope, "snapshot-fact", FactInput{Content: "snapshot content"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc.index = &fixtureIndex{candidates: []IndexCandidate{{FactID: receipt.FactID, Revision: receipt.Revision, ProfileID: "test-profile", Generation: 1, Score: 0.95}}}
+	svc.embedders = fixtureEmbedderResolver{}
+	result, err := svc.Recall(context.Background(), scope.Access, "content", RecallOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Snapshot.Facts) != 1 {
+		t.Fatalf("snapshot references=%d", len(result.Snapshot.Facts))
+	}
+	if _, err := svc.ResolveSnapshot(context.Background(), scope.Access, result.Snapshot); err != nil {
+		t.Fatalf("有效 snapshot 无法恢复：%v", err)
+	}
+	if _, err := svc.Delete(context.Background(), scope, result.Snapshot.Facts[0].FactID, result.Snapshot.Facts[0].Revision); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.ResolveSnapshot(context.Background(), scope.Access, result.Snapshot); !errors.Is(err, ErrSnapshotInvalidated) {
+		t.Fatalf("删除后快照未失效：%v", err)
+	}
+}

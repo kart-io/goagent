@@ -267,7 +267,7 @@ func executeMiddleware(ctx context.Context, request *MiddlewareRequest, handler 
 		response.Duration = time.Since(start)
 	}
 	// 只缓存处理器结果；非幂等后处理在每个请求内各执行一次。
-	if !hit {
+	if !hit && !cacheBypassFrom(ctx) {
 		for _, mw := range middlewares {
 			if cache, ok := mw.(*CacheMiddleware); ok {
 				cache.storeResponse(cache.getCacheKey(request), response)
@@ -516,6 +516,18 @@ type CacheMiddleware struct {
 	ttl       time.Duration
 }
 
+type cacheBypassKey struct{}
+
+// WithCacheBypass skips response cache reads and writes for this execution.
+func WithCacheBypass(ctx context.Context) context.Context {
+	return context.WithValue(ctx, cacheBypassKey{}, true)
+}
+
+func cacheBypassFrom(ctx context.Context) bool {
+	bypass, _ := ctx.Value(cacheBypassKey{}).(bool)
+	return bypass
+}
+
 // cacheShard 单个缓存分片，减少锁竞争
 type cacheShard struct {
 	cache map[string]*CacheEntry
@@ -591,6 +603,15 @@ func fnv32(key string) uint32 {
 
 // OnBefore checks cache before execution
 func (m *CacheMiddleware) OnBefore(ctx context.Context, request *MiddlewareRequest) (*MiddlewareRequest, error) {
+	if cacheBypassFrom(ctx) {
+		if request.Metadata == nil {
+			request.Metadata = make(map[string]interface{})
+		}
+		delete(request.Metadata, "cache_hit")
+		delete(request.Metadata, "cached_response")
+		request.Metadata["original_input"] = request.Input
+		return request, nil
+	}
 	key := m.getCacheKey(request)
 	shard := m.getShard(key)
 
@@ -618,8 +639,10 @@ func (m *CacheMiddleware) OnBefore(ctx context.Context, request *MiddlewareReque
 
 // OnAfter caches successful responses
 func (m *CacheMiddleware) OnAfter(ctx context.Context, response *MiddlewareResponse) (*MiddlewareResponse, error) {
-	if managed, _ := ctx.Value(chainContextKey{}).(bool); !managed {
-		m.storeResponse(m.getCacheKeyFromResponse(response), response)
+	if !cacheBypassFrom(ctx) {
+		if managed, _ := ctx.Value(chainContextKey{}).(bool); !managed {
+			m.storeResponse(m.getCacheKeyFromResponse(response), response)
+		}
 	}
 	return response, nil
 }

@@ -9,13 +9,85 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/kart-io/goagent/core/middleware"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
+	factmemory "github.com/kart-io/goagent/memory"
+	"time"
 )
 
 type evidenceLLM struct {
 	*MockLLMClient
 	requests []*llm.CompletionRequest
+}
+
+type testFactService struct {
+	factmemory.MemoryService
+	calls   int
+	content string
+}
+
+func (s *testFactService) Recall(context.Context, factmemory.MemoryAccess, string, factmemory.RecallOptions) (factmemory.RecallResult, error) {
+	s.calls++
+	return factmemory.RecallResult{Matches: []factmemory.FactMatch{{Fact: factmemory.Fact{ID: "f1", Content: s.content}, Score: 1, MatchKind: factmemory.MatchAlways}}}, nil
+}
+func (s *testFactService) ResolveSnapshot(context.Context, factmemory.MemoryAccess, factmemory.SnapshotRef) (factmemory.RecallResult, error) {
+	return factmemory.RecallResult{Matches: []factmemory.FactMatch{{Fact: factmemory.Fact{ID: "f1", Content: s.content}, Score: 1, MatchKind: factmemory.MatchAlways}}}, nil
+}
+
+type testFactResolver struct {
+	access factmemory.MemoryAccess
+	err    error
+}
+
+func (r testFactResolver) Resolve(context.Context, string) (factmemory.MemoryAccess, error) {
+	return r.access, r.err
+}
+func testFactAccess() factmemory.MemoryAccess {
+	scope := factmemory.MemoryScope{TenantID: "tenant", OwnerKind: factmemory.OwnerAgent, OwnerID: "agent", AgentID: "agent"}
+	return factmemory.MemoryAccess{Principal: factmemory.Principal{TenantID: "tenant", UserID: "user", AgentID: "agent"}, ReadScopes: []factmemory.MemoryScope{scope}}
+}
+
+func TestFactBuilderInjectsOnlyCurrentRequestAndBypassesCache(t *testing.T) {
+	cache := middleware.NewCacheMiddleware(time.Minute)
+	seed := &evidenceLLM{MockLLMClient: NewMockLLMClient("cached answer")}
+	seedAgent, err := NewSimpleBuilder(seed).WithMiddleware(cache).Build()
+	require.NoError(t, err)
+	_, err = seedAgent.AsRunnable().Invoke(context.Background(), "same query")
+	require.NoError(t, err)
+	require.Equal(t, 1, cache.Size())
+	model := &evidenceLLM{MockLLMClient: NewMockLLMClient("fresh 1", "fresh 2")}
+	service := &testFactService{content: "likes tea"}
+	agent, err := NewSimpleBuilder(model).WithAgentID("agent").WithMiddleware(cache).WithFactMemory(service, testFactResolver{access: testFactAccess()}).Build()
+	require.NoError(t, err)
+	first, err := agent.AsRunnable().Invoke(context.Background(), "same query")
+	require.NoError(t, err)
+	service.content = "likes coffee"
+	second, err := agent.AsRunnable().Invoke(context.Background(), "same query")
+	require.NoError(t, err)
+	require.Equal(t, "fresh 1", first.Result)
+	require.Equal(t, "fresh 2", second.Result)
+	require.Equal(t, 2, service.calls)
+	require.Equal(t, 1, cache.Size())
+	require.Contains(t, model.requests[0].Messages[len(model.requests[0].Messages)-1].Content, "likes tea")
+	require.NotContains(t, model.requests[0].Messages[0].Content, "likes tea", "facts must not be injected into system policy")
+}
+
+func TestFactBuilderRejectsMissingPrincipalBeforeCache(t *testing.T) {
+	cache := middleware.NewCacheMiddleware(time.Minute)
+	seedAgent, err := NewSimpleBuilder(NewMockLLMClient("cached")).WithMiddleware(cache).Build()
+	require.NoError(t, err)
+	_, err = seedAgent.AsRunnable().Invoke(context.Background(), "protected query")
+	require.NoError(t, err)
+	model := &evidenceLLM{MockLLMClient: NewMockLLMClient("should not run")}
+	service := &testFactService{content: "private"}
+	agent, err := NewSimpleBuilder(model).WithAgentID("agent").WithMiddleware(cache).WithFactMemory(service, testFactResolver{err: errors.New("missing principal")}).Build()
+	require.NoError(t, err)
+	_, err = agent.AsRunnable().Invoke(context.Background(), "protected query")
+	require.Error(t, err)
+	require.Empty(t, model.requests)
+	require.Zero(t, service.calls)
+	require.Equal(t, 1, cache.Size())
 }
 
 func (m *evidenceLLM) CompleteStream(ctx context.Context, req *llm.CompletionRequest) (<-chan *llm.StreamChunk, error) {

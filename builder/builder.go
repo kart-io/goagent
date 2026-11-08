@@ -65,6 +65,7 @@ type AgentBuilder[C any, S core.State] struct {
 	memoryManager   interfaces.MemoryManager
 	retriever       interfaces.DocumentRetriever
 	retrievalConfig RetrievalConfig
+	factMemory      *factMemoryConfig
 
 	// 配置
 	config *AgentConfig
@@ -136,6 +137,9 @@ func (b *AgentBuilder[C, S]) BuildContext(ctx context.Context) (*ConfigurableAge
 	}
 	if b.inputSerializer == nil {
 		return nil, agentErrors.NewInvalidConfigError("builder", "input_serializer", "input serializer must not be nil")
+	}
+	if b.factMemory != nil && (nilFactInterface(b.factMemory.service) || nilFactInterface(b.factMemory.resolver) || strings.TrimSpace(b.config.AgentID) == "") {
+		return nil, agentErrors.NewInvalidConfigError("builder", "fact_memory", "fact memory requires a service, trusted scope resolver, and AgentID")
 	}
 	if b.config.MemoryFailurePolicy != MemoryFailureBestEffort && b.config.MemoryFailurePolicy != MemoryFailureStrict {
 		return nil, agentErrors.NewInvalidConfigError("builder", "memory_failure_policy", "unknown memory failure policy")
@@ -229,6 +233,7 @@ func (b *AgentBuilder[C, S]) BuildContext(ctx context.Context) (*ConfigurableAge
 		inputSerializer: b.inputSerializer,
 		retriever:       b.retriever,
 		retrievalConfig: b.retrievalConfig,
+		factMemory:      b.factMemory,
 	}
 
 	// 如果需要则初始化

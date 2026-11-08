@@ -23,6 +23,18 @@ import (
 // maxFailureRunes 限制 MaxIterations 报错附带的工具失败文本长度。
 const maxFailureRunes = 500
 
+const factMemoryMessageName = "goagent_fact_memory"
+
+func withoutFactMemoryMessages(messages []llm.Message) []llm.Message {
+	result := make([]llm.Message, 0, len(messages))
+	for _, message := range messages {
+		if message.Name != factMemoryMessageName {
+			result = append(result, message)
+		}
+	}
+	return result
+}
+
 // emptyAnswerPrompt 是空回答后追加的固定重问消息；固定文本保证持久恢复时意图不变。
 const emptyAnswerPrompt = "上一轮没有输出，请直接给出最终回答或调用工具。"
 
@@ -60,7 +72,7 @@ func (a *ConfigurableAgent[C, S]) streamMessages(ctx context.Context, input, evi
 }
 
 // runToolEvents 每轮直接选择工具或输出答案，MaxIterations 包含最终答案请求。
-func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *middleware.MiddlewareRequest, input string, client llm.ToolStreamClient, messages []llm.Message, metadata map[string]interface{}, emit func(AgentEvent) error) (response *middleware.MiddlewareResponse, err error) {
+func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *middleware.MiddlewareRequest, input string, client llm.ToolStreamClient, messages []llm.Message, metadata map[string]interface{}, factContext string, emit func(AgentEvent) error) (response *middleware.MiddlewareResponse, err error) {
 	// 会话级审批授权按会话隔离；宿主已声明会话时沿用宿主的值。
 	if tools.SessionIDFrom(ctx) == "" && a.config.SessionID != "" {
 		ctx = tools.WithSessionID(ctx, a.config.SessionID)
@@ -89,13 +101,17 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 	if err := slog.begin(ctx, messages, a.tools); err != nil {
 		return nil, fmt.Errorf("会话日志: %w", err)
 	}
+	if factContext != "" {
+		messages = append(messages, llm.Message{Role: "user", Name: factMemoryMessageName, Content: factContext})
+	}
 	// finish 结束本轮：记下对话供 Handle 的 Followup 续接。
 	finish := func(answer string, final llm.Message) (*middleware.MiddlewareResponse, error) {
-		if err := slog.end(ctx, append(slices.Clone(messages), final), answer, usage); err != nil {
+		visibleMessages := withoutFactMemoryMessages(messages)
+		if err := slog.end(ctx, append(visibleMessages, final), answer, usage); err != nil {
 			return nil, fmt.Errorf("会话日志: %w", err)
 		}
 		if box != nil {
-			transcript := slices.Clone(messages)
+			transcript := withoutFactMemoryMessages(messages)
 			if len(transcript) > 0 && transcript[0].Role == "system" {
 				transcript = transcript[1:]
 			}
@@ -174,7 +190,7 @@ func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *mi
 			metadata["answer_source"] = "pre_step"
 			return finish(pre.Answer, llm.Message{Role: "assistant", Content: pre.Answer})
 		}
-		if err := slog.sync(ctx, messages); err != nil {
+		if err := slog.sync(ctx, withoutFactMemoryMessages(messages)); err != nil {
 			return nil, fmt.Errorf("会话日志: %w", err)
 		}
 		// 重问需要下一轮额度，最后一轮的空回答按原方式报错。

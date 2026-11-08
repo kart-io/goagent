@@ -62,6 +62,14 @@ func (a *ConfigurableAgent[C, S]) executeStream(ctx context.Context, input inter
 	}
 	ctx = withTokenEstimator(ctx, a.config.TokenEstimator)
 	ctx = ensureModelScope(ctx)
+	if a.factMemory != nil {
+		ctx = middleware.WithCacheBypass(ctx)
+		access, err := a.prepareFactAccess(ctx)
+		if err != nil {
+			return nil, err
+		}
+		ctx = context.WithValue(ctx, factAccessKey{}, access)
+	}
 	if err := validateModelBudget(ctx); err != nil {
 		return nil, err
 	}
@@ -172,6 +180,7 @@ func (a *ConfigurableAgent[C, S]) runEvents(ctx context.Context, request *middle
 		return nil, agentErrors.Wrap(err, agentErrors.CodeInvalidInput, "failed to serialize input")
 	}
 	evidence := ""
+	factContext := ""
 	metadata := make(map[string]interface{}, len(request.Metadata))
 	for k, v := range request.Metadata {
 		metadata[k] = v
@@ -186,6 +195,16 @@ func (a *ConfigurableAgent[C, S]) runEvents(ctx context.Context, request *middle
 		}
 		evidence = retrieved
 		if err := emit(AgentEvent{Type: "sources", Sources: details["retrieval_sources"].([]RetrievalSource)}); err != nil {
+			return nil, err
+		}
+	}
+	continued := false
+	if history, ok := ctx.Value(historyKey{}).([]llm.Message); ok && len(history) > 0 {
+		continued = true
+	}
+	if a.factMemory != nil && !continued {
+		factContext, err = a.factContext(ctx, input)
+		if err != nil {
 			return nil, err
 		}
 	}
@@ -204,7 +223,7 @@ func (a *ConfigurableAgent[C, S]) runEvents(ctx context.Context, request *middle
 		if err != nil {
 			return nil, err
 		}
-		return a.runToolEvents(ctx, request, input, native, messages, metadata, emit)
+		return a.runToolEvents(ctx, request, input, native, messages, metadata, factContext, emit)
 	}
 	if a.config.SessionLog != nil {
 		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "会话日志只支持原生工具流：llm.ToolStreamClient 且配置了工具").WithComponent("builder").WithOperation("run_events")
@@ -212,6 +231,9 @@ func (a *ConfigurableAgent[C, S]) runEvents(ctx context.Context, request *middle
 	messages, err := a.streamMessages(ctx, input, evidence)
 	if err != nil {
 		return nil, err
+	}
+	if factContext != "" {
+		messages = append(messages, llm.UserMessage(factContext))
 	}
 	attempt := 0
 	ctx = withInterruptedModelResend(withRequestRecovery(ctx, a.requestRecovery(0, &messages, &attempt)), a.config.ResendInterruptedModel)

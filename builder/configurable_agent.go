@@ -32,6 +32,7 @@ type ConfigurableAgent[C any, S core.State] struct {
 	inputSerializer InputSerializer
 	retriever       interfaces.DocumentRetriever
 	retrievalConfig RetrievalConfig
+	factMemory      *factMemoryConfig
 	mu              sync.RWMutex
 	executionGate   chan struct{}
 }

@@ -95,6 +95,21 @@ func TestSessionLogRebuildsRequests(t *testing.T) {
 	require.Equal(t, []session.ToolStat{{Name: "lookup", Calls: 1}}, traj.Stats, "the compacted call is no longer in the trajectory")
 }
 
+func TestFactBuilderDoesNotPersistInjectedFactsInSessionLog(t *testing.T) {
+	store := session.NewMemoryStore()
+	model := newScriptModel(answer("已完成"))
+	service := &testFactService{content: "secret preference 7a2f"}
+	agent, err := NewSimpleBuilder(model).WithAgentID("agent").WithSessionID("fact-session").WithSessionLog(store).WithTools(plainTool()).WithFactMemory(service, testFactResolver{access: testFactAccess()}).Build()
+	require.NoError(t, err)
+	_, err = agent.AsRunnable().Invoke(context.Background(), "hello")
+	require.NoError(t, err)
+	events := sessionEvents(t, store, "fact-session")
+	encoded, err := json.Marshal(events)
+	require.NoError(t, err)
+	require.NotContains(t, string(encoded), "secret preference 7a2f")
+	require.Equal(t, 1, service.calls)
+}
+
 // 非持久运行中断的轮次在下一轮记为中止，其消息不进入历史。
 func TestSessionLogAbortsInterruptedTurn(t *testing.T) {
 	store := session.NewMemoryStore()
