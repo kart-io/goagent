@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -356,4 +357,23 @@ func TestGenerator_SingleValue(t *testing.T) {
 	results, err := Collect(gen)
 	require.NoError(t, err)
 	assert.Equal(t, []int{42}, results)
+}
+
+// 消费方取消后不再读取时，转换 goroutine 必须退出，不能卡在发送取消错误上。
+func TestToChannelExitsWhenConsumerAbandonsAfterCancel(t *testing.T) {
+	returned := make(chan struct{})
+	gen := GeneratorFunc(func(yield func(int, error) bool) {
+		defer close(returned)
+		for i := 0; yield(i, nil); i++ {
+		}
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	ch := ToChannel(ctx, gen, 0)
+	<-ch
+	cancel()
+	select {
+	case <-returned:
+	case <-time.After(2 * time.Second):
+		t.Fatal("generator goroutine leaked after consumer abandoned the channel")
+	}
 }

@@ -57,6 +57,8 @@ func GeneratorFunc[T any](fn func(yield func(T, error) bool)) Generator[T] {
 // 注意：
 //   - 此函数会启动 goroutine 消费 Generator
 //   - 当 ctx 取消或 Generator 结束时，channel 自动关闭
+//   - ctx 取消时只在消费方正在接收或缓冲有空位时送出取消错误块，否则直接关闭；
+//     channel 关闭后应检查 ctx.Err() 区分正常结束与取消
 //
 // 示例：
 //
@@ -87,7 +89,11 @@ func ToChannel[T any](ctx context.Context, gen Generator[T], bufferSize int) <-c
 		gen(func(data T, err error) bool {
 			select {
 			case <-ctx.Done():
-				ch <- StreamChunk[T]{Error: ctx.Err()}
+				// 消费方可能已放弃读取，不阻塞；channel 关闭时调用方应以 ctx.Err() 判断是否因取消结束。
+				select {
+				case ch <- StreamChunk[T]{Error: ctx.Err()}:
+				default:
+				}
 				return false
 			case ch <- StreamChunk[T]{Data: data, Error: err}:
 				if err != nil {

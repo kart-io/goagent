@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `tools/http`：配置了 baseURL 的 `APITool` 拒绝其他 scheme/主机的绝对 URL 与跨主机重定向，避免默认请求头中的凭据发往第三方；响应体上限 10 MiB。需要访问多个主机时为每个主机各建一个工具，或不设 baseURL。未配置 baseURL 时默认拒绝连接回环、私网、链路本地与云元数据地址（按实际拨号 IP 判断，并且不走环境变量代理），需要访问内网时使用 `APIToolBuilder.WithPrivateNetwork()`。
 - `builder`：未调用 `WithTemperature`/`WithMaxTokens` 时请求不再携带 0.7 与 2000，改由 LLM 客户端配置决定；`AgentConfig` 新增 `TemperatureSet`，移除 `constants.DefaultAgentMaxTokens`。依赖旧默认值的调用方显式调用这两个选项。
 - `core/durable`：`RetryFailed` 只重跑结果已知的失败（普通失败、超时）；停在 pending 或因取消而失败的记录须由 `Reconcile` 核对未生效或声明 `RetryInterrupted` 才重跑。`tools.Dispatcher` 的默认策略显式声明 `RetryInterrupted`，恢复行为不变；非幂等工具应通过 `DurableOperationPolicy` 提供 `Reconcile` 或去掉 `RetryInterrupted`。
+- `core`：`ToChannel` 在 ctx 取消后只在消费方正在接收或缓冲有空位时送出取消错误块，否则直接关闭 channel，避免消费方放弃读取后 goroutine 永久阻塞；调用方应在 channel 关闭后检查 `ctx.Err()`。
 
 ### 修复与验证
 
