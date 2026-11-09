@@ -1,0 +1,5 @@
+{
+  "events_checked": 846,
+  "required_contract_descendant_skips_failures_or_incomplete_package_evidence": [],
+  "note": "对原始验收记录的额外核对；无测试的示例包允许包级skip。该结果不消除复核器本身的误放行缺陷。"
+}

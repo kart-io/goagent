@@ -1,0 +1,35 @@
+{
+  "status": "changes_requested",
+  "reviewers_completed": 3,
+  "source_files_unchanged": 51,
+  "new_findings": {
+    "P1": 1,
+    "P2": 2
+  },
+  "existing_findings": {
+    "P2": 3
+  },
+  "independent_core_reproduction": {
+    "current_exit": 1,
+    "baseline_exit": 0,
+    "race": true,
+    "failed_cases": 3
+  },
+  "independent_pg_tombstone": {
+    "current_exit": 1,
+    "baseline_exit": 1,
+    "read_committed_control": "passed",
+    "repeatable_read_contract": "failed",
+    "race": true,
+    "new_regression": false
+  },
+  "independent_pg_cancellation": {
+    "observed_defect_runs": 5,
+    "race": true,
+    "live_database": false
+  },
+  "temporary_database_removed": true,
+  "production_source_modified": false,
+  "committed": false,
+  "completed_at": "2026-11-09T03:22:39.013525+00:00"
+}

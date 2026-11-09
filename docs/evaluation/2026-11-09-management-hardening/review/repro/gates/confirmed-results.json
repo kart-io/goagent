@@ -1,0 +1,32 @@
+[
+  {
+    "case": "valid",
+    "exit_code": 0,
+    "expected_exit_code": 0,
+    "output": "实库恢复证据检查通过\n"
+  },
+  {
+    "case": "child-skip-report",
+    "exit_code": 0,
+    "expected_exit_code": 1,
+    "output": "实库恢复证据检查通过\n"
+  },
+  {
+    "case": "package_fail",
+    "exit_code": 0,
+    "expected_exit_code": 1,
+    "output": "实库恢复证据检查通过\n"
+  },
+  {
+    "case": "truncated_tail",
+    "exit_code": 0,
+    "expected_exit_code": 1,
+    "output": "实库恢复证据检查通过\n"
+  },
+  {
+    "case": "missing_package_end",
+    "exit_code": 0,
+    "expected_exit_code": 1,
+    "output": "实库恢复证据检查通过\n"
+  }
+]

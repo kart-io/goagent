@@ -1,0 +1,547 @@
+diff --git a/orchestration/agent-context/run.go b/orchestration/agent-context/run.go
+index 649a5a4..9a48e9e 100644
+--- a/orchestration/agent-context/run.go
++++ b/orchestration/agent-context/run.go
+@@ -9,6 +9,7 @@ import (
+ 	"sort"
+ 	"time"
+ 
++	"github.com/kart-io/goagent/constants"
+ 	"github.com/kart-io/goagent/core"
+ 	"github.com/kart-io/goagent/core/budget"
+ 	"github.com/kart-io/goagent/core/session"
+@@ -93,10 +94,10 @@ func (h *host) graph(ctx context.Context, parallel bool) ([]Accepted, error) {
+ 		if err != nil {
+ 			return nil, err
+ 		}
+-		if err = g.AddEdge(workflow.START, "experts"); err != nil {
++		if err = g.AddEdge(constants.WorkflowStart, "experts"); err != nil {
+ 			return nil, err
+ 		}
+-		if err = g.AddEdge("experts", workflow.END); err != nil {
++		if err = g.AddEdge("experts", constants.WorkflowEnd); err != nil {
+ 			return nil, err
+ 		}
+ 	} else {
+@@ -119,13 +120,13 @@ func (h *host) graph(ctx context.Context, parallel bool) ([]Accepted, error) {
+ 				return "", fmt.Errorf("no eligible itinerary")
+ 			}
+ 			if s.Reports[0].Report.Conclusion != "feasible" {
+-				return workflow.END, nil
++				return constants.WorkflowEnd, nil
+ 			}
+ 			return "budget", nil
+-		}, "budget", workflow.END); err != nil {
++		}, "budget", constants.WorkflowEnd); err != nil {
+ 			return nil, err
+ 		}
+-		for _, edge := range [][2]string{{workflow.START, "itinerary"}, {"budget", workflow.END}} {
++		for _, edge := range [][2]string{{constants.WorkflowStart, "itinerary"}, {"budget", constants.WorkflowEnd}} {
+ 			if err = g.AddEdge(edge[0], edge[1]); err != nil {
+ 				return nil, err
+ 			}
+diff --git a/orchestration/composed-order/main.go b/orchestration/composed-order/main.go
+index 10603e9..8850210 100644
+--- a/orchestration/composed-order/main.go
++++ b/orchestration/composed-order/main.go
+@@ -13,6 +13,7 @@ import (
+ 	"github.com/kart-io/goagent-examples/orchestration/internal/demomodel"
+ 	"github.com/kart-io/goagent/builder"
+ 	"github.com/kart-io/goagent/builder/contextpolicy"
++	"github.com/kart-io/goagent/constants"
+ 	"github.com/kart-io/goagent/core/budget"
+ 	"github.com/kart-io/goagent/core/durable"
+ 	"github.com/kart-io/goagent/core/observe"
+@@ -73,10 +74,10 @@ func run(ctx context.Context, dir string) (result, error) {
+ 	if err = rules.AddNode("refund_rule", func(_ context.Context, n int) (int, error) { return n + 30, nil }); err != nil {
+ 		return out, err
+ 	}
+-	if err = rules.AddEdge(workflow.START, "refund_rule"); err != nil {
++	if err = rules.AddEdge(constants.WorkflowStart, "refund_rule"); err != nil {
+ 		return out, err
+ 	}
+-	if err = rules.AddEdge("refund_rule", workflow.END); err != nil {
++	if err = rules.AddEdge("refund_rule", constants.WorkflowEnd); err != nil {
+ 		return out, err
+ 	}
+ 	ruleRun, err := rules.Compile(ctx)
+diff --git a/orchestration/customer-service/graph.go b/orchestration/customer-service/graph.go
+index c9ff41d..2f6ff17 100644
+--- a/orchestration/customer-service/graph.go
++++ b/orchestration/customer-service/graph.go
+@@ -10,6 +10,7 @@ import (
+ 	"github.com/kart-io/goagent-examples/internal/livemodel"
+ 	"github.com/kart-io/goagent-examples/orchestration/customer-service/support"
+ 	"github.com/kart-io/goagent/builder"
++	"github.com/kart-io/goagent/constants"
+ 	"github.com/kart-io/goagent/core"
+ 	"github.com/kart-io/goagent/core/durable"
+ 	agentErrors "github.com/kart-io/goagent/errors"
+@@ -112,13 +113,13 @@ func parseTriage(t Ticket, o *builder.AgentOutput) (Ticket, error) {
+ 	}
+ 	t = appendTurn(t, triageName, text)
+ 	var d triageDecision
+-	if err := json.Unmarshal([]byte(modelJSON(text)), &d); err != nil || d.Route == "" || (d.Route == multiagent.Finish && !concluded) {
++	if err := json.Unmarshal([]byte(modelJSON(text)), &d); err != nil || d.Route == "" || (d.Route == constants.MultiagentFinish && !concluded) {
+ 		t.Route = ""
+ 		return t, nil
+ 	}
+ 	t.Route = d.Route
+ 	if d.Route == last {
+-		t.Route = multiagent.Finish
++		t.Route = constants.MultiagentFinish
+ 	}
+ 	if d.Intent != "" {
+ 		t.Intent = d.Intent
+diff --git a/orchestration/customer-service/graph_test.go b/orchestration/customer-service/graph_test.go
+index c97ec62..64f6f40 100644
+--- a/orchestration/customer-service/graph_test.go
++++ b/orchestration/customer-service/graph_test.go
+@@ -11,6 +11,7 @@ import (
+ 
+ 	"github.com/kart-io/goagent-examples/orchestration/customer-service/support"
+ 	"github.com/kart-io/goagent/builder"
++	"github.com/kart-io/goagent/constants"
+ 	"github.com/kart-io/goagent/core/budget"
+ 	"github.com/kart-io/goagent/core/durable"
+ 	agentErrors "github.com/kart-io/goagent/errors"
+@@ -317,7 +318,7 @@ func TestParseTriageFinishRequiresMemberConclusion(t *testing.T) {
+ 	answered := Ticket{Turns: []multiagent.Turn{{Agent: triageName, Output: `{"route":"general"}`}, {Agent: generalName, Output: "配送途中"}}}
+ 	got, err = parseTriage(answered, &builder.AgentOutput{Result: finish})
+ 	require.NoError(t, err)
+-	require.Equal(t, multiagent.Finish, got.Route)
++	require.Equal(t, constants.MultiagentFinish, got.Route)
+ }
+ 
+ func TestGraphInjectedFinishHandsOff(t *testing.T) {
+diff --git a/orchestration/flight-booking/graph.go b/orchestration/flight-booking/graph.go
+index 87bb3e6..9e6e4c2 100644
+--- a/orchestration/flight-booking/graph.go
++++ b/orchestration/flight-booking/graph.go
+@@ -5,6 +5,7 @@ import (
+ 	"errors"
+ 	"fmt"
+ 
++	"github.com/kart-io/goagent/constants"
+ 	agentErrors "github.com/kart-io/goagent/errors"
+ 	"github.com/kart-io/goagent/workflow"
+ )
+@@ -134,7 +135,7 @@ func (s *service) graph(ctx context.Context, o *booking) (*workflow.DurableGraph
+ 	}); err != nil {
+ 		return nil, err
+ 	}
+-	for _, e := range [][2]string{{workflow.START, "search"}, {"choose", "prepare"}, {"issue", "settle"}, {"settle", workflow.END}} {
++	for _, e := range [][2]string{{constants.WorkflowStart, "search"}, {"choose", "prepare"}, {"issue", "settle"}, {"settle", constants.WorkflowEnd}} {
+ 		if err := g.AddEdge(e[0], e[1]); err != nil {
+ 			return nil, err
+ 		}
+@@ -145,8 +146,8 @@ func (s *service) graph(ctx context.Context, o *booking) (*workflow.DurableGraph
+ 			if st.Outcome == node.want {
+ 				return node.good, nil
+ 			}
+-			return workflow.END, nil
+-		}, node.good, workflow.END); err != nil {
++			return constants.WorkflowEnd, nil
++		}, node.good, constants.WorkflowEnd); err != nil {
+ 			return nil, err
+ 		}
+ 	}
+diff --git a/orchestration/live/approval/main.go b/orchestration/live/approval/main.go
+index 0ca9db0..62252e0 100644
+--- a/orchestration/live/approval/main.go
++++ b/orchestration/live/approval/main.go
+@@ -16,6 +16,7 @@ import (
+ 	"github.com/kart-io/goagent-examples/internal/livemodel"
+ 	"github.com/kart-io/goagent-examples/orchestration/internal/livecase"
+ 	"github.com/kart-io/goagent/builder"
++	"github.com/kart-io/goagent/constants"
+ 	"github.com/kart-io/goagent/core/budget"
+ 	"github.com/kart-io/goagent/core/durable"
+ 	agentErrors "github.com/kart-io/goagent/errors"
+@@ -151,23 +152,23 @@ func build(ctx context.Context, client *livemodel.Client, store durable.Store, p
+ 		if err := g.AddNode(n, payNode); err != nil {
+ 			return nil, err
+ 		}
+-		if err := g.AddEdge(n, workflow.END); err != nil {
++		if err := g.AddEdge(n, constants.WorkflowEnd); err != nil {
+ 			return nil, err
+ 		}
+ 	}
+-	if err := g.AddEdge(workflow.START, "assess"); err != nil {
++	if err := g.AddEdge(constants.WorkflowStart, "assess"); err != nil {
+ 		return nil, err
+ 	}
+ 	if err := g.AddBranch("assess", func(_ context.Context, r Refund) (string, error) {
+ 		switch {
+ 		case r.Decision != "退款":
+-			return workflow.END, nil
++			return constants.WorkflowEnd, nil
+ 		case r.Amount > LargeAmount:
+ 			return "pay_large", nil
+ 		default:
+ 			return "pay_small", nil
+ 		}
+-	}, "pay_small", "pay_large", workflow.END); err != nil {
++	}, "pay_small", "pay_large", constants.WorkflowEnd); err != nil {
+ 		return nil, err
+ 	}
+ 	return g.CompileDurable(ctx, workflow.DurableConfig{Store: store, Version: "approval-v1/" + client.Live.Provider + "/" + client.Live.Model, ApprovalNodes: []string{"pay_large"}})
+diff --git a/orchestration/live/delegation/main.go b/orchestration/live/delegation/main.go
+index fa1e3d8..7f5bd07 100644
+--- a/orchestration/live/delegation/main.go
++++ b/orchestration/live/delegation/main.go
+@@ -19,6 +19,7 @@ import (
+ 	"github.com/kart-io/goagent-examples/internal/livemodel"
+ 	"github.com/kart-io/goagent-examples/orchestration/internal/livecase"
+ 	"github.com/kart-io/goagent/builder"
++	"github.com/kart-io/goagent/constants"
+ 	"github.com/kart-io/goagent/core/budget"
+ 	"github.com/kart-io/goagent/core/durable"
+ 	"github.com/kart-io/goagent/interfaces"
+@@ -86,7 +87,7 @@ func convertTool(c *counters) (interfaces.Tool, error) {
+ 	if err := g.AddNode("multiply", func(_ context.Context, v conv) (conv, error) { v.CNY = round2(v.Amount * v.Rate); return v, nil }); err != nil {
+ 		return nil, err
+ 	}
+-	for _, e := range [][2]string{{workflow.START, "rate"}, {"rate", "multiply"}, {"multiply", workflow.END}} {
++	for _, e := range [][2]string{{constants.WorkflowStart, "rate"}, {"rate", "multiply"}, {"multiply", constants.WorkflowEnd}} {
+ 		if err := g.AddEdge(e[0], e[1]); err != nil {
+ 			return nil, err
+ 		}
+diff --git a/orchestration/live/localize/main.go b/orchestration/live/localize/main.go
+index 151d7e1..ca4a316 100644
+--- a/orchestration/live/localize/main.go
++++ b/orchestration/live/localize/main.go
+@@ -19,6 +19,7 @@ import (
+ 	"github.com/kart-io/goagent-examples/internal/livemodel"
+ 	"github.com/kart-io/goagent-examples/orchestration/internal/livecase"
+ 	"github.com/kart-io/goagent/builder"
++	"github.com/kart-io/goagent/constants"
+ 	"github.com/kart-io/goagent/core/budget"
+ 	"github.com/kart-io/goagent/core/durable"
+ 	"github.com/kart-io/goagent/interfaces"
+@@ -202,10 +203,10 @@ func build(ctx context.Context, client *livemodel.Client, store durable.Store, g
+ 	}); err != nil {
+ 		return nil, err
+ 	}
+-	if err = g.AddEdge(workflow.START, "localize"); err != nil {
++	if err = g.AddEdge(constants.WorkflowStart, "localize"); err != nil {
+ 		return nil, err
+ 	}
+-	if err = g.AddEdge("localize", workflow.END); err != nil {
++	if err = g.AddEdge("localize", constants.WorkflowEnd); err != nil {
+ 		return nil, err
+ 	}
+ 	return g.CompileDurable(ctx, workflow.DurableConfig{Store: store, Version: "localize-v1/" + client.Live.Provider + "/" + client.Live.Model})
+diff --git a/orchestration/live/parallel-diagnostics/main.go b/orchestration/live/parallel-diagnostics/main.go
+index ceae09b..0c7347e 100644
+--- a/orchestration/live/parallel-diagnostics/main.go
++++ b/orchestration/live/parallel-diagnostics/main.go
+@@ -17,6 +17,7 @@ import (
+ 	"github.com/kart-io/goagent-examples/internal/livemodel"
+ 	"github.com/kart-io/goagent-examples/orchestration/internal/livecase"
+ 	"github.com/kart-io/goagent/builder"
++	"github.com/kart-io/goagent/constants"
+ 	"github.com/kart-io/goagent/core/budget"
+ 	"github.com/kart-io/goagent/core/observe"
+ 	"github.com/kart-io/goagent/devtools"
+@@ -114,7 +115,7 @@ func build(client *livemodel.Client) (*workflow.Graph[Incident], error) {
+ 	}); err != nil {
+ 		return nil, err
+ 	}
+-	for _, e := range [][2]string{{workflow.START, "diagnose"}, {"diagnose", "summarize"}, {"summarize", workflow.END}} {
++	for _, e := range [][2]string{{constants.WorkflowStart, "diagnose"}, {"diagnose", "summarize"}, {"summarize", constants.WorkflowEnd}} {
+ 		if err = g.AddEdge(e[0], e[1]); err != nil {
+ 			return nil, err
+ 		}
+diff --git a/orchestration/live/review-loop/main.go b/orchestration/live/review-loop/main.go
+index a81d781..1aaaa56 100644
+--- a/orchestration/live/review-loop/main.go
++++ b/orchestration/live/review-loop/main.go
+@@ -15,6 +15,7 @@ import (
+ 	"github.com/kart-io/goagent-examples/internal/livemodel"
+ 	"github.com/kart-io/goagent-examples/orchestration/internal/livecase"
+ 	"github.com/kart-io/goagent/builder"
++	"github.com/kart-io/goagent/constants"
+ 	"github.com/kart-io/goagent/core/budget"
+ 	"github.com/kart-io/goagent/core/durable"
+ 	"github.com/kart-io/goagent/workflow"
+@@ -118,7 +119,7 @@ func build(ctx context.Context, client *livemodel.Client, store durable.Store, w
+ 	}); err != nil {
+ 		return nil, err
+ 	}
+-	if err := g.AddEdge(workflow.START, "write"); err != nil {
++	if err := g.AddEdge(constants.WorkflowStart, "write"); err != nil {
+ 		return nil, err
+ 	}
+ 	if err := g.AddEdge("write", "review"); err != nil {
+@@ -126,10 +127,10 @@ func build(ctx context.Context, client *livemodel.Client, store durable.Store, w
+ 	}
+ 	if err := g.AddBranch("review", func(_ context.Context, d Doc) (string, error) {
+ 		if d.Verdict == "通过" || d.Round >= MaxRounds {
+-			return workflow.END, nil
++			return constants.WorkflowEnd, nil
+ 		}
+ 		return "write", nil
+-	}, "write", workflow.END); err != nil {
++	}, "write", constants.WorkflowEnd); err != nil {
+ 		return nil, err
+ 	}
+ 	return g.CompileDurable(ctx, workflow.DurableConfig{Store: store, Version: "review-loop-v1/" + client.Live.Provider + "/" + client.Live.Model})
+diff --git a/orchestration/live/ticket-triage/main.go b/orchestration/live/ticket-triage/main.go
+index 2fed9e9..7ec7d08 100644
+--- a/orchestration/live/ticket-triage/main.go
++++ b/orchestration/live/ticket-triage/main.go
+@@ -15,6 +15,7 @@ import (
+ 	"github.com/kart-io/goagent-examples/internal/livemodel"
+ 	"github.com/kart-io/goagent-examples/orchestration/internal/livecase"
+ 	"github.com/kart-io/goagent/builder"
++	"github.com/kart-io/goagent/constants"
+ 	"github.com/kart-io/goagent/core/budget"
+ 	"github.com/kart-io/goagent/core/durable"
+ 	"github.com/kart-io/goagent/interfaces"
+@@ -83,7 +84,7 @@ func orderLookupTool(runs *atomic.Int64) (interfaces.Tool, error) {
+ 	}); err != nil {
+ 		return nil, err
+ 	}
+-	for _, e := range [][2]string{{workflow.START, "load"}, {"load", "window"}, {"window", workflow.END}} {
++	for _, e := range [][2]string{{constants.WorkflowStart, "load"}, {"load", "window"}, {"window", constants.WorkflowEnd}} {
+ 		if err := g.AddEdge(e[0], e[1]); err != nil {
+ 			return nil, err
+ 		}
+diff --git a/orchestration/ops/sql-review/main.go b/orchestration/ops/sql-review/main.go
+index 34633d7..cf0e398 100644
+--- a/orchestration/ops/sql-review/main.go
++++ b/orchestration/ops/sql-review/main.go
+@@ -22,6 +22,7 @@ import (
+ 	"github.com/kart-io/goagent-examples/internal/livemodel"
+ 	"github.com/kart-io/goagent-examples/orchestration/ops/internal/opscase"
+ 	"github.com/kart-io/goagent/builder"
++	"github.com/kart-io/goagent/constants"
+ 	"github.com/kart-io/goagent/core/budget"
+ 	"github.com/kart-io/goagent/core/durable"
+ 	"github.com/kart-io/goagent/core/observe"
+@@ -297,7 +298,7 @@ func build(ctx context.Context, client *livemodel.Client, store durable.Store, a
+ 	router := func(_ context.Context, r Review) (string, error) {
+ 		switch {
+ 		case r.Status == "rejected":
+-			return workflow.END, nil
++			return constants.WorkflowEnd, nil
+ 		case r.Verdict == nil:
+ 			return "review", nil
+ 		case r.Ticket.Env == "test" && r.RuleVerdict == "pass" && r.Verdict.Decision == "approve" && r.Verdict.RiskLevel == "low":
+@@ -308,10 +309,10 @@ func build(ctx context.Context, client *livemodel.Client, store durable.Store, a
+ 	g := workflow.NewGraph[Review]()
+ 	if err := errors.Join(
+ 		g.AddNode("gate", gate), g.AddNode("review", review), g.AddNode("apply", apply), g.AddNode("apply_approved", apply),
+-		g.AddEdge(workflow.START, "gate"),
+-		g.AddBranch("gate", router, "review", workflow.END),
+-		g.AddBranch("review", router, "apply", "apply_approved", workflow.END),
+-		g.AddEdge("apply", workflow.END), g.AddEdge("apply_approved", workflow.END),
++		g.AddEdge(constants.WorkflowStart, "gate"),
++		g.AddBranch("gate", router, "review", constants.WorkflowEnd),
++		g.AddBranch("review", router, "apply", "apply_approved", constants.WorkflowEnd),
++		g.AddEdge("apply", constants.WorkflowEnd), g.AddEdge("apply_approved", constants.WorkflowEnd),
+ 	); err != nil {
+ 		return nil, err
+ 	}
+diff --git a/orchestration/parallel-diagnostics/main.go b/orchestration/parallel-diagnostics/main.go
+index 977de00..52a35d1 100644
+--- a/orchestration/parallel-diagnostics/main.go
++++ b/orchestration/parallel-diagnostics/main.go
+@@ -3,6 +3,7 @@ package main
+ import (
+ 	"context"
+ 	"fmt"
++	"github.com/kart-io/goagent/constants"
+ 	"github.com/kart-io/goagent/core"
+ 	"github.com/kart-io/goagent/workflow"
+ 	"maps"
+@@ -40,10 +41,10 @@ func build(ctx context.Context) (core.Runnable[diagnostics, diagnostics], error)
+ 	}}); err != nil {
+ 		return nil, err
+ 	}
+-	if err := g.AddEdge(workflow.START, "diagnose"); err != nil {
++	if err := g.AddEdge(constants.WorkflowStart, "diagnose"); err != nil {
+ 		return nil, err
+ 	}
+-	if err := g.AddEdge("diagnose", workflow.END); err != nil {
++	if err := g.AddEdge("diagnose", constants.WorkflowEnd); err != nil {
+ 		return nil, err
+ 	}
+ 	return g.Compile(ctx)
+diff --git a/orchestration/runnable-tool/main.go b/orchestration/runnable-tool/main.go
+index 71e4a2c..15b5ebc 100644
+--- a/orchestration/runnable-tool/main.go
++++ b/orchestration/runnable-tool/main.go
+@@ -3,6 +3,7 @@ package main
+ import (
+ 	"context"
+ 	"fmt"
++	"github.com/kart-io/goagent/constants"
+ 	"github.com/kart-io/goagent/interfaces"
+ 	"github.com/kart-io/goagent/tools"
+ 	"github.com/kart-io/goagent/workflow"
+@@ -12,8 +13,8 @@ func main() {
+ 	ctx := context.Background()
+ 	g := workflow.NewGraph[int]()
+ 	must(g.AddNode("rule", func(_ context.Context, n int) (int, error) { return n + 30, nil }))
+-	must(g.AddEdge(workflow.START, "rule"))
+-	must(g.AddEdge("rule", workflow.END))
++	must(g.AddEdge(constants.WorkflowStart, "rule"))
++	must(g.AddEdge("rule", constants.WorkflowEnd))
+ 	run, err := g.Compile(ctx)
+ 	must(err)
+ 	t, err := tools.NewRunnableTool(run, tools.RunnableToolConfig[int, int]{Name: "refund_days", Description: "Apply refund rule", ArgsSchema: `{"type":"object","properties":{},"additionalProperties":false}`, Version: "v1", Decode: func(map[string]any) (int, error) { return 0, nil }, Encode: func(n int) (any, error) { return n, nil }})
+diff --git a/workflow/business-cases/article.go b/workflow/business-cases/article.go
+index eecefb1..4d78923 100644
+--- a/workflow/business-cases/article.go
++++ b/workflow/business-cases/article.go
+@@ -6,6 +6,7 @@ import (
+ 	"strings"
+ 	"unicode/utf8"
+ 
++	"github.com/kart-io/goagent/constants"
+ 	"github.com/kart-io/goagent/core/durable"
+ 	"github.com/kart-io/goagent/workflow"
+ )
+@@ -97,16 +98,16 @@ func articleGraph(ctx context.Context, store durable.Store, backend *demoBackend
+ 	if err = g.AddBranch("review", func(_ context.Context, s articleState) (string, error) {
+ 		switch s.Decision {
+ 		case "rejected":
+-			return workflow.END, nil
++			return constants.WorkflowEnd, nil
+ 		case "manual_review":
+ 			return "publish_reviewed", nil
+ 		default:
+ 			return "publish", nil
+ 		}
+-	}, workflow.END, "publish_reviewed", "publish"); err != nil {
++	}, constants.WorkflowEnd, "publish_reviewed", "publish"); err != nil {
+ 		return nil, err
+ 	}
+-	if err = edges(g, [2]string{workflow.START, "review"}, [2]string{"publish", workflow.END}, [2]string{"publish_reviewed", workflow.END}); err != nil {
++	if err = edges(g, [2]string{constants.WorkflowStart, "review"}, [2]string{"publish", constants.WorkflowEnd}, [2]string{"publish_reviewed", constants.WorkflowEnd}); err != nil {
+ 		return nil, err
+ 	}
+ 	return g.CompileDurable(ctx, workflow.DurableConfig{Store: store, Version: backend.version("article-demo-v1"), ApprovalNodes: []string{"publish_reviewed"}})
+diff --git a/workflow/business-cases/devops.go b/workflow/business-cases/devops.go
+index 6c1b437..b9ac6dc 100644
+--- a/workflow/business-cases/devops.go
++++ b/workflow/business-cases/devops.go
+@@ -5,6 +5,7 @@ import (
+ 	"fmt"
+ 	"strings"
+ 
++	"github.com/kart-io/goagent/constants"
+ 	"github.com/kart-io/goagent/core/durable"
+ 	"github.com/kart-io/goagent/workflow"
+ )
+@@ -101,11 +102,11 @@ func devopsGraph(ctx context.Context, store durable.Store, backend *demoBackend)
+ 		if s.Outcome == "restart_required" {
+ 			return "restart", nil
+ 		}
+-		return workflow.END, nil
+-	}, "restart", workflow.END); err != nil {
++		return constants.WorkflowEnd, nil
++	}, "restart", constants.WorkflowEnd); err != nil {
+ 		return nil, err
+ 	}
+-	if err = edges(g, [2]string{workflow.START, "inspect"}, [2]string{"inspect", "diagnose"}, [2]string{"restart", "verify"}, [2]string{"verify", workflow.END}); err != nil {
++	if err = edges(g, [2]string{constants.WorkflowStart, "inspect"}, [2]string{"inspect", "diagnose"}, [2]string{"restart", "verify"}, [2]string{"verify", constants.WorkflowEnd}); err != nil {
+ 		return nil, err
+ 	}
+ 	return g.CompileDurable(ctx, workflow.DurableConfig{Store: store, Version: backend.version("devops-demo-v1"), ApprovalNodes: []string{"restart"}})
+diff --git a/workflow/business-cases/native_loop.go b/workflow/business-cases/native_loop.go
+index 896a1b7..cade5f3 100644
+--- a/workflow/business-cases/native_loop.go
++++ b/workflow/business-cases/native_loop.go
+@@ -5,6 +5,7 @@ import (
+ 	"fmt"
+ 
+ 	"github.com/kart-io/goagent/builder"
++	"github.com/kart-io/goagent/constants"
+ 	"github.com/kart-io/goagent/core/durable"
+ 	"github.com/kart-io/goagent/interfaces"
+ 	"github.com/kart-io/goagent/llm"
+@@ -57,10 +58,10 @@ func nativeLoopGraph(ctx context.Context, store durable.Store, b *demoBackend, c
+ 	if err = graph.AddRunnable("agent", node); err != nil {
+ 		return nil, err
+ 	}
+-	if err = graph.AddEdge(workflow.START, "agent"); err != nil {
++	if err = graph.AddEdge(constants.WorkflowStart, "agent"); err != nil {
+ 		return nil, err
+ 	}
+-	if err = graph.AddEdge("agent", workflow.END); err != nil {
++	if err = graph.AddEdge("agent", constants.WorkflowEnd); err != nil {
+ 		return nil, err
+ 	}
+ 	return graph.CompileDurable(ctx, workflow.DurableConfig{Store: store, Version: "native-loop-v3/" + version})
+diff --git a/workflow/business-cases/reply.go b/workflow/business-cases/reply.go
+index 20f66a0..bd32ae3 100644
+--- a/workflow/business-cases/reply.go
++++ b/workflow/business-cases/reply.go
+@@ -5,6 +5,7 @@ import (
+ 	"fmt"
+ 	"strings"
+ 
++	"github.com/kart-io/goagent/constants"
+ 	"github.com/kart-io/goagent/core/durable"
+ 	"github.com/kart-io/goagent/workflow"
+ )
+@@ -66,11 +67,11 @@ func replyGraph(ctx context.Context, store durable.Store, backend *demoBackend)
+ 		if s.Outcome == "ready" {
+ 			return "send", nil
+ 		}
+-		return workflow.END, nil
+-	}, "send", workflow.END); err != nil {
++		return constants.WorkflowEnd, nil
++	}, "send", constants.WorkflowEnd); err != nil {
+ 		return nil, err
+ 	}
+-	if err = edges(g, [2]string{workflow.START, "retrieve"}, [2]string{"send", workflow.END}); err != nil {
++	if err = edges(g, [2]string{constants.WorkflowStart, "retrieve"}, [2]string{"send", constants.WorkflowEnd}); err != nil {
+ 		return nil, err
+ 	}
+ 	return g.CompileDurable(ctx, workflow.DurableConfig{Store: store, Version: backend.version("reply-demo-v1")})
+diff --git a/workflow/refund-recovery/graph.go b/workflow/refund-recovery/graph.go
+index 78bb750..5a73c10 100644
+--- a/workflow/refund-recovery/graph.go
++++ b/workflow/refund-recovery/graph.go
+@@ -8,6 +8,7 @@ import (
+ 	"io"
+ 	"time"
+ 
++	"github.com/kart-io/goagent/constants"
+ 	"github.com/kart-io/goagent/core/durable"
+ 	agentErrors "github.com/kart-io/goagent/errors"
+ 	"github.com/kart-io/goagent/interfaces"
+@@ -121,7 +122,7 @@ func newRefundGraph(ctx context.Context, store durable.Store, ledger *refundLedg
+ 	}, "issue_refund", "prepare"); err != nil {
+ 		return nil, err
+ 	}
+-	for _, edge := range [][2]string{{workflow.START, "restore_request"}, {"prepare", "register_refund"}, {"register_refund", "issue_refund"}, {"issue_refund", workflow.END}} {
++	for _, edge := range [][2]string{{constants.WorkflowStart, "restore_request"}, {"prepare", "register_refund"}, {"register_refund", "issue_refund"}, {"issue_refund", constants.WorkflowEnd}} {
+ 		if err = g.AddEdge(edge[0], edge[1]); err != nil {
+ 			return nil, err
+ 		}
+diff --git a/workflow/refund-recovery/workflow.go b/workflow/refund-recovery/workflow.go
+index 0e07627..0e20631 100644
+--- a/workflow/refund-recovery/workflow.go
++++ b/workflow/refund-recovery/workflow.go
+@@ -6,6 +6,7 @@ import (
+ 	"fmt"
+ 	"time"
+ 
++	"github.com/kart-io/goagent/constants"
+ 	"github.com/kart-io/goagent/core/durable"
+ 	"github.com/kart-io/goagent/workflow"
+ 	"github.com/kart-io/goagent/workflow/refund"
+@@ -37,7 +38,7 @@ func newRunner(ctx context.Context, store durable.Store, ledger *refundLedger, a
+ 	}); err != nil {
+ 		return nil, err
+ 	}
+-	for _, edge := range [][2]string{{workflow.START, "lookup_order"}, {"lookup_order", "check_policy"}, {"check_policy", workflow.END}} {
++	for _, edge := range [][2]string{{constants.WorkflowStart, "lookup_order"}, {"lookup_order", "check_policy"}, {"check_policy", constants.WorkflowEnd}} {
+ 		if err := g.AddEdge(edge[0], edge[1]); err != nil {
+ 			return nil, err
+ 		}

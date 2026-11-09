@@ -1,0 +1,17 @@
+=== RUN   TestReviewCancelledDuringAdvisoryWait
+    review_repro_test.go:91: REPRODUCED: caller=context canceled; Lock err=nil; unlock returned=true
+--- PASS: TestReviewCancelledDuringAdvisoryWait (0.00s)
+=== RUN   TestReviewCancelledDuringAdvisoryWait
+    review_repro_test.go:91: REPRODUCED: caller=context canceled; Lock err=nil; unlock returned=true
+--- PASS: TestReviewCancelledDuringAdvisoryWait (0.00s)
+=== RUN   TestReviewCancelledDuringAdvisoryWait
+    review_repro_test.go:91: REPRODUCED: caller=context canceled; Lock err=nil; unlock returned=true
+--- PASS: TestReviewCancelledDuringAdvisoryWait (0.00s)
+=== RUN   TestReviewCancelledDuringAdvisoryWait
+    review_repro_test.go:91: REPRODUCED: caller=context canceled; Lock err=nil; unlock returned=true
+--- PASS: TestReviewCancelledDuringAdvisoryWait (0.00s)
+=== RUN   TestReviewCancelledDuringAdvisoryWait
+    review_repro_test.go:91: REPRODUCED: caller=context canceled; Lock err=nil; unlock returned=true
+--- PASS: TestReviewCancelledDuringAdvisoryWait (0.00s)
+PASS
+ok  	github.com/kart-io/goagent-contrib/durable/pgstore	1.019s

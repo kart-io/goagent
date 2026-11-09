@@ -1,0 +1,5 @@
+{
+  "Replace": {
+    "/home/hellotalk/code/go/src/github.com/kart-io/goagent/builder/core_review_overlay_test.go": "/home/hellotalk/code/go/src/github.com/kart-io/goagent/docs/evaluation/2026-11-09-management-hardening/review/repro/nested_test.go.txt"
+  }
+}

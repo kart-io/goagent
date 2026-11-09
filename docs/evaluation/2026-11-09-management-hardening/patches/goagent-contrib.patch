@@ -1,0 +1,298 @@
+diff --git a/durable/pgstore/pgstore.go b/durable/pgstore/pgstore.go
+index 019fbbc..e250d8b 100644
+--- a/durable/pgstore/pgstore.go
++++ b/durable/pgstore/pgstore.go
+@@ -264,10 +264,14 @@ func (s *Store) tryAcquire(ns, id, token string) (bool, error) {
+ 		return false, nil
+ 	}
+ 	acquired := false
+-	err = pgx.BeginFunc(ctx, s.cfg.Pool, func(tx pgx.Tx) error {
++	err = pgx.BeginTxFunc(ctx, s.cfg.Pool, pgx.TxOptions{IsoLevel: pgx.ReadCommitted}, func(tx pgx.Tx) error {
+ 		if err := checkScope(ctx, tx, ns); err != nil {
+ 			return err
+ 		}
++		// 顺序固定为 scope 锁 -> lease 锁 -> 行锁；清理租约不再取 scope 锁。
++		if err := lockLease(ctx, tx, ns, id); err != nil {
++			return err
++		}
+ 		var got string
+ 		err := tx.QueryRow(ctx, `INSERT INTO goagent_durable_lease (ns, id, token, owner, expires_at)
+ VALUES ($1, $2, $3, $4, now() + $5 * interval '1 millisecond')
+@@ -300,10 +304,26 @@ func checkScope(ctx context.Context, tx pgx.Tx, ns string) error {
+ 	return err
+ }
+ 
++// lockLease 串行化同一 (ns, id) 的获取与清理，持有到事务提交或回滚。
++// 双 int 键与 scope 使用的单 bigint 键属于不同锁空间，避免锁别名引入死锁。
++// 哈希碰撞只会额外串行化；实际读写仍使用完整的 ns、id 与 token。
++func lockLease(ctx context.Context, tx pgx.Tx, ns, id string) error {
++	_, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))`, ns, id)
++	return err
++}
++
+ func (s *Store) deleteLease(ns, id, token string) {
+ 	ctx, cancel := s.opContext()
+ 	defer cancel()
+-	_, err := s.cfg.Pool.Exec(ctx, `DELETE FROM goagent_durable_lease WHERE ns = $1 AND id = $2 AND token = $3`, ns, id, token)
++	err := pgx.BeginTxFunc(ctx, s.cfg.Pool, pgx.TxOptions{IsoLevel: pgx.ReadCommitted}, func(tx pgx.Tx) error {
++		if err := lockLease(ctx, tx, ns, id); err != nil {
++			return err
++		}
++		// 必须在获锁后的独立语句中 DELETE：新快照才能看到等待期间提交的租约。
++		// token 限制保证不误删已接管的持有者；不检查 scope，墓碑不能阻止清理。
++		_, err := tx.Exec(ctx, `DELETE FROM goagent_durable_lease WHERE ns = $1 AND id = $2 AND token = $3`, ns, id, token)
++		return err
++	})
+ 	s.report("delete_lease", err)
+ }
+ 
+diff --git a/durable/pgstore/pgstore_test.go b/durable/pgstore/pgstore_test.go
+index db96eda..9684eb2 100644
+--- a/durable/pgstore/pgstore_test.go
++++ b/durable/pgstore/pgstore_test.go
+@@ -244,7 +244,7 @@ func TestPrimaryRestart(t *testing.T) {
+ 	require.NoError(t, unlock())
+ }
+ 
+-// dropAfterCommit 在 armed 时把首个 COMMIT 写出后立即断开连接：服务端已提交，客户端只看到连接错误。
++// dropAfterCommit 在 armed 时把首个 COMMIT 写出后立即断开连接：服务端可能仍在提交，客户端只看到连接错误。
+ type dropAfterCommit struct {
+ 	net.Conn
+ 	armed *atomic.Bool
+@@ -252,7 +252,9 @@ type dropAfterCommit struct {
+ 
+ func (c *dropAfterCommit) Write(b []byte) (int, error) {
+ 	n, err := c.Conn.Write(b)
+-	if bytes.Contains(bytes.ToLower(b), []byte("commit")) && c.armed.CompareAndSwap(true, false) {
++	// pgx 的 COMMIT 使用 Simple Query（Q + 四字节长度 + 零结尾 SQL）。
++	// 必须匹配完整命令，不能把 BEGIN ISOLATION LEVEL READ COMMITTED 当作 COMMIT。
++	if len(b) >= 5 && b[0] == 'Q' && bytes.EqualFold(b[5:], []byte("commit\x00")) && c.armed.CompareAndSwap(true, false) {
+ 		_ = c.Conn.Close()
+ 	}
+ 	return n, err
+diff --git a/durable/pgstore/README.md b/durable/pgstore/README.md
+new file mode 100644
+index 0000000..b10af97
+--- /dev/null
++++ b/durable/pgstore/README.md
+@@ -0,0 +1,11 @@
++# 租约事务与提交不确定清理
++
++`tryAcquire` 与 `deleteLease` 在同一 `(ns, id)` 上使用事务级 advisory 排他锁，直到提交或回滚才释放。获取租约的 COMMIT 响应丢失时，清理等待该事务结束，再按完整 `(ns, id, token)` 删除，保留其他持有者的 token。
++
++两个事务显式使用 READ COMMITTED，不依赖连接默认隔离级别。清理的 DELETE 必须是获锁后的独立语句，不能与加锁合并到同一 SQL/CTE：PostgreSQL 的 DELETE 只搜索语句开始前已提交的行，合并语句会保留等待之前的快照。依据：[事务隔离](https://www.postgresql.org/docs/current/transaction-iso.html)、[advisory 锁](https://www.postgresql.org/docs/current/explicit-locking.html#ADVISORY-LOCKS)。
++
++获取顺序为 scope 共享锁 → lease 排他锁 → 行锁；清理只取 lease 锁与行锁，不请求 scope 锁，也不因 scope 墓碑跳过清理。lease 使用双 int 键，scope 使用单 bigint 键，两种锁空间互不重叠；哈希碰撞仅增加串行等待，不改变实际行匹配。
++
++清理仍受 `OpTimeout` 限制。数据库不可用、等待超时或清理自身提交结果不确定时，通过 `OnError("delete_lease", err)` 报告，残留租约由 TTL 兜底；这不是无限等待或保证清理必达的协议。串行化要求并发获取者也使用相同租约锁，混用旧实现时不具备该保证。
++
++回归测试使用隔离 schema 与真实事务，观察 `pg_locks` / `pg_blocking_pids` 确认清理在获取事务结束前阻塞，并验证提交、回滚、其他 token、默认 REPEATABLE READ、获取端锁协议及 scope 锁顺序。`TestAcquireUncertainCommitCleanup` 继续覆盖 COMMIT 发出后断开连接的故障。上述测试不重启数据库、不改全局同步复制配置。
+diff --git a/durable/pgstore/lease_cleanup_test.go b/durable/pgstore/lease_cleanup_test.go
+new file mode 100644
+index 0000000..e8560af
+--- /dev/null
++++ b/durable/pgstore/lease_cleanup_test.go
+@@ -0,0 +1,203 @@
++package pgstore
++
++import (
++	"context"
++	"testing"
++	"time"
++
++	"github.com/jackc/pgx/v5"
++	"github.com/jackc/pgx/v5/pgxpool"
++	"github.com/stretchr/testify/require"
++
++	agentErrors "github.com/kart-io/goagent/errors"
++)
++
++// waitLeaseBlocked observes an actual database lock wait, not a scheduling delay.
++func waitLeaseBlocked(t *testing.T, pool *pgxpool.Pool, blocker uint32, done <-chan struct{}) {
++	t.Helper()
++	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
++	defer cancel()
++	tick := time.NewTicker(5 * time.Millisecond)
++	defer tick.Stop()
++	for {
++		select {
++		case <-done:
++			t.Fatal("lease operation returned before the acquiring transaction finished")
++		case <-ctx.Done():
++			t.Fatal("lease operation did not wait on the acquiring transaction")
++		case <-tick.C:
++			var blocked bool
++			err := pool.QueryRow(ctx, `SELECT EXISTS (
++  SELECT 1 FROM pg_locks WHERE locktype = 'advisory' AND NOT granted
++  AND $1::integer = ANY(pg_blocking_pids(pid)))`, blocker).Scan(&blocked)
++			require.NoError(t, err)
++			if blocked {
++				return
++			}
++		}
++	}
++}
++
++func TestDeleteLeaseWaitsForAcquireTransaction(t *testing.T) {
++	for _, ns := range []string{"", scopeNS("tenant")} {
++		for _, isolation := range []string{"read committed", "repeatable read"} {
++			for _, outcome := range []string{"commit", "rollback", "other-token"} {
++				t.Run(ns+"/"+isolation+"/"+outcome, func(t *testing.T) {
++					dsn, schema := newSchema(t)
++					observer := newPool(t, dsn, schema)
++					cfg, err := pgxpool.ParseConfig(dsn)
++					require.NoError(t, err)
++					cfg.ConnConfig.RuntimeParams["search_path"] = schema
++					cfg.ConnConfig.RuntimeParams["default_transaction_isolation"] = isolation
++					pool, err := pgxpool.NewWithConfig(context.Background(), cfg)
++					require.NoError(t, err)
++					t.Cleanup(pool.Close)
++					errors := make(chan error, 1)
++					// No background renewer: only the acquiring transaction can finish this lease.
++					s := &Store{cfg: Config{Pool: pool, OpTimeout: 5 * time.Second,
++						OnError: func(_ string, err error) { errors <- err }}}
++					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
++					defer cancel()
++					tx, err := observer.Begin(ctx)
++					require.NoError(t, err)
++					defer tx.Rollback(context.Background())
++					require.NoError(t, checkScope(ctx, tx, ns))
++					// Two-int advisory keys have a disjoint lock space from the scope's bigint key.
++					_, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))`, ns, "run")
++					require.NoError(t, err)
++					token := "ours"
++					if outcome == "other-token" {
++						token = "successor"
++					}
++					_, err = tx.Exec(ctx, `INSERT INTO goagent_durable_lease (ns, id, token, owner, expires_at)
++VALUES ($1, 'run', $2, 'test', now() + interval '1 minute')`, ns, token)
++					require.NoError(t, err)
++					done := make(chan struct{})
++					go func() {
++						s.deleteLease(ns, "run", "ours")
++						close(done)
++					}()
++					// Ensure the worker ends even on an assertion failure before releasing the transaction.
++					defer func() {
++						_ = tx.Rollback(context.Background())
++						<-done
++					}()
++					waitLeaseBlocked(t, observer, tx.Conn().PgConn().PID(), done)
++					if outcome == "rollback" {
++						require.NoError(t, tx.Rollback(ctx))
++					} else {
++						require.NoError(t, tx.Commit(ctx))
++					}
++					select {
++					case <-done:
++					case <-ctx.Done():
++						t.Fatal("cleanup did not finish after the transaction ended")
++					}
++					select {
++					case err := <-errors:
++						t.Fatalf("cleanup failed: %v", err)
++					default:
++					}
++					var tokens []string
++					rows, err := observer.Query(ctx, `SELECT token FROM goagent_durable_lease WHERE ns = $1 AND id = 'run'`, ns)
++					require.NoError(t, err)
++					tokens, err = pgx.CollectRows(rows, pgx.RowTo[string])
++					require.NoError(t, err)
++					if outcome == "other-token" {
++						require.Equal(t, []string{"successor"}, tokens)
++					} else {
++						require.Empty(t, tokens, "cleanup must use a fresh snapshot after waiting")
++					}
++				})
++			}
++		}
++	}
++}
++
++func TestTryAcquireUsesLeaseTransactionLock(t *testing.T) {
++	for _, ns := range []string{"", scopeNS("tenant")} {
++		t.Run(ns, func(t *testing.T) {
++			dsn, schema := newSchema(t)
++			pool := newPool(t, dsn, schema)
++			s := &Store{cfg: Config{Pool: pool, OpTimeout: 5 * time.Second, LeaseTTL: time.Minute}}
++			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
++			defer cancel()
++			tx, err := pool.Begin(ctx)
++			require.NoError(t, err)
++			defer tx.Rollback(context.Background())
++			_, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))`, ns, "run")
++			require.NoError(t, err)
++			done := make(chan struct{})
++			var acquired bool
++			var acquireErr error
++			go func() {
++				acquired, acquireErr = s.tryAcquire(ns, "run", "ours")
++				close(done)
++			}()
++			defer func() {
++				_ = tx.Rollback(context.Background())
++				<-done
++			}()
++			waitLeaseBlocked(t, pool, tx.Conn().PgConn().PID(), done)
++			require.NoError(t, tx.Commit(ctx))
++			<-done
++			require.NoError(t, acquireErr)
++			require.True(t, acquired)
++			s.deleteLease(ns, "run", "ours")
++		})
++	}
++}
++
++func TestLeaseCleanupDoesNotWaitForScopeLock(t *testing.T) {
++	dsn, schema := newSchema(t)
++	pool := newPool(t, dsn, schema)
++	errors := make(chan error, 1)
++	s := &Store{cfg: Config{Pool: pool, OpTimeout: 5 * time.Second, LeaseTTL: time.Minute,
++		OnError: func(_ string, err error) { errors <- err }}}
++	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
++	defer cancel()
++	ns := scopeNS("tenant")
++	_, err := pool.Exec(ctx, `INSERT INTO goagent_durable_lease (ns, id, token, owner, expires_at)
++VALUES ($1, 'run', 'ours', 'test', now() + interval '1 minute')`, ns)
++	require.NoError(t, err)
++	tx, err := pool.Begin(ctx)
++	require.NoError(t, err)
++	defer tx.Rollback(context.Background())
++	_, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, ns)
++	require.NoError(t, err)
++	done := make(chan struct{})
++	var acquired bool
++	var acquireErr error
++	go func() {
++		acquired, acquireErr = s.tryAcquire(ns, "next", "next-token")
++		close(done)
++	}()
++	defer func() {
++		_ = tx.Rollback(context.Background())
++		<-done
++	}()
++	pid := tx.Conn().PgConn().PID()
++	waitLeaseBlocked(t, pool, pid, done)
++	var leaseLocked bool
++	require.NoError(t, pool.QueryRow(ctx, `SELECT EXISTS (
++  SELECT 1 FROM pg_locks WHERE locktype = 'advisory' AND granted AND objsubid = 2
++  AND $1::integer = ANY(pg_blocking_pids(pid)))`, pid).Scan(&leaseLocked))
++	require.False(t, leaseLocked, "acquisition must take the scope lock before the lease lock")
++
++	// Cleanup must finish while the exclusive scope lock is still held.
++	s.deleteLease(ns, "run", "ours")
++	select {
++	case err := <-errors:
++		t.Fatalf("cleanup failed while scope was locked: %v", err)
++	default:
++	}
++	var n int
++	require.NoError(t, pool.QueryRow(ctx, `SELECT count(*) FROM goagent_durable_lease WHERE ns = $1 AND id = 'run'`, ns).Scan(&n))
++	require.Zero(t, n)
++	_, err = tx.Exec(ctx, `INSERT INTO goagent_durable_scope (ns, removed_at) VALUES ($1, now())`, ns)
++	require.NoError(t, err)
++	require.NoError(t, tx.Commit(ctx))
++	<-done
++	require.False(t, acquired)
++	require.ErrorIs(t, acquireErr, agentErrors.ErrScopeRemoved)
++}

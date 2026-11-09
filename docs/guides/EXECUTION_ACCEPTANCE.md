@@ -34,7 +34,7 @@ b.WithOutputValidator(func(ctx context.Context, out *builder.AgentOutput) error 
 
 ## 构建期能力检查与迁移
 
-以下配置要求 `ToolStreamClient` 且工具集合非空，否则 BuildContext 在初始化回调与存储访问前报错：PreStep、RequestHook、TurnStopping、PromptSections、PromptContexts、SessionLog。此前有的配置会被忽略，SessionLog 则在运行期报错；现在统一提前拒绝。
+以下配置要求 `ToolStreamClient` 且工具集合非空，否则 BuildContext 在初始化回调与存储访问前报错：PreStep、RequestHook、TurnStopping、PromptSections、PromptContexts。此前有的配置会被忽略，现在统一提前拒绝。`SessionLog` 支持普通流式聊天和原生工具循环，不要求配置工具；纯聊天继续使用原有 `model/answer/0` 持久操作键。
 
 只检查最终格式的纯文本业务应使用 OutputValidator；需要循环干预时配置真实工具流。RequestError 的原样重试仍支持无工具路径。已有 WithTools 用法保持可用，需要统一派发时改为 WithDispatcher 并移除 WithTools。
 

@@ -1,0 +1,95 @@
+package pgstore
+
+import (
+ "context"
+ "net"
+ "strings"
+ "sync"
+ "testing"
+ "time"
+
+ "github.com/jackc/pgx/v5"
+ "github.com/jackc/pgx/v5/pgproto3"
+ "github.com/jackc/pgx/v5/pgxpool"
+)
+
+func TestReviewCancelledDuringAdvisoryWait(t *testing.T) {
+ cfg, err := pgxpool.ParseConfig("host=127.0.0.1 port=1 user=offline dbname=offline sslmode=disable connect_timeout=1")
+ if err != nil { t.Fatal(err) }
+ cfg.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol
+ entered, release := make(chan struct{}), make(chan struct{})
+ var blockOnce sync.Once
+ cfg.ConnConfig.DialFunc = func(context.Context, string, string) (net.Conn, error) {
+  client, server := net.Pipe()
+  go func() {
+   defer server.Close()
+   _ = server.SetDeadline(time.Now().Add(3*time.Second))
+   b := pgproto3.NewBackend(server, server)
+   if _, err := b.ReceiveStartupMessage(); err != nil { return }
+   b.Send(&pgproto3.AuthenticationOk{})
+   b.Send(&pgproto3.ParameterStatus{Name:"client_encoding",Value:"UTF8"})
+   b.Send(&pgproto3.ParameterStatus{Name:"standard_conforming_strings",Value:"on"})
+   b.Send(&pgproto3.ReadyForQuery{TxStatus:'I'})
+   if err := b.Flush(); err != nil { return }
+   status := byte('I')
+   for {
+    msg, err := b.Receive()
+    if err != nil { return }
+    if _, ok := msg.(*pgproto3.Terminate); ok { return }
+    q, ok := msg.(*pgproto3.Query)
+    if !ok { t.Errorf("unexpected protocol message %T",msg); return }
+    sql := strings.ToLower(q.String)
+    tag := "SELECT 1"
+    switch {
+    case strings.HasPrefix(sql,"begin"):
+     status='T'; tag="BEGIN"
+    case sql=="commit" || sql=="rollback":
+     status='I'; tag=strings.ToUpper(sql)
+    case strings.Contains(sql,"pg_advisory_xact_lock("):
+     blockOnce.Do(func(){ close(entered); <-release })
+    case strings.HasPrefix(sql,"select") && strings.Contains(sql,"coalesce"):
+     b.Send(&pgproto3.RowDescription{Fields:[]pgproto3.FieldDescription{
+      {Name:[]byte("removed"),DataTypeOID:16,DataTypeSize:1},
+      {Name:[]byte("busy"),DataTypeOID:16,DataTypeSize:1},
+     }})
+     b.Send(&pgproto3.DataRow{Values:[][]byte{[]byte("f"),[]byte("f")}})
+    case strings.HasPrefix(sql,"insert into goagent_durable_lease"):
+     b.Send(&pgproto3.RowDescription{Fields:[]pgproto3.FieldDescription{
+      {Name:[]byte("token"),DataTypeOID:25,DataTypeSize:-1},
+     }})
+     b.Send(&pgproto3.DataRow{Values:[][]byte{[]byte("returned-token")}})
+     tag="INSERT 0 1"
+    case strings.HasPrefix(sql,"delete from goagent_durable_lease"):
+     tag="DELETE 1"
+    default:
+     t.Errorf("unexpected query %q",q.String); return
+    }
+    b.Send(&pgproto3.CommandComplete{CommandTag:[]byte(tag)})
+    b.Send(&pgproto3.ReadyForQuery{TxStatus:status})
+    if err:=b.Flush(); err!=nil { return }
+   }
+  }()
+  return client,nil
+ }
+ pool,err:=pgxpool.NewWithConfig(context.Background(),cfg)
+ if err!=nil {t.Fatal(err)}
+ defer pool.Close()
+ s:=&Store{cfg:Config{Pool:pool,OpTimeout:time.Second,LeaseTTL:time.Minute},
+  gates:map[string]*gate{},owners:map[string]*hold{}}
+ ctx,cancel:=context.WithCancel(context.Background())
+ defer cancel()
+ type result struct { unlock func()error; err error }
+ done:=make(chan result,1)
+ go func(){u,e:=s.Lock(ctx,"run");done<-result{u,e}}()
+ select {case <-entered:case <-time.After(2*time.Second):t.Fatal("advisory wait not reached")}
+ cancel()
+ close(release)
+ select {
+ case r:=<-done:
+  if ctx.Err()!=context.Canceled {t.Fatal("caller not cancelled")}
+  if r.err!=nil || r.unlock==nil {t.Fatalf("defect not reproduced: err=%v",r.err)}
+  t.Logf("REPRODUCED: caller=%v; Lock err=nil; unlock returned=true",ctx.Err())
+  if err:=r.unlock();err!=nil {t.Fatal(err)}
+ case <-time.After(2*time.Second):t.Fatal("Lock failed to finish")
+ }
+}

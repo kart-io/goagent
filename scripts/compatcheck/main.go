@@ -196,9 +196,12 @@ func verify(ctx context.Context, root, out string, timeout time.Duration, coreDi
 	if timeout <= 0 || out == "" {
 		return fmt.Errorf("必须指定新报告目录和正数超时")
 	}
-	modules, err := discover(ctx, root, coreDir...)
+	// 发现和版本探测共享启动时限，不消耗后续每个模块独立的总时限。
+	startupCtx, startupCancel := context.WithTimeout(ctx, timeout)
+	defer startupCancel()
+	modules, err := discover(startupCtx, root, coreDir...)
 	if err != nil {
-		return err
+		return errors.Join(err, startupCtx.Err())
 	}
 	if err := os.MkdirAll(filepath.Dir(out), 0o700); err != nil {
 		return err
@@ -210,18 +213,21 @@ func verify(ctx context.Context, root, out string, timeout time.Duration, coreDi
 	for _, m := range modules {
 		if m.Path == coreModule {
 			report.CoreDir = m.Dir
-			cmd := exec.CommandContext(ctx, "git", "-C", m.Dir, "rev-parse", "HEAD")
-			if revision, err := cmd.Output(); err == nil {
+			cmd := exec.CommandContext(startupCtx, "git", "-C", m.Dir, "rev-parse", "HEAD")
+			cmd.WaitDelay = 2 * time.Second
+			processgroup.Configure(cmd)
+			if revision, err := (&goProcess{cmd}).Output(); err == nil {
 				report.CoreRevision = strings.TrimSpace(string(revision))
 			}
 			continue
 		}
 		report.Modules = append(report.Modules, moduleResult{Path: m.Path, Dir: m.Dir, Status: "not_run"})
 	}
-	version, err := goCommand(ctx, report.CoreDir, "version").Output()
+	version, err := goCommand(startupCtx, report.CoreDir, "version").Output()
 	if err != nil {
-		return err
+		return errors.Join(err, startupCtx.Err())
 	}
+	startupCancel()
 	report.GoVersion = strings.TrimSpace(string(version))
 	var failures []error
 	index := 0
@@ -371,13 +377,33 @@ func main() {
 	root := flag.String("root", "..", "包含 goagent 及三个关联仓库的目录")
 	coreDir := flag.String("core-dir", "", "显式选择核心工作树，空值使用root/goagent")
 	out := flag.String("out", "", "必须不存在的报告目录")
-	timeout := flag.Duration("timeout", 5*time.Minute, "每个模块的总时限")
+	timeout := flag.Duration("timeout", 5*time.Minute, "启动阶段及每个模块各自的总时限")
+	requirePostgres := flag.Bool("require-postgres", false, "要求真实数据库及进程恢复场景执行通过，拒绝跳过")
+	postgresReport := flag.String("verify-postgres-report", "", "只读核验已有跨仓报告中的实库场景")
 	flag.Parse()
+	if *postgresReport != "" {
+		if err := checkPostgresEvidence(*postgresReport); err != nil {
+			_, _ = fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		_, _ = fmt.Fprintln(os.Stdout, "实库恢复证据检查通过")
+		return
+	}
+	if *requirePostgres && (os.Getenv("GOAGENT_PGSTORE_DSN") == "" || os.Getenv("GOAGENT_PGSTORE_CONTAINER") == "") {
+		_, _ = fmt.Fprintln(os.Stderr, "实库验收需要 GOAGENT_PGSTORE_DSN 和专用测试容器 GOAGENT_PGSTORE_CONTAINER")
+		os.Exit(1)
+	}
 	ctx, cancel := signal.NotifyContext(context.Background(), stopSignals()...)
 	defer cancel()
 	if err := verify(ctx, *root, *out, *timeout, *coreDir); err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
+	}
+	if *requirePostgres {
+		if err := checkPostgresEvidence(*out); err != nil {
+			_, _ = fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
 	}
 	_, _ = io.WriteString(os.Stdout, "跨仓验证通过，测试及跳过项见 "+filepath.Join(*out, "summary.json")+"\n")
 }

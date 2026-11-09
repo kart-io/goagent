@@ -1,0 +1,15 @@
+=== RUN   TestReviewSaveRejectsCommittedTombstoneAfterWait
+=== RUN   TestReviewSaveRejectsCommittedTombstoneAfterWait/read_committed
+    review_tombstone_test.go:57: 隔离级别=read committed，Save错误=持久作用域已删除，拒绝读写，实际快照版本=before
+=== RUN   TestReviewSaveRejectsCommittedTombstoneAfterWait/repeatable_read
+    review_tombstone_test.go:57: 隔离级别=repeatable read，Save错误=<nil>，实际快照版本=after
+    review_tombstone_test.go:58: 
+        	Error Trace:	/tmp/pgstore-review-jKvsB4/pgstore/review_tombstone_test.go:58
+        	Error:      	Expected error with "持久作用域已删除，拒绝读写" in chain but got nil.
+        	Test:       	TestReviewSaveRejectsCommittedTombstoneAfterWait/repeatable_read
+--- FAIL: TestReviewSaveRejectsCommittedTombstoneAfterWait (1.38s)
+    --- PASS: TestReviewSaveRejectsCommittedTombstoneAfterWait/read_committed (0.73s)
+    --- FAIL: TestReviewSaveRejectsCommittedTombstoneAfterWait/repeatable_read (0.65s)
+FAIL
+FAIL	github.com/kart-io/goagent-contrib/durable/pgstore	1.391s
+FAIL

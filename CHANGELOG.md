@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 修复与验证
+
+- 嵌套 Agent 在公共流式与 Handle 执行入口隔离会话日志轮次，避免未配置日志的子调用写入或结束父轮次；补充失败历史、持久恢复与独立子日志回归。
+- 实库证据门禁拒绝关键子测试跳过、包级失败、损坏或未完成的事件流，并核对摘要统计；模块发现与版本探测共享有界启动时限。
+- 普通流式聊天支持 `WithSessionLog`，原生管理适配器不再要求配置占位工具；历史、Fork、故障后的轮次处理和持久回放共用现有会话协议，保留纯聊天原有模型操作键。
+- 管理 Worker 启动恢复分批排空未完成任务和命令，移除10000条截断，保留事务失败回滚与取消语义。
+- 增加管理服务、HTTP、原生与 Graph 适配器的离线行为回归；覆盖率门禁新增 management 75%、adapters 75%、httpapi 80%。
+- 新增 `make test-management` 和 `make compatibility-postgres`；实库门禁检查明确的关键场景通过事件，不能将跳过、仅子测试通过或失败后重跑视为同一次验收通过。
+
 ## [0.51.0] - 2026-11-08
 
 ### 新增

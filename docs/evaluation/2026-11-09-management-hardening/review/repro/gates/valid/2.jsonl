@@ -1,0 +1,10 @@
+{"Action": "start", "Package": "github.com/kart-io/goagent-harness/integration/postgres", "Test": ""}
+{"Action": "run", "Package": "github.com/kart-io/goagent-harness/integration/postgres", "Test": "TestWaitRestartResumeRelease"}
+{"Action": "pass", "Package": "github.com/kart-io/goagent-harness/integration/postgres", "Test": "TestWaitRestartResumeRelease"}
+{"Action": "start", "Package": "github.com/kart-io/goagent-harness/integration/postgres", "Test": ""}
+{"Action": "run", "Package": "github.com/kart-io/goagent-harness/integration/postgres", "Test": "TestTakeoverFencesOldHolder"}
+{"Action": "pass", "Package": "github.com/kart-io/goagent-harness/integration/postgres", "Test": "TestTakeoverFencesOldHolder"}
+{"Action": "start", "Package": "github.com/kart-io/goagent-harness/integration/postgres", "Test": ""}
+{"Action": "run", "Package": "github.com/kart-io/goagent-harness/integration/postgres", "Test": "TestInboxAppendOnceAcrossConnections"}
+{"Action": "pass", "Package": "github.com/kart-io/goagent-harness/integration/postgres", "Test": "TestInboxAppendOnceAcrossConnections"}
+{"Action": "pass", "Package": "github.com/kart-io/goagent-harness/integration/postgres", "Test": ""}

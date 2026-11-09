@@ -1,0 +1,16 @@
+{"Time":"2026-11-09T11:09:00.649205363+08:00","Action":"start","Package":"github.com/kart-io/goagent-harness/integration/postgres"}
+{"Time":"2026-11-09T11:09:00.654972499+08:00","Action":"run","Package":"github.com/kart-io/goagent-harness/integration/postgres","Test":"TestWaitRestartResumeRelease"}
+{"Time":"2026-11-09T11:09:00.655001749+08:00","Action":"output","Package":"github.com/kart-io/goagent-harness/integration/postgres","Test":"TestWaitRestartResumeRelease","Output":"=== RUN   TestWaitRestartResumeRelease\n","OutputType":"frame"}
+{"Time":"2026-11-09T11:09:00.655013549+08:00","Action":"output","Package":"github.com/kart-io/goagent-harness/integration/postgres","Test":"TestWaitRestartResumeRelease","Output":"--- PASS: TestWaitRestartResumeRelease (0.00s)\n","OutputType":"frame"}
+{"Time":"2026-11-09T11:09:00.655015714+08:00","Action":"pass","Package":"github.com/kart-io/goagent-harness/integration/postgres","Test":"TestWaitRestartResumeRelease","Elapsed":0}
+{"Time":"2026-11-09T11:09:00.655021455+08:00","Action":"run","Package":"github.com/kart-io/goagent-harness/integration/postgres","Test":"TestTakeoverFencesOldHolder"}
+{"Time":"2026-11-09T11:09:00.655022505+08:00","Action":"output","Package":"github.com/kart-io/goagent-harness/integration/postgres","Test":"TestTakeoverFencesOldHolder","Output":"=== RUN   TestTakeoverFencesOldHolder\n","OutputType":"frame"}
+{"Time":"2026-11-09T11:09:00.655043979+08:00","Action":"output","Package":"github.com/kart-io/goagent-harness/integration/postgres","Test":"TestTakeoverFencesOldHolder","Output":"--- PASS: TestTakeoverFencesOldHolder (0.00s)\n","OutputType":"frame"}
+{"Time":"2026-11-09T11:09:00.655051973+08:00","Action":"pass","Package":"github.com/kart-io/goagent-harness/integration/postgres","Test":"TestTakeoverFencesOldHolder","Elapsed":0}
+{"Time":"2026-11-09T11:09:00.655058532+08:00","Action":"run","Package":"github.com/kart-io/goagent-harness/integration/postgres","Test":"TestInboxAppendOnceAcrossConnections"}
+{"Time":"2026-11-09T11:09:00.655059603+08:00","Action":"output","Package":"github.com/kart-io/goagent-harness/integration/postgres","Test":"TestInboxAppendOnceAcrossConnections","Output":"=== RUN   TestInboxAppendOnceAcrossConnections\n","OutputType":"frame"}
+{"Time":"2026-11-09T11:09:00.655075087+08:00","Action":"output","Package":"github.com/kart-io/goagent-harness/integration/postgres","Test":"TestInboxAppendOnceAcrossConnections","Output":"--- PASS: TestInboxAppendOnceAcrossConnections (0.00s)\n","OutputType":"frame"}
+{"Time":"2026-11-09T11:09:00.655081778+08:00","Action":"pass","Package":"github.com/kart-io/goagent-harness/integration/postgres","Test":"TestInboxAppendOnceAcrossConnections","Elapsed":0}
+{"Time":"2026-11-09T11:09:00.655091895+08:00","Action":"output","Package":"github.com/kart-io/goagent-harness/integration/postgres","Output":"PASS\n","OutputType":"frame"}
+{"Time":"2026-11-09T11:09:01.656962411+08:00","Action":"output","Package":"github.com/kart-io/goagent-harness/integration/postgres","Output":"ok  \tgithub.com/kart-io/goagent-harness/integration/postgres\t1.007s\n"}
+{"Time":"2026-11-09T11:09:01.656994975+08:00","Action":"pass","Package":"github.com/kart-io/goagent-harness/integration/postgres","Elapsed":1.008}

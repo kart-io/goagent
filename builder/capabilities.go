@@ -23,7 +23,6 @@ func (b *AgentBuilder[C, S]) validateLoopCapabilities(toolset []interfaces.Tool)
 		{"TurnStopping", len(b.config.TurnStopping) > 0},
 		{"PromptSections", len(b.config.PromptSections) > 0},
 		{"PromptContexts", len(b.config.PromptContexts) > 0},
-		{"SessionLog", b.config.SessionLog != nil},
 	} {
 		if feature.enabled {
 			unavailable = append(unavailable, feature.name)

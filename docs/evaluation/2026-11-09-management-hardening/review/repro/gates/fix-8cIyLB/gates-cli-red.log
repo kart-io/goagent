@@ -1,0 +1,6 @@
+full_require_postgres_child_skip 0 跨仓验证通过，测试及跳过项见 /tmp/goagent-review-fix-8cIyLB/gates-repro/child-skip-report/summary.json
+ 
+github.com/kart-io/goagent-contrib/durable/pgstore passed ['github.com/kart-io/goagent-contrib/durable/pgstore/TestConformance/durability']
+github.com/kart-io/goagent-contrib/management passed []
+github.com/kart-io/goagent-examples passed []
+github.com/kart-io/goagent-harness/integration/postgres passed []

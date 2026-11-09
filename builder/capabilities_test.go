@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/kart-io/goagent/core/session"
 	"github.com/kart-io/goagent/llm"
 	"github.com/stretchr/testify/require"
 )
@@ -29,7 +28,6 @@ func TestBuildRejectsUnavailableLoopFeatures(t *testing.T) {
 		{"PromptContexts", func(b *SimpleAgentBuilder) {
 			b.WithPromptContexts(PromptContext{Text: func(PromptScope) string { return "说明" }})
 		}},
-		{"SessionLog", func(b *SimpleAgentBuilder) { b.WithSessionLog(session.NewMemoryStore()) }},
 	}
 	for _, tc := range cases {
 		for _, mode := range []string{"无工具", "无原生接口", "完整工具流"} {

@@ -1,0 +1,8 @@
+{"Time":"2026-11-09T11:29:12.182031273+08:00","Action":"start","Package":"github.com/kart-io/goagent-examples"}
+{"Time":"2026-11-09T11:29:12.190304201+08:00","Action":"run","Package":"github.com/kart-io/goagent-examples","Test":"TestFixture"}
+{"Time":"2026-11-09T11:29:12.190341144+08:00","Action":"output","Package":"github.com/kart-io/goagent-examples","Test":"TestFixture","Output":"=== RUN   TestFixture\n","OutputType":"frame"}
+{"Time":"2026-11-09T11:29:12.190360053+08:00","Action":"output","Package":"github.com/kart-io/goagent-examples","Test":"TestFixture","Output":"--- PASS: TestFixture (0.00s)\n","OutputType":"frame"}
+{"Time":"2026-11-09T11:29:12.190377163+08:00","Action":"pass","Package":"github.com/kart-io/goagent-examples","Test":"TestFixture","Elapsed":0}
+{"Time":"2026-11-09T11:29:12.190392466+08:00","Action":"output","Package":"github.com/kart-io/goagent-examples","Output":"PASS\n","OutputType":"frame"}
+{"Time":"2026-11-09T11:29:13.191898236+08:00","Action":"output","Package":"github.com/kart-io/goagent-examples","Output":"ok  \tgithub.com/kart-io/goagent-examples\t1.010s\n"}
+{"Time":"2026-11-09T11:29:13.191923772+08:00","Action":"pass","Package":"github.com/kart-io/goagent-examples","Elapsed":1.01}

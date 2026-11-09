@@ -1,0 +1,9 @@
+gates-before package_fail exit= 0 实库恢复证据检查通过
+gates-before truncated_tail exit= 0 实库恢复证据检查通过
+gates-before missing_package_end exit= 0 实库恢复证据检查通过
+gates-before child-skip-report exit= 0 实库恢复证据检查通过
+gates-after package_fail exit= 1 docs/evaluation/2026-11-09-management-hardening/review/repro/gates/package_fail/0.jsonl 第4行：包没有成功结束或不是无测试包：github.com/kart-io/goagent-contrib/durable/pgstore
+gates-after truncated_tail exit= 1 docs/evaluation/2026-11-09-management-hardening/review/repro/gates/truncated_tail/2.jsonl 第4行：包没有成功结束或不是无测试包：github.com/kart-io/goagent-harness/integration/postgres
+gates-after missing_package_end exit= 1 docs/evaluation/2026-11-09-management-hardening/review/repro/gates/missing_package_end/0.jsonl 第4行：包没有成功结束或不是无测试包：github.com/kart-io/goagent-contrib/durable/pgstore
+gates-after child-skip-report exit= 1 实库场景后代未通过：github.com/kart-io/goagent-contrib/durable/pgstore/TestConformance/durability（skip）
+full_require_postgres_child_skip_after exit= 1 实库场景后代未通过：github.com/kart-io/goagent-contrib/durable/pgstore/TestConformance/durability（skip）

@@ -1,0 +1,35 @@
+{
+  "mode": "independent_source_review",
+  "depth": "deep",
+  "scope_manifest": "scope.json",
+  "production_code_changes_allowed": false,
+  "reviewers": [
+    {
+      "name": "Socrates",
+      "agent_id": "01a1be43-9e89-7151-b597-eb5b1e240766",
+      "role": "gsd-code-reviewer",
+      "scope": "核心普通聊天会话日志、回放与 Worker 分页恢复",
+      "report": "CORE-REVIEW.md"
+    },
+    {
+      "name": "Locke",
+      "agent_id": "01a1be43-9ea9-7513-813b-ed4623d5ab09",
+      "role": "gsd-code-reviewer",
+      "scope": "PostgreSQL 租约获取、清理、事务与锁顺序",
+      "report": "POSTGRES-REVIEW.md"
+    },
+    {
+      "name": "Goodall",
+      "agent_id": "01a1be43-9ece-7b81-8280-15c76a0de430",
+      "role": "gsd-code-reviewer",
+      "scope": "实库与覆盖门禁、新增管理回归、Examples/Harness 常量迁移",
+      "report": "VALIDATION-REVIEW.md"
+    }
+  ],
+  "orchestrator_scope": "实际改动集合、源码摘要与102份归档证据核对；候选发现复核与汇总",
+  "limitations": [
+    "所有审查 agent 使用当前会话继承的默认模型，不是人工审核或跨模型投票",
+    "本轮未接入生产业务环境",
+    "只有审查报告和复现证据可写入本轮报告目录"
+  ]
+}

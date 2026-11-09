@@ -35,8 +35,22 @@ env -u GOROOT GOTOOLCHAIN=go1.27.3 GOWORK=off go build ./...
 
 核心单测不需要数据库。持久恢复、进程故障和 HTTP 退款案例继续在 contrib 使用专用 Postgres 验证，不能用内存单测或数据库 SKIP 代替。
 
+`make test-management` 执行默认离线回归；`make coverage` 额外要求 management ≥75%、adapters ≥75%、httpapi ≥80%，三个包分别检查，不能用其他包的覆盖率抵消。
+
+## 纯聊天与恢复边界
+
+`adapters.NativeFactory` 支持只有 `llm.Client` 的纯聊天 Builder，无需添加占位工具。适配器绑定的会话日志记录完整轮次，重建后可按原执行键回放，Fork 继续绑定原配置版本。循环钩子和 Handle 仍要求原生工具循环。
+
+单个活动 Worker 可按 `Limits.Workers` 并发执行不同会话；这不提供多实例分片或心跳超时自动接管。异常退出后，宿主必须通过 `ConfirmWorkerStopped` 确认旧进程停止，再执行带 owner、generation 和原因的回收。`Shutdown` 超时不代表旧生产者已退出。
+
+启动恢复每批读取200条 running/canceling 任务和 applying 命令，修改状态后继续读取，直到集合排空，不再截断于10000条；全部批次仍在同一事务内，失败或取消时回滚。数据库必须支持事务内读到自身写入和原子 CAS；超大积压的事务时长、锁等待及恢复目标仍由实际容量测试确定。
+
+跨仓实库验收使用 `make compatibility-postgres`，须配置专用测试数据库和允许重启的容器。它要求数据库存储契约、崩溃接管、重启、同步提交、管理审批进程恢复、Fork 崩溃恢复，以及 Harness 跨连接恢复、旧持有者失效和 Inbox 去重具有实际通过事件；缺失或跳过即失败。
+
 新增20组HTTP与4项数据库业务案例的功能映射、红绿修复和执行结果见 [扩展案例验收](../docs/evaluation/2026-11-08-management-expanded-cases/REPORT.md)。
 
 DeepSeek与Gemini的真实模型、审批续跑、多轮会话、Fork及实际用量结果见 [真实模型验收](../docs/evaluation/2026-11-08-management-live-model/REPORT.md)。
 
 真实模型验收工具的失败退出、请求增量证据和配置前检修复见 [可靠性修复](../docs/evaluation/2026-11-08-management-live-reliability/REPORT.md)。
+
+纯聊天支持、恢复分页、覆盖门禁及跨仓数据库复验见 [管理层稳定化验收](../docs/evaluation/2026-11-09-management-hardening/REPORT.md)。

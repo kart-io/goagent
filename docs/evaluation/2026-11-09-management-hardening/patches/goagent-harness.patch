@@ -1,0 +1,97 @@
+diff --git a/integration/runtime_test.go b/integration/runtime_test.go
+index fa89616..b02b67b 100644
+--- a/integration/runtime_test.go
++++ b/integration/runtime_test.go
+@@ -9,6 +9,7 @@ import (
+ 
+ 	"github.com/kart-io/goagent-harness/preset"
+ 	"github.com/kart-io/goagent/builder"
++	"github.com/kart-io/goagent/constants"
+ 	"github.com/kart-io/goagent/core/durable"
+ 	"github.com/kart-io/goagent/interfaces"
+ 	"github.com/kart-io/goagent/llm"
+@@ -86,8 +87,8 @@ presets:
+ 			in.Result = fmt.Sprint(out.Result)
+ 			return in, nil
+ 		}))
+-		require.NoError(t, g.AddEdge(workflow.START, "agent"))
+-		require.NoError(t, g.AddEdge("agent", workflow.END))
++		require.NoError(t, g.AddEdge(constants.WorkflowStart, "agent"))
++		require.NoError(t, g.AddEdge("agent", constants.WorkflowEnd))
+ 		store, err := durable.NewFileStore(journal)
+ 		require.NoError(t, err)
+ 		d, err := g.CompileDurable(ctx, workflow.DurableConfig{Store: store, Version: "writer-v1", ApprovalNodes: []string{"agent"}})
+diff --git a/preset/build.go b/preset/build.go
+index bab6a76..a75a515 100644
+--- a/preset/build.go
++++ b/preset/build.go
+@@ -17,12 +17,12 @@ import (
+ 	"github.com/kart-io/goagent-harness/permissions"
+ 	"github.com/kart-io/goagent-harness/sandbox"
+ 	"github.com/kart-io/goagent-harness/tools/coding"
++	"github.com/kart-io/goagent/constants"
+ 	"github.com/kart-io/goagent/core/durable"
+ 	"github.com/kart-io/goagent/interfaces"
+ 	"github.com/kart-io/goagent/llm"
+ 	"github.com/kart-io/goagent/tools"
+ 	"github.com/kart-io/goagent/tools/policy"
+-	"github.com/kart-io/goagent/tools/spill"
+ )
+ 
+ // Host 是宿主提供给 Build 的环境。模型、SessionID、持久化作用域与预算由宿主在 Builder 上配置。
+@@ -437,7 +437,7 @@ func (a *Assembler) publish(cfgs []any) (*Assembly, error) {
+ 		kept := all[:0:0]
+ 		for _, t := range all {
+ 			// 溢出结果须能被读取，read_spill 随 spill 组件保留。
+-			if f.Keeps(t.Name()) || t.Name() == spill.ToolReadSpill {
++			if f.Keeps(t.Name()) || t.Name() == constants.ToolReadSpill {
+ 				kept = append(kept, t)
+ 				if err := registry.Register(t); err != nil {
+ 					return nil, err
+diff --git a/preset/builtin.go b/preset/builtin.go
+index fdf0a87..c157681 100644
+--- a/preset/builtin.go
++++ b/preset/builtin.go
+@@ -11,6 +11,7 @@ import (
+ 
+ 	"github.com/kart-io/goagent-harness/permissions"
+ 	"github.com/kart-io/goagent-harness/tools/coding"
++	"github.com/kart-io/goagent/constants"
+ 	"github.com/kart-io/goagent/interfaces"
+ 	"github.com/kart-io/goagent/tools/policy"
+ 	"github.com/kart-io/goagent/tools/spill"
+@@ -404,7 +405,7 @@ var spillSpec = Spec[SpillConfig]{
+ 		_ = store.Prune(c.Retention)
+ 		a.AddPostHook(store.Hook())
+ 		a.AddTools(store.ReadTool())
+-		a.AddRules([]policy.Rule{{Tool: spill.ToolReadSpill, Decision: policy.Allow}}, nil, false)
++		a.AddRules([]policy.Rule{{Tool: constants.ToolReadSpill, Decision: policy.Allow}}, nil, false)
+ 		return nil
+ 	},
+ }
+diff --git a/preset/plan.go b/preset/plan.go
+index 1e03e0b..b11f6c8 100644
+--- a/preset/plan.go
++++ b/preset/plan.go
+@@ -10,11 +10,11 @@ import (
+ 
+ 	"github.com/kart-io/goagent-harness/tools/coding"
+ 	"github.com/kart-io/goagent/builder"
++	"github.com/kart-io/goagent/constants"
+ 	"github.com/kart-io/goagent/interfaces"
+ 	"github.com/kart-io/goagent/llm"
+ 	"github.com/kart-io/goagent/tools"
+ 	"github.com/kart-io/goagent/tools/policy"
+-	"github.com/kart-io/goagent/tools/spill"
+ )
+ 
+ // ComponentPlanMode 是计划模式组件名。
+@@ -41,7 +41,7 @@ type PlanModeConfig struct {
+ 
+ var defaultPlanAllow = []string{
+ 	coding.ToolReadFile, coding.ToolGlob, coding.ToolGrep, coding.ToolGitStatus, coding.ToolGitDiff, coding.ToolGitLog,
+-	coding.ToolTodoWrite, spill.ToolReadSpill, ToolLoadSkill,
++	coding.ToolTodoWrite, constants.ToolReadSpill, ToolLoadSkill,
+ }
+ 
+ func init() {

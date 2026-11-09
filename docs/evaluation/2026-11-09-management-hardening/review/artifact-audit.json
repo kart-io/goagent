@@ -1,0 +1,12 @@
+{
+  "artifact_hashes_checked": 102,
+  "changed_core_source_files": 23,
+  "core_test_packages": 68,
+  "core_pass_events": 5022,
+  "core_skips": 9,
+  "cross_modules": 17,
+  "cross_pass_events": 1924,
+  "cross_skips": 82,
+  "cross_patches_reverse_check": "passed",
+  "issues": []
+}

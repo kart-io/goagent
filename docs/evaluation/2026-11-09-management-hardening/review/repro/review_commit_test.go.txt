@@ -1,0 +1,26 @@
+package pgstore
+
+import (
+ "net"
+ "sync/atomic"
+ "testing"
+ "github.com/jackc/pgx/v5/pgproto3"
+)
+
+type reviewCaptureConn struct { net.Conn; closes int }
+func (c *reviewCaptureConn) Write(b []byte)(int,error) {return len(b),nil}
+func (c *reviewCaptureConn) Close()error {c.closes++;return nil}
+func TestReviewDropAfterCommitMatchesOnlyCommit(t *testing.T) {
+ raw:=&reviewCaptureConn{}
+ armed:=&atomic.Bool{}
+ armed.Store(true)
+ c:=&dropAfterCommit{Conn:raw,armed:armed}
+ for _,sql:=range []string{"begin isolation level read committed","SELECT 'commit'","commit"} {
+  b,err:=(&pgproto3.Query{String:sql}).Encode(nil)
+  if err!=nil {t.Fatal(err)}
+  if _,err=c.Write(b);err!=nil {t.Fatal(err)}
+  if sql!="commit" && (!armed.Load() || raw.closes!=0) {t.Fatalf("premature close: %s",sql)}
+ }
+ if armed.Load() || raw.closes!=1 {t.Fatal("COMMIT did not trigger exactly once")}
+ t.Log("BEGIN READ COMMITTED 未触发，完整 COMMIT 恰好触发一次")
+}

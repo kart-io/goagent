@@ -1,0 +1,1 @@
+{"modules": [{"module": "github.com/kart-io/goagent-contrib/durable/pgstore", "status": "passed", "log": "0.jsonl"}, {"module": "github.com/kart-io/goagent-contrib/management", "status": "passed", "log": "1.jsonl"}, {"module": "github.com/kart-io/goagent-harness/integration/postgres", "status": "passed", "log": "2.jsonl"}]}

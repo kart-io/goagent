@@ -21,6 +21,7 @@ EXAMPLE ?= ./examples/execution-scope
 COVERAGE_DIR=./coverage
 COMPAT_ROOT ?= ..
 COMPAT_CORE ?= $(CURDIR)
+COMPAT_TIMEOUT ?= 5m
 COMPAT_OUT ?= $(COVERAGE_DIR)/compatibility-$(shell date -u +%Y%m%dT%H%M%SZ)
 
 # Colors for output
@@ -29,7 +30,7 @@ GREEN=\033[0;32m
 YELLOW=\033[1;33m
 NC=\033[0m # No Color
 
-.PHONY: all build build-all build-linux build-windows build-darwin run clean test test-frameworkbench test-contracts compatibility coverage deps help version
+.PHONY: all build build-all build-linux build-windows build-darwin run clean test test-management test-frameworkbench test-contracts compatibility compatibility-postgres coverage deps help version
 
 ## help: Display this help message
 help:
@@ -86,7 +87,16 @@ test-contracts:
 
 ## compatibility: 使用当前源码验证本地关联仓库（COMPAT_ROOT、COMPAT_CORE、COMPAT_OUT 可覆盖）
 compatibility:
-	$(GOCMD) run ./scripts/compatcheck -root "$(COMPAT_ROOT)" -core-dir "$(COMPAT_CORE)" -out "$(COMPAT_OUT)"
+	$(GOCMD) run ./scripts/compatcheck -root "$(COMPAT_ROOT)" -core-dir "$(COMPAT_CORE)" -out "$(COMPAT_OUT)" -timeout "$(COMPAT_TIMEOUT)"
+
+## test-management: 验证管理状态机、HTTP 与原生/Graph 适配（无需数据库）
+test-management:
+	GO_TEST_MODE=true $(GOTEST) -race -count=1 -timeout 120s ./management/...
+
+## compatibility-postgres: 跨仓实库验收，要求专用数据库和容器，关键恢复场景不得跳过
+compatibility-postgres: COMPAT_TIMEOUT = 15m
+compatibility-postgres:
+	$(GOCMD) run ./scripts/compatcheck -root "$(COMPAT_ROOT)" -core-dir "$(COMPAT_CORE)" -out "$(COMPAT_OUT)" -timeout "$(COMPAT_TIMEOUT)" -require-postgres
 
 ## test-integration: Run integration tests
 test-integration:

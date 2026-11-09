@@ -1,0 +1,91 @@
+package main
+
+import (
+	"bufio"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+
+	"github.com/kart-io/goagent/codec/json"
+)
+
+// 实库门禁要求关键场景有明确通过事件，编译成功或跳过不能作为恢复验收。
+var postgresContracts = map[string][]string{
+	"github.com/kart-io/goagent-contrib/durable/pgstore": {
+		"TestConformance", "TestProcessCrashTakeover", "TestPrimaryRestart", "TestSyncCommit",
+	},
+	"github.com/kart-io/goagent-contrib/management": {
+		"integration/TestHostRegisterPublishSessionTaskApprovalResume",
+		"integration/TestApprovalSurvivesProcessKillAndRestart",
+		"integration/TestForkCrashAfterLogCopy",
+	},
+	"github.com/kart-io/goagent-harness/integration/postgres": {
+		"TestWaitRestartResumeRelease", "TestTakeoverFencesOldHolder", "TestInboxAppendOnceAcrossConnections",
+	},
+}
+
+func checkPostgresEvidence(directory string) error {
+	raw, err := os.ReadFile(filepath.Join(directory, "summary.json"))
+	if err != nil {
+		return err
+	}
+	var report summary
+	if err := json.Unmarshal(raw, &report); err != nil {
+		return err
+	}
+	var failures []error
+	for module, required := range postgresContracts {
+		var result *moduleResult
+		for i := range report.Modules {
+			if report.Modules[i].Path == module {
+				result = &report.Modules[i]
+				break
+			}
+		}
+		if result == nil || result.Status != "passed" {
+			failures = append(failures, fmt.Errorf("实库验收缺少通过的模块：%s", module))
+			continue
+		}
+		if result.Log == "" || filepath.Base(result.Log) != result.Log {
+			return fmt.Errorf("无效的模块日志路径：%s", module)
+		}
+		states, err := testEvidence(filepath.Join(directory, result.Log))
+		if err != nil {
+			return err
+		}
+		for _, name := range required {
+			if states[module+"/"+name] != "pass" {
+				failures = append(failures, fmt.Errorf("实库场景未通过（缺失、失败或跳过）：%s/%s", module, name))
+			}
+		}
+	}
+	return errors.Join(failures...)
+}
+
+func testEvidence(path string) (map[string]string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = f.Close() }()
+	states := map[string]string{}
+	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 4096), 16*1024*1024)
+	for scanner.Scan() {
+		var event struct{ Action, Package, Test string }
+		if json.Unmarshal(scanner.Bytes(), &event) != nil || event.Test == "" {
+			continue
+		}
+		key := event.Package + "/" + event.Test
+		switch event.Action {
+		case "pass":
+			if states[key] == "" {
+				states[key] = "pass"
+			}
+		case "skip", "fail":
+			states[key] = event.Action
+		}
+	}
+	return states, scanner.Err()
+}

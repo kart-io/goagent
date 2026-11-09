@@ -57,6 +57,8 @@ type streamResult struct {
 func (a *ConfigurableAgent[C, S]) executeStream(ctx context.Context, input interface{}, result *streamResult) (_ <-chan AgentEvent, err error) {
 	// 同步阶段也会调用宿主代码（如 scopeDurableExecution 中的工具与持久存储），panic 时转为错误返回。
 	defer recoverPanic("Agent 流式执行启动", &err)
+	// 每次执行只拥有自己打开的日志轮次；工具子调用和 Handle 都不能继承父轮次的写入权。
+	ctx = context.WithValue(ctx, sessionLogKey{}, (*sessionTurn)(nil))
 	if a.config.UsageHook != nil {
 		ctx = budget.WithUsageHook(ctx, a.config.UsageHook)
 	}
@@ -189,29 +191,30 @@ func (a *ConfigurableAgent[C, S]) runEvents(ctx context.Context, request *middle
 			return nil, err
 		}
 	}
-	if native, ok := client.(llm.ToolStreamClient); ok && len(a.tools) > 0 {
-		if a.config.SessionLog != nil {
-			turn, history, err := a.openSessionTurn(ctx, input)
-			if err != nil {
-				return nil, fmt.Errorf("会话日志: %w", err)
-			}
-			if turn.completed {
-				ctx = durable.WithReplayOnly(ctx)
-			}
-			ctx = context.WithValue(context.WithValue(ctx, historyKey{}, history), sessionLogKey{}, turn)
-		}
-		messages, err := a.streamMessages(ctx, input, evidence)
-		if err != nil {
-			return nil, err
-		}
-		return a.runToolEvents(ctx, request, input, native, messages, metadata, emit)
-	}
 	if a.config.SessionLog != nil {
-		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "会话日志只支持原生工具流：llm.ToolStreamClient 且配置了工具").WithComponent("builder").WithOperation("run_events")
+		turn, history, err := a.openSessionTurn(ctx, input)
+		if err != nil {
+			return nil, fmt.Errorf("会话日志: %w", err)
+		}
+		if turn.completed {
+			ctx = durable.WithReplayOnly(ctx)
+		}
+		ctx = context.WithValue(context.WithValue(ctx, historyKey{}, history), sessionLogKey{}, turn)
 	}
 	messages, err := a.streamMessages(ctx, input, evidence)
 	if err != nil {
 		return nil, err
+	}
+	if native, ok := client.(llm.ToolStreamClient); ok && len(a.tools) > 0 {
+		return a.runToolEvents(ctx, request, input, native, messages, metadata, emit)
+	}
+	// 纯聊天沿用原模型操作键；日志与工具循环共用轮次协议，不添加占位工具。
+	slog := sessionTurnFrom(ctx)
+	if err := slog.begin(ctx, messages, nil); err != nil {
+		return nil, fmt.Errorf("会话日志: %w", err)
+	}
+	if err := slog.sync(ctx, messages); err != nil {
+		return nil, fmt.Errorf("会话日志: %w", err)
 	}
 	attempt := 0
 	ctx = withInterruptedModelResend(withRequestRecovery(ctx, a.requestRecovery(0, &messages, &attempt)), a.config.ResendInterruptedModel)
@@ -230,6 +233,12 @@ func (a *ConfigurableAgent[C, S]) runEvents(ctx context.Context, request *middle
 	}
 	metadata["answer_usage_reported"] = turn.Usage != nil
 
+	if slog != nil {
+		final := llm.Message{Role: "assistant", Content: turn.Content, ReasoningContent: turn.ReasoningContent, ProviderState: turn.ProviderState}
+		if err := slog.end(ctx, append(slices.Clone(messages), final), turn.Content, usage); err != nil {
+			return nil, fmt.Errorf("会话日志: %w", err)
+		}
+	}
 	return a.finishEvents(ctx, request, input, turn.Content, usage, metadata, emit)
 }
 

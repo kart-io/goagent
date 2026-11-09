@@ -1,0 +1,45 @@
+{
+  "core_directory": "/tmp/goagent-review-fix-8cIyLB/gates-repro/child-skip-workspace/goagent",
+  "go_version": "go version go1.27.3 linux/amd64",
+  "modules": [
+    {
+      "module": "github.com/kart-io/goagent-contrib/durable/pgstore",
+      "directory": "/tmp/goagent-review-fix-8cIyLB/gates-repro/child-skip-workspace/goagent-contrib/durable/pgstore",
+      "status": "passed",
+      "core_directory": "/tmp/goagent-review-fix-8cIyLB/gates-repro/child-skip-workspace/goagent",
+      "log": "01-tests.jsonl",
+      "passed_tests": 4,
+      "passed_packages": 1,
+      "skipped_tests": [
+        "github.com/kart-io/goagent-contrib/durable/pgstore/TestConformance/durability"
+      ]
+    },
+    {
+      "module": "github.com/kart-io/goagent-contrib/management",
+      "directory": "/tmp/goagent-review-fix-8cIyLB/gates-repro/child-skip-workspace/goagent-contrib/management",
+      "status": "passed",
+      "core_directory": "/tmp/goagent-review-fix-8cIyLB/gates-repro/child-skip-workspace/goagent",
+      "log": "02-tests.jsonl",
+      "passed_tests": 3,
+      "passed_packages": 1
+    },
+    {
+      "module": "github.com/kart-io/goagent-examples",
+      "directory": "/tmp/goagent-review-fix-8cIyLB/gates-repro/child-skip-workspace/goagent-examples",
+      "status": "passed",
+      "core_directory": "/tmp/goagent-review-fix-8cIyLB/gates-repro/child-skip-workspace/goagent",
+      "log": "03-tests.jsonl",
+      "passed_tests": 1,
+      "passed_packages": 1
+    },
+    {
+      "module": "github.com/kart-io/goagent-harness/integration/postgres",
+      "directory": "/tmp/goagent-review-fix-8cIyLB/gates-repro/child-skip-workspace/goagent-harness/integration/postgres",
+      "status": "passed",
+      "core_directory": "/tmp/goagent-review-fix-8cIyLB/gates-repro/child-skip-workspace/goagent",
+      "log": "04-tests.jsonl",
+      "passed_tests": 3,
+      "passed_packages": 1
+    }
+  ]
+}

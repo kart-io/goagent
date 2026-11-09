@@ -1,0 +1,54 @@
+[
+  {
+    "repository": "goagent-contrib",
+    "base_revision": "87696061ac858e64f6b3a717d11bf1f3749e3a57",
+    "patch": "goagent-contrib.patch",
+    "patch_sha256": "4ae557dedc40591f818481e52e77e6885ab001bdf589f4dc3804c4813b3aa653",
+    "files": [
+      "durable/pgstore/pgstore.go",
+      "durable/pgstore/pgstore_test.go",
+      "durable/pgstore/README.md",
+      "durable/pgstore/lease_cleanup_test.go"
+    ]
+  },
+  {
+    "repository": "goagent-examples",
+    "base_revision": "454b2475955c55801ce0083e4ef4860a0d0df2e4",
+    "patch": "goagent-examples.patch",
+    "patch_sha256": "217af3635935ec75c4eef66a6a61c3e3d39559458e7fece4bb629292876ae49b",
+    "files": [
+      "orchestration/agent-context/run.go",
+      "orchestration/composed-order/main.go",
+      "orchestration/customer-service/graph.go",
+      "orchestration/customer-service/graph_test.go",
+      "orchestration/flight-booking/graph.go",
+      "orchestration/live/approval/main.go",
+      "orchestration/live/delegation/main.go",
+      "orchestration/live/localize/main.go",
+      "orchestration/live/parallel-diagnostics/main.go",
+      "orchestration/live/review-loop/main.go",
+      "orchestration/live/ticket-triage/main.go",
+      "orchestration/ops/sql-review/main.go",
+      "orchestration/parallel-diagnostics/main.go",
+      "orchestration/runnable-tool/main.go",
+      "workflow/business-cases/article.go",
+      "workflow/business-cases/devops.go",
+      "workflow/business-cases/native_loop.go",
+      "workflow/business-cases/reply.go",
+      "workflow/refund-recovery/graph.go",
+      "workflow/refund-recovery/workflow.go"
+    ]
+  },
+  {
+    "repository": "goagent-harness",
+    "base_revision": "367330b2194713b2d94b6c567c75634c4f866cb5",
+    "patch": "goagent-harness.patch",
+    "patch_sha256": "e1d39443948df3648af43773ae3429f0db5ce86ef0d54c7ee7db1fd037593f83",
+    "files": [
+      "integration/runtime_test.go",
+      "preset/build.go",
+      "preset/builtin.go",
+      "preset/plan.go"
+    ]
+  }
+]

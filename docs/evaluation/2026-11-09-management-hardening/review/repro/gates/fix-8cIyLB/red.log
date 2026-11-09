@@ -1,0 +1,98 @@
+=== RUN   TestPostgresEvidenceRequiresExecutedContracts
+=== RUN   TestPostgresEvidenceRequiresExecutedContracts/通过
+=== RUN   TestPostgresEvidenceRequiresExecutedContracts/跳过
+=== RUN   TestPostgresEvidenceRequiresExecutedContracts/缺失
+=== RUN   TestPostgresEvidenceRequiresExecutedContracts/失败
+=== RUN   TestPostgresEvidenceRequiresExecutedContracts/缺少模块
+=== RUN   TestPostgresEvidenceRequiresExecutedContracts/只有子测试
+=== RUN   TestPostgresEvidenceRequiresExecutedContracts/先失败再通过
+--- PASS: TestPostgresEvidenceRequiresExecutedContracts (0.01s)
+    --- PASS: TestPostgresEvidenceRequiresExecutedContracts/通过 (0.00s)
+    --- PASS: TestPostgresEvidenceRequiresExecutedContracts/跳过 (0.00s)
+    --- PASS: TestPostgresEvidenceRequiresExecutedContracts/缺失 (0.00s)
+    --- PASS: TestPostgresEvidenceRequiresExecutedContracts/失败 (0.00s)
+    --- PASS: TestPostgresEvidenceRequiresExecutedContracts/缺少模块 (0.00s)
+    --- PASS: TestPostgresEvidenceRequiresExecutedContracts/只有子测试 (0.00s)
+    --- PASS: TestPostgresEvidenceRequiresExecutedContracts/先失败再通过 (0.00s)
+=== RUN   TestPostgresEvidenceRealEventsAndIntegrity
+=== RUN   TestPostgresEvidenceRealEventsAndIntegrity/完整真实流及无测试包
+=== RUN   TestPostgresEvidenceRealEventsAndIntegrity/普通构建诊断
+=== RUN   TestPostgresEvidenceRealEventsAndIntegrity/依赖构建事件
+=== RUN   TestPostgresEvidenceRealEventsAndIntegrity/包失败
+    postgres_test.go:199: 门禁结果不符，期望通过=false，实际=<nil>
+=== RUN   TestPostgresEvidenceRealEventsAndIntegrity/缺少包结束
+    postgres_test.go:199: 门禁结果不符，期望通过=false，实际=<nil>
+=== RUN   TestPostgresEvidenceRealEventsAndIntegrity/缺少包开始
+    postgres_test.go:199: 门禁结果不符，期望通过=false，实际=<nil>
+=== RUN   TestPostgresEvidenceRealEventsAndIntegrity/缺少测试结束
+=== RUN   TestPostgresEvidenceRealEventsAndIntegrity/缺少测试开始
+    postgres_test.go:199: 门禁结果不符，期望通过=false，实际=<nil>
+=== RUN   TestPostgresEvidenceRealEventsAndIntegrity/损坏尾部
+    postgres_test.go:199: 门禁结果不符，期望通过=false，实际=<nil>
+=== RUN   TestPostgresEvidenceRealEventsAndIntegrity/损坏中间
+    postgres_test.go:199: 门禁结果不符，期望通过=false，实际=<nil>
+=== RUN   TestPostgresEvidenceRealEventsAndIntegrity/无关JSON
+    postgres_test.go:199: 门禁结果不符，期望通过=false，实际=<nil>
+=== RUN   TestPostgresEvidenceRealEventsAndIntegrity/构建失败
+    postgres_test.go:199: 门禁结果不符，期望通过=false，实际=<nil>
+=== RUN   TestPostgresEvidenceRealEventsAndIntegrity/异模块失败
+    postgres_test.go:199: 门禁结果不符，期望通过=false，实际=<nil>
+=== RUN   TestPostgresEvidenceRealEventsAndIntegrity/异模块通过
+    postgres_test.go:199: 门禁结果不符，期望通过=false，实际=<nil>
+=== RUN   TestPostgresEvidenceRealEventsAndIntegrity/模块内辅助包未结束
+    postgres_test.go:199: 门禁结果不符，期望通过=false，实际=<nil>
+=== RUN   TestPostgresEvidenceRealEventsAndIntegrity/模块内辅助测试失败
+    postgres_test.go:199: 门禁结果不符，期望通过=false，实际=<nil>
+=== RUN   TestPostgresEvidenceRealEventsAndIntegrity/执行过测试的包跳过
+    postgres_test.go:199: 门禁结果不符，期望通过=false，实际=<nil>
+=== RUN   TestPostgresEvidenceRealEventsAndIntegrity/重复完整流
+    postgres_test.go:199: 门禁结果不符，期望通过=false，实际=<nil>
+=== RUN   TestPostgresEvidenceRealEventsAndIntegrity/重复包结束
+    postgres_test.go:199: 门禁结果不符，期望通过=false，实际=<nil>
+=== RUN   TestPostgresEvidenceRealEventsAndIntegrity/真实后代skip
+    postgres_test.go:231: 关键契约后代未通过却被放行
+=== RUN   TestPostgresEvidenceRealEventsAndIntegrity/真实后代fail
+=== RUN   TestPostgresEvidenceRealEventsAndIntegrity/重复模块
+    postgres_test.go:252: 摘要与日志矛盾却被放行
+=== RUN   TestPostgresEvidenceRealEventsAndIntegrity/摘要计数不符
+    postgres_test.go:252: 摘要与日志矛盾却被放行
+=== RUN   TestPostgresEvidenceRealEventsAndIntegrity/摘要失败不符
+    postgres_test.go:252: 摘要与日志矛盾却被放行
+--- FAIL: TestPostgresEvidenceRealEventsAndIntegrity (4.84s)
+    --- PASS: TestPostgresEvidenceRealEventsAndIntegrity/完整真实流及无测试包 (0.00s)
+    --- PASS: TestPostgresEvidenceRealEventsAndIntegrity/普通构建诊断 (0.00s)
+    --- PASS: TestPostgresEvidenceRealEventsAndIntegrity/依赖构建事件 (0.00s)
+    --- FAIL: TestPostgresEvidenceRealEventsAndIntegrity/包失败 (0.00s)
+    --- FAIL: TestPostgresEvidenceRealEventsAndIntegrity/缺少包结束 (0.00s)
+    --- FAIL: TestPostgresEvidenceRealEventsAndIntegrity/缺少包开始 (0.00s)
+    --- PASS: TestPostgresEvidenceRealEventsAndIntegrity/缺少测试结束 (0.00s)
+    --- FAIL: TestPostgresEvidenceRealEventsAndIntegrity/缺少测试开始 (0.00s)
+    --- FAIL: TestPostgresEvidenceRealEventsAndIntegrity/损坏尾部 (0.00s)
+    --- FAIL: TestPostgresEvidenceRealEventsAndIntegrity/损坏中间 (0.00s)
+    --- FAIL: TestPostgresEvidenceRealEventsAndIntegrity/无关JSON (0.00s)
+    --- FAIL: TestPostgresEvidenceRealEventsAndIntegrity/构建失败 (0.00s)
+    --- FAIL: TestPostgresEvidenceRealEventsAndIntegrity/异模块失败 (0.00s)
+    --- FAIL: TestPostgresEvidenceRealEventsAndIntegrity/异模块通过 (0.00s)
+    --- FAIL: TestPostgresEvidenceRealEventsAndIntegrity/模块内辅助包未结束 (0.00s)
+    --- FAIL: TestPostgresEvidenceRealEventsAndIntegrity/模块内辅助测试失败 (0.00s)
+    --- FAIL: TestPostgresEvidenceRealEventsAndIntegrity/执行过测试的包跳过 (0.00s)
+    --- FAIL: TestPostgresEvidenceRealEventsAndIntegrity/重复完整流 (0.00s)
+    --- FAIL: TestPostgresEvidenceRealEventsAndIntegrity/重复包结束 (0.00s)
+    --- FAIL: TestPostgresEvidenceRealEventsAndIntegrity/真实后代skip (1.14s)
+    --- PASS: TestPostgresEvidenceRealEventsAndIntegrity/真实后代fail (0.14s)
+    --- FAIL: TestPostgresEvidenceRealEventsAndIntegrity/重复模块 (0.00s)
+    --- FAIL: TestPostgresEvidenceRealEventsAndIntegrity/摘要计数不符 (0.00s)
+    --- FAIL: TestPostgresEvidenceRealEventsAndIntegrity/摘要失败不符 (0.00s)
+=== RUN   TestVerifyStartupDeadlineStopsDiscoveryAndVersion
+=== RUN   TestVerifyStartupDeadlineStopsDiscoveryAndVersion/mod
+    process_unix_test.go:195: 阶段=mod，耗时=4.003527841s，结果=发现仓库 goagent: 读取 /tmp/TestVerifyStartupDeadlineStopsDiscoveryAndVersionmod2547753189/001/包含空格的 workspace/goagent/go.mod: signal: killed
+    process_unix_test.go:200: 配置超时未生效，最终由外层看门狗终止
+=== RUN   TestVerifyStartupDeadlineStopsDiscoveryAndVersion/version
+    process_unix_test.go:195: 阶段=version，耗时=4.003385659s，结果=signal: killed
+    process_unix_test.go:200: 配置超时未生效，最终由外层看门狗终止
+--- FAIL: TestVerifyStartupDeadlineStopsDiscoveryAndVersion (8.41s)
+    --- FAIL: TestVerifyStartupDeadlineStopsDiscoveryAndVersion/mod (4.21s)
+    --- FAIL: TestVerifyStartupDeadlineStopsDiscoveryAndVersion/version (4.21s)
+FAIL
+FAIL	github.com/kart-io/goagent/scripts/compatcheck	13.274s
+FAIL

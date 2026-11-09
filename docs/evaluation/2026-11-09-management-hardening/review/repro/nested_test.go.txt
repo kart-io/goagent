@@ -1,0 +1,85 @@
+package builder
+
+import (
+ "context"
+ "errors"
+ "testing"
+
+ "github.com/kart-io/goagent/core/session"
+ "github.com/kart-io/goagent/core/durable"
+ "github.com/kart-io/goagent/interfaces"
+ "github.com/kart-io/goagent/llm"
+ "github.com/kart-io/goagent/tools"
+ "github.com/stretchr/testify/require"
+)
+
+func TestCoreReviewPlainChildMustNotCloseParentTurn(t *testing.T) {
+ ctx := context.Background()
+ store := session.NewMemoryStore()
+ child, err := NewSimpleBuilder(&eventModel{MockLLMClient: NewMockLLMClient(), chunks: []*llm.StreamChunk{{Done:true, Content:"子回答", FinishReason:"stop"}}}).WithSystemPrompt("子系统").Build()
+ require.NoError(t, err)
+ delegate := tools.NewBaseTool("delegate", "测试", `{"type":"object"}`, func(ctx context.Context, _ *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+  _, err := child.AsRunnable().Invoke(ctx, "子任务")
+  if err != nil { return nil, err }
+  events := sessionEvents(t, store, "parent")
+  _, open := session.OpenTurn(events)
+  if !open { t.Error("子 Agent 未配置 SessionLog，却关闭父轮次") }
+  return &interfaces.ToolOutput{Success:true, Result:"子结果"}, nil
+ })
+ parent, err := NewSimpleBuilder(newScriptModel(callTool("c1", "delegate"), answer("父答案"))).WithTools(delegate).WithSessionID("parent").WithSessionLog(store).WithSystemPrompt("父系统").Build()
+ require.NoError(t, err)
+ _, err = parent.AsRunnable().Invoke(ctx, "父任务")
+ require.NoError(t, err)
+ traj, err := session.BuildTrajectory(sessionEvents(t, store, "parent"))
+ require.NoError(t, err)
+ require.Equal(t, 1, traj.Turns)
+ require.Equal(t, "父系统", traj.System)
+}
+
+func TestCoreReviewPlainChildMustNotBlockDurableResume(t *testing.T) {
+ store := session.NewMemoryStore()
+ ctx := durable.WithJournal(durable.WithExecutionKey(context.Background(), "run"), session.DurableStore(store, "parent"))
+ child, err := NewSimpleBuilder(&eventModel{MockLLMClient: NewMockLLMClient(), chunks: []*llm.StreamChunk{{Done:true, Content:"子回答", FinishReason:"stop"}}}).WithDurableScope("child").Build()
+ require.NoError(t, err)
+ delegate := tools.NewBaseTool("delegate", "测试", `{"type":"object"}`, func(ctx context.Context, _ *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+  out, err := child.AsRunnable().Invoke(ctx, "子任务")
+  if err != nil { return nil, err }
+  return &interfaces.ToolOutput{Success:true, Result:out.Result}, nil
+ })
+ dispatched, err := dispatcherTools(tools.DispatchConfig{}, delegate)
+ require.NoError(t, err)
+ stopped := false
+ model := newScriptModel(callTool("c1", "delegate"), answer("父答案"))
+ build := func() *SimpleAgent {
+  a, err := NewSimpleBuilder(model).WithTools(dispatched...).WithSessionID("parent").WithSessionLog(store).WithDurableScope("parent").WithRequestHook(func(_ context.Context, req *ModelRequest) error {
+   if req.Step == 1 && !stopped { stopped = true; return errors.New("注入中断") }
+   return nil
+  }).Build()
+  require.NoError(t, err)
+  return a
+ }
+ _, err = build().AsRunnable().Invoke(ctx, "父任务")
+ require.ErrorContains(t, err, "注入中断")
+ out, err := build().AsRunnable().Invoke(ctx, "父任务")
+ require.NoError(t, err, "父轮次尚未完成，必须允许执行缺失的最终模型操作")
+ require.Equal(t, "父答案", out.Result)
+}
+
+func TestCoreReviewPlainChildFailureMustAbortParentHistory(t *testing.T) {
+ ctx := context.Background()
+ store := session.NewMemoryStore()
+ child, err := NewSimpleBuilder(&eventModel{MockLLMClient: NewMockLLMClient(), chunks: []*llm.StreamChunk{{Done:true, Content:"子回答", FinishReason:"stop"}}}).Build()
+ require.NoError(t, err)
+ delegate := tools.NewBaseTool("delegate", "测试", `{"type":"object"}`, func(ctx context.Context, _ *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+  _, err := child.AsRunnable().Invoke(ctx, "子任务")
+  return &interfaces.ToolOutput{Success:err==nil, Result:"子结果"}, err
+ })
+ model := newScriptModel(callTool("c1", "delegate"), failing(errors.New("父模型中断")), answer("下一轮"))
+ parent, err := NewSimpleBuilder(model).WithTools(delegate).WithSessionID("parent").WithSessionLog(store).Build()
+ require.NoError(t, err)
+ _, err = parent.AsRunnable().Invoke(ctx, "失败的父任务")
+ require.ErrorContains(t, err, "父模型中断")
+ _, err = parent.AsRunnable().Invoke(ctx, "新输入")
+ require.NoError(t, err)
+ require.Len(t, model.request(2).Messages, 1, "中断的父轮次不得进入下一轮历史")
+}

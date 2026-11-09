@@ -1,0 +1,223 @@
+{
+  "core_directory": "${CORE_ROOT}",
+  "core_revision": "f2e0b0b449fcfda416169356291689248e5f455b",
+  "go_version": "go version go1.27.3 linux/amd64",
+  "modules": [
+    {
+      "module": "github.com/kart-io/goagent-contrib/acp",
+      "directory": "${ISOLATED_ROOT}/goagent-contrib/acp",
+      "status": "passed",
+      "core_directory": "${CORE_ROOT}",
+      "log": "01-tests.jsonl",
+      "passed_tests": 79,
+      "passed_packages": 1
+    },
+    {
+      "module": "github.com/kart-io/goagent-contrib/document",
+      "directory": "${ISOLATED_ROOT}/goagent-contrib/document",
+      "status": "passed",
+      "core_directory": "${CORE_ROOT}",
+      "log": "02-tests.jsonl",
+      "passed_tests": 85,
+      "passed_packages": 1
+    },
+    {
+      "module": "github.com/kart-io/goagent-contrib/document/pdf",
+      "directory": "${ISOLATED_ROOT}/goagent-contrib/document/pdf",
+      "status": "passed",
+      "core_directory": "${CORE_ROOT}",
+      "log": "03-tests.jsonl",
+      "passed_tests": 26,
+      "passed_packages": 1,
+      "skipped_tests": [
+        "github.com/kart-io/goagent-contrib/document/pdf/TestPDFLoader_LoadRealPDF",
+        "github.com/kart-io/goagent-contrib/document/pdf/TestPDFLoader_LoadAndSplit",
+        "github.com/kart-io/goagent-contrib/document/pdf/TestPDFLoader_LoadByPage"
+      ]
+    },
+    {
+      "module": "github.com/kart-io/goagent-contrib/durable/pgstore",
+      "directory": "${ISOLATED_ROOT}/goagent-contrib/durable/pgstore",
+      "status": "failed",
+      "core_directory": "${CORE_ROOT}",
+      "log": "04-tests.jsonl",
+      "passed_tests": 78,
+      "passed_packages": 0,
+      "failed_tests": [
+        "github.com/kart-io/goagent-contrib/durable/pgstore/TestAcquireUncertainCommitCleanup"
+      ],
+      "error": "exit status 1"
+    },
+    {
+      "module": "github.com/kart-io/goagent-contrib/httpagent",
+      "directory": "${ISOLATED_ROOT}/goagent-contrib/httpagent",
+      "status": "passed",
+      "core_directory": "${CORE_ROOT}",
+      "log": "05-tests.jsonl",
+      "passed_tests": 50,
+      "passed_packages": 1
+    },
+    {
+      "module": "github.com/kart-io/goagent-contrib/management",
+      "directory": "${ISOLATED_ROOT}/goagent-contrib/management",
+      "status": "failed",
+      "core_directory": "${CORE_ROOT}",
+      "log": "06-tests.jsonl",
+      "passed_tests": 79,
+      "passed_packages": 1,
+      "skipped_tests": [
+        "github.com/kart-io/goagent-contrib/management/integration/TestLiveManagement"
+      ],
+      "skipped_packages": [
+        "github.com/kart-io/goagent-contrib/management/examples/host"
+      ],
+      "error": "signal: killed\ncontext deadline exceeded"
+    },
+    {
+      "module": "github.com/kart-io/goagent-contrib/management/harness",
+      "directory": "${ISOLATED_ROOT}/goagent-contrib/management/harness",
+      "status": "passed",
+      "core_directory": "${CORE_ROOT}",
+      "log": "07-tests.jsonl",
+      "passed_tests": 5,
+      "passed_packages": 1
+    },
+    {
+      "module": "github.com/kart-io/goagent-contrib/retrieval",
+      "directory": "${ISOLATED_ROOT}/goagent-contrib/retrieval",
+      "status": "passed",
+      "core_directory": "${CORE_ROOT}",
+      "log": "08-tests.jsonl",
+      "passed_tests": 296,
+      "passed_packages": 1
+    },
+    {
+      "module": "github.com/kart-io/goagent-contrib/retrieval/cohere",
+      "directory": "${ISOLATED_ROOT}/goagent-contrib/retrieval/cohere",
+      "status": "passed",
+      "core_directory": "${CORE_ROOT}",
+      "log": "09-tests.jsonl",
+      "passed_tests": 15,
+      "passed_packages": 1
+    },
+    {
+      "module": "github.com/kart-io/goagent-contrib/retrieval/qdrant",
+      "directory": "${ISOLATED_ROOT}/goagent-contrib/retrieval/qdrant",
+      "status": "passed",
+      "core_directory": "${CORE_ROOT}",
+      "log": "10-tests.jsonl",
+      "passed_tests": 22,
+      "passed_packages": 1,
+      "skipped_tests": [
+        "github.com/kart-io/goagent-contrib/retrieval/qdrant/TestRealQdrantRetrieveFilter",
+        "github.com/kart-io/goagent-contrib/retrieval/qdrant/TestRealQdrantBusinessIDsAndMetadataRoundTrip",
+        "github.com/kart-io/goagent-contrib/retrieval/qdrant/TestQdrantVectorStore_DocumentOperations",
+        "github.com/kart-io/goagent-contrib/retrieval/qdrant/TestQdrantVectorStore_AddDocuments",
+        "github.com/kart-io/goagent-contrib/retrieval/qdrant/TestQdrantVectorStore_Search",
+        "github.com/kart-io/goagent-contrib/retrieval/qdrant/TestQdrantVectorStore_EmptyOperations",
+        "github.com/kart-io/goagent-contrib/retrieval/qdrant/TestQdrantVectorStore_BatchOperations",
+        "github.com/kart-io/goagent-contrib/retrieval/qdrant/TestQdrantVectorStore_ErrorCases",
+        "github.com/kart-io/goagent-contrib/retrieval/qdrant/TestQdrantVectorStore_Close"
+      ]
+    },
+    {
+      "module": "github.com/kart-io/goagent-contrib/retrieval/vertexai",
+      "directory": "${ISOLATED_ROOT}/goagent-contrib/retrieval/vertexai",
+      "status": "passed",
+      "core_directory": "${CORE_ROOT}",
+      "log": "11-tests.jsonl",
+      "passed_tests": 2,
+      "passed_packages": 1
+    },
+    {
+      "module": "github.com/kart-io/goagent-contrib/tools/database",
+      "directory": "${ISOLATED_ROOT}/goagent-contrib/tools/database",
+      "status": "passed",
+      "core_directory": "${CORE_ROOT}",
+      "log": "12-tests.jsonl",
+      "passed_tests": 137,
+      "passed_packages": 1
+    },
+    {
+      "module": "github.com/kart-io/goagent-contrib/tools/practical",
+      "directory": "${ISOLATED_ROOT}/goagent-contrib/tools/practical",
+      "status": "passed",
+      "core_directory": "${CORE_ROOT}",
+      "log": "13-tests.jsonl",
+      "passed_tests": 104,
+      "passed_packages": 1
+    },
+    {
+      "module": "github.com/kart-io/goagent-examples",
+      "directory": "${ISOLATED_ROOT}/goagent-examples",
+      "status": "failed",
+      "core_directory": "${CORE_ROOT}",
+      "log": "14-tests.jsonl",
+      "passed_tests": 147,
+      "passed_packages": 26,
+      "skipped_tests": [
+        "github.com/kart-io/goagent-examples/orchestration/live/log-triage/TestLiveLogTriageCrashRecovery",
+        "github.com/kart-io/goagent-examples/internal/livemodel/livemodeltest/TestRequireSkipsWithoutOptIn/skip",
+        "github.com/kart-io/goagent-examples/orchestration/plugin/basic/TestBasicLive",
+        "github.com/kart-io/goagent-examples/orchestration/live/stream-budget/TestLiveSummarize",
+        "github.com/kart-io/goagent-examples/orchestration/live/stream-budget/TestLiveContend",
+        "github.com/kart-io/goagent-examples/orchestration/live/session-replay/TestLiveSessionReplay",
+        "github.com/kart-io/goagent-examples/orchestration/ops/alert-rca/TestLiveAlertRCA",
+        "github.com/kart-io/goagent-examples/orchestration/ops/cost-attribution/TestLiveCostAttribution",
+        "github.com/kart-io/goagent-examples/orchestration/ops/capacity-review/TestLiveCapacityReview",
+        "github.com/kart-io/goagent-examples/orchestration/ops/scoped-lookup/TestLiveScopedLookup"
+      ],
+      "skipped_packages": [
+        "github.com/kart-io/goagent-examples/agent-usage",
+        "github.com/kart-io/goagent-examples/agent-usage/internal/demo",
+        "github.com/kart-io/goagent-examples/orchestration/internal/livecase/livecasetest",
+        "github.com/kart-io/goagent-examples/orchestration/plugin/internal/shop",
+        "github.com/kart-io/goagent-examples/orchestration/stream-pipeline"
+      ],
+      "error": "exit status 1"
+    },
+    {
+      "module": "github.com/kart-io/goagent-examples/orchestration/httpagent",
+      "directory": "${ISOLATED_ROOT}/goagent-examples/orchestration/httpagent",
+      "status": "passed",
+      "core_directory": "${CORE_ROOT}",
+      "log": "15-tests.jsonl",
+      "passed_tests": 15,
+      "passed_packages": 2,
+      "skipped_packages": [
+        "github.com/kart-io/goagent-examples/orchestration/httpagent/cmd/client",
+        "github.com/kart-io/goagent-examples/orchestration/httpagent/internal/hostws",
+        "github.com/kart-io/goagent-examples/orchestration/httpagent/internal/scenarios"
+      ]
+    },
+    {
+      "module": "github.com/kart-io/goagent-harness",
+      "directory": "${ISOLATED_ROOT}/goagent-harness",
+      "status": "failed",
+      "core_directory": "${CORE_ROOT}",
+      "log": "16-tests.jsonl",
+      "passed_tests": 243,
+      "passed_packages": 7,
+      "skipped_tests": [
+        "github.com/kart-io/goagent-harness/sandbox/TestDockerReal",
+        "github.com/kart-io/goagent-harness/sandbox/TestDockerUnixSocketReal",
+        "github.com/kart-io/goagent-harness/tools/coding/TestDockerExecutorWorkspace",
+        "github.com/kart-io/goagent-harness/sandbox/TestLandlockBelowMinimumABIIsUnavailable",
+        "github.com/kart-io/goagent-harness/sandbox/TestLandlockPartialABIGap"
+      ],
+      "skipped_packages": [
+        "github.com/kart-io/goagent-harness/cmd/sandbox-runner"
+      ],
+      "error": "exit status 1"
+    },
+    {
+      "module": "github.com/kart-io/goagent-harness/integration/postgres",
+      "directory": "${ISOLATED_ROOT}/goagent-harness/integration/postgres",
+      "status": "passed",
+      "core_directory": "${CORE_ROOT}",
+      "log": "17-tests.jsonl",
+      "passed_tests": 3,
+      "passed_packages": 1
+    }
+  ]
+}

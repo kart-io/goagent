@@ -156,3 +156,58 @@ func TestGoCommandDeadlineStopsDescendantBeforeItsOwnTimeout(t *testing.T) {
 		}
 	}
 }
+
+// 启动阶段必须服从配置时限；外层看门狗仅用于让旧实现可结束并留下红证据。
+func TestVerifyStartupDeadlineStopsDiscoveryAndVersion(t *testing.T) {
+	for _, stage := range []string{"mod", "version"} {
+		t.Run(stage, func(t *testing.T) {
+			root := compatibilityFixture(t)
+			realGo, err := exec.LookPath("go")
+			if err != nil {
+				t.Fatal(err)
+			}
+			bin := t.TempDir()
+			started, allow, effect := filepath.Join(bin, "started"), filepath.Join(bin, "allow"), filepath.Join(bin, "effect")
+			writeFixture(t, bin, "go", `#!/bin/sh
+if [ "$1" != "$COMPATCHECK_BLOCK_STAGE" ]; then
+ exec "$COMPATCHECK_REAL_GO" "$@"
+fi
+(
+ : > "$COMPATCHECK_STARTED"
+ while [ ! -f "$COMPATCHECK_ALLOW" ]; do sleep 0.01; done
+ : > "$COMPATCHECK_EFFECT"
+) &
+wait
+`)
+			if err := os.Chmod(filepath.Join(bin, "go"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+			t.Setenv("COMPATCHECK_BLOCK_STAGE", stage)
+			t.Setenv("COMPATCHECK_REAL_GO", realGo)
+			t.Setenv("COMPATCHECK_STARTED", started)
+			t.Setenv("COMPATCHECK_ALLOW", allow)
+			t.Setenv("COMPATCHECK_EFFECT", effect)
+			ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+			defer cancel()
+			begin := time.Now()
+			err = verify(ctx, root, filepath.Join(t.TempDir(), "report"), time.Second)
+			t.Logf("阶段=%s，耗时=%v，结果=%v", stage, time.Since(begin), err)
+			if err == nil {
+				t.Error("阻塞的启动阶段不能通过")
+			}
+			if ctx.Err() != nil {
+				t.Error("配置超时未生效，最终由外层看门狗终止")
+			}
+			if _, err := os.Stat(started); err != nil {
+				t.Fatalf("未到达指定阻塞点: %v", err)
+			}
+			writeFixture(t, bin, "allow", "允许后代执行")
+			for end := time.Now().Add(200 * time.Millisecond); time.Now().Before(end); time.Sleep(10 * time.Millisecond) {
+				if _, err := os.Stat(effect); err == nil {
+					t.Fatal("启动阶段超时后，后代仍产生副作用")
+				}
+			}
+		})
+	}
+}

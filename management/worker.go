@@ -170,29 +170,48 @@ func (w *Worker) Run(parent context.Context) (runErr error) {
 }
 func (w *Worker) recover(ctx context.Context) error {
 	return w.s.cfg.Store.WithinTx(ctx, func(tx Tx) error {
-		tasks, e := all[Task](ctx, tx, "tasks", "", Query{Statuses: []string{string(Running), string(Canceling)}, Limit: 10000})
-		if e != nil {
-			return e
-		}
-		for _, t := range tasks {
-			old := t.Revision
-			t.State = Queued
-			t.RecoveryNeeded = true
-			t.Revision++
-			if e = update(ctx, tx, "tasks", t, old); e != nil {
+		// 每批修改后记录即离开查询集合；从集合头继续读取，不使用会因修改而跳项的偏移分页。
+		// 两类记录仍在同一事务中恢复，任一批失败均由 Store 回滚。
+		const batchSize = 200
+		for {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			tasks, e := all[Task](ctx, tx, "tasks", "", Query{Statuses: []string{string(Running), string(Canceling)}, Limit: batchSize})
+			if e != nil {
 				return e
 			}
+			for _, t := range tasks {
+				old := t.Revision
+				t.State = Queued
+				t.RecoveryNeeded = true
+				t.Revision++
+				if e = update(ctx, tx, "tasks", t, old); e != nil {
+					return e
+				}
+			}
+			if len(tasks) < batchSize {
+				break
+			}
 		}
-		cs, e := all[Command](ctx, tx, "commands", "", Query{Statuses: []string{"applying"}, Limit: 10000})
-		if e != nil {
-			return e
-		}
-		for _, c := range cs {
-			old := c.Revision
-			c.State = "pending"
-			c.Revision++
-			if e = update(ctx, tx, "commands", c, old); e != nil {
+		for {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			cs, e := all[Command](ctx, tx, "commands", "", Query{Statuses: []string{"applying"}, Limit: batchSize})
+			if e != nil {
 				return e
+			}
+			for _, c := range cs {
+				old := c.Revision
+				c.State = "pending"
+				c.Revision++
+				if e = update(ctx, tx, "commands", c, old); e != nil {
+					return e
+				}
+			}
+			if len(cs) < batchSize {
+				break
 			}
 		}
 		return nil

@@ -1,0 +1,10 @@
+{"Action": "start", "Package": "github.com/kart-io/goagent-contrib/management/integration", "Test": ""}
+{"Action": "run", "Package": "github.com/kart-io/goagent-contrib/management/integration", "Test": "TestHostRegisterPublishSessionTaskApprovalResume"}
+{"Action": "pass", "Package": "github.com/kart-io/goagent-contrib/management/integration", "Test": "TestHostRegisterPublishSessionTaskApprovalResume"}
+{"Action": "start", "Package": "github.com/kart-io/goagent-contrib/management/integration", "Test": ""}
+{"Action": "run", "Package": "github.com/kart-io/goagent-contrib/management/integration", "Test": "TestApprovalSurvivesProcessKillAndRestart"}
+{"Action": "pass", "Package": "github.com/kart-io/goagent-contrib/management/integration", "Test": "TestApprovalSurvivesProcessKillAndRestart"}
+{"Action": "start", "Package": "github.com/kart-io/goagent-contrib/management/integration", "Test": ""}
+{"Action": "run", "Package": "github.com/kart-io/goagent-contrib/management/integration", "Test": "TestForkCrashAfterLogCopy"}
+{"Action": "pass", "Package": "github.com/kart-io/goagent-contrib/management/integration", "Test": "TestForkCrashAfterLogCopy"}
+{"Action":"fail","Package":

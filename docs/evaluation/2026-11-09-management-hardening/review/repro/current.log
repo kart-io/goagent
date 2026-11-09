@@ -1,0 +1,24 @@
+--- FAIL: TestCoreReviewPlainChildMustNotCloseParentTurn (0.00s)
+    core_review_overlay_test.go:26: 子 Agent 未配置 SessionLog，却关闭父轮次
+    core_review_overlay_test.go:35: 
+        	Error Trace:	/home/hellotalk/code/go/src/github.com/kart-io/goagent/builder/core_review_overlay_test.go:35
+        	Error:      	Not equal: 
+        	            	expected: 1
+        	            	actual  : 2
+        	Test:       	TestCoreReviewPlainChildMustNotCloseParentTurn
+--- FAIL: TestCoreReviewPlainChildMustNotBlockDurableResume (0.01s)
+    core_review_overlay_test.go:64: 
+        	Error Trace:	/home/hellotalk/code/go/src/github.com/kart-io/goagent/builder/core_review_overlay_test.go:64
+        	Error:      	Received unexpected error:
+        	            	只读重放需要已完成的持久记录
+        	Test:       	TestCoreReviewPlainChildMustNotBlockDurableResume
+        	Messages:   	父轮次尚未完成，必须允许执行缺失的最终模型操作
+--- FAIL: TestCoreReviewPlainChildFailureMustAbortParentHistory (0.00s)
+    core_review_overlay_test.go:84: 
+        	Error Trace:	/home/hellotalk/code/go/src/github.com/kart-io/goagent/builder/core_review_overlay_test.go:84
+        	Error:      	"[{user 失败的父任务  []   <nil>} {assistant   [{c1 function {delegate {}}}]   <nil>} {tool 子结果  []  c1 <nil>} {user 新输入  []   <nil>}]" should have 1 item(s), but has 4
+        	Test:       	TestCoreReviewPlainChildFailureMustAbortParentHistory
+        	Messages:   	中断的父轮次不得进入下一轮历史
+FAIL
+FAIL	github.com/kart-io/goagent/builder	0.017s
+FAIL

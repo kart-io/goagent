@@ -76,7 +76,9 @@ pending := h.PendingInputs()   // 独立快照：仍在队列、尚未被执行�
 
 ## 会话日志
 
-`WithSessionLog(store)` 把会话记入 [`core/session`](../core/session/README.md) 的事件日志：模型历史从日志推导（不再读取记忆），每次模型请求前记录与日志不同的对话，PreStep 等对历史的改写记为 `history/rewrite`，因此每次请求都能由日志重建。持久运行可用 `session.DurableStore(store, id)` 作为 durable 日志，操作快照与对话位于同一份日志；`session.BuildTrajectory` 把日志导出为训练轨迹。只支持原生工具流。
+`WithSessionLog(store)` 把会话记入 [`core/session`](../core/session/README.md) 的事件日志：模型历史从日志推导（不再读取记忆），每次模型请求前记录与日志不同的对话，PreStep 等对历史的改写记为 `history/rewrite`，因此每次请求都能由日志重建。持久运行可用 `session.DurableStore(store, id)` 作为 durable 日志，操作快照与对话位于同一份日志；`session.BuildTrajectory` 把日志导出为训练轨迹。支持普通流式聊天与原生工具循环；纯聊天无需配置占位工具。
+
+每个 Agent 只写入自己显式配置的日志；工具中调用的子 Agent 和 Handle 不继承父轮次的日志写入权。子 Agent 需要独立日志且共享同一个 Store 时，宿主应通过 `tools.WithSessionID(ctx, childID)` 为子调用绑定独立会话身份。
 
 ## 代码结构
 

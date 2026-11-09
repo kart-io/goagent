@@ -1,0 +1,194 @@
+[
+  {
+    "Time": "2026-11-09T11:36:47.881807288+08:00",
+    "Action": "pass",
+    "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+    "Test": "TestSaveRejectsTombstoneAfterScopeWait",
+    "Elapsed": 3.91,
+    "source_log": "04-tests.jsonl"
+  },
+  {
+    "Time": "2026-11-09T11:36:59.02935641+08:00",
+    "Action": "pass",
+    "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+    "Test": "TestScopeMaintenanceAfterConcurrentTransaction",
+    "Elapsed": 11.15,
+    "source_log": "04-tests.jsonl"
+  },
+  {
+    "Time": "2026-11-09T11:37:08.789255816+08:00",
+    "Action": "pass",
+    "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+    "Test": "TestSessionWritesAfterRowWait",
+    "Elapsed": 9.76,
+    "source_log": "04-tests.jsonl"
+  },
+  {
+    "Time": "2026-11-09T11:37:19.178651284+08:00",
+    "Action": "pass",
+    "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+    "Test": "TestDeleteLeaseWaitsForAcquireTransaction",
+    "Elapsed": 10.39,
+    "source_log": "04-tests.jsonl"
+  },
+  {
+    "Time": "2026-11-09T11:37:22.365292628+08:00",
+    "Action": "pass",
+    "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+    "Test": "TestTryAcquireUsesLeaseTransactionLock",
+    "Elapsed": 3.19,
+    "source_log": "04-tests.jsonl"
+  },
+  {
+    "Time": "2026-11-09T11:37:23.132871319+08:00",
+    "Action": "pass",
+    "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+    "Test": "TestLeaseCleanupDoesNotWaitForScopeLock",
+    "Elapsed": 0.77,
+    "source_log": "04-tests.jsonl"
+  },
+  {
+    "Time": "2026-11-09T11:37:23.13290003+08:00",
+    "Action": "pass",
+    "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+    "Test": "TestLockAlreadyCancelled",
+    "Elapsed": 0,
+    "source_log": "04-tests.jsonl"
+  },
+  {
+    "Time": "2026-11-09T11:37:30.630193163+08:00",
+    "Action": "pass",
+    "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+    "Test": "TestLockCancellationDuringAdvisoryWait",
+    "Elapsed": 7.5,
+    "source_log": "04-tests.jsonl"
+  },
+  {
+    "Time": "2026-11-09T11:37:32.907446585+08:00",
+    "Action": "pass",
+    "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+    "Test": "TestLockCancelledAfterCommit",
+    "Elapsed": 2.28,
+    "source_log": "04-tests.jsonl"
+  },
+  {
+    "Time": "2026-11-09T11:38:00.730678096+08:00",
+    "Action": "pass",
+    "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+    "Test": "TestConformance",
+    "Elapsed": 27.82,
+    "source_log": "04-tests.jsonl"
+  },
+  {
+    "Time": "2026-11-09T11:38:06.263593142+08:00",
+    "Action": "pass",
+    "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+    "Test": "TestProcessCrashTakeover",
+    "Elapsed": 1.79,
+    "source_log": "04-tests.jsonl"
+  },
+  {
+    "Time": "2026-11-09T11:38:11.399609368+08:00",
+    "Action": "pass",
+    "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+    "Test": "TestPrimaryRestart",
+    "Elapsed": 5.14,
+    "source_log": "04-tests.jsonl"
+  },
+  {
+    "Time": "2026-11-09T11:38:12.143046684+08:00",
+    "Action": "pass",
+    "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+    "Test": "TestAcquireUncertainCommitCleanup",
+    "Elapsed": 0.74,
+    "source_log": "04-tests.jsonl"
+  },
+  {
+    "Time": "2026-11-09T11:38:14.077970712+08:00",
+    "Action": "pass",
+    "Package": "github.com/kart-io/goagent-contrib/durable/pgstore",
+    "Test": "TestSyncCommit",
+    "Elapsed": 1.93,
+    "source_log": "04-tests.jsonl"
+  },
+  {
+    "Time": "2026-11-09T11:39:17.34891934+08:00",
+    "Action": "pass",
+    "Package": "github.com/kart-io/goagent-contrib/management/integration",
+    "Test": "TestHostRegisterPublishSessionTaskApprovalResume",
+    "Elapsed": 5.47,
+    "source_log": "06-tests.jsonl"
+  },
+  {
+    "Time": "2026-11-09T11:40:59.0527877+08:00",
+    "Action": "pass",
+    "Package": "github.com/kart-io/goagent-contrib/management/integration",
+    "Test": "TestRestartAtEveryCommitBoundary",
+    "Elapsed": 84.25,
+    "source_log": "06-tests.jsonl"
+  },
+  {
+    "Time": "2026-11-09T11:41:05.115057767+08:00",
+    "Action": "pass",
+    "Package": "github.com/kart-io/goagent-contrib/management/integration",
+    "Test": "TestOutboxCrashAfterRemoteAcceptanceKeepsStableDelivery",
+    "Elapsed": 6.06,
+    "source_log": "06-tests.jsonl"
+  },
+  {
+    "Time": "2026-11-09T11:42:33.777710672+08:00",
+    "Action": "pass",
+    "Package": "github.com/kart-io/goagent-contrib/management/integration",
+    "Test": "TestForkCrashAfterLogCopy",
+    "Elapsed": 9.46,
+    "source_log": "06-tests.jsonl"
+  },
+  {
+    "Time": "2026-11-09T11:42:40.094259405+08:00",
+    "Action": "pass",
+    "Package": "github.com/kart-io/goagent-contrib/management/integration",
+    "Test": "TestApprovalSurvivesProcessKillAndRestart",
+    "Elapsed": 6.32,
+    "source_log": "06-tests.jsonl"
+  },
+  {
+    "Time": "2026-11-09T11:45:09.510314053+08:00",
+    "Action": "pass",
+    "Package": "github.com/kart-io/goagent-examples/workflow/refund-recovery",
+    "Test": "TestRefundGraphRecoveryAcrossProcesses",
+    "Elapsed": 3.07,
+    "source_log": "14-tests.jsonl"
+  },
+  {
+    "Time": "2026-11-09T11:45:15.649511084+08:00",
+    "Action": "pass",
+    "Package": "github.com/kart-io/goagent-examples/workflow/refund-recovery",
+    "Test": "TestRefundRecoveryAcrossProcesses",
+    "Elapsed": 6.12,
+    "source_log": "14-tests.jsonl"
+  },
+  {
+    "Time": "2026-11-09T11:45:45.583803443+08:00",
+    "Action": "pass",
+    "Package": "github.com/kart-io/goagent-harness/integration/postgres",
+    "Test": "TestWaitRestartResumeRelease",
+    "Elapsed": 1.66,
+    "source_log": "17-tests.jsonl"
+  },
+  {
+    "Time": "2026-11-09T11:45:46.83504995+08:00",
+    "Action": "pass",
+    "Package": "github.com/kart-io/goagent-harness/integration/postgres",
+    "Test": "TestTakeoverFencesOldHolder",
+    "Elapsed": 1.25,
+    "source_log": "17-tests.jsonl"
+  },
+  {
+    "Time": "2026-11-09T11:45:47.635960799+08:00",
+    "Action": "pass",
+    "Package": "github.com/kart-io/goagent-harness/integration/postgres",
+    "Test": "TestInboxAppendOnceAcrossConnections",
+    "Elapsed": 0.8,
+    "source_log": "17-tests.jsonl"
+  }
+]

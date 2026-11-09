@@ -1,0 +1,13 @@
+{
+	"Path": "github.com/kart-io/goagent",
+	"Version": "v0.0.0",
+	"Replace": {
+		"Path": "/tmp/goagent-review-fix-8cIyLB/gates-repro/child-skip-workspace/goagent",
+		"Dir": "/tmp/goagent-review-fix-8cIyLB/gates-repro/child-skip-workspace/goagent",
+		"GoMod": "/tmp/goagent-review-fix-8cIyLB/gates-repro/child-skip-workspace/goagent/go.mod",
+		"GoVersion": "1.26.0"
+	},
+	"Dir": "/tmp/goagent-review-fix-8cIyLB/gates-repro/child-skip-workspace/goagent",
+	"GoMod": "/tmp/goagent-review-fix-8cIyLB/gates-repro/child-skip-workspace/goagent/go.mod",
+	"GoVersion": "1.26.0"
+}

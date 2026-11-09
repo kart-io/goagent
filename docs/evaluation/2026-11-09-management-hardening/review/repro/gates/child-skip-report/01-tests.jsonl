@@ -1,0 +1,25 @@
+{"Time":"2026-11-09T11:08:57.129024329+08:00","Action":"start","Package":"github.com/kart-io/goagent-contrib/durable/pgstore"}
+{"Time":"2026-11-09T11:08:57.136160189+08:00","Action":"run","Package":"github.com/kart-io/goagent-contrib/durable/pgstore","Test":"TestConformance"}
+{"Time":"2026-11-09T11:08:57.136188464+08:00","Action":"output","Package":"github.com/kart-io/goagent-contrib/durable/pgstore","Test":"TestConformance","Output":"=== RUN   TestConformance\n","OutputType":"frame"}
+{"Time":"2026-11-09T11:08:57.136207377+08:00","Action":"run","Package":"github.com/kart-io/goagent-contrib/durable/pgstore","Test":"TestConformance/durability"}
+{"Time":"2026-11-09T11:08:57.136209346+08:00","Action":"output","Package":"github.com/kart-io/goagent-contrib/durable/pgstore","Test":"TestConformance/durability","Output":"=== RUN   TestConformance/durability\n","OutputType":"frame"}
+{"Time":"2026-11-09T11:08:57.136212381+08:00","Action":"output","Package":"github.com/kart-io/goagent-contrib/durable/pgstore","Test":"TestConformance/durability","Output":"    contract_test.go:3: prerequisite unavailable\n"}
+{"Time":"2026-11-09T11:08:57.136230287+08:00","Action":"output","Package":"github.com/kart-io/goagent-contrib/durable/pgstore","Test":"TestConformance/durability","Output":"--- SKIP: TestConformance/durability (0.00s)\n","OutputType":"frame"}
+{"Time":"2026-11-09T11:08:57.136242213+08:00","Action":"skip","Package":"github.com/kart-io/goagent-contrib/durable/pgstore","Test":"TestConformance/durability","Elapsed":0}
+{"Time":"2026-11-09T11:08:57.136258639+08:00","Action":"output","Package":"github.com/kart-io/goagent-contrib/durable/pgstore","Test":"TestConformance","Output":"--- PASS: TestConformance (0.00s)\n","OutputType":"frame"}
+{"Time":"2026-11-09T11:08:57.136263192+08:00","Action":"pass","Package":"github.com/kart-io/goagent-contrib/durable/pgstore","Test":"TestConformance","Elapsed":0}
+{"Time":"2026-11-09T11:08:57.136270923+08:00","Action":"run","Package":"github.com/kart-io/goagent-contrib/durable/pgstore","Test":"TestProcessCrashTakeover"}
+{"Time":"2026-11-09T11:08:57.136272266+08:00","Action":"output","Package":"github.com/kart-io/goagent-contrib/durable/pgstore","Test":"TestProcessCrashTakeover","Output":"=== RUN   TestProcessCrashTakeover\n","OutputType":"frame"}
+{"Time":"2026-11-09T11:08:57.136289911+08:00","Action":"output","Package":"github.com/kart-io/goagent-contrib/durable/pgstore","Test":"TestProcessCrashTakeover","Output":"--- PASS: TestProcessCrashTakeover (0.00s)\n","OutputType":"frame"}
+{"Time":"2026-11-09T11:08:57.13629555+08:00","Action":"pass","Package":"github.com/kart-io/goagent-contrib/durable/pgstore","Test":"TestProcessCrashTakeover","Elapsed":0}
+{"Time":"2026-11-09T11:08:57.136302298+08:00","Action":"run","Package":"github.com/kart-io/goagent-contrib/durable/pgstore","Test":"TestPrimaryRestart"}
+{"Time":"2026-11-09T11:08:57.136303282+08:00","Action":"output","Package":"github.com/kart-io/goagent-contrib/durable/pgstore","Test":"TestPrimaryRestart","Output":"=== RUN   TestPrimaryRestart\n","OutputType":"frame"}
+{"Time":"2026-11-09T11:08:57.136318974+08:00","Action":"output","Package":"github.com/kart-io/goagent-contrib/durable/pgstore","Test":"TestPrimaryRestart","Output":"--- PASS: TestPrimaryRestart (0.00s)\n","OutputType":"frame"}
+{"Time":"2026-11-09T11:08:57.136323903+08:00","Action":"pass","Package":"github.com/kart-io/goagent-contrib/durable/pgstore","Test":"TestPrimaryRestart","Elapsed":0}
+{"Time":"2026-11-09T11:08:57.136328502+08:00","Action":"run","Package":"github.com/kart-io/goagent-contrib/durable/pgstore","Test":"TestSyncCommit"}
+{"Time":"2026-11-09T11:08:57.136329427+08:00","Action":"output","Package":"github.com/kart-io/goagent-contrib/durable/pgstore","Test":"TestSyncCommit","Output":"=== RUN   TestSyncCommit\n","OutputType":"frame"}
+{"Time":"2026-11-09T11:08:57.136345118+08:00","Action":"output","Package":"github.com/kart-io/goagent-contrib/durable/pgstore","Test":"TestSyncCommit","Output":"--- PASS: TestSyncCommit (0.00s)\n","OutputType":"frame"}
+{"Time":"2026-11-09T11:08:57.136350146+08:00","Action":"pass","Package":"github.com/kart-io/goagent-contrib/durable/pgstore","Test":"TestSyncCommit","Elapsed":0}
+{"Time":"2026-11-09T11:08:57.136359499+08:00","Action":"output","Package":"github.com/kart-io/goagent-contrib/durable/pgstore","Output":"PASS\n","OutputType":"frame"}
+{"Time":"2026-11-09T11:08:58.137425598+08:00","Action":"output","Package":"github.com/kart-io/goagent-contrib/durable/pgstore","Output":"ok  \tgithub.com/kart-io/goagent-contrib/durable/pgstore\t1.008s\n"}
+{"Time":"2026-11-09T11:08:58.137449673+08:00","Action":"pass","Package":"github.com/kart-io/goagent-contrib/durable/pgstore","Elapsed":1.008}

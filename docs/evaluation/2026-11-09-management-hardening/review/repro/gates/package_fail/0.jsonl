@@ -1,0 +1,13 @@
+{"Action": "start", "Package": "github.com/kart-io/goagent-contrib/durable/pgstore", "Test": ""}
+{"Action": "run", "Package": "github.com/kart-io/goagent-contrib/durable/pgstore", "Test": "TestConformance"}
+{"Action": "pass", "Package": "github.com/kart-io/goagent-contrib/durable/pgstore", "Test": "TestConformance"}
+{"Action": "start", "Package": "github.com/kart-io/goagent-contrib/durable/pgstore", "Test": ""}
+{"Action": "run", "Package": "github.com/kart-io/goagent-contrib/durable/pgstore", "Test": "TestProcessCrashTakeover"}
+{"Action": "pass", "Package": "github.com/kart-io/goagent-contrib/durable/pgstore", "Test": "TestProcessCrashTakeover"}
+{"Action": "start", "Package": "github.com/kart-io/goagent-contrib/durable/pgstore", "Test": ""}
+{"Action": "run", "Package": "github.com/kart-io/goagent-contrib/durable/pgstore", "Test": "TestPrimaryRestart"}
+{"Action": "pass", "Package": "github.com/kart-io/goagent-contrib/durable/pgstore", "Test": "TestPrimaryRestart"}
+{"Action": "start", "Package": "github.com/kart-io/goagent-contrib/durable/pgstore", "Test": ""}
+{"Action": "run", "Package": "github.com/kart-io/goagent-contrib/durable/pgstore", "Test": "TestSyncCommit"}
+{"Action": "pass", "Package": "github.com/kart-io/goagent-contrib/durable/pgstore", "Test": "TestSyncCommit"}
+{"Action": "fail", "Package": "github.com/kart-io/goagent-contrib/durable/pgstore", "Test": ""}

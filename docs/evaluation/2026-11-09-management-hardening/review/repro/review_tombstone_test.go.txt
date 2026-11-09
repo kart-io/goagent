@@ -1,0 +1,62 @@
+package pgstore
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/stretchr/testify/require"
+)
+
+func TestReviewSaveRejectsCommittedTombstoneAfterWait(t *testing.T) {
+	for _, isolation := range []string{"read committed", "repeatable read"} {
+		t.Run(isolation, func(t *testing.T) {
+			dsn, schema := newSchema(t)
+			observer := newPool(t, dsn, schema)
+			cfg, err := pgxpool.ParseConfig(dsn)
+			require.NoError(t, err)
+			cfg.ConnConfig.RuntimeParams["search_path"] = schema
+			cfg.ConnConfig.RuntimeParams["default_transaction_isolation"] = isolation
+			pool, err := pgxpool.NewWithConfig(context.Background(), cfg)
+			require.NoError(t, err)
+			t.Cleanup(pool.Close)
+			// 使用真实 Lock/Save 路径；不启动续约，避免它修改租约行掩盖快照问题。
+			s := &Store{cfg: Config{Pool: pool, OpTimeout: 5 * time.Second, LeaseTTL: time.Minute}, gates: map[string]*gate{}, owners: map[string]*hold{}}
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			scoped := s.Scope("tenant")
+			unlock, err := scoped.Lock(ctx, "run")
+			require.NoError(t, err)
+			defer func() { require.NoError(t, unlock()) }()
+			require.NoError(t, scoped.Save(ctx, "run", &durable.Snapshot{Version: "before"}))
+			tx, err := observer.Begin(ctx)
+			require.NoError(t, err)
+			defer tx.Rollback(context.Background())
+			_, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, scopeNS("tenant"))
+			require.NoError(t, err)
+			var saveErr error
+			done := make(chan struct{})
+			go func() {
+				saveErr = scoped.Save(ctx, "run", &durable.Snapshot{Version: "after"})
+				close(done)
+			}()
+			defer func() { _ = tx.Rollback(context.Background()); <-done }()
+			waitLeaseBlocked(t, observer, tx.Conn().PgConn().PID(), done)
+			_, err = tx.Exec(ctx, `INSERT INTO goagent_durable_scope (ns, removed_at) VALUES ($1, now())`, scopeNS("tenant"))
+			require.NoError(t, err)
+			require.NoError(t, tx.Commit(ctx))
+			<-done
+			var data []byte
+			require.NoError(t, observer.QueryRow(ctx, `SELECT data FROM goagent_durable_snapshot WHERE ns=$1 AND id='run'`, scopeNS("tenant")).Scan(&data))
+			var snapshot durable.Snapshot
+			require.NoError(t, json.Unmarshal(data, &snapshot))
+			t.Logf("隔离级别=%s，Save错误=%v，实际快照版本=%s", isolation, saveErr, snapshot.Version)
+			require.ErrorIs(t, saveErr, agentErrors.ErrScopeRemoved)
+			require.Equal(t, "before", snapshot.Version)
+		})
+	}
+}

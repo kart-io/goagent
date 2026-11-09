@@ -1,0 +1,66 @@
+[
+  {
+    "repository": "goagent-contrib",
+    "base_revision": "87696061ac858e64f6b3a717d11bf1f3749e3a57",
+    "patch": "goagent-contrib.patch",
+    "patch_sha256": "355f51eb84b41d9b2cdeca9a0d433923f485cfa938a46ab252f91d973b7a8d28",
+    "files": {
+      "durable/pgstore/README.md": "13aeaedab92c7e5f76863d23275dc24d6e6f9ff884b1e491509bc7698014decf",
+      "durable/pgstore/isolation_test.go": "748d2307dbbc1ebb265b2edcb17ff09b45ea1239fa8f178e252852023a351949",
+      "durable/pgstore/lease_cleanup_test.go": "8da81769431a7b2724f9070c6b1b94ccccf666577862e0b798852f0e97412241",
+      "durable/pgstore/lock_cancel_test.go": "9efecbf274b96cde64814148f89e4a7a6f18e7f4d444f5aa62470f458abc3543",
+      "durable/pgstore/pgstore.go": "90cca51fc36389f9a16cb02fa6be1ad88fb2cacb709a7c135617fb450fc6f6f8",
+      "durable/pgstore/pgstore_test.go": "cad19dad8c6da7c8303bbf2d22000a30ad6ba2a823aa7b499de6be9587712565",
+      "durable/pgstore/scope.go": "a2f72df459de4e0c15ecd54a1c0d1bd8edaa542194efcb77b9e3a1a00ee73397",
+      "durable/pgstore/session.go": "e430269183f5c17717e2a0f0b4a6aea5fb51f33f90d861c073989d78bdda48c5"
+    },
+    "validation": {
+      "forward_check": true,
+      "applied_to_clean_base": true,
+      "reverse_check": true,
+      "all_file_bytes_match": true
+    }
+  },
+  {
+    "repository": "goagent-examples",
+    "base_revision": "454b2475955c55801ce0083e4ef4860a0d0df2e4",
+    "patch": "../../patches/goagent-examples.patch",
+    "patch_sha256": "217af3635935ec75c4eef66a6a61c3e3d39559458e7fece4bb629292876ae49b",
+    "files": [
+      "orchestration/agent-context/run.go",
+      "orchestration/composed-order/main.go",
+      "orchestration/customer-service/graph.go",
+      "orchestration/customer-service/graph_test.go",
+      "orchestration/flight-booking/graph.go",
+      "orchestration/live/approval/main.go",
+      "orchestration/live/delegation/main.go",
+      "orchestration/live/localize/main.go",
+      "orchestration/live/parallel-diagnostics/main.go",
+      "orchestration/live/review-loop/main.go",
+      "orchestration/live/ticket-triage/main.go",
+      "orchestration/ops/sql-review/main.go",
+      "orchestration/parallel-diagnostics/main.go",
+      "orchestration/runnable-tool/main.go",
+      "workflow/business-cases/article.go",
+      "workflow/business-cases/devops.go",
+      "workflow/business-cases/native_loop.go",
+      "workflow/business-cases/reply.go",
+      "workflow/refund-recovery/graph.go",
+      "workflow/refund-recovery/workflow.go"
+    ],
+    "unchanged_since_original_validation": true
+  },
+  {
+    "repository": "goagent-harness",
+    "base_revision": "367330b2194713b2d94b6c567c75634c4f866cb5",
+    "patch": "../../patches/goagent-harness.patch",
+    "patch_sha256": "e1d39443948df3648af43773ae3429f0db5ce86ef0d54c7ee7db1fd037593f83",
+    "files": [
+      "integration/runtime_test.go",
+      "preset/build.go",
+      "preset/builtin.go",
+      "preset/plan.go"
+    ],
+    "unchanged_since_original_validation": true
+  }
+]

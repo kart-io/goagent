@@ -12,6 +12,8 @@ make test-frameworkbench
 make compatibility COMPAT_OUT=/tmp/goagent-acceptance-new
 ```
 
+管理层默认回归用 `make test-management`。配置专用 PostgreSQL 和容器后，改用 `make compatibility-postgres COMPAT_OUT=/tmp/goagent-postgres-new`，关键存储与跨进程恢复测试不得跳过。只读检查已有报告用 `go run ./scripts/compatcheck -verify-postgres-report /tmp/goagent-postgres-new`；首次失败记录保留，修复后使用新目录重新验证。
+
 `COMPAT_OUT` 必须不存在。验证器使用临时 modfile 将所有本地模块绑定到当前源码，关闭外部 go.work；不改写下游依赖文件。核对 `summary.json` 中的 `core_directory`、`core_revision` 和各模块 `status`，再逐项检查 `skipped_tests`。
 
 需要 Postgres 实库验证时，在专用测试数据库上配置 `GOAGENT_PGSTORE_DSN` 后执行同一命令，使用另一个新报告目录。相关测试创建隔离 schema 并在结束后删除；需具有建 schema 权限。连接串通过环境提供，不写进报告或提交文件。必须确认 pgstore 与 Harness 的 postgres 集成模块实际执行了测试，不能以它们的编译成功或跳过结果代替实库通过。
@@ -56,3 +58,5 @@ GO_TEST_MODE=true go test -race -count=1 -timeout=120s ./workflow/refund-recover
 保存源码提交、工具链、模块依赖定位、测试数据来源、逐场景结果与跳过项。失败和取消保留在结果中，不在同一目录覆盖或删除。原始日志留在访问受控的报告目录，进入仓库的结果不包含凭据、真实个人信息或完整连接串。
 
 本轮本地证据见 [项目稳定化验收报告](../evaluation/2026-11-05-project-stabilization/REPORT.md)。业务题集与模型效果另见 [业务评测要求](../../evaluation/agentbench/BUSINESS_EVALUATION.md)，执行语义见 [执行契约](../guides/EXECUTION_CONTRACT.md)。
+
+管理层离线回归、PostgreSQL 租约清理修复和后续完整跨仓实库复验见 [管理层稳定化验收](../evaluation/2026-11-09-management-hardening/REPORT.md)。
