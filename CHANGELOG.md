@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `builder`：未调用 `WithTemperature`/`WithMaxTokens` 时请求不再携带 0.7 与 2000，改由 LLM 客户端配置决定；`AgentConfig` 新增 `TemperatureSet`，移除 `constants.DefaultAgentMaxTokens`。依赖旧默认值的调用方显式调用这两个选项。
 - `core/durable`：`RetryFailed` 只重跑结果已知的失败（普通失败、超时）；停在 pending 或因取消而失败的记录须由 `Reconcile` 核对未生效或声明 `RetryInterrupted` 才重跑。`tools.Dispatcher` 的默认策略显式声明 `RetryInterrupted`，恢复行为不变；非幂等工具应通过 `DurableOperationPolicy` 提供 `Reconcile` 或去掉 `RetryInterrupted`。
 - `core`：`ToChannel` 在 ctx 取消后只在消费方正在接收或缓冲有空位时送出取消错误块，否则直接关闭 channel，避免消费方放弃读取后 goroutine 永久阻塞；调用方应在 channel 关闭后检查 `ctx.Err()`。
+- `core/middleware`：`TimingMiddleware.GetTimings` 只返回最近 `constants.DefaultTimingWindow`（1000）条记录，`GetAverageLatency` 仍按全部记录计算；`CacheMiddleware` 条目上限为 `constants.DefaultMiddlewareCacheCapacity`（10000），写满时先回收过期条目再淘汰最早过期的条目，读到过期条目时删除。
 
 ### 修复与验证
 

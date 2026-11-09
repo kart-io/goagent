@@ -423,19 +423,25 @@ func (m *LoggingMiddleware) OnError(ctx context.Context, err error) error {
 }
 
 // TimingMiddleware tracks execution time
+//
+// 只保留最近 constants.DefaultTimingWindow 条记录，长期运行时内存有界；平均值按全部记录累计。
 type TimingMiddleware struct {
 	*BaseMiddleware
-	timings map[string]time.Duration
 	mu      sync.RWMutex
+	recent  []timingRecord // 环形缓冲
+	next    int
 	counter int64
+	total   time.Duration
+}
+
+type timingRecord struct {
+	key      string
+	duration time.Duration
 }
 
 // NewTimingMiddleware creates a timing middleware
 func NewTimingMiddleware() *TimingMiddleware {
-	return &TimingMiddleware{
-		BaseMiddleware: NewBaseMiddleware("timing"),
-		timings:        make(map[string]time.Duration),
-	}
+	return &TimingMiddleware{BaseMiddleware: NewBaseMiddleware("timing")}
 }
 
 // OnBefore records the start time
@@ -468,52 +474,55 @@ func (m *TimingMiddleware) OnAfter(ctx context.Context, response *MiddlewareResp
 	if duration > 0 {
 		response.Metadata["timing_duration"] = duration
 
-		// Store timing with unique key
 		m.mu.Lock()
 		m.counter++
-		key := fmt.Sprintf("%s_%d", time.Now().Format(time.RFC3339Nano), m.counter)
-		m.timings[key] = duration
+		m.total += duration
+		record := timingRecord{key: fmt.Sprintf("%s_%d", time.Now().Format(time.RFC3339Nano), m.counter), duration: duration}
+		if len(m.recent) < constants.DefaultTimingWindow {
+			m.recent = append(m.recent, record)
+		} else {
+			m.recent[m.next] = record
+			m.next = (m.next + 1) % constants.DefaultTimingWindow
+		}
 		m.mu.Unlock()
 	}
 
 	return response, nil
 }
 
-// GetTimings returns all recorded timings
+// GetTimings returns the most recent timings (at most constants.DefaultTimingWindow)
 func (m *TimingMiddleware) GetTimings() map[string]time.Duration {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	timings := make(map[string]time.Duration, len(m.timings))
-	for k, v := range m.timings {
-		timings[k] = v
+	timings := make(map[string]time.Duration, len(m.recent))
+	for _, r := range m.recent {
+		timings[r.key] = r.duration
 	}
 	return timings
 }
 
-// GetAverageLatency returns the average latency
+// GetAverageLatency returns the average latency over all recorded timings
 func (m *TimingMiddleware) GetAverageLatency() time.Duration {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	if len(m.timings) == 0 {
+	if m.counter == 0 {
 		return 0
 	}
-
-	var total time.Duration
-	for _, duration := range m.timings {
-		total += duration
-	}
-
-	return total / time.Duration(len(m.timings))
+	return m.total / time.Duration(m.counter)
 }
 
 // CacheMiddleware provides response caching with sharded locks for better concurrency
+//
+// 条目总数不超过 constants.DefaultMiddlewareCacheCapacity（按分片均分）；分片写满时先回收过期条目，
+// 仍满则淘汰最早过期的条目。读到过期条目时删除。
 type CacheMiddleware struct {
 	*BaseMiddleware
-	shards    []*cacheShard
-	numShards uint32
-	ttl       time.Duration
+	shards     []*cacheShard
+	numShards  uint32
+	ttl        time.Duration
+	shardLimit int
 }
 
 // cacheShard 单个缓存分片，减少锁竞争
@@ -556,6 +565,7 @@ func NewCacheMiddlewareWithShards(ttl time.Duration, numShards uint32) *CacheMid
 		shards:         shards,
 		numShards:      numShards,
 		ttl:            ttl,
+		shardLimit:     max(constants.DefaultMiddlewareCacheCapacity/int(numShards), 1),
 	}
 }
 
@@ -603,7 +613,15 @@ func (m *CacheMiddleware) OnBefore(ctx context.Context, request *MiddlewareReque
 	}
 	delete(request.Metadata, "cache_hit")
 	delete(request.Metadata, "cached_response")
-	if ok && time.Now().Before(entry.ExpiresAt) {
+	if ok && !time.Now().Before(entry.ExpiresAt) {
+		shard.mu.Lock()
+		if shard.cache[key] == entry {
+			delete(shard.cache, key)
+		}
+		shard.mu.Unlock()
+		ok = false
+	}
+	if ok {
 		if response, err := cloneCachedResponse(entry.Response); err == nil {
 			request.Metadata["cache_hit"] = true
 			request.Metadata["cached_response"] = response
@@ -634,9 +652,31 @@ func (m *CacheMiddleware) storeResponse(key string, response *MiddlewareResponse
 		return
 	}
 	shard := m.getShard(key)
+	now := time.Now()
 	shard.mu.Lock()
-	shard.cache[key] = &CacheEntry{Response: cached, ExpiresAt: time.Now().Add(m.ttl)}
+	if _, exists := shard.cache[key]; !exists && len(shard.cache) >= m.shardLimit {
+		shard.evict(now)
+	}
+	shard.cache[key] = &CacheEntry{Response: cached, ExpiresAt: now.Add(m.ttl)}
 	shard.mu.Unlock()
+}
+
+// evict 在持锁状态下腾出至少一个位置：先删全部过期条目，没有过期条目时删最早过期的一条。
+func (s *cacheShard) evict(now time.Time) {
+	var oldestKey string
+	var oldest time.Time
+	reclaimed := false
+	for k, e := range s.cache {
+		if !now.Before(e.ExpiresAt) {
+			delete(s.cache, k)
+			reclaimed = true
+		} else if oldestKey == "" || e.ExpiresAt.Before(oldest) {
+			oldestKey, oldest = k, e.ExpiresAt
+		}
+	}
+	if !reclaimed && oldestKey != "" {
+		delete(s.cache, oldestKey)
+	}
 }
 
 func cloneCachedResponse(response *MiddlewareResponse) (*MiddlewareResponse, error) {
