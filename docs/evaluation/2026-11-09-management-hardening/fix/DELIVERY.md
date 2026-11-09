@@ -1,14 +1,16 @@
 # 提交交付记录（2026-11-09）
 
-用户在全部修复、独立复审和实库验收完成后明确要求提交并推送。本文件随主仓提交，主仓目标为 `origin/master`；所在提交即核心交付版本。
+用户在全部修复、独立复审和实库验收完成后明确要求提交并推送，随后要求将关联修复合入主分支。核心实现已在 `origin/master` 的 [0e4db8bc](https://github.com/kart-io/goagent/commit/0e4db8bceb8a9eb5465e6be3387bec4399bc5f4d) 提交；本记录的后续更新只补充主分支交付状态。
 
-| 关联仓库 | 已推送分支 | 提交 |
+| 关联仓库 | 已合入并推送的主分支 | 提交 |
 |---|---|---|
-| goagent-contrib | `fix/management-hardening-20261109` | [3831bc788521](https://github.com/kart-io/goagent-contrib/commit/3831bc78852145443bc238ae924e1a4182b4b6d3) |
-| goagent-examples | `fix/management-hardening-20261109` | [3b6f8608f90d](https://github.com/kart-io/goagent-examples/commit/3b6f8608f90d6807ba432797044555812da4c044) |
-| goagent-harness | `fix/management-hardening-20261109` | [912bca0a05c1](https://github.com/kart-io/goagent-harness/commit/912bca0a05c11c204b5cad695f0bd85fc0b10b5b) |
+| goagent-contrib | `master` | [3831bc788521](https://github.com/kart-io/goagent-contrib/commit/3831bc78852145443bc238ae924e1a4182b4b6d3) |
+| goagent-examples | `main` | [3b6f8608f90d](https://github.com/kart-io/goagent-examples/commit/3b6f8608f90d6807ba432797044555812da4c044) |
+| goagent-harness | `main` | [912bca0a05c1](https://github.com/kart-io/goagent-harness/commit/912bca0a05c11c204b5cad695f0bd85fc0b10b5b) |
 
-三个关联分支均已推送，并通过 `git ls-remote` 核对远端 SHA 与本地提交一致。关联提交包含已验收的完整补丁，没有更新原工作区的主分支或覆盖用户修改。
+三个关联仓库均已快进合入远端主分支，并通过 `git ls-remote` 核对主分支 SHA 与已验收提交一致。合入前确认远端主分支没有新增提交，未产生冲突或修改受测源码。先前推送的 `fix/management-hardening-20261109` 分支保留。
+
+合入通过隔离工作树完成，原始本地工作区及其主分支指针保持原状，没有覆盖用户未提交修改。远端主分支已包含本次完整修复。
 
 提交前再次核验核心25个源码/测试/构建文件指纹，以及关联仓库补丁范围和内容，与上一轮通过验证的版本一致。此次仅新增交付说明，没有修改受测代码；复用[完整验证结果](verification.json)和[独立复审](POST-FIX-REVIEW.md)，没有重复运行实库矩阵。
 
