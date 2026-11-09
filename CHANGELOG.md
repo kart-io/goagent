@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 破坏性变更
 
+- `tools/shell`：`CommonShellTools()` 不再预设 `find`、`git`、`curl`、`wget`（可经参数执行任意程序或写任意文件），需要时用 `NewShellTool` 显式列入并配合 `tools/policy`。调用方传入的 `timeout` 只能缩短构造时的超时；输出最多保留 1 MiB，结果新增 `truncated`；`command` 与管道命令中的换行按命令分隔符拒绝。新增 `ShellToolBuilder.WithRootDir` 把工作目录限制在指定目录内。
 - `core/durable`：`RetryFailed` 只重跑结果已知的失败（普通失败、超时）；停在 pending 或因取消而失败的记录须由 `Reconcile` 核对未生效或声明 `RetryInterrupted` 才重跑。`tools.Dispatcher` 的默认策略显式声明 `RetryInterrupted`，恢复行为不变；非幂等工具应通过 `DurableOperationPolicy` 提供 `Reconcile` 或去掉 `RetryInterrupted`。
 
 ### 修复与验证

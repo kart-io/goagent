@@ -538,3 +538,88 @@ func TestShellToolNonUTF8OutputEncodes(t *testing.T) {
 		t.Fatalf("编码含非法 UTF-8 的输出失败: %v", err)
 	}
 }
+
+// 模型给出的超时不能超过工具配置的超时。
+func TestShellTool_TimeoutCappedByConfig(t *testing.T) {
+	tool := NewShellTool([]string{"sleep"}, time.Second)
+	started := time.Now()
+	output, _ := tool.Invoke(context.Background(), &interfaces.ToolInput{Args: map[string]interface{}{"command": "sleep", "args": []interface{}{"5"}, "timeout": float64(3600)}})
+	if output.Success || time.Since(started) > 4*time.Second {
+		t.Errorf("Expected timeout capped at 1s, took: %v", time.Since(started))
+	}
+}
+
+// 输出超过上限时截断，避免把无界输出读进内存和模型上下文。
+func TestShellTool_OutputLimited(t *testing.T) {
+	tool := NewShellTool([]string{"head"}, 10*time.Second)
+	out, err := tool.Invoke(context.Background(), &interfaces.ToolInput{Args: map[string]interface{}{"command": "head", "args": []interface{}{"-c", "5000000", "/dev/zero"}}})
+	if err != nil {
+		t.Fatalf("Expected success, got: %v", err)
+	}
+	result := out.Result.(map[string]interface{})
+	if got := len(result["output"].(string)); got != maxOutputBytes {
+		t.Errorf("Expected output truncated to %d bytes, got %d", maxOutputBytes, got)
+	}
+	if result["truncated"] != true {
+		t.Error("Expected truncated flag")
+	}
+}
+
+// 换行在 bash -c 中等同于命令分隔符，不能借此绕过管道白名单。
+func TestShellTool_ExecutePipelineRejectsNewline(t *testing.T) {
+	tool := NewShellTool([]string{"bash", "echo"}, 5*time.Second)
+	for _, cmd := range []string{"echo a\nid", "echo a\rid"} {
+		if _, err := tool.ExecutePipeline(context.Background(), []string{cmd}); err == nil {
+			t.Errorf("Expected %q to be rejected", cmd)
+		}
+	}
+}
+
+// 预设工具不能包含可经参数执行任意程序的命令。
+func TestCommonShellToolsExcludeExecCapableCommands(t *testing.T) {
+	for _, tool := range CommonShellTools() {
+		for _, cmd := range []string{"find", "git", "curl", "wget"} {
+			if tool.IsCommandAllowed(cmd) {
+				t.Errorf("CommonShellTools should not allow %q", cmd)
+			}
+		}
+	}
+}
+
+// 设置根目录后，工作目录默认为根目录，work_dir 不能经 .. 或符号链接离开根目录。
+func TestShellTool_RootDirConfinesWorkDir(t *testing.T) {
+	root := t.TempDir()
+	sub := filepath.Join(root, "sub")
+	if err := os.Mkdir(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	outside := t.TempDir()
+	if err := os.Symlink(outside, filepath.Join(root, "escape")); err != nil {
+		t.Fatal(err)
+	}
+	tool := NewShellToolBuilder().WithAllowedCommands("pwd").WithRootDir(root).Build()
+	pwd := func(workDir string) (string, error) {
+		args := map[string]interface{}{"command": "pwd"}
+		if workDir != "" {
+			args["work_dir"] = workDir
+		}
+		out, err := tool.Invoke(context.Background(), &interfaces.ToolInput{Args: args})
+		if err != nil {
+			return "", err
+		}
+		return strings.TrimSpace(out.Result.(map[string]interface{})["output"].(string)), nil
+	}
+	resolved := func(p string) string { r, _ := filepath.EvalSymlinks(p); return r }
+
+	for workDir, want := range map[string]string{"": root, "sub": sub, sub: sub, ".": root} {
+		got, err := pwd(workDir)
+		if err != nil || resolved(got) != resolved(want) {
+			t.Errorf("work_dir %q: got %q, %v; want %q", workDir, got, err, want)
+		}
+	}
+	for _, workDir := range []string{"..", "../", "/", outside, "escape", "sub/../.."} {
+		if _, err := pwd(workDir); err == nil {
+			t.Errorf("work_dir %q should be rejected", workDir)
+		}
+	}
+}

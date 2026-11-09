@@ -1,14 +1,17 @@
 package shell
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
 	shared "github.com/kart-io/goagent/constants"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/internal/processgroup"
 	"github.com/kart-io/goagent/tools"
@@ -22,13 +25,17 @@ type ShellTool struct {
 	*tools.BaseTool
 	allowedCommands map[string]bool // 命令白名单
 	timeout         time.Duration   // 默认超时时间
+	rootDir         string          // 工作目录根，空表示不限制
 }
 
 // NewShellTool 创建 Shell 工具
 //
+// 白名单只校验命令名，命令的全部参数由模型决定：find -exec、git -c、curl -o、env、xargs、解释器等
+// 可经参数执行任意程序，列入白名单即等于放行任意执行。需要按参数收窄时配合 tools/policy。
+//
 // Parameters:
 //   - allowedCommands: 允许执行的命令列表（白名单）
-//   - timeout: 默认超时时间
+//   - timeout: 超时时间，也是调用方可指定超时的上限
 func NewShellTool(allowedCommands []string, timeout time.Duration) *ShellTool {
 	whitelist := make(map[string]bool)
 	for _, cmd := range allowedCommands {
@@ -76,8 +83,26 @@ func NewShellTool(allowedCommands []string, timeout time.Duration) *ShellTool {
 	return tool
 }
 
-// shellMetachars 是 shell 会解释的字符
-const shellMetachars = ";|&`$><"
+// shellMetachars 是 shell 会解释的字符，换行在 bash -c 中等同于命令分隔符
+const shellMetachars = ";|&`$><\n\r"
+
+// maxOutputBytes 是保留的命令输出上限，超出部分丢弃。
+const maxOutputBytes = 1 << 20
+
+// limitedBuffer 只保留前 maxOutputBytes 字节，其余照常消费，避免子进程因管道写满而阻塞。
+type limitedBuffer struct {
+	buf       bytes.Buffer
+	truncated bool
+}
+
+func (b *limitedBuffer) Write(p []byte) (int, error) {
+	if room := maxOutputBytes - b.buf.Len(); len(p) > room {
+		b.buf.Write(p[:room])
+		b.truncated = true
+		return len(p), nil
+	}
+	return b.buf.Write(p)
+}
 
 // run 执行 shell 命令
 func (s *ShellTool) run(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
@@ -115,13 +140,20 @@ func (s *ShellTool) run(ctx context.Context, input *interfaces.ToolInput) (*inte
 	}
 
 	workDir, _ := input.Args["work_dir"].(string)
+	dir, err := s.resolveWorkDir(workDir)
+	if err != nil {
+		return resp.ValidationError(err.Error(), "work_dir", workDir)
+	}
 
-	// 解析超时
+	// 解析超时：只能缩短，不能超过工具配置的超时
 	timeout := s.timeout
 	if v, ok := toolargs.Float64(input.Args["timeout"]); ok {
 		timeout = time.Duration(v * float64(time.Second))
 	} else if v, ok := input.Args["timeout"].(int); ok {
 		timeout = time.Duration(v) * time.Second
+	}
+	if timeout <= 0 || timeout > s.timeout {
+		timeout = s.timeout
 	}
 
 	// 应用超时
@@ -140,13 +172,13 @@ func (s *ShellTool) run(ctx context.Context, input *interfaces.ToolInput) (*inte
 	processgroup.Configure(cmd)
 	cmd.WaitDelay = time.Second
 	defer func() { _ = processgroup.Kill(cmd) }()
-	if workDir != "" {
-		cmd.Dir = workDir
-	}
+	cmd.Dir = dir
 
 	// 执行命令
+	var output limitedBuffer
+	cmd.Stdout, cmd.Stderr = &output, &output
 	startTime := time.Now()
-	output, err := cmd.CombinedOutput()
+	err = cmd.Run()
 	duration := time.Since(startTime)
 
 	exitCode := 0
@@ -164,7 +196,7 @@ func (s *ShellTool) run(ctx context.Context, input *interfaces.ToolInput) (*inte
 		err = errors.Join(err, ctxErr)
 	}
 
-	outputStr := string(output)
+	outputStr := output.buf.String()
 	success := err == nil && exitCode == 0
 
 	result := map[string]interface{}{
@@ -173,6 +205,7 @@ func (s *ShellTool) run(ctx context.Context, input *interfaces.ToolInput) (*inte
 		"output":    outputStr,
 		"exit_code": exitCode,
 		"duration":  duration.String(),
+		"truncated": output.truncated,
 	}
 
 	if !success {
@@ -188,6 +221,30 @@ func (s *ShellTool) run(ctx context.Context, input *interfaces.ToolInput) (*inte
 		"work_dir": workDir,
 		"timeout":  timeout.String(),
 	})
+}
+
+// resolveWorkDir 返回命令的工作目录：未设根目录时原样使用 work_dir；设了根目录时相对路径基于根目录解析，
+// 解析符号链接后必须仍在根目录内。
+func (s *ShellTool) resolveWorkDir(workDir string) (string, error) {
+	if s.rootDir == "" {
+		return workDir, nil
+	}
+	dir := workDir
+	if !filepath.IsAbs(dir) {
+		dir = filepath.Join(s.rootDir, dir)
+	}
+	root, err := filepath.EvalSymlinks(s.rootDir)
+	if err != nil {
+		return "", fmt.Errorf("resolve root dir: %w", err)
+	}
+	resolved, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		return "", fmt.Errorf("resolve work_dir: %w", err)
+	}
+	if rel, err := filepath.Rel(root, resolved); err != nil || !filepath.IsLocal(rel) && rel != "." {
+		return "", agentErrors.Newf(agentErrors.CodeToolValidation, "work_dir must stay inside the root dir")
+	}
+	return resolved, nil
 }
 
 // GetAllowedCommands 获取允许的命令列表
@@ -278,6 +335,7 @@ func (s *ShellTool) ExecutePipeline(ctx context.Context, commands []string) (*in
 type ShellToolBuilder struct {
 	allowedCommands []string
 	timeout         time.Duration
+	rootDir         string
 }
 
 // NewShellToolBuilder 创建 Shell 工具构建器
@@ -300,20 +358,25 @@ func (b *ShellToolBuilder) WithTimeout(timeout time.Duration) *ShellToolBuilder 
 	return b
 }
 
+// WithRootDir 把工作目录限制在 dir 内：未指定 work_dir 时在 dir 中执行，相对路径基于 dir 解析，
+// 经 .. 或符号链接离开 dir 的 work_dir 被拒绝。它只约束工作目录，命令参数仍可引用任意绝对路径。
+func (b *ShellToolBuilder) WithRootDir(dir string) *ShellToolBuilder {
+	b.rootDir = dir
+	return b
+}
+
 // Build 构建工具
 func (b *ShellToolBuilder) Build() *ShellTool {
-	return NewShellTool(b.allowedCommands, b.timeout)
+	tool := NewShellTool(b.allowedCommands, b.timeout)
+	tool.rootDir = b.rootDir
+	return tool
 }
 
 // CommonShellTools 创建常用的 Shell 工具集合
 func CommonShellTools() []*ShellTool {
 	return []*ShellTool{
-		// 基础命令工具
-		NewShellTool([]string{"ls", "pwd", "echo", "cat", "grep", "find"}, 30*time.Second),
-		// Git 工具
-		NewShellTool([]string{"git"}, 60*time.Second),
-		// 网络工具
-		NewShellTool([]string{"curl", "wget", "ping"}, 60*time.Second),
+		// 基础命令工具；find、git、curl、wget 可经参数执行任意程序或写任意文件，不作预设
+		NewShellTool([]string{"ls", "pwd", "echo", "cat", "grep"}, 30*time.Second),
 		// 系统信息工具
 		NewShellTool([]string{"uname", "hostname", "whoami", "date"}, 10*time.Second),
 	}
