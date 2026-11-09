@@ -56,7 +56,9 @@ tool, err := remote.Tool(client, "remote_agent", "调用远端 Agent")
 // 将 tool 交给 builder.WithTools；也可直接用 client 的流式、查询、取消接口。
 ```
 
-此处 remote 为 `github.com/kart-io/goagent/a2a/remote`。工具 action 为 send/get/cancel；send 需要 message_id 和 input，可带 context_id/task_id。工具调用成功只说明协议请求成功，宿主/模型仍须检查返回 Task 的业务状态。默认 durable 策略 MaxAttempts=1，防止未知外部效果被自动重复执行。认证、HTTP 超时和允许访问的远端地址由宿主管理。
+此处 remote 为 `github.com/kart-io/goagent/a2a/remote`。工具 action 为 send/get/cancel；send 需要 message_id 和 input，可带 context_id/task_id。工具调用成功只说明协议请求成功，宿主/模型仍须检查返回 Task 的业务状态。默认 durable 策略 MaxAttempts=1，防止未知外部效果被自动重复执行。
+
+持久运行中传 `remote.WithDurableInput("v1")`，send 遇到 input-required 时以 `durable.AwaitInput` 暂停，`Info` 为该任务 JSON；宿主以任意 JSON 恢复，该值作为下一条消息发往同一任务（消息 ID 为 `<message_id>/input/<n>`），已完成的发送从日志回放而不重发。此时工具声明 `tools.InterruptibleTool`，不再提供上述持久策略；不在持久运行中时行为不变。认证、HTTP 超时和允许访问的远端地址由宿主管理。
 
 **数值边界：** GoAgent A2A HTTP 入口在 SDK 解码前保留原始 Data，持久输入与幂等比较不会把 `9007199254740993` 舍入为 `9007199254740992`。官方客户端将返回的 Metadata/Data 等 `any` 解码为 float64；`a2a/remote.Tool` 继承这一结果解码边界。需要精确跨平台表示的大整数标识或高精度小数应使用 JSON 字符串；不要依赖 SDK 的 any 数字做账务或身份比较。服务端发出的 JSON 数字原文仍保持精度。
 

@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - 在核心仓库新增 `management/protocol`、`management/a2a`、`management/mcpserver`：A2A/HTTP/MCP 共用管理任务、身份、审批与取消；A2A 使用官方 JSON-RPC/SSE，MCP 提供 Agent 工具和显式长任务工具契约。
 - `a2a/remote` 支持官方 Agent Card 发现与远端 Agent 工具调用；`mcp/remote` 新增可保存的输入检查点、有界人工输入回调和旧协议宿主处理器选项。详见[协议接入指南](docs/guides/PROTOCOL_ADAPTERS.md)。
+- `mcp/remote.WithDurableInput`、`a2a/remote.WithDurableInput`：持久运行中远端要求输入时改为 durable 等待，接入 management 的等待与恢复流程；每次远端调用记入日志，恢复时回放已完成的调用，不重发不带状态的初始调用。`a2a/remote.Tool` 新增可变参数选项。
 
 ### 破坏性变更
 

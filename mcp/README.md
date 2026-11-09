@@ -45,6 +45,8 @@ if errors.As(err, &pending) {
 
 希望在同一工具调用中完成多轮交互时，使用 `remote.WithInputHandler(hostInputHandler, 8)`；宿主回调负责收集响应，最多处理指定轮数（1–64）。达到轮数上限、回调失败或取消时保留检查点；错误链仍可提取取消原因和待处理输入。不会自动批准或猜测人工答案。续接保留原参数和 requestState，最终 `IsError` 仍遵循 `WithToolErrorsAsRejected`。
 
+在持久运行（`durable.WithJournal` + 执行键，如 management Worker）中，使用 `remote.WithDurableInput("v1")` 把输入请求交给 durable 等待：每次远端调用记入日志，远端要求输入时以 `durable.AwaitInput` 暂停，`InterruptContinuation.Info` 是 `InputRequiredError` 的 JSON；宿主以 `mcp.InputResponseMap` 的 JSON 恢复（如 `{"answer":{"action":"accept","content":{}}}`），与请求不匹配的输入保持等待。恢复时已完成的远端调用从日志回放，只发送带输入的续接。该选项声明 `tools.InterruptibleTool`，不能与 `WithDurablePolicy` 同用；不在持久运行中时沿用上面两种方式。
+
 旧协议通过官方反向 `elicitation/create` 请求收集输入，必须在 `ConnectWithOptions` 传入 `ElicitationHandler`。单独的 `WithInputHandler` 用于2026协议返回的多轮结果，不能代替旧版反向处理器。
 
 ## 将 GoAgent 发布为 MCP 服务

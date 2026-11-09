@@ -35,7 +35,33 @@ func pendingCall(r *mcp.CallToolParams, result *mcp.CallToolResult) (*InputRequi
 }
 
 func (e *InputRequiredError) Continue(ctx context.Context, s *mcp.ClientSession, responses mcp.InputResponseMap) (*mcp.CallToolResult, error) {
-	if e == nil || s == nil || e.Name == "" || !json.Valid(e.Arguments) || len(responses) != len(e.Requests) {
+	if s == nil {
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidInput, "MCP 续接参数无效")
+	}
+	r, err := e.params(responses)
+	if err != nil {
+		return nil, err
+	}
+	result, err := s.CallTool(ctx, r)
+	if err != nil {
+		return nil, err
+	}
+	if result == nil {
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidOutput, "MCP 返回空结果")
+	}
+	if result.NeedsInput() {
+		next, err := pendingCall(r, result)
+		if err != nil {
+			return nil, err
+		}
+		return nil, next
+	}
+	return result, nil
+}
+
+// params 校验输入响应与等待中的请求一一对应，构造携带原业务参数与请求状态的续接调用。
+func (e *InputRequiredError) params(responses mcp.InputResponseMap) (*mcp.CallToolParams, error) {
+	if e == nil || e.Name == "" || !json.Valid(e.Arguments) || len(responses) != len(e.Requests) {
 		return nil, agentErrors.Newf(agentErrors.CodeInvalidInput, "MCP 续接参数无效")
 	}
 	for id, req := range e.Requests {
@@ -55,22 +81,7 @@ func (e *InputRequiredError) Continue(ctx context.Context, s *mcp.ClientSession,
 			return nil, agentErrors.Newf(agentErrors.CodeInvalidInput, "MCP 输入响应类型不匹配")
 		}
 	}
-	r := &mcp.CallToolParams{Name: e.Name, Arguments: e.Arguments, RequestState: e.RequestState, InputResponses: responses}
-	result, err := s.CallTool(ctx, r)
-	if err != nil {
-		return nil, err
-	}
-	if result == nil {
-		return nil, agentErrors.Newf(agentErrors.CodeInvalidOutput, "MCP 返回空结果")
-	}
-	if result.NeedsInput() {
-		next, err := pendingCall(r, result)
-		if err != nil {
-			return nil, err
-		}
-		return nil, next
-	}
-	return result, nil
+	return &mcp.CallToolParams{Name: e.Name, Arguments: e.Arguments, RequestState: e.RequestState, InputResponses: responses}, nil
 }
 
 // legacyResponseMatches 保留官方仍支持的 roots/sampling 续接，不能把旧协议响应当成无效类型。
