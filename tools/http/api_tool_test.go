@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
+	"strings"
 	"testing"
 	"time"
 
@@ -470,27 +472,53 @@ func TestAPITool_ConvenienceMethods(t *testing.T) {
 	})
 }
 
-// TestAPITool_AbsoluteURL tests absolute vs relative URL handling
-func TestAPITool_AbsoluteURL(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
+// 配置了 baseURL 时只能访问该主机：跨主机的绝对 URL 与重定向会把默认请求头（含凭据）带给第三方。
+func TestAPITool_BaseURLRestrictsHost(t *testing.T) {
+	var otherHits int
+	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		otherHits++
+		_, _ = w.Write([]byte(`{"leaked":true}`))
+	}))
+	defer other.Close()
+	base := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/redirect" {
+			http.Redirect(w, r, other.URL+"/steal", http.StatusFound)
+			return
+		}
 		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer base.Close()
+
+	tool := NewAPITool(base.URL, 5*time.Second, map[string]string{"X-Api-Key": "secret"})
+	ctx := context.Background()
+	invoke := func(url string) (*interfaces.ToolOutput, error) {
+		return tool.Invoke(ctx, &interfaces.ToolInput{Args: map[string]interface{}{"url": url}, Context: ctx})
+	}
+
+	output, err := invoke("/relative")
+	require.NoError(t, err)
+	assert.True(t, output.Success)
+	output, err = invoke(base.URL + "/absolute-same-host")
+	require.NoError(t, err)
+	assert.True(t, output.Success)
+
+	for _, url := range []string{other.URL + "/steal", "//" + strings.TrimPrefix(other.URL, "http://") + "/steal", "/redirect"} {
+		_, err := invoke(url)
+		assert.Error(t, err, url)
+	}
+	assert.Zero(t, otherHits)
+}
+
+// 响应体超过上限时报错，不把无界内容读进内存。
+func TestAPITool_ResponseBodyLimited(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(make([]byte, maxResponseBodyBytes+1))
 	}))
 	defer server.Close()
 
-	tool := NewAPITool("https://base.example.com", 5*time.Second, nil)
-	ctx := context.Background()
-
-	// Absolute URL should override baseURL
-	output, err := tool.Invoke(ctx, &interfaces.ToolInput{
-		Args: map[string]interface{}{
-			"url": server.URL + "/absolute",
-		},
-		Context: ctx,
-	})
-
-	require.NoError(t, err)
-	assert.True(t, output.Success)
+	output, err := NewAPIToolBuilder().WithPrivateNetwork().Build().Invoke(context.Background(), &interfaces.ToolInput{Args: map[string]interface{}{"url": server.URL}})
+	require.Error(t, err)
+	assert.False(t, output.Success)
 }
 
 // TestAPIToolBuilder tests API tool builder
@@ -569,5 +597,44 @@ func TestAPITool_TransportErrorRedactsURL(t *testing.T) {
 		assert.NotContains(t, s, "SECRET")
 		assert.NotContains(t, s, "pw")
 		assert.Contains(t, s, "http://127.0.0.1:1/v1")
+	}
+}
+
+// 未配置 baseURL 时默认拒绝连接内网、回环与云元数据地址，按实际拨号的 IP 判断，域名解析到内网同样拒绝。
+func TestAPITool_BlocksPrivateNetworkWithoutBaseURL(t *testing.T) {
+	var hits int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer server.Close()
+	invoke := func(tool *APITool, url string) (*interfaces.ToolOutput, error) {
+		return tool.Invoke(context.Background(), &interfaces.ToolInput{Args: map[string]interface{}{"url": url}})
+	}
+
+	port := server.URL[strings.LastIndex(server.URL, ":"):]
+	for _, url := range []string{server.URL, "http://localhost" + port, "http://[::1]" + port, "http://169.254.169.254/latest/meta-data/", "http://100.100.100.200/"} {
+		_, err := invoke(NewAPITool("", time.Second, nil), url)
+		assert.Error(t, err, url)
+	}
+	assert.Zero(t, hits)
+
+	output, err := invoke(NewAPIToolBuilder().WithPrivateNetwork().Build(), server.URL)
+	require.NoError(t, err)
+	assert.True(t, output.Success)
+	// 配置了 baseURL 时宿主已指定目标主机，内网 baseURL 照常可用。
+	output, err = invoke(NewAPITool(server.URL, time.Second, nil), "/x")
+	require.NoError(t, err)
+	assert.True(t, output.Success)
+}
+
+func TestPublicAddress(t *testing.T) {
+	for addr, want := range map[string]bool{
+		"8.8.8.8": true, "2606:4700::1111": true,
+		"127.0.0.1": false, "10.1.2.3": false, "172.16.0.1": false, "192.168.1.1": false, "169.254.169.254": false,
+		"100.100.100.200": false, "0.0.0.0": false, "::1": false, "fe80::1": false, "fd00::1": false, "::ffff:127.0.0.1": false,
+		"224.0.0.1": false,
+	} {
+		assert.Equal(t, want, publicAddress(netip.MustParseAddr(addr)), addr)
 	}
 }

@@ -3,6 +3,12 @@ package http
 import (
 	"context"
 	"fmt"
+	"net"
+	"net/http"
+	"net/netip"
+	"net/url"
+	"strings"
+	"syscall"
 	"time"
 
 	"github.com/kart-io/goagent/codec/json"
@@ -17,13 +23,23 @@ import (
 	"github.com/kart-io/goagent/utils/httpclient"
 )
 
+// maxResponseBodyBytes 是响应体上限，超出时请求失败。
+const maxResponseBodyBytes = 10 << 20
+
+// maxRedirects 与 net/http 默认的重定向次数上限一致。
+const maxRedirects = 10
+
 // APITool HTTP API 调用工具
 //
-// 提供通用的 HTTP 请求能力，使用统一的 HTTP 客户端管理器
+// 提供通用的 HTTP 请求能力，使用统一的 HTTP 客户端管理器。
+// 配置 baseURL 时只允许访问该 scheme 与主机（含重定向），默认请求头里的凭据不会发往其他主机；
+// 未配置 baseURL 时默认拒绝连接非公网地址（回环、私网、链路本地与云元数据地址），按实际拨号的 IP 判断，
+// 且不经环境变量中的 HTTP 代理直连；需要访问内网时用 APIToolBuilder.WithPrivateNetwork。
 type APITool struct {
 	*tools.BaseTool
 	client  *httpclient.Client
 	baseURL string            // 基础 URL（可选）
+	base    *url.URL          // 解析后的基础 URL，nil 表示不限主机
 	headers map[string]string // 默认请求头
 }
 
@@ -34,6 +50,10 @@ type APITool struct {
 //   - timeout: 请求超时时间
 //   - headers: 默认请求头
 func NewAPITool(baseURL string, timeout time.Duration, headers map[string]string) *APITool {
+	return newAPITool(baseURL, timeout, headers, false)
+}
+
+func newAPITool(baseURL string, timeout time.Duration, headers map[string]string, privateNetwork bool) *APITool {
 	if timeout == 0 {
 		timeout = 30 * time.Second
 	}
@@ -51,11 +71,33 @@ func NewAPITool(baseURL string, timeout time.Duration, headers map[string]string
 
 	// 创建 HTTP 客户端
 	client := httpclient.NewClient(config)
+	client.Resty().SetResponseBodyLimit(maxResponseBodyBytes)
 
 	tool := &APITool{
 		client:  client,
 		baseURL: baseURL,
 		headers: headers,
+	}
+	if base, err := url.Parse(baseURL); baseURL != "" && err == nil {
+		tool.base = base
+		client.Resty().SetRedirectPolicy(resty.RedirectPolicyFunc(func(req *http.Request, via []*http.Request) error {
+			if len(via) >= maxRedirects {
+				return agentErrors.Newf(agentErrors.CodeToolValidation, "stopped after %d redirects", maxRedirects)
+			}
+			if !sameOrigin(req.URL, base) {
+				return agentErrors.Newf(agentErrors.CodeToolValidation, "redirect to a host other than base URL is not allowed")
+			}
+			return nil
+		}))
+	} else if !privateNetwork {
+		if transport, ok := client.Resty().GetClient().Transport.(*http.Transport); ok {
+			transport = transport.Clone()
+			// 代理会让拨号目标变成代理地址，绕开检查，因此直连。
+			transport.Proxy = nil
+			dialer := &net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second, Control: rejectNonPublic}
+			transport.DialContext = dialer.DialContext
+			client.Resty().SetTransport(transport)
+		}
 	}
 
 	tool.BaseTool = tools.NewBaseTool(
@@ -107,6 +149,17 @@ func (a *APITool) run(ctx context.Context, input *interfaces.ToolInput) (*interf
 	urlStr, ok := input.Args[shared.FieldURL].(string)
 	if !ok || urlStr == "" {
 		return resp.ValidationError("url is required and must be a non-empty string", "field", "url")
+	}
+
+	// 配置了 baseURL 时，绝对 URL 必须与之同源
+	if a.base != nil {
+		u, err := url.Parse(urlStr)
+		if err != nil {
+			return resp.ValidationError("invalid url", "field", "url")
+		}
+		if (u.Scheme != "" || u.Host != "") && !sameOrigin(u, a.base) {
+			return resp.ValidationError("url must stay on the configured base URL host", "field", "url")
+		}
 	}
 
 	// 解析请求头
@@ -202,6 +255,30 @@ func (a *APITool) run(ctx context.Context, input *interfaces.ToolInput) (*interf
 	})
 }
 
+// cgnat 是运营商级 NAT 地址段，部分云厂商的元数据服务位于其中（如 100.100.100.200）。
+var cgnat = netip.MustParsePrefix("100.64.0.0/10")
+
+func publicAddress(addr netip.Addr) bool {
+	addr = addr.Unmap()
+	return addr.IsGlobalUnicast() && !addr.IsPrivate() && !cgnat.Contains(addr)
+}
+
+// rejectNonPublic 在建立连接前检查实际拨号的 IP，域名解析到内网同样拒绝。
+func rejectNonPublic(_, address string, _ syscall.RawConn) error {
+	host, _, err := net.SplitHostPort(address)
+	if err != nil {
+		return err
+	}
+	if addr, err := netip.ParseAddr(host); err != nil || !publicAddress(addr) {
+		return agentErrors.Newf(agentErrors.CodeToolValidation, "connection to non-public address %s is not allowed", host)
+	}
+	return nil
+}
+
+func sameOrigin(u, base *url.URL) bool {
+	return u.Scheme == base.Scheme && strings.EqualFold(u.Host, base.Host)
+}
+
 // Get 执行 GET 请求的便捷方法
 func (a *APITool) Get(ctx context.Context, url string, headers map[string]string) (*interfaces.ToolOutput, error) {
 	return a.Invoke(ctx, &interfaces.ToolInput{
@@ -267,9 +344,10 @@ func (a *APITool) Patch(ctx context.Context, url string, body interface{}, heade
 
 // APIToolBuilder API 工具构建器
 type APIToolBuilder struct {
-	baseURL string
-	timeout time.Duration
-	headers map[string]string
+	baseURL        string
+	timeout        time.Duration
+	headers        map[string]string
+	privateNetwork bool
 }
 
 // NewAPIToolBuilder 创建 API 工具构建器
@@ -312,7 +390,14 @@ func (b *APIToolBuilder) WithAuth(token string) *APIToolBuilder {
 	return b
 }
 
+// WithPrivateNetwork 允许未配置 baseURL 的工具连接内网、回环与云元数据地址，并沿用环境变量中的 HTTP 代理。
+// 模型可借此访问宿主网络内的任意服务，仅在模型输入可信或有其他出口限制时使用。
+func (b *APIToolBuilder) WithPrivateNetwork() *APIToolBuilder {
+	b.privateNetwork = true
+	return b
+}
+
 // Build 构建工具
 func (b *APIToolBuilder) Build() *APITool {
-	return NewAPITool(b.baseURL, b.timeout, b.headers)
+	return newAPITool(b.baseURL, b.timeout, b.headers, b.privateNetwork)
 }

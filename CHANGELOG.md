@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 破坏性变更
 
 - `tools/shell`：`CommonShellTools()` 不再预设 `find`、`git`、`curl`、`wget`（可经参数执行任意程序或写任意文件），需要时用 `NewShellTool` 显式列入并配合 `tools/policy`。调用方传入的 `timeout` 只能缩短构造时的超时；输出最多保留 1 MiB，结果新增 `truncated`；`command` 与管道命令中的换行按命令分隔符拒绝。新增 `ShellToolBuilder.WithRootDir` 把工作目录限制在指定目录内。
+- `tools/http`：配置了 baseURL 的 `APITool` 拒绝其他 scheme/主机的绝对 URL 与跨主机重定向，避免默认请求头中的凭据发往第三方；响应体上限 10 MiB。需要访问多个主机时为每个主机各建一个工具，或不设 baseURL。未配置 baseURL 时默认拒绝连接回环、私网、链路本地与云元数据地址（按实际拨号 IP 判断，并且不走环境变量代理），需要访问内网时使用 `APIToolBuilder.WithPrivateNetwork()`。
 - `core/durable`：`RetryFailed` 只重跑结果已知的失败（普通失败、超时）；停在 pending 或因取消而失败的记录须由 `Reconcile` 核对未生效或声明 `RetryInterrupted` 才重跑。`tools.Dispatcher` 的默认策略显式声明 `RetryInterrupted`，恢复行为不变；非幂等工具应通过 `DurableOperationPolicy` 提供 `Reconcile` 或去掉 `RetryInterrupted`。
 
 ### 修复与验证
