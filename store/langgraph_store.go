@@ -524,14 +524,16 @@ func namespaceToString(namespace []string) string {
 }
 
 // StoreWithCache 缓存完整业务条目。ttl<=0 表示不额外限制缓存寿命，业务TTL始终有效。
-// 同一包装器的Get与写入串行，防止冷读在写入失效后发布旧缓存。
+// 后端读写不持有包装器的锁；冷读只在读取期间没有经本包装器的写入时发布结果，防止写入失效后发布旧缓存。
+// 写入频繁时冷读可能因此不进缓存，但不会读到旧值。
 // 直接改写backend可能在配置期限内读到旧缓存，跨包装器一致性由宿主负责。
 type StoreWithCache struct {
 	backend LangGraphStore
 	cache   *InMemoryLangGraphStore
 	ttl     time.Duration
-	mu      sync.Mutex
+	mu      sync.Mutex // 只保护 expires 与 writes
 	expires map[cacheKey]time.Time
+	writes  uint64 // 写入提交到后端后递增
 }
 
 type cacheKey struct{ namespace, key string }
@@ -548,12 +550,13 @@ func NewStoreWithCache(backend LangGraphStore, ttl time.Duration) *StoreWithCach
 
 // Get retrieves with cache
 func (s *StoreWithCache) Get(ctx context.Context, namespace []string, key string) (*StoreValue, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	id := cacheKey{namespaceToString(namespace), key}
+	s.mu.Lock()
 	if deadline := s.expires[id]; !deadline.IsZero() && !time.Now().Before(deadline) {
 		s.invalidate(namespace, key)
 	}
+	writes := s.writes
+	s.mu.Unlock()
 	if cached, err := s.cache.Get(ctx, namespace, key); err == nil {
 		return cached, nil
 	}
@@ -567,14 +570,15 @@ func (s *StoreWithCache) Get(ctx context.Context, namespace []string, key string
 	if value == nil || value.IsExpired() {
 		return nil, agentErrors.NewStoreNotFoundError(namespace, key)
 	}
-	if err := s.populate(namespace, key, value); err != nil {
+	if err := s.populate(namespace, key, value, writes); err != nil {
 		return nil, err
 	}
 	return s.cache.copyStoreValue(value)
 }
 
 // populate 缓存完整业务记录，淘汰期限与业务TTL分别判断，避免改变版本及过期语义。
-func (s *StoreWithCache) populate(namespace []string, key string, value *StoreValue) error {
+// writes 是读取后端前记下的写入计数；期间有写入时放弃发布，读到的值可能已被覆盖。
+func (s *StoreWithCache) populate(namespace []string, key string, value *StoreValue, writes uint64) error {
 	copy, err := s.cache.copyStoreValue(value)
 	if err != nil {
 		return err
@@ -583,6 +587,11 @@ func (s *StoreWithCache) populate(namespace []string, key string, value *StoreVa
 		return nil
 	}
 	ns := namespaceToString(namespace)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.writes != writes {
+		return nil
+	}
 	s.cache.mu.Lock()
 	defer s.cache.mu.Unlock()
 	if s.cache.closed {
@@ -598,16 +607,24 @@ func (s *StoreWithCache) populate(namespace []string, key string, value *StoreVa
 	return nil
 }
 
-// invalidate 的成功与否不影响已经提交的后端写入，冷缓存缺失也是正常状态。
+// invalidate 须在持有 s.mu 时调用；成功与否不影响已经提交的后端写入，冷缓存缺失也是正常状态。
 func (s *StoreWithCache) invalidate(namespace []string, key string) {
 	_ = s.cache.Delete(context.Background(), namespace, key)
 	delete(s.expires, cacheKey{namespaceToString(namespace), key})
 }
 
-func (s *StoreWithCache) refresh(ctx context.Context, namespace []string, key string) {
+// committed 在写入提交到后端后调用：递增写入计数并失效缓存，refresh 时重新读取并发布。
+func (s *StoreWithCache) committed(ctx context.Context, namespace []string, key string, refresh bool) {
+	s.mu.Lock()
+	s.writes++
+	writes := s.writes
 	s.invalidate(namespace, key)
+	s.mu.Unlock()
+	if !refresh {
+		return
+	}
 	if value, err := s.backend.Get(ctx, namespace, key); err == nil && value != nil && !value.IsExpired() {
-		_ = s.populate(namespace, key, value)
+		_ = s.populate(namespace, key, value, writes)
 	}
 }
 
@@ -617,14 +634,10 @@ func (s *StoreWithCache) Put(ctx context.Context, namespace []string, key string
 	if err != nil {
 		return agentErrors.Wrap(err, agentErrors.CodeStoreSerialization, "存储写入快照失败").WithComponent("store_cache").WithOperation("put")
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	// Store in backend
 	if err := s.backend.Put(ctx, namespace, key, owned); err != nil {
 		return err
 	}
-
-	s.refresh(ctx, namespace, key)
+	s.committed(ctx, namespace, key, true)
 	return nil
 }
 
@@ -634,14 +647,10 @@ func (s *StoreWithCache) PutWithTTL(ctx context.Context, namespace []string, key
 	if err != nil {
 		return agentErrors.Wrap(err, agentErrors.CodeStoreSerialization, "存储写入快照失败").WithComponent("store_cache").WithOperation("put_with_ttl")
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	// Store in backend
 	if err := s.backend.PutWithTTL(ctx, namespace, key, owned, ttl); err != nil {
 		return err
 	}
-
-	s.refresh(ctx, namespace, key)
+	s.committed(ctx, namespace, key, true)
 	return nil
 }
 
@@ -660,15 +669,10 @@ func (s *StoreWithCache) Search(ctx context.Context, namespace []string, query s
 
 // Delete removes from both cache and backend
 func (s *StoreWithCache) Delete(ctx context.Context, namespace []string, key string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	// Delete from backend
 	if err := s.backend.Delete(ctx, namespace, key); err != nil {
 		return err
 	}
-
-	// Remove from cache
-	s.invalidate(namespace, key)
+	s.committed(ctx, namespace, key, false)
 	return nil
 }
 
@@ -684,9 +688,6 @@ func (s *StoreWithCache) ListWithPrefix(ctx context.Context, namespace []string,
 
 // Update atomically updates in backend and invalidates cache
 func (s *StoreWithCache) Update(ctx context.Context, namespace []string, key string, updateFunc func(*StoreValue) (*StoreValue, error)) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	// Update in backend
 	if err := s.backend.Update(ctx, namespace, key, func(current *StoreValue) (*StoreValue, error) {
 		copy, err := s.cache.copyStoreValue(current)
 		if err != nil {
@@ -704,8 +705,7 @@ func (s *StoreWithCache) Update(ctx context.Context, namespace []string, key str
 		return err
 	}
 
-	// Invalidate cache
-	s.invalidate(namespace, key)
+	s.committed(ctx, namespace, key, false)
 	return nil
 }
 

@@ -144,7 +144,7 @@ func TestDesignSnapshotErrorClassification(t *testing.T) {
 	err = cached.Update(ctx, nil, "k", func(*StoreValue) (*StoreValue, error) { return nil, nil })
 	require.Equal(t, agentErrors.CodeInvalidInput, agentErrors.GetCode(err))
 	require.NoError(t, cached.cache.Close())
-	err = cached.populate(nil, "k", &StoreValue{Value: 1})
+	err = cached.populate(nil, "k", &StoreValue{Value: 1}, cached.writes)
 	require.Equal(t, agentErrors.CodeStoreConnection, agentErrors.GetCode(err))
 }
 

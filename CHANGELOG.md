@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 修复与验证
 
+- `store`：`StoreWithCache` 不再在持锁时访问后端，缓存命中不被其他 key 的冷读或写入阻塞；冷读改以写入计数判断期间是否有写入，避免发布旧值。
 - `tools/policy`：命令规则与会话授权把 `command` 与 `args` 数组连成词序列匹配（参数名由新增的 `Policy.ArgsArg` 指定，默认 `args`），拒绝规则 `git push` 对 `{command:"git", args:["push"]}` 生效，授权不再从子命令扩大到整个程序。
 - 嵌套 Agent 在公共流式与 Handle 执行入口隔离会话日志轮次，避免未配置日志的子调用写入或结束父轮次；补充失败历史、持久恢复与独立子日志回归。
 - 实库证据门禁拒绝关键子测试跳过、包级失败、损坏或未完成的事件流，并核对摘要统计；模块发现与版本探测共享有界启动时限。
