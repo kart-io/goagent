@@ -19,7 +19,6 @@ const (
 // 不同调用层的默认策略独立命名，不因当前数值相同而合并。
 const (
 	DefaultClientMaxTokens       = 2000
-	DefaultAgentMaxTokens        = 2000
 	DefaultAgentMaxIterations    = 10
 	DefaultConversationHistory   = 20
 	DefaultDispatcherConcurrency = 4

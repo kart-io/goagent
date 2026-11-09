@@ -495,3 +495,46 @@ func TestPromptScopeFinalAndDeadline(t *testing.T) {
 	}
 	require.Equal(t, stepContextMessage("最后一步"), lastMessages(model.request(1), 1)[0])
 }
+
+// samplingCapture 记录纯对话流与原生工具流两条路径上的请求。
+type samplingCapture struct {
+	*MockLLMClient
+	requests []*llm.CompletionRequest
+}
+
+func (m *samplingCapture) CompleteStream(ctx context.Context, req *llm.CompletionRequest) (<-chan *llm.StreamChunk, error) {
+	m.requests = append(m.requests, req)
+	return m.MockLLMClient.CompleteStream(ctx, req)
+}
+
+func (m *samplingCapture) CompleteToolsStream(ctx context.Context, req *llm.CompletionRequest, _ []interfaces.Tool) (<-chan *llm.StreamChunk, error) {
+	return m.CompleteStream(ctx, req)
+}
+
+// 未在 builder 上显式设置时，请求不携带 MaxTokens 与 Temperature，交由 LLM 客户端自身配置决定。
+func TestSamplingParamsDeferToClientUnlessSet(t *testing.T) {
+	for _, withTools := range []bool{true, false} {
+		run := func(configure func(*AgentBuilder[any, *core.AgentState])) *llm.CompletionRequest {
+			model := &samplingCapture{MockLLMClient: NewMockLLMClient("答")}
+			b := NewSimpleBuilder(model)
+			if withTools {
+				b.WithTools(plainTool())
+			}
+			configure(b)
+			agent, err := b.Build()
+			require.NoError(t, err)
+			_, err = agent.AsRunnable().Invoke(context.Background(), "问")
+			require.NoError(t, err)
+			require.Len(t, model.requests, 1)
+			return model.requests[0]
+		}
+		req := run(func(*AgentBuilder[any, *core.AgentState]) {})
+		require.Zero(t, req.MaxTokens, "tools=%v", withTools)
+		require.False(t, req.TemperatureSet, "tools=%v", withTools)
+
+		req = run(func(b *AgentBuilder[any, *core.AgentState]) { b.WithTemperature(0).WithMaxTokens(64) })
+		require.Equal(t, 64, req.MaxTokens, "tools=%v", withTools)
+		require.True(t, req.TemperatureSet, "显式设为 0 也要下发，tools=%v", withTools)
+		require.Zero(t, req.Temperature)
+	}
+}

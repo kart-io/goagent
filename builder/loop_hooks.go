@@ -428,7 +428,7 @@ func (a *ConfigurableAgent[C, S]) requestTurn(ctx context.Context, box *inbox, r
 	if err != nil {
 		return nil, nil, messages, err
 	}
-	req := &ModelRequest{Step: round, Final: final, Client: client, Request: &llm.CompletionRequest{Reasoning: a.config.Reasoning.Clone(), Messages: reqMessages, MaxTokens: a.config.MaxTokens, Temperature: a.config.Temperature, TemperatureSet: true}, Tools: tools}
+	req := &ModelRequest{Step: round, Final: final, Client: client, Request: &llm.CompletionRequest{Reasoning: a.config.Reasoning.Clone(), Messages: reqMessages, MaxTokens: a.config.MaxTokens, Temperature: a.config.Temperature, TemperatureSet: a.config.TemperatureSet}, Tools: tools}
 	for _, hook := range a.config.RequestHooks {
 		if err := callHook("Request", func() error { return hook(ctx, req) }); err != nil {
 			return nil, nil, messages, err

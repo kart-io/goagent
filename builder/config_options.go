@@ -101,11 +101,14 @@ type AgentConfig struct {
 	// EnableAutoSave 自动保存状态
 	EnableAutoSave bool
 
-	// MaxTokens 限制 LLM 响应的最大 token 数
+	// MaxTokens 限制 LLM 响应的最大 token 数；0 表示不下发，由 LLM 客户端配置决定
 	MaxTokens int
 
-	// Temperature 控制 LLM 采样的随机性
+	// Temperature 控制 LLM 采样的随机性，仅在 TemperatureSet 为真时下发
 	Temperature float64
+
+	// TemperatureSet 表示 Temperature 被显式设置；为假时由 LLM 客户端配置决定
+	TemperatureSet bool
 
 	// SessionID 用于检查点保存和对话记忆
 	SessionID string
@@ -206,8 +209,6 @@ func DefaultAgentConfig() *AgentConfig {
 		MaxIterations:          shared.DefaultAgentMaxIterations,
 		Timeout:                shared.DefaultAgentExecutionTimeout,
 		EnableAutoSave:         true,
-		MaxTokens:              shared.DefaultAgentMaxTokens,
-		Temperature:            shared.DefaultTemperature,
 		SessionID:              fmt.Sprintf("session-%d", time.Now().UnixNano()),
 		Verbose:                false,
 		MaxConversationHistory: shared.DefaultConversationHistory,
@@ -245,7 +246,7 @@ func (b *AgentBuilder[C, S]) WithAutoSaveEnabled(enabled bool) *AgentBuilder[C, 
 
 // WithMaxTokens 设置最大 token 数
 //
-// [Core] 标准配置，限制 LLM 响应的最大 token 数（默认 2000）。
+// [Core] 标准配置，限制 LLM 响应的最大 token 数（默认不设置，沿用 LLM 客户端配置）。
 // 用于控制成本和响应长度。
 func (b *AgentBuilder[C, S]) WithMaxTokens(max int) *AgentBuilder[C, S] {
 	if max > 0 {
@@ -256,13 +257,13 @@ func (b *AgentBuilder[C, S]) WithMaxTokens(max int) *AgentBuilder[C, S] {
 
 // WithTemperature 设置温度参数（控制随机性）
 //
-// [Simple] 常用配置，控制 LLM 输出的创造性（默认 0.7）。
+// [Simple] 常用配置，控制 LLM 输出的创造性（默认不设置，沿用 LLM 客户端配置）。
 // - 0.0-0.3: 精确、确定性（适合事实查询、代码生成）
 // - 0.4-0.7: 平衡（适合通用对话）
 // - 0.8-1.0: 创造性（适合写作、头脑风暴）
 func (b *AgentBuilder[C, S]) WithTemperature(temp float64) *AgentBuilder[C, S] {
 	if temp >= 0 && temp <= 2.0 {
-		b.config.Temperature = temp
+		b.config.Temperature, b.config.TemperatureSet = temp, true
 	}
 	return b
 }

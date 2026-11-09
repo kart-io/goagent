@@ -163,8 +163,8 @@ func TestDefaultAgentConfig(t *testing.T) {
 	assert.Equal(t, 10, config.MaxIterations)
 	assert.Equal(t, 5*time.Minute, config.Timeout)
 	assert.True(t, config.EnableAutoSave)
-	assert.Equal(t, 2000, config.MaxTokens)
-	assert.Equal(t, 0.7, config.Temperature)
+	assert.Zero(t, config.MaxTokens, "未设置时沿用 LLM 客户端配置")
+	assert.False(t, config.TemperatureSet)
 	assert.NotEmpty(t, config.SessionID)
 	assert.False(t, config.Verbose)
 }
