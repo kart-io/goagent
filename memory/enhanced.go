@@ -404,15 +404,16 @@ func (m *HierarchicalMemory) VectorSearch(ctx context.Context, embedding []float
 			WithOperation("vector_search")
 	}
 
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
+	// 向量库可能是远端服务，检索不持锁；期间被删除的条目在下面查不到，直接跳过。
 	results, err := m.vectorStore.Search(ctx, embedding, limit*2)
 	if err != nil {
 		return nil, agentErrors.Wrap(err, agentErrors.CodeRetrievalSearch, "vector search failed").
 			WithComponent("hierarchical_memory").
 			WithOperation("vector_search")
 	}
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 
 	// Retrieve memory entries
 	var entries []*MemoryEntry

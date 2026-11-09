@@ -238,11 +238,13 @@ func (s *EmbeddingVectorStore) GenerateEmbedding(ctx context.Context, content in
 }
 
 // ChromaVectorStore integrates with Chroma vector database
+//
+// Store、Search、Delete 并发调用 client，client 须支持并发；Clear 删除并重建集合期间独占。
 type ChromaVectorStore struct {
 	client     ChromaClient
 	collection string
 	dimension  int
-	mu         sync.RWMutex
+	mu         sync.RWMutex // 读锁：普通请求；写锁：Clear
 }
 
 // ChromaClient interface for Chroma database operations
@@ -281,8 +283,8 @@ func NewChromaVectorStore(client ChromaClient, collection string, dimension int)
 
 // Store stores a vector in Chroma
 func (s *ChromaVectorStore) Store(ctx context.Context, id string, vector []float32) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
 	// Convert to 2D array for Chroma
 	embeddings := [][]float32{vector}
@@ -329,8 +331,8 @@ func (s *ChromaVectorStore) Search(ctx context.Context, query []float32, k int, 
 
 // Delete deletes from Chroma
 func (s *ChromaVectorStore) Delete(ctx context.Context, id string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
 	return s.client.Delete(ctx, s.collection, []string{id})
 }
