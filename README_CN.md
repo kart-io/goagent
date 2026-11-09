@@ -38,7 +38,7 @@ GoAgent 是嵌入 Go 业务服务的可恢复、可计量、可观测 Agent 执�
 - **执行治理**：根预算（`core/budget`）、带审批、守卫与准入限制的 `tools.Dispatcher`/`Pipeline`、工具结果卸载、会话日志（`core/session`）。
 - **LLM 提供商**：OpenAI（及兼容端点）、DeepSeek、Gemini 支持 `AsRunnable` 与原生工具循环；Kimi、SiliconFlow、Ollama 是 OpenAI 兼容预设，Anthropic 基于官方 SDK，支持相同。见[提供商对照](docs/README.md#llm-提供商)。
 - **可观测性**：只读执行事件（`core/observe`）与 OpenTelemetry 集成（`observability`）。
-- **MCP**：把官方 MCP 客户端会话适配为 Agent 工具（`mcp/remote`）。
+- **A2A / MCP**：连接外部 Agent 与 MCP 工具，并通过 A2A/MCP 发布 GoAgent；与 HTTP 共用任务服务，支持输入、审批、状态查询和取消。见[协议接入](docs/guides/PROTOCOL_ADAPTERS.md)。
 
 ## 快速开始
 

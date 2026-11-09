@@ -1,0 +1,71 @@
+{
+  "verified_at": "2026-11-09T04:28:38.572084+00:00",
+  "base_commit": "0f9f9698aeae84ec921dcdcbfddc08acd4fea4bb",
+  "branch": "master",
+  "committed": false,
+  "checks": [
+    {
+      "name": "全量竞态回归",
+      "command": "env -u GOROOT GO_TEST_MODE=true go test -race -count=1 -timeout=120s -coverprofile=/tmp/goagent-protocol-verification/final-coverage.out ./...",
+      "exit_code": 0,
+      "log": "raw/test.txt",
+      "cwd": "."
+    },
+    {
+      "name": "构建",
+      "command": "env -u GOROOT go build ./...",
+      "exit_code": 0,
+      "log": "raw/build.txt",
+      "cwd": "."
+    },
+    {
+      "name": "vet",
+      "command": "env -u GOROOT go vet ./...",
+      "exit_code": 0,
+      "log": "raw/vet.txt",
+      "cwd": "."
+    },
+    {
+      "name": "lint",
+      "command": "env -u GOROOT /home/hellotalk/code/go/bin/golangci-lint run ./...",
+      "exit_code": 0,
+      "log": "raw/lint.txt",
+      "cwd": "."
+    },
+    {
+      "name": "导入约束",
+      "command": "env -u GOROOT bash scripts/verify_imports.sh",
+      "exit_code": 0,
+      "log": "raw/imports.txt",
+      "cwd": "."
+    },
+    {
+      "name": "覆盖率门禁",
+      "command": "env -u GOROOT bash scripts/check_coverage.sh /tmp/goagent-protocol-verification/final-coverage.out",
+      "exit_code": 0,
+      "log": "raw/coverage-gates.txt",
+      "cwd": "."
+    },
+    {
+      "name": "模块校验",
+      "command": "env -u GOROOT go mod verify",
+      "exit_code": 0,
+      "log": "raw/modules.txt",
+      "cwd": "."
+    },
+    {
+      "name": "协议跨包回归",
+      "command": "env -u GOROOT GO_TEST_MODE=true go test -race -count=1 -timeout=60s -coverpkg=./management/protocol,./management/a2a,./management/mcpserver,./a2a/remote,./mcp/remote -coverprofile=/tmp/goagent-protocol-verification/adapters-coverage.out ./management/protocol ./mcp/remote",
+      "exit_code": 0,
+      "log": "raw/adapters.txt",
+      "cwd": "."
+    },
+    {
+      "name": "独立评测模块",
+      "command": "env -u GOROOT GO_TEST_MODE=true GOWORK=off go test -mod=readonly -race -count=1 -timeout=120s ./...",
+      "exit_code": 0,
+      "log": "raw/frameworkbench.txt",
+      "cwd": "evaluation/frameworkbench"
+    }
+  ]
+}

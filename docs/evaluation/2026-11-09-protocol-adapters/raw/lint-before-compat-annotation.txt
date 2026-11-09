@@ -1,0 +1,20 @@
+mcp/remote/input.go:51:9: SA1019: github.com/modelcontextprotocol/go-sdk/mcp.ListRootsParams is deprecated: the roots feature is deprecated as of protocol version 2026-07-28 (SEP-2577). It remains functional during the deprecation window (at least twelve months). See https://modelcontextprotocol.io/seps/2577-deprecate-roots-sampling-and-logging. (staticcheck)
+		case *mcp.ListRootsParams:
+		      ^
+mcp/remote/input.go:52:24: SA1019: github.com/modelcontextprotocol/go-sdk/mcp.ListRootsResult is deprecated: the roots feature is deprecated as of protocol version 2026-07-28 (SEP-2577). It remains functional during the deprecation window (at least twelve months). See https://modelcontextprotocol.io/seps/2577-deprecate-roots-sampling-and-logging. (staticcheck)
+			r, ok := response.(*mcp.ListRootsResult)
+			                    ^
+mcp/remote/input.go:54:9: SA1019: github.com/modelcontextprotocol/go-sdk/mcp.CreateMessageParams is deprecated: the sampling feature is deprecated as of protocol version 2026-07-28 (SEP-2577). It remains functional during the deprecation window (at least twelve months). See https://modelcontextprotocol.io/seps/2577-deprecate-roots-sampling-and-logging. (staticcheck)
+		case *mcp.CreateMessageParams:
+		      ^
+mcp/remote/input.go:55:24: SA1019: github.com/modelcontextprotocol/go-sdk/mcp.CreateMessageResult is deprecated: the sampling feature is deprecated as of protocol version 2026-07-28 (SEP-2577). It remains functional during the deprecation window (at least twelve months). See https://modelcontextprotocol.io/seps/2577-deprecate-roots-sampling-and-logging. (staticcheck)
+			r, ok := response.(*mcp.CreateMessageResult)
+			                    ^
+mcp/remote/input.go:57:9: SA1019: github.com/modelcontextprotocol/go-sdk/mcp.CreateMessageWithToolsParams is deprecated: the sampling feature is deprecated as of protocol version 2026-07-28 (SEP-2577). It remains functional during the deprecation window (at least twelve months). See https://modelcontextprotocol.io/seps/2577-deprecate-roots-sampling-and-logging. (staticcheck)
+		case *mcp.CreateMessageWithToolsParams:
+		      ^
+mcp/remote/input.go:58:24: SA1019: github.com/modelcontextprotocol/go-sdk/mcp.CreateMessageWithToolsResult is deprecated: the sampling feature is deprecated as of protocol version 2026-07-28 (SEP-2577). It remains functional during the deprecation window (at least twelve months). See https://modelcontextprotocol.io/seps/2577-deprecate-roots-sampling-and-logging. (staticcheck)
+			r, ok := response.(*mcp.CreateMessageWithToolsResult)
+			                    ^
+6 issues:
+* staticcheck: 6

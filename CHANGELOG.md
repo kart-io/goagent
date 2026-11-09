@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 新增
+
+- 在核心仓库新增 `management/protocol`、`management/a2a`、`management/mcpserver`：A2A/HTTP/MCP 共用管理任务、身份、审批与取消；A2A 使用官方 JSON-RPC/SSE，MCP 提供 Agent 工具和显式长任务工具契约。
+- `a2a/remote` 支持官方 Agent Card 发现与远端 Agent 工具调用；`mcp/remote` 新增可保存的输入检查点、有界人工输入回调和旧协议宿主处理器选项。详见[协议接入指南](docs/guides/PROTOCOL_ADAPTERS.md)。
+
 ### 修复与验证
 
 - 嵌套 Agent 在公共流式与 Handle 执行入口隔离会话日志轮次，避免未配置日志的子调用写入或结束父轮次；补充失败历史、持久恢复与独立子日志回归。

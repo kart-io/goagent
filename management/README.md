@@ -6,6 +6,9 @@
 | --- | --- |
 | `management` | 实体、Store/Runtime/Factory 合约、管理服务、Worker、Outbox、只读运行查询 |
 | `management/adapters` | 原生 Agent 与 Graph 的执行适配 |
+| `management/protocol` | A2A/MCP 公共任务身份、回复与状态观测 |
+| `management/a2a` | 官方 A2A JSON-RPC/SSE、能力发现、取消与恢复 |
+| `management/mcpserver` | Agent 工具、长任务、MCP 人工输入与审批续接 |
 | `management/httpapi` | 可挂载的标准库 HTTP Handler 与 [OpenAPI](httpapi/openapi.yaml) |
 
 宿主向 `management.New(Config)` 注入管理 Store、Session Store、HistoryReader、Authorizer 和固定版本 Factory；显式启动 `NewWorker(service).Run(ctx)`，通过 `httpapi.New` 生成 Handler。构造器不建表、不监听端口，也不自动启动后台工作。宿主负责认证、数据库迁移、资源关闭和确认旧进程停止后的 owner 回收。
@@ -54,3 +57,5 @@ DeepSeek与Gemini的真实模型、审批续跑、多轮会话、Fork及实际�
 真实模型验收工具的失败退出、请求增量证据和配置前检修复见 [可靠性修复](../docs/evaluation/2026-11-08-management-live-reliability/REPORT.md)。
 
 纯聊天支持、恢复分页、覆盖门禁及跨仓数据库复验见 [管理层稳定化验收](../docs/evaluation/2026-11-09-management-hardening/REPORT.md)。
+
+A2A、HTTP 与 MCP 共用任务的装配及互操作约束见 [协议接入指南](../docs/guides/PROTOCOL_ADAPTERS.md)。

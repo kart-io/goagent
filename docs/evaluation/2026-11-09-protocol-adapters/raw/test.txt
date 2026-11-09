@@ -1,0 +1,143 @@
+	github.com/kart-io/goagent/a2a/remote		coverage: 0.0% of statements
+ok  	github.com/kart-io/goagent/builder	18.243s	coverage: 91.0% of statements
+ok  	github.com/kart-io/goagent/builder/contextpolicy	8.819s	coverage: 90.0% of statements
+ok  	github.com/kart-io/goagent/cache	1.197s	coverage: 96.4% of statements
+ok  	github.com/kart-io/goagent/codec	1.035s	coverage: 97.4% of statements
+ok  	github.com/kart-io/goagent/codec/json	1.291s	coverage: 89.8% of statements
+ok  	github.com/kart-io/goagent/codec/yaml	1.042s	coverage: 83.3% of statements
+?   	github.com/kart-io/goagent/constants	[no test files]
+ok  	github.com/kart-io/goagent/core	8.502s	coverage: 82.4% of statements
+ok  	github.com/kart-io/goagent/core/budget	1.197s	coverage: 89.6% of statements
+ok  	github.com/kart-io/goagent/core/checkpoint	3.526s	coverage: 93.6% of statements
+ok  	github.com/kart-io/goagent/core/durable	4.617s	coverage: 83.9% of statements
+ok  	github.com/kart-io/goagent/core/durable/migrate	1.071s	coverage: 92.9% of statements
+	github.com/kart-io/goagent/core/durable/storetest		coverage: 0.0% of statements
+ok  	github.com/kart-io/goagent/core/execution	1.030s	coverage: 98.1% of statements
+ok  	github.com/kart-io/goagent/core/flow	1.024s	coverage: 77.5% of statements
+	github.com/kart-io/goagent/core/internal/txnlog		coverage: 0.0% of statements
+ok  	github.com/kart-io/goagent/core/middleware	2.040s	coverage: 91.4% of statements
+ok  	github.com/kart-io/goagent/core/observe	1.020s	coverage: 97.3% of statements
+ok  	github.com/kart-io/goagent/core/session	3.204s	coverage: 84.0% of statements
+	github.com/kart-io/goagent/core/session/sessiontest		coverage: 0.0% of statements
+ok  	github.com/kart-io/goagent/core/state	1.191s	coverage: 91.4% of statements
+ok  	github.com/kart-io/goagent/core/usage	1.012s	coverage: 82.0% of statements
+ok  	github.com/kart-io/goagent/devtools	2.053s	coverage: 76.1% of statements
+ok  	github.com/kart-io/goagent/errors	1.051s	coverage: 85.0% of statements
+ok  	github.com/kart-io/goagent/evaluation	1.040s	coverage: 87.2% of statements
+ok  	github.com/kart-io/goagent/evaluation/agentbench	5.912s	coverage: 89.8% of statements
+	github.com/kart-io/goagent/evaluation/agentbench/cmd/run		coverage: 0.0% of statements
+ok  	github.com/kart-io/goagent/evaluation/agentbench/cmd/stress	1.468s	coverage: 80.9% of statements
+ok  	github.com/kart-io/goagent/evaluation/executionbench	1.301s	coverage: 85.0% of statements
+	github.com/kart-io/goagent/evaluation/executionbench/cmd/run		coverage: 0.0% of statements
+	github.com/kart-io/goagent/evaluation/hitlbench/cmd/run		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/advanced/multi-agent-collaboration		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/advanced/multi-agent-demo		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/advanced/multi-agent-modular		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/advanced/multi-agent-modular/agents		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/advanced/multi-agent-simple		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/advanced/observability		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/advanced/parallel-execution		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/advanced/tool-runtime		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/advanced/tool-selector		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/basic/01-simple-agent		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/basic/03-agent-with-memory		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/basic/04-ollama-agent		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/basic/05-provider-consistency		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/basic/06-all-providers		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/basic/07-smart-agent-with-tools		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/basic/09-deepseek-simple		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/basic/09-deepseek-simple/invokefast		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/basic/11-deepseek-with-builder		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/basic/12-deepseek-simple		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/basic/13-simple-builder-deepseek		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/basic/15-simple-builder-kimi		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/builder/advanced		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/builder/core		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/builder/serialization		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/builder/simple		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/error_handling		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/execution-governed		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/execution-scope		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/generator/advanced		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/generator/basic		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/human-in-the-loop		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/human-in-the-loop-interrupt		coverage: 0.0% of statements
+ok  	github.com/kart-io/goagent/examples/integration/human-in-loop	3.531s	coverage: 93.6% of statements
+	github.com/kart-io/goagent/examples/integration/langchain-complete		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/integration/langchain-inspired		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/integration/langchain-phase1		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/integration/langchain-phase2		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/integration/preconfig-agents		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/llm/anthropic		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/llm/gemini-verify		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/llm/kimi		coverage: 0.0% of statements
+ok  	github.com/kart-io/goagent/examples/llm/minimax-verify	1.261s	coverage: 67.5% of statements
+ok  	github.com/kart-io/goagent/examples/multi-agent-patterns	1.144s	coverage: 73.4% of statements
+	github.com/kart-io/goagent/examples/optimization/02-cache-presets		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/retry-jitter		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/skills/01-demo		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/skills/02-weather-skill		coverage: 0.0% of statements
+?   	github.com/kart-io/goagent/examples/skills/02-weather-skill/internal/config	[no test files]
+	github.com/kart-io/goagent/examples/skills/02-weather-skill/internal/handler		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/skills/02-weather-skill/internal/llmtools		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/skills/02-weather-skill/internal/logic		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/skills/02-weather-skill/internal/skill		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/skills/02-weather-skill/internal/svc		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/skills/02-weather-skill/internal/types		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/testhelpers		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/tools/01-calculator		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/tools/02-http-api		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/tools/03-shell		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/tools/04-search		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/tools/07-function-tool		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/tools/08-tool-with-agent		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/translate		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/translate/interactive		coverage: 0.0% of statements
+	github.com/kart-io/goagent/examples/workflow		coverage: 0.0% of statements
+ok  	github.com/kart-io/goagent/execution	1.192s	coverage: 93.4% of statements
+ok  	github.com/kart-io/goagent/harness/env	8.343s	coverage: 84.9% of statements
+ok  	github.com/kart-io/goagent/interfaces	1.024s	coverage: 0.0% of statements
+	github.com/kart-io/goagent/internal/processgroup		coverage: 0.0% of statements
+ok  	github.com/kart-io/goagent/internal/snapshot	1.040s	coverage: 85.4% of statements
+ok  	github.com/kart-io/goagent/llm	8.598s	coverage: 70.5% of statements
+ok  	github.com/kart-io/goagent/llm/cache	1.586s	coverage: 73.0% of statements
+ok  	github.com/kart-io/goagent/llm/common	1.334s	coverage: 86.8% of statements
+ok  	github.com/kart-io/goagent/llm/providers	11.116s	coverage: 88.4% of statements
+ok  	github.com/kart-io/goagent/management	32.900s	coverage: 79.6% of statements
+	github.com/kart-io/goagent/management/a2a		coverage: 0.0% of statements
+ok  	github.com/kart-io/goagent/management/adapters	1.433s	coverage: 81.3% of statements
+ok  	github.com/kart-io/goagent/management/httpapi	1.354s	coverage: 97.3% of statements
+	github.com/kart-io/goagent/management/internal/managementtest		coverage: 0.0% of statements
+	github.com/kart-io/goagent/management/mcpserver		coverage: 0.0% of statements
+ok  	github.com/kart-io/goagent/management/protocol	2.320s	coverage: 75.9% of statements
+ok  	github.com/kart-io/goagent/mcp/remote	2.147s	coverage: 78.9% of statements
+ok  	github.com/kart-io/goagent/memory	3.630s	coverage: 89.5% of statements
+ok  	github.com/kart-io/goagent/middleware	2.314s	coverage: 98.3% of statements
+ok  	github.com/kart-io/goagent/multiagent	2.639s	coverage: 93.6% of statements
+ok  	github.com/kart-io/goagent/observability	7.269s	coverage: 92.8% of statements
+ok  	github.com/kart-io/goagent/parsers	1.045s	coverage: 98.9% of statements
+ok  	github.com/kart-io/goagent/plugin	1.043s	coverage: 95.1% of statements
+ok  	github.com/kart-io/goagent/scripts/apicheck	1.074s	coverage: 92.3% of statements
+ok  	github.com/kart-io/goagent/scripts/compatcheck	38.116s	coverage: 83.4% of statements
+ok  	github.com/kart-io/goagent/scripts/coveragecheck	1.051s	coverage: 82.9% of statements
+ok  	github.com/kart-io/goagent/scripts/stabilitysoak	1.300s	coverage: 76.5% of statements
+ok  	github.com/kart-io/goagent/store	2.490s	coverage: 89.1% of statements
+ok  	github.com/kart-io/goagent/store/decorator	1.013s	coverage: 79.2% of statements
+ok  	github.com/kart-io/goagent/store/memory	1.212s	coverage: 96.1% of statements
+ok  	github.com/kart-io/goagent/testing/mocks	1.016s	coverage: 28.0% of statements
+ok  	github.com/kart-io/goagent/testing/panictest	4.025s	coverage: 63.6% of statements
+ok  	github.com/kart-io/goagent/testing/replay	1.042s	coverage: 76.7% of statements
+	github.com/kart-io/goagent/testing/testutil		coverage: 0.0% of statements
+ok  	github.com/kart-io/goagent/tools	27.779s	coverage: 82.4% of statements
+ok  	github.com/kart-io/goagent/tools/compute	1.015s	coverage: 86.4% of statements
+ok  	github.com/kart-io/goagent/tools/http	3.036s	coverage: 98.6% of statements
+ok  	github.com/kart-io/goagent/tools/middleware	2.642s	coverage: 88.5% of statements
+ok  	github.com/kart-io/goagent/tools/policy	1.012s	coverage: 92.6% of statements
+ok  	github.com/kart-io/goagent/tools/search	2.032s	coverage: 89.9% of statements
+ok  	github.com/kart-io/goagent/tools/shell	14.102s	coverage: 94.6% of statements
+ok  	github.com/kart-io/goagent/tools/spill	1.025s	coverage: 82.0% of statements
+ok  	github.com/kart-io/goagent/tools/toolargs	1.025s	coverage: 89.2% of statements
+ok  	github.com/kart-io/goagent/utils	1.016s	coverage: 97.7% of statements
+ok  	github.com/kart-io/goagent/utils/httpclient	1.019s	coverage: 95.6% of statements
+ok  	github.com/kart-io/goagent/workflow	10.913s	coverage: 86.7% of statements
+ok  	github.com/kart-io/goagent/workflow/refund	1.013s	coverage: 68.5% of statements
