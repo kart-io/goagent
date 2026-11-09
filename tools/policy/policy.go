@@ -46,6 +46,9 @@ type Policy struct {
 	Default Decision
 	// CommandArg 是命令前缀匹配读取的参数名，默认 "command"。
 	CommandArg string
+	// ArgsArg 是参数数组的参数名，默认 "args"。argv 形式的工具（如 shell 工具）把子命令放在这里，
+	// 匹配时接在 CommandArg 分词之后；数组元素按原样作为一个词，不再分词。
+	ArgsArg string
 	// SessionTools 列出审批时可以整工具"本会话允许"的工具。带命令参数的调用总是收窄为命令前缀，
 	// 不在列表中的其他工具只能单次批准。
 	SessionTools []string
@@ -58,9 +61,34 @@ func (p *Policy) commandArg() string {
 	return "command"
 }
 
+func (p *Policy) argsArg() string {
+	if p.ArgsArg != "" {
+		return p.ArgsArg
+	}
+	return "args"
+}
+
+// commandLine 取调用的命令词序列；unsafe 表示命令串含 shell 控制符、引号或反斜杠，无法可靠分词。
+func commandLine(args map[string]any, commandArg, argsArg string) (words []string, unsafe, ok bool) {
+	command, ok := args[commandArg].(string)
+	if !ok {
+		return nil, false, false
+	}
+	words = strings.Fields(command)
+	switch v := args[argsArg].(type) {
+	case []string:
+		words = append(words, v...)
+	case []any:
+		for _, a := range v {
+			words = append(words, fmt.Sprint(a))
+		}
+	}
+	return words, unsafeCommand(command), true
+}
+
 // Decide 返回调用的裁决。
 func (p *Policy) Decide(call *tools.Call) Decision {
-	command, hasCommand := call.Args[p.commandArg()].(string)
+	words, unsafe, hasCommand := commandLine(call.Args, p.commandArg(), p.argsArg())
 	decision, matched := Allow, false
 	for _, r := range p.Rules {
 		if r.Tool != "*" && r.Tool != call.Tool {
@@ -72,12 +100,12 @@ func (p *Policy) Decide(call *tools.Call) Decision {
 			case !hasCommand:
 				continue
 			case d == Allow:
-				if !commandHasPrefix(command, r.Command) {
+				if unsafe || !wordsHavePrefix(words, r.Command) {
 					continue
 				}
-			case unsafeCommand(command):
+			case unsafe:
 				d = Ask
-			case !restrictedPrefix(command, r.Command):
+			case !restrictedPrefix(words, r.Command):
 				continue
 			}
 		}
@@ -116,12 +144,12 @@ func (p *Policy) Hook() tools.PreHook {
 
 // grantFor 拟定"本会话允许"的范围：命令调用收窄为命令前缀，列入 SessionTools 的工具可整工具放行。
 func (p *Policy) grantFor(call *tools.Call) tools.SessionGrant {
-	if command, ok := call.Args[p.commandArg()].(string); ok {
-		prefix := commandScope(command)
+	if words, unsafe, ok := commandLine(call.Args, p.commandArg(), p.argsArg()); ok {
+		prefix := commandScope(words, unsafe)
 		if prefix == nil {
 			return nil
 		}
-		return CommandGrant{Tool: call.Tool, Arg: p.commandArg(), Prefix: prefix}
+		return CommandGrant{Tool: call.Tool, Arg: p.commandArg(), ArgsArg: p.argsArg(), Prefix: prefix}
 	}
 	if slices.Contains(p.SessionTools, call.Tool) {
 		return ToolGrant{Tool: call.Tool}
@@ -131,12 +159,8 @@ func (p *Policy) grantFor(call *tools.Call) tools.SessionGrant {
 
 // commandScope 取命令首词，第二个词是纯字母子命令时一并取（go test、git status、npm run）。
 // 含 shell 控制符的命令无法安全收窄，返回 nil。
-func commandScope(command string) []string {
-	if unsafeCommand(command) {
-		return nil
-	}
-	words := strings.Fields(command)
-	if len(words) == 0 {
+func commandScope(words []string, unsafe bool) []string {
+	if unsafe || len(words) == 0 {
 		return nil
 	}
 	if len(words) > 1 && isSubcommand(words[1]) {
@@ -156,9 +180,10 @@ func isSubcommand(w string) bool {
 
 // CommandGrant 放行同一工具中以 Prefix 开头、且不含 shell 控制符的命令。
 type CommandGrant struct {
-	Tool   string
-	Arg    string
-	Prefix []string
+	Tool    string
+	Arg     string
+	ArgsArg string
+	Prefix  []string
 }
 
 // Describe 实现 tools.SessionGrant。
@@ -168,8 +193,8 @@ func (g CommandGrant) Describe() string {
 
 // Matches 实现 tools.SessionGrant。
 func (g CommandGrant) Matches(call *tools.Call) bool {
-	command, ok := call.Args[g.Arg].(string)
-	return ok && call.Tool == g.Tool && commandHasPrefix(command, strings.Join(g.Prefix, " "))
+	words, unsafe, ok := commandLine(call.Args, g.Arg, g.ArgsArg)
+	return ok && !unsafe && call.Tool == g.Tool && wordsHavePrefix(words, strings.Join(g.Prefix, " "))
 }
 
 // ToolGrant 放行同一工具的全部调用。
@@ -185,15 +210,10 @@ func unsafeCommand(command string) bool {
 	return strings.ContainsAny(command, ";&|`$()<>\n\r'\"\\")
 }
 
-func commandHasPrefix(command, prefix string) bool {
-	return !unsafeCommand(command) && wordsHavePrefix(strings.Fields(command), prefix)
-}
-
 // restrictedPrefix 供拒绝与询问规则使用：首词取文件名，带路径调用同一程序也算匹配。
-func restrictedPrefix(command, prefix string) bool {
-	words := strings.Fields(command)
+func restrictedPrefix(words []string, prefix string) bool {
 	if len(words) > 0 {
-		words[0] = path.Base(words[0])
+		words = append([]string{path.Base(words[0])}, words[1:]...)
 	}
 	return wordsHavePrefix(words, prefix)
 }

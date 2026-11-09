@@ -135,3 +135,38 @@ func TestDecideAllowRulesStayExact(t *testing.T) {
 	require.Equal(t, Ask, p.Decide(call("run_command", "/tmp/evil/go test")))
 	require.Equal(t, Allow, p.Decide(call("run_command", "go test ./...")))
 }
+
+// argv 形式的工具（如 shell 工具）把子命令放在参数数组里，规则与会话授权须按"命令 + 参数"整体匹配。
+func TestDecideArgvCommands(t *testing.T) {
+	argv := func(command string, args ...any) *tools.Call {
+		return &tools.Call{Tool: "shell", Args: map[string]any{"command": command, "args": args}}
+	}
+	p := &Policy{
+		Rules: []Rule{
+			{Tool: "shell", Command: "git status", Decision: Allow},
+			{Tool: "shell", Command: "git push", Decision: Deny},
+		},
+		Default: Ask,
+	}
+	cases := []struct {
+		call *tools.Call
+		want Decision
+	}{
+		{argv("git", "push", "origin", "main"), Deny},
+		{argv("/usr/bin/git", "push"), Deny},
+		{argv("git", "status", "-s"), Allow},
+		{argv("git", "status --porcelain"), Ask},
+		{argv("git"), Ask},
+		{argv("git", "commit", "-m", "msg with spaces"), Ask},
+		{&tools.Call{Tool: "shell", Args: map[string]any{"command": "git", "args": []string{"push"}}}, Deny},
+	}
+	for _, c := range cases {
+		require.Equal(t, c.want, p.Decide(c.call), c.call.Args)
+	}
+
+	d, err := p.Hook()(context.Background(), argv("git", "log", "-1"))
+	require.NoError(t, err)
+	require.Equal(t, []string{"git", "log"}, d.Grant.(CommandGrant).Prefix)
+	require.True(t, d.Grant.Matches(argv("git", "log", "--oneline")))
+	require.False(t, d.Grant.Matches(argv("git", "push")), "授权不能从子命令扩大到整个程序")
+}
