@@ -1,0 +1,14 @@
+ok  	github.com/kart-io/goagent-harness/background	2.812s
+?   	github.com/kart-io/goagent-harness/cmd/sandbox-runner	[no test files]
+ok  	github.com/kart-io/goagent-harness/effects	1.288s
+ok  	github.com/kart-io/goagent-harness/eval/swebench	1.029s
+?   	github.com/kart-io/goagent-harness/examples/coding-agent	[no test files]
+ok  	github.com/kart-io/goagent-harness/examples/plan-agent	1.024s
+?   	github.com/kart-io/goagent-harness/examples/sandbox-permissions	[no test files]
+ok  	github.com/kart-io/goagent-harness/integration	1.305s
+ok  	github.com/kart-io/goagent-harness/permissions	1.032s
+ok  	github.com/kart-io/goagent-harness/preset	13.703s
+ok  	github.com/kart-io/goagent-harness/sandbox	11.798s
+ok  	github.com/kart-io/goagent-harness/sandbox/sandboxtest	2.715s
+ok  	github.com/kart-io/goagent-harness/sandbox/sshsandbox	1.407s
+ok  	github.com/kart-io/goagent-harness/tools/coding	3.693s

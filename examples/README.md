@@ -15,7 +15,7 @@ Examples that call a real LLM read the provider's API key from the environment (
 | [basic/](basic/) | Single-feature examples: simple agent, memory, Ollama, providers, DeepSeek/Kimi with the builder |
 | [builder/](builder/) | `builder` API layers (simple, core, advanced) and configuration serialization |
 | [tools/](tools/) | Built-in tools (calculator, HTTP API, shell, search), function tools, tools with an agent |
-| [skills/](skills/) | Skill registration, routing and a layered weather skill |
+| [skills/](skills/) | Skill registration, routing, a layered weather skill and [standalone SKILL.md loading](skills/03-catalog/) |
 | [advanced/](advanced/) | Multi-agent collaboration, observability, parallel tool execution, tool runtime, tool selector |
 | [integration/](integration/) | Human-in-the-loop, LangChain-style runnables/middleware/checkpoints, preconfigured agents |
 | [llm/](llm/) | Provider examples: Anthropic, Kimi, and the Gemini native API verifier ([gemini-verify](llm/gemini-verify/README.md)) |

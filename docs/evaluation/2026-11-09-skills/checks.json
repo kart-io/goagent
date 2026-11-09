@@ -1,0 +1,34 @@
+{
+  "core": {
+    "base": "d010f039610aecbc57c0b0c261555fa2765c5f76",
+    "race_test_packages": 72,
+    "build": "pass",
+    "vet": "pass",
+    "lint": "0 issues",
+    "imports": "0 findings",
+    "windows_amd64_build": "pass",
+    "darwin_arm64_build": "pass",
+    "parser_fuzz_executions": 31036,
+    "coverage": {
+      "codec/yaml": 88.4,
+      "skills": 93.1,
+      "tools/skill": 94.6
+    },
+    "overall_coverage": 79.4
+  },
+  "harness": {
+    "base": "912bca0a05c11c204b5cad695f0bd85fc0b10b5b",
+    "race_test_packages": 11,
+    "build": "pass",
+    "vet": "pass",
+    "source_overlay": false,
+    "mode": "temporary workspace with local core",
+    "published_dependency_check": "pending core release and Harness dependency update"
+  },
+  "review": {
+    "initial_resolved_findings": 9,
+    "multi_agent_resolved_findings": 6,
+    "unresolved_confirmed_code_defects": 0,
+    "security_view": "not completed in follow-up multi-agent review: platform automatic safety filter"
+  }
+}

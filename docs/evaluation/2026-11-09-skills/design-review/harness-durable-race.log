@@ -1,0 +1,16 @@
+=== RUN   TestSkillsEnumerationLimitsDurableRejection
+=== RUN   TestSkillsEnumerationLimitsDurableRejection/depth
+=== RUN   TestSkillsEnumerationLimitsDurableRejection/depth/dispatcher
+=== RUN   TestSkillsEnumerationLimitsDurableRejection/depth/builder
+=== RUN   TestSkillsEnumerationLimitsDurableRejection/entries
+=== RUN   TestSkillsEnumerationLimitsDurableRejection/entries/dispatcher
+=== RUN   TestSkillsEnumerationLimitsDurableRejection/entries/builder
+--- PASS: TestSkillsEnumerationLimitsDurableRejection (0.16s)
+    --- PASS: TestSkillsEnumerationLimitsDurableRejection/depth (0.01s)
+        --- PASS: TestSkillsEnumerationLimitsDurableRejection/depth/dispatcher (0.00s)
+        --- PASS: TestSkillsEnumerationLimitsDurableRejection/depth/builder (0.01s)
+    --- PASS: TestSkillsEnumerationLimitsDurableRejection/entries (0.15s)
+        --- PASS: TestSkillsEnumerationLimitsDurableRejection/entries/dispatcher (0.02s)
+        --- PASS: TestSkillsEnumerationLimitsDurableRejection/entries/builder (0.02s)
+PASS
+ok  	github.com/kart-io/goagent-harness/preset	1.173s

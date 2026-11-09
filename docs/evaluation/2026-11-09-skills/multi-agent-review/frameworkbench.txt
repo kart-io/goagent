@@ -1,0 +1,3 @@
+cd evaluation/frameworkbench && GOWORK=off GO_TEST_MODE=true go test -mod=readonly -race -count=1 -timeout 120s ./...
+ok  	github.com/kart-io/goagent-frameworkbench	1.031s
+?   	github.com/kart-io/goagent-frameworkbench/cmd/runner	[no test files]

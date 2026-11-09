@@ -1,0 +1,55 @@
+{
+  "recorded_at": "2026-11-09T07:28:43.121145+00:00",
+  "repositories": {
+    "goagent": {
+      "base": "d010f039610aecbc57c0b0c261555fa2765c5f76",
+      "files": {
+        "README.md": "2d93ce464fc437b43038fcdb614fab848e2f0ee25f32c4c8a9dcfdb5d52a2af1",
+        "README_CN.md": "01b3400532fbbe1e30ba74c91b5020ff9998fab4175bdc3b7510c39428b9c83e",
+        "docs/README.md": "8976449d461221ddb860f59f8882e0b3afc8263ebe6a0f53cd8c565f6bfdc0b0",
+        "docs/architecture/ARCHITECTURE.md": "9733b903f7bd2ba981c6981d700c2b83a9c30d5823f8274372bbbc7d52960cd8",
+        "docs/guides/HARNESS_MIGRATION.md": "ab01f0a4c43e6f5e2974e53c3967f81cf63484ba557a0f188b2d45be716cb71c",
+        "examples/README.md": "2e342116def60f0a4d1602f4c063d37eaebf1eaec26642fc01893cc49a94df86",
+        "scripts/apicheck/main.go": "f6f0a9c88511d4b77c6cabb8afce76ec4a9faa1c85df538182934646feee9c10",
+        "scripts/apicheck/main_test.go": "fbccd3532ef309a6d479442c5ab4722963d87ada105e238ff38edeeaefdd9539",
+        "codec/yaml/mapping.go": "7f273c881c3c8b8b4db18904e63e1593f75d32a85fe2decae6258a2d1a62f5cb",
+        "codec/yaml/mapping_test.go": "749d8553cb46e1aeb0614cc1e2fbb60a76c7041a70353809e187c9a00fb8a822",
+        "constants/skills.go": "a3d80851091fac655d9e903977706b4a468832fa02b5840052e8aeb8e1e99d16",
+        "docs/evaluation/2026-11-09-skills/HARNESS_SOURCE_SHA256SUMS": "2e9727b07f7416b6227915ffb2de9b2043df0966ce89128df22be72b06e2848e",
+        "docs/evaluation/2026-11-09-skills/REPORT.md": "c2cec166efd17b2c873ad1b0c42786a767fb5e192072ceb57dbfdd9b4a522ce8",
+        "docs/evaluation/2026-11-09-skills/SOURCE_SHA256SUMS": "ac3e6d59386200ff411281d1ab883a35b108cbbec72c99678f8a8a8b9e09816c",
+        "docs/evaluation/2026-11-09-skills/checks.json": "4fd091693a25634f67c08e843767846b832f46e031444a9e1e6fd2becc974963",
+        "docs/evaluation/2026-11-09-skills/core-race.log": "3692cef22400db601bf36ca494c7aa04e918e24031df2dcee8d6adcd872966cc",
+        "docs/evaluation/2026-11-09-skills/example.log": "9b5245273fe054d4ed745f2337359556ec22b4addd6ec6694a86da514e25bfe2",
+        "docs/evaluation/2026-11-09-skills/fuzz.txt": "8802c82f94ed6433fc258fbd6c0ac886f38265cc64486241b7f881e12dd0eec3",
+        "docs/evaluation/2026-11-09-skills/harness-checks.json": "48e61390332728e5f4d7a9b711fe4b0b3a744236fc90b434fd61fcac28e4f4ff",
+        "docs/evaluation/2026-11-09-skills/harness-race.log": "8d7d46a0357d5504ea294d02b2a2ba4133d1d20b69b5f039563e9670822990ba",
+        "docs/guides/SKILLS.md": "f3305d90d6814d6ec6e4c2607efe96b13466593c88709f6169e1bfb508785743",
+        "examples/skills/03-catalog/README.md": "e5359664b05f41fca4930a3a0a9613dffa422b9532e75bf2fe7e51cf80937e77",
+        "examples/skills/03-catalog/fixtures/faq/SKILL.md": "1b3d3f9cde48d0151622f4753cb6fdfffb96389327df5356d8c04b36830d23e3",
+        "examples/skills/03-catalog/fixtures/faq/references/refunds.md": "c6c4dde333c9deb758d6e09521c654b54ec3078bee70f2b71b8c1f8565b1787f",
+        "examples/skills/03-catalog/main.go": "0bb8655f2f8c745186131edf6f9f333b331a2b918c72575ba50ada110a72d75e",
+        "skills/catalog.go": "e178447af644ad655ca33e38e04abc1166a553d13a1c88eab6420beace126991",
+        "skills/catalog_linux_test.go": "5e0addfc0dab07e8ee086628ae9dbf90ac0ff41df9279cc3531d4ec68935c9d2",
+        "skills/catalog_test.go": "2306678b854242698918f23521a87d113d47b9ba3589679b78d6f0a240ff47d9",
+        "skills/discovery_linux_test.go": "a6f64d5d7325f09a467cfc525ac90ef96550ee5186475c9c34d7527cbc6155c6",
+        "skills/parse.go": "b80263773c4beb93b7803ab784bc586451d06f5a38788fb5e864d50a7676c50b",
+        "skills/parse_test.go": "615d97bf36d3b26d65de8ebe1c3ec99dda293faa509e505d81a5e39fb6b0d2a5",
+        "tools/skill/tool.go": "c230a82ecf3b12ceaa715619dcc2799b09cd7fdfe29686c2352d1536a1cffff8",
+        "tools/skill/tool_test.go": "c0f6586108813a77660a2ca502635d1a1088d9c18b853c705698ec88ac5ee89a"
+      }
+    },
+    "goagent-harness": {
+      "base": "912bca0a05c11c204b5cad695f0bd85fc0b10b5b",
+      "files": {
+        "README.md": "4efb053fb15bfe8217ea5a5ffde2c3ec721272e2f755493897f2cbbfdecae06c",
+        "docs/MIGRATION.md": "664c887336321a8e1a999a92195b556dd6dccaa17d2cfcd81d0ad5eca9a98b3a",
+        "preset/README.md": "813263aa0ed8ac61b46f38f19ddf3f285bd80ab46f6b2f8d092b2994f8b24e58",
+        "preset/b_test.go": "f322b1de8f6cfdd4b7946e5f5fe92701f2489681a4a25fac3a78420180e38be4",
+        "preset/skills.go": "b7265272b0c262b9f60fc30fbd1bca249d2919706dacc6ec69186184272a04e8",
+        "preset/skills_linux_test.go": "f2e5c9b9a8b333a72ce6d8f5b4a6cc0f06b1e83ec141053d4473e5bdc7e9e95b",
+        "preset/skills_test.go": "4424de0a1f378a06c8432b0c9933a867e9e97327de98132b694cac3cd0f6cb5e"
+      }
+    }
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "time": "2026-11-09T08:22:57.192058+00:00",
+  "core": {
+    "repository": "/home/hellotalk/code/go/src/github.com/kart-io/goagent",
+    "head": "d010f039610aecbc57c0b0c261555fa2765c5f76",
+    "sha256": {
+      "codec/yaml/mapping.go": "d184d7f3f8f28dc950c9375698c632ebd3634bdce5e9007cedfe0d0b53027d8d",
+      "codec/yaml/mapping_test.go": "5455cdbfa6a5e91c579037f5a3bf422abe2e54f0848c099a5cb54d4ba27a6636",
+      "constants/skills.go": "a3d80851091fac655d9e903977706b4a468832fa02b5840052e8aeb8e1e99d16",
+      "docs/guides/HARNESS_MIGRATION.md": "8a660cf8758c961207a2b51c4c080d320d15451c123a8dbdc97898a8aae8894b",
+      "docs/guides/SKILLS.md": "6850cbdc377a6956321ba5cc330936d1ec55deecfee91ad3a6e3aba0d67dfe88",
+      "examples/skills/03-catalog/README.md": "e5359664b05f41fca4930a3a0a9613dffa422b9532e75bf2fe7e51cf80937e77",
+      "examples/skills/03-catalog/fixtures/faq/SKILL.md": "1b3d3f9cde48d0151622f4753cb6fdfffb96389327df5356d8c04b36830d23e3",
+      "examples/skills/03-catalog/fixtures/faq/references/refunds.md": "c6c4dde333c9deb758d6e09521c654b54ec3078bee70f2b71b8c1f8565b1787f",
+      "examples/skills/03-catalog/main.go": "6d075e31a37d6ab60b2df16c4ec557bb0fbf6e9db22d7eef978dd27b5ccb1667",
+      "examples/skills/03-catalog/main_test.go": "28b9513bbba4eb5f0d10db7529effa6381d211674361b50d557d4448248da6e0",
+      "scripts/apicheck/main.go": "f6f0a9c88511d4b77c6cabb8afce76ec4a9faa1c85df538182934646feee9c10",
+      "scripts/apicheck/main_test.go": "fbccd3532ef309a6d479442c5ab4722963d87ada105e238ff38edeeaefdd9539",
+      "skills/catalog.go": "0b86260e033822e915ebb31bef78eb1be77e594843130ed1340639ccbe3c8ed1",
+      "skills/catalog_budget_test.go": "2cf1c671ecaef844be2905541eb21221f9af1068aa1c3c46dcefaa4cd16ae825",
+      "skills/catalog_linux_test.go": "5e0addfc0dab07e8ee086628ae9dbf90ac0ff41df9279cc3531d4ec68935c9d2",
+      "skills/catalog_test.go": "358fc37fe5dbe4cf60c8014c1afd543a666ca9297f121de5433173d7c1e742e2",
+      "skills/discovery_linux_test.go": "a6f64d5d7325f09a467cfc525ac90ef96550ee5186475c9c34d7527cbc6155c6",
+      "skills/parse.go": "b80263773c4beb93b7803ab784bc586451d06f5a38788fb5e864d50a7676c50b",
+      "skills/parse_test.go": "26035a64e40291f17991ae07a5a168ebf7df1e4fa35a75d29b9af8b308baa565",
+      "tools/skill/errors_test.go": "59669da11ab588a9737cbebb82122aa4860f3303e365b33796ec70f338e5f507",
+      "tools/skill/resource_linux_test.go": "6d15c1a8a0985afd5606e3f3d7bc415906350fe6f5dbcd2cb8723a50f3d8ed29",
+      "tools/skill/tool.go": "ee2ac6b13186c2590d577475a1d0524b500e6607535c73544fc77b5dad9868a1",
+      "tools/skill/tool_test.go": "28518c577233faf5823a4ad007726018dfa0aa649f3e89a6fcea498b3c602583"
+    }
+  },
+  "harness": {
+    "repository": "/home/hellotalk/code/go/src/github.com/kart-io/goagent-harness",
+    "head": "912bca0a05c11c204b5cad695f0bd85fc0b10b5b",
+    "sha256": {
+      "preset/README.md": "e836c0c76111482071ee119fdae53afade9ce2313b7b72db3f047556dc0cf612",
+      "preset/b_test.go": "1c50c282bbd86075b03e67581e233d65b25bca886d36bed8188d062bfb6d282f",
+      "preset/boundary_audit_test.go": "dcda15e628ccfddda481e2b4e5dae11365654b4b1e510c5e086777621ff349f1",
+      "preset/skills.go": "b7265272b0c262b9f60fc30fbd1bca249d2919706dacc6ec69186184272a04e8",
+      "preset/skills_durable_test.go": "1fff9c72cdcb54624b8b28858adee5fb92d77b67f0b1481a9c73b6474fc0cf2f",
+      "preset/skills_linux_test.go": "f2e5c9b9a8b333a72ce6d8f5b4a6cc0f06b1e83ec141053d4473e5bdc7e9e95b",
+      "preset/skills_test.go": "4424de0a1f378a06c8432b0c9933a867e9e97327de98132b694cac3cd0f6cb5e"
+    }
+  }
+}

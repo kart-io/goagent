@@ -1,0 +1,12 @@
+{
+  "full_race_with_coverage": "pass",
+  "coverage_gates": "pass",
+  "overall_coverage_percent": 79.4,
+  "frameworkbench": "pass",
+  "commands": [
+    "env -u GOROOT GO_TEST_MODE=true go test -race -timeout 120s -coverprofile=/tmp/goagent-skills-expert-final-coverage.out ./...",
+    "env -u GOROOT bash scripts/check_coverage.sh /tmp/goagent-skills-expert-final-coverage.out",
+    "env -u GOROOT make test-frameworkbench"
+  ],
+  "note": "Core coverage logs refreshed after fixes. Frameworkbench ran on initial review snapshot; its dependencies were not changed by fixes. Hosted CI, Docker/Postgres and standalone Harness publication are not asserted."
+}

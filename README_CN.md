@@ -26,10 +26,11 @@ GoAgent 是嵌入 Go 业务服务的可恢复、可计量、可观测 Agent 执�
 
 - [goagent-contrib](https://github.com/kart-io/goagent-contrib)：检索器（BM25、混合、重排序、Qdrant）、文档加载、实用工具与多实例 Postgres `durable.Store`。
 - [goagent-examples](https://github.com/kart-io/goagent-examples)：业务案例（DevOps、文章审核、自动回复、退款恢复、真实模型编排）。
-- [goagent-harness](https://github.com/kart-io/goagent-harness)：Preset、计划模式、压缩、技能、子 Agent 组件与编码工具，见 [Harness 迁移指南](docs/guides/HARNESS_MIGRATION.md)。
+- [goagent-harness](https://github.com/kart-io/goagent-harness)：Preset、计划模式、压缩、技能装配、子 Agent 组件与编码工具，见 [Harness 迁移指南](docs/guides/HARNESS_MIGRATION.md)。
 
 ## 特性
 
+- **Skills 加载**：独立的只读 `skills.Catalog` 提供元数据、正文和附属资源读取，可选 `load_skill` 工具适配。见 [Skills 指南](docs/guides/SKILLS.md)。
 - **统一执行入口**：`agent.AsRunnable()` 的 `Invoke`、`Stream`、`Batch`、`Pipe` 共用同一执行源，工具、检索、中间件与回调走同一路径。
 - **原生工具循环**：模型在一次流式请求中选择工具或直接回答（OpenAI、DeepSeek、Gemini Provider）；可选并发工具调用与直接返回工具。
 - **循环扩展点**：PreStep、Request、RequestError、TurnStopping 钩子，提示词段落与上下文，以及接受 Steer/Inject/Redirect/Followup 的运行句柄 `Handle`。

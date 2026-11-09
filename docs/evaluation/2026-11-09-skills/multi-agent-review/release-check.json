@@ -1,0 +1,10 @@
+{
+  "command": "env -u GOROOT GOWORK=off go test -mod=readonly ./preset -run ^$",
+  "cwd": "goagent-harness",
+  "exit_code": 1,
+  "missing_packages": [
+    "github.com/kart-io/goagent/skills",
+    "github.com/kart-io/goagent/tools/skill"
+  ],
+  "conclusion": "Standalone Harness release is blocked until its GoAgent dependency references an available revision containing the new packages. Temporary workspace checks do not satisfy this gate."
+}

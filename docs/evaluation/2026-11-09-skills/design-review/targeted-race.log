@@ -1,0 +1,5 @@
+ok  	github.com/kart-io/goagent/codec/yaml	1.055s
+ok  	github.com/kart-io/goagent/skills	1.062s
+ok  	github.com/kart-io/goagent/tools/skill	2.035s
+ok  	github.com/kart-io/goagent/examples/skills/03-catalog	1.011s
+ok  	github.com/kart-io/goagent/scripts/apicheck	1.033s

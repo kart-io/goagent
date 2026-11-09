@@ -1,0 +1,42 @@
+--- FAIL: TestDecodeMappingRejectsBinaryScalars (0.00s)
+    --- FAIL: TestDecodeMappingRejectsBinaryScalars/description:_!!binary_dXNlZnVs_ (0.00s)
+        mapping_test.go:127:
+                Error Trace:    /home/hellotalk/code/go/src/github.com/kart-io/goagent/codec/yaml/mapping_test.go:127
+                Error:          An error is expected but got nil.
+                Test:           TestDecodeMappingRejectsBinaryScalars/description:_!!binary_dXNlZnVs_
+    --- FAIL: TestDecodeMappingRejectsBinaryScalars/description:_!!binary_/w==_ (0.00s)
+        mapping_test.go:127:
+                Error Trace:    /home/hellotalk/code/go/src/github.com/kart-io/goagent/codec/yaml/mapping_test.go:127
+                Error:          An error is expected but got nil.
+                Test:           TestDecodeMappingRejectsBinaryScalars/description:_!!binary_/w==_
+    --- FAIL: TestDecodeMappingRejectsBinaryScalars/metadata:_{value:_!!binary_/w==}_ (0.00s)
+        mapping_test.go:127:
+                Error Trace:    /home/hellotalk/code/go/src/github.com/kart-io/goagent/codec/yaml/mapping_test.go:127
+                Error:          An error is expected but got nil.
+                Test:           TestDecodeMappingRejectsBinaryScalars/metadata:_{value:_!!binary_/w==}_
+    --- FAIL: TestDecodeMappingRejectsBinaryScalars/values:_[!!binary_/w==]_ (0.00s)
+        mapping_test.go:127:
+                Error Trace:    /home/hellotalk/code/go/src/github.com/kart-io/goagent/codec/yaml/mapping_test.go:127
+                Error:          An error is expected but got nil.
+                Test:           TestDecodeMappingRejectsBinaryScalars/values:_[!!binary_/w==]_
+    --- FAIL: TestDecodeMappingRejectsBinaryScalars/first:_&binary_!!binary_/w==_second:_*binary_ (0.00s)
+        mapping_test.go:127:
+                Error Trace:    /home/hellotalk/code/go/src/github.com/kart-io/goagent/codec/yaml/mapping_test.go:127
+                Error:          An error is expected but got nil.
+                Test:           TestDecodeMappingRejectsBinaryScalars/first:_&binary_!!binary_/w==_second:_*binary_
+FAIL
+FAIL    github.com/kart-io/goagent/codec/yaml   0.003s
+--- FAIL: TestParseRejectsMalformedOrInvalidSkills (0.00s)
+    --- FAIL: TestParseRejectsMalformedOrInvalidSkills/二进制元数据 (0.00s)
+        parse_test.go:70:
+                Error Trace:    /home/hellotalk/code/go/src/github.com/kart-io/goagent/skills/parse_test.go:70
+                Error:          An error is expected but got nil.
+                Test:           TestParseRejectsMalformedOrInvalidSkills/二进制元数据
+    --- FAIL: TestParseRejectsMalformedOrInvalidSkills/二进制说明 (0.00s)
+        parse_test.go:70:
+                Error Trace:    /home/hellotalk/code/go/src/github.com/kart-io/goagent/skills/parse_test.go:70
+                Error:          An error is expected but got nil.
+                Test:           TestParseRejectsMalformedOrInvalidSkills/二进制说明
+FAIL
+FAIL    github.com/kart-io/goagent/skills   0.004s
+FAIL

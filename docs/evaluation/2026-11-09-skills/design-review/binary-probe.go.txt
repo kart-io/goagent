@@ -1,0 +1,14 @@
+package main
+import (
+ "fmt"
+ "github.com/kart-io/goagent/codec/yaml"
+ "github.com/kart-io/goagent/skills"
+)
+func main() {
+ for _, data := range []string{"description: !!binary dXNlZnVs\n", "description: !!binary /w==\n"} {
+  out, err := yaml.DecodeMapping([]byte(data), 4096)
+  fmt.Printf("mapping input=%q output=%q err=%v\n", data, out["description"], err)
+  s, err := skills.Parse([]byte("---\nname: sample\n" + data + "---\nbody"))
+  fmt.Printf("parse description=%q err=%v\n", s.Metadata.Description, err)
+ }
+}

@@ -1,0 +1,121 @@
+{
+  "date": "2026-11-09",
+  "environment": "Go 1.27.3；env -u GOROOT；本地工作区",
+  "checks": [
+    {
+      "command": "env -u GOROOT go test ./codec/yaml ./skills -run 'TestDecodeMappingRejectsBinaryScalars|TestParseRejectsMalformedOrInvalidSkills/(二进制说明|二进制元数据)' -count=1",
+      "exit_code": 1,
+      "meaning": "修复前预期红灯",
+      "log": "binary-before.log"
+    },
+    {
+      "command": "env -u GOROOT go test -race -count=1 -timeout=120s ./codec/yaml ./skills ./tools/skill ./examples/skills/03-catalog ./scripts/apicheck",
+      "exit_code": 0,
+      "log": "targeted-race.log"
+    },
+    {
+      "command": "env -u GOROOT go vet ./codec/yaml ./skills ./tools/skill ./examples/skills/03-catalog ./scripts/apicheck",
+      "exit_code": 0
+    },
+    {
+      "command": "env -u GOROOT go run ./scripts/apicheck",
+      "exit_code": 0,
+      "output": "imports: 0 findings"
+    },
+    {
+      "command": "git diff --check",
+      "exit_code": 0
+    },
+    {
+      "command": "env -u GOROOT go test ./tools/skill -run '^TestInstructionLimitsAreCompletedRejections$' -count=1",
+      "exit_code": 1,
+      "meaning": "EXE-01修复前预期红灯",
+      "log": "enumeration-before.log"
+    },
+    {
+      "command": "env -u GOROOT go test -race -count=1 -timeout=120s ./tools/skill",
+      "exit_code": 0,
+      "log": "tool-final-race.log"
+    },
+    {
+      "command": "env -u GOROOT go vet ./tools/skill",
+      "exit_code": 0
+    },
+    {
+      "command": "golangci-lint run ./codec/yaml/... ./skills/... ./tools/skill/... ./examples/skills/03-catalog/... ./scripts/apicheck/...",
+      "exit_code": 0,
+      "output": "0 issues.",
+      "stage": "DC-01修复后"
+    },
+    {
+      "command": "golangci-lint run ./tools/skill/...",
+      "exit_code": 0,
+      "output": "0 issues.",
+      "stage": "EXE-01修复后"
+    },
+    {
+      "command": "文档原Bash代码块，无副作用shell函数模拟",
+      "exit_code": 23,
+      "expected_exit_code": 23,
+      "log": "command-exit-check.json"
+    },
+    {
+      "command": "env -u GOROOT go test -race -count=1 -timeout=90s ./skills -run '^TestCatalogBudget' -v",
+      "exit_code": 0,
+      "source": "VALIDATION.md；Carver实际执行",
+      "result": "4 PASS，0 skip，2.249s"
+    },
+    {
+      "command": "env -u GOROOT GOWORK=/tmp/skills-execution-review-3qakozwn/go.work go test -race -count=1 -timeout=60s -v ./preset -run '^TestSkillsEnumerationLimitsDurableRejection$'",
+      "cwd": "/home/hellotalk/code/go/src/github.com/kart-io/goagent-harness",
+      "exit_code": 0,
+      "source": "Euclid实际执行",
+      "log": "harness-durable-race.log"
+    },
+    {
+      "command": "env -u GOROOT go vet ./skills ./tools/skill",
+      "exit_code": 0
+    },
+    {
+      "command": "golangci-lint run ./skills/... ./tools/skill/...",
+      "exit_code": 0,
+      "output": "0 issues."
+    },
+    {
+      "command": "env -u GOROOT go run ./scripts/apicheck",
+      "exit_code": 0,
+      "output": "imports: 0 findings"
+    },
+    {
+      "command": "git diff --check",
+      "cwd": "两个仓库分别执行",
+      "exit_code": 0
+    },
+    {
+      "command": "env -u GOROOT GOWORK=/tmp/skills-execution-review-3qakozwn/go.work go vet ./preset",
+      "cwd": "../goagent-harness",
+      "exit_code": 0
+    }
+  ],
+  "boundaries": [
+    "未重复全量72包+Harness11包测试；旧测试记录仅对应旧摘要",
+    "未重新执行独立安全审查",
+    "未调用真实模型",
+    "未commit、push、tag或修改发布依赖"
+  ],
+  "log_formatting": {
+    "description": "提交时将两份失败日志的制表符展开为空格并去除行尾空白；测试内容和结果不变，以下保留原始字节摘要。",
+    "files": [
+      {
+        "file": "binary-before.log",
+        "original_sha256": "e55534158234da5718781beac7e68fb4a18ac39d42e61eb6e060b586c41c5f39",
+        "normalized_sha256": "ffeb79f37f813a23d16f7f3b6fd26016e481dcf7c54545317d176020cb45e18f"
+      },
+      {
+        "file": "enumeration-before.log",
+        "original_sha256": "62445a4cd1749ed66365c10618f532e99932fd1257055fbb9b88a4727404de6d",
+        "normalized_sha256": "88475f05ecf2cc93c26b3d6915f5300929db1edbd9958ced6f7b456fc1983e19"
+      }
+    ]
+  }
+}

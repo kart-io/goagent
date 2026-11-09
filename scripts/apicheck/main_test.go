@@ -35,10 +35,23 @@ func TestImportRulesUseCurrentModuleAndLayeredExceptions(t *testing.T) {
 		{"codec/x.go", "utils", true},
 		{"codec/yaml/yaml.go", "codec/json", false},
 		{"codec/codec.go", "codec/yaml", false},
+		{"skills/catalog.go", "codec/yaml", false},
+		{"skills/catalog.go", "errors", false},
+		{"skills/catalog.go", "constants", false},
+		{"skills/catalog.go", "builder", true},
+		{"skills/catalog.go", "tools", true},
+		{"skills/catalog.go", "interfaces", true},
+		{"skills/catalog.go", "core", true},
+		{"skills/catalog.go", "plugin", true},
+		{"core/agent.go", "skills", true},
+		{"tools/skill/tool.go", "skills", false},
 	} {
 		require.Equal(t, tc.bad, forbidden(tc.file, module+tc.dep), tc.file+" -> "+tc.dep)
 	}
 	require.False(t, forbidden("core/a.go", "example.com/tools"))
+	require.True(t, forbidden("skills/catalog.go", "github.com/google/uuid"))
+	require.False(t, forbidden("skills/catalog.go", "io/fs"))
+	require.False(t, forbidden("skills/catalog_test.go", "github.com/stretchr/testify/require"))
 }
 
 func TestCoreDoesNotDependOnHarness(t *testing.T) {

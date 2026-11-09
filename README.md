@@ -26,10 +26,11 @@ Related repositories:
 
 - [goagent-contrib](https://github.com/kart-io/goagent-contrib) - retrievers (BM25, hybrid, reranking, Qdrant), document loaders, practical tools and the multi-instance Postgres `durable.Store`.
 - [goagent-examples](https://github.com/kart-io/goagent-examples) - business cases (DevOps, content review, auto-reply, refund recovery, live-model orchestration).
-- [goagent-harness](https://github.com/kart-io/goagent-harness) - presets, plan mode, compaction, skills, sub-agent components and coding tools. See the [Harness migration guide](docs/guides/HARNESS_MIGRATION.md).
+- [goagent-harness](https://github.com/kart-io/goagent-harness) - presets, plan mode, compaction, Skills assembly, sub-agent components and coding tools. See the [Harness migration guide](docs/guides/HARNESS_MIGRATION.md).
 
 ## Features
 
+- **Skills loading** - standalone read-only `skills.Catalog` for metadata, instructions and resources, with an optional `load_skill` tool. See the [Skills guide](docs/guides/SKILLS.md).
 - **One execution entry** - `agent.AsRunnable()` serves `Invoke`, `Stream`, `Batch` and `Pipe` from the same stream source, so tools, retrieval, middleware and callbacks run on one path.
 - **Native tool loop** - the model picks tools or answers in a single streaming request (OpenAI, DeepSeek and Gemini providers); optional parallel tool calls and direct-return tools.
 - **Loop extension points** - PreStep, Request, RequestError, TurnStopping hooks, prompt sections/contexts, and a running `Handle` that accepts Steer/Inject/Redirect/Followup.

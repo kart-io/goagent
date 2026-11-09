@@ -1,0 +1,66 @@
+{
+  "verified_at": "2026-11-09T07:55:00.234719+00:00",
+  "core": {
+    "race_test_packages": 72,
+    "build": "pass",
+    "vet": "pass",
+    "lint": "0 issues",
+    "imports": "0 findings",
+    "coverage_gates": "pass",
+    "overall_coverage": 79.4,
+    "package_coverage": {
+      "codec/yaml": 88.4,
+      "skills": 93.1,
+      "tools/skill": 94.6
+    },
+    "windows_amd64_tool_test_cross_compile": "pass",
+    "darwin_arm64_build": "pass",
+    "frameworkbench": "pass (initial review snapshot; benchmark dependencies unchanged by fixes)"
+  },
+  "harness": {
+    "race_test_packages": 11,
+    "build": "pass",
+    "vet": "pass",
+    "mode": "temporary workspace",
+    "source_overlay": false,
+    "standalone_release": "blocked: dependency lacks new public packages"
+  },
+  "independent_reviews": {
+    "architecture": "complete: AR-01/AR-02 resolved",
+    "integration": "complete: INT-01 resolved",
+    "verification": "complete: V-01/V-02/V-03 resolved",
+    "security": "not completed: platform automatic safety filter"
+  },
+  "new_defects": {
+    "P2_resolved": 5,
+    "P3_resolved": 1,
+    "unresolved_confirmed_code_defects": 0
+  },
+  "limitations": [
+    "Independent security review incomplete",
+    "Standalone Harness dependency gate not passed",
+    "No opt-in Docker or standalone Postgres run",
+    "No hosted CI run claimed"
+  ],
+  "commands": {
+    "core": [
+      "env -u GOROOT GO_TEST_MODE=true go test -race -timeout 120s -coverprofile=/tmp/goagent-skills-expert-final-coverage.out ./...",
+      "env -u GOROOT bash scripts/check_coverage.sh /tmp/goagent-skills-expert-final-coverage.out",
+      "env -u GOROOT go build ./...",
+      "env -u GOROOT go vet ./...",
+      "env -u GOROOT golangci-lint run ./...",
+      "env -u GOROOT bash scripts/verify_imports.sh"
+    ],
+    "harness": "see harness-checks.json; GOWORK is a temporary workspace containing both actual repositories",
+    "cross_compile": [
+      "env -u GOROOT GOOS=windows GOARCH=amd64 go test -c -o /tmp/goagent-skills-tool-windows.test.exe ./tools/skill",
+      "env -u GOROOT GOOS=darwin GOARCH=arm64 go build ./skills ./tools/skill"
+    ],
+    "frameworkbench": "env -u GOROOT make test-frameworkbench",
+    "example": "env -u GOROOT go run ./examples/skills/03-catalog"
+  },
+  "coverage_profile": {
+    "file": "statements.coverage.gz",
+    "uncompressed_sha256": "3611593cfc2cff104a4ae4269f233d614f0ba8e3658c31a9caedf320d83c32f9"
+  }
+}

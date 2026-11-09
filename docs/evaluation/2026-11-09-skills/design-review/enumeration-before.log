@@ -1,0 +1,9 @@
+--- FAIL: TestInstructionLimitsAreCompletedRejections (0.00s)
+    errors_test.go:47:
+            Error Trace:    /home/hellotalk/code/go/src/github.com/kart-io/goagent/tools/skill/errors_test.go:47
+            Error:          Received unexpected error:
+                            [TOOL_EXECUTION] [load_skill]: skill loading failed: [INVALID_INPUT]: skill resource depth limit exceeded
+            Test:           TestInstructionLimitsAreCompletedRejections
+FAIL
+FAIL    github.com/kart-io/goagent/tools/skill  0.003s
+FAIL

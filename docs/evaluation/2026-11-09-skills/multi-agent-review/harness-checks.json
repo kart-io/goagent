@@ -1,0 +1,32 @@
+{
+  "race": {
+    "command": [
+      "go",
+      "test",
+      "-mod=readonly",
+      "-race",
+      "-count=1",
+      "-timeout=120s",
+      "./..."
+    ],
+    "exit_code": 0
+  },
+  "build": {
+    "command": [
+      "go",
+      "build",
+      "-mod=readonly",
+      "./..."
+    ],
+    "exit_code": 0
+  },
+  "vet": {
+    "command": [
+      "go",
+      "vet",
+      "-mod=readonly",
+      "./..."
+    ],
+    "exit_code": 0
+  }
+}

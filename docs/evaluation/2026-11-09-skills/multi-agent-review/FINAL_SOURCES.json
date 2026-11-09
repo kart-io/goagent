@@ -1,0 +1,47 @@
+{
+  "goagent": {
+    "base": "d010f039610aecbc57c0b0c261555fa2765c5f76",
+    "files": {
+      "README.md": "2d93ce464fc437b43038fcdb614fab848e2f0ee25f32c4c8a9dcfdb5d52a2af1",
+      "README_CN.md": "01b3400532fbbe1e30ba74c91b5020ff9998fab4175bdc3b7510c39428b9c83e",
+      "docs/README.md": "8976449d461221ddb860f59f8882e0b3afc8263ebe6a0f53cd8c565f6bfdc0b0",
+      "docs/architecture/ARCHITECTURE.md": "9733b903f7bd2ba981c6981d700c2b83a9c30d5823f8274372bbbc7d52960cd8",
+      "docs/guides/HARNESS_MIGRATION.md": "ab01f0a4c43e6f5e2974e53c3967f81cf63484ba557a0f188b2d45be716cb71c",
+      "examples/README.md": "2e342116def60f0a4d1602f4c063d37eaebf1eaec26642fc01893cc49a94df86",
+      "scripts/apicheck/main.go": "f6f0a9c88511d4b77c6cabb8afce76ec4a9faa1c85df538182934646feee9c10",
+      "scripts/apicheck/main_test.go": "fbccd3532ef309a6d479442c5ab4722963d87ada105e238ff38edeeaefdd9539",
+      "codec/yaml/mapping.go": "7f273c881c3c8b8b4db18904e63e1593f75d32a85fe2decae6258a2d1a62f5cb",
+      "codec/yaml/mapping_test.go": "749d8553cb46e1aeb0614cc1e2fbb60a76c7041a70353809e187c9a00fb8a822",
+      "constants/skills.go": "a3d80851091fac655d9e903977706b4a468832fa02b5840052e8aeb8e1e99d16",
+      "docs/guides/SKILLS.md": "5dcef2c18945d19c582869924aaf23ee4f179bca875e018453cc9b960ec74369",
+      "examples/skills/03-catalog/README.md": "e5359664b05f41fca4930a3a0a9613dffa422b9532e75bf2fe7e51cf80937e77",
+      "examples/skills/03-catalog/fixtures/faq/SKILL.md": "1b3d3f9cde48d0151622f4753cb6fdfffb96389327df5356d8c04b36830d23e3",
+      "examples/skills/03-catalog/fixtures/faq/references/refunds.md": "c6c4dde333c9deb758d6e09521c654b54ec3078bee70f2b71b8c1f8565b1787f",
+      "examples/skills/03-catalog/main.go": "6d075e31a37d6ab60b2df16c4ec557bb0fbf6e9db22d7eef978dd27b5ccb1667",
+      "examples/skills/03-catalog/main_test.go": "28b9513bbba4eb5f0d10db7529effa6381d211674361b50d557d4448248da6e0",
+      "skills/catalog.go": "0b86260e033822e915ebb31bef78eb1be77e594843130ed1340639ccbe3c8ed1",
+      "skills/catalog_linux_test.go": "5e0addfc0dab07e8ee086628ae9dbf90ac0ff41df9279cc3531d4ec68935c9d2",
+      "skills/catalog_test.go": "358fc37fe5dbe4cf60c8014c1afd543a666ca9297f121de5433173d7c1e742e2",
+      "skills/discovery_linux_test.go": "a6f64d5d7325f09a467cfc525ac90ef96550ee5186475c9c34d7527cbc6155c6",
+      "skills/parse.go": "b80263773c4beb93b7803ab784bc586451d06f5a38788fb5e864d50a7676c50b",
+      "skills/parse_test.go": "615d97bf36d3b26d65de8ebe1c3ec99dda293faa509e505d81a5e39fb6b0d2a5",
+      "tools/skill/errors_test.go": "d29120807ba990a488f7800ce4763627f32f99fe3f39351a9da61e00da00137b",
+      "tools/skill/resource_linux_test.go": "6d15c1a8a0985afd5606e3f3d7bc415906350fe6f5dbcd2cb8723a50f3d8ed29",
+      "tools/skill/tool.go": "5376764841b9e48c5b7b1ac73dc0dadad48aa891ae282d2910bdeefa9b8e40da",
+      "tools/skill/tool_test.go": "ba6f6270d00c594461b64fa183f97b15a66b7ed2eb192ddcbd63e9a98b4697d7"
+    }
+  },
+  "goagent-harness": {
+    "base": "912bca0a05c11c204b5cad695f0bd85fc0b10b5b",
+    "files": {
+      "README.md": "4efb053fb15bfe8217ea5a5ffde2c3ec721272e2f755493897f2cbbfdecae06c",
+      "docs/MIGRATION.md": "664c887336321a8e1a999a92195b556dd6dccaa17d2cfcd81d0ad5eca9a98b3a",
+      "preset/README.md": "fb6e8d51558306961d6dd2cd0ebf01e1f2a1bbaea5ce6a1797cdeaf896fb7515",
+      "preset/b_test.go": "1c50c282bbd86075b03e67581e233d65b25bca886d36bed8188d062bfb6d282f",
+      "preset/boundary_audit_test.go": "dcda15e628ccfddda481e2b4e5dae11365654b4b1e510c5e086777621ff349f1",
+      "preset/skills.go": "b7265272b0c262b9f60fc30fbd1bca249d2919706dacc6ec69186184272a04e8",
+      "preset/skills_linux_test.go": "f2e5c9b9a8b333a72ce6d8f5b4a6cc0f06b1e83ec141053d4473e5bdc7e9e95b",
+      "preset/skills_test.go": "4424de0a1f378a06c8432b0c9933a867e9e97327de98132b694cac3cd0f6cb5e"
+    }
+  }
+}

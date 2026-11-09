@@ -38,6 +38,9 @@ func forbidden(file, path string) bool {
 		}
 	}
 	if !strings.HasPrefix(path, module) {
+		if source == "skills" && !strings.HasSuffix(file, "_test.go") {
+			return strings.Contains(strings.Split(path, "/")[0], ".")
+		}
 		return false
 	}
 	dep := strings.TrimPrefix(path, module)
@@ -76,13 +79,16 @@ func forbidden(file, path string) bool {
 	case "codec":
 		// codec 及其子包是统一的格式转换入口，只依赖标准库、格式库与彼此，任何包都能导入它而不成环。
 		return dest != "codec"
+	case "skills":
+		// Skills 加载与执行/装配分离，只依赖格式编解码、错误与叶子常量。
+		return dest != "skills" && dest != "codec" && dep != "errors" && dep != "constants"
 	case "utils":
 		// errors 只可能依赖常量叶子层，utils 依赖它不会成环。
 		return dest != "utils" && dep != "errors" && dest != "codec" && dep != "constants"
 	case "cache":
 		return dest != "cache" && dest != "codec" && dep != "constants" && dep != "errors"
 	case "core":
-		return dest == "tools" || dest == "middleware" || dest == "parsers" || dest == "builder"
+		return dest == "tools" || dest == "middleware" || dest == "parsers" || dest == "builder" || dest == "skills"
 	case "builder", "parsers":
 		return dest == "middleware"
 	}

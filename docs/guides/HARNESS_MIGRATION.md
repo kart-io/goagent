@@ -3,6 +3,9 @@
 GoAgent 专注执行机制：Runnable、Builder 原生循环、Graph、durable、budget、observe、Dispatcher/Pipeline、Handle 与循环钩子。
 独立项目 GoAgent Harness 专注可配置的 Agent 装配：Preset、计划模式、压缩、技能、子 Agent 组件、Claude Code 命令钩子与编码工具。
 
+Skills 的通用加载现由主仓顶层 `skills` 和可选 `tools/skill` 提供；Harness 负责技能配置、授权、
+提示词与 Manifest 装配。普通业务无需引入 Harness 即可使用[技能目录与资源读取](SKILLS.md)。
+
 ## 路径对照
 
 | 原 GoAgent 路径 | 新项目路径 |
@@ -23,6 +26,24 @@ GoAgent 自 v0.27.0 起不再包含上表的包。迁移只改 import，原有�
 
 ## 本地验证
 
+Skills 公共包迁移尚未发布到 Harness 的版本依赖；当前应直接使用临时 workspace 验证两个 checkout。
+从 GoAgent 根目录运行：
+
+```bash
+(
+set -euo pipefail
+core_dir="$PWD"
+harness_dir="$(cd ../goagent-harness && pwd)"
+workspace_dir="$(mktemp -d)"
+trap 'rm -rf "$workspace_dir"' EXIT
+(cd "$workspace_dir" && env -u GOROOT GOWORK=off go work init "$core_dir" "$harness_dir")
+env -u GOROOT GOWORK="$workspace_dir/go.work" go -C "$harness_dir" test -race ./...
+env -u GOROOT GOWORK="$workspace_dir/go.work" go -C "$harness_dir" build ./...
+)
+```
+
+发布时更新 Harness 的 GoAgent 版本依赖后，再运行包含独立模块门禁的脚本：
+
 ```bash
 # 在 goagent-harness 克隆目录运行，参数为本仓库路径（默认 ../goagent）。
 ./scripts/verify-goagent.sh ../goagent
@@ -33,6 +54,7 @@ GoAgent 自 v0.27.0 起不再包含上表的包。迁移只改 import，原有�
 
 ## 版本
 
-GoAgent Harness 目前只有 `main` 分支，尚未发布版本标签，其 go.mod 声明的 GoAgent 依赖为 v0.23.0。
+GoAgent Harness 的版本依赖以其 `go.mod` 为准；本地 workspace 不会将新公共包的依赖传递给下游。
+独立发布前必须选择包含 `skills`、`tools/skill` 的可获取 GoAgent 版本并通过 `GOWORK=off` 检查。
 
 新项目中的历史设计文档保留来源；本仓库的 Harness 历史设计不再代表上层组件的维护位置。

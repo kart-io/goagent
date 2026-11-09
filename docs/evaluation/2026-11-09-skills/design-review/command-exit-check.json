@@ -1,0 +1,6 @@
+{
+  "simulation": "执行文档原代码块；shell函数替代go/env/mktemp/cd/rm，不执行构建、不创建或删除目录",
+  "injected_test_exit": 23,
+  "script_exit": 23,
+  "result": "测试失败退出码正确传播"
+}
