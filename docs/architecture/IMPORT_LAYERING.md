@@ -46,7 +46,8 @@
 | `cache/` | 除 `cache/...`、`codec/...`、`constants` 与根 `errors` 以外的内部包；不允许 `errors/...` 子包 |
 | `codec/` | 除 `codec/...` 以外的 GoAgent 内部包（统一格式转换入口，只依赖标准库、YAML 库、mapstructure 与彼此） |
 | 除 `codec/` 外的全部代码（含测试与 `examples/`） | `encoding/json`、`encoding/json/v2`、`encoding/json/jsontext`、`encoding/xml`、YAML 库（`go.yaml.in/yaml/...`、`gopkg.in/yaml.*`、`sigs.k8s.io/yaml`、`goccy/go-yaml`）、mapstructure，以及 sonic、json-iterator、go-json、easyjson、gjson、sjson、jsonparser、go-toml、BurntSushi/toml。数据格式转换统一用 `codec/json`、`codec/yaml` 的 `Marshal`/`Unmarshal`，`json.RawMessage`、`json.Number` 等类型与 `json.Strict`、`json.Indent` 等选项，格式运行时才确定时用 `codec`；测试文件只检查此条，其余分层规则只约束非测试代码 |
-| `core/` | `tools`、`middleware`、`parsers`、`builder`（顶层目录，`core/middleware` 不受影响） |
+| `core/` | `tools`、`middleware`、`parsers`、`builder`、`skills`、`revision`（顶层目录，`core/middleware` 不受影响） |
+| `revision/` | 除 `revision/...`、`skills/...`、`codec/...`、`errors` 与 `constants` 以外的内部包 |
 | `builder/` | `middleware` |
 | `parsers/` | `middleware` |
 | `interfaces`、`errors`、`utils`、`cache`、`core`、`builder`、`tools`、`parsers`、`llm`、`workflow`、`memory`、`store`、`middleware`、`observability`、`devtools`、`harness`、`multiagent` | 顶层 `execution` |

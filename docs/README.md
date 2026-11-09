@@ -24,6 +24,8 @@ GoAgent 是嵌入 Go 服务的 Agent 执行内核：原生工具循环、类型�
 
 ## 宿主接入与治理
 
+- [AgentRevision 与会话绑定](guides/AGENT_REVISIONS.md)：不可变配置与工件归档、旧程序加载、新旧会话版本隔离
+
 - [Skills 加载](guides/SKILLS.md)：可复用 Catalog、按需正文与资源读取、可选工具适配及宿主边界
 - [宿主标准接入](guides/HOST_INTEGRATION.md)：Scope、BuildContext、恢复身份与资源生命周期
 - [HTTP/SSE/WebSocket、Webhook与Hooks](guides/HTTP_AGENT.md)：安装、页面/客户端案例、宿主装配、可替换连接接口与正式文档入口

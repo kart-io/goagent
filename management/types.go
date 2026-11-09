@@ -3,15 +3,17 @@ package management
 
 import (
 	"context"
-	"github.com/kart-io/goagent/codec/json"
-	agentErrors "github.com/kart-io/goagent/errors"
 	"time"
 
+	"go.opentelemetry.io/otel/trace"
+
+	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/session"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/execution"
-	"go.opentelemetry.io/otel/trace"
+	"github.com/kart-io/goagent/revision"
 )
 
 type TaskState string
@@ -74,6 +76,7 @@ type Agent struct {
 }
 type Version struct {
 	Meta
+	RevisionID            string          `json:"revision_id,omitempty"`
 	AgentID               string          `json:"agent_id"`
 	Version               string          `json:"version"`
 	RunnerKind            string          `json:"runner_kind"`
@@ -85,6 +88,7 @@ type Version struct {
 }
 type Session struct {
 	Meta
+	RevisionID   string `json:"revision_id,omitempty"`
 	AgentID      string `json:"agent_id"`
 	Version      string `json:"version"`
 	LogID        string `json:"log_id"`
@@ -97,6 +101,7 @@ type Session struct {
 type Task struct {
 	Operations []durable.OperationRef `json:"operations,omitempty"`
 	Meta
+	RevisionID      string          `json:"revision_id,omitempty"`
 	SessionID       string          `json:"session_id"`
 	AgentID         string          `json:"agent_id"`
 	Version         string          `json:"version"`
@@ -203,6 +208,7 @@ type RegisterAgentRequest struct {
 	Name           string `json:"name"`
 }
 type SaveVersionRequest struct {
+	RevisionID            string          `json:"revision_id,omitempty"`
 	IdempotencyKey        string          `json:"-"`
 	AgentID               string          `json:"-"`
 	Version               string          `json:"version"`
@@ -284,11 +290,13 @@ type Visibility struct {
 	ResourceIDs, AgentIDs, SessionIDs []string
 	PolicyVersion                     string
 }
-type ResourceRef struct{ Type, ID, AgentID, SessionID, TenantID string }
-type Authorizer interface {
-	Authorize(context.Context, Actor, string, ResourceRef) error
-	Scope(context.Context, Actor, string, string) (Visibility, error)
-}
+type (
+	ResourceRef struct{ Type, ID, AgentID, SessionID, TenantID string }
+	Authorizer  interface {
+		Authorize(context.Context, Actor, string, ResourceRef) error
+		Scope(context.Context, Actor, string, string) (Visibility, error)
+	}
+)
 
 // TenantAuthorizer 仅用于宿主已经完成用户权限校验的单租户接入，不提供跨租户授权。
 type TenantAuthorizer struct{}
@@ -302,6 +310,7 @@ func (TenantAuthorizer) Authorize(_ context.Context, a Actor, _ string, r Resour
 	}
 	return nil
 }
+
 func (TenantAuthorizer) Scope(_ context.Context, a Actor, _, _ string) (Visibility, error) {
 	return Visibility{All: true, PolicyVersion: "tenant-v1"}, ValidateActor(a)
 }
@@ -364,6 +373,13 @@ type Binding struct {
 type Factory interface {
 	Validate(context.Context, Version) (Capabilities, error)
 	Build(context.Context, Version, Resources) (Binding, error)
+}
+
+// RevisionFactory 从归档中验证完整修订及其运行器，不能用当前配置替代旧版本。
+// 普通 Factory 仍可处理未归档的既有 Version，但不能接纳带 RevisionID 的版本。
+type RevisionFactory interface {
+	Factory
+	ValidateRevision(context.Context, Version) (revision.AgentRevision, Capabilities, error)
 }
 type Reconciliation struct {
 	ID, TenantID, TaskID, VersionHash, EvidenceHash, Resolution, VerifiedBy string

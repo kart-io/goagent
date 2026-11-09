@@ -5,7 +5,7 @@
 | 包 | 职责 |
 | --- | --- |
 | `management` | 实体、Store/Runtime/Factory 合约、管理服务、Worker、Outbox、只读运行查询 |
-| `management/adapters` | 原生 Agent 与 Graph 的执行适配 |
+| `management/adapters` | 原生 Agent、Graph 与不可变归档的执行适配 |
 | `management/protocol` | A2A/MCP 公共任务身份、回复与状态观测 |
 | `management/a2a` | 官方 A2A JSON-RPC/SSE、能力发现、取消与恢复 |
 | `management/mcpserver` | Agent 工具、长任务、MCP 人工输入与审批续接 |
@@ -59,3 +59,5 @@ DeepSeek与Gemini的真实模型、审批续跑、多轮会话、Fork及实际�
 纯聊天支持、恢复分页、覆盖门禁及跨仓数据库复验见 [管理层稳定化验收](../docs/evaluation/2026-11-09-management-hardening/REPORT.md)。
 
 A2A、HTTP 与 MCP 共用任务的装配及互操作约束见 [协议接入指南](../docs/guides/PROTOCOL_ADAPTERS.md)。
+
+不可变配置、提示词、Skills 与程序工件的实际归档和旧版本加载见 [AgentRevision 与会话绑定](../docs/guides/AGENT_REVISIONS.md)。

@@ -2,12 +2,13 @@ package management
 
 import (
 	"context"
+	"testing"
+	"time"
+
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/session"
 	agentErrors "github.com/kart-io/goagent/errors"
-	"testing"
-	"time"
 )
 
 type reviewStore map[string]Document
@@ -35,6 +36,7 @@ type proofRuntime struct {
 func (f *proofRuntime) Build(context.Context, Version, Resources) (Binding, error) {
 	return Binding{Runtime: f}, nil
 }
+
 func (f *proofRuntime) Reconcile(_ context.Context, spec RunSpec, rec Reconciliation) (RunEvidence, error) {
 	if spec.Reconciliation == nil {
 		return RunEvidence{}, agentErrors.ErrManagementInvalid
@@ -42,6 +44,7 @@ func (f *proofRuntime) Reconcile(_ context.Context, spec RunSpec, rec Reconcilia
 	f.seen = &rec
 	return RunEvidence{State: "completed", Result: RunResult{Outcome: "completed", Output: []byte(`1`)}}, nil
 }
+
 func TestReconciliationEvidencePersistedAndApplied(t *testing.T) {
 	w, task, se, _, at := setupR(t)
 	ctx := context.Background()
@@ -71,12 +74,13 @@ func TestReconciliationEvidencePersistedAndApplied(t *testing.T) {
 	}
 	ev, _ := session.NewEvent("management/session", "session")
 	_, _ = s.cfg.Sessions.Append(ctx, se.LogID, 0, ev)
-	w.execute(ctx, ctx, c, task, se, v, at, nil)
+	w.execute(ctx, ctx, c, task, se, v, at, nil, buildClaim{state: Queued, recoveryNeeded: task.RecoveryNeeded})
 	got, e := read[Task](ctx, s.cfg.Store, "tasks", "tenant", "task")
 	if e != nil || got.State != Succeeded || runtime.calls != 0 || runtime.seen == nil || runtime.seen.Resolution != "applied" {
 		t.Fatalf("核对后只能补记结果，不得普通重跑：%+v %v", got, e)
 	}
 }
+
 func (s reviewStore) List(_ context.Context, k string, q Selection) ([]Document, error) {
 	r := []Document{}
 	for _, d := range s {
@@ -91,6 +95,7 @@ func (s reviewStore) Insert(_ context.Context, d Document) error {
 	s[keyR(d.Kind, d.TenantID, d.ID)] = d
 	return nil
 }
+
 func (s reviewStore) CAS(c context.Context, d Document, e int64) error {
 	o, x := s.Get(c, d.Kind, d.TenantID, d.ID)
 	if x != nil {
@@ -101,10 +106,12 @@ func (s reviewStore) CAS(c context.Context, d Document, e int64) error {
 	}
 	return s.Insert(c, d)
 }
+
 func (s reviewStore) Delete(_ context.Context, k, t, id string, _ int64) error {
 	delete(s, keyR(k, t, id))
 	return nil
 }
+
 func setupR(t *testing.T) (*Worker, Task, Session, Command, Attempt) {
 	st := reviewStore{}
 	s := &Service{cfg: Config{Store: st, Sessions: session.NewMemoryStore(), Now: time.Now, Limits: DefaultLimits()}}
@@ -121,6 +128,7 @@ func setupR(t *testing.T) (*Worker, Task, Session, Command, Attempt) {
 	}
 	return w, task, se, cmd, at
 }
+
 func TestReviewCancelWaitingRace(t *testing.T) {
 	w, task, _, cmd, at := setupR(t)
 	cur := task
@@ -148,23 +156,27 @@ type unknownR struct{ calls int }
 func (f *unknownR) Validate(context.Context, Version) (Capabilities, error) {
 	return Capabilities{}, nil
 }
+
 func (f *unknownR) Build(context.Context, Version, Resources) (Binding, error) {
 	return Binding{Runtime: f}, nil
 }
+
 func (f *unknownR) Inspect(context.Context, RunSpec) (RunEvidence, error) {
 	return RunEvidence{State: "unknown"}, nil
 }
+
 func (f *unknownR) Run(context.Context, RunSpec) (RunResult, error) {
 	f.calls++
 	return RunResult{Outcome: "completed", Output: []byte(`1`)}, nil
 }
+
 func TestReviewUnknownEvidence(t *testing.T) {
 	w, task, se, cmd, at := setupR(t)
 	ev, _ := session.NewEvent("management/session", "session")
 	w.s.cfg.Sessions.Append(context.Background(), se.LogID, 0, ev)
 	f := &unknownR{}
 	w.s.cfg.Factories = map[string]Factory{"r": f}
-	w.execute(context.Background(), context.Background(), cmd, task, se, Version{RunnerKind: "r"}, at, nil)
+	w.execute(context.Background(), context.Background(), cmd, task, se, Version{RunnerKind: "r"}, at, nil, buildClaim{state: Queued, recoveryNeeded: task.RecoveryNeeded})
 	got, _ := read[Task](context.Background(), w.s.cfg.Store, "tasks", "tenant", "task")
 	t.Logf("task=%+v", got)
 	if f.calls != 0 {
@@ -184,7 +196,7 @@ func TestCompletedEvidenceWinsRecoveredCancel(t *testing.T) {
 	}
 	f := &completedR{}
 	w.s.cfg.Factories = map[string]Factory{"r": f}
-	w.execute(context.Background(), context.Background(), cmd, task, se, Version{RunnerKind: "r"}, at, nil)
+	w.execute(context.Background(), context.Background(), cmd, task, se, Version{RunnerKind: "r"}, at, nil, buildClaim{state: Queued, recoveryNeeded: task.RecoveryNeeded})
 	got, _ := read[Task](context.Background(), w.s.cfg.Store, "tasks", "tenant", "task")
 	if got.State != Succeeded || f.calls != 0 {
 		t.Fatalf("完成证据必须优先于恢复中的取消，state=%s calls=%d", got.State, f.calls)
@@ -196,16 +208,20 @@ type completedR struct{ calls int }
 func (f *completedR) Validate(context.Context, Version) (Capabilities, error) {
 	return Capabilities{}, nil
 }
+
 func (f *completedR) Build(context.Context, Version, Resources) (Binding, error) {
 	return Binding{Runtime: f}, nil
 }
+
 func (f *completedR) Inspect(context.Context, RunSpec) (RunEvidence, error) {
 	return RunEvidence{State: "completed", Result: RunResult{Outcome: "completed", Output: []byte(`1`)}}, nil
 }
+
 func (f *completedR) Run(context.Context, RunSpec) (RunResult, error) {
 	f.calls++
 	return RunResult{}, nil
 }
+
 func TestOutboxOwnerHasRecoveryProtocol(t *testing.T) {
 	w, _, _, _, _ := setupR(t)
 	s := w.s
@@ -235,6 +251,7 @@ type recReader struct{}
 func (recReader) Lookup(context.Context, Actor, string) (Reconciliation, error) {
 	return Reconciliation{ID: "record", TenantID: "tenant", TaskID: "task", VersionHash: "hash", EvidenceHash: "proof", VerifiedBy: "admin", Resolution: "not_applied"}, nil
 }
+
 func TestReconciliationCannotBeAcceptedWithoutProtocol(t *testing.T) {
 	w, task, _, _, _ := setupR(t)
 	s := w.s

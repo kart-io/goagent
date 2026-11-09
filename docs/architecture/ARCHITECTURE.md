@@ -115,6 +115,7 @@ graph TD
 | `execution` | 宿主装配：`Scope` 组合 RunID、会话、日志、预算、期限与观察者 |
 | `memory`、`store`、`cache` | 对话/向量记忆、键值存储（`store/memory`）、通用缓存 |
 | `mcp/remote` | 基于官方 SDK 的 MCP 客户端适配 |
+| `revision`、`management/adapters` | 宿主层不可变配置与工件归档、精确程序加载；management 的 Version、Session、Task 固定归档身份，不向执行内核引入版本发布逻辑 |
 | `skills`、`tools/skill` | 与内核无关的本地技能目录、格式解析和受限资源读取；可选 `load_skill` 工具。Harness 保留来源配置、授权、提示词与 Manifest 装配 |
 | `middleware`、`observability` | Agent 中间件实现（LLM 工具选择、动态提示词、可观测性等）；OTel 遥测提供者、指标与跨服务追踪 |
 | `parsers` | 输出解析器（JSON、结构化、列表、枚举等） |

@@ -3,6 +3,10 @@ package management
 import (
 	"context"
 	"errors"
+	"os"
+	"sync"
+	"time"
+
 	"github.com/google/uuid"
 	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/core/budget"
@@ -12,9 +16,6 @@ import (
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/execution"
 	"go.opentelemetry.io/otel/trace"
-	"os"
-	"sync"
-	"time"
 )
 
 type Worker struct {
@@ -32,6 +33,7 @@ type Worker struct {
 func NewWorker(s *Service) *Worker {
 	return &Worker{s: s, id: uuid.NewString(), slot: "default", live: map[string]context.CancelFunc{}, done: make(chan struct{})}
 }
+
 func (w *Worker) BeginShutdown() {
 	w.mu.Lock()
 	w.closing = true
@@ -43,6 +45,7 @@ func (w *Worker) BeginShutdown() {
 	}
 	w.mu.Unlock()
 }
+
 func (w *Worker) Shutdown(ctx context.Context) error {
 	w.BeginShutdown()
 	select {
@@ -52,11 +55,13 @@ func (w *Worker) Shutdown(ctx context.Context) error {
 		return ctx.Err()
 	}
 }
+
 func (w *Worker) report(kind string, err error) {
 	if err != nil && w.s.cfg.Report != nil {
 		w.s.cfg.Report(kind, err)
 	}
 }
+
 func (w *Worker) owner(ctx context.Context, release bool) error {
 	return w.s.cfg.Store.WithinTx(ctx, func(tx Tx) error {
 		o, e := read[WorkerOwner](ctx, tx, "workers", "__system", w.slot)
@@ -85,12 +90,15 @@ func (w *Worker) owner(ctx context.Context, release bool) error {
 		return update(ctx, tx, "workers", o, old)
 	})
 }
+
 func (s *Service) RecoverWorkerSlot(ctx context.Context, a Actor, owner string, generation int64, reason string) error {
 	return s.recoverSlot(ctx, a, "default", owner, generation, reason)
 }
+
 func (s *Service) RecoverOutboxSlot(ctx context.Context, a Actor, owner string, generation int64, reason string) error {
 	return s.recoverSlot(ctx, a, "outbox", owner, generation, reason)
 }
+
 func (s *Service) recoverSlot(ctx context.Context, a Actor, slot, owner string, generation int64, reason string) error {
 	if err := s.auth(ctx, a, "worker.recover", "workers", slot); err != nil {
 		return err
@@ -121,6 +129,7 @@ func (s *Service) recoverSlot(ctx context.Context, a Actor, slot, owner string, 
 		return s.audit(ctx, tx, a, "workers", slot, "recover", reason)
 	})
 }
+
 func (w *Worker) Run(parent context.Context) (runErr error) {
 	w.mu.Lock()
 	if w.cancel != nil || w.closing {
@@ -168,6 +177,7 @@ func (w *Worker) Run(parent context.Context) (runErr error) {
 		}
 	}
 }
+
 func (w *Worker) recover(ctx context.Context) error {
 	return w.s.cfg.Store.WithinTx(ctx, func(tx Tx) error {
 		// 每批修改后记录即离开查询集合；从集合头继续读取，不使用会因修改而跳项的偏移分页。
@@ -217,6 +227,7 @@ func (w *Worker) recover(ctx context.Context) error {
 		return nil
 	})
 }
+
 func (w *Worker) poll(ctx context.Context) error {
 	owner, err := read[WorkerOwner](ctx, w.s.cfg.Store, "workers", "__system", w.slot)
 	if err != nil {
@@ -271,6 +282,7 @@ func (w *Worker) poll(ctx context.Context) error {
 	}
 	return nil
 }
+
 func (w *Worker) commandState(ctx context.Context, c Command, state string, cause error) error {
 	return w.s.cfg.Store.WithinTx(ctx, func(tx Tx) error {
 		cur, e := read[Command](ctx, tx, "commands", c.TenantID, c.ID)
@@ -313,6 +325,7 @@ func (w *Worker) commandState(ctx context.Context, c Command, state string, caus
 		return update(ctx, tx, "commands", cur, old)
 	})
 }
+
 func (w *Worker) blockStart(ctx context.Context, c Command, err error) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
@@ -325,6 +338,7 @@ func (w *Worker) blockStart(ctx context.Context, c Command, err error) error {
 	}
 	return err
 }
+
 func (w *Worker) start(ctx context.Context, c Command) error {
 	w.mu.Lock()
 	if w.closing || len(w.live) >= w.s.cfg.Limits.Workers || w.live[c.TaskID] != nil {
@@ -361,7 +375,7 @@ func (w *Worker) start(ctx context.Context, c Command) error {
 		if factory == nil {
 			return w.blockStart(ctx, c, agentErrors.ErrManagementUnsupported)
 		}
-		if _, e = factory.Validate(ctx, version); e != nil {
+		if _, e = validateFactory(ctx, factory, version); e != nil {
 			return w.blockStart(ctx, c, agentErrors.ErrManagementUnsupported)
 		}
 	}
@@ -372,6 +386,7 @@ func (w *Worker) start(ctx context.Context, c Command) error {
 	var se Session
 	var v Version
 	var attempt Attempt
+	var claim buildClaim
 	var inputs map[string]string
 	err = w.s.cfg.Store.WithinTx(ctx, func(tx Tx) error {
 		cur, e := read[Command](ctx, tx, "commands", c.TenantID, c.ID)
@@ -410,8 +425,16 @@ func (w *Worker) start(ctx context.Context, c Command) error {
 		if e != nil {
 			return e
 		}
+		if task.AgentID != se.AgentID || task.Version != se.Version || task.RevisionID != se.RevisionID || task.RevisionID != v.RevisionID {
+			return agentErrors.ErrManagementConflict
+		}
 		if w.s.cfg.Factories[v.RunnerKind] == nil {
 			return agentErrors.ErrManagementUnsupported
+		}
+		if v.RevisionID != "" {
+			if _, ok := w.s.cfg.Factories[v.RunnerKind].(RevisionFactory); !ok {
+				return agentErrors.ErrManagementUnsupported
+			}
 		}
 		if task.State != Queued && c.Kind != "resume" {
 			return agentErrors.ErrManagementBusy
@@ -454,7 +477,7 @@ func (w *Worker) start(ctx context.Context, c Command) error {
 				return update(ctx, tx, "commands", cur, old)
 			}
 		}
-		if task.CancelRequested && !task.RecoveryNeeded {
+		if task.CancelRequested && canCancelWithoutInspection(task.State, task.RecoveryNeeded) {
 			old := task.Revision
 			task.State = Canceled
 			task.Revision++
@@ -472,6 +495,7 @@ func (w *Worker) start(ctx context.Context, c Command) error {
 			return update(ctx, tx, "commands", cur, old)
 		}
 		old := task.Revision
+		claim = buildClaim{state: task.State, recoveryNeeded: task.RecoveryNeeded}
 		task.State = Running
 		task.RecoveryNeeded = false
 		task.Revision++
@@ -484,11 +508,11 @@ func (w *Worker) start(ctx context.Context, c Command) error {
 		if e = update(ctx, tx, "sessions", se, old); e != nil {
 			return e
 		}
-		attempts, e := all[Attempt](ctx, tx, "attempts", task.TenantID, Query{TaskID: task.ID, Limit: 10000})
+		number, e := nextAttemptNumber(ctx, tx, task)
 		if e != nil {
 			return e
 		}
-		attempt = Attempt{Meta: w.s.meta(task.Actor), TaskID: task.ID, Number: len(attempts) + 1, WorkerID: w.id}
+		attempt = Attempt{Meta: w.s.meta(task.Actor), TaskID: task.ID, Number: number, WorkerID: w.id}
 		if sc := trace.SpanContextFromContext(ctx); sc.IsValid() {
 			attempt.TraceID = sc.TraceID().String()
 		}
@@ -532,7 +556,7 @@ func (w *Worker) start(ctx context.Context, c Command) error {
 				w.report("trace", e)
 			}
 		}
-		w.execute(traced, parent, c, task, se, v, attempt, inputs)
+		w.execute(traced, parent, c, task, se, v, attempt, inputs, claim)
 	}()
 	return nil
 }
@@ -554,6 +578,7 @@ func loadOutcome(ctx context.Context, j durable.Store, t Task, versionHash strin
 	}
 	return envelope.Result, nil
 }
+
 func saveOutcome(ctx context.Context, j durable.Store, t Task, v Version, result RunResult) (err error) {
 	id := outcomeID(t)
 	unlock, e := j.Lock(ctx, id)
@@ -570,17 +595,26 @@ func saveOutcome(ctx context.Context, j durable.Store, t Task, v Version, result
 	}
 	return j.Save(ctx, id, &durable.Snapshot{Version: "management/outcome/v1", RunID: t.ID, Data: raw})
 }
-func (w *Worker) execute(ctx, parent context.Context, c Command, t Task, se Session, v Version, attempt Attempt, inputs map[string]string) {
+
+func (w *Worker) execute(ctx, parent context.Context, c Command, t Task, se Session, v Version, attempt Attempt, inputs map[string]string, claim buildClaim) {
 	result := RunResult{}
 	var runErr error
+	buildBlocked := false
 	j := session.DurableStore(w.s.cfg.Sessions, se.LogID)
 	defer func() {
 		if p := recover(); p != nil {
+			buildBlocked = false
 			runErr = agentErrors.Newf(agentErrors.CodeInternal, "运行回调发生 panic").WithComponent("management")
 			result = RunResult{Outcome: "attention", ErrorKind: "panic"}
 		}
 		doneCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
+		if buildBlocked {
+			if e := w.blockBuild(doneCtx, c, t, attempt, claim); e != nil {
+				w.report("build_blocked", e)
+			}
+			return
+		}
 		if e := w.finish(doneCtx, c, t, attempt, result, runErr, parent.Err() != nil); e != nil {
 			w.report("finish", e)
 		}
@@ -628,16 +662,25 @@ func (w *Worker) execute(ctx, parent context.Context, c Command, t Task, se Sess
 		return read[Approval](ctx, w.s.cfg.Store, "approvals", t.TenantID, id)
 	}}
 	binding, err := w.s.cfg.Factories[v.RunnerKind].Build(inspectBound, v, resources)
+	if err != nil {
+		var cleanupErr error
+		if binding.Cleanup != nil {
+			cleanCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+			cleanupErr = binding.Cleanup(cleanCtx)
+			cancel()
+			w.report("cleanup", cleanupErr)
+		}
+		runErr = errors.Join(err, cleanupErr)
+		var retryable *RetryableBuildError
+		buildBlocked = binding.Runtime == nil && cleanupErr == nil && errors.As(err, &retryable) && retryable != nil
+		return
+	}
 	if binding.Cleanup != nil {
 		defer func() {
 			cleanCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 			defer cancel()
 			w.report("cleanup", binding.Cleanup(cleanCtx))
 		}()
-	}
-	if err != nil {
-		runErr = err
-		return
 	}
 	if binding.Runtime == nil {
 		runErr = agentErrors.ErrManagementInvalid
@@ -774,6 +817,7 @@ func (w *Worker) confirmOutcome(ctx context.Context, j durable.Store, t Task, v 
 	}
 	return nil
 }
+
 func WaitPoints(waits []*durable.WaitError) []WaitPoint {
 	out := []WaitPoint{}
 	seen := map[string]bool{}
@@ -808,6 +852,7 @@ func WaitPoints(waits []*durable.WaitError) []WaitPoint {
 	}
 	return out
 }
+
 func (w *Worker) finish(ctx context.Context, c Command, original Task, attempt Attempt, result RunResult, runErr error, stopping bool) error {
 	if result.FinishedAt.IsZero() {
 		result.FinishedAt = w.s.cfg.Now().UTC()

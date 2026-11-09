@@ -676,7 +676,12 @@
                   "implementation_version": {
                     "type": "string"
                   },
-                  "config": {}
+                  "config": {},
+                  "revision_id": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$",
+                    "description": "可选的不可变 AgentRevision 内容摘要；需由支持归档的 Factory 加载和验证。既有版本可省略。"
+                  }
                 },
                 "required": [
                   "version",

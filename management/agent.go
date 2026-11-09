@@ -2,6 +2,7 @@ package management
 
 import (
 	"context"
+
 	"github.com/kart-io/goagent/codec/json"
 	agentErrors "github.com/kart-io/goagent/errors"
 )
@@ -21,12 +22,13 @@ func (s *Service) RegisterAgent(ctx context.Context, a Actor, r RegisterAgentReq
 		return v, s.audit(ctx, tx, a, "agents", v.ID, "register", "")
 	})
 }
+
 func (s *Service) SaveVersion(ctx context.Context, a Actor, r SaveVersionRequest) (Version, error) {
 	if err := s.auth(ctx, a, "agent.write", "agents", r.AgentID); err != nil {
 		return Version{}, err
 	}
 	f := s.cfg.Factories[r.RunnerKind]
-	if f == nil || !validText(r.Version, 128) || !validText(r.ImplementationVersion, 128) {
+	if f == nil || !validText(r.Version, 128) || !validText(r.ImplementationVersion, 128) || (r.RevisionID != "" && !validRevisionID(r.RevisionID)) {
 		return Version{}, agentErrors.ErrManagementInvalid
 	}
 	raw, err := CanonicalJSON(r.Config)
@@ -38,9 +40,13 @@ func (s *Service) SaveVersion(ctx context.Context, a Actor, r SaveVersionRequest
 		if _, e := read[Agent](ctx, tx, "agents", a.TenantID, r.AgentID); e != nil {
 			return Version{}, e
 		}
-		v := Version{Meta: s.meta(a), AgentID: r.AgentID, Version: r.Version, RunnerKind: r.RunnerKind, ImplementationVersion: r.ImplementationVersion, Config: json.RawMessage(raw), ConfigHash: digest(append([]byte(r.RunnerKind+"\x00"+r.ImplementationVersion+"\x00"), raw...)), CreatedBy: a.Subject}
+		v := Version{Meta: s.meta(a), AgentID: r.AgentID, Version: r.Version, RunnerKind: r.RunnerKind, ImplementationVersion: r.ImplementationVersion, Config: json.RawMessage(raw), ConfigHash: digest(append([]byte(r.RunnerKind+"\x00"+r.ImplementationVersion+"\x00"), raw...)), CreatedBy: a.Subject, RevisionID: r.RevisionID}
+		if r.RevisionID != "" {
+			// 归档的提示词、技能和运行工件同样属于恢复身份。
+			v.ConfigHash = digest([]byte(v.ConfigHash + "\x00revision\x00" + r.RevisionID))
+		}
 		v.ID = versionID(r.AgentID, r.Version)
-		caps, e := f.Validate(ctx, v)
+		caps, e := validateFactory(ctx, f, v)
 		if e != nil {
 			return v, wrapInvalid(e)
 		}
@@ -51,6 +57,7 @@ func (s *Service) SaveVersion(ctx context.Context, a Actor, r SaveVersionRequest
 		return v, s.audit(ctx, tx, a, "agents", r.AgentID, "save_version", r.Version)
 	})
 }
+
 func (s *Service) PublishVersion(ctx context.Context, a Actor, r PublishRequest) (Agent, error) {
 	if err := s.auth(ctx, a, "agent.publish", "agents", r.AgentID); err != nil {
 		return Agent{}, err
@@ -71,7 +78,7 @@ func (s *Service) PublishVersion(ctx context.Context, a Actor, r PublishRequest)
 		if f == nil {
 			return v, agentErrors.ErrManagementUnsupported
 		}
-		if _, e = f.Validate(ctx, version); e != nil {
+		if _, e = validateFactory(ctx, f, version); e != nil {
 			return v, wrapInvalid(e)
 		}
 		v.PublishedVersion = r.Version
@@ -82,6 +89,7 @@ func (s *Service) PublishVersion(ctx context.Context, a Actor, r PublishRequest)
 		return v, s.audit(ctx, tx, a, "agents", v.ID, "publish", r.Version)
 	})
 }
+
 func (s *Service) SetAgentEnabled(ctx context.Context, a Actor, r SetEnabledRequest) (Agent, error) {
 	if err := s.auth(ctx, a, "agent.enable", "agents", r.AgentID); err != nil {
 		return Agent{}, err

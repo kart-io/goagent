@@ -1,12 +1,14 @@
 package httpapi
 
 import (
-	"github.com/kart-io/goagent/codec/json"
-	mg "github.com/kart-io/goagent/management"
-	"github.com/stretchr/testify/require"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/codec/json"
+	mg "github.com/kart-io/goagent/management"
 )
 
 func TestBodyLimitAndDuplicateKeys(t *testing.T) {
@@ -25,12 +27,13 @@ func TestBodyLimitAndDuplicateKeys(t *testing.T) {
 }
 
 func TestPublicProjectionPreservesBusinessKeys(t *testing.T) {
-	value, e := public(mg.Task{Input: json.RawMessage(`{"key":"业务字段","execution_key":"用户内容"}`)})
+	value, e := public(mg.Task{RevisionID: strings.Repeat("a", 64), Input: json.RawMessage(`{"key":"业务字段","execution_key":"用户内容"}`)})
 	require.NoError(t, e)
 	raw, e := json.Marshal(value)
 	require.NoError(t, e)
 	var out map[string]json.RawMessage
 	require.NoError(t, json.Unmarshal(raw, &out))
 	require.NotContains(t, out, "execution_key")
+	require.JSONEq(t, `"`+strings.Repeat("a", 64)+`"`, string(out["revision_id"]))
 	require.JSONEq(t, `{"key":"业务字段","execution_key":"用户内容"}`, string(out["input"]))
 }

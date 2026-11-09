@@ -3,6 +3,7 @@ package management
 import (
 	"context"
 	"errors"
+
 	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/session"
@@ -28,10 +29,11 @@ func (s *Service) CreateSession(ctx context.Context, a Actor, r CreateSessionReq
 		if version == "" {
 			return Session{}, agentErrors.ErrManagementInvalid
 		}
-		if _, err = read[Version](ctx, tx, "versions", a.TenantID, versionID(ag.ID, version)); err != nil {
+		selected, err := read[Version](ctx, tx, "versions", a.TenantID, versionID(ag.ID, version))
+		if err != nil {
 			return Session{}, err
 		}
-		se := Session{Meta: s.meta(a), AgentID: ag.ID, Version: version, Status: "preparing"}
+		se := Session{Meta: s.meta(a), AgentID: ag.ID, Version: version, RevisionID: selected.RevisionID, Status: "preparing"}
 		se.LogID = "management/session/" + se.ID
 		if err = insert(ctx, tx, "sessions", se); err != nil {
 			return se, err
@@ -42,6 +44,7 @@ func (s *Service) CreateSession(ctx context.Context, a Actor, r CreateSessionReq
 		return se, s.audit(ctx, tx, a, "sessions", se.ID, "create", "")
 	})
 }
+
 func (s *Service) ForkSession(ctx context.Context, a Actor, r ForkSessionRequest) (Session, error) {
 	if err := s.auth(ctx, a, "session.fork", "sessions", r.SessionID); err != nil {
 		return Session{}, err
@@ -100,7 +103,10 @@ func (s *Service) ForkSession(ctx context.Context, a Actor, r ForkSessionRequest
 		if err != nil {
 			return Session{}, err
 		}
-		se := Session{Meta: s.meta(a), AgentID: source.AgentID, Version: source.Version, Status: "preparing", ParentID: source.ID, ForkSeq: seq, SourceHash: digest(raw)}
+		if source.RevisionID != v.RevisionID {
+			return Session{}, agentErrors.ErrManagementConflict
+		}
+		se := Session{Meta: s.meta(a), AgentID: source.AgentID, Version: source.Version, RevisionID: source.RevisionID, Status: "preparing", ParentID: source.ID, ForkSeq: seq, SourceHash: digest(raw)}
 		se.LogID = "management/session/" + se.ID
 		if err = insert(ctx, tx, "sessions", se); err != nil {
 			return se, err
@@ -111,6 +117,7 @@ func (s *Service) ForkSession(ctx context.Context, a Actor, r ForkSessionRequest
 		return se, s.audit(ctx, tx, a, "sessions", se.ID, "fork", source.ID)
 	})
 }
+
 func prefixEvents(events []session.Event, seq int64) []session.Event {
 	out := []session.Event{}
 	for _, ev := range events {
@@ -120,6 +127,7 @@ func prefixEvents(events []session.Event, seq int64) []session.Event {
 	}
 	return out
 }
+
 func (s *Service) applySession(ctx context.Context, c Command) (err error) {
 	se, err := read[Session](ctx, s.cfg.Store, "sessions", c.TenantID, c.SessionID)
 	if err != nil {

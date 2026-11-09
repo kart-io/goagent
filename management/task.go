@@ -2,11 +2,12 @@ package management
 
 import (
 	"context"
+	"time"
+
 	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
 	agentErrors "github.com/kart-io/goagent/errors"
-	"time"
 )
 
 func (s *Service) SubmitTask(ctx context.Context, a Actor, r SubmitTaskRequest) (Task, error) {
@@ -37,7 +38,7 @@ func (s *Service) SubmitTask(ctx context.Context, a Actor, r SubmitTaskRequest) 
 		if len(pending) >= s.cfg.Limits.MaxPending {
 			return Task{}, agentErrors.ErrManagementBusy
 		}
-		t := Task{Meta: s.meta(a), SessionID: se.ID, AgentID: se.AgentID, Version: se.Version, Input: r.Input, InputHash: digest(r.Input), State: Queued, Actor: a}
+		t := Task{Meta: s.meta(a), SessionID: se.ID, AgentID: se.AgentID, Version: se.Version, RevisionID: se.RevisionID, Input: r.Input, InputHash: digest(r.Input), State: Queued, Actor: a}
 		t.RunID = t.ID
 		t.ExecutionKey = t.ID
 		t.Budget = budget.Config{RootKey: t.ID, Version: "management/v1", MaxModelRequests: 100, MaxToolCalls: 1000, DeadlineUnixMilli: s.cfg.Now().Add(24 * time.Hour).UnixMilli()}
@@ -50,6 +51,7 @@ func (s *Service) SubmitTask(ctx context.Context, a Actor, r SubmitTaskRequest) 
 		return t, s.audit(ctx, tx, a, "tasks", t.ID, "submit", "")
 	})
 }
+
 func (s *Service) CancelTask(ctx context.Context, a Actor, r CancelTaskRequest) (Task, error) {
 	if err := s.auth(ctx, a, "task.cancel", "tasks", r.TaskID); err != nil {
 		return Task{}, err
@@ -68,12 +70,30 @@ func (s *Service) CancelTask(ctx context.Context, a Actor, r CancelTaskRequest) 
 		if t.Revision != r.ExpectedRevision {
 			return t, agentErrors.ErrManagementConflict
 		}
+		if t.State != Running && t.State != Canceling && !canCancelWithoutInspection(t.State, t.RecoveryNeeded) {
+			// 未知结果只能由已接纳的恢复命令核对；没有命令时拒绝取消，
+			// 否则 CancelRequested 会封死公开 ResumeTask 入口。
+			commands, err := all[Command](ctx, tx, "commands", t.TenantID, Query{TaskID: t.ID, Statuses: []string{"pending", "blocked", "applying"}, Limit: 10000})
+			if err != nil {
+				return t, err
+			}
+			continuing := false
+			for _, command := range commands {
+				if command.Kind == "start" || command.Kind == "resume" {
+					continuing = true
+					break
+				}
+			}
+			if !continuing {
+				return t, agentErrors.ErrManagementConflict
+			}
+		}
 		old := t.Revision
 		t.Revision++
 		t.CancelRequested = true
 		if t.State == Running || t.State == Canceling {
 			t.State = Canceling
-		} else {
+		} else if canCancelWithoutInspection(t.State, t.RecoveryNeeded) {
 			t.State = Canceled
 			now := s.cfg.Now().UTC()
 			t.FinishedAt = &now
@@ -84,6 +104,7 @@ func (s *Service) CancelTask(ctx context.Context, a Actor, r CancelTaskRequest) 
 				return t, e
 			}
 		}
+		// 待恢复或 Attention 保留原状态，由已接纳的恢复命令先核对。
 		if e = update(ctx, tx, "tasks", t, old); e != nil {
 			return t, e
 		}
@@ -93,6 +114,7 @@ func (s *Service) CancelTask(ctx context.Context, a Actor, r CancelTaskRequest) 
 		return t, s.audit(ctx, tx, a, "tasks", t.ID, "cancel", r.Reason)
 	})
 }
+
 func (s *Service) releaseSession(ctx context.Context, tx Tx, t Task) error {
 	se, e := read[Session](ctx, tx, "sessions", t.TenantID, t.SessionID)
 	if e != nil {
@@ -106,6 +128,7 @@ func (s *Service) releaseSession(ctx context.Context, tx Tx, t Task) error {
 	}
 	return nil
 }
+
 func (s *Service) supersedeApprovals(ctx context.Context, tx Tx, t Task) error {
 	aps, e := all[Approval](ctx, tx, "approvals", t.TenantID, Query{TaskID: t.ID, Limit: 10000})
 	if e != nil {
@@ -184,6 +207,7 @@ func (s *Service) DecideApproval(ctx context.Context, a Actor, r DecisionRequest
 		return ap, s.audit(ctx, tx, a, "approvals", ap.ID, "decide", r.Reason)
 	})
 }
+
 func (s *Service) ResumeTask(ctx context.Context, a Actor, r ResumeTaskRequest) (Command, error) {
 	if err := s.auth(ctx, a, "task.resume", "tasks", r.TaskID); err != nil {
 		return Command{}, err

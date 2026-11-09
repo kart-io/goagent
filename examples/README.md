@@ -41,3 +41,7 @@ Examples that call a real LLM read the provider's API key from the environment (
 
 - Go version as declared in the root `go.mod`
 - API keys only for the examples that call a real LLM
+
+## 不可变版本与旧程序加载
+
+[agent-revisions](agent-revisions/README.md) 编译两个 Go 程序，归档程序与提示词，删除原工件后分别重载执行 v1、v2、v1，验证旧修订仍可运行。执行 `go run ./examples/agent-revisions`，不需要模型或 Docker。

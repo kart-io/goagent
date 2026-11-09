@@ -44,6 +44,12 @@ func TestImportRulesUseCurrentModuleAndLayeredExceptions(t *testing.T) {
 		{"skills/catalog.go", "core", true},
 		{"skills/catalog.go", "plugin", true},
 		{"core/agent.go", "skills", true},
+		{"core/agent.go", "revision", true},
+		{"revision/archive.go", "skills", false},
+		{"revision/archive.go", "codec/json", false},
+		{"revision/archive.go", "builder", true},
+		{"revision/archive.go", "management", true},
+		{"management/types.go", "revision", false},
 		{"tools/skill/tool.go", "skills", false},
 	} {
 		require.Equal(t, tc.bad, forbidden(tc.file, module+tc.dep), tc.file+" -> "+tc.dep)

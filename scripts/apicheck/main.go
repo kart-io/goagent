@@ -82,13 +82,15 @@ func forbidden(file, path string) bool {
 	case "skills":
 		// Skills 加载与执行/装配分离，只依赖格式编解码、错误与叶子常量。
 		return dest != "skills" && dest != "codec" && dep != "errors" && dep != "constants"
+	case "revision":
+		return dest != "revision" && dest != "skills" && dest != "codec" && dep != "errors" && dep != "constants"
 	case "utils":
 		// errors 只可能依赖常量叶子层，utils 依赖它不会成环。
 		return dest != "utils" && dep != "errors" && dest != "codec" && dep != "constants"
 	case "cache":
 		return dest != "cache" && dest != "codec" && dep != "constants" && dep != "errors"
 	case "core":
-		return dest == "tools" || dest == "middleware" || dest == "parsers" || dest == "builder" || dest == "skills"
+		return dest == "tools" || dest == "middleware" || dest == "parsers" || dest == "builder" || dest == "skills" || dest == "revision"
 	case "builder", "parsers":
 		return dest == "middleware"
 	}
@@ -511,6 +513,7 @@ func scan(root string) (int, error) {
 	}
 	return count, nil
 }
+
 func main() {
 	root := flag.String("root", ".", "source root")
 	mode := flag.String("mode", "imports", "imports")
