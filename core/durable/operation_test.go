@@ -185,6 +185,44 @@ func TestRetryInterruptedOnlyRerunsInterruptedRecords(t *testing.T) {
 	}
 }
 
+// RetryFailed 只重跑结果已知的失败；中断的记录可能已经生效，须由 Reconcile 核对未生效或显式声明 RetryInterrupted。
+func TestRetryFailedSkipsInterruptedRecords(t *testing.T) {
+	policy := OperationPolicy{MaxAttempts: 3, RetryFailed: true}
+	for _, test := range []struct {
+		name         string
+		status, kind string
+		rerun        bool
+	}{
+		{"崩溃后停在 pending", "pending", "ambiguous", false},
+		{"进程停止时被取消", "failed", "canceled", false},
+		{"普通失败", "failed", "execution", true},
+		{"超时", "failed", "deadline", true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := operationContext(t)
+			input := json.RawMessage(`{}`)
+			key := ChildKey(ExecutionKey(ctx), "effect")
+			store := ctx.Value(journalContext{}).(Store)
+			require.NoError(t, saveOperation(ctx, store, OperationStorageID(key), &OperationRecord{
+				ID: "effect", Key: key, InputHash: digest(string(input)), Status: test.status, FailureKind: test.kind,
+				Attempts: 1, MaxAttempts: policy.MaxAttempts, Value: json.RawMessage(`null`),
+			}))
+			calls := 0
+			_, err := Do(ctx, "effect", input, policy, func(context.Context) (json.RawMessage, error) {
+				calls++
+				return json.RawMessage(`1`), nil
+			})
+			if test.rerun {
+				require.NoError(t, err)
+				require.Equal(t, 1, calls)
+				return
+			}
+			require.ErrorIs(t, err, agentErrors.ErrOperationAttention)
+			require.Zero(t, calls)
+		})
+	}
+}
+
 // 没有声明时行为不变：中断的操作不重跑。
 func TestInterruptedOperationStaysStoppedByDefault(t *testing.T) {
 	ctx := operationContext(t)

@@ -30,6 +30,8 @@ import (
 type DispatchConfig struct {
 	// MaxAttempts bounds explicit resume attempts for a journaled CallID.
 	// Default 3. No retries occur inside a single Invoke.
+	// 未声明 DurableOperationPolicy 的工具在恢复时会重跑失败与中断的调用；中断时副作用可能已生效，
+	// 非幂等工具（发邮件、下单等）应声明 Reconcile 核对，或不设 RetryInterrupted 交由宿主处理。
 	MaxAttempts    int `json:"max_attempts"`
 	MaxConcurrency int `json:"max_concurrency"` // 默认 4，限制执行并发，审批等待不占执行槽位
 	// MaxAdmissionConcurrency 独立限制校验与管线准入并发。
@@ -436,7 +438,7 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 				return nil, e
 			}
 		}
-		policy := durable.OperationPolicy{MaxAttempts: d.config.MaxAttempts, RetryFailed: true}
+		policy := durable.OperationPolicy{MaxAttempts: d.config.MaxAttempts, RetryFailed: true, RetryInterrupted: true}
 		if entry.policy != nil {
 			policy = *entry.policy
 		}

@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 在核心仓库新增 `management/protocol`、`management/a2a`、`management/mcpserver`：A2A/HTTP/MCP 共用管理任务、身份、审批与取消；A2A 使用官方 JSON-RPC/SSE，MCP 提供 Agent 工具和显式长任务工具契约。
 - `a2a/remote` 支持官方 Agent Card 发现与远端 Agent 工具调用；`mcp/remote` 新增可保存的输入检查点、有界人工输入回调和旧协议宿主处理器选项。详见[协议接入指南](docs/guides/PROTOCOL_ADAPTERS.md)。
 
+### 破坏性变更
+
+- `core/durable`：`RetryFailed` 只重跑结果已知的失败（普通失败、超时）；停在 pending 或因取消而失败的记录须由 `Reconcile` 核对未生效或声明 `RetryInterrupted` 才重跑。`tools.Dispatcher` 的默认策略显式声明 `RetryInterrupted`，恢复行为不变；非幂等工具应通过 `DurableOperationPolicy` 提供 `Reconcile` 或去掉 `RetryInterrupted`。
+
 ### 修复与验证
 
 - `tools/policy`：命令规则与会话授权把 `command` 与 `args` 数组连成词序列匹配（参数名由新增的 `Policy.ArgsArg` 指定，默认 `args`），拒绝规则 `git push` 对 `{command:"git", args:["push"]}` 生效，授权不再从子命令扩大到整个程序。
