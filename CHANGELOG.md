@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.52.0] - 2026-11-10
+
 ### 新增
 
 - 在核心仓库新增 `management/protocol`、`management/a2a`、`management/mcpserver`：A2A/HTTP/MCP 共用管理任务、身份、审批与取消；A2A 使用官方 JSON-RPC/SSE，MCP 提供 Agent 工具和显式长任务工具契约。
