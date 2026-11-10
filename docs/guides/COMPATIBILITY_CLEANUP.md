@@ -71,7 +71,7 @@ wrapped := tools.WithMiddleware(tool, logging.Wrap)
 
 | 已删除 | 迁移方式 |
 |---|---|
-| `core/checkpoint` 整包（`Checkpointer`、`NewInMemorySaver`、`DistributedCheckpointer` 等）；Builder 的 `WithCheckpointer`、`WithAutoSaveEnabled`、`AgentConfig.EnableAutoSave`；`errors.NewStateCheckpointError` | `Shutdown` 不再保存状态。会话历史用 `WithSessionLog(session.Store)`，崩溃恢复用 `core/durable` 与 `WithDurableScope`，图级暂停与恢复用 `workflow.CompileDurable` |
+| `core/checkpoint` 整包（`Checkpointer`、`NewInMemorySaver`、`DistributedCheckpointer` 等）；Builder 的 `WithCheckpointer`、`WithAutoSaveEnabled`、`AgentConfig.EnableAutoSave`；`errors.NewStateCheckpointError` | `Shutdown` 不再保存状态。状态跨进程恢复用 `WithSessionLog(store).WithSessionState()`，状态类型须实现 `MarshalJSON`/`UnmarshalJSON`；会话历史用 `WithSessionLog(session.Store)`，崩溃恢复用 `core/durable` 与 `WithDurableScope`，图级暂停与恢复用 `workflow.CompileDurable` |
 | `core/execution` 整包（`Runtime`、`NewRuntime`、`RuntimeManager`、`ToolWithRuntime` 等）；`core/middleware.MiddlewareRequest.Runtime` | 中间件读取 `State` 与 `Metadata`；宿主装配用顶层 `execution.Scope`，见[宿主接入](HOST_INTEGRATION.md) |
 | `core.InterruptManager`、`InterruptableExecutor`、`InterruptConfig` 等 | 持久图的 `ApprovalNodes` 或 `durable.AwaitInput`，见[人工介入](HUMAN_IN_THE_LOOP.md)及 `examples/human-in-the-loop`、`examples/human-in-the-loop-interrupt` |
 | Builder 的 `WithStore` | 对话记忆用 `WithMemory`；其他键值数据由宿主直接持有 `store.Store` |

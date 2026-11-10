@@ -110,6 +110,32 @@ func (s *AgentState) Snapshot() map[string]interface{} {
 	return snapshot
 }
 
+// MarshalJSON 把全部值编码为一个 JSON 对象。
+func (s *AgentState) MarshalJSON() ([]byte, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.state == nil {
+		return []byte("{}"), nil
+	}
+	return json.Marshal(s.state)
+}
+
+// UnmarshalJSON 用 JSON 对象替换全部值。值按 JSON 的通用类型还原（数字为 float64，对象为 map），
+// 需要还原原始类型时自定义 State 并实现这两个方法。
+func (s *AgentState) UnmarshalJSON(data []byte) error {
+	var values map[string]interface{}
+	if err := json.Unmarshal(data, &values); err != nil {
+		return err
+	}
+	if values == nil {
+		values = make(map[string]interface{})
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.state = values
+	return nil
+}
+
 // Clone creates a deep copy of the state.
 // 使用 JSON 序列化实现真正的深拷贝，确保嵌套的 map 和 slice 也被复制。
 func (s *AgentState) Clone() State {

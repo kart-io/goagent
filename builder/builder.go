@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/middleware"
 	agentErrors "github.com/kart-io/goagent/errors"
@@ -179,6 +180,14 @@ func (b *AgentBuilder[S]) BuildContext(ctx context.Context) (*ConfigurableAgent[
 		}
 	}
 
+	var initialState json.RawMessage
+	if b.config.SessionState {
+		var err error
+		if initialState, err = encodeSessionState(b.config.SessionLog, b.state); err != nil {
+			return nil, err
+		}
+	}
+
 	// 每轮执行通过 WithHandler 替换处理器，这里只承载中间件。
 	chain := middleware.NewMiddlewareChain(nil)
 
@@ -194,6 +203,7 @@ func (b *AgentBuilder[S]) BuildContext(ctx context.Context) (*ConfigurableAgent[
 	// 创建 Agent
 	agent := &ConfigurableAgent[S]{
 		executionGate:   make(chan struct{}, 1),
+		initialState:    initialState,
 		llmClient:       b.llmClient,
 		tools:           slices.Clone(toolset),
 		systemPrompt:    b.systemPrompt,

@@ -194,3 +194,36 @@ func TestExport(t *testing.T) {
 	empty := &Trajectory{Messages: []llm.Message{{Role: "assistant", Content: "x"}}}
 	require.Error(t, empty.WriteShareGPT(&bytes.Buffer{}))
 }
+
+func TestLastStateSkipsUndoneTurns(t *testing.T) {
+	end := func(seq int64, state string, aborted bool, surface *Surface) Event {
+		d := TurnEnd{Aborted: aborted}
+		if state != "" {
+			d.State = json.RawMessage(state)
+		}
+		ev, err := NewEvent(constants.SessionEventTurnEnd, d)
+		require.NoError(t, err)
+		ev.Seq, ev.Surface = seq, surface
+		return ev
+	}
+	rewind := Event{Seq: 4, Type: constants.SessionEventRewind, Surface: &Surface{Start: 2, End: 3}}
+	tests := []struct {
+		name   string
+		events []Event
+		state  string
+		seq    int64
+	}{
+		{"没有状态", []Event{end(1, "", false, nil)}, "", 0},
+		{"取最后一条", []Event{end(1, `{"n":1}`, false, nil), end(2, "", false, nil), end(3, `{"n":3}`, false, nil)}, `{"n":3}`, 3},
+		{"退回撤销后续轮次", []Event{end(1, `{"n":1}`, false, nil), end(3, `{"n":3}`, false, nil), rewind}, `{"n":1}`, 1},
+		{"中止的轮次不带状态", []Event{end(1, `{"n":1}`, false, nil), end(2, `{"n":2}`, true, &Surface{Start: 2, End: 2})}, `{"n":1}`, 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			state, seq, err := LastState(tt.events)
+			require.NoError(t, err)
+			require.Equal(t, tt.state, string(state))
+			require.Equal(t, tt.seq, seq)
+		})
+	}
+}

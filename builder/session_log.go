@@ -6,6 +6,7 @@ import (
 
 	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/constants"
+	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/session"
 	agentErrors "github.com/kart-io/goagent/errors"
@@ -25,6 +26,72 @@ func (b *AgentBuilder[S]) WithSessionLog(store session.Store) *AgentBuilder[S] {
 	return b
 }
 
+// WithSessionState 让状态随会话日志跨进程恢复，需要 WithSessionLog。
+// 每轮结束时状态以 JSON 记入该轮的 turn/end；开始一轮时若日志中的状态不是当前状态对应的那条，
+// 先用它替换当前状态，没有记录的会话从构建时的状态开始。退回会话后状态随之退回。
+// 状态类型必须实现 MarshalJSON 与 UnmarshalJSON，编码格式由状态类型自己决定；
+// *core.AgentState 编码为 JSON 对象，恢复后的值为 JSON 通用类型。
+func (b *AgentBuilder[S]) WithSessionState() *AgentBuilder[S] {
+	b.config.SessionState = true
+	return b
+}
+
+type stateCodec interface {
+	MarshalJSON() ([]byte, error)
+	UnmarshalJSON([]byte) error
+}
+
+// encodeSessionState 校验 WithSessionState 的前提并编码构建时的状态。
+func encodeSessionState(log session.Store, state core.State) (json.RawMessage, error) {
+	if log == nil {
+		return nil, agentErrors.NewInvalidConfigError("builder", "session_state", "WithSessionState 需要 WithSessionLog")
+	}
+	if _, ok := state.(stateCodec); !ok {
+		return nil, agentErrors.NewInvalidConfigError("builder", "session_state", fmt.Sprintf("WithSessionState 要求状态类型 %T 实现 MarshalJSON 与 UnmarshalJSON", state))
+	}
+	data, err := json.Marshal(state)
+	if err != nil {
+		return nil, agentErrors.Wrap(err, agentErrors.CodeInvalidConfig, "编码初始状态失败")
+	}
+	return data, nil
+}
+
+// restoreSessionState 让当前状态与会话 id 在 events 中的最后状态一致。
+func (a *ConfigurableAgent[S]) restoreSessionState(id string, events []session.Event) error {
+	if !a.config.SessionState {
+		return nil
+	}
+	data, seq, err := session.LastState(events)
+	if err != nil {
+		return err
+	}
+	if id == a.stateSession && seq == a.stateSeq {
+		return nil
+	}
+	if data == nil {
+		if a.stateSession == "" {
+			// 首次执行且会话没有记录：当前状态就是构建时的状态。
+			a.stateSession = id
+			return nil
+		}
+		data = a.initialState
+	}
+	if err := json.Unmarshal(data, a.state); err != nil {
+		return fmt.Errorf("恢复会话状态：%w", err)
+	}
+	a.stateSession, a.stateSeq = id, seq
+	return nil
+}
+
+// bindSessionTurn 记录轮次结束时编码状态，写入后把当前状态绑定到该条 turn/end。
+func (a *ConfigurableAgent[S]) bindSessionTurn(turn *sessionTurn, id string) {
+	if !a.config.SessionState {
+		return
+	}
+	turn.state = func() (json.RawMessage, error) { return json.Marshal(a.state) }
+	turn.saved = func(seq int64) { a.stateSession, a.stateSeq = id, seq }
+}
+
 type sessionLogKey struct{}
 
 // sessionTurn 是一轮的会话日志记录。
@@ -34,6 +101,9 @@ type sessionTurn struct {
 	// resumed 是续写的轮次的 turn/start 序号：回放到已记录位置的同步不再记录，直到对话超出日志。
 	resumed   int64
 	completed bool
+	// state 非空时 end 把它的结果记入 turn/end，写入后以该事件序号调用 saved。
+	state func() (json.RawMessage, error)
+	saved func(seq int64)
 }
 
 func sessionTurnFrom(ctx context.Context) *sessionTurn {
@@ -71,6 +141,9 @@ func (a *ConfigurableAgent[S]) openSessionTurn(ctx context.Context, input string
 		}
 		if start >= 0 {
 			turn.resumed, turn.completed = events[start].Seq, true
+			if err := a.restoreSessionState(id, events[:start]); err != nil {
+				return nil, nil, err
+			}
 			history, err := session.DeriveMessages(events[:start])
 			return turn, history, err
 		}
@@ -91,6 +164,10 @@ func (a *ConfigurableAgent[S]) openSessionTurn(ctx context.Context, input string
 					before = append(before, ev)
 				}
 			}
+			if err := a.restoreSessionState(id, before); err != nil {
+				return nil, nil, err
+			}
+			a.bindSessionTurn(turn, id)
 			history, err := session.DeriveMessages(before)
 			turn.resumed = open.Seq
 			return turn, history, err
@@ -104,6 +181,10 @@ func (a *ConfigurableAgent[S]) openSessionTurn(ctx context.Context, input string
 			return nil, nil, err
 		}
 	}
+	if err := a.restoreSessionState(id, rec.Events()); err != nil {
+		return nil, nil, err
+	}
+	a.bindSessionTurn(turn, id)
 	history, err := session.DeriveMessages(rec.Events())
 	if err != nil {
 		return nil, nil, err
@@ -219,10 +300,19 @@ func (t *sessionTurn) end(ctx context.Context, messages []llm.Message, answer st
 		copy := *usage
 		d.Usage = &copy
 	}
+	if t.state != nil {
+		var err error
+		if d.State, err = t.state(); err != nil {
+			return fmt.Errorf("编码会话状态：%w", err)
+		}
+	}
 	ev, err := session.NewEvent(constants.SessionEventTurnEnd, d)
 	if err != nil {
 		return err
 	}
-	_, err = t.rec.Append(ctx, ev)
+	appended, err := t.rec.Append(ctx, ev)
+	if err == nil && t.saved != nil && len(appended) > 0 {
+		t.saved(appended[len(appended)-1].Seq)
+	}
 	return err
 }

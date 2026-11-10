@@ -91,6 +91,7 @@ func (a *ConfigurableAgent[S]) runToolEvents(ctx context.Context, request *middl
 	}
 	// finish 结束本轮：记下对话供 Handle 的 Followup 续接。
 	finish := func(answer string, final llm.Message) (*middleware.MiddlewareResponse, error) {
+		recordAnswer(request, answer)
 		if err := slog.end(ctx, append(slices.Clone(messages), final), answer, usage); err != nil {
 			return nil, fmt.Errorf("会话日志: %w", err)
 		}

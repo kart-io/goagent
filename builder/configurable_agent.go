@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/middleware"
 	agentErrors "github.com/kart-io/goagent/errors"
@@ -32,6 +33,11 @@ type ConfigurableAgent[S core.State] struct {
 	retrievalConfig RetrievalConfig
 	mu              sync.RWMutex
 	executionGate   chan struct{}
+	// initialState 是构建时状态的编码；stateSession/stateSeq 是当前状态对应的会话与 turn/end 序号。
+	// 三者只在 executionGate 内读写。
+	initialState json.RawMessage
+	stateSession string
+	stateSeq     int64
 }
 
 // Initialize 准备 Agent 执行

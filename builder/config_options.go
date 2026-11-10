@@ -88,6 +88,8 @@ type AgentConfig struct {
 	PromptSections       []PromptSection    `json:"-"`
 	PromptContexts       []PromptContext    `json:"-"`
 	SessionLog           session.Store      `json:"-"`
+	// SessionState 见 WithSessionState。
+	SessionState bool
 
 	// ResendInterruptedModel 见 WithInterruptedModelResend。
 	ResendInterruptedModel bool

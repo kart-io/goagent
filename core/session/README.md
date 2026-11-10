@@ -21,7 +21,7 @@ ctx = durable.WithJournal(durable.WithExecutionKey(ctx, runKey), session.Durable
 
 | 类型 | 内容 |
 |---|---|
-| `turn/start`、`turn/end` | 一轮的输入、答复与用量；中断的轮次在下一轮开始时记为 `aborted` |
+| `turn/start`、`turn/end` | 一轮的输入、答复与用量，开启 Builder 的 `WithSessionState` 时 `turn/end` 另带状态（`session.LastState` 取未撤销的最后一条）；中断的轮次在下一轮开始时记为 `aborted` |
 | `system/message`、`tool/definitions` | 与上次不同的 system 提示词与工具定义，不进入对话，供导出 |
 | `user/message`、`assistant/message`、`tool/result` | 一条对话消息；`tool/result` 带工具名与是否成功 |
 | `history/rewrite` | 对已有历史的改写（压缩、钩子补充的上下文等），`Surface` 指出被替换的区间 |

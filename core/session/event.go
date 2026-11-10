@@ -44,6 +44,8 @@ type TurnEnd struct {
 	Answer  string      `json:"answer,omitempty"`
 	Aborted bool        `json:"aborted,omitzero"`
 	Usage   *TokenUsage `json:"usage,omitzero"`
+	// State 是本轮结束时宿主状态的编码，由 Builder 的 WithSessionState 写入。
+	State json.RawMessage `json:"state,omitempty"`
 }
 
 // TokenUsage 是一轮的用量。
@@ -116,16 +118,8 @@ func DeriveMessages(events []Event) ([]llm.Message, error) {
 // Derive 与 DeriveMessages 相同，另返回每条消息的来源事件序号。
 // session/rewind 与中止的 turn/end 撤销其区间内的全部事件（包括其中的改写）；history/rewrite 在其余事件上替换消息。
 func Derive(events []Event) ([]Entry, error) {
-	var active []Event
-	for _, ev := range events {
-		if undoes(ev) {
-			active = slices.DeleteFunc(active, func(e Event) bool { return ev.Surface.covers(e.Seq) })
-			continue
-		}
-		active = append(active, ev)
-	}
 	var entries []Entry
-	for _, ev := range active {
+	for _, ev := range activeEvents(events) {
 		var added []Entry
 		switch ev.Type {
 		case constants.SessionEventUserMessage, constants.SessionEventAssistantMessage, constants.SessionEventToolResult:
@@ -159,6 +153,38 @@ func Derive(events []Event) ([]Entry, error) {
 		entries = append(entries, added...)
 	}
 	return entries, nil
+}
+
+// LastState 返回未被撤销的最后一个带状态的 turn/end 中的状态及其序号；没有时 state 为空、seq 为 0。
+func LastState(events []Event) (state json.RawMessage, seq int64, err error) {
+	active := activeEvents(events)
+	for i := len(active) - 1; i >= 0; i-- {
+		ev := active[i]
+		if ev.Type != constants.SessionEventTurnEnd {
+			continue
+		}
+		var d TurnEnd
+		if err := json.Unmarshal(ev.Data, &d); err != nil {
+			return nil, 0, fmt.Errorf("事件 %d：%w", ev.Seq, err)
+		}
+		if len(d.State) > 0 {
+			return d.State, ev.Seq, nil
+		}
+	}
+	return nil, 0, nil
+}
+
+// activeEvents 去掉被 session/rewind 与中止的 turn/end 撤销的事件。
+func activeEvents(events []Event) []Event {
+	var active []Event
+	for _, ev := range events {
+		if undoes(ev) {
+			active = slices.DeleteFunc(active, func(e Event) bool { return ev.Surface.covers(e.Seq) })
+			continue
+		}
+		active = append(active, ev)
+	}
+	return active
 }
 
 // undoes 报告 ev 是否撤销其 Surface 区间内的事件。

@@ -483,3 +483,17 @@ func TestAgentState_ClonePreservesTypes(t *testing.T) {
 	copied.Tags["a"] = "2"
 	require.Equal(t, "1", ptr.Tags["a"], "指针值须深拷贝")
 }
+
+func TestAgentStateJSONRoundTrip(t *testing.T) {
+	src := NewAgentStateWithData(map[string]interface{}{"name": "x", "n": 2, "nested": map[string]interface{}{"k": true}})
+	data, err := json.Marshal(src)
+	require.NoError(t, err)
+
+	dst := NewAgentStateWithData(map[string]interface{}{"stale": 1})
+	require.NoError(t, json.Unmarshal(data, dst))
+	assert.Equal(t, map[string]interface{}{"name": "x", "n": float64(2), "nested": map[string]interface{}{"k": true}}, dst.Snapshot())
+
+	empty, err := json.Marshal(&AgentState{})
+	require.NoError(t, err)
+	assert.JSONEq(t, `{}`, string(empty))
+}

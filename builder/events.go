@@ -233,6 +233,7 @@ func (a *ConfigurableAgent[S]) runEvents(ctx context.Context, request *middlewar
 	}
 	metadata["answer_usage_reported"] = turn.Usage != nil
 
+	recordAnswer(request, turn.Content)
 	if slog != nil {
 		final := llm.Message{Role: "assistant", Content: turn.Content, ReasoningContent: turn.ReasoningContent, ProviderState: turn.ProviderState}
 		if err := slog.end(ctx, append(slices.Clone(messages), final), turn.Content, usage); err != nil {
@@ -240,6 +241,14 @@ func (a *ConfigurableAgent[S]) runEvents(ctx context.Context, request *middlewar
 		}
 	}
 	return a.finishEvents(ctx, request, input, turn.Content, usage, metadata, emit)
+}
+
+// recordAnswer 在记录轮次结束之前写入状态，使会话日志中的状态包含本轮回答。
+func recordAnswer(request *middleware.MiddlewareRequest, answer string) {
+	if request.State != nil {
+		request.State.Set("last_response", answer)
+		request.State.Set("last_timestamp", time.Now())
+	}
 }
 
 func (a *ConfigurableAgent[S]) finishEvents(ctx context.Context, request *middleware.MiddlewareRequest, input, answer string, usage *interfaces.TokenUsage, metadata map[string]interface{}, emit func(AgentEvent) error) (*middleware.MiddlewareResponse, error) {
@@ -259,10 +268,6 @@ func (a *ConfigurableAgent[S]) finishEvents(ctx context.Context, request *middle
 	}
 	if err := a.saveConversation(ctx, input, answer); err != nil {
 		return nil, err
-	}
-	if request.State != nil {
-		request.State.Set("last_response", answer)
-		request.State.Set("last_timestamp", time.Now())
 	}
 	return &middleware.MiddlewareResponse{Output: answer, State: request.State, Metadata: metadata, TokenUsage: usage}, nil
 }
