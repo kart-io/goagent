@@ -3,6 +3,7 @@ package compute
 import (
 	"context"
 	"math"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -47,7 +48,6 @@ func TestCalculatorTool_BasicArithmetic(t *testing.T) {
 				Args: map[string]interface{}{
 					"expression": tt.expression,
 				},
-				Context: ctx,
 			})
 
 			require.NoError(t, err)
@@ -79,7 +79,6 @@ func TestCalculatorTool_Parentheses(t *testing.T) {
 				Args: map[string]interface{}{
 					"expression": tt.expression,
 				},
-				Context: ctx,
 			})
 
 			require.NoError(t, err)
@@ -111,7 +110,6 @@ func TestCalculatorTool_PowerOperations(t *testing.T) {
 				Args: map[string]interface{}{
 					"expression": tt.expression,
 				},
-				Context: ctx,
 			})
 
 			require.NoError(t, err)
@@ -169,8 +167,7 @@ func TestCalculatorTool_ErrorCases(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			output, err := calc.Invoke(ctx, &interfaces.ToolInput{
-				Args:    tt.args,
-				Context: ctx,
+				Args: tt.args,
 			})
 
 			require.Error(t, err)
@@ -200,7 +197,6 @@ func TestCalculatorTool_WhitespaceHandling(t *testing.T) {
 				Args: map[string]interface{}{
 					"expression": tt.expression,
 				},
-				Context: ctx,
 			})
 
 			require.NoError(t, err)
@@ -257,7 +253,6 @@ func TestAdvancedCalculatorTool_BasicOperations(t *testing.T) {
 					"operation": tt.operation,
 					"operands":  tt.operands,
 				},
-				Context: ctx,
 			})
 
 			require.NoError(t, err)
@@ -295,7 +290,6 @@ func TestAdvancedCalculatorTool_MathFunctions(t *testing.T) {
 					"operation": tt.operation,
 					"operands":  tt.operands,
 				},
-				Context: ctx,
 			})
 
 			require.NoError(t, err)
@@ -329,7 +323,6 @@ func TestAdvancedCalculatorTool_OperandConversion(t *testing.T) {
 					"operation": "add",
 					"operands":  tt.operands,
 				},
-				Context: ctx,
 			})
 
 			require.NoError(t, err)
@@ -413,8 +406,7 @@ func TestAdvancedCalculatorTool_ErrorCases(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			output, err := calc.Invoke(ctx, &interfaces.ToolInput{
-				Args:    tt.args,
-				Context: ctx,
+				Args: tt.args,
 			})
 
 			if err == nil {
@@ -440,7 +432,6 @@ func TestAdvancedCalculatorTool_Metadata(t *testing.T) {
 			"operation": "add",
 			"operands":  []interface{}{2.0, 3.0},
 		},
-		Context: ctx,
 	})
 
 	require.NoError(t, err)
@@ -464,7 +455,6 @@ func BenchmarkCalculatorTool(b *testing.B) {
 			Args: map[string]interface{}{
 				"expression": "(2 + 3) * 4 - 5 / 2",
 			},
-			Context: ctx,
 		})
 	}
 }
@@ -482,7 +472,6 @@ func BenchmarkAdvancedCalculatorTool(b *testing.B) {
 				"operation": "add",
 				"operands":  []interface{}{1.0, 2.0, 3.0, 4.0, 5.0},
 			},
-			Context: ctx,
 		})
 	}
 }
@@ -492,8 +481,48 @@ func TestAdvancedCalculatorTool_AcceptsJSONNumberOperands(t *testing.T) {
 	calc := NewAdvancedCalculatorTool(CalculatorOperations{Add: true})
 	args, ok := toolargs.Parse(`{"operation":"add","operands":[3.141592653589793238,1]}`)
 	require.True(t, ok)
-	output, err := calc.Invoke(context.Background(), &interfaces.ToolInput{Args: args, Context: context.Background()})
+	output, err := calc.Invoke(context.Background(), &interfaces.ToolInput{Args: args})
 	require.NoError(t, err)
 	require.True(t, output.Success, output.Error)
 	assert.InDelta(t, 4.141592653589793, output.Result.(float64), 1e-12)
+}
+
+// 中间结果不再以文本回填，科学计数法、一元负号与超长输入都按语法解析。
+func TestEvaluateExpressionEdgeCases(t *testing.T) {
+	long := strings.Repeat("1+", 100000) + "1"
+	tests := []struct {
+		expr string
+		want float64
+		err  string
+	}{
+		{expr: "(1000000)*2", want: 2e6},
+		{expr: "(1e21)+1", want: 1e21 + 1},
+		{expr: "1e3+1", want: 1001},
+		{expr: "2.5e-1*4", want: 1},
+		{expr: "2*-3", want: -6},
+		{expr: "-(2+3)", want: -5},
+		{expr: "-2^2", want: -4},
+		{expr: "2^-1", want: 0.5},
+		{expr: "2^3^2", want: 512},
+		{expr: long, want: 100001},
+		{expr: "(2+3))", err: "mismatched parentheses"},
+		{expr: "2+", err: "invalid number"},
+		{expr: "2(3)", err: "invalid number"},
+		{expr: strings.Repeat("(", 100) + "1" + strings.Repeat(")", 100), err: "nesting too deep"},
+	}
+	for _, tt := range tests {
+		name := tt.expr
+		if len(name) > 32 {
+			name = name[:32]
+		}
+		t.Run(name, func(t *testing.T) {
+			got, err := evaluateExpression(tt.expr)
+			if tt.err != "" {
+				require.ErrorContains(t, err, tt.err)
+				return
+			}
+			require.NoError(t, err)
+			assert.InDelta(t, tt.want, got, 1e-9)
+		})
+	}
 }

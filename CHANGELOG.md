@@ -33,6 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `core/session`：退回恢复的是退回位置当时的视图，退回到更早一次退回之前时，那次退回遮蔽的消息重新可见；此前被遮蔽的消息永久丢失。`BuildTrajectory` 的 `Turns` 不再计入被退回的轮次。
 - `workflow.DurableGraph`：节点已成功返回而调用方恰好取消时，结果仍以独立的有界 ctx（`constants.DurableCompletionSaveTimeout`）写入检查点，恢复时不再重跑节点；此前节点的副作用会重复。
 - `builder.WithSessionState`：重放已完成的持久轮次后，`GetState` 返回该轮结束时记录的状态；此前停在轮次开始前的状态。
+- `tools/compute.CalculatorTool`：改为递归下降解析，耗时与表达式长度成正比，括号与一元负号嵌套超过 `constants.CalculatorMaxNesting` 时报错；此前每层括号重写整个字符串（O(n²)），且中间结果以 `%v` 回填，`1e+06` 这类科学计数法会被当成加法。幂运算先于一元负号，`-2^2` 为 -4（此前为 4）。
+
 ## [0.52.0] - 2026-11-10
 
 ### 新增

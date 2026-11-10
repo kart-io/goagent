@@ -35,3 +35,6 @@ const (
 	SpillMaxLineRunes            = 2000
 	ToolReadContextResult        = "read_context_result"
 )
+
+// CalculatorMaxNesting 限制计算器表达式的括号与一元负号嵌套深度，防止超长输入耗尽栈。
+const CalculatorMaxNesting = 64

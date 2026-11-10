@@ -67,103 +67,155 @@ func (c *CalculatorTool) run(ctx context.Context, input *interfaces.ToolInput) (
 	})
 }
 
-// evaluateExpression 计算数学表达式
-// 简化实现：支持基本运算符和括号
-// 运算符优先级：括号 > 幂 > 乘除 > 加减
+// evaluateExpression 计算数学表达式：递归下降一次扫描，耗时与表达式长度成正比。
+// 优先级：括号 > 幂（右结合）> 一元负号 > 乘除 > 加减。
 func evaluateExpression(expr string) (float64, error) {
-	// 移除空格
-	expr = strings.ReplaceAll(expr, " ", "")
-
-	// 处理括号
-	for strings.Contains(expr, "(") {
-		start := strings.LastIndex(expr, "(")
-		end := strings.Index(expr[start:], ")")
-		if end == -1 {
-			return 0, agentErrors.New(agentErrors.CodeToolExecution, "mismatched parentheses").
-				WithComponent("calculator_tool").
-				WithOperation("evaluate_expression").
-				WithContext("expression", expr)
+	p := &exprParser{src: strings.ReplaceAll(expr, " ", "")}
+	v, err := p.sum()
+	if err != nil {
+		return 0, err
+	}
+	if p.pos < len(p.src) {
+		if p.src[p.pos] == ')' {
+			return 0, calcError("mismatched parentheses", p.src)
 		}
-		end += start
+		return 0, calcError("invalid number", p.src[p.pos:])
+	}
+	return v, nil
+}
 
-		subExpr := expr[start+1 : end]
-		subResult, err := evaluateExpression(subExpr)
+type exprParser struct {
+	src   string
+	pos   int
+	depth int
+}
+
+func calcError(msg, expr string) error {
+	return agentErrors.New(agentErrors.CodeToolExecution, msg).
+		WithComponent("calculator_tool").
+		WithOperation("evaluate_expression").
+		WithContext("expression", expr)
+}
+
+func (p *exprParser) accept(c byte) bool {
+	if p.pos < len(p.src) && p.src[p.pos] == c {
+		p.pos++
+		return true
+	}
+	return false
+}
+
+func (p *exprParser) sum() (float64, error) {
+	v, err := p.product()
+	for err == nil && p.pos < len(p.src) {
+		var r float64
+		switch {
+		case p.accept('+'):
+			if r, err = p.product(); err == nil {
+				v += r
+			}
+		case p.accept('-'):
+			if r, err = p.product(); err == nil {
+				v -= r
+			}
+		default:
+			return v, nil
+		}
+	}
+	return v, err
+}
+
+func (p *exprParser) product() (float64, error) {
+	v, err := p.unary()
+	for err == nil && p.pos < len(p.src) {
+		var r float64
+		switch {
+		case p.accept('*'):
+			if r, err = p.unary(); err == nil {
+				v *= r
+			}
+		case p.accept('/'):
+			if r, err = p.unary(); err == nil {
+				if r == 0 {
+					return 0, calcError("division by zero", p.src)
+				}
+				v /= r
+			}
+		default:
+			return v, nil
+		}
+	}
+	return v, err
+}
+
+func (p *exprParser) unary() (float64, error) {
+	if !p.accept('-') {
+		return p.power()
+	}
+	if err := p.enter(); err != nil {
+		return 0, err
+	}
+	defer p.leave()
+	v, err := p.unary()
+	return -v, err
+}
+
+func (p *exprParser) power() (float64, error) {
+	base, err := p.primary()
+	if err != nil || !p.accept('^') {
+		return base, err
+	}
+	if err := p.enter(); err != nil {
+		return 0, err
+	}
+	defer p.leave()
+	exp, err := p.unary()
+	return math.Pow(base, exp), err
+}
+
+func (p *exprParser) primary() (float64, error) {
+	if p.accept('(') {
+		if err := p.enter(); err != nil {
+			return 0, err
+		}
+		defer p.leave()
+		v, err := p.sum()
 		if err != nil {
 			return 0, err
 		}
-
-		expr = expr[:start] + fmt.Sprintf("%v", subResult) + expr[end+1:]
-	}
-
-	// 处理加减（最低优先级，从右到左）
-	for i := len(expr) - 1; i >= 0; i-- {
-		if expr[i] == '+' || (expr[i] == '-' && i > 0 && expr[i-1] != '^' && expr[i-1] != '*' && expr[i-1] != '/') {
-			op := string(expr[i])
-			left, err := evaluateExpression(expr[:i])
-			if err != nil {
-				return 0, err
-			}
-			right, err := evaluateExpression(expr[i+1:])
-			if err != nil {
-				return 0, err
-			}
-
-			if op == "+" {
-				return left + right, nil
-			}
-			return left - right, nil
+		if !p.accept(')') {
+			return 0, calcError("mismatched parentheses", p.src)
 		}
+		return v, nil
 	}
-
-	// 处理乘除（中等优先级，从右到左）
-	for i := len(expr) - 1; i >= 0; i-- {
-		if expr[i] == '*' || expr[i] == '/' {
-			op := string(expr[i])
-			left, err := evaluateExpression(expr[:i])
-			if err != nil {
-				return 0, err
-			}
-			right, err := evaluateExpression(expr[i+1:])
-			if err != nil {
-				return 0, err
-			}
-
-			if op == "*" {
-				return left * right, nil
-			}
-			if right == 0 {
-				return 0, agentErrors.New(agentErrors.CodeToolExecution, "division by zero").
-					WithComponent("calculator_tool").
-					WithOperation("evaluate_expression")
-			}
-			return left / right, nil
+	start := p.pos
+	for p.pos < len(p.src) {
+		c := p.src[p.pos]
+		exponentSign := (c == '+' || c == '-') && p.pos > start && (p.src[p.pos-1] == 'e' || p.src[p.pos-1] == 'E')
+		numeric := c >= '0' && c <= '9' || c == '.' || c == 'e' || c == 'E' || exponentSign
+		if !numeric {
+			break
 		}
+		p.pos++
 	}
-
-	// 处理幂运算（高优先级，从右到左）
-	if idx := strings.LastIndex(expr, "^"); idx != -1 {
-		base, err := evaluateExpression(expr[:idx])
-		if err != nil {
-			return 0, err
-		}
-		exp, err := evaluateExpression(expr[idx+1:])
-		if err != nil {
-			return 0, err
-		}
-		return math.Pow(base, exp), nil
-	}
-
-	// 解析数字
-	num, err := strconv.ParseFloat(expr, 64)
+	num, err := strconv.ParseFloat(p.src[start:p.pos], 64)
 	if err != nil {
 		return 0, agentErrors.Wrap(err, agentErrors.CodeToolExecution, "invalid number").
 			WithComponent("calculator_tool").
 			WithOperation("evaluate_expression").
-			WithContext("expression", expr)
+			WithContext("expression", p.src[start:])
 	}
-
 	return num, nil
 }
+
+func (p *exprParser) enter() error {
+	if p.depth++; p.depth > shared.CalculatorMaxNesting {
+		return calcError("expression nesting too deep", p.src)
+	}
+	return nil
+}
+
+func (p *exprParser) leave() { p.depth-- }
 
 // CalculatorOperations 支持的计算操作类型
 type CalculatorOperations struct {
