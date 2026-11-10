@@ -16,6 +16,8 @@ Pi 设计的采纳继续遵守这些边界：复用现有可恢复子流程，�
 
 Agent/子 Agent 的共享根用量已经由 budget.Controller 统计；可通过 WithAgentID、Observer 用量事件和统一账本查询角色/调用归属，见[设计](MULTI_AGENT_HOOKS_AND_USAGE.md)与[使用指南](../guides/MULTI_AGENT_USAGE.md)。
 
+Hermes 图解的增量采纳见[全文对照](../research/2026-11-10-hermes-design-review.md)和[设计提案](../superpowers/specs/2026-11-10-hermes-runtime-design.md)：优先统一 Harness 技能加载与上下文来源报告，再补固定路由、会话检索和技能候选发布。网关与日历调度由宿主复用管理任务及效果投递；这些新增能力尚未实施。
+
 ## 分层
 
 ```text

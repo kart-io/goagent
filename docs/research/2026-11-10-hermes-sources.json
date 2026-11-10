@@ -1,0 +1,277 @@
+{
+  "article": {
+    "url": "https://mp.weixin.qq.com/s/rbybfVn1Pxbup9pkfPwMWg",
+    "title": "跨平台Agent怎么做的？Hermes深度拆解展开",
+    "account": "图灵AI进化论",
+    "published_at_display": "2026-09-29 20:00",
+    "accessed_on": "2026-11-10",
+    "method": "Browser page metadata + visual inspection of all 17 original images",
+    "limitations": "Secondary illustrated source; pages 14–17 are resource-library screenshots. No Hermes execution validation."
+  },
+  "images": [
+    {
+      "page": 1,
+      "url": "https://mmbiz.qpic.cn/mmbiz_png/dlMMtBwBwiaicvN6SHZZW7vtB1iaHKv8iaDBdzZ9k5GdgcpBga437Y0HibO02uniarm1fHvwK7AzXcDSKz3ZDWtXqSBk6ykl5F6r9SakX7iaHNLzW0/0?wx_fmt=png&from=appmsg",
+      "topic": "总体职责",
+      "sha256": "7ce6a64a38e29fedc568bde028daa194cab0e93d174aa4cf35de82ffbc3c8d51",
+      "bytes": 1417351,
+      "read": true,
+      "architecture_evidence": true,
+      "width": 1086,
+      "height": 1448
+    },
+    {
+      "page": 2,
+      "url": "https://mmbiz.qpic.cn/sz_mmbiz_png/dlMMtBwBwiaibEYHJknJWSDtfRAxkQuKBWuPEzKmzCpK31ajlsILBj6c8zgZpwUuZufNKlf2F4sSViahC4rtViaGbuOsWfydJm3PUL5byINIo1g/0?wx_fmt=png&from=appmsg",
+      "topic": "多入口统一运行时",
+      "sha256": "89d12e547123508519c2560de01c1d6ae68327324243fe8f49c6fd333dbb0a0b",
+      "bytes": 1809251,
+      "read": true,
+      "architecture_evidence": true,
+      "width": 1536,
+      "height": 2048
+    },
+    {
+      "page": 3,
+      "url": "https://mmbiz.qpic.cn/mmbiz_png/dlMMtBwBwia8f86PmGpLgwF5JbzopDhoaAbVkqeaExXoWMicJJic6icuE4f4X1jict0ibvFj5iaMrXLE73icM3wPkdlIp79qibqZBK6OPZUkvPZBKyBE/0?wx_fmt=png&from=appmsg",
+      "topic": "Agent Loop",
+      "sha256": "b002513dee0fa85684e786838ea742c7c8de607a1ac27c430735b84e9c3845f0",
+      "bytes": 1717701,
+      "read": true,
+      "architecture_evidence": true,
+      "width": 1536,
+      "height": 2048
+    },
+    {
+      "page": 4,
+      "url": "https://mmbiz.qpic.cn/mmbiz_png/dlMMtBwBwia9K4qI5j1PtUb9tL2KZ80Ia6Xsox3zSDo87bx2jWoSic1ot0rCoJbfv8icMKrOOeNnnMSkPv1l3MrL4k3VNwkkq9yD6QG9vdCibM8/0?wx_fmt=png&from=appmsg",
+      "topic": "上下文装配",
+      "sha256": "9650e1b9d07fde0eb2dbed79a69ecd6787eaf812c62e3162c205c689e61e0218",
+      "bytes": 2081271,
+      "read": true,
+      "architecture_evidence": true,
+      "width": 1536,
+      "height": 2048
+    },
+    {
+      "page": 5,
+      "url": "https://mmbiz.qpic.cn/mmbiz_png/dlMMtBwBwiaibCgEVUoj0B2hAou7AGicJ4pOz5icTyX0BprNk7CcyFoakUVLibHaGibdmNlEibJ9wLJGaE04KyMjianaJqdlr1gRvAkKkcUDBwaO8MI/0?wx_fmt=png&from=appmsg",
+      "topic": "Provider 路由",
+      "sha256": "0cf477b6c711240d6629453920b35591ed9ae524fdc56c2ee05b344313215be0",
+      "bytes": 1732462,
+      "read": true,
+      "architecture_evidence": true,
+      "width": 1536,
+      "height": 2048
+    },
+    {
+      "page": 6,
+      "url": "https://mmbiz.qpic.cn/sz_mmbiz_png/dlMMtBwBwiaiceU5htWLviaRp5ZLKhd7OA0t0SeJWgGew0TOcnEnfddYwFFdiaVvQDHTr8BG3Ndh6wqnzTPLSfOOpO5FL4wIITPJubia33xF84lI/0?wx_fmt=png&from=appmsg",
+      "topic": "工具总线",
+      "sha256": "d8094172aac6ab32a1ef31d321f14253e666716399891d214f26717e9103595f",
+      "bytes": 1917729,
+      "read": true,
+      "architecture_evidence": true,
+      "width": 1536,
+      "height": 2048
+    },
+    {
+      "page": 7,
+      "url": "https://mmbiz.qpic.cn/sz_mmbiz_png/dlMMtBwBwiaic3VPK4lxcN92dfamD92YtQDaCgggRKSjc4e0CyGkiaxYRO6ib3wdNUhpnB0iaFeeV4D7gqmHs0cVHHlVW6qw0vabZ59MDrclez4M/0?wx_fmt=png&from=appmsg",
+      "topic": "执行后端",
+      "sha256": "b719dd56bd814eb1ad7a31ba4982de804b8ba6d33a0b504c7f8d167b0bac6f13",
+      "bytes": 1683551,
+      "read": true,
+      "architecture_evidence": true,
+      "width": 1536,
+      "height": 2048
+    },
+    {
+      "page": 8,
+      "url": "https://mmbiz.qpic.cn/mmbiz_png/dlMMtBwBwiaibB6DxQp2hqBTpNs6rPRPTibN2QH4FOiajxicb00MzobyrkqEmxH99TO3icuoERoFrw3EJ4Z4gskJNAWvibByxn90Uprs8yrrX9m8WE/0?wx_fmt=png&from=appmsg",
+      "topic": "分层记忆",
+      "sha256": "faed4beda5c95d552d8cd45640374623a6e73c5fa34b8ddf57b3bb8c880d11c2",
+      "bytes": 1811409,
+      "read": true,
+      "architecture_evidence": true,
+      "width": 1536,
+      "height": 2048
+    },
+    {
+      "page": 9,
+      "url": "https://mmbiz.qpic.cn/mmbiz_png/dlMMtBwBwiaib3kJNWibeWuRT51fvCpP0ZXY1T7vhE8VJOKsfIgBAMg2v9OpbOyibplUrEYCS8ysHD0xjFdNKjp4R8ZicfgFvOfSqp2l3iabUk9WI/0?wx_fmt=png&from=appmsg",
+      "topic": "技能沉淀",
+      "sha256": "b6b19b9156d4e47ca44dd94df2790f803c03e46cd9172e953b76b36c4f635d3c",
+      "bytes": 2134002,
+      "read": true,
+      "architecture_evidence": true,
+      "width": 1536,
+      "height": 2048
+    },
+    {
+      "page": 10,
+      "url": "https://mmbiz.qpic.cn/mmbiz_png/dlMMtBwBwiaibxMibXBvpNTMz1MHgNz9SVR7tNZyAsQKxx9ibH6NT6ujzesa7Fyahd6KZj0z5iavLPLSewnocPAWPxbzwOorjuI9kE7pfdj9yD5s/0?wx_fmt=png&from=appmsg",
+      "topic": "多平台网关",
+      "sha256": "782f396fc8e7651f0d0fed63078429772f060d80bfde4a4a4bc3e9653cd9bf85",
+      "bytes": 1747739,
+      "read": true,
+      "architecture_evidence": true,
+      "width": 1536,
+      "height": 2048
+    },
+    {
+      "page": 11,
+      "url": "https://mmbiz.qpic.cn/sz_mmbiz_png/dlMMtBwBwia8Z7ib81WiaTVhrPUxjhSrhM2FJ8MtOUDcLygibhCG89NibjRYSZlvlic7rGZE83xIeR8Yday0UZxWyauCXMdsQVQ19X7zE26k1fUD8/0?wx_fmt=png&from=appmsg",
+      "topic": "定时调度",
+      "sha256": "25507c8fede0d364684fd36b077a24f076a76a0cb62f3ac81deee2b9cc9a4991",
+      "bytes": 1417951,
+      "read": true,
+      "architecture_evidence": true,
+      "width": 1536,
+      "height": 2048
+    },
+    {
+      "page": 12,
+      "url": "https://mmbiz.qpic.cn/mmbiz_png/dlMMtBwBwiaicEpVfnIPibstHacwoveOsHuvuiaBaRUrMwlUbDKYqibW0cqiarAicI1jsKJz3nKjcU1eibVN0jiawrwtIfPd4dt5LamspmRbC7UIDja0/0?wx_fmt=png&from=appmsg",
+      "topic": "运行时安全",
+      "sha256": "178bcf6945273e8f91de3a6a08ade6ce7ff7f76b605f460776ca1733868c67e0",
+      "bytes": 1914293,
+      "read": true,
+      "architecture_evidence": true,
+      "width": 1536,
+      "height": 2048
+    },
+    {
+      "page": 13,
+      "url": "https://mmbiz.qpic.cn/mmbiz_png/dlMMtBwBwia9yC4M4moAiciao3dMRJiajqHmqhuDXRGMegf6mtTZjhficdS2ZqvVekibAFbia84hPQQTiaUpc0AdYhwo3NVDKKXbVGCztpfDNyN9fuY/0?wx_fmt=png&from=appmsg",
+      "topic": "扩展层",
+      "sha256": "035a22b066858997fd0f151972c857ba065786f346df31bd63802d8a81477c7e",
+      "bytes": 1962634,
+      "read": true,
+      "architecture_evidence": true,
+      "width": 1536,
+      "height": 2048
+    },
+    {
+      "page": 14,
+      "url": "https://mmbiz.qpic.cn/sz_mmbiz_jpg/dlMMtBwBwiaibSP7eHhg6ibxRGLMluj2Vl3NvCJIzHe12lBIibFXzxGt36eRz7Y89m54W5dfibQjlGGmGTGnt3bwtLSmdmcwglBntODXGs1vRkcQ/0?wx_fmt=jpeg&from=appmsg",
+      "topic": "资料库展示一",
+      "sha256": "7f48f094fc92cb47dc6c9f71209547b5623d3abd8ce7f1059f1e73741b3683be",
+      "bytes": 159864,
+      "read": true,
+      "architecture_evidence": false,
+      "width": 1280,
+      "height": 1718
+    },
+    {
+      "page": 15,
+      "url": "https://mmbiz.qpic.cn/sz_mmbiz_png/dlMMtBwBwiaibzdOpia1slObiaSy2M5eDSZMtFvORrUKENpmZJDmTWdcNsM9B2YjERHL8W0gu1XmUUR2wiaV1HibZQnDib6Y38IdeZGpZTpzVD74A4/0?wx_fmt=png&from=appmsg",
+      "topic": "资料库展示二",
+      "sha256": "0a7cd92a96dc3db0743d8508193f982e6acf7964658e8f91e775a8f8ef1cf6a6",
+      "bytes": 575122,
+      "read": true,
+      "architecture_evidence": false,
+      "width": 1080,
+      "height": 1440
+    },
+    {
+      "page": 16,
+      "url": "https://mmbiz.qpic.cn/mmbiz_png/dlMMtBwBwiaicS7G0MzZWE2hdAwCpCeibTbpRdEeuXk7jze62HgCZWm8xhjyguFOqLH4CiceHiaKPSn11hC1mCI7N6DS0O4VY7q1icz7Ahp5cZXwE/0?wx_fmt=png&from=appmsg",
+      "topic": "资料库展示三",
+      "sha256": "29d911ab36428d415052a6e1e68c293e6eaef8655b42a19902bdfec5f716aa84",
+      "bytes": 695170,
+      "read": true,
+      "architecture_evidence": false,
+      "width": 1080,
+      "height": 1440
+    },
+    {
+      "page": 17,
+      "url": "https://mmbiz.qpic.cn/mmbiz_png/dlMMtBwBwiaicGDlKt3HJP5vJvhPyE2HmibqSiarwmNpa6943jwdjxcFXWObXSK73tSgIHlWxacbecPHrQKnIPicRyA9Set6xtz69Jib6tu01xCHQ/0?wx_fmt=png&from=appmsg",
+      "topic": "资料库展示四",
+      "sha256": "46d598a7ca700fc152749734916387cddc0b7850a355e69f7424e3593bf9de6c",
+      "bytes": 468980,
+      "read": true,
+      "architecture_evidence": false,
+      "width": 1080,
+      "height": 1440
+    }
+  ],
+  "upstream": {
+    "repository": "https://github.com/NousResearch/hermes-agent",
+    "sha": "a2fa0a4b649b7f3a771cf92f1ae43059eeec76e6",
+    "date": "2026-11-10T14:57:54Z",
+    "files": [
+      {
+        "path": "agent/memory_provider.py",
+        "sha256": "46f7073c312fcfdbc9538bdc280b7b180410755a7b0de896d7c2f83410850f05",
+        "review": "targeted static reading; not execution or complete source audit"
+      },
+      {
+        "path": "agent/prompt_builder.py",
+        "sha256": "92794560ec7e3e0396e9f33bc505c7d2e13aed1275f199b39ed934f3c54a9fcb",
+        "review": "targeted static reading; not execution or complete source audit"
+      },
+      {
+        "path": "agent/prompt_cache_boundary.py",
+        "sha256": "82dfe2db84454e42583a0fa9b512317db973c9e842380543c6f787add3f0d548",
+        "review": "targeted static reading; not execution or complete source audit"
+      },
+      {
+        "path": "agent/provider_registry.py",
+        "sha256": "57475ba5a1a757c59ca335abd1f7b6d2905e02f93b804c3480e8f8fa6ba4ced5",
+        "review": "targeted static reading; not execution or complete source audit"
+      },
+      {
+        "path": "cron/scheduler_delivery.py",
+        "sha256": "ee4010c0b19e8fe71e22dc8cb82fddb70653e8583833066768199bba3de80573",
+        "review": "targeted static reading; not execution or complete source audit"
+      },
+      {
+        "path": "cron/scheduler_tick.py",
+        "sha256": "17eb6231ddca87224e86704d996ddf8e1dbce7985d0985b6f85bdec77dbd23d3",
+        "review": "targeted static reading; not execution or complete source audit"
+      },
+      {
+        "path": "gateway/delivery_ledger.py",
+        "sha256": "f36088a84cdbb2abdb366684c0e8e382560babd911ee4ad6dba9e24604430f8d",
+        "review": "targeted static reading; not execution or complete source audit"
+      },
+      {
+        "path": "gateway/session_identity.py",
+        "sha256": "8cec7da940c3ae7b352d2e5102b8d90bda9a6f37b8a7faac75b6303aa48f1bfe",
+        "review": "targeted static reading; not execution or complete source audit"
+      },
+      {
+        "path": "hermes_cli/runtime_provider.py",
+        "sha256": "d3d70dd8e037da90e8019c9735ad445cea95e34b3b040642f5bcac92372b2601",
+        "review": "targeted static reading; not execution or complete source audit"
+      },
+      {
+        "path": "tools/registry.py",
+        "sha256": "f73137030e95b47b92702f935d95f2cd01740b61161d7d940d6c83f02401294d",
+        "review": "targeted static reading; not execution or complete source audit"
+      },
+      {
+        "path": "tools/session_search_tool.py",
+        "sha256": "efddaa1df4d73d859938d24ae5bdcc6fdfa631a64f760a5c71fa42bb169398ea",
+        "review": "targeted static reading; not execution or complete source audit"
+      },
+      {
+        "path": "tools/skill_manager_tool.py",
+        "sha256": "67df9575e2c22f7ac269e01404a2d6df6a5070d3633288dd00b479405c5bb853",
+        "review": "targeted static reading; not execution or complete source audit"
+      },
+      {
+        "path": "tools/skills_guard.py",
+        "sha256": "16c482ed91cda70c452689b6a592564427d74ae3dc5588e155f6d2127aa991c0",
+        "review": "targeted static reading; not execution or complete source audit"
+      }
+    ]
+  },
+  "local_baselines": {
+    "goagent": "96b816c3f51415af70c0904686bc4115d21c3cf4",
+    "goagent-harness": "367330b2194713b2d94b6c567c75634c4f866cb5",
+    "includes_working_tree": true
+  }
+}

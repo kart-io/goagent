@@ -58,6 +58,7 @@ GoAgent 是嵌入 Go 服务的 Agent 执行内核：原生工具循环、类型�
 - [架构概述](architecture/ARCHITECTURE.md)、[组件关系图](architecture/COMPONENT_DIAGRAM.md)、[导入层级](architecture/IMPORT_LAYERING.md)
 - [设计概述](design/DESIGN_OVERVIEW.md)、[时序图](design/SEQUENCE_DIAGRAMS.md)、[流程图](design/FLOW_DIAGRAMS.md)
 - [Harness 核心设计](design/HARNESS_CORE_DESIGN.md)
+- [Hermes 全文对照](research/2026-11-10-hermes-design-review.md)与[跨仓采纳设计](superpowers/specs/2026-11-10-hermes-runtime-design.md)：17 张图阅读、固定官方源码核对，以及技能加载、上下文来源、路由、检索和宿主调度的增量提案（未实施）
 - [HTTP Agent设计](design/HTTP_AGENT_DESIGN.md)：内核与网络模块边界、执行与接纳/通知的资源责任
 - [多框架调研与方案复审](research/2026-10-27-framework-orchestration-review.md)
 - [Eino 对照：组件、编排、ADK 与扩展生态](research/2026-11-04-eino-comparison.md)
