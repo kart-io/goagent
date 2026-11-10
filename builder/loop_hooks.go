@@ -227,12 +227,13 @@ func journaled[T any](ctx context.Context, id string, compute func(context.Conte
 }
 
 // journaledIntent 与 journaled 相同，记录的意图为 intent：恢复时意图不同即失败。
+// 计算中途崩溃或被取消时没有结果可回放，恢复时重新计算（RetryInterrupted），与 Dispatcher 的默认策略一致。
 func journaledIntent[T any](ctx context.Context, id string, intent json.RawMessage, compute func(context.Context) (T, error)) (T, error) {
 	var zero T
 	if !durable.HasJournal(ctx) {
 		return compute(ctx)
 	}
-	record, err := durable.Do(ctx, id, intent, durable.OperationPolicy{MaxAttempts: 3, RetryFailed: true},
+	record, err := durable.Do(ctx, id, intent, durable.OperationPolicy{MaxAttempts: 3, RetryFailed: true, RetryInterrupted: true},
 		func(c context.Context) (json.RawMessage, error) {
 			v, err := compute(c)
 			if err != nil {

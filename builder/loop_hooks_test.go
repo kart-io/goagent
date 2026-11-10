@@ -538,3 +538,58 @@ func TestSamplingParamsDeferToClientUnlessSet(t *testing.T) {
 		require.Zero(t, req.Temperature)
 	}
 }
+
+// crashStore 在 crashed 置位后拒绝写入，模拟进程在计算中途退出：记录停在 pending。
+type crashStore struct {
+	durable.Store
+	crashed atomic.Bool
+}
+
+func (s *crashStore) Save(ctx context.Context, id string, snap *durable.Snapshot) error {
+	if s.crashed.Load() {
+		return errors.New("进程已退出")
+	}
+	return s.Store.Save(ctx, id, snap)
+}
+
+func (s *crashStore) SaveAll(ctx context.Context, writes ...durable.Write) error {
+	if s.crashed.Load() {
+		return errors.New("进程已退出")
+	}
+	return s.Store.SaveAll(ctx, writes...)
+}
+
+// 循环扩展点在计算中途崩溃或被取消后，恢复时重新计算，不停下来等宿主处理。
+func TestJournaledRecomputesInterruptedLoopStep(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		interrupt func(ctx context.Context, store *crashStore, cancel context.CancelFunc) error
+	}{
+		{"崩溃", func(context.Context, *crashStore, context.CancelFunc) error {
+			return nil
+		}},
+		{"取消", func(ctx context.Context, _ *crashStore, cancel context.CancelFunc) error {
+			cancel()
+			return ctx.Err()
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			files, err := durable.NewFileStore(t.TempDir())
+			require.NoError(t, err)
+			store := &crashStore{Store: files}
+			base := durable.WithJournal(durable.WithExecutionKey(context.Background(), "loop"), store)
+			ctx, cancel := context.WithCancel(base)
+			defer cancel()
+			_, err = journaled(ctx, "loop/pre/1", func(c context.Context) (string, error) {
+				store.crashed.Store(test.name == "崩溃")
+				return "首次", test.interrupt(c, store, cancel)
+			})
+			require.Error(t, err)
+			store.crashed.Store(false)
+
+			got, err := journaled(base, "loop/pre/1", func(context.Context) (string, error) { return "重算", nil })
+			require.NoError(t, err)
+			require.Equal(t, "重算", got)
+		})
+	}
+}

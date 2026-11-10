@@ -56,7 +56,7 @@ type OperationPolicy struct {
 	// Do never loops or retries within a single invocation.
 	// 只作用于结果已知的失败（普通失败、超时）；中断的记录须由 Reconcile 核对未生效或声明 RetryInterrupted 才重跑。
 	RetryFailed bool `json:"retry_failed"`
-	// Reconcile 在记录停在 pending（上次执行中断、结果未知）时先于重跑调用，按派生执行键查询效果是否已生效：
+	// Reconcile 在记录被中断（停在 pending 或因取消而失败，结果未知）时先于重跑调用，按派生执行键查询效果是否已生效：
 	// found 为真时用 value 补记为 completed，不执行 run、不计尝试次数；返回错误时记录不变。
 	Reconcile func(ctx context.Context) (value json.RawMessage, found bool, err error) `json:"-"`
 	// Resumable 声明 run 的全部效果都记在派生执行键下，重新进入只会回放已完成的步骤：
@@ -295,7 +295,8 @@ func Do(ctx context.Context, id string, input json.RawMessage, policy OperationP
 			return record, nil
 		}
 		absent := false
-		if record.Status == "pending" && policy.Reconcile != nil {
+		interrupted := record.Status == "pending" || (record.Status == "failed" && record.FailureKind == "canceled")
+		if interrupted && policy.Reconcile != nil {
 			value, found, e := reconcileOperation(childCtx, policy.Reconcile)
 			if e != nil {
 				return record, e
@@ -311,7 +312,6 @@ func Do(ctx context.Context, id string, input json.RawMessage, policy OperationP
 			record.Replayed = true
 			return record, &OperationError{ID: id, Kind: "not_resumable"}
 		}
-		interrupted := record.Status == "pending" || (record.Status == "failed" && record.FailureKind == "canceled")
 		resume = resume || (policy.RetryInterrupted && interrupted && record.Attempts < policy.MaxAttempts)
 		retryFailed := policy.RetryFailed && (!interrupted || absent)
 		if !resume && (!retryFailed || record.Attempts >= policy.MaxAttempts) {

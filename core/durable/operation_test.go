@@ -223,6 +223,44 @@ func TestRetryFailedSkipsInterruptedRecords(t *testing.T) {
 	}
 }
 
+// 崩溃与取消都是结果未知的中断：Reconcile 查到效果时补记，确认未生效时 RetryFailed 重跑。
+func TestReconcileChecksInterruptedRecords(t *testing.T) {
+	for _, test := range []struct {
+		name         string
+		status, kind string
+		found        bool
+		want         string
+		calls        int
+	}{
+		{"崩溃后已生效", "pending", "ambiguous", true, `"对账"`, 0},
+		{"崩溃后未生效", "pending", "ambiguous", false, `"执行"`, 1},
+		{"取消后已生效", "failed", "canceled", true, `"对账"`, 0},
+		{"取消后未生效", "failed", "canceled", false, `"执行"`, 1},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := operationContext(t)
+			input := json.RawMessage(`{}`)
+			key := ChildKey(ExecutionKey(ctx), "effect")
+			store := ctx.Value(journalContext{}).(Store)
+			require.NoError(t, saveOperation(ctx, store, OperationStorageID(key), &OperationRecord{
+				ID: "effect", Key: key, InputHash: digest(string(input)), Status: test.status, FailureKind: test.kind,
+				Attempts: 1, MaxAttempts: 3, Value: json.RawMessage(`null`),
+			}))
+			policy := OperationPolicy{MaxAttempts: 3, RetryFailed: true, Reconcile: func(context.Context) (json.RawMessage, bool, error) {
+				return json.RawMessage(`"对账"`), test.found, nil
+			}}
+			calls := 0
+			record, err := Do(ctx, "effect", input, policy, func(context.Context) (json.RawMessage, error) {
+				calls++
+				return json.RawMessage(`"执行"`), nil
+			})
+			require.NoError(t, err)
+			require.JSONEq(t, test.want, string(record.Value))
+			require.Equal(t, test.calls, calls)
+		})
+	}
+}
+
 // 没有声明时行为不变：中断的操作不重跑。
 func TestInterruptedOperationStaysStoppedByDefault(t *testing.T) {
 	ctx := operationContext(t)

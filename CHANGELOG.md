@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `tools/shell`：`CommonShellTools()` 不再预设 `find`、`git`、`curl`、`wget`（可经参数执行任意程序或写任意文件），需要时用 `NewShellTool` 显式列入并配合 `tools/policy`。调用方传入的 `timeout` 只能缩短构造时的超时；输出最多保留 1 MiB，结果新增 `truncated`；`command` 与管道命令中的换行按命令分隔符拒绝。新增 `ShellToolBuilder.WithRootDir` 把工作目录限制在指定目录内。
 - `tools/http`：配置了 baseURL 的 `APITool` 拒绝其他 scheme/主机的绝对 URL 与跨主机重定向，避免默认请求头中的凭据发往第三方；响应体上限 10 MiB。需要访问多个主机时为每个主机各建一个工具，或不设 baseURL。未配置 baseURL 时默认拒绝连接回环、私网、链路本地与云元数据地址（按实际拨号 IP 判断，并且不走环境变量代理），需要访问内网时使用 `APIToolBuilder.WithPrivateNetwork()`。
 - `builder`：未调用 `WithTemperature`/`WithMaxTokens` 时请求不再携带 0.7 与 2000，改由 LLM 客户端配置决定；`AgentConfig` 新增 `TemperatureSet`，移除 `constants.DefaultAgentMaxTokens`。依赖旧默认值的调用方显式调用这两个选项。
-- `core/durable`：`RetryFailed` 只重跑结果已知的失败（普通失败、超时）；停在 pending 或因取消而失败的记录须由 `Reconcile` 核对未生效或声明 `RetryInterrupted` 才重跑。`tools.Dispatcher` 的默认策略显式声明 `RetryInterrupted`，恢复行为不变；非幂等工具应通过 `DurableOperationPolicy` 提供 `Reconcile` 或去掉 `RetryInterrupted`。
+- `core/durable`：`RetryFailed` 只重跑结果已知的失败（普通失败、超时）；停在 pending 或因取消而失败的记录须由 `Reconcile` 核对未生效或声明 `RetryInterrupted` 才重跑。`Reconcile` 对这两种中断记录都先行核对（此前只核对 pending，取消后的记录无法对账续跑）。`tools.Dispatcher` 的默认策略与 Builder 循环扩展点（PreStep、TurnStopping、提示词上下文、收件箱等的日志记录）显式声明 `RetryInterrupted`，恢复行为不变；非幂等工具应通过 `DurableOperationPolicy` 提供 `Reconcile` 或去掉 `RetryInterrupted`。
 - `core`：`ToChannel` 在 ctx 取消后只在消费方正在接收或缓冲有空位时送出取消错误块，否则直接关闭 channel，避免消费方放弃读取后 goroutine 永久阻塞；调用方应在 channel 关闭后检查 `ctx.Err()`。
 - `core/middleware`：`TimingMiddleware.GetTimings` 只返回最近 `constants.DefaultTimingWindow`（1000）条记录，`GetAverageLatency` 仍按全部记录计算；`CacheMiddleware` 条目上限为 `constants.DefaultMiddlewareCacheCapacity`（10000），写满时先回收过期条目再淘汰最早过期的条目，读到过期条目时删除。
 
