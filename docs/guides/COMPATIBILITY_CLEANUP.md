@@ -78,6 +78,7 @@ wrapped := middleware.Wrap(tool, logging.Wrap)
 | 泛型参数 `C` 与 `WithContext(C)`：`AgentBuilder[C, S]`、`ConfigurableAgent[C, S]` | 改为 `AgentBuilder[S]`、`ConfigurableAgent[S]`，如 `NewAgentBuilder[any, *core.AgentState]` → `NewAgentBuilder[*core.AgentState]`；应用数据经 `context.Context` 或 `WithMetadata` 传递 |
 | `interfaces` 的 `Lifecycle`、`LifecycleManager`、`HealthStatus` 等生命周期与健康状态定义 | 插件用 `plugin.Starter`、`plugin.Dependent`；其他组件由宿主自行管理生命周期 |
 | `tools.WithMiddleware`、`tools.MiddlewareTool` | `tools/middleware.Wrap(tool, middlewares...)`、`*middleware.WrappedTool` |
+| `llm/cache`（语义缓存） | 无替代；需要时由宿主按租户/会话作用域实现 |
 | `testing/testutil` | 使用标准库 `testing` 断言，或 `testing/mocks` |
 | `core` 的 `Chain`、`BaseChain`、`ChainableAgent`、`Orchestrator`、`PluginRegistry`、`LifecycleManager`、`TimeoutConfig` | 组合用 `core.RunnablePipe`/`RunnableSequence` 或 `workflow`；多 Agent 用 `multiagent` |
 | `tools` 的 `ToolRuntime`、`RuntimeToolAdapter`、`UserInfoTool`、`SavePreferenceTool`、`UpdateStateTool` | 工具所需数据经 `context.Context` 或构造时注入；`StreamWriter` 进度推送没有替代 |

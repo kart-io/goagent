@@ -14,9 +14,11 @@ import (
 	loggercore "github.com/kart-io/logger/core"
 
 	"github.com/kart-io/goagent/cache"
+	"github.com/kart-io/goagent/constants"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/internal/snapshot"
+	"github.com/kart-io/goagent/tools"
 )
 
 // CachingConfig 缓存中间件配置
@@ -100,7 +102,7 @@ func NewCachingMiddleware(opts ...CachingOption) *CachingMiddleware {
 	}
 
 	if cfg.Cache == nil {
-		cfg.Cache = cache.NewSimpleCache(cfg.TTL, cache.WithoutBackgroundCleanup())
+		cfg.Cache = cache.NewSimpleCache(cfg.TTL, cache.WithoutBackgroundCleanup(), cache.WithMaxEntries(constants.DefaultMiddlewareCacheCapacity))
 	}
 	if cfg.KeyFunc == nil {
 		cfg.KeyFunc = defaultCacheKeyFunc
@@ -117,8 +119,7 @@ func NewCachingMiddleware(opts ...CachingOption) *CachingMiddleware {
 // 不调用实际工具，从而避免不必要的计算。
 func (m *CachingMiddleware) Wrap(tool interfaces.Tool, next ToolInvoker) ToolInvoker {
 	return func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
-		// 生成缓存键
-		cacheKey := m.config.KeyFunc(tool.Name(), input.Args)
+		cacheKey := scopedKey(ctx, input, m.config.KeyFunc(tool.Name(), input.Args))
 
 		// 尝试从缓存获取
 		if result, ok := m.cachedOutput(ctx, cacheKey); ok {
@@ -241,6 +242,17 @@ func defaultCacheKeyFunc(toolName string, args map[string]interface{}) string {
 
 	// 保留完整摘要，避免短键碰撞复用另一组参数的结果。
 	return "tool:" + toolName + ":" + hashStr
+}
+
+// scopedKey 把会话与调用者并入缓存键：工具结果可能依赖调用者身份，不同会话或调用者以相同参数调用不共享结果。
+// 自定义 KeyFunc 同样经过它，KeyFunc 只决定作用域内的键。
+func scopedKey(ctx context.Context, input *interfaces.ToolInput, key string) string {
+	session := tools.SessionIDFrom(ctx)
+	if session == "" && input.CallerID == "" {
+		return key
+	}
+	scope := sha256.Sum256([]byte(session + "\x00" + input.CallerID))
+	return hex.EncodeToString(scope[:8]) + ":" + key
 }
 
 // cloneToolOutput 隔离所有业务字段，保留具体 Go 类型。

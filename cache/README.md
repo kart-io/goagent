@@ -1,6 +1,6 @@
 # cache 缓存系统
 
-通用键值缓存，供 LLM 调用结果缓存和工具缓存中间件（`tools/middleware.Caching`）使用。
+通用键值缓存，供工具缓存中间件（`tools/middleware.Caching`）等使用。
 
 ## 核心类型
 
@@ -118,5 +118,4 @@ cache/
 
 ## 扩展阅读
 
-- [llm/cache](../llm/cache/) - LLM 语义缓存
 - [tools/middleware](../tools/middleware/) - 工具缓存中间件

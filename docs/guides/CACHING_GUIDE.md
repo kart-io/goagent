@@ -9,7 +9,6 @@ GoAgent 不默认缓存任何模型答案或工具结果（`ConfigureForRAG` 也
 | 工具结果存储 | `tools.ToolCache` 接口：`SimpleToolCache`、`MemoryToolCache`、`ShardedToolCache` | 按工具名或正则失效；分片版预设 `NewHighPerformanceCache`/`NewLowMemoryCache`，示例见 [02-cache-presets](../../examples/optimization/02-cache-presets/main.go) |
 | 单个工具的结果 | `tools/middleware.Caching`（经 `middleware.Wrap`） | 底层是任意 `cache.Cache`，见[工具中间件](TOOL_MIDDLEWARE.md#内置中间件) |
 | Agent 输入 → 响应 | `core/middleware.NewCacheMiddleware(ttl)`（经 `builder.WithMiddleware`） | 命中时跳过处理器；键只取输入的 `%v` 文本，不区分会话、用户或知识版本 |
-| 语义相近的模型请求 | `llm/cache.NewCachedLLMClient` / `WithSemanticCache` | 见下文限制 |
 
 ## 通用键值缓存
 
@@ -46,36 +45,16 @@ cachedTool := middleware.Wrap(originalTool, middleware.Caching(
 ))
 ```
 
-- 只缓存成功结果；默认键只含工具名与参数的完整 SHA256，多租户或按用户返回不同结果的工具必须用 `WithCacheKeyFunc` 把身份放进键，或不缓存。
+- 只缓存成功结果；键由工具名与参数的完整 SHA256 组成，并按会话（`tools.WithSessionID`，Builder 以 `SessionID` 设置）与 `ToolInput.CallerID` 隔离。租户、知识版本等其他影响结果的维度仍须用 `WithCacheKeyFunc` 放进键，或不缓存。
 - 有副作用的工具不要缓存：命中时工具不执行。
-- 持久运行已由 Dispatcher 调用日志保证恢复时回放、不重复执行；工具缓存解决的是跨运行的重复计算，二者无关。包装后的工具不转发 `DispatchTimeoutProvider` 等可选接口，注意事项见[工具中间件](TOOL_MIDDLEWARE.md#toolswithmiddleware)。
-
-## 语义缓存（llm/cache）
-
-```go
-client, err := llmcache.NewCachedLLMClient(&llmcache.CachedLLMClientConfig{
-    Client:            baseClient,
-    EmbeddingProvider: embedder, // 只需 Embed；任意 llm.EmbeddingClient，如 providers.OpenAIProvider
-    CacheConfig:       llmcache.DefaultSemanticCacheConfig(),
-})
-if err != nil { return err }
-defer client.Close()
-resp, err := llm.Complete(ctx, client, req)
-```
-
-`llmcache` 指 `github.com/kart-io/goagent/llm/cache`。把消息按 `role: content` 拼接后求向量，相似度达到 `SimilarityThreshold`（默认 0.95）且模型相同时（`ModelSpecific`，默认开启）返回缓存；默认最多 10000 条、TTL 24 小时。`WithSemanticCache(embedder, cfg)` 返回 `func(llm.Client) llm.Client`，创建失败时原样返回原客户端。
-
-限制：
-
-- 包装后的客户端只实现 `llm.Client`（`CompleteStream`）：未命中时转发上游流，只缓存成功终止的答案。它不实现 `ToolStreamClient`，因此不能用于配置了工具的 Builder 或原生工具循环。
-- 键不含工具、温度等请求参数；命中只返回文本（`FinishReason="cache_hit"`、`TokensUsed=0`），不含工具调用与用量。
-- 缓存在进程内存中，`Stats()` 返回命中统计，`ClearCache` 清空。
+- 持久运行已由 Dispatcher 调用日志保证恢复时回放、不重复执行；工具缓存解决的是跨运行的重复计算，二者无关。包装后的工具不转发 `DispatchTimeoutProvider` 等可选接口，注意事项见[工具中间件](TOOL_MIDDLEWARE.md#middlewarewrap)。
 
 ## 选用建议
 
 - 缓存键必须覆盖影响结果的全部维度：用户/租户、会话、知识或数据版本、工具版本。
 - 检索增强回答优先每次检索新证据；需要答案缓存时，键中带上知识版本。
 - TTL 按数据变化频率设置；`SimpleCache` 不限容量，条目数不可控时改用 `tools.ShardedToolCache`（容量可配，固定哈希分片和 LRU 淘汰）或外部缓存实现 `cache.Cache`。
+- TTL 按数据变化频率设置；`SimpleCache` 默认不限条目数，键由外部输入决定时用 `cache.WithMaxEntries(n)` 设置上限（工具缓存中间件的默认缓存上限为 10000 条），或由外部缓存实现 `cache.Cache`。
 
 ## 设计审核修复后的配置迁移
 

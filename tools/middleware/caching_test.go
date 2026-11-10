@@ -11,6 +11,7 @@ import (
 
 	"github.com/kart-io/goagent/cache"
 	"github.com/kart-io/goagent/interfaces"
+	"github.com/kart-io/goagent/tools"
 	"github.com/kart-io/goagent/tools/toolargs"
 )
 
@@ -425,4 +426,27 @@ func TestCachingMiddleware_ExactArgumentsDoNotCollide(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, args["id"], out.Result)
 	}
+}
+
+// 缓存按会话与调用者隔离：结果可能依赖调用者身份，不同会话或调用者以相同参数调用不能读到彼此的结果。
+func TestCachingIsolatesSessionsAndCallers(t *testing.T) {
+	calls := 0
+	tool := &mockTool{name: "lookup"}
+	next := func(ctx context.Context, in *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+		calls++
+		return &interfaces.ToolOutput{Success: true, Result: in.CallerID}, nil
+	}
+	invoke := NewCachingMiddleware().Wrap(tool, next)
+	run := func(session, caller string) {
+		ctx := tools.WithSessionID(context.Background(), session)
+		_, err := invoke(ctx, &interfaces.ToolInput{CallerID: caller, Args: map[string]any{"q": "同一参数"}})
+		require.NoError(t, err)
+	}
+	run("s1", "alice")
+	run("s1", "alice")
+	require.Equal(t, 1, calls, "同一会话同一调用者命中缓存")
+	run("s2", "alice")
+	require.Equal(t, 2, calls, "不同会话不共享")
+	run("s1", "bob")
+	require.Equal(t, 3, calls, "不同调用者不共享")
 }

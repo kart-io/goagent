@@ -31,6 +31,10 @@ type SimpleCache struct {
 	wg          sync.WaitGroup
 	lazy        bool
 	nextCleanup atomic.Int64
+
+	// maxEntries 为 0 表示不限条目数；size 是当前条目数，随每次成功插入与删除增减。
+	maxEntries int64
+	size       atomic.Int64
 }
 
 // cacheEntry 缓存条目
@@ -41,12 +45,21 @@ type cacheEntry struct {
 
 // SimpleCacheOption 配置缓存的清理生命周期。
 type SimpleCacheOption func(*simpleCacheConfig)
-type simpleCacheConfig struct{ lazy bool }
+type simpleCacheConfig struct {
+	lazy       bool
+	maxEntries int64
+}
 
 // WithoutBackgroundCleanup 以访问和写入驱动清理，不创建后台协程。
 // 适用于不能把 Close 句柄交给调用方的函数式装配；闲置期间到期数据在下次访问或写入回收。
 func WithoutBackgroundCleanup() SimpleCacheOption {
 	return func(cfg *simpleCacheConfig) { cfg.lazy = true }
+}
+
+// WithMaxEntries 限制条目数：超出时先回收过期条目，仍超出则淘汰其他条目。n<=0 表示不限。
+// 键由外部输入决定时（如工具参数）应设置它，否则 TTL 窗口内内存随不同键持续增长。
+func WithMaxEntries(n int) SimpleCacheOption {
+	return func(cfg *simpleCacheConfig) { cfg.maxEntries = int64(max(n, 0)) }
 }
 
 // NewSimpleCache 创建简化缓存。默认启用后台清理，调用方须关闭它。
@@ -61,10 +74,11 @@ func NewSimpleCache(ttl time.Duration, opts ...SimpleCacheOption) *SimpleCache {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	c := &SimpleCache{
-		ttl:    ttl,
-		ctx:    ctx,
-		cancel: cancel,
-		lazy:   cfg.lazy,
+		ttl:        ttl,
+		ctx:        ctx,
+		cancel:     cancel,
+		lazy:       cfg.lazy,
+		maxEntries: cfg.maxEntries,
 	}
 
 	c.nextCleanup.Store(time.Now().Add(max(ttl/2, time.Nanosecond)).UnixNano())
@@ -86,7 +100,7 @@ func (c *SimpleCache) Get(ctx context.Context, key string) (interface{}, error) 
 
 	entry := v.(*cacheEntry)
 	if time.Now().After(entry.expiresAt) {
-		c.data.CompareAndDelete(key, v)
+		c.remove(key, v)
 		c.misses.Add(1)
 		return nil, agentErrors.ErrCacheMiss
 	}
@@ -101,10 +115,12 @@ func (c *SimpleCache) Set(ctx context.Context, key string, value interface{}, tt
 		ttl = c.ttl
 	}
 
-	c.data.Store(key, &cacheEntry{
+	if _, loaded := c.data.Swap(key, &cacheEntry{
 		value:     value,
 		expiresAt: time.Now().Add(ttl),
-	})
+	}); !loaded && c.size.Add(1) > c.maxEntries && c.maxEntries > 0 {
+		c.evict(key)
+	}
 	if c.lazy {
 		now := time.Now()
 		due := c.nextCleanup.Load()
@@ -117,14 +133,16 @@ func (c *SimpleCache) Set(ctx context.Context, key string, value interface{}, tt
 
 // Delete 删除缓存值
 func (c *SimpleCache) Delete(ctx context.Context, key string) error {
-	c.data.Delete(key)
+	if _, ok := c.data.LoadAndDelete(key); ok {
+		c.size.Add(-1)
+	}
 	return nil
 }
 
 // Clear 清空所有缓存
 func (c *SimpleCache) Clear(ctx context.Context) error {
 	c.data.Range(func(key, value interface{}) bool {
-		c.data.Delete(key)
+		c.remove(key, value)
 		return true
 	})
 	return nil
@@ -139,7 +157,7 @@ func (c *SimpleCache) Has(ctx context.Context, key string) (bool, error) {
 
 	entry := v.(*cacheEntry)
 	if time.Now().After(entry.expiresAt) {
-		c.data.CompareAndDelete(key, v)
+		c.remove(key, v)
 		return false, nil
 	}
 
@@ -201,7 +219,28 @@ func (c *SimpleCache) cleanupExpired() {
 	c.data.Range(func(key, value interface{}) bool {
 		entry := value.(*cacheEntry)
 		if now.After(entry.expiresAt) {
-			c.data.CompareAndDelete(key, value)
+			c.remove(key, value)
+		}
+		return true
+	})
+}
+
+// remove 在条目仍是 value 时删除它并同步计数。
+func (c *SimpleCache) remove(key, value interface{}) {
+	if c.data.CompareAndDelete(key, value) {
+		c.size.Add(-1)
+	}
+}
+
+// evict 在条目数超过上限时先回收过期条目，仍超出则淘汰除 keep 外的条目。
+func (c *SimpleCache) evict(keep string) {
+	c.cleanupExpired()
+	c.data.Range(func(key, value interface{}) bool {
+		if c.size.Load() <= c.maxEntries {
+			return false
+		}
+		if key != keep {
+			c.remove(key, value)
 		}
 		return true
 	})

@@ -14,7 +14,6 @@ import (
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/devtools"
 	"github.com/kart-io/goagent/llm"
-	llmcache "github.com/kart-io/goagent/llm/cache"
 	"github.com/kart-io/goagent/llm/common"
 	"github.com/kart-io/goagent/memory"
 	"github.com/kart-io/goagent/observability"
@@ -35,8 +34,6 @@ func TestConfigTypesTagEveryField(t *testing.T) {
 		reflect.TypeFor[durable.OperationPolicy](),
 		reflect.TypeFor[core.RunnableConfig](),
 		reflect.TypeFor[devtools.RecorderConfig](),
-		reflect.TypeFor[llmcache.CachedLLMClientConfig](),
-		reflect.TypeFor[llmcache.SemanticCacheConfig](),
 		reflect.TypeFor[common.HTTPClientConfig](),
 		reflect.TypeFor[common.RetryConfig](),
 		reflect.TypeFor[llm.LLMOptions](),

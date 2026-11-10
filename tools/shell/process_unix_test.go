@@ -120,3 +120,31 @@ func TestShellParentExitCleansBackgroundAndKeepsExitStatus(t *testing.T) {
 		})
 	}
 }
+
+// 子进程默认只拿到最小环境，宿主的密钥类变量须显式透传才可见。
+func TestShellDoesNotLeakHostEnvironment(t *testing.T) {
+	t.Setenv("GOAGENT_TEST_SECRET", "s3cret")
+	t.Setenv("GOAGENT_TEST_SHARED", "visible")
+	for _, test := range []struct {
+		name          string
+		tool          *ShellTool
+		shared, leaks bool
+	}{
+		{"默认", NewShellTool([]string{"env"}, 5*time.Second), false, false},
+		{"显式透传", NewShellToolBuilder().WithAllowedCommands("env").WithEnv("GOAGENT_TEST_SHARED").Build(), true, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			out, err := test.tool.Invoke(context.Background(), &interfaces.ToolInput{Args: map[string]interface{}{"command": "env"}})
+			if err != nil || !out.Success {
+				t.Fatalf("执行失败: %v %v", err, out)
+			}
+			env := out.Result.(map[string]interface{})["output"].(string)
+			if !strings.Contains(env, "PATH=") {
+				t.Fatalf("应保留 PATH: %q", env)
+			}
+			if strings.Contains(env, "GOAGENT_TEST_SECRET") != test.leaks || strings.Contains(env, "GOAGENT_TEST_SHARED=visible") != test.shared {
+				t.Fatalf("环境变量不符合预期: %q", env)
+			}
+		})
+	}
+}

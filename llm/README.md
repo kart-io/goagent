@@ -16,7 +16,6 @@ llm/
 ├── common/           # BaseProvider、重试、HTTP 错误映射、消息转换
 ├── constants/        # Provider 常量、环境变量名、默认值
 ├── providers/        # OpenAI、Anthropic、Gemini、DeepSeek、Ollama、Kimi、SiliconFlow
-└── cache/            # 基于向量相似度的语义缓存
 ```
 
 ## 能力概览
@@ -117,31 +116,6 @@ Gemini 的向量模型通过 `llm.WithEmbeddingModel` 或 `GEMINI_EMBEDDING_MODE
 
 `llm.ClassifyError(err)` 返回 `Reason`、`Retryable`、`ShouldCompress`、`ShouldFallback`，依据错误链中的 `*llm.ProviderError`（状态码与 `RetryAfter`）和上下文超长的错误文本。各 Provider 的流式与非流式请求失败都会构造 `ProviderError`。Builder 中的模型重试用 `WithRequestError` 与 `builder.RetryTransient`。
 
-## 语义缓存
-
-`llm/cache` 用向量相似度复用已成功完成的响应：
-
-```go
-embedder, err := providers.NewOpenAIWithOptions(llm.WithEmbeddingModel("text-embedding-3-small"))
-if err != nil {
-    return err
-}
-cached, err := cache.NewCachedLLMClient(&cache.CachedLLMClientConfig{
-    Client:            client,
-    EmbeddingProvider: embedder, // 任意 llm.EmbeddingClient
-    CacheConfig: cache.DefaultSemanticCacheConfig(), // 阈值 0.95、10000 条、24 小时
-})
-if err != nil {
-    return err
-}
-defer cached.Close()
-
-resp, err := llm.Chat(ctx, cached, messages)
-fmt.Printf("命中率: %.2f%%\n", cached.Stats().HitRate*100)
-```
-
-`cache.EmbeddingProvider` 只有 `Embed`，`llm.EmbeddingClient`（OpenAI、Gemini Provider）可直接传入；OpenAI 的向量模型由 `llm.WithEmbeddingModel` 指定，默认 `text-embedding-ada-002`。`CachedLLMClient` 只实现 `llm.Client`：命中时直接返回缓存答案，终止块的 `FinishReason` 为 `cache_hit`；未命中时转发上游流，只缓存成功的终止答案。它不实现 `ToolStreamClient`。
-
 ## 相关包
 
 - [builder](../builder/) - Agent 构建器
@@ -150,6 +124,6 @@ fmt.Printf("命中率: %.2f%%\n", cached.Stats().HitRate*100)
 
 ## 显式零温
 
-`llm.WithTemperature(0)` 设置客户端零温；使用 Builder 时同时设置 `builder.WithTemperature(0)`（Builder 默认值为 `0.7`，优先于客户端）。直接构造请求使用 `llm.CompletionRequest{Temperature: 0, TemperatureSet: true}`。JSON 的 `"temperature":0` 会自动保留显式设置，未设置的旧请求仍沿用默认回落。自定义 Provider 应使用 `BaseProvider.ResolveTemperature(req)`，详见 [LLM API](../docs/api/LLM_API.md)。
+`llm.WithTemperature(0)` 设置客户端零温；Builder 未调用 `builder.WithTemperature` 时不下发温度，由客户端配置决定，显式设置时优先于客户端。直接构造请求使用 `llm.CompletionRequest{Temperature: 0, TemperatureSet: true}`。JSON 的 `"temperature":0` 会自动保留显式设置，未设置的旧请求仍沿用默认回落。自定义 Provider 应使用 `BaseProvider.ResolveTemperature(req)`，详见 [LLM API](../docs/api/LLM_API.md)。
 
 `llm.WithReasoning(usage.ReasoningConfig{Effort: "low"})` 设置支持客户端的显式推理默认值；Gemini 可设置 `BudgetSet: true, BudgetTokens: 128`。单次 `CompletionRequest.Reasoning` 可覆盖默认值。结构化流的 `ResponseModel` 保留供应商实际模型名，`Usage` 提供有字段证据的推理和工具输入分项；不要把它们再次计入总量。实现及未知语义见[设计契约](../docs/design/TOKEN_USAGE_EXPLAINABILITY.md)。

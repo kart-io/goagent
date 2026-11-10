@@ -202,3 +202,30 @@ func TestSimpleCache_Cleanup(t *testing.T) {
 		t.Errorf("Expected ErrCacheMiss after cleanup, got %v", err)
 	}
 }
+
+// 设置上限后条目数不超过上限：先回收过期条目，仍超出时淘汰其他条目，刚写入的保留。
+func TestSimpleCacheMaxEntries(t *testing.T) {
+	ctx := context.Background()
+	c := NewSimpleCache(time.Minute, WithoutBackgroundCleanup(), WithMaxEntries(3))
+	for i := range 10 {
+		key := string(rune('a' + i))
+		if err := c.Set(ctx, key, i, 0); err != nil {
+			t.Fatal(err)
+		}
+		if size := c.GetStats().Size; size > 3 {
+			t.Fatalf("写入 %s 后有 %d 个条目", key, size)
+		}
+		if v, err := c.Get(ctx, key); err != nil || v != i {
+			t.Fatalf("刚写入的 %s 不应被淘汰: %v %v", key, v, err)
+		}
+	}
+	if err := c.Set(ctx, "j", 99, 0); err != nil || c.GetStats().Size != 3 {
+		t.Fatalf("覆盖已有键不应增加条目: size=%d", c.GetStats().Size)
+	}
+	if err := c.Delete(ctx, "j"); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Set(ctx, "k", 1, 0); err != nil || c.GetStats().Size != 3 {
+		t.Fatalf("删除后计数应同步: size=%d", c.GetStats().Size)
+	}
+}

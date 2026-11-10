@@ -5,8 +5,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -26,6 +28,22 @@ type ShellTool struct {
 	allowedCommands map[string]bool // 命令白名单
 	timeout         time.Duration   // 默认超时时间
 	rootDir         string          // 工作目录根，空表示不限制
+	env             []string        // 额外透传给子进程的宿主环境变量名
+}
+
+// baseEnv 是子进程默认可见的宿主环境变量：命令定位、区域与临时目录所需，不含凭据。
+// 白名单里的 cat、grep 等能读取 /proc/self/environ，继承完整环境会让宿主的密钥进入工具结果。
+var baseEnv = []string{"PATH", "LANG", "LC_ALL", "TZ", "TMPDIR"}
+
+// environ 返回子进程环境：baseEnv 与显式透传的变量中宿主已设置的那些。
+func (s *ShellTool) environ() []string {
+	env := make([]string, 0, len(baseEnv)+len(s.env))
+	for _, name := range append(slices.Clone(baseEnv), s.env...) {
+		if v, ok := os.LookupEnv(name); ok {
+			env = append(env, name+"="+v)
+		}
+	}
+	return env
 }
 
 // NewShellTool 创建 Shell 工具
@@ -173,6 +191,7 @@ func (s *ShellTool) run(ctx context.Context, input *interfaces.ToolInput) (*inte
 	cmd.WaitDelay = time.Second
 	defer func() { _ = processgroup.Kill(cmd) }()
 	cmd.Dir = dir
+	cmd.Env = s.environ()
 
 	// 执行命令
 	var output limitedBuffer
@@ -282,7 +301,6 @@ func (s *ShellTool) ExecuteScript(ctx context.Context, scriptPath string, args [
 			"command": "bash",
 			"args":    append([]string{scriptPath}, args...),
 		},
-		Context: ctx,
 	})
 }
 
@@ -327,7 +345,6 @@ func (s *ShellTool) ExecutePipeline(ctx context.Context, commands []string) (*in
 			"command": "bash",
 			"args":    []string{"-c", pipeline},
 		},
-		Context: ctx,
 	})
 }
 
@@ -336,6 +353,7 @@ type ShellToolBuilder struct {
 	allowedCommands []string
 	timeout         time.Duration
 	rootDir         string
+	env             []string
 }
 
 // NewShellToolBuilder 创建 Shell 工具构建器
@@ -365,10 +383,18 @@ func (b *ShellToolBuilder) WithRootDir(dir string) *ShellToolBuilder {
 	return b
 }
 
+// WithEnv 把宿主的这些环境变量透传给子进程。默认只透传 PATH、LANG、LC_ALL、TZ、TMPDIR，
+// 列入的变量对模型可经命令读取，不要列入凭据。
+func (b *ShellToolBuilder) WithEnv(names ...string) *ShellToolBuilder {
+	b.env = append(b.env, names...)
+	return b
+}
+
 // Build 构建工具
 func (b *ShellToolBuilder) Build() *ShellTool {
 	tool := NewShellTool(b.allowedCommands, b.timeout)
 	tool.rootDir = b.rootDir
+	tool.env = slices.Clone(b.env)
 	return tool
 }
 
