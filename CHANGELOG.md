@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 修复与验证
 
+- `scripts/apicheck`：新增按路径前缀声明的导入分层表，非测试代码只能导入同层或更低层的包，未声明所在层的包本身即为一条发现；此前没有专门规则的 `tools`、`llm`、`workflow`、`memory`、`store` 等包的反向导入现在会被拒绝。分层见 [导入层级](docs/architecture/IMPORT_LAYERING.md)。
 - `store`：`StoreWithCache` 不再在持锁时访问后端，缓存命中不被其他 key 的冷读或写入阻塞；冷读改以写入计数判断期间是否有写入，避免发布旧值。
 - `memory`：`ChromaVectorStore` 的写入与删除改用读锁，可并发发出请求，仅 `Clear` 独占；`HierarchicalMemory.VectorSearch` 在锁外调用向量库检索。
 - `tools/policy`：命令规则与会话授权把 `command` 与 `args` 数组连成词序列匹配（参数名由新增的 `Policy.ArgsArg` 指定，默认 `args`），拒绝规则 `git push` 对 `{command:"git", args:["push"]}` 生效，授权不再从子命令扩大到整个程序。

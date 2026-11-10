@@ -341,3 +341,41 @@ func TestManagementLayerIsAboveExecution(t *testing.T) {
 	}
 	require.False(t, forbidden("management/x.go", "github.com/jackc/pgx-extra"))
 }
+
+// 分层表约束此前没有专门规则的包：只能导入同层或更低层；测试文件可以向上导入做集成验证。
+func TestLayerTableForbidsUpwardImports(t *testing.T) {
+	for _, tc := range []struct {
+		file, dep string
+		bad       bool
+	}{
+		{"tools/x.go", "builder", true},
+		{"llm/x.go", "tools", true},
+		{"llm/providers/x.go", "core/usage", false},
+		{"core/session/x.go", "llm", false},
+		{"core/usage/x.go", "llm", true},
+		{"store/x.go", "workflow", true},
+		{"workflow/x.go", "builder", true},
+		{"memory/x.go", "llm", false},
+		{"builder/x.go", "workflow", false},
+		{"multiagent/x.go", "builder", false},
+		{"management/x.go", "multiagent", false},
+		{"tools/x_test.go", "builder", false},
+	} {
+		require.Equal(t, tc.bad, forbidden(tc.file, module+tc.dep), tc.file+" -> "+tc.dep)
+	}
+}
+
+// 新的顶层目录必须先在分层表中声明所属层。
+func TestUnlayeredPackageIsReported(t *testing.T) {
+	_, ok := layerOf("newpkg/sub")
+	require.False(t, ok)
+	_, ok = layerOf("core/anything")
+	require.True(t, ok)
+	fset := token.NewFileSet()
+	node, err := parser.ParseFile(fset, "newpkg/x.go", "package newpkg\n", 0)
+	require.NoError(t, err)
+	require.NotEmpty(t, inspect(fset, "newpkg/x.go", node))
+	node, err = parser.ParseFile(fset, "newpkg/x_test.go", "package newpkg\n", 0)
+	require.NoError(t, err)
+	require.Empty(t, inspect(fset, "newpkg/x_test.go", node))
+}

@@ -85,7 +85,7 @@ func TestRetiredConfigBindingsAcrossFiles(t *testing.T) {
 		{"跨文件结构别名", map[string]string{"cache/a.go": `package cache;type CacheConfig=fields`, "cache/z.go": `package cache;type fields struct{MaxSize int}`}, 1},
 		{"跨文件匿名嵌入", map[string]string{"core/a.go": `package core;type RunnableConfig struct{*fields}`, "core/z.go": `package core;type fields struct{RetryPolicy int}`}, 1},
 		{"跨文件接收者别名", map[string]string{"core/checkpoint/a.go": `package checkpoint;type DistributedCheckpointer struct{};func(c *Alias)tryFailback(){}`, "core/checkpoint/z.go": `package checkpoint;type Alias=DistributedCheckpointer`}, 1},
-		{"其它目录不污染", map[string]string{"cache/a.go": `package cache;type CacheConfig=fields;type fields struct{Enabled bool}`, "other/z.go": `package cache;type fields struct{MaxSize int}`}, 0},
+		{"其它目录不污染", map[string]string{"cache/a.go": `package cache;type CacheConfig=fields;type fields struct{Enabled bool}`, "store/z.go": `package cache;type fields struct{MaxSize int}`}, 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			root := t.TempDir()

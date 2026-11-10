@@ -21,6 +21,33 @@ type finding struct {
 	message string
 }
 
+// layers 是模块内包的分层，从低到高；非测试文件只能导入同层或更低层的包。
+// 按路径最长前缀归层（"core/usage" 优先于 "core"）；新增顶层目录须先在此声明。
+// 下面 forbidden 中的专门规则在分层之外进一步收紧个别包。
+var layers = [][]string{
+	{"constants", "errors", "interfaces", "codec"},
+	{"internal", "utils", "cache", "parsers", "skills", "core/usage", "core/state", "core/internal", "tools/toolargs"},
+	{"llm", "store", "revision", "harness", "core/durable", "core/middleware", "core/session", "core/budget", "core/observe"},
+	{"core"},
+	{"tools", "workflow", "memory", "observability"},
+	{"builder", "a2a", "mcp", "middleware", "devtools"},
+	{"execution", "multiagent", "plugin", "evaluation"},
+	{"management", "testing", "scripts", "cmd", "examples"},
+}
+
+// layerOf 返回模块内相对路径 dir 所在的层。
+func layerOf(dir string) (int, bool) {
+	layer, longest := 0, -1
+	for i, prefixes := range layers {
+		for _, prefix := range prefixes {
+			if (dir == prefix || strings.HasPrefix(dir, prefix+"/")) && len(prefix) > longest {
+				layer, longest = i, len(prefix)
+			}
+		}
+	}
+	return layer, longest >= 0
+}
+
 func forbidden(file, path string) bool {
 	source := strings.Split(filepath.ToSlash(file), "/")[0]
 	// 常量是叶子层，只能依赖标准库，不能借常量包反向导入实现或第三方 SDK。
@@ -45,6 +72,12 @@ func forbidden(file, path string) bool {
 	}
 	dep := strings.TrimPrefix(path, module)
 	dest := strings.Split(dep, "/")[0]
+	if !strings.HasSuffix(file, "_test.go") {
+		from, ok := layerOf(filepath.ToSlash(filepath.Dir(file)))
+		if to, known := layerOf(dep); ok && known && to > from {
+			return true
+		}
+	}
 	// management 位于执行和装配之上，下层不得反向依赖管理服务。
 	if dest == "management" && source != "management" && source != "examples" && source != "cmd" && source != "testing" && source != "evaluation" && source != "scripts" {
 		return true
@@ -114,6 +147,11 @@ func inspect(fset *token.FileSet, file string, node *ast.File) []finding {
 
 func inspectWithConstantTypes(fset *token.FileSet, file string, node *ast.File, types *constantTypeContext) []finding {
 	var out []finding
+	if dir := filepath.ToSlash(filepath.Dir(file)); dir != "." && !strings.HasSuffix(file, "_test.go") {
+		if _, ok := layerOf(dir); !ok {
+			out = append(out, finding{1, "package " + dir + " is not declared in the layer table"})
+		}
+	}
 	for _, imp := range node.Imports {
 		path, _ := strconv.Unquote(imp.Path.Value)
 		if forbidden(file, path) {

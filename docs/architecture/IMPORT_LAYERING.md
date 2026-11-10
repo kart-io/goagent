@@ -33,9 +33,24 @@
 
 允许范围按目录段判断：`harness/env_extra/` 和 `core/cmd/` 不因名称相近而豁免。此规则不改变标准库 context、fs、io 错误的身份或错误链语义。
 
-规则按“源文件所在的顶层目录”与“被导入的 GoAgent 包”判断。下表是检查器**实际执行**的全部规则，表外的组合不检查，循环依赖由 Go 编译器拒绝。
+## 分层
 
-## 规则
+非测试代码只能导入同层或更低层的 GoAgent 包。包按路径最长前缀归层（`core/usage` 优先于 `core`），未在表中声明所在层的包本身就是一条发现，新增顶层目录须先在 `scripts/apicheck/main.go` 的 `layers` 中声明。该表是分层的唯一来源，下表与其保持一致：
+
+| 层 | 路径前缀 |
+|---|---|
+| 0 | `constants`、`errors`、`interfaces`、`codec` |
+| 1 | `internal`、`utils`、`cache`、`parsers`、`skills`、`core/usage`、`core/state`、`core/internal`、`tools/toolargs` |
+| 2 | `llm`、`store`、`revision`、`harness`、`core/durable`、`core/middleware`、`core/session`、`core/budget`、`core/observe` |
+| 3 | `core`（其余子包） |
+| 4 | `tools`、`workflow`、`memory`、`observability` |
+| 5 | `builder`、`a2a`、`mcp`、`middleware`、`devtools` |
+| 6 | `execution`、`multiagent`、`plugin`、`evaluation` |
+| 7 | `management`、`testing`、`scripts`、`cmd`、`examples` |
+
+## 专门规则
+
+以下规则在分层之外进一步收紧个别包，按“源文件所在的顶层目录”与“被导入的 GoAgent 包”判断；循环依赖由 Go 编译器拒绝。
 
 | 源目录 | 禁止导入 |
 |--------|----------|
@@ -57,7 +72,7 @@
 
 说明：
 
-- 顶层 `execution/` 是宿主装配薄层（依赖 `builder`、`core`、`core/budget`、`core/durable`、`core/observe`、`tools`），只有表中未列出的目录（如 `examples`、`evaluation`、`mcp`、`testing`）可以导入；它不替代 `core/execution`。
+- 顶层 `execution/` 是宿主装配薄层（依赖 `builder`、`core`、`core/budget`、`core/durable`、`core/observe`、`tools`），只有第 6 层及以上的包（如 `evaluation`、`management`、`testing`、`examples`）可以导入。
 - Harness 已迁到独立仓库 `github.com/kart-io/goagent-harness`，它依赖 GoAgent，反向导入被禁止。本仓库的 `harness/env` 是不依赖内部包的通用环境接口。迁移见 [Harness 迁移指南](../guides/HARNESS_MIGRATION.md)。
 
 ## 当前依赖图
