@@ -1,5 +1,7 @@
 package constants
 
+import "time"
+
 // 续跑种类与输入拒绝原因属于等待协议，不是业务错误码。
 const (
 	ContinuationKindInterrupt    = "interrupt"
@@ -12,3 +14,6 @@ const (
 	// DurableInboxSeenLimit 仅覆盖投递方崩溃重投窗口，不随运行时长增长。
 	DurableInboxSeenLimit = 256
 )
+
+// DurableCompletionSaveTimeout 限制调用方取消后补写执行结果的时间：结果已经产生，不能因取消丢失。
+const DurableCompletionSaveTimeout = 5 * time.Second

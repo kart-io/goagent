@@ -111,6 +111,8 @@ type sessionTurn struct {
 	// state 非空时 end 把它的结果记入 turn/end，写入后以该事件序号调用 saved。
 	state func() (json.RawMessage, error)
 	saved func(seq int64)
+	// replayed 在已完成轮次重放结束时调用。
+	replayed func() error
 }
 
 func sessionTurnFrom(ctx context.Context) *sessionTurn {
@@ -151,6 +153,8 @@ func (a *ConfigurableAgent[S]) openSessionTurn(ctx context.Context, input string
 			if err := a.restoreSessionState(id, events[:start]); err != nil {
 				return nil, nil, err
 			}
+			// 重放期间状态从本轮开始前出发，结束后取本轮记录的状态，与原执行结束时一致。
+			turn.replayed = func() error { return a.restoreSessionState(id, events) }
 			history, err := session.DeriveMessages(events[:start])
 			return turn, history, err
 		}
@@ -300,6 +304,9 @@ func (t *sessionTurn) end(ctx context.Context, messages []llm.Message, answer st
 		return err
 	}
 	if t.completed {
+		if t.replayed != nil {
+			return t.replayed()
+		}
 		return nil
 	}
 	d := session.TurnEnd{Answer: answer}

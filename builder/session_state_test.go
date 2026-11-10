@@ -9,6 +9,7 @@ import (
 
 	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/session"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
@@ -195,4 +196,27 @@ func TestSessionStateDiscardsAbortedTurn(t *testing.T) {
 	recorded, _, err := session.LastState(sessionEvents(t, store, "a"))
 	require.NoError(t, err)
 	require.JSONEq(t, `{"count":1}`, string(recorded))
+}
+
+// 重放已完成的持久轮次后，状态是该轮结束时记录的状态，而不是轮次开始前的状态。
+func TestSessionStateAfterCompletedReplay(t *testing.T) {
+	store := session.NewMemoryStore()
+	run := func() *ConfigurableAgent[*counterState] {
+		state := newCounterState()
+		client := mocks.NewScriptedClient(
+			mocks.ToolCallReply("t1", mocks.ToolCall("c1", "bump", `{}`)),
+			mocks.TextReply("t2", "完成"),
+		)
+		dispatched, err := dispatcherTools(tools.DispatchConfig{}, &bumpTool{state})
+		require.NoError(t, err)
+		agent, err := NewAgentBuilder[*counterState](client).WithState(state).WithTools(dispatched...).
+			WithSessionID("a").WithSessionLog(store).WithSessionState().WithDurableScope("replay").Build()
+		require.NoError(t, err)
+		ctx := durable.WithJournal(durable.WithExecutionKey(context.Background(), "run-1"), session.DurableStore(store, "a"))
+		_, err = agent.AsRunnable().Invoke(ctx, "改")
+		require.NoError(t, err)
+		return agent
+	}
+	require.Equal(t, 99, count(run()))
+	require.Equal(t, 99, count(run()), "新进程重放已完成的轮次")
 }

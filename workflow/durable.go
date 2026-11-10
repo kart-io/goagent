@@ -215,8 +215,8 @@ func (d *DurableGraph[T]) run(ctx context.Context, store durable.Store, id strin
 	result = publicGraphSnapshot(checkpoint, state)
 	// Save using fresh snapshots; failed writes leave the last acknowledged state.
 	// commit 保存快照，调用方保证 next.Data 是 nextState 的编码；save 用于状态变化后，先编码 nextState。
-	commit := func(next durable.Snapshot, nextState graphState[T]) error {
-		if e := store.Save(ctx, id, &next); e != nil {
+	commitWith := func(saveCtx context.Context, next durable.Snapshot, nextState graphState[T]) error {
+		if e := store.Save(saveCtx, id, &next); e != nil {
 			return e
 		}
 		checkpoint = &next
@@ -224,14 +224,16 @@ func (d *DurableGraph[T]) run(ctx context.Context, store durable.Store, id strin
 		result = publicGraphSnapshot(checkpoint, state)
 		return nil
 	}
-	save := func(next durable.Snapshot, nextState graphState[T]) error {
+	commit := func(next durable.Snapshot, nextState graphState[T]) error { return commitWith(ctx, next, nextState) }
+	saveWith := func(saveCtx context.Context, next durable.Snapshot, nextState graphState[T]) error {
 		data, e := json.Marshal(nextState)
 		if e != nil {
 			return e
 		}
 		next.Data = data
-		return commit(next, nextState)
+		return commitWith(saveCtx, next, nextState)
 	}
+	save := func(next durable.Snapshot, nextState graphState[T]) error { return saveWith(ctx, next, nextState) }
 	// 中断等待恢复期间检查点保持等待：重新执行中途崩溃时仍可按“已回应”规则恢复。
 	answered := ""
 	if len(state.Interrupts) > 0 {
@@ -327,6 +329,8 @@ func (d *DurableGraph[T]) run(ctx context.Context, store durable.Store, id strin
 		}
 		node := d.graph.nodes[state.Node]
 		nodeName := state.Node
+		// 节点本身成功但随后 ctx 结束时，流式执行层会丢弃结果；在这里留下结果以便照常记入检查点。
+		var returned *T
 		runner := core.NewStreamRunnable(core.StreamModeSteps, func(ctx context.Context, in T, done func(core.StreamChunk[T]) error) error {
 			var out T
 			var e error
@@ -361,11 +365,16 @@ func (d *DurableGraph[T]) run(ctx context.Context, store durable.Store, id strin
 			if e != nil {
 				return e
 			}
+			returned = &out
 			return done(core.StreamChunk[T]{Done: true, Data: out})
 		})
 		nodeCtx, endNode := observe.Start(durable.AllowInterrupt(durable.WithJournal(durable.WithExecutionKey(ctx, intent.Key), store)), observe.Event{Type: "node", Path: nodeName, OperationKey: intent.Key})
 		output, e := runner.Invoke(nodeCtx, input.State)
 		endNode(e, false)
+		late := ctx.Err()
+		if e != nil && returned != nil && late != nil {
+			output, e = *returned, nil
+		}
 		if e != nil {
 			if points, ok := interruptPoints(durable.Waits(e)); ok && ctx.Err() == nil {
 				waiting := *checkpoint
@@ -394,8 +403,12 @@ func (d *DurableGraph[T]) run(ctx context.Context, store durable.Store, id strin
 		next.Key = ""
 		next.Approved = false
 		next.Waiting = false
-		if err = save(next, graphState[T]{Node: state.Node, Routing: true, State: output}); err != nil {
-			return result, err
+		// 节点已返回，副作用已经生效：调用方此时取消也要记下结果，否则恢复时会重跑节点。
+		saveCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), constants.DurableCompletionSaveTimeout)
+		err = saveWith(saveCtx, next, graphState[T]{Node: state.Node, Routing: true, State: output})
+		cancel()
+		if err != nil || late != nil {
+			return result, errors.Join(err, late)
 		}
 		if err = emit(&core.StreamEvent{Type: "node_end", Step: nodeName}); err != nil {
 			return result, err

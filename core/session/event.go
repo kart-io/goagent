@@ -175,14 +175,35 @@ func LastState(events []Event) (state json.RawMessage, seq int64, err error) {
 }
 
 // activeEvents 去掉被 session/rewind 与中止的 turn/end 撤销的事件。
+// 退回恢复到序号 Start-1 时的视图，因此退回到更早的退回之前会让那次退回失效；中止的轮次只删去本轮事件。
 func activeEvents(events []Event) []Event {
+	type checkpoint struct {
+		seq    int64
+		active []Event
+	}
 	var active []Event
-	for _, ev := range events {
-		if undoes(ev) {
-			active = slices.DeleteFunc(active, func(e Event) bool { return ev.Surface.covers(e.Seq) })
+	marks := []checkpoint{{}}
+	for i, ev := range events {
+		if !undoes(ev) {
+			active = append(active, ev)
 			continue
 		}
-		active = append(active, ev)
+		if ev.Type == constants.SessionEventRewind {
+			// 视图在两次撤销之间只追加，取 Start 之前最近的检查点再补上其后的事件即可。
+			j := len(marks) - 1
+			for marks[j].seq >= ev.Surface.Start {
+				j--
+			}
+			active = slices.Clone(marks[j].active)
+			for _, e := range events[:i] {
+				if e.Seq > marks[j].seq && e.Seq < ev.Surface.Start {
+					active = append(active, e)
+				}
+			}
+		} else {
+			active = slices.DeleteFunc(active, func(e Event) bool { return ev.Surface.covers(e.Seq) })
+		}
+		marks = append(marks, checkpoint{ev.Seq, slices.Clone(active)})
 	}
 	return active
 }

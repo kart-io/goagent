@@ -371,3 +371,23 @@ func TestDurableGraphBeforeApproveUnderLock(t *testing.T) {
 	_, err = run.Run(ctx, "sql", nil, "")
 	require.NoError(t, err)
 }
+
+// 节点成功返回时调用方恰好取消：结果仍要写入检查点，恢复时不再执行节点。
+func TestDurableGraphKeepsResultWhenCanceledAfterNode(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var effects atomic.Int32
+	run, err := oneNode(t, func(_ context.Context, n int) (int, error) {
+		effects.Add(1)
+		cancel()
+		return n + 1, nil
+	}).CompileDurable(context.Background(), workflow.DurableConfig{Store: newStore(t), Version: "v1"})
+	require.NoError(t, err)
+	_, err = run.Run(ctx, "run", 41, "")
+	require.ErrorIs(t, err, context.Canceled)
+	done, err := run.Run(context.Background(), "run", 0, "")
+	require.NoError(t, err)
+	require.True(t, done.Done)
+	require.Equal(t, 42, done.State)
+	require.EqualValues(t, 1, effects.Load(), "节点只能执行一次")
+}

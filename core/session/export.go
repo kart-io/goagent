@@ -48,11 +48,12 @@ func BuildTrajectory(events []Event) (*Trajectory, error) {
 				return nil, err
 			}
 			t.Tools = d.Tools
-		case constants.SessionEventTurnEnd:
-			var d TurnEnd
-			if json.Unmarshal(ev.Data, &d) == nil && !d.Aborted {
-				t.Turns++
-			}
+		}
+	}
+	for _, ev := range activeEvents(events) {
+		var d TurnEnd
+		if ev.Type == constants.SessionEventTurnEnd && json.Unmarshal(ev.Data, &d) == nil && !d.Aborted {
+			t.Turns++
 		}
 	}
 	stats := map[string]*ToolStat{}

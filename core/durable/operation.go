@@ -7,9 +7,9 @@ import (
 	"os"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/constants"
 	agentErrors "github.com/kart-io/goagent/errors"
 )
 
@@ -369,7 +369,7 @@ func Do(ctx context.Context, id string, input json.RawMessage, policy OperationP
 		}
 	}
 	// Persist cancellation/failure evidence with a bounded independent context.
-	saveCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	saveCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), constants.DurableCompletionSaveTimeout)
 	defer cancel()
 	if late {
 		callErr = errors.Join(callErr, ctx.Err())

@@ -5,6 +5,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -224,6 +225,62 @@ func TestLastStateSkipsUndoneTurns(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, tt.state, string(state))
 			require.Equal(t, tt.seq, seq)
+		})
+	}
+}
+
+// 退回恢复的是退回位置当时的视图：退回到更早一次退回之前时，那次退回遮蔽的消息重新可见；被退回的轮次不计入导出。
+// 每轮是一条用户消息加一个 turn/end，rewind 的参数是事件序号。
+func TestRewindRestoresViewAtTarget(t *testing.T) {
+	tests := []struct {
+		name  string
+		steps func(add func(int), rewind func(to int64))
+		msgs  []string
+		turns int
+	}{
+		{"单次退回", func(add func(int), rewind func(int64)) { add(2); rewind(2) }, []string{"m1"}, 1},
+		{"退回到上次退回之前", func(add func(int), rewind func(int64)) { add(5); rewind(4); add(2); rewind(10) },
+			[]string{"m1", "m2", "m3", "m4", "m5"}, 5},
+		{"退回到上次退回之后", func(add func(int), rewind func(int64)) { add(3); rewind(2); add(2); rewind(9) },
+			[]string{"m1", "m4"}, 2},
+		{"连续退回", func(add func(int), rewind func(int64)) { add(3); rewind(4); rewind(2) }, []string{"m1"}, 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			s := NewMemoryStore()
+			var last int64
+			n := 0
+			appendEvent := func(ev Event) {
+				var err error
+				last, err = s.Append(ctx, "s", last, ev)
+				require.NoError(t, err)
+			}
+			add := func(count int) {
+				for range count {
+					n++
+					appendEvent(msgEvent(t, llm.UserMessage("m"+strconv.Itoa(n))))
+					end, err := NewEvent(constants.SessionEventTurnEnd, TurnEnd{})
+					require.NoError(t, err)
+					appendEvent(end)
+				}
+			}
+			rewind := func(to int64) {
+				var err error
+				last, err = Rewind(ctx, s, "s", to, last)
+				require.NoError(t, err)
+			}
+			tt.steps(add, rewind)
+			events, err := s.Read(ctx, "s", 0)
+			require.NoError(t, err)
+			traj, err := BuildTrajectory(events)
+			require.NoError(t, err)
+			var got []string
+			for _, m := range traj.Messages {
+				got = append(got, m.Content)
+			}
+			require.Equal(t, tt.msgs, got)
+			require.Equal(t, tt.turns, traj.Turns)
 		})
 	}
 }

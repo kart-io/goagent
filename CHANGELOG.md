@@ -26,6 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `interfaces.ToolInput`：删除只写不读的 `Context` 字段，工具从 `Invoke(ctx, input)` 的 ctx 取得取消与请求范围的值。迁移：删除构造 `ToolInput` 时的 `Context: ctx`。
 - `core/durable`、`tools`：`run` 或工具已成功返回而 ctx 恰好结束时，结果照常记为 completed 并返回 ctx 错误，恢复时回放而不再执行；此前成功结果被改记为 `failed/canceled`，默认策略下恢复会重复副作用（如重复付款）。非持久调用仍返回 ctx 错误。
 - `builder.WithSessionState`：失败或中断的轮次对状态的修改不再泄漏到下一轮与会话日志；下一轮开始时回到该轮开始前的状态，日志中已有更新的状态时以日志为准。
+- `core/session`：退回恢复的是退回位置当时的视图，退回到更早一次退回之前时，那次退回遮蔽的消息重新可见；此前被遮蔽的消息永久丢失。`BuildTrajectory` 的 `Turns` 不再计入被退回的轮次。
+- `workflow.DurableGraph`：节点已成功返回而调用方恰好取消时，结果仍以独立的有界 ctx（`constants.DurableCompletionSaveTimeout`）写入检查点，恢复时不再重跑节点；此前节点的副作用会重复。
+- `builder.WithSessionState`：重放已完成的持久轮次后，`GetState` 返回该轮结束时记录的状态；此前停在轮次开始前的状态。
 ## [0.52.0] - 2026-11-10
 
 ### 新增
