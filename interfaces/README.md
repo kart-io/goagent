@@ -9,8 +9,7 @@
 | `Tool` 及可选接口 | 工具执行 | `builder.WithTools`、`tools` 包的全部工具 |
 | `MemoryManager` | 对话历史、案例、键值记忆 | `builder.WithMemory`；实现 `memory.InMemoryManager` |
 | `DocumentRetriever` | 检索证据 | `builder.WithRetriever` |
-| `ToolExecutor` | 按名称执行工具 | 仅定义，仓库内无实现 |
-| `VectorStore`、`Store`、`ConversationMemory` | 向量检索、键值存储、对话存储 | 仅定义；`memory` 与 `store` 包使用各自的接口 |
+| `VectorStore` | 向量检索 | 由 goagent-contrib/retrieval 的向量库适配实现 |
 
 ## Tool
 
@@ -52,7 +51,7 @@ type ToolOutput struct {
 }
 ```
 
-另有 `ToolCall`（调用记录）与 `ToolResult`（`ToolExecutor` 的结果）。
+另有 `ToolCall`（调用记录）。
 
 ## 记忆与检索
 
@@ -93,9 +92,9 @@ type DocumentRetriever interface {
 ```text
 interfaces/
 ├── doc.go               # 包文档
-├── tool.go              # Tool 及可选接口、ToolInput/ToolOutput/ToolCall/ToolResult、ToolExecutor
-├── memory.go            # MemoryManager、ConversationMemory、Conversation、Case
-├── store.go             # VectorStore、Store、Document
+├── tool.go              # Tool 及可选接口、ToolInput/ToolOutput/ToolCall
+├── memory.go            # MemoryManager、Conversation、Case
+├── store.go             # VectorStore、Document
 ├── retrieval.go         # DocumentRetriever
 ├── retrieval_source.go  # RetrievalSource
 ├── token.go             # TokenUsage

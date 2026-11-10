@@ -205,7 +205,6 @@ rag, err := builder.RAGAgent(client, retriever) // DocumentRetriever、带 Retri
 可运行示例位于 [`examples/`](examples/README.md)；业务案例位于 [goagent-examples](https://github.com/kart-io/goagent-examples)。
 
 ```bash
-go run ./examples/basic/01-simple-agent
 go run ./examples/workflow
 ```
 

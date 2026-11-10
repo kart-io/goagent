@@ -96,28 +96,6 @@ type ValidatableTool interface {
 	Validate(ctx context.Context, input *ToolInput) error
 }
 
-// ToolExecutor 表示可以执行工具的组件
-//
-// 此接口由需要运行工具的组件实现
-// 例如智能体和工作流引擎
-//
-// 仓库内没有实现；工具调用经 tools.Dispatcher 执行。
-type ToolExecutor interface {
-	// ExecuteTool 按名称使用给定参数执行工具
-	//
-	// 执行器负责：
-	//   - 按名称查找工具
-	//   - 验证参数是否符合工具模式
-	//   - 执行工具
-	//   - 处理错误和超时
-	ExecuteTool(ctx context.Context, toolName string, args map[string]interface{}) (*ToolResult, error)
-
-	// ListTools 返回所有可用工具
-	//
-	// 这对于需要发现可用工具的智能体很有用
-	ListTools() []Tool
-}
-
 // ToolInput 表示工具执行输入
 //
 // 此结构包含执行工具所需的所有信息
@@ -189,23 +167,6 @@ type ToolOutput struct {
 
 	// Labels 预留给数据来源与可信度标签（如 source=web、trust=untrusted），策略可据此判定；目前不传播。
 	Labels map[string]string `json:"labels,omitempty"`
-}
-
-// ToolResult 表示 ToolExecutor 执行工具的结果
-//
-// 与 ToolOutput 不同，它包含执行器跟踪的额外信息
-// 例如执行的工具名称
-type ToolResult struct {
-	// ToolName 是被执行工具的名称
-	ToolName string `json:"tool_name"`
-
-	// Output 包含工具的执行输出
-	Output *ToolOutput `json:"output"`
-
-	// ExecutionTime 是工具执行时长（毫秒）
-	//
-	// 可选，用于性能监控
-	ExecutionTime int64 `json:"execution_time,omitzero"`
 }
 
 // ToolCall 表示工具调用的记录

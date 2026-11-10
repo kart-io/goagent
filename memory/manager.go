@@ -4,23 +4,7 @@ import (
 	"context"
 
 	"github.com/kart-io/goagent/constants"
-	"github.com/kart-io/goagent/interfaces"
 )
-
-// ConversationStore 对话存储接口
-type ConversationStore interface {
-	// Add 添加对话
-	Add(ctx context.Context, conv *interfaces.Conversation) error
-
-	// Get 获取对话历史
-	Get(ctx context.Context, sessionID string, limit int) ([]*interfaces.Conversation, error)
-
-	// Clear 清空会话
-	Clear(ctx context.Context, sessionID string) error
-
-	// Count 获取会话对话数量
-	Count(ctx context.Context, sessionID string) (int, error)
-}
 
 // VectorStore 向量存储接口
 type VectorStore interface {

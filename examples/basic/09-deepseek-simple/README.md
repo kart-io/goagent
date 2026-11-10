@@ -49,5 +49,4 @@ output, err := agent.AsRunnable().Invoke(ctx, "请列举 Go 语言的三个主�
 
 ## 相关示例
 
-- [invokefast](invokefast/)：多个 DeepSeek Agent 串行调用并计时
 - [12-deepseek-simple](../12-deepseek-simple/)：带工具的 DeepSeek Agent

@@ -7,8 +7,6 @@
 | 选项类型 | 作用对象 | 构造函数 |
 |---|---|---|
 | `llm.ClientOption` | `*llm.LLMOptions` | `providers.NewOpenAIWithOptions`、`NewDeepSeekWithOptions`、`NewGeminiWithOptions` 等 |
-| `tools.ExecutorOption` | `*tools.ToolExecutor` | `tools.NewToolExecutor` |
-| `tools.ShardedCacheOption` | `*tools.ShardedCacheConfig` | `tools.NewShardedToolCacheWithOptions` |
 | `memory.MemoryOption` | `*memory.HierarchicalMemory` | `memory.NewHierarchicalMemoryWithContext` |
 | `remote.Option` | MCP 工具适配 | `remote.Tools`（`mcp/remote`） |
 | `LoggingOption`、`CachingOption`、`RateLimitOption`（`tools/middleware`） | 工具中间件 | `NewLoggingMiddleware`、`NewCachingMiddleware`、`NewRateLimitMiddleware` |
@@ -20,9 +18,8 @@ client, err := providers.NewOpenAIWithOptions(
     llm.WithTimeout(30*time.Second),
 )
 
-executor := tools.NewToolExecutor(
-    tools.WithMaxConcurrency(10),
-    tools.WithTimeout(30*time.Second),
+cached := middleware.NewCachingMiddleware(
+    middleware.WithTTL(10*time.Minute),
 )
 ```
 

@@ -21,22 +21,6 @@
 
 实现：`RunnableFunc`（包装函数）、`RunnablePipe`、`RunnableSequence`、`StreamRunnable`（以 `StreamSource` 为唯一执行源，`Invoke` 消费同一数据流；builder 的 `Agent.AsRunnable()` 与 workflow 编译结果均返回它）。`BaseRunnable` 提供回调、配置与 `Batch` 辅助，供具体类型嵌入。
 
-### Agent
-
-```go
-type Agent interface {
-    Runnable[*AgentInput, *AgentOutput]
-    Name() string
-    Description() string
-    Capabilities() []string
-}
-```
-
-- `BaseAgent`：嵌入用基础实现。默认 `Invoke` 返回 `Status: "failed"` 的输出；`Stream`、`Batch`、`RunGenerator` 调用的是 `BaseAgent.Invoke`，嵌入类型重写 `Invoke` 后需一并重写这些方法。
-- `AgentExecutor`：包装 Agent，提供 `WithMaxRetries`、`WithTimeout`、`WithStopOnError` 选项。
-
-完整的 LLM Agent 由 [builder](../builder/) 构建，不直接使用 `BaseAgent`。
-
 ### Callback
 
 `Callback` 接口包含 `OnStart/OnEnd/OnError`、`OnLLMStart/OnLLMEnd/OnLLMError`、`OnChainStart/OnChainEnd/OnChainError`、`OnToolStart/OnToolEnd/OnToolError`、`OnAgentAction/OnAgentFinish`。返回非 nil 错误会中止执行。嵌入 `BaseCallback` 只需实现关心的方法。
@@ -72,28 +56,26 @@ n, err := pipe.Invoke(ctx, "hello") // 5
 `Generator[T]` 即 `iter.Seq2[T, error]`，可直接 `range`，提前 `break` 即停止：
 
 ```go
-gen := agent.RunGenerator(ctx, input) // agent 为 *core.BaseAgent 或重写了 RunGenerator 的类型
+gen := core.GeneratorFunc(func(yield func(int, error) bool) {
+    for i := range 100 {
+        if !yield(i, nil) {
+            return
+        }
+    }
+})
 
-for out, err := range gen {
+for n, err := range gen {
     if err != nil {
         return err
     }
-    fmt.Println(out.Result)
+    fmt.Println(n)
 }
 
-ok := core.Filter(gen, func(o *core.AgentOutput) bool { return o.Status == "success" })
-results, err := core.Collect(core.Take(ok, 10))
+even := core.Filter(gen, func(n int) bool { return n%2 == 0 })
+results, err := core.Collect(core.Take(even, 10))
 ```
 
 另有 `Map`、`GeneratorFunc`、`FromChannel`、`ToChannel`。
-
-### 快速调用
-
-`FastInvoker.InvokeFast` 跳过回调与中间件，适合内部嵌套调用；外部入口应使用 `Invoke`。
-
-```go
-output, err := core.TryInvokeFast(ctx, agent, input) // 不支持 FastInvoker 时回退到 Invoke
-```
 
 ### 状态
 
@@ -117,7 +99,6 @@ snapshot := st.Snapshot()
 ```text
 core/
 ├── runnable.go / stream_runnable.go  # Runnable 接口与实现
-├── agent.go / fast_invoker.go        # Agent 基础类型、FastInvoker
 ├── callback.go                       # 回调
 ├── generator.go                      # Generator[T]
 ├── panic_handler.go

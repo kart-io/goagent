@@ -13,7 +13,7 @@ import (
 //   - retrieval/vector_store.go (Document-based vector search)
 //   - memory/manager.go (Embedding-based vector search)
 //
-// Implementations: memory.MemoryVectorStore, qdrant.QdrantStore, etc.
+// Implementations: goagent-contrib/retrieval 的各向量库适配。
 //
 // The interface provides document-oriented vector operations, which is the most
 // common use case for RAG and retrieval systems.
@@ -51,39 +51,6 @@ type VectorStore interface {
 	//   - GDPR/data deletion compliance
 	//   - Managing store size
 	Delete(ctx context.Context, ids []string) error
-}
-
-// Store is the canonical interface for general key-value storage.
-//
-// This interface provides a simplified, context-aware key-value store
-// suitable for agent state, user preferences, and general persistence.
-//
-// Implementations: memory.MemoryStore, postgres.PostgresStore, redis.RedisStore
-//
-// The interface is intentionally simple to allow easy implementation
-// across different storage backends.
-type Store interface {
-	// Get retrieves a value by key.
-	//
-	// Returns:
-	//   - The stored value
-	//   - An error if the key doesn't exist or retrieval fails
-	Get(ctx context.Context, key string) (interface{}, error)
-
-	// Set stores a key-value pair.
-	//
-	// If the key already exists, its value is replaced.
-	Set(ctx context.Context, key string, value interface{}) error
-
-	// Delete removes a key and its associated value.
-	//
-	// Returns no error if the key doesn't exist (idempotent operation).
-	Delete(ctx context.Context, key string) error
-
-	// Clear removes all keys from the store.
-	//
-	// Use with caution - this operation is typically irreversible.
-	Clear(ctx context.Context) error
 }
 
 // Document represents a document with optional vector embedding.

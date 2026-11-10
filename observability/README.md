@@ -5,7 +5,7 @@
 | 能力 | 入口 | Tracer / 注册表 |
 |---|---|---|
 | Provider 追踪与 OTel 指标 | `TelemetryProvider`、`AgentTracer`、`AgentMetrics` | Provider 自有的 TracerProvider / MeterProvider |
-| 包级追踪函数与分布式传播 | `StartAgentSpan` 等函数、`DistributedTracer`、`CrossServiceTracer`、`InstrumentedAgent` | OTel 全局 TracerProvider 与 propagator |
+| 包级追踪函数与分布式传播 | `StartAgentSpan` 等函数、`DistributedTracer`、`CrossServiceTracer` | OTel 全局 TracerProvider 与 propagator |
 | Prometheus 指标 | `GetMetrics`、`RecordAgentExecution` 等函数 | Prometheus 默认注册表（`promauto`） |
 
 `NewTelemetryProvider` 不会设置 OTel 全局 TracerProvider；需要包级函数的 span 也导出时，由宿主调用 `otel.SetTracerProvider`。
@@ -96,15 +96,6 @@ headers := carrier.GetMetadata() // 随消息发送
 
 属性构造：`AgentAttributes`、`ToolAttributes`、`LLMAttributes`、`MemoryAttributes`、`ErrorAttributes`。
 
-## InstrumentedAgent
-
-```go
-wrapped := observability.NewInstrumentedAgent(agent, "search-service", logger) // 或 WrapAgent
-output, err := wrapped.Invoke(ctx, input)
-```
-
-`agent` 为 `core.Agent`，`logger` 为 `github.com/kart-io/logger/core.Logger`。`Invoke` 增减并发计数、以包级 `StartAgentSpan` 创建 span、写开始与结束日志，并记录 Prometheus 的 Agent 执行、错误与输出中的工具调用指标。
-
 ## Prometheus 指标
 
 ```go
@@ -128,7 +119,6 @@ observability/
 ├── tracing.go              # 包级追踪函数
 ├── tracing_distributed.go  # DistributedTracer、CrossServiceTracer、载体
 ├── metrics.go              # Prometheus 指标
-└── logging.go              # InstrumentedAgent
 ```
 
 ## 扩展阅读

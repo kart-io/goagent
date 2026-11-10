@@ -9,10 +9,6 @@ import (
 // memory.Store 在输入和 Get/Search 输出处取得独立快照；修改返回值不会写回。
 // 元数据通过可选 MetadataWriter 写入，不得通过修改 Get 返回值设置。
 //
-// NOTE: This is a legacy interface with namespace support.
-// For new code, consider using interfaces.Store for simpler key-value storage,
-// or this NamespaceStore for namespace-organized storage.
-//
 // Inspired by LangChain's Store, it provides:
 //   - Namespace-based organization
 //   - Key-value storage with metadata

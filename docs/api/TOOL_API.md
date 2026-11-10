@@ -53,7 +53,7 @@ type ToolOutput struct {
 }
 ```
 
-`interfaces` 还定义了 `ToolCall`（调用记录）、`ToolResult`（`ToolName`、`Output`、`ExecutionTime`）和 `ToolExecutor` 接口（`ExecuteTool`、`ListTools`）；仓库内没有 `interfaces.ToolExecutor` 的实现。
+`interfaces` 还定义了 `ToolCall`（调用记录）。
 
 ## 构造工具
 
@@ -137,39 +137,6 @@ func (r *Registry) Clear()
 ## Dispatcher 与 Pipeline
 
 `NewDispatcher(registry, DispatchConfig)` 在注册表之上提供治理后的调用：并发与排队上限（`MaxConcurrency` 默认 4）、单次 `Timeout`、`Authorize`、`OnResult`，以及 `Pipeline`（PreHook → 审批 → Guard → Around → 工具 → PostHook）。`Dispatcher.Tools()` 返回可交给 `builder.WithTools` 的工具，`Invoke` / `AsRunnable` 供直接调用。没有隐式重试。行为契约见 [执行治理](../guides/EXECUTION_GOVERNANCE.md) 与 [扩展契约](../guides/EXTENSION_CONTRACT.md)；`tools/policy` 提供基于规则的放行/询问/拒绝策略，`tools/spill` 把超长结果写入文件并提供 `read_spill` 读取工具。
-
-## ToolExecutor
-
-`tools.ToolExecutor` 直接执行一组已解析的调用：
-
-```go
-func NewToolExecutor(opts ...ExecutorOption) *ToolExecutor // WithMaxConcurrency、WithTimeout、WithRetryPolicy、WithErrorHandler
-
-func (e *ToolExecutor) ExecuteParallel(ctx context.Context, calls []*ToolCallRequest) ([]*ToolResult, error)
-func (e *ToolExecutor) ExecuteSequential(ctx context.Context, calls []*ToolCallRequest) ([]*ToolResult, error)
-func (e *ToolExecutor) ExecuteBatch(ctx context.Context, tool interfaces.Tool, inputs []*interfaces.ToolInput) ([]*ToolResult, error)
-func (e *ToolExecutor) ExecuteWithDependencies(ctx context.Context, graph *ToolGraph) ([]*ToolResult, error)
-```
-
-`ToolCallRequest` 含 `Tool`、`Input`、`ID`、`Dependencies`；`tools.ToolResult` 含 `CallID`、`Output`、`Duration`、`Error`。`RetryPolicy` 字段：`MaxRetries`、`InitialDelay`、`MaxDelay`、`Multiplier`、`Jitter`、`RetryableErrors`。依赖图用 `NewToolGraph` / `NewToolGraphBuilder` 构建。
-
-```go
-executor := tools.NewToolExecutor(
-    tools.WithMaxConcurrency(10),
-    tools.WithTimeout(30*time.Second),
-    tools.WithRetryPolicy(&tools.RetryPolicy{
-        MaxRetries:   3,
-        InitialDelay: 100 * time.Millisecond,
-        MaxDelay:     5 * time.Second,
-        Multiplier:   2.0,
-    }),
-)
-
-results, err := executor.ExecuteParallel(ctx, []*tools.ToolCallRequest{
-    {ID: "1", Tool: addTool, Input: &interfaces.ToolInput{Args: map[string]interface{}{"a": 1.0, "b": 2.0}}},
-    {ID: "2", Tool: echoTool, Input: &interfaces.ToolInput{Args: map[string]interface{}{"text": "hi"}}},
-})
-```
 
 ## 内置工具
 
@@ -311,8 +278,6 @@ Config 必填 Name、Version、对象 ArgsSchema、Decode、Encode，Description
 工厂部分失败仍应提供已取得资源的 Close。清理 context 不继承父取消，受 CleanupTimeout 约束；不合作的清理不能强制终止，清理失败阻止工具完成。见 [编排指南](../guides/COMPOSABLE_ORCHESTRATION.md)。
 
 ## 其他入口与工具位置
-
-`NewToolExecutor(opts ...ExecutorOption) *ToolExecutor` 仍提供 ExecuteParallel、ExecuteSequential、ExecuteWithDependencies 和 ExecuteBatch，见 [executor_tool.go](../../tools/executor_tool.go)。批量/依赖执行不自动获得 Dispatcher.Tools 的持久模型调用契约。
 
 | 核心子包 | 当前构造器 |
 | --- | --- |

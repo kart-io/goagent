@@ -5,8 +5,6 @@ GoAgent 不默认缓存任何模型答案或工具结果（`ConfigureForRAG` 也
 | 缓存对象 | 组件 | 说明 |
 |---|---|---|
 | 通用键值 | `cache.Cache`；推荐 `cache.NewSimpleCache(ttl)`；无后台生命周期入口时用 `cache.WithoutBackgroundCleanup()` | `sync.Map` + TTL，后台清理；`NoOpCache` 为空实现。包说明见 [cache/README.md](../../cache/README.md) |
-| 单个工具的结果（简化包装） | `tools.NewCachedTool(tool, ttl)` | 内部使用 `tools.SimpleToolCache`；ttl<=0 时取 5 分钟 |
-| 工具结果存储 | `tools.ToolCache` 接口：`SimpleToolCache`、`MemoryToolCache`、`ShardedToolCache` | 按工具名或正则失效；分片版预设 `NewHighPerformanceCache`/`NewLowMemoryCache`，示例见 [02-cache-presets](../../examples/optimization/02-cache-presets/main.go) |
 | 单个工具的结果 | `tools/middleware.Caching`（经 `middleware.Wrap`） | 底层是任意 `cache.Cache`，见[工具中间件](TOOL_MIDDLEWARE.md#内置中间件) |
 | Agent 输入 → 响应 | `core/middleware.NewCacheMiddleware(ttl)`（经 `builder.WithMiddleware`） | 命中时跳过处理器；键只取输入的 `%v` 文本，不区分会话、用户或知识版本 |
 
@@ -53,12 +51,9 @@ cachedTool := middleware.Wrap(originalTool, middleware.Caching(
 
 - 缓存键必须覆盖影响结果的全部维度：用户/租户、会话、知识或数据版本、工具版本。
 - 检索增强回答优先每次检索新证据；需要答案缓存时，键中带上知识版本。
-- TTL 按数据变化频率设置；`SimpleCache` 不限容量，条目数不可控时改用 `tools.ShardedToolCache`（容量可配，固定哈希分片和 LRU 淘汰）或外部缓存实现 `cache.Cache`。
 - TTL 按数据变化频率设置；`SimpleCache` 默认不限条目数，键由外部输入决定时用 `cache.WithMaxEntries(n)` 设置上限（工具缓存中间件的默认缓存上限为 10000 条），或由外部缓存实现 `cache.Cache`。
 
 ## 设计审核修复后的配置迁移
-
-`ShardedToolCache` 固定使用哈希分片和 LRU。已移除没有执行实现的淘汰策略、负载均衡、压缩、字节内存上限、分片并发数、指标开关和自动调优字段及相应 `With*` 选项，不保留空壳兼容入口。容量表示条目数，不表示进程内存字节数；需要字节约束或其他淘汰算法时由宿主提供对应缓存实现。性能/工作负载预设仅调整实际生效的分片与清理参数。
 
 `SimpleCache` 默认仍需要 `Close()`；`NewSimpleCache(ttl, cache.WithoutBackgroundCleanup())` 不创建后台清理协程，在访问/写入时回收到期项。工具函数式缓存默认使用这一模式，注入缓存的生命周期归宿主管理，构造中间件不会额外创建或关闭宿主缓存。
 

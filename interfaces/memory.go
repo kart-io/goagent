@@ -167,27 +167,6 @@ type MemoryManager interface {
 	Clear(ctx context.Context) error
 }
 
-// ConversationMemory is an optional specialized interface for conversation storage.
-//
-// Implementations that need fine-grained control over conversation memory
-// can implement this interface in addition to MemoryManager.
-//
-// This interface is used internally by some memory implementations but is
-// not required for basic MemoryManager usage.
-type ConversationMemory interface {
-	// Add adds a conversation to storage.
-	Add(ctx context.Context, conv *Conversation) error
-
-	// Get retrieves conversation history.
-	Get(ctx context.Context, sessionID string, limit int) ([]*Conversation, error)
-
-	// Clear clears conversation history for a session.
-	Clear(ctx context.Context, sessionID string) error
-
-	// Count returns the number of conversations in a session.
-	Count(ctx context.Context, sessionID string) (int, error)
-}
-
 // Conversation represents a conversation turn.
 //
 // A conversation captures a single message in a multi-turn dialogue,

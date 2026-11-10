@@ -11,8 +11,6 @@
 | 节点/分支级恢复、审批 | CompileDurable 与持久模型/工具记录 |
 | 子 Agent 或子图作为能力 | NewRunnableTool / NewRunnableToolFactory，经 Dispatcher 调用 |
 
-不要把 Builder 的输出与 core.AgentOutput 混用。
-
 ## 运行第一个案例
 
 以下命令使用仓内模拟模型，无需密钥：

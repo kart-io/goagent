@@ -3,7 +3,7 @@
 Runnable examples for the `github.com/kart-io/goagent` module. Run any of them from the repository root, e.g.:
 
 ```bash
-go run ./examples/basic/01-simple-agent
+go run ./examples/workflow
 ```
 
 Examples that call a real LLM read the provider's API key from the environment (see each example); the rest run offline with local or mock models.
@@ -12,11 +12,11 @@ Examples that call a real LLM read the provider's API key from the environment (
 
 | Directory | Contents |
 | --- | --- |
-| [basic/](basic/) | Single-feature examples: simple agent, memory, Ollama, providers, DeepSeek/Kimi with the builder |
+| [basic/](basic/) | Single-feature examples: Ollama, providers, DeepSeek/Kimi with the builder |
 | [builder/](builder/) | `builder` API layers (simple, core, advanced) and configuration serialization |
 | [tools/](tools/) | Built-in tools (calculator, HTTP API, shell, search), function tools, tools with an agent |
 | [skills/](skills/) | Skill registration, routing, a layered weather skill and [standalone SKILL.md loading](skills/03-catalog/) |
-| [advanced/](advanced/) | Multi-agent collaboration, observability, parallel tool execution, tool runtime, tool selector |
+| [advanced/](advanced/) | Multi-agent collaboration, observability, tool selector |
 | [integration/](integration/) | Human-in-the-loop, LangChain-style runnables/middleware/checkpoints, preconfigured agents |
 | [llm/](llm/) | Provider examples: Anthropic, Kimi, and the Gemini native API verifier ([gemini-verify](llm/gemini-verify/README.md)) |
 | [Token 统计案例](https://github.com/kart-io/goagent-examples/tree/main/agent-usage) | 已迁至 goagent-examples：任务、单 Agent／子 Agent、多平台及错误边界 |
@@ -25,12 +25,9 @@ Examples that call a real LLM read the provider's API key from the environment (
 | [multi-agent-patterns/](multi-agent-patterns/) | `multiagent` presets (router, loop, parallel lookup, refund review, supervisor tools, fallback, composed graph) driven by `mocks.ScriptedClient`, offline |
 | [human-in-the-loop-interrupt/](human-in-the-loop-interrupt/) | Node pauses mid-execution for human input and resumes across processes, offline |
 | [execution-scope/](execution-scope/) | `execution.NewScope` + `execution.ConfigureBuilder`: shared run/session ID, request budget and timeout, with a built-in mock model, offline |
-| [generator/](generator/) | Iterating a `core.BaseAgent` stream as a generator vs. a channel (`basic`); Take/Filter and other helpers (`advanced`) |
 | [error_handling/](error_handling/) | `errors` package: codes, context, wrapping, retry and fallback patterns |
-| [retry-jitter/](retry-jitter/) | `ToolExecutor` retry backoff with jitter |
-| [optimization/](optimization/) | `ShardedToolCache` presets |
 | [translate/](translate/) | DeepSeek translation agent, batch and interactive |
-| `testhelpers/` | Mock agent and assertions shared by example tests |
+| `testhelpers/` | Assertions and environment helpers shared by example tests |
 
 ## Elsewhere
 

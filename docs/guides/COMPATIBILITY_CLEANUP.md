@@ -4,7 +4,7 @@
 
 ## 工具调用与流式执行
 
-`tools.ToolCall` 已删除，使用 `tools.ToolCallRequest`。`llm.ToolCall`、`builder.ToolCall` 和 `interfaces.ToolCall` 是不同业务对象，不在本次删除范围。
+`tools.ToolCall` 已删除，工具调用经 Dispatcher 的 `tools.ToolRequest`。`llm.ToolCall`、`builder.ToolCall` 和 `interfaces.ToolCall` 是不同业务对象，不在本次删除范围。
 
 `core/streaming_alias.go` 的类型、常量、工厂变量以及 `core/execution` 的旧 `StreamingAgent/StreamOutput/LegacyStreamChunk` 体系已删除。流式执行使用 `core.Runnable[I,O].Stream` 或 `core.StreamRunnable[I,O]`，消费 `core.StreamChunk[O]` 的 `Data/Error/Done/Event`。调用方应区分一次调用完成和业务流程完成；不能把通道关闭简单当作已持久提交或业务成功。参见[流式执行说明](GROUNDED_RAG_AND_STREAMING.md)。
 
@@ -78,6 +78,10 @@ wrapped := middleware.Wrap(tool, logging.Wrap)
 | 泛型参数 `C` 与 `WithContext(C)`：`AgentBuilder[C, S]`、`ConfigurableAgent[C, S]` | 改为 `AgentBuilder[S]`、`ConfigurableAgent[S]`，如 `NewAgentBuilder[any, *core.AgentState]` → `NewAgentBuilder[*core.AgentState]`；应用数据经 `context.Context` 或 `WithMetadata` 传递 |
 | `interfaces` 的 `Lifecycle`、`LifecycleManager`、`HealthStatus` 等生命周期与健康状态定义 | 插件用 `plugin.Starter`、`plugin.Dependent`；其他组件由宿主自行管理生命周期 |
 | `tools.WithMiddleware`、`tools.MiddlewareTool` | `tools/middleware.Wrap(tool, middlewares...)`、`*middleware.WrappedTool` |
+| `tools.ToolExecutor`、`ToolCallRequest`、`ToolResult`、`RetryPolicy`、`ToolGraph` | `tools.NewDispatcher` 与 `DispatchConfig`（并发、超时、持久回放、重试策略） |
+| `tools.ToolCache`、`SimpleToolCache`、`MemoryToolCache`、`ShardedToolCache`、`NewCachedTool`、`NewHighPerformanceCache`、`NewLowMemoryCache` | `tools/middleware.Caching`，底层任意 `cache.Cache`（可用 `cache.WithMaxEntries` 限制条目） |
+| `core.Agent`、`BaseAgent`、`AgentExecutor`、`AgentInput`/`AgentOutput`、`FastInvoker`；`observability.InstrumentedAgent`/`WrapAgent` | 用 `builder` 构建 Agent，经 `AsRunnable()` 接入 `core.Runnable` |
+| `interfaces.Store`、`ConversationMemory`、`ToolExecutor`、`ToolResult`；`memory.ConversationStore` | 键值存储 `store.Store`；对话历史 `interfaces.MemoryManager` |
 | `llm/cache`（语义缓存） | 无替代；需要时由宿主按租户/会话作用域实现 |
 | `testing/testutil` | 使用标准库 `testing` 断言，或 `testing/mocks` |
 | `core` 的 `Chain`、`BaseChain`、`ChainableAgent`、`Orchestrator`、`PluginRegistry`、`LifecycleManager`、`TimeoutConfig` | 组合用 `core.RunnablePipe`/`RunnableSequence` 或 `workflow`；多 Agent 用 `multiagent` |

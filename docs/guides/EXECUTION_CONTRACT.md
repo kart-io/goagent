@@ -2,7 +2,7 @@
 
 ## 推荐入口
 
-新编排统一使用 `core.Runnable[I, O]`。现有 `core.Agent` 是该泛型接口在 `AgentInput/AgentOutput` 上的专用接口；旧 `interfaces.Agent/Runnable` 已删除。类型不同的 Runnable 需要显式转换输入输出，不进行隐式消息丢弃。
+新编排统一使用 `core.Runnable[I, O]`；旧 `core.Agent`/`BaseAgent` 与 `interfaces.Agent/Runnable` 已删除，Agent 由 Builder 构建并经 `AsRunnable()` 接入。类型不同的 Runnable 需要显式转换输入输出，不进行隐式消息丢弃。
 
 Builder 通过 `AsRunnable()` 接入相同契约：
 
@@ -99,7 +99,6 @@ OpenAI 和 DeepSeek 专用 Provider 共用原生 SSE 解码与完成状态检查
 | Builder.AsRunnable | tokens | 原生答案增量；支持 ToolStreamClient 时工具与答案共用原生对话循环，其他 Provider 保留兼容路径 |
 | workflow.Graph.Compile | steps | 节点事件与最终状态，不代表跨节点逐Token变换 |
 | DurableGraph.AsRunnable | steps | 本次调用的等待或完成快照，业务终态检查Data.Done |
-| core.BaseAgent | final | 基类默认实现执行完成后返回最终块 |
 
 ReAct、ToT、自反思等已删除模块不再列入当前能力矩阵。Pipe/Sequence仍按阶段执行，最后阶段保留实际事件；没有跨节点逐Token转换。
 

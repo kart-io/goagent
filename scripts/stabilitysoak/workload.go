@@ -160,11 +160,19 @@ func exercise(ctx context.Context, directory string) (got cycleResult, err error
 	}
 	canceled, cancel := context.WithCancel(ctx)
 	cancel()
-	effect := tools.NewBaseTool("cancel", "取消后禁止执行", `{}`, func(context.Context, *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+	effect := tools.NewBaseTool("cancel", "取消后禁止执行", `{"type":"object"}`, func(context.Context, *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 		got.Effects++
 		return &interfaces.ToolOutput{Success: true}, nil
 	})
-	_, err = tools.NewToolExecutor().ExecuteSequential(canceled, []*tools.ToolCallRequest{{ID: "cancel", Tool: effect}})
+	cancelRegistry := tools.NewRegistry()
+	if err = cancelRegistry.Register(effect); err != nil {
+		return got, err
+	}
+	dispatcher, err := tools.NewDispatcher(cancelRegistry, tools.DispatchConfig{})
+	if err != nil {
+		return got, err
+	}
+	_, err = dispatcher.Invoke(canceled, tools.ToolRequest{Name: "cancel", Input: &interfaces.ToolInput{Args: map[string]any{}}})
 	if !errors.Is(err, context.Canceled) || got.Effects != 2 {
 		return got, fmt.Errorf("取消后发生工具效果或返回成功")
 	}

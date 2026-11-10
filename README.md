@@ -208,7 +208,6 @@ See [docs/README.md](docs/README.md) for the full index and [CHANGELOG.md](CHANG
 Runnable examples live in [`examples/`](examples/README.md); business cases live in [goagent-examples](https://github.com/kart-io/goagent-examples).
 
 ```bash
-go run ./examples/basic/01-simple-agent
 go run ./examples/workflow
 ```
 

@@ -138,7 +138,6 @@ type StreamChunk[T any] struct {
 
 - `StreamRunnable[I, O]`（`NewStreamRunnable(mode, source)`）从同一执行源提供 `Invoke`、`Stream`、`Batch`、`Pipe`；`StreamMode()` 说明实际输出能力。
 - `RunnableFunc`（`NewRunnableFunc`）、`RunnablePipe`（`NewRunnablePipe`）、`RunnableSequence` 用于组合；组合语义见 [扩展契约](../guides/EXTENSION_CONTRACT.md#pipe-与-sequence-的一致性修复)。
-- `core.Agent` 是 `Runnable[*AgentInput, *AgentOutput]` 加 `Name`、`Description`、`Capabilities`；`BaseAgent`（`NewBaseAgent`）是基础实现。
 - `Callback` / `BaseCallback`、`CallbackManager` 以及 `LoggingCallback`、`MetricsCallback`、`CostTrackingCallback` 提供生命周期通知。
 
 ## State

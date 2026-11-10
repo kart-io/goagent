@@ -18,7 +18,6 @@
 ```mermaid
 graph TB
     subgraph "接口层"
-        ConvStore["ConversationStore<br/>对话存储接口"]
         VecStore["VectorStore<br/>向量存储接口"]
         Embedder["Embedder<br/>嵌入生成接口"]
         EnhancedMem["EnhancedMemory<br/>高级记忆接口"]
@@ -41,7 +40,6 @@ graph TB
         ChromaVec["ChromaVectorStore"]
     end
 
-    ConvStore --> InMemMgr
     VecStore --> HierMem
     HierMem --> ShortTerm
     HierMem --> LongTerm
@@ -49,7 +47,6 @@ graph TB
     LongTerm --> InMemVec
     LongTerm --> ChromaVec
 
-    style ConvStore fill:#e1f5ff
     style VecStore fill:#e1f5ff
     style InMemMgr fill:#e8f5e9
     style HierMem fill:#e8f5e9
@@ -111,20 +108,7 @@ sequenceDiagram
 
 ## 核心组件
 
-### 1. ConversationStore 对话存储
-
-管理会话对话历史：
-
-```go
-type ConversationStore interface {
-    Add(ctx context.Context, conv *Conversation) error
-    Get(ctx context.Context, sessionID string, limit int) ([]*Conversation, error)
-    Clear(ctx context.Context, sessionID string) error
-    Count(ctx context.Context, sessionID string) (int, error)
-}
-```
-
-### 2. VectorStore 向量存储
+### 1. VectorStore 向量存储
 
 支持向量相似度搜索：
 
@@ -141,7 +125,7 @@ type VectorStore interface {
 
 外部向量库实现已迁至 [goagent-contrib/retrieval](https://github.com/kart-io/goagent-contrib/tree/master/retrieval)（如 `QdrantVectorStore`），它们实现的是 `interfaces.VectorStore`：按文本查询（`SimilaritySearch(query, topK)`）、由存储内部生成向量，不满足本接口，不能直接传给 `NewHierarchicalMemoryWithContext` 或 `NewLongTermMemory`。接入外部向量库时由宿主实现 `memory.VectorStore`，向量维度须与 `WithEmbedder` 的输出一致。
 
-### 3. EnhancedMemory 增强记忆
+### 2. EnhancedMemory 增强记忆
 
 支持分层记忆和高级操作：
 

@@ -11,6 +11,6 @@
 //   - MemoryManager: Memory management
 //   - Store: Key-value storage
 //
-// Agent execution contracts live in core (core.Agent, core.Runnable) and
+// Agent execution contracts live in core (core.Runnable, core.StreamRunnable) and
 // durable execution in core/durable.
 package interfaces
