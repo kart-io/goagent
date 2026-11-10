@@ -7,15 +7,12 @@ import (
 
 // TestToolInputStructure verifies ToolInput struct is properly defined
 func TestToolInputStructure(t *testing.T) {
-	ctx := context.Background()
-
 	toolInput := &ToolInput{
 		Args: map[string]interface{}{
 			"query":  "search term",
 			"limit":  10,
 			"filter": map[string]interface{}{"category": "tech"},
 		},
-		Context:  ctx,
 		CallerID: "agent-123",
 		TraceID:  "trace-abc-xyz",
 	}
@@ -31,9 +28,6 @@ func TestToolInputStructure(t *testing.T) {
 	}
 	if toolInput.TraceID != "trace-abc-xyz" {
 		t.Errorf("Expected TraceID 'trace-abc-xyz', got '%s'", toolInput.TraceID)
-	}
-	if toolInput.Context != ctx {
-		t.Error("Context mismatch")
 	}
 }
 
@@ -212,8 +206,7 @@ func TestToolInterface(t *testing.T) {
 
 	// Test Invoke (success)
 	input := &ToolInput{
-		Args:    map[string]interface{}{"input": "test"},
-		Context: ctx,
+		Args: map[string]interface{}{"input": "test"},
 	}
 
 	output, err := tool.Invoke(ctx, input)
@@ -248,12 +241,9 @@ func TestToolInterface(t *testing.T) {
 
 // TestToolInputOptionalFields verifies ToolInput works with optional fields
 func TestToolInputOptionalFields(t *testing.T) {
-	ctx := context.Background()
-
 	// Minimal ToolInput (only required fields)
 	minimalInput := &ToolInput{
-		Args:    map[string]interface{}{"key": "value"},
-		Context: ctx,
+		Args: map[string]interface{}{"key": "value"},
 	}
 
 	if minimalInput.CallerID != "" {
@@ -266,7 +256,6 @@ func TestToolInputOptionalFields(t *testing.T) {
 	// Full ToolInput (with optional fields)
 	fullInput := &ToolInput{
 		Args:     map[string]interface{}{"key": "value"},
-		Context:  ctx,
 		CallerID: "agent-123",
 		TraceID:  "trace-456",
 	}

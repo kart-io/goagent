@@ -42,60 +42,9 @@ const (
 	EnvOllamaModel          = "OLLAMA_MODEL"
 )
 
-// 模型请求参数名。
-const (
-	ParamTemperature      = "temperature"
-	ParamMaxTokens        = "max_tokens"
-	ParamTopP             = "top_p"
-	ParamTopK             = "top_k"
-	ParamFrequencyPenalty = "frequency_penalty"
-	ParamPresencePenalty  = "presence_penalty"
-	ParamStop             = "stop"
-	ParamStream           = "stream"
-	ParamN                = "n"
-	ParamLogprobs         = "logprobs"
-	ParamEcho             = "echo"
-	ParamSeed             = "seed"
-)
-
-// 消息字段名。
-const (
-	MessageFieldRole         = "role"
-	MessageFieldContent      = "content"
-	MessageFieldName         = "name"
-	MessageFieldFunctionCall = "function_call"
-	MessageFieldToolCalls    = "tool_calls"
-)
-
 // 工具与函数调用约定。
 const (
 	ToolTypeFunction = "function"
-	FunctionCallAuto = "auto"
-	FunctionCallNone = "none"
-)
-
-// 响应字段名。
-const (
-	ResponseFieldID      = "id"
-	ResponseFieldObject  = "object"
-	ResponseFieldCreated = "created"
-	ResponseFieldModel   = "model"
-	ResponseFieldChoices = "choices"
-	ResponseFieldUsage   = "usage"
-)
-
-// 用量统计字段名。
-const (
-	UsageFieldPromptTokens     = "prompt_tokens"
-	UsageFieldCompletionTokens = "completion_tokens"
-	UsageFieldTotalTokens      = "total_tokens"
-)
-
-// 流式事件标识。
-const (
-	StreamEventChunk    = "chunk"
-	StreamEventDone     = "done"
-	StreamEventToolCall = "tool_call"
 )
 
 // 提供商默认参数。
@@ -104,7 +53,6 @@ const (
 	DefaultTemperature       = 0.7
 	DefaultProviderTimeout   = 30 * time.Second
 	DefaultTopP              = 1.0
-	DefaultTopK              = 0
 )
 
 // 提供商服务地址与参数。
@@ -115,23 +63,6 @@ const (
 	SiliconFlowBaseURL    = "https://api.siliconflow.cn/v1"
 	DeepSeekDefaultModel  = "deepseek-chat"
 	DeepSeekBaseURL       = "https://api.deepseek.com/v1"
-	DeepSeekMaxTokens     = 4096
-	DeepSeekTemperature   = 0.7
-	DeepSeekTimeout       = 30 * time.Second
-	DeepSeekRetryCount    = 3
-	DeepSeekRetryDelay    = 1 * time.Second
-)
-
-// 请求头名称。
-const (
-	HeaderAPIKey     = "x-api-key"
-	HeaderRetryAfter = "Retry-After"
-)
-
-// 认证前缀。
-const (
-	AuthBearerPrefix = "Bearer "
-	AuthAPIKeyPrefix = "x-api-key: "
 )
 
 // 连接池参数。
@@ -141,31 +72,11 @@ const (
 	IdleConnTimeout     = 90 * time.Second
 )
 
-// 响应完成状态。
-const (
-	StatusComplete = "complete"
-)
-
 // 重试参数。
 const (
 	DefaultMaxAttempts = 3
 	DefaultBaseDelay   = 1 * time.Second
 	DefaultMaxDelay    = 30 * time.Second
-)
-
-// 流式事件类型。
-const (
-	StreamEventStart   = "stream-start"
-	StreamEventContent = "content"
-	StreamEventEnd     = "stream-end"
-	StreamEventError   = "error"
-)
-
-// 消息生命周期事件。
-const (
-	EventMessageStart = "message_start"
-	EventMessageDelta = "message_delta"
-	EventMessageStop  = "message_stop"
 )
 
 // 补全请求默认参数。

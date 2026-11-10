@@ -34,8 +34,7 @@ output, err := agent.AsRunnable().Invoke(ctx, "现在几点了？北京的天气
 
 ```go
 output, err := timeTool.Invoke(ctx, &interfaces.ToolInput{
-    Args:    map[string]interface{}{"timezone": "Asia/Shanghai"},
-    Context: ctx,
+    Args: map[string]interface{}{"timezone": "Asia/Shanghai"},
 })
 ```
 

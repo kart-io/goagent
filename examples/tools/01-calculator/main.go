@@ -49,7 +49,6 @@ func main() {
 			Args: map[string]interface{}{
 				"expression": expr,
 			},
-			Context: ctx,
 		})
 		if err != nil {
 			fmt.Printf("  ✗ %s = 错误: %v\n", expr, err)
@@ -107,7 +106,6 @@ func main() {
 				"operation": op.op,
 				"operands":  op.operands,
 			},
-			Context: ctx,
 		})
 		if err != nil {
 			fmt.Printf("  ✗ %s = 错误: %v\n", op.desc, err)
@@ -141,7 +139,6 @@ func main() {
 			Args: map[string]interface{}{
 				"expression": tc.expr,
 			},
-			Context: ctx,
 		})
 
 		if err != nil {

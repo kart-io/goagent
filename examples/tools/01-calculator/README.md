@@ -17,8 +17,7 @@ go run ./examples/tools/01-calculator
 ```go
 calculator := compute.NewCalculatorTool()
 output, err := calculator.Invoke(ctx, &interfaces.ToolInput{
-    Args:    map[string]interface{}{"expression": "(10 + 5) * 2"},
-    Context: ctx,
+    Args: map[string]interface{}{"expression": "(10 + 5) * 2"},
 })
 // output.Success == true, output.Result == 30
 ```

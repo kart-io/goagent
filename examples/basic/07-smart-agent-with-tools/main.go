@@ -38,7 +38,6 @@ func timeToolExample() {
 			"format":   "2006-01-02 15:04:05",
 			"timezone": "Asia/Shanghai",
 		},
-		Context: ctx,
 	}
 
 	output, err := timeTool.Invoke(ctx, input)
@@ -72,7 +71,6 @@ func apiCallExample() {
 			"method": "GET",
 			"url":    "https://jsonplaceholder.typicode.com/users/1",
 		},
-		Context: ctx,
 	}
 
 	output, err := apiTool.Invoke(ctx, getUserInput)
@@ -94,7 +92,6 @@ func apiCallExample() {
 			"method": "GET",
 			"url":    "https://jsonplaceholder.typicode.com/posts?_limit=3",
 		},
-		Context: ctx,
 	}
 
 	output, err = apiTool.Invoke(ctx, getPostsInput)
@@ -128,7 +125,6 @@ func apiCallExample() {
 				"Content-Type": "application/json",
 			},
 		},
-		Context: ctx,
 	}
 
 	output, err = apiTool.Invoke(ctx, createPostInput)
@@ -172,7 +168,6 @@ func smartAgentExample() {
 			"format":   "2006-01-02 15:04:05",
 			"timezone": "Asia/Shanghai",
 		},
-		Context: ctx,
 	})
 
 	if timeOutput.Success {
@@ -186,7 +181,6 @@ func smartAgentExample() {
 		Args: map[string]interface{}{
 			"city": "Beijing",
 		},
-		Context: ctx,
 	})
 
 	if weatherOutput.Success {

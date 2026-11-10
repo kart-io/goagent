@@ -182,10 +182,10 @@ type FileSystem interface {
 
 ```go
 type Handle interface {
-	Followup(msg string) // 排到下一轮，空闲时唤醒
-	Steer(msg string)    // 排到下一步：当前工具批次结束后作为 user 消息追加，唤醒
-	Inject(msg string)   // 排到下一步，不唤醒；随下一次获准请求发送
-	Redirect(msg string) // 取消进行中的模型请求，保留已流出的文本，追加纠正后重试；工具执行中降级为 Steer
+	Followup(ctx context.Context, msg string) error // 排到下一轮，空闲时唤醒
+	Steer(ctx context.Context, msg string) error    // 排到下一步：当前工具批次结束后作为 user 消息追加，唤醒
+	Inject(ctx context.Context, msg string) error   // 排到下一步，不唤醒；随下一次获准请求发送
+	Redirect(ctx context.Context, msg string) error // 取消进行中的模型请求，保留已流出的文本，追加纠正后重试；工具执行中降级为 Steer
 	Interrupt(cause error)
 	Wait(ctx context.Context) (*AgentOutput, error)
 }

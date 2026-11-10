@@ -20,7 +20,7 @@ func TestHandleCancellationBetweenTurnsRetainsFollowup(t *testing.T) {
 	ctx, cancel := context.WithCancelCause(context.Background())
 	boom := errors.New("canceled between turns")
 	h := &Handle{inbox: &inbox{}, cancel: cancel, done: make(chan struct{})}
-	require.NoError(t, h.Followup("second"))
+	require.NoError(t, h.Followup(context.Background(), "second"))
 	calls := 0
 	h.run(ctx, func(context.Context, string) (*AgentOutput, error) {
 		calls++
@@ -58,7 +58,7 @@ func TestHandleFollowupApprovalRecoveryUsesRecordedBatch(t *testing.T) {
 	}})
 	h := build(model, func() { close(started); <-release }).Start(ctx, "first")
 	<-started
-	require.NoError(t, h.Followup("second"))
+	require.NoError(t, h.Followup(context.Background(), "second"))
 	close(release)
 	_, err = h.Wait(context.Background())
 	wait, continuation := requireWaiting(t, err)
@@ -127,7 +127,7 @@ func TestHandleInterruptWaitsForOwnedCleanup(t *testing.T) {
 	require.NoError(t, err)
 	h := agent.Start(context.Background(), "first")
 	<-started
-	require.NoError(t, h.Followup("second"))
+	require.NoError(t, h.Followup(context.Background(), "second"))
 	boom := errors.New("user canceled")
 	h.Interrupt(boom)
 	<-cleanupStarted

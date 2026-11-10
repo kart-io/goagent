@@ -27,6 +27,5 @@ output, err := shellTool.Invoke(ctx, &interfaces.ToolInput{
         "args":     []interface{}{"-la"},
         "work_dir": "/tmp",
     },
-    Context: ctx,
 })
 ```

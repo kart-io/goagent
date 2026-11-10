@@ -150,8 +150,8 @@ func TestHandleSteerDuringTool(t *testing.T) {
 	require.NoError(t, err)
 	h := agent.Start(context.Background(), "问题")
 	<-started
-	require.NoError(t, h.Steer("顺便检查 B"))
-	require.NoError(t, h.Redirect("工具执行中的纠正降级为 Steer"))
+	require.NoError(t, h.Steer(context.Background(), "顺便检查 B"))
+	require.NoError(t, h.Redirect(context.Background(), "工具执行中的纠正降级为 Steer"))
 	close(release)
 	require.Equal(t, "答", waitAnswer(t, h).Result)
 	tail := lastMessages(model.request(1), 3)
@@ -159,7 +159,7 @@ func TestHandleSteerDuringTool(t *testing.T) {
 	require.Equal(t, llm.UserMessage("顺便检查 B"), tail[1])
 	require.Equal(t, llm.UserMessage("工具执行中的纠正降级为 Steer"), tail[2])
 	require.Equal(t, []int{1, 2}, inputs, "PreStep sees the turn input, then the two steered messages")
-	require.ErrorIs(t, h.Steer("太晚了"), agentErrors.ErrAgentHandleDone)
+	require.ErrorIs(t, h.Steer(context.Background(), "太晚了"), agentErrors.ErrAgentHandleDone)
 }
 
 // 模型给出答复时还有待处理的 Steer：唤醒续跑，而不是结束。
@@ -170,7 +170,7 @@ func TestHandleSteerWakesStopping(t *testing.T) {
 	require.NoError(t, err)
 	h := agent.Start(context.Background(), "写一段话")
 	<-started
-	require.NoError(t, h.Steer("要更短"))
+	require.NoError(t, h.Steer(context.Background(), "要更短"))
 	close(release)
 	require.Equal(t, "终稿", waitAnswer(t, h).Result)
 	require.Equal(t, []llm.Message{{Role: "assistant", Content: "初稿"}, llm.UserMessage("要更短")}, lastMessages(model.request(1), 2))
@@ -184,7 +184,7 @@ func TestHandleInjectDoesNotWake(t *testing.T) {
 	require.NoError(t, err)
 	h := agent.Start(context.Background(), "任务")
 	<-started
-	require.NoError(t, h.Inject("仅供参考"))
+	require.NoError(t, h.Inject(context.Background(), "仅供参考"))
 	close(release)
 	require.Equal(t, "完成", waitAnswer(t, h).Result)
 	require.Equal(t, 1, model.count())
@@ -203,7 +203,7 @@ func TestHandleRedirect(t *testing.T) {
 	require.NoError(t, err)
 	h := agent.Start(context.Background(), "介绍一下")
 	<-streamed
-	require.NoError(t, h.Redirect("不要 A，讲 B"))
+	require.NoError(t, h.Redirect(context.Background(), "不要 A，讲 B"))
 	require.Equal(t, "关于 B 的回答", waitAnswer(t, h).Result)
 	require.Equal(t, []llm.Message{{Role: "assistant", Content: "我先介绍 A"}, llm.UserMessage("不要 A，讲 B")}, lastMessages(model.request(1), 2))
 }
@@ -216,7 +216,7 @@ func TestHandleFollowup(t *testing.T) {
 	require.NoError(t, err)
 	h := agent.Start(context.Background(), "第一问")
 	<-started
-	require.NoError(t, h.Followup("第二问"))
+	require.NoError(t, h.Followup(context.Background(), "第二问"))
 	close(release)
 	require.Equal(t, "二", waitAnswer(t, h).Result)
 	second := model.request(1).Messages
@@ -319,7 +319,7 @@ func TestTurnStoppingBlockedExcludesSteer(t *testing.T) {
 	require.NoError(t, err)
 	h := agent.Start(context.Background(), "写")
 	<-started
-	require.NoError(t, h.Steer("要更短"))
+	require.NoError(t, h.Steer(context.Background(), "要更短"))
 	close(release)
 	require.Equal(t, "终稿", waitAnswer(t, h).Result)
 	require.Equal(t, []Stopping{{Step: 1, Answer: "改稿", Continued: 1, Blocked: 0}, {Step: 2, Answer: "终稿", Continued: 2, Blocked: 1}}, seen)

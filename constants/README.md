@@ -4,16 +4,15 @@
 
 | 文件 | 管理内容 |
 |---|---|
-| `common.go` | 消息角色、通用键和分隔符 |
+| `common.go` | 消息角色与通用键 |
 | `fields.go` | 公共字段名 |
-| `status.go` | 公共状态、优先级和执行模式 |
-| `http.go` | HTTP 方法、头、内容类型和状态码 |
+| `status.go` | 执行结果状态 |
+| `http.go` | HTTP 方法、头和内容类型 |
 | `llm.go` | 提供商标识、环境变量、模型参数和协议字段 |
-| `tools.go` | 工具名称、描述与执行器默认值 |
-| `store.go` | 存储类型、操作及连接参数 |
+| `tools.go` | 工具名称、描述与执行默认值 |
 | `parsers.go` | 解析字段、标记和模式 |
 | `defaults.go` | 共享超时、清理期限及各调用层默认策略 |
-| `cache.go` | 缓存分片上限、中间件/工具缓存默认值与独立预设 |
+| `cache.go` | 中间件缓存默认值 |
 | `execution.go` | 模型重发、收件箱写入和暂时性请求重试策略 |
 | `budget.go` | Agent 拓扑预算默认值与架构相关无限余量 |
 | `durable.go` | 中断续跑协议、原因及重入/去重边界 |
@@ -28,7 +27,7 @@ requestTimeout := shared.DefaultToolTimeout // time.Duration
 role := shared.RoleAssistant
 ```
 
-错误码、错误分类、错误提示及错误上下文字段统一放在 [`errors/`](../errors/README.md)，按 `codes.go`、`sentinels.go`、`llm.go` 管理。`FieldError`、`StreamEventError`、`StatusError` 与 HTTP 状态码仍是协议约定，保留在本目录。
+错误码、错误分类、错误提示及错误上下文字段统一放在 [`errors/`](../errors/README.md)，按 `codes.go`、`sentinels.go`、`llm.go` 管理。HTTP 方法、头等协议约定保留在本目录。
 
 原 `interfaces`、`llm/constants`、`llm/common`、`llm`、`tools`、`store`、`parsers`、`core` 的共享常量转发入口已删除；`llm/constants` 包也已删除，不保留兼容别名。调用方直接使用本包，错误入口统一使用 `errors`。
 
@@ -43,5 +42,5 @@ role := shared.RoleAssistant
 - 不为每个字面量创建通用常量，也不按相同字符串强行合并不同领域概念。迁移验证保留精确值、单位与调用行为，并单独检查 Provider 具名类型位置的有意变化。
 - `BudgetUnlimited` 保留 `math.MaxInt`，随目标架构确定上限；不得固化为 64 位十进制字面量。`DefaultApprovalTimeout`、`DefaultInboxWriteTimeout`、`MaxModelRetryAfter` 等仍为 `time.Duration`。
 - `DefaultTransientRetryBaseDelay=500ms`、`DefaultTransientRetryMaxDelay=8s` 专属于 `builder.RetryTransient`；提供商层 `DefaultBaseDelay=1s`、`DefaultMaxDelay=30s` 是另一策略。
-- 工具缓存的默认配置、性能配置、负载配置和便捷构造器预设分别命名；领域类型 `CleanupStrategy`、`PerformanceProfile`、`WorkloadType` 保持在 `tools`。
 - `VectorStoreTypeChroma`、`VectorStoreTypePinecone`、`VectorStoreTypeWeaviate`、`EmbedderProviderLocal`、`EmbedderProviderMock` 仅保留公开配置词汇，不代表框架已实现或注册这些后端。
+- 不预留没有调用方的常量：新增常量须同时有引用，删除最后一个调用方时一并删除常量。

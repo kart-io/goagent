@@ -58,7 +58,6 @@ func main() {
 				"X-Custom-Header": "test-value",
 			},
 		},
-		Context: ctx,
 	})
 
 	if err != nil {
@@ -103,7 +102,6 @@ func main() {
 				},
 			},
 		},
-		Context: ctx,
 	})
 
 	if err != nil {
@@ -197,7 +195,6 @@ func main() {
 			"url":     "https://httpbin.org/delay/3",
 			"timeout": 1.0, // 1 秒超时
 		},
-		Context: ctx,
 	})
 	if err != nil {
 		fmt.Printf("✓ 正确捕获超时错误: %v\n", err)

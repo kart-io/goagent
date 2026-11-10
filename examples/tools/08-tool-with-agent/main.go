@@ -161,8 +161,7 @@ func demonstrateToolsOnly(ctx context.Context) {
 	// 测试计算器
 	fmt.Println("\n1. 计算器工具测试:")
 	calcOutput, _ := calculator.Invoke(ctx, &interfaces.ToolInput{
-		Args:    map[string]interface{}{"expression": "(25 + 17) * 3"},
-		Context: ctx,
+		Args: map[string]interface{}{"expression": "(25 + 17) * 3"},
 	})
 	if calcOutput.Success {
 		fmt.Printf("   (25 + 17) * 3 = %v\n", calcOutput.Result)
@@ -171,8 +170,7 @@ func demonstrateToolsOnly(ctx context.Context) {
 	// 测试天气
 	fmt.Println("\n2. 天气工具测试:")
 	weatherOutput, _ := weatherTool.Invoke(ctx, &interfaces.ToolInput{
-		Args:    map[string]interface{}{"city": "北京"},
-		Context: ctx,
+		Args: map[string]interface{}{"city": "北京"},
 	})
 	if weatherOutput.Success {
 		fmt.Printf("   %v\n", weatherOutput.Result)
@@ -181,8 +179,7 @@ func demonstrateToolsOnly(ctx context.Context) {
 	// 测试时间
 	fmt.Println("\n3. 时间工具测试:")
 	timeOutput, _ := timeTool.Invoke(ctx, &interfaces.ToolInput{
-		Args:    map[string]interface{}{"format": "human"},
-		Context: ctx,
+		Args: map[string]interface{}{"format": "human"},
 	})
 	if timeOutput.Success {
 		fmt.Printf("   %v\n", timeOutput.Result)
@@ -196,7 +193,6 @@ func demonstrateToolsOnly(ctx context.Context) {
 			"source": "en",
 			"target": "zh",
 		},
-		Context: ctx,
 	})
 	if translateOutput.Success {
 		fmt.Printf("   %v\n", translateOutput.Result)

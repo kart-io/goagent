@@ -36,7 +36,6 @@ func TestCalculatorTool(t *testing.T) {
 				Args: map[string]interface{}{
 					"expression": tt.expression,
 				},
-				Context: ctx,
 			}
 
 			output, err := tool.Invoke(ctx, input)
@@ -66,7 +65,6 @@ func TestSearchTool(t *testing.T) {
 			"query":       "golang",
 			"max_results": 2.0,
 		},
-		Context: ctx,
 	}
 
 	output, err := tool.Invoke(ctx, input)
@@ -100,7 +98,6 @@ func TestShellTool(t *testing.T) {
 				"command": "echo",
 				"args":    []interface{}{"hello", "world"},
 			},
-			Context: ctx,
 		}
 
 		output, err := tool.Invoke(ctx, input)
@@ -128,7 +125,6 @@ func TestShellTool(t *testing.T) {
 				"command": "rm",
 				"args":    []interface{}{"-rf", "/"},
 			},
-			Context: ctx,
 		}
 
 		output, err := tool.Invoke(ctx, input)
@@ -154,7 +150,6 @@ func TestAPITool(t *testing.T) {
 				"method": "GET",
 				"url":    "/posts/1",
 			},
-			Context: ctx,
 		}
 
 		output, err := tool.Invoke(ctx, input)
@@ -185,7 +180,6 @@ func BenchmarkCalculatorTool(b *testing.B) {
 		Args: map[string]interface{}{
 			"expression": "2 + 3 * 4",
 		},
-		Context: ctx,
 	}
 
 	b.ResetTimer()

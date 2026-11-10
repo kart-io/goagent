@@ -77,8 +77,7 @@ func runAnalysisDemo(ctx context.Context, task string) map[string]interface{} {
 
 	analysisTool := createDataAnalysisTool()
 	toolInput := &interfaces.ToolInput{
-		Args:    analysisInput,
-		Context: ctx,
+		Args: analysisInput,
 	}
 
 	analysisOutput, _ := analysisTool.Invoke(ctx, toolInput)
@@ -96,8 +95,7 @@ func runAnalysisDemo(ctx context.Context, task string) map[string]interface{} {
 
 	summarizeTool := createSummarizeTool()
 	summaryToolInput := &interfaces.ToolInput{
-		Args:    summarizeInput,
-		Context: ctx,
+		Args: summarizeInput,
 	}
 
 	summaryOutput, _ := summarizeTool.Invoke(ctx, summaryToolInput)
@@ -132,8 +130,7 @@ func runStrategyDemo(ctx context.Context, analysisResult map[string]interface{})
 
 	strategyTool := createFormulateStrategyTool()
 	toolInput := &interfaces.ToolInput{
-		Args:    strategyInput,
-		Context: ctx,
+		Args: strategyInput,
 	}
 
 	strategyOutput, _ := strategyTool.Invoke(ctx, toolInput)
@@ -158,8 +155,7 @@ func runStrategyDemo(ctx context.Context, analysisResult map[string]interface{})
 
 	prioritizeTool := createPrioritizeTasksTool()
 	prioritizeToolInput := &interfaces.ToolInput{
-		Args:    prioritizeInput,
-		Context: ctx,
+		Args: prioritizeInput,
 	}
 
 	prioritizeOutput, _ := prioritizeTool.Invoke(ctx, prioritizeToolInput)
@@ -197,8 +193,7 @@ func runExecutionDemo(ctx context.Context, strategyResult map[string]interface{}
 
 	httpTool := createHTTPRequestTool()
 	httpToolInput := &interfaces.ToolInput{
-		Args:    httpInput,
-		Context: ctx,
+		Args: httpInput,
 	}
 
 	httpOutput, err := httpTool.Invoke(ctx, httpToolInput)
@@ -221,8 +216,7 @@ func runExecutionDemo(ctx context.Context, strategyResult map[string]interface{}
 
 	cmdTool := createExecuteCommandTool()
 	cmdToolInput := &interfaces.ToolInput{
-		Args:    cmdInput,
-		Context: ctx,
+		Args: cmdInput,
 	}
 
 	cmdOutput, _ := cmdTool.Invoke(ctx, cmdToolInput)
@@ -245,8 +239,7 @@ func runExecutionDemo(ctx context.Context, strategyResult map[string]interface{}
 
 	fileTool := createFileOperationsTool()
 	fileToolInput := &interfaces.ToolInput{
-		Args:    fileInput,
-		Context: ctx,
+		Args: fileInput,
 	}
 
 	fileOutput, _ := fileTool.Invoke(ctx, fileToolInput)

@@ -34,8 +34,7 @@ func TestBaseTool(t *testing.T) {
 
 	ctx := context.Background()
 	input := &interfaces.ToolInput{
-		Args:    map[string]interface{}{},
-		Context: ctx,
+		Args: map[string]interface{}{},
 	}
 
 	output, err := tool.Invoke(ctx, input)
@@ -71,7 +70,6 @@ func TestFunctionTool(t *testing.T) {
 			"a": 5.0,
 			"b": 3.0,
 		},
-		Context: ctx,
 	}
 
 	output, err := tool.Invoke(ctx, input)
@@ -148,8 +146,7 @@ func TestBasicToolInvocation(t *testing.T) {
 
 	ctx := context.Background()
 	input := &interfaces.ToolInput{
-		Args:    map[string]interface{}{},
-		Context: ctx,
+		Args: map[string]interface{}{},
 	}
 
 	output, err := tool.Invoke(ctx, input)
@@ -217,7 +214,6 @@ func BenchmarkFunctionTool(b *testing.B) {
 			"a": 5.0,
 			"b": 3.0,
 		},
-		Context: ctx,
 	}
 
 	b.ResetTimer()
@@ -562,7 +558,6 @@ func TestFunctionToolWithArgsSchemaFromStruct(t *testing.T) {
 			"a":         5.0,
 			"b":         3.0,
 		},
-		Context: ctx,
 	}
 
 	output, err := tool.Invoke(ctx, input)

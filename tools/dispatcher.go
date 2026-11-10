@@ -305,7 +305,6 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 	}
 	// Context and execution key are host-controlled, never accepted from Args.
 	input := *req.Input
-	input.Context = ctx
 	if key := durable.ExecutionKey(ctx); key != "" {
 		input.ExecutionKey = key
 	}
@@ -337,7 +336,6 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 	deadline := time.Now().Add(entry.timeout)
 	vctx, cancel := context.WithDeadline(ctx, deadline)
 	defer cancel()
-	input.Context = vctx
 	if err = vctx.Err(); err != nil {
 		return nil, err
 	}
@@ -445,7 +443,6 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 		if r, ok := entry.tool.(ReconcilableTool); ok && argResult == nil {
 			policy.Reconcile = func(callCtx context.Context) (json.RawMessage, bool, error) {
 				lookup := input
-				lookup.Context = callCtx
 				result, found, e := r.Reconcile(callCtx, &lookup)
 				if e != nil || !found {
 					return nil, false, e
@@ -574,7 +571,6 @@ func (d *Dispatcher) admit(ctx context.Context, entry dispatchEntry, input inter
 func (d *Dispatcher) checkSubstitute(ctx context.Context, target dispatchEntry, input *interfaces.ToolInput) error {
 	vctx, cancel := context.WithTimeout(ctx, target.timeout)
 	defer cancel()
-	input.Context = vctx
 	if err := toolargs.Validate(target.resolved, input.Args); err != nil {
 		return err
 	}
@@ -674,7 +670,6 @@ func (d *Dispatcher) runTool(callCtx context.Context, entry dispatchEntry, input
 			return nil, e
 		}
 	}
-	input.Context = callCtx
 	result, e := entry.tool.Invoke(callCtx, &input)
 	if e != nil {
 		if out, ok := argumentResult(e, settled); ok && callCtx.Err() == nil {

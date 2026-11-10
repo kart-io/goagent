@@ -332,8 +332,7 @@ func ollamaWithToolsExample() {
 	// 直接调用时间工具
 	ctx := context.Background()
 	timeInput := &interfaces.ToolInput{
-		Args:    map[string]interface{}{},
-		Context: ctx,
+		Args: map[string]interface{}{},
 	}
 
 	timeOutput, err := timeTool.Invoke(ctx, timeInput)
@@ -348,7 +347,6 @@ func ollamaWithToolsExample() {
 		Args: map[string]interface{}{
 			"city": "Beijing",
 		},
-		Context: ctx,
 	}
 
 	weatherOutput, err := weatherTool.Invoke(ctx, weatherInput)
@@ -401,8 +399,7 @@ After receiving the tool result, provide a natural language response to the user
 		switch toolName {
 		case "get_current_time":
 			output, toolErr := timeTool.Invoke(ctx, &interfaces.ToolInput{
-				Args:    map[string]interface{}{},
-				Context: ctx,
+				Args: map[string]interface{}{},
 			})
 			if toolErr == nil {
 				toolResult = output.Result
@@ -414,8 +411,7 @@ After receiving the tool result, provide a natural language response to the user
 				return
 			}
 			output, toolErr := weatherTool.Invoke(ctx, &interfaces.ToolInput{
-				Args:    args,
-				Context: ctx,
+				Args: args,
 			})
 			if toolErr == nil {
 				toolResult = output.Result
@@ -478,8 +474,7 @@ Input: <tool_input_as_json>`, toolDescriptions)),
 				return
 			}
 			output, err := weatherTool.Invoke(ctx, &interfaces.ToolInput{
-				Args:    args,
-				Context: ctx,
+				Args: args,
 			})
 			if err == nil {
 				weatherJSON, _ := json.Marshal(output.Result, json.Pretty)

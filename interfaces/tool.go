@@ -115,11 +115,6 @@ type ToolInput struct {
 	// float64 表示不了的大整数与高精度小数是 json.Number（见 tools/toolargs）。
 	Args map[string]interface{} `json:"args"`
 
-	// Context 是执行上下文（不序列化）
-	//
-	// 用于取消、超时和传递请求范围的值
-	Context context.Context `json:"-"`
-
 	// CallerID 标识调用工具的身份
 	//
 	// 可选，用于授权和审计

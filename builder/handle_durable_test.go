@@ -65,10 +65,10 @@ func TestHandleAcceptedInputsSurviveProcessExit(t *testing.T) {
 		require.NoError(t, err)
 		h := agent.Start(durableHandleContext(t, newHandleStore(t, dir)), "task")
 		<-started
-		require.NoError(t, h.Steer("steer-after-crash"))
-		require.NoError(t, h.Inject("inject-after-crash"))
-		require.NoError(t, h.Redirect("redirect-after-crash"))
-		require.NoError(t, h.Followup("followup-after-crash"))
+		require.NoError(t, h.Steer(context.Background(), "steer-after-crash"))
+		require.NoError(t, h.Inject(context.Background(), "inject-after-crash"))
+		require.NoError(t, h.Redirect(context.Background(), "redirect-after-crash"))
+		require.NoError(t, h.Followup(context.Background(), "followup-after-crash"))
 		os.Exit(handleCrashExit)
 	}
 
@@ -122,7 +122,7 @@ func TestHandleClaimedInputIsNotDuplicatedAfterCrashBeforeAck(t *testing.T) {
 		require.NoError(t, err)
 		h := agent.Start(durableHandleContext(t, &exitOnInboxAck{Store: newHandleStore(t, dir)}), "task")
 		<-started
-		require.NoError(t, h.Steer("only-once"))
+		require.NoError(t, h.Steer(context.Background(), "only-once"))
 		close(release)
 		_, _ = h.Wait(context.Background())
 		t.Fatal("期望在确认领取时退出进程")
@@ -156,7 +156,7 @@ func TestHandleSteerOnceDeduplicatesAfterRestartAndClaim(t *testing.T) {
 		require.NoError(t, err)
 		h := agent.Start(durableHandleContext(t, newHandleStore(t, child)), "task")
 		<-started
-		require.NoError(t, h.SteerOnce("notice-1", "only-once"))
+		require.NoError(t, h.SteerOnce(context.Background(), "notice-1", "only-once"))
 		os.Exit(handleCrashExit)
 	}
 	runHandleChild(t, "TestHandleSteerOnceDeduplicatesAfterRestartAndClaim", env, dir)
@@ -171,7 +171,7 @@ func TestHandleSteerOnceDeduplicatesAfterRestartAndClaim(t *testing.T) {
 			<-started
 			if turns++; turns == 2 {
 				require.Empty(t, h.PendingInputs(), "第二次请求之前输入已被领取")
-				require.NoError(t, h.SteerOnce("notice-1", "only-once"))
+				require.NoError(t, h.SteerOnce(context.Background(), "notice-1", "only-once"))
 			}
 			return nil
 		}).Build()
@@ -198,12 +198,12 @@ func TestHandleSteerOnceWithoutJournal(t *testing.T) {
 	require.NoError(t, err)
 	h := agent.Start(context.Background(), "task")
 	<-started
-	require.NoError(t, h.SteerOnce("k", "only-once"))
-	require.NoError(t, h.SteerOnce("k", "only-once"))
+	require.NoError(t, h.SteerOnce(context.Background(), "k", "only-once"))
+	require.NoError(t, h.SteerOnce(context.Background(), "k", "only-once"))
 	require.Len(t, h.PendingInputs(), 1)
 	close(release)
 	require.Equal(t, "done", waitAnswer(t, h).Result)
-	require.ErrorIs(t, h.SteerOnce("k2", "late"), agentErrors.ErrAgentHandleDone)
+	require.ErrorIs(t, h.SteerOnce(context.Background(), "k2", "late"), agentErrors.ErrAgentHandleDone)
 }
 
 // failInboxSave 使收件箱的写入失败。
@@ -233,10 +233,10 @@ func TestHandleInputPersistFailureIsReported(t *testing.T) {
 	require.NoError(t, err)
 	h := agent.Start(durableHandleContext(t, failInboxSave{Store: newHandleStore(t, t.TempDir()), err: boom}), "task")
 	<-started
-	require.ErrorIs(t, h.Steer("lost"), boom)
-	require.ErrorIs(t, h.Inject("lost"), boom)
-	require.ErrorIs(t, h.Followup("lost"), boom)
-	require.ErrorIs(t, h.Redirect("lost"), boom)
+	require.ErrorIs(t, h.Steer(context.Background(), "lost"), boom)
+	require.ErrorIs(t, h.Inject(context.Background(), "lost"), boom)
+	require.ErrorIs(t, h.Followup(context.Background(), "lost"), boom)
+	require.ErrorIs(t, h.Redirect(context.Background(), "lost"), boom)
 	require.Empty(t, h.PendingInputs())
 	close(release)
 	require.Equal(t, "done", waitAnswer(t, h).Result)
@@ -264,7 +264,7 @@ func TestHandleClaimedFollowupBatchResumesAfterRestart(t *testing.T) {
 			return nil
 		}).Start(durableHandleContext(t, newHandleStore(t, dir)), "task")
 		<-started
-		require.NoError(t, h.Followup("second-turn"))
+		require.NoError(t, h.Followup(context.Background(), "second-turn"))
 		close(release)
 		_, _ = h.Wait(context.Background())
 		t.Fatal("期望在第二轮开始时退出进程")

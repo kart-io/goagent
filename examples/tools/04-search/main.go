@@ -109,7 +109,6 @@ func main() {
 				"query":       q.query,
 				"max_results": float64(q.maxResults),
 			},
-			Context: ctx,
 		})
 		if err != nil {
 			fmt.Printf("✗ 搜索失败: %v\n", err)
@@ -179,7 +178,6 @@ func main() {
 			"query":       "test",
 			"max_results": float64(5),
 		},
-		Context: ctx,
 	})
 
 	if err != nil {
@@ -204,7 +202,6 @@ func main() {
 			"query":       "golang",
 			"max_results": float64(3),
 		},
-		Context: ctx,
 	})
 
 	if metaOutput != nil && metaOutput.Metadata != nil {

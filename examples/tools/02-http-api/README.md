@@ -26,6 +26,5 @@ output, err := apiTool.Invoke(ctx, &interfaces.ToolInput{
         "method": "GET",
         "url":    "https://httpbin.org/get",
     },
-    Context: ctx,
 })
 ```

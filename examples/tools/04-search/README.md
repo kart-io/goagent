@@ -24,7 +24,6 @@ engine.AddResponse("golang", []search.SearchResult{
 })
 searchTool := search.NewSearchTool(engine)
 output, err := searchTool.Invoke(ctx, &interfaces.ToolInput{
-    Args:    map[string]interface{}{"query": "golang", "max_results": float64(5)},
-    Context: ctx,
+    Args: map[string]interface{}{"query": "golang", "max_results": float64(5)},
 })
 ```

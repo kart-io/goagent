@@ -44,7 +44,7 @@ func TestDispatcherValidationAuthorizationAndEffectKey(t *testing.T) {
 	ctx := durable.WithExecutionKey(context.Background(), "node-key")
 	authorized := 0
 	tool := &dispatchTestTool{name: "refund", schema: strictOrderSchema, run: func(ctx context.Context, in *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
-		if in.Context != ctx || in.ExecutionKey != "node-key" || in.CallerID != "trusted-user" {
+		if in.ExecutionKey != "node-key" || in.CallerID != "trusted-user" {
 			return nil, errors.New("host metadata lost")
 		}
 		if amount, ok := in.Args["amount"].(int64); !ok || amount != 9007199254740993 {

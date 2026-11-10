@@ -301,8 +301,7 @@ func (s *LLMWeatherSkill) executeToolCalls(ctx context.Context, toolCalls []llm.
 
 		// 执行工具
 		output, err := tool.Invoke(ctx, &interfaces.ToolInput{
-			Args:    args,
-			Context: ctx,
+			Args: args,
 		})
 
 		if err != nil {

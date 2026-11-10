@@ -193,9 +193,8 @@ func (a *ConfigurableAgent[S]) invokeToolCall(ctx context.Context, call ToolCall
 		if tool.Name() == call.Name {
 			// 创建工具输入
 			toolInput := &interfaces.ToolInput{
-				CallID:  call.ID,
-				Args:    call.Input,
-				Context: ctx,
+				CallID: call.ID,
+				Args:   call.Input,
 			}
 
 			// 执行工具

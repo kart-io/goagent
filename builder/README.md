@@ -50,10 +50,10 @@ output, err := agent.AsRunnable().Invoke(ctx, "分析这些数据……")
 
 ```go
 h := agent.Start(ctx, "修复登录页的样式")
-_ = h.Steer("顺便检查移动端")   // 当前工具批次结束后作为 user 消息追加；模型即将结束时唤醒续跑
-_ = h.Inject("用户偏好深色主题") // 随下一次请求发送，不唤醒
-_ = h.Redirect("先别改 CSS")     // 取消进行中的模型请求，保留已流出的文本后重新请求；工具执行中降级为 Steer
-_ = h.Followup("再写个测试")     // 本轮结束后作为新一轮输入，续接对话
+_ = h.Steer(ctx, "顺便检查移动端")   // 当前工具批次结束后作为 user 消息追加；模型即将结束时唤醒续跑
+_ = h.Inject(ctx, "用户偏好深色主题") // 随下一次请求发送，不唤醒
+_ = h.Redirect(ctx, "先别改 CSS")     // 取消进行中的模型请求，保留已流出的文本后重新请求；工具执行中降级为 Steer
+_ = h.Followup(ctx, "再写个测试")     // 本轮结束后作为新一轮输入，续接对话
 out, err := h.Wait(ctx)         // h.Interrupt(cause) 中止运行
 pending := h.PendingInputs()   // 独立快照：仍在队列、尚未被执行循环领取的输入
 ```

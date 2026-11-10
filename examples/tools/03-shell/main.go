@@ -74,8 +74,7 @@ func main() {
 		}
 
 		output, err := shellTool.Invoke(ctx, &interfaces.ToolInput{
-			Args:    args,
-			Context: ctx,
+			Args: args,
 		})
 		if err != nil {
 			fmt.Printf("✗ 执行失败: %v\n", err)
@@ -104,7 +103,6 @@ func main() {
 			"command": "ls",
 			"args":    []interface{}{"-la"},
 		},
-		Context: ctx,
 	})
 
 	if err != nil {
@@ -132,7 +130,6 @@ func main() {
 			Args: map[string]interface{}{
 				"command": cmd,
 			},
-			Context: ctx,
 		})
 
 		if err != nil {
@@ -180,7 +177,6 @@ func main() {
 			"args":     []interface{}{"-la"},
 			"work_dir": "/tmp",
 		},
-		Context: ctx,
 	})
 
 	if err != nil {
@@ -203,7 +199,6 @@ func main() {
 			"args":    []interface{}{"10"}, // 睡眠 10 秒
 			"timeout": 2.0,                 // 超时 2 秒
 		},
-		Context: ctx,
 	})
 
 	if err != nil {

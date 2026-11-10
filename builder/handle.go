@@ -77,16 +77,17 @@ func inboxFrom(ctx context.Context) *inbox {
 
 // persist 把输入写入持久收件箱，返回序号；非持久运行为 0。调用方持有 b.mu：
 // 写入期间不能结束收件箱，否则已落盘的输入会同时收到 ErrHandleDone。
-func (b *inbox) persist(kind, text string) (uint64, error) {
+// persist 在持有 b.mu 时写盘，写入时间不超过 DefaultInboxWriteTimeout，调用方取消时提前返回。
+func (b *inbox) persist(ctx context.Context, kind, text string) (uint64, error) {
 	if b.durable == nil {
 		return 0, nil
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), constants.DefaultInboxWriteTimeout)
+	ctx, cancel := context.WithTimeout(ctx, constants.DefaultInboxWriteTimeout)
 	defer cancel()
 	return b.durable.Append(ctx, kind, text)
 }
 
-func (b *inbox) push(kind inboxKind, text string) error {
+func (b *inbox) push(ctx context.Context, kind inboxKind, text string) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.done {
@@ -96,7 +97,7 @@ func (b *inbox) push(kind inboxKind, text string) error {
 	if kind == inboxSteer {
 		name = inboxKindSteer
 	}
-	seq, err := b.persist(name, text)
+	seq, err := b.persist(ctx, name, text)
 	if err != nil {
 		return err
 	}
@@ -367,11 +368,13 @@ func (h *Handle) PendingInputs() []PendingInput {
 
 // Steer 排到下一步：当前工具批次结束后作为 user 消息追加；模型即将结束本轮时唤醒续跑。
 // 入队成功不保证已处理；结束时未领取的输入可通过 PendingInputs 查询。持久运行中入队成功表示已落盘。
-func (h *Handle) Steer(msg string) error { return h.inbox.push(inboxSteer, msg) }
+func (h *Handle) Steer(ctx context.Context, msg string) error {
+	return h.inbox.push(ctx, inboxSteer, msg)
+}
 
 // SteerOnce 与 Steer 相同，但同一 key 只接受一次，重复调用返回 nil。持久运行中键与输入原子落盘，投递方崩溃后重投、
 // 输入已被领取或进程已重启都不会产生第二条（同一执行键内，记住最近 256 个键）；非持久运行只在本 Handle 内去重。
-func (h *Handle) SteerOnce(key, msg string) error {
+func (h *Handle) SteerOnce(ctx context.Context, key, msg string) error {
 	b := h.inbox
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -380,7 +383,7 @@ func (h *Handle) SteerOnce(key, msg string) error {
 	}
 	var seq uint64
 	if b.durable != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), constants.DefaultInboxWriteTimeout)
+		ctx, cancel := context.WithTimeout(ctx, constants.DefaultInboxWriteTimeout)
 		defer cancel()
 		var duplicate bool
 		var err error
@@ -401,16 +404,18 @@ func (h *Handle) SteerOnce(key, msg string) error {
 }
 
 // Inject 排到下一步，随下一次模型请求发送，但不唤醒即将结束的轮次。
-func (h *Handle) Inject(msg string) error { return h.inbox.push(inboxInject, msg) }
+func (h *Handle) Inject(ctx context.Context, msg string) error {
+	return h.inbox.push(ctx, inboxInject, msg)
+}
 
 // Followup 排到本轮结束之后，作为新一轮的用户输入，续接本轮的对话。
-func (h *Handle) Followup(msg string) error {
+func (h *Handle) Followup(ctx context.Context, msg string) error {
 	h.inbox.mu.Lock()
 	defer h.inbox.mu.Unlock()
 	if h.inbox.done {
 		return agentErrors.ErrAgentHandleDone
 	}
-	seq, err := h.inbox.persist(inboxKindFollowup, msg)
+	seq, err := h.inbox.persist(ctx, inboxKindFollowup, msg)
 	if err != nil {
 		return err
 	}
@@ -420,7 +425,7 @@ func (h *Handle) Followup(msg string) error {
 
 // Redirect 取消进行中的模型请求，保留已流出的文本，追加 msg 后重新请求；没有进行中的模型请求（如工具执行中）
 // 或持久运行中降级为 Steer。
-func (h *Handle) Redirect(msg string) error {
+func (h *Handle) Redirect(ctx context.Context, msg string) error {
 	h.inbox.mu.Lock()
 	if h.inbox.done {
 		h.inbox.mu.Unlock()
@@ -432,7 +437,7 @@ func (h *Handle) Redirect(msg string) error {
 		cancel(agentErrors.ErrModelRedirected)
 		return nil
 	}
-	seq, err := h.inbox.persist(inboxKindSteer, msg)
+	seq, err := h.inbox.persist(ctx, inboxKindSteer, msg)
 	if err == nil {
 		h.inbox.items = append(h.inbox.items, inboxItem{Kind: inboxSteer, Text: msg, Seq: seq})
 	}

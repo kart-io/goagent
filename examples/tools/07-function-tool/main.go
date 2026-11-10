@@ -81,7 +81,6 @@ func main() {
 				"min": float64(1),
 				"max": float64(100),
 			},
-			Context: ctx,
 		})
 
 		if err != nil {
@@ -167,7 +166,6 @@ func main() {
 				"text":      tc.text,
 				"operation": tc.operation,
 			},
-			Context: ctx,
 		})
 
 		if err != nil {
@@ -251,8 +249,7 @@ func main() {
 		}
 
 		output, _ := counterTool.Invoke(ctx, &interfaces.ToolInput{
-			Args:    args,
-			Context: ctx,
+			Args: args,
 		})
 
 		if output.Success {
@@ -333,7 +330,6 @@ func main() {
 				"city": city,
 				"unit": "celsius",
 			},
-			Context: ctx,
 		})
 
 		if output.Success {
@@ -414,7 +410,6 @@ func main() {
 			Args: map[string]interface{}{
 				"format": format,
 			},
-			Context: ctx,
 		})
 
 		if output.Success {

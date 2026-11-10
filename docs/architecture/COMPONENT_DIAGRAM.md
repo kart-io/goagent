@@ -32,10 +32,10 @@ classDiagram
     }
     class Handle {
         <<builder>>
-        +Steer(string) error
-        +Inject(string) error
-        +Followup(string) error
-        +Redirect(string) error
+        +Steer(Context, string) error
+        +Inject(Context, string) error
+        +Followup(Context, string) error
+        +Redirect(Context, string) error
         +Interrupt(error)
         +Wait(ctx) (*AgentOutput, error)
     }

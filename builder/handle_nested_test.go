@@ -36,7 +36,7 @@ func TestNestedAgentDoesNotClaimParentHandleInputs(t *testing.T) {
 	require.NoError(t, err)
 	h := parent.Start(context.Background(), "parent task")
 	<-entered
-	require.NoError(t, h.Steer("for the parent"))
+	require.NoError(t, h.Steer(context.Background(), "for the parent"))
 	close(release)
 	require.Equal(t, "parent answer", waitAnswer(t, h).Result)
 	require.NotContains(t, requestText(childModel.request(0)), "for the parent")
@@ -72,7 +72,7 @@ func TestNestedAgentDoesNotInheritParentFollowupHistory(t *testing.T) {
 	require.NoError(t, err)
 	h := parent.Start(context.Background(), "first")
 	<-started
-	require.NoError(t, h.Followup("second"))
+	require.NoError(t, h.Followup(context.Background(), "second"))
 	close(release)
 	require.Equal(t, "second turn done", waitAnswer(t, h).Result)
 	require.NotContains(t, requestText(childModel.request(0)), "secret from first turn")

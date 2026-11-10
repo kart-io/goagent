@@ -25,7 +25,7 @@ func TestHandleFailedTurnRetainsFollowup(t *testing.T) {
 	require.NoError(t, err)
 	h := agent.Start(context.Background(), "first")
 	<-started
-	require.NoError(t, h.Followup("second"))
+	require.NoError(t, h.Followup(context.Background(), "second"))
 	close(release)
 	_, err = h.Wait(context.Background())
 	require.ErrorIs(t, err, boom)
@@ -45,9 +45,9 @@ func TestHandlePendingInputsAtStoppingBoundary(t *testing.T) {
 	require.NoError(t, err)
 	h := agent.Start(context.Background(), "first")
 	<-started
-	require.NoError(t, h.Steer("late correction"))
-	require.NoError(t, h.Inject("reference"))
-	require.NoError(t, h.Redirect("late redirect")) // No model request: becomes Steer.
+	require.NoError(t, h.Steer(context.Background(), "late correction"))
+	require.NoError(t, h.Inject(context.Background(), "reference"))
+	require.NoError(t, h.Redirect(context.Background(), "late redirect")) // No model request: becomes Steer.
 	close(release)
 	require.Equal(t, "finished", waitAnswer(t, h).Result)
 	require.Equal(t, []PendingInput{
@@ -56,7 +56,7 @@ func TestHandlePendingInputsAtStoppingBoundary(t *testing.T) {
 		{Kind: "steer", Text: "late redirect"},
 	}, h.PendingInputs())
 	require.Equal(t, 1, model.count(), "snapshot does not create another turn or bypass limits")
-	require.ErrorIs(t, h.Followup("too late"), agentErrors.ErrAgentHandleDone)
+	require.ErrorIs(t, h.Followup(context.Background(), "too late"), agentErrors.ErrAgentHandleDone)
 }
 
 func TestHandlePendingInputsAtIterationLimit(t *testing.T) {
@@ -66,7 +66,7 @@ func TestHandlePendingInputsAtIterationLimit(t *testing.T) {
 	require.NoError(t, err)
 	h := agent.Start(context.Background(), "first")
 	<-started
-	require.NoError(t, h.Steer("correction"))
+	require.NoError(t, h.Steer(context.Background(), "correction"))
 	close(release)
 	require.Equal(t, "finished", waitAnswer(t, h).Result)
 	require.Equal(t, []PendingInput{{Kind: "steer", Text: "correction"}}, h.PendingInputs())
@@ -80,14 +80,14 @@ func TestHandlePendingInputsAfterInterrupt(t *testing.T) {
 	require.NoError(t, err)
 	h := agent.Start(context.Background(), "first")
 	<-started
-	require.NoError(t, h.Inject("reference"))
-	require.NoError(t, h.Followup("second"))
+	require.NoError(t, h.Inject(context.Background(), "reference"))
+	require.NoError(t, h.Followup(context.Background(), "second"))
 	// Timing out one waiter must not stop the running Handle.
 	waitCtx, cancel := context.WithCancel(context.Background())
 	cancel()
 	_, err = h.Wait(waitCtx)
 	require.ErrorIs(t, err, context.Canceled)
-	require.NoError(t, h.Followup("third"))
+	require.NoError(t, h.Followup(context.Background(), "third"))
 	boom := errors.New("user canceled")
 	h.Interrupt(boom)
 	_, err = h.Wait(context.Background())
@@ -106,7 +106,7 @@ func TestHandlePendingInputsSnapshotAndConsumption(t *testing.T) {
 	require.NoError(t, err)
 	h := agent.Start(context.Background(), "first")
 	<-started
-	require.NoError(t, h.Followup("second"))
+	require.NoError(t, h.Followup(context.Background(), "second"))
 	snapshot := h.PendingInputs()
 	require.Equal(t, []PendingInput{{Kind: "followup", Text: "second"}}, snapshot)
 	snapshot[0].Text = "changed by caller"
