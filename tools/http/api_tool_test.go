@@ -96,7 +96,6 @@ func TestAPITool_GET(t *testing.T) {
 			"method": "GET",
 			"url":    "/test",
 		},
-		Context: ctx,
 	})
 
 	require.NoError(t, err)
@@ -142,7 +141,6 @@ func TestAPITool_POST(t *testing.T) {
 				"data": "test data",
 			},
 		},
-		Context: ctx,
 	})
 
 	require.NoError(t, err)
@@ -171,7 +169,6 @@ func TestAPITool_PUT(t *testing.T) {
 			"url":    "/update",
 			"body":   map[string]interface{}{"name": "updated"},
 		},
-		Context: ctx,
 	})
 
 	require.NoError(t, err)
@@ -194,7 +191,6 @@ func TestAPITool_DELETE(t *testing.T) {
 			"method": "DELETE",
 			"url":    "/delete/123",
 		},
-		Context: ctx,
 	})
 
 	require.NoError(t, err)
@@ -219,7 +215,6 @@ func TestAPITool_PATCH(t *testing.T) {
 			"url":    "/patch",
 			"body":   map[string]interface{}{"field": "value"},
 		},
-		Context: ctx,
 	})
 
 	require.NoError(t, err)
@@ -251,7 +246,6 @@ func TestAPITool_CustomHeaders(t *testing.T) {
 				"Authorization": "Bearer token123",
 			},
 		},
-		Context: ctx,
 	})
 
 	require.NoError(t, err)
@@ -285,7 +279,6 @@ func TestAPITool_Non2xxStatus(t *testing.T) {
 				Args: map[string]interface{}{
 					"url": "/test",
 				},
-				Context: ctx,
 			})
 
 			require.Error(t, err)
@@ -315,7 +308,6 @@ func TestAPITool_NonJSONResponse(t *testing.T) {
 		Args: map[string]interface{}{
 			"url": "/text",
 		},
-		Context: ctx,
 	})
 
 	require.NoError(t, err)
@@ -345,7 +337,6 @@ func TestAPITool_Timeout(t *testing.T) {
 		Args: map[string]interface{}{
 			"url": "/slow",
 		},
-		Context: ctx,
 	})
 
 	require.Error(t, err)
@@ -370,7 +361,6 @@ func TestAPITool_CustomTimeout(t *testing.T) {
 			"url":     "/test",
 			"timeout": 0.1, // 100ms - much shorter than server response time
 		},
-		Context: ctx,
 	})
 
 	require.Error(t, err)
@@ -419,8 +409,7 @@ func TestAPITool_ErrorCases(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			output, err := tool.Invoke(ctx, &interfaces.ToolInput{
-				Args:    tt.args,
-				Context: ctx,
+				Args: tt.args,
 			})
 
 			require.Error(t, err)
@@ -492,7 +481,7 @@ func TestAPITool_BaseURLRestrictsHost(t *testing.T) {
 	tool := NewAPITool(base.URL, 5*time.Second, map[string]string{"X-Api-Key": "secret"})
 	ctx := context.Background()
 	invoke := func(url string) (*interfaces.ToolOutput, error) {
-		return tool.Invoke(ctx, &interfaces.ToolInput{Args: map[string]interface{}{"url": url}, Context: ctx})
+		return tool.Invoke(ctx, &interfaces.ToolInput{Args: map[string]interface{}{"url": url}})
 	}
 
 	output, err := invoke("/relative")
@@ -633,7 +622,9 @@ func TestPublicAddress(t *testing.T) {
 		"8.8.8.8": true, "2606:4700::1111": true,
 		"127.0.0.1": false, "10.1.2.3": false, "172.16.0.1": false, "192.168.1.1": false, "169.254.169.254": false,
 		"100.100.100.200": false, "0.0.0.0": false, "::1": false, "fe80::1": false, "fd00::1": false, "::ffff:127.0.0.1": false,
-		"224.0.0.1": false,
+		"224.0.0.1":        false,
+		"64:ff9b::808:808": true, "64:ff9b::a9fe:a9fe": false, "64:ff9b::7f00:1": false, "64:ff9b:1::808:808": false,
+		"2002:808:808::1": true, "2002:a9fe:a9fe::1": false, "2002:a00:1::1": false, "2001:0:4136:e378::1": false,
 	} {
 		assert.Equal(t, want, publicAddress(netip.MustParseAddr(addr)), addr)
 	}

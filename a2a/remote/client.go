@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
+	"strings"
 
 	"github.com/a2aproject/a2a-go/v2/a2a"
 	"github.com/a2aproject/a2a-go/v2/a2aclient"
@@ -19,6 +21,8 @@ import (
 
 // Connect 使用宿主 HTTP client 完成能力发现和传输；调用方负责 Destroy。
 // 返回官方客户端，直接支持流式发送、重订阅、查询与取消。
+// 只使用 Agent Card 中与发现地址同源的接口：宿主 client 可能带凭证，不能被远端声明的地址引向其他主机；
+// 接口部署在其他源时，由宿主自行校验 Agent Card 后用 a2aclient.NewFromCard 连接。
 func Connect(ctx context.Context, endpoint string, client *http.Client) (*a2aclient.Client, error) {
 	u, err := url.Parse(endpoint)
 	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") || u.User != nil {
@@ -30,6 +34,13 @@ func Connect(ctx context.Context, endpoint string, client *http.Client) (*a2acli
 	card, err := agentcard.NewResolver(client).Resolve(ctx, endpoint)
 	if err != nil {
 		return nil, err
+	}
+	card.SupportedInterfaces = slices.DeleteFunc(card.SupportedInterfaces, func(i *a2a.AgentInterface) bool {
+		target, err := url.Parse(i.URL)
+		return err != nil || target.Scheme != u.Scheme || !strings.EqualFold(target.Host, u.Host)
+	})
+	if len(card.SupportedInterfaces) == 0 {
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "A2A Agent Card 没有与发现地址同源的接口")
 	}
 	return a2aclient.NewFromCard(ctx, card, a2aclient.WithDefaultsDisabled(), a2aclient.WithJSONRPCTransport(client), a2aclient.WithRESTTransport(client))
 }

@@ -32,12 +32,12 @@ wrapped := middleware.Wrap(calculator,
 output, err := wrapped.Invoke(ctx, &interfaces.ToolInput{Args: map[string]any{"a": 1, "b": 2}})
 ```
 
-`WithMiddleware(tool, middlewares ...middleware.ToolMiddlewareFunc)` 按洋葱模型包装，第一个函数在最外层。`Logging`、`Caching`、`RateLimit` 返回同一种强类型函数；需要保留对象以读取统计时显式传 `NewCachingMiddleware(...).Wrap` 或 `NewRateLimitMiddleware(...).Wrap`。对象或其他任意类型不能作为参数通过编译；空中间件函数或返回空调用器的函数在装配时以 `errors.CodeInvalidConfig` 失败。
+`middleware.Wrap(tool, middlewares ...middleware.ToolMiddlewareFunc)` 按洋葱模型包装，第一个函数在最外层。`Logging`、`Caching`、`RateLimit` 返回同一种强类型函数；需要保留对象以读取统计时显式传 `NewCachingMiddleware(...).Wrap` 或 `NewRateLimitMiddleware(...).Wrap`。对象或其他任意类型不能作为参数通过编译；空中间件函数或返回空调用器的函数在装配时以 `errors.CodeInvalidConfig` 失败。
 不传中间件时返回原工具。包装结果是 `*middleware.WrappedTool`，只实现 `interfaces.Tool` 与 `Unwrap()`，**不转发**原工具声明的可选接口（如 `DispatchTimeoutProvider`、`DurablePolicyProvider`、`interfaces.ArgumentErrorTool`），Dispatcher 也不会调用 `Unwrap`；依赖这些声明的工具不要先包装再注册。
 
 ### 内置中间件
 
-**Logging**：`Logging(opts...)`（或 `NewLoggingMiddleware(opts...).Wrap`），默认输出到 stdout 的 JSON slog，记录工具名、CallerID、TraceID、参数、结果与耗时。选项：`WithLogger`、`WithoutInputLogging`、`WithoutOutputLogging`、`WithMaxArgBytes`（默认 1024 字节，超出截断）。计时留在每次调用的局部变量，不修改业务输入；成功返回时写入 `Metadata["execution_time"]`。错误及部分结果原样传递，空输入和空输出也不会被日志包装改写。
+**Logging**：`Logging(opts...)`（或 `NewLoggingMiddleware(opts...).Wrap`），默认输出到 stdout 的 JSON slog，记录工具名、CallerID、TraceID 与耗时；参数与结果常含用户数据和凭证，默认不记录，分别用 `WithInputLogging`、`WithOutputLogging` 开启。其他选项：`WithLogger`、`WithMaxArgBytes`（默认 1024 字节，超出截断）。计时留在每次调用的局部变量，不修改业务输入；成功返回时写入 `Metadata["execution_time"]`。错误及部分结果原样传递，空输入和空输出也不会被日志包装改写。
 
 **Caching**：`Caching(opts...)`（或 `NewCachingMiddleware(opts...).Wrap`，后者的 `GetStats()` 返回命中/未命中次数）。
 

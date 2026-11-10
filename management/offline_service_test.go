@@ -1,6 +1,7 @@
 package management_test
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -389,4 +390,58 @@ func TestOfflineSessionPreparationDetectsForeignLog(t *testing.T) {
 	require.Equal(t, ev.Data, events[0].Data, "会话冲突不得覆盖原日志")
 	_, err = f.Service.SubmitTask(ctx, f.Actor, mg.SubmitTaskRequest{IdempotencyKey: "unsafe", SessionID: se.ID, Input: []byte(`1`)})
 	require.ErrorIs(t, err, agentErrors.ErrManagementConflict)
+}
+
+// publishPolicy 只允许 publisher 执行 agent.publish。
+type publishPolicy struct{ mg.TenantAuthorizer }
+
+func (p publishPolicy) Authorize(ctx context.Context, actor mg.Actor, action string, ref mg.ResourceRef) error {
+	if action == "agent.publish" && actor.Subject != "publisher" {
+		return agentErrors.ErrManagementForbidden
+	}
+	return p.TenantAuthorizer.Authorize(ctx, actor, action, ref)
+}
+
+// 只有会话权限时只能使用已发布的版本；指定未发布的版本须具备发布权限。
+func TestCreateSessionWithUnpublishedVersionRequiresPublish(t *testing.T) {
+	ctx := context.Background()
+	f := mt.NewFixture(t)
+	cfg := f.Config()
+	cfg.Authorizer = publishPolicy{}
+	var err error
+	f.Service, err = mg.New(cfg)
+	require.NoError(t, err)
+	publisher := f.Actor
+	publisher.Subject = "publisher"
+	a, err := f.Service.RegisterAgent(ctx, publisher, mg.RegisterAgentRequest{IdempotencyKey: "agent", Name: "草稿"})
+	require.NoError(t, err)
+	for _, v := range []string{"v1", "v2"} {
+		_, err = f.Service.SaveVersion(ctx, publisher, mg.SaveVersionRequest{IdempotencyKey: v, AgentID: a.ID, Version: v, RunnerKind: "offline", ImplementationVersion: "impl", Config: []byte(`{}`)})
+		require.NoError(t, err)
+	}
+	_, err = f.Service.PublishVersion(ctx, publisher, mg.PublishRequest{IdempotencyKey: "publish", AgentID: a.ID, Version: "v1", ExpectedRevision: a.Revision})
+	require.NoError(t, err)
+
+	tests := []struct {
+		name    string
+		actor   mg.Actor
+		version string
+		err     error
+	}{
+		{"默认使用发布版本", f.Actor, "", nil},
+		{"显式指定发布版本", f.Actor, "v1", nil},
+		{"未发布版本需要发布权限", f.Actor, "v2", agentErrors.ErrManagementForbidden},
+		{"有发布权限可使用未发布版本", publisher, "v2", nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			se, err := f.Service.CreateSession(ctx, tt.actor, mg.CreateSessionRequest{IdempotencyKey: tt.name, AgentID: a.ID, Version: tt.version})
+			if tt.err != nil {
+				require.ErrorIs(t, err, tt.err)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, cmp.Or(tt.version, "v1"), se.Version)
+		})
+	}
 }

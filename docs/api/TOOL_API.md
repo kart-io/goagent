@@ -170,7 +170,7 @@ func Wrap(tool interfaces.Tool, middlewares ...ToolMiddlewareFunc) interfaces.To
 
 | 中间件 | 有状态对象 | 装配函数 |
 |---|---|---|
-| 日志 | `NewLoggingMiddleware(WithLogger, WithMaxArgBytes, WithoutInputLogging, WithoutOutputLogging)` | `Logging(...)` |
+| 日志 | `NewLoggingMiddleware(WithLogger, WithMaxArgBytes, WithInputLogging, WithOutputLogging)` | `Logging(...)` |
 | 缓存 | `NewCachingMiddleware(WithCache, WithTTL, WithCacheKeyFunc, WithCacheLogger)` | `Caching(...)` |
 | 限流 | `NewRateLimitMiddleware(WithQPS, WithBurst, WithPerToolRateLimit, WithWaitTimeout, WithRateLimitLogger)` | `RateLimit(...)` |
 

@@ -29,6 +29,12 @@ func (s *Service) CreateSession(ctx context.Context, a Actor, r CreateSessionReq
 		if version == "" {
 			return Session{}, agentErrors.ErrManagementInvalid
 		}
+		// 用未发布的版本开会话等同于让它上线，须具备发布权限。
+		if version != ag.PublishedVersion {
+			if err = s.cfg.Authorizer.Authorize(ctx, a, "agent.publish", ResourceRef{Type: "agents", ID: ag.ID, TenantID: a.TenantID, AgentID: ag.ID}); err != nil {
+				return Session{}, err
+			}
+		}
 		selected, err := read[Version](ctx, tx, "versions", a.TenantID, versionID(ag.ID, version))
 		if err != nil {
 			return Session{}, err

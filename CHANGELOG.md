@@ -24,6 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `core/durable`：超时（`failed/deadline`）与崩溃、取消一样按结果未知的中断处理：先经 `Reconcile` 核对，`RetryFailed` 不再直接重跑，需 `Reconcile` 确认未生效或声明 `RetryInterrupted`。此前工具已产生副作用但应答超过 `DispatchConfig.Timeout` 时，恢复会再执行一次。依赖“超时即重跑”的自定义策略需改为提供 `Reconcile` 或声明 `RetryInterrupted`；`tools.Dispatcher` 默认策略已声明 `RetryInterrupted`，Builder 的 `WithInterruptedModelResend` 现在也重发被运行截止时间或根预算截止打断的模型请求。
 
 - `interfaces.ToolInput`：删除只写不读的 `Context` 字段，工具从 `Invoke(ctx, input)` 的 ctx 取得取消与请求范围的值。迁移：删除构造 `ToolInput` 时的 `Context: ctx`。
+- `tools/middleware.Logging`：默认不再记录工具参数与结果（常含用户数据与凭证），`WithoutInputLogging`/`WithoutOutputLogging` 改为 `WithInputLogging`/`WithOutputLogging` 显式开启。迁移：需要记录时加 `WithInputLogging()`、`WithOutputLogging()`；原来用 `Without*` 关闭的直接删除该选项。
+- `a2a/remote.Connect`：只使用 Agent Card 中与发现地址同源（协议与主机相同）的接口，没有同源接口时返回错误；宿主 HTTP client 可能带凭证，此前远端 Agent Card 可把调用引向任意主机。接口部署在其他源时，由宿主校验 Agent Card 后用 `a2aclient.NewFromCard` 连接。
+- `management.CreateSession`：指定的版本不是当前发布版本时，额外要求 `agent.publish` 权限；此前只有 `session.write` 权限即可让未发布的版本上线。
+- `tools/http`：非公网地址检查按内嵌的 IPv4 判断 NAT64（`64:ff9b::/96`）与 6to4（`2002::/16`）地址，拒绝本地 NAT64（`64:ff9b:1::/48`）与 Teredo（`2001::/32`）；此前 `64:ff9b::a9fe:a9fe` 等地址可经 NAT64 网关访问元数据服务。
 - `core/durable`、`tools`：`run` 或工具已成功返回而 ctx 恰好结束时，结果照常记为 completed 并返回 ctx 错误，恢复时回放而不再执行；此前成功结果被改记为 `failed/canceled`，默认策略下恢复会重复副作用（如重复付款）。非持久调用仍返回 ctx 错误。
 - `builder.WithSessionState`：失败或中断的轮次对状态的修改不再泄漏到下一轮与会话日志；下一轮开始时回到该轮开始前的状态，日志中已有更新的状态时以日志为准。
 - `core/session`：退回恢复的是退回位置当时的视图，退回到更早一次退回之前时，那次退回遮蔽的消息重新可见；此前被遮蔽的消息永久丢失。`BuildTrajectory` 的 `Turns` 不再计入被退回的轮次。

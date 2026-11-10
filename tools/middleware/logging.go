@@ -17,17 +17,19 @@ import (
 //
 // 它记录：
 //   - 工具名称和描述
-//   - 输入参数（可配置是否记录）
-//   - 输出结果（可配置是否记录）
+//   - 输入参数（默认不记录，WithInputLogging 开启）
+//   - 输出结果（默认不记录，WithOutputLogging 开启）
 //   - 执行耗时
 //   - 错误信息
+//
+// 参数与结果常含用户数据和凭证，默认只记录调用本身。
 //
 // 使用示例:
 //
 //	logger := core.GetLogger("tools")
 //	loggingMW := NewLoggingMiddleware(
 //	    WithLogger(logger),
-//	    WithoutInputLogging(),  // 不记录输入（保护敏感数据）
+//	    WithOutputLogging(), // 记录结果；确认其中没有敏感数据时才开启
 //	)
 //	wrappedTool := middleware.Wrap(myTool, loggingMW.Wrap)
 type LoggingMiddleware struct {
@@ -49,21 +51,17 @@ func WithLogger(logger loggerCore.Logger) LoggingOption {
 	}
 }
 
-// WithoutInputLogging 禁用输入参数的日志记录
-//
-// 用于保护敏感数据，如密码、API密钥等
-func WithoutInputLogging() LoggingOption {
+// WithInputLogging 记录输入参数（以 __ 开头的内部键除外）；参数可能含密码、API 密钥等时不要开启。
+func WithInputLogging() LoggingOption {
 	return func(m *LoggingMiddleware) {
-		m.logInput = false
+		m.logInput = true
 	}
 }
 
-// WithoutOutputLogging 禁用输出结果的日志记录
-//
-// 用于减少日志量或保护敏感输出
-func WithoutOutputLogging() LoggingOption {
+// WithOutputLogging 记录输出结果；结果可能含敏感数据时不要开启。
+func WithOutputLogging() LoggingOption {
 	return func(m *LoggingMiddleware) {
-		m.logOutput = false
+		m.logOutput = true
 	}
 }
 
@@ -101,8 +99,6 @@ func NewLoggingMiddleware(opts ...LoggingOption) *LoggingMiddleware {
 
 	middleware := &LoggingMiddleware{
 		logger:      defaultLogger,
-		logInput:    true,
-		logOutput:   true,
 		maxArgBytes: 1024, // 默认 1KB
 	}
 

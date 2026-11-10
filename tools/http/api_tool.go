@@ -258,8 +258,33 @@ func (a *APITool) run(ctx context.Context, input *interfaces.ToolInput) (*interf
 // cgnat 是运营商级 NAT 地址段，部分云厂商的元数据服务位于其中（如 100.100.100.200）。
 var cgnat = netip.MustParsePrefix("100.64.0.0/10")
 
+// embeddedIPv4 是把 IPv4 地址嵌入 IPv6 的转换前缀（NAT64、6to4），offset 是 IPv4 所在的字节位置；
+// 经过这些网关仍会到达内嵌的 IPv4，须按内嵌地址判断。
+var embeddedIPv4 = []struct {
+	prefix netip.Prefix
+	offset int
+}{
+	{netip.MustParsePrefix("64:ff9b::/96"), 12},
+	{netip.MustParsePrefix("2002::/16"), 2},
+}
+
+// opaqueIPv6 是目标无法从地址判断的转换前缀：本地 NAT64 与 Teredo。
+var opaqueIPv6 = []netip.Prefix{netip.MustParsePrefix("64:ff9b:1::/48"), netip.MustParsePrefix("2001::/32")}
+
 func publicAddress(addr netip.Addr) bool {
 	addr = addr.Unmap()
+	for _, p := range opaqueIPv6 {
+		if p.Contains(addr) {
+			return false
+		}
+	}
+	for _, e := range embeddedIPv4 {
+		if e.prefix.Contains(addr) {
+			b := addr.As16()
+			addr = netip.AddrFrom4([4]byte(b[e.offset : e.offset+4]))
+			break
+		}
+	}
 	return addr.IsGlobalUnicast() && !addr.IsPrivate() && !cgnat.Contains(addr)
 }
 
@@ -287,7 +312,6 @@ func (a *APITool) Get(ctx context.Context, url string, headers map[string]string
 			shared.FieldURL:     url,
 			shared.FieldHeaders: headers,
 		},
-		Context: ctx,
 	})
 }
 
@@ -300,7 +324,6 @@ func (a *APITool) Post(ctx context.Context, url string, body interface{}, header
 			shared.FieldBody:    body,
 			shared.FieldHeaders: headers,
 		},
-		Context: ctx,
 	})
 }
 
@@ -313,7 +336,6 @@ func (a *APITool) Put(ctx context.Context, url string, body interface{}, headers
 			shared.FieldBody:    body,
 			shared.FieldHeaders: headers,
 		},
-		Context: ctx,
 	})
 }
 
@@ -325,7 +347,6 @@ func (a *APITool) Delete(ctx context.Context, url string, headers map[string]str
 			shared.FieldURL:     url,
 			shared.FieldHeaders: headers,
 		},
-		Context: ctx,
 	})
 }
 
@@ -338,7 +359,6 @@ func (a *APITool) Patch(ctx context.Context, url string, body interface{}, heade
 			shared.FieldBody:    body,
 			shared.FieldHeaders: headers,
 		},
-		Context: ctx,
 	})
 }
 

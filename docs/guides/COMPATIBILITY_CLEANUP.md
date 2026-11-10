@@ -83,6 +83,7 @@ wrapped := middleware.Wrap(tool, logging.Wrap)
 | `core.Agent`、`BaseAgent`、`AgentExecutor`、`AgentInput`/`AgentOutput`、`FastInvoker`；`observability.InstrumentedAgent`/`WrapAgent` | 用 `builder` 构建 Agent，经 `AsRunnable()` 接入 `core.Runnable` |
 | `interfaces.Store`、`ConversationMemory`、`ToolExecutor`、`ToolResult`；`memory.ConversationStore` | 键值存储 `store.Store`；对话历史 `interfaces.MemoryManager` |
 | `llm/cache`（语义缓存） | 无替代；需要时由宿主按租户/会话作用域实现 |
+| `tools/middleware.WithoutInputLogging`、`WithoutOutputLogging` | 默认已不记录参数与结果；需要记录时用 `WithInputLogging`、`WithOutputLogging` |
 | `testing/testutil` | 使用标准库 `testing` 断言，或 `testing/mocks` |
 | `core` 的 `Chain`、`BaseChain`、`ChainableAgent`、`Orchestrator`、`PluginRegistry`、`LifecycleManager`、`TimeoutConfig` | 组合用 `core.RunnablePipe`/`RunnableSequence` 或 `workflow`；多 Agent 用 `multiagent` |
 | `tools` 的 `ToolRuntime`、`RuntimeToolAdapter`、`UserInfoTool`、`SavePreferenceTool`、`UpdateStateTool` | 工具所需数据经 `context.Context` 或构造时注入；`StreamWriter` 进度推送没有替代 |

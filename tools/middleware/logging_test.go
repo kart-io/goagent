@@ -159,7 +159,7 @@ func TestLoggingMiddleware_Basic(t *testing.T) {
 	tool := newMockTool()
 	logger := newMockLogger()
 
-	middleware := NewLoggingMiddleware(WithLogger(logger))
+	middleware := NewLoggingMiddleware(WithLogger(logger), WithInputLogging(), WithOutputLogging())
 
 	invoker := func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 		// 模拟一些处理时间
@@ -206,15 +206,15 @@ func TestLoggingMiddleware_Basic(t *testing.T) {
 	assert.Greater(t, output.Metadata["execution_time"].(int64), int64(0))
 }
 
-// TestLoggingMiddleware_WithoutInputLogging 测试禁用输入日志
-func TestLoggingMiddleware_WithoutInputLogging(t *testing.T) {
+// TestLoggingMiddleware_InputNotLoggedByDefault 默认不记录输入参数
+func TestLoggingMiddleware_InputNotLoggedByDefault(t *testing.T) {
 	ctx := context.Background()
 	tool := newMockTool()
 	logger := newMockLogger()
 
 	middleware := NewLoggingMiddleware(
 		WithLogger(logger),
-		WithoutInputLogging(),
+		WithOutputLogging(),
 	)
 
 	invoker := func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
@@ -237,15 +237,15 @@ func TestLoggingMiddleware_WithoutInputLogging(t *testing.T) {
 	assert.NotContains(t, beforeLog.fields, "args", "Args should not be logged")
 }
 
-// TestLoggingMiddleware_WithoutOutputLogging 测试禁用输出日志
-func TestLoggingMiddleware_WithoutOutputLogging(t *testing.T) {
+// TestLoggingMiddleware_OutputNotLoggedByDefault 默认不记录输出结果
+func TestLoggingMiddleware_OutputNotLoggedByDefault(t *testing.T) {
 	ctx := context.Background()
 	tool := newMockTool()
 	logger := newMockLogger()
 
 	middleware := NewLoggingMiddleware(
 		WithLogger(logger),
-		WithoutOutputLogging(),
+		WithInputLogging(),
 	)
 
 	invoker := func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
@@ -274,6 +274,8 @@ func TestLoggingMiddleware_MaxArgBytes(t *testing.T) {
 
 	middleware := NewLoggingMiddleware(
 		WithLogger(logger),
+		WithInputLogging(),
+		WithOutputLogging(),
 		WithMaxArgBytes(50), // 设置很小的限制
 	)
 
@@ -370,7 +372,7 @@ func TestLoggingMiddleware_StringResult(t *testing.T) {
 	tool := newMockTool()
 	logger := newMockLogger()
 
-	middleware := NewLoggingMiddleware(WithLogger(logger))
+	middleware := NewLoggingMiddleware(WithLogger(logger), WithInputLogging(), WithOutputLogging())
 
 	invoker := func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 		return &interfaces.ToolOutput{
@@ -395,7 +397,7 @@ func TestLoggingMiddleware_ComplexResult(t *testing.T) {
 	tool := newMockTool()
 	logger := newMockLogger()
 
-	middleware := NewLoggingMiddleware(WithLogger(logger))
+	middleware := NewLoggingMiddleware(WithLogger(logger), WithInputLogging(), WithOutputLogging())
 
 	invoker := func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 		return &interfaces.ToolOutput{
