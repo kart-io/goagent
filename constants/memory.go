@@ -19,6 +19,28 @@ const (
 	DefaultMemoryInvalidRetention = 30 * 24 * time.Hour
 	// DefaultMemoryJobAttempts 是抽取任务失败后的最多尝试次数。
 	DefaultMemoryJobAttempts = 3
+	// DefaultMemoryGraphHops 与 DefaultMemoryGraphRelations 是召回关系时扩展的跳数与返回的关系数。
+	DefaultMemoryGraphHops      = 2
+	DefaultMemoryGraphRelations = 8
+	// DefaultMemoryGraphCommunities 是召回时返回的社区摘要数。
+	DefaultMemoryGraphCommunities = 2
+	// DefaultMemoryEntityCandidates 与 DefaultMemoryEntitySimilarity 是实体判重时交给模型的候选数与候选的最低相似度
+	// （名称向量余弦或字符对重合；Graphiti 的向量阈值为 0.6）。
+	DefaultMemoryEntityCandidates = 5
+	DefaultMemoryEntitySimilarity = 0.5
+	// DefaultMemoryPageRankDamping 是 Personalized PageRank 沿边续走的概率（HippoRAG 取 0.5）；
+	// MemoryPageRankIterations 与 MemoryPageRankTolerance 是迭代上限与收敛阈值（L1 距离）。
+	DefaultMemoryPageRankDamping = 0.5
+	MemoryPageRankIterations     = 50
+	MemoryPageRankTolerance      = 1e-9
+	// DefaultMemoryCommunityMinSize 是社区的最少实体数；DefaultMemoryCommunityFacts 是写摘要时取的最近关系数；
+	// DefaultMemoryCommunityHubDegree 是枢纽实体的关系数下限，枢纽不参与社区划分；MemoryLabelPropagationRounds 是标签传播的轮数上限。
+	DefaultMemoryCommunityMinSize   = 3
+	DefaultMemoryCommunityFacts     = 40
+	DefaultMemoryCommunityHubDegree = 12
+	MemoryLabelPropagationRounds    = 20
+	// MemoryJSONRepairAttempts 是记忆模型回复不是合法 JSON 时请它修正的次数。
+	MemoryJSONRepairAttempts = 1
 	// DefaultMemoryWorkerInterval 是 Worker 没有任务时的轮询间隔。
 	DefaultMemoryWorkerInterval = 2 * time.Second
 	// ToolMemorySearch、ToolMemorySave、ToolMemoryForget 是长期记忆工具名。

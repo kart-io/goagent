@@ -107,19 +107,32 @@ func (m *Memory) process(ctx context.Context, j Job) error {
 		// 轮次已被退回，或只有注入的召回块。
 		return nil
 	}
+	at := turnTime(events, j.From, m.now())
 	if j.Aborted {
-		return m.learnFromFailure(ctx, j, transcript)
+		return m.learnFromFailure(ctx, j, at, transcript)
 	}
 	var out struct {
-		Memories []candidate `json:"memories"`
+		Memories  []candidate `json:"memories"`
+		Relations []relation  `json:"relations"`
 	}
-	if err := m.chatJSON(ctx, strings.TrimSpace(extractPrompt+"\n"+m.cfg.Instructions), transcript, &out); err != nil {
+	prompt := extractPrompt
+	if m.cfg.Graph != nil {
+		prompt += relationPrompt
+	}
+	dated := "对话时间：" + at.Format(time.DateTime) + "\n" + transcript
+	if err := m.chatJSON(ctx, strings.TrimSpace(prompt+"\n"+m.cfg.Instructions), dated, &out); err != nil {
 		return err
 	}
 	for i, c := range out.Memories {
-		if err := m.reconcile(ctx, j, i, c); err != nil {
+		if err := m.reconcile(ctx, j, at, i, c); err != nil {
 			return err
 		}
+	}
+	if err := m.applyRelations(ctx, j, at, out.Relations); err != nil {
+		return err
+	}
+	if err := m.syncCommunities(ctx, j.Namespace, true); err != nil {
+		return err
 	}
 	if err := m.reflect(ctx); err != nil {
 		return err
@@ -138,8 +151,14 @@ type candidate struct {
 const extractPrompt = "你从一轮对话中抽取值得跨会话长期记住的信息，输出 JSON：" +
 	`{"memories":[{"kind":"fact|episode|skill","content":"…","keywords":["…"],"entities":["…"],"importance":0.0}]}。` +
 	"fact 是关于用户或业务的稳定事实、偏好与决定；episode 是本轮做了什么、结果如何（至多一条）；skill 是本轮验证有效、可复用的做法。" +
-	"content 写成脱离上下文也能看懂的完整陈述；importance 取 0 到 1，琐碎信息不要记；不要记录密码、密钥、令牌等凭证；" +
+	"content 写成脱离上下文也能看懂的完整陈述，对话中的相对时间（昨天、上周、下个月）按对话时间换算成具体日期写入；importance 取 0 到 1，琐碎信息不要记；不要记录密码、密钥、令牌等凭证；" +
 	"标注为[相关长期记忆]的内容是已有记忆，不要重复抽取。没有值得记的内容时输出 {\"memories\":[]}。只输出 JSON。"
+
+// relationPrompt 在启用图谱时附在抽取提示词后。
+const relationPrompt = "\n另外在同一个 JSON 中输出实体之间的关系：" +
+	`"relations":[{"subject":{"name":"…","type":"person|org|place|product|concept|…","aliases":["…"]},"predicate":"…","object":{"name":"…","type":"…"},"fact":"一句完整陈述","exclusive":true}]。` +
+	"fact 中的相对时间同样换算成具体日期；用户本人的 name 写\"用户\"、type 写 person；predicate 用简短的动词短语，同一含义用同一说法；" +
+	"exclusive 表示主体在该谓词上同时只能有一个客体（如住在、就职于），可以有多个时（如喜欢、认识）为 false。没有关系时输出空数组。"
 
 const reconcilePrompt = "你维护长期记忆。给定一条新信息和若干条相似的已有记忆，判断如何处理，输出 JSON：" +
 	`{"op":"add|update|invalidate|noop","target":"已有记忆的 id","content":"update 时合并后的完整内容"}。` +
@@ -147,7 +166,7 @@ const reconcilePrompt = "你维护长期记忆。给定一条新信息和若干�
 	"invalidate：新信息与某条已有记忆矛盾，以新信息为准；noop：已有记忆已经包含新信息。只输出 JSON。"
 
 // reconcile 把候选与相似的已有记忆比较（Mem0）：新增、合并更新或否定旧记忆。被更新或否定的旧记忆标记失效并指向新记录（Zep），不删除。
-func (m *Memory) reconcile(ctx context.Context, j Job, i int, c candidate) error {
+func (m *Memory) reconcile(ctx context.Context, j Job, at time.Time, i int, c candidate) error {
 	if strings.TrimSpace(c.Content) == "" || !slices.Contains(kinds, c.Kind) {
 		return nil
 	}
@@ -178,7 +197,7 @@ func (m *Memory) reconcile(ctx context.Context, j Job, i int, c candidate) error
 			target = &similar[k].Record
 		}
 	}
-	content := c.Content
+	content, sources := c.Content, []Source{j.source()}
 	switch decision.Op {
 	case "noop":
 		return nil
@@ -186,13 +205,17 @@ func (m *Memory) reconcile(ctx context.Context, j Job, i int, c candidate) error
 		if strings.TrimSpace(decision.Content) != "" {
 			content = decision.Content
 		}
+		if target != nil {
+			// 合并后的内容同时依据旧记录与本轮。
+			sources = append(slices.DeleteFunc(slices.Clone(target.Sources), func(s Source) bool { return s.Job == j.Key }), sources...)
+		}
 	case "invalidate":
 	default:
 		target = nil
 	}
 	r, err := m.Remember(ctx, Record{
-		ID: id, Kind: c.Kind, Content: content, Keywords: c.Keywords, Entities: c.Entities,
-		Importance: c.Importance, Source: Source{Session: j.Session, From: j.From, To: j.To, Job: j.Key},
+		ID: id, Kind: c.Kind, Content: content, Keywords: c.Keywords, Entities: c.Entities, ValidFrom: at,
+		Importance: c.Importance, Sources: sources,
 	})
 	if err != nil || target == nil {
 		return err
@@ -204,7 +227,7 @@ const failurePrompt = "这一轮执行失败或被中止。根据对话记录写
 	`{"lesson":"…","keywords":["…"],"importance":0.0}。看不出原因时 lesson 为空。只输出 JSON。`
 
 // learnFromFailure 为中止的轮次写一条教训（Reflexion）。
-func (m *Memory) learnFromFailure(ctx context.Context, j Job, transcript string) error {
+func (m *Memory) learnFromFailure(ctx context.Context, j Job, at time.Time, transcript string) error {
 	var out struct {
 		Lesson     string   `json:"lesson"`
 		Keywords   []string `json:"keywords"`
@@ -214,8 +237,8 @@ func (m *Memory) learnFromFailure(ctx context.Context, j Job, transcript string)
 		return err
 	}
 	_, err := m.Remember(ctx, Record{
-		ID: stableID(j.Key, "lesson"), Kind: KindReflection, Content: out.Lesson, Keywords: out.Keywords,
-		Importance: min(max(out.Importance, 0), 1), Source: Source{Session: j.Session, From: j.From, To: j.To, Job: j.Key},
+		ID: stableID(j.Key, "lesson"), Kind: KindReflection, Content: out.Lesson, Keywords: out.Keywords, ValidFrom: at,
+		Importance: min(max(out.Importance, 0), 1), Sources: []Source{j.source()},
 	})
 	return err
 }
@@ -274,6 +297,16 @@ func (m *Memory) reflect(ctx context.Context) error {
 	return nil
 }
 
+// turnTime 返回轮次开始事件的时间：记录与关系的生效时间是对话发生的时间，而不是 Worker 处理的时间。
+func turnTime(events []session.Event, from int64, fallback time.Time) time.Time {
+	for _, ev := range events {
+		if ev.Seq == from && !ev.Time.IsZero() {
+			return ev.Time
+		}
+	}
+	return fallback
+}
+
 // renderTurn 把序号区间内的消息事件写成纯文本；跳过注入的召回块。
 func renderTurn(events []session.Event, from, to int64) string {
 	var sb strings.Builder
@@ -311,13 +344,30 @@ func stableID(parts ...string) string {
 	return fmt.Sprintf("%x", sha256.Sum256([]byte(strings.Join(parts, "\x00"))))[:32]
 }
 
-// chatJSON 请求模型并解析回复中的 JSON 对象（容忍代码块包裹与前后说明）。
+// chatJSON 请求模型并解析回复中的 JSON 对象（容忍代码块包裹与前后说明）。回复不是合法 JSON 时，把原回复与解析错误
+// 交回模型修正一次：温度为 0 时重试同一请求会得到同样的错误输出，修正请求的输入不同。被截断的回复不修正。
 func (m *Memory) chatJSON(ctx context.Context, system, user string, out any) error {
-	resp, err := llm.Chat(ctx, m.cfg.Model, []llm.Message{llm.SystemMessage(system), llm.UserMessage(user)})
-	if err != nil {
-		return err
+	msgs := []llm.Message{llm.SystemMessage(system), llm.UserMessage(user)}
+	for attempt := 0; ; attempt++ {
+		resp, err := llm.Chat(ctx, m.cfg.Model, msgs)
+		if err != nil {
+			return err
+		}
+		if resp.FinishReason != "" && resp.FinishReason != "stop" {
+			return agentErrors.Newf(agentErrors.CodeLLMResponse, "记忆模型的回复不完整（finish_reason=%s）；因长度截断时调大模型的 MaxTokens", resp.FinishReason).
+				WithComponent("memory").WithOperation("chat_json")
+		}
+		err = decodeJSON(resp.Content, out)
+		if err == nil || attempt == constants.MemoryJSONRepairAttempts {
+			return err
+		}
+		msgs = append(msgs, llm.Message{Role: "assistant", Content: resp.Content},
+			llm.UserMessage("上面的回复不是合法 JSON（"+err.Error()+"）。按原要求重新输出完整、合法的 JSON，只输出 JSON。"))
 	}
-	text := resp.Content
+}
+
+// decodeJSON 解析 text 中第一个 { 到最后一个 } 之间的 JSON 对象。
+func decodeJSON(text string, out any) error {
 	start, end := strings.Index(text, "{"), strings.LastIndex(text, "}")
 	if start < 0 || end < start {
 		return agentErrors.Newf(agentErrors.CodeLLMResponse, "记忆模型没有返回 JSON").WithComponent("memory").WithOperation("chat_json")

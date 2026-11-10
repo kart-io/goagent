@@ -39,11 +39,13 @@ func (e bigramEmbedder) Embed(_ context.Context, text string) ([]float32, error)
 type scriptedModel struct {
 	reply func(system, user string) (string, error)
 	calls []string
+	// finish 是回复的结束原因，空时为 stop。
+	finish string
 }
 
 func (m *scriptedModel) Provider() constants.Provider { return constants.Provider("fake") }
 func (m *scriptedModel) CompleteStream(_ context.Context, req *llm.CompletionRequest) (<-chan *llm.StreamChunk, error) {
-	system, user := req.Messages[0].Content, req.Messages[1].Content
+	system, user := req.Messages[0].Content, req.Messages[len(req.Messages)-1].Content
 	m.calls = append(m.calls, system)
 	text, err := m.reply(system, user)
 	if err != nil {
@@ -51,7 +53,11 @@ func (m *scriptedModel) CompleteStream(_ context.Context, req *llm.CompletionReq
 	}
 	ch := make(chan *llm.StreamChunk, 2)
 	ch <- &llm.StreamChunk{Delta: text, Content: text}
-	ch <- &llm.StreamChunk{Done: true, Content: text, FinishReason: "stop"}
+	finish := m.finish
+	if finish == "" {
+		finish = "stop"
+	}
+	ch <- &llm.StreamChunk{Done: true, Content: text, FinishReason: finish}
 	close(ch)
 	return ch, nil
 }
@@ -177,7 +183,7 @@ func TestMemoryIndex(t *testing.T) {
 }
 
 func TestRecallBlockPinnedFirstWithinBudget(t *testing.T) {
-	m := newMemory(t, Config{RecallRunes: 120})
+	m := newMemory(t, Config{RecallRunes: 150})
 	ctx := WithNamespace(context.Background(), "u")
 	_, err := m.Remember(ctx, Record{Content: "用户叫小明", Pinned: true, Importance: 1})
 	require.NoError(t, err)
@@ -273,11 +279,18 @@ func mustEmbed(t *testing.T, text string) []float32 {
 // appendTurn 写入一轮对话，返回 turn/start 与 turn/end 的序号。
 func appendTurn(t *testing.T, s session.Store, id string, aborted bool, msgs ...llm.Message) (int64, int64) {
 	t.Helper()
+	return appendTurnAt(t, s, id, time.Time{}, aborted, msgs...)
+}
+
+// appendTurnAt 追加一轮，at 非零时作为轮次开始事件的时间。
+func appendTurnAt(t *testing.T, s session.Store, id string, at time.Time, aborted bool, msgs ...llm.Message) (int64, int64) {
+	t.Helper()
 	ctx := context.Background()
 	rec, _, err := session.OpenRecorder(ctx, s, id)
 	require.NoError(t, err)
 	start, err := session.NewEvent(constants.SessionEventTurnStart, session.TurnStart{Input: msgs[0].Content})
 	require.NoError(t, err)
+	start.Time = at
 	_, err = rec.Append(ctx, start)
 	require.NoError(t, err)
 	from := rec.Seq()
@@ -320,7 +333,7 @@ func TestWorkerExtractsAndSupersedes(t *testing.T) {
 	old, err := m.Recall(ctx, Query{Text: "住在哪里"})
 	require.NoError(t, err)
 	require.Equal(t, []string{"用户住在上海"}, contents(old))
-	require.Equal(t, Source{Session: "s", From: from, To: to, Job: "s/1"}, old[0].Source)
+	require.Equal(t, []Source{{Session: "s", From: from, To: to, Job: "s/1"}}, old[0].Sources)
 
 	require.NoError(t, m.Enqueue(ctx, job), "重复登记不产生新任务")
 	n, err = m.ProcessPending(ctx)
@@ -428,17 +441,102 @@ func TestRewoundInvalidatesLaterRecords(t *testing.T) {
 	m := newMemory(t, Config{})
 	ctx := WithNamespace(context.Background(), "u")
 	for _, r := range []Record{
-		{ID: "early", Content: "早", Importance: 0.5, Source: Source{Session: "s", From: 2}},
-		{ID: "late", Content: "晚", Importance: 0.5, Source: Source{Session: "s", From: 9}},
-		{ID: "other", Content: "其他会话", Importance: 0.5, Source: Source{Session: "x", From: 9}},
+		{ID: "early", Content: "早", Importance: 0.5, Sources: []Source{{Session: "s", From: 2}}},
+		{ID: "late", Content: "晚", Importance: 0.5, Sources: []Source{{Session: "s", From: 9}}},
+		{ID: "other", Content: "其他会话", Importance: 0.5, Sources: []Source{{Session: "x", From: 9}}},
+		{ID: "merged", Content: "合并了早晚两轮", Importance: 0.5, Sources: []Source{{Session: "s", From: 2}, {Session: "s", From: 9}}},
 	} {
 		_, err := m.Remember(ctx, r)
 		require.NoError(t, err)
 	}
 	require.NoError(t, m.Rewound(ctx, "s", 5))
-	for id, valid := range map[string]bool{"early": true, "late": false, "other": true} {
+	for id, valid := range map[string]bool{"early": true, "late": false, "other": true, "merged": false} {
 		r, err := m.Get(ctx, id)
 		require.NoError(t, err)
 		require.Equal(t, valid, r.Valid(), id)
+	}
+}
+
+// 回复因长度被截断时报出原因，而不是笼统的 JSON 解析错误。
+func TestChatJSONReportsTruncation(t *testing.T) {
+	m := newMemory(t, Config{Model: &scriptedModel{finish: "length", reply: func(string, string) (string, error) { return `{"memories":[{"kind":"fact"`, nil }}})
+	var out map[string]any
+	err := m.chatJSON(context.Background(), "s", "u", &out)
+	require.ErrorContains(t, err, "MaxTokens")
+}
+
+// 合并更新的记录继承旧记录的来源；回退较新的轮次时合并记录失效，被它取代的旧记录恢复，不丢失更早轮次的事实。
+func TestRewoundRestoresMergedPredecessor(t *testing.T) {
+	sessions := session.NewMemoryStore()
+	var oldID string
+	model := &scriptedModel{reply: func(system, user string) (string, error) {
+		switch {
+		case strings.Contains(system, "抽取") && strings.Contains(user, "浦东"):
+			return `{"memories":[{"kind":"fact","content":"用户住在上海浦东","importance":0.8}]}`, nil
+		case strings.Contains(system, "抽取"):
+			return `{"memories":[{"kind":"fact","content":"用户住在上海","importance":0.8}]}`, nil
+		}
+		return `{"op":"update","target":"` + oldID + `","content":"用户住在上海浦东"}`, nil
+	}}
+	m := newMemory(t, Config{Model: model, Sessions: sessions})
+	ctx := WithNamespace(context.Background(), "u")
+	run := func(key, input string) (int64, int64) {
+		from, to := appendTurn(t, sessions, "s", false, llm.UserMessage(input), llm.Message{Role: "assistant", Content: "好的"})
+		require.NoError(t, m.Enqueue(ctx, Job{Key: key, Namespace: []string{"u"}, Session: "s", From: from, To: to}))
+		_, err := m.ProcessPending(ctx)
+		require.NoError(t, err)
+		return from, to
+	}
+	first, firstTo := run("s/1", "我住在上海")
+	found, err := m.Recall(ctx, Query{Text: "住在"})
+	require.NoError(t, err)
+	oldID = found[0].ID
+	second, secondTo := run("s/2", "我搬到浦东了")
+
+	found, err = m.Recall(ctx, Query{Text: "住在"})
+	require.NoError(t, err)
+	require.Equal(t, []string{"用户住在上海浦东"}, contents(found))
+	require.Equal(t, []Source{{Session: "s", From: first, To: firstTo, Job: "s/1"}, {Session: "s", From: second, To: secondTo, Job: "s/2"}}, found[0].Sources)
+
+	require.NoError(t, m.Rewound(ctx, "s", second-1))
+	found, err = m.Recall(ctx, Query{Text: "住在"})
+	require.NoError(t, err)
+	require.Equal(t, []string{"用户住在上海"}, contents(found), "回退较新的轮次后恢复旧记录")
+	require.Equal(t, oldID, found[0].ID)
+}
+
+// 回复不是合法 JSON 时把原回复与错误交回模型修正一次；修正后仍不合法才报错。
+func TestChatJSONRepairsInvalidJSON(t *testing.T) {
+	tests := []struct {
+		name    string
+		replies []string
+		wantErr bool
+	}{
+		{"修正后成功", []string{`{"name":"a","summary":"b","}`, `{"name":"a","summary":"b"}`}, false},
+		{"修正后仍不合法", []string{`{"name":"a",}`, `还是不对 {`}, true},
+		{"一次就合法", []string{`{"name":"a","summary":"b"}`}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var users []string
+			model := &scriptedModel{reply: func(_, user string) (string, error) {
+				users = append(users, user)
+				return tt.replies[len(users)-1], nil
+			}}
+			m := newMemory(t, Config{Model: model})
+			var out struct{ Name, Summary string }
+			err := m.chatJSON(context.Background(), "s", "u", &out)
+			if tt.wantErr {
+				require.Error(t, err)
+				require.Len(t, users, 2, "只修正一次")
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, "b", out.Summary)
+			require.Len(t, users, len(tt.replies))
+			if len(users) == 2 {
+				require.Contains(t, users[1], "不是合法 JSON", "修正请求带上解析错误")
+			}
+		})
 	}
 }

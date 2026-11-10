@@ -93,7 +93,7 @@ type Record struct {
     ValidFrom   time.Time
     InvalidAt   time.Time  // 零值表示有效
     SupersededBy string
-    Source      Source     // 会话 ID 与事件序号区间
+    Sources     []Source   // 内容依据的全部轮次（会话 ID 与事件序号区间）；合并更新时继承旧记录的来源
     CreatedAt, LastAccess time.Time
     AccessCount int
     Pinned      bool       // 核心记忆
@@ -112,7 +112,7 @@ type Record struct {
 3. 每个候选检索同命名空间、同类别最相似的 `ReconcileCandidates` 条（不更新访问时间），由模型判定 add / update / invalidate / noop（Mem0）。update 与 invalidate 写入新记录，旧记录写 `InvalidAt` 与 `SupersededBy`（Zep），不物理删除。
 4. 中止的轮次只写一条 `reflection` 教训（Reflexion）；未参与反思的有效情景累计重要度达到 `ReflectionThreshold` 时提炼结论并标记这些情景（Generative Agents）。
 5. 记录 ID 由任务 Key 与序号决定，崩溃后重做同一任务覆盖而不是重复；任务失败按 `JobAttempts` 重试后标记 failed，错误记在任务中。
-6. 宿主在 `session.Rewind` 之后调用 `mem.Rewound(ctx, session, to)`，使来源为被退回轮次的记录失效。
+6. 宿主在 `session.Rewind` 之后调用 `mem.Rewound(ctx, session, to)`：任一来源位于被退回轮次的记录失效，只被这些记录取代的旧记录恢复有效。合并更新的记录带有旧记录与本轮两个来源，回退本轮时合并记录失效、旧记录恢复，较早轮次的事实不会随之丢失。
 
 ### 3.3 召回
 
@@ -129,10 +129,14 @@ type Record struct {
 
 ## 4. 第三阶段：时序知识图谱
 
-- 抽取器同时输出实体与关系三元组；实体节点按名称与类型去重（LLM 判重），关系边带 `ValidFrom`/`InvalidAt`，与新事实矛盾的边失效（Zep）。
-- 存储：`memory.Graph` 接口，默认实现基于 `store.Store`（节点、边、邻接表三个命名空间）。
-- 召回：查询中的实体作为种子，扩展一到两跳的有效边，与向量结果合并重排；可选 Personalized PageRank（HippoRAG）。
-- 社区摘要（Zep 社区子图）推迟到有多跳评测需求时再做。
+- `Config.Graph` 非空时，抽取提示词要求在同一个 JSON 中输出关系 `{subject, predicate, object, fact, exclusive}`，实体带名称、类型与别名；用户本人统一记为 `用户`。
+- 实体判重（Graphiti）：先按命名空间、类型与规范化名称（含别名）精确匹配，新出现的别名并入已有实体；匹配不到的，取同类型中名称向量余弦或字符对重合不低于 0.5 的至多 5 个实体作为候选，一轮中所有有候选的实体合成一次模型请求判定是否为同一对象，只接受该实体自己的候选 ID，判为重复时名称并入别名。没有候选时不请求模型。翻译名与别称（如"Acme"与"爱克米"）只能靠名称向量找到，没有配置 Embedder 时会成为两个节点。
+- 关系边带 `ValidFrom`/`InvalidAt`（Zep 时序图），`Edge.ValidAt(t)` 判断某一时刻是否成立。生效时间取轮次开始事件的时间，即对话发生的时间，而不是 Worker 处理的时间。相同的有效关系不重复写入；`exclusive` 的谓词（主体同时只能有一个客体，如"住在"）出现新客体时，旧边失效并以 `SupersededBy` 指向新边；已有关系比新关系生效更晚时（迟到的旧事实），新边写入即失效并指向已有关系。非排他的关系并存。
+- 存储：`memory.Graph` 接口，`NewGraph(store.Store)` 把实体、边与社区存于 `{"memory","entities"|"edges"|"communities",…}`；遍历时读取整个命名空间，规模随有效关系数线性增长。
+- 召回（HippoRAG）：名称或别名出现在查询中的实体、以及召回记录 `Entities` 中的实体作为种子，取距种子 `GraphHops`（默认 2）跳内的有效边构成子图，在无向图上运行 Personalized PageRank（续走概率 0.5，种子权重为其有效关系数的倒数，即节点特异性，避免"用户"这类枢纽主导），按两端实体得分之和取 `GraphRelations`（默认 8）条，以"[关系 自日期] 陈述"放在召回块中；`memory_search` 同时返回关系。HippoRAG 用包含实体的段落数计算特异性，这里以关系数代替。
+- 社区（Zep 社区子图）：`Config.Communities` 为真时，Worker 每个任务后在有效边上做标签传播（Graphiti；异步更新、并列时保留当前标签或取最小者，保证确定），成员不少于 3 个的成为社区。有效关系数超过 12 的枢纽实体不参与划分，否则个人记忆中所有实体都会经"用户"连成一个社区；枢纽与成员间的关系仍计入社区的事实。社区指纹由成员与涉及成员的有效边决定，指纹不变时不重写摘要，变化时以最近 40 条关系请求模型写摘要（Graphiti 用成员摘要两两归并，这里实体没有摘要，直接用关系）。召回时按成员 PageRank 得分之和附上至多 `GraphCommunities`（默认 2）个社区摘要，以"[主题 名称] 摘要"放在召回块中。
+- `Rewound` 使来自被退回轮次的边失效、恢复只被它们取代的旧边，并删除指纹因此变化的社区（不调用模型，下一次任务重建）；`Purge` 清空图；`Prune` 删除失效超过保留期的边。
+- 未实现：边的模型判重（同义谓词如"就职于"与"在…工作"会成为两条边）、实体摘要、Leiden 社区划分与 GraphRAG 的全局 map-reduce 问答。
 
 ## 5. 迁移
 
@@ -147,4 +151,18 @@ type Record struct {
 
 ## 6. 评测
 
-第三阶段完成后在 LOCOMO 与 LongMemEval 子集上对比"只有会话日志 + 摘要"与"加长期记忆 + 图谱"，结果存入 `docs/evaluation/`。
+`memory/memeval` 把数据集的每个会话作为一轮写入会话日志（轮次时间取会话日期）并按时间顺序抽取，再逐题取上下文、作答与判定。对比的方案：
+
+| 方案 | 上下文 |
+|---|---|
+| `recent` | 不用长期记忆，从最近的会话往前取原文，默认与召回块同为 4000 字符 |
+| `memory` | 召回块（记录） |
+| `graph` | 召回块（记录 + 关系） |
+| `community` | 召回块（记录 + 关系 + 社区摘要） |
+
+- 数据：LongMemEval 读 `longmemeval_oracle.json`、`longmemeval_s_cleaned.json` 等（HF `xiaowu0162/longmemeval-cleaned`），每题自带历史，ID 含 `_abs` 的是弃答题；LOCOMO 读 `locomo10.json`，类别编号以官方评测代码为准（1 多跳、2 时间、3 开放域、4 单跳、5 对抗），第 5 类按弃答评分。
+- 抽样：`-sample N` 按题型分层抽题，各题型名额与题数成正比（题数足够时每类至少一道），题型内按数据集顺序等间隔抽取，使题目分散在各段对话中；被抽中题目的对话仍完整灌入。
+- 评分：判定用 LongMemEval 官方按题型的提示词（原文照录），回答含 yes 即正确；LOCOMO 另算官方的词级 F1（未做 Porter 词干化，略偏低），作答要求日期写成 "7 May 2023" 的格式以与标准答案一致；证据召回率是召回块所依据的会话（`Retrieval.Sessions`：记录的全部来源与关系的来源）中含答案所在会话的比例。
+- 统计：`-repeats K` 重复整个评测，每轮重新抽取记忆。准确率以题目为单位（各轮先平均），给出 95% Wilson 区间与各轮范围；两两比较按同一轮同一道题配对，用双侧精确符号检验给出 p 值，p ≥ 0.05 的差异不作结论。
+- 运行：`go run ./scripts/memeval -format locomo -data locomo10.json -sample 200 -repeats 2 -concurrency 8 -chat deepseek -judge openai:gpt-4o-2024-08-06 -embed gemini:gemini-embedding-001 -out docs/evaluation/<日期>-memory/locomo.md -results locomo.jsonl`。长期记忆方案每个会话有一次抽取和若干次整理调用，`longmemeval_s` 每题约 50 个会话，先用较小的 `-sample` 估算费用。官方判定模型是 gpt-4o-2024-08-06，换用其他模型时结果只在本仓库内可比。
+- 结果存入 `docs/evaluation/`。[2026-11-10-memory](../evaluation/2026-11-10-memory/README.md)：LOCOMO 分层抽样 200 题 × 2 轮、gpt-4o 判定，准确率 recent 25.0%、memory 46.5%、graph 53.0%、community 54.8%；memory 显著好于 recent，graph 显著好于 memory（p = 0.013），community 与 graph 无显著差异（p = 0.48），因此社区摘要默认关闭。

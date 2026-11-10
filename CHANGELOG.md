@@ -13,9 +13,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `tools/shell.ShellToolBuilder.WithEnv(names...)`：按名称把宿主环境变量透传给子进程。
 - `contextpolicy.Compaction` 与 `builder.WithCompaction`：对话超过阈值时把较早的消息压缩成摘要（递归摘要，`Model` 为 nil 时只省略并说明），请求超出上下文时强制压缩一次后重试；自 goagent-harness 的 compaction 组件下沉，编码场景的逻辑经 `Keep`、`Annotate` 注入。设计见 [记忆系统设计](docs/design/MEMORY_DESIGN.md)。
 - `memory` 长期记忆与 `builder.WithLongTermMemory`：记录按宿主经 `memory.WithNamespace` 绑定的命名空间隔离，正文存于 `store.Store`、向量索引（`memory.Index`，内置 `MemoryIndex`）可重建；每轮第一次请求前召回相关记录与钉住的核心记忆，作为低信任用户消息插在输入前；每轮结束登记抽取任务，`Memory.Run` 异步抽取事实、经历与可复用做法，与相似旧记忆比较后新增、合并或使其失效（不删除），中止的轮次写教训，情景累计到阈值时反思；`Tools()` 提供 `memory_search`/`memory_save`/`memory_forget`。
+- `memory` 时序知识图谱：`Config.Graph`（`memory.NewGraph(store)`）非空时抽取实体与关系。实体先按类型与名称（含别名）精确去重，其余按名称向量或字符对找出相似候选，由模型一次判定是否为同一对象（Graphiti）。关系带有效期，生效时间取对话发生的时间；排他谓词出现新客体时旧关系失效并指向新关系（不删除），迟到的旧事实写入即失效；`Edge.ValidAt` 查询某一时刻成立的关系。召回取种子实体若干跳内的关系，按 Personalized PageRank 排序（HippoRAG），放入召回块，`memory_search` 同时返回。`Config.Communities` 为真时用标签传播划分社区并为变化的社区写摘要，召回时附上相关社区的摘要。
+- `memory/memeval` 与 `scripts/memeval`：在 LongMemEval 与 LOCOMO 上对比只看最近原文的基线与长期记忆、图谱、社区各配置，判定使用 LongMemEval 官方提示词，LOCOMO 另算词级 F1，并统计证据会话的召回率；支持按题型分层抽样、多轮重复与并发，报告 95% 区间、各轮范围与两两配对的符号检验。
+- `Memory.Retrieve`：返回召回块及实际写入其中的记录、关系与社区，`Retrieval.Sessions()` 给出它们依据的会话；`RecallBlock` 基于它实现。
+- 长期记忆记录的 `ValidFrom` 与召回块中的日期取对话发生的时间（轮次开始事件的时间），不再是 Worker 处理的时间；抽取时向模型给出对话时间，相对时间（昨天、上周）换算成具体日期再记下。记忆模型的回复不完整（finish_reason 不是 stop，如因长度截断）时报出原因并提示调大 MaxTokens，而不是笼统的 JSON 解析错误。回复不是合法 JSON 时把原回复与解析错误交回模型修正一次（温度为 0 时重试同一请求会得到同样的错误输出）。
 - `contextpolicy.NewRecallTool`（`recall_history`）：取回本会话中被压缩或卸载换掉的原文；`session.Archived` 返回日志中被改写掉、仍未被撤销的消息。
 
 ### 破坏性变更
+
+- `memory.Record.Source` 改为 `Sources []Source`：合并更新的记录同时依据旧记录与新轮次，单一来源会在回退新轮次时连带丢掉更早的事实。迁移：读取 `r.Source` 改为遍历 `r.Sources`，手动写入时设置 `Sources: []memory.Source{...}`；已存储的 JSON 中的 `source` 字段不再读取，需要来源时重新抽取。`Rewound` 现在会恢复只被退回记录取代的旧记录与旧关系。
 
 - `tools`：`WithMiddleware`/`MiddlewareTool` 移入 `tools/middleware`，改为 `middleware.Wrap(tool, middlewares...)` 与 `*middleware.WrappedTool`，用法不变。`tools` 根包不再导入 `tools/middleware`，只用 Builder 的程序不再链接其日志中间件带入的 OTLP/gRPC：`builder` 的依赖包由 394 个降到 183 个；`apicheck` 拒绝 `tools` 根包重新导入 `tools/middleware`。迁移：`tools.WithMiddleware(` 改为 `middleware.Wrap(`。
 - `tools`：删除没有生产使用方、与 Dispatcher 平行的 `ToolExecutor`（`NewToolExecutor`、`ToolCallRequest`、`ToolResult`、`RetryPolicy`、`ExecutorOption` 及 `With*`）、`ToolGraph`/`ToolGraphBuilder`/`ToolNode`，以及三套工具结果缓存 `ToolCache`/`SimpleToolCache`/`MemoryToolCache`/`ShardedToolCache`、`CachedTool`/`NewCachedTool`、`NewHighPerformanceCache`/`NewLowMemoryCache` 与分片缓存选项；对应示例 `retry-jitter`、`optimization/02-cache-presets`、`advanced/parallel-execution` 一并删除。迁移：工具调用经 `tools.NewDispatcher`（并发、超时、持久回放与重试策略见 `DispatchConfig`），结果缓存用 `tools/middleware.Caching`。

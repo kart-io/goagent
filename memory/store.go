@@ -161,3 +161,5 @@ func pendingJobs(ctx context.Context, st store.Store) ([]Job, error) {
 	})
 	return out, nil
 }
+
+func (j Job) source() Source { return Source{Session: j.Session, From: j.From, To: j.To, Job: j.Key} }

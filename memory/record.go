@@ -27,7 +27,7 @@ const (
 
 var kinds = []Kind{KindFact, KindEpisode, KindReflection, KindSkill}
 
-// Source 是记录的来源：会话、事件序号区间与生成它的抽取任务。手动写入时为空。
+// Source 是记录或关系的一个来源：会话、事件序号区间与生成它的抽取任务。
 type Source struct {
 	Session string `json:"session,omitempty"`
 	From    int64  `json:"from,omitzero"`
@@ -35,7 +35,7 @@ type Source struct {
 	Job     string `json:"job,omitempty"`
 }
 
-// Record 是一条长期记忆。InvalidAt 非零表示已失效：被新事实否定（SupersededBy 指向新记录）、被遗忘或来源轮次被退回；
+// Record 是一条长期记忆。InvalidAt 非零表示已失效：被新事实否定或合并（SupersededBy 指向新记录）、被遗忘或来源轮次被退回；
 // 失效记录不再被召回，保留 Retention.InvalidRetention 后删除。
 type Record struct {
 	ID           string    `json:"id"`
@@ -49,14 +49,20 @@ type Record struct {
 	ValidFrom    time.Time `json:"valid_from"`
 	InvalidAt    time.Time `json:"invalid_at,omitzero"`
 	SupersededBy string    `json:"superseded_by,omitempty"`
-	Source       Source    `json:"source,omitzero"`
-	CreatedAt    time.Time `json:"created_at"`
-	LastAccess   time.Time `json:"last_access"`
-	AccessCount  int       `json:"access_count,omitzero"`
+	// Sources 是内容所依据的全部轮次；合并更新时继承旧记录的来源，手动写入时为空。
+	Sources     []Source  `json:"sources,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+	LastAccess  time.Time `json:"last_access"`
+	AccessCount int       `json:"access_count,omitzero"`
 	// EmbedModel 是写入索引时的嵌入模型；与当前模型不同时 Reindex 重建。
 	EmbedModel string `json:"embed_model,omitempty"`
 	// Reflected 表示该情景已参与过反思。
 	Reflected bool `json:"reflected,omitzero"`
+}
+
+// rewound 报告是否有来源位于会话 sessionID 中序号 to 之后。
+func rewound(sources []Source, sessionID string, to int64) bool {
+	return slices.ContainsFunc(sources, func(s Source) bool { return s.Session == sessionID && s.From > to })
 }
 
 // Valid 报告记录是否仍然有效。

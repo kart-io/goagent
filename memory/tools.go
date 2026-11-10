@@ -21,10 +21,24 @@ func (m *Memory) Tools() []interfaces.Tool {
 					return nil, err
 				}
 				items := make([]map[string]any, len(found))
+				var names []string
 				for i, r := range found {
 					items[i] = map[string]any{"id": r.ID, "kind": r.Kind, "content": r.Content, "score": r.Score}
+					names = append(names, r.Entities...)
 				}
-				return map[string]any{"memories": items}, nil
+				graph, err := m.Related(ctx, query, names, m.cfg.GraphHops, m.cfg.GraphRelations)
+				if err != nil {
+					return nil, err
+				}
+				facts := make([]map[string]any, len(graph.Relations))
+				for i, r := range graph.Relations {
+					facts[i] = map[string]any{"fact": r.Fact, "subject": r.SubjectName, "predicate": r.Predicate, "object": r.ObjectName, "valid_from": r.ValidFrom}
+				}
+				topics := make([]map[string]any, len(graph.Communities))
+				for i, c := range graph.Communities {
+					topics[i] = map[string]any{"name": c.Name, "summary": c.Summary}
+				}
+				return map[string]any{"memories": items, "relations": facts, "topics": topics}, nil
 			}},
 		&memoryTool{name: constants.ToolMemorySave, desc: "把值得跨会话记住的信息写入长期记忆，如用户明确要求记住的事实或偏好。不要保存凭证。",
 			schema: `{"type":"object","properties":{"content":{"type":"string","minLength":1},"kind":{"type":"string","enum":["fact","skill"]},"importance":{"type":"number","minimum":0,"maximum":1},"pinned":{"type":"boolean"}},"required":["content"],"additionalProperties":false}`,

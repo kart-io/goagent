@@ -14,6 +14,7 @@
 跨仓测试通过受控 `GOFLAGS` 把临时 modfile 传给测试内的 `go build/run`，包括含空格的路径；测试若主动清除环境或显式指定另一 modfile，则需单独核对其源码定位。Unix 上 Go 命令在独立进程组中运行，SIGINT、SIGTERM 与超时会清理同组后代并保留摘要；主动脱离进程组的程序不在此范围。非 Unix 平台沿用 Go `CommandContext` 的父进程取消，不声明进程树清理保证。
 - `provider_live.sh minimax`：国内 Anthropic 有界回归，读取专用 `MINIMAX_CN_API_KEY`，最多三个请求，不生成报告。Gemini、DeepSeek、OpenAI 仍使用 `provider_live.sh gemini|deepseek|openai NEW_DIRECTORY`，见 [持续回归](../docs/guides/PROVIDER_REGRESSION.md)。
 - `go run ./scripts/stabilitysoak -duration 24h`：持续离线混合负载，临时存储自动清理，结果仅输出到终端。配置、状态查询和发布顺序见[稳定化验证](../docs/guides/STABILITY_VALIDATION.md)。
+- `go run ./scripts/memeval -format longmemeval|locomo -data FILE -sample N -repeats K`：在 LongMemEval、LOCOMO 上对比只看最近原文的基线与长期记忆、图谱、社区各配置，使用真实模型并产生费用，默认按题型分层抽 20 题、跑 1 轮；输出带置信区间与两两显著性检验的 Markdown 汇总，`-results` 另存逐题 JSONL。见[记忆系统设计](../docs/design/MEMORY_DESIGN.md)第 6 节。
 - `hitl_live.py --live --out NEW_DIRECTORY`：Gemini / DeepSeek 的人工暂停、修改、跨进程恢复与拒绝验证，默认最多 6 次模型请求；`--review DIRECTORY` 仅离线复核保存结果。见 [HITL 评测](../evaluation/hitlbench/README.md)。
 
 其他脚本：
