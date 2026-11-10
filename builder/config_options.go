@@ -55,8 +55,6 @@ type AgentConfig struct {
 	AgentID          string                 `json:",omitempty"`
 	// TokenEstimator 是宿主的保守 Token 估计函数，不写入持久配置。
 	TokenEstimator TokenEstimator `json:"-"`
-	// MemoryFailurePolicy 控制对话记忆读写失败时是否中断执行。
-	MemoryFailurePolicy MemoryFailurePolicy `json:",omitempty"`
 
 	// DurableScope identifies one logical Agent invocation within a durable node.
 	// It must be unique among siblings and stable across restarts.
@@ -109,16 +107,11 @@ type AgentConfig struct {
 	// TemperatureSet 表示 Temperature 被显式设置；为假时由 LLM 客户端配置决定
 	TemperatureSet bool
 
-	// SessionID 标识会话，用于对话记忆与会话日志
+	// SessionID 是会话日志的缺省会话 ID；请求上下文经 tools.WithSessionID 给出时以请求为准
 	SessionID string
 
 	// Verbose 启用详细日志
 	Verbose bool
-
-	// MaxConversationHistory 限制加载的历史对话轮数
-	// 用于控制上下文窗口大小，避免超出 LLM 的 token 限制
-	// 0 或负数表示不限制
-	MaxConversationHistory int
 
 	// OutputFormat 指定 LLM 输出格式
 	// 支持：OutputFormatDefault（默认）、OutputFormatPlainText、OutputFormatMarkdown、OutputFormatJSON、OutputFormatCustom
@@ -205,11 +198,10 @@ func (b *AgentBuilder[S]) WithReplayablePartialOutput() *AgentBuilder[S] {
 // DefaultAgentConfig 返回默认配置
 func DefaultAgentConfig() *AgentConfig {
 	return &AgentConfig{
-		MaxIterations:          shared.DefaultAgentMaxIterations,
-		Timeout:                shared.DefaultAgentExecutionTimeout,
-		SessionID:              fmt.Sprintf("session-%d", time.Now().UnixNano()),
-		Verbose:                false,
-		MaxConversationHistory: shared.DefaultConversationHistory,
+		MaxIterations: shared.DefaultAgentMaxIterations,
+		Timeout:       shared.DefaultAgentExecutionTimeout,
+		SessionID:     fmt.Sprintf("session-%d", time.Now().UnixNano()),
+		Verbose:       false,
 	}
 }
 
@@ -273,18 +265,6 @@ func (b *AgentBuilder[S]) WithSessionID(sessionID string) *AgentBuilder[S] {
 // [Core] 标准配置，用于调试和开发（默认 false）。
 func (b *AgentBuilder[S]) WithVerbose(verbose bool) *AgentBuilder[S] {
 	b.config.Verbose = verbose
-	return b
-}
-
-// WithMaxConversationHistory 设置加载的最大历史对话轮数
-//
-// [Core] 标准配置，控制对话记忆的上下文窗口大小（默认 20）。
-// 用于限制发送给 LLM 的历史对话数量，避免超出 token 限制。
-// 设置为 0 或负数表示不限制（加载全部历史）。
-//
-// 注意：此设置仅在使用 WithMemory 配置了 MemoryManager 时生效。
-func (b *AgentBuilder[S]) WithMaxConversationHistory(max int) *AgentBuilder[S] {
-	b.config.MaxConversationHistory = max
 	return b
 }
 

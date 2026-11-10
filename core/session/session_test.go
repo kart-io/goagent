@@ -284,3 +284,40 @@ func TestRewindRestoresViewAtTarget(t *testing.T) {
 		})
 	}
 }
+
+// 被改写掉的原文可取回；改写带入的未改动消息仍可见，不算被改写掉；退回撤销改写后原文重新可见，不再算被改写掉。
+func TestArchived(t *testing.T) {
+	tests := []struct {
+		name   string
+		rewind bool
+		want   []string
+	}{
+		{"压缩后可取回原文", false, []string{"m1", "a1"}},
+		{"退回撤销压缩", true, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			s := NewMemoryStore()
+			rec, _, err := OpenRecorder(ctx, s, "s")
+			require.NoError(t, err)
+			original := []llm.Message{llm.UserMessage("m1"), {Role: "assistant", Content: "a1"}, llm.UserMessage("m2")}
+			require.NoError(t, rec.Sync(ctx, original, nil))
+			before := rec.Seq()
+			require.NoError(t, rec.Sync(ctx, []llm.Message{llm.UserMessage("摘要"), llm.UserMessage("m2")}, nil))
+			if tt.rewind {
+				_, err = Rewind(ctx, s, "s", before, rec.Seq())
+				require.NoError(t, err)
+			}
+			events, err := s.Read(ctx, "s", 0)
+			require.NoError(t, err)
+			archived, err := Archived(events)
+			require.NoError(t, err)
+			var got []string
+			for _, e := range archived {
+				got = append(got, e.Message.Content)
+			}
+			require.Equal(t, tt.want, got)
+		})
+	}
+}

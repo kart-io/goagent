@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `cache.WithMaxEntries(n)`：限制 `SimpleCache` 条目数，超出时先回收过期条目再淘汰其他条目。
 - `tools/shell.ShellToolBuilder.WithEnv(names...)`：按名称把宿主环境变量透传给子进程。
+- `contextpolicy.Compaction` 与 `builder.WithCompaction`：对话超过阈值时把较早的消息压缩成摘要（递归摘要，`Model` 为 nil 时只省略并说明），请求超出上下文时强制压缩一次后重试；自 goagent-harness 的 compaction 组件下沉，编码场景的逻辑经 `Keep`、`Annotate` 注入。设计见 [记忆系统设计](docs/design/MEMORY_DESIGN.md)。
+- `contextpolicy.NewRecallTool`（`recall_history`）：取回本会话中被压缩或卸载换掉的原文；`session.Archived` 返回日志中被改写掉、仍未被撤销的消息。
 
 ### 破坏性变更
 
@@ -29,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `a2a/remote.Connect`：只使用 Agent Card 中与发现地址同源（协议与主机相同）的接口，没有同源接口时返回错误；宿主 HTTP client 可能带凭证，此前远端 Agent Card 可把调用引向任意主机。接口部署在其他源时，由宿主校验 Agent Card 后用 `a2aclient.NewFromCard` 连接。
 - `management.CreateSession`：指定的版本不是当前发布版本时，额外要求 `agent.publish` 权限；此前只有 `session.write` 权限即可让未发布的版本上线。
 - `tools/http`：非公网地址检查按内嵌的 IPv4 判断 NAT64（`64:ff9b::/96`）与 6to4（`2002::/16`）地址，拒绝本地 NAT64（`64:ff9b:1::/48`）与 Teredo（`2001::/32`）；此前 `64:ff9b::a9fe:a9fe` 等地址可经 NAT64 网关访问元数据服务。
+- `builder`：删除 `WithMemory`、`WithMaxConversationHistory`、`WithMemoryFailurePolicy`/`MemoryFailurePolicy`、`AgentConfig.MaxConversationHistory`/`MemoryFailurePolicy` 与 `constants.DefaultConversationHistory`。多轮历史只来自会话日志：此前同时配置时双写，Rewind 后旧记忆仍保留被撤销的轮次；旧路径固定使用 `WithSessionID`，请求经 `tools.WithSessionID` 指定的会话会读写同一份记忆而串会话。迁移：`WithMemory(m)` 改为 `WithSessionLog(session.NewMemoryStore())`（持久化用 `session.NewFileStore`）；`WithMaxConversationHistory(n)` 改为 `WithCompaction(contextpolicy.NewCompaction(...))`；删除 `WithMemoryFailurePolicy`，会话日志写入失败即本轮失败。`interfaces.MemoryManager` 与 `memory` 包在长期记忆落地时一并替换。
 - `constants`：删除 376 个在本仓库与 harness/examples/contrib 代码、文档中均无引用的常量（如 `Status*`/`TaskState*`/`AgentState*`/`ConnectionState*` 状态词汇、多数 `ContentType*`、`DeepSeek*` 默认值、`store.go` 中的存储常量），`store.go` 文件随之删除。迁移：仍需要的值在调用方所属包内定义。
 ### 修复与验证
 

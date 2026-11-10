@@ -266,8 +266,5 @@ func (a *ConfigurableAgent[S]) finishEvents(ctx context.Context, request *middle
 	if err := emit(AgentEvent{Type: "usage", Usage: usage}); err != nil {
 		return nil, err
 	}
-	if err := a.saveConversation(ctx, input, answer); err != nil {
-		return nil, err
-	}
 	return &middleware.MiddlewareResponse{Output: answer, State: request.State, Metadata: metadata, TokenUsage: usage}, nil
 }

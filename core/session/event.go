@@ -155,6 +155,42 @@ func Derive(events []Event) ([]Entry, error) {
 	return entries, nil
 }
 
+// Archived 返回被 history/rewrite 改写掉、仍未被撤销的原始消息，按序号升序：压缩与卸载换掉的原文仍在日志中，可供取回。
+// 改写会把区间内未改动的消息原样带入替代消息，这些仍可见的消息不算被改写掉。
+func Archived(events []Event) ([]Entry, error) {
+	derived, err := Derive(events)
+	if err != nil {
+		return nil, err
+	}
+	visible := make(map[int64]bool, len(derived))
+	shown := make(map[string]bool, len(derived))
+	for _, e := range derived {
+		visible[e.Seq] = true
+		if b, err := json.Marshal(e.Message); err == nil {
+			shown[string(b)] = true
+		}
+	}
+	var out []Entry
+	for _, ev := range activeEvents(events) {
+		switch ev.Type {
+		case constants.SessionEventUserMessage, constants.SessionEventAssistantMessage, constants.SessionEventToolResult:
+		default:
+			continue
+		}
+		if visible[ev.Seq] {
+			continue
+		}
+		var d MessageData
+		if err := json.Unmarshal(ev.Data, &d); err != nil {
+			return nil, fmt.Errorf("事件 %d：%w", ev.Seq, err)
+		}
+		if b, err := json.Marshal(d.Message); err != nil || !shown[string(b)] {
+			out = append(out, Entry{Seq: ev.Seq, Message: d.Message, Tool: d.Tool})
+		}
+	}
+	return out, nil
+}
+
 // LastState 返回未被撤销的最后一个带状态的 turn/end 中的状态及其序号；没有时 state 为空、seq 为 0。
 func LastState(events []Event) (state json.RawMessage, seq int64, err error) {
 	active := activeEvents(events)

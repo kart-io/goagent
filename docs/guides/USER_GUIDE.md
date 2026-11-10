@@ -134,18 +134,21 @@ output, err := agent.AsRunnable().Invoke(ctx, "北京天气怎么样？")
 ### 对话记忆
 
 ```go
-import "github.com/kart-io/goagent/memory"
-
-memManager := memory.NewInMemoryManager(memory.DefaultConfig())
+sessions := session.NewMemoryStore() // 持久化用 session.NewFileStore(dir)
+compaction, err := contextpolicy.NewCompaction(contextpolicy.CompactionConfig{MaxTokens: 100000, Model: summaryClient})
+// 检查 err
+recall, err := contextpolicy.NewRecallTool(sessions)
+// 检查 err
 
 agent, err := builder.NewSimpleBuilder(client).
-    WithMemory(memManager).
+    WithSessionLog(sessions).
     WithSessionID("session-001").
-    WithMaxConversationHistory(20).
+    WithCompaction(compaction).
+    WithTools(recall).
     Build()
 ```
 
-同一 `SessionID` 下的对话写入记忆，后续调用会带上历史上下文。配置 `WithSessionLog(store)` 后，模型历史改由 [core/session](../../core/session/README.md) 的会话日志推导，不再读取记忆。
+多轮历史由 [core/session](../../core/session/README.md) 的会话日志推导；请求上下文经 `tools.WithSessionID(ctx, id)` 给出会话 ID 时以请求为准。对话超过阈值时较早的消息被压缩成摘要，原文仍在日志中，模型可用 `recall_history` 取回，见[上下文治理](CONTEXT_POLICY.md#历史压缩)。
 
 ### 手动管理对话
 

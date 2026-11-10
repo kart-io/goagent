@@ -54,7 +54,6 @@ type AgentBuilder[S core.State] struct {
 	middlewares []middleware.Middleware
 
 	// 对话记忆管理（支持多轮对话）
-	memoryManager   interfaces.MemoryManager
 	retriever       interfaces.DocumentRetriever
 	retrievalConfig RetrievalConfig
 
@@ -128,9 +127,6 @@ func (b *AgentBuilder[S]) BuildContext(ctx context.Context) (*ConfigurableAgent[
 	}
 	if b.inputSerializer == nil {
 		return nil, agentErrors.NewInvalidConfigError("builder", "input_serializer", "input serializer must not be nil")
-	}
-	if b.config.MemoryFailurePolicy != MemoryFailureBestEffort && b.config.MemoryFailurePolicy != MemoryFailureStrict {
-		return nil, agentErrors.NewInvalidConfigError("builder", "memory_failure_policy", "unknown memory failure policy")
 	}
 	if b.retriever != nil && isNilRetriever(b.retriever) {
 		return nil, agentErrors.NewInvalidConfigError("builder", "retriever", "retriever must not be a typed nil")
@@ -213,7 +209,6 @@ func (b *AgentBuilder[S]) BuildContext(ctx context.Context) (*ConfigurableAgent[
 		callbacks:       slices.Clone(b.callbacks),
 		errorHandler:    b.errorHandler,
 		metadata:        maps.Clone(b.metadata),
-		memoryManager:   b.memoryManager,
 		inputSerializer: b.inputSerializer,
 		retriever:       b.retriever,
 		retrievalConfig: b.retrievalConfig,

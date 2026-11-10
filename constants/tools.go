@@ -26,6 +26,12 @@ const (
 	DefaultSpillReadLimitLines   = 2000
 	SpillMaxLineRunes            = 2000
 	ToolReadContextResult        = "read_context_result"
+	ToolRecallHistory            = "recall_history"
+	// DefaultRecallHistoryLimit 与 MaxRecallHistoryLimit 是 recall_history 每次返回的消息条数；
+	// MaxRecallHistoryRunes 是单条消息的上限，更长的截断并标注。
+	DefaultRecallHistoryLimit = 20
+	MaxRecallHistoryLimit     = 100
+	MaxRecallHistoryRunes     = 4000
 )
 
 // CalculatorMaxNesting 限制计算器表达式的括号与一元负号嵌套深度，防止超长输入耗尽栈。

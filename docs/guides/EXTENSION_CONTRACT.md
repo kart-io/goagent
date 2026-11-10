@@ -49,9 +49,7 @@
 
 初始化的Exists/Load失败明确返回错误，不再当成无历史；不存在才使用新状态。状态类型不匹配（含typed-nil）返回普通错误，失败不替换原状态也不触发初始化回调。
 
-`WithMemoryFailurePolicy(builder.MemoryFailureStrict)` 开启严格记忆模式。默认 `MemoryFailureBestEffort` 保持继续执行，但产生不含原始错误或对话的memory_read/write观察事件。严格读写错误保留errors.Is链，在最终成功终态前失败；流式文本可能已经输出。宿主自定义errorHandler仍可按原契约转换错误。
-
-两条对话写入不是事务：用户消息成功、助手消息失败时可能留下部分记录，失败不回滚模型调用或业务副作用。需要事务语义的宿主应由MemoryManager自身提供幂等/事务能力。
+多轮历史只来自会话日志（`WithSessionLog`）。日志写入失败时本轮失败，错误保留 errors.Is 链；流式文本可能已经输出，失败不回滚模型调用或业务副作用。
 
 治理与诊断接入见 [执行治理指南](EXECUTION_GOVERNANCE.md)。
 

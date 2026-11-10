@@ -27,7 +27,6 @@ type ConfigurableAgent[S core.State] struct {
 	callbacks       []core.Callback
 	errorHandler    func(error) error
 	metadata        map[string]interface{}
-	memoryManager   interfaces.MemoryManager // 对话记忆管理
 	inputSerializer InputSerializer
 	retriever       interfaces.DocumentRetriever
 	retrievalConfig RetrievalConfig
@@ -179,11 +178,6 @@ func (a *ConfigurableAgent[S]) buildSystemPromptContent() string {
 	}
 
 	return sb.String()
-}
-
-// saveConversation 保存对话到记忆
-func (a *ConfigurableAgent[S]) saveConversation(ctx context.Context, userInput, assistantResponse string) error {
-	return writeMemory(ctx, a.memoryManager, a.config, userInput, assistantResponse)
 }
 
 // invokeToolCall 保留工具状态，供直接返回路径校验成功标志。
