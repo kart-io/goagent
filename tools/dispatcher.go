@@ -462,9 +462,10 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 		}
 		record, e := durable.Do(ectx, "tool/"+input.CallID, intent, policy, func(callCtx context.Context) (json.RawMessage, error) {
 			result, invokeErr := invoke(callCtx)
-			if invokeErr != nil {
+			if invokeErr != nil && (result == nil || callCtx.Err() == nil) {
 				return nil, invokeErr
 			}
+			// 迟到的成功：工具已生效，交给 Do 记为已完成并由它告知调用方 ctx 已结束。
 			return encodeJournaledOutput(result)
 		})
 		if e != nil {
@@ -681,14 +682,19 @@ func (d *Dispatcher) runTool(callCtx context.Context, entry dispatchEntry, input
 		}
 		return nil, e
 	}
-	if e = callCtx.Err(); e != nil {
-		return nil, e
-	}
+	late := callCtx.Err()
 	if result == nil {
 		return nil, agentErrors.Newf(agentErrors.CodeInvalidOutput, "tool %q returned nil output", entry.name).
 			WithComponent("dispatcher").
 			WithOperation("execute").
 			WithContext("tool_name", entry.name)
+	}
+	if late != nil {
+		if _, rejected := RejectedResult(result); rejected || !result.Success || result.Error != "" {
+			return nil, late
+		}
+		// 成功结果与 ctx 错误一并返回：调用方据错误得知已放弃，持久路径仍据结果记为已完成，恢复时回放而不再执行。
+		return result, late
 	}
 	if _, rejected := RejectedResult(result); rejected {
 		return result, nil

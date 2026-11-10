@@ -2,6 +2,7 @@ package builder
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -9,6 +10,8 @@ import (
 	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/session"
+	"github.com/kart-io/goagent/interfaces"
+	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/testing/mocks"
 	"github.com/kart-io/goagent/tools"
 )
@@ -154,4 +157,42 @@ func TestSessionStateAgentStateDefault(t *testing.T) {
 	user, ok := second.GetState().GetMap("user")
 	require.True(t, ok)
 	require.Equal(t, "zh", user["lang"])
+}
+
+// bumpTool 在工具调用中改写状态，用来观察失败轮次的修改是否被撤回。
+type bumpTool struct{ state *counterState }
+
+func (t *bumpTool) Name() string        { return "bump" }
+func (t *bumpTool) Description() string { return "bump" }
+func (t *bumpTool) ArgsSchema() string  { return `{"type":"object"}` }
+func (t *bumpTool) Invoke(context.Context, *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+	t.state.Set("count", 99)
+	return &interfaces.ToolOutput{Success: true, Result: "ok"}, nil
+}
+
+// 失败的轮次被撤销，它对状态的修改也随之撤回：下一轮从最后一次成功记录的状态开始。
+func TestSessionStateDiscardsAbortedTurn(t *testing.T) {
+	store := session.NewMemoryStore()
+	state := newCounterState()
+	client := mocks.NewScriptedClient(
+		mocks.TextReply("t1", "一"),
+		mocks.ToolCallReply("t2", mocks.ToolCall("c1", "bump", `{}`)),
+		mocks.ScriptedRule{Name: "fail", Respond: func(context.Context, *llm.CompletionRequest) (mocks.ScriptedReply, error) {
+			return mocks.ScriptedReply{}, errors.New("模型不可用")
+		}},
+		mocks.TextReply("t3", "三"),
+	)
+	agent, err := NewAgentBuilder[*counterState](client).WithState(state).WithTools(&bumpTool{state}).
+		WithSessionID("a").WithSessionLog(store).WithSessionState().Build()
+	require.NoError(t, err)
+	state.Set("count", 1)
+	runTurn(t, agent, "a")
+	_, err = agent.AsRunnable().Invoke(tools.WithSessionID(context.Background(), "a"), "改")
+	require.Error(t, err)
+
+	runTurn(t, agent, "a")
+	require.Equal(t, 1, count(agent))
+	recorded, _, err := session.LastState(sessionEvents(t, store, "a"))
+	require.NoError(t, err)
+	require.JSONEq(t, `{"count":1}`, string(recorded))
 }

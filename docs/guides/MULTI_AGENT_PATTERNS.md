@@ -91,7 +91,7 @@ snap, err := graph.Run(budget.WithController(ctx, c), runID, initial, "")
 |---|---|---|---|
 | 请求发出后、终态落盘前崩溃（或终态保存失败） | pending（`ambiguous`） | 拒绝 | 尝试次数 < 3 时重发 |
 | 运行 ctx 被取消 | failed（`canceled`） | 拒绝 | 尝试次数 < 3 时重发 |
-| 错误链含 `context.DeadlineExceeded` | failed（`deadline`） | 拒绝 | 拒绝 |
+| 错误链含 `context.DeadlineExceeded`（运行超时或根预算截止） | failed（`deadline`） | 拒绝 | 尝试次数 < 3 时重发 |
 | 模型返回其他错误 | failed（`execution`） | 拒绝 | 拒绝 |
 
 “拒绝”指节点以 `*durable.OperationError` 失败（`errors.Is(err, agentErrors.ErrOperationAttention)`），同一运行 ID 无法继续。3 次是持久尝试次数，不是请求次数：每次尝试内 `WithRequestError` 还可原样重试，同一回合最多发出 `3 × (1 + maxRecoveries)` 个请求（`builder/model_resend_test.go` 的 `TestModelResendWithRequestRetries`）。模型客户端把超时包装成取消时，超时也会记为 canceled 并可能被重发。重发可能重复计费；开关在运行的整个生命周期内必须一致，否则恢复时报策略变更。deadline 与 execution 的分类见 `core/durable/operation_test.go`。
@@ -146,9 +146,9 @@ _ = g.AddBranch("check", func(_ context.Context, c Case) (string, error) {
 `ApprovalNodes` 的审批发生在节点执行之前，只适合“是否进入某流程”这类粗粒度门禁。要审批 Agent 决定的具体动作（退款金额与订单），在节点内按“提议 → 登记 → 审核 → 执行”分段：
 
 1. 调用退款 Agent 得到结构化提议，Agent 的工具只读。申请 ID 应取自工单：示例用 `"refund-"+订单号` 只为演示，同一订单的第二笔合法退款会因申请 ID 相同而被 `Register` 拒绝。
-2. `durable.Do(ctx, "refund/register", intent, policy, run)` 登记申请并计算争议判定。意图只含申请 ID 与提议，不含规则阈值或时间；登记与判定在同一事务内写入（经 `refund.Service.OnRegister` 钩子：仅在新插入申请时、同一事务内调用，出错整体回滚）；`Reconcile` 只有在申请与判定都存在时才补记完成，避免以零值“无争议”补记而绕过审核。判定由业务规则决定，Agent 只能把“无争议”升级为“有争议”。判定随操作记录固定，等待期间规则阈值或订单事实变化也不会翻转。登记按申请 ID 幂等（`refund.Service.Register` 遇到同一意图返回已有申请、不再调用钩子），策略设 `MaxAttempts: 3, RetryInterrupted: true`：记录停在 pending 且未核对到、或因取消而失败时允许重跑；重跑读不到判定时报错，不以零值放行。
+2. `durable.Do(ctx, "refund/register", intent, policy, run)` 登记申请并计算争议判定。意图只含申请 ID 与提议，不含规则阈值或时间；登记与判定在同一事务内写入（经 `refund.Service.OnRegister` 钩子：仅在新插入申请时、同一事务内调用，出错整体回滚）；`Reconcile` 只有在申请与判定都存在时才补记完成，避免以零值“无争议”补记而绕过审核。判定由业务规则决定，Agent 只能把“无争议”升级为“有争议”。判定随操作记录固定，等待期间规则阈值或订单事实变化也不会翻转。登记按申请 ID 幂等（`refund.Service.Register` 遇到同一意图返回已有申请、不再调用钩子），策略设 `MaxAttempts: 3, RetryInterrupted: true`：记录停在 pending 且未核对到、或因取消或超时而失败时允许重跑；重跑读不到判定时报错，不以零值放行。
 3. 有争议时 `durable.AwaitInput(ctx, "refund-review", info, validate)`。info 含订单号、金额、判定理由与解析审核人所需的提交人；输入为 `{"approved": bool, "note": string, "approver": string, "reason": string}`，`approver` 由宿主认证后填入，批准时必须非空；`reason` 可选，超时输入为 `{"approved": false, "reason": "timeout"}`，validate 严格解码、拒绝未知字段。拒绝时不执行退款，把“人工拒绝”写回状态。
-4. `durable.Do(ctx, "refund/execute", ...)` 的策略设 `MaxAttempts: 3, RetryFailed: true`，并提供按回执核对的 `Reconcile`。`Reconcile` 在记录被中断（停在 pending 或因取消而失败）时先行核对，查到回执即补记完成、不再执行 run；退款已提交而调用返回其他错误时记录为 failed，默认策略下 failed 是终态，续跑只会得到操作错误，`RetryFailed` 才让续跑在尝试次数内重跑 run。run 先按申请 ID 查回执，已有回执直接返回；否则批准并退款。`refund.Service.Approve` 校验有效期与订单事实，重跑时若先比对订单或 `Approve`，退款后订单变化或审批过期会把已完成的退款误报为失败。`refund.Service.Refund` 自身也先返回已提交回执，再在同一事务内检查累计额度，是第二道防线。审核期间订单事实变化时，把“订单已变化，需重新申请”作为业务结果写回状态，而不是节点错误。执行操作也提供按回执核对的 `Reconcile`。
+4. `durable.Do(ctx, "refund/execute", ...)` 的策略设 `MaxAttempts: 3, RetryFailed: true`，并提供按回执核对的 `Reconcile`。`Reconcile` 在记录被中断（停在 pending 或因取消、超时而失败）时先行核对，查到回执即补记完成、不再执行 run；退款已提交而调用返回其他错误时记录为 failed，默认策略下 failed 是终态，续跑只会得到操作错误，`RetryFailed` 才让续跑在尝试次数内重跑 run。run 先按申请 ID 查回执，已有回执直接返回；否则批准并退款。`refund.Service.Approve` 校验有效期与订单事实，重跑时若先比对订单或 `Approve`，退款后订单变化或审批过期会把已完成的退款误报为失败。`refund.Service.Refund` 自身也先返回已提交回执，再在同一事务内检查累计额度，是第二道防线。审核期间订单事实变化时，把“订单已变化，需重新申请”作为业务结果写回状态，而不是节点错误。执行操作也提供按回执核对的 `Reconcile`。
 
 不要把退款放进可中断工具：可中断工具只允许一次尝试且没有对账钩子，“退款已生效、记录未落盘”时崩溃会留下 pending，恢复被拒；续跑还会整体重跑工具，审核人已拒绝的申请可能被重新判为无争议直接退款。业务实现复用 `workflow/refund.Service`，审核人解析与转人工交接由[客服编排案例](https://github.com/kart-io/goagent-examples/blob/main/docs/superpowers/specs/2026-11-05-customer-service-design.md)定义。
 

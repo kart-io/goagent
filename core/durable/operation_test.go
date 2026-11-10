@@ -156,8 +156,8 @@ func TestRetryInterruptedOnlyRerunsInterruptedRecords(t *testing.T) {
 	}{
 		{"崩溃后停在 pending", "pending", "ambiguous", 1, true},
 		{"进程停止时被取消", "failed", "canceled", 1, true},
+		{"超时", "failed", "deadline", 1, true},
 		{"普通失败", "failed", "execution", 1, false},
-		{"超时", "failed", "deadline", 1, false},
 		{"尝试次数已用完", "pending", "ambiguous", 2, false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -185,7 +185,7 @@ func TestRetryInterruptedOnlyRerunsInterruptedRecords(t *testing.T) {
 	}
 }
 
-// RetryFailed 只重跑结果已知的失败；中断的记录可能已经生效，须由 Reconcile 核对未生效或显式声明 RetryInterrupted。
+// RetryFailed 只重跑结果已知的普通失败；中断（崩溃、取消、超时）的记录可能已经生效，须由 Reconcile 核对未生效或显式声明 RetryInterrupted。
 func TestRetryFailedSkipsInterruptedRecords(t *testing.T) {
 	policy := OperationPolicy{MaxAttempts: 3, RetryFailed: true}
 	for _, test := range []struct {
@@ -195,8 +195,8 @@ func TestRetryFailedSkipsInterruptedRecords(t *testing.T) {
 	}{
 		{"崩溃后停在 pending", "pending", "ambiguous", false},
 		{"进程停止时被取消", "failed", "canceled", false},
+		{"超时", "failed", "deadline", false},
 		{"普通失败", "failed", "execution", true},
-		{"超时", "failed", "deadline", true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := operationContext(t)
@@ -223,7 +223,7 @@ func TestRetryFailedSkipsInterruptedRecords(t *testing.T) {
 	}
 }
 
-// 崩溃与取消都是结果未知的中断：Reconcile 查到效果时补记，确认未生效时 RetryFailed 重跑。
+// 崩溃、取消与超时都是结果未知的中断：Reconcile 查到效果时补记，确认未生效时 RetryFailed 重跑。
 func TestReconcileChecksInterruptedRecords(t *testing.T) {
 	for _, test := range []struct {
 		name         string
@@ -236,6 +236,8 @@ func TestReconcileChecksInterruptedRecords(t *testing.T) {
 		{"崩溃后未生效", "pending", "ambiguous", false, `"执行"`, 1},
 		{"取消后已生效", "failed", "canceled", true, `"对账"`, 0},
 		{"取消后未生效", "failed", "canceled", false, `"执行"`, 1},
+		{"超时后已生效", "failed", "deadline", true, `"对账"`, 0},
+		{"超时后未生效", "failed", "deadline", false, `"执行"`, 1},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := operationContext(t)
@@ -287,4 +289,25 @@ func TestCancelledOperationIsRecordedAsCanceledWhateverItReturned(t *testing.T) 
 	})
 	require.Error(t, err)
 	require.Equal(t, "canceled", record.FailureKind)
+}
+
+// run 已成功返回而 ctx 恰好结束：效果已生效，记为已完成并告知调用方取消，恢复时回放而不再执行。
+func TestLateSuccessIsRecordedAsCompleted(t *testing.T) {
+	base := operationContext(t)
+	ctx, cancel := context.WithCancel(base)
+	defer cancel()
+	calls := 0
+	run := func(context.Context) (json.RawMessage, error) {
+		calls++
+		cancel()
+		return json.RawMessage(`"已付款"`), nil
+	}
+	_, err := Do(ctx, "pay", json.RawMessage(`{}`), OperationPolicy{MaxAttempts: 3, RetryInterrupted: true}, run)
+	require.ErrorIs(t, err, context.Canceled)
+
+	record, err := Do(base, "pay", json.RawMessage(`{}`), OperationPolicy{MaxAttempts: 3, RetryInterrupted: true}, run)
+	require.NoError(t, err)
+	require.True(t, record.Replayed)
+	require.JSONEq(t, `"已付款"`, string(record.Value))
+	require.Equal(t, 1, calls)
 }

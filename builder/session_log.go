@@ -68,6 +68,10 @@ func (a *ConfigurableAgent[S]) restoreSessionState(id string, events []session.E
 	if id == a.stateSession && seq == a.stateSeq {
 		return nil
 	}
+	if id == a.stateSession && a.stateBase != nil && seq == a.stateBaseSeq {
+		// 上一轮没有写入 turn/end（失败或中断）且日志没有更新的状态：回到它开始前的状态。
+		data = a.stateBase
+	}
 	if data == nil {
 		if a.stateSession == "" {
 			// 首次执行且会话没有记录：当前状态就是构建时的状态。
@@ -79,7 +83,7 @@ func (a *ConfigurableAgent[S]) restoreSessionState(id string, events []session.E
 	if err := json.Unmarshal(data, a.state); err != nil {
 		return fmt.Errorf("恢复会话状态：%w", err)
 	}
-	a.stateSession, a.stateSeq = id, seq
+	a.stateSession, a.stateSeq, a.stateBase = id, seq, nil
 	return nil
 }
 
@@ -88,8 +92,11 @@ func (a *ConfigurableAgent[S]) bindSessionTurn(turn *sessionTurn, id string) {
 	if !a.config.SessionState {
 		return
 	}
+	// 编码失败时不保留基线，下一轮改从会话日志恢复。
+	a.stateBase, _ = json.Marshal(a.state)
+	a.stateBaseSeq, a.stateSeq = a.stateSeq, -1
 	turn.state = func() (json.RawMessage, error) { return json.Marshal(a.state) }
-	turn.saved = func(seq int64) { a.stateSession, a.stateSeq = id, seq }
+	turn.saved = func(seq int64) { a.stateSession, a.stateSeq, a.stateBase = id, seq, nil }
 }
 
 type sessionLogKey struct{}

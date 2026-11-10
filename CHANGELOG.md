@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- `core/durable`：超时（`failed/deadline`）与崩溃、取消一样按结果未知的中断处理：先经 `Reconcile` 核对，`RetryFailed` 不再直接重跑，需 `Reconcile` 确认未生效或声明 `RetryInterrupted`。此前工具已产生副作用但应答超过 `DispatchConfig.Timeout` 时，恢复会再执行一次。依赖“超时即重跑”的自定义策略需改为提供 `Reconcile` 或声明 `RetryInterrupted`；`tools.Dispatcher` 默认策略已声明 `RetryInterrupted`，Builder 的 `WithInterruptedModelResend` 现在也重发被运行截止时间或根预算截止打断的模型请求。
+
+- `interfaces.ToolInput`：删除只写不读的 `Context` 字段，工具从 `Invoke(ctx, input)` 的 ctx 取得取消与请求范围的值。迁移：删除构造 `ToolInput` 时的 `Context: ctx`。
+- `core/durable`、`tools`：`run` 或工具已成功返回而 ctx 恰好结束时，结果照常记为 completed 并返回 ctx 错误，恢复时回放而不再执行；此前成功结果被改记为 `failed/canceled`，默认策略下恢复会重复副作用（如重复付款）。非持久调用仍返回 ctx 错误。
+- `builder.WithSessionState`：失败或中断的轮次对状态的修改不再泄漏到下一轮与会话日志；下一轮开始时回到该轮开始前的状态，日志中已有更新的状态时以日志为准。
 ## [0.52.0] - 2026-11-10
 
 ### 新增

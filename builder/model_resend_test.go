@@ -3,6 +3,7 @@ package builder
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -92,32 +93,51 @@ func (m *stuckModel) CompleteStream(ctx context.Context, req *llm.CompletionRequ
 	return m.CompleteToolsStream(ctx, req, nil)
 }
 
+// 进程停止与运行截止时间都会打断模型请求，开启重发后恢复时重发而不是停下等宿主处理。
 func TestModelResendAfterStop(t *testing.T) {
-	f := newResendFixture(t, 5)
-	model := &stuckModel{stuckAt: 1, nativeEventModel: nativeModel(answerTurn("好的", 7)), started: make(chan struct{})}
-	agent := resendAgent(t, model)
+	for _, test := range []struct {
+		name      string
+		interrupt func(context.Context) (ctx context.Context, trigger, release func())
+		want      error
+	}{
+		{"进程停止", func(ctx context.Context) (context.Context, func(), func()) {
+			ctx, cancel := context.WithCancel(ctx)
+			return ctx, cancel, cancel
+		}, context.Canceled},
+		{"截止时间到", func(ctx context.Context) (context.Context, func(), func()) {
+			ctx, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
+			return ctx, func() {}, cancel
+		}, context.DeadlineExceeded},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			f := newResendFixture(t, 5)
+			model := &stuckModel{stuckAt: 1, nativeEventModel: nativeModel(answerTurn("好的", 7)), started: make(chan struct{})}
+			agent := resendAgent(t, model)
 
-	stopping, stop := context.WithCancel(f.ctx)
-	done := make(chan error, 1)
-	go func() {
-		_, err := agent.Invoke(stopping, "q")
-		done <- err
-	}()
-	<-model.started
-	stop()
-	require.ErrorIs(t, <-done, context.Canceled)
+			stopping, trigger, release := test.interrupt(f.ctx)
+			defer release()
+			done := make(chan error, 1)
+			go func() {
+				_, err := agent.Invoke(stopping, "q")
+				done <- err
+			}()
+			<-model.started
+			trigger()
+			require.ErrorIs(t, <-done, test.want)
 
-	out, err := agent.Invoke(f.ctx, "q")
-	require.NoError(t, err)
-	require.Equal(t, "好的", out.Result)
-	require.Equal(t, 2, model.calls)
+			out, err := agent.Invoke(f.ctx, "q")
+			require.NoError(t, err)
+			require.Equal(t, "好的", out.Result)
+			require.Equal(t, 2, model.calls)
 
-	// 回放登记在重发那次的键下；被打断的第一次没有用量，不能算到它头上。
-	_, err = agent.Invoke(f.ctx, "q")
-	require.NoError(t, err)
-	snap, err := f.c.Snapshot(context.Background())
-	require.NoError(t, err)
-	require.Equal(t, 7, snap.KnownTokens.TotalTokens)
+			// 回放登记在重发那次的键下；被打断的第一次没有用量，不能算到它头上。
+			_, err = agent.Invoke(f.ctx, "q")
+			require.NoError(t, err)
+			snap, err := f.c.Snapshot(context.Background())
+			require.NoError(t, err)
+			require.Equal(t, 7, snap.KnownTokens.TotalTokens)
+		})
+	}
 }
 
 func TestModelResendStopsAtAttemptLimit(t *testing.T) {

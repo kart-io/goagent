@@ -54,17 +54,17 @@ type OperationPolicy struct {
 	MaxAttempts int `json:"max_attempts"`
 	// RetryFailed permits another attempt on a subsequent explicit invocation.
 	// Do never loops or retries within a single invocation.
-	// 只作用于结果已知的失败（普通失败、超时）；中断的记录须由 Reconcile 核对未生效或声明 RetryInterrupted 才重跑。
+	// 只作用于结果已知的普通失败；中断的记录（崩溃、取消、超时）须由 Reconcile 核对未生效或声明 RetryInterrupted 才重跑。
 	RetryFailed bool `json:"retry_failed"`
-	// Reconcile 在记录被中断（停在 pending 或因取消而失败，结果未知）时先于重跑调用，按派生执行键查询效果是否已生效：
+	// Reconcile 在记录被中断（停在 pending 或因取消、超时而失败，结果未知）时先于重跑调用，按派生执行键查询效果是否已生效：
 	// found 为真时用 value 补记为 completed，不执行 run、不计尝试次数；返回错误时记录不变。
 	Reconcile func(ctx context.Context) (value json.RawMessage, found bool, err error) `json:"-"`
 	// Resumable 声明 run 的全部效果都记在派生执行键下，重新进入只会回放已完成的步骤：
 	// waiting 记录总是重新进入且不计尝试次数，pending 记录在 MaxAttempts 内重新进入。
 	// 只有声明它的操作能把 *WaitError 记为等待。
 	Resumable bool `json:"resumable"`
-	// RetryInterrupted 允许在 MaxAttempts 内重跑被中断的操作：记录停在 pending（进程崩溃）或因取消而失败（进程停止）。
-	// 上次执行可能已经生效，调用方须接受重复的效果；普通失败和超时不算中断。
+	// RetryInterrupted 允许在 MaxAttempts 内重跑被中断的操作：记录停在 pending（进程崩溃）或因取消、超时而失败。
+	// 上次执行可能已经生效，调用方须接受重复的效果；普通失败不算中断。
 	RetryInterrupted bool `json:"retry_interrupted"`
 }
 
@@ -295,7 +295,7 @@ func Do(ctx context.Context, id string, input json.RawMessage, policy OperationP
 			return record, nil
 		}
 		absent := false
-		interrupted := record.Status == "pending" || (record.Status == "failed" && record.FailureKind == "canceled")
+		interrupted := record.Status == "pending" || (record.Status == "failed" && (record.FailureKind == "canceled" || record.FailureKind == "deadline"))
 		if interrupted && policy.Reconcile != nil {
 			value, found, e := reconcileOperation(childCtx, policy.Reconcile)
 			if e != nil {
@@ -331,9 +331,8 @@ func Do(ctx context.Context, id string, input json.RawMessage, policy OperationP
 		return record, err
 	}
 	value, callErr := invokeOperation(context.WithValue(childCtx, attemptContext{}, record.Attempts), run)
-	if callErr == nil {
-		callErr = ctx.Err()
-	}
+	// run 已成功返回时效果已经生效：照常记为 completed 以便恢复时回放，同时把取消告知调用方。
+	late := callErr == nil && ctx.Err() != nil
 	if len(value) == 0 {
 		value = json.RawMessage(`null`)
 	}
@@ -372,6 +371,9 @@ func Do(ctx context.Context, id string, input json.RawMessage, policy OperationP
 	// Persist cancellation/failure evidence with a bounded independent context.
 	saveCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
+	if late {
+		callErr = errors.Join(callErr, ctx.Err())
+	}
 	return record, errors.Join(callErr, save(saveCtx))
 }
 

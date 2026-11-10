@@ -137,7 +137,7 @@ func (b *AgentBuilder[S]) WithDurableScope(scope string) *AgentBuilder[S] {
 	return b
 }
 
-// WithInterruptedModelResend 让持久运行恢复时重发被进程停止或崩溃打断的模型请求，同一回合最多发出 3 次。
+// WithInterruptedModelResend 让持久运行恢复时重发被进程停止、崩溃或截止时间打断的模型请求，同一回合最多发出 3 次。
 // 默认不重发，因为被打断的请求可能已经计费：开启后可能重复计费，每次重发各占一份预算，额度不足时不发送。
 // 已提交的回合、模型明确失败的请求和工具调用都不受影响。开关须在运行的整个生命周期内保持一致，否则恢复时报策略变更。
 func (b *AgentBuilder[S]) WithInterruptedModelResend() *AgentBuilder[S] {
