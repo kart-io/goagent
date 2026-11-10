@@ -9,10 +9,6 @@ import (
 
 	"github.com/kart-io/goagent/codec/json"
 
-	agentErrors "github.com/kart-io/goagent/errors"
-
-	"github.com/kart-io/goagent/core"
-	"github.com/kart-io/goagent/core/checkpoint"
 	"github.com/kart-io/goagent/core/observe"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
@@ -29,83 +25,6 @@ func (m *failingMemory) GetConversationHistory(context.Context, string, int) ([]
 }
 func (m *failingMemory) AddConversation(context.Context, *interfaces.Conversation) error {
 	return m.writeErr
-}
-
-type failingCheckpoint struct {
-	checkpoint.Checkpointer
-	existsErr, loadErr error
-	state              core.State
-}
-
-func (c *failingCheckpoint) Exists(context.Context, string) (bool, error) { return true, c.existsErr }
-func (c *failingCheckpoint) Load(context.Context, string) (core.State, error) {
-	return c.state, c.loadErr
-}
-
-type otherState struct{ *core.AgentState }
-
-type saveFailCheckpoint struct {
-	checkpoint.Checkpointer
-	err error
-}
-
-func (c *saveFailCheckpoint) Exists(context.Context, string) (bool, error)   { return false, nil }
-func (c *saveFailCheckpoint) Save(context.Context, string, core.State) error { return c.err }
-
-// 同步与流式入口在自动保存失败时都必须返回错误，不能只写 stderr 后报告成功。
-func TestCheckpointSaveFailureAcrossEntries(t *testing.T) {
-	for _, entry := range []string{"execute", "runnable"} {
-		t.Run(entry, func(t *testing.T) {
-			sentinel := errors.New("checkpoint storage unavailable")
-			var client llm.Client = NewMockLLMClient("answer")
-			if entry == "runnable" {
-				client = &eventModel{MockLLMClient: NewMockLLMClient(), chunks: []*llm.StreamChunk{{Delta: "answer"}, {Done: true, FinishReason: "stop"}}}
-			}
-			a, err := NewSimpleBuilder(client).WithCheckpointer(&saveFailCheckpoint{err: sentinel}).Build()
-			require.NoError(t, err)
-			var output *AgentOutput
-			if entry == "execute" {
-				output, err = a.AsRunnable().Invoke(context.Background(), "input")
-			} else {
-				output, err = a.AsRunnable().Invoke(context.Background(), "input")
-			}
-			require.ErrorIs(t, err, sentinel)
-			require.Nil(t, output)
-		})
-	}
-}
-
-func TestInitializeRejectsCheckpointFailureWithoutMutation(t *testing.T) {
-	sentinel := errors.New("storage unavailable")
-	for _, tc := range []struct {
-		name  string
-		cp    *failingCheckpoint
-		cause error
-	}{
-		{"exists", &failingCheckpoint{existsErr: sentinel}, sentinel},
-		{"load", &failingCheckpoint{loadErr: sentinel}, sentinel},
-		{"type", &failingCheckpoint{state: &otherState{core.NewAgentState()}}, nil},
-		{"nil", &failingCheckpoint{}, nil},
-		{"typed_nil", &failingCheckpoint{state: (*core.AgentState)(nil)}, nil},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			a, err := NewSimpleBuilder(NewMockLLMClient()).Build()
-			require.NoError(t, err)
-			previous := a.runtime.State
-			cb := NewMockCallback()
-			a.callbacks = []core.Callback{cb}
-			a.runtime.Checkpointer = tc.cp
-			err = a.Initialize(context.Background())
-			require.Error(t, err)
-			var panicErr *agentErrors.PanicError
-			require.False(t, errors.As(err, &panicErr))
-			if tc.cause != nil {
-				require.ErrorIs(t, err, tc.cause)
-			}
-			require.Same(t, previous, a.runtime.State)
-			require.False(t, cb.onStartCalled)
-		})
-	}
 }
 
 type memoryEvents struct{ events []observe.Event }
@@ -191,14 +110,6 @@ func TestMemoryFailurePolicyRejectsUnknownValue(t *testing.T) {
 }
 
 // Build 同样必须保留初始化存储错误，不能触发初始化成功回调。
-func TestBuildPreservesCheckpointError(t *testing.T) {
-	sentinel := errors.New("checkpoint unavailable")
-	cb := NewMockCallback()
-	_, err := NewSimpleBuilder(NewMockLLMClient()).WithCheckpointer(&failingCheckpoint{existsErr: sentinel}).WithCallbacks(cb).Build()
-	require.ErrorIs(t, err, sentinel)
-	require.False(t, cb.onStartCalled)
-}
-
 func TestBestEffortMemoryDoesNotPrintPrivateError(t *testing.T) {
 	previous := os.Stderr
 	r, w, err := os.Pipe()

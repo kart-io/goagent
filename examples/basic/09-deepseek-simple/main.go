@@ -105,7 +105,7 @@ func runBuilderExample(apiKey string) {
 	}
 
 	// 使用 Builder 构建 Agent（指定泛型参数）
-	agent, err := builder.NewAgentBuilder[any, *agentcore.AgentState](client).
+	agent, err := builder.NewAgentBuilder[*agentcore.AgentState](client).
 		WithSystemPrompt("你是一个专业的 Go 语言顾问，擅长解答 Go 编程相关的问题。").
 		WithMetadata("name", "Go-Advisor").
 		WithMetadata("description", "Go 语言专业顾问").
@@ -151,7 +151,7 @@ func runStructuredOutputExample(apiKey string) {
 	}
 
 	// 使用 Builder 构建 Agent，要求输出 JSON 格式
-	agent, err := builder.NewAgentBuilder[any, *agentcore.AgentState](client).
+	agent, err := builder.NewAgentBuilder[*agentcore.AgentState](client).
 		WithSystemPrompt(`你是一个数据分析助手。你的任务是根据用户的要求，生成结构化的 JSON 数据。
 请确保输出的是有效的 JSON 格式，不要包含任何其他文字说明。`).
 		WithMetadata("name", "DataGenerator").

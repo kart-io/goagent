@@ -99,7 +99,6 @@ if err != nil {
 |---|---|
 | `ApprovalNodes` + `WithResumeHandler` | 节点执行前审批，人工修改业务状态 |
 | `durable.AwaitInput` | 节点或工具执行中途要一个输入 |
-| `core.InterruptManager` | 进程内阻塞等待，不能跨进程恢复 |
 | `Handle.Interrupt` | 取消正在运行的 Agent，不是暂停 |
 
 ## 嵌套在 Agent 工具中
@@ -120,10 +119,8 @@ out, err := agent.AsRunnable().Invoke(resumeCtx, originalInput)
 
 这两个 Key 不同，不能互换。子图与父操作使用相同 Store；输入拒绝会保持父操作为 waiting，并通过 `ChildContinuation.Reason=resume_input` 返回。子图审批只接受 `workflow.WithResume` 编码的结构化 `ResumeRequest`，不再接受 `durable.WithResume(ctx, operationKey, approvalKey)` 裸键调用；`durable.WithResume` 仍可向叶子中断传原始输入。由 `Start` 开始的 Agent 应同样以 `Start` 恢复，见 [Builder](../../builder/README.md)。
 
-## 现有 Interrupt 与 Checkpointer 的边界
+## 取消与恢复的边界
 
 `Handle.Interrupt` 取消当前运行，`Wait` 等待工具与清理退出。若要恢复取消的运行，必须事先配置持久日志并保持执行身份；被中断模型请求的重发还受 `WithInterruptedModelResend` 策略控制。
 
-`core.InterruptManager` / `InterruptableExecutor` 用于进程内阻塞等待。`RespondToInterrupt` 可提交审批与 Input，配置的 `core/checkpoint.Checkpointer` 保存业务状态；保存失败会直接返回错误，不发布中断也不执行后续业务。但等待条目和响应通道仍只在内存中，不能靠这个 Checkpointer 重建跨进程等待。
-
-`core/checkpoint.InMemorySaver` 在重启后丢失；`Checkpointer` 保存状态本身，也不包含持久图的执行位置与工具日志。跨进程 HITL 应使用上面的持久图与 `durable.Store`。
+原 `core.InterruptManager`、`InterruptableExecutor` 与 `core/checkpoint` 已删除，人工等待一律使用上面的持久图、`durable.AwaitInput` 与 `durable.Store`；`durable.AwaitInput` 的完整示例见 [human-in-the-loop-interrupt](../../examples/human-in-the-loop-interrupt/README.md)。

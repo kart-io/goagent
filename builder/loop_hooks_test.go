@@ -434,7 +434,7 @@ func TestLoopHooksDurableReplay(t *testing.T) {
 	require.NoError(t, err)
 	ctx := durable.WithJournal(durable.WithExecutionKey(context.Background(), "loop"), store)
 	var stops, contexts atomic.Int32
-	build := func(model *scriptModel) *ConfigurableAgent[any, *core.AgentState] {
+	build := func(model *scriptModel) *ConfigurableAgent[*core.AgentState] {
 		dispatched, err := dispatcherTools(tools.DispatchConfig{}, plainTool())
 		require.NoError(t, err)
 		agent, err := NewSimpleBuilder(model).WithDurableScope("hooks").WithTools(dispatched...).WithMaxIterations(4).
@@ -514,7 +514,7 @@ func (m *samplingCapture) CompleteToolsStream(ctx context.Context, req *llm.Comp
 // 未在 builder 上显式设置时，请求不携带 MaxTokens 与 Temperature，交由 LLM 客户端自身配置决定。
 func TestSamplingParamsDeferToClientUnlessSet(t *testing.T) {
 	for _, withTools := range []bool{true, false} {
-		run := func(configure func(*AgentBuilder[any, *core.AgentState])) *llm.CompletionRequest {
+		run := func(configure func(*AgentBuilder[*core.AgentState])) *llm.CompletionRequest {
 			model := &samplingCapture{MockLLMClient: NewMockLLMClient("答")}
 			b := NewSimpleBuilder(model)
 			if withTools {
@@ -528,11 +528,11 @@ func TestSamplingParamsDeferToClientUnlessSet(t *testing.T) {
 			require.Len(t, model.requests, 1)
 			return model.requests[0]
 		}
-		req := run(func(*AgentBuilder[any, *core.AgentState]) {})
+		req := run(func(*AgentBuilder[*core.AgentState]) {})
 		require.Zero(t, req.MaxTokens, "tools=%v", withTools)
 		require.False(t, req.TemperatureSet, "tools=%v", withTools)
 
-		req = run(func(b *AgentBuilder[any, *core.AgentState]) { b.WithTemperature(0).WithMaxTokens(64) })
+		req = run(func(b *AgentBuilder[*core.AgentState]) { b.WithTemperature(0).WithMaxTokens(64) })
 		require.Equal(t, 64, req.MaxTokens, "tools=%v", withTools)
 		require.True(t, req.TemperatureSet, "显式设为 0 也要下发，tools=%v", withTools)
 		require.Zero(t, req.Temperature)

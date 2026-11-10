@@ -9,7 +9,7 @@ import (
 )
 
 // validateLoopCapabilities 在初始化或访问宿主资源前拒绝会被执行模式忽略的配置。
-func (b *AgentBuilder[C, S]) validateLoopCapabilities(toolset []interfaces.Tool) error {
+func (b *AgentBuilder[S]) validateLoopCapabilities(toolset []interfaces.Tool) error {
 	if _, native := b.llmClient.(llm.ToolStreamClient); native && len(toolset) > 0 {
 		return nil
 	}

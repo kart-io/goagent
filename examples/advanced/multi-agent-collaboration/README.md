@@ -1,6 +1,6 @@
 # Multi-Agent Collaboration Example
 
-Three agents built with `builder.NewAgentBuilder[any, core.State]` run in sequence on one task ("Analyze website performance data and optimize loading times for an e-commerce platform"). Each agent's output is serialized to JSON and passed as the next agent's input.
+Three agents built with `builder.NewAgentBuilder[core.State]` run in sequence on one task ("Analyze website performance data and optimize loading times for an e-commerce platform"). Each agent's output is serialized to JSON and passed as the next agent's input.
 
 | Agent | Tools (`tools.NewBaseTool`) |
 | --- | --- |

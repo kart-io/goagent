@@ -10,13 +10,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/kart-io/goagent/core"
-	"github.com/kart-io/goagent/core/checkpoint"
 	"github.com/kart-io/goagent/core/middleware"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 
 	shared2 "github.com/kart-io/goagent/constants"
-	"github.com/kart-io/goagent/store/memory"
 )
 
 // MockLLMClient implements llm.Client for testing
@@ -150,19 +148,12 @@ func (t *MockTool) WithConfig(config core.RunnableConfig) core.Runnable[*interfa
 	return &newTool
 }
 
-// TestContext for testing
-type TestContext struct {
-	UserID   string
-	UserName string
-}
-
 func TestDefaultAgentConfig(t *testing.T) {
 	config := DefaultAgentConfig()
 
 	require.NotNil(t, config)
 	assert.Equal(t, 10, config.MaxIterations)
 	assert.Equal(t, 5*time.Minute, config.Timeout)
-	assert.True(t, config.EnableAutoSave)
 	assert.Zero(t, config.MaxTokens, "未设置时沿用 LLM 客户端配置")
 	assert.False(t, config.TemperatureSet)
 	assert.NotEmpty(t, config.SessionID)
@@ -171,7 +162,7 @@ func TestDefaultAgentConfig(t *testing.T) {
 
 func TestNewAgentBuilder(t *testing.T) {
 	llmClient := NewMockLLMClient()
-	builder := NewAgentBuilder[TestContext, *core.AgentState](llmClient)
+	builder := NewAgentBuilder[*core.AgentState](llmClient)
 
 	require.NotNil(t, builder)
 	assert.Equal(t, llmClient, builder.llmClient)
@@ -182,7 +173,7 @@ func TestNewAgentBuilder(t *testing.T) {
 
 func TestAgentBuilder_WithTools(t *testing.T) {
 	llmClient := NewMockLLMClient()
-	builder := NewAgentBuilder[TestContext, *core.AgentState](llmClient)
+	builder := NewAgentBuilder[*core.AgentState](llmClient)
 
 	tool1 := NewMockTool("tool1", "result1")
 	tool2 := NewMockTool("tool2", "result2")
@@ -194,7 +185,7 @@ func TestAgentBuilder_WithTools(t *testing.T) {
 
 func TestAgentBuilder_WithSystemPrompt(t *testing.T) {
 	llmClient := NewMockLLMClient()
-	builder := NewAgentBuilder[TestContext, *core.AgentState](llmClient)
+	builder := NewAgentBuilder[*core.AgentState](llmClient)
 
 	prompt := "You are a helpful assistant"
 	builder.WithSystemPrompt(prompt)
@@ -204,7 +195,7 @@ func TestAgentBuilder_WithSystemPrompt(t *testing.T) {
 
 func TestAgentBuilder_WithState(t *testing.T) {
 	llmClient := NewMockLLMClient()
-	builder := NewAgentBuilder[TestContext, *core.AgentState](llmClient)
+	builder := NewAgentBuilder[*core.AgentState](llmClient)
 
 	state := core.NewAgentState()
 	state.Set("key", "value")
@@ -216,43 +207,9 @@ func TestAgentBuilder_WithState(t *testing.T) {
 	assert.Equal(t, "value", val)
 }
 
-func TestAgentBuilder_WithContext(t *testing.T) {
-	llmClient := NewMockLLMClient()
-	builder := NewAgentBuilder[TestContext, *core.AgentState](llmClient)
-
-	ctx := TestContext{
-		UserID:   "user123",
-		UserName: "Alice",
-	}
-	builder.WithContext(ctx)
-
-	assert.Equal(t, "user123", builder.context.UserID)
-	assert.Equal(t, "Alice", builder.context.UserName)
-}
-
-func TestAgentBuilder_WithStore(t *testing.T) {
-	llmClient := NewMockLLMClient()
-	builder := NewAgentBuilder[TestContext, *core.AgentState](llmClient)
-
-	store := memory.New()
-	builder.WithStore(store)
-
-	assert.NotNil(t, builder.store)
-}
-
-func TestAgentBuilder_WithCheckpointer(t *testing.T) {
-	llmClient := NewMockLLMClient()
-	builder := NewAgentBuilder[TestContext, *core.AgentState](llmClient)
-
-	checkpointer := checkpoint.NewInMemorySaver()
-	builder.WithCheckpointer(checkpointer)
-
-	assert.NotNil(t, builder.checkpointer)
-}
-
 func TestAgentBuilder_WithMiddleware(t *testing.T) {
 	llmClient := NewMockLLMClient()
-	builder := NewAgentBuilder[TestContext, *core.AgentState](llmClient)
+	builder := NewAgentBuilder[*core.AgentState](llmClient)
 
 	mw1 := middleware.NewLoggingMiddleware(nil)
 	mw2 := middleware.NewTimingMiddleware()
@@ -264,7 +221,7 @@ func TestAgentBuilder_WithMiddleware(t *testing.T) {
 
 func TestAgentBuilder_WithConfig(t *testing.T) {
 	llmClient := NewMockLLMClient()
-	builder := NewAgentBuilder[TestContext, *core.AgentState](llmClient)
+	builder := NewAgentBuilder[*core.AgentState](llmClient)
 
 	config := &AgentConfig{
 		MaxIterations: 20,
@@ -282,7 +239,7 @@ func TestAgentBuilder_WithConfig(t *testing.T) {
 
 func TestAgentBuilder_ConfigureForRAG(t *testing.T) {
 	llmClient := NewMockLLMClient()
-	builder := NewAgentBuilder[TestContext, *core.AgentState](llmClient)
+	builder := NewAgentBuilder[*core.AgentState](llmClient)
 
 	builder.ConfigureForRAG()
 
@@ -293,7 +250,7 @@ func TestAgentBuilder_ConfigureForRAG(t *testing.T) {
 
 func TestAgentBuilder_ConfigureForChatbot(t *testing.T) {
 	llmClient := NewMockLLMClient()
-	builder := NewAgentBuilder[TestContext, *core.AgentState](llmClient)
+	builder := NewAgentBuilder[*core.AgentState](llmClient)
 
 	builder.ConfigureForChatbot()
 
@@ -303,7 +260,7 @@ func TestAgentBuilder_ConfigureForChatbot(t *testing.T) {
 
 func TestAgentBuilder_ConfigureForAnalysis(t *testing.T) {
 	llmClient := NewMockLLMClient()
-	builder := NewAgentBuilder[TestContext, *core.AgentState](llmClient)
+	builder := NewAgentBuilder[*core.AgentState](llmClient)
 
 	builder.ConfigureForAnalysis()
 
@@ -318,17 +275,9 @@ func TestAgentBuilder_Build(t *testing.T) {
 	state := core.NewAgentState()
 	state.Set("user", "Alice")
 
-	ctx := TestContext{
-		UserID:   "user123",
-		UserName: "Alice",
-	}
-
-	agent, err := NewAgentBuilder[TestContext, *core.AgentState](llmClient).
+	agent, err := NewAgentBuilder[*core.AgentState](llmClient).
 		WithSystemPrompt("You are a test assistant").
 		WithState(state).
-		WithContext(ctx).
-		WithStore(memory.New()).
-		WithCheckpointer(checkpoint.NewInMemorySaver()).
 		Build()
 
 	require.NoError(t, err)
@@ -336,7 +285,6 @@ func TestAgentBuilder_Build(t *testing.T) {
 
 	assert.Equal(t, llmClient, agent.llmClient)
 	assert.Equal(t, "You are a test assistant", agent.systemPrompt)
-	assert.NotNil(t, agent.runtime)
 	assert.NotNil(t, agent.chain)
 }
 
@@ -344,7 +292,7 @@ func TestAgentBuilder_BuildWithDefaults(t *testing.T) {
 	llmClient := NewMockLLMClient("Test response")
 
 	// Build with minimal configuration - should use defaults
-	agent, err := NewAgentBuilder[any, *core.AgentState](llmClient).
+	agent, err := NewAgentBuilder[*core.AgentState](llmClient).
 		WithSystemPrompt("Test prompt").
 		Build()
 
@@ -352,14 +300,11 @@ func TestAgentBuilder_BuildWithDefaults(t *testing.T) {
 	require.NotNil(t, agent)
 
 	// Check defaults were set
-	assert.NotNil(t, agent.runtime.State)
-	assert.NotNil(t, agent.runtime.Store)
-	// 未配置时不创建检查点器，避免每轮无意义地快照状态
-	assert.Nil(t, agent.runtime.Checkpointer)
+	assert.NotNil(t, agent.state)
 }
 
 func TestAgentBuilder_BuildWithoutLLMClient(t *testing.T) {
-	builder := NewAgentBuilder[any, *core.AgentState](nil)
+	builder := NewAgentBuilder[*core.AgentState](nil)
 
 	agent, err := builder.Build()
 
@@ -373,7 +318,7 @@ func TestConfigurableAgent_Execute(t *testing.T) {
 
 	state := core.NewAgentState()
 
-	agent, err := NewAgentBuilder[any, *core.AgentState](llmClient).
+	agent, err := NewAgentBuilder[*core.AgentState](llmClient).
 		WithSystemPrompt("You are helpful").
 		WithState(state).
 		Build()
@@ -394,7 +339,7 @@ func TestConfigurableAgent_GetState(t *testing.T) {
 	state := core.NewAgentState()
 	state.Set("initial", "value")
 
-	agent, err := NewAgentBuilder[any, *core.AgentState](llmClient).
+	agent, err := NewAgentBuilder[*core.AgentState](llmClient).
 		WithState(state).
 		Build()
 	require.NoError(t, err)
@@ -409,7 +354,7 @@ func TestConfigurableAgent_GetMetrics(t *testing.T) {
 	llmClient := MockToolLLMClient{NewMockLLMClient()}
 	tool := NewMockTool("test-tool", "result")
 
-	agent, err := NewAgentBuilder[any, *core.AgentState](llmClient).
+	agent, err := NewAgentBuilder[*core.AgentState](llmClient).
 		WithTools(tool).
 		WithMiddleware(middleware.NewLoggingMiddleware(nil)).
 		Build()
@@ -424,26 +369,19 @@ func TestConfigurableAgent_GetMetrics(t *testing.T) {
 
 func TestConfigurableAgent_Shutdown(t *testing.T) {
 	llmClient := NewMockLLMClient()
-	checkpointer := checkpoint.NewInMemorySaver()
 	state := core.NewAgentState()
 	state.Set("key", "value")
 
-	agent, err := NewAgentBuilder[any, *core.AgentState](llmClient).
+	agent, err := NewAgentBuilder[*core.AgentState](llmClient).
 		WithState(state).
-		WithCheckpointer(checkpointer).
 		Build()
 	require.NoError(t, err)
 
 	// Execute to create some state
 	agent.AsRunnable().Invoke(context.Background(), "test")
 
-	// Shutdown should save state
 	err = agent.Shutdown(context.Background())
 	assert.NoError(t, err)
-
-	// Verify state was saved
-	exists, _ := checkpointer.Exists(context.Background(), agent.config.SessionID)
-	assert.True(t, exists)
 }
 
 func TestQuickAgent(t *testing.T) {
@@ -524,7 +462,6 @@ func TestWorkflowAgent(t *testing.T) {
 	assert.Contains(t, agent.systemPrompt, "workflow orchestrator")
 	assert.Equal(t, "workflow", agent.metadata["type"])
 	assert.Equal(t, 15, agent.config.MaxIterations)
-	assert.True(t, agent.config.EnableAutoSave)
 
 	// Check workflows were set in state
 	wf, ok := agent.GetState().Get("workflows")
@@ -634,7 +571,7 @@ func TestAgentBuilder_ErrorHandling(t *testing.T) {
 		return fmt.Errorf("handled: %w", err)
 	}
 
-	agent, err := NewAgentBuilder[any, *core.AgentState](llmClient).
+	agent, err := NewAgentBuilder[*core.AgentState](llmClient).
 		WithErrorHandler(errorHandler).
 		Build()
 	require.NoError(t, err)
@@ -650,14 +587,6 @@ func TestAgentBuilder_CompleteFlow(t *testing.T) {
 	state := core.NewAgentState()
 	state.Set("session_start", time.Now())
 
-	ctx := TestContext{
-		UserID:   "user456",
-		UserName: "Charlie",
-	}
-
-	store := memory.New()
-	checkpointer := checkpoint.NewInMemorySaver()
-
 	// Create tools
 	calcTool := NewMockTool("calculator", "42")
 	searchTool := NewMockTool("search", "search results")
@@ -669,18 +598,14 @@ func TestAgentBuilder_CompleteFlow(t *testing.T) {
 	cacheMW := middleware.NewCacheMiddleware(1 * time.Minute)
 
 	// Build agent with everything
-	agent, err := NewAgentBuilder[TestContext, *core.AgentState](llmClient).
+	agent, err := NewAgentBuilder[*core.AgentState](llmClient).
 		WithSystemPrompt("You are a comprehensive assistant").
 		WithState(state).
-		WithContext(ctx).
-		WithStore(store).
-		WithCheckpointer(checkpointer).
 		WithTools(calcTool, searchTool).
 		WithMiddleware(loggingMW, cacheMW).
 		WithMetadata("test", "complete").
 		WithMaxIterations(5).
 		WithTimeout(1 * time.Minute).
-		WithAutoSaveEnabled(true).
 		WithTemperature(0.5).
 		WithVerbose(true).
 		Build()
@@ -699,7 +624,6 @@ func TestAgentBuilder_CompleteFlow(t *testing.T) {
 	// Verify components were integrated
 	assert.Equal(t, 2, len(agent.tools))
 	// Context is not an interface, so we directly access the field
-	assert.Equal(t, "user456", agent.runtime.Context.UserID)
 
 	// Check metadata
 	assert.Equal(t, "complete", agent.metadata["test"])
@@ -710,7 +634,7 @@ func BenchmarkAgentBuilder_Build(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		agent, _ := NewAgentBuilder[any, *core.AgentState](llmClient).
+		agent, _ := NewAgentBuilder[*core.AgentState](llmClient).
 			WithSystemPrompt("Benchmark prompt").
 			Build()
 		_ = agent
@@ -719,7 +643,7 @@ func BenchmarkAgentBuilder_Build(b *testing.B) {
 
 func BenchmarkConfigurableAgent_Execute(b *testing.B) {
 	llmClient := NewMockLLMClient("Benchmark response")
-	agent, _ := NewAgentBuilder[any, *core.AgentState](llmClient).
+	agent, _ := NewAgentBuilder[*core.AgentState](llmClient).
 		WithSystemPrompt("Benchmark").
 		Build()
 
@@ -765,7 +689,7 @@ func (mc *MockCallback) OnError(ctx context.Context, err error) error {
 // TestAgentBuilder_WithCallbacks tests the WithCallbacks method
 func TestAgentBuilder_WithCallbacks(t *testing.T) {
 	llmClient := NewMockLLMClient()
-	builder := NewAgentBuilder[any, *core.AgentState](llmClient)
+	builder := NewAgentBuilder[*core.AgentState](llmClient)
 
 	cb1 := NewMockCallback()
 	cb2 := NewMockCallback()
@@ -778,7 +702,7 @@ func TestAgentBuilder_WithCallbacks(t *testing.T) {
 // TestAgentBuilder_WithMetadata tests the WithMetadata method with multiple keys
 func TestAgentBuilder_WithMetadata_Multiple(t *testing.T) {
 	llmClient := NewMockLLMClient()
-	builder := NewAgentBuilder[any, *core.AgentState](llmClient)
+	builder := NewAgentBuilder[*core.AgentState](llmClient)
 
 	builder.
 		WithMetadata("key1", "value1").
@@ -795,7 +719,7 @@ func TestAgentBuilder_ChainedConfiguration(t *testing.T) {
 	llmClient := MockToolLLMClient{NewMockLLMClient("response")}
 	state := core.NewAgentState()
 
-	agent, err := NewAgentBuilder[any, *core.AgentState](llmClient).
+	agent, err := NewAgentBuilder[*core.AgentState](llmClient).
 		WithSystemPrompt("Test").
 		WithState(state).
 		WithMetadata("key1", "value1").
@@ -821,7 +745,7 @@ func TestConfigurableAgent_Execute_WithTimeout(t *testing.T) {
 		Temperature: 0.7,
 	}
 
-	agent, err := NewAgentBuilder[any, *core.AgentState](llmClient).
+	agent, err := NewAgentBuilder[*core.AgentState](llmClient).
 		WithSystemPrompt("Test").
 		WithState(state).
 		WithTimeout(config.Timeout).
@@ -837,51 +761,13 @@ func TestConfigurableAgent_Execute_WithTimeout(t *testing.T) {
 	assert.NotNil(t, output)
 }
 
-// TestConfigurableAgent_Initialize_WithCheckpoint tests state loading from checkpoint
-func TestConfigurableAgent_Initialize_WithCheckpoint(t *testing.T) {
-	llmClient := NewMockLLMClient("response")
-	checkpointer := checkpoint.NewInMemorySaver()
-	state := core.NewAgentState()
-	state.Set("saved_key", "saved_value")
-
-	// First, build and save state
-	agent1, err := NewAgentBuilder[any, *core.AgentState](llmClient).
-		WithSystemPrompt("Test").
-		WithState(state).
-		WithCheckpointer(checkpointer).
-		Build()
-	require.NoError(t, err)
-
-	sessionID := agent1.config.SessionID
-	agent1.AsRunnable().Invoke(context.Background(), "test input")
-	agent1.Shutdown(context.Background())
-
-	// Create new agent with same checkpointer and session ID
-	state2 := core.NewAgentState()
-	config2 := DefaultAgentConfig()
-	config2.SessionID = sessionID
-
-	agent2, err := NewAgentBuilder[any, *core.AgentState](llmClient).
-		WithSystemPrompt("Test").
-		WithState(state2).
-		WithCheckpointer(checkpointer).
-		WithSessionID(config2.SessionID).
-		Build()
-
-	require.NoError(t, err)
-
-	// Verify state was loaded from checkpoint
-	retrievedState := agent2.GetState()
-	assert.NotNil(t, retrievedState)
-}
-
 // TestConfigurableAgent_Initialize_WithCallback tests callback execution during initialization
 func TestConfigurableAgent_Initialize_WithCallback(t *testing.T) {
 	llmClient := NewMockLLMClient("response")
 	state := core.NewAgentState()
 	callback := NewMockCallback()
 
-	agent, err := NewAgentBuilder[any, *core.AgentState](llmClient).
+	agent, err := NewAgentBuilder[*core.AgentState](llmClient).
 		WithSystemPrompt("Test").
 		WithState(state).
 		WithCallbacks(callback).
@@ -899,7 +785,7 @@ func TestConfigurableAgent_Initialize_WithCallbackError(t *testing.T) {
 	callback := NewMockCallback()
 	callback.onStartError = fmt.Errorf("callback error")
 
-	_, err := NewAgentBuilder[any, *core.AgentState](llmClient).
+	_, err := NewAgentBuilder[*core.AgentState](llmClient).
 		WithSystemPrompt("Test").
 		WithState(state).
 		WithCallbacks(callback).
@@ -915,7 +801,7 @@ func TestConfigurableAgent_Execute_WithCallbacks(t *testing.T) {
 	state := core.NewAgentState()
 	callback := NewMockCallback()
 
-	agent, err := NewAgentBuilder[any, *core.AgentState](llmClient).
+	agent, err := NewAgentBuilder[*core.AgentState](llmClient).
 		WithSystemPrompt("Test").
 		WithState(state).
 		WithCallbacks(callback).
@@ -938,7 +824,7 @@ func TestConfigurableAgent_Shutdown_WithSaveError(t *testing.T) {
 	llmClient := NewMockLLMClient("response")
 	state := core.NewAgentState()
 
-	agent, err := NewAgentBuilder[any, *core.AgentState](llmClient).
+	agent, err := NewAgentBuilder[*core.AgentState](llmClient).
 		WithSystemPrompt("Test").
 		WithState(state).
 		Build()
@@ -948,7 +834,6 @@ func TestConfigurableAgent_Shutdown_WithSaveError(t *testing.T) {
 	// Execute to populate state
 	agent.AsRunnable().Invoke(context.Background(), "test")
 
-	// Shutdown should succeed even with nil checkpointer
 	err = agent.Shutdown(context.Background())
 	assert.NoError(t, err)
 }
@@ -959,7 +844,7 @@ func TestConfigurableAgent_Shutdown_WithCallback(t *testing.T) {
 	state := core.NewAgentState()
 	callback := NewMockCallback()
 
-	agent, err := NewAgentBuilder[any, *core.AgentState](llmClient).
+	agent, err := NewAgentBuilder[*core.AgentState](llmClient).
 		WithSystemPrompt("Test").
 		WithState(state).
 		WithCallbacks(callback).
@@ -980,7 +865,7 @@ func TestConfigurableAgent_Execute_WithErrorHandler(t *testing.T) {
 	llmClient := NewMockLLMClient("response")
 	state := core.NewAgentState()
 
-	agent, err := NewAgentBuilder[any, *core.AgentState](llmClient).
+	agent, err := NewAgentBuilder[*core.AgentState](llmClient).
 		WithSystemPrompt("Test").
 		WithState(state).
 		WithErrorHandler(errorHandler).
@@ -997,7 +882,7 @@ func TestConfigurableAgent_GetMetrics_WithAgentState(t *testing.T) {
 	state.Set("key1", "value1")
 	state.Set("key2", "value2")
 
-	agent, err := NewAgentBuilder[any, *core.AgentState](llmClient).
+	agent, err := NewAgentBuilder[*core.AgentState](llmClient).
 		WithSystemPrompt("Test").
 		WithState(state).
 		Build()
@@ -1017,7 +902,7 @@ func TestAgentBuilder_BuildWithStateRequired(t *testing.T) {
 
 	// Create a builder with custom state type that requires explicit state
 	// For AgentState, it should auto-create if not provided
-	agent, err := NewAgentBuilder[any, *core.AgentState](llmClient).
+	agent, err := NewAgentBuilder[*core.AgentState](llmClient).
 		WithSystemPrompt("Test").
 		Build()
 
@@ -1031,7 +916,7 @@ func TestAgentBuilder_ConfigureForChatbot_Validation(t *testing.T) {
 	llmClient := NewMockLLMClient("response")
 	state := core.NewAgentState()
 
-	builder := NewAgentBuilder[any, *core.AgentState](llmClient).
+	builder := NewAgentBuilder[*core.AgentState](llmClient).
 		WithSystemPrompt("Test").
 		WithState(state)
 
@@ -1049,7 +934,7 @@ func TestAgentBuilder_ConfigureForRAG_FullCoverage(t *testing.T) {
 	llmClient := NewMockLLMClient("response")
 	state := core.NewAgentState()
 
-	builder := NewAgentBuilder[any, *core.AgentState](llmClient).
+	builder := NewAgentBuilder[*core.AgentState](llmClient).
 		WithSystemPrompt("Test").
 		WithState(state)
 
@@ -1069,7 +954,7 @@ func TestAgentBuilder_ConfigureForAnalysis_FullCoverage(t *testing.T) {
 	llmClient := NewMockLLMClient("response")
 	state := core.NewAgentState()
 
-	builder := NewAgentBuilder[any, *core.AgentState](llmClient).
+	builder := NewAgentBuilder[*core.AgentState](llmClient).
 		WithSystemPrompt("Test").
 		WithState(state)
 
@@ -1097,14 +982,13 @@ func TestWorkflowAgent_WithValidation(t *testing.T) {
 
 	// Verify validation middleware is installed
 	assert.Equal(t, 15, agent.config.MaxIterations)
-	assert.True(t, agent.config.EnableAutoSave)
 	assert.NotNil(t, agent)
 }
 
 // TestAgentBuilder_MultipleTools tests adding multiple tools in separate calls
 func TestAgentBuilder_MultipleTools(t *testing.T) {
 	llmClient := NewMockLLMClient("response")
-	builder := NewAgentBuilder[any, *core.AgentState](llmClient)
+	builder := NewAgentBuilder[*core.AgentState](llmClient)
 
 	tool1 := NewMockTool("tool1", "result1")
 	tool2 := NewMockTool("tool2", "result2")
@@ -1123,7 +1007,7 @@ func TestConfigurableAgent_GetState_Concurrent(t *testing.T) {
 	state := core.NewAgentState()
 	state.Set("initial", "value")
 
-	agent, err := NewAgentBuilder[any, *core.AgentState](llmClient).
+	agent, err := NewAgentBuilder[*core.AgentState](llmClient).
 		WithState(state).
 		Build()
 	require.NoError(t, err)
@@ -1158,7 +1042,7 @@ func TestAgentBuilder_Build_WithVerboseConfig(t *testing.T) {
 		Verbose:       true,
 	}
 
-	agent, err := NewAgentBuilder[any, *core.AgentState](llmClient).
+	agent, err := NewAgentBuilder[*core.AgentState](llmClient).
 		WithSystemPrompt("Test").
 		WithState(state).
 		WithMaxIterations(config.MaxIterations).
@@ -1177,7 +1061,7 @@ func TestConfigurableAgent_Execute_UpdatesState(t *testing.T) {
 	llmClient := NewMockLLMClient("Test response")
 	state := core.NewAgentState()
 
-	agent, err := NewAgentBuilder[any, *core.AgentState](llmClient).
+	agent, err := NewAgentBuilder[*core.AgentState](llmClient).
 		WithSystemPrompt("Test").
 		WithState(state).
 		Build()
@@ -1195,7 +1079,7 @@ func TestConfigurableAgent_Execute_WithMetadata(t *testing.T) {
 	llmClient := NewMockLLMClient("response")
 	state := core.NewAgentState()
 
-	agent, err := NewAgentBuilder[any, *core.AgentState](llmClient).
+	agent, err := NewAgentBuilder[*core.AgentState](llmClient).
 		WithSystemPrompt("Test").
 		WithState(state).
 		WithMetadata("key1", "value1").
@@ -1216,7 +1100,7 @@ func TestAgentBuilder_FineGrainedOptions(t *testing.T) {
 	mockClient := NewMockLLMClient()
 
 	t.Run("WithMaxIterations", func(t *testing.T) {
-		builder := NewAgentBuilder[any, *core.AgentState](mockClient).
+		builder := NewAgentBuilder[*core.AgentState](mockClient).
 			WithMaxIterations(25)
 
 		assert.Equal(t, 25, builder.config.MaxIterations)
@@ -1227,7 +1111,7 @@ func TestAgentBuilder_FineGrainedOptions(t *testing.T) {
 	})
 
 	t.Run("WithTimeout", func(t *testing.T) {
-		builder := NewAgentBuilder[any, *core.AgentState](mockClient).
+		builder := NewAgentBuilder[*core.AgentState](mockClient).
 			WithTimeout(2 * time.Minute)
 
 		assert.Equal(t, 2*time.Minute, builder.config.Timeout)
@@ -1238,7 +1122,7 @@ func TestAgentBuilder_FineGrainedOptions(t *testing.T) {
 	})
 
 	t.Run("WithTemperature", func(t *testing.T) {
-		builder := NewAgentBuilder[any, *core.AgentState](mockClient).
+		builder := NewAgentBuilder[*core.AgentState](mockClient).
 			WithTemperature(0.5)
 
 		assert.Equal(t, 0.5, builder.config.Temperature)
@@ -1252,7 +1136,7 @@ func TestAgentBuilder_FineGrainedOptions(t *testing.T) {
 	})
 
 	t.Run("WithMaxTokens", func(t *testing.T) {
-		builder := NewAgentBuilder[any, *core.AgentState](mockClient).
+		builder := NewAgentBuilder[*core.AgentState](mockClient).
 			WithMaxTokens(5000)
 
 		assert.Equal(t, 5000, builder.config.MaxTokens)
@@ -1262,18 +1146,8 @@ func TestAgentBuilder_FineGrainedOptions(t *testing.T) {
 		assert.Equal(t, 5000, builder.config.MaxTokens) // Should remain unchanged
 	})
 
-	t.Run("WithAutoSaveEnabled", func(t *testing.T) {
-		builder := NewAgentBuilder[any, *core.AgentState](mockClient).
-			WithAutoSaveEnabled(false)
-
-		assert.False(t, builder.config.EnableAutoSave)
-
-		builder.WithAutoSaveEnabled(true)
-		assert.True(t, builder.config.EnableAutoSave)
-	})
-
 	t.Run("WithSessionID", func(t *testing.T) {
-		builder := NewAgentBuilder[any, *core.AgentState](mockClient).
+		builder := NewAgentBuilder[*core.AgentState](mockClient).
 			WithSessionID("custom-session-123")
 
 		assert.Equal(t, "custom-session-123", builder.config.SessionID)
@@ -1284,7 +1158,7 @@ func TestAgentBuilder_FineGrainedOptions(t *testing.T) {
 	})
 
 	t.Run("WithVerbose", func(t *testing.T) {
-		builder := NewAgentBuilder[any, *core.AgentState](mockClient).
+		builder := NewAgentBuilder[*core.AgentState](mockClient).
 			WithVerbose(true)
 
 		assert.True(t, builder.config.Verbose)
@@ -1294,7 +1168,7 @@ func TestAgentBuilder_FineGrainedOptions(t *testing.T) {
 	})
 
 	t.Run("chaining multiple options", func(t *testing.T) {
-		builder := NewAgentBuilder[any, *core.AgentState](mockClient).
+		builder := NewAgentBuilder[*core.AgentState](mockClient).
 			WithMaxIterations(15).
 			WithTimeout(45 * time.Second).
 			WithTemperature(0.8).
@@ -1315,19 +1189,17 @@ func TestAgentBuilder_FineGrainedMethods(t *testing.T) {
 
 	t.Run("fine-grained methods apply all fields", func(t *testing.T) {
 		customConfig := &AgentConfig{
-			MaxIterations:  25,
-			Timeout:        2 * time.Minute,
-			EnableAutoSave: false,
-			MaxTokens:      4000,
-			Temperature:    0.6,
-			SessionID:      "test-session",
-			Verbose:        true,
+			MaxIterations: 25,
+			Timeout:       2 * time.Minute,
+			MaxTokens:     4000,
+			Temperature:   0.6,
+			SessionID:     "test-session",
+			Verbose:       true,
 		}
 
-		builder := NewAgentBuilder[any, *core.AgentState](mockClient).
+		builder := NewAgentBuilder[*core.AgentState](mockClient).
 			WithMaxIterations(customConfig.MaxIterations).
 			WithTimeout(customConfig.Timeout).
-			WithAutoSaveEnabled(customConfig.EnableAutoSave).
 			WithMaxTokens(customConfig.MaxTokens).
 			WithTemperature(customConfig.Temperature).
 			WithSessionID(customConfig.SessionID).
@@ -1335,7 +1207,6 @@ func TestAgentBuilder_FineGrainedMethods(t *testing.T) {
 
 		assert.Equal(t, 25, builder.config.MaxIterations)
 		assert.Equal(t, 2*time.Minute, builder.config.Timeout)
-		assert.False(t, builder.config.EnableAutoSave)
 		assert.Equal(t, 4000, builder.config.MaxTokens)
 		assert.Equal(t, 0.6, builder.config.Temperature)
 		assert.Equal(t, "test-session", builder.config.SessionID)
@@ -1343,7 +1214,7 @@ func TestAgentBuilder_FineGrainedMethods(t *testing.T) {
 	})
 
 	t.Run("using fine-grained methods", func(t *testing.T) {
-		builder := NewAgentBuilder[any, *core.AgentState](mockClient)
+		builder := NewAgentBuilder[*core.AgentState](mockClient)
 		originalConfig := builder.config
 
 		// No changes should occur
@@ -1354,7 +1225,7 @@ func TestAgentBuilder_FineGrainedMethods(t *testing.T) {
 	})
 
 	t.Run("mixing fine-grained options", func(t *testing.T) {
-		builder := NewAgentBuilder[any, *core.AgentState](mockClient).
+		builder := NewAgentBuilder[*core.AgentState](mockClient).
 			WithMaxIterations(20).
 			WithTemperature(0.5).
 			WithMaxTokens(3500).
@@ -1371,12 +1242,10 @@ func TestAgentBuilder_FineGrainedMethods(t *testing.T) {
 func TestAgentBuilder_FineGrainedOptions_Integration(t *testing.T) {
 	mockClient := NewMockLLMClient("Test response")
 	state := core.NewAgentState()
-	store := memory.New()
 
-	agent, err := NewAgentBuilder[any, *core.AgentState](mockClient).
+	agent, err := NewAgentBuilder[*core.AgentState](mockClient).
 		WithSystemPrompt("You are a test assistant").
 		WithState(state).
-		WithStore(store).
 		WithMaxIterations(5).
 		WithTimeout(30 * time.Second).
 		WithTemperature(0.7).

@@ -44,32 +44,6 @@ agent, err := b.Build()
 
 案例见 goagent-examples 的 `orchestration/plugin/`。
 
-## Runnable 注册表
-
-`core` 另提供进程内的 Runnable 注册表：把泛型 `core.Runnable[I, O]` 包装为动态类型的 `core.DynamicRunnable`，按名称注册、查找。它是独立的组件容器，**不与 Builder 或 Dispatcher 集成**：注册表里的条目是 `DynamicRunnable`，不是模型可调用的 `interfaces.Tool`。给 Agent 提供工具用 `WithTools` 或上面的能力包（见下文 MCP 一节与[原生编排](NATIVE_ORCHESTRATION.md)）。
-
-| 类型 | 职责 |
-|---|---|
-| `TypedToDynamicAdapter[I, O]` / `DynamicToTypedAdapter[I, O]` | 泛型与动态调用互转；输入先直接断言，失败时按结构解码；`TypedToDynamicAdapter` 的调用带 panic 保护 |
-| `PluginRegistry` | 名称 → `DynamicRunnable` 与 `PluginMetadata`；`RegisterTyped`/`GetTyped` 免手写适配器 |
-
-进程级单例：`GlobalPluginRegistry()`。
-
-### 使用
-
-```go
-reg := core.NewPluginRegistry()
-length := core.NewRunnableFunc(func(ctx context.Context, s string) (int, error) { return len(s), nil })
-if err := core.RegisterTyped(reg, "length", length, &core.PluginMetadata{Version: "1.0.0"}); err != nil {
-    return err
-}
-fn, err := core.GetTyped[string, int](reg, "length")
-if err != nil { return err }
-n, err := fn.Invoke(ctx, "hello")
-```
-
-`Get` 返回 `DynamicRunnable`（`InvokeDynamic`/`StreamDynamic`/`BatchDynamic`/`TypeInfo`）；另有 `Unregister`、`List`、`GetMetadata`。
-
 ## 接入 MCP 服务器
 
 MCP 服务器的工具不需要包装为插件。`mcp/remote` 基于官方 SDK 建立会话，`remote.Tools` 返回的 `interfaces.Tool` 可直接传给 Builder：

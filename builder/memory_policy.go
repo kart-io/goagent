@@ -18,7 +18,7 @@ const (
 )
 
 // WithMemoryFailurePolicy 设置对话记忆失败策略；默认尽力模式。
-func (b *AgentBuilder[C, S]) WithMemoryFailurePolicy(policy MemoryFailurePolicy) *AgentBuilder[C, S] {
+func (b *AgentBuilder[S]) WithMemoryFailurePolicy(policy MemoryFailurePolicy) *AgentBuilder[S] {
 	b.config.MemoryFailurePolicy = policy
 	return b
 }

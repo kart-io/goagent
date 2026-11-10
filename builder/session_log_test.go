@@ -132,7 +132,7 @@ func TestSessionLogDurableResume(t *testing.T) {
 		}
 		return &interfaces.ToolOutput{Success: true, Result: "found"}, nil
 	})
-	build := func(model *scriptModel, st session.Store) *ConfigurableAgent[any, *core.AgentState] {
+	build := func(model *scriptModel, st session.Store) *ConfigurableAgent[*core.AgentState] {
 		dispatched, err := dispatcherTools(tools.DispatchConfig{}, tool)
 		require.NoError(t, err)
 		agent, err := NewSimpleBuilder(model).WithSessionID("s").WithSessionLog(st).WithDurableScope("resume").

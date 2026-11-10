@@ -119,11 +119,11 @@ func example3Chatbot(apiKey string) {
 // ========== 辅助函数：简化 API ==========
 
 // quickAgent 快速创建 Agent（最简化）
-func quickAgent(apiKey, prompt string) *builder.ConfigurableAgent[any, core.State] {
+func quickAgent(apiKey, prompt string) *builder.ConfigurableAgent[core.State] {
 	llm := mustCreateLLM(apiKey)
 
 	//nolint:staticcheck // Example demonstrates old API for backward compatibility
-	agent, err := builder.NewAgentBuilder[any, core.State](llm).
+	agent, err := builder.NewAgentBuilder[core.State](llm).
 		WithSystemPrompt(prompt).
 		WithState(agentstate.NewAgentState()).
 		Build()
@@ -135,11 +135,11 @@ func quickAgent(apiKey, prompt string) *builder.ConfigurableAgent[any, core.Stat
 }
 
 // quickAgentWithTools 快速创建带工具的 Agent
-func quickAgentWithTools(apiKey, prompt string, tools ...interfaces.Tool) *builder.ConfigurableAgent[any, core.State] {
+func quickAgentWithTools(apiKey, prompt string, tools ...interfaces.Tool) *builder.ConfigurableAgent[core.State] {
 	llm := mustCreateLLM(apiKey)
 
 	//nolint:staticcheck // Example demonstrates old API for backward compatibility
-	agent, err := builder.NewAgentBuilder[any, core.State](llm).
+	agent, err := builder.NewAgentBuilder[core.State](llm).
 		WithSystemPrompt(prompt).
 		WithTools(tools...).
 		WithState(agentstate.NewAgentState()).
@@ -153,11 +153,11 @@ func quickAgentWithTools(apiKey, prompt string, tools ...interfaces.Tool) *build
 }
 
 // chatbot 创建聊天机器人
-func chatbot(apiKey string) *builder.ConfigurableAgent[any, core.State] {
+func chatbot(apiKey string) *builder.ConfigurableAgent[core.State] {
 	llm := mustCreateLLM(apiKey)
 
 	//nolint:staticcheck // Example demonstrates old API for backward compatibility
-	agent, err := builder.NewAgentBuilder[any, core.State](llm).
+	agent, err := builder.NewAgentBuilder[core.State](llm).
 		WithSystemPrompt("你是友好的聊天机器人").
 		WithState(agentstate.NewAgentState()).
 		ConfigureForChatbot().
@@ -170,7 +170,7 @@ func chatbot(apiKey string) *builder.ConfigurableAgent[any, core.State] {
 }
 
 // run 运行 Agent（简化）
-func run(agent *builder.ConfigurableAgent[any, core.State], input string) interface{} {
+func run(agent *builder.ConfigurableAgent[core.State], input string) interface{} {
 	ctx := context.Background()
 	output, err := agent.AsRunnable().Invoke(ctx, input)
 	if err != nil {
@@ -180,7 +180,7 @@ func run(agent *builder.ConfigurableAgent[any, core.State], input string) interf
 }
 
 // runWithTools 运行带工具的 Agent（简化）
-func runWithTools(agent *builder.ConfigurableAgent[any, core.State], input string) interface{} {
+func runWithTools(agent *builder.ConfigurableAgent[core.State], input string) interface{} {
 	ctx := context.Background()
 	output, err := agent.AsRunnable().Invoke(ctx, input)
 	if err != nil {

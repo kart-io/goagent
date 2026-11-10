@@ -19,7 +19,6 @@
 | `durable.go` | 中断续跑协议、原因及重入/去重边界 |
 | `session.go` | 会话事件类型；事件数据结构仍由 `core/session` 定义 |
 | `workflow.go` | 图起止标记、多 Agent 完成标记和续跑拒绝原因 |
-| `checkpoint.go` | 复制模式、健康检查与故障切换默认值 |
 | `memory.go` | 记忆默认配置、向量存储及嵌入提供商词汇 |
 
 ```go

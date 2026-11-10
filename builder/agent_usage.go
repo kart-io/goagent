@@ -17,7 +17,7 @@ import (
 
 // WithAgentID names a logical role independently of its durable namespace.
 // Concurrent calls have separate call keys; role labels must not contain secrets.
-func (b *AgentBuilder[C, S]) WithAgentID(id string) *AgentBuilder[C, S] {
+func (b *AgentBuilder[S]) WithAgentID(id string) *AgentBuilder[S] {
 	b.config.AgentID = id
 	return b
 }
@@ -25,12 +25,12 @@ func (b *AgentBuilder[C, S]) WithAgentID(id string) *AgentBuilder[C, S] {
 // WithUsageHook binds a read-only token hook for this Agent and descendants.
 // A child's nonnil hook replaces the inherited hook; nil retains inheritance.
 // All evidence and totals come from the same accounting path as Observer.
-func (b *AgentBuilder[C, S]) WithUsageHook(hook budget.UsageHook) *AgentBuilder[C, S] {
+func (b *AgentBuilder[S]) WithUsageHook(hook budget.UsageHook) *AgentBuilder[S] {
 	b.config.UsageHook = hook
 	return b
 }
 
-func (a *ConfigurableAgent[C, S]) prepareAgentUsage(ctx context.Context) (context.Context, error) {
+func (a *ConfigurableAgent[S]) prepareAgentUsage(ctx context.Context) (context.Context, error) {
 	c, metered := budget.FromContext(ctx)
 	if a.config.AgentID == "" && !metered && !observe.Enabled(ctx) && !budget.HasUsageHook(ctx) {
 		return ctx, nil
@@ -166,7 +166,7 @@ func publishModelUsage(ctx context.Context, operation, key string, attempt int, 
 
 // WithReasoning overrides the client's reasoning settings for this Agent's
 // requests. It does not change children using their own Builder/client settings.
-func (b *AgentBuilder[C, S]) WithReasoning(config usage.ReasoningConfig) *AgentBuilder[C, S] {
+func (b *AgentBuilder[S]) WithReasoning(config usage.ReasoningConfig) *AgentBuilder[S] {
 	copy := config
 	b.config.Reasoning = &copy
 	return b

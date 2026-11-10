@@ -1,6 +1,6 @@
 # 检索、事件流、MCP 与可恢复步骤
 
-本文汇总四类入口：goagent-contrib 中的检索器契约、Builder 统一事件流、官方 MCP 客户端适配与 `core/durable` 顺序步骤。Builder 的所有入口都走统一的流式执行管道。`core.InterruptManager` 是进程内的中断机制，不会自动变成持久化步骤。
+本文汇总四类入口：goagent-contrib 中的检索器契约、Builder 统一事件流、官方 MCP 客户端适配与 `core/durable` 顺序步骤。Builder 的所有入口都走统一的流式执行管道。
 
 ## Retriever 执行契约
 
@@ -94,7 +94,7 @@ snapshot, err = runner.Run(ctx, "request-123", nil, snapshot.Key)
 
 执行副作用后、检查点保存前崩溃，会以**相同键重试**该步骤；这是至少一次执行，需要外部服务按键去重，不保证恰好一次。审批键不是认证凭证，应用负责身份、授权与审批界面。同一运行初始数据只写入一次。FileStore 面向具有可靠锁/原子替换语义的本地文件系统；多实例共享运行用 goagent-contrib 的 `durable/pgstore`。
 
-测试包含真实子进程退出后恢复、审批匹配、失败后复用幂等键、已完成步骤不重跑、锁等待取消和损坏检查点拒绝。它用于显式注册的顺序步骤，不恢复任意 Agent 调用栈、动态图或 InterruptManager 的内存 channel；图级恢复见[原生编排](NATIVE_ORCHESTRATION.md)。
+测试包含真实子进程退出后恢复、审批匹配、失败后复用幂等键、已完成步骤不重跑、锁等待取消和损坏检查点拒绝。它用于显式注册的顺序步骤，不恢复任意 Agent 调用栈或动态图；图级恢复见[原生编排](NATIVE_ORCHESTRATION.md)。
 
 [退款审批与崩溃恢复案例](https://github.com/kart-io/goagent-examples/blob/main/workflow/refund-recovery/README.md)组合检查图、审批检查点与独立 SQLite 模拟退款服务，并通过真实进程退出验证副作用提交后的幂等重试。
 

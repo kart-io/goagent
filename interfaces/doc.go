@@ -12,5 +12,5 @@
 //   - Store: Key-value storage
 //
 // Agent execution contracts live in core (core.Agent, core.Runnable) and
-// state checkpointing in core/checkpoint.
+// durable execution in core/durable.
 package interfaces

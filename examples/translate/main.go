@@ -103,8 +103,8 @@ func initializeDeepSeekClient() (llm.Client, error) {
 // MultiAgentTranslator 多代理翻译器
 type MultiAgentTranslator struct {
 	llmClient        llm.Client
-	detectionAgent   *builder.ConfigurableAgent[any, core.State]
-	translationAgent *builder.ConfigurableAgent[any, core.State]
+	detectionAgent   *builder.ConfigurableAgent[core.State]
+	translationAgent *builder.ConfigurableAgent[core.State]
 	tokenTracker     *core.CostTrackingCallback // Token 追踪器
 }
 
@@ -131,7 +131,7 @@ func NewMultiAgentTranslator(llmClient llm.Client) *MultiAgentTranslator {
 }
 
 // createLanguageDetectionAgent 创建语言检测代理
-func (t *MultiAgentTranslator) createLanguageDetectionAgent() *builder.ConfigurableAgent[any, core.State] {
+func (t *MultiAgentTranslator) createLanguageDetectionAgent() *builder.ConfigurableAgent[core.State] {
 	systemPrompt := `你是一个专业的语言检测专家。你的任务是：
 
 1. 分析输入的文本
@@ -161,7 +161,7 @@ func (t *MultiAgentTranslator) createLanguageDetectionAgent() *builder.Configura
 输入: "こんにちは"
 输出: 日语`
 
-	agent, err := builder.NewAgentBuilder[any, core.State](t.llmClient).
+	agent, err := builder.NewAgentBuilder[core.State](t.llmClient).
 		WithSystemPrompt(systemPrompt).
 		WithState(state.NewAgentState()).
 		WithCallbacks(t.tokenTracker). // 添加 token 追踪回调
@@ -174,7 +174,7 @@ func (t *MultiAgentTranslator) createLanguageDetectionAgent() *builder.Configura
 }
 
 // createTranslationAgent 创建翻译代理
-func (t *MultiAgentTranslator) createTranslationAgent() *builder.ConfigurableAgent[any, core.State] {
+func (t *MultiAgentTranslator) createTranslationAgent() *builder.ConfigurableAgent[core.State] {
 	systemPrompt := `你是一个专业的翻译专家。你的任务是：
 
 1. 将输入的文本翻译成简体中文
@@ -200,7 +200,7 @@ func (t *MultiAgentTranslator) createTranslationAgent() *builder.ConfigurableAge
 输入: "Thank you very much!"
 输出: 非常感谢！`
 
-	agent, err := builder.NewAgentBuilder[any, core.State](t.llmClient).
+	agent, err := builder.NewAgentBuilder[core.State](t.llmClient).
 		WithSystemPrompt(systemPrompt).
 		WithState(state.NewAgentState()).
 		WithCallbacks(t.tokenTracker). // 添加 token 追踪回调

@@ -24,7 +24,6 @@ bash scripts/provider_regression.sh         # 离线 Provider/Builder 契约与�
 |------|------|
 | `llm.NewMockStreamClient()` | 实现 `llm.Client` 的离线客户端，适合不带工具的 Agent |
 | `testing/mocks` | `MockLLMClient`（`SetResponses`、`SetError`、`GetRequestHistory`）、`MockStreamingLLMClient`、`MockState`、`MockStore`、`MockTool` 等 |
-| `testing/testutil` | `TestContext`、断言与等待辅助函数 |
 | `testing/replay` | 把会话日志中的持久运行转为回归测试，按边界选择回放或实跑 |
 | `testing/panictest` | 在子进程中运行可能让进程退出的测试 |
 | `core/durable/storetest`、`core/session/sessiontest` | `durable.Store` / `session.Store` 实现的一致性测试，自定义存储后端须通过 |
@@ -143,7 +142,7 @@ func TestDurableRunReplays(t *testing.T) {
 
 - 表驱动测试 + `t.Run` 子测试；断言用 `testify` 的 `require`（失败即停）与 `assert`。
 - 修改全局状态（如 `core.SetGlobalPanicHandler`）后用 `t.Cleanup` 恢复。
-- 等待异步结果用通道或 `testutil.WaitForCondition` 加超时，不用固定 `time.Sleep`。
+- 等待异步结果用通道或 `require.Eventually` 加超时，不用固定 `time.Sleep`。
 - 并发相关改动必须在 `-race` 下通过；取消与超时路径要单独覆盖。
 - 自定义 `durable.Store` / `session.Store` 后端在自己的测试中调用 `storetest.Run` / `sessiontest.Run`。
 - 真实模型或外部服务的测试用 `-tags=integration` 或环境变量控制，缺少凭据时 `t.Skip`。

@@ -84,42 +84,6 @@ func (errorFinishCallback) OnAgentFinish(context.Context, any) error {
 	return errors.New("回调失败")
 }
 
-type funcStep struct{ err error }
-
-func (s funcStep) Execute(_ context.Context, input any) (any, error) { return input, s.err }
-func (funcStep) Name() string                                        { return "step" }
-func (funcStep) Description() string                                 { return "" }
-
-func TestBaseChainCallbackPanicStopsCallbacks(t *testing.T) {
-	stepErr := errors.New("步骤失败")
-	for _, tc := range callbackPanicCases(stepErr) {
-		t.Run(tc.panicOn, func(t *testing.T) {
-			for name, run := range map[string]func(Runnable[*ChainInput, *ChainOutput]) error{
-				"Invoke": func(r Runnable[*ChainInput, *ChainOutput]) error {
-					_, err := r.Invoke(context.Background(), &ChainInput{Options: ChainOptions{StopOnError: true}})
-					return err
-				},
-				"Stream": func(r Runnable[*ChainInput, *ChainOutput]) error {
-					stream, err := r.Stream(context.Background(), &ChainInput{Options: ChainOptions{StopOnError: true}})
-					require.NoError(t, err)
-					var last StreamChunk[*ChainOutput]
-					for chunk := range stream {
-						last = chunk
-					}
-					require.True(t, last.Done)
-					return last.Error
-				},
-			} {
-				t.Run(name, func(t *testing.T) {
-					first, second := newPanicCallbacks(tc.panicOn)
-					chain := NewBaseChain("chain", []Step{funcStep{err: tc.failWith}}).WithCallbacks(first, second)
-					requireCallbackPanic(t, run(chain), tc, first, second)
-				})
-			}
-		})
-	}
-}
-
 func TestCallbackManagerCallbackPanic(t *testing.T) {
 	ctx := context.Background()
 	failure := errors.New("操作失败")

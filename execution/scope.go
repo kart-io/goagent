@@ -152,7 +152,7 @@ func (s *Scope) Bind(ctx context.Context) (context.Context, context.CancelFunc, 
 
 // ConfigureBuilder 设置稳定的会话和 Agent 身份，不构建或关闭 Agent。
 // 调用方应在此之后保留这两个设置，重建时使用相同的 agentID。
-func ConfigureBuilder[C any, S core.State](b *builder.AgentBuilder[C, S], s *Scope, agentID string) (*builder.AgentBuilder[C, S], error) {
+func ConfigureBuilder[S core.State](b *builder.AgentBuilder[S], s *Scope, agentID string) (*builder.AgentBuilder[S], error) {
 	if b == nil {
 		return nil, agentErrors.Newf(agentErrors.CodeInvalidInput, "execution: builder 不能为空").WithComponent("execution").WithOperation("configure_builder")
 	}

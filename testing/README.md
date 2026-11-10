@@ -6,8 +6,7 @@
 
 - [架构设计](#架构设计)
 - [Mock 实现](#mock-实现)
-- [测试工具](#测试工具)
-- [断言函数](#断言函数)
+- [断言与辅助](#断言与辅助)
 - [使用方法](#使用方法)
 - [API 参考](#api-参考)
 - [代码结构](#代码结构)
@@ -25,11 +24,6 @@ graph TB
         MockStore[MockStore<br/>存储 Mock]
     end
 
-    subgraph "工具层"
-        TestCtx[TestContext<br/>测试上下文]
-        Helpers[断言辅助函数]
-    end
-
     subgraph "被测组件"
         Agent[Agent]
         Tools[Tools]
@@ -40,11 +34,6 @@ graph TB
     MockLLM --> Agent
     MockState --> Agent
     MockStore --> Memory
-    TestCtx --> Agent
-    TestCtx --> Tools
-    Helpers --> Agent
-
-    style TestCtx fill:#e1f5ff
     style MockLLM fill:#e8f5e9
 ```
 
@@ -53,15 +42,10 @@ graph TB
 ```mermaid
 sequenceDiagram
     participant Test as 测试代码
-    participant TC as TestContext
     participant Mock as Mock 组件
     participant SUT as 被测系统
 
-    Test->>TC: NewTestContext(t)
-    TC->>Mock: 创建 Mock 组件
-    TC-->>Test: TestContext
-
-    Test->>Mock: 配置响应/行为
+    Test->>Mock: 创建并配置响应/行为
     Test->>SUT: 执行测试
     SUT->>Mock: 调用依赖
     Mock-->>SUT: 返回 Mock 响应
@@ -169,91 +153,9 @@ sequenceDiagram
 | `GetExecuteCalls()` | 获取执行次数 |
 | `Reset()` | 重置状态 |
 
-## 测试工具
+## 断言与辅助
 
-### TestContext 测试上下文
-
-```go
-type TestContext struct {
-    Ctx          context.Context
-    Cancel       context.CancelFunc
-    State        *state.AgentState
-    Store        store.Store
-    Checkpointer checkpoint.Checkpointer
-    MockLLM      *mocks.MockLLMClient
-    MockTools    map[string]*mocks.MockTool
-    T            *testing.T
-}
-```
-
-**自动管理**：
-- 30 秒超时的 context
-- 自动注册 cleanup 回调
-- 内存存储后端
-- 内存检查点存储
-
-### TestAppContext 应用上下文
-
-```go
-type TestAppContext struct {
-    UserID   string
-    UserName string
-    Metadata map[string]interface{}
-}
-```
-
-### TestAgentConfig 测试配置
-
-```go
-type TestAgentConfig struct {
-    Name         string   // Agent 名称
-    SystemPrompt string   // 系统提示
-    Tools        []string // 工具列表
-    MaxIter      int      // 最大迭代
-}
-
-// 默认配置
-func DefaultTestAgentConfig() TestAgentConfig {
-    return TestAgentConfig{
-        Name:         "test-agent",
-        SystemPrompt: "You are a test agent",
-        Tools:        []string{"calculator", "search"},
-        MaxIter:      5,
-    }
-}
-```
-
-## 断言函数
-
-### 基础断言
-
-| 函数 | 说明 |
-|------|------|
-| `AssertNoError(t, err, msg...)` | 断言无错误 |
-| `AssertError(t, err, msg...)` | 断言有错误 |
-| `AssertEqual(t, expected, actual, msg...)` | 断言相等 |
-| `AssertNotNil(t, value, msg...)` | 断言非空 |
-| `AssertNil(t, value, msg...)` | 断言为空 |
-| `AssertTrue(t, value, msg...)` | 断言为真 |
-| `AssertFalse(t, value, msg...)` | 断言为假 |
-| `AssertContains(t, haystack, needle, msg...)` | 断言包含子串 |
-
-### 异步断言
-
-```go
-// 等待条件成立（轮询）
-AssertEventually(t, condition func() bool, timeout time.Duration, msg...)
-
-// 等待条件（带 context）
-WaitForCondition(ctx context.Context, condition func() bool, interval time.Duration) error
-```
-
-### 并行测试
-
-```go
-// 并行运行多个测试
-RunParallel(t *testing.T, tests map[string]func(t *testing.T))
-```
+断言使用 testify 的 `require`/`assert`；等待异步结果用 `require.Eventually` 或通道加超时，不用固定 `time.Sleep`；context 用 `t.Context()`，测试结束时自动取消。
 
 ## 使用方法
 
@@ -262,10 +164,11 @@ RunParallel(t *testing.T, tests map[string]func(t *testing.T))
 ```go
 func TestMyAgent(t *testing.T) {
     // 创建测试上下文
-    tc := testutil.NewTestContext(t)
+    ctx := t.Context()
+    mockLLM := mocks.NewMockLLMClient()
 
     // 配置 Mock LLM 响应
-    tc.MockLLM.SetResponses(
+    mockLLM.SetResponses(
         llm.CompletionResponse{
             Content:    "这是 Mock 响应",
             Model:      "mock-model",
@@ -274,16 +177,13 @@ func TestMyAgent(t *testing.T) {
     )
 
     // 添加 Mock 工具
-    calcTool := tc.AddMockTool("calculator", "计算器工具")
+    calcTool := mocks.NewMockTool("calculator", "计算器工具")
     calcTool.SetInvokeFunc(func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
         return &interfaces.ToolOutput{
             Result:  "42",
             Success: true,
         }, nil
     })
-
-    // 创建运行时
-    runtime := tc.CreateRuntime("test-session")
 
     // 执行测试...
 }
@@ -293,10 +193,11 @@ func TestMyAgent(t *testing.T) {
 
 ```go
 func TestMultiTurnConversation(t *testing.T) {
-    tc := testutil.NewTestContext(t)
+    ctx := t.Context()
+    mockLLM := mocks.NewMockLLMClient()
 
     // 设置多轮响应序列
-    tc.MockLLM.SetResponses(
+    mockLLM.SetResponses(
         llm.CompletionResponse{Content: "第一轮响应"},
         llm.CompletionResponse{Content: "第二轮响应"},
         llm.CompletionResponse{Content: "Final Answer: 42"},
@@ -305,8 +206,8 @@ func TestMultiTurnConversation(t *testing.T) {
     // 执行 Agent...
 
     // 验证请求历史
-    history := tc.MockLLM.GetRequestHistory()
-    testutil.AssertEqual(t, 3, len(history), "应该有 3 轮对话")
+    history := mockLLM.GetRequestHistory()
+    require.Equal(t, 3, len(history), "应该有 3 轮对话")
 }
 ```
 
@@ -314,13 +215,14 @@ func TestMultiTurnConversation(t *testing.T) {
 
 ```go
 func TestFunctionCalling(t *testing.T) {
-    tc := testutil.NewTestContext(t)
+    ctx := t.Context()
+    mockLLM := mocks.NewMockLLMClient()
 
     // 启用函数调用模式
-    tc.MockLLM.SetFunctionCallMode(true)
+    mockLLM.SetFunctionCallMode(true)
 
     // 设置函数响应
-    tc.MockLLM.SetFunctionResponse("calculator", map[string]interface{}{
+    mockLLM.SetFunctionResponse("calculator", map[string]interface{}{
         "result": 42,
     })
 
@@ -343,7 +245,7 @@ func TestStreamingResponse(t *testing.T) {
 
     // 获取流
     ch, err := streamClient.CompleteStream(ctx, req)
-    testutil.AssertNoError(t, err)
+    require.NoError(t, err)
 
     // 消费流
     var content strings.Builder
@@ -351,7 +253,7 @@ func TestStreamingResponse(t *testing.T) {
         content.WriteString(chunk.Delta)
     }
 
-    testutil.AssertEqual(t, "这是流式响应", content.String())
+    require.Equal(t, "这是流式响应", content.String())
 }
 ```
 
@@ -376,7 +278,7 @@ func TestStateManagement(t *testing.T) {
     })
 
     // 验证
-    testutil.AssertEqual(t, 2, len(updates))
+    require.Equal(t, 2, len(updates))
 
     // 快照和恢复
     snapshot := state.Snapshot()
@@ -384,8 +286,8 @@ func TestStateManagement(t *testing.T) {
     state.Restore(snapshot)
 
     val, ok := state.GetString("key1")
-    testutil.AssertTrue(t, ok)
-    testutil.AssertEqual(t, "value1", val)
+    require.True(t, ok)
+    require.Equal(t, "value1", val)
 }
 ```
 
@@ -400,24 +302,24 @@ func TestStoreOperations(t *testing.T) {
 
     // 存储
     err := store.Put(ctx, namespace, "key1", "value1")
-    testutil.AssertNoError(t, err)
+    require.NoError(t, err)
 
     // 获取
     item, err := store.Get(ctx, namespace, "key1")
-    testutil.AssertNoError(t, err)
-    testutil.AssertEqual(t, "value1", item.Value)
+    require.NoError(t, err)
+    require.Equal(t, "value1", item.Value)
 
     // 搜索
     results, err := store.Search(ctx, namespace, map[string]interface{}{
         "prefix": "key",
     })
-    testutil.AssertNoError(t, err)
-    testutil.AssertEqual(t, 1, len(results))
+    require.NoError(t, err)
+    require.Equal(t, 1, len(results))
 
     // 统计
     putCount, getCount := store.GetStats()
-    testutil.AssertEqual(t, 1, putCount)
-    testutil.AssertEqual(t, 1, getCount)
+    require.Equal(t, 1, putCount)
+    require.Equal(t, 1, getCount)
 }
 ```
 
@@ -425,18 +327,19 @@ func TestStoreOperations(t *testing.T) {
 
 ```go
 func TestErrorHandling(t *testing.T) {
-    tc := testutil.NewTestContext(t)
+    ctx := t.Context()
+    mockLLM := mocks.NewMockLLMClient()
 
     // 配置 LLM 返回错误
-    tc.MockLLM.SetError(true, "API 调用失败")
+    mockLLM.SetError(true, "API 调用失败")
 
     // 执行并验证错误处理
-    _, err := agent.AsRunnable().Invoke(tc.Ctx, input)
-    testutil.AssertError(t, err)
-    testutil.AssertContains(t, err.Error(), "API 调用失败")
+    _, err := agent.AsRunnable().Invoke(ctx, input)
+    require.Error(t, err)
+    require.Contains(t, err.Error(), "API 调用失败")
 
     // 重置错误状态
-    tc.MockLLM.Reset()
+    mockLLM.Reset()
 }
 ```
 
@@ -444,18 +347,14 @@ func TestErrorHandling(t *testing.T) {
 
 ```go
 func TestAsyncOperation(t *testing.T) {
-    tc := testutil.NewTestContext(t)
-
-    var completed bool
+    var completed atomic.Bool
     go func() {
         time.Sleep(100 * time.Millisecond)
-        completed = true
+        completed.Store(true)
     }()
 
     // 等待条件成立
-    testutil.AssertEventually(t, func() bool {
-        return completed
-    }, 1*time.Second, "操作应该在 1 秒内完成")
+    require.Eventually(t, completed.Load, time.Second, 10*time.Millisecond, "操作应该在 1 秒内完成")
 }
 ```
 
@@ -463,17 +362,12 @@ func TestAsyncOperation(t *testing.T) {
 
 ```go
 func TestParallel(t *testing.T) {
-    testutil.RunParallel(t, map[string]func(t *testing.T){
-        "TestCase1": func(t *testing.T) {
-            // 测试用例 1
-        },
-        "TestCase2": func(t *testing.T) {
-            // 测试用例 2
-        },
-        "TestCase3": func(t *testing.T) {
-            // 测试用例 3
-        },
-    })
+    for _, name := range []string{"case1", "case2", "case3"} {
+        t.Run(name, func(t *testing.T) {
+            t.Parallel()
+            // 测试用例
+        })
+    }
 }
 ```
 
@@ -498,33 +392,6 @@ NewMockState() *MockState
 NewMockStore() *MockStore
 ```
 
-### testutil 包
-
-```go
-// 测试上下文
-NewTestContext(t *testing.T) *TestContext
-(tc *TestContext) AddMockTool(name, description string) *MockTool
-(tc *TestContext) CreateRuntime(sessionID string) *Runtime
-
-// 断言
-AssertNoError(t, err, msg...)
-AssertError(t, err, msg...)
-AssertEqual(t, expected, actual, msg...)
-AssertNotNil(t, value, msg...)
-AssertNil(t, value, msg...)
-AssertTrue(t, value, msg...)
-AssertFalse(t, value, msg...)
-AssertContains(t, haystack, needle, msg...)
-AssertEventually(t, condition, timeout, msg...)
-
-// 工具
-WaitForCondition(ctx, condition, interval) error
-RunParallel(t, tests)
-
-// 配置
-DefaultTestAgentConfig() TestAgentConfig
-```
-
 ## 代码结构
 
 ```text
@@ -540,40 +407,25 @@ testing/
 │   └── mock_state.go      # 状态和存储 Mock
 │       ├── MockState
 │       └── MockStore
-├── testutil/
-│   └── helpers.go         # TestContext、断言与工具函数
 ├── panictest/             # 在子进程中运行可能使进程退出的测试
 └── replay/                # 会话日志回放
 ```
 
 ## 最佳实践
 
-### 1. 使用 TestContext
-
-```go
-// 推荐：使用 TestContext 统一管理
-tc := testutil.NewTestContext(t)
-// 自动管理超时、cleanup、Mock 组件
-
-// 不推荐：手动创建每个组件
-ctx := context.Background()
-mockLLM := mocks.NewMockLLMClient()
-// 需要手动管理生命周期
-```
-
-### 2. 验证 Mock 调用
+### 1. 验证 Mock 调用
 
 ```go
 // 验证调用次数
 count := mockTool.GetInvokeCount()
-testutil.AssertEqual(t, 3, count, "工具应该被调用 3 次")
+require.Equal(t, 3, count, "工具应该被调用 3 次")
 
 // 验证调用参数
 lastInput := mockTool.GetLastInput()
-testutil.AssertEqual(t, "expected_arg", lastInput.Args["arg1"])
+require.Equal(t, "expected_arg", lastInput.Args["arg1"])
 ```
 
-### 3. 测试后重置
+### 2. 测试后重置
 
 ```go
 // 重置以复用 Mock
@@ -582,14 +434,10 @@ mockTool.Reset()
 mockStore.SetError(false, "")
 ```
 
-### 4. 使用 t.Cleanup
+### 3. 使用 t.Context 与 t.Cleanup
 
 ```go
-// TestContext 自动注册 cleanup
-tc := testutil.NewTestContext(t)
-// context 会在测试结束时自动取消
-
-// 手动添加 cleanup
+ctx := t.Context() // 测试结束时自动取消
 t.Cleanup(func() {
     // 清理资源
 })

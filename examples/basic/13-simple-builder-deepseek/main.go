@@ -446,8 +446,8 @@ func runMockExample() {
 `)
 	fmt.Println("4. 类型别名说明:")
 	fmt.Print(`
-   // SimpleAgentBuilder 等价于 AgentBuilder[any, *core.AgentState]
-   // SimpleAgent 等价于 ConfigurableAgent[any, *core.AgentState]
+   // SimpleAgentBuilder 等价于 AgentBuilder[*core.AgentState]
+   // SimpleAgent 等价于 ConfigurableAgent[*core.AgentState]
 
    // 这意味着你可以：
    var builder *builder.SimpleAgentBuilder = builder.NewSimpleBuilder(client)
@@ -456,7 +456,7 @@ func runMockExample() {
 	fmt.Println("5. 对比旧 API:")
 	fmt.Print(`
    // 旧 API（需要泛型参数）
-   agent, err := builder.NewAgentBuilder[any, *core.AgentState](llmClient).
+   agent, err := builder.NewAgentBuilder[*core.AgentState](llmClient).
        WithSystemPrompt("...").
        Build()
 

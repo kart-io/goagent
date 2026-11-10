@@ -43,7 +43,7 @@ func Dispatch(cfg tools.DispatchConfig) InstallOption {
 // Install 会覆盖此前 WithRequestError 设置的恢复次数上限（所选插件全为 0 时为 Builder 默认值 3）；
 // 宿主要自定义上限，须在 Install 之后调用 WithRequestError。
 // 多个 goroutine 可同时 Install 同一 Host，插件的 Contribute 须并发安全；Install 不得与 Host.Stop 并发。
-func Install[C any, S core.State](ctx context.Context, b *builder.AgentBuilder[C, S], h *Host, opts ...InstallOption) error {
+func Install[S core.State](ctx context.Context, b *builder.AgentBuilder[S], h *Host, opts ...InstallOption) error {
 	if b == nil || h == nil {
 		return agentErrors.New(agentErrors.CodeInvalidInput, "plugin.Install 需要非 nil 的 Builder 与 Host").WithComponent("plugin").WithOperation("install")
 	}
@@ -215,7 +215,7 @@ func collectTools(cs []Contribution, dispatch *tools.DispatchConfig) ([]interfac
 	return d.Tools(), nil
 }
 
-func apply[C any, S core.State](b *builder.AgentBuilder[C, S], selected []Plugin, cs []Contribution, toolset []interfaces.Tool) {
+func apply[S core.State](b *builder.AgentBuilder[S], selected []Plugin, cs []Contribution, toolset []interfaces.Tool) {
 	b.WithTools(toolset...)
 	var recoveries []builder.RequestErrorHook
 	maxRecoveries := 0

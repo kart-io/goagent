@@ -26,7 +26,6 @@ const (
 	CodeStateLoad       ErrorCode = "STATE_LOAD"
 	CodeStateSave       ErrorCode = "STATE_SAVE"
 	CodeStateValidation ErrorCode = "STATE_VALIDATION"
-	CodeStateCheckpoint ErrorCode = "STATE_CHECKPOINT"
 
 	// 流处理错误
 	CodeStreamRead    ErrorCode = "STREAM_READ"

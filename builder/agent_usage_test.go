@@ -168,7 +168,7 @@ func TestAgentUsageKnownModelReplayAfterEvidenceSaveFailure(t *testing.T) {
 	require.NoError(t, err)
 	ctx := budget.WithController(durable.WithJournal(durable.WithExecutionKey(context.Background(), "saved"), store), c)
 	model := nativeModel(answerTurn("ok", 8))
-	build := func() *ConfigurableAgent[any, *core.AgentState] {
+	build := func() *ConfigurableAgent[*core.AgentState] {
 		a, err := NewSimpleBuilder(model).WithAgentID("root").WithDurableScope("root").WithTools(dispatcherFor(t, plainTool()).Tools()...).Build()
 		require.NoError(t, err)
 		return a
@@ -216,7 +216,7 @@ func TestAgentUsageParentChildAttributionAndHooks(t *testing.T) {
 	tool, err := tools.NewRunnableTool(child.AsRunnable(), tools.RunnableToolConfig[any, *AgentOutput]{Name: "child", Description: "child", Version: "v1", ModelInvoking: true, ArgsSchema: `{"type":"object"}`, Decode: func(map[string]any) (any, error) { return "task", nil }, Encode: func(out *AgentOutput) (any, error) { return out.Result, nil }})
 	require.NoError(t, err)
 	parentModel := nativeModel([]*llm.StreamChunk{{Done: true, FinishReason: "tool_calls", ToolCalls: []llm.ToolCall{nativeCall("child-1", "child", "{}")}, Usage: &llm.Usage{TotalTokens: 2}}}, answerTurn("summary", 3))
-	build := func(id string) *ConfigurableAgent[any, *core.AgentState] {
+	build := func(id string) *ConfigurableAgent[*core.AgentState] {
 		a, err := NewSimpleBuilder(parentModel).WithAgentID(id).WithDurableScope("parent").WithTools(dispatcherFor(t, tool).Tools()...).WithMaxIterations(2).Build()
 		require.NoError(t, err)
 		return a

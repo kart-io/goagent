@@ -116,9 +116,6 @@ type MiddlewareRequest struct {
 	// State is the current agent state
 	State state.State `json:"-"`
 
-	// Runtime provides access to the execution environment
-	Runtime interface{} `json:"-"`
-
 	// Metadata holds additional request information
 	Metadata map[string]interface{} `json:"metadata"`
 

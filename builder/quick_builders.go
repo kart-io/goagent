@@ -104,7 +104,6 @@ func AnalysisAgent(llmClient llm.Client, dataSource interface{}) (*SimpleAgent, 
 //
 // 配置:
 //   - MaxIterations: 15 (平衡的工作流步骤)
-//   - EnableAutoSave: true（需跨会话保存状态时，自行构建并配置 WithCheckpointer）
 //   - Middleware: Logging, CircuitBreaker, Validation
 func WorkflowAgent(llmClient llm.Client, workflows map[string]interface{}) (*SimpleAgent, error) {
 	state := core.NewAgentState()
@@ -117,7 +116,6 @@ func WorkflowAgent(llmClient llm.Client, workflows map[string]interface{}) (*Sim
 		WithSystemPrompt("You are a workflow orchestrator. Execute tasks systematically, validate results, and handle errors gracefully.").
 		WithState(state).
 		WithMaxIterations(15).
-		WithAutoSaveEnabled(true).
 		WithMiddleware(
 			middleware.NewLoggingMiddleware(nil),
 			middleware.NewCircuitBreakerMiddleware(5, 30*time.Second),

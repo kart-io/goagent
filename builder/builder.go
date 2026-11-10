@@ -9,14 +9,10 @@ import (
 	"strings"
 
 	"github.com/kart-io/goagent/core"
-	"github.com/kart-io/goagent/core/checkpoint"
-	"github.com/kart-io/goagent/core/execution"
 	"github.com/kart-io/goagent/core/middleware"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
-	"github.com/kart-io/goagent/store"
-	"github.com/kart-io/goagent/store/memory"
 	"github.com/kart-io/goagent/tools"
 )
 
@@ -39,12 +35,11 @@ func (s *DefaultInputSerializer) Serialize(input interface{}) (string, error) {
 //   - 工具注册
 //   - 状态管理
 //   - 运行时上下文
-//   - Store 和 Checkpointer
 //   - 中间件栈
 //   - 系统提示词
 //   - 对话记忆管理
 //   - 输入序列化
-type AgentBuilder[C any, S core.State] struct {
+type AgentBuilder[S core.State] struct {
 	// 核心组件
 	llmClient     llm.Client
 	dispatcher    *tools.Dispatcher
@@ -52,11 +47,7 @@ type AgentBuilder[C any, S core.State] struct {
 	tools         []interfaces.Tool
 	systemPrompt  string
 
-	// Phase 1 组件
-	state        S
-	store        store.Store
-	checkpointer checkpoint.Checkpointer
-	context      C
+	state S
 
 	// Phase 2 组件
 	middlewares []middleware.Middleware
@@ -83,8 +74,8 @@ type AgentBuilder[C any, S core.State] struct {
 }
 
 // NewAgentBuilder 创建一个新的 Agent 构建器
-func NewAgentBuilder[C any, S core.State](llmClient llm.Client) *AgentBuilder[C, S] {
-	return &AgentBuilder[C, S]{
+func NewAgentBuilder[S core.State](llmClient llm.Client) *AgentBuilder[S] {
+	return &AgentBuilder[S]{
 		llmClient:       llmClient,
 		tools:           []interfaces.Tool{},
 		middlewares:     []middleware.Middleware{},
@@ -96,13 +87,13 @@ func NewAgentBuilder[C any, S core.State](llmClient llm.Client) *AgentBuilder[C,
 }
 
 // Build 构建最终的 Agent
-func (b *AgentBuilder[C, S]) Build() (*ConfigurableAgent[C, S], error) {
+func (b *AgentBuilder[S]) Build() (*ConfigurableAgent[S], error) {
 	return b.BuildContext(context.Background())
 }
 
 // BuildContext 使用宿主上下文构建并初始化 Agent。
 // 取消会阻止后续初始化步骤；忽略上下文的宿主调用仍需自行返回。
-func (b *AgentBuilder[C, S]) BuildContext(ctx context.Context) (*ConfigurableAgent[C, S], error) {
+func (b *AgentBuilder[S]) BuildContext(ctx context.Context) (*ConfigurableAgent[S], error) {
 	if ctx == nil {
 		return nil, agentErrors.Newf(agentErrors.CodeInvalidInput, "构建 Agent 的 context 不能为空").WithComponent("builder").WithOperation("build_context")
 	}
@@ -188,19 +179,6 @@ func (b *AgentBuilder[C, S]) BuildContext(ctx context.Context) (*ConfigurableAge
 		}
 	}
 
-	if b.store == nil {
-		b.store = memory.New()
-	}
-
-	// 创建运行时
-	runtime := execution.NewRuntime(
-		b.context,
-		b.state,
-		b.store,
-		b.checkpointer,
-		b.config.SessionID,
-	)
-
 	// 每轮执行通过 WithHandler 替换处理器，这里只承载中间件。
 	chain := middleware.NewMiddlewareChain(nil)
 
@@ -214,12 +192,12 @@ func (b *AgentBuilder[C, S]) BuildContext(ctx context.Context) (*ConfigurableAge
 	chain.Use(b.middlewares...)
 
 	// 创建 Agent
-	agent := &ConfigurableAgent[C, S]{
+	agent := &ConfigurableAgent[S]{
 		executionGate:   make(chan struct{}, 1),
 		llmClient:       b.llmClient,
 		tools:           slices.Clone(toolset),
 		systemPrompt:    b.systemPrompt,
-		runtime:         runtime,
+		state:           b.state,
 		chain:           chain,
 		config:          snapshotAgentConfig(b.config),
 		callbacks:       slices.Clone(b.callbacks),
@@ -243,7 +221,7 @@ func (b *AgentBuilder[C, S]) BuildContext(ctx context.Context) (*ConfigurableAge
 }
 
 // WithInputSerializer 设置输入序列化器
-func (b *AgentBuilder[C, S]) WithInputSerializer(serializer InputSerializer) *AgentBuilder[C, S] {
+func (b *AgentBuilder[S]) WithInputSerializer(serializer InputSerializer) *AgentBuilder[S] {
 	b.inputSerializer = serializer
 	return b
 }
@@ -259,7 +237,7 @@ func (b *AgentBuilder[C, S]) WithInputSerializer(serializer InputSerializer) *Ag
 //   - State: *core.AgentState (标准状态实现)
 //
 // 这个类型别名消除了 95% 以上使用场景中的泛型复杂度。
-// 如果需要自定义 Context 或 State，请使用原始的 NewAgentBuilder[C, S] 函数。
+// 如果需要自定义 Context 或 State，请使用原始的 NewAgentBuilder[S] 函数。
 //
 // 使用示例：
 //
@@ -267,17 +245,17 @@ func (b *AgentBuilder[C, S]) WithInputSerializer(serializer InputSerializer) *Ag
 //	agent, err := builder.
 //	WithSystemPrompt("你是一个助手").
 //	Build()
-type SimpleAgentBuilder = AgentBuilder[any, *core.AgentState]
+type SimpleAgentBuilder = AgentBuilder[*core.AgentState]
 
 // SimpleAgent 是 ConfigurableAgent 的简化版本类型别名
 //
 // 使用最常见的类型参数组合，与 SimpleAgentBuilder 匹配。
-type SimpleAgent = ConfigurableAgent[any, *core.AgentState]
+type SimpleAgent = ConfigurableAgent[*core.AgentState]
 
 // NewSimpleBuilder 创建一个简化的 Agent 构建器
 //
 // 这是推荐的构建器创建方式，适用于大多数使用场景。
-// 相比 NewAgentBuilder[any, *core.AgentState](client)，
+// 相比 NewAgentBuilder[*core.AgentState](client)，
 // 此函数无需显式指定泛型参数，使用更简洁。
 //
 // 参数：
@@ -295,5 +273,5 @@ type SimpleAgent = ConfigurableAgent[any, *core.AgentState]
 //	WithTools(calculatorTool, searchTool).
 //	Build()
 func NewSimpleBuilder(llmClient llm.Client) *SimpleAgentBuilder {
-	return NewAgentBuilder[any, *core.AgentState](llmClient)
+	return NewAgentBuilder[*core.AgentState](llmClient)
 }

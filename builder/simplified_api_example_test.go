@@ -29,7 +29,7 @@ func TestSimplifiedAPI(t *testing.T) {
 	t.Run("类型别名正常工作", func(t *testing.T) {
 		client := NewMockLLMClient("test response")
 
-		// SimpleAgentBuilder 应该等价于 AgentBuilder[any, *core.AgentState]
+		// SimpleAgentBuilder 应该等价于 AgentBuilder[*core.AgentState]
 		var simpleBuilder *SimpleAgentBuilder
 		simpleBuilder = NewSimpleBuilder(client)
 

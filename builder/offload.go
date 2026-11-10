@@ -20,7 +20,7 @@ import (
 //
 // 结果作用域：宿主经 contextpolicy.WithResultScope 提供时由宿主回收；否则持久执行使用执行键（由宿主在运行不再恢复后
 // 调用 o.Release），非持久执行使用临时作用域并在执行结束时释放。
-func (b *AgentBuilder[C, S]) WithOffload(o *contextpolicy.Offload) *AgentBuilder[C, S] {
+func (b *AgentBuilder[S]) WithOffload(o *contextpolicy.Offload) *AgentBuilder[S] {
 	b.config.Offloads = append(b.config.Offloads, o)
 	if o == nil {
 		return b
@@ -36,7 +36,7 @@ func (b *AgentBuilder[C, S]) WithOffload(o *contextpolicy.Offload) *AgentBuilder
 }
 
 // validateOffloads 要求每个结果卸载的读取工具恰好注册一次。
-func (b *AgentBuilder[C, S]) validateOffloads(toolset []interfaces.Tool) error {
+func (b *AgentBuilder[S]) validateOffloads(toolset []interfaces.Tool) error {
 	if len(b.config.Offloads) == 0 {
 		return nil
 	}
@@ -59,7 +59,7 @@ func (b *AgentBuilder[C, S]) validateOffloads(toolset []interfaces.Tool) error {
 }
 
 // offloadScope 补齐结果作用域，返回的 release 在执行结束时释放本次生成的临时作用域；无需释放时为 nil。
-func (a *ConfigurableAgent[C, S]) offloadScope(ctx context.Context) (context.Context, func(context.Context) error) {
+func (a *ConfigurableAgent[S]) offloadScope(ctx context.Context) (context.Context, func(context.Context) error) {
 	if len(a.config.Offloads) == 0 || contextpolicy.ResultScope(ctx) != "" {
 		return ctx, nil
 	}
@@ -80,7 +80,7 @@ func (a *ConfigurableAgent[C, S]) offloadScope(ctx context.Context) (context.Con
 }
 
 // trackOffloads 用本步的对话重建引用表：持久运行恢复时 PreStep 的结果被回放，Reduce 没有执行。
-func (a *ConfigurableAgent[C, S]) trackOffloads(ctx context.Context, messages []llm.Message) {
+func (a *ConfigurableAgent[S]) trackOffloads(ctx context.Context, messages []llm.Message) {
 	for _, o := range a.config.Offloads {
 		o.Track(ctx, messages)
 	}

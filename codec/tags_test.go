@@ -11,7 +11,6 @@ import (
 	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/codec/yaml"
 	"github.com/kart-io/goagent/core"
-	"github.com/kart-io/goagent/core/checkpoint"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/devtools"
 	"github.com/kart-io/goagent/llm"
@@ -33,13 +32,8 @@ func TestConfigTypesTagEveryField(t *testing.T) {
 		reflect.TypeFor[contextpolicy.OffloadConfig](),
 		reflect.TypeFor[builder.RetrievalConfig](),
 		reflect.TypeFor[cache.CacheConfig](),
-		reflect.TypeFor[checkpoint.CheckpointerConfig](),
-		reflect.TypeFor[checkpoint.DistributedCheckpointerConfig](),
 		reflect.TypeFor[durable.OperationPolicy](),
-		reflect.TypeFor[core.InterruptConfig](),
-		reflect.TypeFor[core.LifecycleManagerConfig](),
 		reflect.TypeFor[core.RunnableConfig](),
-		reflect.TypeFor[core.TimeoutConfig](),
 		reflect.TypeFor[devtools.RecorderConfig](),
 		reflect.TypeFor[llmcache.CachedLLMClientConfig](),
 		reflect.TypeFor[llmcache.SemanticCacheConfig](),
@@ -53,7 +47,6 @@ func TestConfigTypesTagEveryField(t *testing.T) {
 		reflect.TypeFor[tools.RetryPolicy](),
 		reflect.TypeFor[tools.ShardedCacheConfig](),
 		reflect.TypeFor[tools.MemoryCacheConfig](),
-		reflect.TypeFor[tools.RuntimeConfig](),
 		reflect.TypeFor[middleware.CachingConfig](),
 		reflect.TypeFor[middleware.RateLimitConfig](),
 		reflect.TypeFor[httpclient.CachingConfig](),

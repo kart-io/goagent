@@ -39,7 +39,7 @@ func TestHandleFollowupApprovalRecoveryUsesRecordedBatch(t *testing.T) {
 	require.NoError(t, err)
 	ctx := durable.WithJournal(durable.WithExecutionKey(context.Background(), "followup-run"), store)
 	effects := map[string]int{}
-	build := func(model *scriptModel, gate func()) *ConfigurableAgent[any, *core.AgentState] {
+	build := func(model *scriptModel, gate func()) *ConfigurableAgent[*core.AgentState] {
 		var first sync.Once
 		agent, err := NewSimpleBuilder(model).WithDurableScope("followup").WithMaxIterations(2).
 			WithTools(dispatcherFor(t, refundTool(t, refundGraph(t, store, effects), "refund_workflow")).Tools()...).

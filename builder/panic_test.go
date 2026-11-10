@@ -328,7 +328,7 @@ func (durablePanicTool) SupportsDurableCalls() bool { panic("durable check boom"
 // 同步入口中宿主代码的 panic 发生在调用方 goroutine，回归时调用方能接住，因此直接在本进程测试。
 // frame 断言调用栈指向 panic 发生的函数，而不只是测试函数本身。
 func TestSyncEntryPanicReturnsPanicError(t *testing.T) {
-	type agentT = ConfigurableAgent[any, *core.AgentState]
+	type agentT = ConfigurableAgent[*core.AgentState]
 	execute := func(ctx context.Context, agent *agentT, _ *panicCallback) error {
 		_, err := agent.AsRunnable().Invoke(ctx, "hi")
 		return err

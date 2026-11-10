@@ -230,7 +230,7 @@ type Handle struct {
 // Start 在后台运行 Agent 并返回句柄，宿主可在运行中追加输入。只支持原生工具流（llm.ToolStreamClient 且配置了工具）。
 // 持久运行中输入写入持久收件箱后才算接受，写入失败时输入方法返回错误。用同一执行键再次 Start 时恢复未领取的输入，
 // 并按记录的批次继续 Followup 轮次，宿主不需要重建也不应重复提交。
-func (a *ConfigurableAgent[C, S]) Start(ctx context.Context, input string) *Handle {
+func (a *ConfigurableAgent[S]) Start(ctx context.Context, input string) *Handle {
 	ctx, cancel := context.WithCancelCause(ctx)
 	h := &Handle{inbox: &inbox{}, cancel: cancel, done: make(chan struct{})}
 	fail := func(err error) *Handle {
@@ -257,7 +257,7 @@ func (a *ConfigurableAgent[C, S]) Start(ctx context.Context, input string) *Hand
 // waits for its producer to close even on cancellation. Handle owns this turn:
 // reporting completion while its tools/cleanup still use the inbox or execution
 // scope would make Wait and a terminal PendingInputs snapshot premature.
-func (a *ConfigurableAgent[C, S]) invokeHandleTurn(ctx context.Context, input string) (*AgentOutput, error) {
+func (a *ConfigurableAgent[S]) invokeHandleTurn(ctx context.Context, input string) (*AgentOutput, error) {
 	var result streamResult
 	events, err := a.executeStream(ctx, input, &result)
 	if err != nil {

@@ -67,7 +67,7 @@ func runBasicExample(apiKey string) {
 	}
 
 	// 使用 Builder 构建 Agent
-	agent, err := builder.NewAgentBuilder[any, *agentcore.AgentState](client).
+	agent, err := builder.NewAgentBuilder[*agentcore.AgentState](client).
 		WithSystemPrompt("你是一个简洁的助手，用一句话回答问题。").
 		Build()
 	if err != nil {
@@ -112,7 +112,7 @@ func runMultiStepExample(apiKey string) {
 	}
 
 	// 创建分析 Agent
-	analyzeAgent, err := builder.NewAgentBuilder[any, *agentcore.AgentState](client).
+	analyzeAgent, err := builder.NewAgentBuilder[*agentcore.AgentState](client).
 		WithSystemPrompt("你是代码分析员。简短回答，不超过20字。").
 		WithMetadata("name", "AnalyzeAgent").
 		Build()
@@ -121,7 +121,7 @@ func runMultiStepExample(apiKey string) {
 	}
 
 	// 创建优化建议 Agent
-	optimizeAgent, err := builder.NewAgentBuilder[any, *agentcore.AgentState](client).
+	optimizeAgent, err := builder.NewAgentBuilder[*agentcore.AgentState](client).
 		WithSystemPrompt("你是代码优化员。仅提供一条最简优化的建议，不超过20字。").
 		WithMetadata("name", "OptimizeAgent").
 		Build()
@@ -193,7 +193,7 @@ func runStructuredDataExample(apiKey string) {
 	}
 
 	// 创建用户数据生成 Agent
-	userAgent, err := builder.NewAgentBuilder[any, *agentcore.AgentState](client).
+	userAgent, err := builder.NewAgentBuilder[*agentcore.AgentState](client).
 		WithSystemPrompt(`你是用户数据生成专家。生成符合要求的用户 JSON 数据，仅输出 JSON 格式，不要其他说明。`).
 		WithMetadata("name", "UserDataGenerator").
 		Build()
@@ -202,7 +202,7 @@ func runStructuredDataExample(apiKey string) {
 	}
 
 	// 创建产品数据生成 Agent
-	productAgent, err := builder.NewAgentBuilder[any, *agentcore.AgentState](client).
+	productAgent, err := builder.NewAgentBuilder[*agentcore.AgentState](client).
 		WithSystemPrompt(`你是产品数据生成专家。生成符合要求的产品 JSON 数据，仅输出 JSON 格式，不要其他说明。`).
 		WithMetadata("name", "ProductDataGenerator").
 		Build()
@@ -265,7 +265,7 @@ func runStructuredDataExample(apiKey string) {
 	fmt.Println()
 
 	// 创建一个协调 Agent，内部调用子 Agent
-	coordinatorAgent, err := builder.NewAgentBuilder[any, *agentcore.AgentState](client).
+	coordinatorAgent, err := builder.NewAgentBuilder[*agentcore.AgentState](client).
 		WithSystemPrompt(`你是数据生成协调器。根据任务描述，说明需要生成什么类型的数据。`).
 		WithMetadata("name", "CoordinatorAgent").
 		Build()
@@ -321,7 +321,7 @@ func showInvokeFastNote() {
 	fmt.Println("==================")
 	fmt.Println("• core.FastInvoker 接口（core/fast_invoker.go）定义了跳过回调的 InvokeFast 路径；")
 	fmt.Println("  core.TryInvokeFast(ctx, agent, input) 在 agent 实现该接口时走快速路径，否则回退到 Invoke。")
-	fmt.Println("• 实现者是 core.BaseAgent（默认返回 ErrNotImplemented，需具体 Agent 重写）与 core.ChainableAgent。")
+	fmt.Println("• 实现者是 core.BaseAgent（默认返回 ErrNotImplemented，需具体 Agent 重写）。")
 	fmt.Println("• builder 构建出的 ConfigurableAgent 不实现 core.FastInvoker，")
 	fmt.Println("  本示例的所有调用都是普通的 agent.Execute，不经过 InvokeFast。")
 }

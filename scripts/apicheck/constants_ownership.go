@@ -16,8 +16,6 @@ var migratedConstantOwners = map[string]string{
 	"builder/contextpolicy/ReadToolName":     "constants.ToolReadContextResult",
 	"core/budget/DefaultMaxAgentCalls":       "constants.DefaultMaxAgentCalls",
 	"core/budget/Unlimited":                  "constants.BudgetUnlimited",
-	"core/checkpoint/ReplicationModeAsync":   "constants.CheckpointReplicationModeAsync",
-	"core/checkpoint/ReplicationModeSync":    "constants.CheckpointReplicationModeSync",
 	"core/durable/ContinuationKindInterrupt": "constants.ContinuationKindInterrupt",
 	"core/durable/ReasonInvalidJSON":         "constants.InterruptReasonInvalidJSON",
 	"core/durable/ReasonRejected":            "constants.InterruptReasonRejected",

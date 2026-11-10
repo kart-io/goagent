@@ -11,7 +11,7 @@ import (
 )
 
 func TestFormattedOutputValidationErrorCode(t *testing.T) {
-	a := &ConfigurableAgent[any, *core.AgentState]{config: &AgentConfig{}}
+	a := &ConfigurableAgent[*core.AgentState]{config: &AgentConfig{}}
 	err := a.validateOutput(context.Background(), nil)
 	require.Equal(t, agentErrors.CodeInvalidOutput, agentErrors.GetCode(err))
 	require.Equal(t, "builder", agentErrors.GetComponent(err))

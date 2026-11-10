@@ -1,6 +1,6 @@
 # 宿主标准接入
 
-`execution.Scope` 组合宿主已有的执行身份、会话、日志、预算、期限与观察者，不创建新的运行引擎。它与 Builder 内部持有状态、存储和检查点的 `core/execution.Runtime` 无关，只负责装配。
+`execution.Scope` 组合宿主已有的执行身份、会话、日志、预算、期限与观察者，不创建新的运行引擎，只负责装配。
 
 ## 构建与运行
 
@@ -37,10 +37,9 @@ Builder 的持久化入口各管一件事，不能相互替代：
 |---|---|---|
 | 运行中途崩溃恢复 | Scope 的 Journal 与 `WithDurableScope` | 记录模型与工具调用，以同一执行键恢复时回放已完成操作 |
 | 对话历史 | `WithMemory` 或 `WithSessionLog` | 配置 SessionLog 后历史从日志推导，不再读取记忆；SessionLog 可同时作为 durable 日志（`session.DurableStore`） |
-| 轮次之间的业务状态 | `WithCheckpointer` + `WithAutoSaveEnabled` | `Initialize` 按 SessionID 加载状态，每轮成功后与 `Shutdown` 时保存，保存失败则本次执行返回错误；未配置时不加载也不保存 |
-| 工具读写的键值数据 | `WithStore` | 经 `tools.ToolRuntime` 交给工具；未配置时使用进程内存储 |
+| 轮次之间的业务状态 | `WithState` | 只在进程内保留，Builder 不加载也不保存；需要跨进程时由宿主持久化，或作为 `workflow.CompileDurable` 图的状态 |
 
-检查点只保存状态快照，不能恢复中断的运行；持久日志只回放操作结果，不保存 `WithState` 的状态。需要两者时分别配置，并使用同一 SessionID。
+持久日志只回放操作结果，不保存 `WithState` 的状态。
 
 ## 开销与验收
 

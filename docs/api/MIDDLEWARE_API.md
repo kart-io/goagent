@@ -8,7 +8,7 @@
 `builder.WithMiddleware(...middleware.Middleware)` 注册的中间件包裹整次 Agent 执行（`ExecuteStream`、`AsRunnable` 与 `Start` 都经过同一条链），不是每次模型调用都执行一次。请求中：
 
 - `Input` 是调用方传入的输入；
-- `State` 是 Agent 状态，`Runtime` 是 `*core/execution.Runtime[C, S]`；
+- `State` 是 Agent 状态；
 - `Metadata` 预先填入 `WithMetadata` 设置的键值。
 
 处理器返回的 `Output` 是最终答案，`TokenUsage` 是本次执行的用量。`WithVerbose(true)` 会在用户中间件之前自动加入 `LoggingMiddleware` 与 `TimingMiddleware`。中间件副作用不会自动幂等，契约见 [扩展契约](../guides/EXTENSION_CONTRACT.md)。
@@ -28,7 +28,6 @@ type Handler func(ctx context.Context, request *MiddlewareRequest) (*MiddlewareR
 type MiddlewareRequest struct {
     Input     interface{}
     State     state.State
-    Runtime   interface{}
     Metadata  map[string]interface{}
     Headers   map[string]string
     Timestamp time.Time

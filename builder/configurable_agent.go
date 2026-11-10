@@ -4,13 +4,11 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"reflect"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/kart-io/goagent/core"
-	"github.com/kart-io/goagent/core/execution"
 	"github.com/kart-io/goagent/core/middleware"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
@@ -18,11 +16,11 @@ import (
 )
 
 // ConfigurableAgent 是具有完整配置的已构建 Agent
-type ConfigurableAgent[C any, S core.State] struct {
+type ConfigurableAgent[S core.State] struct {
 	llmClient       llm.Client
 	tools           []interfaces.Tool
 	systemPrompt    string
-	runtime         *execution.Runtime[C, S]
+	state           S
 	chain           *middleware.MiddlewareChain
 	config          *AgentConfig
 	callbacks       []core.Callback
@@ -37,7 +35,7 @@ type ConfigurableAgent[C any, S core.State] struct {
 }
 
 // Initialize 准备 Agent 执行
-func (a *ConfigurableAgent[C, S]) Initialize(ctx context.Context) (err error) {
+func (a *ConfigurableAgent[S]) Initialize(ctx context.Context) (err error) {
 	defer recoverPanic("Agent 初始化", &err)
 	if ctx == nil {
 		return agentErrors.Newf(agentErrors.CodeInvalidInput, "初始化 Agent 的 context 不能为空").WithComponent("builder").WithOperation("initialize")
@@ -45,34 +43,6 @@ func (a *ConfigurableAgent[C, S]) Initialize(ctx context.Context) (err error) {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	// 如果存在则加载先前状态
-	if a.runtime.Checkpointer != nil {
-		exists, err := a.runtime.Checkpointer.Exists(ctx, a.config.SessionID)
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return ctxErr
-		}
-		if err != nil {
-			return fmt.Errorf("checkpoint exists: %w", err)
-		}
-		if exists {
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			state, err := a.runtime.Checkpointer.Load(ctx, a.config.SessionID)
-			if ctxErr := ctx.Err(); ctxErr != nil {
-				return ctxErr
-			}
-			if err != nil {
-				return fmt.Errorf("checkpoint load: %w", err)
-			}
-			loaded, ok := state.(S)
-			if !ok || isNilState(loaded) {
-				return agentErrors.Newf(agentErrors.CodeStateValidation, "checkpoint state type mismatch: got %T", state).WithComponent("builder").WithOperation("initialize")
-			}
-			a.runtime.State = loaded
-		}
-	}
-
 	// 通知回调
 	for _, cb := range a.callbacks {
 		if err := ctx.Err(); err != nil {
@@ -90,7 +60,7 @@ func (a *ConfigurableAgent[C, S]) Initialize(ctx context.Context) (err error) {
 	return nil
 }
 
-func (a *ConfigurableAgent[C, S]) execute(ctx context.Context, input interface{}, chain *middleware.MiddlewareChain) (*AgentOutput, error) {
+func (a *ConfigurableAgent[S]) execute(ctx context.Context, input interface{}, chain *middleware.MiddlewareChain) (*AgentOutput, error) {
 	// 如果配置了超时则应用
 	if a.config.Timeout > 0 {
 		var cancel context.CancelFunc
@@ -101,8 +71,7 @@ func (a *ConfigurableAgent[C, S]) execute(ctx context.Context, input interface{}
 	// 创建请求
 	request := &middleware.MiddlewareRequest{
 		Input:     input,
-		State:     a.runtime.State,
-		Runtime:   a.runtime,
+		State:     a.state,
 		Metadata:  make(map[string]interface{}),
 		Headers:   make(map[string]string),
 		Timestamp: time.Now(),
@@ -148,7 +117,7 @@ func (a *ConfigurableAgent[C, S]) execute(ctx context.Context, input interface{}
 // handleError 让错误依次经过 errorHandler 与各回调的 OnError。
 // errorHandler 或 OnError 自身 panic 时直接返回 *PanicError，不再调用剩余回调，
 // 也不把这个 panic 再交给 errorHandler 或 OnError，避免回调处理自身 panic 形成递归。
-func (a *ConfigurableAgent[C, S]) handleError(ctx context.Context, err error) (handled error) {
+func (a *ConfigurableAgent[S]) handleError(ctx context.Context, err error) (handled error) {
 	defer recoverPanic("Agent 错误处理回调", &handled)
 	if a.errorHandler != nil {
 		err = a.errorHandler(err)
@@ -164,7 +133,7 @@ func (a *ConfigurableAgent[C, S]) handleError(ctx context.Context, err error) (h
 
 // notifyEnd 通知各回调的 OnEnd。OnEnd 自身 panic 时直接返回 *PanicError，
 // 不再调用剩余回调，也不交给 errorHandler 或 OnError（同 handleError，避免回调递归）。
-func (a *ConfigurableAgent[C, S]) notifyEnd(ctx context.Context, output *AgentOutput) (err error) {
+func (a *ConfigurableAgent[S]) notifyEnd(ctx context.Context, output *AgentOutput) (err error) {
 	defer recoverPanic("Agent 完成回调", &err)
 	for _, cb := range a.callbacks {
 		if err := cb.OnEnd(ctx, output); err != nil {
@@ -175,7 +144,7 @@ func (a *ConfigurableAgent[C, S]) notifyEnd(ctx context.Context, output *AgentOu
 }
 
 // buildSystemPromptContent 构建完整的系统提示内容（包含输出格式指示）
-func (a *ConfigurableAgent[C, S]) buildSystemPromptContent() string {
+func (a *ConfigurableAgent[S]) buildSystemPromptContent() string {
 	if a.systemPrompt == "" && a.config.OutputFormat == OutputFormatDefault {
 		return ""
 	}
@@ -204,25 +173,12 @@ func (a *ConfigurableAgent[C, S]) buildSystemPromptContent() string {
 }
 
 // saveConversation 保存对话到记忆
-func (a *ConfigurableAgent[C, S]) saveConversation(ctx context.Context, userInput, assistantResponse string) error {
+func (a *ConfigurableAgent[S]) saveConversation(ctx context.Context, userInput, assistantResponse string) error {
 	return writeMemory(ctx, a.memoryManager, a.config, userInput, assistantResponse)
 }
 
-// isNilState 拒绝接口内包装的空指针，避免替换成不可用状态。
-func isNilState(value any) bool {
-	if value == nil {
-		return true
-	}
-	v := reflect.ValueOf(value)
-	switch v.Kind() {
-	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
-		return v.IsNil()
-	}
-	return false
-}
-
 // invokeToolCall 保留工具状态，供直接返回路径校验成功标志。
-func (a *ConfigurableAgent[C, S]) invokeToolCall(ctx context.Context, call ToolCall) (*interfaces.ToolOutput, error) {
+func (a *ConfigurableAgent[S]) invokeToolCall(ctx context.Context, call ToolCall) (*interfaces.ToolOutput, error) {
 	// 查找工具
 	for _, tool := range a.tools {
 		if tool.Name() == call.Name {
@@ -251,14 +207,14 @@ func (a *ConfigurableAgent[C, S]) invokeToolCall(ctx context.Context, call ToolC
 }
 
 // GetState 返回当前状态
-func (a *ConfigurableAgent[C, S]) GetState() S {
+func (a *ConfigurableAgent[S]) GetState() S {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
-	return a.runtime.State
+	return a.state
 }
 
 // GetMetrics 返回 Agent 指标
-func (a *ConfigurableAgent[C, S]) GetMetrics() map[string]interface{} {
+func (a *ConfigurableAgent[S]) GetMetrics() map[string]interface{} {
 	metrics := make(map[string]interface{})
 
 	// 添加基本指标
@@ -266,7 +222,7 @@ func (a *ConfigurableAgent[C, S]) GetMetrics() map[string]interface{} {
 	metrics["tools_count"] = len(a.tools)
 
 	// 如果可用则添加状态大小
-	if state, ok := any(a.runtime.State).(*core.AgentState); ok {
+	if state, ok := any(a.state).(*core.AgentState); ok {
 		metrics["state_size"] = state.Size()
 	}
 
@@ -274,15 +230,8 @@ func (a *ConfigurableAgent[C, S]) GetMetrics() map[string]interface{} {
 }
 
 // Shutdown 优雅地关闭 Agent
-func (a *ConfigurableAgent[C, S]) Shutdown(ctx context.Context) (err error) {
+func (a *ConfigurableAgent[S]) Shutdown(ctx context.Context) (err error) {
 	defer recoverPanic("Agent 关闭", &err)
-	// 保存最终状态
-	if a.runtime.Checkpointer != nil {
-		if err := a.runtime.SaveState(ctx); err != nil {
-			return agentErrors.NewStateCheckpointError(a.config.SessionID, "save_final", err)
-		}
-	}
-
 	// 通知回调
 	for _, cb := range a.callbacks {
 		if shutdown, ok := cb.(interface{ OnShutdown(context.Context) error }); ok {

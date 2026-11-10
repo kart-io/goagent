@@ -75,7 +75,7 @@ func lookup(result string, runs *atomic.Int32) interfaces.Tool {
 		})
 }
 
-func agent(t *testing.T, m *model, tool interfaces.Tool, log session.Store) *builder.ConfigurableAgent[any, *core.AgentState] {
+func agent(t *testing.T, m *model, tool interfaces.Tool, log session.Store) *builder.ConfigurableAgent[*core.AgentState] {
 	t.Helper()
 	reg := tools.NewRegistry()
 	require.NoError(t, reg.Register(tool))

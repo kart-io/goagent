@@ -4,9 +4,9 @@
 
 ## 核心类型
 
-- `AgentBuilder[C any, S core.State]`：泛型构建器，`C` 是应用上下文类型，`S` 是状态类型。`NewSimpleBuilder(client)` 返回 `SimpleAgentBuilder`（`AgentBuilder[any, *core.AgentState]`）。
-- `ConfigurableAgent[C, S]`：`Build` / `BuildContext` 的结果。`Build` 校验配置，补齐默认的内存存储（未配置 `WithCheckpointer` 时不加载也不保存状态），组装中间件链并调用 `Initialize`。
-- `AgentConfig`：配置项，`DefaultAgentConfig()` 给出默认值（MaxIterations 10、Timeout 5 分钟、MaxTokens 2000、Temperature 0.7、MaxConversationHistory 20、EnableAutoSave true）。
+- `AgentBuilder[S core.State]`：泛型构建器，`S` 是状态类型。`NewSimpleBuilder(client)` 返回 `SimpleAgentBuilder`（`AgentBuilder[*core.AgentState]`）。
+- `ConfigurableAgent[S]`：`Build` / `BuildContext` 的结果。`Build` 校验配置，组装中间件链并调用 `Initialize`。会话持久化与恢复使用 `WithSessionLog`、`WithDurableScope`，对话记忆使用 `WithMemory`。
+- `AgentConfig`：配置项，`DefaultAgentConfig()` 给出默认值（MaxIterations 10、Timeout 5 分钟、MaxTokens 2000、Temperature 0.7、MaxConversationHistory 20）。
 
 ## 使用
 

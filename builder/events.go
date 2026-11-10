@@ -40,7 +40,7 @@ type AgentEvent struct {
 // Cancel ctx when abandoning the stream; cancellation closes it promptly. On
 // cancellation an error event is best-effort, and ctx.Err() is authoritative.
 // A cached middleware response may produce only done, with no model deltas.
-func (a *ConfigurableAgent[C, S]) ExecuteStream(ctx context.Context, input interface{}) (_ <-chan AgentEvent, err error) {
+func (a *ConfigurableAgent[S]) ExecuteStream(ctx context.Context, input interface{}) (_ <-chan AgentEvent, err error) {
 	// 工具里运行的子 Agent 继承父 Agent 的 ctx，但父 Handle 的输入和对话不属于它；Handle 自己的轮次走 executeStream。
 	ctx = context.WithValue(context.WithValue(ctx, inboxKey{}, (*inbox)(nil)), historyKey{}, nil)
 	return a.executeStream(ctx, input, nil)
@@ -54,7 +54,7 @@ type streamResult struct {
 	err    error
 }
 
-func (a *ConfigurableAgent[C, S]) executeStream(ctx context.Context, input interface{}, result *streamResult) (_ <-chan AgentEvent, err error) {
+func (a *ConfigurableAgent[S]) executeStream(ctx context.Context, input interface{}, result *streamResult) (_ <-chan AgentEvent, err error) {
 	// 同步阶段也会调用宿主代码（如 scopeDurableExecution 中的工具与持久存储），panic 时转为错误返回。
 	defer recoverPanic("Agent 流式执行启动", &err)
 	// 每次执行只拥有自己打开的日志轮次；工具子调用和 Handle 都不能继承父轮次的写入权。
@@ -168,7 +168,7 @@ func (a *ConfigurableAgent[C, S]) executeStream(ctx context.Context, input inter
 	return events, nil
 }
 
-func (a *ConfigurableAgent[C, S]) runEvents(ctx context.Context, request *middleware.MiddlewareRequest, client llm.Client, emit func(AgentEvent) error) (*middleware.MiddlewareResponse, error) {
+func (a *ConfigurableAgent[S]) runEvents(ctx context.Context, request *middleware.MiddlewareRequest, client llm.Client, emit func(AgentEvent) error) (*middleware.MiddlewareResponse, error) {
 	input, err := a.inputSerializer.Serialize(request.Input)
 	if err != nil {
 		return nil, agentErrors.Wrap(err, agentErrors.CodeInvalidInput, "failed to serialize input")
@@ -242,7 +242,7 @@ func (a *ConfigurableAgent[C, S]) runEvents(ctx context.Context, request *middle
 	return a.finishEvents(ctx, request, input, turn.Content, usage, metadata, emit)
 }
 
-func (a *ConfigurableAgent[C, S]) finishEvents(ctx context.Context, request *middleware.MiddlewareRequest, input, answer string, usage *interfaces.TokenUsage, metadata map[string]interface{}, emit func(AgentEvent) error) (*middleware.MiddlewareResponse, error) {
+func (a *ConfigurableAgent[S]) finishEvents(ctx context.Context, request *middleware.MiddlewareRequest, input, answer string, usage *interfaces.TokenUsage, metadata map[string]interface{}, emit func(AgentEvent) error) (*middleware.MiddlewareResponse, error) {
 	if c, ok := budget.FromContext(ctx); ok {
 		snapshot, err := c.Snapshot(ctx)
 		if err != nil {
@@ -263,11 +263,6 @@ func (a *ConfigurableAgent[C, S]) finishEvents(ctx context.Context, request *mid
 	if request.State != nil {
 		request.State.Set("last_response", answer)
 		request.State.Set("last_timestamp", time.Now())
-	}
-	if a.config.EnableAutoSave && a.runtime.Checkpointer != nil {
-		if err := a.runtime.SaveState(ctx); err != nil {
-			return nil, fmt.Errorf("stream checkpoint save: %w", err)
-		}
 	}
 	return &middleware.MiddlewareResponse{Output: answer, State: request.State, Metadata: metadata, TokenUsage: usage}, nil
 }

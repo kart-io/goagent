@@ -20,7 +20,7 @@ import (
 //
 // 上一轮未结束（进程中断）时：持久运行以同一执行键恢复则续写该轮，否则该轮记为中止，其消息不进入历史。
 // 持久运行可用 session.DurableStore(store, id) 作为 durable 日志，操作快照与对话位于同一份日志。
-func (b *AgentBuilder[C, S]) WithSessionLog(store session.Store) *AgentBuilder[C, S] {
+func (b *AgentBuilder[S]) WithSessionLog(store session.Store) *AgentBuilder[S] {
 	b.config.SessionLog = store
 	return b
 }
@@ -41,7 +41,7 @@ func sessionTurnFrom(ctx context.Context) *sessionTurn {
 	return t
 }
 
-func (a *ConfigurableAgent[C, S]) sessionLogID(ctx context.Context) string {
+func (a *ConfigurableAgent[S]) sessionLogID(ctx context.Context) string {
 	if id := tools.SessionIDFrom(ctx); id != "" {
 		return id
 	}
@@ -49,7 +49,7 @@ func (a *ConfigurableAgent[C, S]) sessionLogID(ctx context.Context) string {
 }
 
 // openSessionTurn 读取日志、处理未结束的轮次并开始本轮，返回日志推导的历史。
-func (a *ConfigurableAgent[C, S]) openSessionTurn(ctx context.Context, input string) (*sessionTurn, []llm.Message, error) {
+func (a *ConfigurableAgent[S]) openSessionTurn(ctx context.Context, input string) (*sessionTurn, []llm.Message, error) {
 	id := a.sessionLogID(ctx)
 	if id == "" {
 		return nil, nil, agentErrors.NewInvalidConfigError("builder", "session_id", "会话日志需要会话 ID")

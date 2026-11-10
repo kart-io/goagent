@@ -13,11 +13,11 @@ go doc -all github.com/kart-io/goagent/core
 ## Builder
 
 ```go
-func NewSimpleBuilder(llmClient llm.Client) *SimpleAgentBuilder          // = AgentBuilder[any, *core.AgentState]
-func NewAgentBuilder[C any, S core.State](llmClient llm.Client) *AgentBuilder[C, S]
+func NewSimpleBuilder(llmClient llm.Client) *SimpleAgentBuilder          // = AgentBuilder[*core.AgentState]
+func NewAgentBuilder[S core.State](llmClient llm.Client) *AgentBuilder[S]
 
-func (b *AgentBuilder[C, S]) BuildContext(ctx context.Context) (*ConfigurableAgent[C, S], error) // 宿主推荐
-func (b *AgentBuilder[C, S]) Build() (*ConfigurableAgent[C, S], error)                          // 使用 Background
+func (b *AgentBuilder[S]) BuildContext(ctx context.Context) (*ConfigurableAgent[S], error) // 宿主推荐
+func (b *AgentBuilder[S]) Build() (*ConfigurableAgent[S], error)                          // 使用 Background
 ```
 
 Builder 是可变对象，不要并发配置。所有 `With*` 方法返回同一个 Builder，可链式调用。
@@ -30,9 +30,9 @@ Builder 是可变对象，不要并发配置。所有 `With*` 方法返回同一
 | 生成参数 | `WithMaxTokens`、`WithTemperature`、`WithMaxIterations`、`WithTimeout` |
 | 工具 | `WithTools(...interfaces.Tool)`、`WithReturnDirectTools(names...)`、`WithParallelToolCalls(n)`、`WithEmptyAnswerRetries(n)` |
 | 循环钩子 | `WithPreStep`、`WithIdentifiedPreStep(identity, hook)`、`WithRequestHook`、`WithRequestError(maxRecoveries, hooks...)`、`WithTurnStopping`、`WithOffload(*contextpolicy.Offload)`、`WithTokenEstimator` |
-| 会话与持久化 | `WithSessionID`、`WithSessionLog(session.Store)`、`WithDurableScope`、`WithCheckpointer(checkpoint.Checkpointer)`、`WithStore(store.Store)`、`WithState(S)`、`WithAutoSaveEnabled` |
+| 会话与持久化 | `WithSessionID`、`WithSessionLog(session.Store)`、`WithDurableScope`、`WithState(S)` |
 | 记忆与检索 | `WithMemory(interfaces.MemoryManager)`、`WithMemoryFailurePolicy`、`WithMaxConversationHistory`、`WithRetriever(interfaces.DocumentRetriever, ...RetrievalConfig)` |
-| 横切 | `WithMiddleware(...middleware.Middleware)`、`WithCallbacks(...core.Callback)`、`WithErrorHandler`、`WithMetadata`、`WithInputSerializer`、`WithVerbose`、`WithContext(C)` |
+| 横切 | `WithMiddleware(...middleware.Middleware)`、`WithCallbacks(...core.Callback)`、`WithErrorHandler`、`WithMetadata`、`WithInputSerializer`、`WithVerbose` |
 | 预设 | `ConfigureForChatbot`、`ConfigureForRAG`、`ConfigureForAnalysis` |
 
 循环钩子、`WithReturnDirectTools`、`WithEmptyAnswerRetries`、`WithOffload` 只作用于原生工具流，要求客户端实现 `llm.ToolStreamClient`。`WithParallelToolCalls(n>=2)` 只对声明 `interfaces.ConcurrentCallTool` 的工具并发执行。`WithMiddleware` 的中间件见 [Middleware API](MIDDLEWARE_API.md)。
@@ -161,33 +161,9 @@ type State interface {
 
 `core.NewAgentState()` 返回线程安全的 `*AgentState`，另有 `GetString`、`GetInt`、`GetBool`、`GetFloat64`、`GetMap`、`GetSlice` 等类型化读取方法。
 
-## Checkpoint
+## 持久化
 
-Builder 的 `WithCheckpointer` 接收 `core/checkpoint.Checkpointer`，按线程（会话）ID 保存整份状态：
-
-```go
-type Checkpointer interface {
-    Save(ctx context.Context, threadID string, state state.State) error
-    Load(ctx context.Context, threadID string) (state.State, error)
-    List(ctx context.Context) ([]CheckpointInfo, error)
-    Delete(ctx context.Context, threadID string) error
-    Exists(ctx context.Context, threadID string) (bool, error)
-}
-```
-
-实现：`NewInMemorySaver()`、`NewDistributedCheckpointer(*DistributedCheckpointerConfig)`；`NewCheckpointerWithAutoCleanup` 为任意实现增加定期清理。
-
-```go
-cp := checkpoint.NewInMemorySaver()
-st := core.NewAgentState()
-st.Set("step", 5)
-if err := cp.Save(ctx, "thread-123", st); err != nil {
-    return err
-}
-loaded, err := cp.Load(ctx, "thread-123")
-```
-
-持久执行（`core/durable`、`core/session`）的接入见 [宿主接入指南](../guides/HOST_INTEGRATION.md)。
+会话持久化与恢复使用 `core/session` 的会话日志（`WithSessionLog`）与 `core/durable`（`WithDurableScope`），接入见 [宿主接入指南](../guides/HOST_INTEGRATION.md)。
 
 ## 相关文档
 

@@ -15,7 +15,7 @@ import (
 type TokenEstimator func(context.Context, *llm.CompletionRequest, []interfaces.Tool) (int, error)
 
 // WithTokenEstimator 配置原生流请求的宿主预估；仅在根预算开启 Token 上限时调用。
-func (b *AgentBuilder[C, S]) WithTokenEstimator(estimate TokenEstimator) *AgentBuilder[C, S] {
+func (b *AgentBuilder[S]) WithTokenEstimator(estimate TokenEstimator) *AgentBuilder[S] {
 	b.config.TokenEstimator = estimate
 	return b
 }

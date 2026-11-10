@@ -2,7 +2,7 @@
 
 共享协议值和默认参数统一通过 `github.com/kart-io/goagent/constants` 使用。原来位于 `interfaces`、`llm/constants`、`llm/common`、`llm`、`tools`、`store`、`parsers` 和 `core` 的460个公开转发常量已删除，`llm/constants` 包也已删除；没有兼容别名。内部清理期限也直接引用中央值。
 
-`interfaces.Tool` 等领域接口、`llm.ToolCall` 及其方法、`core.TimeoutConfig` 及其配置函数仍在原包。只迁移共享常量和 Provider 类型，不改变这些领域对象的使用方式。
+`interfaces.Tool` 等领域接口、`llm.ToolCall` 及其方法仍在原包。只迁移共享常量和 Provider 类型，不改变这些领域对象的使用方式。
 
 ## 导入与名称
 
@@ -82,8 +82,6 @@ custom := shared.Provider("offline-demo")
 | `multiagent.Finish` | `constants.MultiagentFinish` |
 | `builder/contextpolicy.ReadToolName` | `constants.ToolReadContextResult` |
 | `tools/spill.ToolReadSpill` | `constants.ToolReadSpill` |
-| `core/checkpoint.ReplicationModeSync` | `constants.CheckpointReplicationModeSync` |
-| `core/checkpoint.ReplicationModeAsync` | `constants.CheckpointReplicationModeAsync` |
 | `core/durable.ContinuationKindInterrupt` | `constants.ContinuationKindInterrupt` |
 | `core/durable.ReasonInvalidJSON` | `constants.InterruptReasonInvalidJSON` |
 | `core/durable.ReasonValidatePanic` | `constants.InterruptReasonValidatePanic` |

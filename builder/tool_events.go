@@ -32,7 +32,7 @@ func isEmptyAnswer(turn *llm.StreamChunk) bool {
 }
 
 // streamMessages 保留消息角色，系统指令与证据各发送一次，避免重复包装。
-func (a *ConfigurableAgent[C, S]) streamMessages(ctx context.Context, input, evidence string) ([]llm.Message, error) {
+func (a *ConfigurableAgent[S]) streamMessages(ctx context.Context, input, evidence string) ([]llm.Message, error) {
 	system := a.buildSystemPromptContent()
 	if a.retriever != nil {
 		system += "\n" + retrievalInstruction
@@ -60,7 +60,7 @@ func (a *ConfigurableAgent[C, S]) streamMessages(ctx context.Context, input, evi
 }
 
 // runToolEvents 每轮直接选择工具或输出答案，MaxIterations 包含最终答案请求。
-func (a *ConfigurableAgent[C, S]) runToolEvents(ctx context.Context, request *middleware.MiddlewareRequest, input string, client llm.ToolStreamClient, messages []llm.Message, metadata map[string]interface{}, emit func(AgentEvent) error) (response *middleware.MiddlewareResponse, err error) {
+func (a *ConfigurableAgent[S]) runToolEvents(ctx context.Context, request *middleware.MiddlewareRequest, input string, client llm.ToolStreamClient, messages []llm.Message, metadata map[string]interface{}, emit func(AgentEvent) error) (response *middleware.MiddlewareResponse, err error) {
 	// 会话级审批授权按会话隔离；宿主已声明会话时沿用宿主的值。
 	if tools.SessionIDFrom(ctx) == "" && a.config.SessionID != "" {
 		ctx = tools.WithSessionID(ctx, a.config.SessionID)
@@ -412,7 +412,7 @@ type toolCallResult struct {
 }
 
 // concurrentCalls 判断本轮调用能否并发：显式开启并发、多个调用且每个工具都声明支持并发调用。
-func (a *ConfigurableAgent[C, S]) concurrentCalls(calls []ToolCall) bool {
+func (a *ConfigurableAgent[S]) concurrentCalls(calls []ToolCall) bool {
 	if len(calls) < 2 || a.config.ParallelToolCalls < 2 {
 		return false
 	}
@@ -468,7 +468,7 @@ func invokeConcurrently(ctx context.Context, calls []ToolCall, limit int, invoke
 // isArgumentErrorResult 位于包级，避免被循环内的 tools 变量遮蔽。
 // errorFeedback 在开启 ToolErrorFeedback 时把可恢复的工具 error 转为交给模型的结果。
 // 持久运行不转换：失败结果不入日志，恢复时工具会重新执行，模型看到的历史将与日志不一致。
-func (a *ConfigurableAgent[C, S]) errorFeedback(ctx context.Context, err error) (*interfaces.ToolOutput, bool) {
+func (a *ConfigurableAgent[S]) errorFeedback(ctx context.Context, err error) (*interfaces.ToolOutput, bool) {
 	if err == nil || !a.config.ToolErrorFeedback || durable.HasJournal(ctx) || ctx.Err() != nil {
 		return nil, false
 	}

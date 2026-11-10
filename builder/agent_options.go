@@ -19,7 +19,7 @@ import "github.com/kart-io/goagent/core"
 //	agent, _ := builder.NewSimpleBuilder(llm).
 //	    WithSystemPrompt("你是一个友好的助手").
 //	    Build()
-func (b *AgentBuilder[C, S]) WithSystemPrompt(prompt string) *AgentBuilder[C, S] {
+func (b *AgentBuilder[S]) WithSystemPrompt(prompt string) *AgentBuilder[S] {
 	b.systemPrompt = prompt
 	return b
 }
@@ -28,17 +28,8 @@ func (b *AgentBuilder[C, S]) WithSystemPrompt(prompt string) *AgentBuilder[C, S]
 //
 // [Advanced] 高级配置，用于自定义状态类型（需要泛型知识）。
 // 大多数情况下使用默认的 *core.AgentState 即可。
-func (b *AgentBuilder[C, S]) WithState(state S) *AgentBuilder[C, S] {
+func (b *AgentBuilder[S]) WithState(state S) *AgentBuilder[S] {
 	b.state = state
-	return b
-}
-
-// WithContext 设置应用上下文
-//
-// [Advanced] 高级配置，用于自定义上下文类型（需要泛型知识）。
-// 大多数情况下使用默认的 any 即可。
-func (b *AgentBuilder[C, S]) WithContext(context C) *AgentBuilder[C, S] {
-	b.context = context
 	return b
 }
 
@@ -52,7 +43,7 @@ func (b *AgentBuilder[C, S]) WithContext(context C) *AgentBuilder[C, S] {
 //	    WithSystemPrompt("...").
 //	    WithCallbacks(core.NewStdoutCallback(true)).
 //	    Build()
-func (b *AgentBuilder[C, S]) WithCallbacks(callbacks ...core.Callback) *AgentBuilder[C, S] {
+func (b *AgentBuilder[S]) WithCallbacks(callbacks ...core.Callback) *AgentBuilder[S] {
 	b.callbacks = append(b.callbacks, callbacks...)
 	return b
 }
@@ -60,7 +51,7 @@ func (b *AgentBuilder[C, S]) WithCallbacks(callbacks ...core.Callback) *AgentBui
 // WithErrorHandler 设置自定义错误处理函数
 //
 // [Core] 标准配置，用于自定义错误处理逻辑（例如重试、降级）。
-func (b *AgentBuilder[C, S]) WithErrorHandler(handler func(error) error) *AgentBuilder[C, S] {
+func (b *AgentBuilder[S]) WithErrorHandler(handler func(error) error) *AgentBuilder[S] {
 	b.errorHandler = handler
 	return b
 }
@@ -68,7 +59,7 @@ func (b *AgentBuilder[C, S]) WithErrorHandler(handler func(error) error) *AgentB
 // WithMetadata 添加元数据到 Agent
 //
 // [Advanced] 高级配置，用于存储自定义键值对数据。
-func (b *AgentBuilder[C, S]) WithMetadata(key string, value interface{}) *AgentBuilder[C, S] {
+func (b *AgentBuilder[S]) WithMetadata(key string, value interface{}) *AgentBuilder[S] {
 	b.metadata[key] = value
 	return b
 }

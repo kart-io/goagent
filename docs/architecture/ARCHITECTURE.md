@@ -39,7 +39,6 @@ graph TD
     builder --> coremw[core/middleware]
     builder --> llm
     builder --> tools
-    builder --> store
 
     contextpolicy --> durable
     contextpolicy --> llm
@@ -60,10 +59,7 @@ graph TD
     multiagent --> tools
     multiagent --> core
 
-    core --> exec[core/execution]
-    core --> checkpoint[core/checkpoint]
     core --> state[core/state]
-    exec --> store
 
     session --> durable
     session --> llm
@@ -93,8 +89,8 @@ graph TD
 | `constants` | 共享协议值、字段、状态、默认参数及 Provider 类型的唯一公开入口；只依赖标准库，不保留旧包转发 |
 | `interfaces` | 共享接口：`Tool`、`ToolInput/ToolOutput`、`MemoryManager`、`DocumentRetriever` 等 |
 | `errors` | 统一错误码、不可变固定哨兵、文案、上下文字段及业务错误构造函数（含 panic 错误） |
-| `core` | `Runnable[I,O]`、`StreamRunnable`、`RunnablePipe/Sequence`、`Callback`、panic 处理注册表、生命周期与 Runnable 注册表 |
-| `core/state`、`core/checkpoint`、`core/execution` | Agent 状态、检查点（`Checkpointer`、`InMemorySaver`）、`Runtime` 与旧流式类型 |
+| `core` | `Runnable[I,O]`、`StreamRunnable`、`RunnablePipe/Sequence`、`Callback`、panic 处理注册表 |
+| `core/state` | Agent 状态 |
 | `core/durable` | 显式、带版本的持久操作：`Do`、`Runner`、`Store`（`FileStore`）、等待与审批 |
 | `core/session` | 追加写会话事件日志：`Store`（`MemoryStore`/`FileStore`）、`DeriveMessages`、`DurableStore` |
 | `core/budget` | 根执行的模型请求、预留 Token、工具次数与期限预算，`New` 与 `NewDurable` |
@@ -123,13 +119,13 @@ graph TD
 | `harness/env` | 文件系统与命令执行的环境接口（本地、Docker、只读、检查点包装） |
 | `devtools` | 观察事件记录与图报告 |
 | `evaluation/...` | 离线评测：`agentbench`、`executionbench` |
-| `testing/...` | `mocks`、`testutil`、`replay`（会话日志回放回归）、`panictest` |
+| `testing/...` | `mocks`、`replay`（会话日志回放回归）、`panictest` |
 
 ## 核心概念
 
 ### Agent 与 Runnable
 
-`builder.NewAgentBuilder[C, S](client)`（或 `NewSimpleBuilder`）配置后经 `Build()` / `BuildContext(ctx)` 得到 `*ConfigurableAgent`。推荐入口 `agent.AsRunnable()` 返回 `*core.StreamRunnable[any, *builder.AgentOutput]`，`Invoke` 与 `Stream` 共享 `ExecuteStream` 同一执行源。完整契约见 [执行契约](../guides/EXECUTION_CONTRACT.md) 与 [扩展契约](../guides/EXTENSION_CONTRACT.md)。
+`builder.NewAgentBuilder[S](client)`（或 `NewSimpleBuilder`）配置后经 `Build()` / `BuildContext(ctx)` 得到 `*ConfigurableAgent`。推荐入口 `agent.AsRunnable()` 返回 `*core.StreamRunnable[any, *builder.AgentOutput]`，`Invoke` 与 `Stream` 共享 `ExecuteStream` 同一执行源。完整契约见 [执行契约](../guides/EXECUTION_CONTRACT.md) 与 [扩展契约](../guides/EXTENSION_CONTRACT.md)。
 
 客户端实现 `llm.ToolStreamClient` 且配置了工具时，走原生工具循环：每轮一次 `CompleteToolsStream`，模型返回工具调用则执行并追加 `tool` 消息，返回文本则结束；`WithMaxIterations` 限制模型请求次数。
 

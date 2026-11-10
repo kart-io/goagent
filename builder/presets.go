@@ -12,7 +12,7 @@ import (
 // 本文件包含 AgentBuilder 的常用场景预设配置方法
 
 // ConfigureForRAG 添加常用的 RAG (检索增强生成) 组件
-func (b *AgentBuilder[C, S]) ConfigureForRAG() *AgentBuilder[C, S] {
+func (b *AgentBuilder[S]) ConfigureForRAG() *AgentBuilder[S] {
 	// Retrieve fresh evidence for each request; answer caching must be explicit
 	// because documents and conversation history can change for the same query.
 	b.WithMiddleware(middleware.NewTimingMiddleware())
@@ -25,7 +25,7 @@ func (b *AgentBuilder[C, S]) ConfigureForRAG() *AgentBuilder[C, S] {
 }
 
 // ConfigureForChatbot 添加常用的聊天机器人组件
-func (b *AgentBuilder[C, S]) ConfigureForChatbot() *AgentBuilder[C, S] {
+func (b *AgentBuilder[S]) ConfigureForChatbot() *AgentBuilder[S] {
 	// 添加聊天机器人中间件
 	b.WithMiddleware(
 		middleware.NewRateLimiterMiddleware(20, time.Minute),
@@ -47,7 +47,7 @@ func (b *AgentBuilder[C, S]) ConfigureForChatbot() *AgentBuilder[C, S] {
 }
 
 // ConfigureForAnalysis 添加用于数据分析任务的组件
-func (b *AgentBuilder[C, S]) ConfigureForAnalysis() *AgentBuilder[C, S] {
+func (b *AgentBuilder[S]) ConfigureForAnalysis() *AgentBuilder[S] {
 	// 添加分析中间件
 	b.WithMiddleware(
 		middleware.NewTimingMiddleware(),

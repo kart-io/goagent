@@ -10,5 +10,4 @@ Multi-feature examples. Run from the repository root with `go run ./examples/adv
 | `multi-agent-demo` | Printed walkthrough of the multi-agent flow, no LLM |
 | `observability` | `observability` telemetry provider, tracer and metrics around an agent, with a mock LLM |
 | `parallel-execution` | `tools.ToolExecutor`: parallel vs. sequential, concurrency limit, errors, retries, timeouts |
-| `tool-runtime` | `tools.NewToolRuntime`: tools reading/writing agent state and a `store/memory` store, stream writer, restricted runtime, cloning |
 | `tool-selector` | `middleware` tool selector: always-include, max limit, caching, token comparison |

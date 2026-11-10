@@ -88,7 +88,7 @@ graph LR
 | Agent | `AGENT_EXECUTION`、`AGENT_VALIDATION`、`AGENT_NOT_FOUND`、`AGENT_INITIALIZATION` |
 | Tool | `TOOL_EXECUTION`、`TOOL_NOT_FOUND`、`TOOL_VALIDATION`、`TOOL_TIMEOUT`、`TOOL_RETRY_EXHAUSTED` |
 | Middleware | `MIDDLEWARE_EXECUTION`、`MIDDLEWARE_CHAIN`、`MIDDLEWARE_VALIDATION` |
-| State | `STATE_LOAD`、`STATE_SAVE`、`STATE_VALIDATION`、`STATE_CHECKPOINT` |
+| State | `STATE_LOAD`、`STATE_SAVE`、`STATE_VALIDATION` |
 | Stream | `STREAM_READ`、`STREAM_WRITE`、`STREAM_TIMEOUT`、`STREAM_CLOSED` |
 | LLM | `LLM_REQUEST`、`LLM_RESPONSE`、`LLM_TIMEOUT`、`LLM_RATE_LIMIT` |
 | Context | `CONTEXT_CANCELED`、`CONTEXT_TIMEOUT` |
@@ -371,7 +371,7 @@ NewVectorDimMismatchError(expected, actual int) *AgentError
 
 // 其余分类同样各有辅助函数：
 // Middleware: NewMiddlewareExecutionError / NewMiddlewareChainError / NewMiddlewareValidationError
-// State:      NewStateLoadError / NewStateSaveError / NewStateValidationError / NewStateCheckpointError
+// State:      NewStateLoadError / NewStateSaveError / NewStateValidationError
 // Context:    NewContextCanceledError / NewContextTimeoutError
 // 通用:       NewInvalidInputError / NewInvalidConfigError / NewNotImplementedError / NewInternalError
 // 分布式:     NewDistributedConnectionError / NewDistributedSerializationError / NewDistributedCoordinationError

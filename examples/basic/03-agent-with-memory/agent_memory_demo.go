@@ -120,172 +120,6 @@ func (a *AnalysisAgent) Invoke(ctx context.Context, input *core.AgentInput) (*co
 	return output, nil
 }
 
-// DataProcessingChain 示例数据处理 Chain
-type DataProcessingChain struct {
-	*core.BaseChain
-}
-
-// NewDataProcessingChain 创建数据处理 Chain
-func NewDataProcessingChain() *DataProcessingChain {
-	steps := []core.Step{
-		&ValidationStep{},
-		&TransformStep{},
-		&EnrichmentStep{},
-	}
-
-	return &DataProcessingChain{
-		BaseChain: core.NewBaseChain("data-processing-chain", steps),
-	}
-}
-
-// ValidationStep 验证步骤
-type ValidationStep struct{}
-
-func (s *ValidationStep) Execute(ctx context.Context, input interface{}) (interface{}, error) {
-	fmt.Println("  [Chain Step 1] Validating input data...")
-	data, ok := input.(map[string]interface{})
-	if !ok {
-		data = map[string]interface{}{"raw": input}
-	}
-	data["validated"] = true
-	return data, nil
-}
-
-func (s *ValidationStep) Name() string        { return "validation" }
-func (s *ValidationStep) Description() string { return "Validate input data" }
-
-// TransformStep 转换步骤
-type TransformStep struct{}
-
-func (s *TransformStep) Execute(ctx context.Context, input interface{}) (interface{}, error) {
-	fmt.Println("  [Chain Step 2] Transforming data...")
-	data := input.(map[string]interface{})
-	data["transformed"] = true
-	data["timestamp"] = time.Now()
-	return data, nil
-}
-
-func (s *TransformStep) Name() string        { return "transformation" }
-func (s *TransformStep) Description() string { return "Transform data format" }
-
-// EnrichmentStep 增强步骤
-type EnrichmentStep struct{}
-
-func (s *EnrichmentStep) Execute(ctx context.Context, input interface{}) (interface{}, error) {
-	fmt.Println("  [Chain Step 3] Enriching data...")
-	data := input.(map[string]interface{})
-	data["enriched"] = true
-	data["metadata"] = map[string]interface{}{
-		"processed_by": "data-processing-chain",
-		"version":      "1.0",
-	}
-	return data, nil
-}
-
-func (s *EnrichmentStep) Name() string        { return "enrichment" }
-func (s *EnrichmentStep) Description() string { return "Enrich data with metadata" }
-
-// SimpleOrchestrator 简单编排器示例
-type SimpleOrchestrator struct {
-	*core.BaseOrchestrator
-}
-
-// NewSimpleOrchestrator 创建简单编排器
-func NewSimpleOrchestrator() *SimpleOrchestrator {
-	return &SimpleOrchestrator{
-		BaseOrchestrator: core.NewBaseOrchestrator("simple-orchestrator"),
-	}
-}
-
-// Execute 执行编排任务
-//
-//nolint:unparam // error return required by Orchestrator interface
-func (o *SimpleOrchestrator) Execute(ctx context.Context, request *core.OrchestratorRequest) (*core.OrchestratorResponse, error) {
-	start := time.Now()
-	response := &core.OrchestratorResponse{
-		ExecutionSteps: make([]core.ExecutionStep, 0),
-		StartTime:      start,
-		Status:         "success",
-		Metadata:       make(map[string]interface{}),
-	}
-
-	fmt.Printf("\n=== Orchestrator: %s ===\n", request.Description)
-
-	// 步骤 1: 执行 Chain
-	if chain, exists := o.GetChain("data-processing"); exists {
-		stepStart := time.Now()
-		chainInput := &core.ChainInput{
-			Data:    request.Parameters,
-			Options: core.DefaultChainOptions(),
-		}
-
-		chainOutput, err := chain.Invoke(ctx, chainInput)
-
-		step := core.ExecutionStep{
-			Step:          1,
-			Name:          "data_processing",
-			Type:          "chain",
-			ComponentName: chain.Name(),
-			Input:         chainInput,
-			Output:        chainOutput,
-			StartTime:     stepStart,
-			EndTime:       time.Now(),
-			Duration:      time.Since(stepStart),
-			Status:        "success",
-		}
-
-		if err != nil {
-			step.Status = "failed"
-			step.Error = err.Error()
-			response.Status = "failed"
-		}
-
-		response.ExecutionSteps = append(response.ExecutionSteps, step)
-	}
-
-	// 步骤 2: 执行 Agent
-	if agent, exists := o.GetAgent("analysis"); exists {
-		stepStart := time.Now()
-		agentInput := &core.AgentInput{
-			Task:      request.Description,
-			Context:   request.Parameters,
-			Options:   core.DefaultAgentOptions(),
-			SessionID: request.SessionID,
-		}
-
-		agentOutput, err := agent.Invoke(ctx, agentInput)
-
-		step := core.ExecutionStep{
-			Step:          2,
-			Name:          "analysis",
-			Type:          "agent",
-			ComponentName: agent.Name(),
-			Input:         agentInput,
-			Output:        agentOutput,
-			StartTime:     stepStart,
-			EndTime:       time.Now(),
-			Duration:      time.Since(stepStart),
-			Status:        "success",
-		}
-
-		if err != nil {
-			step.Status = "failed"
-			step.Error = err.Error()
-			response.Status = "partial"
-		} else {
-			response.Result = agentOutput.Result
-		}
-
-		response.ExecutionSteps = append(response.ExecutionSteps, step)
-	}
-
-	response.EndTime = time.Now()
-	response.TotalLatency = time.Since(start)
-	response.Message = "Orchestration completed"
-
-	return response, nil
-}
-
 func main() {
 	fmt.Println("========================================")
 	fmt.Println("  Agent Framework Example")
@@ -309,23 +143,11 @@ func main() {
 	fmt.Println("2. Creating Analysis Agent...")
 	agent := NewAnalysisAgent(memMgr)
 
-	// 3. 创建 Chain
-	fmt.Println("3. Creating Data Processing Chain...")
-	chain := NewDataProcessingChain()
-
-	// 4. 创建 Orchestrator
-	fmt.Println("4. Creating Orchestrator...")
-	orchestrator := NewSimpleOrchestrator()
-	_ = orchestrator.RegisterAgent("analysis", agent)
-	_ = orchestrator.RegisterChain("data-processing", chain)
-
-	// 5. 执行编排任务
-	fmt.Println("\n5. Executing Orchestration Task...")
-	request := &core.OrchestratorRequest{
-		TaskID:      "task-001",
-		TaskType:    "system_analysis",
-		Description: "Analyze system performance and provide recommendations",
-		Parameters: map[string]interface{}{
+	// 3. 执行分析任务：Agent 先从记忆读取会话历史，完成后写回
+	fmt.Println("\n3. Executing Analysis Task...")
+	input := &core.AgentInput{
+		Task: "Analyze system performance and provide recommendations",
+		Context: map[string]interface{}{
 			"system": "production",
 			"metrics": map[string]float64{
 				"cpu_usage":    75.5,
@@ -333,33 +155,23 @@ func main() {
 				"disk_usage":   68.9,
 			},
 		},
-		Strategy:  core.DefaultOrchestratorStrategy(),
-		Options:   core.DefaultOrchestratorOptions(),
+		Options:   core.AgentOptions{EnableMemory: true, SaveToMemory: true},
 		SessionID: "session-1",
 		Timestamp: time.Now(),
 	}
-
-	response, err := orchestrator.Execute(context.Background(), request)
+	output, err := agent.Invoke(context.Background(), input)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// 6. 显示结果
+	// 4. 显示结果
 	fmt.Println("\n========================================")
 	fmt.Println("  Execution Results")
 	fmt.Println("========================================")
-	fmt.Printf("Status: %s\n", response.Status)
-	fmt.Printf("Total Latency: %v\n", response.TotalLatency)
-	fmt.Printf("Steps Executed: %d\n", len(response.ExecutionSteps))
-
-	fmt.Println("\nExecution Steps:")
-	for _, step := range response.ExecutionSteps {
-		fmt.Printf("  - Step %d: %s (%s) - %s (took %v)\n",
-			step.Step, step.Name, step.Type, step.Status, step.Duration)
-	}
-
-	fmt.Println("\nFinal Result:")
-	if result, ok := response.Result.(map[string]interface{}); ok {
+	fmt.Printf("Status: %s\n", output.Status)
+	fmt.Printf("Latency: %v\n", output.Latency)
+	fmt.Printf("Steps Executed: %d\n", len(output.Steps))
+	if result, ok := output.Result.(map[string]interface{}); ok {
 		fmt.Printf("  Analysis: %v\n", result["analysis"])
 		if recs, ok := result["recommendations"].([]string); ok {
 			fmt.Println("  Recommendations:")
@@ -369,7 +181,7 @@ func main() {
 		}
 	}
 
-	// 7. 演示 Prompt Builder
+	// 5. 演示 Prompt Builder
 	fmt.Println("\n========================================")
 	fmt.Println("  Prompt Builder Example")
 	fmt.Println("========================================")
@@ -385,7 +197,7 @@ func main() {
 
 	fmt.Println(prompt)
 
-	// 8. 演示 Response Parser
+	// 6. 演示 Response Parser
 	fmt.Println("\n========================================")
 	fmt.Println("  Response Parser Example")
 	fmt.Println("========================================")

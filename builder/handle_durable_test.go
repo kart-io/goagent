@@ -246,7 +246,7 @@ func TestHandleInputPersistFailureIsReported(t *testing.T) {
 // Followup 批次被领取后崩溃：恢复时用记录的批次继续同一轮，不需要宿主重建，也不重复。
 func TestHandleClaimedFollowupBatchResumesAfterRestart(t *testing.T) {
 	const env = "GOAGENT_HANDLE_FOLLOWUP_CRASH_DIR"
-	build := func(model *scriptModel, hook func(context.Context, *ModelRequest) error) *ConfigurableAgent[any, *core.AgentState] {
+	build := func(model *scriptModel, hook func(context.Context, *ModelRequest) error) *ConfigurableAgent[*core.AgentState] {
 		agent, err := NewSimpleBuilder(model).WithDurableScope("handle").WithMaxIterations(2).
 			WithTools(dispatcherFor(t, plainTool()).Tools()...).WithRequestHook(hook).Build()
 		require.NoError(t, err)

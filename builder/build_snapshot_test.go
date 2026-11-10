@@ -5,7 +5,6 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/kart-io/goagent/core/checkpoint"
 	"github.com/kart-io/goagent/memory"
 	"github.com/stretchr/testify/require"
 )
@@ -13,10 +12,9 @@ import (
 func TestBuiltAgentKeepsItsConfigurationAndSession(t *testing.T) {
 	ctx := context.Background()
 	model := newScriptModel(answer("原会话回答"), answer("新会话回答"))
-	checkpoints := checkpoint.NewInMemorySaver()
 	mem := memory.NewInMemoryManager(nil)
 	b := NewSimpleBuilder(model).WithTools(plainTool()).WithSessionID("original").
-		WithMaxTokens(10).WithMetadata("owner", "original").WithCheckpointer(checkpoints).WithMemory(mem)
+		WithMaxTokens(10).WithMetadata("owner", "original").WithMemory(mem)
 	original, err := b.Build()
 	require.NoError(t, err)
 
@@ -30,10 +28,7 @@ func TestBuiltAgentKeepsItsConfigurationAndSession(t *testing.T) {
 	require.Equal(t, "original", original.GetMetrics()["session_id"])
 	history, err := mem.GetConversationHistory(ctx, "original", 0)
 	require.NoError(t, err)
-	require.Len(t, history, 2, "记忆与检查点应使用同一会话身份")
-	exists, err := checkpoints.Exists(ctx, "original")
-	require.NoError(t, err)
-	require.True(t, exists)
+	require.Len(t, history, 2, "记忆应使用构建时的会话身份")
 	history, err = mem.GetConversationHistory(ctx, "next", 0)
 	require.NoError(t, err)
 	require.Empty(t, history)
@@ -45,9 +40,6 @@ func TestBuiltAgentKeepsItsConfigurationAndSession(t *testing.T) {
 	history, err = mem.GetConversationHistory(ctx, "next", 0)
 	require.NoError(t, err)
 	require.Len(t, history, 2)
-	exists, err = checkpoints.Exists(ctx, "next")
-	require.NoError(t, err)
-	require.True(t, exists)
 }
 
 func TestBuiltAgentDoesNotAcquireLaterBuilderHooks(t *testing.T) {

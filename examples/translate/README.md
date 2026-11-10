@@ -24,7 +24,7 @@ pricing := map[string]float64{
 }
 tokenTracker := core.NewCostTrackingCallback(pricing)
 
-agent, err := builder.NewAgentBuilder[any, core.State](llmClient).
+agent, err := builder.NewAgentBuilder[core.State](llmClient).
     WithSystemPrompt(systemPrompt).
     WithState(state.NewAgentState()).
     WithCallbacks(tokenTracker).

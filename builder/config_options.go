@@ -98,9 +98,6 @@ type AgentConfig struct {
 	// Timeout 设置 Agent 执行超时时间
 	Timeout time.Duration
 
-	// EnableAutoSave 自动保存状态
-	EnableAutoSave bool
-
 	// MaxTokens 限制 LLM 响应的最大 token 数；0 表示不下发，由 LLM 客户端配置决定
 	MaxTokens int
 
@@ -110,7 +107,7 @@ type AgentConfig struct {
 	// TemperatureSet 表示 Temperature 被显式设置；为假时由 LLM 客户端配置决定
 	TemperatureSet bool
 
-	// SessionID 用于检查点保存和对话记忆
+	// SessionID 标识会话，用于对话记忆与会话日志
 	SessionID string
 
 	// Verbose 启用详细日志
@@ -133,7 +130,7 @@ type AgentConfig struct {
 // WithDurableScope sets a host-owned stable invocation name. Durable execution
 // requires it; different agents/calls in the same node must use different scopes.
 // Reusing the same scope means replaying the same logical invocation.
-func (b *AgentBuilder[C, S]) WithDurableScope(scope string) *AgentBuilder[C, S] {
+func (b *AgentBuilder[S]) WithDurableScope(scope string) *AgentBuilder[S] {
 	b.config.DurableScope = scope
 	return b
 }
@@ -141,7 +138,7 @@ func (b *AgentBuilder[C, S]) WithDurableScope(scope string) *AgentBuilder[C, S] 
 // WithInterruptedModelResend 让持久运行恢复时重发被进程停止或崩溃打断的模型请求，同一回合最多发出 3 次。
 // 默认不重发，因为被打断的请求可能已经计费：开启后可能重复计费，每次重发各占一份预算，额度不足时不发送。
 // 已提交的回合、模型明确失败的请求和工具调用都不受影响。开关须在运行的整个生命周期内保持一致，否则恢复时报策略变更。
-func (b *AgentBuilder[C, S]) WithInterruptedModelResend() *AgentBuilder[C, S] {
+func (b *AgentBuilder[S]) WithInterruptedModelResend() *AgentBuilder[S] {
 	b.config.ResendInterruptedModel = true
 	return b
 }
@@ -150,7 +147,7 @@ func (b *AgentBuilder[C, S]) WithInterruptedModelResend() *AgentBuilder[C, S] {
 // 在 ExecuteStream/AsRunnable 中生效，要求 ToolStreamClient。每次调用替换名单。
 // 本轮多个工具调用时仍走完整模型循环；字符串原样输出，其他结果编码为 JSON。
 // 启用者负责工具结果的格式、完整性与适用场景，模型输出格式指令不会再被执行。
-func (b *AgentBuilder[C, S]) WithReturnDirectTools(names ...string) *AgentBuilder[C, S] {
+func (b *AgentBuilder[S]) WithReturnDirectTools(names ...string) *AgentBuilder[S] {
 	b.config.ReturnDirectTools = append([]string(nil), names...)
 	return b
 }
@@ -161,7 +158,7 @@ func (b *AgentBuilder[C, S]) WithReturnDirectTools(names ...string) *AgentBuilde
 // 改为追加一条固定的 user 消息要求直接回答或调用工具，再请求下一轮。每次重问占用一次
 // MaxIterations 额度并消耗一次预算；超过 n 次或已是最后一轮时按原方式报错。
 // 持久模式下空回合按已完成记录，恢复时回放。负数视为 0。
-func (b *AgentBuilder[C, S]) WithEmptyAnswerRetries(n int) *AgentBuilder[C, S] {
+func (b *AgentBuilder[S]) WithEmptyAnswerRetries(n int) *AgentBuilder[S] {
 	b.config.EmptyAnswerRetries = max(n, 0)
 	return b
 }
@@ -177,7 +174,7 @@ func (b *AgentBuilder[C, S]) WithEmptyAnswerRetries(n int) *AgentBuilder[C, S] {
 // 按执行顺序分配编号或依赖同轮调用的先后。结果仍按模型给出的顺序交还模型，tool_start 在派发前、
 // tool_end 在全部结束后按该顺序发出，Dispatcher 的 OnResult 也在全部结束后按该顺序触发。
 // 某个调用失败不取消其他调用，全部结束后返回顺序最靠前的错误。
-func (b *AgentBuilder[C, S]) WithParallelToolCalls(n int) *AgentBuilder[C, S] {
+func (b *AgentBuilder[S]) WithParallelToolCalls(n int) *AgentBuilder[S] {
 	b.config.ParallelToolCalls = max(n, 0)
 	return b
 }
@@ -189,7 +186,7 @@ func (b *AgentBuilder[C, S]) WithParallelToolCalls(n int) *AgentBuilder[C, S] {
 //   - 工具返回 error：仅限非持久运行。持久运行无法记录失败结果，恢复时会重新执行，仍按原方式中止。
 //
 // 运行 ctx 已结束、预算耗尽、panic 与持久等待始终中止运行。
-func (b *AgentBuilder[C, S]) WithToolErrorFeedback() *AgentBuilder[C, S] {
+func (b *AgentBuilder[S]) WithToolErrorFeedback() *AgentBuilder[S] {
 	b.config.ToolErrorFeedback = true
 	return b
 }
@@ -198,7 +195,7 @@ func (b *AgentBuilder[C, S]) WithToolErrorFeedback() *AgentBuilder[C, S] {
 // 开启后模型请求中途失败时，RequestError 钩子看到的 Emitted 恒为 false，RetryTransient 会照常重发。
 // 适合 AsRunnable().Invoke 等只取最终答复的调用：服务端过载时流常先输出几个字节再停住，默认规则下这次失败不会重试。
 // 通过 ExecuteStream 或 Stream 逐段展示输出的调用方开启后，重试会让已展示的片段再出现一次。
-func (b *AgentBuilder[C, S]) WithReplayablePartialOutput() *AgentBuilder[C, S] {
+func (b *AgentBuilder[S]) WithReplayablePartialOutput() *AgentBuilder[S] {
 	b.config.ReplayablePartialOutput = true
 	return b
 }
@@ -208,7 +205,6 @@ func DefaultAgentConfig() *AgentConfig {
 	return &AgentConfig{
 		MaxIterations:          shared.DefaultAgentMaxIterations,
 		Timeout:                shared.DefaultAgentExecutionTimeout,
-		EnableAutoSave:         true,
 		SessionID:              fmt.Sprintf("session-%d", time.Now().UnixNano()),
 		Verbose:                false,
 		MaxConversationHistory: shared.DefaultConversationHistory,
@@ -219,7 +215,7 @@ func DefaultAgentConfig() *AgentConfig {
 //
 // [Simple] 常用配置，控制 Agent 推理的最大步骤数（默认 10）。
 // 推荐根据任务复杂度调整：简单任务 5-10，复杂任务 15-30。
-func (b *AgentBuilder[C, S]) WithMaxIterations(max int) *AgentBuilder[C, S] {
+func (b *AgentBuilder[S]) WithMaxIterations(max int) *AgentBuilder[S] {
 	if max > 0 {
 		b.config.MaxIterations = max
 	}
@@ -229,18 +225,10 @@ func (b *AgentBuilder[C, S]) WithMaxIterations(max int) *AgentBuilder[C, S] {
 // WithTimeout 设置超时时间
 //
 // [Core] 标准配置，防止 Agent 执行时间过长（默认 5 分钟）。
-func (b *AgentBuilder[C, S]) WithTimeout(timeout time.Duration) *AgentBuilder[C, S] {
+func (b *AgentBuilder[S]) WithTimeout(timeout time.Duration) *AgentBuilder[S] {
 	if timeout > 0 {
 		b.config.Timeout = timeout
 	}
-	return b
-}
-
-// WithAutoSaveEnabled 设置是否启用自动保存
-//
-// [Advanced] 高级配置，控制是否自动保存 Agent 状态（默认 true）；仅在配置 WithCheckpointer 时生效。
-func (b *AgentBuilder[C, S]) WithAutoSaveEnabled(enabled bool) *AgentBuilder[C, S] {
-	b.config.EnableAutoSave = enabled
 	return b
 }
 
@@ -248,7 +236,7 @@ func (b *AgentBuilder[C, S]) WithAutoSaveEnabled(enabled bool) *AgentBuilder[C, 
 //
 // [Core] 标准配置，限制 LLM 响应的最大 token 数（默认不设置，沿用 LLM 客户端配置）。
 // 用于控制成本和响应长度。
-func (b *AgentBuilder[C, S]) WithMaxTokens(max int) *AgentBuilder[C, S] {
+func (b *AgentBuilder[S]) WithMaxTokens(max int) *AgentBuilder[S] {
 	if max > 0 {
 		b.config.MaxTokens = max
 	}
@@ -261,7 +249,7 @@ func (b *AgentBuilder[C, S]) WithMaxTokens(max int) *AgentBuilder[C, S] {
 // - 0.0-0.3: 精确、确定性（适合事实查询、代码生成）
 // - 0.4-0.7: 平衡（适合通用对话）
 // - 0.8-1.0: 创造性（适合写作、头脑风暴）
-func (b *AgentBuilder[C, S]) WithTemperature(temp float64) *AgentBuilder[C, S] {
+func (b *AgentBuilder[S]) WithTemperature(temp float64) *AgentBuilder[S] {
 	if temp >= 0 && temp <= 2.0 {
 		b.config.Temperature, b.config.TemperatureSet = temp, true
 	}
@@ -271,7 +259,7 @@ func (b *AgentBuilder[C, S]) WithTemperature(temp float64) *AgentBuilder[C, S] {
 // WithSessionID 设置会话 ID
 //
 // [Advanced] 高级配置，用于检查点保存和会话恢复（自动生成）。
-func (b *AgentBuilder[C, S]) WithSessionID(sessionID string) *AgentBuilder[C, S] {
+func (b *AgentBuilder[S]) WithSessionID(sessionID string) *AgentBuilder[S] {
 	if sessionID != "" {
 		b.config.SessionID = sessionID
 	}
@@ -281,7 +269,7 @@ func (b *AgentBuilder[C, S]) WithSessionID(sessionID string) *AgentBuilder[C, S]
 // WithVerbose 设置是否启用详细日志
 //
 // [Core] 标准配置，用于调试和开发（默认 false）。
-func (b *AgentBuilder[C, S]) WithVerbose(verbose bool) *AgentBuilder[C, S] {
+func (b *AgentBuilder[S]) WithVerbose(verbose bool) *AgentBuilder[S] {
 	b.config.Verbose = verbose
 	return b
 }
@@ -293,7 +281,7 @@ func (b *AgentBuilder[C, S]) WithVerbose(verbose bool) *AgentBuilder[C, S] {
 // 设置为 0 或负数表示不限制（加载全部历史）。
 //
 // 注意：此设置仅在使用 WithMemory 配置了 MemoryManager 时生效。
-func (b *AgentBuilder[C, S]) WithMaxConversationHistory(max int) *AgentBuilder[C, S] {
+func (b *AgentBuilder[S]) WithMaxConversationHistory(max int) *AgentBuilder[S] {
 	b.config.MaxConversationHistory = max
 	return b
 }
@@ -313,7 +301,7 @@ func (b *AgentBuilder[C, S]) WithMaxConversationHistory(max int) *AgentBuilder[C
 //	    WithSystemPrompt("你是一个助手").
 //	    WithOutputFormat(builder.OutputFormatPlainText).
 //	    Build()
-func (b *AgentBuilder[C, S]) WithOutputFormat(format OutputFormat) *AgentBuilder[C, S] {
+func (b *AgentBuilder[S]) WithOutputFormat(format OutputFormat) *AgentBuilder[S] {
 	b.config.OutputFormat = format
 	return b
 }
@@ -329,7 +317,7 @@ func (b *AgentBuilder[C, S]) WithOutputFormat(format OutputFormat) *AgentBuilder
 //	    WithSystemPrompt("你是一个助手").
 //	    WithCustomOutputFormat("请用表格格式回复，每行一个条目").
 //	    Build()
-func (b *AgentBuilder[C, S]) WithCustomOutputFormat(prompt string) *AgentBuilder[C, S] {
+func (b *AgentBuilder[S]) WithCustomOutputFormat(prompt string) *AgentBuilder[S] {
 	if prompt != "" {
 		b.config.OutputFormat = OutputFormatCustom
 		b.config.CustomOutputPrompt = prompt

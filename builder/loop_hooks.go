@@ -170,7 +170,7 @@ type PromptContext struct {
 }
 
 // WithPreStep 追加 PreStep 钩子。
-func (b *AgentBuilder[C, S]) WithPreStep(hooks ...PreStepHook) *AgentBuilder[C, S] {
+func (b *AgentBuilder[S]) WithPreStep(hooks ...PreStepHook) *AgentBuilder[S] {
 	for _, hook := range hooks {
 		b.config.PreStep = append(b.config.PreStep, preStep{hook: hook})
 	}
@@ -179,19 +179,19 @@ func (b *AgentBuilder[C, S]) WithPreStep(hooks ...PreStepHook) *AgentBuilder[C, 
 
 // WithIdentifiedPreStep 追加带身份的 PreStep 钩子。identity 标识钩子的配置（如版本与配置摘要），进入持久日志中 PreStep
 // 记录的意图：配置改变后恢复旧运行时以 intent changed 失败，而不是回放按旧配置算出的结果。
-func (b *AgentBuilder[C, S]) WithIdentifiedPreStep(identity string, hook PreStepHook) *AgentBuilder[C, S] {
+func (b *AgentBuilder[S]) WithIdentifiedPreStep(identity string, hook PreStepHook) *AgentBuilder[S] {
 	b.config.PreStep = append(b.config.PreStep, preStep{identity: identity, hook: hook})
 	return b
 }
 
 // WithRequestHook 追加 Request 钩子。
-func (b *AgentBuilder[C, S]) WithRequestHook(hooks ...RequestHook) *AgentBuilder[C, S] {
+func (b *AgentBuilder[S]) WithRequestHook(hooks ...RequestHook) *AgentBuilder[S] {
 	b.config.RequestHooks = append(b.config.RequestHooks, hooks...)
 	return b
 }
 
 // WithRequestError 追加 RequestError 钩子；maxRecoveries 是单步内按钩子决定重试的上限（默认 3）。
-func (b *AgentBuilder[C, S]) WithRequestError(maxRecoveries int, hooks ...RequestErrorHook) *AgentBuilder[C, S] {
+func (b *AgentBuilder[S]) WithRequestError(maxRecoveries int, hooks ...RequestErrorHook) *AgentBuilder[S] {
 	b.config.RequestErrorHooks = append(b.config.RequestErrorHooks, hooks...)
 	if maxRecoveries <= 0 {
 		maxRecoveries = 3
@@ -201,19 +201,19 @@ func (b *AgentBuilder[C, S]) WithRequestError(maxRecoveries int, hooks ...Reques
 }
 
 // WithTurnStopping 追加 TurnStopping 钩子。
-func (b *AgentBuilder[C, S]) WithTurnStopping(hooks ...TurnStoppingHook) *AgentBuilder[C, S] {
+func (b *AgentBuilder[S]) WithTurnStopping(hooks ...TurnStoppingHook) *AgentBuilder[S] {
 	b.config.TurnStopping = append(b.config.TurnStopping, hooks...)
 	return b
 }
 
 // WithPromptSections 追加 system 中的提示词段落。
-func (b *AgentBuilder[C, S]) WithPromptSections(sections ...PromptSection) *AgentBuilder[C, S] {
+func (b *AgentBuilder[S]) WithPromptSections(sections ...PromptSection) *AgentBuilder[S] {
 	b.config.PromptSections = append(b.config.PromptSections, sections...)
 	return b
 }
 
 // WithPromptContexts 追加每步重算的提示词上下文。
-func (b *AgentBuilder[C, S]) WithPromptContexts(contexts ...PromptContext) *AgentBuilder[C, S] {
+func (b *AgentBuilder[S]) WithPromptContexts(contexts ...PromptContext) *AgentBuilder[S] {
 	b.config.PromptContexts = append(b.config.PromptContexts, contexts...)
 	return b
 }
@@ -274,7 +274,7 @@ func renderPrompt(items []promptText, scope PromptScope) string {
 	return strings.Join(parts, "\n\n")
 }
 
-func (a *ConfigurableAgent[C, S]) sectionText(scope PromptScope) string {
+func (a *ConfigurableAgent[S]) sectionText(scope PromptScope) string {
 	items := make([]promptText, len(a.config.PromptSections))
 	for i, s := range a.config.PromptSections {
 		items[i] = promptText{s.Name, s.Order, s.Text}
@@ -282,7 +282,7 @@ func (a *ConfigurableAgent[C, S]) sectionText(scope PromptScope) string {
 	return renderPrompt(items, scope)
 }
 
-func (a *ConfigurableAgent[C, S]) contextText(scope PromptScope) string {
+func (a *ConfigurableAgent[S]) contextText(scope PromptScope) string {
 	items := make([]promptText, len(a.config.PromptContexts))
 	for i, c := range a.config.PromptContexts {
 		items[i] = promptText{c.Name, c.Order, c.Text}
@@ -309,7 +309,7 @@ func withSections(messages []llm.Message, text string) []llm.Message {
 }
 
 // preStepIntent 是 PreStep 记录的意图：没有带身份的钩子时同其他扩展点，否则包含按注册顺序的全部身份。
-func (a *ConfigurableAgent[C, S]) preStepIntent() (json.RawMessage, error) {
+func (a *ConfigurableAgent[S]) preStepIntent() (json.RawMessage, error) {
 	identities := make([]string, len(a.config.PreStep))
 	named := false
 	for i, p := range a.config.PreStep {
@@ -325,7 +325,7 @@ func (a *ConfigurableAgent[C, S]) preStepIntent() (json.RawMessage, error) {
 	}{"goagent-loop-v1", identities})
 }
 
-func (a *ConfigurableAgent[C, S]) runPreStep(ctx context.Context, round, inputs int, final bool, messages []llm.Message) ([]llm.Message, PreStepResult, error) {
+func (a *ConfigurableAgent[S]) runPreStep(ctx context.Context, round, inputs int, final bool, messages []llm.Message) ([]llm.Message, PreStepResult, error) {
 	if len(a.config.PreStep) == 0 {
 		return messages, PreStepResult{}, nil
 	}
@@ -354,7 +354,7 @@ func (a *ConfigurableAgent[C, S]) runPreStep(ctx context.Context, round, inputs 
 	return o.Messages, o.Result, err
 }
 
-func (a *ConfigurableAgent[C, S]) runTurnStopping(ctx context.Context, stopping *Stopping) (string, error) {
+func (a *ConfigurableAgent[S]) runTurnStopping(ctx context.Context, stopping *Stopping) (string, error) {
 	return journaled(ctx, fmt.Sprintf("loop/stopping/%d", stopping.Step), func(ctx context.Context) (string, error) {
 		for _, hook := range a.config.TurnStopping {
 			var next string
@@ -374,7 +374,7 @@ func (a *ConfigurableAgent[C, S]) runTurnStopping(ctx context.Context, stopping 
 
 // requestRecovery 返回本步模型请求失败时依次询问 RequestError 钩子的函数，取第一个重试决定；*attempt 累计本步的恢复次数，
 // 达到 MaxRequestRecoveries 后不再询问。messages 是钩子看到的本步对话。
-func (a *ConfigurableAgent[C, S]) requestRecovery(step int, messages *[]llm.Message, attempt *int) requestRecovery {
+func (a *ConfigurableAgent[S]) requestRecovery(step int, messages *[]llm.Message, attempt *int) requestRecovery {
 	if len(a.config.RequestErrorHooks) == 0 {
 		return nil
 	}
@@ -411,7 +411,7 @@ type redirection struct {
 
 // requestTurn 组装并发送本步的模型请求：附加运行上下文、执行 Request 钩子；失败时按 RequestError 钩子恢复，
 // 原样重试在模型操作内进行，替换消息或客户端时在这里重新组装，替换的消息作为新的历史返回。被 Redirect 取消时返回 redirection。
-func (a *ConfigurableAgent[C, S]) requestTurn(ctx context.Context, box *inbox, round int, client llm.ToolStreamClient, messages []llm.Message, tools []interfaces.Tool, final, allowEmpty bool, emit func(AgentEvent) error) (*llm.StreamChunk, *redirection, []llm.Message, error) {
+func (a *ConfigurableAgent[S]) requestTurn(ctx context.Context, box *inbox, round int, client llm.ToolStreamClient, messages []llm.Message, tools []interfaces.Tool, final, allowEmpty bool, emit func(AgentEvent) error) (*llm.StreamChunk, *redirection, []llm.Message, error) {
 	withContext := func(msgs []llm.Message) ([]llm.Message, error) {
 		if len(a.config.PromptContexts) == 0 {
 			return msgs, nil

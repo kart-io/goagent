@@ -34,7 +34,7 @@ response, err := llm.Chat(ctx, client, []llm.Message{
 ### 示例 2：Builder 构建 Agent
 
 ```go
-agent, err := builder.NewAgentBuilder[any, *agentcore.AgentState](client).
+agent, err := builder.NewAgentBuilder[*agentcore.AgentState](client).
     WithSystemPrompt("你是一个专业的 Go 语言顾问，擅长解答 Go 编程相关的问题。").
     WithMetadata("name", "Go-Advisor").
     Build()

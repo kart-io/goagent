@@ -24,7 +24,6 @@ import (
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/providers"
 	"github.com/kart-io/goagent/memory"
-	storeMemory "github.com/kart-io/goagent/store/memory"
 	"github.com/kart-io/goagent/tools"
 )
 
@@ -140,7 +139,7 @@ func example1AgentWithCustomState(apiKey, providerName string) {
 	calculator := createCalculatorTool()
 
 	// 使用泛型 AgentBuilder 配置自定义状态
-	agent, err := builder.NewAgentBuilder[any, *CustomState](llmClient).
+	agent, err := builder.NewAgentBuilder[*CustomState](llmClient).
 		// Simple API
 		WithSystemPrompt("你是一个企业级助手").
 		WithTools(calculator).
@@ -219,10 +218,10 @@ func example2AgentWithMiddleware(apiKey, providerName string) {
 // 使用的方法：
 // - Simple API: WithSystemPrompt, WithTools
 // - Core API: WithMemory, WithMaxConversationHistory
-// - Advanced API: WithSessionID, WithAutoSaveEnabled
+// - Advanced API: WithSessionID
 //
 // 本示例演示如何结合对话记忆和会话管理实现有状态的多轮对话。
-// Agent 会记住之前的对话内容，同时支持会话持久化和恢复。
+// Agent 会记住之前的对话内容，对话历史按会话 ID 保存在记忆管理器中。
 func example3AgentWithSessionManagement(apiKey, providerName string) {
 	fmt.Println("--- 示例 3: 带对话记忆的会话管理 Agent ---")
 
@@ -252,8 +251,7 @@ func example3AgentWithSessionManagement(apiKey, providerName string) {
 		WithMaxConversationHistory(20). // 最多保留 20 轮历史对话
 
 		// Advanced API - 会话管理
-		WithSessionID(sessionID).  // 设置会话 ID
-		WithAutoSaveEnabled(true). // 启用自动保存
+		WithSessionID(sessionID). // 设置会话 ID
 
 		Build()
 	if err != nil {
@@ -325,9 +323,6 @@ func example4EnterpriseAgent(apiKey, providerName string) {
 		},
 	}
 
-	// 创建存储（用于状态持久化，不是对话记忆）
-	memoryStore := storeMemory.New()
-
 	// 创建工具
 	calculator := createCalculatorTool()
 
@@ -337,7 +332,7 @@ func example4EnterpriseAgent(apiKey, providerName string) {
 	}
 
 	// 完整的企业级配置
-	agent, err := builder.NewAgentBuilder[any, *CustomState](llmClient).
+	agent, err := builder.NewAgentBuilder[*CustomState](llmClient).
 		// ========== Simple API ==========
 		WithSystemPrompt("你是一个企业级智能助手，为组织提供专业服务").
 		WithTools(calculator).
@@ -348,13 +343,11 @@ func example4EnterpriseAgent(apiKey, providerName string) {
 		WithTimeout(10*time.Minute).    // 更长的超时时间
 		WithMaxTokens(5000).            // 更多 token 预算
 		WithCallbacks(metricsCallback). // 监控指标
-		WithStore(memoryStore).         // 持久化存储
 		WithVerbose(false).             // 生产环境关闭详细日志
 
 		// ========== Advanced API ==========
 		WithState(customState).                    // 自定义状态
 		WithSessionID("enterprise-session-001").   // 会话管理
-		WithAutoSaveEnabled(true).                 // 自动保存
 		WithMetadata("tenant_id", "tenant-001").   // 租户信息
 		WithMetadata("region", "us-west-2").       // 区域信息
 		WithMetadata("environment", "production"). // 环境标识
@@ -512,7 +505,7 @@ func example5OutputFormatEnterprise(apiKey, providerName string) {
 		},
 	}
 
-	agent1, err := builder.NewAgentBuilder[any, *CustomState](llmClient).
+	agent1, err := builder.NewAgentBuilder[*CustomState](llmClient).
 		WithSystemPrompt("你是一个数据提取助手，专门从文本中提取结构化数据").
 		WithOutputFormat(builder.OutputFormatJSON).
 		// Advanced API
@@ -558,19 +551,14 @@ func example5OutputFormatEnterprise(apiKey, providerName string) {
 	// 5.3 多格式支持 + 完整企业配置
 	fmt.Println("\n5.3 多格式支持演示（Markdown 格式 + 企业配置）:")
 
-	// 创建存储
-	memoryStore := storeMemory.New()
-
 	agent3, err := builder.NewSimpleBuilder(llmClient).
 		WithSystemPrompt("你是一个技术文档助手").
 		WithOutputFormat(builder.OutputFormatMarkdown).
 		// Core API
 		WithTimeout(90*time.Second).
 		WithMaxTokens(2000).
-		WithStore(memoryStore).
 		// Advanced API
 		WithSessionID("doc-gen-001").
-		WithAutoSaveEnabled(true).
 		WithMetadata("doc_type", "technical").
 		WithMetadata("format", "markdown").
 		Build()

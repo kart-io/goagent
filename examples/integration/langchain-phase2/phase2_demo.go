@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/core"
-	"github.com/kart-io/goagent/core/checkpoint"
 	"github.com/kart-io/goagent/core/middleware"
 	"github.com/kart-io/goagent/store/memory"
 )
@@ -239,9 +238,7 @@ func completeAgentDemo() {
 	fmt.Println("  Building AI Agent with Complete Middleware Stack...")
 	fmt.Println()
 
-	// Initialize Phase 1 components
 	store := memory.New()
-	checkpointer := checkpoint.NewInMemorySaver()
 	ctx := context.Background()
 
 	// Create agent state
@@ -409,13 +406,6 @@ func completeAgentDemo() {
 		fmt.Printf("    Output: %v\n", resp.Output)
 		fmt.Printf("    Duration: %v\n", resp.Duration)
 
-		// Save checkpoint after each turn
-		err = checkpointer.Save(ctx, "agent-session-001", state)
-		if err != nil {
-			fmt.Printf("    Error: %v\n", err)
-			continue
-		}
-
 		fmt.Println()
 		time.Sleep(100 * time.Millisecond) // Small delay between requests
 	}
@@ -435,11 +425,4 @@ func completeAgentDemo() {
 	// Check stored conversations
 	keys, _ := store.List(ctx, []string{"conversations", "agent-session-001"})
 	fmt.Printf("    - Stored conversations: %d\n", len(keys))
-
-	// Show checkpointed state
-	loadedState, _ := checkpointer.Load(ctx, "agent-session-001")
-	if loadedState != nil {
-		userName, _ := loadedState.Get("user_name")
-		fmt.Printf("    - Checkpointed user: %v\n", userName)
-	}
 }

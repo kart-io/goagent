@@ -158,7 +158,7 @@ func testOllamaConnection(client llm.Client) bool {
 }
 
 // createAnalysisAgent creates the analysis agent with analysis tools
-func createAnalysisAgent(llmClient llm.Client) (*builder.ConfigurableAgent[any, core.State], error) {
+func createAnalysisAgent(llmClient llm.Client) (*builder.ConfigurableAgent[core.State], error) {
 	// Create analysis tools
 	registry := tools.NewRegistry()
 	_ = registry.Register(createDataAnalysisTool())
@@ -179,7 +179,7 @@ When given a task:
 Always call the appropriate tools and return their results.`
 
 	// Build the agent using the builder pattern
-	agent, err := builder.NewAgentBuilder[any, core.State](llmClient).
+	agent, err := builder.NewAgentBuilder[core.State](llmClient).
 		WithSystemPrompt(systemPrompt).
 		WithTools(registry.List()...).
 		WithState(core.NewAgentState()).
@@ -192,7 +192,7 @@ Always call the appropriate tools and return their results.`
 }
 
 // createStrategyAgent creates the strategy formulation agent
-func createStrategyAgent(llmClient llm.Client) (*builder.ConfigurableAgent[any, core.State], error) {
+func createStrategyAgent(llmClient llm.Client) (*builder.ConfigurableAgent[core.State], error) {
 	// Create strategy tools
 	registry := tools.NewRegistry()
 	_ = registry.Register(createFormulateStrategyTool())
@@ -212,7 +212,7 @@ When creating a strategy:
 
 Always call the appropriate tools and return their results.`
 
-	agent, err := builder.NewAgentBuilder[any, core.State](llmClient).
+	agent, err := builder.NewAgentBuilder[core.State](llmClient).
 		WithSystemPrompt(systemPrompt).
 		WithTools(registry.List()...).
 		WithState(core.NewAgentState()).
@@ -225,7 +225,7 @@ Always call the appropriate tools and return their results.`
 }
 
 // createExecutionAgent creates the execution agent
-func createExecutionAgent(llmClient llm.Client) (*builder.ConfigurableAgent[any, core.State], error) {
+func createExecutionAgent(llmClient llm.Client) (*builder.ConfigurableAgent[core.State], error) {
 	// Create execution tools
 	registry := tools.NewRegistry()
 	_ = registry.Register(createHTTPRequestTool())
@@ -247,7 +247,7 @@ When executing a strategy:
 
 Always call the appropriate tools and return their results.`
 
-	agent, err := builder.NewAgentBuilder[any, core.State](llmClient).
+	agent, err := builder.NewAgentBuilder[core.State](llmClient).
 		WithSystemPrompt(systemPrompt).
 		WithTools(registry.List()...).
 		WithState(core.NewAgentState()).
@@ -260,7 +260,7 @@ Always call the appropriate tools and return their results.`
 }
 
 // runAgent executes an agent with a given task
-func runAgent(ctx context.Context, agent *builder.ConfigurableAgent[any, core.State], task string) (map[string]interface{}, error) {
+func runAgent(ctx context.Context, agent *builder.ConfigurableAgent[core.State], task string) (map[string]interface{}, error) {
 	// Run the agent with text input
 	output, err := agent.AsRunnable().Invoke(ctx, task)
 	if err != nil {

@@ -180,17 +180,22 @@ for _, c := range cases {
 }
 ```
 
-### 检查点
+### 会话日志
 
 ```go
-import "github.com/kart-io/goagent/core/checkpoint"
+import "github.com/kart-io/goagent/core/session"
 
+store, err := session.NewFileStore(dir) // 或 session.NewMemoryStore()
+if err != nil {
+    return err
+}
 agent, err := builder.NewSimpleBuilder(client).
-    WithCheckpointer(checkpoint.NewInMemorySaver()).
     WithSessionID("session-001").
-    WithAutoSaveEnabled(true).
+    WithSessionLog(store).
     Build()
 ```
+
+会话历史从日志推导，进程重启后以同一 SessionID 继续，详见 [core/session](../../core/session/README.md)。
 
 需要进程重启后续跑的多步任务使用 `core/durable`，见[原生编排与工具体系](NATIVE_ORCHESTRATION.md)。
 

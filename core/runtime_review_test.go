@@ -51,28 +51,6 @@ func TestReviewRT10CostRejectsAmbiguousContext(t *testing.T) {
 	require.Equal(t, 22.0, c.GetTotalCost())
 }
 
-func TestReviewRT05ChainCancellation(t *testing.T) {
-	for _, initial := range []bool{true, false} {
-		t.Run(map[bool]string{true: "进入前取消", false: "步骤期间取消"}[initial], func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-			calls := 0
-			first := NewMockStep("首步", "", func(context.Context, interface{}) (interface{}, error) { calls++; cancel(); return nil, nil })
-			second := NewMockStep("后续", "", func(context.Context, interface{}) (interface{}, error) { calls++; return nil, nil })
-			if initial {
-				cancel()
-			}
-			_, err := NewBaseChain("测试", []Step{first, second}).Invoke(ctx, &ChainInput{})
-			require.ErrorIs(t, err, context.Canceled)
-			if initial {
-				require.Zero(t, calls)
-			} else {
-				require.Equal(t, 1, calls)
-			}
-		})
-	}
-}
-
 func TestReviewRT10CostUsesRequestModel(t *testing.T) {
 	c := NewCostTrackingCallback(map[string]float64{"甲": 2, "乙": 3, "gpt-4": 100})
 	var wg sync.WaitGroup

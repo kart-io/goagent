@@ -297,7 +297,7 @@ func TestChildGraphCheckpointsLiveInParentJournalStore(t *testing.T) {
 		answerTurn("已退款", 1),
 	)
 	// 每次“进程启动”都换一个新的子图 Store，模拟进程内存中的检查点在崩溃后丢失。
-	newAgent := func() *ConfigurableAgent[any, *core.AgentState] {
+	newAgent := func() *ConfigurableAgent[*core.AgentState] {
 		volatile, err := durable.NewFileStore(t.TempDir())
 		require.NoError(t, err)
 		agent, err := NewSimpleBuilder(model).WithDurableScope("support").

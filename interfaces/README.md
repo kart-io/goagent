@@ -9,7 +9,6 @@
 | `Tool` 及可选接口 | 工具执行 | `builder.WithTools`、`tools` 包的全部工具 |
 | `MemoryManager` | 对话历史、案例、键值记忆 | `builder.WithMemory`；实现 `memory.InMemoryManager` |
 | `DocumentRetriever` | 检索证据 | `builder.WithRetriever` |
-| `Lifecycle` 及 `LifecycleAware`、`Reloadable`、`DependencyAware`、`LifecycleManager` | 组件生命周期 | `core.BaseLifecycle`、`core.DefaultLifecycleManager` |
 | `ToolExecutor` | 按名称执行工具 | 仅定义，仓库内无实现 |
 | `VectorStore`、`Store`、`ConversationMemory` | 向量检索、键值存储、对话存储 | 仅定义；`memory` 与 `store` 包使用各自的接口 |
 
@@ -80,21 +79,6 @@ type DocumentRetriever interface {
 - `Document`：`ID`、`PageContent`、`Metadata`、`Embedding`、`Score`，方法 `Clone`、`GetMetadata`、`SetMetadata`、`String`。
 - `RetrievalSource`：`Reference`、`ID`、`Source`、`Score`，标识实际送入模型的资料，不代表已核验引用。
 
-## 生命周期
-
-```go
-type Lifecycle interface {
-    Init(ctx context.Context, config interface{}) error
-    Start(ctx context.Context) error
-    Stop(ctx context.Context) error
-    HealthCheck(ctx context.Context) HealthStatus
-}
-```
-
-- `LifecycleState`：`StateUninitialized`、`StateInitialized`、`StateStarting`、`StateRunning`、`StateStopping`、`StateStopped`、`StateFailed`。
-- `HealthState`：`HealthHealthy`、`HealthDegraded`、`HealthUnhealthy`、`HealthUnknown`。
-- `HealthStatus`：`State`、`Message`、`Details`、`LastChecked`、`ComponentName`；构造函数 `NewHealthStatus`、`NewHealthyStatus`、`NewDegradedStatus`、`NewUnhealthyStatus`，方法 `IsHealthy`、`IsOperational`。
-
 ## 其他类型
 
 - `TokenUsage`：`PromptTokens`、`CompletionTokens`、`TotalTokens`、`CachedTokens`，方法 `Add`、`IsEmpty`。`llm.CompletionResponse.Usage` 与 Builder 的 `AgentOutput.TokenUsage` 使用此类型。
@@ -114,7 +98,6 @@ interfaces/
 ├── store.go             # VectorStore、Store、Document
 ├── retrieval.go         # DocumentRetriever
 ├── retrieval_source.go  # RetrievalSource
-├── lifecycle.go         # Lifecycle 与健康状态
 ├── token.go             # TokenUsage
 └── *_constants.go       # 字符串常量
 ```

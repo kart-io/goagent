@@ -54,9 +54,9 @@ harness/env：工具使用的文件系统与命令执行能力接口
 - `Dispatcher` 的工具须支持并发调用，否则设 `MaxConcurrency=1`；审批等待不占执行槽位。
 - 编译后的 `workflow` 图可并发运行，前提是节点与调用方状态支持并发。
 
-## 状态与检查点
+## 状态与持久化
 
-`core/state.AgentState` 是默认状态类型；`WithCheckpointer` 配置的 `core/checkpoint.Checkpointer`（如 `InMemorySaver`）以 SessionID 为键，在 `Initialize` 时恢复状态，`WithAutoSaveEnabled`（默认开启）时每次成功结束后保存，保存失败则本次执行返回错误；未配置时不创建检查点器。它与 `core/durable` 无关：检查点保存状态，持久日志保存操作结果。
+`core/state.AgentState` 是默认状态类型，只在进程内保留，Builder 不保存也不加载它。会话持久化与恢复使用 `core/session` 会话日志（`WithSessionLog`）与 `core/durable` 持久操作（`WithDurableScope`）。
 
 ## 扩展点
 

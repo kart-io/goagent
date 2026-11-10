@@ -53,8 +53,6 @@ func TestApprovedConstantEntrypointsCannotReturn(t *testing.T) {
 		"builder/contextpolicy/ReadToolName":     "constants.ToolReadContextResult",
 		"core/budget/DefaultMaxAgentCalls":       "constants.DefaultMaxAgentCalls",
 		"core/budget/Unlimited":                  "constants.BudgetUnlimited",
-		"core/checkpoint/ReplicationModeAsync":   "constants.CheckpointReplicationModeAsync",
-		"core/checkpoint/ReplicationModeSync":    "constants.CheckpointReplicationModeSync",
 		"core/durable/ContinuationKindInterrupt": "constants.ContinuationKindInterrupt",
 		"core/durable/ReasonInvalidJSON":         "constants.InterruptReasonInvalidJSON",
 		"core/durable/ReasonRejected":            "constants.InterruptReasonRejected",
@@ -98,7 +96,7 @@ func TestApprovedConstantEntrypointsCannotReturn(t *testing.T) {
 		"workflow/RejectResumeInput":             "constants.WorkflowRejectResumeInput",
 		"workflow/START":                         "constants.WorkflowStart",
 	}
-	require.Len(t, approved, 50)
+	require.Len(t, approved, 48)
 	require.Equal(t, approved, migratedConstantOwners)
 	for old, target := range approved {
 		t.Run(old, func(t *testing.T) {

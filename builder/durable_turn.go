@@ -121,7 +121,7 @@ func validateDurableTurn(turn *llm.StreamChunk, tools []interfaces.Tool, allowEm
 
 // scopeDurableExecution runs before middleware, retrieval and model calls so
 // unsupported paths cannot silently bypass journaling or consume paid requests.
-func (a *ConfigurableAgent[C, S]) scopeDurableExecution(ctx context.Context) (context.Context, error) {
+func (a *ConfigurableAgent[S]) scopeDurableExecution(ctx context.Context) (context.Context, error) {
 	if !durable.HasJournal(ctx) {
 		return ctx, nil
 	}

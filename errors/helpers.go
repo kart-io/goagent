@@ -136,14 +136,6 @@ func NewStateValidationError(reason string) *AgentError {
 		WithOperation("validation")
 }
 
-// NewStateCheckpointError creates an error for checkpoint operations
-func NewStateCheckpointError(sessionID string, operation string, cause error) *AgentError {
-	return Wrap(cause, CodeStateCheckpoint, fmt.Sprintf("checkpoint %s failed", operation)).
-		WithComponent("checkpoint").
-		WithOperation(operation).
-		WithContext("session_id", sessionID)
-}
-
 // Stream Processing Errors
 
 // NewStreamReadError creates an error for stream reading failures

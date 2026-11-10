@@ -85,8 +85,8 @@ func main() {
 // SimpleTranslator 简化的翻译器
 type SimpleTranslator struct {
 	llmClient        llm.Client
-	detectionAgent   *builder.ConfigurableAgent[any, core.State]
-	translationAgent *builder.ConfigurableAgent[any, core.State]
+	detectionAgent   *builder.ConfigurableAgent[core.State]
+	translationAgent *builder.ConfigurableAgent[core.State]
 	tokenTracker     *core.CostTrackingCallback // Token 追踪器
 }
 
@@ -118,10 +118,10 @@ func NewSimpleTranslator(llmClient llm.Client) *SimpleTranslator {
 	return translator
 }
 
-func createDetectionAgent(llmClient llm.Client, tokenTracker *core.CostTrackingCallback) *builder.ConfigurableAgent[any, core.State] {
+func createDetectionAgent(llmClient llm.Client, tokenTracker *core.CostTrackingCallback) *builder.ConfigurableAgent[core.State] {
 	systemPrompt := `你是语言检测专家。识别文本语言并用中文返回语言名称（如：英语、法语、日语、西班牙语、德语、俄语、中文、韩语等）。只返回语言名称，不要其他内容。`
 
-	agent, err := builder.NewAgentBuilder[any, core.State](llmClient).
+	agent, err := builder.NewAgentBuilder[core.State](llmClient).
 		WithSystemPrompt(systemPrompt).
 		WithState(state.NewAgentState()).
 		WithCallbacks(tokenTracker). // 添加 token 追踪
@@ -133,10 +133,10 @@ func createDetectionAgent(llmClient llm.Client, tokenTracker *core.CostTrackingC
 	return agent
 }
 
-func createTranslationAgent(llmClient llm.Client, tokenTracker *core.CostTrackingCallback) *builder.ConfigurableAgent[any, core.State] {
+func createTranslationAgent(llmClient llm.Client, tokenTracker *core.CostTrackingCallback) *builder.ConfigurableAgent[core.State] {
 	systemPrompt := `你是专业翻译专家。将输入文本翻译成简体中文。保持原文语气和风格，确保翻译准确、自然、流畅。如果输入已经是中文，保持不变。只返回翻译结果，不要其他内容。`
 
-	agent, err := builder.NewAgentBuilder[any, core.State](llmClient).
+	agent, err := builder.NewAgentBuilder[core.State](llmClient).
 		WithSystemPrompt(systemPrompt).
 		WithState(state.NewAgentState()).
 		WithCallbacks(tokenTracker). // 添加 token 追踪

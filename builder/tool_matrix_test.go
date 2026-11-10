@@ -124,7 +124,7 @@ func TestNativeToolLargeMatrix(t *testing.T) {
 					wantTools = 0
 				}
 				model := nativeModel(turns...)
-				b := NewSimpleBuilder(model).WithTools(tool).WithMaxIterations(budget).WithAutoSaveEnabled(false)
+				b := NewSimpleBuilder(model).WithTools(tool).WithMaxIterations(budget)
 				if direct {
 					name := "status"
 					if scenario == "名单外" {

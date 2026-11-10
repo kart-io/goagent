@@ -73,7 +73,7 @@ func TestDurableScopesIsolateAgentResultsToolsAndRecovery(t *testing.T) {
 		ctx = budget.WithController(ctx, controller)
 		calls := 0
 		models := []*nativeEventModel{}
-		agents := []*ConfigurableAgent[any, *core.AgentState]{}
+		agents := []*ConfigurableAgent[*core.AgentState]{}
 		for _, label := range []string{"A", "B"} {
 			reg := tools.NewRegistry()
 			require.NoError(t, reg.Register(tools.NewBaseTool("write", "write", `{"type":"object"}`, func(ctx context.Context, in *interfaces.ToolInput) (*interfaces.ToolOutput, error) {

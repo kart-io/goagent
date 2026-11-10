@@ -104,7 +104,7 @@ func durableOffloadContext(t *testing.T, key string) (context.Context, contextpo
 // 持久运行在换出引用之后中断：恢复时 PreStep 的结果被回放、Reduce 不再执行，新实例仍能按回放的对话读取证据。
 func TestOffloadReadsAfterResume(t *testing.T) {
 	ctx, results := durableOffloadContext(t, "resume")
-	build := func(model llm.ToolStreamClient, hooks ...RequestHook) *ConfigurableAgent[any, *core.AgentState] {
+	build := func(model llm.ToolStreamClient, hooks ...RequestHook) *ConfigurableAgent[*core.AgentState] {
 		offload := newOffload(t, contextpolicy.OffloadConfig{Store: results, MaxToolResultRunes: 3})
 		agent, err := NewSimpleBuilder(model).WithDurableScope("offload").WithSystemPrompt("system").
 			WithTools(dispatched(t, NewMockTool("lookup", "long evidence"), offload)...).WithMaxIterations(4).WithOffload(offload).
@@ -165,7 +165,7 @@ func TestOffloadSavesEvidenceBeforeRequest(t *testing.T) {
 	require.NoError(t, err)
 	ctx := durable.WithJournal(durable.WithExecutionKey(context.Background(), "save-order"), file)
 	m := nativeModel(toolCalls(nativeCall("a", "lookup", "{}")), finalAnswer("answer"))
-	build := func() *ConfigurableAgent[any, *core.AgentState] {
+	build := func() *ConfigurableAgent[*core.AgentState] {
 		offload := newOffload(t, contextpolicy.OffloadConfig{Store: results, MaxToolResultRunes: 3})
 		a, err := NewSimpleBuilder(m).WithDurableScope("offload").WithTools(dispatched(t, NewMockTool("lookup", "long evidence"), offload)...).
 			WithMaxIterations(3).WithOffload(offload).Build()

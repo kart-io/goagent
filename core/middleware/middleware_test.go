@@ -398,7 +398,6 @@ func TestMiddlewareRequest(t *testing.T) {
 	req := &MiddlewareRequest{
 		Input:     "test input",
 		State:     state,
-		Runtime:   "runtime",
 		Metadata:  map[string]interface{}{"meta": "data"},
 		Headers:   map[string]string{"header": "value"},
 		Timestamp: time.Now(),
@@ -409,7 +408,6 @@ func TestMiddlewareRequest(t *testing.T) {
 	val, ok := req.State.Get("key")
 	assert.True(t, ok)
 	assert.Equal(t, "value", val)
-	assert.Equal(t, "runtime", req.Runtime)
 	assert.Equal(t, "data", req.Metadata["meta"])
 	assert.Equal(t, "value", req.Headers["header"])
 	assert.NotZero(t, req.Timestamp)

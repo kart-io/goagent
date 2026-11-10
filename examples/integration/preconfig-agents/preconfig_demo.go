@@ -82,7 +82,6 @@ func main() {
 	fmt.Println("2. Workflow Agent")
 	fmt.Println("   Optimized for multi-step workflow orchestration")
 	fmt.Println("   - MaxIterations: 15")
-	fmt.Println("   - EnableAutoSave: true")
 	demoWorkflowAgent(ctx, llmClient)
 	fmt.Println()
 

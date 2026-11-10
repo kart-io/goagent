@@ -6,12 +6,12 @@
 
 | 函数 | 说明 |
 |---|---|
-| `NewSimpleBuilder(client llm.Client) *SimpleAgentBuilder` | 常用入口，等价于 `NewAgentBuilder[any, *core.AgentState]` |
-| `NewAgentBuilder[C any, S core.State](client)` | 自定义上下文类型 `C` 与状态类型 `S`；`S` 不是 `*core.AgentState` 时必须 `WithState` |
-| `Build() (*ConfigurableAgent[C, S], error)` | 等价于 `BuildContext(context.Background())` |
-| `BuildContext(ctx) (*ConfigurableAgent[C, S], error)` | 把宿主上下文传给检查点初始化与回调，拒绝 nil 或已取消的上下文，见[宿主接入](HOST_INTEGRATION.md) |
+| `NewSimpleBuilder(client llm.Client) *SimpleAgentBuilder` | 常用入口，等价于 `NewAgentBuilder[*core.AgentState]` |
+| `NewAgentBuilder[S core.State](client)` | 自定义状态类型 `S`；`S` 不是 `*core.AgentState` 时必须 `WithState` |
+| `Build() (*ConfigurableAgent[S], error)` | 等价于 `BuildContext(context.Background())` |
+| `BuildContext(ctx) (*ConfigurableAgent[S], error)` | 把宿主上下文传给初始化回调，拒绝 nil 或已取消的上下文，见[宿主接入](HOST_INTEGRATION.md) |
 
-未设置存储时，Build 使用内存存储；未设置检查点器时不加载也不保存状态。
+状态只在进程内保留，Build 不加载也不保存状态；会话持久化使用 `WithSessionLog` 与 `WithDurableScope`。
 
 ## 基础配置
 
@@ -95,12 +95,8 @@ return builder.NewSimpleBuilder(client).
 | `WithMemory(interfaces.MemoryManager)` | 无 | 对话记忆；配置 `WithSessionLog` 时不再读取记忆 |
 | `WithMemoryFailurePolicy(MemoryFailurePolicy)` | `MemoryFailureBestEffort` | `MemoryFailureStrict` 在记忆读写失败时返回错误 |
 | `WithMaxConversationHistory(int)` | 20 | 加载的历史轮数，0 或负数不限制 |
-| `WithSessionID(string)` | `session-<纳秒时间戳>` | 会话 ID，用于检查点与记忆 |
-| `WithStore(store.Store)` | 内存存储 | 长期键值存储 |
-| `WithCheckpointer(checkpoint.Checkpointer)` | `InMemorySaver` | 会话检查点 |
-| `WithAutoSaveEnabled(bool)` | true | 执行后保存检查点；仅在配置 `WithCheckpointer` 时生效，保存失败时本次执行返回错误 |
+| `WithSessionID(string)` | `session-<纳秒时间戳>` | 会话 ID，用于会话日志与记忆 |
 | `WithState(S)` | `core.NewAgentState()` | 初始状态 |
-| `WithContext(C)` | 零值 | 应用上下文 |
 
 需要进程重启后续跑的多步任务使用 `core/durable` 与 `workflow`，见[原生编排](NATIVE_ORCHESTRATION.md)。
 
@@ -128,7 +124,7 @@ return builder.NewSimpleBuilder(client).
 | `MonitoringAgent(client, checkInterval)` | 限流与缓存中间件，MaxIterations 100，Temperature 0.3 |
 | `ResearchAgent(client, sources)` | 缓存中间件，MaxTokens 4000，Temperature 0.5，MaxIterations 15 |
 
-快速函数返回 `*SimpleAgent`（`ConfigurableAgent[any, *core.AgentState]`）。
+快速函数返回 `*SimpleAgent`（`ConfigurableAgent[*core.AgentState]`）。
 
 ## ConfigurableAgent
 
@@ -154,7 +150,7 @@ type CustomState struct {
     Tenant string
 }
 
-agent, err := builder.NewAgentBuilder[any, *CustomState](client).
+agent, err := builder.NewAgentBuilder[*CustomState](client).
     WithState(&CustomState{AgentState: core.NewAgentState(), Tenant: "t1"}).
     WithSystemPrompt("你是一个企业助手").
     Build()

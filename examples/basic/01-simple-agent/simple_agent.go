@@ -228,26 +228,7 @@ func main() {
 		fmt.Printf("Processed %d tasks\n", len(outputs))
 	*/
 
-	// 6. 使用 ChainableAgent 串联多个 Agent
-	agent1 := NewSimpleTaskAgent()
-	agent2 := NewSimpleTaskAgent()
-
-	chainAgent := agentcore.NewChainableAgent(
-		"ChainedAgent",
-		"A chain of multiple agents",
-		agent1,
-		agent2,
-	)
-
-	output, err = chainAgent.Invoke(ctx, input)
-	if err != nil {
-		fmt.Printf("Chain error: %v\n", err)
-		return
-	}
-
-	fmt.Printf("Chain result: %v\n", output.Result)
-
-	// 7. 使用 AgentExecutor 添加重试和超时
+	// 6. 使用 AgentExecutor 添加重试和超时
 	executor := agentcore.NewAgentExecutor(
 		simpleAgent,
 		agentcore.WithMaxRetries(3),

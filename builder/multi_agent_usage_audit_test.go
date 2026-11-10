@@ -54,7 +54,7 @@ func TestMultiAgentUsageRootIsNotSumOfNestedOutputs(t *testing.T) {
 					nativeCall("a", "child_0", "{}"), nativeCall("b", "child_1", "{}"),
 				}}}, answerTurn("summary", 6),
 			)
-			build := func() *ConfigurableAgent[any, *core.AgentState] {
+			build := func() *ConfigurableAgent[*core.AgentState] {
 				agent, err := NewSimpleBuilder(parent).WithAgentID("parent").WithDurableScope("parent").WithParallelToolCalls(2).
 					WithTools(dispatcherFor(t, childTools...).Tools()...).WithMaxIterations(2).Build()
 				require.NoError(t, err)

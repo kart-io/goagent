@@ -179,7 +179,6 @@ results, err := executor.ExecuteParallel(ctx, []*tools.ToolCallRequest{
 | `tools/http` | `NewAPITool(baseURL, timeout, headers)`、`NewAPIToolBuilder()`（`WithBaseURL`、`WithTimeout`、`WithHeader(s)`、`WithAuth`、`Build`） |
 | `tools/search` | `NewSearchTool(engine SearchEngine)`；引擎：`NewDuckDuckGoSearchEngine()`、`NewGoogleSearchEngine(apiKey, cx)`、`NewAggregatedSearchEngine(engines...)`、`NewMockSearchEngine()` |
 | `tools/shell` | `NewShellTool(allowedCommands, timeout)`（只执行白名单命令）、`NewShellToolBuilder()`、`CommonShellTools()` |
-| `tools` | `NewSavePreferenceTool`、`NewUpdateStateTool`、`NewUserInfoTool`：`RuntimeTool`，通过 `ToolRuntime` 读写状态与存储，可用 `NewRuntimeToolAdapter(tool, runtime)` 绑定运行时 |
 
 ```go
 shellTool := shell.NewShellTool([]string{"ls", "cat", "grep"}, 10*time.Second)

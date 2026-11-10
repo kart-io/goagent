@@ -39,13 +39,7 @@ wrapped := tools.WithMiddleware(tool, logging.Wrap)
 
 ## Runtime 与重试
 
-`core/execution.RuntimeManager` 只管理会话到 Runtime 的并发注册表，构造器改为无配置参数：
-
-```go
-manager := execution.NewRuntimeManager[MyContext, *state.AgentState]()
-```
-
-删除 `execution.RuntimeConfig`、`DefaultRuntimeConfig`、`RuntimeMetrics`、`NewRuntimeMetrics` 及 `RuntimeManager.Metrics()`。此前的自动保存、保存间隔、大小限制和指标开关没有执行路径，不能迁为同名隐藏默认行为。保存须由宿主明确执行；观测使用实际的 `execution.Scope`、Observer/Tracer 和模型 UsageHook。注册表锁不负责同步宿主取出的 Runtime 业务字段。
+删除 `execution.RuntimeConfig`、`DefaultRuntimeConfig`、`RuntimeMetrics`、`NewRuntimeMetrics` 及 `RuntimeManager.Metrics()`。此前的自动保存、保存间隔、大小限制和指标开关没有执行路径，不能迁为同名隐藏默认行为。保存须由宿主明确执行；观测使用实际的 `execution.Scope`、Observer/Tracer 和模型 UsageHook。`core/execution` 包随后整体删除，见[持久化、人工介入与 Runtime](#持久化人工介入与-runtime)。
 
 `core.RunnableConfig.RetryPolicy`、`core.RetryPolicy`、`core.BackoffPolicy` 已删除。模型暂时错误使用 `AgentBuilder.WithRequestError` 与 `builder.RetryTransient`，每次请求独立预留预算，已输出的响应不自动重发；参见[Builder 参考](BUILDER_API_REFERENCE.md)。`tools.RetryPolicy` 是真实工具执行策略，继续保留。
 
@@ -57,7 +51,7 @@ manager := execution.NewRuntimeManager[MyContext, *state.AgentState]()
 
 ## 检查点切回
 
-`DistributedCheckpointerConfig.FailbackDelay` 和生产无调用的私有 `tryFailback` 已删除。配置文件删除 `failback_delay`。故障切到副库后仍由宿主协调写入、核对全部数据及删除结果后重建实例；主库重新健康不会触发自动切回。此改动不增加跨进程 fencing、CAS 或零 RPO 能力，见[检查点契约](../../core/checkpoint/README.md)。
+`DistributedCheckpointerConfig.FailbackDelay` 和生产无调用的私有 `tryFailback` 已删除。配置文件删除 `failback_delay`。故障切到副库后仍由宿主协调写入、核对全部数据及删除结果后重建实例；主库重新健康不会触发自动切回。此改动不增加跨进程 fencing、CAS 或零 RPO 能力。`core/checkpoint` 包随后整体删除，见下节。
 
 ## 工作流续跑与历史账本
 
@@ -70,6 +64,23 @@ manager := execution.NewRuntimeManager[MyContext, *state.AgentState]()
 迁移操作必须停止相关写入并保留备份；使用 `OperationRef{Key,ID}` 明确列出目标，在相同 Store/作用域上先用默认干跑的 `migrate.OperationsV1` 获取报告，校验通过后再传 `OperationOptions{Apply:true}`。组件按存储 ID 排序持锁，全部读取校验完成后通过一次 `Store.SaveAll` 原子转换。转换只改变快照版本，原 Data 字节、身份、输入指纹、结果及次数不变，不调用业务函数。混合的有效 v2 记录不改写，重复应用安全；提交结果未知时重新干跑核对。Store 必须满足 Lock 和 SaveAll 契约。
 
 不要通过删除旧账本来解决版本拒绝；账本记录着已发生的外部效果，清空后重新运行可能重复这些效果。迁移的实际接口、错误边界及可执行示例见迁移包文档；不得让迁移工具和在线执行同时处理同一组运行。
+
+## 持久化、人工介入与 Runtime
+
+以下包与接口已删除，状态持久化、人工介入与恢复统一使用 `core/durable` + `core/session`：
+
+| 已删除 | 迁移方式 |
+|---|---|
+| `core/checkpoint` 整包（`Checkpointer`、`NewInMemorySaver`、`DistributedCheckpointer` 等）；Builder 的 `WithCheckpointer`、`WithAutoSaveEnabled`、`AgentConfig.EnableAutoSave`；`errors.NewStateCheckpointError` | `Shutdown` 不再保存状态。会话历史用 `WithSessionLog(session.Store)`，崩溃恢复用 `core/durable` 与 `WithDurableScope`，图级暂停与恢复用 `workflow.CompileDurable` |
+| `core/execution` 整包（`Runtime`、`NewRuntime`、`RuntimeManager`、`ToolWithRuntime` 等）；`core/middleware.MiddlewareRequest.Runtime` | 中间件读取 `State` 与 `Metadata`；宿主装配用顶层 `execution.Scope`，见[宿主接入](HOST_INTEGRATION.md) |
+| `core.InterruptManager`、`InterruptableExecutor`、`InterruptConfig` 等 | 持久图的 `ApprovalNodes` 或 `durable.AwaitInput`，见[人工介入](HUMAN_IN_THE_LOOP.md)及 `examples/human-in-the-loop`、`examples/human-in-the-loop-interrupt` |
+| Builder 的 `WithStore` | 对话记忆用 `WithMemory`；其他键值数据由宿主直接持有 `store.Store` |
+| 泛型参数 `C` 与 `WithContext(C)`：`AgentBuilder[C, S]`、`ConfigurableAgent[C, S]` | 改为 `AgentBuilder[S]`、`ConfigurableAgent[S]`，如 `NewAgentBuilder[any, *core.AgentState]` → `NewAgentBuilder[*core.AgentState]`；应用数据经 `context.Context` 或 `WithMetadata` 传递 |
+| `interfaces` 的 `Lifecycle`、`LifecycleManager`、`HealthStatus` 等生命周期与健康状态定义 | 插件用 `plugin.Starter`、`plugin.Dependent`；其他组件由宿主自行管理生命周期 |
+| `testing/testutil` | 使用标准库 `testing` 断言，或 `testing/mocks` |
+| `core` 的 `Chain`、`BaseChain`、`ChainableAgent`、`Orchestrator`、`PluginRegistry`、`LifecycleManager`、`TimeoutConfig` | 组合用 `core.RunnablePipe`/`RunnableSequence` 或 `workflow`；多 Agent 用 `multiagent` |
+| `tools` 的 `ToolRuntime`、`RuntimeToolAdapter`、`UserInfoTool`、`SavePreferenceTool`、`UpdateStateTool` | 工具所需数据经 `context.Context` 或构造时注入；`StreamWriter` 进度推送没有替代 |
+| 示例 `examples/integration/{human-in-loop,langchain-phase1,langchain-complete}`、`examples/advanced/tool-runtime` | 人工介入见上述 HITL 示例 |
 
 ## 保留的现行契约
 

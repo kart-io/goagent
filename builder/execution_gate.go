@@ -7,7 +7,7 @@ import (
 
 // beginExecution protects a whole session turn, including middleware and
 // callbacks. Queueing consumes the same timeout budget as execution.
-func (a *ConfigurableAgent[C, S]) beginExecution(ctx context.Context) (context.Context, func(), error) {
+func (a *ConfigurableAgent[S]) beginExecution(ctx context.Context) (context.Context, func(), error) {
 	var cancel context.CancelFunc
 	if a.config.Timeout > 0 {
 		ctx, cancel = context.WithTimeout(ctx, a.config.Timeout)
