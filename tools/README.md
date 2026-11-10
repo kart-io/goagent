@@ -123,8 +123,8 @@ out, err := d.Invoke(ctx, tools.ToolRequest{Name: "calculator", Input: &interfac
 
 - `ToolExecutor`（`NewToolExecutor(WithMaxConcurrency, WithTimeout, WithRetryPolicy, WithErrorHandler)`）：`ExecuteParallel`、`ExecuteSequential`、`ExecuteBatch`，以及按 `ToolGraph` 依赖执行的 `ExecuteWithDependencies`。不经过 Dispatcher 的日志与管线。
 - `NewRunnableTool` / `NewRunnableToolFactory`：把 `core.Runnable`（如子 Agent、workflow 图）适配为工具，`RunnableToolConfig` 声明编解码、版本、超时与是否可恢复。
-- `WithMiddleware(tool, middlewares...)`：用 `tools/middleware` 包装单个工具。
 - 结果缓存：`NewCachedTool(tool, ttl)`，以及实现 `ToolCache` 的 `SimpleToolCache`、`MemoryToolCache`、`ShardedToolCache`（`NewShardedToolCacheWithOptions`、`NewHighPerformanceCache`、`NewLowMemoryCache`）。
+- 单个工具的日志、缓存、限流包装用 `tools/middleware.Wrap(tool, middlewares...)`。
 - `InputValidator`、`ValidateAndInvoke`：按 Schema 校验参数。
 
 

@@ -76,7 +76,7 @@ return resp, nil
 ```go
 c := cache.NewSimpleCache(10 * time.Minute)
 defer c.Close()
-cachedTool := tools.WithMiddleware(originalTool, middleware.Caching(
+cachedTool := middleware.Wrap(originalTool, middleware.Caching(
     middleware.WithCache(c),
     middleware.WithTTL(10*time.Minute),
 ))

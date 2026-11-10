@@ -1,4 +1,4 @@
-package tools
+package middleware_test
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 
 func TestDesignMiddlewareObjectUsesWrap(t *testing.T) {
 	tool := &mockToolForWrapper{name: "cache_object"}
-	wrapped := WithMiddleware(tool, middleware.NewCachingMiddleware().Wrap)
+	wrapped := middleware.Wrap(tool, middleware.NewCachingMiddleware().Wrap)
 	in := &interfaces.ToolInput{Args: map[string]any{"value": "同一请求"}}
 	_, err := wrapped.Invoke(context.Background(), in)
 	require.NoError(t, err)
@@ -23,12 +23,12 @@ func TestDesignMiddlewareObjectUsesWrap(t *testing.T) {
 
 func TestDesignNilMiddlewareFailsAtAssembly(t *testing.T) {
 	require.Panics(t, func() {
-		WithMiddleware(&mockToolForWrapper{name: "invalid"}, nil)
+		middleware.Wrap(&mockToolForWrapper{name: "invalid"}, nil)
 	}, "空函数须在装配时被拒绝")
 }
 
 func TestDesignMiddlewareMustReturnInvoker(t *testing.T) {
 	require.Panics(t, func() {
-		WithMiddleware(&mockToolForWrapper{name: "invalid"}, func(interfaces.Tool, middleware.ToolInvoker) middleware.ToolInvoker { return nil })
+		middleware.Wrap(&mockToolForWrapper{name: "invalid"}, func(interfaces.Tool, middleware.ToolInvoker) middleware.ToolInvoker { return nil })
 	}, "函数返回空调用器须在装配时被拒绝")
 }

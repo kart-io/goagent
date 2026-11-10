@@ -5,13 +5,12 @@ import (
 	"go/token"
 	"path/filepath"
 	"strconv"
-	"strings"
 )
 
 // retiredAPIEntries 记录已退役入口，禁止通过类型、函数或变量重新建立旧API。
 var retiredAPIEntries = func() map[string]bool {
 	entries := map[string][]string{
-		"tools":            {"ToolCall"},
+		"tools":            {"ToolCall", "WithMiddleware", "MiddlewareTool"},
 		"cache":            {"CacheEntry", "InMemoryCache", "NewInMemoryCache", "LRUCache", "NewLRUCache", "MultiTierCache", "NewMultiTierCache"},
 		"tools/middleware": {"ToolMiddleware", "BaseToolMiddleware", "NewBaseToolMiddleware", "Chain", "createMiddlewareInvoker"},
 		"core":             {"RetryPolicy", "BackoffPolicy"},
@@ -77,9 +76,6 @@ func retiredAPIFindings(fset *token.FileSet, file string, node *ast.File, types 
 				if owner == "core/execution" && d.Name.Name == "NewRuntimeManager" && d.Type.Params.NumFields() != 0 {
 					reject(d.Pos(), "NewRuntimeManager 的无效配置参数")
 				}
-				if owner == "tools" && d.Name.Name == "WithMiddleware" && !typedMiddlewareSignature(d, node) {
-					reject(d.Pos(), "WithMiddleware 必须只接收强类型 ToolMiddlewareFunc")
-				}
 			} else {
 				receiver := receiverTypeName(d.Recv.List[0].Type)
 				manager := receiverIs(d.Recv.List[0].Type, "RuntimeManager", types, map[*ast.TypeSpec]bool{})
@@ -108,7 +104,7 @@ func retiredAPIFindings(fset *token.FileSet, file string, node *ast.File, types 
 
 // 固定装配入口只能是函数声明，不能改用变量或类型继续接收旧调用形状。
 func fixedConstructor(owner, name string) bool {
-	return (owner == "tools" && name == "WithMiddleware") || (owner == "core/execution" && name == "NewRuntimeManager")
+	return owner == "core/execution" && name == "NewRuntimeManager"
 }
 
 // 只追踪本包结构体、底层定义与匿名嵌入；具名普通字段不向外提升配置项。
@@ -182,35 +178,6 @@ func receiverIs(expr ast.Expr, target string, types *constantTypeContext, seen m
 		found := receiverIs(declaration.spec.Type, target, types, seen)
 		delete(seen, declaration.spec)
 		if found {
-			return true
-		}
-	}
-	return false
-}
-
-func typedMiddlewareSignature(fn *ast.FuncDecl, file *ast.File) bool {
-	if len(fn.Type.Params.List) != 2 {
-		return false
-	}
-	variadic, ok := fn.Type.Params.List[1].Type.(*ast.Ellipsis)
-	if !ok {
-		return false
-	}
-	selector, ok := variadic.Elt.(*ast.SelectorExpr)
-	if !ok || selector.Sel.Name != "ToolMiddlewareFunc" {
-		return false
-	}
-	alias, ok := selector.X.(*ast.Ident)
-	if !ok {
-		return false
-	}
-	for _, spec := range file.Imports {
-		path, _ := strconv.Unquote(spec.Path.Value)
-		name := path[strings.LastIndex(path, "/")+1:]
-		if spec.Name != nil {
-			name = spec.Name.Name
-		}
-		if name == alias.Name && path == module+"tools/middleware" {
 			return true
 		}
 	}

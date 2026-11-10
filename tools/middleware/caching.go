@@ -75,7 +75,7 @@ type cachingStats struct {
 //	    WithCache(myCache),
 //	    WithTTL(10 * time.Minute),
 //	)
-//	wrappedTool := tools.WithMiddleware(myTool, cachingMW)
+//	wrappedTool := middleware.Wrap(myTool, cachingMW)
 type CachingMiddleware struct {
 	config *CachingConfig
 	stats  *cachingStats

@@ -29,7 +29,7 @@ import (
 //	    WithLogger(logger),
 //	    WithoutInputLogging(),  // 不记录输入（保护敏感数据）
 //	)
-//	wrappedTool := tools.WithMiddleware(myTool, loggingMW.Wrap)
+//	wrappedTool := middleware.Wrap(myTool, loggingMW.Wrap)
 type LoggingMiddleware struct {
 	logger      loggerCore.Logger
 	logInput    bool

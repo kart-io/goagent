@@ -90,7 +90,7 @@ go test ./scripts/apicheck/         # 规则回归测试
 
 ## 退役接口与配置
 
-`apicheck` 同时拒绝重建已退役的旧流、工具调用别名、缓存实现、中间件旧钩子、Runtime 空配置/指标及 Runnable 空重试配置。`WithMiddleware` 必须声明为强类型函数装配入口，`NewRuntimeManager` 不接收已删除的配置；这些函数名不能改成变量或类型来接回旧调用形状。
+`apicheck` 同时拒绝重建已退役的旧流、工具调用别名、缓存实现、中间件旧钩子、Runtime 空配置/指标及 Runnable 空重试配置。`tools` 根包不得重建 `WithMiddleware`/`MiddlewareTool`，也不得导入 `tools/middleware`（其日志中间件依赖带 OTLP/gRPC 的日志引擎，会被带进所有使用 Builder 的程序），工具包装统一用 `tools/middleware.Wrap`；`NewRuntimeManager` 不接收已删除的配置，且不能改成变量或类型来接回旧调用形状。
 
 无效配置字段的检查沿本包结构体别名、底层定义和匿名嵌入追踪；旧方法接收者只沿透明别名追踪，真正的新定义类型保留自己的方法身份。类型上下文按目录和包名隔离，不让测试声明污染生产检查。在线 durable 包不允许 operation-v1 分派；历史版本只允许在独立离线迁移组件中处理。正常协议 facade、当前业务类型及崩溃恢复不属于退役入口。
 

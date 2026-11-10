@@ -5,9 +5,9 @@ GoAgent 不默认缓存任何模型答案或工具结果（`ConfigureForRAG` 也
 | 缓存对象 | 组件 | 说明 |
 |---|---|---|
 | 通用键值 | `cache.Cache`；推荐 `cache.NewSimpleCache(ttl)`；无后台生命周期入口时用 `cache.WithoutBackgroundCleanup()` | `sync.Map` + TTL，后台清理；`NoOpCache` 为空实现。包说明见 [cache/README.md](../../cache/README.md) |
-| 单个工具的结果 | `tools/middleware.Caching`（经 `tools.WithMiddleware`） | 底层是任意 `cache.Cache`，见[工具中间件](TOOL_MIDDLEWARE.md#内置中间件) |
 | 单个工具的结果（简化包装） | `tools.NewCachedTool(tool, ttl)` | 内部使用 `tools.SimpleToolCache`；ttl<=0 时取 5 分钟 |
 | 工具结果存储 | `tools.ToolCache` 接口：`SimpleToolCache`、`MemoryToolCache`、`ShardedToolCache` | 按工具名或正则失效；分片版预设 `NewHighPerformanceCache`/`NewLowMemoryCache`，示例见 [02-cache-presets](../../examples/optimization/02-cache-presets/main.go) |
+| 单个工具的结果 | `tools/middleware.Caching`（经 `middleware.Wrap`） | 底层是任意 `cache.Cache`，见[工具中间件](TOOL_MIDDLEWARE.md#内置中间件) |
 | Agent 输入 → 响应 | `core/middleware.NewCacheMiddleware(ttl)`（经 `builder.WithMiddleware`） | 命中时跳过处理器；键只取输入的 `%v` 文本，不区分会话、用户或知识版本 |
 | 语义相近的模型请求 | `llm/cache.NewCachedLLMClient` / `WithSemanticCache` | 见下文限制 |
 
@@ -40,7 +40,7 @@ stats := c.GetStats() // Hits、Misses、Size、HitRate
 ## 工具结果缓存
 
 ```go
-cachedTool := tools.WithMiddleware(originalTool, middleware.Caching(
+cachedTool := middleware.Wrap(originalTool, middleware.Caching(
     middleware.WithCache(cache.NewSimpleCache(10*time.Minute)),
     middleware.WithTTL(10*time.Minute),
 ))

@@ -198,7 +198,7 @@ searchTool := search.NewSearchTool(search.NewDuckDuckGoSearchEngine())
 type ToolInvoker func(context.Context, *interfaces.ToolInput) (*interfaces.ToolOutput, error)
 type ToolMiddlewareFunc func(interfaces.Tool, ToolInvoker) ToolInvoker
 
-func WithMiddleware(tool interfaces.Tool, middlewares ...ToolMiddlewareFunc) interfaces.Tool
+func Wrap(tool interfaces.Tool, middlewares ...ToolMiddlewareFunc) interfaces.Tool
 ```
 
 | 中间件 | 有状态对象 | 装配函数 |
@@ -210,7 +210,7 @@ func WithMiddleware(tool interfaces.Tool, middlewares ...ToolMiddlewareFunc) int
 对象通过显式的 `.Wrap` 方法装配；函数按列表顺序从外向内调用，返回时反向经过各层。调用方自定义函数应保留结果与错误的组合。日志计时不写入输入参数。空函数或返回空调用器在装配时失败，其他类型不能通过编译。
 
 ```go
-wrapped := tools.WithMiddleware(searchTool,
+wrapped := middleware.Wrap(searchTool,
     toolmw.Logging(),
     toolmw.RateLimit(toolmw.WithQPS(5)),
 )

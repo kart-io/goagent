@@ -1,4 +1,4 @@
-package tools
+package middleware_test
 
 import (
 	"context"
@@ -11,11 +11,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/kart-io/goagent/interfaces"
+	"github.com/kart-io/goagent/tools"
 	"github.com/kart-io/goagent/tools/middleware"
 )
 
 // 装配入口的函数类型由编译器检查，不接受对象或任意值。
-var _ func(interfaces.Tool, ...middleware.ToolMiddlewareFunc) interfaces.Tool = WithMiddleware
+var _ func(interfaces.Tool, ...middleware.ToolMiddlewareFunc) interfaces.Tool = middleware.Wrap
 
 func TestCleanupFunctionalMiddlewareOnionOrder(t *testing.T) {
 	var order []string
@@ -29,11 +30,11 @@ func TestCleanupFunctionalMiddlewareOnionOrder(t *testing.T) {
 			}
 		}
 	}
-	tool := NewBaseTool("顺序", "", `{}`, func(context.Context, *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+	tool := tools.NewBaseTool("顺序", "", `{}`, func(context.Context, *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 		order = append(order, "执行")
 		return &interfaces.ToolOutput{Result: "成功", Success: true}, nil
 	})
-	out, err := WithMiddleware(tool, wrap("甲"), wrap("乙"), wrap("丙")).Invoke(context.Background(), &interfaces.ToolInput{})
+	out, err := middleware.Wrap(tool, wrap("甲"), wrap("乙"), wrap("丙")).Invoke(context.Background(), &interfaces.ToolInput{})
 	require.NoError(t, err)
 	require.True(t, out.Success)
 	require.Equal(t, []string{"甲:前", "乙:前", "丙:前", "执行", "丙:后", "乙:后", "甲:后"}, order)
@@ -45,7 +46,7 @@ func TestCleanupFunctionalMiddlewareErrorBoundaries(t *testing.T) {
 			want := errors.New("边界错误")
 			calls := 0
 			observed := false
-			tool := NewBaseTool("边界", "", `{}`, func(context.Context, *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+			tool := tools.NewBaseTool("边界", "", `{}`, func(context.Context, *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 				calls++
 				if phase == "执行" {
 					return &interfaces.ToolOutput{Result: "部分结果"}, want
@@ -71,7 +72,7 @@ func TestCleanupFunctionalMiddlewareErrorBoundaries(t *testing.T) {
 					return out, err
 				}
 			}
-			out, err := WithMiddleware(tool, observer, boundary).Invoke(context.Background(), &interfaces.ToolInput{})
+			out, err := middleware.Wrap(tool, observer, boundary).Invoke(context.Background(), &interfaces.ToolInput{})
 			require.ErrorIs(t, err, want)
 			require.True(t, observed, "外层函数须观察到内层真实错误")
 			if phase == "前置" {
@@ -89,7 +90,7 @@ func TestCleanupLoggingCacheAndRateLimitCompose(t *testing.T) {
 	tool := &mockToolForWrapper{name: "实际组合"}
 	caching := middleware.NewCachingMiddleware()
 	limit := middleware.NewRateLimitMiddleware(middleware.WithQPS(0), middleware.WithBurst(1))
-	wrapped := WithMiddleware(tool, middleware.Logging(middleware.WithLogger(nil)), caching.Wrap, limit.Wrap)
+	wrapped := middleware.Wrap(tool, middleware.Logging(middleware.WithLogger(nil)), caching.Wrap, limit.Wrap)
 	input := &interfaces.ToolInput{Args: map[string]interface{}{"value": "甲"}}
 	_, err := wrapped.Invoke(context.Background(), input)
 	require.NoError(t, err)
@@ -145,12 +146,12 @@ func (m *mockToolForWrapper) Invoke(ctx context.Context, input *interfaces.ToolI
 	}, nil
 }
 
-// TestWithMiddleware_NoMiddleware 测试无中间件时的包装
-func TestWithMiddleware_NoMiddleware(t *testing.T) {
+// TestWrap_NoMiddleware 测试无中间件时的包装
+func TestWrap_NoMiddleware(t *testing.T) {
 	ctx := context.Background()
 	tool := &mockToolForWrapper{name: "test_tool"}
 
-	wrapped := WithMiddleware(tool)
+	wrapped := middleware.Wrap(tool)
 
 	// 应该返回原始工具
 	assert.Equal(t, tool, wrapped)
@@ -164,14 +165,14 @@ func TestWithMiddleware_NoMiddleware(t *testing.T) {
 	assert.Equal(t, int32(1), tool.callCount.Load())
 }
 
-// TestWithMiddleware_SingleFunctionalMiddleware 测试单个函数式中间件
-func TestWithMiddleware_SingleFunctionalMiddleware(t *testing.T) {
+// TestWrap_SingleFunctionalMiddleware 测试单个函数式中间件
+func TestWrap_SingleFunctionalMiddleware(t *testing.T) {
 	ctx := context.Background()
 	tool := &mockToolForWrapper{name: "test_tool"}
 
 	// 使用缓存中间件
 	cachingMW := middleware.Caching()
-	wrapped := WithMiddleware(tool, cachingMW)
+	wrapped := middleware.Wrap(tool, cachingMW)
 
 	input := &interfaces.ToolInput{
 		Args: map[string]interface{}{"value": "test"},
@@ -192,8 +193,8 @@ func TestWithMiddleware_SingleFunctionalMiddleware(t *testing.T) {
 	assert.True(t, output2.Metadata["cache_hit"].(bool))
 }
 
-// TestWithMiddleware_MultipleFunctionalMiddleware 测试多个函数式中间件
-func TestWithMiddleware_MultipleFunctionalMiddleware(t *testing.T) {
+// TestWrap_MultipleFunctionalMiddleware 测试多个函数式中间件
+func TestWrap_MultipleFunctionalMiddleware(t *testing.T) {
 	ctx := context.Background()
 	tool := &mockToolForWrapper{name: "test_tool"}
 
@@ -204,7 +205,7 @@ func TestWithMiddleware_MultipleFunctionalMiddleware(t *testing.T) {
 		middleware.WithBurst(5),
 	)
 
-	wrapped := WithMiddleware(tool,
+	wrapped := middleware.Wrap(tool,
 		cachingMW,   // 外层
 		rateLimitMW, // 内层
 	)
@@ -231,8 +232,8 @@ func TestWithMiddleware_MultipleFunctionalMiddleware(t *testing.T) {
 	assert.True(t, output2.Metadata["cache_hit"].(bool))
 }
 
-// TestWithMiddleware_StatefulWrap 测试显式装配有状态对象。
-func TestWithMiddleware_StatefulWrap(t *testing.T) {
+// TestWrap_StatefulWrap 测试显式装配有状态对象。
+func TestWrap_StatefulWrap(t *testing.T) {
 	ctx := context.Background()
 	tool := &mockToolForWrapper{name: "test_tool"}
 
@@ -240,7 +241,7 @@ func TestWithMiddleware_StatefulWrap(t *testing.T) {
 	cachingMW := middleware.NewCachingMiddleware()
 
 	// 创建一个包装器，将 CachingMiddleware.Wrap 转换为接口
-	wrapped := WithMiddleware(tool, cachingMW.Wrap)
+	wrapped := middleware.Wrap(tool, cachingMW.Wrap)
 
 	input := &interfaces.ToolInput{
 		Args: map[string]interface{}{"value": "test"},
@@ -258,10 +259,10 @@ func TestWithMiddleware_StatefulWrap(t *testing.T) {
 	assert.True(t, output2.Metadata["cache_hit"].(bool))
 }
 
-// TestWithMiddleware_ToolMetadata 测试工具元数据保留
-func TestWithMiddleware_ToolMetadata(t *testing.T) {
+// TestWrap_ToolMetadata 测试工具元数据保留
+func TestWrap_ToolMetadata(t *testing.T) {
 	tool := &mockToolForWrapper{name: "test_tool"}
-	wrapped := WithMiddleware(tool, middleware.Caching())
+	wrapped := middleware.Wrap(tool, middleware.Caching())
 
 	// 验证工具元数据
 	assert.Equal(t, "test_tool", wrapped.Name())
@@ -269,26 +270,26 @@ func TestWithMiddleware_ToolMetadata(t *testing.T) {
 	assert.Equal(t, `{"type": "object"}`, wrapped.ArgsSchema())
 }
 
-// TestWithMiddleware_Unwrap 测试 Unwrap 方法
-func TestWithMiddleware_Unwrap(t *testing.T) {
+// TestWrap_Unwrap 测试 Unwrap 方法
+func TestWrap_Unwrap(t *testing.T) {
 	tool := &mockToolForWrapper{name: "test_tool"}
-	wrapped := WithMiddleware(tool, middleware.Caching())
+	wrapped := middleware.Wrap(tool, middleware.Caching())
 
 	// 尝试类型断言获取原始工具
-	if mw, ok := wrapped.(*MiddlewareTool); ok {
+	if mw, ok := wrapped.(*middleware.WrappedTool); ok {
 		originalTool := mw.Unwrap()
 		assert.Equal(t, tool, originalTool)
 	} else {
-		t.Fatal("Wrapped tool should be *MiddlewareTool")
+		t.Fatal("Wrapped tool should be *middleware.WrappedTool")
 	}
 }
 
-// TestWithMiddleware_CachingEffectiveness 测试缓存中间件的有效性
-func TestWithMiddleware_CachingEffectiveness(t *testing.T) {
+// TestWrap_CachingEffectiveness 测试缓存中间件的有效性
+func TestWrap_CachingEffectiveness(t *testing.T) {
 	ctx := context.Background()
 	tool := &mockToolForWrapper{name: "test_tool"}
 
-	wrapped := WithMiddleware(tool,
+	wrapped := middleware.Wrap(tool,
 		middleware.Caching(
 			middleware.WithTTL(1*time.Second),
 		),
@@ -309,12 +310,12 @@ func TestWithMiddleware_CachingEffectiveness(t *testing.T) {
 	assert.Equal(t, int32(1), tool.callCount.Load(), "interfaces.Tool should only be called once with caching")
 }
 
-// TestWithMiddleware_RateLimitEffectiveness 测试限流中间件的有效性
-func TestWithMiddleware_RateLimitEffectiveness(t *testing.T) {
+// TestWrap_RateLimitEffectiveness 测试限流中间件的有效性
+func TestWrap_RateLimitEffectiveness(t *testing.T) {
 	ctx := context.Background()
 	tool := &mockToolForWrapper{name: "test_tool"}
 
-	wrapped := WithMiddleware(tool,
+	wrapped := middleware.Wrap(tool,
 		middleware.RateLimit(
 			middleware.WithQPS(10),
 			middleware.WithBurst(3),
@@ -343,12 +344,12 @@ func TestWithMiddleware_RateLimitEffectiveness(t *testing.T) {
 	assert.Equal(t, 7, errorCount, "Remaining requests should be rate limited")
 }
 
-// TestWithMiddleware_Concurrent 测试并发场景
-func TestWithMiddleware_Concurrent(t *testing.T) {
+// TestWrap_Concurrent 测试并发场景
+func TestWrap_Concurrent(t *testing.T) {
 	ctx := context.Background()
 
 	tool := &mockToolForWrapper{name: "test_tool"}
-	wrapped := WithMiddleware(tool,
+	wrapped := middleware.Wrap(tool,
 		middleware.Caching( // LRU cache is thread-safe
 			middleware.WithTTL(1*time.Minute),
 		),
@@ -399,8 +400,8 @@ func TestWithMiddleware_Concurrent(t *testing.T) {
 	assert.Equal(t, coldCalls, tool.callCount.Load(), "热缓存并发命中不应再次调用工具")
 }
 
-// TestWithMiddleware_MixedTypes 测试混合类型的中间件
-func TestWithMiddleware_MixedTypes(t *testing.T) {
+// TestWrap_MixedTypes 测试混合类型的中间件
+func TestWrap_MixedTypes(t *testing.T) {
 	ctx := context.Background()
 	tool := &mockToolForWrapper{name: "test_tool"}
 
@@ -408,7 +409,7 @@ func TestWithMiddleware_MixedTypes(t *testing.T) {
 	cachingMW := middleware.NewCachingMiddleware()
 	rateLimitMW := middleware.RateLimit(middleware.WithQPS(10), middleware.WithBurst(5))
 
-	wrapped := WithMiddleware(tool,
+	wrapped := middleware.Wrap(tool,
 		cachingMW.Wrap, // 使用 Wrap 方法
 		rateLimitMW,    // 函数式中间件
 	)

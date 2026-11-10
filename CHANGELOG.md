@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- `tools`：`WithMiddleware`/`MiddlewareTool` 移入 `tools/middleware`，改为 `middleware.Wrap(tool, middlewares...)` 与 `*middleware.WrappedTool`，用法不变。`tools` 根包不再导入 `tools/middleware`，只用 Builder 的程序不再链接其日志中间件带入的 OTLP/gRPC：`builder` 的依赖包由 394 个降到 183 个；`apicheck` 拒绝 `tools` 根包重新导入 `tools/middleware`。迁移：`tools.WithMiddleware(` 改为 `middleware.Wrap(`。
 - `core/durable`：超时（`failed/deadline`）与崩溃、取消一样按结果未知的中断处理：先经 `Reconcile` 核对，`RetryFailed` 不再直接重跑，需 `Reconcile` 确认未生效或声明 `RetryInterrupted`。此前工具已产生副作用但应答超过 `DispatchConfig.Timeout` 时，恢复会再执行一次。依赖“超时即重跑”的自定义策略需改为提供 `Reconcile` 或声明 `RetryInterrupted`；`tools.Dispatcher` 默认策略已声明 `RetryInterrupted`，Builder 的 `WithInterruptedModelResend` 现在也重发被运行截止时间或根预算截止打断的模型请求。
 
 - `interfaces.ToolInput`：删除只写不读的 `Context` 字段，工具从 `Invoke(ctx, input)` 的 ctx 取得取消与请求范围的值。迁移：删除构造 `ToolInput` 时的 `Context: ctx`。

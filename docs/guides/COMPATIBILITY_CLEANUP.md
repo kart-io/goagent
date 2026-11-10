@@ -15,13 +15,13 @@
 装配入口固定为：
 
 ```go
-func WithMiddleware(tool interfaces.Tool, middlewares ...middleware.ToolMiddlewareFunc) interfaces.Tool
+func Wrap(tool interfaces.Tool, middlewares ...ToolMiddlewareFunc) interfaces.Tool // 包 tools/middleware
 ```
 
 列表中的第一个函数处于最外层。`ToolMiddleware/BaseToolMiddleware/Chain` 旧生命周期已删除；日志、缓存、限流统一通过函数包装调用器：
 
 ```go
-wrapped := tools.WithMiddleware(tool,
+wrapped := middleware.Wrap(tool,
     middleware.Logging(),
     middleware.Caching(),
     middleware.RateLimit(middleware.WithQPS(10)),
@@ -32,10 +32,10 @@ wrapped := tools.WithMiddleware(tool,
 
 ```go
 logging := middleware.NewLoggingMiddleware()
-wrapped := tools.WithMiddleware(tool, logging.Wrap)
+wrapped := middleware.Wrap(tool, logging.Wrap)
 ```
 
-不能再把任意对象直接传给 `WithMiddleware`，也不能靠运行时类型判断接回旧钩子。空中间件函数或返回空调用器的装配以配置错误失败。日志计时属于每次调用，不写入调用方 `ToolInput.Args`；底层返回的部分结果和错误一起保留。工具包装不因此自动获得底层可选持久能力，具体边界见[工具中间件指南](TOOL_MIDDLEWARE.md)。
+不能再把任意对象直接传给 `middleware.Wrap`，也不能靠运行时类型判断接回旧钩子。空中间件函数或返回空调用器的装配以配置错误失败。日志计时属于每次调用，不写入调用方 `ToolInput.Args`；底层返回的部分结果和错误一起保留。工具包装不因此自动获得底层可选持久能力，具体边界见[工具中间件指南](TOOL_MIDDLEWARE.md)。
 
 ## Runtime 与重试
 
@@ -77,6 +77,7 @@ wrapped := tools.WithMiddleware(tool, logging.Wrap)
 | Builder 的 `WithStore` | 对话记忆用 `WithMemory`；其他键值数据由宿主直接持有 `store.Store` |
 | 泛型参数 `C` 与 `WithContext(C)`：`AgentBuilder[C, S]`、`ConfigurableAgent[C, S]` | 改为 `AgentBuilder[S]`、`ConfigurableAgent[S]`，如 `NewAgentBuilder[any, *core.AgentState]` → `NewAgentBuilder[*core.AgentState]`；应用数据经 `context.Context` 或 `WithMetadata` 传递 |
 | `interfaces` 的 `Lifecycle`、`LifecycleManager`、`HealthStatus` 等生命周期与健康状态定义 | 插件用 `plugin.Starter`、`plugin.Dependent`；其他组件由宿主自行管理生命周期 |
+| `tools.WithMiddleware`、`tools.MiddlewareTool` | `tools/middleware.Wrap(tool, middlewares...)`、`*middleware.WrappedTool` |
 | `testing/testutil` | 使用标准库 `testing` 断言，或 `testing/mocks` |
 | `core` 的 `Chain`、`BaseChain`、`ChainableAgent`、`Orchestrator`、`PluginRegistry`、`LifecycleManager`、`TimeoutConfig` | 组合用 `core.RunnablePipe`/`RunnableSequence` 或 `workflow`；多 Agent 用 `multiagent` |
 | `tools` 的 `ToolRuntime`、`RuntimeToolAdapter`、`UserInfoTool`、`SavePreferenceTool`、`UpdateStateTool` | 工具所需数据经 `context.Context` 或构造时注入；`StreamWriter` 进度推送没有替代 |

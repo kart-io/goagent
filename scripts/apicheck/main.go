@@ -78,6 +78,10 @@ func forbidden(file, path string) bool {
 			return true
 		}
 	}
+	// tools 根包不得导入工具中间件：其日志中间件依赖带 OTLP/gRPC 的日志引擎，会被带进所有使用 Builder 的程序。
+	if dep == "tools/middleware" && filepath.ToSlash(filepath.Dir(file)) == "tools" && !strings.HasSuffix(file, "_test.go") {
+		return true
+	}
 	// management 位于执行和装配之上，下层不得反向依赖管理服务。
 	if dest == "management" && source != "management" && source != "examples" && source != "cmd" && source != "testing" && source != "evaluation" && source != "scripts" {
 		return true

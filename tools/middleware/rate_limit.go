@@ -83,7 +83,7 @@ func WithWaitTimeout(timeout time.Duration) RateLimitOption {
 //	    WithBurst(20),         // 允许突发 20 个请求
 //	    WithPerToolRateLimit(), // 每个工具独立限流
 //	)
-//	wrappedTool := tools.WithMiddleware(myTool, rateLimitMW)
+//	wrappedTool := middleware.Wrap(myTool, rateLimitMW)
 type RateLimitMiddleware struct {
 	config   *RateLimitConfig
 	global   *rate.Limiter

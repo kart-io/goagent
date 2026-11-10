@@ -4,10 +4,10 @@
 
 | 层 | 入口 | 适用 |
 |---|---|---|
-| 单个工具的包装 | `tools.WithMiddleware` + `tools/middleware` | 日志、结果缓存、限流等与调用方无关的逻辑 |
+| 单个工具的包装 | `middleware.Wrap` + `tools/middleware` | 日志、结果缓存、限流等与调用方无关的逻辑 |
 | Dispatcher 管线 | `tools.DispatchConfig.Pipeline`（`tools.Pipeline`） | 模型可见调用的准入、审批、硬性拒绝、执行包装与结果后处理；与调用日志、恢复、并发和超时一起工作 |
 
-## tools.WithMiddleware
+## middleware.Wrap
 
 ```go
 import (
@@ -21,7 +21,7 @@ import (
 
 ownedCache := cache.NewSimpleCache(10*time.Minute)
 defer ownedCache.Close()
-wrapped := tools.WithMiddleware(calculator,
+wrapped := middleware.Wrap(calculator,
     middleware.Logging(),                          // 最外层
     middleware.Caching(
         middleware.WithCache(ownedCache),
@@ -33,7 +33,7 @@ output, err := wrapped.Invoke(ctx, &interfaces.ToolInput{Args: map[string]any{"a
 ```
 
 `WithMiddleware(tool, middlewares ...middleware.ToolMiddlewareFunc)` 按洋葱模型包装，第一个函数在最外层。`Logging`、`Caching`、`RateLimit` 返回同一种强类型函数；需要保留对象以读取统计时显式传 `NewCachingMiddleware(...).Wrap` 或 `NewRateLimitMiddleware(...).Wrap`。对象或其他任意类型不能作为参数通过编译；空中间件函数或返回空调用器的函数在装配时以 `errors.CodeInvalidConfig` 失败。
-不传中间件时返回原工具。包装结果是 `*tools.MiddlewareTool`，只实现 `interfaces.Tool` 与 `Unwrap()`，**不转发**原工具声明的可选接口（如 `DispatchTimeoutProvider`、`DurablePolicyProvider`、`interfaces.ArgumentErrorTool`），Dispatcher 也不会调用 `Unwrap`；依赖这些声明的工具不要先包装再注册。
+不传中间件时返回原工具。包装结果是 `*middleware.WrappedTool`，只实现 `interfaces.Tool` 与 `Unwrap()`，**不转发**原工具声明的可选接口（如 `DispatchTimeoutProvider`、`DurablePolicyProvider`、`interfaces.ArgumentErrorTool`），Dispatcher 也不会调用 `Unwrap`；依赖这些声明的工具不要先包装再注册。
 
 ### 内置中间件
 
@@ -95,11 +95,11 @@ dispatcher, err := tools.NewDispatcher(registry, tools.DispatchConfig{
 | `Around` | `Around` | 洋葱式包住工具执行，计入单次超时 |
 | `Post` | `PostHook` → `PostDecision` | 替换结果（`Replace`）或追加上下文（`AdditionalContext`）；也处理被拒绝的结果 |
 
-`Call.Args` 只读。准入阶段（Pre、审批、Guard）在操作日志之外执行，拒绝结果与执行结果一样写入日志；持久运行回放已完成的调用时直接返回日志中的结果，不再经过准入、Around 或包在 Dispatcher 内部的工具包装（含 `WithMiddleware`）。授权（`DispatchConfig.Authorize`）、并发、排队与超时见[执行治理](EXECUTION_GOVERNANCE.md#dispatcher-的两阶段准入)，日志与恢复见[原生编排](NATIVE_ORCHESTRATION.md#工具调用级日志与恢复)。
+`Call.Args` 只读。准入阶段（Pre、审批、Guard）在操作日志之外执行，拒绝结果与执行结果一样写入日志；持久运行回放已完成的调用时直接返回日志中的结果，不再经过准入、Around 或包在 Dispatcher 内部的工具包装（含 `middleware.Wrap`）。授权（`DispatchConfig.Authorize`）、并发、排队与超时见[执行治理](EXECUTION_GOVERNANCE.md#dispatcher-的两阶段准入)，日志与恢复见[原生编排](NATIVE_ORCHESTRATION.md#工具调用级日志与恢复)。
 
 ## 参考
 
-- 源码：`tools/middleware/`、`tools/tool_wrapper.go`、`tools/pipeline.go`、`tools/dispatcher.go`
+- 源码：`tools/middleware/`（`Wrap` 在 `wrap.go`）、`tools/pipeline.go`、`tools/dispatcher.go`
 - [缓存指南](CACHING_GUIDE.md)
 
-具有 `Wrap(interfaces.Tool, ToolInvoker) ToolInvoker` 方法的中间件对象须显式传入其 `Wrap`，如 `tools.WithMiddleware(tool, logging.Wrap)`。装配入口只接受 `ToolMiddlewareFunc`，其它类型由编译器拒绝；空函数或返回空调用器的函数在构造时以配置错误失败。原工具可选能力仍须按前述约束显式装配。
+具有 `Wrap(interfaces.Tool, ToolInvoker) ToolInvoker` 方法的中间件对象须显式传入其 `Wrap`，如 `middleware.Wrap(tool, logging.Wrap)`。装配入口只接受 `ToolMiddlewareFunc`，其它类型由编译器拒绝；空函数或返回空调用器的函数在构造时以配置错误失败。原工具可选能力仍须按前述约束显式装配。
