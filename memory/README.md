@@ -375,6 +375,8 @@ Shutdown(ctx) error
 GetStats() *MemoryStats
 ```
 
+并发：改变条目所在层或向量索引的操作（`Store`/`StoreTyped`、`Get` 触发的晋升、`Consolidate`、`Forget`、`Clear`）彼此串行，以保证向量索引与持有条目一致；调用向量库时不持有读写锁，`Get`、`Search`、`GetByType`、`GetStats`、`VectorSearch` 不会被远端向量库的写入阻塞。写入期间读取可能短暂看到条目已更新而向量尚未同步。
+
 ### VectorStore 实现
 
 ```go

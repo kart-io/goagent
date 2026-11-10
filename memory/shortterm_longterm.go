@@ -255,6 +255,7 @@ type LongTermMemory struct {
 	entries     map[string]*MemoryEntry
 	vectorStore VectorStore
 	index       map[MemoryType][]string // Type index for fast lookup
+	writeMu     sync.Mutex              // 串行化 Store，向量写入不持有 mu
 	mu          sync.RWMutex
 }
 
@@ -269,8 +270,8 @@ func NewLongTermMemory(vectorStore VectorStore) *LongTermMemory {
 
 // Store stores an entry in long-term memory
 func (m *LongTermMemory) Store(ctx context.Context, entry *MemoryEntry) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.writeMu.Lock()
+	defer m.writeMu.Unlock()
 
 	// 先写向量：失败时不留下无法被向量检索的条目
 	if m.vectorStore != nil && len(entry.Embedding) > 0 {
@@ -278,6 +279,14 @@ func (m *LongTermMemory) Store(ctx context.Context, entry *MemoryEntry) error {
 			return err
 		}
 	}
+	m.put(entry)
+	return nil
+}
+
+// put 只写入条目与类型索引，不写向量。
+func (m *LongTermMemory) put(entry *MemoryEntry) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	// Store entry
 	m.entries[entry.ID] = entry
@@ -298,8 +307,6 @@ func (m *LongTermMemory) Store(ctx context.Context, entry *MemoryEntry) error {
 	if !found {
 		m.index[entry.Type] = append(m.index[entry.Type], entry.ID)
 	}
-
-	return nil
 }
 
 // Get retrieves an entry from long-term memory

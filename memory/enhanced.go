@@ -4,6 +4,7 @@ package memory
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os"
 	"reflect"
 	"sync"
@@ -97,7 +98,10 @@ type HierarchicalMemory struct {
 	vectorStore  VectorStore
 	embedder     TextEmbedder
 	consolidator *MemoryConsolidator
-	mu           sync.RWMutex
+	// writeMu 串行化改变条目所在层或向量索引的操作，保证向量索引与持有条目一致；
+	// mu 只在读写各层 map 时短暂持有，调用向量库时不持有，只读操作不被远端 IO 阻塞。加锁顺序：writeMu → mu。
+	writeMu sync.Mutex
+	mu      sync.RWMutex
 
 	// Lifecycle management
 	ctx    context.Context
@@ -208,8 +212,8 @@ func (m *HierarchicalMemory) StoreTyped(ctx context.Context, key string, value i
 			WithContext("key", key)
 	}
 
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.writeMu.Lock()
+	defer m.writeMu.Unlock()
 
 	// Create memory entry
 	entry := &MemoryEntry{
@@ -229,7 +233,12 @@ func (m *HierarchicalMemory) StoreTyped(ctx context.Context, key string, value i
 	// Store based on type
 	switch memType {
 	case MemoryTypeLongTerm, MemoryTypeEpisodic, MemoryTypeSemantic, MemoryTypeProcedural:
-		err = m.longTerm.Store(ctx, entry)
+		// 先写向量：失败时不留下无法被向量检索的条目；条目尚未可见，元数据无需复制
+		if err = m.index(ctx, entry.ID, entry.Embedding, entry.Metadata); err == nil {
+			m.mu.Lock()
+			m.longTerm.put(entry)
+			m.mu.Unlock()
+		}
 	default:
 		err = m.storeShortTerm(ctx, entry)
 	}
@@ -243,19 +252,28 @@ func (m *HierarchicalMemory) StoreTyped(ctx context.Context, key string, value i
 	return nil
 }
 
-// storeShortTerm 让短期条目也立即可被 VectorSearch 检索，并同步被容量淘汰条目的向量。
+// storeShortTerm 让短期条目也立即可被 VectorSearch 检索，并同步被容量淘汰条目的向量。须持有 writeMu。
 func (m *HierarchicalMemory) storeShortTerm(ctx context.Context, entry *MemoryEntry) error {
-	if m.vectorStore != nil && len(entry.Embedding) > 0 {
-		if err := m.vectorStore.Add(ctx, entry.ID, entry.Embedding, entry.Metadata); err != nil {
-			return agentErrors.Wrap(err, agentErrors.CodeStateSave, "failed to index short-term memory").
-				WithComponent("hierarchical_memory").
-				WithOperation("store_typed").
-				WithContext("key", entry.ID)
-		}
+	if err := m.index(ctx, entry.ID, entry.Embedding, entry.Metadata); err != nil {
+		return agentErrors.Wrap(err, agentErrors.CodeStateSave, "failed to index short-term memory").
+			WithComponent("hierarchical_memory").
+			WithOperation("store_typed").
+			WithContext("key", entry.ID)
 	}
 
-	m.syncEvicted(ctx, m.shortTerm.storeEvicting(entry))
+	m.mu.Lock()
+	evicted := m.shortTerm.storeEvicting(entry)
+	m.mu.Unlock()
+	m.syncEvicted(ctx, evicted)
 	return nil
+}
+
+// index 把向量写入向量库；未配置向量库或没有向量时跳过。调用方不得持有 mu。
+func (m *HierarchicalMemory) index(ctx context.Context, id string, embedding []float32, metadata map[string]interface{}) error {
+	if m.vectorStore == nil || len(embedding) == 0 {
+		return nil
+	}
+	return m.vectorStore.Add(ctx, id, embedding, metadata)
 }
 
 // syncEvicted 只处理带向量的被淘汰条目；不带向量的条目从未写入向量存储。
@@ -266,13 +284,22 @@ func (m *HierarchicalMemory) syncEvicted(ctx context.Context, evicted *MemoryEnt
 }
 
 // syncVector 在条目离开某一层或被覆盖后，让向量存储中该 ID 的向量与仍持有它的条目一致：
-// 有持有者则重写其向量（恢复归属），否则删除，避免孤儿向量占用搜索名额。
+// 有持有者则重写其向量（恢复归属），否则删除，避免孤儿向量占用搜索名额。须持有 writeMu、不得持有 mu。
 func (m *HierarchicalMemory) syncVector(ctx context.Context, id string) {
 	if m.vectorStore == nil {
 		return
 	}
-	if holder := m.vectorHolder(ctx, id); holder != nil {
-		if err := m.vectorStore.Add(ctx, id, holder.Embedding, holder.Metadata); err != nil {
+	m.mu.RLock()
+	var embedding []float32
+	var metadata map[string]interface{}
+	holder := m.vectorHolder(ctx, id)
+	if holder != nil {
+		// Associate 可能并发修改元数据，交给向量库的是快照
+		embedding, metadata = holder.Embedding, maps.Clone(holder.Metadata)
+	}
+	m.mu.RUnlock()
+	if holder != nil {
+		if err := m.vectorStore.Add(ctx, id, embedding, metadata); err != nil {
 			// 向量数据库写入失败，记录但继续
 			fmt.Fprintf(os.Stderr, "vector store restore failed (id=%s): %v\n", id, err)
 		}
@@ -345,32 +372,43 @@ func isNil(value interface{}) bool {
 
 // Get retrieves a value from memory
 func (m *HierarchicalMemory) Get(ctx context.Context, key string) (interface{}, error) {
-	// 更新访问计数并可能晋升条目，属于写操作
+	// 更新访问计数不改变所在层，只需 mu；晋升会改变所在层与向量索引，另取 writeMu
 	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	// Check short-term first
 	if entry, err := m.shortTerm.Get(ctx, key); err == nil {
 		m.updateAccess(entry)
-		return entry.Content, nil
+		content := entry.Content
+		m.mu.Unlock()
+		return content, nil
 	}
-
-	// Check long-term
 	if entry, err := m.longTerm.Get(ctx, key); err == nil {
 		m.updateAccess(entry)
-
-		// Promote frequently accessed long-term memories to short-term
-		if entry.AccessCount > 10 {
-			m.syncEvicted(ctx, m.shortTerm.storeEvicting(entry))
+		content, promote := entry.Content, entry.AccessCount > 10
+		m.mu.Unlock()
+		if promote {
+			m.promote(ctx, key)
 		}
-
-		return entry.Content, nil
+		return content, nil
 	}
+	m.mu.Unlock()
 
 	return nil, agentErrors.New(agentErrors.CodeStoreNotFound, "memory not found").
 		WithComponent("hierarchical_memory").
 		WithOperation("get").
 		WithContext("key", key)
+}
+
+// promote 把频繁访问的长期条目放入短期层，并同步被容量淘汰条目的向量。
+func (m *HierarchicalMemory) promote(ctx context.Context, key string) {
+	m.writeMu.Lock()
+	defer m.writeMu.Unlock()
+	m.mu.Lock()
+	entry, err := m.longTerm.Get(ctx, key)
+	var evicted *MemoryEntry
+	if err == nil {
+		evicted = m.shortTerm.storeEvicting(entry)
+	}
+	m.mu.Unlock()
+	m.syncEvicted(ctx, evicted)
 }
 
 // Search searches for memories matching a query
@@ -479,37 +517,35 @@ func (m *HierarchicalMemory) GetByType(ctx context.Context, memType MemoryType, 
 
 // Consolidate consolidates short-term to long-term memory
 func (m *HierarchicalMemory) Consolidate(ctx context.Context) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.writeMu.Lock()
+	defer m.writeMu.Unlock()
 
 	// Get important short-term memories
+	m.mu.RLock()
 	candidates := m.shortTerm.GetConsolidationCandidates(m.consolidationThreshold)
+	m.mu.RUnlock()
 
 	// Consolidate to long-term
 	for _, entry := range candidates {
-		// Update type to long-term
-		if entry.Type == MemoryTypeShortTerm {
-			entry.Type = MemoryTypeLongTerm
-		}
-
-		// Store in long-term
-		if err := m.longTerm.Store(ctx, entry); err != nil {
+		m.mu.RLock()
+		embedding, metadata := entry.Embedding, maps.Clone(entry.Metadata)
+		m.mu.RUnlock()
+		// 先写向量：失败时条目留在短期层，不出现无法被向量检索的长期条目
+		if err := m.index(ctx, entry.ID, embedding, metadata); err != nil {
 			return agentErrors.Wrap(err, agentErrors.CodeStateSave, "failed to consolidate memory").
 				WithComponent("hierarchical_memory").
 				WithOperation("consolidate").
 				WithContext("entry_id", entry.ID)
 		}
 
-		// Store in vector database if available
-		if m.vectorStore != nil && len(entry.Embedding) > 0 {
-			if err := m.vectorStore.Add(ctx, entry.ID, entry.Embedding, entry.Metadata); err != nil {
-				// 向量数据库添加失败，记录但继续
-				fmt.Fprintf(os.Stderr, "vector store add failed during consolidation (entry_id=%s): %v\n", entry.ID, err)
-			}
+		m.mu.Lock()
+		if entry.Type == MemoryTypeShortTerm {
+			entry.Type = MemoryTypeLongTerm
 		}
-
-		// Remove from short-term
-		if err := m.shortTerm.Remove(ctx, entry.ID); err != nil {
+		m.longTerm.put(entry)
+		err := m.shortTerm.Remove(ctx, entry.ID)
+		m.mu.Unlock()
+		if err != nil {
 			// 短期记忆移除失败，记录但继续
 			fmt.Fprintf(os.Stderr, "short-term memory removal failed (entry_id=%s): %v\n", entry.ID, err)
 		}
@@ -520,9 +556,10 @@ func (m *HierarchicalMemory) Consolidate(ctx context.Context) error {
 
 // Forget removes old or unimportant memories
 func (m *HierarchicalMemory) Forget(ctx context.Context, threshold float64) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.writeMu.Lock()
+	defer m.writeMu.Unlock()
 
+	m.mu.Lock()
 	// Apply decay to all memories
 	m.applyDecay()
 
@@ -531,6 +568,7 @@ func (m *HierarchicalMemory) Forget(ctx context.Context, threshold float64) erro
 
 	// Forget long-term memories below threshold (more conservative)
 	longTermForgotten := m.longTerm.Forget(threshold * 0.5)
+	m.mu.Unlock()
 
 	// 另一层仍持有同 ID 条目时保留其向量，否则删除
 	for _, id := range append(shortTermForgotten, longTermForgotten...) {
@@ -669,11 +707,13 @@ func (m *HierarchicalMemory) GetStats() *MemoryStats {
 
 // Clear clears all memory
 func (m *HierarchicalMemory) Clear(ctx context.Context) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.writeMu.Lock()
+	defer m.writeMu.Unlock()
 
+	m.mu.Lock()
 	m.shortTerm.Clear()
 	m.longTerm.Clear()
+	m.mu.Unlock()
 
 	if m.vectorStore != nil {
 		// Clear vector store
