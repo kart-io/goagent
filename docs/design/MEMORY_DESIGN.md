@@ -96,6 +96,9 @@ type Record struct {
     Source      Source     // 会话 ID 与事件序号区间
     CreatedAt, LastAccess time.Time
     AccessCount int
+    Pinned      bool       // 核心记忆
+    EmbedModel  string     // 写入索引时的嵌入模型
+    Reflected   bool       // 情景已参与反思
 }
 ```
 
@@ -104,19 +107,19 @@ type Record struct {
 
 ### 3.2 异步形成与演化
 
-1. 轮次结束（`turn/end` 写入成功后）登记一条任务：`{session, turnSeq}`，键幂等，存于 RecordStore 的任务命名空间。
-2. `memory.Worker`（宿主 `go w.Run(ctx)`）领取任务，从会话日志读该轮消息、最近 M 条消息与当前摘要，调用 `Extractor` 得到候选。
-3. 每个候选检索同命名空间最相似的 N 条，由 `Reconciler` 判定 ADD / UPDATE / INVALIDATE / NOOP（Mem0）。矛盾的旧记录写 `InvalidAt` 与 `SupersededBy`（Zep），不物理删除。
-4. 失败的轮次（`Aborted`）写一条 `reflection`（Reflexion）；累计重要度超过阈值时从近期 `episode` 提炼结论（Generative Agents）。
-5. 任务完成后标记完成；Worker 崩溃后重领未完成任务，抽取结果按"任务键 + 序号"幂等写入。
-6. Rewind 越过某轮时，Worker 使该轮来源的记录失效。
+1. 轮次结束（`turn/end` 写入成功后，重放已完成的持久轮次时也登记）登记一条任务，Key 为"会话/turn/start 序号"，重复登记不产生新任务，存于 `store.Store` 的 `{"memory","jobs"}`。上一轮未结束、在下一轮开始时以中止结束的，登记 `Aborted` 任务。
+2. 宿主运行 `go mem.Run(ctx, onError)`；Worker 从会话日志读该轮的消息事件（跳过注入的召回块，已被退回的轮次跳过），请求抽取模型得到候选。同一任务存储只运行一个 Worker。
+3. 每个候选检索同命名空间、同类别最相似的 `ReconcileCandidates` 条（不更新访问时间），由模型判定 add / update / invalidate / noop（Mem0）。update 与 invalidate 写入新记录，旧记录写 `InvalidAt` 与 `SupersededBy`（Zep），不物理删除。
+4. 中止的轮次只写一条 `reflection` 教训（Reflexion）；未参与反思的有效情景累计重要度达到 `ReflectionThreshold` 时提炼结论并标记这些情景（Generative Agents）。
+5. 记录 ID 由任务 Key 与序号决定，崩溃后重做同一任务覆盖而不是重复；任务失败按 `JobAttempts` 重试后标记 failed，错误记在任务中。
+6. 宿主在 `session.Rewind` 之后调用 `mem.Rewound(ctx, session, to)`，使来源为被退回轮次的记录失效。
 
 ### 3.3 召回
 
-- 混合检索：向量相似度、关键词、标签与命名空间过滤，合并后按 `α·相关性 + β·新近性 + γ·重要性` 打分（Generative Agents），可选 Reranker。
-- 自动召回：PreStep 以本步输入为查询，取 top-K 放入低信任通道（带来源标注的用户消息块，不作为 system），受预算约束。
+- 混合检索：相关性取向量相似度与字符对重合（对中英文都适用）的较大者，与新近性（半衰期 `HalfLife`）、重要性按 `Weights` 加权（Generative Agents）；命名空间与类别在排序前过滤。召回会读取命名空间内全部记录，规模由 `Retention.MaxRecords` 限制。
+- 自动召回：每轮第一次请求前的 PreStep 以本轮输入为查询，召回块以 `[相关长期记忆]` 开头，作为用户消息插在本轮输入之前（不作为 system），并说明只作参考、与用户当前所说冲突时以用户为准；持久运行回放 PreStep 结果，不再召回。
 - 工具：`memory_search`、`memory_save`、`memory_forget`，作用域为当前命名空间。
-- 核心记忆：每个命名空间一小块钉住的画像（MemGPT Working Context），有字数上限，放在 system 之后。
+- 核心记忆：`Pinned` 的记录（MemGPT Working Context）每轮都放在召回块最前，与召回结果共用 `RecallRunes`。
 
 ### 3.4 遗忘与保留
 
@@ -138,8 +141,8 @@ type Record struct {
 | `WithMemory(memory.NewInMemoryManager(...))` | `WithSessionLog(session.NewMemoryStore())`，会话 ID 用 `WithSessionID` 或 `tools.WithSessionID(ctx)` |
 | `WithMaxConversationHistory(n)` | `WithCompaction(contextpolicy.NewCompaction(...))` |
 | `WithMemoryFailurePolicy` | 删除；会话日志写入失败即本轮失败 |
-| `MemoryManager.AddCase/SearchSimilarCases/Store/Retrieve` | 第二阶段 `memory.RecordStore` 与召回 |
-| `memory.HierarchicalMemory` 等 | 第二阶段 `memory` 包 |
+| `MemoryManager.AddCase/SearchSimilarCases/Store/Retrieve` | `memory.Memory` 的 `Remember`/`Recall`；纯键值数据用 `store.Store` |
+| `memory.HierarchicalMemory`、`InMemoryManager`、`InMemoryVectorStore`、`ChromaVectorStore` 等 | `memory.New(memory.Config{...})`、`memory.NewMemoryIndex`；外部向量库实现 `memory.Index` |
 | goagent-harness `preset` 的 `compaction` | 组件保留，内部改用 `contextpolicy.Compaction` 并以 `Keep`/`Annotate` 注入编码场景逻辑 |
 
 ## 6. 评测

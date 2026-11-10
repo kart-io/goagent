@@ -20,6 +20,7 @@ classDiagram
         +WithRequestHook / WithRequestError / WithTurnStopping
         +WithOffload(*contextpolicy.Offload)
         +WithCompaction(*contextpolicy.Compaction)
+        +WithLongTermMemory(*memory.Memory)
         +Build() (*ConfigurableAgent, error)
         +BuildContext(ctx) (*ConfigurableAgent, error)
     }

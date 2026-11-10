@@ -39,7 +39,7 @@ go run ./orchestration/composed-order /tmp/goagent-order-demo
 
 有状态子 Agent 使用 `NewRunnableToolFactory`，每次返回 `OwnedRunnable{Runnable, Close}`。必须显式提供 Close，即便它是 no-op。部分构造失败仍清理已获得资源，成功、执行失败、取消均清理。清理 context 独立于父取消、最长 5 秒；忽略 context 的实现不能被强制终止。清理错误阻止工具记录 completed。
 
-宿主负责为每个 child 分配独立 SessionID、MemoryManager 命名空间及 Dispatcher。不同对象指针无法证明隔离；`agent-tool` 示例测试并发真实记忆隔离，并拒绝复用 SessionID。父历史不自动复制，输入解码只传必要业务字段。模型型工具须声明 `ModelInvoking: true`，缺根预算会在 factory 前拒绝；这项声明不是对隐藏模型调用的自动检测。
+宿主负责为每个 child 分配独立 SessionID、长期记忆命名空间（`memory.WithNamespace`）及 Dispatcher。不同对象指针无法证明隔离；`agent-tool` 示例测试并发真实记忆隔离，并拒绝复用 SessionID。父历史不自动复制，输入解码只传必要业务字段。模型型工具须声明 `ModelInvoking: true`，缺根预算会在 factory 前拒绝；这项声明不是对隐藏模型调用的自动检测。
 
 默认最大嵌套深度 8，祖先更小的限制继续生效。同一执行链重入同一 Dispatcher 在并发槽排队前拒绝；独立子 Dispatcher 允许嵌套。deadline 逐层继承；长工具需宿主显式配置 Dispatcher Timeout。
 

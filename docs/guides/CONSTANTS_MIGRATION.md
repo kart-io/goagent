@@ -68,10 +68,10 @@ custom := shared.Provider("offline-demo")
 | `llm/providers.OllamaBaseURL` | `constants.OllamaBaseURL` |
 | `tools.resumableAttempts` | `constants.DefaultResumableToolAttempts` |
 | `core/durable.interruptAttempts` | `constants.DefaultInterruptAttempts` |
-| `memory.DefaultMaxConversationLength` | `constants.DefaultMemoryMaxConversationLength` |
-| `memory.DefaultSearchLimit` | `constants.DefaultMemorySearchLimit` |
-| `memory.DefaultSimilarityThreshold` | `constants.DefaultMemorySimilarityThreshold` |
-| `memory.DefaultEmbeddingDimension` | `constants.DefaultMemoryEmbeddingDimension` |
+| `memory.DefaultMaxConversationLength` | 已删除（记忆系统重写，见 COMPATIBILITY_CLEANUP） |
+| `memory.DefaultSearchLimit` | 已删除（记忆系统重写，见 COMPATIBILITY_CLEANUP） |
+| `memory.DefaultSimilarityThreshold` | 已删除（记忆系统重写，见 COMPATIBILITY_CLEANUP） |
+| `memory.DefaultEmbeddingDimension` | 已删除（记忆系统重写，见 COMPATIBILITY_CLEANUP） |
 | `core/durable.inboxSeenLimit` | `constants.DurableInboxSeenLimit` |
 | `tools/spill.previewRunes` | `constants.SpillPreviewRunes` |
 | `tools/spill.defaultReadLimit` | `constants.DefaultSpillReadLimitLines` |
@@ -99,13 +99,13 @@ custom := shared.Provider("offline-demo")
 | `core/session.TypeHistoryRewrite` | `constants.SessionEventHistoryRewrite` |
 | `core/session.TypeRewind` | `constants.SessionEventRewind` |
 | `core/session.TypeBoundarySnapshot` | `constants.SessionEventBoundarySnapshot` |
-| `memory.VectorStoreTypeMemory` | `constants.VectorStoreTypeMemory` |
-| `memory.VectorStoreTypeChroma` | `constants.VectorStoreTypeChroma` |
-| `memory.VectorStoreTypePinecone` | `constants.VectorStoreTypePinecone` |
-| `memory.VectorStoreTypeWeaviate` | `constants.VectorStoreTypeWeaviate` |
-| `memory.EmbedderProviderOpenAI` | `constants.EmbedderProviderOpenAI` |
-| `memory.EmbedderProviderLocal` | `constants.EmbedderProviderLocal` |
-| `memory.EmbedderProviderMock` | `constants.EmbedderProviderMock` |
+| `memory.VectorStoreTypeMemory` | 已删除（记忆系统重写，见 COMPATIBILITY_CLEANUP） |
+| `memory.VectorStoreTypeChroma` | 已删除（记忆系统重写，见 COMPATIBILITY_CLEANUP） |
+| `memory.VectorStoreTypePinecone` | 已删除（记忆系统重写，见 COMPATIBILITY_CLEANUP） |
+| `memory.VectorStoreTypeWeaviate` | 已删除（记忆系统重写，见 COMPATIBILITY_CLEANUP） |
+| `memory.EmbedderProviderOpenAI` | 已删除（记忆系统重写，见 COMPATIBILITY_CLEANUP） |
+| `memory.EmbedderProviderLocal` | 已删除（记忆系统重写，见 COMPATIBILITY_CLEANUP） |
+| `memory.EmbedderProviderMock` | 已删除（记忆系统重写，见 COMPATIBILITY_CLEANUP） |
 
 上述常量保留原来的具名/无类型状态和值。时间值仍为 `time.Duration`，不能改成整数秒；`BudgetUnlimited` 仍用 `math.MaxInt` 随目标架构求值。`DefaultModelResendAttempts` 和 `DefaultInterruptAttempts` 会参与持久操作策略校验，默认数字没有变化；不需要改写既有日志。
 

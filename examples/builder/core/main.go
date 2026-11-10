@@ -194,7 +194,7 @@ func example2AgentWithPerformanceControl(apiKey, providerName string) {
 // - Simple API: WithSystemPrompt, WithTools, Build
 // - Core API: WithMemory, WithSessionID, WithMaxConversationHistory
 //
-// 本示例演示如何使用 MemoryManager 实现多轮对话。
+// 本示例演示如何用会话日志实现多轮对话。
 // Agent 会记住之前的对话内容，在后续对话中可以引用之前的信息。
 func example3AgentWithMemory(apiKey, providerName string) {
 	fmt.Println("--- 示例 3: 带对话记忆的 Agent（多轮对话）---")

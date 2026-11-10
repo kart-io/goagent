@@ -31,7 +31,7 @@ Builder 是可变对象，不要并发配置。所有 `With*` 方法返回同一
 | 工具 | `WithTools(...interfaces.Tool)`、`WithReturnDirectTools(names...)`、`WithParallelToolCalls(n)`、`WithEmptyAnswerRetries(n)` |
 | 循环钩子 | `WithPreStep`、`WithIdentifiedPreStep(identity, hook)`、`WithRequestHook`、`WithRequestError(maxRecoveries, hooks...)`、`WithTurnStopping`、`WithOffload(*contextpolicy.Offload)`、`WithTokenEstimator` |
 | 会话与持久化 | `WithSessionID`、`WithSessionLog(session.Store)`、`WithDurableScope`、`WithState(S)` |
-| 记忆与检索 | `WithSessionLog(session.Store)`、`WithCompaction(*contextpolicy.Compaction)`、`WithRetriever(interfaces.DocumentRetriever, ...RetrievalConfig)` |
+| 记忆与检索 | `WithSessionLog(session.Store)`、`WithCompaction(*contextpolicy.Compaction)`、`WithLongTermMemory(*memory.Memory)`、`WithRetriever(interfaces.DocumentRetriever, ...RetrievalConfig)` |
 | 横切 | `WithMiddleware(...middleware.Middleware)`、`WithCallbacks(...core.Callback)`、`WithErrorHandler`、`WithMetadata`、`WithInputSerializer`、`WithVerbose` |
 | 预设 | `ConfigureForChatbot`、`ConfigureForRAG`、`ConfigureForAnalysis` |
 

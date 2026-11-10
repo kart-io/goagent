@@ -72,17 +72,6 @@ func TestApprovedConstantEntrypointsCannotReturn(t *testing.T) {
 		"core/session/TypeTurnStart":             "constants.SessionEventTurnStart",
 		"core/session/TypeUserMessage":           "constants.SessionEventUserMessage",
 		"llm/providers/OllamaBaseURL":            "constants.OllamaBaseURL",
-		"memory/DefaultEmbeddingDimension":       "constants.DefaultMemoryEmbeddingDimension",
-		"memory/DefaultMaxConversationLength":    "constants.DefaultMemoryMaxConversationLength",
-		"memory/DefaultSearchLimit":              "constants.DefaultMemorySearchLimit",
-		"memory/DefaultSimilarityThreshold":      "constants.DefaultMemorySimilarityThreshold",
-		"memory/EmbedderProviderLocal":           "constants.EmbedderProviderLocal",
-		"memory/EmbedderProviderMock":            "constants.EmbedderProviderMock",
-		"memory/EmbedderProviderOpenAI":          "constants.EmbedderProviderOpenAI",
-		"memory/VectorStoreTypeChroma":           "constants.VectorStoreTypeChroma",
-		"memory/VectorStoreTypeMemory":           "constants.VectorStoreTypeMemory",
-		"memory/VectorStoreTypePinecone":         "constants.VectorStoreTypePinecone",
-		"memory/VectorStoreTypeWeaviate":         "constants.VectorStoreTypeWeaviate",
 		"multiagent/Finish":                      "constants.MultiagentFinish",
 		"tools/defaultApprovalTimeout":           "constants.DefaultApprovalTimeout",
 		"tools/resumableAttempts":                "constants.DefaultResumableToolAttempts",
@@ -96,7 +85,7 @@ func TestApprovedConstantEntrypointsCannotReturn(t *testing.T) {
 		"workflow/RejectResumeInput":             "constants.WorkflowRejectResumeInput",
 		"workflow/START":                         "constants.WorkflowStart",
 	}
-	require.Len(t, approved, 48)
+	require.Len(t, approved, 37)
 	require.Equal(t, approved, migratedConstantOwners)
 	for old, target := range approved {
 		t.Run(old, func(t *testing.T) {

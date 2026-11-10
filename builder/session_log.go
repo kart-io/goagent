@@ -113,6 +113,9 @@ type sessionTurn struct {
 	saved func(seq int64)
 	// replayed 在已完成轮次重放结束时调用。
 	replayed func() error
+	// start 是本轮 turn/start 的序号；ended 在本轮的 turn/end 写入后以其序号调用（重放已完成轮次时同样调用，须幂等）。
+	start int64
+	ended func(ctx context.Context, end int64) error
 }
 
 func sessionTurnFrom(ctx context.Context) *sessionTurn {
@@ -149,7 +152,8 @@ func (a *ConfigurableAgent[S]) openSessionTurn(ctx context.Context, input string
 			return nil, nil, err
 		}
 		if start >= 0 {
-			turn.resumed, turn.completed = events[start].Seq, true
+			turn.resumed, turn.completed, turn.start = events[start].Seq, true, events[start].Seq
+			turn.ended = a.memoryJob(id, turn.start, false)
 			if err := a.restoreSessionState(id, events[:start]); err != nil {
 				return nil, nil, err
 			}
@@ -180,7 +184,8 @@ func (a *ConfigurableAgent[S]) openSessionTurn(ctx context.Context, input string
 			}
 			a.bindSessionTurn(turn, id)
 			history, err := session.DeriveMessages(before)
-			turn.resumed = open.Seq
+			turn.resumed, turn.start = open.Seq, open.Seq
+			turn.ended = a.memoryJob(id, turn.start, false)
 			return turn, history, err
 		}
 		end, err := session.NewEvent(constants.SessionEventTurnEnd, session.TurnEnd{Aborted: true})
@@ -190,6 +195,11 @@ func (a *ConfigurableAgent[S]) openSessionTurn(ctx context.Context, input string
 		end.Surface = &session.Surface{Start: open.Seq, End: rec.Seq()}
 		if _, err := rec.Append(ctx, end); err != nil {
 			return nil, nil, err
+		}
+		if learn := a.memoryJob(id, open.Seq, true); learn != nil {
+			if err := learn(ctx, rec.Seq()); err != nil {
+				return nil, nil, err
+			}
 		}
 	}
 	if err := a.restoreSessionState(id, rec.Events()); err != nil {
@@ -204,8 +214,12 @@ func (a *ConfigurableAgent[S]) openSessionTurn(ctx context.Context, input string
 	if err != nil {
 		return nil, nil, err
 	}
-	_, err = rec.Append(ctx, start)
-	return turn, history, err
+	if _, err = rec.Append(ctx, start); err != nil {
+		return nil, nil, err
+	}
+	turn.start = rec.Seq()
+	turn.ended = a.memoryJob(id, turn.start, false)
+	return turn, history, nil
 }
 
 // completedSessionTurn 仅恢复当前最后一轮；退回或后续新轮次之后须使用新的执行键。
@@ -305,9 +319,11 @@ func (t *sessionTurn) end(ctx context.Context, messages []llm.Message, answer st
 	}
 	if t.completed {
 		if t.replayed != nil {
-			return t.replayed()
+			if err := t.replayed(); err != nil {
+				return err
+			}
 		}
-		return nil
+		return t.notifyEnded(ctx)
 	}
 	d := session.TurnEnd{Answer: answer}
 	if usage != nil {
@@ -328,5 +344,21 @@ func (t *sessionTurn) end(ctx context.Context, messages []llm.Message, answer st
 	if err == nil && t.saved != nil && len(appended) > 0 {
 		t.saved(appended[len(appended)-1].Seq)
 	}
+	if err == nil {
+		err = t.notifyEnded(ctx)
+	}
 	return err
+}
+
+// notifyEnded 以本轮 turn/end 的序号调用 ended。
+func (t *sessionTurn) notifyEnded(ctx context.Context) error {
+	if t.ended == nil {
+		return nil
+	}
+	for _, ev := range t.rec.Events() {
+		if ev.Seq > t.start && ev.Type == constants.SessionEventTurnEnd {
+			return t.ended(ctx, ev.Seq)
+		}
+	}
+	return nil
 }

@@ -7,6 +7,7 @@ import (
 	"github.com/kart-io/goagent/builder/contextpolicy"
 	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/session"
+	"github.com/kart-io/goagent/memory"
 
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/usage"
@@ -62,6 +63,9 @@ type AgentConfig struct {
 
 	// Offloads 是 WithOffload 装入的结果卸载；仅作用于原生工具流。
 	Offloads []*contextpolicy.Offload `json:"-"`
+
+	// LongTermMemory 是 WithLongTermMemory 接入的长期记忆。
+	LongTermMemory *memory.Memory `json:"-"`
 
 	// ReturnDirectTools 允许单个工具调用直接提供最终答案；仅作用于原生工具流。
 	ReturnDirectTools []string

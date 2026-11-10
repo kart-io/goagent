@@ -210,6 +210,9 @@ func LastState(events []Event) (state json.RawMessage, seq int64, err error) {
 	return nil, 0, nil
 }
 
+// Active 返回未被 session/rewind 与中止的 turn/end 撤销的事件。
+func Active(events []Event) []Event { return activeEvents(events) }
+
 // activeEvents 去掉被 session/rewind 与中止的 turn/end 撤销的事件。
 // 退回恢复到序号 Start-1 时的视图，因此退回到更早的退回之前会让那次退回失效；中止的轮次只删去本轮事件。
 func activeEvents(events []Event) []Event {

@@ -87,7 +87,7 @@ graph TD
 | 包 | 职责 |
 |----|------|
 | `constants` | 共享协议值、字段、状态、默认参数及 Provider 类型的唯一公开入口；只依赖标准库，不保留旧包转发 |
-| `interfaces` | 共享接口：`Tool`、`ToolInput/ToolOutput`、`MemoryManager`、`DocumentRetriever` 等 |
+| `interfaces` | 共享接口：`Tool`、`ToolInput/ToolOutput`、`DocumentRetriever` 等 |
 | `errors` | 统一错误码、不可变固定哨兵、文案、上下文字段及业务错误构造函数（含 panic 错误） |
 | `core` | `Runnable[I,O]`、`StreamRunnable`、`RunnablePipe/Sequence`、`Callback`、panic 处理注册表 |
 | `core/state` | Agent 状态 |

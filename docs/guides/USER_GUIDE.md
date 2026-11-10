@@ -150,36 +150,31 @@ agent, err := builder.NewSimpleBuilder(client).
 
 多轮历史由 [core/session](../../core/session/README.md) 的会话日志推导；请求上下文经 `tools.WithSessionID(ctx, id)` 给出会话 ID 时以请求为准。对话超过阈值时较早的消息被压缩成摘要，原文仍在日志中，模型可用 `recall_history` 取回，见[上下文治理](CONTEXT_POLICY.md#历史压缩)。
 
-### 手动管理对话
+### 长期记忆
+
+跨会话的事实、经历与教训由 `memory` 包保存，按宿主给出的命名空间隔离：
 
 ```go
-_ = memManager.AddConversation(ctx, &interfaces.Conversation{
-    SessionID: "session-001",
-    Role:      "user",
-    Content:   "你好",
-    Timestamp: time.Now(),
+mem, err := memory.New(memory.Config{
+    Store:    storemem.New(),          // 任意 store.Store
+    Index:    memory.NewMemoryIndex(), // 可选；与 Embedder 同时提供时启用向量召回
+    Embedder: embedClient,             // llm.EmbeddingClient
+    Model:    extractClient,           // Worker 抽取、整理与反思用的模型
+    Sessions: sessions,                // 与 WithSessionLog 相同
 })
+go mem.Run(ctx, nil) // 异步处理每轮结束登记的抽取任务
 
-history, err := memManager.GetConversationHistory(ctx, "session-001", 10)
+agent, err := builder.NewSimpleBuilder(client).
+    WithSessionLog(sessions).
+    WithLongTermMemory(mem).
+    WithTools(mem.Tools()...). // 可选：memory_search、memory_save、memory_forget
+    Build()
 
-_ = memManager.ClearConversation(ctx, "session-001")
+ctx = memory.WithNamespace(ctx, tenantID, userID) // 必须来自可信身份
+out, err := agent.AsRunnable().Invoke(ctx, "推荐一杯咖啡")
 ```
 
-### 案例记忆
-
-```go
-_ = memManager.AddCase(ctx, &interfaces.Case{
-    Title:    "数据库连接超时",
-    Problem:  "应用启动时连接数据库超时",
-    Solution: "检查连接池配置与网络策略",
-    Category: "database",
-})
-
-cases, err := memManager.SearchSimilarCases(ctx, "数据库连接问题", 5)
-for _, c := range cases {
-    fmt.Printf("相似度 %.2f: %s\n", c.Similarity, c.Title)
-}
-```
+每轮第一次请求前按输入召回相关记录，连同钉住的核心记忆作为一条低信任的用户消息放在输入之前；每轮结束登记抽取任务，Worker 抽取事实与经历，与相似的旧记忆比较后新增、合并或使旧记忆失效。设计见 [记忆系统设计](../design/MEMORY_DESIGN.md)。
 
 ### 会话日志
 

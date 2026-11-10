@@ -99,6 +99,7 @@ builder/
 ├── handle.go               # Start 与 Handle
 ├── offload.go              # WithOffload
 ├── compaction.go           # WithCompaction
+├── long_term_memory.go     # WithLongTermMemory
 ├── retrieval.go            # WithRetriever
 ├── session_log.go          # WithSessionLog、WithSessionState
 ├── durable_turn.go         # 持久模型回合
