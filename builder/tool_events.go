@@ -16,6 +16,7 @@ import (
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/memory"
 	"github.com/kart-io/goagent/tools"
 	"github.com/kart-io/goagent/tools/toolargs"
 )
@@ -109,6 +110,8 @@ func (a *ConfigurableAgent[S]) runToolEvents(ctx context.Context, request *middl
 	emptyRetries := 0
 	// inputs 是尚未交给 PreStep 的用户输入条数，起始为轮次输入。
 	inputs := 1
+	// recall 是本轮的召回快照，第 0 步 PreStep 之前生成。
+	var recall *memory.Snapshot
 	for round := 0; round < a.config.MaxIterations; round++ {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -157,6 +160,11 @@ func (a *ConfigurableAgent[S]) runToolEvents(ctx context.Context, request *middl
 			}
 			metadata["final_answer_only"] = len(tools) == 0
 		}
+		if round == 0 {
+			if recall, err = a.snapshotRecall(ctx, messages, inputs); err != nil {
+				return nil, err
+			}
+		}
 		var pre PreStepResult
 		if messages, pre, err = a.runPreStep(ctx, round, inputs, final, messages); err != nil {
 			return nil, err
@@ -172,7 +180,7 @@ func (a *ConfigurableAgent[S]) runToolEvents(ctx context.Context, request *middl
 		}
 		// 重问需要下一轮额度，最后一轮的空回答按原方式报错。
 		allowEmpty := emptyRetries < a.config.EmptyAnswerRetries && round+1 < a.config.MaxIterations
-		turn, redirected, recovered, err := a.requestTurn(ctx, box, round, client, messages, tools, final, allowEmpty, emit)
+		turn, redirected, recovered, err := a.requestTurn(ctx, box, round, client, messages, tools, final, allowEmpty, recall, emit)
 		if err != nil {
 			return nil, err
 		}

@@ -9,6 +9,8 @@ var (
 	ErrAgentHandleDone = newSentinel(CodeInvalidInput, "agent handle is done")
 	ErrModelRedirected = newSentinel(CodeLLMRequest, "model request redirected")
 	ErrAgentWaiting    = newSentinel(CodeWaiting, "agent is waiting for host continuation")
+	// memory：恢复运行时宿主绑定的命名空间与轮次开始时不同。
+	ErrMemoryNamespaceChanged = newSentinel(CodeConflict, "长期记忆的命名空间与轮次开始时不同")
 	// cache。
 	ErrCacheMiss     = newSentinel(CodeNotFound, "cache miss")
 	ErrCacheDisabled = newSentinel(CodeInvalidConfig, "cache is disabled")

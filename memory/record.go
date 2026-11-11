@@ -89,8 +89,12 @@ func NamespaceFrom(ctx context.Context) []string {
 }
 
 // requireNamespace 返回绑定的合法命名空间；没有时拒绝读写，避免落入所有调用方共享的空间。
+// context 中有轮次绑定时取它的写命名空间，轮次内的读写不随宿主之后的绑定改变。
 func requireNamespace(ctx context.Context) ([]string, error) {
 	ns := NamespaceFrom(ctx)
+	if t, ok := TurnFrom(ctx); ok {
+		ns = slices.Clone(t.Write)
+	}
 	if err := validNamespace(ns); err != nil {
 		return nil, err
 	}

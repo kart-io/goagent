@@ -307,9 +307,13 @@ func turnTime(events []session.Event, from int64, fallback time.Time) time.Time 
 	return fallback
 }
 
-// renderTurn 把序号区间内的消息事件写成纯文本；跳过注入的召回块。
+// memoryTools 是长期记忆自身的工具：它们的调用与结果是记忆的副本，抽取时跳过，避免被遗忘的内容经此重新学回。
+var memoryTools = []string{constants.ToolMemorySearch, constants.ToolMemorySave, constants.ToolMemoryForget}
+
+// renderTurn 把序号区间内的消息事件写成纯文本；跳过注入的召回块与记忆工具的调用和结果。
 func renderTurn(events []session.Event, from, to int64) string {
 	var sb strings.Builder
+	skipped := map[string]bool{}
 	for _, ev := range events {
 		if ev.Seq < from || ev.Seq > to {
 			continue
@@ -323,10 +327,18 @@ func renderTurn(events []session.Event, from, to int64) string {
 		if json.Unmarshal(ev.Data, &d) != nil || strings.HasPrefix(d.Message.Content, RecallPrefix) {
 			continue
 		}
+		if ev.Type == constants.SessionEventToolResult &&
+			(skipped[d.Message.ToolCallID] || (d.Tool != nil && slices.Contains(memoryTools, d.Tool.Name))) {
+			continue
+		}
 		if d.Message.Content != "" {
 			fmt.Fprintf(&sb, "[%s] %s\n", d.Message.Role, truncate(d.Message.Content, 2000))
 		}
 		for _, tc := range d.Message.ToolCalls {
+			if slices.Contains(memoryTools, tc.Function.Name) {
+				skipped[tc.ID] = true
+				continue
+			}
 			fmt.Fprintf(&sb, "[%s] 调用工具 %s：%s\n", d.Message.Role, tc.Function.Name, truncate(tc.Function.Arguments, 500))
 		}
 	}

@@ -37,6 +37,8 @@ type TurnStart struct {
 	Input string `json:"input"`
 	// ExecutionKey 是宿主传给持久运行的执行键（DurableScope 派生之前）：以同一执行键恢复时续写该轮。
 	ExecutionKey string `json:"execution_key,omitempty"`
+	// Memory 是本轮的长期记忆绑定（memory.TurnMemory 的编码）：恢复本轮、登记中止轮次的任务时以它为准。
+	Memory json.RawMessage `json:"memory,omitempty"`
 }
 
 // TurnEnd 是 turn/end 的数据。

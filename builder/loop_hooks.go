@@ -14,6 +14,7 @@ import (
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/memory"
 	toolspkg "github.com/kart-io/goagent/tools"
 )
 
@@ -411,19 +412,29 @@ type redirection struct {
 
 // requestTurn 组装并发送本步的模型请求：附加运行上下文、执行 Request 钩子；失败时按 RequestError 钩子恢复，
 // 原样重试在模型操作内进行，替换消息或客户端时在这里重新组装，替换的消息作为新的历史返回。被 Redirect 取消时返回 redirection。
-func (a *ConfigurableAgent[S]) requestTurn(ctx context.Context, box *inbox, round int, client llm.ToolStreamClient, messages []llm.Message, tools []interfaces.Tool, final, allowEmpty bool, emit func(AgentEvent) error) (*llm.StreamChunk, *redirection, []llm.Message, error) {
+func (a *ConfigurableAgent[S]) requestTurn(ctx context.Context, box *inbox, round int, client llm.ToolStreamClient, messages []llm.Message, tools []interfaces.Tool, final, allowEmpty bool, recall *memory.Snapshot, emit func(AgentEvent) error) (*llm.StreamChunk, *redirection, []llm.Message, error) {
+	slot, err := a.hydrateRecall(ctx, recall, round)
+	if err != nil {
+		return nil, nil, messages, err
+	}
+	// 召回块与运行上下文只进入本步请求，不进入历史：替换消息后重新组装时再次插入。
 	withContext := func(msgs []llm.Message) ([]llm.Message, error) {
+		out := slices.Clone(msgs)
+		slot.index = len(out)
+		if slot.text != "" {
+			out = append(out, llm.UserMessage(slot.text))
+		}
 		if len(a.config.PromptContexts) == 0 {
-			return msgs, nil
+			return out, nil
 		}
 		text, err := journaled(ctx, fmt.Sprintf("loop/context/%d", round), func(context.Context) (string, error) {
 			deadline, _ := ctx.Deadline()
 			return a.contextText(PromptScope{SessionID: toolspkg.SessionIDFrom(ctx), Step: round, Final: final, Deadline: deadline}), nil
 		})
 		if err != nil || text == "" {
-			return msgs, err
+			return out, err
 		}
-		return append(slices.Clone(msgs), stepContextMessage(text)), nil
+		return append(out, stepContextMessage(text)), nil
 	}
 	reqMessages, err := withContext(messages)
 	if err != nil {
@@ -452,7 +463,7 @@ func (a *ConfigurableAgent[S]) requestTurn(ctx context.Context, box *inbox, roun
 		if redirectable {
 			box.beginModel(cancel)
 		}
-		turn, err := readJournaledTurn(withInterruptedModelResend(withRequestRecovery(turnCtx, a.requestRecovery(round, &messages, &attempt)), a.config.ResendInterruptedModel), round, req.Client, req.Request, tools, allowEmpty, a.config.ToolErrorFeedback, stepEmit)
+		turn, err := readJournaledTurn(withInterruptedModelResend(withRequestRecovery(turnCtx, a.requestRecovery(round, &messages, &attempt)), a.config.ResendInterruptedModel), round, req.Client, req.Request, tools, allowEmpty, a.config.ToolErrorFeedback, slot, stepEmit)
 		var redirects []string
 		if redirectable {
 			redirects = box.endModel()
