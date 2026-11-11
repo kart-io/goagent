@@ -61,7 +61,7 @@
 - [工具管线](../../tools/pipeline.go)、[Dispatcher](../../tools/dispatcher.go)、[环境能力](../../harness/env/README.md)。
 - [技能加载](../guides/SKILLS.md)、[Catalog](../../skills/catalog.go)、[不可变修订](../guides/AGENT_REVISIONS.md)。
 - [统一管理](../../management/README.md)、[现有 outbox](../../management/outbox.go)、[协议适配](../guides/PROTOCOL_ADAPTERS.md)、[会话 Store](../../core/session/store.go)。
-- [待实施事实记忆设计](../superpowers/specs/2026-11-08-persistent-factual-memory-design.md)，不能算作已发布能力。
+- [长期记忆的删除优先](../design/MEMORY_GOVERNANCE.md)（待实施，取代存档于 tag `archive/persistent-factual-memory` 的事实记忆设计），不能算作已发布能力。
 - Harness：`preset/skills.go`、`preset/envcontext.go`、`preset/build.go`、`preset/loop.go`、`background/README.md`、`effects/README.md` 及现有 Pi/dsh 采纳记录。
 
 ## 5. 设计结论

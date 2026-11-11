@@ -42,6 +42,8 @@ agent, err := builder.NewSimpleBuilder(client).
 | `Remember(ctx, Record)` | 写入或覆盖一条记录；先写索引再写正文 |
 | `Recall(ctx, Query)` | 混合召回：向量相似度与字符对重合取较大者为相关性，与新近性（半衰期 `HalfLife`）、重要性按 `Weights` 加权；更新访问时间 |
 | `RecallBlock(ctx, query)` / `Retrieve(ctx, query)` | 核心记忆在前、召回结果在后的注入文本，不超过 `RecallRunes`；`Retrieve` 另返回写入块中的记录、关系与社区，`Sessions()` 给出它们依据的会话 |
+| `Snapshot(ctx, query)` / `Hydrate(ctx, s, refs)` | 召回分两步：`Snapshot` 只返回引用（可写入持久日志），`Hydrate` 按引用还原召回块，丢弃已删除、失效或不在读绑定内的项；宿主绑定的命名空间与快照不同时返回 `errors.ErrMemoryNamespaceChanged` |
+| `Turn(ctx)` / `WithTurn` / `CheckTurn` | 轮次的记忆绑定 `TurnMemory`：轮次内的读写与任务都使用开始时的写命名空间 |
 | `Forget(ctx, id)` / `Purge(ctx)` | 使一条记录失效 / 删除整个命名空间 |
 | `Rewound(ctx, session, to)` | 宿主在 `session.Rewind` 后调用：任一来源被退回的记录与关系失效，只被它们取代的旧记录与旧关系恢复 |
 | `Reindex(ctx, force)` | 为嵌入模型不同或缺少索引的记录重建向量 |
@@ -65,7 +67,7 @@ agent, err := builder.NewSimpleBuilder(client).
 ## 抽取流程
 
 1. 轮次结束（含中止）后 Builder 登记任务，Key 为"会话/turn/start 序号"，重复登记不产生新任务。
-2. Worker 从会话日志读该轮的消息（跳过注入的召回块）。轮次已被退回时跳过；中止的轮次只写一条教训。
+2. Worker 从会话日志读该轮的消息（跳过召回块，以及 `memory_search`、`memory_save`、`memory_forget` 的调用与结果）。轮次已被退回时跳过；中止的轮次只写一条教训。
 3. 抽取模型输出候选；每个候选与同类最相似的 `ReconcileCandidates` 条旧记录比较，判定新增、合并更新、否定旧记录或忽略。
 4. 未参与反思的情景累计重要度达到 `ReflectionThreshold` 时提炼结论。
 5. 记录 ID 由任务 Key 与序号决定，崩溃后重做同一任务覆盖而不是重复；失败按 `JobAttempts` 重试后标记 failed。

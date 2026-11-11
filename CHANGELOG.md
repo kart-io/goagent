@@ -21,6 +21,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 破坏性变更
 
+- 长期记忆的召回注入（[长期记忆的删除优先](docs/design/MEMORY_GOVERNANCE.md) G0）：被遗忘的记忆不再经会话历史或持久日志回到模型。
+  - `WithLongTermMemory` 不再注册 PreStep。召回块在组装每步请求时插在运行上下文之前（原先在本轮输入之前），不进入会话历史，也不进入持久日志；持久日志只记引用（`memory/recall`、`memory/use/<步骤>`），模型请求的意图用引用子集的摘要代替召回正文。升级前开始、仍在进行的持久运行，恢复时可能因意图或会话同步不一致而失败。迁移：升级前让持久运行结束，或放弃后以新执行键重新开始。
+  - 新增 `memory.TurnMemory`，记入 `session.TurnStart.Memory`。轮次内记忆工具的读写、抽取任务的命名空间都取自开始时的绑定，中止轮次的任务不再使用下一轮的命名空间；升级前没有绑定的中止轮次不再登记任务。恢复运行时宿主绑定了另一个命名空间，返回新的 `errors.ErrMemoryNamespaceChanged`。迁移：恢复时绑定与原运行相同的命名空间。
+  - Request 钩子不得删除、改写或移动召回消息（以 `memory.RecallPrefix` 开头的用户消息），否则持久运行恢复时意图不一致。迁移：调整钩子。这条约束目前只有文档说明，尚无自动化测试（TODO）。
+  - 已知限制：召回仍只作用于原生工具流，未注册工具的纯聊天不召回，与升级前相同。
+  - 长期记忆不能与 `middleware.CacheMiddleware` 同时使用，`Build` 返回配置错误：缓存按输入命中，会跨命名空间返回回答。迁移：去掉其中一个。
+  - 配置长期记忆时，从会话日志推导历史会去掉以 `memory.RecallPrefix` 开头的用户消息（升级前写入历史的召回块）。
+  - 抽取时跳过 `memory_search`、`memory_save`、`memory_forget` 的调用与结果，同一条消息里的普通正文照常保留。
+  - `memory` 新增 `Snapshot`、`Hydrate`、`Ref`、`RecallProtocol`；`Retrieve` 改为 `Snapshot` 后立即 `Hydrate`，结果不变。
 - `memory.Record.Source` 改为 `Sources []Source`：合并更新的记录同时依据旧记录与新轮次，单一来源会在回退新轮次时连带丢掉更早的事实。迁移：读取 `r.Source` 改为遍历 `r.Sources`，手动写入时设置 `Sources: []memory.Source{...}`；已存储的 JSON 中的 `source` 字段不再读取，需要来源时重新抽取。`Rewound` 现在会恢复只被退回记录取代的旧记录与旧关系。
 
 - `tools`：`WithMiddleware`/`MiddlewareTool` 移入 `tools/middleware`，改为 `middleware.Wrap(tool, middlewares...)` 与 `*middleware.WrappedTool`，用法不变。`tools` 根包不再导入 `tools/middleware`，只用 Builder 的程序不再链接其日志中间件带入的 OTLP/gRPC：`builder` 的依赖包由 394 个降到 183 个；`apicheck` 拒绝 `tools` 根包重新导入 `tools/middleware`。迁移：`tools.WithMiddleware(` 改为 `middleware.Wrap(`。
