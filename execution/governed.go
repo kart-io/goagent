@@ -62,7 +62,7 @@ func NewGovernedBuilder(client llm.Client, s *Scope, agentID string, registry *t
 	if len(report.Dispatch.ToolNames) == 0 {
 		return nil, GovernanceReport{}, agentErrors.Newf(agentErrors.CodeInvalidConfig, "治理工具循环至少需要一个已注册工具").WithComponent("execution").WithOperation("new_governed_builder")
 	}
-	b, err := ConfigureBuilder(builder.NewSimpleBuilder(client).WithDispatcher(d).WithMemoryFailurePolicy(builder.MemoryFailureStrict), s, agentID)
+	b, err := ConfigureBuilder(builder.NewSimpleBuilder(client).WithDispatcher(d), s, agentID)
 	if err != nil {
 		return nil, GovernanceReport{}, err
 	}

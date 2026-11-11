@@ -1,6 +1,6 @@
 # 工具上下文：结果卸载与历史压缩
 
-上下文治理只有一种机制：PreStep 钩子在每次模型请求前改写对话，改写后的对话成为之后的历史；持久运行中每步的结果记入日志，恢复时回放。结果卸载（`contextpolicy.Offload`）与历史压缩（[goagent-harness](https://github.com/kart-io/goagent-harness) 的 `preset` 中的 `compaction` 组件）都是 PreStep 组件。要求原生工具流：配置工具并使用 `llm.ToolStreamClient`。
+上下文治理只有一种机制：PreStep 钩子在每次模型请求前改写对话，改写后的对话成为之后的历史；持久运行中每步的结果记入日志，恢复时回放。结果卸载（`contextpolicy.Offload`）与历史压缩（`contextpolicy.Compaction`）都是 PreStep 组件。要求原生工具流：配置工具并使用 `llm.ToolStreamClient`。
 
 ## 大结果卸载
 
@@ -42,7 +42,29 @@ assistant 的工具调用、reasoning_content、结果角色和 tool_call_id 保
 
 ## 历史压缩
 
-长对话的压缩由独立项目 goagent-harness 的 `preset` 中的 `compaction` 组件提供：对话估算长度超过阈值时，用 `Host.CompactionModel` 把较早的消息写成一条摘要，保留 system、最近的消息与本步新收到的输入。摘要随 PreStep 记入日志，恢复时不再调用模型。配置见 [goagent-harness/preset](https://github.com/kart-io/goagent-harness/blob/main/preset/README.md)，迁移见 [Harness 独立项目迁移](HARNESS_MIGRATION.md)。
+```go
+sessions := session.NewMemoryStore()
+compaction, err := contextpolicy.NewCompaction(contextpolicy.CompactionConfig{
+    MaxTokens:  100000,        // 估算长度超过时压缩
+    KeepTokens: 25000,         // 原样保留的最近消息，默认 MaxTokens/4
+    Model:      summaryClient, // nil 时不请求模型，只省略旧消息并说明省略了什么
+})
+recall, err := contextpolicy.NewRecallTool(sessions)
+agent, err := builder.NewSimpleBuilder(client).
+    WithTools(searchTool, recall).
+    WithSessionLog(sessions).
+    WithCompaction(compaction).
+    Build()
+```
+
+- 对话估算长度超过 `MaxTokens` 时，system 之后、最近约 `KeepTokens` 之前的消息换成一条以 `[此前对话的摘要]` 开头的用户消息。保留区从非 tool 消息开始，不拆开工具调用与结果；本步新收到的输入总是保留；被压缩区间中第一条与最近的用户原话在 `KeepTokens/2` 内原样保留（`Keep` 可替换）。
+- 再次压缩时旧摘要与新消息一起交给摘要模型，旧摘要不截断；`Annotate` 返回的附注附在摘要后，不交给摘要模型。
+- 摘要失败时退化为省略说明，旧摘要原样接在后面；取消与根预算耗尽时返回错误。摘要请求计入根预算。
+- 请求因超出上下文失败时，只保留最近一次交互强制压缩一次后重试。
+- `Estimate` 默认按 UTF-8 字节数的三分之一估算 token，对英文偏保守。
+- `Compaction.Identity()` 由 ID、Version 与各项限制计算，作为 PreStep 的身份进入持久日志；`Keep`、`Annotate` 的行为改变时修改 `Version`。
+
+压缩后的对话由会话日志记为带 `Surface` 的 `history/rewrite`：原文仍在日志中，`session/rewind` 撤销摘要，持久运行恢复时回放摘要、不再请求模型。`recall_history` 取回本会话被改写掉的原文：`query` 按子串过滤，`before` 用上次结果的 `next_before` 向前翻页，`limit` 默认 20、最大 100；会话 ID 取自请求上下文，读不到其他会话与已撤销的区间。
 
 ## 自定义改写
 
@@ -63,7 +85,7 @@ b.WithIdentifiedPreStep("glossary/"+version+"/"+hash, func(ctx context.Context, 
 | 旧 | 新 |
 |---|---|
 | `WithContextPolicy(ContextPolicy{MaxToolResultRunes, …})` | `WithOffload(offload)`，并把 `offload` 注册为工具；`ExcludeTools` 等字段移到 `OffloadConfig` |
-| `ContextPolicy.HistorySummary` | goagent-harness `preset` 的 `compaction` 组件 |
+| `ContextPolicy.HistorySummary` | `WithCompaction(contextpolicy.NewCompaction(...))` |
 | `WithContextPolicies(factories...)` + `WithPolicyToolAdapter` | Offload：`WithOffload`，读取工具与业务工具一起经 Dispatcher；自定义策略：`WithIdentifiedPreStep` |
 | `contextpolicy.Policy`、`Descriptor`、`Turn`、`Factory` | 删除；`Descriptor.ConfigHash` 的作用由 PreStep 的身份承担 |
 | 元数据 `context_offloaded_results`、`policy.<id>.*`、`summary_calls` | 删除；用 `offload.Stats()` |

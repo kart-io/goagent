@@ -6,9 +6,9 @@ import (
 	"testing"
 
 	"github.com/kart-io/goagent/core/middleware"
+	"github.com/kart-io/goagent/core/session"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
-	"github.com/kart-io/goagent/memory"
 	"github.com/stretchr/testify/require"
 )
 
@@ -16,13 +16,13 @@ func TestDirectToolSavesFinalRequestAndConversation(t *testing.T) {
 	for _, direct := range []bool{false, true} {
 		t.Run(map[bool]string{false: "默认两次", true: "直接一次"}[direct], func(t *testing.T) {
 			ctx := context.Background()
-			mem := memory.NewInMemoryManager(nil)
+			log := session.NewMemoryStore()
 			model := nativeModel(
 				[]*llm.StreamChunk{{Delta: "正在查询"}, {Done: true, FinishReason: "tool_calls", ToolCalls: []llm.ToolCall{nativeCall("id", "status", "{}")}, Usage: &llm.Usage{TotalTokens: 10}}},
 				[]*llm.StreamChunk{{Delta: "已发货"}, {Done: true, Usage: &llm.Usage{TotalTokens: 20}}},
 			)
 			tool := &countingEventTool{MockTool: NewMockTool("status", "已发货")}
-			b := NewSimpleBuilder(model).WithTools(tool).WithMemory(mem).WithSessionID("direct").WithMaxIterations(2)
+			b := NewSimpleBuilder(model).WithTools(tool).WithSessionLog(log).WithSessionID("direct").WithMaxIterations(2)
 			if direct {
 				b.WithReturnDirectTools("status").WithMaxIterations(1)
 			}
@@ -45,10 +45,9 @@ func TestDirectToolSavesFinalRequestAndConversation(t *testing.T) {
 				require.Len(t, model.requests, 2)
 				require.Equal(t, 30, out.TokenUsage.TotalTokens)
 			}
-			history, err := mem.GetConversationHistory(ctx, "direct", 10)
-			require.NoError(t, err)
-			require.Len(t, history, 2)
-			require.Equal(t, "已发货", history[1].Content)
+			history := sessionMessages(t, log, "direct")
+			require.Equal(t, "订单状态", history[0].Content)
+			require.Equal(t, "已发货", history[len(history)-1].Content)
 			last, ok := agent.GetState().Get("last_response")
 			require.True(t, ok)
 			require.Equal(t, "已发货", last)

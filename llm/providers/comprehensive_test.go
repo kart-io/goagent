@@ -295,6 +295,8 @@ func TestOpenAIStreamingProvider_CreationComprehensive(t *testing.T) {
 
 // TestOpenAIStreamingProvider_CreationErrorComprehensive tests error handling in creation
 func TestOpenAIStreamingProvider_CreationErrorComprehensive(t *testing.T) {
+	// 缺少 API Key 的用例不能被宿主环境中的 OPENAI_API_KEY 补上。
+	t.Setenv(shared.EnvOpenAIAPIKey, "")
 	config := &llm.LLMOptions{
 		Provider:    shared.ProviderOpenAI,
 		BaseURL:     "https://api.openai.com/v1",
@@ -311,6 +313,8 @@ func TestOpenAIStreamingProvider_CreationErrorComprehensive(t *testing.T) {
 
 // TestOpenAIProvider_InitializationComprehensive tests OpenAI provider creation
 func TestOpenAIProvider_InitializationComprehensive(t *testing.T) {
+	// 缺少 API Key 的用例不能被宿主环境中的 OPENAI_API_KEY 补上。
+	t.Setenv(shared.EnvOpenAIAPIKey, "")
 	tests := []struct {
 		name    string
 		config  *llm.LLMOptions

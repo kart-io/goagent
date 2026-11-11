@@ -8,9 +8,9 @@ import (
 	"testing"
 
 	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/core/session"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
-	"github.com/kart-io/goagent/memory"
 	"github.com/stretchr/testify/require"
 )
 
@@ -218,27 +218,29 @@ func TestNativeLastRoundAllowsConfiguredTerminalTool(t *testing.T) {
 
 func TestCompactStreamPreservesHistoryAndOriginalQuestion(t *testing.T) {
 	ctx := context.Background()
-	mem := memory.NewInMemoryManager(nil)
-	require.NoError(t, mem.AddConversation(ctx, &interfaces.Conversation{SessionID: "history", Role: "user", Content: "旧问题"}))
-	require.NoError(t, mem.AddConversation(ctx, &interfaces.Conversation{SessionID: "history", Role: "assistant", Content: "旧答案"}))
+	log := session.NewMemoryStore()
+	old := &eventModel{MockLLMClient: NewMockLLMClient(), chunks: []*llm.StreamChunk{{Delta: "旧答案"}, {Done: true}}}
+	first, err := NewSimpleBuilder(old).WithSessionLog(log).WithSessionID("history").Build()
+	require.NoError(t, err)
+	_, err = first.AsRunnable().Invoke(ctx, "旧问题")
+	require.NoError(t, err)
 	model := &eventModel{MockLLMClient: NewMockLLMClient(), chunks: []*llm.StreamChunk{{Delta: "新答案"}, {Done: true}}}
 	r := documentRetrieverFunc(func(context.Context, string) ([]*interfaces.Document, error) {
 		return []*interfaces.Document{{ID: "ref", PageContent: "检索证据"}}, nil
 	})
-	agent, err := NewSimpleBuilder(model).WithSystemPrompt("规则").WithMemory(mem).WithSessionID("history").WithRetriever(r).Build()
+	agent, err := NewSimpleBuilder(model).WithSystemPrompt("规则").WithSessionLog(log).WithSessionID("history").WithRetriever(r).Build()
 	require.NoError(t, err)
 	_, err = agent.AsRunnable().Invoke(ctx, "新问题")
 	require.NoError(t, err)
 	messages := model.request.Messages
 	require.Len(t, messages, 4)
-	require.Equal(t, llm.Message{Role: "user", Content: "旧问题"}, messages[1])
-	require.Equal(t, llm.Message{Role: "assistant", Content: "旧答案"}, messages[2])
+	require.Equal(t, "旧问题", messages[1].Content)
+	require.Equal(t, "旧答案", messages[2].Content)
 	require.Contains(t, messages[3].Content, "检索证据")
 	require.NotContains(t, messages[3].Content, "旧问题")
-	history, err := mem.GetConversationHistory(ctx, "history", 10)
-	require.NoError(t, err)
+	history := sessionMessages(t, log, "history")
 	require.Len(t, history, 4)
-	require.Equal(t, "新问题", history[2].Content)
+	require.Contains(t, history[2].Content, "新问题")
 	require.Equal(t, "新答案", history[3].Content)
 }
 

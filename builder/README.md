@@ -18,7 +18,7 @@ agent, err := builder.NewSimpleBuilder(client).
     WithTimeout(2 * time.Minute).
     WithTemperature(0.5).
     WithOutputFormat(builder.OutputFormatJSON).
-    WithMemory(memory.NewInMemoryManager(memory.DefaultConfig())).
+    WithSessionLog(session.NewMemoryStore()).
     WithSessionID("session-001").
     WithMiddleware(middleware.NewTimingMiddleware()).
     Build()
@@ -98,16 +98,17 @@ builder/
 ├── loop_hooks.go           # PreStep、Request、RequestError、TurnStopping、提示词段落与上下文
 ├── handle.go               # Start 与 Handle
 ├── offload.go              # WithOffload
+├── compaction.go           # WithCompaction
+├── long_term_memory.go     # WithLongTermMemory
 ├── retrieval.go            # WithRetriever
 ├── session_log.go          # WithSessionLog、WithSessionState
 ├── durable_turn.go         # 持久模型回合
 ├── model_call.go           # 模型调用计数与用量记录
 ├── model_budget.go         # WithTokenEstimator
-├── memory_policy.go        # WithMemoryFailurePolicy
 ├── waiting.go              # ErrWaiting、WaitingError
 ├── presets.go              # ConfigureFor* 场景预设
 ├── quick_builders.go       # 快速创建函数
-└── contextpolicy/          # Offload 与结果存储
+└── contextpolicy/          # Offload、Compaction、recall_history 与结果存储
 ```
 
 ## 多 Agent 用量钩子

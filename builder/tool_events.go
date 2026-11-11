@@ -41,17 +41,9 @@ func (a *ConfigurableAgent[S]) streamMessages(ctx context.Context, input, eviden
 	if system != "" {
 		messages = append(messages, llm.SystemMessage(system))
 	}
-	// Handle 的 Followup 轮次续接上一轮的对话，不再读取记忆。
+	// 历史来自会话日志，或 Handle 的 Followup 轮次续接的上一轮对话。
 	if history, ok := ctx.Value(historyKey{}).([]llm.Message); ok {
 		messages = append(messages, history...)
-	} else if a.memoryManager != nil && a.config.SessionID != "" {
-		history, err := readMemory(ctx, a.memoryManager, a.config)
-		if err != nil {
-			return nil, err
-		}
-		for _, entry := range history {
-			messages = append(messages, llm.Message{Role: entry.Role, Content: entry.Content})
-		}
 	}
 	if evidence != "" {
 		input = evidence + "\n用户请求：" + input

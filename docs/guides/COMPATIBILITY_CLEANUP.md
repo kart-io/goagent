@@ -43,6 +43,36 @@ wrapped := middleware.Wrap(tool, logging.Wrap)
 
 `core.RunnableConfig.RetryPolicy`、`core.RetryPolicy`、`core.BackoffPolicy` 已删除。模型暂时错误使用 `AgentBuilder.WithRequestError` 与 `builder.RetryTransient`，每次请求独立预留预算，已输出的响应不自动重发；参见[Builder 参考](BUILDER_API_REFERENCE.md)。`tools.RetryPolicy` 是真实工具执行策略，继续保留。
 
+## 对话记忆
+
+`AgentBuilder.WithMemory`、`WithMaxConversationHistory`、`WithMemoryFailurePolicy` 及 `MemoryFailurePolicy`、`AgentConfig.MaxConversationHistory`/`MemoryFailurePolicy` 已删除。多轮历史只来自会话日志：
+
+```go
+// 旧
+b.WithMemory(memory.NewInMemoryManager(memory.DefaultConfig())).WithSessionID(id).WithMaxConversationHistory(20)
+// 新
+sessions := session.NewMemoryStore() // 或 session.NewFileStore(dir)
+compaction, err := contextpolicy.NewCompaction(contextpolicy.CompactionConfig{MaxTokens: 100000, Model: summaryClient})
+b.WithSessionLog(sessions).WithSessionID(id).WithCompaction(compaction)
+```
+
+不再按轮数截断：历史长度由 Compaction 按估算 token 控制，旧内容压缩成摘要，原文可经 `contextpolicy.NewRecallTool(sessions)` 取回。会话日志写入失败即本轮失败，没有"尽力而为"模式。旧 `MemoryManager` 中已保存的对话不会自动迁入会话日志；需要保留时由宿主读出后以 `session.Recorder.Sync` 写入。goagent-harness 的 `compaction` 组件改用 `contextpolicy.Compaction`，配置不变。
+
+`interfaces.MemoryManager`、`Conversation`、`Case` 与 `memory` 包原有实现（`InMemoryManager`、`HierarchicalMemory` 及其短期/长期层、`InMemoryVectorStore`、`ChromaVectorStore` 等）已删除，由长期记忆替代：
+
+```go
+// 旧
+mgr.AddCase(ctx, &interfaces.Case{Title: t, Problem: p, Solution: s})
+cases, _ := mgr.SearchSimilarCases(ctx, query, 5)
+// 新
+mem, err := memory.New(memory.Config{Store: storemem.New(), Index: memory.NewMemoryIndex(), Embedder: embedClient})
+ctx = memory.WithNamespace(ctx, tenantID, userID)
+_, err = mem.Remember(ctx, memory.Record{Kind: memory.KindSkill, Content: p + "：" + s, Importance: 0.7})
+found, err := mem.Recall(ctx, memory.Query{Text: query, K: 5})
+```
+
+没有命名空间时所有读写返回错误，不再存在所有调用方共享的空间。`MemoryManager.Store/Retrieve` 的键值数据改用 `store.Store`。旧数据不会自动迁移。
+
 ## 通用缓存
 
 `cache.InMemoryCache/LRUCache/MultiTierCache`、三个对应构造器及专属 `CacheEntry` 已删除。仅需要 TTL 时使用 `cache.NewSimpleCache`；禁用缓存使用 `cache.NewNoOpCache`。SimpleCache 没有容量、LRU 或多级回填契约，不能宣称构造器替换保留了这些能力。

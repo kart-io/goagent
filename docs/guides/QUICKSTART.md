@@ -55,8 +55,8 @@ agent, err := builder.NewSimpleBuilder(client).
 工具实现 `interfaces.Tool`，提供 Name、Description、ArgsSchema 和 Invoke，函数可用 `tools.NewFunctionTool` 包装。检索器实现 `interfaces.DocumentRetriever`；BM25、向量、混合检索及重排序实现位于 goagent-contrib。
 
 - 结果已完整可展示的单个终态工具，可显式配置 `WithReturnDirectTools("lookup")`；不会再调用模型总结或补充引用。
-- `WithMemory(manager).WithSessionID(sessionID)` 启用会话记忆；`WithMaxConversationHistory` 限制加载历史数量。
-- 长任务可用 `WithOffload` 把超长工具结果换成引用、经读取工具分页读回，见[上下文治理](CONTEXT_POLICY.md)；默认关闭。历史摘要由 goagent-harness 的 compaction 组件提供。
+- `WithSessionLog(store).WithSessionID(sessionID)` 启用多轮对话；`WithCompaction` 在对话过长时把较早的消息压缩成摘要。
+- 长任务可用 `WithOffload` 把超长工具结果换成引用、经读取工具分页读回，见[上下文治理](CONTEXT_POLICY.md)；默认关闭。
 - 检索器实现见 [goagent-contrib/retrieval](https://github.com/kart-io/goagent-contrib/tree/master/retrieval)；[MCP 与可恢复步骤](PRIORITY_CAPABILITIES.md)展示外部工具及审批恢复。
 
 ## 流式调用

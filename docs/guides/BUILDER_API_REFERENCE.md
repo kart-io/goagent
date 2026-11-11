@@ -92,10 +92,10 @@ return builder.NewSimpleBuilder(client).
 | 方法 | 默认值 | 说明 |
 |---|---|---|
 | `WithRetriever(interfaces.DocumentRetriever, ...RetrievalConfig)` | 4 篇、12000 字符 | 每次请求检索证据，来源写入输出元数据 `retrieval_sources`；`RetrievalConfig.Filter` 按请求生成元数据过滤条件，需检索器实现 `interfaces.RequestRetriever` |
-| `WithMemory(interfaces.MemoryManager)` | 无 | 对话记忆；配置 `WithSessionLog` 时不再读取记忆 |
-| `WithMemoryFailurePolicy(MemoryFailurePolicy)` | `MemoryFailureBestEffort` | `MemoryFailureStrict` 在记忆读写失败时返回错误 |
-| `WithMaxConversationHistory(int)` | 20 | 加载的历史轮数，0 或负数不限制 |
-| `WithSessionID(string)` | `session-<纳秒时间戳>` | 会话 ID，用于会话日志与记忆 |
+| `WithSessionLog(session.Store)` | 无 | 多轮历史来自会话日志；不配置时每次调用没有历史 |
+| `WithCompaction(*contextpolicy.Compaction)` | 无 | 对话超过阈值时压缩较早的消息；仅作用于原生工具流 |
+| `WithLongTermMemory(*memory.Memory)` | 无 | 跨会话长期记忆：每轮召回、轮末登记抽取任务；需要 `WithSessionLog` 与请求上下文中的 `memory.WithNamespace`；召回仅作用于原生工具流 |
+| `WithSessionID(string)` | `session-<纳秒时间戳>` | 会话日志的缺省会话 ID；请求上下文中的 `tools.WithSessionID` 优先 |
 | `WithState(S)` | `core.NewAgentState()` | 初始状态 |
 
 需要进程重启后续跑的多步任务使用 `core/durable` 与 `workflow`，见[原生编排](NATIVE_ORCHESTRATION.md)。

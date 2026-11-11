@@ -18,12 +18,13 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/builder"
+	"github.com/kart-io/goagent/builder/contextpolicy"
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/middleware"
+	"github.com/kart-io/goagent/core/session"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/providers"
-	"github.com/kart-io/goagent/memory"
 	"github.com/kart-io/goagent/tools"
 )
 
@@ -231,8 +232,13 @@ func example3AgentWithSessionManagement(apiKey, providerName string) {
 		log.Fatalf("创建 %s 客户端失败: %v", providerName, err)
 	}
 
-	// 创建对话记忆管理器（用于多轮对话）
-	memMgr := memory.NewInMemoryManager(memory.DefaultConfig())
+	// 会话日志保存多轮对话；生产环境用 session.NewFileStore 或数据库实现
+	sessions := session.NewMemoryStore()
+	// 对话超过阈值时把较早的消息压缩成摘要，原文仍在会话日志中
+	compaction, err := contextpolicy.NewCompaction(contextpolicy.CompactionConfig{MaxTokens: 8000, Model: llmClient})
+	if err != nil {
+		log.Fatalf("创建压缩组件失败: %v", err)
+	}
 
 	// 创建工具
 	calculator := createCalculatorTool()
@@ -247,8 +253,8 @@ func example3AgentWithSessionManagement(apiKey, providerName string) {
 		WithTools(calculator).
 
 		// Core API - 对话记忆
-		WithMemory(memMgr).             // 设置对话记忆管理器
-		WithMaxConversationHistory(20). // 最多保留 20 轮历史对话
+		WithSessionLog(sessions).   // 历史来自会话日志
+		WithCompaction(compaction). // 超长时压缩较早的消息
 
 		// Advanced API - 会话管理
 		WithSessionID(sessionID). // 设置会话 ID
@@ -282,12 +288,10 @@ func example3AgentWithSessionManagement(apiKey, providerName string) {
 
 	// 查看保存的对话历史
 	fmt.Println("\n=== 对话历史记录 ===")
-	history, _ := memMgr.GetConversationHistory(ctx, sessionID, 0)
+	events, _ := sessions.Read(ctx, sessionID, 0)
+	history, _ := session.DeriveMessages(events)
 	for i, conv := range history {
-		role := "用户"
-		if conv.Role == "assistant" {
-			role = "助手"
-		}
+		role := map[string]string{"user": "用户", "assistant": "助手", "tool": "工具"}[conv.Role]
 		content := conv.Content
 		if len(content) > 60 {
 			content = content[:60] + "..."

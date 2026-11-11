@@ -12,7 +12,6 @@ classDiagram
         +WithTools(...interfaces.Tool)
         +WithMaxIterations(int)
         +WithMiddleware(...middleware.Middleware)
-        +WithMemory(interfaces.MemoryManager)
         +WithRetriever(DocumentRetriever, ...RetrievalConfig)
         +WithSessionID(string)
         +WithSessionLog(session.Store)
@@ -20,6 +19,8 @@ classDiagram
         +WithPreStep / WithIdentifiedPreStep
         +WithRequestHook / WithRequestError / WithTurnStopping
         +WithOffload(*contextpolicy.Offload)
+        +WithCompaction(*contextpolicy.Compaction)
+        +WithLongTermMemory(*memory.Memory)
         +Build() (*ConfigurableAgent, error)
         +BuildContext(ctx) (*ConfigurableAgent, error)
     }

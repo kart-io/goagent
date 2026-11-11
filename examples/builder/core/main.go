@@ -19,10 +19,10 @@ import (
 
 	"github.com/kart-io/goagent/builder"
 	"github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/core/session"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/providers"
-	"github.com/kart-io/goagent/memory"
 	"github.com/kart-io/goagent/tools"
 )
 
@@ -194,7 +194,7 @@ func example2AgentWithPerformanceControl(apiKey, providerName string) {
 // - Simple API: WithSystemPrompt, WithTools, Build
 // - Core API: WithMemory, WithSessionID, WithMaxConversationHistory
 //
-// 本示例演示如何使用 MemoryManager 实现多轮对话。
+// 本示例演示如何用会话日志实现多轮对话。
 // Agent 会记住之前的对话内容，在后续对话中可以引用之前的信息。
 func example3AgentWithMemory(apiKey, providerName string) {
 	fmt.Println("--- 示例 3: 带对话记忆的 Agent（多轮对话）---")
@@ -205,9 +205,8 @@ func example3AgentWithMemory(apiKey, providerName string) {
 		log.Fatalf("创建 %s 客户端失败: %v", providerName, err)
 	}
 
-	// 创建对话记忆管理器
-	// 使用内存存储，生产环境可以使用 Redis 等持久化存储
-	memMgr := memory.NewInMemoryManager(memory.DefaultConfig())
+	// 会话日志保存多轮对话；生产环境用 session.NewFileStore 或数据库实现
+	sessions := session.NewMemoryStore()
 
 	// 创建工具
 	calculator := createCalculatorTool()
@@ -222,9 +221,8 @@ func example3AgentWithMemory(apiKey, providerName string) {
 		WithTools(calculator).
 
 		// Core API - 对话记忆
-		WithMemory(memMgr).             // 设置对话记忆管理器
-		WithSessionID(sessionID).       // 设置会话 ID
-		WithMaxConversationHistory(10). // 最多保留 10 轮历史对话
+		WithSessionLog(sessions). // 历史来自会话日志
+		WithSessionID(sessionID). // 设置会话 ID
 
 		Build()
 	if err != nil {
@@ -265,12 +263,10 @@ func example3AgentWithMemory(apiKey, providerName string) {
 
 	// 查看保存的对话历史
 	fmt.Println("\n=== 对话历史记录 ===")
-	history, _ := memMgr.GetConversationHistory(ctx, sessionID, 0)
+	events, _ := sessions.Read(ctx, sessionID, 0)
+	history, _ := session.DeriveMessages(events)
 	for i, conv := range history {
-		role := "用户"
-		if conv.Role == "assistant" {
-			role = "助手"
-		}
+		role := map[string]string{"user": "用户", "assistant": "助手", "tool": "工具"}[conv.Role]
 		// 只显示前 50 个字符
 		content := conv.Content
 		if len(content) > 50 {
@@ -455,16 +451,15 @@ func example5OutputFormatWithPerformance(apiKey, providerName string) {
 
 	// 5.3 纯文本格式 + 对话记忆（适合聊天场景）
 	fmt.Println("\n5.3 纯文本格式 + 对话记忆:")
-	memMgr := memory.NewInMemoryManager(memory.DefaultConfig())
+	sessions := session.NewMemoryStore()
 	sessionID := fmt.Sprintf("format-demo-%d", time.Now().Unix())
 
 	agent3, err := builder.NewSimpleBuilder(llmClient).
 		WithSystemPrompt("你是一个友好的聊天助手").
 		WithOutputFormat(builder.OutputFormatPlainText).
 		// Core API - 对话记忆
-		WithMemory(memMgr).
+		WithSessionLog(sessions).
 		WithSessionID(sessionID).
-		WithMaxConversationHistory(10).
 		Build()
 	if err != nil {
 		log.Printf("创建 Agent 失败: %v", err)

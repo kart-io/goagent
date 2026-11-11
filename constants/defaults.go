@@ -14,7 +14,6 @@ const (
 const (
 	DefaultClientMaxTokens       = 2000
 	DefaultAgentMaxIterations    = 10
-	DefaultConversationHistory   = 20
 	DefaultDispatcherConcurrency = 4
 	DefaultDispatcherAttempts    = 3
 )

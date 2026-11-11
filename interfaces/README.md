@@ -7,7 +7,6 @@
 | 接口 | 用途 | 仓库内的使用 / 实现 |
 |---|---|---|
 | `Tool` 及可选接口 | 工具执行 | `builder.WithTools`、`tools` 包的全部工具 |
-| `MemoryManager` | 对话历史、案例、键值记忆 | `builder.WithMemory`；实现 `memory.InMemoryManager` |
 | `DocumentRetriever` | 检索证据 | `builder.WithRetriever` |
 | `VectorStore` | 向量检索 | 由 goagent-contrib/retrieval 的向量库适配实现 |
 
@@ -53,28 +52,14 @@ type ToolOutput struct {
 
 另有 `ToolCall`（调用记录）。
 
-## 记忆与检索
+## 检索
 
 ```go
-type MemoryManager interface {
-    AddConversation(ctx context.Context, conv *Conversation) error
-    GetConversationHistory(ctx context.Context, sessionID string, limit int) ([]*Conversation, error)
-    ClearConversation(ctx context.Context, sessionID string) error
-    AddCase(ctx context.Context, caseMemory *Case) error
-    SearchSimilarCases(ctx context.Context, query string, limit int) ([]*Case, error)
-    Store(ctx context.Context, key string, value interface{}) error
-    Retrieve(ctx context.Context, key string) (interface{}, error)
-    Delete(ctx context.Context, key string) error
-    Clear(ctx context.Context) error
-}
-
 type DocumentRetriever interface {
     GetRelevantDocuments(ctx context.Context, query string) ([]*Document, error)
 }
 ```
 
-- `Conversation`：`ID`、`SessionID`、`Role`、`Content`、`Timestamp`、`Metadata`。
-- `Case`：`ID`、`Title`、`Description`、`Problem`、`Solution`、`Category`、`Tags`、`Embedding`、`Similarity`、`CreatedAt`、`UpdatedAt`、`Metadata`。
 - `Document`：`ID`、`PageContent`、`Metadata`、`Embedding`、`Score`，方法 `Clone`、`GetMetadata`、`SetMetadata`、`String`。
 - `RetrievalSource`：`Reference`、`ID`、`Source`、`Score`，标识实际送入模型的资料，不代表已核验引用。
 
@@ -93,7 +78,6 @@ type DocumentRetriever interface {
 interfaces/
 ├── doc.go               # 包文档
 ├── tool.go              # Tool 及可选接口、ToolInput/ToolOutput/ToolCall
-├── memory.go            # MemoryManager、Conversation、Case
 ├── store.go             # VectorStore、Document
 ├── retrieval.go         # DocumentRetriever
 ├── retrieval_source.go  # RetrievalSource
