@@ -43,6 +43,14 @@ const (
 	MemoryJSONRepairAttempts = 1
 	// DefaultMemoryWorkerInterval 是 Worker 没有任务时的轮询间隔。
 	DefaultMemoryWorkerInterval = 2 * time.Second
+	// DefaultMemoryMaxStateBytes 是一个命名空间的 state 解压后的上限；只拒绝让 state 变大且超限的提交。
+	DefaultMemoryMaxStateBytes = 8 << 20
+	// MemoryCommitTimeout 是长期记忆一次提交（Save 与结果未知时的复查）的时间上限；超时按提交结果未知处理。
+	MemoryCommitTimeout = 30 * time.Second
+	// DefaultMemoryEraseWithin 是遗忘的内容从长期记忆的基础快照中物理擦除的时限。
+	DefaultMemoryEraseWithin = 5 * time.Minute
+	// DefaultMemoryStateCacheBytes 是进程内 state 解码缓存的容量（按估计的堆占用计）。
+	DefaultMemoryStateCacheBytes = 64 << 20
 	// ToolMemorySearch、ToolMemorySave、ToolMemoryForget 是长期记忆工具名。
 	ToolMemorySearch = "memory_search"
 	ToolMemorySave   = "memory_save"

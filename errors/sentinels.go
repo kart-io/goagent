@@ -11,6 +11,8 @@ var (
 	ErrAgentWaiting    = newSentinel(CodeWaiting, "agent is waiting for host continuation")
 	// memory：恢复运行时宿主绑定的命名空间与轮次开始时不同。
 	ErrMemoryNamespaceChanged = newSentinel(CodeConflict, "长期记忆的命名空间与轮次开始时不同")
+	// memory：提交长期记忆时存储返回了无法判断结果的错误（如连接中断），写入可能已经生效；重试是安全的。
+	ErrMemoryCommitUnknown = newSentinel(CodeStoreConnection, "长期记忆的提交结果未知")
 	// cache。
 	ErrCacheMiss     = newSentinel(CodeNotFound, "cache miss")
 	ErrCacheDisabled = newSentinel(CodeInvalidConfig, "cache is disabled")

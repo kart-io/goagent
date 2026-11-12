@@ -8,6 +8,7 @@ import (
 	"math"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"time"
 	"unicode"
 
@@ -15,6 +16,7 @@ import (
 
 	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/constants"
+	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/session"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
@@ -41,9 +43,17 @@ type Retention struct {
 // Config 配置长期记忆。Store 必填；Index 与 Embedder 同时提供时启用向量召回，否则只按文本重合召回；
 // Model 与 Sessions 同时提供时 Worker 才能抽取。
 type Config struct {
-	Store    store.Store         `json:"-"`
-	Index    Index               `json:"-"`
-	Embedder llm.EmbeddingClient `json:"-"`
+	Store store.Store `json:"-"`
+	// Durable 是记忆数据的持久存储，须同时实现 durable.Scoped（作用域用于 Purge 的整体删除）。
+	Durable durable.Store `json:"-"`
+	// MaxStateBytes 是一个命名空间的数据（state）解压后的上限，默认 8 MiB；删除类操作不受限制。存储设置不进入 Identity。
+	MaxStateBytes int `json:"-"`
+	// StateCacheBytes 是进程内 state 解码缓存的容量，按估计的堆占用（解压后字节数的 2.5 倍）计，默认 64 MiB；负数关闭缓存。
+	StateCacheBytes int `json:"-"`
+	// EraseWithin 是遗忘或删除之后、旧内容从基础快照中物理擦除的时限，默认 5 分钟（增量提交第 6 节）。
+	EraseWithin time.Duration       `json:"-"`
+	Index       Index               `json:"-"`
+	Embedder    llm.EmbeddingClient `json:"-"`
 	// EmbedModel 标识嵌入模型；改变后用 Reindex 重建索引。
 	EmbedModel string        `json:"embed_model"`
 	Model      llm.Client    `json:"-"`
@@ -75,12 +85,27 @@ type Memory struct {
 	records  RecordStore
 	identity string
 	now      func() time.Time
+	cache    *stateCache
+	// commitTimeout 是一次提交的时间上限（constants.MemoryCommitTimeout），测试可以调小。
+	commitTimeout time.Duration
+	// 压缩的触发条件（增量提交 4.1），测试可以调小。
+	overlaySoft, overlayHard, overlayItems int
+	// baseShare：覆盖层达到基础快照解压后大小的 1/baseShare 时压缩；0 表示不按比例压缩。
+	baseShare   int
+	eraseWithin time.Duration
+	// compactErrors 计数提交成功之后失败的压缩；compactions 计数成功切换的基础快照。
+	compactErrors, compactions atomic.Int64
 }
 
 // New 校验并补齐配置。
 func New(cfg Config) (*Memory, error) {
 	if cfg.Store == nil || (cfg.Index == nil) != (cfg.Embedder == nil) || (cfg.Communities && cfg.Graph == nil) {
 		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "长期记忆需要 Store；Index 与 Embedder 须同时提供；Communities 需要 Graph").WithComponent("memory").WithOperation("new")
+	}
+	if cfg.Durable != nil {
+		if _, ok := cfg.Durable.(durable.Scoped); !ok {
+			return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "长期记忆的 Durable 须实现 durable.Scoped").WithComponent("memory").WithOperation("new")
+		}
 	}
 	defaults := []struct {
 		zero bool
@@ -97,6 +122,9 @@ func New(cfg Config) (*Memory, error) {
 		{cfg.GraphHops <= 0, func() { cfg.GraphHops = constants.DefaultMemoryGraphHops }},
 		{cfg.GraphRelations <= 0, func() { cfg.GraphRelations = constants.DefaultMemoryGraphRelations }},
 		{cfg.GraphCommunities <= 0, func() { cfg.GraphCommunities = constants.DefaultMemoryGraphCommunities }},
+		{cfg.MaxStateBytes <= 0, func() { cfg.MaxStateBytes = constants.DefaultMemoryMaxStateBytes }},
+		{cfg.StateCacheBytes == 0, func() { cfg.StateCacheBytes = constants.DefaultMemoryStateCacheBytes }},
+		{cfg.EraseWithin <= 0, func() { cfg.EraseWithin = constants.DefaultMemoryEraseWithin }},
 	}
 	for _, d := range defaults {
 		if d.zero {
@@ -111,7 +139,9 @@ func New(cfg Config) (*Memory, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Memory{cfg: cfg, records: NewRecordStore(cfg.Store), identity: fmt.Sprintf("memory:%x", sha256.Sum256(fingerprint)), now: time.Now}, nil
+	return &Memory{cfg: cfg, records: NewRecordStore(cfg.Store), identity: fmt.Sprintf("memory:%x", sha256.Sum256(fingerprint)), now: time.Now,
+		cache: newStateCache(cfg.StateCacheBytes), commitTimeout: constants.MemoryCommitTimeout,
+		overlaySoft: overlaySoftBytes, overlayHard: overlayHardBytes, overlayItems: overlayMaxItems, baseShare: baseShareDiv, eraseWithin: cfg.EraseWithin}, nil
 }
 
 // Identity 标识召回配置；写入召回快照，配置改变后旧快照恢复时召回为空。
