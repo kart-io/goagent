@@ -583,3 +583,4 @@ flowchart TB
 | 测试辅助 | 原 `Memory.applyRelations` 不再有生产调用方，移到 `graph_test.go` 作为测试辅助，内部走与 Worker 相同的 `planRelations`、`writeRelations`、`settle` | 级联与图谱测试需要单独写入关系 |
 | 第 8 节测试 | `Finished` 的覆盖层与基础快照还原由 `TestFinishedPersistsThroughOverlayAndCompaction` 覆盖 | 参考模型测试不经过覆盖层（第 15 节最后一行），去掉覆盖层对 `Finished` 的应用时它仍通过 |
 | 第 8 节测量 | 5k 数据集、`Graph` 开启、反思关闭，每轮 5 条记录、10 条关系，60 轮，一轮全部 head 提交的加锁时长之和，p50（基线 `6cf097ee` → G2d）：真实中文 40.5 → 3.7ms、低压缩率 41.4 → 3.7ms；p95 52.7 → 6.9ms、51.5 → 7.1ms；每轮提交次数 7.0 → 1.1 | 门槛为基线的 1.5 倍，实测约为基线的 9%；任务本身只提交一次，每轮平均多出的 0.1 次来自维护中的 `Prune` 与覆盖层压缩 |
+| 第 8 节评测（G2e） | `docs/evaluation/2026-11-13-memory-g2/`：LOCOMO 分层 200 题、独立跑 2 次、真实模型，题目与 G1 相同。graph 50.5%、51.0%（合计 50.8%），在 46–60% 内，与 G1 各轮配对差异不显著（p ≥ 0.54）；memory 48.0%、48.5%（G1 默认 44.5%，p ≥ 0.28）。graph 平均上下文由约 2700 字降到约 1750 字，原因未确认 | 提示词增加 `from`，抽取请求与 G1 不同，未用录制回放 |
