@@ -1,0 +1,7 @@
+== full-g1：与 ctrl-g0 不同的请求 {'answer': 2, 'judge': 1} / 总数 {'chat': 2114, 'embed': 4217, 'answer': 200, 'judge': 200}
+  [temporal] When did Melanie go to the museum?  条目 7→5  少 3 多 1
+  [adversarial] What did Melanie make for a local church?  条目 8→8  仅顺序不同
+  召回块相同 198，不同 2，不同的题型 {'temporal': 1, 'adversarial': 1}
+== track-g1：与 ctrl-g0 不同的请求 {'answer': 1} / 总数 {'chat': 2114, 'embed': 4217, 'answer': 200, 'judge': 200}
+  [adversarial] What did Melanie make for a local church?  条目 8→8  仅顺序不同
+  召回块相同 199，不同 1，不同的题型 {'adversarial': 1}
