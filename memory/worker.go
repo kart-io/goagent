@@ -25,6 +25,20 @@ func (m *Memory) Enqueue(ctx context.Context, j Job) error {
 	if err := validNamespace(j.Namespace); err != nil {
 		return err
 	}
+	// 没有作用域的任务来自 G0 的绑定，可能跨越了 Purge；作用域不是当前的说明这一轮跨越了 Purge。
+	// 两者都丢弃并返回 nil：已完成轮次的回放会再次登记，不能报错（设计 4.3、4.5）。
+	if j.Scope == "" {
+		m.droppedJobs.Add(1)
+		return nil
+	}
+	meta, err := m.loadMeta(ctx, j.Namespace)
+	if err != nil {
+		return err
+	}
+	if meta.Current != j.Scope {
+		m.droppedJobs.Add(1)
+		return nil
+	}
 	if _, ok, err := getJob(ctx, m.cfg.Store, j.Key); err != nil || ok {
 		return err
 	}
@@ -66,18 +80,22 @@ func (m *Memory) ProcessPending(ctx context.Context) (int, error) {
 	if m.cfg.Model == nil || m.cfg.Sessions == nil {
 		return 0, agentErrors.Newf(agentErrors.CodeInvalidConfig, "抽取需要 Model 与 Sessions").WithComponent("memory").WithOperation("process")
 	}
+	cleanupErr := m.cleanupRetiring(ctx)
 	jobs, err := pendingJobs(ctx, m.cfg.Store)
 	if err != nil {
-		return 0, err
+		return 0, errors.Join(cleanupErr, err)
 	}
 	for i, j := range jobs {
 		if err := ctx.Err(); err != nil {
 			return i, err
 		}
-		err := m.process(WithNamespace(ctx, j.Namespace...), j)
+		err := m.processInScope(ctx, j)
 		switch {
 		case err == nil:
 			j.Status, j.Error = JobDone, ""
+		case errors.Is(err, errScopeChanged):
+			m.droppedJobs.Add(1)
+			j.Status, j.Error = JobDropped, err.Error()
 		case ctx.Err() != nil:
 			return i, ctx.Err()
 		default:
@@ -91,7 +109,39 @@ func (m *Memory) ProcessPending(ctx context.Context) (int, error) {
 			return i, err
 		}
 	}
-	return len(jobs), nil
+	return len(jobs), cleanupErr
+}
+
+type jobScopeKey struct{}
+
+// processInScope 只在任务的作用域仍是当前作用域时处理任务；处理期间的每次读取都核对作用域（checkJobScope），
+// 任务跨越 Purge 时返回 errScopeChanged，不会写入新作用域。
+func (m *Memory) processInScope(ctx context.Context, j Job) error {
+	if j.Scope == "" {
+		return errScopeChanged
+	}
+	meta, err := m.loadMeta(ctx, j.Namespace)
+	if err != nil {
+		return err
+	}
+	if meta.Current != j.Scope {
+		return errScopeChanged
+	}
+	return m.process(context.WithValue(WithNamespace(ctx, j.Namespace...), jobScopeKey{}, j.Scope), j)
+}
+
+// jobScope 返回 Worker 正在处理的任务的作用域；不在任务中时为空（不限定作用域）。
+func jobScope(ctx context.Context) string {
+	s, _ := ctx.Value(jobScopeKey{}).(string)
+	return s
+}
+
+// checkJobScope 核对读取得到的作用域是正在处理的任务的作用域。
+func checkJobScope(ctx context.Context, scope string) error {
+	if want := jobScope(ctx); want != "" && want != scope {
+		return errScopeChanged
+	}
+	return nil
 }
 
 // process 抽取一轮的记忆。记录 ID 由任务 Key 与序号决定，崩溃后重做同一任务覆盖而不是重复。
@@ -178,6 +228,9 @@ func (m *Memory) reconcile(ctx context.Context, j Job, at time.Time, i int, c ca
 		return err
 	}
 	similar, scope, err := m.search(ctx, ns, Query{Text: c.Content, K: m.cfg.ReconcileCandidates, Kinds: []Kind{c.Kind}})
+	if err == nil {
+		err = checkJobScope(ctx, scope)
+	}
 	if err != nil {
 		return err
 	}
@@ -295,7 +348,7 @@ func (m *Memory) learnFromFailure(ctx context.Context, j Job, at time.Time, tran
 	if err != nil {
 		return err
 	}
-	return m.derive(ctx, ns, "", []Record{{
+	return m.derive(ctx, ns, jobScope(ctx), []Record{{
 		ID: stableID(j.Key, "lesson"), Kind: KindReflection, Content: out.Lesson, Keywords: out.Keywords, ValidFrom: at,
 		Importance: min(max(out.Importance, 0), 1), Sources: []Source{j.source()},
 	}}, nil)
@@ -311,6 +364,9 @@ func (m *Memory) reflect(ctx context.Context) error {
 		return err
 	}
 	scope, s, err := m.read(ctx, ns)
+	if err == nil {
+		err = checkJobScope(ctx, scope)
+	}
 	if err != nil {
 		return err
 	}

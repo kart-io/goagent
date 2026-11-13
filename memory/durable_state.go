@@ -44,6 +44,7 @@ type metaState struct {
 // retiringEntry 是一个已切换、待删除的作用域。
 type retiringEntry struct {
 	Namespace []string  `json:"namespace"`
+	Scope     string    `json:"scope"`
 	Since     time.Time `json:"since"`
 }
 

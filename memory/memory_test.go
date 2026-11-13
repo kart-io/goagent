@@ -333,7 +333,7 @@ func TestWorkerExtractsAndSupersedes(t *testing.T) {
 	ctx := WithNamespace(context.Background(), "u")
 
 	from, to := appendTurn(t, sessions, "s", false, llm.UserMessage("我住在上海"), llm.Message{Role: "assistant", Content: "好的"})
-	job := Job{Key: "s/1", Namespace: []string{"u"}, Session: "s", From: from, To: to}
+	job := Job{Key: "s/1", Namespace: []string{"u"}, Session: "s", Scope: "0", From: from, To: to}
 	require.NoError(t, m.Enqueue(ctx, job))
 	n, err := m.ProcessPending(ctx)
 	require.NoError(t, err)
@@ -349,7 +349,7 @@ func TestWorkerExtractsAndSupersedes(t *testing.T) {
 	require.Zero(t, n)
 
 	from, to = appendTurn(t, sessions, "s", false, llm.UserMessage("我搬到北京了"), llm.Message{Role: "assistant", Content: "记下了"})
-	require.NoError(t, m.Enqueue(ctx, Job{Key: "s/2", Namespace: []string{"u"}, Session: "s", From: from, To: to}))
+	require.NoError(t, m.Enqueue(ctx, Job{Key: "s/2", Namespace: []string{"u"}, Session: "s", Scope: "0", From: from, To: to}))
 	_, err = m.ProcessPending(ctx)
 	require.NoError(t, err)
 	now, err := m.Recall(ctx, Query{Text: "住在哪里"})
@@ -381,10 +381,10 @@ func TestWorkerSkipsRewoundAndLearnsFromAborted(t *testing.T) {
 	from, to := appendTurn(t, sessions, "s", false, llm.UserMessage("以后都用英文回答"), llm.Message{Role: "assistant", Content: "OK"})
 	_, err := session.Rewind(context.Background(), sessions, "s", from-1, to)
 	require.NoError(t, err)
-	require.NoError(t, m.Enqueue(ctx, Job{Key: "s/rewound", Namespace: []string{"u"}, Session: "s", From: from, To: to}))
+	require.NoError(t, m.Enqueue(ctx, Job{Key: "s/rewound", Namespace: []string{"u"}, Session: "s", Scope: "0", From: from, To: to}))
 
 	from, to = appendTurn(t, sessions, "s", true, llm.UserMessage("帮我退款"), llm.Message{Role: "assistant", Content: "调用失败"})
-	require.NoError(t, m.Enqueue(ctx, Job{Key: "s/aborted", Namespace: []string{"u"}, Session: "s", From: from, To: to, Aborted: true}))
+	require.NoError(t, m.Enqueue(ctx, Job{Key: "s/aborted", Namespace: []string{"u"}, Session: "s", Scope: "0", From: from, To: to, Aborted: true}))
 	_, err = m.ProcessPending(ctx)
 	require.NoError(t, err)
 	got, err := m.Recall(ctx, Query{Text: "退款"})
@@ -401,7 +401,7 @@ func TestWorkerRetriesThenFails(t *testing.T) {
 	m := newMemory(t, Config{Model: &scriptedModel{reply: func(string, string) (string, error) { return "不是 JSON", nil }}, Sessions: sessions, JobAttempts: 2})
 	ctx := WithNamespace(context.Background(), "u")
 	from, to := appendTurn(t, sessions, "s", false, llm.UserMessage("你好"), llm.Message{Role: "assistant", Content: "你好"})
-	require.NoError(t, m.Enqueue(ctx, Job{Key: "k", Namespace: []string{"u"}, Session: "s", From: from, To: to}))
+	require.NoError(t, m.Enqueue(ctx, Job{Key: "k", Namespace: []string{"u"}, Session: "s", Scope: "0", From: from, To: to}))
 	for _, want := range []JobStatus{JobPending, JobFailed} {
 		_, err := m.ProcessPending(ctx)
 		require.NoError(t, err)
@@ -431,7 +431,7 @@ func TestReflectionAfterThreshold(t *testing.T) {
 	ctx := WithNamespace(context.Background(), "u")
 	for i := range 2 {
 		from, to := appendTurn(t, sessions, "s", false, llm.UserMessage("今天又加班"), llm.Message{Role: "assistant", Content: "辛苦了"})
-		require.NoError(t, m.Enqueue(ctx, Job{Key: "s/" + string(rune('a'+i)), Namespace: []string{"u"}, Session: "s", From: from, To: to}))
+		require.NoError(t, m.Enqueue(ctx, Job{Key: "s/" + string(rune('a'+i)), Namespace: []string{"u"}, Session: "s", Scope: "0", From: from, To: to}))
 		_, err := m.ProcessPending(ctx)
 		require.NoError(t, err)
 	}
@@ -490,7 +490,7 @@ func TestRewoundRestoresMergedPredecessor(t *testing.T) {
 	ctx := WithNamespace(context.Background(), "u")
 	run := func(key, input string) (int64, int64) {
 		from, to := appendTurn(t, sessions, "s", false, llm.UserMessage(input), llm.Message{Role: "assistant", Content: "好的"})
-		require.NoError(t, m.Enqueue(ctx, Job{Key: key, Namespace: []string{"u"}, Session: "s", From: from, To: to}))
+		require.NoError(t, m.Enqueue(ctx, Job{Key: key, Namespace: []string{"u"}, Session: "s", Scope: "0", From: from, To: to}))
 		_, err := m.ProcessPending(ctx)
 		require.NoError(t, err)
 		return from, to

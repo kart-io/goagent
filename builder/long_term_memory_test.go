@@ -3,6 +3,7 @@ package builder
 import (
 	"context"
 	"errors"
+	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -85,7 +86,7 @@ func TestLongTermMemoryRecallsAndEnqueues(t *testing.T) {
 			start = ev.Seq
 			var d session.TurnStart
 			require.NoError(t, json.Unmarshal(ev.Data, &d))
-			require.JSONEq(t, `{"write":["t1","alice"],"read":[["t1","alice"]]}`, string(d.Memory), "轮次绑定记入 turn/start")
+			require.JSONEq(t, `{"write":["t1","alice"],"read":[["t1","alice"]],"scope":"0","seq":1}`, string(d.Memory), "轮次绑定记入 turn/start，含作用域与提交序号")
 			break
 		}
 	}
@@ -93,6 +94,7 @@ func TestLongTermMemoryRecallsAndEnqueues(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, ok, "轮次结束后登记抽取任务")
 	require.Equal(t, []string{"t1", "alice"}, job.Namespace)
+	require.Equal(t, "0", job.Scope, "任务绑定轮次开始时的作用域")
 	require.False(t, job.Aborted)
 
 	_, err = agent.AsRunnable().Invoke(ctx, "第二个问题")
@@ -249,6 +251,35 @@ func TestLongTermMemoryDurableResumeDropsForgotten(t *testing.T) {
 	for _, ev := range sessionEvents(t, store, "s") {
 		require.NotContains(t, string(ev.Data), "美式咖啡", "会话日志与持久日志都没有召回正文")
 	}
+}
+
+// G0 写下的持久运行（召回快照为 memory-recall/1，轮次绑定没有作用域）在 G1 下恢复：意图不变，已完成的第 0 步从日志回放，
+// 召回为空。日志由 a4f09197 运行与上面相同的用例、在第 1 步崩溃后导出。
+func TestLongTermMemoryResumesG0Journal(t *testing.T) {
+	data, err := os.ReadFile("testdata/g0_durable_recall_session.json")
+	require.NoError(t, err)
+	var events []session.Event
+	require.NoError(t, json.Unmarshal(data, &events))
+	store := session.NewMemoryStore()
+	_, err = store.Append(context.Background(), "s", 0, events...)
+	require.NoError(t, err)
+	require.Equal(t, events, sessionEvents(t, store, "s"), "按原序号载入")
+
+	ns := memory.WithNamespace(context.Background(), "t1", "alice")
+	m, _ := newTestMemory(t, ns, "用户喜欢喝美式咖啡")
+	dispatched, err := dispatcherTools(tools.DispatchConfig{}, plainTool())
+	require.NoError(t, err)
+	resumed := newScriptModel(answer("推荐美式"))
+	agent, err := NewSimpleBuilder(resumed).WithSessionID("s").WithSessionLog(store).WithDurableScope("memory").
+		WithTools(dispatched...).WithLongTermMemory(m).WithMaxIterations(4).Build()
+	require.NoError(t, err)
+	journal := session.DurableStore(store, "s")
+	out, err := agent.AsRunnable().Invoke(durable.WithJournal(durable.WithExecutionKey(ns, "run-1"), journal), "推荐一杯咖啡")
+	require.NoError(t, err, "G0 日志的意图在 G1 下不变")
+	require.Equal(t, "推荐美式", out.Result)
+	require.Equal(t, 1, resumed.count(), "第 0 步从日志回放")
+	_, found := recallIn(resumed.request(0).Messages)
+	require.False(t, found, "memory-recall/1 的快照恢复时召回为空")
 }
 
 func TestRecallIntentDependsOnlyOnJournal(t *testing.T) {

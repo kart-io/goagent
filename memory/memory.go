@@ -104,7 +104,9 @@ type Memory struct {
 	eraseWithin time.Duration
 	// compactErrors 计数提交成功之后失败的压缩；compactions 计数成功切换的基础快照。
 	compactErrors, compactions atomic.Int64
-	access                     accessBatcher
+	// droppedJobs 计数跨越 Purge（或没有作用域）而丢弃的任务。
+	droppedJobs atomic.Int64
+	access      accessBatcher
 }
 
 // New 校验并补齐配置。
@@ -243,6 +245,12 @@ func (m *Memory) unindex(ctx context.Context, ns []string, ids ...string) error 
 // 嵌入在锁外完成，向量在提交之后写入；作用域在嵌入期间改变（Purge）时重试一次，仍改变则返回 CodeConflict。
 // 返回 ErrMemoryCommitUnknown 时可以重试：得到 CodeConflict 说明上一次其实已经提交。
 func (m *Memory) Remember(ctx context.Context, r Record) (Record, error) {
+	return m.remember(ctx, r, "")
+}
+
+// remember 写入作用域 expect；expect 为空时写入当前作用域，期间发生 Purge 则在新作用域重试一次。
+// 指定的作用域已不是当前作用域时返回 errScopeChanged。
+func (m *Memory) remember(ctx context.Context, r Record, expect string) (Record, error) {
 	ns, err := requireNamespace(ctx)
 	if err != nil {
 		return Record{}, err
@@ -250,9 +258,13 @@ func (m *Memory) Remember(ctx context.Context, r Record) (Record, error) {
 	if r, err = m.prepare(r, ns); err != nil {
 		return Record{}, err
 	}
-	meta, err := m.loadMeta(ctx, ns)
-	if err != nil {
-		return Record{}, err
+	scope := expect
+	if scope == "" {
+		meta, err := m.loadMeta(ctx, ns)
+		if err != nil {
+			return Record{}, err
+		}
+		scope = meta.Current
 	}
 	vec, err := m.embed(ctx, r.Content)
 	if err != nil {
@@ -270,13 +282,15 @@ func (m *Memory) Remember(ctx context.Context, r Record) (Record, error) {
 		return nil
 	}
 	for attempt := 0; ; attempt++ {
-		_, err = m.mutate(ctx, ns, meta.Current, write)
-		if !errors.Is(err, errScopeChanged) || attempt > 0 {
+		_, err = m.mutate(ctx, ns, scope, write)
+		if !errors.Is(err, errScopeChanged) || expect != "" || attempt > 0 {
 			break
 		}
-		if meta, err = m.loadMeta(ctx, ns); err != nil {
+		meta, err := m.loadMeta(ctx, ns)
+		if err != nil {
 			return Record{}, err
 		}
+		scope = meta.Current
 	}
 	if err != nil {
 		return Record{}, err
@@ -592,52 +606,6 @@ func forget(t *tx, r Record, at time.Time) {
 	t.Records.Put(r.ID, r)
 	t.Records.MarkErasure(r.ID)
 	t.SetLastForgetSeq(t.nextSeq())
-}
-
-// Purge 删除当前命名空间的全部记录与图谱（如用户要求删除个人数据），并立即压缩，使旧内容从基础快照中物理擦除。
-// 过渡实现：G1c 改为切换作用域。开启删除日志时先写日志。
-func (m *Memory) Purge(ctx context.Context) error {
-	ns, err := requireNamespace(ctx)
-	if err != nil {
-		return err
-	}
-	meta, err := m.loadMeta(ctx, ns)
-	if err != nil {
-		return err
-	}
-	if m.cfg.RollbackWindow > 0 {
-		now := m.now()
-		if err := m.logDeletion(ctx, ns, func(l *DeletionLog) { l.Purges = append(l.Purges, Deletion{ID: meta.Current, At: now}) }); err != nil {
-			return err
-		}
-	}
-	var ids []string
-	_, err = m.mutate(ctx, ns, meta.Current, func(t *tx) error {
-		ids = t.Records.Keys()
-		clearTable(t.Records)
-		clearTable(t.Entities)
-		clearTable(t.Edges)
-		clearTable(t.Communities)
-		return nil
-	}, shrinking())
-	if err != nil {
-		return err
-	}
-	if err := m.unindex(ctx, ns, ids...); err != nil {
-		return err
-	}
-	if m.cfg.TrackAccess {
-		if err := m.editAccess(ctx, ns, meta.Current, func(a map[string]accessEntry) { clear(a) }); err != nil {
-			return err
-		}
-	}
-	return m.compact(ctx, ns, true, true)
-}
-
-func clearTable[T any](tb *table[T]) {
-	for _, k := range tb.Keys() {
-		tb.Delete(k)
-	}
 }
 
 // Rewound 使任一来源位于会话 sessionID 中序号 to 之后的有效记录与关系失效（rewound），并恢复只被它们取代的旧记录与旧关系：

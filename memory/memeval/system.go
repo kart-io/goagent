@@ -109,7 +109,11 @@ func (m *Memory) Ingest(ctx context.Context, c Case) (Retriever, error) {
 		if err != nil {
 			return nil, err
 		}
-		if err := mem.Enqueue(ctx, memory.Job{Key: s.ID, Namespace: ns, Session: s.ID, From: from, To: to}); err != nil {
+		turn, err := mem.Turn(memory.WithNamespace(ctx, ns...))
+		if err != nil {
+			return nil, err
+		}
+		if err := mem.Enqueue(ctx, memory.Job{Key: s.ID, Namespace: ns, Session: s.ID, From: from, To: to, Scope: turn.Scope, TurnSeq: turn.Seq}); err != nil {
 			return nil, err
 		}
 		// 按时间顺序逐个处理，使后面的会话能更新或否定前面的记忆；失败的任务退避后按 JobAttempts 重试，直到完成或标记失败。

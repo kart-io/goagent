@@ -420,7 +420,7 @@ func TestReadRetriesWhenBaseRewritten(t *testing.T) {
 	require.Contains(t, s.Records, "c1")
 }
 
-// scopeText 返回作用域内全部快照（head 的覆盖层与两个槽位）解码后的文本，用于检查物理擦除。
+// scopeText 返回初始作用域内全部快照（head 的覆盖层与两个槽位）解码后的文本，用于检查物理擦除。
 func scopeText(t *testing.T, m *Memory) string {
 	t.Helper()
 	ctx := context.Background()

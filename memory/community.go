@@ -147,6 +147,9 @@ func (m *Memory) syncCommunities(ctx context.Context, ns []string) error {
 		return nil
 	}
 	scope, s, err := m.read(ctx, ns)
+	if err == nil {
+		err = checkJobScope(ctx, scope)
+	}
 	if err != nil {
 		return err
 	}

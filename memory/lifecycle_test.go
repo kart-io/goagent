@@ -297,10 +297,13 @@ func TestDeletionLogPrune(t *testing.T) {
 	require.Empty(t, log.Forgotten, "RollbackWindow 为 0 时不写日志")
 }
 
-// Purge（过渡实现）：一次提交删除全部记录与图谱，返回时旧内容已从所有快照中物理擦除，索引与召回为空。
-func TestPurgeErasesImmediately(t *testing.T) {
+// Purge 切换到新的空作用域并删除旧作用域：返回时旧作用域已物理删除、retiring 为空（不变量 8），索引与召回为空，
+// 删除日志与 meta 在同一次提交中记下这次清空，之后的写入落在新作用域、可以复用旧 ID。
+func TestPurgeSwitchesScope(t *testing.T) {
 	x := NewMemoryIndex()
-	m := manualCompaction(newMemory(t, Config{Index: x, Embedder: bigramEmbedder{}, EmbedModel: "v1", Graph: true, TrackAccess: true}))
+	m := manualCompaction(newMemory(t, Config{Index: x, Embedder: bigramEmbedder{}, EmbedModel: "v1", Graph: true, TrackAccess: true, RollbackWindow: time.Hour}))
+	now := time.Date(2026, 11, 13, 0, 0, 0, 0, time.UTC)
+	m.now = func() time.Time { return now }
 	ctx := WithNamespace(context.Background(), testNS...)
 	_, err := m.Remember(ctx, Record{ID: "a", Content: "机密：项目代号青鸟", Importance: 0.5})
 	require.NoError(t, err)
@@ -312,9 +315,20 @@ func TestPurgeErasesImmediately(t *testing.T) {
 	require.Contains(t, scopeText(t, m), "青鸟")
 
 	require.NoError(t, m.Purge(ctx))
-	require.NotContains(t, scopeText(t, m), "青鸟", "Purge 返回时已物理擦除")
-	_, s, err := m.read(ctx, testNS)
+	_, err = loadHead(ctx, m.scoped(testNS, initialScope))
+	require.ErrorIs(t, err, agentErrors.ErrScopeRemoved, "Purge 返回时旧作用域已物理删除")
+	meta, err := m.loadMeta(ctx, testNS)
 	require.NoError(t, err)
+	require.EqualValues(t, 1, meta.Purges)
+	require.NotEqual(t, initialScope, meta.Current)
+	requireNoRetiring(t, m)
+	log, err := m.Deletions(ctx)
+	require.NoError(t, err)
+	require.Equal(t, []Deletion{{ID: initialScope, At: now}}, log.Purges, "删除日志记下被清空的作用域")
+
+	scope, s, err := m.read(ctx, testNS)
+	require.NoError(t, err)
+	require.Equal(t, meta.Current, scope)
 	require.Empty(t, s.Records)
 	require.Empty(t, s.Entities)
 	got, err := m.Recall(ctx, Query{Text: "青鸟"})
@@ -323,9 +337,15 @@ func TestPurgeErasesImmediately(t *testing.T) {
 	hits, err := x.Search(ctx, testNS, mustEmbed(t, "青鸟"), 5)
 	require.NoError(t, err)
 	require.Empty(t, hits)
-	a, err := m.loadAccess(ctx, testNS, initialScope)
+	a, err := m.loadAccess(ctx, testNS, meta.Current)
 	require.NoError(t, err)
-	require.Empty(t, a, "访问记录一并清空")
+	require.Empty(t, a, "新作用域没有访问记录")
+
+	_, err = m.Remember(ctx, Record{ID: "a", Content: "新内容", Importance: 0.5})
+	require.NoError(t, err, "清空后可以复用旧 ID")
+	_, s, err = m.read(ctx, testNS)
+	require.NoError(t, err)
+	require.Equal(t, "新内容", s.Records["a"].Content)
 }
 
 // TrackAccess：开启时召回在返回后异步记录访问，新近性与容量淘汰按最近访问计；关闭时召回不产生任何写入，新近性按创建时间计。

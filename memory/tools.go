@@ -50,7 +50,11 @@ func (m *Memory) Tools() []interfaces.Tool {
 				if v, ok := args["importance"]; ok {
 					importance = number(v)
 				}
-				r, err := m.Remember(ctx, Record{Kind: Kind(kind), Content: content, Importance: importance, Pinned: pinned})
+				scope, err := m.saveScope(ctx)
+				if err != nil {
+					return nil, err
+				}
+				r, err := m.remember(ctx, Record{Kind: Kind(kind), Content: content, Importance: importance, Pinned: pinned}, scope)
 				if err != nil {
 					return nil, err
 				}
@@ -101,4 +105,28 @@ func number(v any) float64 {
 		return n
 	}
 	return 0
+}
+
+// saveScope 是 memory_save 写入的作用域：本轮绑定的作用域，使轮次开始后发生的 Purge 不会收到这一轮的保存。
+// G0 记录的绑定没有作用域，只在命名空间从未清空时等同于当前作用域；没有绑定时写入当前作用域（返回空）。
+func (m *Memory) saveScope(ctx context.Context) (string, error) {
+	t, ok := TurnFrom(ctx)
+	if !ok {
+		return "", nil
+	}
+	if t.Scope != "" {
+		return t.Scope, nil
+	}
+	ns, err := requireNamespace(ctx)
+	if err != nil {
+		return "", err
+	}
+	meta, err := m.loadMeta(ctx, ns)
+	if err != nil {
+		return "", err
+	}
+	if meta.Purges > 0 {
+		return "", errScopeChanged
+	}
+	return meta.Current, nil
 }

@@ -124,6 +124,9 @@ func (s *hookStore) Scope(name string) durable.Store {
 }
 
 func (s *hookStore) RemoveScope(ctx context.Context, name string) error {
+	if err := s.call("removescope", name); err != nil {
+		return err
+	}
 	return s.root.RemoveScope(ctx, name)
 }
 

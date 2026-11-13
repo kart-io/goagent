@@ -953,6 +953,33 @@ export GOAGENT_PGSTORE_DSN='postgres://postgres:test@127.0.0.1:55432/postgres?ss
 
 **pgstore**：`memorytest.Run` 由 goagent-contrib 的 `durable/pgstore/memory_test.go` 调用。contrib 依赖已发布的 goagent，所以用临时 `go.work` 指向本地 goagent 验证：套件与 pgstore 全部测试通过（`-race`）。这个测试文件要等 goagent 发布含 `memory/memorytest` 的版本、contrib 升级依赖之后才能在 contrib 单独编译。
 
+### 7.10 G1c：作用域与 Purge（2026-11-13）
+
+**交付**（计划见 `.claude/plan-g1c.md`）：
+
+- `Purge` 改为切换作用域：按 meta → retiring → deletions（开启删除日志时）加锁，一次 `SaveAll` 写入新的 `Current`（UUID）与 `Purges+1`、retiring 条目、删除日志；迁移进行中返回 `CodeConflict`。随后清理一次。过渡实现的整表清空与强制压缩已删除。
+- 清理 `cleanupRetiring`：逐个 retiring 条目，不持锁读旧作用域的记录 ID（不经缓存）→ 删索引 → `RemoveScope`；完成的条目再锁 retiring 移出。`Purge` 结束前与每轮 `ProcessPending` 开始时执行；`ProcessPending` 返回清理错误。
+- `TurnMemory` 增加 `Scope`、`Seq`（omitzero），`Turn` 从一次 `read` 取得；builder 与 memeval 登记任务时填写 `Job.Scope`、`Job.TurnSeq`。
+- `memory_save`：有绑定时写入绑定的作用域，作用域已改变返回 `CodeConflict` 的工具错误；G0 绑定（无 `Scope`）在 `Purges == 0` 时用当前作用域，否则工具错误；没有绑定时写当前作用域（`Remember` 的语义不变，Purge 竞争时在新作用域重试一次）。
+- `Enqueue`：没有 `Scope` 或不是当前作用域时丢弃、计数、返回 nil。Worker：任务作用域不是当前时标记 `JobDropped`；处理中每次读取都核对作用域（reconcile、reflect、关系、社区），派生写入以任务作用域为 `expectScope`。
+- `Ref` 增加 `Scope`、`Incarnation`、`ContentRev`，`RecallProtocol = memory-recall/2`；`Hydrate` 丢弃作用域、实例号或正文版本不一致的项。
+- `Digest` 按快照协议编码：`/1` 用 G0 的三字段引用，与 G0 逐字节相同（常量取自 `a4f09197` 的计算）；`Turn.Scope`、`Turn.Seq` 不进入摘要。
+
+**测试**：
+
+- `TestPurgeSwitchesScope`：旧作用域已删除（`ErrScopeRemoved`）、retiring 为空（不变量 8）、删除日志记下旧作用域、索引与召回为空、可复用旧 ID。
+- `TestPurgeFaults`（表驱动）：`SaveAll` 前崩溃不切换；提交后清理前、清理中途（索引已删、作用域未删）崩溃时旧数据立即不可读，下一轮 Worker 补完。
+- `TestJobsAcrossPurgeDropped`、`TestMemorySaveScope`（5 种绑定）、`TestHydrateDropsChangedRefs`（修改正文、同 ID 重建、清空后重写同一内容）、`TestDigestByProtocol`、`TestPurgeConcurrentWithWrites`（Purge 与 Remember、Enqueue、Worker 并发，`-race`）。
+- `TestLongTermMemoryResumesG0Journal`：`builder/testdata/g0_durable_recall_session.json` 是 `a4f09197` 运行持久用例、在第 1 步崩溃后导出的会话日志；G1 下恢复，意图一致、第 0 步从日志回放、召回为空。
+- `memorytest` 增加"清空与进行中的写入"：两次清空期间另一实例持续写入，清空返回后开始的写入都在当前作用域。
+
+**与前文的差异**：
+
+- G1d 之前索引仍按 `ns + ID`：切换后、`RemoveScope` 前提交到旧作用域的迟到写入可能留下向量；召回按当前作用域的 state 过滤，不会返回旧内容，残留由 G1d 的按作用域 `Clear` 消除。
+- 丢弃计数只在进程内（`droppedJobs`），G1e 的维护接口再公开。
+
+**pgstore**：经临时 `go.work` 指向本地 goagent，`memorytest`（含新用例）与 pgstore 全部测试在 `-race` 下通过。
+
 ## 8. 兼容性
 
 | 变更 | 影响 | 处理 |
@@ -981,7 +1008,7 @@ export GOAGENT_PGSTORE_DSN='postgres://postgres:test@127.0.0.1:55432/postgres?ss
    - `Config.Durable`、`MaxStateBytes`（解压后，只拒绝变大）、`StateCacheBytes`。
    - 原型基准与 10k 压力测试（7.3），不达阈值即停。
 2. **G1b 记录写路径**：`Remember`、`Update`、`Forget`、`Rewound`、`Prune`；召回只读且只读一次；`TrackAccess`；删除日志。已完成（2026-11-12），见 7.9。
-3. **G1c 作用域与 Purge**：meta 切换、全局 retiring 与清理；轮次绑定增加 `Scope`、`Seq`；`Ref` 带版本；`Digest` 分版本；G0 日志字节恢复测试。
+3. **G1c 作用域与 Purge**：meta 切换、全局 retiring 与清理；轮次绑定增加 `Scope`、`Seq`；`Ref` 带版本；`Digest` 分版本；G0 日志字节恢复测试。已完成（2026-11-13），见 7.10。
 4. **G1d 索引**：版本化键、写后复核、`IDs`、`Clear`、`Reindex`；实体向量移入 `Index`。
 5. **G1e 任务、维护与 Worker**：state 内的任务、queue 分片（任务与索引待清理）、`Maintain` 与 `RunMaintenance`、Worker 锁与心跳、`LastForgetSeq` 丢弃规则。
 6. **G1f 迁移与收尾**：`MigrateFromStore`（两阶段）、memeval 适配、CHANGELOG。

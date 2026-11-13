@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -31,6 +32,7 @@ func Run(t *testing.T, newPair func(t *testing.T) (a, b durable.Store)) {
 		{"交替写入", testInterleavedUpdates},
 		{"遗忘跨实例生效", testForget},
 		{"清空跨实例生效", testPurge},
+		{"清空与进行中的写入", testPurgeInflight},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -192,4 +194,40 @@ func testPurge(t *testing.T, ctx context.Context, a, b *memory.Memory) {
 
 	_, err = b.Remember(ctx, record("r0", "清空后重新写入"))
 	require.NoError(t, err, "清空后可以复用 ID")
+}
+
+// testPurgeInflight：b 持续写入时 a 两次清空。进行中的写入要么失败（CodeConflict），要么落在某个作用域；
+// 在两次清空都返回之后开始的写入都在当前作用域，a 能读到。
+func testPurgeInflight(t *testing.T, ctx context.Context, a, b *memory.Memory) {
+	var purges atomic.Int32
+	var stop atomic.Bool
+	var after []string
+	errs := make(chan error, 1)
+	go func() {
+		defer close(errs)
+		for i := 0; !stop.Load() || len(after) < 5; i++ {
+			started := purges.Load()
+			r, err := b.Remember(ctx, record(fmt.Sprintf("w%d", i), "进行中的写入"))
+			switch {
+			case err != nil && !agentErrors.IsCode(err, agentErrors.CodeConflict):
+				errs <- err
+				return
+			case err == nil && started == 2:
+				after = append(after, r.ID)
+			}
+		}
+	}()
+	for range 2 {
+		require.NoError(t, a.Purge(ctx))
+		purges.Add(1)
+	}
+	stop.Store(true)
+	require.NoError(t, <-errs)
+	for _, id := range after {
+		_, err := a.Get(ctx, id)
+		require.NoError(t, err, "清空返回后开始的写入 %s 在当前作用域", id)
+	}
+	log, err := b.Deletions(ctx)
+	require.NoError(t, err)
+	require.Len(t, log.Purges, 2)
 }

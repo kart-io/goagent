@@ -20,17 +20,22 @@ const (
 	JobPending JobStatus = "pending"
 	JobDone    JobStatus = "done"
 	JobFailed  JobStatus = "failed"
+	// JobDropped 表示任务跨越了 Purge（或来自没有作用域的 G0 绑定），没有处理。
+	JobDropped JobStatus = "dropped"
 )
 
 // Job 是一轮结束后登记的抽取任务。Key 为"会话/turn/start 序号"，重复登记不产生新任务。
 // Aborted 的轮次只提炼教训（reflection），其余轮次抽取事实与情景。
 type Job struct {
-	Key       string    `json:"key"`
-	Namespace []string  `json:"namespace"`
-	Session   string    `json:"session"`
-	From      int64     `json:"from"`
-	To        int64     `json:"to"`
-	Aborted   bool      `json:"aborted,omitzero"`
+	Key       string   `json:"key"`
+	Namespace []string `json:"namespace"`
+	Session   string   `json:"session"`
+	From      int64    `json:"from"`
+	To        int64    `json:"to"`
+	Aborted   bool     `json:"aborted,omitzero"`
+	// Scope 与 TurnSeq 取自轮次绑定（TurnMemory.Scope、Seq）：任务只写入登记时的作用域。
+	Scope     string    `json:"scope,omitempty"`
+	TurnSeq   int64     `json:"turn_seq,omitzero"`
 	Status    JobStatus `json:"status"`
 	Attempts  int       `json:"attempts,omitzero"`
 	Error     string    `json:"error,omitempty"`

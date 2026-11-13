@@ -25,7 +25,7 @@ func TestSnapshotHydrateRefsOnly(t *testing.T) {
 	s, err := m.Snapshot(ctx, "咖啡")
 	require.NoError(t, err)
 	require.Equal(t, RecallProtocol, s.Protocol)
-	require.Equal(t, TurnMemory{Write: []string{"t1", "alice"}, Read: [][]string{{"t1", "alice"}}}, s.Turn)
+	require.Equal(t, TurnMemory{Write: []string{"t1", "alice"}, Read: [][]string{{"t1", "alice"}}, Scope: initialScope, Seq: 2}, s.Turn, "绑定记下当前作用域与两次写入后的提交序号")
 	require.Len(t, s.Refs, 2)
 	encoded, err := json.Marshal(s)
 	require.NoError(t, err)

@@ -293,6 +293,9 @@ func (m *Memory) applyRelations(ctx context.Context, j Job, at time.Time, rels [
 	}
 	ns := j.Namespace
 	scope, s, err := m.read(ctx, ns)
+	if err == nil {
+		err = checkJobScope(ctx, scope)
+	}
 	if err != nil {
 		return err
 	}

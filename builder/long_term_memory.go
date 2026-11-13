@@ -89,7 +89,7 @@ func (a *ConfigurableAgent[S]) memoryJob(session string, start int64, aborted bo
 	return func(ctx context.Context, end int64) error {
 		err := m.Enqueue(ctx, memory.Job{
 			Key: session + "/" + strconv.FormatInt(start, 10), Namespace: slices.Clone(t.Write),
-			Session: session, From: start, To: end, Aborted: aborted,
+			Session: session, From: start, To: end, Aborted: aborted, Scope: t.Scope, TurnSeq: t.Seq,
 		})
 		if err != nil {
 			return fmt.Errorf("登记长期记忆任务: %w", err)

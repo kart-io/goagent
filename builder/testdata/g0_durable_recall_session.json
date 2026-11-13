@@ -1,0 +1,405 @@
+[
+ {
+  "seq": 1,
+  "type": "turn/start",
+  "time": "2026-11-13T01:50:08.116808393Z",
+  "data": {
+   "input": "推荐一杯咖啡",
+   "execution_key": "run-1",
+   "memory": {
+    "write": [
+     "t1",
+     "alice"
+    ],
+    "read": [
+     [
+      "t1",
+      "alice"
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "seq": 2,
+  "type": "tool/definitions",
+  "time": "2026-11-13T01:50:08.116829761Z",
+  "data": {
+   "tools": [
+    {
+     "name": "lookup",
+     "description": "test",
+     "parameters": {
+      "type": "object"
+     }
+    }
+   ]
+  }
+ },
+ {
+  "seq": 3,
+  "type": "boundary/snapshot",
+  "time": "2026-11-13T01:50:08.116886039Z",
+  "data": {
+   "id": "goagent/operation/e1e142fe165ea14a26a383df48b1bb1f05d0973d0322113218744d1e15ed832a",
+   "snapshot": {
+    "version": "goagent-operation-v2",
+    "plan": "",
+    "run_id": "goagent/operation/e1e142fe165ea14a26a383df48b1bb1f05d0973d0322113218744d1e15ed832a",
+    "next": 0,
+    "data": {
+     "id": "memory/recall",
+     "key": "e1e142fe165ea14a26a383df48b1bb1f05d0973d0322113218744d1e15ed832a",
+     "input_hash": "f53cf44464c2a82c347b2c82e3640fc44e3e6252d7de405d18adff77eb1648c4",
+     "status": "pending",
+     "attempts": 1,
+     "max_attempts": 3,
+     "value": null,
+     "failure_kind": "ambiguous"
+    },
+    "waiting": false,
+    "approved": false
+   }
+  }
+ },
+ {
+  "seq": 4,
+  "type": "boundary/snapshot",
+  "time": "2026-11-13T01:50:08.117004512Z",
+  "data": {
+   "id": "goagent/operation/e1e142fe165ea14a26a383df48b1bb1f05d0973d0322113218744d1e15ed832a",
+   "snapshot": {
+    "version": "goagent-operation-v2",
+    "plan": "",
+    "run_id": "goagent/operation/e1e142fe165ea14a26a383df48b1bb1f05d0973d0322113218744d1e15ed832a",
+    "next": 0,
+    "data": {
+     "id": "memory/recall",
+     "key": "e1e142fe165ea14a26a383df48b1bb1f05d0973d0322113218744d1e15ed832a",
+     "input_hash": "f53cf44464c2a82c347b2c82e3640fc44e3e6252d7de405d18adff77eb1648c4",
+     "status": "completed",
+     "attempts": 1,
+     "max_attempts": 3,
+     "value": {
+      "protocol": "memory-recall/1",
+      "identity": "memory:98890c51b400208df56a5b8e02b8f6f340ad5385a5f7422a9fbd37151ec6bd9f",
+      "turn": {
+       "write": [
+        "t1",
+        "alice"
+       ],
+       "read": [
+        [
+         "t1",
+         "alice"
+        ]
+       ]
+      },
+      "refs": [
+       {
+        "kind": "record",
+        "namespace": [
+         "t1",
+         "alice"
+        ],
+        "id": "d7d89da2-47e6-4e02-a38b-1be895fd527c"
+       }
+      ]
+     }
+    },
+    "waiting": false,
+    "approved": false
+   }
+  }
+ },
+ {
+  "seq": 5,
+  "type": "user/message",
+  "time": "2026-11-13T01:50:08.117037768Z",
+  "data": {
+   "message": {
+    "role": "user",
+    "content": "推荐一杯咖啡"
+   }
+  }
+ },
+ {
+  "seq": 6,
+  "type": "boundary/snapshot",
+  "time": "2026-11-13T01:50:08.117055624Z",
+  "data": {
+   "id": "goagent/operation/ee0bd5024b831e1923f47d78c59bb9488dcdc10d728b849267966d27ad0522df",
+   "snapshot": {
+    "version": "goagent-operation-v2",
+    "plan": "",
+    "run_id": "goagent/operation/ee0bd5024b831e1923f47d78c59bb9488dcdc10d728b849267966d27ad0522df",
+    "next": 0,
+    "data": {
+     "id": "memory/use/0",
+     "key": "ee0bd5024b831e1923f47d78c59bb9488dcdc10d728b849267966d27ad0522df",
+     "input_hash": "f53cf44464c2a82c347b2c82e3640fc44e3e6252d7de405d18adff77eb1648c4",
+     "status": "pending",
+     "attempts": 1,
+     "max_attempts": 3,
+     "value": null,
+     "failure_kind": "ambiguous"
+    },
+    "waiting": false,
+    "approved": false
+   }
+  }
+ },
+ {
+  "seq": 7,
+  "type": "boundary/snapshot",
+  "time": "2026-11-13T01:50:08.11708347Z",
+  "data": {
+   "id": "goagent/operation/ee0bd5024b831e1923f47d78c59bb9488dcdc10d728b849267966d27ad0522df",
+   "snapshot": {
+    "version": "goagent-operation-v2",
+    "plan": "",
+    "run_id": "goagent/operation/ee0bd5024b831e1923f47d78c59bb9488dcdc10d728b849267966d27ad0522df",
+    "next": 0,
+    "data": {
+     "id": "memory/use/0",
+     "key": "ee0bd5024b831e1923f47d78c59bb9488dcdc10d728b849267966d27ad0522df",
+     "input_hash": "f53cf44464c2a82c347b2c82e3640fc44e3e6252d7de405d18adff77eb1648c4",
+     "status": "completed",
+     "attempts": 1,
+     "max_attempts": 3,
+     "value": [
+      {
+       "kind": "record",
+       "namespace": [
+        "t1",
+        "alice"
+       ],
+       "id": "d7d89da2-47e6-4e02-a38b-1be895fd527c"
+      }
+     ]
+    },
+    "waiting": false,
+    "approved": false
+   }
+  }
+ },
+ {
+  "seq": 8,
+  "type": "boundary/snapshot",
+  "time": "2026-11-13T01:50:08.117173482Z",
+  "data": {
+   "id": "goagent/operation/1af1e88bf3900e27188693268486dcf6c3a520553b6e817c51fcbd5753078b1c",
+   "snapshot": {
+    "version": "goagent-operation-v2",
+    "plan": "",
+    "run_id": "goagent/operation/1af1e88bf3900e27188693268486dcf6c3a520553b6e817c51fcbd5753078b1c",
+    "next": 0,
+    "data": {
+     "id": "model/turn/0",
+     "key": "1af1e88bf3900e27188693268486dcf6c3a520553b6e817c51fcbd5753078b1c",
+     "input_hash": "a42e93b1efe53dc243e54d44872f7dbc762175a8f8bcd74381cea57728c5c1bc",
+     "status": "pending",
+     "attempts": 1,
+     "max_attempts": 1,
+     "value": null,
+     "failure_kind": "ambiguous"
+    },
+    "waiting": false,
+    "approved": false
+   }
+  }
+ },
+ {
+  "seq": 9,
+  "type": "boundary/snapshot",
+  "time": "2026-11-13T01:50:08.117279639Z",
+  "data": {
+   "id": "goagent/operation/1af1e88bf3900e27188693268486dcf6c3a520553b6e817c51fcbd5753078b1c",
+   "snapshot": {
+    "version": "goagent-operation-v2",
+    "plan": "",
+    "run_id": "goagent/operation/1af1e88bf3900e27188693268486dcf6c3a520553b6e817c51fcbd5753078b1c",
+    "next": 0,
+    "data": {
+     "id": "model/turn/0",
+     "key": "1af1e88bf3900e27188693268486dcf6c3a520553b6e817c51fcbd5753078b1c",
+     "input_hash": "a42e93b1efe53dc243e54d44872f7dbc762175a8f8bcd74381cea57728c5c1bc",
+     "status": "completed",
+     "attempts": 1,
+     "max_attempts": 1,
+     "value": {
+      "tool_calls": [
+       {
+        "id": "c1",
+        "type": "function",
+        "function": {
+         "name": "lookup",
+         "arguments": "{}"
+        }
+       }
+      ],
+      "content": "",
+      "delta": "",
+      "finish_reason": "tool_calls",
+      "index": 0,
+      "timestamp": "0001-01-01T00:00:00Z",
+      "done": true
+     }
+    },
+    "waiting": false,
+    "approved": false
+   }
+  }
+ },
+ {
+  "seq": 10,
+  "type": "boundary/snapshot",
+  "time": "2026-11-13T01:50:08.117327565Z",
+  "data": {
+   "id": "goagent/operation/744b5a248998f4602c699b116e5c5f492daeee4f04b4287b7df4f6f89b43e334",
+   "snapshot": {
+    "version": "goagent-operation-v2",
+    "plan": "",
+    "run_id": "goagent/operation/744b5a248998f4602c699b116e5c5f492daeee4f04b4287b7df4f6f89b43e334",
+    "next": 0,
+    "data": {
+     "id": "tool/turn/0/call/c1",
+     "key": "744b5a248998f4602c699b116e5c5f492daeee4f04b4287b7df4f6f89b43e334",
+     "input_hash": "cec3d21ec969cb25714529f35fb47a5d9f2865f474ccd2284f400178f2b8df7a",
+     "status": "pending",
+     "attempts": 1,
+     "max_attempts": 3,
+     "value": null,
+     "failure_kind": "ambiguous"
+    },
+    "waiting": false,
+    "approved": false
+   }
+  }
+ },
+ {
+  "seq": 11,
+  "type": "boundary/snapshot",
+  "time": "2026-11-13T01:50:08.117347771Z",
+  "data": {
+   "id": "goagent/operation/744b5a248998f4602c699b116e5c5f492daeee4f04b4287b7df4f6f89b43e334",
+   "snapshot": {
+    "version": "goagent-operation-v2",
+    "plan": "",
+    "run_id": "goagent/operation/744b5a248998f4602c699b116e5c5f492daeee4f04b4287b7df4f6f89b43e334",
+    "next": 0,
+    "data": {
+     "id": "tool/turn/0/call/c1",
+     "key": "744b5a248998f4602c699b116e5c5f492daeee4f04b4287b7df4f6f89b43e334",
+     "input_hash": "cec3d21ec969cb25714529f35fb47a5d9f2865f474ccd2284f400178f2b8df7a",
+     "status": "completed",
+     "attempts": 1,
+     "max_attempts": 3,
+     "value": {
+      "result": "found",
+      "success": true
+     }
+    },
+    "waiting": false,
+    "approved": false
+   }
+  }
+ },
+ {
+  "seq": 12,
+  "type": "assistant/message",
+  "time": "2026-11-13T01:50:08.117369311Z",
+  "data": {
+   "message": {
+    "role": "assistant",
+    "content": "",
+    "tool_calls": [
+     {
+      "id": "c1",
+      "type": "function",
+      "function": {
+       "name": "lookup",
+       "arguments": "{}"
+      }
+     }
+    ]
+   }
+  }
+ },
+ {
+  "seq": 13,
+  "type": "tool/result",
+  "time": "2026-11-13T01:50:08.11737369Z",
+  "data": {
+   "message": {
+    "role": "tool",
+    "content": "found",
+    "tool_call_id": "c1"
+   },
+   "tool": {
+    "name": "lookup",
+    "success": true
+   }
+  }
+ },
+ {
+  "seq": 14,
+  "type": "boundary/snapshot",
+  "time": "2026-11-13T01:50:08.117397645Z",
+  "data": {
+   "id": "goagent/operation/4fb8c4ea636be700c2ad4ad40662d9f40eeaa425274ef456b080c64dfaa316c7",
+   "snapshot": {
+    "version": "goagent-operation-v2",
+    "plan": "",
+    "run_id": "goagent/operation/4fb8c4ea636be700c2ad4ad40662d9f40eeaa425274ef456b080c64dfaa316c7",
+    "next": 0,
+    "data": {
+     "id": "memory/use/1",
+     "key": "4fb8c4ea636be700c2ad4ad40662d9f40eeaa425274ef456b080c64dfaa316c7",
+     "input_hash": "f53cf44464c2a82c347b2c82e3640fc44e3e6252d7de405d18adff77eb1648c4",
+     "status": "pending",
+     "attempts": 1,
+     "max_attempts": 3,
+     "value": null,
+     "failure_kind": "ambiguous"
+    },
+    "waiting": false,
+    "approved": false
+   }
+  }
+ },
+ {
+  "seq": 15,
+  "type": "boundary/snapshot",
+  "time": "2026-11-13T01:50:08.117424034Z",
+  "data": {
+   "id": "goagent/operation/4fb8c4ea636be700c2ad4ad40662d9f40eeaa425274ef456b080c64dfaa316c7",
+   "snapshot": {
+    "version": "goagent-operation-v2",
+    "plan": "",
+    "run_id": "goagent/operation/4fb8c4ea636be700c2ad4ad40662d9f40eeaa425274ef456b080c64dfaa316c7",
+    "next": 0,
+    "data": {
+     "id": "memory/use/1",
+     "key": "4fb8c4ea636be700c2ad4ad40662d9f40eeaa425274ef456b080c64dfaa316c7",
+     "input_hash": "f53cf44464c2a82c347b2c82e3640fc44e3e6252d7de405d18adff77eb1648c4",
+     "status": "completed",
+     "attempts": 1,
+     "max_attempts": 3,
+     "value": [
+      {
+       "kind": "record",
+       "namespace": [
+        "t1",
+        "alice"
+       ],
+       "id": "d7d89da2-47e6-4e02-a38b-1be895fd527c"
+      }
+     ]
+    },
+    "waiting": false,
+    "approved": false
+   }
+  }
+ }
+]
