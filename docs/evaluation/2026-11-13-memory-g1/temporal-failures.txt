@@ -1,0 +1,86 @@
+# 时间题逐题对照：G0 固定时钟（g0now-rec）对 G1 固定时钟（now-rec），同一份模型输出（temporal.py）
+题目 | 标准答案 | g0now-rec 对/含答案 | now-rec 对/含答案 | 召回块与参照相同
+conv-26/0 When did Caroline go to the LGBTQ support group? | 7 May 2023 | ✓/有 | ✓/有 | 同
+conv-26/20 When did Melanie go to the museum? | 5 July 2023 | ✗/无 | ✗/无 | 同
+conv-26/41 When did Caroline join a new activist group? | The Tuesday before 20 July 2023 | ✓/有 | ✓/有 | 同
+conv-26/67 When did Caroline go biking with friends? | The weekend before 13 September 2023 | ✗/有 | ✗/有 | 同
+conv-30/20 When did Gina get accepted for the design internship? | 27 May, 2023 | ✓/有 | ✓/有 | 同
+conv-30/36 When did Jon and Gina decide to collaborate to create dance  | 21 July 2023 | ✓/有 | ✓/有 | 同
+conv-30/7 When did Gina launch an ad campaign for her store? | 29 January, 2023 | ✓/有 | ✓/有 | 同
+conv-41/20 When did John take a road trip to the Pacific Northwest? | 2022 | ✓/有 | ✓/有 | 同
+conv-41/51 When did Maria start volunteering at the homeless shelter? | Around August 2022 | ✗/无 | ✗/无 | 同
+conv-42/18 Which outdoor spot did Joanna visit in May? | Whispering Falls waterfall | ✗/? | ✗/? | 同
+conv-42/2 When did Joanna first watch "Eternal Sunshine of the Spotles | 2019 | ✗/无 | ✗/无 | 同
+conv-42/32 Where did Joanna travel to in July 2022? | Woodhaven | ✗/? | ✗/? | 同
+conv-42/44 When did Nate win a lot of money in a video game tournament? | September 2022 | ✓/有 | ✓/有 | 同
+conv-43/37 Which week did Tim visit the UK for the Harry Potter Confere | The week before October 13th, 2023. | ✓/有 | ✓/有 | 同
+conv-43/58 When did John attend the Harry Potter trivia? | August 2023. | ✗/有 | ✗/有 | 同
+conv-43/6 In which month's game did John achieve a career-high score i | June 2023 | ✗/无 | ✗/无 | 同
+conv-44/34 How many months passed between Andrew adopting Toby and Budd | three months | ✗/? | ✗/? | 同
+conv-44/6 When did Audrey adopt Pixie? | around April 2, 2023 | ✓/有 | ✓/有 | 同
+conv-47/1 Which recreational activity was James pursuing on March 16,  | bowling | ✓/? | ✓/? | 同
+conv-47/29 When did James depart for his trip to Canada? | July 11, 2022 | ✓/有 | ✓/有 | 同
+conv-47/48 When did James, Samantha and John go to the baseball game to | September 11, 2022 | ✓/有 | ✓/有 | 同
+conv-47/63 When did James, his family and his dogs start on a road trip | November 4, 2022 | ✓/有 | ✓/有 | 同
+conv-48/10 When was Deborah's parents' wedding? | in 1993 | ✓/有 | ✓/有 | 同
+conv-48/32 When was Deborah in Bali? | in 2022 | ✓/有 | ✓/有 | 同
+conv-48/50 Which year did Jolene start practicing yoga? | 2020 | ✓/有 | ✓/有 | 同
+conv-48/66 When did Jolene and her partner return home from Rio de Jane | 29 August, 2023 | ✗/无 | ✗/无 | 同
+conv-49/17 When did Sam's friends mock him for being overweight? | Friday before 27 July 2023 | ✗/有 | ✗/有 | 同
+conv-49/45 Which places in Canada was Evan visiting in July 2023? | Banff, Rocky Mountains | ✗/? | ✗/? | 同
+conv-49/67 When did Evan and Sam planned a trip to the beach together? | December, 2023 | ✓/有 | ✓/有 | 同
+conv-50/2 When did Dave see Aerosmith perform live? | on the weekend before March 26, 2023 | ✓/有 | ✓/有 | 同
+conv-50/27 Which city was Calvin visiting in August 2023? | Miami | ✓/? | ✓/? | 同
+conv-50/51 When did Calvin and Frank Ocean start collaborating? | August 2022 | ✓/无 | ✓/无 | 同
+g0now-rec: 答对 20/32，召回块含答案日期 20，含答案却答错 3
+now-rec: 答对 20/32，召回块含答案日期 20，含答案却答错 3
+
+# 答错时间题的目标事实在放宽召回（RecallK=40、200000 字，仅用于排名）中的名次（rank.py）
+### When did Melanie go to the museum?
+    默认块：记录 5 条、关系 0 条；宽召回：记录 40 条、关系 8 条
+    记录第 4 名：- [episode 2bd5cefab4a7ae3aba0b4d428d046614 2023-07-06] On 2023-07-06, Caroline and Melanie reconnected after a long time; Caroline shared her interest in counseling, her children's book library, and her transition support network
+### When did Caroline go biking with friends?
+    默认块：记录 5 条、关系 7 条；宽召回：记录 40 条、关系 8 条
+    宽召回中也没有
+### When did Maria start volunteering at the homeless shelter?
+    默认块：记录 6 条、关系 8 条；宽召回：记录 40 条、关系 8 条
+    记录第 2 名：- [fact 80881819e55b4ccd56dc0d6791a75630 2023-08-16] Maria从2023年6月开始每月在当地一家狗狗收容所做一次志愿者。她还计划在2023年8月探索更多并在收容所做志愿者。2023-08-11（上周五），她在收容所做前台志愿者，看到受助者获得食物或床位时的笑容让她感到满足。
+    记录第 3 名：- [fact 635d8b974d32e0e0d60719b7ab22a367 2023-08-09] Maria volunteered at a homeless shelter in early August 2023 and received a medal for her service.
+    记录第 7 名：- [fact 0f8ed5160523a344a342743b3effbbcc 2023-04-07] Maria participated in a 5K charity run for a homeless shelter on the weekend of April 1-2, 2023, and found it rewarding and energizing.
+    关系第 6 名：- [关系 自2023-06-27] Maria 在收容所做志愿者。
+    关系第 8 名：- [关系 自2023-02-25] Maria于2023年2月24日在收容所结识了Jean。
+### When did Joanna first watch "Eternal Sunshine
+    默认块：记录 3 条、关系 7 条；宽召回：记录 40 条、关系 8 条
+    宽召回中也没有
+### Which outdoor spot did Joanna visit in May?
+    默认块：记录 5 条、关系 1 条；宽召回：记录 40 条、关系 8 条
+    记录第 21 名：- [episode f5cd71dda80859736e8fdba784dfcbee 2022-05-12] 2022-05-12 的对话中，Joanna 向 Nate 分享了自己在小镇徒步时发现 Whispering Falls 等新路线的经历，并邀请 Nate 来一起徒步，Nate 欣然接受。
+    记录第 33 名：- [fact 3c70677f9bf4fad489a5199098fa0b96 2022-05-12] Joanna 的爱好包括写作、阅读、看电影、探索自然以及与朋友相处；她最喜欢的电影类型是剧情片和浪漫喜剧，她也喜欢剧情片和情感驱动的电影，这些电影能激发她的写作灵感。她最喜欢的电影是一部关于记忆与关系的浪漫剧情片，大约在2019年首次观看，并购买了实体拷贝，已经看过几次。她热爱自然，觉得徒步能让她平静，是一种重置自己的方式；大自然能激发她的创作灵感，在
+    关系第 3 名：- [关系 自2022-05-12] Joanna 在徒步时发现了 Whispering Falls 这个景点。
+### Where did Joanna travel to in July 2022?
+    默认块：记录 2 条、关系 0 条；宽召回：记录 40 条、关系 8 条
+    记录第 8 名：- [fact e3142961363ab71c035aea0c8c1164fa 2022-11-11] Joanna 为下一部电影做调研，进行了一次公路旅行，目的地是中西部小镇 Woodhaven，那里有优美风景和历史建筑，以及一座藏有旧书收藏的图书馆。她在 Woodhaven 图书馆发现一本1900年代的旧书，内含故事和素描，讲述该镇及其居民的历史，这激发了她下一部剧本的灵感。她已根据自己的公路旅行经历写成剧本，目前正在拍摄这部由她担任编剧的电影。
+    记录第 31 名：- [episode 618916af214e314e5205be0f1b4acd26 2022-07-10] 2022年7月10日，Nate 向 Joanna 分享赢得第四场线上游戏锦标赛的喜悦，Joanna 则讲述为电影调研去 Woodhaven 公路旅行的见闻及新剧本、新书计划，两人互相鼓励支持。
+    关系第 6 名：- [关系 自2022-07-10] Joanna 于2022年7月为电影调研前往中西部小镇 Woodhaven 进行公路旅行。
+### In which month's game did John achieve a career-high
+    默认块：记录 6 条、关系 8 条；宽召回：记录 40 条、关系 8 条
+    记录第 1 名：- [fact b621fddae8ef70d12abf6cdbb9509315 2023-07-16] John scored 40 points in a basketball game in the week before 2023-07-16, his highest ever.
+### When did John attend the Harry Potter trivia?
+    默认块：记录 6 条、关系 8 条；宽召回：记录 40 条、关系 8 条
+    宽召回中也没有
+### How many months passed between Andrew adopting Toby
+    默认块：记录 6 条、关系 8 条；宽召回：记录 40 条、关系 8 条
+    记录第 1 名：- [fact 52404cd862fc0e83a735f36cb1db5bbd 2023-11-22] Andrew 养了一只名叫 Toby 的德国牧羊犬幼犬，尽管住在城市里。Toby 因年幼暂不适合徒步。Toby 喜欢可爱的毛衣，曾在狗公园追逐过松鼠。Andrew 对狗美容感兴趣，但一直没有时间学习。Andrew 希望与 Toby 建立更深的感情。大约在2023年10月19日，Andrew从收容所领养了一只名叫 Buddy 的新幼犬；Buddy 正在适
+    记录第 10 名：- [fact e058f74da2a675491b6247fe74efafc1 2023-10-01] Andrew计划在2023年11月与女友和Toby一起去海滩旅行。
+    记录第 16 名：- [episode 3491cf9938b9010d0092dcefc3c1f704 2023-08-04] 2023年7月8日，用户（Audrey）与Andrew聊天，分享养狗经历和户外照片，并约定下个月（2023年8月）一起带狗徒步。2023年7月11日，Andrew向Audrey展示新小狗Toby，并邀请她下个月一起带狗徒步，Audrey接受了邀请。之后两人又聊到户外活动和宠物，Audrey分享了养狗建议，尤其是关于德国牧羊犬的，Andrew计划带
+### When did Jolene and her partner return home from Rio
+    默认块：记录 6 条、关系 8 条；宽召回：记录 40 条、关系 8 条
+    记录第 39 名：- [episode 333e0faa6274e6298a01d8a6a6ddbb79 2023-08-30] 2023年8月30日，用户（Deborah）与Jolene聊天，分享了母亲房子的照片、朋友写的名言纸条以及自己最喜欢的沉思地点，并得知Jolene刚和伴侣从里约热内卢旅行回来。
+### When did Sam's friends mock him for being overweight?
+    默认块：记录 6 条、关系 8 条；宽召回：记录 40 条、关系 8 条
+    记录第 1 名：- [reflection 0587760751ccf2c6b16d0332b16ec837 2024-01-11] Sam 反复面临体重被嘲笑和健康困扰，但持续表现出尝试新事物（绘画、烹饪课、健身）和寻求改变的倾向。
+    记录第 6 名：- [episode a5440f97e189f9923b4dc181271edb54 2023-07-27] On July 27, 2023, Sam talked to Evan about being mocked for his weight and his determination to improve his health; Evan shared his own health journey, suggested dietary swap
+    记录第 15 名：- [fact 723139d16c55610c739a0cc04474cdf4 2023-12-26] Sam 计划尝试绘画，但此前从未画过；2023年5月20日左右看医生体检发现体重不理想，决定开始改善生活方式，并考虑尝试画画来减压和保持动力。2023年7月21日（周五），Sam 的朋友们嘲笑他的体重，这促使他下定决心开始做出健康改变。2023年8月7日当周，Sam 因健康问题看医生，这次就诊成为他更好地照顾自己的警醒。2023年10月2日（周一）体检
+### Which places in Canada was Evan visiting in July 2023?
+    默认块：记录 6 条、关系 8 条；宽召回：记录 40 条、关系 8 条
+    记录第 3 名：- [fact e9c75ee8666df36044c3f5b1baf71164 2023-12-09] In July 2023, Evan went on a road trip in his car to the Rocky Mountains (Banff), where he found the scenery stunning and relaxing and enjoyed amazing views. 这次班夫旅行也启发了他的家庭格言“Br
