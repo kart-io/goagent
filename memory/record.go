@@ -129,5 +129,9 @@ func validNamespace(ns []string) error {
 	if len(ns) == 0 || slices.ContainsFunc(ns, func(s string) bool { return strings.TrimSpace(s) == "" }) {
 		return agentErrors.Newf(agentErrors.CodeInvalidInput, "长期记忆需要命名空间：用 memory.WithNamespace 绑定可信身份").WithComponent("memory").WithOperation("namespace")
 	}
+	// 索引与缓存以 NUL 连接命名空间组件，组件含 NUL 时不同的命名空间会得到同一个键。
+	if slices.ContainsFunc(ns, func(s string) bool { return strings.ContainsRune(s, 0) }) {
+		return agentErrors.Newf(agentErrors.CodeInvalidInput, "长期记忆的命名空间组件不能包含 NUL").WithComponent("memory").WithOperation("namespace")
+	}
 	return nil
 }

@@ -53,6 +53,7 @@ agent, err := builder.NewSimpleBuilder(client).
 | `Run` / `ProcessPending` | Worker：每轮先执行 `Maintain`，再处理各命名空间的待处理任务；多个实例同时运行时由锁保证同一时刻只有一个在处理 |
 | `Maintain(ctx)` / `RunMaintenance(ctx, interval, onError)` | 不需要模型的维护：完成 Purge 遗留的旧作用域清理、Forget 崩溃后残留的向量清理，每 `ReindexEvery` 轮补写向量并清理过期的删除标记。**不运行 Worker 的部署必须运行 `RunMaintenance`** |
 | `Tools()` | `memory_search`、`memory_save`、`memory_forget` |
+| `MigrateFromStore(ctx, src, namespaces, opts)` | 从 G0 的 `store.Store` 迁入记录，见下文"从 G0 迁移" |
 
 ## 时序知识图谱
 
@@ -78,12 +79,31 @@ agent, err := builder.NewSimpleBuilder(client).
 
 多个 Worker 可以同时运行，同一时刻只有持锁的一个在处理。召回会读取命名空间内的全部记录，命名空间较大时用 `Retention.MaxRecords` 限制规模。
 
+## 从 G0 迁移
+
+G0 把记录与图谱以 JSON 文本存在 `store.Store` 中。升级步骤：
+
+1. 停止 Agent 流量与 Worker，让持久运行结束；备份旧存储与旧索引。
+2. 配置 `Durable`；需要数据回滚能力时设置 `RollbackWindow`。
+3. 迁移：
+
+   ```go
+   report, err := mem.MigrateFromStore(ctx, memory.MigrationSource{Store: oldStore, Index: oldIndex},
+       [][]string{{tenantID, userID}}, memory.MigrateOptions{ClearLegacy: true})
+   ```
+
+   每个命名空间两阶段提交，失败或冲突（`report.Namespaces[i].Status`）处理后重跑即可，已迁移的不再导入，Purge 之后重跑也不会导入。只迁入记录，没有取代者的失效记录视为已遗忘并清空正文；关系、实体与社区由之后的抽取重建。旧任务列在 `report.Jobs`，不迁入；`report.Unlisted` 是旧任务中出现、但不在清单里的命名空间。`ClearLegacy` 删除这个命名空间的旧数据、它的旧任务与旧向量。
+4. 恢复流量，启动 Worker（或 `RunMaintenance`）。
+
+回滚数据时从迁移前的备份恢复，再按 `Deletions` 重放回滚窗口内的遗忘与 Purge；没有开启删除日志时，迁移后遗忘的内容会重新出现。
+
 ## 代码结构
 
 ```text
 memory/
 ├── record.go   # Record、Kind、命名空间
 ├── job.go      # 抽取任务、待处理队列、Maintain
+├── migrate.go  # 从 G0 的 store.Store 迁移
 ├── durable_state.go # 命名空间 state 的读写（mutate/read）
 ├── index.go    # Index 接口与进程内 MemoryIndex
 ├── memory.go   # Memory：写入、召回、遗忘、保留

@@ -127,9 +127,10 @@ func TestMemoryRequiresNamespace(t *testing.T) {
 	m := newMemory(t, Config{})
 	ctx := context.Background()
 	for name, call := range map[string]func() error{
-		"写入": func() error { _, err := m.Remember(ctx, Record{Content: "x", Importance: 0.1}); return err },
-		"召回": func() error { _, err := m.Recall(ctx, Query{Text: "x"}); return err },
-		"空段": func() error { _, err := m.Recall(WithNamespace(ctx, "t", " "), Query{}); return err },
+		"写入":    func() error { _, err := m.Remember(ctx, Record{Content: "x", Importance: 0.1}); return err },
+		"召回":    func() error { _, err := m.Recall(ctx, Query{Text: "x"}); return err },
+		"空段":    func() error { _, err := m.Recall(WithNamespace(ctx, "t", " "), Query{}); return err },
+		"含 NUL": func() error { _, err := m.Recall(WithNamespace(ctx, "t\x00u"), Query{}); return err },
 	} {
 		t.Run(name, func(t *testing.T) { require.True(t, agentErrors.IsCode(call(), agentErrors.CodeInvalidInput)) })
 	}

@@ -12,8 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `cache.WithMaxEntries(n)`：限制 `SimpleCache` 条目数，超出时先回收过期条目再淘汰其他条目。
 - `tools/shell.ShellToolBuilder.WithEnv(names...)`：按名称把宿主环境变量透传给子进程。
 - `contextpolicy.Compaction` 与 `builder.WithCompaction`：对话超过阈值时把较早的消息压缩成摘要（递归摘要，`Model` 为 nil 时只省略并说明），请求超出上下文时强制压缩一次后重试；自 goagent-harness 的 compaction 组件下沉，编码场景的逻辑经 `Keep`、`Annotate` 注入。设计见 [记忆系统设计](docs/design/MEMORY_DESIGN.md)。
-- `memory` 长期记忆与 `builder.WithLongTermMemory`：记录按宿主经 `memory.WithNamespace` 绑定的命名空间隔离，正文存于 `store.Store`、向量索引（`memory.Index`，内置 `MemoryIndex`）可重建；每轮第一次请求前召回相关记录与钉住的核心记忆，作为低信任用户消息插在输入前；每轮结束登记抽取任务，`Memory.Run` 异步抽取事实、经历与可复用做法，与相似旧记忆比较后新增、合并或使其失效（不删除），中止的轮次写教训，情景累计到阈值时反思；`Tools()` 提供 `memory_search`/`memory_save`/`memory_forget`。
-- `memory` 时序知识图谱：`Config.Graph`（`memory.NewGraph(store)`）非空时抽取实体与关系。实体先按类型与名称（含别名）精确去重，其余按名称向量或字符对找出相似候选，由模型一次判定是否为同一对象（Graphiti）。关系带有效期，生效时间取对话发生的时间；排他谓词出现新客体时旧关系失效并指向新关系（不删除），迟到的旧事实写入即失效；`Edge.ValidAt` 查询某一时刻成立的关系。召回取种子实体若干跳内的关系，按 Personalized PageRank 排序（HippoRAG），放入召回块，`memory_search` 同时返回。`Config.Communities` 为真时用标签传播划分社区并为变化的社区写摘要，召回时附上相关社区的摘要。
+- `memory` 长期记忆与 `builder.WithLongTermMemory`：记录按宿主经 `memory.WithNamespace` 绑定的命名空间隔离，正文存于 `durable.Store`、向量索引（`memory.Index`，内置 `MemoryIndex`）可重建；每轮第一次请求前召回相关记录与钉住的核心记忆，作为低信任用户消息插在输入前；每轮结束登记抽取任务，`Memory.Run` 异步抽取事实、经历与可复用做法，与相似旧记忆比较后新增、合并或使其失效（不删除），中止的轮次写教训，情景累计到阈值时反思；`Tools()` 提供 `memory_search`/`memory_save`/`memory_forget`。
+- `memory` 时序知识图谱：`Config.Graph` 为真时抽取实体与关系。实体先按类型与名称（含别名）精确去重，其余按名称向量或字符对找出相似候选，由模型一次判定是否为同一对象（Graphiti）。关系带有效期，生效时间取对话发生的时间；排他谓词出现新客体时旧关系失效并指向新关系（不删除），迟到的旧事实写入即失效；`Edge.ValidAt` 查询某一时刻成立的关系。召回取种子实体若干跳内的关系，按 Personalized PageRank 排序（HippoRAG），放入召回块，`memory_search` 同时返回。`Config.Communities` 为真时用标签传播划分社区并为变化的社区写摘要，召回时附上相关社区的摘要。
 - `memory/memeval` 与 `scripts/memeval`：在 LongMemEval 与 LOCOMO 上对比只看最近原文的基线与长期记忆、图谱、社区各配置，判定使用 LongMemEval 官方提示词，LOCOMO 另算词级 F1，并统计证据会话的召回率；支持按题型分层抽样、多轮重复与并发，报告 95% 区间、各轮范围与两两配对的符号检验。
 - `Memory.Retrieve`：返回召回块及实际写入其中的记录、关系与社区，`Retrieval.Sessions()` 给出它们依据的会话；`RecallBlock` 基于它实现。
 - 长期记忆记录的 `ValidFrom` 与召回块中的日期取对话发生的时间（轮次开始事件的时间），不再是 Worker 处理的时间；抽取时向模型给出对话时间，相对时间（昨天、上周）换算成具体日期再记下。记忆模型的回复不完整（finish_reason 不是 stop，如因长度截断）时报出原因并提示调大 MaxTokens，而不是笼统的 JSON 解析错误。回复不是合法 JSON 时把原回复与解析错误交回模型修正一次（温度为 0 时重试同一请求会得到同样的错误输出）。
@@ -31,6 +31,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 抽取时跳过 `memory_search`、`memory_save`、`memory_forget` 的调用与结果，同一条消息里的普通正文照常保留。
   - `memory` 新增 `Snapshot`、`Hydrate`、`Ref`、`RecallProtocol`；`Retrieve` 改为 `Snapshot` 后立即 `Hydrate`，结果不变。
 - `memory.Record.Source` 改为 `Sources []Source`：合并更新的记录同时依据旧记录与新轮次，单一来源会在回退新轮次时连带丢掉更早的事实。迁移：读取 `r.Source` 改为遍历 `r.Sources`，手动写入时设置 `Sources: []memory.Source{...}`；已存储的 JSON 中的 `source` 字段不再读取，需要来源时重新抽取。`Rewound` 现在会恢复只被退回记录取代的旧记录与旧关系。
+- 长期记忆的存储改造（[长期记忆的删除优先](docs/design/MEMORY_GOVERNANCE.md) G1，设计见 [MEMORY_G1_STORAGE](docs/design/MEMORY_G1_STORAGE.md)）：遗忘、Purge 与并发写入不再互相覆盖，被删除的内容不会经并发写入、迟到的向量或重做的任务复活。
+  - 存储：`Config.Store`、`Config.Graph`（接口）、`RecordStore`、`NewRecordStore`、`Graph`、`NewGraph` 删除。记录、图谱与抽取任务存于 `Config.Durable`（`durable.Store`，须实现 `durable.Scoped`，如 `durable.NewFileStore`、goagent-contrib 的 pgstore），每个命名空间一份 state，所有写入在锁内修改。`Config.Graph` 改为 `bool`。新增 `MaxStateBytes`（默认 8 MiB，删除类操作不受限）、`StateCacheBytes`、`TrackAccess`、`RollbackWindow`、`ReindexEvery`、`RetireGrace`。提交结果无法判断时返回 `errors.ErrMemoryCommitUnknown`。
+  - `Remember` 只创建，ID 已存在时返回 `CodeConflict`；修改用新增的 `Update`（按 `Revision` 判重）。`Forget` 清空正文。`Purge` 把命名空间切换到新的空作用域，旧作用域由清理物理删除；迁移进行中返回 `CodeConflict`。
+  - `Index` 增加 `IDs`、`Clear`（只清精确的命名空间）；索引键带记录版本与模型摘要，实体向量移入 `Index`。`Entity.Vector`、`Entity.EmbedModel`、`Record.EmbedModel` 删除，`Record` 增加 `InvalidReason`、`Incarnation`、`Revision`、`ContentRev`。
+  - `TrackAccess` 默认关闭：新近性与 `MaxRecords` 淘汰改为按创建时间计。需要旧行为时开启，`scripts/memeval -track-access` 可对比两者。
+  - 任务：`Job` 增加 `Scope`、`TurnSeq` 与 `JobDropped` 状态，`Memory.Job` 按上下文的命名空间查找，完成的任务只保留键。跨越 Purge、登记之后发生过遗忘、或 state 超限的任务丢弃并计入 `DroppedJobs()`。Worker 持锁互斥，多实例时同一时刻只有一个在处理。
+  - 新增 `Maintain`、`RunMaintenance`：完成 Purge 与 Forget 遗留的清理，定期补写向量。**不运行 Worker（`Run`/`ProcessPending`）的部署必须运行 `RunMaintenance`。**
+  - `TurnMemory`、`Ref` 增加作用域与序号，召回协议改为 `/2`；G0 时期仍在进行的持久运行可以恢复（召回为空，意图不变），G1 的持久运行不能在回滚到 G0 后恢复。
+  - 命名空间组件不能包含 NUL，也不应以 `#` 开头（索引使用 `#作用域` 子命名空间）。
+  - 迁移步骤：
+    1. 停止 Agent 流量与 Worker，让持久运行（含等待审批的）结束；备份旧 `store.Store` 与旧索引。
+    2. 配置 `Durable`；需要数据回滚能力时设置 `RollbackWindow`（删除日志）。自定义 `Index` 实现 `IDs`、`Clear`。
+    3. 调用 `Memory.MigrateFromStore(ctx, memory.MigrationSource{Store: old, Index: oldIndex}, namespaces, memory.MigrateOptions{ClearLegacy: true})`：两阶段提交，失败或冲突时处理后重跑，已迁移的命名空间不再导入。只迁入记录；没有取代者的失效记录视为已遗忘并清空正文；关系、实体、社区不迁入，由之后的抽取重建。旧任务不迁入，列在报告中（`Unlisted` 给出旧任务中出现、但不在清单里的命名空间），原样重新登记会被丢弃。
+    4. 恢复流量，启动 Worker 或 `RunMaintenance`。
+  - 回滚：代码回滚前让持久运行结束；数据从迁移前的备份恢复，再用 `Deletions` 中回滚窗口内的记录在旧存储上重放 Forget 与 Purge，最后 `Reindex(true)`。没有开启删除日志时，迁移后遗忘的内容会在回滚后重新出现。
 
 - `tools`：`WithMiddleware`/`MiddlewareTool` 移入 `tools/middleware`，改为 `middleware.Wrap(tool, middlewares...)` 与 `*middleware.WrappedTool`，用法不变。`tools` 根包不再导入 `tools/middleware`，只用 Builder 的程序不再链接其日志中间件带入的 OTLP/gRPC：`builder` 的依赖包由 394 个降到 183 个；`apicheck` 拒绝 `tools` 根包重新导入 `tools/middleware`。迁移：`tools.WithMiddleware(` 改为 `middleware.Wrap(`。
 - `tools`：删除没有生产使用方、与 Dispatcher 平行的 `ToolExecutor`（`NewToolExecutor`、`ToolCallRequest`、`ToolResult`、`RetryPolicy`、`ExecutorOption` 及 `With*`）、`ToolGraph`/`ToolGraphBuilder`/`ToolNode`，以及三套工具结果缓存 `ToolCache`/`SimpleToolCache`/`MemoryToolCache`/`ShardedToolCache`、`CachedTool`/`NewCachedTool`、`NewHighPerformanceCache`/`NewLowMemoryCache` 与分片缓存选项；对应示例 `retry-jitter`、`optimization/02-cache-presets`、`advanced/parallel-execution` 一并删除。迁移：工具调用经 `tools.NewDispatcher`（并发、超时、持久回放与重试策略见 `DispatchConfig`），结果缓存用 `tools/middleware.Caching`。

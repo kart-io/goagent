@@ -1049,6 +1049,42 @@ export GOAGENT_PGSTORE_DSN='postgres://postgres:test@127.0.0.1:55432/postgres?ss
 - `RunMaintenance` 增加 `onError` 参数，与 `Run` 一致。
 - 旧 `store.Store` 中未处理的任务不迁移，迁移说明属于 G1f。
 
+### 7.13 G1f：迁移与收尾（2026-11-13）
+
+**交付**（计划见 `.claude/plan-g1f.md`）：
+
+- `MigrateFromStore(ctx, MigrationSource, namespaces, MigrateOptions)`，按 5.1 实现：
+  - meta 锁内两阶段提交，先看 `Migrating` 再看 `Migrated` 与已有数据。
+  - 阶段二在锁内合并导入：分配实例号，`Revision = ContentRev = 1`；`LastForgetSeq` 设为提交的 `Seq`，`MigrationID` 设为迁移 ID。
+  - 导入之后对这个命名空间执行 `Reindex(false)` 补写向量。
+  - `ClearLegacy` 清四类旧数据、这个命名空间的旧任务键与旧索引中的 `ns`。
+- 报告：每个命名空间的状态（imported、already_migrated、conflict、failed）、记录数、是否已清理与错误；全部旧任务；旧任务中出现、但不在清单里的命名空间（`Unlisted`）。返回的错误汇总各命名空间的冲突与失败。
+- `scripts/memeval` 增加 `-track-access`，供 7.5 的冒烟对比。
+- 命名空间组件含 NUL 时拒绝（8 节，此前未实现）。
+- CHANGELOG 写明 G1 的破坏性变更、迁移与回滚步骤；README 增加"从 G0 迁移"一节。
+
+**测试**（`memory/migrate_test.go`）：
+
+- `TestMigrateFromStore`（7.4 第 1、6、7、8 行）：
+  - 记录逐字段等价；被取代的记为 superseded，没有取代者的记为 forgotten 并清空正文。
+  - 关系、实体、社区与任务不迁入，报告列出全部任务与 `Unlisted`。
+  - `ClearLegacy` 只清这个命名空间，子命名空间与其他命名空间的任务不动。
+  - 向量补写后可召回。
+  - G0 任务原样重新登记被丢弃；设置了作用域、但 `TurnSeq` 小于 `LastForgetSeq` 的任务处理时丢弃。
+- `TestMigrateRerunDoesNotImport`（7.4 第 2～4 行，表驱动）：直接重跑、Purge 之后、遗忘全部并 Prune 之后，均不导入、不写 state。
+- `TestMigrateConflictWhenDataExists`（7.4 第 5 行）：报告冲突，不导入、不清理，meta 不留迁移标记。
+- `TestMigrateConflictAfterPhaseOne`：阶段一之后有写入，阶段二在锁内发现并撤销迁移标记，之后 Purge 可以执行。
+- `TestMigrateCrashThenRerun`（7.2 迁移行，表驱动）：阶段一之后、阶段二之后、阶段三之后（补写向量失败）、ClearLegacy 中途失败；重跑后记录、`NextIncarnation`、`Seq` 与一次成功的迁移相同；迁移标记未清除期间 Purge 被拒绝，空 state 不被标记为已迁移。
+- 变异验证：去掉阶段二的幂等判断、"先看 Migrating"的顺序、遗忘记录的清空、`LastForgetSeq` 设置、冲突时撤销标记、阶段二的锁内冲突检查、任务键按命名空间筛选或向量补写，各有测试失败。
+
+**与前文的差异**：
+
+- 5.1 第 2 步只以"已有记录"判断冲突。实现中已有记录、实体或关系都算冲突：任何一种都说明迁移前没有停止流量。
+- 阶段二在锁内再检查一次，发现冲突时撤销阶段一的标记，否则 `Migrating` 会一直阻止 Purge。5.1 没有写这种情况。
+- 未做：3.4 提到的 state 解码管理工具不在 9 节的 G1f 范围内，留作后续。
+
+**7.5 冒烟对比**（`docs/evaluation/2026-11-13-memory-g1/`）：LoCoMo 200 题、1 轮，模型与 2026-11-10 的 G0 基线相同，逐题配对。总体准确率在 G0 的 95% 区间内，总体配对差异不显著（graph 默认补跑 1 轮，两轮合计 p = 0.36）。graph 的时间题三组 G1 结果都低于 G0（16、20、19 对 23、23；默认两轮配对 p = 0.031），可回答题答 "not mentioned" 的比例升高（64～69 对 57，共 155 题），证据命中相同，开启 `TrackAccess` 不能消除。原因未定位，需要在同一份抽取结果上对比 G0 与 G1 的召回块。
+
 ## 8. 兼容性
 
 | 变更 | 影响 | 处理 |
@@ -1080,7 +1116,7 @@ export GOAGENT_PGSTORE_DSN='postgres://postgres:test@127.0.0.1:55432/postgres?ss
 3. **G1c 作用域与 Purge**：meta 切换、全局 retiring 与清理；轮次绑定增加 `Scope`、`Seq`；`Ref` 带版本；`Digest` 分版本；G0 日志字节恢复测试。已完成（2026-11-13），见 7.10。
 4. **G1d 索引**：版本化键、写后复核、`IDs`、`Clear`、`Reindex`；实体向量移入 `Index`。已完成（2026-11-13），见 7.11。
 5. **G1e 任务、维护与 Worker**：state 内的任务、queue 分片（任务与索引待清理）、`Maintain` 与 `RunMaintenance`、Worker 锁与心跳、`LastForgetSeq` 丢弃规则。已完成（2026-11-13），见 7.12。
-6. **G1f 迁移与收尾**：`MigrateFromStore`（两阶段）、memeval 适配、CHANGELOG。
+6. **G1f 迁移与收尾**：`MigrateFromStore`（两阶段）、memeval 适配、CHANGELOG。已完成（2026-11-13），见 7.13。
 
 ## 10. 风险
 
