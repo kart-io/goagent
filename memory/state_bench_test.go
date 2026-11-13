@@ -84,10 +84,10 @@ func benchState(n int, gen textGen) func(*tx) error {
 		for i := range n {
 			r := Record{ID: fmt.Sprintf("rec-%06d", i), Kind: KindFact, Content: gen(rng, 40+rng.IntN(120)),
 				Keywords: []string{gen(rng, 2), gen(rng, 3), gen(rng, 2), gen(rng, 4)}, Entities: []string{names[rng.IntN(n)], names[rng.IntN(n)]},
-				Importance: rng.Float64(), ValidFrom: at(), CreatedAt: at(), LastAccess: at(),
+				Importance: rng.Float64(), ValidFrom: at(), CreatedAt: at(),
 				Sources: []Source{{Session: uuid.NewString(), From: rng.Int64N(1e5), To: rng.Int64N(1e5), Job: uuid.NewString()}}}
 			if i%10 < 3 {
-				r.InvalidAt = at()
+				r.InvalidAt, r.InvalidReason = at(), ReasonExpired
 			}
 			t.Records.Put(r.ID, r)
 		}
@@ -156,7 +156,7 @@ func benchMemory(t *testing.T, dir string, cacheBytes int) *Memory {
 	t.Helper()
 	fs, err := durable.NewFileStore(dir)
 	require.NoError(t, err)
-	return durableMemory(t, fs, Config{MaxStateBytes: 1 << 30, StateCacheBytes: cacheBytes})
+	return durableMemory(t, fs, Config{MaxStateBytes: 1 << 30, StateCacheBytes: cacheBytes, Graph: true})
 }
 
 // TestStateBenchmarkReport 是 G1a 的原型基准，需要 MEMORY_STATE_BENCH=1。5k 条记录时两组数据都按 7.3 的硬性阈值判定：
@@ -167,7 +167,7 @@ func TestStateBenchmarkReport(t *testing.T) {
 	}
 	ctx := context.Background()
 	t.Logf("GOMAXPROCS=%d", runtime.GOMAXPROCS(0))
-	t.Logf("| 数据 | 记录数 | 解压后 | 落盘 | mutate p50 | mutate p95 | p99 | 压缩次数/耗时 | 串行吞吐 | 4 写者吞吐 | 热读 均值/p95 | 冷读 均值/p95 | 跨实例读 均值/p95 | 1写5读命中率 | 缓存堆占用 | 索引构建 | 召回计算 p95 | 端到端召回 热 p95 | 端到端召回 跨实例 p95 | 冷召回 p95 |")
+	t.Logf("| 数据 | 记录数 | 解压后 | 落盘 | mutate p50 | mutate p95 | p99 | 压缩次数/耗时 | 串行吞吐 | 4 写者吞吐 | 热读 均值/p95 | 冷读 均值/p95 | 跨实例读 均值/p95 | 1写5读命中率 | 缓存堆占用 | 索引构建 | 召回计算 p95 | 端到端召回 热 p95 | 端到端召回 跨实例 p95 | 冷召回 p95 | 完整召回 热 p95 | 完整召回 跨实例 p95 |")
 	sizes := []int{1000, 5000, 10000}
 	if v := os.Getenv("MEMORY_STATE_BENCH_SIZES"); v != "" {
 		sizes = nil
@@ -234,7 +234,7 @@ func TestStateBenchmarkReport(t *testing.T) {
 			require.NoError(t, err)
 			q := Query{Text: string([]rune(v.cur.Records["rec-000015"].Content)[:16])}
 			build := timed(3, func() { buildIndex(v.base.Records) })
-			compute := timed(40, func() { m.rankState(v.cur, v.idx, q, nil) })
+			compute := timed(40, func() { m.rankState(v.cur, v.idx, q, nil, nil) })
 			recall := timed(40, func() { _, err := m.recallState(ctx, benchNS, q); require.NoError(t, err) })
 			// 冷召回：不用缓存，每次都读取、解码基础快照并等待索引构建（进程启动后的第一次召回）。
 			coldRecall := timed(10, func() { _, err := coldM.recallState(ctx, benchNS, q); require.NoError(t, err) })
@@ -243,6 +243,21 @@ func TestStateBenchmarkReport(t *testing.T) {
 				_, err := writer.mutate(ctx, benchNS, "", addRecord(uuid.NewString()))
 				require.NoError(t, err)
 				crossRecall = append(crossRecall, timed(1, func() { _, err := reader.recallState(ctx, benchNS, q); require.NoError(t, err) })...)
+			}
+			// 完整召回（7.3 测量局限第 2 条）：一轮对话的 Snapshot（钉住、召回、图谱 PageRank）加 Hydrate 的再读。
+			nsCtx := WithNamespace(ctx, benchNS...)
+			turn := func(mm *Memory) {
+				snap, err := mm.Snapshot(nsCtx, q.Text)
+				require.NoError(t, err)
+				_, _, err = mm.Hydrate(WithTurn(nsCtx, snap.Turn), snap, snap.Refs)
+				require.NoError(t, err)
+			}
+			full := timed(40, func() { turn(m) })
+			var crossFull []time.Duration
+			for range 20 {
+				_, err := writer.mutate(ctx, benchNS, "", addRecord(uuid.NewString()))
+				require.NoError(t, err)
+				crossFull = append(crossFull, timed(1, func() { turn(reader) })...)
 			}
 
 			var wg sync.WaitGroup
@@ -261,12 +276,13 @@ func TestStateBenchmarkReport(t *testing.T) {
 			blob, stored := benchSizes(t, m, benchNS)
 			heap := heapOfDecoded(t, blob)
 
-			t.Logf("| %s | %d | %.1f MiB | %.1f MiB | %s | %s | %s | %d / %s | %.1f/s | %.1f/s | %s / %s | %s / %s | %s / %s | %.0f%% | %.1f MiB（%.1f×） | %s | %s | %s | %s | %s |",
+			t.Logf("| %s | %d | %.1f MiB | %.1f MiB | %s | %s | %s | %d / %s | %.1f/s | %.1f/s | %s / %s | %s / %s | %s / %s | %.0f%% | %.1f MiB（%.1f×） | %s | %s | %s | %s | %s | %s | %s |",
 				ds.name, n, float64(blob.RawBytes)/(1<<20), float64(stored)/(1<<20),
 				ms(percentile(lat, 0.5)), ms(percentile(lat, 0.95)), ms(percentile(lat, 0.99)), compactions, ms(mean(compactT)), serial, concurrent,
 				ms(mean(warm)), ms(percentile(warm, 0.95)), ms(mean(cold)), ms(percentile(cold, 0.95)),
 				ms(mean(cross)), ms(percentile(cross, 0.95)), hitRate*100, float64(heap)/(1<<20), float64(heap)/float64(blob.RawBytes),
-				ms(mean(build)), ms(percentile(compute, 0.95)), ms(percentile(recall, 0.95)), ms(percentile(crossRecall, 0.95)), ms(percentile(coldRecall, 0.95)))
+				ms(mean(build)), ms(percentile(compute, 0.95)), ms(percentile(recall, 0.95)), ms(percentile(crossRecall, 0.95)), ms(percentile(coldRecall, 0.95)),
+				ms(percentile(full, 0.95)), ms(percentile(crossFull, 0.95)))
 			if n == 5000 {
 				assert.LessOrEqual(t, percentile(lat, 0.95), 100*time.Millisecond, "%s：5k 条记录时 mutate p95 超过 100ms", ds.name)
 				assert.LessOrEqual(t, percentile(warm, 0.95), 30*time.Millisecond, "%s：5k 条记录时热读 p95 超过 30ms", ds.name)
@@ -275,6 +291,8 @@ func TestStateBenchmarkReport(t *testing.T) {
 				assert.GreaterOrEqual(t, serial, 20.0, "%s：5k 条记录时单命名空间吞吐低于 20 次/秒", ds.name)
 				assert.LessOrEqual(t, percentile(recall, 0.95), 30*time.Millisecond, "%s：5k 条记录时端到端召回（热）p95 超过 30ms", ds.name)
 				assert.LessOrEqual(t, percentile(crossRecall, 0.95), 30*time.Millisecond, "%s：5k 条记录时端到端召回（跨实例）p95 超过 30ms", ds.name)
+				assert.LessOrEqual(t, percentile(full, 0.95), 30*time.Millisecond, "%s：5k 条记录时完整召回（热）p95 超过 30ms", ds.name)
+				assert.LessOrEqual(t, percentile(crossFull, 0.95), 30*time.Millisecond, "%s：5k 条记录时完整召回（跨实例）p95 超过 30ms", ds.name)
 			}
 		}
 	}

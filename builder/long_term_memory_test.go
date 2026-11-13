@@ -24,7 +24,9 @@ import (
 
 func newTestMemory(t *testing.T, ctx context.Context, contents ...string) (*memory.Memory, []string) {
 	t.Helper()
-	m, err := memory.New(memory.Config{Store: storemem.New()})
+	fs, err := durable.NewFileStore(t.TempDir())
+	require.NoError(t, err)
+	m, err := memory.New(memory.Config{Store: storemem.New(), Durable: fs})
 	require.NoError(t, err)
 	var ids []string
 	for _, c := range contents {

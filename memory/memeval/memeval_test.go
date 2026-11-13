@@ -161,7 +161,7 @@ func TestRunnerEndToEnd(t *testing.T) {
 		}
 		return "no"
 	}}
-	mem := &Memory{Label: "memory", Configure: func(st store.Store, sessions session.Store) memory.Config {
+	mem := &Memory{Label: "memory", Dir: t.TempDir(), Configure: func(st store.Store, sessions session.Store) memory.Config {
 		return memory.Config{Store: st, Sessions: sessions, Model: extractor}
 	}}
 	var progress []string
@@ -213,7 +213,7 @@ func TestMemoryIngestRetriesFailedJobs(t *testing.T) {
 				}
 				return `{"memories":[]}`
 			}}
-			sys := &Memory{Label: "memory", Configure: func(st store.Store, sessions session.Store) memory.Config {
+			sys := &Memory{Label: "memory", Dir: t.TempDir(), Configure: func(st store.Store, sessions session.Store) memory.Config {
 				return memory.Config{Store: st, Sessions: sessions, Model: flaky}
 			}}
 			_, err := sys.Ingest(context.Background(), cases[1])

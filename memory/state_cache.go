@@ -3,6 +3,7 @@ package memory
 import (
 	"container/list"
 	"sync"
+	"time"
 )
 
 // stateCache 是进程内的 LRU，按估计的堆占用限制总量（G1 3.5、增量提交 5.1）。每个命名空间一个条目，含两级：
@@ -14,7 +15,7 @@ type stateCache struct {
 	size     int
 	order    *list.List // 前端最近使用，元素为 *cacheEntry
 	items    map[string]*list.Element
-	stats    cacheStats
+	stats    CacheStats
 }
 
 // cacheEntry 是一个命名空间的缓存条目，放入之后不再修改，由读者共享。
@@ -31,9 +32,24 @@ type cacheEntry struct {
 	bytes      int
 }
 
-// cacheStats 是缓存的计数，供基准与测试观察。
-type cacheStats struct {
-	Hits, Misses, BaseHits, Evictions int
+// CacheStats 是 state 解码缓存的计数（Config.StateCacheBytes 为负、关闭缓存时全为零）。
+// Misses 中并发的同一提交只解码一次，Decodes 与 DecodeTime 是实际的解码次数与累计耗时（含读取基础快照）。
+type CacheStats struct {
+	Hits, Misses, BaseHits, Evictions, Decodes int
+	DecodeTime                                 time.Duration
+	// Bytes 是当前估计的堆占用。
+	Bytes int
+}
+
+// decoded 记一次解码及其耗时。
+func (c *stateCache) decoded(d time.Duration) {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.stats.Decodes++
+	c.stats.DecodeTime += d
 }
 
 // heapFactor 是解码后 state 的堆占用与解压后字节数之比的估计（G1 7.3 实测 1.7～2.3，取上浮的值）。
@@ -136,9 +152,9 @@ func (c *stateCache) remove(el *list.Element) {
 }
 
 // snapshot 返回计数与当前估计的堆占用。
-func (c *stateCache) snapshot() (cacheStats, int) {
+func (c *stateCache) snapshot() (CacheStats, int) {
 	if c == nil {
-		return cacheStats{}, 0
+		return CacheStats{}, 0
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()

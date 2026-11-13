@@ -3,6 +3,8 @@ package memory
 import (
 	"context"
 	"errors"
+	"maps"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -37,7 +39,7 @@ func graphMemoryWith(t *testing.T, cfg Config, replies map[string]string) (*Memo
 		}
 		return "", errors.New("没有预设的回复")
 	}}
-	cfg.Store, cfg.Graph, cfg.Model, cfg.Sessions, cfg.Retention = st, NewGraph(st), model, sessions, Retention{InvalidRetention: time.Hour}
+	cfg.Store, cfg.Graph, cfg.Model, cfg.Sessions, cfg.Retention = st, true, model, sessions, Retention{InvalidRetention: time.Hour}
 	m := newMemory(t, cfg)
 	now := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
 	m.now = func() time.Time { return now }
@@ -75,7 +77,7 @@ func TestGraphTemporalRelations(t *testing.T) {
 	runTurn(t, m, sessions, "s/2", "我搬到北京了，最近喜欢茶")
 	runTurn(t, m, sessions, "s/3", "说说我的老家")
 
-	entities, err := m.cfg.Graph.Entities(ctx, []string{"u"})
+	entities, err := graphOf(m).Entities(ctx, []string{"u"})
 	require.NoError(t, err)
 	var names []string
 	for _, e := range entities {
@@ -83,7 +85,7 @@ func TestGraphTemporalRelations(t *testing.T) {
 	}
 	require.ElementsMatch(t, []string{"person:用户", "place:上海市", "product:咖啡", "place:北京", "product:茶"}, names, "按别名去重：上海与上海市是同一实体")
 
-	edges, err := m.cfg.Graph.Edges(ctx, []string{"u"})
+	edges, err := graphOf(m).Edges(ctx, []string{"u"})
 	require.NoError(t, err)
 	byFact := map[string]Edge{}
 	for _, e := range edges {
@@ -103,8 +105,8 @@ func TestGraphTemporalRelations(t *testing.T) {
 
 func TestRelatedMultiHopAndRecallBlock(t *testing.T) {
 	st := storemem.New()
-	g := NewGraph(st)
-	m := newMemory(t, Config{Store: st, Graph: g, GraphHops: 2})
+	m := newMemory(t, Config{Store: st, Graph: true, GraphHops: 2})
+	g := graphOf(m)
 	ctx := WithNamespace(context.Background(), "u")
 	ns := []string{"u"}
 	day := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -164,27 +166,27 @@ func TestGraphRewoundPurgeAndPrune(t *testing.T) {
 	})
 	ctx := WithNamespace(context.Background(), "u")
 	runTurn(t, m, sessions, "s/1", "我住在上海")
-	edges, err := m.cfg.Graph.Edges(ctx, []string{"u"})
+	edges, err := graphOf(m).Edges(ctx, []string{"u"})
 	require.NoError(t, err)
 	require.Len(t, edges, 1)
 
 	require.NoError(t, m.Rewound(ctx, "s", edges[0].Source.From-1))
-	edges, err = m.cfg.Graph.Edges(ctx, []string{"u"})
+	edges, err = graphOf(m).Edges(ctx, []string{"u"})
 	require.NoError(t, err)
 	require.False(t, edges[0].Valid(), "退回的轮次留下的关系失效")
 
 	*now = now.Add(2 * time.Hour)
 	require.NoError(t, m.Prune(ctx))
-	edges, err = m.cfg.Graph.Edges(ctx, []string{"u"})
+	edges, err = graphOf(m).Edges(ctx, []string{"u"})
 	require.NoError(t, err)
 	require.Empty(t, edges, "失效超过保留期的关系被删除")
 
 	runTurn(t, m, sessions, "s/2", "我还是住在上海")
 	require.NoError(t, m.Purge(ctx))
-	entities, err := m.cfg.Graph.Entities(ctx, []string{"u"})
+	entities, err := graphOf(m).Entities(ctx, []string{"u"})
 	require.NoError(t, err)
 	require.Empty(t, entities)
-	edges, err = m.cfg.Graph.Edges(ctx, []string{"u"})
+	edges, err = graphOf(m).Edges(ctx, []string{"u"})
 	require.NoError(t, err)
 	require.Empty(t, edges)
 }
@@ -231,7 +233,7 @@ func TestEntityResolutionByModel(t *testing.T) {
 	require.Contains(t, judged[0], acmeID)
 	require.NotContains(t, judged[0], "深圳", "没有相似候选的实体不交给模型")
 
-	entities, err := m.cfg.Graph.Entities(ctx, []string{"u"})
+	entities, err := graphOf(m).Entities(ctx, []string{"u"})
 	require.NoError(t, err)
 	byName := map[string]Entity{}
 	for _, e := range entities {
@@ -242,7 +244,7 @@ func TestEntityResolutionByModel(t *testing.T) {
 	require.Contains(t, byName["Acme 公司"].Aliases, "爱克米", "判定为同一实体的名称并入别名")
 	require.NotEmpty(t, byName["深圳"].Vector)
 
-	edges, err := m.cfg.Graph.Edges(ctx, []string{"u"})
+	edges, err := graphOf(m).Edges(ctx, []string{"u"})
 	require.NoError(t, err)
 	for _, e := range edges {
 		switch e.Predicate {
@@ -258,7 +260,7 @@ func TestEntityResolutionByModel(t *testing.T) {
 // 迟到的旧事实：已有排他关系比新写入的关系生效更晚时，新关系写入即失效并指向已有关系，已有关系不受影响。
 func TestApplyRelationsLateFact(t *testing.T) {
 	st := storemem.New()
-	m := newMemory(t, Config{Store: st, Graph: NewGraph(st)})
+	m := newMemory(t, Config{Store: st, Graph: true})
 	ctx := WithNamespace(context.Background(), "u")
 	march, jan := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	live := func(city string) relation {
@@ -266,7 +268,7 @@ func TestApplyRelationsLateFact(t *testing.T) {
 	}
 	require.NoError(t, m.applyRelations(ctx, Job{Key: "s/2", Namespace: []string{"u"}, Session: "s"}, march, []relation{live("北京")}))
 	require.NoError(t, m.applyRelations(ctx, Job{Key: "s/1", Namespace: []string{"u"}, Session: "s"}, jan, []relation{live("上海")}))
-	edges, err := m.cfg.Graph.Edges(ctx, []string{"u"})
+	edges, err := graphOf(m).Edges(ctx, []string{"u"})
 	require.NoError(t, err)
 	byFact := map[string]Edge{}
 	for _, e := range edges {
@@ -282,8 +284,8 @@ func TestApplyRelationsLateFact(t *testing.T) {
 // PageRank 以种子为中心排序：查询 Acme 时与 Acme 相连的关系排在"用户"的其他关系之前。
 func TestRelatedPageRankRanking(t *testing.T) {
 	st := storemem.New()
-	g := NewGraph(st)
-	m := newMemory(t, Config{Store: st, Graph: g})
+	m := newMemory(t, Config{Store: st, Graph: true})
+	g := graphOf(m)
 	ctx := WithNamespace(context.Background(), "u")
 	ns := []string{"u"}
 	day := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -327,7 +329,7 @@ func TestPersonalizedPageRankSumsToOne(t *testing.T) {
 // 回退取代旧关系的轮次时，旧关系恢复有效。
 func TestRewoundRestoresSupersededEdge(t *testing.T) {
 	st := storemem.New()
-	m := newMemory(t, Config{Store: st, Graph: NewGraph(st)})
+	m := newMemory(t, Config{Store: st, Graph: true})
 	ctx := WithNamespace(context.Background(), "u")
 	day := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	live := func(city string) []relation {
@@ -336,7 +338,7 @@ func TestRewoundRestoresSupersededEdge(t *testing.T) {
 	require.NoError(t, m.applyRelations(ctx, Job{Key: "s/1", Namespace: []string{"u"}, Session: "s", From: 1, To: 3}, day, live("上海")))
 	require.NoError(t, m.applyRelations(ctx, Job{Key: "s/2", Namespace: []string{"u"}, Session: "s", From: 4, To: 6}, day.Add(time.Hour), live("北京")))
 	require.NoError(t, m.Rewound(ctx, "s", 3))
-	edges, err := m.cfg.Graph.Edges(ctx, []string{"u"})
+	edges, err := graphOf(m).Edges(ctx, []string{"u"})
 	require.NoError(t, err)
 	valid := map[string]bool{}
 	for _, e := range edges {
@@ -351,8 +353,8 @@ func TestRewoundRestoresSupersededEdge(t *testing.T) {
 // Retrieve 返回实际写入召回块的记录与关系，Sessions 汇总二者的来源会话。
 func TestRetrieveReportsSources(t *testing.T) {
 	st := storemem.New()
-	g := NewGraph(st)
-	m := newMemory(t, Config{Store: st, Graph: g})
+	m := newMemory(t, Config{Store: st, Graph: true})
+	g := graphOf(m)
 	ctx := WithNamespace(context.Background(), "u")
 	ns := []string{"u"}
 	for _, e := range []Entity{{ID: "user", Name: "用户"}, {ID: "acme", Name: "Acme"}} {
@@ -373,9 +375,66 @@ func TestRetrieveReportsSources(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, got.Text, block)
 
-	small := newMemory(t, Config{Store: st, Graph: g, RecallRunes: 10})
+	small := newMemory(t, Config{Store: st, Durable: m.cfg.Durable, Graph: true, RecallRunes: 10})
 	got, err = small.Retrieve(ctx, "Acme 的工作")
 	require.NoError(t, err)
 	require.Empty(t, got.Records, "超出预算未写入块的记录不报告")
 	require.Empty(t, got.Text)
+}
+
+// testGraph 在测试中直接读写图谱（不经抽取）。
+type testGraph struct{ m *Memory }
+
+func graphOf(m *Memory) testGraph { return testGraph{m} }
+
+func (g testGraph) PutEntity(ctx context.Context, e Entity) error {
+	ns, err := requireNamespace(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = g.m.mutate(ctx, ns, "", func(t *tx) error {
+		putEntity(t, e)
+		return nil
+	})
+	return err
+}
+
+func (g testGraph) PutEdge(ctx context.Context, e Edge) error {
+	ns, err := requireNamespace(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = g.m.mutate(ctx, ns, "", func(t *tx) error {
+		if old, ok := t.Edges.Get(e.ID); ok {
+			e.Incarnation, e.Revision, e.ContentRev = old.Incarnation, old.Revision+1, old.ContentRev+1
+		} else {
+			e.Incarnation, e.Revision, e.ContentRev = t.incarnation(), 1, 1
+		}
+		t.Edges.Put(e.ID, e)
+		return nil
+	})
+	return err
+}
+
+func (g testGraph) Entities(ctx context.Context, ns []string) ([]Entity, error) {
+	_, s, err := g.m.read(ctx, ns)
+	var out []Entity
+	for _, id := range slices.Sorted(maps.Keys(s.Entities)) {
+		out = append(out, s.Entities[id])
+	}
+	return out, err
+}
+
+func (g testGraph) Edges(ctx context.Context, ns []string) ([]Edge, error) {
+	_, s, err := g.m.read(ctx, ns)
+	return sortedEdges(s.Edges), err
+}
+
+func (g testGraph) Communities(ctx context.Context, ns []string) ([]Community, error) {
+	_, s, err := g.m.read(ctx, ns)
+	var out []Community
+	for _, id := range slices.Sorted(maps.Keys(s.Communities)) {
+		out = append(out, s.Communities[id])
+	}
+	return out, err
 }

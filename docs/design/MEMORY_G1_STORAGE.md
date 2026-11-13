@@ -919,6 +919,40 @@ export GOAGENT_PGSTORE_DSN='postgres://postgres:test@127.0.0.1:55432/postgres?ss
 - 参考模型在 pgstore 上发现，压缩写基础快照槽位时没有持该 ID 的锁，违反存储契约（FileStore 不校验）。已修正：加锁顺序为 compact → base/N → head。测试用的 `hookStore` 现在也强制这条契约。
 - 第 4 版发现的一次疑似竞态检测误报，在 8 次完整的 `-race` 运行（memory 包）与 15 次单独运行中都没有再出现。仍记为观察项。
 
+### 7.9 G1b：记录写路径与完整召回（2026-11-12）
+
+**交付**（计划见 `.claude/plan-g1b.md`）：
+
+- 记录与图谱的读写全部经 `mutate`/`read`。`RecordStore`、`Graph` 接口与 `NewGraph` 已删除；`Config.Graph` 改为 bool；`Config.Durable` 必填，`Config.Store` 只给任务用（G1e 删除）。
+- 新增公开 API：`Update(id, expect, Patch)`、`Deletions` 与 `DeletionLog`、`CacheStats`。
+- `Remember`、`Forget`、`Rewound`、`Prune`、Worker 的派生写入（`derive`）都是一次 `mutate`；召回只读且只读一次，`Hydrate` 每个命名空间再读一次。
+- `TrackAccess`：作用域内的 `memory/access`，按 (命名空间, 作用域) 合并后由一个后台协程写入，失败忽略。
+- 删除日志：`memory/deletions/NK(ns)`，先写日志再遗忘。
+- 并发未命中按 (命名空间, 作用域, CommitID) 只解码一次（singleflight），等待者各自响应取消。
+
+**与前文的差异**：
+
+- `mutate` 在 fn 没有任何修改（或返回 `errNoChange`）时不提交，`Seq` 只计实际提交。例如重复遗忘、删除不存在的键都不提交。
+- `Purge` 是过渡实现：一次 shrinking `mutate` 清空全部表并标记擦除，随后强制压缩，返回时已物理擦除；作用域切换（4.2）在 G1c 实现。删除日志记一条 Purge。
+- `memorytest.Run` 的签名与 `storetest` 一致，为 `Run(t, newPair func(t) (a, b durable.Store))`：同一后端上的两个实例模拟两个进程。它只经公开 API 覆盖跨实例读写、重复 ID、修订号冲突、并发写入、交替写入（含压缩）、遗忘、清空。租约接管、结果未知、崩溃等存储层场景仍由 memory 包内的 `hookStore` 测试与 pgstore 的 G1a 测试覆盖（7.8）。
+- 租约测试改为强制顺序：接管者用独立的钩子，本方重做时等接管者提交完再加锁，断言接管者 `Seq` 为 1、本方为 2。
+
+**完整召回**（7.3 测量局限第 2 条）：一轮对话的 `Snapshot`（钉住、召回、图谱 PageRank，`Graph` 开启）加 `Hydrate` 的再读。FileStore，NVMe，5k，阈值不变：
+
+| 数据 | 核数 | mutate p95 | 串行吞吐 | 冷读 p95 | 跨实例读 p95 | 端到端召回 热 / 跨实例 p95 | 完整召回 热 / 跨实例 p95 | 冷召回 p95 |
+|---|---|---|---|---|---|---|---|---|
+| 真实中文 | 28 | 21.8ms | 51.9/s | 10.0ms | 3.0ms | 0.7 / 4.5ms | 10.6 / 15.7ms | 16.2ms |
+| 低压缩率 | 28 | 22.4ms | 52.8/s | 12.4ms | 3.8ms | 0.0 / 3.7ms | 8.0 / 11.2ms | 24.6ms |
+| 真实中文 | 4 | 22.3ms | 52.3/s | 14.0ms | 6.4ms | 0.9 / 5.2ms | 11.4 / 16.4ms | 31.5ms |
+| 低压缩率 | 4 | 21.3ms | 53.2/s | 16.3ms | 6.9ms | 0.0 / 3.1ms | 7.1 / 12.2ms | 38.2ms |
+
+- 门槛全部通过（基准对完整召回也按 30ms 断言）。冷召回照旧单独报告，4 核上超过 30ms。
+- 完整召回比端到端召回多 7～11ms，主要是 `relatedOf` 对全部关系排序、扫描全部实体找种子（5k 时 1 万条关系）。规模上去时它先于读取成为瓶颈；需要时可以把实体名与关系邻接表放进与 bigram 索引相同的派生缓存。
+- 10k 压力测试（15 秒）通过：提交 298 次，读取 5,261 次，写 p95 61.9ms，读 p95 32.1ms，不变量成立。
+- 基准数据的失效记录补上 `InvalidReason`（不变量 2）。
+
+**pgstore**：`memorytest.Run` 由 goagent-contrib 的 `durable/pgstore/memory_test.go` 调用。contrib 依赖已发布的 goagent，所以用临时 `go.work` 指向本地 goagent 验证：套件与 pgstore 全部测试通过（`-race`）。这个测试文件要等 goagent 发布含 `memory/memorytest` 的版本、contrib 升级依赖之后才能在 contrib 单独编译。
+
 ## 8. 兼容性
 
 | 变更 | 影响 | 处理 |
@@ -946,7 +980,7 @@ export GOAGENT_PGSTORE_DSN='postgres://postgres:test@127.0.0.1:55432/postgres?ss
    - 测试替身：`hookStore`。它合并了原计划的 `crashStore` 与 `fakeStore`：用调用前回调模拟崩溃与错误，用 `afterSave` 模拟"已写入、调用方看到失败"。
    - `Config.Durable`、`MaxStateBytes`（解压后，只拒绝变大）、`StateCacheBytes`。
    - 原型基准与 10k 压力测试（7.3），不达阈值即停。
-2. **G1b 记录写路径**：`Remember`、`Update`、`Forget`、`Rewound`、`Prune`；召回只读且只读一次；`TrackAccess`；删除日志。
+2. **G1b 记录写路径**：`Remember`、`Update`、`Forget`、`Rewound`、`Prune`；召回只读且只读一次；`TrackAccess`；删除日志。已完成（2026-11-12），见 7.9。
 3. **G1c 作用域与 Purge**：meta 切换、全局 retiring 与清理；轮次绑定增加 `Scope`、`Seq`；`Ref` 带版本；`Digest` 分版本；G0 日志字节恢复测试。
 4. **G1d 索引**：版本化键、写后复核、`IDs`、`Clear`、`Reindex`；实体向量移入 `Index`。
 5. **G1e 任务、维护与 Worker**：state 内的任务、queue 分片（任务与索引待清理）、`Maintain` 与 `RunMaintenance`、Worker 锁与心跳、`LastForgetSeq` 丢弃规则。

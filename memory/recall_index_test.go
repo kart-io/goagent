@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand/v2"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -69,14 +70,31 @@ func requireSameRanking(t *testing.T, want, got []Scored, q Query) {
 	}
 }
 
-// syncLegacy 让原实现的记录库与 state 的记录相同。
-func syncLegacy(t *testing.T, m *Memory, s state) {
-	t.Helper()
-	ctx := context.Background()
-	require.NoError(t, m.records.Clear(ctx, testNS))
+// bruteRecall 是 G0 的逐条召回（不含向量）：每条有效记录现算正文与关键词的字符对重合，作为索引召回的对照。
+func bruteRecall(m *Memory, s state, q Query) []Scored {
+	now := m.now()
+	query := bigrams(q.Text)
+	var out []Scored
 	for _, r := range s.Records {
-		require.NoError(t, m.records.Put(ctx, r))
+		if !r.Valid() || (len(q.Kinds) > 0 && !slices.Contains(q.Kinds, r.Kind)) {
+			continue
+		}
+		rel := overlap(query, bigrams(r.Content+" "+strings.Join(r.Keywords, " ")))
+		if len(query) > 0 && rel == 0 {
+			continue
+		}
+		out = append(out, Scored{Record: r, Relevance: rel, Score: m.cfg.Weights.Relevance*rel + m.cfg.Weights.Recency*m.recency(r.CreatedAt, now) + m.cfg.Weights.Importance*r.Importance})
 	}
+	slices.SortFunc(out, func(a, b Scored) int {
+		if a.Score != b.Score {
+			if a.Score > b.Score {
+				return -1
+			}
+			return 1
+		}
+		return strings.Compare(a.ID, b.ID)
+	})
+	return out[:min(m.recallK(q), len(out))]
 }
 
 func TestBigramIndexEquivalentToRecall(t *testing.T) {
@@ -108,11 +126,8 @@ func TestBigramIndexEquivalentToRecall(t *testing.T) {
 					if n >= minIndexedRecords {
 						require.True(t, v.idx.indexed(), "%s：基础快照有索引", phase)
 					}
-					syncLegacy(t, m, v.cur)
-					c := WithNamespace(ctx, testNS...)
 					for _, q := range recallQueries(rng, v.cur, queries) {
-						want, err := m.recall(c, q, false)
-						require.NoError(t, err)
+						want := bruteRecall(m, v.cur, q)
 						got, err := m.recallState(ctx, testNS, q)
 						require.NoError(t, err)
 						requireSameRanking(t, want, got, q)
@@ -134,16 +149,15 @@ func TestBigramIndexEquivalentToRecall(t *testing.T) {
 							r.Content = ds.gen(rng, 30) + "新的内容"
 							t.Records.Put(id, r)
 						case 1:
-							r.InvalidAt = now
-							t.Records.Put(id, r)
+							t.Records.Put(id, r.invalidated(now, ReasonExpired, ""))
 						case 2:
-							r.InvalidAt = time.Time{}
+							r.InvalidAt, r.InvalidReason = time.Time{}, ""
 							t.Records.Put(id, r)
 						case 3:
 							t.Records.Delete(id)
 						default:
 							nid := fmt.Sprintf("new-%03d", i)
-							t.Records.Put(nid, Record{ID: nid, Kind: KindFact, Content: ds.gen(rng, 40), Keywords: []string{"新增"}, CreatedAt: now, LastAccess: now})
+							t.Records.Put(nid, Record{ID: nid, Kind: KindFact, Content: ds.gen(rng, 40), Keywords: []string{"新增"}, CreatedAt: now})
 						}
 					}
 					return nil

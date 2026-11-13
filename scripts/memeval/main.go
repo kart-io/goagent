@@ -109,23 +109,25 @@ func run(ctx context.Context, o options) error {
 		}
 		embedModel = name
 	}
+	dir, err := os.MkdirTemp("", "memeval-")
+	if err != nil {
+		return err
+	}
+	defer func() { _ = os.RemoveAll(dir) }()
 	configure := func(graph, communities bool) func(store.Store, session.Store) memory.Config {
 		return func(st store.Store, sessions session.Store) memory.Config {
-			cfg := memory.Config{Store: st, Sessions: sessions, Model: model, Communities: communities}
+			cfg := memory.Config{Store: st, Sessions: sessions, Model: model, Graph: graph, Communities: communities}
 			if embedder != nil {
 				cfg.Index, cfg.Embedder, cfg.EmbedModel = memory.NewMemoryIndex(), embedder, embedModel
-			}
-			if graph {
-				cfg.Graph = memory.NewGraph(st)
 			}
 			return cfg
 		}
 	}
 	available := map[string]memeval.System{
 		"recent":    memeval.Recent{Runes: o.recentRunes},
-		"memory":    &memeval.Memory{Label: "memory", Configure: configure(false, false)},
-		"graph":     &memeval.Memory{Label: "graph", Configure: configure(true, false)},
-		"community": &memeval.Memory{Label: "community", Configure: configure(true, true)},
+		"memory":    &memeval.Memory{Label: "memory", Configure: configure(false, false), Dir: dir},
+		"graph":     &memeval.Memory{Label: "graph", Configure: configure(true, false), Dir: dir},
+		"community": &memeval.Memory{Label: "community", Configure: configure(true, true), Dir: dir},
 	}
 	var selected []memeval.System
 	for _, name := range strings.Split(o.systems, ",") {

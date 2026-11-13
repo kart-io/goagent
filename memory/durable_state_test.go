@@ -277,24 +277,41 @@ func TestMutateRedoesAfterLeaseLost(t *testing.T) {
 	ctx := context.Background()
 	st := newHookStore(t)
 	m := durableMemory(t, st, Config{})
-	other := durableMemory(t, st, Config{})
-	lost := false
-	st.h.before = func(op, scope, id string) error {
-		if op == "save" && id == headID && !lost {
-			lost = true
-			st.h.before = nil
-			// 模拟接管者在本次 Save 之前提交：需要另取锁，因此在独立的 goroutine 中等待本方释放。
-			go func() { _, _ = other.mutate(ctx, testNS, "", addRecord("taker")) }()
-			return agentErrors.ErrLeaseLost
-		}
-		return nil
+	// 接管者用独立的钩子，与本方共享底层存储。
+	other := durableMemory(t, &hookStore{inner: st.inner, root: st.root, h: &storeHooks{held: map[string]int{}}}, Config{})
+	type result struct {
+		s   state
+		err error
 	}
-	_, err := m.mutate(ctx, testNS, "", addRecord("mine"))
+	taken := make(chan result, 1)
+	st.h.before = func(op, _, id string) error {
+		if op != "save" || id != headID {
+			return nil
+		}
+		// 模拟接管者在本次 Save 之前拿到锁：它在本方释放锁后提交，本方重做时等它提交完再加锁。
+		st.h.before = func(op, _, id string) error {
+			if op == "lock" && id == headID {
+				st.h.before = nil
+				r := <-taken
+				taken <- r
+			}
+			return nil
+		}
+		go func() {
+			s, err := other.mutate(ctx, testNS, "", addRecord("taker"))
+			taken <- result{s, err}
+		}()
+		return agentErrors.ErrLeaseLost
+	}
+	mine, err := m.mutate(ctx, testNS, "", addRecord("mine"))
 	require.NoError(t, err)
-	require.Eventually(t, func() bool {
-		_, s, err := m.read(ctx, testNS)
-		return err == nil && len(s.Records) == 2
-	}, 5*time.Second, 10*time.Millisecond, "被接管后的写入与本方重做的写入都存在")
+	r := <-taken
+	require.NoError(t, r.err)
+	require.Equal(t, int64(1), r.s.Seq, "接管者先提交")
+	require.Equal(t, int64(2), mine.Seq, "本方在接管者的提交之上重做")
+	_, s, err := m.read(ctx, testNS)
+	require.NoError(t, err)
+	require.Len(t, s.Records, 2, "被接管后的写入与本方重做的写入都存在")
 }
 
 func TestMutateUnknownCommitOutcome(t *testing.T) {

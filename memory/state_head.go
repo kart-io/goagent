@@ -273,11 +273,34 @@ func (v view) entry(key, scope string, ref baseRef, headCommit string, ovRaw int
 }
 
 // materialize 还原 head 对应的 state（增量提交 3.1）：结果只由（基础快照, head）决定，缓存命中时不解码。
+// 同一作用域、同一提交的并发未命中只解码一次；解码不随某一个调用方取消，各调用方仍可各自因 ctx 结束而返回。
 func (m *Memory) materialize(ctx context.Context, st durable.Store, ns []string, scope string, h head) (view, error) {
 	key := store.NamespaceKey(ns)
 	if e, ok := m.cache.head(key, scope, h.CommitID); ok {
 		return view{cur: e.cur, base: e.base, baseIdx: e.baseIdx, ov: e.ov, idx: e.idx}, nil
 	}
+	ch := m.decodes.DoChan(key+"#"+scope+"#"+h.CommitID, func() (any, error) {
+		start := time.Now()
+		v, err := m.decode(context.WithoutCancel(ctx), st, ns, scope, h)
+		if err == nil {
+			m.cache.decoded(time.Since(start))
+			m.cache.put(v.entry(key, scope, h.Base, h.CommitID, h.OverlayBytes))
+		}
+		return v, err
+	})
+	select {
+	case r := <-ch:
+		if r.Err != nil {
+			return view{}, r.Err
+		}
+		return r.Val.(view), nil
+	case <-ctx.Done():
+		return view{}, ctx.Err()
+	}
+}
+
+// decode 读取并解码基础快照（缓存中有时复用），叠加 head 的覆盖层。
+func (m *Memory) decode(ctx context.Context, st durable.Store, ns []string, scope string, h head) (view, error) {
 	base, baseIdx, err := m.loadBase(ctx, st, ns, scope, h.Base)
 	if err != nil {
 		return view{}, err
@@ -291,9 +314,7 @@ func (m *Memory) materialize(ctx context.Context, st durable.Store, ns []string,
 		cur = ov.apply(base)
 	}
 	cur.Seq, cur.CommitID, cur.NextIncarnation, cur.LastForgetSeq, cur.MigrationID = h.Seq, h.CommitID, h.NextIncarnation, h.LastForgetSeq, h.MigrationID
-	v := view{cur: cur, base: base, baseIdx: baseIdx, ov: ov, idx: newRecallIndex(baseIdx, ov)}
-	m.cache.put(v.entry(key, scope, h.Base, h.CommitID, h.OverlayBytes))
-	return v, nil
+	return view{cur: cur, base: base, baseIdx: baseIdx, ov: ov, idx: newRecallIndex(baseIdx, ov)}, nil
 }
 
 // loadBase 返回 ref 指向的已解码基础快照及其索引（解码时在后台开始构建）；槽位的 commit_id 与 ref 不同时返回 errBaseChanged。

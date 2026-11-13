@@ -19,7 +19,6 @@ func TestCommunitiesRequireGraph(t *testing.T) {
 // 社区按标签传播划分；成员与关系不变时不重写摘要；关系变化只重写所在社区；退回的关系使社区摘要被删除，下一次刷新重建。
 func TestCommunitiesLifecycle(t *testing.T) {
 	st := storemem.New()
-	g := NewGraph(st)
 	var summarized []string
 	model := &scriptedModel{reply: func(system, user string) (string, error) {
 		require.Equal(t, communityPrompt, system)
@@ -30,7 +29,8 @@ func TestCommunitiesLifecycle(t *testing.T) {
 		}
 		return `{"name":"` + name + `","summary":"摘要：` + strings.ReplaceAll(strings.TrimSpace(user), "\n", "；") + `"}`, nil
 	}}
-	m := newMemory(t, Config{Store: st, Graph: g, Model: model, Communities: true})
+	m := newMemory(t, Config{Store: st, Graph: true, Model: model, Communities: true})
+	g := graphOf(m)
 	ctx := WithNamespace(context.Background(), "u")
 	ns := []string{"u"}
 	day := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)

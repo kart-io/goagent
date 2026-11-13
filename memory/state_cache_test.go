@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -25,7 +27,7 @@ func fullState() state {
 	for i := range 20 {
 		id := fmt.Sprintf("r%02d", i)
 		s.Records[id] = Record{ID: id, Namespace: testNS, Kind: KindFact, Content: "用户喜欢喝茶" + id, Keywords: []string{"茶"},
-			Importance: 0.5, ValidFrom: now, InvalidAt: now.Add(time.Duration(i%2) * time.Hour), CreatedAt: now, LastAccess: now,
+			Importance: 0.5, ValidFrom: now, InvalidAt: now.Add(time.Duration(i%2) * time.Hour), CreatedAt: now,
 			Sources: []Source{{Session: "s1", From: int64(i), To: int64(i + 1), Job: "s1/1"}}}
 	}
 	s.Entities["e1"] = Entity{ID: "e1", Namespace: testNS, Name: "张三", Type: "人物", Aliases: []string{"老张"}, CreatedAt: now}
@@ -132,7 +134,7 @@ func TestStateCacheLRU(t *testing.T) {
 	require.Nil(t, newStateCache(-1))
 }
 
-func cacheStatsOf(m *Memory) cacheStats { s, _ := m.cache.snapshot(); return s }
+func cacheStatsOf(m *Memory) CacheStats { s, _ := m.cache.snapshot(); return s }
 
 // 两个实例共用存储：一方提交后另一方的读取与写入都基于最新提交，命中缓存只省去解码。
 func TestStateCacheAcrossInstances(t *testing.T) {
@@ -433,4 +435,63 @@ func TestMutateCommitDeadline(t *testing.T) {
 	_, err := m.mutate(ctx, testNS, "", addRecord("a"))
 	require.ErrorIs(t, err, agentErrors.ErrMemoryCommitUnknown)
 	require.Less(t, time.Since(start), 2*time.Second)
+}
+
+// 建议 8：同一提交的并发未命中只解码一次，其余读者等待并共享结果；统计计入解码次数与耗时。
+func TestConcurrentMissesDecodeOnce(t *testing.T) {
+	ctx := context.Background()
+	st := newHookStore(t)
+	writer := durableMemory(t, st, Config{})
+	for i := range 50 {
+		_, err := writer.mutate(ctx, testNS, "", addRecord(fmt.Sprintf("r%02d", i)))
+		require.NoError(t, err)
+	}
+	require.NoError(t, writer.compact(ctx, testNS, true, true))
+
+	reader := durableMemory(t, st, Config{})
+	release := make(chan struct{})
+	var loads atomic.Int32
+	st.h.before = func(op, _, id string) error {
+		if op == "load" && strings.HasPrefix(id, "memory/base/") {
+			loads.Add(1)
+			<-release
+		}
+		return nil
+	}
+	const readers = 8
+	var wg sync.WaitGroup
+	for range readers {
+		wg.Go(func() {
+			_, s, err := reader.read(ctx, testNS)
+			assert.NoError(t, err)
+			assert.Len(t, s.Records, 50)
+		})
+	}
+	require.Eventually(t, func() bool { return cacheStatsOf(reader).Misses == readers }, 5*time.Second, time.Millisecond)
+	close(release)
+	wg.Wait()
+	st.h.before = nil
+	require.EqualValues(t, 1, loads.Load(), "基础快照只读取一次")
+	stats := reader.CacheStats()
+	require.Equal(t, 1, stats.Decodes)
+	require.Positive(t, stats.DecodeTime)
+	require.Positive(t, stats.Bytes)
+
+	// 等待中的读者取消时立即返回，不影响进行中的解码。
+	cold := durableMemory(t, st, Config{})
+	block := make(chan struct{})
+	st.h.before = func(op, _, id string) error {
+		if op == "load" && strings.HasPrefix(id, "memory/base/") {
+			<-block
+		}
+		return nil
+	}
+	cctx, cancel := context.WithCancel(ctx)
+	done := make(chan error, 1)
+	go func() { _, _, err := cold.read(cctx, testNS); done <- err }()
+	require.Eventually(t, func() bool { return cacheStatsOf(cold).Misses == 1 }, 5*time.Second, time.Millisecond)
+	cancel()
+	require.ErrorIs(t, <-done, context.Canceled)
+	close(block)
+	require.Eventually(t, func() bool { return cold.CacheStats().Decodes == 1 }, 5*time.Second, time.Millisecond, "解码照常完成并进入缓存")
 }

@@ -10,6 +10,7 @@ import (
 
 	"github.com/kart-io/goagent/codec/json"
 	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/store"
 )
 
 // RecallPrefix 标记注入请求的召回块；抽取时跳过这类消息，避免把记忆再次抽取成记忆。
@@ -165,14 +166,22 @@ func (m *Memory) Snapshot(ctx context.Context, query string) (Snapshot, error) {
 		ctx = WithTurn(ctx, t)
 	}
 	s := Snapshot{Protocol: RecallProtocol, Identity: m.identity, Turn: t}
-	pinned, err := m.Pinned(ctx)
+	if err := validNamespace(t.Write); err != nil {
+		return Snapshot{}, err
+	}
+	q := Query{Text: query}
+	vector, err := m.vectorHits(ctx, t.Write, q)
 	if err != nil {
 		return Snapshot{}, err
 	}
-	recalled, err := m.Recall(ctx, Query{Text: query})
+	// 钉住、召回与图谱对同一次读取计算，不会混用不同提交的数据。
+	rv, err := m.readRecall(ctx, t.Write)
 	if err != nil {
 		return Snapshot{}, err
 	}
+	pinned := pinnedOf(rv.v.cur)
+	recalled := m.rankState(rv.v.cur, rv.v.idx, q, vector, rv.access)
+	m.touch(t.Write, rv.scope, recalled)
 	var items []recallItem
 	seen := map[string]bool{}
 	var names []string
@@ -187,10 +196,7 @@ func (m *Memory) Snapshot(ctx context.Context, query string) (Snapshot, error) {
 			items = append(items, recordItem(t.Write, r.Record))
 		}
 	}
-	graph, err := m.Related(ctx, query, names, m.cfg.GraphHops, m.cfg.GraphRelations)
-	if err != nil {
-		return Snapshot{}, err
-	}
+	graph := m.relatedOf(rv.v.cur, query, names, m.cfg.GraphHops, m.cfg.GraphRelations)
 	for _, c := range graph.Communities {
 		items = append(items, communityItem(t.Write, c))
 	}
@@ -212,87 +218,50 @@ func (m *Memory) Hydrate(ctx context.Context, s Snapshot, refs []Ref) (Retrieval
 		return Retrieval{}, nil, nil
 	}
 	var items []recallItem
-	var graph *graphView
+	// 每个命名空间只读一次。
+	states := map[string]state{}
 	for _, ref := range refs {
 		if !slices.ContainsFunc(s.Turn.Read, func(ns []string) bool { return slices.Equal(ns, ref.Namespace) }) {
 			continue
 		}
-		switch ref.Kind {
-		case RefRecord:
-			r, err := m.records.Get(ctx, ref.Namespace, ref.ID)
-			if agentErrors.IsCode(err, agentErrors.CodeStoreNotFound) {
-				continue
-			}
-			if err != nil {
+		key := store.NamespaceKey(ref.Namespace)
+		st, ok := states[key]
+		if !ok {
+			var err error
+			if _, st, err = m.read(ctx, ref.Namespace); err != nil {
 				return Retrieval{}, nil, err
 			}
-			if r.Valid() {
-				items = append(items, recordItem(ref.Namespace, r))
-			}
-		case RefRelation, RefCommunity:
-			if m.cfg.Graph == nil {
-				continue
-			}
-			if graph == nil || !slices.Equal(graph.ns, ref.Namespace) {
-				var err error
-				if graph, err = m.loadGraphView(ctx, ref.Namespace); err != nil {
-					return Retrieval{}, nil, err
-				}
-			}
-			if item, ok := graph.item(ref); ok {
-				items = append(items, item)
-			}
+			states[key] = st
+		}
+		if item, ok := m.hydrateItem(st, ref); ok {
+			items = append(items, item)
 		}
 	}
 	out, adopted := m.render(items)
 	return out, adopted, nil
 }
 
-// graphView 是一个命名空间的图谱，供 Hydrate 按 ID 查找关系与社区。
-type graphView struct {
-	ns          []string
-	names       map[string]string
-	edges       map[string]Edge
-	communities map[string]Community
-}
-
-func (m *Memory) loadGraphView(ctx context.Context, ns []string) (*graphView, error) {
-	entities, err := m.cfg.Graph.Entities(ctx, ns)
-	if err != nil {
-		return nil, err
-	}
-	edges, err := m.cfg.Graph.Edges(ctx, ns)
-	if err != nil {
-		return nil, err
-	}
-	communities, err := m.cfg.Graph.Communities(ctx, ns)
-	if err != nil {
-		return nil, err
-	}
-	g := &graphView{ns: ns, names: map[string]string{}, edges: map[string]Edge{}, communities: map[string]Community{}}
-	for _, e := range entities {
-		g.names[e.ID] = e.Name
-	}
-	for _, e := range edges {
-		g.edges[e.ID] = e
-	}
-	for _, c := range communities {
-		g.communities[c.ID] = c
-	}
-	return g, nil
-}
-
-func (g *graphView) item(ref Ref) (recallItem, bool) {
+// hydrateItem 在 s 中按 ref 找到仍然有效的对象并生成召回行。
+func (m *Memory) hydrateItem(s state, ref Ref) (recallItem, bool) {
 	switch ref.Kind {
-	case RefRelation:
-		e, ok := g.edges[ref.ID]
-		if !ok || !e.Valid() {
+	case RefRecord:
+		r, ok := s.Records[ref.ID]
+		if !ok || !r.Valid() {
 			return recallItem{}, false
 		}
-		return relationItem(g.ns, Relation{Edge: e, SubjectName: g.names[e.Subject], ObjectName: g.names[e.Object]}), true
+		return recordItem(ref.Namespace, recordKind.clone(r)), true
+	case RefRelation:
+		e, ok := s.Edges[ref.ID]
+		if !m.cfg.Graph || !ok || !e.Valid() {
+			return recallItem{}, false
+		}
+		return relationItem(ref.Namespace, Relation{Edge: e, SubjectName: s.Entities[e.Subject].Name, ObjectName: s.Entities[e.Object].Name}), true
 	case RefCommunity:
-		c, ok := g.communities[ref.ID]
-		return communityItem(g.ns, c), ok
+		c, ok := s.Communities[ref.ID]
+		if !m.cfg.Graph || !ok {
+			return recallItem{}, false
+		}
+		return communityItem(ref.Namespace, communityKind.clone(c)), true
 	}
 	return recallItem{}, false
 }

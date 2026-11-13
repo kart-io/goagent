@@ -3,15 +3,13 @@ package memory
 import (
 	"context"
 	"fmt"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/constants"
-	agentErrors "github.com/kart-io/goagent/errors"
-	"github.com/kart-io/goagent/store"
 )
 
 // Entity 是图中的实体节点，按命名空间、类型与规范化名称去重；Aliases 记录指向同一实体的其他名称。
@@ -25,6 +23,10 @@ type Entity struct {
 	Vector     []float64 `json:"vector,omitempty"`
 	EmbedModel string    `json:"embed_model,omitempty"`
 	CreatedAt  time.Time `json:"created_at"`
+	// Incarnation、Revision、ContentRev 的含义与 Record 相同。
+	Incarnation int64 `json:"incarnation,omitzero"`
+	Revision    int64 `json:"revision,omitzero"`
+	ContentRev  int64 `json:"content_rev,omitzero"`
 }
 
 // Edge 是带有效期的关系（Zep 时序图）：Subject、Object 为实体 ID，Fact 是可读的陈述。
@@ -41,6 +43,9 @@ type Edge struct {
 	SupersededBy string    `json:"superseded_by,omitempty"`
 	Source       Source    `json:"source,omitzero"`
 	CreatedAt    time.Time `json:"created_at"`
+	Incarnation  int64     `json:"incarnation,omitzero"`
+	Revision     int64     `json:"revision,omitzero"`
+	ContentRev   int64     `json:"content_rev,omitzero"`
 }
 
 // Valid 报告关系是否仍然成立。
@@ -49,127 +54,6 @@ func (e Edge) Valid() bool { return e.InvalidAt.IsZero() }
 // ValidAt 报告关系在 t 时是否成立。
 func (e Edge) ValidAt(t time.Time) bool {
 	return !t.Before(e.ValidFrom) && (e.InvalidAt.IsZero() || t.Before(e.InvalidAt))
-}
-
-// Graph 保存实体、关系与社区。
-type Graph interface {
-	PutEntity(ctx context.Context, e Entity) error
-	PutEdge(ctx context.Context, e Edge) error
-	PutCommunity(ctx context.Context, c Community) error
-	Entities(ctx context.Context, namespace []string) ([]Entity, error)
-	Edges(ctx context.Context, namespace []string) ([]Edge, error)
-	Communities(ctx context.Context, namespace []string) ([]Community, error)
-	DeleteEdge(ctx context.Context, namespace []string, id string) error
-	DeleteCommunity(ctx context.Context, namespace []string, id string) error
-	Clear(ctx context.Context, namespace []string) error
-}
-
-// NewGraph 把实体、关系与社区以 JSON 文本存入 st 的 {"memory","entities"|"edges"|"communities",命名空间...}。
-func NewGraph(st store.Store) Graph { return &storeGraph{st: st} }
-
-type storeGraph struct{ st store.Store }
-
-func entitiesNS(ns []string) []string    { return append([]string{"memory", "entities"}, ns...) }
-func edgesNS(ns []string) []string       { return append([]string{"memory", "edges"}, ns...) }
-func communitiesNS(ns []string) []string { return append([]string{"memory", "communities"}, ns...) }
-
-func (g *storeGraph) PutEntity(ctx context.Context, e Entity) error {
-	if e.ID == "" || strings.TrimSpace(e.Name) == "" {
-		return agentErrors.Newf(agentErrors.CodeInvalidInput, "实体需要 ID 与名称").WithComponent("memory").WithOperation("put_entity")
-	}
-	if err := validNamespace(e.Namespace); err != nil {
-		return err
-	}
-	return putJSON(ctx, g.st, entitiesNS(e.Namespace), e.ID, e)
-}
-
-func (g *storeGraph) PutEdge(ctx context.Context, e Edge) error {
-	if e.ID == "" || e.Subject == "" || e.Object == "" || strings.TrimSpace(e.Predicate) == "" {
-		return agentErrors.Newf(agentErrors.CodeInvalidInput, "关系需要 ID、主体、谓词与客体").WithComponent("memory").WithOperation("put_edge")
-	}
-	if err := validNamespace(e.Namespace); err != nil {
-		return err
-	}
-	return putJSON(ctx, g.st, edgesNS(e.Namespace), e.ID, e)
-}
-
-func (g *storeGraph) PutCommunity(ctx context.Context, c Community) error {
-	if c.ID == "" || len(c.Members) == 0 {
-		return agentErrors.Newf(agentErrors.CodeInvalidInput, "社区需要 ID 与成员").WithComponent("memory").WithOperation("put_community")
-	}
-	if err := validNamespace(c.Namespace); err != nil {
-		return err
-	}
-	return putJSON(ctx, g.st, communitiesNS(c.Namespace), c.ID, c)
-}
-
-func (g *storeGraph) Entities(ctx context.Context, ns []string) ([]Entity, error) {
-	out, err := listJSON[Entity](ctx, g.st, entitiesNS(ns))
-	slices.SortFunc(out, func(a, b Entity) int { return strings.Compare(a.ID, b.ID) })
-	return out, err
-}
-
-func (g *storeGraph) Edges(ctx context.Context, ns []string) ([]Edge, error) {
-	out, err := listJSON[Edge](ctx, g.st, edgesNS(ns))
-	slices.SortFunc(out, func(a, b Edge) int { return strings.Compare(a.ID, b.ID) })
-	return out, err
-}
-
-func (g *storeGraph) Communities(ctx context.Context, ns []string) ([]Community, error) {
-	out, err := listJSON[Community](ctx, g.st, communitiesNS(ns))
-	slices.SortFunc(out, func(a, b Community) int { return strings.Compare(a.ID, b.ID) })
-	return out, err
-}
-
-func (g *storeGraph) DeleteEdge(ctx context.Context, ns []string, id string) error {
-	if err := g.st.Delete(ctx, edgesNS(ns), id); err != nil && !isNotFound(err) {
-		return err
-	}
-	return nil
-}
-
-func (g *storeGraph) DeleteCommunity(ctx context.Context, ns []string, id string) error {
-	if err := g.st.Delete(ctx, communitiesNS(ns), id); err != nil && !isNotFound(err) {
-		return err
-	}
-	return nil
-}
-
-func (g *storeGraph) Clear(ctx context.Context, ns []string) error {
-	for _, space := range [][]string{entitiesNS(ns), edgesNS(ns), communitiesNS(ns)} {
-		if err := g.st.Clear(ctx, space); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func putJSON(ctx context.Context, st store.Store, ns []string, key string, v any) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	return st.Put(ctx, ns, key, string(b))
-}
-
-func listJSON[T any](ctx context.Context, st store.Store, ns []string) ([]T, error) {
-	values, err := st.Search(ctx, ns, nil)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]T, 0, len(values))
-	for _, v := range values {
-		text, ok := v.Value.(string)
-		if !ok {
-			return nil, agentErrors.Newf(agentErrors.CodeStoreSerialization, "记忆图数据不是 JSON 文本").WithComponent("memory").WithOperation("decode")
-		}
-		var item T
-		if err := json.Unmarshal([]byte(text), &item); err != nil {
-			return nil, err
-		}
-		out = append(out, item)
-	}
-	return out, nil
 }
 
 // normalizeName 用于实体去重：小写、去首尾空白并合并内部空白。
@@ -238,7 +122,8 @@ type unresolved struct {
 
 // resolveEntities 把一轮抽取的实体引用解析为实体（Graphiti 式判重）：先按类型与规范化名称（含别名）精确匹配；
 // 匹配不到的，取同类型中名称向量或字符对相似度不低于 EntitySimilarity 的实体作为候选，由模型一次判定是否为同一对象；
-// 仍无匹配的新建。返回引用 key 到实体的映射。
+// 仍无匹配的新建。返回引用 key 到实体的映射（含合并后的别名）；不写入，由调用方在 mutate 中按 putEntity 写入。
+// known 须是调用方自有的副本：合并别名会修改其中的实体。
 func (m *Memory) resolveEntities(ctx context.Context, ns []string, known []Entity, refs []entityRef) (map[string]Entity, error) {
 	resolved := map[string]Entity{}
 	var pending []*unresolved
@@ -248,11 +133,7 @@ func (m *Memory) resolveEntities(ctx context.Context, ns []string, known []Entit
 			continue
 		}
 		if i := slices.IndexFunc(known, func(e Entity) bool { return e.Type == ref.Type && intersects(e.names(), ref.names()) }); i >= 0 {
-			if known[i].mergeAliases(append([]string{ref.Name}, ref.Aliases...)...) {
-				if err := m.cfg.Graph.PutEntity(ctx, known[i]); err != nil {
-					return nil, err
-				}
-			}
+			known[i].mergeAliases(append([]string{ref.Name}, ref.Aliases...)...)
 			resolved[ref.key()] = known[i]
 			continue
 		}
@@ -284,14 +165,32 @@ func (m *Memory) resolveEntities(ctx context.Context, ns []string, known []Entit
 			}
 			known = append(known, e)
 		}
-		if err := m.cfg.Graph.PutEntity(ctx, e); err != nil {
-			return nil, err
-		}
 		for _, key := range p.keys {
 			resolved[key] = e
 		}
 	}
+	// 同一实体可能先被引用、后又合并了别名：统一取最终的版本。
+	for key, e := range resolved {
+		if i := slices.IndexFunc(known, func(k Entity) bool { return k.ID == e.ID }); i >= 0 {
+			resolved[key] = known[i]
+		}
+	}
 	return resolved, nil
+}
+
+// putEntity 在 tx 中写入解析出的实体：不存在时新建；已存在时把名称与别名合并到锁内的当前版本（合并可交换，与读取后的修改不冲突）。
+func putEntity(t *tx, e Entity) {
+	cur, ok := t.Entities.Get(e.ID)
+	if !ok {
+		e.Incarnation, e.Revision, e.ContentRev = t.incarnation(), 1, 1
+		t.Entities.Put(e.ID, e)
+		return
+	}
+	if cur.mergeAliases(append([]string{e.Name}, e.Aliases...)...) {
+		cur.Revision++
+		cur.ContentRev++
+		t.Entities.Put(cur.ID, cur)
+	}
 }
 
 // entityCandidates 为每个未匹配的引用找同类型中最相似的至多 EntityCandidates 个实体：
@@ -384,21 +283,22 @@ func dot(a, b []float64) float64 {
 
 // applyRelations 写入一轮抽取出的关系，at 是该轮发生的时间。相同的有效关系不重复写入。
 // 排他谓词上的其他有效关系在 at 失效并指向新关系；已有关系比新关系生效更晚时（迟到的旧事实），新关系写入即失效并指向已有关系。
+// 实体判重（模型与嵌入）在锁外完成；关系的去重与失效在 mutate 内按锁内的关系重新计算，一次提交。
 func (m *Memory) applyRelations(ctx context.Context, j Job, at time.Time, rels []relation) error {
 	rels = slices.DeleteFunc(slices.Clone(rels), func(r relation) bool {
 		return strings.TrimSpace(r.Predicate) == "" || strings.TrimSpace(r.Subject.Name) == "" || strings.TrimSpace(r.Object.Name) == ""
 	})
-	if m.cfg.Graph == nil || len(rels) == 0 {
+	if !m.cfg.Graph || len(rels) == 0 {
 		return nil
 	}
 	ns := j.Namespace
-	known, err := m.cfg.Graph.Entities(ctx, ns)
+	scope, s, err := m.read(ctx, ns)
 	if err != nil {
 		return err
 	}
-	edges, err := m.cfg.Graph.Edges(ctx, ns)
-	if err != nil {
-		return err
+	known := make([]Entity, 0, len(s.Entities))
+	for _, id := range slices.Sorted(maps.Keys(s.Entities)) {
+		known = append(known, entityKind.clone(s.Entities[id]))
 	}
 	var refs []entityRef
 	for _, r := range rels {
@@ -408,42 +308,57 @@ func (m *Memory) applyRelations(ctx context.Context, j Job, at time.Time, rels [
 	if err != nil {
 		return err
 	}
-	for i, r := range rels {
-		pred := strings.TrimSpace(r.Predicate)
-		subj, obj := entities[r.Subject.key()], entities[r.Object.key()]
-		id := stableID(j.Key, "relation", strconv.Itoa(i))
-		if slices.ContainsFunc(edges, func(e Edge) bool {
-			return e.Valid() && e.ID != id && e.Subject == subj.ID && e.Predicate == pred && e.Object == obj.ID
-		}) {
-			continue
+	now := m.now()
+	_, err = m.mutate(ctx, ns, scope, func(t *tx) error {
+		for _, key := range slices.Sorted(maps.Keys(entities)) {
+			putEntity(t, entities[key])
 		}
-		fact := strings.TrimSpace(r.Fact)
-		if fact == "" {
-			fact = subj.Name + " " + pred + " " + obj.Name
-		}
-		edge := Edge{ID: id, Namespace: ns, Subject: subj.ID, Predicate: pred, Object: obj.ID, Fact: fact, ValidFrom: at, CreatedAt: m.now(),
-			Source: j.source()}
-		var superseded []int
-		for k, old := range edges {
-			if !r.Exclusive || !old.Valid() || old.ID == id || old.Subject != subj.ID || old.Predicate != pred || old.Object == obj.ID {
+		for i, r := range rels {
+			pred := strings.TrimSpace(r.Predicate)
+			subj, obj := entities[r.Subject.key()], entities[r.Object.key()]
+			id := stableID(j.Key, "relation", strconv.Itoa(i))
+			keys := t.Edges.Keys()
+			if slices.ContainsFunc(keys, func(k string) bool {
+				e, _ := t.Edges.Get(k)
+				return e.Valid() && e.ID != id && e.Subject == subj.ID && e.Predicate == pred && e.Object == obj.ID
+			}) {
 				continue
 			}
-			if old.ValidFrom.After(at) {
-				edge.InvalidAt, edge.SupersededBy = old.ValidFrom, old.ID
-				continue
+			fact := strings.TrimSpace(r.Fact)
+			if fact == "" {
+				fact = subj.Name + " " + pred + " " + obj.Name
 			}
-			superseded = append(superseded, k)
-		}
-		if err := m.cfg.Graph.PutEdge(ctx, edge); err != nil {
-			return err
-		}
-		for _, k := range superseded {
-			edges[k].InvalidAt, edges[k].SupersededBy = at, id
-			if err := m.cfg.Graph.PutEdge(ctx, edges[k]); err != nil {
-				return err
+			edge := Edge{ID: id, Namespace: ns, Subject: subj.ID, Predicate: pred, Object: obj.ID, Fact: fact, ValidFrom: at, CreatedAt: now,
+				Source: j.source()}
+			var superseded []Edge
+			for _, k := range keys {
+				old, _ := t.Edges.Get(k)
+				if !r.Exclusive || !old.Valid() || old.ID == id || old.Subject != subj.ID || old.Predicate != pred || old.Object == obj.ID {
+					continue
+				}
+				if old.ValidFrom.After(at) {
+					edge.InvalidAt, edge.SupersededBy = old.ValidFrom, old.ID
+					continue
+				}
+				superseded = append(superseded, old)
+			}
+			// 重做同一任务时覆盖上次写入的关系，保留实例号。
+			if prev, ok := t.Edges.Get(id); ok {
+				edge.Incarnation, edge.Revision, edge.ContentRev = prev.Incarnation, prev.Revision+1, prev.ContentRev
+				if prev.Fact != edge.Fact || prev.Subject != edge.Subject || prev.Predicate != edge.Predicate || prev.Object != edge.Object {
+					edge.ContentRev++
+				}
+			} else {
+				edge.Incarnation, edge.Revision, edge.ContentRev = t.incarnation(), 1, 1
+			}
+			t.Edges.Put(id, edge)
+			for _, old := range superseded {
+				old.InvalidAt, old.SupersededBy = at, id
+				old.Revision++
+				t.Edges.Put(old.ID, old)
 			}
 		}
-		edges = append(slices.DeleteFunc(edges, func(e Edge) bool { return e.ID == id }), edge)
-	}
-	return nil
+		return nil
+	})
+	return err
 }

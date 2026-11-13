@@ -3,7 +3,9 @@ package memory
 import (
 	"context"
 	"crypto/sha256"
+	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 	"time"
@@ -116,7 +118,7 @@ func (m *Memory) process(ctx context.Context, j Job) error {
 		Relations []relation  `json:"relations"`
 	}
 	prompt := extractPrompt
-	if m.cfg.Graph != nil {
+	if m.cfg.Graph {
 		prompt += relationPrompt
 	}
 	dated := "对话时间：" + at.Format(time.DateTime) + "\n" + transcript
@@ -131,7 +133,7 @@ func (m *Memory) process(ctx context.Context, j Job) error {
 	if err := m.applyRelations(ctx, j, at, out.Relations); err != nil {
 		return err
 	}
-	if err := m.syncCommunities(ctx, j.Namespace, true); err != nil {
+	if err := m.syncCommunities(ctx, j.Namespace); err != nil {
 		return err
 	}
 	if err := m.reflect(ctx); err != nil {
@@ -171,7 +173,11 @@ func (m *Memory) reconcile(ctx context.Context, j Job, at time.Time, i int, c ca
 		return nil
 	}
 	c.Importance = min(max(c.Importance, 0), 1)
-	similar, err := m.recall(ctx, Query{Text: c.Content, K: m.cfg.ReconcileCandidates, Kinds: []Kind{c.Kind}}, false)
+	ns, err := requireNamespace(ctx)
+	if err != nil {
+		return err
+	}
+	similar, scope, err := m.search(ctx, ns, Query{Text: c.Content, K: m.cfg.ReconcileCandidates, Kinds: []Kind{c.Kind}})
 	if err != nil {
 		return err
 	}
@@ -213,14 +219,63 @@ func (m *Memory) reconcile(ctx context.Context, j Job, at time.Time, i int, c ca
 	default:
 		target = nil
 	}
-	r, err := m.Remember(ctx, Record{
+	now := m.now()
+	return m.derive(ctx, ns, scope, []Record{{
 		ID: id, Kind: c.Kind, Content: content, Keywords: c.Keywords, Entities: c.Entities, ValidFrom: at,
 		Importance: c.Importance, Sources: sources,
+	}}, func(t *tx) []string {
+		if target == nil {
+			return nil
+		}
+		// 只否定召回时看到的那个版本：期间被修改、遗忘或重建的记录不动。
+		cur, ok := t.Records.Get(target.ID)
+		if !ok || !cur.Valid() || cur.Incarnation != target.Incarnation || cur.Revision != target.Revision {
+			return nil
+		}
+		t.Records.Put(cur.ID, cur.invalidated(now, ReasonSuperseded, id))
+		return []string{cur.ID}
 	})
-	if err != nil || target == nil {
+}
+
+// derive 在一次提交中写入 Worker 推导出的记录：rs 中尚不存在的记录被创建（重做的任务不会重复创建或覆盖），
+// 再调用 then 做同一提交中的其余修改，then 返回需要移出索引的记录。嵌入在锁外完成，索引在提交之后更新。
+func (m *Memory) derive(ctx context.Context, ns []string, scope string, rs []Record, then func(t *tx) []string) error {
+	vecs := make([][]float32, len(rs))
+	for i := range rs {
+		r, err := m.prepare(rs[i], ns)
+		if err != nil {
+			return err
+		}
+		if vecs[i], err = m.embed(ctx, r.Content); err != nil {
+			return err
+		}
+		if vecs[i] != nil {
+			r.EmbedModel = m.cfg.EmbedModel
+		}
+		rs[i] = r
+	}
+	var created []int
+	var removed []string
+	_, err := m.mutate(ctx, ns, scope, func(t *tx) error {
+		created, removed = nil, nil
+		for i, r := range rs {
+			if createRecord(t, r) {
+				created = append(created, i)
+			}
+		}
+		if then != nil {
+			removed = then(t)
+		}
+		return nil
+	})
+	if err != nil {
 		return err
 	}
-	return m.invalidate(ctx, *target, r.ID)
+	errs := []error{m.unindex(ctx, ns, removed...)}
+	for _, i := range created {
+		errs = append(errs, m.upsert(ctx, ns, rs[i].ID, vecs[i]))
+	}
+	return errors.Join(errs...)
 }
 
 const failurePrompt = "这一轮执行失败或被中止。根据对话记录写一条以后可以避免同类失败的教训，输出 JSON：" +
@@ -236,11 +291,14 @@ func (m *Memory) learnFromFailure(ctx context.Context, j Job, at time.Time, tran
 	if err := m.chatJSON(ctx, failurePrompt, transcript, &out); err != nil || strings.TrimSpace(out.Lesson) == "" {
 		return err
 	}
-	_, err := m.Remember(ctx, Record{
+	ns, err := requireNamespace(ctx)
+	if err != nil {
+		return err
+	}
+	return m.derive(ctx, ns, "", []Record{{
 		ID: stableID(j.Key, "lesson"), Kind: KindReflection, Content: out.Lesson, Keywords: out.Keywords, ValidFrom: at,
 		Importance: min(max(out.Importance, 0), 1), Sources: []Source{j.source()},
-	})
-	return err
+	}}, nil)
 }
 
 const reflectPrompt = "以下是同一用户近期的若干经历。提炼一到三条更高层的结论（如习惯、偏好、反复出现的问题），输出 JSON：" +
@@ -252,13 +310,14 @@ func (m *Memory) reflect(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	all, err := m.records.List(ctx, ns)
+	scope, s, err := m.read(ctx, ns)
 	if err != nil {
 		return err
 	}
 	var episodes []Record
 	total := 0.0
-	for _, r := range all {
+	for _, id := range slices.Sorted(maps.Keys(s.Records)) {
+		r := s.Records[id]
 		if r.Valid() && r.Kind == KindEpisode && !r.Reflected {
 			episodes = append(episodes, r)
 			total += r.Importance
@@ -280,21 +339,26 @@ func (m *Memory) reflect(ctx context.Context) error {
 		return err
 	}
 	key := stableID(ids...)
+	var insights []Record
 	for i, in := range out.Insights {
 		if strings.TrimSpace(in.Content) == "" {
 			continue
 		}
-		if _, err := m.Remember(ctx, Record{ID: stableID(key, fmt.Sprint(i)), Kind: KindReflection, Content: in.Content, Keywords: in.Keywords, Importance: min(max(in.Importance, 0), 1)}); err != nil {
-			return err
-		}
+		insights = append(insights, Record{ID: stableID(key, fmt.Sprint(i)), Kind: KindReflection, Content: in.Content, Keywords: in.Keywords, Importance: min(max(in.Importance, 0), 1)})
 	}
-	for _, r := range episodes {
-		r.Reflected = true
-		if err := m.records.Put(ctx, r); err != nil {
-			return err
+	// 结论与"已反思"标记在同一次提交中；只标记仍是读取时那个版本的情景。
+	return m.derive(ctx, ns, scope, insights, func(t *tx) []string {
+		for _, e := range episodes {
+			cur, ok := t.Records.Get(e.ID)
+			if !ok || !cur.Valid() || cur.Incarnation != e.Incarnation || cur.Revision != e.Revision {
+				continue
+			}
+			cur.Reflected = true
+			cur.Revision++
+			t.Records.Put(cur.ID, cur)
 		}
-	}
-	return nil
+		return nil
+	})
 }
 
 // turnTime 返回轮次开始事件的时间：记录与关系的生效时间是对话发生的时间，而不是 Worker 处理的时间。

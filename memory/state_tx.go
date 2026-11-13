@@ -103,6 +103,7 @@ type tx struct {
 	Jobs        *table[Job]
 	DoneJobs    *table[time.Time]
 	scalars     stateScalars
+	orig        stateScalars
 	logical     int // 本次修改带来的逻辑大小变化
 	err         error
 }
@@ -110,7 +111,7 @@ type tx struct {
 // newTx 在 cur 的工作副本上开始一次修改；base 是 cur 所依据的基础快照。
 func newTx(cur, base state, ns []string) *tx {
 	w := cur.clone()
-	t := &tx{ns: ns, scalars: cur.scalars()}
+	t := &tx{ns: ns, scalars: cur.scalars(), orig: cur.scalars()}
 	t.Records = &table[Record]{k: recordKind, m: w.Records, base: base.Records, changes: map[string]change[Record]{}, t: t}
 	t.Entities = &table[Entity]{k: entityKind, m: w.Entities, base: base.Entities, changes: map[string]change[Entity]{}, t: t}
 	t.Edges = &table[Edge]{k: edgeKind, m: w.Edges, base: base.Edges, changes: map[string]change[Edge]{}, t: t}
@@ -119,6 +120,22 @@ func newTx(cur, base state, ns []string) *tx {
 	t.DoneJobs = &table[time.Time]{k: doneKind, m: w.DoneJobs, base: base.DoneJobs, changes: map[string]change[time.Time]{}, t: t}
 	return t
 }
+
+// incarnation 分配一个实例号（从 1 起），使 NextIncarnation 始终大于已分配的实例号（不变量 1）。
+// changed 报告这次修改是否改动了任何对象或标量。
+func (t *tx) changed() bool {
+	return len(t.Records.changes)+len(t.Entities.changes)+len(t.Edges.changes)+len(t.Communities.changes)+len(t.Jobs.changes)+len(t.DoneJobs.changes) > 0 ||
+		t.scalars != t.orig
+}
+
+func (t *tx) incarnation() int64 {
+	n := max(t.scalars.NextIncarnation, 1)
+	t.scalars.NextIncarnation = n + 1
+	return n
+}
+
+// nextSeq 是这次修改提交后的 Seq。
+func (t *tx) nextSeq() int64 { return t.scalars.Seq + 1 }
 
 func (t *tx) NextIncarnation() int64     { return t.scalars.NextIncarnation }
 func (t *tx) SetNextIncarnation(n int64) { t.scalars.NextIncarnation = n }
@@ -184,7 +201,7 @@ var recordKind = kind[Record]{
 		return normNS(&r.Namespace, ns)
 	},
 	size: func(_ string, r Record) int {
-		n := 96 + len(r.ID) + len(r.Kind) + len(r.Content) + strLen(r.Keywords) + strLen(r.Entities) + len(r.SupersededBy) + len(r.EmbedModel)
+		n := 112 + len(r.ID) + len(r.Kind) + len(r.Content) + strLen(r.Keywords) + strLen(r.Entities) + len(r.SupersededBy) + len(r.InvalidReason) + len(r.EmbedModel)
 		for _, s := range r.Sources {
 			n += 24 + len(s.Session) + len(s.Job)
 		}
@@ -202,7 +219,7 @@ var entityKind = kind[Entity]{
 		return normNS(&e.Namespace, ns)
 	},
 	size: func(_ string, e Entity) int {
-		return 48 + len(e.ID) + len(e.Name) + len(e.Type) + strLen(e.Aliases) + 8*len(e.Vector) + len(e.EmbedModel)
+		return 72 + len(e.ID) + len(e.Name) + len(e.Type) + strLen(e.Aliases) + 8*len(e.Vector) + len(e.EmbedModel)
 	},
 }
 
@@ -210,7 +227,7 @@ var edgeKind = kind[Edge]{
 	clone:     func(e Edge) Edge { return e },
 	normalize: func(e *Edge, ns []string) bool { return normNS(&e.Namespace, ns) },
 	size: func(_ string, e Edge) int {
-		return 72 + len(e.ID) + len(e.Subject) + len(e.Predicate) + len(e.Object) + len(e.Fact) + len(e.SupersededBy) + len(e.Source.Session) + len(e.Source.Job)
+		return 96 + len(e.ID) + len(e.Subject) + len(e.Predicate) + len(e.Object) + len(e.Fact) + len(e.SupersededBy) + len(e.Source.Session) + len(e.Source.Job)
 	},
 }
 
@@ -221,7 +238,7 @@ var communityKind = kind[Community]{
 		return normNS(&c.Namespace, ns)
 	},
 	size: func(_ string, c Community) int {
-		return 32 + len(c.ID) + strLen(c.Members) + len(c.Name) + len(c.Summary) + len(c.Fingerprint)
+		return 56 + len(c.ID) + strLen(c.Members) + len(c.Name) + len(c.Summary) + len(c.Fingerprint)
 	},
 }
 

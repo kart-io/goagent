@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"hash/fnv"
+	"maps"
 	"math"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/kart-io/goagent/constants"
+	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/session"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
@@ -66,6 +69,11 @@ func newMemory(t *testing.T, cfg Config) *Memory {
 	t.Helper()
 	if cfg.Store == nil {
 		cfg.Store = storemem.New()
+	}
+	if cfg.Durable == nil {
+		fs, err := durable.NewFileStore(t.TempDir())
+		require.NoError(t, err)
+		cfg.Durable = fs
 	}
 	m, err := New(cfg)
 	require.NoError(t, err)
@@ -242,7 +250,7 @@ func TestPurgeAndReindex(t *testing.T) {
 	r, err := m.Remember(ctx, Record{Content: "用户喜欢咖啡", Importance: 0.5})
 	require.NoError(t, err)
 
-	m2 := newMemory(t, Config{Store: m.cfg.Store, Index: NewMemoryIndex(), Embedder: bigramEmbedder{}, EmbedModel: "v2"})
+	m2 := newMemory(t, Config{Store: m.cfg.Store, Durable: m.cfg.Durable, Index: NewMemoryIndex(), Embedder: bigramEmbedder{}, EmbedModel: "v2"})
 	require.NoError(t, m2.Reindex(ctx, false))
 	got, err := m2.Get(ctx, r.ID)
 	require.NoError(t, err)
@@ -252,7 +260,7 @@ func TestPurgeAndReindex(t *testing.T) {
 	require.Len(t, hits, 1, "重建后可向量检索")
 
 	require.NoError(t, m.Purge(ctx))
-	all, err := m.records.List(ctx, []string{"u"})
+	all, err := listRecords(ctx, m, []string{"u"})
 	require.NoError(t, err)
 	require.Empty(t, all)
 	hits, err = x.Search(ctx, []string{"u"}, mustEmbed(t, "咖啡"), 1)
@@ -383,7 +391,7 @@ func TestWorkerSkipsRewoundAndLearnsFromAborted(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []string{"退款前先确认订单状态"}, contents(got))
 	require.Equal(t, KindReflection, got[0].Kind)
-	all, err := m.records.List(ctx, []string{"u"})
+	all, err := listRecords(ctx, m, []string{"u"})
 	require.NoError(t, err)
 	require.Len(t, all, 1, "被退回的轮次不留下记忆")
 }
@@ -539,4 +547,14 @@ func TestChatJSONRepairsInvalidJSON(t *testing.T) {
 			}
 		})
 	}
+}
+
+// listRecords 返回命名空间中的全部记录（含失效记录），按 ID 排序。
+func listRecords(ctx context.Context, m *Memory, ns []string) ([]Record, error) {
+	_, s, err := m.read(ctx, ns)
+	var out []Record
+	for _, id := range slices.Sorted(maps.Keys(s.Records)) {
+		out = append(out, s.Records[id])
+	}
+	return out, err
 }

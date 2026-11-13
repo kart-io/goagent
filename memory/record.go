@@ -35,25 +35,41 @@ type Source struct {
 	Job     string `json:"job,omitempty"`
 }
 
-// Record 是一条长期记忆。InvalidAt 非零表示已失效：被新事实否定或合并（SupersededBy 指向新记录）、被遗忘或来源轮次被退回；
-// 失效记录不再被召回，保留 Retention.InvalidRetention 后删除。
+// InvalidReason 是记录失效的原因。
+type InvalidReason string
+
+const (
+	// ReasonSuperseded：被新事实否定或合并，SupersededBy 指向新记录。
+	ReasonSuperseded InvalidReason = "superseded"
+	// ReasonRewound：来源轮次被退回。
+	ReasonRewound InvalidReason = "rewound"
+	// ReasonExpired：TTL 到期或超出容量被淘汰。
+	ReasonExpired InvalidReason = "expired"
+	// ReasonForgotten：被遗忘，正文已清空，是终态。
+	ReasonForgotten InvalidReason = "forgotten"
+)
+
+// Record 是一条长期记忆。InvalidAt 非零表示已失效，InvalidReason 给出原因；失效记录不再被召回，保留 Retention.InvalidRetention 后删除。
+// Incarnation 是记录在作用域内的实例号，创建时分配、不再改变；Revision 每次修改加一，ContentRev 只在正文改变时加一，二者从 1 起。
 type Record struct {
-	ID           string    `json:"id"`
-	Namespace    []string  `json:"namespace"`
-	Kind         Kind      `json:"kind"`
-	Content      string    `json:"content"`
-	Keywords     []string  `json:"keywords,omitempty"`
-	Entities     []string  `json:"entities,omitempty"`
-	Importance   float64   `json:"importance"`
-	Pinned       bool      `json:"pinned,omitzero"`
-	ValidFrom    time.Time `json:"valid_from"`
-	InvalidAt    time.Time `json:"invalid_at,omitzero"`
-	SupersededBy string    `json:"superseded_by,omitempty"`
+	ID            string        `json:"id"`
+	Namespace     []string      `json:"namespace"`
+	Kind          Kind          `json:"kind"`
+	Content       string        `json:"content"`
+	Keywords      []string      `json:"keywords,omitempty"`
+	Entities      []string      `json:"entities,omitempty"`
+	Importance    float64       `json:"importance"`
+	Pinned        bool          `json:"pinned,omitzero"`
+	ValidFrom     time.Time     `json:"valid_from"`
+	InvalidAt     time.Time     `json:"invalid_at,omitzero"`
+	InvalidReason InvalidReason `json:"invalid_reason,omitempty"`
+	SupersededBy  string        `json:"superseded_by,omitempty"`
 	// Sources 是内容所依据的全部轮次；合并更新时继承旧记录的来源，手动写入时为空。
 	Sources     []Source  `json:"sources,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
-	LastAccess  time.Time `json:"last_access"`
-	AccessCount int       `json:"access_count,omitzero"`
+	Incarnation int64     `json:"incarnation,omitzero"`
+	Revision    int64     `json:"revision,omitzero"`
+	ContentRev  int64     `json:"content_rev,omitzero"`
 	// EmbedModel 是写入索引时的嵌入模型；与当前模型不同时 Reindex 重建。
 	EmbedModel string `json:"embed_model,omitempty"`
 	// Reflected 表示该情景已参与过反思。
@@ -68,9 +84,19 @@ func rewound(sources []Source, sessionID string, to int64) bool {
 // Valid 报告记录是否仍然有效。
 func (r Record) Valid() bool { return r.InvalidAt.IsZero() }
 
+// invalidated 返回在 at 以 reason 失效的副本；by 是取代它的记录（只用于 superseded）。
+func (r Record) invalidated(at time.Time, reason InvalidReason, by string) Record {
+	r.InvalidAt, r.InvalidReason, r.SupersededBy = at, reason, by
+	r.Revision++
+	return r
+}
+
 func (r Record) validate() error {
 	if r.ID == "" || strings.TrimSpace(r.Content) == "" || !slices.Contains(kinds, r.Kind) || r.Importance < 0 || r.Importance > 1 {
 		return agentErrors.Newf(agentErrors.CodeInvalidInput, "记录需要 ID、内容、合法类别与 [0,1] 内的重要度").WithComponent("memory").WithOperation("validate")
+	}
+	if r.InvalidAt.IsZero() != (r.InvalidReason == "") {
+		return agentErrors.Newf(agentErrors.CodeInvalidInput, "记录的失效时间与失效原因须同时设置").WithComponent("memory").WithOperation("validate")
 	}
 	return validNamespace(r.Namespace)
 }

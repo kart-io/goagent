@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -183,6 +184,8 @@ func TestIncrementalConcurrentWithCompaction(t *testing.T) {
 	}
 	ms := []*Memory{open(), open()}
 	refs := make([]*model, 6)
+	// 删除不存在的键没有修改，不提交。
+	var commits atomic.Int64
 	var wg sync.WaitGroup
 	for w := range refs {
 		refs[w] = newModel()
@@ -204,6 +207,9 @@ func TestIncrementalConcurrentWithCompaction(t *testing.T) {
 				})
 				if !assert.NoError(t, err) {
 					return
+				}
+				if _, had := refs[w].s.Records[id]; had || !del {
+					commits.Add(1)
 				}
 				if del {
 					delete(refs[w].s.Records, id)
@@ -242,7 +248,7 @@ func TestIncrementalConcurrentWithCompaction(t *testing.T) {
 	_, got, err := ms[0].read(ctx, testNS)
 	require.NoError(t, err)
 	require.Equal(t, want.s.Records, got.Records)
-	require.EqualValues(t, 150, got.Seq)
+	require.Equal(t, commits.Load(), got.Seq)
 	checkInvariants(t, testNS, got)
 }
 

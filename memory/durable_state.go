@@ -164,6 +164,7 @@ const mutateRetries = 3
 
 // mutate 在 head 锁内修改命名空间 ns 当前作用域的 state 并提交，返回提交后的 state（与缓存共享，只读）。
 // expectScope 非空时要求当前作用域与之相同。加锁后重新 Load(head) 并按 CommitID 核对缓存，不会在其他进程已提交的旧版本上修改。
+// fn 返回 errNoChange 或没有任何修改时不提交，返回当前 state。
 // fn 只能经 tx 读写，不得做 I/O，可能被调用多次（锁丢失时整体重做），必须是纯函数。
 // 作用域改变或被删除时返回 errScopeChanged；提交结果无法判断时返回 ErrMemoryCommitUnknown。
 // 提交成功后、释放 head 锁之后，覆盖层达到条件时压缩（增量提交 4.1）：达到硬上限时同步等待，否则只尝试一次。
@@ -234,10 +235,16 @@ func (m *Memory) mutateOnce(ctx context.Context, ns []string, expectScope string
 		}
 	}
 	if err := fn(t); err != nil {
+		if errors.Is(err, errNoChange) {
+			return v.cur, h, nil
+		}
 		return state{}, head{}, err
 	}
 	if t.err != nil {
 		return state{}, head{}, t.err
+	}
+	if !t.changed() {
+		return v.cur, h, nil
 	}
 	nh := h
 	nh.stateScalars = t.scalars

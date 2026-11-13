@@ -7,8 +7,6 @@ import (
 	"strings"
 	"sync"
 	"unicode"
-
-	"github.com/kart-io/goagent/constants"
 )
 
 // 预计算的 bigram 索引，设计见 docs/design/MEMORY_G1_BIGRAM_INDEX.md：结果与 recall 的逐条打分逐项相同。
@@ -254,14 +252,10 @@ func (ri *recallIndex) matches(q []bigram) map[string]int {
 	return out
 }
 
-// rankState 是 recall 的打分与排序在 state 上的实现：结果与 recall 对同一组记录逐项相同。
-// ri 为 nil 时逐条计算（小 state 或没有索引）。
-func (m *Memory) rankState(s state, ri *recallIndex, q Query, vector map[string]float64) []Scored {
-	k := q.K
-	if k <= 0 {
-		k = m.cfg.RecallK
-	}
-	k = min(k, constants.MaxMemoryRecallK)
+// rankState 在 s 的有效记录中打分排序，返回前 K 条（记录已复制，调用方可以修改）。
+// ri 为 nil 时逐条计算（小 state 或没有索引）；vector 是向量相似度；access 为访问记录（TrackAccess 关闭时为 nil）。
+func (m *Memory) rankState(s state, ri *recallIndex, q Query, vector map[string]float64, access map[string]accessEntry) []Scored {
+	k := m.recallK(q)
 	now := m.now()
 	query := queryBigrams(q.Text)
 	var candidates map[string]int
@@ -297,7 +291,7 @@ func (m *Memory) rankState(s state, ri *recallIndex, q Query, vector map[string]
 		if len(query) > 0 && rel == 0 {
 			return Scored{}, false
 		}
-		return Scored{Record: r, Relevance: rel, Score: m.cfg.Weights.Relevance*rel + m.cfg.Weights.Recency*m.recency(r, now) + m.cfg.Weights.Importance*r.Importance}, true
+		return Scored{Record: r, Relevance: rel, Score: m.cfg.Weights.Relevance*rel + m.cfg.Weights.Recency*m.recency(lastUsed(r, access), now) + m.cfg.Weights.Importance*r.Importance}, true
 	}
 	var out []Scored
 	if candidates == nil {
@@ -329,15 +323,18 @@ func (m *Memory) rankState(s state, ri *recallIndex, q Query, vector map[string]
 		}
 		return strings.Compare(a.ID, b.ID)
 	})
-	return out[:min(k, len(out))]
+	out = out[:min(k, len(out))]
+	for i := range out {
+		out[i].Record = recordKind.clone(out[i].Record)
+	}
+	return out
 }
 
-// recallState 是端到端的召回（G1a 门槛的口径）：读取 state、查候选、打分、排序，返回排好序的结果。
-// 不含向量召回（需要嵌入模型）；G1b 把公开的 Recall 接到这里。
+// recallState 是不含向量与访问记录的端到端召回（读取、查候选、打分、排序），供基准测量 7.3 的门槛。
 func (m *Memory) recallState(ctx context.Context, ns []string, q Query) ([]Scored, error) {
 	_, v, err := m.readView(ctx, ns)
 	if err != nil {
 		return nil, err
 	}
-	return m.rankState(v.cur, v.idx, q, nil), nil
+	return m.rankState(v.cur, v.idx, q, nil, nil), nil
 }

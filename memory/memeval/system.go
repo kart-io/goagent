@@ -4,11 +4,13 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"os"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/kart-io/goagent/constants"
+	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/session"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/memory"
@@ -75,17 +77,29 @@ func (r recentCase) Context(_ context.Context, q Question) (Retrieved, error) {
 }
 
 // Memory 是长期记忆方案：每个会话作为一轮写入会话日志并登记抽取任务，按时间顺序处理完后按题召回。
-// Configure 在每个 Case 的新存储上补齐配置（模型、嵌入、是否启用图谱与社区等）。
+// Configure 在每个 Case 的新存储上补齐配置（模型、嵌入、是否启用图谱与社区等）；没有给出 Durable 时，
+// 每个 Case 在 Dir（空时为系统临时目录）下新建一个 FileStore，由调用方在评测结束后删除 Dir。
 type Memory struct {
 	Label     string
 	Configure func(st store.Store, sessions session.Store) memory.Config
+	Dir       string
 }
 
 func (m *Memory) Name() string { return m.Label }
 
 func (m *Memory) Ingest(ctx context.Context, c Case) (Retriever, error) {
 	st, sessions := storemem.New(), session.NewMemoryStore()
-	mem, err := memory.New(m.Configure(st, sessions))
+	cfg := m.Configure(st, sessions)
+	if cfg.Durable == nil {
+		dir, err := os.MkdirTemp(m.Dir, "memeval-")
+		if err != nil {
+			return nil, err
+		}
+		if cfg.Durable, err = durable.NewFileStore(dir); err != nil {
+			return nil, err
+		}
+	}
+	mem, err := memory.New(cfg)
 	if err != nil {
 		return nil, err
 	}
