@@ -105,42 +105,51 @@ func TestPurgeFaults(t *testing.T) {
 	}
 }
 
-// 跨越 Purge 的抽取任务：登记时作用域已不是当前的直接丢弃；登记后才 Purge 的在处理时丢弃，不写入新作用域。
+// 跨越 Purge 的抽取任务：登记时作用域已不是当前的直接丢弃；登记后才 Purge 的随旧作用域删除，登记由 Worker 不取 state 锁移除；
+// 处理中发生 Purge 的在下一次写入时中止并标记丢弃，不写入新作用域。
 func TestJobsAcrossPurgeDropped(t *testing.T) {
 	sessions := session.NewMemoryStore()
-	model := &scriptedModel{reply: func(string, string) (string, error) {
-		return "", errors.New("跨越 Purge 的任务不应调用模型")
-	}}
-	m := newMemory(t, Config{Model: model, Sessions: sessions})
 	ctx := WithNamespace(context.Background(), "u")
+	var m *Memory
+	var purged atomic.Bool
+	model := &scriptedModel{reply: func(string, string) (string, error) {
+		require.True(t, purged.CompareAndSwap(false, true), "只有处理中 Purge 的任务调用模型")
+		require.NoError(t, m.Purge(ctx))
+		return `{"memories":[{"kind":"fact","content":"用户住在上海","importance":0.8}]}`, nil
+	}}
+	m = newMemory(t, Config{Model: model, Sessions: sessions})
 	turn, err := m.Turn(ctx)
 	require.NoError(t, err)
 	from, to := appendTurn(t, sessions, "s", false, llm.UserMessage("我住在上海"), llm.Message{Role: "assistant", Content: "好的"})
-	job := func(key, scope string) Job {
-		return Job{Key: key, Namespace: []string{"u"}, Session: "s", Scope: scope, TurnSeq: turn.Seq, From: from, To: to}
+	job := func(key, scope string, seq int64) Job {
+		return Job{Key: key, Namespace: []string{"u"}, Session: "s", Scope: scope, TurnSeq: seq, From: from, To: to}
 	}
-	require.NoError(t, m.Enqueue(ctx, job("before", turn.Scope)))
+	require.NoError(t, m.Enqueue(ctx, job("before", turn.Scope, turn.Seq)))
 	require.NoError(t, m.Purge(ctx))
 
 	for _, tc := range []struct{ key, scope string }{{"old", turn.Scope}, {"g0", ""}} {
-		require.NoError(t, m.Enqueue(ctx, job(tc.key, tc.scope)), "回放会再次登记，丢弃时不报错")
+		require.NoError(t, m.Enqueue(ctx, job(tc.key, tc.scope, turn.Seq)), "回放会再次登记，丢弃时不报错")
 		_, ok, err := m.Job(ctx, tc.key)
 		require.NoError(t, err)
 		require.False(t, ok, "%s 未登记", tc.key)
 	}
-	require.EqualValues(t, 2, m.droppedJobs.Load())
+	require.EqualValues(t, 2, m.DroppedJobs())
+	_, ok, err := m.Job(ctx, "before")
+	require.NoError(t, err)
+	require.False(t, ok, "登记后 Purge 的任务随旧作用域删除")
 
+	turn, err = m.Turn(ctx)
+	require.NoError(t, err)
+	require.NoError(t, m.Enqueue(ctx, job("during", turn.Scope, turn.Seq)))
 	n, err := m.ProcessPending(ctx)
 	require.NoError(t, err)
-	require.Equal(t, 1, n)
-	j, _, err := m.Job(ctx, "before")
-	require.NoError(t, err)
-	require.Equal(t, JobDropped, j.Status)
-	require.EqualValues(t, 3, m.droppedJobs.Load())
-	require.Empty(t, model.calls)
+	require.Equal(t, 1, n, "旧作用域的登记不产生任务")
+	require.True(t, purged.Load())
+	require.EqualValues(t, 3, m.DroppedJobs())
 	_, s, err := m.read(ctx, []string{"u"})
 	require.NoError(t, err)
 	require.Empty(t, s.Records, "新作用域没有收到旧轮次的抽取结果")
+	requireQueueEmpty(t, m)
 }
 
 // memory_save 写入本轮绑定的作用域：轮次开始后发生的 Purge 使保存成为工具错误；G0 绑定只在从未清空时可用。

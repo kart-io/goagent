@@ -370,7 +370,7 @@ func (m *Memory) read(ctx, ns []string) (scope string, s state, err error)
   - `RetireGrace` 之后再执行一次 `Index.Clear`。
   - 处理"索引待清理"登记：**先**在 state 锁内移除登记，**再**执行 `Reindex(false)`。这样，Reindex 期间新提交的 Forget 会重新登记，残留不会被漏掉。当前作用域的这类登记与任务登记一样，只能在持有 state 锁时移除。
   - 每 `ReindexEvery` 轮，对有登记的命名空间执行 `Reindex(false)`。
-- `Memory.RunMaintenance(ctx, interval)` 循环调用 `Maintain`。
+- `Memory.RunMaintenance(ctx, interval, onError)` 循环调用 `Maintain`。
 - `Run`（Worker）每轮先调用 `Maintain`，再处理任务。
 - 没有配置 `Model` 与 `Sessions` 的部署，宿主必须运行 `RunMaintenance`，否则 Purge 的残留与 Forget 的向量残留不会被清理。README 与 `New` 的文档注释都写明这一点。
 
@@ -1013,6 +1013,42 @@ export GOAGENT_PGSTORE_DSN='postgres://postgres:test@127.0.0.1:55432/postgres?ss
 
 **pgstore**：经临时 `go.work`，`memorytest` 与 pgstore 全部测试在 `-race` 下通过。
 
+### 7.12 G1e：任务、维护与 Worker（2026-11-13）
+
+**交付**（计划见 `.claude/plan-g1e.md`）：
+
+- 任务存于命名空间的 state：`Jobs` 存待处理、失败与丢弃的任务，`DoneJobs` 存完成任务的键与完成时间。`Config.Store` 删除，`store.go` 改名为 `job.go`。
+- `Job(ctx, key)` 读上下文命名空间的当前作用域，先查 `Jobs`，再查 `DoneJobs`（返回 `JobDone`）。
+- queue 分片：16 个 `memory/queue/<fnv32(命名空间)%16>`，登记为 `{命名空间, 作用域, 原因}`，原因为 `jobs` 或 `index`。登记先无锁 Load，缺失时在分片锁内写入；加锁顺序为 Worker 锁 → state 锁 → 分片锁。
+- `Enqueue`：没有作用域时丢弃；`mutate(expectScope)` 的 `beforeSave` 登记，`fn` 写入任务；遇到 `ErrScopeChanged` 或超过 `MaxStateBytes`（`errStateFull`）时丢弃、计数并返回 nil。`DroppedJobs()` 公开。
+- `Forget` 在配置了 Index 时由 `beforeSave` 登记"索引待清理"。
+- `Maintain`：清理 retiring；逐个登记处理——作用域已不是当前作用域时无锁移除；索引登记先在 state 锁内移除，再 `Reindex(false)`；每 `ReindexEvery`（默认 30）轮对有登记的命名空间执行 `Reindex(false)` 与 `PruneRemoved(MemoryTombstoneRetention)`（24 小时）。`RunMaintenance(ctx, interval, onError)` 循环调用它。
+- Worker（`ProcessPending`）：锁 `memory/worker` → `Maintain` → 逐个任务登记处理。处理前 `LastForgetSeq > TurnSeq` 的任务丢弃。处理中的任务以 `jobBinding{作用域, TurnSeq}` 放入上下文，任务内的每次 `mutate` 在锁内核对作用域与 `LastForgetSeq`，不符时返回 `errScopeChanged` / `errJobStale`，任务记为丢弃。每个任务后保存心跳，失败（如 `ErrLeaseLost`）时结束本轮。没有待处理任务时在 state 锁内移除登记（`settle`）。
+- `Prune` 删除超过 `InvalidRetention` 的 `DoneJobs` 与已结束的 `Jobs`。
+- 调用方：builder 测试、memorytest、memeval（`Configure` 去掉 store 参数）、scripts/memeval。
+
+**测试**（`memory/job_test.go`，另改写 `TestJobsAcrossPurgeDropped`，`checkQueue` 为不变量 5）：
+
+- `TestJobLifecycle`：`Job` 只在所属命名空间可见、完成后只保留键并移除登记、重复登记不产生新任务、Prune 删除过期的结束任务（重试到 `JobAttempts` 后标记 failed 由既有的 Worker 测试覆盖）。
+- `TestEnqueueRacesWorker`（7.1）：4×250 次 Enqueue 与 Worker 移除登记交错，没有任务丢失、登记最终为空。
+- `TestTwoWorkersMutuallyExclusive`（7.1）：两个 Worker 同时运行，模型调用不重叠。
+- `TestEnqueueDropsWhenStateFull`（7.1）：超过 `MaxStateBytes` 时丢弃并计数。
+- `TestWorkerLeaseLostEndsRound`（7.1）：心跳报 `ErrLeaseLost` 时本轮结束，任务留待下一轮。
+- `TestMaintainCleansIndexAfterForgetCrash`（7.2）：Forget 提交后、删除向量前崩溃，`Maintain` 删除残留。
+- `TestRunMaintenanceCompletesPurge`（7.2）：只用宿主 API，Purge 在 `RemoveScope` 前崩溃，`RunMaintenance` 完成清理。
+- `TestEnqueueCrashAfterRegister`（7.2）：登记后、保存前崩溃，留下的空登记由 Worker 移除。
+- `TestWorkerRedoAfterCrashBetweenMutates`（7.2）：任务的两次 `mutate` 之间崩溃，重做后没有重复记录。
+- `TestJobDroppedAfterForget`：登记后发生 Forget 的任务丢弃，不重新抽取。
+- 变异验证：去掉 Worker 锁、`settle` 的保留条件、任务绑定核对或 Forget 登记，对应测试各自失败。
+
+**I8 故障注入**：`TestStateStress10k` 的存储包上 `hookStore`，对 head 的保存注入三类故障：写入前 `ErrLeaseLost`（25%，`mutate` 重做，重做耗尽时为确定失败）、写入前其他错误（2%，结果未知、实际未写入）、写入后报错（2%，按 CommitID 判为成功）。断言增加：确定失败的新增不存在、确定失败的删除没有生效；结果未知的写入不断言。一次运行：租约丢失 167 次（确定失败 9 次）、提交前断开 8 次、写入后报错 7 次，全部断言通过。Purge 的故障由 `scope_test.go` 的逐步崩溃测试覆盖，不在压力测试中注入。
+
+**与前文的差异**：
+
+- 3.1 把最终失败的任务键放进 `DoneJobs`。实现中失败与丢弃的任务留在 `Jobs`（保留错误信息供 `Job` 查询），由 Prune 按保留期删除；`DoneJobs` 只有完成的任务。不变量 5 只针对 pending。
+- `RunMaintenance` 增加 `onError` 参数，与 `Run` 一致。
+- 旧 `store.Store` 中未处理的任务不迁移，迁移说明属于 G1f。
+
 ## 8. 兼容性
 
 | 变更 | 影响 | 处理 |
@@ -1043,7 +1079,7 @@ export GOAGENT_PGSTORE_DSN='postgres://postgres:test@127.0.0.1:55432/postgres?ss
 2. **G1b 记录写路径**：`Remember`、`Update`、`Forget`、`Rewound`、`Prune`；召回只读且只读一次；`TrackAccess`；删除日志。已完成（2026-11-12），见 7.9。
 3. **G1c 作用域与 Purge**：meta 切换、全局 retiring 与清理；轮次绑定增加 `Scope`、`Seq`；`Ref` 带版本；`Digest` 分版本；G0 日志字节恢复测试。已完成（2026-11-13），见 7.10。
 4. **G1d 索引**：版本化键、写后复核、`IDs`、`Clear`、`Reindex`；实体向量移入 `Index`。已完成（2026-11-13），见 7.11。
-5. **G1e 任务、维护与 Worker**：state 内的任务、queue 分片（任务与索引待清理）、`Maintain` 与 `RunMaintenance`、Worker 锁与心跳、`LastForgetSeq` 丢弃规则。
+5. **G1e 任务、维护与 Worker**：state 内的任务、queue 分片（任务与索引待清理）、`Maintain` 与 `RunMaintenance`、Worker 锁与心跳、`LastForgetSeq` 丢弃规则。已完成（2026-11-13），见 7.12。
 6. **G1f 迁移与收尾**：`MigrateFromStore`（两阶段）、memeval 适配、CHANGELOG。
 
 ## 10. 风险
@@ -1138,7 +1174,7 @@ export GOAGENT_PGSTORE_DSN='postgres://postgres:test@127.0.0.1:55432/postgres?ss
 | I5 | 读取达标只覆盖 FileStore 与页缓存已热的情况，测的是 `read` 原语而不是一轮完整召回 | 写入 7.3 的"测量局限"；pgstore 的读路径传输列入 7.6 |
 | I6 | 语料偏小，样本少，命中率是构造出来的，4 核缺完整结果 | 写入测量局限；补上 4 核的完整结果表（7.3） |
 | I7 | 瓶颈与磁盘强相关 | 7.3 单列"小 Save 基线"，并说明它在带掉电保护的 SSD 上不到 1ms |
-| I8 | 压力测试没有注入故障 | 记为 G1e 前补齐：注入租约丢失、结果未知、Purge；断言名称已更正 |
+| I8 | 压力测试没有注入故障 | G1e 已补齐租约丢失与结果未知的注入（7.12）；Purge 的故障由逐步崩溃测试覆盖；断言名称已更正 |
 | 建议 1 | 数据块框架不容忍空白 | 已改，并有测试 |
 | 建议 2～3 | `heapFactor` 的说法不一致；压力测试的注释与代码不符 | 已更正 |
 | 建议 4 | 默认上限 8 MiB 与方案 3 不符 | 取决于 7.3 的规模决策，决策后修改 |

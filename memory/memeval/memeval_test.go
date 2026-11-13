@@ -14,7 +14,6 @@ import (
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/memory"
-	"github.com/kart-io/goagent/store"
 )
 
 // fakeModel 按 reply 应答，供作答、判定与记忆抽取使用。
@@ -161,8 +160,8 @@ func TestRunnerEndToEnd(t *testing.T) {
 		}
 		return "no"
 	}}
-	mem := &Memory{Label: "memory", Dir: t.TempDir(), Configure: func(st store.Store, sessions session.Store) memory.Config {
-		return memory.Config{Store: st, Sessions: sessions, Model: extractor}
+	mem := &Memory{Label: "memory", Dir: t.TempDir(), Configure: func(sessions session.Store) memory.Config {
+		return memory.Config{Sessions: sessions, Model: extractor}
 	}}
 	var progress []string
 	results, err := Runner{Systems: []System{Recent{Runes: 20}, mem}, Answerer: answerer, Judge: judge,
@@ -213,8 +212,8 @@ func TestMemoryIngestRetriesFailedJobs(t *testing.T) {
 				}
 				return `{"memories":[]}`
 			}}
-			sys := &Memory{Label: "memory", Dir: t.TempDir(), Configure: func(st store.Store, sessions session.Store) memory.Config {
-				return memory.Config{Store: st, Sessions: sessions, Model: flaky}
+			sys := &Memory{Label: "memory", Dir: t.TempDir(), Configure: func(sessions session.Store) memory.Config {
+				return memory.Config{Sessions: sessions, Model: flaky}
 			}}
 			_, err := sys.Ingest(context.Background(), cases[1])
 			if tt.wantErr {
@@ -408,7 +407,7 @@ func TestRunnerRepeatsConcurrently(t *testing.T) {
 func TestRunnerContinuesAfterCaseError(t *testing.T) {
 	cases, err := LoadLongMemEval(strings.NewReader(longMemEvalFixture))
 	require.NoError(t, err)
-	bad := &Memory{Label: "bad", Configure: func(store.Store, session.Store) memory.Config { return memory.Config{} }}
+	bad := &Memory{Label: "bad", Configure: func(session.Store) memory.Config { return memory.Config{} }}
 	model := fakeModel{reply: func(string, string) string { return "no" }}
 	results, err := Runner{Systems: []System{bad, Recent{}}, Answerer: model, Judge: model, Concurrency: 2}.Run(context.Background(), cases)
 	require.ErrorContains(t, err, "第 1 轮 bad q1")

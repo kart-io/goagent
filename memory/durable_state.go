@@ -93,6 +93,9 @@ func (s *state) init() {
 // errScopeChanged 表示锁住的作用域已不是当前作用域（期间发生了 Purge），这次写入被放弃。
 var errScopeChanged = agentErrors.New(agentErrors.CodeConflict, "长期记忆的作用域已改变（期间发生了 Purge）").WithComponent("memory")
 
+// errStateFull 表示提交会让 state 变大并超过 MaxStateBytes。
+var errStateFull = errors.New("长期记忆的数据量超过上限")
+
 // scopeRemoved 把作用域删除统一视为作用域改变：两者都说明期间发生了 Purge。
 func scopeRemoved(err error) error {
 	if errors.Is(err, agentErrors.ErrScopeRemoved) {
@@ -224,6 +227,15 @@ func (m *Memory) mutateOnce(ctx context.Context, ns []string, expectScope string
 	if err != nil {
 		return state{}, head{}, scopeRemoved(err)
 	}
+	// Worker 处理任务期间的每次写入都在锁内核对任务绑定：作用域已切换或登记之后发生了遗忘时中止任务（设计 4.3）。
+	if b, ok := jobOf(ctx); ok {
+		if b.scope != scope {
+			return state{}, head{}, errScopeChanged
+		}
+		if v.cur.LastForgetSeq > b.turnSeq {
+			return state{}, head{}, errJobStale
+		}
+	}
 	if o.opKey != "" {
 		if _, done := h.Ops[o.opKey]; done {
 			return v.cur, h, nil
@@ -253,7 +265,8 @@ func (m *Memory) mutateOnce(ctx context.Context, ns []string, expectScope string
 	nh.Seq, nh.CommitID = h.Seq+1, uuid.NewString()
 	nh.LogicalBytes = h.LogicalBytes + t.logical
 	if limit := m.cfg.MaxStateBytes; !o.shrinking && nh.LogicalBytes > limit && nh.LogicalBytes > h.LogicalBytes {
-		return state{}, head{}, agentErrors.Newf(agentErrors.CodeStateSave, "长期记忆的数据量 %d 字节超过上限 %d：调小 Retention.MaxRecords 或缩短保留期", nh.LogicalBytes, limit).WithComponent("memory").WithOperation("mutate")
+		return state{}, head{}, agentErrors.Wrap(errStateFull, agentErrors.CodeStateSave,
+			fmt.Sprintf("长期记忆的数据量 %d 字节超过上限 %d：调小 Retention.MaxRecords 或缩短保留期", nh.LogicalBytes, limit)).WithComponent("memory").WithOperation("mutate")
 	}
 	ov := v.ov.merge(t.overlay(nh.Seq))
 	if ov.erasing() && nh.ErasePending.IsZero() {

@@ -14,8 +14,6 @@ import (
 	"github.com/kart-io/goagent/core/session"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/memory"
-	"github.com/kart-io/goagent/store"
-	storemem "github.com/kart-io/goagent/store/memory"
 )
 
 // System 是被评测的记忆方案。Ingest 灌入一个 Case 的历史，返回只服务该 Case 的检索器；不同 Case 可并发灌入。
@@ -81,15 +79,15 @@ func (r recentCase) Context(_ context.Context, q Question) (Retrieved, error) {
 // 每个 Case 在 Dir（空时为系统临时目录）下新建一个 FileStore，由调用方在评测结束后删除 Dir。
 type Memory struct {
 	Label     string
-	Configure func(st store.Store, sessions session.Store) memory.Config
+	Configure func(sessions session.Store) memory.Config
 	Dir       string
 }
 
 func (m *Memory) Name() string { return m.Label }
 
 func (m *Memory) Ingest(ctx context.Context, c Case) (Retriever, error) {
-	st, sessions := storemem.New(), session.NewMemoryStore()
-	cfg := m.Configure(st, sessions)
+	sessions := session.NewMemoryStore()
+	cfg := m.Configure(sessions)
 	if cfg.Durable == nil {
 		dir, err := os.MkdirTemp(m.Dir, "memeval-")
 		if err != nil {
@@ -127,7 +125,7 @@ func (m *Memory) Ingest(ctx context.Context, c Case) (Retriever, error) {
 			if _, err := mem.ProcessPending(ctx); err != nil {
 				return nil, err
 			}
-			if j, _, err = mem.Job(ctx, s.ID); err != nil {
+			if j, _, err = mem.Job(memory.WithNamespace(ctx, ns...), s.ID); err != nil {
 				return nil, err
 			}
 		}

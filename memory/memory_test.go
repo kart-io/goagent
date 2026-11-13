@@ -18,7 +18,6 @@ import (
 	"github.com/kart-io/goagent/core/session"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
-	storemem "github.com/kart-io/goagent/store/memory"
 )
 
 // bigramEmbedder 把字符对哈希到固定维度，文本重合越多向量越接近。
@@ -67,9 +66,6 @@ func (m *scriptedModel) CompleteStream(_ context.Context, req *llm.CompletionReq
 
 func newMemory(t *testing.T, cfg Config) *Memory {
 	t.Helper()
-	if cfg.Store == nil {
-		cfg.Store = storemem.New()
-	}
 	if cfg.Durable == nil {
 		fs, err := durable.NewFileStore(t.TempDir())
 		require.NoError(t, err)
@@ -142,8 +138,8 @@ func TestMemoryRequiresNamespace(t *testing.T) {
 func TestNewValidatesConfig(t *testing.T) {
 	for name, cfg := range map[string]Config{
 		"缺少存储":   {},
-		"索引缺少嵌入": {Store: storemem.New(), Index: NewMemoryIndex()},
-		"嵌入缺少索引": {Store: storemem.New(), Embedder: bigramEmbedder{}},
+		"索引缺少嵌入": {Index: NewMemoryIndex()},
+		"嵌入缺少索引": {Embedder: bigramEmbedder{}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := New(cfg)
@@ -253,7 +249,7 @@ func TestPurgeAndReindex(t *testing.T) {
 	// 换嵌入模型：v1 写入的键不被 v2 采用，Reindex(false) 补写 v2 的键并删除 v1 的键。
 	x2 := NewMemoryIndex()
 	require.NoError(t, x2.Upsert(ctx, recordSpace.namespace([]string{"u"}, initialScope), indexKey{r.ID, r.Incarnation, r.ContentRev, modelTag("v1")}.String(), mustEmbed(t, "咖啡")))
-	m2 := newMemory(t, Config{Store: m.cfg.Store, Durable: m.cfg.Durable, Index: x2, Embedder: bigramEmbedder{}, EmbedModel: "v2"})
+	m2 := newMemory(t, Config{Durable: m.cfg.Durable, Index: x2, Embedder: bigramEmbedder{}, EmbedModel: "v2"})
 	hits, err := m2.vectorHits(ctx, []string{"u"}, initialScope, stateOf(t, m2), Query{Text: "咖啡"})
 	require.NoError(t, err)
 	require.Empty(t, hits, "其他模型写入的键不被采用")

@@ -16,7 +16,6 @@ import (
 	"github.com/kart-io/goagent/core/durable"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/memory"
-	storemem "github.com/kart-io/goagent/store/memory"
 )
 
 // Run 对 newPair 返回的两个实例运行全部用例；每个用例调用一次 newPair，两个实例须共享同一后端、初始为空且实现 durable.Scoped。
@@ -37,16 +36,15 @@ func Run(t *testing.T, newPair func(t *testing.T) (a, b durable.Store)) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			sa, sb := newPair(t)
-			jobs := storemem.New()
 			ctx := memory.WithNamespace(context.Background(), "t1", "alice")
-			c.run(t, ctx, newMemory(t, jobs, sa), newMemory(t, jobs, sb))
+			c.run(t, ctx, newMemory(t, sa), newMemory(t, sb))
 		})
 	}
 }
 
-func newMemory(t *testing.T, jobs *storemem.Store, st durable.Store) *memory.Memory {
+func newMemory(t *testing.T, st durable.Store) *memory.Memory {
 	t.Helper()
-	m, err := memory.New(memory.Config{Store: jobs, Durable: st, RollbackWindow: time.Hour})
+	m, err := memory.New(memory.Config{Durable: st, RollbackWindow: time.Hour})
 	require.NoError(t, err)
 	return m
 }

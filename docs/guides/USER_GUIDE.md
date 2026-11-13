@@ -156,13 +156,13 @@ agent, err := builder.NewSimpleBuilder(client).
 
 ```go
 mem, err := memory.New(memory.Config{
-    Store:    storemem.New(),          // 任意 store.Store
+    Durable:  fs,                      // durable.NewFileStore(dir) 等实现了 durable.Scoped 的存储
     Index:    memory.NewMemoryIndex(), // 可选；与 Embedder 同时提供时启用向量召回
     Embedder: embedClient,             // llm.EmbeddingClient
     Model:    extractClient,           // Worker 抽取、整理与反思用的模型
     Sessions: sessions,                // 与 WithSessionLog 相同
 })
-go mem.Run(ctx, nil) // 异步处理每轮结束登记的抽取任务
+go mem.Run(ctx, nil) // 异步处理每轮结束登记的抽取任务；不运行 Worker 时须运行 mem.RunMaintenance
 
 agent, err := builder.NewSimpleBuilder(client).
     WithSessionLog(sessions).

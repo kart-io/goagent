@@ -17,43 +17,16 @@ import (
 	"github.com/kart-io/goagent/llm"
 )
 
-// Enqueue 登记一轮的抽取任务；同一 Key 已登记时不做任何事。Builder 在轮次结束（含中止）时调用。
-func (m *Memory) Enqueue(ctx context.Context, j Job) error {
-	if j.Key == "" || j.Session == "" || j.From <= 0 || j.To < j.From {
-		return agentErrors.Newf(agentErrors.CodeInvalidInput, "抽取任务需要 Key、会话与合法的序号区间").WithComponent("memory").WithOperation("enqueue")
-	}
-	if err := validNamespace(j.Namespace); err != nil {
-		return err
-	}
-	// 没有作用域的任务来自 G0 的绑定，可能跨越了 Purge；作用域不是当前的说明这一轮跨越了 Purge。
-	// 两者都丢弃并返回 nil：已完成轮次的回放会再次登记，不能报错（设计 4.3、4.5）。
-	if j.Scope == "" {
-		m.droppedJobs.Add(1)
-		return nil
-	}
-	meta, err := m.loadMeta(ctx, j.Namespace)
-	if err != nil {
-		return err
-	}
-	if meta.Current != j.Scope {
-		m.droppedJobs.Add(1)
-		return nil
-	}
-	if _, ok, err := getJob(ctx, m.cfg.Store, j.Key); err != nil || ok {
-		return err
-	}
-	j.Namespace = slices.Clone(j.Namespace)
-	j.Status, j.Attempts, j.Error, j.CreatedAt = JobPending, 0, "", m.now()
-	return putJob(ctx, m.cfg.Store, j)
+// workerID 是 Worker 的互斥锁与心跳快照（根作用域）：先于其他所有锁获取。
+const workerID = "memory/worker"
+
+// workerBeat 是 Worker 的心跳：每处理完一个任务保存一次，失去锁（如 pgstore 租约被接管）时保存返回 ErrLeaseLost。
+type workerBeat struct {
+	At time.Time `json:"at"`
 }
 
-// Job 返回一个任务的当前状态。
-func (m *Memory) Job(ctx context.Context, key string) (Job, bool, error) {
-	return getJob(ctx, m.cfg.Store, key)
-}
-
-// Run 循环处理待处理的任务，直到 ctx 结束。同一任务存储只应运行一个 Worker：任务的领取没有互斥。
-// 单个任务的失败记入任务并按 JobAttempts 重试；读取任务列表失败时调用 onError（可为 nil）后等待下一轮。
+// Run 循环执行 Worker 轮次（ProcessPending），直到 ctx 结束。多个实例共用存储时由 memory/worker 锁互斥，同一时刻只有一个在处理。
+// 单个任务的失败记入任务并按 JobAttempts 重试；轮次的错误（维护失败、失去锁等）调用 onError（可为 nil）后等待下一轮。
 func (m *Memory) Run(ctx context.Context, onError func(error)) error {
 	timer := time.NewTimer(0)
 	defer timer.Stop()
@@ -68,58 +41,105 @@ func (m *Memory) Run(ctx context.Context, onError func(error)) error {
 			onError(err)
 		}
 		wait := constants.DefaultMemoryWorkerInterval
-		if n > 0 {
+		if n > 0 && err == nil {
 			wait = 0
 		}
 		timer.Reset(wait)
 	}
 }
 
-// ProcessPending 依次处理当前全部待处理任务，返回处理的任务数；任务自身的失败记入任务，不作为返回错误。
+// ProcessPending 执行一轮 Worker（设计 4.3）：持 memory/worker 锁，先 Maintain，再按 queue 分片中的登记逐个作用域处理待处理的任务，
+// 返回处理的任务数。任务自身的失败记入任务，不作为返回错误；每个任务之后保存心跳，失去锁时结束本轮并返回 ErrLeaseLost。
+// 没有待处理任务的登记在 state 锁内移除。
 func (m *Memory) ProcessPending(ctx context.Context) (int, error) {
 	if m.cfg.Model == nil || m.cfg.Sessions == nil {
 		return 0, agentErrors.Newf(agentErrors.CodeInvalidConfig, "抽取需要 Model 与 Sessions").WithComponent("memory").WithOperation("process")
 	}
-	cleanupErr := m.cleanupRetiring(ctx)
-	jobs, err := pendingJobs(ctx, m.cfg.Store)
+	unlock, err := m.cfg.Durable.Lock(ctx, workerID)
 	if err != nil {
-		return 0, errors.Join(cleanupErr, err)
+		return 0, err
 	}
+	defer func() { _ = unlock() }()
+	errs := []error{m.Maintain(ctx)}
+	entries, err := m.queued(ctx)
+	if err != nil {
+		return 0, errors.Join(append(errs, err)...)
+	}
+	n := 0
+	for _, e := range entries {
+		if e.Reason != queueJobs {
+			continue
+		}
+		k, err := m.processEntry(ctx, e)
+		n += k
+		if err == nil {
+			continue
+		}
+		if ctx.Err() != nil || errors.Is(err, errRoundOver) {
+			return n, errors.Join(append(errs, err)...)
+		}
+		errs = append(errs, err)
+	}
+	return n, errors.Join(errs...)
+}
+
+// errRoundOver 包装心跳失败：无法确认仍持有 Worker 锁，结束本轮，以免与接管者重复调用模型。
+var errRoundOver = errors.New("长期记忆 Worker 心跳失败，结束本轮")
+
+// processEntry 处理一条任务登记：作用域已不是当前的直接移除登记；否则依次处理待处理的任务，最后在 state 锁内移除已没有任务的登记。
+func (m *Memory) processEntry(ctx context.Context, e queueEntry) (int, error) {
+	scope, s, err := m.read(ctx, e.Namespace)
+	if err != nil {
+		return 0, err
+	}
+	if scope != e.Scope {
+		return 0, m.unregister(ctx, e)
+	}
+	jobs := pendingJobs(s)
 	for i, j := range jobs {
 		if err := ctx.Err(); err != nil {
 			return i, err
 		}
-		err := m.processInScope(ctx, j)
-		switch {
-		case err == nil:
-			j.Status, j.Error = JobDone, ""
-		case errors.Is(err, errScopeChanged):
-			m.droppedJobs.Add(1)
-			j.Status, j.Error = JobDropped, err.Error()
-		case ctx.Err() != nil:
-			return i, ctx.Err()
-		default:
-			j.Attempts++
-			j.Error = err.Error()
-			if j.Attempts >= m.cfg.JobAttempts {
-				j.Status = JobFailed
-			}
+		var result error = errJobStale
+		if s.LastForgetSeq <= j.TurnSeq {
+			result = m.processInScope(ctx, j)
 		}
-		if err := putJob(ctx, m.cfg.Store, j); err != nil {
+		if result != nil && ctx.Err() != nil {
+			return i, ctx.Err()
+		}
+		if errors.Is(result, errScopeChanged) || errors.Is(result, errJobStale) {
+			m.droppedJobs.Add(1)
+		}
+		if err := m.finishJob(ctx, j, result); err != nil {
 			return i, err
 		}
+		snap, err := encodeSnapshot(workerID, workerBeat{At: m.now()})
+		if err == nil {
+			err = m.cfg.Durable.Save(context.WithoutCancel(ctx), workerID, snap)
+		}
+		if err != nil {
+			return i + 1, fmt.Errorf("%w：%w", errRoundOver, err)
+		}
 	}
-	return len(jobs), cleanupErr
+	return len(jobs), m.settle(ctx, e, hasPending)
 }
 
-type jobScopeKey struct{}
+// jobKey 是上下文中正在处理的任务的绑定：mutate 在锁内据此核对作用域与 LastForgetSeq。
+type jobKey struct{}
+
+type jobBinding struct {
+	scope   string
+	turnSeq int64
+}
+
+func jobOf(ctx context.Context) (jobBinding, bool) {
+	b, ok := ctx.Value(jobKey{}).(jobBinding)
+	return b, ok
+}
 
 // processInScope 只在任务的作用域仍是当前作用域时处理任务；处理期间的每次读取都核对作用域（checkJobScope），
-// 任务跨越 Purge 时返回 errScopeChanged，不会写入新作用域。
+// 每次写入在锁内核对作用域与 LastForgetSeq（mutate），任务跨越 Purge 或遗忘时返回 errScopeChanged 或 errJobStale。
 func (m *Memory) processInScope(ctx context.Context, j Job) error {
-	if j.Scope == "" {
-		return errScopeChanged
-	}
 	meta, err := m.loadMeta(ctx, j.Namespace)
 	if err != nil {
 		return err
@@ -127,13 +147,13 @@ func (m *Memory) processInScope(ctx context.Context, j Job) error {
 	if meta.Current != j.Scope {
 		return errScopeChanged
 	}
-	return m.process(context.WithValue(WithNamespace(ctx, j.Namespace...), jobScopeKey{}, j.Scope), j)
+	return m.process(context.WithValue(WithNamespace(ctx, j.Namespace...), jobKey{}, jobBinding{scope: j.Scope, turnSeq: j.TurnSeq}), j)
 }
 
 // jobScope 返回 Worker 正在处理的任务的作用域；不在任务中时为空（不限定作用域）。
 func jobScope(ctx context.Context) string {
-	s, _ := ctx.Value(jobScopeKey{}).(string)
-	return s
+	b, _ := jobOf(ctx)
+	return b.scope
 }
 
 // checkJobScope 核对读取得到的作用域是正在处理的任务的作用域。

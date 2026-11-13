@@ -14,7 +14,6 @@ import (
 
 	"github.com/kart-io/goagent/core/durable"
 	agentErrors "github.com/kart-io/goagent/errors"
-	storemem "github.com/kart-io/goagent/store/memory"
 )
 
 // storeHooks 在 hookStore 的每次调用前后插入回调，制造确定的交错与崩溃。
@@ -136,7 +135,7 @@ func (s *hookStore) PruneRemoved(ctx context.Context, olderThan time.Duration) e
 
 func durableMemory(t *testing.T, st durable.Store, cfg Config) *Memory {
 	t.Helper()
-	cfg.Store, cfg.Durable = storemem.New(), st
+	cfg.Durable = st
 	return newMemory(t, cfg)
 }
 
@@ -403,7 +402,7 @@ func TestStateSnapshotVersionAndConfig(t *testing.T) {
 
 	fs, err := durable.NewFileStore(t.TempDir())
 	require.NoError(t, err)
-	_, err = New(Config{Store: storemem.New(), Durable: notScoped{fs}})
+	_, err = New(Config{Durable: notScoped{fs}})
 	require.Error(t, err, "Durable 须实现 Scoped")
 }
 

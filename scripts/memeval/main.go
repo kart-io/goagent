@@ -19,7 +19,6 @@ import (
 	"github.com/kart-io/goagent/llm/providers"
 	"github.com/kart-io/goagent/memory"
 	"github.com/kart-io/goagent/memory/memeval"
-	"github.com/kart-io/goagent/store"
 )
 
 // clients 是可用的提供商；API Key 与地址从各自的环境变量读取（如 DEEPSEEK_API_KEY、SILICONFLOW_API_KEY）。
@@ -114,9 +113,9 @@ func run(ctx context.Context, o options) error {
 		return err
 	}
 	defer func() { _ = os.RemoveAll(dir) }()
-	configure := func(graph, communities bool) func(store.Store, session.Store) memory.Config {
-		return func(st store.Store, sessions session.Store) memory.Config {
-			cfg := memory.Config{Store: st, Sessions: sessions, Model: model, Graph: graph, Communities: communities}
+	configure := func(graph, communities bool) func(session.Store) memory.Config {
+		return func(sessions session.Store) memory.Config {
+			cfg := memory.Config{Sessions: sessions, Model: model, Graph: graph, Communities: communities}
 			if embedder != nil {
 				cfg.Index, cfg.Embedder, cfg.EmbedModel = memory.NewMemoryIndex(), embedder, embedModel
 			}

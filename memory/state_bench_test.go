@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand/v2"
 	"os"
@@ -21,6 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // textGen 生成 n 个字的中文文本。
@@ -364,8 +366,10 @@ func TestStateBenchmarkEviction(t *testing.T) {
 }
 
 // TestStateStress10k 是 10k 条记录的压力测试，需要 MEMORY_STATE_STRESS=1（MEMORY_STATE_STRESS_SECONDS 指定时长，默认 20 秒）。
-// 两个实例共用存储，共 4 个写者（新增与删除）与 4 个读者，缓存容量只够一份 state。结束时校验：
-// 每次成功的新增都在、成功删除的不再出现（无丢失更新）、Seq 等于成功写入次数、读者看到的 Seq 单调不减、缓存占用不超过容量、不变量成立。
+// 两个实例共用存储，共 4 个写者（新增与删除）与 4 个读者，缓存容量只够一份 state。提交时注入故障（设计 11 节 I8）：
+// 写入前返回 ErrLeaseLost（mutate 重做；概率取 25%，使重做耗尽的确定失败也会出现）、写入前返回其他错误（结果未知、实际未写入）、写入后返回错误（按 CommitID 判为成功）。
+// 结束时校验：每次成功的新增都在、成功删除的不再出现（无丢失更新）、确定失败的写入没有生效、Seq 等于成功写入次数、
+// 读者看到的 Seq 单调不减、缓存占用不超过容量、不变量成立。Purge 的故障由 scope_test.go 的逐步崩溃测试覆盖。
 func TestStateStress10k(t *testing.T) {
 	if os.Getenv("MEMORY_STATE_STRESS") != "1" {
 		t.Skip("设置 MEMORY_STATE_STRESS=1 运行 10k 压力测试")
@@ -384,17 +388,47 @@ func TestStateStress10k(t *testing.T) {
 	_, size, err := encodeState(&base)
 	require.NoError(t, err)
 	capacity := int(float64(size) * heapFactor * 3 / 2) // 只容得下一份
-	ms2 := []*Memory{benchMemory(t, dir, capacity), benchMemory(t, dir, capacity)}
+	fs, err := durable.NewFileStore(dir)
+	require.NoError(t, err)
+	hs := &hookStore{inner: fs, root: fs, h: &storeHooks{held: map[string]int{}}}
+	errUnknown := errors.New("注入：连接在提交前断开")
+	var leaseLost, unknown, lateFail atomic.Int64
+	hs.h.before = func(op, scope, id string) error {
+		if op != "save" || scope == "" || id != headID {
+			return nil
+		}
+		switch n := rand.IntN(100); {
+		case n < 25:
+			leaseLost.Add(1)
+			return agentErrors.ErrLeaseLost
+		case n < 27:
+			unknown.Add(1)
+			return errUnknown
+		}
+		return nil
+	}
+	hs.h.afterSave = func(scope, id string) error {
+		if scope != "" && id == headID && rand.IntN(100) < 2 {
+			lateFail.Add(1)
+			return errUnknown
+		}
+		return nil
+	}
+	ms2 := []*Memory{durableMemory(t, hs, Config{MaxStateBytes: 1 << 30, StateCacheBytes: capacity, Graph: true}),
+		durableMemory(t, hs, Config{MaxStateBytes: 1 << 30, StateCacheBytes: capacity, Graph: true})}
 
 	var (
 		mu      sync.Mutex
 		added   = map[string]bool{}
 		deleted = map[string]bool{}
-		commits atomic.Int64
-		reads   atomic.Int64
-		failed  atomic.Int64
-		writeLs []time.Duration
-		readLs  []time.Duration
+		// 确定失败（mutateRetries 次尝试都租约丢失）的新增与删除：都不应生效。
+		notAdded   = map[string]bool{}
+		notDeleted = map[string]bool{}
+		commits    atomic.Int64
+		reads      atomic.Int64
+		failed     atomic.Int64
+		writeLs    []time.Duration
+		readLs     []time.Duration
 	)
 	deadline := time.Now().Add(duration)
 	var wg sync.WaitGroup
@@ -417,6 +451,19 @@ func TestStateStress10k(t *testing.T) {
 				t0 := time.Now()
 				_, err := m.mutate(ctx, benchNS, "", fn, opts...)
 				d := time.Since(t0)
+				if errors.Is(err, agentErrors.ErrLeaseLost) {
+					mu.Lock()
+					if j%3 == 2 {
+						notDeleted[id] = true
+					} else {
+						notAdded[id] = true
+					}
+					mu.Unlock()
+					continue
+				}
+				if errors.Is(err, agentErrors.ErrMemoryCommitUnknown) {
+					continue // 结果未知：不断言是否生效
+				}
 				if !assert.NoError(t, err) {
 					failed.Add(1)
 					return
@@ -465,6 +512,12 @@ func TestStateStress10k(t *testing.T) {
 	for id := range deleted {
 		require.NotContains(t, s.Records, id, "已删除的记录 %s 复活", id)
 	}
+	for id := range notAdded {
+		require.NotContains(t, s.Records, id, "确定失败的新增 %s 生效了", id)
+	}
+	for id := range notDeleted {
+		require.Contains(t, s.Records, id, "确定失败的删除 %s 生效了", id)
+	}
 	checkInvariants(t, benchNS, s)
 	for _, m := range ms2 {
 		_, used := m.cache.snapshot()
@@ -473,4 +526,5 @@ func TestStateStress10k(t *testing.T) {
 	t.Logf("10k 压力：%v，提交 %d 次（新增 %d、删除 %d），读取 %d 次；写 p50 %s p95 %s，读 p50 %s p95 %s；最终 %d 条记录、Seq %d",
 		duration, commits.Load(), len(added), len(deleted), reads.Load(), ms(percentile(writeLs, 0.5)), ms(percentile(writeLs, 0.95)),
 		ms(percentile(readLs, 0.5)), ms(percentile(readLs, 0.95)), len(s.Records), s.Seq)
+	t.Logf("注入故障：租约丢失 %d 次（其中确定失败 %d 次），提交前断开 %d 次，写入后报错 %d 次", leaseLost.Load(), len(notAdded)+len(notDeleted), unknown.Load(), lateFail.Load())
 }

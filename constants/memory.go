@@ -51,6 +51,10 @@ const (
 	DefaultMemoryEraseWithin = 5 * time.Minute
 	// DefaultMemoryRetireGrace 是 Purge 后旧作用域留在 retiring 中的时长，到期再清理一次索引以清掉迟到的向量。
 	DefaultMemoryRetireGrace = 10 * time.Minute
+	// DefaultMemoryReindexEvery 是维护每隔多少轮对有登记的命名空间执行一次 Reindex(false)、回收一次过期墓碑。
+	DefaultMemoryReindexEvery = 30
+	// MemoryTombstoneRetention 是已删除作用域的墓碑保留时长：须远大于迟到写入的重试窗口（提交时限、RetireGrace）。
+	MemoryTombstoneRetention = 24 * time.Hour
 	// DefaultMemoryStateCacheBytes 是进程内 state 解码缓存的容量（按估计的堆占用计）。
 	DefaultMemoryStateCacheBytes = 64 << 20
 	// ToolMemorySearch、ToolMemorySave、ToolMemoryForget 是长期记忆工具名。

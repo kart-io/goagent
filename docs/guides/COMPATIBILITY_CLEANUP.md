@@ -65,7 +65,7 @@ b.WithSessionLog(sessions).WithSessionID(id).WithCompaction(compaction)
 mgr.AddCase(ctx, &interfaces.Case{Title: t, Problem: p, Solution: s})
 cases, _ := mgr.SearchSimilarCases(ctx, query, 5)
 // 新
-mem, err := memory.New(memory.Config{Store: storemem.New(), Index: memory.NewMemoryIndex(), Embedder: embedClient})
+mem, err := memory.New(memory.Config{Durable: fs, Index: memory.NewMemoryIndex(), Embedder: embedClient})
 ctx = memory.WithNamespace(ctx, tenantID, userID)
 _, err = mem.Remember(ctx, memory.Record{Kind: memory.KindSkill, Content: p + "：" + s, Importance: 0.7})
 found, err := mem.Recall(ctx, memory.Query{Text: query, K: 5})

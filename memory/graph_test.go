@@ -14,7 +14,6 @@ import (
 
 	"github.com/kart-io/goagent/core/session"
 	"github.com/kart-io/goagent/llm"
-	storemem "github.com/kart-io/goagent/store/memory"
 )
 
 // graphMemory 按用户输入返回预设的关系抽取结果。
@@ -28,7 +27,6 @@ func graphMemory(t *testing.T, replies map[string]string) (*Memory, session.Stor
 func graphMemoryWith(t *testing.T, cfg Config, replies map[string]string) (*Memory, session.Store, *time.Time, *scriptedModel) {
 	t.Helper()
 	sessions := session.NewMemoryStore()
-	st := storemem.New()
 	model := &scriptedModel{reply: func(system, user string) (string, error) {
 		require.Contains(t, system, "relations", "启用图谱时抽取提示词要求输出关系")
 		require.Contains(t, user, "对话时间：", "抽取时给出对话时间，用于换算相对时间")
@@ -39,7 +37,7 @@ func graphMemoryWith(t *testing.T, cfg Config, replies map[string]string) (*Memo
 		}
 		return "", errors.New("没有预设的回复")
 	}}
-	cfg.Store, cfg.Graph, cfg.Model, cfg.Sessions, cfg.Retention = st, true, model, sessions, Retention{InvalidRetention: time.Hour}
+	cfg.Graph, cfg.Model, cfg.Sessions, cfg.Retention = true, model, sessions, Retention{InvalidRetention: time.Hour}
 	m := newMemory(t, cfg)
 	now := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
 	m.now = func() time.Time { return now }
@@ -104,8 +102,7 @@ func TestGraphTemporalRelations(t *testing.T) {
 }
 
 func TestRelatedMultiHopAndRecallBlock(t *testing.T) {
-	st := storemem.New()
-	m := newMemory(t, Config{Store: st, Graph: true, GraphHops: 2})
+	m := newMemory(t, Config{Graph: true, GraphHops: 2})
 	g := graphOf(m)
 	ctx := WithNamespace(context.Background(), "u")
 	ns := []string{"u"}
@@ -265,8 +262,7 @@ func TestEntityResolutionByModel(t *testing.T) {
 
 // 迟到的旧事实：已有排他关系比新写入的关系生效更晚时，新关系写入即失效并指向已有关系，已有关系不受影响。
 func TestApplyRelationsLateFact(t *testing.T) {
-	st := storemem.New()
-	m := newMemory(t, Config{Store: st, Graph: true})
+	m := newMemory(t, Config{Graph: true})
 	ctx := WithNamespace(context.Background(), "u")
 	march, jan := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	live := func(city string) relation {
@@ -289,8 +285,7 @@ func TestApplyRelationsLateFact(t *testing.T) {
 
 // PageRank 以种子为中心排序：查询 Acme 时与 Acme 相连的关系排在"用户"的其他关系之前。
 func TestRelatedPageRankRanking(t *testing.T) {
-	st := storemem.New()
-	m := newMemory(t, Config{Store: st, Graph: true})
+	m := newMemory(t, Config{Graph: true})
 	g := graphOf(m)
 	ctx := WithNamespace(context.Background(), "u")
 	ns := []string{"u"}
@@ -334,8 +329,7 @@ func TestPersonalizedPageRankSumsToOne(t *testing.T) {
 
 // 回退取代旧关系的轮次时，旧关系恢复有效。
 func TestRewoundRestoresSupersededEdge(t *testing.T) {
-	st := storemem.New()
-	m := newMemory(t, Config{Store: st, Graph: true})
+	m := newMemory(t, Config{Graph: true})
 	ctx := WithNamespace(context.Background(), "u")
 	day := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	live := func(city string) []relation {
@@ -358,8 +352,7 @@ func TestRewoundRestoresSupersededEdge(t *testing.T) {
 
 // Retrieve 返回实际写入召回块的记录与关系，Sessions 汇总二者的来源会话。
 func TestRetrieveReportsSources(t *testing.T) {
-	st := storemem.New()
-	m := newMemory(t, Config{Store: st, Graph: true})
+	m := newMemory(t, Config{Graph: true})
 	g := graphOf(m)
 	ctx := WithNamespace(context.Background(), "u")
 	ns := []string{"u"}
@@ -381,7 +374,7 @@ func TestRetrieveReportsSources(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, got.Text, block)
 
-	small := newMemory(t, Config{Store: st, Durable: m.cfg.Durable, Graph: true, RecallRunes: 10})
+	small := newMemory(t, Config{Durable: m.cfg.Durable, Graph: true, RecallRunes: 10})
 	got, err = small.Retrieve(ctx, "Acme 的工作")
 	require.NoError(t, err)
 	require.Empty(t, got.Records, "超出预算未写入块的记录不报告")

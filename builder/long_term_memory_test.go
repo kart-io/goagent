@@ -19,7 +19,6 @@ import (
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/memory"
-	storemem "github.com/kart-io/goagent/store/memory"
 	"github.com/kart-io/goagent/tools"
 )
 
@@ -27,7 +26,7 @@ func newTestMemory(t *testing.T, ctx context.Context, contents ...string) (*memo
 	t.Helper()
 	fs, err := durable.NewFileStore(t.TempDir())
 	require.NoError(t, err)
-	m, err := memory.New(memory.Config{Store: storemem.New(), Durable: fs})
+	m, err := memory.New(memory.Config{Durable: fs})
 	require.NoError(t, err)
 	var ids []string
 	for _, c := range contents {

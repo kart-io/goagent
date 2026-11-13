@@ -13,7 +13,7 @@ import (
 	"github.com/kart-io/goagent/llm"
 )
 
-// hookIndex 在 Upsert 与 Clear 之前调用 before，用于制造交错与崩溃。
+// hookIndex 在 Upsert、Delete 与 Clear 之前调用 before，用于制造交错与崩溃。
 type hookIndex struct {
 	Index
 	before func(op string, ns []string, id string) error
@@ -24,6 +24,13 @@ func (h hookIndex) Upsert(ctx context.Context, ns []string, id string, v []float
 		return err
 	}
 	return h.Index.Upsert(ctx, ns, id, v)
+}
+
+func (h hookIndex) Delete(ctx context.Context, ns []string, id string) error {
+	if err := h.before("delete", ns, id); err != nil {
+		return err
+	}
+	return h.Index.Delete(ctx, ns, id)
 }
 
 func (h hookIndex) Clear(ctx context.Context, ns []string) error {

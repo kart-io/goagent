@@ -20,15 +20,16 @@
 ## 使用
 
 ```go
+fs, err := durable.NewFileStore(dir) // 须实现 durable.Scoped；PostgreSQL 见 goagent-contrib/durable/pgstore
 mem, err := memory.New(memory.Config{
-    Store:    storemem.New(),          // 任意 store.Store，正文以 JSON 文本存于 {"memory","records",命名空间...}
+    Durable:  fs,                      // 记录、图谱与抽取任务都存于其中
     Index:    memory.NewMemoryIndex(), // 可选，与 Embedder 同时提供
     Embedder: embedClient,             // llm.EmbeddingClient
     EmbedModel: "text-embedding-3-small",
     Model:    extractClient,           // 抽取、整理、教训与反思
     Sessions: sessions,                // 与 WithSessionLog 相同的会话日志
 })
-go mem.Run(ctx, func(err error) { log.Println(err) })
+go mem.Run(ctx, func(err error) { log.Println(err) }) // 不运行 Worker 时改用 go mem.RunMaintenance(ctx, time.Minute, onError)
 
 agent, err := builder.NewSimpleBuilder(client).
     WithSessionLog(sessions).
@@ -48,12 +49,14 @@ agent, err := builder.NewSimpleBuilder(client).
 | `Rewound(ctx, session, to)` | 宿主在 `session.Rewind` 后调用：任一来源被退回的记录与关系失效，只被它们取代的旧记录与旧关系恢复 |
 | `Reindex(ctx, force)` | 为缺少当前版本向量的记录与实体补写向量（`force` 时全部重写），删除过期的键；换嵌入模型或升级后运行，不写记录 |
 | `Prune(ctx)` | 按 `Retention` 删除过期、超出容量与超过保留期的失效记录；Worker 每个任务后执行 |
-| `Enqueue` / `Run` / `ProcessPending` | 抽取任务；Builder 在每轮结束登记 |
+| `Enqueue` / `Job` / `DroppedJobs` | 登记抽取任务（Builder 在每轮结束登记）/ 查询任务状态 / 因作用域切换或 state 超限而丢弃的任务数 |
+| `Run` / `ProcessPending` | Worker：每轮先执行 `Maintain`，再处理各命名空间的待处理任务；多个实例同时运行时由锁保证同一时刻只有一个在处理 |
+| `Maintain(ctx)` / `RunMaintenance(ctx, interval, onError)` | 不需要模型的维护：完成 Purge 遗留的旧作用域清理、Forget 崩溃后残留的向量清理，每 `ReindexEvery` 轮补写向量并清理过期的删除标记。**不运行 Worker 的部署必须运行 `RunMaintenance`** |
 | `Tools()` | `memory_search`、`memory_save`、`memory_forget` |
 
 ## 时序知识图谱
 
-`Config.Graph`（如 `memory.NewGraph(st)`）非空时，抽取同时输出实体与关系。
+`Config.Graph` 为真时，抽取同时输出实体与关系。
 
 - 实体：先按类型与规范化名称（含别名）精确匹配；匹配不到的取名称向量或字符对相似的同类型实体为候选，由模型一次判定是否为同一对象，判为重复时名称并入别名。翻译名需要配置 `Embedder` 才能找到。
 - 关系：带有效期，生效时间是对话发生的时间。`exclusive` 的谓词（如"住在"）出现新客体时旧边失效并指向新边，迟到的旧事实写入即失效；`Edge.ValidAt(t)` 查询某一时刻成立的关系。
@@ -71,15 +74,17 @@ agent, err := builder.NewSimpleBuilder(client).
 3. 抽取模型输出候选；每个候选与同类最相似的 `ReconcileCandidates` 条旧记录比较，判定新增、合并更新、否定旧记录或忽略。
 4. 未参与反思的情景累计重要度达到 `ReflectionThreshold` 时提炼结论。
 5. 记录 ID 由任务 Key 与序号决定，崩溃后重做同一任务覆盖而不是重复；失败按 `JobAttempts` 重试后标记 failed。
+6. 任务存于命名空间的 state，与登记它的作用域绑定：Purge 之后旧作用域的任务随之消失，处理中的任务写回时发现作用域已切换即丢弃；登记之后该命名空间发生过 Forget 的任务也丢弃，不让遗忘的内容被重新抽取。丢弃计入 `DroppedJobs`。
 
-同一任务存储只应运行一个 Worker。召回会读取命名空间内的全部记录，命名空间较大时用 `Retention.MaxRecords` 限制规模。
+多个 Worker 可以同时运行，同一时刻只有持锁的一个在处理。召回会读取命名空间内的全部记录，命名空间较大时用 `Retention.MaxRecords` 限制规模。
 
 ## 代码结构
 
 ```text
 memory/
 ├── record.go   # Record、Kind、命名空间
-├── store.go    # RecordStore 与抽取任务的存储
+├── job.go      # 抽取任务、待处理队列、Maintain
+├── durable_state.go # 命名空间 state 的读写（mutate/read）
 ├── index.go    # Index 接口与进程内 MemoryIndex
 ├── memory.go   # Memory：写入、召回、遗忘、保留
 ├── worker.go   # 抽取、整理、教训与反思

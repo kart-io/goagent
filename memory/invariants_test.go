@@ -11,7 +11,7 @@ import (
 )
 
 // checkInvariants 校验一个作用域的 state 满足 docs/design/MEMORY_G1_STORAGE.md 3.3 中的不变量 1～4；
-// 索引的不变量 6、7 见 checkIndex，queue 相关的在 G1e 补充。测试直接写入的原始对象没有实例号（0），不参与不变量 1。
+// 索引的不变量 6、7 见 checkIndex，queue 的不变量 5 见 checkQueue。测试直接写入的原始对象没有实例号（0），不参与不变量 1。
 func checkInvariants(t *testing.T, ns []string, s state) {
 	t.Helper()
 	require.GreaterOrEqual(t, s.Seq, int64(0))
@@ -93,6 +93,28 @@ func checkIndex(t *testing.T, m *Memory, x *MemoryIndex, ns []string) {
 			}
 		}
 	}
+}
+
+// checkQueue 校验不变量 5：ns 的当前作用域有待处理任务时，queue 分片中有它的任务登记。
+func checkQueue(t *testing.T, m *Memory, ns []string) {
+	t.Helper()
+	ctx := context.Background()
+	scope, s, err := m.read(ctx, ns)
+	require.NoError(t, err)
+	if len(pendingJobs(s)) == 0 {
+		return
+	}
+	entries, err := m.queued(ctx)
+	require.NoError(t, err)
+	require.Contains(t, entries, queueEntry{Namespace: ns, Scope: scope, Reason: queueJobs}, "有待处理任务的作用域有登记")
+}
+
+// requireQueueEmpty 断言 queue 分片中没有任何登记。
+func requireQueueEmpty(t *testing.T, m *Memory) {
+	t.Helper()
+	entries, err := m.queued(context.Background())
+	require.NoError(t, err)
+	require.Empty(t, entries)
 }
 
 func TestCheckInvariantsDetectsViolations(t *testing.T) {

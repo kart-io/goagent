@@ -22,7 +22,6 @@ import (
 	"github.com/kart-io/goagent/core/session"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
-	"github.com/kart-io/goagent/store"
 )
 
 // Weights 是召回打分 α·相关性 + β·新近性 + γ·重要性 的系数（Generative Agents）。
@@ -42,10 +41,9 @@ type Retention struct {
 	InvalidRetention time.Duration `json:"invalid_retention"`
 }
 
-// Config 配置长期记忆。Store 与 Durable 必填：记录与图谱存于 Durable，Store 只保存抽取任务（G1e 移入 Durable）。
+// Config 配置长期记忆。Durable 必填：记录、图谱与抽取任务都存于其中。
 // Index 与 Embedder 同时提供时启用向量召回，否则只按文本重合召回；Model 与 Sessions 同时提供时 Worker 才能抽取。
 type Config struct {
-	Store store.Store `json:"-"`
 	// Durable 是记忆数据的持久存储，须同时实现 durable.Scoped（作用域用于 Purge 的整体删除）。
 	Durable durable.Store `json:"-"`
 	// MaxStateBytes 是一个命名空间的数据（state）解压后的上限，默认 8 MiB；删除类操作不受限制。存储设置不进入 Identity。
@@ -59,9 +57,11 @@ type Config struct {
 	RollbackWindow time.Duration `json:"-"`
 	// RetireGrace 是 Purge 后旧作用域留在 retiring 中的时长，默认 10 分钟：到期时再清理一次索引，清掉提交后才写入的迟到向量。
 	// 须大于 Index 单次写入的超时与重试时间之和。
-	RetireGrace time.Duration       `json:"-"`
-	Index       Index               `json:"-"`
-	Embedder    llm.EmbeddingClient `json:"-"`
+	RetireGrace time.Duration `json:"-"`
+	// ReindexEvery 是维护（Maintain）每隔多少轮对有登记的命名空间执行一次 Reindex(false)，默认 30。
+	ReindexEvery int                 `json:"-"`
+	Index        Index               `json:"-"`
+	Embedder     llm.EmbeddingClient `json:"-"`
 	// EmbedModel 标识嵌入模型，其摘要是索引键的一部分；改变后用 Reindex 重建索引。
 	EmbedModel string        `json:"embed_model"`
 	Model      llm.Client    `json:"-"`
@@ -109,15 +109,20 @@ type Memory struct {
 	eraseWithin time.Duration
 	// compactErrors 计数提交成功之后失败的压缩；compactions 计数成功切换的基础快照。
 	compactErrors, compactions atomic.Int64
-	// droppedJobs 计数跨越 Purge（或没有作用域）而丢弃的任务。
+	// droppedJobs 计数没有处理就丢弃的任务（跨越 Purge、没有作用域、state 超限或登记后发生了遗忘）。
 	droppedJobs atomic.Int64
+	// maintenance 计数 Maintain 的轮次，用于每 ReindexEvery 轮的定期维护。
+	maintenance atomic.Int64
 	access      accessBatcher
 }
 
 // New 校验并补齐配置。
+//
+// 不运行 Worker（Run 或 ProcessPending）的部署必须运行 RunMaintenance（或定期调用 Maintain）：
+// 否则 Purge 中断后的旧作用域与 Forget 之后残留的向量不会被清理。
 func New(cfg Config) (*Memory, error) {
-	if cfg.Store == nil || cfg.Durable == nil || (cfg.Index == nil) != (cfg.Embedder == nil) || (cfg.Communities && !cfg.Graph) {
-		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "长期记忆需要 Store 与 Durable；Index 与 Embedder 须同时提供；Communities 需要 Graph").WithComponent("memory").WithOperation("new")
+	if cfg.Durable == nil || (cfg.Index == nil) != (cfg.Embedder == nil) || (cfg.Communities && !cfg.Graph) {
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "长期记忆需要 Durable；Index 与 Embedder 须同时提供；Communities 需要 Graph").WithComponent("memory").WithOperation("new")
 	}
 	if _, ok := cfg.Durable.(durable.Scoped); !ok {
 		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "长期记忆的 Durable 须实现 durable.Scoped").WithComponent("memory").WithOperation("new")
@@ -141,6 +146,7 @@ func New(cfg Config) (*Memory, error) {
 		{cfg.StateCacheBytes == 0, func() { cfg.StateCacheBytes = constants.DefaultMemoryStateCacheBytes }},
 		{cfg.EraseWithin <= 0, func() { cfg.EraseWithin = constants.DefaultMemoryEraseWithin }},
 		{cfg.RetireGrace <= 0, func() { cfg.RetireGrace = constants.DefaultMemoryRetireGrace }},
+		{cfg.ReindexEvery <= 0, func() { cfg.ReindexEvery = constants.DefaultMemoryReindexEvery }},
 	}
 	for _, d := range defaults {
 		if d.zero {
@@ -529,6 +535,16 @@ func (m *Memory) Forget(ctx context.Context, id string) error {
 			return err
 		}
 	}
+	opts := []mutateOption{shrinking()}
+	if m.cfg.Index != nil {
+		// 提交之后、删除向量之前崩溃会留下残留：先登记"索引待清理"，由维护执行 Reindex(false)（设计 4.3）。
+		opts = append(opts, withBeforeSave(func(ctx context.Context, t *tx) error {
+			if r, ok := t.Records.Get(id); !ok || r.InvalidReason == ReasonForgotten {
+				return nil
+			}
+			return m.register(ctx, queueEntry{Namespace: ns, Scope: t.scope, Reason: queueIndex})
+		}))
+	}
 	var old Record
 	_, err = m.mutate(ctx, ns, scope, func(t *tx) error {
 		r, ok := t.Records.Get(id)
@@ -541,7 +557,7 @@ func (m *Memory) Forget(ctx context.Context, id string) error {
 		old = r
 		forget(t, r, now)
 		return nil
-	}, shrinking())
+	}, opts...)
 	if err != nil || old.ID == "" {
 		return err
 	}
@@ -632,7 +648,7 @@ func (m *Memory) Rewound(ctx context.Context, sessionID string, to int64) error 
 	return errors.Join(append(errs, m.writeIndex(ctx, ns, scope, recordSpace, keysOf(restored), vecs))...)
 }
 
-// Prune 按 Retention 在一次提交中整理当前命名空间：删除超过保留期的失效记录与关系，TTL 到期与超出容量的记录改为 expired。
+// Prune 按 Retention 在一次提交中整理当前命名空间：删除超过保留期的失效记录、关系与结束的任务，TTL 到期与超出容量的记录改为 expired。
 // 之后删除过期记录的向量，清理访问记录与超过 RollbackWindow 的删除日志条目。
 func (m *Memory) Prune(ctx context.Context) error {
 	ns, err := requireNamespace(ctx)
@@ -675,6 +691,19 @@ func (m *Memory) Prune(ctx context.Context) error {
 		for _, id := range t.Edges.Keys() {
 			if e, _ := t.Edges.Get(id); !e.Valid() && now.Sub(e.InvalidAt) > m.cfg.Retention.InvalidRetention {
 				t.Edges.Delete(id)
+				changed = true
+			}
+		}
+		// 结束的任务按同一保留期删除：完成的只留有键与完成时间，失败与丢弃的按登记时间计。
+		for _, key := range t.DoneJobs.Keys() {
+			if at, _ := t.DoneJobs.Get(key); now.Sub(at) > m.cfg.Retention.InvalidRetention {
+				t.DoneJobs.Delete(key)
+				changed = true
+			}
+		}
+		for _, key := range t.Jobs.Keys() {
+			if j, _ := t.Jobs.Get(key); j.Status != JobPending && now.Sub(j.CreatedAt) > m.cfg.Retention.InvalidRetention {
+				t.Jobs.Delete(key)
 				changed = true
 			}
 		}

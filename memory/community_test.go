@@ -7,18 +7,15 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-
-	storemem "github.com/kart-io/goagent/store/memory"
 )
 
 func TestCommunitiesRequireGraph(t *testing.T) {
-	_, err := New(Config{Store: storemem.New(), Communities: true})
+	_, err := New(Config{Communities: true})
 	require.Error(t, err)
 }
 
 // 社区按标签传播划分；成员与关系不变时不重写摘要；关系变化只重写所在社区；退回的关系使社区摘要被删除，下一次刷新重建。
 func TestCommunitiesLifecycle(t *testing.T) {
-	st := storemem.New()
 	var summarized []string
 	model := &scriptedModel{reply: func(system, user string) (string, error) {
 		require.Equal(t, communityPrompt, system)
@@ -29,7 +26,7 @@ func TestCommunitiesLifecycle(t *testing.T) {
 		}
 		return `{"name":"` + name + `","summary":"摘要：` + strings.ReplaceAll(strings.TrimSpace(user), "\n", "；") + `"}`, nil
 	}}
-	m := newMemory(t, Config{Store: st, Graph: true, Model: model, Communities: true})
+	m := newMemory(t, Config{Graph: true, Model: model, Communities: true})
 	g := graphOf(m)
 	ctx := WithNamespace(context.Background(), "u")
 	ns := []string{"u"}
