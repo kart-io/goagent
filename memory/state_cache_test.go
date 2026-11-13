@@ -35,6 +35,7 @@ func fullState() state {
 	s.Communities["c1"] = Community{ID: "c1", Namespace: testNS, Members: []string{"e1"}, Name: "茶", Summary: "饮品", UpdatedAt: now}
 	s.Jobs["s1/2"] = Job{Key: "s1/2", Namespace: testNS, Session: "s1", From: 2, To: 3, Status: JobStatus("pending"), CreatedAt: now}
 	s.DoneJobs["s1/1"] = now
+	s.Finished["s1/1"] = JobStats{Records: 2, Relations: 1, Dropped: 1, Conflicts: 1}
 	mk := rewindMarker{Session: "s1", To: 4, Seq: 6, At: now}
 	s.Markers[mk.key()] = mk
 	return s

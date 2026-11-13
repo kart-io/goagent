@@ -30,7 +30,7 @@ const (
 
 // Job 是一轮结束后登记的抽取任务，存于所属命名空间当前作用域的 state。Key 为"会话/turn/start 序号"，重复登记不产生新任务。
 // Aborted 的轮次只提炼教训（reflection），其余轮次抽取事实与情景。
-// 完成的任务只保留键与完成时间（Job 返回的 Status 为 JobDone）；失败与丢弃的任务保留错误信息，二者都由 Prune 在保留期后删除。
+// 完成的任务只保留键、完成时间与统计（Job 返回的 Status 为 JobDone）；失败与丢弃的任务保留错误信息，二者都由 Prune 在保留期后删除。
 type Job struct {
 	Key       string   `json:"key"`
 	Namespace []string `json:"namespace"`
@@ -46,6 +46,16 @@ type Job struct {
 	Attempts  int       `json:"attempts,omitzero"`
 	Error     string    `json:"error,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
+	// Stats 是完成时的写入统计，只有 JobDone 的任务有。
+	Stats JobStats `json:"stats,omitzero"`
+}
+
+// JobStats 是一个任务完成时的写入统计，与任务完成在同一次提交中写入。
+type JobStats struct {
+	Records   int `json:"records,omitzero"`   // 写入的记录
+	Relations int `json:"relations,omitzero"` // 写入的关系派生
+	Dropped   int `json:"dropped,omitzero"`   // 缺少合法 from 而丢弃的关系
+	Conflicts int `json:"conflicts,omitzero"` // 复核不成立、降级为新增的整理决定
 }
 
 func (j Job) source() Source { return Source{Session: j.Session, From: j.From, To: j.To, Job: j.Key} }
@@ -138,7 +148,7 @@ func (m *Memory) Job(ctx context.Context, key string) (Job, bool, error) {
 		return j, true, nil
 	}
 	if _, ok := s.DoneJobs[key]; ok {
-		return Job{Key: key, Namespace: slices.Clone(ns), Status: JobDone}, true, nil
+		return Job{Key: key, Namespace: slices.Clone(ns), Status: JobDone, Stats: s.Finished[key]}, true, nil
 	}
 	return Job{}, false, nil
 }

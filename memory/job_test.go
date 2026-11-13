@@ -346,8 +346,8 @@ func TestEnqueueCrashAfterRegister(t *testing.T) {
 	requireQueueEmpty(t, m)
 }
 
-// 设计 7.2：Worker 两次写入之间崩溃，重做同一任务时记录 ID 确定，不产生重复。
-func TestWorkerRedoAfterCrashBetweenMutates(t *testing.T) {
+// 任务的提交之前崩溃（G2 设计第 6 节）：任务仍待处理，重做从头计划，记录 ID 确定，不产生重复。
+func TestWorkerRedoAfterCrashBeforeCommit(t *testing.T) {
 	st := newHookStore(t)
 	sessions := session.NewMemoryStore()
 	model := &lockedModel{reply: func(system, user string) (string, error) {
@@ -362,11 +362,11 @@ func TestWorkerRedoAfterCrashBetweenMutates(t *testing.T) {
 	from, to := appendTurn(t, sessions, "s", false, llm.UserMessage("我住在上海，养了一只猫"), llm.Message{Role: "assistant", Content: "好的"})
 	require.NoError(t, m.Enqueue(ctx, Job{Key: "k", Namespace: ns, Session: "s", From: from, To: to, Scope: initialScope}))
 
-	// 第一条记录提交之后，第二条记录的提交崩溃。
+	// 任务的唯一一次提交崩溃：什么都没有写入，任务仍待处理。
 	errCrash := errors.New("模拟崩溃")
 	var saves atomic.Int32
 	st.h.before = func(op, scope, id string) error {
-		if op == "save" && scope != "" && id == headID && saves.Add(1) == 2 {
+		if op == "save" && scope != "" && id == headID && saves.Add(1) == 1 {
 			return errCrash
 		}
 		return nil
@@ -379,7 +379,7 @@ func TestWorkerRedoAfterCrashBetweenMutates(t *testing.T) {
 	require.Equal(t, 1, j.Attempts)
 	_, s, err := m.read(ctx, ns)
 	require.NoError(t, err)
-	require.Len(t, s.Records, 1)
+	require.Empty(t, s.Records)
 
 	st.h.before = nil
 	_, err = m.ProcessPending(ctx)

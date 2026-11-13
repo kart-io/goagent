@@ -16,6 +16,35 @@ import (
 	"github.com/kart-io/goagent/llm"
 )
 
+// applyRelations 在一次提交中写入关系：refs 是 From 下标到依据记录的映射，不经抽取与整理。供直接构造图谱的测试使用。
+func (m *Memory) applyRelations(ctx context.Context, j Job, at time.Time, rels []relation, refs map[int]RecordRef) error {
+	n := 0
+	for i := range refs {
+		n = max(n, i+1)
+	}
+	kept, _, ends, err := m.planRelations(ctx, j, rels, n)
+	if err != nil || len(kept) == 0 {
+		return err
+	}
+	scope, err := m.currentScope(ctx, j.Namespace)
+	if err != nil {
+		return err
+	}
+	now := m.now()
+	var w relationWrites
+	var c cascaded
+	if _, err := m.mutate(ctx, j.Namespace, scope, func(t *tx) error {
+		w = writeRelations(t, j, at, now, kept, refs, ends.effective(t), ends.vectors)
+		c = cascade(t, now)
+		c.touch(w.touched...)
+		m.syncGraph(t, c)
+		return nil
+	}); err != nil {
+		return err
+	}
+	return errors.Join(m.writeIndex(ctx, j.Namespace, scope, entitySpace, w.created, w.vecs), m.indexAfter(ctx, j.Namespace, scope, c))
+}
+
 // graphMemory 按用户输入返回预设的关系抽取结果。
 func graphMemory(t *testing.T, replies map[string]string) (*Memory, session.Store, *time.Time) {
 	t.Helper()

@@ -58,6 +58,12 @@ type stateChunk struct {
 	Jobs        []Job
 	DoneJobs    []doneJob
 	Markers     []rewindMarker
+	Finished    []finishedJob
+}
+
+type finishedJob struct {
+	Key   string
+	Stats JobStats
 }
 
 type doneJob struct {
@@ -133,6 +139,10 @@ func (s *state) split() []stateChunk {
 	for _, v := range s.Markers {
 		c := next()
 		c.Markers = append(c.Markers, v)
+	}
+	for k, v := range s.Finished {
+		c := next()
+		c.Finished = append(c.Finished, finishedJob{Key: k, Stats: v})
 	}
 	return chunks
 }
@@ -275,6 +285,13 @@ func decodeState(blob stateBlob, ns []string) (state, error) {
 		},
 		func() {
 			s.Markers = mergeChunks(chunks, func(c *stateChunk) []rewindMarker { return c.Markers }, rewindMarker.key)
+		},
+		func() {
+			finished := mergeChunks(chunks, func(c *stateChunk) []finishedJob { return c.Finished }, func(v finishedJob) string { return v.Key })
+			s.Finished = make(map[string]JobStats, len(finished))
+			for k, v := range finished {
+				s.Finished[k] = v.Stats
+			}
 		},
 	}
 	for _, merge := range merges {

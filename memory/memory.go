@@ -777,10 +777,11 @@ func (m *Memory) Prune(ctx context.Context) error {
 				changed = true
 			}
 		}
-		// 结束的任务按同一保留期删除：完成的只留有键与完成时间，失败与丢弃的按登记时间计。
+		// 结束的任务按同一保留期删除：完成的只留有键、完成时间与统计，失败与丢弃的按登记时间计。
 		for _, key := range t.DoneJobs.Keys() {
 			if at, _ := t.DoneJobs.Get(key); now.Sub(at) > m.cfg.Retention.InvalidRetention {
 				t.DoneJobs.Delete(key)
+				t.Finished.Delete(key)
 				changed = true
 			}
 		}

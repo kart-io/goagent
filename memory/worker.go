@@ -1,11 +1,13 @@
 package memory
 
 import (
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"errors"
 	"fmt"
 	"maps"
+	"math"
 	"slices"
 	"strings"
 	"time"
@@ -118,7 +120,18 @@ func (m *Memory) processEntry(ctx context.Context, e queueEntry) (int, error) {
 			return i + 1, fmt.Errorf("%w：%w", errRoundOver, err)
 		}
 	}
-	return len(jobs), m.settle(ctx, e, hasPending)
+	var errs []error
+	if len(jobs) > 0 {
+		errs = append(errs, m.maintainNamespace(ctx, e.Namespace))
+	}
+	return len(jobs), errors.Join(append(errs, m.settle(ctx, e, hasPending))...)
+}
+
+// maintainNamespace 是处理完一批任务之后的命名空间维护：社区、反思与 Prune（设计 6.4）。它们不属于某个任务，
+// 只绑定命名空间、不受任务核对，各自按依据的版本复核；错误作为 Worker 本轮的错误返回，不写入任务。
+func (m *Memory) maintainNamespace(ctx context.Context, ns []string) error {
+	ctx = WithNamespace(ctx, ns...)
+	return errors.Join(m.syncCommunities(ctx, ns), m.reflect(ctx), m.Prune(ctx))
 }
 
 // jobKey 是上下文中正在处理的任务的绑定：mutate 在锁内据此核对作用域、LastForgetSeq 与回退标记。
@@ -163,7 +176,8 @@ func checkJobScope(ctx context.Context, scope string) error {
 	return nil
 }
 
-// process 抽取一轮的记忆。记录 ID 由任务 Key 与序号决定，崩溃后重做同一任务覆盖而不是重复。
+// process 抽取一轮的记忆：锁外读取对话、抽取、整理与实体判重得到计划，再在一次提交中复核并写入，任务同时完成（设计第 6 节）。
+// 记录 ID 由任务 Key 与下标决定；提交之前崩溃时任务仍待处理，重做从头计划，不会重复写入。
 func (m *Memory) process(ctx context.Context, j Job) error {
 	events, err := m.cfg.Sessions.Read(ctx, j.Session, 0)
 	if err != nil {
@@ -178,10 +192,20 @@ func (m *Memory) process(ctx context.Context, j Job) error {
 		// 轮次已被退回，或只有注入的召回块。
 		return nil
 	}
-	at := turnTime(events, j.From, m.now())
+	p := &jobPlan{at: turnTime(events, j.From, m.now()), vectors: map[string][]float32{}}
 	if j.Aborted {
-		return m.learnFromFailure(ctx, j, at, transcript)
+		err = m.planLesson(ctx, j, transcript, p)
+	} else {
+		err = m.planTurn(ctx, j, transcript, p)
 	}
+	if err != nil {
+		return err
+	}
+	return m.commitJob(ctx, j, p)
+}
+
+// planTurn 抽取一轮的记忆与关系并整理成计划。
+func (m *Memory) planTurn(ctx context.Context, j Job, transcript string, p *jobPlan) error {
 	var out struct {
 		Memories  []candidate `json:"memories"`
 		Relations []relation  `json:"relations"`
@@ -190,31 +214,16 @@ func (m *Memory) process(ctx context.Context, j Job) error {
 	if m.cfg.Graph {
 		prompt += relationPrompt
 	}
-	dated := "对话时间：" + at.Format(time.DateTime) + "\n" + transcript
+	dated := "对话时间：" + p.at.Format(time.DateTime) + "\n" + transcript
 	if err := m.chatJSON(ctx, strings.TrimSpace(prompt+"\n"+m.cfg.Instructions), dated, &out); err != nil {
 		return err
 	}
-	// refs 把抽取结果的下标映射到整理后的记录版本，关系据此（from）得到派生依据。
-	refs := map[int]RecordRef{}
-	for i, c := range out.Memories {
-		ref, ok, err := m.reconcile(ctx, j, at, i, c)
-		if err != nil {
-			return err
-		}
-		if ok {
-			refs[i] = ref
-		}
-	}
-	if err := m.applyRelations(ctx, j, at, out.Relations, refs); err != nil {
+	if err := m.planMemories(ctx, j, out.Memories, p); err != nil {
 		return err
 	}
-	if err := m.syncCommunities(ctx, j.Namespace); err != nil {
-		return err
-	}
-	if err := m.reflect(ctx); err != nil {
-		return err
-	}
-	return m.Prune(ctx)
+	var err error
+	p.relations, p.dropped, p.ends, err = m.planRelations(ctx, j, out.Relations, len(out.Memories))
+	return err
 }
 
 type candidate struct {
@@ -243,120 +252,423 @@ const reconcilePrompt = "你维护长期记忆。给定一条新信息和若干�
 	"add：新信息与已有记忆无关；update：新信息补充或更新了某条已有记忆，给出合并后的内容；" +
 	"invalidate：新信息与某条已有记忆矛盾，以新信息为准；noop：已有记忆已经包含新信息。只输出 JSON。"
 
-// reconcile 把候选与相似的已有记忆比较（Mem0）：新增、合并更新或否定旧记忆。被更新或否定的旧记忆标记失效并指向新记录（Zep），不删除。
-// 返回候选整理后对应的记录版本：新写入的记录，或 noop 时已包含它的那条记录；候选被跳过时 ok 为假。
-// 合并更新时新记录的 MergedFrom 是展示给模型的全部候选，派生自被合并记录的关系与实体名称在同一提交中转移到新记录。
-func (m *Memory) reconcile(ctx context.Context, j Job, at time.Time, i int, c candidate) (RecordRef, bool, error) {
-	if strings.TrimSpace(c.Content) == "" || !slices.Contains(kinds, c.Kind) {
-		return RecordRef{}, false, nil
-	}
-	c.Importance = min(max(c.Importance, 0), 1)
-	ns, err := requireNamespace(ctx)
-	if err != nil {
-		return RecordRef{}, false, err
-	}
-	similar, scope, err := m.search(ctx, ns, Query{Text: c.Content, K: m.cfg.ReconcileCandidates, Kinds: []Kind{c.Kind}})
-	if err == nil {
-		err = checkJobScope(ctx, scope)
-	}
-	if err != nil {
-		return RecordRef{}, false, err
-	}
-	decision := struct {
-		Op      string `json:"op"`
-		Target  string `json:"target"`
-		Content string `json:"content"`
-	}{Op: "add"}
-	if len(similar) > 0 {
-		var existing strings.Builder
-		for _, s := range similar {
-			fmt.Fprintf(&existing, "- id=%s：%s\n", s.ID, s.Content)
+// jobPlan 是一个任务在锁外得到的写入计划，由 commitJob 在一次提交中复核并写入。
+type jobPlan struct {
+	at        time.Time
+	decisions []decision
+	relations []relation
+	ends      resolvedEnds
+	dropped   int                  // 缺少 from 或 from 越界的关系
+	vectors   map[string][]float32 // 正文 → 向量：提交时记录的正文总是计划中出现过的某段正文
+}
+
+// 整理决定的操作。
+const (
+	opAdd        = "add"
+	opUpdate     = "update"
+	opInvalidate = "invalidate"
+	opNoop       = "noop"
+)
+
+// decision 是一个候选的整理决定（设计 6.2）。目标是已有记录（target）或本任务已计划的记录（planned，候选下标；-1 表示不是）。
+// shown 是展示给模型的已有记录的版本（召回只返回有效记录），提交时复核；shownPlanned 是展示的计划记录。
+type decision struct {
+	index        int
+	id           string
+	c            candidate
+	op           string
+	target       string
+	planned      int
+	content      string // update 合并后的正文
+	shown        []RecordRef
+	shownPlanned []int
+}
+
+// plannedRecord 是计划中、尚未提交的记录，参与后续候选的整理（任务内去重，I7）。
+type plannedRecord struct {
+	index   int
+	id      string
+	kind    Kind
+	content string
+	removed bool
+}
+
+// shownItem 是展示给模型的一条相似记忆：已有记录（ref 非空）或计划记录。
+type shownItem struct {
+	id, content string
+	relevance   float64
+	ref         *RecordRef
+	planned     int
+}
+
+// planMemories 把各候选与相似的已有记忆以及本任务已计划的记录比较（Mem0），得到整理决定：新增、合并更新、否定旧记忆或已包含。
+// 已被本任务前面的决定合并或否定的已有记录不再展示。决定的目标是计划记录时直接改写计划（设计 6.2 任务内去重）。
+func (m *Memory) planMemories(ctx context.Context, j Job, cands []candidate, p *jobPlan) error {
+	var planned []*plannedRecord
+	superseded := map[string]bool{}
+	for i, c := range cands {
+		if strings.TrimSpace(c.Content) == "" || !slices.Contains(kinds, c.Kind) {
+			continue
 		}
-		if err := m.chatJSON(ctx, reconcilePrompt, "新信息："+c.Content+"\n\n已有记忆：\n"+existing.String(), &decision); err != nil {
-			return RecordRef{}, false, err
+		c.Importance = min(max(c.Importance, 0), 1)
+		vec, err := m.vector(ctx, p, c.Content)
+		if err != nil {
+			return err
 		}
-	}
-	id := stableID(j.Key, fmt.Sprint(i))
-	var target *Record
-	for k := range similar {
-		// 重做的任务会看到上次写入的同一记录，它不能否定自己。
-		if similar[k].ID == decision.Target && decision.Target != id {
-			target = &similar[k].Record
+		similar, scope, err := m.search(ctx, j.Namespace, Query{Text: c.Content, K: m.cfg.ReconcileCandidates, Kinds: []Kind{c.Kind}})
+		if err == nil {
+			err = checkJobScope(ctx, scope)
 		}
-	}
-	content, sources := c.Content, []Source{j.source()}
-	var merged []RecordRef
-	switch decision.Op {
-	case "noop":
-		if target == nil {
-			return RecordRef{}, false, nil
+		if err != nil {
+			return err
 		}
-		return refOf(*target), true, nil
-	case "update":
-		if strings.TrimSpace(decision.Content) != "" {
-			content = decision.Content
-		}
-		if target != nil {
-			// 合并后的内容同时依据旧记录与本轮。
-			sources = append(slices.DeleteFunc(slices.Clone(target.Sources), func(s Source) bool { return s.Job == j.Key }), sources...)
-		}
-		// 模型看到了全部候选，合并出的内容可能吸收其中任一条：任一条被遗忘，合并记录随之擦除。
-		for _, s := range similar {
-			if s.ID != id {
-				merged = append(merged, refOf(s.Record))
+		shown := m.shownItems(similar, planned, superseded, c, vec, p)
+		d := decision{index: i, id: stableID(j.Key, fmt.Sprint(i)), c: c, op: opAdd, planned: -1}
+		reply := struct {
+			Op      string `json:"op"`
+			Target  string `json:"target"`
+			Content string `json:"content"`
+		}{Op: opAdd}
+		if len(shown) > 0 {
+			var existing strings.Builder
+			for _, s := range shown {
+				fmt.Fprintf(&existing, "- id=%s：%s\n", s.id, s.content)
+				if s.ref != nil {
+					d.shown = append(d.shown, *s.ref)
+				} else {
+					d.shownPlanned = append(d.shownPlanned, s.planned)
+				}
+			}
+			if err := m.chatJSON(ctx, reconcilePrompt, "新信息："+c.Content+"\n\n已有记忆：\n"+existing.String(), &reply); err != nil {
+				return err
 			}
 		}
-	case "invalidate":
-	default:
-		target = nil
+		k := slices.IndexFunc(shown, func(s shownItem) bool { return s.id == reply.Target })
+		var target *plannedRecord
+		if k >= 0 {
+			if shown[k].ref != nil {
+				d.target = shown[k].ref.ID
+			} else {
+				target = planned[slices.IndexFunc(planned, func(r *plannedRecord) bool { return r.index == shown[k].planned })]
+				d.planned = target.index
+			}
+		}
+		if k < 0 && reply.Op != opNoop {
+			reply.Op = opAdd
+		}
+		d.content = c.Content
+		switch reply.Op {
+		case opNoop:
+			if k < 0 {
+				continue // 模型指向不存在的记忆：候选跳过
+			}
+			d.op = opNoop
+		case opUpdate:
+			d.op = opUpdate
+			if strings.TrimSpace(reply.Content) != "" {
+				d.content = reply.Content
+			}
+			if _, err := m.vector(ctx, p, d.content); err != nil {
+				return err
+			}
+			if target != nil {
+				target.content = d.content
+			} else {
+				superseded[d.target] = true
+				planned = append(planned, &plannedRecord{index: i, id: d.id, kind: c.Kind, content: d.content})
+			}
+		case opInvalidate:
+			d.op = opInvalidate
+			if target != nil {
+				target.removed = true
+			} else {
+				superseded[d.target] = true
+			}
+			planned = append(planned, &plannedRecord{index: i, id: d.id, kind: c.Kind, content: c.Content})
+		default:
+			d.target, d.planned = "", -1
+			planned = append(planned, &plannedRecord{index: i, id: d.id, kind: c.Kind, content: c.Content})
+		}
+		p.decisions = append(p.decisions, d)
 	}
+	return nil
+}
+
+// shownItems 合并召回的已有记录与同类别的计划记录（相似度取向量余弦与字符对重合度的较大者，大于 0 的入选），按相关度取前 ReconcileCandidates 条；
+// 没有计划记录入选时保持召回的顺序。
+func (m *Memory) shownItems(similar []Scored, planned []*plannedRecord, superseded map[string]bool, c candidate, vec []float32, p *jobPlan) []shownItem {
+	var out []shownItem
+	for _, s := range similar {
+		if !superseded[s.ID] {
+			ref := refOf(s.Record)
+			out = append(out, shownItem{id: s.ID, content: s.Content, relevance: s.Relevance, ref: &ref, planned: -1})
+		}
+	}
+	grams, mixed := bigrams(c.Content), false
+	for _, r := range planned {
+		if r.removed || r.kind != c.Kind {
+			continue
+		}
+		if rel := max(cosine(vec, p.vectors[r.content]), overlap(grams, bigrams(r.content))); rel > 0 {
+			out, mixed = append(out, shownItem{id: r.id, content: r.content, relevance: rel, planned: r.index}), true
+		}
+	}
+	if mixed {
+		slices.SortStableFunc(out, func(a, b shownItem) int { return cmp.Compare(b.relevance, a.relevance) })
+	}
+	return out[:min(len(out), m.cfg.ReconcileCandidates)]
+}
+
+// vector 返回正文的向量并记入计划；没有配置索引时为 nil。
+func (m *Memory) vector(ctx context.Context, p *jobPlan, text string) ([]float32, error) {
+	if v, ok := p.vectors[text]; ok {
+		return v, nil
+	}
+	v, err := m.embed(ctx, text)
+	if err != nil {
+		return nil, err
+	}
+	p.vectors[text] = v
+	return v, nil
+}
+
+// cosine 是两个向量的余弦相似度；任一为空或长度不同时为 0。
+func cosine(a, b []float32) float64 {
+	if len(a) == 0 || len(a) != len(b) {
+		return 0
+	}
+	var dot, na, nb float64
+	for i := range a {
+		dot += float64(a[i]) * float64(b[i])
+		na += float64(a[i]) * float64(a[i])
+		nb += float64(b[i]) * float64(b[i])
+	}
+	if na == 0 || nb == 0 {
+		return 0
+	}
+	return dot / math.Sqrt(na*nb)
+}
+
+// pendingRecord 是提交中正在构造的计划记录。
+type pendingRecord struct {
+	r             Record
+	mergedPlanned []int
+}
+
+// jobWrites 是 commitJob 一次提交的结果，提交之后据此更新索引。
+type jobWrites struct {
+	stats      JobStats
+	records    []indexKey // 新建的记录
+	recordVecs [][]float32
+	removed    []Record // 被合并或否定的已有记录（旧版本）
+	relations  relationWrites
+	cascaded   cascaded
+}
+
+// commitJob 在一次提交中复核并写入任务的计划，同时完成任务（设计 6.3）。fn 可能重做（ErrLeaseLost），每次从头计算。
+// 任务已不是待处理时不写入；作用域、遗忘与回退的核对由 mutate 按任务绑定完成。
+func (m *Memory) commitJob(ctx context.Context, j Job, p *jobPlan) error {
 	now := m.now()
-	out, err := m.derive(ctx, ns, scope, []Record{{
-		ID: id, Kind: c.Kind, Content: content, Keywords: c.Keywords, Entities: c.Entities, ValidFrom: at,
-		Importance: c.Importance, Sources: sources, MergedFrom: merged,
-	}}, func(t *tx) ([]Record, error) {
-		if target == nil {
-			return nil, nil
+	var w jobWrites
+	_, err := m.mutate(ctx, j.Namespace, j.Scope, func(t *tx) error {
+		w = jobWrites{}
+		if cur, ok := t.Jobs.Get(j.Key); !ok || cur.Status != JobPending {
+			return errNoChange
 		}
-		// 只否定召回时看到的那个版本：期间被修改、遗忘或重建的记录不动。
-		cur, ok := t.Records.Get(target.ID)
-		if !ok || !cur.Valid() || cur.Incarnation != target.Incarnation || cur.Revision != target.Revision {
-			return nil, nil
-		}
-		t.Records.Put(cur.ID, cur.invalidated(now, ReasonSuperseded, id))
-		if decision.Op == "update" {
-			next, _ := t.Records.Get(id)
-			transferOrigins(t, refOf(cur), refOf(next))
-		}
-		return []Record{cur}, nil
+		w.stats.Dropped = p.dropped
+		entities := p.ends.effective(t)
+		refs := m.applyDecisions(t, j, p, now, &w)
+		w.relations = writeRelations(t, j, p.at, now, p.relations, refs, entities, p.ends.vectors)
+		w.stats.Relations, w.stats.Dropped = w.relations.written, w.stats.Dropped+w.relations.dropped
+		w.cascaded = cascade(t, now)
+		w.cascaded.touch(w.relations.touched...)
+		m.syncGraph(t, w.cascaded)
+		t.Jobs.Delete(j.Key)
+		t.DoneJobs.Put(j.Key, now)
+		t.Finished.Put(j.Key, w.stats)
+		return nil
 	})
-	if err != nil || len(out) == 0 {
-		return RecordRef{}, false, err
+	if err != nil {
+		return err
 	}
-	return refOf(out[0]), true, nil
+	return errors.Join(m.dropIndex(ctx, j.Namespace, j.Scope, recordSpace, keysOf(w.removed)...),
+		m.writeIndex(ctx, j.Namespace, j.Scope, recordSpace, w.records, w.recordVecs),
+		m.writeIndex(ctx, j.Namespace, j.Scope, entitySpace, w.relations.created, w.relations.vecs),
+		m.indexAfter(ctx, j.Namespace, j.Scope, w.cascaded))
+}
+
+// applyDecisions 在 tx 中复核并执行整理决定，返回候选下标到记录版本的映射（关系据此得到依据）。
+// 复核先对全部决定执行，基准是任务开始前的状态（I6）：D1 展示的已有记录中任一条已删除、失效或版本变化，D2 已有目标已被前面通过的决定采用；
+// 目标是计划记录时，该记录须仍在且正文仍是计划时的样子。不成立的决定降级为新增：正文用候选原文，来源只含本轮，不合并（复审 I3）。
+func (m *Memory) applyDecisions(t *tx, j Job, p *jobPlan, now time.Time, w *jobWrites) map[int]RecordRef {
+	d1 := make([]bool, len(p.decisions))
+	for i, d := range p.decisions {
+		d1[i] = d.op == opAdd || !slices.ContainsFunc(d.shown, func(ref RecordRef) bool {
+			cur, ok := t.Records.m[ref.ID]
+			return !ok || !cur.Valid() || refOf(cur) != ref
+		})
+	}
+	built := map[int]*pendingRecord{} // 计划记录，按创建它的候选下标
+	diverged := map[int]bool{}        // 正文已不是计划时样子的计划记录
+	owner := map[int]int{}            // 候选下标 → 它对应的计划记录
+	existing := map[int]RecordRef{}   // noop 映射到的已有记录
+	taken := map[string]bool{}
+	type supersede struct {
+		target   string
+		by       int
+		transfer bool
+	}
+	var supersedes []supersede
+	record := func(d decision, content string) *pendingRecord {
+		r := &pendingRecord{r: Record{ID: d.id, Namespace: slices.Clone(t.ns), Kind: d.c.Kind, Content: content,
+			Keywords: slices.Clone(d.c.Keywords), Entities: slices.Clone(d.c.Entities), Importance: d.c.Importance,
+			CreatedAt: now, ValidFrom: p.at, Sources: []Source{j.source()}}}
+		built[d.index], owner[d.index] = r, d.index
+		return r
+	}
+	for i, d := range p.decisions {
+		ok := d1[i]
+		switch {
+		case d.op == opAdd:
+		case d.planned >= 0:
+			ok = ok && built[d.planned] != nil && !diverged[d.planned]
+		default:
+			ok = ok && !taken[d.target]
+		}
+		if !ok {
+			w.stats.Conflicts++
+			record(d, d.c.Content)
+			if d.op == opUpdate {
+				// 后续决定看到的是合并后的正文。
+				diverged[d.index] = true
+				if d.planned >= 0 {
+					diverged[d.planned] = true
+				}
+			}
+			continue
+		}
+		switch {
+		case d.op == opAdd:
+			record(d, d.c.Content)
+		case d.op == opNoop && d.planned >= 0:
+			owner[d.index] = d.planned
+		case d.op == opNoop:
+			existing[d.index] = refOf(t.Records.m[d.target])
+		case d.op == opUpdate && d.planned >= 0:
+			r := built[d.planned]
+			r.r.Content = d.content
+			mergeInto(t, &r.r, d.shown)
+			r.mergedPlanned = append(r.mergedPlanned, slices.DeleteFunc(slices.Clone(d.shownPlanned), func(k int) bool { return k == d.planned })...)
+			owner[d.index] = d.planned
+		case d.op == opUpdate:
+			r := record(d, d.content)
+			mergeInto(t, &r.r, d.shown)
+			r.mergedPlanned = slices.Clone(d.shownPlanned)
+			taken[d.target] = true
+			supersedes = append(supersedes, supersede{d.target, d.index, true})
+		case d.op == opInvalidate && d.planned >= 0:
+			delete(built, d.planned)
+			record(d, d.c.Content)
+		default:
+			record(d, d.c.Content)
+			taken[d.target] = true
+			supersedes = append(supersedes, supersede{d.target, d.index, false})
+		}
+	}
+	// 计划记录一并创建，再补上指向计划记录的 MergedFrom（它们的版本在创建时才确定）。
+	refs := map[int]RecordRef{}
+	for _, k := range slices.Sorted(maps.Keys(built)) {
+		r := built[k].r
+		if createRecord(t, r) {
+			r, _ = t.Records.Get(r.ID)
+			w.records, w.recordVecs = append(w.records, recordKey(r)), append(w.recordVecs, p.vectors[r.Content])
+			w.stats.Records++
+		}
+		refs[k] = refOf(t.Records.m[r.ID])
+	}
+	for _, k := range slices.Sorted(maps.Keys(built)) {
+		var merged []RecordRef
+		for _, q := range built[k].mergedPlanned {
+			if ref, ok := refs[q]; ok && q != k && !slices.Contains(merged, ref) {
+				merged = append(merged, ref)
+			}
+		}
+		if len(merged) > 0 {
+			r, _ := t.Records.Get(built[k].r.ID)
+			r.MergedFrom = append(r.MergedFrom, merged...)
+			t.Records.Put(r.ID, r)
+		}
+	}
+	for _, s := range supersedes {
+		cur, _ := t.Records.Get(s.target)
+		t.Records.Put(cur.ID, cur.invalidated(now, ReasonSuperseded, built[s.by].r.ID))
+		w.removed = append(w.removed, cur)
+		if s.transfer {
+			transferOrigins(t, refOf(cur), refs[s.by])
+		}
+	}
+	out := map[int]RecordRef{}
+	for i, k := range owner {
+		if ref, ok := refs[k]; ok {
+			out[i] = ref
+		}
+	}
+	maps.Copy(out, existing)
+	return out
+}
+
+// mergeInto 把展示的已有记录并入合并记录：MergedFrom 取这些记录，Sources 取它们的来源在前、记录原有来源在后的并集，按 (Session, From, To) 去重。
+// 任一展示记录被遗忘时合并记录随之擦除，其轮次被回退时合并记录随之 rewound（复审 I4）。调用前已复核这些记录仍是展示时的版本。
+func mergeInto(t *tx, r *Record, shown []RecordRef) {
+	var sources []Source
+	add := func(s Source) {
+		if !slices.ContainsFunc(sources, func(x Source) bool { return x.Session == s.Session && x.From == s.From && x.To == s.To }) {
+			sources = append(sources, s)
+		}
+	}
+	for _, ref := range shown {
+		if !slices.Contains(r.MergedFrom, ref) {
+			r.MergedFrom = append(r.MergedFrom, ref)
+		}
+		for _, s := range t.Records.m[ref.ID].Sources {
+			add(s)
+		}
+	}
+	for _, s := range r.Sources {
+		add(s)
+	}
+	r.Sources = sources
 }
 
 // transferOrigins 为派生自 from 的关系与名称来源各追加一条指向 to 的副本，沿用原陈述、时间与轮次：
 // 合并更新不使图谱流失；原来源保留，替代者被回退、from 恢复时仍然成立。
+// 全表只读遍历 table.m，只对要修改的对象 Get。
 func transferOrigins(t *tx, from, to RecordRef) {
-	for _, id := range t.Edges.Keys() {
-		i := slices.IndexFunc(t.Edges.m[id].Derivations, func(d Derivation) bool { return d.Record == from })
-		if i < 0 {
-			continue
+	var edges, entities []string
+	for id, e := range t.Edges.m {
+		if slices.ContainsFunc(e.Derivations, func(d Derivation) bool { return d.Record == from }) {
+			edges = append(edges, id)
 		}
+	}
+	for id, e := range t.Entities.m {
+		if slices.ContainsFunc(e.Names, func(n EntityName) bool {
+			return slices.ContainsFunc(n.Origins, func(o Origin) bool { return o.Record == from })
+		}) {
+			entities = append(entities, id)
+		}
+	}
+	slices.Sort(edges)
+	slices.Sort(entities)
+	for _, id := range edges {
 		e, _ := t.Edges.Get(id)
+		i := slices.IndexFunc(e.Derivations, func(d Derivation) bool { return d.Record == from })
 		d := e.Derivations[i]
 		d.Record = to
 		e.Derivations = addDerivation(t, e.Derivations, d)
 		e.Revision++
 		t.Edges.Put(id, e)
 	}
-	for _, id := range t.Entities.Keys() {
-		if !slices.ContainsFunc(t.Entities.m[id].Names, func(n EntityName) bool {
-			return slices.ContainsFunc(n.Origins, func(o Origin) bool { return o.Record == from })
-		}) {
-			continue
-		}
+	for _, id := range entities {
 		e, _ := t.Entities.Get(id)
 		for k, n := range e.Names {
 			if i := slices.IndexFunc(n.Origins, func(o Origin) bool { return o.Record == from }); i >= 0 {
@@ -423,8 +735,8 @@ func (m *Memory) derive(ctx context.Context, ns []string, scope string, rs []Rec
 const failurePrompt = "这一轮执行失败或被中止。根据对话记录写一条以后可以避免同类失败的教训，输出 JSON：" +
 	`{"lesson":"…","keywords":["…"],"importance":0.0}。看不出原因时 lesson 为空。只输出 JSON。`
 
-// learnFromFailure 为中止的轮次写一条教训（Reflexion）。
-func (m *Memory) learnFromFailure(ctx context.Context, j Job, at time.Time, transcript string) error {
+// planLesson 为中止的轮次计划一条教训（Reflexion）：它是这个任务唯一的写入，与其他任务一样经 commitJob 提交（设计 6.5）。
+func (m *Memory) planLesson(ctx context.Context, j Job, transcript string, p *jobPlan) error {
 	var out struct {
 		Lesson     string   `json:"lesson"`
 		Keywords   []string `json:"keywords"`
@@ -433,15 +745,12 @@ func (m *Memory) learnFromFailure(ctx context.Context, j Job, at time.Time, tran
 	if err := m.chatJSON(ctx, failurePrompt, transcript, &out); err != nil || strings.TrimSpace(out.Lesson) == "" {
 		return err
 	}
-	ns, err := requireNamespace(ctx)
-	if err != nil {
+	if _, err := m.vector(ctx, p, out.Lesson); err != nil {
 		return err
 	}
-	_, err = m.derive(ctx, ns, jobScope(ctx), []Record{{
-		ID: stableID(j.Key, "lesson"), Kind: KindReflection, Content: out.Lesson, Keywords: out.Keywords, ValidFrom: at,
-		Importance: min(max(out.Importance, 0), 1), Sources: []Source{j.source()},
-	}}, nil)
-	return err
+	p.decisions = []decision{{id: stableID(j.Key, "lesson"), op: opAdd, planned: -1,
+		c: candidate{Kind: KindReflection, Content: out.Lesson, Keywords: out.Keywords, Importance: min(max(out.Importance, 0), 1)}}}
+	return nil
 }
 
 const reflectPrompt = "以下是同一用户近期的若干经历。提炼一到三条更高层的结论（如习惯、偏好、反复出现的问题），输出 JSON：" +

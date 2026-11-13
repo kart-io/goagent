@@ -68,6 +68,7 @@ type state struct {
 	Jobs            map[string]Job          `json:"jobs"`
 	DoneJobs        map[string]time.Time    `json:"done_jobs"`
 	Markers         map[string]rewindMarker `json:"markers"`
+	Finished        map[string]JobStats     `json:"finished"`
 }
 
 // init 补齐空映射，使修改函数不必判空。
@@ -92,6 +93,9 @@ func (s *state) init() {
 	}
 	if s.Markers == nil {
 		s.Markers = map[string]rewindMarker{}
+	}
+	if s.Finished == nil {
+		s.Finished = map[string]JobStats{}
 	}
 }
 
@@ -324,6 +328,7 @@ func (m *Memory) recordOp(ops map[string]opMark, key string, seq int64) map[stri
 func (s state) clone() state {
 	s.Records, s.Entities, s.Edges = maps.Clone(s.Records), maps.Clone(s.Entities), maps.Clone(s.Edges)
 	s.Communities, s.Jobs, s.DoneJobs, s.Markers = maps.Clone(s.Communities), maps.Clone(s.Jobs), maps.Clone(s.DoneJobs), maps.Clone(s.Markers)
+	s.Finished = maps.Clone(s.Finished)
 	s.init()
 	return s
 }

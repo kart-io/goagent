@@ -81,7 +81,9 @@ func randomOp(rng *rand.Rand, ns []string) op {
 		j := Job{Key: id, Session: text, Status: JobStatus("pending")}
 		norm := j
 		jobKind.normalize(&norm, ns)
-		return op{"job " + id, func(t *tx) { t.Jobs.Delete(id); t.DoneJobs.Put(id, at) }, func(s *state) { delete(s.Jobs, id); s.DoneJobs[id] = at }}
+		st := JobStats{Records: rng.IntN(5), Conflicts: rng.IntN(3)}
+		return op{"job " + id, func(t *tx) { t.Jobs.Delete(id); t.DoneJobs.Put(id, at); t.Finished.Put(id, st) },
+			func(s *state) { delete(s.Jobs, id); s.DoneJobs[id] = at; s.Finished[id] = st }}
 	case 8:
 		mk := rewindMarker{Session: text, To: rng.Int64N(100), Seq: int64(rng.IntN(40)), At: time.Unix(int64(rng.IntN(1e6)), 0).UTC()}
 		if rng.IntN(3) == 0 {
@@ -104,6 +106,7 @@ func requireMatches(t *testing.T, want, got state, msg string) {
 	require.Equal(t, want.Edges, got.Edges, "%s：关系", msg)
 	require.Equal(t, want.Jobs, got.Jobs, "%s：任务", msg)
 	require.Equal(t, want.DoneJobs, got.DoneJobs, "%s：已完成任务", msg)
+	require.Equal(t, want.Finished, got.Finished, "%s：任务统计", msg)
 	require.Equal(t, want.NextIncarnation, got.NextIncarnation, "%s：NextIncarnation", msg)
 	require.Equal(t, want.LastForgetSeq, got.LastForgetSeq, "%s：LastForgetSeq", msg)
 	require.Equal(t, want.Markers, got.Markers, "%s：回退标记", msg)

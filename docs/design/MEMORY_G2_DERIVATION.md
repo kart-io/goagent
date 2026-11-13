@@ -567,3 +567,19 @@ flowchart TB
 | 第 5 节计数 | `DroppedJobs` 只在任务真正变为 dropped 时计数：`Rewound` 置为 dropped 的、`Enqueue` 登记即 dropped 的、`finishJob` 本次置为 dropped 的 | 原先 Worker 遇到 `errJobStale` 就计数；`Rewound` 已置为 dropped 的任务若正在处理，会被计两次 |
 | 第 5 节判定 | `jobBinding` 增加 `session` 与 `to`（不是 `from`）；锁内核对与 Worker 预检共用 `jobStale` | 判定只用到 `j.To > m.To` |
 | 第 8 节测试 | 增量提交的参考模型测试中，基础快照很小，每次提交都立即压缩，读取从不经过覆盖层；标记的覆盖层还原另由 `TestMarkersPersistThroughOverlayAndCompaction` 覆盖 | 该参考模型测试对其他表的覆盖层还原同样没有覆盖，属既有缺口，未在本阶段改动 |
+
+## 16. G2d 实施记录
+
+实施时与上文不同、或上文未写明的地方：
+
+| 位置 | 实施 | 理由 |
+|---|---|---|
+| 6.3 第 6 步统计 | 统计类型导出为 `JobStats`（`Records`、`Relations`、`Dropped`、`Conflicts`），`Job()` 查询已完成任务时经 `Job.Stats` 返回；`Finished` 与 `DoneJobs` 同一次提交写入，由 `Prune` 一起删除 | 宿主与评测需要看到降级和丢弃的数量；未导出则只能读内部状态 |
+| 6.2 任务内去重 | 已被本任务前面的 update、invalidate 计划替代的已有记录，不再出现在后续候选的相似项中；计划记录只与同类别的候选比较，相似度取向量余弦与字符对重合度的较大者 | 被替代的记录在提交后无效，后续决定指向它只会在 D2 降级 |
+| 6.3 第 2 步计划目标 | 决定的目标是本任务的计划记录时，复核要求那条计划记录仍会创建（未被前面的 invalidate 去掉），且正文仍是计划时的样子；update 降级时，它在计划中改写过的那条计划记录记为正文已变，后续指向它的决定一并降级 | 后续候选看到的是合并后的正文，update 降级后实际写入的不是这段正文，依据它做的决定不再成立 |
+| 6.2 决定解析 | 模型返回的目标不在展示列表中时：noop 跳过该候选，update、invalidate 按 add 处理 | 与 G1 的 Worker 一致 |
+| 6.1 丢弃计数 | 谓词或两端名称为空的关系直接丢弃，不计入 `Dropped`；`Dropped` 只计 `from` 缺失、越界或映射不到记录的关系 | 前者是抽取格式不完整，与提交时的状态无关 |
+| 6.4 维护时机 | `syncCommunities`、`reflect`、`Prune` 在一个队列项的全部任务处理完后各运行一次，不是每个任务一次 | 它们是命名空间级的全量计算，按任务重复运行只增加加锁次数 |
+| 测试辅助 | 原 `Memory.applyRelations` 不再有生产调用方，移到 `graph_test.go` 作为测试辅助，内部走与 Worker 相同的 `planRelations`、`writeRelations`、`settle` | 级联与图谱测试需要单独写入关系 |
+| 第 8 节测试 | `Finished` 的覆盖层与基础快照还原由 `TestFinishedPersistsThroughOverlayAndCompaction` 覆盖 | 参考模型测试不经过覆盖层（第 15 节最后一行），去掉覆盖层对 `Finished` 的应用时它仍通过 |
+| 第 8 节测量 | 5k 数据集、`Graph` 开启、反思关闭，每轮 5 条记录、10 条关系，60 轮，一轮全部 head 提交的加锁时长之和，p50（基线 `6cf097ee` → G2d）：真实中文 40.5 → 3.7ms、低压缩率 41.4 → 3.7ms；p95 52.7 → 6.9ms、51.5 → 7.1ms；每轮提交次数 7.0 → 1.1 | 门槛为基线的 1.5 倍，实测约为基线的 9%；任务本身只提交一次，每轮平均多出的 0.1 次来自维护中的 `Prune` 与覆盖层压缩 |

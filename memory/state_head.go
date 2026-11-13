@@ -51,10 +51,11 @@ type overlay struct {
 	Jobs        map[string]change[Job]
 	DoneJobs    map[string]change[time.Time]
 	Markers     map[string]change[rewindMarker]
+	Finished    map[string]change[JobStats]
 }
 
 func (o overlay) items() int {
-	return len(o.Records) + len(o.Entities) + len(o.Edges) + len(o.Communities) + len(o.Jobs) + len(o.DoneJobs) + len(o.Markers)
+	return len(o.Records) + len(o.Entities) + len(o.Edges) + len(o.Communities) + len(o.Jobs) + len(o.DoneJobs) + len(o.Markers) + len(o.Finished)
 }
 
 // merge 返回 o ⊕ d（d 中的键覆盖 o）；不修改 o，o 可能与缓存共享。
@@ -62,7 +63,7 @@ func (o overlay) merge(d overlay) overlay {
 	return overlay{
 		Records: mergeMap(o.Records, d.Records), Entities: mergeMap(o.Entities, d.Entities), Edges: mergeMap(o.Edges, d.Edges),
 		Communities: mergeMap(o.Communities, d.Communities), Jobs: mergeMap(o.Jobs, d.Jobs), DoneJobs: mergeMap(o.DoneJobs, d.DoneJobs),
-		Markers: mergeMap(o.Markers, d.Markers),
+		Markers: mergeMap(o.Markers, d.Markers), Finished: mergeMap(o.Finished, d.Finished),
 	}
 }
 
@@ -83,7 +84,7 @@ func mergeMap[T any](a, b map[string]change[T]) map[string]change[T] {
 func (o overlay) after(seq int64) overlay {
 	return overlay{Records: filterSeq(o.Records, seq), Entities: filterSeq(o.Entities, seq), Edges: filterSeq(o.Edges, seq),
 		Communities: filterSeq(o.Communities, seq), Jobs: filterSeq(o.Jobs, seq), DoneJobs: filterSeq(o.DoneJobs, seq),
-		Markers: filterSeq(o.Markers, seq)}
+		Markers: filterSeq(o.Markers, seq), Finished: filterSeq(o.Finished, seq)}
 }
 
 func filterSeq[T any](m map[string]change[T], seq int64) map[string]change[T] {
@@ -98,7 +99,7 @@ func filterSeq[T any](m map[string]change[T], seq int64) map[string]change[T] {
 
 // erasing 报告覆盖层中是否有须从基础快照中擦除的变更。
 func (o overlay) erasing() bool {
-	return anyErase(o.Records) || anyErase(o.Entities) || anyErase(o.Edges) || anyErase(o.Communities) || anyErase(o.Jobs) || anyErase(o.DoneJobs) || anyErase(o.Markers)
+	return anyErase(o.Records) || anyErase(o.Entities) || anyErase(o.Edges) || anyErase(o.Communities) || anyErase(o.Jobs) || anyErase(o.DoneJobs) || anyErase(o.Markers) || anyErase(o.Finished)
 }
 
 func anyErase[T any](m map[string]change[T]) bool {
@@ -120,6 +121,7 @@ func (o overlay) apply(base state) state {
 	applyMap(s.Jobs, o.Jobs)
 	applyMap(s.DoneJobs, o.DoneJobs)
 	applyMap(s.Markers, o.Markers)
+	applyMap(s.Finished, o.Finished)
 	return s
 }
 
@@ -143,6 +145,7 @@ func (o overlay) withNamespace(ns []string) overlay {
 		Jobs:        mapValues(o.Jobs, func(v *Job) { v.Namespace = ns }),
 		DoneJobs:    o.DoneJobs,
 		Markers:     o.Markers,
+		Finished:    o.Finished,
 	}
 }
 
@@ -190,7 +193,7 @@ func decodeOverlay(h head, ns []string) (overlay, error) {
 	if o.items() != h.OverlayItems {
 		return overlay{}, badFraming("覆盖层的项数与 head 不符")
 	}
-	for _, seqs := range [][]int64{seqsOf(o.Records), seqsOf(o.Entities), seqsOf(o.Edges), seqsOf(o.Communities), seqsOf(o.Jobs), seqsOf(o.DoneJobs), seqsOf(o.Markers)} {
+	for _, seqs := range [][]int64{seqsOf(o.Records), seqsOf(o.Entities), seqsOf(o.Edges), seqsOf(o.Communities), seqsOf(o.Jobs), seqsOf(o.DoneJobs), seqsOf(o.Markers), seqsOf(o.Finished)} {
 		for _, seq := range seqs {
 			if seq <= h.Base.Seq || seq > h.Seq {
 				return overlay{}, badFraming("覆盖层的变更不在 (base.seq, head.seq] 之内")
