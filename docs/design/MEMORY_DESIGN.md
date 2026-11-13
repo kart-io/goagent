@@ -60,7 +60,7 @@ type CompactionConfig struct {
 - 摘要提示把旧摘要与新消息一起交给模型（递归摘要），旧摘要不截断；摘要长度要求不超过 `KeepTokens/2`。
 - 摘要失败时退化为省略说明，旧摘要原样接在后面；取消与预算耗尽时返回错误。摘要调用计入根预算。
 - 请求因超出上下文失败时只保留最近一次交互强制压缩一次后重试（非持久运行）。
-- `Identity()` 由配置计算，作为 PreStep 身份进入持久日志。
+- `Identity()` 由配置计算，写入召回快照；配置改变后，旧快照恢复时召回为空。
 - 改写由 `Recorder.Sync` 记为带 `Surface` 的 `history/rewrite`：原文仍在日志中，Rewind 撤销摘要，回放不再调用模型。
 
 ### 2.3 `recall_history` 工具
@@ -117,7 +117,7 @@ type Record struct {
 ### 3.3 召回
 
 - 混合检索：相关性取向量相似度与字符对重合（对中英文都适用）的较大者，与新近性（半衰期 `HalfLife`）、重要性按 `Weights` 加权（Generative Agents）；命名空间与类别在排序前过滤。召回会读取命名空间内全部记录，规模由 `Retention.MaxRecords` 限制。
-- 自动召回：每轮第一次请求前的 PreStep 以本轮输入为查询，召回块以 `[相关长期记忆]` 开头，作为用户消息插在本轮输入之前（不作为 system），并说明只作参考、与用户当前所说冲突时以用户为准；持久运行回放 PreStep 结果，不再召回。
+- 自动召回：每轮第一次请求前以本轮输入为查询生成引用快照，召回块以 `[相关长期记忆]` 开头，组装每步请求时作为用户消息插在运行上下文之前（不作为 system），并说明只作参考、与用户当前所说冲突时以用户为准。召回块不进入会话历史与持久日志，持久日志只记引用，模型请求的意图用引用子集的摘要代替正文，见 [长期记忆的删除优先](MEMORY_GOVERNANCE.md) 第 2 节。
 - 工具：`memory_search`、`memory_save`、`memory_forget`，作用域为当前命名空间。
 - 核心记忆：`Pinned` 的记录（MemGPT Working Context）每轮都放在召回块最前，与召回结果共用 `RecallRunes`。
 
@@ -166,3 +166,7 @@ type Record struct {
 - 统计：`-repeats K` 重复整个评测，每轮重新抽取记忆。准确率以题目为单位（各轮先平均），给出 95% Wilson 区间与各轮范围；两两比较按同一轮同一道题配对，用双侧精确符号检验给出 p 值，p ≥ 0.05 的差异不作结论。
 - 运行：`go run ./scripts/memeval -format locomo -data locomo10.json -sample 200 -repeats 2 -concurrency 8 -chat deepseek -judge openai:gpt-4o-2024-08-06 -embed gemini:gemini-embedding-001 -out docs/evaluation/<日期>-memory/locomo.md -results locomo.jsonl`。长期记忆方案每个会话有一次抽取和若干次整理调用，`longmemeval_s` 每题约 50 个会话，先用较小的 `-sample` 估算费用。官方判定模型是 gpt-4o-2024-08-06，换用其他模型时结果只在本仓库内可比。
 - 结果存入 `docs/evaluation/`。[2026-11-10-memory](../evaluation/2026-11-10-memory/README.md)：LOCOMO 分层抽样 200 题 × 2 轮、gpt-4o 判定，准确率 recent 25.0%、memory 46.5%、graph 53.0%、community 54.8%；memory 显著好于 recent，graph 显著好于 memory（p = 0.013），community 与 graph 无显著差异（p = 0.48），因此社区摘要默认关闭。
+
+## 7. 后续：可管理性
+
+删除优先（召回正文不进入会话日志与持久日志、基于 `durable.Store` 的命名空间快照与作用域代际、派生数据级联失效）见[长期记忆的删除优先](MEMORY_GOVERNANCE.md)；管理端分页列表与私有加共享的多命名空间读取见[长期记忆的管理功能](MEMORY_ADMIN.md)。

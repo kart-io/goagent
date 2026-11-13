@@ -3,7 +3,9 @@ package memory
 import (
 	"context"
 	"fmt"
+	"maps"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -11,7 +13,7 @@ import (
 	agentErrors "github.com/kart-io/goagent/errors"
 )
 
-// Community 是一组紧密相关的实体及其摘要（Zep 社区子图）。Fingerprint 由成员与涉及成员的有效关系决定，二者不变时不重写摘要。
+// Community 是一组紧密相关的实体及其摘要（Zep 社区子图）。Fingerprint 由成员、涉及成员的有效关系（含陈述版本）与其两端的名称决定，均不变时不重写摘要。
 type Community struct {
 	ID          string    `json:"id"`
 	Namespace   []string  `json:"namespace"`
@@ -20,6 +22,9 @@ type Community struct {
 	Summary     string    `json:"summary"`
 	Fingerprint string    `json:"fingerprint"`
 	UpdatedAt   time.Time `json:"updated_at"`
+	Incarnation int64     `json:"incarnation,omitzero"`
+	Revision    int64     `json:"revision,omitzero"`
+	ContentRev  int64     `json:"content_rev,omitzero"`
 }
 
 const communityPrompt = "以下是知识图谱中一组相互关联的实体之间的关系，每行一条，带生效日期。" +
@@ -29,7 +34,7 @@ const communityPrompt = "以下是知识图谱中一组相互关联的实体之�
 // detectCommunities 用标签传播（Graphiti）在有效关系上划分社区，返回成员不少于 CommunityMinSize 的社区（不含摘要）。
 // 有效关系数超过 CommunityHubDegree 的枢纽实体（如"用户"）不参与传播，否则所有实体都会被它连成一个社区；
 // 枢纽与社区成员之间的关系仍计入该社区的事实。
-func detectCommunities(ns []string, edges []Edge) []Community {
+func detectCommunities(ns []string, edges []Edge, names map[string]string) []Community {
 	degree := map[string]int{}
 	for _, e := range edges {
 		if e.Valid() {
@@ -90,17 +95,25 @@ func detectCommunities(ns []string, edges []Edge) []Community {
 	for _, id := range nodes {
 		groups[label[id]] = append(groups[label[id]], id)
 	}
+	facts := map[string][]Edge{}
+	for _, e := range edges {
+		if !e.Valid() {
+			continue
+		}
+		ls, lo := label[e.Subject], label[e.Object]
+		facts[ls] = append(facts[ls], e)
+		if lo != ls {
+			facts[lo] = append(facts[lo], e)
+		}
+	}
 	var out []Community
-	for _, members := range groups {
+	for l, members := range groups {
 		if len(members) < constants.DefaultMemoryCommunityMinSize {
 			continue
 		}
 		slices.Sort(members)
-		facts := communityEdges(members, edges)
 		parts := append(slices.Clone(members), "\x01")
-		for _, e := range facts {
-			parts = append(parts, e.ID)
-		}
+		parts = append(parts, communityBasis(facts[l], names)...)
 		out = append(out, Community{ID: stableID(append(append(slices.Clone(ns), "community"), members...)...), Namespace: ns, Members: members, Fingerprint: stableID(parts...)})
 	}
 	slices.SortFunc(out, func(a, b Community) int { return strings.Compare(a.ID, b.ID) })
@@ -109,78 +122,170 @@ func detectCommunities(ns []string, edges []Edge) []Community {
 
 // communityEdges 返回至少一端在 members 中的有效关系，按 ID 排序。
 func communityEdges(members []string, edges []Edge) []Edge {
+	in := make(map[string]bool, len(members))
+	for _, id := range members {
+		in[id] = true
+	}
 	var out []Edge
 	for _, e := range edges {
-		if e.Valid() && (slices.Contains(members, e.Subject) || slices.Contains(members, e.Object)) {
+		if e.Valid() && (in[e.Subject] || in[e.Object]) {
 			out = append(out, e)
 		}
 	}
 	return out
 }
 
+// communityBasis 返回摘要依据的版本：关系的 ID 与陈述版本、两端实体的 ID 与名称，排序后可直接作为指纹的组成部分。
+func communityBasis(facts []Edge, names map[string]string) []string {
+	var out []string
+	for _, e := range facts {
+		out = append(out, "edge\x00"+e.ID+"\x00"+strconv.FormatInt(e.ContentRev, 10))
+		for _, id := range []string{e.Subject, e.Object} {
+			if k := "entity\x00" + id + "\x00" + names[id]; !slices.Contains(out, k) {
+				out = append(out, k)
+			}
+		}
+	}
+	slices.Sort(out)
+	return out
+}
+
 // RefreshCommunities 重新划分当前命名空间的社区：成员与关系都没变的社区保留原摘要，其余由模型重写摘要，消失的社区被删除。
 // 启用 Config.Communities 时 Worker 在每个任务后调用。
 func (m *Memory) RefreshCommunities(ctx context.Context) error {
-	if m.cfg.Graph == nil || m.cfg.Model == nil {
+	if !m.cfg.Graph || m.cfg.Model == nil {
 		return agentErrors.Newf(agentErrors.CodeInvalidConfig, "社区摘要需要 Graph 与 Model").WithComponent("memory").WithOperation("refresh_communities")
 	}
 	ns, err := requireNamespace(ctx)
 	if err != nil {
 		return err
 	}
-	return m.syncCommunities(ctx, ns, true)
+	return m.syncCommunities(ctx, ns)
 }
 
-// syncCommunities 使已存的社区与当前的关系一致。summarize 为假时只删除过期的社区（不调用模型），由下一次刷新重建。
-func (m *Memory) syncCommunities(ctx context.Context, ns []string, summarize bool) error {
-	if m.cfg.Graph == nil || !m.cfg.Communities {
+// summarized 是锁外写好摘要的社区，以及写摘要时依据的关系与实体版本（实例号, ContentRev），键见 versionKey。
+type summarized struct {
+	c     Community
+	basis map[string][2]int64
+}
+
+func versionKey(kind, id string) string { return kind + "\x00" + id }
+
+// syncCommunities 使已存的社区与当前的关系一致：读取后在锁外为变化的社区写摘要，再在 mutate 内按锁内的关系复核并写入。
+func (m *Memory) syncCommunities(ctx context.Context, ns []string) error {
+	if !m.cfg.Graph || !m.cfg.Communities {
 		return nil
 	}
-	entities, err := m.cfg.Graph.Entities(ctx, ns)
+	scope, s, err := m.read(ctx, ns)
+	if err == nil {
+		err = checkJobScope(ctx, scope)
+	}
 	if err != nil {
 		return err
 	}
-	edges, err := m.cfg.Graph.Edges(ctx, ns)
-	if err != nil {
-		return err
-	}
-	existing, err := m.cfg.Graph.Communities(ctx, ns)
-	if err != nil {
-		return err
-	}
-	stored := map[string]Community{}
-	for _, c := range existing {
-		stored[c.ID] = c
-	}
+	edges := sortedEdges(s.Edges)
 	names := map[string]string{}
-	for _, e := range entities {
-		names[e.ID] = e.Name
+	for id, e := range s.Entities {
+		names[id] = e.Name
 	}
 	current := map[string]bool{}
-	for _, c := range detectCommunities(ns, edges) {
-		if old, ok := stored[c.ID]; ok && old.Fingerprint == c.Fingerprint {
-			current[c.ID] = true
-			continue
-		}
-		if !summarize {
-			continue
-		}
-		if err := m.summarizeCommunity(ctx, &c, communityEdges(c.Members, edges), names); err != nil {
-			return err
-		}
-		if err := m.cfg.Graph.PutCommunity(ctx, c); err != nil {
-			return err
-		}
+	var fresh []summarized
+	for _, c := range detectCommunities(ns, edges, names) {
 		current[c.ID] = true
-	}
-	for _, c := range existing {
-		if !current[c.ID] {
-			if err := m.cfg.Graph.DeleteCommunity(ctx, ns, c.ID); err != nil {
-				return err
+		if old, ok := s.Communities[c.ID]; ok && old.Fingerprint == c.Fingerprint {
+			continue
+		}
+		facts := communityEdges(c.Members, edges)
+		basis := make(map[string][2]int64, 3*len(facts))
+		for _, e := range facts {
+			basis[versionKey("edge", e.ID)] = [2]int64{e.Incarnation, e.ContentRev}
+			for _, id := range []string{e.Subject, e.Object} {
+				x := s.Entities[id]
+				basis[versionKey("entity", id)] = [2]int64{x.Incarnation, x.ContentRev}
 			}
 		}
+		if err := m.summarizeCommunity(ctx, &c, facts, names); err != nil {
+			return err
+		}
+		fresh = append(fresh, summarized{c: c, basis: basis})
 	}
-	return nil
+	stale := false
+	for id := range s.Communities {
+		stale = stale || !current[id]
+	}
+	if len(fresh) == 0 && !stale {
+		return nil
+	}
+	_, err = m.mutate(ctx, ns, scope, func(t *tx) error {
+		syncCommunitiesTx(t, ns, fresh)
+		return nil
+	})
+	return err
+}
+
+// syncCommunitiesTx 按锁内的关系重新划分社区：已存社区的指纹与之相同的保留；fresh 中划分与关系版本都与锁内相同的写入；
+// 其余已存社区删除，由下一次刷新重写摘要。fresh 为空时只删除过期的社区（Rewound 使用）。
+func syncCommunitiesTx(t *tx, ns []string, fresh []summarized) {
+	keys := t.Edges.Keys()
+	slices.Sort(keys)
+	edges := make([]Edge, 0, len(keys))
+	for _, k := range keys {
+		edges = append(edges, t.Edges.m[k])
+	}
+	names := map[string]string{}
+	versions := map[string][2]int64{}
+	for _, k := range t.Entities.Keys() {
+		e := t.Entities.m[k]
+		names[k], versions[versionKey("entity", k)] = e.Name, [2]int64{e.Incarnation, e.ContentRev}
+	}
+	for _, e := range edges {
+		versions[versionKey("edge", e.ID)] = [2]int64{e.Incarnation, e.ContentRev}
+	}
+	current := map[string]Community{}
+	for _, c := range detectCommunities(ns, edges, names) {
+		current[c.ID] = c
+	}
+	write := map[string]Community{}
+	for _, f := range fresh {
+		cur, ok := current[f.c.ID]
+		if !ok || cur.Fingerprint != f.c.Fingerprint {
+			continue
+		}
+		same := true
+		for k, v := range f.basis {
+			same = same && versions[k] == v
+		}
+		if same {
+			write[f.c.ID] = f.c
+		}
+	}
+	for _, id := range t.Communities.Keys() {
+		c, _ := t.Communities.Get(id)
+		if _, ok := write[id]; ok {
+			continue
+		}
+		if cur, ok := current[id]; !ok || cur.Fingerprint != c.Fingerprint {
+			t.Communities.Delete(id)
+		}
+	}
+	for _, id := range slices.Sorted(maps.Keys(write)) {
+		c := write[id]
+		if prev, ok := t.Communities.Get(id); ok {
+			c.Incarnation, c.Revision, c.ContentRev = prev.Incarnation, prev.Revision+1, prev.ContentRev+1
+		} else {
+			c.Incarnation, c.Revision, c.ContentRev = t.incarnation(), 1, 1
+		}
+		t.Communities.Put(id, c)
+	}
+}
+
+// sortedEdges 返回按 ID 排序的关系。
+func sortedEdges(m map[string]Edge) []Edge {
+	out := make([]Edge, 0, len(m))
+	for _, id := range slices.Sorted(maps.Keys(m)) {
+		out = append(out, m[id])
+	}
+	return out
 }
 
 // summarizeCommunity 以社区中最近的 CommunityFacts 条关系请求模型写摘要。

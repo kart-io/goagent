@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"maps"
 	"math"
 	"slices"
 	"strings"
@@ -31,21 +32,26 @@ type GraphRecall struct {
 // 种子为名称或别名出现在 text 中的实体，以及 names 中的实体；种子权重为其有效关系数的倒数（节点特异性），
 // 避免"用户"这类与几乎所有关系相连的实体主导排序。
 func (m *Memory) Related(ctx context.Context, text string, names []string, hops, limit int) (GraphRecall, error) {
-	if m.cfg.Graph == nil || limit <= 0 || hops <= 0 {
+	if !m.cfg.Graph || limit <= 0 || hops <= 0 {
 		return GraphRecall{}, nil
 	}
 	ns, err := requireNamespace(ctx)
 	if err != nil {
 		return GraphRecall{}, err
 	}
-	entities, err := m.cfg.Graph.Entities(ctx, ns)
+	_, s, err := m.read(ctx, ns)
 	if err != nil {
 		return GraphRecall{}, err
 	}
-	edges, err := m.cfg.Graph.Edges(ctx, ns)
-	if err != nil {
-		return GraphRecall{}, err
+	return m.relatedOf(s, text, names, hops, limit), nil
+}
+
+// relatedOf 是 Related 在一份 state 上的计算；返回的关系与社区已复制。
+func (m *Memory) relatedOf(s state, text string, names []string, hops, limit int) GraphRecall {
+	if !m.cfg.Graph || limit <= 0 || hops <= 0 {
+		return GraphRecall{}
 	}
+	edges := sortedEdges(s.Edges)
 	edges = slices.DeleteFunc(edges, func(e Edge) bool { return !e.Valid() })
 	byID := map[string]Entity{}
 	degree := map[string]int{}
@@ -60,7 +66,8 @@ func (m *Memory) Related(ctx context.Context, text string, names []string, hops,
 	}
 	dist := map[string]int{}
 	reset := map[string]float64{}
-	for _, e := range entities {
+	for _, id := range slices.Sorted(maps.Keys(s.Entities)) {
+		e := s.Entities[id]
 		byID[e.ID] = e
 		if degree[e.ID] == 0 {
 			continue
@@ -104,7 +111,7 @@ func (m *Memory) Related(ctx context.Context, text string, names []string, hops,
 	scores := personalizedPageRank(sub, reset)
 	out := make([]Relation, 0, len(sub))
 	for _, e := range sub {
-		out = append(out, Relation{Edge: e, SubjectName: byID[e.Subject].Name, ObjectName: byID[e.Object].Name, Hops: reached[e.ID], Score: scores[e.Subject] + scores[e.Object]})
+		out = append(out, Relation{Edge: edgeKind.clone(e), SubjectName: byID[e.Subject].Name, ObjectName: byID[e.Object].Name, Hops: reached[e.ID], Score: scores[e.Subject] + scores[e.Object]})
 	}
 	slices.SortFunc(out, func(a, b Relation) int {
 		if a.Score != b.Score {
@@ -120,11 +127,11 @@ func (m *Memory) Related(ctx context.Context, text string, names []string, hops,
 	})
 	result := GraphRecall{Relations: out[:min(limit, len(out))]}
 	if !m.cfg.Communities || len(scores) == 0 {
-		return result, nil
+		return result
 	}
-	communities, err := m.cfg.Graph.Communities(ctx, ns)
-	if err != nil {
-		return GraphRecall{}, err
+	var communities []Community
+	for _, id := range slices.Sorted(maps.Keys(s.Communities)) {
+		communities = append(communities, s.Communities[id])
 	}
 	weight := map[string]float64{}
 	for _, c := range communities {
@@ -142,8 +149,10 @@ func (m *Memory) Related(ctx context.Context, text string, names []string, hops,
 		}
 		return 0
 	})
-	result.Communities = communities[:min(m.cfg.GraphCommunities, len(communities))]
-	return result, nil
+	for _, c := range communities[:min(m.cfg.GraphCommunities, len(communities))] {
+		result.Communities = append(result.Communities, communityKind.clone(c))
+	}
+	return result
 }
 
 // personalizedPageRank 在以 edges 为无向边（两点间的多条边各计一次）的图上计算 Personalized PageRank：

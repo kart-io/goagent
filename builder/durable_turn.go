@@ -18,7 +18,8 @@ import (
 )
 
 // allowEmpty 为真时，正常结束的空回答按已完成记录，由调用方重问。
-func readJournaledTurn(ctx context.Context, round int, client llm.Client, req *llm.CompletionRequest, tools []interfaces.Tool, allowEmpty, feedback bool, emit func(AgentEvent) error) (*llm.StreamChunk, error) {
+// recall 是本步的召回消息：意图中按 recallIntent 换成占位消息。
+func readJournaledTurn(ctx context.Context, round int, client llm.Client, req *llm.CompletionRequest, tools []interfaces.Tool, allowEmpty, feedback bool, recall recallSlot, emit func(AgentEvent) error) (*llm.StreamChunk, error) {
 	if err := llm.ValidateReasoningRequest(client, req); err != nil {
 		return nil, err
 	}
@@ -46,11 +47,13 @@ func readJournaledTurn(ctx context.Context, round int, client llm.Client, req *l
 	for _, tool := range tools {
 		definitions = append(definitions, definition{tool.Name(), tool.Description(), tool.ArgsSchema()})
 	}
+	normalized := *req
+	normalized.Messages = recallIntent(req.Messages, recall)
 	intent, err := json.Marshal(struct {
 		Provider string
 		Request  *llm.CompletionRequest
 		Tools    []definition
-	}{string(client.Provider()), req, definitions})
+	}{string(client.Provider()), &normalized, definitions})
 	if err != nil {
 		return nil, err
 	}

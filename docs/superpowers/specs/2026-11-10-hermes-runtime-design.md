@@ -2,7 +2,7 @@
 
 日期：2026-11-10。状态：待评审的增量设计；本轮仅更新文档，未实现下列新增能力。
 
-依据：[17 张图逐项阅读、固定源码与本地能力对照](../../research/2026-11-10-hermes-design-review.md)。本文的角色名、记录和流程是拟议契约，不是已导出的 Go API。事实记忆沿用 [2026-11-08 设计](2026-11-08-persistent-factual-memory-design.md)，不改动其尚未提交的需求、设计和计划。
+依据：[17 张图逐项阅读、固定源码与本地能力对照](../../research/2026-11-10-hermes-design-review.md)。本文的角色名、记录和流程是拟议契约，不是已导出的 Go API。事实记忆不再单独建服务，改为在长期记忆上补齐可管理性，见[长期记忆的删除优先](../../design/MEMORY_GOVERNANCE.md)；原 2026-11-08 设计存档于 tag `archive/persistent-factual-memory`。
 
 ## 1. 意图与取舍
 

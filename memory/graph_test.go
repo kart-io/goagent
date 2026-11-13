@@ -3,6 +3,8 @@ package memory
 import (
 	"context"
 	"errors"
+	"maps"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -12,8 +14,36 @@ import (
 
 	"github.com/kart-io/goagent/core/session"
 	"github.com/kart-io/goagent/llm"
-	storemem "github.com/kart-io/goagent/store/memory"
 )
+
+// applyRelations 在一次提交中写入关系：refs 是 From 下标到依据记录的映射，不经抽取与整理。供直接构造图谱的测试使用。
+func (m *Memory) applyRelations(ctx context.Context, j Job, at time.Time, rels []relation, refs map[int]RecordRef) error {
+	n := 0
+	for i := range refs {
+		n = max(n, i+1)
+	}
+	kept, _, ends, err := m.planRelations(ctx, j, rels, n)
+	if err != nil || len(kept) == 0 {
+		return err
+	}
+	scope, err := m.currentScope(ctx, j.Namespace)
+	if err != nil {
+		return err
+	}
+	now := m.now()
+	var w relationWrites
+	var c cascaded
+	if _, err := m.mutate(ctx, j.Namespace, scope, func(t *tx) error {
+		w = writeRelations(t, j, at, now, kept, refs, ends.effective(t), ends.vectors)
+		c = cascade(t, now)
+		c.touch(w.touched...)
+		m.syncGraph(t, c)
+		return nil
+	}); err != nil {
+		return err
+	}
+	return errors.Join(m.writeIndex(ctx, j.Namespace, scope, entitySpace, w.created, w.vecs), m.indexAfter(ctx, j.Namespace, scope, c))
+}
 
 // graphMemory 按用户输入返回预设的关系抽取结果。
 func graphMemory(t *testing.T, replies map[string]string) (*Memory, session.Store, *time.Time) {
@@ -26,8 +56,10 @@ func graphMemory(t *testing.T, replies map[string]string) (*Memory, session.Stor
 func graphMemoryWith(t *testing.T, cfg Config, replies map[string]string) (*Memory, session.Store, *time.Time, *scriptedModel) {
 	t.Helper()
 	sessions := session.NewMemoryStore()
-	st := storemem.New()
 	model := &scriptedModel{reply: func(system, user string) (string, error) {
+		if system == reconcilePrompt {
+			return `{"op":"add"}`, nil
+		}
 		require.Contains(t, system, "relations", "启用图谱时抽取提示词要求输出关系")
 		require.Contains(t, user, "对话时间：", "抽取时给出对话时间，用于换算相对时间")
 		for key, reply := range replies {
@@ -37,7 +69,7 @@ func graphMemoryWith(t *testing.T, cfg Config, replies map[string]string) (*Memo
 		}
 		return "", errors.New("没有预设的回复")
 	}}
-	cfg.Store, cfg.Graph, cfg.Model, cfg.Sessions, cfg.Retention = st, NewGraph(st), model, sessions, Retention{InvalidRetention: time.Hour}
+	cfg.Graph, cfg.Model, cfg.Sessions, cfg.Retention = true, model, sessions, Retention{InvalidRetention: time.Hour}
 	m := newMemory(t, cfg)
 	now := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
 	m.now = func() time.Time { return now }
@@ -48,7 +80,8 @@ func runTurn(t *testing.T, m *Memory, sessions session.Store, key, input string)
 	t.Helper()
 	ctx := WithNamespace(context.Background(), "u")
 	from, to := appendTurnAt(t, sessions, "s", m.now(), false, llm.UserMessage(input), llm.Message{Role: "assistant", Content: "好的"})
-	require.NoError(t, m.Enqueue(ctx, Job{Key: key, Namespace: []string{"u"}, Session: "s", From: from, To: to}))
+	// TurnSeq 与 Builder 相同，取轮次开始时的 Seq：之前的回退标记不拦截之后开始的轮次。
+	require.NoError(t, m.Enqueue(ctx, Job{Key: key, Namespace: []string{"u"}, Session: "s", Scope: "0", From: from, To: to, TurnSeq: stateOf(t, m).Seq}))
 	_, err := m.ProcessPending(ctx)
 	require.NoError(t, err)
 	j, _, err := m.Job(ctx, key)
@@ -59,14 +92,14 @@ func runTurn(t *testing.T, m *Memory, sessions session.Store, key, input string)
 // 排他关系出现新客体时旧关系失效并指向新关系，非排他关系并存；实体按名称与别名去重；可查询某一时刻成立的关系。
 func TestGraphTemporalRelations(t *testing.T) {
 	m, sessions, now := graphMemory(t, map[string]string{
-		"上海": `{"memories":[],"relations":[
-			{"subject":{"name":"用户","type":"person"},"predicate":"住在","object":{"name":"上海市","type":"place","aliases":["上海"]},"fact":"用户住在上海","exclusive":true},
-			{"subject":{"name":"用户","type":"person"},"predicate":"喜欢","object":{"name":"咖啡","type":"product"},"fact":"用户喜欢咖啡","exclusive":false}]}`,
-		"北京": `{"memories":[],"relations":[
-			{"subject":{"name":"用户","type":"person"},"predicate":"住在","object":{"name":"北京","type":"place"},"fact":"用户住在北京","exclusive":true},
-			{"subject":{"name":"用户","type":"person"},"predicate":"喜欢","object":{"name":"茶","type":"product"},"fact":"用户喜欢茶","exclusive":false}]}`,
-		"老家": `{"memories":[],"relations":[
-			{"subject":{"name":"用户","type":"person"},"predicate":"老家在","object":{"name":"上海","type":"place"},"fact":"用户老家在上海","exclusive":true}]}`,
+		"上海": `{"memories":[{"kind":"fact","content":"用户住在上海","importance":0.5},{"kind":"fact","content":"用户喜欢咖啡","importance":0.5}],"relations":[
+			{"from":0,"subject":{"name":"用户","type":"person"},"predicate":"住在","object":{"name":"上海市","type":"place","aliases":["上海"]},"fact":"用户住在上海","exclusive":true},
+			{"from":1,"subject":{"name":"用户","type":"person"},"predicate":"喜欢","object":{"name":"咖啡","type":"product"},"fact":"用户喜欢咖啡","exclusive":false}]}`,
+		"北京": `{"memories":[{"kind":"fact","content":"用户住在北京","importance":0.5},{"kind":"fact","content":"用户喜欢茶","importance":0.5}],"relations":[
+			{"from":0,"subject":{"name":"用户","type":"person"},"predicate":"住在","object":{"name":"北京","type":"place"},"fact":"用户住在北京","exclusive":true},
+			{"from":1,"subject":{"name":"用户","type":"person"},"predicate":"喜欢","object":{"name":"茶","type":"product"},"fact":"用户喜欢茶","exclusive":false}]}`,
+		"老家": `{"memories":[{"kind":"fact","content":"用户老家在上海","importance":0.5}],"relations":[
+			{"from":0,"subject":{"name":"用户","type":"person"},"predicate":"老家在","object":{"name":"上海","type":"place"},"fact":"用户老家在上海","exclusive":true}]}`,
 	})
 	ctx := WithNamespace(context.Background(), "u")
 	runTurn(t, m, sessions, "s/1", "我住在上海，喜欢咖啡")
@@ -75,7 +108,7 @@ func TestGraphTemporalRelations(t *testing.T) {
 	runTurn(t, m, sessions, "s/2", "我搬到北京了，最近喜欢茶")
 	runTurn(t, m, sessions, "s/3", "说说我的老家")
 
-	entities, err := m.cfg.Graph.Entities(ctx, []string{"u"})
+	entities, err := graphOf(m).Entities(ctx, []string{"u"})
 	require.NoError(t, err)
 	var names []string
 	for _, e := range entities {
@@ -83,7 +116,7 @@ func TestGraphTemporalRelations(t *testing.T) {
 	}
 	require.ElementsMatch(t, []string{"person:用户", "place:上海市", "product:咖啡", "place:北京", "product:茶"}, names, "按别名去重：上海与上海市是同一实体")
 
-	edges, err := m.cfg.Graph.Edges(ctx, []string{"u"})
+	edges, err := graphOf(m).Edges(ctx, []string{"u"})
 	require.NoError(t, err)
 	byFact := map[string]Edge{}
 	for _, e := range edges {
@@ -102,9 +135,8 @@ func TestGraphTemporalRelations(t *testing.T) {
 }
 
 func TestRelatedMultiHopAndRecallBlock(t *testing.T) {
-	st := storemem.New()
-	g := NewGraph(st)
-	m := newMemory(t, Config{Store: st, Graph: g, GraphHops: 2})
+	m := newMemory(t, Config{Graph: true, GraphHops: 2})
+	g := graphOf(m)
 	ctx := WithNamespace(context.Background(), "u")
 	ns := []string{"u"}
 	day := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -120,7 +152,7 @@ func TestRelatedMultiHopAndRecallBlock(t *testing.T) {
 	for _, e := range []Edge{
 		{ID: "e1", Subject: "user", Predicate: "就职于", Object: "acme", Fact: "用户就职于 Acme 公司"},
 		{ID: "e2", Subject: "acme", Predicate: "位于", Object: "sz", Fact: "Acme 公司位于深圳"},
-		{ID: "e3", Subject: "user", Predicate: "就职于", Object: "old", Fact: "用户就职于旧公司", InvalidAt: day},
+		{ID: "e3", Subject: "user", Predicate: "就职于", Object: "old", Fact: "用户就职于旧公司", InvalidAt: day, InvalidReason: ReasonSuperseded},
 	} {
 		e.Namespace, e.ValidFrom = ns, day
 		require.NoError(t, g.PutEdge(ctx, e))
@@ -160,31 +192,29 @@ func TestRelatedMultiHopAndRecallBlock(t *testing.T) {
 func TestGraphRewoundPurgeAndPrune(t *testing.T) {
 	m, sessions, now := graphMemory(t, map[string]string{
 		"上海": `{"memories":[{"kind":"fact","content":"用户住在上海","importance":0.5}],"relations":[
-			{"subject":{"name":"用户","type":"person"},"predicate":"住在","object":{"name":"上海","type":"place"},"fact":"用户住在上海","exclusive":true}]}`,
+			{"from":0,"subject":{"name":"用户","type":"person"},"predicate":"住在","object":{"name":"上海","type":"place"},"fact":"用户住在上海","exclusive":true}]}`,
 	})
 	ctx := WithNamespace(context.Background(), "u")
 	runTurn(t, m, sessions, "s/1", "我住在上海")
-	edges, err := m.cfg.Graph.Edges(ctx, []string{"u"})
+	edges, err := graphOf(m).Edges(ctx, []string{"u"})
 	require.NoError(t, err)
 	require.Len(t, edges, 1)
 
-	require.NoError(t, m.Rewound(ctx, "s", edges[0].Source.From-1))
-	edges, err = m.cfg.Graph.Edges(ctx, []string{"u"})
+	require.NoError(t, m.Rewound(ctx, "s", edges[0].Sources[0].From-1))
+	edges, err = graphOf(m).Edges(ctx, []string{"u"})
 	require.NoError(t, err)
-	require.False(t, edges[0].Valid(), "退回的轮次留下的关系失效")
-
+	require.Empty(t, edges, "退回的轮次派生的关系随之删除")
+	entities, err := graphOf(m).Entities(ctx, []string{"u"})
+	require.NoError(t, err)
+	require.Empty(t, entities, "名称只来自退回轮次的实体随之删除")
 	*now = now.Add(2 * time.Hour)
-	require.NoError(t, m.Prune(ctx))
-	edges, err = m.cfg.Graph.Edges(ctx, []string{"u"})
-	require.NoError(t, err)
-	require.Empty(t, edges, "失效超过保留期的关系被删除")
 
 	runTurn(t, m, sessions, "s/2", "我还是住在上海")
 	require.NoError(t, m.Purge(ctx))
-	entities, err := m.cfg.Graph.Entities(ctx, []string{"u"})
+	entities, err = graphOf(m).Entities(ctx, []string{"u"})
 	require.NoError(t, err)
 	require.Empty(t, entities)
-	edges, err = m.cfg.Graph.Edges(ctx, []string{"u"})
+	edges, err = graphOf(m).Edges(ctx, []string{"u"})
 	require.NoError(t, err)
 	require.Empty(t, edges)
 }
@@ -207,9 +237,9 @@ func TestEntityResolutionByModel(t *testing.T) {
 	}}
 	var judged []string
 	m, sessions, _, model := graphMemoryWith(t, cfg, map[string]string{
-		"上班": `{"memories":[],"relations":[{"subject":{"name":"用户","type":"person"},"predicate":"就职于","object":{"name":"Acme 公司","type":"org"},"fact":"用户就职于 Acme 公司","exclusive":true}]}`,
-		"招人": `{"memories":[],"relations":[{"subject":{"name":"爱克米","type":"org"},"predicate":"位于","object":{"name":"深圳","type":"place"},"fact":"爱克米位于深圳","exclusive":true}]}`,
-		"集团": `{"memories":[],"relations":[{"subject":{"name":"爱克米集团","type":"org"},"predicate":"收购","object":{"name":"爱克米","type":"org"},"fact":"爱克米集团收购了爱克米","exclusive":false}]}`,
+		"上班": `{"memories":[{"kind":"fact","content":"用户就职于 Acme 公司","importance":0.5}],"relations":[{"from":0,"subject":{"name":"用户","type":"person"},"predicate":"就职于","object":{"name":"Acme 公司","type":"org"},"fact":"用户就职于 Acme 公司","exclusive":true}]}`,
+		"招人": `{"memories":[{"kind":"fact","content":"爱克米位于深圳","importance":0.5}],"relations":[{"from":0,"subject":{"name":"爱克米","type":"org"},"predicate":"位于","object":{"name":"深圳","type":"place"},"fact":"爱克米位于深圳","exclusive":true}]}`,
+		"集团": `{"memories":[{"kind":"fact","content":"爱克米集团收购了爱克米","importance":0.5}],"relations":[{"from":0,"subject":{"name":"爱克米集团","type":"org"},"predicate":"收购","object":{"name":"爱克米","type":"org"},"fact":"爱克米集团收购了爱克米","exclusive":false}]}`,
 	})
 	reply := model.reply
 	model.reply = func(system, user string) (string, error) {
@@ -231,7 +261,7 @@ func TestEntityResolutionByModel(t *testing.T) {
 	require.Contains(t, judged[0], acmeID)
 	require.NotContains(t, judged[0], "深圳", "没有相似候选的实体不交给模型")
 
-	entities, err := m.cfg.Graph.Entities(ctx, []string{"u"})
+	entities, err := graphOf(m).Entities(ctx, []string{"u"})
 	require.NoError(t, err)
 	byName := map[string]Entity{}
 	for _, e := range entities {
@@ -240,9 +270,15 @@ func TestEntityResolutionByModel(t *testing.T) {
 	require.Len(t, byName, 4, "用户、Acme 公司、深圳、爱克米集团")
 	require.Equal(t, acmeID, byName["Acme 公司"].ID)
 	require.Contains(t, byName["Acme 公司"].Aliases, "爱克米", "判定为同一实体的名称并入别名")
-	require.NotEmpty(t, byName["深圳"].Vector)
+	scope, err := m.currentScope(ctx, []string{"u"})
+	require.NoError(t, err)
+	keys, err := m.cfg.Index.IDs(ctx, entitySpace.namespace([]string{"u"}, scope))
+	require.NoError(t, err)
+	k := entityKey(byName["深圳"])
+	k.Model = m.modelTag
+	require.Contains(t, keys, k.String(), "实体名称向量写入 Index 的实体子命名空间")
 
-	edges, err := m.cfg.Graph.Edges(ctx, []string{"u"})
+	edges, err := graphOf(m).Edges(ctx, []string{"u"})
 	require.NoError(t, err)
 	for _, e := range edges {
 		switch e.Predicate {
@@ -257,16 +293,16 @@ func TestEntityResolutionByModel(t *testing.T) {
 
 // 迟到的旧事实：已有排他关系比新写入的关系生效更晚时，新关系写入即失效并指向已有关系，已有关系不受影响。
 func TestApplyRelationsLateFact(t *testing.T) {
-	st := storemem.New()
-	m := newMemory(t, Config{Store: st, Graph: NewGraph(st)})
+	m := newMemory(t, Config{Graph: true})
 	ctx := WithNamespace(context.Background(), "u")
 	march, jan := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	zero := 0
 	live := func(city string) relation {
-		return relation{Subject: entityRef{Name: "用户", Type: "person"}, Predicate: "住在", Object: entityRef{Name: city, Type: "place"}, Fact: "用户住在" + city, Exclusive: true}
+		return relation{From: &zero, Subject: entityRef{Name: "用户", Type: "person"}, Predicate: "住在", Object: entityRef{Name: city, Type: "place"}, Fact: "用户住在" + city, Exclusive: true}
 	}
-	require.NoError(t, m.applyRelations(ctx, Job{Key: "s/2", Namespace: []string{"u"}, Session: "s"}, march, []relation{live("北京")}))
-	require.NoError(t, m.applyRelations(ctx, Job{Key: "s/1", Namespace: []string{"u"}, Session: "s"}, jan, []relation{live("上海")}))
-	edges, err := m.cfg.Graph.Edges(ctx, []string{"u"})
+	require.NoError(t, m.applyRelations(ctx, Job{Key: "s/2", Namespace: []string{"u"}, Session: "s"}, march, []relation{live("北京")}, basisOf(t, m, "北京")))
+	require.NoError(t, m.applyRelations(ctx, Job{Key: "s/1", Namespace: []string{"u"}, Session: "s"}, jan, []relation{live("上海")}, basisOf(t, m, "上海")))
+	edges, err := graphOf(m).Edges(ctx, []string{"u"})
 	require.NoError(t, err)
 	byFact := map[string]Edge{}
 	for _, e := range edges {
@@ -281,9 +317,8 @@ func TestApplyRelationsLateFact(t *testing.T) {
 
 // PageRank 以种子为中心排序：查询 Acme 时与 Acme 相连的关系排在"用户"的其他关系之前。
 func TestRelatedPageRankRanking(t *testing.T) {
-	st := storemem.New()
-	g := NewGraph(st)
-	m := newMemory(t, Config{Store: st, Graph: g})
+	m := newMemory(t, Config{Graph: true})
+	g := graphOf(m)
 	ctx := WithNamespace(context.Background(), "u")
 	ns := []string{"u"}
 	day := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -324,19 +359,19 @@ func TestPersonalizedPageRankSumsToOne(t *testing.T) {
 	require.Nil(t, personalizedPageRank(edges, map[string]float64{"x": 1}), "种子不在图中")
 }
 
-// 回退取代旧关系的轮次时，旧关系恢复有效。
+// 回退取代旧关系的轮次时，该轮派生的关系删除，旧关系恢复有效。
 func TestRewoundRestoresSupersededEdge(t *testing.T) {
-	st := storemem.New()
-	m := newMemory(t, Config{Store: st, Graph: NewGraph(st)})
+	m := newMemory(t, Config{Graph: true})
 	ctx := WithNamespace(context.Background(), "u")
 	day := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	zero := 0
 	live := func(city string) []relation {
-		return []relation{{Subject: entityRef{Name: "用户", Type: "person"}, Predicate: "住在", Object: entityRef{Name: city, Type: "place"}, Fact: "用户住在" + city, Exclusive: true}}
+		return []relation{{From: &zero, Subject: entityRef{Name: "用户", Type: "person"}, Predicate: "住在", Object: entityRef{Name: city, Type: "place"}, Fact: "用户住在" + city, Exclusive: true}}
 	}
-	require.NoError(t, m.applyRelations(ctx, Job{Key: "s/1", Namespace: []string{"u"}, Session: "s", From: 1, To: 3}, day, live("上海")))
-	require.NoError(t, m.applyRelations(ctx, Job{Key: "s/2", Namespace: []string{"u"}, Session: "s", From: 4, To: 6}, day.Add(time.Hour), live("北京")))
+	require.NoError(t, m.applyRelations(ctx, Job{Key: "s/1", Namespace: []string{"u"}, Session: "s", From: 1, To: 3}, day, live("上海"), basisOf(t, m, "上海")))
+	require.NoError(t, m.applyRelations(ctx, Job{Key: "s/2", Namespace: []string{"u"}, Session: "s", From: 4, To: 6}, day.Add(time.Hour), live("北京"), basisOf(t, m, "北京")))
 	require.NoError(t, m.Rewound(ctx, "s", 3))
-	edges, err := m.cfg.Graph.Edges(ctx, []string{"u"})
+	edges, err := graphOf(m).Edges(ctx, []string{"u"})
 	require.NoError(t, err)
 	valid := map[string]bool{}
 	for _, e := range edges {
@@ -345,21 +380,20 @@ func TestRewoundRestoresSupersededEdge(t *testing.T) {
 			require.Empty(t, e.SupersededBy)
 		}
 	}
-	require.Equal(t, map[string]bool{"用户住在上海": true, "用户住在北京": false}, valid)
+	require.Equal(t, map[string]bool{"用户住在上海": true}, valid, "退回轮次派生的关系删除，被它取代的关系恢复")
 }
 
 // Retrieve 返回实际写入召回块的记录与关系，Sessions 汇总二者的来源会话。
 func TestRetrieveReportsSources(t *testing.T) {
-	st := storemem.New()
-	g := NewGraph(st)
-	m := newMemory(t, Config{Store: st, Graph: g})
+	m := newMemory(t, Config{Graph: true})
+	g := graphOf(m)
 	ctx := WithNamespace(context.Background(), "u")
 	ns := []string{"u"}
 	for _, e := range []Entity{{ID: "user", Name: "用户"}, {ID: "acme", Name: "Acme"}} {
 		e.Namespace, e.Type = ns, "x"
 		require.NoError(t, g.PutEntity(ctx, e))
 	}
-	require.NoError(t, g.PutEdge(ctx, Edge{ID: "e", Namespace: ns, Subject: "user", Predicate: "就职于", Object: "acme", Fact: "用户就职于 Acme", Source: Source{Session: "s3", From: 1}}))
+	require.NoError(t, g.PutEdge(ctx, Edge{ID: "e", Namespace: ns, Subject: "user", Predicate: "就职于", Object: "acme", Fact: "用户就职于 Acme", Sources: []Source{{Session: "s3", From: 1}}}))
 	_, err := m.Remember(ctx, Record{ID: "r", Content: "用户在 Acme 负责支付", Entities: []string{"Acme"}, Importance: 0.5,
 		Sources: []Source{{Session: "s1", From: 1}, {Session: "s2", From: 1}}})
 	require.NoError(t, err)
@@ -373,9 +407,105 @@ func TestRetrieveReportsSources(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, got.Text, block)
 
-	small := newMemory(t, Config{Store: st, Graph: g, RecallRunes: 10})
+	small := newMemory(t, Config{Durable: m.cfg.Durable, Graph: true, RecallRunes: 10})
 	got, err = small.Retrieve(ctx, "Acme 的工作")
 	require.NoError(t, err)
 	require.Empty(t, got.Records, "超出预算未写入块的记录不报告")
 	require.Empty(t, got.Text)
+}
+
+// basisOf 写入一条记录作为直接调用 applyRelations 时关系的依据，返回下标 0 指向它的 refs。
+func basisOf(t *testing.T, m *Memory, content string) map[int]RecordRef {
+	t.Helper()
+	r, err := m.Remember(WithNamespace(context.Background(), "u"), Record{Content: content, Importance: 0.5})
+	require.NoError(t, err)
+	return map[int]RecordRef{0: refOf(r)}
+}
+
+// testGraph 在测试中直接读写图谱（不经抽取）。
+type testGraph struct{ m *Memory }
+
+func graphOf(m *Memory) testGraph { return testGraph{m} }
+
+func (g testGraph) PutEntity(ctx context.Context, e Entity) error {
+	ns, err := requireNamespace(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = g.m.mutate(ctx, ns, "", func(t *tx) error {
+		if len(e.Names) == 0 {
+			o := Origin{Record: g.basis(t, ns)}
+			for _, n := range append([]string{e.Name}, e.Aliases...) {
+				addName(t, &e, n, o)
+			}
+		}
+		if old, ok := t.Entities.Get(e.ID); ok {
+			e.Incarnation, e.Revision, e.ContentRev = old.Incarnation, old.Revision+1, old.ContentRev+1
+		} else {
+			e.Incarnation, e.Revision, e.ContentRev = t.incarnation(), 1, 1
+		}
+		t.Entities.Put(e.ID, e)
+		g.m.cascadeTx(t, g.m.now())
+		return nil
+	})
+	return err
+}
+
+// basis 返回测试图谱的依据记录，不存在时在 tx 中创建：直接写入的实体与关系以它为来源，遗忘它即撤销全部直接写入的图谱。
+func (g testGraph) basis(t *tx, ns []string) RecordRef {
+	const id = "graph-basis"
+	if r, ok := t.Records.Get(id); ok {
+		return refOf(r)
+	}
+	now := g.m.now()
+	createRecord(t, Record{ID: id, Namespace: ns, Kind: KindFact, Content: "图谱依据", Importance: 1, CreatedAt: now, ValidFrom: now})
+	r, _ := t.Records.Get(id)
+	return refOf(r)
+}
+
+func (g testGraph) PutEdge(ctx context.Context, e Edge) error {
+	ns, err := requireNamespace(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = g.m.mutate(ctx, ns, "", func(t *tx) error {
+		if len(e.Derivations) == 0 {
+			ref := g.basis(t, ns)
+			for _, s := range append(slices.Clone(e.Sources), Source{})[:max(len(e.Sources), 1)] {
+				e.Derivations = append(e.Derivations, Derivation{Origin: Origin{Record: ref, Source: s}, Fact: e.Fact, At: e.ValidFrom})
+			}
+		}
+		if old, ok := t.Edges.Get(e.ID); ok {
+			e.Incarnation, e.Revision, e.ContentRev = old.Incarnation, old.Revision+1, old.ContentRev+1
+		} else {
+			e.Incarnation, e.Revision, e.ContentRev = t.incarnation(), 1, 1
+		}
+		t.Edges.Put(e.ID, e)
+		g.m.cascadeTx(t, g.m.now())
+		return nil
+	})
+	return err
+}
+
+func (g testGraph) Entities(ctx context.Context, ns []string) ([]Entity, error) {
+	_, s, err := g.m.read(ctx, ns)
+	var out []Entity
+	for _, id := range slices.Sorted(maps.Keys(s.Entities)) {
+		out = append(out, s.Entities[id])
+	}
+	return out, err
+}
+
+func (g testGraph) Edges(ctx context.Context, ns []string) ([]Edge, error) {
+	_, s, err := g.m.read(ctx, ns)
+	return sortedEdges(s.Edges), err
+}
+
+func (g testGraph) Communities(ctx context.Context, ns []string) ([]Community, error) {
+	_, s, err := g.m.read(ctx, ns)
+	var out []Community
+	for _, id := range slices.Sorted(maps.Keys(s.Communities)) {
+		out = append(out, s.Communities[id])
+	}
+	return out, err
 }

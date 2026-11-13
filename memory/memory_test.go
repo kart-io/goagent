@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"hash/fnv"
+	"maps"
 	"math"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -12,10 +14,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/kart-io/goagent/constants"
+	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/session"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
-	storemem "github.com/kart-io/goagent/store/memory"
 )
 
 // bigramEmbedder 把字符对哈希到固定维度，文本重合越多向量越接近。
@@ -64,8 +66,10 @@ func (m *scriptedModel) CompleteStream(_ context.Context, req *llm.CompletionReq
 
 func newMemory(t *testing.T, cfg Config) *Memory {
 	t.Helper()
-	if cfg.Store == nil {
-		cfg.Store = storemem.New()
+	if cfg.Durable == nil {
+		fs, err := durable.NewFileStore(t.TempDir())
+		require.NoError(t, err)
+		cfg.Durable = fs
 	}
 	m, err := New(cfg)
 	require.NoError(t, err)
@@ -123,9 +127,10 @@ func TestMemoryRequiresNamespace(t *testing.T) {
 	m := newMemory(t, Config{})
 	ctx := context.Background()
 	for name, call := range map[string]func() error{
-		"写入": func() error { _, err := m.Remember(ctx, Record{Content: "x", Importance: 0.1}); return err },
-		"召回": func() error { _, err := m.Recall(ctx, Query{Text: "x"}); return err },
-		"空段": func() error { _, err := m.Recall(WithNamespace(ctx, "t", " "), Query{}); return err },
+		"写入":    func() error { _, err := m.Remember(ctx, Record{Content: "x", Importance: 0.1}); return err },
+		"召回":    func() error { _, err := m.Recall(ctx, Query{Text: "x"}); return err },
+		"空段":    func() error { _, err := m.Recall(WithNamespace(ctx, "t", " "), Query{}); return err },
+		"含 NUL": func() error { _, err := m.Recall(WithNamespace(ctx, "t\x00u"), Query{}); return err },
 	} {
 		t.Run(name, func(t *testing.T) { require.True(t, agentErrors.IsCode(call(), agentErrors.CodeInvalidInput)) })
 	}
@@ -134,14 +139,30 @@ func TestMemoryRequiresNamespace(t *testing.T) {
 func TestNewValidatesConfig(t *testing.T) {
 	for name, cfg := range map[string]Config{
 		"缺少存储":   {},
-		"索引缺少嵌入": {Store: storemem.New(), Index: NewMemoryIndex()},
-		"嵌入缺少索引": {Store: storemem.New(), Embedder: bigramEmbedder{}},
+		"索引缺少嵌入": {Index: NewMemoryIndex()},
+		"嵌入缺少索引": {Embedder: bigramEmbedder{}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := New(cfg)
 			require.Error(t, err)
 		})
 	}
+}
+
+// Config.Now 驱动记录的创建时间，且不改变 Identity（已有的召回快照照常恢复）。
+func TestConfigNowDrivesClockNotIdentity(t *testing.T) {
+	at := time.Date(2023, 5, 20, 2, 21, 0, 0, time.UTC)
+	fs, err := durable.NewFileStore(t.TempDir())
+	require.NoError(t, err)
+	fixed := newMemory(t, Config{Durable: fs, Now: func() time.Time { return at }})
+	require.Equal(t, newMemory(t, Config{Durable: fs}).Identity(), fixed.Identity())
+
+	ctx := WithNamespace(context.Background(), "t1", "alice")
+	r, err := fixed.Remember(ctx, Record{Kind: KindFact, Content: "用户在上海工作", Importance: 0.5})
+	require.NoError(t, err)
+	got, err := fixed.Get(ctx, r.ID)
+	require.NoError(t, err)
+	require.True(t, got.CreatedAt.Equal(at), got.CreatedAt)
 }
 
 func TestMemoryIndex(t *testing.T) {
@@ -242,22 +263,24 @@ func TestPurgeAndReindex(t *testing.T) {
 	r, err := m.Remember(ctx, Record{Content: "用户喜欢咖啡", Importance: 0.5})
 	require.NoError(t, err)
 
-	m2 := newMemory(t, Config{Store: m.cfg.Store, Index: NewMemoryIndex(), Embedder: bigramEmbedder{}, EmbedModel: "v2"})
+	// 换嵌入模型：v1 写入的键不被 v2 采用，Reindex(false) 补写 v2 的键并删除 v1 的键。
+	x2 := NewMemoryIndex()
+	require.NoError(t, x2.Upsert(ctx, recordSpace.namespace([]string{"u"}, initialScope), indexKey{r.ID, r.Incarnation, r.ContentRev, modelTag("v1")}.String(), mustEmbed(t, "咖啡")))
+	m2 := newMemory(t, Config{Durable: m.cfg.Durable, Index: x2, Embedder: bigramEmbedder{}, EmbedModel: "v2"})
+	hits, err := m2.vectorHits(ctx, []string{"u"}, initialScope, stateOf(t, m2), Query{Text: "咖啡"})
+	require.NoError(t, err)
+	require.Empty(t, hits, "其他模型写入的键不被采用")
 	require.NoError(t, m2.Reindex(ctx, false))
-	got, err := m2.Get(ctx, r.ID)
+	require.Equal(t, []string{indexKey{r.ID, r.Incarnation, r.ContentRev, modelTag("v2")}.String()}, indexKeys(x2, []string{"u"}), "重建后只剩当前模型的键")
+	hits, err = m2.vectorHits(ctx, []string{"u"}, initialScope, stateOf(t, m2), Query{Text: "咖啡"})
 	require.NoError(t, err)
-	require.Equal(t, "v2", got.EmbedModel)
-	hits, err := m2.cfg.Index.Search(ctx, []string{"u"}, mustEmbed(t, "咖啡"), 1)
-	require.NoError(t, err)
-	require.Len(t, hits, 1, "重建后可向量检索")
+	require.Contains(t, hits, r.ID, "重建后可向量检索")
 
 	require.NoError(t, m.Purge(ctx))
-	all, err := m.records.List(ctx, []string{"u"})
+	all, err := listRecords(ctx, m, []string{"u"})
 	require.NoError(t, err)
 	require.Empty(t, all)
-	hits, err = x.Search(ctx, []string{"u"}, mustEmbed(t, "咖啡"), 1)
-	require.NoError(t, err)
-	require.Empty(t, hits)
+	require.Empty(t, indexKeys(x, []string{"u"}), "Purge 清空旧作用域的索引")
 }
 
 // 嵌入失败时不写入正文，避免留下无法向量检索的记录。
@@ -325,7 +348,7 @@ func TestWorkerExtractsAndSupersedes(t *testing.T) {
 	ctx := WithNamespace(context.Background(), "u")
 
 	from, to := appendTurn(t, sessions, "s", false, llm.UserMessage("我住在上海"), llm.Message{Role: "assistant", Content: "好的"})
-	job := Job{Key: "s/1", Namespace: []string{"u"}, Session: "s", From: from, To: to}
+	job := Job{Key: "s/1", Namespace: []string{"u"}, Session: "s", Scope: "0", From: from, To: to}
 	require.NoError(t, m.Enqueue(ctx, job))
 	n, err := m.ProcessPending(ctx)
 	require.NoError(t, err)
@@ -341,7 +364,7 @@ func TestWorkerExtractsAndSupersedes(t *testing.T) {
 	require.Zero(t, n)
 
 	from, to = appendTurn(t, sessions, "s", false, llm.UserMessage("我搬到北京了"), llm.Message{Role: "assistant", Content: "记下了"})
-	require.NoError(t, m.Enqueue(ctx, Job{Key: "s/2", Namespace: []string{"u"}, Session: "s", From: from, To: to}))
+	require.NoError(t, m.Enqueue(ctx, Job{Key: "s/2", Namespace: []string{"u"}, Session: "s", Scope: "0", From: from, To: to}))
 	_, err = m.ProcessPending(ctx)
 	require.NoError(t, err)
 	now, err := m.Recall(ctx, Query{Text: "住在哪里"})
@@ -373,17 +396,17 @@ func TestWorkerSkipsRewoundAndLearnsFromAborted(t *testing.T) {
 	from, to := appendTurn(t, sessions, "s", false, llm.UserMessage("以后都用英文回答"), llm.Message{Role: "assistant", Content: "OK"})
 	_, err := session.Rewind(context.Background(), sessions, "s", from-1, to)
 	require.NoError(t, err)
-	require.NoError(t, m.Enqueue(ctx, Job{Key: "s/rewound", Namespace: []string{"u"}, Session: "s", From: from, To: to}))
+	require.NoError(t, m.Enqueue(ctx, Job{Key: "s/rewound", Namespace: []string{"u"}, Session: "s", Scope: "0", From: from, To: to}))
 
 	from, to = appendTurn(t, sessions, "s", true, llm.UserMessage("帮我退款"), llm.Message{Role: "assistant", Content: "调用失败"})
-	require.NoError(t, m.Enqueue(ctx, Job{Key: "s/aborted", Namespace: []string{"u"}, Session: "s", From: from, To: to, Aborted: true}))
+	require.NoError(t, m.Enqueue(ctx, Job{Key: "s/aborted", Namespace: []string{"u"}, Session: "s", Scope: "0", From: from, To: to, Aborted: true}))
 	_, err = m.ProcessPending(ctx)
 	require.NoError(t, err)
 	got, err := m.Recall(ctx, Query{Text: "退款"})
 	require.NoError(t, err)
 	require.Equal(t, []string{"退款前先确认订单状态"}, contents(got))
 	require.Equal(t, KindReflection, got[0].Kind)
-	all, err := m.records.List(ctx, []string{"u"})
+	all, err := listRecords(ctx, m, []string{"u"})
 	require.NoError(t, err)
 	require.Len(t, all, 1, "被退回的轮次不留下记忆")
 }
@@ -393,7 +416,7 @@ func TestWorkerRetriesThenFails(t *testing.T) {
 	m := newMemory(t, Config{Model: &scriptedModel{reply: func(string, string) (string, error) { return "不是 JSON", nil }}, Sessions: sessions, JobAttempts: 2})
 	ctx := WithNamespace(context.Background(), "u")
 	from, to := appendTurn(t, sessions, "s", false, llm.UserMessage("你好"), llm.Message{Role: "assistant", Content: "你好"})
-	require.NoError(t, m.Enqueue(ctx, Job{Key: "k", Namespace: []string{"u"}, Session: "s", From: from, To: to}))
+	require.NoError(t, m.Enqueue(ctx, Job{Key: "k", Namespace: []string{"u"}, Session: "s", Scope: "0", From: from, To: to}))
 	for _, want := range []JobStatus{JobPending, JobFailed} {
 		_, err := m.ProcessPending(ctx)
 		require.NoError(t, err)
@@ -423,7 +446,7 @@ func TestReflectionAfterThreshold(t *testing.T) {
 	ctx := WithNamespace(context.Background(), "u")
 	for i := range 2 {
 		from, to := appendTurn(t, sessions, "s", false, llm.UserMessage("今天又加班"), llm.Message{Role: "assistant", Content: "辛苦了"})
-		require.NoError(t, m.Enqueue(ctx, Job{Key: "s/" + string(rune('a'+i)), Namespace: []string{"u"}, Session: "s", From: from, To: to}))
+		require.NoError(t, m.Enqueue(ctx, Job{Key: "s/" + string(rune('a'+i)), Namespace: []string{"u"}, Session: "s", Scope: "0", From: from, To: to}))
 		_, err := m.ProcessPending(ctx)
 		require.NoError(t, err)
 	}
@@ -482,7 +505,7 @@ func TestRewoundRestoresMergedPredecessor(t *testing.T) {
 	ctx := WithNamespace(context.Background(), "u")
 	run := func(key, input string) (int64, int64) {
 		from, to := appendTurn(t, sessions, "s", false, llm.UserMessage(input), llm.Message{Role: "assistant", Content: "好的"})
-		require.NoError(t, m.Enqueue(ctx, Job{Key: key, Namespace: []string{"u"}, Session: "s", From: from, To: to}))
+		require.NoError(t, m.Enqueue(ctx, Job{Key: key, Namespace: []string{"u"}, Session: "s", Scope: "0", From: from, To: to}))
 		_, err := m.ProcessPending(ctx)
 		require.NoError(t, err)
 		return from, to
@@ -539,4 +562,14 @@ func TestChatJSONRepairsInvalidJSON(t *testing.T) {
 			}
 		})
 	}
+}
+
+// listRecords 返回命名空间中的全部记录（含失效记录），按 ID 排序。
+func listRecords(ctx context.Context, m *Memory, ns []string) ([]Record, error) {
+	_, s, err := m.read(ctx, ns)
+	var out []Record
+	for _, id := range slices.Sorted(maps.Keys(s.Records)) {
+		out = append(out, s.Records[id])
+	}
+	return out, err
 }

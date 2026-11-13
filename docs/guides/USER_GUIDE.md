@@ -156,13 +156,13 @@ agent, err := builder.NewSimpleBuilder(client).
 
 ```go
 mem, err := memory.New(memory.Config{
-    Store:    storemem.New(),          // 任意 store.Store
+    Durable:  fs,                      // durable.NewFileStore(dir) 等实现了 durable.Scoped 的存储
     Index:    memory.NewMemoryIndex(), // 可选；与 Embedder 同时提供时启用向量召回
     Embedder: embedClient,             // llm.EmbeddingClient
     Model:    extractClient,           // Worker 抽取、整理与反思用的模型
     Sessions: sessions,                // 与 WithSessionLog 相同
 })
-go mem.Run(ctx, nil) // 异步处理每轮结束登记的抽取任务
+go mem.Run(ctx, nil) // 异步处理每轮结束登记的抽取任务；不运行 Worker 时须运行 mem.RunMaintenance
 
 agent, err := builder.NewSimpleBuilder(client).
     WithSessionLog(sessions).
@@ -174,7 +174,7 @@ ctx = memory.WithNamespace(ctx, tenantID, userID) // 必须来自可信身份
 out, err := agent.AsRunnable().Invoke(ctx, "推荐一杯咖啡")
 ```
 
-每轮第一次请求前按输入召回相关记录，连同钉住的核心记忆作为一条低信任的用户消息放在输入之前；每轮结束登记抽取任务，Worker 抽取事实与经历，与相似的旧记忆比较后新增、合并或使旧记忆失效。设计见 [记忆系统设计](../design/MEMORY_DESIGN.md)。
+每轮第一次请求前按输入召回相关记录，连同钉住的核心记忆作为一条低信任的用户消息放进每步请求（在运行上下文之前），召回块不写入会话历史；每轮结束登记抽取任务，Worker 抽取事实与经历，与相似的旧记忆比较后新增、合并或使旧记忆失效。设计见 [记忆系统设计](../design/MEMORY_DESIGN.md)。
 
 ### 会话日志
 

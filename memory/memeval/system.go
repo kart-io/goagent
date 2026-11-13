@@ -4,16 +4,16 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"os"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/kart-io/goagent/constants"
+	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/session"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/memory"
-	"github.com/kart-io/goagent/store"
-	storemem "github.com/kart-io/goagent/store/memory"
 )
 
 // System 是被评测的记忆方案。Ingest 灌入一个 Case 的历史，返回只服务该 Case 的检索器；不同 Case 可并发灌入。
@@ -75,17 +75,39 @@ func (r recentCase) Context(_ context.Context, q Question) (Retrieved, error) {
 }
 
 // Memory 是长期记忆方案：每个会话作为一轮写入会话日志并登记抽取任务，按时间顺序处理完后按题召回。
-// Configure 在每个 Case 的新存储上补齐配置（模型、嵌入、是否启用图谱与社区等）。
+// Configure 在每个 Case 的新存储上补齐配置（模型、嵌入、是否启用图谱与社区等）；没有给出 Durable 时，
+// 每个 Case 在 Dir（空时为系统临时目录）下新建一个 FileStore，由调用方在评测结束后删除 Dir。
 type Memory struct {
 	Label     string
-	Configure func(st store.Store, sessions session.Store) memory.Config
+	Configure func(sessions session.Store) memory.Config
+	Dir       string
 }
 
 func (m *Memory) Name() string { return m.Label }
 
 func (m *Memory) Ingest(ctx context.Context, c Case) (Retriever, error) {
-	st, sessions := storemem.New(), session.NewMemoryStore()
-	mem, err := memory.New(m.Configure(st, sessions))
+	sessions := session.NewMemoryStore()
+	cfg := m.Configure(sessions)
+	if cfg.Now == nil {
+		// 时钟固定在最后一个会话的时间：新近性不随评测耗时变化，同一份模型输出的两次运行召回相同。
+		var last time.Time
+		for _, s := range c.Sessions {
+			if s.Date.After(last) {
+				last = s.Date
+			}
+		}
+		cfg.Now = func() time.Time { return last }
+	}
+	if cfg.Durable == nil {
+		dir, err := os.MkdirTemp(m.Dir, "memeval-")
+		if err != nil {
+			return nil, err
+		}
+		if cfg.Durable, err = durable.NewFileStore(dir); err != nil {
+			return nil, err
+		}
+	}
+	mem, err := memory.New(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +117,11 @@ func (m *Memory) Ingest(ctx context.Context, c Case) (Retriever, error) {
 		if err != nil {
 			return nil, err
 		}
-		if err := mem.Enqueue(ctx, memory.Job{Key: s.ID, Namespace: ns, Session: s.ID, From: from, To: to}); err != nil {
+		turn, err := mem.Turn(memory.WithNamespace(ctx, ns...))
+		if err != nil {
+			return nil, err
+		}
+		if err := mem.Enqueue(ctx, memory.Job{Key: s.ID, Namespace: ns, Session: s.ID, From: from, To: to, Scope: turn.Scope, TurnSeq: turn.Seq}); err != nil {
 			return nil, err
 		}
 		// 按时间顺序逐个处理，使后面的会话能更新或否定前面的记忆；失败的任务退避后按 JobAttempts 重试，直到完成或标记失败。
@@ -109,7 +135,7 @@ func (m *Memory) Ingest(ctx context.Context, c Case) (Retriever, error) {
 			if _, err := mem.ProcessPending(ctx); err != nil {
 				return nil, err
 			}
-			if j, _, err = mem.Job(ctx, s.ID); err != nil {
+			if j, _, err = mem.Job(memory.WithNamespace(ctx, ns...), s.ID); err != nil {
 				return nil, err
 			}
 		}

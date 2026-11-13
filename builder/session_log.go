@@ -12,6 +12,7 @@ import (
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/memory"
 	"github.com/kart-io/goagent/tools"
 )
 
@@ -116,6 +117,8 @@ type sessionTurn struct {
 	// start 是本轮 turn/start 的序号；ended 在本轮的 turn/end 写入后以其序号调用（重放已完成轮次时同样调用，须幂等）。
 	start int64
 	ended func(ctx context.Context, end int64) error
+	// memory 是本轮的长期记忆绑定；未配置长期记忆时为 nil。
+	memory *memory.TurnMemory
 }
 
 func sessionTurnFrom(ctx context.Context) *sessionTurn {
@@ -153,13 +156,20 @@ func (a *ConfigurableAgent[S]) openSessionTurn(ctx context.Context, input string
 		}
 		if start >= 0 {
 			turn.resumed, turn.completed, turn.start = events[start].Seq, true, events[start].Seq
-			turn.ended = a.memoryJob(id, turn.start, false)
+			var d session.TurnStart
+			if err := json.Unmarshal(events[start].Data, &d); err != nil {
+				return nil, nil, err
+			}
+			if turn.memory, err = a.turnMemory(ctx, d.Memory); err != nil {
+				return nil, nil, err
+			}
+			turn.ended = a.memoryJob(id, turn.start, false, turn.memory)
 			if err := a.restoreSessionState(id, events[:start]); err != nil {
 				return nil, nil, err
 			}
 			// 重放期间状态从本轮开始前出发，结束后取本轮记录的状态，与原执行结束时一致。
 			turn.replayed = func() error { return a.restoreSessionState(id, events) }
-			history, err := session.DeriveMessages(events[:start])
+			history, err := a.deriveHistory(events[:start])
 			return turn, history, err
 		}
 	}
@@ -179,13 +189,16 @@ func (a *ConfigurableAgent[S]) openSessionTurn(ctx context.Context, input string
 					before = append(before, ev)
 				}
 			}
+			if turn.memory, err = a.turnMemory(ctx, d.Memory); err != nil {
+				return nil, nil, err
+			}
 			if err := a.restoreSessionState(id, before); err != nil {
 				return nil, nil, err
 			}
 			a.bindSessionTurn(turn, id)
-			history, err := session.DeriveMessages(before)
+			history, err := a.deriveHistory(before)
 			turn.resumed, turn.start = open.Seq, open.Seq
-			turn.ended = a.memoryJob(id, turn.start, false)
+			turn.ended = a.memoryJob(id, turn.start, false, turn.memory)
 			return turn, history, err
 		}
 		end, err := session.NewEvent(constants.SessionEventTurnEnd, session.TurnEnd{Aborted: true})
@@ -196,7 +209,15 @@ func (a *ConfigurableAgent[S]) openSessionTurn(ctx context.Context, input string
 		if _, err := rec.Append(ctx, end); err != nil {
 			return nil, nil, err
 		}
-		if learn := a.memoryJob(id, open.Seq, true); learn != nil {
+		// 中止轮次的任务按它开始时的绑定登记；升级前的轮次没有绑定，不登记。
+		var binding *memory.TurnMemory
+		if len(d.Memory) > 0 {
+			binding = new(memory.TurnMemory)
+			if err := json.Unmarshal(d.Memory, binding); err != nil {
+				return nil, nil, fmt.Errorf("会话日志事件 %d：%w", open.Seq, err)
+			}
+		}
+		if learn := a.memoryJob(id, open.Seq, true, binding); learn != nil {
 			if err := learn(ctx, rec.Seq()); err != nil {
 				return nil, nil, err
 			}
@@ -205,12 +226,21 @@ func (a *ConfigurableAgent[S]) openSessionTurn(ctx context.Context, input string
 	if err := a.restoreSessionState(id, rec.Events()); err != nil {
 		return nil, nil, err
 	}
+	if turn.memory, err = a.turnMemory(ctx, nil); err != nil {
+		return nil, nil, err
+	}
+	var binding json.RawMessage
+	if turn.memory != nil {
+		if binding, err = json.Marshal(turn.memory); err != nil {
+			return nil, nil, err
+		}
+	}
 	a.bindSessionTurn(turn, id)
-	history, err := session.DeriveMessages(rec.Events())
+	history, err := a.deriveHistory(rec.Events())
 	if err != nil {
 		return nil, nil, err
 	}
-	start, err := session.NewEvent(constants.SessionEventTurnStart, session.TurnStart{Input: input, ExecutionKey: key})
+	start, err := session.NewEvent(constants.SessionEventTurnStart, session.TurnStart{Input: input, ExecutionKey: key, Memory: binding})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -218,7 +248,7 @@ func (a *ConfigurableAgent[S]) openSessionTurn(ctx context.Context, input string
 		return nil, nil, err
 	}
 	turn.start = rec.Seq()
-	turn.ended = a.memoryJob(id, turn.start, false)
+	turn.ended = a.memoryJob(id, turn.start, false, turn.memory)
 	return turn, history, nil
 }
 

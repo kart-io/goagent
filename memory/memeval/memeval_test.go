@@ -14,7 +14,6 @@ import (
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/memory"
-	"github.com/kart-io/goagent/store"
 )
 
 // fakeModel 按 reply 应答，供作答、判定与记忆抽取使用。
@@ -161,8 +160,8 @@ func TestRunnerEndToEnd(t *testing.T) {
 		}
 		return "no"
 	}}
-	mem := &Memory{Label: "memory", Configure: func(st store.Store, sessions session.Store) memory.Config {
-		return memory.Config{Store: st, Sessions: sessions, Model: extractor}
+	mem := &Memory{Label: "memory", Dir: t.TempDir(), Configure: func(sessions session.Store) memory.Config {
+		return memory.Config{Sessions: sessions, Model: extractor}
 	}}
 	var progress []string
 	results, err := Runner{Systems: []System{Recent{Runes: 20}, mem}, Answerer: answerer, Judge: judge,
@@ -194,6 +193,38 @@ func TestRunnerEndToEnd(t *testing.T) {
 	require.Equal(t, "all", rows[len(rows)-1].Type, "每个方案的汇总行在最后")
 }
 
+// 记忆方案的时钟固定在最后一个会话的时间：记录的创建时间不取墙上时钟，新近性不随评测耗时变化。
+func TestMemoryIngestFreezesClockAtLastSession(t *testing.T) {
+	cases, err := LoadLongMemEval(strings.NewReader(longMemEvalFixture))
+	require.NoError(t, err)
+	extractor := fakeModel{reply: func(system, user string) string {
+		if !strings.Contains(system, "抽取") {
+			return `{"op":"invalidate","target":""}`
+		}
+		return `{"memories":[{"kind":"fact","content":"User moved","importance":0.9}]}`
+	}}
+	mem := &Memory{Label: "memory", Dir: t.TempDir(), Configure: func(sessions session.Store) memory.Config {
+		return memory.Config{Sessions: sessions, Model: extractor}
+	}}
+	c := cases[0]
+	require.Greater(t, len(c.Sessions), 1)
+	var last time.Time
+	for _, s := range c.Sessions {
+		if s.Date.After(last) {
+			last = s.Date
+		}
+	}
+	r, err := mem.Ingest(context.Background(), c)
+	require.NoError(t, err)
+	mc := r.(memoryCase)
+	got, err := mc.mem.Retrieve(memory.WithNamespace(context.Background(), mc.ns...), "User moved")
+	require.NoError(t, err)
+	require.NotEmpty(t, got.Records)
+	for _, rec := range got.Records {
+		require.True(t, rec.CreatedAt.Equal(last), "%s 的创建时间 %s，应为 %s", rec.ID, rec.CreatedAt, last)
+	}
+}
+
 // 抽取偶发失败时按任务的重试次数重试，而不是让整个评测失败；重试用尽才报错。每次尝试含一次 JSON 修正，共两次调用。
 func TestMemoryIngestRetriesFailedJobs(t *testing.T) {
 	noBackoff(t)
@@ -213,8 +244,8 @@ func TestMemoryIngestRetriesFailedJobs(t *testing.T) {
 				}
 				return `{"memories":[]}`
 			}}
-			sys := &Memory{Label: "memory", Configure: func(st store.Store, sessions session.Store) memory.Config {
-				return memory.Config{Store: st, Sessions: sessions, Model: flaky}
+			sys := &Memory{Label: "memory", Dir: t.TempDir(), Configure: func(sessions session.Store) memory.Config {
+				return memory.Config{Sessions: sessions, Model: flaky}
 			}}
 			_, err := sys.Ingest(context.Background(), cases[1])
 			if tt.wantErr {
@@ -408,7 +439,7 @@ func TestRunnerRepeatsConcurrently(t *testing.T) {
 func TestRunnerContinuesAfterCaseError(t *testing.T) {
 	cases, err := LoadLongMemEval(strings.NewReader(longMemEvalFixture))
 	require.NoError(t, err)
-	bad := &Memory{Label: "bad", Configure: func(store.Store, session.Store) memory.Config { return memory.Config{} }}
+	bad := &Memory{Label: "bad", Configure: func(session.Store) memory.Config { return memory.Config{} }}
 	model := fakeModel{reply: func(string, string) string { return "no" }}
 	results, err := Runner{Systems: []System{bad, Recent{}}, Answerer: model, Judge: model, Concurrency: 2}.Run(context.Background(), cases)
 	require.ErrorContains(t, err, "第 1 轮 bad q1")

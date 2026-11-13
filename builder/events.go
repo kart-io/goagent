@@ -15,6 +15,7 @@ import (
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/memory"
 	"github.com/kart-io/goagent/tools"
 )
 
@@ -200,6 +201,9 @@ func (a *ConfigurableAgent[S]) runEvents(ctx context.Context, request *middlewar
 			ctx = durable.WithReplayOnly(ctx)
 		}
 		ctx = context.WithValue(context.WithValue(ctx, historyKey{}, history), sessionLogKey{}, turn)
+		if turn.memory != nil {
+			ctx = memory.WithTurn(ctx, *turn.memory)
+		}
 	}
 	messages, err := a.streamMessages(ctx, input, evidence)
 	if err != nil {

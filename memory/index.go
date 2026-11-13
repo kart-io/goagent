@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"maps"
 	"math"
 	"slices"
 	"strings"
@@ -10,18 +11,23 @@ import (
 	agentErrors "github.com/kart-io/goagent/errors"
 )
 
-// Hit 是一次向量检索的结果，Score 为余弦相似度。
+// Hit 是一次向量检索的结果：ID 是写入时的键，Score 为余弦相似度。
 type Hit struct {
 	ID    string
 	Score float64
 }
 
 // Index 是按命名空间隔离的向量索引，是记录库的投影：丢失后可用 Memory.Reindex 重建。
-// Search 只在给定命名空间内检索，先过滤再取 k 个。
+// 各方法都只作用于给定的精确命名空间，不包括它的子命名空间：Memory 把每个作用域放在 ns 之下的子命名空间中，
+// 按前缀实现的 Clear(ns) 会删掉这些作用域的向量。Search 先过滤再取 k 个。
 type Index interface {
 	Upsert(ctx context.Context, namespace []string, id string, vector []float32) error
 	Delete(ctx context.Context, namespace []string, id string) error
 	Search(ctx context.Context, namespace []string, vector []float32, k int) ([]Hit, error)
+	// IDs 列出命名空间中的全部键，顺序不限。
+	IDs(ctx context.Context, namespace []string) ([]string, error)
+	// Clear 删除命名空间中的全部键，不递归。
+	Clear(ctx context.Context, namespace []string) error
 }
 
 // MemoryIndex 是进程内的精确余弦检索，适合测试与小规模部署。
@@ -65,6 +71,19 @@ func (x *MemoryIndex) Delete(_ context.Context, ns []string, id string) error {
 	x.mu.Lock()
 	defer x.mu.Unlock()
 	delete(x.spaces[spaceKey(ns)], id)
+	return nil
+}
+
+func (x *MemoryIndex) IDs(_ context.Context, ns []string) ([]string, error) {
+	x.mu.RLock()
+	defer x.mu.RUnlock()
+	return slices.Collect(maps.Keys(x.spaces[spaceKey(ns)])), nil
+}
+
+func (x *MemoryIndex) Clear(_ context.Context, ns []string) error {
+	x.mu.Lock()
+	defer x.mu.Unlock()
+	delete(x.spaces, spaceKey(ns))
 	return nil
 }
 
