@@ -24,6 +24,7 @@ type cacheEntry struct {
 	ref        baseRef
 	base       state
 	baseIdx    *lazyIndex // 基础快照的索引（解码时在后台构建），可为 nil
+	deps       *depIndex  // 基础快照的反向依赖（第一次级联时构建）
 	headCommit string
 	cur        state
 	ov         overlay

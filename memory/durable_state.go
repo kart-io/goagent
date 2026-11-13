@@ -242,7 +242,7 @@ func (m *Memory) mutateOnce(ctx context.Context, ns []string, expectScope string
 		}
 	}
 	t := newTx(v.cur, v.base, ns)
-	t.scope = scope
+	t.scope, t.deps, t.ov = scope, v.deps, v.ov
 	if o.beforeSave != nil {
 		if err := o.beforeSave(ctx, t); err != nil {
 			return state{}, head{}, err
@@ -291,7 +291,7 @@ func (m *Memory) mutateOnce(ctx context.Context, ns []string, expectScope string
 		}
 		return state{}, head{}, err
 	}
-	nv := view{cur: cur, base: v.base, baseIdx: v.baseIdx, ov: ov, idx: newRecallIndex(v.baseIdx, ov)}
+	nv := view{cur: cur, base: v.base, baseIdx: v.baseIdx, deps: v.deps, ov: ov, idx: newRecallIndex(v.baseIdx, ov)}
 	m.cache.put(nv.entry(key, scope, h.Base, nh.CommitID, nh.OverlayBytes))
 	return cur, nh, nil
 }

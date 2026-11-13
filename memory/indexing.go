@@ -80,13 +80,12 @@ var (
 			return out
 		},
 	}
-	// 实体向量只取决于名称，名称在一个实例内不变（合并别名会增加 ContentRev），所以只比较实例号，
-	// 键固定取创建时的 ContentRev（1），重建不会为同一实体留下多个键。
+	// 实体向量只取决于显示名，ContentRev 只在显示名改变时加一。
 	entitySpace = indexSpace{
 		sub: "#entity",
 		current: func(s state, k indexKey) bool {
 			e, ok := s.Entities[k.ID]
-			return ok && e.Incarnation == k.Incarnation
+			return ok && e.Incarnation == k.Incarnation && e.ContentRev == k.ContentRev
 		},
 		objects: func(s state) []indexObject {
 			var out []indexObject
@@ -121,7 +120,7 @@ func keysOf(rs []Record) []indexKey {
 }
 
 func entityKey(e Entity) indexKey {
-	return indexKey{ID: e.ID, Incarnation: e.Incarnation, ContentRev: 1}
+	return indexKey{ID: e.ID, Incarnation: e.Incarnation, ContentRev: e.ContentRev}
 }
 
 // adopted 报告键是否可以被采用：用当前模型写入，且对象仍是该版本（不变量 6）。

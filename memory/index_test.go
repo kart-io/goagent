@@ -236,10 +236,10 @@ func TestReindexRepairsIndex(t *testing.T) {
 	_, s, err := m.read(ctx, []string{"u"})
 	require.NoError(t, err)
 	require.Equal(t, before.Seq, s.Seq, "Reindex 不写 state")
-	ak, bj := recordKey(a), entityKey(s.Entities["bj"])
-	ak.Model, bj.Model = m.modelTag, m.modelTag
+	ak, bj, basis := recordKey(a), entityKey(s.Entities["bj"]), recordKey(s.Records["graph-basis"])
+	ak.Model, bj.Model, basis.Model = m.modelTag, m.modelTag, m.modelTag
 	got := indexKeys(x, []string{"u"})
-	want := []string{ak.String(), bj.String()}
+	want := []string{ak.String(), bj.String(), basis.String()}
 	slices.Sort(want)
 	require.Equal(t, want, got)
 	checkIndex(t, m, x, []string{"u"})

@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"slices"
@@ -12,23 +13,62 @@ import (
 	"github.com/kart-io/goagent/constants"
 )
 
-// Entity 是图中的实体节点，按命名空间、类型与规范化名称去重；Aliases 记录指向同一实体的其他名称。
+// Entity 是图中的实体节点，按命名空间、类型与规范化名称去重。Names 是实体的全部名称及其来源，由级联重算维护：
+// 来源记录被遗忘时名称随之删除，名称全部删除时实体删除；至少一个名称存活时 Live 为真，不存活的实体不参与召回与社区。
+// Name 是显示名，取自存活的名称；Aliases 是 Name 以外的存活名称（实体不存活时为其余全部名称），二者都是物化值。
 // 配置了 Index 时名称向量存于 Index 的实体子命名空间，用于找出名称不同的候选重复实体。
 type Entity struct {
-	ID        string    `json:"id"`
-	Namespace []string  `json:"namespace"`
-	Name      string    `json:"name"`
-	Type      string    `json:"type"`
-	Aliases   []string  `json:"aliases,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
-	// Incarnation、Revision、ContentRev 的含义与 Record 相同。
+	ID        string       `json:"id"`
+	Namespace []string     `json:"namespace"`
+	Name      string       `json:"name"`
+	Type      string       `json:"type"`
+	Aliases   []string     `json:"aliases,omitempty"`
+	Names     []EntityName `json:"names,omitempty"`
+	Live      bool         `json:"live,omitzero"`
+	CreatedAt time.Time    `json:"created_at"`
+	// Incarnation、Revision 的含义与 Record 相同；ContentRev 只在 Name 改变时加一，名称向量的键据此区分版本。
 	Incarnation int64 `json:"incarnation,omitzero"`
 	Revision    int64 `json:"revision,omitzero"`
 	ContentRev  int64 `json:"content_rev,omitzero"`
 }
 
-// Edge 是带有效期的关系（Zep 时序图）：Subject、Object 为实体 ID，Fact 是可读的陈述。
-// 与新事实矛盾的边写入 InvalidAt 并以 SupersededBy 指向新边，不删除，因而可追溯某一时刻成立的关系。
+// EntityName 是实体的一个名称（规范化前的原文）及其来源；至少一个来源成立时 Live 为真。
+type EntityName struct {
+	Name    string   `json:"name"`
+	Origins []Origin `json:"origins,omitempty"`
+	Live    bool     `json:"live,omitzero"`
+}
+
+// RecordRef 指向记录的一个版本。
+type RecordRef struct {
+	ID          string `json:"id"`
+	Incarnation int64  `json:"incarnation,omitzero"`
+	ContentRev  int64  `json:"content_rev,omitzero"`
+}
+
+func refOf(r Record) RecordRef {
+	return RecordRef{ID: r.ID, Incarnation: r.Incarnation, ContentRev: r.ContentRev}
+}
+
+// Origin 是关系或实体名称的一个来源：依据的记录版本，以及产生它的轮次（回退据此删除）。
+type Origin struct {
+	Record RecordRef `json:"record"`
+	Source Source    `json:"source,omitzero"`
+}
+
+// Derivation 是关系的一次派生：依据的记录与该次抽取的陈述；At 是对话时间，整理转移时沿用。
+type Derivation struct {
+	Origin
+	Fact string    `json:"fact"`
+	At   time.Time `json:"at"`
+}
+
+// maxOrigins 是一条关系的派生、一个名称的来源的上限，超出时先删不成立的，再删最早的。
+const maxOrigins = 256
+
+// Edge 是带有效期的关系（Zep 时序图）：Subject、Object 为实体 ID。关系由记录派生（Derivations），
+// 至少一条派生成立、两端实体存活时有效，否则失效（underived）；派生全部删除时关系删除。Fact 是成立派生中最新的陈述，Sources 是派生的轮次，二者都是物化值。
+// 与新事实矛盾的边写入 InvalidAt（superseded）并以 SupersededBy 指向新边，不删除，因而可追溯某一时刻成立的关系。
 type Edge struct {
 	ID           string    `json:"id"`
 	Namespace    []string  `json:"namespace"`
@@ -39,19 +79,22 @@ type Edge struct {
 	ValidFrom    time.Time `json:"valid_from"`
 	InvalidAt    time.Time `json:"invalid_at,omitzero"`
 	SupersededBy string    `json:"superseded_by,omitempty"`
-	Source       Source    `json:"source,omitzero"`
-	CreatedAt    time.Time `json:"created_at"`
-	Incarnation  int64     `json:"incarnation,omitzero"`
-	Revision     int64     `json:"revision,omitzero"`
-	ContentRev   int64     `json:"content_rev,omitzero"`
+	// InvalidReason 只有 superseded 与 underived。
+	InvalidReason InvalidReason `json:"invalid_reason,omitempty"`
+	Sources       []Source      `json:"sources,omitempty"`
+	Derivations   []Derivation  `json:"derivations,omitempty"`
+	CreatedAt     time.Time     `json:"created_at"`
+	Incarnation   int64         `json:"incarnation,omitzero"`
+	Revision      int64         `json:"revision,omitzero"`
+	ContentRev    int64         `json:"content_rev,omitzero"`
 }
 
-// Valid 报告关系是否仍然成立。
-func (e Edge) Valid() bool { return e.InvalidAt.IsZero() }
+// Valid 报告关系是否仍然成立。没有派生的关系（G1 写入的旧数据）不成立。
+func (e Edge) Valid() bool { return e.InvalidAt.IsZero() && len(e.Derivations) > 0 }
 
 // ValidAt 报告关系在 t 时是否成立。
 func (e Edge) ValidAt(t time.Time) bool {
-	return !t.Before(e.ValidFrom) && (e.InvalidAt.IsZero() || t.Before(e.InvalidAt))
+	return len(e.Derivations) > 0 && !t.Before(e.ValidFrom) && (e.InvalidAt.IsZero() || t.Before(e.InvalidAt))
 }
 
 // normalizeName 用于实体去重：小写、去首尾空白并合并内部空白。
@@ -99,6 +142,7 @@ func (e *Entity) mergeAliases(names ...string) bool {
 
 // relation 是抽取结果中的关系；Exclusive 表示主体在该谓词上只能有一个客体（如"住在"），新客体使旧关系失效。
 type relation struct {
+	From      *int      `json:"from"` // 依据的记忆在本轮抽取结果中的下标
 	Subject   entityRef `json:"subject"`
 	Predicate string    `json:"predicate"`
 	Object    entityRef `json:"object"`
@@ -120,7 +164,7 @@ type unresolved struct {
 
 // resolveEntities 把一轮抽取的实体引用解析为实体（Graphiti 式判重）：先按类型与规范化名称（含别名）精确匹配；
 // 匹配不到的，取同类型中名称向量或字符对相似度不低于 EntitySimilarity 的实体作为候选，由模型一次判定是否为同一对象；
-// 仍无匹配的新建。返回引用 key 到实体的映射（含合并后的别名），以及新建实体的名称向量；不写入，由调用方在 mutate 中按 putEntity 写入。
+// 仍无匹配的新建。返回引用 key 到实体的映射（含合并后的别名），以及新建实体的名称向量；不写入，由调用方在 mutate 中加入名称来源。
 // known 须是调用方自有的副本，取自作用域 scope：合并别名会修改其中的实体。
 func (m *Memory) resolveEntities(ctx context.Context, ns []string, scope string, known []Entity, refs []entityRef) (map[string]Entity, map[string][]float32, error) {
 	resolved := map[string]Entity{}
@@ -177,29 +221,13 @@ func (m *Memory) resolveEntities(ctx context.Context, ns []string, scope string,
 	return resolved, vectors, nil
 }
 
-// putEntity 在 tx 中写入解析出的实体：不存在时新建并返回 true；已存在时把名称与别名合并到锁内的当前版本（合并可交换，与读取后的修改不冲突）。
-func putEntity(t *tx, e Entity) bool {
-	cur, ok := t.Entities.Get(e.ID)
-	if !ok {
-		e.Incarnation, e.Revision, e.ContentRev = t.incarnation(), 1, 1
-		t.Entities.Put(e.ID, e)
-		return true
-	}
-	if cur.mergeAliases(append([]string{e.Name}, e.Aliases...)...) {
-		cur.Revision++
-		cur.ContentRev++
-		t.Entities.Put(cur.ID, cur)
-	}
-	return false
-}
-
 // entityCandidates 为每个未匹配的引用找同类型中最相似的至多 EntityCandidates 个实体：
 // 相似度取名称向量余弦（需 Index）与名称字符对重合的较大者。翻译或别称（如"Acme"与"爱克米"）只能靠向量找到。
-// 向量在实体子命名空间中检索全部已知实体，只采用 known 中仍是该实例的键。
+// 向量在实体子命名空间中检索全部已知实体，只采用 known 中仍是该版本的键。
 func (m *Memory) entityCandidates(ctx context.Context, ns []string, scope string, known []Entity, pending []*unresolved) error {
-	incarnation := make(map[string]int64, len(known))
+	keys := make(map[string]indexKey, len(known))
 	for _, e := range known {
-		incarnation[e.ID] = e.Incarnation
+		keys[e.ID] = entityKey(e)
 	}
 	for _, p := range pending {
 		similarity := map[string]float64{}
@@ -214,7 +242,7 @@ func (m *Memory) entityCandidates(ctx context.Context, ns []string, scope string
 					return err
 				}
 				for _, h := range hits {
-					if k, ok := parseIndexKey(h.ID); ok && k.Model == m.modelTag && incarnation[k.ID] == k.Incarnation {
+					if k, ok := parseIndexKey(h.ID); ok && k.Model == m.modelTag && keys[k.ID] == (indexKey{ID: k.ID, Incarnation: k.Incarnation, ContentRev: k.ContentRev}) {
 						similarity[k.ID] = max(similarity[k.ID], h.Score)
 					}
 				}
@@ -284,12 +312,17 @@ func (m *Memory) judgeDuplicates(ctx context.Context, pending []*unresolved) (ma
 	return out, nil
 }
 
-// applyRelations 写入一轮抽取出的关系，at 是该轮发生的时间。相同的有效关系不重复写入。
-// 排他谓词上的其他有效关系在 at 失效并指向新关系；已有关系比新关系生效更晚时（迟到的旧事实），新关系写入即失效并指向已有关系。
-// 实体判重（模型与嵌入）在锁外完成；关系的去重与失效在 mutate 内按锁内的关系重新计算，一次提交。
-func (m *Memory) applyRelations(ctx context.Context, j Job, at time.Time, rels []relation) error {
+// applyRelations 写入一轮抽取出的关系，at 是该轮发生的时间。每条关系以 From 指向本轮整理出的记录（refs），没有依据的关系丢弃。
+// 两端实体的名称连同依据加入实体；已有相同的有效关系时只追加一条派生，否则新建关系。
+// 排他谓词上的其他有效关系在 at 失效（superseded）并指向新关系；已有关系比新关系生效更晚时（迟到的旧事实），新关系写入即失效并指向已有关系。
+// 实体判重（模型与嵌入）在锁外完成；名称、关系的去重与失效在 mutate 内按锁内的状态重新计算并级联，一次提交。
+func (m *Memory) applyRelations(ctx context.Context, j Job, at time.Time, rels []relation, refs map[int]RecordRef) error {
 	rels = slices.DeleteFunc(slices.Clone(rels), func(r relation) bool {
-		return strings.TrimSpace(r.Predicate) == "" || strings.TrimSpace(r.Subject.Name) == "" || strings.TrimSpace(r.Object.Name) == ""
+		if r.From == nil {
+			return true
+		}
+		_, ok := refs[*r.From]
+		return !ok || strings.TrimSpace(r.Predicate) == "" || strings.TrimSpace(r.Subject.Name) == "" || strings.TrimSpace(r.Object.Name) == ""
 	})
 	if !m.cfg.Graph || len(rels) == 0 {
 		return nil
@@ -304,71 +337,122 @@ func (m *Memory) applyRelations(ctx context.Context, j Job, at time.Time, rels [
 	}
 	known := make([]Entity, 0, len(s.Entities))
 	for _, id := range slices.Sorted(maps.Keys(s.Entities)) {
-		known = append(known, entityKind.clone(s.Entities[id]))
+		if len(s.Entities[id].Names) > 0 {
+			known = append(known, entityKind.clone(s.Entities[id]))
+		}
 	}
-	var refs []entityRef
+	var ends []entityRef
 	for _, r := range rels {
-		refs = append(refs, r.Subject, r.Object)
+		ends = append(ends, r.Subject, r.Object)
 	}
-	entities, vectors, err := m.resolveEntities(ctx, ns, scope, known, refs)
+	entities, vectors, err := m.resolveEntities(ctx, ns, scope, known, ends)
 	if err != nil {
 		return err
 	}
 	now := m.now()
 	var created []indexKey
 	var createdVecs [][]float32
+	var c cascaded
 	_, err = m.mutate(ctx, ns, scope, func(t *tx) error {
-		created, createdVecs = nil, nil
-		for _, key := range slices.Sorted(maps.Keys(entities)) {
-			e := entities[key]
-			if putEntity(t, e) && vectors[e.ID] != nil {
-				cur, _ := t.Entities.Get(e.ID)
-				created, createdVecs = append(created, entityKey(cur)), append(createdVecs, vectors[e.ID])
+		created, createdVecs, c = nil, nil, cascaded{}
+		touched, fresh := map[string]*Entity{}, map[string]bool{}
+		// entity 返回引用解析到的实体在本次提交中的工作副本；期间被删除的按原 ID 重建。
+		entity := func(r entityRef) *Entity {
+			res := entities[r.key()]
+			if e, ok := touched[res.ID]; ok {
+				return e
+			}
+			cur, ok := t.Entities.Get(res.ID)
+			if ok {
+				cur.Revision++
+			} else {
+				cur = Entity{ID: res.ID, Namespace: ns, Name: strings.TrimSpace(res.Name), Type: res.Type, CreatedAt: now,
+					Incarnation: t.incarnation(), Revision: 1, ContentRev: 1}
+				fresh[res.ID] = true
+			}
+			touched[res.ID] = &cur
+			return &cur
+		}
+		valid := map[[3]string]string{}
+		for _, id := range t.Edges.Keys() {
+			if e := t.Edges.m[id]; e.Valid() {
+				valid[[3]string{e.Subject, e.Predicate, e.Object}] = id
 			}
 		}
 		for i, r := range rels {
 			pred := strings.TrimSpace(r.Predicate)
-			subj, obj := entities[r.Subject.key()], entities[r.Object.key()]
-			id := stableID(j.Key, "relation", strconv.Itoa(i))
-			keys := t.Edges.Keys()
-			if slices.ContainsFunc(keys, func(k string) bool {
-				e, _ := t.Edges.Get(k)
-				return e.Valid() && e.ID != id && e.Subject == subj.ID && e.Predicate == pred && e.Object == obj.ID
-			}) {
-				continue
+			o := Origin{Record: refs[*r.From], Source: j.source()}
+			subj, obj := entity(r.Subject), entity(r.Object)
+			for _, side := range []struct {
+				e   *Entity
+				ref entityRef
+			}{{subj, r.Subject}, {obj, r.Object}} {
+				for _, n := range append([]string{side.ref.Name}, side.ref.Aliases...) {
+					addName(t, side.e, n, o)
+				}
 			}
 			fact := strings.TrimSpace(r.Fact)
 			if fact == "" {
-				fact = subj.Name + " " + pred + " " + obj.Name
+				fact = strings.TrimSpace(r.Subject.Name) + " " + pred + " " + strings.TrimSpace(r.Object.Name)
+			}
+			d := Derivation{Origin: o, Fact: fact, At: at}
+			id := stableID(j.Key, "relation", strconv.Itoa(i))
+			triple := [3]string{subj.ID, pred, obj.ID}
+			if k, ok := valid[triple]; ok && k != id {
+				e, _ := t.Edges.Get(k)
+				e.Derivations = addDerivation(t, e.Derivations, d)
+				e.Revision++
+				t.Edges.Put(k, e)
+				continue
 			}
 			edge := Edge{ID: id, Namespace: ns, Subject: subj.ID, Predicate: pred, Object: obj.ID, Fact: fact, ValidFrom: at, CreatedAt: now,
-				Source: j.source()}
-			var superseded []Edge
-			for _, k := range keys {
-				old, _ := t.Edges.Get(k)
+				Derivations: []Derivation{d}}
+			var superseded []string
+			for _, k := range t.Edges.Keys() {
+				old := t.Edges.m[k]
 				if !r.Exclusive || !old.Valid() || old.ID == id || old.Subject != subj.ID || old.Predicate != pred || old.Object == obj.ID {
 					continue
 				}
 				if old.ValidFrom.After(at) {
-					edge.InvalidAt, edge.SupersededBy = old.ValidFrom, old.ID
+					edge.InvalidAt, edge.SupersededBy, edge.InvalidReason = old.ValidFrom, old.ID, ReasonSuperseded
 					continue
 				}
-				superseded = append(superseded, old)
+				superseded = append(superseded, k)
 			}
-			// 重做同一任务时覆盖上次写入的关系，保留实例号。
+			// 重做同一任务时覆盖上次写入的关系，保留实例号与其他任务追加的派生。
 			if prev, ok := t.Edges.Get(id); ok {
 				edge.Incarnation, edge.Revision, edge.ContentRev = prev.Incarnation, prev.Revision+1, prev.ContentRev
+				if [3]string{prev.Subject, prev.Predicate, prev.Object} == triple {
+					edge.Derivations = addDerivation(t, prev.Derivations, d)
+				}
 				if prev.Fact != edge.Fact || prev.Subject != edge.Subject || prev.Predicate != edge.Predicate || prev.Object != edge.Object {
 					edge.ContentRev++
 				}
 			} else {
 				edge.Incarnation, edge.Revision, edge.ContentRev = t.incarnation(), 1, 1
 			}
+			edge.Sources = edgeSources(edge)
 			t.Edges.Put(id, edge)
-			for _, old := range superseded {
-				old.InvalidAt, old.SupersededBy = at, id
+			if edge.Valid() {
+				valid[triple] = id
+			}
+			for _, k := range superseded {
+				old, _ := t.Edges.Get(k)
+				old.InvalidAt, old.SupersededBy, old.InvalidReason = at, id, ReasonSuperseded
 				old.Revision++
-				t.Edges.Put(old.ID, old)
+				t.Edges.Put(k, old)
+				delete(valid, [3]string{old.Subject, old.Predicate, old.Object})
+			}
+		}
+		for _, id := range slices.Sorted(maps.Keys(touched)) {
+			t.Entities.Put(id, *touched[id])
+		}
+		c = cascade(t, now)
+		c.touch(slices.Collect(maps.Keys(touched))...)
+		m.syncGraph(t, c)
+		for _, id := range slices.Sorted(maps.Keys(fresh)) {
+			if cur, ok := t.Entities.Get(id); ok && vectors[id] != nil {
+				created, createdVecs = append(created, entityKey(cur)), append(createdVecs, vectors[id])
 			}
 		}
 		return nil
@@ -376,5 +460,5 @@ func (m *Memory) applyRelations(ctx context.Context, j Job, at time.Time, rels [
 	if err != nil {
 		return err
 	}
-	return m.writeIndex(ctx, ns, scope, entitySpace, created, createdVecs)
+	return errors.Join(m.writeIndex(ctx, ns, scope, entitySpace, created, createdVecs), m.indexAfter(ctx, ns, scope, c))
 }

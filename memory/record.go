@@ -47,6 +47,8 @@ const (
 	ReasonExpired InvalidReason = "expired"
 	// ReasonForgotten：被遗忘，正文已清空，是终态。
 	ReasonForgotten InvalidReason = "forgotten"
+	// ReasonUnderived：所依据的记录被遗忘或回退。依据被遗忘时正文同时清空。
+	ReasonUnderived InvalidReason = "underived"
 )
 
 // Record 是一条长期记忆。InvalidAt 非零表示已失效，InvalidReason 给出原因；失效记录不再被召回，保留 Retention.InvalidRetention 后删除。
@@ -65,11 +67,15 @@ type Record struct {
 	InvalidReason InvalidReason `json:"invalid_reason,omitempty"`
 	SupersededBy  string        `json:"superseded_by,omitempty"`
 	// Sources 是内容所依据的全部轮次；合并更新时继承旧记录的来源，手动写入时为空。
-	Sources     []Source  `json:"sources,omitempty"`
-	CreatedAt   time.Time `json:"created_at"`
-	Incarnation int64     `json:"incarnation,omitzero"`
-	Revision    int64     `json:"revision,omitzero"`
-	ContentRev  int64     `json:"content_rev,omitzero"`
+	Sources []Source `json:"sources,omitempty"`
+	// MergedFrom 是整理合并时展示给模型的全部候选；其中任一条被擦除，本记录随之擦除（underived）。
+	MergedFrom []RecordRef `json:"merged_from,omitempty"`
+	// ReflectedFrom 是反思所依据的情景；其中任一条被擦除，本记录随之擦除，被回退时本记录失效（underived）。
+	ReflectedFrom []RecordRef `json:"reflected_from,omitempty"`
+	CreatedAt     time.Time   `json:"created_at"`
+	Incarnation   int64       `json:"incarnation,omitzero"`
+	Revision      int64       `json:"revision,omitzero"`
+	ContentRev    int64       `json:"content_rev,omitzero"`
 	// Reflected 表示该情景已参与过反思。
 	Reflected bool `json:"reflected,omitzero"`
 }

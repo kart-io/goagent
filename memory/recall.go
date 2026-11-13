@@ -328,7 +328,9 @@ func (r Retrieval) Sessions() []string {
 		}
 	}
 	for _, rel := range r.Relations {
-		add(rel.Source)
+		for _, s := range rel.Sources {
+			add(s)
+		}
 	}
 	return out
 }

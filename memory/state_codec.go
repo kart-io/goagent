@@ -18,8 +18,10 @@ import (
 // 版本头在前，读写方只解析它就能核对 CommitID；数据块是 gob → zstd → base64 的字符串，按引号定位、不经 JSON 扫描，
 // 分 stateChunks 块并行编解码。版本头与数据块在同一个快照中，一次 Save 原子提交。
 const (
-	stateBlobVersion = "memory-state-blob/2"
-	stateChunks      = 16
+	stateBlobVersion = "memory-state-blob/3"
+	// stateBlobV2 是 G1 的格式，仍可读取：gob 忽略已删除的字段，没有派生的关系与没有名称的实体按 G2 规则过滤与清理。
+	stateBlobV2 = "memory-state-blob/2"
+	stateChunks = 16
 )
 
 // stateScalars 是 state 的标量字段；版本头与第一个数据块各存一份，完整解码时互相核对。

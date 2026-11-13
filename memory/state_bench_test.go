@@ -81,7 +81,12 @@ func benchState(n int, gen textGen) func(*tx) error {
 		ents, names := make([]string, n), make([]string, n)
 		for i := range n {
 			ents[i], names[i] = uuid.NewString(), gen(rng, 4)
-			t.Entities.Put(ents[i], Entity{ID: ents[i], Name: names[i], Type: gen(rng, 2), Aliases: []string{gen(rng, 3)}, CreatedAt: at()})
+			alias := gen(rng, 3)
+			origin := func() []Origin {
+				return []Origin{{Record: RecordRef{ID: fmt.Sprintf("rec-%06d", rng.IntN(n))}, Source: Source{Session: uuid.NewString(), From: rng.Int64N(1e5)}}}
+			}
+			t.Entities.Put(ents[i], Entity{ID: ents[i], Name: names[i], Type: gen(rng, 2), Aliases: []string{alias}, CreatedAt: at(), Live: true,
+				Names: []EntityName{{Name: names[i], Origins: origin(), Live: true}, {Name: alias, Origins: origin(), Live: true}}})
 		}
 		for i := range n {
 			r := Record{ID: fmt.Sprintf("rec-%06d", i), Kind: KindFact, Content: gen(rng, 40+rng.IntN(120)),
@@ -95,8 +100,12 @@ func benchState(n int, gen textGen) func(*tx) error {
 		}
 		for range 2 * n {
 			id := uuid.NewString()
-			t.Edges.Put(id, Edge{ID: id, Subject: ents[rng.IntN(n)], Predicate: gen(rng, 2), Object: ents[rng.IntN(n)],
-				Fact: gen(rng, 15+rng.IntN(30)), ValidFrom: at(), CreatedAt: at(), Source: Source{Session: uuid.NewString(), From: rng.Int64N(1e5)}})
+			e := Edge{ID: id, Subject: ents[rng.IntN(n)], Predicate: gen(rng, 2), Object: ents[rng.IntN(n)],
+				Fact: gen(rng, 15+rng.IntN(30)), ValidFrom: at(), CreatedAt: at()}
+			src := Source{Session: uuid.NewString(), From: rng.Int64N(1e5)}
+			e.Sources = []Source{src}
+			e.Derivations = []Derivation{{Origin: Origin{Record: RecordRef{ID: fmt.Sprintf("rec-%06d", rng.IntN(n))}, Source: src}, Fact: e.Fact, At: e.ValidFrom}}
+			t.Edges.Put(id, e)
 		}
 		for range n / 20 {
 			id := uuid.NewString()

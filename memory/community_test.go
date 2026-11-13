@@ -59,7 +59,7 @@ func TestCommunitiesLifecycle(t *testing.T) {
 	require.Len(t, summarized, 2, "没有变化时不重写摘要")
 
 	added := edge("6", "sz", "zs", "张三住在深圳")
-	added.Source = Source{Session: "s", From: 10, To: 12}
+	added.Sources = []Source{{Session: "s", From: 10, To: 12}}
 	require.NoError(t, g.PutEdge(ctx, added))
 	require.NoError(t, m.RefreshCommunities(ctx))
 	require.Len(t, summarized, 3, "只重写关系变化的社区")
@@ -93,7 +93,9 @@ func TestCommunitiesLifecycle(t *testing.T) {
 // 枢纽实体不参与划分：否则与"用户"相连的所有实体会成为一个社区。
 func TestDetectCommunitiesSkipsHub(t *testing.T) {
 	var edges []Edge
-	add := func(s, o string) { edges = append(edges, Edge{ID: s + o, Subject: s, Object: o, Predicate: "p"}) }
+	add := func(s, o string) {
+		edges = append(edges, Edge{ID: s + o, Subject: s, Object: o, Predicate: "p", Derivations: []Derivation{{}}})
+	}
 	for _, leaf := range []string{"a1", "a2", "a3", "b1", "b2", "b3", "c1", "c2", "c3", "d1", "d2", "d3", "e1"} {
 		add("user", leaf)
 	}
@@ -102,7 +104,7 @@ func TestDetectCommunitiesSkipsHub(t *testing.T) {
 		add(g+"2", g+"3")
 	}
 	var members [][]string
-	for _, c := range detectCommunities([]string{"u"}, edges) {
+	for _, c := range detectCommunities([]string{"u"}, edges, nil) {
 		members = append(members, c.Members)
 	}
 	require.ElementsMatch(t, [][]string{{"a1", "a2", "a3"}, {"b1", "b2", "b3"}}, members)

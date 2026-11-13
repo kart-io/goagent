@@ -22,7 +22,8 @@ import (
 // 增量提交的存储布局与协议，设计见 docs/design/MEMORY_G1_INCREMENTAL.md 第 2～4 节：
 // head 是唯一的提交点，含标量、基础快照指针与按键合并的覆盖层；基础快照在两个槽位间轮换，只由压缩者写入非活动槽位。
 const (
-	headVersion = "memory-head/2"
+	headVersion = "memory-head/3"
+	headV2      = "memory-head/2" // 与 /3 格式相同，可读取
 	headID      = "memory/head"
 	compactID   = "memory/compact"
 )
@@ -238,7 +239,7 @@ func loadHead(ctx context.Context, st durable.Store) (head, error) {
 	if err != nil {
 		return head{}, err
 	}
-	if snap.Version != headVersion || snap.Plan != statePlan {
+	if (snap.Version != headVersion && snap.Version != headV2) || snap.Plan != statePlan {
 		return head{}, agentErrors.Newf(agentErrors.CodeStateLoad, "长期记忆 head 的版本 %q 无法识别，需要升级", snap.Version).WithComponent("memory").WithOperation("load")
 	}
 	var h head
@@ -264,12 +265,13 @@ type view struct {
 	cur     state
 	base    state
 	baseIdx *lazyIndex
+	deps    *depIndex
 	ov      overlay
 	idx     *recallIndex
 }
 
 func (v view) entry(key, scope string, ref baseRef, headCommit string, ovRaw int) *cacheEntry {
-	return &cacheEntry{key: key, scope: scope, ref: ref, base: v.base, baseIdx: v.baseIdx, headCommit: headCommit, cur: v.cur, ov: v.ov, ovRaw: ovRaw, idx: v.idx}
+	return &cacheEntry{key: key, scope: scope, ref: ref, base: v.base, baseIdx: v.baseIdx, deps: v.deps, headCommit: headCommit, cur: v.cur, ov: v.ov, ovRaw: ovRaw, idx: v.idx}
 }
 
 // materialize 还原 head 对应的 state（增量提交 3.1）：结果只由（基础快照, head）决定，缓存命中时不解码。
@@ -277,7 +279,7 @@ func (v view) entry(key, scope string, ref baseRef, headCommit string, ovRaw int
 func (m *Memory) materialize(ctx context.Context, st durable.Store, ns []string, scope string, h head) (view, error) {
 	key := store.NamespaceKey(ns)
 	if e, ok := m.cache.head(key, scope, h.CommitID); ok {
-		return view{cur: e.cur, base: e.base, baseIdx: e.baseIdx, ov: e.ov, idx: e.idx}, nil
+		return view{cur: e.cur, base: e.base, baseIdx: e.baseIdx, deps: e.deps, ov: e.ov, idx: e.idx}, nil
 	}
 	ch := m.decodes.DoChan(key+"#"+scope+"#"+h.CommitID, func() (any, error) {
 		start := time.Now()
@@ -301,7 +303,7 @@ func (m *Memory) materialize(ctx context.Context, st durable.Store, ns []string,
 
 // decode 读取并解码基础快照（缓存中有时复用），叠加 head 的覆盖层。
 func (m *Memory) decode(ctx context.Context, st durable.Store, ns []string, scope string, h head) (view, error) {
-	base, baseIdx, err := m.loadBase(ctx, st, ns, scope, h.Base)
+	base, baseIdx, deps, err := m.loadBase(ctx, st, ns, scope, h.Base)
 	if err != nil {
 		return view{}, err
 	}
@@ -314,42 +316,42 @@ func (m *Memory) decode(ctx context.Context, st durable.Store, ns []string, scop
 		cur = ov.apply(base)
 	}
 	cur.Seq, cur.CommitID, cur.NextIncarnation, cur.LastForgetSeq, cur.MigrationID = h.Seq, h.CommitID, h.NextIncarnation, h.LastForgetSeq, h.MigrationID
-	return view{cur: cur, base: base, baseIdx: baseIdx, ov: ov, idx: newRecallIndex(baseIdx, ov)}, nil
+	return view{cur: cur, base: base, baseIdx: baseIdx, deps: deps, ov: ov, idx: newRecallIndex(baseIdx, ov)}, nil
 }
 
-// loadBase 返回 ref 指向的已解码基础快照及其索引（解码时在后台开始构建）；槽位的 commit_id 与 ref 不同时返回 errBaseChanged。
-func (m *Memory) loadBase(ctx context.Context, st durable.Store, ns []string, scope string, ref baseRef) (state, *lazyIndex, error) {
+// loadBase 返回 ref 指向的已解码基础快照、它的召回索引（解码时在后台开始构建）与反向依赖；槽位的 commit_id 与 ref 不同时返回 errBaseChanged。
+func (m *Memory) loadBase(ctx context.Context, st durable.Store, ns []string, scope string, ref baseRef) (state, *lazyIndex, *depIndex, error) {
 	if ref.CommitID == "" {
 		var s state
 		s.init()
-		return s, nil, nil
+		return s, nil, newDepIndex(s), nil
 	}
 	if e, ok := m.cache.base(store.NamespaceKey(ns), scope, ref.CommitID); ok {
-		return e.base, e.baseIdx, nil
+		return e.base, e.baseIdx, e.deps, nil
 	}
 	snap, err := st.Load(ctx, baseID(ref.Slot))
 	if errors.Is(err, os.ErrNotExist) {
-		return state{}, nil, errBaseChanged
+		return state{}, nil, nil, errBaseChanged
 	}
 	if err != nil {
-		return state{}, nil, err
+		return state{}, nil, nil, err
 	}
-	if snap.Version != stateBlobVersion || snap.Plan != statePlan {
-		return state{}, nil, agentErrors.Newf(agentErrors.CodeStateLoad, "长期记忆基础快照的版本 %q 无法识别，需要升级", snap.Version).WithComponent("memory").WithOperation("load")
+	if (snap.Version != stateBlobVersion && snap.Version != stateBlobV2) || snap.Plan != statePlan {
+		return state{}, nil, nil, agentErrors.Newf(agentErrors.CodeStateLoad, "长期记忆基础快照的版本 %q 无法识别，需要升级", snap.Version).WithComponent("memory").WithOperation("load")
 	}
 	blob, err := decodeBlob(snap.Data)
 	if err != nil {
-		return state{}, nil, err
+		return state{}, nil, nil, err
 	}
 	if blob.CommitID != ref.CommitID {
-		return state{}, nil, errBaseChanged
+		return state{}, nil, nil, errBaseChanged
 	}
 	s, err := decodeState(blob, ns)
 	if err != nil {
-		return state{}, nil, err
+		return state{}, nil, nil, err
 	}
 	s.init()
-	return s, newLazyIndex(s.Records, m.cache != nil), nil
+	return s, newLazyIndex(s.Records, m.cache != nil), newDepIndex(s), nil
 }
 
 // needsCompaction 报告 head 是否达到压缩条件（增量提交 4.1）。
@@ -494,7 +496,7 @@ func (m *Memory) switchBase(ctx, commitCtx context.Context, st durable.Store, ns
 	cur.CommitID = nh.CommitID
 	nb.init()
 	baseIdx := newLazyIndex(nb.Records, m.cache != nil)
-	nv := view{cur: cur, base: nb, baseIdx: baseIdx, ov: kept.withNamespace(ns), idx: newRecallIndex(baseIdx, kept)}
+	nv := view{cur: cur, base: nb, baseIdx: baseIdx, deps: newDepIndex(nb), ov: kept.withNamespace(ns), idx: newRecallIndex(baseIdx, kept)}
 	m.cache.put(nv.entry(store.NamespaceKey(ns), scope, ref, nh.CommitID, nh.OverlayBytes))
 	return nil
 }

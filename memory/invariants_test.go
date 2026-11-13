@@ -34,12 +34,41 @@ func checkInvariants(t *testing.T, ns []string, s state) {
 			require.True(t, r.Content == "" && r.Keywords == nil && r.Entities == nil, "被遗忘的记录 %s 不保留内容", id)
 		}
 	}
+	erasedRef := func(ref RecordRef) bool { r, ok := s.Records[ref.ID]; return ok && erased(r) }
+	for id, r := range s.Records {
+		if slices.ContainsFunc(r.MergedFrom, erasedRef) || slices.ContainsFunc(r.ReflectedFrom, erasedRef) {
+			require.Empty(t, r.Content, "依据被擦除的记录 %s 不保留正文", id)
+		}
+	}
 	for id, e := range s.Entities {
 		incarnation("实体 "+id, e.Incarnation)
+		require.NotEmpty(t, e.Names, "实体 %s 至少有一个名称", id)
+		for _, n := range e.Names {
+			require.False(t, slices.ContainsFunc(n.Origins, func(o Origin) bool { return erasedRef(o.Record) }), "实体 %s 的名称来源不指向擦除过的记录", id)
+		}
+		if e.Live {
+			i := slices.IndexFunc(e.Names, func(n EntityName) bool { return normalizeName(n.Name) == normalizeName(e.Name) })
+			require.True(t, i >= 0 && e.Names[i].Live, "存活的实体 %s 的显示名存活", id)
+		}
 	}
 	for id, e := range s.Edges {
 		incarnation("关系 "+id, e.Incarnation)
+		require.False(t, slices.ContainsFunc(e.Derivations, func(d Derivation) bool { return erasedRef(d.Record) }), "关系 %s 的派生不指向擦除过的记录", id)
+		if !e.Valid() {
+			continue
+		}
+		require.True(t, slices.ContainsFunc(e.Derivations, func(d Derivation) bool {
+			r, ok := s.Records[d.Record.ID]
+			return ok && r.Valid() && r.Incarnation == d.Record.Incarnation && r.ContentRev == d.Record.ContentRev
+		}), "有效关系 %s 至少有一条成立的派生", id)
+		for _, end := range []string{e.Subject, e.Object} {
+			require.True(t, s.Entities[end].Live, "有效关系 %s 的端点 %s 存在且存活", id, end)
+		}
 	}
+	// 级联重算只取决于当前状态：已提交的状态上再运行一次不产生写入。
+	settled := newTx(s, s, ns)
+	cascadeAll(settled, time.Now())
+	require.False(t, settled.changed(), "级联重算已收敛")
 	for id, c := range s.Communities {
 		incarnation("社区 "+id, c.Incarnation)
 	}

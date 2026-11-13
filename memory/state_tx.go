@@ -105,7 +105,9 @@ type tx struct {
 	DoneJobs    *table[time.Time]
 	scalars     stateScalars
 	orig        stateScalars
-	logical     int // 本次修改带来的逻辑大小变化
+	deps        *depIndex // 基础快照的反向依赖；为 nil 时级联逐个检查全部对象
+	ov          overlay   // 基础快照之后已提交的变更：其中的对象不在 deps 中，级联逐个检查
+	logical     int       // 本次修改带来的逻辑大小变化
 	err         error
 }
 
@@ -192,43 +194,83 @@ func strLen(ss []string) int {
 	return n
 }
 
+func sourcesLen(ss []Source) int {
+	n := 0
+	for _, s := range ss {
+		n += 24 + len(s.Session) + len(s.Job)
+	}
+	return n
+}
+
+func refsLen(rs []RecordRef) int {
+	n := 0
+	for _, r := range rs {
+		n += 16 + len(r.ID)
+	}
+	return n
+}
+
+func originLen(o Origin) int { return 16 + len(o.Record.ID) + sourcesLen([]Source{o.Source}) }
+
 var recordKind = kind[Record]{
 	clone: func(r Record) Record {
 		r.Keywords, r.Entities, r.Sources = slices.Clone(r.Keywords), slices.Clone(r.Entities), slices.Clone(r.Sources)
+		r.MergedFrom, r.ReflectedFrom = slices.Clone(r.MergedFrom), slices.Clone(r.ReflectedFrom)
 		return r
 	},
 	normalize: func(r *Record, ns []string) bool {
 		r.Keywords, r.Entities, r.Sources = nilIfEmpty(r.Keywords), nilIfEmpty(r.Entities), nilIfEmpty(r.Sources)
+		r.MergedFrom, r.ReflectedFrom = nilIfEmpty(r.MergedFrom), nilIfEmpty(r.ReflectedFrom)
 		return normNS(&r.Namespace, ns)
 	},
 	size: func(_ string, r Record) int {
-		n := 112 + len(r.ID) + len(r.Kind) + len(r.Content) + strLen(r.Keywords) + strLen(r.Entities) + len(r.SupersededBy) + len(r.InvalidReason)
-		for _, s := range r.Sources {
-			n += 24 + len(s.Session) + len(s.Job)
-		}
-		return n
+		return 112 + len(r.ID) + len(r.Kind) + len(r.Content) + strLen(r.Keywords) + strLen(r.Entities) + len(r.SupersededBy) + len(r.InvalidReason) +
+			sourcesLen(r.Sources) + refsLen(r.MergedFrom) + refsLen(r.ReflectedFrom)
 	},
 }
 
 var entityKind = kind[Entity]{
 	clone: func(e Entity) Entity {
-		e.Aliases = slices.Clone(e.Aliases)
+		e.Aliases, e.Names = slices.Clone(e.Aliases), slices.Clone(e.Names)
+		for i := range e.Names {
+			e.Names[i].Origins = slices.Clone(e.Names[i].Origins)
+		}
 		return e
 	},
 	normalize: func(e *Entity, ns []string) bool {
-		e.Aliases = nilIfEmpty(e.Aliases)
+		e.Aliases, e.Names = nilIfEmpty(e.Aliases), nilIfEmpty(e.Names)
+		for i := range e.Names {
+			e.Names[i].Origins = nilIfEmpty(e.Names[i].Origins)
+		}
 		return normNS(&e.Namespace, ns)
 	},
 	size: func(_ string, e Entity) int {
-		return 72 + len(e.ID) + len(e.Name) + len(e.Type) + strLen(e.Aliases)
+		n := 72 + len(e.ID) + len(e.Name) + len(e.Type) + strLen(e.Aliases)
+		for _, name := range e.Names {
+			n += 8 + len(name.Name)
+			for _, o := range name.Origins {
+				n += originLen(o)
+			}
+		}
+		return n
 	},
 }
 
 var edgeKind = kind[Edge]{
-	clone:     func(e Edge) Edge { return e },
-	normalize: func(e *Edge, ns []string) bool { return normNS(&e.Namespace, ns) },
+	clone: func(e Edge) Edge {
+		e.Sources, e.Derivations = slices.Clone(e.Sources), slices.Clone(e.Derivations)
+		return e
+	},
+	normalize: func(e *Edge, ns []string) bool {
+		e.Sources, e.Derivations = nilIfEmpty(e.Sources), nilIfEmpty(e.Derivations)
+		return normNS(&e.Namespace, ns)
+	},
 	size: func(_ string, e Edge) int {
-		return 96 + len(e.ID) + len(e.Subject) + len(e.Predicate) + len(e.Object) + len(e.Fact) + len(e.SupersededBy) + len(e.Source.Session) + len(e.Source.Job)
+		n := 96 + len(e.ID) + len(e.Subject) + len(e.Predicate) + len(e.Object) + len(e.Fact) + len(e.SupersededBy) + len(e.InvalidReason) + sourcesLen(e.Sources)
+		for _, d := range e.Derivations {
+			n += originLen(d.Origin) + 16 + len(d.Fact)
+		}
+		return n
 	},
 }
 

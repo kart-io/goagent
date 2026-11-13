@@ -29,7 +29,7 @@ func TestReturnedStatesAreImmutable(t *testing.T) {
 	}
 	for i := range 15 {
 		require.NoError(t, g.PutEdge(ctx, Edge{ID: fmt.Sprintf("d%02d", i), Namespace: testNS, Subject: fmt.Sprintf("e%02d", i), Predicate: "关联",
-			Object: fmt.Sprintf("e%02d", i+1), Fact: "关系", Source: Source{Session: "s", From: int64(i)}}))
+			Object: fmt.Sprintf("e%02d", i+1), Fact: "关系", Sources: []Source{{Session: "s", From: int64(i)}}}))
 	}
 
 	var mu sync.Mutex

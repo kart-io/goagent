@@ -28,6 +28,9 @@ func graphMemoryWith(t *testing.T, cfg Config, replies map[string]string) (*Memo
 	t.Helper()
 	sessions := session.NewMemoryStore()
 	model := &scriptedModel{reply: func(system, user string) (string, error) {
+		if system == reconcilePrompt {
+			return `{"op":"add"}`, nil
+		}
 		require.Contains(t, system, "relations", "启用图谱时抽取提示词要求输出关系")
 		require.Contains(t, user, "对话时间：", "抽取时给出对话时间，用于换算相对时间")
 		for key, reply := range replies {
@@ -59,14 +62,14 @@ func runTurn(t *testing.T, m *Memory, sessions session.Store, key, input string)
 // 排他关系出现新客体时旧关系失效并指向新关系，非排他关系并存；实体按名称与别名去重；可查询某一时刻成立的关系。
 func TestGraphTemporalRelations(t *testing.T) {
 	m, sessions, now := graphMemory(t, map[string]string{
-		"上海": `{"memories":[],"relations":[
-			{"subject":{"name":"用户","type":"person"},"predicate":"住在","object":{"name":"上海市","type":"place","aliases":["上海"]},"fact":"用户住在上海","exclusive":true},
-			{"subject":{"name":"用户","type":"person"},"predicate":"喜欢","object":{"name":"咖啡","type":"product"},"fact":"用户喜欢咖啡","exclusive":false}]}`,
-		"北京": `{"memories":[],"relations":[
-			{"subject":{"name":"用户","type":"person"},"predicate":"住在","object":{"name":"北京","type":"place"},"fact":"用户住在北京","exclusive":true},
-			{"subject":{"name":"用户","type":"person"},"predicate":"喜欢","object":{"name":"茶","type":"product"},"fact":"用户喜欢茶","exclusive":false}]}`,
-		"老家": `{"memories":[],"relations":[
-			{"subject":{"name":"用户","type":"person"},"predicate":"老家在","object":{"name":"上海","type":"place"},"fact":"用户老家在上海","exclusive":true}]}`,
+		"上海": `{"memories":[{"kind":"fact","content":"用户住在上海","importance":0.5},{"kind":"fact","content":"用户喜欢咖啡","importance":0.5}],"relations":[
+			{"from":0,"subject":{"name":"用户","type":"person"},"predicate":"住在","object":{"name":"上海市","type":"place","aliases":["上海"]},"fact":"用户住在上海","exclusive":true},
+			{"from":1,"subject":{"name":"用户","type":"person"},"predicate":"喜欢","object":{"name":"咖啡","type":"product"},"fact":"用户喜欢咖啡","exclusive":false}]}`,
+		"北京": `{"memories":[{"kind":"fact","content":"用户住在北京","importance":0.5},{"kind":"fact","content":"用户喜欢茶","importance":0.5}],"relations":[
+			{"from":0,"subject":{"name":"用户","type":"person"},"predicate":"住在","object":{"name":"北京","type":"place"},"fact":"用户住在北京","exclusive":true},
+			{"from":1,"subject":{"name":"用户","type":"person"},"predicate":"喜欢","object":{"name":"茶","type":"product"},"fact":"用户喜欢茶","exclusive":false}]}`,
+		"老家": `{"memories":[{"kind":"fact","content":"用户老家在上海","importance":0.5}],"relations":[
+			{"from":0,"subject":{"name":"用户","type":"person"},"predicate":"老家在","object":{"name":"上海","type":"place"},"fact":"用户老家在上海","exclusive":true}]}`,
 	})
 	ctx := WithNamespace(context.Background(), "u")
 	runTurn(t, m, sessions, "s/1", "我住在上海，喜欢咖啡")
@@ -119,7 +122,7 @@ func TestRelatedMultiHopAndRecallBlock(t *testing.T) {
 	for _, e := range []Edge{
 		{ID: "e1", Subject: "user", Predicate: "就职于", Object: "acme", Fact: "用户就职于 Acme 公司"},
 		{ID: "e2", Subject: "acme", Predicate: "位于", Object: "sz", Fact: "Acme 公司位于深圳"},
-		{ID: "e3", Subject: "user", Predicate: "就职于", Object: "old", Fact: "用户就职于旧公司", InvalidAt: day},
+		{ID: "e3", Subject: "user", Predicate: "就职于", Object: "old", Fact: "用户就职于旧公司", InvalidAt: day, InvalidReason: ReasonSuperseded},
 	} {
 		e.Namespace, e.ValidFrom = ns, day
 		require.NoError(t, g.PutEdge(ctx, e))
@@ -159,7 +162,7 @@ func TestRelatedMultiHopAndRecallBlock(t *testing.T) {
 func TestGraphRewoundPurgeAndPrune(t *testing.T) {
 	m, sessions, now := graphMemory(t, map[string]string{
 		"上海": `{"memories":[{"kind":"fact","content":"用户住在上海","importance":0.5}],"relations":[
-			{"subject":{"name":"用户","type":"person"},"predicate":"住在","object":{"name":"上海","type":"place"},"fact":"用户住在上海","exclusive":true}]}`,
+			{"from":0,"subject":{"name":"用户","type":"person"},"predicate":"住在","object":{"name":"上海","type":"place"},"fact":"用户住在上海","exclusive":true}]}`,
 	})
 	ctx := WithNamespace(context.Background(), "u")
 	runTurn(t, m, sessions, "s/1", "我住在上海")
@@ -167,20 +170,18 @@ func TestGraphRewoundPurgeAndPrune(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, edges, 1)
 
-	require.NoError(t, m.Rewound(ctx, "s", edges[0].Source.From-1))
+	require.NoError(t, m.Rewound(ctx, "s", edges[0].Sources[0].From-1))
 	edges, err = graphOf(m).Edges(ctx, []string{"u"})
 	require.NoError(t, err)
-	require.False(t, edges[0].Valid(), "退回的轮次留下的关系失效")
-
+	require.Empty(t, edges, "退回的轮次派生的关系随之删除")
+	entities, err := graphOf(m).Entities(ctx, []string{"u"})
+	require.NoError(t, err)
+	require.Empty(t, entities, "名称只来自退回轮次的实体随之删除")
 	*now = now.Add(2 * time.Hour)
-	require.NoError(t, m.Prune(ctx))
-	edges, err = graphOf(m).Edges(ctx, []string{"u"})
-	require.NoError(t, err)
-	require.Empty(t, edges, "失效超过保留期的关系被删除")
 
 	runTurn(t, m, sessions, "s/2", "我还是住在上海")
 	require.NoError(t, m.Purge(ctx))
-	entities, err := graphOf(m).Entities(ctx, []string{"u"})
+	entities, err = graphOf(m).Entities(ctx, []string{"u"})
 	require.NoError(t, err)
 	require.Empty(t, entities)
 	edges, err = graphOf(m).Edges(ctx, []string{"u"})
@@ -206,9 +207,9 @@ func TestEntityResolutionByModel(t *testing.T) {
 	}}
 	var judged []string
 	m, sessions, _, model := graphMemoryWith(t, cfg, map[string]string{
-		"上班": `{"memories":[],"relations":[{"subject":{"name":"用户","type":"person"},"predicate":"就职于","object":{"name":"Acme 公司","type":"org"},"fact":"用户就职于 Acme 公司","exclusive":true}]}`,
-		"招人": `{"memories":[],"relations":[{"subject":{"name":"爱克米","type":"org"},"predicate":"位于","object":{"name":"深圳","type":"place"},"fact":"爱克米位于深圳","exclusive":true}]}`,
-		"集团": `{"memories":[],"relations":[{"subject":{"name":"爱克米集团","type":"org"},"predicate":"收购","object":{"name":"爱克米","type":"org"},"fact":"爱克米集团收购了爱克米","exclusive":false}]}`,
+		"上班": `{"memories":[{"kind":"fact","content":"用户就职于 Acme 公司","importance":0.5}],"relations":[{"from":0,"subject":{"name":"用户","type":"person"},"predicate":"就职于","object":{"name":"Acme 公司","type":"org"},"fact":"用户就职于 Acme 公司","exclusive":true}]}`,
+		"招人": `{"memories":[{"kind":"fact","content":"爱克米位于深圳","importance":0.5}],"relations":[{"from":0,"subject":{"name":"爱克米","type":"org"},"predicate":"位于","object":{"name":"深圳","type":"place"},"fact":"爱克米位于深圳","exclusive":true}]}`,
+		"集团": `{"memories":[{"kind":"fact","content":"爱克米集团收购了爱克米","importance":0.5}],"relations":[{"from":0,"subject":{"name":"爱克米集团","type":"org"},"predicate":"收购","object":{"name":"爱克米","type":"org"},"fact":"爱克米集团收购了爱克米","exclusive":false}]}`,
 	})
 	reply := model.reply
 	model.reply = func(system, user string) (string, error) {
@@ -265,11 +266,12 @@ func TestApplyRelationsLateFact(t *testing.T) {
 	m := newMemory(t, Config{Graph: true})
 	ctx := WithNamespace(context.Background(), "u")
 	march, jan := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	zero := 0
 	live := func(city string) relation {
-		return relation{Subject: entityRef{Name: "用户", Type: "person"}, Predicate: "住在", Object: entityRef{Name: city, Type: "place"}, Fact: "用户住在" + city, Exclusive: true}
+		return relation{From: &zero, Subject: entityRef{Name: "用户", Type: "person"}, Predicate: "住在", Object: entityRef{Name: city, Type: "place"}, Fact: "用户住在" + city, Exclusive: true}
 	}
-	require.NoError(t, m.applyRelations(ctx, Job{Key: "s/2", Namespace: []string{"u"}, Session: "s"}, march, []relation{live("北京")}))
-	require.NoError(t, m.applyRelations(ctx, Job{Key: "s/1", Namespace: []string{"u"}, Session: "s"}, jan, []relation{live("上海")}))
+	require.NoError(t, m.applyRelations(ctx, Job{Key: "s/2", Namespace: []string{"u"}, Session: "s"}, march, []relation{live("北京")}, basisOf(t, m, "北京")))
+	require.NoError(t, m.applyRelations(ctx, Job{Key: "s/1", Namespace: []string{"u"}, Session: "s"}, jan, []relation{live("上海")}, basisOf(t, m, "上海")))
 	edges, err := graphOf(m).Edges(ctx, []string{"u"})
 	require.NoError(t, err)
 	byFact := map[string]Edge{}
@@ -327,16 +329,17 @@ func TestPersonalizedPageRankSumsToOne(t *testing.T) {
 	require.Nil(t, personalizedPageRank(edges, map[string]float64{"x": 1}), "种子不在图中")
 }
 
-// 回退取代旧关系的轮次时，旧关系恢复有效。
+// 回退取代旧关系的轮次时，该轮派生的关系删除，旧关系恢复有效。
 func TestRewoundRestoresSupersededEdge(t *testing.T) {
 	m := newMemory(t, Config{Graph: true})
 	ctx := WithNamespace(context.Background(), "u")
 	day := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	zero := 0
 	live := func(city string) []relation {
-		return []relation{{Subject: entityRef{Name: "用户", Type: "person"}, Predicate: "住在", Object: entityRef{Name: city, Type: "place"}, Fact: "用户住在" + city, Exclusive: true}}
+		return []relation{{From: &zero, Subject: entityRef{Name: "用户", Type: "person"}, Predicate: "住在", Object: entityRef{Name: city, Type: "place"}, Fact: "用户住在" + city, Exclusive: true}}
 	}
-	require.NoError(t, m.applyRelations(ctx, Job{Key: "s/1", Namespace: []string{"u"}, Session: "s", From: 1, To: 3}, day, live("上海")))
-	require.NoError(t, m.applyRelations(ctx, Job{Key: "s/2", Namespace: []string{"u"}, Session: "s", From: 4, To: 6}, day.Add(time.Hour), live("北京")))
+	require.NoError(t, m.applyRelations(ctx, Job{Key: "s/1", Namespace: []string{"u"}, Session: "s", From: 1, To: 3}, day, live("上海"), basisOf(t, m, "上海")))
+	require.NoError(t, m.applyRelations(ctx, Job{Key: "s/2", Namespace: []string{"u"}, Session: "s", From: 4, To: 6}, day.Add(time.Hour), live("北京"), basisOf(t, m, "北京")))
 	require.NoError(t, m.Rewound(ctx, "s", 3))
 	edges, err := graphOf(m).Edges(ctx, []string{"u"})
 	require.NoError(t, err)
@@ -347,7 +350,7 @@ func TestRewoundRestoresSupersededEdge(t *testing.T) {
 			require.Empty(t, e.SupersededBy)
 		}
 	}
-	require.Equal(t, map[string]bool{"用户住在上海": true, "用户住在北京": false}, valid)
+	require.Equal(t, map[string]bool{"用户住在上海": true}, valid, "退回轮次派生的关系删除，被它取代的关系恢复")
 }
 
 // Retrieve 返回实际写入召回块的记录与关系，Sessions 汇总二者的来源会话。
@@ -360,7 +363,7 @@ func TestRetrieveReportsSources(t *testing.T) {
 		e.Namespace, e.Type = ns, "x"
 		require.NoError(t, g.PutEntity(ctx, e))
 	}
-	require.NoError(t, g.PutEdge(ctx, Edge{ID: "e", Namespace: ns, Subject: "user", Predicate: "就职于", Object: "acme", Fact: "用户就职于 Acme", Source: Source{Session: "s3", From: 1}}))
+	require.NoError(t, g.PutEdge(ctx, Edge{ID: "e", Namespace: ns, Subject: "user", Predicate: "就职于", Object: "acme", Fact: "用户就职于 Acme", Sources: []Source{{Session: "s3", From: 1}}}))
 	_, err := m.Remember(ctx, Record{ID: "r", Content: "用户在 Acme 负责支付", Entities: []string{"Acme"}, Importance: 0.5,
 		Sources: []Source{{Session: "s1", From: 1}, {Session: "s2", From: 1}}})
 	require.NoError(t, err)
@@ -381,6 +384,14 @@ func TestRetrieveReportsSources(t *testing.T) {
 	require.Empty(t, got.Text)
 }
 
+// basisOf 写入一条记录作为直接调用 applyRelations 时关系的依据，返回下标 0 指向它的 refs。
+func basisOf(t *testing.T, m *Memory, content string) map[int]RecordRef {
+	t.Helper()
+	r, err := m.Remember(WithNamespace(context.Background(), "u"), Record{Content: content, Importance: 0.5})
+	require.NoError(t, err)
+	return map[int]RecordRef{0: refOf(r)}
+}
+
 // testGraph 在测试中直接读写图谱（不经抽取）。
 type testGraph struct{ m *Memory }
 
@@ -392,10 +403,34 @@ func (g testGraph) PutEntity(ctx context.Context, e Entity) error {
 		return err
 	}
 	_, err = g.m.mutate(ctx, ns, "", func(t *tx) error {
-		putEntity(t, e)
+		if len(e.Names) == 0 {
+			o := Origin{Record: g.basis(t, ns)}
+			for _, n := range append([]string{e.Name}, e.Aliases...) {
+				addName(t, &e, n, o)
+			}
+		}
+		if old, ok := t.Entities.Get(e.ID); ok {
+			e.Incarnation, e.Revision, e.ContentRev = old.Incarnation, old.Revision+1, old.ContentRev+1
+		} else {
+			e.Incarnation, e.Revision, e.ContentRev = t.incarnation(), 1, 1
+		}
+		t.Entities.Put(e.ID, e)
+		g.m.cascadeTx(t, g.m.now())
 		return nil
 	})
 	return err
+}
+
+// basis 返回测试图谱的依据记录，不存在时在 tx 中创建：直接写入的实体与关系以它为来源，遗忘它即撤销全部直接写入的图谱。
+func (g testGraph) basis(t *tx, ns []string) RecordRef {
+	const id = "graph-basis"
+	if r, ok := t.Records.Get(id); ok {
+		return refOf(r)
+	}
+	now := g.m.now()
+	createRecord(t, Record{ID: id, Namespace: ns, Kind: KindFact, Content: "图谱依据", Importance: 1, CreatedAt: now, ValidFrom: now})
+	r, _ := t.Records.Get(id)
+	return refOf(r)
 }
 
 func (g testGraph) PutEdge(ctx context.Context, e Edge) error {
@@ -404,12 +439,19 @@ func (g testGraph) PutEdge(ctx context.Context, e Edge) error {
 		return err
 	}
 	_, err = g.m.mutate(ctx, ns, "", func(t *tx) error {
+		if len(e.Derivations) == 0 {
+			ref := g.basis(t, ns)
+			for _, s := range append(slices.Clone(e.Sources), Source{})[:max(len(e.Sources), 1)] {
+				e.Derivations = append(e.Derivations, Derivation{Origin: Origin{Record: ref, Source: s}, Fact: e.Fact, At: e.ValidFrom})
+			}
+		}
 		if old, ok := t.Edges.Get(e.ID); ok {
 			e.Incarnation, e.Revision, e.ContentRev = old.Incarnation, old.Revision+1, old.ContentRev+1
 		} else {
 			e.Incarnation, e.Revision, e.ContentRev = t.incarnation(), 1, 1
 		}
 		t.Edges.Put(e.ID, e)
+		g.m.cascadeTx(t, g.m.now())
 		return nil
 	})
 	return err

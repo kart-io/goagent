@@ -289,7 +289,8 @@ type Patch struct {
 }
 
 // Update 修改一条有效记录：要求记录的 Revision 等于 expect，否则返回 CodeConflict（并发修改或已失效）；记录不存在时返回 CodeStoreNotFound。
-// Revision 加一；正文改变时 ContentRev 加一，并在提交后重写向量。按 expect 判重，结果未知时重试是幂等的。
+// Revision 加一；正文改变时 ContentRev 加一，在同一提交中级联重算（派生自旧正文的关系与名称来源删除），并在提交后重写向量。
+// 按 expect 判重，结果未知时重试是幂等的。
 func (m *Memory) Update(ctx context.Context, id string, expect int64, p Patch) (Record, error) {
 	ns, err := requireNamespace(ctx)
 	if err != nil {
@@ -307,7 +308,10 @@ func (m *Memory) Update(ctx context.Context, id string, expect int64, p Patch) (
 	}
 	var out Record
 	var changed bool
+	var c cascaded
+	now := m.now()
 	_, err = m.mutate(ctx, ns, meta.Current, func(t *tx) error {
+		c = cascaded{}
 		r, ok := t.Records.Get(id)
 		if !ok {
 			return notFound(id)
@@ -340,6 +344,10 @@ func (m *Memory) Update(ctx context.Context, id string, expect int64, p Patch) (
 		}
 		t.Records.Put(id, r)
 		out, _ = t.Records.Get(id)
+		if changed {
+			// 派生自旧正文的关系与名称来源不再成立（版本落后），由级联删除。
+			c = m.cascadeTx(t, now)
+		}
 		return nil
 	})
 	if err != nil {
@@ -351,7 +359,7 @@ func (m *Memory) Update(ctx context.Context, id string, expect int64, p Patch) (
 	old := recordKey(out)
 	old.ContentRev--
 	return out, errors.Join(m.writeIndex(ctx, ns, meta.Current, recordSpace, []indexKey{recordKey(out)}, [][]float32{vec}),
-		m.dropIndex(ctx, ns, meta.Current, recordSpace, old))
+		m.dropIndex(ctx, ns, meta.Current, recordSpace, old), m.indexAfter(ctx, ns, meta.Current, c))
 }
 
 // Get 返回当前命名空间中的一条记录（含失效记录）；不存在时返回 CodeStoreNotFound。
@@ -519,7 +527,8 @@ func pinnedOf(s state) []Record {
 }
 
 // Forget 遗忘一条记录：标记为 forgotten（终态）并清空正文、关键词与实体，移出索引；基础快照中的旧内容在 EraseWithin 内物理擦除。
-// 开启删除日志时先写日志。已遗忘时直接返回；记录不存在时返回 CodeStoreNotFound。不级联到取代它的记录。
+// 开启删除日志时先写日志。已遗忘时直接返回；记录不存在时返回 CodeStoreNotFound。同一提交中级联重算：由它合并或反思出的记录被擦除，
+// 派生自这些记录的关系与实体名称被删除（设计 docs/design/MEMORY_G2_DERIVATION.md 第 3 节）；不级联到取代它的记录。
 func (m *Memory) Forget(ctx context.Context, id string) error {
 	ns, err := requireNamespace(ctx)
 	if err != nil {
@@ -553,7 +562,9 @@ func (m *Memory) Forget(ctx context.Context, id string) error {
 		}))
 	}
 	var old Record
+	var c cascaded
 	_, err = m.mutate(ctx, ns, scope, func(t *tx) error {
+		old, c = Record{}, cascaded{}
 		r, ok := t.Records.Get(id)
 		if !ok {
 			return notFound(id)
@@ -563,12 +574,13 @@ func (m *Memory) Forget(ctx context.Context, id string) error {
 		}
 		old = r
 		forget(t, r, now)
+		c = m.cascadeTx(t, now)
 		return nil
 	}, opts...)
 	if err != nil || old.ID == "" {
 		return err
 	}
-	return m.dropIndex(ctx, ns, scope, recordSpace, recordKey(old))
+	return errors.Join(m.dropIndex(ctx, ns, scope, recordSpace, recordKey(old)), m.indexAfter(ctx, ns, scope, c))
 }
 
 // forget 在 tx 中遗忘 r：清空内容、标记擦除，并把 LastForgetSeq 设为本次提交的 Seq。
@@ -581,9 +593,9 @@ func forget(t *tx, r Record, at time.Time) {
 	t.SetLastForgetSeq(t.nextSeq())
 }
 
-// Rewound 使任一来源位于会话 sessionID 中序号 to 之后的有效记录与关系失效（rewound），并恢复只被它们取代的旧记录与旧关系：
-// 退回的轮次不再留下记忆，也不会带走更早轮次的事实。被遗忘的记录不动；取代者是被遗忘而不是被退回的，不恢复。
-// 涉及变化关系的社区被删除，由下一次刷新重写。一次提交；宿主在 session.Rewind 之后调用。
+// Rewound 使任一来源位于会话 sessionID 中序号 to 之后的有效记录失效（rewound），删除这些轮次产生的关系派生与实体名称来源，
+// 并恢复只被它们取代的旧记录与旧关系：退回的轮次不再留下记忆，也不会带走更早轮次的事实。被遗忘的记录不动；取代者是被遗忘而不是被退回的，不恢复。
+// 恢复的对象经过级联重算核对（设计 docs/design/MEMORY_G2_DERIVATION.md 第 4 节）。一次提交；宿主在 session.Rewind 之后调用。
 func (m *Memory) Rewound(ctx context.Context, sessionID string, to int64) error {
 	ns, err := requireNamespace(ctx)
 	if err != nil {
@@ -591,9 +603,15 @@ func (m *Memory) Rewound(ctx context.Context, sessionID string, to int64) error 
 	}
 	now := m.now()
 	var gone, restored []Record
+	var c cascaded
 	var scope string
 	_, err = m.mutate(ctx, ns, "", func(t *tx) error {
-		gone, restored, scope = nil, nil, t.scope
+		gone, restored, c, scope = nil, nil, cascaded{}, t.scope
+		// 在任何删除之前记下有效的关系：删除派生后，替代者可能已不再有效。
+		before := map[string]bool{}
+		for id, e := range t.Edges.m {
+			before[id] = e.Valid()
+		}
 		for _, id := range t.Records.Keys() {
 			if r, _ := t.Records.Get(id); r.Valid() && rewound(r.Sources, sessionID, to) {
 				t.Records.Put(id, r.invalidated(now, ReasonRewound, ""))
@@ -602,7 +620,8 @@ func (m *Memory) Rewound(ctx context.Context, sessionID string, to int64) error 
 		}
 		for _, id := range t.Records.Keys() {
 			r, _ := t.Records.Get(id)
-			if r.InvalidReason != ReasonSuperseded || rewound(r.Sources, sessionID, to) {
+			// 依据被遗忘而擦除过的记录不恢复（B4）。
+			if r.InvalidReason != ReasonSuperseded || erased(r) || rewound(r.Sources, sessionID, to) {
 				continue
 			}
 			if by, ok := t.Records.Get(r.SupersededBy); ok && by.InvalidReason == ReasonRewound {
@@ -612,38 +631,41 @@ func (m *Memory) Rewound(ctx context.Context, sessionID string, to int64) error 
 				restored = append(restored, r)
 			}
 		}
-		edgesChanged := false
-		goneEdges := map[string]bool{}
-		for _, id := range t.Edges.Keys() {
-			e, _ := t.Edges.Get(id)
-			goneEdges[id] = rewound([]Source{e.Source}, sessionID, to)
+		graph := dropRewoundOrigins(t, sessionID, to)
+		c = cascade(t, now)
+		// 替代者在本次调用中失效（只可能因回退）时恢复被它取代的关系；已有同三元组的有效关系时不恢复。
+		valid := map[[3]string]bool{}
+		for _, e := range t.Edges.m {
+			if e.Valid() {
+				valid[[3]string{e.Subject, e.Predicate, e.Object}] = true
+			}
 		}
 		for _, id := range t.Edges.Keys() {
-			e, _ := t.Edges.Get(id)
-			switch {
-			case goneEdges[id] && e.Valid():
-				e.InvalidAt = now
-			case !goneEdges[id] && !e.Valid() && goneEdges[e.SupersededBy]:
-				e.InvalidAt, e.SupersededBy = time.Time{}, ""
-			default:
+			e := t.Edges.m[id]
+			if e.InvalidReason != ReasonSuperseded || !before[e.SupersededBy] {
 				continue
 			}
-			e.Revision++
-			t.Edges.Put(id, e)
-			edgesChanged = true
+			if by, ok := t.Edges.m[e.SupersededBy]; ok && by.Valid() {
+				continue
+			}
+			if triple := [3]string{e.Subject, e.Predicate, e.Object}; !valid[triple] {
+				e, _ = t.Edges.Get(id)
+				e.InvalidAt, e.InvalidReason, e.SupersededBy = time.Time{}, "", ""
+				e.Revision++
+				t.Edges.Put(id, e)
+				valid[triple] = true
+				graph.touch(e.Subject, e.Object)
+			}
 		}
-		if len(gone) == 0 && len(restored) == 0 && !edgesChanged {
-			return errNoChange
-		}
-		if edgesChanged && m.cfg.Communities {
-			syncCommunitiesTx(t, ns, nil)
-		}
+		c.merge(cascade(t, now))
+		c.merge(graph)
+		m.syncGraph(t, c)
 		return nil
 	}, shrinking())
 	if err != nil {
 		return err
 	}
-	errs := []error{m.dropIndex(ctx, ns, scope, recordSpace, keysOf(gone)...)}
+	errs := []error{m.dropIndex(ctx, ns, scope, recordSpace, keysOf(gone)...), m.indexAfter(ctx, ns, scope, c)}
 	var vecs [][]float32
 	for _, r := range restored {
 		vec, err := m.embed(ctx, r.Content)
@@ -655,7 +677,38 @@ func (m *Memory) Rewound(ctx context.Context, sessionID string, to int64) error 
 	return errors.Join(append(errs, m.writeIndex(ctx, ns, scope, recordSpace, keysOf(restored), vecs))...)
 }
 
-// Prune 按 Retention 在一次提交中整理当前命名空间：删除超过保留期的失效记录、关系与结束的任务，TTL 到期与超出容量的记录改为 expired。
+// dropRewoundOrigins 删除来源轮次被退回的关系派生与实体名称来源，返回涉及的实体；之后的级联据此重算。
+func dropRewoundOrigins(t *tx, sessionID string, to int64) cascaded {
+	hit := func(o Origin) bool { return rewound([]Source{o.Source}, sessionID, to) }
+	var changed cascaded
+	for _, id := range t.Edges.Keys() {
+		if !slices.ContainsFunc(t.Edges.m[id].Derivations, func(d Derivation) bool { return hit(d.Origin) }) {
+			continue
+		}
+		e, _ := t.Edges.Get(id)
+		e.Derivations = slices.DeleteFunc(e.Derivations, func(d Derivation) bool { return hit(d.Origin) })
+		e.Revision++
+		t.Edges.Put(id, e)
+		changed.touch(e.Subject, e.Object)
+	}
+	for _, id := range t.Entities.Keys() {
+		if !slices.ContainsFunc(t.Entities.m[id].Names, func(n EntityName) bool { return slices.ContainsFunc(n.Origins, hit) }) {
+			continue
+		}
+		e, _ := t.Entities.Get(id)
+		for i := range e.Names {
+			e.Names[i].Origins = slices.DeleteFunc(e.Names[i].Origins, hit)
+		}
+		e.Names = slices.DeleteFunc(e.Names, func(n EntityName) bool { return len(n.Origins) == 0 })
+		e.Revision++
+		t.Entities.Put(id, e)
+		changed.touch(id)
+	}
+	return changed
+}
+
+// Prune 按 Retention 在一次提交中整理当前命名空间：删除超过保留期的失效记录、关系与结束的任务，TTL 到期与超出容量的记录改为 expired，
+// 再级联重算：派生自失效或已删除记录的关系与名称随之失效或删除，G1 写入的没有派生的关系与没有名称的实体被删除。
 // 之后删除过期记录的向量，清理访问记录与超过 RollbackWindow 的删除日志条目。
 func (m *Memory) Prune(ctx context.Context) error {
 	ns, err := requireNamespace(ctx)
@@ -675,8 +728,9 @@ func (m *Memory) Prune(ctx context.Context) error {
 	now := m.now()
 	var expired []Record
 	var remaining map[string]bool
+	var c cascaded
 	_, err = m.mutate(ctx, ns, scope, func(t *tx) error {
-		expired, remaining = nil, map[string]bool{}
+		expired, remaining, c = nil, map[string]bool{}, cascaded{}
 		changed := false
 		var valid []Scored
 		for _, id := range t.Records.Keys() {
@@ -729,7 +783,9 @@ func (m *Memory) Prune(ctx context.Context) error {
 				expired, changed = append(expired, r.Record), true
 			}
 		}
-		if !changed {
+		c = cascadeAll(t, now)
+		m.syncGraph(t, c)
+		if !changed && !t.changed() {
 			return errNoChange
 		}
 		return nil
@@ -737,7 +793,7 @@ func (m *Memory) Prune(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := m.dropIndex(ctx, ns, scope, recordSpace, keysOf(expired)...); err != nil {
+	if err := errors.Join(m.dropIndex(ctx, ns, scope, recordSpace, keysOf(expired)...), m.indexAfter(ctx, ns, scope, c)); err != nil {
 		return err
 	}
 	if m.cfg.TrackAccess && slices.ContainsFunc(slices.Collect(maps.Keys(access)), func(id string) bool { return !remaining[id] }) {

@@ -195,12 +195,18 @@ func (m *Memory) process(ctx context.Context, j Job) error {
 	if err := m.chatJSON(ctx, strings.TrimSpace(prompt+"\n"+m.cfg.Instructions), dated, &out); err != nil {
 		return err
 	}
+	// refs 把抽取结果的下标映射到整理后的记录版本，关系据此（from）得到派生依据。
+	refs := map[int]RecordRef{}
 	for i, c := range out.Memories {
-		if err := m.reconcile(ctx, j, at, i, c); err != nil {
+		ref, ok, err := m.reconcile(ctx, j, at, i, c)
+		if err != nil {
 			return err
 		}
+		if ok {
+			refs[i] = ref
+		}
 	}
-	if err := m.applyRelations(ctx, j, at, out.Relations); err != nil {
+	if err := m.applyRelations(ctx, j, at, out.Relations, refs); err != nil {
 		return err
 	}
 	if err := m.syncCommunities(ctx, j.Namespace); err != nil {
@@ -226,9 +232,10 @@ const extractPrompt = "你从一轮对话中抽取值得跨会话长期记住的
 	"content 写成脱离上下文也能看懂的完整陈述，对话中的相对时间（昨天、上周、下个月）按对话时间换算成具体日期写入；importance 取 0 到 1，琐碎信息不要记；不要记录密码、密钥、令牌等凭证；" +
 	"标注为[相关长期记忆]的内容是已有记忆，不要重复抽取。没有值得记的内容时输出 {\"memories\":[]}。只输出 JSON。"
 
-// relationPrompt 在启用图谱时附在抽取提示词后。
+// relationPrompt 在启用图谱时附在抽取提示词后。关系必须以 from 指出依据的记忆：遗忘或回退那条记忆时，关系随之失效。
 const relationPrompt = "\n另外在同一个 JSON 中输出实体之间的关系：" +
-	`"relations":[{"subject":{"name":"…","type":"person|org|place|product|concept|…","aliases":["…"]},"predicate":"…","object":{"name":"…","type":"…"},"fact":"一句完整陈述","exclusive":true}]。` +
+	`"relations":[{"from":0,"subject":{"name":"…","type":"person|org|place|product|concept|…","aliases":["…"]},"predicate":"…","object":{"name":"…","type":"…"},"fact":"一句完整陈述","exclusive":true}]。` +
+	"from 是这条关系依据的那条记忆在 memories 中的下标（从 0 起），每条关系都必须有；没有对应记忆的关系不要输出，需要时先把它写成一条记忆。" +
 	"fact 中的相对时间同样换算成具体日期；用户本人的 name 写\"用户\"、type 写 person；predicate 用简短的动词短语，同一含义用同一说法；" +
 	"exclusive 表示主体在该谓词上同时只能有一个客体（如住在、就职于），可以有多个时（如喜欢、认识）为 false。没有关系时输出空数组。"
 
@@ -238,21 +245,23 @@ const reconcilePrompt = "你维护长期记忆。给定一条新信息和若干�
 	"invalidate：新信息与某条已有记忆矛盾，以新信息为准；noop：已有记忆已经包含新信息。只输出 JSON。"
 
 // reconcile 把候选与相似的已有记忆比较（Mem0）：新增、合并更新或否定旧记忆。被更新或否定的旧记忆标记失效并指向新记录（Zep），不删除。
-func (m *Memory) reconcile(ctx context.Context, j Job, at time.Time, i int, c candidate) error {
+// 返回候选整理后对应的记录版本：新写入的记录，或 noop 时已包含它的那条记录；候选被跳过时 ok 为假。
+// 合并更新时新记录的 MergedFrom 是展示给模型的全部候选，派生自被合并记录的关系与实体名称在同一提交中转移到新记录。
+func (m *Memory) reconcile(ctx context.Context, j Job, at time.Time, i int, c candidate) (RecordRef, bool, error) {
 	if strings.TrimSpace(c.Content) == "" || !slices.Contains(kinds, c.Kind) {
-		return nil
+		return RecordRef{}, false, nil
 	}
 	c.Importance = min(max(c.Importance, 0), 1)
 	ns, err := requireNamespace(ctx)
 	if err != nil {
-		return err
+		return RecordRef{}, false, err
 	}
 	similar, scope, err := m.search(ctx, ns, Query{Text: c.Content, K: m.cfg.ReconcileCandidates, Kinds: []Kind{c.Kind}})
 	if err == nil {
 		err = checkJobScope(ctx, scope)
 	}
 	if err != nil {
-		return err
+		return RecordRef{}, false, err
 	}
 	decision := struct {
 		Op      string `json:"op"`
@@ -265,7 +274,7 @@ func (m *Memory) reconcile(ctx context.Context, j Job, at time.Time, i int, c ca
 			fmt.Fprintf(&existing, "- id=%s：%s\n", s.ID, s.Content)
 		}
 		if err := m.chatJSON(ctx, reconcilePrompt, "新信息："+c.Content+"\n\n已有记忆：\n"+existing.String(), &decision); err != nil {
-			return err
+			return RecordRef{}, false, err
 		}
 	}
 	id := stableID(j.Key, fmt.Sprint(i))
@@ -277,9 +286,13 @@ func (m *Memory) reconcile(ctx context.Context, j Job, at time.Time, i int, c ca
 		}
 	}
 	content, sources := c.Content, []Source{j.source()}
+	var merged []RecordRef
 	switch decision.Op {
 	case "noop":
-		return nil
+		if target == nil {
+			return RecordRef{}, false, nil
+		}
+		return refOf(*target), true, nil
 	case "update":
 		if strings.TrimSpace(decision.Content) != "" {
 			content = decision.Content
@@ -288,47 +301,98 @@ func (m *Memory) reconcile(ctx context.Context, j Job, at time.Time, i int, c ca
 			// 合并后的内容同时依据旧记录与本轮。
 			sources = append(slices.DeleteFunc(slices.Clone(target.Sources), func(s Source) bool { return s.Job == j.Key }), sources...)
 		}
+		// 模型看到了全部候选，合并出的内容可能吸收其中任一条：任一条被遗忘，合并记录随之擦除。
+		for _, s := range similar {
+			if s.ID != id {
+				merged = append(merged, refOf(s.Record))
+			}
+		}
 	case "invalidate":
 	default:
 		target = nil
 	}
 	now := m.now()
-	return m.derive(ctx, ns, scope, []Record{{
+	out, err := m.derive(ctx, ns, scope, []Record{{
 		ID: id, Kind: c.Kind, Content: content, Keywords: c.Keywords, Entities: c.Entities, ValidFrom: at,
-		Importance: c.Importance, Sources: sources,
-	}}, func(t *tx) []Record {
+		Importance: c.Importance, Sources: sources, MergedFrom: merged,
+	}}, func(t *tx) ([]Record, error) {
 		if target == nil {
-			return nil
+			return nil, nil
 		}
 		// 只否定召回时看到的那个版本：期间被修改、遗忘或重建的记录不动。
 		cur, ok := t.Records.Get(target.ID)
 		if !ok || !cur.Valid() || cur.Incarnation != target.Incarnation || cur.Revision != target.Revision {
-			return nil
+			return nil, nil
 		}
 		t.Records.Put(cur.ID, cur.invalidated(now, ReasonSuperseded, id))
-		return []Record{cur}
+		if decision.Op == "update" {
+			next, _ := t.Records.Get(id)
+			transferOrigins(t, refOf(cur), refOf(next))
+		}
+		return []Record{cur}, nil
 	})
+	if err != nil || len(out) == 0 {
+		return RecordRef{}, false, err
+	}
+	return refOf(out[0]), true, nil
+}
+
+// transferOrigins 为派生自 from 的关系与名称来源各追加一条指向 to 的副本，沿用原陈述、时间与轮次：
+// 合并更新不使图谱流失；原来源保留，替代者被回退、from 恢复时仍然成立。
+func transferOrigins(t *tx, from, to RecordRef) {
+	for _, id := range t.Edges.Keys() {
+		i := slices.IndexFunc(t.Edges.m[id].Derivations, func(d Derivation) bool { return d.Record == from })
+		if i < 0 {
+			continue
+		}
+		e, _ := t.Edges.Get(id)
+		d := e.Derivations[i]
+		d.Record = to
+		e.Derivations = addDerivation(t, e.Derivations, d)
+		e.Revision++
+		t.Edges.Put(id, e)
+	}
+	for _, id := range t.Entities.Keys() {
+		if !slices.ContainsFunc(t.Entities.m[id].Names, func(n EntityName) bool {
+			return slices.ContainsFunc(n.Origins, func(o Origin) bool { return o.Record == from })
+		}) {
+			continue
+		}
+		e, _ := t.Entities.Get(id)
+		for k, n := range e.Names {
+			if i := slices.IndexFunc(n.Origins, func(o Origin) bool { return o.Record == from }); i >= 0 {
+				o := n.Origins[i]
+				o.Record = to
+				e.Names[k].Origins = addOrigin(t, n.Origins, o, func(o Origin) Origin { return o })
+			}
+		}
+		e.Revision++
+		t.Entities.Put(id, e)
+	}
 }
 
 // derive 在一次提交中写入 Worker 推导出的记录：rs 中尚不存在的记录被创建（重做的任务不会重复创建或覆盖），
-// 再调用 then 做同一提交中的其余修改，then 返回失效、需要移出索引的记录。嵌入在锁外完成，索引在提交之后写入并复核。
-func (m *Memory) derive(ctx context.Context, ns []string, scope string, rs []Record, then func(t *tx) []Record) error {
+// 再调用 then 做同一提交中的其余修改并级联重算；then 返回失效、需要移出索引的记录，返回 errNoChange 时整次放弃。
+// 嵌入在锁外完成，索引在提交之后写入并复核。返回 rs 在提交后的版本（放弃时为空）。
+func (m *Memory) derive(ctx context.Context, ns []string, scope string, rs []Record, then func(t *tx) ([]Record, error)) ([]Record, error) {
 	vecs := make([][]float32, len(rs))
 	for i := range rs {
 		r, err := m.prepare(rs[i], ns)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if vecs[i], err = m.embed(ctx, r.Content); err != nil {
-			return err
+			return nil, err
 		}
 		rs[i] = r
 	}
 	var created []indexKey
 	var createdVecs [][]float32
-	var removed []Record
+	var removed, out []Record
+	var c cascaded
+	now := m.now()
 	_, err := m.mutate(ctx, ns, scope, func(t *tx) error {
-		created, createdVecs, removed, scope = nil, nil, nil, t.scope
+		created, createdVecs, removed, out, c, scope = nil, nil, nil, nil, cascaded{}, t.scope
 		for i, r := range rs {
 			if createRecord(t, r) {
 				r, _ = t.Records.Get(r.ID)
@@ -336,15 +400,25 @@ func (m *Memory) derive(ctx context.Context, ns []string, scope string, rs []Rec
 			}
 		}
 		if then != nil {
-			removed = then(t)
+			var err error
+			if removed, err = then(t); err != nil {
+				created, removed = nil, nil
+				return err
+			}
+		}
+		c = m.cascadeTx(t, now)
+		for _, r := range rs {
+			if cur, ok := t.Records.Get(r.ID); ok {
+				out = append(out, cur)
+			}
 		}
 		return nil
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return errors.Join(m.dropIndex(ctx, ns, scope, recordSpace, keysOf(removed)...),
-		m.writeIndex(ctx, ns, scope, recordSpace, created, createdVecs))
+	return out, errors.Join(m.dropIndex(ctx, ns, scope, recordSpace, keysOf(removed)...),
+		m.writeIndex(ctx, ns, scope, recordSpace, created, createdVecs), m.indexAfter(ctx, ns, scope, c))
 }
 
 const failurePrompt = "这一轮执行失败或被中止。根据对话记录写一条以后可以避免同类失败的教训，输出 JSON：" +
@@ -364,16 +438,18 @@ func (m *Memory) learnFromFailure(ctx context.Context, j Job, at time.Time, tran
 	if err != nil {
 		return err
 	}
-	return m.derive(ctx, ns, jobScope(ctx), []Record{{
+	_, err = m.derive(ctx, ns, jobScope(ctx), []Record{{
 		ID: stableID(j.Key, "lesson"), Kind: KindReflection, Content: out.Lesson, Keywords: out.Keywords, ValidFrom: at,
 		Importance: min(max(out.Importance, 0), 1), Sources: []Source{j.source()},
 	}}, nil)
+	return err
 }
 
 const reflectPrompt = "以下是同一用户近期的若干经历。提炼一到三条更高层的结论（如习惯、偏好、反复出现的问题），输出 JSON：" +
 	`{"insights":[{"content":"…","keywords":["…"],"importance":0.0}]}。只输出 JSON。`
 
 // reflect 在未参与反思的有效情景累计重要度达到阈值时提炼结论（Generative Agents），并把这些情景标记为已反思。
+// 结论的 ReflectedFrom 是这些情景；提交时任一情景已不是读取时的版本或已失效，整次放弃。
 func (m *Memory) reflect(ctx context.Context) error {
 	ns, err := requireNamespace(ctx)
 	if err != nil {
@@ -411,26 +487,32 @@ func (m *Memory) reflect(ctx context.Context) error {
 		return err
 	}
 	key := stableID(ids...)
+	basis := make([]RecordRef, 0, len(episodes))
+	for _, r := range episodes {
+		basis = append(basis, refOf(r))
+	}
 	var insights []Record
 	for i, in := range out.Insights {
 		if strings.TrimSpace(in.Content) == "" {
 			continue
 		}
-		insights = append(insights, Record{ID: stableID(key, fmt.Sprint(i)), Kind: KindReflection, Content: in.Content, Keywords: in.Keywords, Importance: min(max(in.Importance, 0), 1)})
+		insights = append(insights, Record{ID: stableID(key, fmt.Sprint(i)), Kind: KindReflection, Content: in.Content, Keywords: in.Keywords,
+			Importance: min(max(in.Importance, 0), 1), ReflectedFrom: basis})
 	}
-	// 结论与"已反思"标记在同一次提交中；只标记仍是读取时那个版本的情景。
-	return m.derive(ctx, ns, scope, insights, func(t *tx) []Record {
+	// 结论与"已反思"标记在同一次提交中。
+	_, err = m.derive(ctx, ns, scope, insights, func(t *tx) ([]Record, error) {
 		for _, e := range episodes {
 			cur, ok := t.Records.Get(e.ID)
 			if !ok || !cur.Valid() || cur.Incarnation != e.Incarnation || cur.Revision != e.Revision {
-				continue
+				return nil, errNoChange
 			}
 			cur.Reflected = true
 			cur.Revision++
 			t.Records.Put(cur.ID, cur)
 		}
-		return nil
+		return nil, nil
 	})
+	return err
 }
 
 // turnTime 返回轮次开始事件的时间：记录与关系的生效时间是对话发生的时间，而不是 Worker 处理的时间。
