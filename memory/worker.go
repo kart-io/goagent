@@ -86,7 +86,7 @@ func (m *Memory) ProcessPending(ctx context.Context) (int, error) {
 }
 
 // errRoundOver 包装心跳失败：无法确认仍持有 Worker 锁，结束本轮，以免与接管者重复调用模型。
-var errRoundOver = errors.New("长期记忆 Worker 心跳失败，结束本轮")
+const errRoundOver = sentinel("长期记忆 Worker 心跳失败，结束本轮")
 
 // processEntry 处理一条任务登记：作用域已不是当前的直接移除登记；否则依次处理待处理的任务，最后在 state 锁内移除已没有任务的登记。
 func (m *Memory) processEntry(ctx context.Context, e queueEntry) (int, error) {

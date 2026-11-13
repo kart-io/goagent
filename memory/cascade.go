@@ -541,7 +541,7 @@ func edgeFact(t *tx, e Edge) string {
 		case live != bestLive:
 			continue
 		default:
-			if b := e.Derivations[best]; !d.At.After(b.At) && !(d.At.Equal(b.At) && d.Record.ID > b.Record.ID) {
+			if b := e.Derivations[best]; !d.At.After(b.At) && (!d.At.Equal(b.At) || d.Record.ID <= b.Record.ID) {
 				continue
 			}
 		}

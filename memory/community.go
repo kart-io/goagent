@@ -113,9 +113,7 @@ func detectCommunities(ns []string, edges []Edge, names map[string]string) []Com
 		}
 		slices.Sort(members)
 		parts := append(slices.Clone(members), "\x01")
-		for _, k := range communityBasis(facts[l], names) {
-			parts = append(parts, k)
-		}
+		parts = append(parts, communityBasis(facts[l], names)...)
 		out = append(out, Community{ID: stableID(append(append(slices.Clone(ns), "community"), members...)...), Namespace: ns, Members: members, Fingerprint: stableID(parts...)})
 	}
 	slices.SortFunc(out, func(a, b Community) int { return strings.Compare(a.ID, b.ID) })

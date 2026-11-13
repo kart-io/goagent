@@ -2,7 +2,6 @@ package memory
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"maps"
 	"math/rand/v2"
@@ -14,6 +13,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/codec/json"
 )
 
 // derivedGraph 是级联测试的夹具：记录与由记录派生的关系都经公开接口或 applyRelations 写入。

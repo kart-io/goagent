@@ -184,8 +184,13 @@ func (m *Memory) CacheStats() CacheStats {
 // Identity 标识召回配置；写入召回快照，配置改变后旧快照恢复时召回为空。
 func (m *Memory) Identity() string { return m.identity }
 
+// sentinel 是包内控制流使用的哨兵错误，按值比较：AgentError.Is 只比较错误码，用它做哨兵会与同码的无关错误互相匹配。
+type sentinel string
+
+func (e sentinel) Error() string { return string(e) }
+
 // errNoChange 由修改函数返回，表示没有需要提交的修改：mutate 不提交，返回当前 state。
-var errNoChange = errors.New("长期记忆没有需要提交的修改")
+const errNoChange = sentinel("长期记忆没有需要提交的修改")
 
 // conflict 返回 CodeConflict 错误。
 func conflict(format string, args ...any) error {

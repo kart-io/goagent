@@ -189,7 +189,7 @@ func (m *Memory) importLegacy(ctx context.Context, ns []string, records []Record
 	return MigrationImported, nil
 }
 
-var errMigrationConflict = errors.New("新存储中已有数据")
+const errMigrationConflict = sentinel("新存储中已有数据")
 
 func hasData(s state) bool { return len(s.Records)+len(s.Entities)+len(s.Edges) > 0 }
 

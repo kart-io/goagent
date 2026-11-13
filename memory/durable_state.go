@@ -103,7 +103,7 @@ func (s *state) init() {
 var errScopeChanged = agentErrors.New(agentErrors.CodeConflict, "长期记忆的作用域已改变（期间发生了 Purge）").WithComponent("memory")
 
 // errStateFull 表示提交会让 state 变大并超过 MaxStateBytes。
-var errStateFull = errors.New("长期记忆的数据量超过上限")
+const errStateFull = sentinel("长期记忆的数据量超过上限")
 
 // scopeRemoved 把作用域删除统一视为作用域改变：两者都说明期间发生了 Purge。
 func scopeRemoved(err error) error {
