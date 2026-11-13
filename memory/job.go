@@ -109,7 +109,7 @@ func (m *Memory) Enqueue(ctx context.Context, j Job) error {
 		}
 		return m.register(ctx, queueEntry{Namespace: ns, Scope: t.scope, Reason: queueJobs})
 	}))
-	if errors.Is(err, errScopeChanged) || errors.Is(err, errStateFull) || err == nil && dropped {
+	if isSentinel(err, errScopeChanged) || errors.Is(err, errStateFull) || err == nil && dropped {
 		m.droppedJobs.Add(1)
 		return nil
 	}
@@ -184,7 +184,7 @@ func hasPending(t *tx) bool {
 // 丢弃的为 dropped 并计入 DroppedJobs。任务已不是待处理（或作用域已切换）时不修改。标记任务结束不受 MaxStateBytes 限制。
 func (m *Memory) finishJob(ctx context.Context, j Job, result error) error {
 	now := m.now()
-	stale := errors.Is(result, errScopeChanged) || errors.Is(result, errJobStale)
+	stale := isSentinel(result, errScopeChanged) || isSentinel(result, errJobStale)
 	// dropped 只在本次把任务置为 dropped 时为真：Rewound 已置为 dropped 的任务已经计过数。
 	var dropped bool
 	_, err := m.mutate(ctx, j.Namespace, j.Scope, func(t *tx) error {
@@ -210,7 +210,7 @@ func (m *Memory) finishJob(ctx context.Context, j Job, result error) error {
 		t.Jobs.Put(j.Key, cur)
 		return nil
 	}, shrinking())
-	if errors.Is(err, errScopeChanged) {
+	if isSentinel(err, errScopeChanged) {
 		if stale {
 			m.droppedJobs.Add(1)
 		}
@@ -302,7 +302,7 @@ func (m *Memory) settle(ctx context.Context, e queueEntry, keep func(*tx) bool) 
 			}
 			return m.unregister(ctx, e)
 		}))
-	if errors.Is(err, errScopeChanged) {
+	if isSentinel(err, errScopeChanged) {
 		return m.unregister(ctx, e)
 	}
 	return err

@@ -353,7 +353,7 @@ func (m *Memory) readView(ctx context.Context, ns []string) (string, view, error
 			return "", view{}, err
 		}
 		v, err := m.readScope(ctx, ns, meta.Current)
-		if errors.Is(err, errBaseChanged) {
+		if isSentinel(err, errBaseChanged) {
 			continue
 		}
 		if err != nil {

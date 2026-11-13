@@ -438,3 +438,36 @@ func TestJobDroppedAfterForget(t *testing.T) {
 	}
 	requireQueueEmpty(t, m)
 }
+
+// 处理结果与 errScopeChanged、errJobStale 同为 CodeConflict 时，按失败计尝试次数，不当作过期任务丢弃（AgentError.Is 只比较错误码）。
+func TestFinishJobClassifiesSentinelsByIdentity(t *testing.T) {
+	cases := []struct {
+		name     string
+		result   error
+		status   JobStatus
+		attempts int
+		dropped  int64
+	}{
+		{"读取反复冲突的普通错误", agentErrors.Newf(agentErrors.CodeConflict, "长期记忆的作用域或基础快照在读取期间反复改变").WithComponent("memory"), JobPending, 1, 0},
+		{"记录冲突", conflict("长期记忆记录 %q 已存在：修改用 Update", "r"), JobPending, 1, 0},
+		{"任务过期", errJobStale, JobDropped, 0, 1},
+		{"包装的任务过期", fmt.Errorf("处理：%w", errJobStale), JobDropped, 0, 1},
+		{"作用域改变", errScopeChanged, JobDropped, 0, 1},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			m := workerMemory(t, Config{JobAttempts: 3})
+			ns := []string{"u"}
+			ctx := WithNamespace(context.Background(), ns...)
+			j := emptyJob("k", ns, initialScope)
+			require.NoError(t, m.Enqueue(ctx, j))
+			require.NoError(t, m.finishJob(ctx, j, c.result))
+			got, ok, err := m.Job(ctx, "k")
+			require.NoError(t, err)
+			require.True(t, ok)
+			require.Equal(t, c.status, got.Status)
+			require.Equal(t, c.attempts, got.Attempts)
+			require.Equal(t, c.dropped, m.DroppedJobs())
+		})
+	}
+}

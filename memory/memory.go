@@ -189,6 +189,30 @@ type sentinel string
 
 func (e sentinel) Error() string { return string(e) }
 
+// isSentinel 沿错误链按身份查找 target。errScopeChanged 等对外仍是 CodeConflict 的 *AgentError，
+// errors.Is 会把同码的其它冲突错误也当成它们。
+func isSentinel(err, target error) bool {
+	for err != nil {
+		if err == target {
+			return true
+		}
+		switch e := err.(type) {
+		case interface{ Unwrap() []error }:
+			for _, inner := range e.Unwrap() {
+				if isSentinel(inner, target) {
+					return true
+				}
+			}
+			return false
+		case interface{ Unwrap() error }:
+			err = e.Unwrap()
+		default:
+			return false
+		}
+	}
+	return false
+}
+
 // errNoChange 由修改函数返回，表示没有需要提交的修改：mutate 不提交，返回当前 state。
 const errNoChange = sentinel("长期记忆没有需要提交的修改")
 
@@ -269,7 +293,7 @@ func (m *Memory) remember(ctx context.Context, r Record, expect string) (Record,
 	}
 	for attempt := 0; ; attempt++ {
 		_, err = m.mutate(ctx, ns, scope, write)
-		if !errors.Is(err, errScopeChanged) || expect != "" || attempt > 0 {
+		if !isSentinel(err, errScopeChanged) || expect != "" || attempt > 0 {
 			break
 		}
 		meta, err := m.loadMeta(ctx, ns)
