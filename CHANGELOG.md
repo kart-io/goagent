@@ -24,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 长期记忆的召回注入（[长期记忆的删除优先](docs/design/MEMORY_GOVERNANCE.md) G0）：被遗忘的记忆不再经会话历史或持久日志回到模型。
   - `WithLongTermMemory` 不再注册 PreStep。召回块在组装每步请求时插在运行上下文之前（原先在本轮输入之前），不进入会话历史，也不进入持久日志；持久日志只记引用（`memory/recall`、`memory/use/<步骤>`），模型请求的意图用引用子集的摘要代替召回正文。升级前开始、仍在进行的持久运行，恢复时可能因意图或会话同步不一致而失败。迁移：升级前让持久运行结束，或放弃后以新执行键重新开始。
   - 新增 `memory.TurnMemory`，记入 `session.TurnStart.Memory`。轮次内记忆工具的读写、抽取任务的命名空间都取自开始时的绑定，中止轮次的任务不再使用下一轮的命名空间；升级前没有绑定的中止轮次不再登记任务。恢复运行时宿主绑定了另一个命名空间，返回新的 `errors.ErrMemoryNamespaceChanged`。迁移：恢复时绑定与原运行相同的命名空间。
-  - Request 钩子不得删除、改写或移动召回消息（以 `memory.RecallPrefix` 开头的用户消息），否则持久运行恢复时意图不一致。迁移：调整钩子。这条约束目前只有文档说明，尚无自动化测试（TODO）。
+  - Request 钩子不得改写或移动召回消息（以 `memory.RecallPrefix` 开头的用户消息），否则持久运行恢复时意图不一致，返回 `CodeConflict`；删除召回消息不改变意图。迁移：调整钩子。由 `TestLongTermMemoryRequestHookChangingRecallBreaksResume` 覆盖。
   - 已知限制：召回仍只作用于原生工具流，未注册工具的纯聊天不召回，与升级前相同。
   - 长期记忆不能与 `middleware.CacheMiddleware` 同时使用，`Build` 返回配置错误：缓存按输入命中，会跨命名空间返回回答。迁移：去掉其中一个。
   - 配置长期记忆时，从会话日志推导历史会去掉以 `memory.RecallPrefix` 开头的用户消息（升级前写入历史的召回块）。

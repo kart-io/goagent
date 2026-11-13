@@ -94,7 +94,7 @@ return builder.NewSimpleBuilder(client).
 | `WithRetriever(interfaces.DocumentRetriever, ...RetrievalConfig)` | 4 篇、12000 字符 | 每次请求检索证据，来源写入输出元数据 `retrieval_sources`；`RetrievalConfig.Filter` 按请求生成元数据过滤条件，需检索器实现 `interfaces.RequestRetriever` |
 | `WithSessionLog(session.Store)` | 无 | 多轮历史来自会话日志；不配置时每次调用没有历史 |
 | `WithCompaction(*contextpolicy.Compaction)` | 无 | 对话超过阈值时压缩较早的消息；仅作用于原生工具流 |
-| `WithLongTermMemory(*memory.Memory)` | 无 | 跨会话长期记忆：每轮召回、轮末登记抽取任务；需要 `WithSessionLog` 与请求上下文中的 `memory.WithNamespace`；召回仅作用于原生工具流；不能与 `CacheMiddleware` 同时使用；Request 钩子不得改动召回消息 |
+| `WithLongTermMemory(*memory.Memory)` | 无 | 跨会话长期记忆：每轮召回、轮末登记抽取任务；需要 `WithSessionLog` 与请求上下文中的 `memory.WithNamespace`；召回仅作用于原生工具流；不能与 `CacheMiddleware` 同时使用；Request 钩子不得改写或移动召回消息 |
 | `WithSessionID(string)` | `session-<纳秒时间戳>` | 会话日志的缺省会话 ID；请求上下文中的 `tools.WithSessionID` 优先 |
 | `WithState(S)` | `core.NewAgentState()` | 初始状态 |
 

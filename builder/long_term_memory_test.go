@@ -252,6 +252,67 @@ func TestLongTermMemoryDurableResumeDropsForgotten(t *testing.T) {
 	}
 }
 
+// Request 钩子改写或移动召回消息时，召回正文进入意图：恢复前遗忘了召回中的记录，已完成的第 0 步意图不一致，恢复失败。
+// 与 TestLongTermMemoryDurableResumeDropsForgotten 相同的场景，只多一个钩子。
+func TestLongTermMemoryRequestHookChangingRecallBreaksResume(t *testing.T) {
+	isRecall := func(msg llm.Message) bool {
+		return msg.Role == "user" && strings.HasPrefix(msg.Content, memory.RecallPrefix)
+	}
+	for _, c := range []struct {
+		name string
+		hook RequestHook
+	}{
+		{"改写", func(_ context.Context, req *ModelRequest) error {
+			for i, msg := range req.Request.Messages {
+				if isRecall(msg) {
+					req.Request.Messages[i].Content = msg.Content + "\n（已审阅）"
+				}
+			}
+			return nil
+		}},
+		{"移到开头", func(_ context.Context, req *ModelRequest) error {
+			var recall, rest []llm.Message
+			for _, msg := range req.Request.Messages {
+				if isRecall(msg) {
+					recall = append(recall, msg)
+				} else {
+					rest = append(rest, msg)
+				}
+			}
+			req.Request.Messages = append(recall, rest...)
+			return nil
+		}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			store := session.NewMemoryStore()
+			ns := memory.WithNamespace(context.Background(), "t1", "alice")
+			m, ids := newTestMemory(t, ns, "用户喜欢喝美式咖啡")
+			crash := &crashOn{match: "model/turn/1"}
+			run := func(model *scriptModel) error {
+				dispatched, err := dispatcherTools(tools.DispatchConfig{}, plainTool())
+				require.NoError(t, err)
+				agent, err := NewSimpleBuilder(model).WithSessionID("s").WithSessionLog(store).WithDurableScope("memory").
+					WithTools(dispatched...).WithLongTermMemory(m).WithRequestHook(c.hook).WithMaxIterations(4).Build()
+				require.NoError(t, err)
+				crash.Store = session.DurableStore(store, "s")
+				_, err = agent.AsRunnable().Invoke(durable.WithJournal(durable.WithExecutionKey(ns, "run-1"), crash), "推荐一杯咖啡")
+				return err
+			}
+			first := newScriptModel(callTool("c1", "lookup"), answer("推荐美式"))
+			require.ErrorContains(t, run(first), "crash")
+			_, found := recallIn(first.request(0).Messages)
+			require.True(t, found)
+
+			require.NoError(t, m.Forget(ns, ids[0]))
+			resumed := newScriptModel(answer("推荐美式"))
+			err := run(resumed)
+			require.True(t, agentErrors.IsCode(err, agentErrors.CodeConflict), "意图冲突：%v", err)
+			require.ErrorContains(t, err, "intent")
+			require.Zero(t, resumed.count(), "意图不一致时不重发已完成的步骤")
+		})
+	}
+}
+
 // G0 写下的持久运行（召回快照为 memory-recall/1，轮次绑定没有作用域）在 G1 下恢复：意图不变，已完成的第 0 步从日志回放，
 // 召回为空。日志由 a4f09197 运行与上面相同的用例、在第 1 步崩溃后导出。
 func TestLongTermMemoryResumesG0Journal(t *testing.T) {

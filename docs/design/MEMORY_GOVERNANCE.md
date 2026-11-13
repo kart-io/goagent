@@ -162,7 +162,7 @@ type TurnMemory struct {
    - 子集为空时没有占位消息。
 
    因此意图只由日志决定。即使恢复时引用全部被删、实际请求里没有召回消息，意图也保持不变。`readJournaledTurn` 增加一个参数，传入本步的召回文本与占位消息；RequestError 之后重新组装（`builder/loop_hooks.go` 的替换路径）也传入同一个值。
-6. **Request 钩子**：钩子在组装之后运行。钩子不得删除、改写或移动召回消息，否则意图会变；文档写明这一点并加以测试。
+6. **Request 钩子**：钩子在组装之后运行。钩子不得改写或移动召回消息，否则意图会变；删除召回消息不改变意图（同第 5 条）。
 7. **RequestError 钩子**：把消息交给钩子之前，先去掉召回消息；钩子返回替换消息后重新组装时，再把召回块插回去。这样压缩等恢复逻辑不会把召回内容写进摘要。
 8. **恢复时的重发**：沿用现有策略。已完成的模型操作按意图哈希回放；被中断的模型操作，只有开启了 `ResendInterruptedModel` 才会重发（`builder/model_call.go`），否则仍按原样报错。删除不会带来新的恢复失败，但也不改变原有的恢复限制。
 9. **抽取跳过记忆工具**：`renderTurn` 按 assistant 消息的 `ToolCalls` 和 `MessageData.Tool.Name`，跳过记忆工具（`memory_search`、`memory_save`、`memory_forget`）的调用和结果。同一条 assistant 消息里的普通正文照常保留。
@@ -263,7 +263,7 @@ flowchart TB
   - 恢复未结束的轮次时，绑定取自原 `TurnStart`，不重新计算。
   - 被中止轮次的任务，使用 `TurnStart` 里记录的绑定；没有绑定的旧事件，任务被丢弃。
 - **钩子与重试**：
-  - Request 钩子改动召回消息时，测试能发现意图冲突。**TODO：G0 未实现这条测试**，目前只在文档中写明约束。
+  - Request 钩子改写或移动召回消息时，恢复报意图冲突且不重发已完成的步骤（`TestLongTermMemoryRequestHookChangingRecallBreaksResume`）。
   - RequestError 钩子拿到的消息里没有召回块，替换之后召回块仍在。
 - **抽取与历史**：
   - 记忆工具的调用和结果不进入抽取的对话记录，同一条消息里的普通正文照常保留。
@@ -638,7 +638,7 @@ flowchart TB
 | 旧关系、旧实体、旧社区升级后不再使用 | 有意取舍，图谱随新对话重建 |
 | 关系缺少 `from` 时丢弃 | 计入任务结果，用评测回归检查 |
 | 被遗忘的记录正文保留到保留期满 | 0.1 已写明；需要立即删除时用 `Purge` |
-| Request 钩子不得改动召回消息 | 文档写明，测试中验证 |
+| Request 钩子不得改写或移动召回消息 | 文档写明，测试中验证 |
 | 恢复时被中断的模型调用是否重发，沿用 `ResendInterruptedModel` | 删除不带来新的恢复失败，原有限制不变 |
 | 旧的失效记录没有失效原因 | 影响仅限升级前的数据 |
 | 同一轮中调用 `memory_forget`，这一轮的其他内容也不会被抽取 | `LastForgetSeq` 规则的直接后果，有意保守 |
@@ -658,7 +658,7 @@ flowchart LR
 ```
 
 - **G0 已实施**（分支 `feat/memory-g0-recall`）。遗留事项：
-  - TODO：补上"Request 钩子改动召回消息时，测试能发现意图冲突"的测试（2.5 节）。
+  - 已补上"Request 钩子改写或移动召回消息时，测试能发现意图冲突"的测试（2.5 节）。
   - 已知限制：纯聊天路径（未注册工具）不召回，与升级前相同（2.2 节第 11 条）。
 - **与 G1 的衔接**：G1 完成后，`TurnMemory`、`Ref` 会增加字段，`Snapshot.Protocol` 的版本随之改变。升级前开始、还在进行中的运行，恢复时协议不一致，召回视为空；意图仍按日志计算，不受影响。
 - **G1 中途的状态**：`Update` 修改正文时不会触发级联，这一点在 G2 补上。
@@ -671,7 +671,7 @@ flowchart LR
 |---|---|---|
 | `WithLongTermMemory` 不再使用 PreStep；召回块不进历史，改为插在运行上下文之前 | 升级前开始的持久运行，恢复时可能以意图冲突或会话同步不一致失败 | 升级前让运行结束，或放弃后重新开始 |
 | 新增 `TurnMemory` 与 `ErrMemoryNamespaceChanged`；`TurnStart` 事件增加记忆绑定 | 宿主需要处理新错误 | 恢复时绑定与原运行相同的命名空间 |
-| Request 钩子不得改动召回消息 | 改动召回消息的钩子会引起意图冲突 | 调整钩子 |
+| Request 钩子不得改写或移动召回消息 | 改写或移动召回消息的钩子会引起意图冲突 | 调整钩子 |
 | 长期记忆与 `CacheMiddleware` 互斥 | 同时配置的 Builder 构建失败 | 去掉其中一个 |
 | `Config.Store`、`Config.Graph`（接口）、`RecordStore`、`NewRecordStore`、`NewGraph` 删除；新增 `Config.Durable`（带 `json:"-"` 标签）；`Config.Graph` 改为 `bool`；新增 `Config.TrackAccess` | 自定义存储与图谱实现，以及 `scripts/memeval/main.go`、`builder/long_term_memory_test.go` 等调用方编译失败 | 传入实现了 `Scoped` 的 `durable.Store` |
 | 数据迁到 `durable.Store` | 旧的 `store.Store` 数据不会被读取 | 提供一次性迁移函数 `MigrateFromStore`：只迁入记录，不迁入关系、实体、社区；迁移完成后清空旧 `store.Store` 中的记忆数据，并对旧的索引空间执行 `Clear`；返回旧的待处理任务清单，由宿主决定是否重新登记 |
