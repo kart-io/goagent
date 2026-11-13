@@ -23,15 +23,15 @@ import (
 
 func revisionDefinition(version string) (revision.Definition, map[string][]byte) {
 	return revision.Definition{
-			Config: []byte(fmt.Sprintf(`{"precision":9007199254740993,"mode":%q}`, version)), Prompts: map[string]string{"system": "prompt-" + version},
-			Tools:  []byte(fmt.Sprintf(`[{"name":%q,"schema":{"type":"object"}}]`, "tool-"+version)),
-			Models: map[string]revision.Reference{"chat": {ID: "model-" + version, Version: version}},
-			Policy: revision.Reference{ID: "policy-" + version, Version: version}, Skills: map[string]string{"demo": "skills/demo"},
-			Runtime: revision.Runtime{Kind: "native", Version: version, Digest: fmt.Sprintf("%x", sha256.Sum256([]byte("program-"+version)))},
-		}, map[string][]byte{
-			"skills/demo/SKILL.md": []byte("---\nname: demo\ndescription: archived skill\n---\ninstructions-" + version),
-			"skills/demo/ref.txt":  []byte("reference-" + version), "template.txt": []byte("template-" + version),
-		}
+		Config: []byte(fmt.Sprintf(`{"precision":9007199254740993,"mode":%q}`, version)), Prompts: map[string]string{"system": "prompt-" + version},
+		Tools:  []byte(fmt.Sprintf(`[{"name":%q,"schema":{"type":"object"}}]`, "tool-"+version)),
+		Models: map[string]revision.Reference{"chat": {ID: "model-" + version, Version: version}},
+		Policy: revision.Reference{ID: "policy-" + version, Version: version}, Skills: map[string]string{"demo": "skills/demo"},
+		Runtime: revision.Runtime{Kind: "native", Version: version, Digest: fmt.Sprintf("%x", sha256.Sum256([]byte("program-"+version)))},
+	}, map[string][]byte{
+		"skills/demo/SKILL.md": []byte("---\nname: demo\ndescription: archived skill\n---\ninstructions-" + version),
+		"skills/demo/ref.txt":  []byte("reference-" + version), "template.txt": []byte("template-" + version),
+	}
 }
 
 type revisionRuntime struct {
