@@ -47,6 +47,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     3. 调用 `Memory.MigrateFromStore(ctx, memory.MigrationSource{Store: old, Index: oldIndex}, namespaces, memory.MigrateOptions{ClearLegacy: true})`：两阶段提交，失败或冲突时处理后重跑，已迁移的命名空间不再导入。只迁入记录；没有取代者的失效记录视为已遗忘并清空正文；关系、实体、社区不迁入，由之后的抽取重建。旧任务不迁入，列在报告中（`Unlisted` 给出旧任务中出现、但不在清单里的命名空间），原样重新登记会被丢弃。
     4. 恢复流量，启动 Worker 或 `RunMaintenance`。
   - 回滚：代码回滚前让持久运行结束；数据从迁移前的备份恢复，再用 `Deletions` 中回滚窗口内的记录在旧存储上重放 Forget 与 Purge，最后 `Reindex(true)`。没有开启删除日志时，迁移后遗忘的内容会在回滚后重新出现。
+- 长期记忆的派生与整理（[长期记忆的删除优先](docs/design/MEMORY_GOVERNANCE.md) G2，设计见 [MEMORY_G2_DERIVATION](docs/design/MEMORY_G2_DERIVATION.md)）：遗忘、改写与回退一条记录后，由它合并、反思出的记录，以及从它抽取的关系、实体名称和社区摘要不再留下被删的内容。
+  - 关系：`Edge.Source` 删除，改为 `Sources`（由派生物化）；新增 `InvalidReason`（superseded、underived）与 `Derivations`（依据的记录、轮次、陈述与对话时间），`Fact` 取成立派生中最新的陈述。`Valid()`、`ValidAt()` 要求至少一条派生，G1 写入的关系不再有效，由 `Prune` 删除。迁移：读 `Edge.Source` 改读 `Sources`；图谱随新对话重建。
+  - 实体：新增 `Names`（每个名称带来源）与 `Live`，`Aliases` 改为物化值，`ContentRev` 只随 `Name` 变化；来源被遗忘或回退的名称删除，名称全部删除时实体删除。G1 写入的实体不再使用。迁移：升级后运行 `Reindex(true)`。
+  - 记录：新增 `MergedFrom`、`ReflectedFrom` 与失效原因 `ReasonUnderived`。合并或反思的依据被遗忘时正文清空；反思的依据被回退时反思失效、保留正文。按失效原因分支的调用方需处理新值。
+  - 抽取格式：关系必须带 `from`（同一 JSON 中 `memories` 的下标），缺少合法 `from` 的关系丢弃。迁移：自定义 `Instructions` 中给出关系示例的按新格式修改。
+  - Worker：一轮的全部写入（记录、合并与否定、关系、级联重算、任务完成）在一次提交中完成，5k 记录时每轮加锁时长之和由约 40ms 降到约 4ms。展示给模型的记录在整理期间被修改、或同一目标已被本轮前面的决定采用时，这条决定降级为新增（正文用候选原文，不合并），不再放弃；同一轮中相近的候选只产生一条记录。社区重写、反思与 `Prune` 在一批任务之后运行，出错时作为 Worker 的错误返回，不再使任务失败。
+  - `Job` 新增 `Stats`（`JobStats`：写入的记录与关系、丢弃的关系、降级的整理决定），已完成的任务经 `Memory.Job` 返回，`Prune` 与完成记录一起删除。
+  - `Rewound`：轮次有任何消息被遮蔽（回退点切开轮次，如"重新生成回答"）即整轮失效，来自被回退轮次的派生与名称来源删除；为可见部分补登抽取任务。每次调用都会提交（写回退标记），回退标记拦截回退时仍在进行、之后才登记或提交的轮次。`DroppedJobs` 改为在任务真正变为 dropped 时计数。
+  - 社区指纹改为由成员、成员名称与事实关系的版本计算：升级后第一次同步重写全部社区摘要，需要模型调用。
+  - 状态编码升为 `memory-state-blob/3`、`memory-head/3`：新程序能读 G1 的 `/2`，旧程序拒绝读取 `/3`。
+  - 迁移步骤：停止 Worker，升级后运行 `Reindex(true)`，再启动 Worker；图谱与社区摘要随新对话与第一次同步重建。
+  - 回滚：升级后写入过的 state 不能被旧程序读取；回滚代码前从升级前的备份恢复 state，再按 G1 的回滚步骤重放回滚窗口内的删除。
 
 - `tools`：`WithMiddleware`/`MiddlewareTool` 移入 `tools/middleware`，改为 `middleware.Wrap(tool, middlewares...)` 与 `*middleware.WrappedTool`，用法不变。`tools` 根包不再导入 `tools/middleware`，只用 Builder 的程序不再链接其日志中间件带入的 OTLP/gRPC：`builder` 的依赖包由 394 个降到 183 个；`apicheck` 拒绝 `tools` 根包重新导入 `tools/middleware`。迁移：`tools.WithMiddleware(` 改为 `middleware.Wrap(`。
 - `tools`：删除没有生产使用方、与 Dispatcher 平行的 `ToolExecutor`（`NewToolExecutor`、`ToolCallRequest`、`ToolResult`、`RetryPolicy`、`ExecutorOption` 及 `With*`）、`ToolGraph`/`ToolGraphBuilder`/`ToolNode`，以及三套工具结果缓存 `ToolCache`/`SimpleToolCache`/`MemoryToolCache`/`ShardedToolCache`、`CachedTool`/`NewCachedTool`、`NewHighPerformanceCache`/`NewLowMemoryCache` 与分片缓存选项；对应示例 `retry-jitter`、`optimization/02-cache-presets`、`advanced/parallel-execution` 一并删除。迁移：工具调用经 `tools.NewDispatcher`（并发、超时、持久回放与重试策略见 `DispatchConfig`），结果缓存用 `tools/middleware.Caching`。

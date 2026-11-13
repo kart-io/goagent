@@ -476,38 +476,38 @@ func (m *Memory) Update(ctx context.Context, id string, expect int64, p Patch) (
 
 ### 4.1 派生
 
-- **抽取格式**：抽取的 JSON 中，每条关系增加 `from` 字段，指向同一 JSON 里 `memories` 数组的下标。缺少合法 `from` 的关系直接丢弃，丢弃数量计入任务结果。
+类型、级联的步骤与回退的细节见 [G2 设计](MEMORY_G2_DERIVATION.md) 第 2–4 节，这里只列规则。
+
+- **抽取格式**：抽取的 JSON 中，每条关系增加 `from` 字段，指向同一 JSON 里 `memories` 数组的下标。缺少合法 `from` 的关系直接丢弃，丢弃数量计入任务统计 `Job.Stats.Dropped`。
 - **关系**：
 
   ```go
   type Edge struct {
-      // ...现有字段，另加 Incarnation、Revision、ContentRev、InvalidReason（superseded | expired | underived）
-      Derivations []Derivation `json:"derivations,omitempty"` // 每次派生：依据的记录与当次的陈述
-      Sources     []Source     `json:"sources,omitempty"`     // 取代 Source
+      // ...ID、Subject、Predicate、Object、ValidFrom、InvalidAt、SupersededBy 等；Source 删除
+      InvalidReason InvalidReason `json:"invalid_reason,omitempty"` // superseded | underived
+      Sources       []Source      `json:"sources,omitempty"`        // 由 Derivations 物化
+      Derivations   []Derivation  `json:"derivations,omitempty"`
   }
 
+  // Derivation 是关系的一次派生：依据的记录、产生它的轮次、该次的陈述与对话时间。
   type Derivation struct {
-      Record RecordRef `json:"record"`
-      Fact   string    `json:"fact"`
-  }
-
-  type RecordRef struct {
-      ID          string `json:"id"`
-      Incarnation int64  `json:"incarnation"`
-      ContentRev  int64  `json:"content_rev"`
+      Origin                       // Record RecordRef；Source Source
+      Fact string    `json:"fact"`
+      At   time.Time `json:"at"`
   }
   ```
 
   - **派生成立的条件**：`Record` 指向的记录存在、有效，并且 `Incarnation` 与 `ContentRev` 都与当前一致。正文被 `Update` 改过，旧派生就不再成立；被替代、回退、过期、遗忘的记录，其派生也不成立。
-  - 关系有效的条件：它自身的失效原因不是 superseded 或 expired，并且至少有一次派生仍然成立。
-  - **整理合并时转移派生**：Worker 以 `update` 合并出新记录时，在同一次提交中，为所有派生自被合并记录的关系追加一条派生，指向新记录、沿用原陈述。原派生保留，替代者被回退时可以恢复。只有 `update` 合并会转移；因内容矛盾而被替代的记录不转移，它的派生随之不成立。这样图谱不会随整理逐步流失。
-  - 有效陈述取成立的派生中最新的一条。有效陈述变化时，`ContentRev` 加一。
-- **实体**：名称和每个别名都单独记录派生来源（`[]RecordRef`）。来源全部失效的别名会被删除；没有有效名称的实体会被删除。名称或别名有变化时 `ContentRev` 加一，实体向量随后在锁外重新计算。
-- **合并记录**：整理时 `update` 合并出的记录带 `MergedFrom []RecordRef`。任一来源被遗忘，合并记录失效，原因为 underived，因为它的正文里含有被遗忘的内容。
-- **反思**：反思记录带有所依据情景记录的引用。任一情景记录被遗忘或回退，反思就失效。反思失效后，其余情景记录的 `Reflected` 复位，让它们可以重新参与反思。
+  - **派生的删除**：指向被擦除记录或落后版本的派生删除；来自被回退轮次（`Source` 被回退）的派生删除，被回退轮次的措辞不会留下。派生全部删除的关系随之删除。
+  - 关系有效的条件：它自身的失效原因不是 superseded，两端实体存在且存活，并且至少有一次派生仍然成立。否则失效，原因为 underived。
+  - **整理合并时转移派生**：Worker 以 `update` 合并出新记录时，在同一次提交中，为所有派生自被合并记录的关系追加一条派生，指向新记录，沿用原陈述、`At` 与 `Source`。原派生保留，替代者被回退时可以恢复。只有 `update` 合并会转移；因内容矛盾而被替代的记录不转移，它的派生随之不成立。这样图谱不会随整理逐步流失。
+  - 有效陈述取成立的派生中 `At` 最新的一条。有效陈述变化时，`ContentRev` 加一。
+- **实体**：每个名称（`Names`）单独记录来源（`Origin`）。来源全部不成立的名称不存活；来源被全部删除的名称删除，名称全部删除时删除实体。至少一个名称存活时实体存活（`Live`）。`Name` 不再存活时改为第一个存活的名称，`ContentRev` 加一，实体向量随后在锁外重新计算；`Aliases` 由 `Names` 物化。
+- **合并记录**：整理时 `update` 合并出的记录带 `MergedFrom []RecordRef`。任一依据被擦除（遗忘，或自身因依据被遗忘而擦除），合并记录的正文清空，原因为 underived，因为它的正文里含有被遗忘的内容；可以链式传递。
+- **反思**：反思记录带 `ReflectedFrom`。任一依据情景被擦除，反思正文清空；被回退，反思失效（underived）但保留正文。依据被合并替代或过期不影响反思。反思失效时，其余情景记录的 `Reflected` 复位，只复位一次，让它们可以重新参与反思。
 - **旧数据**：
-  - 旧关系没有 `Derivations`，视为 underived，升级后不再召回。
-  - 旧实体和旧社区在迁移时不迁入（见第 7 节）。
+  - 旧关系没有 `Derivations`，视为无效，升级后不再召回，由 `Prune` 删除。
+  - 旧实体没有 `Names`，不存活，由 `Prune` 删除；旧社区的指纹必然变化，第一次同步时删除重写。
 
 ### 4.2 级联重算
 
@@ -517,7 +517,7 @@ flowchart TB
     C --> MR[合并记录：MergedFrom 含 r 的]
     C --> RF[反思：引用含 r 的]
     C --> EN[实体：名称或别名来源含 r 的]
-    E --> E1{自身原因是 superseded 或 expired?}
+    E --> E1{自身原因是 superseded?}
     E1 -->|是| EK[保持失效]
     E1 -->|否| E2{有成立的派生?}
     E2 -->|有| EV[有效；陈述变化则 ContentRev 加一]
@@ -550,14 +550,14 @@ flowchart TB
     C --> F{LastForgetSeq > TurnSeq?<br/>或 TurnSeq < MarkerHorizon?<br/>或存在同会话、Seq > TurnSeq、<br/>覆盖本轮的回退标记?}
     F -->|是| DIS[丢弃任务]
     F -->|否| D[逐条决定]
-    D --> D1[候选中任一条的版本变化：放弃这条决定及其关系]
-    D --> D2[同一目标的后续决定：放弃]
+    D --> D1[候选中任一条的版本变化：降级为新增，计入 Conflicts]
+    D --> D2[同一目标的后续决定：降级为新增]
     D --> D3[其余决定写入；noop 校验目标仍有效；<br/>记录 候选下标 → RecordRef；<br/>update 记录 MergedFrom 并转移派生]
     D1 --> R
     D2 --> R
     D3 --> R
     R[关系：from 能映射到 RecordRef 的才写入] --> CAS[4.2 级联重算]
-    CAS --> DONE[任务完成，保留任务键 → Save]
+    CAS --> DONE[任务完成，保留任务键、完成时间与统计 → Save]
 ```
 
 - **以轮次开始为界**：被删除的内容，可能经召回块、模型回答、工具结果进入本轮对话。所以三种删除都和轮次开始时的 `TurnMemory.Seq` 比较：
@@ -568,7 +568,8 @@ flowchart TB
   这样做比按相似度判断可靠，代价是损失这一轮的抽取结果。被中止的任务直接使用原始事件，同样受这些判断约束。
 - **回退标记**：`Rewound` 在锁内写入标记 `{会话, To, Seq}`，判断是否覆盖本轮的条件与记录回退一致（`s.To > to`：本轮有任何消息被遮蔽）。回退点切开一个轮次时（`From ≤ to < To`），`Rewound` 在同一次提交中为可见部分 `[From, to]` 补登抽取任务，轮次中途被回退、之后才登记的任务在 `Enqueue` 时截到 `to`。详见 [G2 设计](MEMORY_G2_DERIVATION.md) 第 4、5 节。标记按 `InvalidRetention` 回收，回收时把 `MarkerHorizon` 推进到被回收标记的最大 `Seq`。如果任务的 `TurnSeq` 小于 `MarkerHorizon`，说明对应的标记可能已被回收，保守起见直接丢弃。
 - **计划不持久化**：计划里含有抽取出的正文，不落盘。崩溃后重新调用模型。
-- **一次提交，复核全部依据**：Basis 包括模型看到的全部候选，所以合并出的内容不会吸收已被遗忘的记录。
+- **一次提交，复核全部依据**：Basis 包括模型看到的全部候选，所以合并出的内容不会吸收已被遗忘的记录。复核不成立的决定降级为新增：正文用候选原文，不合并，来源只含本轮。同一轮中相近的候选只产生一条记录。
+- **维护在任务之后**：社区重写、反思与 `Prune` 在一批任务提交之后运行，使用只绑定命名空间的 context，各自复核依据；它们出错时作为 Worker 本轮的错误返回，不写入任务。
 - **单一 Worker**：保留现有约束，同一份存储只运行一个 Worker。任务的领取与状态更新都在锁内完成。
 
 ### 4.4 测试
@@ -591,8 +592,8 @@ flowchart TB
   - 轮次开始后才写入的回退标记，覆盖本轮：任务被丢弃，被中止的轮次同样如此。
   - `TurnSeq < MarkerHorizon` 的任务被丢弃。
 - **整理决定**：
-  - 展示给模型的非目标候选在提交前被遗忘：这条决定被放弃。
-  - 同一目标有两条决定：只采用第一条。
+  - 展示给模型的候选在提交前被修改：这条决定降级为新增。
+  - 同一目标有两条决定：只采用第一条，后一条降级为新增。
 - **崩溃后重试**：重新调用模型，结果中不出现重复记录。
 
 ## 5. 存在的问题
@@ -634,9 +635,9 @@ flowchart TB
 | `memory/queue` 是全局快照，所有命名空间登记任务时都要竞争它 | 只在登记缺失时才写入，绝大多数 Enqueue 只读不写；吞吐不足时改为按作用域分片 |
 | 必须使用实现了 `Scoped` 的 `durable.Store` | `FileStore` 与 `pgstore` 都已实现；`New` 时校验 |
 | 墓碑的保留期 | 作用域核对不依赖墓碑；墓碑作为第二道防线，保留期应大于持久运行的最长恢复窗口 |
-| 轮次开始后发生任何遗忘或回退，就丢弃整轮抽取结果 | 有意保守：以损失一轮学习为代价，换取被删内容不会被重新学回 |
+| 轮次开始后发生任何遗忘或覆盖本轮的回退，就丢弃整轮抽取结果 | 有意保守：以损失一轮学习为代价，换取被删内容不会被重新学回；回退点切开本轮时，可见部分由补登的任务重新学习 |
 | 旧关系、旧实体、旧社区升级后不再使用 | 有意取舍，图谱随新对话重建 |
-| 关系缺少 `from` 时丢弃 | 计入任务结果，用评测回归检查 |
+| 关系缺少 `from` 时丢弃 | 计入 `Job.Stats.Dropped`，用评测回归检查 |
 | 被遗忘的记录正文保留到保留期满 | 0.1 已写明；需要立即删除时用 `Purge` |
 | Request 钩子不得改写或移动召回消息 | 文档写明，测试中验证 |
 | 恢复时被中断的模型调用是否重发，沿用 `ResendInterruptedModel` | 删除不带来新的恢复失败，原有限制不变 |
@@ -645,8 +646,10 @@ flowchart TB
 | 召回块不在 RequestError 钩子的消息里，上下文溢出时压缩无法缩减它 | 召回块受 `RecallRunes` 限制；溢出主要来自历史 |
 | 遗留召回块的过滤作用于全部历史，用户自己输入的、以 `RecallPrefix` 开头的消息也会被去掉 | 前缀专用，影响可以忽略 |
 | 纯聊天路径（未注册工具）不召回 | 与现状相同；需要召回时注册工具 |
-| 冲突时放弃整理决定，不重新判断 | 由后续对话重新整理；冲突数计入任务结果 |
+| 冲突时整理决定降级为新增，不重新判断，可能留下与旧记录重复的新记录 | 由后续对话重新整理；冲突数计入 `Job.Stats.Conflicts` |
 | 同一份存储只能运行一个 Worker | 保留现有约束 |
+| 锁外判重期间实体被用户操作改动时，判重作废，按引用新建实体 | Worker 串行，只有并发的用户操作会触发；接受由此产生的重复实体 |
+| 升级到 G2 后状态编码为 `memory-state-blob/3`，旧程序拒绝读取 | 回滚前从备份恢复升级前的 state |
 
 ## 6. 实施与验收
 
@@ -662,6 +665,7 @@ flowchart LR
   - 已知限制：纯聊天路径（未注册工具）不召回，与升级前相同（2.2 节第 11 条）。
 - **与 G1 的衔接**：G1 完成后，`TurnMemory`、`Ref` 会增加字段，`Snapshot.Protocol` 的版本随之改变。升级前开始、还在进行中的运行，恢复时协议不一致，召回视为空；意图仍按日志计算，不受影响。
 - **G1 中途的状态**：`Update` 修改正文时不会触发级联，这一点在 G2 补上。
+- **G2 已实施**（G2a–G2d），与设计的差异见 [G2 设计](MEMORY_G2_DERIVATION.md) 第 14–16 节。
 - **每个阶段单独提交。** 验收条件：`go build ./...`、`go vet ./...`、`go test ./...` 全部通过，并且本阶段列出的测试全部完成。
 - **G2 完成后**，重新灌入数据，用 `scripts/memeval` 跑 LOCOMO 分层 200 题。准确率应落在 [2026-11-10 结果](../evaluation/2026-11-10-memory/README.md) 的 95% 区间内（graph 为 46–60%）。
 
@@ -675,11 +679,16 @@ flowchart LR
 | 长期记忆与 `CacheMiddleware` 互斥 | 同时配置的 Builder 构建失败 | 去掉其中一个 |
 | `Config.Store`、`Config.Graph`（接口）、`RecordStore`、`NewRecordStore`、`NewGraph` 删除；新增 `Config.Durable`（带 `json:"-"` 标签）；`Config.Graph` 改为 `bool`；新增 `Config.TrackAccess` | 自定义存储与图谱实现，以及 `scripts/memeval/main.go`、`builder/long_term_memory_test.go` 等调用方编译失败 | 传入实现了 `Scoped` 的 `durable.Store` |
 | 数据迁到 `durable.Store` | 旧的 `store.Store` 数据不会被读取 | 提供一次性迁移函数 `MigrateFromStore`：只迁入记录，不迁入关系、实体、社区；迁移完成后清空旧 `store.Store` 中的记忆数据，并对旧的索引空间执行 `Clear`；返回旧的待处理任务清单，由宿主决定是否重新登记 |
-| `Memory.Job(ctx, key)` 改为按命名空间查找；完成的任务只保留键 | 调用方须绑定命名空间；任务完成后查不到详细信息 | 改用任务结果的统计字段 |
+| `Memory.Job(ctx, key)` 改为按命名空间查找；完成的任务只保留键、完成时间与统计（`Job.Stats`） | 调用方须绑定命名空间；任务完成后查不到其他详细信息 | 改用 `Job.Stats` |
 | `Index` 增加 `IDs`、`Clear`；向量键带版本，命名空间加入作用域；实体向量移入 `Index` | 旧向量不再被采用 | 升级后运行 `Reindex(true)` |
 | 命名空间的组成部分不得包含 NUL | 含 NUL 的命名空间被拒绝 | 改用其他分隔方式 |
 | `Remember` 只创建；新增 `Update` | 依赖覆盖写入的调用方会得到冲突 | 改用 `Update` |
-| 记录、关系、实体、社区增加版本与失效原因；`Edge.Source` 改为 `Sources`，`Edge.Fact` 改为由 `Derivations` 决定；实体别名带来源；`Retrieval.Sessions` 改为读取 `Sources` | 旧关系视为 underived，不再召回 | 图谱随新对话重建 |
+| 记录、关系、实体、社区增加版本与失效原因；`Edge.Source` 改为 `Sources`，`Edge.Fact` 改为由 `Derivations` 决定；`Valid()`、`ValidAt()` 要求有派生；`Retrieval.Sessions` 改为读取 `Sources` | 旧关系不再有效、不再召回 | 图谱随新对话重建 |
+| `Entity` 新增 `Names`、`Live`，`Aliases` 改为物化值，`ContentRev` 只随 `Name` 变化 | 旧实体不再使用；实体向量需重建 | 升级后运行 `Reindex(true)` |
+| `Record` 新增 `MergedFrom`、`ReflectedFrom`；新增失效原因 `ReasonUnderived` | 按失效原因分支的调用方需处理新值 | — |
+| 状态编码升为 `memory-state-blob/3`、`memory-head/3` | 升级后不能回滚到旧程序，旧程序拒绝读取 | 回滚前从备份恢复升级前的 state |
+| `Rewound` 总会提交（写回退标记），回退点切开轮次时整轮失效并补登可见部分 | 每次调用至少一次写入；补登的任务由 Worker 处理，需要模型调用 | — |
+| 社区指纹的计算方式改变 | 升级后第一次同步重写全部社区摘要，需要模型调用 | — |
 | 抽取 JSON 中关系必须带 `from` | 自定义提示词需同步修改 | 按新格式输出 |
 | `memory_save` 受轮次作用域约束 | 跨越 `Purge` 的轮次中调用会返回工具错误，由模型看到并处理 | 无需处理 |
 
