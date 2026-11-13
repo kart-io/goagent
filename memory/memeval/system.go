@@ -88,6 +88,16 @@ func (m *Memory) Name() string { return m.Label }
 func (m *Memory) Ingest(ctx context.Context, c Case) (Retriever, error) {
 	sessions := session.NewMemoryStore()
 	cfg := m.Configure(sessions)
+	if cfg.Now == nil {
+		// 时钟固定在最后一个会话的时间：新近性不随评测耗时变化，同一份模型输出的两次运行召回相同。
+		var last time.Time
+		for _, s := range c.Sessions {
+			if s.Date.After(last) {
+				last = s.Date
+			}
+		}
+		cfg.Now = func() time.Time { return last }
+	}
 	if cfg.Durable == nil {
 		dir, err := os.MkdirTemp(m.Dir, "memeval-")
 		if err != nil {

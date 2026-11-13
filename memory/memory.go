@@ -88,6 +88,9 @@ type Config struct {
 	ReflectionThreshold float64       `json:"reflection_threshold"`
 	JobAttempts         int           `json:"job_attempts"`
 	Retention           Retention     `json:"retention"`
+
+	// Now 是时钟，nil 时用 time.Now；评测与回放注入固定时间，使新近性不随运行耗时变化。不进入 Identity。
+	Now func() time.Time `json:"-"`
 }
 
 // Memory 是一个长期记忆实例，可被多个 Agent 与会话并发共享；读写按上下文中的命名空间隔离。
@@ -154,6 +157,10 @@ func New(cfg Config) (*Memory, error) {
 		}
 	}
 	cfg.RecallK = min(cfg.RecallK, constants.MaxMemoryRecallK)
+	now := cfg.Now
+	if now == nil {
+		now = time.Now
+	}
 	// 外层的 Graph 字段沿用 G0 的指纹形式：配置不变时 Identity 不变，已有的召回快照照常恢复。
 	fingerprint, err := json.Marshal(struct {
 		Config
@@ -162,7 +169,7 @@ func New(cfg Config) (*Memory, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Memory{cfg: cfg, identity: fmt.Sprintf("memory:%x", sha256.Sum256(fingerprint)), now: time.Now,
+	return &Memory{cfg: cfg, identity: fmt.Sprintf("memory:%x", sha256.Sum256(fingerprint)), now: now,
 		modelTag: modelTag(cfg.EmbedModel), cache: newStateCache(cfg.StateCacheBytes), commitTimeout: constants.MemoryCommitTimeout,
 		overlaySoft: overlaySoftBytes, overlayHard: overlayHardBytes, overlayItems: overlayMaxItems, baseShare: baseShareDiv, eraseWithin: cfg.EraseWithin}, nil
 }

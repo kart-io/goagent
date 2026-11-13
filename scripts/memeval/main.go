@@ -43,7 +43,6 @@ type options struct {
 	chat, judge, embed, systems  string
 	recentRunes, maxTokens       int
 	out, results                 string
-	trackAccess                  bool
 }
 
 func main() {
@@ -61,7 +60,6 @@ func main() {
 	flag.IntVar(&o.maxTokens, "max-tokens", 8000, "抽取与作答模型的最大输出 token；长会话的抽取结果（含关系）会超过提供商的默认值而被截断")
 	flag.StringVar(&o.out, "out", "", "Markdown 汇总写入的文件，为空时打印")
 	flag.StringVar(&o.results, "results", "", "逐题结果写入的 JSONL 文件")
-	flag.BoolVar(&o.trackAccess, "track-access", false, "记录召回的访问时间，新近性按最近访问计（G0 的行为）；用于对比默认的按创建时间计")
 	flag.Parse()
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
@@ -117,7 +115,7 @@ func run(ctx context.Context, o options) error {
 	defer func() { _ = os.RemoveAll(dir) }()
 	configure := func(graph, communities bool) func(session.Store) memory.Config {
 		return func(sessions session.Store) memory.Config {
-			cfg := memory.Config{Sessions: sessions, Model: model, Graph: graph, Communities: communities, TrackAccess: o.trackAccess}
+			cfg := memory.Config{Sessions: sessions, Model: model, Graph: graph, Communities: communities}
 			if embedder != nil {
 				cfg.Index, cfg.Embedder, cfg.EmbedModel = memory.NewMemoryIndex(), embedder, embedModel
 			}

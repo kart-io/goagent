@@ -1,0 +1,6 @@
+# 固定时钟后的确定性检查：录制 now-rec，回放 now-rep1、now-rep2（analyze.py 输出）
+== now-rep1：与 now-rec 不同的请求 {} / 总数 {'chat': 2114, 'embed': 4217, 'answer': 200, 'judge': 200}
+  召回块相同 200，不同 0，不同的题型 {}
+== now-rep2：与 now-rec 不同的请求 {} / 总数 {'chat': 2114, 'embed': 4217, 'answer': 200, 'judge': 200}
+  召回块相同 200，不同 0，不同的题型 {}
+

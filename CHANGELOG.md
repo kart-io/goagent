@@ -35,7 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 存储：`Config.Store`、`Config.Graph`（接口）、`RecordStore`、`NewRecordStore`、`Graph`、`NewGraph` 删除。记录、图谱与抽取任务存于 `Config.Durable`（`durable.Store`，须实现 `durable.Scoped`，如 `durable.NewFileStore`、goagent-contrib 的 pgstore），每个命名空间一份 state，所有写入在锁内修改。`Config.Graph` 改为 `bool`。新增 `MaxStateBytes`（默认 8 MiB，删除类操作不受限）、`StateCacheBytes`、`TrackAccess`、`RollbackWindow`、`ReindexEvery`、`RetireGrace`。提交结果无法判断时返回 `errors.ErrMemoryCommitUnknown`。
   - `Remember` 只创建，ID 已存在时返回 `CodeConflict`；修改用新增的 `Update`（按 `Revision` 判重）。`Forget` 清空正文。`Purge` 把命名空间切换到新的空作用域，旧作用域由清理物理删除；迁移进行中返回 `CodeConflict`。
   - `Index` 增加 `IDs`、`Clear`（只清精确的命名空间）；索引键带记录版本与模型摘要，实体向量移入 `Index`。`Entity.Vector`、`Entity.EmbedModel`、`Record.EmbedModel` 删除，`Record` 增加 `InvalidReason`、`Incarnation`、`Revision`、`ContentRev`。
-  - `TrackAccess` 默认关闭：新近性与 `MaxRecords` 淘汰改为按创建时间计。需要旧行为时开启，`scripts/memeval -track-access` 可对比两者。
+  - `TrackAccess` 默认关闭：新近性与 `MaxRecords` 淘汰改为按创建时间计。需要旧行为时开启。
+  - 新增 `Config.Now`（时钟，nil 时为 `time.Now`，不影响 `Identity`）。`memory/memeval` 把它固定在每个对话最后一个会话的时间，同一份模型输出的两次评测召回相同；评测中所有记录的新近性因此相同，`scripts/memeval` 的 `-track-access` 不再起作用，已删除。
   - 任务：`Job` 增加 `Scope`、`TurnSeq` 与 `JobDropped` 状态，`Memory.Job` 按上下文的命名空间查找，完成的任务只保留键。跨越 Purge、登记之后发生过遗忘、或 state 超限的任务丢弃并计入 `DroppedJobs()`。Worker 持锁互斥，多实例时同一时刻只有一个在处理。
   - 新增 `Maintain`、`RunMaintenance`：完成 Purge 与 Forget 遗留的清理，定期补写向量。**不运行 Worker（`Run`/`ProcessPending`）的部署必须运行 `RunMaintenance`。**
   - `TurnMemory`、`Ref` 增加作用域与序号，召回协议改为 `/2`；G0 时期仍在进行的持久运行可以恢复（召回为空，意图不变），G1 的持久运行不能在回滚到 G0 后恢复。

@@ -149,6 +149,22 @@ func TestNewValidatesConfig(t *testing.T) {
 	}
 }
 
+// Config.Now 驱动记录的创建时间，且不改变 Identity（已有的召回快照照常恢复）。
+func TestConfigNowDrivesClockNotIdentity(t *testing.T) {
+	at := time.Date(2023, 5, 20, 2, 21, 0, 0, time.UTC)
+	fs, err := durable.NewFileStore(t.TempDir())
+	require.NoError(t, err)
+	fixed := newMemory(t, Config{Durable: fs, Now: func() time.Time { return at }})
+	require.Equal(t, newMemory(t, Config{Durable: fs}).Identity(), fixed.Identity())
+
+	ctx := WithNamespace(context.Background(), "t1", "alice")
+	r, err := fixed.Remember(ctx, Record{Kind: KindFact, Content: "用户在上海工作", Importance: 0.5})
+	require.NoError(t, err)
+	got, err := fixed.Get(ctx, r.ID)
+	require.NoError(t, err)
+	require.True(t, got.CreatedAt.Equal(at), got.CreatedAt)
+}
+
 func TestMemoryIndex(t *testing.T) {
 	ctx := context.Background()
 	ns := []string{"t"}
