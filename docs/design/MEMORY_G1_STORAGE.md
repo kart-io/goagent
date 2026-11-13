@@ -980,6 +980,39 @@ export GOAGENT_PGSTORE_DSN='postgres://postgres:test@127.0.0.1:55432/postgres?ss
 
 **pgstore**：经临时 `go.work` 指向本地 goagent，`memorytest`（含新用例）与 pgstore 全部测试在 `-race` 下通过。
 
+### 7.11 G1d：索引（2026-11-13）
+
+**交付**（计划见 `.claude/plan-g1d.md`）：
+
+- `Index` 增加 `IDs`、`Clear`；接口注释写明各方法只作用于精确的命名空间，`Clear` 不递归，`Hit.ID` 是写入时的键。`MemoryIndex` 实现。
+- 版本化键 `ID#实例号.ContentRev#模型摘要`，模型摘要取 `EmbedModel` 的 SHA-256 前 12 位十六进制；从右侧解析，ID 可以含 `#`。
+- 索引按作用域划分：记录在 `ns + "#scope"`，实体名称向量在其下的 `"#entity"` 子命名空间。
+- `writeIndex`：提交后写键，再 `read` 复核，作用域已不是写入时的作用域或对象已不是所写版本时删除刚写的键。Remember、Update、Rewound（恢复的记录）、Worker 派生、新建实体都经过它。`dropIndex` 删除确认过期的键：Update 的旧 `ContentRev`、Forget、Rewound、Prune 与 Worker 失效的记录。
+- 召回（`Recall`、`Snapshot`）先 `read`，再在该作用域检索，只采用当前模型写入、对象有效且实例号与 `ContentRev` 一致的键。实体只比较实例号：向量只取决于名称，名称在实例内不变，键固定取创建时的 `ContentRev`（1）。
+- `Reindex(force)`：`read` → `IDs` → 锁外嵌入没有可采用键（force 时全部）的有效记录与实体 → `writeIndex` → 再 `read`，删除列出的键中仍不可采用的（无法解析、其他模型、对象不存在、失效或版本已变）。不写 state。
+- retire：`RemoveScope` → 对记录与实体两个命名空间 `Clear`；`Config.RetireGrace`（默认 10 分钟，`json:"-"`）。条目加入超过 `RetireGrace` 之后的那次清理才移出 retiring，宽限期内每次清理都重做，清掉提交后才写入的迟到向量。`scopeRecordIDs` 删除。
+- 删除 `Entity.Vector`、`Entity.EmbedModel`、`Record.EmbedModel`；实体判重的向量候选改为检索实体子命名空间（k 取已知实体数，与原先逐个点积一致）。
+- `tx` 记下所在作用域，供 `expectScope` 为空的修改（Rewound、Worker 派生）把索引写到同一作用域。
+
+**测试**：
+
+- `TestMemoryIndexClearExact`（表驱动）：清父、中间、子命名空间，其余两个不受影响。
+- `TestIndexKeyRoundTrip`：含 `#` 的 ID、非法键。
+- `TestIndexFollowsRecordVersions`：Update 写新键删旧键；残留的旧版本键不贡献相似度，Reindex 删除它；Forget 后索引为空。
+- `TestReindexDuringUpdate`（7.1）：先清空索引，Reindex 锁外嵌入期间 Update 提交；只剩新版本的键。去掉复核后此测试失败。
+- `TestLateIndexWriteAfterPurge`（7.1）：Remember 提交后、写索引前 Purge 完成清理；复核删除迟到的键。去掉复核后此测试失败。
+- `TestRetireClearsIndexAfterCrashAndGrace`（7.2）：`Clear` 前崩溃，清理重做；宽限期内写入旧作用域的键在到期清理时删除，条目移出。
+- `TestReindexRepairsIndex`：补写缺失的记录与实体键，删除各类过期键，不写 state；force 结果相同。
+- `checkIndex`（不变量 7）接入 Forget、Purge、Purge 故障与 Purge 并发写入（后者加上了索引）的测试。
+
+**与前文的差异**：
+
+- `Record.EmbedModel` 一并删除（3.1 未列出）：Reindex 不写 state，这个字段无法维护，模型由键中的摘要表示。
+- Forget 的"索引待清理"登记、Worker 定期 `Reindex(false)` 属于 G1e；在此之前，复核之后崩溃留下的残留键不会被采用，但要等手动 `Reindex` 才删除。
+- Purge 后旧作用域在 retiring 中保留 `RetireGrace`，"retiring 为空"的断言改为在宽限期之后检查。
+
+**pgstore**：经临时 `go.work`，`memorytest` 与 pgstore 全部测试在 `-race` 下通过。
+
 ## 8. 兼容性
 
 | 变更 | 影响 | 处理 |
@@ -987,7 +1020,7 @@ export GOAGENT_PGSTORE_DSN='postgres://postgres:test@127.0.0.1:55432/postgres?ss
 | `Config.Store`、`Config.Graph`（接口）、`RecordStore`、`NewRecordStore`、`Graph`、`NewGraph` 删除；新增 `Config.Durable`（`json:"-"`，必须实现 `Scoped`）、`Config.Graph bool`、`TrackAccess`、`MaxStateBytes` 与 `StateCacheBytes`（均为 `json:"-"`，不进入 `Identity`）、`RollbackWindow`、`ReindexEvery`、`RetireGrace`；新增 `Maintain`、`RunMaintenance`、`ErrCommitUnknown` | 自定义存储与图谱实现编译失败；本仓库内的 memeval、`codec/tags_test.go` 需要修改 | 一并修改；CHANGELOG 写明迁移步骤 |
 | `Remember` 只创建；新增 `Update` | 依赖覆盖写入的调用方得到 `CodeConflict` | 改用 `Update` |
 | `Index` 增加 `IDs`、`Clear`；键带版本；实体向量移入 `Index` 的独立子命名空间 | 自定义 `Index` 编译失败；旧向量不再被采用 | 实现新方法；升级后运行 `Reindex(true)` |
-| `Entity.Vector`、`Entity.EmbedModel` 删除 | 相关代码编译失败 | 改为查询 `Index` |
+| `Entity.Vector`、`Entity.EmbedModel`、`Record.EmbedModel` 删除 | 相关代码编译失败 | 改为查询 `Index`；模型由索引键中的摘要表示 |
 | `TrackAccess` 默认关闭 | 新近性改为从创建时间起算，影响召回排序与 `MaxRecords` 淘汰 | 需要旧行为时开启；memeval 冒烟对比 |
 | `Job` 增加字段；`Memory.Job` 按命名空间查找；完成的任务只保留键 | 调用方必须绑定命名空间 | — |
 | `TurnMemory`、`Ref` 增加字段；协议改为 `/2` | G0 时期仍在进行的持久运行可以恢复，召回为空，意图不变 | 无需处理 |
@@ -1009,7 +1042,7 @@ export GOAGENT_PGSTORE_DSN='postgres://postgres:test@127.0.0.1:55432/postgres?ss
    - 原型基准与 10k 压力测试（7.3），不达阈值即停。
 2. **G1b 记录写路径**：`Remember`、`Update`、`Forget`、`Rewound`、`Prune`；召回只读且只读一次；`TrackAccess`；删除日志。已完成（2026-11-12），见 7.9。
 3. **G1c 作用域与 Purge**：meta 切换、全局 retiring 与清理；轮次绑定增加 `Scope`、`Seq`；`Ref` 带版本；`Digest` 分版本；G0 日志字节恢复测试。已完成（2026-11-13），见 7.10。
-4. **G1d 索引**：版本化键、写后复核、`IDs`、`Clear`、`Reindex`；实体向量移入 `Index`。
+4. **G1d 索引**：版本化键、写后复核、`IDs`、`Clear`、`Reindex`；实体向量移入 `Index`。已完成（2026-11-13），见 7.11。
 5. **G1e 任务、维护与 Worker**：state 内的任务、queue 分片（任务与索引待清理）、`Maintain` 与 `RunMaintenance`、Worker 锁与心跳、`LastForgetSeq` 丢弃规则。
 6. **G1f 迁移与收尾**：`MigrateFromStore`（两阶段）、memeval 适配、CHANGELOG。
 

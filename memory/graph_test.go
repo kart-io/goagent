@@ -242,7 +242,13 @@ func TestEntityResolutionByModel(t *testing.T) {
 	require.Len(t, byName, 4, "用户、Acme 公司、深圳、爱克米集团")
 	require.Equal(t, acmeID, byName["Acme 公司"].ID)
 	require.Contains(t, byName["Acme 公司"].Aliases, "爱克米", "判定为同一实体的名称并入别名")
-	require.NotEmpty(t, byName["深圳"].Vector)
+	scope, err := m.currentScope(ctx, []string{"u"})
+	require.NoError(t, err)
+	keys, err := m.cfg.Index.IDs(ctx, entitySpace.namespace([]string{"u"}, scope))
+	require.NoError(t, err)
+	k := entityKey(byName["深圳"])
+	k.Model = m.modelTag
+	require.Contains(t, keys, k.String(), "实体名称向量写入 Index 的实体子命名空间")
 
 	edges, err := graphOf(m).Edges(ctx, []string{"u"})
 	require.NoError(t, err)

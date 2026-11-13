@@ -202,12 +202,12 @@ func (m *Memory) Snapshot(ctx context.Context, query string) (Snapshot, error) {
 		return Snapshot{}, err
 	}
 	q := Query{Text: query}
-	vector, err := m.vectorHits(ctx, t.Write, q)
+	// 钉住、召回与图谱对同一次读取计算，不会混用不同提交的数据。
+	rv, err := m.readRecall(ctx, t.Write)
 	if err != nil {
 		return Snapshot{}, err
 	}
-	// 钉住、召回与图谱对同一次读取计算，不会混用不同提交的数据。
-	rv, err := m.readRecall(ctx, t.Write)
+	vector, err := m.vectorHits(ctx, t.Write, rv.scope, rv.v.cur, q)
 	if err != nil {
 		return Snapshot{}, err
 	}

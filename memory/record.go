@@ -70,8 +70,6 @@ type Record struct {
 	Incarnation int64     `json:"incarnation,omitzero"`
 	Revision    int64     `json:"revision,omitzero"`
 	ContentRev  int64     `json:"content_rev,omitzero"`
-	// EmbedModel 是写入索引时的嵌入模型；与当前模型不同时 Reindex 重建。
-	EmbedModel string `json:"embed_model,omitempty"`
 	// Reflected 表示该情景已参与过反思。
 	Reflected bool `json:"reflected,omitzero"`
 }

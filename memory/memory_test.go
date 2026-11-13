@@ -250,22 +250,24 @@ func TestPurgeAndReindex(t *testing.T) {
 	r, err := m.Remember(ctx, Record{Content: "用户喜欢咖啡", Importance: 0.5})
 	require.NoError(t, err)
 
-	m2 := newMemory(t, Config{Store: m.cfg.Store, Durable: m.cfg.Durable, Index: NewMemoryIndex(), Embedder: bigramEmbedder{}, EmbedModel: "v2"})
+	// 换嵌入模型：v1 写入的键不被 v2 采用，Reindex(false) 补写 v2 的键并删除 v1 的键。
+	x2 := NewMemoryIndex()
+	require.NoError(t, x2.Upsert(ctx, recordSpace.namespace([]string{"u"}, initialScope), indexKey{r.ID, r.Incarnation, r.ContentRev, modelTag("v1")}.String(), mustEmbed(t, "咖啡")))
+	m2 := newMemory(t, Config{Store: m.cfg.Store, Durable: m.cfg.Durable, Index: x2, Embedder: bigramEmbedder{}, EmbedModel: "v2"})
+	hits, err := m2.vectorHits(ctx, []string{"u"}, initialScope, stateOf(t, m2), Query{Text: "咖啡"})
+	require.NoError(t, err)
+	require.Empty(t, hits, "其他模型写入的键不被采用")
 	require.NoError(t, m2.Reindex(ctx, false))
-	got, err := m2.Get(ctx, r.ID)
+	require.Equal(t, []string{indexKey{r.ID, r.Incarnation, r.ContentRev, modelTag("v2")}.String()}, indexKeys(x2, []string{"u"}), "重建后只剩当前模型的键")
+	hits, err = m2.vectorHits(ctx, []string{"u"}, initialScope, stateOf(t, m2), Query{Text: "咖啡"})
 	require.NoError(t, err)
-	require.Equal(t, "v2", got.EmbedModel)
-	hits, err := m2.cfg.Index.Search(ctx, []string{"u"}, mustEmbed(t, "咖啡"), 1)
-	require.NoError(t, err)
-	require.Len(t, hits, 1, "重建后可向量检索")
+	require.Contains(t, hits, r.ID, "重建后可向量检索")
 
 	require.NoError(t, m.Purge(ctx))
 	all, err := listRecords(ctx, m, []string{"u"})
 	require.NoError(t, err)
 	require.Empty(t, all)
-	hits, err = x.Search(ctx, []string{"u"}, mustEmbed(t, "咖啡"), 1)
-	require.NoError(t, err)
-	require.Empty(t, hits)
+	require.Empty(t, indexKeys(x, []string{"u"}), "Purge 清空旧作用域的索引")
 }
 
 // 嵌入失败时不写入正文，避免留下无法向量检索的记录。

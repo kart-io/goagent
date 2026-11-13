@@ -1,15 +1,17 @@
 package memory
 
 import (
+	"context"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 )
 
-// checkInvariants 校验一个作用域的 state 满足 docs/design/MEMORY_G1_STORAGE.md 3.3 中当前已实现的不变量 1～4；
-// 索引与 queue 相关的不变量在 G1d、G1e 补充。测试直接写入的原始对象没有实例号（0），不参与不变量 1。
+// checkInvariants 校验一个作用域的 state 满足 docs/design/MEMORY_G1_STORAGE.md 3.3 中的不变量 1～4；
+// 索引的不变量 6、7 见 checkIndex，queue 相关的在 G1e 补充。测试直接写入的原始对象没有实例号（0），不参与不变量 1。
 func checkInvariants(t *testing.T, ns []string, s state) {
 	t.Helper()
 	require.GreaterOrEqual(t, s.Seq, int64(0))
@@ -46,6 +48,50 @@ func checkInvariants(t *testing.T, ns []string, s state) {
 		require.True(t, slices.Equal(ns, j.Namespace), "任务 %s 属于命名空间 %v", key, ns)
 		_, done := s.DoneJobs[key]
 		require.False(t, done, "任务 %s 同时处于待处理与已完成", key)
+	}
+}
+
+// indexKeys 返回 x 中命名空间 ns 之下全部作用域（含实体子命名空间）的键，排序。
+func indexKeys(x *MemoryIndex, ns []string) []string {
+	x.mu.RLock()
+	defer x.mu.RUnlock()
+	var out []string
+	for key, space := range x.spaces {
+		if strings.HasPrefix(key, spaceKey(ns)+"\x00#") {
+			for id := range space {
+				out = append(out, id)
+			}
+		}
+	}
+	slices.Sort(out)
+	return out
+}
+
+// checkIndex 在 retiring 清理完成后校验不变量 7：ns 之下只有当前作用域的索引命名空间，其中没有被遗忘记录的键。
+// 不变量 6（被采用的键对应有效对象的当前版本）由 adopted 的定义保证，召回只采用这样的键。
+func checkIndex(t *testing.T, m *Memory, x *MemoryIndex, ns []string) {
+	t.Helper()
+	scope, s, err := m.read(context.Background(), ns)
+	require.NoError(t, err)
+	spaces := map[string]indexSpace{}
+	for _, sp := range indexSpaces {
+		spaces[spaceKey(sp.namespace(ns, scope))] = sp
+	}
+	x.mu.RLock()
+	defer x.mu.RUnlock()
+	for key, space := range x.spaces {
+		if !strings.HasPrefix(key, spaceKey(ns)+"\x00#") || len(space) == 0 {
+			continue
+		}
+		sp, ok := spaces[key]
+		require.True(t, ok, "索引中没有非当前作用域的键：%q", key)
+		for id := range space {
+			k, ok := parseIndexKey(id)
+			require.True(t, ok, "键 %q 可以解析", id)
+			if r, ok := s.Records[k.ID]; ok && sp.sub == "" && r.Incarnation == k.Incarnation {
+				require.NotEqual(t, ReasonForgotten, r.InvalidReason, "索引中没有被遗忘记录的键 %q", id)
+			}
+		}
 	}
 }
 

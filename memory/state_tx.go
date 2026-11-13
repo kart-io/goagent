@@ -96,6 +96,7 @@ func (tb *table[T]) MarkErasure(key string) {
 // tx 是一次 mutate 的修改接口。
 type tx struct {
 	ns          []string
+	scope       string // 本次修改所在的作用域
 	Records     *table[Record]
 	Entities    *table[Entity]
 	Edges       *table[Edge]
@@ -201,7 +202,7 @@ var recordKind = kind[Record]{
 		return normNS(&r.Namespace, ns)
 	},
 	size: func(_ string, r Record) int {
-		n := 112 + len(r.ID) + len(r.Kind) + len(r.Content) + strLen(r.Keywords) + strLen(r.Entities) + len(r.SupersededBy) + len(r.InvalidReason) + len(r.EmbedModel)
+		n := 112 + len(r.ID) + len(r.Kind) + len(r.Content) + strLen(r.Keywords) + strLen(r.Entities) + len(r.SupersededBy) + len(r.InvalidReason)
 		for _, s := range r.Sources {
 			n += 24 + len(s.Session) + len(s.Job)
 		}
@@ -211,15 +212,15 @@ var recordKind = kind[Record]{
 
 var entityKind = kind[Entity]{
 	clone: func(e Entity) Entity {
-		e.Aliases, e.Vector = slices.Clone(e.Aliases), slices.Clone(e.Vector)
+		e.Aliases = slices.Clone(e.Aliases)
 		return e
 	},
 	normalize: func(e *Entity, ns []string) bool {
-		e.Aliases, e.Vector = nilIfEmpty(e.Aliases), nilIfEmpty(e.Vector)
+		e.Aliases = nilIfEmpty(e.Aliases)
 		return normNS(&e.Namespace, ns)
 	},
 	size: func(_ string, e Entity) int {
-		return 72 + len(e.ID) + len(e.Name) + len(e.Type) + strLen(e.Aliases) + 8*len(e.Vector) + len(e.EmbedModel)
+		return 72 + len(e.ID) + len(e.Name) + len(e.Type) + strLen(e.Aliases)
 	},
 }
 

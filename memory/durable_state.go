@@ -230,6 +230,7 @@ func (m *Memory) mutateOnce(ctx context.Context, ns []string, expectScope string
 		}
 	}
 	t := newTx(v.cur, v.base, ns)
+	t.scope = scope
 	if o.beforeSave != nil {
 		if err := o.beforeSave(ctx, t); err != nil {
 			return state{}, head{}, err

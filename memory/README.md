@@ -46,7 +46,7 @@ agent, err := builder.NewSimpleBuilder(client).
 | `Turn(ctx)` / `WithTurn` / `CheckTurn` | 轮次的记忆绑定 `TurnMemory`：轮次内的读写与任务都使用开始时的写命名空间 |
 | `Forget(ctx, id)` / `Purge(ctx)` | 使一条记录失效 / 删除整个命名空间 |
 | `Rewound(ctx, session, to)` | 宿主在 `session.Rewind` 后调用：任一来源被退回的记录与关系失效，只被它们取代的旧记录与旧关系恢复 |
-| `Reindex(ctx, force)` | 为嵌入模型不同或缺少索引的记录重建向量 |
+| `Reindex(ctx, force)` | 为缺少当前版本向量的记录与实体补写向量（`force` 时全部重写），删除过期的键；换嵌入模型或升级后运行，不写记录 |
 | `Prune(ctx)` | 按 `Retention` 删除过期、超出容量与超过保留期的失效记录；Worker 每个任务后执行 |
 | `Enqueue` / `Run` / `ProcessPending` | 抽取任务；Builder 在每轮结束登记 |
 | `Tools()` | `memory_search`、`memory_save`、`memory_forget` |

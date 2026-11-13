@@ -56,10 +56,13 @@ type Config struct {
 	EraseWithin time.Duration `json:"-"`
 	// RollbackWindow 大于 0 时开启删除日志：遗忘与 Purge 先记入日志，数据回滚之后宿主据此重放删除；Prune 删除超过窗口的条目。
 	// 默认 0（关闭），此时数据回滚不能保证删除承诺。
-	RollbackWindow time.Duration       `json:"-"`
-	Index          Index               `json:"-"`
-	Embedder       llm.EmbeddingClient `json:"-"`
-	// EmbedModel 标识嵌入模型；改变后用 Reindex 重建索引。
+	RollbackWindow time.Duration `json:"-"`
+	// RetireGrace 是 Purge 后旧作用域留在 retiring 中的时长，默认 10 分钟：到期时再清理一次索引，清掉提交后才写入的迟到向量。
+	// 须大于 Index 单次写入的超时与重试时间之和。
+	RetireGrace time.Duration       `json:"-"`
+	Index       Index               `json:"-"`
+	Embedder    llm.EmbeddingClient `json:"-"`
+	// EmbedModel 标识嵌入模型，其摘要是索引键的一部分；改变后用 Reindex 重建索引。
 	EmbedModel string        `json:"embed_model"`
 	Model      llm.Client    `json:"-"`
 	Sessions   session.Store `json:"-"`
@@ -93,6 +96,8 @@ type Memory struct {
 	identity string
 	now      func() time.Time
 	cache    *stateCache
+	// modelTag 是 EmbedModel 的摘要，写入索引键。
+	modelTag string
 	// decodes 合并同一提交的并发解码（G1 建议 8）。
 	decodes singleflight.Group
 	// commitTimeout 是一次提交的时间上限（constants.MemoryCommitTimeout），测试可以调小。
@@ -135,6 +140,7 @@ func New(cfg Config) (*Memory, error) {
 		{cfg.MaxStateBytes <= 0, func() { cfg.MaxStateBytes = constants.DefaultMemoryMaxStateBytes }},
 		{cfg.StateCacheBytes == 0, func() { cfg.StateCacheBytes = constants.DefaultMemoryStateCacheBytes }},
 		{cfg.EraseWithin <= 0, func() { cfg.EraseWithin = constants.DefaultMemoryEraseWithin }},
+		{cfg.RetireGrace <= 0, func() { cfg.RetireGrace = constants.DefaultMemoryRetireGrace }},
 	}
 	for _, d := range defaults {
 		if d.zero {
@@ -151,7 +157,7 @@ func New(cfg Config) (*Memory, error) {
 		return nil, err
 	}
 	return &Memory{cfg: cfg, identity: fmt.Sprintf("memory:%x", sha256.Sum256(fingerprint)), now: time.Now,
-		cache: newStateCache(cfg.StateCacheBytes), commitTimeout: constants.MemoryCommitTimeout,
+		modelTag: modelTag(cfg.EmbedModel), cache: newStateCache(cfg.StateCacheBytes), commitTimeout: constants.MemoryCommitTimeout,
 		overlaySoft: overlaySoftBytes, overlayHard: overlayHardBytes, overlayItems: overlayMaxItems, baseShare: baseShareDiv, eraseWithin: cfg.EraseWithin}, nil
 }
 
@@ -206,41 +212,6 @@ func createRecord(t *tx, r Record) bool {
 	return true
 }
 
-// embed 返回正文的向量；没有配置索引时为 nil。
-func (m *Memory) embed(ctx context.Context, text string) ([]float32, error) {
-	if m.cfg.Index == nil {
-		return nil, nil
-	}
-	vec, err := m.cfg.Embedder.Embed(ctx, text)
-	if err != nil {
-		return nil, fmt.Errorf("生成记忆向量：%w", err)
-	}
-	return vec, nil
-}
-
-// upsert 在提交之后写入记录的向量。写入失败时记录已经保存，用 Reindex(ctx, true) 修复（G1d 改为版本化键与复核）。
-func (m *Memory) upsert(ctx context.Context, ns []string, id string, vec []float32) error {
-	if m.cfg.Index == nil || vec == nil {
-		return nil
-	}
-	if err := m.cfg.Index.Upsert(ctx, ns, id, vec); err != nil {
-		return fmt.Errorf("记录 %q 已保存，写入向量索引失败（Reindex(ctx, true) 可修复）：%w", id, err)
-	}
-	return nil
-}
-
-// unindex 在提交之后删除记录的向量。
-func (m *Memory) unindex(ctx context.Context, ns []string, ids ...string) error {
-	if m.cfg.Index == nil {
-		return nil
-	}
-	var errs []error
-	for _, id := range ids {
-		errs = append(errs, m.cfg.Index.Delete(ctx, ns, id))
-	}
-	return errors.Join(errs...)
-}
-
 // Remember 写入一条新记录（命名空间取自上下文），返回补齐后的记录。ID 为空时生成；ID 已存在时返回 CodeConflict，修改用 Update。
 // 嵌入在锁外完成，向量在提交之后写入；作用域在嵌入期间改变（Purge）时重试一次，仍改变则返回 CodeConflict。
 // 返回 ErrMemoryCommitUnknown 时可以重试：得到 CodeConflict 说明上一次其实已经提交。
@@ -270,9 +241,6 @@ func (m *Memory) remember(ctx context.Context, r Record, expect string) (Record,
 	if err != nil {
 		return Record{}, err
 	}
-	if vec != nil {
-		r.EmbedModel = m.cfg.EmbedModel
-	}
 	var out Record
 	write := func(t *tx) error {
 		if !createRecord(t, r) {
@@ -295,7 +263,7 @@ func (m *Memory) remember(ctx context.Context, r Record, expect string) (Record,
 	if err != nil {
 		return Record{}, err
 	}
-	return out, m.upsert(ctx, ns, out.ID, vec)
+	return out, m.writeIndex(ctx, ns, scope, recordSpace, []indexKey{recordKey(out)}, [][]float32{vec})
 }
 
 // Patch 是 Update 的修改项，nil 的字段不变。
@@ -353,9 +321,6 @@ func (m *Memory) Update(ctx context.Context, id string, expect int64, p Patch) (
 		r.Revision++
 		if changed {
 			r.ContentRev++
-			if vec != nil {
-				r.EmbedModel = m.cfg.EmbedModel
-			}
 		}
 		if err := r.validate(); err != nil {
 			return err
@@ -370,7 +335,10 @@ func (m *Memory) Update(ctx context.Context, id string, expect int64, p Patch) (
 	if !changed {
 		return out, nil
 	}
-	return out, m.upsert(ctx, ns, id, vec)
+	old := recordKey(out)
+	old.ContentRev--
+	return out, errors.Join(m.writeIndex(ctx, ns, meta.Current, recordSpace, []indexKey{recordKey(out)}, [][]float32{vec}),
+		m.dropIndex(ctx, ns, meta.Current, recordSpace, old))
 }
 
 // Get 返回当前命名空间中的一条记录（含失效记录）；不存在时返回 CodeStoreNotFound。
@@ -413,26 +381,6 @@ func (m *Memory) recallK(q Query) int {
 	return min(k, constants.MaxMemoryRecallK)
 }
 
-// vectorHits 返回查询的向量相似度（按记录 ID）；没有索引或查询为空时为 nil。
-func (m *Memory) vectorHits(ctx context.Context, ns []string, q Query) (map[string]float64, error) {
-	if m.cfg.Index == nil || strings.TrimSpace(q.Text) == "" {
-		return nil, nil
-	}
-	vec, err := m.cfg.Embedder.Embed(ctx, q.Text)
-	if err != nil {
-		return nil, fmt.Errorf("生成查询向量：%w", err)
-	}
-	hits, err := m.cfg.Index.Search(ctx, ns, vec, m.recallK(q)*4)
-	if err != nil {
-		return nil, err
-	}
-	vector := make(map[string]float64, len(hits))
-	for _, h := range hits {
-		vector[h.ID] = max(h.Score, 0)
-	}
-	return vector, nil
-}
-
 // recallView 是一轮召回读取的数据：一次 read 的结果，以及（TrackAccess 开启时）访问记录。
 type recallView struct {
 	scope  string
@@ -471,11 +419,11 @@ func (m *Memory) Recall(ctx context.Context, q Query) ([]Scored, error) {
 
 // search 是不登记访问的召回，另返回读取时的作用域。
 func (m *Memory) search(ctx context.Context, ns []string, q Query) ([]Scored, string, error) {
-	vector, err := m.vectorHits(ctx, ns, q)
+	rv, err := m.readRecall(ctx, ns)
 	if err != nil {
 		return nil, "", err
 	}
-	rv, err := m.readRecall(ctx, ns)
+	vector, err := m.vectorHits(ctx, ns, rv.scope, rv.v.cur, q)
 	if err != nil {
 		return nil, "", err
 	}
@@ -581,6 +529,7 @@ func (m *Memory) Forget(ctx context.Context, id string) error {
 			return err
 		}
 	}
+	var old Record
 	_, err = m.mutate(ctx, ns, scope, func(t *tx) error {
 		r, ok := t.Records.Get(id)
 		if !ok {
@@ -589,13 +538,14 @@ func (m *Memory) Forget(ctx context.Context, id string) error {
 		if r.InvalidReason == ReasonForgotten {
 			return errNoChange
 		}
+		old = r
 		forget(t, r, now)
 		return nil
 	}, shrinking())
-	if err != nil {
+	if err != nil || old.ID == "" {
 		return err
 	}
-	return m.unindex(ctx, ns, id)
+	return m.dropIndex(ctx, ns, scope, recordSpace, recordKey(old))
 }
 
 // forget 在 tx 中遗忘 r：清空内容、标记擦除，并把 LastForgetSeq 设为本次提交的 Seq。
@@ -618,8 +568,9 @@ func (m *Memory) Rewound(ctx context.Context, sessionID string, to int64) error 
 	}
 	now := m.now()
 	var gone, restored []Record
+	var scope string
 	_, err = m.mutate(ctx, ns, "", func(t *tx) error {
-		gone, restored = nil, nil
+		gone, restored, scope = nil, nil, t.scope
 		for _, id := range t.Records.Keys() {
 			if r, _ := t.Records.Get(id); r.Valid() && rewound(r.Sources, sessionID, to) {
 				t.Records.Put(id, r.invalidated(now, ReasonRewound, ""))
@@ -669,70 +620,16 @@ func (m *Memory) Rewound(ctx context.Context, sessionID string, to int64) error 
 	if err != nil {
 		return err
 	}
-	var errs []error
-	for _, r := range gone {
-		errs = append(errs, m.unindex(ctx, ns, r.ID))
-	}
+	errs := []error{m.dropIndex(ctx, ns, scope, recordSpace, keysOf(gone)...)}
+	var vecs [][]float32
 	for _, r := range restored {
 		vec, err := m.embed(ctx, r.Content)
-		if err == nil {
-			err = m.upsert(ctx, ns, r.ID, vec)
-		}
-		errs = append(errs, err)
-	}
-	return errors.Join(errs...)
-}
-
-// Reindex 为当前命名空间中嵌入模型与配置不同（force 时为全部）的有效记录重建向量，再在一次提交中更新这些记录的 EmbedModel。
-// EmbedModel 是索引的元数据，不改变 Revision；重建期间正文已改变的记录不更新，由下一次 Reindex 处理。
-func (m *Memory) Reindex(ctx context.Context, force bool) error {
-	ns, err := requireNamespace(ctx)
-	if err != nil {
-		return err
-	}
-	if m.cfg.Index == nil {
-		return nil
-	}
-	scope, s, err := m.read(ctx, ns)
-	if err != nil {
-		return err
-	}
-	type built struct{ incarnation, contentRev int64 }
-	done := map[string]built{}
-	for _, id := range slices.Sorted(maps.Keys(s.Records)) {
-		r := s.Records[id]
-		if !r.Valid() || (!force && r.EmbedModel == m.cfg.EmbedModel) {
-			continue
-		}
-		vec, err := m.embed(ctx, r.Content)
 		if err != nil {
-			return err
+			return errors.Join(append(errs, err)...)
 		}
-		if err := m.cfg.Index.Upsert(ctx, ns, id, vec); err != nil {
-			return err
-		}
-		done[id] = built{r.Incarnation, r.ContentRev}
+		vecs = append(vecs, vec)
 	}
-	if len(done) == 0 {
-		return nil
-	}
-	_, err = m.mutate(ctx, ns, scope, func(t *tx) error {
-		n := 0
-		for _, id := range slices.Sorted(maps.Keys(done)) {
-			r, ok := t.Records.Get(id)
-			if !ok || r.Incarnation != done[id].incarnation || r.ContentRev != done[id].contentRev || r.EmbedModel == m.cfg.EmbedModel {
-				continue
-			}
-			r.EmbedModel = m.cfg.EmbedModel
-			t.Records.Put(id, r)
-			n++
-		}
-		if n == 0 {
-			return errNoChange
-		}
-		return nil
-	})
-	return err
+	return errors.Join(append(errs, m.writeIndex(ctx, ns, scope, recordSpace, keysOf(restored), vecs))...)
 }
 
 // Prune 按 Retention 在一次提交中整理当前命名空间：删除超过保留期的失效记录与关系，TTL 到期与超出容量的记录改为 expired。
@@ -753,7 +650,7 @@ func (m *Memory) Prune(ctx context.Context) error {
 		}
 	}
 	now := m.now()
-	var expired []string
+	var expired []Record
 	var remaining map[string]bool
 	_, err = m.mutate(ctx, ns, scope, func(t *tx) error {
 		expired, remaining = nil, map[string]bool{}
@@ -769,7 +666,7 @@ func (m *Memory) Prune(ctx context.Context) error {
 				continue
 			case r.Valid() && expires && now.Sub(r.CreatedAt) > ttl:
 				t.Records.Put(id, r.invalidated(now, ReasonExpired, ""))
-				expired, changed = append(expired, id), true
+				expired, changed = append(expired, r), true
 			case r.Valid() && !r.Pinned:
 				valid = append(valid, Scored{Record: r, Score: m.cfg.Weights.Recency*m.recency(lastUsed(r, access), now) + m.cfg.Weights.Importance*r.Importance})
 			}
@@ -793,7 +690,7 @@ func (m *Memory) Prune(ctx context.Context) error {
 			})
 			for _, r := range valid[:len(valid)-limit] {
 				t.Records.Put(r.ID, r.invalidated(now, ReasonExpired, ""))
-				expired, changed = append(expired, r.ID), true
+				expired, changed = append(expired, r.Record), true
 			}
 		}
 		if !changed {
@@ -804,7 +701,7 @@ func (m *Memory) Prune(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := m.unindex(ctx, ns, expired...); err != nil {
+	if err := m.dropIndex(ctx, ns, scope, recordSpace, keysOf(expired)...); err != nil {
 		return err
 	}
 	if m.cfg.TrackAccess && slices.ContainsFunc(slices.Collect(maps.Keys(access)), func(id string) bool { return !remaining[id] }) {

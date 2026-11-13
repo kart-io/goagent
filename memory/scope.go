@@ -10,7 +10,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/kart-io/goagent/core/durable"
-	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // Purge 删除当前命名空间的全部数据（如用户要求删除个人数据）：把命名空间切换到一个新的空作用域，旧作用域进入 retiring，
@@ -79,7 +78,8 @@ func (m *Memory) switchScope(ctx context.Context, ns []string, at time.Time) err
 	return st.SaveAll(context.WithoutCancel(ctx), writes...)
 }
 
-// cleanupRetiring 物理删除全部 retiring 中的作用域：不持锁删除索引与作用域，完成后再锁 retiring 移出条目（设计 4.3）。
+// cleanupRetiring 物理删除全部 retiring 中的作用域：不持锁删除作用域并清空它的索引，加入超过 RetireGrace 的条目
+// 再锁 retiring 移出（设计 4.3）。宽限期内每次清理都重做一遍，清掉提交后才写入旧作用域的迟到向量。
 // 中途失败或崩溃时条目留在 retiring 中，下一次重做；每一步都可以重复执行。
 func (m *Memory) cleanupRetiring(ctx context.Context) error {
 	var ret retiringState
@@ -89,11 +89,14 @@ func (m *Memory) cleanupRetiring(ctx context.Context) error {
 	var done []string
 	var errs []error
 	for _, name := range slices.Sorted(maps.Keys(ret.Scopes)) {
-		if err := m.retire(ctx, name, ret.Scopes[name]); err != nil {
+		e := ret.Scopes[name]
+		if err := m.retire(ctx, name, e); err != nil {
 			errs = append(errs, err)
 			continue
 		}
-		done = append(done, name)
+		if m.now().Sub(e.Since) >= m.cfg.RetireGrace {
+			done = append(done, name)
+		}
 	}
 	if len(done) > 0 {
 		errs = append(errs, editJSON(ctx, m.cfg.Durable, retiringID, func(r *retiringState) bool {
@@ -106,37 +109,17 @@ func (m *Memory) cleanupRetiring(ctx context.Context) error {
 	return errors.Join(errs...)
 }
 
-// retire 删除一个旧作用域的记录向量（G1d 改为按作用域 Clear 索引），再删除作用域本身（含 state 与访问记录）。
+// retire 删除一个旧作用域（含 state 与访问记录），再清空它的记录与实体索引命名空间。
 func (m *Memory) retire(ctx context.Context, name string, e retiringEntry) error {
-	if m.cfg.Index != nil {
-		ids, err := m.scopeRecordIDs(ctx, e.Namespace, e.Scope)
-		if err != nil {
-			return err
-		}
-		if err := m.unindex(ctx, e.Namespace, ids...); err != nil {
-			return err
-		}
+	if err := m.cfg.Durable.(durable.Scoped).RemoveScope(ctx, name); err != nil {
+		return err
 	}
-	return m.cfg.Durable.(durable.Scoped).RemoveScope(ctx, name)
-}
-
-// scopeRecordIDs 返回作用域中的记录 ID，不经缓存：旧作用域的 state 不应替换缓存中当前作用域的条目。作用域已删除时为空。
-func (m *Memory) scopeRecordIDs(ctx context.Context, ns []string, scope string) ([]string, error) {
-	st := m.scoped(ns, scope)
-	for range readAttempts {
-		h, err := loadHead(ctx, st)
-		if err == nil {
-			var v view
-			if v, err = m.decode(ctx, st, ns, scope, h); err == nil {
-				return slices.Collect(maps.Keys(v.cur.Records)), nil
-			}
-		}
-		switch {
-		case errors.Is(err, agentErrors.ErrScopeRemoved):
-			return nil, nil
-		case !errors.Is(err, errBaseChanged):
-			return nil, err
-		}
+	if m.cfg.Index == nil {
+		return nil
 	}
-	return nil, agentErrors.Newf(agentErrors.CodeConflict, "旧作用域 %q 的基础快照在读取期间反复改变", scope).WithComponent("memory").WithOperation("retire")
+	var errs []error
+	for _, sp := range indexSpaces {
+		errs = append(errs, m.cfg.Index.Clear(ctx, sp.namespace(e.Namespace, e.Scope)))
+	}
+	return errors.Join(errs...)
 }

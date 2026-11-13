@@ -276,7 +276,7 @@ func (m *Memory) reconcile(ctx context.Context, j Job, at time.Time, i int, c ca
 	return m.derive(ctx, ns, scope, []Record{{
 		ID: id, Kind: c.Kind, Content: content, Keywords: c.Keywords, Entities: c.Entities, ValidFrom: at,
 		Importance: c.Importance, Sources: sources,
-	}}, func(t *tx) []string {
+	}}, func(t *tx) []Record {
 		if target == nil {
 			return nil
 		}
@@ -286,13 +286,13 @@ func (m *Memory) reconcile(ctx context.Context, j Job, at time.Time, i int, c ca
 			return nil
 		}
 		t.Records.Put(cur.ID, cur.invalidated(now, ReasonSuperseded, id))
-		return []string{cur.ID}
+		return []Record{cur}
 	})
 }
 
 // derive 在一次提交中写入 Worker 推导出的记录：rs 中尚不存在的记录被创建（重做的任务不会重复创建或覆盖），
-// 再调用 then 做同一提交中的其余修改，then 返回需要移出索引的记录。嵌入在锁外完成，索引在提交之后更新。
-func (m *Memory) derive(ctx context.Context, ns []string, scope string, rs []Record, then func(t *tx) []string) error {
+// 再调用 then 做同一提交中的其余修改，then 返回失效、需要移出索引的记录。嵌入在锁外完成，索引在提交之后写入并复核。
+func (m *Memory) derive(ctx context.Context, ns []string, scope string, rs []Record, then func(t *tx) []Record) error {
 	vecs := make([][]float32, len(rs))
 	for i := range rs {
 		r, err := m.prepare(rs[i], ns)
@@ -302,18 +302,17 @@ func (m *Memory) derive(ctx context.Context, ns []string, scope string, rs []Rec
 		if vecs[i], err = m.embed(ctx, r.Content); err != nil {
 			return err
 		}
-		if vecs[i] != nil {
-			r.EmbedModel = m.cfg.EmbedModel
-		}
 		rs[i] = r
 	}
-	var created []int
-	var removed []string
+	var created []indexKey
+	var createdVecs [][]float32
+	var removed []Record
 	_, err := m.mutate(ctx, ns, scope, func(t *tx) error {
-		created, removed = nil, nil
+		created, createdVecs, removed, scope = nil, nil, nil, t.scope
 		for i, r := range rs {
 			if createRecord(t, r) {
-				created = append(created, i)
+				r, _ = t.Records.Get(r.ID)
+				created, createdVecs = append(created, recordKey(r)), append(createdVecs, vecs[i])
 			}
 		}
 		if then != nil {
@@ -324,11 +323,8 @@ func (m *Memory) derive(ctx context.Context, ns []string, scope string, rs []Rec
 	if err != nil {
 		return err
 	}
-	errs := []error{m.unindex(ctx, ns, removed...)}
-	for _, i := range created {
-		errs = append(errs, m.upsert(ctx, ns, rs[i].ID, vecs[i]))
-	}
-	return errors.Join(errs...)
+	return errors.Join(m.dropIndex(ctx, ns, scope, recordSpace, keysOf(removed)...),
+		m.writeIndex(ctx, ns, scope, recordSpace, created, createdVecs))
 }
 
 const failurePrompt = "这一轮执行失败或被中止。根据对话记录写一条以后可以避免同类失败的教训，输出 JSON：" +
@@ -403,7 +399,7 @@ func (m *Memory) reflect(ctx context.Context) error {
 		insights = append(insights, Record{ID: stableID(key, fmt.Sprint(i)), Kind: KindReflection, Content: in.Content, Keywords: in.Keywords, Importance: min(max(in.Importance, 0), 1)})
 	}
 	// 结论与"已反思"标记在同一次提交中；只标记仍是读取时那个版本的情景。
-	return m.derive(ctx, ns, scope, insights, func(t *tx) []string {
+	return m.derive(ctx, ns, scope, insights, func(t *tx) []Record {
 		for _, e := range episodes {
 			cur, ok := t.Records.Get(e.ID)
 			if !ok || !cur.Valid() || cur.Incarnation != e.Incarnation || cur.Revision != e.Revision {

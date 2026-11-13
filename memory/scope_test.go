@@ -6,6 +6,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -92,14 +93,14 @@ func TestPurgeFaults(t *testing.T) {
 			require.Empty(t, s.Records, "提交后旧数据立即不可读")
 			require.Contains(t, retiringScopes(t, m), scopeName(testNS, initialScope))
 
+			m.now = func() time.Time { return time.Now().Add(m.cfg.RetireGrace) }
 			_, err = m.ProcessPending(ctx)
 			require.NoError(t, err, "下一轮 Worker 补完清理")
 			requireNoRetiring(t, m)
 			_, err = loadHead(ctx, m.scoped(testNS, initialScope))
 			require.ErrorIs(t, err, agentErrors.ErrScopeRemoved)
-			hits, err := x.Search(ctx, testNS, mustEmbed(t, "青鸟"), 5)
-			require.NoError(t, err)
-			require.Empty(t, hits)
+			require.Empty(t, indexKeys(x, testNS))
+			checkIndex(t, m, x, testNS)
 		})
 	}
 }
@@ -287,7 +288,8 @@ func TestPurgeConcurrentWithWrites(t *testing.T) {
 		}
 		return `{"memories":[{"kind":"fact","content":"用户住在北京","importance":0.8}]}`, nil
 	}}
-	m := newMemory(t, Config{Model: model, Sessions: sessions})
+	x := NewMemoryIndex()
+	m := newMemory(t, Config{Index: x, Embedder: bigramEmbedder{}, EmbedModel: "v1", Model: model, Sessions: sessions})
 	ctx := WithNamespace(context.Background(), testNS...)
 
 	var wg sync.WaitGroup
@@ -338,9 +340,11 @@ func TestPurgeConcurrentWithWrites(t *testing.T) {
 	wg.Wait()
 	require.Empty(t, writeErrs)
 
+	m.now = func() time.Time { return time.Now().Add(m.cfg.RetireGrace) }
 	_, err := m.ProcessPending(ctx)
 	require.NoError(t, err)
 	requireNoRetiring(t, m)
+	checkIndex(t, m, x, testNS)
 	meta, err := m.loadMeta(ctx, testNS)
 	require.NoError(t, err)
 	require.EqualValues(t, 3, meta.Purges)

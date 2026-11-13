@@ -13,16 +13,14 @@ import (
 )
 
 // Entity 是图中的实体节点，按命名空间、类型与规范化名称去重；Aliases 记录指向同一实体的其他名称。
-// 配置了 Embedder 时 Vector 是名称的单位向量，用于找出名称不同的候选重复实体。
+// 配置了 Index 时名称向量存于 Index 的实体子命名空间，用于找出名称不同的候选重复实体。
 type Entity struct {
-	ID         string    `json:"id"`
-	Namespace  []string  `json:"namespace"`
-	Name       string    `json:"name"`
-	Type       string    `json:"type"`
-	Aliases    []string  `json:"aliases,omitempty"`
-	Vector     []float64 `json:"vector,omitempty"`
-	EmbedModel string    `json:"embed_model,omitempty"`
-	CreatedAt  time.Time `json:"created_at"`
+	ID        string    `json:"id"`
+	Namespace []string  `json:"namespace"`
+	Name      string    `json:"name"`
+	Type      string    `json:"type"`
+	Aliases   []string  `json:"aliases,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
 	// Incarnation、Revision、ContentRev 的含义与 Record 相同。
 	Incarnation int64 `json:"incarnation,omitzero"`
 	Revision    int64 `json:"revision,omitzero"`
@@ -116,15 +114,15 @@ const resolvePrompt = "你维护知识图谱中的实体。对每个新实体，
 type unresolved struct {
 	ref        entityRef
 	keys       []string
-	vector     []float64
+	vector     []float32
 	candidates []Entity
 }
 
 // resolveEntities 把一轮抽取的实体引用解析为实体（Graphiti 式判重）：先按类型与规范化名称（含别名）精确匹配；
 // 匹配不到的，取同类型中名称向量或字符对相似度不低于 EntitySimilarity 的实体作为候选，由模型一次判定是否为同一对象；
-// 仍无匹配的新建。返回引用 key 到实体的映射（含合并后的别名）；不写入，由调用方在 mutate 中按 putEntity 写入。
-// known 须是调用方自有的副本：合并别名会修改其中的实体。
-func (m *Memory) resolveEntities(ctx context.Context, ns []string, known []Entity, refs []entityRef) (map[string]Entity, error) {
+// 仍无匹配的新建。返回引用 key 到实体的映射（含合并后的别名），以及新建实体的名称向量；不写入，由调用方在 mutate 中按 putEntity 写入。
+// known 须是调用方自有的副本，取自作用域 scope：合并别名会修改其中的实体。
+func (m *Memory) resolveEntities(ctx context.Context, ns []string, scope string, known []Entity, refs []entityRef) (map[string]Entity, map[string][]float32, error) {
 	resolved := map[string]Entity{}
 	var pending []*unresolved
 	for _, ref := range refs {
@@ -144,13 +142,14 @@ func (m *Memory) resolveEntities(ctx context.Context, ns []string, known []Entit
 		}
 		pending = append(pending, &unresolved{ref: ref, keys: []string{ref.key()}})
 	}
-	if err := m.entityCandidates(ctx, known, pending); err != nil {
-		return nil, err
+	if err := m.entityCandidates(ctx, ns, scope, known, pending); err != nil {
+		return nil, nil, err
 	}
 	duplicates, err := m.judgeDuplicates(ctx, pending)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
+	vectors := map[string][]float32{}
 	for i, p := range pending {
 		var e Entity
 		if target, ok := duplicates[i]; ok {
@@ -161,7 +160,7 @@ func (m *Memory) resolveEntities(ctx context.Context, ns []string, known []Entit
 			e = Entity{ID: stableID(append(slices.Clone(ns), p.ref.Type, normalizeName(p.ref.Name))...), Namespace: ns, Name: p.ref.Name, Type: p.ref.Type, CreatedAt: m.now()}
 			e.mergeAliases(p.ref.Aliases...)
 			if p.vector != nil {
-				e.Vector, e.EmbedModel = p.vector, m.cfg.EmbedModel
+				vectors[e.ID] = p.vector
 			}
 			known = append(known, e)
 		}
@@ -175,35 +174,50 @@ func (m *Memory) resolveEntities(ctx context.Context, ns []string, known []Entit
 			resolved[key] = known[i]
 		}
 	}
-	return resolved, nil
+	return resolved, vectors, nil
 }
 
-// putEntity 在 tx 中写入解析出的实体：不存在时新建；已存在时把名称与别名合并到锁内的当前版本（合并可交换，与读取后的修改不冲突）。
-func putEntity(t *tx, e Entity) {
+// putEntity 在 tx 中写入解析出的实体：不存在时新建并返回 true；已存在时把名称与别名合并到锁内的当前版本（合并可交换，与读取后的修改不冲突）。
+func putEntity(t *tx, e Entity) bool {
 	cur, ok := t.Entities.Get(e.ID)
 	if !ok {
 		e.Incarnation, e.Revision, e.ContentRev = t.incarnation(), 1, 1
 		t.Entities.Put(e.ID, e)
-		return
+		return true
 	}
 	if cur.mergeAliases(append([]string{e.Name}, e.Aliases...)...) {
 		cur.Revision++
 		cur.ContentRev++
 		t.Entities.Put(cur.ID, cur)
 	}
+	return false
 }
 
 // entityCandidates 为每个未匹配的引用找同类型中最相似的至多 EntityCandidates 个实体：
-// 相似度取名称向量余弦（需 Embedder）与名称字符对重合的较大者。翻译或别称（如"Acme"与"爱克米"）只能靠向量找到。
-func (m *Memory) entityCandidates(ctx context.Context, known []Entity, pending []*unresolved) error {
+// 相似度取名称向量余弦（需 Index）与名称字符对重合的较大者。翻译或别称（如"Acme"与"爱克米"）只能靠向量找到。
+// 向量在实体子命名空间中检索全部已知实体，只采用 known 中仍是该实例的键。
+func (m *Memory) entityCandidates(ctx context.Context, ns []string, scope string, known []Entity, pending []*unresolved) error {
+	incarnation := make(map[string]int64, len(known))
+	for _, e := range known {
+		incarnation[e.ID] = e.Incarnation
+	}
 	for _, p := range pending {
-		if m.cfg.Embedder != nil {
-			raw, err := m.cfg.Embedder.Embed(ctx, p.ref.Name)
-			if err != nil {
+		similarity := map[string]float64{}
+		if m.cfg.Index != nil {
+			var err error
+			if p.vector, err = m.embed(ctx, p.ref.Name); err != nil {
 				return fmt.Errorf("生成实体名称向量：%w", err)
 			}
-			if p.vector, err = normalize(raw); err != nil {
-				return err
+			if len(known) > 0 {
+				hits, err := m.cfg.Index.Search(ctx, entitySpace.namespace(ns, scope), p.vector, len(known))
+				if err != nil {
+					return err
+				}
+				for _, h := range hits {
+					if k, ok := parseIndexKey(h.ID); ok && k.Model == m.modelTag && incarnation[k.ID] == k.Incarnation {
+						similarity[k.ID] = max(similarity[k.ID], h.Score)
+					}
+				}
 			}
 		}
 		grams := bigrams(strings.Join(p.ref.names(), " "))
@@ -216,10 +230,7 @@ func (m *Memory) entityCandidates(ctx context.Context, known []Entity, pending [
 			if e.Type != p.ref.Type {
 				continue
 			}
-			s := overlap(grams, bigrams(strings.Join(e.names(), " ")))
-			if p.vector != nil && e.EmbedModel == m.cfg.EmbedModel && len(e.Vector) == len(p.vector) {
-				s = max(s, dot(p.vector, e.Vector))
-			}
+			s := max(overlap(grams, bigrams(strings.Join(e.names(), " "))), similarity[e.ID])
 			if s >= constants.DefaultMemoryEntitySimilarity {
 				cands = append(cands, scored{e, s})
 			}
@@ -273,14 +284,6 @@ func (m *Memory) judgeDuplicates(ctx context.Context, pending []*unresolved) (ma
 	return out, nil
 }
 
-func dot(a, b []float64) float64 {
-	s := 0.0
-	for i := range a {
-		s += a[i] * b[i]
-	}
-	return s
-}
-
 // applyRelations 写入一轮抽取出的关系，at 是该轮发生的时间。相同的有效关系不重复写入。
 // 排他谓词上的其他有效关系在 at 失效并指向新关系；已有关系比新关系生效更晚时（迟到的旧事实），新关系写入即失效并指向已有关系。
 // 实体判重（模型与嵌入）在锁外完成；关系的去重与失效在 mutate 内按锁内的关系重新计算，一次提交。
@@ -307,14 +310,21 @@ func (m *Memory) applyRelations(ctx context.Context, j Job, at time.Time, rels [
 	for _, r := range rels {
 		refs = append(refs, r.Subject, r.Object)
 	}
-	entities, err := m.resolveEntities(ctx, ns, known, refs)
+	entities, vectors, err := m.resolveEntities(ctx, ns, scope, known, refs)
 	if err != nil {
 		return err
 	}
 	now := m.now()
+	var created []indexKey
+	var createdVecs [][]float32
 	_, err = m.mutate(ctx, ns, scope, func(t *tx) error {
+		created, createdVecs = nil, nil
 		for _, key := range slices.Sorted(maps.Keys(entities)) {
-			putEntity(t, entities[key])
+			e := entities[key]
+			if putEntity(t, e) && vectors[e.ID] != nil {
+				cur, _ := t.Entities.Get(e.ID)
+				created, createdVecs = append(created, entityKey(cur)), append(createdVecs, vectors[e.ID])
+			}
 		}
 		for i, r := range rels {
 			pred := strings.TrimSpace(r.Predicate)
@@ -363,5 +373,8 @@ func (m *Memory) applyRelations(ctx context.Context, j Job, at time.Time, rels [
 		}
 		return nil
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	return m.writeIndex(ctx, ns, scope, entitySpace, created, createdVecs)
 }

@@ -49,6 +49,8 @@ const (
 	MemoryCommitTimeout = 30 * time.Second
 	// DefaultMemoryEraseWithin 是遗忘的内容从长期记忆的基础快照中物理擦除的时限。
 	DefaultMemoryEraseWithin = 5 * time.Minute
+	// DefaultMemoryRetireGrace 是 Purge 后旧作用域留在 retiring 中的时长，到期再清理一次索引以清掉迟到的向量。
+	DefaultMemoryRetireGrace = 10 * time.Minute
 	// DefaultMemoryStateCacheBytes 是进程内 state 解码缓存的容量（按估计的堆占用计）。
 	DefaultMemoryStateCacheBytes = 64 << 20
 	// ToolMemorySearch、ToolMemorySave、ToolMemoryForget 是长期记忆工具名。
