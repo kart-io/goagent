@@ -80,11 +80,6 @@ type Record struct {
 	Reflected bool `json:"reflected,omitzero"`
 }
 
-// rewound 报告是否有来源位于会话 sessionID 中序号 to 之后。
-func rewound(sources []Source, sessionID string, to int64) bool {
-	return slices.ContainsFunc(sources, func(s Source) bool { return s.Session == sessionID && s.From > to })
-}
-
 // Valid 报告记录是否仍然有效。
 func (r Record) Valid() bool { return r.InvalidAt.IsZero() }
 

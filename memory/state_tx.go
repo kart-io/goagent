@@ -103,6 +103,7 @@ type tx struct {
 	Communities *table[Community]
 	Jobs        *table[Job]
 	DoneJobs    *table[time.Time]
+	Markers     *table[rewindMarker]
 	scalars     stateScalars
 	orig        stateScalars
 	deps        *depIndex // 基础快照的反向依赖；为 nil 时级联逐个检查全部对象
@@ -121,13 +122,14 @@ func newTx(cur, base state, ns []string) *tx {
 	t.Communities = &table[Community]{k: communityKind, m: w.Communities, base: base.Communities, changes: map[string]change[Community]{}, t: t}
 	t.Jobs = &table[Job]{k: jobKind, m: w.Jobs, base: base.Jobs, changes: map[string]change[Job]{}, t: t}
 	t.DoneJobs = &table[time.Time]{k: doneKind, m: w.DoneJobs, base: base.DoneJobs, changes: map[string]change[time.Time]{}, t: t}
+	t.Markers = &table[rewindMarker]{k: markerKind, m: w.Markers, base: base.Markers, changes: map[string]change[rewindMarker]{}, t: t}
 	return t
 }
 
 // incarnation 分配一个实例号（从 1 起），使 NextIncarnation 始终大于已分配的实例号（不变量 1）。
 // changed 报告这次修改是否改动了任何对象或标量。
 func (t *tx) changed() bool {
-	return len(t.Records.changes)+len(t.Entities.changes)+len(t.Edges.changes)+len(t.Communities.changes)+len(t.Jobs.changes)+len(t.DoneJobs.changes) > 0 ||
+	return len(t.Records.changes)+len(t.Entities.changes)+len(t.Edges.changes)+len(t.Communities.changes)+len(t.Jobs.changes)+len(t.DoneJobs.changes)+len(t.Markers.changes) > 0 ||
 		t.scalars != t.orig
 }
 
@@ -144,14 +146,17 @@ func (t *tx) NextIncarnation() int64     { return t.scalars.NextIncarnation }
 func (t *tx) SetNextIncarnation(n int64) { t.scalars.NextIncarnation = n }
 func (t *tx) LastForgetSeq() int64       { return t.scalars.LastForgetSeq }
 func (t *tx) SetLastForgetSeq(n int64)   { t.scalars.LastForgetSeq = n }
+func (t *tx) MarkerHorizon() int64       { return t.scalars.MarkerHorizon }
+func (t *tx) SetMarkerHorizon(n int64)   { t.scalars.MarkerHorizon = n }
 func (t *tx) MigrationID() string        { return t.scalars.MigrationID }
 func (t *tx) SetMigrationID(id string)   { t.scalars.MigrationID = id }
 
 // working 返回工作副本（已含本次修改）。
 func (t *tx) working() state {
 	return state{Seq: t.scalars.Seq, CommitID: t.scalars.CommitID, NextIncarnation: t.scalars.NextIncarnation,
-		LastForgetSeq: t.scalars.LastForgetSeq, MigrationID: t.scalars.MigrationID,
-		Records: t.Records.m, Entities: t.Entities.m, Edges: t.Edges.m, Communities: t.Communities.m, Jobs: t.Jobs.m, DoneJobs: t.DoneJobs.m}
+		LastForgetSeq: t.scalars.LastForgetSeq, MarkerHorizon: t.scalars.MarkerHorizon, MigrationID: t.scalars.MigrationID,
+		Records: t.Records.m, Entities: t.Entities.m, Edges: t.Edges.m, Communities: t.Communities.m, Jobs: t.Jobs.m, DoneJobs: t.DoneJobs.m,
+		Markers: t.Markers.m}
 }
 
 // overlay 返回本次的变更集，各项的 Seq 为 seq。
@@ -159,6 +164,7 @@ func (t *tx) overlay(seq int64) overlay {
 	return overlay{
 		Records: stamp(t.Records.changes, seq), Entities: stamp(t.Entities.changes, seq), Edges: stamp(t.Edges.changes, seq),
 		Communities: stamp(t.Communities.changes, seq), Jobs: stamp(t.Jobs.changes, seq), DoneJobs: stamp(t.DoneJobs.changes, seq),
+		Markers: stamp(t.Markers.changes, seq),
 	}
 }
 
@@ -297,6 +303,12 @@ var doneKind = kind[time.Time]{
 	size:      func(k string, _ time.Time) int { return 16 + len(k) },
 }
 
+var markerKind = kind[rewindMarker]{
+	clone:     func(m rewindMarker) rewindMarker { return m },
+	normalize: func(*rewindMarker, []string) bool { return true },
+	size:      func(k string, m rewindMarker) int { return 40 + len(k) + len(m.Session) },
+}
+
 // logicalBytes 是 state 的逻辑大小：各对象按 kind.size 计的长度之和，MaxStateBytes 按它判断（增量提交第 7 节）。
 func (s *state) logicalBytes() int {
 	n := 0
@@ -317,6 +329,9 @@ func (s *state) logicalBytes() int {
 	}
 	for k, v := range s.DoneJobs {
 		n += doneKind.size(k, v)
+	}
+	for k, v := range s.Markers {
+		n += markerKind.size(k, v)
 	}
 	return n
 }

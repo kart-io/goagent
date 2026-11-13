@@ -551,3 +551,19 @@ flowchart TB
 | 3.5、阶段 4 | 锁内不运行 `syncCommunitiesTx`：级联只删除成员涉及变化的社区（变化的实体、变化关系的两端；改名实体的邻居也算），重新划分与摘要由 Worker 之后的 `syncCommunities` 完成 | 标签传播是全图计算，5k 实体时单次约 100ms，占加锁时长的 85%；删除已足以保证过时摘要不被召回（B1） |
 | 第 3 节级联范围、S5 | 级联只检查本次修改过的对象和依赖它们的对象（派生或名称来源指向修改过的记录、端点是修改过的实体）。候选来自基础快照的反向依赖 `depIndex`（随基础快照缓存，第一次级联时构建），加上覆盖层与本次修改中的对象，再按当前值核对。`Prune` 与不变量检查用 `cascadeAll` 检查全部对象 | 每次提交都运行级联，提交前的状态已收敛；5k 记录、10k 关系时全量检查约 5ms，不用反向索引、逐个筛选依赖也要约 2.4ms |
 | 第 8 节测量 | 5k 数据集、开启 `Communities`，加锁 p50（基线 `6cf097ee` → G2a）：真实中文 Update 1.8 → 3.1ms、Forget 2.2 → 3.0ms；低压缩率 Update 1.7 → 2.5ms、Forget 2.3 → 2.6ms | 均在 +2ms 门槛内 |
+
+## 15. G2b 实施记录
+
+实施时与上文不同、或上文未写明的地方：
+
+| 位置 | 实施 | 理由 |
+|---|---|---|
+| 第 4 节回退判定 | `rewound` 取 `max(s.From, s.To) > to` | 测试与早期数据中有 `To` 为 0 的来源，按 `s.To > to` 会漏判 |
+| 第 4 节第 3 步收集 | 被切开的轮次还从实体名称来源中收集 | 名称来源同样记录轮次，收集范围与第 5 步删除的范围一致 |
+| 第 4 节第 3 步 `Aborted` | 已完成的轮次按是否产出过教训记录（ID 为 `stableID(任务键, "lesson")`）判断 | `DoneJobs` 只存键，取不到原任务的 `Aborted`；补登成非中止任务会从失败的轮次中抽取事实 |
+| 第 4 节第 3 步补登条件 | 轮次中有记录被遗忘过（`erased`），或待处理任务已因遗忘失效（`LastForgetSeq > TurnSeq`）时不补登 | 补登任务的 `TurnSeq` 晚于遗忘，会从对话中重新学回被遗忘的内容 |
+| 第 4 节第 3 步登记队列 | `beforeSave` 在 `fn` 之前、对同一份修改前的 state 调用 `cutTurns`，有补登任务时登记 | `beforeSave` 拿不到 `fn` 的结果；两次调用输入相同，结果一致 |
+| 第 5 节登记 | 登记之后发生过遗忘的任务原样登记，不截断，由 Worker 按 `LastForgetSeq` 丢弃 | 截断会把 `TurnSeq` 抬到本次提交，越过遗忘 |
+| 第 5 节计数 | `DroppedJobs` 只在任务真正变为 dropped 时计数：`Rewound` 置为 dropped 的、`Enqueue` 登记即 dropped 的、`finishJob` 本次置为 dropped 的 | 原先 Worker 遇到 `errJobStale` 就计数；`Rewound` 已置为 dropped 的任务若正在处理，会被计两次 |
+| 第 5 节判定 | `jobBinding` 增加 `session` 与 `to`（不是 `from`）；锁内核对与 Worker 预检共用 `jobStale` | 判定只用到 `j.To > m.To` |
+| 第 8 节测试 | 增量提交的参考模型测试中，基础快照很小，每次提交都立即压缩，读取从不经过覆盖层；标记的覆盖层还原另由 `TestMarkersPersistThroughOverlayAndCompaction` 覆盖 | 该参考模型测试对其他表的覆盖层还原同样没有覆盖，属既有缺口，未在本阶段改动 |

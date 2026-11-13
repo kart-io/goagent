@@ -22,7 +22,7 @@ import (
 
 func fullState() state {
 	now := time.Unix(1_800_000_000, 0).UTC()
-	s := state{Seq: 7, CommitID: "c7", NextIncarnation: 42, LastForgetSeq: 3, MigrationID: "m1"}
+	s := state{Seq: 7, CommitID: "c7", NextIncarnation: 42, LastForgetSeq: 3, MarkerHorizon: 2, MigrationID: "m1"}
 	s.init()
 	for i := range 20 {
 		id := fmt.Sprintf("r%02d", i)
@@ -35,6 +35,8 @@ func fullState() state {
 	s.Communities["c1"] = Community{ID: "c1", Namespace: testNS, Members: []string{"e1"}, Name: "茶", Summary: "饮品", UpdatedAt: now}
 	s.Jobs["s1/2"] = Job{Key: "s1/2", Namespace: testNS, Session: "s1", From: 2, To: 3, Status: JobStatus("pending"), CreatedAt: now}
 	s.DoneJobs["s1/1"] = now
+	mk := rewindMarker{Session: "s1", To: 4, Seq: 6, At: now}
+	s.Markers[mk.key()] = mk
 	return s
 }
 

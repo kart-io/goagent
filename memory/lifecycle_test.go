@@ -154,7 +154,7 @@ func TestForgetLogsBeforeCommit(t *testing.T) {
 	require.True(t, stateOf(t, m).Records["a"].Valid())
 }
 
-// 退回：来自退回轮次的记录与关系失效（rewound）；只被它们取代的旧记录恢复；被遗忘的记录与被遗忘者取代的记录不动。一次提交。
+// 退回：来自退回轮次的记录与关系失效（rewound）；只被它们取代的旧记录恢复；被遗忘的记录与被遗忘者取代的记录不动。一次提交，没有其他变化时也提交（写回退标记）。
 func TestRewoundRestoresOnlyRewoundSuperseders(t *testing.T) {
 	m := newMemory(t, Config{Graph: true})
 	ctx := WithNamespace(context.Background(), "u")
@@ -193,7 +193,10 @@ func TestRewoundRestoresOnlyRewoundSuperseders(t *testing.T) {
 	require.Equal(t, before.Records["old"].Revision+1, s.Records["old"].Revision)
 
 	require.NoError(t, m.Rewound(ctx, "s", 3))
-	require.Equal(t, s.Seq, stateOf(t, m).Seq, "没有变化时不提交")
+	again := stateOf(t, m)
+	require.Equal(t, s.Seq+1, again.Seq, "没有其他变化时也提交，写入回退标记")
+	require.Len(t, again.Markers, 2)
+	require.Equal(t, s.Records, again.Records)
 }
 
 func TestPrune(t *testing.T) {

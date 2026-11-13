@@ -593,9 +593,10 @@ func forget(t *tx, r Record, at time.Time) {
 	t.SetLastForgetSeq(t.nextSeq())
 }
 
-// Rewound 使任一来源位于会话 sessionID 中序号 to 之后的有效记录失效（rewound），删除这些轮次产生的关系派生与实体名称来源，
+// Rewound 使任一来源轮次在会话 sessionID 中有消息位于序号 to 之后（被遮蔽）的有效记录失效（rewound），删除这些轮次产生的关系派生与实体名称来源，
 // 并恢复只被它们取代的旧记录与旧关系：退回的轮次不再留下记忆，也不会带走更早轮次的事实。被遗忘的记录不动；取代者是被遗忘而不是被退回的，不恢复。
-// 恢复的对象经过级联重算核对（设计 docs/design/MEMORY_G2_DERIVATION.md 第 4 节）。一次提交；宿主在 session.Rewind 之后调用。
+// 同时写回退标记，丢弃本会话中含被遮蔽消息的待处理任务（计入 DroppedJobs），并为被 to 切开的轮次补登可见部分 [From, to] 的抽取任务。
+// 恢复的对象经过级联重算核对（设计 docs/design/MEMORY_G2_DERIVATION.md 第 4、5 节）。一次提交，即使没有其他变化也提交；宿主在 session.Rewind 之后调用。
 func (m *Memory) Rewound(ctx context.Context, sessionID string, to int64) error {
 	ns, err := requireNamespace(ctx)
 	if err != nil {
@@ -605,12 +606,26 @@ func (m *Memory) Rewound(ctx context.Context, sessionID string, to int64) error 
 	var gone, restored []Record
 	var c cascaded
 	var scope string
+	var dropped int64
 	_, err = m.mutate(ctx, ns, "", func(t *tx) error {
-		gone, restored, c, scope = nil, nil, cascaded{}, t.scope
+		gone, restored, c, scope, dropped = nil, nil, cascaded{}, t.scope, 0
 		// 在任何删除之前记下有效的关系：删除派生后，替代者可能已不再有效。
 		before := map[string]bool{}
 		for id, e := range t.Edges.m {
 			before[id] = e.Valid()
+		}
+		patch := cutTurns(t, sessionID, to, now)
+		mk := rewindMarker{Session: sessionID, To: to, Seq: t.nextSeq(), At: now}
+		t.Markers.Put(mk.key(), mk)
+		for _, k := range t.Jobs.Keys() {
+			if j, _ := t.Jobs.Get(k); j.Status == JobPending && rewound([]Source{j.source()}, sessionID, to) {
+				j.Status, j.Error = JobDropped, errJobStale.Error()
+				t.Jobs.Put(k, j)
+				dropped++
+			}
+		}
+		for _, j := range patch {
+			t.Jobs.Put(j.Key, j)
 		}
 		for _, id := range t.Records.Keys() {
 			if r, _ := t.Records.Get(id); r.Valid() && rewound(r.Sources, sessionID, to) {
@@ -661,10 +676,17 @@ func (m *Memory) Rewound(ctx context.Context, sessionID string, to int64) error 
 		c.merge(graph)
 		m.syncGraph(t, c)
 		return nil
-	}, shrinking())
+	}, shrinking(), withBeforeSave(func(ctx context.Context, t *tx) error {
+		// beforeSave 在 fn 之前运行，与 fn 看到同一份修改前的 state。
+		if len(cutTurns(t, sessionID, to, now)) == 0 {
+			return nil
+		}
+		return m.register(ctx, queueEntry{Namespace: ns, Scope: t.scope, Reason: queueJobs})
+	}))
 	if err != nil {
 		return err
 	}
+	m.droppedJobs.Add(dropped)
 	errs := []error{m.dropIndex(ctx, ns, scope, recordSpace, keysOf(gone)...), m.indexAfter(ctx, ns, scope, c)}
 	var vecs [][]float32
 	for _, r := range restored {
@@ -765,6 +787,14 @@ func (m *Memory) Prune(ctx context.Context) error {
 		for _, key := range t.Jobs.Keys() {
 			if j, _ := t.Jobs.Get(key); j.Status != JobPending && now.Sub(j.CreatedAt) > m.cfg.Retention.InvalidRetention {
 				t.Jobs.Delete(key)
+				changed = true
+			}
+		}
+		// 回退标记按同一保留期回收；MarkerHorizon 推进到回收的最大 Seq，更早登记的任务因无从核对而丢弃（G2 设计第 5 节）。
+		for _, key := range t.Markers.Keys() {
+			if mk, _ := t.Markers.Get(key); now.Sub(mk.At) > m.cfg.Retention.InvalidRetention {
+				t.Markers.Delete(key)
+				t.SetMarkerHorizon(max(t.MarkerHorizon(), mk.Seq))
 				changed = true
 			}
 		}

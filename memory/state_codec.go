@@ -30,6 +30,7 @@ type stateScalars struct {
 	CommitID        string `json:"commit_id"`
 	NextIncarnation int64  `json:"next_incarnation"`
 	LastForgetSeq   int64  `json:"last_forget_seq"`
+	MarkerHorizon   int64  `json:"marker_horizon,omitzero"`
 	MigrationID     string `json:"migration_id,omitempty"`
 }
 
@@ -56,6 +57,7 @@ type stateChunk struct {
 	Communities []Community
 	Jobs        []Job
 	DoneJobs    []doneJob
+	Markers     []rewindMarker
 }
 
 type doneJob struct {
@@ -84,7 +86,7 @@ func decompress(packed []byte, size int) ([]byte, error) {
 }
 
 func (s *state) scalars() stateScalars {
-	return stateScalars{Seq: s.Seq, CommitID: s.CommitID, NextIncarnation: s.NextIncarnation, LastForgetSeq: s.LastForgetSeq, MigrationID: s.MigrationID}
+	return stateScalars{Seq: s.Seq, CommitID: s.CommitID, NextIncarnation: s.NextIncarnation, LastForgetSeq: s.LastForgetSeq, MarkerHorizon: s.MarkerHorizon, MigrationID: s.MigrationID}
 }
 
 // split 把 s 的条目轮流分到 stateChunks 块。state 中的对象都属于它的命名空间（不变量 4），对象的 Namespace 不写入，
@@ -127,6 +129,10 @@ func (s *state) split() []stateChunk {
 	for k, v := range s.DoneJobs {
 		c := next()
 		c.DoneJobs = append(c.DoneJobs, doneJob{Key: k, At: v})
+	}
+	for _, v := range s.Markers {
+		c := next()
+		c.Markers = append(c.Markers, v)
 	}
 	return chunks
 }
@@ -243,7 +249,7 @@ func decodeState(blob stateBlob, ns []string) (state, error) {
 	if chunks[0].Scalars == nil || *chunks[0].Scalars != h {
 		return state{}, badFraming("版本头与数据块不一致")
 	}
-	s := state{Seq: h.Seq, CommitID: h.CommitID, NextIncarnation: h.NextIncarnation, LastForgetSeq: h.LastForgetSeq, MigrationID: h.MigrationID}
+	s := state{Seq: h.Seq, CommitID: h.CommitID, NextIncarnation: h.NextIncarnation, LastForgetSeq: h.LastForgetSeq, MarkerHorizon: h.MarkerHorizon, MigrationID: h.MigrationID}
 	merges := []func(){
 		func() {
 			s.Records = mergeChunks(chunks, func(c *stateChunk) []Record { return c.Records }, func(v Record) string { return v.ID })
@@ -266,6 +272,9 @@ func decodeState(blob stateBlob, ns []string) (state, error) {
 			for k, v := range done {
 				s.DoneJobs[k] = v.At
 			}
+		},
+		func() {
+			s.Markers = mergeChunks(chunks, func(c *stateChunk) []rewindMarker { return c.Markers }, rewindMarker.key)
 		},
 	}
 	for _, merge := range merges {

@@ -24,7 +24,7 @@ const (
 	JobPending JobStatus = "pending"
 	JobDone    JobStatus = "done"
 	JobFailed  JobStatus = "failed"
-	// JobDropped 表示任务没有处理就被丢弃：处理前或处理中发生了遗忘（LastForgetSeq 大于 TurnSeq）或 Purge。
+	// JobDropped 表示任务没有处理就被丢弃：处理前或处理中发生了遗忘（LastForgetSeq 大于 TurnSeq）、遮蔽本轮消息的回退或 Purge。
 	JobDropped JobStatus = "dropped"
 )
 
@@ -39,7 +39,7 @@ type Job struct {
 	To        int64    `json:"to"`
 	Aborted   bool     `json:"aborted,omitzero"`
 	// Scope 与 TurnSeq 取自轮次绑定（TurnMemory.Scope、Seq）：任务只写入登记时的作用域，
-	// 登记之后作用域内发生过遗忘（LastForgetSeq > TurnSeq）时丢弃，避免重新学回被遗忘的内容。
+	// 登记之后作用域内发生过遗忘（LastForgetSeq > TurnSeq）或遮蔽本轮消息的回退时丢弃，避免重新学回被遗忘或回退的内容。
 	Scope     string    `json:"scope,omitempty"`
 	TurnSeq   int64     `json:"turn_seq,omitzero"`
 	Status    JobStatus `json:"status"`
@@ -50,12 +50,13 @@ type Job struct {
 
 func (j Job) source() Source { return Source{Session: j.Session, From: j.From, To: j.To, Job: j.Key} }
 
-// errJobStale 表示任务登记之后作用域内发生了遗忘，任务被丢弃。
-var errJobStale = agentErrors.New(agentErrors.CodeConflict, "抽取任务登记之后发生了遗忘，任务被丢弃").WithComponent("memory")
+// errJobStale 表示轮次之后作用域内发生了遗忘，或回退遮蔽了这一轮的消息，任务被丢弃。
+var errJobStale = agentErrors.New(agentErrors.CodeConflict, "抽取任务所在轮次之后发生了遗忘或回退，任务被丢弃").WithComponent("memory")
 
 // Enqueue 登记一轮的抽取任务；同一 Key 已登记时不做任何事。Builder 在轮次结束（含中止）时调用。
 // 没有作用域（G0 的绑定）、作用域已不是当前的（跨越了 Purge）或 state 已达 MaxStateBytes 时丢弃任务、计入 DroppedJobs
 // 并返回 nil：已完成轮次的回放会再次登记，不能报错（设计 3.2、4.3、4.5）。
+// 轮次进行中发生过回退时按回退标记处理（G2 设计第 5 节）：整轮被遮蔽的登记为 dropped，被切开的截到可见部分登记。
 func (m *Memory) Enqueue(ctx context.Context, j Job) error {
 	if j.Key == "" || j.Session == "" || j.From <= 0 || j.To < j.From {
 		return agentErrors.Newf(agentErrors.CodeInvalidInput, "抽取任务需要 Key、会话与合法的序号区间").WithComponent("memory").WithOperation("enqueue")
@@ -70,28 +71,56 @@ func (m *Memory) Enqueue(ctx context.Context, j Job) error {
 	ns := slices.Clone(j.Namespace)
 	j.Namespace = ns
 	j.Status, j.Attempts, j.Error, j.CreatedAt = JobPending, 0, "", m.now()
-	known := func(t *tx) bool {
-		_, pending := t.Jobs.Get(j.Key)
-		_, done := t.DoneJobs.Get(j.Key)
-		return pending || done
+	// admit 返回实际登记的任务；原键或截断后的键已登记过时 ok 为 false。
+	admit := func(t *tx) (Job, bool) {
+		known := func(key string) bool {
+			_, pending := t.Jobs.m[key]
+			_, done := t.DoneJobs.m[key]
+			return pending || done
+		}
+		if known(j.Key) {
+			return j, false
+		}
+		a := admitted(t, j)
+		return a, !known(a.Key)
 	}
+	var dropped bool
 	_, err := m.mutate(ctx, ns, j.Scope, func(t *tx) error {
-		if known(t) {
+		a, ok := admit(t)
+		if !ok {
 			return errNoChange
 		}
-		t.Jobs.Put(j.Key, j)
+		dropped = a.Status == JobDropped
+		t.Jobs.Put(a.Key, a)
 		return nil
 	}, withBeforeSave(func(ctx context.Context, t *tx) error {
-		if known(t) {
+		if a, ok := admit(t); !ok || a.Status == JobDropped {
 			return nil
 		}
 		return m.register(ctx, queueEntry{Namespace: ns, Scope: t.scope, Reason: queueJobs})
 	}))
-	if errors.Is(err, errScopeChanged) || errors.Is(err, errStateFull) {
+	if errors.Is(err, errScopeChanged) || errors.Is(err, errStateFull) || err == nil && dropped {
 		m.droppedJobs.Add(1)
 		return nil
 	}
 	return err
+}
+
+// admitted 按回退标记处理登记的任务 j：标记已回收（TurnSeq 早于 MarkerHorizon）或整轮被遮蔽时置为 dropped；
+// 被切开时把 To 截到命中标记中最小的 To，键随之改为 会话/From/To，TurnSeq 取本次提交的 Seq，使它不再被这些标记丢弃。
+// 登记之后发生过遗忘的任务原样登记，由 Worker 按 LastForgetSeq 丢弃：截断会抬高 TurnSeq，越过遗忘。
+func admitted(t *tx, j Job) Job {
+	if t.LastForgetSeq() > j.TurnSeq {
+		return j
+	}
+	cut, ok := markerCut(t.Markers.m, j.Session, j.TurnSeq, j.To)
+	switch {
+	case j.TurnSeq < t.MarkerHorizon() || ok && cut < j.From:
+		j.Status, j.Error = JobDropped, errJobStale.Error()
+	case ok:
+		j.Key, j.To, j.TurnSeq = cutJobKey(j.Session, j.From, cut), cut, t.nextSeq()
+	}
+	return j
 }
 
 // Job 返回当前命名空间中一个任务的状态。
@@ -114,7 +143,7 @@ func (m *Memory) Job(ctx context.Context, key string) (Job, bool, error) {
 	return Job{}, false, nil
 }
 
-// DroppedJobs 返回本实例没有处理就丢弃的任务数（跨越 Purge、没有作用域、state 超限或登记后发生了遗忘）。
+// DroppedJobs 返回本实例没有处理就丢弃的任务数（跨越 Purge、没有作用域、state 超限、轮次之后发生了遗忘或回退）。
 func (m *Memory) DroppedJobs() int64 { return m.droppedJobs.Load() }
 
 // pendingJobs 按登记时间返回 s 中待处理的任务。
@@ -142,10 +171,14 @@ func hasPending(t *tx) bool {
 }
 
 // finishJob 在锁内读取任务并按处理结果更新状态：完成的移入 DoneJobs；失败的计入尝试次数，达到 JobAttempts 时为 failed；
-// 丢弃的为 dropped。任务已不是待处理（或作用域已切换）时不修改。标记任务结束不受 MaxStateBytes 限制。
+// 丢弃的为 dropped 并计入 DroppedJobs。任务已不是待处理（或作用域已切换）时不修改。标记任务结束不受 MaxStateBytes 限制。
 func (m *Memory) finishJob(ctx context.Context, j Job, result error) error {
 	now := m.now()
+	stale := errors.Is(result, errScopeChanged) || errors.Is(result, errJobStale)
+	// dropped 只在本次把任务置为 dropped 时为真：Rewound 已置为 dropped 的任务已经计过数。
+	var dropped bool
 	_, err := m.mutate(ctx, j.Namespace, j.Scope, func(t *tx) error {
+		dropped = false
 		cur, ok := t.Jobs.Get(j.Key)
 		if !ok || cur.Status != JobPending {
 			return errNoChange
@@ -155,8 +188,8 @@ func (m *Memory) finishJob(ctx context.Context, j Job, result error) error {
 			t.Jobs.Delete(j.Key)
 			t.DoneJobs.Put(j.Key, now)
 			return nil
-		case errors.Is(result, errScopeChanged) || errors.Is(result, errJobStale):
-			cur.Status = JobDropped
+		case stale:
+			cur.Status, dropped = JobDropped, true
 		default:
 			cur.Attempts++
 			if cur.Attempts >= m.cfg.JobAttempts {
@@ -168,7 +201,13 @@ func (m *Memory) finishJob(ctx context.Context, j Job, result error) error {
 		return nil
 	}, shrinking())
 	if errors.Is(err, errScopeChanged) {
+		if stale {
+			m.droppedJobs.Add(1)
+		}
 		return nil // 任务随旧作用域一起删除
+	}
+	if err == nil && dropped {
+		m.droppedJobs.Add(1)
 	}
 	return err
 }

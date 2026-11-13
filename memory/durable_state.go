@@ -55,17 +55,19 @@ type retiringState struct {
 
 // state 是一个命名空间、一个作用域的全部数据（还原后的形式）；存储为基础快照加 head 的覆盖层，见 state_head.go。
 type state struct {
-	Seq             int64                `json:"seq"`
-	CommitID        string               `json:"commit_id"`
-	NextIncarnation int64                `json:"next_incarnation"`
-	LastForgetSeq   int64                `json:"last_forget_seq"`
-	MigrationID     string               `json:"migration_id,omitempty"`
-	Records         map[string]Record    `json:"records"`
-	Entities        map[string]Entity    `json:"entities"`
-	Edges           map[string]Edge      `json:"edges"`
-	Communities     map[string]Community `json:"communities"`
-	Jobs            map[string]Job       `json:"jobs"`
-	DoneJobs        map[string]time.Time `json:"done_jobs"`
+	Seq             int64                   `json:"seq"`
+	CommitID        string                  `json:"commit_id"`
+	NextIncarnation int64                   `json:"next_incarnation"`
+	LastForgetSeq   int64                   `json:"last_forget_seq"`
+	MarkerHorizon   int64                   `json:"marker_horizon,omitzero"`
+	MigrationID     string                  `json:"migration_id,omitempty"`
+	Records         map[string]Record       `json:"records"`
+	Entities        map[string]Entity       `json:"entities"`
+	Edges           map[string]Edge         `json:"edges"`
+	Communities     map[string]Community    `json:"communities"`
+	Jobs            map[string]Job          `json:"jobs"`
+	DoneJobs        map[string]time.Time    `json:"done_jobs"`
+	Markers         map[string]rewindMarker `json:"markers"`
 }
 
 // init 补齐空映射，使修改函数不必判空。
@@ -87,6 +89,9 @@ func (s *state) init() {
 	}
 	if s.DoneJobs == nil {
 		s.DoneJobs = map[string]time.Time{}
+	}
+	if s.Markers == nil {
+		s.Markers = map[string]rewindMarker{}
 	}
 }
 
@@ -227,12 +232,12 @@ func (m *Memory) mutateOnce(ctx context.Context, ns []string, expectScope string
 	if err != nil {
 		return state{}, head{}, scopeRemoved(err)
 	}
-	// Worker 处理任务期间的每次写入都在锁内核对任务绑定：作用域已切换或登记之后发生了遗忘时中止任务（设计 4.3）。
+	// Worker 处理任务期间的每次写入都在锁内核对任务绑定：作用域已切换、登记之后发生了遗忘或遮蔽本轮的回退时中止任务（设计 4.3，G2 第 5 节）。
 	if b, ok := jobOf(ctx); ok {
 		if b.scope != scope {
 			return state{}, head{}, errScopeChanged
 		}
-		if v.cur.LastForgetSeq > b.turnSeq {
+		if jobStale(v.cur, b.session, b.turnSeq, b.to) {
 			return state{}, head{}, errJobStale
 		}
 	}
@@ -318,7 +323,7 @@ func (m *Memory) recordOp(ops map[string]opMark, key string, seq int64) map[stri
 // clone 复制各映射，值按结构体复制；值内的切片仍与原 state 共享（tx 的读写都经拷贝，修改函数改不到它们）。
 func (s state) clone() state {
 	s.Records, s.Entities, s.Edges = maps.Clone(s.Records), maps.Clone(s.Entities), maps.Clone(s.Edges)
-	s.Communities, s.Jobs, s.DoneJobs = maps.Clone(s.Communities), maps.Clone(s.Jobs), maps.Clone(s.DoneJobs)
+	s.Communities, s.Jobs, s.DoneJobs, s.Markers = maps.Clone(s.Communities), maps.Clone(s.Jobs), maps.Clone(s.DoneJobs), maps.Clone(s.Markers)
 	s.init()
 	return s
 }

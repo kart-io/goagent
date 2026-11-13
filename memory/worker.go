@@ -101,14 +101,11 @@ func (m *Memory) processEntry(ctx context.Context, e queueEntry) (int, error) {
 			return i, err
 		}
 		var result error = errJobStale
-		if s.LastForgetSeq <= j.TurnSeq {
+		if !jobStale(s, j.Session, j.TurnSeq, j.To) {
 			result = m.processInScope(ctx, j)
 		}
 		if result != nil && ctx.Err() != nil {
 			return i, ctx.Err()
-		}
-		if errors.Is(result, errScopeChanged) || errors.Is(result, errJobStale) {
-			m.droppedJobs.Add(1)
 		}
 		if err := m.finishJob(ctx, j, result); err != nil {
 			return i, err
@@ -124,12 +121,14 @@ func (m *Memory) processEntry(ctx context.Context, e queueEntry) (int, error) {
 	return len(jobs), m.settle(ctx, e, hasPending)
 }
 
-// jobKey 是上下文中正在处理的任务的绑定：mutate 在锁内据此核对作用域与 LastForgetSeq。
+// jobKey 是上下文中正在处理的任务的绑定：mutate 在锁内据此核对作用域、LastForgetSeq 与回退标记。
 type jobKey struct{}
 
 type jobBinding struct {
 	scope   string
+	session string
 	turnSeq int64
+	to      int64
 }
 
 func jobOf(ctx context.Context) (jobBinding, bool) {
@@ -138,7 +137,7 @@ func jobOf(ctx context.Context) (jobBinding, bool) {
 }
 
 // processInScope 只在任务的作用域仍是当前作用域时处理任务；处理期间的每次读取都核对作用域（checkJobScope），
-// 每次写入在锁内核对作用域与 LastForgetSeq（mutate），任务跨越 Purge 或遗忘时返回 errScopeChanged 或 errJobStale。
+// 每次写入在锁内核对作用域、LastForgetSeq 与回退标记（mutate），任务跨越 Purge、遗忘或回退时返回 errScopeChanged 或 errJobStale。
 func (m *Memory) processInScope(ctx context.Context, j Job) error {
 	meta, err := m.loadMeta(ctx, j.Namespace)
 	if err != nil {
@@ -147,7 +146,7 @@ func (m *Memory) processInScope(ctx context.Context, j Job) error {
 	if meta.Current != j.Scope {
 		return errScopeChanged
 	}
-	return m.process(context.WithValue(WithNamespace(ctx, j.Namespace...), jobKey{}, jobBinding{scope: j.Scope, turnSeq: j.TurnSeq}), j)
+	return m.process(context.WithValue(WithNamespace(ctx, j.Namespace...), jobKey{}, jobBinding{scope: j.Scope, session: j.Session, turnSeq: j.TurnSeq, to: j.To}), j)
 }
 
 // jobScope 返回 Worker 正在处理的任务的作用域；不在任务中时为空（不限定作用域）。

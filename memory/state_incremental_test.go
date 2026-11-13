@@ -56,7 +56,7 @@ type op struct {
 func randomOp(rng *rand.Rand, ns []string) op {
 	id := fmt.Sprintf("k%02d", rng.IntN(40))
 	text := strings.Repeat(string(rune(0x4e00+rng.IntN(2000))), 1+rng.IntN(60))
-	switch rng.IntN(9) {
+	switch rng.IntN(10) {
 	case 0, 1, 2:
 		r := Record{ID: id, Content: text, Keywords: []string{text[:3]}, Importance: rng.Float64()}
 		norm := r
@@ -82,9 +82,16 @@ func randomOp(rng *rand.Rand, ns []string) op {
 		norm := j
 		jobKind.normalize(&norm, ns)
 		return op{"job " + id, func(t *tx) { t.Jobs.Delete(id); t.DoneJobs.Put(id, at) }, func(s *state) { delete(s.Jobs, id); s.DoneJobs[id] = at }}
+	case 8:
+		mk := rewindMarker{Session: text, To: rng.Int64N(100), Seq: int64(rng.IntN(40)), At: time.Unix(int64(rng.IntN(1e6)), 0).UTC()}
+		if rng.IntN(3) == 0 {
+			return op{"delete marker", func(t *tx) { t.Markers.Delete(mk.key()) }, func(s *state) { delete(s.Markers, mk.key()) }}
+		}
+		return op{"put marker", func(t *tx) { t.Markers.Put(mk.key(), mk) }, func(s *state) { s.Markers[mk.key()] = mk }}
 	default:
 		n := rng.Int64N(1000)
-		return op{"scalars", func(t *tx) { t.SetNextIncarnation(n); t.SetLastForgetSeq(n / 2) }, func(s *state) { s.NextIncarnation, s.LastForgetSeq = n, n/2 }}
+		return op{"scalars", func(t *tx) { t.SetNextIncarnation(n); t.SetLastForgetSeq(n / 2); t.SetMarkerHorizon(n / 3) },
+			func(s *state) { s.NextIncarnation, s.LastForgetSeq, s.MarkerHorizon = n, n/2, n/3 }}
 	}
 }
 
@@ -99,6 +106,8 @@ func requireMatches(t *testing.T, want, got state, msg string) {
 	require.Equal(t, want.DoneJobs, got.DoneJobs, "%s：已完成任务", msg)
 	require.Equal(t, want.NextIncarnation, got.NextIncarnation, "%s：NextIncarnation", msg)
 	require.Equal(t, want.LastForgetSeq, got.LastForgetSeq, "%s：LastForgetSeq", msg)
+	require.Equal(t, want.Markers, got.Markers, "%s：回退标记", msg)
+	require.Equal(t, want.MarkerHorizon, got.MarkerHorizon, "%s：MarkerHorizon", msg)
 }
 
 func stateJSON(t *testing.T, s state) string {
