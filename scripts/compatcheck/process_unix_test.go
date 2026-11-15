@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -159,6 +160,9 @@ func TestGoCommandDeadlineStopsDescendantBeforeItsOwnTimeout(t *testing.T) {
 
 // 启动阶段必须服从配置时限；外层看门狗仅用于让旧实现可结束并留下红证据。
 func TestVerifyStartupDeadlineStopsDiscoveryAndVersion(t *testing.T) {
+	// 此处验证真实进程树，不能使用虚拟时间。给进程启动和版本探测留出预算，
+	// 再由配置超时结束阻塞；外层看门狗仍独立检查生产代码没有忽略该时限。
+	const startupTimeout = 5 * time.Second
 	for _, stage := range []string{"mod", "version"} {
 		t.Run(stage, func(t *testing.T) {
 			root := compatibilityFixture(t)
@@ -188,13 +192,13 @@ wait
 			t.Setenv("COMPATCHECK_STARTED", started)
 			t.Setenv("COMPATCHECK_ALLOW", allow)
 			t.Setenv("COMPATCHECK_EFFECT", effect)
-			ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 3*startupTimeout)
 			defer cancel()
 			begin := time.Now()
-			err = verify(ctx, root, filepath.Join(t.TempDir(), "report"), time.Second)
+			err = verify(ctx, root, filepath.Join(t.TempDir(), "report"), startupTimeout)
 			t.Logf("阶段=%s，耗时=%v，结果=%v", stage, time.Since(begin), err)
-			if err == nil {
-				t.Error("阻塞的启动阶段不能通过")
+			if !errors.Is(err, context.DeadlineExceeded) {
+				t.Errorf("阻塞的启动阶段必须返回截止时间错误: %v", err)
 			}
 			if ctx.Err() != nil {
 				t.Error("配置超时未生效，最终由外层看门狗终止")

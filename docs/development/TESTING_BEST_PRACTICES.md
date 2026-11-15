@@ -2,21 +2,23 @@
 
 ## 覆盖率与门禁
 
-- `make coverage` 和 CI 执行相同门禁：整体（排除示例）≥75%，`core/durable` ≥70%，`core/budget`、`workflow`、`builder` 各 ≥75%，`multiagent` ≥85%；`llm/providers/openai.go` ≥70%，`llm/providers/gemini.go` ≥65%，`llm/common/base.go` ≥50%。模块阈值针对精确包路径，不混入子包；全部按语句数加权，缺失关键数据会失败。
+- `make coverage` 和 CI 执行相同门禁：整体（排除示例）≥75%，`core/durable` ≥70%，`core/budget`、`workflow`、`builder`、`management`、`management/adapters` 各 ≥75%，`multiagent` ≥85%，`management/httpapi` ≥80%；`llm/providers/openai.go` ≥70%，`llm/providers/gemini.go` ≥65%，`llm/common/base.go` ≥50%。模块阈值针对精确包路径，不混入子包；全部按语句数加权，缺失关键数据会失败。
 - 新行为必须带测试，覆盖正常流程、边界与错误恢复；修 bug 先写能复现的测试。
 - 默认测试不访问外部服务；真实模型测试见 [Provider 持续回归](../guides/PROVIDER_REGRESSION.md)。
 
 ## 运行
 
 ```bash
-make test                                   # GO_TEST_MODE=true go test -v -race -timeout 120s ./...
+make test                                   # GO_TEST_MODE=true go test -p 1 -timeout 10m -count=1 -v -race ./...
 make test-short                             # -short
 make test-integration                       # -tags=integration
 go test -race -run TestName ./builder/      # 单个包或用例
 make coverage                               # 生成 coverage/coverage.out，执行门禁并生成 HTML
-go test -coverprofile=coverage.out ./... && bash scripts/check_coverage.sh coverage.out
+GO_TEST_MODE=true go test -p 1 -timeout 10m -count=1 -race -coverprofile=coverage.out ./... && bash scripts/check_coverage.sh coverage.out
 bash scripts/provider_regression.sh         # 离线 Provider/Builder 契约与竞态回归
 ```
+
+Makefile 默认逐包执行，每包超时 10 分钟；包内的 goroutine、性质测试和 `-race` 检查仍然运行，不跳过磁盘与跨进程用例。FileStore 的大量同步写入和资源预算测试会争用磁盘，完整验收时只运行一套测试。可用 `make test TEST_PARALLELISM=4 TEST_TIMEOUT=15m` 调整机器资源与包超时；`-timeout` 是每个测试包的上限，不是整个命令的总时长。
 
 ## 测试工具
 
@@ -143,6 +145,7 @@ func TestDurableRunReplays(t *testing.T) {
 - 表驱动测试 + `t.Run` 子测试；断言用 `testify` 的 `require`（失败即停）与 `assert`。
 - 修改全局状态（如 `core.SetGlobalPanicHandler`）后用 `t.Cleanup` 恢复。
 - 等待异步结果用通道或 `require.Eventually` 加超时，不用固定 `time.Sleep`。
+- 只验证取消、截止时间或恢复协议时，优先在 `testing/synctest.Test` 中使用现有 `session.DurableStore(session.NewMemoryStore(), id)`；虚拟时间推进前要确认目标操作已启动，等待同时检查调用提前结束。泡内的 `time.Sleep` 用于推进虚拟时间，不等待真实磁盘或网络。磁盘原子提交与进程恢复继续由 FileStore/后端一致性测试覆盖。
 - 并发相关改动必须在 `-race` 下通过；取消与超时路径要单独覆盖。
 - 自定义 `durable.Store` / `session.Store` 后端在自己的测试中调用 `storetest.Run` / `sessiontest.Run`。
 - 真实模型或外部服务的测试用 `-tags=integration` 或环境变量控制，缺少凭据时 `t.Skip`。

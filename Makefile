@@ -19,6 +19,10 @@ GO_MOD_NAME := github.com/kart-io/goagent
 # Library checks compile packages; run selects one example main package.
 EXAMPLE ?= ./examples/execution-scope
 COVERAGE_DIR=./coverage
+# 串行执行包，避免 FileStore/资源预算测试争用磁盘；包内并发测试照常执行。
+TEST_PARALLELISM ?= 1
+TEST_TIMEOUT ?= 10m
+TEST_FLAGS = -p $(TEST_PARALLELISM) -timeout $(TEST_TIMEOUT) -count=1
 COMPAT_ROOT ?= ..
 COMPAT_CORE ?= $(CURDIR)
 COMPAT_TIMEOUT ?= 5m
@@ -70,20 +74,20 @@ run:
 ## test: Run all tests
 test:
 	@echo "$(YELLOW)Running tests...$(NC)"
-	GO_TEST_MODE=true $(GOTEST) -v -race -timeout 120s ./...
+	GO_TEST_MODE=true $(GOTEST) $(TEST_FLAGS) -v -race ./...
 
 ## test-short: Run short tests
 test-short:
 	@echo "$(YELLOW)Running short tests...$(NC)"
-	GO_TEST_MODE=true $(GOTEST) -v -short ./...
+	GO_TEST_MODE=true $(GOTEST) $(TEST_FLAGS) -v -short ./...
 
 ## test-frameworkbench: 验证独立评测模块的依赖与执行契约（不运行计时基准）
 test-frameworkbench:
-	cd evaluation/frameworkbench && GOWORK=off GO_TEST_MODE=true $(GOTEST) -mod=readonly -race -count=1 -timeout 120s ./...
+	cd evaluation/frameworkbench && GOWORK=off GO_TEST_MODE=true $(GOTEST) $(TEST_FLAGS) -mod=readonly -race ./...
 
 ## test-contracts: 验证执行、模型流、恢复、审批、预算与工具公共契约
 test-contracts:
-	GO_TEST_MODE=true $(GOTEST) -race -count=1 -timeout 120s ./core/... ./llm/... ./builder/... ./workflow/... ./multiagent/... ./tools/... ./execution/...
+	GO_TEST_MODE=true $(GOTEST) $(TEST_FLAGS) -race ./core/... ./llm/... ./builder/... ./workflow/... ./multiagent/... ./tools/... ./execution/...
 
 ## compatibility: 使用当前源码验证本地关联仓库（COMPAT_ROOT、COMPAT_CORE、COMPAT_OUT 可覆盖）
 compatibility:
@@ -91,7 +95,7 @@ compatibility:
 
 ## test-management: 验证管理状态机、HTTP 与原生/Graph 适配（无需数据库）
 test-management:
-	GO_TEST_MODE=true $(GOTEST) -race -count=1 -timeout 120s ./management/...
+	GO_TEST_MODE=true $(GOTEST) $(TEST_FLAGS) -race ./management/...
 
 ## compatibility-postgres: 跨仓实库验收，要求专用数据库和容器，关键恢复场景不得跳过
 compatibility-postgres: COMPAT_TIMEOUT = 15m
@@ -101,13 +105,13 @@ compatibility-postgres:
 ## test-integration: Run integration tests
 test-integration:
 	@echo "$(YELLOW)Running integration tests...$(NC)"
-	$(GOTEST) -v -tags=integration ./...
+	$(GOTEST) $(TEST_FLAGS) -v -tags=integration ./...
 
 ## coverage: Generate test coverage report
 coverage:
 	@echo "$(YELLOW)Generating coverage report...$(NC)"
 	@mkdir -p $(COVERAGE_DIR)
-	GO_TEST_MODE=true $(GOTEST) -v -race -coverprofile=$(COVERAGE_DIR)/coverage.out -covermode=atomic ./...
+	GO_TEST_MODE=true $(GOTEST) $(TEST_FLAGS) -v -race -coverprofile=$(COVERAGE_DIR)/coverage.out -covermode=atomic ./...
 	bash scripts/check_coverage.sh $(COVERAGE_DIR)/coverage.out
 	$(GOCMD) tool cover -html=$(COVERAGE_DIR)/coverage.out -o $(COVERAGE_DIR)/coverage.html
 	@echo "$(GREEN)Coverage report generated at $(COVERAGE_DIR)/coverage.html$(NC)"

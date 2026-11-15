@@ -1,6 +1,6 @@
 # 长期记忆的删除优先：实现文档
 
-日期：2026-11-11。状态：待实施，第 5.1 版。
+日期：2026-11-11；状态于 2026-11-14 核对：G0、G1、G2 已合并到 master（v0.53.0）。本文保留第 5.1 版设计与问题背景，当前接口和部署边界见[运行能力与后续验收](../guides/RUNTIME_READINESS.md)。
 
 修订经过：
 - 前三版经 Codex 两轮审查，以及 Software Architect、Backend Architect 两个 agent 的独立审查。

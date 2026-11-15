@@ -4,11 +4,14 @@ import (
 	"context"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
-	"github.com/kart-io/goagent/core/durable"
-	"github.com/kart-io/goagent/interfaces"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/core/durable"
+	"github.com/kart-io/goagent/core/session"
+	"github.com/kart-io/goagent/interfaces"
 )
 
 // effectTool 每次执行都产生一次副作用；首次执行可模拟副作用生效后应答丢失（等到 ctx 结束才返回错误），
@@ -49,34 +52,37 @@ func TestDispatcherDoesNotRepeatInterruptedEffect(t *testing.T) {
 		config     DispatchConfig
 		tool       func(cancel context.CancelFunc) *effectTool
 		reconciles int32
+		want       error
 	}{
 		{"副作用生效后应答超过工具超时", DispatchConfig{Timeout: 20 * time.Millisecond}, func(context.CancelFunc) *effectTool {
 			return &effectTool{lostAck: true}
-		}, 1},
+		}, 1, context.DeadlineExceeded},
 		{"成功返回时调用方取消", DispatchConfig{}, func(cancel context.CancelFunc) *effectTool {
 			return &effectTool{cancel: cancel}
-		}, 0},
+		}, 0, context.Canceled},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			store, err := durable.NewFileStore(t.TempDir())
-			require.NoError(t, err)
-			base := durable.WithJournal(durable.WithExecutionKey(context.Background(), "run"), store)
-			ctx, cancel := context.WithCancel(base)
-			defer cancel()
-			tool := test.tool(cancel)
-			reg := NewRegistry()
-			require.NoError(t, reg.Register(tool))
-			d, err := NewDispatcher(reg, test.config)
-			require.NoError(t, err)
-			req := ToolRequest{Name: "pay", Input: &interfaces.ToolInput{Args: map[string]any{}, CallID: "c1"}}
+			synctest.Test(t, func(t *testing.T) {
+				// 保留正式日志与核对路径，以虚拟时间触发超时，不把 fsync 耗时计入 20ms。
+				store := session.DurableStore(session.NewMemoryStore(), "interrupted-effect")
+				base := durable.WithJournal(durable.WithExecutionKey(context.Background(), "run"), store)
+				ctx, cancel := context.WithCancel(base)
+				defer cancel()
+				tool := test.tool(cancel)
+				reg := NewRegistry()
+				require.NoError(t, reg.Register(tool))
+				d, err := NewDispatcher(reg, test.config)
+				require.NoError(t, err)
+				req := ToolRequest{Name: "pay", Input: &interfaces.ToolInput{Args: map[string]any{}, CallID: "c1"}}
 
-			_, err = d.Invoke(ctx, req)
-			require.Error(t, err)
-			out, err := d.Invoke(base, req)
-			require.NoError(t, err)
-			require.Equal(t, "paid", out.Result)
-			require.EqualValues(t, 1, tool.effects.Load(), "副作用只能发生一次")
-			require.Equal(t, test.reconciles, tool.reconciles.Load())
+				_, err = d.Invoke(ctx, req)
+				require.ErrorIs(t, err, test.want)
+				out, err := d.Invoke(base, req)
+				require.NoError(t, err)
+				require.Equal(t, "paid", out.Result)
+				require.EqualValues(t, 1, tool.effects.Load(), "副作用只能发生一次")
+				require.Equal(t, test.reconciles, tool.reconciles.Load())
+			})
 		})
 	}
 }

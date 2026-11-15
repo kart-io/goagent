@@ -39,6 +39,7 @@ graph TD
     builder --> coremw[core/middleware]
     builder --> llm
     builder --> tools
+    builder --> memory
 
     contextpolicy --> durable
     contextpolicy --> llm
@@ -47,8 +48,17 @@ graph TD
     tools --> budget
     tools --> durable
     tools --> observe
-    tools --> toolmw[tools/middleware]
     tools --> cache
+
+    memory --> durable
+    memory --> session
+    memory --> llm
+
+    management --> execution
+    management --> session
+    management --> budget
+    management --> observe
+    management --> revision
 
     workflow --> core
     workflow --> durable
@@ -109,7 +119,7 @@ graph TD
 | `multiagent` | 多 Agent 预置模式：`Sequential`、`Loop`、`RouterSupervisor` 构造器，`ParallelStep`、`AddStep`、`GuardRoute`，`SupervisorTools` 与文本接力层（`Conversation`、`TextStep`、`TextNext`） |
 | `workflow/refund` | 绑定事务的退款防护示范实现 |
 | `execution` | 宿主装配：`Scope` 组合 RunID、会话、日志、预算、期限与观察者 |
-| `memory`、`store`、`cache` | 对话/向量记忆、键值存储（`store/memory`）、通用缓存 |
+| `memory`、`store`、`cache` | 长期记忆、时序图谱与派生级联；键值存储（`store/memory`）、通用缓存 |
 | `mcp/remote` | 基于官方 SDK 的 MCP 客户端适配 |
 | `revision`、`management/adapters` | 宿主层不可变配置与工件归档、精确程序加载；management 的 Version、Session、Task 固定归档身份，不向执行内核引入版本发布逻辑 |
 | `skills`、`tools/skill` | 与内核无关的本地技能目录、格式解析和受限资源读取；可选 `load_skill` 工具。Harness 保留来源配置、授权、提示词与 Manifest 装配 |

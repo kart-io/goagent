@@ -1,6 +1,6 @@
 # 长期记忆 G2：派生与整理的实现设计
 
-日期：2026-11-13。状态：第 3 版（含复审补充），待用户批准。基线：分支 `feat/memory-g0-recall`，HEAD `6cf097ee`（G0、G1 与 Request 钩子测试，已推送）。
+日期：2026-11-13；状态于 2026-11-14 核对：G2a–G2e 已合并到 master（v0.53.0），真实模型结果见 [G2 评测](../evaluation/2026-11-13-memory-g2/README.md)。本文保留第 3 版设计、复审与实施差异，原设计基线为 `6cf097ee`；当前部署和迁移边界见[运行能力与后续验收](../guides/RUNTIME_READINESS.md)。
 
 本文是 [长期记忆的删除优先](MEMORY_GOVERNANCE.md) 第 4 节的实现设计。目标与取舍以那份文档为准，本文只写落地所需的盘点、数据模型、操作语义、拆分与验证。G1 的存储原语（`mutate`、`tx`、覆盖层、擦除）见 [G1 存储](MEMORY_G1_STORAGE.md) 与 [增量提交](MEMORY_G1_INCREMENTAL.md)，本文直接使用。
 

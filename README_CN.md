@@ -175,13 +175,13 @@ rag, err := builder.RAGAgent(client, retriever) // DocumentRetriever、带 Retri
 |----|------|
 | [builder](builder/) | 流式构建 Agent、原生工具循环、钩子、`Handle` |
 | [builder/contextpolicy](builder/contextpolicy/) | 工具结果卸载（`Offload`） |
-| [core](core/) | `Runnable`/`StreamRunnable`、回调、状态；子包 `durable`、`budget`、`session`、`observe`、`checkpoint`、`middleware` |
+| [core](core/) | `Runnable`/`StreamRunnable`、回调、状态；子包 `durable`、`budget`、`session`、`observe`、`middleware` |
 | [execution](execution/) | 宿主作用域：运行与会话身份、日志、预算、期限、观察者 |
 | [workflow](workflow/) | 类型化图编译与持久图 |
 | [llm](llm/) | 客户端接口与选项；`llm/providers` 为各提供商实现 |
 | [tools](tools/) | 工具注册表、函数工具、`Dispatcher`、`Pipeline`；`tools/policy`、`tools/spill` 与内置工具 |
 | [mcp](mcp/) | 基于官方 SDK 的 MCP 客户端适配 |
-| [memory](memory/) | 对话与案例记忆、向量存储 |
+| [memory](memory/) | 长期记忆、时序图谱、派生级联与索引；[当前能力与迁移边界](docs/guides/RUNTIME_READINESS.md) |
 | [harness/env](harness/env/) | 供工具使用的文件系统与命令执行接口 |
 | [observability](observability/) | OpenTelemetry 追踪与指标 |
 | [evaluation/agentbench](evaluation/agentbench/README.md) | 可复现的任务评测 |

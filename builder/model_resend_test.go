@@ -3,6 +3,7 @@ package builder
 import (
 	"context"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/require"
@@ -11,6 +12,7 @@ import (
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
+	"github.com/kart-io/goagent/core/session"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
@@ -28,6 +30,11 @@ func newResendFixture(t *testing.T, maxRequests int) resendFixture {
 	t.Helper()
 	inner, err := durable.NewFileStore(t.TempDir())
 	require.NoError(t, err)
+	return newResendFixtureWithStore(t, maxRequests, inner)
+}
+
+func newResendFixtureWithStore(t *testing.T, maxRequests int, inner durable.Store) resendFixture {
+	t.Helper()
 	crash := new(bool)
 	store := failOnSave{Store: inner, fail: func(v *durable.Snapshot) bool {
 		return *crash && v.Version == "goagent-operation-v2" && !bytesContains(v.Data, `"pending"`)
@@ -106,36 +113,50 @@ func TestModelResendAfterStop(t *testing.T) {
 		}, context.Canceled},
 		{"截止时间到", func(ctx context.Context) (context.Context, func(), func()) {
 			ctx, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
-			return ctx, func() {}, cancel
+			return ctx, func() { time.Sleep(50 * time.Millisecond) }, cancel
 		}, context.DeadlineExceeded},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			f := newResendFixture(t, 5)
-			model := &stuckModel{stuckAt: 1, nativeEventModel: nativeModel(answerTurn("好的", 7)), started: make(chan struct{})}
-			agent := resendAgent(t, model)
+			synctest.Test(t, func(t *testing.T) {
+				// 截止时间只由泡内虚拟时间推进，不与模型请求前的磁盘同步竞争。
+				f := newResendFixtureWithStore(t, 5, session.DurableStore(session.NewMemoryStore(), "resend"))
+				model := &stuckModel{stuckAt: 1, nativeEventModel: nativeModel(answerTurn("好的", 7)), started: make(chan struct{})}
+				agent := resendAgent(t, model)
 
-			stopping, trigger, release := test.interrupt(f.ctx)
-			defer release()
-			done := make(chan error, 1)
-			go func() {
-				_, err := agent.Invoke(stopping, "q")
-				done <- err
-			}()
-			<-model.started
-			trigger()
-			require.ErrorIs(t, <-done, test.want)
+				stopping, trigger, release := test.interrupt(f.ctx)
+				defer release()
+				done := make(chan error, 1)
+				go func() {
+					_, err := agent.Invoke(stopping, "q")
+					done <- err
+				}()
+				select {
+				case <-model.started:
+				case err := <-done:
+					t.Fatalf("模型启动前调用已返回：%v", err)
+				case <-time.After(5 * time.Second):
+					t.Fatal("等待模型启动超时")
+				}
+				trigger()
+				select {
+				case err := <-done:
+					require.ErrorIs(t, err, test.want)
+				case <-time.After(5 * time.Second):
+					t.Fatal("中断后调用未结束")
+				}
 
-			out, err := agent.Invoke(f.ctx, "q")
-			require.NoError(t, err)
-			require.Equal(t, "好的", out.Result)
-			require.Equal(t, 2, model.calls)
+				out, err := agent.Invoke(f.ctx, "q")
+				require.NoError(t, err)
+				require.Equal(t, "好的", out.Result)
+				require.Equal(t, 2, model.calls)
 
-			// 回放登记在重发那次的键下；被打断的第一次没有用量，不能算到它头上。
-			_, err = agent.Invoke(f.ctx, "q")
-			require.NoError(t, err)
-			snap, err := f.c.Snapshot(context.Background())
-			require.NoError(t, err)
-			require.Equal(t, 7, snap.KnownTokens.TotalTokens)
+				// 回放登记在重发那次的键下；被打断的第一次没有用量，不能算到它头上。
+				_, err = agent.Invoke(f.ctx, "q")
+				require.NoError(t, err)
+				snap, err := f.c.Snapshot(context.Background())
+				require.NoError(t, err)
+				require.Equal(t, 7, snap.KnownTokens.TotalTokens)
+			})
 		})
 	}
 }

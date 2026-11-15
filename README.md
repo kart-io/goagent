@@ -178,13 +178,13 @@ With a `llm.ToolStreamClient` and at least one tool, `agent.Start(ctx, input)` r
 |---------|-------------|
 | [builder](builder/) | Fluent agent construction, native tool loop, hooks, `Handle` |
 | [builder/contextpolicy](builder/contextpolicy/) | Tool-result offloading (`Offload`) |
-| [core](core/) | `Runnable`/`StreamRunnable`, callbacks, state; subpackages `durable`, `budget`, `session`, `observe`, `checkpoint`, `middleware` |
+| [core](core/) | `Runnable`/`StreamRunnable`、回调、状态；子包 `durable`、`budget`、`session`、`observe`、`middleware` |
 | [execution](execution/) | Host scope: run/session identity, journal, budget, deadline, observer |
 | [workflow](workflow/) | Typed graph compilation and durable graphs |
 | [llm](llm/) | Client interfaces, options; `llm/providers` implementations |
 | [tools](tools/) | Tool registry, function tools, `Dispatcher`, `Pipeline`; `tools/policy`, `tools/spill` and built-in tools |
 | [mcp](mcp/) | MCP client adapter on the official SDK |
-| [memory](memory/) | Conversation and case memory, vector stores |
+| [memory](memory/) | 长期记忆、时序图谱、派生级联与索引；[当前能力与迁移边界](docs/guides/RUNTIME_READINESS.md) |
 | [harness/env](harness/env/) | File system and command execution interfaces for tools |
 | [observability](observability/) | OpenTelemetry tracing and metrics |
 | [evaluation/agentbench](evaluation/agentbench/README.md) | Reproducible task evaluation |
