@@ -14,7 +14,7 @@
 [![Issues](https://img.shields.io/github/issues/kart-io/goagent?style=flat-square&logo=github)](https://github.com/kart-io/goagent/issues)
 [![Last Commit](https://img.shields.io/github/last-commit/kart-io/goagent/master?style=flat-square&logo=github)](https://github.com/kart-io/goagent/commits/master/)
 
-[English](README.md) | [中文](README_CN.md)
+[English](README.md) | [Chinese](README_CN.md)
 
 [Quick Start](docs/guides/QUICKSTART.md) · [API Reference](https://pkg.go.dev/github.com/kart-io/goagent) · [Examples](examples/README.md) · [Changelog](CHANGELOG.md)
 
@@ -37,9 +37,9 @@ Related repositories:
 - **Durable execution** - `core/durable` journals model turns and tool calls; `workflow.Graph` compiles typed graphs with branches, parallel joins, bounded loops and approval resume.
 - **Human in the loop** - approval gates accept validated human input via `DurableGraph.Resume`; nodes, parallel branches, interruptible tools and nested graphs pause mid-execution with `durable.AwaitInput` and resume from the checkpoint. See the [HITL guide](docs/guides/HUMAN_IN_THE_LOOP.md).
 - **Governance** - root request budgets (`core/budget`), `tools.Dispatcher`/`Pipeline` with approvals, guards and admission limits, tool-result offloading, session logs (`core/session`).
-- **LLM providers** - OpenAI (and compatible endpoints), DeepSeek and Gemini support `AsRunnable` and the native tool loop; Kimi, SiliconFlow and Ollama are OpenAI-compatible presets with the same support, and Anthropic uses the official SDK with the same support. See the [provider table](docs/README.md#llm-提供商).
+- **LLM providers** - OpenAI (and compatible endpoints), DeepSeek and Gemini support `AsRunnable` and the native tool loop; Kimi, SiliconFlow and Ollama are OpenAI-compatible presets with the same support, and Anthropic uses the official SDK with the same support. See the [provider table](docs/README.md#llm-%E6%8F%90%E4%BE%9B%E5%95%86).
 - **Observability** - read-only execution events (`core/observe`) and OpenTelemetry integration (`observability`).
-- **A2A / MCP**：连接外部 Agent 和 MCP 工具，通过共享任务服务发布 GoAgent，支持人工输入、审批与取消。见[协议接入指南](docs/guides/PROTOCOL_ADAPTERS.md)。
+- **A2A / MCP** - connect to external agents and MCP tools, and expose GoAgent through a shared task service with human input, approvals and cancellation. See the [protocol adapters guide](docs/guides/PROTOCOL_ADAPTERS.md).
 
 ## Quick Start
 
@@ -169,7 +169,7 @@ With a `llm.ToolStreamClient` and at least one tool, `agent.Start(ctx, input)` r
 - [Composable orchestration](docs/guides/COMPOSABLE_ORCHESTRATION.md) - wrap a child agent or `workflow.DurableGraph` as a tool with `tools.NewRunnableToolFactory`; a child waiting for approval suspends the parent with `agentErrors.ErrAgentWaiting`.
 - [Agent composition and input boundaries](docs/guides/AGENT_COMPOSITION.md) - direct workflows, child-agent tools, pending input and completion scopes; [Pi design comparison](docs/research/2026-11-01-pi-core-gap-analysis.md).
 - [Host integration](docs/guides/HOST_INTEGRATION.md) - `execution.NewScope` + `execution.ConfigureBuilder` + `BuildContext`; offline example: `go run ./examples/execution-scope`.
-- [最终验收、治理装配与升级检查](docs/guides/EXECUTION_ACCEPTANCE.md) - 最终结果校验、受治理Builder、恢复版本清单与规模基准。
+- [Final validation, governance setup and upgrade checks](docs/guides/EXECUTION_ACCEPTANCE.md) - final-output validation, governed builders, recovery manifests and scale benchmarks.
 - [Extension contract](docs/guides/EXTENSION_CONTRACT.md) and [execution governance](docs/guides/EXECUTION_GOVERNANCE.md) - budgets, diagnostics and resource limits.
 
 ## Packages
@@ -178,13 +178,13 @@ With a `llm.ToolStreamClient` and at least one tool, `agent.Start(ctx, input)` r
 |---------|-------------|
 | [builder](builder/) | Fluent agent construction, native tool loop, hooks, `Handle` |
 | [builder/contextpolicy](builder/contextpolicy/) | Tool-result offloading (`Offload`) |
-| [core](core/) | `Runnable`/`StreamRunnable`、回调、状态；子包 `durable`、`budget`、`session`、`observe`、`middleware` |
+| [core](core/) | `Runnable`/`StreamRunnable`, callbacks, state; subpackages `durable`, `budget`, `session`, `observe`, `middleware` |
 | [execution](execution/) | Host scope: run/session identity, journal, budget, deadline, observer |
 | [workflow](workflow/) | Typed graph compilation and durable graphs |
 | [llm](llm/) | Client interfaces, options; `llm/providers` implementations |
 | [tools](tools/) | Tool registry, function tools, `Dispatcher`, `Pipeline`; `tools/policy`, `tools/spill` and built-in tools |
 | [mcp](mcp/) | MCP client adapter on the official SDK |
-| [memory](memory/) | 长期记忆、时序图谱、派生级联与索引；[当前能力与迁移边界](docs/guides/RUNTIME_READINESS.md) |
+| [memory](memory/) | Long-term memory, temporal knowledge graphs, cascading invalidation and indexes; [capabilities and migration boundaries](docs/guides/RUNTIME_READINESS.md) |
 | [harness/env](harness/env/) | File system and command execution interfaces for tools |
 | [observability](observability/) | OpenTelemetry tracing and metrics |
 | [evaluation/agentbench](evaluation/agentbench/README.md) | Reproducible task evaluation |
@@ -234,4 +234,4 @@ Apache License 2.0 - see [LICENSE](LICENSE).
 
 GoAgent is inspired by [LangChain](https://github.com/langchain-ai/langchain), [LangGraph](https://github.com/langchain-ai/langgraph) and [AutoGen](https://github.com/microsoft/autogen).
 
-统一运行管理入口见 [management](management/README.md)，支持 Agent、Session、Task、Approval 与运行观测；数据库和 Harness 适配保留在扩展项目。
+See [management](management/README.md) for unified agent, session, task and approval management and execution observability. Database and Harness adapters remain in extension projects.
