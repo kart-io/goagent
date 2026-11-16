@@ -204,9 +204,15 @@ func (a *ConfigurableAgent[S]) runToolEvents(ctx context.Context, request *middl
 			usage.Add(&copy)
 			reports++
 		}
-		metadata["model_calls"] = round + 1
+		// 命中不是真实调用：不计入 model_calls，usage_complete 按真实调用数比较。
+		modelCalls := round + 1
+		if hits, ok := modelCacheHits(ctx); ok {
+			modelCalls -= int(hits)
+			metadata["model_cache_hits"] = hits
+		}
+		metadata["model_calls"] = modelCalls
 		metadata["usage_reports"] = reports
-		metadata["usage_complete"] = reports == round+1
+		metadata["usage_complete"] = reports == modelCalls
 		if len(tools) == 0 && len(turn.ToolCalls) > 0 {
 			if lastFailure != "" {
 				return nil, fmt.Errorf("最终回答回合未提供工具，模型仍返回工具调用；%w", exhausted())

@@ -2,11 +2,17 @@ package builder
 
 import (
 	"context"
+	"errors"
 	"log/slog"
+	"slices"
+	"sync/atomic"
 	"time"
 
 	"github.com/kart-io/goagent/cache"
+	"github.com/kart-io/goagent/core/observe"
 	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/interfaces"
+	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/memory"
 )
 
@@ -100,4 +106,175 @@ func (b *AgentBuilder[S]) validateModelCache() error {
 		}
 	}
 	return nil
+}
+
+type modelCacheScopeKey struct{}
+
+// modelCacheScope 是一次执行的缓存范围，由 Agent 在轮次开始时经 ctx 交给模型调用；不缓存时为 nil。
+type modelCacheScope struct {
+	cfg       ModelCache
+	identity  string
+	sessionID string
+	ltm       *memory.Memory // 可为 nil
+	read      [][]string     // 本轮 TurnMemory.Read
+	hits      *atomic.Int64  // 本次执行的命中计数
+}
+
+// withModelCacheScope 总是覆盖上层的值：工具里运行的子 Agent 不能沿用父 Agent 的范围与计数。
+func withModelCacheScope(ctx context.Context, s *modelCacheScope) context.Context {
+	return context.WithValue(ctx, modelCacheScopeKey{}, s)
+}
+
+// modelCacheScope 按配置、会话 ID 与本轮记忆绑定构造缓存范围；身份不可得时不缓存。
+func (a *ConfigurableAgent[S]) modelCacheScope(ctx context.Context) *modelCacheScope {
+	mc := a.config.ModelCache
+	if mc == nil {
+		return nil
+	}
+	m := a.config.LongTermMemory
+	id, ok := mc.identity(ctx, m != nil)
+	if !ok {
+		return nil
+	}
+	s := &modelCacheScope{cfg: *mc, identity: id, sessionID: a.sessionLogID(ctx), hits: new(atomic.Int64)}
+	if m != nil {
+		// 没有本轮绑定就无法读取记忆版本，删除类操作之后可能取到旧答案：不缓存。
+		turn := sessionTurnFrom(ctx)
+		if turn == nil || turn.memory == nil {
+			return nil
+		}
+		s.ltm, s.read = m, turn.memory.Read
+	}
+	return s
+}
+
+// modelCacheHits 返回本次执行的命中次数。
+func modelCacheHits(ctx context.Context) (int64, bool) {
+	s, _ := ctx.Value(modelCacheScopeKey{}).(*modelCacheScope)
+	if s == nil {
+		return 0, false
+	}
+	return s.hits.Load(), true
+}
+
+// cacheRequest 是计算缓存键所需的请求内容；client 为 nil 时不缓存。
+type cacheRequest struct {
+	client llm.Client
+	req    *llm.CompletionRequest
+	tools  []interfaces.Tool
+}
+
+// modelCacheEntry 是一次模型调用对应的条目：键与记忆版本在查找前确定，写入时复用。
+type modelCacheEntry struct {
+	scope   *modelCacheScope
+	key     string
+	version []memory.NamespaceVersion
+}
+
+// resolveModelCache 计算本次调用的条目；不满足缓存条件或读取记忆版本失败时返回 nil，本次既不查也不写。
+func resolveModelCache(ctx context.Context, cr cacheRequest) *modelCacheEntry {
+	s, _ := ctx.Value(modelCacheScopeKey{}).(*modelCacheScope)
+	if s == nil || cr.client == nil || cr.req == nil {
+		return nil
+	}
+	client, ok := clientIdentity(cr.client, cr.req)
+	if !ok {
+		return nil
+	}
+	version, err := s.memoryVersion(ctx)
+	if err != nil {
+		observe.Emit(ctx, observe.Event{Type: "model_cache_read_error", Path: "cache", ErrorKind: observe.ErrorKind(err)})
+		return nil
+	}
+	key, ok := modelCacheKey(cacheKeyInput{Identity: s.identity, SessionID: s.sessionID, Client: client, Request: cr.req, Tools: cr.tools, Memory: version})
+	if !ok {
+		return nil
+	}
+	return &modelCacheEntry{scope: s, key: key, version: version}
+}
+
+func (s *modelCacheScope) memoryVersion(ctx context.Context) ([]memory.NamespaceVersion, error) {
+	if s.ltm == nil || len(s.read) == 0 {
+		return nil, nil
+	}
+	return s.ltm.CacheVersion(ctx, s.read)
+}
+
+// cacheableTurn 是写入与命中共用的条件：正常结束、通过 cacheable 校验且不含 ProviderState。
+func cacheableTurn(turn *llm.StreamChunk, cacheable func(*llm.StreamChunk) error) error {
+	if turn.FinishReason != "stop" && turn.FinishReason != "tool_calls" {
+		return agentErrors.Newf(agentErrors.CodeInvalidOutput, "未正常结束的模型回合不缓存").WithComponent("builder").WithOperation("model_cache")
+	}
+	if turn.ProviderState != nil {
+		return agentErrors.Newf(agentErrors.CodeInvalidOutput, "带 ProviderState 的模型回合不缓存").WithComponent("builder").WithOperation("model_cache")
+	}
+	return cacheable(turn)
+}
+
+// lookup 返回可用的缓存回合。查找出错按未命中处理；值损坏或未通过 cacheable 时删除该条目并按未命中处理。
+func (e *modelCacheEntry) lookup(ctx context.Context, cacheable func(*llm.StreamChunk) error) *llm.StreamChunk {
+	v, err := e.scope.cfg.Cache.Get(ctx, e.key)
+	if err != nil && !errors.Is(err, agentErrors.ErrCacheMiss) {
+		observe.Emit(ctx, observe.Event{Type: "model_cache_read_error", Path: "cache", ErrorKind: observe.ErrorKind(err)})
+		return nil
+	}
+	if err != nil || v == nil {
+		observe.Emit(ctx, observe.Event{Type: "model_cache_miss", Path: "cache"})
+		return nil
+	}
+	b, _ := v.([]byte)
+	turn, err := decodeCachedTurn(b)
+	if err == nil {
+		err = cacheableTurn(turn, cacheable)
+	}
+	if err != nil {
+		observe.Emit(ctx, observe.Event{Type: "model_cache_invalid", Path: "cache", ErrorKind: observe.ErrorKind(err)})
+		if derr := e.scope.cfg.Cache.Delete(ctx, e.key); derr != nil {
+			observe.Emit(ctx, observe.Event{Type: "model_cache_delete_error", Path: "cache", ErrorKind: observe.ErrorKind(derr)})
+		}
+		return nil
+	}
+	e.scope.hits.Add(1)
+	observe.Emit(ctx, observe.Event{Type: "model_cache_hit", Path: "cache", Cached: true})
+	return turn
+}
+
+// store 写入真实调用的结果。写入前重读记忆版本：与键中的不同说明调用期间发生了删除，放弃写入。
+// 失败只记录，不影响调用方。
+func (e *modelCacheEntry) store(ctx context.Context, turn *llm.StreamChunk, cacheable func(*llm.StreamChunk) error) {
+	if cacheableTurn(turn, cacheable) != nil {
+		return
+	}
+	now, err := e.scope.memoryVersion(ctx)
+	if err != nil || !slices.EqualFunc(now, e.version, func(a, b memory.NamespaceVersion) bool {
+		return slices.Equal(a.Namespace, b.Namespace) && a.Scope == b.Scope && a.LastForgetSeq == b.LastForgetSeq && a.LastRewindSeq == b.LastRewindSeq
+	}) {
+		observe.Emit(ctx, observe.Event{Type: "model_cache_write_skipped", Path: "cache", ErrorKind: observe.ErrorKind(err)})
+		return
+	}
+	// 命中不消耗 token：缓存值不带用量，命中时不计入用量报告。
+	stored := *turn
+	stored.Usage, stored.Error = nil, nil
+	data, err := encodeCachedTurn(&stored)
+	if err == nil {
+		err = e.write(ctx, data)
+	}
+	if err != nil {
+		observe.Emit(ctx, observe.Event{Type: "model_cache_write_error", Path: "cache", ErrorKind: observe.ErrorKind(err)})
+	}
+}
+
+// write 在物理删除可用时带会话与各读命名空间的标签写入，否则普通写入。
+func (e *modelCacheEntry) write(ctx context.Context, data []byte) error {
+	cfg := e.scope.cfg
+	t, ok := cfg.tagged()
+	if !ok || cfg.Erase == EraseOff {
+		return cfg.Cache.Set(ctx, e.key, data, cfg.TTL)
+	}
+	tags := make([]string, 0, 1+len(e.version))
+	tags = append(tags, sessionTag(cfg.TagKey, e.scope.sessionID))
+	for _, v := range e.version {
+		tags = append(tags, memoryTag(cfg.TagKey, v.Namespace, v.Scope))
+	}
+	return t.SetTagged(ctx, e.key, data, cfg.TTL, tags...)
 }

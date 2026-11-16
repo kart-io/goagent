@@ -73,7 +73,7 @@ func TestBudgetRejectsObsoleteModelIntentBeforeSending(t *testing.T) {
 	turn, err := modelOperation(ctx, "model", intent, func(context.Context, func(AgentEvent) error) (*llm.StreamChunk, error) {
 		called = true
 		return nil, errors.New("不应重新请求模型")
-	}, nil, func(AgentEvent) error { return nil })
+	}, nil, nil, cacheRequest{}, func(AgentEvent) error { return nil })
 	require.Error(t, err)
 	require.Nil(t, turn)
 	require.False(t, called, "obsolete intent must not cause another model request")

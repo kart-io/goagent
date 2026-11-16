@@ -205,6 +205,7 @@ func (a *ConfigurableAgent[S]) runEvents(ctx context.Context, request *middlewar
 			ctx = memory.WithTurn(ctx, *turn.memory)
 		}
 	}
+	ctx = withModelCacheScope(ctx, a.modelCacheScope(ctx))
 	messages, err := a.streamMessages(ctx, input, evidence)
 	if err != nil {
 		return nil, err
@@ -236,6 +237,9 @@ func (a *ConfigurableAgent[S]) runEvents(ctx context.Context, request *middlewar
 		usage.Add(&copy)
 	}
 	metadata["answer_usage_reported"] = turn.Usage != nil
+	if hits, ok := modelCacheHits(ctx); ok {
+		metadata["model_cache_hits"] = hits
+	}
 
 	recordAnswer(request, turn.Content)
 	if slog != nil {

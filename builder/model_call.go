@@ -74,9 +74,13 @@ type savedTurn struct {
 	Resend         int            `json:"model_resend,omitzero"`
 	Metadata       *modelMetadata `json:"model_metadata,omitzero"`
 	EvidenceSource string         `json:"evidence_source,omitempty"`
+	// Cached 表示回合来自模型调用缓存：没有预留，回放时不记账。
+	Cached bool `json:"model_cached,omitzero"`
 }
 
-func modelOperation(ctx context.Context, id string, intent json.RawMessage, invoke func(context.Context, func(AgentEvent) error) (*llm.StreamChunk, error), validate func(*llm.StreamChunk) error, emit func(AgentEvent) error) (result *llm.StreamChunk, resultErr error) {
+// modelOperation 执行一次模型回合。cacheable 是写入缓存前的校验，与 cr 一起决定本次能否查找与写入缓存；
+// cacheable 为 nil 时不缓存。
+func modelOperation(ctx context.Context, id string, intent json.RawMessage, invoke func(context.Context, func(AgentEvent) error) (*llm.StreamChunk, error), validate, cacheable func(*llm.StreamChunk) error, cr cacheRequest, emit func(AgentEvent) error) (result *llm.StreamChunk, resultErr error) {
 	c, metered := budget.FromContext(ctx)
 	key := durable.ChildKey(durable.ExecutionKey(ctx), id)
 	if (metered || observe.Enabled(ctx) || budget.HasUsageHook(ctx)) && (!durable.HasJournal(ctx) || key == "") {
@@ -145,6 +149,39 @@ func modelOperation(ctx context.Context, id string, intent json.RawMessage, invo
 		lastTurn = turn
 		return turn, emitted, err
 	}
+	// 键在第一次查找前只计算一次，写入时复用；持久路径只在回调内计算，回放不查缓存。
+	var entry *modelCacheEntry
+	resolved := false
+	cached := func() *llm.StreamChunk {
+		if !resolved {
+			resolved = true
+			if cacheable != nil {
+				entry = resolveModelCache(ctx, cr)
+			}
+		}
+		if entry == nil {
+			return nil
+		}
+		turn := entry.lookup(ctx, cacheable)
+		if turn != nil {
+			observe.MarkCached(ctx)
+		}
+		return turn
+	}
+	store := func(turn *llm.StreamChunk) {
+		if entry != nil {
+			entry.store(ctx, turn, cacheable)
+		}
+	}
+	emitCached := func(turn *llm.StreamChunk) error {
+		if err := emit(AgentEvent{Type: "step", Step: "model_cached"}); err != nil {
+			return err
+		}
+		if turn.Content != "" {
+			return emit(AgentEvent{Type: "text", Delta: turn.Content})
+		}
+		return nil
+	}
 	recovery, _ := ctx.Value(requestRecoveryKey{}).(requestRecovery)
 	// call 按 RequestError 钩子的决定在同一次模型回合操作内原样重试，持久日志仍只有一条回合记录；返回最后一次发出请求的尝试序号。
 	call := func(callCtx context.Context) (*llm.StreamChunk, int, error) {
@@ -190,8 +227,15 @@ func modelOperation(ctx context.Context, id string, intent json.RawMessage, invo
 		}
 	}
 	if !durable.HasJournal(ctx) {
+		if turn := cached(); turn != nil {
+			return turn, emitCached(turn)
+		}
 		turn, n, err := call(ctx)
-		return turn, errors.Join(err, recordUsage(n, turn, false))
+		err = errors.Join(err, recordUsage(n, turn, false))
+		if err == nil {
+			store(turn)
+		}
+		return turn, err
 	}
 	if metered {
 		var err error
@@ -205,7 +249,7 @@ func modelOperation(ctx context.Context, id string, intent json.RawMessage, invo
 			return nil, err
 		}
 	}
-	attempted := false
+	attempted, hit := false, false
 	policy := durable.OperationPolicy{}
 	if on, _ := ctx.Value(modelResendKey{}).(bool); on {
 		policy = durable.OperationPolicy{MaxAttempts: constants.DefaultModelResendAttempts, RetryInterrupted: true}
@@ -213,14 +257,25 @@ func modelOperation(ctx context.Context, id string, intent json.RawMessage, invo
 	record, opErr := durable.Do(ctx, id, intent, policy, func(callCtx context.Context) (json.RawMessage, error) {
 		attempted = true
 		resend = durable.OperationAttempt(callCtx) - 1
-		turn, n, err := call(callCtx)
+		var turn *llm.StreamChunk
+		var n int
+		var err error
+		if turn = cached(); turn != nil {
+			hit = true
+		} else {
+			hit = false
+			turn, n, err = call(callCtx)
+		}
 		if turn == nil {
 			return nil, err
 		}
-		saved := savedTurn{StreamChunk: *turn, Attempt: n, Resend: resend}
+		saved := savedTurn{StreamChunk: *turn, Attempt: n, Resend: resend, Cached: hit}
 		if meta, ok := ctx.Value(modelMetadataKey{}).(modelMetadata); ok {
 			saved.Metadata = &meta
 			saved.EvidenceSource = "provider"
+		}
+		if hit {
+			saved.EvidenceSource = "cache"
 		}
 		saved.Error = nil
 		if err == nil && validate != nil {
@@ -233,7 +288,7 @@ func modelOperation(ctx context.Context, id string, intent json.RawMessage, invo
 		replayed = record.Replayed
 	}
 	var turn *llm.StreamChunk
-	usageAttempt := 0
+	usageAttempt, replayedCache := 0, false
 	// Failed operations retain known usage. An intent mismatch is not a replay.
 	if record != nil && (opErr == nil || record.Replayed || attempted) && len(record.Value) > 0 && string(record.Value) != "null" {
 		var saved savedTurn
@@ -244,6 +299,13 @@ func modelOperation(ctx context.Context, id string, intent json.RawMessage, invo
 		if saved.Metadata != nil {
 			ctx = context.WithValue(ctx, modelMetadataKey{}, *saved.Metadata)
 		}
+		if record.Replayed && saved.Cached {
+			// 回放命中的记录：照常计入命中，但它没有预留，不能记账。
+			replayedCache = true
+			if s, _ := ctx.Value(modelCacheScopeKey{}).(*modelCacheScope); s != nil {
+				s.hits.Add(1)
+			}
+		}
 		if record.Replayed {
 			source := saved.EvidenceSource
 			if source == "" {
@@ -252,7 +314,7 @@ func modelOperation(ctx context.Context, id string, intent json.RawMessage, invo
 			ctx = context.WithValue(ctx, evidenceSourceKey{}, source)
 		}
 	}
-	if turn != nil {
+	if turn != nil && !replayedCache {
 		opErr = errors.Join(opErr, recordUsage(usageAttempt, turn, record.Replayed))
 	}
 	if opErr != nil {
@@ -270,6 +332,13 @@ func modelOperation(ctx context.Context, id string, intent json.RawMessage, invo
 				return turn, err
 			}
 		}
+		return turn, nil
+	}
+	if hit {
+		return turn, emitCached(turn)
+	}
+	if attempted {
+		store(turn)
 	}
 	return turn, nil
 }
@@ -297,5 +366,5 @@ func readPlainModelTurn(ctx context.Context, id string, client llm.Client, req *
 			return nil, e
 		}
 		return readToolTurn(callCtx, stream, emit)
-	}, nil, emit)
+	}, nil, func(turn *llm.StreamChunk) error { return validateDurableTurn(turn, nil, false, false) }, cacheRequest{client: client, req: req}, emit)
 }

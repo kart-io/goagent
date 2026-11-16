@@ -39,8 +39,11 @@ func readJournaledTurn(ctx context.Context, round int, client llm.Client, req *l
 		}
 		return readToolTurn(callCtx, stream, emit)
 	}
+	// 反馈模式下未提供的工具与非法参数同样不写入缓存。
+	cacheable := func(turn *llm.StreamChunk) error { return validateDurableTurn(turn, tools, false, false) }
+	cr := cacheRequest{client: client, req: req, tools: tools}
 	if !durable.HasJournal(ctx) {
-		return modelOperation(ctx, fmt.Sprintf("model/turn/%d", round), nil, invoke, nil, emit)
+		return modelOperation(ctx, fmt.Sprintf("model/turn/%d", round), nil, invoke, nil, cacheable, cr, emit)
 	}
 	type definition struct{ Name, Description, Schema string }
 	definitions := make([]definition, 0, len(tools))
@@ -57,7 +60,7 @@ func readJournaledTurn(ctx context.Context, round int, client llm.Client, req *l
 	if err != nil {
 		return nil, err
 	}
-	return modelOperation(ctx, fmt.Sprintf("model/turn/%d", round), intent, invoke, func(turn *llm.StreamChunk) error { return validateDurableTurn(turn, tools, allowEmpty, feedback) }, emit)
+	return modelOperation(ctx, fmt.Sprintf("model/turn/%d", round), intent, invoke, func(turn *llm.StreamChunk) error { return validateDurableTurn(turn, tools, allowEmpty, feedback) }, cacheable, cr, emit)
 }
 
 // feedback 为真时未提供的工具与非 JSON 参数照常提交，由工具循环交还模型。
