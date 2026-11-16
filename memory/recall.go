@@ -17,7 +17,8 @@ import (
 // RecallPrefix 标记注入请求的召回块；抽取时跳过这类消息，避免把记忆再次抽取成记忆。
 const RecallPrefix = "[相关长期记忆]\n"
 
-// RecallProtocol 标识召回块的渲染规则与引用格式，规则改变时随之改变；协议不同的快照恢复时视为空召回。
+// RecallProtocol 标识召回块的渲染规则与引用格式，协议不同的快照恢复时视为空召回。
+// 计量收紧不升协议：旧快照按新预算宽松还原，放不下的行像已删除项一样丢弃。
 const RecallProtocol = "memory-recall/2"
 
 // recallProtocolV1 是 G0 的协议：引用不带作用域与版本。持久日志中的这类快照恢复时召回为空，摘要仍按 G0 的编码计算。
@@ -243,8 +244,8 @@ func (m *Memory) Snapshot(ctx context.Context, query string) (Snapshot, error) {
 	return s, nil
 }
 
-// Hydrate 按 refs 的顺序还原召回块，不重新打分或截断，返回召回内容与实际采用的引用。被丢弃的项包括：
-// 已删除或已失效的、作用域已切换或实例号与正文版本已变化的，以及命名空间不在 s.Turn.Read 内的。宿主绑定的命名空间与 s.Turn.Write 不同时返回
+// Hydrate 按 refs 的顺序还原召回块，不重新打分，返回召回内容与实际采用的引用。被丢弃的项包括：
+// 已删除或已失效的、作用域已切换或实例号与正文版本已变化的、命名空间不在 s.Turn.Read 内的，以及按当前 RecallRunes 放不下的行。宿主绑定的命名空间与 s.Turn.Write 不同时返回
 // ErrMemoryNamespaceChanged；协议或召回配置与当前不同时召回为空。不更新访问时间。
 func (m *Memory) Hydrate(ctx context.Context, s Snapshot, refs []Ref) (Retrieval, []Ref, error) {
 	if err := CheckTurn(ctx, s.Turn); err != nil {

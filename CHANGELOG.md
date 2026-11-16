@@ -25,7 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 修复
 
-- 长期记忆召回块按整段文本计量 `RecallRunes`：块头与行间换行也计入预算，`RecallBlock`/`Retrieve` 的结果不再超出配置值；预算容不下块头与任何一条时召回为空。原先按旧计量调好的预算需加上块头约 60 个字符。
+- 长期记忆召回块按整段文本计量 `RecallRunes`：块头与行间换行也计入预算，`RecallBlock`/`Retrieve` 的结果不再超出配置值；预算容不下块头与任何一条时召回为空。原先按旧计量调好的预算需加上块头约 60 个字符。放不下的行被跳过、后面更短的行仍可写入，因此被省略的可能是中间任一条，包括过长的核心记忆。
+  回放兼容性：召回协议版本不变，升级前写入持久日志的召回快照按新预算宽松还原，原先贴着预算的快照可能有若干行放不下，像已删除项一样丢弃；意图摘要按日志中的引用计算，不受影响。
 - `cache.SimpleCache.GetStats().Sets` 累计 `Set` 与 `SetTagged` 的写入次数，原先恒为 0。
 - `builder.ModelCache` 为 `EraseOff` 时不再输出"TTL 超过 EraseWithin"的构建期警告；`EraseAuto` 照旧警告。
 
