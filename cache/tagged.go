@@ -2,6 +2,7 @@ package cache
 
 import (
 	"context"
+	"slices"
 	"time"
 )
 
@@ -21,9 +22,9 @@ type Tagged interface {
 
 var _ Tagged = (*SimpleCache)(nil)
 
-// SetTagged 写入条目并关联标签。
+// SetTagged 写入条目并关联标签。标签切片会被复制，调用方之后修改它不影响索引。
 func (c *SimpleCache) SetTagged(ctx context.Context, key string, value []byte, ttl time.Duration, tags ...string) error {
-	return c.set(key, value, ttl, tags)
+	return c.set(key, value, ttl, slices.Clone(tags))
 }
 
 // DeleteTag 删除所有关联该标签的条目。

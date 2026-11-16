@@ -32,6 +32,15 @@ func TestSimpleCacheTagged(t *testing.T) {
 		return err == nil
 	}
 
+	// mutated 写入 k1 后把传入的标签切片改掉，用于验证 SetTagged 不保留调用方的切片。
+	mutated := func(t *testing.T, c *SimpleCache) {
+		tags := []string{"a"}
+		if err := c.SetTagged(ctx, "k1", val, time.Minute, tags...); err != nil {
+			t.Fatal(err)
+		}
+		tags[0] = "x"
+	}
+
 	tests := []struct {
 		name string
 		run  func(t *testing.T, c *SimpleCache)
@@ -177,6 +186,31 @@ func TestSimpleCacheTagged(t *testing.T) {
 			},
 			wantHit:  map[string]bool{"k1": false, "k2": true},
 			wantTags: map[string][]string{"a": {"k2"}},
+		},
+		{
+			name: "调用后修改传入切片，DeleteTag仍能删除",
+			run: func(t *testing.T, c *SimpleCache) {
+				mutated(t, c)
+				if err := c.DeleteTag(ctx, "a"); err != nil {
+					t.Fatal(err)
+				}
+			},
+			wantHit:  map[string]bool{"k1": false},
+			wantTags: map[string][]string{},
+		},
+		{
+			name: "调用后修改传入切片，覆盖写入不残留旧标签",
+			run: func(t *testing.T, c *SimpleCache) {
+				mutated(t, c)
+				if err := c.SetTagged(ctx, "k1", val, time.Minute, "b"); err != nil {
+					t.Fatal(err)
+				}
+				if err := c.DeleteTag(ctx, "a"); err != nil {
+					t.Fatal(err)
+				}
+			},
+			wantHit:  map[string]bool{"k1": true},
+			wantTags: map[string][]string{"b": {"k1"}},
 		},
 	}
 
